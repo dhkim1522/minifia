@@ -1197,6 +1197,57 @@ export async function skipTo(page, tracker, phase) {
   await closeSheet(page);
 }
 
+/**
+ * 꺼진 장치 DOM 흔적 감시 스크립트(13-05 basic-off, FLOW-03). 페이지가 만들어질 때 넣는 init 스크립트 문자열이다 —
+ * 100ms 마다 selectors 와 이름이 prefix 로 시작하는 속성을 찾아 처음 걸린 것만 window.__mfOffScan.seen 에 (개수·그때 단계)로 남긴다. 값·글은 싣지 않는다.
+ * 로비부터 결과까지 한 판 전체를 덮으려고 단계마다 한 번 재는 대신 이 감시를 쓴다. 읽기는 readOffScan.
+ */
+export function offScannerScript(selectors, prefix) {
+  return `(() => {
+    const sels = ${JSON.stringify(selectors)};
+    const prefix = ${JSON.stringify(prefix)};
+    const seen = {};
+    const state = { seen, scans: 0, phases: [] };
+    window.__mfOffScan = state;
+    const phaseOf = () => document.querySelector("[data-game-stage]")?.getAttribute("data-phase") ?? (document.querySelector(".mf-lobby") ? "lobby" : "other");
+    setInterval(() => {
+      if (!document.body) return;
+      state.scans += 1;
+      const phase = phaseOf();
+      if (state.phases[state.phases.length - 1] !== phase) state.phases.push(phase);
+      for (const sel of sels) {
+        const n = document.querySelectorAll(sel).length;
+        if (n > 0 && !(sel in seen)) seen[sel] = { n, phase };
+      }
+      for (const el of document.body.querySelectorAll("*")) {
+        for (const name of el.getAttributeNames()) {
+          if (name.startsWith(prefix) && !((prefix + "*") in seen)) seen[prefix + "*"] = { n: 1, phase, name };
+        }
+      }
+    }, 100);
+  })();`;
+}
+
+/** offScannerScript 가 모은 결과: { seen: { 선택자: { n, phase } }, scans, phases }. 감시가 없으면 null */
+export function readOffScan(page) {
+  return page.evaluate(() => (window.__mfOffScan ? { seen: window.__mfOffScan.seen, scans: window.__mfOffScan.scans, phases: window.__mfOffScan.phases } : null));
+}
+
+/**
+ * 테스트 방 [다음 단계로 넘기기] 를 정확히 한 번 눌러 단계(또는 마감 시각)가 바뀔 때까지 기다린다(13-05 basic-off).
+ * 목표 단계를 정하지 않고 한 칸씩 가므로 동률·0표처럼 단계가 건너뛰는 판에서도 멈추지 않는다. 이미 ended 면 아무것도 하지 않는다.
+ */
+export async function skipOnce(page, tracker) {
+  const before = tracker.last()?.phase;
+  const beforeEnds = tracker.last()?.phaseEndsAt;
+  if (before === "ended") return before;
+  await openTestSheet(page);
+  await clickInDialog(page, TT_LABEL, "다음 단계로 넘기기");
+  await tracker.waitFor((v) => v.phase !== before || v.phaseEndsAt !== beforeEnds, 3000, `${before} 다음 단계`);
+  await closeSheet(page).catch(() => {});
+  return tracker.last()?.phase;
+}
+
 export async function openRoleCard(page) {
   if ((await dialogOf(page, "역할 카드").count()) === 0) await page.locator(".mf-rolecard-btn").click();
   await page.locator('dialog[aria-label="역할 카드"].mf-dialog--open').waitFor({ state: "attached", timeout: 5000 });

@@ -571,7 +571,7 @@ export const OFF_DEVICE_ATTR_PREFIX = "data-turn";
 /**
  * 받은 프레임 하나에서 꺼진 장치 흔적의 경로 문자열을 모은다(원문·값·토큰은 싣지 않는다, T-13-16).
  * state: players[].badge·badgeSwapped, day.turn·runoff·showdown, me.whisperUsed·ballot, phase runoff·showdown.
- * chat: k whisper·whispered. chatLog: 줄의 k. resultLog: part whisper·claim. 기본판 view 는 빈 배열.
+ * chat: k whisper·whispered. chatLog: 줄의 k. resultLog: part whisper·claim 이면서 줄이 있을 때(빈 묶음은 아님). 기본판 view 는 빈 배열.
  */
 export function offDeviceKeysOf(msg) {
   const out = [];
@@ -601,7 +601,8 @@ export function offDeviceKeysOf(msg) {
     if (msg.k === "whisper" || msg.k === "whispered") add(`chat.k:${msg.k}`);
   } else if (msg.t === "chatLog" && Array.isArray(msg.lines)) {
     for (const l of msg.lines) if (l && (l.k === "whisper" || l.k === "whispered")) add(`chatLog.k:${l.k}`);
-  } else if (msg.t === "resultLog" && (msg.part === "whisper" || msg.part === "claim")) {
+  } else if (msg.t === "resultLog" && (msg.part === "whisper" || msg.part === "claim") && Array.isArray(msg.lines) && msg.lines.length > 0) {
+    // 결과 화면은 묶음 네 부분을 모두 요청하고 서버는 꺼진 부분을 빈 줄로 답한다 — 빈 묶음은 흔적이 아니고 줄이 실제로 올 때만 센다
     add(`resultLog.part:${msg.part}`);
   }
   return out;

@@ -16,8 +16,11 @@ import {
   readGhostOutfits,
   readGhostTagContrast,
   setBotVote,
+  skipOnce,
   skipTo,
   tapPick,
+  offScannerScript,
+  readOffScan,
   backToLobby,
   clearToasts,
   consoleCollector,
@@ -111,6 +114,9 @@ import {
   gamePanelHeight,
   ghostDomChecks,
   pickButtonChecks,
+  basicOrderChecks,
+  OFF_DEVICE_ATTR_PREFIX,
+  OFF_DEVICE_SELECTORS,
   NOMINATION_MS,
   verdictPanelChecks,
   ANNOUNCE_MORNING_AT,
@@ -1328,12 +1334,12 @@ async function untilGame(page, pred, ms = 6000, label = "게임 화면") {
 }
 
 /** 방장 + 손님(사람 페이지) + 봇 → 시작 → to 단계까지. 돌려주는 값: { host, hp, ht, hostSeat, guests: [{ context, page, tracker, takeIssues, seat }] } */
-async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], guestSize = undefined, minBotNameChars = 0 } = {}) {
-  const host = await startHost(ctx, flowId, hostNick ? { nickname: hostNick } : {});
+async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], guestSize = undefined, minBotNameChars = 0, hostInitScripts = [], guestNames = GAME_GUESTS } = {}) {
+  const host = await startHost(ctx, flowId, { ...(hostNick ? { nickname: hostNick } : {}), ...(hostInitScripts.length > 0 ? { initScripts: hostInitScripts } : {}) });
   const { page: hp, tracker: ht } = host;
   const pages = [];
   for (let i = 0; i < guests; i++) {
-    const { guest, seat } = await openGuest(ctx, GAME_GUESTS[i], { initScripts: guestInitScripts, ...(guestSize ? { size: guestSize } : {}) });
+    const { guest, seat } = await openGuest(ctx, guestNames[i], { initScripts: guestInitScripts, ...(guestSize ? { size: guestSize } : {}) });
     pages.push({ ...guest, seat });
   }
   await ht.waitFor((v) => v.players.length === guests + 1, 6000, `방장 쪽 인원 ${guests + 1}`);
@@ -1550,6 +1556,7 @@ async function dayFlow(ctx) {
       // NM9 마음 바꾸기(U-3): 손님1 이 손님2 로 바꾸면 모든 페이지 배지가 따라 바뀌고(방장 2·손님2 1), 다시 방장으로 되돌리면 3 으로 돌아온다
       {
         const other = guests[1].seat;
+        await sleep(600); // 같은 연타 방어 간격(첫 표와 바꾸기 사이)
         const swapped = await attempt(async () => {
           await tapPick(guests[0].page, other);
           for (const x of humans) await untilGame(x.page, (g) => Number(g.tags.find((t) => t.seat === hostSeat)?.count ?? 0) === guests.length - 1 && Number(g.tags.find((t) => t.seat === other)?.count ?? 0) === 1, 5000, "바꾼 표");
@@ -1558,9 +1565,17 @@ async function dayFlow(ctx) {
           return hostC.every((c) => c === String(guests.length - 1)) && otherC.every((c) => c === "1") ? true : { ok: false, detail: `방장 ${hostC.join("/")}, 손님2 ${otherC.join("/")}` };
         });
         rec(sc, "NM9", "한 손님이 다른 사람으로 바꾸면 모든 페이지 득표 배지가 따라 바뀐다", swapped.ok, swapped.detail);
+        // 서버는 한 사람의 표 바꾸기를 250ms 안에 되풀이하면 받지 않는다(POINT_MIN_INTERVAL_MS, 연타 방어) — 사람이 마음을 바꾸는 속도로 간격을 둔다
+        await sleep(600);
         const back = await attempt(async () => {
           await tapPick(guests[0].page, hostSeat);
-          for (const x of humans) await untilGame(x.page, (g) => Number(g.tags.find((t) => t.seat === hostSeat)?.count ?? 0) === guests.length && g.tags.find((t) => t.seat === other)?.count === null, 5000, "되돌린 표");
+          try {
+            for (const x of humans) await untilGame(x.page, (g) => Number(g.tags.find((t) => t.seat === hostSeat)?.count ?? 0) === guests.length && g.tags.find((t) => t.seat === other)?.count === null, 5000, "되돌린 표");
+          } catch (e) {
+            const hostC = await countsOf(hostSeat);
+            const otherC = await countsOf(other);
+            return { ok: false, detail: `${e.message} · 방장 ${hostC.join("/")}, 손님2 ${otherC.join("/")}, 지금 단계 ${ht.last().phase}` };
+          }
         });
         rec(sc, "NM9b", "다시 방장으로 되돌리면 배지가 3표로 돌아오고 손님2 의 배지는 사라진다", back.ok, back.detail);
       }
@@ -1880,6 +1895,120 @@ async function noexecFlow(ctx) {
     } finally {
       await closeGame(game);
     }
+  }
+}
+
+// ---- basic-off / basic-vote: 13페이즈 기본판(결정 0072) — 꺼진 장치 부재 검사와 8명 투표 화면 기하 ----
+
+/** 한 판 안에서 가장 길게 보는 한도: 단계를 한 칸씩 넘기며 ended 에 닿기까지의 최대 칸 수(부하로 날이 길어져도 닿도록 넉넉히) */
+const BASIC_OFF_MAX_STEPS = 90;
+
+/**
+ * basic-off (FLOW-03·FLOW-05, U-8): 방장 + 봇 5 의 테스트 방 한 판을 로비부터 결과까지 단계마다 한 칸씩 넘기며,
+ * 꺼진 장치가 DOM(OFF_DEVICE_SELECTORS·data-turn* 속성, 100ms 감시)·받은 프레임(tracker.offKeys)·단계 순서·결과 탭 어디에도 없음을 본다.
+ */
+async function basicOffFlow(ctx) {
+  const id = "basic-off";
+  const rec = recorder(ctx);
+  const game = await openGame(ctx, id, { guests: 0, bots: 5, role: "citizen", vote: { exec: "yes", pick: "other" }, to: null, hostInitScripts: [offScannerScript(OFF_DEVICE_SELECTORS, OFF_DEVICE_ATTR_PREFIX)] });
+  try {
+    const { hp, ht } = game;
+    let endBtn = null;
+    let steps = 0;
+    // 한 칸씩: 로비 직후(assigning)부터 ended 까지. 첫 토론에서 [토론 끝내기] 개수를 센다(OFF5)
+    while (ht.last().phase !== "ended" && steps < BASIC_OFF_MAX_STEPS) {
+      const phase = await step(`${ht.last().phase} 다음 단계`, () => skipOnce(hp, ht));
+      steps += 1;
+      if (phase === "discussion" && endBtn === null) {
+        await settle(hp);
+        endBtn = await hp.locator("[data-end-discussion]").count();
+      }
+      await sleep(250); // 감시(100ms)가 이 단계 화면을 한 번은 보게
+    }
+    const toEnd = await attempt(async () => {
+      if (ht.last().phase !== "ended") throw new Error(`${steps}칸을 넘겼는데 ${ht.last().phase} 에서 끝나지 않음`);
+      await ht.waitFor((v) => v.phase === "ended" && v.result !== undefined, 10000, "결과 도달");
+    });
+    rec(`${id}/flow`, "OFF0", "테스트 방 봇 판이 로비부터 결과(ended)까지 닿는다 (FLOW-05)", toEnd.ok, toEnd.detail);
+    if (!toEnd.ok) return;
+    const shown = await attempt(async () => {
+      await settledResult(hp);
+    });
+    // OFF1 DOM: 로비부터 결과 연출까지 감시가 한 번도 못 본 선택자
+    const scan = await readOffScan(hp);
+    const hits = scan === null ? null : Object.entries(scan.seen).map(([sel, v]) => `${sel} ${v.n}건(${v.phase})`);
+    rec(`${id}/dom`, "OFF1", `꺼진 장치 선택자·${OFF_DEVICE_ATTR_PREFIX}* 속성이 한 판 전체에서 0건이다`, scan !== null && scan.scans > 20 && hits.length === 0, scan === null ? "감시 스크립트가 없음" : hits.length > 0 ? hits.join(", ") : `감시 ${scan.scans}회`);
+    infoRow(ctx, `${id}/dom`, "OFF1i", "감시가 본 단계 열(참고)", scan === null ? "없음" : scan.phases.join(" → "));
+    // OFF2 프레임: 받은 모든 state·chat 프레임의 꺼진 장치 키
+    rec(`${id}/frames`, "OFF2", "받은 프레임에 players[].badge·badgeSwapped·day.turn·day.runoff·day.showdown·me.whisperUsed·me.ballot·귓속말 줄이 0건이다", ht.offKeys.length === 0, ht.offKeys.length === 0 ? `phase 열 ${ht.phases.length}개` : `처음 걸린 경로 ${ht.offKeys[0]} (전체 ${ht.offKeys.join(", ")})`);
+    // OFF3 단계 순서
+    recMany(rec, `${id}/order`, basicOrderChecks(ht.phases));
+    rec(`${id}/order`, "OFF3b", "투표(nomination)·변론(defense)·찬반(verdict)·처형(execution)을 한 번 이상 지났다", ["nomination", "defense", "verdict", "execution", "night", "morning"].every((p) => ht.phases.includes(p)), `지난 단계 ${[...new Set(ht.phases)].join(",")}`);
+    // OFF4 결과 화면: 탭은 있되 귓속말 탭이 없다
+    const tabs = await hp.evaluate(() => ({ all: document.querySelectorAll("[data-result-tab]").length, whisper: document.querySelectorAll('[data-result-tab="whisper"]').length }));
+    rec(`${id}/result`, "OFF4", "결과 화면에 탭이 있고 귓속말 탭(data-result-tab=whisper)이 없다", shown.ok && tabs.all > 0 && tabs.whisper === 0, shown.ok ? `탭 ${tabs.all}개, 귓속말 탭 ${tabs.whisper}개` : shown.detail);
+    // OFF5 낮 토론에는 [토론 끝내기] 가 하나 있다(기본판 장치)
+    rec(`${id}/discussion`, "OFF5", "토론 단계에 [토론 끝내기] 가 하나 있다", endBtn === 1, `[data-end-discussion] ${endBtn}개`);
+  } finally {
+    await closeGame(game);
+  }
+}
+
+/** 8명판 투표 화면 시험용 손님 닉네임 일곱(모두 4자 — UI-SPEC "이름표 버튼 8개 … (4자 이름, 폰 6종)") */
+const BASIC_VOTE_GUESTS = ["가나다라", "마바사아", "자차카타", "파하거너", "더러머버", "서어저처", "커터퍼허"];
+
+/** 이름표가 모여 멈출 때까지 기다렸다 읽는다: 투표 15초 안에 걸어 모이므로(U-2) 버튼 사각형이 두 번 연속 같아질 때까지(최대 maxMs) 0.4초 간격으로 본다. */
+async function readGameStable(page, maxMs = 11000) {
+  const key = (g) => JSON.stringify(g.picks.map((b) => [b.seat, Math.round(b.rect.left), Math.round(b.rect.top)]));
+  let prev = null;
+  let g = await readGame(page);
+  for (const t0 = performance.now(); performance.now() - t0 < maxMs; ) {
+    const k = key(g);
+    if (k === prev) return g;
+    prev = k;
+    await sleep(400);
+    g = await readGame(page);
+  }
+  return g;
+}
+
+/**
+ * basic-vote (FLOW-01, U-8): 8명(방장 + 사람 손님 7, 모두 4자 이름) 투표 화면의 기하. 이름표 버튼 7개가 44×44 이상·무가림(pickButtonChecks, 모여서 멈춘 뒤),
+ * 묶음 G·H, 제목 '투표', 시간 링, 순차 블록 없음, 손님 일곱이 방장을 누르면 득표 배지 합 7 이고 표가 쌓인 뒤에도 기하가 유지된다.
+ * 계획은 봇 7 이었으나 봇 이름은 첫 봇이 8자 고정이라 UI-SPEC 의 '4자 이름' 전제와 다르다 — 사람 손님으로 4자 이름을 만든다(결정 0052-3 과 같은 이유, SUMMARY 편차 참고).
+ */
+async function basicVoteFlow(ctx) {
+  const id = "basic-vote";
+  const rec = recorder(ctx);
+  const sc = `${id}/nomination`;
+  const game = await openGame(ctx, id, { guests: 7, bots: 0, role: "citizen", to: "nomination", guestNames: BASIC_VOTE_GUESTS, hostNick: GAME_HOST_NICK });
+  try {
+    const { host, hp, ht, hostSeat, guests } = game;
+    await allAt([hp], "nomination");
+    const g = await readGameStable(hp);
+    rec(sc, "BV1", "이름표 버튼이 나를 뺀 산 사람 7개다", g.picks.length === 7 && !g.picks.some((b) => b.seat === hostSeat), `버튼 ${g.picks.length}개`);
+    recMany(rec, sc, pickButtonChecks(g.picks), " (8명판, 모여서 멈춘 뒤)");
+    const ring = await hp.evaluate(() => {
+      const el = document.querySelector(".mf-game__header .mv-ring[role=timer]");
+      const m = /(\d+)/.exec(el?.getAttribute("aria-label") ?? "");
+      return el ? { seconds: m ? Number(m[1]) : null } : null;
+    });
+    rec(sc, "BV4", "헤더 제목이 '투표'이고 시간 링이 있다(남은 초 1~15)", g.title === "투표" && !!ring && ring.seconds !== null && ring.seconds >= 1 && ring.seconds <= 15, `제목 '${g.title}', 링 ${ring === null ? "없음" : `${ring.seconds}초`}`);
+    rec(sc, "BV5", "순차 차례 블록([data-turn-block])이 없다", g.turn === null, `turn ${g.turn === null ? "없음" : "있음"}`);
+    await gameGH(ctx, id, "nomination", host);
+    // 손님 일곱이 방장을 누른다 → 모든 이름표 득표 배지 합 7, 방장 이름표 7표
+    const voted = await attempt(async () => {
+      for (const x of guests) await tapPick(x.page, hostSeat);
+      await untilGame(hp, (gm) => Number(gm.tags.find((t) => t.seat === hostSeat)?.count ?? 0) >= 7, NOMINATION_MS, "손님 일곱의 표");
+    });
+    await sleep(300);
+    const g2 = await readGameStable(hp, 4000);
+    const sum = g2.tags.reduce((a, t) => a + Number(t.count ?? 0), 0);
+    rec(sc, "BV6", "손님 일곱의 표가 모두 들어와 득표 배지 합이 7 이다", voted.ok && sum === 7, voted.ok ? `배지 합 ${sum}` : voted.detail);
+    // 표가 쌓인 뒤(배지·선두·유력 표시가 붙은 상태)에도 같은 기하
+    recMany(rec, `${sc}-voted`, pickButtonChecks(g2.picks), " (표가 쌓인 뒤)");
+  } finally {
+    await closeGame(game);
   }
 }
 
@@ -3660,6 +3789,9 @@ export const FLOWS = [
   // 맵 선택(11-13, MAP-06): 칩·시트·카드 기하, 손님 읽기 전용, 선택 반영, 시작 뒤 같은 맵, 광장 한 판 ended
   { id: "map-select", run: mapSelectFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "chat-game", run: chatGameFlow, size: GAME_SIZE },
+  // 13페이즈 기본판(결정 0072): basic-off = 봇 판 한 판 전체(로비 → 낮 → 밤 → 결과)에서 꺼진 장치 DOM·프레임·단계 순서·결과 탭 0건, basic-vote = 8명 투표 화면(이름표 버튼 7개 44×44·무가림, 묶음 G·H). 폰 6종은 basic-vote 만
+  { id: "basic-off", run: basicOffFlow, size: GAME_SIZE },
+  { id: "basic-vote", run: basicVoteFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 기본판(결정 0072, 13페이즈)에서 꺼진 장치의 흐름 7개(politics-badge·whisper·pin·runoff·runoff-tie·showdown·showdown-tie)는 지우지 않고 기본 실행에서 뺀다 — RULESET 을 켰을 때만 --only 로 돈다. politics-verdict(판결 순간 연출, D-06)는 그대로 돈다.
   // 9.1.1 페이즈 정치 긴장(09.1.1-10): 직업 배지(떠 있는 버튼→칩→이름표 배지→말 바꿈)·귓속말(모드→한 줄 시트→당사자만 본문). 둘 다 폰 6종, 방장·손님 두 화면
   { id: "politics-badge", run: politicsBadgeFlow, extraSizes: LOBBY_EXTRA_SIZES, skipByDefault: true },
