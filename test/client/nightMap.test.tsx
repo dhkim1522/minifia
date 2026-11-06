@@ -4,7 +4,9 @@ import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
 import { approachPoint } from "../../shared/game/world";
 import type { RoleId } from "../../shared/game/roles";
+import { setEngineForTest } from "../../src/audio/unlock";
 import { faceSrc } from "../../src/net/assets";
+import { makeRig } from "../helpers/soundRig";
 import type { ClientMessage, InvestigationRecord, PhaseId, PublicPlayer, RoomView, SpectatePicks } from "../../shared/protocol";
 import type { SceneLook } from "../../src/world/presence";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
@@ -966,5 +968,45 @@ describe("밤 시민 편 — 어둠 표식과 긴장 비네트 (NIGHT-10, E3 #20
     expect(rosterSeats(container)).toEqual([3]);
     expect(container.querySelectorAll("[data-role-chip]")).toHaveLength(0);
     expect(container.querySelectorAll("[data-chat-panel]")).toHaveLength(0);
+  });
+});
+
+// ---- 12-09: 밤 소리 갈래 — RoomScreen 이 계산한 visualCues 불리언 하나로만 갈리고 두 갈래의 소리는 같다 (D-11, LS-3) ----
+
+describe("밤 소리: 시각 큐 갈래와 소리 전용 갈래는 같은 소리 id 와 같은 큐 개수를 낸다 (LS-3, T-12-33)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(NOW);
+    vi.spyOn(Math, "random").mockReturnValue(0); // 큐 2개: 5000ms, 9000ms
+  });
+  afterEach(() => {
+    setEngineForTest(null);
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  /** 한 사람의 밤 진입 → 9.1초 동안 엔진 로그 */
+  function nightLog(mySeat: number, opts: { dead?: number[]; reduced?: boolean } = {}): string[] {
+    const rig = makeRig();
+    setEngineForTest(rig.engine);
+    if (opts.reduced === true) vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+    const m = mount(makeView({ phase: "execution", mySeat, ...(opts.dead ? { dead: opts.dead } : {}) }));
+    m.show(makeView({ mySeat, ...(opts.dead ? { dead: opts.dead } : {}) }));
+    act(() => void vi.advanceTimersByTime(9_100)); // 시각 맥박(시민 편)은 이 타이머로 큐를 낸다
+    act(() => rig.fake.clock.advance(9_100)); // 소리 전용 스케줄러(그 밖)는 엔진 시계로 낸다
+    const log = rig.engine.log().map((e) => e.id);
+    m.unmount();
+    cleanup();
+    vi.unstubAllGlobals();
+    return log;
+  }
+
+  it("산 시민·경찰·의사(시각 큐)·산 마피아·유령·모션 줄이기 시민(소리 전용)의 밤 로그가 같다", () => {
+    const logs = [nightLog(3), nightLog(1), nightLog(2), nightLog(0), nightLog(3, { dead: [3] }), nightLog(3, { reduced: true })];
+    const night = (l: string[]): string[] => l.filter((id) => id === "bed.night" || id === "night.fall" || id === "night.cue");
+    for (const l of logs) {
+      expect(night(l)).toEqual(["bed.night", "night.fall", "night.cue", "night.cue"]);
+      expect(l.filter((id) => id.startsWith("ui."))).toEqual([]);
+    }
   });
 });

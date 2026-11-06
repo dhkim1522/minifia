@@ -29,6 +29,7 @@ function av(phase: PhaseId, over: Partial<AudioView> = {}): AudioView {
     turn: null,
     points: [],
     candidate: null,
+    morning: null,
     players: [0, 1, 2, 3].map((seat) => ({ seat, alive: true })),
     mySeat: 0,
     ...over,
@@ -75,7 +76,8 @@ describe("단계 → 침대 표 (D-17, O-7)", () => {
 
 describe("첫 스냅샷·epoch 변경·같은 view 의 되풀이 (LS-10)", () => {
   it.each(PHASES)("%s: 직전 view 가 없으면 침대만 (일회성·대본 0)", (phase) => {
-    const out = direct(null, av(phase, { endsAt: NOW + 60_000 }), clock());
+    // 밤의 큐 대본은 시각 맥박이 도는 갈래(visualCues 참)에서는 없다. 소리 전용 갈래의 재접속 큐는 soundNight.test.ts 가 본다 (LS-10)
+    const out = direct(null, av(phase, { endsAt: NOW + 60_000 }), clock({ visualCues: true }));
     expect(out.bed).toBe(BED_OF[phase]);
     expect(out.now).toEqual([]);
     expect(out.scripts).toEqual([]);
@@ -235,7 +237,7 @@ describe("timer.tick (C-2, LS-11)", () => {
     expect(out.scripts[0]?.items.map((i) => i.at)).toEqual([5000, 6000, 7000, 8000, 9000]);
   });
 
-  it.each(["nomination", "runoff", "showdown", "execution", "night", "morning", "ended", "dayAnnounce", "roleReveal"] as const)(
+  it.each(["nomination", "runoff", "showdown", "execution", "ended", "dayAnnounce", "roleReveal"] as const)(
     "%s 에는 틱이 없다",
     (phase) => {
       const out = direct(av("lobby"), av(phase, { endsAt: NOW + 4000 }), clock());
@@ -243,6 +245,12 @@ describe("timer.tick (C-2, LS-11)", () => {
       expect(ids(out)).not.toContain("timer.tick");
     },
   );
+
+  it.each(["night", "morning"] as const)("%s 의 대본에는 timer.tick 이 없다 (밤·아침은 카운트다운 무음)", (phase) => {
+    const out = direct(av("lobby"), av(phase, { endsAt: NOW + 4000 }), clock());
+    expect(ids(out)).not.toContain("timer.tick");
+    expect(out.scripts.flatMap((s) => s.items.map((i) => i.id))).not.toContain("timer.tick");
+  });
 
   it("이미 지난 경계는 만들지 않는다 (늦게 들어온 view)", () => {
     const out = direct(av("dayAnnounce"), av("discussion", { endsAt: NOW + 3500 }), clock());
@@ -400,8 +408,8 @@ describe("지목 pick.*·pin.* (D-11)", () => {
 // ───────────────────────── 신호 (ui.tap) ─────────────────────────
 
 describe("신호 tap → ui.tap (LS-7)", () => {
-  it("닫힌 신호 종류는 tap 하나이고 인자가 없다", () => {
-    expect([...SIGNAL_KINDS]).toEqual(["tap"]);
+  it("닫힌 신호 종류는 tap·card·tensionCue 이고 인자에 선택값·역할·좌석이 없다", () => {
+    expect([...SIGNAL_KINDS]).toEqual(["tap", "card", "tensionCue"]);
   });
 
   it.each(PHASES.filter((p) => p !== "night"))("%s: ui.tap 한 번", (phase) => {
@@ -526,6 +534,7 @@ describe("audioViewOf: 허용 필드만 (LS-6, T-12-27)", () => {
       turn: { order: [0, 2], i: 1, endsAt: 130_000 },
       points: [{ seat: 0, target: 2 }],
       candidate: 2,
+      morning: null,
       players: [{ seat: 0, alive: true }, { seat: 1, alive: false }, { seat: 2, alive: true }],
       mySeat: 2,
     });

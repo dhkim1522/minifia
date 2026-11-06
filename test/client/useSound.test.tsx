@@ -368,6 +368,64 @@ describe("useSound: 방 view 의 차이가 감독을 거쳐 엔진 요청이 된
     expect(logIds(rig).filter((id) => id === "lobby.join")).toHaveLength(2);
   });
 
+  it("밤 진입(소리 전용 갈래): night.fall + bed.night 즉시, 큐 night.cue 2개가 로컬 시계로 난다 (D-10, LS-3)", () => {
+    const rig = makeRig();
+    const t0 = rig.fake.clock.now();
+    const { rerender } = renderHook((p: Props) => useSound({ engine: rig.engine, view: p.view, epoch: p.epoch, offset: 0, now: rig.fake.clock.now, random: () => 0 }), {
+      initialProps: { view: roomView("execution"), epoch: 1 } as Props,
+    });
+    rerender({ view: roomView("night", { phaseEndsAt: t0 + 30_000 }), epoch: 1 });
+    expect(logIds(rig)).toEqual(["bed.vote", "bed.night", "night.fall"]);
+    act(() => rig.fake.clock.advance(5_100));
+    expect(logIds(rig).filter((id) => id === "night.cue")).toHaveLength(1);
+    act(() => rig.fake.clock.advance(4_000));
+    expect(logIds(rig).filter((id) => id === "night.cue")).toHaveLength(2);
+    act(() => rig.fake.clock.advance(30_000));
+    expect(logIds(rig).filter((id) => id === "night.cue")).toHaveLength(2);
+  });
+
+  it("visualCues 가 참이면 소리 전용 큐 대본이 없고 tensionCue 신호마다 night.cue 한 번 (D-11)", () => {
+    const rig = makeRig();
+    const t0 = rig.fake.clock.now();
+    const { rerender } = renderHook((p: Props) => useSound({ engine: rig.engine, view: p.view, epoch: p.epoch, offset: 0, now: rig.fake.clock.now, random: () => 0, visualCues: true }), {
+      initialProps: { view: roomView("execution"), epoch: 1 } as Props,
+    });
+    rerender({ view: roomView("night", { phaseEndsAt: t0 + 30_000 }), epoch: 1 });
+    expect(logIds(rig)).toContain("night.fall");
+    act(() => rig.fake.clock.advance(30_000));
+    expect(logIds(rig).filter((id) => id === "night.cue")).toHaveLength(0);
+    emitSignal({ kind: "tensionCue" });
+    emitSignal({ kind: "tensionCue" });
+    expect(logIds(rig).filter((id) => id === "night.cue")).toHaveLength(2);
+  });
+
+  it("tensionCue 신호는 밤이 아니면 무음이고, visualCues 가 거짓이어도 무음이다", () => {
+    const rig = makeRig();
+    const { rerender } = mount(rig, { view: roomView("discussion"), epoch: 1 });
+    emitSignal({ kind: "tensionCue" });
+    expect(logIds(rig)).not.toContain("night.cue");
+    rerender({ view: roomView("night", { phaseEndsAt: rig.fake.clock.now() + 30_000 }), epoch: 1 });
+    emitSignal({ kind: "tensionCue" }); // visualCues 기본 거짓
+    expect(logIds(rig)).not.toContain("night.cue");
+  });
+
+  it("밤 중 tap·card 신호는 무음이다 (LS-7)", () => {
+    const rig = makeRig();
+    mount(rig, { view: roomView("night", { phaseEndsAt: rig.fake.clock.now() + 20_000 }), epoch: 1 });
+    emitSignal({ kind: "tap" });
+    emitSignal({ kind: "card", delayMs: 0 });
+    expect(logIds(rig).filter((id) => id.startsWith("ui."))).toEqual([]);
+  });
+
+  it("밤 중간 첫 view: bed.night 만 즉시, night.fall 은 없고 큐는 남은 시간 안에서 새로 뽑는다 (LS-10)", () => {
+    const rig = makeRig();
+    const t0 = rig.fake.clock.now();
+    mount(rig, { view: roomView("night", { phaseEndsAt: t0 + 12_000 }), epoch: 1 });
+    expect(logIds(rig)).toEqual(["bed.night"]);
+    act(() => rig.fake.clock.advance(12_000));
+    expect(logIds(rig)).not.toContain("night.fall");
+  });
+
   it("active 가 거짓이면 감독도 쉰다", () => {
     const rig = makeRig();
     renderHook(() => useSound({ engine: rig.engine, active: false, view: roomView("lobby"), epoch: 1, offset: 0, now: rig.fake.clock.now }));
