@@ -2,9 +2,10 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { NOMINATION_GATHER_MS } from "../../shared/game/phases";
+import { NOMINATION_GATHER_MS, NOMINATION_MS } from "../../shared/game/phases";
+import { RULESET } from "../../shared/game/ruleset";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
-import { alarmOf, advanceTo, closePhase, collect, createRoom, driveToEnded, editRoom, mapPlayers, nextFrame, seat, send, skipOnce, skipThrough, storedRoom, wanderTimes } from "./helpers";
+import { alarmOf, advanceTo, collect, createRoom, driveToEnded, editRoom, mapPlayers, nextFrame, seat, send, skipOnce, skipThrough, storedRoom, wanderTimes } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
@@ -273,7 +274,7 @@ describe("testSkip", () => {
     expect(summary(await sendAndSettle(r.host, { t: "testRole", role: "police" }))).toBe("[error:WRONG_PHASE,state:roleReveal]");
   }, 30_000);
 
-  it("discussion 에서 넘기면 모든 소켓이 지목(모이기 phaseDurationMs 3000)을 받고, 표가 없이 다시 넘기면 밤이다 (DAY-07)", async () => {
+  it("discussion 에서 넘기면 모든 소켓이 투표(동시 15초 phaseDurationMs)를 받고, 표가 없이 다시 넘기면 밤이다 (DAY-07, 결정 0072)", async () => {
     const r = await seatQuiet(3, { testMode: true });
     await start(r);
     await skipUntil(r, "discussion");
@@ -281,7 +282,7 @@ describe("testSkip", () => {
     send(r.host, { t: "testSkip" });
     for (const sock of allSockets(r)) {
       const msg = (await nextFrame(sock, isPhase("nomination"))) as Extract<ServerMessage, { t: "state" }>;
-      expect(`${msg.view.phase}/${msg.view.phaseDurationMs}`).toBe(`nomination/${NOMINATION_GATHER_MS}`);
+      expect(`${msg.view.phase}/${msg.view.phaseDurationMs}`).toBe(`nomination/${RULESET.pickTurn ? NOMINATION_GATHER_MS : NOMINATION_MS}`); // 기본판(결정 0072)은 15000, 순차 지목을 켜면 모이기 3000
     }
     expect(String(await alarmOf(r.code))).toBe(String((await stored(r.code)).phaseEndsAt));
     for (const s of allSockets(r)) s.cursor = s.frames.length;
@@ -390,13 +391,12 @@ async function endedRoom(): Promise<Seated> {
 }
 
 describe("투표 단계 넘기기와 종료 중 도구", () => {
-  it("nomination 중 testSkip: 방장이 자기 차례에 지목한 표와 아직 차례가 안 온 봇의 표가 함께 세어진 뒤 넘어가고 저장된 voteLog 마지막 줄 지목 수는 살아 있는 봇 수 + 방장 표다 (결정 0063-1)", async () => {
+  it("nomination 중 testSkip: 방장이 던진 표와 아직 안 던진 봇의 표가 함께 세어진 뒤 넘어가고 저장된 voteLog 마지막 줄 지목 수는 살아 있는 봇 수 + 방장 표다 (결정 0072)", async () => {
     const r = await seatQuiet(0, { testMode: true });
     send(r.host, { t: "testBots", count: 3 });
     await nextFrame(r.host, lobbyOf(4));
     await start(r);
-    await skipThrough(r, "nomination"); // 모이는 중
-    await closePhase(r.code); // 방장(좌석 0)이 차례 순서 첫째
+    await skipThrough(r, "nomination"); // 기본판: 산 사람 모두 동시에 15초 투표
     await sendAndSettle(r.host, { t: "point", target: 1 });
     send(r.host, { t: "testSkip" });
     await nextFrame(r.host, (m) => m.t === "state" && m.view.phase !== "nomination");

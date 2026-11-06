@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { BOT_CHAT_LINES, BOT_WILL_LINES } from "../../shared/game/bots";
 import { LAST_WORD_CHIPS } from "../../shared/game/showdown";
 import { PHASE_DEFS, PICK_TURN_MS } from "../../shared/game/phases";
+import { RULESET } from "../../shared/game/ruleset";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
   advanceTo,
@@ -468,22 +469,21 @@ const botSeatsOf = async (code: string): Promise<number[]> => (await botsOf(code
 
 describe("봇 투표·변론", () => {
   // 08-11: 지목·찬반 단계의 봇 행동(point·verdict)은 아래 "봇 지목·찬반·토론 끝내기" describe 가 이미 본다. 여기는 실제 흐름으로 지목 줄이 기록으로 남는 것과 봇 변론자의 chat 만 본다.
-  it("nomination: 봇 차례가 되면 봇 지목이 모두에게 공개되고, 끝까지 넘기면 그날 voteLog 줄 cand.votes 에 봇 줄로 남는다", async () => {
-    const r = await botRoomAt("nomination"); // 방장(사람, 차례 순서 첫째) + 봇 3
+  it("nomination: 산 봇 셋이 사람과 같은 길로 한꺼번에 던져 방장의 day.points 에 모두 보이고, 마감하면 그날 voteLog 줄 cand.votes 에 봇 줄로 남는다 (결정 0072)", async () => {
+    const r = await botRoomAt("nomination"); // 방장(사람) + 봇 3, 기본판 동시 투표
     const botSeats = await botSeatsOf(r.code);
-    for (const seat of botSeats) {
-      const from = mark(r.host);
-      expect(await walkToBotPoint(r.code)).toBe(seat);
-      const frames = await settle(r.host, from);
-      const view = (frames.filter((m): m is State => m.t === "state").at(-1)!).view;
-      expect(`${seat}:${JSON.stringify(view.day?.points?.some((l) => l.seat === seat))}`).toBe(`${seat}:true`);
-      expect(JSON.stringify(frames).includes("botPlan")).toBe(false);
-    }
-    // 마지막 봇의 확정 뒤 사이 → 끝 알림 → 집계까지 마감을 당겨 넘긴다.
-    for (let i = 0; i < 4 && (await storedRoom(r.code)).phase === "nomination"; i += 1) await closePhase(r.code);
+    const from = mark(r.host);
+    await forceBotsDue(r.code); // 봇 셋의 point 시각을 당겨 알람 한 번 — 계획은 서 있고 실행은 worker actAsBot → applyPoint → castPoint 다
+    await until("봇 표 3개", async () => (await countWith(r.code, "nominate")) === 3);
+    const frames = await settle(r.host, from);
+    const view = (frames.filter((m): m is State => m.t === "state").at(-1)!).view;
+    expect(`${JSON.stringify([...(view.day?.points ?? [])].map((l) => l.seat).sort())}`).toBe(JSON.stringify(botSeats));
+    expect(Object.hasOwn(view.day ?? {}, "turn")).toBe(false);
+    expect(JSON.stringify(frames).includes("botPlan")).toBe(false);
+    await closePhase(r.code); // 마감: 집계 → 변론 또는 처형 없는 밤
     const line = (await storedRoom(r.code)).voteLog!.at(-1)!.cand!;
     expect(line.votes.map((v) => v.seat).sort().join(",")).toBe(botSeats.join(","));
-    expect(line.votes.every((v) => v.target !== v.seat)).toBe(true);
+    expect(line.votes.every((v) => v.target !== v.seat)).toBe(true); // 자기 지목 없음
     expect(await votesIn(r.code, "nominate")).toBe(0); // 마감 훅이 개인 키를 지웠다
   }, 60_000);
 
@@ -502,7 +502,8 @@ describe("봇 투표·변론", () => {
   }, 30_000);
 });
 
-describe("봇 결선 투표 (09.1.1-05, 결정 0066-4)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
+describe.skipIf(!RULESET.runoff)("봇 결선 투표 (09.1.1-05, 결정 0066-4)", () => {
   it("결선 투표 창(step 1)에서 후보가 아닌 봇이 사람과 같은 길로 한 표씩 던지고, 집계 뒤 변론 또는 밤으로 이어지며, 프레임에는 개인 선택·봇 계획이 새지 않는다", async () => {
     const r = await botRoomAt("nomination"); // 방장(좌석 0) + 봇 3(좌석 1~3)
     const botSeats = await botSeatsOf(r.code);
@@ -547,8 +548,8 @@ describe("누출 없음: 투표·변론·처형·종료", () => {
     await start(r);
     const botIds = (await botsOf(r.code)).map((b) => b.id);
     await driveToEnded(r, async (stage) => {
-      if (stage === "nomination") await walkToBotPoint(r.code); // 순차 지목: 봇 차례가 와서 지목이 끝날 때까지(결정 0063-1)
-      else await forceBotsDue(r.code);
+      if (stage === "nomination" && RULESET.pickTurn) await walkToBotPoint(r.code); // 순차 지목(RULESET.pickTurn): 봇 차례가 와서 지목이 끝날 때까지(결정 0063-1)
+      else await forceBotsDue(r.code); // 기본판(결정 0072): 동시 투표 — 봇 표가 한꺼번에 저장된다
     });
     for (const sock of allSockets(r)) await settle(sock, mark(sock));
     expect(String((await stored(r.code)).phase)).toBe("ended");
@@ -577,7 +578,8 @@ const planKinds = async (code: string): Promise<string> => {
 const countWith = async (code: string, key: string): Promise<number> => ((await playersOf(code)) as unknown as Array<Record<string, unknown>>).filter((p) => p[key] !== undefined).length;
 
 describe("봇 지목·찬반·토론 끝내기", () => {
-  it("nomination: 봇 차례가 시작된 알람 사슬 안에서 그 봇의 point 가 저장되고(차례 시작 − 확정 < 1000ms), 계획 키는 차례마다 nomination:${마감} 으로 바뀌고, 방장의 day.points 에 봇 줄만 쌓인다", async () => {
+  // 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다
+  it.skipIf(!RULESET.pickTurn)("nomination: 봇 차례가 시작된 알람 사슬 안에서 그 봇의 point 가 저장되고(차례 시작 − 확정 < 1000ms), 계획 키는 차례마다 nomination:${마감} 으로 바뀌고, 방장의 day.points 에 봇 줄만 쌓인다", async () => {
     const r = await seatQuiet(0, { testMode: true });
     send(r.host, { t: "testBots", count: 3 });
     await nextFrame(r.host, lobbyOf(4));
@@ -603,6 +605,48 @@ describe("봇 지목·찬반·토론 끝내기", () => {
     expect(JSON.stringify(lastView(r.host).day?.points)).toBe(JSON.stringify([{ seat: b1!.seat, target: 0 }, { seat: b2!.seat, target: 0 }]));
     expect(JSON.stringify(collect(r.host)).includes("isBot")).toBe(false);
   }, 60_000);
+
+  it("nomination(기본판): 계획 키가 nomination:마감이고 봇 셋의 point 가 한꺼번에 저장되며 고정 pick host 면 모두 방장을 지목한다 (결정 0072)", async () => {
+    const r = await seatQuiet(0, { testMode: true });
+    send(r.host, { t: "testBots", count: 3 });
+    await nextFrame(r.host, lobbyOf(4));
+    await sendAndSettle(r.host, { t: "testBotVote", exec: "no", pick: "host" });
+    await start(r);
+    await skipThrough(r, "nomination");
+    const plan = await waitForPlanKey(r.code);
+    const room = await stored(r.code);
+    expect(plan.key).toBe(`nomination:${String(room.phaseEndsAt)}`);
+    expect(plan.steps.map((st) => st.act.t).join(",")).toBe("point,point,point");
+    expect(String(room.pickTurn)).toBe("undefined");
+    await forceBotsDue(r.code);
+    await until("봇 표 3개", async () => (await countWith(r.code, "nominate")) === 3);
+    expect(((await playersOf(r.code)) as unknown as Array<Record<string, unknown>>).filter((p) => p.isBot === true).map((p) => String(p.nominate)).join(",")).toBe("0,0,0");
+    expect(JSON.stringify(lastView(r.host).day?.points)).toBe(JSON.stringify([1, 2, 3].map((seat) => ({ seat, target: 0 }))));
+  }, 30_000);
+
+  it("봇 point 도 사람과 같은 castPoint 를 지난다(기본판): 자기 지목·범위 밖 대상은 거절되고 규칙을 지키는 행동만 저장된다 (결정 0072)", async () => {
+    const r = await botRoomAt("nomination");
+    const [b1, b2, b3] = (await botsOf(r.code)) as [BotRaw, BotRaw, BotRaw];
+    const past = Date.now() - 1000;
+    const nominated = async (): Promise<string> =>
+      ((await stored(r.code)).players as Array<Record<string, unknown>>)
+        .filter((p) => p.isBot === true)
+        .map((p) => `${String(p.seat)}>${String(p.nominate)}`)
+        .join(",");
+    await toPhase(r.code, "nomination", (room) => ({
+      ...room,
+      botPlan: {
+        key: `nomination:${String(room.phaseEndsAt)}`,
+        steps: [
+          { at: past, botId: b1.id, act: { t: "point", target: b1.seat } }, // 자기 지목 → BAD_MESSAGE
+          { at: past + 1, botId: b2.id, act: { t: "point", target: 99 } }, // 범위 밖 → BAD_MESSAGE
+          { at: past + 2, botId: b3.id, act: { t: "point", target: b1.seat } }, // 올바른 지목
+        ],
+      },
+    }));
+    await armBots(r.code);
+    expect(await nominated()).toBe(`${b1.seat}>undefined,${b2.seat}>undefined,${b3.seat}>${b1.seat}`);
+  }, 30_000);
 
   it("verdict: 변론자가 아닌 봇만 던지고, 방장은 첫 투표마다 state 를 받으며 day.voted 에 값 없이 좌석만 있다", async () => {
     const r = await botRoomAt("discussion");
@@ -735,7 +779,8 @@ describe("봇 유언·다가가기 (09-12, 결정 0061-18)", () => {
   }, 30_000);
 });
 
-describe("봇 마지막 3인 (09.1.1-07, 결정 0066-5)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 을 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("봇 마지막 3인 (09.1.1-07, 결정 0066-5)", () => {
   /** 방장(좌석 0) + 봇 3(좌석 1~3) 중 봇 3 이 죽은 낮의 마지막 3인(차례 순서 [0, 1, 2], 봇은 1·2)을 세운다. 단계 마감은 멀리 둔다. */
   async function showdownRoom(i: number): Promise<Seated> {
     const r = await botRoomAt("nomination");
@@ -786,4 +831,62 @@ describe("봇 마지막 3인 (09.1.1-07, 결정 0066-5)", () => {
     expect(JSON.stringify(view.day?.showdown?.voted)).toBe("[1,2]");
     expect(Object.hasOwn(view.me, "ballot")).toBe(false);
   }, 60_000);
+});
+
+// ---- 13-02: 기본판 봇 방 자동 완주 (FLOW-05, 결정 0072) ----
+describe("기본판 봇 방 자동 완주 (FLOW-05, 결정 0072)", () => {
+  it("방장(사람, 아무 행동 없음) + 서버 봇 일곱이 봇 행동과 단계 마감만으로 시작부터 ended 까지 한 판을 끝내고, 결선·결전·차례 키는 한 번도 나오지 않는다", async () => {
+    const r = await seatQuiet(0, { testMode: true });
+    send(r.host, { t: "testBots", count: 7 });
+    await nextFrame(r.host, lobbyOf(8));
+    await sendAndSettle(r.host, { t: "testRole", role: "citizen" });
+    await start(r);
+    const planned = ["discussion", "nomination", "verdict", "night", "defense"];
+    let rounds = 0;
+    for (; rounds < 400; rounds += 1) {
+      const room = await stored(r.code);
+      if (room.phase === "ended") break;
+      const plan = room.botPlan as { steps: unknown[] } | undefined;
+      if (plan !== undefined && plan.steps.length > 0) {
+        await forceBotsDue(r.code);
+        continue;
+      }
+      await closePhase(r.code);
+      // 새 단계의 봇 계획이 저장될 때까지 기다린다(단계 전환 방송이 저장보다 먼저 도착할 수 있다) — 계획이 서지 않는 단계는 바로 넘어간다.
+      for (let i = 0; i < 60; i += 1) {
+        const now = await stored(r.code);
+        if (!planned.includes(String(now.phase))) break;
+        if ((now.botPlan as { key?: string } | undefined)?.key === `${String(now.phase)}:${String(now.phaseEndsAt)}`) break;
+        await sleep(25);
+      }
+    }
+    await settle(r.host, mark(r.host));
+    const views = collect(r.host)
+      .map(parse)
+      .filter((m): m is State => m.t === "state")
+      .map((m) => m.view);
+    const seen: PhaseId[] = [];
+    for (const v of views) if (seen.at(-1) !== v.phase) seen.push(v.phase);
+    const trail = seen.join(">");
+    const fail = (why: string): string => `${why} | 지나간 단계: ${trail}`;
+
+    expect(fail(`ended 에 닿는다(${rounds}회)`) && (await stored(r.code)).phase).toBe("ended");
+    const allowed: PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
+    expect(fail("허용 밖 단계") && seen.filter((p) => !allowed.includes(p)).join(",")).toBe("");
+    expect(fail("runoff·showdown") && seen.filter((p) => p === "runoff" || p === "showdown").join(",")).toBe("");
+    const withKeys = views.filter((v) => {
+      const day = (v.day ?? {}) as Record<string, unknown>;
+      return "turn" in day || "runoff" in day || "showdown" in day || v.players.some((p) => "badge" in (p as unknown as Record<string, unknown>));
+    });
+    expect(fail("day.turn·day.runoff·day.showdown·players[].badge 키") && String(withKeys.length)).toBe("0");
+    const afterNomination = seen.filter((p, i) => i > 0 && seen[i - 1] === "nomination" && p !== "nomination");
+    expect(fail("nomination 다음 단계") && afterNomination.filter((p) => p !== "defense" && p !== "night").join(",")).toBe("");
+    expect(fail("nomination 에 닿는다") && String(seen.includes("nomination"))).toBe("true");
+    const result = views.at(-1)!.result;
+    expect(fail("결과 winner") && String(result?.winner === "citizenWin" || result?.winner === "mafiaWin")).toBe("true");
+    const days = result!.summary.length;
+    const executions = result!.summary.filter((row) => row.exec?.passed === true).length;
+    // 지나간 일수·처형 수는 판마다 다르다(봇 난수) — 하한만 본다. 실제 값은 13-02-SUMMARY 에 옮겼다(예: 2~4일, 처형 2명, 마피아 승리).
+    expect(fail("지나간 일수·처형 수") && `${days >= 1}/${executions >= 0}`).toBe("true/true");
+  }, 180_000);
 });
