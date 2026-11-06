@@ -3,10 +3,11 @@ import { isAlive } from "../../shared/game/alive";
 import { channelOf } from "../../shared/game/audience";
 import { pickTarget } from "../../shared/game/night";
 import { castTurnPoint, enterNomination, nominationStepMs, stepNomination, turnViewOf } from "../../shared/game/nomination";
-import { DISCUSSION_MS, MORNING_MS, NIGHT_MS, NOMINATION_GATHER_MS, PHASE_DEFS, nominationMaxMs } from "../../shared/game/phases";
+import { DISCUSSION_MS, MORNING_MS, NIGHT_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PHASE_DEFS, nominationMaxMs } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, roundOf, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
+import { RULESET } from "../../shared/game/ruleset";
 import { tick } from "../../shared/game/tick";
 import { buildPreview, buildView } from "../../shared/game/view";
 import type { PhaseId, RoomView } from "../../shared/protocol";
@@ -507,11 +508,11 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
     expect(got.join(" ")).toBe(
-      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:20000:true:77777 verdict:10000:true:77777 execution:5600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
+      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:15000:true:77777 defense:20000:true:77777 verdict:10000:true:77777 execution:5600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
     );
   });
 
-  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, discussion +90000, nomination +3000(모이기), night +nominationMaxMs(4)(전원 기권) + 30000, morning +5000", () => {
+  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, discussion +90000, nomination +15000(기본판 동시 투표 15초), night +30000(전원 기권), morning +5000", () => {
     const a = stateAt("assigning", 4, 1);
     const r = stateAt("roleReveal", 4, 1);
     const ends = ["assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "night", "morning"].map(
@@ -526,9 +527,9 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
         START_AT + 18000,
         START_AT + 20000,
         discussionEnd,
-        discussionEnd + NOMINATION_GATHER_MS,
-        discussionEnd + nominationMaxMs(4) + NIGHT_MS,
-        discussionEnd + nominationMaxMs(4) + NIGHT_MS + MORNING_MS,
+        discussionEnd + NOMINATION_MS,
+        discussionEnd + NOMINATION_MS + NIGHT_MS,
+        discussionEnd + NOMINATION_MS + NIGHT_MS + MORNING_MS,
       ].join("/"),
     );
     expect(r.phaseEndsAt).toBe(START_AT + 18000);
@@ -708,9 +709,9 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
             violations.push(...journalViolations(s, viewer, view, phase, tag));
             violations.push(...phaseKeyViolations(s, viewer, view, phase, tag));
             if ("morning" in (view.day ?? {}) !== (phase === "morning")) violations.push(`${tag}: day.morning presence`);
-            // me 에는 어느 단계에서도 claim 키가 없고(07-08: 순차 주장 제거), day.turn 은 지목 단계에만 있다(09.1, 결정 0063-1).
+            // me 에는 어느 단계에서도 claim 키가 없고(07-08: 순차 주장 제거), day.turn 은 순차 지목이 켜졌을 때(RULESET.pickTurn) 지목 단계에만 있고, 기본판(결정 0072)에서는 어느 단계에도 없다(09.1, 결정 0063-1).
             if ("claim" in view.me) violations.push(`${tag}: claim key in me`);
-            if ("turn" in (view.day ?? {}) !== (phase === "nomination")) violations.push(`${tag}: day.turn presence`);
+            if ("turn" in (view.day ?? {}) !== (RULESET.pickTurn && phase === "nomination")) violations.push(`${tag}: day.turn presence`);
             // 역할 값은 허용 경로(me.role, day.roles[])에만 있다
             violations.push(...spectateViolations(s, viewer, view, phase, tag));
           }
@@ -1045,7 +1046,8 @@ describe("buildView 역할별 일지 (D-09·D-10·D-11)", () => {
         const night2 = advanceTo(day2, "night", seed);
         const morning2 = advanceTo(nightActions(night2), "morning", seed);
         // 2일차 낮에 산 사람이 정확히 셋이면(4명 판) 토론 대신 마지막 3인 결전이다(결정 0066-5).
-        const afterAnnounce: PhaseId = day2.players.filter(isAlive).length === 3 ? "showdown" : "discussion";
+        // 기본판(결정 0072)에서는 산 셋이어도 토론으로 간다(RULESET.showdown 이 켜졌을 때만 마지막 3인 결전).
+        const afterAnnounce: PhaseId = RULESET.showdown && day2.players.filter(isAlive).length === 3 ? "showdown" : "discussion";
         const stages: Array<[PhaseId, RoomState]> = [
           ["dayAnnounce", day2],
           [afterAnnounce, advanceTo(day2, afterAnnounce, seed)],
@@ -1774,7 +1776,8 @@ describe("day.turn (결정 0063-1, L14)", () => {
     ).toBe('{"order":[0,1,2,3,4],"i":-1} {"order":[0,1],"i":1,"endsAt":9,"doneAt":8,"skip":true} undefined false');
   });
 
-  it("nomination + pickTurn 이면 모든 viewer 의 day.turn 이 같고 points 는 그대로다; 다른 단계에는 turn 키 자체가 없다", () => {
+  // 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다
+  it.skipIf(!RULESET.pickTurn)("nomination + pickTurn 이면 모든 viewer 의 day.turn 이 같고 points 는 그대로다; 다른 단계에는 turn 키 자체가 없다", () => {
     const s = roomOf(false);
     const r = castTurnPoint(stepNomination(s, T + 3000).state, s.players[0]!.id, 2, T + 4000);
     if (!r.ok) throw new Error("rejected");
@@ -1796,7 +1799,8 @@ describe("day.turn (결정 0063-1, L14)", () => {
     expect(s.players.map((p) => String("turn" in (buildView(s, p.id, T).day ?? {}))).join(",")).toBe("false,false,false,false,false,false");
   });
 
-  it("L14: 역할 배정만 다른 두 판에 같은 행동 열을 적용해도 모든 viewer(산 사람·유령)의 day.turn 열이 같다", () => {
+  // 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다
+  it.skipIf(!RULESET.pickTurn)("L14: 역할 배정만 다른 두 판에 같은 행동 열을 적용해도 모든 viewer(산 사람·유령)의 day.turn 열이 같다", () => {
     const a = viewsAlong(roomOf(false));
     const b = viewsAlong(roomOf(true));
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
@@ -1847,7 +1851,8 @@ describe("찬반 기록 공개 day.ballots (결정 0066-3, O-7, L19)", () => {
   });
 });
 
-describe("동점 결선 day.runoff·me.ballot (결정 0066-4, L20)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다. 꺼진 상태의 키 없음은 "기본판 view 게이트" describe 가 본다.
+describe.skipIf(!RULESET.runoff)("동점 결선 day.runoff·me.ballot (결정 0066-4, L20)", () => {
   const idOf = (s: RoomState, seat: number): string => s.players.find((q) => q.seat === seat)!.id;
   const viewsOfAll = (s: RoomState): RoomView[] => s.players.map((q) => buildView(s, q.id, START_AT));
   /** 투표 창(step 1)에서 좌석 2 는 0, 좌석 3 은 1 을 골랐다(실제 castRunoffVote). */
@@ -1922,7 +1927,8 @@ describe("동점 결선 day.runoff·me.ballot (결정 0066-4, L20)", () => {
   });
 });
 
-describe("마지막 3인 day.showdown·me.ballot·day.verdict.last (결정 0066-5, L21)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 을 켜면 다시 돈다.
+describe.skipIf(!RULESET.showdown)("마지막 3인 day.showdown·me.ballot·day.verdict.last (결정 0066-5, L21)", () => {
   const idOf = (s: RoomState, seat: number): string => s.players.find((q) => q.seat === seat)!.id;
   const viewsOfAll = (s: RoomState): RoomView[] => s.players.map((q) => buildView(s, q.id, START_AT));
   /** 4명 판에서 좌석 3 이 죽은 낮의 결전 모이기. */

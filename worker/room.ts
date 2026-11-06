@@ -37,6 +37,7 @@ import { sendWhisper } from "../shared/game/whisper";
 import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared/game/will";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
+import { RULESET } from "../shared/game/ruleset";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { castPoint, castTurnPoint, turnStartOf } from "../shared/game/nomination";
 import { castRunoffVote } from "../shared/game/runoff";
@@ -322,6 +323,11 @@ export class Room extends DurableObject<Env> {
         await this.handleChat(ws, msg.text, msg.pk);
         return;
       case "badge":
+        // 기본판(결정 0072)에서 꺼진 장치 — 지원하지 않는 기능과 같게 보인다: 오류 한 프레임만(state·저장·방송 없음).
+        if (!RULESET.badge) {
+          this.rejectDisabled(ws);
+          return;
+        }
         await this.handleBadge(ws, msg.role);
         return;
       case "dress":
@@ -337,6 +343,10 @@ export class Room extends DurableObject<Env> {
         await this.handleRematch(ws, msg.round);
         return;
       case "whisper":
+        if (!RULESET.whisper) {
+          this.rejectDisabled(ws);
+          return;
+        }
         await this.handleWhisper(ws, msg.to, msg.text);
         return;
       case "will":
@@ -953,6 +963,12 @@ export class Room extends DurableObject<Env> {
   // 테스트 방 방장 도구(결정 0022). 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에서 seat·방장 여부를 읽지 않는다.
   // 일반 방은 error 프레임만(state·저장·방송 없음): 이 기능이 없는 방에서는 알 수 없는 메시지와 같게 보인다.
   // 그 밖의 거부는 sendRejection(오류 + 그 소켓에만 최신 state).
+  // 기본판(결정 0072, D-05)에서 꺼진 메시지(badge·whisper)의 거절: 보낸 소켓에만 오류 한 프레임 — state·저장·방송·채팅 줄 없음.
+  // 처리기 본체(handleBadge·handleWhisper)는 지우지 않는다. RULESET 값을 켜면 이 문이 열린다.
+  private rejectDisabled(ws: WebSocket): void {
+    this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+  }
+
   private rejectTestTool(ws: WebSocket, playerId: string, code: WsErrorCode): void {
     if (code === "BAD_MESSAGE" && this.room?.testMode !== true) this.sendTo(ws, { t: "error", code });
     else this.sendRejection(ws, playerId, code);

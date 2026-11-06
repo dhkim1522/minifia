@@ -1,5 +1,6 @@
 // 귓속말 워커 통합 테스트(09.1.1-02, 결정 0066-2, L17): 본문 줄은 당사자 두 소켓에만, 나머지에는 같은 seq 의 사실 줄만 간다.
 import { describe, expect, it } from "vitest";
+import { RULESET } from "../../shared/game/ruleset";
 import type { RoleId } from "../../shared/game/roles";
 import type { ServerMessage } from "../../shared/protocol";
 import { env } from "cloudflare:workers";
@@ -21,7 +22,8 @@ async function sendWhisper(g: Game, from: Actor, to: number, text: string): Prom
   return out;
 }
 
-describe("귓속말 — 트레이서 (결정 0066-2, L17)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.whisper 를 켜면 다시 돈다. 꺼진 상태의 거절은 basicOff.test.ts 가 본다.
+describe.skipIf(!RULESET.whisper)("귓속말 — 트레이서 (결정 0066-2, L17)", () => {
   it("좌석 a 가 좌석 b 에게 보내면 당사자 둘은 본문 줄 한 번, 나머지는 같은 seq 의 사실 줄 한 번만 받는다", async () => {
     const g = await startedGame("discussion", 5);
     const from = g.actors[1]!;
@@ -76,7 +78,8 @@ async function whispersOf(code: string): Promise<Array<{ n: number; from: number
   return ((await storedRoom(code)) as unknown as { whispers?: Array<{ n: number; from: number; to: number; text: string; at: number }> }).whispers ?? [];
 }
 
-describe("귓속말 — 규칙 완성 (결정 0066-2, O-3~O-5·O-20)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.whisper 를 켜면 다시 돈다. 꺼진 상태의 거절은 basicOff.test.ts 가 본다.
+describe.skipIf(!RULESET.whisper)("귓속말 — 규칙 완성 (결정 0066-2, O-3~O-5·O-20)", () => {
   it("성공하면 보낸 사람 소켓만 me.whisperUsed 가 켜진 state 를 정확히 한 번 받고 다른 소켓은 state 를 받지 않는다", async () => {
     const g = await startedGame("discussion", 5);
     const from = g.actors[1]!;
@@ -252,7 +255,8 @@ async function matrixGame(assign: readonly RoleId[]): Promise<{ g: Game; bySeat:
   return { g, bySeat };
 }
 
-describe("L17 — 귓속말 본문은 당사자 소켓에만", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.whisper 를 켜면 다시 돈다. 꺼진 상태의 거절은 basicOff.test.ts 가 본다.
+describe.skipIf(!RULESET.whisper)("L17 — 귓속말 본문은 당사자 소켓에만", () => {
   // 보낸·받은 사람의 신분 조합 두 가지. 나머지 소켓에는 나머지 신분(와 유령)이 모두 든다.
   it.each([
     ["시민 -> 마피아", 4, 1],
