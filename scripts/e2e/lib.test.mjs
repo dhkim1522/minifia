@@ -2815,7 +2815,7 @@ test("emoteDeliveryChecks: 보낸 사람 없이도 돌고, 받는 페이지가 �
 const floatTrayGood = () => ({ visibleBefore: { count: 1, shown: 1 }, hiddenWhileOpen: { count: 1, shown: 0 }, visibleAfter: { count: 1, shown: 1 } });
 
 test("floatTrayChecks: 열기 전 보이고 열린 동안 숨고 닫으면 돌아오면 FT1~FT3 모두 통과", () => {
-  const lines = floatTrayChecks(floatTrayGood());
+  const lines = floatTrayChecks(floatTrayGood(), { floatsOn: true });
   assert.deepEqual(lines.map((l) => l.id), ["FT1", "FT2", "FT3"]);
   assert.ok(lines.every((l) => l.ok));
 });
@@ -2823,21 +2823,30 @@ test("floatTrayChecks: 열기 전 보이고 열린 동안 숨고 닫으면 돌�
 test("floatTrayChecks: 한 값씩 어긋나면 해당 항목만 실패한다", () => {
   const a = floatTrayGood();
   a.visibleBefore = { count: 1, shown: 0 };
-  onlyFail(floatTrayChecks(a), "FT1");
+  onlyFail(floatTrayChecks(a, { floatsOn: true }), "FT1");
   const b = floatTrayGood();
   b.hiddenWhileOpen = { count: 1, shown: 1 };
-  onlyFail(floatTrayChecks(b), "FT2");
+  onlyFail(floatTrayChecks(b, { floatsOn: true }), "FT2");
   const c = floatTrayGood();
   c.visibleAfter = { count: 1, shown: 0 };
-  onlyFail(floatTrayChecks(c), "FT3");
+  onlyFail(floatTrayChecks(c, { floatsOn: true }), "FT3");
 });
 
 test("floatTrayChecks: 떠 있는 버튼이 하나도 없으면(확인할 것이 없음) 세 줄 모두 실패 · 측정값이 없어도 실패", () => {
   const none = { count: 0, shown: 0 };
-  assert.ok(floatTrayChecks({ visibleBefore: none, hiddenWhileOpen: none, visibleAfter: none }).every((l) => !l.ok));
-  const lines = floatTrayChecks({});
+  assert.ok(floatTrayChecks({ visibleBefore: none, hiddenWhileOpen: none, visibleAfter: none }, { floatsOn: true }).every((l) => !l.ok));
+  const lines = floatTrayChecks({}, { floatsOn: true });
   assert.equal(lines.length, 3);
   assert.ok(lines.every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+test("floatTrayChecks 기본판(결정 0072): 세 시점 모두 떠 있는 버튼이 0개면 통과, 하나라도 남으면 실패, 측정값이 없으면 실패", () => {
+  const none = { count: 0, shown: 0 };
+  const ok = floatTrayChecks({ visibleBefore: none, hiddenWhileOpen: none, visibleAfter: none });
+  assert.deepEqual(ok.map((l) => l.id), ["FT1", "FT2", "FT3"]);
+  assert.ok(ok.every((l) => l.ok));
+  onlyFail(floatTrayChecks({ visibleBefore: none, hiddenWhileOpen: { count: 1, shown: 0 }, visibleAfter: none }), "FT2");
+  assert.ok(floatTrayChecks({}).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
 });
 
 // ---- 12-06: 소리 시험 페이지 sound-render 순수 판정 (D-18, T-12-22) ----

@@ -514,7 +514,7 @@ export function makeAvatarFlows(helpers) {
         await closeTray(gp);
         await sleep(120);
         const after = await readFloats(gp);
-        for (const l of floatTrayChecks({ visibleBefore: before, hiddenWhileOpen: open, visibleAfter: after })) rec(sc, `AP1-${l.id}`, l.label, l.ok, l.ok ? "" : `${l.detail} (닫힘 ${JSON.stringify(before)} · 열림 ${JSON.stringify(open)} · 닫은 뒤 ${JSON.stringify(after)})`);
+        for (const l of floatTrayChecks({ visibleBefore: before, hiddenWhileOpen: open, visibleAfter: after }, { floatsOn: false /* 기본판(결정 0072): 떠 있는 버튼 없음. RULESET 배지·귓속말을 켜면 true */ })) rec(sc, `AP1-${l.id}`, l.label, l.ok, l.ok ? "" : `${l.detail} (닫힘 ${JSON.stringify(before)} · 열림 ${JSON.stringify(open)} · 닫은 뒤 ${JSON.stringify(after)})`);
         await deliver(rec, sc, "AP1", { sender: G, receivers: [H], emoteId: "clap", mode: "arrive", tagSamples: tags });
       }
 

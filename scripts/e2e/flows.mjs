@@ -2932,6 +2932,9 @@ async function resultFlow(ctx) {
 // 방장 페이지는 연출 구간(모임·뒤집기)을 지나며 탭 등장·시계 정지·무대 탭을, 손님 페이지는 최종 상태의 탭 기하·구분선·진홍·점을 본다. 판이 도는 동안 손님(시민) 페이지의 탭은 0건이어야 한다.
 
 const REVEAL_TEXTS = { mafia: "오늘 밤은 조용히 정해요", ghost: "나는 유령이에요 억울해요", whisper: "귓속말 기록 한 줄" };
+// 기본판(결정 0072): 귓속말 장치가 꺼져 있어 결과 탭은 넷이고 귓속말은 보내지 않는다. RULESET.whisper 를 켜면 true 로 바꾼다(탭 다섯·귓속말 탭 검사).
+const REVEAL_WHISPER = false;
+const REVEAL_TAB_COUNT = REVEAL_WHISPER ? 5 : 4;
 
 async function resultRevealFlow(ctx) {
   const id = "result-reveal";
@@ -2946,7 +2949,7 @@ async function resultRevealFlow(ctx) {
     // 낮 1: 판이 도는 동안 탭 0건 + 귓속말 한 줄(방장 → 다른 사람)
     await untilGame(g.page, (x) => x.phase === "discussion", 8000, "토론 도착(손님)");
     await liveTabs("discussion");
-    const whispered = await attempt(async () => {
+    const whispered = !REVEAL_WHISPER ? { ok: false, detail: "기본판: 귓속말 꺼짐" } : await attempt(async () => {
       await hp.locator('[data-float="whisper"]').click({ timeout: 4000 });
       await hp.locator("[data-pick]").first().waitFor({ state: "attached", timeout: 4000 });
       await hp.locator("[data-pick]").first().dispatchEvent("click");
@@ -2955,7 +2958,7 @@ async function resultRevealFlow(ctx) {
       await hp.locator("[data-line-send]").click({ timeout: 4000 });
       await ht.waitFor((v) => v.me.whisperUsed === true, 5000, "서버가 귓속말 사용함으로 확인");
     });
-    if (!whispered.ok) infoRow(ctx, `${id}/setup`, "RT-W", "귓속말을 보내지 못해 귓속말 탭은 빈 상태로 확인(참고)", whispered.detail);
+    if (REVEAL_WHISPER && !whispered.ok) infoRow(ctx, `${id}/setup`, "RT-W", "귓속말을 보내지 못해 귓속말 탭은 빈 상태로 확인(참고)", whispered.detail);
 
     await step("지목", () => skipTo(hp, ht, "nomination"));
     await liveTabs("nomination");
@@ -2999,11 +3002,11 @@ async function resultRevealFlow(ctx) {
       }
     };
     const before = await waitRead((r) => r.tabs.length > 0, 8000);
-    const after = await waitRead((r) => r.tabs.length === 5, 4000);
+    const after = await waitRead((r) => r.tabs.length === REVEAL_TAB_COUNT, 4000);
     let tapExpanded;
     let paused;
     let tapCollapsed;
-    if (after && after.tabs.length === 5 && after.stage !== "final") {
+    if (after && after.tabs.length === REVEAL_TAB_COUNT && after.stage !== "final") {
       await hp.locator('[data-result-tab="mafia"]').click({ timeout: 4000 });
       const opened = await waitRead((r) => r.expanded, 2000);
       const t0 = Date.now();
@@ -3022,7 +3025,7 @@ async function resultRevealFlow(ctx) {
       tapCollapsed = { stageBefore, stageAfter: skipped?.stage };
     }
     const reveal = { tabsBefore: { stage: before?.stage, count: before?.tabs.length }, tabsAfter: { stage: after?.stage, count: after?.tabs.length }, live, paused, tapExpanded, tapCollapsed };
-    for (const row of resultTabChecks({ reveal })) recOne(rec, sc, row);
+    for (const row of resultTabChecks({ reveal }, { whisper: REVEAL_WHISPER })) recOne(rec, sc, row);
 
     // 두 페이지가 최종 상태에 닿은 뒤 손님 페이지로 탭 기하를 잰다
     for (const page of [hp, g.page]) {
@@ -3054,7 +3057,7 @@ async function resultRevealFlow(ctx) {
         headerBottom: layout1?.headerBottom,
         panelTop: layout1?.panelTop,
       },
-    })) {
+    }, { whisper: REVEAL_WHISPER })) {
       recOne(rec, sc, row);
     }
 
@@ -3065,11 +3068,18 @@ async function resultRevealFlow(ctx) {
     await sleep(150);
     const ghostBody = await bodyOf();
     rec(sc, "RT15", "유령 탭에 유령 채팅 줄만 보임", ghostBody.includes(REVEAL_TEXTS.ghost) && !ghostBody.includes(REVEAL_TEXTS.mafia), "유령 탭 본문이 기대와 다름");
+    if (!REVEAL_WHISPER) {
+      // 기본판: 귓속말 탭·머리줄이 아예 없다(꺼진 장치 흔적 없음)
+      const whisperTabs = await gp.locator('[data-result-tab="whisper"]').count();
+      const whisperHeads = await gp.locator("[data-result-whisper]").count();
+      rec(sc, "RT16", "기본판: 귓속말 탭과 귓속말 머리줄이 없음(결정 0072)", whisperTabs === 0 && whisperHeads === 0, `탭 ${whisperTabs}개 · 머리줄 ${whisperHeads}개`);
+    } else {
     await gp.locator('[data-result-tab="whisper"]').click({ timeout: 4000 });
     await sleep(150);
     const whisperRows = await gp.locator("[data-result-whisper]").count();
     if (whispered.ok) rec(sc, "RT16", "귓속말 탭에 머리줄 + 본문 한 줄과 일차 구분선", whisperRows >= 1 && (await bodyOf()).includes(REVEAL_TEXTS.whisper) && (await readResultTabs(gp))?.separators.some((t) => /^\d+일차$/.test(t)), `머리줄 ${whisperRows}개`);
     else rec(sc, "RT16", "귓속말 탭: 보낸 귓속말이 없으면 quiet 아이콘 하나(글 없음)", whisperRows === 0 && (await bodyOf()) === "", `머리줄 ${whisperRows}개`);
+    }
     await gp.locator('[data-result-tab="all"]').click({ timeout: 4000 });
     await sleep(150);
     const folded = await readResultTabs(gp);

@@ -2049,8 +2049,20 @@ export function emoteDeliveryChecks({ sender, receivers, expectSeat, expectId, m
  * 동작 판이 열려 있는 동안 떠 있는 버튼 묶음(.mf-float)이 숨고 닫으면 돌아오는지(10-05 가 CSS 로 구현). 각 값은 { count, shown } —
  * count = .mf-float 요소 수, shown = 그 가운데 computed visibility 가 hidden 이 아닌 수.
  * FT1 열기 전 하나 이상 있고 모두 보임 · FT2 열린 동안 하나 이상 있고 모두 숨음 · FT3 닫은 뒤 모두 보임. 확인할 버튼이 하나도 없으면 셋 다 실패(공허한 통과 금지).
+ * 기본판(결정 0072, floatsOn 기본 false)에서는 떠 있는 버튼 자체가 없다 — 세 시점 모두 count 0 이면 통과(없음을 확인하는 것이지 확인을 건너뛰는 것이 아니다), 하나라도 있으면 실패. floatsOn(정통 판)이면 위 규칙.
  */
-export function floatTrayChecks({ visibleBefore, hiddenWhileOpen, visibleAfter } = {}) {
+export function floatTrayChecks({ visibleBefore, hiddenWhileOpen, visibleAfter } = {}, { floatsOn = false } = {}) {
+  if (!floatsOn) {
+    const LA = {
+      FT1: "기본판: 판을 열기 전 떠 있는 버튼이 없음(결정 0072)",
+      FT2: "기본판: 판이 열린 동안에도 떠 있는 버튼이 없음",
+      FT3: "기본판: 판을 닫은 뒤에도 떠 있는 버튼이 없음",
+    };
+    const okObs0 = (o) => !!o && isNum(o.count) && isNum(o.shown);
+    if (!okObs0(visibleBefore) || !okObs0(hiddenWhileOpen) || !okObs0(visibleAfter)) return Object.entries(LA).map(([id, label]) => noMeasure(id, label, "visibleBefore·hiddenWhileOpen·visibleAfter { count, shown }"));
+    const none = (o) => (o.count === 0 ? [] : [`떠 있는 버튼 ${o.count}개가 남아 있음`]);
+    return [result("FT1", LA.FT1, none(visibleBefore)), result("FT2", LA.FT2, none(hiddenWhileOpen)), result("FT3", LA.FT3, none(visibleAfter))];
+  }
   const L = {
     FT1: "판을 열기 전: 떠 있는 버튼이 있고 모두 보임",
     FT2: "판이 열린 동안: 떠 있는 버튼이 모두 숨음(visibility hidden)",

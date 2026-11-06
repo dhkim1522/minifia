@@ -1,7 +1,7 @@
 // 결과 화면 E2E 순수 판정 단위 테스트 (11-05). 실행: node --test scripts/e2e/result.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { awardChecks, AWARD_PLATE, READY_PILL, rematchChecks, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, RESULT_TAB_IDS, resultSkipChecks, resultStageChecks, resultTabChecks, TIMELINE_CARD, timelineChecks } from "./result.mjs";
+import { awardChecks, AWARD_PLATE, READY_PILL, rematchChecks, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, RESULT_TAB_IDS, RESULT_TAB_IDS_BASIC, resultSkipChecks, resultStageChecks, resultTabChecks, TIMELINE_CARD, timelineChecks } from "./result.mjs";
 
 // 4명판 시민 승: 좌석 0 마피아(진 팀) · 1 시민 · 2 경찰 · 3 의사
 const good = () => ({
@@ -132,18 +132,18 @@ const goodReveal = () => ({
   tapExpanded: { expandedBefore: true, expandedAfter: false, stageBefore: "flip", stageAfter: "flip" },
   tapCollapsed: { stageBefore: "flip", stageAfter: "light" },
 });
-const tabFailing = (m) => resultTabChecks(m).filter((r) => !r.ok).map((r) => r.id);
+const tabFailing = (m) => resultTabChecks(m, { whisper: true }).filter((r) => !r.ok).map((r) => r.id);
 const withLayout = (over) => ({ layout: { ...goodLayout(), ...over } });
 const withReveal = (over) => ({ reveal: { ...goodReveal(), ...over } });
 
 test("resultTabChecks: 정상 layout 은 RT1·RT3~RT9 가 통과하고 reveal 은 RT2·RT10~RT13 이 통과한다", () => {
-  const l = resultTabChecks({ layout: goodLayout() });
+  const l = resultTabChecks({ layout: goodLayout() }, { whisper: true });
   assert.deepEqual(l.map((r) => r.id), ["RT1", "RT3", "RT4", "RT5", "RT6", "RT7", "RT8", "RT9"]);
   for (const r of l) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
-  const v = resultTabChecks({ reveal: goodReveal() });
+  const v = resultTabChecks({ reveal: goodReveal() }, { whisper: true });
   assert.deepEqual(v.map((r) => r.id), ["RT2", "RT10", "RT11", "RT12", "RT13"]);
   for (const r of v) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
-  assert.equal(resultTabChecks({ layout: goodLayout(), reveal: goodReveal() }).length, 13);
+  assert.equal(resultTabChecks({ layout: goodLayout(), reveal: goodReveal() }, { whisper: true }).length, 13);
   assert.deepEqual(resultTabChecks({}), []);
 });
 
@@ -197,7 +197,7 @@ test("RT9: 헤더 아래 62 이상, 확장 패널이 헤더를 가리지 않는�
 test("RT2: 탭은 첫 뒤집기 전 1개, 뒤집기 시작 뒤 5개 — 구간을 놓치면 측정값 없음으로 실패", () => {
   assert.deepEqual(tabFailing(withReveal({ tabsBefore: { stage: "gather", count: 5 } })), ["RT2"]);
   assert.deepEqual(tabFailing(withReveal({ tabsAfter: { stage: "flip", count: 1 } })), ["RT2"]);
-  const miss = resultTabChecks(withReveal({ tabsBefore: { stage: "flip", count: 5 } })).find((r) => r.id === "RT2");
+  const miss = resultTabChecks(withReveal({ tabsBefore: { stage: "flip", count: 5 } }), { whisper: true }).find((r) => r.id === "RT2");
   assert.equal(miss.ok, false);
   assert.match(miss.detail, /측정값 없음/);
 });
@@ -573,4 +573,24 @@ test("rematchChecks: 측정값이 없으면 조용히 통과하지 않고 측정
 
 test("RESULT_MARKERS: 다시 하기 표식 4개가 더해져 있다 (11-12)", () => {
   for (const m of ["data-ready-pill", "data-ready", "data-ready-count", "data-bench-view"]) assert.equal(RESULT_MARKERS.includes(m), true, m);
+});
+
+// ---------- 13-06: 기본판(결정 0072) — 귓속말 탭이 없다 ----------
+const basicLayout = () => ({
+  ...goodLayout(),
+  tabBoxes: RESULT_TAB_IDS_BASIC.map((id) => ({ id, w: 44, h: 44 })),
+  dots: { before: ["mafia", "ghost"], after: ["ghost"] },
+});
+const basicFailing = (m) => resultTabChecks(m).filter((r) => !r.ok).map((r) => r.id);
+
+test("기본판 resultTabChecks: 탭은 귓속말을 뺀 네 개이고 새 탭 점은 마피아·유령 둘, 마피아를 연 뒤 유령 하나", () => {
+  assert.deepEqual([...RESULT_TAB_IDS_BASIC], ["all", "mafia", "ghost", "log"]);
+  assert.deepEqual(basicFailing({ layout: basicLayout() }), []);
+  assert.deepEqual(basicFailing({ reveal: { ...goodReveal(), tabsAfter: { stage: "flip", count: 4 } } }), []);
+});
+
+test("기본판 resultTabChecks: 귓속말 탭·귓속말 점이 보이면(탭 다섯, 점 셋) 실패한다", () => {
+  assert.deepEqual(basicFailing({ layout: { ...basicLayout(), tabBoxes: RESULT_TAB_IDS.map((id) => ({ id, w: 44, h: 44 })) } }), ["RT1"]);
+  assert.deepEqual(basicFailing({ layout: { ...basicLayout(), dots: { before: ["mafia", "ghost", "whisper"], after: ["ghost", "whisper"] } } }), ["RT8"]);
+  assert.deepEqual(basicFailing({ reveal: goodReveal() }), ["RT2"]);
 });

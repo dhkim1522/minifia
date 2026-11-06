@@ -29,6 +29,9 @@ export const TIMELINE_CARD = Object.freeze({ w: 72, h: 112, gap: 8 });
 /** 결과 탭 id, 표시 순서 (src/game/resultText.ts RESULT_TABS 의 사본) */
 export const RESULT_TAB_IDS = Object.freeze(["all", "mafia", "ghost", "whisper", "log"]);
 
+/** 기본판(결정 0072)에서 보이는 결과 탭 — 귓속말 탭은 RULESET.whisper 일 때만 있다(src/game/resultText.ts RESULT_TABS_SHOWN 의 사본) */
+export const RESULT_TAB_IDS_BASIC = Object.freeze(RESULT_TAB_IDS.filter((id) => id !== "whisper"));
+
 /** 직업 → 3D 의상 id (src/world/ghostOutfit.ts JOB_OUTFIT 의 사본) */
 export const RESULT_JOB_OUTFIT = Object.freeze({ mafia: "mafia", police: "police", doctor: "doctor", citizen: "coat" });
 
@@ -190,22 +193,23 @@ const DOT_TAB_IDS = ["ghost", "mafia", "whisper"];
  *   RT2 첫 뒤집기 전 탭 1개·뒤집기 시작 뒤 5개 · RT10 판 중 탭 0건 · RT11 확장 중 시계 정지 · RT12 확장 중 무대 탭은 접기만 · RT13 접힌 무대 탭은 4600 이후로 건너뜀
  * 반환: 항목별 { id, label, ok, detail }.
  */
-export function resultTabChecks(m = {}) {
+export function resultTabChecks(m = {}, { whisper = false } = {}) {
   const out = [];
-  if (m.layout !== undefined) out.push(...layoutTabChecks(m.layout));
-  if (m.reveal !== undefined) out.push(...revealTabChecks(m.reveal));
+  const tabIds = whisper ? RESULT_TAB_IDS : RESULT_TAB_IDS_BASIC;
+  if (m.layout !== undefined) out.push(...layoutTabChecks(m.layout, tabIds));
+  if (m.reveal !== undefined) out.push(...revealTabChecks(m.reveal, tabIds));
   return out;
 }
 
-function layoutTabChecks(l) {
+function layoutTabChecks(l, tabIds) {
   const L = {
-    RT1: "탭 패널: 탭 버튼 다섯 개, 모두 44×44 이상",
+    RT1: `탭 패널: 탭 버튼 ${tabIds.length}개, 모두 44×44 이상`,
     RT3: "탭 패널: 접힌 패널 높이 188 · 244",
     RT4: "탭 패널: 마피아 탭 확장 높이 min(round(0.7 × 방 높이), 520)",
     RT5: "탭 패널: 확장에서 입력칸 없음",
     RT6: "탭 패널: 마피아 탭 아이콘만 진홍",
     RT7: "탭 패널: 마피아 탭 구분선이 `{n}밤`",
-    RT8: "탭 패널: 새 탭 점 — 열기 전 마피아·유령·귓속말, 마피아를 연 뒤 유령·귓속말",
+    RT8: tabIds.includes("whisper") ? "탭 패널: 새 탭 점 — 열기 전 마피아·유령·귓속말, 마피아를 연 뒤 유령·귓속말" : "탭 패널: 새 탭 점 — 열기 전 마피아·유령, 마피아를 연 뒤 유령(귓속말 탭 없음, 결정 0072)",
     RT9: "탭 패널: 헤더 아래 62 이상, 확장 패널이 헤더를 가리지 않음",
   };
   const out = [];
@@ -214,7 +218,7 @@ function layoutTabChecks(l) {
   if (!Array.isArray(l?.tabBoxes)) out.push(noMeasure("RT1", L.RT1, "tabBoxes"));
   else {
     const bad = [];
-    if (l.tabBoxes.length !== RESULT_TAB_IDS.length) bad.push(`탭 ${l.tabBoxes.length}개 ≠ ${RESULT_TAB_IDS.length}개`);
+    if (l.tabBoxes.length !== tabIds.length) bad.push(`탭 ${l.tabBoxes.length}개 ≠ ${tabIds.length}개`);
     for (const b of l.tabBoxes) if (!isNum(b?.w) || !isNum(b?.h) || b.w < TAB_MIN - 0.5 || b.h < TAB_MIN - 0.5) bad.push(`${b?.id} ${b?.w}×${b?.h}`);
     out.push(result("RT1", L.RT1, bad));
   }
@@ -252,8 +256,10 @@ function layoutTabChecks(l) {
   if (!Array.isArray(l?.dots?.before) || !Array.isArray(l?.dots?.after)) out.push(noMeasure("RT8", L.RT8, "dots"));
   else {
     const bad = [];
-    if (!sameSet(l.dots.before, DOT_TAB_IDS)) bad.push(`열기 전 점 [${[...l.dots.before].sort()}] ≠ [${DOT_TAB_IDS}]`);
-    if (!sameSet(l.dots.after, ["ghost", "whisper"])) bad.push(`마피아를 연 뒤 점 [${[...l.dots.after].sort()}] ≠ [ghost,whisper]`);
+    const dotsBefore = DOT_TAB_IDS.filter((id) => tabIds.includes(id));
+    const dotsAfter = ["ghost", "whisper"].filter((id) => tabIds.includes(id));
+    if (!sameSet(l.dots.before, dotsBefore)) bad.push(`열기 전 점 [${[...l.dots.before].sort()}] ≠ [${dotsBefore}]`);
+    if (!sameSet(l.dots.after, dotsAfter)) bad.push(`마피아를 연 뒤 점 [${[...l.dots.after].sort()}] ≠ [${dotsAfter}]`);
     out.push(result("RT8", L.RT8, bad));
   }
 
@@ -268,9 +274,9 @@ function layoutTabChecks(l) {
   return out;
 }
 
-function revealTabChecks(r) {
+function revealTabChecks(r, tabIds) {
   const L = {
-    RT2: "탭 패널: 첫 뒤집기 전 탭 1개, 뒤집기 시작 뒤 5개",
+    RT2: `탭 패널: 첫 뒤집기 전 탭 1개, 뒤집기 시작 뒤 ${tabIds.length}개`,
     RT10: "탭 패널: 판이 도는 동안 시민 화면에 탭 0건",
     RT11: "탭 패널: 확장 중 연출 시계가 멈춤",
     RT12: "탭 패널: 확장 중 무대 탭은 접기만 함(건너뛰기 아님)",
@@ -285,7 +291,7 @@ function revealTabChecks(r) {
   else {
     const bad = [];
     if (r.tabsBefore.count !== 1) bad.push(`뒤집기 전 탭 ${r.tabsBefore.count}개 ≠ 1`);
-    if (r.tabsAfter.count !== RESULT_TAB_IDS.length) bad.push(`뒤집기 시작 뒤 탭 ${r.tabsAfter.count}개 ≠ ${RESULT_TAB_IDS.length}`);
+    if (r.tabsAfter.count !== tabIds.length) bad.push(`뒤집기 시작 뒤 탭 ${r.tabsAfter.count}개 ≠ ${tabIds.length}`);
     out.push(result("RT2", L.RT2, bad));
   }
 
