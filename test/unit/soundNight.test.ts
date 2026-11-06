@@ -36,6 +36,8 @@ function av(phase: PhaseId, over: Partial<AudioView> = {}): AudioView {
     points: [],
     candidate: null,
     morning: null,
+    verdict: null,
+    hasBallots: false,
     players: [0, 1, 2, 3].map((seat) => ({ seat, alive: true })),
     mySeat: 0,
     ...over,

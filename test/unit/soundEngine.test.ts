@@ -339,6 +339,20 @@ describe("침대 버스 덕킹 (D-16)", () => {
     expect(bgmOf(rig).gain.of("target")).toHaveLength(2);
   });
 
+  it("duckBed 의 세 번째 인자 releaseMs 는 선택이고 복귀 시정수에 반영된다 (기본 250, 12-10)", () => {
+    const rig = unlocked();
+    rig.engine.duckBed(-14, 500, 800);
+    rig.fake.clock.advance(501);
+    const after = bgmOf(rig).gain.of("target");
+    expect(after).toHaveLength(2);
+    expect(after[1]!.value).toBe(BUS_GAIN.bgm);
+    expect(after[1]!.tc).toBeCloseTo(0.8, 6);
+    const rig2 = unlocked();
+    rig2.engine.duckBed(-14, 500);
+    rig2.fake.clock.advance(501);
+    expect(bgmOf(rig2).gain.of("target")[1]!.tc).toBeCloseTo(0.25, 6);
+  });
+
   it("겹친 덕킹은 더 깊은 쪽이 이기고 복귀는 마지막 덕킹이 끝난 뒤다", () => {
     const rig = unlocked();
     rig.engine.duckBed(-6, 1000);

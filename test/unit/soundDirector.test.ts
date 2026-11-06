@@ -30,6 +30,8 @@ function av(phase: PhaseId, over: Partial<AudioView> = {}): AudioView {
     points: [],
     candidate: null,
     morning: null,
+    verdict: null,
+    hasBallots: false,
     players: [0, 1, 2, 3].map((seat) => ({ seat, alive: true })),
     mySeat: 0,
     ...over,
@@ -537,6 +539,8 @@ describe("audioViewOf: 허용 필드만 (LS-6, T-12-27)", () => {
       points: [{ seat: 0, target: 2 }],
       candidate: 2,
       morning: null,
+      verdict: null,
+      hasBallots: false,
       players: [{ seat: 0, alive: true }, { seat: 1, alive: false }, { seat: 2, alive: true }],
       mySeat: 2,
     });
