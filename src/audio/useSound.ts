@@ -1,8 +1,12 @@
 // 12-07: 방 화면이 쥐는 소리 훅 — 엔진 구독, 제스처 resume, 탭 가시성, 시험 훅 (D-9, B-2, B-3, T-12-24).
 // 엔진은 DOM 을 듣지 않는다(engine.ts 머리말). 이 훅이 방 화면이 마운트된 동안만 문서 이벤트를 연결하고, 언마운트하면 모두 푼다.
-// 확장 지점: 12-08 이후 감독은 UseSoundOptions 에 항목을 더하거나 같은 엔진(getEngine)을 받아 쓴다.
-import { useEffect, useSyncExternalStore } from "react";
+// 12-08: view 가 바뀔 때마다 공개 view 의 차이(AudioView)를 감독(director)에 넣고 출력을 같은 엔진(getEngine)에 적용한다.
+// 이 훅은 RoomView 를 직접 읽지 않는다 — audioViewOf(audioView.ts)만 읽고, 감독은 AudioView 만 안다 (LS-6).
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import { audioViewOf, type AudioView } from "./audioView";
+import { direct, directSignal, type DirectOutput } from "./director";
 import type { SoundEngine } from "./engine";
+import { bindSignals } from "./signals";
 import { installSoundHook } from "./testHook";
 import { getEngine } from "./unlock";
 
@@ -23,15 +27,46 @@ export interface UseSoundOptions {
   active?: boolean;
   /** window.__mfSound 를 만들지(?e2e=1·개발 빌드 판정은 부르는 쪽이 한다) */
   hook?: boolean;
+  /** 방 화면의 서버 view (연결 전이면 null). 이 훅은 audioViewOf 로 허용 필드만 읽는다 */
+  view?: Parameters<typeof audioViewOf>[0] | null;
+  /** 연결 번호: 바뀐 렌더는 첫 스냅샷처럼 침대만 낸다 (LS-10) */
+  epoch?: number;
+  /** 서버 시각 − 로컬 시각 (connection.offset) */
+  offset?: number;
+  /** 로컬 시계(기본 Date.now). 시험이 엔진 시계를 넣는다 */
+  now?: () => number;
 }
 
 /** 깨우는 제스처. 눌림 시작 이벤트는 쓰지 않는다 — iOS 가 인정하지 않는 경우가 있다 */
 const GESTURES = ["pointerup", "touchend", "keydown"] as const;
 
+/** 감독 출력을 엔진에 적용한다 */
+function apply(engine: SoundEngine, out: DirectOutput): void {
+  for (const key of out.cancel) engine.cancelScript(key);
+  if ("bed" in out) engine.setBed(out.bed ?? null);
+  for (const call of out.now) engine.play(call.id, { gainDb: call.gainDb, cents: call.cents });
+  for (const run of out.scripts) engine.runScript(run.key, run.items, run.duck);
+  if (out.duck !== null) engine.duckBed(out.duck.db, Math.max(0, out.duck.toMs - out.duck.fromMs), out.duck.returnMs);
+}
+
+interface Directed {
+  av: AudioView;
+  epoch: number;
+}
+
 export function useSound(options: UseSoundOptions = {}): SoundView {
   const engine = options.engine ?? getEngine();
   const active = options.active ?? true;
   const hook = options.hook ?? false;
+  const { view = null, epoch = 0, offset = 0 } = options;
+  const clockNow = options.now ?? Date.now;
+  // 감독에 먹인 직전 상태. 방을 떠나거나(정리) 개발 모드 이중 효과 실행에서 비워 첫 스냅샷처럼 다룬다
+  const last = useRef<Directed | null>(null);
+  const lastJoinAt = useRef<number | null>(null);
+  const offsetRef = useRef(offset);
+  const nowRef = useRef(clockNow);
+  offsetRef.current = offset;
+  nowRef.current = clockNow;
   const snap = useSyncExternalStore(engine.subscribe, engine.snapshot, engine.snapshot);
 
   useEffect(() => {
@@ -58,7 +93,32 @@ export function useSound(options: UseSoundOptions = {}): SoundView {
       document.removeEventListener("visibilitychange", onVisibility);
       // 방을 떠나면 침대·예약 대본을 멈춘다
       engine.stopAll();
+      last.current = null;
     };
+  }, [engine, active]);
+
+  // view 차이 → 감독 → 엔진. 의존은 view·epoch 뿐이고 시계·오프셋은 ref 로 읽는다(같은 view 로 다시 실행돼도 직전과 같아 빈 출력)
+  useEffect(() => {
+    if (!active) return;
+    if (view === null) {
+      last.current = null;
+      return;
+    }
+    const av = audioViewOf(view);
+    const now = nowRef.current();
+    const prev = last.current;
+    const out = direct(prev?.av ?? null, av, { now, offset: offsetRef.current, reset: prev !== null && prev.epoch !== epoch, lastJoinAt: lastJoinAt.current });
+    last.current = { av, epoch };
+    if (out.now.some((c) => c.id === "lobby.join")) lastJoinAt.current = now;
+    apply(engine, out);
+  }, [engine, active, view, epoch]);
+
+  // 닫힌 로컬 신호(주요 버튼 ui.tap). 어떤 소리를 낼지는 감독이 정한다
+  useEffect(() => {
+    if (!active) return;
+    return bindSignals((signal) => {
+      apply(engine, directSignal(signal, last.current?.av ?? null));
+    });
   }, [engine, active]);
 
   const state: SoundUiState = !snap.on ? "off" : snap.state === "running" ? "on" : "locked";

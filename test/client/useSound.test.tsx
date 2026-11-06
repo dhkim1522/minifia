@@ -282,7 +282,7 @@ describe("useSound: 방 view 의 차이가 감독을 거쳐 엔진 요청이 된
     rerender({ view: roomView("assigning"), epoch: 1 });
     rerender({ view: roomView("roleReveal"), epoch: 1 });
     rerender({ view: roomView("dayAnnounce"), epoch: 1 });
-    expect(logIds(rig)).toEqual(["bed.lobby", "game.start", "role.flip", "bed.reveal", "day.start", "bed.day"]);
+    expect(logIds(rig)).toEqual(["bed.lobby", "game.start", "bed.reveal", "role.flip", "bed.day", "day.start"]);
     expect(rig.engine.currentBed()).toBe("bed.day");
   });
 

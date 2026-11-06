@@ -114,7 +114,12 @@ function forbiddenIn(src: string, file = ""): string[] {
 function viewPaths(src: string): string[] {
   const code = stripComments(src);
   const out = new Set<string>();
-  for (const m of code.matchAll(/\bview((?:\??\.[A-Za-z_]\w*)+)/g)) out.add(`view${m[1]!.replace(/\?\./g, ".")}`);
+  for (const m of code.matchAll(/\bview((?:\??\.[A-Za-z_]\w*)+)/g)) {
+    let path = `view${m[1]!.replace(/\?\./g, ".")}`;
+    // 끝이 메서드 호출(view.players.map( …)이면 그 메서드 이름은 필드가 아니다
+    if (code[m.index! + m[0].length] === "(") path = path.slice(0, path.lastIndexOf("."));
+    out.add(path);
+  }
   return [...out].sort();
 }
 
@@ -191,11 +196,13 @@ describe("소리 모듈은 숨은 정보를 읽지 못한다 (LS-6, T-12-04)", (
 });
 
 describe("AudioView 의 읽는 경로 허용 목록 (LS-6, T-12-27)", () => {
+  const files = listSources(AUDIO_DIR);
   const read = (name: string): string => readFileSync(`${AUDIO_DIR}/${name}`, "utf8");
 
   it("가드 자기 시험: view 접근 경로를 모으고 숨은 경로는 허용 집합 밖이다", () => {
     expect(viewPaths("const a = view.phase; const b = view.day?.turn; // view.me.role")).toEqual(["view.day.turn", "view.phase"]);
     expect(viewPaths("const r = view.me?.role;")).toEqual(["view.me.role"]);
+    expect(viewPaths("view.players.map((p) => p.seat);")).toEqual(["view.players"]);
     expect(forbiddenIn("const v: RoomView = x; const e = x.phaseEndsAt;", "audioView.ts")).toEqual([]);
     expect(forbiddenIn("const v: RoomView = x;", "director.ts")).toContain("연결·스토어");
     expect(forbiddenIn("const c = view.me.chat;", "audioView.ts")).toContain("채팅");

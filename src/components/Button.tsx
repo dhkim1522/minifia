@@ -1,4 +1,5 @@
 import type { ReactNode, Ref } from "react";
+import { emitSignal } from "../audio/signals";
 
 export interface ButtonProps {
   variant?: "primary" | "secondary" | "text";
@@ -32,8 +33,16 @@ export function Button({
   const classes = ["mf-btn", `mf-btn--${variant}`, block && "mf-btn--block", compact && "mf-btn--compact", className]
     .filter(Boolean)
     .join(" ");
+  // 주요(primary) 버튼의 클릭만 닫힌 신호 tap 을 보낸다(12-08). 어떤 소리를 낼지·밤에 무음일지는 소리 감독이 정한다. 비활성은 클릭이 오지 않는다
+  const handleClick =
+    variant === "primary"
+      ? () => {
+          emitSignal({ kind: "tap" });
+          onClick?.();
+        }
+      : onClick;
   return (
-    <button ref={ref} type={type} className={classes} disabled={disabled} onClick={onClick} aria-label={ariaLabel}>
+    <button ref={ref} type={type} className={classes} disabled={disabled} onClick={handleClick} aria-label={ariaLabel}>
       {icon}
       {children}
     </button>

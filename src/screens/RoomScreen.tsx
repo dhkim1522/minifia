@@ -254,7 +254,8 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
 
   // 소리(12-07): 방 화면이 보이는 동안 제스처 resume·탭 가시성을 이어 주고, 소리 단추를 한 번 그린다. 소리 설정은 서버로 가지 않는다.
   const [soundHook] = useState(soundHookOn);
-  const sound = useSound({ active: view !== null, hook: soundHook });
+  // 12-08: 같은 훅이 view 차이(공개 필드만)를 소리 감독에 넣는다. 연결 번호가 바뀐 렌더는 침대만 낸다.
+  const sound = useSound({ active: view !== null, hook: soundHook, view, epoch: connection.epoch, offset: connection.offset });
 
   // 대기실·배정 동안 직업 그림 4종 전부와 낮 배경을 미리 받아 둔다.
   // 어떤 역할인지와 무관하게 같은 요청 패턴이다(Pattern 13 ②, Pitfall 20).

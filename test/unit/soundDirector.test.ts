@@ -148,7 +148,7 @@ describe("단계 전환 표", () => {
     ["verdict", "execution"],
     ["nomination", "runoff"],
     ["runoff", "defense"],
-    ["discussion", "showdown"],
+    ["nomination", "showdown"],
     ["showdown", "execution"],
   ] as const)("%s → %s: bed.vote 를 이어 가므로 침대 요청 없음", (a, b) => {
     const out = direct(av(a), av(b), clock());
@@ -544,7 +544,7 @@ describe("audioViewOf: 허용 필드만 (LS-6, T-12-27)", () => {
       (v) => { v.spectate = { seats: [] } as never; },
       (v) => { v.serverNow = 999_999; v.phaseDurationMs = 1; v.round = 9; v.code = "9999"; },
       (v) => { v.players = v.players.map((p) => ({ ...p, nickname: "x", connected: !p.connected, isHost: !p.isHost, badge: "mafia" as never, look: "hat" as never })); },
-      (v) => { v.mapChoice = "plaza"; v.map = "jazzBar"; v.resting = true as never; },
+      (v) => { v.mapChoice = "plaza"; v.map = "bar"; v.resting = true as never; },
     ];
     for (const m of mutations) {
       const v = baseView();
