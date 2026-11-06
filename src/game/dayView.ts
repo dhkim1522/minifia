@@ -38,8 +38,9 @@ export const DAY_COPY = {
   executedText: (name: string): string => `${name} 님 처형`,
   noExecution: "처형 없음",
   // ---- 결과 알림(36px) ----
+  // 14페이즈 U-5: 아래 두 문구는 결과 알림(36px)으로 쓰지 않는다(자막 띠가 같은 말을 한다). 상수는 지우지 않는다.
   announceDay: "낮이 되었습니다",
-  /** 밤 진입 알림(UI-SPEC 218행). 모든 역할에게 같다 */
+  /** 14페이즈 U-5: 결과 알림으로 쓰지 않는다(띠가 말한다). 모든 역할에게 같은 문구라는 기록으로만 남긴다 */
   announceNight: "밤이 되었습니다",
   // ---- 단계 제목 ----
   titles: {
@@ -89,7 +90,7 @@ export const ANNOUNCE_TALLY_MS = 2000;
 export const ANNOUNCE_EXEC_MS = 3000;
 /** 부결(2.0초부터)·지목 동률/0표(밤 시작): "처형 없음" 1.4초 */
 export const ANNOUNCE_NOEXEC_MS = 1400;
-/** 낮 시작 "낮이 되었습니다" — 낮 시작 단계(DAY_ANNOUNCE_MS) 2초 */
+/** 낮 시작 단계(DAY_ANNOUNCE_MS) 2초. 14 U-5 로 36px 알림은 없어졌고 상수만 남는다 */
 export const ANNOUNCE_DAY_MS = 2000;
 /** 처형된 사람이 반투명으로 떠오르는 시간 → 2.4초까지 사라진다(알림 시작 기준) */
 export const GHOST_RISE_MS = 1400;
@@ -98,7 +99,7 @@ export const GHOST_FADE_END_MS = 2400;
 /** 아침 36px 알림 시작(막이 걷히는 0.4초 뒤)과 길이 */
 export const ANNOUNCE_MORNING_AT = 400;
 export const ANNOUNCE_MORNING_MS = 2400;
-/** 밤 진입 "밤이 되었습니다" 길이. 처형 없음으로 온 밤은 그 알림(ANNOUNCE_NOEXEC_MS) 뒤에 이어진다 */
+/** 밤 진입 알림 길이. 14 U-5 로 36px 알림은 없어졌고 상수만 남는다 */
 export const ANNOUNCE_NIGHT_MS = 1600;
 /** 피해자 본인 화면: 0.7초에 "암살당했습니다" 2초(다른 문장 대신) */
 export const ANNOUNCE_VICTIM_AT = 700;
@@ -258,8 +259,8 @@ export function policeResultOf(prev: RoomView | null, cur: RoomView): { seat: nu
 function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["day"]>, out: DayEvents): void {
   switch (cur.phase) {
     case "dayAnnounce":
+      // U-5: "낮이 되었습니다" 36px 알림은 없다(띠가 말한다). 채팅 줄 "{N}일차" 는 그대로
       out.lines.push({ kind: "system", text: DAY_COPY.dayLine(day.n) });
-      out.announces.push({ text: DAY_COPY.announceDay, at: 0, ms: ANNOUNCE_DAY_MS });
       return;
     case "nomination":
       out.lines.push({ kind: "system", text: DAY_COPY.nominationStart });
@@ -320,16 +321,14 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       return;
     }
     case "night": {
-      // 지목 동률·0표로 처형 없이 온 밤은 "처형 없음"(0~1.4초) 뒤에 "밤이 되었습니다"가 이어진다. 찬반 뒤의 밤은 처형 단계가 이미 알렸다.
+      // 지목 동률·0표로 처형 없이 온 밤은 "처형 없음"(0~1.4초) 알림만 남는다. 찬반 뒤의 밤은 처형 단계가 이미 알렸다.
       // 마지막 3인(showdown)의 1-1-1·무표도 같다: 처형 단계 없이 밤으로 와서 이 알림이 처형 없음을 알린다(09.1.1-16, UI-SPEC E-1).
+      // U-5: "밤이 되었습니다" 36px 알림은 이어지지 않는다(띠가 말한다).
       const reason = day.noExecution?.reason;
-      let at = 0;
       if ((prev.phase === "nomination" || prev.phase === "runoff" || prev.phase === "showdown") && (reason === "tie" || reason === "noVotes")) {
         out.lines.push({ kind: "system", text: DAY_COPY.noExecution });
         out.announces.push({ text: DAY_COPY.noExecution, at: 0, ms: ANNOUNCE_NOEXEC_MS });
-        at = ANNOUNCE_NOEXEC_MS;
       }
-      out.announces.push({ text: DAY_COPY.announceNight, at, ms: ANNOUNCE_NIGHT_MS });
       return;
     }
     case "morning": {
