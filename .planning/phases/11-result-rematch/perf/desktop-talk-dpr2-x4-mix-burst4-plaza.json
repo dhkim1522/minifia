@@ -1,0 +1,88 @@
+{
+  "runner": {
+    "tool": "scripts/perf-run.mjs",
+    "map": "plaza",
+    "throttle": 4,
+    "dpr": 2,
+    "size": "390x844",
+    "headless": true,
+    "chrome": "156.0.8078.80",
+    "platform": "darwin/arm64",
+    "node": "v26.13.0",
+    "url": "http://localhost:5173/?perf=1&scene=talk&minutes=2&dpr=2&seed=1&budget=0&outfits=mix&burst=4&map=plaza"
+  },
+  "schema": 1,
+  "at": "2026-11-05T10:21:21.454Z",
+  "build": "2026-11-05T09:34:40Z+2724326f",
+  "three": "186",
+  "query": "?perf=1&scene=talk&minutes=2&dpr=2&seed=1&budget=0&outfits=mix&burst=4&map=plaza",
+  "params": {
+    "scene": "talk",
+    "minutes": 2,
+    "dpr": 2,
+    "budget": 0,
+    "seed": 1,
+    "chars": 8,
+    "shot": false,
+    "nav": false,
+    "outfits": "mix",
+    "burst": 4,
+    "map": "plaza"
+  },
+  "device": {
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "kakaotalk": false,
+    "dpr": 2,
+    "screen": "800x600",
+    "inner": "390x844",
+    "cores": 11,
+    "memoryGB": 32,
+    "glRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+    "webdriver": true
+  },
+  "heartbeat": "first",
+  "truncated": false,
+  "budgetStep": 0,
+  "frames": {
+    "count": 7200,
+    "seconds": 120.01180388259888,
+    "avgFps": 59.994098639191975,
+    "jank": 0,
+    "p50": 16.700000762939453,
+    "p95": 16.700000762939453,
+    "p99": 16.799999237060547,
+    "max": 33.400001525878906,
+    "rafHz": 60,
+    "lowPowerSuspect": false,
+    "firstMinuteFps": 59.98570146926795,
+    "lastMinuteFps": 60.00246413905604,
+    "thermalRatio": 1.0002794444238794,
+    "thermalSuspect": false
+  },
+  "work": {
+    "tagsP95Ms": 0.4,
+    "renderP95Ms": 0.9,
+    "mapBuildMs": 66,
+    "moduleLoadMs": 76
+  },
+  "renderer": {
+    "calls": 44,
+    "triangles": 58700,
+    "geometries": 98,
+    "textures": 3,
+    "programs": 7,
+    "pointLights": 3,
+    "callsMax": 68
+  },
+  "heap": {
+    "startMB": 50.8,
+    "endMB": 52.9,
+    "samplesMB": [
+      52.6
+    ]
+  },
+  "tapToRingMs": [],
+  "interactiveMs": 748,
+  "meets": null,
+  "firstEmoteGapMs": 16.7
+}
