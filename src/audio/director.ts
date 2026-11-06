@@ -18,8 +18,8 @@ import type { PhaseId } from "../../shared/protocol";
 import { POLICE_CARD_AT } from "../game/dayView";
 import type { AudioView } from "./audioView";
 import { recipeDurationMs, type BedId, type SfxId } from "./recipes";
-import { EMOTE_OTHERS_DB, emoteSoundGate, MORNING_SLASH_AT, morningScript, nightCues, pickTickSchedule, tickSchedule, verdictScript, willScript, type DuckSpan, type EmoteGateState, type Rng, type ScriptItem } from "./script";
-import type { EmoteSignal, LocalSignal } from "./signals";
+import { EMOTE_OTHERS_DB, emoteSoundGate, flipCue, lightCues, MORNING_SLASH_AT, morningScript, nightCues, plateCues, pickTickSchedule, tickSchedule, verdictScript, willScript, type DuckSpan, type EmoteGateState, type Rng, type ScriptItem } from "./script";
+import type { EmoteSignal, LocalSignal, ResultSignal } from "./signals";
 
 /** 단계 → 침대 표: 14개 단계 전수. null 은 침대 없음(assigning: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
 export const BED_OF: Readonly<Record<PhaseId, BedId | null>> = {
@@ -124,10 +124,18 @@ function scriptKeys(v: AudioView): string[] {
   if (v.phase === "night") keys.push(nightKey(v));
   if (v.phase === "morning") keys.push(phaseKey(v), killKey(v), letterKey(v), policeCardKey(v));
   if (v.phase === "execution") keys.push(phaseKey(v));
+  if (v.phase === "ended") {
+    keys.push(RESULT_LIGHT_KEY);
+    for (let k = 0; k < RESULT_PLATE_KEYS_MAX; k += 1) keys.push(`${RESULT_PLATE_KEY}${k}`);
+  }
   if (inTurn(v) && v.turn!.doneAt === undefined) keys.push(pickKey(v));
   return keys;
 }
 
+/** 결과 사건 대본 키: 박수 꼬리(80·160ms)가 로비로 넘어가면 취소되게 scriptKeys 가 ended 에서 이 키들을 낸다 */
+const RESULT_LIGHT_KEY = "result:light";
+const RESULT_PLATE_KEY = "result:plate:";
+const RESULT_PLATE_KEYS_MAX = 16;
 const pickKey = (v: AudioView): string => `pick:${v.dayN ?? 0}:${v.turn?.i ?? -1}`;
 
 // ───────────────────────── 지목 핀 (src/world/pinPlan.ts pinOf 의 nomination 부분 복제) ─────────────────────────
@@ -329,6 +337,22 @@ export interface SignalContext {
   visualCues?: boolean;
 }
 
+/** 결과 사건 하나의 소리(12-11, C-6). ended 단계에서만 난다 — 다른 단계의 result 신호는 무시한다(T-12-41). 사건이 시계에서 한 번 나가므로 감독은 상태를 쥐지 않는다 */
+function resultSignal(signal: ResultSignal, cur: AudioView, out: DirectOutput): void {
+  if (cur.phase !== "ended") return;
+  if (signal.step === "flip") {
+    emitTimed(`result:flip:${signal.i}`, flipCue(signal.i), out);
+    return;
+  }
+  if (signal.step === "light") {
+    const s = lightCues({ win: signal.win });
+    emitTimed(RESULT_LIGHT_KEY, s.items, out);
+    out.duck = s.duck;
+    return;
+  }
+  emitTimed(`${RESULT_PLATE_KEY}${signal.k}`, plateCues({ k: signal.k, total: signal.total }), out);
+}
+
 /**
  * 로컬 신호 처리. 소리를 낼지·어떤 id 인지는 여기서 정한다.
  * 밤에는 모든 닫힌 신호가 무음이다(LS-7) — 시각 큐 갈래의 tensionCue 하나만 night.cue 를 낸다(박자를 시각과 맞춘다, D-11).
@@ -359,6 +383,9 @@ export function directSignal(signal: LocalSignal, cur: AudioView | null, ctx: Si
       break;
     case "emote":
       break; // 동작 소리는 게이트 상태가 필요해 directEmote 가 맡는다
+    case "result":
+      resultSignal(signal, cur, out);
+      break;
     case "tensionCue":
       break; // 밤이 아니면 시각 큐도 소리가 없다
   }

@@ -5,7 +5,7 @@
 import type { EmoteId } from "../../shared/protocol";
 
 /** 닫힌 신호 종류 */
-export const SIGNAL_KINDS = ["tap", "card", "tensionCue", "vote", "deny", "emote"] as const;
+export const SIGNAL_KINDS = ["tap", "card", "tensionCue", "vote", "deny", "emote", "result"] as const;
 export type SignalKind = (typeof SIGNAL_KINDS)[number];
 
 /** 주요 버튼이 눌렸다 — 인자 없음 */
@@ -38,7 +38,16 @@ export interface EmoteSignal {
   id: EmoteId;
   mine: boolean;
 }
-export type LocalSignal = TapSignal | CardSignal | TensionCueSignal | VoteSignal | DenySignal | EmoteSignal;
+/**
+ * 결과 화면 시계가 낸 사건 하나(12-11, D-15). ResultScreen 이 단계·뒤집힘 수·패 index 를 바꾸는 바로 그 자리에서 한 번 나간다 —
+ * 건너뛴 사건은 신호도 없고 재접속·처음 마운트(연출 없는 마운트)는 신호가 없다. 인자는 정수·불리언뿐이다(좌석·직업·닉네임·칭호 id 없음, LS-6).
+ *   flip: i 번째 뒤집기(0 기준) · light: 이긴 팀 조명(win = 내 팀이 이겼나) · plate: k 번째 패(총 total 개)
+ */
+export type ResultSignal =
+  | { kind: "result"; step: "flip"; i: number }
+  | { kind: "result"; step: "light"; win: boolean }
+  | { kind: "result"; step: "plate"; k: number; total: number };
+export type LocalSignal = TapSignal | CardSignal | TensionCueSignal | VoteSignal | DenySignal | EmoteSignal | ResultSignal;
 
 type Handler = (signal: LocalSignal) => void;
 

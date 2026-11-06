@@ -220,6 +220,34 @@ export function awardScript(input: AwardInput): Script {
   return { items: [{ at, id }, ...clapsAt(at, AWARD_CLAP_DB)], duck: null };
 }
 
+// ───────────────────────── 결과·시상: 사건 → 소리 (12-11) ─────────────────────────
+// 11페이즈 시계가 사건(뒤집기·조명·패)을 낼 때마다 그 사건 하나의 소리 목록을 만든다. 시각 at 은 사건 기준 상대 ms 다.
+// 절대 시각 표(resultScript·awardScript)가 기준이고 시험이 둘의 일치를 단언한다. 좌석·직업·닉네임·칭호는 입력에 없다.
+
+export interface LightInput {
+  win: boolean;
+}
+
+/** i 번째 직업 뒤집기(좌석 오름차순, 0 기준): role.flip 하나, i 마다 +20 cents. 최대 8번 — 그 밖은 소리 없음 */
+export function flipCue(i: number): ScriptItem[] {
+  if (!Number.isInteger(i) || i < 0 || i >= RESULT_AT.flipMax) return [];
+  return [{ at: 0, id: "role.flip", cents: RESULT_AT.flipCents * i }];
+}
+
+/** 이긴 팀 조명 순간: 승패 소리 하나 + 이긴 팀 박수 셋(−10dB) + 침대 덕킹. 같은 win 이면 누가 불러도 같다 */
+export function lightCues(input: LightInput): Script & { duck: DuckSpan } {
+  return {
+    items: [{ at: 0, id: input.win ? "result.win" : "result.lose" }, ...clapsAt(0, RESULT_CLAP_DB)],
+    duck: { fromMs: 0, toMs: RESULT_DUCK.holdMs, db: RESULT_DUCK.db, returnMs: RESULT_DUCK.returnMs },
+  };
+}
+
+/** 시상 k 번째 패가 뜨는 순간: 패 소리 + 박수 셋(−12dB). 마지막 패는 award.final */
+export function plateCues(input: AwardInput): ScriptItem[] {
+  const id: SfxId = input.k >= input.total - 1 ? "award.final" : "award.plate";
+  return [{ at: 0, id }, ...clapsAt(0, AWARD_CLAP_DB)];
+}
+
 // ───────────────────────── 유언 편지 ─────────────────────────
 
 export interface WillInput {

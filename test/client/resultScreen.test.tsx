@@ -2012,4 +2012,15 @@ describe("결과 사건 신호 (12-11)", () => {
       expect(plates()).toEqual([[0, 5]]);
     });
   });
+
+  it("다시 하기: 승리 조명 전 알약은 신호가 없고, 조명 뒤 손님이 준비를 토글하면 tap 신호 (ui.tap)", () => {
+    const r = arrive({ me: 1 });
+    const pill = () => r.container.querySelector<HTMLElement>("button[data-ready-pill]")!;
+    advance(2000);
+    fireEvent.click(pill());
+    expect(sigs.got.filter((s) => s.kind === "tap")).toEqual([]);
+    advance(2600); // 4600
+    fireEvent.click(pill());
+    expect(sigs.got.filter((s) => s.kind === "tap")).toEqual([{ kind: "tap" }]);
+  });
 });

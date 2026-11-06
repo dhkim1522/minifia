@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import type { PhaseId } from "../../shared/protocol";
 import type { AudioView } from "../../src/audio/audioView";
-import { directSignal } from "../../src/audio/director";
+import { direct, directSignal } from "../../src/audio/director";
 import { SCREEN_COUNTERPART } from "../../src/audio/recipes";
 import { awardScript, flipCue, lightCues, plateCues, RESULT_AT, resultScript } from "../../src/audio/script";
 import { SIGNAL_KINDS, type LocalSignal } from "../../src/audio/signals";
@@ -171,5 +171,49 @@ describe("감독: result 신호는 ended 에서만 소리가 된다 (T-12-41)", 
     expect(keys(flip(0))).toEqual(["i", "kind", "step"]);
     expect(keys(light(true))).toEqual(["kind", "step", "win"]);
     expect(keys(plate(0, 3))).toEqual(["k", "kind", "step", "total"]);
+  });
+});
+
+describe("감독: 결과 진입·재접속·다시 하기 (D-15, LS-10)", () => {
+  const local = { now: 1_000, offset: 0, reset: false, lastJoinAt: null };
+  const ids = (o: ReturnType<typeof direct>): string[] => [...o.now.map((c) => c.id), ...o.scripts.flatMap((s) => s.items.map((i) => i.id))];
+
+  it("처형·아침에서 ended 로 들어오면 bed.result 만 (일회성 소리는 시계 신호가 낸다)", () => {
+    for (const from of ["execution", "morning"] as const) {
+      const o = direct(av(from), av("ended"), local);
+      expect(o.bed).toBe("bed.result");
+      expect(ids(o)).toEqual([]);
+    }
+  });
+
+  it("처음 스냅샷·연결 번호 변경(재접속)으로 받은 ended 도 bed.result 만", () => {
+    const first = direct(null, av("ended"), local);
+    expect(first.bed).toBe("bed.result");
+    expect(ids(first)).toEqual([]);
+    const re = direct(av("execution"), av("ended"), { ...local, reset: true });
+    expect(re.bed).toBe("bed.result");
+    expect(ids(re)).toEqual([]);
+  });
+
+  it("ended 안에서 view 가 다시 와도(준비 표시·닉네임 변경 등) 소리도 취소도 없다", () => {
+    const o = direct(av("ended"), { ...av("ended"), players: [{ seat: 0, alive: true }] }, local);
+    expect(ids(o)).toEqual([]);
+    expect(o.cancel).toEqual([]);
+    expect("bed" in o).toBe(false);
+  });
+
+  it("다시 하기: [시작] 으로 ended → assigning 이면 game.start, 로비로 돌아오면 bed.lobby", () => {
+    const start = direct(av("ended"), av("assigning"), local);
+    expect(ids(start)).toEqual(["game.start"]);
+    expect(start.bed).toBeNull();
+    const back = direct(av("ended"), av("lobby"), local);
+    expect(back.bed).toBe("bed.lobby");
+    expect(ids(back)).toEqual([]);
+  });
+
+  it("ended 를 떠나면 아직 남은 박수 꼬리 대본을 취소한다", () => {
+    const o = direct(av("ended"), av("lobby"), local);
+    expect(o.cancel).toContain("result:light");
+    expect(o.cancel).toContain("result:plate:0");
   });
 });

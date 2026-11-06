@@ -530,8 +530,8 @@ describe("emote 신호 → emote.{id} (D-14, LS-4, T-12-37, T-12-39)", () => {
 // ───────────────────────── 신호 (ui.tap) ─────────────────────────
 
 describe("신호 tap → ui.tap (LS-7)", () => {
-  it("닫힌 신호 종류는 tap·card·tensionCue·vote·deny·emote 이고 인자에 선택값·역할·좌석이 없다", () => {
-    expect([...SIGNAL_KINDS]).toEqual(["tap", "card", "tensionCue", "vote", "deny", "emote"]);
+  it("닫힌 신호 종류는 tap·card·tensionCue·vote·deny·emote·result 이고 인자에 선택값·역할·좌석이 없다", () => {
+    expect([...SIGNAL_KINDS]).toEqual(["tap", "card", "tensionCue", "vote", "deny", "emote", "result"]);
   });
 
   it.each(PHASES.filter((p) => p !== "night"))("%s: ui.tap 한 번", (phase) => {

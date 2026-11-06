@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import type { ClientMessage, EmoteId, MapChoice, MapId, PhaseId, RoomView } from "../../shared/protocol";
+import { emitSignal } from "../audio/signals";
 import { Button } from "../components/Button";
 import { AwardPlate } from "../components/v2/AwardPlate";
 import { ConfirmSheet } from "../components/ConfirmSheet";
@@ -21,7 +22,7 @@ import { WorldStage } from "../components/WorldStage";
 import { CEREMONY_TITLE } from "../game/awardText";
 import { DRESS_TEXT } from "../game/dressText";
 import { LOG_H_KB } from "../game/chatUi";
-import { castOf, CEREMONY, CEREMONY_CENTER, ceremonyAt, ceremonySnap, ceremonyWindowStart, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, satSlots, skipAward, slotsFor, stateAt, walkSnap } from "../game/resultDirector";
+import { castOf, CEREMONY, CEREMONY_CENTER, ceremonyAt, ceremonySnap, ceremonyWindowStart, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, satSlots, skipAward, slotsFor, stateAt, walkSnap, winningTeam } from "../game/resultDirector";
 import type { CeremonyState, ResultState } from "../game/resultDirector";
 import { READY_TEXT } from "../game/resultText";
 import { RESULT_TEXT } from "../game/verdict";
@@ -284,6 +285,12 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
 
   // 표시각마다 setTimeout 으로 단계를 바꾼다. 조명이 켜지는 순간 이긴 팀 박수 큐(최대 4)를 만든다(T-11-17)
   // 시상식 박수(11-09): 패가 뜨는 마크(창 시작 + 900)에서만 큐를 만든다. 모션 줄이기는 박수가 없다. 한 창 4명을 넘지 않는다(ceremonyAt 이 정한다, T-11-33)
+  // 소리 신호(12-11, D-15): 시계가 단계·뒤집힘 수·패 index 를 바꾸는 이 goto 에서만, 사건마다 한 번 나간다. 건너뛰어 지나친 마크는 goto 를 거치지 않으니 신호도 없다.
+  // 연출 없는 마운트(재접속·처음 마운트)는 reveal·시상 마크가 없어 신호가 없다. 인자는 정수·불리언뿐이다(좌석·직업·닉네임·칭호 없음)
+  const myCast = cast.find((c) => c.seat === view.me.seat);
+  const iWin = myCast === undefined ? true : myCast.team === winningTeam(winner);
+  const iWinRef = useRef(iWin);
+  iWinRef.current = iWin;
   const goto = useCallback(
     (m: number) => {
       markRef.current = m;
@@ -294,9 +301,28 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         const c = ceremonyAt(m, awards, cast);
         if (c?.phase === "award" && c.plate && m === ceremonyWindowStart(c.index) + CEREMONY.plateAtMs) setCues(c.clap.map((seat) => ({ seat, id: "clap" as const, nonce: ++nonce.current })));
       }
+      if (reveal && m >= tl.flipStartMs && m < tl.lightAtMs) {
+        const i = (m - tl.flipStartMs) / tl.flipGapMs;
+        if (Number.isInteger(i) && i < cast.length) emitSignal({ kind: "result", step: "flip", i });
+      }
+      if (reveal && m === tl.lightAtMs) emitSignal({ kind: "result", step: "light", win: iWinRef.current });
+      if (ceremonyOn) {
+        const c = ceremonyAt(m, awards, cast);
+        if (c?.phase === "award" && c.plate && m === ceremonyWindowStart(c.index) + CEREMONY.plateAtMs) emitSignal({ kind: "result", step: "plate", k: c.index, total: c.total });
+      }
     },
-    [cast, winner, ceremonyOn, awards],
+    [cast, winner, ceremonyOn, awards, reveal], // eslint-disable-line react-hooks/exhaustive-deps
   );
+  // 모션 줄이기로 곧바로 최종 상태가 열린 도착: 승패 소리 한 번만(뒤집기·조명 시계가 없다). 부모의 소리 훅 효과가 같은 커밋에서 새 단계를 먼저 받도록 한 틱 미룬다
+  const lightSent = useRef(false);
+  useEffect(() => {
+    if (!arrival || reveal || lightSent.current) return;
+    const t = setTimeout(() => {
+      lightSent.current = true;
+      emitSignal({ kind: "result", step: "light", win: iWinRef.current });
+    }, 0);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const schedule = useCallback(
     (from: number) => {
       clock.current = { base: from, since: Date.now() };

@@ -1,3 +1,4 @@
+import { emitSignal } from "../../audio/signals";
 import "../../styles/v2.css";
 import { READY_TEXT } from "../../game/resultText";
 import { V2Icon } from "./V2Icon";
@@ -38,6 +39,8 @@ export function ReadyPill({ host, on, n = 0, m = 0, dim, inactive, onPress }: Re
     onMouseDown: (e: React.MouseEvent) => e.preventDefault(),
     onClick: () => {
       if (off) return;
+      // 준비 토글·[시작] 은 주요 버튼과 같은 닫힌 신호 tap(ui.tap). 흐림(인원 부족)은 토스트 경로라 소리가 없다(12-11)
+      if (!(host && dim === true)) emitSignal({ kind: "tap" });
       onPress();
     },
   };
