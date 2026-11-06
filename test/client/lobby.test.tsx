@@ -279,6 +279,51 @@ describe("Lobby — 채팅 패널: 기록 + 입력줄 + 행동 줄 (CHAT-01, 07-
   });
 });
 
+describe("대기실 [시작] 빛남 (HOST-03)", () => {
+  const start = (container: HTMLElement) => container.querySelector("[data-lobby-start]") as HTMLButtonElement | null;
+  const lit = (el: HTMLElement | null) => (el === null ? "없음" : `${el.classList.contains("is-call")}/${el.hasAttribute("data-call")}`);
+  const hostView = (connected: number) => {
+    const players = [player(0, "방장님")];
+    for (let i = 1; i <= connected; i += 1) players.push(player(i, `친구${i}`));
+    return makeView(players, 0);
+  };
+
+  it("방장 + 연결 4명(시작 가능): [시작] 에 is-call + 값 없는 data-call", () => {
+    const { container } = render(lobby(hostView(3)));
+    expect(lit(start(container))).toBe("true/true");
+    expect(start(container)!.getAttribute("data-call")).toBe("");
+  });
+
+  it("누르면(send 성공) 꺼지고, 2초 잠금이 풀려도 같은 대기실 안에서는 다시 켜지지 않는다", () => {
+    vi.useFakeTimers();
+    const { container } = render(lobby(hostView(3), { send: vi.fn() }));
+    fireEvent.click(start(container)!);
+    expect(lit(start(container))).toBe("false/false");
+    advance(2_000);
+    expect(start(container)!.className).toContain("mf-act--primary");
+    expect(lit(start(container))).toBe("false/false");
+  });
+
+  it("방장 + 연결 3명(모자람): 빛나지 않는다. 누르려 해도 켜지지 않는다", () => {
+    const { container } = render(lobby(hostView(2)));
+    expect(lit(start(container))).toBe("false/false");
+    fireEvent.click(start(container)!);
+    expect(lit(start(container))).toBe("false/false");
+  });
+
+  it("손님: [시작] 이 없고 data-call 도 없다", () => {
+    const view = makeView([player(0, "방장님"), player(1, "친구1"), player(2, "친구2"), player(3, "친구3")], 1);
+    const { container } = render(lobby(view));
+    expect(lit(start(container))).toBe("없음");
+    expect(container.querySelector("[data-call]")).toBeNull();
+  });
+
+  it("연결 끊김(canSend 거짓): 빛나지 않는다", () => {
+    const { container } = render(lobby(hostView(3), { canSend: false }));
+    expect(lit(start(container))).toBe("false/false");
+  });
+});
+
 describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행동 줄)", () => {
   const start = (container: HTMLElement) => container.querySelector("[data-lobby-start]") as HTMLButtonElement | null;
   // 방장(seat 0) + 연결된 참가자 n 명 + 끊긴 참가자 away 명
