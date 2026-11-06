@@ -390,3 +390,30 @@ describe("rolecard.css — 시트 규약", () => {
     expect(/transition|animation/.test(code)).toBe(false);
   });
 });
+
+describe("RoleCardSheet 역할 목표 한 줄 (TOOL-03, HOST-05)", () => {
+  it.each(ROLE_IDS)("%s 앞면: [data-role-goal] 하나 — 자기 목표만, 다른 역할 목표는 DOM 에 없다", (role) => {
+    renderSheet({ role, tab: "role" });
+    const goals = document.querySelectorAll("[data-role-goal]");
+    expect(goals.length).toBe(1);
+    expect(goals[0]!.querySelector(".mf-goal__chip")?.textContent).toBe("목표");
+    expect(goals[0]!.querySelector(".mf-goal__text")?.textContent).toBe(ROLE_TEXT[role].goal);
+    const text = document.querySelector("dialog")?.textContent ?? "";
+    for (const other of ROLE_IDS) {
+      if (other === role) continue;
+      expect(text.includes(ROLE_TEXT[other].goal)).toBe(false);
+    }
+  });
+
+  it.each(ROLE_IDS)("%s 뒷면(showBack)에는 목표 줄이 없다", (role) => {
+    renderSheet({ role, showBack: true });
+    expect(document.querySelector("[data-role-goal]")).toBeNull();
+    const text = document.querySelector("dialog")?.textContent ?? "";
+    for (const r of ROLE_IDS) expect(text.includes(ROLE_TEXT[r].goal)).toBe(false);
+  });
+
+  it("역할 없음에는 목표 줄이 없다", () => {
+    renderSheet({ role: null });
+    expect(document.querySelector("[data-role-goal]")).toBeNull();
+  });
+});
