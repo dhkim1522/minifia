@@ -57,7 +57,7 @@
 .mf-reveal > :not(.mf-reveal__dim) { position: relative; z-index: 1; }
 /* 머리는 게임 화면 헤더와 같은 모양(62, 맵 위에 얹음). 무대(카드)는 띠 아랫변 + 8 아래에서 시작한다 — HostBand 가 --mf-host-bottom 으로 알리고, 없으면 옛 자리(62 + 8). */
 .mf-reveal > .mf-reveal__header { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-toast); box-sizing: border-box; height: 62px; padding: var(--space-sm) var(--space-md) 0; pointer-events: none; }
-.mf-reveal__header .mf-btn { pointer-events: auto; }
+.mf-reveal__header .mf-btn, .mf-reveal__header .mf-tt { pointer-events: auto; } /* 14-08: 머리가 pointer-events:none 이라 테스트 방 [테스트] 단추가 역할 확인에서 눌리지 않던 것을 푼다 */
 .mf-reveal__header .mv-phase { align-items: flex-start; }
 .mf-reveal__header .mv-phase__title { text-shadow: var(--shadow-text); }
 .mf-reveal__stage { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: calc(var(--mf-host-bottom, 62px) + var(--space-sm)) var(--space-md) 0; }

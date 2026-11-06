@@ -170,7 +170,8 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-host__time b { font-size: 16px; line-height: 1.4; font-weight: 700; }
 .mv-host__time span { font-size: 14px; line-height: 1.4; font-weight: 400; }
 .mv-host__time[data-tone="warn"] { color: var(--brass-400); }
-.mv-host__time[data-tone="urgent"] { color: var(--crimson-400); }
+/* 14-08: 숫자(글자)는 crimson-300 — crimson-400 은 어두운 면 위에서 4.2:1 로 4.5:1 에 못 미친다(E2E 묶음 H). 막대(글자 아님)는 UI-SPEC 대로 crimson-400 */
+.mv-host__time[data-tone="urgent"] { color: var(--crimson-300); }
 .mv-host__bar { grid-column: 1 / -1; height: 8px; overflow: hidden; border-radius: var(--radius-pill); background: var(--night-600); }
 .mv-host__bar i { display: block; width: 100%; height: 100%; border-radius: var(--radius-pill); background: var(--gray-100); transform-origin: left center; transition: transform 1s linear, background-color 1s linear; }
 .mv-host__bar i[data-tone="warn"] { background: var(--brass-400); }
