@@ -78,24 +78,12 @@ describe("pointsTally — 지목 집계(공개 정보만)", () => {
     const tally = pointsTally(nominationOf([[1, 2], [3, 2], [4, 0], [2, 0]]));
     same(tally.counts, { 0: 2, 2: 2 });
     expect(tally.leader).toBeUndefined();
-    expect(tally.sure).toBeUndefined();
   });
 
-  it("0표면 비어 있고 과반 수는 산 사람 수에서 나온다(5명 → 3)", () => {
+  it("0표면 비어 있고 선두가 없다", () => {
     const tally = pointsTally(nominationOf([]));
     same(tally.counts, {});
     expect(tally.leader).toBeUndefined();
-    expect(tally.majority).toBe(3);
-  });
-
-  it("과반 수는 탈락자를 뺀 산 사람 수로 센다(5명 중 2명 탈락 → 3명 → 2)", () => {
-    const players = NAMES.map((name, seat) => pl(seat, name, seat > 1));
-    expect(pointsTally(nominationOf([], { players })).majority).toBe(2);
-  });
-
-  it("선두의 표가 과반에 닿으면 sure 가 그 사람", () => {
-    expect(pointsTally(nominationOf([[1, 2], [3, 2]])).sure).toBeUndefined();
-    expect(pointsTally(nominationOf([[1, 2], [3, 2], [4, 2]])).sure).toBe(2);
   });
 
   it("지목 단계가 아닌 view 의 points 는 읽지 않는다", () => {
@@ -118,19 +106,16 @@ describe("dayEvents — 지목 차이 (DAY-04)", () => {
     same(events.lines, []);
   });
 
-  it("이전 view 가 없으면(첫 스냅샷·재접속) 이벤트 없이 정상 상태만 준다", () => {
+  it("이전 view 가 없으면(첫 스냅샷·재접속) 이벤트가 없다", () => {
     const events = dayEvents(null, nominationOf([[1, 2]]));
     same(events.lines, []);
     same(events.announces, []);
     same(events.fx, []);
-    same(events.state.counts, { 2: 1 });
-    expect(events.state.leader).toBe(2);
   });
 
-  it("reset 옵션(epoch 가 바뀐 첫 스냅샷)도 이벤트 없이 상태만 준다", () => {
+  it("reset 옵션(epoch 가 바뀐 첫 스냅샷)도 이벤트가 없다", () => {
     const events = dayEvents(nominationOf([]), nominationOf([[1, 2], [3, 2]]), { reset: true });
     same(events.lines, []);
-    same(events.state.counts, { 2: 2 });
   });
 
   it("닉네임에 HTML 이 있어도 문자열 그대로 둔다", () => {
@@ -333,15 +318,9 @@ describe("dayEvents — 찬반 결과·처형·처형 없음 (DAY-06)", () => {
     same(dayEvents(executionView(5, 2, true), viewOf("night"), { reset: true }).announces, []);
   });
 
-  it("첫 스냅샷이 처형 단계면 줄·알림·연출 없이 상태만 준다 (변론자 유령 상태는 state)", () => {
+  it("첫 스냅샷이 처형 단계면 줄·알림·연출이 없다", () => {
     const events = dayEvents(null, executionView(5, 2, true));
     same([events.lines, events.announces, events.fx], [[], [], []]);
-    expect(events.state.executed).toBe(3);
-    expect(events.state.candidate).toBe(3);
-  });
-
-  it("부결이면 첫 스냅샷에도 executed 가 없다", () => {
-    expect(dayEvents(null, executionView(2, 5, false)).state.executed).toBeUndefined();
   });
 
   it("reset 인 처형 스냅샷도 이벤트가 없다", () => {
@@ -371,7 +350,6 @@ describe("dayEvents — 공개 정보만 (T-08-22)", () => {
       const plain = dayEvents(a, b);
       const priv = dayEvents(withPrivate(a), withPrivate(b));
       expect(text(priv)).toBe(text(plain));
-      expect(JSON.stringify(priv.state)).toBe(JSON.stringify(plain.state));
     }
   });
 

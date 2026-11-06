@@ -6,7 +6,6 @@
 // 문구에 역할 단어를 쓰지 않는다 — 처형 알림·줄 어디에도 역할이 없다(결정 0053-2).
 // 형식은 src/net/roomDiff.ts 선례: 이전 view 가 없으면(첫 스냅샷·재접속) 이벤트 없이 정상 상태만 준다.
 import { isAlive } from "../../shared/game/alive";
-import { majorityOf } from "../../shared/game/nomination";
 import { EXECUTION_MS, VERDICT_LEAD_MS } from "../../shared/game/phases";
 import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
@@ -138,16 +137,6 @@ export interface PointsTally {
   counts: Record<number, number>;
   /** 최다 득표가 정확히 한 명일 때만 */
   leader?: number;
-  /** 산 사람 수의 과반 수 */
-  majority: number;
-  /** 선두의 표가 과반에 닿았을 때 그 사람 */
-  sure?: number;
-}
-
-/** 정상 상태: 지목 집계 + 변론자 + (처형 단계에서 찬반이 통과했으면) 처형된 사람 */
-export interface DayState extends PointsTally {
-  candidate?: number;
-  executed?: number;
 }
 
 /** 이 화면에만 남는 채팅 카드(경찰 조사 결과). 서버 채널 기록이 아니다. at 은 단계 진입 기준 ms */
@@ -163,8 +152,6 @@ export interface DayEvents {
   localCards?: LocalCard[];
   announces: DayAnnounce[];
   fx: DayFx[];
-  /** cur 에서 곧바로 그릴 정상 상태(득표·선두·과반·변론자·처형된 사람). 이벤트가 없어도 항상 있다 */
-  state: DayState;
 }
 
 /** 지목 줄은 지목 단계에서만 의미가 있다 — 다른 단계 view 의 points 는 읽지 않는다. */
@@ -181,14 +168,10 @@ export function pointsTally(view: RoomView): PointsTally {
   const tops = Object.keys(counts)
     .map(Number)
     .filter((seat) => counts[seat] === top && top > 0);
-  const majority = majorityOf(view.players.filter(isAlive).length);
   const leader = tops.length === 1 ? tops[0]! : undefined;
-  const sure = leader !== undefined && counts[leader]! >= majority ? leader : undefined;
   return {
     counts,
-    majority,
     ...(leader !== undefined ? { leader } : {}),
-    ...(sure !== undefined ? { sure } : {}),
   };
 }
 
@@ -219,18 +202,6 @@ const nameOf = (view: RoomView, seat: number): string | undefined => view.player
 
 /** 처형 단계 안에서 끝나도록 알림 길이를 자른다(at 은 처형 단계 진입 기준 ms). */
 const fitExecution = (at: number, ms: number): number => Math.min(ms, EXECUTION_MS - at);
-
-/** 정상 상태: 지목 집계 + 변론자 + 처형 단계에서 찬반이 통과했으면 처형된 사람(유령 상태). */
-function stateOf(view: RoomView): DayState {
-  const state: DayState = { ...pointsTally(view) };
-  const day = view.day;
-  if (day?.candidate !== undefined) state.candidate = day.candidate;
-  if (view.phase === "execution" && day?.verdict?.passed) {
-    const seat = day.execution?.seat ?? day.candidate;
-    if (seat !== undefined) state.executed = seat;
-  }
-  return state;
-}
 
 /** 경찰 결과 카드 본문. 경찰 분기(policeResultOf 가 null 이 아닐 때) 밖에서 쓰지 않는다 */
 const POLICE_TEXT = { mafia: "마피아", clear: "마피아 아님" } as const;
@@ -366,11 +337,10 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
 
 /**
  * 연속한 서버 view 두 개의 공개 정보 차이에서 연출 이벤트를 만든다.
- * prev 가 null 이거나 opts.reset(epoch 가 바뀐 첫 스냅샷)이면 이벤트 없이 정상 상태만 준다.
+ * prev 가 null 이거나 opts.reset(epoch 가 바뀐 첫 스냅샷)이면 이벤트 없이 빈 묶음만 준다.
  */
 export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: boolean } = {}): DayEvents {
-  const state = stateOf(cur);
-  const events: DayEvents = { lines: [], announces: [], fx: [], state };
+  const events: DayEvents = { lines: [], announces: [], fx: [] };
   if (!prev || opts.reset || !cur.day) return events;
 
   // ---- 단계 진입: 줄·결과 알림·연출 ----
