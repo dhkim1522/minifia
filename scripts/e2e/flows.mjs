@@ -1921,6 +1921,8 @@ async function basicOffFlow(ctx) {
       steps += 1;
       if (phase === "discussion" && endBtn === null) {
         await settle(hp);
+        // 배포본은 단계 프레임과 화면 그리기 사이가 느려 한 번에 세면 0개일 수 있다 — 버튼이 붙을 때까지 3초 기다린 뒤 센다(개수 기대는 그대로 정확히 1)
+        await hp.locator("[data-end-discussion]").first().waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
         endBtn = await hp.locator("[data-end-discussion]").count();
       }
       await sleep(250); // 감시(100ms)가 이 단계 화면을 한 번은 보게
