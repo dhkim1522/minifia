@@ -1445,7 +1445,8 @@ async function stageFull(url, args) {
       const allowSpectate = c.ghostFrom !== undefined && f.at >= c.ghostFrom;
       const allowResult = f.msg.view?.phase === "ended";
       const bad = leaves.filter(
-        (l) => !ROLE_ALLOWED_ALWAYS.has(l.path) && !(allowSpectate && l.path === "view.spectate.seats[].job") && !(allowResult && ENDED_ROLE_STRING_PATHS.has(l.path)),
+        (l) => !ROLE_ALLOWED_ALWAYS.has(l.path) && !(allowSpectate && l.path === "view.spectate.seats[].job") && !(allowResult && ENDED_ROLE_STRING_PATHS.has(l.path)) &&
+          !(f.msg.t === "resultLog" && l.path === "part"), // 결과 로그 조각 이름(결정 0069) — 역할이 아니라 채널 이름
       );
       if (bad.length > 0) fail(`${c.nickname} 의 프레임에 허용 경로 밖 역할 문자열이 있음: ${[...new Set(bad.map((l) => l.path))].join(",")}`);
     }
