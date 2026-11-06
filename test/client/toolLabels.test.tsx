@@ -4,8 +4,12 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
+import { Sheet } from "../../src/components/Sheet";
 import { ChatPanel, type ChatPanelProps } from "../../src/components/v2/ChatPanel";
+import { ResultPanel, type ResultPanelProps, type ResultTab } from "../../src/components/v2/ResultPanel";
+import { WillSheet } from "../../src/components/v2/WillSheet";
 import { EMOTE_TRAY_ORDER } from "../../src/game/chatText";
+import { RESULT_PANEL_TEXT, RESULT_TABS_SHOWN } from "../../src/game/resultText";
 
 afterEach(() => {
   cleanup();
@@ -125,5 +129,78 @@ describe("채팅 입력줄 이름표 (TOOL-01 목록 8~11, D-04)", () => {
     expect(rule(".mv-chat__will")).not.toContain("margin-left");
     const w = 360 - 32 - 3 * 44 - 3 * 8;
     expect(w).toBe(172);
+  });
+});
+
+describe("시트 닫기·결과 화면 이름표 (TOOL-01 목록 1·12·14)", () => {
+  it("Sheet 닫기: × + '닫기' 가로 알약, data-tool-label·접근성 이름 '닫기'", () => {
+    const { baseElement } = render(
+      <Sheet label="a" onClose={() => {}} showClose>
+        <p>x</p>
+      </Sheet>,
+    );
+    const btn = baseElement.querySelector(".mf-sheet__close");
+    expectToolLabel(btn, "닫기", { name: "닫기" });
+    expect(btn?.querySelector("svg")).not.toBeNull();
+    expect(btn?.classList.contains("mv-closepill")).toBe(true);
+  });
+
+  it("WillSheet 닫기: × + '닫기' 가로 알약", () => {
+    const { container } = render(<WillSheet value="" onChange={() => {}} onSave={() => {}} onClose={() => {}} />);
+    const btn = container.querySelector(".mv-will__close");
+    expectToolLabel(btn, "닫기", { name: "닫기" });
+    expect(btn?.querySelector("svg")).not.toBeNull();
+    expect(btn?.classList.contains("mv-closepill")).toBe(true);
+  });
+
+  it("닫기 알약 CSS: 높이 44, 아이콘 왼쪽·글자 오른쪽 가로, 라벨 14/400", () => {
+    const r = rule(".mv-closepill");
+    expect(r).toMatch(/height:\s*(var\(--tap-min\)|44px)/);
+    expect(r).toContain("display: inline-flex");
+    expect(r).toContain("border-radius: var(--radius-pill)");
+    expect(rule(".mv-closepill__label")).toContain("font-size: 14px");
+  });
+
+  const tabProps = (over: Partial<ResultPanelProps> = {}): ResultPanelProps => ({
+    tab: "all",
+    onTab: () => {},
+    expanded: false,
+    tabsVisible: true,
+    lines: { mafia: { lines: [], complete: true }, ghost: { lines: [], complete: true }, whisper: { lines: [], complete: true }, claim: { lines: [], complete: true }, ballots: { lines: [], complete: true } },
+    contacts: new Map(),
+    opened: new Set<ResultTab>(["all"]),
+    allSlot: <div />,
+    ...over,
+  });
+
+  it("결과 기록 탭 넷은 선택 여부와 무관하게 아이콘 + 글자를 항상 보인다", () => {
+    for (const sel of ["all", "ghost", "log"] as const) {
+      const { container, unmount } = render(<ResultPanel {...tabProps({ tab: sel, expanded: true })} />);
+      const tabs = [...container.querySelectorAll<HTMLElement>("[data-result-tab]")];
+      expect(tabs.map((t) => t.getAttribute("data-result-tab"))).toEqual([...RESULT_TABS_SHOWN]);
+      for (const t of tabs) {
+        const id = t.getAttribute("data-result-tab") as ResultTab;
+        expectToolLabel(t, RESULT_PANEL_TEXT.tab[id], { name: RESULT_PANEL_TEXT.tabName[id] });
+        expect(t.querySelector("svg"), id).not.toBeNull();
+      }
+      unmount();
+    }
+  });
+
+  it("결과 탭: 고정 폭 규칙 없이 폭 360 에서 넷이 한 줄에 들어간다(탭 폭 합 ≤ 328 + 16)", () => {
+    const tab = rule(".mf-result__tab");
+    expect(tab).not.toMatch(/(^|[;\s])width:/);
+    const pad = /padding:\s*0\s+(\d+)px/.exec(tab);
+    const px = pad ? Number(pad[1]) : 10;
+    // 아이콘 24 + 간격 4 + 글자(3자 ≤ 44, 2자 ≤ 30) — 가장 넓은 합
+    const widths = [30, 44, 30, 30].map((g) => px * 2 + 24 + 4 + g);
+    expect(widths.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(344);
+  });
+
+  it("결과 탭 라벨은 막히지 않은 모든 탭에서 14px 이고 선택된 탭만 gray-100 700 이다", () => {
+    const css = readFileSync("src/styles/result.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const pick = (sel: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => (m[1] ?? "").split(",").some((x) => x.trim() === sel)).map((m) => m[2] ?? "").join(";");
+    expect(pick(".mf-result__tab-label")).toContain("font-weight: 400");
+    expect(pick('.mf-result__tab[aria-selected="true"] .mf-result__tab-label')).toContain("font-weight: 700");
   });
 });

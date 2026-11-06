@@ -349,6 +349,16 @@ describe("나가기 (D-11)", () => {
   };
   const confirmButton = (dialog: Element) => Array.from(dialog.querySelectorAll<HTMLButtonElement>("button")).find((b) => b.textContent === "나가기")!;
 
+  it("헤더 [나가기] 는 아이콘 아래 글자 '나가기' 이름표를 단다(TOOL-01 목록 1, 14-06)", () => {
+    const r = renderRoom(makeView());
+    const btn = r.container.querySelector<HTMLElement>(".mf-result__header button");
+    expect(btn?.getAttribute("data-tool-label")).toBe("나가기");
+    expect(btn?.getAttribute("aria-label")).toBe("나가기");
+    expect(btn?.querySelector(".mv-tool__label")?.textContent).toBe("나가기");
+    expect(btn?.querySelector("svg")).not.toBeNull();
+    expect(btn?.classList.contains("mv-tool")).toBe(true);
+  });
+
   it("헤더 [나가기] → 확인 시트 `방에서 나갈까요?` → 확인하면 leave 를 보내고 onExit(\"left\")", () => {
     const r = renderRoom(makeView());
     const dialog = openLeave(r.container);
