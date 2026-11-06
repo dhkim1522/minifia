@@ -1,9 +1,9 @@
-// 12페이즈 소리 E2E 흐름 (12-06~). sound-render(12-06), sound-unlock(12-07). 이후 계획이 sound-script·sound-night-parity·sound-result 를 같은 파일에 더한다.
+// 12페이즈 소리 E2E 흐름 (12-06~). sound-render(12-06), sound-unlock(12-07), sound-script(12-08). 이후 계획이 sound-night-parity·sound-result 를 같은 파일에 더한다.
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makeSoundFlows(helpers)` 로 받는다(avatar.mjs·politics.mjs 와 같은 모양 — 서로 import 하지 않는다).
-// helpers: { recorder, attempt }
+// helpers: { recorder, attempt, startHost } (sound-script 만 startHost 를 쓴다)
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(soundRenderChecks, SOUND_RENDER_LIMITS)에만 있고 여기서는 낮추지 않는다 (T-12-22).
-import { dropSockets, leaveLobby, reconnectInit, sleep } from "./browser.mjs";
-import { SOUND_RENDER_LIMITS, soundButtonChecks, soundRenderChecks } from "./lib.mjs";
+import { chooseRole, dropSockets, leaveLobby, openTestSheet, reconnectInit, setBotVote, setBots, skipTo, sleep, startGame, tapTurnPick } from "./browser.mjs";
+import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundRenderChecks, soundSequenceChecks } from "./lib.mjs";
 
 /** [전부 계산] 56개 렌더가 끝나기를 기다리는 상한(ms) */
 const CALC_LIMIT_MS = 60000;
@@ -15,10 +15,16 @@ const UNLOCK_NICK = "소리방장";
 const HOOK_WAIT_MS = 3000;
 const BTN = "[data-sound-button]";
 
+const SCRIPT_NICK = "소리방장";
+/** 봇 차례들이 끝나고 변론에 닿는 상한(ms): 지목 모이기 3 + 4명 × (8 + 0.9) + 끝 2 초 안쪽 */
+const NOMINATION_WAIT_MS = 45000;
+/** 찬반(10초) 안에서 마지막 5초 틱이 두 번 이상 쌓이기까지 기다리는 시간(ms) — 5초째·6초째 틱 */
+const VERDICT_TICK_WAIT_MS = 7200;
+
 const infoRow = (rec, scenario, id, detail) => rec(scenario, id, detail.split(" · ")[0], true, detail, true);
 const recOne = (rec, scenario, r) => rec(scenario, r.id, r.label, r.ok, r.detail, r.relaxed === true || r.info === true);
 
-export function makeSoundFlows({ recorder, attempt }) {
+export function makeSoundFlows({ recorder, attempt, startHost }) {
   /**
    * sound-render: 방 없이 새 컨텍스트(GAME_SIZE)로 시험 페이지를 열고 [전부 계산] → 56개 렌더 결과를 순수 판정 함수로 확인한다.
    * 소리 출력은 없다(OfflineAudioContext). 서버 호출도 없다.
@@ -219,5 +225,126 @@ export function makeSoundFlows({ recorder, attempt }) {
     }
   }
 
-  return { soundRenderFlow, soundUnlockFlow };
+  const readLog = (page) => page.evaluate(() => (window.__mfSound ? window.__mfSound.log.map((e) => ({ id: e.id, at: e.at, gain: e.gain, played: e.played })) : null));
+  const clearLog = (page) => page.evaluate(() => window.__mfSound?.clear());
+
+  /**
+   * sound-script (D-21): 테스트 방 + 봇 3 + testSkip 으로 로비 → 시작 → 역할 확인 → 낮 → 지목 → 변론 → 찬반을 지나며
+   * 단계마다 훅 로그(window.__mfSound.log)에 기대 id 가 순서대로 있는지 본다(구간은 clear() 로 나눈다, 기대는 lib.mjs SOUND_SCRIPT_STEPS).
+   * 마지막에 새로고침 직후 로그에 현재 단계 침대 요청만 있고 일회성 소리가 없음을 확인한다(LS-10). 소리 출력은 보지 않는다 — 요청 로그만 읽는다.
+   * 밤·처형·아침·결과는 12-09·12-10·12-11 이 같은 표와 이 흐름에 단계를 더한다.
+   */
+  async function soundScriptFlow(ctx) {
+    const rec = recorder(ctx);
+    const step = (id) => SOUND_SCRIPT_STEPS.find((x) => x.id === id);
+    const judge = (scenario, id, log) => {
+      if (log === null) return rec(scenario, id, step(id).label, false, "window.__mfSound 훅이 없음(?e2e=1 세션 플래그가 꺼짐)");
+      recOne(rec, scenario, soundSequenceChecks([log], [step(id)])[0]);
+    };
+    const host = await startHost(ctx, "sound-script", { nickname: SCRIPT_NICK });
+    const { page: hp, tracker: ht } = host;
+    const myTurn = (v) => {
+      const t = v.day?.turn;
+      return !!t && v.phase === "nomination" && t.i >= 0 && t.order[t.i] === v.me.seat;
+    };
+    try {
+      // ① 로비: 방 화면이 열리면 침대 요청 하나
+      const hooked = await attempt(async () => {
+        await hp.waitForFunction(() => !!window.__mfSound && window.__mfSound.log.length > 0, null, { timeout: 6000 });
+        await sleep(300);
+      });
+      rec("sound-script/lobby", "SC0", "방 화면이 열리면 소리 훅이 있고 로그가 찬다", hooked.ok, hooked.detail);
+      if (!hooked.ok) return;
+      judge("sound-script/lobby", "SC1", await readLog(hp));
+
+      // ② 봇이 앉으면 lobby.join
+      await clearLog(hp);
+      await openTestSheet(hp);
+      await setBots(hp, ht, 3);
+      await sleep(300);
+      judge("sound-script/lobby", "SC2", await readLog(hp));
+      await setBotVote(hp, ht, { exec: "yes", pick: "host" });
+      await chooseRole(hp, ht, "citizen");
+
+      // ③ 시작 → assigning(침대 정지 요청, game.start) → roleReveal(bed.reveal, role.flip)
+      await clearLog(hp);
+      // 배정(3초) 창은 startGame 이 화면을 기다리는 사이 지나갈 수 있어, game.start 가 로그에 찍히는 순간을 따로 잡는다
+      const watch = hp
+        .waitForFunction(() => !!window.__mfSound && window.__mfSound.log.some((e) => e.id === "game.start"), null, { timeout: 8000, polling: 30 })
+        .then(async () => {
+          const log = await readLog(hp);
+          const bed = await hp.evaluate(() => window.__mfSound?.bed ?? null);
+          await clearLog(hp);
+          return { log, bed };
+        })
+        .catch(() => null);
+      await startGame(hp, ht);
+      const caught = await watch;
+      const assigning = caught?.log ?? null;
+      const bedAtAssigning = caught === null ? "(못 잡음)" : caught.bed;
+      const reveal = await readLog(hp);
+      judge("sound-script/assigning", "SC3", assigning ?? reveal);
+      rec("sound-script/assigning", "SC3b", "assigning 동안 침대 정지 요청(훅 bed 가 null)", assigning !== null && bedAtAssigning === null, assigning === null ? "배정 3초 창을 잡지 못함" : `bed ${JSON.stringify(bedAtAssigning)}`);
+      judge("sound-script/roleReveal", "SC4", reveal);
+
+      // ④ 낮: dayAnnounce 진입 day.start + bed.day, discussion 으로 넘어가도 침대 요청은 늘지 않는다
+      await clearLog(hp);
+      await skipTo(hp, ht, "discussion");
+      await sleep(500);
+      judge("sound-script/day", "SC5", await readLog(hp));
+
+      // ⑤ 지목: 진입 phase.vote + bed.vote, 방장 차례가 오면 pin.on · pick.turn (실제 모이기 3초를 기다린다)
+      await clearLog(hp);
+      await skipTo(hp, ht, "nomination");
+      const turn = await attempt(async () => {
+        await ht.waitFor(myTurn, 20000, "내 지목 차례");
+      });
+      rec("sound-script/nomination", "SC6w", "방장의 지목 차례가 온다(모이기 3초 뒤)", turn.ok, turn.detail);
+      if (!turn.ok) return;
+      judge("sound-script/nomination", "SC6", await readLog(hp));
+
+      // ⑥ 방장이 지목하면 pick.point · pin.move
+      await clearLog(hp);
+      const me = ht.last().me.seat;
+      const target = ht.last().players.find((x) => x.seat !== me)?.seat;
+      const picked = await attempt(async () => {
+        await tapTurnPick(hp, target);
+        await ht.waitFor((v) => v.day?.turn?.doneAt !== undefined && v.day.turn.order[v.day.turn.i] === v.me.seat, 4000, "내 차례 확정");
+        await sleep(300);
+      });
+      rec("sound-script/nomination", "SC7w", "방장이 지목 버튼을 눌러 차례가 확정된다", picked.ok, picked.detail);
+      if (!picked.ok) return;
+      judge("sound-script/nomination", "SC7", await readLog(hp));
+
+      // ⑦ 봇 차례들 → 변론: pin.on 은 나고 내 pick.turn 은 없고, 변론 진입에도 새 침대 요청이 없다
+      await clearLog(hp);
+      const defense = await attempt(async () => {
+        await ht.waitFor((v) => v.phase === "defense", NOMINATION_WAIT_MS, "변론");
+        await sleep(500);
+      });
+      rec("sound-script/defense", "SC8w", "봇 차례가 끝나고 변론에 닿는다", defense.ok, defense.detail);
+      if (!defense.ok) return;
+      judge("sound-script/defense", "SC8", await readLog(hp));
+
+      // ⑧ 찬반: 마지막 5초 timer.tick 이 초마다, 새 침대 요청 없음
+      await clearLog(hp);
+      await skipTo(hp, ht, "verdict");
+      await sleep(VERDICT_TICK_WAIT_MS);
+      judge("sound-script/verdict", "SC9", await readLog(hp));
+
+      // ⑨ 낮 중간 새로고침: 첫 스냅샷은 현재 단계 침대만
+      await hp.reload({ waitUntil: "domcontentloaded" });
+      const back = await attempt(async () => {
+        await hp.waitForFunction(() => !!window.__mfSound && window.__mfSound.log.length > 0, null, { timeout: 10000 });
+        await sleep(1500);
+      });
+      rec("sound-script/reload", "SC10w", "새로고침 뒤 방 화면이 다시 열려 훅 로그가 찬다", back.ok, back.detail);
+      if (!back.ok) return;
+      judge("sound-script/reload", "SC10", await readLog(hp));
+    } finally {
+      await host.context.close().catch(() => {});
+    }
+  }
+
+  return { soundRenderFlow, soundUnlockFlow, soundScriptFlow };
 }

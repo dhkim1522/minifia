@@ -2162,3 +2162,67 @@ export function soundButtonChecks({ viewport, button, header, test, toast, banne
   out.push(result("SU7", L.SU7, bad7));
   return out;
 }
+
+// ---- 12페이즈 sound-script (12-08, 결정 D-21): 단계 구간마다 기대 소리 id 가 순서대로 ----
+
+/**
+ * 구간별 훅 로그를 기대 표와 견준다 (sound-script). 구간은 훅 clear() 로 나눈다(단계 시작 전 clear, 끝나면 읽기).
+ * segments = 구간마다 `window.__mfSound.log` 사본 [{ id, at, gain, played }] 의 배열 · steps = segments 와 같은 길이의 기대 목록:
+ *   { id, label, ids[순서대로 있어야 하는 소리 id, 부분 수열·같은 id 반복 가능], notIds?[하나라도 있으면 실패],
+ *     counts?{ id: 정확한 횟수(0 포함) }, onlyPrefix?(모든 줄이 이 접두어이고 한 줄 이상 — 새로고침 구간의 "침대만") }.
+ * 반환은 단계마다 한 줄 { id, label, ok, detail }. 구간 수가 다르거나 로그 모양이 틀리면 전부 측정값 없음으로 실패한다.
+ */
+export function soundSequenceChecks(segments, steps) {
+  const validSteps = Array.isArray(steps) && steps.every((st) => !!st && typeof st.id === "string" && Array.isArray(st.ids));
+  const list = validSteps ? steps : [];
+  const validLogs = Array.isArray(segments) && validSteps && segments.length === steps.length && segments.every((seg) => Array.isArray(seg) && seg.every((e) => !!e && typeof e.id === "string"));
+  if (!validLogs) return (validSteps ? list : [{ id: "SS0", label: "sound-script" }]).map((st) => noMeasure(st.id, st.label ?? st.id, "구간별 로그 배열[[{ id, … }]] 이 단계 수와 같은 길이"));
+  return list.map((st, k) => {
+    const got = segments[k].map((e) => e.id);
+    const bad = [];
+    let from = 0;
+    for (const want of st.ids) {
+      const at = got.indexOf(want, from);
+      if (at < 0) {
+        bad.push(`${want} 없음${got.includes(want) ? "(순서가 다르거나 횟수 부족)" : ""}`);
+        break;
+      }
+      from = at + 1;
+    }
+    for (const id of st.notIds ?? []) if (got.includes(id)) bad.push(`${id} 가 나오면 안 됨`);
+    for (const [id, n] of Object.entries(st.counts ?? {})) {
+      const have = got.filter((x) => x === id).length;
+      if (have !== n) bad.push(`${id} ${have}번 (기대 ${n})`);
+    }
+    if (typeof st.onlyPrefix === "string") {
+      const other = got.filter((id) => !id.startsWith(st.onlyPrefix));
+      if (got.length === 0) bad.push(`${st.onlyPrefix}* 한 줄도 없음`);
+      if (other.length > 0) bad.push(`${st.onlyPrefix}* 가 아닌 줄: ${[...new Set(other)].join(",")}`);
+    }
+    const r = result(st.id, st.label ?? st.id, bad);
+    return bad.length === 0 ? r : { ...r, detail: `${r.detail} · 로그 [${got.join(", ")}]` };
+  });
+}
+
+/** 일회성 소리 id — 새로고침 구간(첫 스냅샷)에 하나도 없어야 한다 (LS-10) */
+const ONE_SHOT_AFTER_RELOAD = Object.freeze(["game.start", "role.flip", "day.start", "phase.vote", "pin.on", "pick.turn", "pick.point", "pin.move", "lobby.join", "timer.tick"]);
+const OTHER_BEDS = (own) => ["bed.lobby", "bed.reveal", "bed.day", "bed.vote", "bed.night", "bed.dawn", "bed.result"].filter((b) => b !== own);
+
+/**
+ * sound-script 의 단계별 기대 (390×844 한 방, 방장 + 봇 3). 순서는 장면 순서이고 구간은 단계마다 clear() 로 나눈다.
+ * 한 구간 안의 순서는 감독이 침대를 먼저 요청하고 일회성 소리를 뒤에 낸다(useSound apply).
+ * 방 화면을 막 연 구간(로비·새로고침)은 개발 서버의 이중 효과 실행(StrictMode)으로 같은 침대 요청이 두 줄일 수 있어 횟수 대신 "침대 줄뿐"(onlyPrefix)으로 본다.
+ * 밤·처형·아침·결과는 12-09·12-10·12-11 이 같은 표에 단계를 더한다.
+ */
+export const SOUND_SCRIPT_STEPS = Object.freeze([
+  Object.freeze({ id: "SC1", label: "로비: 침대 bed.lobby", ids: ["bed.lobby"], onlyPrefix: "bed.", notIds: ["game.start", "lobby.join"] }),
+  Object.freeze({ id: "SC2", label: "봇이 앉으면 lobby.join", ids: ["lobby.join"], notIds: ["game.start", "role.flip"] }),
+  Object.freeze({ id: "SC3", label: "시작 → assigning: game.start, 일회성 뒤 소리 없음", ids: ["game.start"], notIds: ["role.flip", "bed.reveal"] }),
+  Object.freeze({ id: "SC4", label: "roleReveal: bed.reveal → role.flip", ids: ["bed.reveal", "role.flip"], notIds: ["game.start"] }),
+  Object.freeze({ id: "SC5", label: "dayAnnounce·discussion: bed.day → day.start, 침대 요청은 한 번뿐", ids: ["bed.day", "day.start"], counts: { "bed.day": 1, "bed.vote": 0 }, notIds: ["phase.vote", "role.flip"] }),
+  Object.freeze({ id: "SC6", label: "nomination: bed.vote → phase.vote, 내 차례에 pin.on → pick.turn", ids: ["bed.vote", "phase.vote", "pin.on", "pick.turn"], counts: { "bed.vote": 1 }, notIds: ["day.start"] }),
+  Object.freeze({ id: "SC7", label: "내가 지목하면 pick.point → pin.move", ids: ["pick.point", "pin.move"], notIds: ["pick.skip", "bed.vote"] }),
+  Object.freeze({ id: "SC8", label: "봇 차례들: pin.on 이 나고 내 pick.turn·pick.tick 은 없음, 변론 진입에도 새 침대 없음", ids: ["pin.on"], counts: { "bed.vote": 0 }, notIds: ["pick.turn", "pick.tick", "phase.vote", "day.start", "role.flip", "game.start"] }),
+  Object.freeze({ id: "SC9", label: "verdict: 마지막 5초 timer.tick 이 초마다, 새 침대 없음", ids: ["timer.tick", "timer.tick"], counts: { "bed.vote": 0 }, notIds: ["phase.vote", "day.start", "role.flip", "game.start"] }),
+  Object.freeze({ id: "SC10", label: "낮 중간 새로고침(LS-10): 현재 단계 침대만, 일회성 소리 없음", ids: ["bed.vote"], onlyPrefix: "bed.", notIds: [...ONE_SHOT_AFTER_RELOAD, ...OTHER_BEDS("bed.vote")] }),
+]);
