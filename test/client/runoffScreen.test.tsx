@@ -255,7 +255,7 @@ describe("결선 화면 — 헤더 안내 (UI-SPEC D-2)", () => {
     const m = mount(makeRunoff({ step: 0, left: 1000 }));
     advance(3000);
     m.show(makeRunoff({ step: 1 }));
-    const el = m.container.querySelector("[data-guide]") as HTMLElement;
+    const el = m.container.querySelector(".mv-phase__hint") as HTMLElement;
     expect(el.textContent).toBe("둘 중 한 명을 눌러요");
     expect(el.classList.contains("is-folded")).toBe(false);
   });

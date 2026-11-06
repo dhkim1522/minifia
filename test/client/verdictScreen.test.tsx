@@ -258,7 +258,8 @@ describe("찬반 화면 — 한 표 (DAY-06, 트레이서)", () => {
 
 // ---- Task 2: 변론·찬반 화면 — 헤더 문구·변론자 배지 유지·보기 패널·키보드 숨김·조명 (DAY-05·06) ----
 
-const hintOf = (c: ParentNode): string => c.querySelector("[data-guide]")?.textContent ?? "";
+// 14-02(U-2): 헤더 안내 줄은 없다(띠가 같은 말을 한다). 아래 시험은 '안내 줄 없음'을 확인한다 — 띠 문장은 hostLine·guide 시험이 본다.
+const hintOf = (c: ParentNode): string => c.querySelector(".mv-phase__hint")?.textContent ?? "";
 const titleOf = (c: ParentNode): string => c.querySelector(".mv-phase__title")?.textContent ?? "";
 
 describe("최후 변론 화면 (DAY-05)", () => {
@@ -266,15 +267,15 @@ describe("최후 변론 화면 (DAY-05)", () => {
   const defense = (mySeat = 0) =>
     makeView({ phase: "defense", candidate: 3, mySeat, count: 6, candVotes: [[0, 3], [1, 3], [2, 3], [4, 3], [5, 2]] });
 
-  it("제목 '최후 변론', 다른 사람 안내 '지아 님의 변론'", () => {
+  it("제목 '최후 변론', 헤더 안내 줄은 없다", () => {
     const { container } = mount(defense());
     expect(titleOf(container)).toBe("최후 변론");
-    expect(hintOf(container)).toBe("지아 님의 변론");
+    expect(hintOf(container)).toBe("");
   });
 
-  it("변론자 본인의 안내는 '해명할 시간이에요'", () => {
+  it("변론자 본인도 헤더 안내 줄이 없다", () => {
     const { container } = mount(defense(3));
-    expect(hintOf(container)).toBe("해명할 시간이에요");
+    expect(hintOf(container)).toBe("");
   });
 
   it("변론자 이름표만 득표 배지(data-count=4)와 유력 도장(data-sure)을 유지하고 다른 이름표에는 배지·도장이 없다", () => {
@@ -286,10 +287,10 @@ describe("최후 변론 화면 (DAY-05)", () => {
     expect(container.querySelectorAll("[data-lead]").length).toBe(0);
   });
 
-  it("voteLog 줄이 없으면(공개 기록이 없을 때) 배지는 없고 변론자 안내만 그대로다", () => {
+  it("voteLog 줄이 없으면(공개 기록이 없을 때) 배지가 없다", () => {
     const { container } = mount(makeView({ phase: "defense", candidate: 3, count: 6 }));
     expect(container.querySelectorAll(".mv-head[data-count]").length).toBe(0);
-    expect(hintOf(container)).toBe("지아 님의 변론");
+    expect(hintOf(container)).toBe("");
   });
 
   it("행동 줄이 없다: 찬반 버튼·토론 끝내기·지목 버튼이 하나도 없고 패널은 채팅뿐", () => {
@@ -326,28 +327,28 @@ describe("최후 변론 화면 — 채팅 단계 키 (VOTE-03, COMM-03, 08-27 �
 });
 
 describe("찬반 화면 — 신분별 패널·안내·조명 (DAY-06)", () => {
-  it("다른 산 사람: 안내 '도윤 님을 처형할까요?' + 찬반 줄(버튼·점), 제목 '찬반'", () => {
+  it("다른 산 사람: 헤더 안내 줄 없음 + 찬반 줄(버튼·점), 제목 '찬반'", () => {
     const { container } = mount(makeView({ candidate: 4 }));
     expect(titleOf(container)).toBe("찬반");
-    expect(hintOf(container)).toBe("도윤 님을 처형할까요?");
+    expect(hintOf(container)).toBe("");
     expect(verdictBtns(container).length).toBe(2);
     expect(countOf(container)).not.toBeNull();
   });
 
-  it("변론자 본인: 안내 '결과를 기다려요', 패널은 숫자 + 채팅뿐(찬반 버튼 없음)", () => {
+  it("변론자 본인: 헤더 안내 줄 없음, 패널은 숫자 + 채팅뿐(찬반 버튼 없음)", () => {
     const { container } = mount(makeView({ candidate: 0, voted: [1, 2] }));
-    expect(hintOf(container)).toBe("결과를 기다려요");
+    expect(hintOf(container)).toBe("");
     expect(verdictBtns(container).length).toBe(0);
     expect(countNow(container)).toBe(2);
     expect(countMax(container)).toBe(4);
     expect(container.querySelector(".mv-chat")).not.toBeNull();
   });
 
-  it("유령(탈락한 나): 찬반 버튼 없이 점 + 채팅, 안내는 유령 문구, 점 수는 산 사람(나 빼고 4명) − 1", () => {
+  it("유령(탈락한 나): 찬반 버튼 없이 점 + 채팅, 헤더 안내 줄 없음, 점 수는 산 사람(나 빼고 4명) − 1", () => {
     const { container } = mount(makeView({ candidate: 3, dead: [0], voted: [1] }));
     expect(verdictBtns(container).length).toBe(0);
     expect(countOf(container)).not.toBeNull();
-    expect(hintOf(container)).toBe("모두의 직업이 보여요");
+    expect(hintOf(container)).toBe("");
     expect(countMax(container)).toBe(3);
   });
 

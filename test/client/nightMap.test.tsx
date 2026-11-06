@@ -399,7 +399,8 @@ describe("밤 마피아 — 선택 수 배지·'확정' 도장 (서버 집계, �
 
 const sysLines = (c: ParentNode): string[] => [...c.querySelectorAll("[data-chat-log] > p.mv-chat__sys")].map((p) => (p.textContent ?? "").trim());
 const chatChannel = (c: ParentNode): string | null => c.querySelector("[data-chat-panel]")?.getAttribute("data-chat-channel") ?? null;
-const hintText = (c: ParentNode): string | null => c.querySelector(".mf-game__header [data-guide]")?.textContent ?? null;
+// 14-02(U-2): 헤더 안내 줄은 없다 — 밤 할 일 줄은 자막 띠가 말한다. 역할별 줄과 다른 역할 줄 부재(HOST-05)는 guide.test.tsx 가 이어받는다.
+const hintText = (c: ParentNode): string | null => c.querySelector(".mf-game__header .mv-phase__hint")?.textContent ?? null;
 const titleText = (c: ParentNode): string | null => c.querySelector(".mf-game__header .mv-phase__title")?.textContent ?? null;
 
 const faceSeats = (c: ParentNode): number[] => [...c.querySelectorAll<HTMLElement>("[data-face]")].map((b) => Number(b.dataset.face));
@@ -511,10 +512,10 @@ describe("밤 경찰·의사 — 얼굴 목록(NIGHT-09, E1 #1·#3·#6·#7)", ()
 });
 
 describe("밤 마피아·유령 하단 패널 — 채팅 (T-08-47)", () => {
-  it("산 마피아: 마피아 채널 채팅 패널과 헤더 안내 '대상에게 다가가요', 밤 알약은 없다", () => {
+  it("산 마피아: 마피아 채널 채팅 패널과 헤더 안내 줄 없음(띠 몫), 밤 알약은 없다", () => {
     const { container } = mount(makeView({ mySeat: 0 }));
     expect(chatChannel(container)).toBe("mafia");
-    expect(hintText(container)).toBe("대상에게 다가가요");
+    expect(hintText(container)).toBeNull();
     expect(container.querySelector(".mf-game__panel .mf-nightpanel")).toBeNull();
   });
 
@@ -602,10 +603,10 @@ describe("밤 임시 틀 — 유령이 보는 밤 행동 (GHOST-02, T-08-46)", (
     expect(ringSeats(container).sort()).toEqual([2, 3]);
   });
 
-  it("유령 화면: 유령 채널 채팅 패널, 헤더 안내 '모두의 직업과 밤 행동이 보여요', 이름표 버튼 0개, 직업 칩", () => {
+  it("유령 화면: 유령 채널 채팅 패널, 헤더 안내 줄 없음(띠 몫), 이름표 버튼 0개, 직업 칩", () => {
     const { container } = mount(ghostNight());
     expect(chatChannel(container)).toBe("ghost");
-    expect(hintText(container)).toBe("모두의 직업과 밤 행동이 보여요");
+    expect(hintText(container)).toBeNull();
     expect(pickSeats(container)).toEqual([]);
     expect(container.querySelectorAll("[data-role-chip]").length).toBeGreaterThan(0);
     expect(container.querySelector(".mf-game__panel .mf-nightpanel")).toBeNull();

@@ -188,7 +188,7 @@ describe("유령 화면 — 서버가 보낸 관전 정보로 그려진다 (GHOS
 
 const ICON_GHOST = "M5 21V11";
 const input = (c: ParentNode): HTMLInputElement | null => c.querySelector("[data-chat-input]");
-const hintEl = (c: ParentNode): Element | null => c.querySelector("[data-guide]");
+const hintEl = (c: ParentNode): Element | null => c.querySelector(".mv-phase__hint");
 const sysLines = (c: ParentNode) =>
   [...c.querySelectorAll("[data-chat-log] > p.mv-chat__sys")].map((p) => ({
     text: (p.textContent ?? "").trim(),
@@ -227,17 +227,17 @@ describe("유령이 되는 순간 (UI Considerations E6 #20·#22)", () => {
     expect(sysLines(m.container).map((l) => l.text)).toEqual([GHOST_LINE]);
   });
 
-  it("헤더 안내 '모두의 직업이 보여요' 가 같은 단계 안에서 유령이 된 순간 다시 2.5초 보였다 접힌다", () => {
+  it("유령이 된 순간에도 헤더 안내 줄 '모두의 직업이 보여요' 를 다시 띄우지 않는다(14-02: 띠가 유령 줄을 말한다), 직업 칩 등장 연출은 그대로", () => {
     const m = mount(alive("discussion"));
     act(() => void vi.advanceTimersByTime(3000));
-    expect(hintEl(m.container)?.classList.contains("is-folded")).toBe(true);
+    expect(hintEl(m.container)).toBeNull();
     m.show(dead("discussion"));
-    expect(hintEl(m.container)?.textContent).toBe("모두의 직업이 보여요");
-    expect(hintEl(m.container)?.classList.contains("is-folded")).toBe(false);
-    act(() => void vi.advanceTimersByTime(2400));
-    expect(hintEl(m.container)?.classList.contains("is-folded")).toBe(false);
-    act(() => void vi.advanceTimersByTime(200));
-    expect(hintEl(m.container)?.classList.contains("is-folded")).toBe(true);
+    expect(hintEl(m.container)).toBeNull();
+    expect(m.container.textContent).not.toContain("모두의 직업이 보여요");
+    expect(m.container.querySelector("[data-ghost-enter]")).not.toBeNull();
+    act(() => void vi.advanceTimersByTime(2600));
+    expect(hintEl(m.container)).toBeNull();
+    expect(m.container.querySelector("[data-ghost-enter]")).toBeNull();
   });
 
   it("직업 칩 등장: 유령이 된 순간에만 루트에 data-ghost-enter, 2.5초 뒤 사라진다. CSS 는 dur-med 등장 + 모션 줄이기면 none", () => {

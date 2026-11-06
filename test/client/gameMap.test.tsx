@@ -455,30 +455,32 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
       vi.advanceTimersByTime(ms);
     });
 
-  it("낮 토론 산 사람: 제목 '낮 토론', 안내 '이야기하며 마피아를 찾아요' [data-guide] 하나, 서버 마감 기준 시간 링 role=timer", () => {
+  // 14-02(U-2·U-3, TOOL-02): 기본판 헤더는 제목 + [역할 카드] 뿐이다. 안내 줄은 자막 띠가, 남은 시간은 띠의 막대 + 초가 맡는다.
+  it("기본판 낮 토론 산 사람: 헤더는 제목 '낮 토론' + [역할 카드] 뿐 — 안내 줄·시간 링·타이머가 없다", () => {
     const { container } = mount(makeView());
     const header = container.querySelector(".mf-game__header") as HTMLElement;
     expect(header.querySelector(".mv-phase__title")?.textContent).toBe("낮 토론");
-    expect(container.querySelectorAll("[data-guide]").length).toBe(1);
-    expect(header.querySelector("[data-guide]")?.textContent).toBe("이야기하며 마피아를 찾아요");
-    const timer = header.querySelector('[role="timer"]');
-    expect(timer).not.toBeNull();
-    expect(timer?.getAttribute("aria-label")).toBe("남은 시간 90초");
+    expect(header.querySelectorAll(".mv-phase__title").length).toBe(1);
+    expect(header.querySelector(".mv-phase__hint")).toBeNull();
+    expect(header.querySelector(".mv-ring")).toBeNull();
+    expect(header.querySelector('[role="timer"]')).toBeNull();
+    expect(header.querySelectorAll("button").length).toBe(1);
+    expect(header.querySelector("[data-guide]")).toBeNull();
   });
 
-  it("안내는 2500ms 뒤 접히고(.is-folded) 단계가 바뀌면 새 안내가 다시 보였다 접힌다", () => {
-    const m = mount(makeView());
-    const hint = () => m.container.querySelector("[data-guide]") as HTMLElement;
-    expect(hint().classList.contains("is-folded")).toBe(false);
-    advance(2499);
-    expect(hint().classList.contains("is-folded")).toBe(false);
-    advance(1);
-    expect(hint().classList.contains("is-folded")).toBe(true);
-    m.show(makeView({ phase: "defense", candidate: 1 }));
-    expect(hint().textContent).toBe("영희 님의 변론");
-    expect(hint().classList.contains("is-folded")).toBe(false);
-    advance(2500);
-    expect(hint().classList.contains("is-folded")).toBe(true);
+  it("기본판 단계 전부(낮 시작·토론·투표·변론·찬반·처형·밤·아침), 산 사람·유령 모두: 헤더에 안내 줄·시간 링·타이머가 없다", () => {
+    for (const phase of ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"] as const) {
+      for (const dead of [[], [0]] as const) {
+        const { container, unmount } = mount(makeView({ phase, candidate: 1, dead: [...dead] }));
+        const header = container.querySelector(".mf-game__header") as HTMLElement;
+        const cell = `${phase}/${dead.length === 0 ? "산 사람" : "유령"}`;
+        expect(header.querySelectorAll(".mv-phase__title").length, `${cell}: 제목`).toBe(1);
+        expect(header.querySelector(".mv-phase__hint"), `${cell}: 안내 줄`).toBeNull();
+        expect(header.querySelector(".mv-ring"), `${cell}: 시간 링`).toBeNull();
+        expect(header.querySelector('[role="timer"]'), `${cell}: 타이머`).toBeNull();
+        unmount();
+      }
+    }
   });
 
   it("낮 시작에는 시간 링이 없다", () => {
@@ -486,9 +488,10 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
     expect(container.querySelector('.mf-game__header [role="timer"]')).toBeNull();
   });
 
-  it("유령(탈락)의 안내는 '모두의 직업이 보여요'", () => {
+  it("기본판 유령(탈락) 헤더에도 '모두의 직업이 보여요' 안내 줄은 없다 — 띠가 유령 줄을 말한다", () => {
     const { container } = mount(makeView({ dead: [0] }));
-    expect(container.querySelector("[data-guide]")?.textContent).toBe("모두의 직업이 보여요");
+    expect(container.querySelector(".mv-phase__hint")).toBeNull();
+    expect(container.textContent).not.toContain("모두의 직업이 보여요");
   });
 
   it("[역할 카드] 는 글자 없는 44×44 아이콘 버튼이고 헤더 안 시간 링 앞(왼쪽) 형제다 — aria-label '역할 카드'", () => {
@@ -1039,11 +1042,12 @@ describe("GameMap — 기본판 투표 (결정 0072)", () => {
     expect(tag(1).blink).toBeUndefined();
   });
 
-  it("제목 '투표', 안내 '의심되는 사람을 눌러요', 시간 링은 단계 마감 15초 기준, 차례 알약·막대는 DOM 에 없고 어둡게 막은 off", () => {
+  it("기본판 투표: 제목 '투표'뿐(안내 줄·시간 링 없음, 남은 시간은 띠 몫), 차례 알약·막대는 DOM 에 없고 어둡게 막은 off", () => {
     const { container } = mount(voteView());
     expect(container.querySelector(".mv-phase__title")?.textContent).toBe("투표");
-    expect(container.querySelector(".mv-phase__hint")?.textContent).toBe("의심되는 사람을 눌러요");
-    expect(container.querySelector("[role=timer]")?.getAttribute("aria-label")).toBe("남은 시간 15초");
+    expect(container.querySelector(".mv-phase__hint")).toBeNull();
+    expect(container.querySelector(".mv-ring")).toBeNull();
+    expect(container.querySelector("[role=timer]")).toBeNull();
     expect(container.querySelector("[data-turn-block]")).toBeNull();
     const { container: under } = render(<>{stage.props?.underlay}</>);
     expect(under.querySelector(".mf-game__dim")?.getAttribute("data-dim")).toBe("off");

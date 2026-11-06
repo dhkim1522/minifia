@@ -423,7 +423,7 @@ describe("지목 화면 — 내 차례에만 이름표 버튼·계속 깜빡임 
 
   it("헤더 안내: 모이는 중 '모이는 중' 이 접힌 뒤 내 차례가 시작되면 '의심되는 사람을 눌러요' 가 다시 보였다 2.5초 뒤 접힌다", () => {
     const m = mount(makeView({ turn: { i: -1 } }));
-    const hint = () => m.container.querySelector("[data-guide]") as HTMLElement;
+    const hint = () => m.container.querySelector(".mv-phase__hint") as HTMLElement;
     expect(hint().textContent).toBe("모이는 중");
     advance(2500);
     expect(hint().classList.contains("is-folded")).toBe(true);
