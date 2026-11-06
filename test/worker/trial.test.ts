@@ -3,12 +3,13 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { DISCUSSION_MS, NOMINATION_GATHER_MS, PHASE_DEFS, PICK_GAP_MS, PICK_TURN_MS } from "../../shared/game/phases";
+import { DISCUSSION_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PHASE_DEFS, PICK_GAP_MS, PICK_TURN_MS } from "../../shared/game/phases";
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { ringSlots } from "../../shared/game/gather";
 import { advanceTo, alarmOf, chatMsg, closePhase, connect, editRoom, endAs, flushWorld, ghostsOf, hello, killSeats, lastViewOf, layOf, mark, mapPlayers, pause, pointAs, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf, worldOf } from "./helpers";
 import type { Actor, Game } from "./helpers";
+import { RULESET } from "../../shared/game/ruleset";
 
 const viewsOf = (msgs: ServerMessage[]): RoomView[] =>
   msgs.filter((m): m is Extract<ServerMessage, { t: "state" }> => m.t === "state").map((m) => m.view);
@@ -69,7 +70,82 @@ async function storedTurnState(code: string): Promise<string> {
   return JSON.stringify({ players: room.players, pickTurn: room.pickTurn });
 }
 
-describe("지목 — 순차 (결정 0063-1, L15)", () => {
+// 기본판(결정 0072)의 투표는 동시다 — v2.0 08페이즈 동시 지목 시험(51688d65)을 되살렸다.
+describe("투표 — 동시 (결정 0072, DAY-04)", () => {
+  it("손님 A 의 지목은 네 소켓 모두에게 정확히 한 프레임으로 가고 모든 view 의 day.points 가 같은 공개 목록이다", async () => {
+    const g = await nominationRoom();
+    const [a, b] = [g.actors[1]!, g.actors[2]!];
+    const frames = await castAll(g, () => pointAs(a.sock, b.seat));
+    expect(lines(frames)).toBe("[state:nomination] [state:nomination] [state:nomination] [state:nomination]");
+    const want = JSON.stringify([{ seat: a.seat, target: b.seat }]);
+    expect(frames.map((f) => pointsOf(viewsOf(f)[0])).join("|")).toBe([want, want, want, want].join("|"));
+  });
+
+  it("같은 사람의 250ms 안 두 번째 지목은 상태를 바꾸지 않고 그 사람 소켓에만 서버 값 view 를 보낸다(오류 프레임 없음)", async () => {
+    const g = await nominationRoom();
+    const [a, b, c] = [g.actors[1]!, g.actors[2]!, g.actors[3]!];
+    await castAll(g, () => pointAs(a.sock, b.seat));
+    const before = await storedNominates(g.code);
+    const second = await castAll(g, () => pointAs(a.sock, c.seat));
+    // a 는 actors[1] 이라 소켓 순서 두 번째다. 다른 소켓은 500ms 급 관찰(ping/pong 사이)에서 프레임이 없다.
+    expect(lines(second)).toBe("[] [state:nomination] [] []");
+    expect(pointsOf(viewsOf(second[1]!)[0])).toBe(JSON.stringify([{ seat: a.seat, target: b.seat }]));
+    expect(await storedNominates(g.code)).toBe(before);
+  });
+
+  it("250ms 가 지난 뒤의 다른 대상은 받아들여져 모두 새 목록을 받는다", async () => {
+    const g = await nominationRoom();
+    const [a, b, c] = [g.actors[1]!, g.actors[2]!, g.actors[3]!];
+    await castAll(g, () => pointAs(a.sock, b.seat));
+    await pause(300);
+    const frames = await castAll(g, () => pointAs(a.sock, c.seat));
+    expect(lines(frames)).toBe("[state:nomination] [state:nomination] [state:nomination] [state:nomination]");
+    const want = JSON.stringify([{ seat: a.seat, target: c.seat }]);
+    expect(frames.map((f) => pointsOf(viewsOf(f)[0])).join("|")).toBe([want, want, want, want].join("|"));
+  });
+
+  it("같은 값을 다시 보내면 모든 소켓이 프레임을 받지 않는다", async () => {
+    const g = await nominationRoom();
+    const [a, b] = [g.actors[1]!, g.actors[2]!];
+    await castAll(g, () => pointAs(a.sock, b.seat));
+    await pause(300);
+    expect(lines(await castAll(g, () => pointAs(a.sock, b.seat)))).toBe("[] [] [] []");
+  });
+
+  it("자기 자신을 가리키면 보낸 소켓만 BAD_MESSAGE 와 최신 state 를 받는다", async () => {
+    const g = await nominationRoom();
+    const a = g.actors[1]!;
+    expect(lines(await castAll(g, () => pointAs(a.sock, a.seat)))).toBe("[] [error:BAD_MESSAGE,state:nomination] [] []");
+  });
+
+  it("지목 단계가 아니면(discussion) 보낸 소켓만 WRONG_PHASE 와 최신 state 를 받는다", async () => {
+    const g = await startedGame("discussion", 3);
+    const [a, b] = [g.actors[1]!, g.actors[2]!];
+    expect(lines(await castAll(g, () => pointAs(a.sock, b.seat)))).toBe("[] [error:WRONG_PHASE,state:discussion] [] []");
+  });
+
+  it("옛 번들의 처형 여부·후보 선택 메시지는 보낸 소켓만 BAD_MESSAGE 를 받는다(08-21, T-08-10)", async () => {
+    const g = await startedGame("discussion", 3);
+    const a = g.actors[1]!;
+    const old1 = await castAll(g, () => send(a.sock, { t: "execVote", agree: true }));
+    const old2 = await castAll(g, () => send(a.sock, { t: "candidateVote", target: 0 }));
+    expect(`${lines(old1)} ${lines(old2)}`).toBe("[] [error:BAD_MESSAGE] [] [] [] [error:BAD_MESSAGE] [] []");
+  });
+
+  it("스키마: 덧붙은 키(seat)와 범위 밖 target(8)은 보낸 소켓만 BAD_MESSAGE 를 받고 저장은 그대로다", async () => {
+    const g = await nominationRoom();
+    const [a, b] = [g.actors[1]!, g.actors[2]!];
+    const extra = await castAll(g, () => send(a.sock, { t: "point", target: b.seat, seat: 1 }));
+    const range = await castAll(g, () => send(a.sock, { t: "point", target: 8 }));
+    expect(`${lines(extra)} ${lines(range)}`).toBe("[] [error:BAD_MESSAGE] [] [] [] [error:BAD_MESSAGE] [] []");
+    expect(await storedNominates(g.code)).toBe(
+      [...(await storedRoomSeats(g.code))].map((s) => `${s}:-`).join(" "),
+    );
+  });
+});
+
+// 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다
+describe.skipIf(!RULESET.pickTurn)("지목 — 순차 (결정 0063-1, L15)", () => {
   it("지목에 들어가면 모든 소켓의 첫 view 가 day.turn = { order: 좌석 오름차순, i: -1 } 이고 마감은 진입 + 3000, 길이 3000 이다", async () => {
     const g = await nominationRoom();
     const order = g.actors.map((a) => a.seat).sort((x, y) => x - y);
@@ -502,6 +578,14 @@ async function toNominationByEnd(): Promise<{ g: Game; before: number; after: nu
  * 아니면 마감을 당겨 한 걸음 넘긴다(기권·사이·모이기). 끝 알림에 닿으면 멈춘다 — 이어지는 dueAgo 한 번이 지목 집계를 일으킨다.
  */
 async function pointAll(g: Game, bySeat: Record<number, number>): Promise<void> {
+  // 기본판(결정 0072): 차례 정보가 없으면 동시 투표 — 정해진 사람이 한꺼번에 던지고 마감은 이어지는 dueAgo 한 번이 집계한다.
+  if ((await storedRoom(g.code)).pickTurn === undefined) {
+    for (const a of g.actors) {
+      if (Object.hasOwn(bySeat, a.seat)) pointAs(a.sock, bySeat[a.seat]!);
+    }
+    await settleAllSocks(g);
+    return;
+  }
   for (let guard = 0; guard < 40; guard += 1) {
     const room = await storedRoom(g.code);
     const turn = room.pickTurn;
@@ -526,13 +610,16 @@ async function verdictAll(g: Game, agreeBySeat: Record<number, boolean>): Promis
   await settleAllSocks(g);
 }
 
+/** 투표 진입 길이: 기본판(결정 0072)은 동시 투표 15초, 순차 지목이 켜지면 모이기 3초. */
+const NOM_ENTER_MS = RULESET.pickTurn ? NOMINATION_GATHER_MS : NOMINATION_MS;
+
 describe("실제 흐름 (결정 0060-1)", () => {
   it("토론 끝내기 과반 → 지목(마감 = 그 시각 + 3000, 모이기) → 4:1 지목 → 변론(변론자 무대) → 찬반 3:1 → 처형(변론자 탈락·유령) → 밤", async () => {
     const { g, before, after } = await toNominationByEnd();
     const stored = await storedFlow(g.code);
     expect(stored.phase).toBe("nomination");
-    expect(stored.phaseEndsAt! >= before + NOMINATION_GATHER_MS - 50).toBe(true);
-    expect(stored.phaseEndsAt! <= after + NOMINATION_GATHER_MS + 50).toBe(true);
+    expect(stored.phaseEndsAt! >= before + NOM_ENTER_MS - 50).toBe(true);
+    expect(stored.phaseEndsAt! <= after + NOM_ENTER_MS + 50).toBe(true);
 
     const defender = g.actors.find((a) => a.role !== "mafia")!;
     const others = g.actors.filter((a) => a.seat !== defender.seat);
@@ -594,7 +681,8 @@ describe("실제 흐름 (결정 0060-1)", () => {
     expect(lastViews(g).map((v) => v.day?.noExecution?.reason).join(",")).toBe("noVotes,noVotes,noVotes,noVotes,noVotes");
   }, 60_000);
 
-  it("지목이 2:2 로 갈려 결선도 동점(아무도 안 던짐)이면 결선 세 걸음 뒤 밤이고 reason 은 tie 이며 아무도 탈락하지 않는다 (결정 0066-4)", async () => {
+  // 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
+  it.skipIf(!RULESET.runoff)("지목이 2:2 로 갈려 결선도 동점(아무도 안 던짐)이면 결선 세 걸음 뒤 밤이고 reason 은 tie 이며 아무도 탈락하지 않는다 (결정 0066-4)", async () => {
     const { g } = await toNominationByEnd();
     const [s0, s1, s2, s3] = g.actors.map((a) => a.seat);
     await pointAll(g, { [s0!]: s2!, [s1!]: s2!, [s2!]: s0!, [s3!]: s0! });

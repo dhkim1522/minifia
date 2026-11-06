@@ -18,6 +18,7 @@ import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { startedAt } from "../helpers/voteState";
 import { seededRandInt } from "../helpers/seededRandom";
+import { RULESET } from "../../shared/game/ruleset";
 
 const rand = seededRandInt(9);
 const idOf = (s: RoomState, seat: number): string => s.players.find((p) => p.seat === seat)!.id;
@@ -39,7 +40,8 @@ function step(s: RoomState): RoomState {
   return tick(s, s.phaseEndsAt!, rand);
 }
 
-describe("진입 — 산 사람 수만의 함수 (결정 0066-5, L21)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 를 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("진입 — 산 사람 수만의 함수 (결정 0066-5, L21)", () => {
   it("낮 시작 발표 마감에 산 사람이 정확히 셋이면 토론 대신 showdown 이 열리고 길이는 모이기 2초", () => {
     const s = threeAlive();
     const deadline = s.phaseEndsAt!;
@@ -86,7 +88,8 @@ describe("진입 — 산 사람 수만의 함수 (결정 0066-5, L21)", () => {
   });
 });
 
-describe("한마디 사슬 (stay)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 를 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("한마디 사슬 (stay)", () => {
   it("모이기 → 차례 0(8초) → 시간 초과면 skip → 사이 0.9초 → 차례 1 …", () => {
     let s = atShowdown();
     const gatherEnd = s.phaseEndsAt!;
@@ -119,7 +122,8 @@ describe("한마디 사슬 (stay)", () => {
   });
 });
 
-describe("한마디 확정 (acceptLastWord)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 를 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("한마디 확정 (acceptLastWord)", () => {
   const atTurn = (): RoomState => step(atShowdown());
 
   it("차례 주인의 한 줄이 그 차례의 한마디가 되고 마감은 지금 + 사이", () => {
@@ -159,7 +163,8 @@ describe("한마디 확정 (acceptLastWord)", () => {
   });
 });
 
-describe("동시 지목 (castShowdownPoint)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 를 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("동시 지목 (castShowdownPoint)", () => {
   const atPoint = (): RoomState => {
     let s = atShowdown();
     for (let i = 0; i < 1 + 3 * 2; i += 1) s = step(s);
@@ -196,7 +201,8 @@ describe("동시 지목 (castShowdownPoint)", () => {
   });
 });
 
-describe("집계 (resolveShowdown)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 를 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("집계 (resolveShowdown)", () => {
   /** 지목 창에서 seat → target 을 던지고 공개(i 4) 자리까지. */
   function pointed(picks: Record<number, number>): RoomState {
     let s = atShowdown();
@@ -253,7 +259,8 @@ describe("집계 (resolveShowdown)", () => {
   });
 });
 
-describe("공개 모양 (showdownViewOf)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 를 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("공개 모양 (showdownViewOf)", () => {
   it("모이기에는 order·i 뿐이고, 차례에는 endsAt, 확정에는 word·doneAt", () => {
     const gather = atShowdown();
     expect(showdownViewOf(gather)).toEqual({ order: [0, 1, 2], i: -1 });

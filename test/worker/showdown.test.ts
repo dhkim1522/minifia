@@ -10,6 +10,7 @@ import {
 } from "./helpers";
 import type { Game } from "./helpers";
 import { ringSlots } from "../../shared/game/gather";
+import { RULESET } from "../../shared/game/ruleset";
 
 /** 마감을 한 번 넘기고 모든 소켓이 그 state 를 받은 뒤의 마지막 view 들. */
 async function stepViews(g: Game): Promise<RoomView[]> {
@@ -25,7 +26,8 @@ const same = (views: RoomView[], pick: (v: RoomView) => unknown): string => {
   return first;
 };
 
-describe("마지막 3인 — 트레이서 (결정 0066-5)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 를 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("마지막 3인 — 트레이서 (결정 0066-5)", () => {
   it("산 사람 셋의 낮 시작 발표가 끝나면 모든 소켓이 showdown 모이기(2초)를 받고, 낮 시작 청소는 빠지지 않는다", async () => {
     const g = await threeAliveGame();
     const views = await stepViews(g);
@@ -149,7 +151,8 @@ async function framesDuring(g: Game, act: () => void | Promise<void>): Promise<S
   return Promise.all(g.socks.map((s, i) => settle(s, marks[i]!)));
 }
 
-describe("마지막 3인 — 진입·시각은 역할의 함수가 아니다 (L21, T-09.1.1-16)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 를 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("마지막 3인 — 진입·시각은 역할의 함수가 아니다 (L21, T-09.1.1-16)", () => {
   /** 같은 대본(한마디·지목)을 돌리며 모든 소켓의 단계·길이·day.showdown(시각 값 제외, me 제외)을 한 줄씩 모은다. 공개 단계(i 4)에서 멈춘다. */
   async function column(roles: [string, string, string]): Promise<string[]> {
     const g = await threeAliveGame();
@@ -210,7 +213,8 @@ describe("마지막 3인 — 진입·시각은 역할의 함수가 아니다 (L2
   }, 120_000);
 });
 
-describe("마지막 3인 — 동시 지목의 비공개 (T-09.1.1-17)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 를 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("마지막 3인 — 동시 지목의 비공개 (T-09.1.1-17)", () => {
   it("마감 전에는 던진 좌석(voted)만 모두에게 가고 개인 선택은 본인 me.ballot 에만 — 바꾸면 본인 소켓만 받고, 마감 뒤 points 는 모두에게 같다", async () => {
     const g = await threeAliveGame();
     await toPointWindow(g);
@@ -254,7 +258,8 @@ describe("마지막 3인 — 동시 지목의 비공개 (T-09.1.1-17)", () => {
   }, 60_000);
 });
 
-describe("마지막 3인 — 거절 표 (결정 0066-5)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 를 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("마지막 3인 — 거절 표 (결정 0066-5)", () => {
   it("지목 단계가 아닐 때 point → WRONG_PHASE, 자기 자신·죽은 대상·없는 좌석·유령 → BAD_MESSAGE — 보낸 소켓에만 [error, state]이고 저장된 선택은 불변", async () => {
     const g = await threeAliveGame();
     await stepViews(g); // 모이기 → 차례 0
@@ -284,7 +289,8 @@ describe("마지막 3인 — 거절 표 (결정 0066-5)", () => {
   }, 60_000);
 });
 
-describe("마지막 3인 — 재접속 (결정 0066-5)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 를 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("마지막 3인 — 재접속 (결정 0066-5)", () => {
   it("한마디가 확정된 뒤 다시 들어온 소켓의 첫 state 가 현재 day.showdown(한마디 포함)을 싣는다", async () => {
     const g = await threeAliveGame();
     await stepViews(g);
@@ -316,7 +322,8 @@ function movesSince(sock: Game["socks"][number], from: number): Map<number, stri
   return out;
 }
 
-describe("마지막 3인 — 모이기 배치 (결정 0066-5, 09.1.1-07)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 를 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("마지막 3인 — 모이기 배치 (결정 0066-5, 09.1.1-07)", () => {
   it("3명 낮 진입 직후 산 세 사람의 world move 가 방 전원에게 가고 끝점이 ringSlots(3) 다; 키는 '{일차}:showdown'", async () => {
     const g = await threeAliveGame();
     const marks = g.socks.map((sock) => mark(sock));

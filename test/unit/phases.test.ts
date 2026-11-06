@@ -10,6 +10,7 @@ import {
   MORNING_WILL_MS,
   PHASE_DEFS,
 } from "../../shared/game/phases";
+import { RULESET } from "../../shared/game/ruleset";
 
 describe("단계 표 (DAY-07, 결정 0060-1)", () => {
   it("낮 단계 길이: 토론 90000·지목 진입(모이기) 3000·변론 20000·찬반 10000·처형 5600(5000 + 판결 앞머리 600), 밤 30000 (결정 0063-1)", () => {
@@ -18,7 +19,7 @@ describe("단계 표 (DAY-07, 결정 0060-1)", () => {
     const ms = (["discussion", "nomination", "defense", "verdict", "execution", "night"] as const).map(
       (id) => PHASE_DEFS[id].durationMs,
     );
-    expect(ms.join(",")).toBe("90000,3000,20000,10000,5600,30000");
+    expect(ms.join(",")).toBe(RULESET.pickTurn ? "90000,3000,20000,10000,5600,30000" : "90000,15000,20000,10000,5600,30000"); // 기본판(결정 0072)은 투표 15초
   });
 
   it("기본 다음 단계 사슬: discussion → nomination → defense → verdict → execution → night → morning → dayAnnounce", () => {

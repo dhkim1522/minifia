@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { pickTarget } from "../../shared/game/night";
 import { DISCUSSION_MS, SHOWDOWN_GATHER_MS } from "../../shared/game/phases";
+import { RULESET } from "../../shared/game/ruleset";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
@@ -63,7 +64,7 @@ describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", (
             }
             // 낮 시작 발표 마감 다음이 바로 토론이고, 마감은 이전 마감 + DISCUSSION_MS 다.
             // 단 산 사람이 정확히 셋이면 토론 대신 마지막 3인 결전(모이기 SHOWDOWN_GATHER_MS)이다(결정 0066-5).
-            const last3 = living(s).length === 3;
+            const last3 = RULESET.showdown && living(s).length === 3; // 기본판(결정 0072)은 산 셋도 토론이다
             const after = tick(s, s.phaseEndsAt!, rand);
             expect(after.phase).toBe(last3 ? "showdown" : "discussion");
             expect(after.phaseEndsAt).toBe(s.phaseEndsAt! + (last3 ? SHOWDOWN_GATHER_MS : DISCUSSION_MS));

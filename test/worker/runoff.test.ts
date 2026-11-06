@@ -8,6 +8,7 @@ import {
   closePhase, connect, editRoom, forceDue, framesOf, hello, killSeats, lastViewOf, layOf, mapPlayers, mark, nextFrame, pointAll, runoffAll, send, settle, startedGame, storedRoom, worldFramesOf,
 } from "./helpers";
 import type { Game } from "./helpers";
+import { RULESET } from "../../shared/game/ruleset";
 
 const bySeat = (g: Game): Game["actors"] => [...g.actors].sort((a, b) => a.seat - b.seat);
 
@@ -24,7 +25,8 @@ async function untilRunoffStep(g: Game, step: 0 | 1 | 2): Promise<RoomView[]> {
 /** 좌석 0·1·2 가 A·B·C 인 지목: A=0 이 2표, B=1 이 2표, C=2 가 1표, 좌석 5 는 기권(최다 정확히 둘 동점). */
 const TIE_POINTS: Record<number, number> = { 0: 1, 1: 0, 2: 0, 3: 1, 4: 2 };
 
-describe("동점 결선 — 트레이서 (결정 0066-4)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
+describe.skipIf(!RULESET.runoff)("동점 결선 — 트레이서 (결정 0066-4)", () => {
   it("2자 동점 지목 → runoff 앞머리(1000ms) → 투표(5000ms) → 결과 → 승자의 최후 변론으로, 모든 소켓이 같은 값을 받는다", async () => {
     const g = await startedGame("nomination");
     const seated = bySeat(g);
@@ -128,7 +130,8 @@ const stateViews = (msgs: ServerMessage[]): RoomView[] =>
 const seatOf = (g: Game, seat: number): Game["actors"][number] => g.actors.find((a) => a.seat === seat)!;
 const idxOf = (g: Game, seat: number): number => g.actors.findIndex((a) => a.seat === seat);
 
-describe("거절 표 — 보낸 소켓에만 [error, state] (결정 0066-4, T-09.1.1-11)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
+describe.skipIf(!RULESET.runoff)("거절 표 — 보낸 소켓에만 [error, state] (결정 0066-4, T-09.1.1-11)", () => {
   /** sender 가 point 를 보내면 sender 는 [error:code, state:runoff] 만, 나머지는 0프레임이고 저장된 runoffVote 는 그대로다. */
   async function expectRejected(g: Game, seat: number, target: number, code: string, label: string): Promise<void> {
     const marks = g.socks.map((sock) => mark(sock));
@@ -169,7 +172,8 @@ describe("거절 표 — 보낸 소켓에만 [error, state] (결정 0066-4, T-09
   }, 90_000);
 });
 
-describe("L20 — 결선 마감 전 비공개 (결정 0066-4, T-09.1.1-10)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
+describe.skipIf(!RULESET.runoff)("L20 — 결선 마감 전 비공개 (결정 0066-4, T-09.1.1-10)", () => {
   it("첫 표는 모두에게 voted 만 바꾸고, 바꾸기는 본인 소켓에만 가며, 마감 전 어느 소켓도 득표 수·남의 선택을 받지 않는다; 마감 뒤 tally 는 모두 같다", async () => {
     const g = await toRunoff(1);
     const watchers = [4, 5].map((seat) => seatOf(g, seat));
@@ -275,7 +279,8 @@ function movesSince(sock: Game["socks"][number], from: number): Map<number, stri
   return out;
 }
 
-describe("결선 배치 — 두 후보가 가운데 마주 선다 (결정 0066-4, O-19)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
+describe.skipIf(!RULESET.runoff)("결선 배치 — 두 후보가 가운데 마주 선다 (결정 0066-4, O-19)", () => {
   it("결선 진입 때 후보 둘의 world move 가 전원에게 가고 끝점이 RUNOFF_SPOTS 다; 나머지는 움직이지 않는다. 변론으로 가면 승자는 무대로, 진 후보는 둘레 자리로", async () => {
     const g = await startedGame("nomination");
     const marks = g.socks.map((sock) => mark(sock));

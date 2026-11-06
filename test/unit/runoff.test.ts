@@ -6,6 +6,7 @@ import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { castPoints, startedAt } from "../helpers/voteState";
 import { seededRandInt } from "../helpers/seededRandom";
+import { RULESET } from "../../shared/game/ruleset";
 
 const idOf = (s: RoomState, seat: number): string => s.players.find((p) => p.seat === seat)!.id;
 const rand = seededRandInt(9);
@@ -25,7 +26,8 @@ function atVoteWindow(): RoomState {
   return tick(lead, lead.phaseEndsAt!, rand);
 }
 
-describe("지목 집계 분기 (결정 0066-4)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
+describe.skipIf(!RULESET.runoff)("지목 집계 분기 (결정 0066-4)", () => {
   it("최다 득표가 정확히 둘 동점이면 night 대신 runoff 로 간다 — 후보는 낮은 좌석부터, 단계 길이 1초", () => {
     const nominated = castPoints(startedAt(6, 3, "nomination"), TIE);
     const deadline = nominated.phaseEndsAt!;
@@ -57,7 +59,8 @@ describe("지목 집계 분기 (결정 0066-4)", () => {
   });
 });
 
-describe("runoff 사슬 (stay)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
+describe.skipIf(!RULESET.runoff)("runoff 사슬 (stay)", () => {
   it("앞머리 → 투표(5초) → 결과(1.5초) 마감이 이전 마감 + 길이로 이어진다", () => {
     const lead = atRunoff();
     const open = tick(lead, lead.phaseEndsAt!, rand);
@@ -128,7 +131,8 @@ describe("runoff 사슬 (stay)", () => {
   });
 });
 
-describe("castRunoffVote 검사 순서 (계약)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
+describe.skipIf(!RULESET.runoff)("castRunoffVote 검사 순서 (계약)", () => {
   it("단계 → 행위자 → 후보 본인 → 투표 창 → 대상 순으로 거절한다", () => {
     const lead = atRunoff();
     const open = tick(lead, lead.phaseEndsAt!, rand);

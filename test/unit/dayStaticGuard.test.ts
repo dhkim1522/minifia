@@ -75,9 +75,7 @@ export const SERVER_REMOVED_IDENTIFIERS = [
   // 9페이즈(09-18), 결정 0061-17: 아침 문구 수 상수와 직전 문구 기억 필드. 서버는 문구 번호를 더 이상 채우지 않고 와이어도 싣지 않는다.
   "MORNING_PHRASE_COUNT",
   "lastPhrase",
-  // 09.1-04, 결정 0063-1: 동시 지목의 15초 단계 상수와 같은 사람 250ms 지목 간격 상수. 지목 길이는 차례 상수 넷(phases.ts)과 차례 사슬(nominationStepMs)뿐이다.
-  "NOMINATION_MS",
-  "POINT_MIN_INTERVAL_MS",
+  // 09.1-04, 결정 0063-1: 동시 지목의 15초 단계 상수와 같은 사람 250ms 지목 간격 상수를 지웠으나, 13-01(결정 0072)이 기본판 동시 투표로 되살렸다 — 이 둘은 더 이상 지운 이름이 아니다.
   // 09.1-05: 차례 없는 옛 봇 지연 지목의 지연 상수 둘. 봇은 자기 차례 시작에 바로 지목한다.
   "POINT_BASE_MS",
   "POINT_SPAN_MS",
