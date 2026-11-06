@@ -10,8 +10,8 @@ recorded: 2026-11-02
 
 | ID | 심각도 | 처리 | 근거 |
 |---|---|---|---|
-| WR-01 | Warning | open | 로비 좌석 재사용 시 입장 전 줄 복원(결정 0058-2 범위 초과)·옛 줄 이름 바뀜. 추천: 좌석 비울 때 마스크 비트 제거 + 수신 시점 이름 고정 + 나가기·재입장 복원 시험 |
-| WR-02 | Warning | open | 로비 입장·퇴장 시스템 줄만 `Date.now()` — `Date.now()+offset` 으로 맞춘다 |
+| WR-01 | Warning | resolved (12-04) | 로비 좌석 재사용 시 입장 전 줄 복원(결정 0058-2 범위 초과)·옛 줄 이름 바뀜. 추천: 좌석 비울 때 마스크 비트 제거 + 수신 시점 이름 고정 + 나가기·재입장 복원 시험 |
+| WR-02 | Warning | resolved (12-04) | 로비 입장·퇴장 시스템 줄만 `Date.now()` — `Date.now()+offset` 으로 맞춘다 |
 | WR-03 | Warning | resolved (07-23) | 07-UAT 8 사용자 결정(2026-11-02): 낮 보조줄 삭제, 하단 안내 곧 토론이 시작돼요 |
 | IN-01 | Info | open | 기록만 |
 | IN-02 | Info | open | 기록만 |
@@ -27,7 +27,7 @@ recorded: 2026-11-02
 
 | ID | 심각도 | 처리 | 근거 |
 |---|---|---|---|
-| GR-WR-01 | Warning | open | 서버가 150ms 안 둘째 move 를 조용히 버리면 응답 판정이 1.5초 기다린 뒤 거짓 알림·되돌림. 추천: 타이머 콜백에서 `observe` 한 번 더 + 응답 들었으면 알림 없이 비움 + 시험 추가 |
+| GR-WR-01 | Warning | resolved (12-04) | 서버가 150ms 안 둘째 move 를 조용히 버리면 응답 판정이 1.5초 기다린 뒤 거짓 알림·되돌림. 추천: 타이머 콜백에서 `observe` 한 번 더 + 응답 들었으면 알림 없이 비움 + 시험 추가 |
 | GR-IN-01 | Info | open | smoothstep 교정 속도 주석은 왕복 약 200ms 까지만 성립 |
 | GR-IN-02 | Info | open | `runtime.ts` `was` 계산의 `gapMs` 상한 없음, 영향 작음 |
 | GR-IN-03 | Info | open | `notifyMoveSent` 선택 인자 경로를 성능용 메서드로 분리 권장 |
