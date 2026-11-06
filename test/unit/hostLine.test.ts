@@ -76,7 +76,7 @@ function makeView(o: Spec): RoomView {
 }
 
 describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
-  const cases: ReadonlyArray<readonly [string, Spec, string, HostKey, { cardSeen?: boolean }?]> = [
+  const cases: Array<[string, Spec, string, HostKey, { cardSeen?: boolean }?]> = [
     ["대기실 방장·시작 가능", { phase: "lobby", host: true }, "모두 모였습니다. 시작 단추를 눌러 주세요.", "lobby.ready"],
     ["대기실 방장·인원 부족", { phase: "lobby", host: true, connected: 3 }, "대기실입니다. 친구들이 모일 때까지 기다려 주세요.", "lobby.gather"],
     ["대기실 손님", { phase: "lobby", seat: 1, host: false }, "대기실입니다. 방장이 시작할 때까지 기다려 주세요.", "lobby.guest"],
@@ -110,7 +110,7 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     ["결과", { phase: "ended", endsAt: null }, "게임이 끝났습니다. 다음 판을 준비해 주세요.", "ended"],
   ];
 
-  it.each(cases)("%s", (_label, spec, line, key, local) => {
+  it.each(cases)("%s", (_label: string, spec: Spec, line: string, key: HostKey, local?: { cardSeen?: boolean }) => {
     const view = makeView(spec);
     expect(hostKeyOf(view, local)).toBe(key);
     expect(hostLineOf(view, local)).toBe(line);
@@ -173,7 +173,7 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
       const lines = new Set(roles.map((role) => hostLineOf(makeView({ ...spec, role }))));
       expect(lines.size, spec.phase).toBe(1);
     }
-    expect(new Set(roles.map((role) => hostLineOf(makeView({ phase: "night", role })))).size).toBe(3);
+    expect(new Set(roles.map((role) => hostLineOf(makeView({ phase: "night", role })))).size).toBe(4);
   });
 
   it("빈 줄(키 줄이 빈 문자열)은 HOST_FALLBACK 을 돌려준다 — 빈 띠는 없다 (UI#1)", () => {
@@ -379,7 +379,7 @@ describe("HOST-05 허용 목록만 읽는다 (T-14-01)", () => {
     const view = recorder(makeView({ phase: "night", noise: true }), log) as RoomView;
     void view.me.allies;
     void view.spectate;
-    void view.players[0]!.job;
+    void (view.players[0] as unknown as { job: unknown }).job;
     expect([...log].filter((p) => !isAllowed(p)).sort()).toEqual(["me.allies", "players[].job", "spectate"]);
   });
 
