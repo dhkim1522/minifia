@@ -1,7 +1,8 @@
 ---
 phase: "14"
 slug: "host-and-labels"
-status: draft
+status: approved
+reviewed_at: 2026-11-07
 shadcn_initialized: false
 preset: none
 created: "2026-11-07"
@@ -68,7 +69,7 @@ Enumerated by `ls src/components/v2/*.tsx | wc -l` — 30 components — minifia
 ## 자막 띠 계약 (HOST-01·02·03)
 
 모양(시안 A)
-- 면 `overlay-ink-strong`, 모서리 `radius-badge`(12), 왼쪽 줄 4px `brass-400`, 안쪽 `8 12 8 16`, 그림자 `shadow-badge`. 1행: 종(`bell`, 16, `brass-200`) + 문장(Label 14/400, `gray-50`, `keep-all`, 1~2줄) + 오른쪽 끝 "{n}초"(Body 16/700 숫자 + 14/400 "초", `tabular-nums`, 최소 폭 40). 2행: 막대(높이 8, `radius-pill`, 트랙 `night-600`, 채움 `gray-100`, `scaleX` 왼쪽 기준, 1초 선형) — 시간이 있을 때만. 막대 색은 기존 `timerTone` 하나: 평소 `gray-100` → 마지막 10초 `brass-400` → 마지막 5초 `crimson-400`(숫자도 같은 색, 진홍은 낮 화면에서 여기뿐).
+- 면 `overlay-ink-strong`, 모서리 `radius-badge`(12), 왼쪽 줄 4px `brass-400`, 안쪽 `8 16 8 16`, 그림자 `shadow-badge`. 1행: 종(`bell`, 16, `brass-200`) + 문장(Label 14/400, `gray-50`, `keep-all`, 1~2줄) + 오른쪽 끝 "{n}초"(Body 16/700 숫자 + 14/400 "초", `tabular-nums`, 최소 폭 40). 2행: 막대(높이 8, `radius-pill`, 트랙 `night-600`, 채움 `gray-100`, `scaleX` 왼쪽 기준, 1초 선형) — 시간이 있을 때만. 막대 색은 기존 `timerTone` 하나: 평소 `gray-100` → 마지막 10초 `brass-400` → 마지막 5초 `crimson-400`(숫자도 같은 색, 진홍은 낮 화면에서 여기뿐).
 - 문장은 `<p data-host-line data-guide>` 하나. 시간은 `role="timer"` `aria-label="남은 시간 {n}초"`(초마다 읽지 않음). 띠 전체는 `role="status"` `aria-live="polite"` — 문장이 **단계가 바뀔 때만** 바뀌므로 읽는 횟수가 적다. 같은 단계 안에서 문장은 바뀌어도 되지만(예: 역할 확인에서 카드를 연 뒤) 다시 읽히지 않게 `aria-atomic="false"`.
 - 바뀔 때 연출: 문장 `opacity` 0 → 1 (`dur-med`), 종이 `transform: rotate` ±8° 한 번 흔들림(`dur-pop`). 모션 줄이기면 즉시 교체·흔들림 없음.
 - 어느 단계에서도 같은 자리·같은 모양. 단계 이름(제목)은 헤더 그대로("낮 토론"·"투표"…). 역할·좌석 값을 DOM 속성에 싣지 않는다(`data-host-line` 은 값 없는 표식).
@@ -198,7 +199,7 @@ Enumerated by `ls src/components/v2/*.tsx | wc -l` — 30 components — minifia
 | lg / xl / 3xl | 24 / 32 / 64px | 이 페이즈 신규 사용 없음 |
 | 2xl | 48px | 입력칸 높이(`control-input`) |
 
-Exceptions: 도구 단추 아이콘 면 36(MapChip·SoundButton 승인 값 그대로)과 누르기 영역 44, 띠 안쪽 `8 12 8 16` — 모두 4의 배수이거나 12·36 승인 값.
+Exceptions: 도구 단추 아이콘 면 36(MapChip·SoundButton 승인 값 그대로)과 누르기 영역 44, 띠 안쪽 `8 16 8 16` — 모두 4의 배수이거나 12·36 승인 값.
 
 ## Typography
 
