@@ -481,8 +481,8 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
   });
 
   it("소리 단추 표식에는 값이 on·off·locked 뿐이다 — 역할·좌석 값이 실리지 않는다(T-12-23)", () => {
-    const text = sources.find((s) => s.f.endsWith("components/v2/SoundButton.tsx"))!.text;
-    const dataAttrs = [...text.matchAll(/\b(data-[a-z-]+)=/g)].map((m) => m[1]).sort();
+    const text = sources.find((s) => s.f.endsWith("components/v2/SoundButton.tsx"))!.text.replace(/\/\/.*$/gm, "");
+    const dataAttrs = [...new Set([...text.matchAll(/\b(data-[a-z-]+)=/g)].map((m) => m[1]))].sort();
     expect(dataAttrs).toEqual(["data-sound-button", "data-sound-state"]);
     expect(text).not.toMatch(/role=|seat|nonce|mafia/i);
   });

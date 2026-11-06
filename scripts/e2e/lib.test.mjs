@@ -2912,15 +2912,15 @@ test("soundRenderChecks: 배열이 아니거나 필드가 숫자가 아니면 �
 
 // ---- 12-07: soundButtonChecks (SU1~SU7) ----
 
-const R = (left, top, width, height) => ({ left, top, width, height });
+const sRect = (left, top, width, height) => ({ left, top, width, height });
 /** 360 폭 로비 정상값: 헤더 아래 끝 62, 단추 위 70, 오른쪽 16 → left 300 */
 function soundIn(over = {}) {
   return {
     viewport: { w: 360, h: 560 },
-    button: { count: 1, rect: R(300, 70, 44, 44), disc: R(304, 74, 36, 36), pill: false },
-    header: { bottom: 62, buttons: [{ kind: "leave", rect: R(16, 18, 44, 44) }, { kind: "role", rect: R(300, 18, 44, 44) }] },
-    test: R(16, 70, 90, 44),
-    toast: R(110, 88, 140, 36),
+    button: { count: 1, rect: sRect(300, 70, 44, 44), disc: sRect(304, 74, 36, 36), pill: false },
+    header: { bottom: 62, buttons: [{ kind: "leave", rect: sRect(16, 18, 44, 44) }, { kind: "role", rect: sRect(300, 18, 44, 44) }] },
+    test: sRect(16, 70, 90, 44),
+    toast: sRect(110, 88, 140, 36),
     bannerHit: { present: true, covers: true, hitIsButton: true },
     labels: { state: "on", name: "소리 끄기", pressed: "true" },
     ...over,
@@ -2940,13 +2940,13 @@ test("soundButtonChecks SU1: 단추가 0개나 2개면 실패(방 화면에 정�
 });
 
 test("soundButtonChecks SU2: 누르기 영역 44×44 경계 — 43.99 실패 / 44 통과", () => {
-  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: R(300, 70, 44, 44) } })), []);
-  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: R(300, 70, 43.99, 44) } })), ["SU2"]);
-  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: R(300, 70, 44, 43.99) } })), ["SU2"]);
+  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: sRect(300, 70, 44, 44) } })), []);
+  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: sRect(300, 70, 43.99, 44) } })), ["SU2"]);
+  assert.deepEqual(suFails(soundIn({ button: { ...soundIn().button, rect: sRect(300, 70, 44, 43.99) } })), ["SU2"]);
 });
 
 test("soundButtonChecks SU3: 위는 헤더 아래 끝 + 8 (±2), 오른쪽 여백 16 (±2)", () => {
-  const at = (top, left) => suFails(soundIn({ button: { ...soundIn().button, rect: R(left, top, 44, 44) } }));
+  const at = (top, left) => suFails(soundIn({ button: { ...soundIn().button, rect: sRect(left, top, 44, 44) } }));
   assert.deepEqual(at(72, 302), []); // +2 / −2
   assert.deepEqual(at(68, 298), []); // −2 / +2
   assert.deepEqual(at(72.01, 300), ["SU3"]);
@@ -2956,10 +2956,10 @@ test("soundButtonChecks SU3: 위는 헤더 아래 끝 + 8 (±2), 오른쪽 여�
 });
 
 test("soundButtonChecks SU4: 헤더 단추·[테스트]·토스트와 겹침 0 — 겹치면 실패, 닿기만 하면 통과", () => {
-  assert.deepEqual(suFails(soundIn({ header: { bottom: 62, buttons: [{ kind: "role", rect: R(300, 40, 44, 44) }] } })), ["SU4"]);
-  assert.deepEqual(suFails(soundIn({ test: R(280, 70, 90, 44) })), ["SU4"]);
-  assert.deepEqual(suFails(soundIn({ toast: R(200, 88, 140, 36) })), ["SU4"]);
-  assert.deepEqual(suFails(soundIn({ test: R(210, 70, 90, 44) })), []); // 오른쪽변이 단추 왼쪽변에 닿기만
+  assert.deepEqual(suFails(soundIn({ header: { bottom: 62, buttons: [{ kind: "role", rect: sRect(300, 40, 44, 44) }] } })), ["SU4"]);
+  assert.deepEqual(suFails(soundIn({ test: sRect(280, 70, 90, 44) })), ["SU4"]);
+  assert.deepEqual(suFails(soundIn({ toast: sRect(200, 88, 140, 36) })), ["SU4"]);
+  assert.deepEqual(suFails(soundIn({ test: sRect(210, 70, 90, 44) })), []); // 오른쪽변이 단추 왼쪽변에 닿기만
   assert.deepEqual(suFails(soundIn({ test: null, toast: null })), []); // 없으면 겹칠 것이 없다
 });
 
@@ -2971,12 +2971,12 @@ test("soundButtonChecks SU5: 재접속 띠가 단추를 덮고 있을 때 단추
 });
 
 test("soundButtonChecks SU6: 시각 지름 36 (±1) — 경계 35 / 37 통과, 34.99 / 37.01 실패. 알약이면 높이 44 · 폭 112 이상", () => {
-  const d = (w, h) => suFails(soundIn({ button: { ...soundIn().button, disc: R(304, 74, w, h) } }));
+  const d = (w, h) => suFails(soundIn({ button: { ...soundIn().button, disc: sRect(304, 74, w, h) } }));
   assert.deepEqual(d(35, 35), []);
   assert.deepEqual(d(37, 37), []);
   assert.deepEqual(d(34.99, 36), ["SU6"]);
   assert.deepEqual(d(36, 37.01), ["SU6"]);
-  const pill = (w, h) => suFails(soundIn({ button: { count: 1, rect: R(224, 70, 120, 44), disc: R(224, 70, w, h), pill: true }, labels: { state: "locked", name: "소리 켜기", pressed: "false" } }));
+  const pill = (w, h) => suFails(soundIn({ button: { count: 1, rect: sRect(224, 70, 120, 44), disc: sRect(224, 70, w, h), pill: true }, labels: { state: "locked", name: "소리 켜기", pressed: "false" }, toast: null }));
   assert.deepEqual(pill(120, 44), []);
   assert.deepEqual(pill(111.9, 44), ["SU6"]);
   assert.deepEqual(pill(120, 42), ["SU6"]);

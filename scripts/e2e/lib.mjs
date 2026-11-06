@@ -2036,6 +2036,8 @@ export const SOUND_MARKERS = Object.freeze([
   "data-sound-id", // 소리 ▶ 단추 data-sound-id="{id}" (56개)
   "__mfSound", // 테스트 훅 window.__mfSound = { state, on, bed, voices, log, clear }(12-05)
   "__mfSoundLab", // 시험 페이지 훅 window.__mfSoundLab = { done, results }
+  "data-sound-button", // 방 화면 소리 단추(SoundButton.tsx, 12-07) — 방 화면에 정확히 하나
+  "data-sound-state", // 소리 단추 상태 on|off|locked (역할·좌석 값 없음)
 ]);
 
 /**
@@ -2080,5 +2082,83 @@ export function soundRenderChecks(results, limits = SOUND_RENDER_LIMITS) {
       results.filter((r) => r.declaredMs !== null && Math.abs(r.lengthMs - r.declaredMs) > limits.lengthTolMs).map((r) => `${r.id} ${fmt(r.lengthMs)}ms (선언 ${fmt(r.declaredMs)})`),
     ),
   );
+  return out;
+}
+
+// ---- 12페이즈 소리 단추 sound-unlock (12-07, 결정 D-4·D-21, UI-SPEC B-1·B-2) ----
+
+/** 소리 단추 기하: 누르기 44, 시각 지름 36 ±1, 헤더 아래 끝에서 8 아래 ±2, 오른쪽 여백 16 ±2, 알약 높이 44 · 폭 112 이상 */
+export const SOUND_BUTTON_GEOMETRY = Object.freeze({ tap: 44, disc: 36, discTol: 1, gap: 8, margin: 16, posTol: 2, pillH: 44, pillMinW: 112 });
+const SOUND_NAMES = Object.freeze({ on: "소리 끄기", off: "소리 켜기", locked: "소리 켜기" });
+
+/**
+ * 방 화면 소리 단추 위치·겹침·접근성 (sound-unlock). 사각형은 { left, top, width, height }.
+ * viewport = { w, h } · button = { count, rect(누르기 영역), disc(시각 원/알약), pill } · header = { bottom(헤더 아래 끝), buttons[{kind, rect}] } ·
+ * test = [테스트] 사각형|null · toast = TopToast 글자 사각형|null · bannerHit = { present, covers(띠가 단추 중심을 덮음), hitIsButton(그 점의 최상단이 단추) } · labels = { state, name, pressed }.
+ * SU1 정확히 하나 · SU2 누르기 ≥ 44×44 · SU3 위 = 헤더 아래 끝 + 8 (±2) · 오른쪽 여백 16 (±2) · SU4 헤더 단추·[테스트]·TopToast 와 겹침 0 ·
+ * SU5 재접속 띠가 단추 중심을 덮을 때 최상단이 단추 자신(띠가 없거나 덮지 않으면 확인한 것이 없어 실패 — 공허한 통과 금지) ·
+ * SU6 시각 지름 36 (±1), 알약이면 높이 44 · 폭 112 이상 · SU7 접근성 이름이 상태에 맞음(on '소리 끄기' · off/locked '소리 켜기', aria-pressed).
+ */
+export function soundButtonChecks({ viewport, button, header, test, toast, bannerHit, labels } = {}) {
+  const G = SOUND_BUTTON_GEOMETRY;
+  const L = {
+    SU1: "방 화면에 소리 단추가 정확히 하나",
+    SU2: `누르기 영역 ${G.tap}x${G.tap} 이상`,
+    SU3: `위 = 헤더 아래 끝 + ${G.gap} · 오른쪽 여백 ${G.margin} (±${G.posTol})`,
+    SU4: "헤더 단추·[테스트]·토스트 글자와 겹침 0",
+    SU5: "재접속 띠가 떠 있어도 단추 중심의 최상단이 단추 자신",
+    SU6: `시각 지름 ${G.disc}±${G.discTol} (알약은 높이 ${G.pillH} · 폭 ${G.pillMinW} 이상)`,
+    SU7: "접근성 이름·aria-pressed 가 상태에 맞음",
+  };
+  const okRect = (r) => !!r && allNum(r.left, r.top, r.width, r.height);
+  const okButton = !!button && isNum(button.count) && okRect(button.rect) && okRect(button.disc);
+  const okHeader = !!header && isNum(header.bottom) && Array.isArray(header.buttons) && header.buttons.every((b) => !!b && okRect(b.rect));
+  const okOpt = (r) => r === null || r === undefined || okRect(r);
+  const need = (cond, id, what) => (cond ? null : noMeasure(id, L[id], what));
+  const missing = [
+    need(okButton && !!viewport && allNum(viewport.w, viewport.h), "SU1", "viewport { w, h } · button { count, rect, disc }"),
+  ];
+  if (missing[0] || !okHeader || !okOpt(test) || !okOpt(toast) || !bannerHit || typeof bannerHit.present !== "boolean" || !labels) {
+    return Object.entries(L).map(([id, label]) => noMeasure(id, label, "viewport · button · header { bottom, buttons } · test · toast · bannerHit { present, covers, hitIsButton } · labels { state, name, pressed }"));
+  }
+  const r = button.rect;
+  const out = [];
+  out.push(result("SU1", L.SU1, button.count === 1 ? [] : [`${button.count}개`]));
+  out.push(result("SU2", L.SU2, r.width >= G.tap && r.height >= G.tap ? [] : [`${fmt(r.width)}x${fmt(r.height)}`]));
+  const bad3 = [];
+  const dTop = r.top - (header.bottom + G.gap);
+  if (Math.abs(dTop) > G.posTol) bad3.push(`위 ${fmt(r.top)} (헤더 아래 끝 ${fmt(header.bottom)} + ${G.gap} 과 ${fmt(dTop)})`);
+  const marginRight = viewport.w - right(r);
+  if (Math.abs(marginRight - G.margin) > G.posTol) bad3.push(`오른쪽 여백 ${fmt(marginRight)} (기대 ${G.margin})`);
+  out.push(result("SU3", L.SU3, bad3));
+  const bad4 = [];
+  for (const b of header.buttons) if (rectsOverlap(r, b.rect)) bad4.push(`헤더 ${b.kind} (${overlapText(r, b.rect)})`);
+  if (test && rectsOverlap(r, test)) bad4.push(`[테스트] (${overlapText(r, test)})`);
+  if (toast && rectsOverlap(r, toast)) bad4.push(`토스트 (${overlapText(r, toast)})`);
+  out.push(result("SU4", L.SU4, bad4));
+  const bad5 = [];
+  if (!bannerHit.present) bad5.push("재접속 띠가 떠 있지 않아 확인할 것이 없다");
+  else if (bannerHit.covers !== true) bad5.push("띠가 단추 중심을 덮지 않아 확인할 것이 없다");
+  else if (bannerHit.hitIsButton !== true) bad5.push("띠가 단추 중심을 덮고 있다(단추가 눌리지 않음)");
+  out.push(result("SU5", L.SU5, bad5));
+  const d = button.disc;
+  const bad6 = [];
+  if (button.pill === true) {
+    if (Math.abs(d.height - G.pillH) > G.discTol) bad6.push(`알약 높이 ${fmt(d.height)}`);
+    if (d.width < G.pillMinW) bad6.push(`알약 폭 ${fmt(d.width)}`);
+  } else {
+    if (Math.abs(d.width - G.disc) > G.discTol) bad6.push(`지름(폭) ${fmt(d.width)}`);
+    if (Math.abs(d.height - G.disc) > G.discTol) bad6.push(`지름(높이) ${fmt(d.height)}`);
+  }
+  out.push(result("SU6", L.SU6, bad6));
+  const want = SOUND_NAMES[labels.state];
+  const bad7 = [];
+  if (want === undefined) bad7.push(`알 수 없는 상태 ${String(labels.state)}`);
+  else {
+    if (labels.name !== want) bad7.push(`이름 '${labels.name}' (기대 '${want}')`);
+    const wantPressed = labels.state === "on" ? "true" : "false";
+    if (labels.pressed !== wantPressed) bad7.push(`aria-pressed ${labels.pressed} (기대 ${wantPressed})`);
+  }
+  out.push(result("SU7", L.SU7, bad7));
   return out;
 }
