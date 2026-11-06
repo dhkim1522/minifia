@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사회자 자막 띠 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Nanum+Myeongjo:wght@700&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* v2.0 디자인 시스템 토큰 그대로 — 밤 잉크 바탕, 놋쇠 강조, 진홍은 마지막 5초만 */
+  --night-950: #0a0e1c; --night-900: #0e1326; --night-800: #151c36; --night-700: #1e2847; --night-600: #2a3760;
+  --ink: rgba(14, 19, 38, 0.8); --ink-strong: rgba(14, 19, 38, 0.92);
+  --gray-50: #f1f2f5; --gray-300: #a9aebb; --gray-500: #6b7180;
+  --brass-200: #e8d3a8; --brass-400: #c9a46a; --brass-600: #8f7048;
+  --crimson-400: #e0344b; --lamp: #ffcf8a;
+  --font-body: "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --font-display: "Nanum Myeongjo", "AppleMyungjo", serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--night-950); color: var(--gray-50); font-family: var(--font-body); }
+main { max-width: 1280px; margin: 0 auto; padding: 32px 20px 64px; display: grid; gap: 32px; }
+header.page h1 { font-family: var(--font-display); font-size: 28px; margin: 0 0 8px; text-wrap: balance; }
+header.page p { margin: 0; color: var(--gray-300); max-width: 68ch; line-height: 1.6; font-size: 15px; }
+.row { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+figure { margin: 0; display: grid; gap: 12px; width: 300px; }
+figcaption { display: grid; gap: 4px; }
+figcaption b { font-size: 16px; }
+figcaption span { color: var(--gray-300); font-size: 13px; line-height: 1.5; }
+.pick { display: inline-block; font-size: 12px; font-weight: 700; color: var(--night-950); background: var(--brass-400); border-radius: 999px; padding: 2px 10px; width: max-content; }
+
+/* 폰 틀 300x620 (390x806 축소) */
+.phone { position: relative; width: 300px; height: 620px; border-radius: 28px; overflow: hidden; background:
+  radial-gradient(120% 70% at 50% 42%, #2a2236 0%, #17141f 55%, #0c0b12 100%); border: 1px solid var(--night-600); }
+.floor { position: absolute; inset: 120px 0 170px; background:
+  repeating-linear-gradient(115deg, rgba(255,255,255,0.025) 0 18px, transparent 18px 36px); }
+.hdr { position: absolute; top: 14px; left: 12px; right: 12px; height: 44px; display: flex; align-items: center; justify-content: space-between; }
+.ibtn { width: 40px; height: 40px; border-radius: 12px; background: var(--ink); border: 1px solid var(--night-600); display: grid; place-items: center; }
+.ibtn svg { width: 18px; height: 18px; stroke: var(--gray-50); fill: none; stroke-width: 2; }
+.title { text-align: center; }
+.title b { display: block; font-size: 20px; }
+.title small { color: var(--gray-300); font-size: 11px; }
+
+/* 시간: 막대 + 숫자 */
+.timer { display: flex; align-items: center; gap: 8px; }
+.bar { flex: 1; height: 6px; border-radius: 999px; background: rgba(255,255,255,0.12); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 72%; background: var(--brass-400); border-radius: inherit; }
+.sec { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 14px; min-width: 32px; text-align: right; }
+
+/* 자막 띠 A: 헤더 아래 가로 띠 */
+.capA { position: absolute; top: 64px; left: 12px; right: 12px; padding: 10px 12px 10px 14px; border-radius: 12px; background: var(--ink-strong);
+  border-left: 3px solid var(--brass-400); display: grid; gap: 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
+.capA p, .capB p, .capC p { margin: 0; font-size: 14px; line-height: 1.45; }
+.bell { display: inline-flex; vertical-align: -2px; margin-right: 6px; }
+.bell svg { width: 14px; height: 14px; stroke: var(--brass-200); fill: none; stroke-width: 2; }
+
+/* 자막 띠 B: 헤더 제목 자리를 사회자 문장이 대신 */
+.capB { position: absolute; top: 12px; left: 60px; right: 60px; text-align: center; display: grid; gap: 6px; }
+.capB .chip { justify-self: center; font-size: 11px; color: var(--brass-200); border: 1px solid var(--brass-600); border-radius: 999px; padding: 1px 8px; }
+.capB p { font-size: 13px; }
+
+/* 자막 띠 C: 왼쪽 위 사회자 말풍선 카드 */
+.capC { position: absolute; top: 66px; left: 12px; width: 210px; padding: 10px 12px; border-radius: 4px 14px 14px 14px; background: var(--ink-strong);
+  border: 1px solid var(--brass-600); display: grid; gap: 6px; }
+.capC .who { font-size: 11px; color: var(--brass-200); font-weight: 700; }
+.timerC { position: absolute; top: 72px; right: 12px; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--brass-400) 0 72%, rgba(255,255,255,0.12) 72% 100%); }
+.timerC span { width: 42px; height: 42px; border-radius: 50%; background: var(--night-900); display: grid; place-items: center; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 14px; }
+
+/* 인물: 원 + 이름표. 빛나는 대상 */
+.who-dot { position: absolute; width: 46px; height: 46px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #5b4a43, #2a1f1c); }
+.tag { position: absolute; transform: translateX(-50%); white-space: nowrap; font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--ink); border: 1px solid var(--night-600); }
+.tag.glow { border-color: var(--lamp); box-shadow: 0 0 0 2px rgba(255,207,138,0.35), 0 0 14px rgba(255,207,138,0.55); font-weight: 700; }
+@media (prefers-reduced-motion: no-preference) { .tag.glow { animation: pulse 1.6s ease-in-out infinite; } }
+@keyframes pulse { 50% { box-shadow: 0 0 0 4px rgba(255,207,138,0.15), 0 0 20px rgba(255,207,138,0.75); } }
+
+/* 아래 도구 줄: 아이콘 + 한 단어 이름표 */
+.tools { position: absolute; left: 0; right: 0; bottom: 0; height: 160px; background: var(--night-900); border-radius: 20px 20px 0 0; padding: 12px; display: grid; gap: 10px; align-content: start; }
+.log { height: 54px; border-radius: 10px; background: var(--night-950); padding: 6px 10px; font-size: 11px; color: var(--gray-300); line-height: 1.6; }
+.toolrow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.tool { display: grid; justify-items: center; gap: 4px; font-size: 11px; color: var(--gray-300); }
+.tool .ic { width: 40px; height: 40px; border-radius: 12px; background: var(--night-800); border: 1px solid var(--night-600); display: grid; place-items: center; }
+.tool .ic svg { width: 18px; height: 18px; stroke: var(--gray-50); fill: none; stroke-width: 2; }
+.tool.call .ic { border-color: var(--lamp); box-shadow: 0 0 12px rgba(255,207,138,0.5); }
+.tool.call { color: var(--brass-200); font-weight: 700; }
+
+/* 역할 카드 목표 */
+.cards { display: flex; flex-wrap: wrap; gap: 16px; }
+.role { width: 220px; border-radius: 14px; padding: 16px; background: var(--night-800); border: 1px solid var(--night-600); display: grid; gap: 8px; }
+.role .name { font-family: var(--font-display); font-size: 22px; }
+.role .goal { font-size: 13px; color: var(--brass-200); border-top: 1px solid var(--night-600); padding-top: 8px; }
+.role .goal b { color: var(--gray-50); margin-right: 6px; font-size: 11px; border: 1px solid var(--brass-600); border-radius: 999px; padding: 1px 6px; }
+section h2 { font-size: 18px; margin: 0 0 12px; }
+table { border-collapse: collapse; font-size: 13px; width: 100%; max-width: 900px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--night-700); vertical-align: top; }
+th { color: var(--gray-300); font-weight: 400; }
+.wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <header class="page">
+    <h1>사회자 자막 띠 시안 — v3.0 14페이즈</h1>
+    <p>투표 단계에서 시민이 보는 화면 예시입니다. 사회자 한 줄(정통 존댓말)과 알림음 표시, 누를 이름표 빛남, 도구 이름표, 남은 시간 막대 + 숫자를 세 가지 배치로 비교합니다. 추천안 A 로 바로 구현하고, 다른 안을 원하면 다시 요청하면 됩니다.</p>
+  </header>
+
+  <div class="row">
+    <figure>
+      <div class="phone" aria-label="시안 A 화면">
+        <div class="floor"></div>
+        <div class="hdr">
+          <div class="ibtn"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>
+          <div class="title"><b>투표</b><small>2일차 낮</small></div>
+          <div class="ibtn"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg></div>
+        </div>
+        <div class="capA">
+          <p><span class="bell"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span>투표 시간입니다. 처형할 사람의 이름표를 눌러 주세요.</p>
+          <div class="timer"><div class="bar"><i></i></div><span class="sec">11초</span></div>
+        </div>
+        <div class="who-dot" style="left:60px;top:250px"></div><div class="tag glow" style="left:83px;top:222px">수아</div>
+        <div class="who-dot" style="left:190px;top:230px"></div><div class="tag glow" style="left:213px;top:202px">민준</div>
+        <div class="who-dot" style="left:125px;top:330px"></div><div class="tag" style="left:148px;top:302px">나 (지호)</div>
+        <div class="who-dot" style="left:215px;top:350px"></div><div class="tag glow" style="left:238px;top:322px">하늘</div>
+        <div class="tools">
+          <div class="log">수아 → 민준 · 하늘 → 민준</div>
+          <div class="toolrow">
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></div>채팅</div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h5"/></svg></div>유언</div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="10" r="3"/></svg></div>내 역할</div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="2"/><path d="M12 8v6l-3 6M12 14l3 6M7 11l5-2 5 2"/></svg></div>동작</div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/></svg></div>소리</div>
+          </div>
+        </div>
+      </div>
+      <figcaption>
+        <span class="pick">추천</span>
+        <b>A. 헤더 아래 가로 띠</b>
+        <span>단계 이름은 헤더 그대로, 사회자 한 줄과 시간 막대 + 숫자를 한 띠에 묶습니다. 맵을 가장 적게 가리고 모든 단계에 같은 자리라 눈이 한 곳만 봅니다.</span>
+      </figcaption>
+    </figure>
+
+    <figure>
+      <div class="phone" aria-label="시안 B 화면">
+        <div class="floor"></div>
+        <div class="hdr">
+          <div class="ibtn"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>
+          <div class="ibtn"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/></svg></div>
+        </div>
+        <div class="capB">
+          <span class="chip">투표 · 2일차</span>
+          <p><span class="bell"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/></svg></span>투표 시간입니다. 처형할 사람의 이름표를 눌러 주세요.</p>
+          <div class="timer"><div class="bar"><i></i></div><span class="sec">11초</span></div>
+        </div>
+        <div class="who-dot" style="left:60px;top:250px"></div><div class="tag glow" style="left:83px;top:222px">수아</div>
+        <div class="who-dot" style="left:190px;top:230px"></div><div class="tag glow" style="left:213px;top:202px">민준</div>
+        <div class="who-dot" style="left:125px;top:330px"></div><div class="tag" style="left:148px;top:302px">나 (지호)</div>
+        <div class="who-dot" style="left:215px;top:350px"></div><div class="tag glow" style="left:238px;top:322px">하늘</div>
+        <div class="tools">
+          <div class="log">수아 → 민준 · 하늘 → 민준</div>
+          <div class="toolrow">
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></div>채팅</div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/></svg></div>유언</div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/></svg></div>내 역할</div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="2"/><path d="M12 8v6l-3 6M12 14l3 6"/></svg></div>동작</div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/></svg></div>소리</div>
+          </div>
+        </div>
+      </div>
+      <figcaption>
+        <b>B. 제목 자리를 사회자가 대신</b>
+        <span>단계 이름은 작은 칩으로 줄이고 사회자 문장이 제목이 됩니다. 글이 가장 크게 읽히지만 두 줄이 되면 헤더가 길어지고 버튼과 겹치기 쉽습니다.</span>
+      </figcaption>
+    </figure>
+
+    <figure>
+      <div class="phone" aria-label="시안 C 화면">
+        <div class="floor"></div>
+        <div class="hdr">
+          <div class="ibtn"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>
+          <div class="title"><b>투표</b><small>2일차 낮</small></div>
+          <div class="ibtn"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/></svg></div>
+        </div>
+        <div class="capC">
+          <span class="who">사회자</span>
+          <p>투표 시간입니다. 처형할 사람의 이름표를 눌러 주세요.</p>
+        </div>
+        <div class="timerC"><span>11</span></div>
+        <div class="who-dot" style="left:60px;top:260px"></div><div class="tag glow" style="left:83px;top:232px">수아</div>
+        <div class="who-dot" style="left:190px;top:240px"></div><div class="tag glow" style="left:213px;top:212px">민준</div>
+        <div class="who-dot" style="left:125px;top:340px"></div><div class="tag" style="left:148px;top:312px">나 (지호)</div>
+        <div class="who-dot" style="left:215px;top:360px"></div><div class="tag glow" style="left:238px;top:332px">하늘</div>
+        <div class="tools">
+          <div class="log">수아 → 민준 · 하늘 → 민준</div>
+          <div class="toolrow">
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></div>채팅</div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/></svg></div>유언</div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/></svg></div>내 역할</div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="2"/><path d="M12 8v6l-3 6M12 14l3 6"/></svg></div>동작</div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/></svg></div>소리</div>
+          </div>
+        </div>
+      </div>
+      <figcaption>
+        <b>C. 사회자 말풍선 + 원형 시계</b>
+        <span>"사회자"가 말하는 느낌이 가장 강합니다. 말풍선이 맵 왼쪽 위를 가리고, 시간이 원 안 숫자라 막대보다 남은 양이 덜 직관적입니다.</span>
+      </figcaption>
+    </figure>
+  </div>
+
+  <section>
+    <h2>도구를 부를 때 — 유언 단추가 함께 빛남 (A 기준)</h2>
+    <div class="row">
+      <figure>
+        <div class="phone" aria-label="최후 변론 화면">
+          <div class="floor"></div>
+          <div class="hdr">
+            <div class="ibtn"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>
+            <div class="title"><b>최후 변론</b><small>2일차 낮</small></div>
+            <div class="ibtn"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/></svg></div>
+          </div>
+          <div class="capA">
+            <p><span class="bell"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/></svg></span>지목되셨습니다. 마지막으로 하실 말씀과 유언을 남겨 주세요.</p>
+            <div class="timer"><div class="bar"><i style="width:40%"></i></div><span class="sec">8초</span></div>
+          </div>
+          <div class="who-dot" style="left:125px;top:280px;box-shadow:0 0 40px rgba(255,224,176,0.5)"></div><div class="tag" style="left:148px;top:252px">나 (민준)</div>
+          <div class="tools">
+            <div class="log">투표 결과: 민준 3표</div>
+            <div class="toolrow">
+              <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></div>채팅</div>
+              <div class="tool call"><div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h5"/></svg></div>유언</div>
+              <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/></svg></div>내 역할</div>
+              <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="2"/><path d="M12 8v6l-3 6M12 14l3 6"/></svg></div>동작</div>
+              <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/></svg></div>소리</div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>변론자 본인 화면</b><span>사회자가 도구 이름을 부르면 그 단추가 놋쇠 빛으로 함께 빛납니다. 할 일이 없는 사람은 "민준 님의 최후 변론 시간입니다." 한 줄만 받습니다.</span></figcaption>
+      </figure>
+      <div style="display:grid;gap:16px;max-width:560px">
+        <h2 style="margin:0">역할 카드 목표 한 줄</h2>
+        <div class="cards">
+          <div class="role"><span class="name">마피아</span><span class="goal"><b>목표</b>밤마다 한 명을 없애 시민 편과 수가 같아지면 승리합니다.</span></div>
+          <div class="role"><span class="name">경찰</span><span class="goal"><b>목표</b>밤마다 한 명을 조사해 마피아를 찾아내세요.</span></div>
+          <div class="role"><span class="name">의사</span><span class="goal"><b>목표</b>밤마다 한 명을 지켜 마피아의 암살을 막으세요.</span></div>
+          <div class="role"><span class="name">시민</span><span class="goal"><b>목표</b>대화와 투표로 마피아를 모두 처형하면 승리합니다.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>사회자 문구 초안 (모두 / 내 할 일)</h2>
+    <div class="wrap">
+    <table>
+      <thead><tr><th>단계</th><th>할 일이 있는 사람</th><th>할 일이 없는 사람</th></tr></thead>
+      <tbody>
+        <tr><td>역할 확인</td><td>역할이 정해졌습니다. 내 역할 카드를 확인해 주세요.</td><td>—</td></tr>
+        <tr><td>낮 시작</td><td colspan="2">낮이 되었습니다. 모두 모여 주세요.</td></tr>
+        <tr><td>토론</td><td>토론 시간입니다. 채팅으로 의심 가는 사람을 이야기해 주세요.</td><td>(탈락자) 유령은 지켜보며 유령끼리 이야기할 수 있습니다.</td></tr>
+        <tr><td>투표</td><td>투표 시간입니다. 처형할 사람의 이름표를 눌러 주세요.</td><td>(탈락자) 투표가 진행 중입니다.</td></tr>
+        <tr><td>최후 변론</td><td>지목되셨습니다. 마지막으로 하실 말씀과 유언을 남겨 주세요.</td><td>{이름} 님의 최후 변론 시간입니다.</td></tr>
+        <tr><td>찬반</td><td>{이름} 님을 처형할지 찬성 또는 반대를 눌러 주세요.</td><td>(변론자) 다른 분들이 찬반을 정하고 있습니다.</td></tr>
+        <tr><td>밤</td><td>밤이 되었습니다. (역할별) 마피아는 대상을, 경찰은 조사할 사람을, 의사는 지킬 사람을 골라 주세요.</td><td>밤이 되었습니다. 눈을 감고 기다려 주세요.</td></tr>
+        <tr><td>아침</td><td colspan="2">아침이 밝았습니다. 지난밤 {결과}.</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+</main>
+</body>
+</html>
