@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
+import { RULESET } from "../../shared/game/ruleset";
 import type { MorningView, PhaseId, RoomView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { MemoryStorage } from "../helpers/memoryStorage";
@@ -759,7 +760,8 @@ describe("헤더 줄바꿈 금지 (03.1-10, D-16, UI-SPEC A)", () => {
 
 // 11-07: 공개 예고 한 줄(A-4, D-23) — 역할 확인 단계 아래쪽 14px 한 줄을 4초 보이고 줄어든다. 모든 역할이 같은 문구·같은 시간이다(T-11-24)
 describe("공개 예고 (11-07, A-4)", () => {
-  const PRE = "끝나면 밤 대화와 귓속말이 공개돼요";
+  // 기본판(결정 0072)에서는 귓속말이 꺼져 있어 문구에서도 빠진다(U-8)
+  const PRE = RULESET.whisper ? "끝나면 밤 대화와 귓속말이 공개돼요" : "끝나면 밤 대화가 공개돼요";
   const notice = (c: ParentNode) => c.querySelector<HTMLElement>("[data-pre-notice]");
 
   it("마운트 직후 보이고 4초 뒤 줄어든다 (data-state shown → gone, 접근성 숨김)", () => {

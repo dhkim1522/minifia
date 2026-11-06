@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
+import { RULESET } from "../../shared/game/ruleset";
 import type { ChatLineWire, ClientMessage, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
@@ -133,7 +134,8 @@ afterEach(() => {
   stage.props = null;
 });
 
-describe("귓속말 버튼 → 모드 → 이름표 → 한 줄 시트 → whisper 전송 (UI-SPEC B-1·B-2, 트레이서)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.whisper 를 켜면 다시 돈다(귓속말 버튼·시트가 있어야 성립한다). 꺼진 상태는 badgeUi.test.tsx "기본판: 낮 토론에 떠 있는 버튼·시트가 없다" 가 본다.
+describe.skipIf(!RULESET.whisper)("귓속말 버튼 → 모드 → 이름표 → 한 줄 시트 → whisper 전송 (UI-SPEC B-1·B-2, 트레이서)", () => {
   it("토론에서 산 사람 화면에 [data-float=whisper] 가 하나, 배지 버튼 아래, 이름 '귓속말 보내기, 오늘 1번 남음', 점이 있다", () => {
     const { container } = mount(makeView());
     expect(container.querySelectorAll('[data-float="whisper"]')).toHaveLength(1);
@@ -292,7 +294,8 @@ describe("채팅 줄 세 가지 (UI-SPEC B-3, 트레이서)", () => {
 });
 
 // ---- Task 2: 사용함·거절·받음·모드 해제·시트 위치 ----
-describe("사용함 표시 (UI-SPEC B-1, O-4)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.whisper 를 켜면 다시 돈다(귓속말 버튼·시트가 있어야 성립한다). 꺼진 상태는 badgeUi.test.tsx "기본판: 낮 토론에 떠 있는 버튼·시트가 없다" 가 본다.
+describe.skipIf(!RULESET.whisper)("사용함 표시 (UI-SPEC B-1, O-4)", () => {
   it("서버가 whisperUsed 를 켜면 버튼은 aria-disabled·점 없음·이름 '오늘 귓속말을 이미 보냈어요'이고 눌러도 모드가 켜지지 않는다", () => {
     const { container } = mount(makeView({ used: true }));
     const btn = floatBtn(container)!;
@@ -354,7 +357,8 @@ describe("사용함 표시 (UI-SPEC B-1, O-4)", () => {
   });
 });
 
-describe("거절 알림 (UI-SPEC B-2)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.whisper 를 켜면 다시 돈다(귓속말 버튼·시트가 있어야 성립한다). 꺼진 상태는 badgeUi.test.tsx "기본판: 낮 토론에 떠 있는 버튼·시트가 없다" 가 본다.
+describe.skipIf(!RULESET.whisper)("거절 알림 (UI-SPEC B-2)", () => {
   const sendOne = (container: ParentNode) => {
     openSheet(container, 2);
     fireEvent.change(input(container), { target: { value: "비밀이에요" } });
@@ -434,7 +438,8 @@ describe("받음 알림 (UI-SPEC B-3)", () => {
   });
 });
 
-describe("모드 해제 (UI-SPEC B-1 4)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.whisper 를 켜면 다시 돈다(귓속말 버튼·시트가 있어야 성립한다). 꺼진 상태는 badgeUi.test.tsx "기본판: 낮 토론에 떠 있는 버튼·시트가 없다" 가 본다.
+describe.skipIf(!RULESET.whisper)("모드 해제 (UI-SPEC B-1 4)", () => {
   it("단계가 토론을 벗어나면 모드가 꺼지고 버튼도 사라진다", () => {
     const { container, show } = mount(makeView());
     fireEvent.click(floatBtn(container)!);
@@ -487,7 +492,8 @@ describe("모드 해제 (UI-SPEC B-1 4)", () => {
   });
 });
 
-describe("시트 위치 (UI-SPEC B-2)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.whisper 를 켜면 다시 돈다(귓속말 버튼·시트가 있어야 성립한다). 꺼진 상태는 badgeUi.test.tsx "기본판: 낮 토론에 떠 있는 버튼·시트가 없다" 가 본다.
+describe.skipIf(!RULESET.whisper)("시트 위치 (UI-SPEC B-2)", () => {
   it("한 줄 시트는 시트 층(.mf-will-layer, data-sheet-layer=line) 안에 있고 층은 하나다", () => {
     const { container } = mount(makeView());
     openSheet(container, 2);
@@ -563,7 +569,8 @@ describe("본문 DOM 은 당사자 화면에만 있다 (L23, T-09.1.1-25)", () =
   });
 });
 
-describe("접근성 (UI-SPEC 접근성 · 모션 · 입력)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.whisper 를 켜면 다시 돈다(귓속말 버튼·시트가 있어야 성립한다). 꺼진 상태는 badgeUi.test.tsx "기본판: 낮 토론에 떠 있는 버튼·시트가 없다" 가 본다.
+describe.skipIf(!RULESET.whisper)("접근성 (UI-SPEC 접근성 · 모션 · 입력)", () => {
   it("비공개 줄은 role=note 가 아니라 일반 항목이고 읽히는 글은 '{A} → 나, {본문}'", () => {
     const { container } = mount(makeView({ mySeat: 1 }));
     emit(wireLine("whisper", 0, 1, 1, "안녕하세요", NOW + 1));
@@ -610,7 +617,8 @@ describe("접근성 (UI-SPEC 접근성 · 모션 · 입력)", () => {
 });
 
 // 11-07: 귓속말 보내기 시트 위쪽의 공개 예고(A-4, D-23) — 시트가 열려 있는 동안 항상 같은 한 줄이다
-describe("공개 예고 한 줄 (11-07, A-4)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.whisper 를 켜면 다시 돈다(귓속말 버튼·시트가 있어야 성립한다). 꺼진 상태는 badgeUi.test.tsx "기본판: 낮 토론에 떠 있는 버튼·시트가 없다" 가 본다.
+describe.skipIf(!RULESET.whisper)("공개 예고 한 줄 (11-07, A-4)", () => {
   const PRE = "끝나면 밤 대화와 귓속말이 공개돼요";
   const notice = (c: ParentNode) => c.querySelector<HTMLElement>("[data-line-sheet] [data-pre-notice]");
 

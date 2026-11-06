@@ -6,10 +6,12 @@ import "../helpers/singleLineErrors";
 import { phaseKey } from "../../shared/game/audience";
 import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
+import { RULESET } from "../../shared/game/ruleset";
 import type { AwardLine, GameWinner, MapId, RoomView, SummaryRow, VoteLogEntry } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
+import { RESULT_TABS_SHOWN } from "../../src/game/resultText";
 import { GATHER_CENTER } from "../../src/world/camera";
 import { openPlaza } from "../helpers/playable";
 
@@ -849,9 +851,10 @@ describe("결과 탭: 등장 시각·점 표식·시계 정지 (11-07 Task 2)", 
     r.rerenderRoom(makeView(), onEvent());
     return r;
   };
-  const ALL5 = ["all", "mafia", "ghost", "whisper", "log"];
+  // 보이는 탭 전부: 기본판(결정 0072)에서는 귓속말 탭이 없다 — all·mafia·ghost·log 넷(RULESET.whisper 를 켜면 다섯)
+  const ALL5 = [...RESULT_TABS_SHOWN];
 
-  it("연출 마운트: 탭 행은 첫 뒤집기(1200ms)까지 전체 하나뿐이고 그 시각에 다섯이 된다", () => {
+  it("연출 마운트: 탭 행은 첫 뒤집기(1200ms)까지 전체 하나뿐이고 그 시각에 보이는 탭 전부(기본판 넷)가 된다", () => {
     const r = reveal();
     expect(tabIds(r.container)).toEqual(["all"]);
     advance(1199);
@@ -860,19 +863,19 @@ describe("결과 탭: 등장 시각·점 표식·시계 정지 (11-07 Task 2)", 
     expect(tabIds(r.container)).toEqual(ALL5);
   });
 
-  it("건너뛰기로 1200 전에 4600 으로 뛰면 곧바로 다섯이다", () => {
+  it("건너뛰기로 1200 전에 4600 으로 뛰면 곧바로 보이는 탭 전부다", () => {
     const r = reveal();
     advance(300);
     act(() => stage.props!.onStageTap!());
     expect(tabIds(r.container)).toEqual(ALL5);
   });
 
-  it("재접속·처음 마운트는 처음부터 다섯이다", () => {
+  it("재접속·처음 마운트는 처음부터 보이는 탭 전부다", () => {
     const r = renderRoom(makeView());
     expect(tabIds(r.container)).toEqual(ALL5);
   });
 
-  it("모션 줄이기는 처음부터 다섯이다", () => {
+  it("모션 줄이기는 처음부터 보이는 탭 전부다", () => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }));
     const r = reveal();
     expect(tabIds(r.container)).toEqual(ALL5);
@@ -882,14 +885,16 @@ describe("결과 탭: 등장 시각·점 표식·시계 정지 (11-07 Task 2)", 
   it("점 표식: 마피아·유령·귓속말 탭에만 붙고 한 번 열면 사라지며 다시 닫아도 돌아오지 않는다 (기록 탭은 없다)", () => {
     const r = renderRoom(makeView());
     const dots = () => Array.from(r.container.querySelectorAll("[data-result-dot]")).map((d) => d.closest("[data-result-tab]")!.getAttribute("data-result-tab"));
-    expect(dots()).toEqual(["mafia", "ghost", "whisper"]);
+    // 기본판(결정 0072)에서는 귓속말 탭이 없어 점도 마피아·유령 둘이다(RULESET.whisper 를 켜면 귓속말이 더해진다)
+    const rest = RULESET.whisper ? ["whisper"] : [];
+    expect(dots()).toEqual(["mafia", "ghost", ...rest]);
     fireEvent.click(tab(r.container, "ghost"));
-    expect(dots()).toEqual(["mafia", "whisper"]);
+    expect(dots()).toEqual(["mafia", ...rest]);
     fireEvent.click(tab(r.container, "all"));
-    expect(dots()).toEqual(["mafia", "whisper"]);
+    expect(dots()).toEqual(["mafia", ...rest]);
     fireEvent.click(tab(r.container, "log"));
     fireEvent.click(tab(r.container, "all"));
-    expect(dots()).toEqual(["mafia", "whisper"]);
+    expect(dots()).toEqual(["mafia", ...rest]);
   });
 
   it("마피아 탭 아이콘만 진홍 표식이다", () => {
@@ -904,6 +909,11 @@ describe("결과 탭: 등장 시각·점 표식·시계 정지 (11-07 Task 2)", 
     fireEvent.click(tab(r.container, "ghost"));
     expect(Array.from(panelOf(r.container).querySelectorAll("[data-result-divider]")).map((e) => text(e))).toEqual(["2일차", "3일차"]);
     expect(Array.from(panelOf(r.container).querySelectorAll(".mv-chat__name")).map((e) => text(e))).toEqual(["민지", "민지"]);
+    // 귓속말 탭은 기본판(결정 0072)에서 없다 — 켜진 판에서만 본다
+    if (!RULESET.whisper) {
+      expect(r.container.querySelector('[data-result-tab="whisper"]')).toBeNull();
+      return;
+    }
     fireEvent.click(tab(r.container, "whisper"));
     expect(Array.from(panelOf(r.container).querySelectorAll<HTMLImageElement>(".mf-result__face")).map((i) => i.alt)).toEqual(["지우", "서연"]);
     expect(text(panelOf(r.container).querySelector(".mf-result__whisper-text"))).toBe("비밀이야");
@@ -952,7 +962,7 @@ describe("결과 탭: 등장 시각·점 표식·시계 정지 (11-07 Task 2)", 
     it("접힌 뒤 무대 탭이 건너뛰기를 하지 않은 시계는 이어서 흐른다", () => {
       const r = reveal();
       advance(1500);
-      fireEvent.click(tab(r.container, "whisper"));
+      fireEvent.click(tab(r.container, "ghost"));
       act(() => stage.props!.onStageTap!());
       advance(3100); // 경과 1500 + 3100 = 4600
       expect(hookOf().stage).toBe("light");

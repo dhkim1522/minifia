@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useEffect, useRef } from "react";
 import type { CSSProperties, KeyboardEvent, ReactNode, Ref } from "react";
 import "../../styles/v2.css";
-import { dayDivider, nightDivider, RESULT_PANEL_TEXT, RESULT_TABS } from "../../game/resultText";
+import { dayDivider, nightDivider, RESULT_PANEL_TEXT, RESULT_TABS_SHOWN } from "../../game/resultText";
 import type { ResultTabId } from "../../game/resultText";
 import type { ResultLogChatLine, ResultLogWhisperLine } from "../../../shared/protocol";
 import type { ResultLogSnapshot } from "../../net/resultLogStore";
@@ -145,7 +145,7 @@ function WhisperRows({ lines, contacts }: { lines: readonly ResultLogWhisperLine
 
 export function ResultPanel(props: ResultPanelProps) {
   const { tab, onTab, expanded, expandedHeight, tabsVisible, lines, contacts, opened, allSlot, logSlot, view, onJumpWhisper, focusDay, pill, panelRef, kb } = props;
-  const shown: readonly ResultTab[] = tabsVisible ? RESULT_TABS : ["all"];
+  const shown: readonly ResultTab[] = tabsVisible ? RESULT_TABS_SHOWN : ["all"];
 
   const onKey = (e: KeyboardEvent<HTMLElement>): void => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;

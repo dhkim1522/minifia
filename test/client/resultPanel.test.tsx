@@ -73,12 +73,13 @@ describe("기본판: 결과 화면 귓속말 탭이 없다 (U-8, UI#14, 결정 0
 });
 
 describe("탭 행 (A-3)", () => {
-  it("tablist 안에 아이콘 탭 다섯 개: 전체·마피아·유령·귓속말·기록, 접근성 이름이 붙는다", () => {
+  it("tablist 안에 아이콘 탭: 전체·마피아·유령·(귓속말)·기록, 접근성 이름이 붙는다 — 기본판(결정 0072)에서는 귓속말이 빠진 넷", () => {
     const { container } = setup();
     const list = container.querySelector("[role=tablist]")!;
     expect(list).not.toBeNull();
-    expect(tabs(container).map((t) => t.getAttribute("data-result-tab"))).toEqual(["all", "mafia", "ghost", "whisper", "log"]);
-    expect(tabs(container).map((t) => t.getAttribute("aria-label"))).toEqual(["전체 대화", "마피아 밤 대화", "유령 대화", "귓속말 기록", "판 기록"]);
+    const names: Record<string, string> = { all: "전체 대화", mafia: "마피아 밤 대화", ghost: "유령 대화", whisper: "귓속말 기록", log: "판 기록" };
+    expect(tabs(container).map((t) => t.getAttribute("data-result-tab"))).toEqual([...RESULT_TABS_SHOWN]);
+    expect(tabs(container).map((t) => t.getAttribute("aria-label"))).toEqual(RESULT_TABS_SHOWN.map((id) => names[id]));
     for (const t of tabs(container)) {
       expect(t.getAttribute("role")).toBe("tab");
       expect(t.querySelector("svg")).not.toBeNull();
@@ -92,7 +93,7 @@ describe("탭 행 (A-3)", () => {
 
   it("선택된 탭만 aria-selected 이고 라벨 14px 이 아이콘 옆에 붙는다", () => {
     const { container } = setup({ tab: "ghost", expanded: true, opened: new Set<ResultTab>(["all", "ghost"]) });
-    expect(tabs(container).map((t) => t.getAttribute("aria-selected"))).toEqual(["false", "false", "true", "false", "false"]);
+    expect(tabs(container).map((t) => t.getAttribute("aria-selected"))).toEqual(RESULT_TABS_SHOWN.map((id) => String(id === "ghost")));
     const labels = Array.from(container.querySelectorAll(".mf-result__tab-label")).map((e) => text(e));
     expect(labels).toEqual([RESULT_PANEL_TEXT.tab.ghost]);
     expect(labels).toEqual(["유령"]);
@@ -100,8 +101,8 @@ describe("탭 행 (A-3)", () => {
 
   it("탭을 누르면 onTab(id), 좌우 화살표키는 이웃 탭으로 옮긴다 (끝에서 끝으로 돈다)", () => {
     const { container, onTab } = setup({ tab: "mafia", expanded: true });
-    fireEvent.click(tabOf(container, "whisper"));
-    expect(onTab).toHaveBeenLastCalledWith("whisper");
+    fireEvent.click(tabOf(container, "log"));
+    expect(onTab).toHaveBeenLastCalledWith("log");
     fireEvent.keyDown(tabOf(container, "mafia"), { key: "ArrowRight" });
     expect(onTab).toHaveBeenLastCalledWith("ghost");
     fireEvent.keyDown(tabOf(container, "mafia"), { key: "ArrowLeft" });
@@ -113,13 +114,13 @@ describe("탭 행 (A-3)", () => {
   it("마피아 탭 아이콘만 진홍 표식(is-mafia)이다", () => {
     const { container } = setup();
     expect(tabOf(container, "mafia").classList.contains("is-mafia")).toBe(true);
-    for (const id of ["all", "ghost", "whisper", "log"]) expect(tabOf(container, id).classList.contains("is-mafia")).toBe(false);
+    for (const id of RESULT_TABS_SHOWN.filter((x) => x !== "mafia")) expect(tabOf(container, id).classList.contains("is-mafia")).toBe(false);
   });
 
-  it("새 탭 점(data-result-dot): 열린 적 없는 마피아·유령·귓속말 탭에만, 기록·전체 탭에는 없다", () => {
+  it("새 탭 점(data-result-dot): 열린 적 없는 마피아·유령(·귓속말) 탭에만, 기록·전체 탭에는 없다", () => {
     const { container } = setup();
     const dotted = tabs(container).filter((t) => t.querySelector("[data-result-dot]") !== null).map((t) => t.getAttribute("data-result-tab"));
-    expect(dotted).toEqual(["mafia", "ghost", "whisper"]);
+    expect(dotted).toEqual(RESULT_TABS_SHOWN.filter((id) => id === "mafia" || id === "ghost" || id === "whisper"));
     cleanup();
     const again = setup({ opened: new Set<ResultTab>(["all", "mafia", "whisper"]) });
     const left = tabs(again.container).filter((t) => t.querySelector("[data-result-dot]") !== null).map((t) => t.getAttribute("data-result-tab"));

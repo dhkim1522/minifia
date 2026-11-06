@@ -1,9 +1,15 @@
 // 결과 탭 패널·공개 예고의 고정 문구 한 곳 (11-07, UI-SPEC A-3·A-4). 사용자 입력 문자열은 여기 없다 — 닉네임·본문은 화면이 React 텍스트 노드로만 그린다(T-11-22).
 // 마피아·유령 단어가 든 문구(탭 라벨·접근성 이름)는 결과 화면(ended 전용 ResultPanel)에서만 읽는다 — 판 중 화면에는 닿지 않는다(T-11-23).
+import { RULESET } from "../../shared/game/ruleset";
 
 /** 결과 탭 아이디. 표시 순서가 이 배열의 순서다 */
 export const RESULT_TABS = ["all", "mafia", "ghost", "whisper", "log"] as const;
 export type ResultTabId = (typeof RESULT_TABS)[number];
+
+/**
+ * 화면에 실제로 그리는 탭(순서는 RESULT_TABS 와 같다). 기본판(결정 0072)에서는 귓속말이 꺼져 있어 귓속말 탭을 뺀다(U-8) — RESULT_TABS 와 ResultTabId 는 그대로 둔다(RULESET.whisper 를 켜면 다시 보인다).
+ */
+export const RESULT_TABS_SHOWN: readonly ResultTabId[] = RESULT_TABS.filter((id) => id !== "whisper" || RULESET.whisper);
 
 export const RESULT_PANEL_TEXT = {
   /** 선택된 탭의 라벨(14px, 아이콘 옆) */
@@ -11,7 +17,8 @@ export const RESULT_PANEL_TEXT = {
   /** 탭 접근성 이름(아이콘만 있는 버튼) */
   tabName: { all: "전체 대화", mafia: "마피아 밤 대화", ghost: "유령 대화", whisper: "귓속말 기록", log: "판 기록" },
   /** 공개 예고(역할 확인 단계 아래쪽 4초, 귓속말 보내기 시트 위쪽 항상). 모두에게 같은 문구라 역할 정보를 나르지 않는다 */
-  preNotice: "끝나면 밤 대화와 귓속말이 공개돼요",
+  // 기본판(결정 0072)에서는 귓속말이 꺼져 있어 문구에서도 뺀다(U-8: 꺼진 장치의 글이 없다). RULESET.whisper 를 켜면 원래 문구다.
+  preNotice: RULESET.whisper ? "끝나면 밤 대화와 귓속말이 공개돼요" : "끝나면 밤 대화가 공개돼요",
 } as const;
 
 /** 마피아 탭의 구분선: 줄의 n 이 바뀔 때마다 앞에 한 번 */

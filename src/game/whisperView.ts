@@ -1,6 +1,7 @@
 // 귓속말의 순수 화면 모델 (09.1.1-09, UI-SPEC B). 서버 view 와 채팅 줄만 읽는다 — 실제 역할(view.me.role·spectate)은 읽지 않는다(L10·L23).
 // 시각·난수를 읽지 않고 입력을 바꾸지 않는다. 하루 1번 횟수는 서버가 세고, 화면은 view.me.whisperUsed 로만 안다(O-4).
 import { isAlive } from "../../shared/game/alive";
+import { RULESET } from "../../shared/game/ruleset";
 import { WHISPER_PHASES } from "../../shared/game/whisper";
 import type { RoomView } from "../../shared/protocol";
 
@@ -30,6 +31,8 @@ export const WHISPER_TEXT = {
 
 /** 버튼·모드·시트를 낼 수 있는가: 낮 토론(O-3)이고 내가 산 사람이고 나를 뺀 산 사람이 1명 이상. 유령에게는 만들지 않는다(O-21) */
 export function whisperVisible(view: RoomView): boolean {
+  // 기본판(결정 0072)에서 꺼짐 — 귓속말 버튼·모드·한 줄 시트를 만들지 않는다(U-8). RULESET.whisper 를 켜면 아래 조건이 다시 쓰인다.
+  if (!RULESET.whisper) return false;
   if (!WHISPER_PHASES.has(view.phase)) return false;
   const me = view.players.find((p) => p.seat === view.me.seat);
   if (me === undefined || !isAlive(me)) return false;

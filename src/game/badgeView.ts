@@ -2,6 +2,7 @@
 // 시각·난수를 읽지 않고 입력을 바꾸지 않는다. 주장은 공개 값이고 실제 역할의 함수가 아니다(결정 0066-1).
 import { isAlive } from "../../shared/game/alive";
 import { BADGE_PHASES, badgeChoicesOf } from "../../shared/game/badge";
+import { RULESET } from "../../shared/game/ruleset";
 import type { BadgeId, RoomView } from "../../shared/protocol";
 import { ROLE_TEXT } from "./roleText";
 
@@ -56,6 +57,8 @@ export function myClaim(view: RoomView): BadgeId {
 
 /** 떠 있는 버튼·시트가 있는 단계인가: 주장 창(낮 시작 발표·토론·지목·마지막 3인의 모이기·한마디)이고 내가 산 사람. 유령·변론 이후는 없다(만들지도 않는다) */
 export function floatVisible(view: RoomView): boolean {
+  // 기본판(결정 0072)에서 꺼짐 — 떠 있는 버튼도 묶음 컨테이너도 시트도 만들지 않는다(빈 띠·비활성 버튼 없음, U-8). RULESET.badge 를 켜면 아래 단계 표가 다시 쓰인다.
+  if (!RULESET.badge) return false;
   if (!BADGE_PHASES.has(view.phase)) return false;
   // 마지막 3인 동시 지목(i 3)·공개(i 4)에는 접는다: 삼각형 아래 오른쪽 이름표 지목 버튼이 작은 폰(390×664 등)에서 이 버튼에 가려져 눌리지 않았다(09.1.1-16, UI-SPEC O-2)
   if (view.phase === "showdown" && (view.day?.showdown?.i ?? -1) >= 3) return false;

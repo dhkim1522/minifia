@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
+import { RULESET } from "../../shared/game/ruleset";
 import type { ClientMessage, PhaseId, PublicPlayer, RoleRecord, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { KB_PANEL_H, LOG_H_KB, LOG_H_SHORT, LOG_H_TALL } from "../../src/game/chatUi";
@@ -737,7 +738,8 @@ describe("GameMap — 거절 알림의 소리 신호 (12-10, ui.deny)", () => {
     expect(denies(sig.seen)).toEqual([{ kind: "deny" }]);
   });
 
-  it("③ 직업 배지 거절: deny 한 번", () => {
+  // 기본판(결정 0072)에서 꺼짐 — RULESET.badge·whisper 를 켜면 다시 돈다(떠 있는 버튼이 있어야 성립한다)
+  it.skipIf(!RULESET.badge)("③ 직업 배지 거절: deny 한 번", () => {
     const f = errFeed();
     const { container } = mount(makeView({ count: 6 }), { onEvent: f.onEvent });
     const sig = withSignals();
@@ -749,7 +751,7 @@ describe("GameMap — 거절 알림의 소리 신호 (12-10, ui.deny)", () => {
     expect(denies(sig.seen)).toEqual([{ kind: "deny" }]);
   });
 
-  it("④ 귓속말 거절: deny 한 번", () => {
+  it.skipIf(!RULESET.whisper)("④ 귓속말 거절: deny 한 번", () => {
     const f = errFeed();
     const { container } = mount(makeView(), { onEvent: f.onEvent });
     const sig = withSignals();
