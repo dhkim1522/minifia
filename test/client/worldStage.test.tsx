@@ -1241,6 +1241,29 @@ describe("목적지 링 피드백 (UI-SPEC 터치해서 걷기 3~8)", () => {
     expect(s.props.onNotice).not.toHaveBeenCalled();
   });
 
+  it("GR-WR-01: 둘째 탭이 서버에서 버려지고 목적지가 달라도 응답을 들었으면 시계 만료 때 알림 없이 링만 거둔다", async () => {
+    const s = await open();
+    const r = s.world.renderers[0]!;
+    const el = surface(s.utils);
+    tapAt(el, 250, 340);
+    frames(300);
+    tapAt(el, 150, 320);
+    move(s.store, seg(0, [200, 100, 500, 400], Date.now(), 180)); // 첫 탭만 적용, 둘째 예측과 끝점이 다르다
+    frames(MOVE_ACK_TIMEOUT_MS + 300);
+    expect(s.props.onNotice).not.toHaveBeenCalled();
+    expect(lastRing(r)!.at).toBeNull();
+  });
+
+  it("GR-WR-01: 숨은 탭(프레임 없음)에서 응답이 와 있어도 타이머가 먼저 관찰해 알림이 없다", async () => {
+    const s = await open();
+    tapAt(surface(s.utils), 250, 340);
+    move(s.store, seg(0, [200, 100, 500, 400], Date.now(), 180));
+    act(() => {
+      vi.advanceTimersByTime(MOVE_ACK_TIMEOUT_MS + 200); // rAF 는 돌지 않는다
+    });
+    expect(s.props.onNotice).not.toHaveBeenCalled();
+  });
+
   it("보내지 못했으면(send false) 링을 거두고 알림 없이 끝난다", async () => {
     const s = await open({ send: vi.fn(() => false) });
     const r = s.world.renderers[0]!;

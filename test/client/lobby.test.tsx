@@ -217,6 +217,20 @@ describe("Lobby — 채팅 패널: 기록 + 입력줄 + 행동 줄 (CHAT-01, 07-
     expect(toastText(container)).toBe("하윤 님 입장");
   });
 
+  it("WR-02: 입장·퇴장 시스템 줄의 시각은 서버 시각 추정(Date.now() + offset)이고 offset 이 바뀌어도 효과가 다시 돌지 않는다", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000_000);
+    const three = [...base, player(2, "영희")];
+    const { rerender } = render(lobby(makeView(base, 0), { epoch: 0, offset: 5000 }));
+    rerender(lobby(makeView(three, 0), { epoch: 0, offset: 5000 }));
+    rerender(lobby(makeView(base, 0), { epoch: 0, offset: 5000 }));
+    const sys = chatStore.lines().filter((l) => l.kind === "system");
+    expect(sys.map((l) => `${l.text}@${l.at}`).join("|")).toBe("영희 님 입장@1005000|영희 님 퇴장@1005000");
+    // offset 만 바뀐 다시 그리기는 줄을 더하지 않는다
+    rerender(lobby(makeView(base, 0), { epoch: 0, offset: 9000 }));
+    expect(chatStore.lines().filter((l) => l.kind === "system").length).toBe(2);
+  });
+
   it("한 번에 둘이 들어오면 둘 다 기록에 남는다", () => {
     const { container, rerender } = render(lobby(makeView(base, 0), { epoch: 0 }));
     rerender(lobby(makeView([...base, player(2, "하윤"), player(3, "지아")], 0), { epoch: 0 }));

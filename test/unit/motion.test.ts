@@ -203,15 +203,45 @@ describe("createOwnMoves — 내 이동의 응답 판정 (결정 0059-2)", () =>
     expect(own.effective(respA)).toBe(predA);
   });
 
-  it("expire: 대기가 있으면 true 와 함께 예측·대기를 비운다, 없으면 false", () => {
+  it("expire: 대기가 있으면 cleared 와 함께 예측·대기를 비운다, 없으면 cleared 거짓", () => {
     const own = createOwnMoves(0);
-    expect(own.expire()).toBe(false);
+    expect(own.expire()).toEqual({ cleared: false, silent: false });
     own.sent(predA);
-    expect(own.expire()).toBe(true);
+    expect(own.expire()).toEqual({ cleared: true, silent: false });
     expect(own.pending()).toBe(0);
     expect(own.effective(respB)).toBe(respB);
-    expect(own.expire()).toBe(false);
+    expect(own.expire()).toEqual({ cleared: false, silent: false });
   });
+
+  it("GR-WR-01: 둘째 탭이 서버에서 버려지고 목적지가 다르면 응답을 들었으므로 expire 는 silent 이고 예측이 비워진다", () => {
+    const own = createOwnMoves(0);
+    own.sent(predA);
+    own.sent(predB);
+    // 서버는 첫 탭만 적용: seq +1, 구간은 첫 목적지
+    expect(own.observe(1, respA)).toBeNull();
+    expect(own.effective(respA)).toBe(predB); // 유령 예측이 남아 있다
+    expect(own.expire()).toEqual({ cleared: true, silent: true });
+    expect(own.pending()).toBe(0);
+    expect(own.effective(respA)).toBe(respA);
+  });
+
+  it("GR-WR-01: 응답이 하나도 없으면 expire 는 silent 가 아니다(진짜 네트워크 문제)", () => {
+    const own = createOwnMoves(0);
+    own.sent(predA);
+    own.sent(predB);
+    expect(own.observe(0, respA)).toBeNull();
+    expect(own.expire()).toEqual({ cleared: true, silent: false });
+  });
+
+  it("GR-WR-01: 새 탭을 보내면 응답을 들었다는 기억이 지워진다", () => {
+    const own = createOwnMoves(0);
+    own.sent(predA);
+    own.sent(predB);
+    own.observe(1, respA);
+    own.sent(predB);
+    expect(own.expire()).toEqual({ cleared: true, silent: false });
+  });
+
 
   it("기준보다 작은 seq 가 오면 reset: 예측·대기가 비고 기준이 그 seq 가 된다", () => {
     const own = createOwnMoves(3);
