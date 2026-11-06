@@ -33,9 +33,11 @@ export interface FaceListProps {
   disabled?: boolean;
   /** 칸의 접근성 이름. 기본은 닉네임 */
   ariaLabel?: (name: string) => string;
+  /** 빛남(14-04): 지금 눌러야 할 칸의 seat 집합. 그 칸에 is-call·data-call(값 없는 표식). 없거나 비면 빛 없음 */
+  callSeats?: ReadonlySet<number>;
 }
 
-export function FaceList({ faces, value, onPick, icon, label = "대상", disabled, ariaLabel }: FaceListProps) {
+export function FaceList({ faces, value, onPick, icon, label = "대상", disabled, ariaLabel, callSeats }: FaceListProps) {
   // 얼굴 그림이 안 뜬 좌석(onError). 칸 이름·선택은 그대로 두고 그림 자리만 색 원으로 바꾼다(E1 #5)
   const [failed, setFailed] = useState<ReadonlySet<number>>(() => new Set());
   return (
@@ -44,12 +46,14 @@ export function FaceList({ faces, value, onPick, icon, label = "대상", disable
         const on = f.seat === value;
         const blocked = !!disabled || !!f.disabled;
         const broken = failed.has(f.seat);
+        const call = callSeats?.has(f.seat) === true;
         return (
           <button
             key={f.seat}
             type="button"
-            className={["mv-face", on && "is-on"].filter(Boolean).join(" ")}
+            className={["mv-face", on && "is-on", call && "is-call"].filter(Boolean).join(" ")}
             data-face={f.seat}
+            data-call={call ? "" : undefined}
             data-face-fallback={broken ? "true" : undefined}
             aria-pressed={on}
             aria-disabled={blocked ? "true" : undefined}

@@ -17,16 +17,19 @@ export interface VerdictPickerProps {
   value?: Verdict;
   onChange: (v: Verdict) => void;
   disabled?: boolean;
+  /** 빛남(14-04): 아직 안 골랐을 때 두 단추가 함께 빛난다. 부르는 쪽이 쓰면 끈다. data-call 은 값 없는 표식 */
+  call?: boolean;
 }
 
 const VERDICT_TEXT = { group: "찬반", yes: "찬성", no: "반대" } as const;
 
-export function VerdictPicker({ value, onChange, disabled }: VerdictPickerProps) {
+export function VerdictPicker({ value, onChange, disabled, call }: VerdictPickerProps) {
   const button = (v: Verdict) => (
     <button
       type="button"
-      className={["mv-verdict__btn", value === v && "is-on"].filter(Boolean).join(" ")}
+      className={["mv-verdict__btn", value === v && "is-on", call && "is-call"].filter(Boolean).join(" ")}
       data-verdict={v}
+      data-call={call ? "" : undefined}
       aria-pressed={value === v}
       disabled={disabled}
       onMouseDown={(e) => e.preventDefault()}

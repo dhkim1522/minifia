@@ -187,6 +187,19 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-verdict__btn:disabled { opacity: 0.45; cursor: default; }
 .mv-verdict__btn:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 
+/* 빛남(14-04, HOST-03·04, UI-SPEC "빛남 계약"): "지금 이걸 누르세요". light-lamp 테두리 + 정지 빛(--glow-ring, ::after),
+ * 그 위에 짙은 층(--glow-ring-peak, ::before)이 처음 약 6초(5.5초) 동안 opacity 만 오가다 멈춘다 — box-shadow 값 자체는 움직이지 않는다.
+ * 소리 없음. 모션 줄이기에서는 맥박 층 없음(정지 빛만). 빛남 토큰은 이 용도 밖에서 쓰지 않는다. */
+.is-call { position: relative; }
+.is-call::after { content: ""; position: absolute; inset: 0; border-radius: inherit; border: 1.5px solid var(--light-lamp); box-shadow: var(--glow-ring); pointer-events: none; }
+.is-call::before { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: var(--glow-ring-peak); opacity: 0; pointer-events: none; animation: mv-call-pulse var(--dur-pulse) ease-in-out 5; }
+@keyframes mv-call-pulse { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+/* 라벨 글씨가 있는 대상은 700 + brass-200(색만으로 알리지 않는다: 테두리 + 라벨 + 띠 문장). 찬반·얼굴 칸은 "진홍·놋쇠 없음" 부품 규칙 시험이 .mv-verdict·.mv-face 로 시작하는 선택자만 보므로 .is-call 을 앞에 둔다(역할 색이 아니라 모든 역할에게 같다) */
+.mv-tag.is-call .mv-tag__name, .is-call.mv-verdict__btn:not(.is-on), .is-call.mv-face .mv-face__name { color: var(--brass-200); font-weight: 700; }
+.mv-chat__field.is-call::after { border-radius: var(--radius-md); }
+.mv-chat__field.is-call::before { border-radius: var(--radius-md); }
+.mv-chat__will.is-call::after, .mv-chat__will.is-call::before { border-radius: var(--radius-badge); }
+
 @media (prefers-reduced-motion: reduce) {
   .mv-toast, .mv-ring__bar, .mv-phase__hint { transition: none; }
   .mv-chat__newdot i, .mv-typing i { animation: none; }
@@ -197,6 +210,8 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
   /* 깜빡임 대신 눌러야 할 이름표에 gray-100 2px 고정 테두리(09.1-07, UI-SPEC 다르게 5) */
   .mv-tag.is-blink { animation: none; box-shadow: inset 0 0 0 2px var(--gray-100); }
   .mv-badge.is-lead { transform: scale(1.18); }
+  /* 14-04: 빛 맥박 없음 — 정지 빛(::after)만 */
+  .is-call::before { animation: none; }
 }
 
 /* 단계 머리 오른쪽 묶음: 시간 링 왼쪽에 버튼(extra)이 붙을 때만 쓴다. 링과 버튼 사이 8 (8페이즈 [역할 카드], UI-SPEC A2) */

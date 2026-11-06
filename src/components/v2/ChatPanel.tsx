@@ -85,6 +85,10 @@ export interface ChatPanelProps {
   willOpen?: boolean;
   /** 저장된 유언이 있다(오른쪽 위 점, 접근성 이름에 '저장됨') */
   willSaved?: boolean;
+  /** 빛남(14-04): 입력칸이 빛난다(토론 — 입력칸에 is-call, 입력칸에 data-call). 값 없는 표식 */
+  callInput?: boolean;
+  /** 빛남(14-04): [유언] 단추가 빛난다(최후 변론의 변론자 본인, HOST-04) */
+  callWill?: boolean;
   /** 입력줄 맨 오른쪽(보내기·깃펜 뒤)에 놓을 요소. 결과 화면의 다시 하기 알약(11-12). 없으면 자리도 없다 */
   trailing?: ReactNode;
 }
@@ -107,7 +111,7 @@ function atBottom(el: HTMLElement): boolean {
 }
 
 export function ChatPanel(props: ChatPanelProps) {
-  const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef, onWill, willOpen, willSaved, trailing } = props;
+  const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef, onWill, willOpen, willSaved, callInput, callWill, trailing } = props;
   const fieldRef = useRef<HTMLInputElement | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
   const composingRef = useRef(false);
@@ -440,7 +444,7 @@ export function ChatPanel(props: ChatPanelProps) {
             </button>
           ) : null}
           {hasEmotes && trayOpen ? <EmoteTray ids={props.emotes ?? []} onPick={pickEmote} disabled={!!sendDisabled || !!props.emoteBlocked} playing={props.emotePlaying ?? null} firstRef={firstCellRef} onKeyDown={onTrayKeyDown} /> : null}
-          <div className="mv-chat__field">
+          <div className={callInput ? "mv-chat__field is-call" : "mv-chat__field"}>
             {ui.icon ? (
               <span className={channel === "mafia" ? "mv-chat__chan is-mafia" : "mv-chat__chan is-ghost"}>
                 <V2Icon name={ui.icon} size={20} />
@@ -451,6 +455,7 @@ export function ChatPanel(props: ChatPanelProps) {
               ref={bindInput}
               className="mv-chat__input"
               data-chat-input=""
+              data-call={callInput ? "" : undefined}
               type="text"
               inputMode="text"
               enterKeyHint="send"
@@ -484,8 +489,9 @@ export function ChatPanel(props: ChatPanelProps) {
           {onWill ? (
             <button
               type="button"
-              className="mv-chat__will"
+              className={callWill ? "mv-chat__will is-call" : "mv-chat__will"}
               data-will-button=""
+              data-call={callWill ? "" : undefined}
               aria-label={willSaved ? CHAT_TEXT.willSaved : CHAT_TEXT.will}
               aria-pressed={willOpen ? "true" : "false"}
               aria-disabled={sendDisabled ? "true" : undefined}

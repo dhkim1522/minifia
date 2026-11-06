@@ -41,14 +41,16 @@ export interface NameTagProps {
   doneLabel?: string;
   /** 처음 보는 지목의 처음 3초: 이름표 깜빡임 */
   blink?: boolean;
+  /** 빛남(14-04): 지금 눌러야 할 이름표. is-call(light-lamp 테두리 + 정지 빛, 처음 약 6초 맥박). 소리 없음 */
+  call?: boolean;
   /** 유령 표식(is-ghost). 이름표는 불투명 — 몸이 0.26 안개라 직업은 RoleChip 이 알린다(09.1-09) */
   ghost?: boolean;
   /** 이름표 모서리에 걸 요소(직업 주장 배지). 이름표 폭·쌓임 높이를 늘리지 않는다 */
   children?: ReactNode;
 }
 
-export function NameTag({ name, color, me, away, mine, done, doneLabel, blink, ghost, children }: NameTagProps) {
-  const cls = ["mv-tag", me && "is-me", away && "is-away", blink && "is-blink", mine && "is-mine", ghost && "is-ghost"]
+export function NameTag({ name, color, me, away, mine, done, doneLabel, blink, call, ghost, children }: NameTagProps) {
+  const cls = ["mv-tag", me && "is-me", away && "is-away", blink && "is-blink", call && "is-call", mine && "is-mine", ghost && "is-ghost"]
     .filter(Boolean)
     .join(" ");
   return (
@@ -90,7 +92,7 @@ export type HeadStackProps = NameTagProps & {
 };
 
 // 바닥 가운데를 캐릭터 머리 꼭대기에 translate(-50%, -100%) 로 놓는 일은 쓰는 쪽(이름표 층, 06-13)이 한다.
-export function HeadStack({ name, color, me, away, typing, role, count, lead, sure, sureLabel, mine, done, doneLabel, blink, ghost, claim, claimSwapped, claimPop, claimNotice }: HeadStackProps) {
+export function HeadStack({ name, color, me, away, typing, role, count, lead, sure, sureLabel, mine, done, doneLabel, blink, call, ghost, claim, claimSwapped, claimPop, claimNotice }: HeadStackProps) {
   const hasBadge = count !== undefined && count >= 1;
   return (
     <div
@@ -113,7 +115,7 @@ export function HeadStack({ name, color, me, away, typing, role, count, lead, su
       {role ? <RoleChip role={role} /> : null}
       {sure ? <SureStamp {...(sureLabel !== undefined ? { label: sureLabel } : {})} /> : null}
       {hasBadge ? <VoteBadge count={count} lead={lead} /> : null}
-      <NameTag name={name} color={color} me={me} away={away} mine={mine} done={done} doneLabel={doneLabel} blink={blink} ghost={ghost}>
+      <NameTag name={name} color={color} me={me} away={away} mine={mine} done={done} doneLabel={doneLabel} blink={blink} call={call} ghost={ghost}>
         {claim !== undefined ? (
           <ClaimBadge key={claimPop ?? 0} claim={claim} swapped={claimSwapped === true} pop={claimPop !== undefined && claimPop > 0} notice={claimNotice === true} />
         ) : null}

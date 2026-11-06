@@ -400,6 +400,7 @@ export function WorldStage(props: WorldStageProps) {
                   type="button"
                   className={aimState === undefined ? "mf-world__pick" : `mf-world__pick ${aimState === "mine" ? "is-picked" : aimState === "preview" ? "is-preview" : "is-cand"}`}
                   data-pick={p.seat}
+                  data-call={extra.call ? "" : undefined}
                   aria-label={pick.label(p.nickname)}
                   aria-pressed={pick.mine === p.seat}
                   aria-disabled={props.canSend && pick.disabled !== true ? undefined : true}
