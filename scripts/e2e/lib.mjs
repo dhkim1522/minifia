@@ -2343,11 +2343,18 @@ const VERDICT_FAMILY = ["verdict.", "ballot.", "pin.", "execution."];
 const entriesOf = (log, id) => log.filter((e) => e.id === id);
 const validLog = (log) => Array.isArray(log) && log.every((e) => !!e && typeof e.id === "string" && Number.isFinite(e.at));
 
+/** 첫 박동과 이 시간(ms) 안에 요청된 소리는 같은 순간으로 보고 id 순으로 센다(틱 안 순서는 판마다 갈린다) */
+const VERDICT_HEAD_TICK_MS = 50;
+const headKey = (e, base) => (Math.abs(e.at - base) < VERDICT_HEAD_TICK_MS ? base : e.at);
+/** 첫 심장 박동 직전 이 시간(ms) 안에 요청된 판결 계열 소리도 앞머리에 센다(같은 진입 틱의 pin.on) */
+const VERDICT_HEAD_LEAD_MS = 100;
 /** 판결 앞머리 id 열: 첫 심장 박동부터 2350ms(= 2600 − 250, 결과 소리가 나도 되는 가장 이른 시각) 앞의 판결 계열 id (다른 UI 소리는 비교하지 않는다) */
 function verdictHead(log, base) {
+  // pin.on 은 같은 진입 순간에 즉시 요청되고 첫 심장 박동은 같은 틱의 타이머에서 나온다 — 로그 시각이 1~수 ms 앞서거나 같아 base 와 정확히 비교하면 판마다 갈린다(12-12).
+  // 첫 박동 직전 HEAD_LEAD_MS 안의 판결 계열도 같은 앞머리로 센다. 한 판에만 있으면 여전히 V5 가 실패한다
   return log
-    .filter((e) => e.at >= base && e.at - base < VERDICT_TIMING.headBefore && VERDICT_FAMILY.some((p) => e.id.startsWith(p)))
-    .sort((a, b) => a.at - b.at || a.id.localeCompare(b.id))
+    .filter((e) => e.at >= base - VERDICT_HEAD_LEAD_MS && e.at - base < VERDICT_TIMING.headBefore && VERDICT_FAMILY.some((p) => e.id.startsWith(p)))
+    .sort((a, b) => headKey(a, base) - headKey(b, base) || a.id.localeCompare(b.id))
     .map((e) => e.id);
 }
 

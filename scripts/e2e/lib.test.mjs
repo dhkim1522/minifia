@@ -3256,6 +3256,15 @@ test("V5: 두 판의 2600ms 앞(+2350 안) 판결 id 열이 같아야 한다 —
   assert.deepEqual(vFails(vt(verdictLog(), rejectTap)), []);
 });
 
+test("V5: 같은 진입 틱의 pin.on 이 첫 심장 박동보다 1~수 ms 앞서도 뒤에 있어도 같은 앞머리로 센다 — 한 판에만 없으면 여전히 실패", () => {
+  const withPinAt = (base, offset, passed) => verdictLog({ passed, base }).map((e) => (e.id === "pin.on" ? { ...e, at: base + offset } : e)).sort((a, b) => a.at - b.at);
+  assert.deepEqual(vFails(vt(withPinAt(100000, -3, true), withPinAt(900000, 0, false))), []);
+  assert.deepEqual(vFails(vt(withPinAt(100000, -3, true), withPinAt(900000, 2, false))), []);
+  assert.deepEqual(vFails(vt(withPinAt(100000, 0, true), withPinAt(900000, -99, false))), []);
+  // 100ms 보다 앞선 pin.on 은 앞머리가 아니다 → 한쪽에만 있는 것으로 보고 실패
+  assert.deepEqual(vFails(vt(withPinAt(100000, 0, true), withPinAt(900000, -101, false))), ["V5"]);
+});
+
 test("soundVerdictTimingChecks: 로그가 없거나 심장 박동이 없으면 측정값 없음으로 실패", () => {
   assert.ok(vt(null, null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
   assert.ok(vt(verdictLog(), null).some((l) => (l.id === "V4" || l.id === "V5") && !l.ok && /측정값 없음/.test(l.detail)));
