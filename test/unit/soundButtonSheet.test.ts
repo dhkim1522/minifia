@@ -10,8 +10,8 @@ const game = readFileSync(`${ROOT}src/styles/game.css`, "utf8");
 const gameMap = readFileSync(`${ROOT}src/screens/GameMap.tsx`, "utf8");
 
 describe("소리 단추와 시트 층", () => {
-  it("시트 층(data-sheet-layer)이 열리면 방 루트의 소리 단추가 숨고 눌리지 않는다", () => {
-    expect(css).toMatch(/\.mf-room:has\(\[data-sheet-layer\]\)\s*>\s*\.mv-sound\s*\{[^}]*visibility:\s*hidden[^}]*pointer-events:\s*none/);
+  it("시트 층(data-sheet-layer)이 열리면 자막 띠 독 안의 소리 단추가 숨고 눌리지 않는다", () => {
+    expect(css).toMatch(/\.mf-room:has\(\[data-sheet-layer\]\)\s*>\s*\.mv-host\s+\.mv-sound\s*\{[^}]*visibility:\s*hidden[^}]*pointer-events:\s*none/);
   });
 
   it("전제: 게임 화면은 쌓임 맥락(isolation)이고 시트 층은 그 안에서 data-sheet-layer 를 단다", () => {

@@ -14,7 +14,7 @@ import { RoleCardButton } from "../components/RoleCardButton";
 import { RoleCardSheet } from "../components/RoleCardSheet";
 import type { RoleCardTab } from "../components/RoleCardSheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
-import { SoundButton } from "../components/v2/SoundButton";
+import { HostBand, HostDock } from "../components/v2/HostBand";
 import { MORNING_TEXT, morningText } from "../game/eliminationText";
 import { READY_TEXT } from "../game/resultText";
 import { defenseAnnounce, noExecutionPrefix, winnerText } from "../game/verdict";
@@ -424,7 +424,12 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   return (
     <div ref={roomRef} className="mf-root mf-room">
       {view && banner !== "hidden" && <ReconnectBanner mode={banner} floating={shown?.phase === "lobby"} />}
-      {view && sound.supported ? <SoundButton sound={sound} /> : null}
+      {shown && !shown.resting && status !== "replaced" && status !== "failed" ? (
+        <HostBand view={shown} offset={connection.offset} cardSeen={seenFront} sound={sound.supported ? sound : null} />
+      ) : view && sound.supported ? (
+        // 쉬는 사람·안내 화면에는 띠가 없다(T-14-04). 소리 단추만 옛 자리의 독으로 둔다
+        <HostDock sound={sound} />
+      ) : null}
       <div className="mf-room__body">{renderBody()}</div>
       {view && roleCard.open ? (
         // 역할 확인에서 앞면을 본 적이 없을 때만 뒷면. 낮부터는 항상 앞면 내용이다(D-19 의 취지).

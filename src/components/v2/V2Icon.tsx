@@ -6,7 +6,7 @@ import "../../styles/v2.css";
 // 나머지 아이콘은 그것을 쓰는 페이즈(8·9·10페이즈)가 같은 표에 더한다(10페이즈: 동작 아홉 개, hanger 는 10-07 이 더한다).
 // v1.0 아이콘(src/components/Icon.tsx)과 이름이 겹쳐도(check·crown) 서로 다른 부품이다: v2 화면은 이 파일을 쓴다.
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -125,6 +125,11 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
     ["p", "M4 9.5h3.5L12 5.5v13l-4.5-4H4z"],
     ["p", "M16.5 9.5l5 5"],
     ["p", "M21.5 9.5l-5 5"],
+  ],
+  // 14-01: 자막 띠 종(시안 HostCaption.dc.html 시안 A 의 .bell 경로 그대로)
+  bell: [
+    ["p", "M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"],
+    ["p", "M10 20a2 2 0 0 0 4 0"],
   ],
   hanger: [
     ["p", "M10 6.5a2 2 0 1 1 2.6 1.9c-.4.1-.6.5-.6.9V11"],

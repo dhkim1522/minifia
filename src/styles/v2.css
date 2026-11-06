@@ -147,6 +147,28 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-badge.is-lead { animation: mv-pulse var(--dur-pulse) ease-in-out infinite; filter: drop-shadow(0 0 6px rgba(255, 224, 176, 0.75)); }
 .mv-badge__num { font-family: var(--font-serif); font-size: 22px; line-height: 1; font-weight: 700; color: var(--cream-100); font-variant-numeric: tabular-nums; }
 .mv-badge__unit { font-family: var(--font-ui); font-size: 12px; line-height: 1; font-weight: 700; color: var(--brass-400); }
+/* 사회자 자막 띠 (14-01, UI-SPEC "자막 띠 계약" · 시안 HostCaption.dc.html 시안 A). 방 틀 기준, 헤더 아래 8·좌우 16. 맵 위에 얹는다(스테이지를 줄이지 않음).
+ * 위 끝은 HostBand 가 헤더 아랫변을 재서 --mf-host-top 으로 알린다(기본 70 = 옛 소리 단추 자리). 아랫변은 --mf-host-bottom(띠 면), --mf-host-dock(독) — 테스트 단추·맵 칩·위 알림이 따라 내려간다.
+ * 띠는 누를 수 없고(pointer-events none) 독의 소리 단추만 받는다. 층은 옛 소리 단추와 같다: 재접속 띠·[테스트]·지도 칩(z-overlay)보다 위, 시트·모달(z-modal)보다 아래. 키보드가 열려도 헤더와 같이 가상 뷰포트를 따라간다(--mf-vv-top). */
+.mv-host { position: absolute; top: var(--mf-host-top, 70px); left: var(--space-md); right: var(--space-md); z-index: calc(var(--z-overlay) + 1); display: flex; flex-direction: column; align-items: stretch; gap: var(--space-sm); pointer-events: none; transform: translateY(var(--mf-vv-top, 0px)); }
+.mv-host__band { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: var(--space-sm); row-gap: var(--space-sm); align-items: center; box-sizing: border-box; padding: var(--space-sm) var(--space-md); border-left: 4px solid var(--brass-400); border-radius: var(--radius-badge); background: var(--overlay-ink-strong); box-shadow: var(--shadow-badge); font-family: var(--font-ui); }
+.mv-host__bell { display: inline-flex; color: var(--brass-200); }
+.mv-host__line { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-50); word-break: keep-all; overflow-wrap: break-word; }
+.mv-host__time { display: inline-flex; align-items: baseline; justify-content: flex-end; min-width: 40px; color: var(--gray-50); font-variant-numeric: tabular-nums; white-space: nowrap; transition: color 1s linear; }
+.mv-host__time b { font-size: 16px; line-height: 1.4; font-weight: 700; }
+.mv-host__time span { font-size: 14px; line-height: 1.4; font-weight: 400; }
+.mv-host__time[data-tone="warn"] { color: var(--brass-400); }
+.mv-host__time[data-tone="urgent"] { color: var(--crimson-400); }
+.mv-host__bar { grid-column: 1 / -1; height: 8px; overflow: hidden; border-radius: var(--radius-pill); background: var(--night-600); }
+.mv-host__bar i { display: block; width: 100%; height: 100%; border-radius: var(--radius-pill); background: var(--gray-100); transform-origin: left center; transition: transform 1s linear, background-color 1s linear; }
+.mv-host__bar i[data-tone="warn"] { background: var(--brass-400); }
+.mv-host__bar i[data-tone="urgent"] { background: var(--crimson-400); }
+.mv-host__dock { display: flex; justify-content: flex-end; }
+/* 단계가 바뀐 뒤 문장 페이드 + 종 한 번 흔들림(첫 마운트에는 없다) */
+.mv-host__line.is-swap { animation: mv-host-fade var(--dur-med) ease-out both; }
+.mv-host__bell.is-swap { animation: mv-host-ring var(--dur-pop) ease-out both; transform-origin: 50% 20%; }
+@keyframes mv-host-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mv-host-ring { 0% { transform: rotate(0); } 30% { transform: rotate(8deg); } 65% { transform: rotate(-8deg); } 100% { transform: rotate(0); } }
 @keyframes mv-pop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); } }
 @keyframes mv-pulse { 0%, 100% { transform: scale(1.18); } 50% { transform: scale(1.34); } }
 
@@ -168,6 +190,9 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .mv-toast, .mv-ring__bar, .mv-phase__hint { transition: none; }
   .mv-chat__newdot i, .mv-typing i { animation: none; }
+  /* 14-01: 띠 교체 즉시·종 흔들림 없음·막대는 초 단위 계단(전환 없음) */
+  .mv-host__line.is-swap, .mv-host__bell.is-swap { animation: none; }
+  .mv-host__bar i, .mv-host__time { transition: none; }
   .mv-badge, .mv-badge.is-lead, .mv-stamp { animation: none; }
   /* 깜빡임 대신 눌러야 할 이름표에 gray-100 2px 고정 테두리(09.1-07, UI-SPEC 다르게 5) */
   .mv-tag.is-blink { animation: none; box-shadow: inset 0 0 0 2px var(--gray-100); }
@@ -358,10 +383,10 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) { .mv-dress-sheet__strip { scroll-behavior: auto; } }
 .mf-float[data-float-single] { min-height: 0; }
 
-/* 소리 단추 (12-07, UI-SPEC B-1·B-2): 방 화면 오른쪽 위, 헤더 아래 끝(62)에서 8 아래·오른쪽 space-md. 누르기 44×44, 시각 지름 36(아이콘 24 + 안쪽 6).
+/* 소리 단추 (12-07, UI-SPEC B-1·B-2): 14-01 부터 자막 띠 아래 오른쪽 끝 독(.mv-host__dock) 안에 정적으로 놓인다(자리·가상 뷰포트 따라가기는 .mv-host 가 한다). 누르기 44×44, 시각 지름 36(아이콘 24 + 안쪽 6).
  * 층은 재접속 띠(.mf-reconnect--floating)·[테스트]·지도 칩(모두 z-overlay)보다 위, 시트·모달(z-modal)보다 아래다 — 기존 토큰의 식이다(새 토큰 아님).
  * 헤더 컨테이너는 pointer-events 가 없으므로 단추 자신에만 auto. 키보드가 열려도 헤더와 같이 가상 뷰포트를 따라간다(--mf-vv-top). */
-.mv-sound { position: absolute; top: 70px; right: var(--space-md); z-index: calc(var(--z-overlay) + 1); box-sizing: border-box; display: flex; align-items: center; justify-content: center; min-width: var(--tap-min); height: var(--tap-min); margin: 0; padding: 0; border: 0; background: none; color: var(--gray-300); font-family: var(--font-ui); cursor: pointer; pointer-events: auto; transform: translateY(var(--mf-vv-top, 0px)); -webkit-tap-highlight-color: transparent; }
+.mv-sound { position: relative; flex: none; box-sizing: border-box; display: flex; align-items: center; justify-content: center; min-width: var(--tap-min); height: var(--tap-min); margin: 0; padding: 0; border: 0; background: none; color: var(--gray-300); font-family: var(--font-ui); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
 .mv-sound__face { display: flex; align-items: center; justify-content: center; gap: var(--space-sm); box-sizing: border-box; width: 36px; height: 36px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--night-800) 80%, transparent); box-shadow: inset 0 0 0 1px var(--night-600); }
 .mv-sound[data-sound-state="off"] .mv-sound__face { opacity: 0.6; }
 .mv-sound--pill .mv-sound__face { width: auto; min-width: 112px; height: var(--tap-min); padding: 0 var(--space-md); color: var(--gray-100); box-shadow: inset 0 0 0 2px var(--gray-100); }
@@ -369,5 +394,5 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-sound:focus-visible { outline: none; }
 /* 시트(유언·쪽지·배지 등, .mf-will-layer)가 열려 있는 동안 단추는 비켜선다 — 시트는 .mf-game 의 쌓임 맥락(isolation) 안이라 z-modal 이어도
  * 방 루트에 있는 단추(z 51) 위로 올라가지 못해 폭 360×높이 560 에서 시트 [닫기]를 가렸다(12-12 회귀에서 발견). 시트가 닫히면 바로 돌아온다. */
-.mf-room:has([data-sheet-layer]) > .mv-sound { visibility: hidden; pointer-events: none; }
+.mf-room:has([data-sheet-layer]) > .mv-host .mv-sound { visibility: hidden; pointer-events: none; }
 .mv-sound:focus-visible .mv-sound__face { outline: 2px solid var(--gray-100); outline-offset: 2px; }
