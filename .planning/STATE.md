@@ -5,16 +5,16 @@ milestone_name: 사회자와 증거
 current_phase: 13
 current_phase_name: 기본판 낮 흐름
 status: planning
-stopped_at: Completed 14-06-PLAN.md
-last_updated: "2026-11-06T21:11:26.442Z"
+stopped_at: Completed 14-07-PLAN.md
+last_updated: "2026-11-06T21:20:22.001Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: 8f55df6c93dd026c2ecc5777eb47ca98ad19aa0f
+state_head: c988c823773cb1aa00995e1cc4f711c8e70110b0
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
   percent: 33
 ---
 
@@ -208,6 +208,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 14 P04 | 1h | 3 tasks | 16 files |
 | Phase 14 P05 | 50min | 3 tasks | 20 files |
 | Phase 14 P06 | 35min | 2 tasks | 17 files |
+| Phase 14 P07 | 30min | 2 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -441,6 +442,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 14]: 14-05: 역할 확인 머리를 게임 헤더와 같은 absolute 62 모양으로, 헤더 윗여백 18→8(토큰 간격)
 - [Phase 14]: 14-06: 접근성 이름은 보이는 낱말을 포함(WCAG 2.5.3) — '새 메시지' 만 '새 글' 로 바꿈, 결정 0073 에는 14-09 가 기록
 - [Phase 14]: 14-06: 채팅 줄 깃펜 여분 margin-left 제거(폭 360 입력칸 172), 머리 [나가기] 는 ToolButton, 시트 닫기는 .mv-closepill
+- [Phase 14]: 14-07: 꾸미기 → 옷장(DRESS_TEXT.open 한 곳), 떠 있는 단추는 면(.mv-float__face)+라벨, 소리 단추 표식에 data-tool-label 하나만 추가, 방 화면 전수 이름표 시험(면제 E-1·E-2)
 
 ### Pending Todos
 
@@ -505,8 +507,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-06T21:11:26.304Z
-Stopped at: Completed 14-06-PLAN.md
+Last session: 2026-11-06T21:20:21.869Z
+Stopped at: Completed 14-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
