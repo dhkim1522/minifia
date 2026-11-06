@@ -291,7 +291,7 @@ describe("결과 화면: 3D 무대 위 한 장면의 최종 상태 (D-1, A-5)", 
     r.rerenderRoom(after);
     expect(r.container.querySelector("dialog")).toBeNull();
     expect(screen.queryByRole("button", { name: "테스트" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /역할 카드/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /내 역할/ })).toBeNull();
   });
 });
 

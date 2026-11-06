@@ -122,11 +122,14 @@ function card(container: HTMLElement): HTMLElement {
 }
 
 // getBy* 는 실패 때 DOM 전체를 여러 줄로 찍어 TAP 보고서를 깨뜨린다. 한 줄 메시지로 단언한다.
-/** 단계 화면의 옛 시간 표시(Timer). 14-01 자막 띠의 timer([data-host-band] 안)는 14-02 가 옛 시계를 지우기 전까지 따로 센다 */
-function stageTimer(): HTMLElement {
-  const found = screen.getAllByRole("timer").filter((el) => el.closest("[data-host-band]") === null);
-  expect(found, "띠 밖 timer").toHaveLength(1);
-  return found[0]!;
+/** 띠([data-host-band]) 밖의 시간 표시(timer 역할). 14-05 가 역할 확인의 옛 Timer 를 지워 이제 0개여야 한다 */
+function stageTimers(): HTMLElement[] {
+  return screen.queryAllByRole("timer").filter((el) => el.closest("[data-host-band]") === null);
+}
+
+/** 역할 확인 머리의 제목 글자(14-05: PhaseHeader 의 .mv-phase__title) */
+function revealTitle(container: HTMLElement): string {
+  return container.querySelector(".mf-reveal__header .mv-phase__title")?.textContent ?? "(제목 없음)";
 }
 
 function byRole(role: string, name?: string): HTMLElement {
@@ -153,16 +156,27 @@ afterEach(() => {
 });
 
 describe("S-05 역할 확인 (GAME-01, ROLE-02, D-13 개정, D-14, D-15, R12)", () => {
-  it("역할 확인 뒷면: 제목·안내·0:15 타이머·카드 뒷면과 카드 아래 안내 두 줄이 보인다", () => {
+  it("역할 확인 뒷면: 머리는 제목 '역할 확인' + [내 역할] 뿐이고 카드 뒷면이 보인다 — 안내·보조 줄·m:ss 타이머가 없다 (U-2, U-3, TOOL-02)", () => {
     const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
-    expect(byRole("heading", "역할 확인")).toBeTruthy();
-    expect(byText("카드를 눌러 확인하세요")).toBeTruthy();
-    expect(stageTimer().textContent).toContain("0:15");
+    expect(revealTitle(container)).toBe("역할 확인");
+    const header = container.querySelector(".mf-reveal__header") as HTMLElement;
+    expect(header.querySelectorAll(".mv-phase__title").length).toBe(1);
+    expect(Array.from(header.querySelectorAll("button")).map((b) => b.getAttribute("aria-label"))).toEqual(["내 역할"]);
+    expect(header.querySelector(".mv-phase__hint")).toBeNull();
+    expect(header.querySelector(".mv-ring")).toBeNull();
+    expect(container.querySelector(".mf-phasebar")).toBeNull();
+    expect(container.querySelector(".mf-phasebar__do")).toBeNull();
+    expect(container.querySelector(".mf-timer")).toBeNull();
+    expect(container.querySelector(".mf-reveal__hint")).toBeNull();
+    expect(container.querySelector(".mf-reveal__sub")).toBeNull();
+    expect(stageTimers()).toHaveLength(0);
+    expect(container.textContent).not.toContain("0:15");
+    for (const old of ["카드를 눌러 확인하세요", "카드를 눌러 직업을 확인하세요", "다른 사람에게 보이지 않게 가려 주세요"]) {
+      expect(screen.queryByText(old), old).toBeNull();
+    }
+    expect(container.querySelectorAll("[data-pre-notice]").length).toBe(1);
     expect(byRole("button", "역할 카드 뒤집기")).toBeTruthy();
     expect(card(container).classList.contains("mf-card--front")).toBe(false);
-    expect(byText("카드를 눌러 직업을 확인하세요")).toBeTruthy();
-    expect(byText("다른 사람에게 보이지 않게 가려 주세요")).toBeTruthy();
-    expect(byRole("button", "역할 카드")).toBeTruthy();
   });
 
   it("카드를 누르면 앞면(마피아·동료 · 민지)과 앞면 안내가 나오고, 다시 누르면 뒷면으로 돌아간다", () => {
@@ -171,15 +185,12 @@ describe("S-05 역할 확인 (GAME-01, ROLE-02, D-13 개정, D-14, D-15, R12)", 
     expect(card(container).classList.contains("mf-card--front")).toBe(true);
     expect(byText("마피아")).toBeTruthy();
     expect(byText("동료 · 민지")).toBeTruthy();
-    expect(byText("내 직업이에요")).toBeTruthy();
-    expect(byText("확인했으면 그대로 기다리세요")).toBeTruthy();
-    expect(byText("카드를 다시 누르면 가려져요")).toBeTruthy();
-    expect(screen.queryByText("카드를 눌러 직업을 확인하세요")).toBeNull();
+    expect(screen.queryByText("내 직업이에요")).toBeNull();
+    expect(screen.queryByText("확인했으면 그대로 기다리세요")).toBeNull();
 
     fireEvent.click(card(container));
     expect(card(container).classList.contains("mf-card--front")).toBe(false);
-    expect(byText("카드를 눌러 확인하세요")).toBeTruthy();
-    expect(byText("카드를 눌러 직업을 확인하세요")).toBeTruthy();
+    expect(screen.queryByText("카드를 눌러 확인하세요")).toBeNull();
   });
 
   it("누르지 않고 5초가 지나면 저절로 앞면이 되고, 앞면에서 누르면 가려진 뒤 다시 저절로 뒤집히지 않는다", () => {
@@ -237,12 +248,49 @@ describe("S-05 역할 확인 (GAME-01, ROLE-02, D-13 개정, D-14, D-15, R12)", 
     expect(alone.container.querySelector(".mf-card__mates")).not.toBeNull();
   });
 
-  it("15초가 지나도 서버가 day 를 보내기 전에는 역할 확인(0:00)에 머문다 (T-01-46)", () => {
-    renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
+  it("15초가 지나도 서버가 day 를 보내기 전에는 역할 확인에 머문다 (T-01-46)", () => {
+    const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
     advance(15_000);
-    expect(byRole("heading", "역할 확인")).toBeTruthy();
-    expect(stageTimer().textContent).toContain("0:00");
+    expect(revealTitle(container)).toBe("역할 확인");
+    expect(stageTimers()).toHaveLength(0);
     expect(screen.queryByText("낮이 되었습니다")).toBeNull();
+  });
+});
+
+describe("S-05 역할 확인 카드 빛남 (HOST-03, HOST-04, D-08, T-14-15)", () => {
+  const lit = (el: HTMLElement) => `${el.classList.contains("is-call")}/${el.hasAttribute("data-call")}`;
+
+  it("역할이 정해졌고 카드를 아직 안 봤으면 카드 루트가 빛난다(is-call + data-call, 값 없음)", () => {
+    const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
+    expect(lit(card(container))).toBe("true/true");
+    expect(card(container).getAttribute("data-call")).toBe("");
+  });
+
+  it("카드를 눌러 앞면을 보면 꺼지고, 다시 뒷면으로 가려도 되살아나지 않는다", () => {
+    const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "citizen" }));
+    fireEvent.click(card(container));
+    expect(lit(card(container))).toBe("false/false");
+    fireEvent.click(card(container));
+    expect(card(container).classList.contains("mf-card--front")).toBe(false);
+    expect(lit(card(container))).toBe("false/false");
+  });
+
+  it("누르지 않아도 5초 자동 앞면이 되면 꺼진다", () => {
+    const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "police" }));
+    expect(lit(card(container))).toBe("true/true");
+    advance(5_000);
+    expect(lit(card(container))).toBe("false/false");
+  });
+
+  it("역할 없는 view 에서는 빛나지 않는다", () => {
+    const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000 }));
+    expect(lit(card(container))).toBe("false/false");
+  });
+
+  it.each(["mafia", "police", "doctor", "citizen"] as const)("%s: 빛나는 카드 루트 모양이 역할과 무관하게 같다(T-14-15)", (role) => {
+    const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role, allies: role === "mafia" ? [2] : [] }));
+    const base = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "citizen" }));
+    expect(card(container).outerHTML).toBe(card(base.container).outerHTML);
   });
 });
 
@@ -275,7 +323,7 @@ describe("S-04 역할 배정 (GAME-01, D-12, R11, E7, T-01-44)", () => {
     expect(panel?.children.length).toBe(0);
     expect(container.querySelectorAll(".mf-assign__veil").length).toBe(1);
     expect(container.querySelectorAll(".mf-assign__ring").length).toBe(3);
-    expect(screen.queryByRole("button", { name: "역할 카드" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "내 역할" })).toBeNull();
     expect(screen.queryByRole("timer")).toBeNull();
   });
 
@@ -300,7 +348,7 @@ describe("S-06 낮 시작 (D-01, D-02, R13, E9)", () => {
   it("낮 화면의 [역할 카드] 버튼 마크업은 마피아·시민·역할 없음에서 같다", () => {
     const html = (view: RoomView) => {
       renderRoom(view);
-      const out = byRole("button", "역할 카드").outerHTML;
+      const out = byRole("button", "내 역할").outerHTML;
       cleanup();
       return out;
     };
@@ -473,7 +521,7 @@ describe("S-06a 낮 시작 발표 개정 (D-20, M6)", () => {
   it("[역할 카드] 버튼 마크업은 마피아·시민·역할 없음에서 같다", () => {
     const html = (view: RoomView) => {
       renderRoom(view);
-      const out = byRole("button", "역할 카드").outerHTML;
+      const out = byRole("button", "내 역할").outerHTML;
       cleanup();
       return out;
     };
@@ -584,7 +632,7 @@ describe("단계 전환은 서버 view 만 따른다 (T-01-46)", () => {
 // ---- [역할 카드] 시트 (D-19 개정, 결정 0012, R14, E14, T-01-45) ----
 
 function openRoleCard(): HTMLElement {
-  fireEvent.click(byRole("button", "역할 카드"));
+  fireEvent.click(byRole("button", "내 역할"));
   const dialog = document.querySelector<HTMLElement>('dialog[aria-label="역할 카드"]');
   expect(dialog, "역할 카드 시트(dialog)").not.toBeNull();
   return dialog!;
@@ -666,11 +714,11 @@ describe("C-01 [역할 카드] 시트", () => {
     expect(dialog.querySelectorAll("img").length).toBe(0);
   });
 
-  it("[닫기] 를 누르면 260ms 뒤 시트가 사라지고, 시트가 열려 있어도 타이머 숫자는 줄어든다", () => {
+  it("[닫기] 를 누르면 260ms 뒤 시트가 사라지고, 시트가 열려 있어도 역할 확인에는 옛 타이머가 없다", () => {
     const { container } = renderRoom(mafiaReveal(15_000));
     const dialog = openRoleCard();
     advance(3_000);
-    expect(stageTimer().textContent).toContain("0:12");
+    expect(stageTimers()).toHaveLength(0);
     const close = within(dialog).queryByRole("button", { name: "닫기" });
     expect(close, "시트 [닫기]").not.toBeNull();
     fireEvent.click(close!);
@@ -681,7 +729,7 @@ describe("C-01 [역할 카드] 시트", () => {
   it("[역할 카드] 버튼 마크업은 마피아·시민·역할 없음 view 에서 같고 대기실·배정에는 없다", () => {
     const html = (view: RoomView) => {
       renderRoom(view);
-      const out = byRole("button", "역할 카드").outerHTML;
+      const out = byRole("button", "내 역할").outerHTML;
       cleanup();
       return out;
     };
@@ -689,10 +737,10 @@ describe("C-01 [역할 카드] 시트", () => {
     expect(html(makeView({ phase: "roleReveal", endsIn: 15_000, role: "citizen" }))).toBe(mafia);
     expect(html(makeView({ phase: "roleReveal", endsIn: 15_000 }))).toBe(mafia);
     renderRoom(makeView({ phase: "assigning" }));
-    expect(screen.queryByRole("button", { name: "역할 카드" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "내 역할" })).toBeNull();
     cleanup();
     renderRoom(makeView({ phase: "lobby", isHost: true }));
-    expect(screen.queryByRole("button", { name: "역할 카드" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "내 역할" })).toBeNull();
   });
 });
 

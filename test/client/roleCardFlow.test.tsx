@@ -143,67 +143,61 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("헤더 [역할 카드] 버튼 하나 (D-08)", () => {
+describe("헤더 [내 역할] 이름표 단추 하나 (D-08, TOOL-01 6)", () => {
   const ROLES: RoleId[] = ["police", "mafia", "doctor", "citizen"];
   const PHASES: PhaseId[] = ["roleReveal", "dayAnnounce", "discussion", "night", "morning"];
 
-  it.each(ROLES)("%s: 모든 단계에서 `역할 카드` 버튼이 정확히 하나, `수사 기록`·`내 역할` 이름의 버튼은 없다", (role) => {
+  it.each(ROLES)("%s: 모든 단계에서 `내 역할` 버튼이 정확히 하나, `수사 기록`·옛 `역할 카드` 이름의 버튼은 없다", (role) => {
     for (const phase of PHASES) {
       const r = renderRoom(makeView({ role, phase }));
       const buttons = Array.from(document.querySelectorAll<HTMLElement>("button"));
       const names = buttons.map((b) => b.getAttribute("aria-label") ?? b.textContent ?? "");
       const head = buttons.filter((b) => b.classList.contains("mf-rolecard-btn"));
       expect(`${phase}:${head.length}`).toBe(`${phase}:1`);
-      // 낮 시작~아침은 08-13·08-18 부터 맵 화면이라 글자 없는 아이콘 버튼이다(UI-SPEC A2). 이름은 두 모양 모두 `역할 카드`
-      const mapPhase = phase !== "roleReveal";
-      expect(`${phase}:${head[0]!.textContent}`).toBe(`${phase}:${mapPhase ? "" : "역할 카드"}`);
-      expect(`${phase}:${head[0]!.getAttribute("aria-label")}`).toBe(`${phase}:역할 카드`);
+      // 14-05: 두 화면 모두 같은 모양 — 아이콘 아래 한 단어 `내 역할`(접근성 이름·보이는 글자·data-tool-label 이 같다)
+      expect(`${phase}:${head[0]!.textContent}`).toBe(`${phase}:내 역할`);
+      expect(`${phase}:${head[0]!.getAttribute("aria-label")}`).toBe(`${phase}:내 역할`);
+      expect(`${phase}:${head[0]!.getAttribute("data-tool-label")}`).toBe(`${phase}:내 역할`);
       expect(`${phase}:${names.some((x) => x.includes("수사 기록"))}`).toBe(`${phase}:false`);
-      expect(`${phase}:${names.some((x) => x === "내 역할")}`).toBe(`${phase}:false`);
+      expect(`${phase}:${names.some((x) => x === "역할 카드")}`).toBe(`${phase}:false`);
       r.unmount();
     }
   });
 
-  it("버튼에는 아이콘 20 이 있고 글자는 `역할 카드` 뿐이다 (역할 확인 — 글자가 있는 틀; 옛 투표 단계 화면은 08-19 에 지움)", () => {
-    renderRoom(makeView({ phase: "roleReveal" }));
-    const svg = headBtn()?.querySelector("svg");
-    expect(svg?.getAttribute("width") ?? "(아이콘 없음)").toBe("20");
-    expect(headBtn()?.textContent).toBe("역할 카드");
-  });
-
-  it("맵 화면(낮 토론)의 버튼은 아이콘 22 만 있고 글자가 없는 44×44 아이콘 버튼이다 (08-13, UI-SPEC A2)", () => {
-    renderRoom(makeView({ phase: "discussion" }));
+  it.each(["roleReveal", "discussion"] as const)("%s: 버튼은 아이콘 면(36) 아래 라벨 `내 역할` 한 모양이다(두 모양 통일, 14-05)", (phase) => {
+    renderRoom(makeView({ phase }));
     const svg = headBtn()?.querySelector("svg");
     expect(svg?.getAttribute("width") ?? "(아이콘 없음)").toBe("22");
-    expect(headBtn()?.textContent).toBe("");
-    expect(headBtn()?.classList.contains("mf-iconbtn")).toBe(true);
+    expect(headBtn()?.querySelector(".mf-rolecard-btn__face svg") === null ? "면 없음" : "면 있음").toBe("면 있음");
+    expect(headBtn()?.querySelector(".mf-rolecard-btn__label")?.textContent).toBe("내 역할");
+    expect(headBtn()?.textContent).toBe("내 역할");
   });
 });
 
 describe("앰버 점과 읽음 (D-11)", () => {
-  it("경찰이 기록 2개·읽은 개수 0: 이름 `역할 카드, 새 기록`, 점 1개(aria-hidden)", () => {
+  it("경찰이 기록 2개·읽은 개수 0: 이름 `내 역할, 새 기록`, 점 1개(aria-hidden)", () => {
     renderRoom(makeView({ phase: "discussion", records: POLICE_TWO }));
-    expect(headBtn()?.getAttribute("aria-label")).toBe("역할 카드, 새 기록");
+    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할, 새 기록");
     const dots = headBtn()!.querySelectorAll(".mf-rolecard-btn__dot");
     expect(dots.length).toBe(1);
     expect(dots[0]!.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("기록 0개 또는 모두 읽음이면 이름 `역할 카드`, 점 없음", () => {
+  it("기록 0개 또는 모두 읽음이면 이름 `내 역할`, 점 없음", () => {
     renderRoom(makeView({ records: [] }));
-    expect(headBtn()?.getAttribute("aria-label")).toBe("역할 카드");
+    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할");
     expect(headDot()).toBe(false);
     cleanup();
     storage.setItem(KEY, "2");
     renderRoom(makeView({ records: POLICE_TWO }));
-    expect(headBtn()?.getAttribute("aria-label")).toBe("역할 카드");
+    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할");
     expect(headDot()).toBe(false);
   });
 
   it("시민·기록 없는 view 는 점이 없다", () => {
     renderRoom(makeView({ role: "citizen" }));
     expect(headDot()).toBe(false);
-    expect(headBtn()?.getAttribute("aria-label")).toBe("역할 카드");
+    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할");
   });
 
   it("누르면 dialog `역할 카드` 가 `내 역할` 탭으로 열리고 점은 그대로이며 탭에 `활동 기록, 새 기록` 점이 있다", () => {
@@ -223,7 +217,7 @@ describe("앰버 점과 읽음 (D-11)", () => {
     openActivity();
     expect(selectedTab()).toBe("활동 기록");
     expect(headDot()).toBe(false);
-    expect(headBtn()?.getAttribute("aria-label")).toBe("역할 카드");
+    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할");
     expect(tabDot()).toBe(false);
     expect(storage.getItem(KEY)).toBe("2");
     expect(newMarks()).toEqual(["NEW", "NEW"]);
@@ -307,7 +301,7 @@ describe("옛 [수사 기록] 시나리오 이전 (03.1-11 Task 3)", () => {
   it("읽은 개수 1 + 기록 2개면 점이 켜지고, 활동 기록 탭에서 모자란 한 줄(맨 위)만 NEW 다", () => {
     storage.setItem(KEY, "1");
     renderRoom(makeView({ records: POLICE_TWO }));
-    expect(headBtn()?.getAttribute("aria-label")).toBe("역할 카드, 새 기록");
+    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할, 새 기록");
     openSheet();
     openActivity();
     expect(newMarks()).toEqual(["NEW", "-"]);
@@ -335,24 +329,25 @@ describe("css 규약: 머리말 간격과 [역할 카드] 버튼 (UI-SPEC A·S5)
     expect(rule(phaseCss, ".mf-day__top")).toBe("");
   });
 
-  it("버튼은 14px 굵게·안쪽 12·아이콘 간격 8·줄바꿈 없음·점이 밖으로 나오도록 overflow visible", () => {
-    const r = rule(roleCss, ".mf-rolecard-btn");
+  it("단추는 아이콘 위·라벨 아래 세로 배치, 라벨 14/400 gray-300, 폭 ≤ 52·누르기 영역 44 이상, 점이 밖으로 나오도록 overflow visible (TOOL-01)", () => {
+    const r = rule(roleCss, ".mf-btn.mf-rolecard-btn");
     expect(/position:\s*relative/.test(r)).toBe(true);
     expect(/overflow:\s*visible/.test(r)).toBe(true);
-    expect(/padding:\s*0 12px/.test(r)).toBe(true);
-    expect(/gap:\s*8px/.test(r)).toBe(true);
-    expect(/font-size:\s*14px/.test(r)).toBe(true);
-    expect(/font-weight:\s*700/.test(r)).toBe(true);
+    expect(/flex-direction:\s*column/.test(r)).toBe(true);
+    expect(/max-width:\s*52px/.test(r)).toBe(true);
+    expect(/min-width:\s*var\(--tap-min\)/.test(r)).toBe(true);
     expect(/white-space:\s*nowrap/.test(r)).toBe(true);
+    const label = rule(roleCss, ".mf-rolecard-btn__label");
+    expect(/font-size:\s*14px/.test(label) && /font-weight:\s*400/.test(label) && /var\(--gray-300\)/.test(label)).toBe(true);
+    const face = rule(roleCss, ".mf-rolecard-btn__face");
+    expect(/width:\s*36px/.test(face) && /height:\s*36px/.test(face)).toBe(true);
   });
 
-  it("점은 안쪽 12 + 테두리 2 night-900, 오른쪽 위 -4, 앰버 면, 전환·애니메이션 없음", () => {
+  it("점은 면 오른쪽 위의 gray-100 8px(테두리 night-900 1px), 전환·애니메이션 없음 — v2.0 에서 앰버는 쓰지 않는다", () => {
     const d = rule(roleCss, ".mf-rolecard-btn__dot");
-    expect(/width:\s*12px/.test(d) && /height:\s*12px/.test(d)).toBe(true);
-    expect(/right:\s*-4px/.test(d) && /top:\s*-4px/.test(d)).toBe(true);
-    expect(/background:\s*var\(--amber-400\)/.test(d)).toBe(true);
-    expect(/border:\s*2px solid var\(--night-900\)/.test(d)).toBe(true);
-    expect(/box-sizing:\s*content-box/.test(d)).toBe(true);
+    expect(/width:\s*8px/.test(d) && /height:\s*8px/.test(d)).toBe(true);
+    expect(/background:\s*var\(--gray-100\)/.test(d)).toBe(true);
+    expect(/border:\s*1px solid var\(--night-900\)/.test(d)).toBe(true);
     expect(/transition|animation/.test(d)).toBe(false);
   });
 });

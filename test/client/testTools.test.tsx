@@ -236,9 +236,9 @@ describe("게임 중: 버튼 자리와 두 동작 (U-03, U-04)", () => {
     expect(String(actionOf(/^대기실로 되돌리기/).disabled)).toBe("true");
   });
 
-  it("역할 확인에서는 버튼이 위쪽 바 .mf-phasebar__extra 안에 있다", () => {
+  it("역할 확인에서는 버튼이 머리 오른쪽 .mf-reveal__header .mv-phase__side 안에 있다(14-05)", () => {
     open({ phase: "roleReveal", testMode: true });
-    expect(String((testBtn() as HTMLElement).closest(".mf-phasebar__extra") !== null)).toBe("true");
+    expect(String((testBtn() as HTMLElement).closest(".mf-reveal__header .mv-phase__side") !== null)).toBe("true");
   });
 
   it("낮 시작 발표에서도 버튼은 맵 화면의 .mf-game__test 에 있다 (08-13)", () => {

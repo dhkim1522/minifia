@@ -494,26 +494,26 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
     expect(container.textContent).not.toContain("모두의 직업이 보여요");
   });
 
-  it("[역할 카드] 는 글자 없는 44×44 아이콘 버튼이고 헤더 오른쪽 끝(.mv-phase__side)에 홀로 놓인다 — aria-label '역할 카드'", () => {
+  it("[내 역할] 은 아이콘 아래 한 단어 이름표 단추이고 헤더 오른쪽 끝(.mv-phase__side)에 홀로 놓인다 — aria-label '내 역할' (TOOL-01 6)", () => {
     const { container } = mount(makeView());
     const btn = container.querySelector(".mf-game__header button") as HTMLButtonElement;
-    expect(btn.getAttribute("aria-label")).toBe("역할 카드");
-    expect(btn.textContent).toBe("");
-    expect(btn.classList.contains("mf-iconbtn")).toBe(true);
+    expect(btn.getAttribute("aria-label")).toBe("내 역할");
+    expect(btn.getAttribute("data-tool-label")).toBe("내 역할");
+    expect(btn.textContent).toBe("내 역할");
     expect(btn.querySelector("svg")).not.toBeNull();
     expect(btn.parentElement?.classList.contains("mv-phase__side")).toBe(true);
     expect(container.querySelector('.mf-game__header [role="timer"]')).toBeNull();
-    // 헤더가 맵보다 DOM 앞이라 Tab 순서가 [역할 카드] → 이름표 → 입력이다
-    expect(container.querySelectorAll("button[aria-label='역할 카드']").length).toBe(1);
+    // 헤더가 맵보다 DOM 앞이라 Tab 순서가 [내 역할] → 이름표 → 입력이다
+    expect(container.querySelectorAll("button[aria-label='내 역할']").length).toBe(1);
   });
 
-  it("안 읽은 일지가 있으면 이름이 '역할 카드, 새 기록' 이고 gray-100 점이 붙는다(앰버 아님)", () => {
+  it("안 읽은 일지가 있으면 이름이 '내 역할, 새 기록' 이고 gray-100 점이 붙는다(앰버 아님)", () => {
     const { container } = mount(makeView({ records: [{ n: 1, target: 1, isMafia: false }] }));
     const btn = container.querySelector(".mf-game__header button") as HTMLButtonElement;
-    expect(btn.getAttribute("aria-label")).toBe("역할 카드, 새 기록");
+    expect(btn.getAttribute("aria-label")).toBe("내 역할, 새 기록");
     expect(btn.querySelector(".mf-rolecard-btn__dot")).not.toBeNull();
     const css = readFileSync("src/styles/rolecard.css", "utf8");
-    expect(css).toMatch(/\.mf-rolecard-btn--icon \.mf-rolecard-btn__dot[^}]*var\(--gray-100\)/);
+    expect(css).toMatch(/\.mf-rolecard-btn__dot[^}]*var\(--gray-100\)/);
   });
 
   it("눌러 열면 역할 카드 시트가 열린다", () => {

@@ -199,6 +199,17 @@ describe("roleText (역할 문구 한 곳)", () => {
   });
 });
 
+describe("RoleCard 빛남 call (HOST-03)", () => {
+  it("call 이면 루트에 is-call 과 값 없는 data-call, 아니면 둘 다 없다", () => {
+    const on = render(<RoleCard role="mafia" face="back" allies={null} onFlip={vi.fn()} call />);
+    expect(cardRoot(on.container).classList.contains("is-call")).toBe(true);
+    expect(cardRoot(on.container).getAttribute("data-call")).toBe("");
+    const off = render(<RoleCard role="mafia" face="back" allies={null} onFlip={vi.fn()} />);
+    expect(cardRoot(off.container).classList.contains("is-call")).toBe(false);
+    expect(cardRoot(off.container).hasAttribute("data-call")).toBe(false);
+  });
+});
+
 describe("역할 목표 한 줄 (TOOL-03)", () => {
   const GOALS = {
     mafia: "밤마다 한 명을 없애 시민 편과 수가 같아지면 승리합니다.",
