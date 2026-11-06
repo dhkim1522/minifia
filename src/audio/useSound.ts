@@ -35,6 +35,13 @@ export interface UseSoundOptions {
   offset?: number;
   /** 로컬 시계(기본 Date.now). 시험이 엔진 시계를 넣는다 */
   now?: () => number;
+  /** 각자 폰의 난수(기본 Math.random) — 밤 큐 시각. 시험은 시드 난수를 넣는다 (12-09) */
+  random?: () => number;
+  /**
+   * 시각 맥박(TensionVignette)이 밤 큐를 내고 있는가 — RoomScreen 이 nightDarkOf(view) && !reducedMotion 으로 계산한 불리언 하나(12-09, D-11).
+   * 참이면 소리는 시각 큐 신호(tensionCue)에 맞추고, 거짓이면 소리 전용 스케줄러가 같은 규칙으로 낸다. 역할 값은 이 훅에 오지 않는다.
+   */
+  visualCues?: boolean;
 }
 
 /** 깨우는 제스처. 눌림 시작 이벤트는 쓰지 않는다 — iOS 가 인정하지 않는 경우가 있다 */
@@ -58,15 +65,20 @@ export function useSound(options: UseSoundOptions = {}): SoundView {
   const engine = options.engine ?? getEngine();
   const active = options.active ?? true;
   const hook = options.hook ?? false;
-  const { view = null, epoch = 0, offset = 0 } = options;
+  const { view = null, epoch = 0, offset = 0, visualCues = false } = options;
   const clockNow = options.now ?? Date.now;
+  const random = options.random ?? Math.random;
   // 감독에 먹인 직전 상태. 방을 떠나거나(정리) 개발 모드 이중 효과 실행에서 비워 첫 스냅샷처럼 다룬다
   const last = useRef<Directed | null>(null);
   const lastJoinAt = useRef<number | null>(null);
   const offsetRef = useRef(offset);
   const nowRef = useRef(clockNow);
+  const randomRef = useRef(random);
+  const visualCuesRef = useRef(visualCues);
   offsetRef.current = offset;
   nowRef.current = clockNow;
+  randomRef.current = random;
+  visualCuesRef.current = visualCues;
   const snap = useSyncExternalStore(engine.subscribe, engine.snapshot, engine.snapshot);
 
   useEffect(() => {
@@ -107,7 +119,14 @@ export function useSound(options: UseSoundOptions = {}): SoundView {
     const av = audioViewOf(view);
     const now = nowRef.current();
     const prev = last.current;
-    const out = direct(prev?.av ?? null, av, { now, offset: offsetRef.current, reset: prev !== null && prev.epoch !== epoch, lastJoinAt: lastJoinAt.current });
+    const out = direct(prev?.av ?? null, av, {
+      now,
+      offset: offsetRef.current,
+      reset: prev !== null && prev.epoch !== epoch,
+      lastJoinAt: lastJoinAt.current,
+      rng: randomRef.current,
+      visualCues: visualCuesRef.current,
+    });
     last.current = { av, epoch };
     if (out.now.some((c) => c.id === "lobby.join")) lastJoinAt.current = now;
     apply(engine, out);
@@ -117,7 +136,7 @@ export function useSound(options: UseSoundOptions = {}): SoundView {
   useEffect(() => {
     if (!active) return;
     return bindSignals((signal) => {
-      apply(engine, directSignal(signal, last.current?.av ?? null));
+      apply(engine, directSignal(signal, last.current?.av ?? null, { visualCues: visualCuesRef.current }));
     });
   }, [engine, active]);
 

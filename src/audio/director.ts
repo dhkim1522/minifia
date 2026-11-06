@@ -3,11 +3,15 @@
 // 소리 시작 시각은 공개 단계 시각(endsAt)·상수·로컬 시계의 함수이고 프레임 도착 시각이 아니다 (LS-11):
 //   예약 지연 = endsAt − (local.now + local.offset)  — 같은 단계 view 가 늦게 도착해도 서버 시각 기준 예약 지점이 같다.
 // 첫 스냅샷(직전 view 없음)·연결 번호(epoch) 변경(local.reset)은 현재 단계 침대만 낸다 — 일회성 소리·대본은 없다 (LS-10).
-// 12-09(밤·아침·유언)와 12-10(판결·동작)은 이 파일의 enterSounds·inPhase 규칙에 더한다.
+// 12-09 밤: 서버 프레임은 밤 소리를 만들지 않는다 — 밤에 감독이 읽는 것은 단계·마감·일차뿐이고(LS-2), 역할·살아 있음·모션 줄이기는 입력이 아니다(LS-3).
+//   큐 스케줄(D-11)은 갈림 불리언 하나(local.visualCues: 시각 맥박이 큐를 내는 중인가)로만 갈린다. 거짓이면 소리 전용 스케줄러(nightCues)가,
+//   참이면 TensionVignette 의 큐 신호(tensionCue)가 같은 규칙으로 같은 night.cue 를 낸다. 밤의 모든 닫힌 신호는 무음이다(LS-7).
+// 12-10(판결·동작)은 이 파일의 ENTER_SOUND·inPhase 규칙에 더한다.
+import { NIGHT_MS } from "../../shared/game/phases";
 import type { PhaseId } from "../../shared/protocol";
 import type { AudioView } from "./audioView";
 import type { BedId, SfxId } from "./recipes";
-import { pickTickSchedule, tickSchedule, type DuckSpan, type ScriptItem } from "./script";
+import { nightCues, pickTickSchedule, tickSchedule, type DuckSpan, type Rng, type ScriptItem } from "./script";
 import type { LocalSignal } from "./signals";
 
 /** 단계 → 침대 표: 14개 단계 전수. null 은 침대 없음(assigning: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
@@ -52,7 +56,13 @@ export interface LocalClock {
   reset: boolean;
   /** 마지막으로 lobby.join 을 낸 로컬 시각 */
   lastJoinAt: number | null;
+  /** 밤 큐의 난수(각자 폰의 난수, 시험은 시드). 없으면 고정열 — 전역 난수를 읽지 않는다 */
+  rng?: Rng;
+  /** 시각 맥박(TensionVignette)이 큐를 내고 있는가 — RoomScreen 이 nightDarkOf(view) && !reducedMotion 으로 계산한 불리언 하나(D-11). 감독은 역할을 읽지 않는다 */
+  visualCues?: boolean;
 }
+
+const FALLBACK_RNG: Rng = () => 0.5;
 
 export interface SoundCall {
   id: SfxId;
@@ -86,6 +96,7 @@ export function emptyOutput(): DirectOutput {
 // ───────────────────────── 대본 키 ─────────────────────────
 
 const phaseKey = (v: AudioView): string => `phase:${v.phase}:${v.dayN ?? 0}`;
+const nightKey = (v: AudioView): string => `night:${v.dayN ?? 0}`;
 
 function inTurn(v: AudioView): boolean {
   const t = v.turn;
@@ -96,6 +107,7 @@ function inTurn(v: AudioView): boolean {
 function scriptKeys(v: AudioView): string[] {
   const keys: string[] = [];
   if (TICK_PHASES.includes(v.phase)) keys.push(phaseKey(v));
+  if (v.phase === "night") keys.push(nightKey(v));
   if (inTurn(v) && v.turn!.doneAt === undefined) keys.push(pickKey(v));
   return keys;
 }
@@ -128,12 +140,30 @@ function remainingMs(endsAt: number | null | undefined, local: LocalClock): numb
   return endsAt - (local.now + local.offset);
 }
 
+/**
+ * 소리 전용 밤 큐 대본(D-11). visualCues 가 참이면 만들지 않는다(시각 맥박의 큐 신호가 대신 낸다).
+ * 지난 시간은 마감(endsAt)에서 환산한다 — 도착이 늦거나 밤 중간에 합류해도 큐는 남은 시간 안에서만 서고(LS-10, LS-11),
+ * 같은 서버 시각의 밤이면 도착 지연과 무관하게 예약 지점이 같다. 시각은 "지금부터 ms" 다.
+ */
+function nightCueRun(cur: AudioView, local: LocalClock, out: DirectOutput): void {
+  if (local.visualCues === true) return;
+  const rest = remainingMs(cur.endsAt, local);
+  const elapsed = rest === null ? 0 : Math.min(NIGHT_MS, Math.max(0, NIGHT_MS - rest));
+  const items: ScriptItem[] = nightCues(local.rng ?? FALLBACK_RNG, elapsed).map((at) => ({ at: at - elapsed, id: "night.cue" as const }));
+  out.scripts.push({ key: nightKey(cur), items, duck: null });
+}
+
 /** 단계 전환(직전 view 와 단계가 다름) */
-function onPhaseChange(prev: AudioView, cur: AudioView, out: DirectOutput): void {
+function onPhaseChange(prev: AudioView, cur: AudioView, local: LocalClock, out: DirectOutput): void {
   const bed = BED_OF[cur.phase];
   if (bed !== BED_OF[prev.phase]) out.bed = bed;
   const enter = ENTER_SOUND[cur.phase];
   if (enter !== undefined) out.now.push({ id: enter });
+  // 밤 진입: night.fall 은 진입 즉시, 큐는 소리 전용 갈래에서만 대본으로(침대는 위 BED_OF)
+  if (cur.phase === "night") {
+    out.now.push({ id: "night.fall" });
+    nightCueRun(cur, local, out);
+  }
 }
 
 /** 같은 단계 안의 변화 */
@@ -182,15 +212,17 @@ export function direct(prev: AudioView | null, cur: AudioView | null, local: Loc
   if (cur === null) return out;
   if (prev === null) {
     out.bed = BED_OF[cur.phase];
+    if (cur.phase === "night") nightCueRun(cur, local, out); // 밤 중간 합류: 침대 + 남은 시간 안의 새 큐 (night.fall 없음)
     return out;
   }
   if (local.reset) {
     out.bed = BED_OF[cur.phase];
     out.cancel = scriptKeys(prev);
+    if (cur.phase === "night") nightCueRun(cur, local, out);
     return out;
   }
   const phaseChanged = prev.phase !== cur.phase;
-  if (phaseChanged) onPhaseChange(prev, cur, out);
+  if (phaseChanged) onPhaseChange(prev, cur, local, out);
   else inPhase(prev, cur, local, out);
   if (phaseChanged || prev.endsAt !== cur.endsAt) tickRun(cur, local, out);
   // 이전 view 의 대본 가운데 지금도 유효한 키(같은 키는 runScript 가 교체한다)가 아니면 취소한다
@@ -199,10 +231,35 @@ export function direct(prev: AudioView | null, cur: AudioView | null, local: Loc
   return out;
 }
 
-/** 로컬 신호 처리. 소리를 낼지·어떤 id 인지는 여기서 정한다. 밤의 주요 버튼은 무음이다 (LS-7) */
-export function directSignal(signal: LocalSignal, cur: AudioView | null): DirectOutput {
+/** 신호 처리에 필요한 로컬 값 — RoomScreen 이 넘긴 불리언뿐이다 */
+export interface SignalContext {
+  visualCues?: boolean;
+}
+
+/**
+ * 로컬 신호 처리. 소리를 낼지·어떤 id 인지는 여기서 정한다.
+ * 밤에는 모든 닫힌 신호가 무음이다(LS-7) — 시각 큐 갈래의 tensionCue 하나만 night.cue 를 낸다(박자를 시각과 맞춘다, D-11).
+ */
+export function directSignal(signal: LocalSignal, cur: AudioView | null, ctx: SignalContext = {}): DirectOutput {
   const out = emptyOutput();
   if (cur === null) return out;
-  if (signal.kind === "tap" && cur.phase !== "night") out.now.push({ id: "ui.tap" });
+  if (cur.phase === "night") {
+    if (signal.kind === "tensionCue" && ctx.visualCues === true) out.now.push({ id: "night.cue" });
+    return out;
+  }
+  switch (signal.kind) {
+    case "tap":
+      out.now.push({ id: "ui.tap" });
+      break;
+    case "card": {
+      // 카드가 화면에 보이는 시각에 ui.card 한 번 — 카드 종류·글은 신호에 없다(LS-5)
+      const d = Number.isFinite(signal.delayMs) ? Math.max(0, Math.round(signal.delayMs)) : 0;
+      if (d === 0) out.now.push({ id: "ui.card" });
+      else out.scripts.push({ key: `card:${cur.dayN ?? 0}:${d}`, items: [{ at: d, id: "ui.card" }], duck: null });
+      break;
+    }
+    case "tensionCue":
+      break; // 밤이 아니면 시각 큐도 소리가 없다
+  }
   return out;
 }

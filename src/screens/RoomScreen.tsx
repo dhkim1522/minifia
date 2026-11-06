@@ -4,6 +4,7 @@ import { isAlive } from "../../shared/game/alive";
 import { phaseKey } from "../../shared/game/audience";
 import type { PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
 import { useSound } from "../audio/useSound";
+import { nightDarkOf } from "../game/nightDark";
 import { Button } from "../components/Button";
 import { ReconnectBanner } from "../components/ReconnectBanner";
 import { RoleCardButton } from "../components/RoleCardButton";
@@ -255,7 +256,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 소리(12-07): 방 화면이 보이는 동안 제스처 resume·탭 가시성을 이어 주고, 소리 단추를 한 번 그린다. 소리 설정은 서버로 가지 않는다.
   const [soundHook] = useState(soundHookOn);
   // 12-08: 같은 훅이 view 차이(공개 필드만)를 소리 감독에 넣는다. 연결 번호가 바뀐 렌더는 침대만 낸다.
-  const sound = useSound({ active: view !== null, hook: soundHook, view, epoch: connection.epoch, offset: connection.offset });
+  // 12-09: 밤 큐의 갈림 불리언 하나. 시각 맥박(TensionVignette)이 실제로 큐를 내는 조건과 같은 식(GameMap 의 nightDark && !reducedMotion).
+  // 소리 쪽에는 이 불리언만 간다 — 역할 값은 가지 않고, 두 갈래의 소리 id·큐 개수는 같다(LS-3).
+  const visualCues = view !== null && nightDarkOf(view) && !reducedMotion;
+  const sound = useSound({ active: view !== null, hook: soundHook, view, epoch: connection.epoch, offset: connection.offset, visualCues });
 
   // 대기실·배정 동안 직업 그림 4종 전부와 낮 배경을 미리 받아 둔다.
   // 어떤 역할인지와 무관하게 같은 요청 패턴이다(Pattern 13 ②, Pitfall 20).

@@ -990,6 +990,7 @@ describe("밤 소리: 시각 큐 갈래와 소리 전용 갈래는 같은 소리
     const rig = makeRig();
     setEngineForTest(rig.engine);
     if (opts.reduced === true) vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+    vi.setSystemTime(NOW); // 앞 사람의 9.1초가 이 사람의 밤 마감을 앞지르지 않게
     const m = mount(makeView({ phase: "execution", mySeat, ...(opts.dead ? { dead: opts.dead } : {}) }));
     m.show(makeView({ mySeat, ...(opts.dead ? { dead: opts.dead } : {}) }));
     act(() => void vi.advanceTimersByTime(9_100)); // 시각 맥박(시민 편)은 이 타이머로 큐를 낸다

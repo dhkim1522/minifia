@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
@@ -7,6 +7,7 @@ import { canMoveIn } from "../../shared/game/movement";
 import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
 import { APPROACH_DIST_FX, approachPoint, positionAtFx } from "../../shared/game/world";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
+import { emitSignal } from "../audio/signals";
 import { KillFx } from "../components/KillFx";
 import { PoliceResultCard } from "../components/PoliceResultCard";
 import { BallotReveal } from "../components/v2/BallotReveal";
@@ -29,6 +30,7 @@ import { WorldStage } from "../components/WorldStage";
 import type { WorldPick } from "../components/WorldStage";
 import { PICK_TURN_MS } from "../../shared/game/phases";
 import { LOG_H_KB } from "../game/chatUi";
+import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
 import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../game/dayView";
@@ -309,7 +311,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const nighting = view.phase === "night";
   const nightMafia = nighting && meAlive && view.me.role === "mafia";
   // 시민 편(산 시민·경찰·의사)의 밤: 같은 어둠 표식과 긴장 비네트를 본다. 역할마다 다르지 않다(NIGHT-10, E3 #20). 마피아·유령·낮에는 없다.
-  const nightDark = nighting && meAlive && !nightMafia;
+  // 판정식은 nightDarkOf 하나다 — RoomScreen 이 같은 식으로 소리의 시각 큐 갈래를 정한다(12-09).
+  const nightDark = nightDarkOf(view);
   const recordCue = useMemo(
     () =>
       tensionHooksOn()
@@ -319,6 +322,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         : undefined,
     [],
   );
+  // 시각 큐가 울릴 때마다 소리에 신호 하나(12-09, D-11). 인자 없음 — 소리는 시각 맥박과 같은 박자로만 난다. E2E 기록(recordCue)은 그대로 부른다.
+  const onTensionCue = useCallback((): void => {
+    emitSignal({ kind: "tensionCue" });
+    recordCue?.();
+  }, [recordCue]);
   // 동점 결선(09.1.1-14): 후보가 아닌 산 사람이 투표 창(step 1)에 후보 둘 중 하나를 누른다. 서버 값은 view.me.ballot(본인에게만 온다)
   const runoff = view.phase === "runoff" ? view.day?.runoff : undefined;
   const runoffVoting = runoff !== undefined && runoff.step === 1 && meAlive && canSend && !runoff.cand.includes(view.me.seat);
@@ -656,7 +664,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         canWalk={canWalk}
         underlay={
           nightDark ? (
-            <TensionVignette reducedMotion={reducedMotion} {...(recordCue ? { onCue: recordCue } : {})} />
+            <TensionVignette reducedMotion={reducedMotion} onCue={onTensionCue} />
           ) : (
             // 지목 동안 화면을 살짝 어둡게(UI-SPEC A-1): 모이기·차례·확정에 켜고 끝 알림에 걷는다. 캔버스 위·이름표 층 아래라서 WorldStage 의 underlay 자리에 둔다
             <div className="mf-game__dim" aria-hidden="true" data-dim={moment.darken ? "verdict" : dimOn ? "on" : "off"} />

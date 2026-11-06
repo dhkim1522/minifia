@@ -476,6 +476,7 @@ describe("감독 출력 id 는 모두 화면 대응이 있다 (LS-1)", () => {
     for (const a of PHASES) {
       for (const b of PHASES) outs.push(direct(av(a, { endsAt: NOW + 20_000 }), av(b, { endsAt: NOW + 20_000 }), clock()));
       outs.push(directSignal({ kind: "tap" }, av(a)));
+      outs.push(directSignal({ kind: "card", delayMs: 0 }, av(a)), directSignal({ kind: "tensionCue" }, av(a), { visualCues: true }));
     }
     const lobby = (n: number): AudioView => av("lobby", { players: Array.from({ length: n }, (_, seat) => ({ seat, alive: true })) });
     outs.push(direct(lobby(2), lobby(3), clock()));
@@ -493,10 +494,11 @@ describe("감독 출력 id 는 모두 화면 대응이 있다 (LS-1)", () => {
     }
     for (const id of emitted) {
       expect(Object.keys(SCREEN_COUNTERPART), id).toContain(id);
-      if (!(BED_IDS as readonly string[]).includes(id)) expect(AMBIENT_IDS as readonly string[], id).not.toContain(id);
+      // 분위기 소리(침대·night.cue)는 정보가 아니다 — 그 밖의 id 는 분위기 표에 없어야 한다 (night.cue 는 12-09 밤 큐)
+      if (!(BED_IDS as readonly string[]).includes(id) && id !== "night.cue") expect(AMBIENT_IDS as readonly string[], id).not.toContain(id);
     }
     // 이 계획이 맡는 소리가 실제로 모두 나온다
-    for (const id of ["game.start", "role.flip", "day.start", "phase.vote", "lobby.join", "timer.tick", "pin.on", "pick.turn", "pick.tick", "pick.point", "pin.move", "pick.skip", "ui.tap"] as SfxId[]) {
+    for (const id of ["game.start", "role.flip", "day.start", "phase.vote", "lobby.join", "timer.tick", "pin.on", "pick.turn", "pick.tick", "pick.point", "pin.move", "pick.skip", "ui.tap", "night.fall", "night.cue", "ui.card"] as SfxId[]) {
       expect(emitted.has(id), id).toBe(true);
     }
   });
