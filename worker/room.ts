@@ -8,7 +8,7 @@ import { ballotsCardText } from "../shared/game/ballots";
 import { audience, channelOf, phaseKey, worldVisibleTo } from "../shared/game/audience";
 import { bumpStat } from "../shared/game/stats";
 import { pruneBench, pruneLobby, resolveHost } from "../shared/game/continuity";
-import { CHAT_KEY_PREFIX, appendLine, appendWhisperPair, chatKey, emptyChatLog, replayFor, restoreChatLog, seatMask, toWire } from "../shared/game/chatLog";
+import { CHAT_KEY_PREFIX, appendLine, appendWhisperPair, chatKey, clearSeat, emptyChatLog, replayFor, restoreChatLog, seatMask, toWire } from "../shared/game/chatLog";
 import type { ChatLog } from "../shared/game/chatLog";
 import { checkChatSend, sanitizeChatText, typingRelay } from "../shared/game/chatRules";
 import { emoteGate } from "../shared/game/emote";
@@ -391,6 +391,7 @@ export class Room extends DurableObject<Env> {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
+    const before = this.room.players;
     const result = leaveRoom(this.room, att.playerId);
     if (!result.ok) {
       this.sendTo(ws, { t: "error", code: result.error === "WRONG_PHASE" ? "WRONG_PHASE" : "BAD_MESSAGE" });
@@ -414,6 +415,7 @@ export class Room extends DurableObject<Env> {
       return;
     }
     this.room = result.state;
+    await this.vacateSeats(before, result.state.players);
     this.world = despawnPlayer(this.world, att.playerId);
     await this.persistAndBroadcast();
     await this.reschedule();
@@ -437,6 +439,7 @@ export class Room extends DurableObject<Env> {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
+    const before = this.room.players;
     const result = kickPlayer(this.room, att.playerId, seat);
     if (!result.ok) {
       this.sendTo(ws, { t: "error", code: result.error });
@@ -444,6 +447,7 @@ export class Room extends DurableObject<Env> {
     }
     this.closePlayerSockets(result.removedId, "kicked");
     this.room = result.state;
+    await this.vacateSeats(before, result.state.players);
     this.world = despawnPlayer(this.world, result.removedId);
     await this.persistAndBroadcast();
     await this.flushWorld();
@@ -1021,6 +1025,7 @@ export class Room extends DurableObject<Env> {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
+    const before = this.room.players;
     const result = setBotCount(this.room, att.playerId, count, () => crypto.randomUUID(), cryptoRandInt);
     if (!result.ok) {
       this.rejectTestTool(ws, att.playerId, result.error);
@@ -1028,6 +1033,7 @@ export class Room extends DurableObject<Env> {
     }
     if (result.state === this.room) return;
     this.room = result.state;
+    await this.vacateSeats(before, result.state.players);
     const spawned = this.syncWorldPlayers(Date.now());
     await this.persistAndBroadcast();
     // 새 봇은 자기 seat 의 입장 지점에 서고, 방장 소켓은 state 다음에 그 한 점 구간을 받는다. 뺀 봇은 world 에서 지워졌다.
@@ -1073,6 +1079,7 @@ export class Room extends DurableObject<Env> {
     const benchPruned = pruneBench(lobbyPruned.state, now);
     if (next !== room) {
       this.room = benchPruned.state;
+      await this.vacateSeats(room.players, benchPruned.state.players);
       this.despawnRemoved(lobbyPruned.removedIds);
       await this.afterTransition(room, now);
       if (lobbyPruned.removedIds.length > 0) await this.flushWorld();
@@ -1080,6 +1087,7 @@ export class Room extends DurableObject<Env> {
     }
     if (benchPruned.state !== room) {
       this.room = benchPruned.state;
+      await this.vacateSeats(room.players, benchPruned.state.players);
       this.despawnRemoved(lobbyPruned.removedIds);
       if (lobbyPruned.state !== room) await this.persistAndBroadcast();
       else await this.ctx.storage.put("room", this.room);
@@ -1090,6 +1098,25 @@ export class Room extends DurableObject<Env> {
     // 새 유령 snap 은 전환 때만 보낸다: 퇴거로 비워진 ghostSnapped 때문에 깨어날 때마다 같은 snap 을 다시 보내지 않는다(08 동작 유지).
     await this.syncHome(now);
     this.syncLayout(now);
+  }
+
+  /**
+   * 좌석이 비는 모든 경로(나가기·내보내기·봇 줄이기·대기실 자동 정리)가 지나는 한 곳(07 리뷰 WR-01): before 에 있었고 after 에 없는 사람의 좌석 비트를
+   * 보관 줄의 수신자 마스크에서 지우고 바뀐 레코드만 다시 저장한다. 다음 입장자가 같은 좌석을 받아도 자기 입장 전 줄을 복원받지 않는다.
+   * 결과 단계의 나가기는 사람을 지우지 않고 left 로 표시만 하므로(좌석 유지) 여기를 지나도 아무것도 바뀌지 않는다.
+   */
+  private async vacateSeats(before: readonly { id: string; seat: number }[], after: readonly { id: string }[]): Promise<void> {
+    const kept = new Set(after.map((p) => p.id));
+    for (const p of before) {
+      if (kept.has(p.id)) continue;
+      const cleared = clearSeat(this.chatLog, p.seat);
+      if (cleared.changed.length === 0) continue;
+      this.chatLog = cleared.log;
+      // put(entries) 도 한 번에 128개까지다 — deleteChatKeys 와 같은 크기로 나눈다.
+      for (let i = 0; i < cleared.changed.length; i += CHAT_DELETE_MAX) {
+        await this.ctx.storage.put(Object.fromEntries(cleared.changed.slice(i, i + CHAT_DELETE_MAX).map((r) => [chatKey(r.g), r])));
+      }
+    }
   }
 
   // 정리로 지워진 사람의 월드 자리를 걷는다(D-18). 저장은 호출한 쪽이 flushWorld 로 한다.

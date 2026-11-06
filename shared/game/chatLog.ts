@@ -162,6 +162,24 @@ export function replayFor(log: ChatLog, seat: number, perChannel: number = CHAT_
   return mine.filter((x) => picked.has(x.g)).map(toWire);
 }
 
+/**
+ * 좌석이 비었을 때 보관 줄의 수신자 마스크에서 그 좌석 비트를 지운다(07 리뷰 WR-01). 로비는 나가기·내보내기·봇 줄이기·자동 정리 뒤
+ * 같은 좌석을 다음 입장자에게 주므로, 비트가 남아 있으면 새 사람이 자기 입장 전 줄을 복원으로 받는다 — 복원이 보낼 때 수신자보다 넓어진다.
+ * 입력은 바꾸지 않는다. 바뀐 레코드만 changed 로 돌려주고(저장소에 다시 쓸 대상), 바뀐 게 없으면 같은 log 객체를 돌려준다.
+ */
+export function clearSeat(log: ChatLog, seat: number): { log: ChatLog; changed: ChatRecord[] } {
+  if (!Number.isInteger(seat) || seat < 0 || seat >= MAX_PLAYERS) return { log, changed: [] };
+  const bit = 1 << seat;
+  const changed: ChatRecord[] = [];
+  const records = log.records.map((x) => {
+    if ((x.r & bit) === 0) return x;
+    const next: ChatRecord = { ...x, r: x.r & ~bit };
+    changed.push(next);
+    return next;
+  });
+  return changed.length === 0 ? { log, changed } : { log: { ...log, records }, changed };
+}
+
 function isChannel(v: unknown): v is ChatChannel {
   return v === "all" || v === "mafia" || v === "ghost";
 }
