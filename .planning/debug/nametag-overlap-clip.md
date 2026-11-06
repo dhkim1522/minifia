@@ -4,6 +4,10 @@ trigger: "UAT G-06-4 — 8명이 모이면 맨 앞 이름표(특히 '(나)')가 
 created: 2026-11-01T00:00:00Z
 updated: 2026-11-01T07:21:00Z
 goal: find_root_cause_only
+audit_acknowledged:
+  milestone: v2.0
+  at: 2026-11-07
+  status: diagnosed
 ---
 
 ## Current Focus
@@ -14,6 +18,7 @@ expecting: (완료)
 next_action: 없음(진단만). 호출자가 사용자에게 계약 변경 승인을 받은 뒤 fix 단계에서 UI-SPEC·코드·테스트를 함께 고친다.
 
 ## Symptoms
+
 <!-- 오케스트레이터가 채워 줌 — 불변 -->
 
 expected: 8명이 모여도 맨 앞 이름표(특히 '(나)')가 전부 읽히고, 걷는 영역 안에서 이름표가 화면 밖으로 나가지 않는다
@@ -89,6 +94,7 @@ candidate_causes:
   - "[code] writeTags 정렬에 '나' 우선 없음, 가장자리 클램프 없음 (runtime.ts 758~783행)"
   - "[data/환경] 입장 자리 ctx.talk 가 390 보드 기준이라 폭 360 에서 오른쪽 봇이 3px 넘침; 닉네임 8자(최대)에서만 알림이 [테스트] 와 겹침"
   - "[test] NT3·NT4·camera.test.ts 가 읽힘·다른 사람 이름표를 보지 않음 → 통과한 채 출하"
+
 and_gate: "예. 증상 1 은 (순서 규칙에 '나' 없음) AND (면 알파 80%) 둘이 함께 있어야 '(나)' 가 '·)' 로 보인다. 재현에서 하나씩만 고쳤을 때(알파만 불투명 / 나 맨 앞만) 각각 ': )' 또는 유령 잔존으로 증상이 남았다. 증상 2·3 은 단일 원인(계약 범위·배치)."
 fix: (진단만 — 적용하지 않음)
 verification: (해당 없음)

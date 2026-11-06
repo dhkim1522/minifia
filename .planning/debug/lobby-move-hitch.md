@@ -4,6 +4,10 @@ trigger: "UAT G-07-9 (Test 9) — 로비 맵에서 움직일 때 핑이 튀는 �
 created: 2026-11-02T00:00:00Z
 updated: 2026-11-02T00:00:00Z
 goal: find_root_cause_only
+audit_acknowledged:
+  milestone: v2.0
+  at: 2026-11-07
+  status: diagnosed
 ---
 
 ## Current Focus
@@ -32,6 +36,7 @@ reasoning_checkpoint:
   and_gate: "yes — 정지/튐의 크기는 (RTT 에 결합된 구조) × (RTT 가 큼) 이 모두 있어야 체감된다. root_cause 는 두 조건의 합."
 
 ## Symptoms
+
 <!-- 오케스트레이터가 채워 줌 — 불변 -->
 
 expected: 맵을 탭하면 내 캐릭터가 바로 걷기 시작하고, 걷는 중 멈칫하거나 앞으로 튀지 않는다

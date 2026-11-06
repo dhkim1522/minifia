@@ -40,6 +40,10 @@ human_verification:
   - test: "배포본 smoke full (환경 의심, 미확인)"
     expected: "빠른 망에서 `node scripts/smoke.mjs --prod --stage full --players 5` 가 통과하거나, 실패하면 원인이 앱인지 망 지연인지 가려짐"
     why_human: "이 위치에서 5회 모두 타이밍 문턱으로 실패했고 health 응답도 느렸다(v1도 같다). 로컬 smoke는 반복 통과. 확정된 갭이 아니라 환경 의심으로 둔다"
+audit_acknowledged:
+  milestone: v2.0
+  at: 2026-11-07
+  status: human_needed
 ---
 
 # Phase 9: 밤과 아침 검증 보고서

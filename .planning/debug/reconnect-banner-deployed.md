@@ -3,6 +3,10 @@ status: diagnosed
 trigger: "UAT G-06-6: 배포본(minifia-v2, 5e6abf8)에서 reconnect E2E offline 10회 모두 재접속 띠가 한 번도 안 보임(RC6 실패). 로컬 06-18 은 10/10. goal: find_root_cause_only"
 created: 2026-11-01T07:20:00Z
 updated: 2026-11-01T07:50:00Z
+audit_acknowledged:
+  milestone: v2.0
+  at: 2026-11-07
+  status: diagnosed
 ---
 
 ## Current Focus

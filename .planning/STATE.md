@@ -2,39 +2,37 @@
 gsd_state_version: "1.0"
 milestone: v2.0
 milestone_name: 같은 공간
-current_phase: 9
-current_phase_name: 밤과 아침
-status: verifying
+status: Awaiting next milestone
 stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-11-05T01:17:50.343Z"
-last_activity: 2026-11-03
-last_activity_desc: Phase 9 execution started
-state_head: 03d00d892be5fc451b87c1befe2428fa8349a519
+last_updated: "2026-11-06T16:03:07.781Z"
+last_activity: 2026-11-07
+last_activity_desc: Milestone v2.0 completed and archived
+state_head: 1f11d23ac16ead6138a0a758e14c7c100c2aff4e
 progress:
   total_phases: 9
   completed_phases: 3
-  total_plans: 146
-  completed_plans: 138
+  total_plans: 172
+  completed_plans: 172
   percent: 33
+current_phase: 9
+current_phase_name: 밤과 아침
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-11-03)
+See: .planning/PROJECT.md (updated 2026-11-07)
 
-**Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(6~10분)을 끝까지 마치는 것
-**Current focus:** Phase 9 — 밤과 아침
+**Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(평균 10~15분, 참고 목표)을 끝까지 마치는 것
+**Current focus:** v3.0 마일스톤 준비 (`docs/playtest-v2.0-feedback.md`)
 
 ## Current Position
 
-Phase: 9 (밤과 아침) — EXECUTING
-Plan: 23 of 23
-Status: Phase complete — ready for verification
-Last activity: 2026-11-03 — Phase 9 execution started
-
-Progress: [███░░░░░░░] 33% (3/7 phases)
+Phase: Milestone v2.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-07 — Milestone v2.0 completed and archived
 
 ## Performance Metrics
 
@@ -444,6 +442,32 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 | Category | Item | Status | Deferred At | Milestone |
 |----------|------|--------|-------------|-----------|
+| debug_sessions | lobby-move-hitch | diagnosed | 2026-11-07 | v2.0 |
+| debug_sessions | nametag-overlap-clip | diagnosed | 2026-11-07 | v2.0 |
+| debug_sessions | reconnect-banner-deployed | diagnosed | 2026-11-07 | v2.0 |
+| uat_gaps | 09/09-UAT.md | testing | 2026-11-07 | v2.0 |
+| verification_gaps | 09/09-VERIFICATION.md | human_needed | 2026-11-07 | v2.0 |
+| deferred_items | 06/deferred-items.md: 로비에서 "preloaded but not used" 콘솔 경고 17개 묶음 반복 - **증상:** 로비에 머무는 동안 Chrome 이 The resource …… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: 옛 와이어(say·옛 chat 모양)를 보내는 개발용 스크립트 07-11 이 서버·와이어에서 빠른 메시지( say )와 옛 chat 프레임 모양( template… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: emoji 를 보내거나 기다리는 개발용 스크립트·E2E 07-12 가 emoji 클라이언트·서버 메시지를 와이어에서 지웠다. 아래 파일은 vitest 대상이 아니… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: 옛 낮 화면 프레임 단위 E2E 흐름 (claim·상태 줄·157 패널 높이·채팅 내역 모달 전제) 07-15 가 테이블 화면 하단을 ChatPanel 로 바꿨다… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: 닫힌 항목 (07-11·07-12 에서 넘어온 개발용 스크립트) - scripts/bots.mjs , scripts/smoke.mjs : 07-16 이 자유 채팅… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: E2E world 흐름이 360x560 에서 이동 목적지를 못 찾음 (07-13 이후 기존 실패) npm run e2e -- --only world 가 360x5… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: 테이블 화면(DayScene)의 가상 키보드 E2E 와 실기기 확인 - status: open - 07-19 의 chat-keyboard 흐름은 로비만 본다(계획… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: 방 높이 px 고정과 #root min-height 100dvh - status: open - .mf-room 높이는 --mf-room-h px 로 고정되지만 #… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: 낮 시작 문구에 옛 직업 공개 문장이 남아 있음 - status: resolved (07-23) - src/game/scenes.ts 의 PHASE_INTRO.d… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: E2E reconnect/offline RC1 이 병렬 부하에서 한 번 실패 - status: open - 전체 실행(세 흐름 병렬) 중 한 번 reconnect… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: gallery 의 citizen 역할 - status: open - node scripts/gallery.mjs <폴더> citizen 은 시민에게 [활동 기록]… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: 07-21 에서 정리 / 남김 - **perfScene 스테이지 사각형 기본값(07-18 항목)**: 07-21 의 chatload 는 제품 로비( /?e2e=1… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: scripts/bots.mjs — {t:"say", template:"innocent"} , nightAgree , 변론 템플릿 — 개발용 사람 흉내 봇. 자유 … | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: scripts/smoke.mjs — CHAT_FRAME_KEYS · CHAT_ALLOWED_KEYS (template·target·claimedRole), say… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: scripts/uat-day.mjs , scripts/uat-night.mjs , scripts/uat-vote.mjs — say 템플릿 전송과 chat 프레임 … | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: scripts/bots.mjs , scripts/smoke.mjs , scripts/uat-day.mjs , scripts/uat-night.mjs , scrip… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: scripts/gallery.mjs — emoji 언급 확인 필요(화면 갤러리) | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: scripts/e2e/flows.mjs , scripts/e2e/lib.mjs , scripts/e2e/lib.test.mjs , scripts/e2e/brows… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: scripts/e2e/flows.mjs 의 game(...) (police5·citizen4·mafia8·doctor5)· specFlow · voteFlow 등… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: scripts/e2e/lib.mjs 의 PANEL_H = 157 · PANEL_H_DEFENSE_ME = 236 , D6·T1·K2 묶음 — 낮 토론·밤·변론 하… | acknowledged | 2026-11-07 | v2.0 |
+| deferred_items | 07/deferred-items.md: scripts/e2e/flows.mjs 의 변론 검사( defenseChecks ) — 하단 상태 줄 .stat ·후보 본인 칩 6개 | acknowledged | 2026-11-07 | v2.0 |
 | deferred_items | 04/deferred-items.md: 남은 무작위 — 방장 첫 밤 탈락 시 살아 있는 방장 E2E 흐름 재시도(설계대로의 확률, 04-34) | acknowledged | 2026-10-30 | v1.0 |
 | deferred_items | 04/deferred-items.md: E2E 로 직접 못 본 것 — 모션 줄이기 결과 화면·관전 변론·처형·진홍 번짐 품질·iOS (실기기 승인으로 대신) | acknowledged | 2026-10-30 | v1.0 |
 
@@ -455,4 +479,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- 9페이즈: `/gsd-ui-phase 9` → `/gsd-plan-phase 9` (밤과 아침, 밤·아침 임시 틀 교체, 아침 시작 위치 결정 포함)
+- Start the next milestone with /gsd-new-milestone
