@@ -2,14 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v3.0
 milestone_name: 사회자와 증거
+current_phase: 13
+current_phase_name: 기본판 낮 흐름
 status: planning
-last_updated: "2026-11-06T16:06:37.057Z"
+stopped_at: Completed 13-01-PLAN.md
+last_updated: "2026-11-06T17:04:46.409Z"
 last_activity: 2026-11-07
+last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
+state_head: 6a3b2b8d023739b3beec15063ebcbe01320bba7f
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 6
+  completed_plans: 1
   percent: 0
 ---
 
@@ -191,6 +196,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 09.1.1 P16 | 65min | 3 tasks | 11 files |
 | Phase 09.1.1 P17 | 1h40m | 3 tasks | 14 files |
 | Phase 10 P01 | 25m | 3 tasks | 9 files |
+| Phase 13 P01 | 16 min | 3 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -404,6 +410,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 09.1.1]: [09.1.1-16] 동시 지목·공개 동안 떠 있는 배지 버튼을 접는다(작은 폰에서 지목 버튼이 가려짐); 마지막 3인 1-1-1 뒤 밤에도 '처형 없음' 알림을 띄운다
 - [Phase 09.1.1]: 0067: 정치·박진감 계획 값(O-1~O-22)을 결정 기록 한 장으로 닫음. 새 메시지는 badge·whisper 뿐, 결선·마지막 3인은 기존 point·chat 을 단계별로 씀
 - [Phase 10]: 동작 프레임 n 은 채널(all·mafia·ghost)별로 센다 — 받지 못한 프레임의 번호 틈이 시민 편에 새지 않게(결정 0068 기록 대상)
+- [Phase 13]: RULESET(shared/game/ruleset.ts) 한 곳이 다섯 장치를 끄고, 투표(nomination)는 15초 동시 투표·동점 0표는 결선 없이 밤 (13-01, 결정 0072)
 
 ### Pending Todos
 
@@ -468,8 +475,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-05T01:17:49.692Z
-Stopped at: Completed 10-01-PLAN.md
+Last session: 2026-11-06T17:04:46.390Z
+Stopped at: Completed 13-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

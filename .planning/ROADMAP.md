@@ -63,6 +63,7 @@
 ## Phase Details
 
 ### Phase 13: 기본판 낮 흐름
+
 **Goal**: 처음 하는 사람이 따라가기 쉬운 단순한 낮 흐름 하나로 판이 돈다
 **Depends on**: v2.0 (Phase 12)
 **Requirements**: FLOW-01, FLOW-02, FLOW-03, FLOW-04, FLOW-05
@@ -72,22 +73,28 @@
   2. 투표가 동점이거나 0표면 처형 없이 밤으로 넘어간다
   3. 직업 주장 배지·귓속말·순차 지목·결선·3인 결전이 어느 화면·프레임에도 나타나지 않고, 한 곳의 설정값으로 끈다
   4. 찬반 기록 카드는 그대로 공개되고, 봇 방이 새 흐름으로 한 판을 완주한다
-**Plans:** 6 plans (5 waves)
+
+**Plans:** 1/6 plans executed (5 waves)
 
 Plans:
 **Wave 1**
-- [ ] 13-01-PLAN.md — 트레이서: 기본판 설정(RULESET) 한 곳 + 동시 투표 서버 흐름(15초, 동점·0표 → 밤, 산 셋도 토론) + 규칙 영역 시험 정리
+- [x] 13-01-PLAN.md — 트레이서: 기본판 설정(RULESET) 한 곳 + 동시 투표 서버 흐름(15초, 동점·0표 → 밤, 산 셋도 토론) + 규칙 영역 시험 정리
+
 **Wave 2**
 - [ ] 13-02-PLAN.md — 봇·넘기기·smoke·소켓 봇을 동시 투표로, 봇 방 자동 완주(FLOW-05)
 - [ ] 13-03-PLAN.md — 투표 화면 복원: 제목 "투표"·이름표 직접 누르기·선두·과반·위 알림·3초 깜빡임
+
 **Wave 3**
 - [ ] 13-04-PLAN.md — 꺼진 장치 차단: 메시지 조용한 거절·view 게이트·누설 전수 검사·화면 진입점 끄기
+
 **Wave 4**
 - [ ] 13-05-PLAN.md — E2E 동시 투표판 + basic-off(한 판 부재)·basic-vote(8명 기하), 장치 흐름 skipByDefault
+
 **Wave 5**
 - [ ] 13-06-PLAN.md — 결정 0072·문서·폰 6종 회귀·성능·minifia-v3 배포·HANDOFF·push
 
 ### Phase 14: 사회자 진행과 도구 이름표
+
 **Goal**: 화면이 사회자처럼 매 단계 무슨 일이 일어나고 내가 무엇을 하는지 알려 준다
 **Depends on**: Phase 13
 **Requirements**: HOST-01, HOST-02, HOST-03, HOST-04, HOST-05, TOOL-01, TOOL-02, TOOL-03
@@ -99,6 +106,7 @@ Plans:
   4. 역할 확인·역할 카드에 목표 한 줄이 있고, 자막·빛남이 다른 사람의 역할을 드러내지 않는다(누설 검사)
 
 ### Phase 15: 낮 심부름·목격 기록·밤 흔적
+
 **Goal**: 말솜씨가 없어도 관찰로 참여할 수 있게, 게임이 확인할 수 있는 사실을 만든다
 **Depends on**: Phase 14
 **Requirements**: ERRAND-01, ERRAND-02, ERRAND-03, ERRAND-04, ERRAND-05, TRACE-01, TRACE-02, TRACE-03, DEPLOY-03
@@ -113,7 +121,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 13. 기본판 낮 흐름 | v3.0 | 0/6 | Planned | - |
+| 13. 기본판 낮 흐름 | v3.0 | 1/6 | In Progress | - |
 | 14. 사회자 진행과 도구 이름표 | v3.0 | 0/? | Not started | - |
 | 15. 낮 심부름·목격 기록·밤 흔적 | v3.0 | 0/? | Not started | - |
 
