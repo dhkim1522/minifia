@@ -2,6 +2,8 @@
 import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { BASIC_RULESET, RULESET } from "../../shared/game/ruleset";
+import type { Ruleset } from "../../shared/game/ruleset";
 import type { RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
   actorsOf,
@@ -98,7 +100,8 @@ const ROLE_PATHS_ALIVE = [
   ".view.me.chat",
   // 결정 0066-1, 공개 주장 값 — 증명은 badge.test.ts L18(실제 역할만 다른 두 판의 열이 같다). 허용 경로는 이 하나뿐이고,
   // 6명 한 판 전수 검사는 이 경로의 값이 항상 방금 보낸 주장 대본의 값(실제 역할이 아니다)임을 단언한다.
-  ".view.players[].badge",
+  // 기본판(결정 0072)에서는 이 경로가 꺼져 있어 허용하지 않는다 — 켜져 있을 때만 목록에 든다(허용 경로를 넓히지 않고 좁힌다, T-13-14).
+  ...(RULESET.badge ? [".view.players[].badge"] : []),
   // 결정 D-6, 공개 의상 값 — 증명은 dress.test.ts L25(역할 배정만 다른 두 판의 look 열이 같다). 의상 id 에도 직업 이름과 같은 단어(mafia·police·doctor)가 있다.
   // 6명 한 판 전수 검사는 이 경로의 값이 항상 로비에서 방금 보낸 의상 대본의 값(실제 역할이 아니다)임을 단언한다.
   ".view.players[].look",
@@ -129,7 +132,7 @@ const RUNOFF_WIRE_PATHS: ReadonlySet<string> = new Set([".view.day.runoff", ".vi
  *  - .view.day.showdown.*: 마지막 3인 결전 공개 값(order·i·endsAt·doneAt·skip·word·voted·points, 0066-5 — 모두에게 같다, 개인 선택은 없다).
  *  - .view.day.verdict.last: 마지막 3인 결전으로 온 처형 표시(0066-5). .view.day.ballots.*: 찬반 기록 좌석 목록(0066-3, 처형 단계만).
  */
-const POLITICS_ALLOWED_PATHS: readonly string[] = [
+const POLITICS_PATHS_FULL: readonly string[] = [
   ".view.players[].badge",
   ".view.players[].badgeSwapped",
   ".to",
@@ -141,9 +144,29 @@ const POLITICS_ALLOWED_PATHS: readonly string[] = [
   ".view.day.verdict.last",
   ".view.day.ballots.*",
 ];
-/** path 가 POLITICS_ALLOWED_PATHS 에 드는가(`.*` 로 끝나는 항목은 그 경로 자신 또는 그 아래). */
-const politicsAllowed = (path: string): boolean =>
-  POLITICS_ALLOWED_PATHS.some((p) => (p.endsWith(".*") ? path === p.slice(0, -2) || path.startsWith(`${p.slice(0, -1)}`) : path === p));
+/**
+ * 기본판(결정 0072, 13-04, T-13-14): 허용 경로는 그 장치의 설정이 켜졌을 때만 목록에 든다. 꺼진 장치의 경로가 프레임에 나오면 실패한다 — 넓히지 않고 좁힌다.
+ * 찬반 기록(day.ballots, 0066-3)은 다섯 장치에 속하지 않아 늘 허용한다. me.ballot 은 결선·마지막 3인 중 하나라도 켜졌을 때, verdict.last 는 마지막 3인 결전이 켜졌을 때만이다.
+ */
+function politicsPathsFor(r: Ruleset): readonly string[] {
+  const on: Record<string, boolean> = {
+    ".view.players[].badge": r.badge,
+    ".view.players[].badgeSwapped": r.badge,
+    ".to": r.whisper,
+    ".lines[].to": r.whisper,
+    ".view.me.ballot": r.runoff || r.showdown,
+    ".view.me.whisperUsed": r.whisper,
+    ".view.day.runoff.*": r.runoff,
+    ".view.day.showdown.*": r.showdown,
+    ".view.day.verdict.last": r.showdown,
+    ".view.day.ballots.*": true,
+  };
+  return POLITICS_PATHS_FULL.filter((p) => on[p] === true);
+}
+const POLITICS_ALLOWED_PATHS: readonly string[] = politicsPathsFor(RULESET);
+/** path 가 list(기본은 POLITICS_ALLOWED_PATHS)에 드는가(`.*` 로 끝나는 항목은 그 경로 자신 또는 그 아래). */
+const politicsAllowed = (path: string, list: readonly string[] = POLITICS_ALLOWED_PATHS): boolean =>
+  list.some((p) => (p.endsWith(".*") ? path === p.slice(0, -2) || path.startsWith(`${p.slice(0, -1)}`) : path === p));
 const ROLE_PATHS_DEAD = [...ROLE_PATHS_ALIVE, ".view.spectate.seats[].job"];
 /** ended 단계 프레임에서만 더해지는 허용 경로(D-17, Pitfall 10): 결과 화면의 모든 직업. ended 이전 프레임에서는 누출이다. */
 const ROLE_PATH_ENDED = ".view.result.seats[].job";
@@ -381,8 +404,8 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
         // 8페이즈(08-07): 처형 단계의 .view.day.verdict({yes,no,passed})는 공개 와이어 필드다(서버 전용 verdict 와 이름만 같다). 전체 누설 스캔 개편은 08-09.
         for (const path of paths) expect(path !== ".view.day.verdict" && SERVER_ONLY_KEYS.includes(path.slice(path.lastIndexOf(".") + 1))).toBe(false);
         if (msg.t !== "state") continue;
-        // day.turn 은 지목 단계에만 있다(07-08: 순차 주장 제거, 09.1: 순차 지목의 공개 차례 정보 — 결정 0063-1).
-        expect(`${msg.view.phase}:${Object.hasOwn(msg.view.day ?? {}, "turn")}`).toBe(`${msg.view.phase}:${msg.view.phase === "nomination"}`);
+        // day.turn 은 순차 지목이 켜졌을 때(RULESET.pickTurn)만 지목 단계에 있다. 기본판(결정 0072)에서는 어느 단계에도 키가 없다(07-08, 09.1 — 결정 0063-1).
+        expect(`${msg.view.phase}:${Object.hasOwn(msg.view.day ?? {}, "turn")}`).toBe(`${msg.view.phase}:${RULESET.pickTurn && msg.view.phase === "nomination"}`);
         for (const pl of msg.view.players) {
           expect(Object.keys(pl).sort()).toEqual(["alive", "connected", "isHost", "nickname", "seat"]);
         }
@@ -720,6 +743,7 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
 
       // 누가 그날 무엇을 던졌는지(프레임 검사의 기대값). 일차 → seat → 값. 값을 바꾼 사람은 두 값을 모두 기록한다(그 소켓이 받는 me.verdictVote 는 이 집합 안이다).
       const pressed = new Map<number, Set<number>>(); // 토론 끝내기를 누른 좌석
+      const rejectedBy = new Map<number, number>(); // 기본판에서 꺼진 주장·귓속말을 보내 오류 한 프레임씩 받은 좌석 → 받은 수
       const verdictEver = new Map<number, Map<number, Set<boolean>>>(); // 찬반을 던진 좌석 → 보낸 값들
       const verdictFinal = new Map<number, Map<number, boolean>>();
       const byDay = <T,>(map: Map<number, T>, day: number, make: () => T): T => {
@@ -828,16 +852,35 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
       // ---------- 1일차: 낮 → 토론 끝내기 과반 → 지목 → 변론 → 찬반 → 처형 ----------
       await advanceTo(code, socks, "discussion");
       // 직업 주장 대본(결정 0066-1): 마피아 A 가 citizen 을 걸었다가 police 로 바꾸고(말 바꿈), 시민 X 가 mafia 를 건다. 프레임 검사는 players[].badge 값이 이 대본의 값뿐임을 본다.
-      const badgeScript = new Map<number, ReadonlySet<string>>([
-        [mafiaA.seat, new Set(["citizen", "police"])],
-        [victimX.seat, new Set(["mafia"])],
-      ]);
-      await act(mafiaA, { t: "badge", role: "citizen" });
-      await act(victimX, { t: "badge", role: "mafia" });
-      await pause(300); // 같은 사람의 주장 간격(250ms) 밖
-      await act(mafiaA, { t: "badge", role: "police" });
-      for (const sock of socks) await settle(sock, mark(sock));
-      expect(lastViewOf(actors[0]!.sock).players.find((pl) => pl.seat === mafiaA.seat)?.badge).toBe("police");
+      // 기본판(결정 0072)에서는 주장·귓속말이 꺼져 있다: 같은 대본을 보내도 보낸 소켓만 오류 한 프레임(BAD_MESSAGE)을 받고, 어떤 프레임에도 players[].badge 가 없다. 켜지면 기존 대본 그대로다.
+      const badgeScript = new Map<number, ReadonlySet<string>>(
+        RULESET.badge
+          ? [
+              [mafiaA.seat, new Set(["citizen", "police"])],
+              [victimX.seat, new Set(["mafia"])],
+            ]
+          : [],
+      );
+      if (RULESET.badge) {
+        await act(mafiaA, { t: "badge", role: "citizen" });
+        await act(victimX, { t: "badge", role: "mafia" });
+        await pause(300); // 같은 사람의 주장 간격(250ms) 밖
+        await act(mafiaA, { t: "badge", role: "police" });
+        for (const sock of socks) await settle(sock, mark(sock));
+        expect(lastViewOf(actors[0]!.sock).players.find((pl) => pl.seat === mafiaA.seat)?.badge).toBe("police");
+      } else {
+        const turnedAway = async (who: SeatedActor, msg: unknown): Promise<void> => {
+          expect(`${who.seat}:${summary(await act(who, msg))}`).toBe(`${who.seat}:[error:BAD_MESSAGE]`);
+          rejectedBy.set(who.seat, (rejectedBy.get(who.seat) ?? 0) + 1);
+        };
+        await turnedAway(mafiaA, { t: "badge", role: "citizen" });
+        await turnedAway(victimX, { t: "badge", role: "mafia" });
+        await pause(300);
+        await turnedAway(mafiaA, { t: "badge", role: "police" });
+        await turnedAway(victimX, { t: "whisper", to: police.seat, text: "비밀-OFF-CANARY" });
+        for (const sock of socks) await settle(sock, mark(sock));
+        for (const a of actors) expect(lastViewOf(a.sock).players.some((pl) => Object.hasOwn(pl, "badge") || Object.hasOwn(pl, "badgeSwapped"))).toBe(false);
+      }
       await pressEnd(bySeat.slice(0, 4)); // 6명 판의 과반 4
       await castPoints((a) => (a === mafiaA ? police.seat : mafiaA.seat), alive(dead));
       await closeInto("defense");
@@ -917,12 +960,17 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
       for (const a of actors) {
         let isDead = false;
         let endedSeen = false; // 이 소켓이 ended state 를 받은 뒤인가 — resultLog 는 그 뒤에만 온다(L35)
+        let errorFrames = 0; // 이 소켓이 받은 오류 프레임 수 — 기본판의 꺼진 메시지를 보낸 소켓만 그 횟수만큼 받는다
         const logCounts = new Map<string, number>();
         for (const raw of collect(a.sock)) {
           // 남의 토큰은 어떤 프레임에도 없다
           for (const t of allTokens) expect(raw.includes(t)).toBe(false);
           const msg = JSON.parse(raw) as ServerMessage;
-          expect(msg.t === "error").toBe(false); // 시나리오의 모든 행동은 받아들여졌다
+          // 시나리오의 모든 행동은 받아들여졌다. 단 기본판에서 꺼진 주장·귓속말을 보낸 소켓은 BAD_MESSAGE 오류를 보낸 횟수만큼 받는다.
+          if (msg.t === "error") {
+            expect(msg.code).toBe("BAD_MESSAGE");
+            errorFrames += 1;
+          }
           const paths = keyPaths(msg);
           for (const path of paths) {
             const key = path.slice(path.lastIndexOf(".") + 1);
@@ -1037,6 +1085,7 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
             seen.endMine.add(a.seat);
           }
         }
+        expect(`${a.seat}:${errorFrames}`).toBe(`${a.seat}:${rejectedBy.get(a.seat) ?? 0}`);
         // 시민·경찰·의사·마피아·유령 누구든 ended 뒤 다섯 부분을 이 순서로 받았다(L36). 판 중에는 위 검사가 0건을 본다(L35).
         expect([...logCounts.keys()].join(",")).toBe("mafia,ghost,whisper,claim,ballots");
       }
@@ -1331,7 +1380,8 @@ async function walkNomination(g: Game, pickIdx: ReadonlySet<number>): Promise<vo
   for (const sock of g.socks) await settle(sock, mark(sock));
 }
 
-describe("지목 차례는 역할의 함수가 아니다 (L14, 결정 0063-1)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다. 꺼진 상태의 키 0건은 "기본판 — 꺼진 장치 키 0건" describe 가 본다.
+describe.skipIf(!RULESET.pickTurn)("지목 차례는 역할의 함수가 아니다 (L14, 결정 0063-1)", () => {
   const TABLES: Record<"a" | "b", RoleId[]> = {
     a: ["mafia", "mafia", "police", "doctor", "citizen", "citizen"],
     b: ["citizen", "police", "mafia", "citizen", "mafia", "doctor"],
@@ -1363,7 +1413,8 @@ describe("지목 차례는 역할의 함수가 아니다 (L14, 결정 0063-1)", 
   });
 });
 
-describe("차례 아닌 지목은 보낸 사람에게만 (L15, 결정 0063-1)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다.
+describe.skipIf(!RULESET.pickTurn)("차례 아닌 지목은 보낸 사람에게만 (L15, 결정 0063-1)", () => {
   it("지목 단계 내내(모이기·차례·확정 뒤·끝 알림) 차례 아닌 산 사람·유령의 point 는 보낸 소켓에만 오류+state 가 가고 다른 소켓은 프레임 0, 저장 상태는 그대로다", { timeout: 90_000 }, async () => {
     const g = await startedGame("discussion");
     const ghost = withRole(g, "citizen")[0]!;
@@ -1482,7 +1533,8 @@ describe("탈락 직후 산 사람 (L12, 결정 0021·0037)", () => {
   });
 });
 
-describe("동점 결선 프레임 전수 (결정 0066-4, L20·L24)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다.
+describe.skipIf(!RULESET.runoff)("동점 결선 프레임 전수 (결정 0066-4, L20·L24)", () => {
   it("결선 전 과정의 모든 소켓 프레임: 서버 전용 이름은 없고 새 경로는 RUNOFF_WIRE_PATHS 뿐이며 개인 선택은 본인 me.ballot 에만 있다", { timeout: 90_000 }, async () => {
     const g = await startedGame("nomination");
     const starts = g.socks.map((sock) => mark(sock));
@@ -1521,9 +1573,12 @@ describe("동점 결선 프레임 전수 (결정 0066-4, L20·L24)", () => {
   });
 });
 
-describe("마지막 3인 결전 프레임 전수 (결정 0066-5, L21·L24)", () => {
-  it("POLITICS_ALLOWED_PATHS 는 정확히 이 목록이다 — 넓히려면 이유를 적고 이 기대값을 같이 고친다 (L24)", () => {
-    expect([...POLITICS_ALLOWED_PATHS]).toEqual([
+describe("허용 경로 고정 (L24, 결정 0072·T-13-14)", () => {
+  it("POLITICS_ALLOWED_PATHS 는 설정이 켜진 장치의 경로만이다 — 기본판에서는 찬반 기록 하나뿐이고, 모두 켜면 정확히 이 목록이다. 넓히려면 이유를 적고 이 기대값을 같이 고친다", () => {
+    expect([...politicsPathsFor(BASIC_RULESET)]).toEqual([".view.day.ballots.*"]);
+    expect([...POLITICS_ALLOWED_PATHS]).toEqual([...politicsPathsFor(RULESET)]);
+    const allOn: Ruleset = { badge: true, whisper: true, pickTurn: true, runoff: true, showdown: true };
+    expect([...politicsPathsFor(allOn)]).toEqual([
       ".view.players[].badge",
       ".view.players[].badgeSwapped",
       ".to",
@@ -1535,12 +1590,24 @@ describe("마지막 3인 결전 프레임 전수 (결정 0066-5, L21·L24)", () 
       ".view.day.verdict.last",
       ".view.day.ballots.*",
     ]);
-    expect(politicsAllowed(".view.day.showdown.points[].seat")).toBe(true);
-    expect(politicsAllowed(".view.day.showdown")).toBe(true);
-    expect(politicsAllowed(".view.day.showdownX")).toBe(false);
-    expect(politicsAllowed(".view.day.verdict.passed")).toBe(false);
+    const full = politicsPathsFor(allOn);
+    expect(politicsAllowed(".view.day.showdown.points[].seat", full)).toBe(true);
+    expect(politicsAllowed(".view.day.showdown", full)).toBe(true);
+    expect(politicsAllowed(".view.day.showdownX", full)).toBe(false);
+    expect(politicsAllowed(".view.day.verdict.passed", full)).toBe(false);
   });
 
+  it("기본판의 허용 경로는 꺼진 장치의 경로를 받아들이지 않는다", () => {
+    const basic = politicsPathsFor(BASIC_RULESET);
+    for (const path of [".view.players[].badge", ".view.players[].badgeSwapped", ".to", ".lines[].to", ".view.me.ballot", ".view.me.whisperUsed", ".view.day.runoff", ".view.day.runoff.step", ".view.day.showdown.i", ".view.day.verdict.last"]) {
+      expect(`${path}:${politicsAllowed(path, basic)}`).toBe(`${path}:false`);
+    }
+    expect(politicsAllowed(".view.day.ballots.yes", basic)).toBe(true);
+  });
+});
+
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 을 켜면 다시 돈다.
+describe.skipIf(!RULESET.showdown)("마지막 3인 결전 프레임 전수 (결정 0066-5, L21·L24)", () => {
   it("결전 전 과정의 모든 소켓 프레임: 서버 전용 이름은 없고 새 경로는 POLITICS_ALLOWED_PATHS 뿐이며 개인 선택은 마감 전 본인 me.ballot 에만 있다", { timeout: 90_000 }, async () => {
     const g = await threeAliveGame();
     const starts = g.socks.map((sock) => mark(sock));
@@ -1817,3 +1884,61 @@ function phaseKeyOfView(sock: TestSocket): string {
   const v = lastViewOf(sock);
   return `${v.round ?? 1}:${v.day?.n ?? 0}:${v.phase}`;
 }
+
+// ---- 기본판 꺼진 장치 키 0건 (13-04, FLOW-03, 결정 0072, D-05, T-13-11·T-13-13) ----
+
+// 다섯 장치가 모두 꺼진 기본판에서만 뜻이 있다(하나라도 켜면 그 장치의 경로가 정당하게 나온다 — 켜진 장치는 위의 켜짐 전용 describe 들이 본다).
+describe.skipIf(Object.values(RULESET).some(Boolean))("기본판 — 꺼진 장치 키 0건 (FLOW-03, 결정 0072)", () => {
+  /** 한 판 전체의 프레임에서 있으면 안 되는 view 키 경로(접두 포함). 허용 경로는 넓히지 않았다 — 이 경로들은 허용 목록에도 없다. */
+  const OFF_KEY_PATHS = [
+    ".view.players[].badge",
+    ".view.players[].badgeSwapped",
+    ".view.day.turn",
+    ".view.day.runoff",
+    ".view.day.showdown",
+    ".view.day.verdict.last",
+    ".view.me.whisperUsed",
+    ".view.me.ballot",
+  ];
+  const hitsOf = (msg: ServerMessage): string[] => {
+    const out: string[] = [];
+    for (const path of keyPaths(msg)) {
+      if (OFF_KEY_PATHS.some((off) => path === off || path.startsWith(`${off}.`) || path.startsWith(`${off}[`))) out.push(`${path}`);
+    }
+    if (msg.t === "chat" && (msg.k === "whisper" || msg.k === "whispered")) out.push(`chat k=${msg.k}`);
+    if (msg.t === "chatLog") for (const l of msg.lines) if (l.k === "whisper" || l.k === "whispered") out.push(`chatLog k=${l.k}`);
+    if (msg.t === "state" && (msg.view.phase === "runoff" || msg.view.phase === "showdown")) out.push(`phase=${msg.view.phase}`);
+    return out;
+  };
+
+  it("로비 → 낮 → 투표 → 변론 → 찬반 → 처형 → 밤 → 아침 → 결과까지 모든 소켓의 모든 프레임에 꺼진 장치의 키·줄·단계가 0건이고, 거절된 badge·whisper 는 보낸 소켓에만 오류 한 프레임이다", { timeout: 120_000 }, async () => {
+    // richEndedGame6: 1일차 토론에서 경찰이 badge, 시민 X 가 badge 와 whisper 를 보내 보고(모두 거절) 그 뒤 한 판을 ended 까지 돈다.
+    const g = await richEndedGame6();
+    const rejects = new Map<number, number>();
+    const first: string[] = [];
+    for (const a of g.actors) {
+      let errors = 0;
+      for (const msg of framesOf(a.sock)) {
+        if (msg.t === "error") {
+          expect(msg.code).toBe("BAD_MESSAGE");
+          errors += 1;
+        }
+        first.push(...hitsOf(msg).map((h) => `seat${a.seat}: ${h}`));
+        // 결과 공개 묶음(11-03)의 귓속말·주장 부분은 빈 줄이다 — 꺼진 장치의 줄이 생기지 않는다.
+        if (msg.t === "resultLog" && (msg.part === "whisper" || msg.part === "claim")) expect(`${a.seat}:${msg.part}:${msg.lines.length}`).toBe(`${a.seat}:${msg.part}:0`);
+      }
+      rejects.set(a.seat, errors);
+    }
+    // 처음 걸린 경로 한 줄
+    expect(first[0] ?? "없음").toBe("없음");
+    // 거절: 경찰은 badge 한 번, 시민 X 는 badge·whisper 각 한 번 — 보낸 소켓만 받았다.
+    for (const a of g.actors) expect(`${a.seat}:${rejects.get(a.seat)}`).toBe(`${a.seat}:${a === g.police ? 1 : a === g.citizenX ? 2 : 0}`);
+    // 귓속말 본문(canary)은 어떤 소켓의 어떤 프레임에도 없다.
+    for (const a of g.actors) expect(framesOf(a.sock).some((m) => JSON.stringify(m).includes("귓속말 본문 CANARY"))).toBe(false);
+    // 저장된 방에도 주장·귓속말 기록이 없다.
+    const room = JSON.stringify(await storedRoom(g.code));
+    expect(room.includes("badge") || room.includes("whispers")).toBe(false);
+    // 한 판이 실제로 끝까지 갔다(아무것도 안 보는 검사가 되지 않게).
+    for (const a of g.actors) expect(lastViewOf(a.sock).phase).toBe("ended");
+  });
+});

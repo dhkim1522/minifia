@@ -2,6 +2,7 @@
 import { env } from "cloudflare:workers";
 import { evictDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { RULESET } from "../../shared/game/ruleset";
 import type { ResultLogFrame, ServerMessage } from "../../shared/protocol";
 import { RICH_TEXT, advanceTo, connect, framesOf, mark, nextFrame, richEndedGame6, send, settle, startedGame } from "./helpers";
 import type { RichGame6, TestSocket } from "./helpers";
@@ -41,11 +42,12 @@ describe("resultLog 전송 (D-10, L36)", () => {
       `${g.mafiaA.seat}/${RICH_TEXT.ghostA}`,
       `${g.police.seat}/${RICH_TEXT.ghostP}`,
     ]);
-    expect(ownLines(frames, "whisper").map((l) => `${(l as { seat: number }).seat}>${(l as { to: number }).to}/${(l as { text: string }).text}`)).toEqual([
-      `${g.citizenX.seat}>${g.police.seat}/${RICH_TEXT.whisper}`,
-    ]);
+    // 기본판(결정 0072)에서는 귓속말·직업 주장이 꺼져 있어 두 부분은 빈 줄이다 — 켜지면(RULESET.whisper·badge) 기존 기대 그대로다.
+    expect(ownLines(frames, "whisper").map((l) => `${(l as { seat: number }).seat}>${(l as { to: number }).to}/${(l as { text: string }).text}`)).toEqual(
+      RULESET.whisper ? [`${g.citizenX.seat}>${g.police.seat}/${RICH_TEXT.whisper}`] : [],
+    );
     const claims = ownLines(frames, "claim") as Array<{ seat: number; n: number; v: string }>;
-    expect(claims.map((c) => `${c.seat}/${c.n}/${c.v}`).sort()).toEqual([`${g.police.seat}/1/police`, `${g.citizenX.seat}/1/doctor`].sort());
+    expect(claims.map((c) => `${c.seat}/${c.n}/${c.v}`).sort()).toEqual(RULESET.badge ? [`${g.police.seat}/1/police`, `${g.citizenX.seat}/1/doctor`].sort() : []);
     const ballots = ownLines(frames, "ballots") as Array<{ n: number; yes: number[]; no: number[] }>;
     expect(ballots).toEqual([{ n: 1, yes: g.actors.filter((a) => a !== g.mafiaA).map((a) => a.seat).sort((a, b) => a - b), no: [] }]);
   });
@@ -99,8 +101,12 @@ describe("resultLog 누설 — 판 중 0건, ended 뒤 모두 같게 (L35·L36, 
     // 귓속말 본문은 당사자(시민 X·경찰) 밖에는 판 중에 가지 않았다
     for (const a of everyone.filter((x) => x !== g.citizenX && x !== g.police)) expect(`${a.seat}:${live(a).includes(RICH_TEXT.whisper)}`).toBe(`${a.seat}:false`);
     // 끝난 뒤에는 여섯 소켓 모두에게 모든 본문이 있다
+    // (기본판, 결정 0072: 귓속말은 꺼져 있어 본문이 애초에 없다 — 어느 소켓에도 한 번도 가지 않는다)
     for (const a of everyone) {
-      for (const text of Object.values(RICH_TEXT)) expect(`${a.seat}:${text}:${whole(a).includes(text)}`).toBe(`${a.seat}:${text}:true`);
+      for (const text of Object.values(RICH_TEXT)) {
+        const want = text === RICH_TEXT.whisper ? RULESET.whisper : true;
+        expect(`${a.seat}:${text}:${whole(a).includes(text)}`).toBe(`${a.seat}:${text}:${want}`);
+      }
     }
     // 시민 Y: 마피아 채널 chat 프레임은 판 중 0건
     const citizenFrames = framesOf(g.citizenY.sock).slice(0, g.endedAt[g.actors.indexOf(g.citizenY)]);
