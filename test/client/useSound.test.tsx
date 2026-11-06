@@ -426,6 +426,112 @@ describe("useSound: 방 view 의 차이가 감독을 거쳐 엔진 요청이 된
     expect(logIds(rig)).not.toContain("night.fall");
   });
 
+  describe("아침·암살음·유언·경찰 카드 (12-09, D-12, LS-8)", () => {
+    interface P {
+      view: RoomView | null;
+      epoch: number;
+      kill?: { nonce: number; at: number } | null;
+      letter?: { t0: number; writeMs: number } | null;
+      policeCard?: number | null;
+    }
+    const mountDay = (rig: ReturnType<typeof makeRig>, initial: P) =>
+      renderHook((p: P) => useSound({ engine: rig.engine, view: p.view, epoch: p.epoch, offset: 0, now: rig.fake.clock.now, random: () => 0, kill: p.kill ?? null, letter: p.letter ?? null, policeCard: p.policeCard ?? null }), {
+        initialProps: initial,
+      });
+    const morning = (t0: number, m: { eliminated?: number; saved?: true } = {}): RoomView => roomView("morning", { phaseEndsAt: t0 + 7_000, day: { n: 1, roles: [], morning: m } });
+
+    it("밤 → 아침: morning.dawn 즉시 + bed.dawn, 평화면 400ms 에 morning.calm", () => {
+      const rig = makeRig();
+      const t0 = rig.fake.clock.now();
+      const { rerender } = mountDay(rig, { view: roomView("night", { phaseEndsAt: t0 + 10_000 }), epoch: 1 });
+      rerender({ view: morning(t0), epoch: 1 });
+      expect(logIds(rig).slice(-2)).toEqual(["bed.dawn", "morning.dawn"]);
+      expect(logIds(rig)).not.toContain("morning.calm");
+      act(() => rig.fake.clock.advance(450));
+      expect(logIds(rig)).toContain("morning.calm");
+    });
+
+    it("희생자 아침: 700ms 에 chalk.draw, killFx 새 nonce 는 +50ms 에 kill.slash 한 번 (같은 nonce 되풀이는 없음)", () => {
+      const rig = makeRig();
+      const t0 = rig.fake.clock.now();
+      const { rerender } = mountDay(rig, { view: roomView("night", { phaseEndsAt: t0 + 10_000 }), epoch: 1 });
+      rerender({ view: morning(t0, { eliminated: 1 }), epoch: 1 });
+      rerender({ view: morning(t0, { eliminated: 1 }), epoch: 1, kill: { nonce: 1, at: t0 } });
+      expect(logIds(rig)).not.toContain("kill.slash");
+      act(() => rig.fake.clock.advance(60));
+      expect(logIds(rig).filter((id) => id === "kill.slash")).toHaveLength(1);
+      rerender({ view: morning(t0, { eliminated: 1 }), epoch: 1, kill: { nonce: 1, at: t0 } });
+      act(() => rig.fake.clock.advance(1_000));
+      expect(logIds(rig).filter((id) => id === "kill.slash")).toHaveLength(1);
+      expect(logIds(rig)).toContain("chalk.draw");
+    });
+
+    it("처음부터 killFx 가 있는 마운트(재접속 직후)·밤 단계의 killFx·killFx 없는 아침은 kill.slash 가 없다", () => {
+      const rig = makeRig();
+      const t0 = rig.fake.clock.now();
+      const a = mountDay(rig, { view: morning(t0, { eliminated: 1 }), epoch: 1, kill: { nonce: 3, at: t0 } });
+      act(() => rig.fake.clock.advance(5_000));
+      expect(logIds(rig)).not.toContain("kill.slash");
+      a.unmount();
+      const rig2 = makeRig();
+      const b = mountDay(rig2, { view: roomView("night", { phaseEndsAt: t0 + 10_000 }), epoch: 1 });
+      b.rerender({ view: roomView("night", { phaseEndsAt: t0 + 10_000 }), epoch: 1, kill: { nonce: 1, at: t0 } });
+      act(() => rig2.fake.clock.advance(5_000));
+      expect(logIds(rig2)).not.toContain("kill.slash");
+    });
+
+    it("유언 편지: t0 기준으로 will.quill 들 → will.seal → will.fold, 다음 단계로 넘어가면 남은 줄이 취소된다", () => {
+      const rig = makeRig();
+      const t0 = rig.fake.clock.now();
+      const { rerender } = mountDay(rig, { view: roomView("night", { phaseEndsAt: t0 + 10_000 }), epoch: 1 });
+      rerender({ view: morning(t0, { eliminated: 1 }), epoch: 1 });
+      rerender({ view: morning(t0, { eliminated: 1 }), epoch: 1, letter: { t0: t0 + 700, writeMs: 1_000 } });
+      act(() => rig.fake.clock.advance(1_400));
+      expect(logIds(rig)).not.toContain("will.quill");
+      act(() => rig.fake.clock.advance(200)); // t0 + 800 = 1500
+      expect(logIds(rig)).toContain("will.quill");
+      act(() => rig.fake.clock.advance(1_500)); // 3100: 쓰기 끝(1500 + 1000)과 인장(+100) 뒤
+      expect(logIds(rig)).toContain("will.seal");
+      expect(logIds(rig)).not.toContain("will.fold");
+      act(() => rig.fake.clock.advance(3_000)); // 6100 > t0 + 700 + 5000
+      expect(logIds(rig).filter((id) => id === "will.fold")).toHaveLength(1);
+    });
+
+    it("경찰 카드: 새 id 가 서면 POLICE_CARD_AT(2400ms) 뒤 ui.card 한 번", () => {
+      const rig = makeRig();
+      const t0 = rig.fake.clock.now();
+      const { rerender } = mountDay(rig, { view: roomView("night", { phaseEndsAt: t0 + 10_000 }), epoch: 1 });
+      rerender({ view: morning(t0), epoch: 1 });
+      rerender({ view: morning(t0), epoch: 1, policeCard: 1 });
+      act(() => rig.fake.clock.advance(2_300));
+      expect(logIds(rig)).not.toContain("ui.card");
+      act(() => rig.fake.clock.advance(200));
+      expect(logIds(rig).filter((id) => id === "ui.card")).toHaveLength(1);
+      rerender({ view: morning(t0), epoch: 1, policeCard: 1 });
+      act(() => rig.fake.clock.advance(5_000));
+      expect(logIds(rig).filter((id) => id === "ui.card")).toHaveLength(1);
+    });
+
+    it("카드 신호(유언·쪽지)는 delayMs 뒤 ui.card 한 번", () => {
+      const rig = makeRig();
+      const t0 = rig.fake.clock.now();
+      mountDay(rig, { view: morning(t0), epoch: 1 });
+      emitSignal({ kind: "card", delayMs: 2_800 });
+      act(() => rig.fake.clock.advance(2_700));
+      expect(logIds(rig)).not.toContain("ui.card");
+      act(() => rig.fake.clock.advance(200));
+      expect(logIds(rig).filter((id) => id === "ui.card")).toHaveLength(1);
+    });
+
+    it("아침 중간 첫 view: bed.dawn 만 (morning.dawn·분기 소리 없음)", () => {
+      const rig = makeRig();
+      const t0 = rig.fake.clock.now();
+      mountDay(rig, { view: morning(t0, { eliminated: 1 }), epoch: 1 });
+      act(() => rig.fake.clock.advance(5_000));
+      expect(logIds(rig)).toEqual(["bed.dawn"]);
+    });
+  });
+
   it("active 가 거짓이면 감독도 쉰다", () => {
     const rig = makeRig();
     renderHook(() => useSound({ engine: rig.engine, active: false, view: roomView("lobby"), epoch: 1, offset: 0, now: rig.fake.clock.now }));

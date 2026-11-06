@@ -4,8 +4,12 @@ import { describe, expect, it } from "vitest";
 import { NIGHT_MS } from "../../shared/game/phases";
 import type { PhaseId, PublicPlayer, RoleId, RoomView } from "../../shared/protocol";
 import { audioViewOf, type AudioView } from "../../src/audio/audioView";
-import { direct, directSignal, type DirectOutput, type LocalClock } from "../../src/audio/director";
-import { nightCues, NIGHT_CUE } from "../../src/audio/script";
+import { direct, directEvent, directSignal, type DirectOutput, type LocalClock } from "../../src/audio/director";
+import { RECIPES } from "../../src/audio/recipes";
+import { MORNING_SLASH_AT, nightCues, NIGHT_CUE, willScript } from "../../src/audio/script";
+import { KILL_FX_START_MS } from "../../src/components/KillFx";
+import { ANNOUNCE_MORNING_AT, ANNOUNCE_VICTIM_AT, POLICE_CARD_AT } from "../../src/game/dayView";
+import { LETTER_FOLD_AT_MS, LETTER_MS_PER_CHAR, LETTER_SEAL_GAP_MS, LETTER_WRITE_AT_MS, LETTER_WRITE_MAX_MS } from "../../src/game/willLetter";
 import { SIGNAL_KINDS, type LocalSignal } from "../../src/audio/signals";
 import { nightDarkOf } from "../../src/game/nightDark";
 import { planTensionCues } from "../../src/world/tension";
@@ -327,5 +331,198 @@ describe("밤 재접속·도착 지연 (LS-10, LS-11)", () => {
         for (const d of cueAts(out)) expect(d).toBeLessThanOrEqual(NIGHT_MS - late - 1000);
       }
     }
+  });
+});
+
+// ───────────────────────── 아침 분기 (D-12) ─────────────────────────
+
+describe("아침 진입: morning.dawn + bed.dawn 는 결과와 무관하고 분기만 갈린다", () => {
+  const MORNING = (morning: AudioView["morning"]): AudioView => av("morning", { endsAt: NOW + 5_000, morning });
+  const enter = (morning: AudioView["morning"]): DirectOutput => direct(NIGHT_VIEW(), MORNING(morning), clock());
+  const scriptItems = (out: DirectOutput): { at: number; id: string }[] => out.scripts.flatMap((s) => s.items.map((i) => ({ at: i.at, id: i.id })));
+
+  it("평화: morning.calm 이 ANNOUNCE_MORNING_AT 에", () => {
+    const out = enter({ eliminated: false, saved: false });
+    expect(out.bed).toBe("bed.dawn");
+    expect(out.now.map((c) => c.id)).toEqual(["morning.dawn"]);
+    expect(out.scripts.map((s) => s.key)).toEqual(["phase:morning:1"]);
+    expect(scriptItems(out)).toEqual([{ at: ANNOUNCE_MORNING_AT, id: "morning.calm" }]);
+  });
+
+  it("구출: morning.saved 가 같은 시각에", () => {
+    const out = enter({ eliminated: false, saved: true });
+    expect(scriptItems(out)).toEqual([{ at: ANNOUNCE_MORNING_AT, id: "morning.saved" }]);
+  });
+
+  it("희생자: chalk.draw 가 ANNOUNCE_VICTIM_AT 에 (kill.slash 는 감독이 view 로는 내지 않는다)", () => {
+    const out = enter({ eliminated: true, saved: false });
+    expect(scriptItems(out)).toEqual([{ at: ANNOUNCE_VICTIM_AT, id: "chalk.draw" }]);
+  });
+
+  it("세 갈래 모두 morning.dawn 과 침대가 같다 (결과 무관, LS-1)", () => {
+    const a = enter({ eliminated: false, saved: false });
+    for (const m of [{ eliminated: false, saved: true }, { eliminated: true, saved: false }, null]) {
+      const b = enter(m);
+      expect(b.now).toEqual(a.now);
+      expect(b.bed).toEqual(a.bed);
+      expect(b.duck).toEqual(a.duck);
+    }
+  });
+
+  it("아침 view 의 공개 모양: eliminated 존재·saved 여부만 읽는다 (누구인지는 읽지 않는다)", () => {
+    const base = {
+      code: "0042", phase: "morning" as const, phaseEndsAt: null, phaseDurationMs: null, serverNow: 0, minPlayers: 4, maxPlayers: 8,
+      players: [0, 1, 2, 3].map((seat) => ({ seat, nickname: `p${seat}`, connected: true, isHost: seat === 0 })),
+      me: { seat: 1, isHost: false },
+    };
+    const day = (morning?: { eliminated?: number; saved?: true }): RoomView => ({ ...base, day: { n: 1, roles: [], ...(morning ? { morning } : {}) } }) as RoomView;
+    expect(audioViewOf(day()).morning).toBeNull();
+    expect(audioViewOf(day({})).morning).toEqual({ eliminated: false, saved: false });
+    expect(audioViewOf(day({ saved: true })).morning).toEqual({ eliminated: false, saved: true });
+    expect(audioViewOf(day({ eliminated: 0 })).morning).toEqual({ eliminated: true, saved: false });
+    expect(audioViewOf(day({ eliminated: 3 })).morning).toEqual(audioViewOf(day({ eliminated: 0 })).morning); // 누구든 같다
+  });
+
+  it("재접속(LS-10): 아침 중간 첫 view·epoch 변경은 bed.dawn 만 — morning.dawn·분기·slash 없음", () => {
+    for (const m of [{ eliminated: true, saved: false }, { eliminated: false, saved: true }, { eliminated: false, saved: false }]) {
+      const first = direct(null, MORNING(m), clock());
+      const reset = direct(NIGHT_VIEW(), MORNING(m), clock({ reset: true }));
+      for (const out of [first, reset]) {
+        expect(out.bed).toBe("bed.dawn");
+        expect(out.now).toEqual([]);
+        expect(out.scripts).toEqual([]);
+      }
+    }
+  });
+
+  it("한 번 본 아침 view 가 되풀이되면 아무것도 새로 안 난다", () => {
+    const a = MORNING({ eliminated: true, saved: false });
+    expect(quiet(direct(a, structuredClone(a), clock()))).toBe(true);
+  });
+
+  it("아침을 떠나면 아침 대본·암살음·편지·경찰 카드 키가 모두 취소된다", () => {
+    const out = direct(MORNING({ eliminated: true, saved: false }), av("dayAnnounce", { endsAt: NOW + 2000 }), clock());
+    expect(out.cancel).toEqual(expect.arrayContaining(["phase:morning:1", "kill:1", "letter:1", "card:police:1"]));
+  });
+});
+
+// ───────────────────────── 암살음 (LS-8) ─────────────────────────
+
+describe("LS-8: 암살음은 피해자 본인만, 아침 도착 뒤", () => {
+  const MORNING = av("morning", { endsAt: NOW + 7_000, morning: { eliminated: true, saved: false } });
+
+  it("KILL_FX_START_MS(KillFx 의 시작 지연)와 MORNING_SLASH_AT 이 같은 값이다", () => {
+    expect(MORNING_SLASH_AT).toBe(KILL_FX_START_MS);
+  });
+
+  it("killFx 입력이 서면 killFx.at + 50ms 에 kill.slash 한 번", () => {
+    const out = directEvent({ kind: "kill", at: NOW }, MORNING, clock());
+    expect(out.scripts.map((s) => s.key)).toEqual(["kill:1"]);
+    expect(out.scripts[0]!.items).toEqual([{ at: KILL_FX_START_MS, id: "kill.slash" }]);
+    expect(out.now).toEqual([]);
+    const late = directEvent({ kind: "kill", at: NOW - 20 }, MORNING, clock());
+    expect(late.scripts[0]!.items).toEqual([{ at: KILL_FX_START_MS - 20, id: "kill.slash" }]);
+    const past = directEvent({ kind: "kill", at: NOW - 500 }, MORNING, clock());
+    expect(past.now).toEqual([{ id: "kill.slash" }]);
+  });
+
+  it("밤 중·낮·ended·view 없음에서는 killFx 가 와도 소리가 없다", () => {
+    for (const phase of ["night", "discussion", "nomination", "execution", "dayAnnounce", "ended"] as const) {
+      expect(quiet(directEvent({ kind: "kill", at: NOW }, av(phase), clock())), phase).toBe(true);
+    }
+    expect(quiet(directEvent({ kind: "kill", at: NOW }, null, clock()))).toBe(true);
+  });
+
+  it("view 만으로는 어떤 갈래·재접속·밤에서도 kill.slash 가 나지 않는다 (killFx 입력이 없으면 출력 없음)", () => {
+    const outs: DirectOutput[] = [];
+    for (const m of [{ eliminated: true, saved: false }, { eliminated: false, saved: true }, { eliminated: false, saved: false }, null]) {
+      outs.push(direct(NIGHT_VIEW(), av("morning", { endsAt: NOW + 5000, morning: m }), clock()));
+      outs.push(direct(null, av("morning", { endsAt: NOW + 5000, morning: m }), clock()));
+    }
+    outs.push(direct(av("execution"), NIGHT_VIEW(), clock()), direct(null, NIGHT_VIEW(), clock()));
+    for (const o of outs) {
+      const all = [...o.now.map((c) => c.id), ...o.scripts.flatMap((s) => s.items.map((i) => i.id))];
+      expect(all).not.toContain("kill.slash");
+    }
+  });
+});
+
+// ───────────────────────── 유언 편지 (C-5) ─────────────────────────
+
+describe("유언 편지: t0 기준으로 quill → seal → fold", () => {
+  const MORNING = av("morning", { endsAt: NOW + 9_000, morning: { eliminated: true, saved: false } });
+  const abs = (out: DirectOutput, now: number): { at: number; id: string }[] => out.scripts.flatMap((s) => s.items.map((i) => ({ at: now + i.at, id: i.id }))).concat(out.now.map((c) => ({ at: now, id: c.id })));
+
+  it("t0 가 앞에 있으면 willScript 의 모든 줄이 t0 + at 에 선다 (글은 입력에 없다)", () => {
+    const t0 = NOW + 600;
+    const writeMs = 1_900;
+    const out = directEvent({ kind: "letter", t0, writeMs }, MORNING, clock());
+    expect(out.scripts.map((s) => s.key)).toEqual(["letter:1"]);
+    expect(abs(out, NOW).sort((a, b) => a.at - b.at)).toEqual(willScript({ writeMs }).items.map((i) => ({ at: t0 + i.at, id: i.id })));
+    const ids = out.scripts[0]!.items.map((i) => i.id);
+    expect(ids.filter((id) => id === "will.quill").length).toBe(Math.floor(writeMs / 60));
+    expect(ids.slice(-2)).toEqual(["will.seal", "will.fold"]);
+    const seal = out.scripts[0]!.items.find((i) => i.id === "will.seal")!;
+    const fold = out.scripts[0]!.items.find((i) => i.id === "will.fold")!;
+    expect(seal.at).toBe(600 + LETTER_WRITE_AT_MS + writeMs + LETTER_SEAL_GAP_MS);
+    expect(fold.at).toBe(600 + LETTER_FOLD_AT_MS);
+  });
+
+  it("편지가 늦게 떠서 t0 가 이미 지났으면 지난 줄은 빼고 남은 줄만 난다", () => {
+    const out = directEvent({ kind: "letter", t0: NOW - 2_000, writeMs: 1_900 }, MORNING, clock());
+    for (const i of out.scripts[0]!.items) expect(i.at).toBeGreaterThanOrEqual(0);
+    expect(out.scripts[0]!.items.at(-1)).toEqual({ at: LETTER_FOLD_AT_MS - 2_000, id: "will.fold" });
+    expect(out.scripts[0]!.items.some((i) => i.id === "will.quill")).toBe(true);
+  });
+
+  it("쓰기 길이 상한은 상수 (190 × 글자, 최대 2300)", () => {
+    expect(Math.min(LETTER_WRITE_MAX_MS, LETTER_MS_PER_CHAR * 4)).toBe(760);
+  });
+
+  it("편지가 없거나 writeMs 가 0 이하거나 아침이 아니면 없다", () => {
+    expect(quiet(directEvent({ kind: "letter", t0: NOW, writeMs: 0 }, MORNING, clock()))).toBe(true);
+    expect(quiet(directEvent({ kind: "letter", t0: NOW, writeMs: 1000 }, av("night"), clock()))).toBe(true);
+    expect(quiet(directEvent({ kind: "letter", t0: NOW, writeMs: 1000 }, null, clock()))).toBe(true);
+  });
+});
+
+// ───────────────────────── 카드 도착 (LS-5) ─────────────────────────
+
+describe("카드 도착 ui.card: 종류 구분이 없다 (LS-5, T-12-34)", () => {
+  const MORNING = av("morning", { endsAt: NOW + 9_000, morning: { eliminated: true, saved: false } });
+
+  it("경찰 카드: policeCard 이벤트는 POLICE_CARD_AT 에 ui.card 한 번", () => {
+    const out = directEvent({ kind: "policeCard" }, MORNING, clock());
+    expect(out.scripts.map((s) => s.key)).toEqual(["card:police:1"]);
+    expect(out.scripts[0]!.items).toEqual([{ at: POLICE_CARD_AT, id: "ui.card" }]);
+  });
+
+  it("카드 신호(유언·쪽지): delayMs 뒤 ui.card 한 번, 0 이면 즉시", () => {
+    const out = directSignal({ kind: "card", delayMs: 2_800 }, MORNING);
+    expect(out.scripts).toHaveLength(1);
+    expect(out.scripts[0]!.items).toEqual([{ at: 2_800, id: "ui.card" }]);
+    expect(directSignal({ kind: "card", delayMs: 0 }, MORNING).now).toEqual([{ id: "ui.card" }]);
+    expect(directSignal({ kind: "card", delayMs: Number.NaN }, MORNING).now).toEqual([{ id: "ui.card" }]);
+  });
+
+  it("세 가지 카드(유언·쪽지·경찰)의 소리는 같은 id·같은 이득이고 레시피는 하나다", () => {
+    const will = directSignal({ kind: "card", delayMs: 2_400 }, MORNING).scripts[0]!.items[0]!;
+    const note = directSignal({ kind: "card", delayMs: 2_400 }, MORNING).scripts[0]!.items[0]!;
+    const police = directEvent({ kind: "policeCard" }, MORNING, clock()).scripts[0]!.items[0]!;
+    expect(will).toEqual(note);
+    expect(police).toEqual({ at: POLICE_CARD_AT, id: "ui.card" });
+    expect(will.id).toBe(police.id);
+    expect(will).not.toHaveProperty("gainDb");
+    expect(will).not.toHaveProperty("cents");
+    expect(Object.keys(RECIPES).filter((id) => id.startsWith("ui.card"))).toEqual(["ui.card"]);
+  });
+
+  it("밤에는 카드 신호·경찰 카드 모두 무음", () => {
+    expect(quiet(directSignal({ kind: "card", delayMs: 1_000 }, NIGHT_VIEW()))).toBe(true);
+    expect(quiet(directEvent({ kind: "policeCard" }, NIGHT_VIEW(), clock()))).toBe(true);
+  });
+
+  it("ANNOUNCE 상수가 정해진 값이다 (400 / 700 / 2400)", () => {
+    expect([ANNOUNCE_MORNING_AT, ANNOUNCE_VICTIM_AT, POLICE_CARD_AT]).toEqual([400, 700, 2400]);
   });
 });

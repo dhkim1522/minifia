@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { CARD_HOLD_BALLOTS_MS, ChatStore } from "../../src/net/chatStore";
+import { CARD_HOLD_BALLOTS_MS, CARD_HOLD_MS, ChatStore } from "../../src/net/chatStore";
 import type { ChatLineFrame, ChatLogFrame } from "../../shared/protocol";
 
 const chat = (ch: ChatLineFrame["ch"], seat: number, seq: number, text: string, at: number): ChatLineFrame => ({
@@ -662,5 +662,49 @@ describe("ChatStore: ballots 카드 (09.1.1-12, 결정 0066-3)", () => {
     store.apply({ t: "typing", seat: 3, on: true }, 1, 1000);
     store.apply(ballots(3, 9, "0|1", 900), 1, 1100);
     expect(store.typingSeats(1100).has(3)).toBe(true);
+  });
+});
+
+describe("ChatStore: lastLiveCardRevealAt — 방금 받은 라이브 카드의 공개 시각 (12-09, LS-5)", () => {
+  const card = (k: "will" | "note" | "ballots", seat: number, seq: number, at: number): ChatLineFrame => ({ ...chat("all", seat, seq, "글", at), k });
+
+  it("유언·쪽지 카드를 방금 받았으면 보류가 끝나는 시각(받은 시각 + CARD_HOLD_MS)", () => {
+    for (const k of ["will", "note"] as const) {
+      const store = ready();
+      store.apply(card(k, 2, 1, 900), 1, 1000);
+      expect(store.lastLiveCardRevealAt(), k).toBe(1000 + CARD_HOLD_MS);
+    }
+  });
+
+  it("편지 보류(holdCardsUntil)로 늦춰진 시각을 돌려준다", () => {
+    const store = ready();
+    store.apply(card("will", 2, 1, 900), 1, 1000);
+    store.holdCardsUntil(6400, 1100);
+    expect(store.lastLiveCardRevealAt()).toBe(6400);
+  });
+
+  it("다음 프레임이 카드가 아니면(사람 줄·귓속말·ballots) null — 신호를 다시 보내지 않는다", () => {
+    const store = ready();
+    store.apply(card("will", 2, 1, 900), 1, 1000);
+    store.apply(chat("all", 1, 2, "안녕", 1100), 1, 1100);
+    expect(store.lastLiveCardRevealAt()).toBeNull();
+    store.apply(card("ballots", 0, 3, 1200), 1, 1200);
+    expect(store.lastLiveCardRevealAt()).toBeNull();
+    store.apply({ ...chat("all", 1, 4, "속닥", 1300), k: "whisper", to: 2 }, 1, 1300);
+    expect(store.lastLiveCardRevealAt()).toBeNull();
+  });
+
+  it("같은 카드를 다시 받으면(중복) null, 재접속 복원(chatLog)도 null", () => {
+    const store = ready();
+    store.apply(card("note", 2, 1, 900), 1, 1000);
+    store.apply(card("note", 2, 1, 900), 1, 1001);
+    expect(store.lastLiveCardRevealAt()).toBeNull();
+    const fresh = ready();
+    fresh.apply({ t: "chatLog", lines: [{ ch: "all", seat: 3, seq: 9, text: "가", at: 900, k: "will" }] }, 1, 1000);
+    expect(fresh.lastLiveCardRevealAt()).toBeNull();
+  });
+
+  it("카드를 받은 적이 없으면 null", () => {
+    expect(ready().lastLiveCardRevealAt()).toBeNull();
   });
 });
