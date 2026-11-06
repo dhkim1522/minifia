@@ -5,16 +5,16 @@ milestone_name: 사회자와 증거
 current_phase: 13
 current_phase_name: 기본판 낮 흐름
 status: planning
-stopped_at: Completed 14-05-PLAN.md
-last_updated: "2026-11-06T21:00:53.553Z"
+stopped_at: Completed 14-06-PLAN.md
+last_updated: "2026-11-06T21:11:26.442Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: 2377986d5d0bbaa1c71e134f0541ff3fccf01877
+state_head: 8f55df6c93dd026c2ecc5777eb47ca98ad19aa0f
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 15
-  completed_plans: 11
+  completed_plans: 12
   percent: 33
 ---
 
@@ -207,6 +207,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 14 P03 | 25min | 2 tasks | 16 files |
 | Phase 14 P04 | 1h | 3 tasks | 16 files |
 | Phase 14 P05 | 50min | 3 tasks | 20 files |
+| Phase 14 P06 | 35min | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -438,6 +439,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 14]: 14-04: 36px 낮/밤 결과 알림 삭제(U-5), 투표 처음 깜빡임 삭제(U-7). DAY_COPY·ANNOUNCE_* 상수는 유지
 - [Phase 14]: 14-05: [내 역할] 단추 두 모양을 아이콘 면 아래 한 단어로 통일, 새 기록 점은 gray-100 8px (앰버 폐기)
 - [Phase 14]: 14-05: 역할 확인 머리를 게임 헤더와 같은 absolute 62 모양으로, 헤더 윗여백 18→8(토큰 간격)
+- [Phase 14]: 14-06: 접근성 이름은 보이는 낱말을 포함(WCAG 2.5.3) — '새 메시지' 만 '새 글' 로 바꿈, 결정 0073 에는 14-09 가 기록
+- [Phase 14]: 14-06: 채팅 줄 깃펜 여분 margin-left 제거(폭 360 입력칸 172), 머리 [나가기] 는 ToolButton, 시트 닫기는 .mv-closepill
 
 ### Pending Todos
 
@@ -502,8 +505,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-06T21:00:53.420Z
-Stopped at: Completed 14-05-PLAN.md
+Last session: 2026-11-06T21:11:26.304Z
+Stopped at: Completed 14-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
