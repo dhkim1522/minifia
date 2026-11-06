@@ -9,6 +9,7 @@ import {
   appendLine,
   appendWhisperPair,
   chatKey,
+  clearSeat,
   emptyChatLog,
   replayFor,
   restoreChatLog,
@@ -590,5 +591,55 @@ describe("ballots 카드 (결정 0066-3, O-8)", () => {
     const masked = appendLine(emptyChatLog(), { ...line("all", 4, "1|2", 1 << 3), k: "ballots" }).log;
     expect(replayFor(masked, 0).length).toBe(0);
     expect(replayFor(masked, 3).length).toBe(1);
+  });
+});
+
+// ---- 12-04: 좌석이 비면 보관 줄 마스크에서 그 좌석 비트를 지운다 (07 리뷰 WR-01, T-12-11) ----
+describe("clearSeat — 좌석 재사용이 입장 전 줄을 복원받지 않게 (WR-01)", () => {
+  const rec = (g: number, r: number, extra: Partial<ChatRecord> = {}): ChatRecord => ({ g, ch: "all", seq: g, seat: 0, text: `줄${g}`, at: g, n: 0, r, ...extra });
+  const logOf = (...records: ChatRecord[]): ChatLog => ({ records, nextG: records.length + 1, nextSeq: { all: records.length + 1, mafia: 1, ghost: 1 } });
+
+  it("그 좌석 비트만 꺼지고 다른 비트·비트 없는 레코드는 그대로이며 바뀐 레코드만 돌려준다", () => {
+    const log = logOf(rec(1, 0b0111), rec(2, 0b0011), rec(3, 0b1000));
+    const out = clearSeat(log, 2);
+    expect(out.log.records.map((x) => x.r).join(",")).toBe("3,3,8");
+    expect(out.changed.map((x) => x.g).join(",")).toBe("1");
+    expect(out.log.records[1]).toBe(log.records[1]); // 바뀌지 않은 레코드는 같은 객체
+    expect(out.log.nextG).toBe(log.nextG);
+    expect(json(out.log.nextSeq)).toBe(json(log.nextSeq));
+  });
+
+  it("입력 로그와 레코드를 바꾸지 않는다", () => {
+    const log = logOf(rec(1, 0b0111));
+    const before = json(log);
+    clearSeat(log, 1);
+    expect(json(log)).toBe(before);
+  });
+
+  it("바뀐 게 없으면 changed 가 빈 목록이고 log 는 같은 객체다", () => {
+    const log = logOf(rec(1, 0b0011));
+    const out = clearSeat(log, 5);
+    expect(out.changed.length).toBe(0);
+    expect(out.log).toBe(log);
+  });
+
+  it("귓속말·카드 같은 특수 줄도 같은 규칙으로 비트만 지우고 k·to 는 남긴다", () => {
+    const log = logOf(rec(1, 0b0110, { k: "whisper", to: 2 }), rec(2, 0b0100, { k: "will" }));
+    const out = clearSeat(log, 2);
+    expect(json(out.log.records.map((x) => [x.r, x.k, x.to]))).toBe(json([[2, "whisper", 2], [0, "will", undefined]]));
+  });
+
+  it("지운 뒤 그 좌석의 복원은 0줄이고 다른 좌석의 복원은 그대로다", () => {
+    const log = logOf(rec(1, 0b0111), rec(2, 0b0101));
+    const out = clearSeat(log, 2);
+    expect(replayFor(out.log, 2).length).toBe(0);
+    expect(replayFor(out.log, 0).length).toBe(2);
+    expect(replayFor(out.log, 1).length).toBe(1);
+  });
+
+  it("범위 밖 좌석은 아무것도 바꾸지 않는다", () => {
+    const log = logOf(rec(1, 0b1111_1111));
+    expect(clearSeat(log, -1).changed.length).toBe(0);
+    expect(clearSeat(log, 8).changed.length).toBe(0);
   });
 });

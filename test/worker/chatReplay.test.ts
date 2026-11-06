@@ -2,10 +2,10 @@
 // 트레이서(Task 1)는 로비 한 줄이 저장되고 새로 hello 한 소켓이 그 줄을 chatLog 로 받는 것까지를 증명한다.
 // 복원 규칙 전수(채널별 30줄·마스크·상한·리셋)는 같은 파일 아래쪽이 맡는다.
 import { env } from "cloudflare:workers";
-import { evictDurableObject, runInDurableObject } from "cloudflare:test";
+import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
-import { actorsOf, advanceTo, chatKeysOf, chatLogOf, chatRecordsOf, chatSend, chatsOf, connect, createRoom, editRoom, framesOf, hello, helloForLog, joinOk, lineText, mapPlayers, mark, nextFrame, pickAs, seat, send, settle, skipThrough, startedGame, storedRoom } from "./helpers";
+import { actorsOf, advanceTo, chatKeysOf, chatLogOf, chatRecordsOf, chatSend, chatsOf, connect, createRoom, editRoom, framesOf, hello, helloForLog, joinOk, lineText, mapPlayers, mark, nextFrame, pickAs, seat, send, settle, skipThrough, startedGame, storedRoom, until } from "./helpers";
 import type { Actor, Seated } from "./helpers";
 
 /** 프레임 목록을 'state,world.snap,chatLog' 같은 한 줄 종류 열로(실패 보고가 한 줄이어야 한다). */
@@ -284,4 +284,85 @@ describe("아침 카드 재접속 복원 (MORN-02, 결정 0061-11)", () => {
     expect(got.map((x) => (x.t === "error" ? `error:${x.code}` : x.t)).join(",")).toBe("error:BAD_MESSAGE");
     expect((await chatKeysOf(g.code)).length).toBe(before);
   }, 40_000);
+});
+
+// ---- 12-04: 좌석 재사용 — 나간 사람의 좌석을 새 사람이 받아도 입장 전 줄을 복원받지 않는다 (07 리뷰 WR-01, 결정 0058-2, T-12-11) ----
+describe("채팅 복원 — 로비 좌석 재사용 (WR-01)", () => {
+  /** 새 사람이 들어와 hello 해 받은 chatLog 줄 수와 그가 받은 좌석 */
+  async function newcomerReplay(code: string, nickname: string): Promise<{ seat: number; lines: string[] }> {
+    const joined = await joinOk(code, nickname);
+    const sock = await connect(code);
+    const lines = (await helloForLog(sock, joined.token)).map(lineText);
+    return { seat: joined.seat, lines };
+  }
+
+  it("나가기: A 가 나가고 B 가 같은 좌석을 받으면 B 의 chatLog 는 비고, 남은 사람은 그 줄을 복원으로 계속 받는다", async () => {
+    const s = await seat(2, 0);
+    const [g1, g2] = s.guests as [(typeof s.guests)[number], (typeof s.guests)[number]];
+    await bulkChat(s.code, 0, ["입장 전 줄"]);
+    send(g2.sock, { t: "leave" });
+    await g2.sock.closedPromise;
+    const b = await newcomerReplay(s.code, "새사람");
+    expect(b.seat).toBe(g2.seat);
+    expect(b.lines.join("|")).toBe("");
+    expect((await replayOf(s.code, g1.token)).join("|")).toBe("all/0/1/입장 전 줄");
+    expect((await replayOf(s.code, s.hostToken)).join("|")).toBe("all/0/1/입장 전 줄");
+  });
+
+  it("바뀐 레코드는 저장소에도 다시 쓰인다: DO 를 퇴거했다 읽어도 새 사람의 chatLog 는 비어 있고 번호는 이어진다", async () => {
+    const s = await seat(2, 0);
+    const g2 = s.guests[1]!;
+    await bulkChat(s.code, 0, ["입장 전 줄"]);
+    send(g2.sock, { t: "leave" });
+    await g2.sock.closedPromise;
+    const rec = (await chatRecordsOf(s.code))["chat:000001"]!;
+    expect(`${((rec.r as number) >> g2.seat) & 1}`).toBe("0");
+    await evictDurableObject(env.ROOM.getByName(s.code));
+    const b = await newcomerReplay(s.code, "새사람");
+    expect(b.lines.join("|")).toBe("");
+    await bulkChat(s.code, 0, ["둘째"]);
+    expect((await replayOf(s.code, s.hostToken)).join("|")).toBe("all/0/1/입장 전 줄|all/0/2/둘째");
+  });
+
+  it("내보내기: 방장이 A 를 내보내고 B 가 같은 좌석을 받으면 B 의 chatLog 는 비고 남은 사람은 줄을 받는다", async () => {
+    const s = await seat(2, 0);
+    const [g1, g2] = s.guests as [(typeof s.guests)[number], (typeof s.guests)[number]];
+    await bulkChat(s.code, 0, ["입장 전 줄"]);
+    g2.sock.ws.close(); // 연결된 사람은 내보낼 수 없다(CANNOT_KICK) — 끊긴 뒤에 내보낸다
+    await nextFrame(s.host, (m) => m.t === "state" && m.view.players.find((p) => p.seat === g2.seat)?.connected === false);
+    send(s.host, { t: "kick", seat: g2.seat });
+    await nextFrame(s.host, (m) => m.t === "state" && !m.view.players.some((p) => p.seat === g2.seat));
+    const b = await newcomerReplay(s.code, "새사람");
+    expect(b.seat).toBe(g2.seat);
+    expect(b.lines.join("|")).toBe("");
+    expect((await replayOf(s.code, g1.token)).join("|")).toBe("all/0/1/입장 전 줄");
+  });
+
+  it("봇 줄이기: 봇 자리를 사람이 받으면 입장 전 줄이 0줄이다", async () => {
+    const s = await seat(0, 0, { testMode: true });
+    send(s.host, { t: "testBots", count: 2 });
+    await nextFrame(s.host, (m) => m.t === "state" && m.view.players.length === 3);
+    await bulkChat(s.code, 0, ["봇이 있던 때"]);
+    send(s.host, { t: "testBots", count: 0 });
+    await nextFrame(s.host, (m) => m.t === "state" && m.view.players.length === 1);
+    const b = await newcomerReplay(s.code, "새사람");
+    expect(b.seat).toBe(1);
+    expect(b.lines.join("|")).toBe("");
+    expect((await replayOf(s.code, s.hostToken)).join("|")).toBe("all/0/1/봇이 있던 때");
+  });
+
+  it("대기실 자동 정리: 끊긴 채 정리 시간이 지나 지워진 자리를 새 사람이 받아도 입장 전 줄이 0줄이다", async () => {
+    const s = await seat(2, 0, { testMode: true });
+    const [g1, g2] = s.guests as [(typeof s.guests)[number], (typeof s.guests)[number]];
+    await bulkChat(s.code, 0, ["입장 전 줄"]);
+    g2.sock.ws.close();
+    await until("끊김 기록", async () => ((await storedRoom(s.code)).players as Array<{ seat?: number; disconnectedAt?: number }>).find((p) => p.seat === g2.seat)?.disconnectedAt !== undefined);
+    await editRoom(s.code, (room) => mapPlayers(room, (p) => (p.seat === g2.seat ? { ...p, disconnectedAt: Date.now() - 10_000 } : p)));
+    expect(await runDurableObjectAlarm(env.ROOM.getByName(s.code))).toBe(true);
+    await nextFrame(g1.sock, (m) => m.t === "state" && !m.view.players.some((p) => p.seat === g2.seat));
+    const b = await newcomerReplay(s.code, "새사람");
+    expect(b.seat).toBe(g2.seat);
+    expect(b.lines.join("|")).toBe("");
+    expect((await replayOf(s.code, g1.token)).join("|")).toBe("all/0/1/입장 전 줄");
+  });
 });
