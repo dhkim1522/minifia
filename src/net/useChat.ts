@@ -54,6 +54,9 @@ export function useChat({ store, connection, view, motion }: { store: ChatStore;
 
   // 줄 앞 이름: 지금 방에 있는 사람의 닉네임. 떠난 사람의 줄은 마지막으로 본 닉네임을 쓴다.
   const names = useRef(new Map<number, string>());
+  // 줄 이름 고정(07 리뷰 WR-01): 줄이 처음 그려질 때 알던 이름을 줄 키로 붙들어, 같은 좌석을 새 사람이 받아도 옛 줄이 새 이름으로 바뀌지 않는다.
+  // 이름을 한 번도 못 본 좌석의 줄은 고정하지 않고(빈 이름), 알려지는 순간 채워 고정한다.
+  const lineNames = useRef(new Map<string, string>());
   const channel = view.me.chat ?? null;
   const { players } = view;
   const mySeat = view.me.seat;
@@ -73,6 +76,13 @@ export function useChat({ store, connection, view, motion }: { store: ChatStore;
     const now = Date.now();
     renderedAt.current = now;
     const nameOf = (seat: number): string => names.current.get(seat) ?? "";
+    const pinnedName = (key: string, seat: number): string => {
+      const pinned = lineNames.current.get(key);
+      if (pinned !== undefined) return pinned;
+      const name = nameOf(seat);
+      if (name !== "") lineNames.current.set(key, name);
+      return name;
+    };
     return store.visibleLines(channel, now).flatMap((line): ChatPanelMessage[] => {
       // 귓속말: 본문 줄(받은·보낸 비공개 블록)과 공개 사실 줄. 이름은 좌석으로 찾는다(저장소는 이름을 모른다)
       // 내가 당사자가 아닌 본문 줄·당사자에게 온 사실 줄은 그리지 않는다(서버가 보내지 않지만, 와도 본문을 일반 줄로 흘리지 않는다 — T-09.1.1-25)
@@ -93,7 +103,7 @@ export function useChat({ store, connection, view, motion }: { store: ChatStore;
       if (line.kind === "card" && line.card) {
         // 카드는 서버 k 줄과 이 화면의 경찰 카드뿐이다. 서버 카드의 제목은 좌석 닉네임으로 만든다(UI-SPEC 427행).
         const m: ChatPanelMessage = { key: line.key, kind: "card", card: line.card, text: line.text, icon: line.card === "will" ? "quill" : line.card === "note" ? "note" : "eye" };
-        if (line.card === "will") m.title = CHAT_TEXT.cardWill(line.seat === undefined ? "" : (names.current.get(line.seat) ?? ""));
+        if (line.card === "will") m.title = CHAT_TEXT.cardWill(line.seat === undefined ? "" : pinnedName(line.key, line.seat));
         else if (line.card === "note") {
           m.title = CHAT_TEXT.cardNote;
           m.tone = "mafia";
@@ -109,7 +119,7 @@ export function useChat({ store, connection, view, motion }: { store: ChatStore;
       const m: ChatPanelMessage = { key: line.key, kind: "player", text: line.text };
       if (line.seat !== undefined) {
         m.seat = line.seat;
-        m.name = names.current.get(line.seat) ?? "";
+        m.name = pinnedName(line.key, line.seat);
         m.me = line.seat === mySeat;
       }
       if (line.ch) m.ch = line.ch;
