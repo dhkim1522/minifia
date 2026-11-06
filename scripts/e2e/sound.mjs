@@ -1,9 +1,9 @@
-// 12페이즈 소리 E2E 흐름 (12-06~). sound-render(12-06), sound-unlock(12-07), sound-script(12-08). 이후 계획이 sound-night-parity·sound-result 를 같은 파일에 더한다.
+// 12페이즈 소리 E2E 흐름 (12-06~). sound-render(12-06), sound-unlock(12-07), sound-script(12-08), sound-night-parity(12-09). 이후 계획이 sound-result 를 같은 파일에 더한다.
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makeSoundFlows(helpers)` 로 받는다(avatar.mjs·politics.mjs 와 같은 모양 — 서로 import 하지 않는다).
-// helpers: { recorder, attempt, startHost } (sound-script 만 startHost 를 쓴다)
+// helpers: { recorder, attempt, startHost, openGame, closeGame, nightScenario } (sound-script 는 startHost, sound-night-parity 는 openGame·closeGame·nightScenario 를 쓴다)
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(soundRenderChecks, SOUND_RENDER_LIMITS)에만 있고 여기서는 낮추지 않는다 (T-12-22).
-import { chooseRole, dropSockets, leaveLobby, openTestSheet, reconnectInit, setBotVote, setBots, skipTo, sleep, startGame, tapTurnPick } from "./browser.mjs";
-import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundRenderChecks, soundSequenceChecks } from "./lib.mjs";
+import { chooseRole, dropSockets, leaveLobby, openTestSheet, reconnectInit, SetupError, setBotVote, setBots, settle, skipTo, sleep, startGame, tapPick, tapTurnPick } from "./browser.mjs";
+import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundNightParityChecks, soundRenderChecks, soundSequenceChecks } from "./lib.mjs";
 
 /** [전부 계산] 56개 렌더가 끝나기를 기다리는 상한(ms) */
 const CALC_LIMIT_MS = 60000;
@@ -24,7 +24,14 @@ const VERDICT_TICK_WAIT_MS = 7200;
 const infoRow = (rec, scenario, id, detail) => rec(scenario, id, detail.split(" · ")[0], true, detail, true);
 const recOne = (rec, scenario, r) => rec(scenario, r.id, r.label, r.ok, r.detail, r.relaxed === true || r.info === true);
 
-export function makeSoundFlows({ recorder, attempt, startHost }) {
+/** sound-night-parity: 밤 시작 뒤 이 시각에 손님 하나를 새로고침한다(ms). 큐가 이미 한두 개 난 뒤, 밤 끝(30초)보다 한참 앞 */
+const PARITY_RELOAD_AT_MS = 12000;
+/** 밤이 서버 타이머로 끝나 아침이 되기를 기다리는 상한(ms): 밤 30초 + 여유 */
+const PARITY_MORNING_WAIT_MS = 42000;
+/** 아침 진입 뒤 아침 소리(morning.dawn · 400/700ms 분기 · kill.slash +50ms)가 로그에 쌓이도록 기다리는 시간(ms) */
+const PARITY_MORNING_SETTLE_MS = 3000;
+
+export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGame, nightScenario }) {
   /**
    * sound-render: 방 없이 새 컨텍스트(GAME_SIZE)로 시험 페이지를 열고 [전부 계산] → 56개 렌더 결과를 순수 판정 함수로 확인한다.
    * 소리 출력은 없다(OfflineAudioContext). 서버 호출도 없다.
@@ -232,7 +239,7 @@ export function makeSoundFlows({ recorder, attempt, startHost }) {
    * sound-script (D-21): 테스트 방 + 봇 3 + testSkip 으로 로비 → 시작 → 역할 확인 → 낮 → 지목 → 변론 → 찬반을 지나며
    * 단계마다 훅 로그(window.__mfSound.log)에 기대 id 가 순서대로 있는지 본다(구간은 clear() 로 나눈다, 기대는 lib.mjs SOUND_SCRIPT_STEPS).
    * 마지막에 새로고침 직후 로그에 현재 단계 침대 요청만 있고 일회성 소리가 없음을 확인한다(LS-10). 소리 출력은 보지 않는다 — 요청 로그만 읽는다.
-   * 밤·처형·아침·결과는 12-09·12-10·12-11 이 같은 표와 이 흐름에 단계를 더한다.
+   * 밤·아침(12-09)은 새로고침 뒤 testSkip 으로 이어서 본다. 처형·결과는 12-10·12-11 이 같은 표와 이 흐름에 단계를 더한다.
    */
   async function soundScriptFlow(ctx) {
     const rec = recorder(ctx);
@@ -341,10 +348,107 @@ export function makeSoundFlows({ recorder, attempt, startHost }) {
       rec("sound-script/reload", "SC10w", "새로고침 뒤 방 화면이 다시 열려 훅 로그가 찬다", back.ok, back.detail);
       if (!back.ok) return;
       judge("sound-script/reload", "SC10", await readLog(hp));
+
+      // ⑩ 밤 → 아침 (12-09, testSkip): 진입 소리와 침대만 본다. 큐·역할별 동일성·암살음은 sound-night-parity 몫
+      await clearLog(hp);
+      await skipTo(hp, ht, "night");
+      await sleep(700);
+      judge("sound-script/night", "SC11", await readLog(hp));
+      await clearLog(hp);
+      await skipTo(hp, ht, "morning");
+      await sleep(800);
+      judge("sound-script/morning", "SC12", await readLog(hp));
     } finally {
       await host.context.close().catch(() => {});
     }
   }
 
-  return { soundRenderFlow, soundUnlockFlow, soundScriptFlow };
+  /**
+   * sound-night-parity (D-21, LS-3·LS-7·LS-8·LS-10): 방장(마피아) + 사람 손님 셋 + 봇 하나(5명 → 마피아는 방장 하나라 손님은 모두 비마피아).
+   * 방장이 손님 한 명(피해자)을 일부러 고르고(밤 UI 조작) 밤 30초를 실제로 기다린다. 손님 하나는 밤 중간에 새로고침한다.
+   * 판정은 lib.mjs soundNightParityChecks (문턱은 거기에만 있고 여기서는 낮추지 않는다). 소리 출력은 보지 않는다 — 훅 요청 로그만 읽는다.
+   */
+  async function soundNightParityRun(ctx, rec) {
+    const sc = "sound-night-parity";
+    const game = await openGame(ctx, "sound-night-parity", { guests: 3, bots: 1, role: "mafia", vote: { exec: "no", pick: "other" }, to: "discussion" });
+    try {
+      const { hp, ht, hostSeat, guests } = game;
+      if (ht.last().me.role !== "mafia") throw new SetupError(`방장 직업이 마피아가 아님 (${ht.last().me.role})`);
+      const roles = guests.map((g) => g.tracker.last()?.me?.role ?? "?");
+      if (roles.includes("mafia")) throw new SetupError(`손님 중 마피아가 있음 (${roles.join(",")})`);
+      const victim = guests[0];
+      const decoy = guests[1];
+      const pages = [
+        { label: "방장(마피아)", page: hp, tracker: ht },
+        { label: `손님1(피해자·${roles[0]})`, page: victim.page, tracker: victim.tracker },
+        { label: `손님2(${roles[1]})`, page: decoy.page, tracker: decoy.tracker },
+        { label: `손님3(${roles[2]}·새로고침)`, page: guests[2].page, tracker: guests[2].tracker, reloaded: true },
+      ];
+      const victimLabel = pages[1].label;
+      const hooked = await attempt(async () => {
+        for (const p of pages) await p.page.waitForFunction(() => !!window.__mfSound, null, { timeout: 6000 });
+      });
+      rec(`${sc}/setup`, "NP0", "네 페이지 모두 소리 훅이 있다(?e2e=1 세션 플래그)", hooked.ok, hooked.detail);
+      if (!hooked.ok) return;
+
+      // 낮에서 밤으로: 로그를 비운 뒤 밤으로 넘긴다(밤 앞의 시험 시트 눌림은 밤 구간이 아니다 — 판정이 첫 bed.night 부터 자른다)
+      for (const p of pages) await clearLog(p.page);
+      await skipTo(hp, ht, "night");
+      const nightStart = Date.now();
+      for (const p of pages) await p.tracker.waitFor((v) => v.phase === "night", 9000, `${p.label} 밤 도착`);
+
+      // 밤 UI 를 일부러 만진다(LS-7): 방장은 피해자 이름표를 눌러 확정하고(마피아가 하나라 바로 확정), 손님들은 화면을 만진다. 모두 무음이어야 한다
+      const picked = await attempt(async () => {
+        // 밤 진입 장면 전환 막이 걷히고 이름표 버튼이 그려진 뒤에 누른다(막 위에서는 눌림이 가로막힌다)
+        await hp.waitForFunction(() => !document.querySelector("[data-curtain]"), null, { timeout: 8000 });
+        await hp.waitForSelector(`[data-pick="${victim.seat}"]`, { timeout: 8000 });
+        await settle(hp);
+        await tapPick(hp, victim.seat);
+      });
+      rec(`${sc}/night`, "NP1", "방장이 밤에 이름표를 눌러 피해자를 고른다(밤 UI 조작)", picked.ok, picked.detail);
+      for (const g of guests) await g.page.touchscreen.tap(Math.round(ctx.size.w / 2), Math.round(ctx.size.h / 3)).catch(() => {});
+      await sleep(Math.max(0, PARITY_RELOAD_AT_MS - (Date.now() - nightStart)));
+
+      // 밤 중간 새로고침(LS-10): night.fall 이 없고 침대만 + 남은 시간의 새 큐
+      const reloadPage = pages[3].page;
+      await reloadPage.reload({ waitUntil: "domcontentloaded" });
+      const back = await attempt(async () => {
+        await reloadPage.waitForFunction(() => !!window.__mfSound && window.__mfSound.log.some((e) => e.id === "bed.night"), null, { timeout: 10000 });
+      });
+      rec(`${sc}/reload`, "NP2", "밤 중간 새로고침 뒤 방 화면이 다시 열려 훅 로그에 bed.night 가 찬다", back.ok, back.detail);
+      if (!back.ok) return;
+
+      // 밤이 끝나 아침이 되고 아침 소리가 쌓이기를 기다린다(밤은 실제로 30초)
+      await ht.waitFor((v) => v.phase === "morning", PARITY_MORNING_WAIT_MS, "밤 뒤 아침(서버 타이머)");
+      const morning = ht.last().day?.morning;
+      // 의사 봇·의사 손님이 우연히 피해자를 지키면(구출 아침) 암살음이 날 수 없다 — 새 방으로 다시 돈다
+      if (morning?.eliminated !== victim.seat) throw new SetupError(`피해자가 탈락하지 않음 (아침 결과 ${JSON.stringify(morning ?? null)}, 방장 자리 ${hostSeat})`);
+      await sleep(PARITY_MORNING_SETTLE_MS);
+
+      const logs = [];
+      for (const p of pages) logs.push({ label: p.label, log: await readLog(p.page), ...(p.reloaded ? { reloaded: true } : {}) });
+      if (logs.some((l) => l.log === null)) {
+        rec(`${sc}/judge`, "NP3", "모든 페이지에서 훅 로그를 읽었다", false, "window.__mfSound 훅이 없음");
+        return;
+      }
+      for (const line of soundNightParityChecks({ pages: logs, victimLabel })) recOne(rec, `${sc}/judge`, line);
+      // 참고(판정 아님): 페이지별 밤 id 집합과 night.cue 개수 — SUMMARY 에 옮긴다
+      for (const l of logs) {
+        const ids = l.log.map((e) => e.id);
+        const from = ids.indexOf("bed.night");
+        const to = ids.indexOf("bed.dawn", Math.max(0, from));
+        const night = from < 0 ? [] : ids.slice(from, to < 0 ? undefined : to);
+        infoRow(rec, `${sc}/info`, `NPi-${logs.indexOf(l) + 1}`, `참고: ${l.label} 밤 {${[...new Set(night)].sort().join(", ")}} · night.cue ${night.filter((id) => id === "night.cue").length}개 · 아침 [${ids.slice(to < 0 ? ids.length : to).join(", ")}]`);
+      }
+    } finally {
+      await closeGame(game);
+    }
+  }
+
+  async function soundNightParityFlow(ctx) {
+    const rec = recorder(ctx);
+    await nightScenario(ctx, () => soundNightParityRun(ctx, rec));
+  }
+
+  return { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow };
 }

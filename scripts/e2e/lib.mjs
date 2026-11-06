@@ -2225,4 +2225,110 @@ export const SOUND_SCRIPT_STEPS = Object.freeze([
   Object.freeze({ id: "SC8", label: "봇 차례들: pin.on 이 나고 내 pick.turn·pick.tick 은 없음, 변론 진입에도 새 침대 없음", ids: ["pin.on"], counts: { "bed.vote": 0 }, notIds: ["pick.turn", "pick.tick", "phase.vote", "day.start", "role.flip", "game.start"] }),
   Object.freeze({ id: "SC9", label: "verdict: 마지막 5초 timer.tick 이 초마다, 새 침대 없음", ids: ["timer.tick", "timer.tick"], counts: { "bed.vote": 0 }, notIds: ["phase.vote", "day.start", "role.flip", "game.start"] }),
   Object.freeze({ id: "SC10", label: "낮 중간 새로고침(LS-10): 현재 단계 침대만, 일회성 소리 없음", ids: ["bed.vote"], onlyPrefix: "bed.", notIds: [...ONE_SHOT_AFTER_RELOAD, ...OTHER_BEDS("bed.vote")] }),
+  // 12-09: 새로고침 뒤 testSkip 으로 밤 → 아침. 지나온 단계의 소리가 앞에 끼어도 되도록 부분 수열로 본다(큐·역할별 동일성은 sound-night-parity 가 본다)
+  Object.freeze({ id: "SC11", label: "밤 진입: bed.night → night.fall (밤 큐·암살음·아침 소리는 아직 없음)", ids: ["bed.night", "night.fall"], notIds: ["kill.slash", "morning.dawn", "bed.dawn"] }),
+  Object.freeze({ id: "SC12", label: "아침 진입: bed.dawn → morning.dawn 한 번 (결과와 무관), night.fall 없음", ids: ["bed.dawn", "morning.dawn"], counts: { "morning.dawn": 1 }, notIds: ["night.fall"] }),
 ]);
+
+// ---- 12페이즈 sound-night-parity (12-09, 결정 D-21): 역할이 다른 페이지의 밤 소리 동일성 · 밤 UI 무음 · 암살음 피해자만 ----
+
+/** 밤 구간(첫 bed.night 부터 첫 bed.dawn 앞)의 소리 id 집합 — 역할·살아 있음과 무관하게 모든 페이지가 같다 (LS-3). 이 밖의 id 가 나오면 새는 것이다 */
+export const NIGHT_PARITY_IDS = Object.freeze(["bed.night", "night.cue", "night.fall"]);
+
+/** 페이지 로그를 밤 구간과 아침 구간으로 나눈다. 밤: 첫 bed.night 부터 그 뒤 첫 bed.dawn 앞 · 아침: 첫 bed.dawn 부터 끝. 밤 앞의 낮 소리(시험 시트 눌림 등)는 어느 쪽에도 넣지 않는다 */
+function nightSegments(log) {
+  const ids = log.map((e) => e.id);
+  const nightAt = ids.indexOf("bed.night");
+  const dawnAt = ids.indexOf("bed.dawn", Math.max(0, nightAt));
+  return {
+    night: nightAt < 0 ? [] : ids.slice(nightAt, dawnAt < 0 ? undefined : dawnAt),
+    morning: dawnAt < 0 ? [] : ids.slice(dawnAt),
+  };
+}
+
+/**
+ * 밤 소리 동일성 판정 (sound-night-parity, LS-3·LS-7·LS-8·LS-10). 순수 함수 — 문턱은 여기에만 있다.
+ * pages = [{ label, log[{ id, … }], reloaded? }] (훅 로그 사본; reloaded 는 밤 중간에 새로고침한 페이지) · victimLabel = 암살당한 페이지 라벨.
+ *   P1 새로고침하지 않은 모든 페이지의 밤 id 집합이 NIGHT_PARITY_IDS 와 같다(서로 같다는 뜻이기도 하다)
+ *   P2 night.cue 개수: 새로고침하지 않은 페이지는 2~4, 새로고침 페이지는 0~4 (남은 시간 안에서 새로 뽑는다)
+ *   P3 모든 페이지의 밤 구간에 ui.* 와 vote.cast 가 0
+ *   P4 kill.slash: 밤 구간 0, 아침 구간은 피해자 페이지에서만 정확히 1회
+ *   P5 morning.dawn 은 모든 페이지의 아침 구간에 정확히 1회 (결과와 무관)
+ *   P6 새로고침 페이지는 밤 구간에 bed.night 가 있고 night.fall 이 없다
+ */
+export function soundNightParityChecks(input) {
+  const ids = ["P1", "P2", "P3", "P4", "P5", "P6"];
+  const labels = {
+    P1: "밤 구간 id 집합이 {bed.night, night.fall, night.cue} 로 모든 페이지에서 같다",
+    P2: "night.cue 가 2~4개(새로고침 페이지는 0~4)",
+    P3: "밤 구간에 ui.* 와 vote.cast 가 0",
+    P4: "kill.slash 는 아침에 피해자 페이지에서만 정확히 1회, 밤 구간 0",
+    P5: "morning.dawn 이 모든 페이지에 정확히 1회",
+    P6: "새로고침 페이지는 bed.night 만 있고 night.fall 이 없다",
+  };
+  const pages = input?.pages;
+  const valid = Array.isArray(pages) && pages.length > 0 && pages.every((p) => !!p && typeof p.label === "string" && Array.isArray(p.log) && p.log.every((e) => !!e && typeof e.id === "string"));
+  if (!valid) return ids.map((id) => noMeasure(id, labels[id], "pages[{ label, log[{ id }] }]"));
+  const seg = pages.map((p) => ({ ...p, ...nightSegments(p.log) }));
+  const full = seg.filter((p) => p.reloaded !== true);
+  const reloaded = seg.filter((p) => p.reloaded === true);
+  const count = (list, id) => list.filter((x) => x === id).length;
+  const out = [];
+
+  if (full.length < 2) out.push(noMeasure("P1", labels.P1, "새로고침하지 않은 페이지가 둘 이상"));
+  else {
+    const bad = [];
+    for (const p of full) {
+      const set = [...new Set(p.night)].sort();
+      if (p.night.length === 0) bad.push(`${p.label}: 밤 구간 없음`);
+      else if (set.join(",") !== NIGHT_PARITY_IDS.join(",")) bad.push(`${p.label}: {${set.join(", ")}}`);
+    }
+    out.push(result("P1", labels.P1, bad));
+  }
+
+  const bad2 = [];
+  for (const p of seg) {
+    const n = count(p.night, "night.cue");
+    if (p.reloaded === true ? n > 4 : n < 2 || n > 4) bad2.push(`${p.label}: night.cue ${n}개`);
+  }
+  out.push(result("P2", labels.P2, bad2));
+
+  const bad3 = [];
+  for (const p of seg) {
+    const loud = p.night.filter((id) => id.startsWith("ui.") || id === "vote.cast");
+    if (loud.length > 0) bad3.push(`${p.label}: 밤에 ${[...new Set(loud)].join(",")}`);
+  }
+  out.push(result("P3", labels.P3, bad3));
+
+  const victim = seg.find((p) => p.label === input.victimLabel);
+  if (victim === undefined) out.push(noMeasure("P4", labels.P4, `피해자 페이지 '${String(input.victimLabel)}' 가 pages 에 있어야 함`));
+  else {
+    const bad4 = [];
+    for (const p of seg) {
+      const inNight = count(p.night, "kill.slash");
+      if (inNight > 0) bad4.push(`${p.label}: 밤 구간에 kill.slash ${inNight}번`);
+      const inMorning = count(p.morning, "kill.slash");
+      const want = p === victim ? 1 : 0;
+      if (inMorning !== want) bad4.push(`${p.label}: 아침 kill.slash ${inMorning}번 (기대 ${want})`);
+    }
+    out.push(result("P4", labels.P4, bad4));
+  }
+
+  const bad5 = [];
+  for (const p of seg) {
+    const n = count(p.morning, "morning.dawn");
+    if (n !== 1) bad5.push(`${p.label}: morning.dawn ${n}번`);
+  }
+  out.push(result("P5", labels.P5, bad5));
+
+  if (reloaded.length === 0) out.push(noMeasure("P6", labels.P6, "밤 중간에 새로고침한 페이지가 하나 이상"));
+  else {
+    const bad6 = [];
+    for (const p of reloaded) {
+      if (!p.night.includes("bed.night")) bad6.push(`${p.label}: bed.night 없음`);
+      if (p.night.includes("night.fall")) bad6.push(`${p.label}: night.fall 이 나옴`);
+    }
+    out.push(result("P6", labels.P6, bad6));
+  }
+  return out;
+}

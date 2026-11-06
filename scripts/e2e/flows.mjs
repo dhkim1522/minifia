@@ -3691,7 +3691,7 @@ const { avatarEmoteFlow, avatarDressFlow, avatarPhasesFlow, avatarPhasesNightFlo
 const { mapSelectFlow } = makeMapSelectFlows({ recorder, startHost, openGuest, attempt, LOBBY_HOST_NICK, WORLD_GUEST_NICK, settledResult });
 
 // 소리(12페이즈): sound-render(12-06) 시험 페이지 오프라인 렌더 56개. 흐름 본문은 sound.mjs, 도우미만 넘긴다
-const { soundRenderFlow, soundUnlockFlow, soundScriptFlow } = makeSoundFlows({ recorder, attempt, startHost });
+const { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow } = makeSoundFlows({ recorder, attempt, startHost, openGame, closeGame, nightScenario });
 
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
@@ -3748,6 +3748,8 @@ export const FLOWS = [
   { id: "sound-unlock-360x560", run: soundUnlockFlow, size: { w: 360, h: 560, label: "360x560" } },
   // 12-08: 로비 → 시작 → 역할 확인 → 낮 → 지목 → 변론 → 찬반 단계마다 훅 로그에 기대 소리 id 가 순서대로 + 새로고침은 침대만. 테스트 방 + 봇 + testSkip, 390x844 한 크기(D-21)
   { id: "sound-script", run: soundScriptFlow, size: GAME_SIZE },
+  // 12-09: 밤 소리 동일성 — 방장(마피아) + 비마피아 손님 셋의 밤 로그가 같은 id 집합·큐 2~4개, 밤 UI 무음, 암살음은 피해자 페이지에만 1회, 밤 중간 새로고침은 night.fall 없음. 밤 30초를 실제로 기다린다
+  { id: "sound-night-parity", run: soundNightParityFlow, size: GAME_SIZE },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },
