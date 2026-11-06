@@ -95,7 +95,6 @@ describe("Lobby — 맵 로비 틀 (MAP-01, 06-15)", () => {
     expect(typeof p.onNotice).toBe("function");
     expect(typeof p.onKick).toBe("function");
     expect(typeof p.onLeave).toBe("function");
-    expect(typeof p.onReady).toBe("function");
     expect(p.exiting).toBeFalsy();
   });
 
@@ -112,8 +111,9 @@ describe("Lobby — 맵 로비 틀 (MAP-01, 06-15)", () => {
     expect(within(header).getByText("대기실")).toBeTruthy();
     expect(container.textContent).not.toContain("0042");
     expect(container.querySelector(".mf-lobby__code") === null).toBe(true);
-    // 읽을 글은 '대기실' 과 접히는 한 줄뿐
-    expect(header.querySelectorAll(".mv-phase__title, .mv-phase__hint").length).toBe(2);
+    // 14-02(U-2): 읽을 글은 '대기실' 하나뿐 — 안내 줄은 자막 띠가 맡는다
+    expect(header.querySelectorAll(".mv-phase__title").length).toBe(1);
+    expect(header.querySelectorAll(".mv-phase__hint").length).toBe(0);
   });
 
   it("닉네임은 이 틀 어디에서도 글자로 그려지지 않는다 — 이름표는 WorldStage 몫이다", () => {
@@ -122,25 +122,11 @@ describe("Lobby — 맵 로비 틀 (MAP-01, 06-15)", () => {
     expect(container.querySelector("b") === null).toBe(true);
   });
 
-  it("안내 한 줄 '바닥을 눌러 걸어요' 는 [data-guide] 하나이고, 맵이 열리기 전에는 접혀 있다", () => {
+  it("헤더는 제목만이다: 안내 줄(.mv-phase__hint)과 [data-guide] 가 없다(안내는 자막 띠 몫, 14-02 U-2)", () => {
     const { container } = render(lobby(view));
-    const guides = container.querySelectorAll("[data-guide]");
-    expect(guides.length).toBe(1);
-    expect(guides[0]!.textContent).toBe("바닥을 눌러 걸어요");
-    expect(guides[0]!.classList.contains("mv-phase__hint")).toBe(true);
-    expect(guides[0]!.classList.contains("is-folded")).toBe(true);
-  });
-
-  it("맵이 열린(onReady) 뒤 안내가 보이고 2500ms 뒤 접힌다", () => {
-    vi.useFakeTimers();
-    const { container } = render(lobby(view));
-    const hint = () => container.querySelector("[data-guide]") as HTMLElement;
-    act(() => props().onReady?.());
-    expect(hint().classList.contains("is-folded")).toBe(false);
-    advance(2499);
-    expect(hint().classList.contains("is-folded")).toBe(false);
-    advance(1);
-    expect(hint().classList.contains("is-folded")).toBe(true);
+    expect(container.querySelectorAll("[data-guide]").length).toBe(0);
+    expect(container.querySelectorAll(".mv-phase__hint").length).toBe(0);
+    expect(container.querySelector(".mv-phase__title")!.textContent).toBe("대기실");
   });
 
   it("[테스트] 버튼은 헤더 아래 자리(.mf-lobby__test)에 놓인다", () => {
