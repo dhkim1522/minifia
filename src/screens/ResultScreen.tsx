@@ -521,7 +521,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
       ) : null}
       <header ref={headerRef} className="mf-result__header">
         <Button variant="secondary" compact className="mf-iconbtn" aria-label="나가기" icon={<Icon name="back" />} disabled={!canSend} onClick={() => setLeaveOpen(true)} />
-        <h1 className="mf-result__title" data-title={inAward ? "ceremony" : state.title} data-guide="">
+        <h1 className="mf-result__title" data-title={inAward ? "ceremony" : state.title}>
           {inAward ? (
             <V2Icon name="trophy" size={24} className="mf-result__title-icon" />
           ) : state.title === "result" ? null : (

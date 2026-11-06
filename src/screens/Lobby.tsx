@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { ClientMessage, MapChoice, RoomView } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
@@ -31,8 +31,6 @@ import "../styles/sheet.css";
 import "../styles/testtools.css";
 
 const START_LOCK_MS = 2000;
-/** 맵이 열린 뒤 안내 한 줄이 보이는 시간(결정 0051-5: 안내는 한 번, 그리고 사라진다) */
-const HINT_MS = 2500;
 
 interface LobbyProps {
   view: RoomView;
@@ -87,22 +85,10 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
     if (diff.newHost) chat.addSystem(CHAT_TEXT.hostChanged(diff.newHost.nickname), { scope: "all", icon: "crown", at });
   }, [view, epoch, bannerVisible, show, chat]);
 
-  // 열려 있는 시트. 화면이 기억하는 상태는 이것과 [시작] 잠금·안내 접힘뿐이다.
+  // 열려 있는 시트. 화면이 기억하는 상태는 이것과 [시작] 잠금뿐이다.
   // 내보내기는 누른 시점의 닉네임을 같이 들고 있어 그사이 view 가 바뀌어도 제목이 흔들리지 않는다.
   const [sheet, setSheet] = useState<{ kind: "leave" } | { kind: "share" } | { kind: "kick"; seat: number; nickname: string } | null>(null);
   const closeSheet = () => setSheet(null);
-
-  // 안내 한 줄: 맵이 열린 뒤에만 보이고 2.5초 뒤 접힌다. 로비를 열 때마다(맵이 새로 열릴 때마다) 다시 보인다.
-  const [hintOn, setHintOn] = useState(false);
-  const hintTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const onReady = useCallback(() => {
-    setHintOn(true);
-    if (hintTimer.current !== undefined) clearTimeout(hintTimer.current);
-    hintTimer.current = setTimeout(() => {
-      hintTimer.current = undefined;
-      setHintOn(false);
-    }, HINT_MS);
-  }, []);
 
   // [시작] 2초 잠금. 시작이 거절되면 서버가 다시 보낸 view 대로 그린다.
   const [locked, setLocked] = useState(false);
@@ -110,7 +96,6 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   useEffect(
     () => () => {
       if (lockTimer.current !== undefined) clearTimeout(lockTimer.current);
-      if (hintTimer.current !== undefined) clearTimeout(hintTimer.current);
     },
     [],
   );
@@ -191,7 +176,6 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
         onNotice={(text) => show(text)}
         onKick={(seat, nickname) => setSheet({ kind: "kick", seat, nickname })}
         onLeave={() => setSheet({ kind: "leave" })}
-        onReady={onReady}
         exiting={exiting}
       />
       <div className="mf-lobby__scrim" aria-hidden="true" />
@@ -205,7 +189,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           disabled={!canSend}
           onClick={() => setSheet({ kind: "leave" })}
         />
-        <PhaseHeader title="대기실" hint="바닥을 눌러 걸어요" showHint={hintOn} guide />
+        <PhaseHeader title="대기실" />
         {view.code ? (
           <Button variant="secondary" compact className="mf-iconbtn" aria-label="공유" icon={<Icon name="share" />} onClick={() => setSheet({ kind: "share" })} />
         ) : (

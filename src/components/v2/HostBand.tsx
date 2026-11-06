@@ -11,7 +11,7 @@ import { V2Icon } from "./V2Icon";
 // 사회자 자막 띠 (14-01, HOST-01·03, TOOL-02, UI-SPEC "자막 띠 계약"): 모든 방 화면 헤더 바로 아래 같은 자리·같은 모양의 한 줄.
 // 1행: 종 + 문장(hostLineOf) + 남은 초 / 2행: 시간 막대. 시간이 있는 단계에서만 시간 행이 있다(hostTimeOf).
 // 띠 아래 오른쪽 끝 독에 소리 단추가 있다(U-8) — 띠는 누를 수 없고(pointer-events none) 독의 단추만 받는다.
-// 문장은 React 텍스트 노드로만 그린다(닉네임이 들어간다). DOM 표식은 값 없는 data-host-band·data-host-line·data-host-time 과 시간 톤(calm|warn|urgent)뿐이다 — 역할·좌석 값 없음(T-14-03).
+// 문장은 React 텍스트 노드로만 그린다(닉네임이 들어간다). DOM 표식은 값 없는 data-host-band·data-host-line(= data-guide, 화면당 하나의 "지금 할 일" 표식, 14-02)·data-host-time 과 시간 톤(calm|warn|urgent)뿐이다 — 역할·좌석 값 없음(T-14-03).
 // 초마다 다시 그리기는 HostTime 안에 가둔다(맵은 다시 그리지 않는다, T-14-05).
 
 export interface HostBandProps {
@@ -115,7 +115,7 @@ export function HostBand({ view, offset, cardSeen, sound }: HostBandProps) {
         <span key={`bell-${view.phase}`} className={swap ? "mv-host__bell is-swap" : "mv-host__bell"}>
           <V2Icon name="bell" size={16} />
         </span>
-        <p key={`line-${view.phase}`} className={swap ? "mv-host__line is-swap" : "mv-host__line"} data-host-line="" role="status" aria-live="polite" aria-atomic="false">
+        <p key={`line-${view.phase}`} className={swap ? "mv-host__line is-swap" : "mv-host__line"} data-host-line="" data-guide="" role="status" aria-live="polite" aria-atomic="false">
           {line}
         </p>
         {showTime && endsAt !== null && durationMs !== null ? <HostTime endsAt={endsAt} durationMs={durationMs} offset={offset} /> : null}

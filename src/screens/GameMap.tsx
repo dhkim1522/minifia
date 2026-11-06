@@ -165,7 +165,6 @@ function MapHeader({ view, offset, hintOn, hintOverride, extra }: { view: RoomVi
       title={head.title}
       {...(hintOverride !== undefined ? { hint: hintOverride } : head.hint !== undefined ? { hint: head.hint } : {})}
       showHint={hintOverride !== undefined || hintOn}
-      guide
       {...(timing ? { time, total } : {})}
       extra={extra}
     />
