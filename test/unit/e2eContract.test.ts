@@ -39,6 +39,8 @@ import * as perfRun from "../../scripts/perf-run.mjs";
 import * as resultE2e from "../../scripts/e2e/result.mjs";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as mapSelectE2e from "../../scripts/e2e/mapselect.mjs";
+import { HOST_LINES } from "../../src/game/hostLine";
+import { ROLE_TEXT } from "../../src/game/roleText";
 import { CEREMONY_TITLE } from "../../src/game/awardText";
 import { RESULT_TEXT } from "../../src/game/verdict";
 import { JOB_OUTFIT } from "../../src/world/ghostOutfit";
@@ -630,5 +632,49 @@ describe("12페이즈 sound-result E2E (12-11)", () => {
     const named = [...body.matchAll(/"((?:role|result|award|bed|game)\.[a-z]+)"/g)].map((m) => m[1]!);
     const known = new Set<string>(SOUND_IDS);
     expect([...new Set(named)].filter((id) => !known.has(id))).toEqual([]);
+  });
+});
+
+describe("14페이즈 사회자·이름표 E2E 사본과 제품 값 (14-08, 사본 일치 규약)", () => {
+  type L = {
+    HOST_ACT_LINES: Record<string, string>;
+    GOALS: Record<string, string>;
+    VIEW_TOP_KEYS: ReadonlySet<string>;
+    VIEW_ME_KEYS: ReadonlySet<string>;
+    VIEW_DAY_KEYS: ReadonlySet<string>;
+    HOST_MARKERS: readonly string[];
+  };
+  const lib = e2eLib as unknown as L;
+  const root = new URL("../../", import.meta.url);
+
+  it("HOST_ACT_LINES 는 src/game/hostLine.ts 의 밤 역할별 줄과, GOALS 는 roleText.ts 의 목표 문장과 한 글자도 다르지 않다", () => {
+    expect(lib.HOST_ACT_LINES).toEqual({ mafia: HOST_LINES["night.mafia"], police: HOST_LINES["night.police"], doctor: HOST_LINES["night.doctor"] });
+    expect(lib.GOALS).toEqual({ mafia: ROLE_TEXT.mafia.goal, police: ROLE_TEXT.police.goal, doctor: ROLE_TEXT.doctor.goal, citizen: ROLE_TEXT.citizen.goal });
+  });
+
+  /** view.test.ts 의 `const NAME ... = new Set([ "a", "b" ])` 안 문자열 목록(줄 주석은 뺀다). 서버 view 허용 목록은 이 페이즈에서 그대로다. */
+  const keysIn = (name: string): string[] => {
+    const text = readFileSync(new URL("test/unit/view.test.ts", root), "utf8");
+    const m = new RegExp(`const ${name}\\b[^=]*=\\s*new Set\\(\\[([\\s\\S]*?)\\]\\)`).exec(text);
+    if (!m) throw new Error(`${name} 를 찾지 못함`);
+    const body = m[1]!.replace(/\/\/.*$/gm, "");
+    return [...body.matchAll(/"([^"]+)"/g)].map((x) => x[1]!);
+  };
+
+  it("VIEW_TOP/ME/DAY_KEYS 는 test/unit/view.test.ts 의 TOP_KEYS·ME_KEYS·DAY_KEYS 와 같은 집합이다(서버 view 키 사본이 어긋나지 않게)", () => {
+    for (const [name, got] of [["TOP_KEYS", lib.VIEW_TOP_KEYS], ["ME_KEYS", lib.VIEW_ME_KEYS], ["DAY_KEYS", lib.VIEW_DAY_KEYS]] as const) {
+      const want = keysIn(name);
+      expect(want.length, name).toBeGreaterThan(5);
+      expect([...got].sort(), name).toEqual([...new Set(want)].sort());
+    }
+  });
+
+  it("HOST_MARKERS(E2E 가 읽는 표식)가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
+    const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
+      .split("\n")
+      .filter((f) => /\.(tsx?|css)$/.test(f));
+    const all = tracked.map((f) => readFileSync(new URL(f, root), "utf8")).join("\n");
+    expect(lib.HOST_MARKERS).toEqual(["data-host-band", "data-host-line", "data-host-time", "data-call", "data-tool-label", "data-role-goal", "data-guide"]);
+    expect(lib.HOST_MARKERS.filter((m) => !all.includes(m))).toEqual([]);
   });
 });

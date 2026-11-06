@@ -163,6 +163,20 @@ import {
   parseRgb,
 } from "./lib.mjs";
 import { dropSockets } from "./browser.mjs";
+import {
+  GOALS,
+  HOST_ACT_LINES,
+  TOOL_LABEL_EXEMPT,
+  VIEW_DAY_KEYS,
+  VIEW_ME_KEYS,
+  VIEW_TOP_KEYS,
+  hostBandChecks,
+  hostChimeChecks,
+  hostLeakChecks,
+  hostOverlapChecks,
+  toolLabelChecks,
+  viewKeyChecks,
+} from "./lib.mjs";
 
 const PROD = "https://minifia-v3.dhplay.workers.dev\n";
 const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
@@ -813,7 +827,7 @@ test("TIMELESS_PHASES: 대기실·배정·결과 (src/game/scenes.ts 와 같은 
 
 const gOk = (over = {}) => ({
   count: 1,
-  items: [{ text: "토론하세요", inHeader: false, height: 20, lineHeight: 20 }],
+  items: [{ text: "토론하세요", inBand: true, height: 20, lineHeight: 20 }],
   timers: 1,
   ...over,
 });
@@ -834,24 +848,23 @@ test("guideChecks UX1: 안내 요소 0개는 실패, 2개도 실패(개수 적�
 });
 
 test("guideChecks UX1: 글자가 공백뿐이면 실패", () => {
-  const r = guideChecks(gOk({ items: [{ text: "  \n ", inHeader: false, height: 20, lineHeight: 20 }] }), { phase: "discussion" });
+  const r = guideChecks(gOk({ items: [{ text: "  \n ", inBand: true, height: 20, lineHeight: 20 }] }), { phase: "discussion" });
   assert.equal(r.ok, false);
   assert.match(r.detail, /글자/);
 });
 
-test("guideChecks UX1: 헤더 안내줄이 두 줄이면 실패, 한 줄 경계(1.6배)는 통과", () => {
-  const two = guideChecks(gOk({ items: [{ text: "안내", inHeader: true, height: 40, lineHeight: 20 }] }), { phase: "discussion" });
-  assert.equal(two.ok, false);
-  assert.match(two.detail, /40/);
-  const edge = guideChecks(gOk({ items: [{ text: "안내", inHeader: true, height: 32, lineHeight: 20 }] }), { phase: "discussion" });
-  assert.equal(edge.ok, true, edge.detail);
-  const over = guideChecks(gOk({ items: [{ text: "안내", inHeader: true, height: 32.5, lineHeight: 20 }] }), { phase: "discussion" });
-  assert.equal(over.ok, false);
+test("guideChecks UX1(14페이즈): 띠 문장은 3줄 미만 — 두 줄은 통과, 세 줄은 실패", () => {
+  const two = guideChecks(gOk({ items: [{ text: "안내", inBand: true, height: 40, lineHeight: 20 }] }), { phase: "discussion" });
+  assert.equal(two.ok, true, two.detail);
+  const three = guideChecks(gOk({ items: [{ text: "안내", inBand: true, height: 60, lineHeight: 20 }] }), { phase: "discussion" });
+  assert.equal(three.ok, false);
+  assert.match(three.detail, /3줄/);
 });
 
-test("guideChecks UX1: 헤더가 아닌 안내는 여러 줄이어도 한 줄 판정을 받지 않는다", () => {
-  const r = guideChecks(gOk({ items: [{ text: "안내", inHeader: false, height: 80, lineHeight: 20 }] }), { phase: "discussion" });
-  assert.equal(r.ok, true, r.detail);
+test("guideChecks UX1(14페이즈): 안내 문장이 띠 밖이면 실패한다", () => {
+  const r = guideChecks(gOk({ items: [{ text: "안내", inBand: false, height: 20, lineHeight: 20 }] }), { phase: "discussion" });
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /띠 밖/);
 });
 
 test("guideChecks UX1: 타이머 0개는 시간 있는 단계에서 실패, TIMELESS_PHASES 에서는 통과", () => {
@@ -867,7 +880,7 @@ test("guideChecks UX1: 측정값이 없거나 숫자가 아니면 조용히 통�
     assert.equal(r.ok, false, JSON.stringify(g));
     assert.match(r.detail, /측정값 없음/, JSON.stringify(g));
   }
-  const r = guideChecks(gOk({ items: [{ text: "안내", inHeader: true, height: "x", lineHeight: 20 }] }), { phase: "discussion" });
+  const r = guideChecks(gOk({ items: [{ text: "안내", inBand: true, height: "x", lineHeight: 20 }] }), { phase: "discussion" });
   assert.equal(r.ok, false);
   assert.match(r.detail, /측정값 없음/);
 });
@@ -3520,4 +3533,219 @@ test("SOUND_SCRIPT_STEPS: 13-05 투표 단계는 기본판 — bed.vote·phase.v
   const sc8 = SOUND_SCRIPT_STEPS.find((x) => x.id === "SC8");
   assert.equal(sc8.counts["bed.vote"], 0);
   for (const id of ["pin.on", "pick.turn", "pick.tick", "phase.vote"]) assert.ok(sc8.notIds.includes(id), id);
+});
+
+// ---- 14페이즈(14-08): 띠·이름표·누설·알림음·view 키 판정 ----
+
+const bandOk = (over = {}) => ({
+  bands: 1, lineCount: 1, lineH: 40, lineLH: 20, guideCount: 1, guideInBand: true,
+  timeText: "42초", barShown: true, oldHint: 0, oldRing: 0, oldTimer: 0, ...over,
+});
+
+test("hostBandChecks: 시간 있는 단계 — 띠 하나·문장 하나·data-guide 띠 안·두 줄·막대+초 는 통과(HB1~HB5)", () => {
+  const rs = hostBandChecks(bandOk(), { phase: "discussion", timed: true });
+  assert.deepEqual(rs.map((r) => r.id), ["HB1", "HB2", "HB3", "HB4", "HB5"]);
+  for (const r of rs) assert.equal(r.ok, true, r.id + r.detail);
+});
+
+test("hostBandChecks: 시간 없는 단계는 막대·숫자가 둘 다 없어야 통과, 하나만 있어도 실패", () => {
+  const ok = hostBandChecks(bandOk({ timeText: "", barShown: false }), { phase: "lobby", timed: false });
+  for (const r of ok) assert.equal(r.ok, true, r.id + r.detail);
+  const bar = hostBandChecks(bandOk({ timeText: "", barShown: true }), { phase: "lobby", timed: false }).find((r) => r.id === "HB4");
+  assert.equal(bar.ok, false);
+  const txt = hostBandChecks(bandOk({ timeText: "3초", barShown: false }), { phase: "lobby", timed: false }).find((r) => r.id === "HB4");
+  assert.equal(txt.ok, false);
+});
+
+test("hostBandChecks: 띠 0·2개, data-guide 0개·띠 밖, 세 줄, 옛 안내·링·타이머 는 각각 실패한다", () => {
+  const bad = (over, id) => {
+    const r = hostBandChecks(bandOk(over), { phase: "discussion", timed: true }).find((x) => x.id === id);
+    assert.equal(r.ok, false, id + JSON.stringify(over));
+    return r;
+  };
+  bad({ bands: 0 }, "HB1");
+  bad({ bands: 2 }, "HB1");
+  bad({ lineCount: 2 }, "HB1");
+  bad({ guideCount: 0 }, "HB2");
+  bad({ guideInBand: false }, "HB2");
+  assert.match(bad({ lineH: 60 }, "HB3").detail, /3줄/);
+  bad({ timeText: "1:05" }, "HB4");
+  bad({ barShown: false }, "HB4");
+  bad({ oldHint: 1 }, "HB5");
+  bad({ oldRing: 1 }, "HB5");
+  bad({ oldTimer: 1 }, "HB5");
+});
+
+test("hostBandChecks: 측정값이 없거나 숫자가 아니면 조용히 통과하지 않고 측정값 없음으로 실패", () => {
+  for (const b of [undefined, null, {}, bandOk({ bands: "1" }), bandOk({ lineH: undefined }), bandOk({ lineLH: 0 }), bandOk({ timeText: null }), bandOk({ guideInBand: undefined }), bandOk({ oldHint: undefined })]) {
+    const rs = hostBandChecks(b, { phase: "discussion", timed: true });
+    assert.ok(rs.some((r) => !r.ok && /측정값 없음/.test(r.detail)), JSON.stringify(b));
+    assert.equal(rs.every((r) => r.ok), false);
+  }
+});
+
+test("hostOverlapChecks: 이름표끼리·띠와 겹치지 않으면 통과, 겹치면 실패, 값 없음은 측정값 없음", () => {
+  const band = { left: 0, top: 0, width: 360, height: 60 };
+  const tags = [{ left: 10, top: 100, width: 44, height: 44 }, { left: 60, top: 100, width: 44, height: 44 }];
+  assert.equal(hostOverlapChecks({ band, tags }).ok, true);
+  assert.equal(hostOverlapChecks({ band, tags: [...tags, { left: 70, top: 110, width: 44, height: 44 }] }).ok, false);
+  assert.equal(hostOverlapChecks({ band, tags: [{ left: 10, top: 50, width: 44, height: 44 }] }).ok, false);
+  // 변만 맞닿으면 겹침이 아니다
+  assert.equal(hostOverlapChecks({ band, tags: [{ left: 10, top: 60, width: 44, height: 44 }] }).ok, true);
+  for (const x of [undefined, {}, { band, tags: [] }, { tags }]) {
+    const r = hostOverlapChecks(x);
+    assert.equal(r.ok, false);
+    assert.match(r.detail, /측정값 없음/);
+  }
+});
+
+test("toolLabelChecks: 글자가 있는 단추는 통과, 글자 없는 아이콘 단추는 면제 밖이면 실패", () => {
+  const list = [
+    { name: "나가기", text: "나가기", toolLabel: "나가기", hasIcon: true },
+    { name: "넘기기 1/3", text: "넘기기 1/3", toolLabel: "넘기기", hasIcon: true },
+    { name: "시작", text: "시작", toolLabel: null, hasIcon: false },
+  ];
+  for (const r of toolLabelChecks(list)) assert.equal(r.ok, true, r.id + r.detail);
+  const bad = toolLabelChecks([...list, { name: "공유", text: "", toolLabel: null, hasIcon: true }]).find((r) => r.id === "TL1");
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /공유/);
+  // 숫자·공백·'/' 뿐인 글자도 빈 것으로 본다
+  assert.equal(toolLabelChecks([{ name: "넘기기", text: "1 / 3", toolLabel: null, hasIcon: true }]).find((r) => r.id === "TL1").ok, false);
+});
+
+test("toolLabelChecks: 면제 E-1(내보내기 ×)·E-2(봇 ±)는 글자가 없어도 통과, 이름이 같지 않으면 면제가 아니다", () => {
+  assert.deepEqual(TOOL_LABEL_EXEMPT.map((e) => e.id), ["E-1", "E-2"]);
+  const ex = [
+    { name: "민수 님 내보내기", text: "×", toolLabel: null, hasIcon: true },
+    { name: "봇 줄이기", text: "−", toolLabel: null, hasIcon: true },
+    { name: "봇 늘리기", text: "+", toolLabel: null, hasIcon: true },
+  ];
+  assert.equal(toolLabelChecks(ex).find((r) => r.id === "TL1").ok, true);
+  assert.equal(toolLabelChecks([{ name: "다른 단추", text: "", toolLabel: null, hasIcon: true }]).find((r) => r.id === "TL1").ok, false);
+});
+
+test("toolLabelChecks TL2: data-tool-label 이 있으면 보이는 글자와 같고 접근성 이름이 그것을 포함해야 한다", () => {
+  const ok = [{ name: "내 역할, 새 기록", text: "내 역할", toolLabel: "내 역할", hasIcon: true }];
+  assert.equal(toolLabelChecks(ok).find((r) => r.id === "TL2").ok, true);
+  const diffText = toolLabelChecks([{ name: "옷장", text: "꾸미기", toolLabel: "옷장", hasIcon: true }]).find((r) => r.id === "TL2");
+  assert.equal(diffText.ok, false);
+  const diffName = toolLabelChecks([{ name: "꾸미기", text: "옷장", toolLabel: "옷장", hasIcon: true }]).find((r) => r.id === "TL2");
+  assert.equal(diffName.ok, false);
+});
+
+test("toolLabelChecks: 목록이 비었거나 모양이 틀리면 측정값 없음으로 실패(공허 통과 금지)", () => {
+  for (const x of [undefined, null, [], [{ text: 1 }]]) {
+    const rs = toolLabelChecks(x);
+    assert.equal(rs.every((r) => r.ok), false, JSON.stringify(x));
+    assert.ok(rs.some((r) => /측정값 없음/.test(r.detail)));
+  }
+});
+
+test("HOST_ACT_LINES·GOALS: 역할별 줄·목표 문장 표", () => {
+  assert.deepEqual(Object.keys(HOST_ACT_LINES).sort(), ["doctor", "mafia", "police"]);
+  assert.deepEqual(Object.keys(GOALS).sort(), ["citizen", "doctor", "mafia", "police"]);
+});
+
+const leakItem = (role, over = {}) => ({ role, ownRole: role === "ghost" ? "mafia" : role, phase: "night", domText: "밤이 되었습니다.", callCount: 0, line: "밤이 되었습니다.", idle: false, ...over });
+
+test("hostLeakChecks HL1: 내 역할 줄·목표만 있으면 통과, 다른 역할 act 줄·목표가 있으면 실패", () => {
+  const rs = hostLeakChecks([leakItem("police", { domText: HOST_ACT_LINES.police + " " + GOALS.police })]);
+  assert.equal(rs.find((r) => r.id === "HL1").ok, true);
+  const act = hostLeakChecks([leakItem("citizen", { domText: HOST_ACT_LINES.mafia })]).find((r) => r.id === "HL1");
+  assert.equal(act.ok, false);
+  assert.match(act.detail, /citizen/);
+  const goal = hostLeakChecks([leakItem("doctor", { domText: GOALS.mafia })]).find((r) => r.id === "HL1");
+  assert.equal(goal.ok, false);
+  // 유령은 자기 직업 줄·다른 직업 줄 모두 띠에 없어야 한다 — 자기 직업의 목표 문장만 허용
+  const ghost = hostLeakChecks([leakItem("ghost", { ownRole: "mafia", domText: GOALS.mafia })]).find((r) => r.id === "HL1");
+  assert.equal(ghost.ok, true, ghost.detail);
+  assert.equal(hostLeakChecks([leakItem("ghost", { ownRole: "mafia", domText: HOST_ACT_LINES.mafia })]).find((r) => r.id === "HL1").ok, false);
+});
+
+test("hostLeakChecks HL2: 같은 단계에서 할 일 없는 역할(idle) 둘의 띠 문장이 같아야 한다", () => {
+  const a = leakItem("citizen", { phase: "roleReveal", idle: true, line: "확인하셨으면 그대로 기다려 주세요." });
+  const b = leakItem("police", { phase: "roleReveal", idle: true, line: "확인하셨으면 그대로 기다려 주세요." });
+  assert.equal(hostLeakChecks([a, b]).find((r) => r.id === "HL2").ok, true);
+  const c = { ...b, line: "경찰은 기다려 주세요." };
+  const bad = hostLeakChecks([a, c]).find((r) => r.id === "HL2");
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /roleReveal/);
+  // idle 이 아닌 항목은 비교하지 않는다
+  assert.equal(hostLeakChecks([a, { ...c, idle: false }]).find((r) => r.id === "HL2").ok, true);
+});
+
+test("hostLeakChecks HL3: 유령 띠 문장에 마피아·경찰·의사·시민 낱말이 없어야 한다", () => {
+  assert.equal(hostLeakChecks([leakItem("ghost", { line: "밤이 되었습니다. 모두의 밤 행동을 지켜봐 주세요." })]).find((r) => r.id === "HL3").ok, true);
+  const bad = hostLeakChecks([leakItem("ghost", { line: "마피아가 움직입니다." })]).find((r) => r.id === "HL3");
+  assert.equal(bad.ok, false);
+});
+
+test("hostLeakChecks HL4: 산 마피아 밤 화면의 data-call 은 0개여야 한다", () => {
+  assert.equal(hostLeakChecks([leakItem("mafia", { callCount: 0 })]).find((r) => r.id === "HL4").ok, true);
+  assert.equal(hostLeakChecks([leakItem("mafia", { callCount: 3 })]).find((r) => r.id === "HL4").ok, false);
+  // 마피아가 아니거나 밤이 아니면 보지 않는다
+  assert.equal(hostLeakChecks([leakItem("police", { callCount: 3 }), leakItem("mafia", { phase: "nomination", callCount: 7 })]).find((r) => r.id === "HL4").ok, true);
+});
+
+test("hostLeakChecks: 목록이 비었거나 모양이 틀리면 측정값 없음으로 실패", () => {
+  for (const x of [undefined, null, [], [{ role: "mafia" }], [leakItem("ghost", { ownRole: undefined })], [leakItem("mafia", { callCount: "0" })]]) {
+    const rs = hostLeakChecks(x);
+    assert.equal(rs.every((r) => r.ok), false, JSON.stringify(x));
+    assert.ok(rs.some((r) => /측정값 없음/.test(r.detail)), JSON.stringify(x));
+  }
+});
+
+test("viewKeyChecks VK1: 최상위·me·day 키가 허용 목록 안이면 통과, 밖이면 실패", () => {
+  const ok = { top: new Set(["code", "phase", "me"]), me: ["seat", "isHost"], day: ["n"] };
+  assert.equal(viewKeyChecks(ok).ok, true);
+  const bad = viewKeyChecks({ ...ok, top: ["code", "evidence"] });
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /evidence/);
+  assert.equal(viewKeyChecks({ ...ok, me: ["seat", "traceMine"] }).ok, false);
+  assert.equal(viewKeyChecks({ ...ok, day: ["roleOf"] }).ok, false);
+  assert.ok(VIEW_TOP_KEYS.has("phase") && VIEW_ME_KEYS.has("role") && VIEW_DAY_KEYS.has("n"));
+  for (const x of [undefined, {}, { top: [], me: [] }, { top: [], me: [], day: [] }]) {
+    const r = viewKeyChecks(x);
+    assert.equal(r.ok, false);
+    assert.match(r.detail, /측정값 없음/);
+  }
+});
+
+test("hostChimeChecks: 전환 구간 1번·첫 프레임 0번·낮 시작→토론 0번·소리 끔 재생 0번이면 모두 통과", () => {
+  const segs = [
+    { kind: "transition", name: "토론→투표", count: 1, played: 1 },
+    { kind: "first", name: "처음 입장", count: 0, played: 0 },
+    { kind: "reload", name: "새로고침", count: 0, played: 0 },
+    { kind: "dayToDiscussion", name: "낮 시작→토론", count: 0, played: 0 },
+    { kind: "muted", name: "소리 끔", count: 1, played: 0 },
+  ];
+  const rs = hostChimeChecks(segs);
+  assert.deepEqual(rs.map((r) => r.id), ["HS1", "HS2", "HS3", "HS4"]);
+  for (const r of rs) assert.equal(r.ok, true, r.id + r.detail);
+});
+
+test("hostChimeChecks: 전환 0번·2번, 첫 프레임 1번, 낮 시작→토론 1번, 소리 끔 재생 1번은 각각 실패", () => {
+  const f = (seg, id) => {
+    const r = hostChimeChecks([seg]).find((x) => x.id === id);
+    assert.equal(r.ok, false, id);
+    assert.match(r.detail, new RegExp(seg.name));
+  };
+  f({ kind: "transition", name: "T0", count: 0, played: 0 }, "HS1");
+  f({ kind: "transition", name: "T2", count: 2, played: 2 }, "HS1");
+  f({ kind: "first", name: "F1", count: 1, played: 1 }, "HS2");
+  f({ kind: "reload", name: "R1", count: 1, played: 1 }, "HS2");
+  f({ kind: "dayToDiscussion", name: "D1", count: 1, played: 1 }, "HS3");
+  f({ kind: "muted", name: "M1", count: 1, played: 1 }, "HS4");
+});
+
+test("hostChimeChecks: 구간이 없거나 모양이 틀리면 측정값 없음으로 실패(해당 구간 종류가 하나도 없어도 실패)", () => {
+  for (const x of [undefined, null, [], [{ kind: "transition", count: "1" }], [{ kind: "x", name: "?", count: 0, played: 0 }]]) {
+    const rs = hostChimeChecks(x);
+    assert.equal(rs.every((r) => r.ok), false, JSON.stringify(x));
+    assert.ok(rs.some((r) => /측정값 없음/.test(r.detail)), JSON.stringify(x));
+  }
+  // 전환만 있고 나머지 종류가 없으면 그 종류의 판정은 측정값 없음
+  const only = hostChimeChecks([{ kind: "transition", name: "T", count: 1, played: 1 }]);
+  assert.equal(only.find((r) => r.id === "HS1").ok, true);
+  assert.equal(only.find((r) => r.id === "HS2").ok, false);
 });
