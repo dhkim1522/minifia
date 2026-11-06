@@ -1,9 +1,9 @@
-// 12페이즈 소리 E2E 흐름 (12-06~). sound-render(12-06), sound-unlock(12-07), sound-script(12-08), sound-night-parity(12-09). 이후 계획이 sound-result 를 같은 파일에 더한다.
+// 12페이즈 소리 E2E 흐름 (12-06~). sound-render(12-06), sound-unlock(12-07), sound-script(12-08, 12-10 처형 타이밍), sound-night-parity(12-09, 12-10 동작 누설). 이후 계획이 sound-result 를 같은 파일에 더한다.
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makeSoundFlows(helpers)` 로 받는다(avatar.mjs·politics.mjs 와 같은 모양 — 서로 import 하지 않는다).
 // helpers: { recorder, attempt, startHost, openGame, closeGame, nightScenario } (sound-script 는 startHost, sound-night-parity 는 openGame·closeGame·nightScenario 를 쓴다)
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(soundRenderChecks, SOUND_RENDER_LIMITS)에만 있고 여기서는 낮추지 않는다 (T-12-22).
 import { chooseRole, dropSockets, leaveLobby, openTestSheet, reconnectInit, SetupError, setBotVote, setBots, settle, skipTo, sleep, startGame, tapPick, tapTurnPick } from "./browser.mjs";
-import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundNightParityChecks, soundRenderChecks, soundSequenceChecks } from "./lib.mjs";
+import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundEmoteLeakChecks, soundNightParityChecks, soundRenderChecks, soundSequenceChecks, soundVerdictTimingChecks } from "./lib.mjs";
 
 /** [전부 계산] 56개 렌더가 끝나기를 기다리는 상한(ms) */
 const CALC_LIMIT_MS = 60000;
@@ -30,6 +30,13 @@ const PARITY_RELOAD_AT_MS = 12000;
 const PARITY_MORNING_WAIT_MS = 42000;
 /** 아침 진입 뒤 아침 소리(morning.dawn · 400/700ms 분기 · kill.slash +50ms)가 로그에 쌓이도록 기다리는 시간(ms) */
 const PARITY_MORNING_SETTLE_MS = 3000;
+
+/** 처형 진입 뒤 로그를 읽기까지 기다리는 시간(ms): 결과 소리(첫 심장 박동 +2.6초)와 떠오름이 로그에 쌓이고 처형 단계(5.6초)가 끝나기 전 */
+const EXECUTION_WATCH_MS = 3800;
+/** 낮 동작 소리·밤 동작 소리가 로그에 도착하기를 기다리는 상한(ms) */
+const EMOTE_ARRIVE_MS = 6000;
+/** 동작 칸이 풀리기를 기다리며 판을 여닫는 횟수(등장 걷기가 끝나야 칸이 눌린다) */
+const EMOTE_OPEN_TRIES = 12;
 
 export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGame, nightScenario }) {
   /**
@@ -241,8 +248,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
    * 마지막에 새로고침 직후 로그에 현재 단계 침대 요청만 있고 일회성 소리가 없음을 확인한다(LS-10). 소리 출력은 보지 않는다 — 요청 로그만 읽는다.
    * 밤·아침(12-09)은 새로고침 뒤 testSkip 으로 이어서 본다. 처형·결과는 12-10·12-11 이 같은 표와 이 흐름에 단계를 더한다.
    */
-  async function soundScriptFlow(ctx) {
-    const rec = recorder(ctx);
+  async function soundScriptSteps(ctx, rec) {
     const step = (id) => SOUND_SCRIPT_STEPS.find((x) => x.id === id);
     const judge = (scenario, id, log) => {
       if (log === null) return rec(scenario, id, step(id).label, false, "window.__mfSound 훅이 없음(?e2e=1 세션 플래그가 꺼짐)");
@@ -364,6 +370,91 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
   }
 
   /**
+   * 처형 판결 순간(12-10, D-13): 방장 + 봇 3 이 방장을 변론자로 세워 변론 → 찬반 → 처형에 들어서고, 처형 진입 뒤 실제 시간으로 훅 로그를 읽는다.
+   * kind "pass" 는 봇 전원 찬성(처형 성립), "reject" 는 전원 반대(부결). 두 판의 로그를 lib.mjs soundVerdictTimingChecks 가 비교한다(문턱은 거기에만).
+   * 지목 단계는 방장이 첫 차례에 봇 하나를 누르고 봇 둘이 방장을 가리킬 때까지만 기다린 뒤 testSkip 으로 변론·찬반을 건너뛴다.
+   */
+  async function soundVerdictWatch(ctx, rec, kind) {
+    const sc = `sound-script/execution-${kind}`;
+    const game = await openGame(ctx, "sound-script", { guests: 0, bots: 3, role: "citizen", vote: { exec: kind === "pass" ? "yes" : "no", pick: "host" }, to: "nomination" });
+    try {
+      const { hp, ht, hostSeat } = game;
+      const hooked = await attempt(async () => {
+        await hp.waitForFunction(() => !!window.__mfSound, null, { timeout: 6000 });
+      });
+      rec(sc, "SV0", "방장 페이지에 소리 훅이 있다(?e2e=1 세션 플래그)", hooked.ok, hooked.detail);
+      if (!hooked.ok) return null;
+      const myTurn = (v) => {
+        const t = v.day?.turn;
+        return !!t && v.phase === "nomination" && t.i >= 0 && t.order[t.i] === v.me.seat;
+      };
+      const nominated = await attempt(async () => {
+        await ht.waitFor(myTurn, 20000, "방장 지목 차례");
+        const other = ht.last().players.find((x) => x.seat !== hostSeat)?.seat;
+        await tapTurnPick(hp, other);
+        await ht.waitFor((v) => (v.day?.points ?? []).filter((p) => p.target === hostSeat).length >= 2, NOMINATION_WAIT_MS, "봇 둘이 방장을 가리킴");
+      });
+      rec(sc, "SV1", "방장이 지목하고 봇 둘이 방장을 가리킨다(변론자가 정해진다)", nominated.ok, nominated.detail);
+      if (!nominated.ok) return null;
+      await skipTo(hp, ht, "defense");
+      await skipTo(hp, ht, "verdict");
+      await clearLog(hp);
+      await skipTo(hp, ht, "execution");
+      await sleep(EXECUTION_WATCH_MS);
+      const still = ht.last().phase === "execution";
+      const log = await readLog(hp);
+      rec(sc, "SV2", "처형 진입 뒤 로그를 읽는 순간에도 처형 단계다(처형 전체를 지켜봄)", still && log !== null, still ? (log === null ? "훅 로그 없음" : `로그 ${log.length}줄`) : `단계 ${ht.last().phase}`);
+      return still ? log : null;
+    } finally {
+      await closeGame(game);
+    }
+  }
+
+  async function soundScriptFlow(ctx) {
+    const rec = recorder(ctx);
+    await soundScriptSteps(ctx, rec);
+    // 12-10: 처형 순간을 실제 시간으로 — 통과 판과 부결 판의 로그를 같은 순수 판정 함수에 넣는다
+    const pass = await soundVerdictWatch(ctx, rec, "pass");
+    const reject = await soundVerdictWatch(ctx, rec, "reject");
+    for (const line of soundVerdictTimingChecks({ pass, reject })) recOne(rec, "sound-script/execution", line);
+    const gap = (log, id) => {
+      const heart = log?.find((e) => e.id === "verdict.heart");
+      const hit = log?.find((e) => e.id === id);
+      return heart && hit ? Math.round(hit.at - heart.at) : null;
+    };
+    const hearts = (log) => log?.filter((e) => e.id === "verdict.heart").length ?? 0;
+    infoRow(rec, "sound-script/execution-info", "SVi-1", `참고: 통과 판 verdict.heart ${hearts(pass)}개 · gavel 간격 ${gap(pass, "execution.gavel")}ms · rise 간격 ${gap(pass, "execution.rise")}ms`);
+    infoRow(rec, "sound-script/execution-info", "SVi-2", `참고: 부결 판 verdict.heart ${hearts(reject)}개 · reject 간격 ${gap(reject, "verdict.reject")}ms`);
+  }
+
+  /** 동작 칸을 눌러 보낸다(등장 걷기·앞 동작이 끝나 칸이 풀릴 때까지 판을 여닫으며 기다린다) */
+  const sendEmote = (page, id) =>
+    attempt(async () => {
+      for (let i = 0; i < EMOTE_OPEN_TRIES; i += 1) {
+        if ((await page.locator("[data-emote-tray]").count()) === 0) await page.locator("[data-emote-button]").click({ timeout: 3000 });
+        await page.waitForSelector("[data-emote-tray]", { timeout: 1500 });
+        const off = await page.locator(`[data-emote="${id}"]`).getAttribute("aria-disabled");
+        if (off !== "true") {
+          await page.locator(`[data-emote="${id}"]`).click({ timeout: 3000 });
+          return;
+        }
+        await page.locator("[data-emote-button]").click({ timeout: 3000 });
+        await sleep(1000);
+      }
+      return { ok: false, detail: "동작 칸이 풀리지 않음" };
+    });
+  /** 훅 로그에 emote.* 가 want 개 이상 찍히기를 기다린다(상한 EMOTE_ARRIVE_MS). 못 채워도 읽은 로그를 돌려준다 */
+  async function waitEmoteLog(page, want) {
+    const start = Date.now();
+    let log = await readLog(page);
+    while ((log?.filter((e) => e.id.startsWith("emote.")).length ?? 0) < want && Date.now() - start < EMOTE_ARRIVE_MS) {
+      await sleep(150);
+      log = await readLog(page);
+    }
+    return log;
+  }
+
+  /**
    * sound-night-parity (D-21, LS-3·LS-7·LS-8·LS-10): 방장(마피아) + 사람 손님 셋 + 봇 하나(5명 → 마피아는 방장 하나라 손님은 모두 비마피아).
    * 방장이 손님 한 명(피해자)을 일부러 고르고(밤 UI 조작) 밤 30초를 실제로 기다린다. 손님 하나는 밤 중간에 새로고침한다.
    * 판정은 lib.mjs soundNightParityChecks (문턱은 거기에만 있고 여기서는 낮추지 않는다). 소리 출력은 보지 않는다 — 훅 요청 로그만 읽는다.
@@ -391,6 +482,13 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       rec(`${sc}/setup`, "NP0", "네 페이지 모두 소리 훅이 있다(?e2e=1 세션 플래그)", hooked.ok, hooked.detail);
       if (!hooked.ok) return;
 
+      // 12-10 낮 동작(E3): 방장이 박수를 보내면 보낸 쪽 로그는 gain 1, 받은 쪽(손님2) 로그는 gain 0.5 안팎(−6dB)
+      for (const p of pages) await clearLog(p.page);
+      const dayEmote = await sendEmote(hp, "clap");
+      rec(`${sc}/emote`, "NP4", "방장이 낮에 동작 칸을 눌러 보낸다", dayEmote.ok, dayEmote.detail);
+      const daySenderLog = dayEmote.ok ? await waitEmoteLog(hp, 1) : null;
+      const dayReceiverLog = dayEmote.ok ? await waitEmoteLog(decoy.page, 1) : null;
+
       // 낮에서 밤으로: 로그를 비운 뒤 밤으로 넘긴다(밤 앞의 시험 시트 눌림은 밤 구간이 아니다 — 판정이 첫 bed.night 부터 자른다)
       for (const p of pages) await clearLog(p.page);
       await skipTo(hp, ht, "night");
@@ -407,6 +505,10 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       });
       rec(`${sc}/night`, "NP1", "방장이 밤에 이름표를 눌러 피해자를 고른다(밤 UI 조작)", picked.ok, picked.detail);
       for (const g of guests) await g.page.touchscreen.tap(Math.round(ctx.size.w / 2), Math.round(ctx.size.h / 3)).catch(() => {});
+      // 12-10 밤 동작(E1·E2): 마피아 방장만 동작 칸이 있다 — 서버가 마피아 채널로만 보내므로 시민 편 손님 로그에는 emote.* 가 없어야 한다
+      const nightEmote = await sendEmote(hp, "throat");
+      rec(`${sc}/emote`, "NP5", "마피아 방장이 밤에 동작 칸을 눌러 보낸다", nightEmote.ok, nightEmote.detail);
+      if (nightEmote.ok) await waitEmoteLog(hp, 1);
       await sleep(Math.max(0, PARITY_RELOAD_AT_MS - (Date.now() - nightStart)));
 
       // 밤 중간 새로고침(LS-10): night.fall 이 없고 침대만 + 남은 시간의 새 큐
@@ -432,6 +534,12 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
         return;
       }
       for (const line of soundNightParityChecks({ pages: logs, victimLabel })) recOne(rec, `${sc}/judge`, line);
+      // 12-10: 동작 소리 누설 — 보낸 마피아 로그 1개, 시민 편 손님 로그 0개, 낮 동작 gain
+      for (const line of soundEmoteLeakChecks({
+        senderLog: logs[0].log,
+        otherLogs: logs.slice(1).map((l) => ({ label: l.label, log: l.log })),
+        day: daySenderLog && dayReceiverLog ? { senderLog: daySenderLog, receiverLog: dayReceiverLog } : undefined,
+      })) recOne(rec, `${sc}/emote-judge`, line);
       // 참고(판정 아님): 페이지별 밤 id 집합과 night.cue 개수 — SUMMARY 에 옮긴다
       for (const l of logs) {
         const ids = l.log.map((e) => e.id);

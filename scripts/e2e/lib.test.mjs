@@ -3171,6 +3171,12 @@ test("soundNightParityChecks P6: 새로고침 페이지에 night.fall 이 있거
   assert.ok(sFails(parity(noBed)).includes("P6"));
 });
 
+test("soundNightParityChecks: 마피아 방장이 밤에 보낸 동작 소리(emote.*)는 밤 id 집합 비교(P1·P3)에 들어가지 않는다 (12-10)", () => {
+  const withEmote = okPages();
+  withEmote[0] = { ...withEmote[0], log: [...withEmote[0].log.slice(0, 2), { id: "emote.throat", at: 9, gain: 0.5 }, ...withEmote[0].log.slice(2)] };
+  assert.deepEqual(sFails(parity(withEmote, "손님A(피해자)")), []);
+});
+
 test("soundNightParityChecks: 새로고침 페이지가 없거나 완전한 페이지가 둘 미만이거나 입력 모양이 틀리면 측정값 없음으로 실패", () => {
   assert.ok(parity(okPages().slice(0, 3)).some((l) => l.id === "P6" && !l.ok && /측정값 없음/.test(l.detail)), "새로고침 페이지 없음");
   const one = [okPages()[0], okPages()[3]];

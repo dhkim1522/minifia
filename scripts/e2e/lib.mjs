@@ -2237,7 +2237,8 @@ export const NIGHT_PARITY_IDS = Object.freeze(["bed.night", "night.cue", "night.
 
 /** 페이지 로그를 밤 구간과 아침 구간으로 나눈다. 밤: 첫 bed.night 부터 그 뒤 첫 bed.dawn 앞 · 아침: 첫 bed.dawn 부터 끝. 밤 앞의 낮 소리(시험 시트 눌림 등)는 어느 쪽에도 넣지 않는다 */
 function nightSegments(log) {
-  const ids = log.map((e) => e.id);
+  // 동작 소리(emote.*)는 받은 프레임에서만 나는 별개 규칙이라 soundEmoteLeakChecks 가 본다 — 밤 소리 집합 비교에서는 뺀다(12-10)
+  const ids = log.map((e) => e.id).filter((id) => !id.startsWith("emote."));
   const nightAt = ids.indexOf("bed.night");
   const dawnAt = ids.indexOf("bed.dawn", Math.max(0, nightAt));
   return {
