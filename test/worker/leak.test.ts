@@ -1380,7 +1380,7 @@ async function walkNomination(g: Game, pickIdx: ReadonlySet<number>): Promise<vo
   for (const sock of g.socks) await settle(sock, mark(sock));
 }
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다. 꺼진 상태의 키 0건은 "기본판 — 꺼진 장치 키 0건" describe 가 본다.
+// 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다. 꺼진 상태의 키 검사는 파일 끝의 기본판 describe 가 본다.
 describe.skipIf(!RULESET.pickTurn)("지목 차례는 역할의 함수가 아니다 (L14, 결정 0063-1)", () => {
   const TABLES: Record<"a" | "b", RoleId[]> = {
     a: ["mafia", "mafia", "police", "doctor", "citizen", "citizen"],
@@ -1885,7 +1885,7 @@ function phaseKeyOfView(sock: TestSocket): string {
   return `${v.round ?? 1}:${v.day?.n ?? 0}:${v.phase}`;
 }
 
-// ---- 기본판 꺼진 장치 키 0건 (13-04, FLOW-03, 결정 0072, D-05, T-13-11·T-13-13) ----
+// ---- 기본판 전수 검사 (13-04, FLOW-03, 결정 0072, D-05, T-13-11·T-13-13) ----
 
 // 다섯 장치가 모두 꺼진 기본판에서만 뜻이 있다(하나라도 켜면 그 장치의 경로가 정당하게 나온다 — 켜진 장치는 위의 켜짐 전용 describe 들이 본다).
 describe.skipIf(Object.values(RULESET).some(Boolean))("기본판 — 꺼진 장치 키 0건 (FLOW-03, 결정 0072)", () => {

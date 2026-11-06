@@ -149,7 +149,7 @@ describe("기본판: 낮 토론에 떠 있는 버튼·시트가 없다 (U-8, UI#
       expect(container.querySelectorAll("[data-float]")).toHaveLength(0);
     });
 
-    it("유령(탈락한 나)에게도 떠 있는 버튼·시트가 없다", () => {
+    it("유령(탈락한 나)에게도 떠 있는 버튼과 묶음이 없다", () => {
       const { container } = mount(makeView({ phase: "discussion", dead: [0] }));
       expect(container.querySelectorAll("[data-float], [data-float-stack]")).toHaveLength(0);
     });
@@ -161,7 +161,7 @@ describe("기본판: 낮 토론에 떠 있는 버튼·시트가 없다 (U-8, UI#
   });
 });
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.badge 를 켜면 다시 돈다(떠 있는 버튼이 있어야 성립한다). 꺼진 상태는 위 "기본판: 낮 토론에 떠 있는 버튼·시트가 없다" 가 본다.
+// 기본판(결정 0072)에서 꺼짐 — RULESET.badge 를 켜면 다시 돈다(떠 있는 버튼이 있어야 성립한다). 꺼진 상태는 위의 기본판 describe 가 본다.
 describe.skipIf(!RULESET.badge)("떠 있는 버튼 → 칩 시트 → badge 전송 (UI-SPEC A-2, 트레이서)", () => {
   it("토론에서 산 사람 화면에 [data-float=claim] 이 하나이고 이름은 '직업 배지 고르기, 지금 말 안 함'", () => {
     const { container } = mount(makeView());
@@ -338,7 +338,7 @@ describe("말 바꿈 효과 (UI-SPEC A-1, O-22)", () => {
   });
 });
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.badge 를 켜면 다시 돈다(떠 있는 버튼이 있어야 성립한다). 꺼진 상태는 위 "기본판: 낮 토론에 떠 있는 버튼·시트가 없다" 가 본다.
+// 기본판(결정 0072)에서 꺼짐 — RULESET.badge 를 켜면 다시 돈다(떠 있는 버튼이 있어야 성립한다). 꺼진 상태는 위의 기본판 describe 가 본다.
 describe.skipIf(!RULESET.badge)("낙관 표시와 거절 되돌림 (UI-SPEC A-2)", () => {
   it("칩을 누르는 즉시 내 이름표 배지와 버튼 아이콘·이름이 새 값이 된다", () => {
     const { container } = mount(makeView());
@@ -433,7 +433,7 @@ describe.skipIf(!RULESET.badge)("낙관 표시와 거절 되돌림 (UI-SPEC A-2)
 });
 
 // ---- Task 3: 표식·단계 표·접근성·L23 DOM 분리 ----
-// 기본판(결정 0072)에서 꺼짐 — RULESET.badge 를 켜면 다시 돈다(떠 있는 버튼이 있어야 성립한다). 꺼진 상태는 위 "기본판: 낮 토론에 떠 있는 버튼·시트가 없다" 가 본다.
+// 기본판(결정 0072)에서 꺼짐 — RULESET.badge 를 켜면 다시 돈다(떠 있는 버튼이 있어야 성립한다). 꺼진 상태는 위의 기본판 describe 가 본다.
 describe.skipIf(!RULESET.badge)("단계 표: 떠 있는 버튼은 주장 창에서만 DOM 에 있다 (UI-SPEC A-2)", () => {
   it.each(["dayAnnounce", "discussion", "nomination"] as PhaseId[])("%s 에서 산 사람에게는 하나", (phase) => {
     const { container } = mount(makeView({ phase }));
@@ -510,7 +510,7 @@ describe("L23: 배지는 직업 칩(data-role-chip)과 섞이지 않는다", () 
   });
 });
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.badge 를 켜면 다시 돈다(떠 있는 버튼이 있어야 성립한다). 꺼진 상태는 위 "기본판: 낮 토론에 떠 있는 버튼·시트가 없다" 가 본다.
+// 기본판(결정 0072)에서 꺼짐 — RULESET.badge 를 켜면 다시 돈다(떠 있는 버튼이 있어야 성립한다). 꺼진 상태는 위의 기본판 describe 가 본다.
 describe.skipIf(!RULESET.badge)("접근성·초점·Tab 순서 (UI-SPEC 접근성)", () => {
   it.each([
     ["none", "말 안 함"],
