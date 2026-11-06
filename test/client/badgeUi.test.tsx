@@ -154,6 +154,11 @@ describe("기본판: 낮 토론에 떠 있는 버튼·시트가 없다 (U-8, UI#
       expect(container.querySelectorAll("[data-float], [data-float-stack]")).toHaveLength(0);
     });
 
+    it.each(["dayAnnounce", "discussion", "nomination", "verdict"] as PhaseId[])("%s: 스크린리더 배지 알림 줄([data-badge-live])도 없다 (E2E basic-off 가 잡은 흔적)", (phase) => {
+      const { container } = mount(makeView({ phase }));
+      expect(container.querySelectorAll("[data-badge-live]")).toHaveLength(0);
+    });
+
     it("서버 view 에 주장이 실려 와도(옛 번들 호환) 떠 있는 버튼은 없다", () => {
       const { container } = mount(makeView({ phase: "discussion", badges: { 0: "police" } }));
       expect(container.querySelectorAll("[data-float]")).toHaveLength(0);
@@ -325,7 +330,7 @@ describe("말 바꿈 효과 (UI-SPEC A-1, O-22)", () => {
     expect(p.claimNotice).toBeUndefined();
   });
 
-  it("화면에 안 보이는 live 한 줄: 바뀐 순간에만 '{이름} 님이 {직업}라고 말했어요'", () => {
+  it.skipIf(!RULESET.badge)("화면에 안 보이는 live 한 줄: 바뀐 순간에만 '{이름} 님이 {직업}라고 말했어요'", () => {
     const m = mount(makeView({ badges: { 1: "police" } }));
     expect(live(m.container)).toBe("");
     const line = m.container.querySelector("[data-badge-live]")!;

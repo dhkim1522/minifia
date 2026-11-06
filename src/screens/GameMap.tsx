@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { CHAT_MAX_GRAPHEMES } from "../../shared/game/chatRules";
 import { canMoveIn } from "../../shared/game/movement";
+import { RULESET } from "../../shared/game/ruleset";
 import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
 import { APPROACH_DIST_FX, approachPoint, positionAtFx } from "../../shared/game/world";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
@@ -739,10 +740,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         onLeave={() => onLeave?.()}
       />
       <TopToast {...toast.props} />
-      {/* 누가 배지를 걸거나 바꿨을 때 읽히는 한 줄(화면에는 안 보인다) */}
-      <div className="mf-sr-only" role="status" data-badge-live="">
-        {badgeFx.said}
-      </div>
+      {/* 누가 배지를 걸거나 바꿨을 때 읽히는 한 줄(화면에는 안 보인다). 기본판(결정 0072)은 주장이 꺼져 있어 줄 자체를 만들지 않는다(U-8, E2E basic-off) */}
+      {RULESET.badge ? (
+        <div className="mf-sr-only" role="status" data-badge-live="">
+          {badgeFx.said}
+        </div>
+      ) : null}
       {/* 알약·막대·위 한 줄은 순차 지목·결선·마지막 3인에만 있다. 기본판 동시 투표(day.turn 없음)는 DOM 이 없다([data-turn-block] 0) */}
       {blockMode !== null ? <TurnBlock view={view} offset={offset} line={topLine} compact={compactTurn} reducedMotion={reducedMotion} /> : null}
       {testButton ? <div className="mf-game__test">{testButton}</div> : null}
