@@ -79,9 +79,9 @@
 
 ### 소리 (SOUND)
 
-- [ ] **SOUND-01**: 로비·낮·밤·결과에 분위기에 맞는 배경음이 나온다
-- [ ] **SOUND-02**: 밤·아침 전환, 지목·찬반, 처형, 암살, 승패, 동작에 효과음이 나온다
-- [ ] **SOUND-03**: 각자 폰에서 소리를 끄고 켤 수 있고, iOS 는 참가 버튼(재접속 때는 "소리 켜기")에서 오디오를 깨운다. 소리로만 알리는 정보는 없다
+- [x] **SOUND-01**: 로비·낮·밤·결과에 분위기에 맞는 배경음이 나온다
+- [x] **SOUND-02**: 밤·아침 전환, 지목·찬반, 처형, 암살, 승패, 동작에 효과음이 나온다
+- [x] **SOUND-03**: 각자 폰에서 소리를 끄고 켤 수 있고, iOS 는 참가 버튼(재접속 때는 "소리 켜기")에서 오디오를 깨운다. 소리로만 알리는 정보는 없다
 
 ### 연결 (CONN)
 
@@ -166,9 +166,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REMATCH-01 | Phase 11 | Complete |
 | CONNX-01 | Phase 11 | Complete |
 | CONNX-02 | Phase 11 | Complete |
-| SOUND-01 | Phase 12 | Pending |
-| SOUND-02 | Phase 12 | Pending |
-| SOUND-03 | Phase 12 | Pending |
+| SOUND-01 | Phase 12 | Complete |
+| SOUND-02 | Phase 12 | Complete |
+| SOUND-03 | Phase 12 | Complete |
 
 **Coverage:**
 - v2.0 requirements: 46 total
