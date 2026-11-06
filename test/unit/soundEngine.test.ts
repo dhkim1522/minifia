@@ -385,6 +385,61 @@ describe("끄기/켜기 (D-5, B-1)", () => {
     expect(rig.engine.isOn()).toBe(false);
   });
 
+  it("12-07 setOn(false): ui.toggle(끔 변형)을 먼저 내 played 참으로 남기고, 나머지 보이스만 120ms 페이드아웃한다", () => {
+    const rig = unlocked();
+    fire(rig, "game.start");
+    fire(rig, "day.start");
+    const ctx = rig.fake.ctx();
+    const before = ctx.sources().length;
+    const t0 = ctx.currentTime;
+    rig.engine.clearLog();
+    rig.engine.setOn(false);
+    expect(rig.engine.log()).toMatchObject([{ id: "ui.toggle", played: true }]);
+    const made = ctx.sources().slice(before);
+    expect(made).toHaveLength(1);
+    expect(made[0]!.frequency.of("exp")[0]!.value).toBe(330); // 끔 변형은 440 → 330
+    // 켜 둔 동안 낸 소리는 페이드 중이고, 방금 낸 ui.toggle 보이스만 남아 있다
+    expect(rig.engine.voiceCount()).toBe(1);
+    expect(rig.engine.voiceInfo()[0]!.id).toBe("ui.toggle");
+    expect(made[0]!.stoppedAt === null || made[0]!.stoppedAt > t0 + 0.12).toBe(true);
+    rig.fake.clock.advance(200);
+    expect(rig.engine.voiceCount()).toBe(0);
+    rig.engine.play("ui.tap");
+    expect(rig.engine.log().at(-1)).toMatchObject({ id: "ui.tap", played: false });
+  });
+
+  it("12-07 setOn(false): 순서 — ui.toggle 소스가 만들어진 뒤에 나머지 보이스가 끊긴다", () => {
+    const rig = unlocked();
+    fire(rig, "game.start");
+    const ctx = rig.fake.ctx();
+    const sourcesBefore = ctx.sources().length;
+    const order: string[] = [];
+    const origCreate = ctx.createOscillator.bind(ctx);
+    ctx.createOscillator = ((...a: Parameters<typeof origCreate>) => {
+      order.push("create");
+      return origCreate(...a);
+    }) as typeof ctx.createOscillator;
+    for (const src of ctx.sources()) {
+      const stop = src.stop.bind(src);
+      src.stop = ((t?: number) => {
+        order.push("stop");
+        return stop(t);
+      }) as typeof src.stop;
+    }
+    rig.engine.setOn(false);
+    expect(ctx.sources().length).toBeGreaterThan(sourcesBefore);
+    expect(order.indexOf("create")).toBeGreaterThanOrEqual(0);
+    const firstStop = order.indexOf("stop");
+    if (firstStop >= 0) expect(order.indexOf("create")).toBeLessThan(firstStop);
+  });
+
+  it("12-07 저장값이 켜짐이어도 locked(컨텍스트가 running 이 아님)에서 setOn(false)는 조용히 저장만 한다", () => {
+    const rig = makeRig();
+    expect(() => rig.engine.setOn(false)).not.toThrow();
+    expect(rig.engine.isOn()).toBe(false);
+    expect(rig.engine.log()).toMatchObject([{ id: "ui.toggle", played: false }]);
+  });
+
   it("setOn(true): ui.toggle(on 변형)을 한 번 낸다. 꺼져 있던 동안의 요청은 되살리지 않는다", () => {
     const rig = unlocked();
     rig.engine.setOn(false);
@@ -801,7 +856,7 @@ describe("대본 예약·취소", () => {
     };
     expect(run((e) => e.cancelScript("a"))).toEqual(["ui.deny"]);
     expect(run((e) => e.stopAll())).toEqual([]);
-    expect(run((e) => e.setOn(false))).toEqual([]);
+    expect(run((e) => e.setOn(false))).toEqual(["ui.toggle"]); // 12-07: 끌 때 ui.toggle(끔) 한 번만 남는다
     expect(run((e) => e.hidden())).toEqual([]);
   });
 

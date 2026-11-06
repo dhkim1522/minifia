@@ -145,3 +145,30 @@ describe("V2Icon 맵 아이콘 (11-13)", () => {
     expect(new Set(shapes).size).toBe(3);
   });
 });
+
+// 12-07: 소리 단추 아이콘 sound(스피커 + 파동 둘)·soundOff(스피커 + 빗금) — 직접 그린 단순 모양, 24 격자, 선 2px, 둥근 끝 (O-2)
+const V2_SOUND: V2IconName[] = ["sound", "soundOff"];
+
+describe("V2Icon 소리 아이콘 (12-07)", () => {
+  it.each(V2_SOUND)("%s 는 24 격자 svg, 선 2px·둥근 끝이고 도형이 있다", (name) => {
+    const { container } = render(<V2Icon name={name} />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.getAttribute("stroke-width")).toBe("2");
+    expect(svg?.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.querySelectorAll("path,circle").length).toBeGreaterThan(0);
+  });
+
+  it("두 아이콘은 서로, 그리고 다른 아이콘과 모양이 다르다", () => {
+    const shape = (name: V2IconName) => {
+      const { container } = render(<V2Icon name={name} />);
+      return [...container.querySelectorAll("path,circle")].map((e) => e.outerHTML).join("");
+    };
+    expect(shape("sound")).not.toBe(shape("soundOff"));
+    for (const other of ["quiet", "whisper", "send", "face"] as V2IconName[]) {
+      expect(shape("sound")).not.toBe(shape(other));
+      expect(shape("soundOff")).not.toBe(shape(other));
+    }
+  });
+});

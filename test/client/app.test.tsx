@@ -1,10 +1,12 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
 import type { RoomPreview } from "../../shared/protocol";
 import { App } from "../../src/App";
 import { loadSession, saveSession } from "../../src/net/session";
+import { setEngineForTest } from "../../src/audio/unlock";
+import { makeRig } from "../helpers/soundRig";
 
 const TOKEN = "t".repeat(43);
 
@@ -64,6 +66,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  setEngineForTest(null);
   vi.useRealTimers();
   vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
@@ -205,5 +208,93 @@ describe("방에서 나온 이유별 화면 (E3, D-07)", () => {
     act(() => screen.getByRole("button", { name: "처음으로" }).click());
     expect(screen.queryByRole("button", { name: "방 만들기" })).not.toBeNull();
     expect(stored()).toBe(storedAs("0042"));
+  });
+});
+
+// 12-07 (D-7, B-3): 참가 버튼이 곧 소리를 켜는 사용자 제스처다. 처리기 맨 앞에서, await 보다 먼저, 동기로 오디오를 깨운다.
+describe("참가 경로는 동기로 오디오를 깨운다 (SOUND-03, D-7)", () => {
+  const typeNickname = (value: string) => fireEvent.change(screen.getByLabelText("닉네임"), { target: { value } });
+
+  function spyOrder() {
+    const rig = makeRig();
+    setEngineForTest(rig.engine);
+    const calls: string[] = [];
+    vi.spyOn(rig.engine, "unlock").mockImplementation(() => {
+      calls.push("unlock");
+    });
+    return { rig, calls };
+  }
+
+  it("홈 [방 만들기] 시트의 [만들기]: createRoom(fetch) 보다 먼저, 같은 동기 구간에서 unlockAudio", () => {
+    const { calls } = spyOrder();
+    const fetchMock = vi.fn((_url: string) => {
+      calls.push("fetch");
+      return new Promise<Response>(() => {}); // 끝내 풀리지 않는 지연 promise
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+    expect(calls).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "방 만들기" }));
+    typeNickname("민수");
+    expect(calls).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "만들기" }));
+    expect(calls).toEqual(["unlock", "fetch"]);
+  });
+
+  it("홈 [참가] 시트의 [참가하기]: joinRoom 보다 먼저 unlockAudio", () => {
+    const { calls } = spyOrder();
+    vi.stubGlobal("fetch", vi.fn(() => {
+      calls.push("fetch");
+      return new Promise<Response>(() => {});
+    }));
+    render(<App />);
+    fireEvent.change(screen.getByLabelText("방 코드"), { target: { value: "0042" } });
+    fireEvent.click(screen.getByRole("button", { name: "참가" }));
+    expect(calls).toEqual([]);
+    typeNickname("민수");
+    fireEvent.click(screen.getByRole("button", { name: "참가하기" }));
+    expect(calls).toEqual(["unlock", "fetch"]);
+  });
+
+  it("홈 [참가] 에서 저장된 입장 정보로 바로 들어가는 분기도 제스처 안에서 unlockAudio", () => {
+    const { calls } = spyOrder();
+    saveSession({ code: "0042", token: TOKEN });
+    window.history.replaceState(null, "", "/?test=1");
+    vi.stubGlobal("fetch", vi.fn());
+    render(<App />);
+    fireEvent.change(screen.getByLabelText("방 코드"), { target: { value: "0042" } });
+    fireEvent.click(screen.getByRole("button", { name: "참가" }));
+    expect(calls).toEqual(["unlock"]);
+  });
+
+  it("링크 참가 [참가하기]: joinRoom 보다 먼저 unlockAudio", async () => {
+    const { calls } = spyOrder();
+    window.history.replaceState(null, "", "/r/0042");
+    vi.stubGlobal("fetch", vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        calls.push("fetch");
+        return new Promise<Response>(() => {});
+      }
+      return Promise.resolve(ok());
+    }));
+    render(<App />);
+    await see("Minifia에 초대받았어요");
+    expect(calls).toEqual([]);
+    typeNickname("민수");
+    fireEvent.click(screen.getByRole("button", { name: "참가하기" }));
+    expect(calls).toEqual(["unlock", "fetch"]);
+  });
+
+  it("홈·링크 참가 화면에는 소리 단추가 없다", async () => {
+    const rig = makeRig();
+    setEngineForTest(rig.engine);
+    vi.stubGlobal("fetch", vi.fn(async () => ok()));
+    const home = render(<App />);
+    expect(document.querySelector("[data-sound-button]")).toBeNull();
+    home.unmount();
+    window.history.replaceState(null, "", "/r/0042");
+    render(<App />);
+    await see("Minifia에 초대받았어요");
+    expect(document.querySelector("[data-sound-button]")).toBeNull();
   });
 });
