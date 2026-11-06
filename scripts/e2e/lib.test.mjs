@@ -1325,9 +1325,19 @@ test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더�
   assert.match(run, /extraSizes/);
   assert.match(run, /!args\.sizesGiven/);
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
-  const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)? \}/g)];
+  const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)?(?:, skipByDefault: true)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
   assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "result-awards", "map-select", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock"]);
+});
+
+test("기본판(결정 0072)에서 꺼진 장치 흐름 7개는 skipByDefault 이고 politics-verdict 는 기본 실행에 남는다 (13-05)", () => {
+  const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
+  const skipped = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z]+, (?:extraSizes: LOBBY_EXTRA_SIZES|size: GAME_SIZE), skipByDefault: true \}/g)].map((m) => m[1]);
+  for (const id of ["politics-badge", "politics-whisper", "politics-pin", "politics-runoff", "politics-runoff-tie", "politics-showdown", "politics-showdown-tie"]) assert.ok(skipped.includes(id), id);
+  assert.ok(!skipped.includes("politics-verdict"));
+  const all = [{ id: "politics-badge", skipByDefault: true }, { id: "day" }];
+  assert.deepEqual(selectFlows(all, null).map((f) => f.id), ["day"]);
+  assert.deepEqual(selectFlows(all, ["politics-badge"]).map((f) => f.id), ["politics-badge"]);
 });
 
 test("flows.mjs night-sizes 편지 시험 유언 WILL50 은 서버 유언 상한(WILL_MAX_GRAPHEMES)과 같은 자소 수이고, 공백 없는 긴 단어(10~15자)를 섞는다(사용자 결정 2026-11-05)", () => {

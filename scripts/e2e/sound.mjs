@@ -2,7 +2,7 @@
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makeSoundFlows(helpers)` 로 받는다(avatar.mjs·politics.mjs 와 같은 모양 — 서로 import 하지 않는다).
 // helpers: { recorder, attempt, startHost, openGame, closeGame, nightScenario } (sound-script 는 startHost, sound-night-parity·sound-result 는 openGame·closeGame 을 쓴다)
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(soundRenderChecks, SOUND_RENDER_LIMITS)에만 있고 여기서는 낮추지 않는다 (T-12-22).
-import { chooseRole, dropSockets, leaveLobby, openTestSheet, reconnectInit, SetupError, setBotVote, setBots, settle, skipTo, sleep, startGame, tapPick, tapTurnPick } from "./browser.mjs";
+import { chooseRole, dropSockets, leaveLobby, openTestSheet, reconnectInit, SetupError, setBotVote, setBots, settle, skipTo, sleep, startGame, tapPick } from "./browser.mjs";
 import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundEmoteLeakChecks, soundNightParityChecks, soundRenderChecks, soundResultChecks, soundResultSkipChecks, soundSequenceChecks, soundVerdictTimingChecks } from "./lib.mjs";
 
 /** [전부 계산] 56개 렌더가 끝나기를 기다리는 상한(ms) */
@@ -274,10 +274,6 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
     };
     const host = await startHost(ctx, "sound-script", { nickname: SCRIPT_NICK });
     const { page: hp, tracker: ht } = host;
-    const myTurn = (v) => {
-      const t = v.day?.turn;
-      return !!t && v.phase === "nomination" && t.i >= 0 && t.order[t.i] === v.me.seat;
-    };
     try {
       // ① 로비: 방 화면이 열리면 침대 요청 하나
       const hooked = await attempt(async () => {
@@ -324,36 +320,32 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       await sleep(500);
       judge("sound-script/day", "SC5", await readLog(hp));
 
-      // ⑤ 지목: 진입 phase.vote + bed.vote, 방장 차례가 오면 pin.on · pick.turn (실제 모이기 3초를 기다린다)
+      // ⑤ 투표(기본판, 동시 15초): 진입 phase.vote + bed.vote. 차례 소리(pin.on·pick.turn·pick.tick)는 없다
       await clearLog(hp);
       await skipTo(hp, ht, "nomination");
-      const turn = await attempt(async () => {
-        await ht.waitFor(myTurn, 20000, "내 지목 차례");
-      });
-      rec("sound-script/nomination", "SC6w", "방장의 지목 차례가 온다(모이기 3초 뒤)", turn.ok, turn.detail);
-      if (!turn.ok) return;
-      judge("sound-script/nomination", "SC6", await readLogWith(hp, "pick.turn"));
+      await ht.waitFor((v) => v.phase === "nomination", 5000, "투표 진입").catch(() => {});
+      await sleep(800);
+      judge("sound-script/nomination", "SC6", await readLogWith(hp, "phase.vote"));
 
-      // ⑥ 방장이 지목하면 pick.point · pin.move
+      // ⑥ 방장이 한 사람을 누른다: 눌림은 로컬 소리가 없고(차례 소리 pick.point·pin.move 도 없음) 새 침대도 없다
       await clearLog(hp);
       const me = ht.last().me.seat;
       const target = ht.last().players.find((x) => x.seat !== me)?.seat;
       const picked = await attempt(async () => {
-        await tapTurnPick(hp, target);
-        await ht.waitFor((v) => v.day?.turn?.doneAt !== undefined && v.day.turn.order[v.day.turn.i] === v.me.seat, 4000, "내 차례 확정");
-        await sleep(300);
+        await tapPick(hp, target);
+        await sleep(500);
       });
-      rec("sound-script/nomination", "SC7w", "방장이 지목 버튼을 눌러 차례가 확정된다", picked.ok, picked.detail);
+      rec("sound-script/nomination", "SC7w", "방장이 이름표 버튼을 눌러 눌림 표시가 선다", picked.ok, picked.detail);
       if (!picked.ok) return;
       judge("sound-script/nomination", "SC7", await readLog(hp));
 
-      // ⑦ 봇 차례들 → 변론: pin.on 은 나고 내 pick.turn 은 없고, 변론 진입에도 새 침대 요청이 없다
+      // ⑦ 봇 투표 → 변론: 봇 표(2~8초)가 들어오고 투표가 끝나 변론에 닿는다. 차례 소리 없음, 변론 진입에도 새 침대 없음
       await clearLog(hp);
       const defense = await attempt(async () => {
         await ht.waitFor((v) => v.phase === "defense", NOMINATION_WAIT_MS, "변론");
         await sleep(500);
       });
-      rec("sound-script/defense", "SC8w", "봇 차례가 끝나고 변론에 닿는다", defense.ok, defense.detail);
+      rec("sound-script/defense", "SC8w", "투표가 끝나고 변론에 닿는다", defense.ok, defense.detail);
       if (!defense.ok) return;
       judge("sound-script/defense", "SC8", await readLog(hp));
 
@@ -390,7 +382,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
   /**
    * 처형 판결 순간(12-10, D-13): 방장 + 봇 3 이 방장을 변론자로 세워 변론 → 찬반 → 처형에 들어서고, 처형 진입 뒤 실제 시간으로 훅 로그를 읽는다.
    * kind "pass" 는 봇 전원 찬성(처형 성립), "reject" 는 전원 반대(부결). 두 판의 로그를 lib.mjs soundVerdictTimingChecks 가 비교한다(문턱은 거기에만).
-   * 지목 단계는 방장이 첫 차례에 봇 하나를 누르고 봇 둘이 방장을 가리킬 때까지만 기다린 뒤 testSkip 으로 변론·찬반을 건너뛴다.
+   * 투표 단계는 봇 둘 이상이 방장을 가리킬 때까지만 기다린 뒤(방장은 누르지 않는다) testSkip 으로 변론·찬반을 건너뛴다.
    */
   async function soundVerdictWatch(ctx, rec, kind) {
     const sc = `sound-script/execution-${kind}`;
@@ -402,17 +394,10 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       });
       rec(sc, "SV0", "방장 페이지에 소리 훅이 있다(?e2e=1 세션 플래그)", hooked.ok, hooked.detail);
       if (!hooked.ok) return null;
-      const myTurn = (v) => {
-        const t = v.day?.turn;
-        return !!t && v.phase === "nomination" && t.i >= 0 && t.order[t.i] === v.me.seat;
-      };
       const nominated = await attempt(async () => {
-        await ht.waitFor(myTurn, 20000, "방장 지목 차례");
-        const other = ht.last().players.find((x) => x.seat !== hostSeat)?.seat;
-        await tapTurnPick(hp, other);
         await ht.waitFor((v) => (v.day?.points ?? []).filter((p) => p.target === hostSeat).length >= 2, NOMINATION_WAIT_MS, "봇 둘이 방장을 가리킴");
       });
-      rec(sc, "SV1", "방장이 지목하고 봇 둘이 방장을 가리킨다(변론자가 정해진다)", nominated.ok, nominated.detail);
+      rec(sc, "SV1", "봇 둘 이상이 방장을 가리킨다(기본판 동시 투표, 변론자가 정해진다)", nominated.ok, nominated.detail);
       if (!nominated.ok) return null;
       await skipTo(hp, ht, "defense");
       await skipTo(hp, ht, "verdict");
