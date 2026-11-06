@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
+import { RULESET } from "../../shared/game/ruleset";
 import type { BadgeId, ClientMessage, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
@@ -125,6 +126,38 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   stage.props = null;
+});
+
+describe("기본판: 낮 토론에 떠 있는 버튼·시트가 없다 (U-8, UI#12·#13, 결정 0072)", () => {
+  // 켜진 판(RULESET.badge·whisper)에서는 아래 '떠 있는 버튼' describe 들이 본다 — 이 describe 는 기본판에서만 뜻이 있다.
+  const run = RULESET.badge || RULESET.whisper ? describe.skip : describe;
+  run("꺼진 장치의 진입점", () => {
+    const PHASES_SHOWN = ["dayAnnounce", "discussion", "nomination"] as PhaseId[];
+    it.each(PHASES_SHOWN)("%s: [data-float] 0개, 묶음 컨테이너 0개(빈 띠 없음), 주장·한 줄·한마디 시트 0개", (phase) => {
+      const { container } = mount(makeView({ phase }));
+      expect(container.querySelectorAll("[data-float]")).toHaveLength(0);
+      expect(container.querySelectorAll("[data-float-stack], .mf-float")).toHaveLength(0);
+      expect(container.querySelectorAll("[data-claim-sheet], .mv-claim-sheet, [data-line-sheet], [data-speak-sheet]")).toHaveLength(0);
+      expect(container.querySelectorAll('[aria-disabled="true"]')).toHaveLength(0);
+      expect(container.textContent).not.toContain("준비 중");
+    });
+
+    it("discussion: [토론 끝내기] 하나는 있다(UI#13 populated) — 떠 있는 줄 없이", () => {
+      const { container } = mount(makeView({ phase: "discussion" }));
+      expect(container.querySelectorAll("[data-end-discussion]")).toHaveLength(1);
+      expect(container.querySelectorAll("[data-float]")).toHaveLength(0);
+    });
+
+    it("유령(탈락한 나)에게도 떠 있는 버튼·시트가 없다", () => {
+      const { container } = mount(makeView({ phase: "discussion", dead: [0] }));
+      expect(container.querySelectorAll("[data-float], [data-float-stack]")).toHaveLength(0);
+    });
+
+    it("서버 view 에 주장이 실려 와도(옛 번들 호환) 떠 있는 버튼은 없다", () => {
+      const { container } = mount(makeView({ phase: "discussion", badges: { 0: "police" } }));
+      expect(container.querySelectorAll("[data-float]")).toHaveLength(0);
+    });
+  });
 });
 
 describe("떠 있는 버튼 → 칩 시트 → badge 전송 (UI-SPEC A-2, 트레이서)", () => {

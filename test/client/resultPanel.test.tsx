@@ -4,7 +4,8 @@ import "../helpers/singleLineErrors";
 import type { ResultLogChatLine, ResultLogWhisperLine } from "../../shared/protocol";
 import { ResultPanel } from "../../src/components/v2/ResultPanel";
 import type { ResultPanelProps, ResultTab } from "../../src/components/v2/ResultPanel";
-import { RESULT_PANEL_TEXT } from "../../src/game/resultText";
+import { RULESET } from "../../shared/game/ruleset";
+import { RESULT_PANEL_TEXT, RESULT_TABS_SHOWN } from "../../src/game/resultText";
 import type { ResultLogSnapshot } from "../../src/net/resultLogStore";
 import { tlLog, TL_NAMES, TL_RESULT, TL_VOTE_LOG } from "../helpers/timelineState";
 
@@ -54,6 +55,22 @@ function setup(over: Partial<ResultPanelProps> = {}) {
 const tabs = (c: ParentNode) => Array.from(c.querySelectorAll<HTMLElement>("[data-result-tab]"));
 const tabOf = (c: ParentNode, id: string) => c.querySelector<HTMLElement>(`[data-result-tab="${id}"]`)!;
 const text = (el: Element | null | undefined) => el?.textContent ?? "";
+
+describe("기본판: 결과 화면 귓속말 탭이 없다 (U-8, UI#14, 결정 0072)", () => {
+  it("보이는 탭 목록은 귓속말을 뺀 all·mafia·ghost·log 이고 탭 행·좌우 화살표키 이동도 그 넷 안이다", () => {
+    if (RULESET.whisper) return;
+    expect([...RESULT_TABS_SHOWN]).toEqual(["all", "mafia", "ghost", "log"]);
+    const { container, onTab } = setup({ tab: "mafia", expanded: true });
+    expect(tabs(container).map((t) => t.getAttribute("data-result-tab"))).toEqual(["all", "mafia", "ghost", "log"]);
+    expect(container.querySelector('[data-result-tab="whisper"]')).toBeNull();
+    fireEvent.keyDown(tabOf(container, "ghost"), { key: "ArrowRight" });
+    expect(onTab).toHaveBeenLastCalledWith("log");
+    fireEvent.keyDown(tabOf(container, "log"), { key: "ArrowRight" });
+    expect(onTab).toHaveBeenLastCalledWith("all");
+    fireEvent.keyDown(tabOf(container, "all"), { key: "ArrowLeft" });
+    expect(onTab).toHaveBeenLastCalledWith("log");
+  });
+});
 
 describe("탭 행 (A-3)", () => {
   it("tablist 안에 아이콘 탭 다섯 개: 전체·마피아·유령·귓속말·기록, 접근성 이름이 붙는다", () => {

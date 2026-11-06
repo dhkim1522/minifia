@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
+import { RULESET } from "../../shared/game/ruleset";
 import { WHISPER_TEXT, whisperLine, whisperTargets, whisperUsed, whisperVisible } from "../../src/game/whisperView";
 
 // 09.1.1-09: 귓속말 화면의 순수 모델(UI-SPEC B). 서버 view 와 채팅 줄만 읽고 시각·난수가 없다.
@@ -38,7 +39,16 @@ function makeView(o: Opt = {}): RoomView {
 
 const nameOf = (seat: number): string => NAMES[seat] ?? "";
 
-describe("whisperVisible (UI-SPEC B-1, O-3)", () => {
+describe("기본판 whisperVisible — 어느 단계에서도 거짓 (U-8, 결정 0072)", () => {
+  const ALL = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"] as PhaseId[];
+  it("산 사람이고 산 상대가 있어도 모든 단계에서 귓속말 버튼이 없다(RULESET.whisper 가 꺼져 있을 때)", () => {
+    if (RULESET.whisper) return;
+    expect(ALL.map((phase) => `${phase}:${whisperVisible(makeView({ phase }))}`).join(" ")).toBe(ALL.map((phase) => `${phase}:false`).join(" "));
+  });
+});
+
+// 기본판(결정 0072)에서 꺼짐 — RULESET.whisper 를 켜면 다시 돈다.
+describe.skipIf(!RULESET.whisper)("whisperVisible (UI-SPEC B-1, O-3)", () => {
   it("낮 토론에서 내가 산 사람이고 나 말고 산 사람이 있으면 참", () => {
     expect(whisperVisible(makeView())).toBe(true);
   });

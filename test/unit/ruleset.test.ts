@@ -25,4 +25,10 @@ describe("기본판 설정 RULESET (결정 0072)", () => {
     const view = read("shared/game/view.ts");
     expect(`${/import \{[^}]*\bRULESET\b[^}]*\} from "..\/shared\/game\/ruleset"/.test(room)}/${/import \{[^}]*\bRULESET\b[^}]*\} from "\.\/ruleset"/.test(view)}`).toBe("true/true");
   });
+  it("화면 모델은 설정을 RULESET 으로 읽는다 (13-04, 떠 있는 버튼·결과 탭 진입점)", () => {
+    const has = (rel: string): boolean => /import \{[^}]*\bRULESET\b[^}]*\} from "[^"]*shared\/game\/ruleset"/.test(read(rel));
+    expect(["src/game/badgeView.ts", "src/game/whisperView.ts", "src/game/resultText.ts"].map((f) => `${f}:${has(f)}`).join(" ")).toBe(
+      "src/game/badgeView.ts:true src/game/whisperView.ts:true src/game/resultText.ts:true",
+    );
+  });
 });
