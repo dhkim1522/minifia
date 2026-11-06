@@ -2791,6 +2791,18 @@ describe("게임 이름표: 지목 버튼·tagProps·canWalk (DAY-04, MAP-04)", 
       expect(pickBtn(s, 4).textContent).toContain("<img src=x onerror=alert(1)>");
     });
 
+    it("tagProps 의 call 은 이름표 is-call 과 누르는 단추 data-call(값 없음)로 간다 — call 이 없는 좌석은 둘 다 없다(14-04)", async () => {
+      const s = await open(
+        { scene: SCENE5, pick: pickOf(), tagProps: (seat) => (seat === 1 || seat === 4 ? { call: true } : {}) },
+        { players: FIVE, ents: FIVE_ENTS() },
+      );
+      const lit = [...s.utils.container.querySelectorAll("button[data-pick][data-call]")].map((b) => b.getAttribute("data-pick"));
+      expect(lit).toEqual(["1", "4"]);
+      expect(pickBtn(s, 1).getAttribute("data-call")).toBe("");
+      expect(pickBtn(s, 1).querySelector(".mv-tag.is-call")).not.toBeNull();
+      expect(pickBtn(s, 2).querySelector(".is-call")).toBeNull();
+    });
+
     it("방장이 끊긴 사람을 내보내는 버튼과 같은 이름표에 겹치지 않는다(pick 좌석이 먼저)", async () => {
       const players = [player(0, "민지"), player(1, "철수", { connected: false })];
       const s = await open({ scene: sceneOf({ 0: {}, 1: {} }), pick: pickOf({ seats: new Set([1]), mine: undefined }) }, { players });

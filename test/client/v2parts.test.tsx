@@ -378,7 +378,7 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
   // 14-01: 사회자 자막 띠(.mv-host*)의 왼쪽 놋쇠 줄·종·10초 놋쇠 막대와 5초 진홍 막대·숫자는 시간 신호·사회자 색이라 같이 뺀다(14-UI-SPEC "색 약속 정리").
   // 나머지 규칙(이름표·채팅·시간 링 기본 등)은 7페이즈 규칙 그대로다.
   const WITHOUT_PHASE8_PARTS = V2_CSS.replace(/\/\*[\s\S]*?\*\//g, "").replace(/[^{}]*\{[^{}]*\}/g, (rule) =>
-    /^\s*\.mv-(badge|stamp|rolechip)|^\s*\.mv-chat__sys\.is-hot|^\s*\.mv-will--mafia|^\s*\.mv-chat__card--mafia|^\s*\.mv-ring\.is-(warn|urgent)|^\s*\.mf-turn\[data-turn-tone=|^\s*\.mv-host/.test(rule) ? "" : rule,
+    /^\s*\.mv-(badge|stamp|rolechip)|^\s*\.mv-chat__sys\.is-hot|^\s*\.mv-will--mafia|^\s*\.mv-chat__card--mafia|^\s*\.mv-ring\.is-(warn|urgent)|^\s*\.mf-turn\[data-turn-tone=|^\s*\.mv-host|^\s*\.mv-tag\.is-call/.test(rule) ? "" : rule,
   );
 
   it("hex 색이 없고 놋쇠 토큰을 쓰지 않으며, 진홍은 crimson-300 글자색 하나뿐이다 (07-UI-SPEC Color: 진홍 글자 예약, 면·큰 글자 금지) — 8페이즈 부품 규칙 제외", () => {

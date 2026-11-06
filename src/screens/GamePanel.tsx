@@ -49,6 +49,10 @@ export interface GamePanelProps {
   noteReady?: boolean;
   /** 저장된 유언이 있는가 — 깃펜 점(본인에게만) */
   willSaved?: boolean;
+  /** 빛남(14-04): 지금 빛나야 할 도구. 부르는 쪽(GameMap)이 callTargetsOf 로 정하고 시트·키보드·이미 씀을 거른 결과만 준다. 없으면 빛 없음 */
+  call?: { chat?: boolean; will?: boolean; verdict?: boolean; faces?: ReadonlySet<number> };
+  /** 빛나는 도구를 썼다(입력칸 포커스·첫 글·[유언] 엶·찬반 고름·얼굴 고름). 기존 동작 뒤에 부르고 동작을 막지 않는다 */
+  onCallUsed?: () => void;
   inputRef?: RefObject<HTMLInputElement | null>;
   panelRef?: RefObject<HTMLElement | null>;
 }
@@ -58,7 +62,7 @@ export interface GamePanelProps {
  * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + HeadCount, 08-16)을 얹는다 — 변론·처형·유령은 채팅만이거나 뒤 계획이 이 틀 위에 얹는다.
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, inputRef, panelRef }: GamePanelProps) {
+export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef }: GamePanelProps) {
   const serverPressed = view.me.endDiscussion === true;
   const [pressed, choose] = useViewChoice<boolean>(view, serverPressed);
   // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
@@ -101,6 +105,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
     if (!canSend) return;
     if (send({ t: "verdict", agree: v === "yes" }) === false) return;
     chooseVerdict(v);
+    onCallUsed?.();
   };
 
   // 밤(UI-SPEC 아래 패널 종류): 산 마피아 = 마피아 채널 채팅, 산 경찰·의사 = 얼굴 목록(NIGHT-09), 산 시민 = 비어 있음(유언 줄은 09-17), 유령 = 유령 채널 채팅.
@@ -120,6 +125,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
     if (send({ t: "pick", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 눌림도 바꾸지 않는다
     onNightPickSent?.(seat);
     chooseNightPick(seat);
+    onCallUsed?.();
   };
 
   // 밤 시민 편은 입력줄이 없어 아래 행동 줄의 [유언] 이 깃펜을 대신한다(UI-SPEC 237행). 산 사람 + 밤 시민·경찰·의사에게만.
@@ -152,7 +158,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
       {showVerdict || showVerdictDots ? (
         <div className="mf-game__verdict" data-verdict-row="">
           {showVerdict ? (
-            <VerdictPicker {...(verdict ? { value: verdict } : {})} onChange={pressVerdict} {...(canSend ? {} : { disabled: true })} />
+            <VerdictPicker {...(verdict ? { value: verdict } : {})} onChange={pressVerdict} {...(canSend ? {} : { disabled: true })} {...(call?.verdict ? { call: true } : {})} />
           ) : null}
           <HeadCount count={voted} total={Math.max(0, aliveCount - 1)} label="투표한 사람" />
         </div>
@@ -167,6 +173,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
             label={nightFaces === "police" ? "조사할 사람" : "지킬 사람"}
             ariaLabel={(name) => (nightFaces === "police" ? `${name} 조사` : `${name} 보호`)}
             {...(canSend ? {} : { disabled: true })}
+            {...(call?.faces !== undefined ? { callSeats: call.faces } : {})}
           />
         ) : null
       ) : nightCitizen ? null : chatChannelOk ? (
@@ -175,13 +182,25 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
           logHeight={logHeight}
           compact={kbOpen}
           {...(inputRef ? { inputRef } : {})}
+          onInputFocus={() => onCallUsed?.()}
+          {...(binding.onSend
+            ? {
+                onSend: (text: string) => {
+                  binding.onSend?.(text);
+                  onCallUsed?.();
+                },
+              }
+            : {})}
+          {...(call?.chat ? { callInput: true } : {})}
           {...(penOn
             ? {
                 onWill: () => {
                   if (canSend) onOpenWill?.(panelRef?.current?.querySelector<HTMLElement>("[data-will-button]") ?? null);
+                  onCallUsed?.();
                 },
                 willOpen,
                 willSaved,
+                ...(call?.will ? { callWill: true } : {}),
               }
             : {})}
         />

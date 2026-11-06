@@ -35,6 +35,7 @@ import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
 import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../game/dayView";
+import { callTargetsOf } from "../game/hostLine";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
 import type { ChatStore } from "../net/chatStore";
@@ -68,8 +69,6 @@ import "../styles/testtools.css";
 const BALLOT_TOP = 131;
 const BALLOT_GAP = 16;
 const HINT_MS = 2500;
-/** 투표 시작 뒤 누를 수 있는 이름표가 깜빡이는 시간(0.9초 × 3, UI-SPEC U-6) */
-const VOTE_BLINK_MS = 2700;
 /** 서버가 단계 어긋난 행동을 거절했을 때 위 알림(UI-SPEC Copywriting Contract, 7페이즈 "지금은 보낼 수 없어요" 문구 계열) */
 const REJECT_TEXT = "지금은 고를 수 없어요";
 /** 지목이 단계 어긋남이 아닌 이유로 거절됐을 때 위 알림 */
@@ -373,28 +372,13 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // pickedTurn = 내가 이미 누른 차례 번호. 서버가 거절하면 비워 다시 고를 수 있게 한다.
   const [pickedTurn, setPickedTurn] = useState<number | undefined>(undefined);
   const canPick = voting ? meAlive : nominating && meAlive && myTurnNo !== undefined && pickedTurn !== myTurnNo && mine === undefined;
-  // 처음 깜빡임(U-6): 투표가 시작되면 누를 수 있는 이름표가 3초(0.9초 × 3) 깜빡이고 내가 누르면 바로 멈춘다. 저장 키 없이 매 투표(일차)마다 켠다.
-  // 재접속으로 이미 지난 투표는 남은 시간만큼만(단계 시작 = 마감 − 단계 길이) 깜빡이고, 이미 골랐으면 켜지 않는다. 모션 줄이기는 CSS 가 정지 테두리로 바꾼다.
-  const [voteBlink, setVoteBlink] = useState(false);
-  const voteKey = voting && meAlive ? `vote:${view.day?.n ?? 0}` : null;
-  const voteStartedAt = view.phaseEndsAt !== null && view.phaseDurationMs !== null ? view.phaseEndsAt - view.phaseDurationMs : null;
-  useEffect(() => {
-    if (voteKey === null) {
-      setVoteBlink(false);
-      return;
-    }
-    const sinceStart = voteStartedAt === null ? 0 : Math.max(0, Date.now() + offset - voteStartedAt);
-    const left = VOTE_BLINK_MS - sinceStart;
-    if (left <= 0) {
-      setVoteBlink(false);
-      return;
-    }
-    setVoteBlink(true);
-    const timer = setTimeout(() => setVoteBlink(false), left);
-    return () => clearTimeout(timer);
-    // 투표가 시작될 때(일차 키)만 켠다 — 같은 투표 안의 view 갱신으로 다시 깜빡이지 않는다
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voteKey]);
+  // 빛남(14-04, HOST-03·04, U-7): 13 의 투표 처음 3초 깜빡임을 대체한다. 대상은 callTargetsOf(view)(공개 정보·내 역할만) 하나가 정하고,
+  // 같은 단계 안에서 내가 그 도구를 쓰면 즉시 꺼져 되살아나지 않는다(서버가 거절해도 다시 켜지 않는다). "썼음" 은 단계 키(단계·일차·변론자) 하나로 쥐어 키가 바뀌면 자동으로 풀린다.
+  // 내 행동만으로 끄는 로컬 상태이고 남의 행동·서버 값을 미리 그리지 않는다(T-14-13). 빛은 소리를 내지 않는다.
+  const callKey = `${view.phase}:${view.day?.n ?? 0}:${view.day?.candidate ?? ""}`;
+  const [callUsedKey, setCallUsedKey] = useState<string | null>(null);
+  const markCallUsed = useCallback((): void => setCallUsedKey(callKey), [callKey]);
+  const callUsed = callUsedKey === callKey;
   // 서버가 내 선택을 확인했으면 더는 거절을 기다리지 않는다. 거절이 오면 내 선택을 서버 값으로 되돌린다(처음 그릴 때는 아무것도 하지 않는다).
   useEffect(() => {
     if (pointSent.current !== null && serverMine === pointSent.current.target) pointSent.current = null;
@@ -456,7 +440,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           if (send(nighting ? { t: "pick", target: seat } : { t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
           pointSent.current = { target: seat, at: Date.now() };
           chooseMine(seat);
-          if (voting) setVoteBlink(false);
+          if (voting) markCallUsed();
           else if (nominating) setPickedTurn(myTurnNo);
           if (nightMafia) approach(seat);
         },
@@ -551,7 +535,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       return (seat) => {
         const count = tally.counts[seat] ?? 0;
         return {
-          ...(voteBlink && mine === undefined && pickSeats?.has(seat) ? { blink: true } : {}),
           ...(mine === seat ? { mine: true } : {}),
           ...(count >= 1 ? { count } : {}),
           ...(tally.leader === seat ? { lead: true } : {}),
@@ -574,7 +557,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         ...(turnSeat === seat ? { ring: "turn" as const, turn: true } : {}),
       };
     };
-  }, [nominating, voting, voteBlink, nighting, nightMafia, mine, serverMine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting, showdownPointing, showdownStage]);
+  }, [nominating, voting, nighting, nightMafia, mine, serverMine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting, showdownPointing, showdownStage]);
 
   // 유령 화면의 이름표: 모든 이름표 위에 그 사람의 직업 칩(spectate.seats 의 job), 죽은 좌석은 반투명. 산 사람 view 에는 spectate 가 없어 이 겹침이 없다.
   const tagProps = useMemo<WorldTagProps | undefined>(() => {
@@ -649,10 +632,27 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   }, [tagProps, view, badge.shown, badge.server, claimPops, claimNotices]);
 
   // 귓속말 모드: 대상 이름표가 깜빡이는 버튼이 된다(모션 줄이기는 CSS 가 gray-100 2px 고정 테두리). 모드가 아니면 위 함수 그대로(이름표에 넘기는 속성이 없다)
+  // 빛남 대상(14-04): 열린 시트·키보드·귓속말 모드·이미 썼음이면 켜지 않는다. 한 화면에는 한 종류(tool 하나 / 이름표 무리 / 얼굴 칸 무리)만 나온다.
+  // 마피아 밤·산 시민·유령·할 일 없는 사람은 callTargetsOf 가 null 이라 빛이 0개다(HOST-05).
+  const callTarget = useMemo(() => callTargetsOf(view), [view]);
+  const callOn = callTarget !== null && !callUsed && layerKind === null && !kbOpen && !whisper.mode;
+  const callTool = callOn && callTarget.kind === "tool" ? callTarget.tool : null;
+  const callTagSeats = useMemo<ReadonlySet<number> | null>(
+    () => (callOn && callTarget.kind === "tag" && voting && mine === undefined ? new Set(callTarget.seats) : null),
+    [callOn, callTarget, voting, mine],
+  );
+  const callFaceSeats = useMemo<ReadonlySet<number> | undefined>(
+    () => (callOn && callTarget.kind === "tag" && nighting && view.me.pick === undefined ? new Set(callTarget.seats) : undefined),
+    [callOn, callTarget, nighting, view.me.pick],
+  );
   const stageTagProps = useMemo<WorldTagProps | undefined>(() => {
-    if (!whisper.mode) return claimTagProps;
-    return (seat) => ({ ...(claimTagProps?.(seat) ?? {}), ...(whisper.targets.has(seat) ? { blink: true } : {}) });
-  }, [whisper.mode, whisper.targets, claimTagProps]);
+    if (!whisper.mode && callTagSeats === null) return claimTagProps;
+    return (seat) => ({
+      ...(claimTagProps?.(seat) ?? {}),
+      ...(whisper.mode && whisper.targets.has(seat) ? { blink: true } : {}),
+      ...(callTagSeats?.has(seat) ? { call: true } : {}),
+    });
+  }, [whisper.mode, whisper.targets, claimTagProps, callTagSeats]);
 
   // 아래 패널 높이(--mf-panel-h)는 DOM 에서 재서 루트에 한 번 정한다(패널이 자라도 따라간다). 떠 있는 버튼 묶음(아래 끝 = 키보드 올림 + 패널 높이 + 8)과
   // 찬반 기록 묶음(09.1.1-13)이 CSS 상속으로 같은 값을 읽는다
@@ -780,6 +780,13 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         kbOpen={kbOpen}
         lifted={kbLifted}
         veiled={veiled || (speakOpen && !speakWriting)}
+        call={{
+          ...(callTool === "chat" ? { chat: true } : {}),
+          ...(callTool === "will" ? { will: true } : {}),
+          ...(callTool === "verdict" && view.me.verdictVote === undefined ? { verdict: true } : {}),
+          ...(callFaceSeats !== undefined ? { faces: callFaceSeats } : {}),
+        }}
+        onCallUsed={markCallUsed}
         rejected={rejects}
         onNightPickSent={(target) => {
           pointSent.current = { target, at: Date.now() };

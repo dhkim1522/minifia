@@ -1016,29 +1016,26 @@ describe("GameMap — 기본판 투표 (결정 0072)", () => {
     expect((stage.props?.scene?.camera as { zoom?: number }).zoom).toBe(1.08);
   });
 
-  it("처음 깜빡임: 시작 직후 누를 수 있는 이름표가 blink, 2700ms 뒤 꺼진다. 내가 누르면 바로 꺼진다", () => {
+  it("기본판 투표 이름표는 is-blink 없음 — 13 의 처음 깜빡임은 빛남(call)이 대체한다(U-7)", () => {
     mount(voteView());
-    expect(tag(1).blink).toBe(true);
-    expect(tag(0).blink).toBeUndefined();
-    advance(2699);
-    expect(tag(1).blink).toBe(true);
-    advance(1);
     expect(tag(1).blink).toBeUndefined();
-    cleanup();
-    vi.setSystemTime(NOW);
-    mount(voteView());
-    expect(tag(3).blink).toBe(true);
+    expect(tag(1).call).toBe(true);
+    advance(2700);
+    expect(tag(1).blink).toBeUndefined();
+    expect(tag(1).call).toBe(true); // 시간으로 꺼지지 않는다 — 쓰면 꺼진다
+    expect(tag(0).call).toBeUndefined();
     act(() => stage.props!.pick!.onPick(1));
-    expect(tag(3).blink).toBeUndefined();
+    expect(tag(3).call).toBeUndefined();
   });
 
-  it("재접속으로 이미 지난 투표는 깜빡이지 않고, 이미 골랐어도 깜빡이지 않는다", () => {
+  it("재접속으로 이미 지난 투표도, 이미 골랐어도 blink 는 없다(빛남은 이미 골랐으면 켜지 않는다)", () => {
     const old = voteView();
     mount({ ...old, phaseEndsAt: NOW + 5_000 });
     expect(tag(1).blink).toBeUndefined();
     cleanup();
     mount(voteView([[0, 2]]));
     expect(tag(1).blink).toBeUndefined();
+    expect(tag(1).call).toBeUndefined();
   });
 
   it("기본판 투표: 제목 '투표'뿐(안내 줄·시간 링 없음, 남은 시간은 띠 몫), 차례 알약·막대는 DOM 에 없고 어둡게 막은 off", () => {
