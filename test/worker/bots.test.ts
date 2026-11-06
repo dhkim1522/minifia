@@ -26,6 +26,7 @@ import {
   toPhase,
   until,
   votesIn,
+  writeRoomEdit,
   worldFramesOf,
   worldOf,
 } from "./helpers";
@@ -175,12 +176,12 @@ async function waitForPlanKey(code: string): Promise<{ key: string; steps: Array
 async function forceBotsDue(code: string): Promise<void> {
   await waitForPlan(code);
   const stub = env.ROOM.getByName(code);
-  await runInDurableObject(stub, async (_instance, state) => {
-    const room = await state.storage.get<Record<string, unknown>>("room");
-    const plan = room?.botPlan as { key: string; steps: Array<Record<string, unknown>> } | undefined;
-    if (!room || !plan) throw new Error("forceBotsDue: 봇 계획이 없다");
+  // 12-03: 저장소만 고치면 evict 전에 봇 알람이 낡은 메모리 방으로 덮어쓴다 — 메모리 사본도 같이 고치는 writeRoomEdit 를 쓴다.
+  await writeRoomEdit(stub, (room) => {
+    const plan = room.botPlan as { key: string; steps: Array<Record<string, unknown>> } | undefined;
+    if (!plan) throw new Error("forceBotsDue: 봇 계획이 없다");
     const steps = plan.steps.map((s) => ({ ...s, at: Date.now() - 1000 }));
-    await state.storage.put("room", { ...room, botPlan: { ...plan, steps } });
+    return { ...room, botPlan: { ...plan, steps } };
   });
   await evictDurableObject(stub);
   expect(await runDurableObjectAlarm(stub)).toBe(true);
