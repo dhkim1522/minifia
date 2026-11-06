@@ -13,6 +13,7 @@ import { isAlive } from "./alive";
 import { BOT_NAMES, botCount, botExecAgree, botNightTarget, botPointTarget, botRunoffTarget, isBot } from "./bots";
 import { testRoleOptions } from "./roles";
 import type { RoleId } from "./roles";
+import { castPoint } from "./nomination";
 import { pickTarget } from "./night";
 import { benchAsPlayers } from "./rematch";
 import { lowestFreeSeat } from "./room";
@@ -38,7 +39,7 @@ function checkTestHost(state: RoomState, actorId: string): TestToolError | null 
  * 정상 마감과 같은 경로(tick 의 ON_ENTER, 결정 0016)라 밤 판정·아침 문구·일차 증가가 그대로 일어난다.
  * 새 마감은 "당긴 마감(now) + 다음 단계 길이" 라 정확히 한 단계만 넘어간다. 대기실·종료(마감 없음)는 WRONG_PHASE.
  * 밤과 찬반 단계(night·verdict)는 넘기기 직전에 아직 안 던진 살아 있는 봇이 먼저 던진다 — 그렇지 않으면 봇 표 없이 마감되어
- * 테스트 방 한 판이 처형에 닿지 못한다. 지목은 차례 방식 하나뿐이라 위 분기가 맡는다(차례 없는 지목은 방 정규화가 차례를 세워 실제로는 오지 않는다 — 지금 단계 마감만 당긴다).
+ * 테스트 방 한 판이 처형에 닿지 못한다. 기본판(결정 0072)의 투표(nomination, 차례 없음)도 같아서 안 던진 산 봇이 먼저 던진다 — 차례가 있는 지목(RULESET.pickTurn)은 위 분기가 맡는다.
  * 그 뒤 단계는 마감 훅의 분기 결과(통과 여부·후보·승패)를 그대로 따른다(결정 0022, 0060-13).
  */
 export function skipPhase(state: RoomState, actorId: string, now: number, randInt: RandInt): TestToolResult {
@@ -53,7 +54,7 @@ export function skipPhase(state: RoomState, actorId: string, now: number, randIn
   if (state.phase === "runoff") return { ok: true, state: tick({ ...finishRunoff(state, randInt), phaseEndsAt: now }, now, randInt) };
   // 마지막 3인 결전(09.1.1-07, 결정 0066-5): 모이기·한마디·지목 창 어디서든 남은 산 봇의 지목을 채우고 공개(points 확정)로 만든 뒤 마감을 당겨 집계 → 처형 단계 또는 밤으로 한 번에 벗어난다.
   if (state.phase === "showdown") return { ok: true, state: tick({ ...finishShowdown(state, randInt), phaseEndsAt: now }, now, randInt) };
-  const ready = state.phase === "night" ? botsPickNow(state, randInt) : state.phase === "verdict" ? botsVoteNow(state, randInt) : state;
+  const ready = state.phase === "night" ? botsPickNow(state, randInt) : state.phase === "verdict" || state.phase === "nomination" ? botsVoteNow(state, randInt) : state;
   return { ok: true, state: tick({ ...ready, phaseEndsAt: now }, now, randInt) };
 }
 
@@ -139,14 +140,24 @@ function botsPickNow(state: RoomState, randInt: RandInt): RoomState {
 }
 
 /**
- * 찬반 단계를 당겨 끝내기 전에 아직 안 던진 살아 있는 봇이 지금 한 번 던진다 — 사람의 표는 건드리지 않고 이미 던진 봇도 다시 던지지 않는다.
- * 계획(planFor)과 같은 결정 함수(botExecAgree)와 사람과 같은 본체(castVerdict)를 쓰되 지연 난수는 부르지 않는다.
- * 봇은 seat 오름차순으로 하나당 randInt(100) 한 번씩 부른다. 변론자 봇은 던지지 않는다.
+ * 투표(기본판 동시 투표)·찬반 단계를 당겨 끝내기 전에 아직 안 던진 살아 있는 봇이 지금 한 번 던진다 — 사람의 표는 건드리지 않고 이미 던진 봇도 다시 던지지 않는다.
+ * 투표: 계획(planFor)과 같은 결정 함수(botPointTarget — 자기·탈락 제외, 고정 pick 포함)와 사람과 같은 본체(castPoint). 봇마다 randInt(후보 수) 한 번(고정 pick 이면 없음).
+ * 찬반: 계획과 같은 결정 함수(botExecAgree)와 사람과 같은 본체(castVerdict). 봇마다 randInt(100) 한 번, 변론자 봇은 던지지 않는다.
+ * 지연 난수는 부르지 않는다. 봇은 seat 오름차순이다.
  */
 function botsVoteNow(state: RoomState, randInt: RandInt): RoomState {
   let next = state;
   const bots = state.players.filter((p) => isBot(p) && isAlive(p)).sort((a, b) => a.seat - b.seat);
   for (const bot of bots) {
+    if (state.phase === "nomination") {
+      // 동시 투표(결정 0072): 이미 던진 봇은 그대로 두고 난수도 쓰지 않는다.
+      if (bot.nominate !== undefined) continue;
+      const target = botPointTarget(next, bot, randInt, state.testBotVote?.pick);
+      if (target === undefined) continue;
+      const cast = castPoint(next, bot.id, target);
+      if (cast.ok) next = cast.state;
+      continue;
+    }
     // 찬반(8페이즈): 변론자 봇은 던지지 않는다(castVerdict 가 거절하고, 난수도 쓰지 않는다).
     if (bot.verdictVote !== undefined || bot.seat === state.verdict?.candidate) continue;
     const cast = castVerdict(next, bot.id, botExecAgree(randInt, state.testBotVote?.exec));

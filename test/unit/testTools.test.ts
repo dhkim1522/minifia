@@ -12,6 +12,7 @@ import { castPoint, castTurnPoint, enterNomination, nominationStepMs, stepNomina
 import { castVerdict } from "../../shared/game/verdict";
 import { finishNomination, finishRunoff, finishShowdown, resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
+import { RULESET } from "../../shared/game/ruleset";
 import { runoffStepMs, stepRunoff } from "../../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint, showdownStepMs, stepShowdown } from "../../shared/game/showdown";
 import { buildPreview, buildView } from "../../shared/game/view";
@@ -925,7 +926,8 @@ describe("skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다", (
 });
 
 // ---- 09.1.1-05: 넘기기가 동점 결선을 한 번에 끝낸다 (결정 0066-4) ----
-describe("넘기기: 동점 결선 (09.1.1-05)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 을 켜면 다시 돈다
+describe.skipIf(!RULESET.runoff)("넘기기: 동점 결선 (09.1.1-05)", () => {
   /** 방장(seat 0, 사람) + 봇 4: 지목에서 0 과 1 이 서로를 가리킨 1:1 동점 → 결선 앞머리(step 0). 후보 [0, 1], 투표자는 봇 2·3·4. */
   const runoffAt = (lobby: RoomState = botLobby(), step: 0 | 1 | 2 = 0): RoomState => {
     const nominated = castPoints(startedFrom(lobby, 3, "nomination"), { 0: 1, 1: 0 });
@@ -1033,7 +1035,8 @@ describe("넘기기: 동점 결선 (09.1.1-05)", () => {
 });
 
 // ---- 09.1.1-07: 넘기기가 마지막 3인 결전을 한 번에 끝낸다 (결정 0066-5) ----
-describe("넘기기: 마지막 3인 결전 (09.1.1-07)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 을 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("넘기기: 마지막 3인 결전 (09.1.1-07)", () => {
   /** 방장(좌석 0, 사람) + 봇 4 중 봇 3·4 가 죽은 낮의 모이기(i -1). 차례 순서 [0, 1, 2], 산 봇은 1·2. */
   const gatherOf = (lobby: RoomState = botLobby()): RoomState => {
     const day = startedFrom(lobby, 3, "dayAnnounce");

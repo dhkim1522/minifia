@@ -716,8 +716,8 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
     expect(nomination.phase).toBe("nomination");
     const next = syncBotPlan(nomination, nowOf(nomination), seededRandInt(5));
     expect(String(next.botPlan?.key)).toBe(`nomination:${nomination.phaseEndsAt}`);
-    // 지목은 모이기부터 시작하는 순차 규칙이라(결정 0063-1) 모이는 동안 봇 행동은 없다 — 봇 차례 지목은 "봇 차례 지목" describe 가 본다.
-    expect(Object.hasOwn(next, "botPlan") && stepsOf(next).length === 0).toBe(true);
+    // 기본판(결정 0072) 투표는 동시라 진입 직후 산 봇(4명)마다 point 한 행이 선다 — 순차 차례 계획은 "봇 차례 지목" describe 가 본다(RULESET.pickTurn).
+    expect(stepsOf(next).map((s) => s.act.t).join(",")).toBe("point,point,point,point");
   });
 
   it("행동은 at 오름차순이다", () => {
@@ -886,7 +886,8 @@ describe("봇 투표·변론 계획: 회귀", () => {
     });
     // 08-11: 토론이 90초가 되고 밤이 지목 마감 뒤에 닿아 두 계획의 시각(at)이 모두 달라졌다 — 새 흐름 값으로 다시 고정한다.
     // 09.1-04: 지목이 순차(전원 기권 기준 모이기 + 인원 × 8.9초 + 끝 알림)가 되어 밤 시작 시각이 달라졌다 — night 값만 다시 고정한다(discussion 은 그대로).
-    expect(got.join(",")).toBe("34804349,125073089");
+    // 13-02(결정 0072): 기본판 투표는 15초 동시 투표(순차 아님)라 밤 시작 시각이 되돌아가 night 값을 다시 고정한다(125073089 → 554531902, discussion 은 그대로).
+    expect(got.join(",")).toBe("34804349,554531902");
   });
 
   it("discussion 계획의 난수 호출 수는 claim 제거 뒤에도 그대로다 (07-08, 리서치 Pitfall 13)", () => {
@@ -1278,7 +1279,8 @@ function runoffVoteAt(seed: number, step: 0 | 1 | 2 = 1): RoomState {
 }
 const runoffNow = (s: RoomState): number => s.phaseEndsAt! - RUNOFF_VOTE_MS;
 
-describe("봇 결선 투표 계획 (09.1.1-05)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 을 켜면 다시 돈다
+describe.skipIf(!RULESET.runoff)("봇 결선 투표 계획 (09.1.1-05)", () => {
   it("상수: 500 + [0, 2500) ms — 투표 창 5초에서 마감 − 500 안에 든다", () => {
     expect(RUNOFF_BOT_BASE_MS).toBe(500);
     expect(RUNOFF_BOT_SPAN_MS).toBe(2_500);
@@ -1394,7 +1396,8 @@ const turnNow = (s: RoomState): number => s.phaseEndsAt! - SHOWDOWN_TURN_MS;
 const pointNow = (s: RoomState): number => s.phaseEndsAt! - SHOWDOWN_POINT_MS;
 const idAt = (s: RoomState, seat: number): string => s.players.find((p) => p.seat === seat)!.id;
 
-describe("봇 마지막 3인 계획 (09.1.1-07)", () => {
+// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 을 켜면 다시 돈다
+describe.skipIf(!RULESET.showdown)("봇 마지막 3인 계획 (09.1.1-07)", () => {
   it("상수: 지목 지연 500 + [0, 2500) ms — 지목 창 8초에서 마감 − 500 안에 든다", () => {
     expect(SHOWDOWN_BOT_POINT_BASE_MS).toBe(500);
     expect(SHOWDOWN_BOT_POINT_SPAN_MS).toBe(2_500);
