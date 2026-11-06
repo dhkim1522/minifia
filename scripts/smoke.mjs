@@ -73,6 +73,7 @@ const CHAT_REJECT_KEYS = ["t", "why"];
 // D5(shared/game/chatRules.ts)의 최소 전송 간격 600ms. 스크립트는 TS 를 import 하지 않는다.
 const CHAT_MIN_GAP_MS = 600;
 const ALLOWED_PLAYER_KEYS = ["alive", "connected", "isHost", "nickname", "seat"];
+const OPTIONAL_PLAYER_KEYS = ["badge", "look", "badgeSwapped", "ready", "sat"]; // 공개 선택 키(결정 0066-1·0068·0069)
 const PREVIEW_PLAYER_KEYS = ["nickname", "seat"];
 const DAY_SPREAD_LIMIT_MS = 500;
 // shared/game/roles.ts 의 ROLE_TABLE 과 같은 값 (마피아·경찰·의사·시민)
@@ -1124,7 +1125,7 @@ async function stageFull(url, args) {
     for (const f of stateFrames) {
       const v = f.msg.view;
       for (const p of v.players) {
-        if (Object.keys(p).sort().join(",") !== ALLOWED_PLAYER_KEYS.join(",")) fail(`${c.nickname} 의 players 항목 키 집합이 다름: ${Object.keys(p).sort().join(",")}`);
+        if (!ALLOWED_PLAYER_KEYS.every((k) => k in p) || Object.keys(p).some((k) => !ALLOWED_PLAYER_KEYS.includes(k) && !OPTIONAL_PLAYER_KEYS.includes(k))) fail(`${c.nickname} 의 players 항목 키 집합이 다름: ${Object.keys(p).sort().join(",")}`);
       }
       const rolePaths = [];
       collectKeyPaths(f.msg, "role", "", rolePaths);
