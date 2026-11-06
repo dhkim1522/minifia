@@ -87,7 +87,8 @@ describe("DressSheet — 부품", () => {
   it("제목 글자가 없고 새 색(hex)도 쓰지 않는다 — 읽을 글은 카드 이름뿐", () => {
     const { container } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} />);
     expect(container.querySelector("h1,h2,h3,[data-dress-title]")).toBeNull();
-    const text = (container.textContent ?? "").replace(/\s/g, "");
+    // 14-07: 닫기 알약의 글자 '닫기' 는 이름표다(TOOL-01 목록 12) — 읽을 글은 카드 이름 + 이름표 하나
+    const text = (container.textContent ?? "").replace(/\s/g, "").replace(/^닫기/, "");
     expect(text).toBe(DRESS_ORDER.map((id) => OUTFIT_LABEL[id]).join(""));
   });
 });

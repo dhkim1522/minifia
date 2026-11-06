@@ -743,12 +743,12 @@ describe("Lobby — 스타일 계약 (lobby.css)", () => {
     expect(14 + 8 + 48 + 10 + 52 + 22).toBe(LOBBY_PANEL_EXTRA);
   });
 
-  it("헤더: 위 18·좌우 space-md·높이 62(= 18 + 버튼 44), 맵 탭을 가로채지 않는다 (stageBox 의 옛 대기실 바 119.2 검사를 대신한다)", () => {
+  it("헤더: 위 18·좌우 space-md·높이 62(윗여백 8 + 이름표 단추), 맵 탭을 가로채지 않는다 (stageBox 의 옛 대기실 바 119.2 검사를 대신한다)", () => {
     const rule = css.match(/\.mf-lobby__header\s*\{[^}]*\}/)?.[0] ?? "";
     expect(rule).toContain("height: 62px");
-    expect(rule).toContain("padding: 18px var(--space-md) 0");
+    expect(rule).toContain("padding: var(--space-sm) var(--space-md) 0"); // 14-07: 이름표 단추(약 57)가 들어가도록 윗여백을 토큰 간격 8 로
     expect(rule).toContain("pointer-events: none");
-    expect(18 + 44).toBe(62);
+    expect(rule).not.toContain("overflow"); // 단추 아랫변(8 + 약 57)이 62 를 넘어도 자르지 않고, HostBand 가 단추 아랫변까지 재서 띠를 붙인다
   });
 
   it("[테스트] 자리는 자막 띠 아래 8(띠 없을 때 기본 62 + 8 = 70)·왼쪽 space-md·z-overlay (14-01 U-1)", () => {

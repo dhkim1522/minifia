@@ -101,7 +101,7 @@ describe("SoundButton 세 상태 (B-1, B-2)", () => {
     act(() => rig.fake.ctx().setState("interrupted"));
     expect(button().textContent).toBe("소리 켜기");
     act(() => void vi.advanceTimersByTime(8000));
-    expect(button().textContent).toBe("");
+    expect(button().textContent).toBe("소리");
     act(() => rig.fake.ctx().setState("running"));
     expect(button().getAttribute("data-sound-state")).toBe("on");
     act(() => rig.fake.ctx().setState("interrupted"));
@@ -109,7 +109,7 @@ describe("SoundButton 세 상태 (B-1, B-2)", () => {
     act(() => void vi.advanceTimersByTime(7999));
     expect(button().textContent).toBe("소리 켜기");
     act(() => void vi.advanceTimersByTime(1));
-    expect(button().textContent).toBe("");
+    expect(button().textContent).toBe("소리");
   });
 
   it("AudioContext 를 만들 수 없는 환경이면 DOM 에 없다", () => {

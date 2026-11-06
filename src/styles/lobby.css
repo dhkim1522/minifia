@@ -11,9 +11,9 @@
 /* 위쪽 가림막: night-900 88% → 70px 에서 60% → 120px 에서 0. 헤더 글씨 대비를 지킨다. 입력을 가로채지 않는다. */
 .mf-lobby__scrim { position: absolute; top: 0; left: 0; right: 0; height: 120px; z-index: 2; pointer-events: none; background: linear-gradient(to bottom, color-mix(in srgb, var(--night-900) 88%, transparent) 0, color-mix(in srgb, var(--night-900) 60%, transparent) 70px, transparent 120px); }
 
-/* 헤더: 위 18, 좌우 16, 버튼 44×44 → 블록 아래 끝 62. 맵 탭을 가로채지 않도록 버튼만 입력을 받는다. */
-.mf-lobby__header { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-toast); box-sizing: border-box; height: 62px; padding: 18px var(--space-md) 0; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); pointer-events: none; }
-.mf-lobby__header .mf-btn { pointer-events: auto; }
+/* 헤더: 위 8(14-07: 이름표 단추 약 57 이 들어가도록 토큰 간격으로), 좌우 16. 단추는 아이콘 면 36 + 라벨(HostBand 가 단추 아랫변까지 재서 띠를 붙인다). 맵 탭을 가로채지 않도록 버튼만 입력을 받는다. */
+.mf-lobby__header { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-toast); box-sizing: border-box; height: 62px; padding: var(--space-sm) var(--space-md) 0; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); pointer-events: none; }
+.mf-lobby__header .mf-btn, .mf-lobby__header .mv-tool { pointer-events: auto; }
 .mf-lobby__header-gap { flex: none; width: var(--tap-min); height: var(--tap-min); }
 .mf-lobby__header .mv-phase { flex: 1 1 auto; min-width: 0; justify-content: center; text-align: center; }
 .mf-lobby__header .mv-phase__text { align-items: center; }

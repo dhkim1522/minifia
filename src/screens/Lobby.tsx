@@ -4,7 +4,7 @@ import type { ClientMessage, MapChoice, RoomView } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import { connectedCount } from "../../shared/game/room";
 import { ActionButton, ActionRow } from "../components/ActionButton";
-import { Button } from "../components/Button";
+import { ToolButton } from "../components/ToolButton";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
 import { ShareSheet } from "../components/ShareSheet";
@@ -187,18 +187,11 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       />
       <div className="mf-lobby__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-lobby__header">
-        <Button
-          variant="secondary"
-          compact
-          className="mf-iconbtn"
-          aria-label="나가기"
-          icon={<Icon name="back" />}
-          disabled={!canSend}
-          onClick={() => setSheet({ kind: "leave" })}
-        />
+        {/* 머리 단추: 아이콘 아래 한 단어(data-tool-label="나가기"·"공유" 는 ToolButton 이 단다, 14-07 TOOL-01 목록 1·2) */}
+        <ToolButton word="나가기" icon={<Icon name="back" />} disabled={!canSend} onClick={() => setSheet({ kind: "leave" })} />
         <PhaseHeader title="대기실" />
         {view.code ? (
-          <Button variant="secondary" compact className="mf-iconbtn" aria-label="공유" icon={<Icon name="share" />} onClick={() => setSheet({ kind: "share" })} />
+          <ToolButton word="공유" icon={<Icon name="share" />} onClick={() => setSheet({ kind: "share" })} />
         ) : (
           <span className="mf-lobby__header-gap" aria-hidden="true" />
         )}

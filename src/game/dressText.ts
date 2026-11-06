@@ -20,7 +20,7 @@ export const OUTFIT_LABEL: Readonly<Record<OutfitId, string>> = {
 
 /** 접근성 이름 조각. 보이는 글이 아니다 */
 export const DRESS_TEXT = {
-  open: "꾸미기",
+  open: "옷장", // 14-07(TOOL-01): 꾸미기 → 옷장. 단추 라벨·접근성 이름·시트 이름이 한 곳에서 바뀐다
   close: "닫기",
   selected: ", 선택됨",
 } as const;

@@ -285,8 +285,11 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 @keyframes mv-claim-out { from { opacity: 1; } to { opacity: 0; } }
 
 /* 오른쪽 아래 떠 있는 둥근 버튼(09.1.1-08, UI-SPEC A-2·B-1): 지름 48(control-input), 면 night-700, 테두리 1px night-600, 안에 아이콘 24. 시트가 열려 있으면 안쪽 테두리 2px gray-100 */
-.mv-float { position: relative; display: grid; place-items: center; flex: none; box-sizing: border-box; width: var(--control-input); height: var(--control-input); padding: 0; border-radius: var(--radius-pill); border: 1px solid var(--night-600); background: var(--night-700); color: var(--gray-100); font-family: var(--font-ui); cursor: pointer; pointer-events: auto; }
-.mv-float[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--gray-100); }
+/* 14-07 TOOL-01: 단추는 투명한 세로 상자(폭 48 = 면 지름)이고 둥근 면은 .mv-float__face, 아래에 한 단어 라벨(.mv-float__label 14/400 gray-300). 점·눌림은 면에 붙는다 */
+.mv-float { position: relative; display: flex; flex-direction: column; align-items: center; flex: none; gap: var(--space-xs); box-sizing: border-box; width: var(--control-input); padding: 0; border: 0; background: transparent; color: var(--gray-100); font-family: var(--font-ui); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
+.mv-float__face { position: relative; display: grid; place-items: center; flex: none; box-sizing: border-box; width: var(--control-input); height: var(--control-input); border-radius: var(--radius-pill); border: 1px solid var(--night-600); background: var(--night-700); }
+.mv-float__label { font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); white-space: nowrap; text-shadow: var(--shadow-text); }
+.mv-float[aria-pressed="true"] .mv-float__face { box-shadow: inset 0 0 0 2px var(--gray-100); }
 .mv-float[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 .mv-float:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 .mv-float__dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); }
@@ -379,7 +382,8 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
    카드 띠: 한 줄 가로 스크롤 스냅, 카드 72×112(그림 64×80 · 이름 14px 700 한 줄, 안쪽 위 4 · 아래 6), 사이 8. 선택 카드 = 테두리 2px gray-100 + 오른쪽 위 체크 12. 새 색·진홍 없음. */
 .mv-dress-sheet { position: absolute; left: 0; right: 0; bottom: var(--mf-kb-lift, 0px); z-index: calc(var(--z-overlay) + 1); height: var(--mf-panel-h, 250px); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow: hidden; background: var(--night-800); border: 1px solid var(--night-600); border-bottom: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; font-family: var(--font-ui); color: var(--gray-100); }
 .mv-dress-sheet__top { flex: none; display: flex; align-items: center; justify-content: space-between; height: var(--tap-min); padding-left: 4px; }
-.mv-dress-sheet__close { display: grid; place-items: center; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; border-radius: var(--radius-md); background: none; color: var(--gray-100); cursor: pointer; }
+/* 닫기는 공통 알약 .mv-closepill(14-06) */
+.mv-dress-sheet__close { color: var(--gray-100); }
 .mv-dress-sheet__strip { flex: none; display: flex; gap: var(--space-sm); overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; margin: 0 -12px; padding: 0 12px; scroll-padding: 0 12px; }
 .mv-dress-sheet__strip::-webkit-scrollbar { display: none; }
 .mv-dress-card { position: relative; flex: none; scroll-snap-align: start; display: flex; flex-direction: column; align-items: center; gap: 2px; box-sizing: border-box; width: 72px; height: 112px; padding: 4px 0 6px; border: 1px solid var(--night-600); border-radius: var(--radius-md); background: var(--night-700); color: var(--gray-100); font-family: inherit; cursor: pointer; }
@@ -390,8 +394,11 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-dress-card[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 /* 방장의 [맵][의상] 탭(11-13): 아이콘 44×44, 선택 탭은 아래 2px 줄(gray-100). 맵 탭 카드 3장 96×112 간격 8(합 304) — 그림 80×80 cover + 이름 14px */
 .mv-dress-sheet__tabs { display: flex; align-items: center; }
-.mv-dress-sheet__tab { position: relative; display: grid; place-items: center; box-sizing: border-box; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; background: none; color: var(--gray-300); cursor: pointer; }
+/* 14-07 TOOL-01: 탭은 아이콘 20 위 + 라벨 14 아래(높이 44 안), 폭은 글자 따라(최소 44) */
+.mv-dress-sheet__tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; box-sizing: border-box; min-width: var(--tap-min); height: var(--tap-min); padding: 0 var(--space-sm); border: 0; background: none; color: var(--gray-300); font-family: var(--font-ui); cursor: pointer; }
+.mv-dress-sheet__tab-label { font-size: 14px; line-height: 1.2; font-weight: 400; white-space: nowrap; }
 .mv-dress-sheet__tab.is-selected { color: var(--gray-100); }
+.mv-dress-sheet__tab.is-selected .mv-dress-sheet__tab-label { font-weight: 700; }
 .mv-dress-sheet__tab.is-selected::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: var(--gray-100); }
 .mv-dress-sheet__tab:focus-visible { outline: 2px solid var(--gray-100); outline-offset: -2px; }
 .mv-dress-sheet__maps { flex: none; display: flex; justify-content: center; gap: var(--space-sm); }
@@ -404,9 +411,11 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-map-card[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 .mv-map-card:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 /* 지도 칩(11-13): 시각 원 36(아이콘 24 + 안쪽 6)을 44×44 누르기 영역이 감싼다(바깥 4 는 음수 여백) */
-.mf-mapchip { position: relative; flex: none; display: block; box-sizing: border-box; width: var(--tap-min); height: var(--tap-min); margin: -4px; padding: 0; border: 0; background: none; color: var(--gray-100); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
+/* 14-07 TOOL-01: 원(36)은 그대로 두고 그 아래에 한 단어 '맵'. 칩은 폭 44 의 세로 상자, 위 안쪽 여백 4 + 음수 여백 -4 라 원의 자리는 옛 값과 같다 */
+.mf-mapchip { position: relative; flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); box-sizing: border-box; width: var(--tap-min); min-height: var(--tap-min); margin: -4px; padding: 4px 0 0; border: 0; background: none; color: var(--gray-100); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
 .mf-mapchip[aria-disabled="true"] { cursor: default; }
-.mf-mapchip__disc { position: absolute; top: 4px; left: 4px; display: grid; place-items: center; box-sizing: border-box; width: 36px; height: 36px; border-radius: var(--radius-pill); background: var(--overlay-ink-strong); box-shadow: inset 0 0 0 1px var(--night-600); }
+.mf-mapchip__label { font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); white-space: nowrap; text-shadow: var(--shadow-text); }
+.mf-mapchip__disc { position: relative; flex: none; display: grid; place-items: center; box-sizing: border-box; width: 36px; height: 36px; border-radius: var(--radius-pill); background: var(--overlay-ink-strong); box-shadow: inset 0 0 0 1px var(--night-600); }
 .mf-mapchip:focus-visible .mf-mapchip__disc { box-shadow: inset 0 0 0 2px var(--gray-100); }
 .mv-dress-card:focus-visible, .mv-dress-sheet__close:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .mv-dress-sheet__strip { scroll-behavior: auto; } }
@@ -415,10 +424,12 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 /* 소리 단추 (12-07, UI-SPEC B-1·B-2): 14-01 부터 자막 띠 아래 오른쪽 끝 독(.mv-host__dock) 안에 정적으로 놓인다(자리·가상 뷰포트 따라가기는 .mv-host 가 한다). 누르기 44×44, 시각 지름 36(아이콘 24 + 안쪽 6).
  * 층은 재접속 띠(.mf-reconnect--floating)·[테스트]·지도 칩(모두 z-overlay)보다 위, 시트·모달(z-modal)보다 아래다 — 기존 토큰의 식이다(새 토큰 아님).
  * 헤더 컨테이너는 pointer-events 가 없으므로 단추 자신에만 auto. 키보드가 열려도 헤더와 같이 가상 뷰포트를 따라간다(--mf-vv-top). */
-.mv-sound { position: relative; flex: none; box-sizing: border-box; display: flex; align-items: center; justify-content: center; min-width: var(--tap-min); height: var(--tap-min); margin: 0; padding: 0; border: 0; background: none; color: var(--gray-300); font-family: var(--font-ui); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
+.mv-sound { position: relative; flex: none; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: var(--space-xs); min-width: var(--tap-min); min-height: var(--tap-min); margin: 0; padding: 0; border: 0; background: none; color: var(--gray-300); font-family: var(--font-ui); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
 .mv-sound__face { display: flex; align-items: center; justify-content: center; gap: var(--space-sm); box-sizing: border-box; width: 36px; height: 36px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--night-800) 80%, transparent); box-shadow: inset 0 0 0 1px var(--night-600); }
 .mv-sound[data-sound-state="off"] .mv-sound__face { opacity: 0.6; }
 .mv-sound--pill .mv-sound__face { width: auto; min-width: 112px; height: var(--tap-min); padding: 0 var(--space-md); color: var(--gray-100); box-shadow: inset 0 0 0 2px var(--gray-100); }
+/* 14-07 TOOL-01: 면 아래 한 단어 '소리'(알약이 떠 있는 동안은 알약이 글자라 없다) */
+.mv-sound__label { font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); white-space: nowrap; text-shadow: var(--shadow-text); }
 .mv-sound__text { font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap; }
 .mv-sound:focus-visible { outline: none; }
 /* 시트(유언·쪽지·배지 등, .mf-will-layer)가 열려 있는 동안 단추는 비켜선다 — 시트는 .mf-game 의 쌓임 맥락(isolation) 안이라 z-modal 이어도
