@@ -38,10 +38,11 @@ describe("MapChip — 부품", () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  it("시각 원(disc)과 누르는 영역이 따로 있고 글자·hex 색이 없다", () => {
+  it("시각 원(disc)과 누르는 영역이 따로 있고 글자는 이름표 '맵' 하나뿐이며 hex 색이 없다 (14-07 TOOL-01)", () => {
     const { container } = render(<MapChip choice="bar" host onPress={() => {}} />);
     expect(container.querySelector("[data-map-chip] .mf-mapchip__disc")).not.toBeNull();
-    expect((container.textContent ?? "").trim()).toBe("");
+    expect((container.textContent ?? "").trim()).toBe("맵");
+    expect(container.querySelector("[data-map-chip]")?.getAttribute("data-tool-label")).toBe("맵");
     expect(container.innerHTML).not.toMatch(/#[0-9a-fA-F]{6}\b/);
   });
 });

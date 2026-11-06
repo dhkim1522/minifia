@@ -39,7 +39,7 @@ describe("dressText — 고정 문구와 순서", () => {
   it("순서는 shared 의 OUTFIT_IDS 와 같고 이름 아홉 개가 UI-SPEC 순서다", () => {
     expect([...DRESS_ORDER]).toEqual([...OUTFIT_IDS]);
     expect(DRESS_ORDER.map((id) => OUTFIT_LABEL[id])).toEqual(["기본", "경찰", "의사", "마피아", "탐정", "기자", "어르신", "후드", "누아르"]);
-    expect(DRESS_TEXT.open).toBe("꾸미기");
+    expect(DRESS_TEXT.open).toBe("옷장");
     expect(DRESS_TEXT.close).toBe("닫기");
     expect(DRESS_TEXT.selected).toBe(", 선택됨");
   });
@@ -112,13 +112,13 @@ const lobby = (view: RoomView, send: (msg: ClientMessage) => boolean | void = ()
 const view = makeView([player(0, "민수"), player(1, "영희"), player(2, "서준", { look: "doctor" })], 2);
 
 describe("Lobby — 꾸미기 버튼과 시트 (10-07, D-4·D-5)", () => {
-  it("떠 있는 버튼 하나(data-float=dress, 접근성 이름 꾸미기)가 있고 방장·손님 똑같다", () => {
+  it("떠 있는 버튼 하나(data-float=dress, 접근성 이름 옷장)가 있고 방장·손님 똑같다", () => {
     for (const mySeat of [0, 2]) {
       const { container, unmount } = render(lobby(makeView([player(0, "민수"), player(1, "영희"), player(2, "서준")], mySeat)));
       const btns = container.querySelectorAll("[data-float]");
       expect(btns).toHaveLength(1);
       expect(btns[0]!.getAttribute("data-float")).toBe("dress");
-      expect(btns[0]!.getAttribute("aria-label")).toBe("꾸미기");
+      expect(btns[0]!.getAttribute("aria-label")).toBe("옷장");
       expect(container.querySelector("[data-dress-sheet]")).toBeNull();
       unmount();
     }
@@ -126,7 +126,7 @@ describe("Lobby — 꾸미기 버튼과 시트 (10-07, D-4·D-5)", () => {
 
   it("누르면 시트가 열리고 떠 있는 버튼은 숨는다", () => {
     const { container } = render(lobby(view));
-    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     expect(container.querySelector("[data-dress-sheet]")).not.toBeNull();
     expect(container.querySelector("[data-float='dress']")).toBeNull();
     // 내 지금 의상(서버 값 doctor)이 선택돼 있다
@@ -135,7 +135,7 @@ describe("Lobby — 꾸미기 버튼과 시트 (10-07, D-4·D-5)", () => {
 
   it("닫기를 누르면 시트가 사라지고 버튼이 돌아온다", () => {
     const { container } = render(lobby(view));
-    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     fireEvent.click(screen.getByRole("button", { name: "닫기" }));
     expect(container.querySelector("[data-dress-sheet]")).toBeNull();
     expect(container.querySelector("[data-float='dress']")).not.toBeNull();
@@ -144,7 +144,7 @@ describe("Lobby — 꾸미기 버튼과 시트 (10-07, D-4·D-5)", () => {
   it("카드를 누르면 {t:'dress', look} 만 서버로 간다", () => {
     const send = vi.fn((_msg: ClientMessage) => true);
     render(lobby(view, send));
-    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     send.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "마피아" }));
     const dress = send.mock.calls.map((c) => c[0]).filter((m) => m.t === "dress");
@@ -153,7 +153,7 @@ describe("Lobby — 꾸미기 버튼과 시트 (10-07, D-4·D-5)", () => {
 
   it("서버 state 로 look 이 오면 선택 카드가 그 값을 따른다", () => {
     const { container, rerender } = render(lobby(view));
-    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     const next = makeView([player(0, "민수"), player(1, "영희"), player(2, "서준", { look: "noir" })], 2);
     rerender(lobby(next));
     act(() => {});
@@ -217,7 +217,7 @@ describe("Lobby — 꾸미기 미리 보기와 초점 (10-07 Task 2)", () => {
   it("카드를 누르면 WorldStage 에 넘기는 view 의 내 좌석 look 이 즉시 바뀐다(밖의 view 는 그대로)", () => {
     render(lobby(view));
     expect(stage.props!.view.players.find((p) => p.seat === 2)?.look).toBe("doctor");
-    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     fireEvent.click(screen.getByRole("button", { name: "마피아" }));
     expect(stage.props!.view.players.find((p) => p.seat === 2)?.look).toBe("mafia");
     expect(stage.props!.view.players.find((p) => p.seat === 0)?.look).toBeUndefined();
@@ -227,7 +227,7 @@ describe("Lobby — 꾸미기 미리 보기와 초점 (10-07 Task 2)", () => {
   it("서버가 거절하면(1200ms 안에 같은 값이 안 오면) 조용히 서버 값으로 돌아가고 알림이 없다", () => {
     vi.useFakeTimers();
     const { container } = render(lobby(view));
-    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     fireEvent.click(screen.getByRole("button", { name: "마피아" }));
     act(() => {
       vi.advanceTimersByTime(1200);
@@ -239,7 +239,7 @@ describe("Lobby — 꾸미기 미리 보기와 초점 (10-07 Task 2)", () => {
 
   it("시트를 닫으면 초점이 꾸미기 버튼으로 돌아온다", () => {
     const { container } = render(lobby(view));
-    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     expect(document.activeElement).toBe(container.querySelector("button[data-outfit='doctor']"));
     fireEvent.click(screen.getByRole("button", { name: "닫기" }));
     expect(document.activeElement).toBe(container.querySelector("[data-float='dress']"));
@@ -250,14 +250,14 @@ describe("Lobby — 꾸미기 미리 보기와 초점 (10-07 Task 2)", () => {
     const input = container.querySelector<HTMLInputElement>(".mv-chat__form input")!;
     input.focus();
     expect(document.activeElement).toBe(input);
-    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     expect(document.activeElement).not.toBe(input);
   });
 
   it("연결이 끊기면 시트의 카드가 비활성이고 눌러도 아무것도 가지 않는다", () => {
     const send = vi.fn((_msg: ClientMessage) => true);
     const { container, rerender } = render(lobby(view, send));
-    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     rerender(lobby(view, send, { canSend: false }));
     const card = container.querySelector<HTMLButtonElement>("button[data-outfit='mafia']")!;
     expect(card.getAttribute("aria-disabled")).toBe("true");
@@ -382,7 +382,7 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
     expect(container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
     expect(container.querySelector("[data-float='dress']")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "닫기" }));
-    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     expect(container.querySelector("button[data-map-card]")).toBeNull();
     expect(container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
     expect(container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
@@ -392,7 +392,7 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
     const { container } = render(lobby(guestView()));
     fireEvent.click(container.querySelector("[data-map-chip]")!);
     expect(container.querySelector("[data-dress-sheet]")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "꾸미기" }));
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     expect(container.querySelector("button[data-map-tab]")).toBeNull();
     expect(container.querySelector("button[data-map-card]")).toBeNull();
   });

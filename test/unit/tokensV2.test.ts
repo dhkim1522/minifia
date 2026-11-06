@@ -179,8 +179,9 @@ describe("직업 배지 CSS 규칙 (09.1.1-08)", () => {
     expect(body).toMatch(/z-index:\s*calc\(var\(--z-overlay\) - 1\)/);
   });
 
-  it("버튼 지름 48(control-input), 칩 높이 44(tap-min)", () => {
-    const btn = mine(V2, /^\.mv-float$/)[0]?.body ?? "";
+  it("버튼 지름 48(control-input), 칩 높이 44(tap-min) — 14-07: 지름 48 은 면(.mv-float__face), 단추 폭은 그대로 48", () => {
+    expect(mine(V2, /^\.mv-float$/)[0]?.body ?? "").toMatch(/width:\s*var\(--control-input\)/);
+    const btn = mine(V2, /^\.mv-float__face$/)[0]?.body ?? "";
     expect(btn).toMatch(/width:\s*var\(--control-input\)/);
     expect(btn).toMatch(/height:\s*var\(--control-input\)/);
     expect(mine(V2, /^\.mv-claim-chip$/)[0]?.body ?? "").toMatch(/min-height:\s*var\(--tap-min\)/);

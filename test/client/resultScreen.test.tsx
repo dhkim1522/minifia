@@ -1673,7 +1673,7 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
   it("시상식이 없는 최종 상태: 아래 칸에 [꾸미기]가 있고 [넘기기]는 없다", () => {
     const r = renderRoom(makeView({ me: 1 }));
     expect(dress(r.container)).not.toBeNull();
-    expect(dress(r.container)!.getAttribute("aria-label")).toBe("꾸미기");
+    expect(dress(r.container)!.getAttribute("aria-label")).toBe("옷장");
     expect(skip(r.container)).toBeNull();
   });
 
