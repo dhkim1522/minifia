@@ -460,13 +460,35 @@ export async function verdictAll(code: string, actors: Actor[], agreeBySeat: Rea
  */
 export async function editRoom(code: string, edit: (room: Record<string, unknown>) => Record<string, unknown>): Promise<void> {
   const stub = env.ROOM.getByName(code);
-  await runInDurableObject(stub, async (_instance, state) => {
-    const room = await state.storage.get<Record<string, unknown>>("room");
-    if (!room) throw new Error("editRoom: 방이 없다");
-    await state.storage.put("room", edit(room));
-  });
+  await writeRoomEdit(stub, edit);
   await evictDurableObject(stub);
 }
+
+/**
+ * editRoom 의 쓰기 절반(evict 없음): 저장소와 살아 있는 인스턴스의 메모리 사본(private room)을 같은 값으로 고친다.
+ * 12-03: 저장소만 고치면 evict 가 끝나기 전에 봇 알람(runDueBots 는 때가 된 단계마다 메모리 방을 통째로 저장한다)이 낡은 메모리 방으로
+ * 방금 고친 값을 덮어써, 손으로 정한 표가 사라지고 판이 끝나지 않는 간헐 실패가 났다. 메모리도 함께 고쳐 두면 그 저장이 고친 값을 그대로 쓴다.
+ */
+export async function writeRoomEdit(
+  stub: ReturnType<typeof env.ROOM.getByName>,
+  edit: (room: Record<string, unknown>) => Record<string, unknown>,
+): Promise<void> {
+  await runInDurableObject(stub, async (instance, state) => {
+    const room = await state.storage.get<Record<string, unknown>>("room");
+    if (!room) throw new Error("editRoom: 방이 없다");
+    const edited = edit(room);
+    await state.storage.put("room", edited);
+    (instance as unknown as { room: unknown }).room = edited;
+  });
+}
+
+/**
+ * 봇의 남은 계획 행동을 비운다(12-03, D-26). 봇은 단계가 시작될 때 무작위 표를 때(at)마다 던지도록 계획을 세우므로, 손으로 정한 표를 넣은 뒤에도
+ * 남은 계획이 알람에 깨어나 그 표를 무작위 값으로 덮어쓸 수 있다(찬성으로 정한 봇이 반대를 던져 판이 끝나지 않던 간헐 실패). 계획 키는 남겨
+ * 다음 동기화가 새 계획을 다시 세우지 않게 한다. 봇이 없는 방(botPlan 없음)은 그대로 둔다.
+ */
+export const clearBotSteps = (room: Record<string, unknown>): Record<string, unknown> =>
+  room.botPlan === undefined ? room : { ...room, botPlan: { ...(room.botPlan as Record<string, unknown>), steps: [] } };
 
 /** 저장된 모든 플레이어에 fn 을 적용한다. */
 export const mapPlayers = (
@@ -488,13 +510,46 @@ export async function until(label: string, ready: () => Promise<boolean>): Promi
   throw new Error(`until: ${label} 이(가) 이뤄지지 않았다`);
 }
 
-/** 방장이 testSkip 을 한 번 보내고 모든 소켓이 다음 state 하나를 받을 때까지. */
+/**
+ * 한 번의 전이를 사건으로 기다린다(12-03, D-26). 보내기 전에 저장된 단계(before)를 읽고, 모든 소켓의 cursor 를 끝으로 옮긴 뒤 trigger 를 부르고,
+ * 소켓마다 "before 와 다른 단계의 state 프레임" 을 받을 때까지 기다린다. 옛 skipOnce 는 '아무 state 프레임' 하나에 풀려서, 앞 전이의 뒤늦은 같은 단계 프레임이
+ * 먼저 오면 전이가 끝나기 전에 반환할 수 있었다. 받은 단계(첫 소켓 기준)를 돌려준다. 못 받으면 어느 단계에서 어느 소켓을 기다렸는지 담아 던진다.
+ */
+export async function awaitTransition(
+  socks: TestSocket[],
+  trigger: () => void,
+  readPhase: () => Promise<string>,
+  limitMs = TRANSITION_WAIT_MS,
+): Promise<string> {
+  const before = await readPhase();
+  for (const s of socks) s.cursor = s.frames.length;
+  trigger();
+  let reached = before;
+  for (const [i, s] of socks.entries()) {
+    try {
+      const msg = await nextFrame(s, (m) => m.t === "state" && m.view.phase !== before, limitMs);
+      if (i === 0 && msg.t === "state") reached = msg.view.phase;
+    } catch {
+      throw new Error(`awaitTransition: ${before} 에서 바뀐 단계의 state 를 소켓 ${i} 가 ${limitMs}ms 안에 받지 못했다`);
+    }
+  }
+  return reached;
+}
+
+/**
+ * 한 번의 전이를 기다리는 한도. 08-11: 낮 단계가 늘어(지목·찬반 + 변론자 걷기) 전체 시험이 동시에 돌 때 DO 재기동 뒤 첫 전이가 기본 3초를 넘기는 일이 있어 넓혔다.
+ * 12-03 에서 올리지 않았다 — 'ended' 군의 간헐 실패는 한도가 아니라 editRoom 경합이 원인이었다(고쳤다).
+ */
+export const TRANSITION_WAIT_MS = 10_000;
+
+/** 방장이 testSkip 을 한 번 보내고 모든 소켓이 바뀐 단계의 state 를 받을 때까지(awaitTransition). */
 export async function skipOnce(seated: Seated): Promise<void> {
   const socks = [seated.host, ...seated.guests.map((g) => g.sock)];
-  for (const s of socks) s.cursor = s.frames.length;
-  send(seated.host, { t: "testSkip" });
-  // 08-11: 낮 단계가 늘어(지목·찬반 + 변론자 걷기) 전체 시험이 동시에 돌 때 DO 재기동 뒤 첫 전이가 기본 3초를 넘기는 일이 있어 한도를 넓힌다.
-  for (const s of socks) await nextFrame(s, (m) => m.t === "state", 10_000);
+  await awaitTransition(
+    socks,
+    () => send(seated.host, { t: "testSkip" }),
+    async () => (await storedRoom(seated.code)).phase,
+  );
 }
 
 /** 저장된 단계가 phase 가 될 때까지 skipOnce 를 거듭한다. 산 사람이 셋인 낮의 showdown(결정 0066-5)은 testSkip 한 걸음씩 시간 초과로 지나가 처형 없는 밤이 된다(전원 한마디 생략·지목 없음). 한마디·지목을 넣으려면 showdownAll 을 쓴다. */
@@ -512,13 +567,13 @@ export async function driveToEnded(seated: Seated, hook?: (stage: "nomination" |
   await skipThrough(seated, "nomination");
   await hook?.("nomination");
   await editRoom(seated.code, (room) =>
-    mapPlayers(room, (p) => (p.isBot === true ? { ...p, nominate: 0 } : p.seat === 0 ? { ...p, nominate: 1 } : p)),
+    mapPlayers(clearBotSteps(room), (p) => (p.isBot === true ? { ...p, nominate: 0 } : p.seat === 0 ? { ...p, nominate: 1 } : p)),
   );
   await skipOnce(seated);
   expect((await storedRoom(seated.code)).phase).toBe("defense");
   await skipThrough(seated, "verdict");
   await hook?.("verdict");
-  await editRoom(seated.code, (room) => mapPlayers(room, (p) => (p.isBot === true ? { ...p, verdictVote: true } : p)));
+  await editRoom(seated.code, (room) => mapPlayers(clearBotSteps(room), (p) => (p.isBot === true ? { ...p, verdictVote: true } : p)));
   await skipThrough(seated, "ended");
 }
 
