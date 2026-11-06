@@ -810,6 +810,19 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     deps.onRing?.(null);
   }
 
+  /** 내 이동의 응답을 센다. 프레임마다, 그리고 응답 없음 시계가 끝날 때(숨은 탭은 프레임이 없다) 부른다 */
+  function observeOwnMove(now: number): void {
+    const ev = own.observe(store.moveSeqOf(deps.mySeat()), store.segOf(deps.mySeat()));
+    if (ev === "answered") {
+      clearAckTimer();
+      const mineSeg = store.segOf(deps.mySeat());
+      if (ring !== null && !ring.acked && mineSeg !== undefined) ackRing(ring, mineSeg, now);
+    } else if (ev === "reset") {
+      clearAckTimer();
+      clearRing();
+    }
+  }
+
   function ackRing(g: Ring, s: Segment, now: number): void {
     g.acked = true;
     const n = s.p.length;
@@ -1011,15 +1024,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       clearAckTimer();
       clearRing(); // 알림 없이 거둔다 — 새 연결의 서버 위치가 진실이다
     } else {
-      const ev = own.observe(store.moveSeqOf(deps.mySeat()), store.segOf(deps.mySeat()));
-      if (ev === "answered") {
-        clearAckTimer();
-        const mineSeg = store.segOf(deps.mySeat());
-        if (ring !== null && !ring.acked && mineSeg !== undefined) ackRing(ring, mineSeg, now);
-      } else if (ev === "reset") {
-        clearAckTimer();
-        clearRing();
-      }
+      observeOwnMove(now);
     }
 
     for (const seat of store.takeEntered()) pendingEntered.add(seat);
@@ -1407,9 +1412,12 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     clearAckTimer();
     ackTimer = setTimeout(() => {
       ackTimer = null;
-      if (disposed || !own.expire()) return;
+      if (disposed) return;
+      observeOwnMove(Date.now()); // 숨은 탭에서도 이미 온 응답을 센다
+      const r = own.expire();
+      if (!r.cleared) return;
       clearRing();
-      deps.onNotice(NETWORK_TEXT);
+      if (!r.silent) deps.onNotice(NETWORK_TEXT); // 응답을 하나라도 들었으면 네트워크 문제가 아니다
     }, MOVE_ACK_TIMEOUT_MS);
   }
 

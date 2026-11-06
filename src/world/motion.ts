@@ -84,8 +84,11 @@ export interface OwnMoves {
   sent(pred: Segment | null): void;
   /** 프레임마다 moveSeqOf(내 자리)·segOf(내 자리)를 넘긴다 */
   observe(seq: number, server: Segment | undefined): OwnMoveEvent;
-  /** 응답 없음 1.5초: 대기가 있었으면 대기·예측을 비우고 true */
-  expire(): boolean;
+  /**
+   * 응답 없음 1.5초: 대기가 있었으면 대기·예측을 비우고 cleared. 마지막으로 보낸 뒤 응답을 하나라도 들었으면 silent
+   * (서버가 마지막 탭만 조용히 버린 경우 — 네트워크 문제가 아니니 알림 없이 비운다, GR-WR-01)
+   */
+  expire(): { cleared: boolean; silent: boolean };
   /** 새 연결(epoch 변경): 대기·예측을 비우고 기준 seq 를 다시 잡는다 */
   reset(seq: number): void;
   /** 그릴 구간: 예측 중이면 예측, 아니면 server */
@@ -105,14 +108,17 @@ export function createOwnMoves(initialSeq: number): OwnMoves {
   let base = initialSeq;
   let waiting = 0;
   let predicted: Segment | null = null;
+  let heardSinceSent = false;
   const clear = (): void => {
     waiting = 0;
     predicted = null;
+    heardSinceSent = false;
   };
   return {
     sent(pred) {
       waiting += 1;
       predicted = pred;
+      heardSinceSent = false;
     },
     observe(seq, server) {
       if (seq < base) {
@@ -125,6 +131,7 @@ export function createOwnMoves(initialSeq: number): OwnMoves {
       base = seq;
       if (waiting === 0) return null; // 내가 보낸 것의 응답이 아니다
       waiting = Math.max(0, waiting - d);
+      heardSinceSent = true;
       const reachedPrediction = predicted !== null && server !== undefined && sameEnd(server, predicted);
       if (waiting === 0 || reachedPrediction) {
         clear();
@@ -133,9 +140,10 @@ export function createOwnMoves(initialSeq: number): OwnMoves {
       return null; // 앞선 탭의 응답 — 마지막 탭의 예측을 끊지 않는다
     },
     expire() {
-      if (waiting === 0) return false;
+      if (waiting === 0) return { cleared: false, silent: false };
+      const silent = heardSinceSent;
       clear();
-      return true;
+      return { cleared: true, silent };
     },
     reset(seq) {
       base = seq;
