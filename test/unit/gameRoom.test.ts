@@ -657,6 +657,20 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     expect(String(stored.phase)).toBe("day"); // 입력은 바꾸지 않는다
   });
 
+  it("기본판: 투표(nomination) 방은 차례 정보가 없고 표가 있어도 입력과 같은 객체다 — DO 를 다시 깨워도 마감·표가 그대로다 (결정 0072)", () => {
+    const base = fullRoom([0, 1, 2, 3]);
+    const stored: RoomState = {
+      ...base,
+      phase: "nomination",
+      phaseEndsAt: 77_000,
+      day: 1,
+      players: base.players.map((p, i) => ({ ...p, role: ROLE_IDS[i % ROLE_IDS.length], ...(i < 2 ? { nominate: 3 } : {}) })),
+    };
+    const got = normalizeStoredRoom(stored, 5_000);
+    expect(got === stored).toBe(true);
+    expect(`${got.phaseEndsAt}/${got.pickTurn === undefined}/${got.players.filter((p) => p.nominate === 3).length}`).toBe("77000/true/2");
+  });
+
   it("lobby·roleReveal·discussion 상태는 messages 키가 없으면 같은 객체를 돌려준다", () => {
     const lobby = fullRoom([0, 1, 2, 3]);
     const started = startGame(lobby, "p0", 0, seededRandInt(1));

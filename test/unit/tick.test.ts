@@ -8,6 +8,7 @@ import {
   MORNING_MS,
   NIGHT_MS,
   NOMINATION_GATHER_MS,
+  NOMINATION_MS,
   VERDICT_LEAD_MS,
   VERDICT_MS,
   PHASE_DEFS,
@@ -469,5 +470,40 @@ describe("tick: 아침 마감 = 진입 + morningMsOf (MORN-04, 결정 0061-13)",
   it("따라잡기: 늦게 불려도 아침 마감은 밤 마감 + 아침 길이에서 이어진다", () => {
     const caught = tick(nightWith(), T + NIGHT_MS + 9000 + 1);
     expect(`${caught.phase}/${caught.phaseEndsAt}`).toBe(`dayAnnounce/${T + NIGHT_MS + 9000 + DAY_ANNOUNCE_MS}`);
+  });
+});
+
+// ---- 13-01: 기본판 낮 분기 (결정 0072) ----
+describe("기본판 낮 분기 (결정 0072)", () => {
+  const T = 50_000;
+  const marked = (state: RoomState, targetBySeat: Record<number, number>): RoomState => ({
+    ...state,
+    players: state.players.map((p) => (p.seat in targetBySeat ? { ...p, nominate: targetBySeat[p.seat]! } : p)),
+  });
+
+  it("토론 마감 → 투표(nomination): 마감 = 마감 + 15000, pickTurn 키 없음, 지난 nominate 는 모두 지워진다", () => {
+    const base = marked({ ...stateIn("discussion", T), day: 1 }, { 0: 1, 1: 2 });
+    const out = tick(base, T, seededRandInt(1));
+    expect(`${out.phase}/${out.phaseEndsAt}/${Object.hasOwn(out, "pickTurn")}/${out.players.some((p) => "nominate" in p)}`).toBe(`nomination/${T + NOMINATION_MS}/false/false`);
+    expect(NOMINATION_MS).toBe(15_000);
+  });
+
+  it("투표 마감(최다 한 명) → 변론(defense), 변론자 후보가 정해진다", () => {
+    const base = marked({ ...stateIn("nomination", T), day: 1 }, { 0: 2, 1: 2, 3: 2, 2: 0 });
+    const out = tick(base, T, seededRandInt(1));
+    expect(`${out.phase}/${JSON.stringify(out.verdict)}`).toBe(`defense/${JSON.stringify({ passed: false, candidate: 2 })}`);
+  });
+
+  it("투표 마감(2:2 동점)은 결선(runoff) 없이 night 으로 간다", () => {
+    const base = marked({ ...stateIn("nomination", T), day: 1 }, { 0: 2, 1: 2, 2: 0, 3: 0 });
+    const out = tick(base, T, seededRandInt(1));
+    expect(`${out.phase}/${out.runoff === undefined}`).toBe("night/true");
+  });
+
+  it("산 사람이 정확히 셋인 낮 시작 발표 마감 → 토론(showdown 아님, showdown 키 없음)", () => {
+    const base = stateIn("dayAnnounce", T);
+    const three: RoomState = { ...base, day: 1, players: base.players.map((p) => (p.seat === 3 ? { ...p, alive: false } : p)) };
+    const out = tick(three, T, seededRandInt(1));
+    expect(`${out.phase}/${out.phaseEndsAt}/${Object.hasOwn(out, "showdown")}`).toBe(`discussion/${T + DISCUSSION_MS}/false`);
   });
 });

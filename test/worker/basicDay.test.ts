@@ -3,7 +3,7 @@
 // 토론 끝내기 → 투표(동시, 15초, 마감까지 바꾸기) → 최후 변론 → 찬반 → 처형(찬반 기록 카드) → 밤을 실제 방 DO 와 소켓 프레임으로 끝까지 돈다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { closePhase, endAs, framesOf, lastViewOf, mark, pause, pointAs, settle, startedGame, storedRoom, verdictAll, chatsOf } from "./helpers";
+import { closePhase, endAs, framesOf, lastViewOf, mark, pause, pointAll, pointAs, settle, startedGame, storedRoom, threeAliveGame, verdictAll, chatsOf } from "./helpers";
 import type { Game } from "./helpers";
 
 const viewsOf = (msgs: ServerMessage[]): RoomView[] =>
@@ -93,5 +93,38 @@ describe("기본판 낮 흐름 (FLOW-01·04, 결정 0072)", () => {
     expect(seen.length > 0).toBe(true);
     expect(seen.filter((v) => v.phase === "runoff" || v.phase === "showdown").length).toBe(0);
     expect(seen.filter((v) => Object.hasOwn(v.day ?? {}, "turn")).length).toBe(0);
+  }, 60_000);
+});
+
+describe("기본판 낮 분기 (FLOW-02·03, 결정 0072)", () => {
+  const seenPhases = (g: Game, from: number[]): string[] => g.socks.flatMap((s, i) => viewsOf(framesOf(s).slice(from[i]!)).map((v) => v.phase));
+
+  it("2:2 동점으로 투표가 마감되면 결선 없이 모든 소켓이 night 와 day.noExecution.reason tie 를 받고 runoff 프레임이 0이다", async () => {
+    const g = await startedGame("nomination", 3);
+    const from = g.socks.map(mark);
+    const [s0, s1, s2, s3] = g.actors.map((a) => a.seat);
+    await pointAll(g.code, g.actors, { [s0!]: s2!, [s1!]: s2!, [s2!]: s0!, [s3!]: s0! });
+    await settleAll(g);
+    expect((await storedRoom(g.code)).phase).toBe("night");
+    expect(g.socks.map((s) => lastViewOf(s).day?.noExecution?.reason).join(",")).toBe("tie,tie,tie,tie");
+    expect(seenPhases(g, from).filter((p) => p === "runoff").length).toBe(0);
+  }, 60_000);
+
+  it("0표로 투표가 마감되면 night 이고 reason 은 noVotes 다", async () => {
+    const g = await startedGame("nomination", 3);
+    await pointAll(g.code, g.actors, {});
+    await settleAll(g);
+    expect((await storedRoom(g.code)).phase).toBe("night");
+    expect(g.socks.map((s) => lastViewOf(s).day?.noExecution?.reason).join(",")).toBe("noVotes,noVotes,noVotes,noVotes");
+  }, 60_000);
+
+  it("산 사람이 정확히 셋인 낮 시작 발표 마감 뒤에는 토론으로 가고 showdown 프레임이 0이다", async () => {
+    const g = await threeAliveGame();
+    const from = g.socks.map(mark);
+    await closePhase(g.code);
+    await settleAll(g);
+    expect((await storedRoom(g.code)).phase).toBe("discussion");
+    expect(g.socks.map((s) => lastViewOf(s).phase).join(",")).toBe("discussion,discussion,discussion,discussion");
+    expect(seenPhases(g, from).filter((p) => p === "showdown").length).toBe(0);
   }, 60_000);
 });

@@ -4,6 +4,7 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 문자열 하나로 한다.
 import { describe, expect, it } from "vitest";
 import {
+  castPoint,
   castTurnPoint,
   enterNomination,
   majorityOf,
@@ -487,5 +488,56 @@ describe("시험 도우미: 지목 방식과 무관 (09.1-03)", () => {
 
   it("nominationSpanMs 는 지목이 아닌 상태를 받으면 Error", () => {
     expect(() => nominationSpanMs(startedAt(4, 1, "discussion"), 2)).toThrow();
+  });
+});
+
+describe("기본판 투표 castPoint·집계 (결정 0072, D-03)", () => {
+  const vote = (state: RoomState, actorSeat: number, target: number) => castPoint(state, idOf(state, actorSeat), target);
+
+  it("castPoint 거부 코드: 단계가 아니면 WRONG_PHASE, 죽은·없는 행위자, 정수 아님·죽은·없는 대상, 자기 자신은 BAD_MESSAGE", () => {
+    const base = withDead(nominationOf(), [4]);
+    const rows = [
+      err(castPoint({ ...base, phase: "discussion" }, idOf(base, 0), 1)),
+      err(vote(base, 4, 1)),
+      err(castPoint(base, "nobody", 1)),
+      err(vote(base, 0, 1.5)),
+      err(vote(base, 0, 4)),
+      err(vote(base, 0, 9)),
+      err(vote(base, 0, 0)),
+      err(vote(base, 0, 1)),
+    ];
+    expect(rows.join(" ")).toBe("WRONG_PHASE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE ok");
+  });
+
+  it("같은 값을 다시 던지면 입력과 같은 객체이고, 다른 값이면 그 사람의 nominate 만 바뀐다 (취소 없음)", () => {
+    const base = nominationOf();
+    const first = vote(base, 0, 1);
+    if (!first.ok) throw new Error("rejected");
+    const again = castPoint(first.state, idOf(base, 0), 1);
+    expect(again.ok && again.state === first.state).toBe(true);
+    const changed = vote(first.state, 0, 2);
+    if (!changed.ok) throw new Error("rejected");
+    expect(changed.state.players.map((p) => `${p.seat}:${p.nominate ?? "-"}`).join(" ")).toBe("0:2 1:- 2:- 3:- 4:-");
+    expect(first.state.players[0]!.nominate).toBe(1); // 입력은 바꾸지 않는다
+  });
+
+  it("2:2 동점이면 next night 이고 결과 상태에 runoff 키가 없고 candidate 없는 줄에 표 4줄이 쌓인다", () => {
+    const base = withPoints(nominationOf(), { 0: 2, 1: 2, 2: 0, 3: 0 });
+    const r = resolveNomination(base);
+    const line = r.state.voteLog?.at(-1);
+    expect(`${String(r.next)} ${r.state.runoff === undefined} ${JSON.stringify(r.state.verdict)} ${line?.cand?.votes.length} ${line?.cand?.candidate}`).toBe(
+      `night true ${JSON.stringify({ passed: false })} 4 undefined`,
+    );
+  });
+
+  it("3:1:1 이 아니라 최다가 셋 동점이어도 0표여도 night 이다", () => {
+    const tie3 = resolveNomination(withPoints(nominationOf(), { 0: 1, 1: 2, 2: 0 }));
+    const none = resolveNomination(nominationOf());
+    expect(`${String(tie3.next)} ${String(none.next)}`).toBe("night night");
+  });
+
+  it("최다 한 명이면 next 없이(defense) verdict.candidate 가 그 좌석이다", () => {
+    const r = resolveNomination(withPoints(nominationOf(), { 0: 3, 1: 3, 2: 3, 4: 1 }));
+    expect(`${String(r.next)} ${JSON.stringify(r.state.verdict)}`).toBe(`undefined ${JSON.stringify({ passed: false, candidate: 3 })}`);
   });
 });
