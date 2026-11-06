@@ -1,39 +1,27 @@
 import type { ReactElement } from "react";
-import { Button } from "./Button";
 import { Icon } from "./Icon";
 import "../styles/rolecard.css";
 import "../styles/sheet.css";
 
 export interface RoleCardButtonProps {
-  /** 안 읽은 일지가 있는가. 있으면 오른쪽 위에 점이 붙고 이름이 `역할 카드, 새 기록` 이 된다(텍스트 모양은 앰버, 아이콘 모양은 gray-100) */
+  /** 안 읽은 일지가 있는가. 있으면 아이콘 면 오른쪽 위에 점이 붙고 이름이 `내 역할, 새 기록` 이 된다 */
   unread: boolean;
   onOpen: () => void;
-  /** 글자 없는 44×44 아이콘 버튼(8페이즈 맵 화면 헤더, 시간 링 왼쪽, UI-SPEC A2). 기본은 글자가 있는 v1.0 모양 */
+  /** 14-05 이전 두 모양(글자판·아이콘판)의 구분. 이제 모양은 하나라 받기만 하고 쓰지 않는다 */
   iconOnly?: boolean;
 }
 
-// 헤더 오른쪽 슬롯의 유일한 버튼(결정 0026, UI-SPEC A). 모든 역할·모든 시점에 같은 마크업이고 점만 다르다.
-// 점은 장식(aria-hidden)이라 새 기록 여부는 이름이 읽는다.
-export function RoleCardButton({ unread, onOpen, iconOnly = false }: RoleCardButtonProps): ReactElement {
-  const label = unread ? "역할 카드, 새 기록" : "역할 카드";
-  if (iconOnly) {
-    return (
-      <Button
-        variant="secondary"
-        compact
-        className="mf-rolecard-btn mf-rolecard-btn--icon mf-iconbtn"
-        icon={<Icon name="card" size={22} />}
-        aria-label={label}
-        onClick={onOpen}
-      >
-        {unread ? <span className="mf-rolecard-btn__dot" aria-hidden="true" /> : null}
-      </Button>
-    );
-  }
+// 헤더 오른쪽 슬롯의 유일한 버튼(결정 0026, UI-SPEC A·TOOL-01 목록 6). 14페이즈: 두 모양을 "아이콘(면 36) 아래 한 단어 '내 역할'" 하나로 통일한다.
+// 모든 역할·모든 시점에 같은 마크업이고 점만 다르다. 점은 장식(aria-hidden)이라 새 기록 여부는 이름이 읽는다 — 이름은 보이는 글자로 시작한다.
+export function RoleCardButton({ unread, onOpen }: RoleCardButtonProps): ReactElement {
+  const label = unread ? "내 역할, 새 기록" : "내 역할";
   return (
-    <Button variant="secondary" compact className="mf-rolecard-btn" icon={<Icon name="card" size={20} />} aria-label={label} onClick={onOpen}>
-      역할 카드
-      {unread ? <span className="mf-rolecard-btn__dot" aria-hidden="true" /> : null}
-    </Button>
+    <button type="button" className="mf-btn mf-rolecard-btn" aria-label={label} data-tool-label="내 역할" onClick={onOpen}>
+      <span className="mf-rolecard-btn__face">
+        <Icon name="card" size={22} />
+        {unread ? <span className="mf-rolecard-btn__dot" aria-hidden="true" /> : null}
+      </span>
+      <span className="mf-rolecard-btn__label">내 역할</span>
+    </button>
   );
 }

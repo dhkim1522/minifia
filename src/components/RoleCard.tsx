@@ -12,6 +12,8 @@ export interface RoleCardProps {
   face: "back" | "front";
   /** null = 동료 줄 없음(마피아 아님), [] = "혼자예요" */
   allies: string[] | null;
+  /** 사회자 줄이 이 카드를 부를 때 true — 루트에 is-call + 값 없는 data-call(14페이즈 HOST-03). 모든 역할에게 같은 모양 */
+  call?: boolean;
   onFlip: () => void;
 }
 
@@ -30,12 +32,12 @@ export function Diamond() {
 // 카드 루트 전체가 버튼이다(뒷면·앞면 모두 누르면 onFlip). 뒤집을지 말지는 cardFace 가 정한다.
 // 뒷면 마크업은 역할과 무관하게 같고, 앞면은 면이 처음 front 가 될 때 마운트한다(Pitfall 20, T-01-26):
 // 뒷면 상태의 DOM·이미지 요청에 역할이 드러나지 않는다.
-export function RoleCard({ role, face, allies, onFlip }: RoleCardProps) {
+export function RoleCard({ role, face, allies, call = false, onFlip }: RoleCardProps) {
   const [mountedFront, setMountedFront] = useState(face === "front" && role !== null);
   if (!mountedFront && face === "front" && role !== null) setMountedFront(true);
 
   const showFront = face === "front" && role !== null;
-  const classes = ["mf-card", showFront && "mf-card--front"].filter(Boolean).join(" ");
+  const classes = ["mf-card", showFront && "mf-card--front", call && "is-call"].filter(Boolean).join(" ");
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key === " " || e.key === "Enter") {
@@ -50,6 +52,7 @@ export function RoleCard({ role, face, allies, onFlip }: RoleCardProps) {
       role="button"
       tabIndex={0}
       aria-label={showFront ? undefined : "역할 카드 뒤집기"}
+      {...(call ? { "data-call": "" } : {})}
       onClick={onFlip}
       onKeyDown={onKeyDown}
     >

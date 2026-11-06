@@ -24,8 +24,8 @@ export interface HostBandProps {
   sound?: SoundView | null;
 }
 
-/** 화면 헤더(방 틀 본문의 첫 것): 로비·게임 맵·결과의 absolute 헤더, 역할 확인의 흐름 속 단계 바, 배정 바 */
-const HEADER_SELECTOR = ".mf-lobby__header, .mf-game__header, .mf-result__header, .mf-phasebar, .mf-assign__bar";
+/** 화면 헤더(방 틀 본문의 첫 것): 로비·게임 맵·결과의 absolute 헤더, 역할 확인의 absolute 헤더, 배정 바 */
+const HEADER_SELECTOR = ".mf-lobby__header, .mf-game__header, .mf-result__header, .mf-reveal__header, .mf-phasebar, .mf-assign__bar";
 const HOST_VARS = ["--mf-host-top", "--mf-host-bottom", "--mf-host-dock"] as const;
 
 /** 방 틀에 값이 다를 때만 쓴다. 값이 없으면(헤더 없음·측정 0) 지워서 CSS 기본값(옛 자리 70·62·80)으로 돌아간다 */

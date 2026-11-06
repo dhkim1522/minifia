@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { RoomView } from "../../shared/protocol";
-import { PhaseBar } from "../components/PhaseBar";
 import { RoleCard } from "../components/RoleCard";
-import { Timer } from "../components/Timer";
+import { PhaseHeader } from "../components/v2/PhaseHeader";
+import { callTargetsOf } from "../game/hostLine";
 import { allyNicknames } from "../game/roleText";
 import { PRE_NOTICE_MS, RESULT_PANEL_TEXT } from "../game/resultText";
 import { autoFlipDelayMs, initialCardState, onAutoTimer, onTap, sinceStartMs } from "../net/cardFace";
@@ -21,7 +21,9 @@ export interface RoleRevealProps {
 }
 
 // S-05 역할 확인(15초). 테이블은 그리지 않는다(D-13 개정). 뒤 3D 무대는 PreGame 이 깐다. 카드 면은 cardFace 가 정하고,
-// 타이머는 서버 마감 시각 하나만 본다. 마감이 지나도 화면이 스스로 단계를 넘기지 않는다(서버 view 만 따름, T-01-46).
+// 마감이 지나도 화면이 스스로 단계를 넘기지 않는다(서버 view 만 따름, T-01-46).
+// 14페이즈(U-2·U-3, TOOL-02): 머리는 제목 + [내 역할] 뿐이다 — 안내·보조 줄은 자막 띠(HostBand)가, 남은 시간은 띠의 막대 + 초가 맡는다.
+// 카드 빛남(HOST-03): callTargetsOf 가 "카드"를 부르면 카드가 빛나고, 처음 앞면을 보면 꺼진다(되살아나지 않는다).
 export function RoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleRevealProps) {
   const role = view.me.role ?? null;
   const hasRole = role !== null;
@@ -67,26 +69,21 @@ export function RoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleReve
     return () => clearTimeout(id);
   }, []);
 
-  const front = card.face === "front" && hasRole;
   const allies = allyNicknames(view);
+  // 빛남 조건은 me.role 유무와 카드를 봤는가(내 클라이언트 상태)뿐이다 — 모든 역할이 같은 모양(T-14-15)
+  const callTarget = callTargetsOf(view, { cardSeen: card.seenFront });
+  const callCard = callTarget?.kind === "tool" && callTarget.tool === "card";
 
   return (
     <main className="mf-root mf-reveal">
       <div className="mf-reveal__dim" aria-hidden="true" />
-      <PhaseBar
-        title="역할 확인"
-        instruction={front ? "내 직업이에요" : "카드를 눌러 확인하세요"}
-        extra={myRoleButton}
-        timer={endsAt !== null && durationMs !== null ? <Timer endsAt={endsAt} durationMs={durationMs} offset={offset} /> : null}
-      />
+      <header className="mf-reveal__header">
+        <PhaseHeader title="역할 확인" extra={myRoleButton} />
+      </header>
       <section className="mf-reveal__stage">
-        <RoleCard role={role} face={card.face} allies={allies} onFlip={() => setCard((s) => onTap(s, hasRole))} />
+        <RoleCard role={role} face={card.face} allies={allies} call={callCard} onFlip={() => setCard((s) => onTap(s, hasRole))} />
       </section>
       <div className="mf-reveal__hints">
-        <p className="mf-reveal__hint">
-          {front ? "확인했으면 그대로 기다리세요" : "카드를 눌러 직업을 확인하세요"}
-        </p>
-        <p className="mf-reveal__sub">{front ? "카드를 다시 누르면 가려져요" : "다른 사람에게 보이지 않게 가려 주세요"}</p>
         <p className="mf-reveal__pre" data-pre-notice="" data-state={noticeShown ? "shown" : "gone"} {...(noticeShown ? {} : { "aria-hidden": "true" as const })}>
           {RESULT_PANEL_TEXT.preNotice}
         </p>
