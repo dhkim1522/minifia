@@ -79,6 +79,16 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 - 장면: 좌석마다 look 을 입히고(`wear`), 유령 화면에서는 직업 의상 안개가 고른 의상을 덮은 뒤 끝나면 복원한다. 동시 동작 렌더 상한 4(`src/world/emoteCap.ts`, 도착 순서), 단계가 바뀌면 `stopAllEmotes` 로 정리한다. 이름표 층에는 동작 슬롯이 없다(머리 위 표시 없음).
 - 테스트 훅(`?e2e=1`·개발 빌드): `window.__mfEmotes`(마지막 프레임·재생 중 좌석)·`window.__mfLooks`(좌석 → 의상 id).
 
+## 결과 공개·다시 하기·방 연속성·맵 (11페이즈, 결정 0069)
+
+- 판 번호 `round`(`view.round`)가 단계 키 `'{판}:{일차}:{단계}'` 앞에 붙는다(`phaseKey` 한 곳). 새 메시지는 `ready{on,round}`·`rematch{round}`·`mapPick{map}`이고 거절은 오류 없이 보낸 소켓에 `state` 한 프레임이다.
+- 결과 단계 채팅은 `CHAT_PHASES`·`channelOf`(ended 에서 null)가 아니라 `applyChat`·`audience` 분기·`view.me.chat` 으로 열린다. 전체 채널 하나, 동작·입력 중은 서버가 버린다.
+- `resultLog{part,i,end,lines}` 프레임: mafia → ghost → whisper → claim → ballots, 40줄 청크, ended 진입 때 한 번과 hello 재전송(`shared/game/resultLog.ts`). 신분별 차이 없음, ended 전용.
+- `result.awards`: 칭호 점수·동점·패 순서를 서버가 끝내고(`shared/game/awards.ts`) 화면은 재정렬하지 않는다. 입력은 서버 전용 `Player.stats`(판 중 `say`·`emote`).
+- 다시 하기(`shared/game/rematch.ts`): `ready` 한 연결된 사람 ≥ 4 이면 방장 `rematch`, 허용 목록 리터럴로 방을 다시 만든다(의상 유지). 준비 안 한 사람은 `bench`(게임 코드가 안 봄)에서 쉬다 `sat` 로 결과에 합류, 본인 view 는 `resting` + 자기 한 줄 `players`.
+- 연속성(`shared/game/continuity.ts`): 방장 이양(끊긴 지 45초, 가장 이른 `joinSeq`)·대기실 정리(3분)·결과 단계 `left` 표시, 테스트 방 3초·6초. 알람은 `nextWakeAt` 한 곳.
+- 맵: `MAPS` 표(`shared/game/maps.ts`, 광장은 `mapPlaza.ts`), `PLAYABLE_MAPS = ["bar","plaza"]`, 랜덤은 시작(`beginGame`)에서 서버가 정해 `view.map` 에 싣는다(시작 전엔 키 없음).
+
 ## 상태 공개 원칙
 
 - 서버는 플레이어마다 다른 상태를 보낸다. 시민에게는 다른 사람의 역할을 보내지 않는다.
@@ -87,6 +97,7 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 - 찬반(결정 0060-4, 개정 0067-5): 투표 중에는 누가 무엇을 골랐는지 어떤 소켓에도 실리지 않는다. 투표를 마쳤는지(좌석)와 집계 수만 공개하고, 내 값은 본인에게만 보내며 집계 직후 개인 값을 키째 지운다. 마감 뒤 처형 단계의 view 에서만 `day.verdict.ballots`(찬성·반대 좌석 두 묶음)를 모두에게 공개한다. 처형 발표에는 좌석만 싣고 역할은 비공개다. 지목(누가 누구를 가리키는지)과 지목 차례 `day.turn` 은 공개 정보라 모두의 view 에 같은 값으로 실린다(역할 무관, 0064-11).
 - 정치·박진감 장치의 공개 값(결정 0066·0067): 공개는 `players[].badge`·`badgeSwapped`(직업 주장 배지와 말 바꿈 표시, 실제 역할이 아니다)·`day.runoff`(결선 후보와 단계, 마감 뒤 득표 수만)·`day.showdown`(단계와 차례, 동시 지목 중에는 `voted` 완료 좌석만, 공개에서 득표)·`day.verdict.ballots`·`day.verdict.last`(마지막 3인 처형)이고, 본인 한정은 `me.ballot`·`me.whisperUsed`다. 서버 전용은 `Player.badgeLog`·`RoomState.whispers`·`runoffVote`·`showdownPick`이며 어떤 프레임에도 실리지 않는다(누설 시험이 서버 전용 키를 본다).
 - 캐릭터 의상(결정 0068): 공개는 `players[].look`(역할과 무관, 모든 단계·viewer 같음)이고, 서버 전용은 동작 기록(`emoteRates`, 인메모리)이다. 동작 프레임 `n` 은 채널별로 세어 틈이 다른 채널에 새지 않는다.
+- 결과 공개·다시 하기(결정 0069): 공개는 `view.round`·`mapChoice`·`map`·`players[].ready`·`players[].sat`·`resting`(쉬는 사람 본인에게만, 자기 한 줄)·`result.awards`와 ended 에서만 가는 `resultLog` 프레임이다(끝난 뒤라 신분 구분 없음). 서버 전용은 `Player.stats`·`disconnectedAt`·`left`·`bench` 로 어떤 프레임에도 실리지 않는다.
 - 유령(결정 0060-8, 0021): 유령은 모든 사람의 역할과 밤 선택을 본다(spectate 경로). 유령 시점의 직업 의상 안개는 이 spectate 로 화면이 입힌다(서버 새 필드 없음, 0063-2·0064-14). 반대로 산 사람의 소켓 · DOM 에는 유령의 위치 · 움직임 · 채팅 · 입력 중이 없다. 이 규칙은 서버 한 곳(audience)에서 막고 시험과 E2E 누설 검사가 증명한다.
 
 ## 재접속
