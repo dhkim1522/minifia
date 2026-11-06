@@ -461,7 +461,7 @@ Plans:
   3. 지목·변론·찬반처럼 이동이 막힌 구간에서도 제자리 동작과 채팅이 된다 (AVTR-05)
   4. 로비에서 여러 직업 의상을 눌러 갈아입으면 다른 폰에서도 바로 바뀌어 보이고, 고른 외형은 게임 중에도 유지된다. 의상은 실제 역할과 관계없이 고른 대로 나온다 (AVTR-04)
 
-**Plans**: 2/9 plans executed
+**Plans**: 9/9 plans executed
 **UI hint**: yes
 **계획 메모**: 캐릭터는 1번 시안의 구·원통 조립 3D 인물이다(결정 0047) — 관절별 메시 합치기로 드로우콜 예산 지키기, 동작 키프레임 품질(손 4종·표정 10종), 시안 `design/v2.0/3d/mf3d.js` 를 출발점으로 쓴다. 에셋 출처·약관을 `manifest.json` 에 기록하고 에셋 검증 스크립트와 포즈 스트립 디버그 페이지를 둔다. 동시 재생 상한을 명시한다. 감정표현은 몸 동작만이고 머리 위 표시는 전혀 두지 않는다(사용자 결정 2026-11-05, 결정 0064-16).
 **계획 확정 메모(10-UI-SPEC 기준)**: 현재 코드가 3D 조립 인물·의상 9종·동작 9종을 이미 가져 이 페이즈는 연결과 검증이 주 일이다. 출발점은 `mf3d.js` 가 아니라 `src/world/character.ts` 이고 새 부품·표정·손 모양은 만들지 않는다. 서버(01·02) → 장면(03·04) → 화면(05·07) → 에셋 검사(06)·막힌 구간(08) → 마무리(09). 폰 6종 전체 회귀와 성능 측정은 마지막 계획에서만 한 번(사용자 요청: 실행 시간 단축), 앞 계획은 단위·워커 시험과 바꾼 E2E 흐름 하나 × 1~2개 폰 크기만. 새 와이어 메시지는 `emote`·`dress` 둘. 배포는 계획에 없다 — 모든 계획이 끝난 뒤 오케스트레이터가 한다.
@@ -473,21 +473,21 @@ Plans:
 
 **Wave 2**
 - [x] 10-02-PLAN.md — 서버: 의상(dress 메시지·Player.look 공개·로비에서만·250ms·L25·L26 메타모픽) (TDD, W2)
-- [ ] 10-03-PLAN.md — 장면: emote 프레임 재생(동시 상한 4·stopEmote·단계 전환 정리·모션 줄이기·표정 병합 선행·__mfEmotes) (TDD, W2)
+- [x] 10-03-PLAN.md — 장면: emote 프레임 재생(동시 상한 4·stopEmote·단계 전환 정리·모션 줄이기·표정 병합 선행·__mfEmotes) (TDD, W2)
 
 **Wave 3**
-- [ ] 10-04-PLAN.md — 장면: 좌석별 의상(유령 직업 의상 안개 우선·복원·이전 지오메트리 해제·__mfLooks·머리 위 표시 없음 L31) (TDD, W3)
-- [ ] 10-05-PLAN.md — 화면: 입력줄 동작 버튼·5+4 아이콘 판·비활성 규칙·E2E avatar-emote 폰 2종 (TDD, W3)
+- [x] 10-04-PLAN.md — 장면: 좌석별 의상(유령 직업 의상 안개 우선·복원·이전 지오메트리 해제·__mfLooks·머리 위 표시 없음 L31) (TDD, W3)
+- [x] 10-05-PLAN.md — 화면: 입력줄 동작 버튼·5+4 아이콘 판·비활성 규칙·E2E avatar-emote 폰 2종 (TDD, W3)
 
 **Wave 4**
-- [ ] 10-06-PLAN.md — 에셋: check:character 45조합 예산·manifest·포즈 스트립 디버그 화면·성능 시나리오 확장 (TDD, W4)
-- [ ] 10-07-PLAN.md — 화면: 로비 꾸미기 hanger 버튼·한 줄 카드 띠 시트·미리 보기/되돌림·E2E avatar-dress 폰 2종 (TDD, W4)
+- [x] 10-06-PLAN.md — 에셋: check:character 45조합 예산·manifest·포즈 스트립 디버그 화면·성능 시나리오 확장 (TDD, W4)
+- [x] 10-07-PLAN.md — 화면: 로비 꾸미기 hanger 버튼·한 줄 카드 띠 시트·미리 보기/되돌림·E2E avatar-dress 폰 2종 (TDD, W4)
 
 **Wave 5**
-- [ ] 10-08-PLAN.md — 막힌 구간·밤·유령: 단계 × 신분 수신자 표·지목 유지 자세 위 동작·E2E avatar-phases (TDD, W5)
+- [x] 10-08-PLAN.md — 막힌 구간·밤·유령: 단계 × 신분 수신자 표·지목 유지 자세 위 동작·E2E avatar-phases (TDD, W5)
 
 **Wave 6**
-- [ ] 10-09-PLAN.md — 결정 0068·문서·HANDOFF·실기기 목록·폰 6종 회귀·성능 한 번·위생 검사·push(배포 없음) (W6)
+- [x] 10-09-PLAN.md — 결정 0068·문서·HANDOFF·실기기 목록·폰 6종 회귀·성능 한 번·위생 검사·push(배포 없음) (W6)
 
 ### Phase 11: 결과 공개와 다시 하기
 
@@ -501,7 +501,7 @@ Plans:
   4. 방장이 나가거나 30~60초 넘게 돌아오지 않으면 가장 먼저 들어온 연결자에게 방장이 넘어가 방이 이어지고, 로비에서 오래 돌아오지 않는 사람은 자동으로 정리된다 (CONNX-01, CONNX-02)
   5. 방장이 로비에서 지하 재즈 바 · 시계탑 광장 · 랜덤(기본값) 가운데 맵을 고르고, 랜덤이면 서버가 게임 시작 때 정한 같은 맵이 모두에게 열린다. 두 맵 모두에서 한 판이 끝까지 돈다 (MAP-06, 결정 0050)
 
-**Plans**: 0/14 plans executed
+**Plans**: 14/14 plans executed
 **UI hint**: yes
 **계획 메모**: 결과 화면에 귓속말 내용·직업 주장 이력 공개(결정 0066)와 칭호(연기대상·헛다리왕 등)를 더한다. 표준 패턴이라 연구 생략 가능(순수 함수 `rematch`·`awards`, v1.0 `testReset` 길 일반화). 통계 카운터는 7~10페이즈 구현 때 훅을 같이 심어 둔다. 판 번호(`round`)로 이전 판 메시지를 거부해 동시 클릭·늦은 메시지에도 안 꼬이게 한다. 시상 칭호 최종 목록과 채팅 공개 사전 안내 문구는 디자인 단계에서 정한다.
 **계획 확정 메모(11-UI-SPEC 기준)**: 서버 규칙(01·02·03·04·06·08)과 화면(05·07·09·11·12·13)을 번갈아 두어 서로 다른 파일을 쓰는 계획은 같은 웨이브에서 나란히 돈다(W4 04‖05, W5 06‖07, W6 08‖09‖10). 광장은 데이터 표(06)와 3D 장면(10)과 선택 화면(13)으로 나눠 `PLAYABLE_MAPS` 한 곳으로 노출을 잠갔다 — 10·13 한 쌍이 빠져도 나머지는 재즈 바 하나로 온전하다(13 이 E2E 통과 뒤에만 연다). 폰 6종 전체 회귀·재즈 바와 광장 성능·결정 0069·문서·HANDOFF·위생 검사·push 는 마지막 계획(14)에서만 한 번(사용자 요청: 실행 시간 단축), 앞 계획은 단위·워커 시험과 바꾼 E2E 흐름 × 1~2개 폰 크기만. 새 와이어: 메시지 `ready`·`rematch`·`mapPick`, 프레임 `resultLog`. 배포는 계획에 없다 — 모든 계획이 끝난 뒤 오케스트레이터가 한다.
@@ -509,38 +509,38 @@ Plans:
 Plans:
 
 **Wave 1**
-- [ ] 11-01-PLAN.md — 서버: 판 번호 round·세 부분 단계 키(이전 판 폐기)·판 통계 카운터 stats (TDD, W1)
+- [x] 11-01-PLAN.md — 서버: 판 번호 round·세 부분 단계 키(이전 판 폐기)·판 통계 카운터 stats (TDD, W1)
 
 **Wave 2**
-- [ ] 11-02-PLAN.md — 서버: 칭호 computeAwards(열 개 + 대체 둘, 서버 정렬)·result.awards·L35~L37 (TDD, W2)
+- [x] 11-02-PLAN.md — 서버: 칭호 computeAwards(열 개 + 대체 둘, 서버 정렬)·result.awards·L35~L37 (TDD, W2)
 
 **Wave 3**
-- [ ] 11-03-PLAN.md — 서버: 결과 단계 한 줄 채팅·resultLog 프레임(ended 진입 + hello 재전송)·L35·L36 (TDD, W3)
+- [x] 11-03-PLAN.md — 서버: 결과 단계 한 줄 채팅·resultLog 프레임(ended 진입 + hello 재전송)·L35·L36 (TDD, W3)
 
 **Wave 4**
-- [ ] 11-04-PLAN.md — 서버: 방장 이양 45초·대기실 정리 3분·결과 단계 leave·L43 (TDD, W4)
-- [ ] 11-05-PLAN.md — 화면: 결과 3D 무대(모임·뒤집기·직업 의상·조명·박수·승리 알림)·건너뛰기·E2E result (TDD, W4)
+- [x] 11-04-PLAN.md — 서버: 방장 이양 45초·대기실 정리 3분·결과 단계 leave·L43 (TDD, W4)
+- [x] 11-05-PLAN.md — 화면: 결과 3D 무대(모임·뒤집기·직업 의상·조명·박수·승리 알림)·건너뛰기·E2E result (TDD, W4)
 
 **Wave 5**
-- [ ] 11-06-PLAN.md — 서버: 맵 표·광장 이동 마스크·mapPick·시작 때 map 결정·PLAYABLE_MAPS 잠금·L40·L42 (TDD, W5)
-- [ ] 11-07-PLAN.md — 화면: 탭 패널(전체·마피아·유령·귓속말·기록)·ResultLogStore·사전 안내·E2E result-reveal 폰 2종 (TDD, W5)
+- [x] 11-06-PLAN.md — 서버: 맵 표·광장 이동 마스크·mapPick·시작 때 map 결정·PLAYABLE_MAPS 잠금·L40·L42 (TDD, W5)
+- [x] 11-07-PLAN.md — 화면: 탭 패널(전체·마피아·유령·귓속말·기록)·ResultLogStore·사전 안내·E2E result-reveal 폰 2종 (TDD, W5)
 
 **Wave 6**
-- [ ] 11-08-PLAN.md — 서버: ready·rematch·허용 목록 리터럴·쉬는 사람 bench/sat·결과 꾸미기·L38~L41 (TDD, W6)
-- [ ] 11-09-PLAN.md — 화면: 시상식(AwardPlate·2.5초 연출·넘기기·일시정지)·E2E result-awards 폰 2종 (TDD, W6)
-- [ ] 11-10-PLAN.md — 광장 3D 장면·단계 조명 표·시계·맵 id 로 렌더러·런타임 선택·광장 성능 측정 입구 (TDD, W6, 11-13 과 한 쌍)
+- [x] 11-08-PLAN.md — 서버: ready·rematch·허용 목록 리터럴·쉬는 사람 bench/sat·결과 꾸미기·L38~L41 (TDD, W6)
+- [x] 11-09-PLAN.md — 화면: 시상식(AwardPlate·2.5초 연출·넘기기·일시정지)·E2E result-awards 폰 2종 (TDD, W6)
+- [x] 11-10-PLAN.md — 광장 3D 장면·단계 조명 표·시계·맵 id 로 렌더러·런타임 선택·광장 성능 측정 입구 (TDD, W6, 11-13 과 한 쌍)
 
 **Wave 7**
-- [ ] 11-11-PLAN.md — 화면: 기록 타임라인(일차 카드 띠·하루 상세)·E2E result-awards 기록 검사 (TDD, W7)
+- [x] 11-11-PLAN.md — 화면: 기록 타임라인(일차 카드 띠·하루 상세)·E2E result-awards 기록 검사 (TDD, W7)
 
 **Wave 8**
-- [ ] 11-12-PLAN.md — 화면: 준비/시작 알약·쉬게 될 사람 시트·BenchView·sat 표시·결과 꾸미기·E2E result-rematch·host-handoff (TDD, W8)
+- [x] 11-12-PLAN.md — 화면: 준비/시작 알약·쉬게 될 사람 시트·BenchView·sat 표시·결과 꾸미기·E2E result-rematch·host-handoff (TDD, W8)
 
 **Wave 9**
-- [ ] 11-13-PLAN.md — 화면: 지도 칩·꾸미기 시트 맵 탭·맵 카드 그림·PLAYABLE_MAPS 개방·E2E map-select (TDD, W9, 11-10 과 한 쌍)
+- [x] 11-13-PLAN.md — 화면: 지도 칩·꾸미기 시트 맵 탭·맵 카드 그림·PLAYABLE_MAPS 개방·E2E map-select (TDD, W9, 11-10 과 한 쌍)
 
 **Wave 10**
-- [ ] 11-14-PLAN.md — 결정 0069·문서·HANDOFF·실기기 목록·폰 6종 회귀·성능(재즈 바·광장)·위생 검사·push(배포 없음) (W10)
+- [x] 11-14-PLAN.md — 결정 0069·문서·HANDOFF·실기기 목록·폰 6종 회귀·성능(재즈 바·광장)·위생 검사·push(배포 없음) (W10)
 
 ### Phase 12: 소리와 마무리
 
@@ -601,8 +601,8 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 (소�
 | 7. 자유 채팅 | v2.0 | 27/27 | Complete    | 2026-11-02 |
 | 8. 낮 처형과 유령 | v2.0 | 28/28 | Complete    | 2026-11-03 |
 | 9. 밤과 아침 | v2.0 | 30/30 | In Progress | - |
-| 10. 캐릭터·동작·의상 | v2.0 | 2/9 | In Progress | - |
-| 11. 결과 공개와 다시 하기 | v2.0 | 0/14 | Not started | - |
+| 10. 캐릭터·동작·의상 | v2.0 | 9/9 | In Progress | - |
+| 11. 결과 공개와 다시 하기 | v2.0 | 14/14 | In Progress | - |
 | 12. 소리와 마무리 | v2.0 | 0/12 | Not started | - |
 
 ## Backlog
