@@ -441,10 +441,10 @@ describe("밤 끝 알림 없음 (결정 0028, UI-SPEC D·R6)", () => {
     feed(r, makeView({ role, phase: "morning", records: [rec] }));
     return r;
   };
-  // 일지 알림이 없다는 뜻이라, 맵 화면의 구조 자리(맵 불러오는 카드·빈 위 알림 영역)와 아침 결과 알림([data-announce], 08-18)은 세지 않는다
+  // 일지 알림이 없다는 뜻이라, 맵 화면의 구조 자리(맵 불러오는 카드·빈 위 알림 영역)와 아침 결과 알림([data-announce], 08-18)과 자막 띠 문장([data-host-line], 14-01)은 세지 않는다
   const statusCount = (): number =>
     [...document.querySelectorAll('[role="status"]')].filter(
-      (e) => !e.classList.contains("mf-mapcard") && !e.hasAttribute("data-announce") && (e.textContent ?? "").trim() !== "",
+      (e) => !e.classList.contains("mf-mapcard") && !e.hasAttribute("data-announce") && !e.hasAttribute("data-host-line") && (e.textContent ?? "").trim() !== "",
     ).length;
 
   it.each([

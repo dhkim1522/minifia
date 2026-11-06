@@ -20,7 +20,7 @@
 .mf-game__header .mv-phase__text { gap: 0; }
 
 /* [테스트] 버튼 자리: 헤더 아래 8, 왼쪽 16 (6페이즈 그대로) */
-.mf-game__test { position: absolute; top: 70px; left: var(--space-md); z-index: var(--z-overlay); }
+.mf-game__test { position: absolute; top: calc(var(--mf-host-bottom, 62px) + 8px); left: var(--space-md); z-index: var(--z-overlay); }
 
 /* 아래 패널: night-800 97%, 위 모서리 radius-lg, 안쪽 14 16 22. 위에서부터 채팅 기록 칸 + 입력줄(48) + 단계별 행동 줄. 높이는 DOM 에서 재서 스테이지 사각형에 넘긴다. */
 .mf-game__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: color-mix(in srgb, var(--night-800) 97%, transparent); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }

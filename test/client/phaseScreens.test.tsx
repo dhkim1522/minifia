@@ -122,6 +122,13 @@ function card(container: HTMLElement): HTMLElement {
 }
 
 // getBy* 는 실패 때 DOM 전체를 여러 줄로 찍어 TAP 보고서를 깨뜨린다. 한 줄 메시지로 단언한다.
+/** 단계 화면의 옛 시간 표시(Timer). 14-01 자막 띠의 timer([data-host-band] 안)는 14-02 가 옛 시계를 지우기 전까지 따로 센다 */
+function stageTimer(): HTMLElement {
+  const found = screen.getAllByRole("timer").filter((el) => el.closest("[data-host-band]") === null);
+  expect(found, "띠 밖 timer").toHaveLength(1);
+  return found[0]!;
+}
+
 function byRole(role: string, name?: string): HTMLElement {
   const el = screen.queryByRole(role, name === undefined ? undefined : { name });
   expect(el, `role=${role} name=${name ?? ""}`).not.toBeNull();
@@ -150,7 +157,7 @@ describe("S-05 역할 확인 (GAME-01, ROLE-02, D-13 개정, D-14, D-15, R12)", 
     const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
     expect(byRole("heading", "역할 확인")).toBeTruthy();
     expect(byText("카드를 눌러 확인하세요")).toBeTruthy();
-    expect(byRole("timer").textContent).toContain("0:15");
+    expect(stageTimer().textContent).toContain("0:15");
     expect(byRole("button", "역할 카드 뒤집기")).toBeTruthy();
     expect(card(container).classList.contains("mf-card--front")).toBe(false);
     expect(byText("카드를 눌러 직업을 확인하세요")).toBeTruthy();
@@ -234,7 +241,7 @@ describe("S-05 역할 확인 (GAME-01, ROLE-02, D-13 개정, D-14, D-15, R12)", 
     renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
     advance(15_000);
     expect(byRole("heading", "역할 확인")).toBeTruthy();
-    expect(byRole("timer").textContent).toContain("0:00");
+    expect(stageTimer().textContent).toContain("0:00");
     expect(screen.queryByText("낮이 되었습니다")).toBeNull();
   });
 });
@@ -663,7 +670,7 @@ describe("C-01 [역할 카드] 시트", () => {
     const { container } = renderRoom(mafiaReveal(15_000));
     const dialog = openRoleCard();
     advance(3_000);
-    expect(container.querySelector('[role="timer"]')?.textContent).toContain("0:12");
+    expect(stageTimer().textContent).toContain("0:12");
     const close = within(dialog).queryByRole("button", { name: "닫기" });
     expect(close, "시트 [닫기]").not.toBeNull();
     fireEvent.click(close!);

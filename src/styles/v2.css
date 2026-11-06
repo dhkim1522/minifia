@@ -45,9 +45,9 @@
 /* 인원·진행 숫자 '현재 / 최대'(feedback-13). 버튼 라벨과 같은 16px 700, 색은 놓인 자리의 글자색을 따른다 */
 .mv-count { flex: none; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; color: inherit; }
 
-/* 화면 위 알림. 위에서 toast-top, 가운데. 비어 있으면 자리를 차지하지 않는다 */
+/* 화면 위 알림. 자막 띠·소리 단추 독 아랫변 + 8(14-01 U-6, 띠가 없으면 위에서 toast-top), 가운데. 비어 있으면 자리를 차지하지 않는다 */
 .mv-toast { display: flex; justify-content: center; pointer-events: none; opacity: 0; transition: opacity 220ms; }
-.mv-toast--top { position: absolute; top: var(--toast-top); left: 0; right: 0; z-index: var(--z-toast); }
+.mv-toast--top { position: absolute; top: calc(var(--mf-host-dock, calc(var(--toast-top) - 8px)) + 8px); left: 0; right: 0; z-index: var(--z-toast); }
 .mv-toast.is-on { opacity: 1; }
 .mv-toast__text { display: inline-flex; align-items: center; gap: 6px; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-pill); background: var(--night-800); border: 1px solid var(--night-600); color: var(--gray-50); font-family: var(--font-ui); font-size: 16px; line-height: 1.5; font-weight: 700; white-space: nowrap; }
 .mv-toast__text:empty { display: none; }

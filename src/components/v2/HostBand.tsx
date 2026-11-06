@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import type { RefObject } from "react";
 import "../../styles/v2.css";
 import type { SoundView } from "../../audio/useSound";
 import type { RoomView } from "../../../shared/protocol";
@@ -23,8 +24,82 @@ export interface HostBandProps {
   sound?: SoundView | null;
 }
 
+/** 화면 헤더(방 틀 본문의 첫 것): 로비·게임 맵·결과의 absolute 헤더, 역할 확인의 흐름 속 단계 바, 배정 바 */
+const HEADER_SELECTOR = ".mf-lobby__header, .mf-game__header, .mf-result__header, .mf-phasebar, .mf-assign__bar";
+const HOST_VARS = ["--mf-host-top", "--mf-host-bottom", "--mf-host-dock"] as const;
+
+/** 방 틀에 값이 다를 때만 쓴다. 값이 없으면(헤더 없음·측정 0) 지워서 CSS 기본값(옛 자리 70·62·80)으로 돌아간다 */
+function setVar(room: HTMLElement, name: string, px: number | null): void {
+  if (px === null || !(px > 0)) {
+    if (room.style.getPropertyValue(name) !== "") room.style.removeProperty(name);
+    return;
+  }
+  const value = `${Math.round(px * 10) / 10}px`;
+  if (room.style.getPropertyValue(name) !== value) room.style.setProperty(name, value);
+}
+
+/**
+ * 띠 아래로 밀려나는 자리의 기준을 잰다(U-1·U-6·U-8): 헤더 아랫변 + 8 → --mf-host-top, 띠 면 아랫변 → --mf-host-bottom, 독 아랫변 → --mf-host-dock.
+ * 값은 방 틀 위 끝 기준이고 가상 뷰포트 이동(--mf-vv-top)을 뺀 값이라 키보드가 열려도 변하지 않는다.
+ * 헤더 단추가 헤더 높이를 넘으면(14-05·14-07 이름표) 그 아랫변을 쓴다 — 띠가 단추를 덮지 않게.
+ */
+function useHostMetrics(rootRef: RefObject<HTMLDivElement | null>, bandRef: RefObject<HTMLDivElement | null>, deps: readonly unknown[]): void {
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const band = bandRef.current;
+    const room = root?.closest<HTMLElement>(".mf-room") ?? null;
+    if (root === null || room === null) return;
+    const measure = (): void => {
+      const roomTop = room.getBoundingClientRect().top;
+      const vv = Number.parseFloat(getComputedStyle(room).getPropertyValue("--mf-vv-top")) || 0;
+      const rel = (bottom: number): number => bottom - roomTop - vv;
+      const header = room.querySelector<HTMLElement>(HEADER_SELECTOR);
+      let headerBottom = 0;
+      if (header !== null) {
+        headerBottom = header.getBoundingClientRect().bottom;
+        for (const button of header.querySelectorAll("button")) headerBottom = Math.max(headerBottom, button.getBoundingClientRect().bottom);
+        headerBottom = rel(headerBottom);
+      }
+      setVar(room, "--mf-host-top", headerBottom > 0 ? headerBottom + 8 : null);
+      // 위 값을 쓴 뒤에 잰다(getBoundingClientRect 가 레이아웃을 새로 계산한다)
+      const dock = root.querySelector<HTMLElement>(".mv-host__dock");
+      const bandBottom = band === null ? 0 : rel(band.getBoundingClientRect().bottom);
+      setVar(room, "--mf-host-bottom", bandBottom);
+      setVar(room, "--mf-host-dock", dock === null ? bandBottom : Math.max(bandBottom, rel(dock.getBoundingClientRect().bottom)));
+    };
+    measure();
+    const header = room.querySelector<HTMLElement>(HEADER_SELECTOR);
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+    } else {
+      observer = new ResizeObserver(measure);
+      observer.observe(room);
+      observer.observe(root);
+      if (band !== null) observer.observe(band);
+      if (header !== null) observer.observe(header);
+    }
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps 는 호출자가 정한다(단계·문장·시간 행·소리 독이 바뀔 때 다시 잰다)
+  }, deps);
+  // 띠가 사라지면(쉬는 사람·화면 이동) 변수를 지워 CSS 기본값으로 돌린다
+  useLayoutEffect(() => {
+    const room = rootRef.current?.closest<HTMLElement>(".mf-room") ?? null;
+    return () => {
+      if (room !== null) for (const name of HOST_VARS) room.style.removeProperty(name);
+    };
+  }, [rootRef]);
+}
+
 export function HostBand({ view, offset, cardSeen, sound }: HostBandProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const bandRef = useRef<HTMLDivElement>(null);
   const line = hostLineOf(view, { cardSeen });
+  const showTime = hostTimeOf(view);
+  useHostMetrics(rootRef, bandRef, [view.phase, line, showTime, sound != null]);
   // 단계가 바뀐 렌더에서만 교체 연출(문장 페이드 + 종 흔들림). 첫 마운트·같은 단계 안 다시 그리기에는 하지 않는다.
   const prevPhase = useRef<string | null>(null);
   const swap = prevPhase.current !== null && prevPhase.current !== view.phase;
@@ -35,15 +110,15 @@ export function HostBand({ view, offset, cardSeen, sound }: HostBandProps) {
   const endsAt = view.phaseEndsAt;
   const durationMs = view.phaseDurationMs;
   return (
-    <div className="mv-host" data-host-band="">
-      <div className="mv-host__band">
+    <div ref={rootRef} className="mv-host" data-host-band="">
+      <div ref={bandRef} className="mv-host__band">
         <span key={`bell-${view.phase}`} className={swap ? "mv-host__bell is-swap" : "mv-host__bell"}>
           <V2Icon name="bell" size={16} />
         </span>
         <p key={`line-${view.phase}`} className={swap ? "mv-host__line is-swap" : "mv-host__line"} data-host-line="" role="status" aria-live="polite" aria-atomic="false">
           {line}
         </p>
-        {hostTimeOf(view) && endsAt !== null && durationMs !== null ? <HostTime endsAt={endsAt} durationMs={durationMs} offset={offset} /> : null}
+        {showTime && endsAt !== null && durationMs !== null ? <HostTime endsAt={endsAt} durationMs={durationMs} offset={offset} /> : null}
       </div>
       {sound ? (
         <div className="mv-host__dock">

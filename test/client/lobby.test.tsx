@@ -715,9 +715,9 @@ describe("Lobby — 스타일 계약 (lobby.css)", () => {
     expect(18 + 44).toBe(62);
   });
 
-  it("[테스트] 자리는 헤더 아래 8(= 70)·왼쪽 space-md·z-overlay", () => {
+  it("[테스트] 자리는 자막 띠 아래 8(띠 없을 때 기본 62 + 8 = 70)·왼쪽 space-md·z-overlay (14-01 U-1)", () => {
     const rule = css.match(/\.mf-lobby__test\s*\{[^}]*\}/)?.[0] ?? "";
-    expect(rule).toContain("top: 70px");
+    expect(rule).toContain("top: calc(var(--mf-host-bottom, 62px) + 8px)");
     expect(rule).toContain("left: var(--space-md)");
     expect(rule).toContain("var(--z-overlay)");
   });

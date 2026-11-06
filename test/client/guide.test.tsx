@@ -269,7 +269,7 @@ describe("UX-01 점검표: 단계 × 시점 모든 칸의 안내 문장과 남�
         }
         if (phase === "nomination") {
           // 09.1-07: 지목 점검 칸은 모이는 중이다 — 헤더 링은 차례 중·확정에만 있다(UI-SPEC A-1). 차례 중 링은 nominationScreen 시험이 본다
-          expect(container.querySelectorAll('[role="timer"]').length, `${cell}: 모이는 중 링 없음`).toBe(0);
+          expect([...container.querySelectorAll('[role="timer"]')].filter((el) => el.closest("[data-host-band]") === null).length, `${cell}: 모이는 중 링 없음(자막 띠 시계 제외, 14-01)`).toBe(0);
         } else if (!TIMELESS_PHASES.includes(phase) && !NO_CLOCK.has(phase)) {
           expect(container.querySelectorAll('[role="timer"]').length, `${cell}: 타이머`).toBeGreaterThanOrEqual(1);
         }

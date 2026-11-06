@@ -4,6 +4,7 @@
 //    변수는 방 틀(.mf-room)에 쓴다 — 헤더·알림·패널(화면 안)과 떠 있는 재접속 띠(화면 밖, 방 틀 직속)가 같은 값을 읽는다. 방 틀이 없으면 화면 루트.
 //    열림(포커스 + lift > 80)이면 행동 줄을 숨기고(D3) 기록 칸을 72 로 줄이며 패널이 키보드 위로 올라간다. 캔버스 크기는 건드리지 않는다.
 // 2. 스테이지 사각형: 위 끝 = 헤더 블록 아래, 아래 끝 = 아래 패널 위(키보드가 열려 있으면 패널 + 키보드 높이). 캔버스는 화면 전체 크기 그대로 두고 카메라 중심만 이 사각형에 맞춘다.
+//    14-01: 위 끝은 헤더 아랫변과 자막 띠 면([data-host-band] .mv-host__band) 아랫변 중 큰 쪽이다.
 //    재서 넘기는 값이라 패널이 자라도(채팅·단계별 행동 줄) 같은 길로 따라간다. 측정이 0 이면(레이아웃 없는 환경) 넘기지 않고 WorldStage 기본값을 쓴다.
 //    지목(09.1-08, UI-SPEC A-1): turnActive 이면 루트 안의 `[data-turn-block]`(차례 알약, GameMap 이 ref 를 넘기지 않고 이 훅이 루트에서 찾는다)의 막대 아랫변을 함께 재서
 //    위 끝을 mapStageTop(알약·막대 아랫변 + 4)으로 내린다. 막대가 없을 때(모이는 중·끝 알림)는 마지막으로 잰 값, 없으면 기본값(160 · 압축 124). 작은 폰이면 압축형(turnCompact)을 알려 준다.
@@ -34,6 +35,19 @@ export interface MapInsets {
   stageInsets: { top: number; readonly bottom: number } | undefined;
 }
 
+/** 방 틀의 자막 띠 면(HostBand 의 [data-host-band] 안 띠). 띠 본체만 — 아래 독(소리 단추)은 스테이지 안전선에 넣지 않는다 */
+const HOST_BAND_FACE = "[data-host-band] .mv-host__band";
+
+/** 띠 면 아랫변(루트 위 끝 기준). 가상 뷰포트 이동(--mf-vv-top)은 뺀다 — 키보드가 열려도 스테이지 위쪽이 흔들리지 않게. 띠가 없거나 측정이 0 이면 0 */
+function hostBandBottom(room: HTMLElement | null, root: HTMLElement | null): number {
+  if (room === null || root === null) return 0;
+  const band = room.querySelector<HTMLElement>(HOST_BAND_FACE);
+  if (band === null) return 0;
+  const vv = Number.parseFloat(getComputedStyle(room).getPropertyValue("--mf-vv-top")) || 0;
+  const bottom = band.getBoundingClientRect().bottom - root.getBoundingClientRect().top - vv;
+  return bottom > 0 ? bottom : 0;
+}
+
 /** turnActive: 지금 지목 또는 결선 단계이고 알약 부품(`[data-turn-block]`)이 그려진다(blockModeOf !== null) */
 export function useMapInsets(turnActive = false): MapInsets {
   const rootRef = useRef<HTMLElement>(null);
@@ -59,9 +73,12 @@ export function useMapInsets(turnActive = false): MapInsets {
     const panel = panelRef.current;
     if (header === null || panel === null) return;
     const measure = (): void => {
-      const headerBottom = header.offsetTop + header.offsetHeight;
+      let headerBottom = header.offsetTop + header.offsetHeight;
       const bottom = panel.offsetHeight;
       if (headerBottom <= 0 || bottom <= 0) return;
+      // 14-01: 자막 띠가 헤더 아래에 얹히므로 위쪽 안전선은 헤더와 띠 면 아랫변 중 큰 쪽이다(띠가 1→2줄이 되면 따라 내려간다). 띠가 없으면 그대로.
+      const hostBottom = hostBandBottom(roomRef.current, rootRef.current);
+      if (hostBottom > headerBottom) headerBottom = hostBottom;
       let top = headerBottom;
       if (turnActive) {
         const block = rootRef.current?.querySelector<HTMLElement>("[data-turn-block]") ?? null;
@@ -85,6 +102,8 @@ export function useMapInsets(turnActive = false): MapInsets {
     ro.observe(panel);
     const block = turnActive ? (rootRef.current?.querySelector<HTMLElement>("[data-turn-block]") ?? null) : null;
     if (block !== null) ro.observe(block);
+    const hostBand = roomRef.current?.querySelector<HTMLElement>(HOST_BAND_FACE) ?? null;
+    if (hostBand !== null) ro.observe(hostBand);
     return () => {
       window.removeEventListener("resize", measure);
       ro.disconnect();
