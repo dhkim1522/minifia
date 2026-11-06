@@ -1,281 +1,540 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>미니피아 설계 문서</title>
-<meta name="description" content="미니피아의 서버 설계: 방 하나를 Durable Object 하나로, 플레이어마다 다른 상태를 보내는 실시간 마피아 서버의 결정과 검증.">
+<meta name="description" content="미니피아 설계 문서: 요구사항, 기술 및 설계 결정, 시스템 아키텍처, 인터페이스, 데이터 모델링, 상태, 신뢰성·보안, 이슈, 테스트.">
 <meta property="og:title" content="미니피아 설계 문서">
-<meta property="og:description" content="방 하나를 Durable Object 하나로. 설계 결정, 풀었던 문제, 검증 방법.">
+<meta property="og:description" content="요구사항 · 설계 결정 · 아키텍처 · 인터페이스 · 데이터 모델링 · 이슈 · 테스트">
 <meta property="og:image" content="img/lobby.webp">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=Gowun+Dodum&family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
-<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
-/* 설계 문서: 앱 소개(index.html)와 같은 토큰, 문서형 배치. 표지 대신 짧은 머리말 */
-.top { padding-block: 28px 0; }
-.top a.back { color: var(--muted); font-size: 14px; text-decoration: none; }
-.top a.back:hover { color: var(--brass-hi); }
-.head { padding-block: 40px 0; }
-.head h1 { font-family: var(--font-serif); font-size: clamp(38px, 6vw, 60px); line-height: 1.12; letter-spacing: -.02em; margin-top: 16px; }
-.head .tagline { font-family: var(--font-ui); font-size: clamp(19px, 2.3vw, 24px); color: var(--ink); margin-top: 12px; max-width: 28em; }
-.head .lede { color: var(--muted); font-size: 17px; max-width: 38em; margin-top: 10px; }
-.nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
-.nav a { font-size: 14px; font-weight: 700; color: var(--body); text-decoration: none; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px; line-height: 1; }
-.nav a:hover { border-color: var(--brass); color: var(--brass-hi); }
-section { scroll-margin-top: 16px; }
-.nums { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.nums small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; line-height: 1.45; }
-
-/* 결정 · 문제 카드: 배경/선택/다른 선택지/감수한 것 */
-.dec { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 26px 28px; margin-top: 18px; min-width: 0; }
-.dec:first-of-type { margin-top: 28px; }
-.dec .no { font-family: var(--font-serif); color: var(--brass); font-size: 15px; }
-.dec h3 { font-size: 21px; font-weight: 800; margin-top: 2px; line-height: 1.4; }
-.dec dl { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 14px 22px; margin: 18px 0 0; }
-.dec dt { font-family: var(--font-ui); color: var(--brass); font-size: 14.5px; padding-top: 2px; }
-.dec dd { margin: 0; color: var(--body); font-size: 15.5px; min-width: 0; }
-.dec dd p + p, .dec dd ul + p, .dec dd p + ul { margin-top: 8px; }
-.dec dd ul { margin: 0; padding-left: 1.1em; }
-.dec dd li { margin-top: 4px; }
-.dec dd li::marker { color: var(--brass); }
-.dec dd .why { color: var(--muted); }
-.dec .cost dd, .dec dd.cost { color: var(--muted); }
-
+/* 제출용 설계 문서: 흰 바탕, Pretendard, 강조는 남색 하나 */
+:root { --ink: #111827; --body: #1f2937; --muted: #6b7280; --line: #d9dee7; --soft: #f5f7fa; --navy: #173f8a; --navy-soft: #eef3fc; }
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: #fff; color: var(--body); font: 400 17px/1.65 "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; word-break: keep-all; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+a { color: var(--navy); }
+h1, h2, h3 { color: var(--ink); margin: 0; }
+p { margin: 0; }
+b { color: var(--ink); font-weight: 700; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .86em; background: var(--soft); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--navy); white-space: nowrap; }
+.top { padding-top: 28px; }
+.top a { color: var(--muted); font-size: 14px; text-decoration: none; }
+.head { padding-top: 22px; }
+.head h1 { font-size: 38px; font-weight: 800; letter-spacing: -.02em; padding-bottom: 14px; border-bottom: 3px solid var(--navy); }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; font-size: 15px; }
+.toc a { color: var(--body); text-decoration: none; font-weight: 600; }
+.toc a span { color: var(--navy); margin-right: 5px; }
+.toc a:hover { color: var(--navy); }
+main { padding-bottom: 56px; }
+section.ch { padding-top: 52px; scroll-margin-top: 12px; }
+section.ch h2 { font-size: 26px; font-weight: 800; letter-spacing: -.01em; padding-bottom: 10px; border-bottom: 1px solid var(--ink); }
+h3.sec { font-size: 19px; font-weight: 700; margin-top: 28px; }
+h2 .n, h3 .n { color: var(--navy); margin-right: 10px; }
+.lead { margin-top: 16px; font-size: 18px; }
+.lead b { color: var(--navy); }
+.cap { color: var(--muted); font-size: 15px; margin-top: 10px; }
+.notes { margin: 14px 0 0; padding-left: 1.3em; }
+.notes li { margin-top: 4px; }
+.notes li::marker { color: var(--navy); }
 /* 표 */
-.tbl { width: 100%; border-collapse: collapse; margin-top: 28px; font-size: 15px; }
-.tbl th, .tbl td { text-align: left; vertical-align: top; padding: 13px 14px; border-top: 1px solid var(--line); }
-.tbl th { font-family: var(--font-ui); font-weight: 400; color: var(--brass); font-size: 14px; white-space: nowrap; width: 150px; }
-.tbl td { color: var(--body); }
-.tbl td small { display: block; color: var(--muted); font-size: 13.5px; margin-top: 3px; }
-.tbl tr:last-child th, .tbl tr:last-child td { border-bottom: 1px solid var(--line); }
-
-.note { color: var(--muted); font-size: 14px; margin-top: 14px; max-width: 46em; }
-.linkrow { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
-.linkrow .btn { min-height: 46px; font-size: 15px; }
-
-@media (max-width: 960px) { .nums { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 22px; } }
+.tbl { width: 100%; border-collapse: collapse; font-size: 15.5px; margin-top: 14px; }
+.tbl th, .tbl td { text-align: left; vertical-align: top; padding: 10px 12px; border: 1px solid var(--line); }
+.tbl thead th { background: var(--navy-soft); color: var(--navy); font-weight: 700; font-size: 14.5px; white-space: nowrap; border-top: 2px solid var(--navy); }
+.tbl tbody th { color: var(--ink); font-weight: 700; background: var(--soft); width: 30%; }
+.tbl.narrow tbody th { width: 26%; }
+.tbl.test tbody th { width: 18%; white-space: nowrap; }
+.tbl .alt { display: block; color: var(--muted); font-weight: 400; font-size: 14px; margin-top: 4px; }
+/* 도식 */
+.fig { margin: 14px 0 0; border: 1px solid var(--line); border-radius: 6px; padding: 12px; overflow-x: auto; }
+.fig svg { display: block; width: 100%; min-width: 720px; height: auto; }
+.fig svg text { font-family: "Pretendard", system-ui, sans-serif; fill: var(--body); }
+.fig svg .t { font-size: 18px; font-weight: 700; fill: var(--ink); }
+.fig svg .s { font-size: 16px; fill: #374151; }
+.fig svg .xs { font-size: 14.5px; fill: #374151; }
+.fig.m-only { display: none; }
+.fig.m-only svg { min-width: 0; }
+.fig svg .m { font-size: 15px; fill: var(--navy); font-weight: 600; }
+.fig svg .l { font-size: 14.5px; fill: var(--navy); font-weight: 700; }
+.fig svg .box { fill: #fafbfc; stroke: #aab3c2; stroke-width: 1.3; }
+.fig svg .hot { fill: var(--navy-soft); stroke: var(--navy); stroke-width: 1.8; }
+.fig svg .zone { fill: none; stroke: #b8c0cc; stroke-width: 1.3; stroke-dasharray: 6 5; }
+.fig svg .ln { stroke: var(--navy); stroke-width: 1.6; fill: none; }
+.fig svg .ln2 { stroke: #8a94a6; stroke-width: 1.4; fill: none; stroke-dasharray: 4 4; }
+.fig svg .life { stroke: #c3cad6; stroke-width: 1.3; stroke-dasharray: 3 5; }
+.hint { display: none; color: var(--muted); font-size: 13px; margin-top: 6px; }
+/* 이슈 */
+.issue { padding: 20px 0 4px; border-bottom: 1px solid var(--line); }
+.issue h3 { font-size: 18px; font-weight: 700; }
+.issue dl { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px 16px; margin: 12px 0 16px; }
+.issue dt { color: var(--navy); font-weight: 700; font-size: 15.5px; padding-top: 1px; }
+.issue dd { margin: 0; }
+.issue ul { margin: 0; padding-left: 1.1em; }
+.issue li { margin-top: 2px; }
+.refs { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 15px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 20px; }
+.refs a { text-decoration: none; font-weight: 600; }
+footer { padding: 20px 0 48px; color: var(--muted); font-size: 13px; }
 @media (max-width: 600px) {
-  .dec { padding: 22px 20px; }
-  .dec dl { grid-template-columns: minmax(0, 1fr); gap: 4px; }
-  .dec dd { margin-bottom: 10px; }
-  .tbl th { display: block; width: auto; border-top: 1px solid var(--line); padding-bottom: 0; }
-  .tbl td { display: block; border-top: 0; padding-top: 4px; }
-  .tbl tr:last-child th { border-bottom: 0; }
-  .tbl tr:last-child td { border-bottom: 1px solid var(--line); }
-  .linkrow .btn { width: 100%; justify-content: center; }
+  body { font-size: 16px; }
+  .head h1 { font-size: 30px; }
+  .fig { margin-left: -24px; margin-right: -24px; border-left: 0; border-right: 0; border-radius: 0; }
+  .hint { display: block; }
+  .fig.d-only { display: none; } .fig.m-only { display: block; } .hint.d-only { display: none; }
+  .tbl, .tbl tbody, .tbl tr, .tbl th, .tbl td { display: block; width: auto; }
+  .tbl thead { display: none; }
+  .tbl tr { border: 1px solid var(--line); border-top: 2px solid var(--navy); margin-bottom: 10px; }
+  .tbl th, .tbl td { border: 0; padding: 6px 12px; }
+  .tbl tbody th, .tbl.narrow tbody th, .tbl.test tbody th { width: auto; white-space: normal; }
+  .tbl td[data-k]::before { content: attr(data-k); display: block; color: var(--navy); font-size: 13px; font-weight: 700; }
+  .issue dl { grid-template-columns: minmax(0, 1fr); gap: 2px; } .issue dd { margin-bottom: 8px; }
+}
+@media print { .top, .refs, .hint { display: none; } .fig, .tbl tr, .issue { break-inside: avoid; } }
+
+/* 요구사항 · 결정 */
+.req td:first-child { white-space: nowrap; color: var(--navy); font-weight: 700; width: 56px; }
+.opts { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 15.5px; }
+.opts td { border: 1px solid var(--line); padding: 9px 12px; vertical-align: top; }
+.opts td:first-child { width: 34%; font-weight: 700; color: var(--ink); }
+.opts tr.pick td { background: var(--navy-soft); }
+.opts tr.pick td:first-child::before { content: "채택"; display: inline-block; font-size: 12px; font-weight: 700; color: #fff; background: var(--navy); border-radius: 3px; padding: 0 6px; margin-right: 8px; vertical-align: 2px; }
+.why { margin: 10px 0 0; padding: 0; list-style: none; }
+.why li { margin-top: 4px; padding-left: 82px; text-indent: -82px; }
+.why li b:first-child { display: inline-block; width: 74px; text-indent: 0; color: var(--navy); }
+.rq { display: inline-block; font-size: 13px; font-weight: 700; color: var(--navy); border: 1px solid #c5d3ee; border-radius: 3px; padding: 0 6px; margin-left: 8px; vertical-align: 2px; }
+/* 펼치기 */
+details.flow { margin-top: 10px; border: 1px solid var(--line); border-radius: 6px; }
+details.flow summary { cursor: pointer; padding: 12px 16px; font-weight: 700; color: var(--ink); list-style: none; }
+details.flow summary::-webkit-details-marker { display: none; }
+details.flow summary::before { content: "▸"; color: var(--navy); margin-right: 10px; display: inline-block; transition: transform .15s; }
+details.flow[open] summary::before { transform: rotate(90deg); }
+details.flow summary small { color: var(--muted); font-weight: 400; margin-left: 8px; font-size: 14.5px; }
+details.flow .fig { margin: 0 12px 12px; }
+.schema { margin-top: 18px; }
+.schema h4 { margin: 18px 0 0; font-size: 16.5px; color: var(--ink); }
+.schema h4 code { font-size: 15px; }
+.schema h4 small { color: var(--muted); font-weight: 400; font-size: 14.5px; margin-left: 8px; }
+.tbl td.ty { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; color: var(--navy); white-space: nowrap; }
+.tbl.fields tbody th { width: 22%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14.5px; font-weight: 600; }
+@media (max-width: 600px) {
+  .opts, .opts tbody, .opts tr, .opts td { display: block; width: auto !important; }
+  .opts tr { border: 1px solid var(--line); margin-bottom: 6px; }
+  .opts td { border: 0; padding: 6px 12px; }
+  .why li { padding-left: 0; text-indent: 0; } .why li b:first-child { display: block; width: auto; }
+  .tbl.fields tbody th { width: auto; }
+}
+
+/* 요구사항 · 결정 */
+.req td:first-child { white-space: nowrap; color: var(--navy); font-weight: 700; width: 56px; }
+.opts { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 15.5px; }
+.opts td { border: 1px solid var(--line); padding: 9px 12px; vertical-align: top; }
+.opts td:first-child { width: 34%; font-weight: 700; color: var(--ink); }
+.opts tr.pick td { background: var(--navy-soft); }
+.opts tr.pick td:first-child::before { content: "채택"; display: inline-block; font-size: 12px; font-weight: 700; color: #fff; background: var(--navy); border-radius: 3px; padding: 0 6px; margin-right: 8px; vertical-align: 2px; }
+.why { margin: 10px 0 0; padding: 0; list-style: none; }
+.why li { margin-top: 4px; padding-left: 82px; text-indent: -82px; }
+.why li b:first-child { display: inline-block; width: 74px; text-indent: 0; color: var(--navy); }
+.rq { display: inline-block; font-size: 13px; font-weight: 700; color: var(--navy); border: 1px solid #c5d3ee; border-radius: 3px; padding: 0 6px; margin-left: 8px; vertical-align: 2px; }
+/* 펼치기 */
+details.flow { margin-top: 10px; border: 1px solid var(--line); border-radius: 6px; }
+details.flow summary { cursor: pointer; padding: 12px 16px; font-weight: 700; color: var(--ink); list-style: none; }
+details.flow summary::-webkit-details-marker { display: none; }
+details.flow summary::before { content: "▸"; color: var(--navy); margin-right: 10px; display: inline-block; transition: transform .15s; }
+details.flow[open] summary::before { transform: rotate(90deg); }
+details.flow summary small { color: var(--muted); font-weight: 400; margin-left: 8px; font-size: 14.5px; }
+details.flow .fig { margin: 0 12px 12px; }
+.schema { margin-top: 18px; }
+.schema h4 { margin: 18px 0 0; font-size: 16.5px; color: var(--ink); }
+.schema h4 code { font-size: 15px; }
+.schema h4 small { color: var(--muted); font-weight: 400; font-size: 14.5px; margin-left: 8px; }
+.tbl td.ty { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; color: var(--navy); white-space: nowrap; }
+.tbl.fields tbody th { width: 22%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14.5px; font-weight: 600; }
+@media (max-width: 600px) {
+  .opts, .opts tbody, .opts tr, .opts td { display: block; width: auto !important; }
+  .opts tr { border: 1px solid var(--line); margin-bottom: 6px; }
+  .opts td { border: 0; padding: 6px 12px; }
+  .why li { padding-left: 0; text-indent: 0; } .why li b:first-child { display: block; width: auto; }
+  .tbl.fields tbody th { width: auto; }
+}
+
+/* 요구사항 · 결정 */
+.req td:first-child { width: 60%; }
+.opts { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 15.5px; }
+.opts td { border: 1px solid var(--line); padding: 9px 12px; vertical-align: top; }
+.opts td:first-child { width: 34%; font-weight: 700; color: var(--ink); }
+.opts tr.pick td { background: var(--navy-soft); }
+.opts tr.pick td:first-child::before { content: "채택"; display: inline-block; font-size: 12px; font-weight: 700; color: #fff; background: var(--navy); border-radius: 3px; padding: 0 6px; margin-right: 8px; vertical-align: 2px; }
+.why { margin: 10px 0 0; padding: 0; list-style: none; }
+.why li { margin-top: 4px; padding-left: 82px; text-indent: -82px; }
+.why li b:first-child { display: inline-block; width: 74px; text-indent: 0; color: var(--navy); }
+.rq { display: inline-block; font-size: 13px; font-weight: 700; color: var(--navy); border: 1px solid #c5d3ee; border-radius: 3px; padding: 0 6px; margin-left: 8px; vertical-align: 2px; }
+/* 펼치기 */
+details.flow { margin-top: 10px; border: 1px solid var(--line); border-radius: 6px; }
+details.flow summary { cursor: pointer; padding: 12px 16px; font-weight: 700; color: var(--ink); list-style: none; }
+details.flow summary::-webkit-details-marker { display: none; }
+details.flow summary::before { content: "▸"; color: var(--navy); margin-right: 10px; display: inline-block; transition: transform .15s; }
+details.flow[open] summary::before { transform: rotate(90deg); }
+details.flow summary small { color: var(--muted); font-weight: 400; margin-left: 8px; font-size: 14.5px; }
+details.flow .fig { margin: 0 12px 12px; }
+.schema { margin-top: 18px; }
+.schema h4 { margin: 18px 0 0; font-size: 16.5px; color: var(--ink); }
+.schema h4 code { font-size: 15px; }
+.schema h4 small { color: var(--muted); font-weight: 400; font-size: 14.5px; margin-left: 8px; }
+.tbl td.ty { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; color: var(--navy); white-space: nowrap; }
+.tbl.fields tbody th { width: 22%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14.5px; font-weight: 600; }
+@media (max-width: 600px) {
+  .opts, .opts tbody, .opts tr, .opts td { display: block; width: auto !important; }
+  .opts tr { border: 1px solid var(--line); margin-bottom: 6px; }
+  .opts td { border: 0; padding: 6px 12px; }
+  .why li { padding-left: 0; text-indent: 0; } .why li b:first-child { display: block; width: auto; }
+  .tbl.fields tbody th { width: auto; }
+}
+
+/* 요구사항 · 결정 */
+.reqs { margin: 16px 0 0; padding-left: 1.5em; }
+.reqs li { margin-top: 8px; }
+.reqs li::marker { color: var(--navy); font-weight: 700; }
+.req td:first-child { width: 60%; }
+.opts { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 15.5px; }
+.opts td { border: 1px solid var(--line); padding: 9px 12px; vertical-align: top; }
+.opts td:first-child { width: 34%; font-weight: 700; color: var(--ink); }
+.opts tr.pick td { background: var(--navy-soft); }
+.opts tr.pick td:first-child::before { content: "채택"; display: inline-block; font-size: 12px; font-weight: 700; color: #fff; background: var(--navy); border-radius: 3px; padding: 0 6px; margin-right: 8px; vertical-align: 2px; }
+.why { margin: 10px 0 0; padding: 0; list-style: none; }
+.why li { margin-top: 4px; padding-left: 82px; text-indent: -82px; }
+.why li b:first-child { display: inline-block; width: 74px; text-indent: 0; color: var(--navy); }
+.rq { display: inline-block; font-size: 13px; font-weight: 700; color: var(--navy); border: 1px solid #c5d3ee; border-radius: 3px; padding: 0 6px; margin-left: 8px; vertical-align: 2px; }
+/* 펼치기 */
+details.flow { margin-top: 10px; border: 1px solid var(--line); border-radius: 6px; }
+details.flow summary { cursor: pointer; padding: 12px 16px; font-weight: 700; color: var(--ink); list-style: none; }
+details.flow summary::-webkit-details-marker { display: none; }
+details.flow summary::before { content: "▸"; color: var(--navy); margin-right: 10px; display: inline-block; transition: transform .15s; }
+details.flow[open] summary::before { transform: rotate(90deg); }
+details.flow summary small { color: var(--muted); font-weight: 400; margin-left: 8px; font-size: 14.5px; }
+details.flow .fig { margin: 0 12px 12px; }
+.schema { margin-top: 18px; }
+.schema h4 { margin: 18px 0 0; font-size: 16.5px; color: var(--ink); }
+.schema h4 code { font-size: 15px; }
+.schema h4 small { color: var(--muted); font-weight: 400; font-size: 14.5px; margin-left: 8px; }
+.tbl td.ty { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; color: var(--navy); white-space: nowrap; }
+.tbl.fields tbody th { width: 22%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14.5px; font-weight: 600; }
+@media (max-width: 600px) {
+  .opts, .opts tbody, .opts tr, .opts td { display: block; width: auto !important; }
+  .opts tr { border: 1px solid var(--line); margin-bottom: 6px; }
+  .opts td { border: 0; padding: 6px 12px; }
+  .why li { padding-left: 0; text-indent: 0; } .why li b:first-child { display: block; width: auto; }
+  .tbl.fields tbody th { width: auto; }
 }
 </style>
 </head>
 <body>
-<div class="top"><div class="wrap"><a class="back" href="./">← 미니피아 소개</a></div></div>
-
+<div class="top"><div class="wrap"><a href="./">← 미니피아 소개</a></div></div>
 <header class="head"><div class="wrap">
-  <div class="tags"><span>Cloudflare Workers</span><span>Durable Objects</span><span>WebSocket</span><span>TypeScript</span></div>
   <h1>미니피아 설계 문서</h1>
-  <p class="tagline">방 하나를 서버 객체 하나로, 보여도 되는 정보만 보내는 실시간 마피아 서버</p>
-  <p class="lede">4~8명이 각자 폰으로 한 방에 모여 10분 안에 끝내는 게임입니다. 마피아 게임은 “누가 무엇을 아는가”가 곧 규칙이라, 서버 설계의 중심은 판정의 일관성과 정보 경계였습니다.</p>
-  <nav class="nav" aria-label="문서 목차">
-    <a href="#arch">아키텍처</a><a href="#decisions">설계 결정</a><a href="#problems">풀었던 문제</a><a href="#verify">검증</a><a href="#limits">한계</a>
-  </nav>
+  <nav class="toc" aria-label="목차"><a href="#c1"><span>1</span>요구사항</a><a href="#c2"><span>2</span>기술 및 설계 결정</a><a href="#c3"><span>3</span>시스템 아키텍처</a><a href="#c4"><span>4</span>인터페이스</a><a href="#c5"><span>5</span>데이터 모델링</a><a href="#c6"><span>6</span>상태 설계</a><a href="#c7"><span>7</span>신뢰성 · 보안</a><a href="#c8"><span>8</span>이슈 및 해결</a><a href="#c9"><span>9</span>테스트</a></nav>
 </div></header>
-
 <main>
-<section><div class="wrap">
-  <p class="eyebrow">AT A GLANCE</p>
-  <h2>한눈에</h2>
-  <div class="nums">
-    <div><b>1 : 1</b><span>방 하나 = 서버 객체 하나</span><small>판정이 한 곳에서 순서대로</small></div>
-    <div><b>4~8명</b><span>한 방 동시 접속</span><small>WebSocket</small></div>
-    <div><b>5,000+</b><span>자동 테스트</span><small>규칙 · 화면 · 방 서버</small></div>
-    <div><b>60fps</b><span>CPU 4배 느리게 한 조건</span><small>실기기 iPhone 16 Pro 59.98fps</small></div>
-  </div>
+
+<section class="ch" id="c1"><div class="wrap">
+  <h2><span class="n">1</span>요구사항</h2>
+  <ol class="reqs">
+    <li>여러 명(4~8명)이 방 코드로 한 방에 들어와 각자 폰으로 함께 플레이할 수 있어야 한다.</li>
+    <li>캐릭터가 맵 위를 이동하고, 다른 사람의 이동이 실시간으로 보여야 한다.</li>
+    <li>투표와 밤 행동이 같은 순간에 들어와도 결과는 하나로 정해져야 한다.</li>
+    <li>역할과 밤 행동처럼 숨겨야 할 정보는 볼 수 없는 사람에게 전달되지 않아야 한다.</li>
+    <li>채팅은 공개 · 마피아 · 유령 채널로 나뉘고, 다시 접속해도 대화가 남아 있어야 한다.</li>
+    <li>연결이 끊겨도 게임은 멈추지 않고, 다시 접속하면 같은 자리로 돌아와야 한다.</li>
+    <li>단계 전환과 타이머는 서버 기준으로 진행되어야 한다.</li>
+    <li>혼자 운영할 수 있고, 사용자가 없는 동안 비용이 거의 들지 않아야 한다.</li>
+  </ol>
 </div></section>
 
-<section id="arch"><div class="wrap">
-  <p class="eyebrow">ARCHITECTURE</p>
-  <h2>구조</h2>
-  <div class="arch">
-    <div class="diagram" aria-label="구조도">
-      <div class="node"><b>플레이어 폰 4~8대</b><small>받은 상태를 그리고, 행동만 보내요</small><div class="phones" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
-      <div class="wire">WebSocket</div>
-      <div class="node"><b>Cloudflare Worker</b><small>방 코드로 해당 방에 연결</small></div>
-      <div class="wire">라우팅</div>
-      <div class="node room"><b>Room Durable Object</b><small>방마다 하나. 참가자 · 역할 · 단계 · 타이머 · 판정 · 수신자별 상태 만들기</small></div>
-    </div>
-    <ul class="points">
-      <li><h3>서버가 기준</h3><p>단계 전환과 타이머는 서버가 정하고, 폰은 서버가 보낸 마감 시각을 표시만 해요</p></li>
-      <li><h3>규칙은 공용 모듈 하나</h3><p><code>shared/</code> 의 순수 규칙을 서버와 브라우저가 함께 쓰고, 두 개의 타입 검사가 환경 전용 API 사용을 막아요</p></li>
-      <li><h3>입력은 값으로 검증</h3><p>폰이 보낸 메시지는 zod 스키마로 검사하고, 틀린 요청은 상태를 바꾸지 않아요</p></li>
-      <li><h3>대기 중에는 쉬는 객체</h3><p>WebSocket Hibernation API로 아무도 말하지 않는 동안의 비용을 줄여요</p></li>
-    </ul>
-  </div>
-</div></section>
-
-<section id="decisions"><div class="wrap">
-  <p class="eyebrow">DESIGN DECISIONS</p>
-  <h2>설계 결정</h2>
-  <p class="intro">결정마다 번호를 붙여 <a href="https://github.com/dhkim1522/minifia/tree/v2/docs/decisions" target="_blank" rel="noopener">결정 기록</a>으로 남겼어요. 여기서는 그중 서버의 골격을 이룬 네 가지를 소개해요.</p>
-
-  <article class="dec">
-    <span class="no">결정 0002</span>
-    <h3>방 하나를 Durable Object 하나로</h3>
-    <dl>
-      <dt>문제</dt><dd>4~8명이 같은 방에서 동시에 투표하고, 밤 행동을 보내고, 타이머가 돌아요. 판정은 한 곳에서 순서대로 일어나야 해요.</dd>
-      <dt>선택</dt><dd>방마다 Durable Object를 하나 두고 WebSocket으로 연결해요. 규칙과 판정은 그 객체 안에서만 실행해요.</dd>
-      <dt>다른 선택지</dt><dd>
-        <ul>
-          <li><b>일반 서버 + Redis</b>: 인스턴스가 여러 개가 되면 방 상태 동기화와 락이 필요하고, 서버 운영도 따로 해야 해요.</li>
-          <li><b>Firebase · Supabase 같은 실시간 서비스</b>: 판정을 클라이언트나 별도 함수에 나눠 두게 돼서, 서버가 규칙을 강제하는 구조를 만들기 어려워요.</li>
-          <li><b>방장 폰이 서버 역할(P2P)</b>: 방장 폰이 모든 역할을 알게 되어 마피아 게임이 성립하지 않아요.</li>
-        </ul>
-      </dd>
-      <dt>결과</dt><dd>방 상태가 한 곳에 있어 동시 입력이 순서대로 처리되고 락이 필요 없어요. 정적 파일도 같은 곳에서 배포해요.</dd>
-      <dt>감수한 것</dt><dd class="cost">Cloudflare에 종속돼요. 객체가 한 리전에 있어서 한국에서는 왕복이 약 155ms였고, 이는 아래 <a href="#p1">문제 1</a>의 원인이 됐어요.</dd>
-    </dl>
-  </article>
-
-  <article class="dec">
-    <span class="no">결정 0020 · 0061</span>
-    <h3>플레이어마다 다른 상태를 만들어 보내고, 전송 경로는 한 곳으로</h3>
-    <dl>
-      <dt>문제</dt><dd>화면에서 숨기기만 하면 개발자 도구로 다른 사람의 역할이 보여요. 밤의 마피아 행동, 유령의 위치처럼 “받으면 안 되는 사람”이 있는 정보가 많아요.</dd>
-      <dt>선택</dt><dd>서버가 플레이어별로 볼 수 있는 상태만 골라 만들어요. 모든 이벤트의 받는 사람은 <code>audience</code> 함수 한 곳이 정하고, 전송은 <code>deliver</code> 한 길로만 나가요. 새 기능도 이 길을 지나야 해요.</dd>
-      <dt>다른 선택지</dt><dd>
-        <ul>
-          <li><b>전체 상태를 모두에게 보내고 클라이언트에서 가리기</b>: 구현은 쉽지만 네트워크에 정보가 그대로 실려요.</li>
-          <li><b>역할별 채널로 나눠 구독</b>: 같은 판정 규칙이 여러 채널에 흩어져 일관성을 지키기 어려워요.</li>
-        </ul>
-      </dd>
-      <dt>결과</dt><dd>시민의 소켓에는 마피아의 행동이 한 프레임도 가지 않고, 산 사람의 소켓에는 유령의 위치와 채팅이 가지 않아요. 규칙이 한 곳에 있어서 테스트로 증명할 수 있어요(<a href="#p3">문제 3</a>).</dd>
-      <dt>감수한 것</dt><dd class="cost">모든 프레임이 한 함수를 지나야 해서 새 메시지 종류를 더할 때 제약이 생겨요. 방이 4~8명이라 플레이어별 상태 계산 비용은 문제가 되지 않았어요.</dd>
-    </dl>
-  </article>
-
-  <article class="dec">
-    <span class="no">결정 0058</span>
-    <h3>채팅은 서버가 보관하고, 줄마다 받는 사람을 함께 저장</h3>
-    <dl>
-      <dt>문제</dt><dd>새로 고침이나 재접속 뒤에도 채팅이 돌아와야 해요. 그런데 밤의 마피아 채팅과 유령 채팅은 비공개라, 복원이 실시간 전송보다 넓게 보여주면 안 돼요.</dd>
-      <dt>선택</dt><dd>줄 단위로 저장하면서 그 줄을 받은 사람의 좌석을 8비트 마스크로 같이 저장해요. 복원은 내 좌석 비트가 켜진 줄만 돌려줘요. 줄 번호는 채널마다 따로 세요.</dd>
-      <dt>다른 선택지</dt><dd>
-        <ul>
-          <li><b>저장하지 않기</b>: 가장 단순하지만 재접속하면 대화가 사라져요.</li>
-          <li><b>브라우저에만 저장</b>: 서버가 보낸 줄만 남아서, 서버가 기준인 비공개 규칙을 복원에 적용할 수 없어요.</li>
-          <li><b>전부 저장하고 조회할 때 역할로 거르기</b>: 조회 시점의 역할로 판단하면 “탈락한 뒤부터 보인다” 같은 시점 규칙이 틀어져요.</li>
-        </ul>
-      </dd>
-      <dt>결과</dt><dd>복원도 실시간 전송과 같은 규칙을 따라요. 번호를 채널마다 세는 이유는, 전체 번호를 쓰면 공개 채팅 번호의 빈틈으로 비공개 채널에 몇 줄이 오갔는지 알 수 있기 때문이에요.</dd>
-      <dt>감수한 것</dt><dd class="cost">저장 쓰기가 늘어서 줄 단위 키와 채널별 상한으로 묶었어요. “채팅은 저장하지 않는다”던 이전 결정은 근거를 남기고 개정했어요.</dd>
-    </dl>
-  </article>
-
-  <article class="dec">
-    <span class="no">결정 0016 · 0034</span>
-    <h3>끊겨도 판은 서버 타이머대로, 같은 자리로 다시 연결</h3>
-    <dl>
-      <dt>문제</dt><dd>iOS에서는 화면이 꺼지거나 다른 앱으로 가면 WebSocket이 끊어져요. 한 명 때문에 점심시간 10분짜리 판이 멈추면 안 돼요.</dd>
-      <dt>선택</dt><dd>참가할 때 토큰을 발급하고 다시 연결하면 같은 자리에 붙여 현재 상태를 다시 보내요. 진행은 기다리지 않고 서버 타이머대로 가요. 마감까지 못 보낸 투표는 무효표, 밤 행동은 행동 없음으로 처리해요.</dd>
-      <dt>다른 선택지</dt><dd>
-        <ul>
-          <li><b>끊기면 전원 일시정지</b>: 공정하지만 짧은 게임에서는 한 명이 모두를 붙잡아요.</li>
-          <li><b>끊기면 탈락</b>: 모바일에서 흔한 끊김을 너무 가혹하게 벌해요.</li>
-        </ul>
-      </dd>
-      <dt>결과</dt><dd>끊긴 사람은 테이블에서 흐릿하게 보이고, 돌아오면 이어서 해요.</dd>
-      <dt>감수한 것</dt><dd class="cost">자주 끊기는 사람은 불리해요. 대신 판의 길이는 항상 예측 가능해요.</dd>
-    </dl>
-  </article>
-</div></section>
-
-<section id="problems"><div class="wrap">
-  <p class="eyebrow">PROBLEMS SOLVED</p>
-  <h2>풀었던 문제</h2>
-
-  <article class="dec" id="p1">
-    <span class="no">문제 1 · 결정 0059</span>
-    <h3>“이동할 때 핑이 튀는 것처럼 끊긴다”</h3>
-    <dl>
-      <dt>증상</dt><dd>실기기(iPhone)로 해 보니 캐릭터를 탭한 뒤 잠깐 멈췄다가 움직였고, 걷는 도중 방향을 바꾸면 앞으로 튀었어요.</dd>
-      <dt>원인</dt><dd>서버 처리 시간은 0~1ms인데 한국에서 왕복이 약 155ms였어요(Cloudflare LAX 경유, 코드로 바꿀 수 없는 경로). 모든 캐릭터를 서버가 보낸 구간으로만 그려서, 탭하면 한 번 왕복하는 동안 서 있다가 응답이 오면 그만큼 앞으로 튀었어요.</dd>
-      <dt>해결</dt><dd>
-        <ul>
-          <li>내 캐릭터만 탭하는 즉시 서버와 같은 길찾기로 예측해서 걷기 시작해요.</li>
-          <li>서버 구간이 오면 100~150ms에 걸쳐 위치 차이를 0으로 줄여요.</li>
-          <li>서버가 요청을 거절하면 예측을 멈추고 서버가 아는 위치로 돌아와요.</li>
-          <li>위치의 진실은 계속 서버예요. 속도 제한과 이동 가능 영역 검사도 서버가 해요.</li>
-        </ul>
-      </dd>
-      <dt>배운 것</dt><dd>이전 UI 사양에 “예측 이동 금지”가 있었는데, 측정 결과를 근거로 그 결정을 개정했어요. 서버 권위를 지키면서 체감 지연만 줄이는 선을 정한 경험이에요.</dd>
-    </dl>
-  </article>
-
-  <article class="dec" id="p2">
-    <span class="no">문제 2 · 결정 0016 · 0062</span>
-    <h3>알람이 늦거나 객체가 쉬었다 깨어날 때, 단계가 건너뛰어도 상태가 맞아야 한다</h3>
-    <dl>
-      <dt>증상</dt><dd>단계(토론 → 지목 → 투표 → 밤 → 아침)는 알람으로 넘어가는데, 객체가 쉬었다 깨어나거나 알람이 늦으면 한 번에 여러 단계를 따라잡아야 해요. 중간 단계의 진입 처리가 빠지면 위치와 상태가 어긋나요.</dd>
-      <dt>해결</dt><dd>단계에 들어갈 때 일어나야 하는 상태 변화를 <code>ON_ENTER</code> 표 한 곳에만 두고, 알람 핸들러에서 직접 부르지 않기로 했어요. 알람이 여러 단계를 따라잡아도 중간 진입 처리가 순서대로 한 번씩 실행돼요.</dd>
-      <dt>더 찾은 것</dt><dd>코드 리뷰에서 “알람 따라잡기로 아침을 건너뛰면 밤에 옮겨 둔 위치가 되돌아가지 않는” 빈틈을 찾아 고쳤어요. 객체를 강제로 퇴거시킨 뒤 복원되는지 보는 테스트도 있어요.</dd>
-    </dl>
-  </article>
-
-  <article class="dec" id="p3">
-    <span class="no">문제 3 · 결정 0061</span>
-    <h3>“받지 않았다”를 어떻게 증명하나</h3>
-    <dl>
-      <dt>문제</dt><dd>정보가 새지 않았다는 건 “아무것도 오지 않았다”를 보여야 해서, 보통의 테스트로는 증명하기 어려워요.</dd>
-      <dt>해결</dt><dd>
-        <ul>
-          <li><b>메타모픽 테스트</b>: 마피아의 행동만 다르게 한 두 판을 돌려서, 시민 편 소켓이 받은 프레임 열이 같은지 비교해요. 숨긴 정보가 한 글자라도 실렸다면 두 열이 달라져요.</li>
-          <li><b>전 프레임 검사</b>: 6명이 두 밤을 보내는 한 판의 모든 실제 프레임에서 서버 전용 키가 없는지 확인해요.</li>
-          <li>“오지 않았음”은 확인 신호(ping/pong)를 주고받은 시점까지 프레임이 없음을 보는 방식으로 증명해요.</li>
-        </ul>
-      </dd>
-      <dt>결과</dt><dd>비공개 정보의 경계가 코드 리뷰 감이 아니라 테스트로 지켜져요. 새 기능을 더할 때도 같은 테스트가 회귀를 잡아요.</dd>
-    </dl>
-  </article>
-</div></section>
-
-<section id="verify"><div class="wrap">
-  <p class="eyebrow">VERIFICATION</p>
-  <h2>검증</h2>
-  <table class="tbl">
-    <tr><th>규칙 테스트</th><td>순수 규칙은 Node에서, 화면은 DOM 시뮬레이션에서, 방 서버는 실제 Workers 런타임(workerd) 안에서 실행해요.<small>세 갈래로 나뉜 자동 테스트 5,000개 이상</small></td></tr>
-    <tr><th>정보 누설 검사</th><td>밤 · 유령 · 채팅 · 동작 각각에 누설 테스트가 있어요. 위의 메타모픽 방식을 써요.</td></tr>
-    <tr><th>화면 E2E</th><td>실제 Chrome으로 방을 만들고 여러 폰 화면 크기에서 배치 · 겹침 · 잘림 · 탭 크기를 좌표로 검사해요.<small>이 검사가 밤 끝 알림이 360px 폭에서 버튼의 점을 1.8px 덮는 결함을 잡았어요</small></td></tr>
-    <tr><th>성능 게이트</th><td>3D 맵과 캐릭터 8명을 CPU 4배 느리게 한 조건에서 5분 측정했어요.<small>평균 60fps · 끊김 0 · 그리는 호출 최대 67 · 입장에서 조작까지 0.76초 · 실기기 iPhone 16 Pro 59.98fps</small></td></tr>
-    <tr><th>결정 기록</th><td>68개 결정에 상태(채택 · 개정)와 날짜를 붙이고, 개정할 때는 원문을 남기고 표시를 덧붙여요.</td></tr>
+<section class="ch" id="c2"><div class="wrap">
+  <h2><span class="n">2</span>기술 및 설계 결정</h2>
+  <h3 class="sec" id="d1"><span class="n">2.1</span>방 상태 관리</h3>
+  <table class="opts"><tbody><tr class="pick"><td>방마다 Durable Object</td><td>객체 하나가 요청을 도착 순서대로 처리하고, 저장소와 알람을 함께 가진다</td></tr><tr><td>일반 서버 + Redis</td><td>인스턴스가 늘면 방 상태 동기화와 분산 락이 필요하고, 서버를 직접 운영해야 한다</td></tr><tr><td>Firebase 같은 실시간 서비스</td><td>판정이 클라이언트와 별도 함수로 나뉘어 서버가 규칙을 강제하기 어렵다</td></tr><tr><td>방장 폰이 서버 역할 (P2P)</td><td>방장 폰이 모든 역할을 알게 되어 게임이 성립하지 않는다</td></tr></tbody></table>
+  <ul class="why"><li><b>채택 근거</b>방의 상태와 판정이 한 객체에 있어 락 없이 처리 순서가 정해지고, 서버가 규칙을 강제하며, 서버를 운영할 필요가 없다.</li><li><b>감수한 점</b>Cloudflare에 종속된다. 객체가 한 리전에 있어 한국에서 왕복 약 155ms가 걸린다(<a href="#i1">8.1</a>).</li></ul>
+  <h3 class="sec" id="d2"><span class="n">2.2</span>정보 전달 방식</h3>
+  <table class="opts"><tbody><tr class="pick"><td>플레이어별 상태 생성 + 단일 전송 경로</td><td>서버가 플레이어마다 볼 수 있는 정보만 담아 보내고, 받는 사람은 한 함수에서 정한다</td></tr><tr><td>전체 상태 전송 후 화면에서 숨김</td><td>구현은 쉽지만 숨긴 정보가 네트워크에 그대로 실린다</td></tr><tr><td>역할별 채널 구독</td><td>같은 판정 규칙이 여러 채널에 흩어져 일관성을 지키기 어렵다</td></tr></tbody></table>
+  <ul class="why"><li><b>채택 근거</b>숨겨야 할 정보가 네트워크로도 가지 않고, 정보 경계가 한 곳에 있어 테스트로 증명할 수 있다(<a href="#c9">9</a>).</li><li><b>감수한 점</b>모든 메시지가 한 함수를 거쳐야 해 새 기능을 넣을 때 제약이 생긴다.</li></ul>
+  <h3 class="sec" id="d3"><span class="n">2.3</span>채팅 보관</h3>
+  <table class="opts"><tbody><tr class="pick"><td>서버 보관 + 줄마다 받는 사람 기록</td><td>보낼 때의 받는 사람을 8비트 마스크로 줄과 함께 저장한다</td></tr><tr><td>저장하지 않음</td><td>가장 단순하지만 재접속하면 대화가 사라진다</td></tr><tr><td>브라우저에만 저장</td><td>서버 기준의 비공개 규칙을 복원에 적용할 수 없다</td></tr><tr><td>조회할 때 역할로 거름</td><td>조회 시점의 역할로 판단해 “탈락한 뒤부터 보인다” 같은 규칙이 어긋난다</td></tr></tbody></table>
+  <ul class="why"><li><b>채택 근거</b>재접속해도 대화가 남고, 복원되는 범위가 실시간 전송과 같다.</li><li><b>감수한 점</b>쓰기가 늘어 줄 단위 키와 채널별 보관 상한으로 묶었다.</li></ul>
+  <h3 class="sec" id="d4"><span class="n">2.4</span>연결 끊김 처리</h3>
+  <table class="opts"><tbody><tr class="pick"><td>서버 타이머로 진행 + 토큰 재연결</td><td>끊겨도 진행하고, 마감까지 못 낸 투표는 무효표로 처리한다</td></tr><tr><td>끊기면 전원 일시정지</td><td>공정하지만 한 명이 판 전체를 붙잡는다</td></tr><tr><td>끊기면 탈락</td><td>모바일에서 흔한 끊김에 과도한 불이익을 준다</td></tr></tbody></table>
+  <ul class="why"><li><b>채택 근거</b>판 길이가 예측 가능하고, 진행 기준이 서버에 있다.</li><li><b>감수한 점</b>자주 끊기는 사람은 불리하다.</li></ul>
+  <h3 class="sec" id="d5"><span class="n">2.5</span>보조 기술</h3>
+  <table class="tbl narrow">
+    <thead><tr><th>기술</th><th>선택 이유</th></tr></thead>
+    <tbody>
+      <tr><th>WebSocket Hibernation API</th><td data-k="선택 이유">대화가 없는 동안 객체를 메모리에서 내려 유휴 비용을 줄인다</td></tr>
+      <tr><th>TypeScript</th><td data-k="선택 이유">게임 규칙과 메시지 타입을 서버와 클라이언트가 같은 코드로 쓴다</td></tr>
+      <tr><th>zod</th><td data-k="선택 이유">메시지 스키마 하나로 타입과 런타임 검증을 함께 얻고, 클라이언트와 공유한다</td></tr>
+    </tbody>
   </table>
 </div></section>
 
-<section id="limits"><div class="wrap">
-  <p class="eyebrow">LIMITS &amp; NEXT</p>
-  <h2>한계와 다음 단계</h2>
-  <table class="tbl">
-    <tr><th>응답 지연</th><td>한국에서 서버까지 왕복이 약 155ms예요. 예측 이동으로 체감은 줄였지만, 요금제나 도메인 변경이 도움이 되는지는 확인하지 않았어요.</td></tr>
-    <tr><th>기기 범위</th><td>성능은 최신 iPhone과 CPU 스로틀로 확인했어요. 저가 Android와 구형 iPhone은 실측하지 않았고, 느린 기기에서는 렌더 품질을 단계적으로 낮추는 사다리가 대신 지켜요.</td></tr>
-    <tr><th>부하</th><td>방 단위로 객체가 분리돼 있어 방이 늘어도 서로 영향을 주지 않는 구조예요. 동시에 많은 방을 돌리는 부하 시험은 아직 하지 않았어요.</td></tr>
-    <tr><th>다음</th><td>정식 출시 때 같은 웹 코드를 Capacitor로 감싸 Android · iOS 앱으로 내요. 링크로 참가하는 방식은 그대로 유지해요.</td></tr>
+<section class="ch" id="c3"><div class="wrap">
+  <h2><span class="n">3</span>시스템 아키텍처</h2>
+  <h3 class="sec"><span class="n">3.1</span>구성도</h3>
+  <figure class="fig d-only"><svg viewBox="0 0 980 390" role="img" aria-label="시스템 구성도"><defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#173f8a"/></marker></defs>
+<rect class="box" x="20" y="80" width="200" height="230" rx="12"/>
+<text class="t" x="40" y="114">클라이언트</text><text class="s" x="40" y="138">한 방 4~8명</text>
+<text class="s" x="40" y="186">· 받은 상태 렌더링</text><text class="s" x="40" y="214">· 의도만 전송</text><text class="s" x="40" y="242">· 내 캐릭터 예측 이동</text>
+<rect class="zone" x="250" y="20" width="710" height="360" rx="16"/>
+<text class="l" x="270" y="48">Cloudflare · 한 번에 배포</text>
+<rect class="box" x="280" y="80" width="200" height="110" rx="12"/>
+<text class="t" x="300" y="114">Worker</text><text class="s" x="300" y="142">요청 검증</text><text class="s" x="300" y="168">방 코드로 연결</text>
+<rect class="box" x="280" y="220" width="200" height="80" rx="12"/>
+<text class="t" x="300" y="254">정적 파일</text><text class="s" x="300" y="280">화면(SPA)</text>
+<rect class="hot" x="540" y="70" width="400" height="200" rx="14"/>
+<text class="t" x="560" y="104">Room Durable Object</text><text class="s" x="560" y="130">방마다 1개 · 요청을 순서대로 처리</text>
+<text class="s" x="560" y="172">① 입력 검증</text><text class="s" x="560" y="202">② 판정 · 단계 전환 (알람)</text><text class="s" x="560" y="232">③ 플레이어별 상태 생성 → 전송</text>
+<rect class="box" x="540" y="296" width="400" height="66" rx="12"/>
+<text class="t" x="560" y="324">저장소 (SQLite)</text><text class="m" x="560" y="350">room · world · chat · alarm</text>
+<path class="ln" d="M220 135 H272" marker-end="url(#a1)"/><text class="l" x="226" y="124">HTTP</text>
+<path class="ln" d="M220 280 C 330 368, 470 350, 532 250" marker-end="url(#a1)"/><text class="l" x="290" y="368">WebSocket</text>
+<path class="ln" d="M480 135 H532" marker-end="url(#a1)"/><text class="l" x="490" y="124">RPC</text>
+<path class="ln" d="M740 270 V290" marker-end="url(#a1)"/>
+</svg></figure><figure class="fig m-only"><svg viewBox="0 0 360 620" role="img" aria-label="시스템 구성도"><defs><marker id="b1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#173f8a"/></marker></defs>
+<rect class="box" x="20" y="10" width="320" height="104" rx="12"/><text class="t" x="38" y="42">클라이언트 (한 방 4~8명)</text><text class="xs" x="38" y="72">받은 상태 렌더링 · 의도만 전송</text><text class="xs" x="38" y="96">내 캐릭터 예측 이동</text>
+<path class="ln" d="M180 114 V152" marker-end="url(#b1)"/><text class="l" x="192" y="140">HTTP · WebSocket</text>
+<rect class="box" x="20" y="158" width="320" height="76" rx="12"/><text class="t" x="38" y="190">Worker</text><text class="xs" x="38" y="218">요청 검증 · 방 코드로 연결</text>
+<path class="ln" d="M180 234 V272" marker-end="url(#b1)"/><text class="l" x="192" y="260">RPC</text>
+<rect class="hot" x="20" y="278" width="320" height="188" rx="14"/><text class="t" x="38" y="310">Room Durable Object</text><text class="xs" x="38" y="338">방마다 1개 · 요청을 순서대로 처리</text>
+<text class="xs" x="38" y="378">① 입력 검증</text><text class="xs" x="38" y="406">② 판정 · 단계 전환 (알람)</text><text class="xs" x="38" y="434">③ 플레이어별 상태 생성 → 전송</text>
+<path class="ln" d="M180 466 V504" marker-end="url(#b1)"/>
+<rect class="box" x="20" y="510" width="320" height="90" rx="12"/><text class="t" x="38" y="542">저장소 (SQLite)</text><text class="m" x="38" y="572">room · world · chat · alarm</text>
+</svg></figure>
+  <ul class="notes"><li>게임 규칙은 서버와 클라이언트가 같은 코드를 쓴다. <b>판정은 서버에서만</b> 하고, 클라이언트는 표시와 이동 예측에만 쓴다.</li></ul>
+  <h3 class="sec"><span class="n">3.2</span>외부 의존성 · 통신 인프라</h3>
+  <table class="tbl narrow">
+    <thead><tr><th>구성 요소</th><th>역할</th></tr></thead>
+    <tbody>
+      <tr><th>Cloudflare Workers</th><td data-k="역할">HTTP 라우팅, 방 생성 · 참가 API, 정적 파일 제공. 상태를 갖지 않는다</td></tr>
+      <tr><th>Durable Objects</th><td data-k="역할">방 코드 이름으로 방마다 하나. 게임 상태, 판정, WebSocket 연결을 맡는다</td></tr>
+      <tr><th>Durable Object Storage</th><td data-k="역할">SQLite 기반 키-값 저장소. 방마다 격리되며 room · world · chat 키를 둔다</td></tr>
+      <tr><th>Durable Object Alarm</th><td data-k="역할">방마다 하나. 단계 마감과 방 만료를 처리한다</td></tr>
+      <tr><th>외부 DB · 큐 · 캐시</th><td data-k="역할">없다. 상태와 저장이 방 객체 안에서 끝난다</td></tr>
+      <tr><th>통신</th><td data-k="역할">방 생성 · 참가는 HTTP, 게임 중에는 WebSocket. 객체가 한 리전에 있어 한국 왕복 약 155ms</td></tr>
+    </tbody>
   </table>
-  <div class="linkrow">
-    <a class="btn" href="./">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
-      미니피아 소개
-    </a>
-    <a class="btn" href="https://github.com/dhkim1522/minifia/blob/v2/docs/architecture.md" target="_blank" rel="noopener">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>
-      설계서 전문
-      <svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg><span class="sr-only"> (새 탭에서 열림)</span>
-    </a>
-    <a class="btn" href="https://github.com/dhkim1522/minifia/tree/v2/docs/decisions" target="_blank" rel="noopener">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4"/></svg>
-      결정 기록 68개
-      <svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg><span class="sr-only"> (새 탭에서 열림)</span>
-    </a>
+  <h3 class="sec"><span class="n">3.3</span>동시성 모델</h3>
+  <ul class="notes">
+    <li>한 객체 안에서는 요청이 <b>하나씩</b> 처리된다. 같은 순간 들어온 투표도 도착 순서대로 반영되어 락이 필요 없다.</li>
+    <li>방끼리는 객체가 분리되어 서로 영향을 주지 않는다. 방이 늘면 객체 수가 늘어난다.</li>
+    <li>대기 중에는 객체가 메모리에서 내려가도 WebSocket 연결은 유지되고(하이버네이션), 다시 깨어날 때 저장소에서 상태를 읽는다.</li>
+  </ul>
+  <p class="cap">배포: <code>npm run deploy</code> 한 번으로 검사 · 빌드 · 배포, 배포 버전은 <code>/api/health</code>로 확인</p>
+</div></section>
+
+<section class="ch" id="c4"><div class="wrap">
+  <h2><span class="n">4</span>인터페이스</h2>
+  <p class="lead">클라이언트는 결과가 아니라 <b>의도만 보낸다.</b> 밤 행동은 대상만, 이동은 목적지만 보내고 판단은 서버가 한다.</p>
+  <h3 class="sec"><span class="n">4.1</span>HTTP API</h3>
+  <table class="tbl narrow">
+    <thead><tr><th>요청</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><th><code>POST /api/rooms</code></th><td data-k="설명">방 생성. 4자리 코드를 난수로 뽑고 겹치면 최대 8회 재시도 (실패 시 503)</td></tr>
+      <tr><th><code>GET /api/rooms/{code}</code></th><td data-k="설명">입장 전 미리보기 (없으면 404)</td></tr>
+      <tr><th><code>POST /api/rooms/{code}/join</code></th><td data-k="설명">참가. 재접속용 토큰 발급 (방이 차거나 시작됐으면 409)</td></tr>
+      <tr><th><code>GET /api/rooms/{code}/ws</code></th><td data-k="설명">WebSocket 연결. 첫 메시지 <code>hello</code>의 토큰으로 자리 확인</td></tr>
+    </tbody>
+  </table>
+  <h3 class="sec"><span class="n">4.2</span>WebSocket 메시지</h3>
+  <table class="tbl narrow">
+    <thead><tr><th>방향</th><th>메시지</th></tr></thead>
+    <tbody>
+      <tr><th>클라이언트 → 서버</th><td data-k="메시지">연결 <code>hello</code> <code>ping</code> · 행동 <code>pick</code> <code>point</code> <code>verdict</code> · 이동 · 대화 <code>move</code> <code>chat</code> <code>whisper</code></td></tr>
+      <tr><th>서버 → 클라이언트</th><td data-k="메시지">상태 <code>state</code>(플레이어마다 다름) · 이벤트 <code>world</code> <code>chat</code> <code>chatLog</code> · 오류 <code>error</code></td></tr>
+      <tr><th>제한</th><td data-k="메시지">본문 · 메시지 1KB, 연결당 초당 20건, 모든 메시지 zod 검증</td></tr>
+    </tbody>
+  </table>
+  <h3 class="sec"><span class="n">4.3</span>주요 흐름</h3>
+  <details class="flow"><summary>① 방 생성 → 참가 → 연결<small>HTTP로 토큰을 받고 WebSocket으로 자리 확인</small></summary><figure class="fig"><svg viewBox="0 0 980 458" role="img"><defs><marker id="f1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#173f8a"/></marker></defs><line class="life" x1="90" y1="64" x2="90" y2="448"/><line class="life" x1="356" y1="64" x2="356" y2="448"/><line class="life" x1="623" y1="64" x2="623" y2="448"/><line class="life" x1="890" y1="64" x2="890" y2="448"/><rect class="box" x="10" y="20" width="160" height="44" rx="10"/><text class="t" x="90" y="48" text-anchor="middle">클라이언트</text><rect class="box" x="276" y="20" width="160" height="44" rx="10"/><text class="t" x="356" y="48" text-anchor="middle">Worker</text><rect class="hot" x="543" y="20" width="160" height="44" rx="10"/><text class="t" x="623" y="48" text-anchor="middle">Room DO</text><rect class="box" x="810" y="20" width="160" height="44" rx="10"/><text class="t" x="890" y="48" text-anchor="middle">저장소</text><path class="ln" d="M90 100 H348" marker-end="url(#f1)"/><text class="m" x="223.0" y="92" text-anchor="middle">POST /api/rooms {닉네임}</text><path class="ln" d="M356 146 H615" marker-end="url(#f1)"/><text class="m" x="489.5" y="138" text-anchor="middle">4자리 코드로 방 생성 (겹치면 재시도, 최대 8회)</text><path class="ln" d="M623 192 H882" marker-end="url(#f1)"/><text class="m" x="756.5" y="184" text-anchor="middle">room 저장 · 만료 알람</text><path class="ln" d="M623 238 H364" marker-end="url(#f1)"/><text class="m" x="489.5" y="230" text-anchor="middle">토큰 · 좌석</text><path class="ln" d="M356 284 H98" marker-end="url(#f1)"/><text class="m" x="223.0" y="276" text-anchor="middle">201 {code, token, seat}</text><path class="ln" d="M90 330 H615" marker-end="url(#f1)"/><text class="m" x="356.5" y="322" text-anchor="middle">WebSocket 연결 → hello {token}</text><rect class="box" x="403.0" y="354" width="440" height="34" rx="8"/><text class="s" x="623" y="376" text-anchor="middle">토큰으로 좌석 확인, 소켓에 플레이어 기록</text><path class="ln" d="M623 422 H98" marker-end="url(#f1)"/><text class="m" x="356.5" y="414" text-anchor="middle">state (내 시점) · 위치 · chatLog</text></svg></figure><p class="hint">도식은 옆으로 밀어 볼 수 있습니다.</p></details>
+  <details class="flow" open><summary>② 밤 행동 처리<small>검증 · 판정 후 소켓마다 다른 상태 전송</small></summary><figure class="fig"><svg viewBox="0 0 980 470" role="img" aria-label="요청 처리 흐름"><defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#173f8a"/></marker></defs>
+<line class="life" x1="110" y1="64" x2="110" y2="450"/><line class="life" x1="440" y1="64" x2="440" y2="450"/>
+<line class="life" x1="775" y1="64" x2="775" y2="450"/><line class="life" x1="910" y1="64" x2="910" y2="450"/>
+<rect class="box" x="30" y="20" width="160" height="44" rx="10"/><text class="t" x="110" y="48" text-anchor="middle">마피아 폰</text>
+<rect class="hot" x="350" y="20" width="180" height="44" rx="10"/><text class="t" x="440" y="48" text-anchor="middle">Room DO</text>
+<rect class="box" x="705" y="20" width="140" height="44" rx="10"/><text class="t" x="775" y="48" text-anchor="middle">저장소</text>
+<rect class="box" x="855" y="20" width="115" height="44" rx="10"/><text class="t" x="912" y="48" text-anchor="middle">시민 폰들</text>
+<path class="ln" d="M110 100 H432" marker-end="url(#a2)"/><text class="m" x="270" y="90" text-anchor="middle">밤 행동 { 대상: 3 }</text>
+<rect class="box" x="455" y="114" width="300" height="160" rx="10"/>
+<text class="s" x="472" y="142">① 속도 제한 (초당 20건)</text><text class="s" x="472" y="170">② 크기 1KB · 스키마 검증</text><text class="s" x="472" y="198">③ 마감 지난 단계 먼저 처리</text><text class="s" x="472" y="226">④ 단계 · 역할 권한 확인</text><text class="s" x="472" y="254">⑤ 집계 · 판정</text>
+<path class="ln" d="M440 300 H767" marker-end="url(#a2)"/><text class="m" x="600" y="292" text-anchor="middle">저장 · 다음 알람</text>
+<rect class="box" x="455" y="316" width="300" height="44" rx="10"/><text class="s" x="472" y="344">⑥ 소켓마다 볼 수 있는 상태 생성</text>
+<path class="ln" d="M440 400 H118" marker-end="url(#a2)"/><text class="m" x="280" y="390" text-anchor="middle">상태 (집계 포함)</text>
+<path class="ln" d="M440 436 H902" marker-end="url(#a2)"/><text class="m" x="670" y="428" text-anchor="middle">상태 (마피아 행동 없음)</text>
+</svg></figure><p class="hint">도식은 옆으로 밀어 볼 수 있습니다.</p></details>
+  <details class="flow"><summary>③ 알람에 의한 단계 전환<small>마감 지난 단계를 순서대로 처리</small></summary><figure class="fig"><svg viewBox="0 0 980 320" role="img"><defs><marker id="f3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#173f8a"/></marker></defs><line class="life" x1="90" y1="64" x2="90" y2="310"/><line class="life" x1="356" y1="64" x2="356" y2="310"/><line class="life" x1="623" y1="64" x2="623" y2="310"/><line class="life" x1="890" y1="64" x2="890" y2="310"/><rect class="box" x="10" y="20" width="160" height="44" rx="10"/><text class="t" x="90" y="48" text-anchor="middle">알람</text><rect class="hot" x="276" y="20" width="160" height="44" rx="10"/><text class="t" x="356" y="48" text-anchor="middle">Room DO</text><rect class="box" x="543" y="20" width="160" height="44" rx="10"/><text class="t" x="623" y="48" text-anchor="middle">저장소</text><rect class="box" x="810" y="20" width="160" height="44" rx="10"/><text class="t" x="890" y="48" text-anchor="middle">클라이언트들</text><path class="ln" d="M90 100 H348" marker-end="url(#f3)"/><text class="m" x="223.0" y="92" text-anchor="middle">alarm() · 마감 시각 도달</text><rect class="box" x="156.0" y="124" width="400" height="34" rx="8"/><text class="s" x="356" y="146" text-anchor="middle">마감 지난 단계를 순서대로 진입 처리</text><path class="ln" d="M356 192 H615" marker-end="url(#f3)"/><text class="m" x="489.5" y="184" text-anchor="middle">room 저장 · 다음 알람 설정</text><path class="ln" d="M356 238 H882" marker-end="url(#f3)"/><text class="m" x="623.0" y="230" text-anchor="middle">소켓마다 볼 수 있는 state</text><rect class="box" x="156.0" y="262" width="400" height="34" rx="8"/><text class="s" x="356" y="284" text-anchor="middle">처리 중 예외 → 1초 뒤 알람 재설정</text></svg></figure><p class="hint">도식은 옆으로 밀어 볼 수 있습니다.</p></details>
+  <details class="flow"><summary>④ 재접속 복원<small>같은 자리로 연결하고 상태 · 위치 · 채팅 복원</small></summary><figure class="fig"><svg viewBox="0 0 980 412" role="img"><defs><marker id="f4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#173f8a"/></marker></defs><line class="life" x1="90" y1="64" x2="90" y2="402"/><line class="life" x1="490" y1="64" x2="490" y2="402"/><line class="life" x1="890" y1="64" x2="890" y2="402"/><rect class="box" x="10" y="20" width="160" height="44" rx="10"/><text class="t" x="90" y="48" text-anchor="middle">클라이언트</text><rect class="hot" x="410" y="20" width="160" height="44" rx="10"/><text class="t" x="490" y="48" text-anchor="middle">Room DO</text><rect class="box" x="810" y="20" width="160" height="44" rx="10"/><text class="t" x="890" y="48" text-anchor="middle">저장소</text><rect class="box" x="280.0" y="78" width="420" height="34" rx="8"/><text class="s" x="490" y="100" text-anchor="middle">객체가 메모리에서 내려갔다면 깨어날 때</text><path class="ln" d="M890 146 H498" marker-end="url(#f4)"/><text class="m" x="690.0" y="138" text-anchor="middle">room · world · chat:* 읽어 메모리 복원</text><path class="ln" d="M90 192 H482" marker-end="url(#f4)"/><text class="m" x="290.0" y="184" text-anchor="middle">WebSocket 재연결 → hello {token}</text><rect class="box" x="260.0" y="216" width="460" height="34" rx="8"/><text class="s" x="490" y="238" text-anchor="middle">같은 토큰의 이전 연결 종료, 같은 자리로 연결</text><path class="ln" d="M490 284 H98" marker-end="url(#f4)"/><text class="m" x="290.0" y="276" text-anchor="middle">state (내 시점)</text><path class="ln" d="M490 330 H98" marker-end="url(#f4)"/><text class="m" x="290.0" y="322" text-anchor="middle">위치 (볼 수 있는 사람만)</text><path class="ln" d="M490 376 H98" marker-end="url(#f4)"/><text class="m" x="290.0" y="368" text-anchor="middle">chatLog (내 좌석 비트가 켜진 줄, 채널별 30줄)</text></svg></figure><p class="hint">도식은 옆으로 밀어 볼 수 있습니다.</p></details>
+  <details class="flow"><summary>⑤ 채팅 전송<small>채널과 받는 사람을 서버가 정해 저장 · 전송</small></summary><figure class="fig"><svg viewBox="0 0 980 366" role="img"><defs><marker id="f5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#173f8a"/></marker></defs><line class="life" x1="90" y1="64" x2="90" y2="356"/><line class="life" x1="356" y1="64" x2="356" y2="356"/><line class="life" x1="623" y1="64" x2="623" y2="356"/><line class="life" x1="890" y1="64" x2="890" y2="356"/><rect class="box" x="10" y="20" width="160" height="44" rx="10"/><text class="t" x="90" y="48" text-anchor="middle">보낸 사람</text><rect class="hot" x="276" y="20" width="160" height="44" rx="10"/><text class="t" x="356" y="48" text-anchor="middle">Room DO</text><rect class="box" x="543" y="20" width="160" height="44" rx="10"/><text class="t" x="623" y="48" text-anchor="middle">저장소</text><rect class="box" x="810" y="20" width="160" height="44" rx="10"/><text class="t" x="890" y="48" text-anchor="middle">받는 사람들</text><path class="ln" d="M90 100 H348" marker-end="url(#f5)"/><text class="m" x="223.0" y="92" text-anchor="middle">chat {text}</text><rect class="box" x="166.0" y="124" width="380" height="34" rx="8"/><text class="s" x="356" y="146" text-anchor="middle">길이 · 단계 · 도배 제한 확인</text><rect class="box" x="96.0" y="170" width="520" height="34" rx="8"/><text class="s" x="356" y="192" text-anchor="middle">채널 결정 (공개 / 마피아 / 유령) → 받는 사람 마스크</text><path class="ln" d="M356 238 H615" marker-end="url(#f5)"/><text class="m" x="489.5" y="230" text-anchor="middle">chat:{번호} {채널 번호, 마스크}</text><path class="ln" d="M356 284 H882" marker-end="url(#f5)"/><text class="m" x="623.0" y="276" text-anchor="middle">chat (마스크에 든 소켓에만)</text><path class="ln" d="M356 330 H98" marker-end="url(#f5)"/><text class="m" x="223.0" y="322" text-anchor="middle">거절 시 chatReject</text></svg></figure><p class="hint">도식은 옆으로 밀어 볼 수 있습니다.</p></details>
+</div></section>
+
+<section class="ch" id="c5"><div class="wrap">
+  <h2><span class="n">5</span>데이터 모델링</h2>
+  <h3 class="sec"><span class="n">5.1</span>논리 모델 (ERD)</h3>
+  <figure class="fig"><svg viewBox="0 0 980 520" role="img" aria-label="논리 데이터 모델">
+<rect class="hot" x="20" y="20" width="280" height="202" rx="8"/><rect x="20" y="20" width="280" height="36" rx="8" fill="#173f8a"/><rect x="20" y="40" width="280" height="16" fill="#173f8a"/><text x="34" y="44" style="fill:#fff;font-size:16px;font-weight:700">Room (방)</text><text class="m" x="34" y="80">PK code</text><text class="xs" x="288" y="80" text-anchor="end">4자리</text><text class="m" x="34" y="106">phase</text><text class="xs" x="288" y="106" text-anchor="end">단계</text><text class="m" x="34" y="132">phaseEndsAt</text><text class="xs" x="288" y="132" text-anchor="end">마감 시각</text><text class="m" x="34" y="158">day</text><text class="xs" x="288" y="158" text-anchor="end">일차</text><text class="m" x="34" y="184">hostId</text><text class="xs" x="288" y="184" text-anchor="end">FK → Player</text><text class="m" x="34" y="210">expiresAt</text><text class="xs" x="288" y="210" text-anchor="end">만료 시각</text>
+<rect class="box" x="370" y="20" width="260" height="228" rx="8"/><rect x="370" y="20" width="260" height="36" rx="8" fill="#173f8a"/><rect x="370" y="40" width="260" height="16" fill="#173f8a"/><text x="384" y="44" style="fill:#fff;font-size:16px;font-weight:700">Player (참가자)</text><text class="m" x="384" y="80">PK id</text><text class="xs" x="618" y="80" text-anchor="end"></text><text class="m" x="384" y="106">token</text><text class="xs" x="618" y="106" text-anchor="end">재접속 인증</text><text class="m" x="384" y="132">seat</text><text class="xs" x="618" y="132" text-anchor="end">좌석 0~7</text><text class="m" x="384" y="158">role / alive</text><text class="xs" x="618" y="158" text-anchor="end">역할 · 생존</text><text class="m" x="384" y="184">nightPick</text><text class="xs" x="618" y="184" text-anchor="end">밤 행동 대상</text><text class="m" x="384" y="210">nominate</text><text class="xs" x="618" y="210" text-anchor="end">지목</text><text class="m" x="384" y="236">verdictVote</text><text class="xs" x="618" y="236" text-anchor="end">찬반</text>
+<rect class="box" x="700" y="20" width="260" height="202" rx="8"/><rect x="700" y="20" width="260" height="36" rx="8" fill="#173f8a"/><rect x="700" y="40" width="260" height="16" fill="#173f8a"/><text x="714" y="44" style="fill:#fff;font-size:16px;font-weight:700">ChatLine (채팅 줄)</text><text class="m" x="714" y="80">PK g</text><text class="xs" x="948" y="80" text-anchor="end">쓰기 순번</text><text class="m" x="714" y="106">ch</text><text class="xs" x="948" y="106" text-anchor="end">채널</text><text class="m" x="714" y="132">seq</text><text class="xs" x="948" y="132" text-anchor="end">채널별 번호</text><text class="m" x="714" y="158">seat</text><text class="xs" x="948" y="158" text-anchor="end">FK → Player</text><text class="m" x="714" y="184">text / at</text><text class="xs" x="948" y="184" text-anchor="end">내용 · 시각</text><text class="m" x="714" y="210">r</text><text class="xs" x="948" y="210" text-anchor="end">받는 사람 마스크</text>
+<rect class="box" x="20" y="330" width="280" height="124" rx="8"/><rect x="20" y="330" width="280" height="36" rx="8" fill="#173f8a"/><rect x="20" y="350" width="280" height="16" fill="#173f8a"/><text x="34" y="354" style="fill:#fff;font-size:16px;font-weight:700">VoteLog (투표 기록)</text><text class="m" x="34" y="390">day</text><text class="xs" x="288" y="390" text-anchor="end">일차</text><text class="m" x="34" y="416">cand</text><text class="xs" x="288" y="416" text-anchor="end">지목 결과</text><text class="m" x="34" y="442">exec</text><text class="xs" x="288" y="442" text-anchor="end">찬반 결과</text>
+<rect class="box" x="370" y="350" width="260" height="124" rx="8"/><rect x="370" y="350" width="260" height="36" rx="8" fill="#173f8a"/><rect x="370" y="370" width="260" height="16" fill="#173f8a"/><text x="384" y="374" style="fill:#fff;font-size:16px;font-weight:700">Segment (이동 구간)</text><text class="m" x="384" y="410">FK playerId</text><text class="xs" x="618" y="410" text-anchor="end"></text><text class="m" x="384" y="436">p</text><text class="xs" x="618" y="436" text-anchor="end">경로 점</text><text class="m" x="384" y="462">t0 · v</text><text class="xs" x="618" y="462" text-anchor="end">출발 시각 · 속도</text>
+<rect class="box" x="700" y="330" width="260" height="124" rx="8"/><rect x="700" y="330" width="260" height="36" rx="8" fill="#173f8a"/><rect x="700" y="350" width="260" height="16" fill="#173f8a"/><text x="714" y="354" style="fill:#fff;font-size:16px;font-weight:700">Whisper (귓속말)</text><text class="m" x="714" y="390">from / to</text><text class="xs" x="948" y="390" text-anchor="end">FK → Player</text><text class="m" x="714" y="416">text / at</text><text class="xs" x="948" y="416" text-anchor="end">내용 · 시각</text><text class="m" x="714" y="442">n</text><text class="xs" x="948" y="442" text-anchor="end">일차</text>
+<path class="ln" d="M300 80 H370"/><text class="l" x="306" y="72">1</text><text class="l" x="352" y="72">N</text>
+<path class="ln" d="M630 80 H700"/><text class="l" x="636" y="72">1</text><text class="l" x="680" y="72">N</text>
+<path class="ln" d="M160 238 V330"/><text class="l" x="170" y="262">1</text><text class="l" x="170" y="322">N</text>
+<path class="ln" d="M500 236 V350"/><text class="l" x="510" y="262">1</text><text class="l" x="510" y="342">0..1</text>
+<path class="ln" d="M630 210 H675 V300 H830 V330"/><text class="l" x="640" y="202">1</text><text class="l" x="840" y="322">N</text>
+</svg></figure><p class="hint">도식은 옆으로 밀어 볼 수 있습니다.</p>
+  <ul class="notes"><li>방 하나가 모든 엔티티의 경계다. 다른 방과 관계를 맺지 않아 방 단위로 저장소를 격리할 수 있다.</li></ul>
+
+  <h3 class="sec"><span class="n">5.2</span>물리 스키마 (키-값)</h3>
+  <figure class="fig d-only"><svg viewBox="0 0 980 340" role="img" aria-label="저장소 구조">
+<text class="l" x="20" y="40">Durable Object 저장소 · 방마다 따로</text>
+<rect class="hot" x="20" y="60" width="225" height="170" rx="12"/><text class="t" x="36" y="92">room</text><text class="s" x="36" y="124">참가자 · 역할 · 단계</text><text class="s" x="36" y="152">입장 · 판정 때 갱신</text><text class="s" x="36" y="180">방 상태의 기준</text>
+<rect class="box" x="265" y="60" width="215" height="170" rx="12"/><text class="t" x="281" y="92">world</text><text class="s" x="281" y="124">캐릭터 위치</text><text class="s" x="281" y="152">이동 후 2초 모아 저장</text>
+<rect class="box" x="500" y="60" width="250" height="170" rx="12"/><text class="t" x="516" y="92">chat:{번호}</text><text class="s" x="516" y="124">줄 하나 = 키 하나</text><text class="s" x="516" y="152">받는 사람 8비트 마스크</text><text class="s" x="516" y="180">채널별 번호 · 30줄 복원</text>
+<rect class="box" x="770" y="60" width="190" height="170" rx="12"/><text class="t" x="786" y="92">alarm</text><text class="s" x="786" y="124">다음 마감 시각</text><text class="s" x="786" y="152">실패 시 1초 뒤 재설정</text>
+<rect class="zone" x="20" y="256" width="940" height="64" rx="12"/>
+<text class="s" x="40" y="294">메모리 전용 · 재시작 시 초기화 허용: 속도 제한 · 도배 제한 기록 (잃어도 제한이 한 번 느슨해질 뿐)</text>
+</svg></figure><figure class="fig m-only"><svg viewBox="0 0 360 520" role="img" aria-label="저장소 구조">
+<rect class="hot" x="14" y="10" width="160" height="176" rx="12"/><text class="t" x="28" y="40">room</text><text class="xs" x="28" y="70">참가자 · 역할 · 단계</text><text class="xs" x="28" y="96">입장 · 판정 때 갱신</text><text class="xs" x="28" y="122">방 상태의 기준</text><rect class="box" x="186" y="10" width="160" height="176" rx="12"/><text class="t" x="200" y="40">world</text><text class="xs" x="200" y="70">캐릭터 위치</text><text class="xs" x="200" y="96">2초 모아 저장</text>
+<rect class="box" x="14" y="200" width="160" height="176" rx="12"/><text class="t" x="28" y="230">chat:{번호}</text><text class="xs" x="28" y="260">줄 하나 = 키 하나</text><text class="xs" x="28" y="286">받는 사람 마스크</text><text class="xs" x="28" y="312">채널별 번호</text><text class="xs" x="28" y="338">최근 30줄 복원</text><rect class="box" x="186" y="200" width="160" height="176" rx="12"/><text class="t" x="200" y="230">alarm</text><text class="xs" x="200" y="260">다음 마감 시각</text><text class="xs" x="200" y="286">실패 시 1초 뒤</text><text class="xs" x="200" y="312">다시 설정</text>
+<rect class="zone" x="14" y="392" width="332" height="110" rx="12"/><text class="t" x="30" y="424">메모리 전용</text><text class="xs" x="30" y="454">속도 · 도배 제한 기록</text><text class="xs" x="30" y="480">재시작 시 초기화 허용</text>
+</svg></figure>
+  <p class="cap">관계형 테이블 대신 쓰기 빈도가 다른 데이터를 키로 나눴다. <code>room</code>에 이동과 채팅을 함께 두면 걸음 하나, 말 한 줄에도 방 전체를 다시 써야 하기 때문이다.</p>
+  <div class="schema">
+    <h4><code>room</code><small>Room과 Player 목록 · 입장 · 판정 때 저장</small></h4>
+    <table class="tbl fields"><thead><tr><th>필드</th><th>타입</th><th>설명</th></tr></thead><tbody>
+      <tr><th>code</th><td class="ty" data-k="타입">string</td><td data-k="설명">방 코드 4자리 (객체 이름)</td></tr>
+      <tr><th>phase · phaseEndsAt</th><td class="ty" data-k="타입">PhaseId · number|null</td><td data-k="설명">현재 단계와 마감 시각</td></tr>
+      <tr><th>day</th><td class="ty" data-k="타입">number?</td><td data-k="설명">일차</td></tr>
+      <tr><th>createdAt · expiresAt</th><td class="ty" data-k="타입">number</td><td data-k="설명">생성 · 만료 시각</td></tr>
+      <tr><th>hostId</th><td class="ty" data-k="타입">string</td><td data-k="설명">방장 Player id</td></tr>
+      <tr><th>players[]</th><td class="ty" data-k="타입">Player[]</td><td data-k="설명">id, token, seat, nickname, role?, alive?, connected, nightPick?, nominate?, verdictVote?</td></tr>
+      <tr><th>voteLog[] · nightLog[]</th><td class="ty" data-k="타입">object[]</td><td data-k="설명">일차별 투표 · 밤 결과 기록 (서버 전용)</td></tr>
+    </tbody></table>
+    <h4><code>world</code><small>위치 · 이동 후 2초 모아 저장</small></h4>
+    <table class="tbl fields"><thead><tr><th>필드</th><th>타입</th><th>설명</th></tr></thead><tbody>
+      <tr><th>segs</th><td class="ty" data-k="타입">{ playerId: Segment }</td><td data-k="설명">각자 현재 이동 구간: 경로 점 p, 출발 시각 t0, 속도 v</td></tr>
+      <tr><th>home</th><td class="ty" data-k="타입">{ day, pos }?</td><td data-k="설명">그날 밤 · 아침에 돌아갈 위치 (서버 전용)</td></tr>
+    </tbody></table>
+    <h4><code>chat:000001</code> …<small>줄 하나 = 키 하나 · 줄마다 저장</small></h4>
+    <table class="tbl fields"><thead><tr><th>필드</th><th>타입</th><th>설명</th></tr></thead><tbody>
+      <tr><th>g</th><td class="ty" data-k="타입">number</td><td data-k="설명">방 전체 쓰기 순번 (키 번호)</td></tr>
+      <tr><th>ch · seq</th><td class="ty" data-k="타입">all|mafia|ghost · number</td><td data-k="설명">채널과 채널별 번호</td></tr>
+      <tr><th>seat · text · at</th><td class="ty" data-k="타입">number · string · number</td><td data-k="설명">보낸 좌석, 내용, 시각</td></tr>
+      <tr><th>r</th><td class="ty" data-k="타입">number (8비트)</td><td data-k="설명">보낼 때의 받는 사람 좌석 마스크. 복원은 이 값으로만 거른다</td></tr>
+    </tbody></table>
+  </div>
+  <ul class="notes"><li><b>번호를 채널마다 따로 매긴다.</b> 전체 번호를 쓰면 공개 채팅 번호가 비는 간격으로 비공개 대화량을 알 수 있기 때문이다.</li></ul>
+
+  <h3 class="sec"><span class="n">5.3</span>캐시 설계</h3>
+  <table class="tbl">
+    <thead><tr><th>데이터</th><th>읽기</th><th>쓰기</th></tr></thead>
+    <tbody>
+      <tr><th>방 상태 (room)</th><td data-k="읽기">메모리 사본. 저장소는 객체가 깨어날 때만 읽는다</td><td data-k="쓰기">바뀔 때마다 바로 저장 (write-through)</td></tr>
+      <tr><th>위치 (world)</th><td data-k="읽기">메모리 사본</td><td data-k="쓰기">이동 후 2초 모아 저장 (write-behind). 나가기 · 단계 전환 · 알람 때는 즉시</td></tr>
+      <tr><th>채팅 (chat:*)</th><td data-k="읽기">메모리 사본</td><td data-k="쓰기">줄을 추가할 때 바로 저장</td></tr>
+      <tr><th>속도 · 도배 제한 기록</th><td data-k="읽기">메모리만</td><td data-k="쓰기">저장하지 않는다. 잃어도 제한이 한 번 느슨해질 뿐이다</td></tr>
+    </tbody>
+  </table>
+  <ul class="notes"><li>외부 캐시는 두지 않았다. 방마다 객체 하나만 쓰기를 하므로 메모리 사본이 곧 캐시이고, 무효화할 다른 사본이 없다.</li></ul>
+
+  <h3 class="sec"><span class="n">5.4</span>보관 · 만료 정책</h3>
+  <table class="tbl narrow">
+    <thead><tr><th>대상</th><th>정책</th></tr></thead>
+    <tbody>
+      <tr><th>아무도 접속하지 않은 방</th><td data-k="정책">10분 뒤 만료</td></tr>
+      <tr><th>접속 · 시작한 방</th><td data-k="정책">3시간 뒤 만료. 만료되면 연결을 닫고 저장소 전체를 지운다</td></tr>
+      <tr><th>채팅</th><td data-k="정책">공개 100줄, 마피아 · 유령 300줄 보관. 넘으면 오래된 줄부터 20줄씩 지우고, 재접속 시 채널별 최근 30줄 반환</td></tr>
+    </tbody>
+  </table>
+</div></section>
+
+<section class="ch" id="c6"><div class="wrap">
+  <h2><span class="n">6</span>상태 설계</h2>
+  <figure class="fig"><svg viewBox="0 0 1000 320" role="img" aria-label="상태 전이도"><defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#173f8a"/></marker></defs>
+<rect class="box" x="265.0" y="19" width="130" height="42" rx="21"/><text class="s" x="330" y="45" text-anchor="middle">showdown</text><rect class="box" x="580.0" y="19" width="120" height="42" rx="21"/><text class="s" x="640" y="45" text-anchor="middle">runoff</text>
+<rect class="box" x="10.0" y="119" width="100" height="42" rx="21"/><text class="s" x="60" y="145" text-anchor="middle">lobby</text><rect class="box" x="128.0" y="119" width="124" height="42" rx="21"/><text class="s" x="190" y="145" text-anchor="middle">roleReveal</text><rect class="box" x="262.0" y="119" width="136" height="42" rx="21"/><text class="s" x="330" y="145" text-anchor="middle">dayAnnounce</text><rect class="box" x="422.0" y="119" width="126" height="42" rx="21"/><text class="s" x="485" y="145" text-anchor="middle">discussion</text>
+<rect class="hot" x="574.0" y="119" width="132" height="42" rx="21"/><text class="s" x="640" y="145" text-anchor="middle">nomination</text><rect class="box" x="736.0" y="119" width="108" height="42" rx="21"/><text class="s" x="790" y="145" text-anchor="middle">defense</text><rect class="box" x="875.0" y="119" width="100" height="42" rx="21"/><text class="s" x="925" y="145" text-anchor="middle">verdict</text>
+<rect class="box" x="865.0" y="249" width="120" height="42" rx="21"/><text class="s" x="925" y="275" text-anchor="middle">execution</text><rect class="hot" x="590.0" y="249" width="100" height="42" rx="21"/><text class="s" x="640" y="275" text-anchor="middle">night</text><rect class="box" x="410.0" y="249" width="120" height="42" rx="21"/><text class="s" x="470" y="275" text-anchor="middle">morning</text><rect class="box" x="148.0" y="249" width="104" height="42" rx="21"/><text class="s" x="200" y="275" text-anchor="middle">ended</text>
+<path class="ln" d="M110 140 H124" marker-end="url(#a3)"/><path class="ln" d="M252 140 H258" marker-end="url(#a3)"/>
+<path class="ln" d="M398 140 H418" marker-end="url(#a3)"/><path class="ln" d="M548 140 H570" marker-end="url(#a3)"/>
+<path class="ln" d="M706 140 H732" marker-end="url(#a3)"/><path class="ln" d="M844 140 H871" marker-end="url(#a3)"/>
+<path class="ln" d="M925 161 V245" marker-end="url(#a3)"/><text class="l" x="935" y="208">찬성 과반</text>
+<path class="ln" d="M865 270 H694" marker-end="url(#a3)"/>
+<path class="ln" d="M640 161 V245" marker-end="url(#a3)"/><text class="l" x="650" y="208">동률 · 0표</text>
+<path class="ln" d="M900 160 C 830 200, 740 220, 682 252" marker-end="url(#a3)"/><text class="l" x="790" y="196">부결</text>
+<path class="ln" d="M590 270 H534" marker-end="url(#a3)"/>
+<path class="ln" d="M440 249 C 410 210, 360 200, 340 165" marker-end="url(#a3)"/><text class="l" x="392" y="200">다음 날</text>
+<path class="ln2" d="M640 119 V61"/><text class="l" x="652" y="96">2명 동점</text>
+<path class="ln2" d="M330 119 V61"/><text class="l" x="342" y="96">생존 3명</text>
+<path class="ln2" d="M410 270 H252"/><path class="ln2" d="M925 291 C 925 312, 260 312, 220 291"/><text class="l" x="262" y="258">아침 · 처형 뒤 승패 확정</text>
+</svg></figure><p class="hint">도식은 옆으로 밀어 볼 수 있습니다.</p>
+  <ul class="notes"><li>단계는 <b>서버 알람</b>으로 넘어가고, 클라이언트는 서버가 보낸 마감 시각을 표시만 한다.</li><li>단계마다 들어갈 때 할 일을 표 하나에 모아, 알람이 늦어 여러 단계를 건너뛰어도 순서대로 실행한다(<a href="#i2">8.2</a>).</li></ul>
+</div></section>
+
+<section class="ch" id="c7"><div class="wrap">
+  <h2><span class="n">7</span>신뢰성 · 보안</h2>
+  <table class="tbl narrow">
+    <thead><tr><th>항목</th><th>방식</th></tr></thead>
+    <tbody>
+      <tr><th>인증</th><td data-k="방식">참가 때 발급한 토큰으로 WebSocket 첫 메시지에서 자리를 확인한다. 같은 토큰으로 다시 접속하면 이전 연결을 닫는다</td></tr>
+      <tr><th>입력 제한</th><td data-k="방식">본문 · 메시지 1KB, 연결당 초당 20건, 모든 메시지 스키마 검증</td></tr>
+      <tr><th>권한</th><td data-k="방식">단계 · 생존 · 역할을 확인한 뒤 처리한다. 행동의 종류는 서버에 저장된 역할로 정한다</td></tr>
+      <tr><th>정보 경계</th><td data-k="방식">플레이어마다 볼 수 있는 상태만 만들고, 서버 전용 값은 어떤 메시지에도 싣지 않는다</td></tr>
+      <tr><th>멱등 처리</th><td data-k="방식">메시지 · 알람 · 연결 모든 진입점이 마감 지난 단계를 먼저 처리한다</td></tr>
+      <tr><th>알람 복구</th><td data-k="방식">처리 중 예외가 나면 1초 뒤로 다시 건다</td></tr>
+      <tr><th>상태 복원</th><td data-k="방식">객체가 메모리에서 내려가도 저장소 키로 같은 상태와 같은 다음 채팅 번호를 복원한다</td></tr>
+    </tbody>
+  </table>
+</div></section>
+
+<section class="ch" id="c8"><div class="wrap">
+  <h2><span class="n">8</span>이슈 및 해결</h2>
+  <article class="issue" id="i1">
+    <h3>8.1 왕복 155ms 환경에서 이동 지연 제거</h3>
+    <dl>
+      <dt>문제</dt><dd>캐릭터를 탭하면 잠깐 멈췄다가 움직이고, 방향을 바꾸면 앞으로 튀었다.</dd>
+      <dt>원인</dt><dd>서버 처리는 <b>0~1ms</b>, 한국 왕복은 <b>약 155ms</b>. 서버 응답으로만 그려서 왕복 동안 멈춰 있었다.</dd>
+      <dt>해결</dt><dd><ul><li>내 캐릭터만 <b>서버와 같은 길찾기로 먼저 이동</b>하고, 응답이 오면 <b>150ms</b>에 걸쳐 맞춘다.</li><li>서버가 거절하면 서버 위치로 되돌린다.</li></ul></dd>
+      <dt>결과</dt><dd>위치의 기준은 서버에 두고 체감 지연만 없앴다. 단일 리전을 택하며 <a href="#d1">감수한 지연</a>에 대한 대응이다.</dd>
+    </dl>
+  </article>
+  <article class="issue" id="i2">
+    <h3>8.2 서버가 쉬었다 깨어날 때 단계 처리 누락</h3>
+    <dl>
+      <dt>문제</dt><dd>알람이 늦거나 객체가 메모리에서 내려갔다 깨어나면 밀린 단계를 한 번에 따라잡는데, 아침 단계를 건너뛰면 위치가 돌아오지 않는 결함이 있었다.</dd>
+      <dt>원인</dt><dd>건너뛴 단계의 진입 처리가 빠졌다.</dd>
+      <dt>해결</dt><dd><ul><li><b>단계별 진입 처리를 표 하나로 모아</b> 건너뛰어도 순서대로 한 번씩 실행한다.</li><li>메시지 · 알람 · 연결 모든 진입점이 마감 지난 단계부터 처리한다.</li><li>알람 처리 중 예외가 나면 1초 뒤로 다시 걸어 알람이 멈추지 않게 했다.</li></ul></dd>
+      <dt>결과</dt><dd>늦은 알람, 객체 퇴거, 재접속 어느 경우에도 같은 상태가 된다. 강제 퇴거 후 복원 테스트로 확인한다.</dd>
+    </dl>
+  </article>
+</div></section>
+
+<section class="ch" id="c9"><div class="wrap">
+  <h2><span class="n">9</span>테스트</h2>
+  <table class="tbl test">
+    <thead><tr><th>구분</th><th>방법</th></tr></thead>
+    <tbody>
+      <tr><th>정보 누설</th><td data-k="방법"><b>마피아 행동만 다르게 한 두 판</b>을 돌려 시민이 받은 메시지가 완전히 같은지 비교. 숨긴 정보가 한 글자라도 실리면 달라진다</td></tr>
+      <tr><th>방 서버 통합</th><td data-k="방법">실제 Workers 런타임에서 저장소 · 알람 · WebSocket과 강제 퇴거 후 복원 검증</td></tr>
+      <tr><th>규칙 단위</th><td data-k="방법">판정 · 단계 분기 · 받는 사람 결정</td></tr>
+      <tr><th>화면 E2E</th><td data-k="방법">폰 크기별 배치 · 겹침 · 탭 크기</td></tr>
+    </tbody>
+  </table>
+  <p class="cap">자동 테스트 5,000개 이상. 다수 방 동시 부하 시험은 아직 하지 않았다.</p>
+  <div class="refs"><span>참고 문서</span>
+    <a href="https://github.com/dhkim1522/minifia/blob/v2/docs/architecture.md" target="_blank" rel="noopener">설계서 전문 ↗</a>
+    <a href="https://github.com/dhkim1522/minifia/tree/v2/docs/decisions" target="_blank" rel="noopener">설계 결정 기록 68건 ↗</a>
+    <a href="./">미니피아 소개</a>
   </div>
 </div></section>
 </main>
-<footer style="padding-top:64px"><div class="wrap">미니피아 · <span class="serif">minifia</span> 설계 문서</div></footer>
+<footer><div class="wrap">미니피아 설계 문서</div></footer>
 </body></html>
