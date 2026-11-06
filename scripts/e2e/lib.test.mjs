@@ -144,6 +144,7 @@ import {
   SOUND_RENDER_LIMITS,
   soundButtonChecks,
   soundRenderChecks,
+  soundNightParityChecks,
   soundSequenceChecks,
   SOUND_SCRIPT_STEPS,
   sheetFitChecks,
@@ -3071,4 +3072,120 @@ test("SOUND_SCRIPT_STEPS: 단계 표가 있고 id·label 이 겹치지 않으며
   assert.ok(SOUND_SCRIPT_STEPS.some((x) => x.ids.includes("pick.turn") && x.ids.includes("pin.on")));
   assert.ok(SOUND_SCRIPT_STEPS.some((x) => x.ids.includes("pick.point") && x.ids.includes("pin.move")));
   assert.ok(SOUND_SCRIPT_STEPS.some((x) => x.notIds?.includes("game.start") && x.notIds.includes("day.start")), "새로고침 단계는 일회성 소리가 없음을 확인");
+});
+
+// ---- 12-09 sound-night-parity: 역할이 다른 페이지들의 밤 소리 동일성·밤 UI 무음·암살음 피해자만 ----
+
+const NIGHT = (cues) => ["bed.night", "night.fall", ...Array(cues).fill("night.cue")];
+const MORNING = (...extra) => ["bed.dawn", "morning.dawn", ...extra];
+/** 페이지 로그 = (밤 앞의 낮 소리) + 밤 구간 + 아침 구간. 밤 구간은 첫 bed.night 부터 첫 bed.dawn 앞까지 */
+const page = (label, ids, extra = {}) => ({ label, log: L(...ids), ...extra });
+const okPages = () => [
+  page("방장(마피아)", ["ui.tap", ...NIGHT(3), ...MORNING("morning.calm")]),
+  page("손님A(피해자)", [...NIGHT(2), ...MORNING("kill.slash", "chalk.draw")]),
+  page("손님B", [...NIGHT(4), ...MORNING("chalk.draw")]),
+  page("손님C(새로고침)", ["bed.night", "night.cue", ...MORNING("chalk.draw")], { reloaded: true }),
+];
+const parity = (pages, victimLabel = "손님A(피해자)") => soundNightParityChecks({ pages, victimLabel });
+
+test("soundNightParityChecks: 정상 로그(밤 id 집합 동일·큐 2~4·밤 ui 0·slash 피해자만·dawn 1회·새로고침 night.fall 없음)는 6줄 모두 통과", () => {
+  const lines = parity(okPages());
+  assert.deepEqual(lines.map((l) => l.id), ["P1", "P2", "P3", "P4", "P5", "P6"]);
+  assert.deepEqual(sFails(lines), []);
+});
+
+test("soundNightParityChecks P1: 한 페이지의 밤에 다른 id 가 있거나 빠지면 실패 — 밤 앞의 낮 소리(ui.tap)는 밤 구간이 아니다", () => {
+  const extra = okPages();
+  extra[1] = page("손님A(피해자)", [...NIGHT(2), "pick.turn", ...MORNING("kill.slash", "chalk.draw")]);
+  assert.deepEqual(sFails(parity(extra)), ["P1"]);
+  const missing = okPages();
+  missing[2] = page("손님B", ["bed.night", "night.cue", "night.cue", ...MORNING("chalk.draw")]);
+  assert.ok(sFails(parity(missing)).includes("P1"), "night.fall 이 빠진 페이지");
+  const ok = okPages();
+  assert.deepEqual(sFails(parity(ok)), []);
+});
+
+test("soundNightParityChecks P2: 큐가 1개이거나 5개이면 실패, 새로고침 페이지는 상한만 본다", () => {
+  const few = okPages();
+  few[2] = page("손님B", [...NIGHT(1), ...MORNING("chalk.draw")]);
+  assert.deepEqual(sFails(parity(few)), ["P2"]);
+  const many = okPages();
+  many[0] = page("방장(마피아)", [...NIGHT(5), ...MORNING("morning.calm")]);
+  assert.deepEqual(sFails(parity(many)), ["P2"]);
+  const reloadedZero = okPages();
+  reloadedZero[3] = page("손님C(새로고침)", ["bed.night", ...MORNING("chalk.draw")], { reloaded: true });
+  assert.deepEqual(sFails(parity(reloadedZero)), [], "새로고침 페이지의 큐는 0~4 (남은 시간에 따라)");
+  const reloadedFive = okPages();
+  reloadedFive[3] = page("손님C(새로고침)", ["bed.night", ...Array(5).fill("night.cue"), ...MORNING("chalk.draw")], { reloaded: true });
+  assert.deepEqual(sFails(parity(reloadedFive)), ["P2"]);
+});
+
+test("soundNightParityChecks P3: 밤 구간의 ui.* 와 vote.cast 는 실패, 아침의 ui.card 는 괜찮다", () => {
+  const tap = okPages();
+  tap[0] = page("방장(마피아)", [...NIGHT(3), "ui.tap", ...MORNING("morning.calm")]);
+  assert.ok(sFails(parity(tap)).includes("P3"));
+  const vote = okPages();
+  vote[2] = page("손님B", ["bed.night", "night.fall", "night.cue", "vote.cast", "night.cue", ...MORNING("chalk.draw")]);
+  assert.ok(sFails(parity(vote)).includes("P3"));
+  const card = okPages();
+  card[2] = page("손님B", [...NIGHT(4), ...MORNING("chalk.draw", "ui.card")]);
+  assert.deepEqual(sFails(parity(card)), []);
+  const reloadedTap = okPages();
+  reloadedTap[3] = page("손님C(새로고침)", ["bed.night", "ui.tap", "night.cue", ...MORNING("chalk.draw")], { reloaded: true });
+  assert.ok(sFails(parity(reloadedTap)).includes("P3"), "새로고침 페이지도 밤에는 무음");
+});
+
+test("soundNightParityChecks P4: kill.slash 는 피해자 페이지의 아침에 정확히 1회 — 다른 페이지·밤·두 번은 실패", () => {
+  const other = okPages();
+  other[2] = page("손님B", [...NIGHT(4), ...MORNING("kill.slash", "chalk.draw")]);
+  assert.deepEqual(sFails(parity(other)), ["P4"]);
+  const none = okPages();
+  none[1] = page("손님A(피해자)", [...NIGHT(2), ...MORNING("chalk.draw")]);
+  assert.deepEqual(sFails(parity(none)), ["P4"]);
+  const twice = okPages();
+  twice[1] = page("손님A(피해자)", [...NIGHT(2), ...MORNING("kill.slash", "kill.slash", "chalk.draw")]);
+  assert.deepEqual(sFails(parity(twice)), ["P4"]);
+  const inNight = okPages();
+  inNight[0] = page("방장(마피아)", ["bed.night", "night.fall", "kill.slash", "night.cue", "night.cue", ...MORNING("morning.calm")]);
+  assert.ok(sFails(parity(inNight)).includes("P4"));
+  assert.ok(sFails(parity(okPages(), "없는사람")).includes("P4"), "피해자 라벨이 페이지에 없으면 측정할 수 없다");
+});
+
+test("soundNightParityChecks P5: morning.dawn 은 모든 페이지에 정확히 1회", () => {
+  const missing = okPages();
+  missing[2] = page("손님B", [...NIGHT(4), "bed.dawn", "chalk.draw"]);
+  assert.deepEqual(sFails(parity(missing)), ["P5"]);
+  const twice = okPages();
+  twice[0] = page("방장(마피아)", [...NIGHT(3), ...MORNING("morning.dawn", "morning.calm")]);
+  assert.deepEqual(sFails(parity(twice)), ["P5"]);
+});
+
+test("soundNightParityChecks P6: 새로고침 페이지에 night.fall 이 있거나 bed.night 가 없으면 실패", () => {
+  const fall = okPages();
+  fall[3] = page("손님C(새로고침)", ["bed.night", "night.fall", "night.cue", ...MORNING("chalk.draw")], { reloaded: true });
+  assert.deepEqual(sFails(parity(fall)), ["P6"]);
+  const noBed = okPages();
+  noBed[3] = page("손님C(새로고침)", ["night.cue", ...MORNING("chalk.draw")], { reloaded: true });
+  assert.ok(sFails(parity(noBed)).includes("P6"));
+});
+
+test("soundNightParityChecks: 새로고침 페이지가 없거나 완전한 페이지가 둘 미만이거나 입력 모양이 틀리면 측정값 없음으로 실패", () => {
+  assert.ok(parity(okPages().slice(0, 3)).some((l) => l.id === "P6" && !l.ok && /측정값 없음/.test(l.detail)), "새로고침 페이지 없음");
+  const one = [okPages()[0], okPages()[3]];
+  assert.ok(parity(one, "방장(마피아)").some((l) => l.id === "P1" && !l.ok && /측정값 없음/.test(l.detail)), "완전한 페이지 하나");
+  assert.ok(parity(null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(soundNightParityChecks({ pages: [{ label: "a", log: [{ nope: 1 }] }, okPages()[1]], victimLabel: "a" }).every((l) => !l.ok));
+  assert.ok(soundNightParityChecks({ pages: [], victimLabel: "a" }).every((l) => !l.ok));
+});
+
+test("soundNightParityChecks: 밤 구간이 하나도 없는 로그(훅이 비었음)는 공허하게 통과하지 못한다", () => {
+  const empty = okPages().map((p) => ({ ...p, log: [] }));
+  assert.ok(sFails(parity(empty)).length > 0);
+});
+
+test("SOUND_SCRIPT_STEPS: 12-09 가 밤(night.fall·bed.night)과 아침(morning.dawn·bed.dawn) 단계를 더했다", () => {
+  const night = SOUND_SCRIPT_STEPS.find((x) => x.ids.includes("night.fall"));
+  assert.ok(night && night.ids.includes("bed.night"));
+  const morning = SOUND_SCRIPT_STEPS.find((x) => x.ids.includes("morning.dawn"));
+  assert.ok(morning && morning.ids.includes("bed.dawn"));
 });

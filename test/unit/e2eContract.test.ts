@@ -520,7 +520,31 @@ describe("12페이즈 sound-script E2E 기대 표 (12-08)", () => {
 
   it("단계 표는 감독의 단계 → 침대 표와 같은 침대 id 를 쓴다", () => {
     const beds = lib.SOUND_SCRIPT_STEPS.flatMap((s) => s.ids.filter((id) => id.startsWith("bed.")));
-    expect([...new Set(beds)].sort()).toEqual(["bed.day", "bed.lobby", "bed.reveal", "bed.vote"]);
+    expect([...new Set(beds)].sort()).toEqual(["bed.dawn", "bed.day", "bed.lobby", "bed.night", "bed.reveal", "bed.vote"]);
+  });
+});
+
+describe("12페이즈 sound-night-parity E2E (12-09)", () => {
+  const root = new URL("../../", import.meta.url);
+
+  it("sound-night-parity 가 flows.mjs 에 390x844(GAME_SIZE)로 등록돼 있다", () => {
+    const flows = readFileSync(new URL("scripts/e2e/flows.mjs", root), "utf8");
+    expect(flows).toMatch(/\{ id: "sound-night-parity", run: soundNightParityFlow, size: GAME_SIZE \}/);
+  });
+
+  it("판정 함수는 lib.mjs 의 순수 함수이고 흐름 본문은 sound.mjs 에 있다 (문턱은 순수 함수에만)", () => {
+    const lib = readFileSync(new URL("scripts/e2e/lib.mjs", root), "utf8");
+    const sound = readFileSync(new URL("scripts/e2e/sound.mjs", root), "utf8");
+    expect(lib).toMatch(/export function soundNightParityChecks/);
+    expect(sound).toMatch(/soundNightParityChecks/);
+    expect(sound).toMatch(/async function soundNightParityFlow/);
+  });
+
+  it("흐름이 쓰는 밤 id 집합은 실제 소리 id 이다 (오타 방지)", () => {
+    const lib = e2eLib as unknown as { NIGHT_PARITY_IDS: readonly string[] };
+    const known = new Set<string>(SOUND_IDS);
+    expect(lib.NIGHT_PARITY_IDS.filter((id) => !known.has(id))).toEqual([]);
+    expect([...lib.NIGHT_PARITY_IDS].sort()).toEqual(["bed.night", "night.cue", "night.fall"]);
   });
 });
 
