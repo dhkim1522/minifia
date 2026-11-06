@@ -1,8 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   RESULT_TEXT,
-  VERDICT_TEXT,
   defenseAnnounce,
   endedAnnounce,
   noExecutionPrefix,
@@ -36,29 +34,8 @@ describe("순수 모듈 검사 (D-38)", () => {
 
 // ---- 문구 정본 (UI-SPEC 7.2·7.3, D-11, D-19, D-34) ----
 
-describe("VERDICT_TEXT — UI-SPEC 7.2 와 글자까지 같다", () => {
-  it("옛 후보 선택 안내 키는 없다 (결정 0040: 이름을 글자 그대로 두지 않아 남은 참조를 grep 이 잡는다)", () => {
-    expect(Object.hasOwn(VERDICT_TEXT, ["candidate", "Hint"].join(""))).toBe(false);
-  });
-
-  it("남은 고정 문구 전부 (지운 화면 전용 키는 없다)", () => {
-    expect(VERDICT_TEXT).toMatchObject({
-      candidateNone: "선택 안 함",
-      votedSuffix: "님에게 투표했어요",
-    });
-    expect(Object.keys(VERDICT_TEXT).sort()).toEqual(["candidateNone", "votedSuffix"]);
-  });
-
-  it("값이 UI-SPEC 문서에도 그대로 있다 (문서가 있을 때)", () => {
-    const path = new URL("../../.planning/milestones/v1.0-phases/04-execution-verdict/04-UI-SPEC.md", import.meta.url);
-    if (!existsSync(path)) return;
-    const doc = readFileSync(path, "utf8");
-    const flat = (v: unknown): string[] => (typeof v === "string" ? [v] : typeof v === "object" && v !== null ? Object.values(v).flatMap(flat) : []);
-    for (const text of flat(VERDICT_TEXT)) expect(doc, text).toContain(text);
-  });
-
+describe("verdict 문구 함수 — UI-SPEC 7.2·7.3", () => {
   it("읽기용 단계 안내와 보조 문구 함수", () => {
-    expect(Object.hasOwn(VERDICT_TEXT, "announce")).toBe(false); // 옛 세 단계 안내 문구 묶음은 08-22 에 PhaseId 와 함께 지웠다
     expect(defenseAnnounce("도윤")).toBe("도윤님의 최후 변론");
     expect(defenseAnnounce(null)).toBe("내 최후 변론");
     expect(endedAnnounce("citizenWin")).toBe("게임이 끝났습니다. 시민 팀 승리");

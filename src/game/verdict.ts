@@ -1,4 +1,4 @@
-// 결과 화면 제목·밤 패널·단계 안내가 쓰는 문구만 남았다(08-20, 11-05). 후보 공개 시간표·테이블 기하·후광은 v1.0 테이블 화면과 함께, 옛 결과 카드 화면의 연출 시각·요약 줄은 11-05 에 지웠다.
+// 결과 화면 제목·단계 안내가 쓰는 문구만 남았다(08-20, 11-05, 12-01). 후보 공개 시간표·테이블 기하·후광은 v1.0 테이블 화면과 함께, 옛 결과 카드 화면의 연출 시각·요약 줄은 11-05 에 지웠다.
 // DOM·현재 시각·난수를 읽지 않는 순수 모듈이다. 이 파일은 역할 문자열(직업 단어)을 만들지 않는다 — 입력은 서버가 모두에게 보낸 공개 타입뿐이다(D-09).
 import type { GameWinner, NoExecutionReason } from "../../shared/protocol";
 
@@ -8,13 +8,6 @@ import type { GameWinner, NoExecutionReason } from "../../shared/protocol";
 /** 결과 화면 헤더 제목(11-05, 결정 0051): 모임~승리 알림 동안은 "결과", 최종 상태는 승리 한 줄. 읽는 글은 이것뿐이다 */
 export const RESULT_TEXT = {
   title: { result: "결과", citizenWin: "시민 승리", mafiaWin: "마피아 승리" },
-} as const;
-
-export const VERDICT_TEXT = {
-  // 밤 패널의 지목 줄
-  candidateNone: "선택 안 함",
-  /** 확정 알약은 자리 색 점과 굵은 이름이 따로 그려지므로 이름 뒤 조각만 둔다(D-19) */
-  votedSuffix: "님에게 투표했어요",
 } as const;
 
 /** 변론 단계 안내(aria-live). name 이 null 이면 후보 본인 */
