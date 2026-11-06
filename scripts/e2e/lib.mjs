@@ -2332,3 +2332,150 @@ export function soundNightParityChecks(input) {
   }
   return out;
 }
+
+// ---- 12페이즈 판결 타이밍·동작 소리 누설 (12-10, 결정 D-13·D-14·D-21, LS-4) ----
+
+/** 판결 타이밍 문턱: 결과 소리는 첫 심장 박동 +2600ms ± 250, 의사봉과 떠오름은 ±100 안에서 같이 난다 */
+export const VERDICT_TIMING = Object.freeze({ hearts: 5, announceAt: 2600, tolerance: 250, riseTolerance: 100, headBefore: 2350 });
+const VERDICT_FAMILY = ["verdict.", "ballot.", "pin.", "execution."];
+
+const entriesOf = (log, id) => log.filter((e) => e.id === id);
+const validLog = (log) => Array.isArray(log) && log.every((e) => !!e && typeof e.id === "string" && Number.isFinite(e.at));
+
+/** 판결 앞머리 id 열: 첫 심장 박동부터 2350ms(= 2600 − 250, 결과 소리가 나도 되는 가장 이른 시각) 앞의 판결 계열 id (다른 UI 소리는 비교하지 않는다) */
+function verdictHead(log, base) {
+  return log
+    .filter((e) => e.at >= base && e.at - base < VERDICT_TIMING.headBefore && VERDICT_FAMILY.some((p) => e.id.startsWith(p)))
+    .sort((a, b) => a.at - b.at || a.id.localeCompare(b.id))
+    .map((e) => e.id);
+}
+
+/**
+ * 판결 순간 소리 타이밍 판정 (sound-script, D-13·LS-1·T-12-36). 순수 함수 — 문턱은 여기에만 있고 흐름은 낮추지 않는다.
+ * input = { pass, reject } (각 훅 로그 [{ id, at, … }]: 찬성으로 통과한 처형 판 · 반대로 부결된 판).
+ *   V1 두 판 모두 verdict.heart 가 정확히 5개
+ *   V2 통과 판: execution.gavel 이 정확히 1개이고 첫 심장 박동 +2600 ± 250
+ *   V3 통과 판: execution.rise 가 gavel 과 ±100 안
+ *   V4 부결 판: gavel·rise 가 없고 verdict.reject 가 정확히 1개, 첫 심장 박동 +2600 ± 250
+ *   V5 두 판의 2600ms 앞(첫 심장 박동 +2350 안) 판결 id 열이 같다 (결과가 앞머리에 새지 않는다)
+ */
+export function soundVerdictTimingChecks(input) {
+  const T = VERDICT_TIMING;
+  const labels = {
+    V1: `verdict.heart 가 두 판 모두 정확히 ${T.hearts}개`,
+    V2: `통과: execution.gavel 이 첫 심장 박동 +${T.announceAt}ms ± ${T.tolerance}`,
+    V3: `통과: execution.rise 가 gavel 과 ±${T.riseTolerance}ms 안`,
+    V4: `부결: gavel·rise 없이 verdict.reject 가 첫 심장 박동 +${T.announceAt}ms ± ${T.tolerance}`,
+    V5: "두 판의 2600ms 앞 판결 소리 열이 같다 (결과 무관 앞머리)",
+  };
+  const ids = ["V1", "V2", "V3", "V4", "V5"];
+  const pass = validLog(input?.pass) ? input.pass : null;
+  const reject = validLog(input?.reject) ? input.reject : null;
+  const base = (log) => {
+    const hs = log === null ? [] : entriesOf(log, "verdict.heart").sort((a, b) => a.at - b.at);
+    return hs.length > 0 ? hs[0].at : null;
+  };
+  const pb = base(pass);
+  const rb = base(reject);
+  const out = [];
+
+  if (pass === null || reject === null) out.push(noMeasure("V1", labels.V1, "통과 판·부결 판 훅 로그"));
+  else {
+    const bad = [];
+    for (const [name, log] of [["통과", pass], ["부결", reject]]) {
+      const n = entriesOf(log, "verdict.heart").length;
+      if (n !== T.hearts) bad.push(`${name} 판 verdict.heart ${n}개`);
+    }
+    out.push(result("V1", labels.V1, bad));
+  }
+
+  if (pass === null || pb === null) out.push(noMeasure("V2", labels.V2, "통과 판의 verdict.heart"));
+  else {
+    const g = entriesOf(pass, "execution.gavel");
+    const bad = [];
+    if (g.length !== 1) bad.push(`gavel ${g.length}개`);
+    else if (Math.abs(g[0].at - pb - T.announceAt) > T.tolerance) bad.push(`gavel 간격 ${Math.round(g[0].at - pb)}ms`);
+    out.push(result("V2", labels.V2, bad));
+  }
+
+  if (pass === null) out.push(noMeasure("V3", labels.V3, "통과 판 훅 로그"));
+  else {
+    const g = entriesOf(pass, "execution.gavel");
+    const r = entriesOf(pass, "execution.rise");
+    const bad = [];
+    if (g.length !== 1 || r.length !== 1) bad.push(`gavel ${g.length}개 · rise ${r.length}개`);
+    else if (Math.abs(r[0].at - g[0].at) > T.riseTolerance) bad.push(`rise 가 gavel 과 ${Math.round(r[0].at - g[0].at)}ms 차이`);
+    out.push(result("V3", labels.V3, bad));
+  }
+
+  if (reject === null || rb === null) out.push(noMeasure("V4", labels.V4, "부결 판의 verdict.heart"));
+  else {
+    const rj = entriesOf(reject, "verdict.reject");
+    const bad = [];
+    if (entriesOf(reject, "execution.gavel").length > 0 || entriesOf(reject, "execution.rise").length > 0) bad.push("부결 판에 gavel/rise 가 남");
+    if (rj.length !== 1) bad.push(`verdict.reject ${rj.length}개`);
+    else if (Math.abs(rj[0].at - rb - T.announceAt) > T.tolerance) bad.push(`reject 간격 ${Math.round(rj[0].at - rb)}ms`);
+    out.push(result("V4", labels.V4, bad));
+  }
+
+  if (pb === null || rb === null) out.push(noMeasure("V5", labels.V5, "두 판의 verdict.heart"));
+  else {
+    const a = verdictHead(pass, pb);
+    const b = verdictHead(reject, rb);
+    out.push(result("V5", labels.V5, a.join(",") === b.join(",") ? [] : [`통과 [${a.join(", ")}] ≠ 부결 [${b.join(", ")}]`]));
+  }
+  return ids.map((id) => out.find((l) => l.id === id));
+}
+
+/** 동작 소리 gain(선형): 내 것 0dB = 1, 남의 것 −6dB ≈ 0.501 */
+const EMOTE_GAIN = Object.freeze({ mine: 1, other: 0.501, tolerance: 0.03 });
+
+/**
+ * 동작 소리 누설 판정 (sound-night-parity, D-14·LS-4·T-12-37). 순수 함수.
+ * input = { senderLog, otherLogs: [{ label, log }], day?: { senderLog, receiverLog } } — 밤 마피아 동작의 보낸 쪽·시민 쪽 로그, 낮 동작의 보낸·받은 쪽 로그.
+ *   E1 보낸 마피아 로그에 emote.{id} 가 정확히 1개 (played 여부와 무관)
+ *   E2 시민 쪽 모든 로그에 emote.* 가 0개
+ *   E3 낮 동작: 보낸 사람 gain 1(0dB), 받은 사람 gain 0.501(−6dB)
+ */
+export function soundEmoteLeakChecks(input) {
+  const labels = {
+    E1: "보낸 마피아 로그에 emote.* 가 정확히 1개",
+    E2: "시민 쪽 로그에 emote.* 가 0개",
+    E3: "낮 동작 gain: 보낸 사람 1(0dB) · 받은 사람 0.501(−6dB)",
+  };
+  const isEmote = (e) => e.id.startsWith("emote.");
+  const sender = validLog(input?.senderLog) ? input.senderLog : null;
+  const others = Array.isArray(input?.otherLogs) && input.otherLogs.length > 0 && input.otherLogs.every((o) => !!o && typeof o.label === "string" && validLog(o.log)) ? input.otherLogs : null;
+  const day = input?.day;
+  const out = [];
+
+  if (sender === null) out.push(noMeasure("E1", labels.E1, "보낸 쪽 훅 로그"));
+  else {
+    const n = sender.filter(isEmote).length;
+    out.push(result("E1", labels.E1, n === 1 ? [] : [`emote.* ${n}개`]));
+  }
+
+  if (others === null) out.push(noMeasure("E2", labels.E2, "시민 쪽 훅 로그 [{ label, log }]"));
+  else {
+    const bad = [];
+    for (const o of others) {
+      const n = o.log.filter(isEmote).length;
+      if (n > 0) bad.push(`${o.label}: emote.* ${n}개`);
+    }
+    out.push(result("E2", labels.E2, bad));
+  }
+
+  if (!day || !validLog(day.senderLog) || !validLog(day.receiverLog)) out.push(noMeasure("E3", labels.E3, "낮 동작의 보낸·받은 쪽 로그"));
+  else {
+    const s = day.senderLog.filter(isEmote);
+    const r = day.receiverLog.filter(isEmote);
+    const bad = [];
+    if (s.length !== 1 || r.length !== 1) bad.push(`보낸 쪽 emote ${s.length}개 · 받은 쪽 ${r.length}개`);
+    else {
+      if (!(Math.abs(s[0].gain - EMOTE_GAIN.mine) <= EMOTE_GAIN.tolerance)) bad.push(`보낸 사람 gain ${s[0].gain}`);
+      if (!(Math.abs(r[0].gain - EMOTE_GAIN.other) <= EMOTE_GAIN.tolerance)) bad.push(`받은 사람 gain ${r[0].gain}`);
+    }
+    out.push(result("E3", labels.E3, bad));
+  }
+  return out;
+}

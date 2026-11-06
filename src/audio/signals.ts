@@ -1,9 +1,11 @@
 // 12-08: 컴포넌트 → 소리 감독의 닫힌 로컬 신호 (D-3, LS-7).
 // 컴포넌트는 소리를 고르지 않는다: 신호 종류만 보내고 어떤 소리를·낼지 말지는 감독이 정한다.
-// 신호 인자에는 선택값·역할·좌석이 없다. 새 종류(12-10: emote)는 SIGNAL_KINDS 와 LocalSignal 에 더한다.
+// 신호 인자에는 선택값·역할·좌석이 없다. 새 종류는 SIGNAL_KINDS 와 LocalSignal 에 더한다.
+
+import type { EmoteId } from "../../shared/protocol";
 
 /** 닫힌 신호 종류 */
-export const SIGNAL_KINDS = ["tap", "card", "tensionCue", "vote", "deny"] as const;
+export const SIGNAL_KINDS = ["tap", "card", "tensionCue", "vote", "deny", "emote"] as const;
 export type SignalKind = (typeof SIGNAL_KINDS)[number];
 
 /** 주요 버튼이 눌렸다 — 인자 없음 */
@@ -27,7 +29,16 @@ export interface VoteSignal {
 export interface DenySignal {
   kind: "deny";
 }
-export type LocalSignal = TapSignal | CardSignal | TensionCueSignal | VoteSignal | DenySignal;
+/**
+ * 받은 동작 프레임 하나(12-10, LS-4). 방 화면의 emote 프레임 처리에서만 나간다 — 받지 못한 프레임은 신호도 없다.
+ * id 는 공개 동작 이름이고 mine 은 내 동작인가(불리언). 좌석·시각·채널은 싣지 않는다.
+ */
+export interface EmoteSignal {
+  kind: "emote";
+  id: EmoteId;
+  mine: boolean;
+}
+export type LocalSignal = TapSignal | CardSignal | TensionCueSignal | VoteSignal | DenySignal | EmoteSignal;
 
 type Handler = (signal: LocalSignal) => void;
 

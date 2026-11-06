@@ -797,7 +797,7 @@ describe("RoomScreen — 동작 프레임의 소리 신호 (12-10)", () => {
     const sig = collect();
     f.emit({ t: "typing", seat: 2, on: true });
     f.emit({ t: "chat", seat: 2, ch: "all", seq: 1, text: "안녕", at: NOW });
-    f.emit({ t: "world", k: "snap", segs: [], seq: 1 });
+    f.emit({ t: "world", k: "snap", at: NOW, ents: [] });
     sig.stop();
     expect(sig.seen.filter((s) => s.kind === "emote")).toEqual([]);
   });

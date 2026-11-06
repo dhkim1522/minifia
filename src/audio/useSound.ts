@@ -4,8 +4,9 @@
 // 이 훅은 RoomView 를 직접 읽지 않는다 — audioViewOf(audioView.ts)만 읽고, 감독은 AudioView 만 안다 (LS-6).
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { audioViewOf, type AudioView } from "./audioView";
-import { direct, directEvent, directSignal, type DirectOutput, type PersonalEvent } from "./director";
+import { direct, directEmote, directEvent, directSignal, type DirectOutput, type PersonalEvent } from "./director";
 import type { SoundEngine } from "./engine";
+import { EMOTE_GATE_EMPTY, type EmoteGateState } from "./script";
 import { bindSignals } from "./signals";
 import { installSoundHook } from "./testHook";
 import { getEngine } from "./unlock";
@@ -77,6 +78,8 @@ export function useSound(options: UseSoundOptions = {}): SoundView {
   // 감독에 먹인 직전 상태. 방을 떠나거나(정리) 개발 모드 이중 효과 실행에서 비워 첫 스냅샷처럼 다룬다
   const last = useRef<Directed | null>(null);
   const lastJoinAt = useRef<number | null>(null);
+  // 동작 소리 게이트 상태(12-10): 최근 수락 시각 — 방을 떠나면 비운다
+  const emoteGate = useRef<EmoteGateState>(EMOTE_GATE_EMPTY);
   const offsetRef = useRef(offset);
   const nowRef = useRef(clockNow);
   const randomRef = useRef(random);
@@ -112,6 +115,7 @@ export function useSound(options: UseSoundOptions = {}): SoundView {
       // 방을 떠나면 침대·예약 대본을 멈춘다
       engine.stopAll();
       last.current = null;
+      emoteGate.current = EMOTE_GATE_EMPTY;
     };
   }, [engine, active]);
 
@@ -170,6 +174,12 @@ export function useSound(options: UseSoundOptions = {}): SoundView {
   useEffect(() => {
     if (!active) return;
     return bindSignals((signal) => {
+      if (signal.kind === "emote") {
+        const r = directEmote(signal, last.current?.av ?? null, emoteGate.current, nowRef.current());
+        emoteGate.current = r.gate;
+        apply(engine, r.out);
+        return;
+      }
       apply(engine, directSignal(signal, last.current?.av ?? null, { visualCues: visualCuesRef.current }));
     });
   }, [engine, active]);

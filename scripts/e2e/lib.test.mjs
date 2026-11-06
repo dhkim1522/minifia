@@ -3216,12 +3216,14 @@ test("soundVerdictTimingChecks: 정상 통과·부결 로그는 V1~V5 모두 통
 });
 
 test("V1: verdict.heart 가 5개가 아니면 실패 (4·6)", () => {
-  assert.deepEqual(vFails(vt(verdictLog({ hearts: HEART.slice(1) }), verdictLog({ passed: false }))), ["V1"]);
-  assert.deepEqual(vFails(vt(verdictLog({ hearts: [...HEART, 2500] }), verdictLog({ passed: false }))), ["V1"]);
+  assert.ok(vFails(vt(verdictLog({ hearts: HEART.slice(1) }), verdictLog({ passed: false }))).includes("V1"));
+  assert.ok(vFails(vt(verdictLog({ hearts: [...HEART, 2500] }), verdictLog({ passed: false }))).includes("V1"));
+  assert.ok(vFails(vt(verdictLog(), verdictLog({ passed: false, hearts: HEART.slice(0, 4) }))).includes("V1"));
 });
 
 test("V2: gavel 은 첫 심장 박동 +2600 ± 250 — 경계 2350·2850 통과, 2349·2851 실패", () => {
   for (const at of [2350, 2850]) assert.deepEqual(vFails(vt(verdictLog({ gavelAt: at, riseAt: at }), verdictLog({ passed: false }))), [], `at ${at}`);
+  assert.ok(vFails(vt(verdictLog({ gavelAt: 2349, riseAt: 2349 }), verdictLog({ passed: false }))).includes("V2"));
   for (const at of [2349, 2851]) assert.ok(vFails(vt(verdictLog({ gavelAt: at, riseAt: at }), verdictLog({ passed: false }))).includes("V2"), `at ${at}`);
 });
 
@@ -3239,7 +3241,7 @@ test("V4: 부결 판은 gavel·rise 가 없고 verdict.reject 가 +2600 ± 250 �
   assert.ok(vFails(vt(verdictLog(), verdictLog({ passed: false }).filter((e) => e.id !== "verdict.reject"))).includes("V4"));
 });
 
-test("V5: 두 판의 2600ms 앞 판결 id 열이 같아야 한다 — 부결 판에 앞머리가 하나 빠지면 실패, 다른 소리(ui.tap)는 비교하지 않는다", () => {
+test("V5: 두 판의 2600ms 앞(+2350 안) 판결 id 열이 같아야 한다 — 부결 판에 앞머리가 하나 빠지면 실패, 다른 소리(ui.tap)는 비교하지 않는다", () => {
   const rejectNoPin = verdictLog({ passed: false, base: 900000 }).filter((e) => e.id !== "pin.on");
   assert.deepEqual(vFails(vt(verdictLog(), rejectNoPin)), ["V5"]);
   const rejectTap = verdictLog({ passed: false, base: 900000, extra: [entry("ui.tap", 900000 + 300)] });

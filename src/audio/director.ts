@@ -17,9 +17,9 @@ import { EXECUTION_MS, NIGHT_MS } from "../../shared/game/phases";
 import type { PhaseId } from "../../shared/protocol";
 import { POLICE_CARD_AT } from "../game/dayView";
 import type { AudioView } from "./audioView";
-import type { BedId, SfxId } from "./recipes";
-import { MORNING_SLASH_AT, morningScript, nightCues, pickTickSchedule, tickSchedule, verdictScript, willScript, type DuckSpan, type Rng, type ScriptItem } from "./script";
-import type { LocalSignal } from "./signals";
+import { recipeDurationMs, type BedId, type SfxId } from "./recipes";
+import { EMOTE_OTHERS_DB, emoteSoundGate, MORNING_SLASH_AT, morningScript, nightCues, pickTickSchedule, tickSchedule, verdictScript, willScript, type DuckSpan, type EmoteGateState, type Rng, type ScriptItem } from "./script";
+import type { EmoteSignal, LocalSignal } from "./signals";
 
 /** 단계 → 침대 표: 14개 단계 전수. null 은 침대 없음(assigning: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
 export const BED_OF: Readonly<Record<PhaseId, BedId | null>> = {
@@ -357,10 +357,27 @@ export function directSignal(signal: LocalSignal, cur: AudioView | null, ctx: Si
     case "deny":
       out.now.push({ id: "ui.deny" });
       break;
+    case "emote":
+      break; // 동작 소리는 게이트 상태가 필요해 directEmote 가 맡는다
     case "tensionCue":
       break; // 밤이 아니면 시각 큐도 소리가 없다
   }
   return out;
+}
+
+/**
+ * 받은 동작 프레임의 소리(12-10, D-14, LS-4). 신호는 방 화면이 서버에서 받은 프레임을 처리하는 자리에서만 오므로 받지 못한 프레임은 소리도 없다.
+ * 밤에도 받은 프레임이면 난다(수신자는 서버가 정한 마피아·유령). 내 동작 0dB, 남의 동작 −6dB. 게이트(초당 3·동시 4)가 거절하면 아무것도 내지 않는다.
+ * 모션 줄이기는 입력에 없다(O-5). 게이트 상태는 부르는 쪽이 쥐고 돌려받은 값을 다음 호출에 넘긴다.
+ */
+export function directEmote(signal: EmoteSignal, cur: AudioView | null, gate: EmoteGateState, now: number): { out: DirectOutput; gate: EmoteGateState } {
+  const out = emptyOutput();
+  if (cur === null) return { out, gate };
+  const id: SfxId = `emote.${signal.id}`;
+  const r = emoteSoundGate(gate, now, recipeDurationMs(id));
+  if (!r.ok) return { out, gate };
+  out.now.push({ id, gainDb: signal.mine ? 0 : EMOTE_OTHERS_DB });
+  return { out, gate: r.next };
 }
 
 /**

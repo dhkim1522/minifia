@@ -218,6 +218,9 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const { announce, deny, fading, ghostEnter, killFx, policeResult } = useDayFx({ view, epoch: connection.epoch, chat });
   // 암살 유언 편지(결정 0063-3): 같은 ChatStore 의 라이브 유언 카드와 view 차이로만 만든다
   const letter = useWillLetter({ view, epoch: connection.epoch, chat });
+  // 12-10: 받은 동작 프레임의 소리 신호가 "내 동작" 인지 가를 내 좌석(구독은 한 번만 걸리므로 ref 로 읽는다)
+  const mySeatRef = useRef<number | null>(null);
+  mySeatRef.current = view?.me.seat ?? null;
   useEffect(
     () =>
       onEvent((e, meta) => {
@@ -225,7 +228,11 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
           if (e.k === "snap") worldSnaps.current += 1;
           store.applyFrame(e, meta.epoch);
         }
-        else if (e.t === "emote") store.applyEmote(e, meta.epoch); // 동작은 채팅 저장소로 보내지 않는다(10-03)
+        else if (e.t === "emote") {
+          store.applyEmote(e, meta.epoch); // 동작은 채팅 저장소로 보내지 않는다(10-03)
+          // 12-10: 몸 동작을 재생하는 바로 그 자리에서 소리 신호 하나. 받지 못한 프레임·옛 연결 번호의 프레임(저장소가 버리는 것)은 신호도 없다(LS-4)
+          if (meta.epoch >= store.currentEpoch()) emitSignal({ kind: "emote", id: e.id, mine: e.seat === mySeatRef.current });
+        }
         else if (e.t === "resultLog") resultLog.apply(e, meta.epoch);
         else if (e.t === "chat" || e.t === "typing" || e.t === "chatLog" || e.t === "chatReject") {
           chat.apply(e, meta.epoch, Date.now());

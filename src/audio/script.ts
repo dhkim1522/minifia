@@ -238,6 +238,34 @@ export function willScript(input: WillInput): Script {
   return { items, duck: null };
 }
 
+// ───────────────────────── 동작 소리 게이트 (12-10, D-14, T-12-39) ─────────────────────────
+
+/** 동작 소리: 1초(창) 안에 3개까지 */
+export const EMOTE_SOUND_PER_SEC = 3;
+export const EMOTE_SOUND_WINDOW_MS = 1000;
+/** 동시에 울리는 동작 소리 상한 — src/world/emoteCap.ts 의 EMOTE_RENDER_MAX 와 같은 값이다(소리 모듈은 world/ 를 import 하지 못해 시험이 대조한다) */
+export const EMOTE_SOUND_MAX = 4;
+/** 남의 동작 소리는 레시피 위에 이만큼 낮춘다(내 동작은 0dB) */
+export const EMOTE_OTHERS_DB = -6;
+
+/** 게이트 상태: 최근 수락한 동작 소리의 시작 시각과 끝날 것으로 추정한 시각(수락 시각 + 그 레시피 길이) */
+export interface EmoteGateState {
+  accepted: readonly { at: number; endAt: number }[];
+}
+export const EMOTE_GATE_EMPTY: EmoteGateState = Object.freeze({ accepted: Object.freeze([]) });
+
+/**
+ * 동작 소리 한 개를 받아들일지 정한다(순수, 시각은 인자). 최근 1000ms 안 수락이 3개이거나 활성 추정이 4개 이상이면 거절 —
+ * 거절은 조용히 버리고 상태를 바꾸지 않는다(같은 객체). 수락하면 지난 항목을 정리한 새 상태를 준다. durationMs 는 이 소리의 레시피 길이.
+ */
+export function emoteSoundGate(state: EmoteGateState, now: number, durationMs: number): { ok: boolean; next: EmoteGateState } {
+  const recent = state.accepted.filter((a) => now - a.at < EMOTE_SOUND_WINDOW_MS);
+  const active = state.accepted.filter((a) => a.endAt > now);
+  if (recent.length >= EMOTE_SOUND_PER_SEC || active.length >= EMOTE_SOUND_MAX) return { ok: false, next: state };
+  const kept = state.accepted.filter((a) => now - a.at < EMOTE_SOUND_WINDOW_MS || a.endAt > now);
+  return { ok: true, next: { accepted: [...kept, { at: now, endAt: now + Math.max(0, durationMs) }] } };
+}
+
 // ───────────────────────── 카운트다운 ─────────────────────────
 
 function boundaryDelays(remainingMs: number, seconds: readonly number[]): number[] {
