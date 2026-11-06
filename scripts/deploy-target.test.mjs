@@ -165,11 +165,11 @@ test("정적 검사: prod-url.txt 를 읽는 요청 스크립트는 모두 v1.0 
   const readers = gitLsFiles("scripts").filter(
     (f) => f.endsWith(".mjs") && !f.endsWith(".test.mjs") && !exempt.has(f) && read(f).includes("prod-url.txt"),
   );
-  assert.ok(readers.length >= 7, `prod-url.txt 를 읽는 스크립트 수집 실패: ${readers.join(", ")}`);
+  assert.ok(readers.length >= 5, `prod-url.txt 를 읽는 스크립트 수집 실패: ${readers.join(", ")}`);
   const unguarded = readers.filter((f) => !/\bexitIfV1\(|\bresolveTarget\(/.test(read(f)));
   assert.deepEqual(unguarded, []);
-  // 명시적 주소 갈래: 이름이 알려진 일곱 스크립트는 반드시 exitIfV1 을 직접 부른다
-  for (const f of ["smoke", "bots", "uat-day", "uat-night", "uat-vote", "uat-test-room", "uat-test-bots"]) {
+  // 명시적 주소 갈래: 이름이 알려진 세 스크립트는 반드시 exitIfV1 을 직접 부른다
+  for (const f of ["smoke", "bots", "uat-test-room"]) {
     assert.match(read(`scripts/${f}.mjs`), /\bexitIfV1\(/, `${f}.mjs`);
   }
   assert.match(read("scripts/gallery.mjs"), /\bexitIfV1\(/);

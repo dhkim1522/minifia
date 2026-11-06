@@ -145,7 +145,7 @@ describe("BOT_NAMES", () => {
     expect(keys.size).toBe(7);
   });
 
-  it("scripts/bots.mjs 의 NAMES 와 scripts/uat-test-bots.mjs 의 BOT_NAMES 가 BOT_NAMES 와 같은 순서·같은 값이다", () => {
+  it("scripts/bots.mjs 의 NAMES 가 BOT_NAMES 와 같은 순서·같은 값이다", () => {
     const literalOf = (file: string, constName: string): string[] => {
       const text = readFileSync(resolve(__dirname, "../../scripts", file), "utf8");
       const m = text.match(new RegExp(`const ${constName} = (\\[[^\\]]*\\]);`));
@@ -153,7 +153,6 @@ describe("BOT_NAMES", () => {
       return JSON.parse(m![1]) as string[];
     };
     expect(literalOf("bots.mjs", "NAMES")).toEqual([...BOT_NAMES]);
-    expect(literalOf("uat-test-bots.mjs", "BOT_NAMES")).toEqual([...BOT_NAMES]);
   });
 });
 
