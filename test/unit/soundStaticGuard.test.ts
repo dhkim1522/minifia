@@ -97,10 +97,38 @@ function disallowedImports(src: string): string[] {
     .map((r) => r.text.replace(/\s+/g, " "));
 }
 
-function forbiddenIn(src: string): string[] {
-  const code = stripComments(src);
+/**
+ * RoomView 를 읽는 유일한 파일(12-08, D-3): 공개 view 에서 허용 필드만 고르는 audioView.ts.
+ * 이 파일만 RoomView 타입과 phaseEndsAt 필드 이름을 쓸 수 있고, 나머지 금지 이름은 그대로 걸린다.
+ */
+const VIEW_READER = "audioView.ts";
+const VIEW_READER_ALLOWED = /\b(RoomView|phaseEndsAt)\b/g;
+
+function forbiddenIn(src: string, file = ""): string[] {
+  let code = stripComments(src);
+  if (file === VIEW_READER) code = code.replace(VIEW_READER_ALLOWED, "");
   return FORBIDDEN_PATTERNS.filter((p) => p.re.test(code)).map((p) => p.label);
 }
+
+/** 소스에서 `view.` 로 시작하는 접근 경로(`?.` 는 `.` 로 본다)를 모은다 */
+function viewPaths(src: string): string[] {
+  const code = stripComments(src);
+  const out = new Set<string>();
+  for (const m of code.matchAll(/\bview((?:\??\.[A-Za-z_]\w*)+)/g)) out.add(`view${m[1]!.replace(/\?\./g, ".")}`);
+  return [...out].sort();
+}
+
+/** AudioView 가 RoomView 에서 읽을 수 있는 경로의 허용 집합 (LS-6). 이후 계획이 필요한 공개 필드를 여기와 audioView.ts 에 함께 더한다 */
+const ALLOWED_VIEW_PATHS: readonly string[] = [
+  "view.phase",
+  "view.phaseEndsAt",
+  "view.day.n",
+  "view.day.turn",
+  "view.day.points",
+  "view.day.candidate",
+  "view.players",
+  "view.me.seat",
+];
 
 function listSources(dir: string): string[] {
   const out: string[] = [];
@@ -158,6 +186,47 @@ describe("소리 모듈은 숨은 정보를 읽지 못한다 (LS-6, T-12-04)", (
   });
 
   it.each(files.map((f) => [f.slice(ROOT.length), f] as const))("%s: 숨은 필드·연결·스토어 이름이 없다", (_rel, full) => {
-    expect(forbiddenIn(readFileSync(full, "utf8"))).toEqual([]);
+    expect(forbiddenIn(readFileSync(full, "utf8"), full.slice(AUDIO_DIR.length + 1))).toEqual([]);
+  });
+});
+
+describe("AudioView 의 읽는 경로 허용 목록 (LS-6, T-12-27)", () => {
+  const read = (name: string): string => readFileSync(`${AUDIO_DIR}/${name}`, "utf8");
+
+  it("가드 자기 시험: view 접근 경로를 모으고 숨은 경로는 허용 집합 밖이다", () => {
+    expect(viewPaths("const a = view.phase; const b = view.day?.turn; // view.me.role")).toEqual(["view.day.turn", "view.phase"]);
+    expect(viewPaths("const r = view.me?.role;")).toEqual(["view.me.role"]);
+    expect(forbiddenIn("const v: RoomView = x; const e = x.phaseEndsAt;", "audioView.ts")).toEqual([]);
+    expect(forbiddenIn("const v: RoomView = x;", "director.ts")).toContain("연결·스토어");
+    expect(forbiddenIn("const c = view.me.chat;", "audioView.ts")).toContain("채팅");
+  });
+
+  it("audioView.ts 가 있고 읽는 경로가 모두 허용 집합 안이다", () => {
+    const paths = viewPaths(read("audioView.ts"));
+    expect(paths.length).toBeGreaterThan(0);
+    const extra = paths.filter((p) => !ALLOWED_VIEW_PATHS.includes(p));
+    expect(extra).toEqual([]);
+  });
+
+  it("금지 경로(me.role·allies·pick·allyPicks·nightTally·nightSure·records·chat·note·will·spectate·whisper)가 audioView.ts 에 없다", () => {
+    const code = stripComments(read("audioView.ts"));
+    for (const name of ["role", "allies", "pick", "allyPicks", "nightTally", "nightSure", "records", "chat", "note", "will", "spectate", "whisperUsed", "ballot", "verdictVote", "result"]) {
+      expect(new RegExp(`\\.${name}\\b`).test(code), name).toBe(false);
+    }
+  });
+
+  it("RoomView 를 가져오는 파일은 audioView.ts 뿐이다 (director·script·engine·useSound 는 AudioView 만 안다)", () => {
+    for (const f of files) {
+      const name = f.slice(AUDIO_DIR.length + 1);
+      const refs = importRefs(readFileSync(f, "utf8")).filter((r) => /\bRoomView\b/.test(r.text));
+      if (name === VIEW_READER) expect(refs.length).toBeGreaterThan(0);
+      else expect(refs, name).toEqual([]);
+    }
+  });
+
+  it("useSound.ts 는 audioViewOf 를 쓰고 눌림 시작 이벤트 이름이 주석에도 없다", () => {
+    const src = read("useSound.ts");
+    expect(src.includes("audioViewOf")).toBe(true);
+    expect(/touchstart|pointerdown/.test(src)).toBe(false);
   });
 });

@@ -1,7 +1,10 @@
 // 12-07: useSound — 엔진 구독, 제스처 resume, 가시성, 훅 설치, 잠금 해제 함수 (D-7, D-9, B-3, T-12-24).
 // 실제 소리는 나지 않는다: 가짜 컨텍스트가 든 엔진을 주입한다.
 import { act, cleanup, renderHook } from "@testing-library/react";
+import { StrictMode, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
+import { emitSignal } from "../../src/audio/signals";
 import { SOUND_PREF_KEY } from "../../src/audio/prefs";
 import { getEngine, setEngineForTest, unlockAudio } from "../../src/audio/unlock";
 import { useSound } from "../../src/audio/useSound";
@@ -228,5 +231,146 @@ describe("useSound: 시험 훅 (D-22)", () => {
     expect(window.__mfSound?.state).toBe("locked");
     act(() => on.engine.unlock());
     expect(window.__mfSound?.state).toBe("running");
+  });
+});
+
+
+// ───────────────────────── 12-08: view 차이 → 감독 → 엔진 ─────────────────────────
+
+function roomView(phase: PhaseId, over: Partial<RoomView> = {}, count = 4): RoomView {
+  const players: PublicPlayer[] = Array.from({ length: count }, (_, seat) => ({ seat, nickname: `p${seat}`, connected: true, isHost: seat === 0 }));
+  return {
+    code: "0042",
+    phase,
+    phaseEndsAt: null,
+    phaseDurationMs: null,
+    serverNow: 0,
+    minPlayers: 4,
+    maxPlayers: 8,
+    players,
+    me: { seat: 1, isHost: false },
+    day: phase === "lobby" || phase === "assigning" ? undefined : { n: 1, roles: [] },
+    ...over,
+  };
+}
+
+interface Props {
+  view: RoomView | null;
+  epoch: number;
+}
+
+const logIds = (rig: ReturnType<typeof makeRig>): string[] => rig.engine.log().map((e) => e.id);
+
+function mount(rig: ReturnType<typeof makeRig>, initial: Props, wrapper?: ({ children }: { children: ReactNode }) => ReactNode) {
+  return renderHook((p: Props) => useSound({ engine: rig.engine, view: p.view, epoch: p.epoch, offset: 0, now: rig.fake.clock.now }), {
+    initialProps: initial,
+    wrapper: wrapper as never,
+  });
+}
+
+describe("useSound: 방 view 의 차이가 감독을 거쳐 엔진 요청이 된다 (D-3, LS-10)", () => {
+  it("첫 스냅샷은 현재 단계 침대만 요청한다 (일회성·대본 없음)", () => {
+    const rig = makeRig();
+    mount(rig, { view: roomView("discussion", { phaseEndsAt: rig.fake.clock.now() + 60_000 }), epoch: 1 });
+    expect(logIds(rig)).toEqual(["bed.day"]);
+    expect(rig.fake.clock.pending()).toBe(0);
+  });
+
+  it("로비 → assigning → roleReveal → dayAnnounce 가 game.start · role.flip · day.start 와 침대를 요청한다", () => {
+    const rig = makeRig();
+    const { rerender } = mount(rig, { view: roomView("lobby"), epoch: 1 });
+    rerender({ view: roomView("assigning"), epoch: 1 });
+    rerender({ view: roomView("roleReveal"), epoch: 1 });
+    rerender({ view: roomView("dayAnnounce"), epoch: 1 });
+    expect(logIds(rig)).toEqual(["bed.lobby", "game.start", "role.flip", "bed.reveal", "day.start", "bed.day"]);
+    expect(rig.engine.currentBed()).toBe("bed.day");
+  });
+
+  it("같은 view 가 새 객체로 되풀이돼도 요청이 늘지 않는다", () => {
+    const rig = makeRig();
+    const { rerender } = mount(rig, { view: roomView("lobby"), epoch: 1 });
+    rerender({ view: roomView("lobby"), epoch: 1 });
+    rerender({ view: roomView("lobby"), epoch: 1 });
+    expect(logIds(rig)).toEqual(["bed.lobby"]);
+  });
+
+  it("epoch 가 바뀐 렌더는 단계가 바뀌었어도 침대만 요청한다", () => {
+    const rig = makeRig();
+    const { rerender } = mount(rig, { view: roomView("lobby"), epoch: 1 });
+    rerender({ view: roomView("roleReveal"), epoch: 2 });
+    expect(logIds(rig)).toEqual(["bed.lobby", "bed.reveal"]);
+  });
+
+  it("개발 모드 이중 효과 실행(StrictMode)에서도 일회성 소리가 한 번이다", () => {
+    const rig = makeRig();
+    const { rerender } = mount(rig, { view: roomView("lobby"), epoch: 1 }, ({ children }) => <StrictMode>{children}</StrictMode>);
+    expect(rig.engine.currentBed()).toBe("bed.lobby");
+    rerender({ view: roomView("assigning"), epoch: 1 });
+    expect(logIds(rig).filter((id) => id === "game.start")).toHaveLength(1);
+    expect(rig.engine.currentBed()).toBeNull();
+  });
+
+  it("view 가 null 이면(연결 전) 아무것도 요청하지 않고, 뒤에 오는 첫 view 는 침대만", () => {
+    const rig = makeRig();
+    const { rerender } = mount(rig, { view: null, epoch: 0 });
+    expect(logIds(rig)).toEqual([]);
+    rerender({ view: roomView("night", { phaseEndsAt: rig.fake.clock.now() + 20_000 }), epoch: 1 });
+    expect(logIds(rig)).toEqual(["bed.night"]);
+  });
+
+  it("토론 마지막 5초 틱: 엔진 시계로 예약되고 단계가 바뀌면 남은 틱이 취소된다", () => {
+    const rig = makeRig();
+    const t0 = rig.fake.clock.now();
+    const { rerender } = mount(rig, { view: roomView("dayAnnounce"), epoch: 1 });
+    rerender({ view: roomView("discussion", { phaseEndsAt: t0 + 10_000 }), epoch: 1 });
+    act(() => rig.fake.clock.advance(5_100));
+    expect(logIds(rig).filter((id) => id === "timer.tick")).toHaveLength(1);
+    rerender({ view: roomView("nomination", { phaseEndsAt: t0 + 13_000, day: { n: 1, roles: [], turn: { order: [0, 1], i: -1 } } }), epoch: 1 });
+    act(() => rig.fake.clock.advance(20_000));
+    expect(logIds(rig).filter((id) => id === "timer.tick")).toHaveLength(1);
+  });
+
+  it("서버 시각 오프셋을 반영한다: 서버가 로컬보다 앞서 있으면 틱이 그만큼 일찍 난다", () => {
+    const rig = makeRig();
+    const t0 = rig.fake.clock.now();
+    const { rerender } = renderHook((p: Props) => useSound({ engine: rig.engine, view: p.view, epoch: p.epoch, offset: 2_000, now: rig.fake.clock.now }), {
+      initialProps: { view: roomView("dayAnnounce"), epoch: 1 } as Props,
+    });
+    // 서버 시각 = 로컬 + 2000 이므로 마감까지 로컬로 8000ms 남았다 → 첫 틱(남은 5초)은 3000ms 뒤
+    rerender({ view: roomView("discussion", { phaseEndsAt: t0 + 10_000 }), epoch: 1 });
+    act(() => rig.fake.clock.advance(2_900));
+    expect(logIds(rig)).not.toContain("timer.tick");
+    act(() => rig.fake.clock.advance(200));
+    expect(logIds(rig)).toContain("timer.tick");
+  });
+
+  it("주요 버튼 신호: 낮에는 ui.tap, 밤에는 무음, 언마운트하면 바인딩이 풀린다", () => {
+    const rig = makeRig();
+    const { rerender, unmount } = mount(rig, { view: roomView("discussion"), epoch: 1 });
+    emitSignal({ kind: "tap" });
+    expect(logIds(rig).filter((id) => id === "ui.tap")).toHaveLength(1);
+    rerender({ view: roomView("night"), epoch: 1 });
+    emitSignal({ kind: "tap" });
+    expect(logIds(rig).filter((id) => id === "ui.tap")).toHaveLength(1);
+    unmount();
+    emitSignal({ kind: "tap" });
+    expect(logIds(rig).filter((id) => id === "ui.tap")).toHaveLength(1);
+  });
+
+  it("로비 입장은 1초에 한 번까지만 (사람 수가 늘 때)", () => {
+    const rig = makeRig();
+    const { rerender } = mount(rig, { view: roomView("lobby", {}, 3), epoch: 1 });
+    rerender({ view: roomView("lobby", {}, 4), epoch: 1 });
+    rerender({ view: roomView("lobby", {}, 5), epoch: 1 });
+    expect(logIds(rig).filter((id) => id === "lobby.join")).toHaveLength(1);
+    act(() => rig.fake.clock.advance(1_000));
+    rerender({ view: roomView("lobby", {}, 6), epoch: 1 });
+    expect(logIds(rig).filter((id) => id === "lobby.join")).toHaveLength(2);
+  });
+
+  it("active 가 거짓이면 감독도 쉰다", () => {
+    const rig = makeRig();
+    renderHook(() => useSound({ engine: rig.engine, active: false, view: roomView("lobby"), epoch: 1, offset: 0, now: rig.fake.clock.now }));
+    expect(logIds(rig)).toEqual([]);
   });
 });
