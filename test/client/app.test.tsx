@@ -278,7 +278,7 @@ describe("참가 경로는 동기로 오디오를 깨운다 (SOUND-03, D-7)", ()
       return Promise.resolve(ok());
     }));
     render(<App />);
-    await see("Minifia에 초대받았어요");
+    await see("1 / 8명이 모였어요");
     expect(calls).toEqual([]);
     typeNickname("민수");
     fireEvent.click(screen.getByRole("button", { name: "참가하기" }));
@@ -294,7 +294,7 @@ describe("참가 경로는 동기로 오디오를 깨운다 (SOUND-03, D-7)", ()
     home.unmount();
     window.history.replaceState(null, "", "/r/0042");
     render(<App />);
-    await see("Minifia에 초대받았어요");
+    await see("1 / 8명이 모였어요");
     expect(document.querySelector("[data-sound-button]")).toBeNull();
   });
 });

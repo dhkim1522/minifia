@@ -357,3 +357,14 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-dress-card:focus-visible, .mv-dress-sheet__close:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .mv-dress-sheet__strip { scroll-behavior: auto; } }
 .mf-float[data-float-single] { min-height: 0; }
+
+/* 소리 단추 (12-07, UI-SPEC B-1·B-2): 방 화면 오른쪽 위, 헤더 아래 끝(62)에서 8 아래·오른쪽 space-md. 누르기 44×44, 시각 지름 36(아이콘 24 + 안쪽 6).
+ * 층은 재접속 띠(.mf-reconnect--floating)·[테스트]·지도 칩(모두 z-overlay)보다 위, 시트·모달(z-modal)보다 아래다 — 기존 토큰의 식이다(새 토큰 아님).
+ * 헤더 컨테이너는 pointer-events 가 없으므로 단추 자신에만 auto. 키보드가 열려도 헤더와 같이 가상 뷰포트를 따라간다(--mf-vv-top). */
+.mv-sound { position: absolute; top: 70px; right: var(--space-md); z-index: calc(var(--z-overlay) + 1); box-sizing: border-box; display: flex; align-items: center; justify-content: center; min-width: var(--tap-min); height: var(--tap-min); margin: 0; padding: 0; border: 0; background: none; color: var(--gray-300); font-family: var(--font-ui); cursor: pointer; pointer-events: auto; transform: translateY(var(--mf-vv-top, 0px)); -webkit-tap-highlight-color: transparent; }
+.mv-sound__face { display: flex; align-items: center; justify-content: center; gap: var(--space-sm); box-sizing: border-box; width: 36px; height: 36px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--night-800) 80%, transparent); box-shadow: inset 0 0 0 1px var(--night-600); }
+.mv-sound[data-sound-state="off"] .mv-sound__face { opacity: 0.6; }
+.mv-sound--pill .mv-sound__face { width: auto; min-width: 112px; height: var(--tap-min); padding: 0 var(--space-md); color: var(--gray-100); box-shadow: inset 0 0 0 2px var(--gray-100); }
+.mv-sound__text { font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap; }
+.mv-sound:focus-visible { outline: none; }
+.mv-sound:focus-visible .mv-sound__face { outline: 2px solid var(--gray-100); outline-offset: 2px; }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { ApiErrorCode, RoomPreview } from "../../shared/protocol";
 import { NICKNAME_MAX_GRAPHEMES, validateNickname } from "../../shared/nickname";
+import { unlockAudio } from "../audio/unlock";
 import { Backdrop } from "../components/Backdrop";
 import { Button } from "../components/Button";
 import { Figure } from "../components/Figure";
@@ -162,6 +163,7 @@ export function JoinByLink({ code, notice, onEnterRoom, onHome }: JoinByLinkProp
 
   async function handleJoin(e: FormEvent) {
     e.preventDefault();
+    unlockAudio(); // [참가하기] 탭이 곧 소리를 켜는 제스처다: 어떤 await 보다 먼저, 같은 틱에서(D-7, B-3)
     if (busy || !validation.ok) return;
     setBusy(true);
     setServerNicknameError(null);

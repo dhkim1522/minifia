@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { validateNickname } from "../../shared/nickname";
 import { isRoomCode } from "../../shared/roomCode";
 import { WORKER_NAME } from "../../shared/version";
+import { unlockAudio } from "../audio/unlock";
 import { Backdrop } from "../components/Backdrop";
 import { Button } from "../components/Button";
 import { NicknameSheet } from "../components/NicknameSheet";
@@ -67,6 +68,7 @@ export function Home({ onEnterRoom }: HomeProps) {
     // 이 브라우저가 이미 그 방의 토큰을 갖고 있으면 닉네임을 묻지 않고 같은 자리로 돌아간다(D-07).
     const stored = loadSession();
     if (stored && stored.code === code) {
+      unlockAudio(); // 이 탭도 사용자 제스처다 — 방 화면의 오디오를 여기서 깨운다(D-7)
       onEnterRoom(code, stored.token);
       return;
     }
@@ -76,6 +78,7 @@ export function Home({ onEnterRoom }: HomeProps) {
   }
 
   async function handleCreate() {
+    unlockAudio(); // 제출 탭이 곧 소리를 켜는 제스처다: 어떤 await 보다 먼저, 같은 틱에서(D-7, B-3)
     if (busy || !validation.ok) return;
     setBusy(true);
     setServerNicknameError(null);
@@ -100,6 +103,7 @@ export function Home({ onEnterRoom }: HomeProps) {
   }
 
   async function handleJoin() {
+    unlockAudio(); // 제출 탭이 곧 소리를 켜는 제스처다: 어떤 await 보다 먼저, 같은 틱에서(D-7, B-3)
     if (busy || !validation.ok || !isRoomCode(code)) return;
     setBusy(true);
     setServerNicknameError(null);

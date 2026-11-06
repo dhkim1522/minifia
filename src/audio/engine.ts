@@ -529,17 +529,24 @@ export function createEngine(deps: EngineDeps = {}): SoundEngine {
 
   const setOn = (next: boolean): void => {
     if (next === on) return;
-    on = next;
-    saveSoundPref(on, deps.storage);
-    if (!on) {
+    if (!next) {
+      // 끌 때 ui.toggle(끔 변형)을 먼저 낸다: 끈 뒤에는 모든 요청이 막히므로 순서를 바꿀 수 없다(12-07).
+      // 방금 낸 토글 보이스는 페이드 대상에서 빼고, 이미 울리던 나머지만 120ms 에 줄인다.
+      const others = [...voices];
+      play("ui.toggle", { variant: "off" });
+      on = false;
+      saveSoundPref(on, deps.storage);
       cancelAllScripts();
-      fadeOutVoices(OFF_FADE_S);
+      for (const v of others) if (voices.includes(v)) cutVoice(v, OFF_FADE_S);
       if (bedRt !== null) fadeOutBed(bedRt, OFF_FADE_S);
       clearDuck();
-    } else {
-      play("ui.toggle", { variant: "on" });
-      ensureBed();
+      notify();
+      return;
     }
+    on = true;
+    saveSoundPref(on, deps.storage);
+    play("ui.toggle", { variant: "on" });
+    ensureBed();
     notify();
   };
 

@@ -3,15 +3,17 @@ import type { ReactNode, RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { phaseKey } from "../../shared/game/audience";
 import type { PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
+import { useSound } from "../audio/useSound";
 import { Button } from "../components/Button";
 import { ReconnectBanner } from "../components/ReconnectBanner";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { RoleCardSheet } from "../components/RoleCardSheet";
 import type { RoleCardTab } from "../components/RoleCardSheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
+import { SoundButton } from "../components/v2/SoundButton";
 import { MORNING_TEXT, morningText } from "../game/eliminationText";
 import { READY_TEXT } from "../game/resultText";
-import { VERDICT_TEXT, defenseAnnounce, noExecutionPrefix, winnerText } from "../game/verdict";
+import { defenseAnnounce, noExecutionPrefix, winnerText } from "../game/verdict";
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { ChatStore } from "../net/chatStore";
 import { ResultLogStore } from "../net/resultLogStore";
@@ -24,6 +26,7 @@ import { useRoomConnection } from "../net/useRoomConnection";
 import { useWakeLock } from "../net/useWakeLock";
 import { EXIT_CURTAIN_MS, preloadWorld } from "../world/runtime";
 import { WorldStore } from "../world/store";
+import { worldTestHooksEnabled } from "../world/testHooks";
 import { PreGame } from "./PreGame";
 import { Assigning } from "./Assigning";
 import { BenchView } from "./BenchView";
@@ -178,6 +181,17 @@ function useFixedRoomHeight(ref: RefObject<HTMLElement | null>): void {
   }, [ref]);
 }
 
+/** E2E 훅이 켜진 문맥인가(?e2e=1·개발 빌드). 소리 훅 window.__mfSound 의 켜짐 판정이다 */
+function soundHookOn(): boolean {
+  let store: Storage | null = null;
+  try {
+    store = typeof sessionStorage === "undefined" ? null : sessionStorage;
+  } catch {
+    store = null;
+  }
+  return worldTestHooksEnabled(window.location.search, store, import.meta.env.DEV);
+}
+
 // 방 화면 틀: 재접속 띠(대기실에서는 맵 위에 떠 있고, 그 밖의 단계에서는 흐름 안에서 본문을 밀어냄) + 본문. 단계 화면은 본문 자리에 붙는다.
 export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const connection = useRoomConnection(code, token);
@@ -237,6 +251,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
 
   // 방을 보여 주는 동안 화면이 꺼지지 않게 한다(D-12, P5-7 기본값: 대기실 포함 — 꺼지면 소켓이 끊겨 친구에게 "나갔다" 로 보인다).
   useWakeLock(view !== null && view.phase !== "ended" && status !== "replaced" && status !== "failed" && status !== "removed");
+
+  // 소리(12-07): 방 화면이 보이는 동안 제스처 resume·탭 가시성을 이어 주고, 소리 단추를 한 번 그린다. 소리 설정은 서버로 가지 않는다.
+  const [soundHook] = useState(soundHookOn);
+  const sound = useSound({ active: view !== null, hook: soundHook });
 
   // 대기실·배정 동안 직업 그림 4종 전부와 낮 배경을 미리 받아 둔다.
   // 어떤 역할인지와 무관하게 같은 요청 패턴이다(Pattern 13 ②, Pitfall 20).
@@ -366,6 +384,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   return (
     <div ref={roomRef} className="mf-root mf-room">
       {view && banner !== "hidden" && <ReconnectBanner mode={banner} floating={shown?.phase === "lobby"} />}
+      {view && sound.supported ? <SoundButton sound={sound} /> : null}
       <div className="mf-room__body">{renderBody()}</div>
       {view && roleCard.open ? (
         // 역할 확인에서 앞면을 본 적이 없을 때만 뒷면. 낮부터는 항상 앞면 내용이다(D-19 의 취지).

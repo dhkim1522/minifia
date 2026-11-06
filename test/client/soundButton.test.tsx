@@ -1,7 +1,6 @@
 // 12-07: 소리 단추 — 세 상태·알약 8초 접힘·토글 저장·표식 (B-1, B-2, D-5, D-6, T-12-23).
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SOUND_PREF_KEY } from "../../src/audio/prefs";
 import { useSound } from "../../src/audio/useSound";
@@ -39,7 +38,7 @@ function Harness({ rig }: { rig: Rig }) {
 function mount(opts: { on?: boolean; unlocked?: boolean } = {}): Rig {
   const storage = new MemoryStorage();
   if (opts.on === false) storage.setItem(SOUND_PREF_KEY, JSON.stringify({ v: 1, on: false }));
-  const rig = makeRig({ storage });
+  const rig: Rig = { ...makeRig({ storage }), storage }; // 엔진이 쓰는 저장소를 시험이 들여다본다
   if (opts.unlocked) rig.engine.unlock();
   render(<Harness rig={rig} />);
   return rig;
@@ -176,7 +175,7 @@ describe("SoundButton 누르기 (D-5, D-6)", () => {
 });
 
 // 단추·잠금 해제 외의 곳은 소리를 고르지 않는다 (prohibition)
-const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const ROOT = `${process.cwd()}/`;
 function listSrc(dir: string): string[] {
   const out: string[] = [];
   for (const name of readdirSync(dir)) {
