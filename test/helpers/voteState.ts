@@ -8,7 +8,7 @@ import { isAlive } from "../../shared/game/alive";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
-import { castTurnPoint, nominationStepMs, stepNomination } from "../../shared/game/nomination";
+import { castPoint, castTurnPoint, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { PICK_TURN_MS, SHOWDOWN_POINT_MS, SHOWDOWN_TURN_MS } from "../../shared/game/phases";
 import { castRunoffVote, runoffStepMs, stepRunoff } from "../../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint, showdownStepMs, stepShowdown } from "../../shared/game/showdown";
@@ -63,12 +63,20 @@ const seatToId = (state: RoomState, seat: number): string => {
 
 /**
  * seat → 지목 대상 seat 를 실제 규칙 함수로 주입한다(지목 단계여야 한다). 거부되면 테스트 준비가 틀린 것이다.
- *  - 지목은 순차 하나뿐이다(09.1-05가 차례 없는 옛 동시 지목을 지웠다). pickTurn 이 없으면 준비가 틀린 것이라 Error.
- *  - 차례를 좌석 순으로 끝 알림까지 걷는다: 대상이 정해진 사람만 자기 차례에 castTurnPoint,
+ *  - pickTurn 이 없으면(기본판 동시 투표) 좌석마다 castPoint. 있으면(RULESET.pickTurn) 차례를 좌석 순으로 끝 알림까지 걷는다: 대상이 정해진 사람만 자기 차례에 castTurnPoint,
  *    나머지는 기권으로 한 걸음 넘긴다. 돌려주는 상태는 끝 알림 자리(i = order.length)다 — 다음 tick(phaseEndsAt) 이 집계한다.
  */
 export function castPoints(state: RoomState, targetBySeat: Record<number, number>): RoomState {
-  if (state.pickTurn === undefined) throw new Error("castPoints: pickTurn 이 없는 지목 상태다 — 차례 지목만 있다(enterNomination 을 지난 상태가 필요하다)");
+  // 기본판(결정 0072): 차례 정보가 없으면 동시 투표다 — 좌석마다 castPoint 를 순서대로 적용한다(마감은 건드리지 않는다).
+  if (state.pickTurn === undefined) {
+    let voted = state;
+    for (const [seat, target] of Object.entries(targetBySeat)) {
+      const result = castPoint(voted, seatToId(voted, Number(seat)), target);
+      if (!result.ok) throw new Error(`castPoint rejected seat ${seat}: ${result.error}`);
+      voted = result.state;
+    }
+    return voted;
+  }
   let s = state;
   const order = state.pickTurn.order;
   for (const seat of Object.keys(targetBySeat)) {

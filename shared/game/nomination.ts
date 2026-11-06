@@ -11,6 +11,7 @@ import { NOMINATION_END_MS, NOMINATION_GATHER_MS, PHASE_DEFS, PICK_GAP_MS, PICK_
 import type { PickTurn, RoomState } from "./room";
 import type { DeadlineResult } from "./tick";
 import type { VoteError } from "./discussion";
+import { RULESET } from "./ruleset";
 import { startRunoff } from "./runoff";
 
 /**
@@ -63,7 +64,7 @@ export function tallyPoints(state: RoomState): {
 /**
  * nomination 마감 훅(결정 0060-3, DAY-05). 그날 voteLog 줄 {n, exec:{0,0,false}, cand:{votes, candidate?}} 을 항상 쌓는다 —
  * 찬반 마감(resolveVerdict)이 같은 줄의 exec 를 채운다. 최다 한 명이면 verdict {passed:false, candidate} 로 표의 기본 다음 단계(defense),
- * 동률·0표면 next "night" 다. 단 최다 득표자가 정확히 둘이면 동점 결선 runoff 로 간다(결정 0066-4, 그날 줄은 candidate 없이 쌓고 결선이 채운다). 집계 직후 모든 플레이어의 nominate 키를 구조 분해로 지운다.
+ * 동률·0표면 next "night" 다. 단 RULESET.runoff 가 켜져 있고 최다 득표자가 정확히 둘이면 동점 결선 runoff 로 간다(결정 0066-4, 그날 줄은 candidate 없이 쌓고 결선이 채운다) — 기본판(결정 0072)은 꺼져 있어 동점도 night 다. 집계 직후 모든 플레이어의 nominate 키를 구조 분해로 지운다.
  */
 export function resolveNomination(state: RoomState): DeadlineResult {
   const { votes, leader, leaders } = tallyPoints(state);
@@ -83,7 +84,7 @@ export function resolveNomination(state: RoomState): DeadlineResult {
     voteLog: [...(state.voteLog ?? []), line],
     verdict: leader === undefined ? { passed: false } : { passed: false, candidate: leader },
   };
-  if (leaders.length === 2) return { state: startRunoff(next, [leaders[0]!, leaders[1]!]), stay: false, next: "runoff" };
+  if (RULESET.runoff && leaders.length === 2) return { state: startRunoff(next, [leaders[0]!, leaders[1]!]), stay: false, next: "runoff" };
   return leader === undefined ? { state: next, stay: false, next: "night" } : { state: next, stay: false };
 }
 
