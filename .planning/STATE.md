@@ -5,16 +5,16 @@ milestone_name: 사회자와 증거
 current_phase: 13
 current_phase_name: 기본판 낮 흐름
 status: planning
-stopped_at: Completed 14-01-PLAN.md
-last_updated: "2026-11-06T20:22:40.698Z"
+stopped_at: Completed 14-02-PLAN.md
+last_updated: "2026-11-06T20:31:03.102Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: 2f116ac0cd4581f982e528d0d9012fed098b03ea
+state_head: b7705b2594ec823368fe787a1f92472547cf9593
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 15
-  completed_plans: 7
+  completed_plans: 8
   percent: 33
 ---
 
@@ -203,6 +203,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 13 P05 | 약 1시간 | 3 tasks | 8 files |
 | Phase 13 P06 | 약 2시간 | 3 tasks | 16 files |
 | Phase 14 P01 | 40min | 3 tasks | 17 files |
+| Phase 14 P02 | 25m | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -427,6 +428,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 13]: 13-05: 부재 검사는 로비부터 결과까지 100ms DOM 감시 + 받은 프레임 경로(offKeys). 기본판에서 [data-badge-live] 빈 줄도 만들지 않게 고침
 - [Phase 13]: 0072: 기본판은 RULESET 한 곳(다섯 값 false)으로 정치 장치를 끄고 투표는 15초 동시. 회귀가 드러낸 옛 기대는 문턱을 낮추지 않고 기본판 계약으로 고침
 - [Phase 14]: [14-01] data-host-band 는 띠 루트에 두고 스테이지 안전선은 그 안의 띠 면(.mv-host__band)만 잰다. 띠 없는 화면(쉬는 사람·안내)에는 소리 단추만 있는 HostDock
+- [Phase 14]: 꺼진 장치 화면(day.turn 지목·결선·마지막 3인·귓속말)은 헤더 안내 줄·차례 링을 13 계약 그대로 유지, 기본판 헤더는 제목 + [역할 카드] 뿐 (14-02)
 
 ### Pending Todos
 
@@ -491,8 +493,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-06T20:22:40.667Z
-Stopped at: Completed 14-01-PLAN.md
+Last session: 2026-11-06T20:31:02.964Z
+Stopped at: Completed 14-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

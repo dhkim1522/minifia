@@ -105,14 +105,14 @@ Plans:
   3. 모든 도구에 한 단어 이름표가 있고 남은 시간은 막대 + 숫자로 보인다
   4. 역할 확인·역할 카드에 목표 한 줄이 있고, 자막·빛남이 다른 사람의 역할을 드러내지 않는다(누설 검사)
 
-**Plans:** 1/9 plans executed (7 waves)
+**Plans:** 2/9 plans executed (7 waves)
 
 Plans:
 **Wave 1**
 - [x] 14-01-PLAN.md — 트레이서: 사회자 문구 표(hostLine.ts 순수)·자막 띠(HostBand)·방 화면 연결·시간 막대 + 초·띠 아래 자리 정리, HOST-05 읽기 경로 시험
 
 **Wave 2**
-- [ ] 14-02-PLAN.md — 띠 하나로: data-guide 를 띠 문장으로, 기본판 헤더 안내 줄·시간 링 끄기(꺼진 장치 화면은 그대로), HOST-05 DOM 시험
+- [x] 14-02-PLAN.md — 띠 하나로: data-guide 를 띠 문장으로, 기본판 헤더 안내 줄·시간 링 끄기(꺼진 장치 화면은 그대로), HOST-05 DOM 시험
 - [ ] 14-03-PLAN.md — 알림음 ui.host: 신호 host·감독·합성 레시피·시험 페이지·문서, 단계 전환마다 한 번(첫 프레임·재접속·낮 시작→토론 제외)
 
 **Wave 3**
@@ -148,7 +148,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 13. 기본판 낮 흐름 | v3.0 | 6/6 | Complete (실기기 확인은 v3.0 끝) | 2026-11-07 |
-| 14. 사회자 진행과 도구 이름표 | v3.0 | 1/9 | In Progress | - |
+| 14. 사회자 진행과 도구 이름표 | v3.0 | 2/9 | In Progress | - |
 | 15. 낮 심부름·목격 기록·밤 흔적 | v3.0 | 0/? | Not started | - |
 
 ## Backlog
