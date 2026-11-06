@@ -7,6 +7,7 @@ import { roleArtSrc } from "../net/assets";
 import type { JournalRole } from "../net/assets";
 import { Journal } from "./Journal";
 import { Diamond } from "./RoleCard";
+import { RoleGoal } from "./RoleGoal";
 import { Sheet } from "./Sheet";
 import "../styles/phase.css";
 import "../styles/rolecard.css";
@@ -141,6 +142,7 @@ function Front({ view, role }: { view: RoomView; role: RoleId }): ReactElement {
       <div className="mf-rolecard__t">
         <h3 className="mf-rolecard__name">{text.name}</h3>
         <p className="mf-rolecard__desc">{text.desc}</p>
+        <RoleGoal goal={text.goal} />
         {allies !== null ? <p className="mf-rolecard__mates">{alliesText(allies)}</p> : null}
       </div>
     </div>

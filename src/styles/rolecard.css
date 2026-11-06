@@ -94,6 +94,8 @@
 .mf-rolecard__t { flex: 1; min-width: 0; }
 .mf-rolecard__name { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); }
 .mf-rolecard__desc { margin: var(--space-xs) 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); word-break: keep-all; }
+.mf-rolecard__t .mf-goal { align-items: flex-start; margin-top: var(--space-sm); }
+.mf-rolecard__t .mf-goal__text { text-align: left; }
 .mf-rolecard__mates { margin: var(--space-sm) 0 0; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); word-break: keep-all; }
 .mf-rolecard__empty { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-300); word-break: keep-all; }
 

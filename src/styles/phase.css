@@ -28,6 +28,10 @@
 /* 직업 그림은 표시 폭 150(3:4). 카드가 낮으면 그림이 먼저 줄어 글자가 잘리지 않는다. */
 .mf-card__art { width: 150px; max-width: 100%; height: auto; flex: 0 1 auto; min-height: 0; object-fit: contain; filter: drop-shadow(0 8px 12px var(--shadow)); }
 .mf-card__desc { font-size: 16px; line-height: 1.5; color: var(--gray-300); margin: 0; word-break: keep-all; }
+/* 역할 목표 한 줄(TOOL-03): 칩 + 문장, 윗줄 구분선. 마피아 문장이 가장 길어(약 30자) 카드 폭에서 2줄까지. 카드·시트가 함께 쓴다. */
+.mf-goal { flex: none; width: 100%; display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); padding-top: var(--space-sm); margin-top: var(--space-xs); border-top: 1px solid var(--night-600); }
+.mf-goal__chip { flex: none; padding: 0 var(--space-sm); border: 1px solid var(--brass-600); border-radius: var(--radius-sm); font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--brass-200); }
+.mf-goal__text { font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--brass-200); word-break: keep-all; text-align: center; }
 .mf-card__divider { flex: none; width: 100%; height: 1px; background: var(--gray-700); }
 .mf-card__mates { flex: none; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); margin: 0; word-break: keep-all; }
 @keyframes mf-card-rise { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }

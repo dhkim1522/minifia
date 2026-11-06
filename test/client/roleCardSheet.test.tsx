@@ -257,7 +257,7 @@ describe("RoleCardSheet 내 역할 본문", () => {
     renderSheet({ role: "mafia", allies: [1, 3] });
     const t = document.querySelector<HTMLElement>(".mf-rolecard__t")!;
     const lines = Array.from(t.children).map((el) => el.textContent);
-    expect(lines).toEqual(["마피아", ROLE_TEXT.mafia.desc, "동료 · 하윤, 도현"]);
+    expect(lines).toEqual(["마피아", ROLE_TEXT.mafia.desc, `목표${ROLE_TEXT.mafia.goal}`, "동료 · 하윤, 도현"]);
     cleanup();
     renderSheet({ role: "mafia", allies: [] });
     expect(document.querySelector(".mf-rolecard__t")?.textContent).toContain("혼자예요");
