@@ -151,6 +151,11 @@ import {
   soundResultSkipChecks,
   soundSequenceChecks,
   SOUND_SCRIPT_STEPS,
+  NOMINATION_MS,
+  OFF_DEVICE_SELECTORS,
+  OFF_DEVICE_ATTR_PREFIX,
+  offDeviceKeysOf,
+  basicOrderChecks,
   sheetFitChecks,
   claimBadgeChecks,
   ballotFitChecks,
@@ -3073,8 +3078,8 @@ test("SOUND_SCRIPT_STEPS: 단계 표가 있고 id·label 이 겹치지 않으며
   }
   const first = SOUND_SCRIPT_STEPS.find((x) => x.ids.includes("game.start"));
   assert.ok(first, "game.start 를 기대하는 단계");
-  assert.ok(SOUND_SCRIPT_STEPS.some((x) => x.ids.includes("pick.turn") && x.ids.includes("pin.on")));
-  assert.ok(SOUND_SCRIPT_STEPS.some((x) => x.ids.includes("pick.point") && x.ids.includes("pin.move")));
+  // 13-05: 기본판 투표(동시)에는 차례 소리가 없다 — 기대 id 가 아니라 나오면 안 되는 id 로 바뀌었다
+  assert.ok(!SOUND_SCRIPT_STEPS.some((x) => x.ids.includes("pick.turn") || x.ids.includes("pin.on") || x.ids.includes("pick.point") || x.ids.includes("pin.move")));
   assert.ok(SOUND_SCRIPT_STEPS.some((x) => x.notIds?.includes("game.start") && x.notIds.includes("day.start")), "새로고침 단계는 일회성 소리가 없음을 확인");
 });
 
@@ -3394,4 +3399,79 @@ test("soundResultSkipChecks: 건너뛴 판은 role.flip 이 참가자 수 미만
   assert.deepEqual(soundResultSkipChecks({ log: full, participants: 4 }).map((l) => l.id + l.ok), ["K1false", "K2true"]);
   assert.deepEqual(soundResultSkipChecks({ log: [...ok, rl("result.win", 4600)], participants: 4 }).map((l) => l.id + l.ok), ["K1true", "K2false"]);
   assert.ok(soundResultSkipChecks(null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+// ---- 13-05: 꺼진 장치 부재 검사 · 기본판 단계 순서 · 소리 대본 기대 (D-05, U-8) ----
+
+test("NOMINATION_MS 사본은 15000 이다(shared/game/phases.ts 와 같은 값)", () => {
+  assert.equal(NOMINATION_MS, 15000);
+});
+
+test("OFF_DEVICE_SELECTORS: UI-SPEC 표의 선택자 10개가 동결되어 있다", () => {
+  assert.equal(OFF_DEVICE_SELECTORS.length, 10);
+  assert.ok(Object.isFrozen(OFF_DEVICE_SELECTORS));
+  for (const sel of ['[data-float="claim"]', '[data-float="whisper"]', "[data-claim-sheet]", "[data-claim-chip]", "[data-claim]", "[data-badge-live]", "[data-line-sheet]", "[data-turn-block]", "[data-speak-sheet]", "[data-showdown-step]"]) {
+    assert.ok(OFF_DEVICE_SELECTORS.includes(sel), sel);
+  }
+  assert.equal(OFF_DEVICE_ATTR_PREFIX, "data-turn");
+});
+
+test("offDeviceKeysOf: 기본판 투표 view 는 빈 배열이다", () => {
+  const view = { phase: "nomination", players: [{ seat: 0 }, { seat: 1, away: true }], day: { points: [{ seat: 1, target: 0 }], voted: [1] }, me: { seat: 0 } };
+  assert.deepEqual(offDeviceKeysOf({ t: "state", view }), []);
+  assert.deepEqual(offDeviceKeysOf({ t: "chat", ch: "all", seat: 0, seq: 1, text: "x", at: 1 }), []);
+  assert.deepEqual(offDeviceKeysOf({ t: "chat", ch: "all", seat: 0, seq: 1, text: "x", at: 1, k: "ballots" }), [], "찬반 기록 카드는 기본판 장치다");
+  assert.deepEqual(offDeviceKeysOf(null), []);
+  assert.deepEqual(offDeviceKeysOf({ t: "pong" }), []);
+});
+
+test("offDeviceKeysOf: 꺼진 장치 키를 경로 문자열로 모은다", () => {
+  const view = {
+    phase: "nomination",
+    players: [{ seat: 0, badge: "doctor" }, { seat: 1, badgeSwapped: true }],
+    day: { turn: { i: 0 }, runoff: {}, showdown: {} },
+    me: { seat: 0, whisperUsed: true, ballot: 2 },
+  };
+  const got = offDeviceKeysOf({ t: "state", view });
+  for (const k of ["players[].badge", "players[].badgeSwapped", "day.turn", "day.runoff", "day.showdown", "me.whisperUsed", "me.ballot"]) assert.ok(got.includes(k), k);
+  assert.equal(new Set(got).size, got.length, "같은 경로는 한 번만");
+  assert.ok(!JSON.stringify(got).includes("doctor"), "값은 싣지 않는다(경로만)");
+});
+
+test("offDeviceKeysOf: 귓속말 채팅 줄과 결선·결전 단계를 표시한다", () => {
+  assert.deepEqual(offDeviceKeysOf({ t: "chat", ch: "all", seat: 0, seq: 1, text: "비밀", at: 1, k: "whisper", to: 1 }), ["chat.k:whisper"]);
+  assert.deepEqual(offDeviceKeysOf({ t: "chat", ch: "all", seat: 0, seq: 1, text: "", at: 1, k: "whispered", to: 1 }), ["chat.k:whispered"]);
+  assert.deepEqual(offDeviceKeysOf({ t: "chatLog", lines: [{ k: "whisper" }, { k: "will" }] }), ["chatLog.k:whisper"]);
+  assert.deepEqual(offDeviceKeysOf({ t: "state", view: { phase: "runoff", players: [], day: {}, me: {} } }), ["phase:runoff"]);
+  assert.deepEqual(offDeviceKeysOf({ t: "state", view: { phase: "showdown", players: [], day: {}, me: {} } }), ["phase:showdown"]);
+});
+
+test("basicOrderChecks: 기본판 단계 순서는 통과하고 연속 중복은 접는다", () => {
+  const ok = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "nomination", "defense", "verdict", "execution", "night", "morning", "dayAnnounce", "discussion", "nomination", "night", "morning", "dayAnnounce", "ended"];
+  const r = basicOrderChecks(ok);
+  assert.ok(r.length >= 1 && r.every((x) => x.ok), JSON.stringify(r));
+  for (const x of r) assert.ok(x.id && x.label);
+  assert.ok(basicOrderChecks(["nomination", "defense", "verdict", "execution", "ended"]).every((x) => x.ok), "처형 뒤 승패가 나면 결과");
+});
+
+test("basicOrderChecks: runoff·showdown·건너뛴 전이는 처음 어긋난 곳을 detail 로 실패한다", () => {
+  const a = basicOrderChecks(["discussion", "nomination", "runoff", "defense"]);
+  assert.ok(a.some((x) => !x.ok && /runoff/.test(x.detail)));
+  const b = basicOrderChecks(["discussion", "nomination", "showdown", "night"]);
+  assert.ok(b.some((x) => !x.ok && /showdown/.test(x.detail)));
+  const c = basicOrderChecks(["discussion", "verdict"]);
+  assert.ok(c.some((x) => !x.ok && /discussion/.test(x.detail) && /verdict/.test(x.detail)));
+  assert.ok(basicOrderChecks([]).every((x) => !x.ok && /측정값 없음/.test(x.detail)));
+  assert.ok(basicOrderChecks(null).every((x) => !x.ok));
+});
+
+test("SOUND_SCRIPT_STEPS: 13-05 투표 단계는 기본판 — bed.vote·phase.vote 를 기대하고 차례 소리는 나오면 안 된다", () => {
+  const sc6 = SOUND_SCRIPT_STEPS.find((x) => x.id === "SC6");
+  assert.deepEqual(sc6.ids, ["bed.vote", "phase.vote"]);
+  for (const id of ["pin.on", "pick.turn", "pick.tick"]) assert.ok(sc6.notIds.includes(id), id);
+  const sc7 = SOUND_SCRIPT_STEPS.find((x) => x.id === "SC7");
+  for (const id of ["pick.point", "pin.move", "pick.turn", "pin.on"]) assert.ok(sc7.notIds.includes(id), id);
+  const sc8 = SOUND_SCRIPT_STEPS.find((x) => x.id === "SC8");
+  assert.equal(sc8.counts["bed.vote"], 0);
+  for (const id of ["pin.on", "pick.turn", "pick.tick", "phase.vote"]) assert.ok(sc8.notIds.includes(id), id);
 });
