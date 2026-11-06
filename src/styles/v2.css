@@ -81,17 +81,22 @@
 .mv-chat__card-title { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
 .mv-chat__card--mafia .mv-chat__card-title { color: var(--crimson-300); }
 .mv-chat__card-text { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
-.mv-chat__form { position: relative; display: flex; gap: var(--space-sm); }
+/* 입력줄(14페이즈): 이름표 단추(아이콘 면 36 + 4 + 라벨)가 입력칸 48 보다 높다 — 입력칸은 아래 정렬. 폭 360: 동작 44 + 입력칸 + 보내기 44 + 유언 44, 간격 8 → 입력칸 약 172 */
+.mv-chat__form { position: relative; display: flex; align-items: flex-end; gap: var(--space-sm); }
 .mv-chat__field { position: relative; display: flex; flex: 1; min-width: 0; }
 .mv-chat__input { flex: 1; min-width: 0; height: var(--control-input); box-sizing: border-box; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-900); color: var(--gray-100); font-family: inherit; font-size: 16px; user-select: text; }
-.mv-chat__send { display: grid; place-items: center; flex: none; width: var(--control-input); height: var(--control-input); padding: 0; border: 0; border-radius: var(--radius-md); background: var(--gray-100); color: var(--night-900); cursor: pointer; }
-.mv-chat__send[aria-disabled="true"] { background: var(--night-700); color: var(--gray-500); cursor: default; }
-/* 입력줄 깃펜(유언 쓰기): [입력칸][보내기][깃펜], 보내기와 16px(form gap 8 + margin-left 8, 오터치 방지, feedback-11) */
-.mv-chat__will { margin-left: var(--space-sm); position: relative; display: grid; place-items: center; flex: none; width: var(--control-input); height: var(--control-input); padding: 0; border: 0; border-radius: var(--radius-badge); background: var(--night-700); color: var(--gray-100); cursor: pointer; }
-.mv-chat__will[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--gray-100); }
-.mv-chat__will[aria-disabled="true"] { opacity: 0.45; cursor: default; }
-.mv-chat__will-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); }
-.mv-chat__will:focus-visible, .mv-chat__send:focus-visible, .mv-chat__input:focus-visible, .mv-chat__newdot:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+/* 공통 이름표 단추(TOOL-01, 14-06): 아이콘 면 36 위 + 간격 4 + 라벨 14/400 gray-300 아래. 폭 44~52, 누르기 44 이상. 14-07 이 머리·떠 있는 단추에도 쓴다 */
+.mv-tool { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; flex: none; gap: var(--space-xs); min-width: var(--tap-min); max-width: 52px; min-height: var(--tap-min); padding: 0; border: 0; background: transparent; color: var(--gray-300); font-family: var(--font-ui); font-size: 14px; font-weight: 400; line-height: 1.4; white-space: nowrap; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mv-tool__face { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; box-sizing: border-box; border-radius: var(--radius-badge); background: var(--night-700); color: var(--gray-100); }
+.mv-tool__label { font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); text-shadow: var(--shadow-text); }
+.mv-tool[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.mv-tool[aria-pressed="true"] .mv-tool__face { box-shadow: inset 0 0 0 2px var(--gray-100); }
+.mv-tool:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mv-chat__send .mv-tool__face { background: var(--gray-100); color: var(--night-900); }
+.mv-chat__send[aria-disabled="true"] .mv-tool__face { background: var(--night-700); color: var(--gray-500); }
+/* 입력줄 깃펜(유언 쓰기): [입력칸][보내기][유언]. 14페이즈: 여분 margin-left 8 은 없앴다(입력칸 약 172 확보, UI-SPEC). 면·눌림은 .mv-tool */
+.mv-chat__will-dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); }
+.mv-chat__input:focus-visible, .mv-chat__newdot:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 .mv-chat__send.is-dim { opacity: 0.45; }
 /* 입력줄 오른쪽 끝 슬롯(11-12): 결과 화면의 다시 하기 알약 자리. 줄어들지 않는다 */
 .mv-chat__trailing { display: flex; flex: none; align-items: center; }
@@ -103,11 +108,8 @@
 .mv-ready__label, .mv-ready__count { display: block; font-size: 14px; line-height: 20px; font-weight: 700; }
 .mv-ready.is-dim { opacity: 0.45; cursor: default; }
 .mv-ready:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
-/* 입력줄 동작 버튼(10페이즈): 입력줄 맨 앞 48×48, 깃펜 버튼(.mv-chat__will)과 같은 면·눌림 표시 */
-.mv-chat__emote { position: relative; display: grid; place-items: center; flex: none; width: var(--control-input); height: var(--control-input); padding: 0; border: 0; border-radius: var(--radius-badge); background: var(--night-700); color: var(--gray-100); cursor: pointer; }
-.mv-chat__emote[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--gray-100); }
-.mv-chat__emote[aria-disabled="true"] { opacity: 0.45; cursor: default; }
-.mv-chat__emote:focus-visible, .mv-emote-tray__cell:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+/* 입력줄 동작 버튼(10페이즈): 입력줄 맨 앞, 이름표 단추(.mv-tool). 판 칸 포커스 링은 같은 값 */
+.mv-emote-tray__cell:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 /* 동작 판: 입력줄 윗변에서 8px 위, 폭은 입력줄(= 폰 폭 − 32), 위로 자란다. 5열 격자에 아랫줄 4칸은 가운데(칸 폭 = (판 폭 − 16 − 32) / 5) */
 .mv-emote-tray { position: absolute; left: 0; right: 0; bottom: calc(100% + var(--space-sm)); z-index: calc(var(--z-overlay) + 1); box-sizing: border-box; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); grid-auto-rows: 56px; gap: var(--space-sm); padding: var(--space-sm); border-radius: var(--radius-badge); background: var(--night-700); border: 1px solid var(--night-600); font-family: var(--font-ui); color: var(--gray-100); }
 .mv-emote-tray__cell { grid-column: span 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 0; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--gray-100); font-family: inherit; font-size: 14px; font-weight: 700; line-height: 1.2; white-space: nowrap; cursor: pointer; }
@@ -125,8 +127,9 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 
 /* 기록 칸 바깥 상자: 새 메시지 점이 줄과 함께 스크롤되지 않게 기록 칸 밖에 둔다 */
 .mv-chat__logbox { position: relative; }
+/* 새 글 알림(14페이즈 TOOL-01): 점이 아니라 14px 글자 알약. 누르기 영역은 44×44 그대로(투명), 알약은 그 안 가운데 */
 .mv-chat__newdot { position: absolute; right: 0; bottom: 0; display: grid; place-items: center; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; background: transparent; cursor: pointer; }
-.mv-chat__newdot i { width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); animation: mv-chat-pulse 1.6s ease-in-out infinite; }
+.mv-chat__newdot-pill { display: inline-block; padding: 0 var(--space-sm); border-radius: var(--radius-pill); background: var(--gray-100); color: var(--night-900); font-family: var(--font-ui); font-size: 14px; line-height: 22px; font-weight: 400; white-space: nowrap; animation: mv-chat-pulse 1.6s ease-in-out infinite; }
 @keyframes mv-chat-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(1.25); } }
 
 /* 막힘 알림: system 줄 모양에서 글자색만 crimson-300(입력 오류 문장). 아이콘·nowrap 없음 */
@@ -199,10 +202,12 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-chat__field.is-call::after { border-radius: var(--radius-md); }
 .mv-chat__field.is-call::before { border-radius: var(--radius-md); }
 .mv-chat__will.is-call::after, .mv-chat__will.is-call::before { border-radius: var(--radius-badge); }
+/* 이름표 단추가 빛나면 라벨 700 + brass-200(14-06) */
+.mv-tool.is-call .mv-tool__label { color: var(--brass-200); font-weight: 700; }
 
 @media (prefers-reduced-motion: reduce) {
   .mv-toast, .mv-ring__bar, .mv-phase__hint { transition: none; }
-  .mv-chat__newdot i, .mv-typing i { animation: none; }
+  .mv-chat__newdot-pill, .mv-typing i { animation: none; }
   /* 14-01: 띠 교체 즉시·종 흔들림 없음·막대는 초 단위 계단(전환 없음) */
   .mv-host__line.is-swap, .mv-host__bell.is-swap { animation: none; }
   .mv-host__bar i, .mv-host__time { transition: none; }

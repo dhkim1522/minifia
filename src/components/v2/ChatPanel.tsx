@@ -317,7 +317,7 @@ export function ChatPanel(props: ChatPanelProps) {
   const blank = value.trim() === "";
   const sendOff = blank || !!sendDisabled;
   const rootCls = ["mv-chat", onSend && ui.icon && "has-chan", compact && "is-compact"].filter(Boolean).join(" ");
-  const sendCls = sendDim ? "mv-chat__send is-dim" : "mv-chat__send";
+  const sendCls = sendDim ? "mv-tool mv-chat__send is-dim" : "mv-tool mv-chat__send";
 
   return (
     <section className={rootCls} data-chat-panel="" data-chat-channel={channel}>
@@ -419,8 +419,8 @@ export function ChatPanel(props: ChatPanelProps) {
           ) : null}
         </div>
         {newDot ? (
-          <button type="button" className="mv-chat__newdot" data-chat-newdot="" aria-label={CHAT_TEXT.newDot} onClick={jumpToBottom}>
-            <i />
+          <button type="button" className="mv-chat__newdot" data-chat-newdot="" data-tool-label={CHAT_TEXT.newDot} aria-label={CHAT_TEXT.newDot} onClick={jumpToBottom}>
+            <span className="mv-chat__newdot-pill">{CHAT_TEXT.newDot}</span>
           </button>
         ) : null}
       </div>
@@ -429,8 +429,9 @@ export function ChatPanel(props: ChatPanelProps) {
           {hasEmotes ? (
             <button
               type="button"
-              className="mv-chat__emote"
+              className="mv-tool mv-chat__emote"
               data-emote-button=""
+              data-tool-label={CHAT_TEXT.label.emote}
               aria-label={EMOTE_TEXT.button}
               aria-expanded={trayOpen}
               aria-pressed={trayOpen}
@@ -440,7 +441,10 @@ export function ChatPanel(props: ChatPanelProps) {
               // 포커스가 버튼으로 옮겨 가 입력칸이 blur 되지 않게 한다(보내기 버튼과 같다)
               onMouseDown={(e) => e.preventDefault()}
             >
-              <V2Icon name="face" />
+              <span className="mv-tool__face">
+                <V2Icon name="face" size={22} />
+              </span>
+              <span className="mv-tool__label">{CHAT_TEXT.label.emote}</span>
             </button>
           ) : null}
           {hasEmotes && trayOpen ? <EmoteTray ids={props.emotes ?? []} onPick={pickEmote} disabled={!!sendDisabled || !!props.emoteBlocked} playing={props.emotePlaying ?? null} firstRef={firstCellRef} onKeyDown={onTrayKeyDown} /> : null}
@@ -479,18 +483,23 @@ export function ChatPanel(props: ChatPanelProps) {
             type="submit"
             className={sendCls}
             data-chat-send=""
+            data-tool-label={CHAT_TEXT.label.send}
             aria-label={CHAT_TEXT.send}
             aria-disabled={sendOff ? "true" : "false"}
             // 누르는 순간 포커스가 버튼으로 옮겨 가면 입력칸이 blur 되어 키보드가 닫히고 패널이 손가락 밑에서 내려간다(Chromium·Android). 포커스는 입력칸에 둔다(07-19, 합격 검사 6).
             onMouseDown={(e) => e.preventDefault()}
           >
-            <V2Icon name="send" />
+            <span className="mv-tool__face">
+              <V2Icon name="send" size={22} />
+            </span>
+            <span className="mv-tool__label">{CHAT_TEXT.label.send}</span>
           </button>
           {onWill ? (
             <button
               type="button"
-              className={callWill ? "mv-chat__will is-call" : "mv-chat__will"}
+              className={callWill ? "mv-tool mv-chat__will is-call" : "mv-tool mv-chat__will"}
               data-will-button=""
+              data-tool-label={CHAT_TEXT.label.will}
               data-call={callWill ? "" : undefined}
               aria-label={willSaved ? CHAT_TEXT.willSaved : CHAT_TEXT.will}
               aria-pressed={willOpen ? "true" : "false"}
@@ -499,8 +508,11 @@ export function ChatPanel(props: ChatPanelProps) {
               // 포커스가 버튼으로 옮겨 가 키보드가 닫히지 않게 한다(보내기 버튼과 같다). 입력 중 경로(onChange)는 부르지 않는다.
               onMouseDown={(e) => e.preventDefault()}
             >
-              <V2Icon name="quill" />
-              {willSaved ? <i className="mv-chat__will-dot" /> : null}
+              <span className="mv-tool__face">
+                <V2Icon name="quill" size={22} />
+                {willSaved ? <i className="mv-chat__will-dot" /> : null}
+              </span>
+              <span className="mv-tool__label">{CHAT_TEXT.label.will}</span>
             </button>
           ) : null}
           {trailing ? (

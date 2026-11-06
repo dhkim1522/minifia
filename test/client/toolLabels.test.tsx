@@ -81,7 +81,7 @@ describe("채팅 입력줄 이름표 (TOOL-01 목록 8~11, D-04)", () => {
   it("빛나는 [유언] 은 라벨이 700 brass-200 이 된다(CSS 계약)", () => {
     const { container } = mount({ callWill: true });
     expect(container.querySelector("[data-will-button]")?.classList.contains("is-call")).toBe(true);
-    const r = rule(".is-call.mv-tool .mv-tool__label");
+    const r = rule(".mv-tool.is-call .mv-tool__label");
     expect(r).toContain("font-weight: 700");
     expect(r).toContain("var(--brass-200)");
   });
