@@ -1,7 +1,8 @@
 ---
 phase: "13"
 slug: "basic-day-flow"
-status: draft
+status: approved
+reviewed_at: 2026-11-07
 shadcn_initialized: false
 preset: none
 created: "2026-11-07"
