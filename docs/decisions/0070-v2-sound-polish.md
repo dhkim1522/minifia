@@ -35,7 +35,7 @@
 0070-4. **믹스·성능(D-16, O-3·O-5·O-6·O-10).**
 - 버스 3개(bgm 0.3·sfx 0.7·ui 0.45) + 마스터 0.7 + compressor(−18dB, 4:1) + 동시 보이스 8 + 노드 48 + 우선순위 끊기(우선 0 은 끊지 않음) + 덕킹. 같은 id 는 `max` 2·간격 제한(timer.tick 800ms, emote 250ms, vote.cast 120ms, ui.tap 80ms). 동작 소리는 남의 것 −6dB·초당 3개·동시 4(O-5). `timer.tick` 은 켠다(O-6). 저사양 `lite` 는 두지 않는다(O-10, 실기기 55fps 미달이 확인될 때만).
 - 모든 레벨(침대 포함)은 첫 초안이다. 시험 페이지(`/?sound-lab=1`)로 듣고 id 단위로 조정한다.
-- 소리 켠 5분 nightload(4배 스로틀, 390×844, 합격선 평균 55fps·끊김 5회·draw call 120·점광원 3, 소리 끈 기준선 대비 2fps 이내): TBD-NIGHTLOAD
+- 소리 켠 5분 nightload(4배 스로틀, 390×844, 합격선 평균 55fps·끊김 5회·draw call 120·점광원 3, 소리 끈 기준선 대비 2fps 이내): 재즈 바 평균 59.9fps·끊김 2·draw call 34→31, 광장 평균 59.9fps·끊김 1·draw call 34→31, 둘 다 점광원 4(알려진 `perfbudget` B2 4>3, 10페이즈 이전부터)이고 `sound.state` running·요청 300. 소리 끈 기준선(59.92/59.93)과 0.02fps 이내라 합격선·기준선 모두 통과했고 `--sound off` 대조는 필요 없었다(숫자는 `.planning/phases/12-sound-polish/perf/`). 실기기 확인은 `12-TEAM-TEST.md` S5.
 
 0070-5. **계획이 추가로 정한 규칙.**
 - **닫힌 로컬 신호 종류**: `tap`·`card`·`deny`·`vote`·`emote`·`tensionCue`·`result` 일곱. 인자에 선택값·역할·좌석을 넣지 않고, 종류를 늘리려면 `SIGNAL_KINDS`·`LocalSignal`·`directSignal` 분기를 함께 고친다.
