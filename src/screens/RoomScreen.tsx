@@ -5,6 +5,7 @@ import { phaseKey } from "../../shared/game/audience";
 import type { PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { useSound } from "../audio/useSound";
+import { hostChimeOf } from "../game/hostLine";
 import { nightDarkOf } from "../game/nightDark";
 import { LETTER_MS_PER_CHAR, LETTER_WRITE_MAX_MS, oneParagraph } from "../game/willLetter";
 import { countGraphemes } from "../../shared/nickname";
@@ -295,6 +296,20 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     letter: letterSound,
     policeCard: policeResult?.id ?? null,
   });
+
+  // 사회자 알림음(14-03, HOST-02): 자막 띠가 그리는 view(본문과 같은 curtain ?? view)의 단계가 바뀐 프레임에 신호 하나({ kind: "host" }, 인자 없음).
+  // 처음 마운트·연결 번호(epoch)가 바뀐 첫 프레임·같은 단계 안 변화·낮 시작 → 토론은 hostChimeOf 가 거른다. 띠가 없는 화면(쉬는 사람·안내)은 이전 단계만 갱신하고 보내지 않는다.
+  // 기존 prevPhase(대기실 복귀 비움)와 별개의 ref 다. 소리 끄기·잠김은 엔진이 따른다.
+  const bandPhase = shown !== null && !shown.resting && status !== "replaced" && status !== "failed" ? shown.phase : null;
+  const shownPhase = shown?.phase;
+  const hostPrev = useRef<{ phase: PhaseId; epoch: number } | null>(null);
+  useEffect(() => {
+    if (shownPhase === undefined) return;
+    const prev = hostPrev.current;
+    hostPrev.current = { phase: shownPhase, epoch: connection.epoch };
+    if (bandPhase === null || prev === null) return;
+    if (hostChimeOf(prev.phase, shownPhase, prev.epoch !== connection.epoch)) emitSignal({ kind: "host" });
+  }, [shownPhase, bandPhase, connection.epoch]);
 
   // 대기실·배정 동안 직업 그림 4종 전부와 낮 배경을 미리 받아 둔다.
   // 어떤 역할인지와 무관하게 같은 요청 패턴이다(Pattern 13 ②, Pitfall 20).
