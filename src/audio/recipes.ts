@@ -125,7 +125,7 @@ export interface Bed {
 export const BED_IDS = ["bed.lobby", "bed.reveal", "bed.day", "bed.vote", "bed.night", "bed.dawn", "bed.result"] as const;
 export type BedId = (typeof BED_IDS)[number];
 export const SFX_IDS = [
-  "ui.tap", "ui.toggle", "ui.deny", "ui.card", "lobby.join", "game.start", "role.flip",
+  "ui.tap", "ui.toggle", "ui.deny", "ui.card", "ui.host", "lobby.join", "game.start", "role.flip",
   "day.start", "timer.tick", "phase.vote", "pin.on", "pin.move", "pick.turn", "pick.tick", "pick.point",
   "pick.skip", "runoff.intro", "runoff.reveal", "showdown.reveal", "vote.cast",
   "verdict.heart", "ballot.yes", "ballot.no", "execution.gavel", "execution.rise", "verdict.reject",
@@ -136,7 +136,7 @@ export const SFX_IDS = [
   "result.win", "result.lose", "award.plate", "award.final",
 ] as const;
 export type SfxId = (typeof SFX_IDS)[number];
-/** 소리 id 56개: 침대 7 + 효과음 49 */
+/** 소리 id 57개: 침대 7 + 효과음 50 */
 export const SOUND_IDS = [...BED_IDS, ...SFX_IDS] as const;
 export type SoundId = BedId | SfxId;
 
@@ -259,6 +259,15 @@ export const RECIPES: Readonly<Record<SfxId, Recipe>> = {
     nz(0, 70, bp(2200, 2200, 2), 0.8, perc(70)),
     osc("sine", 20, 40, 880, 0.6, perc(40)),
   ]),
+  // 사회자 알림(14-03, HOST-02, D-01): 맑은 종 두 음 상승 약 350ms. 음성·외부 샘플 없음(결정 0070). 800ms 안 되풀이는 gapMs 가 막는다
+  "ui.host": recipe(
+    "ui.host",
+    "ui",
+    2,
+    -24,
+    [osc("sine", 0, 120, 880, 1, perc(120)), osc("sine", 120, 230, 1318, 1, perc(230))],
+    { gapMs: 800 },
+  ),
   "lobby.join": recipe("lobby.join", "sfx", 2, -26, [osc("sine", 0, 80, [600, 800], 1, perc(80))]),
   "game.start": recipe(
     "game.start",
@@ -556,6 +565,7 @@ export const SCREEN_COUNTERPART: Readonly<Record<SoundId, string>> = {
   "ui.toggle": "소리 단추의 켬/끔 모양 변화",
   "ui.deny": "거절 토스트가 뜨는 모습",
   "ui.card": "카드·편지가 화면에 도착하는 모습",
+  "ui.host": "자막 띠 문장이 바뀌는 모습",
   "lobby.join": "입장 토스트와 새로 선 캐릭터",
   "game.start": "시작 직후 배정 연출 화면",
   "role.flip": "역할 카드가 뒤집히는 모습",

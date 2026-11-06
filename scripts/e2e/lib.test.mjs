@@ -2852,7 +2852,7 @@ test("floatTrayChecks 기본판(결정 0072): 세 시점 모두 떠 있는 버�
 // ---- 12-06: 소리 시험 페이지 sound-render 순수 판정 (D-18, T-12-22) ----
 
 const soundRow = (id, over = {}) => ({ id, peakDb: -9, rmsDb: -30, nan: 0, lengthMs: 300, declaredMs: id.startsWith("bed.") ? null : 300, ok: true, ...over });
-const soundRows = () => [...Array.from({ length: 7 }, (_, i) => soundRow(`bed.${i}`)), ...Array.from({ length: 49 }, (_, i) => soundRow(`sfx.${i}`))];
+const soundRows = () => [...Array.from({ length: 7 }, (_, i) => soundRow(`bed.${i}`)), ...Array.from({ length: 50 }, (_, i) => soundRow(`sfx.${i}`))];
 const soundFails = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
 
 test("SOUND_RENDER_LIMITS: 57개 · 피크 −3 · RMS −60 · 길이 ±50ms (문턱은 이 한 곳)", () => {

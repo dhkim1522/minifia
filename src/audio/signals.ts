@@ -5,7 +5,7 @@
 import type { EmoteId } from "../../shared/protocol";
 
 /** 닫힌 신호 종류 */
-export const SIGNAL_KINDS = ["tap", "card", "tensionCue", "vote", "deny", "emote", "result"] as const;
+export const SIGNAL_KINDS = ["tap", "card", "tensionCue", "vote", "deny", "emote", "result", "host"] as const;
 export type SignalKind = (typeof SIGNAL_KINDS)[number];
 
 /** 주요 버튼이 눌렸다 — 인자 없음 */
@@ -47,7 +47,14 @@ export type ResultSignal =
   | { kind: "result"; step: "flip"; i: number }
   | { kind: "result"; step: "light"; win: boolean }
   | { kind: "result"; step: "plate"; k: number; total: number };
-export type LocalSignal = TapSignal | CardSignal | TensionCueSignal | VoteSignal | DenySignal | EmoteSignal | ResultSignal;
+/**
+ * 사회자 자막 띠의 단계가 바뀌었다(14-03, HOST-02) — 공개 단계 전환 신호. 인자가 없다: 역할·좌석·단계 이름도 싣지 않는다(결정 0073).
+ * 모든 사람에게 같은 프레임에 같은 소리라서 밤 진입에도 난다(밤 무음 LS-7 의 유일한 예외, 감독이 정한다).
+ */
+export interface HostSignal {
+  kind: "host";
+}
+export type LocalSignal = TapSignal | CardSignal | TensionCueSignal | VoteSignal | DenySignal | EmoteSignal | ResultSignal | HostSignal;
 
 type Handler = (signal: LocalSignal) => void;
 

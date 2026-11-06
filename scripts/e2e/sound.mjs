@@ -5,7 +5,7 @@
 import { chooseRole, dropSockets, leaveLobby, openTestSheet, reconnectInit, SetupError, setBotVote, setBots, settle, skipTo, sleep, startGame, tapPick } from "./browser.mjs";
 import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundEmoteLeakChecks, soundNightParityChecks, soundRenderChecks, soundResultChecks, soundResultSkipChecks, soundSequenceChecks, soundVerdictTimingChecks } from "./lib.mjs";
 
-/** [전부 계산] 56개 렌더가 끝나기를 기다리는 상한(ms) */
+/** [전부 계산] 57개 렌더가 끝나기를 기다리는 상한(ms) */
 const CALC_LIMIT_MS = 60000;
 const LAB_URL = "/?e2e=1&sound-lab=1";
 
@@ -49,7 +49,7 @@ const EMOTE_OPEN_TRIES = 12;
 
 export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGame, nightScenario }) {
   /**
-   * sound-render: 방 없이 새 컨텍스트(GAME_SIZE)로 시험 페이지를 열고 [전부 계산] → 56개 렌더 결과를 순수 판정 함수로 확인한다.
+   * sound-render: 방 없이 새 컨텍스트(GAME_SIZE)로 시험 페이지를 열고 [전부 계산] → 57개 렌더 결과를 순수 판정 함수로 확인한다.
    * 소리 출력은 없다(OfflineAudioContext). 서버 호출도 없다.
    */
   async function soundRenderFlow(ctx) {

@@ -8,7 +8,7 @@
 - 소리 라이브러리: **0** (`package.json` 에 howler·tone·zzfx 등이 없다. 소리는 브라우저 기본 Web Audio 만 쓴다).
 - 레시피(발진기·필터링한 잡음·엔벨로프)는 이 저장소에서 직접 작성했다. 알려진 곡의 선율을 인용하지 않았다. 코드 진행은 일반적인 재즈 화성(Dm9·Gm9·A7♭9)이고 음높이·리듬 배치는 직접 정했다.
 - 작성일: 2026-11-06 (12페이즈).
-- 정적 시험: `test/unit/soundProvenance.test.ts` (오디오 파일·소리 라이브러리가 생기면 아래 표에 행이 있어야 통과), `test/unit/soundProtocol.test.ts` (이 문서의 레시피 지도가 소리 id 56개를 모두 담는지, 서버가 소리를 모르는지), `test/unit/soundStaticGuard.test.ts` (`src/audio/` 가 허용된 입력만 읽는지).
+- 정적 시험: `test/unit/soundProvenance.test.ts` (오디오 파일·소리 라이브러리가 생기면 아래 표에 행이 있어야 통과), `test/unit/soundProtocol.test.ts` (이 문서의 레시피 지도가 소리 id 57개를 모두 담는지, 서버가 소리를 모르는지), `test/unit/soundStaticGuard.test.ts` (`src/audio/` 가 허용된 입력만 읽는지).
 
 ## 샘플을 들일 때 필수 항목
 
@@ -20,7 +20,7 @@
 
 ## 레시피 지도
 
-소리 id 56개(배경음 7 + 효과음 49). 레시피는 `src/audio/recipes.ts` 한 표(`RECIPES`·`BEDS`)가 단일 정의라서 id 하나를 바꾸려면 그 줄만 고치면 된다. 감독 규칙은 `src/audio/director.ts`(공개 view 차이·닫힌 로컬 신호), 시간표 대본은 `src/audio/script.ts` 에 있다. 값(레벨·길이·음높이)은 모두 첫 초안이고 폰으로 듣고 조정한다.
+소리 id 57개(배경음 7 + 효과음 50). 레시피는 `src/audio/recipes.ts` 한 표(`RECIPES`·`BEDS`)가 단일 정의라서 id 하나를 바꾸려면 그 줄만 고치면 된다. 감독 규칙은 `src/audio/director.ts`(공개 view 차이·닫힌 로컬 신호), 시간표 대본은 `src/audio/script.ts` 에 있다. 값(레벨·길이·음높이)은 모두 첫 초안이고 폰으로 듣고 조정한다.
 
 | 소리 id | 일어나는 일 | 정의 → 규칙이 있는 파일 |
 |---------|-------------|--------------------------|
@@ -35,6 +35,7 @@
 | `ui.toggle` | 소리 단추를 누름(켬·끔 변형) | recipes.ts → engine.ts (`setOn`) |
 | `ui.deny` | 서버가 요청을 거절해 토스트가 뜸 | recipes.ts → director.ts |
 | `ui.card` | 카드·편지 도착(종류 구분 없음) | recipes.ts → script.ts · director.ts |
+| `ui.host` | 자막 띠가 바뀜(단계 전환), 밤 진입도 모든 역할 같음 | recipes.ts → director.ts |
 | `lobby.join` | 사람이 입장함 | recipes.ts → director.ts |
 | `game.start` | 시작해 배정 3초가 열림 | recipes.ts → director.ts |
 | `role.flip` | 역할 카드 공개·결과의 직업 뒤집기(직업별 차이 없음) | recipes.ts → script.ts · director.ts |
@@ -87,7 +88,7 @@
 ## 시험 페이지
 
 - 열기: `npm run dev` (`--host` 포함) 후 폰에서 `http://<Mac IP>:5173/?sound-lab=1`. 개발 문맥 전용이고 배포본 번들에는 들어가지 않는다.
-- 56개를 ▶ 로 하나씩 듣고, [전부 계산] 으로 오프라인 렌더 검사(피크·NaN·무음·길이)를 헤드리스에서도 돌릴 수 있다.
+- 57개를 ▶ 로 하나씩 듣고, [전부 계산] 으로 오프라인 렌더 검사(피크·NaN·무음·길이)를 헤드리스에서도 돌릴 수 있다.
 - 마음에 들지 않는 id 를 알려 주면 `src/audio/recipes.ts` 의 레시피 한 줄만 고친다. 레벨이 문제면 `gainDb`, 길이면 `dur`, 음높이면 `f0`·`f1`.
 
 ## iOS 메모

@@ -2143,7 +2143,7 @@ export function dressChecks({ float, panel, sheet, cards, close, selected, nameF
 /** 12페이즈가 새로 더한 시험 페이지 DOM 표식·훅 이름. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지). 이후 계획(소리 단계)이 같은 목록에 더한다. */
 export const SOUND_MARKERS = Object.freeze([
   "data-sound-lab", // 시험 페이지 루트(soundLab.ts)
-  "data-sound-id", // 소리 ▶ 단추 data-sound-id="{id}" (56개)
+  "data-sound-id", // 소리 ▶ 단추 data-sound-id="{id}" (57개)
   "__mfSound", // 테스트 훅 window.__mfSound = { state, on, bed, voices, log, clear }(12-05)
   "__mfSoundLab", // 시험 페이지 훅 window.__mfSoundLab = { done, results }
   "data-sound-button", // 방 화면 소리 단추(SoundButton.tsx, 12-07) — 방 화면에 정확히 하나
@@ -2154,7 +2154,7 @@ export const SOUND_MARKERS = Object.freeze([
  * 오프라인 렌더 합격 문턱 (D-18). 낮추지 않는다: 실패하면 레시피를 고친다(T-12-22).
  * count 는 SOUND_IDS.length, 나머지는 src/debug/soundLabData.ts 의 SOUND_LIMITS 와 같아야 하고 e2eContract 시험이 대조한다.
  */
-export const SOUND_RENDER_LIMITS = Object.freeze({ count: 56, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
+export const SOUND_RENDER_LIMITS = Object.freeze({ count: 57, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
 
 /**
  * sound-render: 시험 페이지 [전부 계산] 결과(window.__mfSoundLab.results)를 판정한다.
@@ -2345,10 +2345,16 @@ export const SOUND_SCRIPT_STEPS = Object.freeze([
 /** 밤 구간(첫 bed.night 부터 첫 bed.dawn 앞)의 소리 id 집합 — 역할·살아 있음과 무관하게 모든 페이지가 같다 (LS-3). 이 밖의 id 가 나오면 새는 것이다 */
 export const NIGHT_PARITY_IDS = Object.freeze(["bed.night", "night.cue", "night.fall"]);
 
+/**
+ * 사회자 알림음(14-03, HOST-02): 자막 띠의 공개 단계 전환 소리. 밤 진입에도 모든 역할이 같은 프레임에 듣는다 — 밤 동일성은 이 소리를 뺀 나머지로 본다.
+ * 밤 무음(P3)의 예외도 이 id 하나뿐이다(다른 ui.* 는 그대로 실패).
+ */
+export const HOST_CHIME_ID = "ui.host";
+
 /** 페이지 로그를 밤 구간과 아침 구간으로 나눈다. 밤: 첫 bed.night 부터 그 뒤 첫 bed.dawn 앞 · 아침: 첫 bed.dawn 부터 끝. 밤 앞의 낮 소리(시험 시트 눌림 등)는 어느 쪽에도 넣지 않는다 */
 function nightSegments(log) {
   // 동작 소리(emote.*)는 받은 프레임에서만 나는 별개 규칙이라 soundEmoteLeakChecks 가 본다 — 밤 소리 집합 비교에서는 뺀다(12-10)
-  const ids = log.map((e) => e.id).filter((id) => !id.startsWith("emote."));
+  const ids = log.map((e) => e.id).filter((id) => !id.startsWith("emote.") && id !== HOST_CHIME_ID);
   const nightAt = ids.indexOf("bed.night");
   const dawnAt = ids.indexOf("bed.dawn", Math.max(0, nightAt));
   return {

@@ -8,7 +8,7 @@ import type { SfxId, SoundId } from "../audio/recipes";
  */
 export const SOUND_LIMITS = {
   /** 소리 id 수: 침대 7 + 효과음 49 */
-  count: 56,
+  count: 57,
   peakMaxDb: -3,
   rmsMinDb: -60,
   /** 효과음 측정 길이와 선언 길이의 허용 차이(ms) */
@@ -21,9 +21,9 @@ export interface LabGroup {
   ids: readonly SfxId[];
 }
 
-/** 효과음 49개를 단계로 묶는다(UI-SPEC C-2 의 표 제목 순서). 합집합이 SFX_IDS 전부 — 시험이 확인한다 */
+/** 효과음 50개를 단계로 묶는다(UI-SPEC C-2 의 표 제목 순서). 합집합이 SFX_IDS 전부 — 시험이 확인한다 */
 export const LAB_GROUPS: readonly LabGroup[] = [
-  { key: "common", title: "공통·로비·역할", ids: ["ui.tap", "ui.toggle", "ui.deny", "ui.card", "lobby.join", "game.start", "role.flip"] },
+  { key: "common", title: "공통·로비·역할", ids: ["ui.tap", "ui.toggle", "ui.deny", "ui.card", "ui.host", "lobby.join", "game.start", "role.flip"] },
   {
     key: "day",
     title: "낮·지목·변론",
@@ -48,6 +48,7 @@ export const SOUND_NAMES: Readonly<Record<SoundId, string>> = {
   "ui.toggle": "소리 단추",
   "ui.deny": "거절 토스트",
   "ui.card": "카드 도착",
+  "ui.host": "사회자 알림",
   "lobby.join": "사람 입장",
   "game.start": "게임 시작",
   "role.flip": "직업 카드 공개",

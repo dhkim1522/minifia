@@ -355,11 +355,17 @@ function resultSignal(signal: ResultSignal, cur: AudioView, out: DirectOutput): 
 
 /**
  * 로컬 신호 처리. 소리를 낼지·어떤 id 인지는 여기서 정한다.
- * 밤에는 모든 닫힌 신호가 무음이다(LS-7) — 시각 큐 갈래의 tensionCue 하나만 night.cue 를 낸다(박자를 시각과 맞춘다, D-11).
+ * 밤에는 사용자 행동 신호가 모두 무음이다(LS-7) — 시각 큐 갈래의 tensionCue 하나만 night.cue 를 낸다(박자를 시각과 맞춘다, D-11).
+ * 예외는 host 하나: 자막 띠의 공개 단계 전환(HOST-02)이라 밤 진입에도 모든 역할에게 같은 프레임에 같은 ui.host 가 난다 —
+ * LS-7 은 '내 행동·내 역할이 소리로 드러나지 않게' 하는 규칙이고, host 는 인자가 없고 모두에게 같다(결정 0073, T-14-08).
  */
 export function directSignal(signal: LocalSignal, cur: AudioView | null, ctx: SignalContext = {}): DirectOutput {
   const out = emptyOutput();
   if (cur === null) return out;
+  if (signal.kind === "host") {
+    out.now.push({ id: "ui.host" });
+    return out;
+  }
   if (cur.phase === "night") {
     if (signal.kind === "tensionCue" && ctx.visualCues === true) out.now.push({ id: "night.cue" });
     return out;
