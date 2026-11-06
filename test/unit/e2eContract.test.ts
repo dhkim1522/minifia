@@ -661,11 +661,26 @@ describe("14페이즈 사회자·이름표 E2E 사본과 제품 값 (14-08, 사�
     return [...body.matchAll(/"([^"]+)"/g)].map((x) => x[1]!);
   };
 
-  it("VIEW_TOP/ME/DAY_KEYS 는 test/unit/view.test.ts 의 TOP_KEYS·ME_KEYS·DAY_KEYS 와 같은 집합이다(서버 view 키 사본이 어긋나지 않게)", () => {
+  // view.test.ts 의 풍부한 상태가 만들지 않는 9페이즈 상태 의존 키(결정 0061-9·10·14) — 실제 판의 프레임에는 나온다. protocol.ts 의 같은 인터페이스에 선언되어 있어야 한다.
+  const EXTRA: Record<string, { iface: string; keys: string[] }> = {
+    ME_KEYS: { iface: "MyInfo", keys: ["will", "note"] },
+    DAY_KEYS: { iface: "DayView", keys: ["chalk"] },
+  };
+
+  it("VIEW_TOP/ME/DAY_KEYS 는 test/unit/view.test.ts 의 TOP_KEYS·ME_KEYS·DAY_KEYS 에 9페이즈 상태 의존 키(me.will·me.note·day.chalk)만 더한 집합이다(서버 view 키 사본이 어긋나지 않게)", () => {
     for (const [name, got] of [["TOP_KEYS", lib.VIEW_TOP_KEYS], ["ME_KEYS", lib.VIEW_ME_KEYS], ["DAY_KEYS", lib.VIEW_DAY_KEYS]] as const) {
       const want = keysIn(name);
       expect(want.length, name).toBeGreaterThan(5);
-      expect([...got].sort(), name).toEqual([...new Set(want)].sort());
+      expect([...got].sort(), name).toEqual([...new Set([...want, ...(EXTRA[name]?.keys ?? [])])].sort());
+    }
+  });
+
+  it("더한 키 셋(will·note·chalk)은 shared/protocol.ts 의 MyInfo·DayView 인터페이스에 선언되어 있다", () => {
+    const text = readFileSync(new URL("shared/protocol.ts", root), "utf8");
+    for (const { iface, keys } of Object.values(EXTRA)) {
+      const m = new RegExp(`export interface ${iface}\\b[^{]*\\{([\\s\\S]*?)\\n\\}`).exec(text);
+      expect(m, iface).not.toBeNull();
+      for (const k of keys) expect(m![1]!, `${iface}.${k}`).toMatch(new RegExp(`\\b${k}\\??:`));
     }
   });
 

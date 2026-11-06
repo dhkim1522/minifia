@@ -133,6 +133,7 @@ import { makeMapSelectFlows } from "./mapselect.mjs";
 import { awardChecks, readAwardState, readBenchView, readRematchState, readRestSheet, readResultStage, readResultTabs, readTimeline, rematchChecks, resultSkipChecks, resultStageChecks, resultTabChecks, timelineChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
+import { makeHostFlows } from "./host.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
 const HOST_NICK = "화면검사기";
@@ -3773,6 +3774,9 @@ const { mapSelectFlow } = makeMapSelectFlows({ recorder, startHost, openGuest, a
 // 소리(12페이즈): sound-render(12-06) 시험 페이지 오프라인 렌더 56개. 흐름 본문은 sound.mjs, 도우미만 넘긴다
 const { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow, soundResultFlow } = makeSoundFlows({ recorder, attempt, startHost, openGame, closeGame, nightScenario });
 
+// 사회자·이름표(14페이즈 14-08): emcee-band(띠, 폰 6종)·emcee-tools·emcee-leak·emcee-sound. 흐름 본문은 host.mjs, 도우미만 넘긴다
+const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow } = makeHostFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH, settledResult });
+
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
   { id: "lobby", run: lobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
@@ -3835,6 +3839,11 @@ export const FLOWS = [
   { id: "sound-night-parity", run: soundNightParityFlow, size: GAME_SIZE },
   // 12-11: 결과·시상 소리 — ended 도착부터 role.flip 개수(최대 8)·result.win/lose 1회·award.plate(패 수−1)·award.final 1회·순서, 새로고침은 bed.result 만. 무대 탭 건너뛰기 변형 한 판 포함. 390x844 한 크기
   { id: "sound-result", run: soundResultFlow, size: GAME_SIZE },
+  // 14-08: 사회자 띠(HOST-01·TOOL-02) 폰 6종 / 도구 이름표 전수(TOOL-01) / 역할 다섯 시점 누설(HOST-05) / 알림음(HOST-02). 이름 앞머리 emcee — host-handoff 와 --only 앞부분 일치가 겹치지 않는다
+  { id: "emcee-band", run: emceeBandFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  { id: "emcee-tools", run: emceeToolsFlow, size: GAME_SIZE },
+  { id: "emcee-leak", run: emceeLeakFlow, size: GAME_SIZE },
+  { id: "emcee-sound", run: emceeSoundFlow, size: GAME_SIZE },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },

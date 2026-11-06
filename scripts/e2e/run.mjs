@@ -161,6 +161,8 @@ async function runJob({ flow, size }) {
       break;
     } catch (e) {
       lastError = e;
+      // E2E_STACK=1 이면 던진 오류의 호출 자리 몇 줄을 더 찍는다(어느 조작에서 멈췄는지 볼 때만, 결과 판정은 그대로)
+      if (process.env.E2E_STACK === "1" && e instanceof Error) emit(`${String(e.message).replace(/\u001b\[\d+m/g, "").split("\n").slice(0, 14).join("\n")}\n${String(e.stack ?? "").split("\n").filter((l) => /^\s+at /.test(l)).slice(0, 5).join("\n")}`);
       const failed = ctx.results.filter((r) => r.ok === false);
       for (const r of failed) {
         const key = JSON.stringify([r.scenario, r.size, r.id, r.detail]);

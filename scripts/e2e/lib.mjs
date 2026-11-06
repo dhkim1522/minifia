@@ -2728,10 +2728,14 @@ export function soundResultSkipChecks(input) {
 export const HOST_LINE_MAX = 3;
 /** E2E 가 읽는 14페이즈 표식(src 에 있어야 한다 — e2eContract 가 확인). */
 export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time", "data-call", "data-tool-label", "data-role-goal", "data-guide"];
-/** 서버 view 허용 키. test/unit/view.test.ts 의 TOP_KEYS·ME_KEYS·DAY_KEYS 와 같은 값(13페이즈 그대로, 서버 diff 0) — e2eContract 가 같음을 고정한다. */
+/**
+ * 서버 view 허용 키(13페이즈 그대로, 서버 diff 0). test/unit/view.test.ts 의 TOP_KEYS·ME_KEYS·DAY_KEYS 에 더해, 그 시험의 풍부한 상태가 만들지 않는 9페이즈 상태 의존 키만 더했다:
+ * me.will·me.note(유언·쪽지, 결정 0061-9·10)·day.chalk(암살 분필, 결정 0061-14). 실제 판의 state 프레임에는 이 키들이 나온다(emcee-leak 이 처음 걸렸다) — e2eContract 가 "view.test.ts 집합 + 이 셋" 임과
+ * 그 셋이 shared/protocol.ts 의 MyInfo·DayView 에 선언된 키임을 고정한다. 14페이즈가 새 키를 더하면 여전히 VK1 이 잡는다.
+ */
 export const VIEW_TOP_KEYS = new Set(["code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map"]);
-export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "nightTally", "nightSure"]);
-export const VIEW_DAY_KEYS = new Set(["n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown"]);
+export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "nightTally", "nightSure", "will", "note"]);
+export const VIEW_DAY_KEYS = new Set(["n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown", "chalk"]);
 /** 밤 역할별 사회자 줄(src/game/hostLine.ts HOST_LINES 의 night.mafia·police·doctor 사본) — 다른 역할 화면에 있으면 누설이다. e2eContract 가 같음을 고정한다. */
 export const HOST_ACT_LINES = {
   mafia: "밤이 되었습니다. 없앨 사람에게 다가가 주세요.",
@@ -2794,17 +2798,22 @@ export function hostBandChecks(b, { phase, timed }) {
   return out;
 }
 
-/** HO1 투표·밤 이름표 단추끼리, 그리고 띠와 겹침 0(OVERLAP_EPS). x = { band, tags }. */
-export function hostOverlapChecks(x) {
+/**
+ * HO1 투표·밤 이름표 단추끼리, 그리고 띠와 겹침 0(OVERLAP_EPS). x = { band, tags }.
+ * knownBandLimit: 가장 낮고 좁은 폰(360×560, UI#14 알려진 한계)에서는 띠와 이름표의 겹침을 판정에서 빼고 known 에 측정값 그대로 돌려준다 — 이름표끼리 겹침은 그대로 판정한다.
+ * 돌려주는 값: { id, label, ok, detail, known } — known 은 한계로 기록한 문장("" 이면 없음).
+ */
+export function hostOverlapChecks(x, { knownBandLimit = false } = {}) {
   const label = "이름표 단추끼리·띠와 겹침 없음";
   const okRect = (r) => r && isNum(r.left) && isNum(r.top) && isNum(r.width) && isNum(r.height);
-  if (!x || !okRect(x.band) || !Array.isArray(x.tags) || x.tags.length === 0 || !x.tags.every(okRect)) return noMeasure("HO1", label, "띠·이름표 사각형");
+  if (!x || !okRect(x.band) || !Array.isArray(x.tags) || x.tags.length === 0 || !x.tags.every(okRect)) return { ...noMeasure("HO1", label, "띠·이름표 사각형"), known: "" };
   const bad = [];
+  const known = [];
   x.tags.forEach((t, i) => {
-    if (rectsOverlap(t, x.band)) bad.push(`이름표 ${i + 1} 이 띠와 겹침(${overlapText(t, x.band)})`);
+    if (rectsOverlap(t, x.band)) (knownBandLimit ? known : bad).push(`이름표 ${i + 1} 이 띠와 겹침(${overlapText(t, x.band)})`);
     for (let j = i + 1; j < x.tags.length; j++) if (rectsOverlap(t, x.tags[j])) bad.push(`이름표 ${i + 1}·${j + 1} 겹침(${overlapText(t, x.tags[j])})`);
   });
-  return result("HO1", label, bad);
+  return { ...result("HO1", label, bad), known: known.join("; ") };
 }
 
 /** 단추 글자에서 숫자·공백·'/' 를 뺀다(넘기기 k/n 의 숫자는 이름표가 아니다). */

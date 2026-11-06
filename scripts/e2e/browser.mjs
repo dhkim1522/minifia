@@ -179,6 +179,8 @@ export async function openHostPage(browser, { origin, code, token, size, dpr, mo
   // 13-05: 기본판 부재 검사 — 판 전체에서 받은 프레임의 꺼진 장치 흔적(경로 문자열만, 원문·토큰 없음)과 단계 열(연속 중복 접음)
   tracker.offKeys = [];
   tracker.phases = [];
+  // 14-08: 판 전체에서 받은 state 프레임의 view 키 이름 집합(최상위·me·day) — 키 이름만 싣는다(값·토큰·닉네임 없음, T-14-22). viewKeyChecks 가 받는다
+  tracker.viewKeys = { top: new Set(), me: new Set(), day: new Set() };
   page.on("websocket", (ws) => {
     ws.on("framesent", ({ payload }) => {
       try {
@@ -199,6 +201,9 @@ export async function openHostPage(browser, { origin, code, token, size, dpr, mo
       if (msg && msg.t === "state" && msg.view) {
         tracker.view = msg.view;
         tracker.seq += 1;
+        for (const k of Object.keys(msg.view)) tracker.viewKeys.top.add(k);
+        for (const k of Object.keys(msg.view.me ?? {})) tracker.viewKeys.me.add(k);
+        for (const k of Object.keys(msg.view.day ?? {})) tracker.viewKeys.day.add(k);
         if (typeof msg.view.phase === "string" && tracker.phases[tracker.phases.length - 1] !== msg.view.phase) tracker.phases.push(msg.view.phase);
       } else if (msg && msg.t === "world" && msg.k === "move" && typeof msg.s === "number") {
         tracker.moveSeq += 1;
@@ -288,7 +293,7 @@ export async function readJoinFit(page) {
 }
 
 /**
- * 지금 할 일 문장(UX1)과 문서 높이(UX2)를 한 번의 evaluate 로 읽는다(05-06). `[data-guide]` 목록은 글자(공백 정리)·헤더 안내줄 여부·높이·계산된 줄 높이,
+ * 지금 할 일 문장(UX1)과 문서 높이(UX2)를 한 번의 evaluate 로 읽는다(05-06). `[data-guide]` 목록은 글자(공백 정리)·자막 띠 안 여부(14페이즈: 헤더 안내줄 → 띠)·높이·계산된 줄 높이,
  * 줄 높이가 normal 이면 글자 크기 × 1.4. 모양은 lib.mjs "5페이즈 계약" 의 guideChecks·docHeightChecks 입력과 같다.
  */
 export async function readGuide(page) {
@@ -298,7 +303,7 @@ export async function readGuide(page) {
       const lh = parseFloat(cs.lineHeight);
       return {
         text: (el.textContent ?? "").replace(/\s+/g, " ").trim(),
-        inHeader: el.closest(".mf-phasebar") !== null && el.classList.contains("mf-phasebar__do"),
+        inBand: el.closest("[data-host-band]") !== null,
         height: el.getBoundingClientRect().height,
         lineHeight: Number.isFinite(lh) ? lh : parseFloat(cs.fontSize) * 1.4,
       };
@@ -354,6 +359,9 @@ export async function readHeaderContrast(page) {
     const defs = [
       { name: "제목", sels: [".mf-phasebar h1", ".mf-assign__bar h1", ".mf-lobby__header .mv-phase__title", ".mf-game__header .mv-phase__title"] },
       { name: "타이머", sels: [".mf-timer__num"] },
+      // 14-08(HOST-01·TOOL-02): 자막 띠 문장과 남은 초도 같은 대비 기준을 받는다
+      { name: "띠 문장", sels: ["[data-host-line]"] },
+      { name: "띠 시간", sels: ["[data-host-time]"] },
     ];
     const items = [];
     const hide = [];
@@ -1746,4 +1754,162 @@ export function readResult(page) {
       },
     };
   });
+}
+
+// ---- 14페이즈(14-08): 사회자 띠·도구 이름표·빛남 읽기 — 값만 모아 lib.mjs 판정 함수(hostBandChecks 등)에 넘긴다 ----
+
+/**
+ * 띠 읽기(hostBandChecks 입력): [data-host-band] 수, [data-host-line] 수·높이·줄 높이, [data-guide] 수와 띠 안 여부, [data-host-time] 글자·막대,
+ * 옛 안내줄(.mv-phase__hint)·링(.mv-ring)·m:ss 타이머(.mf-timer) 수. 문장 글자와 띠 사각형(겹침 판정용)도 함께 싣는다. 값은 DOM 에서만 읽는다.
+ */
+export function readHostBand(page) {
+  return page.evaluate(() => {
+    const qa = (s) => [...document.querySelectorAll(s)];
+    const box = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+    };
+    const line = document.querySelector("[data-host-line]");
+    const cs = line ? getComputedStyle(line) : null;
+    const lh = cs ? parseFloat(cs.lineHeight) : NaN;
+    const time = document.querySelector("[data-host-time]");
+    const bar = document.querySelector("[data-host-band] .mv-host__bar");
+    const guides = qa("[data-guide]");
+    const face = document.querySelector("[data-host-band] .mv-host__band");
+    return {
+      bands: qa("[data-host-band]").length,
+      lineCount: qa("[data-host-line]").length,
+      lineH: line ? line.getBoundingClientRect().height : null,
+      lineLH: cs ? (Number.isFinite(lh) ? lh : parseFloat(cs.fontSize) * 1.4) : null,
+      guideCount: guides.length,
+      guideInBand: guides.length > 0 && guides.every((g) => g.closest("[data-host-band]") !== null),
+      timeText: time ? (time.textContent ?? "").replace(/\s+/g, "") : "",
+      barShown: !!bar && bar.getBoundingClientRect().width > 0 && bar.getBoundingClientRect().height > 0,
+      oldHint: qa(".mv-phase__hint").length,
+      oldRing: qa(".mv-ring").length,
+      oldTimer: qa(".mf-timer").length,
+      text: line ? (line.textContent ?? "").replace(/\s+/g, " ").trim() : "",
+      bandRect: box(face),
+      vw: window.innerWidth,
+    };
+  });
+}
+
+/**
+ * 보이는 button·[role=tab] 읽기(toolLabelChecks 입력): 접근성 이름(aria-label → 보이는 글자), 보이는 글자(aria-hidden·.mf-sr-only 안 글자 뺀 것),
+ * data-tool-label(단추 자신 또는 안), 아이콘(svg·img) 유무. 보이지 않는 것(display none·visibility hidden·크기 0·닫힌 시트)은 뺀다.
+ */
+export function readToolButtons(page) {
+  return page.evaluate(() => {
+    const visible = (el) => {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return false;
+      return typeof el.checkVisibility === "function" ? el.checkVisibility({ checkVisibilityCSS: true }) : true;
+    };
+    const visibleText = (el) => {
+      let out = "";
+      const walk = (n) => {
+        if (n.nodeType === 3) {
+          out += n.nodeValue;
+          return;
+        }
+        if (n.nodeType !== 1) return;
+        if (n.getAttribute("aria-hidden") === "true" || n.classList.contains("mf-sr-only")) return;
+        for (const c of n.childNodes) walk(c);
+      };
+      walk(el);
+      return out.replace(/\s+/g, " ").trim();
+    };
+    return [...document.querySelectorAll('button, [role="tab"]')]
+      .filter(visible)
+      .map((el) => {
+        const text = visibleText(el);
+        const label = el.getAttribute("aria-label");
+        const inner = el.hasAttribute("data-tool-label") ? el : el.querySelector("[data-tool-label]");
+        return {
+          name: (label !== null && label.trim() !== "" ? label : text).trim(),
+          text,
+          toolLabel: inner ? inner.getAttribute("data-tool-label") : null,
+          hasIcon: el.querySelector("svg, img") !== null,
+          cls: String(el.className ?? "").slice(0, 60),
+        };
+      });
+  });
+}
+
+/** 빛남([data-call]) 수. */
+export function readCallCount(page) {
+  return page.evaluate(() => document.querySelectorAll("[data-call]").length);
+}
+
+/** 띠 문장·역할 목표·빛남 영역 글자(누설 판정용). 열린 시트 안의 목표 칩도 포함한다. */
+export function readRoomText(page) {
+  return page.evaluate(() => {
+    const parts = [...document.querySelectorAll("[data-host-line], [data-role-goal], [data-call]")];
+    return parts.map((el) => (el.textContent ?? "").replace(/\s+/g, " ").trim()).join(" | ");
+  });
+}
+
+/** 투표·밤 이름표 단추(이름표 [data-pick]·얼굴 칸 [data-face])의 보이는 사각형 목록. */
+export function readTagRects(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll("[data-pick], [data-face]")]
+      .filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      })
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+      }),
+  );
+}
+
+/**
+ * 띠 감시(14-08): 2초짜리 낮 시작처럼 한 칸 넘기고 읽기에는 너무 짧은 단계를 놓치지 않게, 띠 문장이 바뀔 때마다 그 순간의 띠 값(readHostBand 와 같은 모양)을
+ * 맵 단계 표식([data-game-stage] 의 data-phase)과 함께 쌓는다. 값만 싣는다(닉네임이 든 문장 글자는 길이만 — 판정은 모양과 개수만 본다). 읽기는 readBandWatch.
+ */
+export function armBandWatch(page) {
+  return page.evaluate(() => {
+    if (window.__mfBandWatch) return;
+    const snaps = [];
+    window.__mfBandWatch = { snaps };
+    const qa = (s) => [...document.querySelectorAll(s)];
+    const snap = () => {
+      const line = document.querySelector("[data-host-line]");
+      if (!line) return;
+      const text = (line.textContent ?? "").replace(/\s+/g, " ").trim();
+      const phase = document.querySelector("[data-game-stage]")?.getAttribute("data-phase") ?? null;
+      const last = snaps[snaps.length - 1];
+      if (last && last.text === text && last.phase === phase) return;
+      const cs = getComputedStyle(line);
+      const lh = parseFloat(cs.lineHeight);
+      const time = document.querySelector("[data-host-time]");
+      const bar = document.querySelector("[data-host-band] .mv-host__bar");
+      const guides = qa("[data-guide]");
+      snaps.push({
+        phase,
+        text,
+        bands: qa("[data-host-band]").length,
+        lineCount: qa("[data-host-line]").length,
+        lineH: line.getBoundingClientRect().height,
+        lineLH: Number.isFinite(lh) ? lh : parseFloat(cs.fontSize) * 1.4,
+        guideCount: guides.length,
+        guideInBand: guides.length > 0 && guides.every((g) => g.closest("[data-host-band]") !== null),
+        timeText: time ? (time.textContent ?? "").replace(/\s+/g, "") : "",
+        barShown: !!bar && bar.getBoundingClientRect().width > 0 && bar.getBoundingClientRect().height > 0,
+        oldHint: qa(".mv-phase__hint").length,
+        oldRing: qa(".mv-ring").length,
+        oldTimer: qa(".mf-timer").length,
+      });
+    };
+    new MutationObserver(snap).observe(document.body, { subtree: true, childList: true, characterData: true });
+    snap();
+  });
+}
+
+/** armBandWatch 가 쌓은 띠 값 목록(없으면 null). */
+export function readBandWatch(page) {
+  return page.evaluate(() => (window.__mfBandWatch ? window.__mfBandWatch.snaps.map((s) => ({ ...s })) : null));
 }
