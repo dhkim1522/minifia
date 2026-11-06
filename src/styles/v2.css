@@ -367,4 +367,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-sound--pill .mv-sound__face { width: auto; min-width: 112px; height: var(--tap-min); padding: 0 var(--space-md); color: var(--gray-100); box-shadow: inset 0 0 0 2px var(--gray-100); }
 .mv-sound__text { font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap; }
 .mv-sound:focus-visible { outline: none; }
+/* 시트(유언·쪽지·배지 등, .mf-will-layer)가 열려 있는 동안 단추는 비켜선다 — 시트는 .mf-game 의 쌓임 맥락(isolation) 안이라 z-modal 이어도
+ * 방 루트에 있는 단추(z 51) 위로 올라가지 못해 폭 360×높이 560 에서 시트 [닫기]를 가렸다(12-12 회귀에서 발견). 시트가 닫히면 바로 돌아온다. */
+.mf-room:has([data-sheet-layer]) > .mv-sound { visibility: hidden; pointer-events: none; }
 .mv-sound:focus-visible .mv-sound__face { outline: 2px solid var(--gray-100); outline-offset: 2px; }

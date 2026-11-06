@@ -250,11 +250,12 @@ export function makeAvatarFlows(helpers) {
       const [gScreens, hScreens] = await Promise.all([screensOfWorld(gp, centers), screensOfWorld(hp, centers)]);
       const inStage = (s, st) => !!s && Number.isFinite(s.sx) && s.sx > pad && s.sx < ctx.size.w - pad && s.sy > st.top + pad && s.sy < st.bottom - pad;
       const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw) && inStage(hScreens[i], hw));
-      const { ranked } = worldTapRanking(onScreen, from);
-      const probe = ranked.slice(0, 40);
-      const gHits = await hitsInputSurface(gp, probe);
-      const target = probe.find((_, i) => gHits[i]);
-      if (!target) throw new SetupError(`탭할 목적지를 찾지 못함(보이는 칸 ${onScreen.length}개)`);
+      // 떠 있는 버튼(소리 단추 12페이즈·꾸미기 hanger)이 덮은 칸을 먼저 빼고 순위를 매긴다(worldFlow 와 같은 순서) — 문턱(3 단위·낮은 스테이지 1.5 단위)은 그대로다
+      const gHits = await hitsInputSurface(gp, onScreen);
+      const open = onScreen.filter((_, i) => gHits[i]);
+      const { ranked } = worldTapRanking(open, from);
+      const target = ranked[0];
+      if (!target) throw new SetupError(`탭할 목적지를 찾지 못함(보이는 칸 ${onScreen.length}개, 가리지 않은 칸 ${open.length}개)`);
       const free2 = await waitUnblocked(gp, gSeat);
       if (free2 === null) throw new SetupError("손님 동작 칸이 세 번째로 풀리지 않음");
       // 춤을 시작하고 곧바로 걷는다
