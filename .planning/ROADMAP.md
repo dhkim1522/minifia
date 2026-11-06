@@ -74,7 +74,7 @@
   3. 직업 주장 배지·귓속말·순차 지목·결선·3인 결전이 어느 화면·프레임에도 나타나지 않고, 한 곳의 설정값으로 끈다
   4. 찬반 기록 카드는 그대로 공개되고, 봇 방이 새 흐름으로 한 판을 완주한다
 
-**Plans:** 4/6 plans executed (5 waves)
+**Plans:** 5/6 plans executed (5 waves)
 
 Plans:
 **Wave 1**
@@ -88,7 +88,7 @@ Plans:
 - [x] 13-04-PLAN.md — 꺼진 장치 차단: 메시지 조용한 거절·view 게이트·누설 전수 검사·화면 진입점 끄기
 
 **Wave 4**
-- [ ] 13-05-PLAN.md — E2E 동시 투표판 + basic-off(한 판 부재)·basic-vote(8명 기하), 장치 흐름 skipByDefault
+- [x] 13-05-PLAN.md — E2E 동시 투표판 + basic-off(한 판 부재)·basic-vote(8명 기하), 장치 흐름 skipByDefault
 
 **Wave 5**
 - [ ] 13-06-PLAN.md — 결정 0072·문서·폰 6종 회귀·성능·minifia-v3 배포·HANDOFF·push
@@ -121,7 +121,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 13. 기본판 낮 흐름 | v3.0 | 4/6 | In Progress | - |
+| 13. 기본판 낮 흐름 | v3.0 | 5/6 | In Progress | - |
 | 14. 사회자 진행과 도구 이름표 | v3.0 | 0/? | Not started | - |
 | 15. 낮 심부름·목격 기록·밤 흔적 | v3.0 | 0/? | Not started | - |
 
