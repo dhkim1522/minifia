@@ -3754,6 +3754,7 @@ describe("런타임 직접: 근처 snap·onProject·walkTo (15페이즈 D-02, UI
     const r = world.renderers[0]!;
     const h = r.chars.get(1)!;
     nearSnapFrame(store, [seg(0, [200, 100])]);
+    frame(1); // 첫 프레임이 구간 없음을 알아보고 퇴장을 시작한다
     frame(EXIT_MS / 2);
     expect(r.chars.has(1)).toBe(true);
     expect(h.root.scale.x).toBeLessThan(0.83);

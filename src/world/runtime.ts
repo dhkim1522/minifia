@@ -215,6 +215,11 @@ export interface WorldRuntimeDeps {
   onEmotes?: (state: { last: { seat: number; id: EmoteId; n: number } | null; playing: readonly number[] }) => void;
   /** 카메라 줌이 렌더러에 새로 보내질 때 소수 셋째 자리로 불린다 — E2E 훅 window.__mfPin.zoom 용(09.1.1-13). 제품은 넘기지 않는다 */
   onZoom?: (zoom: number) => void;
+  /**
+   * 프레임마다 이름표 쓰기 다음에 한 번 불린다(15-05). project(x, z) 는 월드 바닥점(발끝)의 화면 좌표(host 기준 px)를 돌려준다 —
+   * 심부름 표지·화살표·근처 링이 이 콜백 안에서 DOM 에 직접 쓴다(React 상태를 프레임마다 바꾸지 않는다). 투영할 수 없으면 null
+   */
+  onProject?: (project: (x: number, z: number) => { sx: number; sy: number } | null, now: number) => void;
 }
 
 export interface WorldRuntime {
@@ -238,6 +243,11 @@ export interface WorldRuntime {
   setScene(look: SceneLook | null): void;
   /** 화면 좌표의 탭. 받아들이면 바닥 교점(월드 단위)을 돌려주고 목적지 링을 바로 띄운다 */
   tap(clientX: number, clientY: number): { x: number; z: number } | null;
+  /**
+   * 월드 단위 목적지로 걷는다 — tap 이 바닥 교점을 얻은 뒤와 같은 경로(링을 바로 띄우고 목적지를 돌려준다, 15-05 심부름 표지).
+   * 서버로 보내는 일과 notifyMoveSent 는 부른 쪽이 탭과 똑같이 한다
+   */
+  walkTo(x: number, z: number): { x: number; z: number } | null;
   /**
    * move 를 보낸 직후 부른다(서버 시각 at, 응답 없음 시계의 시작).
    * dest(보낸 1/100 정수 목적지)가 있으면 내 캐릭터가 같은 길로 바로 걷기 시작한다. 없으면 예측 없이 서버 구간만 따른다.
@@ -1306,6 +1316,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const b = timed ? performance.now() : 0;
     writeTags(r);
     if (timed) tagsMs = performance.now() - b;
+    if (deps.onProject !== undefined) deps.onProject(projectGround(r), now);
     for (const a of gone) {
       removeActor(a);
       if (a.tag !== null) a.tag.style.opacity = "0";
@@ -1319,6 +1330,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (status.status === "loading" && store.isReady()) dispatch({ t: "ready" });
     if (status.status === "ready") degrade.frame(gapMs);
     deps.onFrame?.({ renderMs, tagsMs });
+  }
+
+  /** 바닥점 투영 함수 — renderer.project 를 감싼다(y = 0). 유한하지 않은 값은 null */
+  function projectGround(r: WorldRenderer): (x: number, z: number) => { sx: number; sy: number } | null {
+    return (x, z) => {
+      const p = r.project({ x, y: 0, z });
+      return Number.isFinite(p.sx) && Number.isFinite(p.sy) ? { sx: p.sx, sy: p.sy } : null;
+    };
   }
 
   /**
@@ -1391,14 +1410,25 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (!gate.accept(Date.now())) return null;
     const rect = host.getBoundingClientRect();
     const at = renderer.groundAt(clientX - rect.left, clientY - rect.top);
+    return startWalk(renderer, at.x, at.z);
+  }
+
+  function walkTo(x: number, z: number): { x: number; z: number } | null {
+    if (disposed || renderer === null || inputBlocked(status)) return null;
+    if (!gate.accept(Date.now())) return null;
+    return startWalk(renderer, x, z);
+  }
+
+  /** 탭과 표지 걷기가 함께 쓰는 부분: 손짓·이전 링을 거두고 목적지 링을 바로 띄운다 */
+  function startWalk(r: WorldRenderer, x: number, z: number): { x: number; z: number } {
     hideCue();
     writeCueKey();
     clearRing();
-    const here = { x: at.x, z: at.z };
+    const here = { x, z };
     ring = { at: here, target: here, from: null, to: null, slideStart: 0, acked: false, endsAt: 0, fadeStart: null };
-    renderer.setMarker("ring", here, 1, 1);
+    r.setMarker("ring", here, 1, 1);
     deps.onRing?.(here);
-    return { x: at.x, z: at.z };
+    return { x, z };
   }
 
   function notifyMoveSent(at: number, dest?: { x: number; z: number }): void {
@@ -1458,6 +1488,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       (a.handle as PlayableCharacter).setFace?.("surprise");
     },
     tap,
+    walkTo,
     notifyMoveSent,
     cancelMove: clearRing,
     async retry() {
