@@ -3784,3 +3784,159 @@ describe("런타임 직접: 근처 snap·onProject·walkTo (15페이즈 D-02, UI
     runtime.dispose();
   });
 });
+
+// ---------- 15-05 Task 2: errand 층(표지·화살표 칩·근처 링) ----------
+
+describe("WorldStage: errand 층 (15페이즈 D-02·D-09, UI-SPEC U-3·U-5·U-18)", () => {
+  const INS = { top: 60, bottom: 84 };
+  // 가짜 렌더러: 발끝 (x, z) → sx = 200 + 10x, sy = 300 + 10z
+  const A = { id: "glass" as const, x: 0, z: 0, done: false }; // (200, 300) 안
+  const B = { id: "piano" as const, x: -100, z: 0, done: false }; // (-800, 300) 밖
+  const C = { id: "sax" as const, x: 10, z: 5, done: true }; // (300, 350) 안
+  const errandProp = (over: Partial<NonNullable<WorldStageProps["errand"]>> = {}): NonNullable<WorldStageProps["errand"]> => ({
+    places: [A, B, C],
+    nextId: "glass",
+    callPlace: false,
+    nearR: 3,
+    onWalk: vi.fn(),
+    ...over,
+  });
+  const layer = (s: Setup) => s.utils.container.querySelector<HTMLElement>(".mf-world__errand");
+  const pin = (s: Setup, id: string) => s.utils.container.querySelector<HTMLElement>(`button[data-errand-place="${id}"]`)!;
+  const arrow = (s: Setup) => s.utils.container.querySelector<HTMLElement>("[data-errand-arrow]")!;
+
+  it("errand prop 이 없으면 층이 DOM 에 없다(회귀)", async () => {
+    const s = await open({ stageInsets: INS });
+    expect(layer(s)).toBeNull();
+    expect(s.utils.container.querySelector("[data-near-ring]")).toBeNull();
+  });
+
+  it("errand prop 이 있으면 장소마다 표지 버튼, 화살표 칩 하나, 링 svg(data-near-ring=nearR) 가 마운트된다", async () => {
+    const s = await open({ stageInsets: INS, errand: errandProp() });
+    expect(layer(s)).not.toBeNull();
+    expect(s.utils.container.querySelectorAll("button[data-errand-place]")).toHaveLength(3);
+    expect(s.utils.container.querySelectorAll("[data-errand-arrow]")).toHaveLength(1);
+    expect(s.utils.container.querySelector("svg[data-near-ring]")!.getAttribute("data-near-ring")).toBe("3");
+    expect(pin(s, "sax").hasAttribute("data-done")).toBe(true);
+    expect(pin(s, "glass").hasAttribute("data-done")).toBe(false);
+  });
+
+  it("층은 이름표 층보다 DOM 앞(아래)에 있고 nearR 값이 바뀌면 속성이 따라간다", async () => {
+    const s = await open({ stageInsets: INS, errand: errandProp() });
+    const kids = [...s.utils.container.querySelector("[data-world-stage]")!.children];
+    expect(kids.indexOf(layer(s)!)).toBeLessThan(kids.indexOf(s.utils.container.querySelector(".mf-world__tags")!));
+    s.rerender({ errand: errandProp({ nearR: 4 }) });
+    expect(s.utils.container.querySelector("svg[data-near-ring]")!.getAttribute("data-near-ring")).toBe("4");
+  });
+
+  it("표지를 누르면 onWalk(id) 가 불리고 그 장소로 걷는 move 가 한 번 간다(처리 메시지 없음)", async () => {
+    const onWalk = vi.fn();
+    const s = await open({ stageInsets: INS, errand: errandProp({ onWalk }) });
+    frame();
+    fireEvent.click(pin(s, "sax"));
+    expect(onWalk).toHaveBeenCalledWith("sax");
+    expect(s.send).toHaveBeenCalledTimes(1);
+    expect(s.send).toHaveBeenCalledWith({ t: "move", x: 1000, z: 500 });
+  });
+
+  it("canWalk 가 거짓이면 표지를 눌러도 걷지 않는다", async () => {
+    const s = await open({ stageInsets: INS, canWalk: false, errand: errandProp() });
+    frame();
+    fireEvent.click(pin(s, "sax"));
+    expect(s.send).not.toHaveBeenCalled();
+  });
+
+  it("프레임마다 스테이지 안(안쪽 8)의 표지는 투영 좌표로 놓이고 화면 밖 표지는 hidden 이다", async () => {
+    const s = await open({ stageInsets: INS, errand: errandProp() });
+    frame();
+    expect(pin(s, "glass").hidden).toBe(false);
+    expect(pin(s, "glass").style.transform).toBe("translate(178px, 278px)");
+    expect(pin(s, "sax").hidden).toBe(false);
+    expect(pin(s, "sax").style.transform).toBe("translate(278px, 328px)");
+    expect(pin(s, "piano").hidden).toBe(true);
+  });
+
+  it("다음 장소가 화면 밖이면 화살표가 보이고 그 방향(왼쪽)을 가리키며, 보이면 화살표는 hidden 이다", async () => {
+    const s = await open({ stageInsets: INS, errand: errandProp({ nextId: "piano" }) });
+    frame();
+    expect(arrow(s).hidden).toBe(false);
+    expect(arrow(s).style.transform).toMatch(/^translate\(/);
+    const turn = arrow(s).querySelector<HTMLElement>(".mv-errand-arrow__turn")!;
+    const deg = Number(/rotate\((-?[\d.]+)deg\)/.exec(turn.style.transform)![1]);
+    expect(deg).toBeLessThan(-60);
+    expect(deg).toBeGreaterThan(-120);
+    s.rerender({ errand: errandProp({ nextId: "glass" }) });
+    frame();
+    expect(arrow(s).hidden).toBe(true);
+  });
+
+  it("독 줄과 겹치는 표지는 그리지 않고 다음 장소면 화살표가 대신한다", async () => {
+    const dock = document.createElement("div");
+    dock.setAttribute("data-host-band", "");
+    const row = document.createElement("div");
+    row.className = "mv-host__dock";
+    row.getBoundingClientRect = () => ({ left: 170, top: 270, right: 230, bottom: 330, width: 60, height: 60, x: 170, y: 270, toJSON() {} }) as DOMRect;
+    dock.append(row);
+    document.body.append(dock);
+    const s = await open({ stageInsets: INS, errand: errandProp({ nextId: "glass" }) });
+    frame(600);
+    expect(pin(s, "glass").hidden).toBe(true);
+    expect(arrow(s).hidden).toBe(false);
+    dock.remove();
+  });
+
+  it("빛남: callPlace 면 보이는 다음 장소 표지에만 data-call, 화살표가 대신하면 화살표에만, callPlace 거짓이면 어디에도 없다", async () => {
+    const s = await open({ stageInsets: INS, errand: errandProp({ callPlace: true, nextId: "glass" }) });
+    frame();
+    expect(s.utils.container.querySelectorAll("[data-call]")).toHaveLength(1);
+    expect(pin(s, "glass").hasAttribute("data-call")).toBe(true);
+    expect(arrow(s).hasAttribute("data-call")).toBe(false);
+    s.rerender({ errand: errandProp({ callPlace: true, nextId: "piano" }) });
+    frame();
+    expect(s.utils.container.querySelectorAll("[data-call]")).toHaveLength(1);
+    expect(pin(s, "glass").hasAttribute("data-call")).toBe(false);
+    expect(arrow(s).hasAttribute("data-call")).toBe(true);
+    s.rerender({ errand: errandProp({ callPlace: false, nextId: "piano" }) });
+    frame();
+    expect(s.utils.container.querySelectorAll("[data-call]")).toHaveLength(0);
+  });
+
+  it("링: 내 위치를 중심으로 반경 nearR 월드 단위의 24점 다각형이 투영되어 points 가 갱신되고 내 위치가 없으면 hidden", async () => {
+    const s = await open({ stageInsets: INS, errand: errandProp() }, { ents: [seg(0, [200, 100]), seg(1, [-300, 50])] });
+    frame();
+    const ring = s.utils.container.querySelector<SVGElement>("svg[data-near-ring]")!;
+    expect(ring.hasAttribute("hidden")).toBe(false);
+    const pts = ring.querySelector("polygon")!.getAttribute("points")!.trim().split(/\s+/).map((p) => p.split(",").map(Number));
+    expect(pts).toHaveLength(24);
+    // 내 위치 (2, 1) → 투영 중심 (220, 310), 반경 3 → 30px
+    for (const [x, y] of pts) expect(Math.hypot(x! - 220, y! - 310)).toBeCloseTo(30, 0);
+    s.rerender({ view: makeView(TWO, 7) });
+    frame();
+    expect(ring.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("스타일: 층은 pointer-events none·표지 버튼만 auto, 이름표 층보다 한 단 아래, 링은 점선 굵기 2·정지, hex 없음", () => {
+    const css = readFileSync("src/styles/game.css", "utf8");
+    const block = (sel: string): string => new RegExp(`${sel.replace(/[.[\]]/g, "\\$&")}\\s*\\{[^}]*\\}`).exec(css)?.[0] ?? "";
+    const layerCss = block(".mf-world__errand");
+    expect(layerCss).toContain("pointer-events: none");
+    expect(layerCss).toContain("calc(var(--z-tags) - 1)");
+    const ringCss = block(".mf-world__ring");
+    expect(ringCss).toContain("stroke-dasharray");
+    expect(ringCss).toContain("stroke-width: 2");
+    expect(ringCss).toContain("var(--gray-50)");
+    expect(ringCss).not.toContain("animation");
+    expect(layerCss + ringCss).not.toMatch(/#[0-9a-fA-F]{3,6}/);
+    expect(css).toMatch(/\.mf-world__errand > \.mv-errand-pin\s*\{[^}]*pointer-events: auto/);
+  });
+
+  it("모션 줄이기: 층 쪽에는 애니메이션이 없다(링·표지 채움은 즉시)", async () => {
+    stubReducedMotion(true);
+    const s = await open({ stageInsets: INS, errand: errandProp() });
+    frame();
+    const ring = s.utils.container.querySelector<SVGElement>("svg[data-near-ring]")!;
+    expect(ring.getAttribute("style") ?? "").not.toContain("animation");
+    const css = readFileSync("src/styles/game.css", "utf8");
+    expect(css).not.toMatch(/\.mf-world__ring[^{]*\{[^}]*animation/);
+  });
+});
