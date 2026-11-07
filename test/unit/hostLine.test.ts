@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
-import type { MorningView, PhaseId, RoomView } from "../../shared/protocol";
-import { HOST_FALLBACK, HOST_LINES, callTargetsOf, hostChimeOf, hostKeyOf, hostLineOf, hostTimeOf, type HostKey } from "../../src/game/hostLine";
+import type { MorningView, PhaseId, PlaceId, RoomView } from "../../shared/protocol";
+import { HOST_FALLBACK, HOST_LINES, callTargetsOf, hostChimeOf, hostKeyOf, hostLineOf, hostTimeOf, type HostKey, type HostLocal } from "../../src/game/hostLine";
 
 // 14-01: 사회자 문구 표(UI-SPEC "사회자 문구 표")와 파생 판정. 표가 단일 출처다 — 시험과 표가 어긋나면 표를 따른다.
 // 마지막 describe 는 HOST-05(T-14-01): 문장·빛남 대상은 내 view 의 허용 목록 값만 읽는다.
@@ -29,6 +29,10 @@ interface Spec {
   dead?: readonly number[];
   endsAt?: number | null;
   durationMs?: number | null;
+  /** 15-04: 내 심부름 목록·진행(me.errand). 없으면 키 자체가 없다 */
+  errand?: { places: PlaceId[]; done: PlaceId[] };
+  /** 이번 판의 맵(view.map) */
+  map?: "bar" | "plaza";
 }
 
 function makeView(o: Spec): RoomView {
@@ -55,6 +59,7 @@ function makeView(o: Spec): RoomView {
   }
   const day: Record<string, unknown> = { n: 1 };
   if (o.candidate !== undefined) day.candidate = o.candidate;
+  if (o.errand !== undefined) me.errand = { places: [...o.errand.places], done: [...o.errand.done] };
   if (o.passed !== undefined) day.verdict = { yes: 3, no: 1, passed: o.passed };
   if (o.morning !== undefined) day.morning = o.morning;
   if (o.noise) Object.assign(day, { roles: ["mafia", "police", "citizen"], points: [{ seat: 1, target: 2 }], turn: { i: 0 }, voteLog: [{ seat: 1, target: 2 }] });
@@ -71,9 +76,13 @@ function makeView(o: Spec): RoomView {
     me,
     day,
   };
+  if (o.map !== undefined) view.map = o.map;
   if (o.noise) view.spectate = { seats: [{ seat: 1, job: "mafia" }], picks: { mafia: [1], police: [], doctor: [] } };
   return view as unknown as RoomView;
 }
+
+const ERR_PART = { places: ["glass", "piano", "sax"] as PlaceId[], done: ["piano"] as PlaceId[] };
+const ERR_DONE = { places: ["glass", "piano", "sax"] as PlaceId[], done: ["glass", "piano", "sax"] as PlaceId[] };
 
 describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
   const cases: Array<[string, Spec, string, HostKey, { cardSeen?: boolean }?]> = [
@@ -85,6 +94,12 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     ["역할 확인, 카드 봄", { phase: "roleReveal" }, "확인하셨으면 그대로 기다려 주세요.", "roleReveal.wait", { cardSeen: true }],
     ["낮 시작 산 사람", { phase: "dayAnnounce" }, "낮이 되었습니다. 모두 모여 주세요.", "dayAnnounce.wait"],
     ["낮 시작 유령", { phase: "dayAnnounce", ghost: true }, "낮이 되었습니다. 유령은 지켜봐 주세요.", "dayAnnounce.ghost"],
+    ["심부름 산 사람(시민)", { phase: "errand", role: "citizen", map: "bar", errand: ERR_PART }, "심부름 시간입니다. 장소 세 곳을 돌며 처리해 주세요.", "errand.act"],
+    ["심부름 산 사람(마피아, 같은 문장)", { phase: "errand", role: "mafia", map: "bar", errand: ERR_PART }, "심부름 시간입니다. 장소 세 곳을 돌며 처리해 주세요.", "errand.act"],
+    ["심부름 3곳 완료(경찰)", { phase: "errand", role: "police", map: "bar", errand: ERR_DONE }, "심부름을 마쳤습니다. 곧 토론이 시작됩니다.", "errand.done"],
+    ["심부름 3곳 완료(마피아, 같은 문장)", { phase: "errand", role: "mafia", map: "bar", errand: ERR_DONE }, "심부름을 마쳤습니다. 곧 토론이 시작됩니다.", "errand.done"],
+    ["심부름 유령", { phase: "errand", ghost: true }, "심부름 시간입니다. 유령은 지켜봐 주세요.", "errand.ghost"],
+    ["심부름 목록 없는 산 사람", { phase: "errand", map: "bar" }, "심부름 시간입니다. 장소 세 곳을 돌며 처리해 주세요.", "errand.act"],
     ["토론 산 사람", { phase: "discussion" }, "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.", "discussion.act"],
     ["토론 유령", { phase: "discussion", ghost: true }, "유령은 지켜보며 유령끼리 이야기할 수 있습니다.", "discussion.ghost"],
     ["투표 산 사람", { phase: "nomination" }, "투표 시간입니다. 처형할 사람의 이름표를 눌러 주세요.", "nomination.act"],
@@ -140,10 +155,10 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     expect(hostKeyOf(makeView({ phase: "runoff" }))).toBe("fallback");
   });
 
-  it("예약 키 errand·witness·trace 는 빈 문자열이고 hostKeyOf 가 돌려주지 않는다 (15페이즈 행)", () => {
-    expect(HOST_LINES.errand).toBe("");
+  it("예약 키 witness·trace 는 빈 문자열이고 hostKeyOf 가 돌려주지 않는다(15-07 까지), errand 예약 행은 없다 (15페이즈 행)", () => {
     expect(HOST_LINES.witness).toBe("");
     expect(HOST_LINES.trace).toBe("");
+    expect("errand" in HOST_LINES).toBe(false);
     for (const key of matrixKeys()) expect(["errand", "witness", "trace"]).not.toContain(key);
   });
 
@@ -162,6 +177,8 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     const calm: Array<Spec> = [
       { phase: "assigning" },
       { phase: "dayAnnounce" },
+      { phase: "errand", map: "bar", errand: { places: ["glass", "piano", "sax"], done: ["piano"] } },
+      { phase: "errand", map: "bar", errand: { places: ["glass", "piano", "sax"], done: ["glass", "piano", "sax"] } },
       { phase: "discussion" },
       { phase: "nomination" },
       { phase: "defense", candidate: 1 },
@@ -229,6 +246,40 @@ describe("빛남 대상 callTargetsOf (HOST-03·04)", () => {
     expect(callTargetsOf(makeView({ phase: "night", role: "police", ghost: true }))).toBeNull();
   });
 
+  it("심부름: 반경 안이면 tool errand, 반경 밖이면 가장 가까운 미완료 place, 위치를 모르면 첫 미완료 place", () => {
+    const v = makeView({ phase: "errand", map: "bar", errand: { places: ["glass", "piano", "sax"], done: [] } });
+    // glass (-3.9,-2.2) · piano (-2.6,-5.6) · sax (-0.2,-5.2)
+    expect(callTargetsOf(v, { pos: { x: -3.9, z: -2.2 } })).toEqual({ kind: "tool", tool: "errand" });
+    expect(callTargetsOf(v, { pos: { x: -3.9, z: -1.5 } })).toEqual({ kind: "tool", tool: "errand" });
+    expect(callTargetsOf(v, { pos: { x: -5, z: 3 } })).toEqual({ kind: "place", id: "glass" });
+    expect(callTargetsOf(v, { pos: { x: 3, z: 0 } })).toEqual({ kind: "place", id: "sax" });
+    expect(callTargetsOf(v, { pos: { x: 0, z: -5 } })).toEqual({ kind: "tool", tool: "errand" }); // sax 반경 안
+    expect(callTargetsOf(v, { pos: { x: 1.5, z: -3 } })).toEqual({ kind: "place", id: "sax" });
+    expect(callTargetsOf(v, { pos: null })).toEqual({ kind: "place", id: "glass" });
+    expect(callTargetsOf(v, {})).toEqual({ kind: "place", id: "glass" });
+  });
+
+  it("심부름: 처리한 곳 곁이면 빛은 다른 미완료 place 로 간다", () => {
+    const v = makeView({ phase: "errand", map: "bar", errand: { places: ["glass", "piano", "sax"], done: ["glass"] } });
+    expect(callTargetsOf(v, { pos: { x: -3.9, z: -2.2 } })).toEqual({ kind: "place", id: "piano" });
+    expect(callTargetsOf(v, { pos: null })).toEqual({ kind: "place", id: "piano" });
+  });
+
+  it("심부름: view.map 없음·목록 없음 → null, 3곳 완료·유령 → null", () => {
+    expect(callTargetsOf(makeView({ phase: "errand", errand: ERR_PART }), { pos: { x: 0, z: 0 } })).toBeNull();
+    expect(callTargetsOf(makeView({ phase: "errand", map: "bar" }), { pos: { x: 0, z: 0 } })).toBeNull();
+    expect(callTargetsOf(makeView({ phase: "errand", map: "bar", errand: { places: [], done: [] } }), { pos: null })).toBeNull();
+    expect(callTargetsOf(makeView({ phase: "errand", map: "bar", errand: ERR_DONE }), { pos: { x: -3.9, z: -2.2 } })).toBeNull();
+    expect(callTargetsOf(makeView({ phase: "errand", ghost: true, map: "bar" }), { pos: { x: -3.9, z: -2.2 } })).toBeNull();
+  });
+
+  it("심부름 빛남 대상은 역할과 무관하다(마피아·시민이 같은 대상)", () => {
+    for (const pos of [null, { x: -3.9, z: -2.2 }, { x: 3, z: 0 }]) {
+      const targets = (["mafia", "police", "doctor", "citizen"] as RoleId[]).map((role) => JSON.stringify(callTargetsOf(makeView({ phase: "errand", role, map: "bar", errand: ERR_PART }), { pos })));
+      expect(new Set(targets).size).toBe(1);
+    }
+  });
+
   it("배정·낮 시작·처형·아침·결과·꺼진 장치 단계 → null", () => {
     for (const phase of ["assigning", "dayAnnounce", "execution", "morning", "ended", "runoff", "showdown"] as PhaseId[]) {
       expect(callTargetsOf(makeView({ phase, candidate: 1, passed: true, morning: {} })), phase).toBeNull();
@@ -257,6 +308,7 @@ describe("시간 행 hostTimeOf (TOOL-02, U-3)", () => {
     expect(timed("verdict", 10_000)).toBe(true);
     expect(timed("execution", 5600)).toBe(true);
     expect(timed("night", 30_000)).toBe(true);
+    expect(timed("errand", 40_000)).toBe(true); // 15-04: 심부름은 TIMELESS 가 아니라 막대·숫자 행이 있다(U-15)
   });
 
   it("마감 또는 길이가 없으면 false", () => {
@@ -277,6 +329,14 @@ describe("알림음 판정 hostChimeOf (HOST-02)", () => {
     expect(hostChimeOf("dayAnnounce", "discussion", false)).toBe(false);
     expect(hostChimeOf("execution", "night", false)).toBe(true);
     expect(hostChimeOf("morning", "dayAnnounce", false)).toBe(true);
+  });
+
+  it("15-04: 낮 시작 → 심부름은 울리지 않고, 심부름 → 토론은 울린다(fresh 면 아님), 낮 시작 → 토론은 그대로 무음", () => {
+    expect(hostChimeOf("dayAnnounce", "errand", false)).toBe(false);
+    expect(hostChimeOf("errand", "discussion", false)).toBe(true);
+    expect(hostChimeOf("errand", "discussion", true)).toBe(false);
+    expect(hostChimeOf("dayAnnounce", "discussion", false)).toBe(false);
+    expect(hostChimeOf("discussion", "nomination", false)).toBe(true);
   });
 });
 
@@ -303,6 +363,13 @@ const ALLOWED_EXACT: ReadonlySet<string> = new Set([
   "day.verdict",
   "day.verdict.passed",
   "day.morning",
+  // 15-04: 내 심부름 목록·진행과 이번 판의 맵 id(공개) — 내 view 의 값뿐이다
+  "map",
+  "me.errand",
+  "me.errand.places",
+  "me.errand.places[]",
+  "me.errand.done",
+  "me.errand.done[]",
 ]);
 /** morningText 가 읽는 하위 값 */
 const ALLOWED_PREFIX = ["day.morning."];
@@ -329,18 +396,19 @@ function recorder(root: object, log: Set<string>): object {
 
 const isAllowed = (path: string): boolean => ALLOWED_EXACT.has(path) || ALLOWED_PREFIX.some((p) => path.startsWith(p));
 
-const MATRIX_PHASES: readonly PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
+const MATRIX_PHASES: readonly PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
 
 /** 단계 14개 × 시점(마피아·경찰·의사·시민 산 사람, 유령, 방장/손님, 변론자 본인) */
 function matrixSpecs(): Spec[] {
   const out: Spec[] = [];
   for (const phase of MATRIX_PHASES) {
-    const base: Spec = { phase, candidate: 1, passed: true, morning: { eliminated: 2 } };
+    const base: Spec = { phase, candidate: 1, passed: true, morning: { eliminated: 2 }, map: "bar", errand: ERR_PART };
     for (const role of ["mafia", "police", "doctor", "citizen"] as RoleId[]) out.push({ ...base, role });
     out.push({ ...base, ghost: true });
     out.push({ ...base, host: true });
     out.push({ ...base, seat: 1, host: false, candidate: 1 });
     out.push({ ...base, seat: 1, candidate: 1 }); // 변론자 본인
+    if (phase === "errand") out.push({ ...base, role: "mafia", errand: ERR_DONE }, { ...base, role: "citizen", errand: ERR_DONE }, { ...base, ghost: true, errand: undefined });
   }
   return out;
 }
@@ -357,18 +425,23 @@ function allLines(): string[] {
   });
 }
 
+/** 내 월드 좌표(클라이언트 상태)의 시점: 모름·장소 위·장소 밖 */
+const POSES: ReadonlyArray<HostLocal["pos"]> = [undefined, null, { x: -3.9, z: -2.2 }, { x: 5, z: 5 }];
+
 describe("HOST-05 허용 목록만 읽는다 (T-14-01)", () => {
-  it("단계 14개 × 시점마다 hostLineOf·hostKeyOf·callTargetsOf 가 읽은 경로가 모두 허용 목록 안이다", () => {
+  it("단계 15개 × 시점마다 hostLineOf·hostKeyOf·callTargetsOf 가 읽은 경로가 모두 허용 목록 안이다", () => {
     const outside = new Set<string>();
     for (const spec of matrixSpecs()) {
       for (const cardSeen of [false, true]) {
-        const log = new Set<string>();
-        const view = recorder(makeView({ ...spec, noise: true }), log) as RoomView;
-        hostLineOf(view, { cardSeen });
-        hostKeyOf(view, { cardSeen });
-        callTargetsOf(view, { cardSeen });
-        hostTimeOf(view);
-        for (const path of log) if (!isAllowed(path)) outside.add(path);
+        for (const pos of POSES) {
+          const log = new Set<string>();
+          const view = recorder(makeView({ ...spec, noise: true }), log) as RoomView;
+          hostLineOf(view, { cardSeen, pos });
+          hostKeyOf(view, { cardSeen, pos });
+          callTargetsOf(view, { cardSeen, pos });
+          hostTimeOf(view);
+          for (const path of log) if (!isAllowed(path)) outside.add(path);
+        }
       }
     }
     expect([...outside]).toEqual([]);
@@ -386,13 +459,41 @@ describe("HOST-05 허용 목록만 읽는다 (T-14-01)", () => {
   it("허용 목록 밖 값(allies·records·pick·verdictVote·nightTally·spectate·job·points·turn·voteLog·roles)을 채운 view 와 지운 view 의 결과가 같다", () => {
     for (const spec of matrixSpecs()) {
       for (const cardSeen of [false, true]) {
-        const plain = makeView(spec);
-        const noisy = makeView({ ...spec, noise: true });
-        expect(hostLineOf(noisy, { cardSeen })).toBe(hostLineOf(plain, { cardSeen }));
-        expect(hostKeyOf(noisy, { cardSeen })).toBe(hostKeyOf(plain, { cardSeen }));
-        expect(callTargetsOf(noisy, { cardSeen })).toEqual(callTargetsOf(plain, { cardSeen }));
-        expect(hostTimeOf(noisy)).toBe(hostTimeOf(plain));
+        for (const pos of POSES) {
+          const plain = makeView(spec);
+          const noisy = makeView({ ...spec, noise: true });
+          expect(hostLineOf(noisy, { cardSeen, pos })).toBe(hostLineOf(plain, { cardSeen, pos }));
+          expect(hostKeyOf(noisy, { cardSeen, pos })).toBe(hostKeyOf(plain, { cardSeen, pos }));
+          expect(callTargetsOf(noisy, { cardSeen, pos })).toEqual(callTargetsOf(plain, { cardSeen, pos }));
+          expect(hostTimeOf(noisy)).toBe(hostTimeOf(plain));
+        }
       }
     }
+  });
+
+  it("심부름 단계의 키·문장·대상은 역할(me.role)을 읽지 않는다: 역할을 지운 view 와 같다", () => {
+    for (const errand of [ERR_PART, ERR_DONE]) {
+      for (const pos of POSES) {
+        const roles = (["mafia", "police", "doctor", "citizen"] as RoleId[]).map((role) => makeView({ phase: "errand", role, map: "bar", errand }));
+        const noRole = makeView({ phase: "errand", role: null, map: "bar", errand });
+        for (const v of roles) {
+          expect(hostKeyOf(v, { pos })).toBe(hostKeyOf(noRole, { pos }));
+          expect(hostLineOf(v, { pos })).toBe(hostLineOf(noRole, { pos }));
+          expect(callTargetsOf(v, { pos })).toEqual(callTargetsOf(noRole, { pos }));
+        }
+      }
+    }
+  });
+
+  it("심부름 단계가 읽은 경로: 허용 목록 중 me.errand.*·map 과 기본 값뿐이고 me.role 은 읽지 않는다", () => {
+    const log = new Set<string>();
+    const view = recorder(makeView({ phase: "errand", role: "mafia", map: "bar", errand: ERR_PART, noise: true }), log) as RoomView;
+    hostLineOf(view, { pos: { x: 0, z: 0 } });
+    hostKeyOf(view, { pos: { x: 0, z: 0 } });
+    callTargetsOf(view, { pos: { x: 0, z: 0 } });
+    expect([...log].filter((p) => !isAllowed(p))).toEqual([]);
+    expect(log.has("me.role")).toBe(false);
+    expect(log.has("me.errand.places[]")).toBe(true);
+    expect(log.has("map")).toBe(true);
   });
 });
