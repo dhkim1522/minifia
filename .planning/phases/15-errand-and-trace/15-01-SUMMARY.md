@@ -90,7 +90,7 @@ metrics:
 - `npx vitest run test/unit/errand.test.ts test/worker/errand.test.ts` — 28 통과(세 번 연속).
 - `npm run typecheck` 0, `npm test` — 244 파일 통과·7093 통과·261 건너뜀(0 실패).
 - 인수 기준: errand.ts 존재, `ERRAND_MS` 2줄, protocol `errand` 4줄, errand.ts 의 `.role` 0, `errandGo` bots.ts 5·room.ts 2, `ERRAND_MS =` 정의 1곳, ruleset.ts diff 0.
-- 위생: `git grep -nIiE "torder|티오더|조직|회사|~/project"` 새 적중 없음(기존 `.planning/milestones` 의 옛 문서 적중뿐).
+- 위생: 하위 레포 지침의 금지어 grep 에 새 적중 없음(기존 `.planning/milestones` 옛 문서의 적중뿐).
 
 ## Deviations from Plan
 
