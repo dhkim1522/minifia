@@ -7,12 +7,13 @@ import { canMoveIn } from "../../shared/game/movement";
 import { RULESET } from "../../shared/game/ruleset";
 import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
 import { APPROACH_DIST_FX, approachPoint, positionAtFx } from "../../shared/game/world";
-import type { ClientMessage, RoomView } from "../../shared/protocol";
+import type { ClientMessage, PlaceId, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { KillFx } from "../components/KillFx";
 import { PoliceResultCard } from "../components/PoliceResultCard";
 import { BallotReveal } from "../components/v2/BallotReveal";
 import { ResultAnnounce } from "../components/ResultAnnounce";
+import { ErrandDock } from "../components/v2/ErrandDock";
 import { WillLetter } from "../components/v2/WillLetter";
 import type { WillLetter as WillLetterState } from "../net/useWillLetter";
 import { SceneCurtain } from "../components/SceneCurtain";
@@ -28,13 +29,14 @@ import { SpeakSheet } from "../components/v2/SpeakSheet";
 import { WillSheet } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { WorldStage } from "../components/WorldStage";
-import type { WorldPick } from "../components/WorldStage";
-import { PICK_TURN_MS } from "../../shared/game/phases";
+import type { ErrandLayerProps, WorldPick } from "../components/WorldStage";
+import { ERRAND_NEAR_R, PICK_TURN_MS } from "../../shared/game/phases";
 import { LOG_H_KB } from "../game/chatUi";
 import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
 import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../game/dayView";
+import { errandProgress, placeCentersOf } from "../game/errandView";
 import { callTargetsOf } from "../game/hostLine";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
@@ -43,6 +45,7 @@ import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
 import { useBadge, useBadgeFx } from "../net/useBadge";
 import { useChat } from "../net/useChat";
+import { useErrandPos } from "../net/useErrandPos";
 import { useMyMotion } from "../net/useMyMotion";
 import { useTurnLook } from "../net/useTurnLook";
 import { useVerdictMoment } from "../net/useVerdictMoment";
@@ -79,6 +82,9 @@ const NOTE_PLACEHOLDER = "이름 없이 아침에 공개돼요";
 const PICK_REPLY_MS = 3000;
 /** 스테이지 사각형을 아직 못 쟀을 때 WorldStage 기본값(헤더 아래 62 · 패널 250)과 같은 값 — 장면 표의 확대 판정에만 쓴다 */
 const DEFAULT_INSET_TOP = 62;
+/** 심부름이 아닐 때·목록이 없을 때 쓰는 고정 빈 값(렌더마다 새 배열을 만들지 않는다) */
+const NO_CENTERS: ReturnType<typeof placeCentersOf> = [];
+const NO_PLACE_IDS: readonly PlaceId[] = [];
 const DEFAULT_INSET_BOTTOM = 250;
 /** 보이는 화면(visualViewport) 높이가 이보다 낮으면 유언 시트 입력칸을 2줄로 줄인다(UI-SPEC 282행) */
 const COMPACT_VV_MAX = 300;
@@ -634,7 +640,36 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 귓속말 모드: 대상 이름표가 깜빡이는 버튼이 된다(모션 줄이기는 CSS 가 gray-100 2px 고정 테두리). 모드가 아니면 위 함수 그대로(이름표에 넘기는 속성이 없다)
   // 빛남 대상(14-04): 열린 시트·키보드·귓속말 모드·이미 썼음이면 켜지 않는다. 한 화면에는 한 종류(tool 하나 / 이름표 무리 / 얼굴 칸 무리)만 나온다.
   // 마피아 밤·산 시민·유령·할 일 없는 사람은 callTargetsOf 가 null 이라 빛이 0개다(HOST-05).
-  const callTarget = useMemo(() => callTargetsOf(view), [view]);
+  // 심부름(15-05): 내 목록·진행·위치 표본. 위치 표본은 처리 가능 장소·다음 장소가 바뀔 때만 다시 그린다. 이 분기는 역할을 읽지 않는다(D-03)
+  const errandOn = view.phase === "errand" && meAlive;
+  const errandMine = useMemo(() => (errandOn ? errandProgress(view) : null), [errandOn, view]);
+  const errandCenters = useMemo(() => (errandMine === null ? NO_CENTERS : placeCentersOf(view)), [errandMine === null, view]);
+  const errandPos = useErrandPos(store, view.me.seat, () => Date.now() + offset, errandCenters, errandMine?.done ?? NO_PLACE_IDS, errandMine !== null);
+  const callTarget = useMemo(
+    () => callTargetsOf(view, view.phase === "errand" ? { pos: errandPos.pos() } : {}),
+    // 위치는 표본이 바꾼 처리 가능·다음 장소로만 반영한다(errandPos.pos() 는 상태가 아니라 읽기)
+    [view, errandPos.actableId, errandPos.nextId],
+  );
+  // 심부름의 빛은 위치·진행으로만 정해진다 — 14페이즈의 "이미 썼는가"·열린 시트와 무관하다(UI-SPEC 빛남 계약 추가)
+  const errandCallAct = errandMine !== null && callTarget?.kind === "tool" && callTarget.tool === "errand";
+  const errandCallPlace = errandMine !== null && callTarget?.kind === "place";
+  const errandLayer = useMemo<ErrandLayerProps | undefined>(
+    () =>
+      errandMine === null
+        ? undefined
+        : {
+            places: errandCenters.map((c) => ({ id: c.id, x: c.x, z: c.z, done: errandMine.done.includes(c.id) })),
+            nextId: errandPos.nextId,
+            callPlace: errandCallPlace,
+            nearR: ERRAND_NEAR_R,
+          },
+    [errandMine, errandCenters, errandPos.nextId, errandCallPlace],
+  );
+  // [처리]: 처리 반경 안 미완료 장소가 있을 때만 보낸다(서버가 다시 정한다). 못 보내면(소켓 닫힘) 아무 변화 없다
+  const onErrandAct = (): void => {
+    if (!canSend || errandPos.actableId === null) return;
+    send({ t: "errand" });
+  };
   const callOn = callTarget !== null && !callUsed && layerKind === null && !kbOpen && !whisper.mode;
   const callTool = callOn && callTarget.kind === "tool" ? callTarget.tool : null;
   const callTagSeats = useMemo<ReadonlySet<number> | null>(
@@ -743,6 +778,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         {...(surprise ? { surprise } : {})}
         {...(pick ? { pick } : {})}
         {...(stageTagProps ? { tagProps: stageTagProps } : {})}
+        {...(errandLayer ? { errand: errandLayer } : {})}
         onNotice={(text) => show(text)}
         onLeave={() => onLeave?.()}
       />
@@ -771,45 +807,52 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           reducedMotion={reducedMotion}
         />
       ) : null}
-      <GamePanel
-        view={view}
-        send={send}
-        canSend={canSend}
-        binding={binding}
-        logHeight={kbOpen ? LOG_H_KB : logH}
-        kbOpen={kbOpen}
-        lifted={kbLifted}
-        veiled={veiled || (speakOpen && !speakWriting)}
-        call={{
-          ...(callTool === "chat" ? { chat: true } : {}),
-          ...(callTool === "will" ? { will: true } : {}),
-          ...(callTool === "verdict" && view.me.verdictVote === undefined ? { verdict: true } : {}),
-          ...(callFaceSeats !== undefined ? { faces: callFaceSeats } : {}),
-        }}
-        onCallUsed={markCallUsed}
-        rejected={rejects}
-        onNightPickSent={(target) => {
-          pointSent.current = { target, at: Date.now() };
-        }}
-        onOpenWill={(opener) => {
-          badge.setOpen(false);
-          whisper.off();
-          whisper.close();
-          will.openSheet("will", opener);
-        }}
-        willOpen={will.open === "will"}
-        willSaved={will.hasWill}
-        onOpenNote={(opener) => {
-          badge.setOpen(false);
-          whisper.off();
-          whisper.close();
-          will.openSheet("note", opener);
-        }}
-        noteOpen={will.open === "note"}
-        noteReady={will.noteReady}
-        inputRef={inputRef}
-        panelRef={panelRef}
-      />
+      {view.phase === "errand" ? (
+        // 심부름 단계의 아래 패널은 채팅이 아니라 독이다(높이 84, D-09). 유령·목록 없음은 같은 높이의 내용 없는 패널(스테이지 높이가 역할·생존으로 갈라지지 않게)
+        <section ref={panelRef} className="mf-game__panel mf-game__panel--errand" data-world-panel="">
+          {errandMine !== null ? <ErrandDock places={errandMine.places} done={errandMine.done} canAct={errandPos.actableId !== null && canSend} call={errandCallAct} onAct={onErrandAct} /> : null}
+        </section>
+      ) : (
+        <GamePanel
+          view={view}
+          send={send}
+          canSend={canSend}
+          binding={binding}
+          logHeight={kbOpen ? LOG_H_KB : logH}
+          kbOpen={kbOpen}
+          lifted={kbLifted}
+          veiled={veiled || (speakOpen && !speakWriting)}
+          call={{
+            ...(callTool === "chat" ? { chat: true } : {}),
+            ...(callTool === "will" ? { will: true } : {}),
+            ...(callTool === "verdict" && view.me.verdictVote === undefined ? { verdict: true } : {}),
+            ...(callFaceSeats !== undefined ? { faces: callFaceSeats } : {}),
+          }}
+          onCallUsed={markCallUsed}
+          rejected={rejects}
+          onNightPickSent={(target) => {
+            pointSent.current = { target, at: Date.now() };
+          }}
+          onOpenWill={(opener) => {
+            badge.setOpen(false);
+            whisper.off();
+            whisper.close();
+            will.openSheet("will", opener);
+          }}
+          willOpen={will.open === "will"}
+          willSaved={will.hasWill}
+          onOpenNote={(opener) => {
+            badge.setOpen(false);
+            whisper.off();
+            whisper.close();
+            will.openSheet("note", opener);
+          }}
+          noteOpen={will.open === "note"}
+          noteReady={will.noteReady}
+          inputRef={inputRef}
+          panelRef={panelRef}
+        />
+      )}
       {badge.allowed || whisper.allowed ? (
         <FloatActions ref={floatRef}>
           {badge.allowed ? (

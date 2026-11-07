@@ -3905,14 +3905,14 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, UI-SPEC U-3·U-5·U-18
     const s = await open({ stageInsets: INS, errand: errandProp() }, { ents: [seg(0, [200, 100]), seg(1, [-300, 50])] });
     frame();
     const ring = s.utils.container.querySelector<SVGElement>("svg[data-near-ring]")!;
-    expect(ring.hasAttribute("hidden")).toBe(false);
+    expect(ring.style.display).toBe("");
     const pts = ring.querySelector("polygon")!.getAttribute("points")!.trim().split(/\s+/).map((p) => p.split(",").map(Number));
     expect(pts).toHaveLength(24);
     // 내 위치 (2, 1) → 투영 중심 (220, 310), 반경 3 → 30px
     for (const [x, y] of pts) expect(Math.hypot(x! - 220, y! - 310)).toBeCloseTo(30, 0);
     s.rerender({ view: makeView(TWO, 7) });
     frame();
-    expect(ring.hasAttribute("hidden")).toBe(true);
+    expect(ring.style.display).toBe("none");
   });
 
   it("스타일: 층은 pointer-events none·표지 버튼만 auto, 이름표 층보다 한 단 아래, 링은 점선 굵기 2·정지, hex 없음", () => {

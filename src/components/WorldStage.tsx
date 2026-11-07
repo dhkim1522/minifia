@@ -76,6 +76,8 @@ export interface ErrandLayerProps {
 }
 
 const NEAR_RING_POINTS = 24;
+/** 링 svg 의 처음 마운트 스타일(위치를 아직 모른다). 값이 늘 같아 React 가 다시 쓰지 않는다 */
+const RING_HIDDEN: CSSProperties = { display: "none" };
 const PIN_HALF = 22; // 표지 누르기 상자 44 의 절반
 const CHIP_HALF = 18; // 화살표 칩 36 의 절반
 const RECT_TTL_MS = 250; // 독 줄·호스트 사각형을 다시 재는 간격(프레임마다 레이아웃을 강제하지 않는다)
@@ -165,11 +167,12 @@ function writeErrandLayer(
       if (parts.length === NEAR_RING_POINTS) pts = parts.join(" ");
     }
     const poly = ring.querySelector("polygon");
+    // svg 는 hidden 속성이 타입에도 브라우저 기본 스타일에도 없다 — display 로 숨긴다(처음 마운트 값 RING_HIDDEN 과 같은 쪽)
     if (pts === null) {
-      if (!ring.hasAttribute("hidden")) ring.setAttribute("hidden", "");
+      if (ring.style.display !== "none") ring.style.display = "none";
     } else {
       if (poly !== null && poly.getAttribute("points") !== pts) poly.setAttribute("points", pts);
-      if (ring.hasAttribute("hidden")) ring.removeAttribute("hidden");
+      if (ring.style.display === "none") ring.style.display = "";
     }
   }
 }
@@ -493,7 +496,7 @@ export function WorldStage(props: WorldStageProps) {
       {props.underlay}
       {props.errand ? (
         <div ref={errandRef} className="mf-world__errand" data-errand-layer="">
-          <svg className="mf-world__ring" data-near-ring={String(props.errand.nearR)} aria-hidden="true" focusable="false" hidden>
+          <svg className="mf-world__ring" data-near-ring={String(props.errand.nearR)} aria-hidden="true" focusable="false" style={RING_HIDDEN}>
             <polygon points="" />
           </svg>
           {props.errand.places.map((pl) => (
