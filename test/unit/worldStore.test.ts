@@ -255,3 +255,72 @@ describe("WorldStore: 동작 프레임 (10-03, D-9)", () => {
     expect(late).not.toHaveBeenCalled();
   });
 });
+
+const nearSnap = (ents: { s: number; p: number[]; t0: number; v: number }[], at = 0) => ({ ...snap(ents, at), near: true as const });
+
+describe("WorldStore: 근처 snap (15페이즈 D-02, UI-SPEC U-17)", () => {
+  it("near snap 은 같은 epoch 에서 사본을 그 사람들로 통째로 바꾸고, 새로 보이는 좌석만 오름차순으로 entered 에 넣는다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(1)]), 1);
+    store.takeEntered();
+    store.applyFrame(nearSnap([rest(0), rest(4), rest(2)]), 1);
+    expect(store.seats()).toEqual([0, 2, 4]);
+    expect(store.takeEntered()).toEqual([2, 4]);
+  });
+
+  it("near snap 에서 빠진 좌석은 seats·segOf·positionOf 에서 사라지고 늦은 move 는 새 사람으로 다시 나타난다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(1), rest(2)]), 1);
+    store.applyFrame(nearSnap([rest(0)]), 1);
+    expect(store.seats()).toEqual([0]);
+    expect(store.segOf(1)).toBeUndefined();
+    expect(store.positionOf(2, 0)).toBeNull();
+    store.takeEntered();
+    store.applyFrame(move(1, [100, 100, 200, 100], 10), 1);
+    expect(store.takeEntered()).toEqual([1]);
+  });
+
+  it("near 가 없는 snap(대기실 복귀·밤 진입)은 기존처럼 entered 를 비운다(회귀)", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0)]), 1);
+    store.applyFrame(snap([rest(0), rest(3)]), 1);
+    expect(store.takeEntered()).toEqual([]);
+  });
+
+  it("첫 snap(ready 전)과 새 epoch 의 near snap 은 등장 연출 없이 바로 맞춘다", () => {
+    const first = new WorldStore();
+    first.applyFrame(nearSnap([rest(0), rest(1)]), 1);
+    expect(first.takeEntered()).toEqual([]);
+    const next = new WorldStore();
+    next.applyFrame(snap([rest(0)]), 1);
+    next.applyFrame(nearSnap([rest(0), rest(1)]), 2);
+    expect(next.seats()).toEqual([0, 1]);
+    expect(next.takeEntered()).toEqual([]);
+  });
+
+  it("더 낡은 epoch 의 near snap 은 버린다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(1)]), 2);
+    store.applyFrame(nearSnap([rest(0)]), 1);
+    expect(store.seats()).toEqual([0, 1]);
+  });
+
+  it("near snap 이후 늦게 온 move 의 좌석이 이미 snap 에 있으면 entered 에 안 들어간다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0)]), 1);
+    store.applyFrame(nearSnap([rest(0), rest(5)]), 1);
+    store.takeEntered();
+    store.applyFrame(move(5, [100, 100, 300, 100], 20), 1);
+    expect(store.takeEntered()).toEqual([]);
+  });
+
+  it("near snap 은 남은 좌석의 move 수(내 이동 응답 세기)를 지우지 않는다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(1)]), 1);
+    store.applyFrame(move(0, [100, 100, 200, 100], 10), 1);
+    expect(store.moveSeqOf(0)).toBe(1);
+    store.applyFrame(nearSnap([rest(0)]), 1);
+    expect(store.moveSeqOf(0)).toBe(1);
+    expect(store.moveSeqOf(1)).toBe(0);
+  });
+});

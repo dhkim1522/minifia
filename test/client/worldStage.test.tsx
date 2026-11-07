@@ -19,7 +19,7 @@ import type { CharacterHandle, LightingPhase, RendererStatusEvent, WorldRenderer
 import { gatherView, PAN_BOX, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
 import { predictSegment, SEG_BLEND_MS, YAW_TURN_RATE } from "../../src/world/motion";
 import { GHOST_FADE_END_MS } from "../../src/game/dayView";
-import { ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, RING_COLORS, WALK_CUE_KEY } from "../../src/world/runtime";
+import { createWorldRuntime, ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, RING_COLORS, WALK_CUE_KEY } from "../../src/world/runtime";
 import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
 import { WorldStore } from "../../src/world/store";
@@ -3668,5 +3668,118 @@ describe("결과 장면: opacity 0.5 좌석 (11-12)", () => {
     const s = await openResult({ 0: {}, 1: { opacity: 0.5 }, 2: {}, 3: {} });
     frames(50);
     expect(tagOf(s.utils, 1)!.style.opacity).toBe("1");
+  });
+});
+
+// ---------- 15-05 Task 1: 근처 snap 등장·퇴장, onProject, walkTo ----------
+
+describe("런타임 직접: 근처 snap·onProject·walkTo (15페이즈 D-02, UI-SPEC U-17)", () => {
+  async function bootRuntime(over: { reduced?: boolean; onProject?: (p: (x: number, z: number) => { sx: number; sy: number } | null, now: number) => void } = {}) {
+    const world = makeWorld();
+    const store = new WorldStore();
+    const host = document.createElement("div");
+    const tagLayer = document.createElement("div");
+    document.body.append(host, tagLayer);
+    for (const seat of [0, 1, 2]) {
+      const el = document.createElement("div");
+      el.setAttribute("data-seat", String(seat));
+      tagLayer.append(el);
+    }
+    snap(store, [seg(0, [200, 100]), seg(1, [-300, 50])]);
+    const players = [player(0, "민지"), player(1, "철수"), player(2, "영희")];
+    const runtime = createWorldRuntime({
+      host,
+      tagLayer,
+      store,
+      serverNow: () => Date.now(),
+      mySeat: () => 0,
+      players: () => players,
+      reducedMotion: () => over.reduced === true,
+      stageRect: () => ({ top: 60, bottom: 500 }),
+      onStatus: () => {},
+      onNotice: () => {},
+      allowSoftware: true,
+      loadModules: world.loadModules,
+      mapId: () => "bar",
+      onProject: over.onProject,
+    });
+    await act(async () => {
+      void runtime.start();
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+    });
+    frame();
+    return { world, store, host, tagLayer, runtime };
+  }
+
+  function nearSnapFrame(store: WorldStore, ents: WorldSeg[], epoch = 1): void {
+    store.applyFrame({ t: "world", k: "snap", at: Date.now(), ents, near: true }, epoch);
+  }
+
+  it("onProject 는 프레임마다 한 번 불리고 project(x, z) 는 renderer.project 의 발끝 좌표와 같다", async () => {
+    const calls: { sx: number; sy: number }[] = [];
+    let n = 0;
+    const { runtime } = await bootRuntime({
+      onProject: (project) => {
+        n++;
+        const p = project(3, 2);
+        if (p) calls.push(p);
+      },
+    });
+    const before = n;
+    frame();
+    expect(n).toBe(before + 1);
+    expect(calls.at(-1)).toEqual({ sx: 200 + 30, sy: 300 + 20 });
+    runtime.dispose();
+  });
+
+  it("onProject 를 안 주면 아무 일도 없다", async () => {
+    const { runtime } = await bootRuntime();
+    frame();
+    runtime.dispose();
+  });
+
+  it("near snap 으로 새 좌석은 등장 연출(크기 0.6)으로 나타난다", async () => {
+    const { world, store, runtime } = await bootRuntime();
+    nearSnapFrame(store, [seg(0, [200, 100]), seg(1, [-300, 50]), seg(2, [300, 300])]);
+    frame(1);
+    const h = world.renderers[0]!.chars.get(2)!;
+    expect(h.root.scale.x).toBeCloseTo(0.83 * 0.6, 2);
+    frames(ENTER_MS + 40);
+    expect(h.root.scale.x).toBeCloseTo(0.83, 6);
+    runtime.dispose();
+  });
+
+  it("near snap 으로 빠진 좌석은 퇴장 연출을 하고 EXIT_MS 뒤 캐릭터가 사라지며 이름표도 같이 흐려진다", async () => {
+    const { world, store, tagLayer, runtime } = await bootRuntime();
+    const r = world.renderers[0]!;
+    const h = r.chars.get(1)!;
+    nearSnapFrame(store, [seg(0, [200, 100])]);
+    frame(EXIT_MS / 2);
+    expect(r.chars.has(1)).toBe(true);
+    expect(h.root.scale.x).toBeLessThan(0.83);
+    const tag = tagLayer.querySelector<HTMLElement>('[data-seat="1"]')!;
+    expect(Number(tag.style.opacity)).toBeLessThan(1);
+    frames(EXIT_MS * 2);
+    expect(r.chars.has(1)).toBe(false);
+    expect(tag.style.opacity).toBe("0");
+    runtime.dispose();
+  });
+
+  it("모션 줄이기면 near snap 의 퇴장은 즉시, 등장은 연출 없이 바로 보인다", async () => {
+    const { world, store, runtime } = await bootRuntime({ reduced: true });
+    nearSnapFrame(store, [seg(0, [200, 100]), seg(2, [300, 300])]);
+    frame(16);
+    const r = world.renderers[0]!;
+    expect(r.chars.has(1)).toBe(false);
+    expect(r.chars.get(2)!.root.scale.x).toBeCloseTo(0.83, 6);
+    runtime.dispose();
+  });
+
+  it("walkTo(x, z) 는 탭과 같이 목적지 링을 띄우고 그 월드 좌표를 돌려준다", async () => {
+    const { runtime } = await bootRuntime();
+    const at = runtime.walkTo(4, 2.5);
+    expect(at).toEqual({ x: 4, z: 2.5 });
+    expect(runtime.ring()).toEqual({ x: 4, z: 2.5 });
+    runtime.dispose();
   });
 });
