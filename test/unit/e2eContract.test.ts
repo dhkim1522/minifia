@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { BAR_MASK } from "../../shared/game/map";
-import { NOMINATION_END_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
+import { ERRAND_MS, NOMINATION_END_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { ANNOUNCE_MORNING_AT } from "../../src/game/dayView";
@@ -700,5 +700,37 @@ describe("14페이즈 사회자·이름표 E2E 사본과 제품 값 (14-08, 사�
     const all = tracked.map((f) => readFileSync(new URL(f, root), "utf8")).join("\n");
     expect(lib.HOST_MARKERS).toEqual(["data-host-band", "data-host-line", "data-host-time", "data-call", "data-tool-label", "data-role-goal", "data-guide"]);
     expect(lib.HOST_MARKERS.filter((m) => !all.includes(m))).toEqual([]);
+  });
+});
+
+describe("서버 계약 소비자 스크립트의 새 단계 흐름 (15-06, DEPLOY-03, 결정 0074)", () => {
+  const scriptText = (name: string): string => readFileSync(new URL(`../../scripts/${name}`, import.meta.url), "utf8");
+
+  it("scripts/smoke.mjs 의 ERRAND_MS 가 shared/game/phases.ts 의 ERRAND_MS 와 같다 (스크립트는 shared 를 import 하지 않는다)", () => {
+    const m = /^const ERRAND_MS = ([0-9_]+);/m.exec(scriptText("smoke.mjs"));
+    expect(m, "smoke.mjs 에 const ERRAND_MS 가 있어야 한다").not.toBeNull();
+    expect(Number(m![1]!.replaceAll("_", ""))).toBe(ERRAND_MS);
+  });
+
+  it("smoke.mjs 의 전이 표가 dayAnnounce → errand → discussion 이고 낮 단계 목록에 errand 가 있으며 errand 40초 대기를 쓴다", () => {
+    const text = scriptText("smoke.mjs");
+    expect(text).toMatch(/dayAnnounce: \["errand"\]/);
+    expect(text).toMatch(/errand: \["discussion"\]/);
+    expect(text).toMatch(/const DAY_PHASES = \[[^\]]*"errand"/);
+    expect(text).toMatch(/ERRAND_WAIT_MS = ERRAND_MS \+ STATE_LIMIT_MS/);
+    expect(text).not.toMatch(/dayAnnounce: \["discussion"\]/);
+  });
+
+  it("uat-test-room.mjs 의 전이 표도 dayAnnounce → errand → discussion 이고 errand 로 한 번 넘긴다", () => {
+    const text = scriptText("uat-test-room.mjs");
+    expect(text).toMatch(/dayAnnounce: \["errand"\], errand: \["discussion"\]/);
+    expect(text).toContain('await skipTo("errand")');
+    expect(text).not.toMatch(/dayAnnounce: \["discussion"\]/);
+  });
+
+  it("bots.mjs 는 errand 단계를 알고(행동 없이 지나간다) 밤에는 시민 봇도 고른다", () => {
+    const text = scriptText("bots.mjs");
+    expect(text).toContain('view.phase === "errand"');
+    expect(text).toContain('role !== "citizen"');
   });
 });

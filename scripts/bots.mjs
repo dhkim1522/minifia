@@ -187,14 +187,19 @@ function onState(bot, view) {
       sendTo(bot, { t: "endDiscussion", on: true });
       log(`${bot.nickname}: 토론 끝내기`);
     }, 30000 + Math.random() * 30000);
+  } else if (view.phase === "errand") {
+    // 심부름(15페이즈, 결정 0074): 소켓 봇은 걷지도 처리하지도 않고 채팅도 보내지 않는다 — 서버가 errand 40초 뒤 토론으로 넘기니 행동 없이 기다리면 막히지 않고 지나간다.
+    // (이 단계의 채팅·동작은 서버가 막는 메시지라 보내지 않는다.) 낮 토론 기록은 토론 진입에서 새로 시작한다.
+    stopTalk(bot);
   } else if (view.phase === "night") {
     stopTalk(bot);
-    // 밤마다 한 번만 고른다(밤 키 = `${일차}:night`). 마피아는 동료가 아닌 살아 있는 사람, 경찰·의사는 살아 있는 아무나, 시민은 행동 없음.
+    // 밤마다 한 번만 고른다(밤 키 = `${일차}:night`). 마피아는 동료가 아닌 살아 있는 사람, 경찰·의사·시민은 살아 있는 아무나(자기 제외).
+    // 15페이즈(결정 0074, D-05): 시민도 같은 입력을 보내고 마피아·경찰·의사와 같은 응답을 받는다(서버는 시민의 선택을 저장만 하고 판정에 쓰지 않는다).
     const key = `${day}:night`;
     if (bot.nightKey === key) return;
     bot.nightKey = key;
     const role = view.me?.role;
-    if (role !== "mafia" && role !== "police" && role !== "doctor") return;
+    if (role !== "mafia" && role !== "police" && role !== "doctor" && role !== "citizen") return;
     const allies = new Set(view.me.allies ?? []);
     const candidates = view.players
       .filter((p) => p.alive !== false && p.seat !== bot.seat && !(role === "mafia" && allies.has(p.seat)))

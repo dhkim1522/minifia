@@ -30,9 +30,12 @@ import { exitIfV1 } from "./deploy-target.mjs";
 
 const TOTAL_LIMIT_MS = 30_000;
 const STATE_LIMIT_MS = 10_000;
-const FULL_TOTAL_LIMIT_MS = 720_000; // 시작 → ended. 낮 하루(과반 토론 끝내기 → 순차 지목 최악 3 + 산 사람 수 × 8.9 + 2 (스크립트는 차례마다 곧바로 지목해 약 10초) + 변론 20 + 찬반 10 + 처형 5 + 밤 30 + 아침 5~15 초) 최대 3일 + 여유
+const FULL_TOTAL_LIMIT_MS = 900_000; // 시작 → ended. 낮 하루(심부름 40 + 과반 토론 끝내기 → 순차 지목 최악 3 + 산 사람 수 × 8.9 + 2 (스크립트는 차례마다 곧바로 지목해 약 10초) + 변론 20 + 찬반 10 + 처형 5 + 밤 30 + 아침 5~15 초) 최대 3일 + 여유(15페이즈: 하루마다 심부름 40초 늘었다)
 // 낮 단계 길이(shared/game/phases.ts 와 같은 값, 결정 0060-1). 스크립트는 TS 를 import 하지 않는다.
 const DISCUSSION_MS = 90_000;
+// 15페이즈(결정 0074): 낮 시작 발표 다음에 심부름 단계가 40초 돈다. shared/game/phases.ts 의 ERRAND_MS 와 같은 값 — test/unit/e2eContract.test.ts 가 두 값이 같은지 묶는다.
+const ERRAND_MS = 40_000;
+const ERRAND_WAIT_MS = ERRAND_MS + STATE_LIMIT_MS;
 // 기본판 동시 투표(결정 0072): 산 사람 모두 한 번에 15초. shared/game/phases.ts 의 NOMINATION_MS 와 같은 값 — 고치면 함께.
 const NOMINATION_MS = 15_000;
 // 봇 지연 등 서버 간격: 한 사람이 지목을 바꾸는 최소 간격(applyPoint)은 250ms 라 바꾸기 전에 이만큼 기다린다.
@@ -86,13 +89,14 @@ const EXPECTED_ROLES = {
   8: { mafia: 2, police: 1, doctor: 1, citizen: 4 },
 };
 // 허용 전이 표(shared/game/phases.ts 의 next + tick 분기와 같다). 분기형이라 값이 배열이다(결정 0060-1):
-// discussion → nomination → (최다 한 명) defense → verdict → execution → night | ended,
+// dayAnnounce → errand → discussion → nomination → (최다 한 명) defense → verdict → execution → night | ended,
 // 지목 0표·동률은 곧장 night, night → morning → dayAnnounce(다음 낮) | ended. 승패가 나지 않는 한 낮 루프라 끝이 없다.
 const PHASE_NEXT = {
   lobby: ["assigning"],
   assigning: ["roleReveal"],
   roleReveal: ["dayAnnounce"],
-  dayAnnounce: ["discussion"], // 기본판(결정 0072): showdown 으로 가지 않는다
+  dayAnnounce: ["errand"], // 15페이즈(결정 0074): 낮 시작 발표 다음은 심부름(errand) 40초, 끝나면 토론. 기본판(결정 0072): showdown 으로 가지 않는다
+  errand: ["discussion"],
   discussion: ["nomination"],
   nomination: ["defense", "night"], // 기본판(결정 0072): 동점·0표는 runoff 가 아니라 처형 없는 밤
   defense: ["verdict"],
@@ -102,7 +106,7 @@ const PHASE_NEXT = {
   morning: ["dayAnnounce", "ended"],
   ended: [],
 };
-const DAY_PHASES = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
+const DAY_PHASES = ["dayAnnounce", "errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
 const ROLE_IDS = ["mafia", "police", "doctor", "citizen"];
 // 직업 이름 문자열이 나와도 되는 경로(배열 칸은 [] 로 줄여 비교한다). 채널 이름 mafia 가 든 ch·me.chat 은 채널 검사가 따로 본다.
 // 탈락자의 view.spectate.seats[].job 은 탈락 뒤 프레임에서만 따로 허용한다.
@@ -533,8 +537,23 @@ async function stageFull(url, args) {
     if (c.unexpectedClose !== null) fail(`${c.nickname} 소켓이 예상 밖으로 닫힘 (code ${c.unexpectedClose})`);
   }
 
-  // (10) 낮 토론 진입 — 주장 단계 없이 낮 시작 발표 다음이 곧장 자유 채팅 토론이다(CHAT-06). 직업 목록(day.roles)은 모두 같다.
-  await waitUntil(() => clients.every((c) => firstState(c, "discussion")), STATE_LIMIT_MS + 5000, "모든 클라이언트가 dayAnnounce 다음에 discussion 을 받지 못함");
+  // (9a) 심부름(15페이즈, 결정 0074): 낮 시작 발표 다음이 errand 40초다. 마감·길이는 모든 클라이언트에 같고, 산 사람 모두가 같은 모양의 me.errand(장소 3곳·처리 0곳)를 받는다.
+  //      클라이언트마다 장소 id 값은 다를 수 있어 값이 아니라 구조로 견준다. 이 줄에는 토큰·역할·좌표를 쓰지 않는다.
+  await waitUntil(() => clients.every((c) => firstState(c, "errand")), STATE_LIMIT_MS + 5000, "모든 클라이언트가 dayAnnounce 다음에 errand 를 받지 못함");
+  const errandEnds = new Set(clients.map((c) => firstState(c, "errand").msg.view.phaseEndsAt));
+  if (errandEnds.size !== 1) fail(`errand 의 phaseEndsAt 이 클라이언트마다 다름 (${errandEnds.size}종)`);
+  for (const c of clients) {
+    const ev = firstState(c, "errand").msg.view;
+    if (ev.phaseDurationMs !== ERRAND_MS) fail(`${c.nickname} 의 errand phaseDurationMs 가 ${ERRAND_MS} 이 아님: ${ev.phaseDurationMs}`);
+    const errand = ev.me.errand;
+    if (!errand || Object.keys(errand).sort().join(",") !== "done,places") fail(`${c.nickname} 의 errand view 에 me.errand{done,places} 가 없음`);
+    if (!Array.isArray(errand.places) || errand.places.length !== 3 || new Set(errand.places).size !== 3) fail(`${c.nickname} 의 me.errand.places 가 서로 다른 3곳이 아님`);
+    if (!Array.isArray(errand.done) || errand.done.length !== 0) fail(`${c.nickname} 의 me.errand.done 이 빈 배열이 아님`);
+  }
+  info(`심부름: 산 ${clients.length}명 모두 같은 마감(${ERRAND_MS / 1000}초)과 같은 모양의 me.errand(장소 3곳)를 받음`);
+
+  // (10) 낮 토론 진입 — 주장 단계 없이 심부름 다음이 자유 채팅 토론이다(CHAT-06). 서버가 ERRAND_MS 뒤에 넘긴다(행동 없이 기다린다). 직업 목록(day.roles)은 모두 같다.
+  await waitUntil(() => clients.every((c) => firstState(c, "discussion")), ERRAND_WAIT_MS + 5000, "모든 클라이언트가 errand 다음에 discussion 을 받지 못함");
   const roleList = firstState(clients[1], "discussion").msg.view.day.roles;
   if (roleList.includes("doctor") !== (N >= 5)) fail(`day.roles 의 의사 포함 여부가 인원(${N})과 맞지 않음: ${roleList.join(",")}`);
   if (roleList.length < 3) fail(`day.roles 가 너무 짧음: ${roleList.join(",")}`);
@@ -985,6 +1004,12 @@ async function stageFull(url, args) {
   if (doctorClient) doctorClient.ws.send(JSON.stringify({ t: "pick", target: doctorClient.seat }));
   const actors = [...mafiaClients.map((m) => [m, targetX]), [policeClient, policeTarget], ...(doctorClient ? [[doctorClient, doctorClient.seat]] : [])];
   await waitUntil(() => actors.every(([c, seat]) => hasPicked(c, seat)), STATE_LIMIT_MS, "밤 행동 뒤 본인 선택(me.pick)이 행위자 화면에 오지 않음");
+  // (14a) 밤 고르기 통일(15페이즈 D-05, 결정 0074): 시민도 같은 입력을 보낼 수 있고 마피아·경찰·의사와 같은 응답(오류 없는 state)을 받는다. 선택은 판정에 영향이 없다.
+  const citizenPicker = citizenClients.at(-1);
+  const pickerFrom = citizenPicker.frames.length;
+  citizenPicker.ws.send(JSON.stringify({ t: "pick", target: policeTarget }));
+  await waitUntil(() => hasPicked(citizenPicker, policeTarget), STATE_LIMIT_MS, "시민의 밤 pick 뒤 본인 선택(me.pick)이 오지 않음 — 모든 역할이 같은 응답을 받아야 한다");
+  if (citizenPicker.frames.slice(pickerFrom).some((f) => f.msg?.t === "error")) fail("시민의 밤 pick 이 오류로 거절됨 — 모든 역할이 같은 응답을 받아야 한다");
   const nightTown = clients.filter((c) => c.role !== "mafia" && !dead.has(c)); // 밤에 산 시민 편(시민·경찰·의사)
   // 마피아 한 명이 밤 채팅·입력 중 → ch mafia 로 마피아(보낸 사람 포함)에게만. 살아 있는 비마피아에게는 chat·typing 프레임이 가지 않는다(CHAT-02).
   const talker = mafiaClients[0];
@@ -1067,8 +1092,8 @@ async function stageFull(url, args) {
     // 하루 갈래는 산 사람 수가 아니라 서버가 보낸 단계로 고른다. 기본판(결정 0072)은 산 사람이 3명이어도 discussion 이다 — showdown 이 오면 전이 표(PHASE_NEXT)가 실패시킨다.
     await waitUntil(
       () => aliveNow().every((c) => lastView(c)?.day?.n === dayNo && (lastView(c).phase === "discussion" || lastView(c).phase === "showdown")),
-      STATE_LIMIT_MS + 5000,
-      `${dayNo}일차 dayAnnounce 다음에 discussion 이 오지 않음`,
+      ERRAND_WAIT_MS + STATE_LIMIT_MS, // dayAnnounce → errand(40초) → discussion — 15페이즈에서 심부름이 끼었다
+      `${dayNo}일차 dayAnnounce·errand 다음에 discussion 이 오지 않음`,
     );
     if (lastView(aliveNow()[0]).phase === "showdown") {
       // 기본판(결정 0072)에서는 서버가 이 단계에 들어가지 않는다 — RULESET.showdown 을 켠 판의 마지막 3인 결전. 처형 대상이 마피아면 2표로 판이 끝난다.

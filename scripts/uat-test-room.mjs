@@ -181,7 +181,7 @@ async function main() {
   // 값이 배열인 이유: 분기가 있는 단계가 있다(결정 0022·0060). 이 방은 사람만 있어 지목이 없으므로 nomination 은 변론 없이 night 으로 가지만,
   // 지목이 있으면 defense 쪽으로 갈 수 있다 — 순서 확인은 "허용된 다음 단계 중 하나" 로 본다.
   const PHASE_NEXT = {
-    roleReveal: ["dayAnnounce"], dayAnnounce: ["discussion"], discussion: ["nomination"],
+    roleReveal: ["dayAnnounce"], dayAnnounce: ["errand"], errand: ["discussion"], discussion: ["nomination"], // 15페이즈(결정 0074): 낮 시작 다음에 심부름(errand) 40초
     nomination: ["night", "defense"], night: ["morning"], morning: ["dayAnnounce"],
   };
   const order = [];
@@ -197,6 +197,10 @@ async function main() {
     current = next;
   };
   await skipTo("dayAnnounce");
+  await skipTo("errand");
+  check("e", "dayAnnounce 다음은 errand (심부름 단계, 산 네 소켓 모두 me.errand 장소 3곳·처리 0곳)",
+    clients.every((c) => lastView(c).phase === "errand" && lastView(c).me.errand?.places?.length === 3 && lastView(c).me.errand?.done?.length === 0),
+    JSON.stringify(lastView(host).me.errand ?? null));
   await skipTo("discussion");
   await skipTo("nomination");
   // 사람만 있는 방이라 아무도 지목하지 않았다: 지목 0표는 변론 없이 곧장 night 이다(day.points 도 빈 목록).
@@ -204,8 +208,8 @@ async function main() {
     clients.every((c) => lastView(c).phase === "nomination" && Array.isArray(lastView(c).day?.points) && lastView(c).day.points.length === 0),
     JSON.stringify(lastView(host).day?.points ?? null));
   await skipTo("night");
-  check("e", "roleReveal → dayAnnounce → discussion → nomination → night 를 넘기기 한 번에 하나씩 네 소켓 모두 3초 안에 받음",
-    orderOk, `${order.join(" → ")} (${Math.round(performance.now() - t0)}ms, 토론 90초·밤 30초를 기다리지 않음)`);
+  check("e", "roleReveal → dayAnnounce → errand → discussion → nomination → night 를 넘기기 한 번에 하나씩 네 소켓 모두 3초 안에 받음",
+    orderOk, `${order.join(" → ")} (${Math.round(performance.now() - t0)}ms, 심부름 40초·토론 90초·밤 30초를 기다리지 않음)`);
   check("e", "지목 0표로 온 밤: 모든 소켓의 day.noExecution 이 {reason:noVotes}",
     clients.every((c) => same(lastView(c).day?.noExecution, { reason: "noVotes" })), JSON.stringify(lastView(host).day?.noExecution ?? null));
   const victim = guests[0];
@@ -216,7 +220,7 @@ async function main() {
   await waitAllPhase(clients, "morning", SKIP_WAIT_MS, "밤 넘기기(morning)");
   const mornings = clients.map((c) => lastView(c).day?.morning);
   check("e", "넘긴 밤도 정상 판정: 모든 소켓의 day.morning 이 같고 지목한 사람이 탈락",
-    mornings.every((m) => same(m, mornings[0])) && mornings[0]?.eliminated === victim.seat, JSON.stringify(mornings[0]));
+    mornings.every((m) => same(m, mornings[0])) && mornings[0]?.eliminated === victim.seat && typeof mornings[0]?.trace === "string", JSON.stringify(mornings[0]));
   await sleep(RATE_PAUSE_MS);
   send(host, { t: "testSkip" });
   await waitAllPhase(clients, "dayAnnounce", SKIP_WAIT_MS, "아침 넘기기(dayAnnounce)");
