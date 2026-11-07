@@ -38,9 +38,9 @@
 
 ### 밤 흔적 (TRACE)
 
-- [ ] **TRACE-01**: 밤에 산 사람 모두가 같은 방식으로 한 명을 고른다(시민은 효과 없는 고르기). 겉보기와 네트워크로는 역할이 구분되지 않는다
-- [ ] **TRACE-02**: 피해자가 나온 아침에 사회자가 그 밤 피해자를 고른 사람 중 한 명의 흔적 하나를 공개한다. 흔적은 확정 증거가 아니고(마피아일 수도 다른 역할일 수도 있다) 역할을 드러내지 않는다
-- [ ] **TRACE-03**: 아무도 죽지 않은 아침에는 흔적이 없다
+- [x] **TRACE-01**: 밤에 산 사람 모두가 같은 방식으로 한 명을 고른다(시민은 효과 없는 고르기). 겉보기와 네트워크로는 역할이 구분되지 않는다
+- [x] **TRACE-02**: 피해자가 나온 아침에 사회자가 그 밤 피해자를 고른 사람 중 한 명의 흔적 하나를 공개한다. 흔적은 확정 증거가 아니고(마피아일 수도 다른 역할일 수도 있다) 역할을 드러내지 않는다
+- [x] **TRACE-03**: 아무도 죽지 않은 아침에는 흔적이 없다
 
 ### 배포 (DEPLOY)
 
@@ -85,9 +85,9 @@
 | ERRAND-03 | Phase 15 | Complete |
 | ERRAND-04 | Phase 15 | Complete |
 | ERRAND-05 | Phase 15 | Complete |
-| TRACE-01 | Phase 15 | Pending |
-| TRACE-02 | Phase 15 | Pending |
-| TRACE-03 | Phase 15 | Pending |
+| TRACE-01 | Phase 15 | Complete |
+| TRACE-02 | Phase 15 | Complete |
+| TRACE-03 | Phase 15 | Complete |
 | DEPLOY-03 | Phase 15 | Pending |
 
 **Coverage:**
