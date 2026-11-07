@@ -2,7 +2,6 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
-import { approachPoint } from "../../shared/game/world";
 import type { RoleId } from "../../shared/game/roles";
 import { setEngineForTest } from "../../src/audio/unlock";
 import { faceSrc } from "../../src/net/assets";
@@ -201,49 +200,17 @@ const tapFloor = (c: HTMLElement): void => {
   fireEvent.pointerUp(surface, { pointerId: 1, clientX: 100, clientY: 300, pointerType: "touch" });
 };
 
-describe("밤 마피아 — 다가가기(결정 0061-2·6, NIGHT-07·08, E2 #9)", () => {
-  it("산 마피아 밤: 자신·동료를 뺀 산 좌석만 이름표 버튼이 되고 접근성 이름은 '{닉네임} 님에게 다가가기', 묶음은 '밤 대상'이다", () => {
-    const { container } = mount(makeView({ mySeat: 0 }));
-    expect(container.querySelector("main.mf-game")?.getAttribute("data-phase")).toBe("night");
-    expect(pickSeats(container)).toEqual([1, 2, 3, 5]);
-    expect(container.querySelector('[data-pick="2"]')?.getAttribute("aria-label")).toBe("서준 님에게 다가가기");
-    expect(container.querySelector('[role="group"][aria-label="밤 대상"]')).not.toBeNull();
-  });
-
-  it("이름표를 누르면 pick 뒤에 그 사람 옆(approachPoint) 목적지로 move 를 보낸다. 같은 사람을 다시 누르면 아무것도 보내지 않고, 다른 사람은 다시 pick + move", () => {
+describe("밤 마피아 전용 화면 없음 (15페이즈 D-05)", () => {
+  it("산 마피아 밤: 이름표 버튼(밤 대상 묶음)·접근 걷기·마피아 고리·선택 수 이름표 배지·확정 도장이 없다(서버 집계가 와도)", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
-    const { handlers, onEvent } = withHandlers();
-    const m = mount(makeView({ mySeat: 0 }), { send, onEvent });
-    feedSnap(handlers, { 0: [100, 100], 2: [500, 100], 3: [100, 700] });
-    fireEvent.click(m.container.querySelector('[data-pick="2"]')!);
-    expect(nightSends(send)).toEqual([{ t: "pick", target: 2 }, { t: "move", ...approachPoint({ x: 500, z: 100 }, { x: 100, z: 100 }, 80) }]);
-    expect(m.container.querySelector('[data-pick="2"]')?.getAttribute("aria-pressed")).toBe("true");
-    send.mockClear();
-    fireEvent.click(m.container.querySelector('[data-pick="2"]')!);
+    const { container } = mount(makeView({ mySeat: 0, pick: 2, allyPicks: [3], nightTally: [{ seat: 2, n: 2 }], nightSure: 2 }), { send });
+    expect(pickSeats(container)).toEqual([]);
+    expect(container.querySelector('[role="group"][aria-label="밤 대상"] [data-pick]')).toBeNull();
+    expect(ringSeats(container)).toEqual([]);
+    expect(container.querySelector('[data-ring-kind="mafia"], [data-ring-kind="mafia-ally"]')).toBeNull();
+    expect(container.querySelector("[data-night-pick], [data-night-mark]")).toBeNull();
+    expect(container.querySelector(".mv-head[data-count], .mv-head[data-sure]")).toBeNull();
     expect(nightSends(send)).toEqual([]);
-    fireEvent.click(m.container.querySelector('[data-pick="3"]')!);
-    expect(nightSends(send)).toEqual([{ t: "pick", target: 3 }, { t: "move", ...approachPoint({ x: 100, z: 700 }, { x: 100, z: 100 }, 80) }]);
-    expect(m.container.querySelector('[data-pick="3"]')?.getAttribute("aria-pressed")).toBe("true");
-  });
-
-  it("대상 위치를 store 가 모르면 pick 만 나간다", () => {
-    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
-    const m = mount(makeView({ mySeat: 0 }), { send });
-    fireEvent.click(m.container.querySelector('[data-pick="2"]')!);
-    expect(nightSends(send)).toEqual([{ t: "pick", target: 2 }]);
-  });
-
-  it("서버 view(me.pick·allyPicks)가 오면 내가 고른 좌석은 mafia 고리, 동료만 고른 좌석은 mafia-ally 고리다. 아무도 안 골랐으면 고리가 없다", () => {
-    const m = mount(makeView({ mySeat: 0 }));
-    expect(ringSeats(m.container)).toEqual([]);
-    m.show(makeView({ mySeat: 0, pick: 2, allyPicks: [3] }));
-    expect(ringOf(m.container, 2)).toBe("mafia");
-    expect(ringOf(m.container, 3)).toBe("mafia-ally");
-    expect(ringSeats(m.container).sort()).toEqual([2, 3]);
-    expect(m.container.querySelector('[data-pick="2"]')?.getAttribute("aria-pressed")).toBe("true");
-    // 같은 좌석을 나도 동료도 골랐으면 내 고리(mafia)가 이긴다
-    m.show(makeView({ mySeat: 0, pick: 2, allyPicks: [2] }));
-    expect(ringOf(m.container, 2)).toBe("mafia");
   });
 
   it("밤에는 산 마피아도 걷지 못한다 — 시민·경찰·의사와 같다(15페이즈 D-05; 옛 NIGHT-07 마피아 걷기는 없어졌다)", () => {
@@ -275,122 +242,47 @@ describe("밤 마피아 — 다가가기(결정 0061-2·6, NIGHT-07·08, E2 #9)"
   });
 });
 
-const aimOf = (c: ParentNode, seat: number): string | null => c.querySelector(`[data-seat="${seat}"]`)?.getAttribute("data-night-pick") ?? null;
-const aimSeats = (c: ParentNode): number[] => [...c.querySelectorAll<HTMLElement>("[data-night-pick]")].map((t) => Number(t.dataset.seat));
 
-describe("마피아 밤 선택 효과 (09.1-q2, 결정 0065)", () => {
-  it("산 마피아: 후보(나·동료 제외) 이름표만 cand, 고르면 그 좌석만 mine(클래스 is-picked·표식), 나·동료는 속성이 없다", () => {
-    const m = mount(makeView({ mySeat: 0 }));
-    // 0 나, 4 동료 → 후보는 1·2·3·5
-    expect(aimSeats(m.container)).toEqual([1, 2, 3, 5]);
-    expect([1, 2, 3, 5].every((s) => aimOf(m.container, s) === "cand")).toBe(true);
-    expect(m.container.querySelector('[data-pick="2"]')?.classList.contains("is-cand")).toBe(true);
-    fireEvent.click(m.container.querySelector('[data-pick="2"]')!);
-    expect(aimOf(m.container, 2)).toBe("mine");
-    expect(aimOf(m.container, 3)).toBe("cand");
-    const b = m.container.querySelector('[data-pick="2"]')!;
-    expect(b.classList.contains("is-picked")).toBe(true);
-    expect(b.querySelector("[data-night-mark]")).not.toBeNull();
-    expect(m.container.querySelectorAll("[data-night-mark]")).toHaveLength(1);
+const badgeOf = (c: ParentNode, seat: number): Element | null => faceOf(c, seat)?.querySelector(".mv-face__count") ?? null;
+/** 한 시점의 얼굴 목록 구조 서명: 칸 수·순서·접근성 이름·묶음 이름·클래스(눌림 제외). 시점마다 같아야 한다(T-15-31) */
+const faceSig = (c: ParentNode): string =>
+  JSON.stringify([
+    c.querySelectorAll("[data-face-list]").length,
+    c.querySelector("[data-face-list]")?.getAttribute("aria-label"),
+    [...c.querySelectorAll<HTMLElement>("[data-face]")].map((b) => [b.dataset.face, b.getAttribute("aria-label")?.replace(/^\S+/, "N"), b.className, b.hasAttribute("data-call"), b.getAttribute("aria-disabled")]),
+  ]);
+
+describe("마피아 선택 수 배지 — 얼굴 칸 안, 겉보기 같음의 유일한 예외 (D-05, T-15-32)", () => {
+  it("산 마피아 얼굴 칸에만 선택 수(1 이상)가 숫자 배지로, 확정 칸은 check 표시(접근성 이름 '확정')로 붙는다", () => {
+    const { container } = mount(makeView({ mySeat: 0, pick: 2, allyPicks: [2, 3], nightTally: [{ seat: 2, n: 2 }, { seat: 3, n: 1 }, { seat: 4, n: 0 }], nightSure: 2 }));
+    expect(badgeOf(container, 3)?.textContent).toBe("1");
+    expect(badgeOf(container, 4)).toBeNull();
+    const sure = badgeOf(container, 2);
+    expect(sure?.textContent).toBe("");
+    expect(sure?.querySelector("svg")).not.toBeNull();
+    expect(sure?.getAttribute("aria-label")).toBe("확정");
+    expect(container.querySelectorAll(".mv-face__count")).toHaveLength(2);
   });
 
-  it("서버 view(me.pick)가 오면 그 좌석이 mine. 동료만 고른 좌석(allyPicks)은 cand 그대로 — 동료 선택에는 테두리 효과가 없다", () => {
-    const m = mount(makeView({ mySeat: 0 }));
-    m.show(makeView({ mySeat: 0, pick: 2, allyPicks: [3] }));
-    expect(aimOf(m.container, 2)).toBe("mine");
-    expect(aimOf(m.container, 3)).toBe("cand");
-    expect(m.container.querySelectorAll("[data-night-mark]")).toHaveLength(1);
-  });
-
-  it("누르는 동안 preview, 떼면 cand", () => {
-    const m = mount(makeView({ mySeat: 0 }));
-    const b = m.container.querySelector('[data-pick="3"]')!;
-    fireEvent.pointerDown(b, { pointerId: 2, pointerType: "touch" });
-    expect(aimOf(m.container, 3)).toBe("preview");
-    expect(b.classList.contains("is-preview")).toBe(true);
-    fireEvent.pointerUp(b, { pointerId: 2, pointerType: "touch" });
-    expect(aimOf(m.container, 3)).toBe("cand");
-  });
-
-  it("누설 규칙: 산 시민·경찰·의사·유령 화면에는 data-night-pick·표식·is-cand 가 0개다(서버 me.pick 이 섞여 와도)", () => {
-    for (const seat of [3, 1, 2]) {
-      const m = mount(makeView({ mySeat: seat, pick: 5 }));
-      expect(aimSeats(m.container), `seat ${seat}`).toEqual([]);
-      expect(m.container.querySelectorAll("[data-night-mark], .is-cand, .is-picked, .is-preview"), `seat ${seat}`).toHaveLength(0);
+  it("다른 역할(시민·경찰·의사)과 유령 화면에는 집계가 섞여 와도 배지 요소가 0개다", () => {
+    for (const mySeat of [1, 2, 3]) {
+      const { container } = mount(makeView({ mySeat, nightTally: [{ seat: 2, n: 2 }], nightSure: 2 }));
+      expect(container.querySelectorAll(".mv-face__count"), `seat ${mySeat}`).toHaveLength(0);
       cleanup();
     }
-    const g = mount(makeView({ mySeat: 5, dead: [5], picks: { mafia: [2], police: [], doctor: [] } }));
-    expect(aimSeats(g.container)).toEqual([]);
-    expect(g.container.querySelectorAll("[data-night-mark], .is-cand, .is-picked, .is-preview")).toHaveLength(0);
+    const g = mount(makeView({ mySeat: 5, dead: [5], nightTally: [{ seat: 2, n: 2 }], nightSure: 2 }));
+    expect(g.container.querySelectorAll(".mv-face__count")).toHaveLength(0);
+  });
+
+  it("배지·확정 표시가 붙어도 칸 구조·순서·클래스는 배지 없는 화면과 같다(배지 요소만 더해진다)", () => {
+    const plain = mount(makeView({ mySeat: 0 }));
+    const base = faceSig(plain.container);
     cleanup();
-    // 탈락한 마피아도 없다
-    const dead = mount(makeView({ mySeat: 0, dead: [0] }));
-    expect(aimSeats(dead.container)).toEqual([]);
-  });
-
-  it("낮 지목 단계의 이름표 버튼은 그대로다: 밤 효과 속성·클래스·표식이 없다", () => {
-    const m = mount(makeView({ phase: "nomination", mySeat: 0 }));
-    expect(aimSeats(m.container)).toEqual([]);
-    expect(m.container.querySelectorAll("[data-night-mark], .is-cand, .is-picked, .is-preview")).toHaveLength(0);
-    for (const b of m.container.querySelectorAll("button.mf-world__pick")) expect(b.className).toBe("mf-world__pick");
+    const badged = mount(makeView({ mySeat: 0, nightTally: [{ seat: 2, n: 2 }], nightSure: 2 }));
+    expect(faceSig(badged.container)).toBe(base);
+    expect(badged.container.querySelector(".mv-face__count")?.className).not.toMatch(/crimson|mafia/);
   });
 });
-
-const headOf = (c: ParentNode, seat: number): Element | null => c.querySelector(`[data-seat="${seat}"] .mv-head`);
-const countOf = (c: ParentNode, seat: number): string | null => headOf(c, seat)?.getAttribute("data-count") ?? null;
-const sureOf = (c: ParentNode, seat: number): string | null => headOf(c, seat)?.getAttribute("data-sure") ?? null;
-
-describe("밤 마피아 — 선택 수 배지·'확정' 도장 (서버 집계, 결정 0061-7, E2 #10~#12)", () => {
-  it("서로 다른 대상을 고르면 각 좌석에 배지 1, 도장 없음", () => {
-    const { container } = mount(makeView({ mySeat: 0, pick: 2, allyPicks: [5], nightTally: [{ seat: 2, n: 1 }, { seat: 5, n: 1 }] }));
-    expect(countOf(container, 2)).toBe("1");
-    expect(countOf(container, 5)).toBe("1");
-    expect(sureOf(container, 2)).toBeNull();
-    expect(container.querySelectorAll(".mv-stamp")).toHaveLength(0);
-    expect(container.querySelectorAll(".mv-badge")).toHaveLength(2);
-  });
-
-  it("전원 일치(nightSure)면 그 좌석은 배지 대신 '확정' 도장이다. 일치가 깨지면 도장이 사라지고 배지로 돌아간다", () => {
-    const m = mount(makeView({ mySeat: 0, pick: 2, allyPicks: [2], nightTally: [{ seat: 2, n: 2 }], nightSure: 2 }));
-    expect(sureOf(m.container, 2)).toBe("true");
-    expect(countOf(m.container, 2)).toBeNull();
-    expect(headOf(m.container, 2)?.querySelector(".mv-stamp")?.textContent).toBe("확정");
-    expect(headOf(m.container, 2)?.querySelector(".mv-badge")).toBeNull();
-    m.show(makeView({ mySeat: 0, pick: 2, allyPicks: [3], nightTally: [{ seat: 2, n: 1 }, { seat: 3, n: 1 }] }));
-    expect(m.container.querySelectorAll(".mv-stamp")).toHaveLength(0);
-    expect(countOf(m.container, 2)).toBe("1");
-    expect(countOf(m.container, 3)).toBe("1");
-  });
-
-  it("마피아 1명 방: 고르는 즉시 도장이다(서버 집계가 확정으로 보낸다)", () => {
-    const { container } = mount(makeView({ mySeat: 0, pick: 2, nightTally: [{ seat: 2, n: 1 }], nightSure: 2 }));
-    expect(sureOf(container, 2)).toBe("true");
-    expect(headOf(container, 2)?.querySelector(".mv-stamp")?.textContent).toBe("확정");
-  });
-
-  it("아무도 안 골랐으면(nightTally 빈 배열) 배지·도장·고리가 없다", () => {
-    const { container } = mount(makeView({ mySeat: 0, nightTally: [] }));
-    expect(container.querySelectorAll(".mv-badge, .mv-stamp")).toHaveLength(0);
-    expect(ringSeats(container)).toEqual([]);
-  });
-
-  it("마피아가 아닌 view(시민·경찰·의사·유령)에 nightTally·nightSure 가 섞여 와도 배지·도장이 0개다 — 마피아 분기에서만 읽는다", () => {
-    for (const [seat, dead] of [[3, []], [1, []], [2, []], [5, [5]]] as const) {
-      const base = makeView({ mySeat: seat, dead: [...dead], ...(dead.length ? { picks: { mafia: [2], police: [], doctor: [] } } : {}) });
-      const v: RoomView = { ...base, me: { ...base.me, nightTally: [{ seat, n: 2 }, { seat: 2, n: 2 }], nightSure: seat } };
-      const { container } = mount(v);
-      expect(container.querySelectorAll(".mv-badge, .mv-stamp"), `seat ${seat}`).toHaveLength(0);
-      cleanup();
-    }
-  });
-
-  it("배지·도장 요소에 진홍 클래스가 없다(진홍은 고리·동료 칩·채널 이름에만, UI-SPEC 230행)", () => {
-    const { container } = mount(makeView({ mySeat: 0, pick: 2, allyPicks: [3], nightTally: [{ seat: 2, n: 1 }, { seat: 3, n: 1 }] }));
-    for (const el of container.querySelectorAll(".mv-head, .mv-head *")) expect(el.className.toString(), el.outerHTML.slice(0, 80)).not.toMatch(/crimson/);
-  });
-});
-
-// ---- Task 2: 밤 역할별 패널·안내·조명·유령 고리·거절 알림 (A1, GHOST-02, UI Considerations E7 #25~#27) ----
 
 const sysLines = (c: ParentNode): string[] => [...c.querySelectorAll("[data-chat-log] > p.mv-chat__sys")].map((p) => (p.textContent ?? "").trim());
 const chatChannel = (c: ParentNode): string | null => c.querySelector("[data-chat-panel]")?.getAttribute("data-chat-channel") ?? null;
@@ -403,34 +295,51 @@ const faceOf = (c: ParentNode, seat: number): HTMLElement | null => c.querySelec
 const pressed = (c: ParentNode, seat: number): string | null => faceOf(c, seat)?.getAttribute("aria-pressed") ?? null;
 const pickMsgs = (send: ReturnType<typeof vi.fn<(m: ClientMessage) => boolean>>): ClientMessage[] => send.mock.calls.map(([x]) => x).filter((x) => x.t === "pick");
 
-describe("밤 경찰·의사 — 얼굴 목록(NIGHT-09, E1 #1·#3·#6·#7)", () => {
-  it("산 경찰: 묶음 '조사할 사람', 자기 칸 없는 산 사람 5칸, 칸 이름 '{닉네임} 조사', 그림은 faceSrc(seat), 이름표 버튼·밤 알약·채팅 패널은 없다", () => {
-    const { container } = mount(makeView({ mySeat: 1 }));
-    expect(container.querySelector("[data-face-list]")?.getAttribute("aria-label")).toBe("조사할 사람");
-    expect(faceSeats(container)).toEqual([0, 2, 3, 4, 5]);
-    expect(faceOf(container, 2)?.getAttribute("aria-label")).toBe("서준 조사");
-    expect(faceOf(container, 2)?.querySelector("img")?.getAttribute("src")).toBe(faceSrc(2));
-    expect(pickSeats(container)).toEqual([]);
-    expect(container.querySelector(".mf-game__panel .mf-nightpanel, .mf-game__panel .mf-pk")).toBeNull();
-    expect(container.querySelector("[data-chat-panel]")).toBeNull();
-    expect(titleText(container)).toBe("밤");
-    expect(container.querySelector('.mf-game__header [role="timer"]')).toBeNull(); // 14-02: 시간은 띠의 막대 + 초가 맡는다
+describe("밤 산 사람 모두 — 같은 얼굴 목록(D-05, TRACE-01, T-15-31)", () => {
+  it("네 역할(마피아·경찰·의사·시민) 시점: 얼굴 목록 하나·같은 묶음 '밤 대상'·나 포함 산 사람 6칸·칸 이름 '{닉네임} 고르기'·같은 클래스, 아이콘·aria-disabled 0개", () => {
+    const sigs: string[] = [];
+    for (const mySeat of [0, 1, 2, 3]) {
+      const { container } = mount(makeView({ mySeat }));
+      expect(container.querySelector("[data-face-list]")?.getAttribute("aria-label"), `seat ${mySeat}`).toBe("밤 대상");
+      expect(faceSeats(container), `seat ${mySeat}`).toEqual([0, 1, 2, 3, 4, 5]);
+      expect(faceOf(container, 2)?.getAttribute("aria-label")).toBe("서준 고르기");
+      expect(faceOf(container, 2)?.querySelector("img")?.getAttribute("src")).toBe(faceSrc(2));
+      expect(container.querySelectorAll("[data-face] svg"), `seat ${mySeat}: eye·heal 0`).toHaveLength(0);
+      expect(container.querySelectorAll('[data-face][aria-disabled="true"]'), `seat ${mySeat}: 막힌 칸 0`).toHaveLength(0);
+      expect(pickSeats(container)).toEqual([]);
+      expect(container.querySelector("[data-chat-panel]")).toBeNull();
+      expect(container.querySelectorAll("[data-face][data-call]"), `seat ${mySeat}: 빛남`).toHaveLength(6);
+      expect(titleText(container)).toBe("밤");
+      sigs.push(faceSig(container));
+      cleanup();
+    }
+    expect(new Set(sigs).size).toBe(1);
   });
 
-  it("산 의사: 묶음 '지킬 사람', 자기 포함 6칸, 칸 이름 '{닉네임} 보호', 서버 pick 이 오면 그 칸이 눌린다", () => {
-    const m = mount(makeView({ mySeat: 2 }));
-    expect(m.container.querySelector("[data-face-list]")?.getAttribute("aria-label")).toBe("지킬 사람");
-    expect(faceSeats(m.container)).toEqual([0, 1, 2, 3, 4, 5]);
-    expect(faceOf(m.container, 2)?.getAttribute("aria-label")).toBe("서준 보호");
-    expect(pickSeats(m.container)).toEqual([]);
-    m.show(makeView({ mySeat: 2, pick: 2 }));
-    expect(pressed(m.container, 2)).toBe("true");
-    expect(pressed(m.container, 3)).toBe("false");
+  it("고른 뒤에도 아이콘(eye·heal)은 없고 고른 칸만 is-on·aria-pressed, 빛남은 모두 꺼진다 — 네 역할 같다", () => {
+    for (const mySeat of [0, 1, 2, 3]) {
+      const m = mount(makeView({ mySeat }));
+      fireEvent.click(faceOf(m.container, 3)!);
+      expect(pressed(m.container, 3), `seat ${mySeat}`).toBe("true");
+      expect(faceOf(m.container, 3)?.className).toContain("is-on");
+      expect(m.container.querySelectorAll("[data-face] svg")).toHaveLength(0);
+      m.show(makeView({ mySeat, pick: 3 }));
+      expect(m.container.querySelectorAll("[data-face][data-call]")).toHaveLength(0);
+      cleanup();
+    }
   });
 
-  it("탈락한 좌석은 산 경찰의 얼굴 목록에 없다", () => {
+  it("마피아 시점의 동료 칸·내 칸도 누르면 pick 이 간다(막지 않는다, 거절 알림 없음)", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const { container } = mount(makeView({ mySeat: 0 }), { send });
+    fireEvent.click(faceOf(container, 4)!); // 동료
+    fireEvent.click(faceOf(container, 0)!); // 나
+    expect(pickMsgs(send)).toEqual([{ t: "pick", target: 4 }, { t: "pick", target: 0 }]);
+  });
+
+  it("탈락한 좌석은 얼굴 목록에 없다", () => {
     const { container } = mount(makeView({ mySeat: 1, dead: [4] }));
-    expect(faceSeats(container)).toEqual([0, 2, 3, 5]);
+    expect(faceSeats(container)).toEqual([0, 1, 2, 3, 5]);
   });
 
   it("얼굴을 누르면 pick 한 번과 즉시 눌림, 같은 칸 재클릭은 보내지 않고, 서버 view(me.pick)가 오면 서버 값이 이긴다", () => {
@@ -471,17 +380,15 @@ describe("밤 경찰·의사 — 얼굴 목록(NIGHT-09, E1 #1·#3·#6·#7)", ()
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
     const { container } = mount(makeView({ mySeat: 1 }), { send, canSend: false });
     const faces = [...container.querySelectorAll<HTMLElement>("[data-face]")];
-    expect(faces).toHaveLength(5);
+    expect(faces).toHaveLength(6);
     expect(faces.every((b) => b.getAttribute("aria-disabled") === "true")).toBe(true);
     fireEvent.click(faceOf(container, 2)!);
     expect(pickMsgs(send)).toEqual([]);
   });
 
-  it("후보가 0명(경찰 혼자 산 가짜 view)이면 얼굴 목록도 경고 글도 없다", () => {
+  it("산 사람이 나 하나면 그 한 칸만 있다(경고 글 없음)", () => {
     const { container } = mount(makeView({ mySeat: 1, dead: [0, 2, 3, 4, 5] }));
-    expect(container.querySelector("[data-face-list]")).toBeNull();
-    // 얼굴 목록 대신 아래 행동 줄 [유언] 하나만 남는다(09-17, 경고 글 없음)
-    expect(container.querySelector(".mf-game__panel")?.textContent ?? "").toBe("유언");
+    expect(faceSeats(container)).toEqual([1]);
   });
 
   it("아무것도 안 골랐으면 눌린 칸이 없고 경고 글이 없다", () => {
@@ -490,79 +397,46 @@ describe("밤 경찰·의사 — 얼굴 목록(NIGHT-09, E1 #1·#3·#6·#7)", ()
     expect(container.querySelector(".mf-game__panel")?.textContent).not.toMatch(/고르지|선택 안|경고/);
   });
 
-  it("산 시민 밤: 아래 패널은 [유언] 행동 줄뿐이고(밤 알약 없음) 얼굴 목록·이름표 버튼·채팅 패널·고리가 0개다", () => {
-    const { container } = mount(makeView({ mySeat: 3 }));
-    expect(container.querySelector(".mf-game__panel .mf-nightpanel, .mf-game__panel .mf-pk")).toBeNull();
-    expect(container.querySelector("[data-face-list]")).toBeNull();
-    expect(pickSeats(container)).toEqual([]);
-    expect(container.querySelector("[data-chat-panel]")).toBeNull();
-    expect(ringSeats(container)).toEqual([]);
+  it("행동 줄: 산 마피아 [쪽지] 하나, 산 시민·경찰·의사 [유언] 하나, 얼굴 목록 하나 — 88 고정 빈 패널은 없다", () => {
+    const note = mount(makeView({ mySeat: 0 })).container;
+    expect(note.querySelectorAll("[data-note-button]")).toHaveLength(1);
+    expect(note.querySelectorAll("[data-will-button]")).toHaveLength(0);
+    cleanup();
+    for (const mySeat of [1, 2, 3]) {
+      const c = mount(makeView({ mySeat })).container;
+      expect(c.querySelectorAll("[data-will-button]"), `seat ${mySeat}`).toHaveLength(1);
+      expect(c.querySelectorAll("[data-note-button]"), `seat ${mySeat}`).toHaveLength(0);
+      expect(c.querySelectorAll("[data-face-list]")).toHaveLength(1);
+      cleanup();
+    }
   });
 
-  it("산 마피아·유령 화면에는 얼굴 목록이 없다", () => {
-    expect(mount(makeView({ mySeat: 0 })).container.querySelector("[data-face-list]")).toBeNull();
-    cleanup();
+  it("유령 화면에는 얼굴 목록이 없다", () => {
     expect(mount(makeView({ mySeat: 5, dead: [5], picks: { mafia: [], police: [], doctor: [] } })).container.querySelector("[data-face-list]")).toBeNull();
   });
 });
 
-describe("밤 마피아·유령 하단 패널 — 채팅 (T-08-47)", () => {
-  it("산 마피아: 마피아 채널 채팅 패널과 헤더 안내 줄 없음(띠 몫), 밤 알약은 없다", () => {
+describe("밤 마피아 채팅 패널은 화면에 없다 (D-05, T-15-33)", () => {
+  it("산 마피아: 채팅 패널·기록 칸·입력줄이 없고(서버 채널이 와도) 밤 알약도 없다", () => {
     const { container } = mount(makeView({ mySeat: 0 }));
-    expect(chatChannel(container)).toBe("mafia");
+    expect(chatChannel(container)).toBeNull();
+    expect(container.querySelector("[data-chat-panel], .mv-chat__input, [data-chat-log]")).toBeNull();
     expect(hintText(container)).toBeNull();
     expect(container.querySelector(".mf-game__panel .mf-nightpanel")).toBeNull();
   });
 
-  it("마피아 채팅 패널은 서버 view.me.chat 이 mafia 일 때만 그린다(T-08-47): 채널이 없으면 패널도 마피아 문구도 없다", () => {
-    const v = makeView({ mySeat: 0 });
-    delete v.me.chat;
-    const { container } = mount(v);
-    expect(container.querySelector("[data-chat-panel]")).toBeNull();
-    expect(container.textContent).not.toContain("마피아끼리만 보여요");
-    expect(container.textContent).not.toContain("마피아 채팅");
-  });
-
-  it("시스템 줄 '밤 · 마피아 채팅' 은 낮에서 밤으로 넘어올 때 한 번, 같은 밤에 다시 그려도 늘지 않는다. 밤 첫 스냅샷(재접속)은 줄이 없다", () => {
-    const m = mount(makeView({ phase: "nomination", mySeat: 0 }));
-    expect(sysLines(m.container)).not.toContain("밤 · 마피아 채팅");
-    m.show(makeView({ mySeat: 0 }));
-    expect(sysLines(m.container).filter((t) => t === "밤 · 마피아 채팅")).toHaveLength(1);
-    m.show(makeView({ mySeat: 0, pick: 2 }));
-    m.show({ ...makeView({ mySeat: 0 }), serverNow: NOW + 900 });
-    expect(sysLines(m.container).filter((t) => t === "밤 · 마피아 채팅")).toHaveLength(1);
-    cleanup();
-    const fresh = mount(makeView({ mySeat: 0 }));
-    expect(sysLines(fresh.container)).toEqual([]);
-  });
-
-  it("시민·경찰·의사 화면의 어느 밤 단계에도 마피아 채널 문구가 없다(T-07-08 계열)", () => {
-    for (const seat of [1, 2, 3]) {
+  it("어느 역할 화면의 밤에도 마피아 채널 문구·'다가가' 문구가 없다(T-07-08 계열)", () => {
+    for (const seat of [0, 1, 2, 3]) {
       const m = mount(makeView({ phase: "nomination", mySeat: seat }));
       m.show(makeView({ mySeat: seat }));
       expect(m.container.textContent, `seat ${seat}`).not.toContain("마피아 채팅");
       expect(m.container.textContent, `seat ${seat}`).not.toContain("마피아끼리만 보여요");
-      expect(m.container.textContent, `seat ${seat}`).not.toContain("다가가요");
+      expect(m.container.textContent, `seat ${seat}`).not.toContain("다가가");
       cleanup();
     }
-    // 유령(마피아였어도)은 모두의 직업과 밤 행동 안내 그대로, 마피아 안내 문자열이 DOM 에 없다
     const ghost = mount(makeView({ mySeat: 5, dead: [5], picks: { mafia: [2], police: [], doctor: [] } }));
-    expect(ghost.container.textContent).not.toContain("다가가요");
+    expect(ghost.container.textContent).not.toContain("다가가");
     expect(ghost.container.textContent).not.toContain("확정");
-  });
-
-  it("마피아 확정이 새로 서면 마피아 채팅에 hot 줄 '{이름} · 확정' 이 한 번 남고, 같은 확정을 다시 받아도 늘지 않는다. 첫 스냅샷에서는 줄이 없다", () => {
-    const hotLines = (c: ParentNode): string[] => [...c.querySelectorAll("[data-chat-log] > p.is-hot")].map((p) => (p.textContent ?? "").trim());
-    const m = mount(makeView({ mySeat: 0, pick: 2, nightTally: [{ seat: 2, n: 1 }] }));
-    expect(hotLines(m.container)).toEqual([]);
-    m.show(makeView({ mySeat: 0, pick: 2, allyPicks: [2], nightTally: [{ seat: 2, n: 2 }], nightSure: 2 }));
-    expect(hotLines(m.container)).toEqual(["서준 · 확정"]);
-    m.show({ ...makeView({ mySeat: 0, pick: 2, allyPicks: [2], nightTally: [{ seat: 2, n: 2 }], nightSure: 2 }), serverNow: NOW + 900 });
-    expect(hotLines(m.container)).toEqual(["서준 · 확정"]);
-    cleanup();
-    const fresh = mount(makeView({ mySeat: 0, pick: 2, allyPicks: [2], nightTally: [{ seat: 2, n: 2 }], nightSure: 2 }));
-    expect(hotLines(fresh.container)).toEqual([]);
-    expect(sureOf(fresh.container, 2)).toBe("true");
   });
 });
 
