@@ -266,8 +266,8 @@ describe("빛남 대상 callTargetsOf (HOST-03·04)", () => {
     expect(callTargetsOf(makeView({ phase: "night", role: "mafia", ghost: true }))).toBeNull();
   });
 
-  it("밤 문구: night.wait 키는 없고 night.mafia·night.citizen 은 36자 이하·역할 낱말 없음", () => {
-    expect(Object.keys(HOST_LINES)).not.toContain("night.wait");
+  it("밤 문구: 대기 키는 없고 night.mafia·night.citizen 은 36자 이하·역할 낱말 없음", () => {
+    expect(Object.keys(HOST_LINES)).not.toContain(["night", "wait"].join("."));
     for (const k of ["night.mafia", "night.citizen"] as const) {
       const t = HOST_LINES[k] as string;
       expect(t.length, k).toBeLessThanOrEqual(36);

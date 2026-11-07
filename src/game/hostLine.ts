@@ -26,7 +26,7 @@ export type HostKey =
   | "defense.act" | "defense.wait" | "defense.ghost"
   | "verdict.act" | "verdict.wait" | "verdict.ghost"
   | "execution.passed" | "execution.failed"
-  | "night.mafia" | "night.police" | "night.doctor" | "night.wait" | "night.ghost"
+  | "night.mafia" | "night.police" | "night.doctor" | "night.citizen" | "night.ghost"
   | "morning" | "ended"
   | "errand.act" | "errand.done" | "errand.ghost"
   | "witness" | "trace"
@@ -71,10 +71,10 @@ export const HOST_LINES: Readonly<Record<HostKey, Line>> = {
   "verdict.ghost": (name) => `${name} 님의 처형 찬반 투표 중입니다.`,
   "execution.passed": (name) => `찬성이 많아 ${name} 님이 처형됩니다.`,
   "execution.failed": "반대가 많아 처형은 없습니다.",
-  "night.mafia": "밤이 되었습니다. 없앨 사람에게 다가가 주세요.",
+  "night.mafia": "밤이 되었습니다. 없앨 사람의 이름표를 눌러 주세요.",
   "night.police": "밤이 되었습니다. 조사할 사람의 이름표를 눌러 주세요.",
   "night.doctor": "밤이 되었습니다. 지킬 사람의 이름표를 눌러 주세요.",
-  "night.wait": "밤이 되었습니다. 눈을 감고 기다려 주세요.",
+  "night.citizen": "밤이 되었습니다. 한 명의 이름표를 눌러 주세요.",
   "night.ghost": "밤이 되었습니다. 모두의 밤 행동을 지켜봐 주세요.",
   morning: (result) => `아침이 밝았습니다. ${result}.`,
   ended: "게임이 끝났습니다. 다음 판을 준비해 주세요.",
@@ -142,7 +142,7 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
       if (role === "mafia") return "night.mafia";
       if (role === "police") return "night.police";
       if (role === "doctor") return "night.doctor";
-      return "night.wait";
+      return "night.citizen";
     }
     case "morning": {
       const morning = view.day?.morning;
@@ -182,7 +182,7 @@ function aliveSeats(view: RoomView, includeMe: boolean): number[] {
 }
 
 /**
- * 빛남 대상(UI-SPEC "빛남 계약" 표). 공개 정보와 내 역할만으로 정한다 — 마피아 밤은 대상이 없어 동료·대상이 빛으로 드러나지 않는다.
+ * 빛남 대상(UI-SPEC "빛남 계약" 표). 공개 정보와 내 역할만으로 정한다 — 밤 고르기는 네 역할이 같은 칸이 빛나 빛으로 역할이 드러나지 않는다.
  * "이미 썼는가"(내 선택·시트 열림)는 이 함수가 보지 않는다 — 화면이 끈다(14-04).
  */
 export function callTargetsOf(view: RoomView, local: HostLocal = {}): CallTarget | null {
@@ -213,11 +213,11 @@ export function callTargetsOf(view: RoomView, local: HostLocal = {}): CallTarget
       const next = nextPlaceOf(local.pos, centers, progress.done);
       return next === null ? null : { kind: "place", id: next };
     }
-    case "night.police": {
-      const seats = aliveSeats(view, false);
-      return seats.length === 0 ? null : { kind: "tag", seats };
-    }
+    case "night.mafia":
+    case "night.citizen":
+    case "night.police":
     case "night.doctor": {
+      // 밤 고르기는 역할과 무관하다(D-05) — 산 사람 모두 나를 포함한 산 사람 전원이 같이 빛난다
       const seats = aliveSeats(view, true);
       return seats.length === 0 ? null : { kind: "tag", seats };
     }

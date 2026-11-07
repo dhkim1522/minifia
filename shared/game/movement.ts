@@ -25,11 +25,11 @@ export const MAP_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
 ]);
 
 /**
- * 표의 본체(단계 × 생존 × 마피아 여부). 로비는 모두 움직인다. 지도 단계에서 유령은 언제나 자유(A4)이고 산 사람은 낮 시작·심부름·토론에서만 움직인다.
- * 밤에는 산 사람 누구도 움직이지 않는다(D-05, 역할 무관) — 모두 어둠 속에 서 있다. 세 번째 인자 isMafia 는 받되 무시한다(클라이언트 GameMap 호출이 15-08 에서 바뀐 뒤 지운다).
+ * 표의 본체(단계 × 생존). 로비는 모두 움직인다. 지도 단계에서 유령은 언제나 자유(A4)이고 산 사람은 낮 시작·심부름·토론에서만 움직인다.
+ * 밤에는 산 사람 누구도 움직이지 않는다(D-05, 역할 무관) — 모두 어둠 속에 서 있다.
  * 화면이 view 의 단계와 내 alive 로 같은 표를 쓰게 따로 내보낸다 — 권위는 서버다.
  */
-export function canMoveIn(phase: PhaseId, alive: boolean, _isMafia = false): boolean {
+export function canMoveIn(phase: PhaseId, alive: boolean): boolean {
   if (phase === "lobby") return true;
   if (!MAP_PHASES.has(phase)) return false; // assigning·roleReveal·ended 와 옛 투표 단계
   if (!alive) return true; // 유령은 모든 지도 단계에서 자유(A4)

@@ -6,7 +6,6 @@ import { CHAT_MAX_GRAPHEMES } from "../../shared/game/chatRules";
 import { canMoveIn } from "../../shared/game/movement";
 import { RULESET } from "../../shared/game/ruleset";
 import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
-import { APPROACH_DIST_FX, approachPoint, positionAtFx } from "../../shared/game/world";
 import type { ClientMessage, PlaceId, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { KillFx } from "../components/KillFx";
@@ -335,8 +334,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 이동 권한: 산 사람은 낮 시작·토론에서만, 유령은 언제나(MAP-04). 권위는 서버 canMove 이고 화면은 같은 표로 맵 탭만 막는다.
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);
-  // 밤에는 산 마피아만 걷는다(NIGHT-07, 결정 0061-2). 역할은 서버가 이 사람에게만 보낸 view.me.role 이다.
-  const canWalk = canMoveIn(view.phase, meAlive, view.me.role === "mafia");
+  // 밤에는 산 사람 누구도 걷지 않는다(15페이즈 D-05) — 서버와 같은 이동 권한 표(canMoveIn)다.
+  const canWalk = canMoveIn(view.phase, meAlive);
   // 유령 화면(GHOST-02, 결정 0021): 내가 탈락했고 서버가 관전 정보(spectate)를 보냈을 때만 그린다. 서버가 안 보낸 view 에서는 이 분기가 아예 없다 — 받아서 감추는 방식이 아니다.
   const spectate = !meAlive ? view.spectate : undefined;
   const ghost = spectate !== undefined;
@@ -349,9 +348,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const nominating = view.phase === "nomination";
   // 기본판 동시 투표(결정 0072): 서버 view 에 day.turn 이 없는 지목 단계. 순차·동시를 설정 값이 아니라 view 가 가른다 — day.turn 이 있으면 아래 순차 코드가 그대로 쓰인다.
   const voting = nominating && view.day?.turn === undefined;
-  // 밤 선택: 산 마피아만 지도 이름표를 눌러 대상을 보낸다(결정 0061-6). 경찰·의사는 아래 패널 얼굴 목록(GamePanel)으로 고른다(NIGHT-09). 서버 값은 view.me.pick(본인에게만 온다).
+  // 밤 선택: 산 사람 모두 아래 패널 얼굴 목록(GamePanel)으로 고른다(D-05) — 지도 이름표로 고르는 길은 없다.
   const nighting = view.phase === "night";
-  const nightMafia = nighting && meAlive && view.me.role === "mafia";
   // 시민 편(산 시민·경찰·의사)의 밤: 같은 어둠 표식과 긴장 비네트를 본다. 역할마다 다르지 않다(NIGHT-10, E3 #20). 마피아·유령·낮에는 없다.
   // 판정식은 nightDarkOf 하나다 — RoomScreen 이 같은 식으로 소리의 시각 큐 갈래를 정한다(12-09).
   const nightDark = nightDarkOf(view);
@@ -486,28 +484,15 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     // chooseMine 은 렌더마다 새 함수지만 setState 만 부른다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rejects]);
-  // 누를 수 있는 좌석: 지목은 나를 뺀 산 사람. 밤은 산 마피아가 자신·동료를 뺀 산 사람(권위는 서버 pickTarget).
-  const allies = view.me.allies;
+  // 누를 수 있는 좌석: 지목은 나를 뺀 산 사람(밤 고르기는 아래 패널 얼굴 목록이 한다).
   const runoffCand = runoff?.cand;
   const pickSeats = useMemo(() => {
     if (canPick) return new Set(view.players.filter((p) => isAlive(p) && p.seat !== view.me.seat).map((p) => p.seat));
     if (runoffVoting && runoffCand !== undefined) return new Set<number>(runoffCand);
     if (showdownPointing) return new Set<number>(pointSeatsOf(view));
-    if (!nightMafia) return null;
-    return new Set(view.players.filter((p) => isAlive(p) && p.seat !== view.me.seat && !(allies ?? []).includes(p.seat)).map((p) => p.seat));
+    return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canPick, runoffVoting, runoffCand, showdownPointing, nightMafia, allies, view.players, view.me.seat, view.day?.showdown?.order]);
-  // 마피아 다가가기(UI-SPEC 다르게 하는 곳 6): 고른 사람 옆 목적지를 일반 move 로 보낸다. 서버 applyMove 가 걷기 가능 칸으로 보정한다.
-  // 대상이나 내 위치를 store 가 모르면 pick 만 나간다(A3).
-  const approach = (target: number): void => {
-    const now = Date.now() + offset;
-    const targetSeg = store.segOf(target);
-    const mySeg = store.segOf(view.me.seat);
-    if (targetSeg === undefined || mySeg === undefined) return;
-    const dest = approachPoint(positionAtFx(targetSeg, now), positionAtFx(mySeg, now), APPROACH_DIST_FX);
-    send({ t: "move", x: dest.x, z: dest.z });
-  };
-
+  }, [canPick, runoffVoting, runoffCand, showdownPointing, view.players, view.me.seat, view.day?.showdown?.order]);
   // 귓속말(09.1.1-09, UI-SPEC B): 모드·한 줄 시트·보내기는 useWhisper 가 쥔다. 모드에서는 나를 뺀 산 사람의 이름표가 버튼이 된다(낮 토론이라 지목·밤 선택의 pickSeats 와 겹치지 않는다).
   const whisper = useWhisper({ view, send, canSend, rejected: whisperRejects, guard: sendGuard });
   // 받은 순간 위 알림 "{A} 님의 귓속말"(본문 없음). 라이브로 받은 줄만 번호가 바뀐다 — 재접속 복원 줄·내가 보낸 줄은 알림이 없다. 처음 마운트 때의 번호는 지난 일이다
@@ -528,19 +513,16 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         ...(mine !== undefined ? { mine } : {}),
         // 연결이 끊긴 동안은 버튼이 aria-disabled 이고 눌러도 보내지 않는다(UI-SPEC "연결 끊김")
         ...(canSend ? {} : { disabled: true as const }),
-        label: (nickname) => (nighting ? `${nickname} 님에게 다가가기` : runoffVoting ? `${nickname} 님에게 투표` : showdownPointing ? SHOWDOWN_COPY.pointLabel(nickname) : `${nickname} 님 가리키기`),
+        label: (nickname) => (runoffVoting ? `${nickname} 님에게 투표` : showdownPointing ? SHOWDOWN_COPY.pointLabel(nickname) : `${nickname} 님 가리키기`),
         onPick: (seat) => {
           if (seat === mine) return; // 이미 고른 후보를 다시 눌러도 보내지 않는다. 다른 후보를 누르면 마감까지 바꿀 수 있다(결선)
-          if (send(nighting ? { t: "pick", target: seat } : { t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
+          if (send({ t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
           pointSent.current = { target: seat, at: Date.now() };
           chooseMine(seat);
           if (voting) markCallUsed();
           else if (nominating) setPickedTurn(myTurnNo);
-          if (nightMafia) approach(seat);
         },
-        group: nighting ? "밤 대상" : runoffVoting ? "결선" : showdownPointing ? SHOWDOWN_COPY.pointGroup : voting ? "투표" : "지목",
-        // 마피아 밤 선택 효과(결정 0065): nightMafia(산 마피아의 밤)일 때만. mine 은 서버가 마피아에게만 준 me.pick 이다
-        ...(nightMafia ? { aim: true as const } : {}),
+        group: runoffVoting ? "결선" : showdownPointing ? SHOWDOWN_COPY.pointGroup : voting ? "투표" : "지목",
       }
     : undefined;
 
@@ -560,36 +542,16 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       if (candidate === undefined || votes === undefined || votes < 1) return undefined;
       return (seat) => (seat === candidate ? { count: votes, sure: true } : {});
     }
-    // 밤 발밑 고리(A2 임시 예외): 서버가 이 사람에게 보낸 값만 그린다. 산 마피아는 내 선택·동료 선택(allyPicks),
-    // 유령은 서버가 유령에게만 보낸 spectate.picks(한 좌석에 여럿이면 마피아 → 경찰 → 의사 하나). 산 시민·경찰·의사 화면에는 고리가 없다(T-08-46, 경찰·의사의 선택은 얼굴 목록이 보인다).
+    // 밤 발밑 고리(A2 임시 예외): 유령만 — 서버가 유령에게만 보낸 spectate.picks(한 좌석에 여럿이면 마피아 → 경찰 → 의사 하나).
+    // 산 사람 화면(마피아 포함)에는 고리·배지가 없다(D-05) — 선택은 아래 얼굴 목록이 보인다.
     if (nighting) {
+      if (!spectate?.picks) return undefined;
       const rings = new Map<number, RingKind>();
-      const put = (seat: number, kind: RingKind): void => {
-        if (!rings.has(seat)) rings.set(seat, kind);
-      };
-      if (spectate?.picks) {
-        for (const kind of ["mafia", "police", "doctor"] as const) for (const seat of spectate.picks[kind]) put(seat, kind);
-      } else if (nightMafia) {
-        if (mine !== undefined) put(mine, "mafia");
-        // 내가 고른 좌석이 먼저 서므로 동료도 같은 좌석을 골랐으면 내 고리(mafia)가 이긴다. 동료만 고른 좌석은 연한 고리(mafiaAlly)
-        for (const seat of view.me.allyPicks ?? []) put(seat, "mafiaAlly");
-      }
-      // 선택 수 배지·확정 도장(결정 0061-7): 서버가 산 마피아에게만 보낸 집계(me.nightTally·nightSure)를 그대로 그린다. 마피아가 아니면 읽지 않는다.
-      // 확정 좌석은 배지 대신 "확정" 도장 하나. 확정이 깨지면 서버가 nightSure 를 빼므로 도장이 사라지고 배지로 돌아간다.
-      const counts = new Map<number, number>();
-      let sureSeat: number | undefined;
-      if (nightMafia) {
-        for (const t of view.me.nightTally ?? []) if (t.n >= 1) counts.set(t.seat, t.n);
-        sureSeat = view.me.nightSure;
-      }
-      if (rings.size === 0 && counts.size === 0 && sureSeat === undefined) return undefined;
+      for (const kind of ["mafia", "police", "doctor"] as const) for (const seat of spectate.picks[kind]) if (!rings.has(seat)) rings.set(seat, kind);
+      if (rings.size === 0) return undefined;
       return (seat) => {
         const ring = rings.get(seat);
-        const count = counts.get(seat);
-        return {
-          ...(ring !== undefined ? { ring } : {}),
-          ...(seat === sureSeat ? { sure: true, sureLabel: "확정" } : count !== undefined ? { count } : {}),
-        };
+        return ring !== undefined ? { ring } : {};
       };
     }
     // 동점 결선(09.1.1-14, UI-SPEC D-2): 던진 사람 이름표에 done 체크만(누가 누구를은 서버가 주지 않는다). 후보 머리 위 배지는 마감 전엔 지목 때 받은 득표, 결과(step 2)에는 결선 득표 tally 의 두 값
@@ -651,7 +613,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         ...(turnSeat === seat ? { ring: "turn" as const, turn: true } : {}),
       };
     };
-  }, [nominating, voting, nighting, nightMafia, mine, serverMine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting, showdownPointing, showdownStage]);
+  }, [nominating, voting, nighting, mine, serverMine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting, showdownPointing, showdownStage]);
 
   // 유령 화면의 이름표: 모든 이름표 위에 그 사람의 직업 칩(spectate.seats 의 job), 죽은 좌석은 반투명. 산 사람 view 에는 spectate 가 없어 이 겹침이 없다.
   const tagProps = useMemo<WorldTagProps | undefined>(() => {
