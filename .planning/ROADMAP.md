@@ -143,13 +143,40 @@ Plans:
   3. 밤에 모든 산 사람이 같은 방식으로 한 명을 고르고, 피해자가 나온 아침에 사회자가 흔적 하나를 공개한다(확정 아님)
   4. v3.0 전체가 `minifia-v3` 에 배포되고 봇 방이 심부름·흔적을 포함한 한 판을 완주한다
 
+**Plans:** 0/10 plans executed (7 waves)
+
+Plans:
+**Wave 1**
+- [ ] 15-01-PLAN.md — 트레이서: 심부름 단계(errand 40초)·장소 3곳 배정(마피아도 같은 모양)·{t:"errand"} 처리·view.me.errand·봇 errandGo/errandAct, 봇 방 완주 + PhaseId 확장 따라가기
+
+**Wave 2**
+- [ ] 15-02-PLAN.md — 근처 사람만 보이는 위치(받는 사람 집합·근처 snap·잘린 구간)·1초 표본 목격 기록·me.record(3곳 완료만, 본인에게만)
+- [ ] 15-04-PLAN.md — 심부름 부품: 장소 아이콘 18개·낱말 표·진행/다음 장소 판정·표지 배치 계획·ErrandMarker/ErrandDock·사회자 errand 문구와 빛남
+
+**Wave 3**
+- [ ] 15-03-PLAN.md — 밤 선택 통일(모든 역할 같은 메시지·응답, 나 포함 전원, 마피아 접근 걷기·밤 위치 차이 삭제)·아침 흔적(피해자를 고른 사람 중 한 명의 의상 조각, 없으면 없음)·봇의 밤 선택
+- [ ] 15-05-PLAN.md — 심부름 화면 통합: near snap 등장·퇴장·런타임 투영 콜백·WorldStage errand 층(표지·화살표·근처 링)·GameMap 독·[처리]·빛남·유령·역할 무관 DOM
+
+**Wave 4**
+- [ ] 15-06-PLAN.md — 누설 검사 확장(역할 다섯 시점 프레임 전수·공유 view 비교·leak 허용 경로)과 smoke·소켓 봇·UAT 방 스크립트의 새 단계 반영
+- [ ] 15-07-PLAN.md — 목격 기록 카드·[기록] 이름표·witness 문구/빛남, 아침 흔적 카드·trace 띠·도착 소리 한 번
+
+**Wave 5**
+- [ ] 15-08-PLAN.md — 밤 화면 통일: 모든 역할 같은 얼굴 목록·마피아 전용 밤 화면(이름표 선택·접근·고리·밤 채팅) 삭제·마피아 선택 수 배지·밤 사회자 줄(night.citizen)
+
+**Wave 6**
+- [ ] 15-09-PLAN.md — E2E errand·witness·trace 흐름(폰 6종 영역 검사)·판정 함수·옛 흐름 기대 갱신·바뀐 흐름 로컬 실행
+
+**Wave 7**
+- [ ] 15-10-PLAN.md — 결정 0074·지도 문서·폰 6종 회귀 한 번·성능(nightload 심부름 장면)·minifia-v3 배포(계정 가드)·HANDOFF·push
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 13. 기본판 낮 흐름 | v3.0 | 6/6 | Complete (실기기 확인은 v3.0 끝) | 2026-11-07 |
 | 14. 사회자 진행과 도구 이름표 | v3.0 | 9/9 | Complete (실기기 확인은 v3.0 끝) | 2026-11-07 |
-| 15. 낮 심부름·목격 기록·밤 흔적 | v3.0 | 0/? | Not started | - |
+| 15. 낮 심부름·목격 기록·밤 흔적 | v3.0 | 0/10 | Planned (7 waves) | - |
 
 ## Backlog
 
