@@ -46,7 +46,7 @@ import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { actErrand, nearSnapFrame, placeCenterFx, sampleErrand } from "../shared/game/errand";
-import { ERRAND_MIN_GAP_MS } from "../shared/game/phases";
+import { ERRAND_MIN_GAP_MS, ERRAND_TICK_MS } from "../shared/game/phases";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
 import type { MapDef } from "../shared/game/map";
@@ -120,6 +120,8 @@ export class Room extends DurableObject<Env> {
   private readonly writeAt = new Map<string, number>();
   // 새 유령 snap 을 이미 보낸 사람 id(08-09, 가정 A1). 인메모리라 하이버네이션·퇴거로 비면 유령에게 snap 이 한 번 더 갈 뿐이다(유령에게만, 무해).
   private readonly ghostSnapped = new Set<string>();
+  /** snapEachViewer 를 부른 횟수 — afterTransition 이 한 전환에 전체 snap 이 두 번 가지 않게 센다(메모리뿐, 저장하지 않는다). */
+  private snapEachCount = 0;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -1229,9 +1231,15 @@ export class Room extends DurableObject<Env> {
   private async afterTransition(prev: RoomState, now: number): Promise<void> {
     if (this.captureHomeNow()) await this.flushWorld();
     this.fillChalk(prev);
+    // 알람 따라잡기로 늦게 errand 에 닿으면 첫 표본 시각(진입 마감 + 1초)이 이미 지났다 — 지금부터 한 간격 뒤로 옮겨 들어오자마자 snap 이 두 번 가지 않게 한다(저장은 아래 한 번).
+    if (this.room?.phase === "errand" && prev.phase !== "errand" && this.room.errandTickAt !== undefined && this.room.errandTickAt <= now) {
+      this.room = { ...this.room, errandTickAt: now + ERRAND_TICK_MS };
+    }
     await this.persistAndBroadcast();
+    // syncHome 이 이미 모두에게 snap 을 보냈으면(snapEachViewer 는 지금 단계 규칙을 따른다) 진입·이탈 snap 은 건너뛴다 — 한 전환에 snap 이 한 번이다.
+    const eachBefore = this.snapEachCount;
     await this.syncPositions(now);
-    this.syncErrandTransition(prev, now);
+    if (this.snapEachCount === eachBefore) this.syncErrandTransition(prev, now);
     await this.emitDeathCards(prev, now);
     await this.emitBallotsCard(prev, now);
     this.emitResultLog(prev);
@@ -1376,6 +1384,7 @@ export class Room extends DurableObject<Env> {
   private snapEachViewer(now: number): void {
     const room = this.room;
     if (!room) return;
+    this.snapEachCount += 1;
     for (const viewer of room.players) {
       const frame = this.snapFrameFor(viewer, now);
       if (frame === null) continue;

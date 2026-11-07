@@ -174,7 +174,8 @@ describe("skipPhase 동작", () => {
       const r = skipPhase(state, state.hostId, now, seededRandInt(9));
       if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
       const normal = tick(state, state.phaseEndsAt!, seededRandInt(9));
-      expect(canon({ ...r.state, phaseEndsAt: 0 })).toBe(canon({ ...normal, phaseEndsAt: 0 }));
+      // errandTickAt(15-02)도 마감처럼 시각에서 정해지는 값이라 phaseEndsAt 과 같이 비교에서 뺀다 — 둘 다 진입 시각 + 상수다.
+      expect(canon({ ...r.state, phaseEndsAt: 0, errandTickAt: 0 })).toBe(canon({ ...normal, phaseEndsAt: 0, errandTickAt: 0 }));
     });
     it(`${phase} 에서 입력 상태를 바꾸지 않는다`, () => {
       const state = stateAt(6, 7, phase);

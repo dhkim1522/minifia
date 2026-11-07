@@ -5,8 +5,8 @@ import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
-import { MORNING_MAX_MS } from "../../shared/game/phases";
-import { editRoom, flushWorld, homeBySeat, layOf, mark, moveAs, nextFrame, pause, pickAs, segEndsBySeat, settle, snapSeatsOf, startedGame, withRole, worldFramesOf, worldOf } from "./helpers";
+import { ERRAND_NEAR_R, MORNING_MAX_MS } from "../../shared/game/phases";
+import { editRoom, flushWorld, homeBySeat, layOf, mark, moveAs, nextFrame, pause, pickAs, segEndsBySeat, settle, snapSeatsOf, startedGame, storedRoom, withRole, worldFramesOf, worldOf } from "./helpers";
 import type { Game } from "./helpers";
 
 /** 마지막 world snap 의 '좌석:x,z' 오름차순 문자열. snap 이 없으면 'none'. */
@@ -24,6 +24,21 @@ const homeRows = (home: string, seats: number[]): string =>
     .slice(1)
     .filter((row) => seats.includes(Number(row.split(":")[0])))
     .join("|");
+
+/**
+ * 따라잡기가 심부름(errand)에 닿았으면(15-02, D-02) 산 사람의 snap 은 본인 + 근처(home 좌표 사이 거리 ≤ ERRAND_NEAR_R)뿐이다 — 낮 시작·토론에 닿았으면 pool 전체.
+ * 보는 사람 viewerSeat 의 home 좌표에서 pool 의 좌석 가운데 보일 좌석(오름차순)을 돌려준다.
+ */
+function visibleSeats(landed: string, home: string, viewerSeat: number, pool: number[]): number[] {
+  if (landed !== "errand") return pool;
+  const at = new Map(home.split("|").slice(1).map((row) => {
+    const [seatNo, xz] = row.split(":");
+    const [x, z] = xz!.split(",").map(Number);
+    return [Number(seatNo), { x: x!, z: z! }] as const;
+  }));
+  const me = at.get(viewerSeat)!;
+  return pool.filter((q) => q === viewerSeat || Math.hypot(at.get(q)!.x - me.x, at.get(q)!.z - me.z) <= ERRAND_NEAR_R * 100);
+}
 
 /** 밤에 마피아 둘이 시민 한 명을 고르고 마피아 한 명이 걷게 한 뒤, 아침 길이 + 1초 늦게 알람을 돌려 낮 시작 쪽으로 한 번에 따라잡는다. */
 async function lateCatchup(withVictim: boolean): Promise<{ g: Game; victim: Game["actors"][number]; walker: Game["actors"][number]; home: string; before: string; got: ServerMessage[][]; marks: number[] }> {
@@ -60,11 +75,13 @@ describe("알람 따라잡기 — 밤 → 아침 → 낮 시작 (review-WR-01)",
     expect(homeRows(ends, [walker.seat])).toBe(homeRows(home, [walker.seat]));
     expect(homeRows(ends, everyone)).toBe(homeRows(home, everyone));
 
+    const landed = (await storedRoom(g.code)).phase;
     for (const a of g.actors) {
       const i = g.actors.indexOf(a);
+      const seats = visibleSeats(landed, home, a.seat, everyone);
       expect(`${a.role}:${worldFramesOf(a.sock, marks[i]!).map((m) => m.k).join(",")}`).toBe(`${a.role}:snap`);
-      expect(snapSeatsOf(got[i]!)).toBe(everyone.join(","));
-      expect(snapPoints(got[i]!)).toBe(homeRows(home, everyone));
+      expect(snapSeatsOf(got[i]!)).toBe(seats.join(","));
+      expect(snapPoints(got[i]!)).toBe(homeRows(home, seats));
     }
   }, 40_000);
 
@@ -74,11 +91,13 @@ describe("알람 따라잡기 — 밤 → 아침 → 낮 시작 (review-WR-01)",
     const aliveSeats = alive.map((a) => a.seat).sort((p, q) => p - q);
     const everyone = g.actors.map((a) => a.seat).sort((p, q) => p - q);
 
+    const landed = (await storedRoom(g.code)).phase;
     for (const a of alive) {
       const i = g.actors.indexOf(a);
+      const seats = visibleSeats(landed, home, a.seat, aliveSeats);
       expect(`${a.role}:${worldFramesOf(a.sock, marks[i]!).map((m) => m.k).join(",")}`).toBe(`${a.role}:snap`);
-      expect(snapSeatsOf(got[i]!)).toBe(aliveSeats.join(","));
-      expect(snapPoints(got[i]!)).toBe(homeRows(home, aliveSeats));
+      expect(snapSeatsOf(got[i]!)).toBe(seats.join(","));
+      expect(snapPoints(got[i]!)).toBe(homeRows(home, seats));
     }
     const vi = g.actors.indexOf(victim);
     expect(worldFramesOf(victim.sock, marks[vi]!).map((m) => m.k).join(",")).toBe("snap");
