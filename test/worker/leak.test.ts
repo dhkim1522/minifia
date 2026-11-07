@@ -620,9 +620,10 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     }
     const morning1 = JSON.parse([...morningsByDay.get(1)!][0]!) as { eliminated?: number };
     const morning2 = JSON.parse([...morningsByDay.get(2)!][0]!) as { eliminated?: number };
-    expect(Object.keys(morning1)).toEqual(["eliminated"]);
+    // 피해자가 나온 아침의 키는 eliminated·trace 둘뿐이다(조각 id 하나, 15페이즈 D-06).
+    expect(Object.keys(morning1)).toEqual(["eliminated", "trace"]);
     expect(morning1.eliminated).toBe(victimX.seat);
-    expect(Object.keys(morning2)).toEqual(["eliminated"]);
+    expect(Object.keys(morning2)).toEqual(["eliminated", "trace"]);
     expect(morning2.eliminated).toBe(victimY.seat);
 
     // 일지는 본인 역할의 것만: 마피아 둘은 같은 암살일지(두 밤 모두 died true), 의사는 자기 치료일지, 시민은 키 없음.
@@ -1328,7 +1329,8 @@ describe("신분 여섯 × 유언·쪽지 canary 행렬 (WILL-01, NIGHT-12, L7·
     // 아침 state 의 day.chalk 와 day.morning 은 모든 소켓에서 같다.
     const morningViews = g.socks.map((sock) => lastViewOf(sock));
     expect(new Set(morningViews.map((x) => JSON.stringify([x.day?.chalk, x.day?.morning]))).size).toBe(1);
-    expect(JSON.stringify(morningViews[0]!.day?.morning)).toBe(JSON.stringify({ eliminated: v.seat }));
+    expect(JSON.stringify(morningViews[0]!.day?.morning)).toBe(JSON.stringify({ eliminated: v.seat, trace: morningViews[0]!.day?.morning?.trace }));
+    expect(typeof morningViews[0]!.day?.morning?.trace).toBe("string");
   }, 120_000);
 });
 

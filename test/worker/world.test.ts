@@ -503,25 +503,20 @@ describe("단계별 이동 — 산 사람은 막히고 유령은 걷는다 (MAP-
   }, 30_000);
 });
 
-describe("밤 마피아 이동 (NIGHT-07, 결정 0061-2)", () => {
+describe("밤 이동 — 산 사람은 역할과 무관하게 걷지 못한다 (15페이즈 D-05; 옛 NIGHT-07 마피아 걷기는 없어졌다)", () => {
   const worldCounts = (got: ServerMessage[][]): string => got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",");
 
-  it("산 마피아의 move 는 산 마피아 소켓과 유령 소켓에만 world.move 로 가고 시민·경찰·의사 소켓은 world 프레임 0개다", async () => {
+  it("산 마피아의 move 는 어느 소켓에도 world 프레임·오류가 없다 (시민·경찰·의사와 같다)", async () => {
     const g = await startedGame("night");
-    const [mafiaA, mafiaB] = withRole(g, "mafia") as [(typeof g.actors)[number], (typeof g.actors)[number]];
+    const [mafiaA] = withRole(g, "mafia") as [(typeof g.actors)[number]];
     const marks = g.socks.map((sock) => mark(sock));
     send(mafiaA.sock, { t: "move", x: 300, z: 100 });
     const got = await settleAll(g.socks, marks, g.actors.indexOf(mafiaA));
-    const counts = got.map((msgs) => msgs.filter((m) => m.t === "world" || m.t === "error").length);
-    for (const a of g.actors) {
-      const expected = a === mafiaA || a === mafiaB ? 1 : 0;
-      expect(`${a.role}:${counts[g.actors.indexOf(a)]}`).toBe(`${a.role}:${expected}`);
-    }
-    const seenByB = got[g.actors.indexOf(mafiaB)]!.filter(isMove);
-    expect(seenByB.map((m) => m.s).join(",")).toBe(`${mafiaA.seat}`);
+    expect(got.map((msgs) => msgs.filter((m) => m.t === "world" || m.t === "error").length).join(",")).toBe("0,0,0,0,0,0");
+    expect(worldCounts(got)).toBe("0,0,0,0,0,0");
   }, 40_000);
 
-  it("유령 소켓도 산 마피아의 걸음을 받고, 시민 편 산 사람은 여전히 0프레임이다", async () => {
+  it("유령 소켓도 산 마피아의 걸음을 받지 않고, 산 사람도 0프레임이다", async () => {
     const g = await startedGame("night");
     const [mafiaA] = withRole(g, "mafia") as [(typeof g.actors)[number]];
     const doomed = withRole(g, "citizen").slice(0, 1);
@@ -530,9 +525,8 @@ describe("밤 마피아 이동 (NIGHT-07, 결정 0061-2)", () => {
     send(mafiaA.sock, { t: "move", x: 300, z: 100 });
     const got = await settleAll(g.socks, marks, g.actors.indexOf(mafiaA));
     const countOf = (a: (typeof g.actors)[number]): number => got[g.actors.indexOf(a)]!.filter((m) => m.t === "world").length;
-    expect(`ghost:${countOf(ghosts[0]!)}`).toBe("ghost:1");
-    const nonMafiaLiving = living.filter((a) => a.role !== "mafia");
-    expect(nonMafiaLiving.map(countOf).join(",")).toBe(nonMafiaLiving.map(() => 0).join(","));
+    expect(`ghost:${countOf(ghosts[0]!)}`).toBe("ghost:0");
+    expect(living.map(countOf).join(",")).toBe(living.map(() => 0).join(","));
   }, 40_000);
 
   it("산 비마피아의 move 는 어느 소켓에도 프레임·오류가 없다", async () => {
@@ -556,12 +550,12 @@ async function reconnectSnapSeats(code: string, token: string): Promise<string> 
 }
 
 describe("밤 재접속 첫 snap (NIGHT-07, L9, 결정 0061-3)", () => {
-  it("밤에 시민이 새 소켓으로 hello 하면 첫 world snap 의 좌석이 본인 하나뿐이고, 마피아가 hello 하면 산 사람 좌석 전부다", async () => {
+  it("밤에 시민이 새 소켓으로 hello 하면 첫 world snap 의 좌석이 본인 하나뿐이고, 마피아가 hello 해도 본인 하나뿐이다 (15페이즈 D-05)", async () => {
     const g = await startedGame("night");
     const citizen = withRole(g, "citizen")[0]!;
     const mafia = withRole(g, "mafia")[0]!;
     expect(await reconnectSnapSeats(g.code, citizen.token)).toBe(`${citizen.seat}`);
-    expect(await reconnectSnapSeats(g.code, mafia.token)).toBe(g.actors.map((a) => a.seat).sort((a, b) => a - b).join(","));
+    expect(await reconnectSnapSeats(g.code, mafia.token)).toBe(`${mafia.seat}`);
   }, 40_000);
 
   it("밤에 경찰·의사도 본인 한 칸이고, 유령이 hello 하면 전원이다", async () => {

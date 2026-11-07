@@ -731,7 +731,7 @@ describe("봇 지목·찬반·토론 끝내기", () => {
   }, 30_000);
 });
 
-describe("봇 유언·다가가기 (09-12, 결정 0061-18)", () => {
+describe("봇 유언·밤 고르기 (09-12, 결정 0061-18; 15-03: 접근 걷기는 없어졌다)", () => {
   it("1일차 토론: 봇이 같은 applyWill 본체로 BOT_WILL_LINES 중 한 줄을 저장하고 사람 소켓에는 프레임이 없다", async () => {
     const r = await seatQuiet(1, { testMode: true });
     send(r.host, { t: "testBots", count: 3 });
@@ -750,7 +750,7 @@ describe("봇 유언·다가가기 (09-12, 결정 0061-18)", () => {
     }
   }, 30_000);
 
-  it("밤: 마피아 봇이 approach 로 대상 곁까지 걷고, 시민 편 사람 소켓은 world 프레임이 0개다", async () => {
+  it("밤: 모든 역할의 봇이 pick 으로 한 명을 고르고(시민 봇 포함) 걷지 않으며, 어떤 사람 소켓도 world 프레임이 0개다 (15-03 D-05)", async () => {
     const r = await seatQuiet(0, { testMode: true });
     send(r.host, { t: "testBots", count: 5 });
     await nextFrame(r.host, lobbyOf(6));
@@ -766,16 +766,14 @@ describe("봇 유언·다가가기 (09-12, 결정 0061-18)", () => {
     await flushWorld(r.code);
     const after = (await worldOf(r.code))!;
     const players = (await playersOf(r.code)) as Array<BotRaw & { role?: string; nightPick?: number }>;
-    const mafias = players.filter((p) => p.role === "mafia");
-    const target = players.find((p) => p.seat === mafias[0]!.nightPick)!;
-    const at = (w: typeof after, id: string): [number, number] => [w.segs[id]!.p.at(-2)!, w.segs[id]!.p.at(-1)!];
-    const [tx, tz] = at(after, target.id);
-    for (const m of mafias) {
-      const [bx, bz] = at(after, m.id);
-      const [px, pz] = at(before, m.id);
-      expect(`${m.seat}:${Math.hypot(bx - tx, bz - tz) <= 400}`).toBe(`${m.seat}:true`);
-      expect(`${m.seat}:${bx !== px || bz !== pz}`).toBe(`${m.seat}:true`);
-    }
+    // 시민 봇도 한 명을 골랐다(저장됨 — 판정은 역할로 거른다).
+    const bots = players.filter((p) => p.isBot);
+    const citizenBots = bots.filter((p) => p.role === "citizen");
+    expect(citizenBots.length > 0).toBe(true);
+    for (const p of bots) expect(`${p.seat}:${typeof p.nightPick}`).toBe(`${p.seat}:number`);
+    // 마피아 봇도 걷지 않는다: 밤 world 의 위치가 그대로다.
+    const at = (w: typeof after, id: string): string => `${w.segs[id]!.p.at(-2)},${w.segs[id]!.p.at(-1)}`;
+    for (const m of players.filter((p) => p.role === "mafia")) expect(`${m.seat}:${at(after, m.id)}`).toBe(`${m.seat}:${at(before, m.id)}`);
   }, 30_000);
 });
 

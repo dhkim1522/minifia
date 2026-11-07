@@ -56,19 +56,18 @@ describe("밤 진입 — 트레이서 (NIGHT-07, 결정 0061-3·5)", () => {
     }
   }, 40_000);
 
-  it("같은 밤 진입에서 산 마피아 소켓은 산 사람 여섯 모두가 home 에 선 snap 하나를 받는다 (걷던 사람도 한 점)", async () => {
+  it("같은 밤 진입에서 산 마피아 소켓도 본인 한 칸 snap 하나만 받는다 — 역할과 무관하게 같은 모양이다 (15-03 D-05, T-15-11)", async () => {
     const { g, home } = await nominationWithWalkers();
     const marks = g.socks.map((s) => mark(s));
 
     await advanceTo(g.code, g.socks, "night");
     const got = await Promise.all(g.actors.map((a, i) => settle(a.sock, marks[i]!)));
 
-    const everyone = g.actors.map((a) => a.seat).sort((p, q) => p - q);
     for (const a of withRole(g, "mafia")) {
       const msgs = got[g.actors.indexOf(a)]!;
       expect(worldFramesOf(a.sock, marks[g.actors.indexOf(a)]!).map((m) => m.k).join(",")).toBe("snap");
-      expect(snapSeatsOf(msgs)).toBe(everyone.join(","));
-      expect(snapPoints(msgs)).toBe(homeRows(home, everyone));
+      expect(snapSeatsOf(msgs)).toBe(String(a.seat));
+      expect(snapPoints(msgs)).toBe(homeRows(home, [a.seat]));
     }
   }, 40_000);
 
@@ -213,12 +212,8 @@ describe("세 경로 동일성 — 테스트 넘기기·토론 끝내기도 단�
     const got = await Promise.all(socks.map((sock, i) => settle(sock, marks[i]!)));
 
     const mine = (i: number): number => lastViewOf(socks[i]!).me.seat;
-    const everyone = socks.map((_, i) => mine(i)).sort((p, q) => p - q);
-    expect(snapPoints(got[0]!)).toBe(homeRows(home, everyone));
-    for (let i = 1; i < socks.length; i += 1) {
-      if (lastViewOf(socks[i]!).me.role === "mafia") continue;
-      expect(snapPoints(got[i]!)).toBe(homeRows(home, [mine(i)]));
-    }
+    // 밤 snap 은 마피아(방장)도 본인 한 칸이다(15-03 D-05) — 모든 소켓이 같은 규칙이다.
+    for (let i = 0; i < socks.length; i += 1) expect(snapPoints(got[i]!)).toBe(homeRows(home, [mine(i)]));
   }, 40_000);
 
   it("산 사람 전원이 토론 끝내기를 눌러 과반으로 지목에 들어가도 토론 마지막 자리가 home 으로 기록된다", async () => {
@@ -236,7 +231,7 @@ describe("세 경로 동일성 — 테스트 넘기기·토론 끝내기도 단�
 });
 
 describe("재접속 첫 snap — 라이브 진입 snap 과 같은 좌석 규칙 (L9, 결정 0061-3·4)", () => {
-  it("밤 중간에 시민이 새 소켓으로 hello 하면 첫 프레임 열이 [state, world snap(본인 한 칸, home), chatLog] 이고 마피아는 산 사람 전원이다", async () => {
+  it("밤 중간에 시민이 새 소켓으로 hello 하면 첫 프레임 열이 [state, world snap(본인 한 칸, home), chatLog] 이고 마피아도 본인 한 칸이다(15-03 D-05)", async () => {
     const g = await startedGame("night");
     const home = await homeBySeat(g.code);
     const citizen = withRole(g, "citizen")[0]!;
@@ -248,7 +243,7 @@ describe("재접속 첫 snap — 라이브 진입 snap 과 같은 좌석 규칙 
 
     const asMafia = await helloFrames(g.code, mafia.token);
     expect(kinds(asMafia)).toBe("state,world,chatLog");
-    expect(snapPoints(asMafia)).toBe(homeRows(home, g.actors.map((a) => a.seat)));
+    expect(snapPoints(asMafia)).toBe(homeRows(home, [mafia.seat]));
   }, 40_000);
 
   it("아침 중간에 시민이 hello 하면 산 사람 전원의 home 좌표 snap 을 받는다", async () => {
@@ -376,7 +371,8 @@ describe("메타모픽 (ii) 암살 밤 (L2·L5)", () => {
       const i = g.actors.indexOf(x);
       expect(`${x.role}:${busy[i]}`).toBe(`${x.role}:${quiet[i]}`);
       const col = quiet[i]!;
-      expect(col.includes(`"morning":{"eliminated":${v.seat}}`)).toBe(true);
+      // 피해자가 나온 아침에는 흔적 조각 id 하나가 함께 실린다(D-06) — 두 구간에서 열이 같으니 같은 조각이다.
+      expect(new RegExp(`"morning":\\{"eliminated":${v.seat},"trace":"[A-Za-z]+"\\}`).test(col)).toBe(true);
       expect(col.includes('"k":"will"') && col.includes("VWILL") && col.includes('"k":"note"') && col.includes("조용히")).toBe(true);
       expect(col.includes('"chalk"')).toBe(true);
     }
