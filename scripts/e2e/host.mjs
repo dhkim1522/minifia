@@ -475,7 +475,15 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       };
       // roleReveal → dayAnnounce(전환 1), dayAnnounce → discussion(0), discussion → nomination(1), nomination → …
       const toDay = await stepSeg("transition", "역할 확인 → 낮 시작");
-      if (toDay === "dayAnnounce") await stepSeg("dayToDiscussion", "낮 시작 → 토론");
+      if (toDay === "dayAnnounce") {
+        // 낮 시작은 2초 단계라 넘기기를 누르면 토론까지 건너뛰거나(14-09: 배포본은 지연이 커서 이미 토론으로 넘어간 뒤 넘기기가 토론 → 투표를 건드려 1번이 잡혔다)
+        // 자동으로 넘어가는 것을 기다려 그 구간의 ui.host 를 센다. 0번이어야 한다는 문턱은 그대로다.
+        await clearLog(hp);
+        await ht.waitFor((v) => v.phase === "discussion", 8000, "낮 시작 → 토론 자동 전환").catch(() => {});
+        await sleep(CHIME_SETTLE_MS);
+        const log = await hostLog(hp);
+        segs.push({ kind: "dayToDiscussion", name: "낮 시작 → 토론", count: log?.length ?? -1, played: log?.filter((e) => e.played).length ?? -1 });
+      }
       for (let i = 0; i < 6 && ht.last().phase !== "ended"; i++) {
         const from = ht.last().phase;
         const to = await stepSeg("transition", `${from} → 다음 단계`);
