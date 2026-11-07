@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v3.0
 milestone_name: 사회자와 증거
-current_phase: 13
-current_phase_name: 기본판 낮 흐름
+current_phase: 15
+current_phase_name: 낮 심부름·목격 기록·밤 흔적
 status: planning
-stopped_at: Completed 14-08-PLAN.md
-last_updated: "2026-11-06T23:27:00.493Z"
+stopped_at: Completed 14-09-PLAN.md
+last_updated: "2026-11-07T00:16:42.499Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: d96f0c83226a640d69da41ff4569de46b5614fee
+state_head: f295e38e38d303d429d63ddef1a71c3c8befb62f
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 15
-  completed_plans: 14
-  percent: 33
+  completed_plans: 15
+  percent: 67
 ---
 
 # Project State
@@ -25,13 +25,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-07)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(평균 10~15분, 참고 목표)을 끝까지 마치는 것
-**Current focus:** Phase 13 — 기본판 낮 흐름
+**Current focus:** Phase 15 — 낮 심부름·목격 기록·밤 흔적
 
 ## Current Position
 
-Phase: 13 (기본판 낮 흐름) — not started
+Phase: 15 (낮 심부름·목격 기록·밤 흔적) — not started (14페이즈 완료·배포 `d77e3dbf`, 결정 0073)
 Plan: —
-Status: Ready to plan (UI-SPEC 먼저)
+Status: Ready to plan (캔버스 시안 2~3개 → /gsd-ui-phase 15 먼저)
 Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 
 ## Performance Metrics
@@ -210,6 +210,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 14 P06 | 35min | 2 tasks | 17 files |
 | Phase 14 P07 | 30min | 2 tasks | 16 files |
 | Phase 14 P08 | 95min | 3 tasks | 15 files |
+| Phase 14 P09 | 110min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -447,6 +448,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 14]: 14-08: VIEW 키 허용 목록 사본 = view.test.ts 집합 + 9페이즈 상태 의존 키(me.will·me.note·day.chalk), protocol.ts 선언으로 고정
 - [Phase 14]: 14-08: 360x560 UI#14 알려진 한계(띠·헤더 밑 요소)는 판정 대상에 두고 잰 값만 정보 줄(HO1k·R-MS6k·AW4k·GH13k)로 남김, 문턱 그대로
 - [Phase 14]: 14-08: 띠 시간 숫자 마지막 5초 색을 crimson-300 으로(crimson-400 은 4.2:1 로 묶음 H 4.5:1 미달), UI-SPEC '숫자도 같은 색' 과 다른 점은 14-09 가 알림
+- [Phase 14]: 0073: 사회자 띠·빛남·한 단어 이름표(0051 보완). 남은 초는 올림(U-4), 쉬는 사람 화면은 띠 없음(U-9 예외), 밤 진입 알림음은 LS-7 예외, 마지막 5초 숫자는 crimson-300(UI-SPEC 와 다름)
 
 ### Pending Todos
 
@@ -511,8 +513,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-06T23:27:00.313Z
-Stopped at: Completed 14-08-PLAN.md
+Last session: 2026-11-07T00:16:42.362Z
+Stopped at: Completed 14-09-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
