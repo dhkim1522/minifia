@@ -65,7 +65,8 @@ describe("밤 → 아침 한 줄 (NIGHT-01, NIGHT-06, D-08)", () => {
     const morning = tick(picked, picked.phaseEndsAt ?? 0, seededRandInt(1));
     expect(morning.phase).toBe("morning");
     expect(morning.players.find((p) => p.id === victim.id)?.alive).toBe(false);
-    expect(Object.keys(morning.morning ?? {}).sort().join(",")).toBe("eliminated");
+    // 피해자가 나온 아침에는 흔적 조각이 함께 실린다(15페이즈 D-06) — 키는 eliminated·trace 둘뿐이다.
+    expect(Object.keys(morning.morning ?? {}).sort().join(",")).toBe("eliminated,trace");
     expect(morning.morning?.eliminated).toBe(victim.seat);
     expect(morning.players.some((p) => "nightPick" in p)).toBe(false);
   });
@@ -175,18 +176,23 @@ describe("pickTarget 검사 순서 (D-02, ELIM-01)", () => {
     expect(outcome(pickTarget(night, "nobody-in-this-room", 0))).toBe("BAD_MESSAGE");
   });
 
-  it("night 에서 탈락한 마피아·경찰·의사와 살아 있는 시민은 BAD_MESSAGE 다", () => {
+  it("night 에서 탈락한 행위자는 역할과 무관하게 같은 BAD_MESSAGE 이고, 산 시민은 다른 역할과 같이 ok 다 (D-05)", () => {
     const night = nightOf(6, 11);
     const target = withRole(night, "citizen")[0]!;
     const out: string[] = [];
-    for (const role of ["mafia", "police", "doctor"] as const) {
-      const actor = withRole(night, role)[0]!;
+    for (const role of ["mafia", "police", "doctor", "citizen"] as const) {
+      const actor = withRole(night, role).filter((p) => p.id !== target.id)[0]!;
       const dead = kill(night, actor);
       out.push(`${role}:${outcome(pickTarget(dead, actor.id, target.seat))}`);
     }
-    const citizen = withRole(night, "citizen")[1]!;
-    out.push(`citizen:${outcome(pickTarget(night, citizen.id, target.seat))}`);
     expect(out.join(" ")).toBe("mafia:BAD_MESSAGE police:BAD_MESSAGE doctor:BAD_MESSAGE citizen:BAD_MESSAGE");
+    // 산 사람이 같은 산 대상을 고르면 마피아·경찰·의사·시민 모두 같은 응답(ok)이다 — 응답으로 역할이 갈라지지 않는다.
+    const alive: string[] = [];
+    for (const role of ["mafia", "police", "doctor", "citizen"] as const) {
+      const actor = withRole(night, role).filter((p) => p.id !== target.id)[0]!;
+      alive.push(`${role}:${outcome(pickTarget(night, actor.id, target.seat))}`);
+    }
+    expect(alive.join(" ")).toBe("mafia:ok police:ok doctor:ok citizen:ok");
   });
 
   it("대상이 정수가 아니거나 앉지 않은 seat 이거나 탈락자면 BAD_MESSAGE 다", () => {
@@ -198,7 +204,7 @@ describe("pickTarget 검사 순서 (D-02, ELIM-01)", () => {
     expect(out.join(" ")).toBe("BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE");
   });
 
-  it("마피아가 자신 또는 동료를 고르면 BAD_MESSAGE 다(6명 판)", () => {
+  it("마피아가 자신 또는 동료를 골라도 효과 없이 받는다(저장되고 같은 ok, D-05) — 판정이 걸러낸다", () => {
     const night = nightOf(6, 11);
     const [m1, m2] = withRole(night, "mafia") as [Player, Player];
     const out = [
@@ -206,15 +212,31 @@ describe("pickTarget 검사 순서 (D-02, ELIM-01)", () => {
       outcome(pickTarget(night, m1.id, m2.seat)),
       outcome(pickTarget(night, m2.id, m1.seat)),
     ];
-    expect(out.join(" ")).toBe("BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE");
+    expect(out.join(" ")).toBe("ok ok ok");
+    const stored = pickTarget(night, m1.id, m2.seat);
+    expect(stored.ok && stored.state.players.find((p) => p.id === m1.id)?.nightPick).toBe(m2.seat);
   });
 
-  it("경찰·의사는 자신을 고를 수 있다", () => {
+  it("모든 역할이 자신을 고를 수 있다(칸 수가 역할마다 같다, D-05)", () => {
     const night = nightOf(6, 11);
-    const police = withRole(night, "police")[0]!;
-    const doctor = withRole(night, "doctor")[0]!;
-    const out = [outcome(pickTarget(night, police.id, police.seat)), outcome(pickTarget(night, doctor.id, doctor.seat))];
-    expect(out.join(" ")).toBe("ok ok");
+    const out = (["mafia", "police", "doctor", "citizen"] as const).map((role) => {
+      const actor = withRole(night, role)[0]!;
+      return outcome(pickTarget(night, actor.id, actor.seat));
+    });
+    expect(out.join(" ")).toBe("ok ok ok ok");
+  });
+
+  it("거절 사유는 역할과 무관하다: 같은 잘못된 입력에 네 역할이 같은 응답을 받는다", () => {
+    const night = nightOf(6, 11);
+    const deadOne = kill(night, withRole(night, "citizen")[0]!);
+    const bad = [1.5, Number.NaN, 7, -1, withRole(night, "citizen")[0]!.seat];
+    for (const t of bad) {
+      const row = (["mafia", "police", "doctor", "citizen"] as const).map((role) => {
+        const actor = withRole(night, role).filter((p) => p.id !== withRole(night, "citizen")[0]!.id)[0]!;
+        return outcome(pickTarget(deadOne, actor.id, t));
+      });
+      expect(`${t}:${new Set(row).size}:${row[0]}`).toBe(`${t}:1:BAD_MESSAGE`);
+    }
   });
 
   it("단계가 틀리면 다른 위반이 있어도 WRONG_PHASE, 탈락한 시민이 탈락자를 고르면 BAD_MESSAGE 다", () => {
@@ -272,6 +294,20 @@ describe("pickTarget 검사 순서 (D-02, ELIM-01)", () => {
     pickTarget(night, mafia.id, mafia.seat);
     pickTarget(night, "nobody-in-this-room", 0);
     expect(JSON.stringify(night) === before).toBe(true);
+  });
+
+  it("pickTarget 은 역할을 읽지 않는다: 같은 자리에서 역할만 바꿔도 결과 상태의 nightPick 이 같다", () => {
+    const night = nightOf(6, 11);
+    const target = withRole(night, "police")[0]!;
+    const actor = withRole(night, "citizen")[0]!;
+    const base = pickTarget(night, actor.id, target.seat);
+    for (const role of ["mafia", "police", "doctor"] as const) {
+      const swapped: RoomState = { ...night, players: night.players.map((p) => (p.id === actor.id ? { ...p, role } : p)) };
+      const r = pickTarget(swapped, actor.id, target.seat);
+      expect(`${role}:${r.ok && r.state.players.find((p) => p.id === actor.id)?.nightPick}`).toBe(
+        `${role}:${base.ok && base.state.players.find((p) => p.id === actor.id)?.nightPick}`,
+      );
+    }
   });
 });
 
@@ -532,9 +568,9 @@ describe("confirmedTarget — 마피아 전원 일치 (NIGHT-08, 결정 0061-6, 
 describe("buildView 아침 day.morning (MORN-03, T-09-13)", () => {
   const dayMorning = (s: RoomState, viewerId: string): string =>
     JSON.stringify(buildView(s, viewerId, START_AT).day?.morning);
-  const toMorning = (s: RoomState): RoomState => tick(s, s.phaseEndsAt ?? 0);
+  const toMorning = (s: RoomState): RoomState => tick(s, s.phaseEndsAt ?? 0, seededRandInt(1)); // 흔적 조각을 정하는 난수 한 번(D-06)
 
-  it("구출은 { saved: true }, 탈락은 { eliminated } 만, 미선택·불일치는 {} — 모든 viewer 가 같다", () => {
+  it("구출은 { saved: true }, 탈락은 { eliminated, trace } 만, 미선택·불일치는 {} — 모든 viewer 가 같다", () => {
     const { night, m1, m2, doctor, c1, c2 } = cast6();
     const saved = toMorning(picks(night, [m1, c1], [m2, c1], [doctor, c1]));
     const killed = toMorning(picks(night, [m1, c1], [m2, c1]));
@@ -542,7 +578,8 @@ describe("buildView 아침 day.morning (MORN-03, T-09-13)", () => {
     const split = toMorning(picks(night, [m1, c1], [m2, c2]));
     for (const p of night.players) {
       expect(dayMorning(saved, p.id)).toBe(JSON.stringify({ saved: true }));
-      expect(dayMorning(killed, p.id)).toBe(JSON.stringify({ eliminated: c1.seat }));
+      // 흔적 조각(D-06)은 모든 viewer 에게 같은 값이다 — 구출·무효 밤에는 키가 없다.
+      expect(dayMorning(killed, p.id)).toBe(JSON.stringify({ eliminated: c1.seat, trace: killed.morning?.trace }));
       expect(dayMorning(none, p.id)).toBe("{}");
       expect(dayMorning(split, p.id)).toBe("{}");
     }
@@ -576,20 +613,27 @@ describe("난수 없음 계약 (결정 0061-6·17)", () => {
     expect([none.target, none.eliminated, none.saved]).toEqual([undefined, undefined, false]);
   });
 
-  it("tick 에 난수를 주지 않아도 밤 → 아침이 예외 없이 넘어간다", () => {
-    const { night, m1, m2, c1 } = cast6();
-    const s = picks(night, [m1, c1], [m2, c1]);
-    const morning = tick(s, s.phaseEndsAt ?? 0);
+  it("판정(resolveNight)에는 난수가 없다 — tick 에 난수를 주지 않아도 탈락자 없는 밤 → 아침은 넘어가고, 탈락자가 있는 아침의 흔적에만 난수 한 번이 든다 (D-06)", () => {
+    const { night, m1, m2, c1, c2 } = cast6();
+    const none = picks(night, [m1, c1], [m2, c2]);
+    expect(tick(none, none.phaseEndsAt ?? 0).phase).toBe("morning");
+    const killed = picks(night, [m1, c1], [m2, c1]);
+    let calls = 0;
+    const morning = tick(killed, killed.phaseEndsAt ?? 0, (n) => {
+      calls += 1;
+      return n - 1;
+    });
     expect(morning.phase).toBe("morning");
     expect(morning.morning?.eliminated).toBe(c1.seat);
+    expect(calls).toBe(1);
   });
 });
 
 describe("아침 결과 morning (MORN-03, 결정 0061-12·17)", () => {
-  it("탈락이면 키는 eliminated 하나뿐이다(문구 번호·역할 없음)", () => {
+  it("탈락이면 키는 eliminated·trace 둘뿐이다(문구 번호·역할 없음, D-06)", () => {
     const { night, m1, m2, c1 } = cast6();
     const out = enterMorning(picks(night, [m1, c1], [m2, c1]));
-    expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated");
+    expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated,trace");
     expect(out.morning?.eliminated).toBe(c1.seat);
     expect(JSON.stringify(out.morning).includes("citizen")).toBe(false);
   });
@@ -611,7 +655,8 @@ describe("아침 결과 morning (MORN-03, 결정 0061-12·17)", () => {
   it("의사가 확정이 아닌 다른 사람을 지키면 탈락이다(saved 키 없음)", () => {
     const { night, m1, m2, doctor, c1, c2 } = cast6();
     const out = enterMorning(picks(night, [m1, c1], [m2, c1], [doctor, c2]));
-    expect(JSON.stringify(out.morning)).toBe(JSON.stringify({ eliminated: c1.seat }));
+    expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated,trace");
+    expect(out.morning?.eliminated).toBe(c1.seat);
   });
 
   it("결과 상태에 lastPhrase 키가 없다(문구 번호 기억 제거)", () => {

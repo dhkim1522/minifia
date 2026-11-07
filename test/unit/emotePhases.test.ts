@@ -144,11 +144,11 @@ describe("동작은 이동 차단과 무관하다 (AVTR-05, movement.ts 머리 �
     }
   });
 
-  it("밤 시민 편(이동도 동작도 막힌 유일한 칸)은 버려지고 산 마피아는 이동과 동작이 모두 된다", () => {
+  it("밤 시민 편은 이동도 동작도 막히고, 산 마피아는 이동이 막혀도(15페이즈 D-05 — 누구도 밤에 걷지 않는다) 동작은 된다", () => {
     const night = sixAt("night", [2]);
     expect(canMoveIn("night", true, false)).toBe(false);
     expect(actualRecipients(night, idOf(0))).toBe("");
-    expect(canMoveIn("night", true, true)).toBe(true);
+    expect(canMoveIn("night", true, true)).toBe(false);
     expect(actualRecipients(night, idOf(1))).not.toBe("");
   });
 });

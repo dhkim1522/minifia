@@ -200,32 +200,22 @@ describe("audience — 받는 사람 집합", () => {
   });
 });
 
-describe("audience world 밤 분기 (NIGHT-07, 결정 0061-2)", () => {
+describe("audience world 밤 분기 (15페이즈 D-05 — 산 사람은 역할과 무관하게 빈 집합)", () => {
   const night = sixAt("night", { day: 1 });
   const world = (mover: number): AudienceEvent => ({ k: "world", mover: idOf(mover) });
 
-  it("산 마피아가 움직이면 산 마피아 + 유령뿐이다", () => {
-    expect(sorted(audience(night, world(1)))).toEqual(ids(1, 2, 4));
-    expect(sorted(audience(night, world(4)))).toEqual(ids(1, 2, 4));
-  });
-
-  it("산 비마피아 mover 는 빈 집합이다(fail-closed, A2)", () => {
-    for (const seat of [0, 3, 5]) expect(audience(night, world(seat)).size).toBe(0);
+  it("산 사람 mover 는 마피아도 빈 집합이다 — 밤에는 걸음 프레임이 어디로도 가지 않는다(fail-closed)", () => {
+    for (const seat of [0, 1, 3, 4, 5]) expect(audience(night, world(seat)).size).toBe(0);
   });
 
   it("유령이 움직이면 유령만 받는다", () => {
     expect(sorted(audience(night, world(2)))).toEqual(ids(2));
   });
 
-  it("탈락한 마피아가 있어도 유령으로 든다(A1) — 마피아 1명 남은 판", () => {
+  it("탈락한 마피아는 유령 쪽으로 든다 — 산 마피아의 걸음은 여전히 빈 집합", () => {
     const one = sixAt("night", { day: 1, dead: [2, 4] });
-    expect(sorted(audience(one, world(1)))).toEqual(ids(1, 2, 4));
+    expect(audience(one, world(1)).size).toBe(0);
     expect(sorted(audience(one, world(4)))).toEqual(ids(2, 4));
-  });
-
-  it("마피아가 한 명뿐인 판도 마피아와 유령만 받는다", () => {
-    const solo: RoomState = { ...night, players: night.players.map((p) => (p.seat === 4 ? { ...p, role: "citizen" as RoleId } : p)) };
-    expect(sorted(audience(solo, world(1)))).toEqual(ids(1, 2));
   });
 
   it("다른 지도 단계·로비의 결과는 그대로다", () => {
@@ -315,8 +305,8 @@ describe("world mover(GHOST-01)", () => {
     expect(sorted(audience(sixAt(phase, { day: 1 }), world(idOf(0))))).toEqual(ids(0, 1, 2, 3, 4, 5));
   });
 
-  it("night: mover 가 산 마피아면 산 마피아 + 유령, 산 시민이면 빈 집합 (밤 분기는 아래 블록)", () => {
-    expect(sorted(audience(sixAt("night", { day: 1 }), world(idOf(1))))).toEqual(ids(1, 2, 4));
+  it("night: mover 가 산 마피아든 산 시민이든 빈 집합 (밤 분기는 위 블록)", () => {
+    expect(audience(sixAt("night", { day: 1 }), world(idOf(1))).size).toBe(0);
     expect(audience(sixAt("night", { day: 1 }), world(idOf(0))).size).toBe(0);
   });
 
@@ -368,15 +358,8 @@ describe("worldVisibleTo — 접속 스냅샷에 실릴 좌석 (GHOST-01)", () =
   describe("밤 분기 (NIGHT-07, 결정 0061-3)", () => {
     const night = sixAt("night", { day: 1 });
 
-    it("시민·경찰·의사 viewer 는 본인 한 칸뿐이다", () => {
-      expect(sorted(worldVisibleTo(night, idOf(0)))).toEqual(ids(0));
-      expect(sorted(worldVisibleTo(night, idOf(3)))).toEqual(ids(3));
-      expect(sorted(worldVisibleTo(night, idOf(5)))).toEqual(ids(5));
-    });
-
-    it("산 마피아 viewer 는 산 사람 전원을 본다(유령은 빼고)", () => {
-      expect(sorted(worldVisibleTo(night, idOf(1)))).toEqual(ids(0, 1, 3, 4, 5));
-      expect(sorted(worldVisibleTo(night, idOf(4)))).toEqual(ids(0, 1, 3, 4, 5));
+    it("산 viewer 는 시민·경찰·의사·마피아 모두 본인 한 칸뿐이다 (D-05)", () => {
+      for (const seat of [0, 1, 3, 4, 5]) expect(sorted(worldVisibleTo(night, idOf(seat)))).toEqual(ids(seat));
     });
 
     it("유령 viewer 는 전원을 본다", () => {

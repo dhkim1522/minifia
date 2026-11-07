@@ -1098,14 +1098,14 @@ describe("buildView 아침 결과 (NIGHT-06·D-13)", () => {
   const morningsOf = (s: RoomState): string[] => s.players.map((p) => flat(buildView(s, p.id, START_AT).day?.morning));
   const toMorning = (s: RoomState): RoomState => tick(s, s.phaseEndsAt!, seededRandInt(1));
 
-  it("마피아 전원이 시민 X 지목 → 모든 viewer 의 day.morning 이 같은 {eliminated: X} 하나(문구 번호 없음)", () => {
+  it("마피아 전원이 시민 X 지목 → 모든 viewer 의 day.morning 이 같은 {eliminated: X, trace} 하나(문구 번호 없음)", () => {
     const s0 = stateAt("night", 5, 1);
     const x = seatOfRole(s0, "citizen");
     const s = toMorning(s0.players.filter((p) => p.role === "mafia").reduce((acc, p) => actAt(acc, p.seat, x), s0));
     const got = morningsOf(s);
     expect(new Set(got).size).toBe(1);
     const m = buildView(s, s.hostId, START_AT).day?.morning ?? {};
-    expect(`${Object.keys(m).sort().join(",")} ${m.eliminated}`).toBe(`eliminated ${x}`);
+    expect(`${Object.keys(m).sort().join(",")} ${m.eliminated}`).toBe(`eliminated,trace ${x}`); // 흔적 조각(D-06)
   });
 
   it("의사가 X 를 지킴 → { saved: true }, 아무도 안 고름 → {}", () => {

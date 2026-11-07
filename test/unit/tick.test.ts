@@ -467,13 +467,14 @@ describe("tick: 아침 마감 = 진입 + morningMsOf (MORN-04, 결정 0061-13)",
   }
 
   it("확정·탈락(피해자 유언 있음)이면 마감이 진입 + 9000 이다", () => {
-    const morning = tick(nightWith(), T + NIGHT_MS);
-    expect(`${morning.phase}/${morning.morning?.eliminated}/${morning.phaseEndsAt}`).toBe(`morning/1/${T + NIGHT_MS + 9000}`);
+    // 피해자(p1)를 고른 사람은 마피아 p0 뿐이라 흔적이 실려(D-06) 아침이 3초 길다.
+    const morning = tick(nightWith(), T + NIGHT_MS, seededRandInt(1));
+    expect(`${morning.phase}/${morning.morning?.eliminated}/${morning.phaseEndsAt}`).toBe(`morning/1/${T + NIGHT_MS + 9000 + 3000}`);
   });
 
   it("쪽지까지 있으면 진입 + 11000, 구출이면 쪽지가 지워져 진입 + 5000 이다", () => {
-    const withNote = tick(nightWith({ nightNote: "쪽지" }), T + NIGHT_MS);
-    expect(withNote.phaseEndsAt).toBe(T + NIGHT_MS + 11000);
+    const withNote = tick(nightWith({ nightNote: "쪽지" }), T + NIGHT_MS, seededRandInt(1));
+    expect(withNote.phaseEndsAt).toBe(T + NIGHT_MS + 11000 + 3000); // 흔적 3초(D-06)
     const saved = tick(nightWith({ nightNote: "쪽지" }, true), T + NIGHT_MS);
     expect(JSON.stringify(saved.morning)).toBe('{"saved":true}');
     expect("nightNote" in saved).toBe(false);
@@ -486,13 +487,16 @@ describe("tick: 아침 마감 = 진입 + morningMsOf (MORN-04, 결정 0061-13)",
     expect(tick(none, T + NIGHT_MS).phaseEndsAt).toBe(T + NIGHT_MS + 5000);
   });
 
-  it("난수 인자 없이 night → morning 을 넘겨도 예외가 없다", () => {
-    expect(() => tick(nightWith(), T + NIGHT_MS)).not.toThrow();
+  it("탈락자 없는 밤은 난수 인자 없이 night → morning 을 넘겨도 예외가 없다(흔적 난수는 탈락자가 있을 때만, D-06)", () => {
+    const s = nightWith();
+    const none: RoomState = { ...s, players: s.players.map(({ nightPick: _n, ...p }) => p) };
+    expect(() => tick(none, T + NIGHT_MS)).not.toThrow();
+    expect(() => tick(nightWith({}, true), T + NIGHT_MS)).not.toThrow(); // 의사 구출 — 탈락 없음
   });
 
   it("따라잡기: 늦게 불려도 아침 마감은 밤 마감 + 아침 길이에서 이어진다", () => {
-    const caught = tick(nightWith(), T + NIGHT_MS + 9000 + 1);
-    expect(`${caught.phase}/${caught.phaseEndsAt}`).toBe(`dayAnnounce/${T + NIGHT_MS + 9000 + DAY_ANNOUNCE_MS}`);
+    const caught = tick(nightWith(), T + NIGHT_MS + 9000 + 3000 + 1, seededRandInt(1)); // 흔적 3초가 아침 길이에 든다(D-06)
+    expect(`${caught.phase}/${caught.phaseEndsAt}`).toBe(`dayAnnounce/${T + NIGHT_MS + 9000 + 3000 + DAY_ANNOUNCE_MS}`);
   });
 });
 

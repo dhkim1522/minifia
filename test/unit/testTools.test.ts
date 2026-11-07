@@ -198,7 +198,7 @@ describe("skipPhase 동작", () => {
     if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
     expect(r.state.phase).toBe("morning");
     expect(String(r.state.morning?.eliminated)).toBe(String(citizen.seat));
-    expect(Object.keys(r.state.morning ?? {}).join(",")).toBe("eliminated");
+    expect(Object.keys(r.state.morning ?? {}).join(",")).toBe("eliminated,trace"); // 흔적 조각(15페이즈 D-06)
     expect(String(r.state.players.find((p) => p.id === citizen.id)!.alive)).toBe("false");
   });
 
@@ -579,7 +579,7 @@ describe("skipPhase: 밤을 넘길 때 마피아 봇은 같은 대상으로 모�
     }
   });
 
-  it("경찰·의사 봇은 기존대로 randInt(후보 수) 를 seat 오름차순으로 한 번씩 부르고 마피아 봇은 난수를 부르지 않는다", () => {
+  it("시민·경찰·의사 봇이 randInt(후보 수) 를 seat 오름차순으로 한 번씩 부르고 마피아 봇은 난수를 부르지 않는다 (15-03: 시민 봇도 고른다)", () => {
     const state = arrangedNight({ 2: "mafia", 4: "mafia", 3: "police", 5: "doctor" });
     const calls: number[] = [];
     const inner = seededRandInt(5);
@@ -588,8 +588,8 @@ describe("skipPhase: 밤을 넘길 때 마피아 봇은 같은 대상으로 모�
       return inner(n);
     });
     if (!r.ok) throw new Error(r.error);
-    // 경찰 seat 3 → 자기를 뺀 산 사람 5, 의사 seat 5 → 산 사람 6. 그 뒤 tick 이 아침 문구 등에 부르는 난수는 이 둘 뒤에 온다.
-    expect(calls.slice(0, 2).join(",")).toBe("5,6");
+    // 시민 봇 seat 1 → 자기를 뺀 산 사람 5, 경찰 seat 3 → 5, 의사 seat 5 → 자신 포함 산 사람 6. 그 뒤 tick 이 부르는 난수는 이 셋 뒤에 온다.
+    expect(calls.slice(0, 3).join(",")).toBe("5,5,6");
   });
 
   it("이미 고른 봇의 선택은 바뀌지 않는다", () => {

@@ -69,9 +69,10 @@ describe("canMove — 단계 × 신분 표 (MAP-04)", () => {
   });
 });
 
-describe("canMoveIn — 밤은 산 마피아만 (NIGHT-07, 결정 0061-2)", () => {
-  it("밤: 산 마피아 true · 산 비마피아 false · 기본값 false · 유령 true", () => {
-    expect(`night:${canMoveIn("night", true, true)}`).toBe("night:true");
+describe("canMoveIn — 밤에는 산 사람 누구도 걷지 못한다 (15페이즈 D-05)", () => {
+  it("밤: 산 사람은 isMafia 값과 무관하게 false · 유령 true", () => {
+    // 마피아의 밤 접근 걷기가 없어졌다 — 세 번째 인자는 받되 무시한다.
+    expect(`night:${canMoveIn("night", true, true)}`).toBe("night:false");
     expect(`night:${canMoveIn("night", true, false)}`).toBe("night:false");
     expect(`night:${canMoveIn("night", true)}`).toBe("night:false");
     expect(`night:${canMoveIn("night", false, true)}`).toBe("night:true");
@@ -88,13 +89,13 @@ describe("canMoveIn — 밤은 산 마피아만 (NIGHT-07, 결정 0061-2)", () =
     expect(`discussion:${canMoveIn("discussion", true, false)}`).toBe("discussion:true");
   });
 
-  it("canMove 는 역할이 마피아인 산 사람만 밤에 허용한다", () => {
+  it("canMove 는 밤에 어떤 역할의 산 사람도 허용하지 않고 유령만 허용한다", () => {
     const night = withPhase("night");
-    expect(`mafia:${canMove(night, { ...living, role: "mafia" })}`).toBe("mafia:true");
-    expect(`citizen:${canMove(night, { ...living, role: "citizen" })}`).toBe("citizen:false");
-    expect(`police:${canMove(night, { ...living, role: "police" })}`).toBe("police:false");
-    expect(`doctor:${canMove(night, { ...living, role: "doctor" })}`).toBe("doctor:false");
+    for (const role of ["mafia", "citizen", "police", "doctor"] as const) {
+      expect(`${role}:${canMove(night, { ...living, role })}`).toBe(`${role}:false`);
+    }
     expect(`deadMafia:${canMove(night, { ...ghost, role: "mafia" })}`).toBe("deadMafia:true");
+    expect(`deadCitizen:${canMove(night, { ...ghost, role: "citizen" })}`).toBe("deadCitizen:true");
   });
 });
 
