@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 15
 current_phase_name: 낮 심부름·목격 기록·밤 흔적
-current_plan: 3
+current_plan: 4
 status: executing
-stopped_at: Completed 15-04-PLAN.md
-last_updated: "2026-11-07T06:33:20.220Z"
+stopped_at: Completed 15-02-PLAN.md
+last_updated: "2026-11-07T06:59:12.214Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: 415d2a0e0a4f140f6bcc1057b7f638dbc15a3ad2
+state_head: 525961e7621a1d1f30ac15deca2d9835f420df40
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 25
-  completed_plans: 17
+  completed_plans: 18
   percent: 67
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 15 (낮 심부름·목격 기록·밤 흔적) — executing (14페이즈 완료·배포 `d77e3dbf`, 결정 0073)
-Current Plan: 3
+Current Plan: 4
 Total Plans in Phase: 10
 Status: Ready to execute
 Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
@@ -215,6 +215,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 14 P09 | 110min | 3 tasks | 12 files |
 | Phase 15 P01 | 60min | 2 tasks | 39 files |
 | Phase 15 P04 | 40min | 2 tasks | 10 files |
+| Phase 15 P02 | 80min | 2 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -456,6 +457,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 15]: 15-01: 심부름 장소 id 는 닫힌 집합 16개(PLACE_IDS), {t:'errand'} 는 필드 없음·거절은 모든 이유·역할에서 같은 응답(보낸 소켓에 state 한 프레임), 결정 0074 에는 15-10 이 기록
 - [Phase 15]: 15-01: errand 단계는 채팅·동작을 받지 않는다(CHAT_PHASES 밖), 요청 간격 250ms 는 검사를 통과한 모든 시도에서 기록, 장소 좌표 세 곳(piano·sax·lamp)을 걷기 칸으로 보정
 - [Phase 15]: 15-04: 장소 아이콘은 16개(맵 후보 8+8), 새 V2IconName 은 arrow·thread 포함 18개. hostChimeOf 는 낮 시작→심부름 무음·심부름→토론 소리
+- [Phase 15]: 근처 snap: 위치는 사건(move)이 아니라 1초 표본(snap), 산 mover 의 move 는 본인·유령에게만
+- [Phase 15]: 목격 줄 장소는 본 사람에게 가장 가까운 맵 후보 장소(목록 3곳에 한정하지 않음)
+- [Phase 15]: 표본 상태(errandNear·errandSeen·errandTickAt)는 방 상태에 저장하고 표본마다 state 방송 없이 저장만
 
 ### Pending Todos
 
@@ -520,8 +524,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-07T06:33:20.067Z
-Stopped at: Completed 15-04-PLAN.md
+Last session: 2026-11-07T06:59:12.074Z
+Stopped at: Completed 15-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
