@@ -123,74 +123,24 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("밤 마피아 채팅 (CHAT-02, 채널 mafia)", () => {
-  it("산 마피아의 밤 아래는 ChatPanel(mafia): 입력칸 '마피아 채팅 입력'·안내 '마피아끼리만 보여요'·입력칸 안 마피아 아이콘, 밤 알약 패널이 아니다", () => {
+describe("산 마피아의 밤 채팅 패널은 화면에 없다 (15페이즈 D-05, 서버 채널은 그대로)", () => {
+  it("산 마피아의 밤 아래: 채팅 패널·입력칸·기록 칸·마피아 아이콘이 없고(서버 채널이 mafia 여도) 얼굴 목록이 대신 있다", () => {
     const { container } = scene(makeView({ role: "mafia", chat: "mafia" }));
-    expect(chatPanel(container)?.getAttribute("data-chat-channel")).toBe("mafia");
-    expect(input(container)?.getAttribute("aria-label")).toBe("마피아 채팅 입력");
-    expect(input(container)?.getAttribute("placeholder")).toBe("마피아끼리만 보여요");
-    expect(container.querySelector(".mv-chat__chan.is-mafia")).not.toBeNull();
+    expect(chatPanel(container)).toBeNull();
+    expect(input(container)).toBeNull();
+    expect(container.querySelector(".mv-chat__chan.is-mafia, [data-chat-log]")).toBeNull();
+    expect(container.querySelector("[data-face-list]")).not.toBeNull();
     expect(container.querySelector(".mf-game__panel .mf-nightpanel")).toBeNull();
-    expect(container.querySelector(".mf-game__panel .mf-ro")).toBeNull();
   });
 
-  it("낮에서 밤으로 넘어오는 렌더에 마피아 아이콘 + '밤 · 마피아 채팅' 시스템 줄이 한 번 생기고, 같은 밤을 다시 그려도 늘지 않는다", () => {
+  it("낮에서 밤으로 넘어와도 마피아 시스템 줄 '밤 · 마피아 채팅' 은 DOM 에 없고, 아침이 되면 공개 채널 패널이 돌아온다", () => {
     const r = scene(makeView({ phase: "discussion", role: "mafia", chat: "all" }));
-    expect(sysTexts(r.container)).toEqual([]);
-    vi.setSystemTime(T0 + 1000);
     r.rerender(makeView({ phase: "night", role: "mafia", chat: "mafia" }));
-    expect(logLines(r.container)).toEqual([{ kind: "system", text: "밤 · 마피아 채팅", icon: ICON_MAFIA }]);
-    r.rerender({ ...makeView({ phase: "night", role: "mafia", chat: "mafia" }), serverNow: T0 + 2000 });
-    expect(sysTexts(r.container)).toEqual(["밤 · 마피아 채팅"]);
-  });
-
-  it("StrictMode 에서도 채널 시작 줄은 한 번이다", () => {
-    const r = scene(makeView({ phase: "discussion", role: "mafia", chat: "all" }), { strict: true });
-    r.rerender(makeView({ phase: "night", role: "mafia", chat: "mafia" }));
-    expect(sysTexts(r.container)).toEqual(["밤 · 마피아 채팅"]);
-  });
-
-  it("밤 기록에는 마피아 줄과 마피아 시스템 줄만 시간 순으로 보이고(이름 진홍 클래스), 낮의 공개 줄은 다음 낮에 돌아오며 마피아 줄은 공개 기록에 없다", () => {
-    const r = scene(makeView({ phase: "discussion", role: "mafia", chat: "all" }));
-    r.receive("all", 2, 1, "낮에 한 말", T0 + 100);
-    expect(logLines(r.container).map((l) => l.text)).toContain("낮에 한 말");
-    vi.setSystemTime(T0 + 1000);
-    r.rerender(makeView({ phase: "night", role: "mafia", chat: "mafia" }));
-    r.receive("mafia", 1, 1, "오늘은 도현", T0 + 1500);
-    const night = logLines(r.container);
-    expect(night.map((l) => l.text)).toEqual(["밤 · 마피아 채팅", "오늘은 도현"]);
-    expect(night[1]).toMatchObject({ kind: "player", ch: "mafia", name: "하윤", mafiaName: true });
-    expect(r.container.textContent).not.toContain("낮에 한 말");
-    // 아침: 공개 채널로 돌아온다. 마피아 줄은 공개 기록에 없다
+    expect(r.container.textContent).not.toContain("마피아 채팅");
+    expect(chatPanel(r.container)).toBeNull();
     r.rerender(makeView({ phase: "morning", n: 1, role: "mafia", chat: "all" }));
     expect(chatPanel(r.container)?.getAttribute("data-chat-channel")).toBe("all");
-    expect(r.container.textContent).not.toContain("오늘은 도현");
-    // 다음 낮 토론: 공개 줄이 돌아오고 마피아 줄·마피아 시스템 줄은 없다
-    r.rerender(makeView({ phase: "discussion", n: 2, role: "mafia", chat: "all" }));
-    expect(logLines(r.container).map((l) => l.text)).toContain("낮에 한 말");
-    expect(r.container.textContent).not.toContain("오늘은 도현");
     expect(r.container.textContent).not.toContain("마피아 채팅");
-  });
-
-  it("재접속: 밤에 처음 마운트하거나 epoch 가 바뀐 첫 view 에서는 채널 시작 줄을 만들지 않는다", () => {
-    const first = scene(makeView({ phase: "night", role: "mafia", chat: "mafia" }));
-    expect(sysTexts(first.container)).toEqual([]);
-    cleanup();
-    const r = scene(makeView({ phase: "discussion", role: "mafia", chat: "all" }));
-    r.rerender(makeView({ phase: "night", role: "mafia", chat: "mafia" }), 2);
-    expect(sysTexts(r.container)).toEqual([]);
-    // 그 뒤 같은 연결에서 다음 밤이 오면 만든다
-    r.rerender(makeView({ phase: "morning", role: "mafia", chat: "all" }), 2);
-    r.rerender(makeView({ phase: "night", n: 2, role: "mafia", chat: "mafia" }), 2);
-    expect(sysTexts(r.container)).toEqual(["밤 · 마피아 채팅"]);
-  });
-
-  it("낮 투표 시작 시스템 줄은 공개 줄이라 밤 마피아 기록에는 보이지 않는다", () => {
-    const r = scene(makeView({ phase: "discussion", role: "mafia", chat: "all" }));
-    r.rerender(makeView({ phase: "nomination", role: "mafia", chat: "all" }));
-    expect(sysTexts(r.container)).toEqual(["투표 시작"]);
-    r.rerender(makeView({ phase: "night", role: "mafia", chat: "mafia" }));
-    expect(sysTexts(r.container)).toEqual(["밤 · 마피아 채팅"]);
   });
 });
 

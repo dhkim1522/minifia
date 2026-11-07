@@ -2892,109 +2892,29 @@ describe("게임 이름표: 지목 버튼·tagProps·canWalk (DAY-04, MAP-04)", 
     });
   });
 
-  describe("동료 선택 고리 mafiaAlly (UI-SPEC 226·318행)", () => {
-    it("RING_COLORS: mafiaAlly 는 crimson-400, mafia 는 crimson-500 그대로", () => {
-      expect(RING_COLORS.mafiaAlly).toBe("#e0344b");
+  describe("마피아 전용 밤 표시 없음 (15페이즈 D-05)", () => {
+    it("RING_COLORS 에는 동료 고리(mafiaAlly)가 없고 mafia 는 유령 화면용으로 crimson-500 그대로", () => {
+      expect(Object.keys(RING_COLORS).sort()).toEqual(["doctor", "mafia", "police", "turn"]);
       expect(RING_COLORS.mafia).toBe("#c8102e");
     });
 
-    it("ring \"mafiaAlly\" 좌석의 이름표는 data-ring-kind=\"mafia-ally\" 이고 발밑 고리는 crimson-400, mafia 는 그대로 \"mafia\"", async () => {
-      const s = await open({ scene: SCENE5, tagProps: (seat) => (seat === 3 ? { ring: "mafiaAlly" } : seat === 4 ? { ring: "mafia" } : {}) }, { players: FIVE, ents: FIVE_ENTS() });
-      expect(tagOf(s.utils, 3)!.getAttribute("data-ring-kind")).toBe("mafia-ally");
-      expect(tagOf(s.utils, 4)!.getAttribute("data-ring-kind")).toBe("mafia");
-      const r = s.world.renderers[0]!;
-      frame();
-      expect((r.chars.get(3) as FakeHandle).setRing).toHaveBeenCalledWith("#e0344b");
-      expect((r.chars.get(4) as FakeHandle).setRing).toHaveBeenCalledWith("#c8102e");
-    });
-  });
-
-  describe("마피아 밤 선택 효과 (09.1-q2, 결정 0065)", () => {
-    const aimPick = (mine?: number, aim = true) => ({
-      seats: new Set([2, 3, 4]),
-      ...(mine !== undefined ? { mine } : {}),
-      label: (n: string) => `${n} 님에게 다가가기`,
-      onPick: () => {},
-      group: "밤 대상",
-      ...(aim ? { aim: true as const } : {}),
-    });
-
-    it("aim 이면 후보 이름표 버튼은 is-cand, 눌린 좌석은 is-picked + 표식이고 이름표 래퍼에 data-night-pick 이 붙는다", async () => {
-      const s = await open({ scene: SCENE5, pick: aimPick(3) }, { players: FIVE, ents: FIVE_ENTS() });
-      expect(tagOf(s.utils, 2)!.getAttribute("data-night-pick")).toBe("cand");
-      expect(tagOf(s.utils, 2)!.querySelector("button.mf-world__pick")!.classList.contains("is-cand")).toBe(true);
-      expect(tagOf(s.utils, 3)!.getAttribute("data-night-pick")).toBe("mine");
-      const b3 = tagOf(s.utils, 3)!.querySelector("button.mf-world__pick")!;
-      expect(b3.classList.contains("is-picked")).toBe(true);
-      expect(b3.classList.contains("is-cand")).toBe(false);
-      expect(b3.querySelector("[data-night-mark]")).not.toBeNull();
-      expect(tagOf(s.utils, 2)!.querySelector("[data-night-mark]")).toBeNull();
-      // 후보가 아닌 좌석(0·1)은 속성도 표식도 없다
-      expect(tagOf(s.utils, 1)!.hasAttribute("data-night-pick")).toBe(false);
-      // 밤에는 낮 지목의 gray-100 면(is-mine)을 쓰지 않는다
-      expect(s.utils.container.querySelector(".mv-tag.is-mine")).toBeNull();
-    });
-
-    it("누르고 있는 동안 is-preview + data-night-pick=preview, 떼거나 벗어나면 cand 로 돌아온다", async () => {
-      const s = await open({ scene: SCENE5, pick: aimPick() }, { players: FIVE, ents: FIVE_ENTS() });
-      const btn = tagOf(s.utils, 2)!.querySelector("button.mf-world__pick")!;
-      fireEvent.pointerDown(btn, { pointerId: 5, pointerType: "touch" });
-      expect(tagOf(s.utils, 2)!.getAttribute("data-night-pick")).toBe("preview");
-      expect(btn.classList.contains("is-preview")).toBe(true);
-      fireEvent.pointerUp(btn, { pointerId: 5, pointerType: "touch" });
-      expect(tagOf(s.utils, 2)!.getAttribute("data-night-pick")).toBe("cand");
-      fireEvent.pointerDown(btn, { pointerId: 5, pointerType: "touch" });
-      fireEvent.pointerLeave(btn, { pointerId: 5, pointerType: "touch" });
-      expect(tagOf(s.utils, 2)!.getAttribute("data-night-pick")).toBe("cand");
-      fireEvent.pointerDown(btn, { pointerId: 5, pointerType: "touch" });
-      fireEvent.pointerCancel(btn, { pointerId: 5, pointerType: "touch" });
-      expect(tagOf(s.utils, 2)!.getAttribute("data-night-pick")).toBe("cand");
-    });
-
-    it("aim 이 없는 지목(낮)은 클래스·속성·표식이 없다 — 낮 이름표는 그대로", async () => {
-      const s = await open({ scene: SCENE5, pick: aimPick(3, false) }, { players: FIVE, ents: FIVE_ENTS() });
-      expect(s.utils.container.querySelector("[data-night-pick]")).toBeNull();
-      expect(s.utils.container.querySelector("[data-night-mark]")).toBeNull();
+    it("밤 선택 효과(aim)가 없다: 후보 이름표 버튼은 늘 mf-world__pick 하나이고 누르는 중에도 클래스·data-night-pick·표식이 없다", async () => {
+      const s = await open(
+        { scene: SCENE5, pick: { seats: new Set([2, 3, 4]), mine: 3, label: (n: string) => `${n} 님 가리키기`, onPick: () => {}, group: "지목" } },
+        { players: FIVE, ents: FIVE_ENTS() },
+      );
+      expect(s.utils.container.querySelector("[data-night-pick], [data-night-mark]")).toBeNull();
       const b = tagOf(s.utils, 2)!.querySelector("button.mf-world__pick")!;
       expect(b.className).toBe("mf-world__pick");
       fireEvent.pointerDown(b, { pointerId: 5, pointerType: "touch" });
       expect(b.className).toBe("mf-world__pick");
       expect(s.utils.container.querySelector(".mv-tag.is-mine")).not.toBeNull(); // 낮 지목의 눌린 이름표 스타일 유지
+      expect((s.world.renderers[0]!.chars.get(3) as FakeHandle).setPickMark).not.toHaveBeenCalled();
     });
 
-    it("런타임: data-night-pick=mine 인 좌석의 캐릭터만 윤곽(#e0344b·animate)을 받고, 바뀌어 없어지면 뗀다", async () => {
-      const s = await open({ scene: SCENE5, pick: aimPick(3) }, { players: FIVE, ents: FIVE_ENTS() });
-      const r = s.world.renderers[0]!;
-      frame();
-      const h3 = r.chars.get(3) as FakeHandle;
-      expect(h3.setPickMark).toHaveBeenCalledTimes(1);
-      expect(h3.setPickMark).toHaveBeenCalledWith(true, { color: "#e0344b", animate: true });
-      expect((r.chars.get(2) as FakeHandle).setPickMark).not.toHaveBeenCalled();
-      frame();
-      expect(h3.setPickMark).toHaveBeenCalledTimes(1); // 같은 상태는 다시 부르지 않는다
-      s.rerender({ pick: aimPick() });
-      frame();
-      expect(h3.setPickMark).toHaveBeenLastCalledWith(false);
-    });
-
-    it("움직임 줄이기: 윤곽은 받되 animate 는 거짓이다", async () => {
-      stubReducedMotion(true);
-      const s = await open({ scene: SCENE5, pick: aimPick(4) }, { players: FIVE, ents: FIVE_ENTS() });
-      frame();
-      expect((s.world.renderers[0]!.chars.get(4) as FakeHandle).setPickMark).toHaveBeenCalledWith(true, { color: "#e0344b", animate: false });
-    });
-
-    it("world.css: 고른 이름표는 3px 실선 진홍 테두리·맥박, 후보는 점선, 움직임 줄이기에서는 애니메이션이 없다", () => {
+    it("world.css 에는 밤 선택 효과 규칙(is-cand·is-preview·is-picked·aimmark)이 없다", () => {
       const css = readFileSync("src/styles/world.css", "utf8");
-      const rule = (sel: string): string => [...css.matchAll(new RegExp(`\\.mf-world__pick\\.${sel}::after\\s*\\{([^}]*)\\}`, "g"))].map((m) => m[1]).join(" ");
-      expect(rule("is-cand")).toMatch(/dashed/);
-      expect(rule("is-preview")).toMatch(/#e0344b/);
-      expect(rule("is-preview")).toMatch(/solid/);
-      expect(rule("is-picked")).toMatch(/#c8102e/);
-      expect(rule("is-picked")).toMatch(/3px/);
-      expect(rule("is-picked")).toMatch(/animation:\s*mf-aim-beat/);
-      const reduced = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)", css.indexOf("is-picked::after", css.indexOf("mf-aim-beat"))));
-      expect(reduced).toMatch(/\.mf-world__pick\.is-picked::after\s*\{[^}]*animation:\s*none/);
+      expect(css).not.toMatch(/is-cand|is-preview|is-picked|aimmark|mf-aim-beat/);
     });
   });
 

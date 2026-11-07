@@ -108,18 +108,20 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
     onCallUsed?.();
   };
 
-  // 밤(UI-SPEC 아래 패널 종류): 산 마피아 = 마피아 채널 채팅, 산 경찰·의사 = 얼굴 목록(NIGHT-09), 산 시민 = 비어 있음(유언 줄은 09-17), 유령 = 유령 채널 채팅.
-  // 채팅 패널은 서버가 보낸 view.me.chat 이 그 채널일 때만 그린다(서버 값이 기준, T-08-47).
+  // 밤(UI-SPEC "밤 고르기 계약", D-05): 산 사람은 역할과 무관하게 같은 얼굴 목록(나 포함 산 사람 전원)으로 고른다 — 유령은 유령 채널 채팅.
+  // 채팅 패널은 서버가 보낸 view.me.chat 이 그 채널일 때만 그린다(서버 값이 기준, T-08-47). 산 마피아의 밤 채팅은 그리지 않는다.
   const night = view.phase === "night";
   const myRole = view.me.role;
-  const nightFaces = night && meAlive && (myRole === "police" || myRole === "doctor") ? myRole : null;
-  const nightCitizen = night && meAlive && myRole !== "mafia" && nightFaces === null;
-  const chatChannelOk = !night || view.me.chat === (meAlive ? "mafia" : "ghost");
-  // 후보: 산 사람(경찰은 자기 제외, 의사는 자기 포함). 좌석 오름차순. 후보가 없으면 목록을 그리지 않는다(E1 #1).
-  const faces = nightFaces === null ? [] : view.players
-    .filter((p) => isAlive(p) && !(nightFaces === "police" && p.seat === view.me.seat))
+  const nightFaces = night && meAlive;
+  const chatChannelOk = !night || view.me.chat === "ghost";
+  // 후보: 산 사람 전원(나 포함). 좌석 오름차순. 후보가 없으면 목록을 그리지 않는다(E1 #1).
+  const faces = !nightFaces ? [] : view.players
+    .filter((p) => isAlive(p))
     .sort((a, b) => a.seat - b.seat)
     .map((p) => ({ seat: p.seat, name: p.nickname, img: faceSrc(p.seat), color: seatColorVar(p.seat) }));
+  // 마피아의 합의 수단(결정 0074): 서버가 산 마피아 본인에게만 보낸 집계를 칸 안 작은 배지로 그린다. 다른 역할 view 에는 값이 없고 읽지도 않는다.
+  const tally = new Map<number, number>();
+  if (nightFaces && myRole === "mafia") for (const t of view.me.nightTally ?? []) if (t.n >= 1) tally.set(t.seat, t.n);
   const pickFace = (seat: number): void => {
     if (!canSend) return;
     if (send({ t: "pick", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 눌림도 바꾸지 않는다
@@ -128,13 +130,12 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
     onCallUsed?.();
   };
 
-  // 밤 시민 편은 입력줄이 없어 아래 행동 줄의 [유언] 이 깃펜을 대신한다(UI-SPEC 237행). 산 사람 + 밤 시민·경찰·의사에게만.
-  // 채팅 입력줄이 있는 화면(낮·아침·밤 마피아)은 깃펜, 산 사람 + 지도 단계에만(유령·로비·역할 확인에는 없다, UI-SPEC 281·286행)
+  // 밤 산 사람은 입력줄이 없어 아래 행동 줄의 [쪽지]·[유언] 이 대신한다(UI-SPEC 237행). 마피아 [쪽지], 그 밖 [유언] — 역할을 읽는 곳은 이 줄뿐이다.
+  // 채팅 입력줄이 있는 화면(낮·아침)은 깃펜, 산 사람 + 지도 단계에만(유령·로비·역할 확인에는 없다, UI-SPEC 281·286행)
   const penOn = meAlive && MAP_PHASES.has(view.phase) && onOpenWill !== undefined;
-  const nightMafia = night && meAlive && myRole === "mafia";
-  const showNoteRow = nightMafia && onOpenNote !== undefined;
+  const showNoteRow = nightFaces && myRole === "mafia" && onOpenNote !== undefined;
   const noteHintId = useId();
-  const showWillRow = (nightCitizen || nightFaces !== null) && onOpenWill !== undefined;
+  const showWillRow = nightFaces && myRole !== "mafia" && onOpenWill !== undefined;
 
   const pressEnd = (): void => {
     if (!canSend) return;
@@ -163,20 +164,21 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
           <HeadCount count={voted} total={Math.max(0, aliveCount - 1)} label="투표한 사람" />
         </div>
       ) : null}
-      {nightFaces !== null ? (
+      {nightFaces ? (
         faces.length > 0 ? (
           <FaceList
             faces={faces}
             {...(nightPick !== undefined ? { value: nightPick } : {})}
             onPick={pickFace}
-            icon={nightFaces === "police" ? "eye" : "heal"}
-            label={nightFaces === "police" ? "조사할 사람" : "지킬 사람"}
-            ariaLabel={(name) => (nightFaces === "police" ? `${name} 조사` : `${name} 보호`)}
+            label="밤 대상"
+            ariaLabel={(name) => `${name} 고르기`}
             {...(canSend ? {} : { disabled: true })}
             {...(call?.faces !== undefined ? { callSeats: call.faces } : {})}
+            {...(tally.size > 0 ? { tally } : {})}
+            {...(myRole === "mafia" && view.me.nightSure !== undefined ? { sure: view.me.nightSure } : {})}
           />
         ) : null
-      ) : nightCitizen ? null : chatChannelOk ? (
+      ) : chatChannelOk ? (
         <ChatPanel
           {...binding}
           logHeight={logHeight}

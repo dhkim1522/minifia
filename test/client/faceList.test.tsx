@@ -166,3 +166,33 @@ describe("FaceList — 고른 칸·줄바꿈·그림 실패·칸 수 (E1 #2~#5)"
     expect(tsx).not.toMatch(/crimson|brass|dangerouslySetInnerHTML|innerHTML/);
   });
 });
+
+describe("FaceList — 마피아 합의 배지 tally·sure (15페이즈 D-05, 결정 0074)", () => {
+  const faces = [face(0), face(2), face(5)];
+
+  it("tally·sure 가 없으면 배지 요소가 없고 아이콘 없는 고른 칸도 svg 가 없다", () => {
+    const { container } = render(<FaceList faces={faces} value={2} />);
+    expect(container.querySelector(".mv-face__count")).toBeNull();
+    expect(container.querySelector("[data-face] svg")).toBeNull();
+  });
+
+  it("tally 는 1 이상인 칸에 숫자 배지, sure 칸은 숫자 대신 check(접근성 이름 '확정')", () => {
+    const { container } = render(<FaceList faces={faces} tally={new Map([[0, 1], [2, 2], [5, 0]])} sure={2} />);
+    expect(container.querySelector('[data-face="0"] .mv-face__count')?.textContent).toBe("1");
+    const sure = container.querySelector('[data-face="2"] .mv-face__count');
+    expect(sure?.getAttribute("aria-label")).toBe("확정");
+    expect(sure?.querySelector("svg")).not.toBeNull();
+    expect(sure?.textContent).toBe("");
+    expect(container.querySelector('[data-face="5"] .mv-face__count')).toBeNull();
+  });
+
+  it("배지가 있어도 칸 수·순서·클래스·aria-disabled 는 같고 배지는 절대 위치 css 다(칸 크기를 바꾸지 않는다)", () => {
+    const plain = render(<FaceList faces={faces} value={0} />);
+    const sig = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>("[data-face]")].map((b) => [b.dataset.face, b.className, b.getAttribute("aria-disabled")]);
+    const base = sig(plain.container);
+    cleanup();
+    const badged = render(<FaceList faces={faces} value={0} tally={new Map([[2, 3]])} />);
+    expect(sig(badged.container)).toEqual(base);
+    expect(rulesStarting(".mv-face__count").join("")).toMatch(/position:\s*absolute/);
+  });
+});

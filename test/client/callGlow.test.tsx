@@ -366,12 +366,12 @@ describe("맵 화면 빛남 (HOST-03·04·05)", () => {
     });
   });
 
-  describe("밤 — 경찰·의사 얼굴 칸만, 그 밖은 0개 (T-14-11)", () => {
+  describe("밤 — 산 사람 모두 같은 얼굴 칸, 유령은 0개 (T-14-11, D-05)", () => {
     const faceCalls = (c: ParentNode) => calls(c).map((b) => b.getAttribute("data-face"));
 
-    it("산 경찰: 나(1)를 뺀 산 사람 얼굴 칸 전부, 하나를 고르면 0개", () => {
+    it("산 경찰: 나 포함 산 사람 얼굴 칸 전부, 하나를 고르면 0개", () => {
       const { container } = mount(mapView({ phase: "night", mySeat: 1, role: "police", dead: [3] }));
-      expect(faceCalls(container)).toEqual(["0", "2"]);
+      expect(faceCalls(container)).toEqual(["0", "1", "2"]);
       expect(calls(container).every((b) => b.getAttribute("data-call") === "")).toBe(true);
       fireEvent.click(container.querySelector('button[data-face="2"]')!);
       expect(calls(container)).toHaveLength(0);
@@ -387,10 +387,22 @@ describe("맵 화면 빛남 (HOST-03·04·05)", () => {
       expect(calls(container)).toHaveLength(0);
     });
 
-    it("산 마피아·산 시민·유령·죽은 경찰: 방 화면 전체에 data-call 0개, 이름표 call 도 0", () => {
+    it("산 마피아·산 시민도 의사와 같은 칸이 빛난다(네 시점의 빛남 칸이 같다), 이름표 call 은 0", () => {
       for (const o of [
         { mySeat: 0, role: "mafia" as RoleId },
+        { mySeat: 1, role: "police" as RoleId },
+        { mySeat: 2, role: "doctor" as RoleId },
         { mySeat: 3, role: "citizen" as RoleId },
+      ]) {
+        const { container, unmount } = mount(mapView({ phase: "night", ...o }));
+        expect(faceCalls(container), JSON.stringify(o)).toEqual(["0", "1", "2", "3"]);
+        expect(tagCalls(4), JSON.stringify(o)).toEqual([]);
+        unmount();
+      }
+    });
+
+    it("유령·죽은 경찰: 방 화면 전체에 data-call 0개, 이름표 call 도 0", () => {
+      for (const o of [
         { mySeat: 1, role: "police" as RoleId, dead: [1] },
         { mySeat: 0, role: "mafia" as RoleId, dead: [0] },
       ]) {
