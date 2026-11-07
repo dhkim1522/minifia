@@ -316,6 +316,9 @@ describe("봇 행동", () => {
     const mafiaBot = bots.find((b) => (b as unknown as { role?: string }).role === "mafia")!;
     const citizenBot = bots.find((b) => (b as unknown as { role?: string }).role !== "mafia")!;
     const guest = r.guests[0]!.sock;
+    // 계획된 밤 고르기(1초 뒤~)·밤 채팅이 검사 사이에 끼면 방장에게 state·chat 프레임이 더 와서 간헐 실패한다 — 계획을 비워 둔다(키는 그대로라 다시 짜지 않는다).
+    await waitForPlan(r.code);
+    await editRoom(r.code, (room) => ({ ...room, botPlan: { ...(room.botPlan as object), steps: [] } }));
     const mh = mark(r.host);
     const mg = mark(guest);
     await botSays(r.code, mafiaBot.id, "동의해요");
