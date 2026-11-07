@@ -246,14 +246,16 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   if (state.testMode === true && me.id === state.hostId) {
     myInfo.testMode = true;
     if (state.phase === "lobby" && state.testRole !== undefined) myInfo.testRole = state.testRole;
-    // 서버 봇 수는 시트의 '봇' 줄이 있는 대기실에서만, 0 포함 항상 숫자로(결정 0024). isBot·botPlan·봇 id 는 어디에도 싣지 않는다.
-    if (state.phase === "lobby") myInfo.testBots = botCount(state);
     // 봇 투표 규칙(P-13)은 시트의 '봇 투표' 줄이 있는 대기실에서만, 무작위가 아닌 값이 있을 때만. 상태 객체를 펼치지 않고 두 값을 필드별로 읽는다.
     if (state.phase === "lobby" && state.testBotVote !== undefined) {
       const { exec, pick } = state.testBotVote;
       if (exec !== undefined || pick !== undefined) myInfo.testBotVote = { exec: exec ?? "random", pick: pick ?? "random" };
     }
   }
+
+  // 서버 봇 수는 방장 본인의 대기실 view 에서만, 0 포함 항상 숫자로(결정 0024). 결정 0075 부터 일반 방 방장도 받는다([봇] 버튼).
+  // isBot·botPlan·봇 id 는 어디에도 싣지 않는다.
+  if (me.id === state.hostId && state.phase === "lobby") myInfo.testBots = botCount(state);
 
   // 내 심부름(15페이즈, 결정 0074)은 errand 단계의 산 본인에게만 — 목록·진행뿐이고 좌표·역할은 없다. 필드별 복사라 서버 상태 객체를 펼치지 않는다.
   if (state.phase === "errand" && isAlive(me) && me.errandPlaces !== undefined) {

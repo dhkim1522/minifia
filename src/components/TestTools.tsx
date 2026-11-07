@@ -2,9 +2,9 @@ import { useState } from "react";
 import type { ReactElement } from "react";
 import { ROLE_IDS, testRoleOptions } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
-import { MAX_TEST_BOTS } from "../../shared/protocol";
 import type { BotVoteExec, BotVotePick, ClientMessage, PhaseId, RoomView } from "../../shared/protocol";
 import { ROLE_TEXT } from "../game/roleText";
+import { BotStepper } from "./BotStepper";
 import { Button } from "./Button";
 import { Chip } from "./Chip";
 import { Icon } from "./Icon";
@@ -57,9 +57,6 @@ export interface TestToolsSheetProps {
   onClose: () => void;
 }
 
-/** 채우기 버튼이 맞추는 총 인원 — 5명이면 네 직업이 모두 나온다(rolesInPlay). */
-const FILL_TO_PLAYERS = 5;
-
 /** 칩이 고르는 값: null = 랜덤. */
 type Pick = RoleId | null;
 
@@ -93,14 +90,6 @@ export function TestToolsSheet({ view, canSend, send, onClose }: TestToolsSheetP
   };
   const options = testRoleOptions(view.players.length);
 
-  // 봇 줄(결정 0024): 숫자는 서버 view 의 me.testBots 를 따른다(낙관적 값 없음 — count 가 절대값이라 연타해도 같은 요청이다).
-  const bots = view.me.testBots ?? 0;
-  const humans = view.players.length - bots;
-  const maxBots = Math.min(MAX_TEST_BOTS, view.maxPlayers - humans);
-  const setBots = (count: number) => {
-    if (canSend) send({ t: "testBots", count });
-  };
-
   const choose = (role: Pick) => {
     if (!canSend || role === selected) return;
     setPending({ view, role });
@@ -128,40 +117,7 @@ export function TestToolsSheet({ view, canSend, send, onClose }: TestToolsSheetP
               </div>
             </section>
           ) : null}
-          {isLobby ? (
-            <section className="mf-tt-sheet__bots">
-              <p className="mf-tt-sheet__label">봇</p>
-              <div className="mf-tt-sheet__stepper">
-                <Button
-                  variant="secondary"
-                  compact
-                  className="mf-tt-sheet__step"
-                  aria-label="봇 줄이기"
-                  icon={<Icon name="minus" size={18} />}
-                  disabled={!canSend || bots <= 0}
-                  onClick={() => setBots(bots - 1)}
-                />
-                <span className="mf-tt-sheet__count" aria-live="polite">{`${bots}명`}</span>
-                <Button
-                  variant="secondary"
-                  compact
-                  className="mf-tt-sheet__step"
-                  aria-label="봇 늘리기"
-                  icon={<Icon name="plus" size={18} />}
-                  disabled={!canSend || bots >= maxBots}
-                  onClick={() => setBots(bots + 1)}
-                />
-                <Button
-                  variant="secondary"
-                  compact
-                  disabled={!canSend || view.players.length >= FILL_TO_PLAYERS}
-                  onClick={() => setBots(FILL_TO_PLAYERS - humans)}
-                >
-                  5명 채우기
-                </Button>
-              </div>
-            </section>
-          ) : null}
+          {isLobby ? <BotStepper view={view} canSend={canSend} send={send} /> : null}
           {isLobby ? (
             <>
               <section className="mf-tt-sheet__botvote">

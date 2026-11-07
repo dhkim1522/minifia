@@ -2,7 +2,7 @@
 // 시각 now 와 난수 randInt 는 인자로만 받는다(방 DO 는 Date.now()·cryptoRandInt, 테스트는 고정 값·seededRandInt).
 // 검사 순서가 계약이다: testMode 가 아니면 BAD_MESSAGE(일반 방에서는 이 메시지가 있다는 사실도 드러내지 않는다)
 // → 방장이 아니면 NOT_HOST → 단계가 맞지 않으면 WRONG_PHASE → (testRole 만) 직업이 구성에 없으면 BAD_MESSAGE
-// (testBots 는 대기실 다음에 개수 범위가 틀리면 BAD_MESSAGE, 결정 0024. testBotVote 는 대기실 다음에 값이 범위 밖이면 BAD_MESSAGE, P-13).
+// (testBots 는 결정 0075 부터 testMode 검사가 없어 방장 → 대기실 → 개수 범위 순이다, 결정 0024. testBotVote 는 대기실 다음에 값이 범위 밖이면 BAD_MESSAGE, P-13).
 // (finishShowdown: 아직 안 던진 산 봇만 좌석 순 randInt(2)(자기를 뺀 산 사람 둘 중 하나) 한 번씩, 고정 pick 이면 없음.)
 // (finishNomination 의 난수 호출 순서: 남은 차례의 산 봇만 좌석 순 randInt(후보 수) 한 번씩. finishRunoff: 아직 안 던진 후보 아닌 산 봇만 좌석 순 randInt(2) 한 번씩, 고정 pick 이면 없음.)
 // 결정 0017-5(방장 연장·넘기기 제거)와 0020 은 일반 방에서 그대로다. 이 도구는 테스트 방 전용 예외다.
@@ -243,7 +243,7 @@ function botNickname(keys: ReadonlySet<string>, wantLen: number): { nickname: st
 }
 
 /**
- * 테스트 방 서버 봇 수를 count(원하는 봇 수, 절대값)로 맞춘다(결정 0024). 대기실에서만, 사람 + 봇 <= MAX_PLAYERS 로 잘라 정확히 그만큼 둔다.
+ * 서버 봇 수를 count(원하는 봇 수, 절대값)로 맞춘다(결정 0024, 0075 부터 일반 방 방장도). 대기실에서만, 사람 + 봇 <= MAX_PLAYERS 로 잘라 정확히 그만큼 둔다.
  * 더할 때는 가장 낮은 빈 자리에 BOT_NAMES 중 방에 같은 비교 키가 없는 첫 이름으로 앉히고, 뺄 때는 가장 높은 자리 봇부터 뺀다. 사람은 손대지 않는다.
  * 09-24: 이름 길이는 1~8 그래핌 무작위다(결정 0052-3 개정, feedback-10) — 봇이 0명일 때 더해지는 첫 봇만 8자 그대로 두어 가장 넓은 이름표를 늘 시험하고,
  * 나머지는 길이 1 + randInt(8) 로 그 기본 이름의 앞부분을 쓴다. 겹치면 길이를 하나씩 늘리고, 8자까지 늘려도 겹치면 그 기본 이름은 건너뛴다.
@@ -251,8 +251,8 @@ function botNickname(keys: ReadonlySet<string>, wantLen: number): { nickname: st
  * 봇은 토큰이 없고(빈 문자열) 소켓이 없으며 connected 가 항상 true 다 — makeId 는 호출하는 쪽(방 DO 는 crypto.randomUUID)이 준다.
  */
 export function setBotCount(state: RoomState, actorId: string, count: number, makeId: () => string, randInt: RandInt): TestToolResult {
-  const denied = checkTestHost(state, actorId);
-  if (denied !== null) return { ok: false, error: denied };
+  // 결정 0075: 봇 수 맞추기는 일반 방 방장도 쓴다(사람이 모자란 판을 봇으로 채운다). testMode 검사 없이 방장 검사만 한다.
+  if (actorId !== state.hostId) return { ok: false, error: "NOT_HOST" };
   if (state.phase !== "lobby") return { ok: false, error: "WRONG_PHASE" };
   if (!Number.isInteger(count) || count < 0 || count > MAX_TEST_BOTS) return { ok: false, error: "BAD_MESSAGE" };
 

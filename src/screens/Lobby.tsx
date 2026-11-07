@@ -4,6 +4,7 @@ import type { ClientMessage, MapChoice, RoomView } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import { connectedCount } from "../../shared/game/room";
 import { ActionButton, ActionRow } from "../components/ActionButton";
+import { BotSheet } from "../components/BotSheet";
 import { ToolButton } from "../components/ToolButton";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
@@ -88,7 +89,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
 
   // 열려 있는 시트. 화면이 기억하는 상태는 이것과 [시작] 잠금뿐이다.
   // 내보내기는 누른 시점의 닉네임을 같이 들고 있어 그사이 view 가 바뀌어도 제목이 흔들리지 않는다.
-  const [sheet, setSheet] = useState<{ kind: "leave" } | { kind: "share" } | { kind: "kick"; seat: number; nickname: string } | null>(null);
+  const [sheet, setSheet] = useState<{ kind: "leave" } | { kind: "share" } | { kind: "bots" } | { kind: "kick"; seat: number; nickname: string } | null>(null);
   const closeSheet = () => setSheet(null);
 
   // [시작] 2초 잠금. 시작이 거절되면 서버가 다시 보낸 view 대로 그린다.
@@ -140,6 +141,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
 
   const connected = connectedCount(view.players);
   const isHost = view.me.isHost;
+  const botsOn = isHost && view.me.testBots !== undefined;
   // 맵 선택(11-13): 칩과 카드는 서버가 방송한 view.mapChoice 만 따른다. 보내기만 하고 미리 바꾸지 않는다
   const mapChoice: MapChoice = view.mapChoice ?? "random";
   const pickMap = (map: MapChoice) => {
@@ -227,7 +229,11 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
         )}
       </section>
       {dressOpen ? null : (
-        <FloatActions single>
+        <FloatActions single={!botsOn}>
+          {/* 결정 0075: 방장만 [봇] — 서버가 방장 대기실 view 에만 me.testBots 를 싣는다 */}
+          {botsOn ? (
+            <FloatAction kind="bots" icon="bot" label="봇" pressed={sheet?.kind === "bots"} disabled={!canSend} onPress={() => setSheet({ kind: "bots" })} />
+          ) : null}
           <FloatAction ref={dressBtnRef} kind="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={() => openDress()} />
         </FloatActions>
       )}
@@ -265,6 +271,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           onClose={closeSheet}
         />
       ) : null}
+      {sheet?.kind === "bots" && botsOn ? <BotSheet view={view} canSend={canSend} send={send} onClose={closeSheet} /> : null}
       {sheet?.kind === "share" ? <ShareSheet code={view.code} hostNickname={host?.nickname ?? ""} full={full} onClose={closeSheet} /> : null}
     </main>
   );

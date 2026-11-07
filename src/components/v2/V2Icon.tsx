@@ -8,7 +8,7 @@ import "../../styles/v2.css";
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
 // 장소·arrow·thread: 임시 선 그림(15페이즈), 나중에 같은 이름의 경로만 바꾼다. 장소 16개(재즈 바 8·광장 8)는 한 맵 안에서 실루엣이 서로 달라 알아보게만 그렸다.
 // 새 이름은 모두 18개 = 장소 16 + arrow(위쪽을 가리킴, 회전해 쓴다) + thread(끝이 풀린 사각 천).
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "arrow" | "thread" | "placeGlass" | "placePiano" | "placeSax" | "placeStool" | "placeDoor" | "placePoster" | "placeRecord" | "placeCandle" | "placeClock" | "placeFountain" | "placeBench" | "placeLamp" | "placeMail" | "placeTree" | "placeFlower" | "placeStand";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "arrow" | "thread" | "placeGlass" | "placePiano" | "placeSax" | "placeStool" | "placeDoor" | "placePoster" | "placeRecord" | "placeCandle" | "placeClock" | "placeFountain" | "placeBench" | "placeLamp" | "placeMail" | "placeTree" | "placeFlower" | "placeStand" | "bot";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -234,6 +234,15 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
     ["p", "M5.5 8v13"],
     ["p", "M18.5 8v13"],
     ["p", "M5.5 14h13"],
+  ],
+  // 결정 0075: 일반 방 방장의 [봇] 버튼 — 안테나 달린 네모 얼굴.
+  bot: [
+    ["p", "M6.5 9h11a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2V11a2 2 0 0 1 2-2z"],
+    ["p", "M12 9V5.8"],
+    ["c", 12, 4.6, 1.2, true],
+    ["c", 9.3, 13.6, 1.2, true],
+    ["c", 14.7, 13.6, 1.2, true],
+    ["p", "M9.8 16.8h4.4"],
   ],
   hanger: [
     ["p", "M10 6.5a2 2 0 1 1 2.6 1.9c-.4.1-.6.5-.6.9V11"],

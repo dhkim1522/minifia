@@ -19,7 +19,7 @@ export function FloatActions({ children, ref, single }: { children: ReactNode; r
 
 export interface FloatActionProps {
   /** E2E·누설 검사가 읽는 표식 */
-  kind: "claim" | "whisper" | "dress" | "skip";
+  kind: "claim" | "whisper" | "dress" | "skip" | "bots";
   /** 안에 그릴 아이콘 24 */
   icon: V2IconName;
   /** 아이콘 아래에 보이는 한 단어 이름표이자 접근성 이름(TOOL-01). 부르는 쪽이 enum 에서 만든 고정 문구다 */

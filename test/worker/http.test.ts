@@ -133,7 +133,7 @@ describe("GET /api/rooms/{code}/ws", () => {
     expect(msg.view.phaseEndsAt).toBeNull();
     expect(msg.view.players).toEqual([{ seat: 0, nickname: "민수", connected: true, isHost: true, alive: true }]);
     expect(Object.keys(msg.view.players[0]!).sort()).toEqual(["alive", "connected", "isHost", "nickname", "seat"]);
-    expect(msg.view.me).toEqual({ seat: 0, isHost: true, chat: "all" }); // 07-10: 대기실의 내 채널
+    expect(msg.view.me).toEqual({ seat: 0, isHost: true, chat: "all", testBots: 0 }); // 07-10: 대기실의 내 채널, 0075: 방장 봇 수
     sock.ws.close();
   });
 

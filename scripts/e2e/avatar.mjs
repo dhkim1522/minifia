@@ -328,8 +328,10 @@ export function makeAvatarFlows(helpers) {
       /** 닫힌 때의 버튼을 읽고(AD1) 눌러 시트를 연 뒤 시트·카드를 읽어(AD2) 같은 검사 줄로 기록한다. 끝나면 시트는 열려 있다. */
       const measure = async (who, page) => {
         const closed = await readDressUi(page);
-        const idle = closed.sheet === null && closed.float !== null && closed.floatLabel === "옷장" && closed.floatCount === 1;
-        rec(`${sc}-${who}`, "AD1a", `${who}: 로비에 떠 있는 버튼이 하나, 접근성 이름 '옷장'(14-07 TOOL-01 — 꾸미기 → 옷장), 시트는 닫혀 있음`, idle, `버튼 ${closed.float ? "있음" : "없음"} · 이름 ${closed.floatLabel} · 떠 있는 버튼 ${closed.floatCount}개 · 시트 ${closed.sheet ? "열림" : "닫힘"}`);
+        // 결정 0075: 방장은 [봇] 버튼이 하나 더 떠 있다(옷장 + 봇), 손님은 옷장 하나.
+        const wantFloats = page === hp ? 2 : 1;
+        const idle = closed.sheet === null && closed.float !== null && closed.floatLabel === "옷장" && closed.floatCount === wantFloats;
+        rec(`${sc}-${who}`, "AD1a", `${who}: 로비에 떠 있는 버튼이 ${wantFloats}개(방장은 봇 포함, 0075), 옷장 접근성 이름 '옷장'(14-07 TOOL-01), 시트는 닫혀 있음`, idle, `버튼 ${closed.float ? "있음" : "없음"} · 이름 ${closed.floatLabel} · 떠 있는 버튼 ${closed.floatCount}개 · 시트 ${closed.sheet ? "열림" : "닫힘"}`);
         await page.locator(DRESS_FLOAT).click({ timeout: 3000 });
         await page.waitForSelector(DRESS_SHEET, { timeout: 1500 });
         await sleep(150);

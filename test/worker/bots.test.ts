@@ -189,13 +189,13 @@ async function forceBotsDue(code: string): Promise<void> {
 }
 
 describe("testBots 거부", () => {
-  it("일반 방은 방장·손님 모두 BAD_MESSAGE 오류 프레임 하나뿐이고 방 상태가 그대로다", async () => {
+  it("일반 방(결정 0075): 손님은 NOT_HOST 와 그 소켓에만 state, 방장은 봇을 넣는다", async () => {
     const r = await seatQuiet(2);
     const before = JSON.stringify((await stored(r.code)).players);
-    for (const sock of allSockets(r)) {
-      expect(summary(await sendAndSettle(sock, { t: "testBots", count: 3 }))).toBe("[error:BAD_MESSAGE]");
-    }
+    expect(summary(await sendAndSettle(r.guests[0]!.sock, { t: "testBots", count: 3 }))).toBe("[error:NOT_HOST,state:lobby]");
     expect(JSON.stringify((await stored(r.code)).players)).toBe(before);
+    await sendAndSettle(r.host, { t: "testBots", count: 2 });
+    expect((await botsOf(r.code)).length).toBe(2);
   });
 
   it("테스트 방 손님은 NOT_HOST 와 그 소켓에만 state 가 간다", async () => {

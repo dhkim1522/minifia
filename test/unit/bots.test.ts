@@ -158,10 +158,13 @@ describe("BOT_NAMES", () => {
 });
 
 describe("setBotCount 거부", () => {
-  it("일반 방은 방장이어도 BAD_MESSAGE 다", () => {
+  it("일반 방 방장도 봇 수를 맞춘다(결정 0075), 일반 방 손님은 NOT_HOST 다", () => {
     const state = lobbyOf(2, false);
     const result = setBotCount(state, HOST_ID, 3, idMaker(), seededRandInt(1));
-    expect(result.ok ? "ok" : result.error).toBe("BAD_MESSAGE");
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(botsOf(result.state).length).toBe(3);
+    const guest = setBotCount(state, "player-id-0001-aaaa", 3, idMaker(), seededRandInt(1));
+    expect(guest.ok ? "ok" : guest.error).toBe("NOT_HOST");
   });
   it("테스트 방 손님은 NOT_HOST 다", () => {
     const state = lobbyOf(2);
@@ -179,9 +182,10 @@ describe("setBotCount 거부", () => {
       expect(`${count}:${result.ok ? "ok" : result.error}`).toBe(`${count}:BAD_MESSAGE`);
     }
   });
-  it("검사 순서는 testMode → 방장 → 대기실 → 개수다", () => {
+  it("검사 순서는 방장 → 대기실 → 개수다(결정 0075: testMode 검사 없음)", () => {
     const normal = lobbyOf(2, false);
-    expect(canon(setBotCount(normal, "player-id-0001-aaaa", -1, idMaker(), seededRandInt(1)))).toBe('{"error":"BAD_MESSAGE","ok":false}');
+    expect(canon(setBotCount(normal, "player-id-0001-aaaa", -1, idMaker(), seededRandInt(1)))).toBe('{"error":"NOT_HOST","ok":false}');
+    expect(canon(setBotCount(normal, HOST_ID, -1, idMaker(), seededRandInt(1)))).toBe('{"error":"BAD_MESSAGE","ok":false}');
     const started = stateAt(4, 0, 1, "roleReveal");
     const guestId = "player-id-0001-aaaa";
     expect(canon(setBotCount(started, guestId, -1, idMaker(), seededRandInt(1)))).toBe('{"error":"NOT_HOST","ok":false}');
@@ -192,7 +196,6 @@ describe("setBotCount 거부", () => {
     const before = canon(state);
     setBotCount(state, "player-id-0001-aaaa", 3, idMaker(), seededRandInt(1));
     setBotCount(state, HOST_ID, 8, idMaker(), seededRandInt(1));
-    setBotCount(lobbyOf(2, false), HOST_ID, 3, idMaker(), seededRandInt(1));
     expect(canon(state)).toBe(before);
   });
 });
@@ -389,13 +392,14 @@ describe("buildView 와 봇", () => {
     expect(String(buildView(withBots(lobbyOf(2), 3), HOST_ID, 0).me.testBots)).toBe("3");
   });
 
-  it("roleReveal 방장 view·손님 view·일반 방 방장 view 에는 testBots 키가 없다", () => {
+  it("roleReveal 방장 view·손님 view 에는 testBots 키가 없고, 일반 방 방장 대기실 view 에는 있다(결정 0075)", () => {
     const game = stateAt(2, 3, 2, "roleReveal");
     expect(Object.hasOwn(buildView(game, HOST_ID, 0).me, "testBots")).toBe(false);
     const lobby = withBots(lobbyOf(2), 3);
     expect(Object.hasOwn(buildView(lobby, guestId, 0).me, "testBots")).toBe(false);
     const normal = lobbyOf(2, false);
-    expect(Object.hasOwn(buildView(normal, HOST_ID, 0).me, "testBots")).toBe(false);
+    expect(buildView(normal, HOST_ID, 0).me.testBots).toBe(0);
+    expect(Object.hasOwn(buildView(withBots(normal, 2), guestId, 0).me, "testBots")).toBe(false);
   });
 
   it("손님 view JSON 에 isBot·botPlan·봇 id·token 이 없고 players 항목 키는 다섯이며 봇 자리는 connected true 다", () => {
