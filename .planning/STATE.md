@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 15
 current_phase_name: 낮 심부름·목격 기록·밤 흔적
-current_plan: 7
+current_plan: 8
 status: executing
-stopped_at: Completed 15-07-PLAN.md
-last_updated: "2026-11-07T07:32:41.242Z"
+stopped_at: Completed 15-06-PLAN.md
+last_updated: "2026-11-07T07:43:18.855Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: dd2f3bf2a43d72a48cf0dc9577c586d5d323cc49
+state_head: 14d7fdd699404268920fe434f041e52035ff186b
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 25
-  completed_plans: 21
+  completed_plans: 22
   percent: 67
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 15 (낮 심부름·목격 기록·밤 흔적) — executing (14페이즈 완료·배포 `d77e3dbf`, 결정 0073)
-Current Plan: 7
+Current Plan: 8
 Total Plans in Phase: 10
 Status: Ready to execute
 Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
@@ -219,6 +219,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 15 P05 | 55min | 3 tasks | 10 files |
 | Phase 15 P03 | 70min | 2 tasks | 28 files |
 | Phase 15 P07 | 50min | 3 tasks | 14 files |
+| Phase 15 P06 | 70min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -466,6 +467,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 15]: 15-05: 근처 snap 은 이동 응답 세기(moveSeqs)를 지우지 않는다 — 걷는 중 예측 구간 유지
 - [Phase 15]: 15-05: errand 표지·화살표·링은 런타임 onProject 에서 DOM 직접 쓰기(React 상태 없음), 빛은 위치·진행으로만
 - [Phase 15]: 15-03: 밤 고르기는 모든 역할이 같은 pickTarget(역할 미참조)·자기 포함 산 사람 전원 후보(U-11 개정, 의사 규칙 불변), 밤에는 아무도 걷지 않음, 아침 흔적은 피해자를 고른 산 사람 중 난수 한 명의 의상 조각 id 하나(+3초)
+- [Phase 15]: 15-06: 근처 판정은 시험이 좌표만으로 독립 계산한다(서버 판정 함수 재사용 금지). me.record 검사는 키 경로로(장소 id 'record' 때문에 문자열 검색 금지)
+- [Phase 15]: 15-06: 새 view 키는 FIFTEEN_PATHS·ALLOWED_NEW_PATHS·ME_ALLOWED·ME_KEYS·VIEW_ME_KEYS 다섯 곳을 함께 고친다
 
 ### Pending Todos
 
@@ -530,8 +533,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-07T07:32:41.101Z
-Stopped at: Completed 15-07-PLAN.md
+Last session: 2026-11-07T07:43:18.705Z
+Stopped at: Completed 15-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

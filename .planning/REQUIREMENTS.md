@@ -44,7 +44,7 @@
 
 ### 배포 (DEPLOY)
 
-- [ ] **DEPLOY-03**: v3.0 이 `v3` 브랜치에서 Worker `minifia-v3`(https://minifia-v3.dhplay.workers.dev)로 배포되고 v1.0·v2.0 주소는 그대로 남는다. 누설 검사가 새 메시지·단계로 넓어진 채 통과한다
+- [x] **DEPLOY-03**: v3.0 이 `v3` 브랜치에서 Worker `minifia-v3`(https://minifia-v3.dhplay.workers.dev)로 배포되고 v1.0·v2.0 주소는 그대로 남는다. 누설 검사가 새 메시지·단계로 넓어진 채 통과한다
 
 ## Future Requirements
 
@@ -88,7 +88,7 @@
 | TRACE-01 | Phase 15 | Complete |
 | TRACE-02 | Phase 15 | Complete |
 | TRACE-03 | Phase 15 | Complete |
-| DEPLOY-03 | Phase 15 | Pending |
+| DEPLOY-03 | Phase 15 | Complete |
 
 **Coverage:**
 - v3.0 requirements: 22 total
