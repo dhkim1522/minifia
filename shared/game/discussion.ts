@@ -85,7 +85,7 @@ export function endReached(state: RoomState): boolean {
  * 날짜별 기록(voteLog)과 그 밖의 키는 그대로 둔다.
  */
 export function enterDiscussion(state: RoomState): RoomState {
-  const { verdict: _verdict, execution: _execution, pickTurn: _pickTurn, runoff: _runoff, showdown: _showdown, ...rest } = state;
+  const { verdict: _verdict, execution: _execution, pickTurn: _pickTurn, runoff: _runoff, showdown: _showdown, errandTickAt: _errandTickAt, ...rest } = state;
   return {
     ...rest,
     players: state.players.map((p) => {

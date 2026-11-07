@@ -71,6 +71,9 @@ export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<strin
     if (!isAlive(mover)) return pick((p) => !isAlive(p));
     // 밤(NIGHT-07, 결정 0061-2): 산 마피아의 걸음은 산 마피아와 유령에게만 간다. 산 비마피아 mover 는 canMove 가 먼저 거절하지만 여기서도 빈 집합이다(방어선 두 겹).
     // 시민 편 폰에는 거르는 방식이 아니라 받는 사람 집합에서 빠져 네트워크로도 가지 않는다(결정 0002·0021). 탈락한 마피아는 유령 쪽으로 든다.
+    // errand(15페이즈 D-02): 산 사람의 걸음(move)은 본인과 유령에게만 간다. 다른 산 사람은 서버가 표본마다 따로 보내는 근처 snap 으로만 남을 본다(worker/room.ts runErrandTick).
+    // 반경 밖 좌표는 받는 사람 집합에서 빠져 네트워크로도 가지 않는다(결정 0002·0021).
+    if (state.phase === "errand") return pick((p) => p.id === mover.id || !isAlive(p));
     if (state.phase === "night") return mover.role === "mafia" ? pick((p) => !isAlive(p) || p.role === "mafia") : new Set();
     return pick(() => true);
   }
@@ -91,7 +94,7 @@ export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<strin
 /**
  * 접속(hello) 스냅샷에 실릴 좌석의 주인들 — 보는 사람 viewerId 별이다(GHOST-01).
  * 로비·assigning·roleReveal 은 방 전원(역할 확인 중 재접속해도 낮 시작에 위치가 있게, RESEARCH A6).
- * 지도 단계는 viewer 가 산 사람이면 산 사람만, 유령이면 전원. 밤(NIGHT-07, 결정 0061-3)은 산 시민·경찰·의사면 본인 한 칸뿐이다. ended·옛 투표 단계·방에 없는 viewer 는 빈 집합이다.
+ * 지도 단계는 viewer 가 산 사람이면 산 사람만(errand 는 본인 한 칸), 유령이면 전원. 밤(NIGHT-07, 결정 0061-3)은 산 시민·경찰·의사면 본인 한 칸뿐이다. ended·옛 투표 단계·방에 없는 viewer 는 빈 집합이다.
  */
 export function worldVisibleTo(state: RoomState, viewerId: string): ReadonlySet<string> {
   const viewer = state.players.find((p) => p.id === viewerId);
@@ -100,6 +103,8 @@ export function worldVisibleTo(state: RoomState, viewerId: string): ReadonlySet<
   if (state.phase === "lobby" || state.phase === "assigning" || state.phase === "roleReveal") return pick(() => true);
   if (!MAP_PHASES.has(state.phase)) return new Set();
   if (!isAlive(viewer)) return pick(() => true);
+  // errand(D-02): 산 viewer 는 본인 한 칸뿐 — 근처 사람은 worker 의 근처 snap(nearSnapFrame)이 따로 정한다.
+  if (state.phase === "errand") return new Set([viewerId]);
   // 밤: 시민 편은 본인 한 칸(사용자 확정 2026-11-03, 결정 0061-3) — handleHello·밤/아침 진입 snap 이 모두 이 함수를 쓴다(L9).
   if (state.phase === "night" && viewer.role !== "mafia") return new Set([viewerId]);
   return pick(isAlive);

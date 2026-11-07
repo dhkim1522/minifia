@@ -113,5 +113,7 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
 
 /** DO 알람 하나로 단계 마감과 방 만료, 방장 이양·로비 정리 마감(continuity)을 함께 다룬다. */
 export function nextWakeAt(state: RoomState): number {
-  return Math.min(state.phaseEndsAt ?? Number.POSITIVE_INFINITY, state.expiresAt, nextContinuityAt(state));
+  // errand 단계의 근처·목격 표본 시각(15페이즈). 다른 단계에서는 errandTickAt 이 있어도 무시한다.
+  const errandTick = state.phase === "errand" && state.errandTickAt !== undefined ? state.errandTickAt : Number.POSITIVE_INFINITY;
+  return Math.min(state.phaseEndsAt ?? Number.POSITIVE_INFINITY, state.expiresAt, nextContinuityAt(state), errandTick);
 }

@@ -43,7 +43,7 @@ export function enterNight(state: RoomState): RoomState {
     ...rest,
     players: state.players.map((p) => {
       // 심부름 목록·진행(15페이즈)도 키째 지운다 — 다음 낮에 새로 배정되므로 남은 값이 어떤 view 에도 새지 않는다.
-      const { nightPick: _nightPick, errandPlaces: _errandPlaces, errandDone: _errandDone, ...kept } = p;
+      const { nightPick: _nightPick, errandPlaces: _errandPlaces, errandDone: _errandDone, errandNear: _errandNear, errandSeen: _errandSeen, ...kept } = p;
       return kept;
     }),
   };

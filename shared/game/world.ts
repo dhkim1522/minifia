@@ -137,6 +137,55 @@ export function positionAtFx(seg: Segment, t: number): { x: number; z: number } 
   return { x: Math.round(q.x) + 0, z: Math.round(q.z) + 0 };
 }
 
+/**
+ * 지금(nowMs)부터 horizonMs 만큼만 남긴 짧은 구간(15페이즈 D-02: 근처 사람에게 목적지·전체 경로가 새지 않게). t0 = nowMs, p[0..1] = 그 순간 위치(positionAtFx 와 같은 반올림),
+ * 남은 경로를 v × horizonMs / 1000 만큼만 따라가고 마지막 선분은 비례로 자른다. 서 있거나 끝난 구간·now 가 t0 앞인 구간은 한 점이다. v 는 그대로, 입력은 바꾸지 않는다.
+ * 사칙연산·제곱근만 쓴다. now 가 t0 앞이면 t0 가 아직 오지 않은 구간이라 서 있는 것으로 본다(t0 = nowMs 로 옮겨 시각 불일치를 만들지 않는다).
+ */
+export function truncateSegment(seg: Segment, nowMs: number, horizonMs: number): Segment {
+  const here = positionAtFx(seg, nowMs);
+  const rest: Segment = { p: [here.x, here.z], t0: nowMs, v: seg.v };
+  const n = seg.p.length >> 1;
+  if (n < 2 || !(seg.v > 0) || nowMs <= seg.t0) return rest;
+  // interpFx 와 같은 순회로 지금 위치가 놓인 선분 i 를 찾는다(길이 0 선분은 건너뛴다). 끝까지 갔으면 끝난 구간이다.
+  const q = interpFx(seg, nowMs);
+  let remain = (seg.v * (nowMs - seg.t0)) / 1000;
+  let i = 0;
+  for (; i + 1 < n; i++) {
+    const dx = seg.p[2 * i + 2]! - seg.p[2 * i]!;
+    const dz = seg.p[2 * i + 3]! - seg.p[2 * i + 1]!;
+    const len = Math.sqrt(dx * dx + dz * dz);
+    if (len === 0) continue;
+    if (remain < len) break;
+    remain -= len;
+  }
+  if (i + 1 >= n) return rest;
+  const out: number[] = [here.x, here.z];
+  let budget = (seg.v * horizonMs) / 1000;
+  let cx = q.x;
+  let cz = q.z;
+  for (let j = i; j + 1 < n && budget > 0; j++) {
+    const bx = seg.p[2 * j + 2]!;
+    const bz = seg.p[2 * j + 3]!;
+    const dx = bx - cx;
+    const dz = bz - cz;
+    const len = Math.sqrt(dx * dx + dz * dz);
+    if (len === 0) continue;
+    if (len <= budget) {
+      out.push(bx, bz);
+      budget -= len;
+      cx = bx;
+      cz = bz;
+    } else {
+      const f = budget / len;
+      out.push(Math.round(cx + dx * f), Math.round(cz + dz * f));
+      budget = 0;
+    }
+  }
+  if (out.length < 4) return rest;
+  return { p: out, t0: nowMs, v: seg.v };
+}
+
 /** 구간이 끝나는 서버 ms(올림). 한 점이거나 v ≤ 0 이면 t0. */
 export function segmentEndsAt(seg: Segment): number {
   const p = seg.p;

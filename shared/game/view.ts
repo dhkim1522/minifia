@@ -34,7 +34,7 @@ import { confirmedTarget } from "./night";
 import { pointLinesOf, turnViewOf } from "./nomination";
 import { runoffVotersOf, runoffViewOf } from "./runoff";
 import { showdownViewOf } from "./showdown";
-import { PHASE_DEFS } from "./phases";
+import { PHASE_DEFS, RECORD_MAX } from "./phases";
 import { RULESET } from "./ruleset";
 import { isReady } from "./rematch";
 import { rolesInPlay } from "./roles";
@@ -256,6 +256,17 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 내 심부름(15페이즈, 결정 0074)은 errand 단계의 산 본인에게만 — 목록·진행뿐이고 좌표·역할은 없다. 필드별 복사라 서버 상태 객체를 펼치지 않는다.
   if (state.phase === "errand" && isAlive(me) && me.errandPlaces !== undefined) {
     myInfo.errand = { places: [...me.errandPlaces], done: [...(me.errandDone ?? [])] };
+  }
+
+  // 내 목격 기록(D-04)은 토론 단계에서 심부름 3곳을 모두 처리한 산 본인에게만 — 줄이 0개여도 빈 배열. 필드별 복사({seat, place})라 서버 상태를 펼치지 않고, 역할을 읽지 않는다.
+  if (
+    state.phase === "discussion" &&
+    isAlive(me) &&
+    me.errandPlaces !== undefined &&
+    me.errandPlaces.length > 0 &&
+    (me.errandDone ?? []).length >= me.errandPlaces.length
+  ) {
+    myInfo.record = (me.errandSeen ?? []).slice(0, RECORD_MAX).map((l) => ({ seat: l.seat, place: l.place }));
   }
 
   // 본인 선택은 본인에게만(D-06) — 남의 nightPick 은 어떤 키로도 싣지 않는다. 밤에 살아 있는 본인이 고른 값이 있을 때만 키를 만든다.

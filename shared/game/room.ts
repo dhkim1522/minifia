@@ -2,7 +2,7 @@
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
-import type { MapChoice, MapId, PlaceId } from "../protocol";
+import type { MapChoice, MapId, PlaceId, RecordLine } from "../protocol";
 import type {
   AssassinationRecord,
   BadgeId,
@@ -79,6 +79,10 @@ export interface Player {
   errandPlaces?: PlaceId[];
   /** 서버 전용(결정 0074). 처리한 장소 id 를 처리한 순서로. enterErrand 가 빈 배열로 시작하고 enterNight 가 키째 지운다. */
   errandDone?: PlaceId[];
+  /** 서버 전용(결정 0074). errand 표본마다 갱신하는 내 근처 산 사람의 좌석 집합(오름차순). 어떤 view 에도 싣지 않는다 — me.record 로 필드별 복사만. enterNight 가 키째 지운다. */
+  errandNear?: number[];
+  /** 서버 전용(결정 0074). 목격 줄({seat, place}, 시간순, 상한 RECORD_MAX). 어떤 view 에도 싣지 않는다 — me.record 로 필드별 복사만. enterNight 가 키째 지운다(토론 때 쓴다). */
+  errandSeen?: RecordLine[];
   /** 로비 의상(결정 D-6). setLook 만 쓴다. 사람이 고른 공개 값이고 역할과 무관하다. 없으면 기본 coat 로 읽고, 게임 시작·테스트 방 되돌리기 뒤에도 남는다. */
   look?: OutfitId;
   /** 직업을 건 뒤 다른 값으로 바꾼 적이 있음(결정 0066-1, O-1). 한 번 켜지면 판이 끝날 때까지 끄지 않는다. 이전 값은 어디에도 없다. */
@@ -163,6 +167,8 @@ export interface RoomState {
   everConnected?: boolean;
   phase: PhaseId;
   phaseEndsAt: number | null;
+  /** 서버 전용(결정 0074). errand 다음 근처·목격 표본 시각(ms). enterErrand 가 쓰고 sampleErrand 가 옮기고 enterDiscussion 이 키째 지운다. 어떤 view 에도 없다. */
+  errandTickAt?: number;
   /** 일차(1부터). dayAnnounce 진입 때 tick 의 진입 훅이 올린다. 없으면 아직 낮이 시작되지 않았다. 뷰에는 DayView.n 으로 실린다. */
   day?: number;
   /** 판 번호(1부터, 결정 D-26). 다시 하기(11-08)가 올린다. 없으면 1 — 옛 저장 방은 읽는 쪽 기본값(roundOf)으로 읽는다. 단계 키 '판:일차:단계'의 앞 부분이고 view.round 로 실린다. */
