@@ -75,6 +75,8 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.strictObject({ t: z.literal("whisper"), to: z.number().int().min(0).max(7), text: z.string().min(1).max(200) }),
   // 직업 주장(결정 0066-1): 값은 enum 뿐 — 이번 판 구성에 있는 직업인지·단계·산 사람은 서버 규칙(shared/game/badge.ts)이 본다. 참·거짓은 판정하지 않는다.
   z.strictObject({ t: z.literal("badge"), role: z.enum(["mafia", "police", "doctor", "citizen", "none"]) }),
+  // 심부름 처리(15페이즈, 결정 0074): 필드 없음 — 덧붙은 키는 거부한다. 위치·장소·시각은 서버가 정한다(D-08).
+  z.strictObject({ t: z.literal("errand") }),
   // 로비 의상(결정 D-6): 값은 의상 id enum 뿐 — 단계(대기실)·간격은 서버 규칙(shared/game/look.ts)이 본다. 역할과는 비교하지 않는다.
   z.strictObject({ t: z.literal("dress"), look: z.enum(OUTFIT_IDS) }),
   // 맵 선택(결정 D-20, 11-06): 값은 enum 뿐 — 방장·단계·허용 맵은 서버 규칙(shared/game/maps.ts pickMap)이 본다. 신원은 소켓 첨부 playerId.

@@ -1,7 +1,7 @@
 // 시계탑 광장 이동 데이터(MAP-06, 결정 D-22): 장애물 원문 · 28×28 이동 마스크 · 입장 지점 8곳 · PLAZA_MAP.
 // 재즈 바(map.ts)와 같은 규칙으로 만든다 — 시각·난수 없는 순수 모듈이고, 마스크는 장애물 원문과 시험(test/unit/map.test.ts)으로 묶인다.
 import { GRID_SIZE, STAGE_SPOT, parseMask } from "./map";
-import type { MapDef, Obstacle, Spawn } from "./map";
+import type { MapDef, Obstacle, PlaceDef, Spawn } from "./map";
 
 /**
  * 시계탑 광장 장애물 원문(design/v2.0/blockout/plaza.js 의 build). 길이는 월드 단위, rot 는 three 의 rotation.y(라디안).
@@ -81,4 +81,16 @@ export const PLAZA_SPAWNS: readonly Spawn[] = [
   { x: -3.2, z: -1.8 },
 ];
 
-export const PLAZA_MAP: MapDef = { id: "plaza", size: GRID_SIZE, mask: parseMask(PLAZA_MASK), spawns: PLAZA_SPAWNS, stage: STAGE_SPOT };
+/** 시계탑 광장 심부름 장소 후보 8곳(결정 0074) — 걷기 칸 중심. id 는 protocol.ts 의 PLACE_IDS 와 시험이 맞춘다. */
+export const PLAZA_PLACES: readonly PlaceDef[] = [
+  { id: "clock", x: -2.4, z: -2.6 },
+  { id: "fountain", x: 1.6, z: 1.6 },
+  { id: "bench", x: 4.6, z: -2.2 },
+  { id: "lamp", x: -3.0, z: -0.3 },
+  { id: "mail", x: 5.0, z: 3.4 },
+  { id: "tree", x: -4.6, z: 2.8 },
+  { id: "flower", x: 0.8, z: 4.6 },
+  { id: "stand", x: 2.4, z: -4.8 },
+];
+
+export const PLAZA_MAP: MapDef = { id: "plaza", size: GRID_SIZE, mask: parseMask(PLAZA_MASK), spawns: PLAZA_SPAWNS, stage: STAGE_SPOT, places: PLAZA_PLACES };

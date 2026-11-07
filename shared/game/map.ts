@@ -22,6 +22,13 @@ export interface Spawn {
   yaw?: number;
 }
 
+/** 심부름 장소 후보 한 곳(월드 단위, 결정 0074). 이 파일은 import 없는 순수 모듈이라 id 를 string 으로 두고 닫힌 집합(PLACE_IDS)은 시험이 맞춘다. */
+export interface PlaceDef {
+  id: string;
+  x: number;
+  z: number;
+}
+
 export interface MapDef {
   /** protocol.ts 의 MapId 와 같은 합집합이다 — 이 파일은 import 가 없는 순수 모듈이라(소스 규약 시험) 타입을 되풀이해 적는다. 어긋나면 maps.ts 의 MAPS(Record<MapId, MapDef>)가 컴파일에서 잡는다. */
   id: "bar" | "plaza";
@@ -33,6 +40,8 @@ export interface MapDef {
    * 무대 원기둥 안이라 마스크로는 막힌 칸이다(변론자가 서는 자리, 결정 0060-7).
    */
   stage?: { x: number; z: number };
+  /** 심부름 장소 후보(결정 0074, 맵당 8곳). 없는 맵(시험용)은 심부름 목록이 빈 배열이다. */
+  places?: readonly PlaceDef[];
 }
 
 /** 변론자가 서는 무대 위 자리(고정소수점). 블록아웃 design/v2.0/screens/bar.js 의 ctx.center 와 같은 점이다(높이 0.29 는 화면 규칙, A4). */
@@ -145,8 +154,20 @@ export const BAR_SPAWNS: readonly Spawn[] = [
   { x: 2.2, z: 5.4 },
 ];
 
+/** 재즈 바 심부름 장소 후보 8곳(결정 0074) — 가구 곁 걷기 칸 중심. id 는 protocol.ts 의 PLACE_IDS 와 시험이 맞춘다. */
+export const BAR_PLACES: readonly PlaceDef[] = [
+  { id: "glass", x: -3.9, z: -2.2 },
+  { id: "piano", x: -2.6, z: -5.6 },
+  { id: "sax", x: -0.2, z: -5.2 },
+  { id: "stool", x: -3.9, z: 0.2 },
+  { id: "door", x: 5.2, z: 5.0 },
+  { id: "poster", x: 2.6, z: -5.6 },
+  { id: "record", x: 5.2, z: -0.6 },
+  { id: "candle", x: -0.4, z: 2.6 },
+];
+
 /** 재즈 바 이동 맵(모듈 로드 때 마스크 문자열을 한 번 변환한다 — 결정적). */
-export const BAR_MAP: MapDef = { id: "bar", size: GRID_SIZE, mask: parseMask(BAR_MASK), spawns: BAR_SPAWNS, stage: STAGE_SPOT };
+export const BAR_MAP: MapDef = { id: "bar", size: GRID_SIZE, mask: parseMask(BAR_MASK), spawns: BAR_SPAWNS, stage: STAGE_SPOT, places: BAR_PLACES };
 
 /** 칸 한 변(고정소수점) = CELL × UNIT */
 const CELL_FX = 50;

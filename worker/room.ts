@@ -45,6 +45,8 @@ import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
+import { actErrand, placeCenterFx } from "../shared/game/errand";
+import { ERRAND_MIN_GAP_MS } from "../shared/game/phases";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
 import type { MapDef } from "../shared/game/map";
@@ -309,6 +311,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "testBotVote":
         await this.handleTestBotVote(ws, msg.exec, msg.pick);
+        return;
+      case "errand":
+        await this.handleErrand(ws);
         return;
       case "move":
         this.handleMove(ws, msg.x, msg.z);
@@ -693,6 +698,36 @@ export class Room extends DurableObject<Env> {
     return null;
   }
 
+  // 심부름 처리(15페이즈, 결정 0074): 메시지에 필드가 없다 — 신원은 소켓 첨부의 playerId 뿐이고 위치는 서버 world 구간, 장소는 서버 목록이 정한다(D-08).
+  private async handleErrand(ws: WebSocket): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    await this.applyErrand(att.playerId, Date.now());
+  }
+
+  // 사람의 errand 메시지와 봇 errandAct 가 같은 본체를 지난다(특권 없음). 간격(ERRAND_MIN_GAP_MS) 안의 요청과 규칙 거절(단계·생존·반경·중복·위치 없음)은
+  // 사람·역할·이유와 무관하게 같은 응답이다: 상태 변화 없이 보낸 사람에게만 자기 state 한 프레임(오류 프레임·방송 없음, D-08·T-15-02·T-15-04).
+  // 받아들이면 저장한 뒤 역시 본인에게만 state 를 보낸다 — 진행은 본인 view 에만 있어 다른 폰에 방송할 것이 없다.
+  private async applyErrand(playerId: string, now: number): Promise<void> {
+    const room = this.room;
+    if (!room) return;
+    const key = `errand:${playerId}`;
+    const last = this.writeAt.get(key);
+    if (last === undefined || now - last >= ERRAND_MIN_GAP_MS) {
+      this.writeAt.set(key, now);
+      const seg = Object.prototype.hasOwnProperty.call(this.world.segs, playerId) ? this.world.segs[playerId] : undefined;
+      const result = seg === undefined ? null : actErrand(room, playerId, positionAtFx(seg, now));
+      if (result !== null && result.ok) {
+        this.room = result.state;
+        await this.ctx.storage.put("room", this.room);
+      }
+    }
+    this.sendViewTo([playerId]);
+  }
+
   // 유언(9페이즈, WILL-01, 결정 0061-10): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-09-28).
   private async handleWill(ws: WebSocket, text: string): Promise<void> {
     const att = this.attachmentOf(ws);
@@ -950,6 +985,33 @@ export class Room extends DurableObject<Env> {
         return;
       case "verdict":
         await this.applyVerdict(step.botId, act.agree);
+        return;
+      // 15페이즈(결정 0074): 심부름. errandGo 는 그 봇의 미완료 장소 중 지금 위치에서 가장 가까운 곳 중앙으로 사람과 같은 applyMove(단계·150ms·걷기 칸 보정)를 지난다.
+      // errandAct 는 사람의 errand 메시지와 같은 applyErrand 본체다. 난수 없음, 특권 없음.
+      case "errandGo": {
+        const bot = room.players.find((p) => p.id === step.botId);
+        const seg = Object.prototype.hasOwnProperty.call(this.world.segs, step.botId) ? this.world.segs[step.botId] : undefined;
+        if (!bot || !seg || bot.errandPlaces === undefined) return;
+        const map = this.mapDef();
+        const here = positionAtFx(seg, Date.now());
+        const done = bot.errandDone ?? [];
+        let best: { x: number; z: number } | undefined;
+        let bestD = Infinity;
+        for (const id of bot.errandPlaces) {
+          if (done.includes(id)) continue;
+          const c = placeCenterFx(map, id);
+          if (c === undefined) continue;
+          const d = (c.x - here.x) ** 2 + (c.z - here.z) ** 2;
+          if (d < bestD) {
+            bestD = d;
+            best = c;
+          }
+        }
+        if (best !== undefined) this.applyMove(step.botId, best, Date.now());
+        return;
+      }
+      case "errandAct":
+        await this.applyErrand(step.botId, Date.now());
         return;
       default: {
         // 새 봇 행동을 BotAct 에 더하고 여기를 빠뜨리면 컴파일이 실패한다(Pitfall 15).
@@ -1257,12 +1319,12 @@ export class Room extends DurableObject<Env> {
     this.deliver(ids, { t: "chat", ...toWire(appended.record) });
   }
 
-  // 그날 처음으로 걷기 단계(dayAnnounce·discussion)를 벗어난 지도 단계에 들어오면 각자 토론이 끝난 자리를 기억한다(결정 0061-5).
+  // 그날 처음으로 걷기 단계(dayAnnounce·errand·discussion)를 벗어난 지도 단계에 들어오면 각자 토론이 끝난 자리를 기억한다(결정 0061-5).
   // captureHome 이 같은 일차면 입력을 그대로 돌려주므로(멱등) 지목 → 변론 → 밤처럼 이어지는 단계에서 자리를 덮지 않는다. 바뀌었으면 true.
   private captureHomeNow(): boolean {
     const room = this.room;
     if (!room || room.day === undefined) return false;
-    if (!MAP_PHASES.has(room.phase) || room.phase === "dayAnnounce" || room.phase === "discussion") return false;
+    if (!MAP_PHASES.has(room.phase) || room.phase === "dayAnnounce" || room.phase === "errand" || room.phase === "discussion") return false;
     const next = captureHome(
       this.world,
       room.players.map((p) => p.id),

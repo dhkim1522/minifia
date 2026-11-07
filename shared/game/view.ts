@@ -49,6 +49,7 @@ import { WHISPER_PER_DAY, whisperUsedToday } from "./whisper";
  */
 const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
   "dayAnnounce",
+  "errand",
   "discussion",
   "nomination",
   "runoff",
@@ -250,6 +251,11 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
       const { exec, pick } = state.testBotVote;
       if (exec !== undefined || pick !== undefined) myInfo.testBotVote = { exec: exec ?? "random", pick: pick ?? "random" };
     }
+  }
+
+  // 내 심부름(15페이즈, 결정 0074)은 errand 단계의 산 본인에게만 — 목록·진행뿐이고 좌표·역할은 없다. 필드별 복사라 서버 상태 객체를 펼치지 않는다.
+  if (state.phase === "errand" && isAlive(me) && me.errandPlaces !== undefined) {
+    myInfo.errand = { places: [...me.errandPlaces], done: [...(me.errandDone ?? [])] };
   }
 
   // 본인 선택은 본인에게만(D-06) — 남의 nightPick 은 어떤 키로도 싣지 않는다. 밤에 살아 있는 본인이 고른 값이 있을 때만 키를 만든다.

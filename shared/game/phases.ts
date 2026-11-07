@@ -1,6 +1,6 @@
 // 단계 정의 표. 코드 분기 대신 데이터 한 곳에 둔다(roles.ts 의 ROLE_TABLE 과 같은 원칙) —
 // 이후 페이즈는 이 표에 행을 더하는 방식으로만 단계를 늘린다(D-01).
-// 역할 확인(roleReveal) 뒤에는 낮 두 단계(dayAnnounce → discussion)가 돈다. 순차 주장 단계는 7페이즈에서 없어졌다(CHAT-06).
+// 역할 확인(roleReveal) 뒤에는 낮 단계(dayAnnounce → errand → discussion)가 돈다(errand 는 15페이즈 결정 0074). 순차 주장 단계는 7페이즈에서 없어졌다(CHAT-06).
 // 기본판 낮 흐름(결정 0072, 8페이즈 결정 0060-1·DAY-07): discussion → nomination(투표, 동시 15초) → defense → verdict → execution → night → morning → dayAnnounce.
 // 승패가 나면 execution·morning 의 마감에서 ended(마감 없음)로 간다. 투표 동점·0표는 결선 없이 night 다. 순차 지목(0063-1)·동점 결선 runoff(0066-4)·마지막 3인 결전 showdown(0066-5)은
 // ruleset.ts 의 RULESET 이 켜졌을 때만 돈다(기본판은 모두 꺼짐). 분기(투표 동률·0표 → night 등)는 tick.ts 의 ON_DEADLINE 이
@@ -58,13 +58,25 @@ export const SHOWDOWN_TURN_MS = 8_000; // 결정 0066-5 · 플레이테스트 �
 export const SHOWDOWN_POINT_MS = 8_000; // 결정 0066-5 · 플레이테스트 뒤 이 줄만 고친다 — 셋이 동시에 한 명을 지목하는 창
 export const SHOWDOWN_REVEAL_MS = 1_500; // 결정 0066-5 · 플레이테스트 뒤 이 줄만 고친다 — 누가 누구를 지목했는지 동시 공개
 
+// 심부름(15페이즈, 결정 0074). 낮 시작 다음 40초. 거리는 월드 단위(1 단위 = 칸 하나). 플레이테스트 뒤 이 블록의 줄만 고친다 — 다른 곳에 같은 값을 쓰지 않는다.
+export const ERRAND_MS = 40_000; // 결정 0074 · 플레이테스트 뒤 이 줄만 고친다 — 심부름 단계 길이(D-01)
+export const ERRAND_COUNT = 3; // 결정 0074 — 산 사람마다 받는 장소 수(D-01)
+export const ERRAND_ACT_R = 1.2; // 결정 0074 — 처리 반경(월드 단위)
+export const ERRAND_NEAR_R = 3.0; // 결정 0074 — 근처 반경(월드 단위, 근처 사람만 보인다 D-02)
+export const ERRAND_TICK_MS = 1_000; // 결정 0074 — 근처·목격 표본 간격
+export const ERRAND_VIEW_HORIZON_MS = 1_500; // 결정 0074 — 근처 사람 이동 구간을 자르는 길이
+export const ERRAND_MIN_GAP_MS = 250; // 결정 0074 — 같은 사람의 처리 요청 최소 간격(연타 방어)
+export const RECORD_MAX = 6; // 결정 0074 — 목격 기록 줄 상한
+export const MORNING_TRACE_MS = 3_000; // 결정 0074 — 아침 흔적 공개 구간
+
 export const VERDICT_MS = 10_000; // 찬반(DAY-06, 결정 0060-1·0060-4) — 조기 종료 없이 마감까지
 
 export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   lobby: Object.freeze({ durationMs: null, next: null, revealsOwnRole: false }), // start 로만 나간다
   assigning: Object.freeze({ durationMs: ASSIGNING_MS, next: "roleReveal", revealsOwnRole: false }),
   roleReveal: Object.freeze({ durationMs: ROLE_REVEAL_MS, next: "dayAnnounce", revealsOwnRole: true }),
-  dayAnnounce: Object.freeze({ durationMs: DAY_ANNOUNCE_MS, next: "discussion", revealsOwnRole: true }),
+  dayAnnounce: Object.freeze({ durationMs: DAY_ANNOUNCE_MS, next: "errand", revealsOwnRole: true }),
+  errand: Object.freeze({ durationMs: ERRAND_MS, next: "discussion", revealsOwnRole: true }), // 15페이즈(결정 0074) — 낮 시작 다음 40초 심부름, 끝나면 토론
   discussion: Object.freeze({ durationMs: DISCUSSION_MS, next: "nomination", revealsOwnRole: true }),
   defense: Object.freeze({ durationMs: DEFENSE_MS, next: "verdict", revealsOwnRole: true }),
   execution: Object.freeze({ durationMs: EXECUTION_MS, next: "night", revealsOwnRole: true }),

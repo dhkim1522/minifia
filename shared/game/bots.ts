@@ -13,6 +13,7 @@
 // 07-11: 봇은 고정 문구 목록에서 자유 채팅 줄(chat)을 보낸다 — 낮 토론 두 줄(BOT_CHAT_LINES), 밤 산 마피아 60% 한 줄(BOT_NIGHT_LINES), 후보 봇의 변론 한 줄.
 // 이모티콘·빠른 메시지(say)는 더 이상 보내지 않는다. 로비에서는 말하지 않는다(계획이 서지 않는다). 줄은 사람과 같은 applyChat 본체를 지나 단계 키·채널·D5 제한을 그대로 받는다.
 //
+// 15-01: errand(심부름, 결정 0074) 계획은 난수를 부르지 않는다 — 산 봇마다 errandGo 3 + errandAct 6 단계뿐이라 다른 단계의 호출 순서와 시드 고정 값은 그대로다.
 // 난수 호출 순서가 계약이다(시드 테스트가 고정한다). randInt(0) 호출은 어디에도 없다(cryptoRandInt(0) 은 RangeError).
 // 새 단계의 난수는 새 분기 안에서만 늘어난다. 07-08 에서 claim 분기의 난수 호출이 빠져 시드 고정 값이 새 호출 순서로 다시 고정됐다(다른 단계의 호출 수는 그대로).
 // 07-11: 봇 자유 채팅으로 discussion·night 의 호출 순서가 바뀌어 시드 고정 값을 다시 고정했다(옛 투표·defense 의 호출 수는 그대로였다).
@@ -36,7 +37,7 @@
 // 새 난수는 이 새 분기 안에서만 늘어나 기존 단계의 시드 고정 값은 그대로다. 실행은 사람과 같은 applyChat(한마디 확정 포함)·applyPoint(castShowdownPoint) 본체를 지난다 — 봇은 특권이 없다.
 // verdict(변론자가 아닌 산 봇만) = randInt(100) → randInt(찬반 지연 폭 5000) — 결정 함수(botExecAgree)는 찬성 확률 EXEC_YES_PERCENT 이고 고정 exec(yes·no)도 같다(exec 는 봇 찬반).
 import { isAlive } from "./alive";
-import { SHOWDOWN_TURN_MS } from "./phases";
+import { ERRAND_COUNT, SHOWDOWN_TURN_MS } from "./phases";
 import type { Player, RoomState } from "./room";
 import { LAST_WORD_CHIPS } from "./showdown";
 import type { RandInt } from "./tick";
@@ -104,6 +105,11 @@ export const BOT_WILL_LINES: readonly string[] = ["다들 끝까지 힘내요", 
 export const BOT_WILL_AT_MS = 3_000;
 /** 밤에 마피아 봇이 pick 계획 이만큼 뒤에 대상 곁으로 걷는다(ms). */
 export const BOT_APPROACH_AFTER_MS = 200;
+/** 심부름 봇 계획(결정 0074): 첫 걷기 시작·장소 사이 간격·걷기 뒤 처리·재시도(ms). 난수 없음. */
+export const ERRAND_BOT_FIRST_MS = 500;
+export const ERRAND_BOT_STEP_MS = 12_000;
+export const ERRAND_BOT_ACT_MS = 9_000;
+export const ERRAND_BOT_RETRY_MS = 11_000;
 /** 봇은 채팅 한 줄을 보내기 이만큼 전에 입력 중 신호를 켠다(ms, 09-24). 서버 typingRelay 의 켜짐 간격(1500ms)과 같다 — 같은 봇의 두 줄 사이(8000ms 이상)에는 항상 새로 중계된다. */
 export const BOT_TYPING_LEAD_MS = 1_500;
 
@@ -119,7 +125,10 @@ export type BotAct =
   | { t: "will"; text: string }
   | { t: "approach"; target: number }
   // 9페이즈 보완(09-24, feedback-1): 채팅 줄 직전에 서버 안에서 입력 중 켜짐을 중계한다(방 DO 의 relayTyping 본체, 사람의 typing 메시지와 같은 길). 난수 없음, 꺼짐은 보내지 않는다.
-  | { t: "typing" };
+  | { t: "typing" }
+  // 15페이즈(결정 0074): 심부름. errandGo = 봇의 미완료 장소 중 가장 가까운 곳 중앙으로 걷기(applyMove 본체), errandAct = 처리 요청(applyErrand 본체). 둘 다 난수 없음, 특권 없음.
+  | { t: "errandGo" }
+  | { t: "errandAct" };
 export interface BotStep {
   at: number;
   botId: string;
@@ -203,9 +212,9 @@ export function botPointTarget(
   return candidates[randInt(candidates.length)]!.seat;
 }
 
-/** 봇 계획이 필요한 단계(discussion·nomination·runoff·showdown·verdict·night·defense)의 키 "단계:마감". 그 밖은 null. */
+/** 봇 계획이 필요한 단계(errand·discussion·nomination·runoff·showdown·verdict·night·defense)의 키 "단계:마감". 그 밖은 null. */
 export function botPlanKey(state: RoomState): string | null {
-  const planned: readonly string[] = ["discussion", "nomination", "runoff", "showdown", "verdict", "night", "defense"];
+  const planned: readonly string[] = ["errand", "discussion", "nomination", "runoff", "showdown", "verdict", "night", "defense"];
   if (!planned.includes(state.phase)) return null;
   return `${state.phase}:${state.phaseEndsAt}`;
 }
@@ -289,7 +298,15 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
     add(Math.max(now, at - BOT_TYPING_LEAD_MS), { t: "typing" });
     add(at, { t: "chat", text });
   };
-  if (state.phase === "discussion") {
+  if (state.phase === "errand") {
+    // 심부름(15페이즈): 장소마다 걸어가고(errandGo) 9초·11초 뒤 처리한다(errandAct — 두 번째는 못 닿았을 때의 재시도, 이미 처리했으면 무해). 난수 없음.
+    for (let k = 0; k < ERRAND_COUNT; k++) {
+      const goAt = now + ERRAND_BOT_FIRST_MS + k * ERRAND_BOT_STEP_MS;
+      add(goAt, { t: "errandGo" });
+      add(goAt + ERRAND_BOT_ACT_MS, { t: "errandAct" });
+      add(goAt + ERRAND_BOT_RETRY_MS, { t: "errandAct" });
+    }
+  } else if (state.phase === "discussion") {
     const first = now + DISCUSSION_FIRST_BASE_MS + randInt(DISCUSSION_FIRST_SPAN_MS);
     addChat(first, discussionText(randInt));
     const second = first + DISCUSSION_GAP_BASE_MS + randInt(DISCUSSION_GAP_SPAN_MS);

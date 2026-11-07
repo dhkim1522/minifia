@@ -21,6 +21,7 @@ import type { PhaseId } from "../protocol";
 import { nextContinuityAt } from "./continuity";
 import { enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
+import { enterErrand } from "./errand";
 import { enterExecution } from "./execution";
 import { enterNomination, enterVote, stepNomination, resolveNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
@@ -50,6 +51,7 @@ export type DeadlineResult = { state: RoomState; stay: boolean; next?: PhaseId }
 /** 진입 훅. at 은 진입 시각(= 이전 마감)이다. 인자를 쓰지 않는 훅은 앞의 둘만 받아도 타입이 맞는다. */
 const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt, at: number) => RoomState>> = {
   dayAnnounce: enterDayAnnounce,
+  errand: enterErrand, // 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts)
   discussion: enterDiscussion,
   nomination: RULESET.pickTurn ? enterNomination : enterVote,
   execution: enterExecution,

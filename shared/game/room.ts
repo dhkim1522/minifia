@@ -2,7 +2,7 @@
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
-import type { MapChoice, MapId } from "../protocol";
+import type { MapChoice, MapId, PlaceId } from "../protocol";
 import type {
   AssassinationRecord,
   BadgeId,
@@ -75,6 +75,10 @@ export interface Player {
   will?: string;
   /** 공개 직업 주장(결정 0066-1). setBadge 만 쓴다. 실제 역할과 무관한 값이고 view 에는 산 사람 것만 players[].badge 로 실린다. */
   badge?: BadgeId;
+  /** 서버 전용(15페이즈 결정 0074). errand 진입 때 enterErrand 가 뽑은 장소 id 목록 — 모든 역할이 같은 모양이다(D-03). enterNight 가 키째 지운다. 뷰에는 me.errand 로만 간다. */
+  errandPlaces?: PlaceId[];
+  /** 서버 전용(결정 0074). 처리한 장소 id 를 처리한 순서로. enterErrand 가 빈 배열로 시작하고 enterNight 가 키째 지운다. */
+  errandDone?: PlaceId[];
   /** 로비 의상(결정 D-6). setLook 만 쓴다. 사람이 고른 공개 값이고 역할과 무관하다. 없으면 기본 coat 로 읽고, 게임 시작·테스트 방 되돌리기 뒤에도 남는다. */
   look?: OutfitId;
   /** 직업을 건 뒤 다른 값으로 바꾼 적이 있음(결정 0066-1, O-1). 한 번 켜지면 판이 끝날 때까지 끄지 않는다. 이전 값은 어디에도 없다. */
