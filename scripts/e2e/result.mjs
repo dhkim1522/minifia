@@ -194,7 +194,7 @@ const DOT_TAB_IDS = ["ghost", "mafia", "whisper"];
  * 탭 패널 판정(11-07, UI-SPEC A-3·G). 입력은 두 묶음 중 있는 것만 판정한다: { layout?, reveal? }. 묶음이 있는데 값이 비면 `측정값 없음` 으로 실패한다.
  * layout(최종 상태 한 페이지): roomH · tabBoxes [{id,w,h}] · panelCollapsedH · panelExpandedH(마피아 탭을 연 높이) · inputPresent(확장에서 [data-chat-input]) ·
  *   iconColors { 탭id: 아이콘 계산 색 } · crimson(진홍 토큰의 계산 색) · separators(마피아 탭 구분선 글자들) · dots { before, after }(점이 붙은 탭 id, 열기 전/마피아를 연 뒤) · headerBottom · panelTop(방 위 끝 기준)
- *   RT1 탭 44×44 이상 다섯 · RT3 접힌 188/244 ±1 · RT4 확장 min(round(0.7×방 높이),520) ±2 · RT5 확장에서 입력칸 없음 · RT6 마피아 탭만 진홍 · RT7 구분선 `{n}밤` ·
+ *   RT1 탭 44×44 이상 다섯 · RT3 접힌 188/244 ±1 · RT4 확장 min(round(0.7×방 높이),520) ±2 · RT5 확장에서 입력칸 없음 · RT6 마피아 탭만 진홍 · RT7 구분선은 없거나 모두 `{n}밤` ·
  *   RT8 점: 열기 전 마피아·유령·귓속말, 마피아를 연 뒤 유령·귓속말 · RT9 헤더 아래 62 이상이고 확장 패널이 헤더를 가리지 않음
  * reveal(연출 구간을 지나는 방장 페이지): tabsBefore {stage,count} · tabsAfter {stage,count} · live [{phase,count}] · paused {stageAtOpen,chipsAtOpen,stageLater,chipsLater,waitedMs} ·
  *   tapExpanded {expandedBefore,expandedAfter,stageBefore,stageAfter} · tapCollapsed {stageBefore,stageAfter}
@@ -216,7 +216,7 @@ function layoutTabChecks(l, tabIds) {
     RT4: "탭 패널: 마피아 탭 확장 높이 min(round(0.7 × 방 높이), 520)",
     RT5: "탭 패널: 확장에서 입력칸 없음",
     RT6: "탭 패널: 마피아 탭 아이콘만 진홍",
-    RT7: "탭 패널: 마피아 탭 구분선이 `{n}밤`",
+    RT7: "탭 패널: 마피아 탭 구분선은 없거나 모두 `{n}밤`",
     RT8: tabIds.includes("whisper") ? "탭 패널: 새 탭 점 — 열기 전 마피아·유령·귓속말, 마피아를 연 뒤 유령·귓속말" : "탭 패널: 새 탭 점 — 열기 전 마피아·유령, 마피아를 연 뒤 유령(귓속말 탭 없음, 결정 0072)",
     RT9: "탭 패널: 헤더 아래 62 이상, 확장 패널이 헤더를 가리지 않음",
   };
@@ -257,7 +257,8 @@ function layoutTabChecks(l, tabIds) {
   }
 
   // RT7
-  if (!Array.isArray(l?.separators) || l.separators.length === 0) out.push(noMeasure("RT7", L.RT7, "separators"));
+  // 15-10: 산 마피아의 밤 채팅 화면이 없어(15-08) 마피아 탭이 비어 있을 수 있다 — 구분선은 없어도 되고, 있으면 모두 `{n}밤` 꼴이다.
+  if (!Array.isArray(l?.separators)) out.push(noMeasure("RT7", L.RT7, "separators"));
   else out.push(result("RT7", L.RT7, l.separators.every((t) => /^\d+밤$/.test(t)) ? [] : [`구분선 "${l.separators.join('", "')}"`]));
 
   // RT8

@@ -183,9 +183,10 @@ test("RT6: 마피아 탭 아이콘만 진홍 — 진홍이 아니거나 다른 �
   assert.deepEqual(tabFailing(withLayout({ iconColors: { ...c, ghost: "rgb(230, 100, 100)" } })), ["RT6"]);
 });
 
-test("RT7: 구분선은 `{n}밤` 꼴이고 한 개 이상이어야 한다", () => {
+test("RT7: 구분선은 없거나(밤 채팅 화면 삭제, 15-08) 모두 `{n}밤` 꼴이어야 한다", () => {
   assert.deepEqual(tabFailing(withLayout({ separators: ["1일차"] })), ["RT7"]);
-  assert.deepEqual(tabFailing(withLayout({ separators: [] })), ["RT7"]);
+  assert.deepEqual(tabFailing(withLayout({ separators: [] })), []);
+  assert.deepEqual(tabFailing(withLayout({ separators: undefined })), ["RT7"]);
   assert.deepEqual(tabFailing(withLayout({ separators: ["1밤", "밤"] })), ["RT7"]);
 });
 

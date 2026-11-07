@@ -2990,11 +2990,9 @@ async function resultRevealFlow(ctx) {
       await waitChatLine(g.page, REVEAL_TEXTS.ghost);
     });
     rec(`${id}/setup`, "RT-G", "손님(유령)이 유령 채팅 한 줄을 보냄", ghostSent.ok, ghostSent.detail);
-    const mafiaSent = await attempt(async () => {
-      await typeAndSendChat(hp, REVEAL_TEXTS.mafia);
-      await waitChatLine(hp, REVEAL_TEXTS.mafia);
-    });
-    rec(`${id}/setup`, "RT-M", "방장(마피아)이 밤 채팅 한 줄을 보냄", mafiaSent.ok, mafiaSent.detail);
+    // 15페이즈(15-08): 산 마피아의 밤 채팅 화면이 없다(서버 채널은 유지). 사람이 보낼 수단이 없는 것이 계약이다.
+    const mafiaInput = await hp.locator("[data-chat-input]").count();
+    rec(`${id}/setup`, "RT-M", "방장(마피아)에게 밤 채팅 입력칸이 없음(15-08 밤 화면 통일)", mafiaInput === 0, `입력칸 ${mafiaInput}개`);
     await tapFace(hp, (await readNightFaces(hp)).faceSeats.find((x) => x !== hostSeat)); // 15-08: 밤 고르기는 얼굴 목록 칸
     await step("아침", () => skipTo(hp, ht, "morning"));
     await liveTabs("morning");
@@ -3073,7 +3071,10 @@ async function resultRevealFlow(ctx) {
 
     // 탭 안 내용: 마피아·유령 줄이 해당 탭에만, 귓속말은 머리줄 + 본문(보냈을 때)
     const bodyOf = async () => (await readResultTabs(gp))?.bodyText ?? "";
-    rec(sc, "RT14", "마피아 탭에 밤 채팅 줄이 보임", (await bodyOf()).includes(REVEAL_TEXTS.mafia), "마피아 탭 본문에 줄이 없음");
+    // 15-08 뒤: 사람이 보낸 밤 채팅 줄이 없으므로 마피아 탭에는 밤 채팅 줄이 하나도 보이지 않는다(채팅 줄 `[data-chat-line]` 0건·보낼 글 없음).
+    const mafiaBody = await bodyOf();
+    const mafiaChatLines = await gp.locator("[data-result-panel] .mv-chat__msg").count();
+    rec(sc, "RT14", "마피아 탭에 밤 채팅 줄이 없음(밤 채팅 화면 삭제, 15-08)", !mafiaBody.includes(REVEAL_TEXTS.mafia) && mafiaChatLines === 0, `본문 포함 ${mafiaBody.includes(REVEAL_TEXTS.mafia)} · 줄 ${mafiaChatLines}개`);
     await gp.locator('[data-result-tab="ghost"]').click({ timeout: 4000 });
     await sleep(150);
     const ghostBody = await bodyOf();
