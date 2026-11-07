@@ -246,13 +246,8 @@ describe("밤 마피아 — 다가가기(결정 0061-2·6, NIGHT-07·08, E2 #9)"
     expect(ringOf(m.container, 2)).toBe("mafia");
   });
 
-  it("산 마피아는 밤에 바닥을 눌러 걷는다(NIGHT-07), 산 시민·경찰·의사는 걷지 못한다", () => {
-    const sendM = vi.fn<(m: ClientMessage) => boolean>(() => true);
-    const a = mount(makeView({ mySeat: 0 }), { send: sendM });
-    tapFloor(a.container);
-    expect(moves(sendM)).toHaveLength(1);
-    cleanup();
-    for (const seat of [1, 2, 3]) {
+  it("밤에는 산 마피아도 걷지 못한다 — 시민·경찰·의사와 같다(15페이즈 D-05; 옛 NIGHT-07 마피아 걷기는 없어졌다)", () => {
+    for (const seat of [0, 1, 2, 3]) {
       const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
       const b = mount(makeView({ mySeat: seat }), { send });
       tapFloor(b.container);
