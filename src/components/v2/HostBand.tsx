@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import "../../styles/v2.css";
 import type { SoundView } from "../../audio/useSound";
 import type { RoomView } from "../../../shared/protocol";
-import { hostLineOf, hostTimeOf } from "../../game/hostLine";
+import { hostLineOf, hostTimeOf, type HostLocal } from "../../game/hostLine";
 import { timerTone, useCountdown } from "../../net/countdown";
 import { SoundButton } from "./SoundButton";
 import { V2Icon } from "./V2Icon";
@@ -20,6 +20,8 @@ export interface HostBandProps {
   offset: number;
   /** 역할 카드 앞면을 본 적이 있는가(클라이언트 상태) */
   cardSeen: boolean;
+  /** 클라이언트 상태(15-07): 목격 기록을 열었는가·아침 흔적 구간인가. 맵 화면이 알린다. 없으면 둘 다 거짓 */
+  local?: Pick<HostLocal, "recordOpened" | "traceOn">;
   /** 소리를 지원하는 환경이면 독에 단추를 둔다 */
   sound?: SoundView | null;
 }
@@ -94,10 +96,10 @@ function useHostMetrics(rootRef: RefObject<HTMLDivElement | null>, bandRef: RefO
   }, [rootRef]);
 }
 
-export function HostBand({ view, offset, cardSeen, sound }: HostBandProps) {
+export function HostBand({ view, offset, cardSeen, local, sound }: HostBandProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const bandRef = useRef<HTMLDivElement>(null);
-  const line = hostLineOf(view, { cardSeen });
+  const line = hostLineOf(view, { cardSeen, ...(local ?? {}) });
   const showTime = hostTimeOf(view);
   useHostMetrics(rootRef, bandRef, [view.phase, line, showTime, sound != null]);
   // 단계가 바뀐 렌더에서만 교체 연출(문장 페이드 + 종 흔들림). 첫 마운트·같은 단계 안 다시 그리기에는 하지 않는다.

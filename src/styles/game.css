@@ -13,7 +13,8 @@
 
 /* 헤더: 위 18, 좌우 16. 제목·안내는 왼쪽, 오른쪽에 [역할 카드] 44×44 + 시간 링 44(간격 8). 맵 탭을 가로채지 않도록 버튼만 입력을 받는다. */
 .mf-game__header { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-toast); box-sizing: border-box; height: 62px; padding: var(--space-sm) var(--space-md) 0; pointer-events: none; }
-.mf-game__header .mf-btn { pointer-events: auto; }
+.mf-game__header .mf-btn, .mf-game__header .mv-tool { pointer-events: auto; }
+.mf-game__record-slot { display: contents; }
 .mf-game__header .mv-phase { align-items: flex-start; }
 .mf-game__header .mv-phase__title, .mf-game__header .mv-phase__hint { text-shadow: var(--shadow-text); }
 /* 접히는 안내 줄 높이(한 줄)만큼만 헤더 아래로 삐져나온다 */

@@ -5,7 +5,7 @@ import { phaseKey } from "../../shared/game/audience";
 import type { PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { useSound } from "../audio/useSound";
-import { hostChimeOf } from "../game/hostLine";
+import { hostChimeOf, type HostLocal } from "../game/hostLine";
 import { nightDarkOf } from "../game/nightDark";
 import { LETTER_MS_PER_CHAR, LETTER_WRITE_MAX_MS, oneParagraph } from "../game/willLetter";
 import { countGraphemes } from "../../shared/nickname";
@@ -368,6 +368,11 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 단계 화면이 바뀌어도 시트가 살아 있어야 한다(Pitfall 19 ⑧, UI-SPEC D).
   const [roleCard, setRoleCard] = useState<{ open: boolean; tab: RoleCardTab }>({ open: false, tab: "role" });
   const [seenFront, setSeenFront] = useState(false);
+  // 맵 화면이 알리는 띠용 클라이언트 상태(15-07): 목격 기록을 열었는가·아침 흔적 구간인가. 같은 값이면 상태를 바꾸지 않는다
+  const [hostLocal, setHostLocal] = useState<Pick<HostLocal, "recordOpened" | "traceOn">>({});
+  const onHostLocal = useCallback((next: Pick<HostLocal, "recordOpened" | "traceOn">): void => {
+    setHostLocal((prev) => (prev.recordOpened === next.recordOpened && prev.traceOn === next.traceOn ? prev : next));
+  }, []);
   const onSeenFront = useCallback(() => setSeenFront(true), []);
 
   // 읽은 일지 수: 폰에는 이 개수만 남긴다. 기록 내용은 서버 view(me.records) 에서만 온다(가정 A4, T-03.1-32).
@@ -442,7 +447,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     <div ref={roomRef} className="mf-root mf-room">
       {view && banner !== "hidden" && <ReconnectBanner mode={banner} floating={shown?.phase === "lobby"} />}
       {shown && !shown.resting && status !== "replaced" && status !== "failed" ? (
-        <HostBand view={shown} offset={connection.offset} cardSeen={seenFront} sound={sound.supported ? sound : null} />
+        <HostBand view={shown} offset={connection.offset} cardSeen={seenFront} local={hostLocal} sound={sound.supported ? sound : null} />
       ) : view && sound.supported ? (
         // 쉬는 사람·안내 화면에는 띠가 없다(T-14-04). 소리 단추만 옛 자리의 독으로 둔다
         <HostDock sound={sound} />
@@ -590,6 +595,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             letter={letter}
             onEvent={connection.onEvent}
             epoch={connection.epoch}
+            onHostLocal={onHostLocal}
             onLeave={() => onExit("gaveUp")}
           />
         );

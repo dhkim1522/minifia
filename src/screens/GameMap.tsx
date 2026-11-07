@@ -19,6 +19,10 @@ import type { WillLetter as WillLetterState } from "../net/useWillLetter";
 import { SceneCurtain } from "../components/SceneCurtain";
 import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
+import { ToolButton } from "../components/ToolButton";
+import { RecordCard } from "../components/v2/RecordCard";
+import { TraceCard } from "../components/v2/TraceCard";
+import { V2Icon } from "../components/v2/V2Icon";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { CLAIM_ICON } from "../components/v2/ClaimBadge";
@@ -37,7 +41,9 @@ import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
 import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../game/dayView";
 import { errandProgress, placeCentersOf } from "../game/errandView";
-import { callTargetsOf } from "../game/hostLine";
+import { callTargetsOf, type HostLocal } from "../game/hostLine";
+import { recordRowsOf, traceWindowOf } from "../game/recordView";
+import { faceSrc, seatColorVar } from "../net/assets";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
 import type { ChatStore } from "../net/chatStore";
@@ -149,6 +155,8 @@ interface GameMapProps {
   onEvent?: RoomConnection["onEvent"];
   /** 연결 번호. 바뀐 첫 스냅샷은 배지 효과(팝·알약)를 내지 않고 현재 상태로 바로 그린다(09.1.1-08). 기본 0 */
   epoch?: number;
+  /** 사회자 띠가 읽는 클라이언트 상태(15-07): 목격 기록을 열었는가·아침 흔적 구간인가. 방 화면이 띠에 넘긴다. 언마운트 때 빈 값 */
+  onHostLocal?: (local: Pick<HostLocal, "recordOpened" | "traceOn">) => void;
   /** 맵을 쓸 수 없는 기기의 불가 카드 [처음으로] */
   onLeave?: () => void;
 }
@@ -196,7 +204,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, toast: pointToast = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, testButton, announce = null, toast: pointToast = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onHostLocal, onLeave }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
@@ -378,6 +386,86 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // pickedTurn = 내가 이미 누른 차례 번호. 서버가 거절하면 비워 다시 고를 수 있게 한다.
   const [pickedTurn, setPickedTurn] = useState<number | undefined>(undefined);
   const canPick = voting ? meAlive : nominating && meAlive && myTurnNo !== undefined && pickedTurn !== myTurnNo && mine === undefined;
+  // 목격 기록(15-07, ERRAND-05·D-04): 있는지는 서버가 준 view.me.record 의 유무 하나다(역할을 읽지 않는다). 토론에서만 [기록]·카드가 있고 단계가 바뀌면 사라진다.
+  // 한 번 열면 [기록] 의 빛은 그 토론 안에서 되살아나지 않는다(열림 래치 — 단계·일차 키가 바뀌면 자동으로 풀린다).
+  const witnessRows = useMemo(() => (view.phase === "discussion" && meAlive ? recordRowsOf(view) : null), [view, meAlive]);
+  const recordKey = `${view.phase}:${view.day?.n ?? 0}`;
+  const [recordOpenKey, setRecordOpenKey] = useState<string | null>(null);
+  const [recordSeenKey, setRecordSeenKey] = useState<string | null>(null);
+  const recordOpened = recordSeenKey === recordKey;
+  const recordOpen = witnessRows !== null && recordOpenKey === recordKey;
+  const toggleRecord = (): void => {
+    if (recordOpen) {
+      setRecordOpenKey(null);
+      return;
+    }
+    setRecordOpenKey(recordKey);
+    setRecordSeenKey(recordKey);
+  };
+  // 채팅 입력칸에 포커스가 가면 카드가 접힌다(카드는 기록 칸을 덮을 뿐 입력줄을 가리지 않지만, 쓰는 동안은 기록 칸이 보여야 한다)
+  useEffect(() => {
+    if (!recordOpen) return;
+    const root = rootRef.current;
+    if (root === null) return;
+    const onFocusIn = (e: FocusEvent): void => {
+      if (e.target !== null && e.target === inputRef.current) setRecordOpenKey(null);
+    };
+    root.addEventListener("focusin", onFocusIn);
+    return () => root.removeEventListener("focusin", onFocusIn);
+  }, [recordOpen, rootRef, inputRef]);
+  // 카드 아래 끝 = 입력줄 윗변 − 8 (CSS 변수 --mf-record-bottom = 루트 아랫변에서 카드 아랫변까지). 열려 있는 동안 다시 그릴 때마다 잰다(키보드·패널 높이)
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (root === null) return;
+    if (!recordOpen) {
+      root.style.removeProperty("--mf-record-bottom");
+      return;
+    }
+    const form = root.querySelector<HTMLElement>(".mv-chat__form");
+    if (form === null) return;
+    const rr = root.getBoundingClientRect();
+    const fr = form.getBoundingClientRect();
+    root.style.setProperty("--mf-record-bottom", `${Math.max(0, Math.round(rr.height - (fr.top - rr.top) + 8))}px`);
+  });
+
+  // 아침 흔적(15-07, TRACE-02·03, D-06): 흔적이 있는 아침의 마지막 MORNING_TRACE_MS 동안 모두에게 같은 카드. 서버 시계 기준.
+  // 구간 시작 전에 마운트하면 시작 시각까지 남은 ms 를 담은 소리 신호를 한 번 보낸다. 이미 구간 안에서 마운트(재접속·새로 고침)하면 신호는 없다.
+  const traceKey = view.phase === "morning" && view.day?.morning?.trace !== undefined ? `${view.day.n}:${view.phaseEndsAt ?? ""}` : null;
+  const [traceOn, setTraceOn] = useState<boolean>(() => traceWindowOf(view, Date.now() + offset)?.on === true);
+  const traceSignalKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (traceKey === null) {
+      setTraceOn(false);
+      return;
+    }
+    const win = traceWindowOf(view, Date.now() + offset);
+    if (win === null) {
+      setTraceOn(false);
+      return;
+    }
+    if (win.on) {
+      traceSignalKey.current = traceKey;
+      setTraceOn(true);
+      return;
+    }
+    setTraceOn(false);
+    if (traceSignalKey.current !== traceKey) {
+      traceSignalKey.current = traceKey;
+      emitSignal({ kind: "card", delayMs: win.startsInMs });
+    }
+    const timer = setTimeout(() => setTraceOn(true), win.startsInMs);
+    return () => clearTimeout(timer);
+    // 구간은 (일차, 마감) 키가 정한다 — 같은 아침 안의 다시 그리기로는 다시 잡지 않는다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [traceKey]);
+  const tracePiece = view.phase === "morning" ? view.day?.morning?.trace : undefined;
+  const traceShown = traceOn && traceKey !== null && tracePiece !== undefined;
+  // 사회자 띠가 같은 상태를 읽는다(RoomScreen 이 HostBand 에 넘긴다). 언마운트하면 비운다
+  useEffect(() => {
+    onHostLocal?.({ recordOpened, traceOn: traceShown });
+  }, [onHostLocal, recordOpened, traceShown]);
+  useEffect(() => () => onHostLocal?.({}), [onHostLocal]);
+
   // 빛남(14-04, HOST-03·04, U-7): 13 의 투표 처음 3초 깜빡임을 대체한다. 대상은 callTargetsOf(view)(공개 정보·내 역할만) 하나가 정하고,
   // 같은 단계 안에서 내가 그 도구를 쓰면 즉시 꺼져 되살아나지 않는다(서버가 거절해도 다시 켜지 않는다). "썼음" 은 단계 키(단계·일차·변론자) 하나로 쥐어 키가 바뀌면 자동으로 풀린다.
   // 내 행동만으로 끄는 로컬 상태이고 남의 행동·서버 값을 미리 그리지 않는다(T-14-13). 빛은 소리를 내지 않는다.
@@ -646,9 +734,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const errandCenters = useMemo(() => (errandMine === null ? NO_CENTERS : placeCentersOf(view)), [errandMine === null, view]);
   const errandPos = useErrandPos(store, view.me.seat, () => Date.now() + offset, errandCenters, errandMine?.done ?? NO_PLACE_IDS, errandMine !== null);
   const callTarget = useMemo(
-    () => callTargetsOf(view, view.phase === "errand" ? { pos: errandPos.pos() } : {}),
+    () => callTargetsOf(view, { ...(view.phase === "errand" ? { pos: errandPos.pos() } : {}), recordOpened, traceOn: traceShown }),
     // 위치는 표본이 바꾼 처리 가능·다음 장소로만 반영한다(errandPos.pos() 는 상태가 아니라 읽기)
-    [view, errandPos.actableId, errandPos.nextId],
+    [view, errandPos.actableId, errandPos.nextId, recordOpened, traceShown],
   );
   // 심부름의 빛은 위치·진행으로만 정해진다 — 14페이즈의 "이미 썼는가"·열린 시트와 무관하다(UI-SPEC 빛남 계약 추가)
   const errandCallAct = errandMine !== null && callTarget?.kind === "tool" && callTarget.tool === "errand";
@@ -672,6 +760,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   };
   const callOn = callTarget !== null && !callUsed && layerKind === null && !kbOpen && !whisper.mode;
   const callTool = callOn && callTarget.kind === "tool" ? callTarget.tool : null;
+  // [기록] 의 빛은 "이미 썼는가"(채팅 입력칸 포커스)와 무관하다 — 카드를 한 번도 열지 않았다는 사실(recordOpened) 하나가 끈다
+  const recordCall = callTarget?.kind === "tool" && callTarget.tool === "record" && layerKind === null && !kbOpen && !whisper.mode;
   const callTagSeats = useMemo<ReadonlySet<number> | null>(
     () => (callOn && callTarget.kind === "tag" && voting && mine === undefined ? new Set(callTarget.seats) : null),
     [callOn, callTarget, voting, mine],
@@ -753,7 +843,18 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           offset={offset}
           hintOn={hintOn}
           {...(whisper.mode ? { hintOverride: WHISPER_TEXT.modeHint } : {})}
-          extra={roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null}
+          extra={
+            witnessRows !== null || roleCard ? (
+              <>
+                {witnessRows !== null ? (
+                  <span className="mf-game__record-slot" data-record-button="">
+                    <ToolButton word="기록" icon={<V2Icon name="timeline" size={22} />} call={recordCall} expanded={recordOpen} onClick={toggleRecord} />
+                  </span>
+                ) : null}
+                {roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null}
+              </>
+            ) : null
+          }
         />
       </header>
       <WorldStage
@@ -853,6 +954,16 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           panelRef={panelRef}
         />
       )}
+      {witnessRows !== null && recordOpen ? (
+        <div className="mf-game__record">
+          <RecordCard rows={witnessRows} faceOf={faceSrc} colorOf={seatColorVar} onClose={() => setRecordOpenKey(null)} />
+        </div>
+      ) : null}
+      {traceShown && tracePiece !== undefined ? (
+        <div className="mf-game__trace">
+          <TraceCard piece={tracePiece} />
+        </div>
+      ) : null}
       {badge.allowed || whisper.allowed ? (
         <FloatActions ref={floatRef}>
           {badge.allowed ? (
