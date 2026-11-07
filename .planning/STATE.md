@@ -4,19 +4,19 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 15
 current_phase_name: 낮 심부름·목격 기록·밤 흔적
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 15-01-PLAN.md
-last_updated: "2026-11-07T06:24:27.326Z"
+stopped_at: Completed 15-04-PLAN.md
+last_updated: "2026-11-07T06:33:20.220Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: a0648ad7ed00f578e023c0fd3e935958fdf1be9f
+state_head: 415d2a0e0a4f140f6bcc1057b7f638dbc15a3ad2
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 25
-  completed_plans: 16
-  percent: 64
+  completed_plans: 17
+  percent: 67
 ---
 
 # Project State
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 15 (낮 심부름·목격 기록·밤 흔적) — executing (14페이즈 완료·배포 `d77e3dbf`, 결정 0073)
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 10
 Status: Ready to execute
 Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
@@ -214,6 +214,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 14 P08 | 95min | 3 tasks | 15 files |
 | Phase 14 P09 | 110min | 3 tasks | 12 files |
 | Phase 15 P01 | 60min | 2 tasks | 39 files |
+| Phase 15 P04 | 40min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -454,6 +455,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 14]: 0073: 사회자 띠·빛남·한 단어 이름표(0051 보완). 남은 초는 올림(U-4), 쉬는 사람 화면은 띠 없음(U-9 예외), 밤 진입 알림음은 LS-7 예외, 마지막 5초 숫자는 crimson-300(UI-SPEC 와 다름)
 - [Phase 15]: 15-01: 심부름 장소 id 는 닫힌 집합 16개(PLACE_IDS), {t:'errand'} 는 필드 없음·거절은 모든 이유·역할에서 같은 응답(보낸 소켓에 state 한 프레임), 결정 0074 에는 15-10 이 기록
 - [Phase 15]: 15-01: errand 단계는 채팅·동작을 받지 않는다(CHAT_PHASES 밖), 요청 간격 250ms 는 검사를 통과한 모든 시도에서 기록, 장소 좌표 세 곳(piano·sax·lamp)을 걷기 칸으로 보정
+- [Phase 15]: 15-04: 장소 아이콘은 16개(맵 후보 8+8), 새 V2IconName 은 arrow·thread 포함 18개. hostChimeOf 는 낮 시작→심부름 무음·심부름→토론 소리
 
 ### Pending Todos
 
@@ -518,8 +520,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-07T06:24:27.196Z
-Stopped at: Completed 15-01-PLAN.md
+Last session: 2026-11-07T06:33:20.067Z
+Stopped at: Completed 15-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
