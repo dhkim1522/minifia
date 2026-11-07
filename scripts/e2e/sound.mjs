@@ -507,26 +507,17 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       const picked = await attempt(async () => {
         // 밤 진입 장면 전환 막이 걷히고 이름표 버튼이 그려진 뒤에 누른다(막 위에서는 눌림이 가로막힌다)
         await hp.waitForFunction(() => !document.querySelector("[data-curtain]"), null, { timeout: 8000 });
-        await hp.waitForSelector(`[data-pick="${victim.seat}"]`, { timeout: 8000 });
+        // 15-08: 밤 고르기는 맵 이름표가 아니라 아래 패널의 얼굴 목록 칸([data-face])이다(네 역할 같음) — 패널 안이라 화면 밖 이름표 사정과 무관하다
+        await hp.waitForSelector(`[data-face="${victim.seat}"]`, { timeout: 8000 });
         await settle(hp);
-        // 밤 카메라가 마피아(방장)를 따라가서 어떤 이름표는 화면 밖(x<0)에 있다 — 눌림이 불가능하다(이 페이즈 이전부터의 알려진 밤 이름표 위치, 소리 단추와 무관).
-        // 화면 안에 있는 쪽이 피해자가 되도록 첫 두 손님의 역할(피해자·보조)을 바꾼다. 판정은 바뀐 라벨로 한다
-        const inView = (seat) => hp.evaluate((s) => { const b = document.querySelector(`[data-pick="${s}"]`); if (!b) return false; const r = b.getBoundingClientRect(); return r.left >= 0 && r.right <= window.innerWidth && r.top >= 0 && r.bottom <= window.innerHeight; }, seat);
-        if (!(await inView(victim.seat)) && (await inView(decoy.seat))) {
-          [victim, decoy] = [decoy, victim];
-          const labels = [`손님1(피해자·${roles[1]})`, `손님2(${roles[0]})`];
-          pages[1] = { label: labels[0], page: victim.page, tracker: victim.tracker };
-          pages[2] = { label: labels[1], page: decoy.page, tracker: decoy.tracker };
-          victimLabel = labels[0];
-        }
-        await tapPick(hp, victim.seat);
+        await hp.locator(`[data-face="${victim.seat}"]`).click({ timeout: 4000 });
+        await hp.waitForSelector(`[data-face="${victim.seat}"][aria-pressed="true"]`, { timeout: 3000 });
       });
       rec(`${sc}/night`, "NP1", "방장이 밤에 이름표를 눌러 피해자를 고른다(밤 UI 조작)", picked.ok, picked.detail);
       for (const g of guests) await g.page.touchscreen.tap(Math.round(ctx.size.w / 2), Math.round(ctx.size.h / 3)).catch(() => {});
-      // 12-10 밤 동작(E1·E2): 마피아 방장만 동작 칸이 있다 — 서버가 마피아 채널로만 보내므로 시민 편 손님 로그에는 emote.* 가 없어야 한다
-      const nightEmote = await sendEmote(hp, "throat");
-      rec(`${sc}/emote`, "NP5", "마피아 방장이 밤에 동작 칸을 눌러 보낸다", nightEmote.ok, nightEmote.detail);
-      if (nightEmote.ok) await waitEmoteLog(hp, 1);
+      // 15-08: 밤 마피아 화면은 시민 편과 같은 얼굴 목록 하나다 — 마피아 밤 채팅 패널이 없어져 동작 칸([data-emote-button])도 없다. 시민 편 손님 로그에 emote.* 가 없음은 그대로 판정된다
+      const nightEmoteBtn = await hp.evaluate(() => document.querySelectorAll("[data-emote-button]").length);
+      rec(`${sc}/emote`, "NP5", "마피아 방장의 밤 화면에는 동작 칸이 없다(15-08: 밤 채팅 패널 삭제)", nightEmoteBtn === 0, `동작 버튼 ${nightEmoteBtn}개`);
       await sleep(Math.max(0, PARITY_RELOAD_AT_MS - (Date.now() - nightStart)));
 
       // 밤 중간 새로고침(LS-10): night.fall 이 없고 침대만 + 남은 시간의 새 큐

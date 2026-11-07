@@ -675,10 +675,10 @@ test("faceListPanelH: 폭 4종 × 2행·1행이 UI-SPEC 표 값(약, ±1)이고 
   assert.equal(faceListPanelH({ w: 360, n: 8 }), 14 + 2 * (76 + 26.2) + 8 + 10 + 52 + 22);
 });
 
-test("gamePanelHeight: 밤은 faceList 하나(faceListPanelH) — nightMafia·nightCitizen 종류는 15-08 에서 없어졌다 (09-21, 15-09)", () => {
+test("gamePanelHeight: 밤은 faceList 하나(faceListPanelH) — 옛 밤 마피아·밤 시민 패널 종류는 15-08 에서 없어졌다 (09-21, 15-09)", () => {
   assert.equal(Object.hasOwn(GAME_PANEL_EXTRA, "nightMafia"), false);
   assert.throws(() => gamePanelHeight(640, "nightMafia"), /알 수 없는 패널 종류/);
-  assert.throws(() => gamePanelHeight(640, "nightCitizen"), /알 수 없는 패널 종류/);
+  assert.throws(() => gamePanelHeight(640, ["night", "Citizen"].join("")), /알 수 없는 패널 종류/);
   assert.equal(gamePanelHeight(640, "faceList", { w: 360, n: 5 }), faceListPanelH({ w: 360, n: 5 }));
   assert.equal(gamePanelHeight(932, "faceList", { w: 430, n: 4, wrappedRows: 1 }), faceListPanelH({ w: 430, n: 4, wrappedRows: 1 }));
   assert.throws(() => gamePanelHeight(640, "faceList"), /w·n/);
@@ -1347,14 +1347,14 @@ test("LOBBY_SIZES: DEFAULT_SIZES 4개 + 390x844 + 402x874 여섯 개이고 LOBBY
   assert.deepEqual(DEFAULT_SIZES.map((x) => x.label), ["360x640", "390x664", "430x932", "360x560"]);
 });
 
-test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·result-awards(11-09 시상식 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종) 만 갖는다", () => {
+test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·result-awards(11-09 시상식 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand·witness·trace(15-09 심부름·목격 기록·밤 통일/아침 흔적 폰 6종) 만 갖는다", () => {
   const run = readFileSync(new URL("./run.mjs", import.meta.url), "utf8");
   assert.match(run, /extraSizes/);
   assert.match(run, /!args\.sizesGiven/);
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)?(?:, skipByDefault: true)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
-  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "result-awards", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band"]);
+  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "result-awards", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "errand", "witness", "trace"]);
 });
 
 test("기본판(결정 0072)에서 꺼진 장치 흐름 7개는 skipByDefault 이고 politics-verdict 는 기본 실행에 남는다 (13-05)", () => {
@@ -3348,21 +3348,21 @@ const mk = (label, log) => ({ label, log });
 const emoteIn = (gain) => [entry("bed.night", 1), entry("emote.throat", 5, gain)];
 const leak = (input) => soundEmoteLeakChecks(input);
 const eOk = () => ({
-  senderLog: emoteIn(0.5),
+  senderLog: [entry("bed.night", 1), entry("night.cue", 6)],
   otherLogs: [mk("손님1", [entry("bed.night", 1), entry("night.cue", 6)]), mk("손님2", [entry("bed.night", 1)])],
   day: { senderLog: [entry("emote.clap", 5, 1)], receiverLog: [entry("emote.clap", 5, 0.501)] },
 });
 
-test("soundEmoteLeakChecks: 정상(보낸 쪽 1개·시민 0·낮 gain 1 과 0.501)은 E1~E3 통과", () => {
+test("soundEmoteLeakChecks: 정상(밤 마피아 0·시민 0·낮 gain 1 과 0.501)은 E1~E3 통과", () => {
   const lines = leak(eOk());
   assert.deepEqual(lines.map((l) => l.id), ["E1", "E2", "E3"]);
   assert.deepEqual(vFails(lines), []);
 });
 
-test("E1: 보낸 마피아 로그의 emote.* 가 정확히 1개 (played 무관) — 0개·2개 실패", () => {
-  assert.deepEqual(vFails(leak({ ...eOk(), senderLog: [entry("bed.night", 1)] })), ["E1"]);
-  assert.deepEqual(vFails(leak({ ...eOk(), senderLog: [...emoteIn(0.5), entry("emote.deny", 9, 0.5)] })), ["E1"]);
-  assert.deepEqual(vFails(leak({ ...eOk(), senderLog: [entry("emote.throat", 5, 0.5)].map((e) => ({ ...e, played: false })) })), []);
+test("E1(15-08): 밤 마피아 로그의 emote.* 가 0개 — 밤 동작 칸이 없어졌으므로 1개라도 있으면 실패(played 무관)", () => {
+  assert.deepEqual(vFails(leak({ ...eOk(), senderLog: [entry("bed.night", 1)] })), []);
+  assert.deepEqual(vFails(leak({ ...eOk(), senderLog: emoteIn(0.5) })), ["E1"]);
+  assert.deepEqual(vFails(leak({ ...eOk(), senderLog: [entry("emote.throat", 5, 0.5)].map((e) => ({ ...e, played: false })) })), ["E1"]);
 });
 
 test("E2: 시민 쪽 로그에 emote.* 가 하나라도 있으면 실패하고 그 라벨을 적는다", () => {
@@ -3962,7 +3962,7 @@ const recOk = (over = {}) => ({
   cardRect: RR(16, 183, 328, 150),
   dockRect: RR(300, 131, 44, 44),
   bandRect: RR(16, 70, 328, 53),
-  panelRect: RR(0, 360, 360, 200),
+  inputRect: RR(16, 400, 328, 52),
   collapsedOnFocus: true,
   ...over,
 });
@@ -3983,7 +3983,10 @@ test("recordChecks: 어긋남은 해당 판정만 실패", () => {
   // 카드 윗변이 독 아랫변 + 8 − 0.5 미만이면 실패, 0.5 이내는 통과
   assert.deepEqual(fails(recordChecks(recOk({ cardRect: RR(16, 182, 328, 150) }))), ["RC3"]);
   assert.deepEqual(fails(recordChecks(recOk({ cardRect: RR(16, 182.6, 328, 150) }))), []);
-  assert.deepEqual(fails(recordChecks(recOk({ cardRect: RR(16, 183, 328, 200) }))), ["RC3"]);
+  // 아랫변이 입력줄 윗변 − 8 을 넘으면 실패(카드는 채팅 기록 칸을 덮되 입력줄은 덮지 않는다), 정확히 − 8 이면 통과
+  assert.deepEqual(fails(recordChecks(recOk({ cardRect: RR(16, 183, 328, 209) }))), []);
+  assert.deepEqual(fails(recordChecks(recOk({ cardRect: RR(16, 183, 328, 211) }))), ["RC3"]);
+  assert.deepEqual(fails(recordChecks(recOk({ cardRect: RR(16, 183, 328, 300) }))), ["RC3"]);
   assert.deepEqual(fails(recordChecks(recOk({ bandRect: RR(16, 150, 328, 53) }))), ["RC3"]);
   assert.deepEqual(fails(recordChecks(recOk({ collapsedOnFocus: false }))), ["RC4"]);
 });

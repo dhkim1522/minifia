@@ -356,8 +356,8 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
         if (glow) await gameGH(ctx, id, `record-${who}`, handle);
         await handle.page.locator(".mv-chat__input").first().focus({ timeout: 3000 });
         const collapsed = await handle.page.waitForFunction(() => document.querySelector("[data-record-card]") === null, null, { timeout: 2000 }).then(() => true, () => false);
-        const f = fold(recordChecks({ finished: true, hasButton: before.buttons === 1, hasCard: open.cards === 1, rowsAttr: open.rowsAttr, rowCount: open.rowCount, zeroText: open.zeroText, cardRect: open.cardRect, dockRect: open.dockRect, bandRect: open.bandRect, panelRect: open.panelRect, collapsedOnFocus: collapsed }));
-        rec(sc, "WR", `줄 수 표식 = li ${open.rowCount}개·줄 0이면 '0'·카드 윗변 ≥ 독 + 8·띠·패널 교차 0·입력칸 포커스에 접힘`, f.ok, f.detail);
+        const f = fold(recordChecks({ finished: true, hasButton: before.buttons === 1, hasCard: open.cards === 1, rowsAttr: open.rowsAttr, rowCount: open.rowCount, zeroText: open.zeroText, cardRect: open.cardRect, dockRect: open.dockRect, bandRect: open.bandRect, inputRect: open.inputRect, collapsedOnFocus: collapsed }));
+        rec(sc, "WR", `줄 수 표식 = li ${open.rowCount}개·줄 0이면 '0'·카드 윗변 ≥ 독 + 8·띠 교차 0·아랫변 ≤ 입력줄 − 8·입력칸 포커스에 접힘`, f.ok, f.detail);
         return open.rowCount;
       };
       const rowsA = await finishedFlow({ page: hp, tracker: ht, takeIssues: host.takeIssues }, "host", true);

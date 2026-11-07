@@ -2488,10 +2488,11 @@ async function nightMismatch(ctx) {
     });
     rec(sc, "MM1", "봇 마피아가 먼저 대상을 고른다(me.nightTally)", botPick.ok, botPick.detail);
     const botSeat = (ht.last().me.nightTally ?? []).find((t) => t.n >= 1)?.seat;
-    const other = g.picks.map((b) => b.seat).sort((a, b) => a - b).find((s) => s !== botSeat);
+    const faceSeats = (await readNightFaces(hp)).faceSeats;
+    const other = faceSeats.filter((x) => x !== game.hostSeat && !(ht.last().me.allies ?? []).includes(x)).sort((a, b) => a - b).find((x) => x !== botSeat);
     if (botSeat === undefined || other === undefined) throw new SetupError("봇 선택 또는 다른 대상을 찾지 못함");
     const tap = await attempt(async () => {
-      await tapPick(hp, other);
+      await tapFace(hp, other); // 15-08: 밤 고르기는 아래 패널 얼굴 목록 칸이다
     });
     rec(sc, "MM2", `봇이 고른 자리(${botSeat})와 다른 자리(${other})를 눌러 눌림 표시`, tap.ok, tap.detail);
     await ht.waitFor((v) => (v.me.nightTally ?? []).filter((t) => t.n >= 1).length >= 2, 3000, "갈린 선택").catch(() => {});
@@ -2527,11 +2528,11 @@ async function nightPolice(ctx, shared) {
     rec(sc, "PL1", "내 직업이 경찰이다", view.me.role === "police", `직업 ${view.me.role}`);
     shared.dark.police = n.nightDark;
     sideChecks(rec, sc, "경찰", n, g);
-    faceListChecks(rec, sc, "경찰", n, aliveOf(view).length - 1);
-    rec(sc, "PL2", "경찰 얼굴 목록에 내 칸이 없다", !n.faces.some((f) => f.seat === hostSeat), `칸 ${n.faces.map((f) => f.seat).join(",")}`);
+    faceListChecks(rec, sc, "경찰", n, aliveOf(view).length);
+    rec(sc, "PL2", "경찰 얼굴 목록에 내 칸도 있다(15-08: 네 역할 모두 나 포함 산 사람 전원)", n.faces.some((f) => f.seat === hostSeat), `칸 ${n.faces.map((f) => f.seat).join(",")}`);
     recTagInStageFaces(rec, sc, "PL3", "경찰", n);
     await gameGH(ctx, id, "night-police", host);
-    const target = n.faces.map((f) => f.seat).sort((a, b) => a - b)[0];
+    const target = n.faces.map((f) => f.seat).filter((x) => x !== hostSeat).sort((a, b) => a - b)[0];
     const tap = await attempt(async () => {
       await tapFace(hp, target);
     });
@@ -2921,10 +2922,11 @@ async function resultFlow(ctx) {
       await untilGame(hp, (g) => g.phase === "verdict" && g.verdictBtns.length === 2, 6000, "찬반 도착");
       await chooseVerdict(hp, true);
       await skipTo(hp, ht, "night");
-      const g = await untilGame(hp, (x) => x.phase === "night" && x.picks.length > 0, 9000, "밤 도착(지목 버튼)");
+      await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
+      await hp.waitForSelector("[data-face]", { timeout: 8000 });
       const alive = aliveOf(ht.last());
       if (alive.length !== 3 || !alive.includes(hostSeat)) throw new SetupError(`처형 뒤 생존자가 방장 포함 3명이 아님 (${alive.join(",")})`);
-      await tapPick(hp, g.picks.find((b) => b.seat !== hostSeat).seat); // 4명판에는 의사가 없어 반드시 죽는다
+      await tapFace(hp, (await readNightFaces(hp)).faceSeats.find((x) => x !== hostSeat)); // 4명판에는 의사가 없어 반드시 죽는다(15-08: 밤 고르기는 얼굴 목록 칸)
       await skipTo(hp, ht, "morning");
       await toEnded(game);
       await resultState(ctx, id, game, { winner: "mafiaWin", n: 4 });
@@ -2974,7 +2976,8 @@ async function resultRevealFlow(ctx) {
     await untilGame(hp, (x) => x.phase === "verdict" && x.verdictBtns.length === 2, 6000, "찬반 도착");
     await chooseVerdict(hp, true);
     await step("밤", () => skipTo(hp, ht, "night"));
-    const night = await untilGame(hp, (x) => x.phase === "night" && x.picks.length > 0, 9000, "밤 도착(지목 버튼)");
+    await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
+    await hp.waitForSelector("[data-face]", { timeout: 8000 }); // 15-08: 밤 고르기는 얼굴 목록 칸
     await liveTabs("night");
     const alive = aliveOf(ht.last());
     if (alive.length !== 3 || !alive.includes(hostSeat)) throw new SetupError(`처형 뒤 생존자가 방장 포함 3명이 아님 (${alive.join(",")})`);
@@ -2992,7 +2995,7 @@ async function resultRevealFlow(ctx) {
       await waitChatLine(hp, REVEAL_TEXTS.mafia);
     });
     rec(`${id}/setup`, "RT-M", "방장(마피아)이 밤 채팅 한 줄을 보냄", mafiaSent.ok, mafiaSent.detail);
-    await tapPick(hp, night.picks.find((b) => b.seat !== hostSeat).seat);
+    await tapFace(hp, (await readNightFaces(hp)).faceSeats.find((x) => x !== hostSeat)); // 15-08: 밤 고르기는 얼굴 목록 칸
     await step("아침", () => skipTo(hp, ht, "morning"));
     await liveTabs("morning");
 

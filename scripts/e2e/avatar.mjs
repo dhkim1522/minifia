@@ -597,9 +597,10 @@ export function makeAvatarFlows(helpers) {
       const dom = await gp.evaluate(() => ({ button: document.querySelectorAll("[data-emote-button]").length, tray: document.querySelectorAll("[data-emote-tray]").length, cell: document.querySelectorAll("[data-emote]").length }));
       rec(sc, "AP5a", "시민 편 손님의 밤 DOM 에 [data-emote-button]·[data-emote-tray]·[data-emote] 가 0개(D-20)", dom.button === 0 && dom.tray === 0 && dom.cell === 0, `버튼 ${dom.button} · 판 ${dom.tray} · 칸 ${dom.cell}`);
       const hostDom = await hp.evaluate(() => document.querySelectorAll("[data-emote-button]").length);
-      rec(sc, "AP5b", "마피아 방장의 밤 아래 패널에는 동작 버튼이 있다(마피아 채널)", hostDom === 1, `버튼 ${hostDom}`);
-
-      await deliver(rec, sc, "AP5c", { sender: H, receivers: [G], emoteId: "throat", mode: "absent", tagSamples: tags });
+      // 15-08: 밤 마피아 화면은 시민 편과 같은 얼굴 목록 하나(채팅 패널 삭제)라 동작 버튼이 없다 — 마피아 → 시민 편 동작 도착 0건은 보낼 수단이 없는 것으로 대신한다
+      rec(sc, "AP5b", "마피아 방장의 밤 아래 패널에도 동작 버튼이 없다(15-08: 네 역할 같은 얼굴 목록)", hostDom === 0, `버튼 ${hostDom}`);
+      // 보낸 동작이 없어도 밤 두 화면(마피아 방장·시민 편 손님)의 이름표 층에 동작 표식이 없음은 그대로 표본으로 본다(AP7)
+      for (const who of [H, G]) tags.push({ where: `${sc}/AP5/${who.name}`, mark: await readTagEmoteMarks(who.page) });
       recordTagSamples(rec, `${id}/tags`, tags);
     } finally {
       await closeGame(game);

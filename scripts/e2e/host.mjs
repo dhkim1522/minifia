@@ -36,7 +36,7 @@ const MAX_STEPS = 90;
 /** 시간이 있는 단계의 최소 길이(ms) — src/game/hostLine.ts hostTimeOf 와 같은 값 */
 const HOST_TIME_MIN_MS = 3000;
 /** 띠 검사가 반드시 지나야 하는 단계(없으면 EB0 실패 — 공허 통과 금지). 배정은 3초 창이라 잡히면 더하고 못 잡아도 실패가 아니다 */
-const BAND_REQUIRED = ["lobby", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
+const BAND_REQUIRED = ["lobby", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
 /** 이 높이(px) 미만의 폰은 방 틀 높이 575 미만의 짧은 폰이다(DEFAULT_SIZES 의 360x560 probe) — UI#14 알려진 한계 적용 대상 */
 const SHORT_PHONE_H = 575;
 /** 이름표·얼굴 칸이 눌려야 하는 단계(띠·이름표 겹침 검사) */
@@ -80,8 +80,9 @@ async function readTagsStable(page, maxMs = 11000) {
   return rects;
 }
 
-/** ended 까지 넘긴다. 처형이 없는 날이 이어지면 한 번의 skipTo(24칸)로 모자랄 수 있어 몇 번 더 시도한다(마감이 먼저 지나 이미 ended 면 그대로 둔다) */
-async function driveToEnd(hp, ht, tries = 5) {
+/** ended 까지 넘긴다. 처형이 없는 날이 이어지면 한 번의 skipTo(24칸)로 모자랄 수 있어 몇 번 더 시도한다(마감이 먼저 지나 이미 ended 면 그대로 둔다).
+ *  15페이즈: 하루에 심부름 단계가 하나 늘어(6칸) 시도 횟수를 5 → 8 로 올렸다(15-09). */
+async function driveToEnd(hp, ht, tries = 8) {
   for (let i = 0; i < tries && ht.last().phase !== "ended"; i++) {
     try {
       await skipTo(hp, ht, "ended");
@@ -473,16 +474,16 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         segs.push({ kind, name, count: log?.length ?? -1, played: log?.filter((e) => e.played).length ?? -1 });
         return phase;
       };
-      // roleReveal → dayAnnounce(전환 1), dayAnnounce → discussion(0), discussion → nomination(1), nomination → …
+      // roleReveal → dayAnnounce(전환 1), dayAnnounce → errand(0, 15페이즈), errand → discussion(1), discussion → nomination(1), nomination → …
       const toDay = await stepSeg("transition", "역할 확인 → 낮 시작");
       if (toDay === "dayAnnounce") {
-        // 낮 시작은 2초 단계라 넘기기를 누르면 토론까지 건너뛰거나(14-09: 배포본은 지연이 커서 이미 토론으로 넘어간 뒤 넘기기가 토론 → 투표를 건드려 1번이 잡혔다)
+        // 낮 시작은 2초 단계라 넘기기를 누르면 심부름까지 건너뛰거나(14-09: 배포본은 지연이 커서 이미 토론으로 넘어간 뒤 넘기기가 토론 → 투표를 건드려 1번이 잡혔다)
         // 자동으로 넘어가는 것을 기다려 그 구간의 ui.host 를 센다. 0번이어야 한다는 문턱은 그대로다.
         await clearLog(hp);
-        await ht.waitFor((v) => v.phase === "discussion", 8000, "낮 시작 → 토론 자동 전환").catch(() => {});
+        await ht.waitFor((v) => v.phase === "errand", 8000, "낮 시작 → 심부름 자동 전환").catch(() => {});
         await sleep(CHIME_SETTLE_MS);
         const log = await hostLog(hp);
-        segs.push({ kind: "dayToDiscussion", name: "낮 시작 → 토론", count: log?.length ?? -1, played: log?.filter((e) => e.played).length ?? -1 });
+        segs.push({ kind: "dayToErrand", name: "낮 시작 → 심부름", count: log?.length ?? -1, played: log?.filter((e) => e.played).length ?? -1 });
       }
       for (let i = 0; i < 6 && ht.last().phase !== "ended"; i++) {
         const from = ht.last().phase;

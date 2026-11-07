@@ -2574,13 +2574,13 @@ const EMOTE_GAIN = Object.freeze({ mine: 1, other: 0.501, tolerance: 0.03 });
 /**
  * 동작 소리 누설 판정 (sound-night-parity, D-14·LS-4·T-12-37). 순수 함수.
  * input = { senderLog, otherLogs: [{ label, log }], day?: { senderLog, receiverLog } } — 밤 마피아 동작의 보낸 쪽·시민 쪽 로그, 낮 동작의 보낸·받은 쪽 로그.
- *   E1 보낸 마피아 로그에 emote.{id} 가 정확히 1개 (played 여부와 무관)
+ *   E1 밤 마피아 로그에 emote.* 가 0개 (15-08: 밤 마피아 화면은 시민 편과 같은 얼굴 목록이라 밤 동작 칸이 없다 — 보낼 수단이 없다)
  *   E2 시민 쪽 모든 로그에 emote.* 가 0개
  *   E3 낮 동작: 보낸 사람 gain 1(0dB), 받은 사람 gain 0.501(−6dB)
  */
 export function soundEmoteLeakChecks(input) {
   const labels = {
-    E1: "보낸 마피아 로그에 emote.* 가 정확히 1개",
+    E1: "밤 마피아 로그에 emote.* 가 0개(밤 동작 칸 없음)",
     E2: "시민 쪽 로그에 emote.* 가 0개",
     E3: "낮 동작 gain: 보낸 사람 1(0dB) · 받은 사람 0.501(−6dB)",
   };
@@ -2593,7 +2593,7 @@ export function soundEmoteLeakChecks(input) {
   if (sender === null) out.push(noMeasure("E1", labels.E1, "보낸 쪽 훅 로그"));
   else {
     const n = sender.filter(isEmote).length;
-    out.push(result("E1", labels.E1, n === 1 ? [] : [`emote.* ${n}개`]));
+    out.push(result("E1", labels.E1, n === 0 ? [] : [`emote.* ${n}개`]));
   }
 
   if (others === null) out.push(noMeasure("E2", labels.E2, "시민 쪽 훅 로그 [{ label, log }]"));
@@ -2949,7 +2949,7 @@ export function hostChimeChecks(segs) {
 //     s = { total(칩 수), places: [{ id, done }], doneAttr(data-done 칩 수), progressText("n/N"), actText([처리] 글자), actDisabled(aria-disabled 가 true 인가), bandLine(띠 문장),
 //           callCount([data-call] 수), seatsInWorld(__mfWorld.seats() 중 나 말고 수), nearSeats(그 가운데 근처 반경 + 여유 안), tagSeats(나 말고 이름표 수), attrValues(ERRAND_MARKERS 속성 값 전부) }
 //   EO1~EO4 errandOverlapChecks({ stage, band, dock, panel, pins, arrow, tagButtons })   — 사각형은 { left, top, width, height } (DOMRect 값). pins = 보이는 표지, arrow = 보이는 화살표 사각형 | 목록 | null
-//   RC1~RC4 recordChecks(s)   s = { finished, hasButton, hasCard, rowsAttr, rowCount, zeroText, cardRect, dockRect, bandRect, panelRect, collapsedOnFocus }
+//   RC1~RC4 recordChecks(s)   s = { finished, hasButton, hasCard, rowsAttr, rowCount, zeroText, cardRect, dockRect, bandRect, inputRect, collapsedOnFocus } — inputRect = 채팅 입력줄(.mv-chat__form) 사각형
 //   TC1~TC5 traceChecks(s)    s = { expectCard, cards, cardText, cardAttrText, nameLines, noteLines, cardRect, bandRect, dockRect, panelRect, announceVisible }
 //   NF1~NF6 nightFaceChecks(list)   list = [{ role, count, itemH, listH, eyeHeal, ringMafia, callCount, disabledCount, toastAfterTap }] — 마피아·경찰·의사·시민 네 시점
 
@@ -3098,13 +3098,14 @@ export function errandOverlapChecks(x) {
 /**
  * RC1~RC4 목격 기록(ERRAND-05, D-04). s = 위 15페이즈 계약. finished = 3곳을 모두 마친 산 사람인가.
  * RC1 마친 사람만 [기록] 이 있고 못 마친 사람은 단추·카드 0. RC2 열린 카드의 줄 수 표식 = li 개수, 줄 0이면 '0' 한 칸.
- * RC3 열린 카드 윗변 ≥ 독 아랫변 + 8, 띠·아래 패널과 교차 0. RC4 입력칸 포커스에 카드가 접힌다(마친 사람 필수).
+ * RC3 열린 카드 윗변 ≥ 독 아랫변 + 8, 띠와 교차 0, 아랫변 ≤ 입력줄 윗변 − 8. 카드는 아래 패널의 채팅 기록 칸을 덮는 것이 설계다(UI-SPEC "기록 카드 영역": 아래는 입력줄 윗변 − 8,
+ * 입력줄·[토론 끝내기]는 가려지지 않는다) — 그래서 패널 전체가 아니라 입력줄과의 교차를 본다(15-09 편차, 문턱은 같다). RC4 입력칸 포커스에 카드가 접힌다(마친 사람 필수).
  */
 export function recordChecks(s) {
   const L = {
     RC1: "[기록]·카드는 3곳을 마친 사람에게만(못 마친 사람 0건)",
     RC2: "줄 수 표식 = 줄(li) 개수, 줄 0이면 '0'",
-    RC3: `카드 윗변 ≥ 독 아랫변 + ${RECORD_DOCK_GAP}, 띠·아래 패널과 교차 0`,
+    RC3: `카드 윗변 ≥ 독 아랫변 + ${RECORD_DOCK_GAP}, 띠와 교차 0, 아랫변 ≤ 입력줄 윗변 − ${RECORD_DOCK_GAP}`,
     RC4: "입력칸 포커스에 카드가 접힌다",
   };
   const ids = Object.keys(L);
@@ -3124,13 +3125,13 @@ export function recordChecks(s) {
     if (s.rowCount === 0 && !(isStr(s.zeroText) && s.zeroText.trim() === "0")) bad.push(`줄 0개인데 머리 글자 '${s.zeroText}' ≠ '0'`);
     out.push(result("RC2", L.RC2, bad));
   } else out.push(noMeasure("RC2", L.RC2, "줄 수 표식·li 개수"));
-  if (okRect(s.cardRect) && okRect(s.dockRect) && okRect(s.bandRect) && okRect(s.panelRect)) {
+  if (okRect(s.cardRect) && okRect(s.dockRect) && okRect(s.bandRect) && okRect(s.inputRect)) {
     const bad = [];
     if (s.cardRect.top < bottom(s.dockRect) + RECORD_DOCK_GAP - OVERLAP_EPS) bad.push(`카드 윗변 ${rd(s.cardRect.top)} < 독 아랫변 ${rd(bottom(s.dockRect))} + ${RECORD_DOCK_GAP}`);
     if (rectsOverlap(s.cardRect, s.bandRect)) bad.push(`카드·띠 겹침(${overlapText(s.cardRect, s.bandRect)})`);
-    if (rectsOverlap(s.cardRect, s.panelRect)) bad.push(`카드·아래 패널 겹침(${overlapText(s.cardRect, s.panelRect)})`);
+    if (bottom(s.cardRect) > s.inputRect.top - RECORD_DOCK_GAP + OVERLAP_EPS) bad.push(`카드 아랫변 ${rd(bottom(s.cardRect))} > 입력줄 윗변 ${rd(s.inputRect.top)} − ${RECORD_DOCK_GAP}`);
     out.push(result("RC3", L.RC3, bad));
-  } else out.push(noMeasure("RC3", L.RC3, "카드·독·띠·패널 사각형"));
+  } else out.push(noMeasure("RC3", L.RC3, "카드·독·띠·입력줄 사각형"));
   out.push(typeof s.collapsedOnFocus === "boolean" ? result("RC4", L.RC4, s.collapsedOnFocus ? [] : ["포커스에도 카드가 남음"]) : noMeasure("RC4", L.RC4, "포커스 접힘 읽기"));
   return out;
 }

@@ -1989,7 +1989,7 @@ export function readErrand(page) {
 
 /**
  * 토론의 목격 기록 화면 한 장(recordChecks 입력): [기록] 단추 수·눌림(aria-expanded)·빛, 카드 수·줄 수 표식·li 수·머리 숫자 글자, 사각형.
- * { buttons, expanded, buttonCall, cards, rowsAttr, rowCount, zeroText, cardRect, dockRect, bandRect, panelRect, callCount, bandLine, inputCount }
+ * { buttons, expanded, buttonCall, cards, rowsAttr, rowCount, zeroText, cardRect, dockRect, bandRect, panelRect, inputRect(채팅 입력줄), callCount, bandLine, inputCount }
  */
 export function readRecord(page) {
   return page.evaluate(() => {
@@ -2014,6 +2014,7 @@ export function readRecord(page) {
       dockRect: box(document.querySelector("[data-host-band] .mv-host__dock")),
       bandRect: box(document.querySelector("[data-host-band] .mv-host__band")),
       panelRect: box(document.querySelector("[data-world-panel]")),
+      inputRect: box(document.querySelector(".mv-chat__form")),
       callCount: qa("[data-call]").length,
       bandLine: bandLine ? (bandLine.textContent ?? "").replace(/\s+/g, " ").trim() : "",
       inputCount: qa(".mv-chat__input").length,
