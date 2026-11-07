@@ -124,6 +124,8 @@ const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "
 // turn·showdown·runoff·pickTurn·showdownPick·runoffVote: 기본판(결정 0072)에서 꺼진 장치의 키다. 공개 경로로도 허용하지 않아 어느 프레임에도 이름이 나오면 안 된다.
 // 기본판(결정 0072): turn·showdown·runoff 는 공개 경로도 없다 — 어떤 프레임에 이름이 나오면 실패한다(T-13-07, 허용 경로를 좁히기만 한다).
 const PUBLIC_KEY_PATHS = { verdict: ["view.day.verdict"], verdictVote: ["view.me.verdictVote"] };
+// 아침 흔적 조각 id 닫힌 집합(shared/protocol.ts TRACE_PIECE_IDS 사본, 결정 0074-5)
+const TRACE_PIECES = ["button", "pin", "whiteCloth", "blackCloth", "brownCloth", "pencil", "grayThread", "navyThread", "redCloth"];
 // 역할별 일지 줄의 키 집합(결정 0027-11)
 const RECORD_KEYS = { police: "isMafia,n,target", mafia: "died,n,target", doctor: "n,target" };
 // 거절된 줄의 본문 표식: 어느 클라이언트의 어떤 프레임에도 되돌아오면 안 된다(COMM-04).
@@ -1407,7 +1409,10 @@ async function stageFull(url, args) {
   });
   const morning = morningViews[0].day.morning;
   // day.morning 은 탈락자 seat 하나뿐이다(문구 번호·유언 본문·쪽지가 없다, 결정 0061-17). 유언은 chat 카드로만 간다.
-  if (Object.keys(morning).sort().join(",") !== "eliminated") fail(`아침 day.morning 의 키가 eliminated 하나가 아님: ${Object.keys(morning).sort().join(",")}`);
+  // 15페이즈(결정 0074-5): 흔적 조각 id(`trace`, 닫힌 집합 9개 중 하나)가 더해질 수 있다 — 그 밖의 키는 여전히 없다.
+  const morningKeys = Object.keys(morning).sort().join(",");
+  if (morningKeys !== "eliminated" && morningKeys !== "eliminated,trace") fail(`아침 day.morning 의 키가 eliminated(+trace)가 아님: ${morningKeys}`);
+  if (morning.trace !== undefined && !TRACE_PIECES.includes(morning.trace)) fail(`아침 day.morning.trace 가 닫힌 조각 id 가 아님: ${JSON.stringify(morning.trace)}`);
   if (morning.eliminated !== targetX) fail(`아침 탈락자가 지목한 seat(${targetX})가 아님: ${morning.eliminated}`);
   morningViews.forEach((v, i) => {
     for (const p of v.players) {
@@ -1475,8 +1480,9 @@ async function stageFull(url, args) {
   if (nightEnds.size !== 1) fail(`night 의 phaseEndsAt 이 클라이언트마다 다름 (${nightEnds.size}종)`);
   const morningEnds = new Set(morningViews.map((v) => v.phaseEndsAt));
   if (morningEnds.size !== 1) fail(`morning 의 phaseEndsAt 이 클라이언트마다 다름 (${morningEnds.size}종)`);
-  // 아침 길이(MORN-04, 결정 0061-13): 기본 5 + 피해자 2 + 유언 2 = 9초(쪽지 없음). 모든 클라이언트가 같다.
-  if (morningViews.some((v) => v.phaseDurationMs !== 9_000)) fail(`morning phaseDurationMs 가 9000(피해자 + 유언)이 아님: ${morningViews.map((v) => v.phaseDurationMs).join(",")}`);
+  // 아침 길이(MORN-04, 결정 0061-13): 기본 5 + 피해자 2 + 유언 2 = 9초(쪽지 없음). 흔적이 있으면 +3초(15페이즈, 결정 0074-5). 모든 클라이언트가 같다.
+  const morningWant = 9_000 + (morning.trace !== undefined ? 3_000 : 0);
+  if (morningViews.some((v) => v.phaseDurationMs !== morningWant)) fail(`morning phaseDurationMs 가 ${morningWant}(피해자 + 유언${morning.trace !== undefined ? " + 흔적" : ""})이 아님: ${morningViews.map((v) => v.phaseDurationMs).join(",")}`);
 
   for (const c of clients) await closeSocket(c);
 
