@@ -2,8 +2,9 @@
 // 자막 문장은 서버가 만들지 않는다. 클라이언트가 받은 자기 view 만으로 이 파일의 순수 함수가 한 줄을 만든다 — 서버·프로토콜 diff 0.
 // 읽는 값은 허용 목록뿐이다: phase · phaseEndsAt · phaseDurationMs · minPlayers · me.seat · me.role · me.isHost ·
 // players[].{seat, nickname, alive, connected} · day.candidate · day.verdict.passed · day.morning(morningText 가 읽는 하위 값) · local.cardSeen ·
-// (15-04) me.errand.places · me.errand.done · view.map(심부름 목록·진행·맵 id — 내 view 의 값) · local.pos(내 월드 좌표, 클라이언트 상태).
-// 심부름 분기(errand.*)는 역할(me.role)을 읽지 않는다 — 마피아도 시민과 같은 키·같은 문장·같은 빛남 대상(D-03).
+// (15-04) me.errand.places · me.errand.done · view.map(심부름 목록·진행·맵 id — 내 view 의 값) · local.pos(내 월드 좌표, 클라이언트 상태) ·
+// (15-07) me.record 의 유무(불리언 — 줄 내용 seat·place 는 읽지 않는다) · day.morning.trace 의 유무 · local.recordOpened · local.traceOn(클라이언트 상태).
+// 심부름 분기(errand.*)와 목격 기록·흔적 분기(witness·trace)는 역할(me.role)을 읽지 않는다 — 마피아도 시민과 같은 키·같은 문장·같은 빛남 대상(D-03, D-04).
 // players[].job · spectate · me.allies · me.records · me.pick · me.verdictVote · day.points · day.turn · day.voteLog · day.roles 등 그 밖은 읽지 않는다
 // (유령 줄도 남의 직업을 말하지 않는다). 시각·난수·DOM·window 를 읽지 않는다. 시험(test/unit/hostLine.test.ts "HOST-05")이 읽은 경로를 기록해 고정한다.
 // 역할별 줄(밤 마피아·경찰·의사)은 그 역할 분기 안에서 키가 정해진 뒤에만 꺼낸다(T-09-29 선례) — 여러 역할 줄을 모은 배열은 없다.
@@ -14,7 +15,7 @@ import { actablePlaceOf, errandProgress, nextPlaceOf, placeCentersOf } from "./e
 import { morningText } from "./eliminationText";
 import { TIMELESS_PHASES } from "./scenes";
 
-/** 문구 표의 키 하나 = 한 줄. 15페이즈는 errand.* 를 채웠고 witness·trace 는 15-07 이 채운다(함수·띠 변경 없음). */
+/** 문구 표의 키 하나 = 한 줄. 15페이즈는 errand.*·witness·trace 를 채웠다(함수·띠 변경 없음). */
 export type HostKey =
   | "lobby.ready" | "lobby.gather" | "lobby.guest"
   | "assigning"
@@ -39,6 +40,10 @@ export interface HostLocal {
   cardSeen?: boolean;
   /** 내 월드 좌표(클라이언트 상태, 15-04). 심부름의 다음 장소·처리 가능 판정에만 쓴다. 모르면 없음·null */
   pos?: { x: number; z: number } | null;
+  /** 목격 기록 카드를 한 번 열었는가(15-07, 클라이언트 상태). 열면 witness 가 discussion.act 로 돌아온다 */
+  recordOpened?: boolean;
+  /** 지금이 아침 흔적 구간인가(15-07, 클라이언트 상태 — 서버 시계로 화면이 정한다) */
+  traceOn?: boolean;
 }
 
 /** 함수 줄은 채울 한 가지 값을 받는다: 이름이 있는 줄은 "{닉네임}", morning 은 아침 결과 문장(마침표 없음) */
@@ -77,9 +82,9 @@ export const HOST_LINES: Readonly<Record<HostKey, Line>> = {
   "errand.act": "심부름 시간입니다. 장소 세 곳을 돌며 처리해 주세요.",
   "errand.done": "심부름을 마쳤습니다. 곧 토론이 시작됩니다.",
   "errand.ghost": "심부름 시간입니다. 유령은 지켜봐 주세요.",
-  // 예약 행(목격 기록·밤 흔적). hostKeyOf 는 돌려주지 않는다(15-07).
-  witness: "",
-  trace: "",
+  // 15페이즈(UI-SPEC 표 원문): 목격 기록이 있는 토론, 피해자 있는 아침의 흔적 구간. 마피아도 같은 문장이다.
+  witness: "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.",
+  trace: "현장에 흔적이 남았습니다.",
   fallback: HOST_FALLBACK,
 };
 
@@ -115,7 +120,9 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
       return errandProgress(view)?.complete === true ? "errand.done" : "errand.act";
     }
     case "discussion":
-      return ghost ? "discussion.ghost" : "discussion.act";
+      if (ghost) return "discussion.ghost";
+      // 역할을 읽지 않는다. 기록이 있다는 사실(불리언)만 본다 — 줄 내용은 읽지 않는다
+      return view.me.record !== undefined && local.recordOpened !== true ? "witness" : "discussion.act";
     case "nomination":
       return ghost ? "nomination.ghost" : "nomination.act";
     case "defense":
@@ -137,8 +144,11 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
       if (role === "doctor") return "night.doctor";
       return "night.wait";
     }
-    case "morning":
-      return view.day?.morning === undefined ? "fallback" : "morning";
+    case "morning": {
+      const morning = view.day?.morning;
+      if (morning === undefined) return "fallback";
+      return local.traceOn === true && morning.trace !== undefined ? "trace" : "morning";
+    }
     case "ended":
       return "ended";
     default:
@@ -160,7 +170,7 @@ export function hostLineOf(view: RoomView, local: HostLocal = {}): string {
   return name === undefined ? HOST_FALLBACK : line(name);
 }
 
-export type CallTool = "start" | "card" | "chat" | "will" | "verdict" | "errand";
+export type CallTool = "start" | "card" | "chat" | "will" | "verdict" | "errand" | "record";
 /** 15페이즈: place = 다음 장소 표지(화면 밖이면 화살표 칩) */
 export type CallTarget = { kind: "tool"; tool: CallTool } | { kind: "tag"; seats: readonly number[] } | { kind: "place"; id: PlaceId };
 
@@ -182,6 +192,8 @@ export function callTargetsOf(view: RoomView, local: HostLocal = {}): CallTarget
       return { kind: "tool", tool: "start" };
     case "roleReveal.act":
       return { kind: "tool", tool: "card" };
+    case "witness":
+      return { kind: "tool", tool: "record" };
     case "discussion.act":
       return { kind: "tool", tool: "chat" };
     case "nomination.act": {
