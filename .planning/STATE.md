@@ -4,18 +4,19 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 15
 current_phase_name: 낮 심부름·목격 기록·밤 흔적
-status: planning
-stopped_at: Completed 14-09-PLAN.md
-last_updated: "2026-11-07T00:16:42.499Z"
+current_plan: 2
+status: executing
+stopped_at: Completed 15-01-PLAN.md
+last_updated: "2026-11-07T06:24:27.326Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: f295e38e38d303d429d63ddef1a71c3c8befb62f
+state_head: a0648ad7ed00f578e023c0fd3e935958fdf1be9f
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 15
-  completed_plans: 15
-  percent: 67
+  total_plans: 25
+  completed_plans: 16
+  percent: 64
 ---
 
 # Project State
@@ -29,9 +30,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 
 ## Current Position
 
-Phase: 15 (낮 심부름·목격 기록·밤 흔적) — not started (14페이즈 완료·배포 `d77e3dbf`, 결정 0073)
-Plan: —
-Status: Ready to plan (캔버스 시안 2~3개 → /gsd-ui-phase 15 먼저)
+Phase: 15 (낮 심부름·목격 기록·밤 흔적) — executing (14페이즈 완료·배포 `d77e3dbf`, 결정 0073)
+Current Plan: 2
+Total Plans in Phase: 10
+Status: Ready to execute
 Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 
 ## Performance Metrics
@@ -211,6 +213,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 14 P07 | 30min | 2 tasks | 16 files |
 | Phase 14 P08 | 95min | 3 tasks | 15 files |
 | Phase 14 P09 | 110min | 3 tasks | 12 files |
+| Phase 15 P01 | 60min | 2 tasks | 39 files |
 
 ## Accumulated Context
 
@@ -449,6 +452,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 14]: 14-08: 360x560 UI#14 알려진 한계(띠·헤더 밑 요소)는 판정 대상에 두고 잰 값만 정보 줄(HO1k·R-MS6k·AW4k·GH13k)로 남김, 문턱 그대로
 - [Phase 14]: 14-08: 띠 시간 숫자 마지막 5초 색을 crimson-300 으로(crimson-400 은 4.2:1 로 묶음 H 4.5:1 미달), UI-SPEC '숫자도 같은 색' 과 다른 점은 14-09 가 알림
 - [Phase 14]: 0073: 사회자 띠·빛남·한 단어 이름표(0051 보완). 남은 초는 올림(U-4), 쉬는 사람 화면은 띠 없음(U-9 예외), 밤 진입 알림음은 LS-7 예외, 마지막 5초 숫자는 crimson-300(UI-SPEC 와 다름)
+- [Phase 15]: 15-01: 심부름 장소 id 는 닫힌 집합 16개(PLACE_IDS), {t:'errand'} 는 필드 없음·거절은 모든 이유·역할에서 같은 응답(보낸 소켓에 state 한 프레임), 결정 0074 에는 15-10 이 기록
+- [Phase 15]: 15-01: errand 단계는 채팅·동작을 받지 않는다(CHAT_PHASES 밖), 요청 간격 250ms 는 검사를 통과한 모든 시도에서 기록, 장소 좌표 세 곳(piano·sax·lamp)을 걷기 칸으로 보정
 
 ### Pending Todos
 
@@ -513,8 +518,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-07T00:16:42.362Z
-Stopped at: Completed 14-09-PLAN.md
+Last session: 2026-11-07T06:24:27.196Z
+Stopped at: Completed 15-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

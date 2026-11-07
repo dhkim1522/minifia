@@ -30,10 +30,10 @@
 
 ### 낮 심부름과 목격 기록 (ERRAND)
 
-- [ ] **ERRAND-01**: 토론 전에 40초 심부름 단계가 있고, 산 사람마다 지도 위 장소 3곳 목록을 받는다
-- [ ] **ERRAND-02**: 장소 근처로 가서 누르면 처리되고, 내 진행(n/3)과 다음 장소가 보인다
+- [x] **ERRAND-01**: 토론 전에 40초 심부름 단계가 있고, 산 사람마다 지도 위 장소 3곳 목록을 받는다
+- [x] **ERRAND-02**: 장소 근처로 가서 누르면 처리되고, 내 진행(n/3)과 다음 장소가 보인다
 - [ ] **ERRAND-03**: 심부름 중 다른 사람의 위치는 내 근처에 있을 때만 보인다. 서버가 근처 사람의 위치만 보낸다
-- [ ] **ERRAND-04**: 마피아도 같은 모양의 가짜 목록을 받아 겉보기에 구분되지 않는다(방해 행동 없음)
+- [x] **ERRAND-04**: 마피아도 같은 모양의 가짜 목록을 받아 겉보기에 구분되지 않는다(방해 행동 없음)
 - [ ] **ERRAND-05**: 3곳을 모두 처리한 사람은 토론 때 내 화면에 심부름 중 내 근처를 지나간 사람(장소·순서) 목격 기록을 받는다. 못 마치면 기록이 없고, 기록은 본인에게만 간다(마피아도 같은 규칙)
 
 ### 밤 흔적 (TRACE)
@@ -80,10 +80,10 @@
 | TOOL-01 | Phase 14 | Complete |
 | TOOL-02 | Phase 14 | Complete |
 | TOOL-03 | Phase 14 | Complete |
-| ERRAND-01 | Phase 15 | Pending |
-| ERRAND-02 | Phase 15 | Pending |
+| ERRAND-01 | Phase 15 | Complete |
+| ERRAND-02 | Phase 15 | Complete |
 | ERRAND-03 | Phase 15 | Pending |
-| ERRAND-04 | Phase 15 | Pending |
+| ERRAND-04 | Phase 15 | Complete |
 | ERRAND-05 | Phase 15 | Pending |
 | TRACE-01 | Phase 15 | Pending |
 | TRACE-02 | Phase 15 | Pending |
