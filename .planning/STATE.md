@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 15
 current_phase_name: 낮 심부름·목격 기록·밤 흔적
-current_plan: 4
+current_plan: 5
 status: executing
-stopped_at: Completed 15-02-PLAN.md
-last_updated: "2026-11-07T06:59:12.214Z"
+stopped_at: Completed 15-05-PLAN.md
+last_updated: "2026-11-07T07:09:47.066Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: 525961e7621a1d1f30ac15deca2d9835f420df40
+state_head: a1cde4bf24868fc9292081fb8fa7d48cba31b98c
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 25
-  completed_plans: 18
+  completed_plans: 19
   percent: 67
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 15 (낮 심부름·목격 기록·밤 흔적) — executing (14페이즈 완료·배포 `d77e3dbf`, 결정 0073)
-Current Plan: 4
+Current Plan: 5
 Total Plans in Phase: 10
 Status: Ready to execute
 Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
@@ -216,6 +216,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 15 P01 | 60min | 2 tasks | 39 files |
 | Phase 15 P04 | 40min | 2 tasks | 10 files |
 | Phase 15 P02 | 80min | 2 tasks | 19 files |
+| Phase 15 P05 | 55min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -460,6 +461,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 15]: 근처 snap: 위치는 사건(move)이 아니라 1초 표본(snap), 산 mover 의 move 는 본인·유령에게만
 - [Phase 15]: 목격 줄 장소는 본 사람에게 가장 가까운 맵 후보 장소(목록 3곳에 한정하지 않음)
 - [Phase 15]: 표본 상태(errandNear·errandSeen·errandTickAt)는 방 상태에 저장하고 표본마다 state 방송 없이 저장만
+- [Phase 15]: 15-05: 근처 snap 은 이동 응답 세기(moveSeqs)를 지우지 않는다 — 걷는 중 예측 구간 유지
+- [Phase 15]: 15-05: errand 표지·화살표·링은 런타임 onProject 에서 DOM 직접 쓰기(React 상태 없음), 빛은 위치·진행으로만
 
 ### Pending Todos
 
@@ -524,8 +527,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-07T06:59:12.074Z
-Stopped at: Completed 15-02-PLAN.md
+Last session: 2026-11-07T07:09:46.923Z
+Stopped at: Completed 15-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
