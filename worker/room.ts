@@ -7,7 +7,7 @@ import { isAlive } from "../shared/game/alive";
 import { ballotsCardText } from "../shared/game/ballots";
 import { audience, channelOf, phaseKey, worldVisibleTo } from "../shared/game/audience";
 import { bumpStat } from "../shared/game/stats";
-import { pruneBench, pruneLobby, resolveHost } from "../shared/game/continuity";
+import { emptyGameCloseAt, pruneBench, pruneLobby, resolveHost } from "../shared/game/continuity";
 import { CHAT_KEY_PREFIX, appendLine, appendWhisperPair, chatKey, clearSeat, emptyChatLog, replayFor, restoreChatLog, seatMask, toWire } from "../shared/game/chatLog";
 import type { ChatLog } from "../shared/game/chatLog";
 import { checkChatSend, sanitizeChatText, typingRelay } from "../shared/game/chatRules";
@@ -1138,7 +1138,8 @@ export class Room extends DurableObject<Env> {
   private async advance(now: number): Promise<void> {
     const room = this.room;
     if (!room) return;
-    if (now >= room.expiresAt) {
+    // 만료, 또는 게임 중 사람이 모두 끊긴 지 EMPTY_GAME_CLOSE_MS 가 지난 방(결정 0076)은 닫고 지운다.
+    if (now >= room.expiresAt || now >= emptyGameCloseAt(room)) {
       for (const ws of this.ctx.getWebSockets()) {
         try {
           ws.close(CLOSE_CODES.REMOVED, "room_closed");
@@ -1414,8 +1415,11 @@ export class Room extends DurableObject<Env> {
     const room = this.room;
     if (!room || room.phase !== "errand" || room.errandTickAt === undefined || room.errandTickAt > now) return;
     const has = (id: string): boolean => Object.prototype.hasOwnProperty.call(this.world.segs, id);
-    this.room = sampleErrand(room, (id) => (has(id) ? positionAtFx(this.world.segs[id]!, now) : undefined), now);
-    await this.ctx.storage.put("room", this.room);
+    const next = sampleErrand(room, (id) => (has(id) ? positionAtFx(this.world.segs[id]!, now) : undefined), now);
+    this.room = next;
+    // 결정 0076: 근처·목격 결과가 바뀐 표본만 저장한다. 표본 시각(errandTickAt)만 옮겨진 1초 표본은 메모리에 두고 다음 저장이 함께 싣는다
+    // (심부름 40초에 40번 쓰던 것). DO 가 도중에 내려가도 목격 기록은 저장돼 있고, 옛 표본 시각은 다시 깨어나자마자 곧바로 표본을 뜬다.
+    if (errandMarks(next) !== errandMarks(room)) await this.ctx.storage.put("room", next);
     this.syncErrandView(now);
   }
 
@@ -1944,4 +1948,9 @@ export class Room extends DurableObject<Env> {
       // 닫히는 중인 소켓에는 보낼 수 없다.
     }
   }
+}
+
+/** 심부름 표본이 바꾸는 사람별 근처·목격 값의 비교 키(결정 0076). 같으면 저장하지 않는다. */
+function errandMarks(state: RoomState): string {
+  return JSON.stringify(state.players.map((p) => [p.errandNear ?? null, p.errandSeen ?? null]));
 }

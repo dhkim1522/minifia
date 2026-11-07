@@ -11,6 +11,9 @@ export const LOBBY_PRUNE_MS = 180_000;
 /** 테스트 방의 정리 시간 — 검사용. */
 export const LOBBY_PRUNE_TEST_MS = 6_000;
 
+/** 게임 중(대기실 밖) 연결된 사람이 아무도 없는 상태가 이만큼 이어지면 방을 닫는다(결정 0076). 버려진 방이 만료(3시간)까지 단계를 돌며 저장소를 쓰지 않게 한다. */
+export const EMPTY_GAME_CLOSE_MS = 5 * 60_000;
+
 const isHuman = (p: Player): boolean => p.isBot !== true;
 
 export const hostGraceOf = (state: Pick<RoomState, "testMode">): number =>
@@ -112,4 +115,23 @@ export function nextContinuityAt(state: RoomState): number {
   // 쉬는 사람 정리(11-08)는 단계와 무관하다.
   for (const p of prunableBench(state)) at = Math.min(at, (p.disconnectedAt as number) + pruneAfterOf(state));
   return at;
+}
+
+/**
+ * 버려진 게임 방을 닫을 시각(결정 0076). 대기실은 기존 정리(D-18)가 맡아 Infinity 다.
+ * 사람(봇 아님) 중 연결된 사람이 하나라도 있으면 Infinity, 모두 끊겼으면 가장 늦게 끊긴 시각 + EMPTY_GAME_CLOSE_MS.
+ * 끊긴 시각이 없는 사람이 있으면(기록 전) 안전하게 Infinity 다. 나간 사람(left)은 끊긴 것으로 센다.
+ */
+export function emptyGameCloseAt(state: RoomState): number {
+  if (state.phase === "lobby") return Number.POSITIVE_INFINITY;
+  let last = Number.NEGATIVE_INFINITY;
+  let humans = 0;
+  for (const p of state.players) {
+    if (!isHuman(p)) continue;
+    humans += 1;
+    if (p.connected && p.left !== true) return Number.POSITIVE_INFINITY;
+    if (p.disconnectedAt === undefined) return Number.POSITIVE_INFINITY;
+    last = Math.max(last, p.disconnectedAt);
+  }
+  return humans === 0 ? Number.POSITIVE_INFINITY : last + EMPTY_GAME_CLOSE_MS;
 }

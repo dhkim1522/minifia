@@ -18,7 +18,7 @@
 // 분기(4페이즈): 마감 훅이 next 를 돌려주면 그 단계로, 없으면 단계 표(PHASE_DEFS)의 기본 next 로 간다. 표는 데이터만 두고 분기는 훅이 정한다.
 // 진입 훅의 세 번째 인자 at 은 진입 시각(= 이전 마감)이다 — 시각을 스스로 읽지 않는 순수 규칙이 "진입 + 30분" 같은 계산을 할 때 쓴다.
 import type { PhaseId } from "../protocol";
-import { nextContinuityAt } from "./continuity";
+import { emptyGameCloseAt, nextContinuityAt } from "./continuity";
 import { enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
 import { enterErrand } from "./errand";
@@ -115,5 +115,6 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
 export function nextWakeAt(state: RoomState): number {
   // errand 단계의 근처·목격 표본 시각(15페이즈). 다른 단계에서는 errandTickAt 이 있어도 무시한다.
   const errandTick = state.phase === "errand" && state.errandTickAt !== undefined ? state.errandTickAt : Number.POSITIVE_INFINITY;
-  return Math.min(state.phaseEndsAt ?? Number.POSITIVE_INFINITY, state.expiresAt, nextContinuityAt(state), errandTick);
+  // 버려진 게임 방 닫기(결정 0076)도 같은 알람에 합친다.
+  return Math.min(state.phaseEndsAt ?? Number.POSITIVE_INFINITY, state.expiresAt, nextContinuityAt(state), errandTick, emptyGameCloseAt(state));
 }

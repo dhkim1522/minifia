@@ -1,3 +1,5 @@
+import { EMPTY_GAME_CLOSE_MS, emptyGameCloseAt } from "../../shared/game/continuity";
+import type { RoomState as _RS } from "../../shared/game/room";
 import { describe, expect, it } from "vitest";
 import {
   HOST_GRACE_MS,
@@ -270,5 +272,22 @@ describe("pruneBench (쉬는 사람 정리, D-13·D-18, 11-08)", () => {
     expect(nextContinuityAt(s)).toBe(T0 + 5 + LOBBY_PRUNE_MS);
     expect(nextContinuityAt({ ...s, testMode: true })).toBe(T0 + 5 + LOBBY_PRUNE_TEST_MS);
     expect(nextContinuityAt(withBench([sitter(4)]))).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+// 결정 0076: 버려진 게임 방 닫기 시각
+describe("emptyGameCloseAt (결정 0076)", () => {
+  const base = (phase: string, players: Array<Record<string, unknown>>) => ({ phase, players } as unknown as _RS);
+  const human = (connected: boolean, disconnectedAt?: number) => ({ connected, ...(disconnectedAt === undefined ? {} : { disconnectedAt }) });
+  it("대기실은 Infinity", () => {
+    expect(emptyGameCloseAt(base("lobby", [human(false, 1)]))).toBe(Number.POSITIVE_INFINITY);
+  });
+  it("연결된 사람이 있으면 Infinity, 봇은 세지 않는다", () => {
+    expect(emptyGameCloseAt(base("discussion", [human(true), human(false, 5)]))).toBe(Number.POSITIVE_INFINITY);
+    expect(emptyGameCloseAt(base("discussion", [{ connected: true, isBot: true }, human(false, 5)]))).toBe(5 + EMPTY_GAME_CLOSE_MS);
+  });
+  it("모두 끊기면 가장 늦게 끊긴 시각 + 5분, 끊긴 시각이 없으면 Infinity", () => {
+    expect(emptyGameCloseAt(base("night", [human(false, 5), human(false, 9)]))).toBe(9 + EMPTY_GAME_CLOSE_MS);
+    expect(emptyGameCloseAt(base("night", [human(false, 5), human(false)]))).toBe(Number.POSITIVE_INFINITY);
   });
 });
