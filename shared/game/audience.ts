@@ -58,7 +58,7 @@ export function channelOf(state: RoomState, senderId: string): ChatChannel | nul
  * CHAT_PHASES 밖이면 빈 집합, mafia 인데 night 가 아니면 빈 집합, ghost 는 탈락자만.
  * world: 로비는 방의 모든 사람(6페이즈 emitWorld 와 같다). 지도 단계(MAP_PHASES)는 mover 기준 — mover 가 산 사람이면 방 전원(산 사람 + 유령),
  * 유령이면 유령만(GHOST-01: 산 사람 폰에는 유령의 위치가 네트워크로도 가지 않는다).
- * 밤(NIGHT-07, 결정 0061-2)은 mover 가 산 마피아면 산 마피아 + 유령, 산 비마피아면 빈 집합이다. mover 가 없거나 방에 없으면 빈 집합(실패하면 닫힌다).
+ * 밤(15페이즈 D-05)은 산 mover 면 역할과 무관하게 빈 집합이다. mover 가 없거나 방에 없으면 빈 집합(실패하면 닫힌다).
  * 그 밖의 단계는 빈 집합이다.
  */
 export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<string> {
@@ -69,12 +69,11 @@ export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<strin
     const mover = ev.mover === undefined ? undefined : state.players.find((p) => p.id === ev.mover);
     if (mover === undefined) return new Set();
     if (!isAlive(mover)) return pick((p) => !isAlive(p));
-    // 밤(NIGHT-07, 결정 0061-2): 산 마피아의 걸음은 산 마피아와 유령에게만 간다. 산 비마피아 mover 는 canMove 가 먼저 거절하지만 여기서도 빈 집합이다(방어선 두 겹).
-    // 시민 편 폰에는 거르는 방식이 아니라 받는 사람 집합에서 빠져 네트워크로도 가지 않는다(결정 0002·0021). 탈락한 마피아는 유령 쪽으로 든다.
+    // 밤(15페이즈 D-05): 산 사람은 역할과 무관하게 걷지 못한다 — canMove 가 먼저 거절하지만 여기서도 빈 집합이다(방어선 두 겹). 유령 mover 는 위 분기가 유령에게만 보낸다.
     // errand(15페이즈 D-02): 산 사람의 걸음(move)은 본인과 유령에게만 간다. 다른 산 사람은 서버가 표본마다 따로 보내는 근처 snap 으로만 남을 본다(worker/room.ts runErrandTick).
     // 반경 밖 좌표는 받는 사람 집합에서 빠져 네트워크로도 가지 않는다(결정 0002·0021).
     if (state.phase === "errand") return pick((p) => p.id === mover.id || !isAlive(p));
-    if (state.phase === "night") return mover.role === "mafia" ? pick((p) => !isAlive(p) || p.role === "mafia") : new Set();
+    if (state.phase === "night") return new Set();
     return pick(() => true);
   }
   // 결과 단계(11-03, D-11): chat 의 all 한 채널만 방 전원(탈락자 포함)에게 연다. CHAT_PHASES 에 ended 를 넣지 않는 이유 — emote·typing 의 종료 단계 버림 표와 channelOf(null)를 그대로 두기 위해서다.
@@ -94,7 +93,7 @@ export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<strin
 /**
  * 접속(hello) 스냅샷에 실릴 좌석의 주인들 — 보는 사람 viewerId 별이다(GHOST-01).
  * 로비·assigning·roleReveal 은 방 전원(역할 확인 중 재접속해도 낮 시작에 위치가 있게, RESEARCH A6).
- * 지도 단계는 viewer 가 산 사람이면 산 사람만(errand 는 본인 한 칸), 유령이면 전원. 밤(NIGHT-07, 결정 0061-3)은 산 시민·경찰·의사면 본인 한 칸뿐이다. ended·옛 투표 단계·방에 없는 viewer 는 빈 집합이다.
+ * 지도 단계는 viewer 가 산 사람이면 산 사람만(errand 는 본인 한 칸), 유령이면 전원. 밤(15페이즈 D-05)은 산 사람이면 역할과 무관하게 본인 한 칸뿐이다. ended·옛 투표 단계·방에 없는 viewer 는 빈 집합이다.
  */
 export function worldVisibleTo(state: RoomState, viewerId: string): ReadonlySet<string> {
   const viewer = state.players.find((p) => p.id === viewerId);
@@ -105,7 +104,7 @@ export function worldVisibleTo(state: RoomState, viewerId: string): ReadonlySet<
   if (!isAlive(viewer)) return pick(() => true);
   // errand(D-02): 산 viewer 는 본인 한 칸뿐 — 근처 사람은 worker 의 근처 snap(nearSnapFrame)이 따로 정한다.
   if (state.phase === "errand") return new Set([viewerId]);
-  // 밤: 시민 편은 본인 한 칸(사용자 확정 2026-11-03, 결정 0061-3) — handleHello·밤/아침 진입 snap 이 모두 이 함수를 쓴다(L9).
-  if (state.phase === "night" && viewer.role !== "mafia") return new Set([viewerId]);
+  // 밤(D-05): 산 사람은 역할과 무관하게 본인 한 칸 — 마피아의 전원 위치 전송은 없어졌다. handleHello·밤/아침 진입 snap 이 모두 이 함수를 쓴다(L9).
+  if (state.phase === "night") return new Set([viewerId]);
   return pick(isAlive);
 }

@@ -18,12 +18,13 @@
 // 새 단계의 난수는 새 분기 안에서만 늘어난다. 07-08 에서 claim 분기의 난수 호출이 빠져 시드 고정 값이 새 호출 순서로 다시 고정됐다(다른 단계의 호출 수는 그대로).
 // 07-11: 봇 자유 채팅으로 discussion·night 의 호출 순서가 바뀌어 시드 고정 값을 다시 고정했다(옛 투표·defense 의 호출 수는 그대로였다).
 // 봇 하나당 순서: discussion = (randInt(첫 지연 폭) → randInt(8)) → (randInt(둘째 지연 폭) → randInt(8)),
-// night = (경찰·의사만, 대상이 있으면) randInt(대상 수) → randInt(pick 지연 폭), 마피아면 대상 난수 없이 randInt(pick 지연 폭) → randInt(10) → (< 6 이면) randInt(채팅 지연 폭) → randInt(3),
+// night = 마피아가 아닌 봇(경찰·의사·시민, 대상이 있으면) randInt(대상 수) → randInt(pick 지연 폭), 마피아면 대상 난수 없이 randInt(pick 지연 폭) → randInt(10) → (< 6 이면) randInt(채팅 지연 폭) → randInt(3),
+// 15-03: 밤 고르기가 모든 역할에 같아져(D-05) 시민 봇도 randInt(대상 수) → randInt(pick 지연 폭) 을 부른다 — night 시드 고정 값을 다시 고정했다. 마피아 봇의 접근 걷기는 없어졌다(밤에는 아무도 걷지 않는다).
 // 09-02: 마피아 봇 협응(결정 0061-18)으로 마피아의 대상 난수가 없어져 night 호출 순서가 바뀌었고 시드 고정 값을 다시 고정했다.
 // defense(후보 봇만) = randInt(문구 수 3) → randInt(지연 폭).
 // 테스트 방 방장이 봇 투표를 고정한 경우(RoomState.testBotVote, P-13): 고정 값이면 결정 난수(randInt(100)·randInt(후보 수))를 건너뛰고 지연 난수는 그대로 부른다.
 // 고정 설정이 없거나 pick 조건이 안 맞아 무작위로 돌아가면 위 순서와 똑같다.
-// 09-12: will(1일차 토론 시작 3초 뒤 유언 한 줄)·approach(마피아 봇이 pick 계획 200ms 뒤 대상 곁으로 걷기)는 난수를 부르지 않는다 — 위 호출 순서와 시드 고정 값은 그대로다(결정 0061-18, 가정 A3).
+// 09-12: will(1일차 토론 시작 3초 뒤 유언 한 줄)은 난수를 부르지 않는다 — 위 호출 순서와 시드 고정 값은 그대로다(결정 0061-18, 가정 A3).
 // 09-24: 채팅 줄마다 그 앞에 입력 중(typing) 단계가 붙는다(at = 줄 시각 − BOT_TYPING_LEAD_MS, 지금보다 앞서지 않음) — 난수를 부르지 않으므로 위 호출 순서와 시드 고정 값은 그대로다.
 // 08-07 순서 추가: discussion 은 위 두 줄 뒤에 randInt(토론 끝내기 폭 30000) 한 번이 붙는다(봇당 5번: 폭·문구 수·폭·문구 수·끝내기 폭, 시드 고정 값을 다시 고정했다).
 // 09.1: 지목(nomination, 결정 0063-1)은 차례인 봇 하나만 randInt(후보 수) 한 번(지연 난수 없음) — 차례가 아닌 봇·모이는 중·확정 뒤 사이·끝 알림에는 계획과 난수가 없다. 결정 함수(botPointTarget)는 자기를 뺀 산 사람 하나를 고르고 고정 pick(host·other)도 같다(결정 0060-13: pick 은 봇 지목 대상). 09.1-05 가 옛 지연 지목(2000 + [0, 6000) ms)의 난수 계약을 지웠다.
@@ -103,8 +104,6 @@ export const BOT_DEFENSE_LINES: readonly string[] = ["저 아니에요", "저는
 export const BOT_WILL_LINES: readonly string[] = ["다들 끝까지 힘내요", "저는 믿어 주세요", "좋은 판이었어요"];
 /** 1일차 토론 시작 이만큼 뒤에 산 봇이 유언을 쓴다(ms). */
 export const BOT_WILL_AT_MS = 3_000;
-/** 밤에 마피아 봇이 pick 계획 이만큼 뒤에 대상 곁으로 걷는다(ms). */
-export const BOT_APPROACH_AFTER_MS = 200;
 /** 심부름 봇 계획(결정 0074): 첫 걷기 시작·장소 사이 간격·걷기 뒤 처리·재시도(ms). 난수 없음. */
 export const ERRAND_BOT_FIRST_MS = 500;
 export const ERRAND_BOT_STEP_MS = 12_000;
@@ -121,9 +120,8 @@ export type BotAct =
   | { t: "endDiscussion" }
   | { t: "point"; target: number }
   | { t: "verdict"; agree: boolean }
-  // 9페이즈(결정 0061-18): 유언 한 줄(방 DO 의 applyWill 본체)·마피아 다가가기(applyMove 본체, 대상 seat 은 계획 시점 값이고 실행 시점에 botMafiaTarget 으로 다시 구한다). 둘 다 난수 없음.
+  // 9페이즈(결정 0061-18): 유언 한 줄(방 DO 의 applyWill 본체). 난수 없음.
   | { t: "will"; text: string }
-  | { t: "approach"; target: number }
   // 9페이즈 보완(09-24, feedback-1): 채팅 줄 직전에 서버 안에서 입력 중 켜짐을 중계한다(방 DO 의 relayTyping 본체, 사람의 typing 메시지와 같은 길). 난수 없음, 꺼짐은 보내지 않는다.
   | { t: "typing" }
   // 15페이즈(결정 0074): 심부름. errandGo = 봇의 미완료 장소 중 가장 가까운 곳 중앙으로 걷기(applyMove 본체), errandAct = 처리 요청(applyErrand 본체). 둘 다 난수 없음, 특권 없음.
@@ -162,17 +160,16 @@ export function botMafiaTarget(state: RoomState, bot: Player): number | undefine
 }
 
 /**
- * 밤에 이 봇이 고를 대상 seat. 마피아는 botMafiaTarget(난수 없음, 결정 0061-18), 경찰은 살아 있는 다른 사람,
- * 의사는 자신 포함 살아 있는 모두(둘 다 seat 오름차순 후보에서 randInt). 그 밖 역할·탈락한 봇·후보 없음은 undefined(randInt 를 부르지 않는다).
+ * 밤에 이 봇이 고를 대상 seat. 마피아는 botMafiaTarget(난수 없음, 결정 0061-18), 의사는 자신 포함 살아 있는 모두,
+ * 경찰·시민은 살아 있는 다른 사람(셋 다 seat 오름차순 후보에서 randInt 한 번). 탈락한 봇·후보 없음은 undefined(randInt 를 부르지 않는다).
  */
 export function botNightTarget(state: RoomState, bot: Player, randInt: RandInt): number | undefined {
   if (!isAlive(bot)) return undefined;
   if (bot.role === "mafia") return botMafiaTarget(state, bot);
   const living = state.players.filter(isAlive).sort(bySeat);
   let candidates: Player[];
-  if (bot.role === "police") candidates = living.filter((p) => p.id !== bot.id);
-  else if (bot.role === "doctor") candidates = living;
-  else return undefined;
+  if (bot.role === "doctor") candidates = living;
+  else candidates = living.filter((p) => p.id !== bot.id);
   if (candidates.length === 0) return undefined;
   return candidates[randInt(candidates.length)]!.seat;
 }
@@ -335,15 +332,9 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
       add(now + VERDICT_BASE_MS + randInt(VERDICT_SPAN_MS), { t: "verdict", agree });
     }
   } else if (state.phase === "night") {
-    if (bot.role === "mafia" || bot.role === "police" || bot.role === "doctor") {
-      const target = botNightTarget(state, bot, randInt);
-      if (target !== undefined) {
-        const pickAt = now + NIGHT_PICK_BASE_MS + randInt(NIGHT_PICK_SPAN_MS);
-        add(pickAt, { t: "pick", target });
-        // 다가가기(09-12): 마피아 봇만, 난수 없이 pick 시각 + 200ms. 대상은 실행 시점에 방 DO 가 botMafiaTarget 으로 다시 구한다.
-        if (bot.role === "mafia") add(pickAt + BOT_APPROACH_AFTER_MS, { t: "approach", target });
-      }
-    }
+    // 모든 역할의 산 봇이 한 명을 고른다(D-05) — 시민 봇의 고르기도 같은 pickTarget 을 지나 효과 없이 저장된다.
+    const target = botNightTarget(state, bot, randInt);
+    if (target !== undefined) add(now + NIGHT_PICK_BASE_MS + randInt(NIGHT_PICK_SPAN_MS), { t: "pick", target });
     if (bot.role === "mafia" && randInt(10) < NIGHT_CHAT_TENTHS) {
       const at = now + NIGHT_CHAT_BASE_MS + randInt(NIGHT_CHAT_SPAN_MS);
       addChat(at, BOT_NIGHT_LINES[randInt(BOT_NIGHT_LINES.length)]!);

@@ -70,10 +70,14 @@ export interface TreatmentRecord {
 }
 /** 본인 역할의 일지 한 줄 — 줄 모양은 키로 구별되고 화면은 me.role 로 해석한다(결정 0027). */
 export type RoleRecord = InvestigationRecord | AssassinationRecord | TreatmentRecord;
+/** 아침 흔적 조각(15페이즈 D-06): 닫힌 집합 9개. 의상의 함수이지 역할의 함수가 아니고 확정 증거가 아니다. 의상 id 와 이름이 다르다(의상 id 를 싣지 않는다). 이름·그림은 클라이언트 표가 정한다. */
+export const TRACE_PIECE_IDS = ["button", "pin", "whiteCloth", "blackCloth", "brownCloth", "pencil", "grayThread", "navyThread", "redCloth"] as const;
+export type TracePiece = (typeof TRACE_PIECE_IDS)[number];
 /** 아침 결과. 키 없는 객체는 지난밤 무사. 결정 0061-12·17: eliminated·saved 둘뿐이고 문장은 화면이 만든다(문구 번호 없음). */
 export interface MorningView {
   eliminated?: number; // 탈락한 seat
   saved?: true; // 의사가 확정 대상을 지킨 아침. 누구인지는 싣지 않는다(결정 0061-12, 0044-22)
+  trace?: TracePiece; // 탈락자가 있는 아침에만(15페이즈 D-06). 흔적 조각 id 하나뿐 — 좌석·의상·역할·고른 사람 풀은 싣지 않는다
 }
 /** 탈락자 전용 관전 정보(결정 0021): 한 사람의 실제 직업. 키 이름은 role 이 아니라 job 이다(누출 테스트 불변식). */
 export interface SpectateSeat {

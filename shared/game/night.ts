@@ -1,18 +1,23 @@
 // 밤 규칙. 순수 모듈이다 — 현재 시각·전역 난수를 읽지 않고, 입력 상태는 바꾸지 않는다.
 // 밤 판정에는 난수가 없다(결정 0061-6·17): 마피아 전원이 같은 대상을 골라야 확정이고, 갈리면 아무도 죽지 않는다.
 //
-// 이 파일이 플레이어의 role 을 읽는 이유는 행동 종류(지목·조사·보호)·마피아 표·조사 결과가 서버 판정이기 때문이다.
+// 이 파일이 플레이어의 role 을 읽는 이유는 행동 종류(지목·조사·보호)·마피아 표·조사 결과가 서버 판정이기 때문이다(pickTarget 은 읽지 않는다 — 15페이즈 D-05).
+// 밤 고르기는 산 사람 누구나 같은 입력·같은 응답이고, 효과는 판정이 역할로 가른다. 피해자가 나온 아침에는 enterMorning 이 그 밤 피해자를 고른 사람 중 한 명의 의상으로 흔적 조각을 정한다(D-06, trace.ts).
 // 읽은 역할 값은 어디에도 내보내지 않는다(결정 0002): 반환값에는 isMafia 불리언 하나와 seat 뿐이다.
 import type { AssassinationRecord, InvestigationRecord, MorningView, TreatmentRecord } from "../protocol";
 import { isAlive } from "./alive";
 import type { Player, RoomState } from "./room";
+import { pickTracePiece } from "./trace";
+import type { RandInt } from "./tick";
 
 export type NightError = "WRONG_PHASE" | "BAD_MESSAGE";
 
 /**
- * 밤 행동(지목·조사·보호) 한 번. 행동 종류는 메시지가 아니라 보낸 사람의 서버 저장 역할이 정한다.
+ * 밤에 한 명 고르기. 산 사람 누구나 같은 메시지·같은 규칙·같은 응답이다(15페이즈 D-05) — 이 함수는 역할을 읽지 않는다.
+ * 고른 값은 그 사람의 nightPick 에 저장되고, 효과가 있는지(마피아 팀 확정·경찰 조사·의사 보호)는 판정(resolveNight·confirmedTarget)이 역할로 가른다.
+ * 시민의 고르기·마피아가 동료나 자신을 고르는 것은 효과 없이 받는다 — 응답으로 역할이 갈라지지 않게 한다(D-08).
  * 검사 순서가 계약이다: 단계(night 아니면 WRONG_PHASE) → 행위자(방에 있고 생존, 아니면 BAD_MESSAGE)
- * → 역할(마피아·경찰·의사) → 대상(정수·앉은 생존자) → 마피아가 고른 대상이 마피아(자신·동료)면 BAD_MESSAGE → 같은 값이면 입력 상태 그대로 ok → 그 사람의 nightPick 만 바꾼 새 상태.
+ * → 대상(정수·앉은 생존자, 자기 자신 포함, 아니면 BAD_MESSAGE) → 같은 값이면 입력 상태 그대로 ok → 그 사람의 nightPick 만 바꾼 새 상태.
  */
 export function pickTarget(
   state: RoomState,
@@ -22,13 +27,8 @@ export function pickTarget(
   if (state.phase !== "night") return { ok: false, error: "WRONG_PHASE" };
   const actor = state.players.find((p) => p.id === actorId);
   if (!actor || !isAlive(actor)) return { ok: false, error: "BAD_MESSAGE" };
-  if (actor.role !== "mafia" && actor.role !== "police" && actor.role !== "doctor") {
-    return { ok: false, error: "BAD_MESSAGE" };
-  }
   const chosen = Number.isInteger(target) ? state.players.find((p) => p.seat === target) : undefined;
   if (!chosen || !isAlive(chosen)) return { ok: false, error: "BAD_MESSAGE" };
-  // 마피아는 자신·동료를 고를 수 없다. 화면이 막아 두지만 서버가 방어선이다(D-02).
-  if (actor.role === "mafia" && chosen.role === "mafia") return { ok: false, error: "BAD_MESSAGE" };
   if (actor.nightPick === target) return { ok: true, state };
   return {
     ok: true,
@@ -141,9 +141,11 @@ export function resolveNight(state: RoomState): ResolvedNight {
  * 경찰 investigations·마피아 assassinations·의사 treatments 뒤에 추가, morning 은 탈락이면 { eliminated }, 의사 구출이면 { saved: true }, 확정이 없으면 {},
  * 탈락이 없으면 nightNote 를 키째 지운다(구출·무효 밤의 쪽지 폐기, 결정 0061-9),
  * 모든 nightPick 키 제거(아침 뷰에 선택 흔적이 남지 않는다), nightLog 끝에 그 밤 한 줄 추가(서버 전용, 키를 필드별로 만든다).
- * 난수 인자가 없다(결정 0061-17). tick 의 진입 훅 시그니처는 앞 인자만 받아도 맞는다.
+ * 판정에는 난수가 없다(결정 0061-17). 난수는 탈락자가 있을 때 흔적을 낼 사람을 뽑는 한 번뿐이다(D-06, randInt 를 안 받으면 첫 후보 — 결정적).
+ * 흔적(morning.trace): 탈락자가 있을 때만, 그 밤 피해자를 고른 산 사람(피해자 본인 제외) 풀에서 한 명의 의상 조각 하나. 풀은 nightPick 을 지우기 전의 players 로 만든다.
+ * 구출·무효 밤은 trace 키가 없다.
  */
-export function enterMorning(state: RoomState): RoomState {
+export function enterMorning(state: RoomState, randInt: RandInt = () => 0): RoomState {
   const result = resolveNight(state);
   const players: Player[] = state.players.map((p) => {
     const { nightPick: _nightPick, ...kept } = p;
@@ -158,8 +160,13 @@ export function enterMorning(state: RoomState): RoomState {
     };
     return result.eliminated === p.seat ? { ...withRecords, alive: false } : withRecords;
   });
+  const piece = result.eliminated === undefined ? undefined : pickTracePiece(state, result.eliminated, randInt);
   const morning: MorningView =
-    result.eliminated !== undefined ? { eliminated: result.eliminated } : result.saved ? { saved: true } : {};
+    result.eliminated !== undefined
+      ? { eliminated: result.eliminated, ...(piece === undefined ? {} : { trace: piece }) }
+      : result.saved
+        ? { saved: true }
+        : {};
   const { nightNote: _nightNote, ...rest } = state;
   return {
     ...(result.eliminated === undefined ? rest : state),

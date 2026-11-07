@@ -7,14 +7,14 @@ import { isAlive } from "./alive";
 import { majorityOf, nominationStepMs } from "./nomination";
 import { runoffStepMs } from "./runoff";
 import { showdownStepMs } from "./showdown";
-import { MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, PHASE_DEFS } from "./phases";
+import { MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_TRACE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
 
 /** 낮 투표류 규칙 함수(토론 끝내기·지목·찬반)의 거부 코드. 단계가 아니면 WRONG_PHASE, 그 밖의 잘못된 입력은 BAD_MESSAGE. */
 export type VoteError = "WRONG_PHASE" | "BAD_MESSAGE";
 
 /**
- * 아침 길이(ms, MORN-04, 결정 0061-13): 탈락이 없으면 MORNING_MS, 있으면 MORNING_MS + 탈락 + (피해자 유언이 비어 있지 않으면 유언) + (쪽지가 비어 있지 않으면 쪽지), 상한 MORNING_MAX_MS.
+ * 아침 길이(ms, MORN-04, 결정 0061-13): 탈락이 없으면 MORNING_MS, 있으면 MORNING_MS + 탈락 + (피해자 유언이 비어 있지 않으면 유언) + (쪽지가 비어 있지 않으면 쪽지) + (흔적이 있으면 MORNING_TRACE_MS), 상한 MORNING_MAX_MS.
  * 공개 내용만의 함수다(L6) — 구출·무효 밤은 enterMorning 이 쪽지를 이미 지워서 5초이고, 경찰 선택·마피아 이동·보호 대상은 읽지 않는다.
  * 피해자 유언은 죽은 뒤 바꿀 수 없어(A2) 아침 동안 길이가 변하지 않는다.
  */
@@ -26,7 +26,8 @@ export function morningMsOf(state: RoomState): number {
     MORNING_MS +
     MORNING_VICTIM_MS +
     (will !== undefined && will !== "" ? MORNING_WILL_MS : 0) +
-    (state.nightNote !== undefined && state.nightNote !== "" ? MORNING_NOTE_MS : 0);
+    (state.nightNote !== undefined && state.nightNote !== "" ? MORNING_NOTE_MS : 0) +
+    (state.morning?.trace !== undefined ? MORNING_TRACE_MS : 0); // 흔적 공개 구간(15페이즈 D-06) — 흔적은 탈락자가 있는 아침에만 있다
   return Math.min(MORNING_MAX_MS, ms);
 }
 

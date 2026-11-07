@@ -134,6 +134,8 @@ function buildDay(state: RoomState): DayView {
     const result = state.morning;
     if (result?.eliminated !== undefined) {
       morning.eliminated = result.eliminated;
+      // 흔적(15페이즈 D-06): 서버가 정한 조각 id 하나를 모든 view 에 같은 값으로 필드별 복사한다 — 좌석·의상·역할·풀은 없다.
+      if (result.trace !== undefined) morning.trace = result.trace;
     } else if (result?.saved === true) {
       // 의사 구출은 saved 하나만 공개한다 — 보호받은 사람이 누구인지·쪽지는 어디에도 싣지 않는다(결정 0061-12, 0044-22).
       morning.saved = true;
