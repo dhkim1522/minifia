@@ -110,7 +110,7 @@ const ROLE_PATHS_ALIVE = [
  * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. stats 는 판 통계 카운터(11-01, 결정 D-6, L35)다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)·순차 지목 차례(pickTurn, 결정 0063-1)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
  */
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick", "stats", "badgeLog", "whispers", "disconnectedAt", "left"]; // disconnectedAt·left(11-04): 방 연속성 서버 전용 기록 (L43). badgeLog·whispers(11-03): 결과 공개 줄은 v·to 같은 다른 이름을 쓴다 — 서버 전용 이름은 어떤 프레임에도 키로 없다 (L35)
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick", "stats", "badgeLog", "whispers", "disconnectedAt", "left", "errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick"]; // errandPlaces·errandDone·errandNear·errandSeen·errandTickAt·nightPick(15-06, T-15-25): 심부름·밤 선택의 서버 전용 이름 — view 는 me.errand·me.record·me.pick 이라는 다른 이름으로만 본인에게 싣는다. disconnectedAt·left(11-04): 방 연속성 서버 전용 기록 (L43). badgeLog·whispers(11-03): 결과 공개 줄은 v·to 같은 다른 이름을 쓴다 — 서버 전용 이름은 어떤 프레임에도 키로 없다 (L35)
 /**
  * 서버 전용 이름과 같은 공개 와이어 필드의 경로(08-11, 결정 0060-3·4) — 이 두 경로만 SERVER_ONLY_KEYS 검사에서 빼고 이유를 단다. 목록은 줄이지 않고, 새 경로는 받을 권리 조건이 있을 때만 더한다.
  *  - .view.day.verdict: 처형 단계에서 모두에게 같은 {yes,no,passed} 집계(서버 전용 RoomState.verdict 와 이름만 같다).
@@ -167,6 +167,22 @@ const POLITICS_ALLOWED_PATHS: readonly string[] = politicsPathsFor(RULESET);
 /** path 가 list(기본은 POLITICS_ALLOWED_PATHS)에 드는가(`.*` 로 끝나는 항목은 그 경로 자신 또는 그 아래). */
 const politicsAllowed = (path: string, list: readonly string[] = POLITICS_ALLOWED_PATHS): boolean =>
   list.some((p) => (p.endsWith(".*") ? path === p.slice(0, -2) || path.startsWith(`${p.slice(0, -1)}`) : path === p));
+/**
+ * 15페이즈(심부름·목격 기록·아침 흔적)가 view 에 더한 경로 전부(15-06, D-08, T-15-23) — 새 경로는 이 목록에 이유와 함께 넣어야 하고 이 밖의 키가 이 접두 아래에 보이면 아래 시험이 실패한다.
+ *  - .view.me.errand(.places[]·.done[]): errand 단계의 산 본인에게만. 장소 id 목록과 처리한 순서뿐이고 좌표·역할은 없다(모든 역할의 모양이 같다, D-03).
+ *  - .view.me.record([].seat·.place): 토론 단계에서 3곳을 마친 산 본인에게만. 근처에서 본 좌석과 장소 id 뿐이다(D-04).
+ *  - .view.day.morning(.eliminated·.saved·.trace): 아침의 모든 view 에 같은 값. trace 는 조각 id 하나뿐이고 탈락자가 있는 아침에만 있다(D-06).
+ */
+const FIFTEEN_PATHS: ReadonlySet<string> = new Set([
+  ".view.me.errand", ".view.me.errand.places", ".view.me.errand.done",
+  ".view.me.record", ".view.me.record[].seat", ".view.me.record[].place",
+  ".view.day.morning", ".view.day.morning.eliminated", ".view.day.morning.saved", ".view.day.morning.trace",
+]);
+const FIFTEEN_PREFIXES = [".view.me.errand", ".view.me.record", ".view.day.morning"];
+/** path 가 15페이즈 접두 중 하나의 그 키 자신 또는 그 아래인가(이름이 겹치는 기존 .view.me.records 는 아니다). */
+const underFifteen = (path: string): boolean => FIFTEEN_PREFIXES.some((p) => path === p || path.startsWith(`${p}.`) || path.startsWith(`${p}[]`));
+/** 경로 목록에서 허용 밖 15페이즈 경로. 비어 있어야 통과다. */
+const fifteenViolations = (paths: readonly string[]): string[] => paths.filter((pth) => underFifteen(pth) && !FIFTEEN_PATHS.has(pth));
 const ROLE_PATHS_DEAD = [...ROLE_PATHS_ALIVE, ".view.spectate.seats[].job"];
 /** ended 단계 프레임에서만 더해지는 허용 경로(D-17, Pitfall 10): 결과 화면의 모든 직업. ended 이전 프레임에서는 누출이다. */
 const ROLE_PATH_ENDED = ".view.result.seats[].job";
@@ -466,7 +482,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     const sawChatMafia = new Set<number>(); // me.chat 이 "mafia" 인 view 를 받은 seat
     const morningsByDay = new Map<number, Set<string>>(); // 일차 → day.morning JSON 모음
     const morningSeen = new Map<number, Set<number>>(); // 일차 → 아침 state 를 받은 seat
-    const saw = { ally: new Set<number>(), records: new Set<number>(), pick: new Set<number>(), tally: new Set<number>(), sure: new Set<number>(), spectatePicksX: false };
+    const saw = { errand: new Set<number>(), record: new Set<number>(), trace: false, ally: new Set<number>(), records: new Set<number>(), pick: new Set<number>(), tally: new Set<number>(), sure: new Set<number>(), spectatePicksX: false };
 
     for (const a of actors) {
       let dead = false;
@@ -503,6 +519,20 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
           if (phase === "night" && a.seat === victimX.seat && day === 2 && spectate.picks!.mafia.includes(victimY.seat)) {
             saw.spectatePicksX = true;
           }
+        }
+        // (3a) 15페이즈 새 경로(15-06): 허용 목록 안이고, 받을 권리가 있을 때만 나온다 — errand 는 errand 단계의 산 본인, record 는 토론 단계의 산 본인, trace 는 아침.
+        expect(fifteenViolations(paths).join(" | ")).toBe("");
+        if (paths.includes(".view.me.errand")) {
+          expect(`${phase}/${dead}`).toBe("errand/false");
+          saw.errand.add(a.seat);
+        }
+        if (paths.includes(".view.me.record")) {
+          expect(`${phase}/${dead}`).toBe("discussion/false");
+          saw.record.add(a.seat);
+        }
+        if (paths.includes(".view.day.morning.trace")) {
+          expect(phase).toBe("morning");
+          saw.trace = true;
         }
         // (3) 비공개 키는 받을 사람에게만.
         // 일지(D-10): 경찰·마피아·의사 본인만, 역할마다 줄 키가 다르다. 시민(탈락한 시민 관전 소켓 포함)에게는 어떤 프레임에도 없다.
@@ -612,6 +642,10 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     expect([...saw.pick].sort()).toEqual([mafiaA.seat, mafiaB.seat, police.seat, doctor.seat].sort());
     expect([...saw.tally].sort()).toEqual([mafiaA.seat, mafiaB.seat].sort()); // 집계는 산 마피아 둘만 받았고, 둘 다 같은 대상을 골라 확정도 받았다
     expect([...saw.sure].sort()).toEqual([mafiaA.seat, mafiaB.seat].sort());
+    // 15페이즈(15-06): 첫 낮의 errand 단계에서 산 여섯 모두가 me.errand 를 받았고(역할과 무관), 아무도 심부름을 하지 않은 판이라 me.record 는 누구에게도 가지 않았다. 흔적은 아침에 나왔다.
+    expect([...saw.errand].sort()).toEqual(actors.map((a) => a.seat).sort());
+    expect([...saw.record]).toEqual([]);
+    expect(saw.trace).toBe(true);
 
     // (5) 두 아침 각각 모든 소켓이 같은 day.morning 이고 각각 {eliminated} 하나뿐이다(문구 번호 없음, 결정 0061-17).
     for (const day of [1, 2]) {
@@ -1653,6 +1687,20 @@ describe.skipIf(!RULESET.showdown)("마지막 3인 결전 프레임 전수 (결�
       // 유령(좌석 3)은 어느 프레임에도 me.ballot 이 없다
       if (a.seat === 3) expect(frames.some((m) => m.t === "state" && m.view.me.ballot !== undefined)).toBe(false);
     });
+  });
+});
+
+describe("15페이즈 허용 경로 (15-06, D-08, T-15-23)", () => {
+  it("허용 목록 밖 키(me.errandNear·me.errand.near·me.record[].role·morning.victim)는 위반으로 잡히고, 허용된 경로만 있는 view 는 통과한다", () => {
+    const ok = { view: { me: { errand: { places: ["glass"], done: [] }, record: [{ seat: 1, place: "glass" }] }, day: { morning: { eliminated: 1, trace: "pin" } } } };
+    expect(fifteenViolations(keyPaths(ok))).toEqual([]);
+    const bad = { view: { me: { errand: { places: [], done: [], near: [1] }, errandNear: [1], record: [{ seat: 1, place: "x", role: "mafia" }] }, day: { morning: { victim: "mafia" } } } };
+    expect(fifteenViolations(keyPaths(bad))).toEqual([".view.me.errand.near", ".view.me.record[].role", ".view.day.morning.victim"]);
+    // me.errandNear 같은 접두가 이어진 서버 전용 이름은 SERVER_ONLY_KEYS 검사가 마지막 키 이름으로 잡는다.
+    expect(keyPaths(bad).filter((pth) => SERVER_ONLY_KEYS.includes(pth.slice(pth.lastIndexOf(".") + 1)))).toEqual([".view.me.errandNear"]);
+    // 이름이 겹치는 기존 일지 키는 15페이즈 접두가 아니다.
+    expect(fifteenViolations(keyPaths({ view: { me: { records: [{ n: 1, target: 2 }] } } }))).toEqual([]);
+    for (const name of ["errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick"]) expect(SERVER_ONLY_KEYS.includes(name)).toBe(true);
   });
 });
 
