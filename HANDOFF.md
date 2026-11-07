@@ -7,6 +7,7 @@
 - **v3.0 개발 완료·배포됨(브랜치 `v3`, 13~15페이즈, 결정 0072~0074)**: 13 기본판 낮 흐름, 14 사회자 자막 띠·빛남·도구 이름표(0073), 15 낮 심부름·목격 기록·밤 선택 통일·아침 흔적(0074). 배포 version `2026-11-07T09:14:56Z+f882224e`(minifia-v3). RULESET 새 스위치 없음. 요구사항 22개 완료·로드맵 13~15(`.planning/`), 범위·순서 결정 0071.
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`(페이즈 문서 `v2.0-phases/`). 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터(결정 0047·0048)**: 원본 https://claude.ai/artifact/NP1XfUrYTTqQ5nAB1HKYT5 (사본 `design/v2.0/figure/`, 모듈 `design/v2.0/blockout/character.js`). `3d/mf3d.js` 는 옛 방식이라 안 쓴다.
+- **v3.0 시안**: 15페이즈 심부름·목격·흔적 캔버스 https://claude.ai/artifact/X9XPJtc6mm3UdihPA6fNYD (원본 `design/v3.0/errand/ErrandTrace.html`).
 - **맵(결정 0050)**: 재즈 바 + 시계탑 광장(`PLAYABLE_MAPS`). 블록아웃 https://claude.ai/artifact/1hzgEyAufgnDPVMvPvxdhP (사본 `design/v2.0/blockout/`).
 - **브랜치**: 지금은 **`v3`**. `v2` 는 v2.0 그대로, `v1` 은 v1.0 배포본 수정 전용, `main` 은 배포된 v1.0. 다른 PC 는 `git fetch` 후 `git switch v3`.
 - 배포: v3 https://minifia-v3.dhplay.workers.dev (Worker `minifia-v3`, `scripts/deploy-target.mjs`), v2 https://minifia-v2.dhplay.workers.dev (비교용, 변화 없음), v1.0 `https://minifia.dhplay.workers.dev`(변화 없음). `npm run deploy` 가 계정·배포 대상 가드를 거친다(가드는 우회하지 않는다).
@@ -24,7 +25,6 @@
 
 ## 다음 할 일
 
-0. **(작은 일) 15페이즈 시안을 캔버스로 옮긴다.** 15페이즈 때 아티팩트 도구가 안 돼(`list_types` 가 "not available to this session") 시안을 로컬 HTML `design/v3.0/errand/ErrandTrace.html` 로 대신했다. 새 세션에서 아티팩트 도구가 되면 이 HTML 을 Design 캔버스 시안으로 만들고 링크를 `15-CONTEXT.md` "시안"과 이 파일에 적는다. 도구가 여전히 안 되면 그대로 두고 1번으로 간다.
 1. **v3.0 전체 실테스트 한 번**(팀·실기기, v2.0 실기기 칸 `.planning/milestones/v2.0-phases/12-sound-polish/12-TEAM-TEST.md` 포함). 볼 것: 심부름 40초 체감(`ERRAND_MS`)·근처 반경 3.0·처리 반경 1.2·기록 줄(상한 6)·흔적 구간 3초 — 모두 `shared/game/phases.ts` 한 곳 값, 투표 15초, 8명 동시 가리키기 성능, 투표 이름표 손가락 누르기. 결과로 값·위임 기본값을 고치고, 통과하면 main 에 반영.
 2. 정통 판(장치 켜기)은 `RULESET` 값만 바꾸면 된다. 마피아의 심부름 방해·시상에 목격 반영은 Future(0074).
 3. three `0.186.1` 고정, 성능 확인 폰은 iPhone 16 Pro + 크롬 CPU 4배 스로틀(결정 0055). 이력서용 포트폴리오는 v3.0 뒤(`docs/portfolio-request.md`).

@@ -25,7 +25,7 @@
 
 ## 시안 (세부 결정 15: 2~3개 + 추천안 바로 구현)
 
-- 캔버스 도구를 이 세션에서 쓸 수 없어 로컬 HTML 로 만들었다: `design/v3.0/errand/ErrandTrace.html`(캔버스 링크 없음).
+- 캔버스: https://claude.ai/artifact/X9XPJtc6mm3UdihPA6fNYD (2026-11-07, 처음 만든 로컬 HTML `design/v3.0/errand/ErrandTrace.html` 을 옮김).
 - **채택: 모두 A(추천)** — 심부름: 지도 위 장소 아이콘 + 다음 장소 빛남 + 진행 점 3개 + [처리] 단추 / 목격 기록: 접히는 기록 카드(사람·장소·순서) / 밤: 모든 역할 같은 이름표 목록 "고르기" / 아침 흔적: 아이콘 + 한 줄 카드("누구의 것인지는 모릅니다").
 
 ## Claude's Discretion (추천안으로 진행, 결정 0074 로 기록)
