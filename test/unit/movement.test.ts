@@ -70,23 +70,20 @@ describe("canMove — 단계 × 신분 표 (MAP-04)", () => {
 });
 
 describe("canMoveIn — 밤에는 산 사람 누구도 걷지 못한다 (15페이즈 D-05)", () => {
-  it("밤: 산 사람은 isMafia 값과 무관하게 false · 유령 true", () => {
-    // 마피아의 밤 접근 걷기가 없어졌다 — 세 번째 인자는 받되 무시한다.
-    expect(`night:${canMoveIn("night", true, true)}`).toBe("night:false");
-    expect(`night:${canMoveIn("night", true, false)}`).toBe("night:false");
+  it("밤: 산 사람 false · 유령 true (인자는 단계·생존 둘뿐)", () => {
+    expect(canMoveIn.length).toBe(2);
     expect(`night:${canMoveIn("night", true)}`).toBe("night:false");
-    expect(`night:${canMoveIn("night", false, true)}`).toBe("night:true");
-    expect(`night:${canMoveIn("night", false, false)}`).toBe("night:true");
+    expect(`night:${canMoveIn("night", false)}`).toBe("night:true");
   });
 
-  it("밤 밖의 단계는 isMafia 가 결과를 바꾸지 않는다", () => {
+  it("밤 밖의 단계 표는 그대로다(회귀)", () => {
     for (const [phase, aliveCan, ghostCan] of TABLE) {
       if (phase === "night") continue;
-      expect(`${phase}:${canMoveIn(phase, true, true)}`).toBe(`${phase}:${aliveCan}`);
-      expect(`${phase}:${canMoveIn(phase, false, true)}`).toBe(`${phase}:${ghostCan}`);
+      expect(`${phase}:${canMoveIn(phase, true)}`).toBe(`${phase}:${aliveCan}`);
+      expect(`${phase}:${canMoveIn(phase, false)}`).toBe(`${phase}:${ghostCan}`);
     }
-    expect(`morning:${canMoveIn("morning", true, true)}`).toBe("morning:false");
-    expect(`discussion:${canMoveIn("discussion", true, false)}`).toBe("discussion:true");
+    expect(`morning:${canMoveIn("morning", true)}`).toBe("morning:false");
+    expect(`discussion:${canMoveIn("discussion", true)}`).toBe("discussion:true");
   });
 
   it("canMove 는 밤에 어떤 역할의 산 사람도 허용하지 않고 유령만 허용한다", () => {

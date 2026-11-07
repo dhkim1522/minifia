@@ -129,7 +129,7 @@ describe("동작 수신자 표 — 단계 × 신분 (UI-SPEC A-6, D-12·D-14)", 
 });
 
 describe("동작은 이동 차단과 무관하다 (AVTR-05, movement.ts 머리 주석)", () => {
-  const blockedDay = [...MAP_PHASES].filter((p) => p !== "night" && !canMoveIn(p, true, false) && !canMoveIn(p, true, true));
+  const blockedDay = [...MAP_PHASES].filter((p) => p !== "night" && !canMoveIn(p, true));
 
   it("이동이 막힌 낮 지도 단계가 지목·결선·마지막 3인·변론·찬반·처형·아침을 포함한다", () => {
     expect(blockedDay.sort().join(",")).toBe(["defense", "execution", "morning", "nomination", "runoff", "showdown", "verdict"].join(","));
@@ -146,9 +146,9 @@ describe("동작은 이동 차단과 무관하다 (AVTR-05, movement.ts 머리 �
 
   it("밤 시민 편은 이동도 동작도 막히고, 산 마피아는 이동이 막혀도(15페이즈 D-05 — 누구도 밤에 걷지 않는다) 동작은 된다", () => {
     const night = sixAt("night", [2]);
-    expect(canMoveIn("night", true, false)).toBe(false);
+    expect(canMoveIn("night", true)).toBe(false);
     expect(actualRecipients(night, idOf(0))).toBe("");
-    expect(canMoveIn("night", true, true)).toBe(false);
+    expect(canMoveIn("night", true)).toBe(false);
     expect(actualRecipients(night, idOf(1))).not.toBe("");
   });
 });

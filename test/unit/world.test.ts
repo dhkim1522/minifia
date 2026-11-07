@@ -10,7 +10,6 @@ import {
   walkableCells,
 } from "../../shared/game/map";
 import {
-  APPROACH_DIST_FX,
   WANDER_MIN_MS,
   WANDER_SPAN_MS,
   MOVE_MIN_GAP_MS,
@@ -20,7 +19,6 @@ import {
   type WorldState,
   captureHome,
   compactWorld,
-  approachPoint,
   despawnPlayer,
   emptyWorld,
   forceSegment,
@@ -945,25 +943,5 @@ describe("home 정리 — 퇴장·대기실 복귀 (결정 0061-5)", () => {
 
   it("respawnAll 은 home 을 없앤다(대기실 복귀)", () => {
     expect(respawnAll(withHome(), PLAYERS, 9000, BAR_MAP).home).toBeUndefined();
-  });
-});
-
-describe("approachPoint — 마피아 다가가기 목적지 (UI-SPEC 다르게 하는 곳 6)", () => {
-  it("APPROACH_DIST_FX 는 80(대상 옆 0.8 단위)", () => {
-    expect(APPROACH_DIST_FX).toBe(80);
-  });
-
-  it("target 에서 from 쪽으로 distFx 만큼 떨어진 점", () => {
-    expect(approachPoint({ x: 0, z: 0 }, { x: 300, z: 400 }, 80)).toEqual({ x: 48, z: 64 });
-  });
-
-  it("from 과 target 이 같으면 target 의 +x 쪽 distFx 점", () => {
-    expect(approachPoint({ x: 100, z: 100 }, { x: 100, z: 100 }, 80)).toEqual({ x: 180, z: 100 });
-  });
-
-  it("결과는 항상 정수(반올림)", () => {
-    const r = approachPoint({ x: 7, z: 3 }, { x: 101, z: 59 }, 80);
-    expect(Number.isInteger(r.x)).toBe(true);
-    expect(Number.isInteger(r.z)).toBe(true);
   });
 });

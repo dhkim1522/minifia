@@ -126,10 +126,10 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     ["처형 통과", { phase: "execution", candidate: 1, passed: true }, "찬성이 많아 하윤 님이 처형됩니다.", "execution.passed"],
     ["처형 통과 유령(같은 문장)", { phase: "execution", candidate: 1, passed: true, ghost: true }, "찬성이 많아 하윤 님이 처형됩니다.", "execution.passed"],
     ["처형 부결", { phase: "execution", candidate: 1, passed: false }, "반대가 많아 처형은 없습니다.", "execution.failed"],
-    ["밤 마피아", { phase: "night", role: "mafia" }, "밤이 되었습니다. 없앨 사람에게 다가가 주세요.", "night.mafia"],
+    ["밤 마피아", { phase: "night", role: "mafia" }, "밤이 되었습니다. 없앨 사람의 이름표를 눌러 주세요.", "night.mafia"],
     ["밤 경찰", { phase: "night", role: "police" }, "밤이 되었습니다. 조사할 사람의 이름표를 눌러 주세요.", "night.police"],
     ["밤 의사", { phase: "night", role: "doctor" }, "밤이 되었습니다. 지킬 사람의 이름표를 눌러 주세요.", "night.doctor"],
-    ["밤 시민", { phase: "night", role: "citizen" }, "밤이 되었습니다. 눈을 감고 기다려 주세요.", "night.wait"],
+    ["밤 시민", { phase: "night", role: "citizen" }, "밤이 되었습니다. 한 명의 이름표를 눌러 주세요.", "night.citizen"],
     ["밤 유령", { phase: "night", role: "police", ghost: true }, "밤이 되었습니다. 모두의 밤 행동을 지켜봐 주세요.", "night.ghost"],
     ["아침 피해자", { phase: "morning", morning: { eliminated: 2 } }, "아침이 밝았습니다. 민지 님이 당했습니다.", "morning"],
     ["아침 구출", { phase: "morning", morning: { saved: true } }, "아침이 밝았습니다. 누군가 살아났습니다.", "morning"],
@@ -256,13 +256,23 @@ describe("빛남 대상 callTargetsOf (HOST-03·04)", () => {
     expect(callTargetsOf(makeView({ phase: "verdict", candidate: 1, ghost: true }))).toBeNull();
   });
 
-  it("밤: 경찰은 나 제외, 의사는 나 포함, 마피아·시민·유령 → null", () => {
-    expect(callTargetsOf(makeView({ phase: "night", role: "police", seat: 1 }))).toEqual(tag(0, 2, 3));
-    expect(callTargetsOf(makeView({ phase: "night", role: "doctor", seat: 1 }))).toEqual(tag(0, 1, 2, 3));
-    expect(callTargetsOf(makeView({ phase: "night", role: "doctor", seat: 1, dead: [3] }))).toEqual(tag(0, 1, 2));
-    expect(callTargetsOf(makeView({ phase: "night", role: "mafia" }))).toBeNull();
-    expect(callTargetsOf(makeView({ phase: "night", role: "citizen" }))).toBeNull();
+  it("밤: 산 마피아·경찰·의사·시민 모두 나를 포함한 산 사람 전원(네 시점 같음), 유령 → null (D-05)", () => {
+    const roles: RoleId[] = ["mafia", "police", "doctor", "citizen"];
+    for (const role of roles) {
+      expect(callTargetsOf(makeView({ phase: "night", role, seat: 1 })), role).toEqual(tag(0, 1, 2, 3));
+      expect(callTargetsOf(makeView({ phase: "night", role, seat: 1, dead: [3] })), `${role} 한 명 탈락`).toEqual(tag(0, 1, 2));
+    }
     expect(callTargetsOf(makeView({ phase: "night", role: "police", ghost: true }))).toBeNull();
+    expect(callTargetsOf(makeView({ phase: "night", role: "mafia", ghost: true }))).toBeNull();
+  });
+
+  it("밤 문구: night.wait 키는 없고 night.mafia·night.citizen 은 36자 이하·역할 낱말 없음", () => {
+    expect(Object.keys(HOST_LINES)).not.toContain("night.wait");
+    for (const k of ["night.mafia", "night.citizen"] as const) {
+      const t = HOST_LINES[k] as string;
+      expect(t.length, k).toBeLessThanOrEqual(36);
+      expect(/마피아|경찰|의사|시민/.test(t), k).toBe(false);
+    }
   });
 
   it("심부름: 반경 안이면 tool errand, 반경 밖이면 가장 가까운 미완료 place, 위치를 모르면 첫 미완료 place", () => {

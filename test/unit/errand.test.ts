@@ -305,8 +305,7 @@ describe("view", () => {
 
 describe("movement·채팅", () => {
   it("errand 에서 산 사람은 걷고(마피아·시민 모두), 말할 수 없다", () => {
-    expect(canMoveIn("errand", true, false)).toBe(true);
-    expect(canMoveIn("errand", true, true)).toBe(true);
+    expect(canMoveIn("errand", true)).toBe(true);
     expect(canMoveIn("errand", false)).toBe(true);
     const s = barRoom(5, "errand");
     for (const p of s.players) expect(channelOf(s, p.id)).toBeNull();

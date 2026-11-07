@@ -130,12 +130,12 @@ const ALL_VIEWPOINTS: readonly Viewpoint[] = ["mafia", "police", "doctor", "citi
 // ---- 밤·아침: 띠 문장이 지금 할 일이다. 역할 줄은 밤뿐이고 그 줄은 내 화면에만 있다 ----
 
 describe("UX-01 띠 문장: night·morning (14-02)", () => {
-  it("night: 마피아·경찰·의사는 자기 줄, 시민은 기다림 줄, 탈락은 유령 줄 — 모두 띠 안 [data-guide] 하나", () => {
+  it("night: 마피아·경찰·의사는 자기 줄, 시민은 이름표 줄, 탈락은 유령 줄 — 모두 띠 안 [data-guide] 하나", () => {
     const expected: Readonly<Record<Viewpoint, string>> = {
       mafia: HOST_LINES["night.mafia"] as string,
       police: HOST_LINES["night.police"] as string,
       doctor: HOST_LINES["night.doctor"] as string,
-      citizen: HOST_LINES["night.wait"] as string,
+      citizen: HOST_LINES["night.citizen"] as string,
       spectator: HOST_LINES["night.ghost"] as string,
     };
     for (const vp of ALL_VIEWPOINTS) {
@@ -160,7 +160,7 @@ describe("UX-01 띠 문장: night·morning (14-02)", () => {
 });
 
 describe("UX-01 처형 없이 온 밤 (14-02)", () => {
-  it("처형 무효로 온 밤: 마피아 하나 = 마피아 줄, 시민 하나 = 기다림 줄(모두 띠 안)", () => {
+  it("처형 무효로 온 밤: 마피아 하나 = 마피아 줄, 시민 하나 = 시민 줄(모두 띠 안)", () => {
     const mafia = renderRoom(makeView({ phase: "night", viewpoint: "mafia", endsIn: 30_000, noExecution: "tie" }));
     const gm = onlyGuide(mafia.container, "noExecution/마피아");
     expect(gm.hasAttribute("data-host-line")).toBe(true);
@@ -168,7 +168,7 @@ describe("UX-01 처형 없이 온 밤 (14-02)", () => {
     mafia.unmount();
     const citizen = renderRoom(makeView({ phase: "night", viewpoint: "citizen", endsIn: 30_000, noExecution: "noVotes" }));
     const gc = onlyGuide(citizen.container, "noExecution/시민");
-    expect(squish(gc.textContent)).toBe(HOST_LINES["night.wait"]);
+    expect(squish(gc.textContent)).toBe(HOST_LINES["night.citizen"]);
     expect(gc.hasAttribute("data-host-line")).toBe(true);
   });
 });
