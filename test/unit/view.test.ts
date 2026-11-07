@@ -293,6 +293,7 @@ const ME_KEYS: ReadonlySet<string> = new Set([
   "whisperUsed", // 오늘 귓속말을 이미 보냈다(결정 0066-2) — 토론 단계의 산 본인에게만, 값은 true 뿐
   "ballot", // 동점 결선(결정 0066-4)·마지막 3인 동시 지목(결정 0066-5)에서 본인이 고른 좌석 — 투표 창·결과/지목 창·공개의 산 본인에게만, 값은 좌석 하나
   "errand", // 심부름 목록·진행(15페이즈, 결정 0074) — errand 단계의 산 본인에게만, 아래 "심부름 me.errand" describe 가 조건을 단언한다
+  "record", // 목격 기록(15-02, D-04) — 토론 단계에서 심부름 3곳을 모두 처리한 산 본인에게만, errandNear.test.ts 의 "me.record" describe 가 조건을 단언한다
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([

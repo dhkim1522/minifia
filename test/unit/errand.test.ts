@@ -129,8 +129,8 @@ describe("enterErrand", () => {
   it("같은 시드·같은 입력이면 같은 결과, 입력 상태는 바뀌지 않는다", () => {
     const base = barRoom(5, "dayAnnounce");
     const frozen = JSON.stringify(base);
-    const a = enterErrand(base, seededRandInt(7));
-    const b = enterErrand(base, seededRandInt(7));
+    const a = enterErrand(base, seededRandInt(7), 0);
+    const b = enterErrand(base, seededRandInt(7), 0);
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
     expect(JSON.stringify(base)).toBe(frozen);
   });
@@ -141,8 +141,8 @@ describe("enterErrand", () => {
       ...base,
       players: base.players.map((p) => ({ ...p, role: p.role === "mafia" ? "citizen" : "mafia" })),
     };
-    const a = enterErrand(base, seededRandInt(11));
-    const b = enterErrand(flipped, seededRandInt(11));
+    const a = enterErrand(base, seededRandInt(11), 0);
+    const b = enterErrand(flipped, seededRandInt(11), 0);
     expect(JSON.stringify(a.players.map((p) => [p.errandPlaces, p.errandDone]))).toBe(JSON.stringify(b.players.map((p) => [p.errandPlaces, p.errandDone])));
     // 마피아와 시민의 키 이름·개수·길이가 같다
     const shapes = new Set(a.players.map((p) => `${Object.keys(p).filter((k) => k.startsWith("errand")).join(",")}/${p.errandPlaces!.length}/${p.errandDone!.length}`));
@@ -152,10 +152,14 @@ describe("enterErrand", () => {
   it("난수 호출 순서: seat 오름차순 산 사람, 사람마다 k = 0..2 에 randInt(n - k)", () => {
     const base = barRoom(5, "dayAnnounce");
     const calls: number[] = [];
-    enterErrand(base, (n) => {
-      calls.push(n);
-      return 0;
-    });
+    enterErrand(
+      base,
+      (n) => {
+        calls.push(n);
+        return 0;
+      },
+      0,
+    );
     expect(calls).toEqual(Array.from({ length: 6 }, () => [8, 7, 6]).flat());
   });
 
@@ -164,10 +168,14 @@ describe("enterErrand", () => {
     const dead = base.players[2]!.id;
     const withDead: RoomState = { ...base, players: base.players.map((p) => (p.id === dead ? { ...p, alive: false, errandPlaces: ["glass"], errandDone: [] } : p)) };
     let calls = 0;
-    const out = enterErrand(withDead, (n) => {
-      calls += 1;
-      return n - 1;
-    });
+    const out = enterErrand(
+      withDead,
+      (n) => {
+        calls += 1;
+        return n - 1;
+      },
+      0,
+    );
     expect(calls).toBe(5 * 3);
     expect(Object.keys(byId(out, dead)).some((k) => k.startsWith("errand"))).toBe(false);
     expect(isAlive(byId(out, dead))).toBe(false);
@@ -175,7 +183,7 @@ describe("enterErrand", () => {
 
   it("광장 방은 광장 후보에서 뽑는다", () => {
     const base = { ...barRoom(5, "dayAnnounce"), map: "plaza" as const };
-    const out = enterErrand(base, seededRandInt(3));
+    const out = enterErrand(base, seededRandInt(3), 0);
     const candidates = new Set(PLAZA_PLACES.map((p) => p.id));
     for (const p of out.players) for (const id of p.errandPlaces!) expect(candidates.has(id)).toBe(true);
   });
@@ -186,7 +194,7 @@ describe("enterErrand", () => {
     const saved = real.places;
     try {
       (real as { places?: unknown }).places = undefined;
-      const out = enterErrand(base, seededRandInt(3));
+      const out = enterErrand(base, seededRandInt(3), 0);
       for (const p of out.players) expect(p.errandPlaces).toEqual([]);
     } finally {
       (real as { places?: unknown }).places = saved;
