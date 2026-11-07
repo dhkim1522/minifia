@@ -17,8 +17,12 @@ const seatState = (seatNo: number, connected: boolean) => (m: ServerMessage): bo
 const hostSeatOf = (m: ServerMessage): number | undefined =>
   m.t === "state" ? m.view.players.find((p) => p.isHost)?.seat : undefined;
 
-/** 유예(3초)는 넘고 정리 시간(6초)은 안 넘은 끊긴 지 시간 — 이양만 일어나고 옛 방장은 아직 지워지지 않는다. */
-const PAST_GRACE_MS = 4000;
+/**
+ * 유예(3초)는 넘고 정리 시간(6초)은 안 넘은 끊긴 지 시간 — 이양만 일어나고 옛 방장은 아직 지워지지 않는다.
+ * 저장소를 고쳐 쓰는 editRoom(DO 퇴거 포함)이 이 환경에서 약 2초 걸려서 알람이 돌 때의 실제 경과는 이 값 + 약 2초다 —
+ * 4000 이면 6초를 넘겨 이양과 함께 옛 방장이 정리돼 "같은 토큰으로 돌아오면" 시험이 5초 시간 초과로 실패했다(15-06 에서 원인 확인). 3초 이상·6초 미만이 두 경우 모두 들도록 3200.
+ */
+const PAST_GRACE_MS = 3200;
 
 /** 저장된 방장 자리의 disconnectedAt 을 과거로 옮겨 유예가 지난 것으로 만든다(DO 를 evict 하므로 소켓은 하이버네이션). */
 async function agePast(code: string, hostId: string, ms: number): Promise<void> {
