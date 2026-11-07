@@ -1965,16 +1965,21 @@ export function readErrand(page) {
       arrows: arrows.filter(shown).map(box),
       arrowAngle: deg ? Number(deg[1]) : null,
       ringShown: !!ring && getComputedStyle(ring).display !== "none",
-      ringPoints: ring ? (ring.getAttribute("points") ?? "").trim().split(/\s+/).filter(Boolean).length : 0,
+      ringPoints: ring ? (ring.querySelector("polygon")?.getAttribute("points") ?? "").trim().split(/\s+/).filter(Boolean).length : 0,
       callCount: qa("[data-call]").length,
       bandLine: bandLine ? (bandLine.textContent ?? "").replace(/\s+/g, " ").trim() : "",
       title: title ? (title.textContent ?? "").replace(/\s+/g, "") : "",
-      stage: { left: 0, top: band ? band.getBoundingClientRect().bottom : 0, right: window.innerWidth, bottom: (document.querySelector("[data-world-panel]")?.getBoundingClientRect().top ?? window.innerHeight) },
+      stage: (() => {
+        const top = band ? band.getBoundingClientRect().bottom : 0;
+        const bottom = document.querySelector("[data-world-panel]")?.getBoundingClientRect().top ?? window.innerHeight;
+        return { left: 0, top, right: window.innerWidth, bottom, width: window.innerWidth, height: bottom - top };
+      })(),
       band: box(band),
       dockRow: box(document.querySelector("[data-host-band] .mv-host__dock")),
       panel: box(document.querySelector("[data-world-panel]")),
       tagButtons: qa("[data-pick], [data-face]").filter(shown).map(box),
-      tagCount: qa(".mf-world__tag[data-seat]").length,
+      // 이름표 요소는 방의 사람 수만큼 DOM 에 있고(공개 목록) 근처 밖은 투명(opacity 0)으로 남는다 — 보이는 이름표만 센다
+      tagCount: qa(".mf-world__tag[data-seat]").filter((el) => Number(getComputedStyle(el).opacity) > 0.01).length,
       attrValues: values,
       vw: window.innerWidth,
       vh: window.innerHeight,

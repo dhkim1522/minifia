@@ -66,6 +66,7 @@ import {
   typeAndSendChat,
   waitChatLine,
   waitWorldReady,
+  readNightFaces,
 } from "./browser.mjs";
 import {
   JOIN_FIT_MIN_H,
@@ -136,6 +137,7 @@ import { SHORT_PHONE_H, awardChecks, readAwardState, readBenchView, readRematchS
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
+import { makeErrandFlows } from "./errand.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
 const HOST_NICK = "화면검사기";
@@ -2277,55 +2279,35 @@ async function nightAssassin(ctx) {
     const allies = view.me.allies?.length ?? 0;
     const alive = aliveOf(view).length;
     rec(sc, "NA1", "내 직업이 마피아이고 동료가 있다(6명판)", view.me.role === "mafia" && allies === 1, `직업 ${view.me.role}, 동료 ${allies}`);
-    rec(sc, "NA2", "밤 마피아 아래 패널은 마피아 채널 채팅이다", g.hasInput && g.chatChannel === "mafia", `채널 ${g.chatChannel}, 입력 ${g.hasInput}`);
-    rec(sc, "NA3", `이름표 선택 버튼은 나·동료를 뺀 산 사람 ${alive - 1 - allies}개`, g.picks.length === alive - 1 - allies, `버튼 ${g.picks.length}개`);
+    // 15-08: 밤 마피아도 시민·경찰·의사와 같은 얼굴 목록(나 포함 산 사람 전원)으로 고른다 — 채팅 입력·이름표 선택 버튼·다가가기 걷기·후보 효과는 없다
     const n0 = await readNight(hp);
+    rec(sc, "NA2", "밤 마피아 아래 패널은 얼굴 목록이고 채팅 입력은 없다", n0?.faceList === true && g.hasInput === false, `얼굴 목록 ${n0?.faceList}, 입력 ${g.hasInput}`);
+    rec(sc, "NA3", `이름표 선택 버튼은 없고 얼굴 칸은 나 포함 산 사람 ${alive}개`, g.picks.length === 0 && n0?.faces?.length === alive, `버튼 ${g.picks.length}개, 칸 ${n0?.faces?.length}개`);
     rec(sc, "NA4", "확정 전에는 [쪽지] 가 있고 비활성(aria-disabled)이다", n0?.noteButton?.disabled === true, `쪽지 버튼 ${JSON.stringify(n0?.noteButton)}`);
     rec(sc, "NA5", "밤 마피아 화면에는 어둠·맥박이 없다(시민 편만)", n0?.nightDark === null && n0?.tensionPulse === 0, `어둠 ${n0?.nightDark}, 맥박 ${n0?.tensionPulse}`);
     await gameGH(ctx, id, "night-mafia", host);
+    const aim0 = (await readAim(hp)).filter((t) => t.aim !== null || t.mark);
+    rec(sc, "NA3b", "맵 이름표에 선택 효과(data-night-pick)·표식이 하나도 없다", aim0.length === 0, `선택 효과 이름표 ${aim0.length}개`);
 
-    // 선택 효과(결정 0065): 고르기 전 후보 이름표는 점선 테두리(cand), 나·동료는 없다
-    const aim0 = await readAim(hp);
-    const cand0 = aim0.filter((t) => t.aim === "cand");
-    rec(sc, "NA3b", "고르기 전: 후보 이름표 전부가 cand + 점선 테두리고 표식은 없다", cand0.length === g.picks.length && cand0.every((t) => t.borderStyle === "dashed" && !t.mark) && aim0.every((t) => t.aim === "cand" || t.aim === null), `cand ${cand0.length}/${g.picks.length}, 점선 ${cand0.filter((t) => t.borderStyle === "dashed").length}, 상태 ${aim0.map((t) => t.aim).join(",")}`);
-
-    // 다가가기: 봇이 고르는 가장 낮은 seat 의 산 비마피아를 방장이 누른다 → 내 캐릭터가 움직이고(목적지 링) 봇 마피아와 일치해 확정된다
-    const target = g.picks.map((b) => b.seat).sort((a, b) => a - b)[0];
+    // 고르기: 봇 마피아가 고르는 가장 낮은 seat 의 산 비마피아(나·동료 제외)를 얼굴 목록에서 누른다 → 눌림 표시, 내 캐릭터는 걷지 않고, 봇 마피아와 일치해 확정된다
+    const faceSeats = (await readNightFaces(hp)).faceSeats;
+    const target = faceSeats.filter((seat) => seat !== game.hostSeat && !(view.me.allies ?? []).includes(seat)).sort((x, y) => x - y)[0];
     const posBefore = await sampleWorld(hp, game.hostSeat).catch(() => null);
-    const segBefore = ht.moves.get(game.hostSeat)?.n ?? 0;
     const movesBefore = ht.sentMoveAt.length;
     const tap = await attempt(async () => {
-      await tapPick(hp, target);
+      await tapFace(hp, target);
     });
-    rec(sc, "NA6", "이름표 버튼을 누르면 눌림 표시", tap.ok, tap.detail);
-    // 테두리 색은 0.15초 전환이라 끝난 값을 기다려 읽는다
-    let aim1 = await readAim(hp);
-    for (let i = 0; i < 10 && aim1.find((t) => t.seat === target)?.borderColor !== "rgb(200, 16, 46)"; i++) {
-      await sleep(100);
-      aim1 = await readAim(hp);
-    }
-    const mineTag = aim1.find((t) => t.seat === target);
-    rec(sc, "NA6b", "고른 뒤: 대상 이름표만 mine + is-picked + 3px 실선 진홍(#c8102e) 테두리 + 표식, 나머지 후보는 cand", mineTag?.aim === "mine" && /is-picked/.test(mineTag.cls ?? "") && mineTag.borderStyle === "solid" && mineTag.borderWidth === 3 && mineTag.borderColor === "rgb(200, 16, 46)" && mineTag.mark === true && aim1.filter((t) => t.aim === "mine").length === 1 && aim1.filter((t) => t.aim === "cand").length === g.picks.length - 1 && aim1.filter((t) => t.mark).length === 1, `대상 ${JSON.stringify(mineTag)}, mine ${aim1.filter((t) => t.aim === "mine").length}, cand ${aim1.filter((t) => t.aim === "cand").length}, 표식 ${aim1.filter((t) => t.mark).length}`);
-    // 다가가기는 일반 move 를 보낸다(목적지 링 data-ring 은 맵 탭에서만 생긴다) — 내 구간이 새로 오고 위치가 실제로 옮겨지는지로 본다
-    const moved = await attempt(async () => {
-      const start = performance.now();
-      for (;;) {
-        const now = await sampleWorld(hp, game.hostSeat).catch(() => null);
-        if (posBefore && now && Math.hypot(now.x - posBefore.x, now.z - posBefore.z) > 0.5) return true;
-        if (performance.now() - start > 5000) return { ok: false, detail: `위치 ${JSON.stringify(posBefore)} → ${JSON.stringify(now)}` };
-        await sleep(150);
-      }
-    });
-    rec(sc, "NA7", "대상을 고르면 내 캐릭터가 대상 곁으로 걷는다(move 전송 + 위치가 0.5 단위 넘게 옮겨짐)", moved.ok && ht.sentMoveAt.length > movesBefore && (ht.moves.get(game.hostSeat)?.n ?? 0) > segBefore, `${moved.detail} / 보낸 move ${ht.sentMoveAt.length - movesBefore}개, 내 구간 번호 ${segBefore} → ${ht.moves.get(game.hostSeat)?.n ?? 0}`);
-    infoRow(ctx, sc, "NA7k", "참고: 다가가기 중 목적지 링 data-ring(맵 탭에서만 생김, 판정 아님)", `링 ${(await readGame(hp)).ring}`);
+    rec(sc, "NA6", "얼굴 칸을 누르면 눌림 표시(aria-pressed)", tap.ok, tap.detail);
+    await sleep(900);
+    const posAfter = await sampleWorld(hp, game.hostSeat).catch(() => null);
+    rec(sc, "NA7", "대상을 골라도 내 캐릭터는 걷지 않는다(보낸 move 0개·위치 변화 0.5 단위 이하)", ht.sentMoveAt.length === movesBefore && (!posBefore || !posAfter || Math.hypot(posAfter.x - posBefore.x, posAfter.z - posBefore.z) <= 0.5), `보낸 move ${ht.sentMoveAt.length - movesBefore}개, 위치 ${JSON.stringify(posBefore)} → ${JSON.stringify(posAfter)}`);
     const sure = await attempt(async () => {
-      const gg = await untilGame(hp, (x) => x.tags.some((t) => t.sure), 9000, "확정 도장");
-      const st = gg.tags.find((t) => t.sure);
-      return st?.seat === target ? true : { ok: false, detail: `확정 도장 자리 ${st?.seat} ≠ 대상 ${target}` };
+      await hp.waitForFunction((seat) => document.querySelector(`[data-face="${seat}"] .mv-face__count[aria-label="확정"]`) !== null, target, { timeout: 9000 });
     });
-    rec(sc, "NA8", "봇 마피아가 같은 대상을 고르면 대상 이름표에 '확정' 도장이 붙는다", sure.ok, sure.detail);
+    rec(sc, "NA8", "봇 마피아가 같은 대상을 고르면 대상 얼굴 칸 안에 '확정' 표시(check)가 붙는다", sure.ok, sure.detail || "9초 안에 확정 표시가 나타나지 않음");
     const nSure = await readNight(hp);
-    rec(sc, "NA9", "도장 글자가 '확정' 이다", /확정/.test(nSure?.sure?.text ?? ""), `도장 ${nSure?.sure?.text}`);
+    const sureLabel = await hp.evaluate((seat) => document.querySelector(`[data-face="${seat}"] .mv-face__count[aria-label]`)?.getAttribute("aria-label") ?? null, target);
+    rec(sc, "NA9", "확정 표시의 접근성 이름이 '확정' 이다", sureLabel === "확정", `이름 ${sureLabel}`);
     rec(sc, "NA10", "확정 뒤 [쪽지] 가 활성이다", nSure?.noteButton?.disabled === false, `쪽지 버튼 ${JSON.stringify(nSure?.noteButton)}`);
     rec(sc, "NA11", "서버 확정(me.nightSure)이 대상과 같다", ht.last().me.nightSure === target, `nightSure ${ht.last().me.nightSure}`);
 
@@ -2651,9 +2633,9 @@ async function nightVictim(ctx, shared) {
     rec(sc, "VC2", "내 직업이 시민이다", ht.last().me.role === "citizen", `직업 ${ht.last().me.role}`);
     shared.dark.citizen = n.nightDark;
     sideChecks(rec, sc, "시민", n, g);
-    recNear(rec, sc, "VC3", "시민: 아래 패널 높이가 88 고정이다", n.panel?.height, gamePanelHeight(ctx.size.h, "nightCitizen"), 1);
-    recTagInStage(rec, sc, "VC4", "시민", n);
-    rec(sc, "VC5", "시민 밤 화면에는 얼굴 목록·쪽지 버튼이 없다", n.faceList === false && n.noteButton === null, `얼굴 목록 ${n.faceList}, 쪽지 ${JSON.stringify(n.noteButton)}`);
+    faceListChecks(rec, sc, "시민", n, aliveOf(ht.last()).length); // 15-08: 시민도 같은 얼굴 목록(88 고정 빈 패널은 없어졌다)
+    recTagInStageFaces(rec, sc, "VC4", "시민", n);
+    rec(sc, "VC5", "시민 밤 화면에는 얼굴 목록이 있고 쪽지 버튼은 없다(쪽지는 마피아 전용)", n.faceList === true && n.noteButton === null, `얼굴 목록 ${n.faceList}, 쪽지 ${JSON.stringify(n.noteButton)}`);
     await gameGH(ctx, id, "night-citizen", host);
     // 봇 마피아가 알람으로 방장(가장 낮은 seat)을 고른다. 밤 30초가 자연스럽게 끝나기를 기다린다
     await armAnnounceWatch(hp);
@@ -2751,13 +2733,13 @@ async function nightSizesFlow(ctx) {
     const { game, g } = await openNight(ctx, id, { guests: 0, bots: 5, role: "mafia" });
     try {
       const n = await readNight(game.hp);
-      rec(sc, "SZ1", "마피아: 이름표 선택 버튼이 있다", g.picks.length > 0, `버튼 ${g.picks.length}개`);
-      recMany(rec, sc, pickButtonChecks(g.picks), " (마피아 밤)");
-      recTagInStage(rec, sc, "SZ2", "마피아", n);
-      panelRow(rec, sc, "SZ3", g, h, "nightMafia", "마피아 밤");
+      // 15-08: 마피아도 시민·경찰·의사와 같은 아래 패널 얼굴 목록(나 포함 산 사람 전원)으로 고른다 — 맵 이름표 선택 버튼·후보 효과(cand)·밤 채팅 패널은 없다
+      rec(sc, "SZ1", "마피아: 이름표 선택 버튼([data-pick])이 없고 얼굴 목록 칸만 있다", g.picks.length === 0 && n.faces.length > 0, `버튼 ${g.picks.length}개, 칸 ${n.faces.length}개`);
+      faceListChecks(rec, sc, "마피아", n, aliveOf(game.ht.last()).length);
+      recTagInStageFaces(rec, sc, "SZ2", "마피아", n);
       const aim = await readAim(game.hp);
-      const cands = aim.filter((t) => t.aim === "cand");
-      rec(sc, "SZ3b", "마피아: 후보 이름표 버튼이 모두 선택 효과 상태(cand, 점선 테두리)다", cands.length === g.picks.length && cands.every((t) => t.borderStyle === "dashed"), `cand ${cands.length}/${g.picks.length}, 점선 ${cands.filter((t) => t.borderStyle === "dashed").length}`);
+      const withAim = aim.filter((t) => t.aim !== null || t.mark);
+      rec(sc, "SZ3b", "마피아: 맵 이름표에 선택 효과(data-night-pick·표식)가 하나도 없다", withAim.length === 0, `선택 효과 이름표 ${withAim.length}개`);
     } finally {
       await closeGame(game);
     }
@@ -2768,7 +2750,7 @@ async function nightSizesFlow(ctx) {
     try {
       const n = await readNight(game.hp);
       sideChecks(rec, sc, "경찰", n, g);
-      faceListChecks(rec, sc, "경찰", n, aliveOf(game.ht.last()).length - 1);
+      faceListChecks(rec, sc, "경찰", n, aliveOf(game.ht.last()).length);
       recTagInStageFaces(rec, sc, "SZ4", "경찰", n);
     } finally {
       await closeGame(game);
@@ -2781,8 +2763,8 @@ async function nightSizesFlow(ctx) {
     try {
       const n = await readNight(game.hp);
       sideChecks(rec, sc, "시민", n, g);
-      recNear(rec, sc, "SZ5", "시민: 아래 패널 높이가 88 고정이다", n.panel?.height, gamePanelHeight(h, "nightCitizen"), 1);
-      recTagInStage(rec, sc, "SZ6", "시민", n);
+      faceListChecks(rec, sc, "시민", n, aliveOf(game.ht.last()).length);
+      recTagInStageFaces(rec, sc, "SZ6", "시민", n);
     } finally {
       await closeGame(game);
     }
@@ -3800,6 +3782,9 @@ const { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow,
 // 사회자·이름표(14페이즈 14-08): emcee-band(띠, 폰 6종)·emcee-tools·emcee-leak·emcee-sound. 흐름 본문은 host.mjs, 도우미만 넘긴다
 const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow } = makeHostFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH, settledResult });
 
+// 심부름·목격 기록·밤 통일·아침 흔적(15페이즈 15-09): errand·witness·trace(폰 6종). 흐름 본문은 errand.mjs, 도우미만 넘긴다
+const { errandFlow, witnessFlow, traceFlow } = makeErrandFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH });
+
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
   { id: "lobby", run: lobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
@@ -3867,6 +3852,10 @@ export const FLOWS = [
   { id: "emcee-tools", run: emceeToolsFlow, size: GAME_SIZE },
   { id: "emcee-leak", run: emceeLeakFlow, size: GAME_SIZE },
   { id: "emcee-sound", run: emceeSoundFlow, size: GAME_SIZE },
+  // 15-09: 심부름(ERRAND-01~04)·목격 기록(ERRAND-05)·밤 얼굴 목록 통일 + 아침 흔적(TRACE-01~03). 이름 앞머리 errand·witness·trace — 다른 흐름과 --only 부분 일치가 겹치지 않는다. 폰 6종(영역 검사 필수)
+  { id: "errand", run: errandFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  { id: "witness", run: witnessFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  { id: "trace", run: traceFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },
