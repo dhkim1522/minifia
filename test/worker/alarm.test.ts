@@ -2,7 +2,7 @@ import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { DISCUSSION_MS, ERRAND_MS } from "../../shared/game/phases";
+import { DISCUSSION_MS, ERRAND_MS, ERRAND_TICK_MS } from "../../shared/game/phases";
 import { ROOM_TTL_MS, UNCONNECTED_ROOM_TTL_MS } from "../../shared/game/room";
 import { alarmOf, closed, connect, createRoom, editRoom, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
 import type { Seated } from "./helpers";
@@ -76,15 +76,16 @@ describe("알람", () => {
     await viewsOf(r, "dayAnnounce");
     expect((await storedRoom(r.code) as { day?: number }).day).toBe(1);
 
-    const stepInto = async (phase: string, ms: number): Promise<void> => {
+    const stepInto = async (phase: string, ms: number, wakeAfterMs = ms): Promise<void> => {
       const forced = await advance();
       const views = await viewsOf(r, phase);
       expect(views.every((v) => v.phaseEndsAt === forced + ms)).toBe(true);
       expect(views.every((v) => v.phaseDurationMs === ms)).toBe(true);
-      expect(await alarmOf(r.code)).toBe(forced + ms);
+      expect(await alarmOf(r.code)).toBe(forced + wakeAfterMs);
     };
     // 07-08: 순차 주장 단계가 없다 — 15페이즈(결정 0074): 낮 시작 발표 마감 다음이 심부름이고 그 마감 다음이 토론이다
-    await stepInto("errand", ERRAND_MS);
+    // 15-02: errand 에서는 알람이 마감보다 이른 근처·목격 표본 시각(진입 + ERRAND_TICK_MS)에 걸린다 — 마감은 그대로 진입 + ERRAND_MS.
+    await stepInto("errand", ERRAND_MS, ERRAND_TICK_MS);
     await stepInto("discussion", DISCUSSION_MS);
 
     // 지목(지목이 0표이므로 다음은 night): 지목 방식과 무관하게(09.1-03) 알람을 거듭하며 매번 마감 = 당긴 마감 + 그 view 의 단계 길이, 저장된 알람 = 그 마감이다.

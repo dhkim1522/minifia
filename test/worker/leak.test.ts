@@ -186,7 +186,8 @@ const RESULT_LOG_ROLE_PATHS = new Set([".lines[].v", ".part"]);
 const phaseOf = (phase: string) => (m: ServerMessage) => m.t === "state" && m.view.phase === phase;
 
 // ---- world 프레임(06-08, T-06-16 → 08-09 결정 0060-8): 키·문자열 값은 허용 목록뿐이고, 게임 중 산 사람 소켓에는 산 좌석만 간다 ----
-const WORLD_KEY_PATHS = new Set([".t", ".k", ".s", ".p", ".t0", ".v", ".at", ".ents", ".ents[].s", ".ents[].p", ".ents[].t0", ".ents[].v"]);
+// 15-02: ".near" 는 errand 의 근처 snap 표시(값은 true 뿐, 역할·좌석·id 와 무관, D-02). 근처 판정의 결과는 ents 의 좌석 집합으로만 드러나고 그 좌석은 아래에서 산 좌석으로 검사한다.
+const WORLD_KEY_PATHS = new Set([".t", ".k", ".s", ".p", ".t0", ".v", ".at", ".near", ".ents", ".ents[].s", ".ents[].p", ".ents[].t0", ".ents[].v"]);
 const WORLD_STRING_VALUES: Record<string, ReadonlySet<string>> = { ".t": new Set(["world"]), ".k": new Set(["move", "snap"]) };
 
 // ---- typing 프레임(07-10, T-07-18): 키는 t·seat·on 뿐, 문자열 값은 .t "typing" 뿐이다 ----
