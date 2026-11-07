@@ -3792,7 +3792,7 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, UI-SPEC U-3·U-5·U-18
   // 가짜 렌더러: 발끝 (x, z) → sx = 200 + 10x, sy = 300 + 10z
   const A = { id: "glass" as const, x: 0, z: 0, done: false }; // (200, 300) 안
   const B = { id: "piano" as const, x: -100, z: 0, done: false }; // (-800, 300) 밖
-  const C = { id: "sax" as const, x: 10, z: 5, done: true }; // (300, 350) 안
+  const C = { id: "sax" as const, x: 5, z: 5, done: true }; // (250, 350) 안
   const errandProp = (over: Partial<NonNullable<WorldStageProps["errand"]>> = {}): NonNullable<WorldStageProps["errand"]> => ({
     places: [A, B, C],
     nextId: "glass",
@@ -3836,7 +3836,7 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, UI-SPEC U-3·U-5·U-18
     fireEvent.click(pin(s, "sax"));
     expect(onWalk).toHaveBeenCalledWith("sax");
     expect(s.send).toHaveBeenCalledTimes(1);
-    expect(s.send).toHaveBeenCalledWith({ t: "move", x: 1000, z: 500 });
+    expect(s.send).toHaveBeenCalledWith({ t: "move", x: 500, z: 500 });
   });
 
   it("canWalk 가 거짓이면 표지를 눌러도 걷지 않는다", async () => {
@@ -3852,7 +3852,7 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, UI-SPEC U-3·U-5·U-18
     expect(pin(s, "glass").hidden).toBe(false);
     expect(pin(s, "glass").style.transform).toBe("translate(178px, 278px)");
     expect(pin(s, "sax").hidden).toBe(false);
-    expect(pin(s, "sax").style.transform).toBe("translate(278px, 328px)");
+    expect(pin(s, "sax").style.transform).toBe("translate(228px, 328px)");
     expect(pin(s, "piano").hidden).toBe(true);
   });
 

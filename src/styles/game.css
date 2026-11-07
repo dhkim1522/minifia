@@ -89,3 +89,13 @@
 /* 오른쪽 아래 떠 있는 버튼 묶음(09.1.1-08, UI-SPEC A-2): 오른쪽 16, 아래 = 키보드 올림 + 패널 높이(--mf-panel-h, 화면 틀이 잰다) + 8.
    배지 버튼이 위, 귓속말 버튼(09.1.1-09)이 아래라 두 칸(48 + 8 + 48)을 항상 잡아 둔다 — 버튼이 하나일 때도 위 칸 자리는 그대로다. 빈 칸은 포인터를 받지 않는다(땅 탭 걷기를 가리지 않는다). 시트 아래(z-overlay − 1) */
 .mf-float { position: absolute; right: var(--space-md); bottom: calc(var(--mf-kb-lift, 0px) + var(--mf-panel-h, 0px) + var(--space-sm)); z-index: calc(var(--z-overlay) - 1); display: flex; flex-direction: column; gap: var(--space-sm); min-height: calc(var(--control-input) * 2 + var(--space-sm)); pointer-events: none; }
+
+/* 심부름 층(15-05): 이름표 층보다 한 단 아래. 층 전체는 눌림 통과, 표지 버튼만 받는다(바닥 탭이 표지 없는 곳에서 그대로 걷기로 간다).
+   위치·숨김은 런타임 프레임 콜백이 DOM 에 직접 쓴다 — 이 파일에는 자리 값이 없다. */
+.mf-world__errand { position: absolute; inset: 0; z-index: calc(var(--z-tags) - 1); pointer-events: none; overflow: hidden; }
+.mf-world__errand > .mv-errand-pin, .mf-world__errand > .mv-errand-arrow { left: 0; top: 0; }
+.mf-world__errand > .mv-errand-pin { pointer-events: auto; }
+.mf-world__errand [hidden] { display: none; }
+/* 근처 반경 링: 굵기 2·gray-50 35% 점선, 정지 모양(모션 줄이기와 무관). 처리 반경은 그리지 않는다 */
+.mf-world__ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; fill: none; stroke: var(--gray-50); stroke-opacity: 0.35; stroke-width: 2; stroke-dasharray: 6 6; stroke-linejoin: round; }
+.mf-world__ring[hidden] { display: none; }
