@@ -27,7 +27,7 @@ import {
   startGame,
 } from "../shared/game/room";
 import type { JoinError } from "../shared/game/room";
-import type { RoomState } from "../shared/game/room";
+import type { Player, RoomState } from "../shared/game/room";
 import { pickRecipientIds, pickTarget } from "../shared/game/night";
 import { BADGE_MIN_GAP_MS, setBadge } from "../shared/game/badge";
 import { LOOK_MIN_GAP_MS, setLook } from "../shared/game/look";
@@ -45,7 +45,7 @@ import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
-import { actErrand, placeCenterFx } from "../shared/game/errand";
+import { actErrand, nearSnapFrame, placeCenterFx, sampleErrand } from "../shared/game/errand";
 import { ERRAND_MIN_GAP_MS } from "../shared/game/phases";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
@@ -1231,6 +1231,7 @@ export class Room extends DurableObject<Env> {
     this.fillChalk(prev);
     await this.persistAndBroadcast();
     await this.syncPositions(now);
+    this.syncErrandTransition(prev, now);
     await this.emitDeathCards(prev, now);
     await this.emitBallotsCard(prev, now);
     this.emitResultLog(prev);
@@ -1376,11 +1377,51 @@ export class Room extends DurableObject<Env> {
     const room = this.room;
     if (!room) return;
     for (const viewer of room.players) {
-      const visible = worldVisibleTo(room, viewer.id);
-      if (visible.size === 0) continue;
+      const frame = this.snapFrameFor(viewer, now);
+      if (frame === null) continue;
       if (!isAlive(viewer)) this.ghostSnapped.add(viewer.id);
-      this.deliver(new Set([viewer.id]), snapFrame(this.world, room.players.filter((q) => visible.has(q.id)), now));
+      this.deliver(new Set([viewer.id]), frame);
     }
+  }
+
+  // 보는 사람 한 명에게 갈 지금 위치 프레임 한 곳(15-02, D-02): errand 단계의 산 사람은 본인 + 근처(nearSnapFrame), 그 밖은 worldVisibleTo 로 거른 snapFrame.
+  // 보낼 좌석이 없는 단계(ended 등)는 null — 보내지 않는다. handleHello·snapEachViewer·snapNewGhosts 가 모두 이 함수를 쓴다.
+  private snapFrameFor(viewer: Player, now: number): WorldFrame | null {
+    const room = this.room;
+    if (!room) return null;
+    const visible = worldVisibleTo(room, viewer.id);
+    if (visible.size === 0) return null;
+    if (room.phase === "errand" && isAlive(viewer)) return nearSnapFrame(this.world, room.players, viewer.id, now);
+    return snapFrame(this.world, room.players.filter((q) => visible.has(q.id)), now);
+  }
+
+  // errand 의 근처 snap 을 산 사람마다 한 명씩 보낸다(D-02) — 새 무차별 방송 길을 만들지 않고 deliver 한 명씩(결정 0002·0021).
+  private syncErrandView(now: number): void {
+    const room = this.room;
+    if (!room || room.phase !== "errand") return;
+    for (const viewer of room.players) {
+      if (!isAlive(viewer)) continue;
+      this.deliver(new Set([viewer.id]), nearSnapFrame(this.world, room.players, viewer.id, now));
+    }
+  }
+
+  // errand 로 들어오면 근처 snap, errand 를 벗어나면(토론으로) 모든 산 사람에게 전체 snap. 알람 따라잡기로 여러 단계를 지나도 "전 단계 → 지금 단계" 한 번이다.
+  private syncErrandTransition(prev: RoomState, now: number): void {
+    const room = this.room;
+    if (!room) return;
+    if (room.phase === "errand" && prev.phase !== "errand") this.syncErrandView(now);
+    else if (room.phase !== "errand" && prev.phase === "errand") this.snapEachViewer(now);
+  }
+
+  // errand 표본 한 번(D-04, 알람 하나에 합친다): 위치는 world.segs 의 positionAtFx. 상태(errandNear·errandSeen·errandTickAt)는 방 상태에 저장돼 하이버네이션에도 이어진다.
+  // 방 상태가 바뀌어도 view 에는 실리는 값이 없어 state 를 다시 방송하지 않는다 — 저장만 한다(표본당 쓰기 한 번). 이어서 근처 snap 을 보낸다.
+  private async runErrandTick(now: number): Promise<void> {
+    const room = this.room;
+    if (!room || room.phase !== "errand" || room.errandTickAt === undefined || room.errandTickAt > now) return;
+    const has = (id: string): boolean => Object.prototype.hasOwnProperty.call(this.world.segs, id);
+    this.room = sampleErrand(room, (id) => (has(id) ? positionAtFx(this.world.segs[id]!, now) : undefined), now);
+    await this.ctx.storage.put("room", this.room);
+    this.syncErrandView(now);
   }
 
   // 지금 단계의 배치(지목 둘레 자리·변론 무대·부결 복귀)를 서버가 걷게 한다(DAY-04·05, 결정 0060-7).
@@ -1415,10 +1456,10 @@ export class Room extends DurableObject<Env> {
     if (!room) return;
     for (const p of room.players) {
       if (isAlive(p) || this.ghostSnapped.has(p.id)) continue;
-      const visible = worldVisibleTo(room, p.id);
-      if (visible.size === 0) continue;
+      const frame = this.snapFrameFor(p, now);
+      if (frame === null) continue;
       this.ghostSnapped.add(p.id);
-      this.deliver(new Set([p.id]), snapFrame(this.world, room.players.filter((q) => visible.has(q.id)), now));
+      this.deliver(new Set([p.id]), frame);
     }
   }
 
@@ -1468,6 +1509,7 @@ export class Room extends DurableObject<Env> {
       await this.advance(Date.now());
       await this.runDueBots(Date.now());
       this.runBotWander(Date.now());
+      await this.runErrandTick(Date.now());
       await this.reschedule();
     } catch (err) {
       // 토큰 없는 짧은 로그만 남기고, 예외로 재시도 한도가 소진되어 알람이 멈추지 않게 1초 뒤 다시 건다.
@@ -1523,8 +1565,8 @@ export class Room extends DurableObject<Env> {
     // state 다음에 이 소켓에만 지금 위치를 보낸다 — 보는 사람별로 거른다(결정 0060-8, T-08-11): 로비·assigning·roleReveal 은 모두,
     // 지도 단계는 산 사람이면 산 사람만·유령이면 모두(worldVisibleTo). 보낼 좌석이 없는 단계(ended 등)는 snap 을 보내지 않는다.
     // 클라이언트 epoch 가 첫 state 에서 오르는 규약(WR-03)과 맞는 순서다.
-    const visible = worldVisibleTo(this.room, player.id);
-    if (visible.size > 0) this.sendTo(ws, snapFrame(this.world, this.room.players.filter((p) => visible.has(p.id)), Date.now()));
+    const helloFrame = this.snapFrameFor(player, Date.now());
+    if (helloFrame !== null) this.sendTo(ws, helloFrame);
     // 그다음 이 소켓에만 보관 줄을 한 프레임으로 돌려준다 — 줄이 없어도 빈 배열로 보낸다(D2, 결정 0058-3).
     // 복원도 보낼 때의 마스크로만 거른다(결정 0058-2): 지금의 역할·생존으로 다시 계산하지 않아 라이브보다 넓어지지 않는다.
     this.sendTo(ws, { t: "chatLog", lines: replayFor(this.chatLog, player.seat) });
