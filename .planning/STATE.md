@@ -5,17 +5,17 @@ milestone_name: 사회자와 증거
 current_phase: 15
 current_phase_name: 낮 심부름·목격 기록·밤 흔적
 current_plan: 10
-status: executing
-stopped_at: Completed 15-09-PLAN.md
-last_updated: "2026-11-07T08:26:16.380Z"
+status: verifying
+stopped_at: Completed 15-10-PLAN.md
+last_updated: "2026-11-07T09:46:25.886Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: 02e7d7499934eb10dfd441f14ea93543c66d914f
+state_head: 1390b20d41db09e5e163b77a44d3e71d9095d6c3
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 25
-  completed_plans: 24
+  completed_plans: 25
   percent: 67
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 Phase: 15 (낮 심부름·목격 기록·밤 흔적) — executing (14페이즈 완료·배포 `d77e3dbf`, 결정 0073)
 Current Plan: 10
 Total Plans in Phase: 10
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 
 ## Performance Metrics
@@ -222,6 +222,7 @@ Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 | Phase 15 P06 | 70min | 2 tasks | 9 files |
 | Phase 15 P08 | 75min | 2 tasks | 22 files |
 | Phase 15 P09 | 약 3시간 | 3 tasks | 9 files |
+| Phase 15 P10 | 2h30m | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -473,6 +474,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 15]: 15-06: 새 view 키는 FIFTEEN_PATHS·ALLOWED_NEW_PATHS·ME_ALLOWED·ME_KEYS·VIEW_ME_KEYS 다섯 곳을 함께 고친다
 - [Phase 15]: 15-08: 밤 얼굴 목록은 모든 산 사람 같음(나 포함 전원, 묶음 '밤 대상'), 마피아 밤 채팅 패널은 화면에서 삭제(서버 채널 유지), 마피아 합의는 칸 안 선택 수 배지(tally·sure)가 유일한 예외
 - [Phase 15]: 15-09: 기록 카드는 채팅 기록 칸을 덮는 것이 설계라 E2E 는 입력줄 윗변 − 8 과 교차를 본다. 근처 밖 이름표는 DOM 에 opacity 0 으로 남아 보이는 수로 판정한다
+- [Phase 15]: [15-10] result-reveal 마피아 탭 검사는 시험 전용 훅 없이 밤 채팅 화면 삭제 계약(입력칸 없음·줄 없음·구분선 없거나 {n}밤)으로 바꿈
+- [Phase 15]: [15-10] 결정 0074 로 심부름·목격 기록·밤 통일·흔적과 위임 기본값 U-1~U-18 기록, v3.0 minifia-v3 배포 version 2026-11-07T09:14:56Z+f882224e
 
 ### Pending Todos
 
@@ -537,8 +540,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-07T08:26:16.233Z
-Stopped at: Completed 15-09-PLAN.md
+Last session: 2026-11-07T09:46:25.720Z
+Stopped at: Completed 15-10-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
