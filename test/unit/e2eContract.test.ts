@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { BAR_MASK } from "../../shared/game/map";
-import { ERRAND_MS, NOMINATION_END_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
+import { ERRAND_ACT_R, ERRAND_COUNT, ERRAND_MS, ERRAND_NEAR_R, MORNING_TRACE_MS, NOMINATION_END_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { ANNOUNCE_MORNING_AT } from "../../src/game/dayView";
@@ -39,6 +39,7 @@ import * as perfRun from "../../scripts/perf-run.mjs";
 import * as resultE2e from "../../scripts/e2e/result.mjs";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as mapSelectE2e from "../../scripts/e2e/mapselect.mjs";
+import { PLACE_IDS } from "../../shared/protocol";
 import { HOST_LINES } from "../../src/game/hostLine";
 import { ROLE_TEXT } from "../../src/game/roleText";
 import { CEREMONY_TITLE } from "../../src/game/awardText";
@@ -217,9 +218,9 @@ describe("9페이즈 E2E 표식·패널(09-21)", () => {
     expect(missing).toEqual([]);
   });
 
-  it("lib 의 nightMafia 덧셈이 앱 LOBBY_PANEL_EXTRA(154)와 같다 — 어긋나면 E2E 가 거짓 통과·거짓 실패한다", () => {
-    expect(lib.GAME_PANEL_EXTRA.nightMafia).toBe(LOBBY_PANEL_EXTRA);
-    expect(lib.GAME_PANEL_EXTRA.nightMafia).toBe(lib.GAME_PANEL_EXTRA.talk);
+  it("밤 패널 종류는 얼굴 목록 하나다 — lib 의 GAME_PANEL_EXTRA 에 nightMafia 덧셈이 없고(15-08 이 마피아 밤 채팅 패널을 지웠다), 토론 덧셈은 앱 LOBBY_PANEL_EXTRA(154)와 같다", () => {
+    expect(Object.hasOwn(lib.GAME_PANEL_EXTRA, "nightMafia")).toBe(false);
+    expect(lib.GAME_PANEL_EXTRA.talk).toBe(LOBBY_PANEL_EXTRA);
   });
 });
 
@@ -700,6 +701,57 @@ describe("14페이즈 사회자·이름표 E2E 사본과 제품 값 (14-08, 사�
     const all = tracked.map((f) => readFileSync(new URL(f, root), "utf8")).join("\n");
     expect(lib.HOST_MARKERS).toEqual(["data-host-band", "data-host-line", "data-host-time", "data-call", "data-tool-label", "data-role-goal", "data-guide"]);
     expect(lib.HOST_MARKERS.filter((m) => !all.includes(m))).toEqual([]);
+  });
+});
+
+describe("15페이즈 E2E 사본과 제품 값 (15-09, 사본 일치 규약)", () => {
+  type L = {
+    ERRAND_MARKERS: readonly string[];
+    ERRAND_PLACE_IDS: readonly string[];
+    ERRAND_PER_PERSON: number;
+    ERRAND_E2E_MS: number;
+    TRACE_WINDOW_MS: number;
+    ERRAND_ACT_R_E2E: number;
+    ERRAND_NEAR_R_E2E: number;
+    ERRAND_LINES: Record<string, string>;
+  };
+  const lib = e2eLib as unknown as L;
+  const root = new URL("../../", import.meta.url);
+
+  it("ERRAND_MARKERS(E2E 가 읽는 15페이즈 표식 열둘)가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
+    const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
+      .split("\n")
+      .filter((f) => /\.(tsx?|css)$/.test(f));
+    const all = tracked.map((f) => readFileSync(new URL(f, root), "utf8")).join("\n");
+    expect(lib.ERRAND_MARKERS).toHaveLength(12);
+    expect(lib.ERRAND_MARKERS.filter((m) => !all.includes(m))).toEqual([]);
+  });
+
+  it("장소 id 16개·산 사람마다 3곳·심부름 40초·흔적 3초·처리·근처 반경 사본이 제품 값과 같다", () => {
+    expect([...lib.ERRAND_PLACE_IDS]).toEqual([...PLACE_IDS]);
+    expect(lib.ERRAND_PER_PERSON).toBe(ERRAND_COUNT);
+    expect(lib.ERRAND_E2E_MS).toBe(ERRAND_MS);
+    expect(lib.TRACE_WINDOW_MS).toBe(MORNING_TRACE_MS);
+    expect(lib.ERRAND_ACT_R_E2E).toBe(ERRAND_ACT_R);
+    expect(lib.ERRAND_NEAR_R_E2E).toBe(ERRAND_NEAR_R);
+  });
+
+  it("ERRAND_LINES 는 src/game/hostLine.ts 의 errand·witness·trace·discussion 줄과 한 글자도 다르지 않다", () => {
+    expect(lib.ERRAND_LINES).toEqual({
+      act: HOST_LINES["errand.act"],
+      done: HOST_LINES["errand.done"],
+      witness: HOST_LINES.witness,
+      discussionAct: HOST_LINES["discussion.act"],
+      trace: HOST_LINES.trace,
+    });
+  });
+
+  it("E2E 의 흐름 파일(errand.mjs)·읽기 도우미(browser.mjs)는 표식 값 외에 닉네임·토큰을 결과로 돌려주지 않는다 — 읽기 도우미 반환 필드 이름에 nick·token 이 없다", () => {
+    const text = readFileSync(new URL("scripts/e2e/browser.mjs", root), "utf8");
+    const start = text.indexOf("export function readErrand");
+    expect(start).toBeGreaterThan(0);
+    const body = text.slice(start);
+    expect(body).not.toMatch(/nickname|\btoken\b/i);
   });
 });
 

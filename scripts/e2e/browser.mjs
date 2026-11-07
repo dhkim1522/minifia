@@ -1913,3 +1913,222 @@ export function armBandWatch(page) {
 export function readBandWatch(page) {
   return page.evaluate(() => (window.__mfBandWatch ? window.__mfBandWatch.snaps.map((s) => ({ ...s })) : null));
 }
+
+// ---- 15페이즈 읽기·조작 (15-09): 심부름·목격 기록·밤 얼굴 목록·아침 흔적 ----
+// 읽기는 한 번의 evaluate 로 끝낸다. 반환 객체의 글자 값은 장소 id·진행 글자("n/3")·[처리] 글자(처리·완료)·띠 문장(고정 문구)·머리 글자("0" 등 숫자)뿐이고,
+// 사람 이름(닉네임)은 읽지도 싣지도 않는다. 판정은 lib.mjs 의 순수 함수가 한다.
+
+/** 심부름 표식 열두 개(lib.mjs ERRAND_MARKERS)의 속성 값 전부 — 장소 id·진행 수뿐이어야 한다(D-08) */
+const ERRAND_ATTRS = ["data-errand-dock", "data-errand-chip", "data-errand-progress", "data-errand-act", "data-errand-place", "data-errand-arrow", "data-near-ring", "data-record-button", "data-record-card", "data-record-rows", "data-record-row", "data-trace-card"];
+
+/**
+ * 심부름 화면 한 장(errandChecks·errandOverlapChecks 입력). 보이는 표지·화살표만 사각형으로 싣는다(hidden·display none·크기 0 은 뺀다).
+ * { docks, chips, doneAttr, progressText, actText, actDisabled, actDone, actCall, places: [{ id, done, hidden, call }], pins: rect[], arrows: rect[], arrowAngle, ringShown, ringPoints,
+ *   callCount, bandLine, title, stage, band, dockRow, panel, tagButtons: rect[], tagCount, attrValues: string[], vw, vh }
+ */
+export function readErrand(page) {
+  return page.evaluate((attrs) => {
+    const qa = (s) => [...document.querySelectorAll(s)];
+    const box = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+    };
+    const shown = (el) => {
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      return !el.hidden && cs.display !== "none" && cs.visibility !== "hidden" && r.width > 0 && r.height > 0;
+    };
+    const act = document.querySelector("[data-errand-act]");
+    const prog = document.querySelector("[data-errand-progress]");
+    const pins = qa("[data-errand-place]");
+    const arrows = qa("[data-errand-arrow]");
+    const ring = document.querySelector("svg[data-near-ring]");
+    const turn = document.querySelector("[data-errand-arrow] .mv-errand-arrow__turn");
+    const deg = turn ? /rotate\((-?[\d.]+)deg\)/.exec(turn.style.transform ?? "") : null;
+    const band = document.querySelector("[data-host-band] .mv-host__band");
+    const bandLine = document.querySelector("[data-host-line]");
+    const title = document.querySelector(".mf-game__header h1, .mf-game__header [class*='title']");
+    const values = [];
+    for (const a of attrs) for (const el of qa(`[${a}]`)) values.push(el.getAttribute(a) ?? "");
+    return {
+      docks: qa("[data-errand-dock]").length,
+      chips: qa("[data-errand-chip]").length,
+      doneAttr: qa("[data-errand-chip][data-done]").length,
+      progressText: prog ? (prog.textContent ?? "").replace(/\s+/g, "") : "",
+      actText: act ? (act.textContent ?? "").replace(/\s+/g, "") : "",
+      actDisabled: !!act && act.getAttribute("aria-disabled") === "true",
+      actDone: !!act && act.hasAttribute("data-done"),
+      actCall: !!act && act.hasAttribute("data-call"),
+      places: pins.map((el) => ({ id: el.getAttribute("data-errand-place") ?? "", done: el.hasAttribute("data-done"), hidden: !shown(el), call: el.hasAttribute("data-call") })),
+      pins: pins.filter(shown).map(box),
+      arrows: arrows.filter(shown).map(box),
+      arrowAngle: deg ? Number(deg[1]) : null,
+      ringShown: !!ring && getComputedStyle(ring).display !== "none",
+      ringPoints: ring ? (ring.getAttribute("points") ?? "").trim().split(/\s+/).filter(Boolean).length : 0,
+      callCount: qa("[data-call]").length,
+      bandLine: bandLine ? (bandLine.textContent ?? "").replace(/\s+/g, " ").trim() : "",
+      title: title ? (title.textContent ?? "").replace(/\s+/g, "") : "",
+      stage: { left: 0, top: band ? band.getBoundingClientRect().bottom : 0, right: window.innerWidth, bottom: (document.querySelector("[data-world-panel]")?.getBoundingClientRect().top ?? window.innerHeight) },
+      band: box(band),
+      dockRow: box(document.querySelector("[data-host-band] .mv-host__dock")),
+      panel: box(document.querySelector("[data-world-panel]")),
+      tagButtons: qa("[data-pick], [data-face]").filter(shown).map(box),
+      tagCount: qa(".mf-world__tag[data-seat]").length,
+      attrValues: values,
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+    };
+  }, ERRAND_ATTRS);
+}
+
+/**
+ * 토론의 목격 기록 화면 한 장(recordChecks 입력): [기록] 단추 수·눌림(aria-expanded)·빛, 카드 수·줄 수 표식·li 수·머리 숫자 글자, 사각형.
+ * { buttons, expanded, buttonCall, cards, rowsAttr, rowCount, zeroText, cardRect, dockRect, bandRect, panelRect, callCount, bandLine, inputCount }
+ */
+export function readRecord(page) {
+  return page.evaluate(() => {
+    const qa = (s) => [...document.querySelectorAll(s)];
+    const box = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+    };
+    const btn = document.querySelector("[data-record-button] button");
+    const card = document.querySelector("[data-record-card]");
+    const bandLine = document.querySelector("[data-host-line]");
+    return {
+      buttons: qa("[data-record-button]").length,
+      expanded: btn ? btn.getAttribute("aria-expanded") === "true" : false,
+      buttonCall: !!btn && btn.hasAttribute("data-call"),
+      cards: qa("[data-record-card]").length,
+      rowsAttr: card ? card.getAttribute("data-record-rows") : null,
+      rowCount: qa("[data-record-card] li[data-record-row]").length,
+      zeroText: card ? (card.querySelector(".mv-record__count")?.textContent ?? "").trim() : "",
+      cardRect: box(card),
+      dockRect: box(document.querySelector("[data-host-band] .mv-host__dock")),
+      bandRect: box(document.querySelector("[data-host-band] .mv-host__band")),
+      panelRect: box(document.querySelector("[data-world-panel]")),
+      callCount: qa("[data-call]").length,
+      bandLine: bandLine ? (bandLine.textContent ?? "").replace(/\s+/g, " ").trim() : "",
+      inputCount: qa(".mv-chat__input").length,
+    };
+  });
+}
+
+/**
+ * 아침 흔적 카드 화면 한 장(traceChecks 입력): 카드 수·글자·속성 값·줄 수·사각형, 피해자 알림이 보이는가, 띠 문장.
+ * 글자 값은 이 판정이 금지 낱말만 검사하는 데 쓰고 결과 줄에는 싣지 않는다.
+ * { cards, cardText, cardAttrText, nameLines, noteLines, cardRect, bandRect, dockRect, panelRect, announceVisible, bandLine, phase }
+ */
+export function readTrace(page) {
+  return page.evaluate(() => {
+    const qa = (s) => [...document.querySelectorAll(s)];
+    const box = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+    };
+    const lines = (el) => {
+      if (!el) return null;
+      const lh = parseFloat(getComputedStyle(el).lineHeight);
+      const fs = parseFloat(getComputedStyle(el).fontSize);
+      return Math.round(el.getBoundingClientRect().height / (Number.isFinite(lh) ? lh : fs * 1.4));
+    };
+    const card = document.querySelector("[data-trace-card]");
+    const attrs = card ? [card, ...card.querySelectorAll("*")].flatMap((el) => el.getAttributeNames().map((n) => `${n}=${el.getAttribute(n)}`)) : [];
+    const ann = document.querySelector("[data-announce]");
+    const bandLine = document.querySelector("[data-host-line]");
+    return {
+      cards: qa("[data-trace-card]").length,
+      cardText: card ? (card.textContent ?? "").replace(/\s+/g, " ").trim() : "",
+      cardAttrText: attrs.join(" "),
+      nameLines: lines(card?.querySelector(".mv-trace__name") ?? null),
+      noteLines: lines(card?.querySelector(".mv-trace__note") ?? null),
+      cardRect: box(card),
+      bandRect: box(document.querySelector("[data-host-band] .mv-host__band")),
+      dockRect: box(document.querySelector("[data-host-band] .mv-host__dock")),
+      panelRect: box(document.querySelector("[data-world-panel]")),
+      announceVisible: !!ann && ann.getBoundingClientRect().height > 0 && getComputedStyle(ann).visibility !== "hidden" && getComputedStyle(ann).opacity !== "0",
+      bandLine: bandLine ? (bandLine.textContent ?? "").replace(/\s+/g, " ").trim() : "",
+      phase: document.querySelector("[data-game-stage]")?.getAttribute("data-phase") ?? "",
+    };
+  });
+}
+
+/**
+ * 밤 얼굴 목록 한 시점(nightFaceChecks 입력의 값 부분): { count, itemH, listH, eyeHeal, ringMafia, callCount, disabledCount, toastShown, faceSeats: number[] }
+ * eyeHeal = 칸 안 `.mv-face__mark` 의 아이콘(svg) 수(고른 칸에 eye·heal 이 그려지면 0 이 아니다), ringMafia = data-ring-kind="mafia" 수.
+ */
+export function readNightFaces(page) {
+  return page.evaluate(() => {
+    const qa = (s) => [...document.querySelectorAll(s)];
+    const faces = qa("[data-face]").filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+    const list = document.querySelector("[data-face-list]");
+    return {
+      count: faces.length,
+      itemH: faces.length > 0 ? faces[0].getBoundingClientRect().height : 0,
+      listH: list ? list.getBoundingClientRect().height : 0,
+      eyeHeal: qa("[data-face-list] .mv-face__mark svg").length,
+      ringMafia: qa('[data-ring-kind="mafia"]').length,
+      callCount: qa("[data-face][data-call]").length,
+      disabledCount: qa("[data-face][aria-disabled='true']").length,
+      toastShown: qa(".mv-toast.is-on").length,
+      faceSeats: faces.map((el) => Number(el.getAttribute("data-face"))),
+    };
+  });
+}
+
+/**
+ * 장소 표지를 눌러 그쪽으로 걷는다. id 가 null 이면 빛나는(data-call) 표지, 없으면 처리하지 않은 첫 표지.
+ * 표지가 화면에 없으면(화면 밖·독 줄 때문에 그리지 않음) 화살표 방향의 바닥을 눌러 한 걸음 가까이 간다. 돌려주는 값: "pin" | "arrow" | "none"
+ */
+export async function walkToPlace(page, id = null) {
+  const target = await page.evaluate((want) => {
+    const pins = [...document.querySelectorAll("button[data-errand-place]")].filter((el) => !el.hasAttribute("data-done"));
+    const pick = want !== null ? pins.find((el) => el.getAttribute("data-errand-place") === want) : (pins.find((el) => el.hasAttribute("data-call")) ?? pins[0]);
+    if (pick && !pick.hidden && getComputedStyle(pick).display !== "none") {
+      const r = pick.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) return { kind: "pin", x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
+    const turn = document.querySelector("[data-errand-arrow] .mv-errand-arrow__turn");
+    const m = turn ? /rotate\((-?[\d.]+)deg\)/.exec(turn.style.transform ?? "") : null;
+    if (!m) return null;
+    const a = (Number(m[1]) * Math.PI) / 180;
+    const band = document.querySelector("[data-host-band] .mv-host__band")?.getBoundingClientRect();
+    const panel = document.querySelector("[data-world-panel]")?.getBoundingClientRect();
+    const top = band?.bottom ?? 0;
+    const bottom = panel?.top ?? window.innerHeight;
+    const cx = window.innerWidth / 2;
+    const cy = (top + bottom) / 2;
+    const reach = Math.min(window.innerWidth, bottom - top) * 0.3;
+    return { kind: "arrow", x: cx + Math.sin(a) * reach, y: cy - Math.cos(a) * reach };
+  }, id);
+  if (!target) return "none";
+  await page.mouse.click(target.x, target.y);
+  return target.kind;
+}
+
+/** [처리] 가 눌릴 수 있으면(aria-disabled 아님·완료 아님) 누르고 true, 아니면 false */
+export async function pressErrandAct(page) {
+  const ok = await page.evaluate(() => {
+    const act = document.querySelector("[data-errand-act]");
+    return !!act && act.getAttribute("aria-disabled") !== "true" && !act.hasAttribute("data-done");
+  });
+  if (!ok) return false;
+  await page.locator("[data-errand-act]").click({ timeout: 3000 });
+  return true;
+}
+
+/** 진행 글자가 n/3 이 될 때까지(최대 ms) 기다린다. 돼 있으면 true */
+export async function waitErrandDone(page, n, ms = 16_000) {
+  try {
+    await page.waitForFunction((want) => (document.querySelector("[data-errand-progress]")?.getAttribute("data-errand-progress") ?? "").startsWith(`${want}/`), n, { timeout: ms });
+    return true;
+  } catch {
+    return false;
+  }
+}

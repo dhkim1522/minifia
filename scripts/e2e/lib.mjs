@@ -25,7 +25,9 @@ export const FONT_HOSTS = ["fonts.googleapis.com", "fonts.gstatic.com"];
 export const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 export const MAX_PARALLEL = 3;
 // 흐름이 늘었다(vote5 등, 04-32) — 기준 수치가 아니라 중단 한도다.
-export const OVERALL_LIMIT_MS = 900_000;
+// 15-09: 새 흐름 errand·witness·trace 가 폰 6종으로 돈다. 흐름마다 실제 40초 심부름(witness·errand)과 최대 15초 아침(trace)을 기다린다 —
+// 한 판 약 90초(errand)·100초(witness)·170초(trace, 밤 둘·아침 둘) × 6 크기 = 약 2160초를 MAX_PARALLEL 3 으로 나눈 720초를 기존 900초에 더해 1620초로 올렸다.
+export const OVERALL_LIMIT_MS = 1_620_000;
 
 // ---- 결과 화면(ended) 판정은 11-05 에 scripts/e2e/result.mjs 로 옮겼다(resultStageChecks) — 옛 카드 격자 계약(04-29 P8)은 지웠다. ----
 
@@ -271,8 +273,8 @@ export function lobbyPanelHeight(logH) {
 // ---- 게임 맵 판정 (08-23, 08-UI-SPEC "아래 패널 종류와 높이"·"검사 가능하게 둘 것"). 순수 함수 — 브라우저에서 읽는 값은 08-24 의 readGame 이 만든다. ----
 // 모든 판정은 다른 판정과 같은 { id, label, ok, detail } 줄(들)을 돌려준다. 값이 없거나 숫자가 아니면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
 
-/** 게임 맵 아래 패널 높이 덧셈(안전 영역 제외): 토론 = LOG_H + 154, 채팅 = + 92, 찬반 투표자 = + 218, 찬반 보기 = + 126(0062-2: 점 9px 대신 숫자 한 줄 24px 이라 +15), 밤 마피아 = + 154(토론 패널과 같다, 09-UI-SPEC 149~157행). */
-export const GAME_PANEL_EXTRA = Object.freeze({ talk: 154, chat: CHAT_PANEL_EXTRA, verdictVoter: 218, verdictViewer: 126, nightMafia: 154 });
+/** 게임 맵 아래 패널 높이 덧셈(안전 영역 제외): 토론 = LOG_H + 154, 채팅 = + 92, 찬반 투표자 = + 218, 찬반 보기 = + 126(0062-2: 점 9px 대신 숫자 한 줄 24px 이라 +15). 밤은 네 역할 모두 얼굴 목록 하나라 여기 없다(15-08, faceListPanelH). */
+export const GAME_PANEL_EXTRA = Object.freeze({ talk: 154, chat: CHAT_PANEL_EXTRA, verdictVoter: 218, verdictViewer: 126 });
 
 /**
  * 14-06(TOOL-01): 입력줄의 [동작]·[보내기]·[유언]이 면 36 + 4 + 라벨 한 줄(14px × 1.4 = 19.6) 이름표 단추(높이 59.6)가 되어, 입력칸 48 이 아래 정렬이라 입력줄이 11.6 커지고
@@ -280,9 +282,6 @@ export const GAME_PANEL_EXTRA = Object.freeze({ talk: 154, chat: CHAT_PANEL_EXTR
  */
 export const TOOL_BUTTON_H = 36 + 4 + 19.6;
 export const TOOL_ROW_EXTRA = TOOL_BUTTON_H - 48;
-
-/** 밤 시민 패널 높이: 행동 줄 52 [유언] 하나 = 88 고정(09-UI-SPEC 157행, 방 높이와 무관). */
-export const NIGHT_CITIZEN_PANEL_H = 88;
 
 /**
  * 밤 얼굴 목록 패널 높이(09-UI-SPEC 160행 식, 안전 영역 제외). w = 폰 폭, n = 후보 수(밤 동안 변하지 않는다), wrappedRows = 이름이 줄바꿈된 행 수.
@@ -296,11 +295,10 @@ export function faceListPanelH({ w, n, wrappedRows = 0 }) {
 }
 
 /**
- * 게임 맵 아래 패널의 기대 높이. kind 는 GAME_PANEL_EXTRA 의 키 또는 "nightCitizen"(88 고정)·"faceList"(opts = { w, n, wrappedRows? }), roomH = 방(뷰포트) 높이.
+ * 게임 맵 아래 패널의 기대 높이. kind 는 GAME_PANEL_EXTRA 의 키 또는 "faceList"(opts = { w, n, wrappedRows? }), roomH = 방(뷰포트) 높이.
  * 알 수 없는 kind 는 던진다.
  */
 export function gamePanelHeight(roomH, kind, opts) {
-  if (kind === "nightCitizen") return NIGHT_CITIZEN_PANEL_H;
   if (kind === "faceList") {
     if (!opts || !isNum(opts.w) || !isNum(opts.n)) throw new Error("faceList 패널 높이는 opts.w·n 이 필요하다");
     return faceListPanelH(opts);
@@ -2862,14 +2860,14 @@ export function toolLabelChecks(list, { exempt = TOOL_LABEL_EXEMPT } = {}) {
 /**
  * HL1~HL4 누설(HOST-05 ①③④). list = [{ role, ownRole, phase, domText, callCount, line, idle }] — 위 14페이즈 계약.
  * HL1 시점 X 의 띠·목표·빛남 글자에 다른 역할의 act 줄·목표가 없다(유령은 살았을 때 직업의 목표만 허용, act 줄은 어느 것도 없음). HL2 같은 단계 idle 시점끼리 띠 문장이 같다.
- * HL3 유령 띠 문장에 마피아·경찰·의사·시민 낱말이 없다. HL4 산 마피아의 밤 화면에 data-call 0개.
+ * HL3 유령 띠 문장에 마피아·경찰·의사·시민 낱말이 없다. HL4 산 사람의 밤 화면 data-call 수가 역할과 무관하게 같다(15-08: 네 역할 모두 산 사람 칸이 빛난다 — 마피아도 0이 아니다).
  */
 export function hostLeakChecks(list) {
   const L = {
     HL1: "다른 역할 전용 줄·목표가 화면에 없음",
     HL2: "할 일 없는 시점끼리 같은 단계의 띠 문장이 같음",
     HL3: "유령 띠 문장에 역할 이름 없음",
-    HL4: "산 마피아 밤 화면의 data-call 0개",
+    HL4: "산 사람의 밤 화면 data-call 수가 역할과 무관하게 같음",
   };
   const ROLES = ["mafia", "police", "doctor", "citizen", "ghost"];
   const okItem = (it) =>
@@ -2892,8 +2890,18 @@ export function hostLeakChecks(list) {
     if (lines.size > 1) bad2.push(`${phase}: ${its.map((i) => `${i.role} '${i.line}'`).join(" ≠ ")}`);
   }
   const bad3 = list.filter((it) => it.role === "ghost" && /마피아|경찰|의사|시민/.test(it.line)).map((it) => `${it.phase}: '${it.line}'`);
-  const bad4 = list.filter((it) => it.role === "mafia" && it.phase === "night" && it.callCount !== 0).map((it) => `밤 data-call ${it.callCount}개`);
-  return [result("HL1", L.HL1, bad1), result("HL2", L.HL2, bad2), result("HL3", L.HL3, bad3), result("HL4", L.HL4, bad4)];
+  // HL4: 산 사람(유령 제외)의 밤 읽기가 서로 다른 역할 둘 이상이어야 비교가 된다 — 아니면 측정 불가(공허 통과 금지)
+  const liveNights = list.filter((it) => it.role !== "ghost" && it.phase === "night");
+  const nightRoles = new Set(liveNights.map((it) => it.role));
+  let hl4;
+  if (nightRoles.size < 2) hl4 = noMeasure("HL4", L.HL4, "산 사람 밤 읽기가 서로 다른 역할 둘 미만");
+  else {
+    const counts = new Map();
+    for (const it of liveNights) counts.set(it.role, it.callCount);
+    const vals = new Set(counts.values());
+    hl4 = result("HL4", L.HL4, vals.size === 1 ? [] : [`역할별 밤 data-call: ${[...counts].map(([r, n]) => `${r} ${n}`).join(" ≠ ")}`]);
+  }
+  return [result("HL1", L.HL1, bad1), result("HL2", L.HL2, bad2), result("HL3", L.HL3, bad3), hl4];
 }
 
 /** VK1 받은 state 프레임의 view 키(최상위·me·day)가 허용 목록 안(HOST-05 ②, 서버 diff 0). keys = { top, me, day } — 배열 또는 Set. */
@@ -2913,14 +2921,14 @@ export function viewKeyChecks(keys) {
 
 /**
  * HS1~HS4 사회자 알림음(HOST-02). segs = [{ kind, name, count, played }].
- * HS1 transition(단계 전환) 구간마다 ui.host 정확히 1. HS2 first(처음 입장)·reload(새로고침 첫 프레임) 0. HS3 dayToDiscussion(낮 시작 → 토론) 0.
+ * HS1 transition(단계 전환 — 심부름 → 토론 포함) 구간마다 ui.host 정확히 1. HS2 first(처음 입장)·reload(새로고침 첫 프레임) 0. HS3 dayToErrand(낮 시작 → 심부름; 옛 이름 dayToDiscussion 도 받는다) 0.
  * HS4 muted(소리 끔) 구간에 재생된 ui.host 0. 구간 종류가 하나도 없으면 그 판정은 측정값 없음.
  */
 export function hostChimeChecks(segs) {
   const spec = [
     ["HS1", "단계 전환마다 ui.host 한 번", ["transition"], (s) => (s.count === 1 ? null : `${s.name}: ui.host ${s.count}번 ≠ 1`)],
     ["HS2", "처음 입장·새로고침 첫 프레임 0번", ["first", "reload"], (s) => (s.count === 0 ? null : `${s.name}: ui.host ${s.count}번 ≠ 0`)],
-    ["HS3", "낮 시작 → 토론 0번", ["dayToDiscussion"], (s) => (s.count === 0 ? null : `${s.name}: ui.host ${s.count}번 ≠ 0`)],
+    ["HS3", "낮 시작 → 심부름 0번(15페이즈: 낮 시작 다음은 심부름이다)", ["dayToErrand", "dayToDiscussion"], (s) => (s.count === 0 ? null : `${s.name}: ui.host ${s.count}번 ≠ 0`)],
     ["HS4", "소리를 끄면 재생된 ui.host 0번", ["muted"], (s) => (s.played === 0 ? null : `${s.name}: 재생된 ui.host ${s.played}번 ≠ 0`)],
   ];
   const okSeg = (s) => s && isStr(s.kind) && isStr(s.name) && isNum(s.count) && isNum(s.played);
@@ -2931,4 +2939,266 @@ export function hostChimeChecks(segs) {
     if (mine.length === 0) return noMeasure(id, label, `${kinds.join("·")} 구간`);
     return result(id, label, mine.map(judge).filter((x) => x !== null));
   });
+}
+
+
+// ---- 15페이즈 계약 (15-09) — 심부름·목격 기록·밤 얼굴 목록·아침 흔적 판정이 받는 값의 모양 ----
+// 판정은 모두 이 파일의 순수 함수고 흐름(scripts/e2e/errand.mjs)은 읽기만 한다. 값이 없거나 모양이 틀리면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다(공허 통과 금지, T-15-36).
+// 문턱은 여기서만 정하고 낮추지 않는다. 결과 줄에는 장소 id·진행 수·개수·단계 이름만 쓴다(닉네임·토큰 없음, T-15-35).
+//   EA1~EA6 errandChecks(s)
+//     s = { total(칩 수), places: [{ id, done }], doneAttr(data-done 칩 수), progressText("n/N"), actText([처리] 글자), actDisabled(aria-disabled 가 true 인가), bandLine(띠 문장),
+//           callCount([data-call] 수), seatsInWorld(__mfWorld.seats() 중 나 말고 수), nearSeats(그 가운데 근처 반경 + 여유 안), tagSeats(나 말고 이름표 수), attrValues(ERRAND_MARKERS 속성 값 전부) }
+//   EO1~EO4 errandOverlapChecks({ stage, band, dock, panel, pins, arrow, tagButtons })   — 사각형은 { left, top, width, height } (DOMRect 값). pins = 보이는 표지, arrow = 보이는 화살표 사각형 | 목록 | null
+//   RC1~RC4 recordChecks(s)   s = { finished, hasButton, hasCard, rowsAttr, rowCount, zeroText, cardRect, dockRect, bandRect, panelRect, collapsedOnFocus }
+//   TC1~TC5 traceChecks(s)    s = { expectCard, cards, cardText, cardAttrText, nameLines, noteLines, cardRect, bandRect, dockRect, panelRect, announceVisible }
+//   NF1~NF6 nightFaceChecks(list)   list = [{ role, count, itemH, listH, eyeHeal, ringMafia, callCount, disabledCount, toastAfterTap }] — 마피아·경찰·의사·시민 네 시점
+
+/** E2E 가 읽는 15페이즈 표식(src 에 있어야 한다 — e2eContract 가 확인). */
+export const ERRAND_MARKERS = [
+  "data-errand-dock",
+  "data-errand-chip",
+  "data-errand-progress",
+  "data-errand-act",
+  "data-errand-place",
+  "data-errand-arrow",
+  "data-near-ring",
+  "data-record-button",
+  "data-record-card",
+  "data-record-rows",
+  "data-record-row",
+  "data-trace-card",
+];
+/** 심부름 장소 id 16개(shared/protocol.ts PLACE_IDS 사본 — e2eContract 가 같음을 고정). 표식 값은 이 집합·숫자·"n/N"·빈 값뿐이어야 한다(좌석·역할 값 금지, D-08). */
+export const ERRAND_PLACE_IDS = ["glass", "piano", "sax", "stool", "door", "poster", "record", "candle", "clock", "fountain", "bench", "lamp", "mail", "tree", "flower", "stand"];
+/** 산 사람마다 받는 장소 수(shared/game/phases.ts ERRAND_COUNT 사본 — e2eContract 가 고정). */
+export const ERRAND_PER_PERSON = 3;
+/** 심부름 단계 길이 ms(ERRAND_MS 사본). 흔적 구간 길이 ms(MORNING_TRACE_MS 사본). */
+export const ERRAND_E2E_MS = 40_000;
+export const TRACE_WINDOW_MS = 3_000;
+/** 처리 반경·근처 반경(월드 단위, ERRAND_ACT_R·ERRAND_NEAR_R 사본). 근처 검사는 서버가 근처로 본 사람이 이 반경 + 여유 안인지 본다. */
+export const ERRAND_ACT_R_E2E = 1.2;
+export const ERRAND_NEAR_R_E2E = 3.0;
+/** 기록 카드 윗변은 독 아랫변보다 이만큼(px) 아래에 있어야 한다(UI-SPEC "기록 카드 영역"). */
+export const RECORD_DOCK_GAP = 8;
+/** 표지 상자가 스테이지 안쪽에 있어야 하는 여백(px). */
+export const ERRAND_STAGE_INSET = 8;
+/** 사회자 띠 문장 사본(src/game/hostLine.ts HOST_LINES 의 errand·witness·trace·discussion 줄 — e2eContract 가 같음을 고정). */
+export const ERRAND_LINES = {
+  act: "심부름 시간입니다. 장소 세 곳을 돌며 처리해 주세요.",
+  done: "심부름을 마쳤습니다. 곧 토론이 시작됩니다.",
+  witness: "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.",
+  discussionAct: "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.",
+  trace: "현장에 흔적이 남았습니다.",
+};
+/** 흔적·기록·표식 값에 있으면 안 되는 낱말(역할 연상어·확정 암시). */
+const ROLE_WORD_RE = /마피아|경찰|의사|시민|범인|증거|확정|mafia|police|doctor|citizen/i;
+
+const okRect = (r) => !!r && typeof r === "object" && isNum(r.left) && isNum(r.top) && isNum(r.width) && isNum(r.height);
+const asRectList = (x) => (x === null || x === undefined ? [] : Array.isArray(x) ? x : [x]);
+
+/** EA1~EA6 심부름 화면 판정(ERRAND-01~04). s = 위 15페이즈 계약. */
+export function errandChecks(s) {
+  const L = {
+    EA1: `진행 칩이 ${ERRAND_PER_PERSON}개이고 장소 표지 수와 같다`,
+    EA2: "진행 숫자 n/N = data-done 칩 수 = 처리한 표지 수",
+    EA3: "[처리] 글자·aria-disabled 규칙(미완 '처리', 3/3 이면 '완료'+aria-disabled)과 띠 문장(errand.act/done)",
+    EA4: "[data-call] 이 한 화면에 한 종류 이하(1개 이하)",
+    EA5: "월드·이름표에 근처 밖 좌석 0",
+    EA6: "표식 속성 값에 좌석·역할 없음(장소 id·숫자·진행 수뿐)",
+  };
+  const ids = Object.keys(L);
+  if (!s || typeof s !== "object") return ids.map((id) => noMeasure(id, L[id], "심부름 읽기 값"));
+  const out = [];
+  const placesOk = Array.isArray(s.places) && s.places.every((p) => p && isStr(p.id) && typeof p.done === "boolean");
+  // EA1
+  if (isNum(s.total) && placesOk) {
+    const bad = [];
+    if (s.total !== ERRAND_PER_PERSON) bad.push(`칩 ${s.total}개 ≠ ${ERRAND_PER_PERSON}`);
+    if (s.places.length !== s.total) bad.push(`표지 ${s.places.length}개 ≠ 칩 ${s.total}개`);
+    out.push(result("EA1", L.EA1, bad));
+  } else out.push(noMeasure("EA1", L.EA1, "칩 수·표지 목록"));
+  // EA2
+  if (isNum(s.total) && isNum(s.doneAttr) && isStr(s.progressText) && placesOk) {
+    const doneMarkers = s.places.filter((p) => p.done).length;
+    const bad = [];
+    if (s.progressText.trim() !== `${s.doneAttr}/${s.total}`) bad.push(`진행 '${s.progressText}' ≠ ${s.doneAttr}/${s.total}`);
+    if (doneMarkers !== s.doneAttr) bad.push(`처리한 표지 ${doneMarkers}개 ≠ data-done 칩 ${s.doneAttr}개`);
+    out.push(result("EA2", L.EA2, bad));
+  } else out.push(noMeasure("EA2", L.EA2, "진행 글자·data-done 칩 수·표지"));
+  // EA3
+  if (isNum(s.total) && isNum(s.doneAttr) && isStr(s.actText) && typeof s.actDisabled === "boolean" && isStr(s.bandLine)) {
+    const bad = [];
+    const complete = s.doneAttr >= s.total;
+    if (complete) {
+      if (s.actText.trim() !== "완료") bad.push(`3/3 인데 [처리] 글자 '${s.actText}' ≠ '완료'`);
+      if (!s.actDisabled) bad.push("3/3 인데 [처리] 가 aria-disabled 가 아님");
+      if (s.bandLine.trim() !== ERRAND_LINES.done) bad.push("3/3 인데 띠 문장이 errand.done 이 아님");
+    } else {
+      if (s.actText.trim() !== "처리") bad.push(`미완인데 [처리] 글자 '${s.actText}' ≠ '처리'`);
+      if (s.bandLine.trim() !== ERRAND_LINES.act) bad.push("미완인데 띠 문장이 errand.act 가 아님");
+    }
+    out.push(result("EA3", L.EA3, bad));
+  } else out.push(noMeasure("EA3", L.EA3, "[처리] 글자·aria-disabled·띠 문장"));
+  // EA4
+  out.push(isNum(s.callCount) ? result("EA4", L.EA4, s.callCount <= 1 ? [] : [`[data-call] ${s.callCount}개 > 1`]) : noMeasure("EA4", L.EA4, "[data-call] 수"));
+  // EA5
+  if (isNum(s.seatsInWorld) && isNum(s.nearSeats) && isNum(s.tagSeats)) {
+    const bad = [];
+    if (s.nearSeats > s.seatsInWorld) bad.push(`근처 좌석 ${s.nearSeats} > 월드 좌석 ${s.seatsInWorld}`);
+    if (s.seatsInWorld !== s.nearSeats) bad.push(`월드에 근처 밖 좌석 ${s.seatsInWorld - s.nearSeats}개(월드 ${s.seatsInWorld}·근처 ${s.nearSeats})`);
+    if (s.tagSeats > s.seatsInWorld) bad.push(`이름표 ${s.tagSeats}개 > 월드 좌석 ${s.seatsInWorld}`);
+    out.push(result("EA5", L.EA5, bad));
+  } else out.push(noMeasure("EA5", L.EA5, "월드 좌석·근처 좌석·이름표 수"));
+  // EA6
+  if (Array.isArray(s.attrValues) && s.attrValues.every(isStr)) {
+    const bad = [];
+    for (const v of s.attrValues) {
+      const fine = v === "" || /^\d+$/.test(v) || /^\d+\/\d+$/.test(v) || ERRAND_PLACE_IDS.includes(v);
+      if (!fine || ROLE_WORD_RE.test(v)) bad.push(`표식 값 '${v}'`);
+    }
+    out.push(result("EA6", L.EA6, bad));
+  } else out.push(noMeasure("EA6", L.EA6, "표식 속성 값 목록"));
+  return out;
+}
+
+/**
+ * EO1~EO4 심부름 영역(UI-SPEC "심부름 화면 영역 표", 폰 6종). x = { stage, band, dock, panel, pins, arrow, tagButtons } — 사각형은 { left, top, width, height }.
+ * EO1 표지·화살표 칩이 서로 겹치지 않는다. EO2 표지·화살표가 이름표 버튼과 겹치지 않는다. EO3 표지·화살표가 띠 면·독 줄·아래 패널과 겹치지 않는다.
+ * EO4 표지 상자가 스테이지 안쪽 8 inset 안(보이는 것만 입력에 든다)이고 화살표는 한 개 이하. 판정 문턱(OVERLAP_EPS)은 낮추지 않는다.
+ */
+export function errandOverlapChecks(x) {
+  const L = {
+    EO1: "표지·화살표 칩끼리 겹침 0",
+    EO2: "표지·화살표 칩이 이름표 버튼과 겹침 0",
+    EO3: "표지·화살표 칩이 띠 면·독 줄·아래 패널과 겹침 0",
+    EO4: `표지 상자가 스테이지 안쪽 ${ERRAND_STAGE_INSET} 안이고 화살표는 한 개 이하`,
+  };
+  const ids = Object.keys(L);
+  const arrows = asRectList(x?.arrow);
+  const pins = x?.pins;
+  const tags = x?.tagButtons;
+  if (!x || !okRect(x.stage) || !okRect(x.band) || !okRect(x.dock) || !okRect(x.panel) || !Array.isArray(pins) || !pins.every(okRect) || !arrows.every(okRect) || !Array.isArray(tags) || !tags.every(okRect))
+    return ids.map((id) => noMeasure(id, L[id], "스테이지·띠·독·패널·표지·화살표·이름표 사각형"));
+  const marks = [...pins.map((r, i) => ({ r, name: `표지 ${i + 1}` })), ...arrows.map((r, i) => ({ r, name: `화살표 ${i + 1}` }))];
+  const bad1 = [];
+  for (let i = 0; i < marks.length; i++) for (let j = i + 1; j < marks.length; j++) if (rectsOverlap(marks[i].r, marks[j].r)) bad1.push(`${marks[i].name}·${marks[j].name} 겹침(${overlapText(marks[i].r, marks[j].r)})`);
+  const bad2 = [];
+  for (const m of marks) tags.forEach((t, k) => { if (rectsOverlap(m.r, t)) bad2.push(`${m.name} 이 이름표 ${k + 1} 과 겹침(${overlapText(m.r, t)})`); });
+  const bad3 = [];
+  for (const m of marks) for (const [name, r] of [["띠", x.band], ["독 줄", x.dock], ["아래 패널", x.panel]]) if (rectsOverlap(m.r, r)) bad3.push(`${m.name} 이 ${name}와 겹침(${overlapText(m.r, r)})`);
+  const bad4 = [];
+  const inner = { left: x.stage.left + ERRAND_STAGE_INSET, top: x.stage.top + ERRAND_STAGE_INSET, right: right(x.stage) - ERRAND_STAGE_INSET, bottom: bottom(x.stage) - ERRAND_STAGE_INSET };
+  pins.forEach((p, i) => {
+    if (!rectInside(p, inner)) bad4.push(`표지 ${i + 1} 이 스테이지 안쪽 ${ERRAND_STAGE_INSET} 밖(${rd(p.left)},${rd(p.top)} ${rd(p.width)}x${rd(p.height)})`);
+  });
+  if (arrows.length > 1) bad4.push(`화살표 ${arrows.length}개 > 1`);
+  return [result("EO1", L.EO1, bad1), result("EO2", L.EO2, bad2), result("EO3", L.EO3, bad3), result("EO4", L.EO4, bad4)];
+}
+
+/**
+ * RC1~RC4 목격 기록(ERRAND-05, D-04). s = 위 15페이즈 계약. finished = 3곳을 모두 마친 산 사람인가.
+ * RC1 마친 사람만 [기록] 이 있고 못 마친 사람은 단추·카드 0. RC2 열린 카드의 줄 수 표식 = li 개수, 줄 0이면 '0' 한 칸.
+ * RC3 열린 카드 윗변 ≥ 독 아랫변 + 8, 띠·아래 패널과 교차 0. RC4 입력칸 포커스에 카드가 접힌다(마친 사람 필수).
+ */
+export function recordChecks(s) {
+  const L = {
+    RC1: "[기록]·카드는 3곳을 마친 사람에게만(못 마친 사람 0건)",
+    RC2: "줄 수 표식 = 줄(li) 개수, 줄 0이면 '0'",
+    RC3: `카드 윗변 ≥ 독 아랫변 + ${RECORD_DOCK_GAP}, 띠·아래 패널과 교차 0`,
+    RC4: "입력칸 포커스에 카드가 접힌다",
+  };
+  const ids = Object.keys(L);
+  if (!s || typeof s !== "object" || typeof s.finished !== "boolean" || typeof s.hasButton !== "boolean" || typeof s.hasCard !== "boolean") return ids.map((id) => noMeasure(id, L[id], "기록 읽기 값(finished·hasButton·hasCard)"));
+  const out = [];
+  const bad1 = [];
+  if (s.finished && !s.hasButton) bad1.push("마친 사람인데 [기록] 단추가 없음");
+  if (!s.finished && s.hasButton) bad1.push("못 마친 사람에게 [기록] 단추가 있음");
+  if (!s.finished && s.hasCard) bad1.push("못 마친 사람에게 기록 카드가 있음");
+  out.push(result("RC1", L.RC1, bad1));
+  if (!s.finished) return [...out, result("RC2", L.RC2, []), result("RC3", L.RC3, []), result("RC4", L.RC4, [])];
+  // RC2·RC3 은 열린 카드에서만 잰다(마친 사람이 카드를 연 읽기). 카드가 없으면 그 읽기가 없었으므로 측정 불가
+  if (!s.hasCard) return [...out, noMeasure("RC2", L.RC2, "열린 카드"), noMeasure("RC3", L.RC3, "열린 카드"), typeof s.collapsedOnFocus === "boolean" ? result("RC4", L.RC4, s.collapsedOnFocus ? [] : ["포커스에도 카드가 남음"]) : noMeasure("RC4", L.RC4, "포커스 접힘 읽기")];
+  if (isNum(s.rowCount) && (isNum(s.rowsAttr) || (isStr(s.rowsAttr) && /^\d+$/.test(s.rowsAttr)))) {
+    const bad = [];
+    if (Number(s.rowsAttr) !== s.rowCount) bad.push(`data-record-rows ${s.rowsAttr} ≠ li ${s.rowCount}`);
+    if (s.rowCount === 0 && !(isStr(s.zeroText) && s.zeroText.trim() === "0")) bad.push(`줄 0개인데 머리 글자 '${s.zeroText}' ≠ '0'`);
+    out.push(result("RC2", L.RC2, bad));
+  } else out.push(noMeasure("RC2", L.RC2, "줄 수 표식·li 개수"));
+  if (okRect(s.cardRect) && okRect(s.dockRect) && okRect(s.bandRect) && okRect(s.panelRect)) {
+    const bad = [];
+    if (s.cardRect.top < bottom(s.dockRect) + RECORD_DOCK_GAP - OVERLAP_EPS) bad.push(`카드 윗변 ${rd(s.cardRect.top)} < 독 아랫변 ${rd(bottom(s.dockRect))} + ${RECORD_DOCK_GAP}`);
+    if (rectsOverlap(s.cardRect, s.bandRect)) bad.push(`카드·띠 겹침(${overlapText(s.cardRect, s.bandRect)})`);
+    if (rectsOverlap(s.cardRect, s.panelRect)) bad.push(`카드·아래 패널 겹침(${overlapText(s.cardRect, s.panelRect)})`);
+    out.push(result("RC3", L.RC3, bad));
+  } else out.push(noMeasure("RC3", L.RC3, "카드·독·띠·패널 사각형"));
+  out.push(typeof s.collapsedOnFocus === "boolean" ? result("RC4", L.RC4, s.collapsedOnFocus ? [] : ["포커스에도 카드가 남음"]) : noMeasure("RC4", L.RC4, "포커스 접힘 읽기"));
+  return out;
+}
+
+/**
+ * TC1~TC5 아침 흔적 카드(TRACE-02·03, D-06). s = 위 15페이즈 계약. expectCard = 피해자가 있고 흔적 구간 안인가(구간 전·피해자 없음은 false).
+ * TC1 카드 수 = expectCard ? 1 : 0. TC2 조각 이름 한 줄 + 보조 줄 합쳐 두 줄 이내. TC3 카드 글자·속성에 역할 낱말·'범인'·'증거'·'확정' 0.
+ * TC4 피해자 알림과 카드가 동시에 보이지 않는다. TC5 카드가 띠·독 줄·아래 패널과 교차 0.
+ */
+export function traceChecks(s) {
+  const L = {
+    TC1: "피해자 있는 아침의 흔적 구간에만 카드 1개, 아니면 0개",
+    TC2: "조각 이름 한 줄 + 보조 줄 합쳐 두 줄 이내",
+    TC3: "카드 글자·속성에 역할 낱말·'범인'·'증거'·'확정' 없음",
+    TC4: "피해자 알림과 카드가 동시에 보이지 않음",
+    TC5: "카드가 띠·독 줄·아래 패널과 교차 0",
+  };
+  const ids = Object.keys(L);
+  if (!s || typeof s !== "object" || typeof s.expectCard !== "boolean" || !isNum(s.cards)) return ids.map((id) => noMeasure(id, L[id], "흔적 읽기 값(expectCard·cards)"));
+  const out = [result("TC1", L.TC1, s.cards === (s.expectCard ? 1 : 0) ? [] : [`카드 ${s.cards}개(기대 ${s.expectCard ? 1 : 0})`])];
+  if (s.cards === 0) {
+    // 카드가 없는 읽기는 알림 동시 표시 외에 볼 것이 없다 — 나머지는 해당 없음(통과)
+    return [...out, result("TC2", L.TC2, []), result("TC3", L.TC3, []), typeof s.announceVisible === "boolean" ? result("TC4", L.TC4, []) : noMeasure("TC4", L.TC4, "알림 표시 여부"), result("TC5", L.TC5, [])];
+  }
+  out.push(isNum(s.nameLines) && isNum(s.noteLines) ? result("TC2", L.TC2, [...(s.nameLines === 1 ? [] : [`조각 이름 ${s.nameLines}줄 ≠ 1`]), ...(s.nameLines + s.noteLines <= 2 ? [] : [`카드 ${s.nameLines + s.noteLines}줄 > 2`])]) : noMeasure("TC2", L.TC2, "이름·보조 줄 수"));
+  if (isStr(s.cardText) && isStr(s.cardAttrText)) {
+    const bad = [];
+    if (ROLE_WORD_RE.test(s.cardText)) bad.push("카드 글자에 금지 낱말");
+    if (ROLE_WORD_RE.test(s.cardAttrText)) bad.push("카드 속성에 금지 낱말");
+    out.push(result("TC3", L.TC3, bad));
+  } else out.push(noMeasure("TC3", L.TC3, "카드 글자·속성"));
+  out.push(typeof s.announceVisible === "boolean" ? result("TC4", L.TC4, s.announceVisible ? ["알림과 카드가 같이 보임"] : []) : noMeasure("TC4", L.TC4, "알림 표시 여부"));
+  if (okRect(s.cardRect) && okRect(s.bandRect) && okRect(s.dockRect) && okRect(s.panelRect)) {
+    const bad = [];
+    for (const [name, r] of [["띠", s.bandRect], ["독 줄", s.dockRect], ["아래 패널", s.panelRect]]) if (rectsOverlap(s.cardRect, r)) bad.push(`카드·${name} 겹침(${overlapText(s.cardRect, r)})`);
+    out.push(result("TC5", L.TC5, bad));
+  } else out.push(noMeasure("TC5", L.TC5, "카드·띠·독·패널 사각형"));
+  return out;
+}
+
+/** 밤 얼굴 목록 판정이 요구하는 역할 네 시점. */
+export const NIGHT_FACE_ROLES = ["mafia", "police", "doctor", "citizen"];
+/** 네 시점의 높이 차 허용(px). 마피아 선택 수 배지는 칸 크기를 바꾸지 않아야 하므로 1px 만 본다. */
+export const NIGHT_FACE_H_EPS = 1;
+
+/**
+ * NF1~NF6 밤 얼굴 목록(TRACE-01, D-05). list = [{ role, count, itemH, listH, eyeHeal, ringMafia, callCount, disabledCount, toastAfterTap }] — 네 역할이 모두 있어야 한다.
+ * NF1 칸 수가 네 역할에서 같다. NF2 칸 높이·목록 높이가 같다(±1). NF3 eye·heal 아이콘 0. NF4 data-ring-kind="mafia" 0.
+ * NF5 aria-disabled 칸 0이고 [data-call] 수가 네 역할에서 같고 칸 수와 같다(모든 칸이 같이 빛남). NF6 어떤 칸을 눌러도 거절 알림 0.
+ */
+export function nightFaceChecks(list) {
+  const L = {
+    NF1: "밤 얼굴 목록 칸 수가 마피아·경찰·의사·시민에서 같다",
+    NF2: `칸 높이·목록 높이가 네 역할에서 같다(±${NIGHT_FACE_H_EPS}px)`,
+    NF3: "eye·heal 아이콘 0",
+    NF4: 'data-ring-kind="mafia" 0',
+    NF5: "aria-disabled 칸 0, [data-call] 수가 네 역할에서 같고 칸 수와 같다",
+    NF6: "어떤 칸을 눌러도 거절 알림 0",
+  };
+  const ids = Object.keys(L);
+  const okItem = (it) => it && NIGHT_FACE_ROLES.includes(it.role) && [it.count, it.itemH, it.listH, it.eyeHeal, it.ringMafia, it.callCount, it.disabledCount, it.toastAfterTap].every(isNum);
+  const roles = Array.isArray(list) ? new Set(list.map((it) => it?.role)) : new Set();
+  if (!Array.isArray(list) || !list.every(okItem) || !NIGHT_FACE_ROLES.every((r) => roles.has(r))) return ids.map((id) => noMeasure(id, L[id], "마피아·경찰·의사·시민 밤 얼굴 목록 읽기"));
+  const by = (key) => list.map((it) => `${it.role} ${rd(it[key])}`).join(" ≠ ");
+  const spread = (key) => Math.max(...list.map((it) => it[key])) - Math.min(...list.map((it) => it[key]));
+  const hits = (key) => list.filter((it) => it[key] !== 0).map((it) => `${it.role} ${it[key]}`);
+  const bad1 = spread("count") === 0 && list[0].count > 0 ? [] : [`칸 수 ${by("count")}`];
+  const bad2 = [...(spread("itemH") <= NIGHT_FACE_H_EPS ? [] : [`칸 높이 ${by("itemH")}`]), ...(spread("listH") <= NIGHT_FACE_H_EPS ? [] : [`목록 높이 ${by("listH")}`])];
+  const bad5 = [...hits("disabledCount").map((h) => `aria-disabled ${h}`), ...(spread("callCount") === 0 ? [] : [`[data-call] ${by("callCount")}`]), ...list.filter((it) => it.callCount !== it.count).map((it) => `${it.role} 빛남 ${it.callCount} ≠ 칸 ${it.count}`)];
+  return [result("NF1", L.NF1, bad1), result("NF2", L.NF2, bad2), result("NF3", L.NF3, hits("eyeHeal")), result("NF4", L.NF4, hits("ringMafia")), result("NF5", L.NF5, bad5), result("NF6", L.NF6, hits("toastAfterTap"))];
 }

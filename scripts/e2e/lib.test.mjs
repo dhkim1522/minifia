@@ -174,6 +174,17 @@ import {
   VIEW_DAY_KEYS,
   VIEW_ME_KEYS,
   VIEW_TOP_KEYS,
+  ERRAND_LINES,
+  ERRAND_MARKERS,
+  ERRAND_PER_PERSON,
+  ERRAND_PLACE_IDS,
+  NIGHT_FACE_ROLES,
+  OVERALL_LIMIT_MS,
+  errandChecks,
+  errandOverlapChecks,
+  nightFaceChecks,
+  recordChecks,
+  traceChecks,
   hostBandChecks,
   hostChimeChecks,
   hostLeakChecks,
@@ -603,9 +614,9 @@ test("headerContrastChecks H1: 제목 항목이 없어도 실패한다(대기실
   assert.match(r.detail, /제목/);
 });
 
-test("EXPECTED_SCENE: 단계 열네 개가 모두 장면 id 로 정해져 있다 (옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 PhaseId 와 함께 없어졌고, 결선 runoff·마지막 3인 showdown 은 09.1.1-04·06 이 더했다)", () => {
+test("EXPECTED_SCENE: 단계 열다섯 개(15-01 이 errand 를 더했다)가 모두 장면 id 로 정해져 있다 (옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 PhaseId 와 함께 없어졌고, 결선 runoff·마지막 3인 showdown 은 09.1.1-04·06 이 더했다)", () => {
   assert.deepEqual(Object.keys(EXPECTED_SCENE).sort(), [
-    "assigning", "dayAnnounce", "defense", "discussion", "ended", "execution", "lobby", "morning", "night", "nomination", "roleReveal", "runoff", "showdown", "verdict",
+    "assigning", "dayAnnounce", "defense", "discussion", "ended", "errand", "execution", "lobby", "morning", "night", "nomination", "roleReveal", "runoff", "showdown", "verdict",
   ]);
   for (const p of ["nomination", "defense", "verdict", "execution", "runoff", "showdown"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
   assert.equal(EXPECTED_SCENE.ended, "night");
@@ -643,7 +654,7 @@ test("gamePanelHeight: 토론 LOG_H+154 · 채팅 +92 · 찬반 투표자 +218 �
   for (const [h, talk, chat, voter, viewer] of [[640, 250, 188, 314, 222], [664, 250, 188, 314, 222], [932, 306, 244, 370, 278], [560, 250, 188, 314, 222], [844, 306, 244, 370, 278], [874, 306, 244, 370, 278]]) {
     assert.deepEqual([gamePanelHeight(h, "talk"), gamePanelHeight(h, "chat"), gamePanelHeight(h, "verdictVoter"), gamePanelHeight(h, "verdictViewer")], [talk + X, chat + X, voter + X, viewer + X], `방 높이 ${h}`);
   }
-  assert.deepEqual({ ...GAME_PANEL_EXTRA }, { talk: 154, chat: 92, verdictVoter: 218, verdictViewer: 126, nightMafia: 154 });
+  assert.deepEqual({ ...GAME_PANEL_EXTRA }, { talk: 154, chat: 92, verdictVoter: 218, verdictViewer: 126 });
   assert.equal(GAME_PANEL_EXTRA.chat, CHAT_PANEL_EXTRA);
   assert.throws(() => gamePanelHeight(640, "table"), /알 수 없는 패널 종류/);
   assert.throws(() => gamePanelHeight(640, "toString"), /알 수 없는 패널 종류/);
@@ -664,13 +675,10 @@ test("faceListPanelH: 폭 4종 × 2행·1행이 UI-SPEC 표 값(약, ±1)이고 
   assert.equal(faceListPanelH({ w: 360, n: 8 }), 14 + 2 * (76 + 26.2) + 8 + 10 + 52 + 22);
 });
 
-test("gamePanelHeight: nightMafia = LOG_H + 154 · nightCitizen = 88(방 높이와 무관) · faceList 는 faceListPanelH (09-21)", () => {
-  assert.equal(GAME_PANEL_EXTRA.nightMafia, 154);
-  for (const [h, mafia] of [[640, 250], [560, 250], [932, 306], [874, 306]]) {
-    assert.equal(gamePanelHeight(h, "nightMafia"), mafia + TOOL_ROW_EXTRA, `방 높이 ${h}`);
-    assert.equal(gamePanelHeight(h, "nightMafia"), gamePanelHeight(h, "talk"));
-    assert.equal(gamePanelHeight(h, "nightCitizen"), 88, `방 높이 ${h}`);
-  }
+test("gamePanelHeight: 밤은 faceList 하나(faceListPanelH) — nightMafia·nightCitizen 종류는 15-08 에서 없어졌다 (09-21, 15-09)", () => {
+  assert.equal(Object.hasOwn(GAME_PANEL_EXTRA, "nightMafia"), false);
+  assert.throws(() => gamePanelHeight(640, "nightMafia"), /알 수 없는 패널 종류/);
+  assert.throws(() => gamePanelHeight(640, "nightCitizen"), /알 수 없는 패널 종류/);
   assert.equal(gamePanelHeight(640, "faceList", { w: 360, n: 5 }), faceListPanelH({ w: 360, n: 5 }));
   assert.equal(gamePanelHeight(932, "faceList", { w: 430, n: 4, wrappedRows: 1 }), faceListPanelH({ w: 430, n: 4, wrappedRows: 1 }));
   assert.throws(() => gamePanelHeight(640, "faceList"), /w·n/);
@@ -3514,7 +3522,7 @@ test("offDeviceKeysOf: 결과 공개 묶음(resultLog)은 귓속말·주장 줄�
 });
 
 test("basicOrderChecks: 기본판 단계 순서는 통과하고 연속 중복은 접는다", () => {
-  const ok = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "nomination", "defense", "verdict", "execution", "night", "morning", "dayAnnounce", "discussion", "nomination", "night", "morning", "ended"];
+  const ok = ["lobby", "assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "nomination", "defense", "verdict", "execution", "night", "morning", "dayAnnounce", "errand", "discussion", "nomination", "night", "morning", "ended"];
   const r = basicOrderChecks(ok);
   assert.ok(r.length >= 1 && r.every((x) => x.ok), JSON.stringify(r));
   for (const x of r) assert.ok(x.id && x.label);
@@ -3705,11 +3713,21 @@ test("hostLeakChecks HL3: 유령 띠 문장에 마피아·경찰·의사·시민
   assert.equal(bad.ok, false);
 });
 
-test("hostLeakChecks HL4: 산 마피아 밤 화면의 data-call 은 0개여야 한다", () => {
-  assert.equal(hostLeakChecks([leakItem("mafia", { callCount: 0 })]).find((r) => r.id === "HL4").ok, true);
-  assert.equal(hostLeakChecks([leakItem("mafia", { callCount: 3 })]).find((r) => r.id === "HL4").ok, false);
-  // 마피아가 아니거나 밤이 아니면 보지 않는다
-  assert.equal(hostLeakChecks([leakItem("police", { callCount: 3 }), leakItem("mafia", { phase: "nomination", callCount: 7 })]).find((r) => r.id === "HL4").ok, true);
+test("hostLeakChecks HL4(15-08): 산 사람의 밤 화면 data-call 수가 역할과 무관하게 같아야 한다", () => {
+  const hl4 = (list) => hostLeakChecks(list).find((r) => r.id === "HL4");
+  assert.equal(hl4([leakItem("mafia", { callCount: 6 }), leakItem("police", { callCount: 6 }), leakItem("citizen", { callCount: 6 })]).ok, true);
+  // 마피아만 0(옛 계약)이거나 하나만 다르면 실패 — 마피아도 시민과 같은 칸이 빛난다
+  const old = hl4([leakItem("mafia", { callCount: 0 }), leakItem("police", { callCount: 6 })]);
+  assert.equal(old.ok, false);
+  assert.match(old.detail, /mafia 0 ≠ police 6/);
+  assert.equal(hl4([leakItem("mafia", { callCount: 6 }), leakItem("doctor", { callCount: 5 })]).ok, false);
+  // 유령·밤이 아닌 단계는 보지 않는다
+  assert.equal(hl4([leakItem("police", { callCount: 6 }), leakItem("mafia", { callCount: 6 }), leakItem("ghost", { callCount: 0 }), leakItem("doctor", { phase: "nomination", callCount: 7 })]).ok, true);
+  // 서로 다른 역할의 산 사람 밤 읽기가 둘 미만이면 비교가 안 된다: 측정 불가(공허 통과 금지)
+  const lone = hl4([leakItem("mafia", { callCount: 6 })]);
+  assert.equal(lone.ok, false);
+  assert.match(lone.detail, /측정값 없음/);
+  assert.equal(hl4([leakItem("mafia", { callCount: 6 }), leakItem("mafia", { callCount: 6 })]).ok, false);
 });
 
 test("hostLeakChecks: 목록이 비었거나 모양이 틀리면 측정값 없음으로 실패", () => {
@@ -3820,4 +3838,240 @@ test("emoteTrayChecks labeled(14-06 이름표 단추): 동작 단추 폭 44~52·
   const old = trayGood();
   old.labeled = true; // 48x48 버튼·간격 8 인 옛 모양
   assert.deepEqual(emoteTrayChecks(old).filter((l) => !l.ok).map((l) => l.id), ["EB1", "TR3"]);
+});
+
+
+// ---- 15-09: 15페이즈 판정(심부름·목격 기록·아침 흔적·밤 얼굴 목록) ----
+
+const fails = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
+const noMeasureAll = (lines) => lines.every((l) => !l.ok && /측정값 없음/.test(l.detail));
+
+test("ERRAND_MARKERS: 열두 개이고 서로 다르며 ERRAND_PLACE_IDS 는 16곳, 3곳씩", () => {
+  assert.equal(ERRAND_MARKERS.length, 12);
+  assert.equal(new Set(ERRAND_MARKERS).size, 12);
+  assert.ok(ERRAND_MARKERS.every((m) => /^data-(errand|near|record|trace)-/.test(m)));
+  assert.equal(ERRAND_PLACE_IDS.length, 16);
+  assert.equal(ERRAND_PER_PERSON, 3);
+  assert.equal(ERRAND_LINES.trace, "현장에 흔적이 남았습니다.");
+});
+
+test("OVERALL_LIMIT_MS: 새 흐름 errand·witness·trace 가 더하는 시간(720초)만큼 900초에서 1620초로 올랐다 (15-09)", () => {
+  assert.equal(OVERALL_LIMIT_MS, 1_620_000);
+});
+
+const errandOk = (over = {}) => ({
+  total: 3,
+  places: [{ id: "clock", done: false }, { id: "bench", done: false }, { id: "lamp", done: false }],
+  doneAttr: 0,
+  progressText: "0/3",
+  actText: "처리",
+  actDisabled: true,
+  bandLine: ERRAND_LINES.act,
+  callCount: 1,
+  seatsInWorld: 2,
+  nearSeats: 2,
+  tagSeats: 2,
+  attrValues: ["", "1", "2", "3", "0/3", "clock", "bench", "lamp"],
+  ...over,
+});
+
+test("errandChecks: 정상 입력은 EA1~EA6 모두 통과, 3/3 도 통과", () => {
+  assert.deepEqual(fails(errandChecks(errandOk())), []);
+  const done = errandOk({
+    places: [{ id: "clock", done: true }, { id: "bench", done: true }, { id: "lamp", done: true }],
+    doneAttr: 3,
+    progressText: "3/3",
+    actText: "완료",
+    bandLine: ERRAND_LINES.done,
+    callCount: 0,
+  });
+  assert.deepEqual(fails(errandChecks(done)), []);
+});
+
+test("errandChecks: 항목 하나씩 어긋나게 하면 해당 판정만 실패한다", () => {
+  assert.deepEqual(fails(errandChecks(errandOk({ total: 2, places: errandOk().places.slice(0, 2), progressText: "0/2" }))), ["EA1"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ doneAttr: 1 }))), ["EA2"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ progressText: "1/3" }))), ["EA2"]);
+  // 3/3 인데 글자가 '처리' 이거나 aria-disabled 가 아니거나 띠가 act 줄이면 EA3
+  const done3 = { places: errandOk().places.map((p) => ({ ...p, done: true })), doneAttr: 3, progressText: "3/3", callCount: 0 };
+  assert.deepEqual(fails(errandChecks(errandOk({ ...done3, actText: "처리", bandLine: ERRAND_LINES.done }))), ["EA3"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ ...done3, actText: "완료", actDisabled: false, bandLine: ERRAND_LINES.done }))), ["EA3"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ ...done3, actText: "완료", bandLine: ERRAND_LINES.act }))), ["EA3"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ actText: "완료" }))), ["EA3"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ callCount: 2 }))), ["EA4"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ seatsInWorld: 3, nearSeats: 2 }))), ["EA5"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ tagSeats: 3 }))), ["EA5"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ attrValues: ["clock", "mafia"] }))), ["EA6"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ attrValues: ["seat3"] }))), ["EA6"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ attrValues: ["unknownPlace"] }))), ["EA6"]);
+});
+
+test("errandChecks: 측정 누락(null·빈 입력)은 측정값 없음으로 실패(공허 통과 금지)", () => {
+  for (const x of [undefined, null, 3]) assert.ok(noMeasureAll(errandChecks(x)), String(x));
+  for (const k of ["total", "places", "doneAttr", "progressText", "actText", "actDisabled", "bandLine", "callCount", "seatsInWorld", "nearSeats", "tagSeats", "attrValues"]) {
+    const rs = errandChecks(errandOk({ [k]: null }));
+    assert.ok(rs.some((r) => !r.ok && /측정값 없음/.test(r.detail)), `${k} 누락`);
+  }
+});
+
+const RR = (l, t, w, h) => ({ left: l, top: t, width: w, height: h });
+const overlapOk = () => ({
+  stage: RR(0, 123, 360, 353),
+  band: RR(16, 70, 328, 53),
+  dock: RR(300, 131, 44, 44),
+  panel: RR(0, 476, 360, 84),
+  pins: [RR(40, 200, 44, 44), RR(150, 300, 44, 44)],
+  arrow: RR(300, 250, 36, 36),
+  tagButtons: [RR(100, 150, 44, 44)],
+});
+
+test("errandOverlapChecks: 서로 안 겹치면 통과, 변이 맞닿거나 0.5px 이하 겹침도 통과", () => {
+  assert.deepEqual(fails(errandOverlapChecks(overlapOk())), []);
+  assert.deepEqual(fails(errandOverlapChecks({ ...overlapOk(), pins: [RR(40, 200, 44, 44), RR(84.4, 200, 44, 44)] })), []);
+  assert.deepEqual(fails(errandOverlapChecks({ ...overlapOk(), arrow: null })), []);
+});
+
+test("errandOverlapChecks: 1px 겹침이 각각 해당 판정을 실패시킨다", () => {
+  const o = overlapOk();
+  assert.deepEqual(fails(errandOverlapChecks({ ...o, pins: [RR(40, 200, 44, 44), RR(83, 200, 44, 44)] })), ["EO1"]);
+  assert.deepEqual(fails(errandOverlapChecks({ ...o, arrow: RR(150, 343, 36, 36) })), ["EO1"]);
+  assert.deepEqual(fails(errandOverlapChecks({ ...o, tagButtons: [RR(40, 242, 44, 44)] })), ["EO2"]);
+  // 띠(위로 걸침: 스테이지 안쪽 inset 도 함께 벗어난다)·독 줄·아래 패널
+  assert.deepEqual(fails(errandOverlapChecks({ ...o, pins: [RR(150, 100, 44, 44)] })), ["EO3", "EO4"]);
+  assert.ok(fails(errandOverlapChecks({ ...o, arrow: RR(310, 170, 36, 36) })).includes("EO3"));
+  assert.ok(fails(errandOverlapChecks({ ...o, pins: [RR(40, 440, 44, 44)] })).includes("EO3"));
+  // 스테이지 안쪽 8 inset 밖, 화살표 둘
+  assert.deepEqual(fails(errandOverlapChecks({ ...o, pins: [RR(4, 200, 44, 44)] })), ["EO4"]);
+  assert.deepEqual(fails(errandOverlapChecks({ ...o, arrow: [RR(300, 250, 36, 36), RR(200, 400, 36, 36)] })), ["EO4"]);
+});
+
+test("errandOverlapChecks: 사각형 누락은 측정값 없음", () => {
+  assert.ok(noMeasureAll(errandOverlapChecks(undefined)));
+  assert.ok(noMeasureAll(errandOverlapChecks({ ...overlapOk(), stage: null })));
+  assert.ok(noMeasureAll(errandOverlapChecks({ ...overlapOk(), pins: [{ left: 1 }] })));
+  assert.ok(noMeasureAll(errandOverlapChecks({ ...overlapOk(), tagButtons: undefined })));
+});
+
+const recOk = (over = {}) => ({
+  finished: true,
+  hasButton: true,
+  hasCard: true,
+  rowsAttr: "2",
+  rowCount: 2,
+  zeroText: "2",
+  cardRect: RR(16, 183, 328, 150),
+  dockRect: RR(300, 131, 44, 44),
+  bandRect: RR(16, 70, 328, 53),
+  panelRect: RR(0, 360, 360, 200),
+  collapsedOnFocus: true,
+  ...over,
+});
+
+test("recordChecks: 마친 사람의 열린 카드는 통과, 줄 0 이면 '0'", () => {
+  assert.deepEqual(fails(recordChecks(recOk())), []);
+  assert.deepEqual(fails(recordChecks(recOk({ rowsAttr: "0", rowCount: 0, zeroText: "0" }))), []);
+  // 못 마친 사람: 단추·카드 0 이면 통과
+  assert.deepEqual(fails(recordChecks({ finished: false, hasButton: false, hasCard: false })), []);
+});
+
+test("recordChecks: 어긋남은 해당 판정만 실패", () => {
+  assert.deepEqual(fails(recordChecks({ finished: false, hasButton: true, hasCard: true })), ["RC1"]);
+  assert.deepEqual(fails(recordChecks({ finished: false, hasButton: true, hasCard: false })), ["RC1"]);
+  assert.deepEqual(fails(recordChecks(recOk({ hasButton: false }))), ["RC1"]);
+  assert.deepEqual(fails(recordChecks(recOk({ rowsAttr: "3" }))), ["RC2"]);
+  assert.deepEqual(fails(recordChecks(recOk({ rowsAttr: "0", rowCount: 0, zeroText: "" }))), ["RC2"]);
+  // 카드 윗변이 독 아랫변 + 8 − 0.5 미만이면 실패, 0.5 이내는 통과
+  assert.deepEqual(fails(recordChecks(recOk({ cardRect: RR(16, 182, 328, 150) }))), ["RC3"]);
+  assert.deepEqual(fails(recordChecks(recOk({ cardRect: RR(16, 182.6, 328, 150) }))), []);
+  assert.deepEqual(fails(recordChecks(recOk({ cardRect: RR(16, 183, 328, 200) }))), ["RC3"]);
+  assert.deepEqual(fails(recordChecks(recOk({ bandRect: RR(16, 150, 328, 53) }))), ["RC3"]);
+  assert.deepEqual(fails(recordChecks(recOk({ collapsedOnFocus: false }))), ["RC4"]);
+});
+
+test("recordChecks: 마친 사람인데 카드를 읽지 못했거나 값이 없으면 측정값 없음", () => {
+  assert.ok(noMeasureAll(recordChecks(undefined)));
+  assert.ok(noMeasureAll(recordChecks({ finished: "yes" })));
+  const noCard = recordChecks(recOk({ hasCard: false, collapsedOnFocus: true }));
+  assert.deepEqual(noCard.filter((l) => !l.ok).map((l) => l.id), ["RC2", "RC3"]);
+  assert.ok(recordChecks(recOk({ collapsedOnFocus: null })).some((l) => l.id === "RC4" && /측정값 없음/.test(l.detail)));
+  assert.ok(recordChecks(recOk({ cardRect: null })).some((l) => l.id === "RC3" && /측정값 없음/.test(l.detail)));
+});
+
+const traceOk = (over = {}) => ({
+  expectCard: true,
+  cards: 1,
+  cardText: "단추 하나 누구의 것인지는 모릅니다",
+  cardAttrText: "status",
+  nameLines: 1,
+  noteLines: 1,
+  cardRect: RR(16, 240, 328, 88),
+  bandRect: RR(16, 70, 328, 53),
+  dockRect: RR(300, 131, 44, 44),
+  panelRect: RR(0, 360, 360, 200),
+  announceVisible: false,
+  ...over,
+});
+
+test("traceChecks: 피해자 있는 흔적 구간의 카드 1개는 통과, 없는 아침의 카드 0개도 통과", () => {
+  assert.deepEqual(fails(traceChecks(traceOk())), []);
+  assert.deepEqual(fails(traceChecks({ expectCard: false, cards: 0, announceVisible: false })), []);
+});
+
+test("traceChecks: 카드 수·글자 줄·역할 낱말·알림 동시·겹침 어긋남은 각각 실패", () => {
+  assert.deepEqual(fails(traceChecks(traceOk({ cards: 0 }))), ["TC1"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ expectCard: false }))), ["TC1"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ cards: 2 }))), ["TC1"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ nameLines: 2 }))), ["TC2"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ noteLines: 2 }))), ["TC2"]);
+  for (const w of ["마피아", "경찰", "의사", "시민", "범인", "증거", "확정"]) assert.deepEqual(fails(traceChecks(traceOk({ cardText: `${w} 조각` }))), ["TC3"], w);
+  assert.deepEqual(fails(traceChecks(traceOk({ cardAttrText: "data-role=mafia" }))), ["TC3"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ announceVisible: true }))), ["TC4"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ cardRect: RR(16, 340, 328, 88) }))), ["TC5"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ cardRect: RR(16, 100, 328, 88) }))), ["TC5"]);
+});
+
+test("traceChecks: 값 누락은 측정값 없음", () => {
+  assert.ok(noMeasureAll(traceChecks(undefined)));
+  assert.ok(noMeasureAll(traceChecks({ cards: 1 })));
+  assert.ok(traceChecks(traceOk({ nameLines: null })).some((l) => l.id === "TC2" && /측정값 없음/.test(l.detail)));
+  assert.ok(traceChecks(traceOk({ announceVisible: null })).some((l) => l.id === "TC4" && /측정값 없음/.test(l.detail)));
+  assert.ok(traceChecks({ expectCard: false, cards: 0, announceVisible: null }).some((l) => l.id === "TC4" && !l.ok));
+});
+
+const faceOk = (role, over = {}) => ({ role, count: 6, itemH: 100, listH: 230, eyeHeal: 0, ringMafia: 0, callCount: 6, disabledCount: 0, toastAfterTap: 0, ...over });
+const four = (over = {}) => NIGHT_FACE_ROLES.map((r) => faceOk(r, over[r] ?? {}));
+
+test("nightFaceChecks: 네 역할이 같으면 NF1~NF6 모두 통과", () => {
+  assert.deepEqual(NIGHT_FACE_ROLES, ["mafia", "police", "doctor", "citizen"]);
+  assert.deepEqual(fails(nightFaceChecks(four())), []);
+  // 마피아 선택 수 배지가 칸 높이를 0.5px 흔들어도 ±1 안이면 통과
+  assert.deepEqual(fails(nightFaceChecks(four({ mafia: { itemH: 100.5 } }))), []);
+});
+
+test("nightFaceChecks: 한 역할만 달라도 해당 판정이 실패", () => {
+  assert.deepEqual(fails(nightFaceChecks(four({ mafia: { count: 5, callCount: 5 } }))), ["NF1", "NF5"]);
+  assert.deepEqual(fails(nightFaceChecks(four({ citizen: { itemH: 90 } }))), ["NF2"]);
+  assert.deepEqual(fails(nightFaceChecks(four({ police: { listH: 300 } }))), ["NF2"]);
+  assert.deepEqual(fails(nightFaceChecks(four({ police: { eyeHeal: 1 } }))), ["NF3"]);
+  assert.deepEqual(fails(nightFaceChecks(four({ doctor: { eyeHeal: 2 } }))), ["NF3"]);
+  assert.deepEqual(fails(nightFaceChecks(four({ mafia: { ringMafia: 1 } }))), ["NF4"]);
+  assert.deepEqual(fails(nightFaceChecks(four({ mafia: { disabledCount: 1 } }))), ["NF5"]);
+  assert.deepEqual(fails(nightFaceChecks(four({ mafia: { callCount: 0 } }))), ["NF5"]);
+  assert.deepEqual(fails(nightFaceChecks(four({ citizen: { toastAfterTap: 1 } }))), ["NF6"]);
+});
+
+test("nightFaceChecks: 역할 하나가 빠졌거나 값이 없으면 전부 측정값 없음", () => {
+  assert.ok(noMeasureAll(nightFaceChecks(four().slice(0, 3))));
+  assert.ok(noMeasureAll(nightFaceChecks([])));
+  assert.ok(noMeasureAll(nightFaceChecks(undefined)));
+  assert.ok(noMeasureAll(nightFaceChecks(four({ mafia: { listH: null } }))));
+  assert.ok(noMeasureAll(nightFaceChecks([...four(), { role: "ghost" }])));
+});
+
+test("hostChimeChecks HS3: 낮 시작 → 심부름(dayToErrand) 0번이어야 한다 (15-09)", () => {
+  const seg = (kind, name, count) => ({ kind, name, count, played: count });
+  const base = [seg("first", "첫", 0), seg("transition", "t", 1), seg("muted", "m", 0)];
+  assert.equal(hostChimeChecks([...base, seg("dayToErrand", "낮 시작 → 심부름", 0)]).find((r) => r.id === "HS3").ok, true);
+  assert.equal(hostChimeChecks([...base, seg("dayToErrand", "낮 시작 → 심부름", 1)]).find((r) => r.id === "HS3").ok, false);
+  assert.match(hostChimeChecks(base).find((r) => r.id === "HS3").detail, /측정값 없음/);
 });
