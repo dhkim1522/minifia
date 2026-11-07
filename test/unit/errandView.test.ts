@@ -247,7 +247,7 @@ describe("표지 배치 계획", () => {
 
   it("(e) 화살표 칩이 독 줄 사각형과 겹치면 아래로 밀려 겹침 0, 띠 아래(stage.top + 8) 위로는 안 올라간다", () => {
     // 위쪽 오른쪽 구석 방향 → 원래 자리가 독 줄과 겹친다
-    const target = { id: "glass" as PlaceId, x: 355, y: 20 };
+    const target = { id: "glass" as PlaceId, x: 450, y: 20 };
     const plan = placeMarkerPlan({ stage: STAGE, dock: DOCK, items: [target], nextId: "glass" });
     const a = plan.arrow!;
     expect(overlap(boxOf(a.x, a.y, 36), DOCK)).toBe(false);

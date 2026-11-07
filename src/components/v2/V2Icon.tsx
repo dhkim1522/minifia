@@ -6,7 +6,9 @@ import "../../styles/v2.css";
 // 나머지 아이콘은 그것을 쓰는 페이즈(8·9·10페이즈)가 같은 표에 더한다(10페이즈: 동작 아홉 개, hanger 는 10-07 이 더한다).
 // v1.0 아이콘(src/components/Icon.tsx)과 이름이 겹쳐도(check·crown) 서로 다른 부품이다: v2 화면은 이 파일을 쓴다.
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell";
+// 장소·arrow·thread: 임시 선 그림(15페이즈), 나중에 같은 이름의 경로만 바꾼다. 장소 16개(재즈 바 8·광장 8)는 한 맵 안에서 실루엣이 서로 달라 알아보게만 그렸다.
+// 새 이름은 모두 18개 = 장소 16 + arrow(위쪽을 가리킴, 회전해 쓴다) + thread(끝이 풀린 사각 천).
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "arrow" | "thread" | "placeGlass" | "placePiano" | "placeSax" | "placeStool" | "placeDoor" | "placePoster" | "placeRecord" | "placeCandle" | "placeClock" | "placeFountain" | "placeBench" | "placeLamp" | "placeMail" | "placeTree" | "placeFlower" | "placeStand";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -130,6 +132,108 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
   bell: [
     ["p", "M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"],
     ["p", "M10 20a2 2 0 0 0 4 0"],
+  ],
+  // 15페이즈(심부름): 임시 선 그림. 같은 이름의 경로만 나중에 바꾼다.
+  arrow: [
+    ["p", "M12 20V5"],
+    ["p", "M6 11l6-6 6 6"],
+  ],
+  thread: [
+    ["p", "M5 4h14v11H5z"],
+    ["p", "M7.5 15v5"],
+    ["p", "M12 15v4"],
+    ["p", "M16.5 15v5.5"],
+  ],
+  // 재즈 바 8곳
+  placeGlass: [
+    ["p", "M6 4h12l-1.6 7.5a4.4 4.4 0 0 1-8.8 0z"],
+    ["p", "M12 16v4.5"],
+    ["p", "M8.5 20.5h7"],
+  ],
+  placePiano: [
+    ["p", "M3.5 6h17v12h-17z"],
+    ["p", "M3.5 12h17"],
+    ["p", "M8 12v6"],
+    ["p", "M12 12v6"],
+    ["p", "M16 12v6"],
+  ],
+  placeSax: [
+    ["p", "M8 3.5l3 1.5v11a3.5 3.5 0 0 0 7 0v-2.5"],
+    ["p", "M15.5 13.5h5"],
+    ["c", 11, 9, 1, true],
+  ],
+  placeStool: [
+    ["p", "M7 3v9"],
+    ["p", "M7 12h11"],
+    ["p", "M7 12v9"],
+    ["p", "M18 12v9"],
+  ],
+  placeDoor: [
+    ["p", "M6 21V4h12v17"],
+    ["p", "M4 21h16"],
+    ["c", 15, 12.5, 1, true],
+  ],
+  placePoster: [
+    ["p", "M5 3h10l4 4v14H5z"],
+    ["p", "M15 3v4h4"],
+    ["c", 12, 13.5, 2.5],
+  ],
+  placeRecord: [
+    ["c", 12, 12, 9],
+    ["c", 12, 12, 2.5],
+    ["p", "M19.5 3.5L15 10"],
+  ],
+  placeCandle: [
+    ["p", "M12 3c2 2.5 3 4 3 5.5a3 3 0 0 1-6 0C9 7 10 5.5 12 3z"],
+    ["p", "M8.5 12.5h7V21h-7z"],
+  ],
+  // 시계탑 광장 8곳
+  placeClock: [
+    ["p", "M8 21V6h8v15"],
+    ["p", "M6 6h12"],
+    ["p", "M4.5 21h15"],
+    ["c", 12, 11, 2.5],
+    ["p", "M12 9.8V11l1 .7"],
+  ],
+  placeFountain: [
+    ["p", "M4 15h16l-1.5 5h-13z"],
+    ["p", "M12 15V6"],
+    ["p", "M12 6c-2-.5-4 .5-5 2.5"],
+    ["p", "M12 6c2-.5 4 .5 5 2.5"],
+  ],
+  placeBench: [
+    ["p", "M4 7.5h16v4H4z"],
+    ["p", "M3.5 14.5h17"],
+    ["p", "M6 14.5V19"],
+    ["p", "M18 14.5V19"],
+  ],
+  placeLamp: [
+    ["p", "M8 9l1.5-5h5L16 9z"],
+    ["p", "M12 9v12"],
+    ["p", "M8.5 21h7"],
+  ],
+  placeMail: [
+    ["p", "M5 21V11a7 7 0 0 1 14 0v10z"],
+    ["p", "M9.5 11.5h5"],
+  ],
+  placeTree: [
+    ["p", "M8 15a4.5 4.5 0 0 1-1-8.8A5 5 0 0 1 16.5 5.5 4.8 4.8 0 0 1 17 15z"],
+    ["p", "M12 15v6"],
+  ],
+  placeFlower: [
+    ["c", 12, 9, 1.8],
+    ["c", 12, 5, 2.2],
+    ["c", 8, 9, 2.2],
+    ["c", 16, 9, 2.2],
+    ["c", 12, 13, 2.2],
+    ["p", "M12 15.2V21"],
+    ["p", "M12 18c-3 0-4.5-1-5-3"],
+  ],
+  placeStand: [
+    ["p", "M3.5 8l2-4.5h13l2 4.5z"],
+    ["p", "M5.5 8v13"],
+    ["p", "M18.5 8v13"],
+    ["p", "M5.5 14h13"],
   ],
   hanger: [
     ["p", "M10 6.5a2 2 0 1 1 2.6 1.9c-.4.1-.6.5-.6.9V11"],
