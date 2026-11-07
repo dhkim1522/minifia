@@ -466,3 +466,25 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
   .mv-errand-pin[data-done] .mv-errand-pin__disc, .mv-errand-chip[data-done] { animation: none; }
   .mv-errand-pin:active .mv-errand-pin__disc, .mv-errand-dock__act:not([aria-disabled="true"]):active { transform: none; }
 }
+
+/* 목격 기록 카드·아침 흔적 카드(15-07, UI-SPEC "목격 기록 카드 계약"·"아침 흔적 카드 계약"). 새 토큰·hex·진홍 없음 — 위치는 GameMap 이 .mf-game__record·.mf-game__trace 로 정한다.
+ * 등장은 opacity(흔적은 translateY 포함)뿐, 모션 줄이기에서 즉시. 이 블록은 파일 끝에 둔다(시험이 첫 .mv-record 부터 끝까지를 본다). */
+.mv-record { display: flex; flex-direction: column; box-sizing: border-box; width: 100%; max-height: 100%; padding: var(--space-sm) var(--space-md); border: 1px solid var(--night-600); border-radius: var(--radius-badge); background: var(--overlay-ink-strong); color: var(--gray-50); font-family: var(--font-ui); animation: mv-record-in var(--dur-fast) var(--ease-out); }
+.mv-record__head { display: flex; flex: none; align-items: center; gap: var(--space-sm); height: var(--tap-min); color: var(--gray-100); }
+.mv-record__count { flex: 1; font-size: 16px; line-height: 1.5; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gray-50); }
+.mv-record__rows { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; margin: 0; padding: 0; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
+.mv-record__row { display: flex; flex: none; align-items: center; gap: var(--space-sm); box-sizing: border-box; height: 44px; border-top: 1px solid var(--night-600); color: var(--gray-100); }
+.mv-record__n { flex: none; width: 20px; font-size: 14px; line-height: 1.4; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; color: var(--gray-50); }
+.mv-record__face { flex: none; box-sizing: border-box; width: 28px; height: 28px; border-radius: var(--radius-pill); border: 1px solid var(--night-600); object-fit: cover; background: var(--night-700); }
+.mv-record__name { min-width: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-50); word-break: keep-all; white-space: nowrap; overflow: hidden; }
+.mv-trace { display: flex; align-items: center; gap: var(--space-md); box-sizing: border-box; width: 328px; max-width: 100%; min-height: 88px; padding: var(--space-md); border: 1px solid var(--night-600); border-radius: var(--radius-badge); background: var(--overlay-ink-strong); color: var(--gray-50); font-family: var(--font-ui); text-align: left; animation: mv-trace-in var(--dur-med) var(--ease-out); }
+.mv-trace__disc { display: grid; place-items: center; flex: none; box-sizing: border-box; width: 44px; height: 44px; border-radius: var(--radius-pill); background: var(--night-700); color: var(--gray-100); }
+.mv-trace__text { display: flex; flex-direction: column; min-width: 0; gap: var(--space-xs); }
+.mv-trace__name { font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); word-break: keep-all; white-space: nowrap; overflow: hidden; }
+.mv-trace__note { font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
+@keyframes mv-record-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mv-trace-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .mv-record { animation: none; }
+  .mv-trace { animation: none; }
+}

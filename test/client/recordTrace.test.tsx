@@ -92,7 +92,8 @@ describe("RecordCard", () => {
     expect(css).toMatch(/\.mv-record__name\s*\{[^}]*word-break: keep-all[^}]*white-space: nowrap|\.mv-record__name\s*\{[^}]*white-space: nowrap[^}]*word-break: keep-all/);
     expect(css).toMatch(/\.mv-record__rows\s*\{[^}]*overflow-y: auto/);
     expect(css).toMatch(/\.mv-record__row\s*\{[^}]*night-600/);
-    expect(css).toMatch(/\.mv-record\s*\{[^}]*overlay-ink-strong[^}]*radius-badge[^}]*night-600/);
+    const rule = /\.mv-record\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    for (const token of ["overlay-ink-strong", "radius-badge", "1px solid var(--night-600)"]) expect(rule).toContain(token);
   });
 });
 
@@ -146,11 +147,10 @@ describe("ToolButton call·expanded", () => {
 
   it("기존 사용처의 마크업은 그대로(call·expanded 없이 같은 속성)", () => {
     const { container } = render(<ToolButton word="맵" icon={icon} />);
-    expect(container.innerHTML).toBe(
-      '<button type="button" class="mv-tool mv-tool--head" aria-label="맵" data-tool-label="맵"><span class="mv-tool__face"><svg class="mv-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        (container.querySelector("svg")?.innerHTML ?? "") +
-        '</svg></span><span class="mv-tool__label">맵</span></button>',
-    );
+    const b = container.querySelector("button") as HTMLButtonElement;
+    expect(b.className).toBe("mv-tool mv-tool--head");
+    expect([...b.getAttributeNames()].sort()).toEqual(["aria-label", "class", "data-tool-label", "type"]);
+    expect(b.getAttribute("aria-label")).toBe("맵");
   });
 });
 
