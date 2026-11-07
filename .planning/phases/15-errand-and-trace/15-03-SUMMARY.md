@@ -102,7 +102,7 @@ metrics:
 - `npm run typecheck` 종료 코드 0.
 - 인수 기준: `trace.ts` 존재, `TRACE_PIECE_IDS` in protocol.ts 2, bots.ts `approach`(대소문자 무시) 0, room.ts `approach` 0, trace.ts 주석 뺀 `.role` 0, pickTarget 본문 `role` 0(주석 뺀 본문).
 - 판정 불변: `resolveNight`·`confirmedTarget` 본문은 수정하지 않았다(diff 는 `pickTarget`·`enterMorning`·머리 주석뿐). 단위 시험 "시민의 선택을 넣고 뺀 resolveNight 가 같다" 가 고정.
-- 위생: `git grep -nIiE "torder|티오더|조직|회사|~/project"` 로 새 적중 없음.
+- 위생: 위생 검사로 새 적중 없음.
 
 ## Deviations from Plan
 
