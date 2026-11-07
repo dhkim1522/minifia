@@ -65,6 +65,7 @@ describe("단계 → 장면 규칙표(PHASE_SCENE)", () => {
       assigning: "lobby",
       roleReveal: "lobby",
       dayAnnounce: "day",
+      errand: "day",
       discussion: "day",
       night: "night",
       morning: "morning",

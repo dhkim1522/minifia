@@ -39,7 +39,7 @@ export const PLACE_IDS = [
   "clock", "fountain", "bench", "lamp", "mail", "tree", "flower", "stand",
 ] as const;
 export type PlaceId = (typeof PLACE_IDS)[number];
-/** 내 심부름: 서버가 뽑은 장소 목록(순서에 뜻 없음)과 처리한 순서. 모든 역할이 같은 모양이다(D-03). */
+/** 내 심부름(errand 단계, MyInfo.errand): 서버가 뽑은 장소 목록(순서에 뜻 없음)과 처리한 순서. 모든 역할이 같은 모양이다(D-03). */
 export interface ErrandMine {
   places: PlaceId[];
   done: PlaceId[];

@@ -4,6 +4,7 @@ import {
   DAY_ANNOUNCE_MS,
   DEFENSE_MS,
   DISCUSSION_MS,
+  ERRAND_MS,
   EXECUTION_MS,
   MORNING_MS,
   NIGHT_MS,
@@ -58,12 +59,16 @@ function stateIn(
 /** 투표 단계 전체 길이·진입 길이: 기본판(결정 0072)은 동시 투표 15초, 순차 지목이 켜지면 차례 사슬 최대·모이기. */
 const NOM_SPAN_MS = RULESET.pickTurn ? nominationMaxMs(4) : NOMINATION_MS;
 const NOM_ENTER_MS = RULESET.pickTurn ? NOMINATION_GATHER_MS : NOMINATION_MS;
+/** errand 진입(15페이즈, 결정 0074)이 난수를 쓴다 — 낮 시작을 지나는 tick 은 같은 시드의 난수 함수를 새로 받는다. */
+const rnd = (): ((n: number) => number) => seededRandInt(7);
+/** 낮 시작 발표 마감부터 토론 마감까지의 앞부분: 낮 시작 발표 + 심부름(15페이즈). */
+const DAY_TO_TALK_MS = DAY_ANNOUNCE_MS + ERRAND_MS;
 
 describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", () => {
-  it("단계는 열네 개다 — lobby·assigning·roleReveal, 낮 두 단계(순차 주장·공개 연출 단계 없음, D-07, CHAT-06), 지목·동점 결선·마지막 3인 결전·변론·찬반·처형(결정 0060·0066-4·0066-5, 옛 처형 여부 투표·후보 선택·공개 단계 없음), 밤·아침, 판 종료", () => {
+  it("단계는 열다섯 개다 — lobby·assigning·roleReveal, 낮 세 단계(낮 시작·심부름·토론, 순차 주장·공개 연출 단계 없음, D-07, CHAT-06), 지목·동점 결선·마지막 3인 결전·변론·찬반·처형(결정 0060·0066-4·0066-5, 옛 처형 여부 투표·후보 선택·공개 단계 없음), 밤·아침, 판 종료", () => {
     const keys = Object.keys(PHASE_DEFS).sort();
     expect(`${keys.length}:${keys.join(",")}`).toBe(
-      "14:assigning,dayAnnounce,defense,discussion,ended,execution,lobby,morning,night,nomination,roleReveal,runoff,showdown,verdict",
+      "15:assigning,dayAnnounce,defense,discussion,ended,errand,execution,lobby,morning,night,nomination,roleReveal,runoff,showdown,verdict",
     );
   });
 
@@ -79,7 +84,8 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(row("runoff")).toBe("1000/defense/true"); // 동점 결선 앞머리 1초 → 기본 다음은 최후 변론(결정 0066-4, 결선도 동점이면 훅이 night 로)
     expect(row("assigning")).toBe("3000/roleReveal/false");
     expect(row("roleReveal")).toBe("15000/dayAnnounce/true");
-    expect(row("dayAnnounce")).toBe("2000/discussion/true"); // 낮 시작 발표 다음이 바로 토론(CHAT-06)
+    expect(row("dayAnnounce")).toBe("2000/errand/true"); // 낮 시작 발표 다음이 심부름(15페이즈 결정 0074, 순차 주장 단계 없음 CHAT-06)
+    expect(row("errand")).toBe("40000/discussion/true"); // 심부름 40초 다음이 토론
     expect(row("discussion")).toBe("90000/nomination/true"); // 토론 다음은 지목(DAY-07, 결정 0060-1)
     expect(row("defense")).toBe("20000/verdict/true"); // 변론 다음은 찬반(결정 0060-1)
     expect(row("nomination")).toBe(`${NOM_ENTER_MS}/defense/true`); // 지목 진입 길이 = 모이기(결정 0063-1). 동률·0표면 마감 훅이 night 로 보낸다
@@ -261,36 +267,36 @@ describe("tick (순수 단계 진행)", () => {
     const T = 100_000;
     const s: RoomState = { ...stateIn("discussion", T), day: 1 };
     // 마감: nomination +nominationMaxMs(4)(전원 기권) → (0표) night +NIGHT_MS → morning +MORNING_MS → dayAnnounce +DAY_ANNOUNCE_MS → discussion +DISCUSSION_MS.
-    const toDiscussion = NOM_SPAN_MS + NIGHT_MS + MORNING_MS + DAY_ANNOUNCE_MS;
-    const out = tick(s, T + toDiscussion + 3_000);
+    const toDiscussion = NOM_SPAN_MS + NIGHT_MS + MORNING_MS + DAY_TO_TALK_MS;
+    const out = tick(s, T + toDiscussion + 3_000, rnd());
     expect(`${out.phase}/${out.day}/${out.phaseEndsAt}`).toBe(`discussion/2/${T + toDiscussion + DISCUSSION_MS}`);
   });
 
   it("늦은 알람이 여러 낮 단계를 따라잡아도 중간 단계의 진입 훅이 루프 안에서 돈다 (RESEARCH Pattern 1)", () => {
     const s = stateIn("roleReveal", 19000);
-    // 마감: dayAnnounce 21000 → discussion 61000. 37000 이면 토론이 한창이다.
-    const next = tick(s, 37000);
+    // 마감: dayAnnounce 21000 → errand 61000 → discussion 151000. 77000 이면 토론이 한창이다.
+    const next = tick(s, 21000 + ERRAND_MS + 16000, rnd());
     expect(next.phase).toBe("discussion");
     expect(next.day).toBe(1); // dayAnnounce 훅이 한 번 돌았다
-    expect(next.phaseEndsAt).toBe(21000 + DISCUSSION_MS);
+    expect(next.phaseEndsAt).toBe(21000 + ERRAND_MS + DISCUSSION_MS);
   });
 
   it("한 바퀴를 한 번에 따라잡아도 일차가 정확히 한 번만 늘어난다 (밤·아침은 일차를 올리지 않는다)", () => {
     const T = 100_000;
     const s: RoomState = { ...stateIn("discussion", T), day: 1 };
     // 마감: nomination → (0표) night → morning → dayAnnounce → discussion (각 단계 길이를 이어 붙인다).
-    const round = NOM_SPAN_MS + NIGHT_MS + MORNING_MS + DAY_ANNOUNCE_MS + DISCUSSION_MS;
-    const next = tick(s, T + round - 5_000);
+    const round = NOM_SPAN_MS + NIGHT_MS + MORNING_MS + DAY_TO_TALK_MS + DISCUSSION_MS;
+    const next = tick(s, T + round - 5_000, rnd());
     expect(next.phase).toBe("discussion");
     expect(next.day).toBe(2);
     expect(next.phaseEndsAt).toBe(T + round);
     // 한 바퀴가 정확히 끝나는 순간에는 지목이 시작되고 일차는 그대로다.
-    const vote = tick(s, T + round);
+    const vote = tick(s, T + round, rnd());
     expect(vote.phase).toBe("nomination");
     expect(vote.day).toBe(2);
     expect(vote.phaseEndsAt).toBe(T + round + NOM_ENTER_MS);
     // 표가 없으면 그 마감에 밤이 시작되고 일차는 그대로다.
-    const night = tick(s, T + round + NOM_SPAN_MS);
+    const night = tick(s, T + round + NOM_SPAN_MS, rnd());
     expect(night.phase).toBe("night");
     expect(night.day).toBe(2);
     expect(night.phaseEndsAt).toBe(T + round + NOM_SPAN_MS + NIGHT_MS);
@@ -298,9 +304,9 @@ describe("tick (순수 단계 진행)", () => {
 
   it("아주 늦게 불리면 여러 단계를 한 번에 따라잡는다", () => {
     const s = stateIn("assigning", 4000);
-    const next = tick(s, 30000);
-    expect(next.phase).toBe("discussion"); // roleReveal 19000 → dayAnnounce 21000 → discussion 61000
-    expect(next.phaseEndsAt).toBe(21000 + DISCUSSION_MS);
+    const next = tick(s, 21000 + ERRAND_MS + 30000, rnd());
+    expect(next.phase).toBe("discussion"); // roleReveal 19000 → dayAnnounce 21000 → errand 61000 → discussion 151000
+    expect(next.phaseEndsAt).toBe(21000 + ERRAND_MS + DISCUSSION_MS);
     expect(next.day).toBe(1);
   });
 
@@ -314,8 +320,8 @@ describe("tick (순수 단계 진행)", () => {
   it("같은 now 로 두 번 불러도 결과가 같다 (알람 at-least-once)", () => {
     const s = stateIn("assigning", 4000);
     for (const now of [4000, 4500, 19000, 30000, 50000, 200000]) {
-      const once = tick(s, now);
-      expect(JSON.stringify(tick(once, now))).toBe(JSON.stringify(once));
+      const once = tick(s, now, rnd());
+      expect(JSON.stringify(tick(once, now, rnd()))).toBe(JSON.stringify(once));
     }
     const T = 100_000;
     const discussion: RoomState = { ...stateIn("discussion", T), day: 1 };
@@ -326,28 +332,34 @@ describe("tick (순수 단계 진행)", () => {
       nightStart + NIGHT_MS,
       nightStart + NIGHT_MS + MORNING_MS,
       nightStart + NIGHT_MS + MORNING_MS + DAY_ANNOUNCE_MS,
+      nightStart + NIGHT_MS + MORNING_MS + DAY_TO_TALK_MS,
     ]) {
-      const once = tick(discussion, now);
-      expect(JSON.stringify(tick(once, now))).toBe(JSON.stringify(once));
+      const once = tick(discussion, now, rnd());
+      expect(JSON.stringify(tick(once, now, rnd()))).toBe(JSON.stringify(once));
     }
   });
 
-  it("세 번째 인자(난수 함수)를 넘겨도 지금 단계 표만으로는 한 번도 부르지 않는다 — 03-03 이 아침 훅을 더하기 전의 계약", () => {
+  it("난수 함수는 errand 진입에서만 불린다 — 인자는 심부름 후보 수(8)에서 하나씩 줄어드는 값(8·7·6)이고 호출은 산 사람 × 3 의 배수다 (15페이즈 결정 0074, 03-03 계약 갱신)", () => {
     const T = 100_000;
-    let calls = 0;
+    const args: number[] = [];
     const randInt = (n: number): number => {
-      calls += 1;
+      args.push(n);
       return n - 1;
     };
     tick({ ...stateIn("discussion", T), day: 1 }, T + 200_000, randInt);
     tick(stateIn("assigning", 4000), 30_000, randInt);
-    expect(calls).toBe(0);
+    expect(args.length > 0 && args.length % (4 * 3) === 0).toBe(true);
+    expect(args.every((n) => n === 8 || n === 7 || n === 6)).toBe(true);
+    // 심부름을 지나지 않는 구간(밤 → 아침)은 난수를 쓰지 않는다.
+    const none: number[] = [];
+    tick({ ...stateIn("night", T), day: 1 }, T, (n) => (none.push(n), 0));
+    expect(none).toEqual([]);
   });
 
   it("연결 여부를 보지 않는다 — 전원 끊겨도 같은 결과다 (D-05, D-18)", () => {
-    const online = tick(stateIn("assigning", 4000), 30000);
-    const offline = tick(stateIn("assigning", 4000, { connected: false }), 30000);
-    expect(offline.phase).toBe("discussion");
+    const online = tick(stateIn("assigning", 4000), 30000, rnd());
+    const offline = tick(stateIn("assigning", 4000, { connected: false }), 30000, rnd());
+    expect(offline.phase).toBe("errand");
     expect(offline.phase).toBe(online.phase);
     expect(offline.phaseEndsAt).toBe(online.phaseEndsAt);
     expect(offline.day).toBe(online.day);
@@ -356,7 +368,7 @@ describe("tick (순수 단계 진행)", () => {
   it("입력 상태를 바꾸지 않는다", () => {
     const s = stateIn("assigning", 4000);
     const before = JSON.stringify(s);
-    tick(s, 30000);
+    tick(s, 30000, rnd());
     expect(JSON.stringify(s)).toBe(before);
   });
 });
@@ -379,8 +391,8 @@ describe("tick - 늦은 알람의 따라잡기 훅 순서 (밤·아침을 건너
   it("discussion 에서 한 번에 다음 낮 discussion 까지 따라잡아도 낮 시작 훅이 한 번 돌고 claim 계열 키가 생기지 않는다", () => {
     const T = 100_000;
     const s: RoomState = { ...stateIn("discussion", T), day: 1 };
-    const dayAnnounceEnd = T + NOM_SPAN_MS + NIGHT_MS + MORNING_MS + DAY_ANNOUNCE_MS;
-    const out = tick(s, dayAnnounceEnd);
+    const dayAnnounceEnd = T + NOM_SPAN_MS + NIGHT_MS + MORNING_MS + DAY_TO_TALK_MS;
+    const out = tick(s, dayAnnounceEnd, rnd());
     expect(`${out.phase}/${out.day}/${out.phaseEndsAt}`).toBe(`discussion/2/${dayAnnounceEnd + DISCUSSION_MS}`);
     for (const key of ["claimOrder", "claimIdx", "claimStart", "claimPick", "claimLog"]) expect(Object.hasOwn(out, key)).toBe(false);
   });
@@ -425,15 +437,17 @@ describe("낮 처형 구간 길이 (결정 0060-1, 0063-1)", () => {
 
 // 07-08: 순차 주장 단계 제거 — 낮 시작 발표 다음이 바로 토론이다(CHAT-06).
 describe("tick - 낮 흐름에 순차 주장 단계가 없다 (07-08, CHAT-06)", () => {
-  it("07-08 dayAnnounce 마감 다음이 바로 discussion 이고 마감은 이전 마감 + DISCUSSION_MS 다", () => {
+  it("07-08 dayAnnounce 마감 다음이 심부름(15페이즈)이고 그 마감 다음이 discussion 이며 마감은 이전 마감 + DISCUSSION_MS 다", () => {
     const T = 50_000;
-    const out = tick({ ...stateIn("dayAnnounce", T), day: 1 }, T);
-    expect(`${out.phase}/${out.phaseEndsAt}`).toBe(`discussion/${T + DISCUSSION_MS}`);
+    const errand = tick({ ...stateIn("dayAnnounce", T), day: 1 }, T, rnd());
+    expect(`${errand.phase}/${errand.phaseEndsAt}`).toBe(`errand/${T + ERRAND_MS}`);
+    const out = tick(errand, T + ERRAND_MS, rnd());
+    expect(`${out.phase}/${out.phaseEndsAt}`).toBe(`discussion/${T + ERRAND_MS + DISCUSSION_MS}`);
   });
 
   it("07-08 늦은 알람으로 roleReveal 에서 한 번에 따라잡아도 roleReveal → dayAnnounce → discussion 순서이고 일차는 1이다", () => {
-    const out = tick(stateIn("roleReveal", 19_000), 19_000 + DAY_ANNOUNCE_MS + 500);
-    expect(`${out.phase}/${out.day}/${out.phaseEndsAt}`).toBe(`discussion/1/${19_000 + DAY_ANNOUNCE_MS + DISCUSSION_MS}`);
+    const out = tick(stateIn("roleReveal", 19_000), 19_000 + DAY_TO_TALK_MS + 500, rnd());
+    expect(`${out.phase}/${out.day}/${out.phaseEndsAt}`).toBe(`discussion/1/${19_000 + DAY_TO_TALK_MS + DISCUSSION_MS}`);
   });
 });
 
@@ -509,10 +523,12 @@ describe("기본판 낮 분기 (결정 0072)", () => {
     expect(`${out.phase}/${out.runoff === undefined}`).toBe("night/true");
   });
 
-  it("산 사람이 정확히 셋인 낮 시작 발표 마감 → 토론(showdown 아님, showdown 키 없음)", () => {
+  it("산 사람이 정확히 셋인 낮 시작 발표 마감 → 심부름 → 토론(showdown 아님, showdown 키 없음)", () => {
     const base = stateIn("dayAnnounce", T);
     const three: RoomState = { ...base, day: 1, players: base.players.map((p) => (p.seat === 3 ? { ...p, alive: false } : p)) };
-    const out = tick(three, T, seededRandInt(1));
-    expect(`${out.phase}/${out.phaseEndsAt}/${Object.hasOwn(out, "showdown")}`).toBe(`discussion/${T + DISCUSSION_MS}/false`);
+    const errand = tick(three, T, seededRandInt(1));
+    expect(`${errand.phase}/${errand.phaseEndsAt}/${Object.hasOwn(errand, "showdown")}`).toBe(`errand/${T + ERRAND_MS}/false`);
+    const out = tick(errand, T + ERRAND_MS, seededRandInt(1));
+    expect(`${out.phase}/${out.phaseEndsAt}/${Object.hasOwn(out, "showdown")}`).toBe(`discussion/${T + ERRAND_MS + DISCUSSION_MS}/false`);
   });
 });

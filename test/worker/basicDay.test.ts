@@ -118,10 +118,13 @@ describe("기본판 낮 분기 (FLOW-02·03, 결정 0072)", () => {
     expect(g.socks.map((s) => lastViewOf(s).day?.noExecution?.reason).join(",")).toBe("noVotes,noVotes,noVotes,noVotes");
   }, 60_000);
 
-  it("산 사람이 정확히 셋인 낮 시작 발표 마감 뒤에는 토론으로 가고 showdown 프레임이 0이다", async () => {
+  it("산 사람이 정확히 셋인 낮 시작 발표 마감 뒤에는 심부름을 지나 토론으로 가고 showdown 프레임이 0이다", async () => {
     const g = await threeAliveGame();
     const from = g.socks.map(mark);
-    await closePhase(g.code);
+    await closePhase(g.code); // 낮 시작 → 심부름(15페이즈)
+    await settleAll(g);
+    expect((await storedRoom(g.code)).phase).toBe("errand");
+    await closePhase(g.code); // 심부름 → 토론
     await settleAll(g);
     expect((await storedRoom(g.code)).phase).toBe("discussion");
     expect(g.socks.map((s) => lastViewOf(s).phase).join(",")).toBe("discussion,discussion,discussion,discussion");

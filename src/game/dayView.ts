@@ -45,6 +45,7 @@ export const DAY_COPY = {
   // ---- 단계 제목 ----
   titles: {
     dayAnnounce: "낮 토론",
+    errand: "심부름", // 15페이즈 UI-SPEC: 심부름 단계 제목(헤더)
     discussion: "낮 토론",
     nomination: "투표",
     runoff: "결선",

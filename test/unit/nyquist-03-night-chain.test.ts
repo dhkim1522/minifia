@@ -26,7 +26,7 @@ function nightOf(n: number, seed: number): RoomState {
   const st = startGame(lobby, lobby.hostId, 10_000, seededRandInt(seed));
   if (!st.ok) throw new Error("start");
   let s = st.state;
-  while (s.phase !== "night") s = tick(s, s.phaseEndsAt!);
+  while (s.phase !== "night") s = tick(s, s.phaseEndsAt!, seededRandInt(seed)); // errand 진입(15페이즈)이 난수를 쓴다
   return s;
 }
 

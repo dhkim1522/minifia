@@ -5,7 +5,7 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { Player, RoomState } from "../../shared/game/room";
 import type { RoleId } from "../../shared/game/roles";
 import { tick } from "../../shared/game/tick";
-import { NIGHT_MS } from "../../shared/game/phases";
+import { ERRAND_MS, NIGHT_MS } from "../../shared/game/phases";
 import type { PhaseId } from "../../shared/protocol";
 import { buildView } from "../../shared/game/view";
 import { seededRandInt } from "../helpers/seededRandom";
@@ -41,7 +41,7 @@ function nightOf(n: number, seed: number): RoomState {
   let state = started.state;
   while (state.phase !== "night") {
     if (state.phaseEndsAt === null) throw new Error("phase has no deadline");
-    state = tick(state, state.phaseEndsAt);
+    state = tick(state, state.phaseEndsAt, seededRandInt(seed)); // errand 진입(15페이즈)이 난수를 쓴다
   }
   return state;
 }
@@ -644,7 +644,7 @@ describe("따라잡기", () => {
     const endsAt = discussion.phaseEndsAt ?? 0;
     // 토론 마감 한 번으로 지목 첫 순간을 만들고, 거기서 마감 사슬을 따라 계산한 지목 길이를 더한다(지목 방식과 무관).
     const nomination = tick(discussion, endsAt, seededRandInt(11));
-    const caught = tick(discussion, endsAt + nominationSpanMs(nomination, 11) + NIGHT_MS + 5_000 + 2_000);
+    const caught = tick(discussion, endsAt + nominationSpanMs(nomination, 11) + NIGHT_MS + 5_000 + 2_000 + ERRAND_MS, seededRandInt(11)); // 낮 시작 다음 심부름 단계(15페이즈)가 끼어 ERRAND_MS 만큼 늘었다
     expect(caught.phase).toBe("discussion");
     expect(caught.day).toBe((discussion.day ?? 0) + 1);
     expect(caught.morning === undefined).toBe(false);

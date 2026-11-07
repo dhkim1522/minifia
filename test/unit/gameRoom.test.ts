@@ -15,7 +15,7 @@ import {
   startGame,
 } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
-import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS, ROLE_REVEAL_MS } from "../../shared/game/phases";
+import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, ERRAND_MS, NOMINATION_GATHER_MS, ROLE_REVEAL_MS } from "../../shared/game/phases";
 import { RULESET } from "../../shared/game/ruleset";
 import { tick } from "../../shared/game/tick";
 import type { PhaseId } from "../../shared/protocol";
@@ -677,7 +677,7 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     const started = startGame(lobby, "p0", 0, seededRandInt(1));
     if (!started.ok) throw new Error(started.error);
     const roleReveal = tick(started.state, ASSIGNING_MS);
-    const ticked = tick(roleReveal, ASSIGNING_MS + ROLE_REVEAL_MS + DAY_ANNOUNCE_MS);
+    const ticked = tick(roleReveal, ASSIGNING_MS + ROLE_REVEAL_MS + DAY_ANNOUNCE_MS + ERRAND_MS, seededRandInt(1)); // 낮 시작 다음 심부름(15페이즈)을 지나 토론
     // tick 의 낮 시작 훅이 아직 옛 messages 빈 배열을 쓴다(02-15 가 지운다) — 이 테스트는 그 키가 없는 상태의 동일성을 본다.
     const { messages: _old, ...bare } = ticked as RoomState & { messages?: unknown };
     const discussion = bare as RoomState;
@@ -816,17 +816,17 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
         return rest;
       }),
     };
-    const line = [ASSIGNING_MS, ROLE_REVEAL_MS, DAY_ANNOUNCE_MS];
+    const line = [ASSIGNING_MS, ROLE_REVEAL_MS, DAY_ANNOUNCE_MS, ERRAND_MS];
     let at = 0;
     const seen: string[] = [];
     let state = legacy;
     for (const ms of line) {
       at += ms;
-      state = tick(state, at);
+      state = tick(state, at, seededRandInt(3));
       const view = buildView(state, "p1", at);
       seen.push(`${state.phase}:${view.day === undefined ? "-" : view.day.n}`);
     }
-    expect(seen.join(" ")).toBe("roleReveal:- dayAnnounce:1 discussion:1");
+    expect(seen.join(" ")).toBe("roleReveal:- dayAnnounce:1 errand:1 discussion:1");
     const day = buildView(state, "p1", at).day;
     expect(Object.keys(day ?? {}).includes("messages")).toBe(false);
   });

@@ -37,6 +37,7 @@ export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
   assigning: "lobby",
   roleReveal: "lobby",
   dayAnnounce: "day",
+  errand: "day", // 15페이즈(결정 0074): 낮 장면 그대로 — 심부름은 같은 낮 지도 위에서 걷는다
   discussion: "day",
   night: "night",
   morning: "morning",

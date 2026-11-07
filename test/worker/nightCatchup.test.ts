@@ -45,7 +45,7 @@ async function lateCatchup(withVictim: boolean): Promise<{ g: Game; victim: Game
   const marks = g.socks.map((s) => mark(s));
 
   expect(await runDurableObjectAlarm(env.ROOM.getByName(g.code))).toBe(true);
-  for (const sock of g.socks) await nextFrame(sock, (m) => m.t === "state" && (m.view.phase === "dayAnnounce" || m.view.phase === "discussion"));
+  for (const sock of g.socks) await nextFrame(sock, (m) => m.t === "state" && (m.view.phase === "dayAnnounce" || m.view.phase === "errand" || m.view.phase === "discussion"));
   const got = await Promise.all(g.actors.map((a, i) => settle(a.sock, marks[i]!)));
   return { g, victim, walker, home, before, got, marks };
 }

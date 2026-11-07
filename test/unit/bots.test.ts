@@ -33,7 +33,7 @@ import { checkChatSend, sanitizeChatText } from "../../shared/game/chatRules";
 import type { ChatSenderRate } from "../../shared/game/chatRules";
 import { pickTarget } from "../../shared/game/night";
 import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
-import { PHASE_DEFS } from "../../shared/game/phases";
+import { ERRAND_MS, PHASE_DEFS } from "../../shared/game/phases";
 import { rolesInPlay } from "../../shared/game/roles";
 import {
   attachConnection,
@@ -881,7 +881,10 @@ describe("봇 투표·변론 계획: 회귀", () => {
     const got = (["discussion", "night"] as const).map((phase) => {
       const state = stateAt(1, 5, 8, phase);
       // 09-12: will·approach(09-24: typing 도)는 난수 없는 덧붙임 행동이다 — 걸러내면 기존 시드 고정 값이 그대로여야 한다(난수 호출 순서 불변 증명).
-      const steps = planBotSteps(state, nowOf(state), seededRandInt(42)).filter((st) => st.act.t !== "will" && st.act.t !== "approach" && st.act.t !== "typing");
+      const steps = planBotSteps(state, nowOf(state), seededRandInt(42)).filter((st) => st.act.t !== "will" && st.act.t !== "approach" && st.act.t !== "typing")
+        // 15-01(결정 0074): 낮 시작과 토론 사이에 심부름 40초가 끼어 모든 시각(at)이 ERRAND_MS 만큼 뒤로 밀린다. 난수 호출 순서는 그대로이므로(errand 계획은 난수 없음)
+        // 시각만 되돌려 옛 고정 값을 그대로 지킨다 — 값이 어긋나면 난수 순서가 바뀐 것이다.
+        .map((st) => ({ ...st, at: st.at - ERRAND_MS }));
       return digest(canon(steps));
     });
     // 08-11: 토론이 90초가 되고 밤이 지목 마감 뒤에 닿아 두 계획의 시각(at)이 모두 달라졌다 — 새 흐름 값으로 다시 고정한다.

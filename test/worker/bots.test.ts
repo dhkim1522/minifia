@@ -871,7 +871,7 @@ describe("기본판 봇 방 자동 완주 (FLOW-05, 결정 0072)", () => {
     const fail = (why: string): string => `${why} | 지나간 단계: ${trail}`;
 
     expect(fail(`ended 에 닿는다(${rounds}회)`) && (await stored(r.code)).phase).toBe("ended");
-    const allowed: PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
+    const allowed: PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
     expect(fail("허용 밖 단계") && seen.filter((p) => !allowed.includes(p)).join(",")).toBe("");
     expect(fail("runoff·showdown") && seen.filter((p) => p === "runoff" || p === "showdown").join(",")).toBe("");
     const withKeys = views.filter((v) => {

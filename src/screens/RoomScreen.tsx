@@ -57,6 +57,7 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   assigning: () => "직업을 배정하고 있습니다",
   roleReveal: () => "역할 확인",
   dayAnnounce: (view) => `${view.day?.n ?? 1}일차 낮이 되었습니다`,
+  errand: () => "심부름", // 15페이즈(결정 0074)
   discussion: () => "낮 토론",
   night: nightAnnounce,
   morning: morningAnnounce,
@@ -126,6 +127,7 @@ function executionAnnounceOf(view: RoomView): string {
 function sceneKey(phase: PhaseId): string {
   switch (phase) {
     case "dayAnnounce":
+    case "errand":
     case "discussion":
     case "nomination":
     case "runoff":
@@ -558,6 +560,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
           </PreGame>
         );
       case "dayAnnounce":
+      case "errand":
       case "discussion":
       case "nomination":
       case "runoff":

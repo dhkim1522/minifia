@@ -290,7 +290,7 @@ describe("phaseKey — 단계 한 번(instance)마다 유일한 키", () => {
     // 실제 전이로 1일차 밤·아침과 2일차 낮 시작까지 따라간다.
     for (let guard = 0; guard < 60 && !(state.day === 2 && state.phase === "discussion"); guard += 1) {
       if (state.phaseEndsAt === null) break;
-      state = tick(state, state.phaseEndsAt);
+      state = tick(state, state.phaseEndsAt, seededRandInt(8)); // errand 진입(15페이즈)이 난수를 쓴다
       if (state.phase === "ended") break;
       check(state);
     }

@@ -17,6 +17,7 @@ const KIND: Record<PhaseId, Kind> = {
   assigning: "silent",
   roleReveal: "silent",
   dayAnnounce: "day",
+  errand: "silent", // 15페이즈: 심부름 단계는 채팅·동작을 받지 않는다(CHAT_PHASES 밖, 결정 0074) — 걷기와 처리만
   discussion: "day",
   nomination: "day",
   runoff: "day",

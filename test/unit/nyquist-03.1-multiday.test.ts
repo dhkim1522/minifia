@@ -2,7 +2,7 @@
 // 개별 규칙 단위 테스트가 놓치기 쉬운 '낮이 거듭될 때의 누적' 을 본다: 낮 시작 발표 다음이 바로 토론인지·일지 누적·누출 키 부재.
 import { describe, expect, it } from "vitest";
 import { pickTarget } from "../../shared/game/night";
-import { DISCUSSION_MS, SHOWDOWN_GATHER_MS } from "../../shared/game/phases";
+import { DISCUSSION_MS, ERRAND_MS, SHOWDOWN_GATHER_MS } from "../../shared/game/phases";
 import { RULESET } from "../../shared/game/ruleset";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
@@ -62,12 +62,20 @@ describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", (
               const v = JSON.stringify(buildView(s, p.id, s.phaseEndsAt! - 1));
               for (const k of ["claimPick", "claimOrder", "claimIdx", "claimStart", "turn"]) expect(v).not.toContain(`"${k}"`);
             }
-            // 낮 시작 발표 마감 다음이 바로 토론이고, 마감은 이전 마감 + DISCUSSION_MS 다.
-            // 단 산 사람이 정확히 셋이면 토론 대신 마지막 3인 결전(모이기 SHOWDOWN_GATHER_MS)이다(결정 0066-5).
+            // 낮 시작 발표 마감 다음이 심부름(15페이즈, 마감 = 이전 마감 + ERRAND_MS)이고 그 마감 다음이 토론(+ DISCUSSION_MS)이다.
+            // 단 산 사람이 정확히 셋이고 결전이 켜져 있으면 낮 시작 다음이 마지막 3인 결전(모이기 SHOWDOWN_GATHER_MS)이다(결정 0066-5).
             const last3 = RULESET.showdown && living(s).length === 3; // 기본판(결정 0072)은 산 셋도 토론이다
             const after = tick(s, s.phaseEndsAt!, rand);
-            expect(after.phase).toBe(last3 ? "showdown" : "discussion");
-            expect(after.phaseEndsAt).toBe(s.phaseEndsAt! + (last3 ? SHOWDOWN_GATHER_MS : DISCUSSION_MS));
+            if (last3) {
+              expect(after.phase).toBe("showdown");
+              expect(after.phaseEndsAt).toBe(s.phaseEndsAt! + SHOWDOWN_GATHER_MS);
+            } else {
+              expect(after.phase).toBe("errand");
+              expect(after.phaseEndsAt).toBe(s.phaseEndsAt! + ERRAND_MS);
+              const talk = tick(after, after.phaseEndsAt!, rand);
+              expect(talk.phase).toBe("discussion");
+              expect(talk.phaseEndsAt).toBe(after.phaseEndsAt! + DISCUSSION_MS);
+            }
             for (const k of ["claimPick", "claimOrder", "claimIdx", "claimStart", "claimLog"]) expect(Object.hasOwn(after, k)).toBe(false);
           }
           if (s.phase === "night") s = actNight(s);

@@ -3,7 +3,7 @@ import { isAlive } from "../../shared/game/alive";
 import { channelOf } from "../../shared/game/audience";
 import { pickTarget } from "../../shared/game/night";
 import { castTurnPoint, enterNomination, nominationStepMs, stepNomination, turnViewOf } from "../../shared/game/nomination";
-import { DISCUSSION_MS, MORNING_MS, NIGHT_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PHASE_DEFS, nominationMaxMs } from "../../shared/game/phases";
+import { DISCUSSION_MS, ERRAND_MS, MORNING_MS, NIGHT_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PHASE_DEFS, nominationMaxMs } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, roundOf, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
@@ -27,6 +27,7 @@ const PHASES: readonly PhaseId[] = [
   "assigning",
   "roleReveal",
   "dayAnnounce",
+  "errand",
   "discussion",
   "nomination",
   "defense",
@@ -285,12 +286,13 @@ const SERVER_ONLY_KEYS: readonly string[] = [
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
-  "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended",
+  "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended",
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
   "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote",
   "whisperUsed", // 오늘 귓속말을 이미 보냈다(결정 0066-2) — 토론 단계의 산 본인에게만, 값은 true 뿐
   "ballot", // 동점 결선(결정 0066-4)·마지막 3인 동시 지목(결정 0066-5)에서 본인이 고른 좌석 — 투표 창·결과/지목 창·공개의 산 본인에게만, 값은 좌석 하나
+  "errand", // 심부름 목록·진행(15페이즈, 결정 0074) — errand 단계의 산 본인에게만, 아래 "심부름 me.errand" describe 가 조건을 단언한다
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
@@ -508,24 +510,26 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
     expect(got.join(" ")).toBe(
-      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:15000:true:77777 defense:20000:true:77777 verdict:10000:true:77777 execution:5600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
+      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 errand:40000:true:77777 discussion:90000:true:77777 nomination:15000:true:77777 defense:20000:true:77777 verdict:10000:true:77777 execution:5600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
     );
   });
 
-  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, discussion +90000, nomination +15000(기본판 동시 투표 15초), night +30000(전원 기권), morning +5000", () => {
+  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, errand +40000(15페이즈), discussion +90000, nomination +15000(기본판 동시 투표 15초), night +30000(전원 기권), morning +5000", () => {
     const a = stateAt("assigning", 4, 1);
     const r = stateAt("roleReveal", 4, 1);
-    const ends = ["assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "night", "morning"].map(
+    const ends = ["assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "night", "morning"].map(
       (phase) => stateAt(phase as PhaseId, 4, 1).phaseEndsAt,
     );
-    // discussion 은 낮 시작 발표 마감(20000) 바로 뒤에 이어진다(20000 + DISCUSSION_MS)
-    const discussionEnd = START_AT + 20000 + DISCUSSION_MS;
+    // errand 는 낮 시작 발표 마감(20000) 바로 뒤에 이어지고(20000 + ERRAND_MS), discussion 은 그 마감 뒤에 이어진다(+ DISCUSSION_MS)
+    const errandEnd = START_AT + 20000 + ERRAND_MS;
+    const discussionEnd = errandEnd + DISCUSSION_MS;
     expect(DISCUSSION_MS).toBe(90000);
     expect(ends.join("/")).toBe(
       [
         START_AT + 3000,
         START_AT + 18000,
         START_AT + 20000,
+        errandEnd,
         discussionEnd,
         discussionEnd + NOMINATION_MS,
         discussionEnd + NOMINATION_MS + NIGHT_MS,
@@ -534,6 +538,23 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
     );
     expect(r.phaseEndsAt).toBe(START_AT + 18000);
     expect(a.expiresAt).toBe(START_AT + ROOM_TTL_MS);
+  });
+});
+
+describe("심부름 me.errand (15페이즈, 결정 0074)", () => {
+  it("errand 단계의 산 본인에게만 { places, done } 이 실리고, 다른 단계·유령·다른 사람 view 에는 키가 없다", () => {
+    const s = stateAt("errand", 6, 3);
+    for (const p of s.players) {
+      const me = buildView(s, p.id, 0).me;
+      expect(keysOf(me.errand)).toBe("done,places");
+      expect(me.errand?.places).toEqual(p.errandPlaces);
+      expect(me.errand?.done).toEqual([]);
+    }
+    const ghost = { ...s, players: s.players.map((p, i) => (i === 0 ? { ...p, alive: false } : p)) };
+    expect("errand" in buildView(ghost, s.players[0]!.id, 0).me).toBe(false);
+    for (const phase of ["dayAnnounce", "discussion", "night", "morning"] as PhaseId[]) {
+      expect(`${phase}:${"errand" in buildView(stateAt(phase, 6, 3), s.players[0]!.id, 0).me}`).toBe(`${phase}:false`);
+    }
   });
 });
 

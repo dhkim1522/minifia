@@ -21,12 +21,13 @@ import { recipeDurationMs, type BedId, type SfxId } from "./recipes";
 import { EMOTE_OTHERS_DB, emoteSoundGate, flipCue, lightCues, MORNING_SLASH_AT, morningScript, nightCues, plateCues, pickTickSchedule, tickSchedule, verdictScript, willScript, type DuckSpan, type EmoteGateState, type Rng, type ScriptItem } from "./script";
 import type { EmoteSignal, LocalSignal, ResultSignal } from "./signals";
 
-/** 단계 → 침대 표: 14개 단계 전수. null 은 침대 없음(assigning: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
+/** 단계 → 침대 표: 15개 단계 전수. null 은 침대 없음(assigning: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
 export const BED_OF: Readonly<Record<PhaseId, BedId | null>> = {
   lobby: "bed.lobby",
   assigning: null,
   roleReveal: "bed.reveal",
   dayAnnounce: "bed.day",
+  errand: "bed.day", // 15페이즈: 진입 소리는 없다(낮 시작에서 이미 울렸다, UI-SPEC U-15)
   discussion: "bed.day",
   nomination: "bed.vote",
   runoff: "bed.vote",
