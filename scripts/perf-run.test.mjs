@@ -3,7 +3,7 @@
 // nightload 실행 자체는 이 시험이 하지 않는다(실행과 성능 합격선은 12-12).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { USAGE, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
+import { NIGHTLOAD_DWELL, USAGE, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
 
 test("parseArgs --sound: 기본 on, on·off 를 받는다", () => {
   assert.equal(parseArgs([]).sound, "on");
@@ -94,4 +94,10 @@ test("readSoundState: page.evaluate 가 던지면 null", async () => {
     },
   };
   assert.equal(await readSoundState(page), null);
+});
+
+test("NIGHTLOAD_DWELL: 15페이즈 errand 장면이 첫 장면(낮 시작 다음·토론 앞)이고 한 바퀴 합은 70초다", () => {
+  assert.deepEqual(NIGHTLOAD_DWELL.map(([phase]) => phase), ["errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"]);
+  assert.deepEqual(NIGHTLOAD_DWELL[0], ["errand", 20_000]);
+  assert.equal(NIGHTLOAD_DWELL.reduce((sum, [, ms]) => sum + ms, 0), 70_000);
 });

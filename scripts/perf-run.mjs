@@ -66,8 +66,10 @@ const DEFAULT_OUT = join(REPO, ".planning/phases/06-world-skeleton/perf");
 const CHATLOAD_OUT = join(REPO, ".planning/phases/07-free-chat/perf");
 /** nightload 의 기본 저장 폴더(9페이즈) */
 const NIGHTLOAD_OUT = join(REPO, ".planning/phases/09-night-morning/perf");
-/** nightload: 장면마다 머무는 시간(ms). 합 50초 = 한 바퀴. 처형·아침은 서버 타이머가 5초 안팎이라 그보다 짧게 머문다 */
-const NIGHTLOAD_DWELL = [
+/** nightload: 장면마다 머무는 시간(ms). 합 70초 = 한 바퀴. 처형·아침은 서버 타이머가 5초 안팎이라 그보다 짧게 머문다.
+ * errand(15페이즈, 결정 0074)는 낮 시작 다음·토론 앞 — 사람 입력 없이 20초 머문다(근처 snap 갱신·표지 투영·링이 매 프레임 일하는 구간, 봇이 장소를 돈다) */
+export const NIGHTLOAD_DWELL = [
+  ["errand", 20_000],
   ["discussion", 10_000],
   ["nomination", 6_000],
   ["defense", 6_000],
@@ -723,7 +725,7 @@ async function nightloadOnce(browser, o, origin, chrome) {
     // --map plaza: 시작 전에 칩 → 맵 탭 → 광장 카드로 고른다(11-13). bar·없음이면 아무것도 하지 않는다(재즈 바 판은 이전과 같다). 선택은 방에 남아 두 판 모두 광장이다
     if (o.map === "plaza") await pickMapViaUi(page, tracker, "plaza");
 
-    // 한 바퀴(50초)까지 넘겨 재는 경우가 있어 측정 시간에 여유 2분을 더한 240Hz 분량
+    // 한 바퀴(70초)까지 넘겨 재는 경우가 있어 측정 시간에 여유 2분을 더한 240Hz 분량
     const cap = Math.ceil((o.minutes * 60 + 120) * 240);
     await page.evaluate((capacity) => {
       const gaps = new Float32Array(capacity);
@@ -767,8 +769,7 @@ async function nightloadOnce(browser, o, origin, chrome) {
       while (measured < perPassMs) {
         await mark(`${role}:setup`, true);
         await startGame(page, tracker);
-        await skipTo(page, tracker, "discussion");
-        for (const [phase, ms] of NIGHTLOAD_DWELL) {
+        for (const [phase, ms] of NIGHTLOAD_DWELL) { // 첫 장면이 errand 라 낮 시작에서 바로 넘긴다(15페이즈)
           await mark(`${role}:setup`, true);
           await skipTo(page, tracker, phase);
           // 마피아 판의 밤: 대상 이름표를 눌러 내 캐릭터가 걷게 한다(이동·고리). 실패해도 측정은 이어 간다
