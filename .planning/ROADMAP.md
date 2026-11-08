@@ -177,7 +177,7 @@ Plans:
 **Goal:** 2026-11-08 실테스트 피드백(결정 0077)으로, 단추가 글 이름표 없이 한 모양으로 정리되고, 심부름과 아침 흔적이 실제로 의심의 근거가 된다. 튜토리얼은 17페이즈(결정 0078).
 **Requirements**: TOOL-04, BTN-01, BTN-02, ERRAND-06, ERRAND-07, ERRAND-08, ASSET-01, EVID-01, EVID-02, EVID-03, DEPLOY-04
 **Depends on:** Phase 15
-**Plans:** 2/10 plans executed (8 waves)
+**Plans:** 3/10 plans executed (8 waves)
 
 **Success Criteria:**
 1. 아이콘 단추 아래 글 이름표가 없다(접근성 이름은 남는다)
@@ -191,7 +191,7 @@ Plans:
 - [x] 16-02-PLAN.md — 컬러 에셋 A 25개 이식(변환 스크립트·design/v3.0/assets 사본·placeArt.tsx·--check)
 
 **Wave 2**
-- [ ] 16-03-PLAN.md — (TDD) 마피아 가짜 장소: errandFake 배정·처리 제외·응답 동일·봇 목표 순서·누설
+- [x] 16-03-PLAN.md — (TDD) 마피아 가짜 장소: errandFake 배정·처리 제외·응답 동일·봇 목표 순서·누설
 - [ ] 16-04-PLAN.md — 아이콘 단추 이름표 삭제(이름표 속성·라벨 span, 접근성 이름 필수), 시험·E2E 이름표 판정 뒤집기
 
 **Wave 3**
@@ -236,7 +236,7 @@ Plans:
 | 13. 기본판 낮 흐름 | v3.0 | 6/6 | Complete (실기기 확인은 v3.0 끝) | 2026-11-07 |
 | 14. 사회자 진행과 도구 이름표 | v3.0 | 9/9 | Complete (실기기 확인은 v3.0 끝) | 2026-11-07 |
 | 15. 낮 심부름·목격 기록·밤 흔적 | v3.0 | 10/10 | Complete (배포 `f882224e`) | 2026-11-07 |
-| 16. 단추 정리·심부름 증거 | v3.0 | 2/10 | In Progress | - |
+| 16. 단추 정리·심부름 증거 | v3.0 | 3/10 | In Progress | - |
 | 17. 튜토리얼 "첫 사건" | v3.0 | 0/? | Not started | - |
 
 ## Backlog
