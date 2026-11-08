@@ -7,16 +7,16 @@ current_phase_name: 낮 심부름·목격 기록·밤 흔적
 current_plan: 10
 status: verifying
 stopped_at: Completed 15-10-PLAN.md
-last_updated: "2026-11-07T09:46:25.886Z"
+last_updated: "2026-11-08T04:04:08.695Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: 1390b20d41db09e5e163b77a44d3e71d9095d6c3
+state_head: d93d1d7b7a3eb79f14900817a880efc89e240fef
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 2
   total_plans: 25
   completed_plans: 25
-  percent: 67
+  percent: 50
 ---
 
 # Project State
@@ -502,6 +502,7 @@ None yet.
 - Phase 03.1 inserted after Phase 3 (v1.0): 순차 주장(결정 0023)과 역할 카드·일지(결정 0026) 구현, E2E 결함 해소
 - v2.0 로드맵 생성 2026-10-30: 6~12페이즈 7개 (연구 SUMMARY 의 8단계에서 유령을 낮 처형에, 방장 이양·로비 정리를 결과 공개에 병합)
 - Phase 09.1 inserted after Phase 9: 묶음 B 연출(순차 지목·직업 의상 유령·유언 편지 공개, 결정 0063)
+- Phase 16 added: 튜토리얼·단추 정리·심부름 증거 (2026-11-08 실테스트 피드백, 결정 0077)
 
 ## Deferred Items
 
