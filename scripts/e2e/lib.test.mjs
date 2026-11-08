@@ -3856,7 +3856,8 @@ test("ERRAND_MARKERS: 열네 개(16-07: data-rest 추가, 16-08: 독·칩 대신
   assert.ok(ERRAND_MARKERS.every((m) => /^data-(errand-|near-|record-|trace-|rest$)/.test(m)));
   assert.equal(ERRAND_PLACE_IDS.length, 16);
   assert.equal(ERRAND_PER_PERSON, 3);
-  assert.equal(ERRAND_LINES.trace, "현장에 흔적이 남았습니다.");
+  assert.equal(ERRAND_LINES.trace, "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.");
+  assert.equal(ERRAND_LINES.discussionEvidence, "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.");
 });
 
 test("OVERALL_LIMIT_MS: 새 흐름 errand·witness·trace 가 더하는 시간(720초)만큼 900초에서 1620초로 올랐다 (15-09)", () => {

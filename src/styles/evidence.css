@@ -1,4 +1,4 @@
-/* 증거 카드 전용 스타일(16-01). v2.css 는 "ellipsis·놋쇠 토큰 없음" 계약(v2parts·errandParts 시험)이 걸려 있어 따로 둔다 — 눈 아이콘 brass-200 과 피해자 이름 4em 말줄임은 UI-SPEC V-30 값이다. */
+/* 증거 카드·이름표 흔적 표시 전용 스타일(16-01·16-09). v2.css 는 "ellipsis·놋쇠 토큰 없음" 계약(v2parts·errandParts 시험)이 걸려 있어 따로 둔다 — 눈 아이콘 brass-200 과 피해자 이름 4em 말줄임은 UI-SPEC V-30 값이다. */
 /* 증거 카드(16-01, V-28·V-30, D-10): 15 흔적 카드(.mv-trace)에 둘째 줄 "피해자를 마지막으로 본 사람"을 더한 한 장. 폭 328, 높이 128 = 안쪽 12 + 행 44 + 사이 16 + 행 44 + 12.
  * 구분선 1px 은 사이 16 의 가운데(높이에 더하지 않는다). 토큰 변수만 쓴다 — hex·새 색 없음. 누르는 것이 아니라 빛·단추가 없다. */
 .mv-evidence { flex-direction: column; align-items: stretch; gap: 0; min-height: 128px; padding: 12px var(--space-md); }
@@ -18,3 +18,9 @@
 .mv-evidence__witness { font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); word-break: keep-all; white-space: nowrap; }
 .mv-evidence__zero { font-size: 16px; line-height: 1.5; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gray-50); }
 .mv-evidence__place { display: grid; place-items: center; flex: none; box-sizing: border-box; width: 40px; height: 40px; margin-left: auto; border-radius: var(--radius-badge); background: var(--night-700); color: var(--gray-100); }
+/* 이름표 흔적 표시(16-09, V-29): 같은 옷 = 테두리 2 + thread 16 은 조각 색(--trace-mark), 마지막 목격 = eye 16 brass-200. 둘 다 이름 앞에 나란히. 색 값은 데이터에서 사용자 변수로만 온다. */
+.mv-tag[data-trace-mark] { box-shadow: inset 0 0 0 2px var(--trace-mark); }
+.mv-tag.is-me[data-trace-mark] { box-shadow: inset 0 0 0 2px var(--trace-mark), inset 0 0 0 3.5px var(--gray-100); }
+.mv-tag__trace, .mv-tag__seen { display: inline-flex; align-items: center; flex: none; }
+.mv-tag__trace { color: var(--trace-mark); }
+.mv-tag__seen { color: var(--brass-200); }

@@ -757,6 +757,7 @@ describe("15페이즈 E2E 사본과 제품 값 (15-09, 사본 일치 규약)", (
       witness: HOST_LINES.witness,
       discussionAct: HOST_LINES["discussion.act"],
       trace: HOST_LINES.trace,
+      discussionEvidence: HOST_LINES["discussion.evidence"],
     });
   });
 

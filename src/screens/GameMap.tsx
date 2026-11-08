@@ -43,6 +43,7 @@ import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../gam
 import { errandProgress, placeCentersOf } from "../game/errandView";
 import { callTargetsOf, type HostLocal } from "../game/hostLine";
 import { recordRowsOf, traceWindowOf } from "../game/recordView";
+import { TRACE_MARK, sameOutfitSeats } from "../game/traceMark";
 import { faceSrc, seatColorVar } from "../net/assets";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
@@ -473,6 +474,14 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     return who === null || evidenceSeen === undefined ? null : { ...who, place: evidenceSeen.place };
   })();
   const traceShown = traceOn && traceKey !== null && tracePiece !== undefined;
+  // 이름표 표시(16-09, D-09·D-10, V-29): 아침은 증거 카드가 뜬 뒤(흔적 구간)부터, 낮 단계는 day.evidence 가 있으면 항상. 밤에는 서버가 싣지 않아 사라진다.
+  // 같은 옷 판정은 서버가 새로 계산하지 않는다 — 공개된 players[].look 과 조각의 함수다(R-3). 모든 viewer(마피아·시민·유령)가 같은 좌석 집합을 본다.
+  const evidence = view.day?.evidence;
+  const marksOn = evidence?.trace !== undefined && (view.phase === "morning" ? traceShown : true);
+  const evidenceMarks = useMemo(() => {
+    if (!marksOn || evidence?.trace === undefined) return null;
+    return { same: new Set(sameOutfitSeats(view.players, evidence.trace)), color: TRACE_MARK[evidence.trace], seen: evidence.seen?.seat };
+  }, [marksOn, evidence, view.players]);
   // 사회자 띠가 같은 상태를 읽는다(RoomScreen 이 HostBand 에 넘긴다). 언마운트하면 비운다
   useEffect(() => {
     onHostLocal?.({ recordOpened, traceOn: traceShown });
@@ -631,7 +640,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   }, [nominating, voting, nighting, mine, serverMine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting, showdownPointing, showdownStage]);
 
   // 유령 화면의 이름표: 모든 이름표 위에 그 사람의 직업 칩(spectate.seats 의 job), 죽은 좌석은 반투명. 산 사람 view 에는 spectate 가 없어 이 겹침이 없다.
-  const tagProps = useMemo<WorldTagProps | undefined>(() => {
+  const roleTagProps = useMemo<WorldTagProps | undefined>(() => {
     if (spectate === undefined) return baseTagProps;
     const jobs = new Map(spectate.seats.map((s) => [s.seat, s.job] as const));
     const deadSeats = new Set(view.players.filter((p) => !isAlive(p)).map((p) => p.seat));
@@ -640,6 +649,17 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       return { ...(baseTagProps?.(seat) ?? {}), ...(job !== undefined ? { role: job } : {}), ...(deadSeats.has(seat) ? { ghost: true } : {}) };
     };
   }, [spectate, baseTagProps, view.players]);
+  // 이름표 흔적 표시(16-09): 같은 옷을 입은 산 사람 = traceMark(조각 색), 마지막 목격자 = seenMark. 기존 키는 덮어쓰지 않는다. 표시가 없으면 위 함수 그대로.
+  const tagProps = useMemo<WorldTagProps | undefined>(() => {
+    if (evidenceMarks === null) return roleTagProps;
+    return (seat) => {
+      const base = roleTagProps?.(seat) ?? {};
+      const same = evidenceMarks.same.has(seat);
+      const seen = evidenceMarks.seen === seat;
+      if (!same && !seen) return base;
+      return { ...(same ? { traceMark: evidenceMarks.color } : {}), ...(seen ? { seenMark: true } : {}), ...base };
+    };
+  }, [roleTagProps, evidenceMarks]);
 
   // 유언·쪽지 시트(WILL-01·NIGHT-12): 상태와 저장 흐름은 useWill 이 쥔다. 실패 알림은 위 알림 한 문구다.
   const will = useWill({ view, send, canSend, rejected: rejects, onFail: () => show(SEND_FAIL_TEXT), busyRef: willBusy });

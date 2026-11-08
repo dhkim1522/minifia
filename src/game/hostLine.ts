@@ -4,6 +4,7 @@
 // players[].{seat, nickname, alive, connected} · day.candidate · day.verdict.passed · day.morning(morningText 가 읽는 하위 값) · local.cardSeen ·
 // (15-04) me.errand.places · me.errand.done · view.map(심부름 목록·진행·맵 id — 내 view 의 값) · local.pos(내 월드 좌표, 클라이언트 상태) ·
 // (15-07) me.record 의 유무(불리언 — 줄 내용 seat·place 는 읽지 않는다) · day.morning.trace 의 유무 · local.recordOpened · local.traceOn(클라이언트 상태).
+// (16-09) day.evidence.trace 의 유무(모두에게 같은 공개 값 — 조각 값·day.evidence.seen·players[].look 은 읽지 않는다).
 // 심부름 분기(errand.*)와 목격 기록·흔적 분기(witness·trace)는 역할(me.role)을 읽지 않는다 — 마피아도 시민과 같은 키·같은 문장·같은 빛남 대상(D-03, D-04).
 // players[].job · spectate · me.allies · me.records · me.pick · me.verdictVote · day.points · day.turn · day.voteLog · day.roles 등 그 밖은 읽지 않는다
 // (유령 줄도 남의 직업을 말하지 않는다). 시각·난수·DOM·window 를 읽지 않는다. 시험(test/unit/hostLine.test.ts "HOST-05")이 읽은 경로를 기록해 고정한다.
@@ -15,13 +16,13 @@ import { actablePlaceOf, errandProgress, nextPlaceOf, placeCentersOf } from "./e
 import { morningText } from "./eliminationText";
 import { TIMELESS_PHASES } from "./scenes";
 
-/** 문구 표의 키 하나 = 한 줄. 15페이즈는 errand.*·witness·trace 를 채웠다(함수·띠 변경 없음). */
+/** 문구 표의 키 하나 = 한 줄. 15페이즈는 errand.*·witness·trace 를 채웠고, 16페이즈는 trace 문장을 고치고 discussion.evidence 를 더했다. */
 export type HostKey =
   | "lobby.ready" | "lobby.gather" | "lobby.guest"
   | "assigning"
   | "roleReveal.act" | "roleReveal.wait"
   | "dayAnnounce.wait" | "dayAnnounce.ghost"
-  | "discussion.act" | "discussion.ghost"
+  | "discussion.act" | "discussion.evidence" | "discussion.ghost"
   | "nomination.act" | "nomination.ghost"
   | "defense.act" | "defense.wait" | "defense.ghost"
   | "verdict.act" | "verdict.wait" | "verdict.ghost"
@@ -60,6 +61,7 @@ export const HOST_LINES: Readonly<Record<HostKey, Line>> = {
   "dayAnnounce.wait": "낮이 되었습니다. 모두 모여 주세요.",
   "dayAnnounce.ghost": "낮이 되었습니다. 유령은 지켜봐 주세요.",
   "discussion.act": "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.",
+  "discussion.evidence": "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.",
   "discussion.ghost": "유령은 지켜보며 유령끼리 이야기할 수 있습니다.",
   "nomination.act": "투표 시간입니다. 처형할 사람의 이름표를 눌러 주세요.",
   "nomination.ghost": "투표가 진행 중입니다. 지켜봐 주세요.",
@@ -83,8 +85,9 @@ export const HOST_LINES: Readonly<Record<HostKey, Line>> = {
   "errand.done": "심부름을 마쳤습니다. 곧 토론이 시작됩니다.",
   "errand.ghost": "심부름 시간입니다. 유령은 지켜봐 주세요.",
   // 15페이즈(UI-SPEC 표 원문): 목격 기록이 있는 토론, 피해자 있는 아침의 흔적 구간. 마피아도 같은 문장이다.
+  // 16페이즈(D-11): 흔적 문장은 "표시했습니다"로 근거를 가리키고, 흔적이 있는 날 토론은 discussion.evidence 다. 둘 다 '범인'·'증거'·'확정' 없이 공개된 두 근거(같은 옷·목격)만 말한다.
   witness: "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.",
-  trace: "현장에 흔적이 남았습니다.",
+  trace: "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.",
   fallback: HOST_FALLBACK,
 };
 
@@ -121,8 +124,10 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
     }
     case "discussion":
       if (ghost) return "discussion.ghost";
-      // 역할을 읽지 않는다. 기록이 있다는 사실(불리언)만 본다 — 줄 내용은 읽지 않는다
-      return view.me.record !== undefined && local.recordOpened !== true ? "witness" : "discussion.act";
+      // 역할을 읽지 않는다. 우선순위: 기록을 아직 안 연 사람 → witness, 흔적이 있는 날 → discussion.evidence, 그 밖 → discussion.act.
+      // 기록이 있다는 사실(불리언)과 day.evidence.trace 의 유무만 본다 — 줄 내용·조각 값·목격자는 읽지 않는다
+      if (view.me.record !== undefined && local.recordOpened !== true) return "witness";
+      return view.day?.evidence?.trace !== undefined ? "discussion.evidence" : "discussion.act";
     case "nomination":
       return ghost ? "nomination.ghost" : "nomination.act";
     case "defense":
@@ -195,6 +200,7 @@ export function callTargetsOf(view: RoomView, local: HostLocal = {}): CallTarget
     case "witness":
       return { kind: "tool", tool: "record" };
     case "discussion.act":
+    case "discussion.evidence":
       return { kind: "tool", tool: "chat" };
     case "nomination.act": {
       const seats = aliveSeats(view, false);

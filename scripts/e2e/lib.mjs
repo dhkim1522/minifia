@@ -3123,7 +3123,8 @@ export const ERRAND_LINES = {
   done: "심부름을 마쳤습니다. 곧 토론이 시작됩니다.",
   witness: "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.",
   discussionAct: "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.",
-  trace: "현장에 흔적이 남았습니다.",
+  trace: "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.",
+  discussionEvidence: "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.",
 };
 /** 흔적·기록·표식 값에 있으면 안 되는 낱말(역할 연상어·확정 암시). */
 const ROLE_WORD_RE = /마피아|경찰|의사|시민|범인|증거|확정|mafia|police|doctor|citizen/i;

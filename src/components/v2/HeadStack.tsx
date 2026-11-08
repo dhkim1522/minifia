@@ -1,8 +1,9 @@
 import "../../styles/v2.css";
+import "../../styles/evidence.css";
 import { CHAT_TEXT } from "../../game/chatText";
 import type { RoleId } from "../../../shared/game/roles";
 import type { BadgeId } from "../../../shared/protocol";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { ClaimBadge } from "./ClaimBadge";
 import { RoleChip } from "./RoleChip";
 import { SureStamp } from "./SureStamp";
@@ -16,6 +17,7 @@ import { VoteBadge } from "./VoteBadge";
 // role 은 부르는 쪽(유령 화면 분기)이 넘길 때만 칩을 그린다 — 이 부품은 역할을 스스로 판단하지 않는다(T-08-20).
 // 상태 속성(data-count·lead·sure·mine·done·ghost)은 켜질 때만 .mv-head 에 실린다(E2E·누설 검사가 읽는다).
 // 직업 주장 배지(09.1.1-08)는 이름표(.mv-tag) 안 오른쪽 위 모서리에 걸린다(절대 위치) — 쌓임 순서·높이를 바꾸지 않는다.
+// 흔적 표시(16-09, V-29): traceMark(같은 옷)·seenMark(마지막 목격)는 부르는 쪽이 공개 값으로 계산해 넘긴다. 속성 값은 비어 있다(좌석·역할·조각 id 없음).
 // 입력 중 알약에는 글자가 없다(점 세 개) — 채팅 본문을 머리 위 말풍선으로 띄우지 않는다.
 //
 // 닉네임은 React 텍스트 노드로만 그린다(innerHTML 없음, T-06-26). 말줄임도 하지 않는다:
@@ -45,18 +47,38 @@ export interface NameTagProps {
   call?: boolean;
   /** 유령 표식(is-ghost). 이름표는 불투명 — 몸이 0.26 안개라 직업은 RoleChip 이 알린다(09.1-09) */
   ghost?: boolean;
+  /** 아침 흔적과 같은 옷을 입은 산 사람(16-09, V-29): 조각 색 값(TRACE_MARK 의 닫힌 표 값). 이름 앞 thread 16 + 테두리 2 — 색은 스타일의 --trace-mark 로만 간다 */
+  traceMark?: string;
+  /** 피해자를 마지막으로 본 사람(16-09, V-29): 이름 앞 eye 16 brass-200. traceMark 와 함께면 나란히 */
+  seenMark?: boolean;
   /** 이름표 모서리에 걸 요소(직업 주장 배지). 이름표 폭·쌓임 높이를 늘리지 않는다 */
   children?: ReactNode;
 }
 
-export function NameTag({ name, color, me, away, mine, done, doneLabel, blink, call, ghost, children }: NameTagProps) {
+export function NameTag({ name, color, me, away, mine, done, doneLabel, blink, call, ghost, traceMark, seenMark, children }: NameTagProps) {
   const cls = ["mv-tag", me && "is-me", away && "is-away", blink && "is-blink", call && "is-call", mine && "is-mine", ghost && "is-ghost"]
     .filter(Boolean)
     .join(" ");
   return (
-    <span className={cls}>
+    <span
+      className={cls}
+      data-trace-mark={traceMark !== undefined ? "" : undefined}
+      data-seen-mark={seenMark === true ? "" : undefined}
+      style={traceMark !== undefined ? ({ "--trace-mark": traceMark } as CSSProperties) : undefined}
+    >
       <span className="mv-tag__dot" style={{ background: color }} />
+      {traceMark !== undefined ? (
+        <span className="mv-tag__trace">
+          <V2Icon name="thread" size={16} />
+        </span>
+      ) : null}
+      {seenMark === true ? (
+        <span className="mv-tag__seen">
+          <V2Icon name="eye" size={16} />
+        </span>
+      ) : null}
       <span className="mv-tag__name">{me ? `${name} (나)` : name}</span>
+      {traceMark !== undefined ? <span className="mv-sr">흔적과 같은 옷</span> : null}
       {mine ? <V2Icon name="point" size={16} label={MINE_LABEL} /> : null}
       {done ? (
         <span className="mv-tag__done">
@@ -92,7 +114,7 @@ export type HeadStackProps = NameTagProps & {
 };
 
 // 바닥 가운데를 캐릭터 머리 꼭대기에 translate(-50%, -100%) 로 놓는 일은 쓰는 쪽(이름표 층, 06-13)이 한다.
-export function HeadStack({ name, color, me, away, typing, role, count, lead, sure, sureLabel, mine, done, doneLabel, blink, call, ghost, claim, claimSwapped, claimPop, claimNotice }: HeadStackProps) {
+export function HeadStack({ name, color, me, away, typing, role, count, lead, sure, sureLabel, mine, done, doneLabel, blink, call, ghost, traceMark, seenMark, claim, claimSwapped, claimPop, claimNotice }: HeadStackProps) {
   const hasBadge = count !== undefined && count >= 1;
   return (
     <div
@@ -115,7 +137,7 @@ export function HeadStack({ name, color, me, away, typing, role, count, lead, su
       {role ? <RoleChip role={role} /> : null}
       {sure ? <SureStamp {...(sureLabel !== undefined ? { label: sureLabel } : {})} /> : null}
       {hasBadge ? <VoteBadge count={count} lead={lead} /> : null}
-      <NameTag name={name} color={color} me={me} away={away} mine={mine} done={done} doneLabel={doneLabel} blink={blink} call={call} ghost={ghost}>
+      <NameTag name={name} color={color} me={me} away={away} mine={mine} done={done} doneLabel={doneLabel} blink={blink} call={call} ghost={ghost} traceMark={traceMark} seenMark={seenMark}>
         {claim !== undefined ? (
           <ClaimBadge key={claimPop ?? 0} claim={claim} swapped={claimSwapped === true} pop={claimPop !== undefined && claimPop > 0} notice={claimNotice === true} />
         ) : null}
