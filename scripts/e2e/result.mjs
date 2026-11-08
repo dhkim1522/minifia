@@ -40,11 +40,6 @@ export const RESULT_WIN_TITLE = Object.freeze({ citizenWin: "시민 승리", maf
 
 /** 아래 패널 높이: 기록 칸 LOG_H(96 · 방 높이 780 이상 152) + 92 = 188 · 244 */
 export const RESULT_PANEL_H = Object.freeze({ short: 188, tall: 244, tallRoomMinH: 780 });
-/**
- * 14-06(TOOL-01): 입력줄의 [동작]·[보내기]·[유언]이 면 36 + 4 + 라벨 한 줄(14px × 1.4 = 19.6) 이름표 단추(높이 59.6)가 되어, 입력칸 48 이 아래 정렬이라 패널이 그만큼(11.6) 는다.
- * 위 188 · 244 는 앱 상수(chatUi.ts)의 값 그대로이고, 방 높이로 기대를 계산하는 판정(RS5·RT3)이 이 값을 더한다.
- */
-export const TOOL_ROW_EXTRA = 36 + 4 + 19.6 - 48;
 /** 이 높이(px) 미만의 폰은 방 틀 높이 575 미만의 짧은 폰(360×560 probe) — 14-08 UI#14 알려진 한계 적용 대상 */
 export const SHORT_PHONE_H = 575;
 
@@ -79,7 +74,7 @@ export function resultStageChecks(m) {
     RS3: "결과 화면: 어두운 좌석 == 진 팀",
     RS4: "결과 화면: 모두 직업 의상(런타임이 입은 값)",
     RS4after: "결과 화면: 시상식 뒤 직업 의상이 걷힘(고른 look)",
-    RS5: "결과 화면: 아래 패널 높이 188 · 244 (+ 이름표 줄 11.6)",
+    RS5: "결과 화면: 아래 패널 높이 188 · 244",
     RS6: "결과 화면: 스테이지 아래 끝 == 방 높이 − 패널",
     RS7: "결과 화면: 옛 카드·배너·[처음으로]·방 닫힘 안내 없음",
     RS8: "결과 화면: 채팅 한 줄이 기록 칸에 보임",
@@ -116,7 +111,7 @@ export function resultStageChecks(m) {
   }
 
   // RS5
-  const want = isNum(m?.panelWant) ? m.panelWant : isNum(m?.roomH) ? (m.roomH >= RESULT_PANEL_H.tallRoomMinH ? RESULT_PANEL_H.tall : RESULT_PANEL_H.short) + TOOL_ROW_EXTRA : null;
+  const want = isNum(m?.panelWant) ? m.panelWant : isNum(m?.roomH) ? (m.roomH >= RESULT_PANEL_H.tallRoomMinH ? RESULT_PANEL_H.tall : RESULT_PANEL_H.short) : null;
   if (!isNum(m?.panel) || want === null) out.push(noMeasure("RS5", L.RS5, "panel·roomH"));
   else out.push(result("RS5", L.RS5, Math.abs(m.panel - want) <= 1 ? [] : [`패널 높이 ${m.panel} ≠ ${want} (±1)`]));
 
@@ -212,7 +207,7 @@ export function resultTabChecks(m = {}, { whisper = false } = {}) {
 function layoutTabChecks(l, tabIds) {
   const L = {
     RT1: `탭 패널: 탭 버튼 ${tabIds.length}개, 모두 44×44 이상`,
-    RT3: "탭 패널: 접힌 패널 높이 188 · 244 (+ 이름표 줄 11.6)",
+    RT3: "탭 패널: 접힌 패널 높이 188 · 244",
     RT4: "탭 패널: 마피아 탭 확장 높이 min(round(0.7 × 방 높이), 520)",
     RT5: "탭 패널: 확장에서 입력칸 없음",
     RT6: "탭 패널: 마피아 탭 아이콘만 진홍",
@@ -232,7 +227,7 @@ function layoutTabChecks(l, tabIds) {
   }
 
   // RT3
-  const wantCollapsed = isNum(l?.roomH) ? (l.roomH >= RESULT_PANEL_H.tallRoomMinH ? RESULT_PANEL_H.tall : RESULT_PANEL_H.short) + TOOL_ROW_EXTRA : null;
+  const wantCollapsed = isNum(l?.roomH) ? (l.roomH >= RESULT_PANEL_H.tallRoomMinH ? RESULT_PANEL_H.tall : RESULT_PANEL_H.short) : null;
   if (!isNum(l?.panelCollapsedH) || wantCollapsed === null) out.push(noMeasure("RT3", L.RT3, "panelCollapsedH·roomH"));
   else out.push(result("RT3", L.RT3, Math.abs(l.panelCollapsedH - wantCollapsed) <= 1 ? [] : [`접힌 높이 ${l.panelCollapsedH} ≠ ${wantCollapsed} (±1)`]));
 

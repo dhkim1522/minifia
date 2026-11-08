@@ -277,13 +277,6 @@ export function lobbyPanelHeight(logH) {
 export const GAME_PANEL_EXTRA = Object.freeze({ talk: 154, chat: CHAT_PANEL_EXTRA, verdictVoter: 218, verdictViewer: 126 });
 
 /**
- * 14-06(TOOL-01): 입력줄의 [동작]·[보내기]·[유언]이 면 36 + 4 + 라벨 한 줄(14px × 1.4 = 19.6) 이름표 단추(높이 59.6)가 되어, 입력칸 48 이 아래 정렬이라 입력줄이 11.6 커지고
- * 입력줄이 든 패널(토론·채팅·찬반·밤 마피아)이 그만큼 는다. 위 GAME_PANEL_EXTRA 는 앱 상수(chatUi.ts)의 값 그대로이고 gamePanelHeight 가 이 값을 더한다.
- */
-export const TOOL_BUTTON_H = 36 + 4 + 19.6;
-export const TOOL_ROW_EXTRA = TOOL_BUTTON_H - 48;
-
-/**
  * 밤 얼굴 목록 패널 높이(09-UI-SPEC 160행 식, 안전 영역 제외). w = 폰 폭, n = 후보 수(밤 동안 변하지 않는다), wrappedRows = 이름이 줄바꿈된 행 수.
  * 한 칸 fw = (w − 32 − 24) / 4, 한 행 = fw + 26.2, 행 수 = ceil(n / 4), 행 사이 8. 패널 = 14 + 행들 + 10 + 52 + 22 + 줄바꿈 행마다 18.
  * 표의 값은 이 식의 반올림이고 E2E 는 패널 높이를 DOM 에서 재 이 식과 ±2px 로 비교한다(가정 A1).
@@ -295,7 +288,7 @@ export function faceListPanelH({ w, n, wrappedRows = 0 }) {
 }
 
 /**
- * 게임 맵 아래 패널의 기대 높이. kind 는 GAME_PANEL_EXTRA 의 키 또는 "faceList"(opts = { w, n, wrappedRows? }), roomH = 방(뷰포트) 높이.
+ * 게임 맵 아래 패널의 기대 높이(기록 칸 + 여분 — 입력줄 단추가 48 원이라 보정 없음, 16-05). kind 는 GAME_PANEL_EXTRA 의 키 또는 "faceList"(opts = { w, n, wrappedRows? }), roomH = 방(뷰포트) 높이.
  * 알 수 없는 kind 는 던진다.
  */
 export function gamePanelHeight(roomH, kind, opts) {
@@ -305,7 +298,7 @@ export function gamePanelHeight(roomH, kind, opts) {
   }
   const extra = Object.hasOwn(GAME_PANEL_EXTRA, kind) ? GAME_PANEL_EXTRA[kind] : undefined;
   if (extra === undefined) throw new Error(`알 수 없는 패널 종류: ${kind}`);
-  return logHeightFor(roomH) + extra + TOOL_ROW_EXTRA;
+  return logHeightFor(roomH) + extra;
 }
 
 // ---- 9페이즈 표식·판정 (09-21, 09-UI-SPEC "검사 가능하게 둘 것" 450~455행). 8페이즈 표식(data-game-stage·data-announce·data-pick 등)은 그대로라 여기 없다. ----
@@ -1971,14 +1964,14 @@ export const AVATAR_MARKERS = Object.freeze([
  * EB1 버튼 48x48 ±1 · EP2 입력칸 폭 ≥ 150 · TR1 판 좌우 16 ±1·폭 = viewport − 32 ±1 · TR2 칸 아홉 개(윗줄 5·아랫줄 4)이고 두 줄 모두 판 가운데 정렬(좌우 여백 차 ≤ 2) ·
  * EP3 칸 폭·높이 ≥ 44 · TR3 판 아랫변 = 입력칸 윗변 − 8 ±2 · EP4 캐릭터 점이 판 사각형 밖 · TR4 이름 글자 ≥ 14 · TR5 판이 열려 있을 때 키보드는 닫혀 있음.
  */
-export function emoteTrayChecks({ button, input, tray, cells, nameFont, viewport, character, hasKb, labeled = false } = {}) {
+export function emoteTrayChecks({ button, input, tray, cells, nameFont, viewport, character, hasKb } = {}) {
   const L = {
-    EB1: labeled ? `동작 이름표 단추 폭 ${TAP_MIN}~52 · 높이 ${fmt(TOOL_BUTTON_H)}` : `동작 버튼 ${TAP_MIN + 4}x${TAP_MIN + 4}`,
+    EB1: `동작 버튼 ${TAP_MIN + 4}x${TAP_MIN + 4}`,
     EP2: "입력칸 폭 150 이상",
     TR1: "판 좌우 16 · 폭 = 폰 폭 − 32",
     TR2: "칸 아홉 개: 윗줄 5 · 아랫줄 4, 두 줄 모두 판 가운데",
     EP3: `칸 누르기 영역 ${TAP_MIN} 이상`,
-    TR3: labeled ? `판 아랫변 = 입력칸 윗변 − 8 − 이름표 줄 늘어난 ${fmt(TOOL_ROW_EXTRA)}` : "판 아랫변 = 입력줄 윗변 − 8",
+    TR3: "판 아랫변 = 입력줄 윗변 − 8",
     EP4: "판이 내 캐릭터를 가리지 않음",
     TR4: "칸 이름 글자 14px 이상",
     TR5: "판이 열려 있을 때 키보드는 닫혀 있음",
@@ -1987,8 +1980,7 @@ export function emoteTrayChecks({ button, input, tray, cells, nameFont, viewport
   const valid = rectOk(button) && rectOk(input) && rectOk(tray) && Array.isArray(cells) && cells.every(rectOk) && !!viewport && allNum(viewport.w, viewport.h) && !!character && allNum(character.x, character.y) && isNum(nameFont) && typeof hasKb === "boolean";
   if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "button·input·tray·cells·nameFont·viewport·character·hasKb"));
   const out = [];
-  // labeled(14-06 이름표 단추): 폭 44~52(누르기 44 이상·최대 52), 높이 면 36 + 4 + 라벨 19.6 = 59.6 ±1 — 옛 48x48 은 라벨이 없던 모양
-  const eb1Bad = labeled ? button.width + 0.5 < TAP_MIN || button.width > 52.5 || Math.abs(button.height - TOOL_BUTTON_H) > 1 : Math.abs(button.width - 48) > 1 || Math.abs(button.height - 48) > 1;
+  const eb1Bad = Math.abs(button.width - 48) > 1 || Math.abs(button.height - 48) > 1;
   out.push(result("EB1", L.EB1, eb1Bad ? [`${fmt(button.width)}x${fmt(button.height)}`] : []));
   out.push(result("EP2", L.EP2, input.width >= 150 ? [] : [`입력칸 폭 ${fmt(input.width)}`]));
   const t1 = [];
@@ -2020,8 +2012,7 @@ export function emoteTrayChecks({ button, input, tray, cells, nameFont, viewport
   out.push(result("TR2", L.TR2, t2));
   out.push(result("EP3", L.EP3, cells.filter((c) => c.width + OVERLAP_EPS < TAP_MIN || c.height + OVERLAP_EPS < TAP_MIN).map((c) => `${fmt(c.width)}x${fmt(c.height)}`)));
   const gap = input.top - bottom(tray);
-  const wantGap = 8 + (labeled ? TOOL_ROW_EXTRA : 0);
-  out.push(result("TR3", L.TR3, Math.abs(gap - wantGap) > 2 ? [`입력줄 윗변과 간격 ${fmt(gap)} (기대 ${fmt(wantGap)})`] : []));
+  out.push(result("TR3", L.TR3, Math.abs(gap - 8) > 2 ? [`입력줄 윗변과 간격 ${fmt(gap)} (기대 8)`] : []));
   const covered = character.x >= tray.left && character.x <= right(tray) && character.y >= tray.top && character.y <= bottom(tray);
   out.push(result("EP4", L.EP4, covered ? [`캐릭터 ${fmt(character.x)},${fmt(character.y)} 가 판 안`] : []));
   out.push(result("TR4", L.TR4, nameFont >= 14 ? [] : [`${nameFont}px`]));

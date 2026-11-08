@@ -185,7 +185,7 @@ export function makeAvatarFlows(helpers) {
         await openTray(page);
         const ui = await readEmoteUi(page, seat);
         rec(`${sc}-${who}`, "AE1b", `${who}: 판이 role=group 이름 '동작', 칸 아홉 개 순서 clap~throat`, ui.trayRole === "group" && ui.trayLabel === "동작" && ui.cells.map((c) => c.id).join(",") === "clap,praise,handshake,dance,surprise,cry,deny,point,throat", `role ${ui.trayRole} · 이름 ${ui.trayLabel} · 칸 ${ui.cells.map((c) => c.id).join(",")}`);
-        for (const l of emoteTrayChecks({ button: ui.button, input: ui.input, tray: ui.tray, cells: ui.cells.map((c) => c.rect), nameFont: ui.nameFont, viewport: { w: ui.vw, h: ui.vh }, character: ui.character, hasKb: ui.kbOpen, labeled: true })) {
+        for (const l of emoteTrayChecks({ button: ui.button, input: ui.input, tray: ui.tray, cells: ui.cells.map((c) => c.rect), nameFont: ui.nameFont, viewport: { w: ui.vw, h: ui.vh }, character: ui.character, hasKb: ui.kbOpen })) {
           rec(`${sc}-${who}`, l.id, l.label, l.ok, l.detail);
         }
         await closeTray(page);

@@ -172,18 +172,18 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     expect(extra.talk).toBe(LOBBY_PANEL_EXTRA);
     expect(extra.verdictVoter).toBe(218);
     expect(extra.verdictViewer).toBe(126);
-    // 14-06(TOOL-01): 입력줄 이름표 단추(면 36 + 간격 4 + 라벨 14px × 1.4)가 입력칸 48 보다 11.6 커서 패널이 그만큼 는다 — 판정이 이 값을 더한다
-    const toolRow = (e2eLib as unknown as { TOOL_ROW_EXTRA: number }).TOOL_ROW_EXTRA;
-    expect(toolRow).toBeCloseTo(36 + 4 + 14 * 1.4 - 48, 9);
+    // 16-05: 입력줄 단추가 48 원이라 입력칸 48 과 높이가 같다 — 패널 높이에 보정이 없고, 판정은 "기록 칸 + 여분" 이다. CSS 의 단추 크기와도 견준다
     const css = readFileSync(new URL("src/styles/v2.css", new URL("../../", import.meta.url)), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-    const rule = (sel: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === sel)?.[2] ?? "";
-    expect(rule(".mv-tool__face")).toContain("width: 36px");
-    expect(rule(".mv-tool__face")).toContain("height: 36px");
-    expect(rule(".mv-tool__label")).toContain("font-size: 14px");
-    expect(rule(".mv-tool__label")).toContain("line-height: 1.4");
+    const rule = (sel: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => (m[1] ?? "").split(",").some((x) => x.trim() === sel)).map((m) => m[2] ?? "").join(";");
+    expect(rule(".mv-tool")).toMatch(/(^|[;\s])width:\s*var\(--tap-min\)/);
+    expect(rule(".mv-tool")).toMatch(/(^|[;\s])height:\s*var\(--tap-min\)/);
+    for (const sel of [".mv-chat__emote", ".mv-chat__send", ".mv-chat__will"]) {
+      expect(rule(sel)).toContain("width: var(--control-input)");
+      expect(rule(sel)).toContain("height: var(--control-input)");
+    }
     for (const roomH of [560, 640, 664, 779, 780, 844, 874, 932]) {
-      expect(gamePanelHeight(roomH, "chat")).toBeCloseTo(logHeightFor(roomH) + CHAT_PANEL_EXTRA + toolRow, 9);
-      expect(gamePanelHeight(roomH, "talk")).toBeCloseTo(logHeightFor(roomH) + LOBBY_PANEL_EXTRA + toolRow, 9);
+      expect(gamePanelHeight(roomH, "chat")).toBe(logHeightFor(roomH) + CHAT_PANEL_EXTRA);
+      expect(gamePanelHeight(roomH, "talk")).toBe(logHeightFor(roomH) + LOBBY_PANEL_EXTRA);
     }
   });
 

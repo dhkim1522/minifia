@@ -566,24 +566,19 @@ const CHAT_LOG_SHORT = 96;
 const CHAT_TALL_ROOM_MIN_H = 780;
 const CHAT_LOBBY_EXTRA = 154;
 const CHAT_CONTROL = 48;
-/** 14-06(TOOL-01): 입력줄의 [동작]·[보내기]·[유언]은 면 36 + 4 + 라벨 한 줄(14px × 1.4 = 19.6) 이름표 단추라 높이 59.6 이고, 입력칸 48 은 아래 정렬이라 패널이 그만큼(11.6) 는다 */
-const CHAT_TOOL_ROW = 36 + 4 + 19.6;
-const CHAT_TOOL_ROW_EXTRA = CHAT_TOOL_ROW - CHAT_CONTROL;
-/** 이름표 단추 폭은 누르기 44 이상 최대 52(UI-SPEC 도구 이름표 목록) */
-const CHAT_TOOL_W_MAX = 52;
 const CHAT_PANEL_EPS = 1;
 
 /** 한 페이지의 로비 채팅 패널 치수 판정. m 은 readChatPanel 의 값. 검사 행 목록을 돌려준다. */
 function chatPanelRows(m) {
   if (!m) return [{ id: "CP0", label: "채팅 패널을 읽음", ok: false, detail: "패널·기록 칸·입력칸·보내기 중 없는 것이 있음" }];
   const logWant = m.roomH >= CHAT_TALL_ROOM_MIN_H ? CHAT_LOG_TALL : CHAT_LOG_SHORT;
-  const panelWant = logWant + CHAT_LOBBY_EXTRA + CHAT_TOOL_ROW_EXTRA;
+  const panelWant = logWant + CHAT_LOBBY_EXTRA;
   const near = (a, b) => Math.abs(a - b) <= CHAT_PANEL_EPS;
   const r1 = (n) => Math.round(n * 10) / 10;
   return [
-    { id: "CP1", label: `로비 패널 높이 ${r1(panelWant)} (방 높이 ${r1(m.roomH)} → 기록 ${logWant} + ${CHAT_LOBBY_EXTRA} + 이름표 줄 늘어난 ${r1(CHAT_TOOL_ROW_EXTRA)})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
+    { id: "CP1", label: `로비 패널 높이 ${r1(panelWant)} (방 높이 ${r1(m.roomH)} → 기록 ${logWant} + ${CHAT_LOBBY_EXTRA})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
     { id: "CP2", label: `기록 칸 높이 ${logWant}`, ok: near(m.log.height, logWant), detail: `기록 칸 ${r1(m.log.height)}` },
-    { id: "CP3", label: `입력칸 높이 ${CHAT_CONTROL} · 보내기 이름표 단추 높이 ${r1(CHAT_TOOL_ROW)}·폭 ${TAP_MIN}~${CHAT_TOOL_W_MAX}`, ok: near(m.input.height, CHAT_CONTROL) && near(m.send.height, CHAT_TOOL_ROW) && m.send.width + 0.5 >= TAP_MIN && m.send.width <= CHAT_TOOL_W_MAX + 0.5, detail: `입력칸 ${r1(m.input.height)} · 보내기 ${r1(m.send.width)}x${r1(m.send.height)}` },
+    { id: "CP3", label: `입력칸 높이 ${CHAT_CONTROL} · 보내기 ${CHAT_CONTROL}x${CHAT_CONTROL}`, ok: near(m.input.height, CHAT_CONTROL) && near(m.send.height, CHAT_CONTROL) && near(m.send.width, CHAT_CONTROL), detail: `입력칸 ${r1(m.input.height)} · 보내기 ${r1(m.send.width)}x${r1(m.send.height)}` },
     { id: "CP4", label: "입력칸 글자 16px", ok: m.inputFont === 16, detail: `${m.inputFont}px` },
     { id: "CP5", label: `보내기 누르는 영역 ≥ ${TAP_MIN} 이고 눌림`, ok: m.send.width + 0.5 >= TAP_MIN && m.send.height + 0.5 >= TAP_MIN && m.send.hit, detail: `${r1(m.send.width)}x${r1(m.send.height)} hit ${m.send.hit}` },
     { id: "CP6", label: "스테이지 사각형 아래 끝 = 방 높이 − 패널 높이", ok: near(m.stageBottom, m.roomH - m.panel.height), detail: `아래 끝 ${r1(m.stageBottom)} · 방 높이 − 패널 ${r1(m.roomH - m.panel.height)}` },
@@ -734,8 +729,8 @@ async function chatImeFlow(ctx) {
 // 키보드 열림 치수(UI-SPEC 패널과 키보드). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다.
 /** 가상 키보드 높이(폰 크기 표의 K) */
 const KB_LIFT = 336;
-/** 14-06: 키보드 열림 패널 = 14 + 72 + 8 + 이름표 입력줄 59.6(옛 입력칸 48) + 8 = 161.6 — 앱 상수(chatUi.ts KB_PANEL_H 150)에 이름표 줄 늘어난 11.6 을 더한다 */
-const KB_PANEL_H = 150 + (36 + 4 + 19.6 - 48);
+/** 키보드 열림 패널 = 14 + 72 + 8 + 입력줄 48 + 8 = 150 — 앱 상수(chatUi.ts KB_PANEL_H)와 같다(이름표 보정은 16-05 에서 삭제) */
+const KB_PANEL_H = 150;
 const KB_LOG_H = 72;
 /** 큰 폰(390x844 이상)은 캐릭터 발과 이름표(입력 중 칸 포함)가 남은 스테이지 안에 모두 있어야 한다. 그 아래 작은 폰은 캐릭터 몸만 본다(가정 A2, 합격 검사 3) */
 const KB_BIG_MIN_H = 800;
@@ -1385,7 +1380,7 @@ function panelRow(rec, sc, id, g, h, kind, who) {
   const want = gamePanelHeight(h, kind);
   const got = g?.panel?.height;
   const ok = typeof got === "number" && Math.abs(got - want) <= 1;
-  rec(sc, id, `아래 패널 높이 LOG_H + ${GAME_PANEL_EXTRA[kind]} + 이름표 줄 11.6 (${who})`, ok, `실제 ${typeof got === "number" ? Math.round(got * 10) / 10 : got} ≠ 기대 ${want}`);
+  rec(sc, id, `아래 패널 높이 LOG_H + ${GAME_PANEL_EXTRA[kind]} (${who})`, ok, `실제 ${typeof got === "number" ? Math.round(got * 10) / 10 : got} ≠ 기대 ${want}`);
 }
 
 /** 게임 화면의 G(공통)·H(헤더 대비) 묶음을 한 페이지에 적용한다. */

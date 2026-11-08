@@ -1,7 +1,7 @@
 // 결과 화면 E2E 순수 판정 단위 테스트 (11-05). 실행: node --test scripts/e2e/result.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { awardChecks, AWARD_PLATE, READY_PILL, SHORT_PHONE_H, TOOL_ROW_EXTRA, rematchChecks, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, RESULT_TAB_IDS, RESULT_TAB_IDS_BASIC, resultSkipChecks, resultStageChecks, resultTabChecks, TIMELINE_CARD, timelineChecks } from "./result.mjs";
+import { awardChecks, AWARD_PLATE, READY_PILL, SHORT_PHONE_H, rematchChecks, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, RESULT_TAB_IDS, RESULT_TAB_IDS_BASIC, resultSkipChecks, resultStageChecks, resultTabChecks, TIMELINE_CARD, timelineChecks } from "./result.mjs";
 
 // 4명판 시민 승: 좌석 0 마피아(진 팀) · 1 시민 · 2 경찰 · 3 의사
 const good = () => ({
@@ -59,15 +59,14 @@ test("RS5: 패널 높이가 188(짧은 방) · 244(방 높이 780 이상) ±1 �
   assert.deepEqual(failing({ panel: 190, stageBottom: 474 }), ["RS5"]);
   assert.deepEqual(failing({ panel: 189, stageBottom: 475 }), []); // ±1 안
   // panelWant 없이 방 높이로 계산: 780 이상이면 244
-  const tall = { ...good(), panelWant: undefined, roomH: 800, panel: 244 + TOOL_ROW_EXTRA, stageBottom: 800 - 244 - TOOL_ROW_EXTRA };
+  const tall = { ...good(), panelWant: undefined, roomH: 800, panel: 244, stageBottom: 800 - 244 };
   assert.deepEqual(resultStageChecks(tall).filter((r) => !r.ok), []);
   assert.deepEqual(resultStageChecks({ ...tall, panel: 188, stageBottom: 612 }).filter((r) => !r.ok).map((r) => r.id), ["RS5"]);
   assert.deepEqual(RESULT_PANEL_H, { short: 188, tall: 244, tallRoomMinH: 780 });
-  // 14-06: 방 높이로 계산하는 기대에는 이름표 줄 늘어난 11.6 이 더해진다(이름표 단추 59.6 − 입력칸 48)
-  assert.ok(Math.abs(TOOL_ROW_EXTRA - 11.6) < 1e-9);
-  const short = { ...good(), panelWant: undefined, roomH: 664, panel: 188 + TOOL_ROW_EXTRA, stageBottom: 664 - 188 - TOOL_ROW_EXTRA };
+  // 16-05: 방 높이로 계산하는 기대는 보정 없는 188 · 244 — 이름표 단추가 키웠던 11.6 은 없다
+  const short = { ...good(), panelWant: undefined, roomH: 664, panel: 188, stageBottom: 664 - 188 };
   assert.deepEqual(resultStageChecks(short).filter((r) => !r.ok), []);
-  assert.deepEqual(resultStageChecks({ ...short, panel: 188, stageBottom: 664 - 188 }).filter((r) => !r.ok).map((r) => r.id), ["RS5"]); // 이름표 줄 없는 옛 높이는 실패
+  assert.deepEqual(resultStageChecks({ ...short, panel: 188 + 11.6, stageBottom: 664 - 188 - 11.6 }).filter((r) => !r.ok).map((r) => r.id), ["RS5"]); // 이름표 줄이 키운 옛 높이는 실패
 });
 
 test("RS6: 스테이지 아래 끝이 방 높이 − 패널과 다르면 RS6 만 실패한다", () => {
@@ -116,7 +115,7 @@ test("상수: 표식 목록·승리 한 줄·직업 의상 표", () => {
 const goodLayout = () => ({
   roomH: 664,
   tabBoxes: RESULT_TAB_IDS.map((id) => ({ id, w: 44, h: 44 })),
-  panelCollapsedH: 188 + TOOL_ROW_EXTRA,
+  panelCollapsedH: 188,
   panelExpandedH: 465, // min(round(0.7 × 664), 520)
   inputPresent: false,
   iconColors: { all: "rgb(200, 200, 200)", mafia: "rgb(230, 100, 100)", ghost: "rgb(200, 200, 200)", whisper: "rgb(200, 200, 200)", log: "rgb(200, 200, 200)" },
@@ -157,20 +156,20 @@ test("RT1: 탭 버튼이 44×44 미만이거나 다섯 개가 아니면 RT1 만 
   assert.deepEqual(tabFailing(withLayout({ tabBoxes: goodLayout().tabBoxes.slice(0, 4) })), ["RT1"]);
 });
 
-test("RT3: 접힌 패널 높이는 188(방 780 미만)·244(780 이상) + 이름표 줄 11.6 ±1", () => {
+test("RT3: 접힌 패널 높이는 188(방 780 미만)·244(780 이상) ±1 — 이름표 보정 없음", () => {
   assert.deepEqual(tabFailing(withLayout({ panelCollapsedH: 212 })), ["RT3"]);
-  assert.deepEqual(tabFailing(withLayout({ panelCollapsedH: 200 })), []);
-  assert.deepEqual(tabFailing(withLayout({ panelCollapsedH: 188 })), ["RT3"]); // 이름표 줄 없는 옛 높이
-  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 244 + TOOL_ROW_EXTRA, panelExpandedH: 520 })), []);
-  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 188 + TOOL_ROW_EXTRA, panelExpandedH: 520 })), ["RT3"]);
+  assert.deepEqual(tabFailing(withLayout({ panelCollapsedH: 189 })), []);
+  assert.deepEqual(tabFailing(withLayout({ panelCollapsedH: 188 + 11.6 })), ["RT3"]); // 이름표 줄이 키운 옛 높이
+  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 244, panelExpandedH: 520 })), []);
+  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 188, panelExpandedH: 520 })), ["RT3"]);
 });
 
 test("RT4: 확장 높이 = min(round(0.7 × 방 높이), 520) ±2", () => {
   assert.deepEqual(tabFailing(withLayout({ panelExpandedH: 400 })), ["RT4"]);
   assert.deepEqual(tabFailing(withLayout({ panelExpandedH: 467 })), []);
   assert.deepEqual(tabFailing(withLayout({ panelExpandedH: 468 })), ["RT4"]);
-  assert.deepEqual(tabFailing(withLayout({ roomH: 560, panelExpandedH: 392, panelCollapsedH: 188 + TOOL_ROW_EXTRA })), []);
-  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 244 + TOOL_ROW_EXTRA, panelExpandedH: 652 })), ["RT4"]);
+  assert.deepEqual(tabFailing(withLayout({ roomH: 560, panelExpandedH: 392, panelCollapsedH: 188 })), []);
+  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 244, panelExpandedH: 652 })), ["RT4"]);
 });
 
 test("RT5: 확장에서 입력칸이 있으면 RT5 만 실패한다", () => {
