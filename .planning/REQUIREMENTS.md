@@ -50,8 +50,8 @@
 
 ### 심부름 화면과 컬러 에셋 (ERRAND·ASSET) — 16페이즈
 
-- [ ] **ERRAND-06**: 심부름 시작 2초 카드가 내 장소 3곳을 컬러 그림으로 보여 준다
-- [ ] **ERRAND-07**: 해야 할 장소가 64 타일로 보이고 가장 가까운 곳에 빛·방향 화살표가 있으며, 닿으면 그 장소 위에 [처리]가 뜨고 진행은 점 3개로 보인다(아래 독 없음)
+- [x] **ERRAND-06**: 심부름 시작 2초 카드가 내 장소 3곳을 컬러 그림으로 보여 준다
+- [x] **ERRAND-07**: 해야 할 장소가 64 타일로 보이고 가장 가까운 곳에 빛·방향 화살표가 있으며, 닿으면 그 장소 위에 [처리]가 뜨고 진행은 점 3개로 보인다(아래 독 없음)
 - [x] **ASSET-01**: 장소 16·흔적 조각 9 아이콘이 승인 컬러 에셋 A 이고(다시 그리지 않고 이식) id·이름이 1:1 이다
 
 ### 심부름 증거 (ERRAND·EVID) — 16페이즈
@@ -112,8 +112,8 @@
 | TOOL-04 | Phase 16 | Complete |
 | BTN-01 | Phase 16 | Complete |
 | BTN-02 | Phase 16 | Complete |
-| ERRAND-06 | Phase 16 | Pending |
-| ERRAND-07 | Phase 16 | Pending |
+| ERRAND-06 | Phase 16 | Complete |
+| ERRAND-07 | Phase 16 | Complete |
 | ASSET-01 | Phase 16 | Complete |
 | ERRAND-08 | Phase 16 | Complete |
 | EVID-01 | Phase 16 | Pending |
