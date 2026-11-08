@@ -3853,6 +3853,24 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, 16페이즈 D-06·D-07
     btn.remove();
   });
 
+  it("진행 점 줄([data-errand-dots]) 윗변 − 8 아래로 걸치는 타일은 그리지 않고 그 위는 그린다 (16-08, V-23)", async () => {
+    const dots = document.createElement("div");
+    dots.setAttribute("data-errand-dots", "");
+    const setTop = (top: number): void => {
+      dots.getBoundingClientRect = () => ({ left: 158, top, right: 242, bottom: top + 20, width: 84, height: 20, x: 158, y: top, toJSON() {} }) as DOMRect;
+    };
+    setTop(340); // 윗변 − 8 = 332 = 타일 glass(168..232 × 268..332) 아랫변
+    document.body.append(dots);
+    const s = await open({ stageInsets: { top: 60, bottom: 0 }, errand: errandProp({ nextId: "glass" }) });
+    frame(600);
+    expect(pin(s, "glass").hidden).toBe(false);
+    expect(pin(s, "sax").hidden).toBe(true); // (250, 350) 상자는 점 줄에 걸친다
+    setTop(339); // 윗변 − 8 = 331 < 332 → glass 도 걸친다
+    frame(1200);
+    expect(pin(s, "glass").hidden).toBe(true);
+    dots.remove();
+  });
+
   it("빛남·후광: 미처리·빛나지 않는 보이는 타일은 data-rest, callPlace 면 가장 가까운 타일만 data-call(is-call), 알약이 있으면 알약만 data-call, 화살표는 켜지지 않는다", async () => {
     const s = await open({ stageInsets: INS, errand: errandProp({ callPlace: true, nextId: "glass" }) });
     frame();

@@ -4,7 +4,6 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { ErrandAct } from "../../src/components/v2/ErrandAct";
-import { ErrandDock } from "../../src/components/v2/ErrandDock";
 import { ErrandDots } from "../../src/components/v2/ErrandDots";
 import { ErrandStartCard } from "../../src/components/v2/ErrandStartCard";
 import { ErrandArrow, ErrandMarker } from "../../src/components/v2/ErrandMarker";
@@ -13,7 +12,7 @@ import type { PlaceId } from "../../shared/protocol";
 
 afterEach(cleanup);
 
-// 15-04·16-07: 심부름 부품(ErrandMarker 64 타일·ErrandArrow 40 글리프·ErrandAct 알약·ErrandDock 칩). 마피아·시민이 같은 마크업(D-03, ERRAND-04) — 부품은 역할·좌석 prop 이 없고
+// 15-04·16-07·16-08: 심부름 부품(ErrandMarker 64 타일·ErrandArrow 40 글리프·ErrandAct 알약·ErrandStartCard 시작 카드·ErrandDots 진행 점). 마피아·시민이 같은 마크업(D-03, ERRAND-04) — 부품은 역할·좌석 prop 이 없고
 // 같은 입력에 같은 DOM 을 낸다. 표식 값에는 장소 id·진행 수뿐이다(D-08).
 
 const V2_CSS = readFileSync("src/styles/v2.css", "utf8");
@@ -171,40 +170,6 @@ describe("ErrandAct ([처리] 알약)", () => {
   });
 });
 
-describe("ErrandDock (칩·n/3 만 — [처리] 는 장소 위 알약으로 옮겼다)", () => {
-  it("3곳·done 1 → 칩 3(1·2·3, 첫째만 data-done), data-errand-progress='1/3', 스크린리더용 '진행 1/3'(aria-live polite), 단추 없음", () => {
-    const { container } = render(<ErrandDock places={PLACES} done={["piano"]} />);
-    expect(container.querySelector("[data-errand-dock]")).not.toBeNull();
-    const chips = [...container.querySelectorAll("[data-errand-chip]")];
-    expect(chips.map((c) => c.getAttribute("data-errand-chip"))).toEqual(["1", "2", "3"]);
-    expect(chips.map((c) => c.hasAttribute("data-done"))).toEqual([true, false, false]);
-    expect(chips[0]!.querySelector("svg")).not.toBeNull(); // 채운 칩에 check
-    expect(chips[1]!.querySelector("svg")).toBeNull();
-    const progress = container.querySelector("[data-errand-progress]")!;
-    expect(progress.getAttribute("data-errand-progress")).toBe("1/3");
-    expect(progress.getAttribute("aria-hidden")).toBe("true");
-    expect(progress.textContent).toBe("1/3");
-    const live = container.querySelector("[aria-live='polite']")!;
-    expect(live.textContent).toBe("진행 1/3");
-    expect(container.querySelector("[role='group']")!.getAttribute("aria-label")).toBe("진행 1/3");
-    expect(container.querySelectorAll("button")).toHaveLength(0);
-    expect(container.querySelector("[data-errand-act]")).toBeNull();
-  });
-
-  it("done 3 → 칩 셋 모두 data-done, 3/3", () => {
-    const { container } = render(<ErrandDock places={PLACES} done={[...PLACES]} />);
-    expect([...container.querySelectorAll("[data-errand-chip]")].every((c) => c.hasAttribute("data-done"))).toBe(true);
-    expect(container.querySelector("[data-errand-progress]")!.getAttribute("data-errand-progress")).toBe("3/3");
-    expect(container.querySelector("[aria-live='polite']")!.textContent).toBe("진행 3/3");
-    expect(container.querySelector("[data-call]")).toBeNull();
-  });
-
-  it("places 빈 배열 → null(아무것도 안 그림)", () => {
-    const { container } = render(<ErrandDock places={[]} done={[]} />);
-    expect(container.innerHTML).toBe("");
-  });
-});
-
 describe("ErrandStartCard (2초 '오늘 갈 곳' 카드, 16-08 V-19)", () => {
   it("루트 하나, 타일 3(role=img·aria-label '{장소} 장소', 각 svg 하나), 제목·한 줄, button 0, 장소 이름 글자 없음", () => {
     const { container } = render(<ErrandStartCard places={PLACES} />);
@@ -293,9 +258,11 @@ describe("같은 마크업 (D-03, ERRAND-04, T-15-16, T-16-15)", () => {
   };
   const attrNames = (root: Element): string[] => [root, ...root.querySelectorAll("*")].flatMap((e) => e.getAttributeNames().filter((n) => n.startsWith("data-")));
 
-  it("같은 props 로 두 번 렌더한 HTML 이 같다(네 부품)", () => {
-    const dock = <ErrandDock places={PLACES} done={["glass", "sax"]} />;
-    expect(html(dock)).toBe(html(dock));
+  it("같은 props 로 두 번 렌더한 HTML 이 같다(여섯 부품)", () => {
+    const dots = <ErrandDots total={3} done={2} />;
+    expect(html(dots)).toBe(html(dots));
+    const card = <ErrandStartCard places={PLACES} />;
+    expect(html(card)).toBe(html(card));
     const pin = <ErrandMarker id="door" done call onWalk={() => {}} />;
     expect(html(pin)).toBe(html(pin));
     const arrow = <ErrandArrow angle={45} call />;
@@ -306,14 +273,17 @@ describe("같은 마크업 (D-03, ERRAND-04, T-15-16, T-16-15)", () => {
 
   it("부품은 역할·좌석·가짜 표식 prop 을 받지 않는다: 알려진 prop 말고 넘기면 타입 오류(@ts-expect-error)이고 DOM 에도 나오지 않는다", () => {
     // @ts-expect-error 부품에는 role·seat·fake prop 이 없다
-    const dock = <ErrandDock places={PLACES} done={[]} role="mafia" seat={3} fake />;
+    const dots = <ErrandDots total={3} done={0} role="mafia" seat={3} fake />;
+    // @ts-expect-error 부품에는 role·seat·fake prop 이 없다
+    const startCard = <ErrandStartCard places={PLACES} role="mafia" fake />;
     // @ts-expect-error 부품에는 role·seat·fake prop 이 없다
     const pin = <ErrandMarker id="glass" done={false} call={false} onWalk={() => {}} role="mafia" fake />;
     // @ts-expect-error 부품에는 role·seat·fake prop 이 없다
     const act = <ErrandAct id="glass" call={false} onPress={() => {}} role="mafia" fake />;
     const { container } = render(
       <div>
-        {dock}
+        {dots}
+        {startCard}
         {pin}
         {act}
       </div>,
@@ -331,7 +301,8 @@ describe("같은 마크업 (D-03, ERRAND-04, T-15-16, T-16-15)", () => {
         for (const rest of [false, true]) {
           const { container, unmount } = render(
             <div>
-              <ErrandDock places={PLACES} done={done} />
+              <ErrandDots total={3} done={done.length} />
+              <ErrandStartCard places={PLACES} />
               <ErrandMarker id="glass" done={done.length > 0} call={call} rest={rest} onWalk={() => {}} />
               <ErrandArrow angle={10} call={call} />
               <ErrandAct id="glass" call={call} onPress={() => {}} />
@@ -348,25 +319,26 @@ describe("같은 마크업 (D-03, ERRAND-04, T-15-16, T-16-15)", () => {
         }
       }
     }
-    expect([...names].sort()).toEqual(["data-call", "data-done", "data-errand-act", "data-errand-arrow", "data-errand-chip", "data-errand-dock", "data-errand-place", "data-errand-progress", "data-rest"]);
+    expect([...names].sort()).toEqual(["data-call", "data-done", "data-errand-act", "data-errand-arrow", "data-errand-dot", "data-errand-dots", "data-errand-place", "data-errand-progress", "data-errand-start-card", "data-rest"]);
     for (const v of values) expect(v).toMatch(/^(|\d(\/\d)?|glass)$/);
-    const sample = render(<ErrandDock places={PLACES} done={["glass"]} />);
+    const sample = render(<ErrandDots total={3} done={1} />);
     expect(attrNames(sample.container).length).toBeGreaterThan(0);
   });
 });
 
 describe("접근성·스타일 (UI-SPEC)", () => {
-  it("장소 타일·[처리] 알약은 button 이고 칩·화살표는 button·tabindex 가 없다(포커스를 받지 않는다)", () => {
+  it("장소 타일·[처리] 알약은 button 이고 점·시작 카드·화살표는 button·tabindex 가 없다(포커스를 받지 않는다)", () => {
     const { container } = render(
       <div>
-        <ErrandDock places={PLACES} done={[]} />
+        <ErrandDots total={3} done={0} />
+        <ErrandStartCard places={PLACES} />
         <ErrandArrow angle={0} call={false} />
         <ErrandMarker id="glass" done={false} call={false} onWalk={() => {}} />
         <ErrandAct id="glass" call={false} onPress={() => {}} />
       </div>,
     );
     expect(container.querySelectorAll("button")).toHaveLength(2);
-    for (const e of container.querySelectorAll("[data-errand-chip], [data-errand-arrow], [data-errand-progress]")) {
+    for (const e of container.querySelectorAll("[data-errand-dots], [data-errand-dot], [data-errand-start-card], [data-errand-arrow]")) {
       expect(e.tagName).not.toBe("BUTTON");
       expect(e.hasAttribute("tabindex")).toBe(false);
     }
@@ -386,8 +358,8 @@ describe("접근성·스타일 (UI-SPEC)", () => {
     expect(css).toMatch(/\.mv-errand-act\s*\{[^}]*height: 44px[^}]*background: var\(--brass-400\)[^}]*color: var\(--night-950\)/);
     expect(css).toMatch(/\.mv-errand-pin\[data-rest\]\s*\{[^}]*var\(--brass-200\)/);
     expect(css).toMatch(/\.mv-errand-pin\.is-call::after\s*\{[^}]*border-width: 3px/);
-    // 옛 36 원 표지·가장자리 칩·독 [처리] 규칙은 없다
-    expect(css).not.toMatch(/mv-errand-pin__disc|mv-errand-dock__act/);
+    // 옛 36 원 표지·가장자리 칩·아래 패널(독) 규칙은 없다
+    expect(css).not.toMatch(/mv-errand-pin__disc|mv-errand-dock|mv-errand-chip/);
   });
 
   it("새 블록의 모든 글자 크기는 14px 이상이다", () => {

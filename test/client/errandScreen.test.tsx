@@ -9,8 +9,8 @@ import type { PlaceId, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
-// 15-05·16-07: errand 단계의 맵 화면(독 칩·장소 타일·장소 위 [처리] 알약 전송·빛남·유령·역할 무관). WorldStage 는 받은 props 만 쥐는 가짜(gameMap.test 와 같은 틀) —
-// 표지·링·투영은 worldStage.test 가 진짜 런타임으로 본다. 나머지(GameMap·GamePanel 분기·ErrandDock)는 진짜.
+// 15-05·16-07·16-08: errand 단계의 맵 화면(진행 점·시작 카드·장소 타일·장소 위 [처리] 알약 전송·빛남·유령·역할 무관). WorldStage 는 받은 props 만 쥐는 가짜(gameMap.test 와 같은 틀) —
+// 표지·링·투영은 worldStage.test 가 진짜 런타임으로 본다. 나머지(GameMap·GamePanel 분기·ErrandDots·ErrandStartCard)는 진짜.
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("../../src/net/useRoomConnection", () => ({
   useRoomConnection: () => connectionMock.current,
@@ -123,43 +123,109 @@ const taps = (): { off: () => void; count: () => number } => {
   const off = bindSignals((sig) => got.push(sig));
   return { off, count: () => got.filter((g) => g.kind === "tap").length };
 };
-const dock = (c: ParentNode) => c.querySelector<HTMLElement>("[data-errand-dock]");
+const dots = (c: ParentNode) => c.querySelector<HTMLElement>("[data-errand-dots]");
+const card = (c: ParentNode) => c.querySelector<HTMLElement>("[data-errand-start-card]");
 
-describe("errand 화면: 아래 패널 (D-09, U-1·U-16)", () => {
-  it("산 사람(역할 무관): 독 하나·칩 3·진행 0/3·독에는 [처리] 가 없다, 채팅 입력·[토론 끝내기]·유언·행동 줄은 없고 패널 section 에 data-world-panel 이 있다", () => {
+describe("errand 화면: 아래 패널 없음·진행 점 (D-06, V-23, ERRAND-07)", () => {
+  it("산 사람(역할 무관): 아래 패널 section 이 없고 독·칩도 없다, 진행 점 줄 하나·점 3·진행 0/3, 채팅 입력·[토론 끝내기]·유언·[처리] 는 없다", () => {
     for (const role of ["mafia", "citizen"] as const) {
       const { container, unmount } = mount(makeView({ role }));
-      expect(container.querySelectorAll("[data-errand-dock]")).toHaveLength(1);
-      expect(container.querySelectorAll("[data-errand-chip]")).toHaveLength(3);
-      expect(container.querySelector("[data-errand-progress]")!.getAttribute("data-errand-progress")).toBe("0/3");
+      expect(container.querySelector("section[data-world-panel]")).toBeNull();
+      expect(container.querySelector(".mf-game__panel")).toBeNull();
+      expect(container.querySelectorAll("[data-errand-dock], [data-errand-chip]")).toHaveLength(0);
+      expect(container.querySelectorAll("[data-errand-dots]")).toHaveLength(1);
+      expect(container.querySelectorAll("[data-errand-dot]")).toHaveLength(3);
+      expect(dots(container)!.getAttribute("data-errand-progress")).toBe("0/3");
+      expect(dots(container)!.getAttribute("aria-label")).toBe("진행 0/3");
       expect(container.querySelectorAll("[data-errand-act]")).toHaveLength(0);
-      expect(dock(container)!.querySelector("button")).toBeNull();
       expect(container.querySelector("[data-chat-input]")).toBeNull();
       expect(container.querySelector("[data-end-discussion]")).toBeNull();
       expect(container.querySelector("[data-will-button]")).toBeNull();
-      const panel = container.querySelector("section[data-world-panel]")!;
-      expect(panel.className).toContain("mf-game__panel--errand");
-      expect(panel.contains(dock(container))).toBe(true);
       unmount();
     }
   });
 
-  it("유령(내가 탈락): 같은 높이 패널 section 이 있되 독·칩·[처리] 는 0개, 채팅 패널도 없다", () => {
-    const { container } = mount(makeView({ dead: true }));
-    const panel = container.querySelector("section[data-world-panel]")!;
-    expect(panel).not.toBeNull();
-    expect(panel.className).toContain("mf-game__panel--errand");
-    expect(dock(container)).toBeNull();
-    expect(container.querySelectorAll("[data-errand-chip]")).toHaveLength(0);
-    expect(act$(container)).toBeNull();
-    expect(container.querySelector("[data-chat-input]")).toBeNull();
+  it("유령(내가 탈락)·목록 없음: 진행 점·시작 카드·패널 모두 없다(채팅 패널도 없다)", () => {
+    for (const o of [{ dead: true }, { noList: true }]) {
+      const { container, unmount } = mount(makeView(o));
+      expect(dots(container)).toBeNull();
+      expect(card(container)).toBeNull();
+      expect(container.querySelector("section[data-world-panel]")).toBeNull();
+      expect(container.querySelector("[data-chat-input]")).toBeNull();
+      unmount();
+    }
   });
 
-  it("심부름 단계가 아니면 기존 GamePanel 이다(회귀) — 독은 없다", () => {
+  it("심부름 단계가 아니면 기존 GamePanel 이다(회귀) — 진행 점은 없다", () => {
     const view = { ...makeView(), phase: "discussion" as const };
     const { container } = mount(view);
-    expect(dock(container)).toBeNull();
-    expect(container.querySelector("section[data-world-panel]")!.className).not.toContain("mf-game__panel--errand");
+    expect(dots(container)).toBeNull();
+    expect(container.querySelector("section[data-world-panel]")).not.toBeNull();
+  });
+});
+
+describe("errand 화면: 시작 카드 2초 (D-06, V-19, ERRAND-06)", () => {
+  const at = (ms: number): void => {
+    vi.useFakeTimers({ now: NOW + ms });
+  };
+  const advance = (ms: number): void => {
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  };
+
+  it("단계 시작 1초 뒤 들어오면 카드가 있고(내 장소 3 타일), 2초가 지나면 사라진다 — 진행 점·타일은 그대로", () => {
+    at(1_000);
+    const { container } = mount(makeView());
+    expect(card(container)).not.toBeNull();
+    expect(card(container)!.querySelectorAll("[role='img']")).toHaveLength(3);
+    advance(500);
+    expect(card(container)).not.toBeNull();
+    advance(600);
+    expect(card(container)).toBeNull();
+    expect(dots(container)).not.toBeNull();
+    expect(stage.props!.errand!.places).toHaveLength(3);
+  });
+
+  it("재접속·새로 고침으로 2초가 지난 뒤(시작 + 3초) 마운트하면 처음부터 없다 — 그래도 점·타일은 같은 목록", () => {
+    at(3_000);
+    const { container } = mount(makeView());
+    expect(card(container)).toBeNull();
+    expect(dots(container)!.getAttribute("data-errand-progress")).toBe("0/3");
+    expect(stage.props!.errand!.places.map((p) => p.id)).toEqual(LIST);
+  });
+
+  it("카드가 떠 있을 때 방 아무 곳 pointerdown 한 번이면 닫히고, 그 누름은 막히지 않는다(자식까지 도달, 기본 동작 유지)", () => {
+    at(500);
+    const { container } = mount(makeView());
+    expect(card(container)).not.toBeNull();
+    const target = container.querySelector<HTMLElement>("[data-world-stage-fake]")!;
+    const reached = vi.fn();
+    target.addEventListener("pointerdown", reached);
+    const notPrevented = fireEvent.pointerDown(target);
+    expect(notPrevented).toBe(true);
+    expect(reached).toHaveBeenCalledTimes(1);
+    expect(card(container)).toBeNull();
+  });
+
+  it("닫은 뒤에는 같은 단계에서 다시 뜨지 않는다(리렌더·새 view 로도)", () => {
+    at(500);
+    const m = mount(makeView());
+    fireEvent.pointerDown(m.container.querySelector("[data-world-stage-fake]")!);
+    expect(card(m.container)).toBeNull();
+    m.show(makeView({ done: ["glass"] }));
+    expect(card(m.container)).toBeNull();
+  });
+
+  it("카드·막은 눌림을 통과한다(CSS)·마피아와 시민의 카드 마크업이 같다", () => {
+    at(500);
+    const htmls: string[] = [];
+    for (const role of ["mafia", "citizen", "police"] as const) {
+      const { container, unmount } = mount(makeView({ role }));
+      htmls.push(card(container)!.outerHTML);
+      unmount();
+    }
+    expect(new Set(htmls).size).toBe(1);
   });
 });
 
@@ -216,27 +282,22 @@ describe("errand 화면: [처리] 알약 전송 (D-01·D-06, ERRAND-02·03)", ()
     expect(send).toHaveBeenCalledTimes(1);
     expect(container.innerHTML).toBe(before);
   });
-
-  it("독에는 [처리] 단추가 없다(처리 입구는 장소 위 알약 하나)", () => {
-    const { container } = mount(makeView());
-    standAt(-3.9, -2.2);
-    expect(dock(container)!.querySelectorAll("button, [data-errand-act]")).toHaveLength(0);
-  });
 });
 
 describe("errand 화면: 진행 (U-6)", () => {
-  it("view.me.errand.done 이 늘면 칩이 채워지고 표지(errand prop)가 done 이 되며 n/3 이 갱신된다, 3/3 이면 알약 없음", () => {
+  it("view.me.errand.done 이 늘면 점이 채워지고 표지(errand prop)가 done 이 되며 진행 n/3 이 갱신된다, 3/3 이면 알약 없음·점 3 모두 채움", () => {
     const m = mount(makeView());
     standAt(FAR.x, FAR.z);
     expect(stage.props!.errand!.places.map((p) => p.done)).toEqual([false, false, false]);
     m.show(makeView({ done: ["glass"] }));
-    expect(m.container.querySelectorAll("[data-errand-chip][data-done]")).toHaveLength(1);
-    expect(m.container.querySelector("[data-errand-progress]")!.getAttribute("data-errand-progress")).toBe("1/3");
+    expect(m.container.querySelectorAll("[data-errand-dot][data-done]")).toHaveLength(1);
+    expect(dots(m.container)!.getAttribute("data-errand-progress")).toBe("1/3");
     expect(stage.props!.errand!.places.find((p) => p.id === "glass")!.done).toBe(true);
     m.show(makeView({ done: ["glass", "piano", "sax"] }));
     expect(actId()).toBeNull();
     expect(act$(m.container)).toBeNull();
-    expect(m.container.querySelector("[data-errand-progress]")!.getAttribute("data-errand-progress")).toBe("3/3");
+    expect(dots(m.container)!.getAttribute("data-errand-progress")).toBe("3/3");
+    expect(m.container.querySelectorAll("[data-errand-dot][data-done]")).toHaveLength(3);
   });
 });
 
@@ -316,9 +377,9 @@ describe("errand 화면: 마피아와 시민은 같은 DOM (D-03, ERRAND-04, T-1
     for (const el of c.querySelectorAll("*")) for (const a of el.getAttributeNames()) if (a.startsWith("data-") || a.startsWith("aria-")) set.add(`${el.tagName}.${a}`);
     return [...set].sort();
   };
-  const panelOf = (c: HTMLElement): HTMLElement => c.querySelector<HTMLElement>("section[data-world-panel]")!;
+  const panelOf = (c: HTMLElement): HTMLElement => c.querySelector<HTMLElement>("[data-errand-dots]")!;
 
-  it("역할만 바꾼 렌더 네 번: 아래 패널의 마크업과 errand prop 이 같다", () => {
+  it("역할만 바꾼 렌더 네 번: 진행 점 줄의 마크업과 errand prop 이 같다", () => {
     const outs: { html: string; names: string[]; prop: string }[] = [];
     for (const role of ["mafia", "citizen", "police", "doctor"] as const) {
       const { container, unmount } = mount(makeView({ role, done: ["glass"] }));
@@ -333,7 +394,7 @@ describe("errand 화면: 마피아와 시민은 같은 DOM (D-03, ERRAND-04, T-1
     }
   });
 
-  it("처리 반경 안(알약이 있을 때)도 역할만 다른 네 렌더의 패널 마크업·errand prop 이 같다(가짜 장소를 모른다, V-25)", () => {
+  it("처리 반경 안(알약이 있을 때)도 역할만 다른 네 렌더의 진행 점 마크업·errand prop 이 같다(가짜 장소를 모른다, V-25)", () => {
     const outs: { html: string; prop: string }[] = [];
     for (const role of ["mafia", "citizen", "police", "doctor"] as const) {
       const { container, unmount } = mount(makeView({ role }));
