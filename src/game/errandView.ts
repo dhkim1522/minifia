@@ -115,7 +115,7 @@ export interface MarkerPlanInput {
   /** 스테이지 사각형(띠 아랫변 ~ 아래 패널 윗변) */
   stage: Rect;
   /** 타일·알약이 피할 사각형(소리 열 첫 칸 등). 화살표도 피한다 */
-  avoid: Rect[];
+  avoid: ReadonlyArray<Rect>;
   /** 장소별 투영 좌표(타일 중심, px) */
   items: ReadonlyArray<{ id: PlaceId; x: number; y: number }>;
   /** 내 발밑 투영 좌표. 모르면 null */
@@ -125,7 +125,7 @@ export interface MarkerPlanInput {
   /** 처리 반경 안 미처리 장소 id(있으면 [처리] 알약이 서고 화살표는 없다) */
   actId: PlaceId | null;
   /** 화살표만 더 피하는 사각형(내 이름표) */
-  arrowAvoid?: Rect[];
+  arrowAvoid?: ReadonlyArray<Rect>;
   /** 알약 폭(그 요소의 offsetWidth). 모르면 96 */
   pillW?: number;
   /** 타일 한 변(기본 64) */

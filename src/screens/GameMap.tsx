@@ -712,8 +712,15 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     [view, errandPos.actableId, errandPos.nextId, recordOpened, traceShown],
   );
   // 심부름의 빛은 위치·진행으로만 정해진다 — 14페이즈의 "이미 썼는가"·열린 시트와 무관하다(UI-SPEC 빛남 계약 추가)
-  const errandCallAct = errandMine !== null && callTarget?.kind === "tool" && callTarget.tool === "errand";
   const errandCallPlace = errandMine !== null && callTarget?.kind === "place";
+  // [처리] 알약(장소 위, 16-07): 처리 반경 안 미완료 장소가 있을 때만 보낸다(서버가 다시 정한다). 못 보내면(소켓 닫힘) 아무 변화 없다.
+  // 알약은 반경 안에서만 DOM 에 있어 헛누름이 없고, 누를 때 주요 버튼 소리(ui.tap)가 한 번 난다(V-31). 거절·실패 알림은 없다
+  const errandActId = errandPos.actableId;
+  const onErrandAct = useCallback((): void => {
+    if (!canSend || errandActId === null) return;
+    emitSignal({ kind: "tap" });
+    send({ t: "errand" });
+  }, [canSend, errandActId, send]);
   const errandLayer = useMemo<ErrandLayerProps | undefined>(
     () =>
       errandMine === null
@@ -721,16 +728,13 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         : {
             places: errandCenters.map((c) => ({ id: c.id, x: c.x, z: c.z, done: errandMine.done.includes(c.id) })),
             nextId: errandPos.nextId,
+            actId: errandPos.actableId,
             callPlace: errandCallPlace,
             nearR: ERRAND_NEAR_R,
+            onAct: onErrandAct,
           },
-    [errandMine, errandCenters, errandPos.nextId, errandCallPlace],
+    [errandMine, errandCenters, errandPos.nextId, errandPos.actableId, errandCallPlace, onErrandAct],
   );
-  // [처리]: 처리 반경 안 미완료 장소가 있을 때만 보낸다(서버가 다시 정한다). 못 보내면(소켓 닫힘) 아무 변화 없다
-  const onErrandAct = (): void => {
-    if (!canSend || errandPos.actableId === null) return;
-    send({ t: "errand" });
-  };
   const callOn = callTarget !== null && !callUsed && layerKind === null && !kbOpen && !whisper.mode;
   const callTool = callOn && callTarget.kind === "tool" ? callTarget.tool : null;
   // [기록] 의 빛은 "이미 썼는가"(채팅 입력칸 포커스)와 무관하다 — 카드를 한 번도 열지 않았다는 사실(recordOpened) 하나가 끈다
@@ -884,7 +888,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       {view.phase === "errand" ? (
         // 심부름 단계의 아래 패널은 채팅이 아니라 독이다(높이 84, D-09). 유령·목록 없음은 같은 높이의 내용 없는 패널(스테이지 높이가 역할·생존으로 갈라지지 않게)
         <section ref={panelRef} className="mf-game__panel mf-game__panel--errand" data-world-panel="">
-          {errandMine !== null ? <ErrandDock places={errandMine.places} done={errandMine.done} canAct={errandPos.actableId !== null && canSend} call={errandCallAct} onAct={onErrandAct} /> : null}
+          {errandMine !== null ? <ErrandDock places={errandMine.places} done={errandMine.done} /> : null}
         </section>
       ) : (
         <GamePanel

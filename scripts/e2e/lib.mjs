@@ -3098,7 +3098,7 @@ export const RECORD_DOCK_GAP = 8;
 export const ERRAND_STAGE_INSET = 8;
 /** 사회자 띠 문장 사본(src/game/hostLine.ts HOST_LINES 의 errand·witness·trace·discussion 줄 — e2eContract 가 같음을 고정). */
 export const ERRAND_LINES = {
-  act: "심부름 시간입니다. 장소 세 곳을 돌며 처리해 주세요.",
+  act: "심부름 시간입니다. 빛나는 곳을 찾아 처리해 주세요.",
   done: "심부름을 마쳤습니다. 곧 토론이 시작됩니다.",
   witness: "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.",
   discussionAct: "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.",

@@ -79,7 +79,7 @@ export const HOST_LINES: Readonly<Record<HostKey, Line>> = {
   morning: (result) => `아침이 밝았습니다. ${result}.`,
   ended: "게임이 끝났습니다. 다음 판을 준비해 주세요.",
   // 15페이즈(UI-SPEC 표 원문, 합쇼체·역할 단어 없음). 마피아도 같은 문장이다.
-  "errand.act": "심부름 시간입니다. 장소 세 곳을 돌며 처리해 주세요.",
+  "errand.act": "심부름 시간입니다. 빛나는 곳을 찾아 처리해 주세요.",
   "errand.done": "심부름을 마쳤습니다. 곧 토론이 시작됩니다.",
   "errand.ghost": "심부름 시간입니다. 유령은 지켜봐 주세요.",
   // 15페이즈(UI-SPEC 표 원문): 목격 기록이 있는 토론, 피해자 있는 아침의 흔적 구간. 마피아도 같은 문장이다.

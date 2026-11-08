@@ -439,8 +439,12 @@ describe("맵 화면 빛남 (HOST-03·04·05)", () => {
 
     it("빛남은 소리를 내지 않는다 — 신호 관련 새 코드 없음(소스 검사)", () => {
       const src = readFileSync("src/screens/GameMap.tsx", "utf8");
-      const block = src.slice(src.indexOf("callTargetsOf(view)"), src.indexOf("const stageTagProps"));
+      // 16-07: 장소 위 [처리] 알약을 누를 때의 ui.tap 은 빛남이 아니라 눌림 소리(V-31)라 그 핸들러(onErrandAct)만 검사에서 뺀다
+      const block = src
+        .slice(src.indexOf("callTargetsOf(view)"), src.indexOf("const stageTagProps"))
+        .replace(/const onErrandAct = useCallback\([\s\S]*?\n  \}, \[[^\]]*\]\);/, "");
       expect(block).not.toMatch(/emitSignal/);
+      expect(block).not.toMatch(/const onErrandAct/);
     });
   });
 });
