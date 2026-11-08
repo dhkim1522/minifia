@@ -1951,13 +1951,14 @@ export function readBandWatch(page) {
 // 읽기는 한 번의 evaluate 로 끝낸다. 반환 객체의 글자 값은 장소 id·진행 글자("n/3")·[처리] 글자(처리·완료)·띠 문장(고정 문구)·머리 글자("0" 등 숫자)뿐이고,
 // 사람 이름(닉네임)은 읽지도 싣지도 않는다. 판정은 lib.mjs 의 순수 함수가 한다.
 
-/** 심부름 표식 열두 개(lib.mjs ERRAND_MARKERS)의 속성 값 전부 — 장소 id·진행 수뿐이어야 한다(D-08) */
-const ERRAND_ATTRS = ["data-errand-dock", "data-errand-chip", "data-errand-progress", "data-errand-act", "data-errand-place", "data-errand-arrow", "data-near-ring", "data-record-button", "data-record-card", "data-record-rows", "data-record-row", "data-trace-card"];
+/** 심부름 표식 열세 개(lib.mjs ERRAND_MARKERS)의 속성 값 전부 — 장소 id·진행 수뿐이어야 한다(D-08) */
+const ERRAND_ATTRS = ["data-errand-dock", "data-errand-chip", "data-errand-progress", "data-errand-act", "data-errand-place", "data-errand-arrow", "data-near-ring", "data-rest", "data-record-button", "data-record-card", "data-record-rows", "data-record-row", "data-trace-card"];
 
 /**
- * 심부름 화면 한 장(errandChecks·errandOverlapChecks 입력). 보이는 표지·화살표만 사각형으로 싣는다(hidden·display none·크기 0 은 뺀다).
- * { docks, chips, doneAttr, progressText, actText, actDisabled, actDone, actCall, places: [{ id, done, hidden, call }], pins: rect[], arrows: rect[], arrowAngle, ringShown, ringPoints,
- *   callCount, bandLine, title, stage, band, dockRow, panel, tagButtons: rect[], tagCount, attrValues: string[], vw, vh }
+ * 심부름 화면 한 장(errandChecks·errandOverlapChecks 입력). 보이는 타일·화살표·알약만 사각형으로 싣는다(hidden·display none·크기 0 은 뺀다).
+ * { docks, chips, doneAttr, progressText, dockButtons(아래 패널 안 단추 수), actCount([data-errand-act] 수), actShown, act(보이는 알약 사각형|null), places: [{ id, done, hidden, call, rest }],
+ *   pins: rect[](보이는 타일), arrows: rect[], arrowAngle, ringShown, ringPoints, callCount, callKinds("act"|"tile"|"arrow"|"other" 목록), restCount, bandLine, title, stage, band, dockRow, side: rect[](오른쪽 열 단추),
+ *   panel, tagButtons: rect[], tagCount, attrValues: string[], vw, vh }
  */
 export function readErrand(page) {
   return page.evaluate((attrs) => {
@@ -1972,9 +1973,11 @@ export function readErrand(page) {
       const cs = getComputedStyle(el);
       return !el.hidden && cs.display !== "none" && cs.visibility !== "hidden" && r.width > 0 && r.height > 0;
     };
-    const act = document.querySelector("[data-errand-act]");
+    const acts = qa("[data-errand-act]");
+    const act = acts[0] ?? null;
     const prog = document.querySelector("[data-errand-progress]");
     const pins = qa("[data-errand-place]");
+    const kindOf = (el) => (el.hasAttribute("data-errand-act") ? "act" : el.hasAttribute("data-errand-place") ? "tile" : el.hasAttribute("data-errand-arrow") ? "arrow" : "other");
     const arrows = qa("[data-errand-arrow]");
     const ring = document.querySelector("svg[data-near-ring]");
     const turn = document.querySelector("[data-errand-arrow] .mv-errand-arrow__turn");
@@ -1989,17 +1992,19 @@ export function readErrand(page) {
       chips: qa("[data-errand-chip]").length,
       doneAttr: qa("[data-errand-chip][data-done]").length,
       progressText: prog ? (prog.textContent ?? "").replace(/\s+/g, "") : "",
-      actText: act ? (act.textContent ?? "").replace(/\s+/g, "") : "",
-      actDisabled: !!act && act.getAttribute("aria-disabled") === "true",
-      actDone: !!act && act.hasAttribute("data-done"),
-      actCall: !!act && act.hasAttribute("data-call"),
-      places: pins.map((el) => ({ id: el.getAttribute("data-errand-place") ?? "", done: el.hasAttribute("data-done"), hidden: !shown(el), call: el.hasAttribute("data-call") })),
+      dockButtons: (document.querySelector("[data-world-panel]")?.querySelectorAll("button") ?? []).length,
+      actCount: acts.length,
+      actShown: !!act && shown(act),
+      act: act && shown(act) ? box(act) : null,
+      places: pins.map((el) => ({ id: el.getAttribute("data-errand-place") ?? "", done: el.hasAttribute("data-done"), hidden: !shown(el), call: el.hasAttribute("data-call"), rest: el.hasAttribute("data-rest") })),
       pins: pins.filter(shown).map(box),
       arrows: arrows.filter(shown).map(box),
       arrowAngle: deg ? Number(deg[1]) : null,
       ringShown: !!ring && getComputedStyle(ring).display !== "none",
       ringPoints: ring ? (ring.querySelector("polygon")?.getAttribute("points") ?? "").trim().split(/\s+/).filter(Boolean).length : 0,
       callCount: qa("[data-call]").length,
+      callKinds: qa("[data-call]").map(kindOf),
+      restCount: qa("[data-rest]").length,
       bandLine: bandLine ? (bandLine.textContent ?? "").replace(/\s+/g, " ").trim() : "",
       title: title ? (title.textContent ?? "").replace(/\s+/g, "") : "",
       stage: (() => {
@@ -2009,6 +2014,7 @@ export function readErrand(page) {
       })(),
       band: box(band),
       dockRow: box(document.querySelector("[data-host-band] .mv-host__dock")),
+      side: qa("[data-side-button]").filter(shown).map(box),
       panel: box(document.querySelector("[data-world-panel]")),
       tagButtons: qa("[data-pick], [data-face]").filter(shown).map(box),
       // 이름표 요소는 방의 사람 수만큼 DOM 에 있고(공개 목록) 근처 밖은 투명(opacity 0)으로 남는다 — 보이는 이름표만 센다
@@ -2049,6 +2055,8 @@ export function readRecord(page) {
       panelRect: box(document.querySelector("[data-world-panel]")),
       inputRect: box(document.querySelector(".mv-chat__form")),
       callCount: qa("[data-call]").length,
+      callKinds: qa("[data-call]").map(kindOf),
+      restCount: qa("[data-rest]").length,
       bandLine: bandLine ? (bandLine.textContent ?? "").replace(/\s+/g, " ").trim() : "",
       inputCount: qa(".mv-chat__input").length,
     };
@@ -2133,33 +2141,52 @@ export async function walkToPlace(page, id = null) {
       const r = pick.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) return { kind: "pin", x: r.left + r.width / 2, y: r.top + r.height / 2 };
     }
-    const turn = document.querySelector("[data-errand-arrow] .mv-errand-arrow__turn");
+    const arrow = document.querySelector("[data-errand-arrow]:not([hidden])");
+    const turn = arrow?.querySelector(".mv-errand-arrow__turn");
     const m = turn ? /rotate\((-?[\d.]+)deg\)/.exec(turn.style.transform ?? "") : null;
-    if (!m) return null;
+    if (!arrow || !m) return null;
+    // 화살표는 내 발밑에서 목표 쪽으로 56 떨어져 있다 — 그 방향으로 더 나아간 바닥(화살표 중심 + 140)을 누른다(스테이지 안쪽으로 가둔다)
     const a = (Number(m[1]) * Math.PI) / 180;
+    const ar = arrow.getBoundingClientRect();
     const band = document.querySelector("[data-host-band] .mv-host__band")?.getBoundingClientRect();
     const panel = document.querySelector("[data-world-panel]")?.getBoundingClientRect();
-    const top = band?.bottom ?? 0;
-    const bottom = panel?.top ?? window.innerHeight;
-    const cx = window.innerWidth / 2;
-    const cy = (top + bottom) / 2;
-    const reach = Math.min(window.innerWidth, bottom - top) * 0.3;
-    return { kind: "arrow", x: cx + Math.sin(a) * reach, y: cy - Math.cos(a) * reach };
+    const top = (band?.bottom ?? 0) + 8;
+    const bottom = (panel?.top ?? window.innerHeight) - 8;
+    const x = Math.min(Math.max(ar.left + ar.width / 2 + Math.sin(a) * 140, 8), window.innerWidth - 8);
+    const y = Math.min(Math.max(ar.top + ar.height / 2 - Math.cos(a) * 140, top), bottom);
+    return { kind: "arrow", x, y };
   }, id);
   if (!target) return "none";
   await page.mouse.click(target.x, target.y);
   return target.kind;
 }
 
-/** [처리] 가 눌릴 수 있으면(aria-disabled 아님·완료 아님) 누르고 true, 아니면 false */
+/** 장소 위 [처리] 알약(처리 반경 안에서만 DOM 에 있다, 16-07)이 보이면 누르고 true, 없으면 false */
 export async function pressErrandAct(page) {
   const ok = await page.evaluate(() => {
-    const act = document.querySelector("[data-errand-act]");
-    return !!act && act.getAttribute("aria-disabled") !== "true" && !act.hasAttribute("data-done");
+    const act = document.querySelector("button[data-errand-act]");
+    if (!act || act.hidden) return false;
+    const r = act.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
   });
   if (!ok) return false;
-  await page.locator("[data-errand-act]").click({ timeout: 3000 });
+  await page.locator("button[data-errand-act]").click({ timeout: 3000 });
   return true;
+}
+
+/**
+ * 심부름 영역의 마크업 서명(ER1 입력): 층(타일·화살표·링)·알약 층·아래 패널 안의 data-* 이름 목록과 구조 표식 개수. 값·닉네임은 싣지 않는다.
+ * { names: string[], counts: { [표식]: number } }
+ */
+export function readErrandSignature(page) {
+  return page.evaluate((counted) => {
+    const scopes = [...document.querySelectorAll("[data-errand-layer], [data-errand-act-layer], [data-world-panel]")];
+    const names = new Set();
+    for (const root of scopes) for (const el of [root, ...root.querySelectorAll("*")]) for (const n of el.getAttributeNames()) if (n.startsWith("data-")) names.add(n);
+    const counts = {};
+    for (const c of counted) counts[c] = scopes.reduce((n, root) => n + (root.hasAttribute(c) ? 1 : 0) + root.querySelectorAll(`[${c}]`).length, 0);
+    return { names: [...names].sort(), counts };
+  }, ["data-errand-dock", "data-errand-chip", "data-errand-progress", "data-errand-place", "data-errand-arrow", "data-near-ring"]);
 }
 
 /** 진행 글자가 n/3 이 될 때까지(최대 ms) 기다린다. 돼 있으면 true */

@@ -3059,10 +3059,13 @@ export function hostChimeChecks(segs) {
 // ---- 15페이즈 계약 (15-09) — 심부름·목격 기록·밤 얼굴 목록·아침 흔적 판정이 받는 값의 모양 ----
 // 판정은 모두 이 파일의 순수 함수고 흐름(scripts/e2e/errand.mjs)은 읽기만 한다. 값이 없거나 모양이 틀리면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다(공허 통과 금지, T-15-36).
 // 문턱은 여기서만 정하고 낮추지 않는다. 결과 줄에는 장소 id·진행 수·개수·단계 이름만 쓴다(닉네임·토큰 없음, T-15-35).
-//   EA1~EA6 errandChecks(s)
-//     s = { total(칩 수), places: [{ id, done }], doneAttr(data-done 칩 수), progressText("n/N"), actText([처리] 글자), actDisabled(aria-disabled 가 true 인가), bandLine(띠 문장),
-//           callCount([data-call] 수), seatsInWorld(__mfWorld.seats() 중 나 말고 수), nearSeats(그 가운데 근처 반경 + 여유 안), tagSeats(나 말고 이름표 수), attrValues(ERRAND_MARKERS 속성 값 전부) }
-//   EO1~EO4 errandOverlapChecks({ stage, band, dock, panel, pins, arrow, tagButtons })   — 사각형은 { left, top, width, height } (DOMRect 값). pins = 보이는 표지, arrow = 보이는 화살표 사각형 | 목록 | null
+//   EA1~EA10 errandChecks(s)   (16-07: 처리 입구가 아래 독 [처리] 에서 장소 위 알약으로 바뀌어 EA3 를 고치고 EA7~EA10 을 더했다)
+//     s = { total(칩 수), places: [{ id, done, hidden, call, rest }], doneAttr(data-done 칩 수), progressText("n/N"), bandLine(띠 문장), dockButtons(아래 패널 안 단추 수),
+//           callCount([data-call] 수), callKinds([data-call] 요소 종류 목록: "act"|"tile"|"arrow"|"other"), reach("out" 반경 밖|"in" 반경 안|"done" 3곳 완료), actCount([data-errand-act] 수), arrowCount(보이는 화살표 수),
+//           tiles(보이는 타일 사각형 목록), seatsInWorld(__mfWorld.seats() 중 나 말고 수), nearSeats(그 가운데 근처 반경 + 여유 안), tagSeats(나 말고 이름표 수), attrValues(ERRAND_MARKERS 속성 값 전부) }
+//   EO1~EO4 errandOverlapChecks({ stage, band, side, panel, pins, arrow, act, tagButtons })   — 사각형은 { left, top, width, height } (DOMRect 값). pins = 보이는 타일, side = 오른쪽 열 단추들([data-side-button]),
+//           arrow = 보이는 화살표 사각형 | 목록 | null, act = 보이는 [처리] 알약 사각형 | null
+//   ER1 errandParityChecks(mafia, citizen) — 마피아 판과 시민 판의 심부름 영역 마크업(data-* 이름·개수)이 같다(V-25, T-16-15)
 //   RC1~RC4 recordChecks(s)   s = { finished, hasButton, hasCard, rowsAttr, rowCount, zeroText, cardRect, dockRect, bandRect, inputRect, collapsedOnFocus } — inputRect = 채팅 입력줄(.mv-chat__form) 사각형
 //   TC1~TC5 traceChecks(s)    s = { expectCard, cards, cardText, cardAttrText, nameLines, noteLines, cardRect, bandRect, dockRect, panelRect, announceVisible }
 //   NF1~NF6 nightFaceChecks(list)   list = [{ role, count, itemH, listH, eyeHeal, ringMafia, callCount, disabledCount, toastAfterTap }] — 마피아·경찰·의사·시민 네 시점
@@ -3076,6 +3079,7 @@ export const ERRAND_MARKERS = [
   "data-errand-place",
   "data-errand-arrow",
   "data-near-ring",
+  "data-rest",
   "data-record-button",
   "data-record-card",
   "data-record-rows",
@@ -3094,8 +3098,14 @@ export const ERRAND_ACT_R_E2E = 1.2;
 export const ERRAND_NEAR_R_E2E = 3.0;
 /** 기록 카드 윗변은 독 아랫변보다 이만큼(px) 아래에 있어야 한다(UI-SPEC "기록 카드 영역"). */
 export const RECORD_DOCK_GAP = 8;
-/** 표지 상자가 스테이지 안쪽에 있어야 하는 여백(px). */
+/** 타일·알약·화살표 상자가 스테이지 안쪽에 있어야 하는 여백(px). */
 export const ERRAND_STAGE_INSET = 8;
+/** 장소 타일 한 변(px)과 허용 오차(UI-SPEC V-20). */
+export const ERRAND_TILE_PX = 64;
+export const ERRAND_TILE_EPS = 1;
+/** 마크업 동일 판정(ER1)이 개수까지 견주는 구조 표식, 그리고 상태에 따라 있고 없는 표식(이름만 허용 집합 안인지 본다). */
+export const ERRAND_PARITY_COUNTED = ["data-errand-dock", "data-errand-chip", "data-errand-progress", "data-errand-place", "data-errand-arrow", "data-near-ring"];
+export const ERRAND_STATE_ATTRS = ["data-done", "data-call", "data-rest", "data-errand-act"];
 /** 사회자 띠 문장 사본(src/game/hostLine.ts HOST_LINES 의 errand·witness·trace·discussion 줄 — e2eContract 가 같음을 고정). */
 export const ERRAND_LINES = {
   act: "심부름 시간입니다. 빛나는 곳을 찾아 처리해 주세요.",
@@ -3110,15 +3120,19 @@ const ROLE_WORD_RE = /마피아|경찰|의사|시민|범인|증거|확정|mafia|
 const okRect = (r) => !!r && typeof r === "object" && isNum(r.left) && isNum(r.top) && isNum(r.width) && isNum(r.height);
 const asRectList = (x) => (x === null || x === undefined ? [] : Array.isArray(x) ? x : [x]);
 
-/** EA1~EA6 심부름 화면 판정(ERRAND-01~04). s = 위 15페이즈 계약. */
+/** EA1~EA10 심부름 화면 판정(ERRAND-01~04, 16-07 D-06·D-07). s = 위 계약. */
 export function errandChecks(s) {
   const L = {
-    EA1: `진행 칩이 ${ERRAND_PER_PERSON}개이고 장소 표지 수와 같다`,
-    EA2: "진행 숫자 n/N = data-done 칩 수 = 처리한 표지 수",
-    EA3: "[처리] 글자·aria-disabled 규칙(미완 '처리', 3/3 이면 '완료'+aria-disabled)과 띠 문장(errand.act/done)",
-    EA4: "[data-call] 이 한 화면에 한 종류 이하(1개 이하)",
+    EA1: `진행 칩이 ${ERRAND_PER_PERSON}개이고 장소 타일 수와 같다`,
+    EA2: "진행 숫자 n/N = data-done 칩 수 = 처리한 타일 수",
+    EA3: "띠 문장(errand.act/done)과 아래 독에 단추 없음([처리] 는 장소 위 알약뿐)",
+    EA4: "[data-call] 이 한 화면 1개 이하이고 화살표에는 없다(알약 또는 가장 가까운 타일)",
     EA5: "월드·이름표에 근처 밖 좌석 0",
     EA6: "표식 속성 값에 좌석·역할 없음(장소 id·숫자·진행 수뿐)",
+    EA7: `보이는 타일 상자가 ${ERRAND_TILE_PX}×${ERRAND_TILE_PX} ± ${ERRAND_TILE_EPS}`,
+    EA8: "반경 밖이면 알약 0·화살표 1, 반경 안이면 알약 1·화살표 0, 3곳 완료면 둘 다 0",
+    EA9: "빛남 우선: 반경 안이면 알약만, 반경 밖이면 가장 가까운 타일만(보이면), 3곳 완료면 없음",
+    EA10: "남은(미처리·빛나지 않는) 보이는 타일은 data-rest, 처리한 타일과 빛나는 타일은 data-rest 없음",
   };
   const ids = Object.keys(L);
   if (!s || typeof s !== "object") return ids.map((id) => noMeasure(id, L[id], "심부름 읽기 값"));
@@ -3128,33 +3142,35 @@ export function errandChecks(s) {
   if (isNum(s.total) && placesOk) {
     const bad = [];
     if (s.total !== ERRAND_PER_PERSON) bad.push(`칩 ${s.total}개 ≠ ${ERRAND_PER_PERSON}`);
-    if (s.places.length !== s.total) bad.push(`표지 ${s.places.length}개 ≠ 칩 ${s.total}개`);
+    if (s.places.length !== s.total) bad.push(`타일 ${s.places.length}개 ≠ 칩 ${s.total}개`);
     out.push(result("EA1", L.EA1, bad));
-  } else out.push(noMeasure("EA1", L.EA1, "칩 수·표지 목록"));
+  } else out.push(noMeasure("EA1", L.EA1, "칩 수·타일 목록"));
   // EA2
   if (isNum(s.total) && isNum(s.doneAttr) && isStr(s.progressText) && placesOk) {
     const doneMarkers = s.places.filter((p) => p.done).length;
     const bad = [];
     if (s.progressText.trim() !== `${s.doneAttr}/${s.total}`) bad.push(`진행 '${s.progressText}' ≠ ${s.doneAttr}/${s.total}`);
-    if (doneMarkers !== s.doneAttr) bad.push(`처리한 표지 ${doneMarkers}개 ≠ data-done 칩 ${s.doneAttr}개`);
+    if (doneMarkers !== s.doneAttr) bad.push(`처리한 타일 ${doneMarkers}개 ≠ data-done 칩 ${s.doneAttr}개`);
     out.push(result("EA2", L.EA2, bad));
-  } else out.push(noMeasure("EA2", L.EA2, "진행 글자·data-done 칩 수·표지"));
+  } else out.push(noMeasure("EA2", L.EA2, "진행 글자·data-done 칩 수·타일"));
   // EA3
-  if (isNum(s.total) && isNum(s.doneAttr) && isStr(s.actText) && typeof s.actDisabled === "boolean" && isStr(s.bandLine)) {
+  if (isNum(s.total) && isNum(s.doneAttr) && isStr(s.bandLine) && isNum(s.dockButtons)) {
     const bad = [];
     const complete = s.doneAttr >= s.total;
     if (complete) {
-      if (s.actText.trim() !== "완료") bad.push(`3/3 인데 [처리] 글자 '${s.actText}' ≠ '완료'`);
-      if (!s.actDisabled) bad.push("3/3 인데 [처리] 가 aria-disabled 가 아님");
       if (s.bandLine.trim() !== ERRAND_LINES.done) bad.push("3/3 인데 띠 문장이 errand.done 이 아님");
-    } else {
-      if (s.actText.trim() !== "처리") bad.push(`미완인데 [처리] 글자 '${s.actText}' ≠ '처리'`);
-      if (s.bandLine.trim() !== ERRAND_LINES.act) bad.push("미완인데 띠 문장이 errand.act 가 아님");
-    }
+    } else if (s.bandLine.trim() !== ERRAND_LINES.act) bad.push("미완인데 띠 문장이 errand.act 가 아님");
+    if (s.dockButtons !== 0) bad.push(`아래 독에 단추 ${s.dockButtons}개 ≠ 0`);
     out.push(result("EA3", L.EA3, bad));
-  } else out.push(noMeasure("EA3", L.EA3, "[처리] 글자·aria-disabled·띠 문장"));
+  } else out.push(noMeasure("EA3", L.EA3, "띠 문장·아래 독 단추 수"));
   // EA4
-  out.push(isNum(s.callCount) ? result("EA4", L.EA4, s.callCount <= 1 ? [] : [`[data-call] ${s.callCount}개 > 1`]) : noMeasure("EA4", L.EA4, "[data-call] 수"));
+  if (isNum(s.callCount) && Array.isArray(s.callKinds) && s.callKinds.every(isStr)) {
+    const bad = [];
+    if (s.callCount > 1) bad.push(`[data-call] ${s.callCount}개 > 1`);
+    if (s.callKinds.length !== s.callCount) bad.push(`[data-call] ${s.callCount}개인데 종류 목록 ${s.callKinds.length}개`);
+    if (s.callKinds.some((k) => k !== "act" && k !== "tile")) bad.push(`알약·타일이 아닌 곳에 빛: ${s.callKinds.filter((k) => k !== "act" && k !== "tile").join(",")}`);
+    out.push(result("EA4", L.EA4, bad));
+  } else out.push(noMeasure("EA4", L.EA4, "[data-call] 수·종류"));
   // EA5
   if (isNum(s.seatsInWorld) && isNum(s.nearSeats) && isNum(s.tagSeats)) {
     const bad = [];
@@ -3172,42 +3188,107 @@ export function errandChecks(s) {
     }
     out.push(result("EA6", L.EA6, bad));
   } else out.push(noMeasure("EA6", L.EA6, "표식 속성 값 목록"));
+  // EA7
+  if (Array.isArray(s.tiles) && s.tiles.every(okRect)) {
+    const bad = [];
+    s.tiles.forEach((t, i) => {
+      if (Math.abs(t.width - ERRAND_TILE_PX) > ERRAND_TILE_EPS || Math.abs(t.height - ERRAND_TILE_PX) > ERRAND_TILE_EPS) bad.push(`타일 ${i + 1} 상자 ${rd(t.width)}x${rd(t.height)} ≠ ${ERRAND_TILE_PX}`);
+    });
+    out.push(result("EA7", L.EA7, bad));
+  } else out.push(noMeasure("EA7", L.EA7, "타일 사각형"));
+  // EA8·EA9
+  const reachOk = s.reach === "out" || s.reach === "in" || s.reach === "done";
+  if (reachOk && isNum(s.actCount) && isNum(s.arrowCount)) {
+    const want = { out: [0, 1], in: [1, 0], done: [0, 0] }[s.reach];
+    const bad = [];
+    if (s.actCount !== want[0]) bad.push(`${s.reach}: 알약 ${s.actCount}개 ≠ ${want[0]}`);
+    if (s.arrowCount !== want[1]) bad.push(`${s.reach}: 화살표 ${s.arrowCount}개 ≠ ${want[1]}`);
+    out.push(result("EA8", L.EA8, bad));
+  } else out.push(noMeasure("EA8", L.EA8, "반경 상태(reach)·알약 수·화살표 수"));
+  if (reachOk && Array.isArray(s.callKinds) && s.callKinds.every(isStr)) {
+    const bad = [];
+    if (s.reach === "in" && !(s.callKinds.length === 1 && s.callKinds[0] === "act")) bad.push(`반경 안인데 빛이 알약 하나가 아님(${s.callKinds.join(",") || "없음"})`);
+    if (s.reach === "out" && s.callKinds.some((k) => k !== "tile")) bad.push(`반경 밖인데 타일 말고 빛남(${s.callKinds.join(",")})`);
+    if (s.reach === "done" && s.callKinds.length !== 0) bad.push(`3곳 완료인데 빛이 ${s.callKinds.length}개`);
+    out.push(result("EA9", L.EA9, bad));
+  } else out.push(noMeasure("EA9", L.EA9, "반경 상태(reach)·빛 종류"));
+  // EA10
+  if (placesOk && s.places.every((p) => typeof p.hidden === "boolean" && typeof p.call === "boolean" && typeof p.rest === "boolean")) {
+    const bad = [];
+    for (const p of s.places) {
+      if (p.hidden) continue;
+      if (p.done && (p.rest || p.call)) bad.push(`처리한 타일 ${p.id} 에 ${p.rest ? "data-rest" : "data-call"}`);
+      if (!p.done && p.call && p.rest) bad.push(`빛나는 타일 ${p.id} 에 data-rest`);
+      if (!p.done && !p.call && !p.rest) bad.push(`남은 타일 ${p.id} 에 data-rest 없음`);
+    }
+    out.push(result("EA10", L.EA10, bad));
+  } else out.push(noMeasure("EA10", L.EA10, "타일별 hidden·call·rest"));
   return out;
 }
 
 /**
- * EO1~EO4 심부름 영역(UI-SPEC "심부름 화면 영역 표", 폰 6종). x = { stage, band, dock, panel, pins, arrow, tagButtons } — 사각형은 { left, top, width, height }.
- * EO1 표지·화살표 칩이 서로 겹치지 않는다. EO2 표지·화살표가 이름표 버튼과 겹치지 않는다. EO3 표지·화살표가 띠 면·독 줄·아래 패널과 겹치지 않는다.
- * EO4 표지 상자가 스테이지 안쪽 8 inset 안(보이는 것만 입력에 든다)이고 화살표는 한 개 이하. 판정 문턱(OVERLAP_EPS)은 낮추지 않는다.
+ * EO1~EO4 심부름 영역(UI-SPEC "심부름 화면 영역 표", 폰 6종). x = { stage, band, side, panel, pins, arrow, act, tagButtons } — 사각형은 { left, top, width, height }.
+ * EO1 타일끼리·[처리] 알약과 타일이 겹치지 않는다(화살표는 눌림을 통과하는 방향 표지라 가까이 다가가면 목표 타일 위로 지나갈 수 있어 타일과의 겹침은 보지 않는다 — 16-07).
+ * EO2 타일·알약·화살표가 이름표 버튼과 겹치지 않는다. EO3 타일·알약·화살표가 띠 면·오른쪽 열 단추·아래 패널과 겹치지 않는다(SC2).
+ * EO4 타일·알약·화살표 상자가 스테이지 안쪽 8 inset 안이고 화살표·알약은 한 개 이하. 판정 문턱(OVERLAP_EPS)은 낮추지 않는다.
  */
 export function errandOverlapChecks(x) {
   const L = {
-    EO1: "표지·화살표 칩끼리 겹침 0",
-    EO2: "표지·화살표 칩이 이름표 버튼과 겹침 0",
-    EO3: "표지·화살표 칩이 띠 면·독 줄·아래 패널과 겹침 0",
-    EO4: `표지 상자가 스테이지 안쪽 ${ERRAND_STAGE_INSET} 안이고 화살표는 한 개 이하`,
+    EO1: "타일끼리·알약과 타일 겹침 0",
+    EO2: "타일·알약·화살표가 이름표 버튼과 겹침 0",
+    EO3: "타일·알약·화살표가 띠 면·오른쪽 열 단추·아래 패널과 겹침 0",
+    EO4: `타일·알약·화살표 상자가 스테이지 안쪽 ${ERRAND_STAGE_INSET} 안이고 화살표·알약은 한 개 이하`,
   };
   const ids = Object.keys(L);
   const arrows = asRectList(x?.arrow);
+  const acts = asRectList(x?.act);
   const pins = x?.pins;
   const tags = x?.tagButtons;
-  if (!x || !okRect(x.stage) || !okRect(x.band) || !okRect(x.dock) || !okRect(x.panel) || !Array.isArray(pins) || !pins.every(okRect) || !arrows.every(okRect) || !Array.isArray(tags) || !tags.every(okRect))
-    return ids.map((id) => noMeasure(id, L[id], "스테이지·띠·독·패널·표지·화살표·이름표 사각형"));
-  const marks = [...pins.map((r, i) => ({ r, name: `표지 ${i + 1}` })), ...arrows.map((r, i) => ({ r, name: `화살표 ${i + 1}` }))];
+  const side = x?.side;
+  if (!x || !okRect(x.stage) || !okRect(x.band) || !okRect(x.panel) || !Array.isArray(side) || !side.every(okRect) || !Array.isArray(pins) || !pins.every(okRect) || !arrows.every(okRect) || !acts.every(okRect) || !Array.isArray(tags) || !tags.every(okRect))
+    return ids.map((id) => noMeasure(id, L[id], "스테이지·띠·오른쪽 열·패널·타일·화살표·알약·이름표 사각형"));
+  const marks = [...pins.map((r, i) => ({ r, name: `타일 ${i + 1}` })), ...acts.map((r, i) => ({ r, name: `알약 ${i + 1}` })), ...arrows.map((r, i) => ({ r, name: `화살표 ${i + 1}` }))];
   const bad1 = [];
-  for (let i = 0; i < marks.length; i++) for (let j = i + 1; j < marks.length; j++) if (rectsOverlap(marks[i].r, marks[j].r)) bad1.push(`${marks[i].name}·${marks[j].name} 겹침(${overlapText(marks[i].r, marks[j].r)})`);
+  const solid = marks.filter((m) => !m.name.startsWith("화살표"));
+  for (let i = 0; i < solid.length; i++) for (let j = i + 1; j < solid.length; j++) if (rectsOverlap(solid[i].r, solid[j].r)) bad1.push(`${solid[i].name}·${solid[j].name} 겹침(${overlapText(solid[i].r, solid[j].r)})`);
   const bad2 = [];
   for (const m of marks) tags.forEach((t, k) => { if (rectsOverlap(m.r, t)) bad2.push(`${m.name} 이 이름표 ${k + 1} 과 겹침(${overlapText(m.r, t)})`); });
   const bad3 = [];
-  for (const m of marks) for (const [name, r] of [["띠", x.band], ["독 줄", x.dock], ["아래 패널", x.panel]]) if (rectsOverlap(m.r, r)) bad3.push(`${m.name} 이 ${name}와 겹침(${overlapText(m.r, r)})`);
+  for (const m of marks) for (const [name, r] of [["띠", x.band], ...side.map((r, k) => [`오른쪽 열 단추 ${k + 1}`, r]), ["아래 패널", x.panel]]) if (rectsOverlap(m.r, r)) bad3.push(`${m.name} 이 ${name}와 겹침(${overlapText(m.r, r)})`);
   const bad4 = [];
   const inner = { left: x.stage.left + ERRAND_STAGE_INSET, top: x.stage.top + ERRAND_STAGE_INSET, right: right(x.stage) - ERRAND_STAGE_INSET, bottom: bottom(x.stage) - ERRAND_STAGE_INSET };
-  pins.forEach((p, i) => {
-    if (!rectInside(p, inner)) bad4.push(`표지 ${i + 1} 이 스테이지 안쪽 ${ERRAND_STAGE_INSET} 밖(${rd(p.left)},${rd(p.top)} ${rd(p.width)}x${rd(p.height)})`);
-  });
+  for (const m of marks) if (!rectInside(m.r, inner)) bad4.push(`${m.name} 이 스테이지 안쪽 ${ERRAND_STAGE_INSET} 밖(${rd(m.r.left)},${rd(m.r.top)} ${rd(m.r.width)}x${rd(m.r.height)})`);
   if (arrows.length > 1) bad4.push(`화살표 ${arrows.length}개 > 1`);
+  if (acts.length > 1) bad4.push(`알약 ${acts.length}개 > 1`);
   return [result("EO1", L.EO1, bad1), result("EO2", L.EO2, bad2), result("EO3", L.EO3, bad3), result("EO4", L.EO4, bad4)];
 }
+
+/**
+ * ER1 마피아 판과 시민 판의 심부름 영역 마크업이 같다(V-25, T-16-15). 입력은 각 판의 { names: 영역 안 data-* 이름 목록, counts: { [표식]: 개수 } } (browser.mjs readErrandSignature).
+ * 같아야 하는 것: 구조 표식(ERRAND_PARITY_COUNTED)의 개수, 상태 표식(ERRAND_STATE_ATTRS)을 뺀 data-* 이름 집합.
+ * 상태 표식(data-done·data-call·data-rest·data-errand-act)은 판마다 위치가 달라 있고 없고가 다르므로 개수는 견주지 않고 이름이 허용 집합 안인지만 본다. 역할류 이름(fake·mafia·role·decoy·bluff)은 어느 쪽에도 없어야 한다.
+ */
+export function errandParityChecks(mafia, citizen) {
+  const id = "ER1";
+  const label = "마피아·시민 심부름 영역의 data-* 이름·구조 표식 개수가 같고 가짜·역할류 표식이 없다";
+  const okSig = (z) => z && Array.isArray(z.names) && z.names.every(isStr) && z.counts && typeof z.counts === "object" && ERRAND_PARITY_COUNTED.every((k) => isNum(z.counts[k]));
+  if (!okSig(mafia) || !okSig(citizen)) return [noMeasure(id, label, "마피아·시민 판의 심부름 영역 표식 이름·개수")];
+  const bad = [];
+  const structural = (z) => [...new Set(z.names)].filter((n) => !ERRAND_STATE_ATTRS.includes(n)).sort();
+  const a = structural(mafia);
+  const b = structural(citizen);
+  if (JSON.stringify(a) !== JSON.stringify(b)) bad.push(`표식 이름 집합이 다름(마피아 ${a.join(",")} ≠ 시민 ${b.join(",")})`);
+  for (const k of ERRAND_PARITY_COUNTED) if (mafia.counts[k] !== citizen.counts[k]) bad.push(`${k} 개수 마피아 ${mafia.counts[k]} ≠ 시민 ${citizen.counts[k]}`);
+  for (const [who, z] of [["마피아", mafia], ["시민", citizen]]) {
+    for (const n of new Set(z.names)) {
+      if (/fake|mafia|role|decoy|bluff/i.test(n)) bad.push(`${who} 판에 역할류 표식 ${n}`);
+      if (ERRAND_STATE_ATTRS.includes(n) === false && ERRAND_MARKERS.includes(n) === false && !ERRAND_STRUCT_EXTRA.includes(n)) bad.push(`${who} 판에 알 수 없는 표식 ${n}`);
+    }
+  }
+  return [result(id, label, bad)];
+}
+/** 심부름 영역에 구조적으로 더 있는 표식(층 상자) — 허용 집합. */
+const ERRAND_STRUCT_EXTRA = ["data-errand-layer", "data-errand-act-layer", "data-world-panel"];
 
 /**
  * RC1~RC4 목격 기록(ERRAND-05, D-04). s = 위 15페이즈 계약. finished = 3곳을 모두 마친 산 사람인가.
