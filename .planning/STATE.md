@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 16
 current_phase_name: 단추 정리·심부름 증거
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-11-08T10:00:42.125Z"
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-11-08T10:10:07.251Z"
 last_activity: 2026-11-08
 last_activity_desc: Phase 16 execution started
-state_head: 8a725e122b778101cf466ad21345b158fcac7b4d
+state_head: 634f6a85aa30c020c53579b790d06d220fe51cf3
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 35
-  completed_plans: 26
+  completed_plans: 27
   percent: 60
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 16 (단추 정리·심부름 증거) — EXECUTING
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 10
 Status: Ready to execute
 Last activity: 2026-11-08 — Phase 16 execution started
@@ -224,6 +224,7 @@ Last activity: 2026-11-08 — Phase 16 execution started
 | Phase 15 P09 | 약 3시간 | 3 tasks | 9 files |
 | Phase 15 P10 | 2h30m | 3 tasks | 17 files |
 | Phase 16 P01 | 60min | 3 tasks | 22 files |
+| Phase 16 P02 | 10min | 2 tasks | 31 files |
 
 ## Accumulated Context
 
@@ -480,6 +481,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 16]: 16-01: seen 은 day.morning.seen 과 day.evidence.seen 두 곳에 같은 값으로 싣고 클라이언트는 day.evidence 만 읽는다 (P-1)
 - [Phase 16]: 16-01: 증거 카드 스타일은 v2.css 계약(ellipsis·놋쇠 금지) 때문에 evidence.css 로 분리한다
 - [Phase 16]: 16-01: 아침 흔적 구간 5초·상한 16초(A3) — 유언·쪽지·흔적이 모두 있는 최악의 아침이 정확히 16초
+- [Phase 16]: [16-02] 컬러 에셋 변환기는 .ts 를 import 하지 않고 낱말→id 표를 스크립트에 두며, 일치는 단위 시험이 검사한다. 사본은 design/v3.0/assets/{id}.svg, JSX 는 생성물(placeArt.tsx)
 
 ### Pending Todos
 
@@ -546,8 +548,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-08T10:00:41.969Z
-Stopped at: Completed 16-01-PLAN.md
+Last session: 2026-11-08T10:10:07.093Z
+Stopped at: Completed 16-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
