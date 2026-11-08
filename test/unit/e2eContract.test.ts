@@ -785,6 +785,14 @@ describe("서버 계약 소비자 스크립트의 새 단계 흐름 (15-06, DEPL
     expect(Number(m![1]!.replaceAll("_", ""))).toBe(ERRAND_MS);
   });
 
+  it("scripts/smoke.mjs 의 MORNING_TRACE_MS 가 shared/game/phases.ts 의 MORNING_TRACE_MS 와 같고 아침 길이 기대에 그 상수를 쓴다 (16-10: 3초 하드코딩이 5초로 바뀐 값을 놓쳤다)", () => {
+    const text = scriptText("smoke.mjs");
+    const m = /^const MORNING_TRACE_MS = ([0-9_]+);/m.exec(text);
+    expect(m, "smoke.mjs 에 const MORNING_TRACE_MS 가 있어야 한다").not.toBeNull();
+    expect(Number(m![1]!.replaceAll("_", ""))).toBe(MORNING_TRACE_MS);
+    expect(text).toMatch(/morningWant = 9_000 \+ \(morning\.trace !== undefined \? MORNING_TRACE_MS : 0\)/);
+  });
+
   it("smoke.mjs 의 전이 표가 dayAnnounce → errand → discussion 이고 낮 단계 목록에 errand 가 있으며 errand 40초 대기를 쓴다", () => {
     const text = scriptText("smoke.mjs");
     expect(text).toMatch(/dayAnnounce: \["errand"\]/);
