@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>컬러 에셋 B</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&amp;family=Gowun+Dodum&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 820px; height: 780px; box-sizing: border-box; padding: 32px; display: flex; flex-direction: column; gap: 14px; background: #14111c; color: #f1f2f5; font-family: 'Gowun Dodum', system-ui, sans-serif">
+<span style="font-family: 'Gowun Batang', serif; font-size: 20px; font-weight: 700; color: #e8d3a8">재즈 바</span>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{bar}}" as="it" hint-placeholder-count="8">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+<div role="img" aria-label="{{it.name}}" style="width: 72px; height: 72px; border-radius: 50%; background: {{it.bg}}; box-shadow: inset 0 -5px 0 rgba(0,0,0,0.25), 0 0 0 3px #221d2e; display: grid; place-items: center">
+<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{it.d}}"></path></svg>
+</div>
+<span style="font-size: 13px; color: #a9aebb">{{it.name}}</span>
+</div>
+</sc-for>
+</div>
+<span style="font-family: 'Gowun Batang', serif; font-size: 20px; font-weight: 700; color: #e8d3a8; margin-top: 6px">시계탑 광장</span>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{plaza}}" as="it" hint-placeholder-count="8">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+<div role="img" aria-label="{{it.name}}" style="width: 72px; height: 72px; border-radius: 50%; background: {{it.bg}}; box-shadow: inset 0 -5px 0 rgba(0,0,0,0.25), 0 0 0 3px #221d2e; display: grid; place-items: center">
+<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{it.d}}"></path></svg>
+</div>
+<span style="font-size: 13px; color: #a9aebb">{{it.name}}</span>
+</div>
+</sc-for>
+</div>
+<span style="font-family: 'Gowun Batang', serif; font-size: 20px; font-weight: 700; color: #e8d3a8; margin-top: 6px">아침 흔적 조각</span>
+<div style="display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{trace}}" as="it" hint-placeholder-count="9">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+<div role="img" aria-label="{{it.name}}" style="width: 64px; height: 64px; border-radius: 50%; background: {{it.bg}}; box-shadow: inset 0 -4px 0 rgba(0,0,0,0.25), 0 0 0 3px #221d2e; display: grid; place-items: center">
+<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="{{it.fg}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{it.d}}"></path></svg>
+</div>
+<span style="font-size: 12px; color: #a9aebb">{{it.name}}</span>
+</div>
+</sc-for>
+</div>
+<span style="font-size: 13px; color: #a9aebb; margin-top: 4px">색 동전 + 흰 선 그림 · 모양이 통일되지만 사물 고유색이 사라져 장소끼리 구분은 A 보다 약하다</span>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":780}}'>
+class Component extends DCLogic {
+renderVals() {
+const cloth = 'M5 7l5-2 3 2.5 6-1.5-1 6 2 5-6 1.5-3-2-5 1.5 1-5.5z';
+const thread = 'M4 15c3-7 5 4 8-3s5 3 8-4';
+return {
+bar: [
+{ name: '술잔', bg: '#c8455a', d: 'M5 4h14l-7 8zM12 12v7M8 20h8' },
+{ name: '피아노', bg: '#4a4260', d: 'M4 8h16v10H4zM8 13v5M12 13v5M16 13v5M4 13h16' },
+{ name: '색소폰', bg: '#c9902e', d: 'M14 3l2 1-2 11c-.5 4-3 6-6 6-2.5 0-4-1.5-4-3.5S5.5 15 7 15s2 1 2 2' },
+{ name: '의자', bg: '#b8483a', d: 'M5 7h14M7 7l-2 13M17 7l2 13M12 7v13M6 14h12' },
+{ name: '문', bg: '#9a5b34', d: 'M6 21V4h12v17M4 21h16M15 12h.01' },
+{ name: '포스터', bg: '#7a5ab0', d: 'M6 3h12v18H6zM12 7l1.5 3 3 .5-2 2 .5 3-3-1.5-3 1.5.5-3-2-2 3-.5z' },
+{ name: '전축', bg: '#3a3346', d: 'M11 12m-8 0a8 8 0 1 0 16 0a8 8 0 1 0-16 0M11 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M21 3l-4 9' },
+{ name: '촛불', bg: '#d9822b', d: 'M12 3c2.5 3 3 4.5 3 6a3 3 0 0 1-6 0c0-1.5.5-3 3-6zM9 12h6v8H9zM6 20h12' }
+],
+plaza: [
+{ name: '시계탑', bg: '#4f7fc8', d: 'M12 2l5 5H7zM8 7h8v14H8zM12 11v2l1.5 1' },
+{ name: '분수', bg: '#3a9ad6', d: 'M12 4v7M12 11c-3-4-6-4-7-2M12 11c3-4 6-4 7-2M3 15h18l-2 5H5z' },
+{ name: '벤치', bg: '#b07a43', d: 'M3 7h18M3 11h18M2 15h20M5 15v5M19 15v5' },
+{ name: '가로등', bg: '#c99a2e', d: 'M8 4h8l-1 5H9zM12 9v12M8 21h8' },
+{ name: '우체통', bg: '#d9483b', d: 'M6 9a6 6 0 0 1 12 0v9H6zM9 9h6M12 18v3M9 21h6' },
+{ name: '나무', bg: '#3f9a5c', d: 'M12 3a6 6 0 0 1 6 6 6 6 0 0 1-6 6 6 6 0 0 1-6-6 6 6 0 0 1 6-6zM12 15v6' },
+{ name: '꽃', bg: '#d65c93', d: 'M12 9m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0M12 12v9M12 17c-3 0-4-2-4-3 2 0 4 1 4 3' },
+{ name: '가판', bg: '#c8503c', d: 'M3 8l2-4h14l2 4zM3 8c1 2 3 2 4.5 0 1 2 3 2 4.5 0 1 2 3 2 4.5 0 1 2 3 2 4.5 0M5 12h14v8H5z' }
+],
+trace: [
+{ name: '단추', bg: '#9a6e41', fg: '#ffffff', d: 'M12 12m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0M10 10h.01M14 10h.01M10 14h.01M14 14h.01' },
+{ name: '은빛 핀', bg: '#8b93a3', fg: '#ffffff', d: 'M12 3l2.5 5 5.5 1-4 4 1 5.5-5-2.5-5 2.5 1-5.5-4-4 5.5-1z' },
+{ name: '흰 천', bg: '#e9e6de', fg: '#2a2533', d: cloth },
+{ name: '검은 천', bg: '#2a2533', fg: '#ffffff', d: cloth },
+{ name: '갈색 천', bg: '#8a5530', fg: '#ffffff', d: cloth },
+{ name: '연필', bg: '#e0a520', fg: '#2a2533', d: 'M5 19l11-11 3 3-11 11H5zM16 8l2-2 3 3-2 2' },
+{ name: '회색 실', bg: '#8b909c', fg: '#ffffff', d: thread },
+{ name: '남색 실', bg: '#2f4a9a', fg: '#ffffff', d: thread },
+{ name: '붉은 천', bg: '#c23446', fg: '#ffffff', d: cloth }
+]
+};
+}
+}
+</script>
+</body>
+</html>
