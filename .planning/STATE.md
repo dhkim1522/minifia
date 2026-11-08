@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 16
 current_phase_name: 단추 정리·심부름 증거
-current_plan: 9
+current_plan: 10
 status: executing
-stopped_at: Completed 16-08-PLAN.md
-last_updated: "2026-11-08T12:23:26.319Z"
+stopped_at: Completed 16-09-PLAN.md
+last_updated: "2026-11-08T12:45:10.639Z"
 last_activity: 2026-11-08
 last_activity_desc: Phase 16 execution started
-state_head: 3789a36596133690ec48fa8279dd8358c53e665f
+state_head: 1cec5fa56875e8b229bbd8252fd75ef955c1ab6e
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 35
-  completed_plans: 33
+  completed_plans: 34
   percent: 60
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 16 (단추 정리·심부름 증거) — EXECUTING
-Current Plan: 9
+Current Plan: 10
 Total Plans in Phase: 10
 Status: Ready to execute
 Last activity: 2026-11-08 — Phase 16 execution started
@@ -231,6 +231,7 @@ Last activity: 2026-11-08 — Phase 16 execution started
 | Phase 16 P06 | 70min | 3 tasks | 30 files |
 | Phase 16 P07 | 35min | 3 tasks | 24 files |
 | Phase 16 P08 | 55min | 3 tasks | 14 files |
+| Phase 16 P09 | 95min | 3 tasks | 23 files |
 
 ## Accumulated Context
 
@@ -500,6 +501,10 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 16]: 16-07: E2E EO1 은 화살표와 타일의 겹침을 보지 않는다(눌림 통과 방향 표지), 피할 사각형은 [data-side-button] 전부
 - [Phase 16]: 16-08: useMapInsets 두 번째 인자를 panelKey 에서 panelless 로 바꿈 — 심부름은 아래 패널이 없고 단계가 바뀌면 다시 잼
 - [Phase 16]: 16-08: 시작 카드 표시·닫기는 useErrandStartCard 훅(캡처 pointerdown, 누름은 막지 않음)이 맡고 닫은 단계는 phaseEndsAt 로 구분
+- [Phase 16]: 16-09: 조각 색은 닫힌 표 TRACE_MARK 에서 CSS 사용자 변수 --trace-mark 로만 넘기고, 같은 옷 판정은 서버가 아니라 클라이언트가 공개 look 과 조각으로 계산한다
+- [Phase 16]: 16-09: 이름표 표시는 증거 카드가 뜬 뒤부터 낮 끝까지(밤엔 서버가 증거를 안 실어 사라짐), 목격 표시도 trace 가 있을 때만, 같은 옷 대상은 산 사람만
+- [Phase 16]: 16-09: 사회자 discussion.evidence 는 day.evidence.trace 유무만 읽고 빛남은 discussion.act 와 같은 채팅 단추 — 우선순위 witness, discussion.evidence, discussion.act
+- [Phase 16]: 16-09: 이름표 표시·증거 카드 CSS 는 v2.css 의 brass 금지 계약 때문에 evidence.css 에 둔다
 
 ### Pending Todos
 
@@ -566,8 +571,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-08T12:23:26.136Z
-Stopped at: Completed 16-08-PLAN.md
+Last session: 2026-11-08T12:45:10.472Z
+Stopped at: Completed 16-09-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
