@@ -31,7 +31,7 @@ import {
 import type { Actor, Game, Seated, TestSocket } from "./helpers";
 
 type Raw = Record<string, unknown>;
-interface StoredPlayer { id: string; seat: number; isBot?: boolean; role?: string; errandPlaces?: string[]; errandDone?: string[] }
+interface StoredPlayer { id: string; seat: number; isBot?: boolean; role?: string; errandPlaces?: string[]; errandDone?: string[]; errandFake?: string }
 interface PlanStep { at: number; botId: string; act: { t: string } }
 const stored = async (code: string): Promise<Raw> => (await storedRoom(code)) as unknown as Raw;
 const playersOf = async (code: string): Promise<StoredPlayer[]> => (await stored(code)).players as StoredPlayer[];
@@ -108,7 +108,8 @@ describe("트레이서: 봇 방이 낮 시작 → 심부름 → 토론을 지난
       const from = starts.get(b.id)!;
       let best = b.errandPlaces![0]!;
       let bestD = Infinity;
-      for (const id of b.errandPlaces!) {
+      // 가짜(서버 전용 errandFake)는 마지막으로 미룬다 — 가짜가 아닌 미완료 장소가 있으면 그중 가장 가까운 곳이 목표다(D-08).
+      for (const id of b.errandPlaces!.filter((x) => x !== b.errandFake)) {
         const c = centerOf(map, id);
         const d = (c.x - from.x) ** 2 + (c.z - from.z) ** 2;
         if (d < bestD) {
@@ -121,16 +122,26 @@ describe("트레이서: 봇 방이 낮 시작 → 심부름 → 토론을 지난
       expect(`${b.id}:${Math.hypot(end.x - snapped.x, end.z - snapped.z) <= 30}`).toBe(`${b.id}:true`);
     }
 
-    // 3) errandAct: 봇을 각자 목록 장소 중앙에 세우고 계획의 errandAct 를 돌리면 장소 하나씩 처리되어 3 이 된다
+    // 3) errandAct: 봇을 각자 목록 장소 중앙에 세우고 계획의 errandAct 를 돌리면 장소 하나씩 처리된다. 마피아 봇은 가짜를 마지막에 가고 거기서 조용히 실패해 2/3 에서 멈추고,
+    //    시민 봇은 3/3 이다(D-08). 걷는 순서는 가짜가 아닌 곳 먼저, 가짜는 마지막이다.
+    const mafiaBots = bots.filter((b) => b.role === "mafia");
+    expect(mafiaBots.length).toBeGreaterThan(0);
+    for (const b of mafiaBots) expect(b.errandPlaces).toContain(b.errandFake);
+    for (const b of bots.filter((x) => x.role !== "mafia")) expect(b.errandFake).toBeUndefined();
+    const orderOf = (b: StoredPlayer): string[] => [...b.errandPlaces!.filter((x) => x !== b.errandFake), ...b.errandPlaces!.filter((x) => x === b.errandFake)];
     for (let k = 0; k < 3; k += 1) {
       await pause(ERRAND_MIN_GAP_MS + 50);
-      for (const b of bots) await placeAt(r.code, b.id, centerOf(map, b.errandPlaces![k]!));
+      for (const b of bots) await placeAt(r.code, b.id, centerOf(map, orderOf(b)[k]!));
       await runSteps(r.code, key, bots.map((b) => ({ botId: b.id, act: { t: "errandAct" } })));
-      await until(`봇 전원 ${k + 1}/3`, async () => (await playersOf(r.code)).filter((p) => p.isBot === true).every((p) => p.errandDone?.length === k + 1));
+      await until(`봇 ${k + 1}번째 처리`, async () =>
+        (await playersOf(r.code)).filter((p) => p.isBot === true).every((p) => p.errandDone?.length === (p.role === "mafia" ? Math.min(k + 1, 2) : k + 1)),
+      );
     }
     for (const b of (await playersOf(r.code)).filter((p) => p.isBot === true)) {
       const original = bots.find((x) => x.id === b.id)!;
-      expect(JSON.stringify([...b.errandDone!].sort())).toBe(JSON.stringify([...original.errandPlaces!].sort()));
+      const expected = original.role === "mafia" ? original.errandPlaces!.filter((x) => x !== original.errandFake) : original.errandPlaces!;
+      expect(`${b.id}:${JSON.stringify([...b.errandDone!].sort())}`).toBe(`${b.id}:${JSON.stringify([...expected].sort())}`);
+      expect(b.errandDone).not.toContain(original.errandFake ?? "__none__");
     }
 
     // 4) 방장이 넘기면 토론으로 간다 — 단계가 바뀐 뒤 view 에는 me.errand 가 없다
@@ -179,7 +190,11 @@ describe("응답 동일성 · 스키마", () => {
     const rejected: string[] = [];
     for (const a of [mafia, citizen]) {
       const id = await idOf(g.code, a.seat);
-      const mine = await placesOf(g.code, id);
+      const places = await placesOf(g.code, id);
+      const fake = (await playersOf(g.code)).find((p) => p.id === id)!.errandFake;
+      expect(fake === undefined).toBe(a.role !== "mafia");
+      // 마피아는 가짜가 아닌 곳을 [0]·[1] 로 쓴다(가짜는 처리되지 않는다 — D-08)
+      const mine = [...places.filter((x) => x !== fake), ...places.filter((x) => x === fake)];
       const outside = (map.places ?? []).map((p) => p.id).find((p) => !mine.includes(p))!;
       // 1) 반경 밖
       await placeAt(g.code, id, far);
@@ -189,6 +204,13 @@ describe("응답 동일성 · 스키마", () => {
       await placeAt(g.code, id, centerOf(map, outside));
       rejected.push(await press(g, a));
       await pause(ERRAND_MIN_GAP_MS + 50);
+      // 가짜 곁(마피아만): 반경 밖과 같은 응답이고 진행은 오르지 않는다
+      if (fake !== undefined) {
+        await placeAt(g.code, id, centerOf(map, fake));
+        rejected.push(await press(g, a));
+        expect(JSON.stringify(await doneOf(g.code, id))).toBe("[]");
+        await pause(ERRAND_MIN_GAP_MS + 50);
+      }
       // 성공(같은 모양의 한 프레임이지만 진행이 오른다)
       await placeAt(g.code, id, centerOf(map, mine[0]!));
       await press(g, a);
@@ -206,7 +228,7 @@ describe("응답 동일성 · 스키마", () => {
       await press(g, a);
       expect(await doneOf(g.code, id)).toEqual([mine[0], mine[1]]);
     }
-    expect(rejected).toHaveLength(8);
+    expect(rejected).toHaveLength(9); // 시민 4 + 마피아 4 + 마피아의 가짜 곁 1
     expect(new Set(rejected).size).toBe(1);
     expect(rejected[0]).toBe("[state]|[][][][][]");
   }, 90_000);

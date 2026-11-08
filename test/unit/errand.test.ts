@@ -331,6 +331,59 @@ describe("actErrand", () => {
   });
 });
 
+describe("actErrand — 마피아 가짜 장소 (16페이즈 D-08, A1)", () => {
+  /** id 의 목록을 주어진 장소들로 두고 errandFake 키를 fake 로 둔 방(fake 가 없으면 키 없음). */
+  const withFake = (s: RoomState, id: string, places: string[], fake?: string): RoomState => ({
+    ...s,
+    players: s.players.map((p) => {
+      if (p.id !== id) return p;
+      const { errandFake: _old, ...rest } = p as Player & { errandFake?: string };
+      return { ...rest, errandPlaces: places as never[], errandDone: [], ...(fake === undefined ? {} : { errandFake: fake }) } as Player;
+    }),
+  });
+  const base = (): { s: RoomState; id: string } => {
+    const s = barRoom(5, "errand");
+    return { s, id: s.players[0]!.id };
+  };
+
+  it("가짜 장소 중앙에서 처리하면 { ok: false }, 같은 사람이 진짜 장소 중앙에서는 ok 다", () => {
+    const { s, id } = base();
+    const r = withFake(s, id, ["glass", "stool", "door"], "stool");
+    expect(JSON.stringify(actErrand(r, id, placeCenterFx(BAR_MAP, "stool")!))).toBe('{"ok":false}');
+    const real = actErrand(r, id, placeCenterFx(BAR_MAP, "glass")!);
+    expect(JSON.stringify(real.ok && byId(real.state, id).errandDone)).toBe(JSON.stringify(["glass"]));
+  });
+
+  it("가짜와 진짜가 둘 다 반경 안이면 진짜가 처리된다(가짜가 목록 앞이어도). 가짜 키가 없는 사람은 15 와 같이 목록 앞이 처리된다", () => {
+    const { s, id } = base();
+    const a = placeCenterFx(BAR_MAP, "stool")!;
+    const b = placeCenterFx(BAR_MAP, "glass")!;
+    const mid = { x: Math.round((a.x + b.x) / 2), z: Math.round((a.z + b.z) / 2) }; // 둘 다 정확히 반경 경계(1.2) 위
+    const fake = actErrand(withFake(s, id, ["stool", "glass", "door"], "stool"), id, mid);
+    expect(JSON.stringify(fake.ok && byId(fake.state, id).errandDone)).toBe(JSON.stringify(["glass"]));
+    const plain = actErrand(withFake(s, id, ["stool", "glass", "door"]), id, mid);
+    expect(JSON.stringify(plain.ok && byId(plain.state, id).errandDone)).toBe(JSON.stringify(["stool"]));
+  });
+
+  it("진짜 두 곳을 모두 처리한 뒤 가짜만 남으면 어디서도 { ok: false } 다(2/3 에서 멈춘다)", () => {
+    const { s, id } = base();
+    let cur = withFake(s, id, ["glass", "stool", "door"], "stool");
+    for (const place of ["glass", "door"]) {
+      const res = actErrand(cur, id, placeCenterFx(BAR_MAP, place)!);
+      expect(res.ok).toBe(true);
+      if (res.ok) cur = res.state;
+    }
+    expect(JSON.stringify(byId(cur, id).errandDone)).toBe('["glass","door"]');
+    expect(JSON.stringify(actErrand(cur, id, placeCenterFx(BAR_MAP, "stool")!))).toBe('{"ok":false}');
+  });
+
+  it("enterErrand 는 이전 errandFake 를 지운다", () => {
+    const { s, id } = base();
+    const stale = withFake(s, id, ["glass", "stool", "door"], "stool");
+    expect(enterErrand(stale, seededRandInt(3), 0).players.some((p) => "errandFake" in p)).toBe(false);
+  });
+});
+
 describe("스키마", () => {
   it("{t:'errand'} 는 받고 다른 키가 붙으면 거부", () => {
     expect(ClientMessageSchema.safeParse({ t: "errand" }).success).toBe(true);

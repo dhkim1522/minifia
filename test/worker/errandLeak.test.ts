@@ -5,10 +5,15 @@
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { ERRAND_NEAR_R } from "../../shared/game/phases";
+import { placeCenterFx } from "../../shared/game/errand";
+import { UNIT } from "../../shared/game/map";
+import type { MapDef } from "../../shared/game/map";
+import { mapOf } from "../../shared/game/maps";
+import { ERRAND_ACT_R, ERRAND_MIN_GAP_MS, ERRAND_NEAR_R } from "../../shared/game/phases";
 import { MOVE_V, restSegment } from "../../shared/game/world";
 import type { Segment, WorldState } from "../../shared/game/world";
 import { OUTFIT_IDS, PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
+import type { MapId } from "../../shared/protocol";
 import type { ServerMessage } from "../../shared/protocol";
 import {
   actorsOf,
@@ -21,6 +26,7 @@ import {
   moveAs,
   nextFrame,
   observe,
+  pause,
   pickAs,
   seat,
   send,
@@ -36,13 +42,13 @@ import {
 import type { Actor, Game, TestSocket } from "./helpers";
 
 type SnapFrame = Extract<ServerMessage, { t: "world"; k: "snap" }>;
-interface StoredPlayer { id: string; seat: number; errandPlaces?: string[]; errandDone?: string[] }
+interface StoredPlayer { id: string; seat: number; errandPlaces?: string[]; errandDone?: string[]; errandFake?: string }
 
 // ---- 허용 목록 검사 도우미(제품 코드가 아니라 이 시험의 것이다) ----
 
 const FORBIDDEN_KEYS = ["token", "id", "playerId", "connId", "nicknameKey", "joinSeq", "hostId"];
 /** 어떤 프레임의 어떤 깊이에도 키로 없어야 하는 서버 전용 이름(T-15-25). */
-const SERVER_ONLY_NEW = ["errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick", "errandLast"];
+const SERVER_ONLY_NEW = ["errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick", "errandLast", "errandFake"];
 /**
  * 15페이즈가 view 에 더한 경로 전부(이유 한 줄씩). 이 밖의 새 경로가 이 접두 아래에 보이면 실패한다.
  *  - .view.me.errand(.places[]·.done[]): errand 단계의 산 본인에게만, 장소 id 목록과 처리한 순서(좌표·역할 없음).
@@ -547,6 +553,65 @@ describe("⑦ 마지막 목격 증거 — 서버 전용 errandLast 는 어떤 �
   }, 120_000);
 });
 
+describe("⑧ 마피아 가짜 장소 — 서버 전용 errandFake 는 어떤 프레임에도 없고 응답·목록 모양이 시민과 같다 (D-08·A1, T-16-07·08)", () => {
+  /** 모든 장소 중앙에서 가장 먼 입장 지점(서 있어도 처리 반경 밖). */
+  function farPoint(map: MapDef): Pos {
+    let best: Pos = { x: 0, z: 0 };
+    let bestD = -1;
+    for (const sp of map.spawns) {
+      const p = { x: Math.round(sp.x * UNIT), z: Math.round(sp.z * UNIT) };
+      const d = Math.min(...(map.places ?? []).map((pl) => Math.hypot(pl.x * UNIT - p.x, pl.z * UNIT - p.z)));
+      if (d > bestD) {
+        bestD = d;
+        best = p;
+      }
+    }
+    expect(bestD).toBeGreaterThan(ERRAND_ACT_R * UNIT);
+    return best;
+  }
+
+  it("마피아·시민의 me.errand 는 키 집합 done,places · places 길이 3 · done 빈 배열로 같고, 가짜 장소 곁의 처리 응답은 반경 밖의 응답과 한 글자도 같으며(보낸 소켓 state 한 프레임, 다른 소켓 0), errandFake 는 어떤 프레임에도 키로도 문자열로도 없다", async () => {
+    const g = await startedGame("errand");
+    const map = mapOf(((await storedRoom(g.code)) as unknown as { map?: MapId }).map ?? "bar");
+    const far = farPoint(map);
+    const mafias = withRole(g, "mafia");
+    expect(mafias.length).toBeGreaterThan(0);
+
+    // 목록 모양: 모든 역할이 같다
+    const shapes = g.actors.map((a) => {
+      const e = lastViewOf(a.sock).me.errand!;
+      return `${Object.keys(e).sort().join(",")}|${e.places.length}|${e.done.length}`;
+    });
+    expect(new Set(shapes).size).toBe(1);
+    expect(shapes[0]).toBe("done,places|3|0");
+
+    for (const m of mafias) {
+      const stored = (await playersOf(g.code)).find((p) => p.seat === m.seat)!;
+      expect(stored.errandPlaces).toContain(stored.errandFake);
+      // errandFake 값(장소 id)은 그 마피아 자신의 목록 안에 있을 뿐이다 — view 의 places 도 같은 목록이다
+      expect([...lastViewOf(m.sock).me.errand!.places].sort().join(",")).toBe([...stored.errandPlaces!].sort().join(","));
+      const press = async (pos: Pos): Promise<{ mine: string; others: number }> => {
+        await placeSeats(g.code, { [m.seat]: pos });
+        await pause(ERRAND_MIN_GAP_MS + 50);
+        const frames = await observe(g, m, () => send(m.sock, { t: "errand" }));
+        const self = g.actors.indexOf(m);
+        return { mine: stable(frames[self]!), others: frames.filter((_, i) => i !== self).reduce((n, f) => n + f.length, 0) };
+      };
+      const outside = await press(far);
+      const atFake = await press(placeCenterFx(map, stored.errandFake!)!);
+      expect(atFake.mine).toBe(outside.mine);
+      expect(`${atFake.others}:${outside.others}`).toBe("0:0");
+      expect(JSON.stringify((await playersOf(g.code)).find((p) => p.seat === m.seat)!.errandDone)).toBe("[]");
+    }
+
+    // 어떤 소켓의 어떤 프레임에도 서버 전용 이름이 없고 허용 목록 밖 경로·금지 키도 없다
+    for (const s of g.socks) {
+      expect(s.frames.some((raw) => raw.includes("errandFake"))).toBe(false);
+      expect(violationsOfSock(s).join(" | ")).toBe("");
+    }
+  }, 90_000);
+});
+
 describe("⑥ 허용 목록 검사는 새 키를 놓치지 않는다 (음성 시험)", () => {
   const stateRaw = (me: Record<string, unknown>, phase = "errand", extra: Record<string, unknown> = {}): string =>
     JSON.stringify({ t: "state", view: { phase, me: { seat: 0, isHost: false, ...me }, day: { n: 1 }, ...extra } });
@@ -556,6 +621,8 @@ describe("⑥ 허용 목록 검사는 새 키를 놓치지 않는다 (음성 시
     expect(violationsOf(stateRaw({ errandNear: [1, 2] })).join("|")).toContain("server-only .view.me.errandNear");
     expect(violationsOf(stateRaw({ errand: { places: ["glass"], done: [], near: [1] } })).join("|")).toContain("not allowed .view.me.errand.near");
     expect(violationsOf(stateRaw({ errandDone: ["glass"] })).join("|")).toContain("server-only");
+    expect(violationsOf(stateRaw({ errandFake: "glass" })).join("|")).toContain("server-only .view.me.errandFake"); // 16-03: 마피아 가짜 장소(D-08)
+    expect(violationsOf(stateRaw({ errand: { places: ["glass"], done: [], fake: "glass" } })).join("|")).toContain("not allowed .view.me.errand.fake");
     expect(violationsOf(stateRaw({ record: [{ seat: 1, place: "glass", role: "mafia" }] }, "discussion")).join("|")).toContain("not allowed .view.me.record[].role");
     expect(violationsOf(stateRaw({}, "morning", { day: { n: 1, morning: { eliminated: 1, trace: "pin", victim: "mafia" } } })).join("|")).toContain("not allowed .view.day.morning.victim");
     expect(violationsOf(stateRaw({ id: "x" })).join("|")).toContain("forbidden .view.me.id");

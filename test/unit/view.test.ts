@@ -283,6 +283,7 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "runoffVote", // 동점 결선의 개인 선택(결정 0066-4): 서버 전용 — 본인 값은 me.ballot, 공개는 day.runoff 의 voted·tally 뿐
   "whispers", // 귓속말 본문 보관(결정 0066-2, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
   "badgeLog", // 직업 주장 이력(결정 0066-1, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
+  "errandFake", // 마피아의 가짜 심부름 장소(16페이즈 D-08): 서버 전용 — 어떤 view 에도 없다. me.errand.places 는 시민과 같은 목록 그대로
   "errandLast", // 심부름 중 피해자 후보별 마지막 관찰자 줄(16페이즈 D-10): 서버 전용 — 공개는 아침의 피해자 한 줄(day.evidence.seen)뿐
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
