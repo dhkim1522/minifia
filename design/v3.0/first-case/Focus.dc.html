@@ -16,7 +16,7 @@
 <div style="width: 390px; display: flex; flex-direction: column; gap: 12px">
 <div style="height: 44px; display: flex; align-items: center; gap: 8px"><span style="font-size: 24px; font-weight: 700; color: {{o.c}}">{{o.k}}</span><span style="font-size: 16px; font-weight: 700">{{o.t}}</span></div>
 <div style="width: 390px; height: 844px; border-radius: 20px; overflow: hidden; border: 1px solid {{o.edge}}">
-<dc-import name="Main" scene="{{three}}" still="{{yes}}" focus="{{o.k}}" hint-size="390px,844px"></dc-import>
+<dc-import name="Main" scene="{{o.n}}" still="{{yes}}" pre="{{yes}}" hint-size="390px,844px"></dc-import>
 </div>
 </div>
 </sc-for>
@@ -26,11 +26,11 @@
 class Component extends DCLogic {
   renderVals() {
     return {
-      yes: true, three: 3,
+      yes: true,
       opts: [
-        { k: 'A', t: '흐림 + 어둠 + 램프 링 (추천)', c: '#ffcf8a', edge: '#c9a46a' },
-        { k: 'B', t: '무대 원뿔 스포트라이트', c: '#a9aebb', edge: '#2a3760' },
-        { k: 'C', t: '손가락 포인터만', c: '#a9aebb', edge: '#2a3760' }
+        { k: 'C', n: 3, t: '깜빡이는 테두리 — 심부름 [처리]', c: '#ffcf8a', edge: '#c9a46a' },
+        { k: 'C', n: 4, t: '깜빡이는 테두리 — 목격한 사람', c: '#ffcf8a', edge: '#c9a46a' },
+        { k: 'C', n: 6, t: '깜빡이는 테두리 — 투표 이름표', c: '#ffcf8a', edge: '#c9a46a' }
       ]
     };
   }
