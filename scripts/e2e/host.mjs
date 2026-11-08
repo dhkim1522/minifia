@@ -16,6 +16,7 @@ import {
   readRoomText,
   readTagRects,
   readToolButtons,
+  readToolLabelCounts,
   closeSheet,
   setBotVote,
   setBots,
@@ -93,9 +94,9 @@ async function driveToEnd(hp, ht, tries = 8) {
   }
 }
 
-/** 열린 시트를 [닫기] 이름표 단추로 닫는다 */
+/** 열린 시트를 [닫기] 아이콘 단추(aria-label)로 닫는다 */
 async function closeTopSheet(page) {
-  await page.locator('[data-tool-label="닫기"]').first().click({ timeout: 4000 });
+  await page.locator('button[aria-label="닫기"]').first().click({ timeout: 4000 });
   await sleep(350);
 }
 
@@ -246,15 +247,15 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
   /** 지금 보이는 button·[role=tab] 을 읽어 toolLabelChecks 한 줄로 쌓는다 */
   async function readTools(page, rec, sc, state) {
     const list = await readToolButtons(page);
-    const lines = toolLabelChecks(list);
+    const lines = toolLabelChecks(list, await readToolLabelCounts(page));
     const f = fold(lines);
-    rec(sc, "TL", `보이는 단추 ${list.length}개에 글자 없는 것 0건(면제 E-1·E-2 밖)·data-tool-label 일치 (${state})`, f.ok, f.detail);
+    rec(sc, "TL", `보이는 단추 ${list.length}개에 접근성 이름 없는 것 0건·이름표 속성·라벨 요소 0건 (${state})`, f.ok, f.detail);
     return list;
   }
 
   /**
-   * emcee-tools (TOOL-01): 대기실(방장)·역할 확인·낮·투표·밤·아침·결과(넘기기 보이는 시점·탭 있는 패널)와 열린 시트(옷장·내 역할·유언)에서
-   * 보이는 button·[role=tab] 중 글자(숫자 제외)가 빈 것이 면제 E-1·E-2 밖 0건이다(toolLabelChecks).
+   * emcee-tools (TOOL-04): 대기실(방장)·역할 확인·낮·투표·밤·아침·결과(넘기기 보이는 시점·탭 있는 패널)와 열린 시트(옷장·내 역할·유언)에서
+   * 보이는 button·[role=tab] 중 접근성 이름이 빈 것 0건, 이름표 속성·아이콘 아래 라벨 요소 0건이다(toolLabelChecks).
    */
   async function emceeToolsFlow(ctx) {
     const id = "emcee-tools";
@@ -266,7 +267,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       await readTools(hp, rec, `${id}/lobby`, "대기실");
       // 옷장 시트(대기실 떠 있는 단추 '옷장')
       const dress = await attempt(async () => {
-        await hp.locator('[data-tool-label="옷장"]').first().click({ timeout: 4000 });
+        await hp.locator('[data-float="dress"]').first().click({ timeout: 4000 });
         await hp.waitForSelector("[data-dress-sheet]", { timeout: 4000 });
         await sleep(400);
       });
@@ -309,7 +310,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       // 결과: 시상식에서 [넘기기] 가 보이는 시점 → 연출이 끝난 패널(탭)
       await driveToEnd(hp, ht);
       const skipBtn = await attempt(async () => {
-        await hp.waitForSelector('[data-tool-label="넘기기"]', { timeout: 15000 });
+        await hp.waitForSelector('[data-float="skip"]', { timeout: 15000 });
         await settle(hp);
       });
       rec(`${id}/ended-ceremony`, "TL0", "결과 시상식에서 [넘기기] 가 보인다", skipBtn.ok, skipBtn.detail);
@@ -321,8 +322,9 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       rec(`${id}/ended-panel`, "TL0", "결과 연출이 끝나 기록 탭이 보인다", panel.ok, panel.detail);
       if (panel.ok) {
         const list = await readTools(hp, rec, `${id}/ended-panel`, "결과 패널");
-        const tabs = list.filter((b) => b.cls.includes("tab") || b.toolLabel !== null).length;
-        rec(`${id}/ended-panel`, "TL3", "결과 패널의 data-tool-label 단추가 있다(탭 이름표)", tabs > 0, `이름표 단추 ${tabs}개`);
+        // 탭 글은 그대로 보이고(V-7) 이름표 속성은 없다
+        const tabs = list.filter((b) => b.cls.includes("tab") && b.text !== "");
+        rec(`${id}/ended-panel`, "TL3", "결과 패널의 탭 글이 보인다(이름표 속성은 TL 이 0건으로 판정)", tabs.length > 0, `탭 ${tabs.length}개(${tabs.map((b) => b.text).join("·")})`);
       }
     } finally {
       await closeGame(asGame(host));

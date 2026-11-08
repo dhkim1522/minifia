@@ -170,7 +170,6 @@ import {
   FLOAT_LABEL_EXTRA,
   GOALS,
   HOST_ACT_LINES,
-  TOOL_LABEL_EXEMPT,
   VIEW_DAY_KEYS,
   VIEW_ME_KEYS,
   VIEW_TOP_KEYS,
@@ -3627,50 +3626,53 @@ test("hostOverlapChecks knownBandLimit: 띠 겹침은 판정에서 빼 known 으
   assert.equal(hostOverlapChecks({ band, tags: [] }, { knownBandLimit: true }).ok, false);
 });
 
-test("toolLabelChecks: 글자가 있는 단추는 통과, 글자 없는 아이콘 단추는 면제 밖이면 실패", () => {
+const NO_LABELS = { labelAttrs: 0, labelEls: 0 };
+
+test("toolLabelChecks TL1: 접근성 이름이 있으면 글 단추·아이콘 단추 모두 통과, 이름이 빈 단추는 실패", () => {
   const list = [
-    { name: "나가기", text: "나가기", toolLabel: "나가기", hasIcon: true },
-    { name: "넘기기 1/3", text: "넘기기 1/3", toolLabel: "넘기기", hasIcon: true },
-    { name: "시작", text: "시작", toolLabel: null, hasIcon: false },
+    { name: "나가기", text: "", hasIcon: true },
+    { name: "넘기기", text: "1 / 3", hasIcon: true },
+    { name: "시작", text: "시작", hasIcon: false },
   ];
-  for (const r of toolLabelChecks(list)) assert.equal(r.ok, true, r.id + r.detail);
-  const bad = toolLabelChecks([...list, { name: "공유", text: "", toolLabel: null, hasIcon: true }]).find((r) => r.id === "TL1");
+  for (const r of toolLabelChecks(list, NO_LABELS)) assert.equal(r.ok, true, r.id + r.detail);
+  const bad = toolLabelChecks([...list, { name: "", text: "", hasIcon: true }], NO_LABELS).find((r) => r.id === "TL1");
   assert.equal(bad.ok, false);
-  assert.match(bad.detail, /공유/);
-  // 숫자·공백·'/' 뿐인 글자도 빈 것으로 본다
-  assert.equal(toolLabelChecks([{ name: "넘기기", text: "1 / 3", toolLabel: null, hasIcon: true }]).find((r) => r.id === "TL1").ok, false);
+  assert.match(bad.detail, /아이콘만/);
+  // 공백뿐인 이름도 빈 것이다
+  assert.equal(toolLabelChecks([{ name: "  ", text: "", hasIcon: true }], NO_LABELS).find((r) => r.id === "TL1").ok, false);
 });
 
-test("toolLabelChecks: 면제 E-1(내보내기 ×)·E-2(봇 ±)는 글자가 없어도 통과, 이름이 같지 않으면 면제가 아니다", () => {
-  assert.deepEqual(TOOL_LABEL_EXEMPT.map((e) => e.id), ["E-1", "E-2"]);
-  const ex = [
-    { name: "민수 님 내보내기", text: "×", toolLabel: null, hasIcon: true },
-    { name: "봇 줄이기", text: "−", toolLabel: null, hasIcon: true },
-    { name: "봇 늘리기", text: "+", toolLabel: null, hasIcon: true },
+test("toolLabelChecks: 면제 목록은 없다 — 이름이 있는 내보내기 ×·봇 ± 는 이름 덕에 통과하고 이름이 없으면 실패", async () => {
+  assert.equal("TOOL_LABEL_EXEMPT" in (await import("./lib.mjs")), false);
+  const named = [
+    { name: "민수 님 내보내기", text: "×", hasIcon: true },
+    { name: "봇 줄이기", text: "−", hasIcon: true },
   ];
-  assert.equal(toolLabelChecks(ex).find((r) => r.id === "TL1").ok, true);
-  assert.equal(toolLabelChecks([{ name: "다른 단추", text: "", toolLabel: null, hasIcon: true }]).find((r) => r.id === "TL1").ok, false);
+  assert.equal(toolLabelChecks(named, NO_LABELS).find((r) => r.id === "TL1").ok, true);
+  assert.equal(toolLabelChecks([{ name: "", text: "×", hasIcon: true }], NO_LABELS).find((r) => r.id === "TL1").ok, false);
 });
 
-test("toolLabelChecks TL2: data-tool-label 이 있으면 보이는 글자와 같고 접근성 이름이 그것을 포함해야 한다", () => {
-  const ok = [{ name: "내 역할, 새 기록", text: "내 역할", toolLabel: "내 역할", hasIcon: true }];
-  assert.equal(toolLabelChecks(ok).find((r) => r.id === "TL2").ok, true);
-  const diffText = toolLabelChecks([{ name: "옷장", text: "꾸미기", toolLabel: "옷장", hasIcon: true }]).find((r) => r.id === "TL2");
-  assert.equal(diffText.ok, false);
-  const diffName = toolLabelChecks([{ name: "꾸미기", text: "옷장", toolLabel: "옷장", hasIcon: true }]).find((r) => r.id === "TL2");
-  assert.equal(diffName.ok, false);
+test("toolLabelChecks TL2: 이름표 속성·아이콘 아래 라벨 요소가 0건이어야 통과", () => {
+  const ok = [{ name: "내 역할, 새 기록", text: "", hasIcon: true }];
+  assert.equal(toolLabelChecks(ok, NO_LABELS).find((r) => r.id === "TL2").ok, true);
+  const attrs = toolLabelChecks(ok, { labelAttrs: 2, labelEls: 0 }).find((r) => r.id === "TL2");
+  assert.equal(attrs.ok, false);
+  assert.match(attrs.detail, /data-tool-label 요소 2개/);
+  const els = toolLabelChecks(ok, { labelAttrs: 0, labelEls: 3 }).find((r) => r.id === "TL2");
+  assert.equal(els.ok, false);
+  assert.match(els.detail, /라벨 요소 3개/);
 });
 
-test("toolLabelChecks TL2: 소리 잠김 알약('소리 켜기')은 낱말로 시작하므로 통과하지만 다른 단추는 낱말로 시작해도 같은 글자가 아니면 실패한다", () => {
-  assert.equal(toolLabelChecks([{ name: "소리 켜기", text: "소리 켜기", toolLabel: "소리", hasIcon: true }]).find((r) => r.id === "TL2").ok, true);
-  assert.equal(toolLabelChecks([{ name: "옷장 열기", text: "옷장 열기", toolLabel: "옷장", hasIcon: true }]).find((r) => r.id === "TL2").ok, false);
-});
-
-test("toolLabelChecks: 목록이 비었거나 모양이 틀리면 측정값 없음으로 실패(공허 통과 금지)", () => {
+test("toolLabelChecks: 목록이 비었거나 모양이 틀리거나 개수가 없으면 측정값 없음으로 실패(공허 통과 금지)", () => {
   for (const x of [undefined, null, [], [{ text: 1 }]]) {
-    const rs = toolLabelChecks(x);
-    assert.equal(rs.every((r) => r.ok), false, JSON.stringify(x));
-    assert.ok(rs.some((r) => /측정값 없음/.test(r.detail)));
+    const rs = toolLabelChecks(x, NO_LABELS);
+    assert.equal(rs.find((r) => r.id === "TL1").ok, false, JSON.stringify(x));
+    assert.ok(/측정값 없음/.test(rs.find((r) => r.id === "TL1").detail));
+  }
+  for (const c of [undefined, null, {}, { labelAttrs: 0 }, { labelAttrs: "0", labelEls: 0 }]) {
+    const tl2 = toolLabelChecks([{ name: "x", text: "x", hasIcon: false }], c).find((r) => r.id === "TL2");
+    assert.equal(tl2.ok, false, JSON.stringify(c));
+    assert.match(tl2.detail, /측정값 없음/);
   }
 });
 

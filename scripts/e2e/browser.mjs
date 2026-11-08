@@ -1798,7 +1798,7 @@ export function readHostBand(page) {
 
 /**
  * 보이는 button·[role=tab] 읽기(toolLabelChecks 입력): 접근성 이름(aria-label → 보이는 글자), 보이는 글자(aria-hidden·.mf-sr-only 안 글자 뺀 것),
- * data-tool-label(단추 자신 또는 안), 아이콘(svg·img) 유무. 보이지 않는 것(display none·visibility hidden·크기 0·닫힌 시트)은 뺀다.
+ * 아이콘(svg·img) 유무. 보이지 않는 것(display none·visibility hidden·크기 0·닫힌 시트)은 뺀다.
  */
 export function readToolButtons(page) {
   return page.evaluate(() => {
@@ -1826,16 +1826,25 @@ export function readToolButtons(page) {
       .map((el) => {
         const text = visibleText(el);
         const label = el.getAttribute("aria-label");
-        const inner = el.hasAttribute("data-tool-label") ? el : el.querySelector("[data-tool-label]");
         return {
           name: (label !== null && label.trim() !== "" ? label : text).trim(),
           text,
-          toolLabel: inner ? inner.getAttribute("data-tool-label") : null,
           hasIcon: el.querySelector("svg, img") !== null,
           cls: String(el.className ?? "").slice(0, 60),
         };
       });
   });
+}
+
+/**
+ * 이름표 흔적 수(toolLabelChecks 의 counts): 이름표 속성 요소 수와 아이콘 아래 라벨 요소 수(보이는지와 무관하게 DOM 전체).
+ * 16페이즈 TOOL-04 — 둘 다 0 이어야 한다.
+ */
+export function readToolLabelCounts(page) {
+  return page.evaluate(() => ({
+    labelAttrs: document.querySelectorAll("[data-tool-label]").length,
+    labelEls: document.querySelectorAll(".mv-tool__label, .mv-float__label, .mf-mapchip__label, .mv-sound__label, .mv-closepill__label, .mf-rolecard-btn__label").length,
+  }));
 }
 
 /** 빛남([data-call]) 수. */

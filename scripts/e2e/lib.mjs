@@ -2726,7 +2726,7 @@ export function soundResultSkipChecks(input) {
   ];
 }
 
-// ---- 14페이즈 계약 (14-08) — 사회자 띠·도구 이름표·누설·알림음 판정이 받는 값의 모양 ----
+// ---- 14페이즈 계약 (14-08) — 사회자 띠·도구 단추 이름·누설·알림음 판정이 받는 값의 모양 ----
 // 판정은 모두 이 파일의 순수 함수고 흐름(scripts/e2e/host.mjs)은 읽기만 한다. 값이 없거나 모양이 틀리면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다. 문턱은 여기서만 정하고 낮추지 않는다.
 //   HB1~HB5 hostBandChecks(b, { phase, timed })
 //     b = { bands, lineCount, lineH, lineLH, guideCount, guideInBand, timeText, barShown, oldHint, oldRing, oldTimer }
@@ -2734,7 +2734,8 @@ export function soundResultSkipChecks(input) {
 //       guideCount = `[data-guide]` 수, guideInBand = 그것이 띠 안인가, timeText = `[data-host-time]` 글자(없으면 ""), barShown = 시간 막대가 보이는가,
 //       oldHint·oldRing·oldTimer = `.mv-phase__hint`·`.mv-ring`·`.mf-timer` 수(옛 헤더 안내줄·시간 링·m:ss 타이머)
 //   hostOverlapChecks({ band, tags })   band = 띠 사각형, tags = 이름표 단추 사각형 목록(투표·밤)
-//   TL1·TL2 toolLabelChecks(list, { exempt })   list = [{ name, text, toolLabel, hasIcon }] — 보이는 button·[role=tab] 하나씩(접근성 이름·보이는 글자·data-tool-label 값)
+//   TL1·TL2 toolLabelChecks(list, { labelAttrs, labelEls })   list = [{ name, text, hasIcon }] — 보이는 button·[role=tab] 하나씩(접근성 이름·보이는 글자),
+//       labelAttrs = 이름표 속성(data-tool-label) 요소 수, labelEls = 아이콘 아래 라벨 요소 수(16페이즈 TOOL-04: 둘 다 0, 이름 없는 단추도 0)
 //   HL1~HL4 hostLeakChecks(list)   list = [{ role, ownRole, phase, domText, callCount, line, idle }] — role = 시점(mafia·police·doctor·citizen·ghost), ownRole = 유령의 살았을 때 직업,
 //       domText = 띠·목표·빛남 영역 글자, callCount = `[data-call]` 수, line = 띠 문장, idle = 그 단계에서 할 일이 없는 시점인가
 //   VK1 viewKeyChecks({ top, me, day })   받은 state 프레임의 최상위·me·day 키 이름 집합(값 없음)
@@ -2743,7 +2744,7 @@ export function soundResultSkipChecks(input) {
 /** 자막 띠 문장의 줄 수 상한(미만): 한 문장·3줄 미만(UI-SPEC 사회자 문구 표 — 2줄까지). */
 export const HOST_LINE_MAX = 3;
 /** E2E 가 읽는 14페이즈 표식(src 에 있어야 한다 — e2eContract 가 확인). */
-export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time", "data-call", "data-tool-label", "data-role-goal", "data-guide"];
+export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time", "data-call", "data-role-goal", "data-guide"];
 /**
  * 서버 view 허용 키(13페이즈 그대로, 서버 diff 0). test/unit/view.test.ts 의 TOP_KEYS·ME_KEYS·DAY_KEYS 에 더해, 그 시험의 풍부한 상태가 만들지 않는 9페이즈 상태 의존 키만 더했다:
  * me.will·me.note(유언·쪽지, 결정 0061-9·10)·day.chalk(암살 분필, 결정 0061-14). 실제 판의 state 프레임에는 이 키들이 나온다(emcee-leak 이 처음 걸렸다) — e2eContract 가 "view.test.ts 집합 + 이 셋" 임과
@@ -2765,12 +2766,6 @@ export const GOALS = {
   doctor: "밤마다 한 명을 지켜 마피아의 암살을 막으세요.",
   citizen: "대화와 투표로 마피아를 모두 처형하면 승리합니다.",
 };
-/** TL1 이 보지 않는 글자 없는 단추(UI-SPEC 면제 E-1·E-2 — E-3 은 누르는 것이 아니라 단추가 아니다). 접근성 이름으로 가린다. 항목을 더할 때는 id 와 이유를 함께 적는다. */
-export const TOOL_LABEL_EXEMPT = [
-  { id: "E-1", name: /^.+ 님 내보내기$/, reason: "방장의 내보내기 × — 누르면 확인 시트가 '내보내기'로 이름을 말한다(WorldStage 이름표의 방장 전용 보조 단추)" },
-  { id: "E-2", name: /^봇 (줄이기|늘리기)$/, reason: "테스트 방 시트 안의 봇 ± — 개발 도구, 방장 테스트 모드뿐" },
-];
-
 const isStr = (x) => typeof x === "string";
 
 /** HB1~HB5 자막 띠 판정(HOST-01, TOOL-02). b = 위 14페이즈 계약. */
@@ -2832,29 +2827,26 @@ export function hostOverlapChecks(x, { knownBandLimit = false } = {}) {
   return { ...result("HO1", label, bad), known: known.join("; ") };
 }
 
-/** 단추 글자에서 숫자·공백·'/' 를 뺀다(넘기기 k/n 의 숫자는 이름표가 아니다). */
-const labelWord = (s) => String(s).replace(/[\d\s/]/g, "");
 /**
- * TL1·TL2 도구 이름표(TOOL-01). list = [{ name, text, toolLabel, hasIcon }].
- * TL1 글자(숫자·공백·'/' 뺀)가 빈 단추가 면제(E-1·E-2) 밖에 0건. TL2 data-tool-label 이 있으면 보이는 글자와 같고 접근성 이름이 그것을 포함한다.
+ * TL1·TL2 아이콘 단추 이름(TOOL-04, 14 의 이름표 판정 TOOL-01 을 뒤집은 것). list = [{ name, text, hasIcon }], counts = { labelAttrs, labelEls }.
+ * TL1 보이는 button·[role=tab] 중 접근성 이름이 빈 것 0건(면제 목록 없음 — 아이콘 단추는 aria-label, 글 단추는 내용이 이름이다).
+ * TL2 이름표 속성(data-tool-label) 요소 수 + 아이콘 아래 라벨 요소 수가 0(브라우저가 읽어 넘긴다).
  */
-export function toolLabelChecks(list, { exempt = TOOL_LABEL_EXEMPT } = {}) {
-  const l1 = "글자 없는 단추 0건(면제 E-1·E-2 밖)";
-  const l2 = "data-tool-label 이 보이는 글자·접근성 이름과 같은 낱말";
-  const okItem = (it) => it && isStr(it.name) && isStr(it.text) && (it.toolLabel === null || it.toolLabel === undefined || isStr(it.toolLabel));
-  if (!Array.isArray(list) || list.length === 0 || !list.every(okItem)) return [noMeasure("TL1", l1, "보이는 단추 목록"), noMeasure("TL2", l2, "보이는 단추 목록")];
-  const isExempt = (it) => exempt.some((e) => e.name.test(it.name));
-  const bare = list.filter((it) => labelWord(it.text) === "" && !isExempt(it));
-  const bad2 = [];
-  for (const it of list) {
-    if (it.toolLabel === null || it.toolLabel === undefined || it.toolLabel === "") continue;
-    const want = labelWord(it.toolLabel);
-    // 소리 잠김 알약(8초, 14-07): 알약 자체가 글자('소리 켜기')라 라벨을 따로 두지 않는다 — 낱말로 시작하면 같은 낱말로 본다. 접히면 '소리' 라벨
-    const lockedPill = want === "소리" && labelWord(it.text).startsWith(want);
-    if (labelWord(it.text) !== want && !lockedPill) bad2.push(`'${it.name}' 보이는 글자 '${it.text}' ≠ data-tool-label '${it.toolLabel}'`);
-    else if (!it.name.replace(/\s/g, "").includes(want)) bad2.push(`'${it.name}' 접근성 이름이 '${it.toolLabel}' 을 포함하지 않음`);
-  }
-  return [result("TL1", l1, bare.map((it) => `'${it.name}'${it.hasIcon ? "(아이콘만)" : ""}`)), result("TL2", l2, bad2)];
+export function toolLabelChecks(list, counts) {
+  const l1 = "접근성 이름이 빈 단추 0건";
+  const l2 = "이름표 속성·아이콘 아래 라벨 요소 0건";
+  const okItem = (it) => it && isStr(it.name) && isStr(it.text);
+  if (!Array.isArray(list) || list.length === 0 || !list.every(okItem)) return [noMeasure("TL1", l1, "보이는 단추 목록"), toolLabelCountCheck(counts, l2)];
+  const bare = list.filter((it) => it.name.trim() === "");
+  return [result("TL1", l1, bare.map((it) => `이름 없는 단추(글자 '${it.text}'${it.hasIcon ? ", 아이콘만" : ""})`)), toolLabelCountCheck(counts, l2)];
+}
+
+function toolLabelCountCheck(counts, label) {
+  if (!counts || !isNum(counts.labelAttrs) || !isNum(counts.labelEls)) return noMeasure("TL2", label, "이름표 속성·라벨 요소 수");
+  const bad = [];
+  if (counts.labelAttrs > 0) bad.push(`data-tool-label 요소 ${counts.labelAttrs}개`);
+  if (counts.labelEls > 0) bad.push(`아이콘 아래 라벨 요소 ${counts.labelEls}개`);
+  return result("TL2", label, bad);
 }
 
 /**
