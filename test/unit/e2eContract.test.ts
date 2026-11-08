@@ -506,6 +506,19 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
     expect(text).not.toMatch(/role=|seat|nonce|mafia/i);
   });
 
+  it("SIDE_MARKERS(16-06 오른쪽 열 표식)가 src/ 에 있고, data-side-button 값은 sound·map·bots·dress 고정 낱말뿐이다(T-16-14)", () => {
+    const side = e2eLib as unknown as { SIDE_MARKERS: readonly string[]; SIDE_ORDER: readonly string[] };
+    expect(side.SIDE_MARKERS).toEqual(["data-side-column", "data-side-button"]);
+    expect(side.SIDE_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)))).toEqual([]);
+    expect(side.SIDE_ORDER).toEqual(["sound", "map", "bots", "dress"]);
+    const values = new Set<string>();
+    for (const s of sources) {
+      for (const m of s.text.replace(/\/\/.*$/gm, "").matchAll(/data-side-button(?:"?\s*[:=]\s*|=)\{?"([a-z]+)"/g)) values.add(m[1]!);
+      for (const m of s.text.replace(/\/\/.*$/gm, "").matchAll(/<FloatAction\b[^>]*\sside="([a-z]+)"/g)) values.add(m[1]!);
+    }
+    expect([...values].sort()).toEqual(["bots", "dress", "map", "sound"]);
+  });
+
   it("E2E 문턱 개수는 SOUND_IDS.length 와 같고, 앱 쪽 SOUND_LIMITS 와 한 글자도 다르지 않다(문턱 완화 방지, T-12-22)", () => {
     expect(lib.SOUND_RENDER_LIMITS.count).toBe(SOUND_IDS.length);
     expect({ ...lib.SOUND_RENDER_LIMITS }).toEqual({ ...SOUND_LIMITS });

@@ -111,7 +111,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       const b = btns[0] ?? null;
       const header = document.querySelector(".mf-lobby__header");
       const bandEl = document.querySelector("[data-host-band] .mv-host__band");
-      const headerButtons = [...document.querySelectorAll(".mf-lobby__header button, .mf-mapchip")].map((el) => ({ kind: el.getAttribute("aria-label") ?? el.className, rect: box(el) }));
+      const headerButtons = [...document.querySelectorAll(".mf-lobby__header button")].map((el) => ({ kind: el.getAttribute("aria-label") ?? el.className, rect: box(el) }));
       const toastEl = document.querySelector(".mv-toast.is-on .mv-toast__text");
       const toastRect = toastEl && (toastEl.textContent ?? "").trim() !== "" ? box(toastEl) : null;
       const banner = document.querySelector(".mf-reconnect");
@@ -129,7 +129,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       const bannerZ = banner ? getComputedStyle(banner).zIndex : null;
       return {
         viewport: vp,
-        button: { count: btns.length, rect, disc: box(b?.querySelector(".mv-sound__face")), pill: !!b?.classList.contains("mv-sound--pill") },
+        button: { count: btns.length, rect, disc: box(b) /* 16-06: 상자가 곧 52 원 면이다 */, pill: !!b?.classList.contains("mv-sound--pill") },
         // 14페이즈: 소리 단추는 자막 띠 아래 독에 선다 — 띠가 있으면 띠 면 아랫변이 기준이다
         header: { bottom: bandEl ? bandEl.getBoundingClientRect().bottom : header ? header.getBoundingClientRect().bottom : null, buttons: headerButtons.filter((x) => x.rect) },
         test: box(document.querySelector(".mf-lobby__test .mf-tt")),
@@ -198,10 +198,10 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
         await sleep(600);
         const state = await buttonState(page);
         const text = ((await page.locator(BTN).first().textContent()) ?? "").trim();
-        // 14-07: 끈 단추에도 한 단어 라벨 '소리' 가 항상 붙는다 — 알약의 글('소리 켜기')만 없어야 한다
-        return state === "off" && text === "소리" ? true : { ok: false, detail: `state ${state} · 글 '${text}'` };
+        // 16-04(TOOL-04): 이름표(한 단어 라벨)는 없어졌다 — 끈 단추에는 알약의 글('소리 켜기')도 라벨도 없다
+        return state === "off" && text === "" ? true : { ok: false, detail: `state ${state} · 글 '${text}'` };
       });
-      rec("sound-unlock/reload-off", "SK4", "끈 채 새로고침 → data-sound-state=off, 알약(글 '소리 켜기') 없이 라벨 '소리' 만", offReload.ok, offReload.detail);
+      rec("sound-unlock/reload-off", "SK4", "끈 채 새로고침 → data-sound-state=off, 알약(글 '소리 켜기') 없이 글 자체가 없음(아이콘 단추)", offReload.ok, offReload.detail);
 
       // ⑤ 켠 채 새로고침 → 알약(locked) → 아무 데나 탭 → running
       await page.locator(BTN).first().click();
@@ -217,7 +217,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       });
       rec("sound-unlock/reload-on", "SK5b", "켠 채 새로고침 → locked, 알약 글 '소리 켜기', 훅 locked", pill.ok, pill.detail);
       const pillBox = await page.evaluate(() => {
-        const f = document.querySelector("[data-sound-button] .mv-sound__face")?.getBoundingClientRect();
+        const f = document.querySelector("[data-sound-button]")?.getBoundingClientRect();
         return f ? { width: Math.round(f.width * 10) / 10, height: Math.round(f.height * 10) / 10 } : null;
       });
       rec("sound-unlock/reload-on", "SK5i", "참고: 알약 크기", true, pillBox ? `${pillBox.width}x${pillBox.height}` : "측정 못함", true);

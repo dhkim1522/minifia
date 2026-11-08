@@ -371,11 +371,14 @@ export function pickButtonChecks(buttons) {
 /** 떠 있는 버튼 지름(--control-input) */
 export const FLOAT_SIZE = 48;
 /**
- * 14-07(TOOL-01): 떠 있는 버튼은 둥근 면(48) 아래 한 단어 라벨이 붙어 단추 상자가 길어졌다 — 면과 라벨 사이 4(--space-xs) + 라벨 한 줄 14px × 1.4 = 19.6.
- * 상자 폭은 그대로 48(면 지름). 높이를 보는 판정(FB4·DB1)은 이 상자 높이를 받고(boxH·floatH), 지름 48 은 폭이 맡는다.
+ * 14-07 에서 떠 있는 버튼은 면(48) 아래 한 단어 라벨이 붙어 상자가 71.6 으로 길어졌으나, 16-04 가 이름표를 없애고 16-06 이 상자를 곧 면(48 원)으로 합쳤다.
+ * 라벨 몫은 0 이다. 높이를 보는 판정(FB4)은 이 상자 높이를 받는다(boxH).
  */
-export const FLOAT_LABEL_EXTRA = 23.6;
+export const FLOAT_LABEL_EXTRA = 0;
 export const FLOAT_BOX_H = FLOAT_SIZE + FLOAT_LABEL_EXTRA;
+/** 오른쪽 열(SideColumn) 단추 지름(--control-button, 16-06) · 칸 사이 간격 */
+export const SIDE_BUTTON_SIZE = 52;
+export const SIDE_GAP = 12;
 /** 떠 있는 묶음의 오른쪽 여백(--space-md) */
 export const FLOAT_MARGIN = 16;
 /** 떠 있는 버튼 사이와 패널 윗변 위 간격(--space-sm) */
@@ -2095,14 +2098,14 @@ export function floatTrayChecks({ visibleBefore, hiddenWhileOpen, visibleAfter }
  * 꾸미기 기하(DB1·DS1~DS6). 사각형은 { left, top, width, height }.
  * float = 떠 있는 꾸미기 버튼(시트가 닫힌 때), panel = 로비 아래 패널, sheet = 열린 시트, cards = 카드 아홉 개(띠 안에서 가려져도 DOM 사각형),
  * close = 닫기 버튼, selected = { rect, pressedCount }(선택 카드와 aria-pressed="true" 개수), nameFont = 카드 이름 글자 크기 최솟값(px), viewport = { w, h }, kb = 가상 키보드가 열려 있나.
- * DB1 버튼 48x48 ±1 · 오른쪽 여백 16 ±1 · 아랫변 = 패널 윗변 − 8 ±2(키보드가 열려 있으면 아랫변은 보지 않는다) ·
+ * DB1 버튼 52x52 ±1(16-06 오른쪽 열의 한 칸) · 오른쪽 여백 16 ±1(두 열로 접히면 둘째 열 80) · 아랫변 ≤ 패널 윗변 − 8(키보드가 열려 있으면 보지 않는다) ·
  * DS1 시트 윗변 = 패널 윗변 ±1, 높이 = 패널 높이 ±1(키보드가 열려 있으면 윗변은 보지 않는다) · DS2 카드 아홉 개, 폭 72 ±2, 높이 44 이상 ·
  * DS3 완전히 보이는 카드 4 이상이고 시트 오른쪽 가장자리에 걸쳐 8px 이상 보이는 다음 카드가 있음(더 있음을 알림) · DS4 닫기 44x44 이상 ·
  * DS5 선택 카드가 시트 가로 안에 완전히 보이고 aria-pressed="true" 가 하나뿐 · DS6 이름 글자 14px 이상.
  */
-export function dressChecks({ float, panel, sheet, cards, close, selected, nameFont, viewport, kb, floatH = FLOAT_SIZE } = {}) {
+export function dressChecks({ float, panel, sheet, cards, close, selected, nameFont, viewport, kb } = {}) {
   const L = {
-    DB1: `옷장 버튼 ${FLOAT_SIZE}x${fmt(floatH)} · 오른쪽 ${FLOAT_MARGIN} · 패널 윗변 위 ${FLOAT_GAP}`,
+    DB1: `옷장 버튼 ${SIDE_BUTTON_SIZE}x${SIDE_BUTTON_SIZE}(오른쪽 열) · 오른쪽 ${FLOAT_MARGIN} · 아랫변이 패널 윗변 − ${FLOAT_GAP} 위`,
     DS1: "시트가 아래 패널을 정확히 덮음(윗변·높이)",
     DS2: "카드 아홉 개: 폭 72 · 높이 44 이상",
     DS3: "완전히 보이는 카드 4장 이상 + 오른쪽에 걸친 다음 카드",
@@ -2115,9 +2118,11 @@ export function dressChecks({ float, panel, sheet, cards, close, selected, nameF
   if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "float·panel·sheet·cards·close·selected·nameFont·viewport·kb"));
   const out = [];
   const db = [];
-  if (Math.abs(float.width - FLOAT_SIZE) > 1 || Math.abs(float.height - floatH) > 1) db.push(`${fmt(float.width)}x${fmt(float.height)}`);
-  if (Math.abs(viewport.w - right(float) - FLOAT_MARGIN) > 1) db.push(`오른쪽 여백 ${fmt(viewport.w - right(float))}`);
-  if (!kb && Math.abs(panel.top - FLOAT_GAP - bottom(float)) > 2) db.push(`아랫변 ${fmt(bottom(float))} (기대 ${fmt(panel.top - FLOAT_GAP)})`);
+  if (Math.abs(float.width - SIDE_BUTTON_SIZE) > 1 || Math.abs(float.height - SIDE_BUTTON_SIZE) > 1) db.push(`${fmt(float.width)}x${fmt(float.height)}`);
+  // 열이 하나면 오른쪽 여백 16, 넘쳐 두 열로 접히면(V-3) 옷장이 둘째 열(왼쪽 12 옆)에 서서 16 + 52 + 12 = 80 이다
+  const margin = viewport.w - right(float);
+  if (Math.abs(margin - FLOAT_MARGIN) > 1 && Math.abs(margin - (FLOAT_MARGIN + SIDE_BUTTON_SIZE + SIDE_GAP)) > 1) db.push(`오른쪽 여백 ${fmt(margin)} (기대 ${FLOAT_MARGIN} 또는 둘째 열 ${FLOAT_MARGIN + SIDE_BUTTON_SIZE + SIDE_GAP})`);
+  if (!kb && bottom(float) > panel.top - FLOAT_GAP + OVERLAP_EPS) db.push(`아랫변 ${fmt(bottom(float))} (패널 윗변 − ${FLOAT_GAP} = ${fmt(panel.top - FLOAT_GAP)} 아래로 넘음)`);
   out.push(result("DB1", L.DB1, db));
   const ds1 = [];
   if (!kb && Math.abs(sheet.top - panel.top) > 1) ds1.push(`윗변 ${fmt(sheet.top)} (패널 ${fmt(panel.top)})`);
@@ -2205,8 +2210,8 @@ export function soundRenderChecks(results, limits = SOUND_RENDER_LIMITS) {
 
 // ---- 12페이즈 소리 단추 sound-unlock (12-07, 결정 D-4·D-21, UI-SPEC B-1·B-2) ----
 
-/** 소리 단추 기하: 누르기 44, 시각 지름 36 ±1, 헤더 아래 끝에서 8 아래 ±2, 오른쪽 여백 16 ±2, 알약 높이 44 · 폭 112 이상 */
-export const SOUND_BUTTON_GEOMETRY = Object.freeze({ tap: 44, disc: 36, discTol: 1, gap: 8, margin: 16, posTol: 2, pillH: 44, pillMinW: 112 });
+/** 소리 단추 기하(16-06 V-2·V-4): 상자가 곧 면이라 누르기 = 시각 지름 52 ±1, 자막 띠 아랫변에서 12 아래 ±2, 오른쪽 여백 16 ±2, 알약 높이 52 · 폭 112 이상 */
+export const SOUND_BUTTON_GEOMETRY = Object.freeze({ tap: 52, disc: 52, discTol: 1, gap: 12, margin: 16, posTol: 2, pillH: 52, pillMinW: 112 });
 const SOUND_NAMES = Object.freeze({ on: "소리 끄기", off: "소리 켜기", locked: "소리 켜기" });
 
 /**
@@ -2278,6 +2283,132 @@ export function soundButtonChecks({ viewport, button, header, test, toast, banne
     if (labels.pressed !== wantPressed) bad7.push(`aria-pressed ${labels.pressed} (기대 ${wantPressed})`);
   }
   out.push(result("SU7", L.SU7, bad7));
+  return out;
+}
+
+// ---- 16페이즈 오른쪽 세로 한 줄 열 sideColumnChecks (16-06, 결정 D-05, UI-SPEC V-2~V-5) ----
+
+/** 열 단추의 위 → 아래 순서(오른쪽 열부터, 열 안은 위부터). 맵·봇은 방장에게만 있다 */
+export const SIDE_ORDER = Object.freeze(["sound", "map", "bots", "dress"]);
+/** 앱이 더한 DOM 표식(16-06). 값은 SIDE_ORDER 의 고정 낱말뿐이다(역할·좌석 없음, T-16-14). e2eContract 가 git 추적 src/ 에 있는지·값이 낱말뿐인지 본다 */
+export const SIDE_MARKERS = Object.freeze(["data-side-column", "data-side-button"]);
+
+/**
+ * 알려진 한계로 두고 고치지 않는 폰·화면 조합(사용자 메모 '작은 화면 문제는 그대로', UI Considerations #21 unresolved, 결정 0079).
+ * 360×560 방장 대기실은 열 두 개와 아래 패널(250)이 겹칠 수 있다 — 14 의 위쪽 비좁음과 같은 한계. 이 조합의 SC2(교차)는 잰 값을 남기되 실패로 세지 않는다.
+ * 목록 밖 조합은 그대로 판정한다 — 예외를 넓히려면 이유를 적어 여기에 한 줄을 더해야 한다.
+ */
+export const SIDE_COLUMN_EXCEPTIONS = Object.freeze([
+  Object.freeze({ w: 360, h: 560, host: true, screen: "lobby", reason: "360×560 방장 대기실: 열 두 개와 아래 패널이 겹칠 수 있는 알려진 한계(UI Considerations #21, 결정 0079)" }),
+]);
+
+/**
+ * 오른쪽 열 판정 (SC1~SC6). 사각형은 { left, top, width, height, right, bottom }.
+ * s = { viewport {w,h} · screen "lobby"|"result"|"game" · host 방장 화면인가 · mapsOn·botsOn 이 방에서 맵·봇 도구가 켜져 있나 ·
+ *       buttons [{ side, rect, pill? }]([data-side-button]) · band 자막 띠 면 사각형|null · panelTop 아래 패널 윗변|null ·
+ *       head [{ kind, rect }] 머리 단추(나가기·공유) · expectHead 머리 단추 개수(기본 2) · test [테스트] 사각형|null }.
+ * SC1 열 단추는 지름 52±1 원(알약 소리는 높이 52±1·폭 112 이상) · SC2 열 단추끼리·자막 띠(좌우·아래 8 여유)·아래 패널(윗변 − 8)·머리 단추·[테스트] 와 교차 0(예외 조합은 SIDE_COLUMN_EXCEPTIONS) ·
+ * SC3 방장은 map(mapsOn)·bots(botsOn)가 있고 손님은 없다, 소리·옷장(대기실·결과)이 있고 순서는 sound·map·bots·dress ·
+ * SC4 머리에는 44 정사각 단추뿐(개수 expectHead) · SC5 열 윗변 = 띠 아랫변 + 12 ±2, 가장 오른쪽 단추의 오른쪽 여백 16 ±1 ·
+ * SC6 열 안 간격 12 ±1, 두 열이면 열 사이 12 ±1, 첫 열(오른쪽)은 두 칸 이상.
+ */
+export function sideColumnChecks(s = {}) {
+  const L = {
+    SC1: `열 단추는 지름 ${SIDE_BUTTON_SIZE}±1 원(소리 알약은 높이 ${SIDE_BUTTON_SIZE}·폭 ${SOUND_BUTTON_GEOMETRY.pillMinW} 이상)`,
+    SC2: "열 단추끼리·자막 띠(좌우·아래 8 이내)·아래 패널·머리 단추·[테스트]와 교차 0",
+    SC3: "방장은 맵·봇(켜진 방), 손님은 없다 · 소리·옷장 · 순서 소리·맵·봇·옷장",
+    SC4: "머리 단추는 44 정사각뿐(나가기·공유)",
+    SC5: `열 윗변 = 띠 아랫변 + ${SIDE_GAP}(±2) · 오른쪽 여백 16(±1)`,
+    SC6: `열 안 간격 ${SIDE_GAP}(±1) · 열 사이 ${SIDE_GAP}(±1) · 첫 열은 두 칸 이상`,
+  };
+  const rectOk = (r) => !!r && allNum(r.left, r.top, r.width, r.height);
+  const valid =
+    !!s.viewport && allNum(s.viewport.w, s.viewport.h) && typeof s.host === "boolean" && ["lobby", "result", "game"].includes(s.screen) &&
+    Array.isArray(s.buttons) && s.buttons.length > 0 && s.buttons.every((b) => !!b && typeof b.side === "string" && rectOk(b.rect)) &&
+    (s.band === null || s.band === undefined || rectOk(s.band)) && Array.isArray(s.head) && s.head.every((b) => !!b && rectOk(b.rect)) &&
+    (s.test === null || s.test === undefined || rectOk(s.test)) && (s.panelTop === null || s.panelTop === undefined || isNum(s.panelTop));
+  if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "viewport·screen·host·buttons[{side, rect}]·band·panelTop·head·test"));
+  const out = [];
+  // 소리 잠김 알약(8초)은 왼쪽으로 늘어나므로 교차·열 판정에는 오른쪽 52 몫만 쓴다(오른쪽 변은 움직이지 않는다). 크기(SC1)는 상자 전체로 본다
+  const btns = s.buttons.map((b) => ({ side: b.side, raw: b.rect, pill: b.pill === true, r: b.pill === true ? { left: right(b.rect) - SIDE_BUTTON_SIZE, top: b.rect.top, width: SIDE_BUTTON_SIZE, height: b.rect.height, right: right(b.rect), bottom: bottom(b.rect) } : b.rect }));
+  const D = SIDE_BUTTON_SIZE;
+  const bad1 = [];
+  for (const b of btns) {
+    const wOk = b.pill ? b.raw.width + OVERLAP_EPS >= SOUND_BUTTON_GEOMETRY.pillMinW : Math.abs(b.raw.width - D) <= 1;
+    if (!wOk || Math.abs(b.raw.height - D) > 1) bad1.push(`${b.side} ${fmt(b.raw.width)}x${fmt(b.raw.height)}`);
+  }
+  out.push(result("SC1", L.SC1, bad1));
+
+  const bad2 = [];
+  for (let i = 0; i < btns.length; i++) for (let j = i + 1; j < btns.length; j++) if (rectsOverlap(btns[i].r, btns[j].r)) bad2.push(`${btns[i].side}·${btns[j].side} (${overlapText(btns[i].r, btns[j].r)})`);
+  if (s.band) {
+    const fat = { left: s.band.left - 8, top: s.band.top, right: right(s.band) + 8, bottom: bottom(s.band) + 8 };
+    fat.width = fat.right - fat.left;
+    fat.height = fat.bottom - fat.top;
+    for (const b of btns) if (rectsOverlap(b.r, fat)) bad2.push(`${b.side} 가 자막 띠 주변 8 안 (${overlapText(b.r, fat)})`);
+  }
+  if (isNum(s.panelTop)) for (const b of btns) if (bottom(b.r) > s.panelTop - 8 + OVERLAP_EPS) bad2.push(`${b.side} 아랫변 ${fmt(bottom(b.r))} > 패널 윗변 − 8 = ${fmt(s.panelTop - 8)}`);
+  for (const h of s.head) for (const b of btns) if (rectsOverlap(b.r, h.rect)) bad2.push(`${b.side}·머리 ${h.kind ?? "?"} (${overlapText(b.r, h.rect)})`);
+  if (s.test) for (const b of btns) if (rectsOverlap(b.r, s.test)) bad2.push(`${b.side}·[테스트] (${overlapText(b.r, s.test)})`);
+  const exc = SIDE_COLUMN_EXCEPTIONS.find((e) => e.w === s.viewport.w && e.h === s.viewport.h && e.host === s.host && e.screen === s.screen);
+  if (exc && bad2.length > 0) out.push({ id: "SC2", label: L.SC2, ok: true, detail: `알려진 한계(판정 아님): ${exc.reason} — ${bad2.join("; ")}`, known: true, info: true });
+  else out.push(result("SC2", L.SC2, bad2));
+
+  const bad3 = [];
+  const sides = btns.map((b) => b.side);
+  const count = (k) => sides.filter((x) => x === k).length;
+  const unknown = sides.filter((x) => !SIDE_ORDER.includes(x));
+  if (unknown.length > 0) bad3.push(`알 수 없는 표식 ${unknown.join(",")}`);
+  if (count("sound") !== 1) bad3.push(`소리 ${count("sound")}개`);
+  if (s.screen !== "game" && count("dress") !== 1) bad3.push(`옷장 ${count("dress")}개`);
+  if (s.screen === "game" && count("dress") !== 0) bad3.push(`게임 화면에 옷장 ${count("dress")}개`);
+  const wantMap = s.host && s.screen !== "game" && s.mapsOn === true;
+  const wantBots = s.host && s.screen === "lobby" && s.botsOn === true;
+  if (count("map") !== (wantMap ? 1 : 0)) bad3.push(`맵 ${count("map")}개(기대 ${wantMap ? 1 : 0})`);
+  if (count("bots") !== (wantBots ? 1 : 0)) bad3.push(`봇 ${count("bots")}개(기대 ${wantBots ? 1 : 0})`);
+  // 순서: 오른쪽 열(오른쪽변이 큰 쪽)부터, 열 안은 위부터
+  const ordered = [...btns].sort((a, b) => (Math.abs(right(b.r) - right(a.r)) > 6 ? right(b.r) - right(a.r) : a.r.top - b.r.top)).map((b) => b.side).filter((x) => SIDE_ORDER.includes(x));
+  const want = SIDE_ORDER.filter((x) => ordered.includes(x));
+  if (ordered.join(",") !== want.join(",")) bad3.push(`순서 ${ordered.join("·")} (기대 ${want.join("·")})`);
+  out.push(result("SC3", L.SC3, bad3));
+
+  const bad4 = [];
+  const expectHead = s.expectHead ?? 2;
+  if (s.head.length !== expectHead) bad4.push(`머리 단추 ${s.head.length}개(기대 ${expectHead})`);
+  for (const h of s.head) if (Math.abs(h.rect.width - TAP_MIN) > 1 || Math.abs(h.rect.height - TAP_MIN) > 1) bad4.push(`${h.kind ?? "?"} ${fmt(h.rect.width)}x${fmt(h.rect.height)}`);
+  out.push(result("SC4", L.SC4, bad4));
+
+  const bad5 = [];
+  if (!s.band) bad5.push("자막 띠 사각형 없음(기준을 알 수 없다)");
+  else {
+    const top = Math.min(...btns.map((b) => b.r.top));
+    if (Math.abs(top - (bottom(s.band) + SIDE_GAP)) > 2) bad5.push(`열 윗변 ${fmt(top)} (띠 아랫변 ${fmt(bottom(s.band))} + ${SIDE_GAP} = ${fmt(bottom(s.band) + SIDE_GAP)})`);
+  }
+  const maxRight = Math.max(...btns.map((b) => right(b.r)));
+  if (Math.abs(s.viewport.w - maxRight - FLOAT_MARGIN) > 1) bad5.push(`오른쪽 여백 ${fmt(s.viewport.w - maxRight)} (기대 ${FLOAT_MARGIN})`);
+  out.push(result("SC5", L.SC5, bad5));
+
+  const bad6 = [];
+  // 열 나누기: 오른쪽변이 6 이상 다르면 다른 열
+  const cols = [];
+  for (const b of [...btns].sort((a, c) => right(c.r) - right(a.r))) {
+    const last = cols[cols.length - 1];
+    if (last && Math.abs(right(last[0].r) - right(b.r)) <= 6) last.push(b);
+    else cols.push([b]);
+  }
+  for (const col of cols) {
+    col.sort((a, b) => a.r.top - b.r.top);
+    for (let i = 1; i < col.length; i++) {
+      const gap = col[i].r.top - bottom(col[i - 1].r);
+      if (Math.abs(gap - SIDE_GAP) > 1) bad6.push(`${col[i - 1].side}·${col[i].side} 간격 ${fmt(gap)}`);
+    }
+  }
+  for (let i = 1; i < cols.length; i++) {
+    const gap = Math.min(...cols[i - 1].map((b) => b.r.left)) - Math.max(...cols[i].map((b) => right(b.r)));
+    if (Math.abs(gap - SIDE_GAP) > 1) bad6.push(`열 ${i}·${i + 1} 사이 ${fmt(gap)}`);
+  }
+  if (cols.length > 1 && cols[0].length < 2) bad6.push(`첫 열이 ${cols[0].length}칸`);
+  out.push(result("SC6", L.SC6, bad6));
   return out;
 }
 

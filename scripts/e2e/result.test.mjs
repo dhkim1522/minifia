@@ -266,8 +266,8 @@ test("awardChecks: 정상 입력은 AW1~AW10 이 모두 통과한다", () => {
   for (const r of rows) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
 });
 
-test("AW-PLATE 상수: 폭 min(328, 폭 − 32), 높이 96, 윗변 + 8, 패 아래 150, [넘기기] 상자 48x71.6(14-07 이름표)", () => {
-  assert.deepEqual({ ...AWARD_PLATE, floatH: Math.round(AWARD_PLATE.floatH * 10) / 10 }, { maxW: 328, sideMargin: 32, h: 96, topGap: 8, belowMin: 150, float: 48, floatH: 71.6, floatRight: 16, floatGap: 8 });
+test("AW-PLATE 상수: 폭 min(328, 폭 − 32), 높이 96, 윗변 + 8, 패 아래 150, [넘기기] 상자 48x48(16-06: 상자가 곧 면, 열 밖 제자리)", () => {
+  assert.deepEqual({ ...AWARD_PLATE, floatH: Math.round(AWARD_PLATE.floatH * 10) / 10 }, { maxW: 328, sideMargin: 32, h: 96, topGap: 8, belowMin: 150, float: 48, floatH: 48, floatRight: 16, floatGap: 8 });
 });
 
 test("AW1: 패 수가 참가자 수·훅 목록 길이와 다르면 AW1 이 실패한다", () => {
@@ -296,11 +296,12 @@ test("AW4(AW-PLATE): 폭·높이·윗변·가운데·패 아래 스테이지, �
   assert.deepEqual(awFailing({ ...small, panelTop: 300 }), ["AW4", "AW5"]); // 패 아래 134 < 150, 그리고 [넘기기]가 아래 칸에 걸림
 });
 
-test("AW5: [넘기기] 폭 48·상자 높이 71.6·오른쪽 16·위 칸, 한 값씩 어긋나면 AW5 만 실패한다", () => {
+test("AW5: [넘기기] 48×48 원·오른쪽 16·위 칸, 한 값씩 어긋나면 AW5 만 실패한다", () => {
   const H = AWARD_PLATE.floatH;
   assert.deepEqual(awFailing({ floatBox: { left: 326, top: 480, width: 44, height: H, bottom: 480 + H } }), ["AW5"]);
   assert.deepEqual(awFailing({ floatBox: { left: 320, top: 480, width: 48, height: H, bottom: 480 + H } }), ["AW5"]);
-  assert.deepEqual(awFailing({ floatBox: { left: 326, top: 480, width: 48, height: 48, bottom: 528 } }), ["AW5"]); // 라벨 없는 옛 48 높이
+  assert.deepEqual(awFailing({ floatBox: { left: 326, top: 480, width: 48, height: 71.6, bottom: 551.6 } }), ["AW5"]); // 이름표가 붙은 옛 71.6 높이
+  assert.deepEqual(awFailing({ floatBox: { left: 322, top: 480, width: 52, height: 52, bottom: 532 } }), ["AW5"]); // 열 단추 52 원이 아니다(시상 [넘기기]는 48)
   assert.deepEqual(awFailing({ floatBox: { left: 326, top: 530, width: 48, height: H, bottom: 530 + H } }), ["AW5"]); // 아래 칸 자리를 침범(윗변이 위 칸보다 아래)
   assert.deepEqual(awFailing({ floatBox: { left: 326, top: 480, width: 48, height: H, bottom: 600 } }), ["AW5"]); // 아랫변이 패널 윗변 − 8 을 넘음
   assert.deepEqual(awFailing({ floatBox: null }), ["AW5"]);

@@ -44,8 +44,8 @@ export const RESULT_PANEL_H = Object.freeze({ short: 188, tall: 244, tallRoomMin
 export const SHORT_PHONE_H = 575;
 
 /** 시상식(11-09, UI-SPEC B-3·G): 패 기하와 떠 있는 [넘기기] 기하. test/unit/e2eContract.test.ts 가 앱 CSS 와 대조한다 */
-/** floatH: 14-07 이름표로 [넘기기] 단추 상자가 면 48 + 4 + 라벨 19.6 = 71.6 이 되었다(폭 48 그대로) */
-export const AWARD_PLATE = Object.freeze({ maxW: 328, sideMargin: 32, h: 96, topGap: 8, belowMin: 150, float: 48, floatH: 48 + 4 + 19.6, floatRight: 16, floatGap: 8 });
+/** floatH: 16-04 가 이름표를 없애고 16-06 이 상자를 곧 면으로 합쳐 [넘기기] 단추 상자는 48×48 원이다(시상식 [넘기기]는 열 밖 제자리, 지름 52 가 아니다) */
+export const AWARD_PLATE = Object.freeze({ maxW: 328, sideMargin: 32, h: 96, topGap: 8, belowMin: 150, float: 48, floatH: 48, floatRight: 16, floatGap: 8 });
 
 /** 시상식 헤더 제목 (src/game/awardText.ts CEREMONY_TITLE 의 사본) */
 export const AWARD_CEREMONY_TITLE = "시상식";
@@ -400,7 +400,7 @@ export function awardChecks(m) {
     AW2: "시상식: 패 순서 == 서버가 보낸 칭호 순서",
     AW3: "시상식: 마지막 패가 이긴 팀",
     AW4: "시상식: 패 기하 AW-PLATE (폭 min(328, 폭 − 32) · 높이 96 · 스테이지 윗변 + 8 · 아래 150 이상)",
-    AW5: "시상식: [넘기기] 폭 48(상자 높이 71.6) · 오른쪽 16 · 위 칸",
+    AW5: "시상식: [넘기기] 48×48 원(열 밖 제자리) · 오른쪽 16 · 위 칸",
     AW6: "시상식: 진행 숫자 'k / n' 이 패마다 1씩 오름",
     AW7: "시상식: 헤더 '시상식' → 끝난 뒤 승리 한 줄",
     AW8: "시상식: 끝난 뒤 [넘기기] 없음",
@@ -462,7 +462,7 @@ export function awardChecks(m) {
   if (!isNum(fb?.left) || !isNum(fb?.width) || !isNum(fb?.height) || !isNum(fb?.bottom) || !isNum(m?.viewport?.w) || !isNum(m?.panelTop)) out.push(noMeasure("AW5", L.AW5, "floatBox·viewport·panelTop"));
   else {
     const bad = [];
-    if (Math.abs(fb.width - AWARD_PLATE.float) > 1 || Math.abs(fb.height - AWARD_PLATE.floatH) > 1) bad.push(`상자 ${fb.width}×${fb.height} ≠ ${AWARD_PLATE.float}×${AWARD_PLATE.floatH} (±1, 면 48 + 라벨)`);
+    if (Math.abs(fb.width - AWARD_PLATE.float) > 1 || Math.abs(fb.height - AWARD_PLATE.floatH) > 1) bad.push(`상자 ${fb.width}×${fb.height} ≠ ${AWARD_PLATE.float}×${AWARD_PLATE.floatH} (±1, 상자가 곧 면 48)`);
     const right = m.viewport.w - (fb.left + fb.width);
     if (Math.abs(right - AWARD_PLATE.floatRight) > 1) bad.push(`오른쪽 여백 ${right} ≠ ${AWARD_PLATE.floatRight} (±1)`);
     // 위 칸: 윗변이 `패널 윗변 − 8 − (칸 둘 48×2 + 사이 8)` 이하 — 아래 칸(11-12 의 [옷장] 자리)을 비운 위 칸에 선다. 14-07 이름표로 단추 상자가 길어져도 줄 자리(.mf-float 의 예약 높이)는

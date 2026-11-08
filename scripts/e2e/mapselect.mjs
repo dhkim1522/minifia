@@ -2,7 +2,8 @@
 // 시작 뒤 모두 같은 맵, 광장에서 한 판이 ended 까지. 흐름 본문은 이 파일에 둔다(flows.mjs 의 도우미는 `makeMapSelectFlows(helpers)` 로 받는다 — avatar.mjs 와 같은 모양).
 // helpers: { recorder, startHost, openGuest, attempt, LOBBY_HOST_NICK, WORLD_GUEST_NICK, settledResult }
 // 판정 문턱은 아래 순수 검사 함수(mapChoiceChecks)에만 있고 흐름은 낮추지 않는다. 칩·카드 기하는 src/styles/v2.css 와 같아야 하고 test/unit/e2eContract.test.ts 가 대조한다.
-import { chooseRole, chooseVerdict, clickInDialog, closeSheet, openTestSheet, readGame, setBotVote, setBots, settle, skipTo, sleep, startGame, waitWorldReady } from "./browser.mjs";
+import { chooseRole, chooseVerdict, clickInDialog, closeSheet, openTestSheet, readGame, readSideColumn, setBotVote, setBots, settle, skipTo, sleep, startGame, waitWorldReady } from "./browser.mjs";
+import { sideColumnChecks } from "./lib.mjs";
 
 /** 앱이 더한 DOM 표식·훅 이름. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지) */
 export const MAP_MARKERS = Object.freeze([
@@ -243,6 +244,11 @@ export function makeMapSelectFlows(helpers) {
       rec(sc, "MC1", "로비 무대는 늘 재즈 바(__mfMap = bar, 두 페이지)", h0.map === "bar" && g0.map === "bar", `방장 ${h0.map} · 손님 ${g0.map}`);
       // 손님 화면에는 칩이 없다(16-06: 맵은 방장만, T-16-13)
       const guestInfo = { chipCount: await gp.locator(CHIP).count() };
+      // 오른쪽 열(16-06 SC1~SC6): 방장은 소리·맵·봇·옷장, 손님은 소리·옷장
+      for (const [who, pg, isHost] of [["방장", hp, true], ["손님", gp, false]]) {
+        const col = await readSideColumn(pg);
+        for (const r of sideColumnChecks({ viewport: { w: h0.vw, h: h0.vh }, screen: "lobby", host: isHost, mapsOn: true, botsOn: isHost, ...col })) rec(sc, `${r.id}-${who}`, `${who} 열: ${r.label}`, r.ok, r.detail, r.info === true);
+      }
 
       // ── 방장이 칩을 눌러 맵 탭 ──
       await hp.locator(CHIP).click({ timeout: 3000 });
@@ -257,8 +263,8 @@ export function makeMapSelectFlows(helpers) {
       await closeDressSheet(gp);
       const rows = mapChoiceChecks({
         viewport: { w: hOpen.vw, h: hOpen.vh },
-        headerBottom: hOpen.headerBottom,
-        chip: hOpen.chip,
+        headerBottom: h0.headerBottom,
+        chip: h0.chip, // 시트가 열리면 열(칩)이 사라지므로 닫힌 때 읽은 값
         guest: guestInfo,
         sheet: hOpen.sheet,
         tabs: hOpen.tabs,
@@ -266,11 +272,11 @@ export function makeMapSelectFlows(helpers) {
         cards: hOpen.cards,
         selected: hOpen.selected,
         selectedId: hOpen.selectedId,
-        testBtn: hOpen.testBtn,
-        tags: hOpen.tags.filter(Boolean),
+        testBtn: h0.testBtn,
+        tags: h0.tags.filter(Boolean),
       });
       // MS6 는 두 번에 나눠 본다: 방장 칩이 [테스트] 버튼(왼쪽 위)과 겹치지 않음, 방장 칩이 이름표와 겹치지 않음. 이름표 쪽은 칩이 오른쪽 열로 옮겨져 손님 화면에는 없다.
-      const hostBtn = mapChoiceChecks({ viewport: { w: hOpen.vw, h: hOpen.vh }, headerBottom: hOpen.headerBottom, chip: hOpen.chip, guest: guestInfo, sheet: hOpen.sheet, tabs: hOpen.tabs, guestTabs: 0, cards: hOpen.cards, selected: hOpen.selected, selectedId: hOpen.selectedId, testBtn: hOpen.testBtn, tags: [] }).find((r) => r.id === "MS6");
+      const hostBtn = mapChoiceChecks({ viewport: { w: hOpen.vw, h: hOpen.vh }, headerBottom: h0.headerBottom, chip: h0.chip, guest: guestInfo, sheet: hOpen.sheet, tabs: hOpen.tabs, guestTabs: 0, cards: hOpen.cards, selected: hOpen.selected, selectedId: hOpen.selectedId, testBtn: h0.testBtn, tags: [] }).find((r) => r.id === "MS6");
       const guestTags = mapChoiceChecks({ viewport: { w: h0.vw, h: h0.vh }, headerBottom: h0.headerBottom, chip: h0.chip, guest: guestInfo, sheet: hOpen.sheet, tabs: hOpen.tabs, guestTabs: 0, cards: hOpen.cards, selected: hOpen.selected, selectedId: hOpen.selectedId, testBtn: null, tags: h0.tags.filter(Boolean) }).find((r) => r.id === "MS6");
       for (const r of rows) {
         if (r.id === "MS6") {
@@ -285,19 +291,21 @@ export function makeMapSelectFlows(helpers) {
       await hp.locator(`${SHEET} button[data-map-card="plaza"]`).click({ timeout: 3000 });
       const seen = await until(async () => {
         const [a, b] = await Promise.all([readMapUi(hp), readMapUi(gp)]);
-        return a.chip?.label === "맵 광장" && b.chip === null && a.selectedId === "plaza";
+        return a.selectedId === "plaza" && b.chip === null; // 시트가 열려 있는 동안 열(칩)은 없다 — 방장 칩 라벨은 시트를 닫은 뒤(MS9) 본다
       }, ARRIVE_MS);
-      rec(sc2, "MS7", `광장 선택이 ${ARRIVE_MS}ms 안에 방장 칩(맵 광장)과 시트 카드에 반영`, seen !== null, seen === null ? `방장 ${(await readMapUi(hp)).chip?.label}` : `${Date.now() - t0}ms`);
+      rec(sc2, "MS7", `광장 선택이 ${ARRIVE_MS}ms 안에 방장 시트 카드에 반영(손님 화면에는 칩 없음)`, seen !== null, seen === null ? `방장 선택 ${(await readMapUi(hp)).selectedId}` : `${Date.now() - t0}ms`);
       const [hm, gm] = await Promise.all([readMapHook(hp), readMapHook(gp)]);
       rec(sc2, "MS8", "광장을 골라도 로비 무대는 재즈 바(__mfMap = bar)", hm === "bar" && gm === "bar", `방장 ${hm} · 손님 ${gm}`);
       // 방장이 랜덤으로 되돌린다
       await hp.locator(`${SHEET} button[data-map-card="random"]`).click({ timeout: 3000 });
       const back = await until(async () => {
         const [a, b] = await Promise.all([readMapUi(hp), readMapUi(gp)]);
-        return a.chip?.label === "맵 랜덤" && b.chip === null;
+        return a.selectedId === "random" && b.chip === null;
       }, ARRIVE_MS);
-      rec(sc2, "MS9", `랜덤으로 되돌리면 ${ARRIVE_MS}ms 안에 방장 칩이 맵 랜덤`, back !== null, `방장 ${(await readMapUi(hp)).chip?.label}`);
+      rec(sc2, "MS9", `랜덤으로 되돌리면 ${ARRIVE_MS}ms 안에 방장 시트 선택이 random`, back !== null, `방장 선택 ${(await readMapUi(hp)).selectedId}`);
       await closeDressSheet(hp);
+      const chipBack = await until(async () => (await readMapUi(hp)).chip?.label === "맵 랜덤", 1000);
+      rec(sc2, "MS9b", "시트를 닫으면 방장 칩이 서버 값(맵 랜덤)을 보임", chipBack !== null, `방장 칩 ${(await readMapUi(hp)).chip?.label}`);
 
       // ── 랜덤으로 시작: 모든 페이지의 맵이 같다 ──
       const sc3 = "map-select/start";
@@ -357,6 +365,11 @@ export function makeMapSelectFlows(helpers) {
       const hr = await readMapUi(hp);
       const gr = await readMapUi(gp);
       rec(sc5, "MS14", "결과 화면에서 방장 칩이 서버 mapChoice(광장)를 보이고 손님 화면에는 칩이 없다", hr.chip?.label === "맵 광장" && gr.chip === null, `방장 ${hr.chip?.label} · 손님 ${gr.chip?.label ?? "없음"}`);
+      // 결과 화면 오른쪽 열(16-06): 방장 소리·맵·옷장, 손님 소리·옷장 — 시트가 열리면 열이 사라지므로 시트를 열기 전에 읽는다
+      for (const [who, pg, isHost] of [["방장", hp, true], ["손님", gp, false]]) {
+        const col = await readSideColumn(pg);
+        for (const r of sideColumnChecks({ viewport: { w: hr.vw, h: hr.vh }, screen: "result", host: isHost, mapsOn: true, botsOn: false, expectHead: 1, ...col })) rec(sc5, `R-${r.id}-${who}`, `결과 ${who} 열: ${r.label}`, r.ok, r.detail, r.info === true);
+      }
       await hp.locator(CHIP).click({ timeout: 3000 });
       await hp.waitForSelector(`${SHEET} button[data-map-card]`, { timeout: 2000 });
       await sleep(200);
@@ -364,8 +377,8 @@ export function makeMapSelectFlows(helpers) {
       rec(sc5, "MS15", "결과 화면 방장 시트의 선택 카드가 mapChoice(plaza)와 같음", hro.selectedId === "plaza" && hro.selected === 1, `선택 ${hro.selectedId} ${hro.selected}개`);
       const rr = mapChoiceChecks({
         viewport: { w: hro.vw, h: hro.vh },
-        headerBottom: hro.headerBottom,
-        chip: hro.chip,
+        headerBottom: hr.headerBottom,
+        chip: hr.chip, // 시트가 열리면 열(칩)이 사라지므로 닫힌 때 읽은 값
         guest: { chipCount: gr.chip === null ? 0 : 1 },
         sheet: hro.sheet,
         tabs: hro.tabs,
@@ -375,7 +388,7 @@ export function makeMapSelectFlows(helpers) {
         selectedId: hro.selectedId,
         selectedWant: "plaza",
         testBtn: null,
-        tags: hro.tags.filter(Boolean),
+        tags: hr.tags.filter(Boolean),
       });
       for (const r of rr) {
         if (!["MS1", "MS3", "MS4", "MS5", "MS6"].includes(r.id)) continue;

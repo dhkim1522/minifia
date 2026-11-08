@@ -67,6 +67,7 @@ import {
   waitChatLine,
   waitWorldReady,
   readNightFaces,
+  readSideColumn,
 } from "./browser.mjs";
 import {
   JOIN_FIT_MIN_H,
@@ -130,6 +131,7 @@ import {
   graphemeCount,
   letterChecks,
   ownPenFontRequests,
+  sideColumnChecks,
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
 import { makeMapSelectFlows } from "./mapselect.mjs";
@@ -239,6 +241,9 @@ async function lobbyFlow(ctx) {
   const g1 = await readGuide(page);
   recOne(rec, "lobby/lobby", guideChecks(g1, { phase: "lobby" }));
   recOne(rec, "lobby/lobby", docHeightChecks(g1, { h }));
+  // 16-06 오른쪽 한 줄 열: 방장은 소리·맵·봇·옷장 52 원, 머리에는 44 정사각 둘, 교차 없음(360×560 방장은 문서화한 예외)
+  const sideHost = await readSideColumn(page);
+  for (const r of sideColumnChecks({ viewport: { w, h }, screen: "lobby", host: true, mapsOn: true, botsOn: tracker.last()?.me?.testBots !== undefined, ...sideHost })) recOne(rec, "lobby/lobby", r);
 
   // 방 코드는 헤더에 없고 공유 시트 안에서만 보인다
   const share = await attempt(async () => {

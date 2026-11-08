@@ -625,6 +625,30 @@ export async function readLobbyFrame(page) {
 }
 
 /**
+ * 오른쪽 열(16-06): 보이는 [data-side-button] 의 표식 값·사각형(소리 알약이면 pill)과 sideColumnChecks 가 함께 보는 띠 면·아래 패널 윗변·머리 단추·[테스트] 사각형을 한 번에 읽는다.
+ * 반환은 sideColumnChecks 입력의 일부 { buttons, band, panelTop, head, test } — viewport·screen·host·mapsOn·botsOn 은 부르는 쪽이 더한다.
+ */
+export function readSideColumn(page) {
+  return page.evaluate(() => {
+    const rect = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+    };
+    const shown = (el) => getComputedStyle(el).visibility !== "hidden" && el.getBoundingClientRect().width > 0;
+    const panel = document.querySelector(".mf-lobby__panel, .mf-result__panel");
+    return {
+      buttons: [...document.querySelectorAll("[data-side-button]")].filter(shown).map((el) => ({ side: el.getAttribute("data-side-button"), rect: rect(el), pill: el.classList.contains("mv-sound--pill") })),
+      band: rect(document.querySelector("[data-host-band] .mv-host__band")),
+      panelTop: panel ? panel.getBoundingClientRect().top : null,
+      head: [...document.querySelectorAll(".mf-lobby__header button, .mf-result__header button, .mf-game__header button")].filter(shown).map((el) => ({ kind: el.getAttribute("aria-label") ?? "?", rect: rect(el) })),
+      test: rect(document.querySelector(".mf-lobby__test .mf-tt, .mf-game__test .mf-tt")),
+      columns: document.querySelectorAll("[data-side-column]").length,
+    };
+  });
+}
+
+/**
  * 채팅 입력칸에 글을 쓰고 [보내기] 를 누른다(07-13). 값은 fill 로 한 번에 넣는다 — 한글 조합 이벤트는 만들지 않는다(실제 IME 는 07-19 몫).
  * 보내기 버튼이 활성(aria-disabled "false")이 될 때까지 기다린 뒤 누르므로, 글자가 React 상태에 닿기 전에 누르는 일이 없다.
  */
