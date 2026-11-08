@@ -4,13 +4,13 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 16
 current_phase_name: 단추 정리·심부름 증거
-current_plan: 10
+current_plan: 1
 status: executing
 stopped_at: Phase 16 UI-SPEC approved
-last_updated: "2026-11-08T09:41:27.402Z"
-last_activity: 2026-11-07
-last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: 885da11b60bce84205cd4decd64aac7a76fa6d8c
+last_updated: "2026-11-08T09:45:07.849Z"
+last_activity: 2026-11-08
+last_activity_desc: Phase 16 execution started
+state_head: fa1e50cf30a540cbf10c06a4684679b0eeae3779
 progress:
   total_phases: 5
   completed_phases: 3
@@ -26,15 +26,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-07)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(평균 10~15분, 참고 목표)을 끝까지 마치는 것
-**Current focus:** Phase 15 — 낮 심부름·목격 기록·밤 흔적
+**Current focus:** Phase 16 — 단추 정리·심부름 증거
 
 ## Current Position
 
-Phase: 16 (단추 정리·심부름 증거) — READY TO EXECUTE
-Current Plan: 10
+Phase: 16 (단추 정리·심부름 증거) — EXECUTING
+Current Plan: 1
 Total Plans in Phase: 10
-Status: Ready to execute
-Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
+Status: Executing Phase 16
+Last activity: 2026-11-08 — Phase 16 execution started
 
 ## Performance Metrics
 
