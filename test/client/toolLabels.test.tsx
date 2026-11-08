@@ -38,23 +38,38 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-// 14페이즈 TOOL-01(결정 0051 보완, UI-SPEC "도구 이름표 목록"): 눌리는 모든 아이콘 단추는 아이콘 아래 한 단어를 항상 단다.
-// 규칙: ① data-tool-label="{낱말}" ② 보이는 글자 = 그 낱말 ③ 접근성 이름은 그 낱말을 포함한다(WCAG 2.5.3 — 같거나 뒤에 상태·대상이 붙는다)
-// ④ 낱말은 숫자를 빼고 비어 있지 않고 3자 이하(예외 "내 역할"·"보내기"·"넘기기"는 UI-SPEC 표가 정한 낱말) ⑤ 낱말은 고정 문구뿐(T-14-16: 역할·좌석 없음).
-// 이 파일은 부품 단위 describe 로 시작하고 14-07 이 방 화면 전수 검사를 더한다.
+// 16페이즈 TOOL-04(결정 0077·0079, 14 의 TOOL-01 대체): 아이콘 단추 아래 글 이름표는 없다.
+// 규칙: ① 이름표 속성(data-tool-label)과 아이콘 아래 라벨 요소는 어느 화면에도 0건 ② 모든 button·[role=tab] 에 비어 있지 않은 접근성 이름
+// (아이콘 단추는 aria-label, 글 단추는 내용) ③ 접근성 이름은 고정 문구뿐(T-16-11: 역할·좌석 값 없음).
+// 이 파일은 부품 단위 describe 로 시작하고 방 화면 전수 검사가 이어진다.
 
 const V2_CSS = readFileSync("src/styles/v2.css", "utf8");
 
-/** 이름표 단추 계약: data-tool-label 값 = 보이는 글자(aria-hidden 제외, 숫자·공백 제외) 이고 접근성 이름이 그 값을 포함한다. */
-export function expectToolLabel(btn: Element | null, word: string, opts: { name?: string; name_contains?: boolean } = {}): void {
-  expect(btn, `이름표 단추 '${word}'`).not.toBeNull();
+// 지워진 이름표의 흔적: 속성과 아이콘 아래 라벨 클래스(16-05 가 CSS 의 라벨 규칙을 지울 때까지 CSS 는 남아 있다)
+const TOOL_ATTR = "data-tool-label";
+const LABEL_SELECTOR = ".mv-tool__label, .mv-float__label, .mf-mapchip__label, .mv-sound__label, .mv-closepill__label, .mf-rolecard-btn__label";
+
+/** 아이콘 단추 계약: 이름표 속성·라벨 요소가 없고, 보이는 글자가 없으며(숫자 장식 aria-hidden 제외), 접근성 이름 = name. */
+export function expectIconButton(btn: Element | null, name: string): void {
+  expect(btn, `아이콘 단추 '${name}'`).not.toBeNull();
   const el = btn as HTMLElement;
-  expect(el.getAttribute("data-tool-label")).toBe(word);
-  const visible = [...el.querySelectorAll("*")].filter((n) => !n.closest("[aria-hidden='true']") && n.children.length === 0).map((n) => n.textContent ?? "").join("").replace(/[\d\s/]/g, "");
-  expect(visible, `'${word}' 단추의 보이는 글자`).toBe(word.replace(/\s/g, ""));
-  const name = el.getAttribute("aria-label") ?? visible;
-  expect(name.includes(word), `접근성 이름 '${name}' 은 '${word}' 를 포함해야 한다`).toBe(true);
-  if (opts.name !== undefined) expect(name).toBe(opts.name);
+  expect(el.hasAttribute(TOOL_ATTR), `'${name}' 에 이름표 속성이 없다`).toBe(false);
+  expect(el.querySelector(LABEL_SELECTOR), `'${name}' 아래 라벨 요소가 없다`).toBeNull();
+  expect(el.getAttribute("aria-label")).toBe(name);
+  const visible = [...el.querySelectorAll("*")].filter((n) => !n.closest("[aria-hidden='true']") && n.children.length === 0).map((n) => n.textContent ?? "").join("").trim();
+  expect(visible, `'${name}' 단추에 보이는 글자가 없다`).toBe("");
+  expect(el.querySelector("svg"), `'${name}' 단추의 아이콘`).not.toBeNull();
+}
+
+/** 글 단추·탭 계약: 이름표 속성이 없고 글이 그대로 보인다. */
+export function expectTextControl(el: Element | null, text: string, opts: { name?: string } = {}): void {
+  expect(el, `글 단추 '${text}'`).not.toBeNull();
+  const t = el as HTMLElement;
+  expect(t.hasAttribute(TOOL_ATTR), `'${text}' 에 이름표 속성이 없다`).toBe(false);
+  expect(t.querySelector(LABEL_SELECTOR)).toBeNull();
+  const visible = [...t.querySelectorAll("*")].filter((n) => !n.closest("[aria-hidden='true']") && n.children.length === 0).map((n) => n.textContent ?? "").join("").replace(/\s/g, "");
+  expect(visible, `'${text}' 의 보이는 글자`).toBe(text.replace(/\s/g, ""));
+  if (opts.name !== undefined) expect(t.getAttribute("aria-label") ?? visible).toBe(opts.name);
 }
 
 function Harness(rest: Partial<ChatPanelProps>) {
@@ -70,49 +85,46 @@ function rule(sel: string): string {
     .join(";");
 }
 
-describe("채팅 입력줄 이름표 (TOOL-01 목록 8~11, D-04)", () => {
+describe("채팅 입력줄 단추 (TOOL-04, D-01)", () => {
   const mount = (rest: Partial<ChatPanelProps> = {}) => render(<Harness emotes={EMOTE_TRAY_ORDER} onEmote={() => {}} onWill={() => {}} {...rest} />);
 
-  it("동작·보내기·유언 단추가 보이는 글자와 data-tool-label 을 단다(접근성 이름은 낱말을 포함)", () => {
+  it("동작·보내기·유언 단추는 글 없이 아이콘과 aria-label 만 가진다", () => {
     const { container } = mount();
-    expectToolLabel(container.querySelector("[data-emote-button]"), "동작", { name: "동작 고르기" });
-    expectToolLabel(container.querySelector("[data-chat-send]"), "보내기", { name: "보내기" });
-    expectToolLabel(container.querySelector("[data-will-button]"), "유언", { name: "유언 쓰기" });
+    expectIconButton(container.querySelector("[data-emote-button]"), "동작 고르기");
+    expectIconButton(container.querySelector("[data-chat-send]"), "보내기");
+    expectIconButton(container.querySelector("[data-will-button]"), "유언 쓰기");
   });
 
-  it("유언이 저장돼 있으면 접근성 이름만 '유언 쓰기, 저장됨' 이 되고 보이는 낱말은 그대로다", () => {
+  it("유언이 저장돼 있으면 접근성 이름만 '유언 쓰기, 저장됨' 이 된다", () => {
     const { container } = mount({ willSaved: true });
-    expectToolLabel(container.querySelector("[data-will-button]"), "유언", { name: "유언 쓰기, 저장됨" });
+    expectIconButton(container.querySelector("[data-will-button]"), "유언 쓰기, 저장됨");
     expect(container.querySelector(".mv-chat__will-dot")).not.toBeNull();
   });
 
-  it("보내기가 막혀(aria-disabled) 있어도 라벨은 보인다(UI#10 partial)", () => {
+  it("보내기가 막혀(aria-disabled) 있어도 이름은 남는다", () => {
     const { container } = mount({ sendDisabled: true });
     expect(container.querySelector("[data-chat-send]")?.getAttribute("aria-disabled")).toBe("true");
-    expectToolLabel(container.querySelector("[data-chat-send]"), "보내기");
-    expectToolLabel(container.querySelector("[data-emote-button]"), "동작");
-    expectToolLabel(container.querySelector("[data-will-button]"), "유언");
+    expectIconButton(container.querySelector("[data-chat-send]"), "보내기");
+    expectIconButton(container.querySelector("[data-emote-button]"), "동작 고르기");
+    expectIconButton(container.querySelector("[data-will-button]"), "유언 쓰기");
   });
 
-  it("각 이름표 단추는 아이콘(svg)과 라벨(.mv-tool__label)을 가진 .mv-tool 이다", () => {
+  it("각 입력줄 단추는 아이콘(svg) 하나를 가진 .mv-tool 이고 라벨 요소가 없다", () => {
     const { container } = mount();
     for (const sel of ["[data-emote-button]", "[data-chat-send]", "[data-will-button]"]) {
       const b = container.querySelector(sel);
       expect(b?.classList.contains("mv-tool"), sel).toBe(true);
-      expect(b?.querySelector("svg"), sel).not.toBeNull();
-      expect(b?.querySelector(".mv-tool__label"), sel).not.toBeNull();
+      expect(b?.querySelectorAll("svg").length, sel).toBe(1);
+      expect(b?.querySelector(LABEL_SELECTOR), sel).toBeNull();
     }
   });
 
-  it("빛나는 [유언] 은 라벨이 700 brass-200 이 된다(CSS 계약)", () => {
+  it("빛나는 [유언] 은 is-call 표식을 단다", () => {
     const { container } = mount({ callWill: true });
     expect(container.querySelector("[data-will-button]")?.classList.contains("is-call")).toBe(true);
-    const r = rule(".mv-tool.is-call .mv-tool__label");
-    expect(r).toContain("font-weight: 700");
-    expect(r).toContain("var(--brass-200)");
   });
 
-  it("새 메시지 알림은 14px 알약 '새 글' 이다(보이는 글자·접근성 이름·data-tool-label 모두 '새 글')", async () => {
+  it("새 메시지 알림은 글 '새 글' 알약이다(이름표 속성 없음)", async () => {
     // 위로 올려 읽는 중 새 줄이 오면 점이 뜬다 — chatPanel.test 의 같은 장치(스크롤 치수 가짜)를 쓴다.
     const { container, rerender } = render(<Harness messages={[{ key: "a", kind: "player", seat: 0, name: "가", text: "하나", ch: "all" }]} />);
     const log = container.querySelector("[data-chat-log]") as HTMLElement;
@@ -129,19 +141,15 @@ describe("채팅 입력줄 이름표 (TOOL-01 목록 8~11, D-04)", () => {
         ]}
       />,
     );
-    expectToolLabel(container.querySelector("button[data-chat-newdot]"), "새 글", { name: "새 글" });
+    expectTextControl(container.querySelector("button[data-chat-newdot]"), "새 글", { name: "새 글" });
   });
 
-  it("이름표 CSS: 폭 ≤ 52·누르기 44 이상, 라벨 14px/400 gray-300, 막힘은 불투명도만", () => {
+  it("단추 크기 CSS: 폭 ≤ 52·누르기 44 이상, 막힘은 불투명도만 (크기는 16-05 가 바꾼다)", () => {
     const tool = rule(".mv-tool");
     expect(tool).toMatch(/min-width:\s*(var\(--tap-min\)|44px)/);
     expect(tool).toContain("max-width: 52px");
     expect(tool).toMatch(/min-height:\s*(var\(--tap-min\)|44px)/);
     expect(tool).toContain("flex-direction: column");
-    const label = rule(".mv-tool__label");
-    expect(label).toContain("font-size: 14px");
-    expect(label).toContain("font-weight: 400");
-    expect(label).toContain("color: var(--gray-300)");
     expect(rule('.mv-tool[aria-disabled="true"]')).toContain("opacity: 0.45");
   });
 
@@ -154,33 +162,30 @@ describe("채팅 입력줄 이름표 (TOOL-01 목록 8~11, D-04)", () => {
   });
 });
 
-describe("시트 닫기·결과 화면 이름표 (TOOL-01 목록 1·12·14)", () => {
-  it("Sheet 닫기: × + '닫기' 가로 알약, data-tool-label·접근성 이름 '닫기'", () => {
+describe("시트 닫기·결과 탭 (TOOL-04, D-01·V-7)", () => {
+  it("Sheet 닫기: × 아이콘 하나와 접근성 이름 '닫기' 뿐이다", () => {
     const { baseElement } = render(
       <Sheet label="a" onClose={() => {}} showClose>
         <p>x</p>
       </Sheet>,
     );
     const btn = baseElement.querySelector(".mf-sheet__close");
-    expectToolLabel(btn, "닫기", { name: "닫기" });
-    expect(btn?.querySelector("svg")).not.toBeNull();
+    expectIconButton(btn, "닫기");
     expect(btn?.classList.contains("mv-closepill")).toBe(true);
   });
 
-  it("WillSheet 닫기: × + '닫기' 가로 알약", () => {
+  it("WillSheet 닫기: × 아이콘과 '닫기' 이름", () => {
     const { container } = render(<WillSheet value="" onChange={() => {}} onSave={() => {}} onClose={() => {}} />);
     const btn = container.querySelector(".mv-will__close");
-    expectToolLabel(btn, "닫기", { name: "닫기" });
-    expect(btn?.querySelector("svg")).not.toBeNull();
+    expectIconButton(btn, "닫기");
     expect(btn?.classList.contains("mv-closepill")).toBe(true);
   });
 
-  it("닫기 알약 CSS: 높이 44, 아이콘 왼쪽·글자 오른쪽 가로, 라벨 14/400", () => {
+  it("닫기 단추 CSS: 높이 44, inline-flex 알약 (크기는 16-05 가 바꾼다)", () => {
     const r = rule(".mv-closepill");
     expect(r).toMatch(/height:\s*(var\(--tap-min\)|44px)/);
     expect(r).toContain("display: inline-flex");
     expect(r).toContain("border-radius: var(--radius-pill)");
-    expect(rule(".mv-closepill__label")).toContain("font-size: 14px");
   });
 
   const tabProps = (over: Partial<ResultPanelProps> = {}): ResultPanelProps => ({
@@ -195,15 +200,16 @@ describe("시트 닫기·결과 화면 이름표 (TOOL-01 목록 1·12·14)", ()
     ...over,
   });
 
-  it("결과 기록 탭 넷은 선택 여부와 무관하게 아이콘 + 글자를 항상 보인다", () => {
+  it("결과 기록 탭 넷은 선택 여부와 무관하게 아이콘 + 글자를 그대로 보이고 이름표 속성이 없다", () => {
     for (const sel of ["all", "ghost", "log"] as const) {
       const { container, unmount } = render(<ResultPanel {...tabProps({ tab: sel, expanded: true })} />);
       const tabs = [...container.querySelectorAll<HTMLElement>("[data-result-tab]")];
       expect(tabs.map((t) => t.getAttribute("data-result-tab"))).toEqual([...RESULT_TABS_SHOWN]);
       for (const t of tabs) {
         const id = t.getAttribute("data-result-tab") as ResultTab;
-        expectToolLabel(t, RESULT_PANEL_TEXT.tab[id], { name: RESULT_PANEL_TEXT.tabName[id] });
+        expectTextControl(t, RESULT_PANEL_TEXT.tab[id], { name: RESULT_PANEL_TEXT.tabName[id] });
         expect(t.querySelector("svg"), id).not.toBeNull();
+        expect(t.getAttribute("aria-selected")).toBe(id === sel ? "true" : "false");
       }
       unmount();
     }
@@ -227,86 +233,67 @@ describe("시트 닫기·결과 화면 이름표 (TOOL-01 목록 1·12·14)", ()
   });
 });
 
-describe("머리·떠 있는 단추·옷장 이름표 (TOOL-01 목록 1~5·7·12·13)", () => {
-  it("MapChip: 라벨 '맵', data-tool-label '맵', 접근성 이름 '맵 …' — 손님(aria-disabled)도 라벨이 보인다", () => {
+describe("머리·떠 있는 단추·옷장 (TOOL-04, D-01)", () => {
+  it("MapChip: 글 없이 아이콘과 접근성 이름 '맵 …' — 손님(aria-disabled)도 이름이 남는다", () => {
     for (const host of [true, false]) {
       for (const choice of ["bar", "plaza", "random"] as const) {
         const { container, unmount } = render(<MapChip choice={choice} host={host} onPress={() => {}} />);
         const chip = container.querySelector("[data-map-chip]");
-        expectToolLabel(chip, "맵", { name: MAP_CHIP_NAME[choice] });
+        expectIconButton(chip, MAP_CHIP_NAME[choice]);
         expect(chip?.getAttribute("aria-disabled") === "true").toBe(!host);
-        expect(chip?.querySelector(".mf-mapchip__label")?.textContent).toBe("맵");
         unmount();
       }
     }
   });
 
-  it("DRESS_TEXT.open 은 '옷장' 이고 FloatAction(옷장)은 라벨·접근성 이름이 같은 낱말이다", () => {
+  it("DRESS_TEXT.open 은 '옷장' 이고 FloatAction(옷장)은 아이콘과 같은 이름뿐이다", () => {
     expect(DRESS_TEXT.open).toBe("옷장");
     const { container } = render(<FloatAction kind="dress" icon="hanger" label={DRESS_TEXT.open} onPress={() => {}} />);
-    expectToolLabel(container.querySelector("[data-float=dress]"), "옷장", { name: "옷장" });
-    expect(container.querySelector("[data-float=dress] svg")).not.toBeNull();
+    expectIconButton(container.querySelector("[data-float=dress]"), "옷장");
   });
 
-  it("FloatAction(넘기기): 라벨 '넘기기' 아래, 위 'k / n' 은 장식으로 유지된다(보이는 글자 비교는 숫자·'/' 를 뺀다)", () => {
+  it("FloatAction(넘기기): 글 없이 아이콘, 위 'k / n' 은 장식으로 유지된다", () => {
     const { container } = render(<FloatAction kind="skip" icon="skip" label="넘기기" count="2 / 5" onPress={() => {}} />);
     const b = container.querySelector("[data-float=skip]");
-    expectToolLabel(b, "넘기기", { name: "넘기기" });
+    expectIconButton(b, "넘기기");
     expect(b?.querySelector("[data-float-count]")?.textContent).toBe("2 / 5");
     expect(b?.querySelector("[data-float-count]")?.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("FloatAction 막힘(aria-disabled)도 라벨이 보인다(UI#10 partial)", () => {
+  it("FloatAction 막힘(aria-disabled)도 이름이 남는다", () => {
     const { container } = render(<FloatAction kind="dress" icon="hanger" label="옷장" disabled onPress={() => {}} />);
     expect(container.querySelector("[data-float=dress]")?.getAttribute("aria-disabled")).toBe("true");
-    expectToolLabel(container.querySelector("[data-float=dress]"), "옷장");
+    expectIconButton(container.querySelector("[data-float=dress]"), "옷장");
   });
 
-  it("옷장 시트: 이름 '옷장', 방장 탭 둘은 '맵'·'의상' 글자, 닫기는 × + '닫기' 알약", () => {
+  it("옷장 시트: 이름 '옷장', 방장 탭 둘은 '맵'·'의상' 글자 그대로, 닫기는 × 뿐", () => {
     const { container } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} host tab="map" mapChoice="random" onPickMap={() => {}} />);
     expect(container.querySelector("[data-dress-sheet]")?.getAttribute("aria-label")).toBe("옷장");
-    expectToolLabel(container.querySelector("[data-map-tab=map]"), "맵", { name: "맵" });
-    expectToolLabel(container.querySelector("[data-map-tab=dress]"), "의상", { name: "의상" });
+    expectTextControl(container.querySelector("[data-map-tab=map]"), "맵", { name: "맵" });
+    expectTextControl(container.querySelector("[data-map-tab=dress]"), "의상", { name: "의상" });
     const close = container.querySelector(".mv-dress-sheet__close");
-    expectToolLabel(close, "닫기", { name: "닫기" });
+    expectIconButton(close, "닫기");
     expect(close?.classList.contains("mv-closepill")).toBe(true);
-    expect(close?.querySelector("svg")).not.toBeNull();
   });
 
-  it("손님의 옷장 시트에는 탭이 없고 닫기 알약은 있다", () => {
+  it("손님의 옷장 시트에는 탭이 없고 닫기는 있다", () => {
     const { container } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} />);
     expect(container.querySelector("[data-map-tab]")).toBeNull();
-    expectToolLabel(container.querySelector(".mv-dress-sheet__close"), "닫기");
+    expectIconButton(container.querySelector(".mv-dress-sheet__close"), "닫기");
   });
 
-  it("CSS: 맵 칩·떠 있는 단추·소리 단추의 라벨은 14/400 gray-300 이고 단추 폭 ≤ 52 이다", () => {
-    expect(rule(".mf-mapchip__label")).toContain("font-size: 14px");
-    expect(rule(".mf-mapchip__label")).toContain("color: var(--gray-300)");
-    expect(rule(".mv-float__label")).toContain("font-size: 14px");
-    expect(rule(".mv-float__label")).toContain("color: var(--gray-300)");
-    expect(rule(".mv-sound__label")).toContain("font-size: 14px");
-    expect(rule(".mv-sound__label")).toContain("font-weight: 400");
+  it("CSS: 맵 칩·떠 있는 단추의 폭 규칙은 그대로다 (크기는 16-05 가 바꾼다)", () => {
     expect(rule(".mf-mapchip")).toContain("width: var(--tap-min)");
     expect(rule(".mv-float")).toContain("width: var(--control-input)");
   });
 });
 
-// ---- 방 화면 전수 이름표 검사 (14-07 Task 2, UI-SPEC "도구 이름표 검사") ----
-// RoomScreen 을 단계 × 시점으로 그려, 보이는 button·[role=tab] 가운데 보이는 글자(숫자·공백·'/' 제외)가 비어 있는 것이 면제 밖에 0건임을 센다.
-// 판정은 느슨하게 하지 않는다 — 실패하면 빠진 단추를 부품에서 고친다. 이 시험은 14-07 이 소리 단추까지 포함해 방 화면 전체를 본다.
+// ---- 방 화면 전수 검사 (16-04, UI-SPEC "아이콘 단추 검사") ----
+// RoomScreen 을 단계 × 시점으로 그려, 이름표 속성·라벨 요소가 0건이고 보이는 button·[role=tab] 마다 비어 있지 않은 접근성 이름이 있음을 센다.
+// 14 의 면제 목록(E-1~E-5)은 없다 — 새 불변 규칙은 "아이콘 단추는 aria-label 이 있다" 하나다.
+// 판정은 느슨하게 하지 않는다 — 실패하면 빠진 단추를 부품에서 고친다.
 
 const NOW = 1_700_000_000_000;
-
-/**
- * 면제(이름표를 붙이지 않음, UI-SPEC "도구 이름표 목록" 면제 문단). 이 셋 밖의 아이콘 단추는 결함이다.
- * E-1: 방장의 내보내기 ×(WorldStage 이름표에 붙는 방장 전용 보조 단추 — 누르면 확인 시트가 "내보내기"로 이름을 말한다)
- * E-2: 테스트 방 시트 안의 봇 ±(개발 도구, 방장 테스트 모드뿐)
- * E-3: 입력칸 앞 채널 아이콘 — 누르는 것이 아니라 단추가 아니므로 이 검사 대상이 아니다(`.mv-chat__chan` 은 span)
- */
-const EXEMPT: ReadonlyArray<{ id: "E-1" | "E-2"; selector: string }> = [
-  { id: "E-1", selector: ".mf-world__kick" },
-  { id: "E-2", selector: ".mf-tt-sheet__step" },
-];
 
 type Viewpoint = "mafia" | "police" | "doctor" | "citizen" | "spectator";
 const ROLE_OF: Readonly<Record<Exclude<Viewpoint, "spectator">, RoleId>> = { mafia: "mafia", police: "police", doctor: "doctor", citizen: "citizen" };
@@ -387,45 +374,39 @@ function isVisible(el: Element): boolean {
   return el.closest("[aria-hidden='true'], [hidden], [inert], dialog:not([open])") === null;
 }
 
-/** aria-hidden 조각을 뺀 보이는 글자에서 숫자·공백·'/' 를 지운 값 */
-function visibleWord(el: Element): string {
+/** aria-hidden 조각을 뺀 보이는 글자(공백 정리) */
+function visibleText(el: Element): string {
   let out = "";
   const walk = (n: Node): void => {
     if (n.nodeType === 3) out += n.textContent ?? "";
     else if (n.nodeType === 1 && (n as Element).getAttribute("aria-hidden") !== "true") n.childNodes.forEach(walk);
   };
   el.childNodes.forEach(walk);
-  return out.replace(/[\d\s/]/g, "");
+  return out.trim();
 }
 
-function nameOf(el: Element): string {
-  return el.getAttribute("aria-label") ?? visibleWord(el);
+/** 접근성 이름: aria-label(있으면) 아니면 보이는 글자 */
+function accessibleName(el: Element): string {
+  const label = el.getAttribute("aria-label");
+  return (label !== null ? label : visibleText(el)).trim();
 }
 
-/** 한 화면의 위반 목록. 비어 있어야 한다. 메시지는 화면 이름 + 단추 접근성 이름 */
+/** 한 화면의 위반 목록. 비어 있어야 한다. 메시지는 화면 이름 + 단추 정보 */
 function violations(scene: string, minButtons = 1): string[] {
   const out: string[] = [];
   const buttons = [...document.body.querySelectorAll("button, [role=tab]")].filter(isVisible);
   // 검사가 빈 화면을 지나가지 않게: 배정 화면 말고는 단추가 하나 이상(입력줄·[내 역할]·[나가기] …) 있다
   if (buttons.length < minButtons) out.push(`${scene}: 보이는 단추가 ${buttons.length}개뿐이다(렌더 실패?)`);
   for (const b of buttons) {
-    const exempt = EXEMPT.find((e) => b.matches(e.selector));
-    if (exempt) continue;
-    const word = visibleWord(b);
-    if (word === "") out.push(`${scene}: 보이는 글자가 없는 단추 — '${nameOf(b)}'`);
-    const tool = b.getAttribute("data-tool-label");
-    if (tool !== null) {
-      const want = tool.replace(/\s/g, "");
-      // 소리 단추의 잠김 알약은 글자가 '소리 켜기' 라 낱말 '소리' 로 시작한다(8초 뒤 접히면 '소리' 와 같다)
-      if (word !== want && !word.startsWith(want)) out.push(`${scene}: data-tool-label '${tool}' ≠ 보이는 글자 '${word}'`);
-      if (!nameOf(b).includes(tool)) out.push(`${scene}: 접근성 이름 '${nameOf(b)}' 이 낱말 '${tool}' 을 포함하지 않는다`);
-      if (!/^[가-힣]+$/.test(want) || [...want].length > 4) out.push(`${scene}: 낱말 '${tool}' 이 고정 한글 낱말(4자 이하)이 아니다`);
-    }
+    if (accessibleName(b) === "") out.push(`${scene}: 접근성 이름이 빈 단추 — <${b.tagName.toLowerCase()} class="${b.getAttribute("class") ?? ""}">`);
   }
+  // 이름표 흔적: 속성과 아이콘 아래 라벨 요소(보이지 않는 조각 포함 — 어디에도 0건)
+  for (const el of document.body.querySelectorAll(`[${TOOL_ATTR}]`)) out.push(`${scene}: 이름표 속성이 남았다 — '${el.getAttribute(TOOL_ATTR) ?? ""}'`);
+  for (const el of document.body.querySelectorAll(LABEL_SELECTOR)) out.push(`${scene}: 아이콘 아래 라벨 요소가 남았다 — '${el.textContent ?? ""}'`);
   return out;
 }
 
-describe("방 화면 전수 이름표 (TOOL-01, UI-SPEC 검사)", () => {
+describe("방 화면 전수 — 이름표 0건·접근성 이름 (TOOL-04)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
@@ -442,19 +423,20 @@ describe("방 화면 전수 이름표 (TOOL-01, UI-SPEC 검사)", () => {
       delete view.me.role;
       const { unmount } = renderRoom(view);
       expect(violations(`lobby/${isHost ? "방장" : "손님"}`)).toEqual([]);
-      // 방 코드가 있으면 [공유] 도 이름표를 단다
-      expect(document.body.querySelector('[data-tool-label="공유"]')).not.toBeNull();
-      expect(document.body.querySelector('[data-tool-label="나가기"]')).not.toBeNull();
+      // 방 코드가 있으면 [공유] 도 있다 — 머리 단추는 이름만 단다
+      expect(document.body.querySelector('.mv-tool[aria-label="공유"]')).not.toBeNull();
+      expect(document.body.querySelector('.mv-tool[aria-label="나가기"]')).not.toBeNull();
       expect(document.body.querySelector("[data-sound-button]"), "대기실에도 [소리]").not.toBeNull();
       unmount();
     }
   });
 
-  it("대기실: 방 코드가 없으면 [공유] 가 없고 나머지는 이름표를 단다", () => {
+  it("대기실: 방 코드가 없으면 [공유] 가 없고 나머지는 이름을 단다", () => {
     const view = makeView({ phase: "lobby", endsIn: null, isHost: true, code: null });
     delete view.me.role;
     renderRoom(view);
     expect(violations("lobby/코드 없음")).toEqual([]);
+    expect(document.body.querySelector('[aria-label="공유"]')).toBeNull();
   });
 
   it("배정·역할 확인(카드 앞면 전·후)", () => {
@@ -503,8 +485,8 @@ describe("방 화면 전수 이름표 (TOOL-01, UI-SPEC 검사)", () => {
       for (const vp of ["citizen", "spectator"] as const) {
         const { unmount } = renderRoom(endedView(vp, winner));
         expect(violations(`ended/${winner}/${vp}`)).toEqual([]);
-        // 결과 머리 [나가기] 와 기록 탭은 이름표를 단다
-        expect(document.body.querySelector('.mf-result__header [data-tool-label="나가기"]')).not.toBeNull();
+        // 결과 머리 [나가기] 는 이름만 단다
+        expect(document.body.querySelector('.mf-result__header [aria-label="나가기"]')).not.toBeNull();
         expect(document.body.querySelector("[data-sound-button]"), `ended/${winner}/${vp}: [소리]`).not.toBeNull();
         unmount();
       }
@@ -524,7 +506,7 @@ describe("방 화면 전수 이름표 (TOOL-01, UI-SPEC 검사)", () => {
     l.unmount();
     // [내 역할] 시트(낮 토론)
     const day = renderRoom(makeView({ phase: "discussion", viewpoint: "police" }));
-    const role = document.body.querySelector<HTMLElement>('[data-tool-label="내 역할"]');
+    const role = document.body.querySelector<HTMLElement>('.mf-rolecard-btn[aria-label^="내 역할"]');
     expect(role, "내 역할 단추").not.toBeNull();
     act(() => void fireEvent.click(role!));
     expect(document.body.querySelector("dialog"), "내 역할 시트").not.toBeNull();
@@ -540,8 +522,7 @@ describe("방 화면 전수 이름표 (TOOL-01, UI-SPEC 검사)", () => {
     will.unmount();
   });
 
-  it("이름표 낱말은 고정 문구뿐이다 — 모든 화면의 data-tool-label 값 집합이 허용 목록 안이다(T-14-16: 역할·좌석 없음)", () => {
-    const ALLOWED = new Set(["동작", "보내기", "유언", "새 글", "닫기", "전체", "마피아", "유령", "기록", "나가기", "공유", "맵", "옷장", "의상", "넘기기", "소리", "내 역할"]);
+  it("접근성 이름은 고정 문구뿐이다 — 머리·입력줄·닫기·소리·맵 단추의 이름에 역할·좌석·토큰 값이 없다(T-16-11)", () => {
     const seen = new Set<string>();
     const views: RoomView[] = [
       (() => {
@@ -556,36 +537,36 @@ describe("방 화면 전수 이름표 (TOOL-01, UI-SPEC 검사)", () => {
     ];
     for (const view of views) {
       const { unmount } = renderRoom(view);
-      for (const el of document.body.querySelectorAll("[data-tool-label]")) seen.add(el.getAttribute("data-tool-label") ?? "");
-      expect(document.body.innerHTML).not.toMatch(/data-tool-label="[^"]*(seat|nonce|token)/i);
+      for (const el of document.body.querySelectorAll(".mv-tool, .mv-float, [data-map-chip], [data-sound-button], .mf-rolecard-btn, .mv-closepill")) seen.add(el.getAttribute("aria-label") ?? "");
+      expect(document.body.innerHTML).not.toMatch(/aria-label="[^"]*(seat|nonce|token|mafia|police|doctor)/i);
       unmount();
     }
-    expect([...seen].filter((w) => !ALLOWED.has(w))).toEqual([]);
+    expect([...seen].filter((w) => w.trim() === "")).toEqual([]);
     expect(seen.size).toBeGreaterThan(6);
   });
 
-  it("검사가 실제로 잡는다: 글자 없는 아이콘 단추·낱말을 포함하지 않는 접근성 이름·E-1 면제는 각각 판정된다", () => {
+  it("검사가 실제로 잡는다: 이름 없는 아이콘 단추·이름표 속성·아이콘 아래 라벨은 각각 판정되고 이름 있는 단추·숨긴 단추는 통과한다", () => {
     const { unmount } = renderRoom(makeView({ phase: "discussion", viewpoint: "citizen" }));
     const host = document.createElement("div");
     host.innerHTML =
-      '<button aria-label="아이콘만"><svg></svg></button>' +
-      '<button data-tool-label="공유" aria-label="전달"><svg></svg><span>공유</span></button>' +
+      '<button class="이름없음"><svg></svg></button>' +
+      '<button data-tool-label="공유" aria-label="공유"><svg></svg></button>' +
+      '<button aria-label="라벨있음"><svg></svg><span class="mv-tool__label">라벨</span></button>' +
       '<button class="mf-world__kick" aria-label="지우 님 내보내기"><svg></svg></button>' +
-      '<button aria-hidden="true" aria-label="숨김"></button>';
+      '<button aria-hidden="true"></button>';
     document.body.appendChild(host);
     const found = violations("가짜");
-    expect(found.some((m) => m.includes("아이콘만"))).toBe(true);
-    expect(found.some((m) => m.includes("전달"))).toBe(true);
-    expect(found.some((m) => m.includes("내보내기"))).toBe(false); // E-1 면제
-    expect(found.some((m) => m.includes("숨김"))).toBe(false); // 보이지 않는 단추
+    expect(found.some((m) => m.includes("이름없음"))).toBe(true);
+    expect(found.some((m) => m.includes("이름표 속성이 남았다"))).toBe(true);
+    expect(found.some((m) => m.includes("아이콘 아래 라벨 요소가 남았다"))).toBe(true);
+    expect(found.some((m) => m.includes("내보내기"))).toBe(false); // aria-label 이 있다
+    expect(found.filter((m) => m.includes("접근성 이름이 빈 단추")).length).toBe(1); // 숨긴 단추는 세지 않는다
     host.remove();
     unmount();
   });
 
-  it("면제 목록 상수는 E-1·E-2 둘이고(E-3 은 단추가 아니라 대상 밖), 각각 실제 클래스를 가리킨다", () => {
-    expect(EXEMPT.map((e) => e.id)).toEqual(["E-1", "E-2"]);
-    expect(readFileSync("src/components/WorldStage.tsx", "utf8")).toContain("mf-world__kick");
-    expect(readFileSync("src/styles/testtools.css", "utf8")).toContain("mf-tt-sheet__step");
+  it("면제 목록은 없다: E-1(내보내기 ×)·E-2(봇 ±)도 접근성 이름을 가진다", () => {
+    expect(readFileSync("src/components/WorldStage.tsx", "utf8")).toMatch(/mf-world__kick[\s\S]{0,400}aria-label/);
     expect(readFileSync("src/components/v2/ChatPanel.tsx", "utf8")).toMatch(/<span className=\{channel === "mafia" \? "mv-chat__chan/);
   });
 });
