@@ -1,6 +1,7 @@
 // 심부름 규칙(15페이즈, 결정 0074 예정) — 순수 모듈: 시각·난수는 인자로만 받고 입력 상태를 바꾸지 않는다.
 // 심부름 목록은 모든 역할이 같다(D-03): 이 파일은 역할·연결 상태를 읽지 않는다. 마피아도 같은 모양·같은 개수의 목록을 받고
 // 같은 처리 규칙을 지난다(가짜 목록, 방해 행동 없음). 역할만 다른 두 방이 같은 시드로 같은 목록을 얻는 것이 그 증거다.
+// 가짜 장소(16페이즈 D-08)는 Player.errandFake 키로만 안다 — 역할은 errandFake.ts 가 읽고 이 파일은 그 키 이름만 다룬다.
 // 처리 거절은 사유를 가르지 않고 { ok: false } 하나다(D-08) — 응답이 오라클이 되지 않는다.
 import { PLACE_IDS } from "../protocol";
 import type { PlaceId, RecordLine, WorldFrame } from "../protocol";
@@ -53,7 +54,7 @@ export function nearestPlaceId(map: MapDef, posFx: { x: number; z: number }): st
 
 /**
  * errand 진입 훅. 산 사람(seat 오름차순)마다 맵 후보에서 ERRAND_COUNT 곳을 부분 피셔–예이츠로 뽑아 errandPlaces 에 쓰고 errandDone 은 빈 배열로 둔다.
- * 죽은 사람은 두 키를 지운다. 새 낮이므로 서버 전용 errandLast(마지막 목격 줄, 16페이즈 D-10)도 키째 지운다. 난수 호출 순서가 계약이다: seat 오름차순 산 사람, 사람마다 k = 0..count-1 순서로 randInt(n - k).
+ * 죽은 사람은 두 키를 지운다. 이전 낮의 errandFake(서버 전용 가짜 장소)도 지운다. 새 낮이므로 서버 전용 errandLast(마지막 목격 줄, 16페이즈 D-10)도 키째 지운다. 난수 호출 순서가 계약이다: seat 오름차순 산 사람, 사람마다 k = 0..count-1 순서로 randInt(n - k).
  * at(진입 시각 = 이전 마감)을 받아 첫 근처·목격 표본 시각 errandTickAt = at + ERRAND_TICK_MS 를 정하고, 모든 사람의 errandNear·errandSeen 을 지운다(15-02).
  */
 export function enterErrand(state: RoomState, randInt: RandInt, at: number): RoomState {
@@ -76,7 +77,7 @@ export function enterErrand(state: RoomState, randInt: RandInt, at: number): Roo
     ...rest,
     errandTickAt: at + ERRAND_TICK_MS,
     players: state.players.map((p) => {
-      const { errandPlaces: _places, errandDone: _done, errandNear: _near, errandSeen: _seen, ...kept } = p;
+      const { errandPlaces: _places, errandDone: _done, errandNear: _near, errandSeen: _seen, errandFake: _fake, ...kept } = p;
       const mine = picks.get(p.id);
       return mine === undefined ? kept : { ...kept, errandPlaces: mine, errandDone: [] };
     }),
@@ -101,7 +102,7 @@ export function actErrand(
   let best: PlaceId | undefined;
   let bestD = Infinity;
   for (const id of actor.errandPlaces) {
-    if (done.includes(id)) continue;
+    if (done.includes(id) || id === actor.errandFake) continue; // 가짜 장소는 후보에서 뺀다 — 후보가 없으면 반경 밖과 같은 { ok: false } 다(D-08)
     const c = placeCenterFx(map, id);
     if (c === undefined) continue;
     const d = distSq(c, posFx);

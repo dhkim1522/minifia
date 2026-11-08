@@ -1,26 +1,18 @@
 // 마피아 가짜 장소(16페이즈 D-08, A1, 결정 0079 예정): 산 마피아는 겉모양·개수가 같은 목록을 받지만 그중 한 곳은 처리되지 않는다.
-// 배정은 난수 없이 (seat + day) % 3 이고, 역할을 읽는 심부름 파일은 errandFake.ts 하나뿐이다. 모듈이 아직 없을 때도 시험이 단언으로 실패하도록
-// 동적으로 불러온다(import 오류가 RED 가 되지 않게).
+// 배정은 난수 없이 (seat + day) % 3 이고, 역할을 읽는 심부름 파일은 errandFake.ts 하나뿐이다.
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { isAlive } from "../../shared/game/alive";
 import { enterErrand } from "../../shared/game/errand";
+import { assignErrandFake } from "../../shared/game/errandFake";
 import type { Player, RoomState } from "../../shared/game/room";
 import { enterNight } from "../../shared/game/night";
 import { tick } from "../../shared/game/tick";
 import { seededRandInt } from "../helpers/seededRandom";
 import { startedAt } from "../helpers/voteState";
 
-type AssignFn = (state: RoomState) => RoomState;
-async function loadAssign(): Promise<AssignFn | undefined> {
-  const path = "../../shared/game/errandFake";
-  try {
-    const mod = (await import(/* @vite-ignore */ path)) as { assignErrandFake?: AssignFn };
-    return mod.assignErrandFake;
-  } catch {
-    return undefined;
-  }
-}
+/** RED 때는 모듈이 없어도 시험이 단언으로 실패하도록 동적으로 불렀다. 지금은 정적 import 와 같은 값을 돌려준다. */
+const loadAssign = async (): Promise<typeof assignErrandFake> => assignErrandFake;
 
 /** 재즈 바로 고정한 낮 시작 방(맵은 시드로 정해지므로 시험이 고정한다). */
 function barDay(seed: number, n = 6): RoomState {

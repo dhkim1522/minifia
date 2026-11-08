@@ -83,6 +83,8 @@ export interface Player {
   errandNear?: number[];
   /** 서버 전용(결정 0074). 목격 줄({seat, place}, 시간순, 상한 RECORD_MAX). 어떤 view 에도 싣지 않는다 — me.record 로 필드별 복사만. enterNight 가 키째 지운다(토론 때 쓴다). */
   errandSeen?: RecordLine[];
+  /** 서버 전용(16페이즈 결정 0079 예정, D-08). 산 마피아의 가짜 심부름 장소 한 곳 — errandPlaces 안의 값이고 actErrand 가 이 장소를 처리 후보에서 뺀다. errandFake.ts 가 errand 진입 직후 쓰고 enterErrand·enterNight 가 키째 지운다. 어떤 view 에도 싣지 않는다(me.errand.places 는 시민과 같은 목록 그대로). */
+  errandFake?: PlaceId;
   /** 로비 의상(결정 D-6). setLook 만 쓴다. 사람이 고른 공개 값이고 역할과 무관하다. 없으면 기본 coat 로 읽고, 게임 시작·테스트 방 되돌리기 뒤에도 남는다. */
   look?: OutfitId;
   /** 직업을 건 뒤 다른 값으로 바꾼 적이 있음(결정 0066-1, O-1). 한 번 켜지면 판이 끝날 때까지 끄지 않는다. 이전 값은 어디에도 없다. */

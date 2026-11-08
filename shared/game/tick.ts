@@ -22,6 +22,7 @@ import { emptyGameCloseAt, nextContinuityAt } from "./continuity";
 import { enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
 import { enterErrand } from "./errand";
+import { assignErrandFake } from "./errandFake";
 import { enterExecution } from "./execution";
 import { enterNomination, enterVote, stepNomination, resolveNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
@@ -51,7 +52,7 @@ export type DeadlineResult = { state: RoomState; stay: boolean; next?: PhaseId }
 /** 진입 훅. at 은 진입 시각(= 이전 마감)이다. 인자를 쓰지 않는 훅은 앞의 둘만 받아도 타입이 맞는다. */
 const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt, at: number) => RoomState>> = {
   dayAnnounce: enterDayAnnounce,
-  errand: enterErrand, // 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts)
+  errand: (s, r, at) => assignErrandFake(enterErrand(s, r, at)), // 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts). 16페이즈(결정 0079): 산 마피아의 가짜 한 곳은 난수 없이 뒤에서 정한다
   discussion: enterDiscussion,
   nomination: RULESET.pickTurn ? enterNomination : enterVote,
   execution: enterExecution,

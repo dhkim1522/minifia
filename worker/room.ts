@@ -974,7 +974,7 @@ export class Room extends DurableObject<Env> {
       case "verdict":
         await this.applyVerdict(step.botId, act.agree);
         return;
-      // 15페이즈(결정 0074): 심부름. errandGo 는 그 봇의 미완료 장소 중 지금 위치에서 가장 가까운 곳 중앙으로 사람과 같은 applyMove(단계·150ms·걷기 칸 보정)를 지난다.
+      // 15페이즈(결정 0074): 심부름. errandGo 는 그 봇의 미완료 장소(가짜는 마지막, 16페이즈 D-08) 중 지금 위치에서 가장 가까운 곳 중앙으로 사람과 같은 applyMove(단계·150ms·걷기 칸 보정)를 지난다.
       // errandAct 는 사람의 errand 메시지와 같은 applyErrand 본체다. 난수 없음, 특권 없음.
       case "errandGo": {
         const bot = room.players.find((p) => p.id === step.botId);
@@ -983,17 +983,22 @@ export class Room extends DurableObject<Env> {
         const map = this.mapDef();
         const here = positionAtFx(seg, Date.now());
         const done = bot.errandDone ?? [];
+        // 가짜 장소(16페이즈 D-08, 서버 전용 errandFake 키)는 마지막으로 미룬다: 가짜가 아닌 미완료 장소 중 가장 가까운 곳, 없을 때만 가짜로 간다.
+        // 가짜에서는 처리가 조용히 실패하지만 가짜가 가장 가깝다고 거기 서 버리는 겉보기 차이는 생기지 않는다.
         let best: { x: number; z: number } | undefined;
         let bestD = Infinity;
-        for (const id of bot.errandPlaces) {
-          if (done.includes(id)) continue;
-          const c = placeCenterFx(map, id);
-          if (c === undefined) continue;
-          const d = (c.x - here.x) ** 2 + (c.z - here.z) ** 2;
-          if (d < bestD) {
-            bestD = d;
-            best = c;
+        for (const pass of [false, true]) {
+          for (const id of bot.errandPlaces) {
+            if (done.includes(id) || (id === bot.errandFake) !== pass) continue;
+            const c = placeCenterFx(map, id);
+            if (c === undefined) continue;
+            const d = (c.x - here.x) ** 2 + (c.z - here.z) ** 2;
+            if (d < bestD) {
+              bestD = d;
+              best = c;
+            }
           }
+          if (best !== undefined) break;
         }
         if (best !== undefined) this.applyMove(step.botId, best, Date.now());
         return;
