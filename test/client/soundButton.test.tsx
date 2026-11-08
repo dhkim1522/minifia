@@ -47,7 +47,7 @@ function mount(opts: { on?: boolean; unlocked?: boolean } = {}): Rig {
 const button = () => document.querySelector("[data-sound-button]") as HTMLButtonElement;
 
 describe("SoundButton 세 상태 (B-1, B-2)", () => {
-  it("on: sound 아이콘, 이름 '소리 끄기', aria-pressed 참, 보이는 라벨 '소리'(14-07 TOOL-01)", () => {
+  it("on: sound 아이콘, 이름 '소리 끄기', aria-pressed 참, 글 없음(16-04 TOOL-04)", () => {
     mount({ unlocked: true });
     expect(document.querySelectorAll("[data-sound-button]")).toHaveLength(1);
     const b = button();
@@ -55,20 +55,21 @@ describe("SoundButton 세 상태 (B-1, B-2)", () => {
     expect(b.getAttribute("aria-label")).toBe("소리 끄기");
     expect(b.getAttribute("aria-pressed")).toBe("true");
     expect(b.querySelector("svg")).not.toBeNull();
-    expect(b.textContent).toBe("소리");
-    expect(b.getAttribute("data-tool-label")).toBe("소리");
+    expect(b.textContent).toBe("");
+    expect(b.hasAttribute("data-tool-label")).toBe(false);
+    expect(b.querySelector(".mv-sound__label")).toBeNull();
     expect(screen.getByRole("button", { name: "소리 끄기" })).toBe(b);
   });
 
-  it("off: 이름 '소리 켜기', aria-pressed 거짓, 라벨 '소리' 뿐 — 알약을 권하지 않는다", () => {
+  it("off: 이름 '소리 켜기', aria-pressed 거짓, 글 없음 — 알약을 권하지 않는다", () => {
     mount({ on: false });
     const b = button();
     expect(b.getAttribute("data-sound-state")).toBe("off");
     expect(b.getAttribute("aria-label")).toBe("소리 켜기");
     expect(b.getAttribute("aria-pressed")).toBe("false");
-    expect(b.textContent).toBe("소리");
+    expect(b.textContent).toBe("");
     act(() => void vi.advanceTimersByTime(20000));
-    expect(b.textContent).toBe("소리");
+    expect(b.textContent).toBe("");
   });
 
   it("locked: 알약 — 글 '소리 켜기', 이름 '소리 켜기', aria-pressed 거짓", () => {
@@ -87,7 +88,7 @@ describe("SoundButton 세 상태 (B-1, B-2)", () => {
     expect(button().textContent).toBe("소리 켜기");
     act(() => void vi.advanceTimersByTime(1));
     const b = button();
-    expect(b.textContent).toBe("소리");
+    expect(b.textContent).toBe("");
     expect(b.classList.contains("mv-sound--pill")).toBe(false);
     expect(b.getAttribute("data-sound-state")).toBe("locked");
     expect(b.getAttribute("aria-label")).toBe("소리 켜기");
@@ -101,7 +102,7 @@ describe("SoundButton 세 상태 (B-1, B-2)", () => {
     act(() => rig.fake.ctx().setState("interrupted"));
     expect(button().textContent).toBe("소리 켜기");
     act(() => void vi.advanceTimersByTime(8000));
-    expect(button().textContent).toBe("소리");
+    expect(button().textContent).toBe("");
     act(() => rig.fake.ctx().setState("running"));
     expect(button().getAttribute("data-sound-state")).toBe("on");
     act(() => rig.fake.ctx().setState("interrupted"));
@@ -109,7 +110,7 @@ describe("SoundButton 세 상태 (B-1, B-2)", () => {
     act(() => void vi.advanceTimersByTime(7999));
     expect(button().textContent).toBe("소리 켜기");
     act(() => void vi.advanceTimersByTime(1));
-    expect(button().textContent).toBe("소리");
+    expect(button().textContent).toBe("");
   });
 
   it("AudioContext 를 만들 수 없는 환경이면 DOM 에 없다", () => {
@@ -118,11 +119,10 @@ describe("SoundButton 세 상태 (B-1, B-2)", () => {
     expect(document.querySelector("[data-sound-button]")).toBeNull();
   });
 
-  it("표식은 data-sound-button·data-sound-state 에 이름표 data-tool-label 하나를 더한 셋뿐이다 (역할·좌석 값 없음, T-12-23 — data-tool-label 은 고정 낱말 '소리', 14-07 TOOL-01)", () => {
+  it("표식은 data-sound-button·data-sound-state 둘뿐이다 (역할·좌석 값 없음, T-12-23 — 이름표 속성은 16-04 TOOL-04 로 없어졌다)", () => {
     mount({ unlocked: true });
     const names = button().getAttributeNames().filter((n) => n.startsWith("data-")).sort();
-    expect(names).toEqual(["data-sound-button", "data-sound-state", "data-tool-label"]);
-    expect(button().getAttribute("data-tool-label")).toBe("소리");
+    expect(names).toEqual(["data-sound-button", "data-sound-state"]);
     expect(button().getAttribute("role")).toBeNull();
     expect(button().outerHTML).not.toMatch(/role|seat|mafia|nonce/i);
   });

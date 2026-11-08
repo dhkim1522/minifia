@@ -91,13 +91,13 @@ describe("탭 행 (A-3)", () => {
     expect(tabs(container).map((t) => t.getAttribute("data-result-tab"))).toEqual(["all"]);
   });
 
-  it("선택된 탭만 aria-selected 이고 라벨은 선택 여부와 무관하게 네 탭 모두에 붙는다 (14-06 TOOL-01 목록 14)", () => {
+  it("선택된 탭만 aria-selected 이고 탭 안 글은 선택 여부와 무관하게 네 탭 모두에 붙으며 이름표 속성은 없다 (16-04 V-7)", () => {
     const { container } = setup({ tab: "ghost", expanded: true, opened: new Set<ResultTab>(["all", "ghost"]) });
     expect(tabs(container).map((t) => t.getAttribute("aria-selected"))).toEqual(RESULT_TABS_SHOWN.map((id) => String(id === "ghost")));
     const labels = Array.from(container.querySelectorAll(".mf-result__tab-label")).map((e) => text(e));
     expect(labels).toEqual(RESULT_TABS_SHOWN.map((id) => RESULT_PANEL_TEXT.tab[id]));
     expect(labels).toEqual(["전체", "마피아", "유령", "기록"]);
-    expect(tabs(container).map((t) => t.getAttribute("data-tool-label"))).toEqual(labels);
+    expect(tabs(container).map((t) => t.hasAttribute("data-tool-label"))).toEqual([false, false, false, false]);
   });
 
   it("탭을 누르면 onTab(id), 좌우 화살표키는 이웃 탭으로 옮긴다 (끝에서 끝으로 돈다)", () => {

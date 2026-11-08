@@ -202,13 +202,14 @@ describe("ChatPanel 입력칸 계약 (CHAT-05, UI-SPEC 패널과 키보드)", ()
     expect(input(container).hasAttribute("placeholder")).toBe(false);
   });
 
-  it("보내기는 아이콘 + 라벨 '보내기' 단추다(14페이즈 TOOL-01): aria-label '보내기'", () => {
+  it("보내기는 글 없는 아이콘 단추다(16페이즈 TOOL-04): aria-label '보내기'", () => {
     const { container } = render(<Harness />);
     const btn = sendBtn(container);
     expect(btn.getAttribute("aria-label")).toBe("보내기");
     expect(btn.getAttribute("type")).toBe("submit");
     expect(btn.querySelector("svg")).not.toBeNull();
-    expect(btn.textContent).toBe("보내기");
+    expect(btn.textContent).toBe("");
+    expect(btn.hasAttribute("data-tool-label")).toBe(false);
   });
 
   it("CSS: 입력칸 글자 16px, 입력줄 높이 control-input, 보내기 면 gray-100, 비활성은 night-700 면·gray-500 아이콘", () => {

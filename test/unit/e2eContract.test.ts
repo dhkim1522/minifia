@@ -500,8 +500,8 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
   it("소리 단추 표식에는 값이 on·off·locked 뿐이다 — 역할·좌석 값이 실리지 않는다(T-12-23)", () => {
     const text = sources.find((s) => s.f.endsWith("components/v2/SoundButton.tsx"))!.text.replace(/\/\/.*$/gm, "");
     const dataAttrs = [...new Set([...text.matchAll(/\b(data-[a-z-]+)=/g)].map((m) => m[1]))].sort();
-    // 14-07(TOOL-01): 이름표 표식 data-tool-label 하나만 더했다. 값은 고정 낱말 '소리' — 역할·좌석 값이 아니다(T-12-23 의 뜻은 그대로)
-    expect(dataAttrs).toEqual(["data-sound-button", "data-sound-state", "data-tool-label"]);
+    // 16-04(TOOL-04): 이름표 표식 data-tool-label 은 없어졌다 — 표식은 둘뿐이다(T-12-23)
+    expect(dataAttrs).toEqual(["data-sound-button", "data-sound-state"]);
     expect(text).not.toMatch(/role=|seat|nonce|mafia/i);
   });
 
@@ -699,7 +699,7 @@ describe("14페이즈 사회자·이름표 E2E 사본과 제품 값 (14-08, 사�
       .split("\n")
       .filter((f) => /\.(tsx?|css)$/.test(f));
     const all = tracked.map((f) => readFileSync(new URL(f, root), "utf8")).join("\n");
-    expect(lib.HOST_MARKERS).toEqual(["data-host-band", "data-host-line", "data-host-time", "data-call", "data-tool-label", "data-role-goal", "data-guide"]);
+    expect(lib.HOST_MARKERS).toEqual(["data-host-band", "data-host-line", "data-host-time", "data-call", "data-role-goal", "data-guide"]);
     expect(lib.HOST_MARKERS.filter((m) => !all.includes(m))).toEqual([]);
   });
 });

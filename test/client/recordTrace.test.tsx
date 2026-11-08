@@ -77,12 +77,12 @@ describe("RecordCard", () => {
     expect((img.style as CSSStyleDeclaration).borderColor || img.getAttribute("style")).toContain(seatColorVar(1));
   });
 
-  it("머리줄: 눈 아이콘 + 줄 수 + [닫기](data-tool-label=닫기) — 누르면 onClose 한 번", () => {
+  it("머리줄: 눈 아이콘 + 줄 수 + [닫기](aria-label=닫기) — 누르면 onClose 한 번", () => {
     const onClose = vi.fn();
     const { container } = card(ROWS, onClose);
     const head = container.querySelector(".mv-record__head") as HTMLElement;
     expect(head.querySelector(".mv-record__count")?.textContent).toBe("3");
-    const close = container.querySelector("button[data-tool-label='닫기']") as HTMLButtonElement;
+    const close = container.querySelector("button[aria-label='닫기']") as HTMLButtonElement;
     expect(close).not.toBeNull();
     expect(close.getAttribute("aria-label")).toBe("닫기");
     fireEvent.click(close);
@@ -283,7 +283,7 @@ const mount = (view: RoomView) => {
 const WITNESS = "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.";
 const DISCUSS = "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.";
 const band = (c: ParentNode): string => c.querySelector("[data-host-line]")?.textContent ?? "";
-const recordButton = (c: ParentNode): HTMLButtonElement | null => c.querySelector("button[data-tool-label='기록']");
+const recordButton = (c: ParentNode): HTMLButtonElement | null => c.querySelector("button[aria-label='기록']");
 const calls = (c: ParentNode): HTMLElement[] => [...c.querySelectorAll<HTMLElement>("[data-call]")];
 
 describe("토론 — [기록] 단추와 카드 (ERRAND-05, D-04)", () => {
@@ -291,7 +291,7 @@ describe("토론 — [기록] 단추와 카드 (ERRAND-05, D-04)", () => {
     const { container } = mount(mapView({ phase: "discussion", role, record: REC }));
     const btn = recordButton(container);
     expect(btn).not.toBeNull();
-    expect(container.querySelectorAll("button[data-tool-label='기록']")).toHaveLength(1);
+    expect(container.querySelectorAll("button[aria-label='기록']")).toHaveLength(1);
     expect(btn?.getAttribute("aria-label")).toBe("기록");
     expect(btn?.getAttribute("aria-expanded")).toBe("false");
     expect(container.querySelector("[data-record-card]")).toBeNull();
@@ -302,9 +302,10 @@ describe("토론 — [기록] 단추와 카드 (ERRAND-05, D-04)", () => {
   it("[기록] 은 [내 역할] 왼쪽(DOM 에서 앞)에 있다", () => {
     const { container } = mount(mapView({ phase: "discussion", record: REC }));
     const header = container.querySelector(".mf-game__header") as HTMLElement;
-    const order = [...header.querySelectorAll("button")].map((b) => b.getAttribute("data-tool-label"));
+    const order = [...header.querySelectorAll("button")].map((b) => b.getAttribute("aria-label") ?? "");
+    const role = order.findIndex((n) => n.startsWith("내 역할"));
     expect(order.indexOf("기록")).toBeGreaterThanOrEqual(0);
-    expect(order.indexOf("기록")).toBeLessThan(order.indexOf("내 역할"));
+    expect(order.indexOf("기록")).toBeLessThan(role);
   });
 
   it("누르면 카드가 열리고(줄 수 표식) aria-expanded=true·빛 꺼짐·띠 discussion.act·입력칸이 빛난다", () => {
@@ -324,7 +325,7 @@ describe("토론 — [기록] 단추와 카드 (ERRAND-05, D-04)", () => {
   it("[닫기] 로 닫히고 다시 열어도 [기록] 빛은 되살아나지 않는다", () => {
     const { container } = mount(mapView({ phase: "discussion", record: REC }));
     fireEvent.click(recordButton(container)!);
-    fireEvent.click(container.querySelector("[data-record-card] button[data-tool-label='닫기']")!);
+    fireEvent.click(container.querySelector("[data-record-card] button[aria-label='닫기']")!);
     expect(container.querySelector("[data-record-card]")).toBeNull();
     expect(recordButton(container)?.hasAttribute("data-call")).toBe(false);
     fireEvent.click(recordButton(container)!);

@@ -143,7 +143,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("헤더 [내 역할] 이름표 단추 하나 (D-08, TOOL-01 6)", () => {
+describe("헤더 [내 역할] 아이콘 단추 하나 (D-08, TOOL-04)", () => {
   const ROLES: RoleId[] = ["police", "mafia", "doctor", "citizen"];
   const PHASES: PhaseId[] = ["roleReveal", "dayAnnounce", "discussion", "night", "morning"];
 
@@ -154,23 +154,23 @@ describe("헤더 [내 역할] 이름표 단추 하나 (D-08, TOOL-01 6)", () => 
       const names = buttons.map((b) => b.getAttribute("aria-label") ?? b.textContent ?? "");
       const head = buttons.filter((b) => b.classList.contains("mf-rolecard-btn"));
       expect(`${phase}:${head.length}`).toBe(`${phase}:1`);
-      // 14-05: 두 화면 모두 같은 모양 — 아이콘 아래 한 단어 `내 역할`(접근성 이름·보이는 글자·data-tool-label 이 같다)
-      expect(`${phase}:${head[0]!.textContent}`).toBe(`${phase}:내 역할`);
+      // 16-04: 두 화면 모두 같은 모양 — 글 없는 아이콘 단추, 이름은 aria-label `내 역할`, 이름표 속성 없음
+      expect(`${phase}:${head[0]!.textContent}`).toBe(`${phase}:`);
       expect(`${phase}:${head[0]!.getAttribute("aria-label")}`).toBe(`${phase}:내 역할`);
-      expect(`${phase}:${head[0]!.getAttribute("data-tool-label")}`).toBe(`${phase}:내 역할`);
+      expect(`${phase}:${head[0]!.hasAttribute("data-tool-label")}`).toBe(`${phase}:false`);
       expect(`${phase}:${names.some((x) => x.includes("수사 기록"))}`).toBe(`${phase}:false`);
       expect(`${phase}:${names.some((x) => x === "역할 카드")}`).toBe(`${phase}:false`);
       r.unmount();
     }
   });
 
-  it.each(["roleReveal", "discussion"] as const)("%s: 버튼은 아이콘 면(36) 아래 라벨 `내 역할` 한 모양이다(두 모양 통일, 14-05)", (phase) => {
+  it.each(["roleReveal", "discussion"] as const)("%s: 버튼은 아이콘 면(36) 하나, 글 없음 한 모양이다(두 모양 통일, 16-04)", (phase) => {
     renderRoom(makeView({ phase }));
     const svg = headBtn()?.querySelector("svg");
     expect(svg?.getAttribute("width") ?? "(아이콘 없음)").toBe("22");
     expect(headBtn()?.querySelector(".mf-rolecard-btn__face svg") === null ? "면 없음" : "면 있음").toBe("면 있음");
-    expect(headBtn()?.querySelector(".mf-rolecard-btn__label")?.textContent).toBe("내 역할");
-    expect(headBtn()?.textContent).toBe("내 역할");
+    expect(headBtn()?.querySelector(".mf-rolecard-btn__label")).toBeNull();
+    expect(headBtn()?.textContent).toBe("");
   });
 });
 

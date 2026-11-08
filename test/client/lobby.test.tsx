@@ -109,11 +109,12 @@ describe("Lobby — 맵 로비 틀 (MAP-01, 06-15)", () => {
     expect(within(header).getByRole("button", { name: "나가기" })).toBeTruthy();
     expect(within(header).getByRole("button", { name: "공유" })).toBeTruthy();
     expect(within(header).getByText("대기실")).toBeTruthy();
-    // 14-07(TOOL-01): 머리 단추는 아이콘 아래 한 단어 — [나가기]·[공유]
+    // 16-04(TOOL-04): 머리 단추는 글 없는 아이콘 단추 — 이름은 aria-label [나가기]·[공유]
     const leave = within(header).getByRole("button", { name: "나가기" });
     const share = within(header).getByRole("button", { name: "공유" });
-    expect([leave.getAttribute("data-tool-label"), share.getAttribute("data-tool-label")]).toEqual(["나가기", "공유"]);
-    expect([leave.textContent, share.textContent]).toEqual(["나가기", "공유"]);
+    expect([leave.hasAttribute("data-tool-label"), share.hasAttribute("data-tool-label")]).toEqual([false, false]);
+    expect([leave.textContent, share.textContent]).toEqual(["", ""]);
+    expect(header.querySelector(".mv-tool__label")).toBeNull();
     expect(container.textContent).not.toContain("0042");
     expect(container.querySelector(".mf-lobby__code") === null).toBe(true);
     // 14-02(U-2): 읽을 글은 '대기실' 하나뿐 — 안내 줄은 자막 띠가 맡는다

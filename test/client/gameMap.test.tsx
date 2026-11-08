@@ -494,12 +494,13 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
     expect(container.textContent).not.toContain("모두의 직업이 보여요");
   });
 
-  it("[내 역할] 은 아이콘 아래 한 단어 이름표 단추이고 헤더 오른쪽 끝(.mv-phase__side)에 홀로 놓인다 — aria-label '내 역할' (TOOL-01 6)", () => {
+  it("[내 역할] 은 글 없는 아이콘 단추이고 헤더 오른쪽 끝(.mv-phase__side)에 홀로 놓인다 — aria-label '내 역할' (TOOL-04)", () => {
     const { container } = mount(makeView());
     const btn = container.querySelector(".mf-game__header button") as HTMLButtonElement;
     expect(btn.getAttribute("aria-label")).toBe("내 역할");
-    expect(btn.getAttribute("data-tool-label")).toBe("내 역할");
-    expect(btn.textContent).toBe("내 역할");
+    expect(btn.hasAttribute("data-tool-label")).toBe(false);
+    expect(btn.querySelector(".mf-rolecard-btn__label")).toBeNull();
+    expect(btn.textContent).toBe("");
     expect(btn.querySelector("svg")).not.toBeNull();
     expect(btn.parentElement?.classList.contains("mv-phase__side")).toBe(true);
     expect(container.querySelector('.mf-game__header [role="timer"]')).toBeNull();
