@@ -2,21 +2,21 @@
 gsd_state_version: "1.0"
 milestone: v3.0
 milestone_name: 사회자와 증거
-current_phase: 16
-current_phase_name: 단추 정리·심부름 증거
-current_plan: 10
-status: verifying
-stopped_at: Completed 16-10-PLAN.md
+current_phase: 17
+current_phase_name: 튜토리얼 "첫 사건"
+current_plan: 0
+status: ready_to_plan
+stopped_at: Phase 16 complete (실기기 확인은 v3.0 끝)
 last_updated: "2026-11-08T14:45:19.746Z"
 last_activity: 2026-11-08
-last_activity_desc: Phase 16 execution started
+last_activity_desc: Phase 16 complete — 검증 human_needed(실기기 항목 v3.0 끝으로 미룸)
 state_head: 887b2ab84d915bace545790c05044964ed3cbc0b
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 35
   completed_plans: 35
-  percent: 60
+  percent: 80
 ---
 
 # Project State
@@ -26,15 +26,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-07)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(평균 10~15분, 참고 목표)을 끝까지 마치는 것
-**Current focus:** Phase 16 — 단추 정리·심부름 증거
+**Current focus:** Phase 17 — 튜토리얼 "첫 사건"
 
 ## Current Position
 
-Phase: 16 (단추 정리·심부름 증거) — EXECUTING
-Current Plan: 10
-Total Plans in Phase: 10
-Status: Phase complete — ready for verification
-Last activity: 2026-11-08 — Phase 16 execution started
+Phase: 17 (튜토리얼 "첫 사건") — NOT STARTED
+Current Plan: 0
+Total Plans in Phase: 0
+Status: Ready to plan (Design 캔버스 시안 → /gsd-ui-phase 17 → /gsd-plan-phase 17)
+Last activity: 2026-11-08 — Phase 16 complete (배포 `49b1ad57`, 실기기 확인은 v3.0 끝)
 
 ## Performance Metrics
 
