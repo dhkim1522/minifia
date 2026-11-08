@@ -175,7 +175,7 @@ const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v
  * 장소 타일·발밑 화살표·[처리] 알약 배치 계획(순수·결정적, 16-07).
  * 타일은 상자(tile) 전체가 스테이지 안쪽(inset) 안이고 avoid 어느 것과도 겹치지 않을 때만 그린다.
  * 화살표(actId 없음 · me·nextId 있음)는 내 발밑에서 목표 방향 reach 떨어진 곳이고 avoid·arrowAvoid 와 겹치면 reachShort 로 한 번만 당긴다(스테이지 안쪽으로 가둔다).
- * 알약(actId 있음)은 그 타일(그려지지 않았으면 투영 점을 안쪽으로 당긴 자리) 위 gap 에 서고, 위가 stage.top + inset 을 넘거나 avoid 에 막히면 아래로 뒤집으며, 좌우는 안쪽 inset 안으로 민다.
+ * 알약(actId 있음)은 그 타일(그려지지 않았으면 투영 점을 안쪽으로 당긴 자리) 위 gap 에 서고, 위가 stage.top + inset 을 넘거나 avoid 에 막히거나(아래가 비어 있을 때) 다른 장소 타일에 걸리면 아래로 뒤집으며, 좌우는 안쪽 inset 안으로 민다.
  */
 export function placeMarkerPlan(input: MarkerPlanInput): MarkerPlan {
   const { stage, avoid, items, me, nextId, actId } = input;
@@ -231,8 +231,14 @@ export function placeMarkerPlan(input: MarkerPlanInput): MarkerPlan {
       const px = clamp(cx, inner.left + pillW / 2, inner.right - pillW / 2);
       const boxAt = (y: number): Rect => ({ left: px - pillW / 2, top: y - pillH / 2, right: px + pillW / 2, bottom: y + pillH / 2 });
       const above = cy - half - gap - pillH / 2;
-      const blockedAbove = boxAt(above).top < inner.top || avoid.some((r) => overlaps(boxAt(above), r));
-      act = { id: actId, x: px, y: blockedAbove ? cy + half + gap + pillH / 2 : above };
+      const below = cy + half + gap + pillH / 2;
+      // 다른 장소의 그려진 타일에 걸리는지(16-10): 두 장소가 가까우면 위쪽 알약이 이웃 타일을 몇 px 가릴 수 있다.
+      const hitsTile = (b: Rect): boolean => pins.some((p) => p.id !== actId && overlaps(b, { left: p.x - half, top: p.y - half, right: p.x + half, bottom: p.y + half }));
+      const hardBlockedAbove = boxAt(above).top < inner.top || avoid.some((r) => overlaps(boxAt(above), r));
+      let y = above;
+      if (hardBlockedAbove) y = below;
+      else if (hitsTile(boxAt(above)) && boxAt(below).bottom <= inner.bottom && !avoid.some((r) => overlaps(boxAt(below), r)) && !hitsTile(boxAt(below))) y = below;
+      act = { id: actId, x: px, y };
     }
   }
   return { pins, arrow, act };
