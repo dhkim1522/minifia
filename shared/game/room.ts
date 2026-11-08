@@ -175,6 +175,11 @@ export interface RoomState {
   round?: number;
   /** 지난밤 결과 한 곳 — enterMorning 이 쓰고 enterNight 가 지운다. 없으면 아직 아침이 오지 않았다(3페이즈, 모두 optional). */
   morning?: MorningView;
+  /**
+   * 서버 전용 — view 에 그대로 싣지 않는다(결정 0079 예정, 16페이즈 D-10). 심부름 표본이 피해자 후보(산 사람) 좌석마다 덮어쓰는 "반경 안에 다른 산 사람이 있었던 마지막 표본의
+   * 가장 가까운 사람(by)과 곁 장소(place)" 한 줄(seat 오름차순). enterErrand 가 비우고 enterNight 는 남기며 enterMorning 이 피해자 줄을 morning.seen 으로 옮긴 뒤 지운다.
+   */
+  errandLast?: Array<{ seat: number; by: number; place: PlaceId }>;
   /** 서버 전용(결정 0061-9). 이번 밤 마피아가 남긴 쪽지 — saveNote(09-12)가 쓰고 enterMorning(탈락 없는 밤)·enterNight 가 키째 지운다. 구출·무효 밤의 쪽지는 폐기된다. */
   nightNote?: string;
   /** 서버 전용(결정 0061-14). 암살 현장 분필 자국(고정소수점) — 방 DO 가 채우고 enterNight 가 지운다(09-14). */

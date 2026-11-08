@@ -56,8 +56,8 @@
  * 층 z-overlay — 띠(+1)·소리 단추 아래. 틀은 눌림을 통과시키고 카드만 받는다(입력줄·[토론 끝내기]는 틀 밖이라 가려지지 않는다). */
 .mf-game__record { position: absolute; left: var(--space-md); right: var(--space-md); top: calc(var(--mf-host-dock, 175px) + 8px); bottom: var(--mf-record-bottom, 150px); z-index: var(--z-overlay); display: flex; flex-direction: column; justify-content: flex-start; pointer-events: none; }
 .mf-game__record > .mv-record { pointer-events: auto; }
-/* 아침 흔적 카드 자리(15-07): 36px 결과 알림이 쓰던 자리(위 240, 좌우 16). 누를 것이 아니므로 눌림 통과, 사라질 때는 opacity 만 */
-.mf-game__trace { position: absolute; top: 240px; left: var(--space-md); right: var(--space-md); z-index: calc(var(--z-toast) + 5); display: flex; justify-content: center; pointer-events: none; }
+/* 아침 증거 카드 자리(15-07 → 16-01 V-28): 위 = 소리 독 아랫변 + 16(16-06 이 독 아랫변을 옮기면 따라간다), 좌우 16. 누를 것이 아니므로 눌림 통과, 사라질 때는 opacity 만 */
+.mf-game__trace { position: absolute; top: calc(var(--mf-host-dock, 175px) + 16px); left: var(--space-md); right: var(--space-md); z-index: calc(var(--z-toast) + 5); display: flex; justify-content: center; pointer-events: none; }
 
 /* 유령이 되는 순간(08-17, UI-SPEC "유령이 되는 순간"): 이름표 위 직업 칩이 dur-med 동안 나타난다. 재접속 첫 화면에는 data-ghost-enter 가 없어 연출이 없다 */
 .mf-game[data-ghost-enter] .mv-rolechip { animation: mf-chip-in var(--dur-med) var(--ease-out) both; }

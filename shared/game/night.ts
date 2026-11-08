@@ -38,6 +38,7 @@ export function pickTarget(
 
 /** 밤 진입 훅: 남은 선택(nightPick)·지난 아침 결과(morning)·쪽지(nightNote)·분필(chalk)을 키째 지운다(결정 0061-9·14). */
 export function enterNight(state: RoomState): RoomState {
+  // errandLast(마지막 목격 줄, 16페이즈 D-10)는 일부러 지우지 않는다 — 낮 심부름에서 쌓은 줄을 다음 아침의 enterMorning 이 피해자 한 줄만 꺼내 쓴다.
   const { morning: _morning, nightNote: _nightNote, chalk: _chalk, ...rest } = state;
   return {
     ...rest,
@@ -144,6 +145,7 @@ export function resolveNight(state: RoomState): ResolvedNight {
  * 판정에는 난수가 없다(결정 0061-17). 난수는 탈락자가 있을 때 흔적을 낼 사람을 뽑는 한 번뿐이다(D-06, randInt 를 안 받으면 첫 후보 — 결정적).
  * 흔적(morning.trace): 탈락자가 있을 때만, 그 밤 피해자를 고른 산 사람(피해자 본인 제외) 풀에서 한 명의 의상 조각 하나. 풀은 nightPick 을 지우기 전의 players 로 만든다.
  * 구출·무효 밤은 trace 키가 없다.
+ * 마지막 목격(16페이즈 D-10): 탈락자가 있고 errandLast 에 그 seat 줄이 있으면 morning.seen = { seat: 관찰자, place }. 어느 분기든 반환 상태에서 errandLast 를 지운다(서버 전용, 피해자 아닌 사람의 줄은 공개되지 않는다).
  */
 export function enterMorning(state: RoomState, randInt: RandInt = () => 0): RoomState {
   const result = resolveNight(state);
@@ -161,15 +163,21 @@ export function enterMorning(state: RoomState, randInt: RandInt = () => 0): Room
     return result.eliminated === p.seat ? { ...withRecords, alive: false } : withRecords;
   });
   const piece = result.eliminated === undefined ? undefined : pickTracePiece(state, result.eliminated, randInt);
+  const seenRow = result.eliminated === undefined ? undefined : state.errandLast?.find((row) => row.seat === result.eliminated);
   const morning: MorningView =
     result.eliminated !== undefined
-      ? { eliminated: result.eliminated, ...(piece === undefined ? {} : { trace: piece }) }
+      ? {
+          eliminated: result.eliminated,
+          ...(piece === undefined ? {} : { trace: piece }),
+          ...(seenRow === undefined ? {} : { seen: { seat: seenRow.by, place: seenRow.place } }),
+        }
       : result.saved
         ? { saved: true }
         : {};
-  const { nightNote: _nightNote, ...rest } = state;
+  const { nightNote: _nightNote, errandLast: _errandLast, ...rest } = state;
+  const { errandLast: _kept, ...stateNoLast } = state;
   return {
-    ...(result.eliminated === undefined ? rest : state),
+    ...(result.eliminated === undefined ? rest : stateNoLast),
     players,
     morning,
     nightLog: [

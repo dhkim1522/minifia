@@ -76,9 +76,14 @@ describe("EvidenceCard", () => {
     expect(container.querySelector(".mv-evidence__victim")?.textContent).toBe("<b>가</b>");
   });
 
-  it("스타일: 폭 328·1px night-600·overlay-ink-strong, 피해자 이름 취소선·말줄임", () => {
+  it("스타일: 면·테두리·폭은 .mv-trace 에서 받고(328·overlay-ink-strong·1px night-600) .mv-evidence 가 높이 128·세로 쌓기, 피해자 이름은 취소선·4em 말줄임", () => {
+    const base = /\.mv-trace\s*\{([^}]*)\}/.exec(V2_CSS)?.[1] ?? "";
+    for (const token of ["328px", "overlay-ink-strong", "radius-badge", "1px solid var(--night-600)"]) expect(base).toContain(token);
     const rule = /\.mv-evidence\s*\{([^}]*)\}/.exec(V2_CSS)?.[1] ?? "";
-    for (const token of ["328px", "overlay-ink-strong", "radius-badge", "1px solid var(--night-600)"]) expect(rule).toContain(token);
-    expect(/\.mv-evidence__victim\s*\{([^}]*)\}/.exec(V2_CSS)?.[1] ?? "").toMatch(/line-through/);
+    expect(rule).toContain("min-height: 128px");
+    expect(rule).toContain("flex-direction: column");
+    const victim = /\.mv-evidence__victim\s*\{([^}]*)\}/.exec(V2_CSS)?.[1] ?? "";
+    for (const token of ["line-through", "max-width: 4em", "text-overflow: ellipsis", "opacity: 0.5"]) expect(victim).toContain(token);
+    expect(/\.mv-evidence[^{]*\{[^}]*#[0-9a-fA-F]{3,8}\b/.test(V2_CSS)).toBe(false);
   });
 });

@@ -2751,7 +2751,7 @@ export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time
  */
 export const VIEW_TOP_KEYS = new Set(["code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map"]);
 export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "errand", "record", "nightTally", "nightSure", "will", "note"]);
-export const VIEW_DAY_KEYS = new Set(["n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown", "chalk"]);
+export const VIEW_DAY_KEYS = new Set(["n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown", "chalk", "evidence"]);
 /** 밤 역할별 사회자 줄(src/game/hostLine.ts HOST_LINES 의 night.mafia·police·doctor 사본) — 다른 역할 화면에 있으면 누설이다. e2eContract 가 같음을 고정한다. */
 export const HOST_ACT_LINES = {
   mafia: "밤이 되었습니다. 없앨 사람의 이름표를 눌러 주세요.",

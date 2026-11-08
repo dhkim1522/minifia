@@ -1950,7 +1950,7 @@ export class Room extends DurableObject<Env> {
   }
 }
 
-/** 심부름 표본이 바꾸는 사람별 근처·목격 값의 비교 키(결정 0076). 같으면 저장하지 않는다. */
+/** 심부름 표본이 바꾸는 사람별 근처·목격 값과 마지막 목격 줄(errandLast, 16페이즈)의 비교 키(결정 0076). 같으면 저장하지 않는다. */
 function errandMarks(state: RoomState): string {
-  return JSON.stringify(state.players.map((p) => [p.errandNear ?? null, p.errandSeen ?? null]));
+  return JSON.stringify([state.players.map((p) => [p.errandNear ?? null, p.errandSeen ?? null]), state.errandLast ?? null]);
 }

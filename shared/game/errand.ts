@@ -53,7 +53,7 @@ export function nearestPlaceId(map: MapDef, posFx: { x: number; z: number }): st
 
 /**
  * errand 진입 훅. 산 사람(seat 오름차순)마다 맵 후보에서 ERRAND_COUNT 곳을 부분 피셔–예이츠로 뽑아 errandPlaces 에 쓰고 errandDone 은 빈 배열로 둔다.
- * 죽은 사람은 두 키를 지운다. 난수 호출 순서가 계약이다: seat 오름차순 산 사람, 사람마다 k = 0..count-1 순서로 randInt(n - k).
+ * 죽은 사람은 두 키를 지운다. 새 낮이므로 서버 전용 errandLast(마지막 목격 줄, 16페이즈 D-10)도 키째 지운다. 난수 호출 순서가 계약이다: seat 오름차순 산 사람, 사람마다 k = 0..count-1 순서로 randInt(n - k).
  * at(진입 시각 = 이전 마감)을 받아 첫 근처·목격 표본 시각 errandTickAt = at + ERRAND_TICK_MS 를 정하고, 모든 사람의 errandNear·errandSeen 을 지운다(15-02).
  */
 export function enterErrand(state: RoomState, randInt: RandInt, at: number): RoomState {
@@ -71,8 +71,9 @@ export function enterErrand(state: RoomState, randInt: RandInt, at: number): Roo
     }
     picks.set(p.id, pool.slice(0, count));
   }
+  const { errandLast: _last, ...rest } = state;
   return {
-    ...state,
+    ...rest,
     errandTickAt: at + ERRAND_TICK_MS,
     players: state.players.map((p) => {
       const { errandPlaces: _places, errandDone: _done, errandNear: _near, errandSeen: _seen, ...kept } = p;
@@ -153,6 +154,9 @@ export function nearIdsOf(
  * errand 표본 한 번(D-04). 산 사람 A 마다 근처 좌석 집합을 구해 이전 errandNear 와 견주고, 새로 들어온 좌석 B(오름차순)마다
  * errandSeen.length < RECORD_MAX 이면 { seat: B.seat, place: B 에게 가장 가까운 맵 장소 id } 를 끝에 더한다(장소를 못 구하면 더하지 않는다).
  * errandNear 는 새 집합(좌석 오름차순)으로 바꾸고 errandTickAt = at + ERRAND_TICK_MS. errand 단계가 아니면 입력 그대로, 입력 상태는 바꾸지 않는다.
+ * 마지막 목격(16페이즈 D-10, 서버 전용 errandLast): 산 사람 B 마다 반경 안의 다른 산 사람 중 B 에게 가장 가까운 A(거리가 같으면 낮은 좌석)를 찾아 있으면
+ * { seat: B.seat, by: A.seat, place: B 곁 장소 id } 로 B 의 줄을 덮어쓴다. 반경 안에 아무도 없는 표본은 이전 줄을 남긴다(마지막 관찰자 유지). 장소를 못 구하면 덮어쓰지 않는다.
+ * 관찰자의 역할·심부름 진행은 읽지 않는다(이 파일의 불변식).
  */
 export function sampleErrand(state: RoomState, posOf: (id: string) => Pos | undefined, at: number): RoomState {
   if (state.phase !== "errand") return state;
@@ -174,7 +178,32 @@ export function sampleErrand(state: RoomState, posOf: (id: string) => Pos | unde
     }
     return { ...a, errandNear: nearSeats, errandSeen: seen };
   });
-  return { ...state, players, errandTickAt: at + ERRAND_TICK_MS };
+  const last = new Map((state.errandLast ?? []).map((row) => [row.seat, row] as const));
+  for (const b of state.players) {
+    if (!isAlive(b)) continue;
+    const here = posOf(b.id);
+    if (here === undefined) continue;
+    let by: number | undefined;
+    let byD = Infinity;
+    // nearIdsOf 는 seat 오름차순 — 엄격한 < 로 가르면 거리가 같을 때 낮은 좌석이 남는다.
+    for (const id of nearIdsOf(state.players, posOf, b.id, radiusFx)) {
+      const other = state.players.find((p) => p.id === id);
+      const there = other === undefined ? undefined : posOf(id);
+      if (other === undefined || there === undefined) continue;
+      const d = distSq(here, there);
+      if (d < byD) {
+        byD = d;
+        by = other.seat;
+      }
+    }
+    if (by === undefined) continue;
+    const place = nearestPlaceId(map, here);
+    if (place === undefined || !isPlaceId(place)) continue;
+    last.set(b.seat, { seat: b.seat, by, place });
+  }
+  const { errandLast: _before, ...rest } = state;
+  const rows = [...last.values()].sort((a, b) => a.seat - b.seat);
+  return { ...rest, players, errandTickAt: at + ERRAND_TICK_MS, ...(rows.length > 0 ? { errandLast: rows } : {}) };
 }
 
 /**

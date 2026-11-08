@@ -73,11 +73,22 @@ export type RoleRecord = InvestigationRecord | AssassinationRecord | TreatmentRe
 /** 아침 흔적 조각(15페이즈 D-06): 닫힌 집합 9개. 의상의 함수이지 역할의 함수가 아니고 확정 증거가 아니다. 의상 id 와 이름이 다르다(의상 id 를 싣지 않는다). 이름·그림은 클라이언트 표가 정한다. */
 export const TRACE_PIECE_IDS = ["button", "pin", "whiteCloth", "blackCloth", "brownCloth", "pencil", "grayThread", "navyThread", "redCloth"] as const;
 export type TracePiece = (typeof TRACE_PIECE_IDS)[number];
+/** 마지막 목격(16페이즈 D-10): 심부름 동안 피해자 곁에 마지막으로 있던 사람의 좌석과 그 순간 피해자 곁 장소 id(닫힌 집합, 좌표 없음). */
+export interface LastSeen {
+  seat: number;
+  place: PlaceId;
+}
 /** 아침 결과. 키 없는 객체는 지난밤 무사. 결정 0061-12·17: eliminated·saved 둘뿐이고 문장은 화면이 만든다(문구 번호 없음). */
 export interface MorningView {
   eliminated?: number; // 탈락한 seat
   saved?: true; // 의사가 확정 대상을 지킨 아침. 누구인지는 싣지 않는다(결정 0061-12, 0044-22)
   trace?: TracePiece; // 탈락자가 있는 아침에만(15페이즈 D-06). 흔적 조각 id 하나뿐 — 좌석·의상·역할·고른 사람 풀은 싣지 않는다
+  seen?: LastSeen; // 탈락자가 있는 아침에만, 마지막 목격자가 있을 때만(16페이즈 D-10). 모두에게 같은 값 — 좌표·역할은 없다
+}
+/** 아침~처형의 공개 증거(16페이즈 D-10·R-4): 모두에게 같은 값. 필드별 복사로 만들며 좌표·의상 id·역할·고른 사람 풀은 없다. */
+export interface EvidenceView {
+  trace?: TracePiece;
+  seen?: LastSeen;
 }
 /** 탈락자 전용 관전 정보(결정 0021): 한 사람의 실제 직업. 키 이름은 role 이 아니라 job 이다(누출 테스트 불변식). */
 export interface SpectateSeat {
@@ -160,6 +171,7 @@ export interface DayView {
   roles: RoleId[]; // 이번 판 직업(구성표 순서, 공개 정보)
   morning?: MorningView; // morning 단계에서만
   chalk?: { x: number; z: number }; // 암살 현장 분필 자국 위치(고정소수점, 결정 0061-14). 채우는 일은 09-14
+  evidence?: EvidenceView; // 아침~처형 단계에서, trace 나 seen 이 있을 때만(모두에게 같은 값, 16페이즈 D-10·R-4)
   // ---- 4페이즈 처형 필드 ----
   // 서버는 낮 단계마다(빈 배열 포함) 항상 싣는다. 타입을 optional 로 둔 이유: 필수로 하면 화면 테스트의 DayView 리터럴이 서버 웨이브에서 한꺼번에 바뀐다(화면 계획이 필요하면 필수로 올린다).
   voteLog?: VoteLogEntry[];

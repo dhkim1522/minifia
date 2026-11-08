@@ -20,7 +20,7 @@ import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { ToolButton } from "../components/ToolButton";
 import { RecordCard } from "../components/v2/RecordCard";
-import { TraceCard } from "../components/v2/TraceCard";
+import { EvidenceCard } from "../components/v2/EvidenceCard";
 import { V2Icon } from "../components/v2/V2Icon";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
@@ -456,7 +456,18 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     // 구간은 (일차, 마감) 키가 정한다 — 같은 아침 안의 다시 그리기로는 다시 잡지 않는다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [traceKey]);
-  const tracePiece = view.phase === "morning" ? view.day?.morning?.trace : undefined;
+  // 증거 카드(16-01, D-10): 1행 흔적 + 2행 마지막 목격. 구간·소리는 15 흔적 구간 그대로이고 값은 모두에게 같은 day.evidence 에서만 읽는다(P-1).
+  const tracePiece = view.phase === "morning" ? view.day?.evidence?.trace : undefined;
+  const evidenceVictim = view.day?.morning?.eliminated;
+  const evidenceSeen = view.day?.evidence?.seen;
+  const nameOfSeat = (seat: number | undefined): { name: string; color: string } | null => {
+    const p = seat === undefined ? undefined : view.players.find((q) => q.seat === seat);
+    return p === undefined ? null : { name: p.nickname, color: seatColorVar(p.seat) };
+  };
+  const witnessOfEvidence = ((): { name: string; color: string; place: PlaceId } | null => {
+    const who = nameOfSeat(evidenceSeen?.seat);
+    return who === null || evidenceSeen === undefined ? null : { ...who, place: evidenceSeen.place };
+  })();
   const traceShown = traceOn && traceKey !== null && tracePiece !== undefined;
   // 사회자 띠가 같은 상태를 읽는다(RoomScreen 이 HostBand 에 넘긴다). 언마운트하면 비운다
   useEffect(() => {
@@ -923,7 +934,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       ) : null}
       {traceShown && tracePiece !== undefined ? (
         <div className="mf-game__trace">
-          <TraceCard piece={tracePiece} />
+          <EvidenceCard piece={tracePiece} victim={nameOfSeat(evidenceVictim)} witness={witnessOfEvidence} />
         </div>
       ) : null}
       {badge.allowed || whisper.allowed ? (

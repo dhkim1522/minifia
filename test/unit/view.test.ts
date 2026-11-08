@@ -821,14 +821,14 @@ describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 
     expect(bad.join(",")).toBe("");
   });
 
-  it("dayAnnounce·discussion·night·morning 의 day 키는 n,roles,voteLog(discussion 은 + endCount, night 는 + noExecution: 표 없이 지나온 밤, morning 은 + morning)이고 turn 키가 없다", () => {
+  it("dayAnnounce·discussion·night·morning 의 day 키는 n,roles,voteLog(discussion 은 + endCount, night 는 + noExecution: 표 없이 지나온 밤, morning 은 + morning·evidence: 피해자가 나온 아침의 흔적)이고 turn 키가 없다", () => {
     const got: string[] = [];
     for (const phase of ["dayAnnounce", "discussion", "night", "morning"] as const) {
       const s = richStateAt(phase, 5, 1);
       const keys = new Set(s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(",")));
       got.push(`${phase}:${[...keys].join("|")}`);
     }
-    expect(got.join(" ")).toBe("dayAnnounce:n,roles,voteLog discussion:endCount,n,roles,voteLog night:n,noExecution,roles,voteLog morning:morning,n,roles,voteLog");
+    expect(got.join(" ")).toBe("dayAnnounce:n,roles,voteLog discussion:endCount,n,roles,voteLog night:n,noExecution,roles,voteLog morning:evidence,morning,n,roles,voteLog");
   });
 
   it("dayAnnounce 뷰의 day 는 {n, roles, voteLog []} 뿐이다", () => {
