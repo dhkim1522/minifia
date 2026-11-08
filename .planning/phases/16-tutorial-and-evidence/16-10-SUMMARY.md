@@ -13,6 +13,7 @@ requirements-completed: [TOOL-04, BTN-01, BTN-02, ERRAND-06, ERRAND-07, ERRAND-0
 
 - [x] 단계 1 로컬 검증: npm test 7584 통과(알려진 간헐 2건은 단독 통과) · E2E 전 흐름 폰 6종 회귀 한 번(실패 5건 → 간헐 4건은 재실행 통과·알려진 perfbudget B2/M1 은 13페이즈부터) · nightload 평균 59.9fps·끊김 4(재측정) · RULESET 불변 · 위생 통과(새 결과 0)
 - [x] 단계 2 문서: 결정 0079(0079-1~0079-14, 위임 기본값 V-1~V-7·V-19~V-32 표) · 0073·0074·0077 개정 표시 · screen-map 16 절(sideColumnChecks·B+64) · architecture·product 문단
+- [x] 단계 3 배포: minifia-v3 `2026-11-08T03:41:15Z+b79c0e5a` → `2026-11-08T14:29:24Z+49b1ad57`(두 번 배포: 첫 배포 `13:53:05Z+a312a029` 뒤 smoke·알약 수정을 반영해 재배포) · 배포본 smoke full 통과(재실행 1회 포함) · lobby·errand·trace E2E 24/24 흐름 통과 · v1·v2 health 변화 없음 · 개인 계정 확인
 
 ## 단계 1: 로컬 전체 검증
 
@@ -95,6 +96,40 @@ witness: 이월 메모의 "심부름 N번째 장소를 16초 안에 처리하지
 - **Files modified:** scripts/e2e/errand.mjs
 - **Commit:** 0536e4d4
 
-(이 중 EO1 "알약이 가까운 다른 장소 타일을 몇 px 가리는 경우"는 알약이 자기 타일 위 8 에 뜨고 타일끼리 가까우면 일어날 수 있는 배치 한계이며, 알약 위치 계획이 다른 타일을 피하지 않는다. 걷기를 막지 않아 고치지 않고 0079 알려진 한계에 적었다.)
+(EO1 "알약이 가까운 다른 장소 타일을 몇 px 가리는 경우"는 하네스가 아니라 제품 배치의 실제 경우였고 단계 3 에서 제품 수정 2번으로 고쳤다.)
+
+**2. [Rule 1 - Bug, E2E 하네스] `scripts/smoke.mjs` 의 아침 길이 기대가 흔적 3초 하드코딩**
+- **Found during:** 단계 3 (배포본 smoke full)
+- **Issue:** 16-01 이 흔적 구간을 3초 → 5초로 바꿨는데 smoke 가 `9_000 + 3_000` 을 하드코딩했다. 로컬 재현: `morning phaseDurationMs 가 12000(피해자 + 유언 + 흔적)이 아님: 14000`. 배포본 첫 두 실행은 같은 판 진행 중 다른 메시지(`Cannot read properties of undefined (reading 'msg')`)로 먼저 멈췄고(원인 미확정), 수정 뒤 배포본에서 통과했다.
+- **Fix:** 실패 시험(`e2eContract` 가 smoke 의 `MORNING_TRACE_MS` 사본 = phases.ts 값이고 기대식이 그 상수를 쓴다) → `scripts/smoke.mjs` 에 `MORNING_TRACE_MS = 5_000` 사본 상수와 기대식 수정(RED `test(16-10)` → GREEN `fix(16-10)`).
+- **Files modified:** scripts/smoke.mjs, test/unit/e2eContract.test.ts
+- **Commits:** 먼저 RED 시험 커밋, 이어서 `fix(16-10): smoke 아침 길이 기대가 흔적 5초를 쓴다`
+
+**3. [Rule 1 - Bug, 제품] 두 장소가 가까우면 [처리] 알약이 이웃 장소 타일을 2~3px 가린다**
+- **Found during:** 단계 3 (배포본 errand E2E 360x640 EO1 "타일 1·알약 1 겹침(가로 57.5px·세로 2px)", 로컬에서도 같은 형태 2번 관찰)
+- **Issue:** `placeMarkerPlan` 의 알약은 자기 타일 위 8 에 서고 띠·열·화면 위쪽에만 막혔다. 같은 x 에 가까운 두 장소(예: glass·stool)가 있으면 알약이 위 이웃 타일 아랫변을 가렸다. 걷기·누르기는 막지 않는 겉모습 문제.
+- **Fix:** RED 시험((n) 이웃 타일에 3px 걸리면 아래로, (o) 아래도 막혔으면 위 그대로) → `placeMarkerPlan` 이 다른 장소의 그려진 타일에 걸리고 아래가 비어 있으면 아래로 뒤집는다. 이 때문에 코드가 배포 뒤에 바뀌어 한 번 더 배포했다.
+- **Files modified:** src/game/errandView.ts, test/unit/errandView.test.ts
+- **Commits:** RED `test(16-10): 알약이 이웃 장소 타일에 걸리면 아래로 뒤집는 실패 시험`, GREEN `49b1ad57`
+
+**Total deviations:** 3 auto-fixed (하네스 2 + 제품 1). **Impact:** 16페이즈 범위는 그대로. 재배포가 한 번 늘었다(DO 쓰기 한도 여유 안).
+
+## 단계 3: 배포·배포본 확인
+
+| 항목 | 결과 |
+|---|---|
+| 개인 계정 | 개인 계정 확인(`npm run deploy` 맨 앞 계정 가드 통과 — 가드는 우회하지 않았다) |
+| 배포 대상 가드 | minifia-v3 확인 통과 |
+| v3 version 전 | `2026-11-08T03:41:15Z+b79c0e5a` |
+| v3 version 첫 배포 | `2026-11-08T13:53:05Z+a312a029` |
+| v3 version 후(최종) | `2026-11-08T14:29:24Z+49b1ad57` (재배포 — 첫 배포 뒤 바뀐 제품 코드는 알약 배치 수정 하나) |
+| v2 health | `2026-11-06T13:49:18Z+e51942c6` — 전·후 변화 없음 |
+| v1 health | `2026-10-29T14:52:03Z+cb6979c` — 전·후 변화 없음 |
+
+배포본 검사(결정 0076: smoke 와 바뀐 흐름만, 큰 회귀는 로컬에서 한 번 돌렸다):
+
+- **smoke full**(`--prod --stage full --players 5 --previous-version <배포 전 version>`): 첫 배포본에서는 위 편차 2 때문에 실패 두 번, 수정 뒤 통과(`SMOKE OK full players=5`). 최종 배포본에서는 첫 실행이 `dayAnnounce 도착 편차 839ms 가 500ms 이상`(망 지연 간헐)으로 실패했고 같은 조건 재실행에서 통과했다(`SMOKE OK full spread=33ms discSpread=13ms`, version `...+49b1ad57`).
+- **E2E `--only lobby,errand,trace`**(인자 없는 e2e = 배포본, 폰 6종): 최종 배포본 24/24 흐름 통과(lobby 40/40·39/39, chat-lobby 23/23, errand 22/22·27/27, trace 51/51). 첫 배포본에서는 errand 360x640 EO1 한 번 실패(위 편차 3), 재실행 통과.
+- 누설 시험(errandLeak·leak)이 통과한 빌드만 배포했다(로컬 `npm test` 7588 통과, 간헐 실패 없는 전체 실행 한 번 포함).
 
 <!-- gsd:write-continue -->
