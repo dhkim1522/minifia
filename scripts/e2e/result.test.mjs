@@ -458,7 +458,7 @@ test("RESULT_MARKERS: 기록 탭 표식 3개가 더해져 있다 (11-11)", () =>
 const rmGood = () => ({
   viewport: { w: 360, h: 560 },
   pillBox: { width: 96, height: 48 },
-  inputWidth: 172,
+  inputWidth: 168,
   guestPill: { before: { ready: "false", pressed: "false" }, after: { ready: "true", pressed: "true" } },
   count: { text: "2/5", dim: true, disabled: true },
   countWant: { n: 2, m: 5, minPlayers: 4 },
@@ -481,8 +481,8 @@ const rmGood = () => ({
 });
 const rmFailing = (over) => rematchChecks({ ...rmGood(), ...over }).filter((r) => !r.ok).map((r) => r.id);
 
-test("READY_PILL: 알약 96×48, 입력줄 여백 188(보내기 이름표 단추 44)", () => {
-  assert.deepEqual({ ...READY_PILL }, { w: 96, h: 48, inputExtra: 188 });
+test("READY_PILL: 알약 96×48, 입력줄 여백 192(보내기 48 원)", () => {
+  assert.deepEqual({ ...READY_PILL }, { w: 96, h: 48, inputExtra: 192 });
 });
 
 test("rematchChecks: 정상 입력은 RM1~RM12 가 모두 통과한다", () => {
@@ -491,13 +491,13 @@ test("rematchChecks: 정상 입력은 RM1~RM12 가 모두 통과한다", () => {
   for (const r of rows) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
 });
 
-test("RM1: 알약 96×48 ±1 이고 입력칸 폭 = 폭 − 188 ±2", () => {
+test("RM1: 알약 96×48 ±1 이고 입력칸 폭 = 폭 − 192 ±2", () => {
   assert.deepEqual(rmFailing({ pillBox: { width: 100, height: 48 } }), ["RM1"]);
   assert.deepEqual(rmFailing({ pillBox: { width: 96, height: 44 } }), ["RM1"]);
   assert.deepEqual(rmFailing({ inputWidth: 180 }), ["RM1"]);
-  assert.deepEqual(rmFailing({ inputWidth: 170.5, pillBox: { width: 96.9, height: 48.9 } }), []); // 오차 안
-  assert.deepEqual(rmFailing({ viewport: { w: 430, h: 932 }, inputWidth: 242 }), []);
-  assert.deepEqual(rmFailing({ viewport: { w: 430, h: 932 }, inputWidth: 238 }), ["RM1"]); // 옛 192 기준(보내기 48)이면 실패
+  assert.deepEqual(rmFailing({ inputWidth: 169.5, pillBox: { width: 96.9, height: 48.9 } }), []); // 오차 안
+  assert.deepEqual(rmFailing({ viewport: { w: 430, h: 932 }, inputWidth: 238 }), []);
+  assert.deepEqual(rmFailing({ viewport: { w: 430, h: 932 }, inputWidth: 242 }), ["RM1"]); // 이름표 단추(44) 기준 188 이면 실패
 });
 
 test("RM2: 손님 토글 전후로 data-ready 와 aria-pressed 가 반대로 바뀌고 서로 같다", () => {

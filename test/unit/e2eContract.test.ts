@@ -468,8 +468,8 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     const pill = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === ".mv-ready")?.[2] ?? "";
     expect(pill).toContain(`width: ${r.READY_PILL.w}px`);
     expect(pill).toContain(`height: ${r.READY_PILL.h}px`);
-    // 입력줄 여백 188 = 보내기 이름표 단추 44(14-06, 옛 48) + 알약 96 + 요소 사이 8 × 2 + 좌우 16 × 2
-    expect(44 + r.READY_PILL.w + 8 * 2 + 16 * 2).toBe(r.READY_PILL.inputExtra);
+    // 입력줄 여백 192 = 보내기 48 원 + 알약 96 + 요소 사이 8 × 2 + 좌우 16 × 2
+    expect(48 + r.READY_PILL.w + 8 * 2 + 16 * 2).toBe(r.READY_PILL.inputExtra);
   });
 });
 

@@ -50,8 +50,8 @@ export const AWARD_PLATE = Object.freeze({ maxW: 328, sideMargin: 32, h: 96, top
 /** 시상식 헤더 제목 (src/game/awardText.ts CEREMONY_TITLE 의 사본) */
 export const AWARD_CEREMONY_TITLE = "시상식";
 
-/** 다시 하기 알약(11-12, UI-SPEC D-1·G): 96×48, 입력줄 = [입력 flex][보내기 이름표 단추 44(14-06, 옛 48)][알약 96], 요소 사이 8, 좌우 16 → 입력칸 폭 = 폭 − 188. test/unit/e2eContract.test.ts 가 앱 CSS 와 대조한다 */
-export const READY_PILL = Object.freeze({ w: 96, h: 48, inputExtra: 188 });
+/** 다시 하기 알약(11-12, UI-SPEC D-1·G): 96×48, 입력줄 = [입력 flex][보내기 48 원][알약 96], 요소 사이 8, 좌우 16 → 입력칸 폭 = 폭 − 192. test/unit/e2eContract.test.ts 가 앱 CSS 와 대조한다 */
+export const READY_PILL = Object.freeze({ w: 96, h: 48, inputExtra: 192 });
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 const result = (id, label, bad) => ({ id, label, ok: bad.length === 0, detail: bad.length === 0 ? "" : bad.join("; ") });
@@ -709,13 +709,13 @@ const has = (x) => x !== undefined && x !== null;
  *  sheet {title,buttons,faces,extraText} 쉬게 될 사람 확인 시트 · restingWant 쉬게 될 사람 수 · round {before,after,phases} 시작 뒤 참가자 페이지 · benchView 쉬는 페이지에 BenchView
  *  bench {timers,chatInputs,floats,text,buttons} 쉬는 페이지 · looks·looksWant 새 판의 look · chat {before,old} 이전 판 채팅 · sat {seats,want,chipsOnSat,chips,participants} 다음 결과
  *  ceremony {pillActive,plateVsPill,skipVsPill} 시상 중 · early {disabled} 승리 조명 전.
- * RM1 알약 96×48 ±1 · 입력칸 폭 − 188 ±2 · RM2 손님 토글 전후 반대 · RM3 방장 n/m · RM4 4명 미만 토스트 · RM5 쉬는 사람 시트 · RM6 시작 후 round + 1·assigning·BenchView ·
+ * RM1 알약 96×48 ±1 · 입력칸 폭 − 192 ±2 · RM2 손님 토글 전후 반대 · RM3 방장 n/m · RM4 4명 미만 토스트 · RM5 쉬는 사람 시트 · RM6 시작 후 round + 1·assigning·BenchView ·
  * RM7 쉬는 페이지에 타이머·채팅 입력·떠 있는 버튼 없음 · RM8 의상 유지 · RM9 이전 판 채팅 0줄 · RM10 쉬었던 사람 sat·칩 없음 · RM11 시상 중 알약 활성·겹침 없음 · RM12 조명 전 비활성.
  * 측정값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
  */
 export function rematchChecks(m) {
   const L = {
-    RM1: "다시 하기: 알약 96×48, 입력칸 폭 = 폭 − 188",
+    RM1: "다시 하기: 알약 96×48, 입력칸 폭 = 폭 − 192",
     RM2: "다시 하기: 손님 알약 토글 전후로 data-ready·aria-pressed 가 반대",
     RM3: "다시 하기: 방장 알약 'n/m' 이 준비 상태와 같고 n < 최소면 흐림",
     RM4: "다시 하기: 인원 부족 탭 → 토스트 '{최소}명부터 시작해요' 뿐(판은 그대로)",
