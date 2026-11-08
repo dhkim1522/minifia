@@ -66,6 +66,8 @@ const EXECUTION_WAIT_MS = EXECUTION_MS + STATE_LIMIT_MS;
 // 밤 30초, 아침은 최대 길이 16초 + 여유. MORNING_MAX_MS 는 shared/game/phases.ts 의 사본이다(결정 0061-13: 기본 5 + 피해자 2 + 유언 2 + 쪽지 2, 상한 16초 — 16페이즈 A3).
 const NIGHT_WAIT_MS = 30_000 + STATE_LIMIT_MS;
 const MORNING_MAX_MS = 16_000;
+// 아침 흔적 구간. shared/game/phases.ts 의 MORNING_TRACE_MS 사본(결정 0079-10: 3초 → 5초) — test/unit/e2eContract.test.ts 가 같은 값인지 묶는다.
+const MORNING_TRACE_MS = 5_000;
 const MORNING_WAIT_MS = 15_000 + STATE_LIMIT_MS;
 // 자유 채팅 와이어(shared/protocol.ts ChatLineWire·TypingFrame·ChatLogFrame·ChatRejectFrame): 이 키 밖은 어떤 프레임에도 없다(CHAT-06).
 // 채널 필드는 서버 → 클라이언트에만 있고(ch), id·역할·토큰·수신자 마스크는 싣지 않는다(결정 0002·0058).
@@ -1480,8 +1482,8 @@ async function stageFull(url, args) {
   if (nightEnds.size !== 1) fail(`night 의 phaseEndsAt 이 클라이언트마다 다름 (${nightEnds.size}종)`);
   const morningEnds = new Set(morningViews.map((v) => v.phaseEndsAt));
   if (morningEnds.size !== 1) fail(`morning 의 phaseEndsAt 이 클라이언트마다 다름 (${morningEnds.size}종)`);
-  // 아침 길이(MORN-04, 결정 0061-13): 기본 5 + 피해자 2 + 유언 2 = 9초(쪽지 없음). 흔적이 있으면 +3초(15페이즈, 결정 0074-5). 모든 클라이언트가 같다.
-  const morningWant = 9_000 + (morning.trace !== undefined ? 3_000 : 0);
+  // 아침 길이(MORN-04, 결정 0061-13): 기본 5 + 피해자 2 + 유언 2 = 9초(쪽지 없음). 흔적이 있으면 + MORNING_TRACE_MS(15페이즈 3초, 16페이즈 5초 — 결정 0079-10). 모든 클라이언트가 같다.
+  const morningWant = 9_000 + (morning.trace !== undefined ? MORNING_TRACE_MS : 0);
   if (morningViews.some((v) => v.phaseDurationMs !== morningWant)) fail(`morning phaseDurationMs 가 ${morningWant}(피해자 + 유언${morning.trace !== undefined ? " + 흔적" : ""})이 아님: ${morningViews.map((v) => v.phaseDurationMs).join(",")}`);
 
   for (const c of clients) await closeSocket(c);
