@@ -45,9 +45,9 @@ describe("단계 표 (DAY-07, 결정 0060-1)", () => {
 });
 
 describe("아침 길이 상수 (MORN-04, 결정 0061-13)", () => {
-  it("기본 5000 + 탈락 2000 + 유언 2000 + 쪽지 2000, 상한 15000 이고 단계 표 morning 행은 기본 길이다", () => {
+  it("기본 5000 + 탈락 2000 + 유언 2000 + 쪽지 2000, 상한 16000(16페이즈 A3: 흔적 구간 5초) 이고 단계 표 morning 행은 기본 길이다", () => {
     expect(`${MORNING_MS},${MORNING_VICTIM_MS},${MORNING_WILL_MS},${MORNING_NOTE_MS},${MORNING_MAX_MS}`).toBe(
-      "5000,2000,2000,2000,15000",
+      "5000,2000,2000,2000,16000",
     );
     expect(PHASE_DEFS.morning.durationMs).toBe(MORNING_MS);
   });

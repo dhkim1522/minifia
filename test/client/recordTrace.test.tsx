@@ -420,12 +420,12 @@ describe("아침 — 흔적 카드 (TRACE-02·03, D-06)", () => {
   const MORNING_LINE = "아침이 밝았습니다. 서준 님이 당했습니다.";
   const TRACE_LINE = "현장에 흔적이 남았습니다.";
 
-  it("구간 전(마감 5초 전): 카드 0개·띠 morning, 2초 뒤 카드 1개·띠 trace, 소리 신호는 구간 전에 한 번(delayMs 2000)뿐", () => {
-    const { container } = mount(mapView({ phase: "morning", morning: MORNING, endsInMs: 5000 }));
+  it("구간 전(마감 7초 전): 카드 0개·띠 morning, 2초 뒤 카드 1개·띠 trace, 소리 신호는 구간 전에 한 번(delayMs 2000)뿐", () => {
+    const { container } = mount(mapView({ phase: "morning", morning: MORNING, endsInMs: 7000 }));
     expect(card(container)).toBeNull();
     expect(band(container)).toBe(MORNING_LINE);
     const cards = signals.emit.mock.calls.map((c) => c[0] as { kind: string; delayMs?: number }).filter((s) => s.kind === "card");
-    expect(cards).toEqual([{ kind: "card", delayMs: 5000 - MORNING_TRACE_MS }]);
+    expect(cards).toEqual([{ kind: "card", delayMs: 7000 - MORNING_TRACE_MS }]);
     act(() => void vi.advanceTimersByTime(2000));
     expect(card(container)).not.toBeNull();
     expect(card(container)?.querySelector(".mv-trace__name")?.textContent).toBe("노란 연필 조각");

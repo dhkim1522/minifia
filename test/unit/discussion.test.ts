@@ -182,8 +182,8 @@ describe("morningMsOf - 아침 길이는 공개 내용만의 함수 (MORN-04, �
     expect(morningMsOf(room("morning", 1, { morning: { eliminated: 1 }, ...withWill(2, "남의 유언") }))).toBe(7000);
   });
 
-  it("MORNING_MAX_MS(15000)로 자른다 — 가산 상수를 크게 바꾼 가상 값으로도 넘지 않는다", async () => {
-    expect(MORNING_MAX_MS).toBe(15_000);
+  it("MORNING_MAX_MS(16000)로 자른다 — 가산 상수를 크게 바꾼 가상 값으로도 넘지 않는다", async () => {
+    expect(MORNING_MAX_MS).toBe(16_000);
     vi.resetModules();
     vi.doMock("../../shared/game/phases", async (orig) => ({
       ...(await orig<typeof import("../../shared/game/phases")>()),

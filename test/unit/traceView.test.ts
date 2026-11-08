@@ -117,9 +117,10 @@ describe("traceWindowOf (D-06)", () => {
     expect(traceWindowOf(makeView({ phase: "morning", trace: "pin", eliminated: 1, endsAt: null }), T)).toBeNull();
   });
 
-  it("마감 5초 전: 시작까지 2000ms·아직 아님, 3초 전: 0·구간 안, 1ms 전: 0·구간 안", () => {
+  it("마감 7초 전: 시작까지 2000ms·아직 아님, 5초 전(MORNING_TRACE_MS): 0·구간 안, 1ms 전: 0·구간 안", () => {
+    expect(MORNING_TRACE_MS).toBe(5000);
     const view = makeView({ phase: "morning", trace: "pencil", eliminated: 1, endsAt: T });
-    expect(traceWindowOf(view, T - 5000)).toEqual({ piece: "pencil", startsInMs: 2000, on: false });
+    expect(traceWindowOf(view, T - 7000)).toEqual({ piece: "pencil", startsInMs: 2000, on: false });
     expect(traceWindowOf(view, T - MORNING_TRACE_MS)).toEqual({ piece: "pencil", startsInMs: 0, on: true });
     expect(traceWindowOf(view, T - 1)).toEqual({ piece: "pencil", startsInMs: 0, on: true });
   });

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { isAlive } from "../../shared/game/alive";
 import { channelOf } from "../../shared/game/audience";
 import { BOT_END_MARGIN_MS, botPlanKey, planBotSteps } from "../../shared/game/bots";
-import { actErrand, enterErrand, nearestPlaceId, placeCenterFx } from "../../shared/game/errand";
+import { actErrand, enterErrand, nearestPlaceId, placeCenterFx, sampleErrand } from "../../shared/game/errand";
 import { BAR_MAP, BAR_PLACES, UNIT, cellOfFx, isWalkable, routeFx, snapToWalkable } from "../../shared/game/map";
 import { PLAZA_MAP, PLAZA_PLACES } from "../../shared/game/mapPlaza";
 import { mapOf } from "../../shared/game/maps";
@@ -199,6 +199,73 @@ describe("enterErrand", () => {
     } finally {
       (real as { places?: unknown }).places = saved;
     }
+  });
+});
+
+describe("errandLast — 마지막 목격 표본 (16페이즈 D-10, A2)", () => {
+  type Pos = { x: number; z: number };
+  const base = (): RoomState => barRoom(5, "errand", 6);
+  /** 좌석 → 위치. 적지 않은 좌석은 서로 멀리 떨어진 먼 곳에 둔다(반경 300 밖). */
+  const posBySeat = (s: RoomState, at: Record<number, Pos>): ((id: string) => Pos | undefined) => {
+    const seatOf = new Map(s.players.map((p) => [p.id, p.seat] as const));
+    return (id) => at[seatOf.get(id)!] ?? { x: 9000 + (seatOf.get(id)! * 1000), z: 9000 };
+  };
+  const rowsOf = (s: RoomState): string => JSON.stringify((s.errandLast ?? []).map((r) => [r.seat, r.by]));
+  const sample = (s: RoomState, at: Record<number, Pos>, t = 1000): RoomState => sampleErrand(s, posBySeat(s, at), t);
+
+  it("반경 안 관찰자가 둘이면 더 가까운 사람이 마지막 목격자이고 줄은 seat 오름차순이다", () => {
+    const got = sample(base(), { 0: { x: 0, z: 0 }, 1: { x: 100, z: 0 }, 2: { x: 0, z: 200 } });
+    // 0 에게는 1(100)이, 1 에게는 0(100)이, 2 에게는 0(200)이 가장 가깝다
+    expect(rowsOf(got)).toBe(JSON.stringify([[0, 1], [1, 0], [2, 0]]));
+    for (const r of got.errandLast!) expect((PLACE_IDS as readonly string[]).includes(r.place)).toBe(true);
+  });
+
+  it("거리가 같으면 낮은 좌석", () => {
+    const got = sample(base(), { 0: { x: 0, z: 0 }, 1: { x: 100, z: 0 }, 2: { x: -100, z: 0 } });
+    expect(JSON.stringify(got.errandLast!.find((r) => r.seat === 0))).toBe(JSON.stringify({ seat: 0, by: 1, place: got.errandLast!.find((r) => r.seat === 0)!.place }));
+  });
+
+  it("반경 안에 아무도 없는 표본은 이전 줄을 남기고, 뒤 표본에서 다른 사람이 더 가까우면 바뀐다", () => {
+    const first = sample(base(), { 0: { x: 0, z: 0 }, 1: { x: 100, z: 0 } });
+    expect(rowsOf(first)).toBe(JSON.stringify([[0, 1], [1, 0]]));
+    const alone = sample(first, {}, 2000);
+    expect(rowsOf(alone)).toBe(rowsOf(first));
+    expect(JSON.stringify(alone.errandLast)).toBe(JSON.stringify(first.errandLast));
+    // 5 번이 0 번 곁 50 으로 오면 0 번의 마지막 관찰자는 5 번으로 바뀐다(1 번은 그대로 100)
+    const closer = sample(alone, { 0: { x: 0, z: 0 }, 1: { x: 100, z: 0 }, 5: { x: 0, z: 50 } }, 3000);
+    expect(closer.errandLast!.find((r) => r.seat === 0)!.by).toBe(5);
+  });
+
+  it("죽은 사람은 관찰자도 대상도 아니다", () => {
+    const s = base();
+    const dead: RoomState = { ...s, players: s.players.map((p) => (p.seat === 1 ? { ...p, alive: false } : p)) };
+    const got = sample(dead, { 0: { x: 0, z: 0 }, 1: { x: 50, z: 0 }, 2: { x: 0, z: 200 } });
+    expect(rowsOf(got)).toBe(JSON.stringify([[0, 2], [2, 0]]));
+  });
+
+  it("errand 단계가 아니면 입력 그대로다", () => {
+    const talk = tick(base(), base().phaseEndsAt!, seededRandInt(3));
+    expect(talk.phase).toBe("discussion");
+    expect(sampleErrand(talk, () => ({ x: 0, z: 0 }), 1)).toBe(talk);
+  });
+
+  it("관찰자의 역할·심부름 진행과 무관하게 같은 줄이 나온다(역할만 뒤집은 두 방 비교) · 입력은 바뀌지 않는다", () => {
+    const s = base();
+    const flipped: RoomState = {
+      ...s,
+      players: s.players.map((p) => ({ ...p, role: p.role === "mafia" ? "citizen" : "mafia", errandDone: p.seat % 2 === 0 ? [...(p.errandPlaces ?? [])] : [] })),
+    };
+    const at = { 0: { x: 0, z: 0 }, 1: { x: 100, z: 0 }, 2: { x: 0, z: 200 } };
+    const frozen = JSON.stringify(flipped);
+    expect(JSON.stringify(sample(s, at).errandLast)).toBe(JSON.stringify(sample(flipped, at).errandLast));
+    expect(JSON.stringify(flipped)).toBe(frozen);
+  });
+
+  it("enterErrand 가 errandLast 를 키째 지운다(새 낮의 시작)", () => {
+    const day = { ...barRoom(5, "dayAnnounce"), errandLast: [{ seat: 0, by: 1, place: "glass" as const }] };
+    const errand = enterErrand(day, seededRandInt(7), 0);
+    expect("errandLast" in errand).toBe(false);
+    expect(day.errandLast).toHaveLength(1);
   });
 });
 
