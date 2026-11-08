@@ -208,7 +208,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
   // 지목이면 스테이지 윗변을 차례 알약 아랫변 + 4 로 내리고(UI-SPEC A-1) 작은 폰은 압축형 알약을 받는다(turnCompact). 알약 요소는 훅이 루트에서 `[data-turn-block]` 으로 찾는다.
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, logH, turnCompact: compactTurn, stageInsets } = useMapInsets(blockModeOf(view) !== null);
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, logH, turnCompact: compactTurn, stageInsets } = useMapInsets(blockModeOf(view) !== null, view.phase === "errand" ? "errand" : "chat");
   // 키보드가 시트의 textarea 때문에 열린 것이면 채팅 패널을 줄이거나 행동 줄을 숨기지 않는다(시트를 연 버튼이 남아야 닫을 때 초점이 돌아온다). 패널은 키보드 위로 올라간다(lifted).
   const kbOpen = kbLifted && !kbInSheet;
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);

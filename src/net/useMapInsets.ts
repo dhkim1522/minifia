@@ -50,8 +50,11 @@ function hostBandBottom(room: HTMLElement | null, root: HTMLElement | null): num
   return bottom > 0 ? bottom : 0;
 }
 
-/** turnActive: 지금 지목 또는 결선 단계이고 알약 부품(`[data-turn-block]`)이 그려진다(blockModeOf !== null) */
-export function useMapInsets(turnActive = false): MapInsets {
+/**
+ * turnActive: 지금 지목 또는 결선 단계이고 알약 부품(`[data-turn-block]`)이 그려진다(blockModeOf !== null)
+ * panelKey: 아래 패널 요소가 다른 종류로 바뀌면(채팅 패널 ↔ 심부름 독 패널) 값을 바꿔 준다. 재는 효과가 패널 요소를 시작 때 한 번 쥐므로 요소가 바뀌면 다시 쥐게 한다(16-07: 안 그러면 떼어진 옛 패널을 재다가 위·아래 안전선이 옛 값에 멈춘다).
+ */
+export function useMapInsets(turnActive = false, panelKey = ""): MapInsets {
   const rootRef = useRef<HTMLElement>(null);
   const roomRef = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -113,7 +116,7 @@ export function useMapInsets(turnActive = false): MapInsets {
       window.removeEventListener("resize", measure);
       ro.disconnect();
     };
-  }, [turnActive, compact]);
+  }, [turnActive, compact, panelKey]);
 
   // 키보드 높이는 프레임마다 바뀌어도 다시 그리지 않는다: 아래 끝을 getter 로 넘겨 WorldStage 가 프레임마다 읽는 순간의 lift 를 더하게 한다(열림·닫힘만 다시 그린다).
   const stageInsets = useMemo(
