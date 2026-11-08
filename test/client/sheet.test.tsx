@@ -543,3 +543,53 @@ describe("G-01-9 다이얼로그 자동 스크롤 차단 (실기기 패널: 시�
     expect(block).toMatch(/overflow:\s*clip/);
   });
 });
+
+describe("Sheet — 폰 키패드 여백 --mf-kb (2026-11-08 실기기: iOS 에서 시트가 눌려 입력칸이 잘림)", () => {
+  // 가짜 visualViewport 와 dialog·시트 높이를 정해 두고 입력칸에 포커스를 준 뒤 --mf-kb 를 읽는다.
+  function setup(vvHeight: number, sheetH: number) {
+    const vv = Object.assign(new EventTarget(), { height: vvHeight, offsetTop: 0 });
+    vi.stubGlobal("visualViewport", vv);
+    const proto = HTMLElement.prototype;
+    const ch = vi.spyOn(proto, "clientHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.tagName === "DIALOG" ? 844 : 0;
+    });
+    const sh = vi.spyOn(proto, "scrollHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("mf-sheet") ? sheetH : 0;
+    });
+    const { container } = render(
+      <Sheet label="내 닉네임" onClose={() => {}}>
+        <input aria-label="닉네임" />
+      </Sheet>,
+    );
+    const dlg = dialogOf(container);
+    act(() => screen.getByLabelText("닉네임").focus());
+    const kb = () => dlg.style.getPropertyValue("--mf-kb");
+    const restore = () => {
+      ch.mockRestore();
+      sh.mockRestore();
+      vi.unstubAllGlobals();
+    };
+    return { vv, kb, restore };
+  }
+
+  it("키패드 높이만큼 여백을 준다(시트가 들어갈 자리가 남을 때)", () => {
+    const s = setup(500, 250);
+    expect(s.kb()).toBe("344px");
+    s.restore();
+  });
+
+  it("보이는 높이가 틀리게 작아도 시트는 제 내용 높이보다 작게 눌리지 않는다", () => {
+    const s = setup(160, 250);
+    expect(s.kb()).toBe(`${844 - 250}px`);
+    s.restore();
+  });
+
+  it("조금 뒤 다시 읽어 바로잡힌 값을 따른다", () => {
+    vi.useFakeTimers();
+    const s = setup(160, 250);
+    s.vv.height = 500;
+    advance(1000);
+    expect(s.kb()).toBe("344px");
+    s.restore();
+  });
+});

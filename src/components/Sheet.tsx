@@ -141,19 +141,32 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, className, c
     const update = () => {
       const active = document.activeElement;
       const typing = active instanceof HTMLElement && dlg.contains(active) && isTextInput(active);
-      const kb = typing ? Math.round(dlg.clientHeight - vv.height - vv.offsetTop) : 0;
-      dlg.style.setProperty("--mf-kb", `${kb > KEYBOARD_MIN_PX ? kb : 0}px`);
+      const raw = typing ? Math.round(dlg.clientHeight - vv.height - vv.offsetTop) : 0;
+      // iOS 26 은 키패드가 뜨는 순간 visualViewport 높이를 틀리게(작게) 줄 때가 있다(Pitfall 8). 그 값이 그대로 들어가면 시트가
+      // 남은 높이에 맞춰 눌려 제목만 보이고 입력칸이 잘린다(2026-11-08 실기기). 시트는 제 내용 높이(scrollHeight)보다 작게 눌리지 않게 막는다.
+      const room = dlg.clientHeight - (sheetRef.current?.scrollHeight ?? 0);
+      const kb = raw > KEYBOARD_MIN_PX ? Math.max(0, Math.min(raw, room)) : 0;
+      dlg.style.setProperty("--mf-kb", `${kb}px`);
+    };
+    // 포커스 직후 값이 틀리고 조금 뒤 맞는 경우가 있어 몇 번 더 읽는다(useKeyboardLift 와 같은 시각).
+    let timers: ReturnType<typeof setTimeout>[] = [];
+    const updateSoon = () => {
+      update();
+      for (const t of timers) clearTimeout(t);
+      timers = [100, 300, 1000].map((ms) => setTimeout(update, ms));
     };
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);
-    dlg.addEventListener("focusin", update);
-    dlg.addEventListener("focusout", update);
-    update();
+    dlg.addEventListener("focusin", updateSoon);
+    dlg.addEventListener("focusout", updateSoon);
+    // 열리자마자 입력칸에 포커스가 가는 시트(빈 닉네임)는 focusin 이 리스너보다 먼저 지나가므로 여기서도 다시 읽기를 건다.
+    updateSoon();
     return () => {
+      for (const t of timers) clearTimeout(t);
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
-      dlg.removeEventListener("focusin", update);
-      dlg.removeEventListener("focusout", update);
+      dlg.removeEventListener("focusin", updateSoon);
+      dlg.removeEventListener("focusout", updateSoon);
     };
   }, []);
 
