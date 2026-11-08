@@ -86,7 +86,7 @@ const RECT_TTL_MS = 250; // 소리 열·이름표 사각형을 다시 재는 간
 interface ErrandWriteCache {
   at: number;
   stage: Rect;
-  /** 소리 열 첫 칸·오른쪽 열 단추들(타일·알약·화살표가 피한다). 16-08 이 진행 점 줄을 여기 더한다 */
+  /** 소리 열 첫 칸·오른쪽 열 단추들과 진행 점 줄(윗변 − 8 부터)을 타일·알약·화살표가 피한다 */
   avoid: Rect[];
   /** 내 이름표 사각형(화살표만 피한다) */
   tag: Rect | null;
@@ -113,8 +113,19 @@ function writeErrandLayer(
       return { left: d.left - base.left, top: d.top - base.top, right: d.right - base.left, bottom: d.bottom - base.top };
     };
     const avoid = [...host.ownerDocument.querySelectorAll("[data-side-button]")].map(rel);
+    // 진행 점 줄(16-08, V-23): 아래 패널이 없는 심부름 스테이지는 화면 아래까지 넓어서 타일·알약은 점 줄 윗변 − 8 위에만 놓는다.
+    // 스테이지 아래 끝을 점 줄 윗변으로 올리고(안쪽 여백 8 이 윗변 − 8 이 된다) 줄 자체도 피할 사각형에 더한다.
+    let stageBottom = h - insets.bottom;
+    const dotsEl = host.ownerDocument.querySelector("[data-errand-dots]");
+    if (dotsEl !== null) {
+      const dr = rel(dotsEl);
+      if (dr.bottom > dr.top) {
+        avoid.push({ left: dr.left, top: dr.top - 8, right: dr.right, bottom: dr.bottom });
+        stageBottom = Math.min(stageBottom, dr.top);
+      }
+    }
     const tagEl = host.querySelector(".mf-world__tag[data-me]");
-    cache.current = { at: now, stage: { left: 0, top: insets.top, right: w, bottom: h - insets.bottom }, avoid, tag: tagEl === null ? null : rel(tagEl) };
+    cache.current = { at: now, stage: { left: 0, top: insets.top, right: w, bottom: stageBottom }, avoid, tag: tagEl === null ? null : rel(tagEl) };
   }
   const { stage, avoid, tag } = cache.current;
   const items: Array<{ id: PlaceId; x: number; y: number }> = [];

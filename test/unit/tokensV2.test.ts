@@ -103,9 +103,9 @@ describe("명조 글꼴 토큰 --font-serif (08-05, UI-SPEC Font)", () => {
     expect(links[0]?.includes("family=Gowun+Dodum")).toBe(true);
   });
 
-  it("v2.css 에서 --font-serif 는 배지 숫자와 유력 도장 규칙에만 쓰이고 대체값이 없다", () => {
+  it("v2.css 에서 --font-serif 는 배지 숫자·유력 도장·심부름 시작 카드 제목(16-08)에만 쓰이고 대체값이 없다", () => {
     const users = [...V2_CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => (m[2] ?? "").includes("--font-serif")).map((m) => (m[1] ?? "").trim());
-    expect(users.join("|")).toBe(".mv-badge__num|.mv-stamp");
+    expect(users.join("|")).toBe(".mv-badge__num|.mv-stamp|.mv-errand-start__title");
     expect(V2_CSS.includes("var(--font-serif,")).toBe(false);
   });
 

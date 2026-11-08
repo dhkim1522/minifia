@@ -732,12 +732,12 @@ describe("15페이즈 E2E 사본과 제품 값 (15-09, 사본 일치 규약)", (
   const lib = e2eLib as unknown as L;
   const root = new URL("../../", import.meta.url);
 
-  it("ERRAND_MARKERS(E2E 가 읽는 15·16페이즈 심부름 표식 열셋 — 16-07 이 data-rest 를 더했다)가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
+  it("ERRAND_MARKERS(E2E 가 읽는 15·16페이즈 심부름 표식 열셋 — 16-07 이 data-rest 를, 16-08 이 시작 카드·진행 점을 더했다)가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
     const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
       .split("\n")
       .filter((f) => /\.(tsx?|css)$/.test(f));
     const all = tracked.map((f) => readFileSync(new URL(f, root), "utf8")).join("\n");
-    expect(lib.ERRAND_MARKERS).toHaveLength(13);
+    expect(lib.ERRAND_MARKERS).toHaveLength(14);
     expect(lib.ERRAND_MARKERS.filter((m) => !all.includes(m))).toEqual([]);
   });
 

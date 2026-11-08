@@ -12,7 +12,8 @@ import { KillFx } from "../components/KillFx";
 import { PoliceResultCard } from "../components/PoliceResultCard";
 import { BallotReveal } from "../components/v2/BallotReveal";
 import { ResultAnnounce } from "../components/ResultAnnounce";
-import { ErrandDock } from "../components/v2/ErrandDock";
+import { ErrandDots } from "../components/v2/ErrandDots";
+import { ErrandStartCard } from "../components/v2/ErrandStartCard";
 import { WillLetter } from "../components/v2/WillLetter";
 import type { WillLetter as WillLetterState } from "../net/useWillLetter";
 import { SceneCurtain } from "../components/SceneCurtain";
@@ -60,6 +61,7 @@ import { useSheetLayer } from "../net/useSheetLayer";
 import { useViewChoice } from "../net/useViewChoice";
 import { useWhisper } from "../net/useWhisper";
 import { useWill } from "../net/useWill";
+import { useErrandStartCard } from "../net/useErrandStartCard";
 import { useMapInsets } from "../net/useMapInsets";
 import { useReducedMotion } from "../net/useReducedMotion";
 import type { RoomConnection } from "../net/useRoomConnection";
@@ -208,7 +210,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
   // 지목이면 스테이지 윗변을 차례 알약 아랫변 + 4 로 내리고(UI-SPEC A-1) 작은 폰은 압축형 알약을 받는다(turnCompact). 알약 요소는 훅이 루트에서 `[data-turn-block]` 으로 찾는다.
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, logH, turnCompact: compactTurn, stageInsets } = useMapInsets(blockModeOf(view) !== null, view.phase === "errand" ? "errand" : "chat");
+  // 심부름 단계는 아래 패널이 없다(16-08, panelless): 스테이지가 띠 아래부터 화면 아래까지 넓어진다
+  const panelless = view.phase === "errand";
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, logH, turnCompact: compactTurn, stageInsets } = useMapInsets(blockModeOf(view) !== null, panelless);
   // 키보드가 시트의 textarea 때문에 열린 것이면 채팅 패널을 줄이거나 행동 줄을 숨기지 않는다(시트를 연 버튼이 남아야 닫을 때 초점이 돌아온다). 패널은 키보드 위로 올라간다(lifted).
   const kbOpen = kbLifted && !kbInSheet;
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
@@ -704,6 +708,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 심부름(15-05): 내 목록·진행·위치 표본. 위치 표본은 처리 가능 장소·다음 장소가 바뀔 때만 다시 그린다. 이 분기는 역할을 읽지 않는다(D-03)
   const errandOn = view.phase === "errand" && meAlive;
   const errandMine = useMemo(() => (errandOn ? errandProgress(view) : null), [errandOn, view]);
+  const errandCardOn = useErrandStartCard(view, offset, rootRef);
   const errandCenters = useMemo(() => (errandMine === null ? NO_CENTERS : placeCentersOf(view)), [errandMine === null, view]);
   const errandPos = useErrandPos(store, view.me.seat, () => Date.now() + offset, errandCenters, errandMine?.done ?? NO_PLACE_IDS, errandMine !== null);
   const callTarget = useMemo(
@@ -886,10 +891,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         />
       ) : null}
       {view.phase === "errand" ? (
-        // 심부름 단계의 아래 패널은 채팅이 아니라 독이다(높이 84, D-09). 유령·목록 없음은 같은 높이의 내용 없는 패널(스테이지 높이가 역할·생존으로 갈라지지 않게)
-        <section ref={panelRef} className="mf-game__panel mf-game__panel--errand" data-world-panel="">
-          {errandMine !== null ? <ErrandDock places={errandMine.places} done={errandMine.done} /> : null}
-        </section>
+        // 심부름 단계에는 아래 패널이 없다(16-08, V-23): 진행 점 3 이 화면 아래 가운데에 떠 있다. 유령·목록 없음은 점도 없다(지켜본다).
+        // 시작 2초 카드는 막 + 카드이고 눌림을 통과한다 — 닫는 누름은 useErrandStartCard 가 루트에서 받는다.
+        <>
+          {errandCardOn && errandMine !== null ? <ErrandStartCard places={errandMine.places} /> : null}
+          {errandMine !== null ? <ErrandDots total={errandMine.total} done={errandMine.n} /> : null}
+        </>
       ) : (
         <GamePanel
           view={view}

@@ -5,6 +5,7 @@
 //    열림(포커스 + lift > 80)이면 행동 줄을 숨기고(D3) 기록 칸을 72 로 줄이며 패널이 키보드 위로 올라간다. 캔버스 크기는 건드리지 않는다.
 // 2. 스테이지 사각형: 위 끝 = 헤더 블록 아래, 아래 끝 = 아래 패널 위(키보드가 열려 있으면 패널 + 키보드 높이). 캔버스는 화면 전체 크기 그대로 두고 카메라 중심만 이 사각형에 맞춘다.
 //    14-01: 위 끝은 헤더 아랫변과 자막 띠 면([data-host-band] .mv-host__band) 아랫변 중 큰 쪽이다.
+//    16-08: 심부름 단계는 아래 패널이 없다(panelless) — 아래 끝은 0(화면 아래)이다.
 //    재서 넘기는 값이라 패널이 자라도(채팅·단계별 행동 줄) 같은 길로 따라간다. 측정이 0 이면(레이아웃 없는 환경) 넘기지 않고 WorldStage 기본값을 쓴다.
 //    지목(09.1-08, UI-SPEC A-1): turnActive 이면 루트 안의 `[data-turn-block]`(차례 알약, GameMap 이 ref 를 넘기지 않고 이 훅이 루트에서 찾는다)의 막대 아랫변을 함께 재서
 //    위 끝을 mapStageTop(알약·막대 아랫변 + 4)으로 내린다. 막대가 없을 때(모이는 중·끝 알림)는 마지막으로 잰 값, 없으면 기본값(160 · 압축 124). 작은 폰이면 압축형(turnCompact)을 알려 준다.
@@ -52,9 +53,10 @@ function hostBandBottom(room: HTMLElement | null, root: HTMLElement | null): num
 
 /**
  * turnActive: 지금 지목 또는 결선 단계이고 알약 부품(`[data-turn-block]`)이 그려진다(blockModeOf !== null)
- * panelKey: 아래 패널 요소가 다른 종류로 바뀌면(채팅 패널 ↔ 심부름 독 패널) 값을 바꿔 준다. 재는 효과가 패널 요소를 시작 때 한 번 쥐므로 요소가 바뀌면 다시 쥐게 한다(16-07: 안 그러면 떼어진 옛 패널을 재다가 위·아래 안전선이 옛 값에 멈춘다).
+ * panelless: 아래 패널이 없는 단계(심부름, 16-08)다. 패널 없이도 위 끝은 지금처럼 재고 아래 끝은 0 으로 알린다. 재는 효과가 패널 요소를 시작 때 한 번 쥐므로
+ *   단계가 바뀌어 패널이 생기거나 사라지면 이 값이 바뀌어 다시 쥔다(안 그러면 떼어진 옛 패널을 재다가 위·아래 안전선이 옛 값에 멈춘다, 16-07).
  */
-export function useMapInsets(turnActive = false, panelKey = ""): MapInsets {
+export function useMapInsets(turnActive = false, panelless = false): MapInsets {
   const rootRef = useRef<HTMLElement>(null);
   const roomRef = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -77,11 +79,11 @@ export function useMapInsets(turnActive = false, panelKey = ""): MapInsets {
   useLayoutEffect(() => {
     const header = headerRef.current;
     const panel = panelRef.current;
-    if (header === null || panel === null) return;
+    if (header === null || (panel === null && !panelless)) return;
     const measure = (): void => {
       let headerBottom = header.offsetTop + header.offsetHeight;
-      const bottom = panel.offsetHeight;
-      if (headerBottom <= 0 || bottom <= 0) return;
+      const bottom = panelless || panel === null ? 0 : panel.offsetHeight;
+      if (headerBottom <= 0 || (!panelless && bottom <= 0)) return;
       // 14-01: 자막 띠가 헤더 아래에 얹히므로 위쪽 안전선은 헤더와 띠 면 아랫변 중 큰 쪽이다(띠가 1→2줄이 되면 따라 내려간다). 띠가 없으면 그대로.
       const hostBottom = hostBandBottom(roomRef.current, rootRef.current);
       if (hostBottom > headerBottom) headerBottom = hostBottom;
@@ -107,7 +109,7 @@ export function useMapInsets(turnActive = false, panelKey = ""): MapInsets {
     if (typeof ResizeObserver === "undefined") return () => window.removeEventListener("resize", measure);
     const ro = new ResizeObserver(measure);
     ro.observe(header);
-    ro.observe(panel);
+    if (panel !== null && !panelless) ro.observe(panel);
     const block = turnActive ? (rootRef.current?.querySelector<HTMLElement>("[data-turn-block]") ?? null) : null;
     if (block !== null) ro.observe(block);
     const hostBand = roomRef.current?.querySelector<HTMLElement>(HOST_BAND_FACE) ?? null;
@@ -116,7 +118,7 @@ export function useMapInsets(turnActive = false, panelKey = ""): MapInsets {
       window.removeEventListener("resize", measure);
       ro.disconnect();
     };
-  }, [turnActive, compact, panelKey]);
+  }, [turnActive, compact, panelless]);
 
   // 키보드 높이는 프레임마다 바뀌어도 다시 그리지 않는다: 아래 끝을 getter 로 넘겨 WorldStage 가 프레임마다 읽는 순간의 lift 를 더하게 한다(열림·닫힘만 다시 그린다).
   const stageInsets = useMemo(

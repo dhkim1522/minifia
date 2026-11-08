@@ -3072,8 +3072,9 @@ export function hostChimeChecks(segs) {
 
 /** E2E 가 읽는 15페이즈 표식(src 에 있어야 한다 — e2eContract 가 확인). */
 export const ERRAND_MARKERS = [
-  "data-errand-dock",
-  "data-errand-chip",
+  "data-errand-start-card",
+  "data-errand-dots",
+  "data-errand-dot",
   "data-errand-progress",
   "data-errand-act",
   "data-errand-place",

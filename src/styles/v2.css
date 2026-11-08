@@ -458,12 +458,6 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-errand-act { position: absolute; display: inline-flex; align-items: center; justify-content: center; gap: 6px; box-sizing: border-box; height: 44px; margin: 0; padding: 0 18px; border: 0; border-radius: var(--radius-pill); background: var(--brass-400); color: var(--night-950); font-family: var(--font-ui); font-size: 16px; line-height: 1.5; font-weight: 700; white-space: nowrap; cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; animation: mv-errand-pop var(--dur-pop) var(--ease-out); }
 .mv-errand-act:active { opacity: 0.85; }
 .mv-errand-act:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
-.mv-errand-dock { position: relative; display: flex; flex: none; align-items: center; justify-content: center; gap: var(--space-sm); box-sizing: border-box; width: 100%; height: calc(84px + env(safe-area-inset-bottom, 0px)); padding: 12px var(--space-md) calc(var(--space-lg) + env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--night-800) 97%, transparent); border-radius: var(--radius-lg) var(--radius-lg) 0 0; font-family: var(--font-ui); color: var(--gray-100); }
-.mv-errand-dock__chips { display: flex; flex: none; align-items: center; gap: var(--space-sm); }
-.mv-errand-chip { display: grid; place-items: center; box-sizing: border-box; flex: none; width: 36px; height: 36px; border-radius: var(--radius-pill); background: var(--night-700); border: 2px solid var(--gray-300); color: var(--night-900); }
-.mv-errand-chip[data-done] { background: var(--gray-100); border-color: var(--gray-100); animation: mv-errand-fill var(--dur-pop) var(--ease-out); }
-.mv-errand-dock__count { flex: none; width: 40px; font-size: 16px; line-height: 1.5; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; color: var(--gray-100); }
-.mv-errand-dock__sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 /* 시작 카드(16-08, V-19): 막(--scrim) + 카드. 위 = max(띠 아랫변 + 40, 232). 눌림 통과 — 닫는 누름은 방 루트가 받는다. */
 .mv-errand-start { position: absolute; inset: 0; z-index: var(--z-overlay); display: flex; justify-content: center; align-items: flex-start; pointer-events: none; animation: mv-errand-pop var(--dur-fast) var(--ease-out); }
 .mv-errand-start__scrim { position: absolute; inset: 0; background: var(--scrim); pointer-events: none; }
@@ -479,7 +473,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 @keyframes mv-errand-fill { 0% { transform: scale(0.6); opacity: 0.4; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 @keyframes mv-errand-pop { 0% { opacity: 0; } 100% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .mv-errand-pin__badge, .mv-errand-chip[data-done], .mv-errand-act, .mv-errand-start, .mv-errand-dot[data-done] { animation: none; }
+  .mv-errand-pin__badge, .mv-errand-act, .mv-errand-start, .mv-errand-dot[data-done] { animation: none; }
   .mv-errand-pin:active > svg { transform: none; }
 }
 
