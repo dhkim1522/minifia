@@ -2,21 +2,21 @@
 gsd_state_version: "1.0"
 milestone: v3.0
 milestone_name: 사회자와 증거
-current_phase: 15
-current_phase_name: 낮 심부름·목격 기록·밤 흔적
+current_phase: 16
+current_phase_name: 단추 정리·심부름 증거
 current_plan: 10
-status: verifying
+status: executing
 stopped_at: Phase 16 UI-SPEC approved
-last_updated: "2026-11-08T08:30:59.859Z"
+last_updated: "2026-11-08T09:41:27.402Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: 084aa3a5f662573a1d6433cce828b858e62192db
+state_head: 885da11b60bce84205cd4decd64aac7a76fa6d8c
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 3
-  total_plans: 25
+  total_plans: 35
   completed_plans: 25
-  percent: 75
+  percent: 60
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 
 ## Current Position
 
-Phase: 15 (낮 심부름·목격 기록·밤 흔적) — executing (14페이즈 완료·배포 `d77e3dbf`, 결정 0073)
+Phase: 16 (단추 정리·심부름 증거) — READY TO EXECUTE
 Current Plan: 10
 Total Plans in Phase: 10
-Status: Phase complete — ready for verification
+Status: Ready to execute
 Last activity: 2026-11-07 — v3.0 requirements(22)·roadmap(13~15) 작성
 
 ## Performance Metrics
