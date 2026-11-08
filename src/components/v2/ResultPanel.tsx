@@ -192,7 +192,6 @@ export function ResultPanel(props: ResultPanelProps) {
                 role="tab"
                 className={id === "mafia" ? "mf-result__tab is-mafia" : "mf-result__tab"}
                 data-result-tab={id}
-                data-tool-label={RESULT_PANEL_TEXT.tab[id]}
                 aria-selected={selected}
                 aria-label={RESULT_PANEL_TEXT.tabName[id]}
                 tabIndex={selected ? 0 : -1}

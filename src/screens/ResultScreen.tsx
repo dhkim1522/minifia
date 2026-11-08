@@ -521,8 +521,8 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         </div>
       ) : null}
       <header ref={headerRef} className="mf-result__header">
-        {/* 이름표 단추: 아이콘 아래 "나가기", data-tool-label="나가기" 는 ToolButton 이 단다(14-06 TOOL-01 목록 1) */}
-        <ToolButton word="나가기" icon={<Icon name="back" />} disabled={!canSend} onClick={() => setLeaveOpen(true)} />
+        {/* 머리 단추: 아이콘 단추, 이름은 aria-label "나가기" */}
+        <ToolButton name="나가기" icon={<Icon name="back" />} disabled={!canSend} onClick={() => setLeaveOpen(true)} />
         <h1 className="mf-result__title" data-title={inAward ? "ceremony" : state.title}>
           {inAward ? (
             <V2Icon name="trophy" size={24} className="mf-result__title-icon" />

@@ -189,11 +189,11 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       />
       <div className="mf-lobby__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-lobby__header">
-        {/* 머리 단추: 아이콘 아래 한 단어(data-tool-label="나가기"·"공유" 는 ToolButton 이 단다, 14-07 TOOL-01 목록 1·2) */}
-        <ToolButton word="나가기" icon={<Icon name="back" />} disabled={!canSend} onClick={() => setSheet({ kind: "leave" })} />
+        {/* 머리 단추: 아이콘 단추, 이름은 aria-label(이름표는 결정 0077·0079 로 없앴다) */}
+        <ToolButton name="나가기" icon={<Icon name="back" />} disabled={!canSend} onClick={() => setSheet({ kind: "leave" })} />
         <PhaseHeader title="대기실" />
         {view.code ? (
-          <ToolButton word="공유" icon={<Icon name="share" />} onClick={() => setSheet({ kind: "share" })} />
+          <ToolButton name="공유" icon={<Icon name="share" />} onClick={() => setSheet({ kind: "share" })} />
         ) : (
           <span className="mf-lobby__header-gap" aria-hidden="true" />
         )}

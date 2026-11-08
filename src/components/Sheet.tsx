@@ -228,11 +228,9 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, className, c
             compact
             className="mf-sheet__close mv-closepill"
             aria-label="닫기"
-            data-tool-label="닫기"
             onClick={requestClose}
           >
             <Icon name="close" size={20} />
-            <span className="mv-closepill__label">닫기</span>
           </Button>
         ) : null}
         {typeof children === "function" ? children(requestClose, closing) : children}

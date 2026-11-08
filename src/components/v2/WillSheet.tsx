@@ -105,9 +105,8 @@ export function WillSheet(props: WillSheetProps) {
           <V2Icon name={icon} size={20} />
           {title}
         </span>
-        <button type="button" className="mv-will__close mv-closepill" aria-label={WILL_TEXT.close} data-tool-label="닫기" onMouseDown={(e) => e.preventDefault()} onClick={close}>
+        <button type="button" className="mv-will__close mv-closepill" aria-label={WILL_TEXT.close} onMouseDown={(e) => e.preventDefault()} onClick={close}>
           <V2Icon name="close" size={20} />
-          <span className="mv-closepill__label">닫기</span>
         </button>
       </div>
       <label className="mv-sr" htmlFor={inputId}>

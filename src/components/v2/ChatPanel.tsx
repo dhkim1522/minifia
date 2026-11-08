@@ -419,7 +419,7 @@ export function ChatPanel(props: ChatPanelProps) {
           ) : null}
         </div>
         {newDot ? (
-          <button type="button" className="mv-chat__newdot" data-chat-newdot="" data-tool-label={CHAT_TEXT.newDot} aria-label={CHAT_TEXT.newDot} onClick={jumpToBottom}>
+          <button type="button" className="mv-chat__newdot" data-chat-newdot="" aria-label={CHAT_TEXT.newDot} onClick={jumpToBottom}>
             <span className="mv-chat__newdot-pill">{CHAT_TEXT.newDot}</span>
           </button>
         ) : null}
@@ -431,7 +431,6 @@ export function ChatPanel(props: ChatPanelProps) {
               type="button"
               className="mv-tool mv-chat__emote"
               data-emote-button=""
-              data-tool-label={CHAT_TEXT.label.emote}
               aria-label={EMOTE_TEXT.button}
               aria-expanded={trayOpen}
               aria-pressed={trayOpen}
@@ -444,7 +443,6 @@ export function ChatPanel(props: ChatPanelProps) {
               <span className="mv-tool__face">
                 <V2Icon name="face" size={22} />
               </span>
-              <span className="mv-tool__label">{CHAT_TEXT.label.emote}</span>
             </button>
           ) : null}
           {hasEmotes && trayOpen ? <EmoteTray ids={props.emotes ?? []} onPick={pickEmote} disabled={!!sendDisabled || !!props.emoteBlocked} playing={props.emotePlaying ?? null} firstRef={firstCellRef} onKeyDown={onTrayKeyDown} /> : null}
@@ -483,7 +481,6 @@ export function ChatPanel(props: ChatPanelProps) {
             type="submit"
             className={sendCls}
             data-chat-send=""
-            data-tool-label={CHAT_TEXT.label.send}
             aria-label={CHAT_TEXT.send}
             aria-disabled={sendOff ? "true" : "false"}
             // 누르는 순간 포커스가 버튼으로 옮겨 가면 입력칸이 blur 되어 키보드가 닫히고 패널이 손가락 밑에서 내려간다(Chromium·Android). 포커스는 입력칸에 둔다(07-19, 합격 검사 6).
@@ -492,14 +489,12 @@ export function ChatPanel(props: ChatPanelProps) {
             <span className="mv-tool__face">
               <V2Icon name="send" size={22} />
             </span>
-            <span className="mv-tool__label">{CHAT_TEXT.label.send}</span>
           </button>
           {onWill ? (
             <button
               type="button"
               className={callWill ? "mv-tool mv-chat__will is-call" : "mv-tool mv-chat__will"}
               data-will-button=""
-              data-tool-label={CHAT_TEXT.label.will}
               data-call={callWill ? "" : undefined}
               aria-label={willSaved ? CHAT_TEXT.willSaved : CHAT_TEXT.will}
               aria-pressed={willOpen ? "true" : "false"}
@@ -512,7 +507,6 @@ export function ChatPanel(props: ChatPanelProps) {
                 <V2Icon name="quill" size={22} />
                 {willSaved ? <i className="mv-chat__will-dot" /> : null}
               </span>
-              <span className="mv-tool__label">{CHAT_TEXT.label.will}</span>
             </button>
           ) : null}
           {trailing ? (

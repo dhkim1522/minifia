@@ -22,10 +22,8 @@ export interface FloatActionProps {
   kind: "claim" | "whisper" | "dress" | "skip" | "bots";
   /** 안에 그릴 아이콘 24 */
   icon: V2IconName;
-  /** 아이콘 아래에 보이는 한 단어 이름표이자 접근성 이름(TOOL-01). 부르는 쪽이 enum 에서 만든 고정 문구다 */
+  /** 접근성 이름(aria-label). 글 이름표는 없다(16페이즈 TOOL-04). 부르는 쪽이 enum 에서 만든 고정 문구다 */
   label: string;
-  /** 보이는 낱말이 접근성 이름(label)과 달라야 할 때만(귓속말·배지처럼 이름이 긴 단추). 없으면 label 이 그대로 보인다. label 은 word 를 포함해야 한다 */
-  word?: string;
   /** 시트가 열려 있다(눌림): 안쪽 테두리 2px */
   pressed?: boolean;
   /** 눌러도 아무 일 없음(aria-disabled, 불투명도 0.45) */
@@ -40,7 +38,7 @@ export interface FloatActionProps {
   ref?: Ref<HTMLButtonElement>;
 }
 
-export function FloatAction({ kind, icon, label, word, pressed, disabled, dot, left, count, onPress, ref }: FloatActionProps) {
+export function FloatAction({ kind, icon, label, pressed, disabled, dot, left, count, onPress, ref }: FloatActionProps) {
   return (
     <button
       ref={ref}
@@ -49,7 +47,6 @@ export function FloatAction({ kind, icon, label, word, pressed, disabled, dot, l
       data-float={kind}
       {...(left !== undefined ? { "data-float-left": String(left) } : {})}
       aria-label={label}
-      data-tool-label={word ?? label}
       aria-pressed={pressed === true}
       aria-disabled={disabled ? "true" : undefined}
       onMouseDown={(e) => e.preventDefault()}
@@ -62,7 +59,6 @@ export function FloatAction({ kind, icon, label, word, pressed, disabled, dot, l
         <V2Icon name={icon} size={24} />
         {dot ? <span className="mv-float__dot" aria-hidden="true" /> : null}
       </span>
-      <span className="mv-float__label">{word ?? label}</span>
       {count !== undefined ? (
         <span className="mv-float__count" data-float-count="" aria-hidden="true">
           {count}

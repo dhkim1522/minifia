@@ -2,11 +2,9 @@ import type { ReactElement, ReactNode, Ref } from "react";
 import "../styles/v2.css";
 
 export interface ToolButtonProps {
-  /** 아이콘 아래 보이는 한 단어(3자 이하, 고정 문구). data-tool-label 과 접근성 이름의 바탕이 된다 */
-  word: string;
+  /** 접근성 이름(필수, 고정 문구 — 역할·좌석 값 없음). 아이콘 단추라 글은 없고 이름은 aria-label 이 맡는다 */
+  name: string;
   icon: ReactNode;
-  /** 접근성 이름. 없으면 word. 있으면 word 를 포함해야 한다(WCAG 2.5.3 — 예: "내 역할, 새 기록") */
-  name?: string;
   disabled?: boolean;
   onClick?: () => void;
   className?: string;
@@ -17,24 +15,22 @@ export interface ToolButtonProps {
   ref?: Ref<HTMLButtonElement>;
 }
 
-// 14페이즈 TOOL-01: 머리(헤더)의 아이콘 단추 — 면 36(night-800, gray-700 테두리) 위 + 4 + 라벨 아래. 모양은 .mv-tool(v2.css) 한 곳이다.
-// 막힌 단추(disabled)도 라벨은 보이고 불투명도만 낮다(UI#10 partial). 사용자 문자열은 들어가지 않는다.
-export function ToolButton({ word, icon, name, disabled, onClick, className, call, expanded, ref }: ToolButtonProps): ReactElement {
+// 머리(헤더)의 아이콘 단추 — 면(night-800, gray-700 테두리) 하나뿐이고 글은 없다. 이름은 aria-label(16페이즈 TOOL-04, 이름표는 결정 0077·0079 로 없앴다).
+// 모양은 .mv-tool(v2.css) 한 곳이다. 막힌 단추(disabled)도 이름은 남고 불투명도만 낮다. 사용자 문자열은 들어가지 않는다.
+export function ToolButton({ name, icon, disabled, onClick, className, call, expanded, ref }: ToolButtonProps): ReactElement {
   const cls = ["mv-tool", "mv-tool--head", call === true && "is-call", className].filter(Boolean).join(" ");
   return (
     <button
       ref={ref}
       type="button"
       className={cls}
-      aria-label={name ?? word}
+      aria-label={name}
       aria-expanded={expanded}
-      data-tool-label={word}
       data-call={call === true ? "" : undefined}
       disabled={disabled}
       onClick={onClick}
     >
       <span className="mv-tool__face">{icon}</span>
-      <span className="mv-tool__label">{word}</span>
     </button>
   );
 }

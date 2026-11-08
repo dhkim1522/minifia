@@ -155,29 +155,29 @@ describe("ToolButton call·expanded", () => {
   const icon = <V2Icon name="timeline" size={22} />;
 
   it("call 이면 is-call 과 data-call, 아니면 둘 다 없다", () => {
-    const { container, rerender } = render(<ToolButton word="기록" icon={icon} call />);
+    const { container, rerender } = render(<ToolButton name="기록" icon={icon} call />);
     const b = () => container.querySelector("button") as HTMLButtonElement;
     expect(b().classList.contains("is-call")).toBe(true);
     expect(b().hasAttribute("data-call")).toBe(true);
-    rerender(<ToolButton word="기록" icon={icon} />);
+    rerender(<ToolButton name="기록" icon={icon} />);
     expect(b().classList.contains("is-call")).toBe(false);
     expect(b().hasAttribute("data-call")).toBe(false);
     expect(b().hasAttribute("aria-expanded")).toBe(false);
   });
 
   it("expanded 가 주어지면 aria-expanded 가 그 값", () => {
-    const { container, rerender } = render(<ToolButton word="기록" icon={icon} expanded />);
+    const { container, rerender } = render(<ToolButton name="기록" icon={icon} expanded />);
     const b = () => container.querySelector("button") as HTMLButtonElement;
     expect(b().getAttribute("aria-expanded")).toBe("true");
-    rerender(<ToolButton word="기록" icon={icon} expanded={false} />);
+    rerender(<ToolButton name="기록" icon={icon} expanded={false} />);
     expect(b().getAttribute("aria-expanded")).toBe("false");
   });
 
   it("기존 사용처의 마크업은 그대로(call·expanded 없이 같은 속성)", () => {
-    const { container } = render(<ToolButton word="맵" icon={icon} />);
+    const { container } = render(<ToolButton name="맵" icon={icon} />);
     const b = container.querySelector("button") as HTMLButtonElement;
     expect(b.className).toBe("mv-tool mv-tool--head");
-    expect([...b.getAttributeNames()].sort()).toEqual(["aria-label", "class", "data-tool-label", "type"]);
+    expect([...b.getAttributeNames()].sort()).toEqual(["aria-label", "class", "type"]);
     expect(b.getAttribute("aria-label")).toBe("맵");
   });
 });

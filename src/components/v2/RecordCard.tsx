@@ -23,9 +23,8 @@ export function RecordCard({ rows, faceOf, colorOf, onClose }: RecordCardProps):
       <div className="mv-record__head">
         <V2Icon name="eye" size={24} />
         <span className="mv-record__count">{rows.length}</span>
-        <button type="button" className="mv-record__close mv-closepill" aria-label="닫기" data-tool-label="닫기" onMouseDown={(e) => e.preventDefault()} onClick={onClose}>
+        <button type="button" className="mv-record__close mv-closepill" aria-label="닫기" onMouseDown={(e) => e.preventDefault()} onClick={onClose}>
           <V2Icon name="close" size={20} />
-          <span className="mv-closepill__label">닫기</span>
         </button>
       </div>
       {rows.length === 0 ? null : (

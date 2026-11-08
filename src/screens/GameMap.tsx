@@ -821,7 +821,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
               <>
                 {witnessRows !== null ? (
                   <span className="mf-game__record-slot" data-record-button="">
-                    <ToolButton word="기록" icon={<V2Icon name="timeline" size={22} />} call={recordCall} expanded={recordOpen} onClick={toggleRecord} />
+                    <ToolButton name="기록" icon={<V2Icon name="timeline" size={22} />} call={recordCall} expanded={recordOpen} onClick={toggleRecord} />
                   </span>
                 ) : null}
                 {roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null}

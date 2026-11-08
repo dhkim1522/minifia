@@ -71,7 +71,6 @@ export function DressSheet({ value, onPick, onClose, disabled = false, host = fa
                 className={tab === id ? "mv-dress-sheet__tab is-selected" : "mv-dress-sheet__tab"}
                 data-map-tab={id}
                 aria-selected={tab === id}
-                data-tool-label={DRESS_TAB_NAME[id]}
                 aria-label={DRESS_TAB_NAME[id]}
                 onClick={() => setTab(id)}
               >
@@ -83,9 +82,8 @@ export function DressSheet({ value, onPick, onClose, disabled = false, host = fa
         ) : (
           <V2Icon name="hanger" size={24} />
         )}
-        <button type="button" className="mv-dress-sheet__close mv-closepill" data-tool-label={DRESS_TEXT.close} aria-label={DRESS_TEXT.close} onClick={onClose}>
+        <button type="button" className="mv-dress-sheet__close mv-closepill" aria-label={DRESS_TEXT.close} onClick={onClose}>
           <V2Icon name="close" size={20} />
-          <span className="mv-closepill__label">{DRESS_TEXT.close}</span>
         </button>
       </div>
       {tab === "map" ? (
