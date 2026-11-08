@@ -114,75 +114,110 @@ export interface Rect {
 export interface MarkerPlanInput {
   /** 스테이지 사각형(띠 아랫변 ~ 아래 패널 윗변) */
   stage: Rect;
-  /** 독 줄 사각형(소리 단추 줄). 없으면 null */
-  dock: Rect | null;
-  /** 장소별 투영 좌표(표지 중심, px) */
+  /** 타일·알약이 피할 사각형(소리 열 첫 칸 등). 화살표도 피한다 */
+  avoid: Rect[];
+  /** 장소별 투영 좌표(타일 중심, px) */
   items: ReadonlyArray<{ id: PlaceId; x: number; y: number }>;
-  /** 다음 장소 id */
+  /** 내 발밑 투영 좌표. 모르면 null */
+  me: { x: number; y: number } | null;
+  /** 가장 가까운 미처리 장소 id */
   nextId: PlaceId | null;
-  /** 표지 원 지름(기본 36) — 계산에는 누르기 상자(tap)만 쓴다 */
-  pin?: number;
-  /** 표지 누르기 상자 한 변(기본 44) */
-  tap?: number;
+  /** 처리 반경 안 미처리 장소 id(있으면 [처리] 알약이 서고 화살표는 없다) */
+  actId: PlaceId | null;
+  /** 화살표만 더 피하는 사각형(내 이름표) */
+  arrowAvoid?: Rect[];
+  /** 알약 폭(그 요소의 offsetWidth). 모르면 96 */
+  pillW?: number;
+  /** 타일 한 변(기본 64) */
+  tile?: number;
   /** 스테이지 안쪽 여백(기본 8) */
   inset?: number;
-  /** 화살표 칩 지름(기본 36) */
-  chip?: number;
+  /** 화살표 글리프 한 변(기본 40) */
+  arrow?: number;
+  /** 내 발밑에서 화살표 중심까지(기본 56) */
+  reach?: number;
+  /** 겹칠 때 한 번만 당기는 거리(기본 48) */
+  reachShort?: number;
+  /** 알약 높이(기본 44) */
+  pillH?: number;
+  /** 타일과 알약 사이(기본 8) */
+  gap?: number;
 }
 
 export interface MarkerPlan {
   pins: Array<{ id: PlaceId; x: number; y: number }>;
-  /** 화살표는 항상 하나뿐. angle 은 도(위쪽 0°, 시계 방향) — 스테이지 중심에서 그 장소 투영 점으로의 방향 */
+  /** angle 은 도(위쪽 0°, 시계 방향) — 내 발밑에서 그 장소 투영 점으로의 방향 */
   arrow: { id: PlaceId; x: number; y: number; angle: number } | null;
+  /** [처리] 알약 중심 */
+  act: { id: PlaceId; x: number; y: number } | null;
 }
 
 const overlaps = (a: Rect, b: Rect): boolean => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v, lo), Math.max(lo, hi));
 
 /**
- * 표지 배치 계획(순수·결정적). 표지는 누르기 상자(tap) 전체가 스테이지 안쪽(inset) 안이고 독 줄과 교차하지 않을 때만 그린다.
- * 그리지 못한 장소가 다음 장소면 화살표 한 개가 스테이지 가장자리(안쪽 inset + chip/2)에 붙어 그 방향을 가리킨다.
- * 화살표가 독 줄과 겹치면 아래로 비키고, 띠 아래(stage.top + inset)보다 위로는 올라가지 않는다.
+ * 장소 타일·발밑 화살표·[처리] 알약 배치 계획(순수·결정적, 16-07).
+ * 타일은 상자(tile) 전체가 스테이지 안쪽(inset) 안이고 avoid 어느 것과도 겹치지 않을 때만 그린다.
+ * 화살표(actId 없음 · me·nextId 있음)는 내 발밑에서 목표 방향 reach 떨어진 곳이고 avoid·arrowAvoid 와 겹치면 reachShort 로 한 번만 당긴다(스테이지 안쪽으로 가둔다).
+ * 알약(actId 있음)은 그 타일(그려지지 않았으면 투영 점을 안쪽으로 당긴 자리) 위 gap 에 서고, 위가 stage.top + inset 을 넘거나 avoid 에 막히면 아래로 뒤집으며, 좌우는 안쪽 inset 안으로 민다.
  */
 export function placeMarkerPlan(input: MarkerPlanInput): MarkerPlan {
-  const { stage, dock, items, nextId } = input;
-  const tap = input.tap ?? 44;
+  const { stage, avoid, items, me, nextId, actId } = input;
+  const tile = input.tile ?? 64;
   const inset = input.inset ?? 8;
-  const chip = input.chip ?? 36;
-  const half = tap / 2;
+  const arrowSize = input.arrow ?? 40;
+  const reach = input.reach ?? 56;
+  const reachShort = input.reachShort ?? 48;
+  const pillH = input.pillH ?? 44;
+  const pillW = input.pillW ?? 96;
+  const gap = input.gap ?? 8;
+  const half = tile / 2;
+  const inner: Rect = { left: stage.left + inset, top: stage.top + inset, right: stage.right - inset, bottom: stage.bottom - inset };
+
   const pins: MarkerPlan["pins"] = [];
   for (const it of items) {
     const box: Rect = { left: it.x - half, top: it.y - half, right: it.x + half, bottom: it.y + half };
-    const inside = box.left >= stage.left + inset && box.right <= stage.right - inset && box.top >= stage.top + inset && box.bottom <= stage.bottom - inset;
-    if (inside && !(dock !== null && overlaps(box, dock))) pins.push({ id: it.id, x: it.x, y: it.y });
+    const inside = box.left >= inner.left && box.right <= inner.right && box.top >= inner.top && box.bottom <= inner.bottom;
+    if (inside && !avoid.some((r) => overlaps(box, r))) pins.push({ id: it.id, x: it.x, y: it.y });
   }
-  if (nextId === null || pins.some((p) => p.id === nextId)) return { pins, arrow: null };
-  const target = items.find((it) => it.id === nextId);
-  if (target === undefined) return { pins, arrow: null };
 
-  const cx = (stage.left + stage.right) / 2;
-  const cy = (stage.top + stage.bottom) / 2;
-  const dx = target.x - cx;
-  const dy = target.y - cy;
-  const reach = inset + chip / 2;
-  const hx = (stage.right - stage.left) / 2 - reach;
-  const hy = (stage.bottom - stage.top) / 2 - reach;
-  let ax: number;
-  let ay: number;
-  let angle: number;
-  if (dx === 0 && dy === 0) {
-    ax = cx;
-    ay = stage.top + reach;
-    angle = 0;
-  } else {
-    // 중심에서 그 방향으로 뻗은 선이 안쪽 사각형(가장자리에서 reach 안쪽)과 만나는 점
-    const t = Math.min(dx === 0 ? Infinity : hx / Math.abs(dx), dy === 0 ? Infinity : hy / Math.abs(dy));
-    ax = cx + dx * t;
-    ay = cy + dy * t;
-    angle = (Math.atan2(dx, -dy) * 180) / Math.PI;
+  let arrow: MarkerPlan["arrow"] = null;
+  if (actId === null && nextId !== null && me !== null) {
+    const target = items.find((it) => it.id === nextId);
+    if (target !== undefined) {
+      const dx = target.x - me.x;
+      const dy = target.y - me.y;
+      const len = Math.hypot(dx, dy);
+      const ux = len === 0 ? 0 : dx / len;
+      const uy = len === 0 ? -1 : dy / len;
+      const angle = len === 0 ? 0 : (Math.atan2(dx, -dy) * 180) / Math.PI;
+      const ha = arrowSize / 2;
+      const at = (d: number): { x: number; y: number } => ({
+        x: clamp(me.x + ux * d, inner.left + ha, inner.right - ha),
+        y: clamp(me.y + uy * d, inner.top + ha, inner.bottom - ha),
+      });
+      const blocked = (p: { x: number; y: number }): boolean => {
+        const box: Rect = { left: p.x - ha, top: p.y - ha, right: p.x + ha, bottom: p.y + ha };
+        return avoid.some((r) => overlaps(box, r)) || (input.arrowAvoid ?? []).some((r) => overlaps(box, r));
+      };
+      let p = at(reach);
+      if (blocked(p)) p = at(reachShort);
+      arrow = { id: nextId, x: p.x, y: p.y, angle };
+    }
   }
-  if (dock !== null) {
-    const chipBox = (y: number): Rect => ({ left: ax - chip / 2, top: y - chip / 2, right: ax + chip / 2, bottom: y + chip / 2 });
-    if (overlaps(chipBox(ay), dock)) ay = Math.min(dock.bottom + chip / 2, stage.bottom - reach);
+
+  let act: MarkerPlan["act"] = null;
+  if (actId !== null) {
+    const target = items.find((it) => it.id === actId);
+    if (target !== undefined) {
+      const cx = clamp(target.x, inner.left + half, inner.right - half);
+      const cy = clamp(target.y, inner.top + half, inner.bottom - half);
+      const px = clamp(cx, inner.left + pillW / 2, inner.right - pillW / 2);
+      const boxAt = (y: number): Rect => ({ left: px - pillW / 2, top: y - pillH / 2, right: px + pillW / 2, bottom: y + pillH / 2 });
+      const above = cy - half - gap - pillH / 2;
+      const blockedAbove = boxAt(above).top < inner.top || avoid.some((r) => overlaps(boxAt(above), r));
+      act = { id: actId, x: px, y: blockedAbove ? cy + half + gap + pillH / 2 : above };
+    }
   }
-  return { pins, arrow: { id: nextId, x: ax, y: Math.max(ay, stage.top + reach), angle } };
+  return { pins, arrow, act };
 }

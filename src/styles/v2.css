@@ -442,33 +442,33 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-side__col { display: flex; flex-direction: column; align-items: center; gap: 12px; pointer-events: none; }
 .mv-side__slot { display: block; flex: none; width: var(--control-button); height: var(--control-button); pointer-events: none; }
 
-/* 심부름 부품(15-04, UI-SPEC "심부름 화면 계약"·"영역 배치"). 새 토큰·새 색 없음 — 빛남은 14 의 .is-call·--glow-ring 을 그대로 쓴다.
- * 애니메이션은 transform·opacity 뿐. 이 블록은 파일 끝에 둔다(시험이 첫 .mv-errand 부터 끝까지를 본다). */
-.mv-errand-pin { position: absolute; display: grid; place-items: center; box-sizing: border-box; width: var(--tap-min); height: var(--tap-min); margin: 0; padding: 0; border: 0; background: none; color: var(--gray-100); font-family: var(--font-ui); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
-.mv-errand-pin__disc { display: grid; place-items: center; box-sizing: border-box; width: 36px; height: 36px; border-radius: var(--radius-pill); background: var(--night-700); border: 2px solid var(--gray-300); color: var(--gray-100); }
-.mv-errand-pin[data-done] .mv-errand-pin__disc { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); animation: mv-errand-fill var(--dur-pop) var(--ease-out); }
-.mv-errand-pin:active .mv-errand-pin__disc { transform: scale(0.94); }
-.mv-errand-pin:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 0; border-radius: var(--radius-pill); }
-/* 빛 고리는 누르기 상자(44)가 아니라 원(36)을 감싼다 */
-.mv-errand-pin.is-call { border-radius: var(--radius-pill); }
-.mv-errand-pin.is-call::after, .mv-errand-pin.is-call::before { inset: 4px; }
-.mv-errand-arrow { position: absolute; display: grid; place-items: center; box-sizing: border-box; width: 36px; height: 36px; border-radius: var(--radius-pill); background: var(--night-700); border: 2px solid var(--gray-300); color: var(--gray-100); pointer-events: none; }
+/* 심부름 부품(15-04·16-07, UI-SPEC "심부름 화면 계약"·V-20~V-22). 새 토큰·hex 없음 — 빛남은 14 의 .is-call 을 그대로 쓰고 타일 빛만 테두리 3·번짐 26 으로 키운다.
+ * 위치는 층이 inline transform 으로 쓰므로 위치를 쓰는 요소(타일·화살표·알약)에는 transform 애니메이션·:active 변형을 걸지 않는다(그림·배지 같은 자식에만).
+ * 이 블록은 파일 끝에 둔다(시험이 첫 .mv-errand 부터 끝까지를 본다). */
+.mv-errand-pin { position: absolute; display: grid; place-items: center; box-sizing: border-box; width: 64px; height: 64px; border-radius: 16px; background: var(--night-800); margin: 0; padding: 0; border: 0; color: var(--gray-100); font-family: var(--font-ui); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
+.mv-errand-pin[data-rest] { box-shadow: 0 0 0 2px var(--brass-200), 0 0 14px 0 color-mix(in srgb, var(--brass-200) 35%, transparent); }
+.mv-errand-pin[data-done] { opacity: 0.55; box-shadow: 0 0 0 3px var(--brass-400); }
+.mv-errand-pin__badge { position: absolute; right: -6px; bottom: -6px; display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--radius-pill); background: var(--brass-400); color: var(--night-950); animation: mv-errand-fill var(--dur-pop) var(--ease-out); }
+.mv-errand-pin:active > svg { transform: scale(0.94); }
+.mv-errand-pin:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mv-errand-pin.is-call::after { border-width: 3px; box-shadow: 0 0 26px 6px color-mix(in srgb, var(--light-lamp) 60%, transparent); }
+.mv-errand-arrow { position: absolute; display: grid; place-items: center; box-sizing: border-box; width: 40px; height: 40px; pointer-events: none; }
 .mv-errand-arrow__turn { display: grid; place-items: center; transform-origin: 50% 50%; }
+.mv-errand-arrow svg { display: block; fill: var(--light-lamp); stroke: var(--night-950); stroke-width: 1; stroke-linejoin: round; }
+.mv-errand-act { position: absolute; display: inline-flex; align-items: center; justify-content: center; gap: 6px; box-sizing: border-box; height: 44px; margin: 0; padding: 0 18px; border: 0; border-radius: var(--radius-pill); background: var(--brass-400); color: var(--night-950); font-family: var(--font-ui); font-size: 16px; line-height: 1.5; font-weight: 700; white-space: nowrap; cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; animation: mv-errand-pop var(--dur-pop) var(--ease-out); }
+.mv-errand-act:active { opacity: 0.85; }
+.mv-errand-act:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 .mv-errand-dock { position: relative; display: flex; flex: none; align-items: center; justify-content: center; gap: var(--space-sm); box-sizing: border-box; width: 100%; height: calc(84px + env(safe-area-inset-bottom, 0px)); padding: 12px var(--space-md) calc(var(--space-lg) + env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--night-800) 97%, transparent); border-radius: var(--radius-lg) var(--radius-lg) 0 0; font-family: var(--font-ui); color: var(--gray-100); }
 .mv-errand-dock__chips { display: flex; flex: none; align-items: center; gap: var(--space-sm); }
 .mv-errand-chip { display: grid; place-items: center; box-sizing: border-box; flex: none; width: 36px; height: 36px; border-radius: var(--radius-pill); background: var(--night-700); border: 2px solid var(--gray-300); color: var(--night-900); }
 .mv-errand-chip[data-done] { background: var(--gray-100); border-color: var(--gray-100); animation: mv-errand-fill var(--dur-pop) var(--ease-out); }
 .mv-errand-dock__count { flex: none; width: 40px; font-size: 16px; line-height: 1.5; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; color: var(--gray-100); }
 .mv-errand-dock__sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.mv-errand-dock__act { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs); box-sizing: border-box; width: 104px; height: 48px; margin: 0 0 0 var(--space-md); padding: 0; border: 0; border-radius: var(--radius-pill); background: var(--gray-100); color: var(--night-900); font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 700; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.mv-errand-dock__act[aria-disabled="true"] { opacity: 0.45; cursor: default; }
-.mv-errand-dock__act[data-done] { opacity: 1; background: var(--night-700); color: var(--gray-100); box-shadow: inset 0 0 0 2px var(--gray-100); }
-.mv-errand-dock__act:not([aria-disabled="true"]):active { transform: scale(0.97); }
-.mv-errand-dock__act:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 @keyframes mv-errand-fill { 0% { transform: scale(0.6); opacity: 0.4; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes mv-errand-pop { 0% { opacity: 0; } 100% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .mv-errand-pin[data-done] .mv-errand-pin__disc, .mv-errand-chip[data-done] { animation: none; }
-  .mv-errand-pin:active .mv-errand-pin__disc, .mv-errand-dock__act:not([aria-disabled="true"]):active { transform: none; }
+  .mv-errand-pin__badge, .mv-errand-chip[data-done], .mv-errand-act { animation: none; }
+  .mv-errand-pin:active > svg { transform: none; }
 }
 
 /* 목격 기록 카드·아침 흔적 카드(15-07, UI-SPEC "목격 기록 카드 계약"·"아침 흔적 카드 계약"). 새 토큰·hex·진홍 없음 — 위치는 GameMap 이 .mf-game__record·.mf-game__trace 로 정한다.
