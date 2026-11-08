@@ -14,6 +14,7 @@ import { ChatPanel } from "../components/v2/ChatPanel";
 import { DressSheet } from "../components/v2/DressSheet";
 import { FloatAction, FloatActions } from "../components/v2/FloatAction";
 import { MapChip } from "../components/v2/MapChip";
+import { SideColumn } from "../components/v2/SideColumn";
 import { ReadyPill } from "../components/v2/ReadyPill";
 import { ResultPanel } from "../components/v2/ResultPanel";
 import type { ResultTab } from "../components/v2/ResultPanel";
@@ -146,7 +147,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const toast = useTopToast();
   const { show } = toast;
   const [leaveOpen, setLeaveOpen] = useState(false);
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, stageInsets } = useMapInsets();
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, sideMaxH, stageInsets } = useMapInsets();
 
   // 탭 패널(11-07): 현재 탭과 열어 본 탭 집합은 이 화면이 쥔다. 전체가 아닌 탭이면 패널이 확장되고 연출 시계가 멈춘다(D-3, D-25)
   const [tab, setTab] = useState<ResultTab>("all");
@@ -515,11 +516,6 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         onLeave={() => setLeaveOpen(true)}
       />
       <div className="mf-result__scrim" aria-hidden="true" />
-      {mapsOn ? (
-        <div className="mf-result__map">
-          <MapChip choice={mapChoice} host={view.me.isHost} onPress={() => openDress("map")} />
-        </div>
-      ) : null}
       <header ref={headerRef} className="mf-result__header">
         {/* 머리 단추: 아이콘 단추, 이름은 aria-label "나가기" */}
         <ToolButton name="나가기" icon={<Icon name="back" />} disabled={!canSend} onClick={() => setLeaveOpen(true)} />
@@ -596,10 +592,12 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
           <FloatAction kind="skip" icon="skip" label="넘기기" count={`${ceremony.index + 1} / ${ceremony.total}`} onPress={skipAwardNow} />
         </FloatActions>
       ) : null}
+      {/* 시상식이 끝난 뒤 오른쪽 세로 한 줄(16-06 D-05·V-5): 소리(독) · 맵(방장) · 옷장. 손님은 소리 · 옷장 */}
       {ceremonyDone && !expanded && !dressOpen ? (
-        <FloatActions single>
-          <FloatAction ref={dressBtnRef} kind="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={() => openDress()} />
-        </FloatActions>
+        <SideColumn soundSlot maxHeight={sideMaxH}>
+          {mapsOn && view.me.isHost ? <MapChip key="map" choice={mapChoice} host onPress={() => openDress("map")} /> : null}
+          <FloatAction key="dress" ref={dressBtnRef} kind="dress" side="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={() => openDress()} />
+        </SideColumn>
       ) : null}
       {dressOpen ? (
         <DressSheet

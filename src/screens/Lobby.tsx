@@ -11,9 +11,10 @@ import { Icon } from "../components/Icon";
 import { ShareSheet } from "../components/ShareSheet";
 import { ChatPanel } from "../components/v2/ChatPanel";
 import { DressSheet } from "../components/v2/DressSheet";
-import { FloatAction, FloatActions } from "../components/v2/FloatAction";
+import { FloatAction } from "../components/v2/FloatAction";
 import { MapChip } from "../components/v2/MapChip";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
+import { SideColumn } from "../components/v2/SideColumn";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
 import type { ChatStore } from "../net/chatStore";
@@ -106,12 +107,12 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
 
   // 키보드(07-19, CHAT-05)·스테이지 사각형 측정(06-15)·기록 칸 높이는 게임 맵(GameMap)과 같은 훅 하나가 맡는다(08-13).
   // 키보드가 열려 있으면(kbOpen) 행동 줄을 숨기고 기록 칸을 72 로 줄이며 패널이 키보드 위로 올라간다. 아래 패널의 채팅 기록 칸 높이 logH 는 방 높이로 한 번 정한다.
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, stageInsets } = useMapInsets();
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, sideMaxH, stageInsets } = useMapInsets();
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
   const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view, motion });
 
-  // 꾸미기(10-07): 오른쪽 아래 떠 있는 hanger 버튼 → 패널을 덮는 카드 띠 시트. 아래 패널 높이(--mf-panel-h)는 DOM 에서 재서 루트에 정한다
-  // (떠 있는 버튼 묶음과 시트가 같은 값을 읽는다 — GameMap 과 같은 방식). 시트가 열린 동안 떠 있는 버튼은 그리지 않는다.
+  // 꾸미기(10-07): 오른쪽 열의 hanger 버튼 → 패널을 덮는 카드 띠 시트. 아래 패널 높이(--mf-panel-h)는 DOM 에서 재서 루트에 정한다
+  // (시트가 그 값을 읽는다 — GameMap 과 같은 방식). 시트가 열린 동안·키보드가 열린 동안 오른쪽 열은 그리지 않는다.
   const [dressOpen, setDressOpen] = useState(false);
   useLayoutEffect(() => {
     rootRef.current?.style.setProperty("--mf-panel-h", `${panelRef.current?.offsetHeight ?? 0}px`);
@@ -147,7 +148,8 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   const pickMap = (map: MapChoice) => {
     if (canSend) send({ t: "mapPick", map });
   };
-  const mapChip = mapsOn ? <MapChip choice={mapChoice} host={isHost} onPress={() => openDress("map")} /> : null;
+  // 맵 단추는 방장에게만 그린다(16-06 V-5, T-16-13): 손님은 맵을 고르지 못하고 서버도 방장의 mapPick 만 받는다
+  const mapChip = mapsOn && isHost ? <MapChip choice={mapChoice} host onPress={() => openDress("map")} /> : null;
   const host = view.players.find((p) => p.isHost);
   const full = view.players.length >= view.maxPlayers;
   // 서버 checkStart 와 같은 기준(연결된 사람 수)을 쓴다. 버튼 모양은 표시용이고 판정은 서버가 한다.
@@ -199,14 +201,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
         )}
       </header>
       <TopToast {...toast.props} />
-      {testButton ? (
-        <div className="mf-lobby__test">
-          {testButton}
-          {mapChip}
-        </div>
-      ) : mapChip ? (
-        <div className="mf-lobby__map">{mapChip}</div>
-      ) : null}
+      {testButton ? <div className="mf-lobby__test">{testButton}</div> : null}
       <section ref={panelRef} className={kbOpen ? "mf-lobby__panel mf-lobby__panel--kb" : "mf-lobby__panel"} data-world-panel="">
         <ChatPanel {...binding} logHeight={kbOpen ? LOG_H_KB : logH} compact={kbOpen} inputRef={inputRef} />
         {kbOpen ? null : (
@@ -228,14 +223,16 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           </ActionRow>
         )}
       </section>
-      {dressOpen ? null : (
-        <FloatActions single={!botsOn}>
+      {dressOpen || kbOpen ? null : (
+        // 오른쪽 세로 한 줄(16-06 D-05): 소리(독) · 맵(방장) · 봇(방장) · 옷장. 손님은 소리 · 옷장
+        <SideColumn soundSlot maxHeight={sideMaxH}>
+          {mapChip}
           {/* 결정 0075: 방장만 [봇] — 서버가 방장 대기실 view 에만 me.testBots 를 싣는다 */}
           {botsOn ? (
-            <FloatAction kind="bots" icon="bot" label="봇" pressed={sheet?.kind === "bots"} disabled={!canSend} onPress={() => setSheet({ kind: "bots" })} />
+            <FloatAction key="bots" kind="bots" side="bots" icon="bot" label="봇" pressed={sheet?.kind === "bots"} disabled={!canSend} onPress={() => setSheet({ kind: "bots" })} />
           ) : null}
-          <FloatAction ref={dressBtnRef} kind="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={() => openDress()} />
-        </FloatActions>
+          <FloatAction key="dress" ref={dressBtnRef} kind="dress" side="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={() => openDress()} />
+        </SideColumn>
       )}
       {dressOpen ? (
         <DressSheet

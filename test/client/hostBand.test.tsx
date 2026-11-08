@@ -252,12 +252,11 @@ describe("띠 아래 자리 (U-1·U-6·U-8)", () => {
     expect(lastWorldStage.props?.stageInsets?.top).toBe(150);
   });
 
-  it("자리 규칙이 CSS 에 있다: 테스트 단추·맵 칩은 띠 면 아래, 위 알림은 독 아래", () => {
+  it("자리 규칙이 CSS 에 있다: 테스트 단추·오른쪽 열은 띠 면 아래, 위 알림은 독 아래", () => {
     const css = (file: string) => readFileSync(`src/styles/${file}.css`, "utf8");
     expect(css("lobby")).toMatch(/\.mf-lobby__test\s*\{[^}]*--mf-host-bottom/);
-    expect(css("lobby")).toMatch(/\.mf-lobby__map\s*\{[^}]*--mf-host-bottom/);
+    expect(css("v2")).toMatch(/\.mv-side\s*\{[^}]*--mf-host-bottom/); // 오른쪽 열(맵 칩 포함): 띠 아랫변 + 12 (16-06)
     expect(css("game")).toMatch(/\.mf-game__test\s*\{[^}]*--mf-host-bottom/);
-    expect(css("result")).toMatch(/\.mf-result__map\s*\{[^}]*--mf-host-bottom/);
     expect(css("v2")).toMatch(/\.mv-toast--top\s*\{[^}]*--mf-host-dock/);
     expect(css("v2")).toMatch(/\.mv-host\s*\{[^}]*--mf-host-top/);
   });

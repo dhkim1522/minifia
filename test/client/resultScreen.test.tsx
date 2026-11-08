@@ -1689,6 +1689,21 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
     expect(dress(r.container)).not.toBeNull();
   });
 
+  it("시상 중에는 오른쪽 열(맵 칩 포함)이 없고 [넘기기]는 열 밖 제자리다 — 끝나면 방장 열 [map, dress] 가 나타난다 (16-06 D-05)", () => {
+    const r = renderRoom(executionView());
+    r.rerenderRoom(makeView({ me: 0, awards: AW }));
+    advance(5600 + 100);
+    expect(r.container.querySelector("[data-side-column]")).toBeNull();
+    expect(r.container.querySelector("[data-map-chip]")).toBeNull();
+    const k = skip(r.container)!;
+    expect(k.closest("[data-side-column]")).toBeNull();
+    expect(k.hasAttribute("data-side-button")).toBe(false);
+    advance(5000 + 700);
+    expect(skip(r.container)).toBeNull();
+    expect(r.container.querySelectorAll("[data-side-column]")).toHaveLength(1);
+    expect(dress(r.container)!.getAttribute("data-side-button")).toBe("dress");
+  });
+
   it("연출 중(5600 전)에도 [꾸미기]는 없다", () => {
     const r = renderRoom(executionView());
     r.rerenderRoom(makeView());
@@ -1759,14 +1774,28 @@ describe("결과 단계 지도 칩과 맵 탭 (11-13, D-20·O-11)", () => {
   });
   afterEach(() => restore());
   const chip = (c: ParentNode) => c.querySelector<HTMLElement>("[data-map-chip]");
+  const sideButtons = (c: ParentNode) => [...c.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button"));
   const withMap = (v: RoomView, mapChoice: "bar" | "plaza" | "random", map?: "bar" | "plaza"): RoomView => ({ ...v, mapChoice, ...(map ? { map } : {}) });
 
-  it("칩은 모두에게 보이고 서버의 mapChoice(random 이 정해진 뒤에도 choice, 결과 map 은 노출하지 않음)를 따른다", () => {
-    for (const [me, choice, map, name] of [[0, "plaza", undefined, "맵 광장"], [1, "random", "plaza", "맵 랜덤"], [1, "bar", "bar", "맵 재즈 바"]] as const) {
-      const r = renderRoom(withMap(makeView({ me }), choice, map));
+  it("칩은 방장에게만 보이고 서버의 mapChoice(random 이 정해진 뒤에도 choice, 결과 map 은 노출하지 않음)를 따른다", () => {
+    for (const [choice, map, name] of [["plaza", undefined, "맵 광장"], ["random", "plaza", "맵 랜덤"], ["bar", "bar", "맵 재즈 바"]] as const) {
+      const r = renderRoom(withMap(makeView({ me: 0 }), choice, map));
       expect(chip(r.container)?.getAttribute("aria-label")).toBe(name);
       r.unmount();
     }
+  });
+
+  it("손님 화면에는 칩이 없다 — 오른쪽 열은 [dress] 하나(16-06 V-5, T-16-13)", () => {
+    const r = renderRoom(withMap(makeView({ me: 1 }), "plaza"));
+    expect(chip(r.container)).toBeNull();
+    expect(sideButtons(r.container)).toEqual(["dress"]);
+  });
+
+  it("시상식이 끝난 뒤 방장의 오른쪽 열은 소리 자리 다음 [map, dress] 이고 칩은 둘째 칸이다 (16-06 D-05)", () => {
+    const r = renderRoom(makeView({ me: 0 }));
+    expect(r.container.querySelectorAll("[data-side-column]")).toHaveLength(1);
+    expect(sideButtons(r.container)).toEqual(["map", "dress"]);
+    expect(r.container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
   });
 
   it("mapChoice 가 없는 옛 view 는 랜덤으로 읽는다", () => {
@@ -1779,13 +1808,15 @@ describe("결과 단계 지도 칩과 맵 탭 (11-13, D-20·O-11)", () => {
     fireEvent.click(chip(r.container)!);
     expect(r.container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
     expect(r.container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
+    expect(r.container.querySelector("[data-side-column]")).toBeNull(); // 시트가 열린 동안 열은 그리지 않는다
     r.send.mockClear();
     fireEvent.click(r.container.querySelector("button[data-map-card='plaza']")!);
     expect(r.send.mock.calls.map((c) => c[0])).toEqual([{ t: "mapPick", map: "plaza" }]);
-    expect(chip(r.container)?.getAttribute("aria-label")).toBe("맵 랜덤");
+    expect(r.container.querySelector("button[data-map-card='random']")?.getAttribute("aria-pressed")).toBe("true");
     r.rerenderRoom(withMap(makeView({ me: 0 }), "plaza"));
-    expect(chip(r.container)?.getAttribute("aria-label")).toBe("맵 광장");
     expect(r.container.querySelector("button[data-map-card='plaza']")?.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+    expect(chip(r.container)?.getAttribute("aria-label")).toBe("맵 광장");
   });
 
   it("방장이 [꾸미기]로 열면 의상 탭이고 탭 둘이 있다", () => {
@@ -1795,22 +1826,11 @@ describe("결과 단계 지도 칩과 맵 탭 (11-13, D-20·O-11)", () => {
     expect(r.container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
   });
 
-  it("손님은 눌러도 시트가 열리지 않고(aria-disabled), 꾸미기 시트에 탭이 없다", () => {
+  it("손님은 꾸미기 시트에 탭이 없다", () => {
     const r = renderRoom(makeView({ me: 1 }));
-    expect(chip(r.container)?.getAttribute("aria-disabled")).toBe("true");
-    fireEvent.click(chip(r.container)!);
-    expect(r.container.querySelector("[data-dress-sheet]")).toBeNull();
+    expect(chip(r.container)).toBeNull();
     fireEvent.click(r.container.querySelector<HTMLElement>("[data-float='dress']")!);
     expect(r.container.querySelector("[data-map-tab]")).toBeNull();
-  });
-
-  it("칩은 시상식·연출 중에도 보이고(헤더 아래 자리), 눌러도 연출 단계가 되돌아가지 않는다", () => {
-    const r = renderRoom(makeView({ me: 0, awards: [{ seat: 3, award: "whiff" as const, k: 2 }, { seat: 0, award: "survivor" as const }] }));
-    expect(chip(r.container)).not.toBeNull();
-    expect(r.container.querySelector(".mf-result__map [data-map-chip]")).not.toBeNull();
-    const stageBefore = r.container.querySelector("main")!.getAttribute("data-result-stage");
-    fireEvent.click(chip(r.container)!);
-    expect(r.container.querySelector("main")!.getAttribute("data-result-stage")).toBe(stageBefore);
   });
 
   it("허용 맵이 하나뿐이면 칩이 없다", () => {

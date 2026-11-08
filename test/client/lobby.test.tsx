@@ -153,6 +153,44 @@ describe("Lobby — 맵 로비 틀 (MAP-01, 06-15)", () => {
   });
 });
 
+describe("Lobby — 오른쪽 한 줄 열: 방장 넷·손님 둘 (16-06 D-05, V-2·V-5)", () => {
+  const players = [player(0, "민수"), player(1, "영희"), player(2, "서준")];
+  const side = (c: ParentNode) => [...c.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button"));
+
+  it("손님: 소리 자리 다음 [dress] 뿐이다 — 맵 칩·봇 단추가 없다 (T-16-13)", () => {
+    const { container } = render(lobby(makeView(players, 2)));
+    expect(side(container)).toEqual(["dress"]);
+    expect(container.querySelector("[data-map-chip], [data-float='bots']")).toBeNull();
+    expect(container.querySelectorAll("[data-side-column]")).toHaveLength(1);
+    expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
+  });
+
+  it("방장 + 봇 도구가 켜진 방: [bots, dress] 순서(맵이 켜지면 맵이 맨 위)이고 열 밖에 떠 있는 단추 묶음이 없다", () => {
+    const view = makeView(players, 0);
+    view.me = { ...view.me, testBots: 0 };
+    const { container } = render(lobby(view));
+    expect(side(container)).toEqual(expect.arrayContaining(["bots", "dress"]));
+    expect(side(container).indexOf("bots")).toBeLessThan(side(container).indexOf("dress"));
+    expect(container.querySelector("[data-float-stack]")).toBeNull();
+    for (const b of container.querySelectorAll("[data-side-button]")) {
+      expect(b.textContent).toBe(""); // 글 없음(접근성 이름만)
+      expect(b.getAttribute("aria-label")).toBeTruthy();
+    }
+  });
+
+  it("방장도 봇 도구가 없으면(testBots 없음) 봇 단추가 없다", () => {
+    const { container } = render(lobby(makeView(players, 0)));
+    expect(side(container)).not.toContain("bots");
+    expect(side(container)).toContain("dress");
+  });
+
+  it("꾸미기 시트가 열려 있는 동안 열을 그리지 않는다", () => {
+    const { container } = render(lobby(makeView(players, 2)));
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
+    expect(container.querySelector("[data-side-column]")).toBeNull();
+  });
+});
+
 describe("Lobby — 채팅 패널: 기록 + 입력줄 + 행동 줄 (CHAT-01, 07-13)", () => {
   const base = [player(0, "민수"), player(1, "서준")];
   const sysTexts = (container: HTMLElement): string => [...container.querySelectorAll(".mv-chat__sys")].map((el) => el.textContent ?? "").join("|");

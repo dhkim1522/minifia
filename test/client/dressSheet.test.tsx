@@ -354,12 +354,14 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
   const hostView = (extra: Partial<RoomView> = {}): RoomView => ({ ...makeView([player(0, "민수"), player(1, "영희"), player(2, "서준")], 0), ...extra });
   const guestView = (extra: Partial<RoomView> = {}): RoomView => ({ ...makeView([player(0, "민수"), player(1, "영희"), player(2, "서준")], 2), ...extra });
 
-  it("칩은 모두에게 보이고 현재 선택(기본 랜덤)을 따른다", () => {
-    for (const [v, name] of [[hostView(), "맵 랜덤"], [guestView({ mapChoice: "plaza" }), "맵 광장"], [hostView({ mapChoice: "bar" }), "맵 재즈 바"]] as const) {
+  it("칩은 방장에게만 보이고 현재 선택(기본 랜덤)을 따른다 — 손님에게는 없다 (16-06 V-5, T-16-13)", () => {
+    for (const [v, name] of [[hostView(), "맵 랜덤"], [hostView({ mapChoice: "plaza" }), "맵 광장"], [hostView({ mapChoice: "bar" }), "맵 재즈 바"]] as const) {
       const { container, unmount } = render(lobby(v));
       expect(container.querySelector("[data-map-chip]")?.getAttribute("aria-label")).toBe(name);
       unmount();
     }
+    const { container } = render(lobby(guestView({ mapChoice: "plaza" })));
+    expect(container.querySelector("[data-map-chip]")).toBeNull();
   });
 
   it("허용 맵이 하나뿐이면 칩을 그리지 않는다", () => {
@@ -389,10 +391,10 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
     expect(container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
   });
 
-  it("손님은 칩을 눌러도 시트가 열리지 않고, 꾸미기 시트에는 탭이 없다", () => {
+  it("손님은 맵 칩·봇 단추가 없고(열은 [dress] 하나), 꾸미기 시트에는 탭이 없다", () => {
     const { container } = render(lobby(guestView()));
-    fireEvent.click(container.querySelector("[data-map-chip]")!);
-    expect(container.querySelector("[data-dress-sheet]")).toBeNull();
+    expect(container.querySelector("[data-map-chip]")).toBeNull();
+    expect([...container.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button"))).toEqual(["dress"]);
     fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     expect(container.querySelector("button[data-map-tab]")).toBeNull();
     expect(container.querySelector("button[data-map-card]")).toBeNull();
@@ -405,22 +407,32 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
     send.mockClear();
     fireEvent.click(container.querySelector("button[data-map-card='plaza']")!);
     expect(send.mock.calls.map((c) => c[0])).toEqual([{ t: "mapPick", map: "plaza" }]);
-    expect(container.querySelector("[data-map-chip]")?.getAttribute("aria-label")).toBe("맵 랜덤");
     expect(container.querySelector("button[data-map-card='random']")?.getAttribute("aria-pressed")).toBe("true");
     rerender(lobby(hostView({ mapChoice: "plaza" }), send));
-    expect(container.querySelector("[data-map-chip]")?.getAttribute("aria-label")).toBe("맵 광장");
     expect(container.querySelector("button[data-map-card='plaza']")?.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "닫기" })); // 시트가 열린 동안 오른쪽 열은 그리지 않는다
+    expect(container.querySelector("[data-map-chip]")?.getAttribute("aria-label")).toBe("맵 광장");
   });
 
-  it("[테스트] 버튼이 있으면 칩은 그 오른쪽(같은 자리 묶음 안, 뒤)에 놓인다", () => {
+  it("[테스트] 버튼은 왼쪽 위 묶음(.mf-lobby__test)에 혼자 있고 칩은 오른쪽 열로 옮겨 갔다 (16-06 A5)", () => {
     const { container } = render(lobby(hostView(), () => {}, { testButton: <button type="button">테스트</button> }));
     const slot = container.querySelector(".mf-lobby__test")!;
-    expect([...slot.children].map((c) => (c.hasAttribute("data-map-chip") ? "chip" : "test"))).toEqual(["test", "chip"]);
+    expect([...slot.children].map((c) => c.textContent)).toEqual(["테스트"]);
+    expect(slot.querySelector("[data-map-chip]")).toBeNull();
+    expect(container.querySelector("[data-side-column] [data-map-chip]")).not.toBeNull();
   });
 
-  it("[테스트] 버튼이 없으면 칩은 .mf-lobby__map 자리에 있다", () => {
+  it("[테스트] 버튼이 없으면 .mf-lobby__test 가 없고 칩은 열에 있다", () => {
     const { container } = render(lobby(hostView()));
-    expect(container.querySelector(".mf-lobby__map [data-map-chip]")).not.toBeNull();
+    expect(container.querySelector(".mf-lobby__map")).toBeNull();
     expect(container.querySelector(".mf-lobby__test")).toBeNull();
+    expect(container.querySelector("[data-side-column] [data-map-chip]")).not.toBeNull();
+  });
+
+  it("방장 대기실 열(봇 단추 없는 방)은 소리 자리 다음 [map, dress] 다 (위 → 아래)", () => {
+    const { container } = render(lobby(hostView()));
+    expect([...container.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button"))).toEqual(["map", "dress"]);
+    expect(container.querySelectorAll("[data-side-column]")).toHaveLength(1);
+    expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
   });
 });

@@ -21,10 +21,8 @@
 /* 접히는 안내 줄 높이(한 줄)만큼만 헤더 아래로 삐져나온다 */
 .mf-lobby__header .mv-phase__text { gap: 0; }
 
-/* [테스트] 버튼 자리: 헤더 아래 8, 왼쪽 16 */
+/* [테스트] 버튼 자리: 헤더 아래 8, 왼쪽 16 (16-06: 맵 칩은 오른쪽 열로 옮겨 가 이 자리에는 [테스트]만 남는다) */
 .mf-lobby__test { position: absolute; top: calc(var(--mf-host-bottom, 62px) + 8px); left: var(--space-md); z-index: var(--z-overlay); display: flex; align-items: flex-start; gap: var(--space-sm); }
-/* 지도 칩 자리(11-13): [테스트] 버튼이 없으면 같은 자리(헤더 아래 8, 왼쪽 16). 있으면 칩은 위 자리 묶음 안에서 버튼 오른쪽에 놓인다 */
-.mf-lobby__map { position: absolute; top: calc(var(--mf-host-bottom, 62px) + 8px); left: var(--space-md); z-index: var(--z-overlay); }
 
 /* 아래 패널: night-800 97%, 위 모서리 radius-lg, 안쪽 14 16 22. 위에서부터 채팅 기록 칸(LOG_H 96·152) + 입력줄(48) + 행동 줄(52), 사이 간격은 부품 8 · 패널 10 → 높이 LOG_H + 154 (07-13).
    채팅 없는 6페이즈 때는 행동 줄 하나라 88 이었다. 높이는 DOM 에서 재서 스테이지 사각형에 넘기므로 식이 바뀌어도 카메라가 따라간다. */
@@ -40,4 +38,4 @@
 
 /* iOS 가 키보드를 위해 화면을 위로 밀면(vv.offsetTop > 0) 헤더 계열이 그만큼 내려와 보이는 영역 맨 위에 머문다. window.scrollTo 로 되돌리지 않는다(깜빡임).
    --mf-vv-top 은 포커스가 없을 때 0 이라 평소에는 움직이지 않는다. 재접속 띠(.mf-reconnect--floating)는 방 틀 직속이라 같은 변수를 방 틀에서 읽는다. */
-.mf-lobby__scrim, .mf-lobby__header, .mf-lobby__test, .mf-lobby__map, .mf-lobby .mv-toast, .mf-reconnect--floating { transform: translateY(var(--mf-vv-top, 0px)); }
+.mf-lobby__scrim, .mf-lobby__header, .mf-lobby__test, .mf-lobby .mv-side, .mf-lobby .mv-toast, .mf-reconnect--floating { transform: translateY(var(--mf-vv-top, 0px)); }

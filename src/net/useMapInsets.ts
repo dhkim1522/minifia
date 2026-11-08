@@ -31,6 +31,8 @@ export interface MapInsets {
   logH: number;
   /** 지목 알약을 압축형으로 그릴 폰인가(UI-SPEC A-1). 지목이 아니거나 아직 못 쟀으면 false */
   turnCompact: boolean;
+  /** 오른쪽 열(SideColumn)의 최대 높이(16-06, V-3) = 아래 패널 윗변 − 8 − 열 윗변(자막 띠 아랫변 + 12). 측정 전(또는 레이아웃이 없는 환경)에는 Infinity(한 열) */
+  sideMaxH: number;
   /** WorldStage 로 넘길 스테이지 사각형. 측정 전(또는 레이아웃이 없는 환경)에는 undefined */
   stageInsets: { top: number; readonly bottom: number } | undefined;
 }
@@ -64,6 +66,7 @@ export function useMapInsets(turnActive = false): MapInsets {
   const [insets, setInsets] = useState<{ top: number; bottom: number } | undefined>(undefined);
   // 압축형 판정은 8페이즈 기준 높이(창 높이 − 패널 − 62)라서 알약 위치와 순환하지 않는다. 패널·창이 바뀌면 다시 정한다.
   const [panelH, setPanelH] = useState(0);
+  const [sideMaxH, setSideMaxH] = useState(Number.POSITIVE_INFINITY);
   const [viewH, setViewH] = useState(() => (typeof window === "undefined" ? 0 : window.innerHeight));
   const compact = turnActive && panelH > 0 && turnCompact(viewH, panelH);
   // 마지막으로 잰 막대 아랫변(압축 여부별). 막대가 없는 단계(모이는 중·끝 알림)에도 스테이지가 움직이지 않게 한다.
@@ -79,6 +82,8 @@ export function useMapInsets(turnActive = false): MapInsets {
       // 14-01: 자막 띠가 헤더 아래에 얹히므로 위쪽 안전선은 헤더와 띠 면 아랫변 중 큰 쪽이다(띠가 1→2줄이 되면 따라 내려간다). 띠가 없으면 그대로.
       const hostBottom = hostBandBottom(roomRef.current, rootRef.current);
       if (hostBottom > headerBottom) headerBottom = hostBottom;
+      const roomH = rootRef.current?.clientHeight ?? 0;
+      if (roomH > 0) setSideMaxH(Math.max(0, roomH - bottom - 8 - (headerBottom + 12)));
       let top = headerBottom;
       if (turnActive) {
         const block = rootRef.current?.querySelector<HTMLElement>("[data-turn-block]") ?? null;
@@ -126,5 +131,5 @@ export function useMapInsets(turnActive = false): MapInsets {
 
   const logH = useChatLogHeight(rootRef, inputRef);
 
-  return { rootRef, headerRef, panelRef, inputRef, kbOpen, kbInSheet, logH, turnCompact: compact, stageInsets };
+  return { rootRef, headerRef, panelRef, inputRef, kbOpen, kbInSheet, logH, turnCompact: compact, sideMaxH, stageInsets };
 }
