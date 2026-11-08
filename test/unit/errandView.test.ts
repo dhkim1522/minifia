@@ -6,13 +6,13 @@ import { describe, expect, it } from "vitest";
 import { actErrand } from "../../shared/game/errand";
 import { BAR_PLACES, UNIT } from "../../shared/game/map";
 import { PLAZA_PLACES } from "../../shared/game/mapPlaza";
-import { ERRAND_ACT_R } from "../../shared/game/phases";
+import { ERRAND_ACT_R, ERRAND_MS } from "../../shared/game/phases";
 import type { Player, RoomState } from "../../shared/game/room";
 import { PLACE_IDS } from "../../shared/protocol";
 import type { PlaceId, RoomView } from "../../shared/protocol";
 import { V2Icon } from "../../src/components/v2/V2Icon";
 import type { V2IconName } from "../../src/components/v2/V2Icon";
-import { ERRAND_TEXT, actablePlaceOf, errandProgress, nextPlaceOf, placeCentersOf, placeMarkerPlan, progressLabel } from "../../src/game/errandView";
+import { ERRAND_CARD_MS, ERRAND_TEXT, actablePlaceOf, errandProgress, nextPlaceOf, placeCentersOf, placeMarkerPlan, progressLabel, startCardOn } from "../../src/game/errandView";
 import type { Rect } from "../../src/game/errandView";
 import { PLACE_NAME, placeIconOf, placeLabel } from "../../src/game/placeText";
 import { seededRandInt } from "../helpers/seededRandom";
@@ -324,5 +324,30 @@ describe("타일·화살표·알약 배치 계획", () => {
     expect(reach.y).toBeCloseTo(270, 6);
     const pill = placeMarkerPlan({ ...base, avoid: [], actId: "glass", pillW: 90, pillH: 40, gap: 4 });
     expect(pill.act!.y).toBe(300 - 32 - 4 - 20);
+  });
+});
+
+describe("시작 카드 표시 판정 (16-08, V-19)", () => {
+  const START = 1_000_000;
+  const at = (over: Record<string, unknown> = {}, errand: { places: PlaceId[]; done: PlaceId[] } | undefined = { places: ["glass", "piano", "sax"], done: [] }): RoomView =>
+    ({ ...(viewOf("bar", errand) as unknown as Record<string, unknown>), phaseEndsAt: START + ERRAND_MS, ...over }) as unknown as RoomView;
+
+  it("카드 시간은 2초(클라이언트 상수)", () => {
+    expect(ERRAND_CARD_MS).toBe(2_000);
+  });
+  it("단계 시작부터 2초 안(경계 전까지)이면 참", () => {
+    expect(startCardOn(at(), START)).toBe(true);
+    expect(startCardOn(at(), START + 1_000)).toBe(true);
+    expect(startCardOn(at(), START + ERRAND_CARD_MS - 1)).toBe(true);
+  });
+  it("2초가 지났으면(재접속·새로 고침으로 늦게 들어옴) 거짓", () => {
+    expect(startCardOn(at(), START + ERRAND_CARD_MS)).toBe(false);
+    expect(startCardOn(at(), START + 3_000)).toBe(false);
+  });
+  it("다른 단계·목록 없음(유령 포함)·phaseEndsAt 없음이면 거짓", () => {
+    expect(startCardOn(at({ phase: "discussion" }), START + 500)).toBe(false);
+    expect(startCardOn(at({}, undefined), START + 500)).toBe(false);
+    expect(startCardOn(at({}, { places: [], done: [] }), START + 500)).toBe(false);
+    expect(startCardOn(at({ phaseEndsAt: null }), START + 500)).toBe(false);
   });
 });

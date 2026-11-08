@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { ErrandAct } from "../../src/components/v2/ErrandAct";
 import { ErrandDock } from "../../src/components/v2/ErrandDock";
+import { ErrandDots } from "../../src/components/v2/ErrandDots";
+import { ErrandStartCard } from "../../src/components/v2/ErrandStartCard";
 import { ErrandArrow, ErrandMarker } from "../../src/components/v2/ErrandMarker";
 import { PLACE_IDS } from "../../shared/protocol";
 import type { PlaceId } from "../../shared/protocol";
@@ -203,6 +205,85 @@ describe("ErrandDock (칩·n/3 만 — [처리] 는 장소 위 알약으로 옮�
   });
 });
 
+describe("ErrandStartCard (2초 '오늘 갈 곳' 카드, 16-08 V-19)", () => {
+  it("루트 하나, 타일 3(role=img·aria-label '{장소} 장소', 각 svg 하나), 제목·한 줄, button 0, 장소 이름 글자 없음", () => {
+    const { container } = render(<ErrandStartCard places={PLACES} />);
+    expect(container.querySelectorAll("[data-errand-start-card]")).toHaveLength(1);
+    const tiles = [...container.querySelectorAll("[role='img']")];
+    expect(tiles.map((t) => t.getAttribute("aria-label"))).toEqual(["술잔 장소", "피아노 장소", "색소폰 장소"]);
+    for (const t of tiles) {
+      expect(t.querySelectorAll("svg")).toHaveLength(1);
+      expect(t.textContent).toBe("");
+      expect(t.querySelector("svg")!.getAttribute("width")).toBe("60");
+    }
+    expect(container.textContent).toContain("오늘 갈 곳");
+    expect(container.textContent).toContain("가는 길에 본 사람이 기록돼요");
+    expect(container.querySelectorAll("button")).toHaveLength(0);
+    for (const n of ["술잔", "피아노", "색소폰"]) expect(container.textContent).not.toContain(n);
+  });
+  it("places 가 0개면 아무것도 그리지 않는다", () => {
+    const { container } = render(<ErrandStartCard places={[]} />);
+    expect(container.innerHTML).toBe("");
+  });
+  it("같은 입력에 같은 DOM(마피아·시민 구분 없음), 속성은 data-errand-start-card 하나뿐", () => {
+    const a = render(<ErrandStartCard places={PLACES} />);
+    const h1 = a.container.innerHTML;
+    a.unmount();
+    const b = render(<ErrandStartCard places={PLACES} />);
+    expect(b.container.innerHTML).toBe(h1);
+    const names = new Set([b.container, ...b.container.querySelectorAll("*")].flatMap((e) => e.getAttributeNames().filter((n) => n.startsWith("data-"))));
+    expect([...names]).toEqual(["data-errand-start-card"]);
+  });
+});
+
+describe("ErrandDots (진행 점 3, 16-08 V-23)", () => {
+  it("3곳·done 1 → 점 3(1·2·3, 첫째만 data-done), data-errand-progress='1/3', role=group·aria-label '진행 1/3'·aria-live polite, 보이는 글자·단추·tabindex 없음", () => {
+    const { container } = render(<ErrandDots total={3} done={1} />);
+    const root = container.querySelector("[data-errand-dots]")!;
+    expect(root.getAttribute("data-errand-progress")).toBe("1/3");
+    expect(root.getAttribute("role")).toBe("group");
+    expect(root.getAttribute("aria-label")).toBe("진행 1/3");
+    expect(root.getAttribute("aria-live")).toBe("polite");
+    const dots = [...container.querySelectorAll("[data-errand-dot]")];
+    expect(dots.map((d) => d.getAttribute("data-errand-dot"))).toEqual(["1", "2", "3"]);
+    expect(dots.map((d) => d.hasAttribute("data-done"))).toEqual([true, false, false]);
+    expect(container.textContent).toBe("");
+    expect(container.querySelectorAll("button")).toHaveLength(0);
+    expect(container.querySelectorAll("[tabindex]")).toHaveLength(0);
+  });
+  it("done 3 → 모두 채움 3/3, done 이 total 을 넘어도 total 로 자른다", () => {
+    const { container } = render(<ErrandDots total={3} done={5} />);
+    expect([...container.querySelectorAll("[data-errand-dot]")].every((d) => d.hasAttribute("data-done"))).toBe(true);
+    expect(container.querySelector("[data-errand-dots]")!.getAttribute("data-errand-progress")).toBe("3/3");
+  });
+  it("done 0 → 채움 0, total 0 이면 null", () => {
+    const a = render(<ErrandDots total={3} done={0} />);
+    expect(a.container.querySelectorAll("[data-errand-dot][data-done]")).toHaveLength(0);
+    a.unmount();
+    const b = render(<ErrandDots total={0} done={0} />);
+    expect(b.container.innerHTML).toBe("");
+  });
+});
+
+describe("시작 카드·진행 점 스타일 (16-08)", () => {
+  it("시작 카드·막·진행 점 줄은 눌림을 통과하고, hex 없이 토큰만 쓴다", () => {
+    const css = errandBlock();
+    expect(css).toMatch(/\.mv-errand-start\s*\{[^}]*pointer-events: none/);
+    expect(css).toMatch(/\.mv-errand-dots\s*\{[^}]*pointer-events: none/);
+    expect(css).toMatch(/\.mv-errand-start__card\s*\{[^}]*background: var\(--night-800\)[^}]*border-radius: 20px/);
+    expect(css).toMatch(/\.mv-errand-start__scrim\s*\{[^}]*background: var\(--scrim\)/);
+    expect(css).toMatch(/\.mv-errand-start__tile\s*\{[^}]*width: 84px[^}]*height: 84px[^}]*border-radius: 20px[^}]*background: var\(--night-700\)/);
+    expect(css).toMatch(/\.mv-errand-dot\s*\{[^}]*width: 20px[^}]*height: 20px[^}]*border: 3px solid var\(--brass-400\)/);
+    expect(css).toMatch(/\.mv-errand-dot\[data-done\]\s*\{[^}]*background: var\(--brass-400\)/);
+    expect(css).toMatch(/\.mv-errand-dots\s*\{[^}]*gap: 12px/);
+  });
+  it("모션 줄이기에서 시작 카드 등장이 즉시다", () => {
+    const css = errandBlock();
+    const reduce = [...css.matchAll(/@media \(prefers-reduced-motion: reduce\)\s*\{([^]*?)\n\}/g)].map((m) => m[1]).join("\n");
+    expect(reduce).toMatch(/mv-errand-start/);
+  });
+});
+
 describe("같은 마크업 (D-03, ERRAND-04, T-15-16, T-16-15)", () => {
   const html = (node: ReactElement): string => {
     const r = render(node);
@@ -337,7 +418,7 @@ describe("접근성·스타일 (UI-SPEC)", () => {
     const css = errandBlock();
     expect(css).not.toMatch(/crimson/);
     for (const m of css.matchAll(/(^|\n)([^\n{]+)\{([^}]*(?:brass|light-lamp)[^}]*)\}/g)) {
-      expect(m[2], m[2]).toMatch(/mv-errand-(pin|act|arrow)/);
+      expect(m[2], m[2]).toMatch(/mv-errand-(pin|act|arrow|start|dot)/);
     }
   });
 });
