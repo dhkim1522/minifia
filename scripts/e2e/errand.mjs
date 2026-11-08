@@ -1,4 +1,4 @@
-// 15페이즈 심부름·목격 기록·아침 흔적 E2E 흐름 (15-09, 16-07 에서 심부름을 장소 타일·발밑 화살표·장소 위 [처리] 알약 기준으로 바꿈): errand(심부름, 폰 6종)·witness(목격 기록, 폰 6종)·trace(밤 얼굴 목록 통일 + 아침 흔적 카드, 폰 6종).
+// 15페이즈 심부름·목격 기록·아침 흔적 E2E 흐름 (15-09, 16-07 에서 심부름을 장소 타일·발밑 화살표·장소 위 [처리] 알약 기준으로, 16-08 에서 아래 패널 대신 진행 점 3·시작 카드 기준으로 바꿈): errand(심부름, 폰 6종)·witness(목격 기록, 폰 6종)·trace(밤 얼굴 목록 통일 + 아침 흔적 카드, 폰 6종).
 // 이름은 errand·witness·trace — 기존 흐름 이름과 `--only` 부분 일치가 겹치지 않는다. 흐름은 화면을 읽기만 하고 판정은 lib.mjs 의 순수 함수(errandChecks 등)에 맡긴다:
 // 판정 문턱은 여기서 낮추지 않는다(T-15-36). 닉네임·토큰은 결과 줄에 남기지 않는다(T-15-35) — 장소 id·진행 수·개수·단계 이름만 쓴다.
 // 심부름은 실제 40초라(결정 0074) 시간 안에 못 끝낸 것은 시험 결함이 아니라 환경 지연이다 — 판정을 느슨하게 하지 않고 SetupError 로 던져 실행기가 다시 돌린다.
@@ -13,6 +13,7 @@ import {
   readErrandSignature,
   readNightFaces,
   readRecord,
+  readStartCard,
   readTrace,
   setBotVote,
   setBots,
@@ -25,7 +26,7 @@ import {
   waitErrandDone,
   walkToPlace,
 } from "./browser.mjs";
-import { ERRAND_E2E_MS, ERRAND_LINES, ERRAND_NEAR_R_E2E, ERRAND_PER_PERSON, TRACE_WINDOW_MS, errandChecks, errandOverlapChecks, errandParityChecks, hostChimeChecks, nightFaceChecks, recordChecks, traceChecks } from "./lib.mjs";
+import { ERRAND_E2E_MS, ERRAND_LINES, ERRAND_NEAR_R_E2E, ERRAND_PER_PERSON, TRACE_WINDOW_MS, errandCardChecks, errandCardWalkChecks, errandChecks, errandOverlapChecks, errandParityChecks, hostChimeChecks, nightFaceChecks, recordChecks, traceChecks } from "./lib.mjs";
 
 const NICK = "심부름방장";
 /** 손님 이름(모두 4자 — emcee-band 와 같은 이름 규칙) */
@@ -71,10 +72,10 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
     await settle(page);
   }
 
-  /** 심부름 화면이 그려질 때까지(독 + 표지나 화살표 하나 이상) */
+  /** 심부름 화면이 그려질 때까지(진행 점 줄 + 표지나 화살표 하나 이상) */
   async function untilErrandDrawn(page) {
     await settleMap(page);
-    await page.waitForFunction(() => document.querySelector("[data-errand-dock]") !== null && (document.querySelector("button[data-errand-place]:not([hidden])") !== null || document.querySelector("[data-errand-arrow]:not([hidden])") !== null), null, { timeout: 8000 });
+    await page.waitForFunction(() => document.querySelector("[data-errand-dots]") !== null && (document.querySelector("button[data-errand-place]:not([hidden])") !== null || document.querySelector("[data-errand-arrow]:not([hidden])") !== null), null, { timeout: 8000 });
     await sleep(300);
   }
 
@@ -112,12 +113,16 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
     return {
       r,
       s: {
-        total: r.chips,
+        total: r.dotCount,
         places: r.places.map((p) => ({ id: p.id, done: p.done, hidden: p.hidden, call: p.call, rest: p.rest })),
         doneAttr: r.doneAttr,
         progressText: r.progressText,
         bandLine: r.bandLine,
-        dockButtons: r.dockButtons,
+        panelCount: r.panelCount,
+        dotsRows: r.dotsRows,
+        dotsAria: r.dotsAria,
+        dotsLive: r.dotsLive,
+        dotsText: r.dotsText,
         callCount: r.callCount,
         callKinds: r.callKinds,
         reach,
@@ -188,14 +193,26 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
       } else await walkToPlace(page);
       await sleep(1000);
     }
-    throw new SetupError(`심부름 ${n}번째 장소를 ${PLACE_MS / 1000}초 안에 처리하지 못함`);
+    const last = await readErrand(page).catch(() => null);
+    // 알약이 보이는데 눌러지지 않는 경우(다른 요소가 위에 있다)를 가리려고 알약 중심 점의 맨 위 요소를 함께 적는다
+    const top = await page
+      .evaluate(() => {
+        const a = document.querySelector("button[data-errand-act]");
+        if (!a || a.hidden) return "알약 없음";
+        const r = a.getBoundingClientRect();
+        const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return `알약 ${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)} 맨 위 ${el === a ? "알약" : (el?.getAttribute("data-side-button") ?? el?.className ?? "?")}`;
+      })
+      .catch(() => "?");
+    const note = last ? ` (진행 ${last.progressText}·타일 ${last.pins.length}/${last.places.length}·화살표 ${last.arrows.length}·알약 ${last.actCount}·타일 상태 ${last.places.map((p) => `${p.id}${p.done ? "✓" : ""}${p.hidden ? "숨김" : ""}`).join(",")}·단계 ${tracker.last()?.phase}·${top})` : "";
+    throw new SetupError(`심부름 ${n}번째 장소를 ${PLACE_MS / 1000}초 안에 처리하지 못함${note}`);
   }
 
   // ---- errand ----
 
   /**
-   * errand (ERRAND-01~04·07, D-02·D-03·D-06·D-07): 방장 + 봇 5 로 심부름 단계까지 가서 ① 도착 직후 독 1·칩 3(done 0)·"0/3"·타일 64·알약 0·화살표 1·남은 타일 후광(data-rest)·빛 1 이하·띠 errand.act·근처 링(errandChecks)
-   * ② 반경 밖에는 [처리] 알약이 DOM 에 없다 ③ 월드·이름표에 근처 밖 좌석 0 ④ 장소 셋을 걸어 처리 — 알약이 나타난 순간 반경 안 읽기(알약 1·화살표 0·알약만 빛남)를 하고 알약을 눌러 각 단계 칩·타일·진행 숫자를 본다 → 3/3 에서 알약·화살표 0·띠 errand.done
+   * errand (ERRAND-01~04·07, D-02·D-03·D-06·D-07): 방장 + 봇 5 로 심부름 단계까지 가서 ① 도착 2초 안 시작 카드 1(타일 3)·2.5초 뒤 0, 그 뒤 진행 점 3(done 0)·"0/3"·아래 패널 0·타일 64·알약 0·화살표 1·남은 타일 후광(data-rest)·빛 1 이하·띠 errand.act·근처 링(errandChecks)
+   * ② 반경 밖에는 [처리] 알약이 DOM 에 없다 ③ 월드·이름표에 근처 밖 좌석 0 ④ 장소 셋을 걸어 처리 — 알약이 나타난 순간 반경 안 읽기(알약 1·화살표 0·알약만 빛남)를 하고 알약을 눌러 각 단계 채운 점·타일·진행 표식을 본다 → 3/3 에서 알약·화살표 0·띠 errand.done
    * ⑤ 타일·화살표·알약 영역(errandOverlapChecks, 폰 6종) ⑥ 근처에서 빠진 좌석은 이름표도 사라진다 ⑦ 390x844: 방 둘(마피아/시민)의 심부름 영역 마크업이 같다(errandParityChecks, ER1) ⑧ 묶음 G·H ⑨ 소리: 낮 시작 → 심부름 0번·심부름 → 토론 1번.
    */
   async function errandFlow(ctx) {
@@ -203,16 +220,37 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
     const rec = recorder(ctx);
     const firstSize = ctx.size.label === "390x844";
     let mafiaSig = null;
+    let mafiaCard = null;
+    let cardWalk = null;
     if (firstSize) {
-      // 마피아 판: 심부름 도착 직후 서명만 읽고 닫는다(방 하나 더 — 이 비교는 390x844 에서만)
+      // 마피아 판: 심부름 도착 직후(시작 카드가 떠 있는 2초 안) 서명을 읽고 카드 중 걷기를 확인한 뒤 닫는다(방 하나 더 — 이 비교는 390x844 에서만)
       const mh = await lobbyWith(ctx, id, { bots: 4, role: "mafia", vote: { exec: "yes", pick: "other" } });
       try {
         await startGame(mh.page, mh.tracker);
         await skipTo(mh.page, mh.tracker, "errand");
+        // 시작 카드가 아직 떠 있을 때(2초 안) 마크업 서명·카드를 읽고, 카드 중에도 바닥을 누르면 걷는지 본다(T-16-19)
+        const shownCard = await mh.page.waitForSelector("[data-errand-start-card]", { timeout: 4000 }).then(() => true, () => false);
+        if (shownCard) {
+          mafiaSig = await readErrandSignature(mh.page);
+          mafiaCard = await readStartCard(mh.page);
+          const seat = mh.tracker.last().me.seat;
+          const before = await mh.page.evaluate((s) => window.__mfWorld?.sample(s) ?? null, seat);
+          // 카드를 닫는 누름이 곧 걷기 누름이다 — 내 자리에서 한 칸 떨어진 바닥을 누른다
+          if (before) await tapWorld(mh.page, mh.tracker, seat, before.x + 1.2, before.z + 0.6).catch(() => null);
+          const closed = await mh.page.waitForFunction(() => document.querySelector("[data-errand-start-card]") === null, null, { timeout: 1500 }).then(() => true, () => false);
+          await sleep(1500);
+          const after = await mh.page.evaluate((s) => window.__mfWorld?.sample(s) ?? null, seat);
+          const moved = !!before && !!after && Math.hypot(after.x - before.x, after.z - before.z) > 0.2;
+          cardWalk = { moved, closed };
+        }
         await untilErrandDrawn(mh.page);
-        mafiaSig = await readErrandSignature(mh.page);
+        if (mafiaSig === null) mafiaSig = await readErrandSignature(mh.page);
         const r = await readErrand(mh.page);
-        rec(`${id}/mafia`, "EF0", `마피아 판의 심부름 화면이 같은 모양으로 그려진다(독 ${r.docks}·칩 ${r.chips}·표지 ${r.places.length})`, r.docks === 1 && r.chips === ERRAND_PER_PERSON && r.places.length === ERRAND_PER_PERSON, `독 ${r.docks}, 칩 ${r.chips}, 표지 ${r.places.length}`);
+        rec(`${id}/mafia`, "EF0", `마피아 판의 심부름 화면이 같은 모양으로 그려진다(진행 점 줄 ${r.dotsRows}·점 ${r.dotCount}·표지 ${r.places.length}·아래 패널 ${r.panelCount})`, r.dotsRows === 1 && r.dotCount === ERRAND_PER_PERSON && r.places.length === ERRAND_PER_PERSON && r.panelCount === 0, `점 줄 ${r.dotsRows}, 점 ${r.dotCount}, 표지 ${r.places.length}, 패널 ${r.panelCount}`);
+        if (cardWalk !== null) {
+          const fw = fold(errandCardWalkChecks(cardWalk));
+          rec(`${id}/mafia`, "EC2", "카드 중에도 바닥을 누르면 걷고 그 누름에 카드가 닫힌다(마피아 판)", fw.ok, fw.detail || `걸음 ${cardWalk.moved}, 닫힘 ${cardWalk.closed}`);
+        } else rec(`${id}/mafia`, "EC2", "카드 중에도 바닥을 누르면 걷고 그 누름에 카드가 닫힌다(마피아 판)", false, "측정값 없음(시작 카드가 4초 안에 보이지 않음)");
       } finally {
         await closeGame(asGame(mh));
       }
@@ -235,20 +273,28 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
         segs.push({ kind: "dayToErrand", name: "낮 시작 → 심부름", count: n, played: n });
       }
       if (ht.last().phase !== "errand") await ht.waitFor((v) => v.phase === "errand", 8000, "심부름 도착");
+      // 시작 카드(16-08): 단계 시작 2초 안에 읽고(마크업 서명 포함), 2.5초 뒤에는 사라졌는지 본다. 읽기는 도착 직후에 해야 하므로 소리 구간 읽기보다 앞이다
+      const cardSeen = await hp.waitForSelector("[data-errand-start-card]", { timeout: 4000 }).then(() => true, () => false);
+      const cardEarly = cardSeen ? await readStartCard(hp) : { cards: 0, tiles: 0, buttons: 0, text: "" };
+      const citizenSigEarly = cardSeen && mafiaSig !== null ? await readErrandSignature(hp) : null;
+      await sleep(2500);
+      const cardLate = await readStartCard(hp);
+      const fcard = fold(errandCardChecks({ early: cardEarly, late: cardLate }));
+      rec(`${id}/start-card`, "EC1", "시작 카드: 2초 안 1개(타일 3·단추 0·제목·한 줄), 2.5초 뒤 0개", fcard.ok, fcard.detail || `2초 안 ${cardEarly.cards}개·타일 ${cardEarly.tiles}, 2.5초 뒤 ${cardLate.cards}개`);
       await untilErrandDrawn(hp);
 
       // ① 도착 직후
       const first = await errandInput(hp, mySeat, { reach: "out" });
       // 마피아 판과 견줄 시민 판의 마크업 서명은 같은 상태(도착 직후·반경 밖)에서 읽는다
-      const citizenSig = mafiaSig !== null ? await readErrandSignature(hp) : null;
+      const citizenSig = citizenSigEarly;
       const f1 = fold(errandChecks(first.s));
-      rec(`${id}/arrive`, "EA", `진행 칩 3·"0/3"·알약 0·화살표 1·타일 64·후광·빛 1 이하·근처 밖 좌석 0·표식 값에 좌석·역할 없음 (좌석 ${first.s.seatsInWorld}·근처 ${first.s.nearSeats})`, f1.ok, f1.detail);
-      rec(`${id}/arrive`, "EF1", "독 1개·심부름 제목·근처 링(24점 정지 모양)이 있다", first.r.docks === 1 && first.r.title.includes("심부름") && first.r.ringShown && first.r.ringPoints >= 8, `독 ${first.r.docks}, 제목 ${first.r.title ? "있음" : "없음"}, 링 ${first.r.ringShown}(${first.r.ringPoints}점)`);
-      rec(`${id}/arrive`, "EF2", "진행 칩 수 = 3, done 0", first.s.total === ERRAND_PER_PERSON && first.s.doneAttr === 0, `칩 ${first.s.total}, done ${first.s.doneAttr}`);
+      rec(`${id}/arrive`, "EA", `진행 점 3·"0/3"·아래 패널 0·알약 0·화살표 1·타일 64·후광·빛 1 이하·근처 밖 좌석 0·표식 값에 좌석·역할 없음 (좌석 ${first.s.seatsInWorld}·근처 ${first.s.nearSeats})`, f1.ok, f1.detail);
+      rec(`${id}/arrive`, "EF1", "진행 점 줄 1개·심부름 제목·근처 링(24점 정지 모양)이 있고 시작 카드는 지나갔다", first.r.dotsRows === 1 && first.r.title.includes("심부름") && first.r.ringShown && first.r.ringPoints >= 8 && first.r.cards === 0, `점 줄 ${first.r.dotsRows}, 제목 ${first.r.title ? "있음" : "없음"}, 링 ${first.r.ringShown}(${first.r.ringPoints}점), 카드 ${first.r.cards}`);
+      rec(`${id}/arrive`, "EF2", "진행 점 수 = 3, done 0", first.s.total === ERRAND_PER_PERSON && first.s.doneAttr === 0, `점 ${first.s.total}, done ${first.s.doneAttr}`);
       // ⑤ 영역: 타일·화살표·알약(보이는 것만)이 서로·이름표 버튼·띠·오른쪽 열·아래 패널과 교차 0
       const overlap = (r, when) => {
-        const f = fold(errandOverlapChecks({ stage: r.stage, band: r.band, side: r.side, panel: r.panel, pins: r.pins, arrow: r.arrows, act: r.act, tagButtons: r.tagButtons }));
-        rec(`${id}/${when}`, "EO", `타일 ${r.pins.length}·화살표 ${r.arrows.length}·알약 ${r.act ? 1 : 0}이 서로·이름표·띠·오른쪽 열·아래 패널과 겹치지 않고 스테이지 안쪽 8 안 (${when})`, f.ok, f.detail);
+        const f = fold(errandOverlapChecks({ stage: r.stage, band: r.band, side: r.side, dots: r.dots, vh: r.vh, pins: r.pins, arrow: r.arrows, act: r.act, tagButtons: r.tagButtons }));
+        rec(`${id}/${when}`, "EO", `타일 ${r.pins.length}·화살표 ${r.arrows.length}·알약 ${r.act ? 1 : 0}이 서로·이름표·띠·오른쪽 열·진행 점 줄과 겹치지 않고 스테이지 안쪽 8 안이며 점 줄 아래 변 = 창 아래 − 40 (${when})`, f.ok, f.detail);
       };
       overlap(first.r, "arrive");
       // ⑧ 묶음 G·H(콘솔 오류·14px·가로 넘침·헤더 대비)
@@ -276,15 +322,15 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
         await sleep(700);
         const r = await readErrand(hp);
         const marks = r.places.filter((p) => p.done).length;
-        rec(`${id}/place-${k}`, "EF4", `${k}번째 처리: 칩 done ${k}·표지 done ${k}·진행 ${k}/3`, r.doneAttr === k && marks === k && r.progressText === `${k}/3`, `칩 ${r.doneAttr}, 표지 ${marks}, 진행 ${r.progressText}`);
+        rec(`${id}/place-${k}`, "EF4", `${k}번째 처리: 채운 점 ${k}·표지 done ${k}·진행 ${k}/3`, r.doneAttr === k && marks === k && r.progressText === `${k}/3`, `점 ${r.doneAttr}, 표지 ${marks}, 진행 ${r.progressText}`);
         if (k === 1) overlap(r, "mid");
       }
       const exits = await stopExitWatch(hp);
       await sleep(600);
       const done = await errandInput(hp, mySeat, { settleTags: true, reach: "done" });
       const f3 = fold(errandChecks(done.s));
-      rec(`${id}/done`, "EA", `3/3: 알약·화살표 0·띠 errand.done·독에 단추 0·빛 0·표식 값 (${done.s.progressText})`, f3.ok && done.s.callCount === 0, f3.detail || `[data-call] ${done.s.callCount}개`);
-      rec(`${id}/done`, "EF5", "3/3 에서 칩 셋이 모두 채워지고 타일 셋이 모두 data-done 이다", done.r.doneAttr === ERRAND_PER_PERSON && done.r.places.length === ERRAND_PER_PERSON && done.r.places.every((p) => p.done), `칩 ${done.r.doneAttr}, 처리한 타일 ${done.r.places.filter((p) => p.done).length}/${done.r.places.length}`);
+      rec(`${id}/done`, "EA", `3/3: 알약·화살표 0·띠 errand.done·아래 패널 0·빛 0·표식 값 (${done.s.progressText})`, f3.ok && done.s.callCount === 0, f3.detail || `[data-call] ${done.s.callCount}개`);
+      rec(`${id}/done`, "EF5", "3/3 에서 점 셋이 모두 채워지고 타일 셋이 모두 data-done 이다", done.r.doneAttr === ERRAND_PER_PERSON && done.r.places.length === ERRAND_PER_PERSON && done.r.places.every((p) => p.done), `점 ${done.r.doneAttr}, 처리한 타일 ${done.r.places.filter((p) => p.done).length}/${done.r.places.length}`);
 
       // ⑥ 근처에서 빠진 좌석은 월드·이름표에서 사라진다(걷는 동안 관찰한 것만 — 빠진 사람이 없었으면 참고 행)
       const settled = (exits?.exits ?? []).filter((e) => e.ageMs >= 3000);
@@ -294,7 +340,7 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
       // ⑦ 마피아·시민 마크업 동일(390x844, ER1): 둘 다 도착 직후(반경 밖)에 읽은 심부름 영역의 data-* 이름·구조 표식 개수
       if (mafiaSig !== null && citizenSig !== null) {
         const f7 = fold(errandParityChecks(mafiaSig, citizenSig));
-        rec(`${id}/d03`, "EF7", "마피아·시민 심부름 영역(타일·화살표·링·독)의 data-* 이름·구조 표식 개수가 같고 가짜·역할류 표식이 없다(ER1)", f7.ok, f7.detail);
+        rec(`${id}/d03`, "EF7", "마피아·시민 심부름 영역(타일·화살표·링·진행 점·시작 카드)의 data-* 이름·구조 표식 개수가 같고 가짜·역할류 표식이 없다(ER1)", f7.ok, f7.detail);
       }
 
       // ⑨ 소리: 심부름 → 토론 ui.host 한 번

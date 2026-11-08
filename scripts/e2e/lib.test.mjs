@@ -180,6 +180,8 @@ import {
   ERRAND_PLACE_IDS,
   NIGHT_FACE_ROLES,
   OVERALL_LIMIT_MS,
+  errandCardChecks,
+  errandCardWalkChecks,
   errandChecks,
   errandOverlapChecks,
   errandParityChecks,
@@ -3845,10 +3847,12 @@ test("emoteTrayChecks(16-05): 동작 단추는 48x48, 판 아랫변은 입력줄
 const fails = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
 const noMeasureAll = (lines) => lines.every((l) => !l.ok && /측정값 없음/.test(l.detail));
 
-test("ERRAND_MARKERS: 열세 개(16-07: data-rest 추가)이고 서로 다르며 ERRAND_PLACE_IDS 는 16곳, 3곳씩", () => {
-  assert.equal(ERRAND_MARKERS.length, 13);
-  assert.equal(new Set(ERRAND_MARKERS).size, 13);
+test("ERRAND_MARKERS: 열네 개(16-07: data-rest 추가, 16-08: 독·칩 대신 시작 카드·진행 점 셋)이고 서로 다르며 ERRAND_PLACE_IDS 는 16곳, 3곳씩", () => {
+  assert.equal(ERRAND_MARKERS.length, 14);
+  assert.equal(new Set(ERRAND_MARKERS).size, 14);
   assert.ok(ERRAND_MARKERS.includes("data-rest"));
+  for (const gone of ["data-errand-dock", "data-errand-chip"]) assert.ok(!ERRAND_MARKERS.includes(gone), gone);
+  for (const added of ["data-errand-start-card", "data-errand-dots", "data-errand-dot"]) assert.ok(ERRAND_MARKERS.includes(added), added);
   assert.ok(ERRAND_MARKERS.every((m) => /^data-(errand-|near-|record-|trace-|rest$)/.test(m)));
   assert.equal(ERRAND_PLACE_IDS.length, 16);
   assert.equal(ERRAND_PER_PERSON, 3);
@@ -3871,7 +3875,11 @@ const errandOk = (over = {}) => ({
   doneAttr: 0,
   progressText: "0/3",
   bandLine: ERRAND_LINES.act,
-  dockButtons: 0,
+  panelCount: 0,
+  dotsRows: 1,
+  dotsAria: "진행 0/3",
+  dotsLive: "polite",
+  dotsText: "",
   callCount: 1,
   callKinds: ["tile"],
   reach: "out",
@@ -3889,6 +3897,7 @@ const errandDone = (over = {}) =>
     places: [{ id: "clock", done: true, hidden: false, call: false, rest: false }, { id: "bench", done: true, hidden: false, call: false, rest: false }, { id: "lamp", done: true, hidden: true, call: false, rest: false }],
     doneAttr: 3,
     progressText: "3/3",
+    dotsAria: "진행 3/3",
     bandLine: ERRAND_LINES.done,
     callCount: 0,
     callKinds: [],
@@ -3908,21 +3917,26 @@ const errandIn = (over = {}) =>
     ...over,
   });
 
-test("errandChecks: 정상 입력은 EA1~EA10 모두 통과 — 반경 밖·반경 안·3/3 세 상태", () => {
+test("errandChecks: 정상 입력은 EA1~EA11 모두 통과 — 반경 밖·반경 안·3/3 세 상태", () => {
   assert.deepEqual(fails(errandChecks(errandOk())), []);
   assert.deepEqual(fails(errandChecks(errandIn())), []);
   assert.deepEqual(fails(errandChecks(errandDone())), []);
-  assert.equal(errandChecks(errandOk()).length, 10);
+  assert.equal(errandChecks(errandOk()).length, 11);
 });
 
 test("errandChecks: 항목 하나씩 어긋나게 하면 해당 판정만 실패한다", () => {
-  assert.deepEqual(fails(errandChecks(errandOk({ total: 2, places: errandOk().places.slice(0, 2), progressText: "0/2" }))), ["EA1"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ total: 2, places: errandOk().places.slice(0, 2), progressText: "0/2", dotsAria: "진행 0/2" }))), ["EA1"]);
   assert.deepEqual(fails(errandChecks(errandOk({ doneAttr: 1 }))), ["EA2"]);
-  assert.deepEqual(fails(errandChecks(errandOk({ progressText: "1/3" }))), ["EA2"]);
   // 띠 문장과 독 단추(EA3)
   assert.deepEqual(fails(errandChecks(errandDone({ bandLine: ERRAND_LINES.act }))), ["EA3"]);
   assert.deepEqual(fails(errandChecks(errandOk({ bandLine: ERRAND_LINES.done }))), ["EA3"]);
-  assert.deepEqual(fails(errandChecks(errandOk({ dockButtons: 1 }))), ["EA3"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ panelCount: 1 }))), ["EA3"]);
+  // 진행 점 줄: 줄 수·aria-label·aria-live·보이는 글자
+  assert.deepEqual(fails(errandChecks(errandOk({ dotsRows: 0 }))), ["EA11"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ dotsAria: "진행 1/3" }))), ["EA11"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ progressText: "1/3" }))), ["EA2", "EA11"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ dotsLive: "" }))), ["EA11"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ dotsText: "0/3" }))), ["EA11"]);
   // 빛은 한 화면 하나, 화살표에는 없다(EA4)
   assert.deepEqual(fails(errandChecks(errandOk({ callCount: 2, callKinds: ["tile", "tile"] }))), ["EA4"]);
   assert.deepEqual(fails(errandChecks(errandOk({ callKinds: ["arrow"] }))), ["EA4", "EA9"]);
@@ -3954,7 +3968,7 @@ test("errandChecks: 항목 하나씩 어긋나게 하면 해당 판정만 실패
 
 test("errandChecks: 측정 누락(null·빈 입력)은 측정값 없음으로 실패(공허 통과 금지)", () => {
   for (const x of [undefined, null, 3]) assert.ok(noMeasureAll(errandChecks(x)), String(x));
-  for (const k of ["total", "places", "doneAttr", "progressText", "bandLine", "dockButtons", "callCount", "callKinds", "reach", "actCount", "arrowCount", "tiles", "seatsInWorld", "nearSeats", "tagSeats", "attrValues"]) {
+  for (const k of ["total", "places", "doneAttr", "progressText", "bandLine", "panelCount", "dotsRows", "dotsAria", "dotsLive", "dotsText", "callCount", "callKinds", "reach", "actCount", "arrowCount", "tiles", "seatsInWorld", "nearSeats", "tagSeats", "attrValues"]) {
     const rs = errandChecks(errandOk({ [k]: null }));
     assert.ok(rs.some((r) => !r.ok && /측정값 없음/.test(r.detail)), `${k} 누락`);
   }
@@ -3964,10 +3978,11 @@ test("errandChecks: 측정 누락(null·빈 입력)은 측정값 없음으로 �
 });
 
 const overlapOk = () => ({
-  stage: RR(0, 123, 360, 353),
+  stage: RR(0, 123, 360, 457), // 띠 아랫변 ~ 진행 점 줄 윗변(580)
   band: RR(16, 70, 328, 53),
   side: [RR(292, 131, 52, 52), RR(292, 195, 52, 52)],
-  panel: RR(0, 476, 360, 84),
+  dots: RR(138, 580, 84, 20), // 창 640 − 40 = 600 이 아랫변
+  vh: 640,
   pins: [RR(40, 200, 64, 64), RR(150, 300, 64, 64)],
   arrow: RR(240, 250, 40, 40),
   act: null,
@@ -3993,7 +4008,13 @@ test("errandOverlapChecks: 1px 겹침이 각각 해당 판정을 실패시킨다
   assert.deepEqual(fails(errandOverlapChecks({ ...o, pins: [RR(40, 100, 64, 64)] })), ["EO3", "EO4"]);
   assert.ok(fails(errandOverlapChecks({ ...o, arrow: RR(310, 170, 40, 40) })).includes("EO3"));
   assert.deepEqual(fails(errandOverlapChecks({ ...o, pins: [RR(280, 180, 64, 64)] })), ["EO3"]);
-  assert.ok(fails(errandOverlapChecks({ ...o, pins: [RR(40, 440, 64, 64)] })).includes("EO3"));
+  assert.ok(fails(errandOverlapChecks({ ...o, pins: [RR(120, 520, 64, 64)] })).includes("EO3"));
+  // 진행 점 줄 윗변 − 8(572) 에 걸치는 타일은 점 줄과 겹치지 않아도 EO3, 스테이지(윗변 580) 안쪽 8 도 벗어난다
+  assert.deepEqual(fails(errandOverlapChecks({ ...o, pins: [RR(120, 512, 64, 64)] })), ["EO3", "EO4"]);
+  assert.deepEqual(fails(errandOverlapChecks({ ...o, pins: [RR(120, 508, 64, 64)] })), []);
+  // 진행 점 줄 아랫변이 창 아래 − 40 ± 2 를 벗어나면 EO5
+  assert.deepEqual(fails(errandOverlapChecks({ ...o, dots: RR(138, 583, 84, 20) })), ["EO5"]);
+  assert.deepEqual(fails(errandOverlapChecks({ ...o, dots: RR(138, 581, 84, 20) })), []);
   // 스테이지 안쪽 8 inset 밖(타일·알약·화살표 모두), 화살표 둘·알약 둘
   assert.deepEqual(fails(errandOverlapChecks({ ...o, pins: [RR(4, 200, 64, 64)] })), ["EO4"]);
   assert.deepEqual(fails(errandOverlapChecks({ ...o, arrow: null, act: RR(4, 300, 96, 44) })), ["EO4"]);
@@ -4009,11 +4030,13 @@ test("errandOverlapChecks: 사각형 누락은 측정값 없음", () => {
   assert.ok(noMeasureAll(errandOverlapChecks({ ...overlapOk(), tagButtons: undefined })));
   assert.ok(noMeasureAll(errandOverlapChecks({ ...overlapOk(), side: undefined })));
   assert.ok(noMeasureAll(errandOverlapChecks({ ...overlapOk(), act: { left: 1 } })));
+  assert.ok(noMeasureAll(errandOverlapChecks({ ...overlapOk(), dots: undefined })));
+  assert.ok(noMeasureAll(errandOverlapChecks({ ...overlapOk(), vh: undefined })));
 });
 
 const sigOk = (over = {}) => ({
-  names: ["data-errand-dock", "data-errand-chip", "data-errand-progress", "data-errand-place", "data-errand-arrow", "data-near-ring", "data-errand-layer", "data-errand-act-layer", "data-world-panel", "data-done", "data-rest"],
-  counts: { "data-errand-dock": 1, "data-errand-chip": 3, "data-errand-progress": 1, "data-errand-place": 3, "data-errand-arrow": 1, "data-near-ring": 1 },
+  names: ["data-errand-start-card", "data-errand-dots", "data-errand-dot", "data-errand-progress", "data-errand-place", "data-errand-arrow", "data-near-ring", "data-errand-layer", "data-errand-act-layer", "data-done", "data-rest"],
+  counts: { "data-errand-start-card": 1, "data-errand-dots": 1, "data-errand-dot": 3, "data-errand-progress": 1, "data-errand-place": 3, "data-errand-arrow": 1, "data-near-ring": 1 },
   ...over,
 });
 
@@ -4029,7 +4052,28 @@ test("errandParityChecks: 이름 집합·구조 표식 개수가 다르거나 �
   assert.deepEqual(fails(errandParityChecks(sigOk({ names: [...sigOk().names, "data-mafia-place"] }), sigOk({ names: [...sigOk().names, "data-mafia-place"] }))), ["ER1"]);
   assert.deepEqual(fails(errandParityChecks(sigOk({ names: [...sigOk().names, "data-extra"] }), sigOk({ names: [...sigOk().names, "data-extra"] }))), ["ER1"]);
   assert.ok(noMeasureAll(errandParityChecks(null, sigOk())));
-  assert.ok(noMeasureAll(errandParityChecks(sigOk(), sigOk({ counts: { "data-errand-dock": 1 } }))));
+  assert.ok(noMeasureAll(errandParityChecks(sigOk(), sigOk({ counts: { "data-errand-dots": 1 } }))));
+});
+
+test("errandCardChecks: 2초 안 카드 1개(타일 3·단추 0·제목·한 줄)·2.5초 뒤 0개면 통과, 어긋나면 EC1 실패, 읽기 누락은 측정값 없음", () => {
+  const early = { cards: 1, tiles: 3, buttons: 0, text: "오늘 갈 곳 가는 길에 본 사람이 기록돼요" };
+  assert.deepEqual(fails(errandCardChecks({ early, late: { cards: 0 } })), []);
+  assert.deepEqual(fails(errandCardChecks({ early: { ...early, cards: 0 }, late: { cards: 0 } })), ["EC1"]);
+  assert.deepEqual(fails(errandCardChecks({ early: { ...early, tiles: 2 }, late: { cards: 0 } })), ["EC1"]);
+  assert.deepEqual(fails(errandCardChecks({ early: { ...early, buttons: 1 }, late: { cards: 0 } })), ["EC1"]);
+  assert.deepEqual(fails(errandCardChecks({ early: { ...early, text: "오늘 갈 곳 술잔 가는 길에 본 사람이 기록돼요" }, late: { cards: 0 } })), ["EC1"]);
+  assert.deepEqual(fails(errandCardChecks({ early, late: { cards: 1 } })), ["EC1"]);
+  assert.ok(noMeasureAll(errandCardChecks(undefined)));
+  assert.ok(noMeasureAll(errandCardChecks({ early, late: null })));
+  assert.ok(noMeasureAll(errandCardChecks({ early: { cards: 1 }, late: { cards: 0 } })));
+});
+
+test("errandCardWalkChecks: 걷고 닫혔으면 통과, 걷지 않거나 닫히지 않으면 EC2 실패, 누락은 측정값 없음", () => {
+  assert.deepEqual(fails(errandCardWalkChecks({ moved: true, closed: true })), []);
+  assert.deepEqual(fails(errandCardWalkChecks({ moved: false, closed: true })), ["EC2"]);
+  assert.deepEqual(fails(errandCardWalkChecks({ moved: true, closed: false })), ["EC2"]);
+  assert.ok(noMeasureAll(errandCardWalkChecks(null)));
+  assert.ok(noMeasureAll(errandCardWalkChecks({ moved: true })));
 });
 
 const recOk = (over = {}) => ({
