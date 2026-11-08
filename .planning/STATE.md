@@ -6,17 +6,17 @@ current_phase: 15
 current_phase_name: 낮 심부름·목격 기록·밤 흔적
 current_plan: 10
 status: verifying
-stopped_at: Completed 15-10-PLAN.md
-last_updated: "2026-11-08T04:04:08.695Z"
+stopped_at: Phase 16 UI-SPEC approved
+last_updated: "2026-11-08T08:30:59.859Z"
 last_activity: 2026-11-07
 last_activity_desc: v3.0 requirements(22)·roadmap(13~15) 작성
-state_head: d93d1d7b7a3eb79f14900817a880efc89e240fef
+state_head: 084aa3a5f662573a1d6433cce828b858e62192db
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 25
   completed_plans: 25
-  percent: 50
+  percent: 75
 ---
 
 # Project State
@@ -541,9 +541,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-07T09:46:25.720Z
-Stopped at: Completed 15-10-PLAN.md
-Resume file: None
+Last session: 2026-11-08T08:30:59.575Z
+Stopped at: Phase 16 UI-SPEC approved
+Resume file: .planning/phases/16-tutorial-and-evidence/16-UI-SPEC.md
 
 ## Operator Next Steps
 
