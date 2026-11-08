@@ -7,6 +7,7 @@ import {
   ERRAND_MS,
   EXECUTION_MS,
   MORNING_MS,
+  MORNING_TRACE_MS,
   NIGHT_MS,
   NOMINATION_GATHER_MS,
   NOMINATION_MS,
@@ -467,14 +468,14 @@ describe("tick: 아침 마감 = 진입 + morningMsOf (MORN-04, 결정 0061-13)",
   }
 
   it("확정·탈락(피해자 유언 있음)이면 마감이 진입 + 9000 이다", () => {
-    // 피해자(p1)를 고른 사람은 마피아 p0 뿐이라 흔적이 실려(D-06) 아침이 3초 길다.
+    // 피해자(p1)를 고른 사람은 마피아 p0 뿐이라 흔적이 실려(D-06) 아침이 MORNING_TRACE_MS 길다.
     const morning = tick(nightWith(), T + NIGHT_MS, seededRandInt(1));
-    expect(`${morning.phase}/${morning.morning?.eliminated}/${morning.phaseEndsAt}`).toBe(`morning/1/${T + NIGHT_MS + 9000 + 3000}`);
+    expect(`${morning.phase}/${morning.morning?.eliminated}/${morning.phaseEndsAt}`).toBe(`morning/1/${T + NIGHT_MS + 9000 + MORNING_TRACE_MS}`);
   });
 
   it("쪽지까지 있으면 진입 + 11000, 구출이면 쪽지가 지워져 진입 + 5000 이다", () => {
     const withNote = tick(nightWith({ nightNote: "쪽지" }), T + NIGHT_MS, seededRandInt(1));
-    expect(withNote.phaseEndsAt).toBe(T + NIGHT_MS + 11000 + 3000); // 흔적 3초(D-06)
+    expect(withNote.phaseEndsAt).toBe(T + NIGHT_MS + 11000 + MORNING_TRACE_MS); // 흔적 구간(D-06, 16페이즈 A3 로 5초)
     const saved = tick(nightWith({ nightNote: "쪽지" }, true), T + NIGHT_MS);
     expect(JSON.stringify(saved.morning)).toBe('{"saved":true}');
     expect("nightNote" in saved).toBe(false);
@@ -495,8 +496,8 @@ describe("tick: 아침 마감 = 진입 + morningMsOf (MORN-04, 결정 0061-13)",
   });
 
   it("따라잡기: 늦게 불려도 아침 마감은 밤 마감 + 아침 길이에서 이어진다", () => {
-    const caught = tick(nightWith(), T + NIGHT_MS + 9000 + 3000 + 1, seededRandInt(1)); // 흔적 3초가 아침 길이에 든다(D-06)
-    expect(`${caught.phase}/${caught.phaseEndsAt}`).toBe(`dayAnnounce/${T + NIGHT_MS + 9000 + 3000 + DAY_ANNOUNCE_MS}`);
+    const caught = tick(nightWith(), T + NIGHT_MS + 9000 + MORNING_TRACE_MS + 1, seededRandInt(1)); // 흔적 구간이 아침 길이에 든다(D-06)
+    expect(`${caught.phase}/${caught.phaseEndsAt}`).toBe(`dayAnnounce/${T + NIGHT_MS + 9000 + MORNING_TRACE_MS + DAY_ANNOUNCE_MS}`);
   });
 });
 

@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import "../../styles/v2.css";
+import "../../styles/evidence.css";
 import type { PlaceId, TracePiece } from "../../../shared/protocol";
 import { placeIconOf } from "../../game/placeText";
 import { TRACE_NOTE, TRACE_TEXT } from "../../game/traceText";

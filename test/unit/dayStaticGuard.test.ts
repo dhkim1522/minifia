@@ -147,12 +147,12 @@ describe("지운 v1.0 낮·처형 화면 이름 (DAY-07)", () => {
     expect(read(ROOM_PATH).includes('"candidateVoteReveal"') || read(ROOM_PATH).includes("candidateVoteReveal:")).toBe(true);
   });
 
-  it("와이어 MorningView 필드는 eliminated·saved·trace 셋뿐이고 문구 번호 필드가 없다 (결정 0061-12·17, trace 는 15페이즈 D-06)", () => {
+  it("와이어 MorningView 필드는 eliminated·saved·trace·seen 넷뿐이고 문구 번호 필드가 없다 (결정 0061-12·17, trace 는 15페이즈 D-06, seen 은 16페이즈 D-10)", () => {
     const code = stripComments(read("shared/protocol.ts"));
     const body = /export interface MorningView \{([^}]*)\}/.exec(code)?.[1] ?? "";
     expect(body.length).toBeGreaterThan(0);
     const keys = [...body.matchAll(/^\s*([A-Za-z]+)\??:/gm)].map((m) => m[1]);
-    expect(keys.sort().join(",")).toBe("eliminated,saved,trace");
+    expect(keys.sort().join(",")).toBe("eliminated,saved,seen,trace");
   });
 
   it("지운 파일이 저장소에 없다", () => {

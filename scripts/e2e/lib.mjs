@@ -2974,7 +2974,7 @@ export const ERRAND_PLACE_IDS = ["glass", "piano", "sax", "stool", "door", "post
 export const ERRAND_PER_PERSON = 3;
 /** 심부름 단계 길이 ms(ERRAND_MS 사본). 흔적 구간 길이 ms(MORNING_TRACE_MS 사본). */
 export const ERRAND_E2E_MS = 40_000;
-export const TRACE_WINDOW_MS = 3_000;
+export const TRACE_WINDOW_MS = 5_000;
 /** 처리 반경·근처 반경(월드 단위, ERRAND_ACT_R·ERRAND_NEAR_R 사본). 근처 검사는 서버가 근처로 본 사람이 이 반경 + 여유 안인지 본다. */
 export const ERRAND_ACT_R_E2E = 1.2;
 export const ERRAND_NEAR_R_E2E = 3.0;

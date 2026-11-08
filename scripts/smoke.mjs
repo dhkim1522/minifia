@@ -63,9 +63,9 @@ const DEFENSE_WAIT_MS = DEFENSE_MS + STATE_LIMIT_MS;
 const VERDICT_WAIT_MS = VERDICT_MS + STATE_LIMIT_MS;
 const EXECUTION_WAIT_MS = EXECUTION_MS + STATE_LIMIT_MS;
 // 아침 문구 번호·문구 수 상수는 없다(결정 0061-17: 서버가 phrase 를 채우지 않는다).
-// 밤 30초, 아침은 최대 길이 15초 + 여유. MORNING_MAX_MS 는 shared/game/phases.ts 의 사본이다(결정 0061-13: 기본 5 + 피해자 2 + 유언 2 + 쪽지 2, 상한 15초).
+// 밤 30초, 아침은 최대 길이 16초 + 여유. MORNING_MAX_MS 는 shared/game/phases.ts 의 사본이다(결정 0061-13: 기본 5 + 피해자 2 + 유언 2 + 쪽지 2, 상한 16초 — 16페이즈 A3).
 const NIGHT_WAIT_MS = 30_000 + STATE_LIMIT_MS;
-const MORNING_MAX_MS = 15_000;
+const MORNING_MAX_MS = 16_000;
 const MORNING_WAIT_MS = 15_000 + STATE_LIMIT_MS;
 // 자유 채팅 와이어(shared/protocol.ts ChatLineWire·TypingFrame·ChatLogFrame·ChatRejectFrame): 이 키 밖은 어떤 프레임에도 없다(CHAT-06).
 // 채널 필드는 서버 → 클라이언트에만 있고(ch), id·역할·토큰·수신자 마스크는 싣지 않는다(결정 0002·0058).

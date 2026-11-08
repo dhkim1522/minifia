@@ -490,21 +490,3 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
   .mv-record { animation: none; }
   .mv-trace { animation: none; }
 }
-
-/* 증거 카드(16-01, V-28·V-30, D-10): 15 흔적 카드(.mv-trace)에 둘째 줄 "피해자를 마지막으로 본 사람"을 더한 한 장. 폭 328, 높이 128 = 안쪽 12 + 행 44 + 사이 16 + 행 44 + 12.
- * 구분선 1px 은 사이 16 의 가운데(높이에 더하지 않는다). 토큰 변수만 쓴다 — hex·새 색 없음. 누르는 것이 아니라 빛·단추가 없다. */
-.mv-evidence { flex-direction: column; align-items: stretch; gap: 0; min-height: 128px; padding: 12px var(--space-md); }
-.mv-evidence__trace { display: flex; align-items: center; gap: var(--space-md); height: 44px; }
-.mv-evidence .mv-trace__text { gap: 0; }
-.mv-evidence .mv-trace__name { line-height: 1.375; }
-.mv-evidence .mv-trace__note { line-height: 1.3; }
-.mv-evidence__rule { position: relative; flex: none; height: var(--space-md); }
-.mv-evidence__rule::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--night-600); }
-.mv-evidence__row { display: flex; align-items: center; gap: var(--space-sm); height: 44px; color: var(--gray-100); }
-.mv-evidence__who { display: flex; align-items: center; flex: none; gap: var(--space-xs); min-width: 0; }
-.mv-evidence__dot { flex: none; box-sizing: border-box; width: 12px; height: 12px; border-radius: var(--radius-pill); border: 1px solid var(--night-600); }
-.mv-evidence__victim { max-width: 4em; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-50); text-decoration: line-through; opacity: 0.5; word-break: keep-all; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mv-evidence__eye { display: grid; place-items: center; flex: none; color: var(--brass-200); }
-.mv-evidence__witness { font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); word-break: keep-all; white-space: nowrap; }
-.mv-evidence__zero { font-size: 16px; line-height: 1.5; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gray-50); }
-.mv-evidence__place { display: grid; place-items: center; flex: none; box-sizing: border-box; width: 40px; height: 40px; margin-left: auto; border-radius: var(--radius-badge); background: var(--night-700); color: var(--gray-100); }

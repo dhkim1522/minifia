@@ -29,7 +29,7 @@ export const MORNING_MS = 5_000;
 export const MORNING_VICTIM_MS = 2_000; // 탈락 발표(MORN-04)
 export const MORNING_WILL_MS = 2_000; // 피해자 유언이 비어 있지 않을 때
 export const MORNING_NOTE_MS = 2_000; // 마피아 쪽지가 비어 있지 않을 때(탈락한 밤에만 남는다)
-export const MORNING_MAX_MS = 15_000; // 아침 길이 상한
+export const MORNING_MAX_MS = 16_000; // 아침 길이 상한 — 결정 0079(A3) · 흔적 카드가 두 줄이 되어 3→5초, 상한 15→16초 (시간은 참고 목표)
 export const DEFENSE_MS = 20_000; // 최후 변론(DAY-07, 결정 0060-1) — 변론자가 무대에서 말하는 20초
 /** 판결 앞머리(결정 0066-7) — 처형 단계 맨 앞 0.6초는 화면의 느린 확대·핀 조명이 알림보다 앞선다. */
 export const VERDICT_LEAD_MS = 600;
@@ -67,7 +67,7 @@ export const ERRAND_TICK_MS = 1_000; // 결정 0074 — 근처·목격 표본 �
 export const ERRAND_VIEW_HORIZON_MS = 1_500; // 결정 0074 — 근처 사람 이동 구간을 자르는 길이
 export const ERRAND_MIN_GAP_MS = 250; // 결정 0074 — 같은 사람의 처리 요청 최소 간격(연타 방어)
 export const RECORD_MAX = 6; // 결정 0074 — 목격 기록 줄 상한
-export const MORNING_TRACE_MS = 3_000; // 결정 0074 — 아침 흔적 공개 구간
+export const MORNING_TRACE_MS = 5_000; // 결정 0079(A3) · 흔적 카드가 두 줄이 되어 3→5초, 상한 15→16초 — 시간은 참고 목표(결정 0074 의 흔적 공개 구간)
 
 export const VERDICT_MS = 10_000; // 찬반(DAY-06, 결정 0060-1·0060-4) — 조기 종료 없이 마감까지
 
