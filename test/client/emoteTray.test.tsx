@@ -119,10 +119,12 @@ describe("CSS 계약 (토큰만, 새 hex 없음)", () => {
     return [...bare.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => (m[1] ?? "").split(",").some((s) => s.trim() === sel)).map((m) => m[2] ?? "").join(";");
   };
 
-  it("동작 버튼은 이름표 단추(.mv-tool 44 이상·면 36), 판은 z-overlay+1·night-700·night-600 테두리", () => {
+  it("동작 버튼은 입력줄 48 원(.mv-tool 면이 단추를 채움), 판은 z-overlay+1·night-700·night-600 테두리", () => {
     const b = block(".mv-tool__face");
-    expect(/width:\s*36px/.test(b) && /height:\s*36px/.test(b)).toBe(true);
-    expect(/min-width:\s*var\(--tap-min\)/.test(block(".mv-tool"))).toBe(true);
+    expect(/width:\s*100%/.test(b) && /height:\s*100%/.test(b)).toBe(true);
+    expect(/(^|[;\s])width:\s*var\(--tap-min\)/.test(block(".mv-tool"))).toBe(true);
+    const e = block(".mv-chat__emote");
+    expect(/width:\s*var\(--control-input\)/.test(e) && /height:\s*var\(--control-input\)/.test(e)).toBe(true);
     const t = block(".mv-emote-tray");
     expect(/calc\(var\(--z-overlay\) \+ 1\)/.test(t)).toBe(true);
     expect(/var\(--night-700\)/.test(t) && /var\(--night-600\)/.test(t)).toBe(true);

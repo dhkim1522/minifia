@@ -805,14 +805,17 @@ describe("ChatPanel 깃펜 버튼 (WILL-01)", () => {
     expect(ev.defaultPrevented).toBe(true);
   });
 
-  it("CSS: 36 면 night-700 아이콘 gray-100 반경 badge(이름표 단추 안), 점은 gray-100 8px", () => {
+  it("CSS: 유언 단추는 48 원, 면 night-700 아이콘 gray-100(단추 상자를 채움), 점은 gray-100 8px", () => {
     const rule = rulesFor(V2_CSS, ".mv-tool__face").join(";");
-    expect(rule).toContain("width: 36px");
-    expect(rule).toContain("height: 36px");
+    expect(rule).toContain("width: 100%");
+    expect(rule).toContain("height: 100%");
     expect(rule).toContain("background: var(--night-700)");
     expect(rule).toContain("color: var(--gray-100)");
-    expect(rule).toContain("border-radius: var(--radius-badge)");
-    // 14페이즈: 보내기와의 여분 margin-left 8 은 없어졌다(폭 360 에서 입력칸 약 172, UI-SPEC 접근성·입력)
+    expect(rule).toContain("border-radius: inherit");
+    const will = rulesFor(V2_CSS, ".mv-chat__will").join(";");
+    expect(will).toContain("width: var(--control-input)");
+    expect(will).toContain("border-radius: var(--radius-pill)");
+    // 14페이즈: 보내기와의 여분 margin-left 8 은 없어졌다(폭 360 에서 입력칸 160, UI-SPEC 접근성·입력)
     expect(rulesFor(V2_CSS, ".mv-chat__will").join(";")).not.toContain("margin-left");
     const dot = rulesFor(V2_CSS, ".mv-chat__will-dot").join(";");
     expect(dot).toContain("width: 8px");
