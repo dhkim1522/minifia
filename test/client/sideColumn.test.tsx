@@ -9,7 +9,7 @@ import { SideColumn, splitSideColumn } from "../../src/components/v2/SideColumn"
 
 afterEach(cleanup);
 
-const V2 = readFileSync(new URL("../../src/styles/v2.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+const V2 = readFileSync("src/styles/v2.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 const rules = [...V2.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: (m[1] ?? "").trim(), body: m[2] ?? "" }));
 const body = (sel: string): string => rules.find((r) => r.selector === sel)?.body ?? "";
 
@@ -131,9 +131,9 @@ describe("열 단추 표식·모양 (V-2)", () => {
       const b = body(sel);
       expect(b, sel).toMatch(/width:\s*var\(--control-button\)/);
       expect(b, sel).toMatch(/height:\s*var\(--control-button\)/);
-      expect(b, sel).toMatch(/border-radius:\s*var\(--radius-pill\)/);
     }
     for (const sel of [".mv-sound", ".mf-mapchip", ".mv-float"]) {
+      expect(body(sel), sel).toMatch(/border-radius:\s*var\(--radius-pill\)/);
       expect(body(sel), sel).toMatch(/background:\s*var\(--night-700\)/);
       expect(body(sel), sel).toMatch(/border:\s*1px solid var\(--night-600\)/);
     }

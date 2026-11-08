@@ -1,4 +1,4 @@
-// 11페이즈 맵 선택 E2E (11-13, 결정 D-20·D-21, UI-SPEC F-2·G): 지도 칩·꾸미기 시트 맵 탭·카드 기하, 손님 읽기 전용, 선택이 모든 페이지에 반영,
+// 11페이즈 맵 선택 E2E (11-13, 결정 D-20·D-21, UI-SPEC F-2·G; 16-06: 칩은 오른쪽 열의 52 원, 손님에게는 칩이 없다): 지도 칩·꾸미기 시트 맵 탭·카드 기하, 선택이 모든 페이지에 반영,
 // 시작 뒤 모두 같은 맵, 광장에서 한 판이 ended 까지. 흐름 본문은 이 파일에 둔다(flows.mjs 의 도우미는 `makeMapSelectFlows(helpers)` 로 받는다 — avatar.mjs 와 같은 모양).
 // helpers: { recorder, startHost, openGuest, attempt, LOBBY_HOST_NICK, WORLD_GUEST_NICK, settledResult }
 // 판정 문턱은 아래 순수 검사 함수(mapChoiceChecks)에만 있고 흐름은 낮추지 않는다. 칩·카드 기하는 src/styles/v2.css 와 같아야 하고 test/unit/e2eContract.test.ts 가 대조한다.
@@ -6,14 +6,17 @@ import { chooseRole, chooseVerdict, clickInDialog, closeSheet, openTestSheet, re
 
 /** 앱이 더한 DOM 표식·훅 이름. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지) */
 export const MAP_MARKERS = Object.freeze([
-  "data-map-chip", // 지도 칩 data-map-chip="{bar|plaza|random}" (aria-disabled = 손님)
+  "data-map-chip", // 지도 칩 data-map-chip="{bar|plaza|random}" (방장에게만 있다, 16-06)
   "data-map-card", // 시트 맵 카드 data-map-card="{bar|plaza|random}" (aria-pressed)
   "data-map-tab", // 시트 탭 data-map-tab="{map|dress}" (방장에게만)
   "__mfMap", // 테스트 훅 window.__mfMap = "bar" | "plaza" (렌더러에 올린 맵)
 ]);
 
-/** 칩: 시각 원 지름 36 · 누르기 영역 44 · 왼쪽 16 · 헤더(자막 띠가 있으면 띠) 아래 8 (UI-SPEC D-20, 14페이즈 --mf-host-bottom). [테스트] 버튼이 있으면 그 오른쪽 + 8 */
-export const MAP_CHIP = Object.freeze({ disc: 36, hit: 44, left: 16, below: 8 });
+/**
+ * 칩(16-06 V-2·V-5): 오른쪽 열의 두 번째 칸 — 상자가 곧 지름 52 원 · 오른쪽 16 · 위 = 자막 띠 아랫변 + 12(열 윗변) + 64(소리 칸 52 + 간격 12).
+ * 칸 나누기는 한 열 최소 2개라 맵 칸은 언제나 오른쪽 열의 둘째 칸이다.
+ */
+export const MAP_CHIP = Object.freeze({ disc: 52, hit: 52, right: 16, below: 76 });
 /** 맵 카드: 96×112, 간격 8, 합 304 */
 export const MAP_CARD = Object.freeze({ w: 96, h: 112, gap: 8, total: 304 });
 
@@ -28,17 +31,17 @@ const inside = (inner, outer) => inner.left >= outer.left - 0.5 && inner.right <
 
 /**
  * MS1~MS6 맵 선택 화면 판정. 입력 (Box = { left, top, width, height, right, bottom }):
- *  viewport {w,h} · headerBottom 헤더 아래 끝 · chip { disc, hit, label, ariaDisabled } 방장 칩(시각 원·누르기 영역) · guest { ariaDisabled, sheetOpened } 손님 칩과 눌러 본 결과
+ *  viewport {w,h} · headerBottom 헤더 아래 끝(자막 띠가 있으면 띠 아랫변) · chip { disc, hit, label } 방장 칩(상자가 곧 면이라 disc = hit) · guest { chipCount } 손님 화면의 칩 수
  *  sheet 방장 시트(맵 탭이 열린 채) · tabs 시트 탭 상자 · guestTabs 손님 시트의 탭 수 · cards 맵 카드 상자 · selected 선택 카드 수 · selectedId 선택 카드 id · selectedWant 기대 선택(기본 random)
  *  testBtn [테스트] 버튼 상자(없으면 null) · tags 이름표 상자.
- * MS1 칩 시각 36±1·누르기 44 이상·왼쪽 16±1(테스트 버튼이 있으면 버튼 오른쪽 + 8)·위 = 헤더 아래 + 8 ±2 · MS2 손님 칩 읽기 전용(aria-disabled·눌러도 시트 안 열림)
+ * MS1 칩 52±1(원)·오른쪽 16±1·위 = 헤더(띠) 아래 + 76 ±2(열 윗변 12 + 소리 칸 64) · MS2 손님 화면에 칩 없음(T-16-13)
  *  MS3 방장 시트 탭 둘(각 44×44 이상)·손님 시트 탭 없음 · MS4 카드 3장 96×112 ±2·사이 8 ±2·합 304 이하·시트 안 · MS5 선택 카드 정확히 하나(기본 random)
  *  MS6 MC-OVERLAP: 칩 누르기 영역이 [테스트] 버튼·이름표와 겹치지 않음.
  */
 export function mapChoiceChecks(m) {
   const L = {
-    MS1: "지도 칩: 시각 36·누르기 44 이상·왼쪽 16·헤더(띠) 아래 8",
-    MS2: "지도 칩: 손님은 읽기 전용(aria-disabled, 눌러도 시트 안 열림)",
+    MS1: "지도 칩: 52 원·오른쪽 16·헤더(띠) 아래 76(열 윗변 12 + 소리 칸 64)",
+    MS2: "지도 칩: 손님 화면에는 없다(방장만)",
     MS3: "꾸미기 시트: 방장은 [맵][의상] 탭 둘(44×44 이상), 손님은 탭 없음",
     MS4: "꾸미기 시트 맵 탭: 카드 3장 96×112·간격 8·합 304 이하·시트 안",
     MS5: "꾸미기 시트 맵 탭: 선택 카드가 정확히 하나",
@@ -55,8 +58,8 @@ export function mapChoiceChecks(m) {
     const bad = [];
     if (!within(chip.disc.width, MAP_CHIP.disc, 1) || !within(chip.disc.height, MAP_CHIP.disc, 1)) bad.push(`시각 ${r1(chip.disc.width)}x${r1(chip.disc.height)} ≠ ${MAP_CHIP.disc}`);
     if (chip.hit.width + 0.5 < MAP_CHIP.hit || chip.hit.height + 0.5 < MAP_CHIP.hit) bad.push(`누르기 ${r1(chip.hit.width)}x${r1(chip.hit.height)} < ${MAP_CHIP.hit}`);
-    const wantLeft = isBox(m.testBtn) ? m.testBtn.right + 8 : MAP_CHIP.left;
-    if (!within(chip.disc.left, wantLeft, 1)) bad.push(`왼쪽 ${r1(chip.disc.left)} ≠ ${wantLeft}`);
+    const marginRight = isNum(m?.viewport?.w) ? m.viewport.w - chip.disc.right : NaN;
+    if (!within(marginRight, MAP_CHIP.right, 1)) bad.push(`오른쪽 여백 ${r1(marginRight)} ≠ ${MAP_CHIP.right}`);
     const wantTop = m.headerBottom + MAP_CHIP.below;
     if (!within(chip.disc.top, wantTop, 2)) bad.push(`위 ${r1(chip.disc.top)} ≠ 헤더(띠) 아래 ${r1(m.headerBottom)} + ${MAP_CHIP.below}`);
     add("MS1", bad);
@@ -64,13 +67,8 @@ export function mapChoiceChecks(m) {
 
   // MS2
   const g = m?.guest;
-  if (!g || typeof g.ariaDisabled !== "boolean" || typeof g.sheetOpened !== "boolean") miss("MS2", "guest.ariaDisabled·sheetOpened");
-  else {
-    const bad = [];
-    if (!g.ariaDisabled) bad.push("손님 칩이 aria-disabled 가 아님");
-    if (g.sheetOpened) bad.push("손님이 눌렀더니 시트가 열림");
-    add("MS2", bad);
-  }
+  if (!g || !isNum(g.chipCount)) miss("MS2", "guest.chipCount");
+  else add("MS2", g.chipCount === 0 ? [] : [`손님 화면에 칩 ${g.chipCount}개`]);
 
   // MS3
   if (!Array.isArray(m?.tabs) || !isNum(m?.guestTabs)) miss("MS3", "tabs·guestTabs");
@@ -151,7 +149,7 @@ export function readMapUi(page) {
       vh: window.innerHeight,
       // 14페이즈: 칩은 자막 띠 면(.mv-host__band) 아래 8 에 선다 — 띠가 있으면 그 아랫변, 없으면 헤더 아랫변이 기준이다(입력 이름은 headerBottom 그대로)
       headerBottom: band ? band.getBoundingClientRect().bottom : header ? header.getBoundingClientRect().bottom : null,
-      chip: chip ? { disc: rect(chip.querySelector(".mf-mapchip__disc")), hit: rect(chip), label: chip.getAttribute("aria-label"), id: chip.getAttribute("data-map-chip"), ariaDisabled: chip.getAttribute("aria-disabled") === "true" } : null,
+      chip: chip ? { disc: rect(chip), hit: rect(chip), label: chip.getAttribute("aria-label"), id: chip.getAttribute("data-map-chip"), ariaDisabled: chip.getAttribute("aria-disabled") === "true" } : null,
       sheet: rect(q("[data-dress-sheet]")),
       tabs: qa("[data-dress-sheet] button[data-map-tab]").map((el) => rect(el)),
       tabIds: qa("[data-dress-sheet] button[data-map-tab]").map((el) => el.getAttribute("data-map-tab")),
@@ -241,13 +239,10 @@ export function makeMapSelectFlows(helpers) {
       const sc = "map-select/lobby";
       const h0 = await readMapUi(hp);
       const g0 = await readMapUi(gp);
-      rec(sc, "MC0", "방장·손님 모두 로비에 지도 칩이 있고 기본 선택은 랜덤(맵 랜덤)", h0.chip?.label === "맵 랜덤" && g0.chip?.label === "맵 랜덤", `방장 ${h0.chip?.label} · 손님 ${g0.chip?.label}`);
+      rec(sc, "MC0", "방장 로비에는 지도 칩이 있고 기본 선택은 랜덤(맵 랜덤), 손님 로비에는 칩이 없다", h0.chip?.label === "맵 랜덤" && g0.chip === null, `방장 ${h0.chip?.label} · 손님 ${g0.chip?.label ?? "없음"}`);
       rec(sc, "MC1", "로비 무대는 늘 재즈 바(__mfMap = bar, 두 페이지)", h0.map === "bar" && g0.map === "bar", `방장 ${h0.map} · 손님 ${g0.map}`);
-      // 손님이 칩을 눌러 본다(aria-disabled 라 Playwright 에게는 비활성 — 실제 탭처럼 force)
-      await gp.locator(CHIP).click({ timeout: 3000, force: true });
-      await sleep(300);
-      const gAfter = await readMapUi(gp);
-      const guestInfo = { ariaDisabled: g0.chip?.ariaDisabled === true, sheetOpened: gAfter.sheet !== null };
+      // 손님 화면에는 칩이 없다(16-06: 맵은 방장만, T-16-13)
+      const guestInfo = { chipCount: await gp.locator(CHIP).count() };
 
       // ── 방장이 칩을 눌러 맵 탭 ──
       await hp.locator(CHIP).click({ timeout: 3000 });
@@ -274,14 +269,13 @@ export function makeMapSelectFlows(helpers) {
         testBtn: hOpen.testBtn,
         tags: hOpen.tags.filter(Boolean),
       });
-      // MS6 는 두 번에 나눠 본다. 방장 쪽은 [테스트] 버튼과의 겹침만(테스트 방 전용 버튼 때문에 칩이 오른쪽으로 비켜 선 구성), 이름표와의 겹침은 실제 제품 구성인
-      // 손님 쪽(테스트 버튼 없음, 칩 왼쪽 16)에서 본다. 방장 쪽에서 8자 닉네임 이름표(폭 161)가 칩에 16px 걸리는 것은 테스트 방 최소 폭(360×560) 한정이라 고치지 않는다(SUMMARY 이월 메모).
+      // MS6 는 두 번에 나눠 본다: 방장 칩이 [테스트] 버튼(왼쪽 위)과 겹치지 않음, 방장 칩이 이름표와 겹치지 않음. 이름표 쪽은 칩이 오른쪽 열로 옮겨져 손님 화면에는 없다.
       const hostBtn = mapChoiceChecks({ viewport: { w: hOpen.vw, h: hOpen.vh }, headerBottom: hOpen.headerBottom, chip: hOpen.chip, guest: guestInfo, sheet: hOpen.sheet, tabs: hOpen.tabs, guestTabs: 0, cards: hOpen.cards, selected: hOpen.selected, selectedId: hOpen.selectedId, testBtn: hOpen.testBtn, tags: [] }).find((r) => r.id === "MS6");
-      const guestTags = mapChoiceChecks({ viewport: { w: g0.vw, h: g0.vh }, headerBottom: g0.headerBottom, chip: g0.chip, guest: guestInfo, sheet: hOpen.sheet, tabs: hOpen.tabs, guestTabs: 0, cards: hOpen.cards, selected: hOpen.selected, selectedId: hOpen.selectedId, testBtn: null, tags: g0.tags.filter(Boolean) }).find((r) => r.id === "MS6");
+      const guestTags = mapChoiceChecks({ viewport: { w: h0.vw, h: h0.vh }, headerBottom: h0.headerBottom, chip: h0.chip, guest: guestInfo, sheet: hOpen.sheet, tabs: hOpen.tabs, guestTabs: 0, cards: hOpen.cards, selected: hOpen.selected, selectedId: hOpen.selectedId, testBtn: null, tags: h0.tags.filter(Boolean) }).find((r) => r.id === "MS6");
       for (const r of rows) {
         if (r.id === "MS6") {
           rec(sc, "MS6a", "방장 칩이 [테스트] 버튼과 겹치지 않음 (MC-OVERLAP)", hostBtn.ok, hostBtn.detail);
-          rec(sc, "MS6b", "손님 칩(실제 구성)이 이름표와 겹치지 않음 (MC-OVERLAP)", guestTags.ok, guestTags.detail);
+          rec(sc, "MS6b", "방장 칩이 이름표와 겹치지 않음 (MC-OVERLAP)", guestTags.ok, guestTags.detail);
         } else rec(sc, r.id, r.label, r.ok, r.detail);
       }
 
@@ -291,18 +285,18 @@ export function makeMapSelectFlows(helpers) {
       await hp.locator(`${SHEET} button[data-map-card="plaza"]`).click({ timeout: 3000 });
       const seen = await until(async () => {
         const [a, b] = await Promise.all([readMapUi(hp), readMapUi(gp)]);
-        return a.chip?.label === "맵 광장" && b.chip?.label === "맵 광장" && a.selectedId === "plaza";
+        return a.chip?.label === "맵 광장" && b.chip === null && a.selectedId === "plaza";
       }, ARRIVE_MS);
-      rec(sc2, "MS7", `광장 선택이 ${ARRIVE_MS}ms 안에 두 페이지 칩(맵 광장)과 방장 시트 카드에 반영`, seen !== null, seen === null ? `방장 ${(await readMapUi(hp)).chip?.label} · 손님 ${(await readMapUi(gp)).chip?.label}` : `${Date.now() - t0}ms`);
+      rec(sc2, "MS7", `광장 선택이 ${ARRIVE_MS}ms 안에 방장 칩(맵 광장)과 시트 카드에 반영`, seen !== null, seen === null ? `방장 ${(await readMapUi(hp)).chip?.label}` : `${Date.now() - t0}ms`);
       const [hm, gm] = await Promise.all([readMapHook(hp), readMapHook(gp)]);
       rec(sc2, "MS8", "광장을 골라도 로비 무대는 재즈 바(__mfMap = bar)", hm === "bar" && gm === "bar", `방장 ${hm} · 손님 ${gm}`);
       // 방장이 랜덤으로 되돌린다
       await hp.locator(`${SHEET} button[data-map-card="random"]`).click({ timeout: 3000 });
       const back = await until(async () => {
         const [a, b] = await Promise.all([readMapUi(hp), readMapUi(gp)]);
-        return a.chip?.label === "맵 랜덤" && b.chip?.label === "맵 랜덤";
+        return a.chip?.label === "맵 랜덤" && b.chip === null;
       }, ARRIVE_MS);
-      rec(sc2, "MS9", `랜덤으로 되돌리면 ${ARRIVE_MS}ms 안에 두 페이지 칩이 맵 랜덤`, back !== null, `방장 ${(await readMapUi(hp)).chip?.label} · 손님 ${(await readMapUi(gp)).chip?.label}`);
+      rec(sc2, "MS9", `랜덤으로 되돌리면 ${ARRIVE_MS}ms 안에 방장 칩이 맵 랜덤`, back !== null, `방장 ${(await readMapUi(hp)).chip?.label}`);
       await closeDressSheet(hp);
 
       // ── 랜덤으로 시작: 모든 페이지의 맵이 같다 ──
@@ -362,7 +356,7 @@ export function makeMapSelectFlows(helpers) {
       await Promise.all([settledResult(hp), settledResult(gp)]);
       const hr = await readMapUi(hp);
       const gr = await readMapUi(gp);
-      rec(sc5, "MS14", "결과 화면에서 방장·손님 칩이 서버 mapChoice(광장)를 보이고 손님 칩은 읽기 전용", hr.chip?.label === "맵 광장" && gr.chip?.label === "맵 광장" && gr.chip?.ariaDisabled === true && hr.chip?.ariaDisabled === false, `방장 ${hr.chip?.label}/${hr.chip?.ariaDisabled} · 손님 ${gr.chip?.label}/${gr.chip?.ariaDisabled}`);
+      rec(sc5, "MS14", "결과 화면에서 방장 칩이 서버 mapChoice(광장)를 보이고 손님 화면에는 칩이 없다", hr.chip?.label === "맵 광장" && gr.chip === null, `방장 ${hr.chip?.label} · 손님 ${gr.chip?.label ?? "없음"}`);
       await hp.locator(CHIP).click({ timeout: 3000 });
       await hp.waitForSelector(`${SHEET} button[data-map-card]`, { timeout: 2000 });
       await sleep(200);
@@ -372,7 +366,7 @@ export function makeMapSelectFlows(helpers) {
         viewport: { w: hro.vw, h: hro.vh },
         headerBottom: hro.headerBottom,
         chip: hro.chip,
-        guest: { ariaDisabled: gr.chip?.ariaDisabled === true, sheetOpened: false },
+        guest: { chipCount: gr.chip === null ? 0 : 1 },
         sheet: hro.sheet,
         tabs: hro.tabs,
         guestTabs: 0,
@@ -385,8 +379,8 @@ export function makeMapSelectFlows(helpers) {
       });
       for (const r of rr) {
         if (!["MS1", "MS3", "MS4", "MS5", "MS6"].includes(r.id)) continue;
-        // 14-08 UI#14 알려진 한계: 가장 낮은 폰(360×560, 방 높이 575 미만)의 결과 화면은 띠 아래로 내려온 칩(36 원 + '맵' 라벨, 누르기 영역 63)이 이름표 한 칸과 겹친다 —
-        // 칩 아래 라벨 칸이 이름표 위로 겹칠 뿐 눌림은 가려지지 않는다. 판정에서 빼고 잰 값을 그대로 남긴다(고치지 않는다). 다른 크기 5종은 그대로 판정한다.
+        // 14-08 UI#14 알려진 한계: 가장 낮은 폰(360×560, 방 높이 575 미만)의 결과 화면은 띠 아래로 내려온 칩이 이름표 한 칸과 겹칠 수 있다 —
+        // 눌림은 가려지지 않는다. 판정에서 빼고 잰 값을 그대로 남긴다(고치지 않는다). 다른 크기 5종은 그대로 판정한다.
         if (r.id === "MS6" && !r.ok && hro.vh < 575) rec(sc5, `R-${r.id}k`, `알려진 한계(UI#14): 결과 화면 낮은 폰(${hro.vw}x${hro.vh})의 지도 칩이 이름표와 겹침(판정 아님)`, true, r.detail, true);
         else rec(sc5, `R-${r.id}`, `결과 화면: ${r.label}`, r.ok, r.detail);
       }

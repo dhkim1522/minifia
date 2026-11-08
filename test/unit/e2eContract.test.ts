@@ -500,8 +500,9 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
   it("소리 단추 표식에는 값이 on·off·locked 뿐이다 — 역할·좌석 값이 실리지 않는다(T-12-23)", () => {
     const text = sources.find((s) => s.f.endsWith("components/v2/SoundButton.tsx"))!.text.replace(/\/\/.*$/gm, "");
     const dataAttrs = [...new Set([...text.matchAll(/\b(data-[a-z-]+)=/g)].map((m) => m[1]))].sort();
-    // 16-04(TOOL-04): 이름표 표식 data-tool-label 은 없어졌다 — 표식은 둘뿐이다(T-12-23)
-    expect(dataAttrs).toEqual(["data-sound-button", "data-sound-state"]);
+    // 16-04(TOOL-04): 이름표 표식 data-tool-label 은 없어졌다. 16-06: 열의 첫 칸임을 알리는 data-side-button="sound" 가 더해졌다(값은 고정 낱말, T-16-14)
+    expect(dataAttrs).toEqual(["data-side-button", "data-sound-button", "data-sound-state"]);
+    expect(text).toContain('data-side-button="sound"');
     expect(text).not.toMatch(/role=|seat|nonce|mafia/i);
   });
 
@@ -567,7 +568,7 @@ describe("12페이즈 sound-night-parity E2E (12-09)", () => {
 });
 
 describe("11페이즈 맵 선택 E2E 표식·기하 (11-13)", () => {
-  const maps = mapSelectE2e as unknown as { MAP_MARKERS: readonly string[]; MAP_CHIP: { disc: number; hit: number; left: number; below: number }; MAP_CARD: { w: number; h: number; gap: number; total: number } };
+  const maps = mapSelectE2e as unknown as { MAP_MARKERS: readonly string[]; MAP_CHIP: { disc: number; hit: number; right: number; below: number }; MAP_CARD: { w: number; h: number; gap: number; total: number } };
   const root = new URL("../../", import.meta.url);
   const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
     .split("\n")
@@ -587,7 +588,7 @@ describe("11페이즈 맵 선택 E2E 표식·기하 (11-13)", () => {
     expect(body(".mf-mapchip")).toContain("width: var(--control-button)");
     expect(body(".mf-mapchip")).toContain("height: var(--control-button)");
     expect(maps.MAP_CHIP.hit).toBe(52);
-    expect(maps.MAP_CHIP.left).toBe(16);
+    expect(maps.MAP_CHIP.right).toBe(16);
     const card = body(".mv-map-card");
     expect(card).toContain(`width: ${maps.MAP_CARD.w}px`);
     expect(card).toContain(`height: ${maps.MAP_CARD.h}px`);
