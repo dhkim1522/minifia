@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>첫 사건 스토리보드</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&amp;family=Gowun+Dodum&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: 916px; height: 1080px; box-sizing: border-box; padding: 32px; background: #0a0e1c; color: #f1f2f5; font-family: 'Gowun Dodum', system-ui, sans-serif; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; align-items: baseline; gap: 16px"><span style="font-size: 24px; font-weight: 700">첫 사건 — 8장면</span><span style="font-size: 14px; color: #a9aebb">약 60~90초 · 직접 누르는 곳 3번(처리 · 투표 · 다음)</span></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="8">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="width: 195px; height: 422px; overflow: hidden; border-radius: 16px; border: 1px solid #2a3760; position: relative">
+<div style="width: 390px; height: 844px; transform: scale(.5); transform-origin: 0 0">
+<dc-import name="Main" scene="{{f.n}}" still="{{yes}}" hint-size="390px,844px"></dc-import>
+</div>
+</div>
+<div style="font-size: 14px; font-weight: 700; color: #e8d3a8">{{f.t}}</div>
+<div style="font-size: 14px; color: #a9aebb; line-height: 1.4; white-space: pre-line">{{f.d}}</div>
+</div>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":916,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      yes: true,
+      frames: [
+        { n: 1, t: '1 오프닝 · 4초', d: '램프가 하나씩 꺼지고\n비명, 진홍 번쩍, 한 사람이 사라짐' },
+        { n: 2, t: '2 아침 · 사회자', d: '빈자리에 조명 →\n"이 중에 마피아가 있습니다"' },
+        { n: 3, t: '3 심부름 · 직접', d: '우체통만 밝게, 나머지 흐림\n[처리] 누르기' },
+        { n: 4, t: '4 목격', d: '도윤이 지나감 → 조명\n목격 기록 카드가 생김' },
+        { n: 5, t: '5 아침 증거', d: '붉은 천 조각 ↔ 도윤 목도리\n목격 선이 이어짐 = 의심' },
+        { n: 6, t: '6 투표 · 정답', d: '이름 카드 누르기 → 지목 도장\n정체 공개, 정답 불꽃' },
+        { n: 7, t: '7 직업 카드', d: '시민·마피아·의사·경찰\n카드가 차례로 뒤집힘' },
+        { n: 8, t: '8 진짜 판으로', d: '[방 만들기] [참가하기]\n함께 진행이면 역할 확인으로' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

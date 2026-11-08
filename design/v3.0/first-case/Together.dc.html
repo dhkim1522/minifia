@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>함께 진행</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&amp;family=Gowun+Dodum&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: 884px; height: 964px; box-sizing: border-box; padding: 32px; background: #0a0e1c; color: #f1f2f5; font-family: 'Gowun Dodum', system-ui, sans-serif; display: flex; gap: 40px">
+
+<div style="width: 390px; display: flex; flex-direction: column; gap: 12px">
+<div style="height: 44px; display: flex; align-items: center; font-size: 16px; font-weight: 700">대기실 · 방장</div>
+<div style="position: relative; width: 390px; height: 844px; border-radius: 20px; overflow: hidden; border: 1px solid #2a3760; background: radial-gradient(120% 60% at 50% 30%, #2a2f44, #141826 60%)">
+<div style="position: absolute; left: 16px; right: 16px; top: 12px; height: 44px; display: flex; justify-content: space-between; align-items: center">
+<button type="button" aria-label="나가기" style="width: 44px; height: 44px; border-radius: 12px; border: 1px solid #2a3760; background: #151c36; display: grid; place-items: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a9aebb" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button>
+<span style="font-family: 'Gowun Batang', serif; font-size: 24px; font-weight: 700; color: #e8d3a8; letter-spacing: .1em">4821</span>
+<button type="button" aria-label="공유" style="width: 44px; height: 44px; border-radius: 12px; border: 1px solid #2a3760; background: #151c36; display: grid; place-items: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a9aebb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M8 7l4-4 4 4M5 13v6h14v-6"></path></svg></button>
+</div>
+<div style="position: absolute; right: 16px; top: 120px; display: flex; flex-direction: column; gap: 12px">
+<sc-for list="{{col}}" as="c" hint-placeholder-count="4"><button type="button" aria-label="{{c}}" style="width: 52px; height: 52px; border-radius: 50%; border: 1px solid #2a3760; background: #1e2847"></button></sc-for>
+</div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 362px; box-sizing: border-box; padding: 16px; border-radius: 20px 20px 0 0; background: rgba(21,28,54,.97); display: flex; flex-direction: column; gap: 12px">
+<div style="height: 160px; border-radius: 12px; background: #0e1326; padding: 12px; box-sizing: border-box; font-size: 14px; color: #a9aebb; display: flex; flex-direction: column; gap: 8px">
+<span>민준 님이 들어왔어요</span><span>지호 님이 들어왔어요</span><span>도윤 님이 들어왔어요</span>
+</div>
+<div style="height: 64px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 14px; border: 1px solid #c9a46a; background: #1e2847">
+<span style="width: 40px; height: 40px; border-radius: 10px; background: radial-gradient(60% 60% at 50% 35%, rgba(255,207,138,.45), #0e1326 75%); display: grid; place-items: center"><svg width="20" height="28" viewBox="0 0 40 70" aria-hidden="true"><path d="M8 40 Q8 30 20 30 Q32 30 32 40 L32 62 Q32 65 28 65 L12 65 Q8 65 8 62 Z" fill="#0a0e1c"></path><circle cx="20" cy="20" r="11" fill="#0a0e1c"></circle><ellipse cx="20" cy="11.5" rx="15" ry="3.2" fill="#0a0e1c"></ellipse><path d="M12 11.5 Q12 2 20 2 Q28 2 28 11.5 Z" fill="#0a0e1c"></path><rect x="10" y="32" width="20" height="5" rx="2.5" fill="#d23c4e"></rect></svg></span>
+<span style="flex: 1; display: flex; flex-direction: column"><span style="font-size: 16px; font-weight: 700">첫 사건 먼저</span><span style="font-size: 14px; color: #a9aebb">모두 1분 보고 시작</span></span>
+<button type="button" role="switch" aria-checked="true" aria-label="첫 사건 먼저" style="width: 48px; height: 28px; border: none; border-radius: 999px; background: #c9a46a; position: relative"><span style="position: absolute; right: 4px; top: 4px; width: 20px; height: 20px; border-radius: 50%; background: #0a0e1c"></span></button>
+</div>
+<button type="button" style="height: 52px; border: none; border-radius: 14px; background: #e6e8ee; color: #0e1326; font-size: 16px; font-weight: 700">시작</button>
+</div>
+</div>
+</div>
+
+<div style="width: 390px; display: flex; flex-direction: column; gap: 12px">
+<div style="height: 44px; display: flex; align-items: center; font-size: 16px; font-weight: 700">먼저 끝낸 사람 · 기다림</div>
+<div style="position: relative; width: 390px; height: 844px; border-radius: 20px; overflow: hidden; border: 1px solid #2a3760; background: radial-gradient(120% 70% at 50% 40%, #1a2140, #0e1326 55%, #0a0e1c)">
+<div style="position: absolute; left: 0; right: 0; top: 96px; text-align: center; font-family: 'Gowun Batang', serif; font-size: 24px; font-weight: 700; color: #e8d3a8">곧 진짜 사건이 시작돼요</div>
+<div style="position: absolute; left: 24px; right: 24px; top: 180px; box-sizing: border-box; padding: 28px 20px; border-radius: 16px; background: rgba(14,19,38,.92); border: 1px solid #2a3760; display: flex; flex-direction: column; align-items: center; gap: 16px">
+<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#c9a46a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M7 12l3.5 3.5L17 9"></path></svg>
+<span style="font-size: 16px; font-weight: 700">다른 사람을 기다리는 중…</span>
+<div role="img" aria-label="5명 중 3명 끝냄" style="display: flex; gap: 8px">
+<sc-for list="{{ppl}}" as="p" hint-placeholder-count="5"><span style="width: 40px; height: 40px; box-sizing: border-box; border-radius: 50%; border: {{p.b}}; background: {{p.bg}}; display: grid; place-items: center; color: #0a0e1c; font-size: 14px; font-weight: 700">{{p.t}}</span></sc-for>
+</div>
+<span style="font-family: 'Gowun Batang', serif; font-size: 24px; font-weight: 700; color: #e8d3a8; font-variant-numeric: tabular-nums">3 / 5</span>
+<div style="width: 100%; display: flex; align-items: center; gap: 8px"><span style="flex: 1; height: 8px; border-radius: 4px; background: #2a3760; overflow: hidden"><span style="display: block; width: 40%; height: 8px; background: #c9a46a"></span></span><span style="font-size: 14px; color: #a9aebb; font-variant-numeric: tabular-nums">38초</span></div>
+</div>
+<div style="position: absolute; left: 24px; right: 24px; top: 520px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{tips}}" as="t" hint-placeholder-count="2"><div style="height: 96px; box-sizing: border-box; padding: 12px; border-radius: 14px; background: #151c36; border: 1px solid #2a3760; display: flex; flex-direction: column; gap: 6px"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{t.c}}" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="{{t.i}}"></path></svg><span style="font-size: 14px; color: #e6e8ee; line-height: 1.4">{{t.s}}</span></div></sc-for>
+</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":884,"height":964}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const done = { b: 'none', bg: '#c9a46a', t: '✓' };
+    const wait = { b: '2px dashed #6b7180', bg: 'transparent', t: '' };
+    return {
+      col: ['소리', '맵', '봇', '옷장'],
+      ppl: [done, done, done, wait, wait],
+      tips: [
+        { i: 'M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z', c: '#e8d3a8', s: '심부름 때 누구를 봤는지 기억해요' },
+        { i: 'M3 15c3-7 5 4 8-3s5 3 8-4', c: '#f08a97', s: '아침 흔적은 옷과 이어져요' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

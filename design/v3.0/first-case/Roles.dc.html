@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>직업 카드 4종</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&amp;family=Gowun+Dodum&amp;display=swap">
+<style>
+body{margin:0}
+.a-eye{animation:blink 3s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
+@keyframes blink{0%,44%,52%,100%{transform:scaleY(1)}48%{transform:scaleY(.1)}}
+.a-mask{animation:smoke 2.4s ease-in-out infinite}
+@keyframes smoke{0%,100%{filter:drop-shadow(0 0 4px rgba(224,52,75,.4))}50%{filter:drop-shadow(0 0 16px rgba(224,52,75,.85))}}
+.a-shield{animation:shield 1.8s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
+@keyframes shield{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+.a-lens{animation:lens 2.6s ease-in-out infinite}
+@keyframes lens{0%,100%{transform:translate(0,0)}25%{transform:translate(8px,-4px)}50%{transform:translate(0,-8px)}75%{transform:translate(-8px,-4px)}}
+</style>
+</helmet>
+<div style="width: 1314px; height: 640px; box-sizing: border-box; padding: 32px; background: #0a0e1c; color: #f1f2f5; font-family: 'Gowun Dodum', system-ui, sans-serif; display: flex; flex-direction: column; gap: 16px">
+<div style="height: 44px; display: flex; align-items: center; gap: 16px">
+<span style="font-size: 24px; font-weight: 700">직업 카드</span>
+<span style="font-size: 14px; color: #a9aebb">역할 확인 카드(RoleCard)와 같은 틀 · 앞면에 직업 의상 인물 + 대표 움직임 · 첫 사건 7장면에서 차례로 뒤집힌다</span>
+<span style="margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 14px; color: #a9aebb">뒷면
+<span style="width: 40px; height: 56px; border-radius: 8px; background: repeating-linear-gradient(45deg, #151c36 0 6px, #1e2847 6px 12px); border: 1px solid #8f7048; display: grid; place-items: center"><svg width="22" height="14" viewBox="0 0 40 20" aria-hidden="true"><ellipse cx="20" cy="15" rx="18" ry="4" fill="#c9a46a"></ellipse><path d="M10 15 Q10 2 20 2 Q30 2 30 15 Z" fill="#c9a46a"></path></svg></span></span>
+</div>
+<div style="display: flex; gap: 42px">
+<sc-for list="{{roles}}" as="r" hint-placeholder-count="4">
+<div style="width: 280px; display: flex; flex-direction: column; gap: 12px">
+<div style="height: 400px; box-sizing: border-box; padding: 24px 20px; border-radius: 20px; background: radial-gradient(80% 45% at 50% 30%, {{r.halo}}, #151c36 75%); border: 1px solid {{r.edge}}; box-shadow: 0 16px 40px rgba(0,0,0,.55); display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center">
+<div style="position: relative; width: 160px; height: 200px">
+<svg width="120" height="210" viewBox="0 0 40 70" aria-hidden="true" style="position: absolute; left: 20px; top: -6px">
+<ellipse cx="20" cy="66" rx="13" ry="3.5" fill="#000" opacity=".4"></ellipse>
+<path d="M8 40 Q8 30 20 30 Q32 30 32 40 L32 62 Q32 65 28 65 L12 65 Q8 65 8 62 Z" fill="{{r.coat}}"></path>
+<path d="M20 30 Q32 30 32 40 L32 62 Q32 65 28 65 L20 65 Z" fill="#000" opacity=".16"></path>
+<path d="{{r.detail}}" fill="{{r.detailFill}}"></path>
+<circle cx="20" cy="20" r="11" fill="#e2c3a0"></circle>
+<path d="M9 20 Q9 8 20 8 Q31 8 31 20 Q26 13 20 13 Q14 13 9 20 Z" fill="#3a2a20"></path>
+<path d="{{r.hat}}" fill="{{r.hatFill}}"></path>
+<ellipse cx="16" cy="16" rx="3.5" ry="2.5" fill="#fff" opacity=".18"></ellipse>
+<circle cx="16.5" cy="21" r="1.4" fill="#1a1420"></circle><circle cx="23.5" cy="21" r="1.4" fill="#1a1420"></circle>
+</svg>
+<span style="position: absolute; right: -6px; bottom: 8px; width: 64px; height: 64px; border-radius: 50%; background: #0e1326; border: 2px solid {{r.color}}; display: grid; place-items: center"><svg class="{{r.anim}}" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="{{r.color}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{r.icon}}"></path></svg></span>
+</div>
+<span style="font-size: 36px; font-weight: 700; color: {{r.color}}">{{r.name}}</span>
+<span style="font-size: 16px; color: #e6e8ee; line-height: 1.4; white-space: pre-line">{{r.line}}</span>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #a9aebb"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c9d4ff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"></path></svg>{{r.night}}</div>
+<div style="font-size: 14px; color: #6b7180; line-height: 1.4">움직임: {{r.move}}</div>
+</div>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1314,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const fedora = 'M5 11.5 a15 3.2 0 1030 0 a15 3.2 0 10-30 0 M12 11.5 Q12 2 20 2 Q28 2 28 11.5 Z';
+    return {
+      roles: [
+        { name: '시민', line: '흔적과 목격으로\n마피아를 찾아요', night: '밤: 한 명을 고르는 척(효과 없음)', move: '눈이 깜빡이며 주위를 살핀다', color: '#e8d3a8', edge: '#2a3760', halo: 'rgba(232,211,168,.16)', coat: '#6b5a43', detail: 'M10 32h20v4H10z', detailFill: '#8f7048', hat: fedora, hatFill: '#5a4030', icon: 'M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z M12 9.4a2.6 2.6 0 110 5.2 2.6 2.6 0 010-5.2z', anim: 'a-eye' },
+        { name: '마피아', line: '밤에 한 명을 고르고\n들키지 않아요', night: '밤: 동료와 한 명을 고른다', move: '가면에 진홍 연기가 번진다', color: '#f2556a', edge: '#8e0b21', halo: 'rgba(200,16,46,.3)', coat: '#2b2b33', detail: 'M19 32 L21 32 L22 50 L20 53 L18 50 Z', detailFill: '#c8102e', hat: fedora, hatFill: '#1a1420', icon: 'M3 9c3-2 6-2 9 0 3-2 6-2 9 0 0 5-3 8-6 8-1.5 0-2.3-1.5-3-3-.7 1.5-1.5 3-3 3-3 0-6-3-6-8z M8 10.5h1.5 M14.5 10.5H16', anim: 'a-mask' },
+        { name: '의사', line: '밤에 한 명을\n지켜요', night: '밤: 지킬 사람을 고른다', move: '방패가 숨 쉬듯 커졌다 줄어든다', color: '#6fa59a', edge: '#2a3760', halo: 'rgba(111,165,154,.24)', coat: '#e6e8ee', detail: 'M18.5 40h3v8h-3z M16 42.5h8v3h-8z', detailFill: '#6fa59a', hat: 'M9 12 Q9 6 20 6 Q31 6 31 12 Z', hatFill: '#e6e8ee', icon: 'M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z M12 9v6 M9 12h6', anim: 'a-shield' },
+        { name: '경찰', line: '밤에 한 명이 마피아인지\n알아봐요', night: '밤: 조사할 사람을 고른다', move: '돋보기가 이리저리 훑는다', color: '#7a8fb8', edge: '#2a3760', halo: 'rgba(122,143,184,.26)', coat: '#2a3760', detail: 'M13 36h4v3h-4z M23 36h4v3h-4z', detailFill: '#c9a46a', hat: 'M8 12 L32 12 L30 15 L10 15 Z M11 12 Q11 3 20 3 Q29 3 29 12 Z', hatFill: '#1e2847', icon: 'M10.5 4.5a6 6 0 110 12 6 6 0 010-12z M15 15l5.5 5.5', anim: 'a-lens' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

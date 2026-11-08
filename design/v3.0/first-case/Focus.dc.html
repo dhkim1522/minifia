@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>포커스 조명 시안</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&amp;family=Gowun+Dodum&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: 1314px; height: 964px; box-sizing: border-box; padding: 32px; background: #0a0e1c; color: #f1f2f5; font-family: 'Gowun Dodum', system-ui, sans-serif; display: flex; gap: 40px">
+<sc-for list="{{opts}}" as="o" hint-placeholder-count="3">
+<div style="width: 390px; display: flex; flex-direction: column; gap: 12px">
+<div style="height: 44px; display: flex; align-items: center; gap: 8px"><span style="font-size: 24px; font-weight: 700; color: {{o.c}}">{{o.k}}</span><span style="font-size: 16px; font-weight: 700">{{o.t}}</span></div>
+<div style="width: 390px; height: 844px; border-radius: 20px; overflow: hidden; border: 1px solid {{o.edge}}">
+<dc-import name="Main" scene="{{three}}" still="{{yes}}" focus="{{o.k}}" hint-size="390px,844px"></dc-import>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1314,"height":964}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      yes: true, three: 3,
+      opts: [
+        { k: 'A', t: '흐림 + 어둠 + 램프 링 (추천)', c: '#ffcf8a', edge: '#c9a46a' },
+        { k: 'B', t: '무대 원뿔 스포트라이트', c: '#a9aebb', edge: '#2a3760' },
+        { k: 'C', t: '손가락 포인터만', c: '#a9aebb', edge: '#2a3760' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
