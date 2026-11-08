@@ -1,7 +1,8 @@
 ---
 phase: "16"
 slug: "tutorial-and-evidence"
-status: draft
+status: approved
+reviewed_at: "2026-11-08"
 shadcn_initialized: false
 preset: none
 created: "2026-11-08"
@@ -261,7 +262,7 @@ Enumerated by `ls src/components/v2/*.tsx | wc -l` — 35 components — minifia
 | 심부름 | `errand.act`(수정) | 심부름 시간입니다. 빛나는 곳을 찾아 처리해 주세요. | 마피아도 같은 문장 |
 | 심부름 | `errand.done`·`errand.ghost` | 15 그대로 | |
 | 아침 | `trace`(수정) | 흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다. | 증거 카드 구간, 단계 끝까지 유지, 알림음 없음 |
-| 토론 | `discussion.evidence`(신규) | 토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요. | 흔적이 있는 날만, 23자. 기록을 안 연 사람은 `witness` 가 우선, 연 뒤 이 줄 |
+| 토론 | `discussion.evidence`(신규) | 토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요. | 흔적이 있는 날만, 27자(공백 포함). 기록을 안 연 사람은 `witness` 가 우선, 연 뒤 이 줄 |
 | 토론 | `discussion.act`·`witness` | 14·15 그대로 | 흔적이 없는 날의 기본 줄 |
 
 - 우선순위(토론): `witness`(기록을 아직 안 연 사람) → `discussion.evidence`(흔적이 있는 날) → `discussion.act`. 같은 단계 안 문장 변화는 소리가 없다(14 규칙).
@@ -412,6 +413,21 @@ Applicable state considerations resolved: 17 covered, 3 backstop, 1 unresolved
 - 마피아에게만 있는 줄·단추·색·표식(가짜 장소 포함), 목격 기록의 채팅 자동 입력, 흔적 표시의 "범인" 암시·캐릭터 몸 색칠.
 - 머리 위 감정 표시(몸동작만), 시상식 `skip` 자리 변경, 마피아의 심부름 방해 행동(Deferred), 시상에 목격·흔적 반영(Future).
 
+### 점검 엔진 대조 (ui-phase 9.5, 2026-11-08)
+
+`ui-consideration-probe` 가 요소 9개(E1 오른쪽 열 · E2 머리 단추 · E3 [튜토리얼]·방장 스위치 · E4 연습 화면 · E5 기다림 화면 · E6 시작 카드 · E7 심부름 맵 · E8 증거 카드 · E9 컬러 에셋)에서 범주 51개를 냈다. 위 표가 다루는 것은 그 행을 따르고, 나머지는 아래처럼 정리한다(사용자 위임 — 추천안).
+
+| 요소 · 범주 | 처리 | 근거 |
+|---|---|---|
+| 전 요소 · loading | dismiss | 화면 값은 방 view(서버가 밀어 줌)이거나 연습 상수·인라인 SVG 라 따로 불러오는 순간이 없다. 첫 view 전은 기존 접속 화면 |
+| 전 요소 · error (연결 끊김) | covered (14) | 끊기면 14 의 재접속 띠. 연습은 로컬이라 계속되고(위 #7), 기다림·심부름·증거는 재접속 뒤 view 로 다시 그린다 |
+| E3 스위치 · error | covered | 스위치 값은 [시작] 메시지에 실려 간다. 시작 실패는 기존 대기실 처리 그대로, 스위치 상태는 남는다 |
+| E1·E2·E9 · long-text | dismiss | 글이 없는 아이콘 단추·그림이다(이름표 삭제). 이름은 `aria-label` 뿐 |
+| E2 머리 단추 · empty/populated | covered | 늘 둘(나가기·공유) 고정. 이 페이즈는 개수를 바꾸지 않는다 |
+| E6 시작 카드 · zero-one-many/overflow | covered | 3곳 고정(84 타일 3개 + 간격 = 360 폭 안). 0곳이면 카드 없이 띠 줄만(#14 와 같음) |
+| E6 시작 카드 · error | covered | 2초 카드는 화면 표시용. 놓쳐도 맵의 진행 점·타일이 같은 목록을 보인다 |
+| E9 컬러 에셋 · empty | covered | 장소 id 에 그림이 없으면 시험이 실패로 센다(`placeArt.test`, 16 + 9 모두 매핑) |
+
 ## 남은 위험 · 플래너 확인 목록
 
 - **서버가 함께 바뀐다(UI 가 읽는 값만 적는다)**: 방 설정 `tutorial`(시작 메시지에 켬·끔), 연습 단계와 `TUTORIAL_MS`(90초)·방 view 의 공개 값 `tutorial {done, total, endsAt}`, 연습 끝 메시지 하나, 마피아의 가짜 장소(배정 1곳 + 응답 규칙), 마지막 목격자(+선택 장소 id). `PhaseId` 에 연습 단계를 더하면 15 처럼 `PHASE_SCENE`·`PHASES`·`hostChimeOf`·E2E 단계 목록이 컴파일 오류로 따라온다. 모두 `RULESET` 스위치가 아니라 방 설정·정상 단계로 둔다.
@@ -432,12 +448,12 @@ Applicable state considerations resolved: 17 covered, 3 backstop, 1 unresolved
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-11-08 (UI 검사기 개정 1 재검증, Copywriting FLAG — 단일 낱말 [처리]·[튜토리얼]·[건너뛰기] 는 0051 의도)
