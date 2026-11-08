@@ -3,7 +3,8 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import "../helpers/singleLineErrors";
 import { EvidenceCard } from "../../src/components/v2/EvidenceCard";
-import { TRACE_NOTE, TRACE_TEXT } from "../../src/game/traceText";
+import { TRACE_MARK } from "../../src/game/traceMark";
+import { TRACE_MARK_NOTE, TRACE_TEXT } from "../../src/game/traceText";
 import { TRACE_PIECE_IDS } from "../../shared/protocol";
 
 afterEach(cleanup);
@@ -24,7 +25,21 @@ describe("EvidenceCard", () => {
     const root = roots[0] as HTMLElement;
     expect(root.getAttribute("role")).toBe("status");
     expect(root.querySelector(".mv-trace__name")?.textContent).toBe(TRACE_TEXT.pencil);
-    expect(root.querySelector(".mv-trace__note")?.textContent).toBe(TRACE_NOTE);
+    expect(root.querySelector(".mv-trace__note")?.textContent).toBe(TRACE_MARK_NOTE);
+    expect(TRACE_MARK_NOTE).toBe("같은 옷을 입은 사람에게 표시");
+  });
+
+  it("1행은 조각 그림 svg 하나(36, 장식)이고 타일 style 에 --trace-mark 가 TRACE_MARK[piece] 다", () => {
+    for (const piece of ["pencil", "redCloth", "blackCloth"] as const) {
+      const { container } = render(<EvidenceCard piece={piece} victim={VICTIM} witness={WITNESS} />);
+      const tile = container.querySelector(".mv-evidence__trace .mv-trace__disc") as HTMLElement;
+      expect(tile.querySelectorAll("svg")).toHaveLength(1);
+      const svg = tile.querySelector("svg") as SVGElement;
+      expect(svg.getAttribute("width")).toBe("36");
+      expect(svg.getAttribute("aria-hidden")).toBe("true");
+      expect(tile.getAttribute("style")).toContain(`--trace-mark: ${TRACE_MARK[piece]}`);
+      cleanup();
+    }
   });
 
   it("목격자가 있으면 2행 count=1, 피해자 이름(취소선 클래스)·목격자 이름·장소 아이콘 svg 하나", () => {
@@ -34,6 +49,7 @@ describe("EvidenceCard", () => {
     expect(row.querySelector(".mv-evidence__victim")?.textContent).toBe("서준");
     expect(row.querySelector(".mv-evidence__witness")?.textContent).toBe("하윤");
     expect(row.querySelectorAll(".mv-evidence__place svg")).toHaveLength(1);
+    expect(row.querySelector(".mv-evidence__place svg")?.getAttribute("width")).toBe("32");
     expect(row.querySelectorAll(".mv-evidence__place")).toHaveLength(1);
   });
 
@@ -83,6 +99,7 @@ describe("EvidenceCard", () => {
     const rule = /\.mv-evidence\s*\{([^}]*)\}/.exec(EVIDENCE_CSS)?.[1] ?? "";
     expect(rule).toContain("min-height: 128px");
     expect(rule).toContain("flex-direction: column");
+    expect(EVIDENCE_CSS).toMatch(/\.mv-evidence__trace \.mv-trace__disc\s*\{[^}]*border: 2px solid var\(--trace-mark\)/);
     const victim = /\.mv-evidence__victim\s*\{([^}]*)\}/.exec(EVIDENCE_CSS)?.[1] ?? "";
     for (const token of ["line-through", "max-width: 4em", "text-overflow: ellipsis", "opacity: 0.5"]) expect(victim).toContain(token);
     expect(EVIDENCE_CSS).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);

@@ -14,7 +14,7 @@ import { V2Icon } from "../../src/components/v2/V2Icon";
 import type { V2IconName } from "../../src/components/v2/V2Icon";
 import { ERRAND_CARD_MS, ERRAND_TEXT, actablePlaceOf, errandProgress, nextPlaceOf, placeCentersOf, placeMarkerPlan, progressLabel, startCardOn } from "../../src/game/errandView";
 import type { Rect } from "../../src/game/errandView";
-import { PLACE_NAME, placeIconOf, placeLabel } from "../../src/game/placeText";
+import { PLACE_NAME, placeLabel } from "../../src/game/placeText";
 import { seededRandInt } from "../helpers/seededRandom";
 import { startedAt } from "../helpers/voteState";
 import { tick } from "../../shared/game/tick";
@@ -37,10 +37,6 @@ describe("장소 낱말·아이콘", () => {
     expect(BAR_PLACES.length + PLAZA_PLACES.length).toBe(16);
     expect(new Set([...BAR_IDS, ...PLAZA_IDS]).size).toBe(16);
     expect(JSON.stringify([...BAR_IDS, ...PLAZA_IDS].sort())).toBe(JSON.stringify([...PLACE_IDS].sort()));
-    const placeIcons = PLACE_IDS.map((id) => placeIconOf(id));
-    expect(new Set(placeIcons).size).toBe(16);
-    // 새 아이콘 이름은 모두 18개: 장소 16 + arrow + thread
-    expect(placeIcons.length + ["arrow", "thread"].length).toBe(18);
   });
 
   it("PLACE_NAME 은 16개 id 모두의 키를 가지고 같은 맵 안의 낱말이 서로 다르다", () => {
@@ -52,18 +48,6 @@ describe("장소 낱말·아이콘", () => {
     }
     expect(JSON.stringify(BAR_IDS.map((id) => PLACE_NAME[id as PlaceId]))).toBe(JSON.stringify(["술잔", "피아노", "색소폰", "의자", "문", "포스터", "전축", "촛불"]));
     expect(JSON.stringify(PLAZA_IDS.map((id) => PLACE_NAME[id as PlaceId]))).toBe(JSON.stringify(["시계탑", "분수", "벤치", "가로등", "우체통", "나무", "꽃", "가판"]));
-  });
-
-  it("placeIconOf 는 'place' + id 첫 글자 대문자이고 V2Icon 이 실제로 그린다(16개 전부)", () => {
-    expect(placeIconOf("clock")).toBe("placeClock");
-    expect(placeIconOf("glass")).toBe("placeGlass");
-    for (const id of PLACE_IDS) {
-      const name = placeIconOf(id);
-      expect(name).toBe(`place${id.charAt(0).toUpperCase()}${id.slice(1)}`);
-      const html = renderToStaticMarkup(createElement(V2Icon, { name, size: 20 }));
-      expect(html).toContain("<svg");
-      expect(html).toMatch(/<(path|circle)/);
-    }
   });
 
   it("V2Icon: arrow·thread 가 그려지고 크기 prop 이 따른다", () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { RECORD_MAX, MORNING_TRACE_MS } from "../../shared/game/phases";
 import { TRACE_PIECE_IDS, type PhaseId, type PlaceId, type RecordLine, type RoomView, type TracePiece } from "../../shared/protocol";
 import { recordRowsOf, traceWindowOf } from "../../src/game/recordView";
-import { TRACE_NOTE, TRACE_TEXT } from "../../src/game/traceText";
+import { TRACE_MARK_NOTE, TRACE_TEXT } from "../../src/game/traceText";
 
 // 15-07 Task 1: 흔적 조각 이름 표(D-06·D-09), 기록 줄(D-04), 흔적 구간(D-06). 모두 순수 함수 — 시각·DOM 을 읽지 않는다.
 
@@ -59,11 +59,12 @@ describe("TRACE_TEXT (D-06, D-09 — 닫힌 표)", () => {
   });
 
   it("어느 이름·고정 문구에도 역할 연상어·'범인'·'증거'·'확정' 이 없다", () => {
-    for (const text of [...Object.values(TRACE_TEXT), TRACE_NOTE]) for (const w of BANNED) expect(text).not.toContain(w);
+    for (const text of [...Object.values(TRACE_TEXT), TRACE_MARK_NOTE]) for (const w of BANNED) expect(text).not.toContain(w);
   });
 
-  it("고정 문구는 '누구의 것인지는 모릅니다' 이다", () => {
-    expect(TRACE_NOTE).toBe("누구의 것인지는 모릅니다");
+  it("고정 보조 줄은 '같은 옷을 입은 사람에게 표시' 이고 색 이름이 없다", () => {
+    expect(TRACE_MARK_NOTE).toBe("같은 옷을 입은 사람에게 표시");
+    for (const w of ["빨간", "붉은", "검은", "하얀", "파란", "노란", "테두리"]) expect(TRACE_MARK_NOTE).not.toContain(w);
   });
 
   it("가장 긴 이름이 8자 이하(카드 폭 328 안 한 줄 확인용)", () => {

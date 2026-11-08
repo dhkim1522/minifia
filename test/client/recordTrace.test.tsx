@@ -3,12 +3,10 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { RecordCard } from "../../src/components/v2/RecordCard";
-import { TraceCard } from "../../src/components/v2/TraceCard";
 import { ToolButton } from "../../src/components/ToolButton";
 import { V2Icon } from "../../src/components/v2/V2Icon";
-import { TRACE_NOTE, TRACE_TEXT } from "../../src/game/traceText";
 import { faceSrc, seatColorVar } from "../../src/net/assets";
-import { TRACE_PIECE_IDS, type MorningView, type PhaseId, type PlaceId, type PublicPlayer, type RecordLine, type RoomView } from "../../shared/protocol";
+import { type MorningView, type PhaseId, type PlaceId, type PublicPlayer, type RecordLine, type RoomView } from "../../shared/protocol";
 import type { RoleId } from "../../shared/game/roles";
 import { MORNING_TRACE_MS } from "../../shared/game/phases";
 import type { RecordRow } from "../../src/game/recordView";
@@ -69,6 +67,8 @@ describe("RecordCard", () => {
       expect(li.querySelector(".mv-record__n")?.textContent).toBe(String(i + 1));
       expect(li.querySelectorAll("img")).toHaveLength(1);
       expect(li.querySelectorAll("svg")).toHaveLength(1);
+      expect(li.querySelector("svg")?.getAttribute("width")).toBe("24");
+      expect(li.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
       expect(li.querySelector(".mv-record__name")?.textContent).toBe(ROWS[i].name);
     });
     const img = lis[0].querySelector("img") as HTMLImageElement;
@@ -122,32 +122,6 @@ describe("RecordCard", () => {
     expect(css).toMatch(/\.mv-record__row\s*\{[^}]*night-600/);
     const rule = /\.mv-record\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
     for (const token of ["overlay-ink-strong", "radius-badge", "1px solid var(--night-600)"]) expect(rule).toContain(token);
-  });
-});
-
-describe("TraceCard", () => {
-  it("data-trace-card·role=status, 이름은 TRACE_TEXT[piece], 보조 줄은 TRACE_NOTE, 아이콘 한 개", () => {
-    const { container } = render(<TraceCard piece="pencil" />);
-    const root = container.querySelector("div[data-trace-card]") as HTMLElement;
-    expect(root.getAttribute("role")).toBe("status");
-    expect(root.querySelector(".mv-trace__name")?.textContent).toBe(TRACE_TEXT.pencil);
-    expect(root.querySelector(".mv-trace__note")?.textContent).toBe(TRACE_NOTE);
-    expect(root.querySelectorAll("svg")).toHaveLength(1);
-  });
-
-  it.each(TRACE_PIECE_IDS)("%s: 역할·'범인'·'증거' 낱말이 없고 속성 값에 조각 id·좌석이 없다", (piece) => {
-    const { container } = render(<TraceCard piece={piece} />);
-    for (const w of ["마피아", "경찰", "의사", "시민", "범인", "증거", "확정"]) expect(container.textContent).not.toContain(w);
-    const values = [...container.querySelectorAll("*")].flatMap((e) => e.getAttributeNames().map((n) => `${n}=${e.getAttribute(n)}`));
-    expect(values.join(" ")).not.toContain(piece);
-    expect(container.innerHTML).not.toMatch(/data-seat|data-role|data-piece/);
-  });
-
-  it("스타일: 폭 328·한 줄 이름(nowrap)·thread 원 44", () => {
-    const css = V2_CSS.slice(V2_CSS.indexOf(".mv-record"));
-    expect(css).toMatch(/\.mv-trace\s*\{[^}]*width: 328px/);
-    expect(css).toMatch(/\.mv-trace__name\s*\{[^}]*white-space: nowrap/);
-    expect(css).toMatch(/\.mv-trace__disc\s*\{[^}]*width: 44px[^}]*height: 44px/);
   });
 });
 
