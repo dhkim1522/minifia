@@ -1,11 +1,52 @@
 ---
 phase: 16-tutorial-and-evidence
 plan: "10"
-status: in-progress
+subsystem: verification-docs-deploy
+tags: [e2e, nightload, deploy, decision-0079, handoff]
+requires:
+  - phase: 16-tutorial-and-evidence
+    provides: 16-01~16-09 구현(이름표 삭제·오른쪽 열·컬러 심부름 화면·가짜 장소·마지막 목격·같은 옷 표시)
+provides:
+  - 로컬 전체 검증(폰 6종 회귀·nightload)과 성능 JSON
+  - 결정 0079 와 지도·구조·기획 문서, 0073·0074·0077 개정 표시
+  - minifia-v3 배포(version 2026-11-08T14:29:24Z+49b1ad57)와 배포본 확인
+affects: [17]
+actuals:
+  tokens: 60000
+  tasks: 4
+  commits: 9
+plan_head_before: e39f41751c47414a94823f0423718dbf5ce1e880
+commits: 9
+plan_head_after: 887b2ab84d915bace545790c05044964ed3cbc0b
+key-files:
+  created:
+    - docs/decisions/0079-v3-buttons-and-evidence.md
+    - .planning/phases/16-tutorial-and-evidence/perf/nightload-390x844-x4.json
+    - .planning/phases/16-tutorial-and-evidence/perf/nightload-390x844-x4-run1.json
+  modified:
+    - docs/screen-map.md
+    - docs/architecture.md
+    - docs/product.md
+    - docs/decisions/0073-v3-host-and-labels.md
+    - docs/decisions/0074-v3-errand-and-trace.md
+    - docs/decisions/0077-tutorial-and-evidence.md
+    - src/game/errandView.ts
+    - scripts/smoke.mjs
+    - scripts/e2e/errand.mjs
+    - test/unit/errandView.test.ts
+    - test/unit/e2eContract.test.ts
+    - HANDOFF.md
+    - .planning/REQUIREMENTS.md
+key-decisions:
+  - "결정 0079 한 장에 16페이즈 확정분(0079-1~14)·위임 기본값 V-*·연구 뒤 기본값 A1~A5·편차·한계를 둔다. V-8~V-18(튜토리얼)은 17 로 넘긴다"
+  - "첫 배포 뒤 [처리] 알약 배치(이웃 타일 피하기)를 고쳐 한 번 더 배포했다 — 배포본이 항상 커밋된 코드와 같다"
 requirements-completed: [TOOL-04, BTN-01, BTN-02, ERRAND-06, ERRAND-07, ERRAND-08, ASSET-01, EVID-01, EVID-02, EVID-03, DEPLOY-04]
+status: complete
 ---
 
 # Phase 16 Plan 10: 검증·문서·배포 Summary
+
+16페이즈를 폰 6종 전 흐름 회귀(로컬)·nightload 59.9fps·결정 0079·minifia-v3 배포(`...+49b1ad57`)·HANDOFF 로 닫았다. 검증 중 하네스 둘(errand 이름표 경쟁·smoke 아침 흔적 길이)과 제품 하나(알약이 이웃 타일을 가림)를 고쳤다.
 
 ## 진행
 
@@ -133,4 +174,35 @@ witness: 이월 메모의 "심부름 N번째 장소를 16초 안에 처리하지
 - **E2E `--only lobby,errand,trace`**(인자 없는 e2e = 배포본, 폰 6종): 최종 배포본 24/24 흐름 통과(lobby 40/40·39/39, chat-lobby 23/23, errand 22/22·27/27, trace 51/51). 첫 배포본에서는 errand 360x640 EO1 한 번 실패(위 편차 3), 재실행 통과.
 - 누설 시험(errandLeak·leak)이 통과한 빌드만 배포했다(로컬 `npm test` 7588 통과, 간헐 실패 없는 전체 실행 한 번 포함).
 
-<!-- gsd:write-continue -->
+## Authentication Gates
+
+없음. 계정 가드(`npm run deploy` 맨 앞)는 두 번 모두 통과했고 우회하지 않았다. 식별자·토큰은 적지 않는다.
+
+## Known Stubs
+
+없음. 이 계획은 검증·문서·배포이며 화면에 흐르는 빈 값·자리표시 문구를 새로 만들지 않았다. 알려진 한계는 결정 0079 에 있다.
+
+## Threat Flags
+
+없음. 새 네트워크 표면·인증 경로·스키마 변경이 없다(T-16-23 가드 통과, T-16-24 위생 통과, T-16-25 누설 시험 통과 빌드만 배포, T-16-26 큰 회귀는 로컬 한 번·배포본은 smoke 와 바뀐 흐름 셋만).
+
+## Deferred Issues
+
+- `test/worker/errandLeak.test.ts` "근처 사람의 snap 구간 마지막 꼭짓점은 반경 안이다…" — 16페이즈 시작 커밋에서도 6번 중 2번 실패하는 기존 간헐 시험(경쟁). 고치지 않았다.
+- `test/worker/bots.test.ts` 밤 채팅 — 알려진 간헐(단독 통과).
+- E2E `perfbudget` B2(점광원 4 > 3)·M1(geometries 35 > 25) — 13페이즈부터의 기존 한계, 판정 문턱 불변.
+- E2E `witness` "N번째 장소를 16초 안에 처리하지 못함" — 이번 6종 회귀에서 재현되지 않아 원인(제품 vs 하네스) 미확정. `errand` 의 타일 위치(EO4)·소리 읽기(HS3)도 각 1회 간헐. 재현되면 16-08 이 남긴 시간 초과 진단으로 먼저 본다.
+- 배포본 smoke 의 `dayAnnounce 도착 편차` 500ms 판정은 망 지연으로 가끔 넘는다(재실행 통과).
+
+## 남은 것 (사용자·다음 세션)
+
+- 17페이즈(튜토리얼 "첫 사건") 시안 결정: 사회자(A/B/C)·첫 화면 진입(A/B/C) — HANDOFF 다음 할 일 1.
+- 결정 0079 위임 기본값(V-*·A1~A5) 검토, 한 줄씩 바꿀 수 있음.
+- v3.0 실테스트는 17 배포 뒤 한 번에(같은 옷 표시 색 읽힘·가짜 장소 무반응 읽힘·심부름 체감).
+
+## Self-Check: PASSED
+
+- 파일 존재: `docs/decisions/0079-v3-buttons-and-evidence.md`, `perf/nightload-390x844-x4.json`·`-run1.json` 확인.
+- 커밋 존재(조상 확인): `0536e4d4`·`e30e2301`·`a312a029`·`49b1ad57`·`887b2ab8` 확인. 측정된 `commits: 9`(`git rev-list --count e39f4175..887b2ab8`, SUMMARY 커밋 제외).
+- 인수 기준: 0079 의 `0079-` 18줄(≥10) · 0073·0074·0077 개정 표시 각 1 · screen-map `sideColumnChecks` 1·`B+64` 3 · 0079 의 `V-8` 3 · HANDOFF 5814바이트(≤6144)·`0079` 4줄·머리 셋 · REQUIREMENTS 11개 `[x]` · `git rev-list --count origin/v3..HEAD` 0(stage 4 push 직후) · `## 진행` 단계 1~4 줄.
+- 계획 `<verification>`: 배포본이 새 version, smoke full·lobby·errand·trace E2E 통과, v1·v2 health 불변.

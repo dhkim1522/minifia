@@ -5,17 +5,17 @@ milestone_name: 사회자와 증거
 current_phase: 16
 current_phase_name: 단추 정리·심부름 증거
 current_plan: 10
-status: executing
-stopped_at: Completed 16-09-PLAN.md
-last_updated: "2026-11-08T12:45:10.639Z"
+status: verifying
+stopped_at: Completed 16-10-PLAN.md
+last_updated: "2026-11-08T14:45:19.746Z"
 last_activity: 2026-11-08
 last_activity_desc: Phase 16 execution started
-state_head: 1cec5fa56875e8b229bbd8252fd75ef955c1ab6e
+state_head: 887b2ab84d915bace545790c05044964ed3cbc0b
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 35
-  completed_plans: 34
+  completed_plans: 35
   percent: 60
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 Phase: 16 (단추 정리·심부름 증거) — EXECUTING
 Current Plan: 10
 Total Plans in Phase: 10
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-08 — Phase 16 execution started
 
 ## Performance Metrics
@@ -232,6 +232,7 @@ Last activity: 2026-11-08 — Phase 16 execution started
 | Phase 16 P07 | 35min | 3 tasks | 24 files |
 | Phase 16 P08 | 55min | 3 tasks | 14 files |
 | Phase 16 P09 | 95min | 3 tasks | 23 files |
+| Phase 16 P10 | 약 3h 20m | 4 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -505,6 +506,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 16]: 16-09: 이름표 표시는 증거 카드가 뜬 뒤부터 낮 끝까지(밤엔 서버가 증거를 안 실어 사라짐), 목격 표시도 trace 가 있을 때만, 같은 옷 대상은 산 사람만
 - [Phase 16]: 16-09: 사회자 discussion.evidence 는 day.evidence.trace 유무만 읽고 빛남은 discussion.act 와 같은 채팅 단추 — 우선순위 witness, discussion.evidence, discussion.act
 - [Phase 16]: 16-09: 이름표 표시·증거 카드 CSS 는 v2.css 의 brass 금지 계약 때문에 evidence.css 에 둔다
+- [Phase 16]: 결정 0079: 16페이즈 확정분 0079-1~14·위임 기본값 V-1~V-7·V-19~V-32(V-8~V-18 은 17 로 이동)·A1~A5 한 장에 기록
+- [Phase 16]: 첫 배포 뒤 알약 배치(이웃 장소 타일 피하기)를 고쳐 minifia-v3 를 한 번 더 배포 — 배포본은 항상 커밋된 코드와 같다
+- [Phase 16]: E2E errand 이름표 수 판정은 퇴장 연출(180ms)과 겹치는 시간 경쟁이라 settleTags 로 고치고 smoke 아침 흔적 길이는 MORNING_TRACE_MS 사본으로 묶는다
 
 ### Pending Todos
 
@@ -571,8 +575,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-08T12:45:10.472Z
-Stopped at: Completed 16-09-PLAN.md
+Last session: 2026-11-08T14:45:19.588Z
+Stopped at: Completed 16-10-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
