@@ -14,6 +14,7 @@ requirements-completed: [TOOL-04, BTN-01, BTN-02, ERRAND-06, ERRAND-07, ERRAND-0
 - [x] 단계 1 로컬 검증: npm test 7584 통과(알려진 간헐 2건은 단독 통과) · E2E 전 흐름 폰 6종 회귀 한 번(실패 5건 → 간헐 4건은 재실행 통과·알려진 perfbudget B2/M1 은 13페이즈부터) · nightload 평균 59.9fps·끊김 4(재측정) · RULESET 불변 · 위생 통과(새 결과 0)
 - [x] 단계 2 문서: 결정 0079(0079-1~0079-14, 위임 기본값 V-1~V-7·V-19~V-32 표) · 0073·0074·0077 개정 표시 · screen-map 16 절(sideColumnChecks·B+64) · architecture·product 문단
 - [x] 단계 3 배포: minifia-v3 `2026-11-08T03:41:15Z+b79c0e5a` → `2026-11-08T14:29:24Z+49b1ad57`(두 번 배포: 첫 배포 `13:53:05Z+a312a029` 뒤 smoke·알약 수정을 반영해 재배포) · 배포본 smoke full 통과(재실행 1회 포함) · lobby·errand·trace E2E 24/24 흐름 통과 · v1·v2 health 변화 없음 · 개인 계정 확인
+- [x] 단계 4 HANDOFF·push: 요구사항 11개 완료 표시(DEPLOY-04 포함) · HANDOFF 5814바이트(≤6144)·머리 셋 · `git push origin v3`
 
 ## 단계 1: 로컬 전체 검증
 

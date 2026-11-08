@@ -64,7 +64,7 @@
 ### 배포 (DEPLOY)
 
 - [x] **DEPLOY-03**: v3.0 이 `v3` 브랜치에서 Worker `minifia-v3`(https://minifia-v3.dhplay.workers.dev)로 배포되고 v1.0·v2.0 주소는 그대로 남는다. 누설 검사가 새 메시지·단계로 넓어진 채 통과한다
-- [ ] **DEPLOY-04**: 16페이즈가 누설 검사를 새 view 필드(day.evidence 등)·서버 전용 값(errandFake·errandLast)까지 넓힌 채 `minifia-v3` 에 배포된다(DEPLOY-03 과 같은 방식)
+- [x] **DEPLOY-04**: 16페이즈가 누설 검사를 새 view 필드(day.evidence 등)·서버 전용 값(errandFake·errandLast)까지 넓힌 채 `minifia-v3` 에 배포된다(DEPLOY-03 과 같은 방식)
 
 ## Future Requirements
 
@@ -119,7 +119,7 @@
 | EVID-01 | Phase 16 | Complete |
 | EVID-02 | Phase 16 | Complete |
 | EVID-03 | Phase 16 | Complete |
-| DEPLOY-04 | Phase 16 | Pending |
+| DEPLOY-04 | Phase 16 | Complete |
 
 **Coverage:**
 - v3.0 requirements: 33 total
