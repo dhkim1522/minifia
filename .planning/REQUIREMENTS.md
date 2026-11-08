@@ -45,7 +45,7 @@
 ### 단추 정리 (TOOL·BTN) — 16페이즈, 결정 0077
 
 - [x] **TOOL-04**: 아이콘 단추 아래 글 이름표가 어느 화면에도 없고, 모든 아이콘 단추에 비어 있지 않은 접근성 이름이 있다(TOOL-01 을 대체)
-- [ ] **BTN-01**: 머리에는 정사각 44 단추만 있고(대기실 나가기·공유 / 게임 기록·내 역할), 입력줄 단추는 48 원이다
+- [x] **BTN-01**: 머리에는 정사각 44 단추만 있고(대기실 나가기·공유 / 게임 기록·내 역할), 입력줄 단추는 48 원이다
 - [ ] **BTN-02**: 소리·맵(방장)·봇(방장)·옷장이 오른쪽 세로 한 줄의 52 원이고 자막 띠 주변은 비어 있다. 손님에게는 맵·봇이 없다
 
 ### 심부름 화면과 컬러 에셋 (ERRAND·ASSET) — 16페이즈
@@ -110,7 +110,7 @@
 | TRACE-03 | Phase 15 | Complete |
 | DEPLOY-03 | Phase 15 | Complete |
 | TOOL-04 | Phase 16 | Complete |
-| BTN-01 | Phase 16 | Pending |
+| BTN-01 | Phase 16 | Complete |
 | BTN-02 | Phase 16 | Pending |
 | ERRAND-06 | Phase 16 | Pending |
 | ERRAND-07 | Phase 16 | Pending |
