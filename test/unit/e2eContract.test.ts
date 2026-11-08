@@ -583,10 +583,10 @@ describe("11페이즈 맵 선택 E2E 표식·기하 (11-13)", () => {
   it("칩·카드 기하가 앱 CSS 와 같다 — 어긋나면 E2E 가 거짓 통과·거짓 실패한다", () => {
     const css = readFileSync(new URL("src/styles/v2.css", root), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     const body = (sel: string): string => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === sel)?.[2] ?? "";
-    expect(body(".mf-mapchip__disc")).toContain(`width: ${maps.MAP_CHIP.disc}px`);
-    expect(body(".mf-mapchip__disc")).toContain(`height: ${maps.MAP_CHIP.disc}px`);
-    expect(body(".mf-mapchip")).toContain("width: var(--tap-min)");
-    expect(maps.MAP_CHIP.hit).toBe(44);
+    expect(maps.MAP_CHIP.disc).toBe(52); // 16-06: 상자가 곧 52 원(--control-button)
+    expect(body(".mf-mapchip")).toContain("width: var(--control-button)");
+    expect(body(".mf-mapchip")).toContain("height: var(--control-button)");
+    expect(maps.MAP_CHIP.hit).toBe(52);
     expect(maps.MAP_CHIP.left).toBe(16);
     const card = body(".mv-map-card");
     expect(card).toContain(`width: ${maps.MAP_CARD.w}px`);

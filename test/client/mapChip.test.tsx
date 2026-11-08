@@ -38,9 +38,11 @@ describe("MapChip — 부품", () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  it("시각 원(disc)과 누르는 영역이 따로 있고 글은 없고(이름은 aria-label) hex 색이 없다 (16-04 TOOL-04)", () => {
+  it("상자가 곧 52 원 면이고(안쪽 disc 없음) 글은 없고(이름은 aria-label) hex 색이 없다 (16-04 TOOL-04, 16-06 V-2)", () => {
     const { container } = render(<MapChip choice="bar" host onPress={() => {}} />);
-    expect(container.querySelector("[data-map-chip] .mf-mapchip__disc")).not.toBeNull();
+    expect(container.querySelector("[data-map-chip] .mf-mapchip__disc")).toBeNull();
+    expect(container.querySelector("[data-map-chip] svg")).not.toBeNull();
+    expect(container.querySelector("[data-map-chip]")?.getAttribute("data-side-button")).toBe("map");
     expect((container.textContent ?? "").trim()).toBe("");
     expect(container.querySelector("[data-map-chip]")?.hasAttribute("data-tool-label")).toBe(false);
     expect(container.querySelector(".mf-mapchip__label")).toBeNull();

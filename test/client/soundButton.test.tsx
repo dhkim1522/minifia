@@ -119,10 +119,12 @@ describe("SoundButton 세 상태 (B-1, B-2)", () => {
     expect(document.querySelector("[data-sound-button]")).toBeNull();
   });
 
-  it("표식은 data-sound-button·data-sound-state 둘뿐이다 (역할·좌석 값 없음, T-12-23 — 이름표 속성은 16-04 TOOL-04 로 없어졌다)", () => {
+  it("표식은 data-sound-button·data-sound-state·data-side-button=sound 셋뿐이다 (역할·좌석 값 없음, T-12-23·T-16-14 — 이름표 속성은 16-04 TOOL-04 로 없어졌다)", () => {
     mount({ unlocked: true });
     const names = button().getAttributeNames().filter((n) => n.startsWith("data-")).sort();
-    expect(names).toEqual(["data-sound-button", "data-sound-state"]);
+    expect(names).toEqual(["data-side-button", "data-sound-button", "data-sound-state"]);
+    expect(button().getAttribute("data-side-button")).toBe("sound");
+    expect(button().querySelector(".mv-sound__face")).toBeNull(); // 상자가 곧 면(52 원)
     expect(button().getAttribute("role")).toBeNull();
     expect(button().outerHTML).not.toMatch(/role|seat|mafia|nonce/i);
   });

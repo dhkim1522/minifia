@@ -311,9 +311,10 @@ describe("머리·떠 있는 단추·옷장 (TOOL-04, D-01)", () => {
     expectIconButton(container.querySelector(".mv-dress-sheet__close"), "닫기");
   });
 
-  it("CSS: 맵 칩·떠 있는 단추의 폭 규칙은 그대로다 (크기는 16-06 이 바꾼다)", () => {
-    expect(rule(".mf-mapchip")).toContain("width: var(--tap-min)");
+  it("CSS: 맵 칩은 52 원, 떠 있는 단추는 48 원(옆 열 단추는 52)이다 (16-06, 상자가 곧 면)", () => {
+    expect(rule(".mf-mapchip")).toContain("width: var(--control-button)");
     expect(rule(".mv-float")).toContain("width: var(--control-input)");
+    expect(rule(".mv-float[data-side-button]")).toContain("width: var(--control-button)");
   });
 });
 

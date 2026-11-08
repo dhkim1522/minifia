@@ -178,7 +178,7 @@ describe("띠 아래 자리 (U-1·U-6·U-8)", () => {
       if (this.tagName === "BUTTON" && this.closest(".mf-game__header") !== null) return rect(18, headerButtonBottom || 62);
       const hostTop = Number.parseFloat(document.querySelector<HTMLElement>(".mf-room")?.style.getPropertyValue("--mf-host-top") || "") || 70;
       if (cls.contains("mv-host__band")) return rect(hostTop, hostTop + bandH);
-      if (cls.contains("mv-host__dock")) return rect(hostTop + bandH + 8, hostTop + bandH + 8 + 44);
+      if (cls.contains("mv-host__dock")) return rect(hostTop + bandH + 8, hostTop + bandH + 8 + 4 + 52); // 독 위 안쪽 여백 4 + 소리 원 52
       return rect(0, 0);
     });
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
@@ -210,7 +210,7 @@ describe("띠 아래 자리 (U-1·U-6·U-8)", () => {
     renderRoom(makeView({ phase: "discussion" }));
     expect(roomVar("--mf-host-top")).toBe("70px");
     expect(roomVar("--mf-host-bottom")).toBe("118px");
-    expect(roomVar("--mf-host-dock")).toBe("170px");
+    expect(roomVar("--mf-host-dock")).toBe("182px"); // 띠 아랫변 118 + 64 (16-06 V-4)
   });
 
   it("헤더 안 단추가 헤더보다 아래로 나오면 단추 아랫변을 쓴다 (띠가 이름표 단추를 덮지 않게)", () => {
