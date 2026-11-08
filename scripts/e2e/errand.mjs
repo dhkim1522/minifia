@@ -285,7 +285,7 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
       await untilErrandDrawn(hp);
 
       // ① 도착 직후
-      const first = await errandInput(hp, mySeat, { reach: "out" });
+      const first = await errandInput(hp, mySeat, { reach: "out", settleTags: true }); // 근처에서 막 벗어난 사람의 퇴장 연출(180ms)과 겹치는 경쟁을 가라앉힌다(16-10)
       // 마피아 판과 견줄 시민 판의 마크업 서명은 같은 상태(도착 직후·반경 밖)에서 읽는다
       const citizenSig = citizenSigEarly;
       const f1 = fold(errandChecks(first.s));
@@ -315,8 +315,11 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
         // 첫 장소에서 알약이 나타난 순간(처리 반경 안)을 한 번 읽어 판정한다
         await doPlace(hp, ht, k, k === 1 ? async () => {
           await sleep(200);
+          // 영역 겹침(EO)은 알약이 나타난 순간의 읽기(inn)로, 이름표 수(EA5)는 가라앉힌 읽기(innEa)로 판정한다. 걷는 동안 근처를 벗어난 사람의
+          // 이름표가 퇴장 연출(180ms) 중이면 월드 좌석보다 많아 보이는 경쟁이 있었다(16-10) — settleTags 는 문턱 그대로 3초 안에 사라지는지를 본다.
           const inn = await errandInput(hp, mySeat, { reach: "in" });
-          const fi = fold(errandChecks(inn.s));
+          const innEa = await errandInput(hp, mySeat, { reach: "in", settleTags: true });
+          const fi = fold(errandChecks(innEa.s));
           rec(`${id}/in-range`, "EA", `반경 안: 알약 1·화살표 0·알약만 빛남·남은 타일 후광·타일 64`, fi.ok, fi.detail);
           overlap(inn.r, "in-range");
         } : undefined);
