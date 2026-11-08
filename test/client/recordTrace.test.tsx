@@ -404,7 +404,7 @@ describe("아침 — 흔적 카드 (TRACE-02·03, D-06)", () => {
     act(() => void vi.advanceTimersByTime(2000));
     expect(card(container)).not.toBeNull();
     expect(card(container)?.querySelector(".mv-trace__name")?.textContent).toBe("노란 연필 조각");
-    expect(card(container)?.querySelector(".mv-trace__note")?.textContent).toBe("누구의 것인지는 모릅니다");
+    expect(card(container)?.querySelector(".mv-trace__note")?.textContent).toBe("같은 옷을 입은 사람에게 표시");
     expect(band(container)).toBe(TRACE_LINE);
     act(() => void vi.advanceTimersByTime(2500));
     expect(signals.emit.mock.calls.map((c) => (c[0] as { kind: string }).kind).filter((k) => k === "card")).toHaveLength(1);

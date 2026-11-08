@@ -14,5 +14,5 @@ export const TRACE_TEXT: Readonly<Record<TracePiece, string>> = {
   redCloth: "붉은 천 조각",
 };
 
-/** 카드의 고정 보조 문구 — 확정 증거가 아님을 글 한 줄로만 말한다(T-15-12) */
-export const TRACE_NOTE = "누구의 것인지는 모릅니다";
+/** 증거 카드 1행의 고정 보조 줄 — 이름표 표시가 무엇을 뜻하는지만 말한다(색 이름·'범인'·'증거'·'확정' 없음, 시험이 막는다) */
+export const TRACE_MARK_NOTE = "같은 옷을 입은 사람에게 표시";

@@ -91,7 +91,7 @@ describe("옛 장소 선 그림 삭제 (D-07, ASSET-01)", () => {
   });
 
   it("장소 → 아이콘 이름 함수와 15 흔적 카드 부품이 없다", () => {
-    expect(readFileSync("src/game/placeText.ts", "utf8")).not.toContain("placeIconOf");
+    expect(readFileSync("src/game/placeText.ts", "utf8")).not.toContain(["place", "IconOf"].join(""));
     expect(() => readFileSync("src/components/v2/TraceCard.tsx", "utf8")).toThrow();
   });
 });

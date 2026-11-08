@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 import "../../styles/v2.css";
-import { placeIconOf } from "../../game/placeText";
 import type { RecordRow } from "../../game/recordView";
+import { PlaceArt } from "./placeArt";
 import { V2Icon } from "./V2Icon";
 
 export interface RecordCardProps {
@@ -32,7 +32,7 @@ export function RecordCard({ rows, faceOf, colorOf, onClose }: RecordCardProps):
           {rows.map((r) => (
             <li key={r.n} className="mv-record__row" data-record-row="">
               <span className="mv-record__n">{r.n}</span>
-              <V2Icon name={placeIconOf(r.place)} size={24} />
+              <PlaceArt id={r.place} size={24} />
               <img className="mv-record__face" src={faceOf(r.seat)} alt="" draggable={false} style={{ borderColor: colorOf(r.seat) }} />
               <span className="mv-record__name">{r.name}</span>
             </li>

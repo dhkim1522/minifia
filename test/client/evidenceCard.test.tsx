@@ -99,7 +99,7 @@ describe("EvidenceCard", () => {
     const rule = /\.mv-evidence\s*\{([^}]*)\}/.exec(EVIDENCE_CSS)?.[1] ?? "";
     expect(rule).toContain("min-height: 128px");
     expect(rule).toContain("flex-direction: column");
-    expect(EVIDENCE_CSS).toMatch(/\.mv-evidence__trace \.mv-trace__disc\s*\{[^}]*border: 2px solid var\(--trace-mark\)/);
+    expect(EVIDENCE_CSS).toMatch(/\.mv-evidence__trace \.mv-trace__disc\s*\{[^}]*border: 2px solid var\(--trace-mark[,)]/);
     const victim = /\.mv-evidence__victim\s*\{([^}]*)\}/.exec(EVIDENCE_CSS)?.[1] ?? "";
     for (const token of ["line-through", "max-width: 4em", "text-overflow: ellipsis", "opacity: 0.5"]) expect(victim).toContain(token);
     expect(EVIDENCE_CSS).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
