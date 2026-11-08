@@ -3705,33 +3705,37 @@ describe("런타임 직접: 근처 snap·onProject·walkTo (15페이즈 D-02, UI
   });
 });
 
-// ---------- 15-05 Task 2: errand 층(표지·화살표 칩·근처 링) ----------
+// ---------- 15-05 Task 2·16-07: errand 층(장소 타일·발밑 화살표·장소 위 [처리] 알약·근처 링) ----------
 
-describe("WorldStage: errand 층 (15페이즈 D-02·D-09, UI-SPEC U-3·U-5·U-18)", () => {
+describe("WorldStage: errand 층 (15페이즈 D-02·D-09, 16페이즈 D-06·D-07, UI-SPEC V-20~V-22)", () => {
   const INS = { top: 60, bottom: 84 };
-  // 가짜 렌더러: 발끝 (x, z) → sx = 200 + 10x, sy = 300 + 10z
+  // 가짜 렌더러: 발끝 (x, z) → sx = 200 + 10x, sy = 300 + 10z. 내 위치(기본 ents)는 (2, 1) → (220, 310)
   const A = { id: "glass" as const, x: 0, z: 0, done: false }; // (200, 300) 안
   const B = { id: "piano" as const, x: -100, z: 0, done: false }; // (-800, 300) 밖
   const C = { id: "sax" as const, x: 5, z: 5, done: true }; // (250, 350) 안
   const errandProp = (over: Partial<NonNullable<WorldStageProps["errand"]>> = {}): NonNullable<WorldStageProps["errand"]> => ({
     places: [A, B, C],
     nextId: "glass",
+    actId: null,
     callPlace: false,
     nearR: 3,
     onWalk: vi.fn(),
     ...over,
   });
   const layer = (s: Setup) => s.utils.container.querySelector<HTMLElement>(".mf-world__errand");
+  const actLayer = (s: Setup) => s.utils.container.querySelector<HTMLElement>(".mf-world__errand-act");
   const pin = (s: Setup, id: string) => s.utils.container.querySelector<HTMLElement>(`button[data-errand-place="${id}"]`)!;
   const arrow = (s: Setup) => s.utils.container.querySelector<HTMLElement>("[data-errand-arrow]")!;
+  const act = (s: Setup) => s.utils.container.querySelector<HTMLElement>("button[data-errand-act]");
 
   it("errand prop 이 없으면 층이 DOM 에 없다(회귀)", async () => {
     const s = await open({ stageInsets: INS });
     expect(layer(s)).toBeNull();
+    expect(actLayer(s)).toBeNull();
     expect(s.utils.container.querySelector("[data-near-ring]")).toBeNull();
   });
 
-  it("errand prop 이 있으면 장소마다 표지 버튼, 화살표 칩 하나, 링 svg(data-near-ring=nearR) 가 마운트된다", async () => {
+  it("errand prop 이 있으면 장소마다 타일 버튼, 화살표 하나, 링 svg(data-near-ring=nearR) 가 마운트되고 알약은 actId 가 있을 때만 하나다", async () => {
     const s = await open({ stageInsets: INS, errand: errandProp() });
     expect(layer(s)).not.toBeNull();
     expect(s.utils.container.querySelectorAll("button[data-errand-place]")).toHaveLength(3);
@@ -3739,17 +3743,26 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, UI-SPEC U-3·U-5·U-18
     expect(s.utils.container.querySelector("svg[data-near-ring]")!.getAttribute("data-near-ring")).toBe("3");
     expect(pin(s, "sax").hasAttribute("data-done")).toBe(true);
     expect(pin(s, "glass").hasAttribute("data-done")).toBe(false);
+    expect(s.utils.container.querySelectorAll("[data-errand-act]")).toHaveLength(0);
+    s.rerender({ errand: errandProp({ actId: "glass" }) });
+    expect(s.utils.container.querySelectorAll("[data-errand-act]")).toHaveLength(1);
+    expect(act(s)!.getAttribute("aria-label")).toBe("술잔에서 처리");
+    s.rerender({ errand: errandProp({ actId: null }) });
+    expect(s.utils.container.querySelectorAll("[data-errand-act]")).toHaveLength(0);
   });
 
-  it("층은 이름표 층보다 DOM 앞(아래)에 있고 nearR 값이 바뀌면 속성이 따라간다", async () => {
-    const s = await open({ stageInsets: INS, errand: errandProp() });
+  it("층은 이름표 층보다 DOM 앞에 있고(알약 층도 같다 — z 는 CSS) nearR 값이 바뀌면 속성이 따라간다", async () => {
+    const s = await open({ stageInsets: INS, errand: errandProp({ actId: "glass" }) });
     const kids = [...s.utils.container.querySelector("[data-world-stage]")!.children];
-    expect(kids.indexOf(layer(s)!)).toBeLessThan(kids.indexOf(s.utils.container.querySelector(".mf-world__tags")!));
+    const tags = s.utils.container.querySelector(".mf-world__tags")!;
+    expect(kids.indexOf(layer(s)!)).toBeLessThan(kids.indexOf(tags));
+    expect(kids.indexOf(actLayer(s)!)).toBeLessThan(kids.indexOf(tags));
+    expect(actLayer(s)!.contains(act(s))).toBe(true);
     s.rerender({ errand: errandProp({ nearR: 4 }) });
     expect(s.utils.container.querySelector("svg[data-near-ring]")!.getAttribute("data-near-ring")).toBe("4");
   });
 
-  it("표지를 누르면 onWalk(id) 가 불리고 그 장소로 걷는 move 가 한 번 간다(처리 메시지 없음)", async () => {
+  it("타일을 누르면 onWalk(id) 가 불리고 그 장소로 걷는 move 가 한 번 간다(처리 메시지 없음)", async () => {
     const onWalk = vi.fn();
     const s = await open({ stageInsets: INS, errand: errandProp({ onWalk }) });
     frame();
@@ -3759,64 +3772,112 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, UI-SPEC U-3·U-5·U-18
     expect(s.send).toHaveBeenCalledWith({ t: "move", x: 500, z: 500 });
   });
 
-  it("canWalk 가 거짓이면 표지를 눌러도 걷지 않는다", async () => {
+  it("canWalk 가 거짓이면 타일을 눌러도 걷지 않는다", async () => {
     const s = await open({ stageInsets: INS, canWalk: false, errand: errandProp() });
     frame();
     fireEvent.click(pin(s, "sax"));
     expect(s.send).not.toHaveBeenCalled();
   });
 
-  it("프레임마다 스테이지 안(안쪽 8)의 표지는 투영 좌표로 놓이고 화면 밖 표지는 hidden 이다", async () => {
+  it("프레임마다 스테이지 안(안쪽 8)의 타일은 64 상자 중심이 투영 좌표로 놓이고 화면 밖 타일은 hidden 이다", async () => {
     const s = await open({ stageInsets: INS, errand: errandProp() });
     frame();
     expect(pin(s, "glass").hidden).toBe(false);
-    expect(pin(s, "glass").style.transform).toBe("translate(178px, 278px)");
+    expect(pin(s, "glass").style.transform).toBe("translate(168px, 268px)");
     expect(pin(s, "sax").hidden).toBe(false);
-    expect(pin(s, "sax").style.transform).toBe("translate(228px, 328px)");
+    expect(pin(s, "sax").style.transform).toBe("translate(218px, 318px)");
     expect(pin(s, "piano").hidden).toBe(true);
   });
 
-  it("다음 장소가 화면 밖이면 화살표가 보이고 그 방향(왼쪽)을 가리키며, 보이면 화살표는 hidden 이다", async () => {
-    const s = await open({ stageInsets: INS, errand: errandProp({ nextId: "piano" }) });
+  it("화살표: 알약이 없으면 내 발밑(220, 310)에서 가장 가까운 장소(glass) 방향으로 56 떨어진 자리에 40 글리프가 선다(타일이 보여도)", async () => {
+    const s = await open({ stageInsets: INS, errand: errandProp({ nextId: "glass" }) });
     frame();
     expect(arrow(s).hidden).toBe(false);
-    expect(arrow(s).style.transform).toMatch(/^translate\(/);
+    // 방향 (-20, -10)/22.36 → 중심 (220 - 50.08, 310 - 25.04) → 왼쪽 위 모서리 (150, 265)
+    expect(arrow(s).style.transform).toBe("translate(150px, 265px)");
     const turn = arrow(s).querySelector<HTMLElement>(".mv-errand-arrow__turn")!;
     const deg = Number(/rotate\((-?[\d.]+)deg\)/.exec(turn.style.transform)![1]);
-    expect(deg).toBeLessThan(-60);
-    expect(deg).toBeGreaterThan(-120);
-    s.rerender({ errand: errandProp({ nextId: "glass" }) });
+    expect(deg).toBeCloseTo(-63.4, 1);
+    // 목표가 화면 밖(piano, 왼쪽)이어도 같은 규칙: 왼쪽(약 -90°)
+    s.rerender({ errand: errandProp({ nextId: "piano" }) });
     frame();
-    expect(arrow(s).hidden).toBe(true);
+    const deg2 = Number(/rotate\((-?[\d.]+)deg\)/.exec(arrow(s).querySelector<HTMLElement>(".mv-errand-arrow__turn")!.style.transform)![1]);
+    expect(deg2).toBeLessThan(-80);
+    expect(deg2).toBeGreaterThan(-100);
+    // 눌림 통과·포커스 없음: 요소는 span·aria-hidden
+    expect(arrow(s).getAttribute("aria-hidden")).toBe("true");
+    expect(arrow(s).tagName).toBe("SPAN");
   });
 
-  it("독 줄과 겹치는 표지는 그리지 않고 다음 장소면 화살표가 대신한다", async () => {
-    const dock = document.createElement("div");
-    dock.setAttribute("data-host-band", "");
-    const row = document.createElement("div");
-    row.className = "mv-host__dock";
-    row.getBoundingClientRect = () => ({ left: 170, top: 270, right: 230, bottom: 330, width: 60, height: 60, x: 170, y: 270, toJSON() {} }) as DOMRect;
-    dock.append(row);
-    document.body.append(dock);
+  it("내 위치를 모르거나 다음 장소가 없으면 화살표는 hidden 이고 알약이 있으면 화살표도 hidden 이다", async () => {
+    const s = await open({ stageInsets: INS, errand: errandProp({ nextId: "glass" }) }, { ents: [seg(1, [-300, 50])] });
+    frame();
+    expect(arrow(s).hidden).toBe(true);
+    const t = await open({ stageInsets: INS, errand: errandProp({ nextId: null }) });
+    frame();
+    expect(arrow(t).hidden).toBe(true);
+    const u = await open({ stageInsets: INS, errand: errandProp({ nextId: "glass", actId: "glass" }) });
+    frame();
+    expect(arrow(u).hidden).toBe(true);
+  });
+
+  it("알약: actId 장소 타일 위 8 에 서고(중심 y = 300 - 32 - 8 - 22, 폭을 모르면 96) 누르면 onAct 가 한 번 불린다", async () => {
+    const onAct = vi.fn();
+    const s = await open({ stageInsets: INS, errand: errandProp({ actId: "glass", onAct }) });
+    frame();
+    const pill = act(s)!;
+    expect(pill.hidden).toBe(false);
+    expect(pill.style.transform).toBe("translate(152px, 216px)");
+    fireEvent.click(pill);
+    expect(onAct).toHaveBeenCalledTimes(1);
+    expect(s.send).not.toHaveBeenCalled(); // 처리 메시지는 GameMap 몫(onAct) — 층은 보내지 않는다
+  });
+
+  it("알약 위가 막히면(스테이지 위 안쪽 8) 타일 아래 8 로 뒤집는다", async () => {
+    const s = await open({ stageInsets: { top: 250, bottom: 84 }, errand: errandProp({ actId: "glass" }) });
+    frame();
+    // 스테이지 top 250 → 안쪽 258, 알약 위 상자 top = 216 < 258 → 아래: 중심 y = 300 + 32 + 8 + 22 = 362 → top 340
+    expect(act(s)!.style.transform).toBe("translate(152px, 340px)");
+  });
+
+  it("소리 열·오른쪽 열 단추([data-side-button])와 겹치는 타일은 그리지 않는다", async () => {
+    const btn = document.createElement("button");
+    btn.setAttribute("data-side-button", "sound");
+    btn.getBoundingClientRect = () => ({ left: 190, top: 290, right: 242, bottom: 342, width: 52, height: 52, x: 190, y: 290, toJSON() {} }) as DOMRect;
+    document.body.append(btn);
     const s = await open({ stageInsets: INS, errand: errandProp({ nextId: "glass" }) });
     frame(600);
     expect(pin(s, "glass").hidden).toBe(true);
+    expect(pin(s, "sax").hidden).toBe(true); // (250, 350) 상자 218..282 × 318..382 도 단추(~242, ~342)와 겹친다
     expect(arrow(s).hidden).toBe(false);
-    dock.remove();
+    btn.remove();
   });
 
-  it("빛남: callPlace 면 보이는 다음 장소 표지에만 data-call, 화살표가 대신하면 화살표에만, callPlace 거짓이면 어디에도 없다", async () => {
+  it("빛남·후광: 미처리·빛나지 않는 보이는 타일은 data-rest, callPlace 면 가장 가까운 타일만 data-call(is-call), 알약이 있으면 알약만 data-call, 화살표는 켜지지 않는다", async () => {
     const s = await open({ stageInsets: INS, errand: errandProp({ callPlace: true, nextId: "glass" }) });
     frame();
     expect(s.utils.container.querySelectorAll("[data-call]")).toHaveLength(1);
     expect(pin(s, "glass").hasAttribute("data-call")).toBe(true);
+    expect(pin(s, "glass").classList.contains("is-call")).toBe(true);
+    expect(pin(s, "glass").hasAttribute("data-rest")).toBe(false);
     expect(arrow(s).hasAttribute("data-call")).toBe(false);
+    expect(pin(s, "sax").hasAttribute("data-rest")).toBe(false); // 처리한 곳은 후광이 아니다
+    expect(pin(s, "piano").hasAttribute("data-rest")).toBe(false); // 안 보이는 타일
+    // 다음 장소가 안 보이는 곳이면 어느 타일도 빛나지 않는다(화살표는 방향만 알린다)
     s.rerender({ errand: errandProp({ callPlace: true, nextId: "piano" }) });
     frame();
+    expect(s.utils.container.querySelectorAll("[data-call]")).toHaveLength(0);
+    expect(pin(s, "glass").hasAttribute("data-rest")).toBe(true);
+    // 알약이 있으면 알약만 빛난다(callPlace 가 우연히 참이어도 타일은 켜지 않는다)
+    s.rerender({ errand: errandProp({ callPlace: true, nextId: "glass", actId: "glass" }) });
+    frame();
     expect(s.utils.container.querySelectorAll("[data-call]")).toHaveLength(1);
+    expect(act(s)!.hasAttribute("data-call")).toBe(true);
+    expect(act(s)!.classList.contains("is-call")).toBe(true);
     expect(pin(s, "glass").hasAttribute("data-call")).toBe(false);
-    expect(arrow(s).hasAttribute("data-call")).toBe(true);
-    s.rerender({ errand: errandProp({ callPlace: false, nextId: "piano" }) });
+    expect(pin(s, "glass").hasAttribute("data-rest")).toBe(true); // 후광은 유지
+    // 3곳 완료(callPlace 거짓·알약 없음): 맥박 빛 없음
+    s.rerender({ errand: errandProp({ callPlace: false, nextId: null, actId: null, places: [{ ...A, done: true }, B, { ...C, done: true }] }) });
     frame();
     expect(s.utils.container.querySelectorAll("[data-call]")).toHaveLength(0);
   });
@@ -3835,22 +3896,26 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, UI-SPEC U-3·U-5·U-18
     expect(ring.style.display).toBe("none");
   });
 
-  it("스타일: 층은 pointer-events none·표지 버튼만 auto, 이름표 층보다 한 단 아래, 링은 점선 굵기 2·정지, hex 없음", () => {
+  it("스타일: 층은 pointer-events none·타일 버튼만 auto, 타일·화살표는 이름표 층보다 한 단 아래, 알약 층은 한 단 위, 링은 점선 굵기 2·정지, hex 없음", () => {
     const css = readFileSync("src/styles/game.css", "utf8");
     const block = (sel: string): string => new RegExp(`${sel.replace(/[.[\]]/g, "\\$&")}\\s*\\{[^}]*\\}`).exec(css)?.[0] ?? "";
     const layerCss = block(".mf-world__errand");
     expect(layerCss).toContain("pointer-events: none");
     expect(layerCss).toContain("calc(var(--z-tags) - 1)");
+    const actCss = block(".mf-world__errand-act");
+    expect(actCss).toContain("pointer-events: none");
+    expect(actCss).toContain("calc(var(--z-tags) + 1)");
     const ringCss = block(".mf-world__ring");
     expect(ringCss).toContain("stroke-dasharray");
     expect(ringCss).toContain("stroke-width: 2");
     expect(ringCss).toContain("var(--gray-50)");
     expect(ringCss).not.toContain("animation");
-    expect(layerCss + ringCss).not.toMatch(/#[0-9a-fA-F]{3,6}/);
+    expect(layerCss + actCss + ringCss).not.toMatch(/#[0-9a-fA-F]{3,6}/);
     expect(css).toMatch(/\.mf-world__errand > \.mv-errand-pin\s*\{[^}]*pointer-events: auto/);
+    expect(css).toMatch(/\.mf-world__errand-act > \.mv-errand-act\s*\{[^}]*left: 0[^}]*top: 0/);
   });
 
-  it("모션 줄이기: 층 쪽에는 애니메이션이 없다(링·표지 채움은 즉시)", async () => {
+  it("모션 줄이기: 층 쪽에는 애니메이션이 없다(링·타일 채움은 즉시)", async () => {
     stubReducedMotion(true);
     const s = await open({ stageInsets: INS, errand: errandProp() });
     frame();
