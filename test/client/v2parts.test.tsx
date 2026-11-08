@@ -77,6 +77,66 @@ describe("HeadStack", () => {
   });
 });
 
+describe("HeadStack 흔적 표시 (16-09, V-29, D-09·D-10)", () => {
+  const tag = (c: ParentNode): HTMLElement => c.querySelector(".mv-tag") as HTMLElement;
+
+  it("traceMark: 이름표에 data-trace-mark(값 없음)·--trace-mark 색·이름 앞 thread 16·시각 숨김 글 '흔적과 같은 옷'", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" traceMark="#d23c4e" />);
+    const t = tag(container);
+    expect(t.getAttribute("data-trace-mark")).toBe("");
+    expect(t.getAttribute("style")).toContain("--trace-mark: #d23c4e");
+    const icon = t.querySelector(".mv-tag__trace svg") as SVGElement;
+    expect(icon.getAttribute("width")).toBe("16");
+    expect(t.querySelectorAll("svg")).toHaveLength(1);
+    const kids = [...t.children];
+    expect(kids.indexOf(t.querySelector(".mv-tag__trace") as Element)).toBeLessThan(kids.indexOf(t.querySelector(".mv-tag__name") as Element));
+    expect(t.querySelector(".mv-sr")?.textContent).toBe("흔적과 같은 옷");
+    expect(t.hasAttribute("data-seen-mark")).toBe(false);
+  });
+
+  it("seenMark: data-seen-mark·이름 앞 eye 16, traceMark 와 함께면 아이콘 둘이 나란히 이름 앞에 있다", () => {
+    const only = render(<HeadStack name="도윤" color="var(--seat-2)" seenMark />);
+    const t = tag(only.container);
+    expect(t.getAttribute("data-seen-mark")).toBe("");
+    expect(t.querySelectorAll("svg")).toHaveLength(1);
+    expect(t.hasAttribute("data-trace-mark")).toBe(false);
+    expect(t.querySelector(".mv-sr")).toBeNull();
+    cleanup();
+    const both = render(<HeadStack name="도윤" color="var(--seat-2)" traceMark="#5b7fd1" seenMark />);
+    const b = tag(both.container);
+    expect(b.querySelectorAll("svg")).toHaveLength(2);
+    const name = b.querySelector(".mv-tag__name") as Element;
+    const order = [...b.children];
+    for (const cls of [".mv-tag__trace", ".mv-tag__seen"]) expect(order.indexOf(b.querySelector(cls) as Element)).toBeLessThan(order.indexOf(name));
+  });
+
+  it("안 주면 표식·아이콘·숨김 글이 없다", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" />);
+    const t = tag(container);
+    expect(t.hasAttribute("data-trace-mark")).toBe(false);
+    expect(t.hasAttribute("data-seen-mark")).toBe(false);
+    expect(t.querySelectorAll("svg")).toHaveLength(0);
+    expect(t.querySelector(".mv-sr")).toBeNull();
+    expect(t.hasAttribute("style")).toBe(false);
+  });
+
+  it("속성 값에 좌석·역할·조각 id 가 없고 닉네임은 텍스트로만 나온다", () => {
+    const { container } = render(<HeadStack name="<b>가</b>" color="var(--seat-2)" traceMark="#d23c4e" seenMark />);
+    expect(container.querySelector("b")).toBeNull();
+    const values = [...container.querySelectorAll("*")].flatMap((e) => e.getAttributeNames().filter((n) => n !== "style" && n !== "d").map((n) => `${n}=${e.getAttribute(n)}`)).join(" ");
+    expect(values).not.toMatch(/data-seat|data-role|data-piece|pin|redCloth/);
+    expect(container.querySelector(".mv-tag")?.getAttribute("data-trace-mark")).toBe("");
+  });
+
+  it("CSS: 표시된 이름표 테두리 2 는 var(--trace-mark), 눈은 brass-200, hex 없음", () => {
+    const css = readFileSync("src/styles/evidence.css", "utf8");
+    expect(css).toMatch(/\.mv-tag\[data-trace-mark\]\s*\{[^}]*2px[^}]*var\(--trace-mark\)/);
+    expect(css).toMatch(/\.mv-tag__trace\s*\{[^}]*var\(--trace-mark\)/);
+    expect(css).toMatch(/\.mv-tag__seen\s*\{[^}]*var\(--brass-200\)/);
+    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+});
+
 describe("HeadStack 입력 중 칸 (CHAT-04, 07-03)", () => {
   it("typing 이면 .mv-head 에 data-typing=true 와 맨 위 칸 알약(role img, 입력 중, 점 세 개), 그다음 이름표", () => {
     const { container } = render(<HeadStack name="지호" color="var(--seat-1)" typing />);

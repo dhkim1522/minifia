@@ -5,8 +5,9 @@ import "../helpers/singleLineErrors";
 import { RecordCard } from "../../src/components/v2/RecordCard";
 import { ToolButton } from "../../src/components/ToolButton";
 import { V2Icon } from "../../src/components/v2/V2Icon";
+import { TRACE_MARK } from "../../src/game/traceMark";
 import { faceSrc, seatColorVar } from "../../src/net/assets";
-import { type MorningView, type PhaseId, type PlaceId, type PublicPlayer, type RecordLine, type RoomView } from "../../shared/protocol";
+import { type MorningView, type OutfitId, type PhaseId, type PlaceId, type PublicPlayer, type RecordLine, type RoomView } from "../../shared/protocol";
 import type { RoleId } from "../../shared/game/roles";
 import { MORNING_TRACE_MS } from "../../shared/game/phases";
 import type { RecordRow } from "../../src/game/recordView";
@@ -17,9 +18,16 @@ const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("../../src/net/useRoomConnection", () => ({
   useRoomConnection: () => connectionMock.current,
 }));
+// 이름표 표시(16-09)는 tagProps 로 읽는다 — 가짜 무대가 받은 props 를 쥔다.
+const stage = vi.hoisted(() => ({ props: undefined as undefined | { tagProps?: (seat: number) => Record<string, unknown> } }));
 vi.mock("../../src/components/WorldStage", async () => {
   const { createElement } = await import("react");
-  return { WorldStage: () => createElement("div", { "data-world-stage-fake": "" }) };
+  return {
+    WorldStage: (props: { tagProps?: (seat: number) => Record<string, unknown> }) => {
+      stage.props = props;
+      return createElement("div", { "data-world-stage-fake": "" });
+    },
+  };
 });
 const signals = vi.hoisted(() => ({ emit: vi.fn() }));
 vi.mock("../../src/audio/signals", async (importOriginal) => {
@@ -204,10 +212,12 @@ interface MapOpts {
   dead?: number[];
   morning?: MorningView;
   endsInMs?: number;
+  /** 좌석 → 공개 의상(players[].look). 없으면 look 키 자체가 없다 */
+  looks?: Record<number, OutfitId>;
 }
 
 function mapView(o: MapOpts): RoomView {
-  const players: PublicPlayer[] = NAMES.map((nickname, seat) => ({ seat, nickname, connected: true, isHost: seat === 0, ...(o.dead?.includes(seat) ? { alive: false } : {}) }));
+  const players: PublicPlayer[] = NAMES.map((nickname, seat) => ({ seat, nickname, connected: true, isHost: seat === 0, ...(o.dead?.includes(seat) ? { alive: false } : {}), ...(o.looks?.[seat] !== undefined ? { look: o.looks[seat] } : {}) }));
   return {
     code: "0042",
     phase: o.phase,
@@ -229,7 +239,7 @@ function mapView(o: MapOpts): RoomView {
       n: 1,
       roles: [],
       ...(o.morning !== undefined ? { morning: o.morning } : {}),
-      ...(o.morning?.trace !== undefined || o.morning?.seen !== undefined
+      ...((o.morning?.trace !== undefined || o.morning?.seen !== undefined) && o.phase !== "night"
         ? { evidence: { ...(o.morning.trace !== undefined ? { trace: o.morning.trace } : {}), ...(o.morning.seen !== undefined ? { seen: o.morning.seen } : {}) } }
         : {}),
     },
@@ -393,7 +403,7 @@ describe("아침 — 흔적 카드 (TRACE-02·03, D-06)", () => {
   const MORNING: MorningView = { eliminated: 2, trace: "pencil" };
   const card = (c: ParentNode): HTMLElement | null => c.querySelector("[data-trace-card]");
   const MORNING_LINE = "아침이 밝았습니다. 서준 님이 당했습니다.";
-  const TRACE_LINE = "현장에 흔적이 남았습니다.";
+  const TRACE_LINE = "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.";
 
   it("구간 전(마감 7초 전): 카드 0개·띠 morning, 2초 뒤 카드 1개·띠 trace, 소리 신호는 구간 전에 한 번(delayMs 2000)뿐", () => {
     const { container } = mount(mapView({ phase: "morning", morning: MORNING, endsInMs: 7000 }));
@@ -467,5 +477,94 @@ describe("아침 — 흔적 카드 (TRACE-02·03, D-06)", () => {
     const { container, show } = mount(mapView({ phase: "morning", morning: MORNING, endsInMs: 1500 }));
     show(mapView({ phase: "dayAnnounce" }));
     expect(card(container)).toBeNull();
+  });
+});
+
+describe("이름표 표시 — 같은 옷·마지막 목격 (EVID-01, D-09·D-10, T-16-20)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+
+  // 0(나)·1·2(피해자, 죽음) 가 police(= 은빛 핀), 3 은 의상 없음(coat), 목격자는 3
+  const LOOKS: Record<number, OutfitId> = { 0: "police", 1: "police", 2: "police" };
+  const MORNING: MorningView = { eliminated: 2, trace: "pin", seen: { seat: 3, place: "glass" } };
+  const marks = (): { trace: number[]; seen: number[] } => {
+    const seats = [0, 1, 2, 3];
+    const tag = (seat: number) => stage.props?.tagProps?.(seat) ?? {};
+    return {
+      trace: seats.filter((seat) => tag(seat).traceMark !== undefined),
+      seen: seats.filter((seat) => tag(seat).seenMark === true),
+    };
+  };
+  const view = (o: Partial<MapOpts> = {}): RoomView => mapView({ phase: "discussion", morning: MORNING, looks: LOOKS, dead: [2], ...o });
+
+  it("같은 옷 산 사람(나 포함)에만 traceMark(조각 색), 목격자에만 seenMark — 죽은 피해자는 같은 옷이어도 빠진다", () => {
+    mount(view());
+    expect(marks()).toEqual({ trace: [0, 1], seen: [3] });
+    expect(stage.props?.tagProps?.(0).traceMark).toBe(TRACE_MARK.pin);
+    expect(stage.props?.tagProps?.(1).traceMark).toBe(TRACE_MARK.pin);
+  });
+
+  it("같은 옷이 목격자이기도 하면 두 표시가 같은 좌석에 함께 있다", () => {
+    mount(view({ morning: { eliminated: 2, trace: "pin", seen: { seat: 1, place: "piano" } } }));
+    expect(marks()).toEqual({ trace: [0, 1], seen: [1] });
+  });
+
+  it("아침: 흔적 구간 전에는 표시 0, 카드가 뜬 뒤(2초 뒤)부터 붙는다", () => {
+    mount(view({ phase: "morning", endsInMs: 7000 }));
+    expect(marks()).toEqual({ trace: [], seen: [] });
+    act(() => void vi.advanceTimersByTime(2000));
+    expect(marks()).toEqual({ trace: [0, 1], seen: [3] });
+  });
+
+  it("이미 구간 안에서 마운트(재접속)하면 바로 붙는다", () => {
+    mount(view({ phase: "morning", endsInMs: 2000 }));
+    expect(marks()).toEqual({ trace: [0, 1], seen: [3] });
+  });
+
+  it("낮 단계(토론·투표·최종 판결)에 day.evidence 가 있으면 계속 붙어 있다", () => {
+    for (const phase of ["discussion", "nomination", "verdict"] as PhaseId[]) {
+      mount(view({ phase }));
+      expect(marks(), phase).toEqual({ trace: [0, 1], seen: [3] });
+      cleanup();
+    }
+  });
+
+  it("밤(day.evidence 없음)에는 표시 0", () => {
+    mount(view({ phase: "night" }));
+    expect(marks()).toEqual({ trace: [], seen: [] });
+  });
+
+  it("피해자 없는 아침·흔적 없는 날·구출은 표시 0", () => {
+    for (const morning of [{} as MorningView, { saved: true } as MorningView, { eliminated: 2 } as MorningView]) {
+      mount(view({ morning, endsInMs: 1500 }));
+      expect(marks()).toEqual({ trace: [], seen: [] });
+      cleanup();
+    }
+  });
+
+  it("마피아·시민·경찰 viewer 가 같은 좌석 집합을 본다(역할 무관한 공개 값)", () => {
+    const seen = (role: RoleId) => {
+      mount(view({ role }));
+      const m = marks();
+      cleanup();
+      return m;
+    };
+    const base = seen("citizen");
+    expect(base.trace).toEqual([0, 1]);
+    for (const role of ["mafia", "police", "doctor"] as RoleId[]) expect(seen(role)).toEqual(base);
+  });
+
+  it("유령 viewer 도 같은 규칙으로 보고 표시 값에 좌석·역할·조각 id 가 없다", () => {
+    mount(view({ dead: [0, 2] }));
+    expect(marks()).toEqual({ trace: [1], seen: [3] });
+    const t = stage.props?.tagProps?.(1) ?? {};
+    expect(t.traceMark).toBe(TRACE_MARK.pin);
+  });
+
+  it("공개 의상이 없는 사람은 기본 의상(coat)이라 단추 하나에 표시된다", () => {
+    mount(view({ morning: { eliminated: 2, trace: "button" }, looks: { 0: "police" } }));
+    expect(marks().trace).toEqual([1, 3]);
   });
 });

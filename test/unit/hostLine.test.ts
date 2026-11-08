@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
-import type { MorningView, PhaseId, PlaceId, RecordLine, RoomView } from "../../shared/protocol";
+import type { EvidenceView, MorningView, PhaseId, PlaceId, RecordLine, RoomView } from "../../shared/protocol";
 import { HOST_FALLBACK, HOST_LINES, callTargetsOf, hostChimeOf, hostKeyOf, hostLineOf, hostTimeOf, type HostKey, type HostLocal } from "../../src/game/hostLine";
 
 // 14-01: 사회자 문구 표(UI-SPEC "사회자 문구 표")와 파생 판정. 표가 단일 출처다 — 시험과 표가 어긋나면 표를 따른다.
@@ -35,6 +35,8 @@ interface Spec {
   map?: "bar" | "plaza";
   /** 15-07: 내 목격 기록(me.record). 없으면 키 자체가 없다(못 마친 사람) */
   record?: RecordLine[];
+  /** 16-09: 낮의 증거(day.evidence). 없으면 키 자체가 없다 */
+  evidence?: EvidenceView;
 }
 
 function makeView(o: Spec): RoomView {
@@ -46,7 +48,7 @@ function makeView(o: Spec): RoomView {
     connected: i < connected,
     isHost: i === 0,
     ...((o.ghost === true && i === seat) || (o.dead ?? []).includes(i) ? { alive: false } : {}),
-    ...(o.noise ? { job: "mafia" } : {}),
+    ...(o.noise ? { job: "mafia", look: "police" } : {}),
   }));
   const me: Record<string, unknown> = { seat, isHost: o.host ?? seat === 0 };
   if (o.role !== null) me.role = o.role ?? "citizen";
@@ -65,6 +67,7 @@ function makeView(o: Spec): RoomView {
   if (o.errand !== undefined) me.errand = { places: [...o.errand.places], done: [...o.errand.done] };
   if (o.passed !== undefined) day.verdict = { yes: 3, no: 1, passed: o.passed };
   if (o.morning !== undefined) day.morning = o.morning;
+  if (o.evidence !== undefined) day.evidence = { ...o.evidence, ...(o.noise ? { seen: { seat: 1, place: "glass" } } : {}) };
   if (o.noise) Object.assign(day, { roles: ["mafia", "police", "citizen"], points: [{ seat: 1, target: 2 }], turn: { i: 0 }, voteLog: [{ seat: 1, target: 2 }] });
   const endsAt = o.endsAt === undefined ? 1_700_000_090_000 : o.endsAt;
   const view: Record<string, unknown> = {
@@ -108,6 +111,12 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     ["심부름 유령", { phase: "errand", ghost: true }, "심부름 시간입니다. 유령은 지켜봐 주세요.", "errand.ghost"],
     ["심부름 목록 없는 산 사람", { phase: "errand", map: "bar" }, "심부름 시간입니다. 빛나는 곳을 찾아 처리해 주세요.", "errand.act"],
     ["토론 산 사람", { phase: "discussion" }, "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.", "discussion.act"],
+    ["토론 흔적이 있는 날, 기록 없음", { phase: "discussion", evidence: { trace: "pin" } }, "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.", "discussion.evidence"],
+    ["토론 흔적이 있는 날, 기록 있고 안 열었음 — witness 가 먼저", { phase: "discussion", evidence: { trace: "pin" }, record: REC_SOME }, "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.", "witness"],
+    ["토론 흔적이 있는 날, 기록 열었음", { phase: "discussion", evidence: { trace: "pin" }, record: REC_SOME }, "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.", "discussion.evidence", { recordOpened: true }],
+    ["토론 흔적이 있는 날(마피아, 같은 문장)", { phase: "discussion", role: "mafia", evidence: { trace: "redCloth" } }, "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.", "discussion.evidence"],
+    ["토론 흔적 없고 목격만 있는 날은 discussion.act", { phase: "discussion", evidence: { seen: { seat: 1, place: "glass" } } }, "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.", "discussion.act"],
+    ["토론 흔적이 있는 날 유령", { phase: "discussion", ghost: true, evidence: { trace: "pin" } }, "유령은 지켜보며 유령끼리 이야기할 수 있습니다.", "discussion.ghost"],
     ["토론 유령", { phase: "discussion", ghost: true }, "유령은 지켜보며 유령끼리 이야기할 수 있습니다.", "discussion.ghost"],
     ["토론 기록 있는 산 사람(안 열었음 — 시민 시점)", { phase: "discussion", role: "citizen", record: REC_SOME }, "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.", "witness"],
     ["토론 기록 있는 산 사람(마피아, 같은 문장)", { phase: "discussion", role: "mafia", record: REC_SOME }, "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.", "witness"],
@@ -135,8 +144,8 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     ["아침 구출", { phase: "morning", morning: { saved: true } }, "아침이 밝았습니다. 누군가 살아났습니다.", "morning"],
     ["아침 무사", { phase: "morning", morning: {} }, "아침이 밝았습니다. 아무 일도 없었습니다.", "morning"],
     ["아침 유령(같은 문장)", { phase: "morning", morning: {}, ghost: true }, "아침이 밝았습니다. 아무 일도 없었습니다.", "morning"],
-    ["아침 흔적 구간(모두에게 같은 문장)", { phase: "morning", morning: { eliminated: 2, trace: "pin" } }, "현장에 흔적이 남았습니다.", "trace", { traceOn: true }],
-    ["아침 흔적 구간 유령(같은 문장)", { phase: "morning", morning: { eliminated: 2, trace: "pin" }, ghost: true }, "현장에 흔적이 남았습니다.", "trace", { traceOn: true }],
+    ["아침 흔적 구간(모두에게 같은 문장)", { phase: "morning", morning: { eliminated: 2, trace: "pin" } }, "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.", "trace", { traceOn: true }],
+    ["아침 흔적 구간 유령(같은 문장)", { phase: "morning", morning: { eliminated: 2, trace: "pin" }, ghost: true }, "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.", "trace", { traceOn: true }],
     ["아침 흔적 구간 전(피해자 문장)", { phase: "morning", morning: { eliminated: 2, trace: "pin" } }, "아침이 밝았습니다. 민지 님이 당했습니다.", "morning", { traceOn: false }],
     ["아침 흔적 없는 아침은 traceOn 이어도 morning", { phase: "morning", morning: { eliminated: 2 } }, "아침이 밝았습니다. 민지 님이 당했습니다.", "morning", { traceOn: true }],
     ["아침 구출은 traceOn 이어도 morning", { phase: "morning", morning: { saved: true } }, "아침이 밝았습니다. 누군가 살아났습니다.", "morning", { traceOn: true }],
@@ -173,9 +182,10 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     expect(hostKeyOf(makeView({ phase: "runoff" }))).toBe("fallback");
   });
 
-  it("예약 키는 이제 없다: errand·witness·trace 모두 채워졌고 witness·trace 는 UI-SPEC 원문이다 (15-07)", () => {
+  it("예약 키는 이제 없다: errand·witness·trace·discussion.evidence 모두 채워졌고 UI-SPEC 원문이다 (15-07·16-09)", () => {
     expect(HOST_LINES.witness).toBe("토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.");
-    expect(HOST_LINES.trace).toBe("현장에 흔적이 남았습니다.");
+    expect(HOST_LINES.trace).toBe("흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.");
+    expect(HOST_LINES["discussion.evidence"]).toBe("토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.");
     expect(Object.keys(HOST_LINES)).not.toContain("errand");
     for (const key of Object.keys(HOST_LINES) as HostKey[]) expect(HOST_LINES[key]).not.toBe("");
     expect(new Set(matrixKeys())).toContain("witness");
@@ -401,6 +411,9 @@ const ALLOWED_EXACT: ReadonlySet<string> = new Set([
   "me.errand.places[]",
   "me.errand.done",
   "me.errand.done[]",
+  // 16-09: 흔적이 있는 날 토론 문구 — day.evidence.trace 의 유무(모두에게 같은 공개 값)만 본다. seen·조각 값은 읽지 않는다(아래 시험)
+  "day.evidence",
+  "day.evidence.trace",
 ]);
 /** morningText 가 읽는 하위 값 */
 const ALLOWED_PREFIX = ["day.morning."];
@@ -433,7 +446,7 @@ const MATRIX_PHASES: readonly PhaseId[] = ["lobby", "assigning", "roleReveal", "
 function matrixSpecs(): Spec[] {
   const out: Spec[] = [];
   for (const phase of MATRIX_PHASES) {
-    const base: Spec = { phase, candidate: 1, passed: true, morning: { eliminated: 2, trace: "pin" }, map: "bar", errand: ERR_PART };
+    const base: Spec = { phase, candidate: 1, passed: true, morning: { eliminated: 2, trace: "pin" }, evidence: { trace: "pin" }, map: "bar", errand: ERR_PART };
     for (const role of ["mafia", "police", "doctor", "citizen"] as RoleId[]) out.push({ ...base, role }, { ...base, role, record: REC_SOME });
     out.push({ ...base, ghost: true, record: REC_SOME }, { ...base, record: [] });
     out.push({ ...base, ghost: true });
@@ -602,11 +615,55 @@ describe("15-07 목격 기록·흔적 분기 (D-04, D-06, T-15-27)", () => {
     expect(hostChimeOf("morning", "morning", false)).toBe(false);
   });
 
-  it("witness·trace 문구는 36자 이하이고 역할 단어가 없다", () => {
-    for (const k of ["witness", "trace"] as const) {
+  it("witness·trace·discussion.evidence 문구는 36자 이하이고 역할 단어가 없다", () => {
+    for (const k of ["witness", "trace", "discussion.evidence"] as const) {
       const t = HOST_LINES[k] as string;
       expect(t.length).toBeLessThanOrEqual(36);
       for (const w of ["마피아", "경찰", "의사", "시민", "범인", "증거", "확정"]) expect(t).not.toContain(w);
     }
+  });
+});
+
+describe("16-09 discussion.evidence (D-11, EVID-03, T-16-21)", () => {
+  const EV = { phase: "discussion" as const, evidence: { trace: "pin" as const, seen: { seat: 2, place: "piano" as const } } };
+
+  it("day.evidence.trace 의 유무만 읽고 조각 값·seen·look·me.role·me.records 는 읽지 않는다", () => {
+    for (const role of ["mafia", "citizen"] as RoleId[]) {
+      for (const local of [{}, { recordOpened: true }]) {
+        const log = new Set<string>();
+        const view = recorder(makeView({ ...EV, role, noise: true }), log) as RoomView;
+        hostKeyOf(view, local);
+        hostLineOf(view, local);
+        callTargetsOf(view, local);
+        expect(log.has("day.evidence.trace")).toBe(true);
+        expect([...log].filter((p) => p.startsWith("day.evidence") && p !== "day.evidence" && p !== "day.evidence.trace")).toEqual([]);
+        expect([...log].filter((p) => p.includes("look") || p.includes("records"))).toEqual([]);
+        expect(log.has("me.role")).toBe(false);
+      }
+    }
+  });
+
+  it("조각 값·목격자가 달라도 같은 키·문장이고, 마피아·시민·역할 없음이 같다", () => {
+    const a = makeView({ ...EV, role: "mafia" });
+    for (const v of [makeView({ ...EV, role: "citizen" }), makeView({ ...EV, role: null }), makeView({ phase: "discussion", evidence: { trace: "redCloth" } })]) {
+      expect(hostKeyOf(v)).toBe("discussion.evidence");
+      expect(hostLineOf(v)).toBe(hostLineOf(a));
+    }
+  });
+
+  it("빛남 대상은 discussion.act 와 같다: 채팅 단추", () => {
+    expect(callTargetsOf(makeView(EV))).toEqual({ kind: "tool", tool: "chat" });
+    expect(callTargetsOf(makeView({ ...EV, ghost: true }))).toBeNull();
+  });
+
+  it("흔적이 있는 날이어도 토론 밖 단계 키는 바뀌지 않는다", () => {
+    for (const phase of ["nomination", "defense", "verdict", "dayAnnounce"] as PhaseId[]) {
+      const base = { phase, role: "citizen" as RoleId, candidate: 1 };
+      expect(hostKeyOf(makeView({ ...base, evidence: { trace: "pin" } }))).toBe(hostKeyOf(makeView(base)));
+    }
+  });
+
+  it("문구에 '범인'·'증거'·'확정'·색 이름이 없다", () => {
+    for (const k of ["trace", "discussion.evidence"] as const) for (const w of ["범인", "증거", "확정", "빨간", "붉은", "검은"]) expect(HOST_LINES[k] as string).not.toContain(w);
   });
 });
