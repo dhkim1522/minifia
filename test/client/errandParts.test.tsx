@@ -270,7 +270,7 @@ describe("시작 카드·진행 점 스타일 (16-08)", () => {
     const css = errandBlock();
     expect(css).toMatch(/\.mv-errand-start\s*\{[^}]*pointer-events: none/);
     expect(css).toMatch(/\.mv-errand-dots\s*\{[^}]*pointer-events: none/);
-    expect(css).toMatch(/\.mv-errand-start__card\s*\{[^}]*background: var\(--night-800\)[^}]*border-radius: 20px/);
+    expect(css).toMatch(/\.mv-errand-start__card\s*\{[^}]*border-radius: 20px[^}]*background: var\(--night-800\)/);
     expect(css).toMatch(/\.mv-errand-start__scrim\s*\{[^}]*background: var\(--scrim\)/);
     expect(css).toMatch(/\.mv-errand-start__tile\s*\{[^}]*width: 84px[^}]*height: 84px[^}]*border-radius: 20px[^}]*background: var\(--night-700\)/);
     expect(css).toMatch(/\.mv-errand-dot\s*\{[^}]*width: 20px[^}]*height: 20px[^}]*border: 3px solid var\(--brass-400\)/);

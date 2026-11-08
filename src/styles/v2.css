@@ -464,10 +464,22 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-errand-chip[data-done] { background: var(--gray-100); border-color: var(--gray-100); animation: mv-errand-fill var(--dur-pop) var(--ease-out); }
 .mv-errand-dock__count { flex: none; width: 40px; font-size: 16px; line-height: 1.5; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; color: var(--gray-100); }
 .mv-errand-dock__sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* 시작 카드(16-08, V-19): 막(--scrim) + 카드. 위 = max(띠 아랫변 + 40, 232). 눌림 통과 — 닫는 누름은 방 루트가 받는다. */
+.mv-errand-start { position: absolute; inset: 0; z-index: var(--z-overlay); display: flex; justify-content: center; align-items: flex-start; pointer-events: none; animation: mv-errand-pop var(--dur-fast) var(--ease-out); }
+.mv-errand-start__scrim { position: absolute; inset: 0; background: var(--scrim); pointer-events: none; }
+.mv-errand-start__card { position: relative; display: flex; flex-direction: column; align-items: center; gap: var(--space-md); box-sizing: border-box; width: calc(100% - 48px); max-width: 360px; margin-top: max(calc(var(--mf-host-bottom, 62px) + 40px), 232px); padding: 28px var(--space-md); border: 1px solid var(--brass-400); border-radius: 20px; background: var(--night-800); font-family: var(--font-ui); pointer-events: none; }
+.mv-errand-start__title { margin: 0; font-family: var(--font-serif); font-size: 24px; line-height: 1.3; font-weight: 700; color: var(--brass-200); }
+.mv-errand-start__tiles { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.mv-errand-start__tile { display: grid; place-items: center; flex: none; box-sizing: border-box; width: 84px; height: 84px; border: 2px solid var(--brass-400); border-radius: 20px; background: var(--night-700); }
+.mv-errand-start__line { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; text-align: center; }
+/* 진행 점(16-08, V-23): 아래 가운데 떠 있는 줄. 아래 변 = 화면 아래 40 + 안전 영역. 패널·글자 없음, 눌림 통과 */
+.mv-errand-dots { position: absolute; left: 50%; bottom: calc(40px + env(safe-area-inset-bottom, 0px)); z-index: var(--z-tags); display: flex; align-items: center; gap: 12px; transform: translateX(-50%); pointer-events: none; }
+.mv-errand-dot { display: block; flex: none; box-sizing: border-box; width: 20px; height: 20px; border: 3px solid var(--brass-400); border-radius: var(--radius-pill); background: transparent; }
+.mv-errand-dot[data-done] { background: var(--brass-400); animation: mv-errand-fill var(--dur-pop) var(--ease-out); }
 @keyframes mv-errand-fill { 0% { transform: scale(0.6); opacity: 0.4; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 @keyframes mv-errand-pop { 0% { opacity: 0; } 100% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .mv-errand-pin__badge, .mv-errand-chip[data-done], .mv-errand-act { animation: none; }
+  .mv-errand-pin__badge, .mv-errand-chip[data-done], .mv-errand-act, .mv-errand-start, .mv-errand-dot[data-done] { animation: none; }
   .mv-errand-pin:active > svg { transform: none; }
 }
 
