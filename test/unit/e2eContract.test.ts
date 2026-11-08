@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { TRACE_OF_OUTFIT } from "../../shared/game/trace";
 import { BAR_MASK } from "../../shared/game/map";
 import { ERRAND_ACT_R, ERRAND_COUNT, ERRAND_MS, ERRAND_NEAR_R, MORNING_TRACE_MS, NOMINATION_END_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
 import { MOVE_SPEED } from "../../shared/game/world";
@@ -728,16 +729,17 @@ describe("15페이즈 E2E 사본과 제품 값 (15-09, 사본 일치 규약)", (
     ERRAND_ACT_R_E2E: number;
     ERRAND_NEAR_R_E2E: number;
     ERRAND_LINES: Record<string, string>;
+    TRACE_OF_OUTFIT_E2E: Record<string, string>;
   };
   const lib = e2eLib as unknown as L;
   const root = new URL("../../", import.meta.url);
 
-  it("ERRAND_MARKERS(E2E 가 읽는 15·16페이즈 심부름 표식 열셋 — 16-07 이 data-rest 를, 16-08 이 시작 카드·진행 점을 더했다)가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
+  it("ERRAND_MARKERS(E2E 가 읽는 15·16페이즈 표식 열여덟 — 16-07 이 data-rest 를, 16-08 이 시작 카드·진행 점을, 16-09 가 증거 카드 2행·이름표 표시를 더했다)가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
     const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
       .split("\n")
       .filter((f) => /\.(tsx?|css)$/.test(f));
     const all = tracked.map((f) => readFileSync(new URL(f, root), "utf8")).join("\n");
-    expect(lib.ERRAND_MARKERS).toHaveLength(14);
+    expect(lib.ERRAND_MARKERS).toHaveLength(18);
     expect(lib.ERRAND_MARKERS.filter((m) => !all.includes(m))).toEqual([]);
   });
 
@@ -759,6 +761,10 @@ describe("15페이즈 E2E 사본과 제품 값 (15-09, 사본 일치 규약)", (
       trace: HOST_LINES.trace,
       discussionEvidence: HOST_LINES["discussion.evidence"],
     });
+  });
+
+  it("TRACE_OF_OUTFIT_E2E 는 shared/game/trace.ts 의 TRACE_OF_OUTFIT 과 같다 (16-09, 같은 옷 좌석 기대값 사본)", () => {
+    expect(lib.TRACE_OF_OUTFIT_E2E).toEqual({ ...TRACE_OF_OUTFIT });
   });
 
   it("E2E 의 흐름 파일(errand.mjs)·읽기 도우미(browser.mjs)는 표식 값 외에 닉네임·토큰을 결과로 돌려주지 않는다 — 읽기 도우미 반환 필드 이름에 nick·token 이 없다", () => {

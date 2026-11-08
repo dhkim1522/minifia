@@ -1,4 +1,4 @@
-// 15페이즈 심부름·목격 기록·아침 흔적 E2E 흐름 (15-09, 16-07 에서 심부름을 장소 타일·발밑 화살표·장소 위 [처리] 알약 기준으로, 16-08 에서 아래 패널 대신 진행 점 3·시작 카드 기준으로 바꿈): errand(심부름, 폰 6종)·witness(목격 기록, 폰 6종)·trace(밤 얼굴 목록 통일 + 아침 흔적 카드, 폰 6종).
+// 15페이즈 심부름·목격 기록·아침 흔적 E2E 흐름 (15-09, 16-09 에서 증거 카드 두 행·이름표 표시 좌석(흔적 구간→낮→밤)을 더함, 16-07 에서 심부름을 장소 타일·발밑 화살표·장소 위 [처리] 알약 기준으로, 16-08 에서 아래 패널 대신 진행 점 3·시작 카드 기준으로 바꿈): errand(심부름, 폰 6종)·witness(목격 기록, 폰 6종)·trace(밤 얼굴 목록 통일 + 아침 흔적 카드, 폰 6종).
 // 이름은 errand·witness·trace — 기존 흐름 이름과 `--only` 부분 일치가 겹치지 않는다. 흐름은 화면을 읽기만 하고 판정은 lib.mjs 의 순수 함수(errandChecks 등)에 맡긴다:
 // 판정 문턱은 여기서 낮추지 않는다(T-15-36). 닉네임·토큰은 결과 줄에 남기지 않는다(T-15-35) — 장소 id·진행 수·개수·단계 이름만 쓴다.
 // 심부름은 실제 40초라(결정 0074) 시간 안에 못 끝낸 것은 시험 결함이 아니라 환경 지연이다 — 판정을 느슨하게 하지 않고 SetupError 로 던져 실행기가 다시 돌린다.
@@ -12,6 +12,7 @@ import {
   readErrand,
   readErrandSignature,
   readNightFaces,
+  readMarks,
   readRecord,
   readStartCard,
   readTrace,
@@ -26,7 +27,7 @@ import {
   waitErrandDone,
   walkToPlace,
 } from "./browser.mjs";
-import { ERRAND_E2E_MS, ERRAND_LINES, ERRAND_NEAR_R_E2E, ERRAND_PER_PERSON, TRACE_WINDOW_MS, errandCardChecks, errandCardWalkChecks, errandChecks, errandOverlapChecks, errandParityChecks, hostChimeChecks, nightFaceChecks, recordChecks, traceChecks } from "./lib.mjs";
+import { ERRAND_E2E_MS, ERRAND_LINES, ERRAND_NEAR_R_E2E, ERRAND_PER_PERSON, TRACE_WINDOW_MS, errandCardChecks, errandCardWalkChecks, errandChecks, errandOverlapChecks, errandParityChecks, expectedMarks, hostChimeChecks, nightFaceChecks, recordChecks, traceChecks, traceMarkChecks } from "./lib.mjs";
 
 const NICK = "심부름방장";
 /** 손님 이름(모두 4자 — emcee-band 와 같은 이름 규칙) */
@@ -505,12 +506,20 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
       const got = await hp.waitForSelector("[data-trace-card]", { timeout: 16_000 }).then(() => true, () => false);
       if (!got) throw new SetupError("피해자가 있는 아침에 흔적 카드가 뜨지 않음(피해자 미발생 포함)");
       const inWin = await Promise.all(all.map((p) => readTrace(p.page)));
+      const expectMorning = expectedMarks(ht.last());
       const texts = new Set(inWin.map((t) => t.cardText));
       for (const [i, t] of inWin.entries()) {
         const role = all[i].role;
-        const f = fold(traceChecks({ expectCard: true, cards: t.cards, cardText: t.cardText, cardAttrText: t.cardAttrText, nameLines: t.nameLines, noteLines: t.noteLines, cardRect: t.cardRect, bandRect: t.bandRect, dockRect: t.dockRect, panelRect: t.panelRect, announceVisible: t.announceVisible }));
-        rec(`${id}/morning1`, "TC", `${role}${all[i].seat === victim ? "(탈락)" : ""}: 흔적 카드 1개·두 줄 이내·금지 낱말 0·알림과 동시 0·띠·독·패널 교차 0`, f.ok, f.detail);
+        const f = fold(traceChecks({ expectCard: true, cards: t.cards, cardText: t.cardText, cardAttrText: t.cardAttrText, nameLines: t.nameLines, noteLines: t.noteLines, rowLines: t.rowLines, lastseenRows: t.lastseenRows, lastseenCount: t.lastseenCount, expectSeen: expectMorning.seen.length > 0, rowOverflow: t.rowOverflow, cardRect: t.cardRect, bandRect: t.bandRect, dockRect: t.dockRect, panelRect: t.panelRect, announceVisible: t.announceVisible }));
+        rec(`${id}/morning1`, "TC", `${role}${all[i].seat === victim ? "(탈락)" : ""}: 증거 카드 1개·1행 두 줄·2행 한 줄 이내·금지 낱말 0·알림과 동시 0·띠·독·패널 교차 0·2행 표식·목격 count`, f.ok, f.detail);
       }
+      // 이름표 표시(D-09·D-10): 카드와 같은 순간부터 같은 옷 산 사람·마지막 목격자 이름표에만 붙는다 — 모든 사람(유령 포함)이 같은 좌석 집합을 본다
+      const morningMarks = await Promise.all(all.map((p) => readMarks(p.page)));
+      for (const [i, m] of morningMarks.entries()) {
+        const f = fold(traceMarkChecks({ stage: "morning", expectTrace: expectMorning.trace, expectSeen: expectMorning.seen, ...m }));
+        rec(`${id}/morning1`, "TC7", `${all[i].role}${all[i].seat === victim ? "(탈락)" : ""}: 같은 옷 산 사람(${expectMorning.trace.length}명)·마지막 목격자(${expectMorning.seen.length}명) 이름표에만 표시`, f.ok, f.detail);
+      }
+      rec(`${id}/morning1`, "TR7", "마피아·시민·경찰·의사·유령이 같은 표시 좌석 집합을 본다", new Set(morningMarks.map((m) => JSON.stringify([m.trace, m.seen]))).size === 1, `서로 다른 집합 ${new Set(morningMarks.map((m) => JSON.stringify([m.trace, m.seen]))).size}가지`);
       rec(`${id}/morning1`, "TR1", "모든 사람(유령 포함)에게 같은 카드 글자", texts.size === 1, `서로 다른 카드 글자 ${texts.size}가지`);
       rec(`${id}/morning1`, "TR2", "카드가 뜨는 동안 띠가 trace 문장이다", inWin.every((t) => t.bandLine === ERRAND_LINES.trace), `다른 문장 ${inWin.filter((t) => t.bandLine !== ERRAND_LINES.trace).length}곳`);
       rec(`${id}/morning1`, "TR6", "마피아 둘이 같은 사람을 골라 그 사람이 탈락한다(흔적 구간 읽기 전제)", ht.last().day?.morning?.eliminated === victim, `탈락 ${ht.last().day?.morning?.eliminated === victim ? "기대한 사람" : "다른 사람 또는 없음"}`);
@@ -519,9 +528,35 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
       rec(`${id}/morning1`, "TR3", "흔적 카드 도착 소리 ui.card 가 한 번", cardSound === 1, `ui.card ${cardSound}번`);
       void TRACE_WINDOW_MS;
 
+      // ---- 낮: 같은 좌석에 표시가 남고 사회자가 근거를 가리킨다 (D-09·D-11) ----
+      await skipTo(hp, ht, "discussion");
+      await Promise.all(all.map((p) => p.tracker.waitFor((v) => v.phase === "discussion", 8000, "토론 도착")));
+      await Promise.all(all.map((p) => settleMap(p.page)));
+      const expectDay = expectedMarks(ht.last());
+      rec(`${id}/discussion`, "TR8", "토론에도 같은 증거 값이 있다(day.evidence — 표시 좌석 기대가 아침과 같다)", JSON.stringify(expectDay) === JSON.stringify(expectMorning), `기대 좌석 아침 ${JSON.stringify(expectMorning)} · 토론 ${JSON.stringify(expectDay)}`);
+      const dayMarks = await Promise.all(all.map((p) => readMarks(p.page)));
+      for (const [i, m] of dayMarks.entries()) {
+        const f = fold(traceMarkChecks({ stage: "discussion", expectTrace: expectDay.trace, expectSeen: expectDay.seen, ...m }));
+        rec(`${id}/discussion`, "TC8", `${all[i].role}${all[i].seat === victim ? "(탈락)" : ""}: 토론에서도 같은 좌석에 표시가 남아 있다`, f.ok, f.detail);
+      }
+      // 띠: 심부름 기록이 없는 산 사람은 discussion.evidence, 기록이 있고 안 열었으면 witness(역할은 보지 않는다 — 마피아도 같은 문장)
+      const dayBands = await Promise.all(all.map((p) => readTrace(p.page)));
+      const wrongBands = all.filter((p, i) => p.seat !== victim && dayBands[i].bandLine !== (p.tracker.last().me.record !== undefined ? ERRAND_LINES.witness : ERRAND_LINES.discussionEvidence));
+      rec(`${id}/discussion`, "TR9", "흔적이 있는 날 토론의 띠: 산 사람은 discussion.evidence(기록이 있고 안 열었으면 witness), 마피아도 같은 문장", wrongBands.length === 0, `다른 문장 ${wrongBands.length}곳`);
+
       // ---- 둘째 밤: 마피아가 갈려 아무도 안 죽는다 ----
       await skipTo(hp, ht, "night");
       await Promise.all(all.map((p) => (p.seat === victim ? Promise.resolve() : untilNight(p.page, p.tracker))));
+      // 밤에는 서버가 day.evidence 를 싣지 않아 표시가 사라진다(D-09)
+      await Promise.all(all.map((p) => p.tracker.waitFor((v) => v.phase === "night", 8000, "밤 도착(전원)")));
+      await sleep(600);
+      rec(`${id}/night2`, "TR10", "밤 view 에는 day.evidence 가 없다", ht.last().day?.evidence === undefined, `evidence ${ht.last().day?.evidence === undefined ? "없음" : "있음"}`);
+      const expectNight = expectedMarks(ht.last());
+      const nightMarks = await Promise.all(all.map((p) => readMarks(p.page)));
+      for (const [i, m] of nightMarks.entries()) {
+        const f = fold(traceMarkChecks({ stage: "night", expectTrace: expectNight.trace, expectSeen: expectNight.seen, ...m }));
+        rec(`${id}/night2`, "TC8", `${all[i].role}${all[i].seat === victim ? "(탈락)" : ""}: 밤에는 이름표 표시가 0개`, f.ok, f.detail);
+      }
       const seats = (await readNightFaces(hp)).faceSeats.filter((s) => s !== m1.seat);
       const [x1, x2] = seats;
       if (x1 === undefined || x2 === undefined) throw new SetupError("둘째 밤에 고를 수 있는 칸이 둘 미만");

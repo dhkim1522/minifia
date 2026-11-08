@@ -188,6 +188,10 @@ import {
   nightFaceChecks,
   recordChecks,
   traceChecks,
+  traceMarkChecks,
+  expectedMarks,
+  sameOutfitSeatsE2E,
+  TRACE_OF_OUTFIT_E2E,
   hostBandChecks,
   hostChimeChecks,
   hostLeakChecks,
@@ -3847,13 +3851,14 @@ test("emoteTrayChecks(16-05): 동작 단추는 48x48, 판 아랫변은 입력줄
 const fails = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
 const noMeasureAll = (lines) => lines.every((l) => !l.ok && /측정값 없음/.test(l.detail));
 
-test("ERRAND_MARKERS: 열네 개(16-07: data-rest 추가, 16-08: 독·칩 대신 시작 카드·진행 점 셋)이고 서로 다르며 ERRAND_PLACE_IDS 는 16곳, 3곳씩", () => {
-  assert.equal(ERRAND_MARKERS.length, 14);
-  assert.equal(new Set(ERRAND_MARKERS).size, 14);
+test("ERRAND_MARKERS: 열여덟 개(16-07: data-rest 추가, 16-08: 독·칩 대신 시작 카드·진행 점 셋, 16-09: 증거 카드 2행·이름표 표시 넷)이고 서로 다르며 ERRAND_PLACE_IDS 는 16곳, 3곳씩", () => {
+  assert.equal(ERRAND_MARKERS.length, 18);
+  assert.equal(new Set(ERRAND_MARKERS).size, 18);
   assert.ok(ERRAND_MARKERS.includes("data-rest"));
   for (const gone of ["data-errand-dock", "data-errand-chip"]) assert.ok(!ERRAND_MARKERS.includes(gone), gone);
   for (const added of ["data-errand-start-card", "data-errand-dots", "data-errand-dot"]) assert.ok(ERRAND_MARKERS.includes(added), added);
-  assert.ok(ERRAND_MARKERS.every((m) => /^data-(errand-|near-|record-|trace-|rest$)/.test(m)));
+  for (const added of ["data-lastseen-row", "data-lastseen-count", "data-trace-mark", "data-seen-mark"]) assert.ok(ERRAND_MARKERS.includes(added), added);
+  assert.ok(ERRAND_MARKERS.every((m) => /^data-(errand-|near-|record-|trace-|lastseen-|seen-|rest$)/.test(m)));
   assert.equal(ERRAND_PLACE_IDS.length, 16);
   assert.equal(ERRAND_PER_PERSON, 3);
   assert.equal(ERRAND_LINES.trace, "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.");
@@ -4128,11 +4133,16 @@ test("recordChecks: 마친 사람인데 카드를 읽지 못했거나 값이 없
 const traceOk = (over = {}) => ({
   expectCard: true,
   cards: 1,
-  cardText: "단추 하나 누구의 것인지는 모릅니다",
+  cardText: "단추 하나 같은 옷을 입은 사람에게 표시 서준 하윤",
   cardAttrText: "status",
   nameLines: 1,
   noteLines: 1,
-  cardRect: RR(16, 240, 328, 88),
+  rowLines: 1,
+  lastseenRows: 1,
+  lastseenCount: "1",
+  expectSeen: true,
+  rowOverflow: false,
+  cardRect: RR(16, 220, 328, 128),
   bandRect: RR(16, 70, 328, 53),
   dockRect: RR(300, 131, 44, 44),
   panelRect: RR(0, 360, 360, 200),
@@ -4151,19 +4161,80 @@ test("traceChecks: 카드 수·글자 줄·역할 낱말·알림 동시·겹침 
   assert.deepEqual(fails(traceChecks(traceOk({ cards: 2 }))), ["TC1"]);
   assert.deepEqual(fails(traceChecks(traceOk({ nameLines: 2 }))), ["TC2"]);
   assert.deepEqual(fails(traceChecks(traceOk({ noteLines: 2 }))), ["TC2"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ rowLines: 2 }))), ["TC2"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ lastseenRows: 0 }))), ["TC6"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ lastseenRows: 2 }))), ["TC6"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ lastseenCount: "0" }))), ["TC6"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ expectSeen: false }))), ["TC6"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ rowOverflow: true }))), ["TC6"]);
   for (const w of ["마피아", "경찰", "의사", "시민", "범인", "증거", "확정"]) assert.deepEqual(fails(traceChecks(traceOk({ cardText: `${w} 조각` }))), ["TC3"], w);
   assert.deepEqual(fails(traceChecks(traceOk({ cardAttrText: "data-role=mafia" }))), ["TC3"]);
   assert.deepEqual(fails(traceChecks(traceOk({ announceVisible: true }))), ["TC4"]);
-  assert.deepEqual(fails(traceChecks(traceOk({ cardRect: RR(16, 340, 328, 88) }))), ["TC5"]);
-  assert.deepEqual(fails(traceChecks(traceOk({ cardRect: RR(16, 100, 328, 88) }))), ["TC5"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ cardRect: RR(16, 340, 328, 128) }))), ["TC5"]);
+  assert.deepEqual(fails(traceChecks(traceOk({ cardRect: RR(16, 100, 328, 128) }))), ["TC5"]);
 });
 
 test("traceChecks: 값 누락은 측정값 없음", () => {
   assert.ok(noMeasureAll(traceChecks(undefined)));
   assert.ok(noMeasureAll(traceChecks({ cards: 1 })));
   assert.ok(traceChecks(traceOk({ nameLines: null })).some((l) => l.id === "TC2" && /측정값 없음/.test(l.detail)));
+  assert.ok(traceChecks(traceOk({ rowLines: null })).some((l) => l.id === "TC2" && /측정값 없음/.test(l.detail)));
+  assert.ok(traceChecks(traceOk({ lastseenCount: null })).some((l) => l.id === "TC6" && /측정값 없음/.test(l.detail)));
+  assert.ok(traceChecks(traceOk({ rowOverflow: null })).some((l) => l.id === "TC6" && /측정값 없음/.test(l.detail)));
   assert.ok(traceChecks(traceOk({ announceVisible: null })).some((l) => l.id === "TC4" && /측정값 없음/.test(l.detail)));
   assert.ok(traceChecks({ expectCard: false, cards: 0, announceVisible: null }).some((l) => l.id === "TC4" && !l.ok));
+});
+
+test("traceChecks: 목격자 없는 카드(count 0)는 expectSeen false 와 맞으면 통과, 카드 0개는 TC6 도 해당 없음", () => {
+  assert.deepEqual(fails(traceChecks(traceOk({ lastseenCount: "0", expectSeen: false }))), []);
+  assert.deepEqual(fails(traceChecks({ expectCard: false, cards: 0, announceVisible: false })), []);
+});
+
+const players8 = [
+  { seat: 0, look: "police" },
+  { seat: 1 },
+  { seat: 2, look: "coat" },
+  { seat: 3, look: "police", alive: false },
+  { seat: 4, look: "police" },
+];
+
+test("TRACE_OF_OUTFIT_E2E·sameOutfitSeatsE2E·expectedMarks: 의상 없으면 coat, 죽은 사람 제외, 증거 없으면 빈 집합", () => {
+  assert.equal(Object.keys(TRACE_OF_OUTFIT_E2E).length, 9);
+  assert.deepEqual(sameOutfitSeatsE2E(players8, "button"), [1, 2]);
+  assert.deepEqual(sameOutfitSeatsE2E(players8, "pin"), [0, 4]);
+  assert.deepEqual(sameOutfitSeatsE2E(players8, "pencil"), []);
+  assert.deepEqual(expectedMarks({ players: players8, day: { evidence: { trace: "pin", seen: { seat: 2, place: "glass" } } } }), { trace: [0, 4], seen: [2] });
+  assert.deepEqual(expectedMarks({ players: players8, day: { evidence: { trace: "button" } } }), { trace: [1, 2], seen: [] });
+  assert.deepEqual(expectedMarks({ players: players8, day: { evidence: { seen: { seat: 2, place: "glass" } } } }), { trace: [], seen: [] });
+  assert.deepEqual(expectedMarks({ players: players8, day: {} }), { trace: [], seen: [] });
+  assert.deepEqual(expectedMarks(undefined), { trace: [], seen: [] });
+});
+
+const markOk = (over = {}) => ({ stage: "morning", expectTrace: [0, 4], expectSeen: [2], trace: [4, 0], seen: [2], unseated: 0, attrValues: ["", "", ""], ...over });
+
+test("traceMarkChecks: 흔적 구간 TC7·낮 TC8 은 좌석 집합이 기대와 같으면 통과(순서 무관)", () => {
+  assert.deepEqual(traceMarkChecks(markOk()).map((l) => l.id), ["TC7"]);
+  assert.deepEqual(fails(traceMarkChecks(markOk())), []);
+  assert.deepEqual(traceMarkChecks(markOk({ stage: "discussion" })).map((l) => l.id), ["TC8"]);
+  assert.deepEqual(fails(traceMarkChecks(markOk({ stage: "discussion" }))), []);
+});
+
+test("traceMarkChecks: 밤에는 기대가 빈 배열 — 표시가 남아 있으면 실패", () => {
+  assert.deepEqual(fails(traceMarkChecks(markOk({ stage: "night", expectTrace: [], expectSeen: [], trace: [], seen: [], attrValues: [] }))), []);
+  assert.deepEqual(fails(traceMarkChecks(markOk({ stage: "night", expectTrace: [], expectSeen: [], trace: [0], seen: [], attrValues: [""] }))), ["TC8"]);
+});
+
+test("traceMarkChecks: 좌석 불일치·누락·표식 값·좌석 못 찾음은 각각 실패, 값 누락은 측정값 없음", () => {
+  assert.deepEqual(fails(traceMarkChecks(markOk({ trace: [0] }))), ["TC7"]);
+  assert.deepEqual(fails(traceMarkChecks(markOk({ trace: [0, 4, 1] }))), ["TC7"]);
+  assert.deepEqual(fails(traceMarkChecks(markOk({ seen: [] }))), ["TC7"]);
+  assert.deepEqual(fails(traceMarkChecks(markOk({ seen: [3] }))), ["TC7"]);
+  assert.deepEqual(fails(traceMarkChecks(markOk({ unseated: 1 }))), ["TC7"]);
+  assert.deepEqual(fails(traceMarkChecks(markOk({ attrValues: ["", "mafia"] }))), ["TC7"]);
+  assert.ok(noMeasureAll(traceMarkChecks(undefined)));
+  assert.ok(noMeasureAll(traceMarkChecks(markOk({ trace: null }))));
+  assert.ok(noMeasureAll(traceMarkChecks(markOk({ stage: "dawn" }))));
+  assert.ok(noMeasureAll(traceMarkChecks(markOk({ unseated: undefined }))));
 });
 
 const faceOk = (role, over = {}) => ({ role, count: 6, itemH: 100, listH: 230, eyeHeal: 0, ringMafia: 0, callCount: 6, disabledCount: 0, toastAfterTap: 0, ...over });

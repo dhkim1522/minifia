@@ -3069,7 +3069,8 @@ export function hostChimeChecks(segs) {
 //           arrow = 보이는 화살표 사각형 | 목록 | null, act = 보이는 [처리] 알약 사각형 | null, dots = 진행 점 줄, vh = 창 높이
 //   ER1 errandParityChecks(mafia, citizen) — 마피아 판과 시민 판의 심부름 영역 마크업(data-* 이름·개수)이 같다(V-25, T-16-15)
 //   RC1~RC4 recordChecks(s)   s = { finished, hasButton, hasCard, rowsAttr, rowCount, zeroText, cardRect, dockRect, bandRect, inputRect, collapsedOnFocus } — inputRect = 채팅 입력줄(.mv-chat__form) 사각형
-//   TC1~TC5 traceChecks(s)    s = { expectCard, cards, cardText, cardAttrText, nameLines, noteLines, cardRect, bandRect, dockRect, panelRect, announceVisible }
+//   TC1~TC6 traceChecks(s)    s = { expectCard, cards, cardText, cardAttrText, nameLines, noteLines, rowLines, lastseenRows, lastseenCount, expectSeen, rowOverflow, cardRect, bandRect, dockRect, panelRect, announceVisible } (16-09: 증거 카드 두 행)
+//   TC7·TC8 traceMarkChecks(s) s = { stage: "morning"|"discussion"|"night", expectTrace, expectSeen, trace, seen, unseated, attrValues } — 이름표 표시 좌석(같은 옷·마지막 목격). expect* 는 expectedMarks(view) 로 만든다
 //   NF1~NF6 nightFaceChecks(list)   list = [{ role, count, itemH, listH, eyeHeal, ringMafia, callCount, disabledCount, toastAfterTap }] — 마피아·경찰·의사·시민 네 시점
 
 /** E2E 가 읽는 15페이즈 표식(src 에 있어야 한다 — e2eContract 가 확인). */
@@ -3088,6 +3089,10 @@ export const ERRAND_MARKERS = [
   "data-record-rows",
   "data-record-row",
   "data-trace-card",
+  "data-lastseen-row",
+  "data-lastseen-count",
+  "data-trace-mark",
+  "data-seen-mark",
 ];
 /** 심부름 장소 id 16개(shared/protocol.ts PLACE_IDS 사본 — e2eContract 가 같음을 고정). 표식 값은 이 집합·숫자·"n/N"·빈 값뿐이어야 한다(좌석·역할 값 금지, D-08). */
 export const ERRAND_PLACE_IDS = ["glass", "piano", "sax", "stool", "door", "poster", "record", "candle", "clock", "fountain", "bench", "lamp", "mail", "tree", "flower", "stand"];
@@ -3126,6 +3131,31 @@ export const ERRAND_LINES = {
   trace: "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.",
   discussionEvidence: "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.",
 };
+/** 의상 → 조각 id 사본(shared/game/trace.ts TRACE_OF_OUTFIT — e2eContract 가 같음을 고정). 공개 players[].look 에서 같은 옷 좌석을 셈하는 데만 쓴다. */
+export const TRACE_OF_OUTFIT_E2E = {
+  coat: "button",
+  police: "pin",
+  doctor: "whiteCloth",
+  mafia: "blackCloth",
+  detective: "brownCloth",
+  reporter: "pencil",
+  elder: "grayThread",
+  hood: "navyThread",
+  noir: "redCloth",
+};
+/** 조각과 같은 옷을 입은 산 사람 좌석(오름차순). 의상이 없는 사람은 coat. src/game/traceMark.ts sameOutfitSeats 와 같은 규칙. */
+export function sameOutfitSeatsE2E(players, piece) {
+  return players
+    .filter((p) => p.alive !== false && TRACE_OF_OUTFIT_E2E[p.look ?? "coat"] === piece)
+    .map((p) => p.seat)
+    .sort((a, b) => a - b);
+}
+/** 한 view 가 이름표에 붙여야 할 표시 좌석: day.evidence.trace 가 있을 때만 { trace: 같은 옷 산 사람, seen: 목격자 }, 아니면 둘 다 빈 배열. */
+export function expectedMarks(view) {
+  const ev = view?.day?.evidence;
+  if (!ev || typeof ev.trace !== "string" || !Array.isArray(view.players)) return { trace: [], seen: [] };
+  return { trace: sameOutfitSeatsE2E(view.players, ev.trace), seen: ev.seen && Number.isInteger(ev.seen.seat) ? [ev.seen.seat] : [] };
+}
 /** 흔적·기록·표식 값에 있으면 안 되는 낱말(역할 연상어·확정 암시). */
 const ROLE_WORD_RE = /마피아|경찰|의사|시민|범인|증거|확정|mafia|police|doctor|citizen/i;
 
@@ -3387,26 +3417,32 @@ export function recordChecks(s) {
 }
 
 /**
- * TC1~TC5 아침 흔적 카드(TRACE-02·03, D-06). s = 위 15페이즈 계약. expectCard = 피해자가 있고 흔적 구간 안인가(구간 전·피해자 없음은 false).
- * TC1 카드 수 = expectCard ? 1 : 0. TC2 조각 이름 한 줄 + 보조 줄 합쳐 두 줄 이내. TC3 카드 글자·속성에 역할 낱말·'범인'·'증거'·'확정' 0.
+ * TC1~TC6 아침 증거 카드(TRACE-02·03, D-06, 16-09 EVID-02). s = 위 계약. expectCard = 피해자가 있고 흔적 구간 안인가(구간 전·피해자 없음은 false).
+ * TC1 카드 수 = expectCard ? 1 : 0. TC2 1행 조각 이름 한 줄 + 보조 줄 합쳐 두 줄 이내 + 2행(마지막 목격) 한 줄. TC3 카드 글자·속성에 역할 낱말·'범인'·'증거'·'확정' 0.
  * TC4 피해자 알림과 카드가 동시에 보이지 않는다. TC5 카드가 띠·독 줄·아래 패널과 교차 0.
+ * TC6 2행 표식: data-lastseen-row 하나·data-lastseen-count 가 목격자 유무(1|0)와 같고 2행이 카드 밖으로 넘치지 않는다.
  */
 export function traceChecks(s) {
   const L = {
     TC1: "피해자 있는 아침의 흔적 구간에만 카드 1개, 아니면 0개",
-    TC2: "조각 이름 한 줄 + 보조 줄 합쳐 두 줄 이내",
+    TC2: "1행 조각 이름 한 줄 + 보조 줄 합쳐 두 줄 이내 + 2행 한 줄",
     TC3: "카드 글자·속성에 역할 낱말·'범인'·'증거'·'확정' 없음",
     TC4: "피해자 알림과 카드가 동시에 보이지 않음",
     TC5: "카드가 띠·독 줄·아래 패널과 교차 0",
+    TC6: "2행 표식 하나·목격자 유무와 같은 count(0|1)·카드 밖으로 안 넘침",
   };
   const ids = Object.keys(L);
   if (!s || typeof s !== "object" || typeof s.expectCard !== "boolean" || !isNum(s.cards)) return ids.map((id) => noMeasure(id, L[id], "흔적 읽기 값(expectCard·cards)"));
   const out = [result("TC1", L.TC1, s.cards === (s.expectCard ? 1 : 0) ? [] : [`카드 ${s.cards}개(기대 ${s.expectCard ? 1 : 0})`])];
   if (s.cards === 0) {
     // 카드가 없는 읽기는 알림 동시 표시 외에 볼 것이 없다 — 나머지는 해당 없음(통과)
-    return [...out, result("TC2", L.TC2, []), result("TC3", L.TC3, []), typeof s.announceVisible === "boolean" ? result("TC4", L.TC4, []) : noMeasure("TC4", L.TC4, "알림 표시 여부"), result("TC5", L.TC5, [])];
+    return [...out, result("TC2", L.TC2, []), result("TC3", L.TC3, []), typeof s.announceVisible === "boolean" ? result("TC4", L.TC4, []) : noMeasure("TC4", L.TC4, "알림 표시 여부"), result("TC5", L.TC5, []), result("TC6", L.TC6, [])];
   }
-  out.push(isNum(s.nameLines) && isNum(s.noteLines) ? result("TC2", L.TC2, [...(s.nameLines === 1 ? [] : [`조각 이름 ${s.nameLines}줄 ≠ 1`]), ...(s.nameLines + s.noteLines <= 2 ? [] : [`카드 ${s.nameLines + s.noteLines}줄 > 2`])]) : noMeasure("TC2", L.TC2, "이름·보조 줄 수"));
+  out.push(
+    isNum(s.nameLines) && isNum(s.noteLines) && isNum(s.rowLines)
+      ? result("TC2", L.TC2, [...(s.nameLines === 1 ? [] : [`조각 이름 ${s.nameLines}줄 ≠ 1`]), ...(s.nameLines + s.noteLines <= 2 ? [] : [`카드 ${s.nameLines + s.noteLines}줄 > 2`]), ...(s.rowLines === 1 ? [] : [`2행 ${s.rowLines}줄 ≠ 1`])])
+      : noMeasure("TC2", L.TC2, "이름·보조 줄·2행 줄 수"),
+  );
   if (isStr(s.cardText) && isStr(s.cardAttrText)) {
     const bad = [];
     if (ROLE_WORD_RE.test(s.cardText)) bad.push("카드 글자에 금지 낱말");
@@ -3419,7 +3455,36 @@ export function traceChecks(s) {
     for (const [name, r] of [["띠", s.bandRect], ["독 줄", s.dockRect], ["아래 패널", s.panelRect]]) if (rectsOverlap(s.cardRect, r)) bad.push(`카드·${name} 겹침(${overlapText(s.cardRect, r)})`);
     out.push(result("TC5", L.TC5, bad));
   } else out.push(noMeasure("TC5", L.TC5, "카드·띠·독·패널 사각형"));
+  if (isNum(s.lastseenRows) && typeof s.expectSeen === "boolean" && typeof s.rowOverflow === "boolean" && (s.lastseenCount === "0" || s.lastseenCount === "1")) {
+    const bad = [];
+    if (s.lastseenRows !== 1) bad.push(`2행 표식 ${s.lastseenRows}개 ≠ 1`);
+    if (s.lastseenCount !== (s.expectSeen ? "1" : "0")) bad.push(`목격 count ${s.lastseenCount}(기대 ${s.expectSeen ? 1 : 0})`);
+    if (s.rowOverflow) bad.push("2행이 카드 밖으로 넘침");
+    out.push(result("TC6", L.TC6, bad));
+  } else out.push(noMeasure("TC6", L.TC6, "2행 표식 읽기"));
   return out;
+}
+
+/**
+ * TC7·TC8 이름표 표시 좌석(EVID-01, D-09·D-10). stage "morning"(흔적 구간 안) → TC7, "discussion"(낮 단계)·"night"(밤) → TC8.
+ * 읽은 data-trace-mark 좌석 = expectTrace(같은 옷 산 사람), data-seen-mark 좌석 = expectSeen(마지막 목격자). 밤에는 expect* 가 모두 빈 배열이다(서버가 증거를 싣지 않음).
+ * 표식 값은 모두 빈 값이고(좌석·역할·조각 id 금지) 좌석을 못 찾은 표식(unseated)이 0 이다. 결과 줄에는 좌석 번호만 쓴다.
+ */
+export function traceMarkChecks(s) {
+  const id = s && s.stage === "morning" ? "TC7" : "TC8";
+  const label = s && s.stage === "night" ? "밤에는 이름표 표시가 0개" : s && s.stage === "discussion" ? "낮(토론)에도 같은 좌석에 표시가 남아 있다" : "흔적 구간: 같은 옷 산 사람·마지막 목격자 이름표에만 표시";
+  const okSeats = (a) => Array.isArray(a) && a.every((x) => Number.isInteger(x));
+  if (!s || !["morning", "discussion", "night"].includes(s.stage) || ![s.expectTrace, s.expectSeen, s.trace, s.seen].every(okSeats) || !isNum(s.unseated) || !Array.isArray(s.attrValues)) {
+    return [noMeasure(id, label, "표시 좌석 읽기(stage·expect*·trace·seen·unseated·attrValues)")];
+  }
+  const norm = (a) => JSON.stringify([...a].sort((x, y) => x - y));
+  const bad = [];
+  if (norm(s.trace) !== norm(s.expectTrace)) bad.push(`같은 옷 표시 좌석 [${[...s.trace].sort((x, y) => x - y)}] ≠ 기대 [${[...s.expectTrace].sort((x, y) => x - y)}]`);
+  if (norm(s.seen) !== norm(s.expectSeen)) bad.push(`목격 표시 좌석 [${[...s.seen].sort((x, y) => x - y)}] ≠ 기대 [${[...s.expectSeen].sort((x, y) => x - y)}]`);
+  if (s.unseated !== 0) bad.push(`좌석을 못 찾은 표식 ${s.unseated}개`);
+  const loud = s.attrValues.filter((v) => v !== "");
+  if (loud.length > 0) bad.push(`표식 값이 비어 있지 않음 ${loud.length}개`);
+  return [result(id, label, bad)];
 }
 
 /** 밤 얼굴 목록 판정이 요구하는 역할 네 시점. */

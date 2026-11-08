@@ -2071,7 +2071,7 @@ export function readRecord(page) {
 /**
  * 아침 흔적 카드 화면 한 장(traceChecks 입력): 카드 수·글자·속성 값·줄 수·사각형, 피해자 알림이 보이는가, 띠 문장.
  * 글자 값은 이 판정이 금지 낱말만 검사하는 데 쓰고 결과 줄에는 싣지 않는다.
- * { cards, cardText, cardAttrText, nameLines, noteLines, cardRect, bandRect, dockRect, panelRect, announceVisible, bandLine, phase }
+ * { cards, cardText, cardAttrText, nameLines, noteLines, lastseenRows, lastseenCount, rowLines, rowOverflow, cardRect, bandRect, dockRect, panelRect, announceVisible, bandLine, phase }
  */
 export function readTrace(page) {
   return page.evaluate(() => {
@@ -2088,6 +2088,7 @@ export function readTrace(page) {
       return Math.round(el.getBoundingClientRect().height / (Number.isFinite(lh) ? lh : fs * 1.4));
     };
     const card = document.querySelector("[data-trace-card]");
+    const row = card ? card.querySelector("[data-lastseen-row]") : null;
     const attrs = card ? [card, ...card.querySelectorAll("*")].flatMap((el) => el.getAttributeNames().map((n) => `${n}=${el.getAttribute(n)}`)) : [];
     const ann = document.querySelector("[data-announce]");
     const bandLine = document.querySelector("[data-host-line]");
@@ -2097,6 +2098,11 @@ export function readTrace(page) {
       cardAttrText: attrs.join(" "),
       nameLines: lines(card?.querySelector(".mv-trace__name") ?? null),
       noteLines: lines(card?.querySelector(".mv-trace__note") ?? null),
+      // 2행(마지막 목격, 16-09): 표식 수·목격 count·이름 줄 수(가장 긴 쪽)·카드 밖 넘침
+      lastseenRows: qa("[data-lastseen-row]").length,
+      lastseenCount: row ? row.getAttribute("data-lastseen-count") : null,
+      rowLines: row ? Math.max(1, ...[...row.querySelectorAll(".mv-evidence__victim, .mv-evidence__witness, .mv-evidence__zero")].map((el) => lines(el) ?? 1)) : null,
+      rowOverflow: row ? row.scrollWidth > row.clientWidth + 1 : null,
       cardRect: box(card),
       bandRect: box(document.querySelector("[data-host-band] .mv-host__band")),
       dockRect: box(document.querySelector("[data-host-band] .mv-host__dock")),
@@ -2105,6 +2111,30 @@ export function readTrace(page) {
       bandLine: bandLine ? (bandLine.textContent ?? "").replace(/\s+/g, " ").trim() : "",
       phase: document.querySelector("[data-game-stage]")?.getAttribute("data-phase") ?? "",
     };
+  });
+}
+
+/**
+ * 이름표 표시(16-09, 같은 옷·마지막 목격) 한 장(traceMarkChecks 입력의 값 부분): { trace: 좌석[], seen: 좌석[], unseated, attrValues }.
+ * 표시는 이름표(.mv-tag)의 data-trace-mark·data-seen-mark 이고 좌석은 이름표 층 상자(data-seat)에서 읽는다. 값은 모두 빈 값이어야 한다.
+ */
+export function readMarks(page) {
+  return page.evaluate(() => {
+    const qa = (s) => [...document.querySelectorAll(s)];
+    const seatsOf = (sel) => {
+      const seats = new Set();
+      let unseated = 0;
+      for (const el of qa(sel)) {
+        const n = Number(el.closest("[data-seat]")?.getAttribute("data-seat"));
+        if (Number.isInteger(n)) seats.add(n);
+        else unseated += 1;
+      }
+      return { seats: [...seats].sort((a, b) => a - b), unseated };
+    };
+    const trace = seatsOf("[data-trace-mark]");
+    const seen = seatsOf("[data-seen-mark]");
+    const attrValues = qa("[data-trace-mark], [data-seen-mark]").flatMap((el) => ["data-trace-mark", "data-seen-mark"].filter((n) => el.hasAttribute(n)).map((n) => el.getAttribute(n) ?? ""));
+    return { trace: trace.seats, seen: seen.seats, unseated: trace.unseated + seen.unseated, attrValues };
   });
 }
 
