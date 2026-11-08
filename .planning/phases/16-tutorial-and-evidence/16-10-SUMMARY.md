@@ -12,6 +12,7 @@ requirements-completed: [TOOL-04, BTN-01, BTN-02, ERRAND-06, ERRAND-07, ERRAND-0
 (단계가 끝날 때마다 한 줄씩 더한다. 중단되면 이 절과 `git log --oneline --grep "(16-10)"` 로 끊긴 단계부터 다시 시작한다.)
 
 - [x] 단계 1 로컬 검증: npm test 7584 통과(알려진 간헐 2건은 단독 통과) · E2E 전 흐름 폰 6종 회귀 한 번(실패 5건 → 간헐 4건은 재실행 통과·알려진 perfbudget B2/M1 은 13페이즈부터) · nightload 평균 59.9fps·끊김 4(재측정) · RULESET 불변 · 위생 통과(새 결과 0)
+- [x] 단계 2 문서: 결정 0079(0079-1~0079-14, 위임 기본값 V-1~V-7·V-19~V-32 표) · 0073·0074·0077 개정 표시 · screen-map 16 절(sideColumnChecks·B+64) · architecture·product 문단
 
 ## 단계 1: 로컬 전체 검증
 
