@@ -4,10 +4,10 @@
 
 ## 지금 상태
 
-- **v3.0 진행 중(브랜치 `v3`)**: 13~15페이즈 완료·배포(결정 0072~0076). 2026-11-08 첫 실테스트(사람 2 + 봇) 피드백으로 **16페이즈 추가(결정 0077)**: 이름표 빼고 튜토리얼, 단추 오른쪽 한 줄, 심부름 화면·컬러 에셋, 마피아 가짜 장소·흔적↔옷·마지막 목격. 배포 version `2026-11-08T03:41:15Z+b79c0e5a`(minifia-v3).
+- **v3.0 진행 중(브랜치 `v3`)**: 13~15페이즈 완료·배포(결정 0072~0076). 첫 실테스트 피드백으로 16(단추 정리·심부름 증거, 결정 0077)과 17(튜토리얼 "첫 사건", 결정 0078)을 나눴다. **16은 계획 완료**(10개·8웨이브, UI-SPEC·RESEARCH·VALIDATION 승인). 배포 version `2026-11-08T03:41:15Z+b79c0e5a`(minifia-v3).
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`(페이즈 문서 `v2.0-phases/`). 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터(결정 0047·0048)**: 원본 https://claude.ai/artifact/NP1XfUrYTTqQ5nAB1HKYT5 (사본 `design/v2.0/figure/`, 모듈 `design/v2.0/blockout/character.js`). `3d/mf3d.js` 는 옛 방식이라 안 쓴다.
-- **v3.0 시안**: 16페이즈 튜토리얼·단추·컬러 에셋·심부름 증거 캔버스 https://claude.ai/artifact/9y71ePzHX9TamPrkCgt7KT (사본 `design/v3.0/tutorial/`, 결정 0077). 15페이즈 심부름·목격·흔적 캔버스 https://claude.ai/artifact/X9XPJtc6mm3UdihPA6fNYD (원본 `design/v3.0/errand/ErrandTrace.html`).
+- **v3.0 시안**: 17 첫 사건 캔버스 https://claude.ai/artifact/BLPWgYmeQrKJYekHcBPwR8 (사본 `design/v3.0/first-case/`, 실제 게임 화면을 찍어 그 위에 만든 프로토타입). 16 캔버스 https://claude.ai/artifact/9y71ePzHX9TamPrkCgt7KT (에셋 A·단추 A 채택, 사본 `design/v3.0/tutorial/`). 15 캔버스 https://claude.ai/artifact/X9XPJtc6mm3UdihPA6fNYD.
 - **맵(결정 0050)**: 재즈 바 + 시계탑 광장(`PLAYABLE_MAPS`). 블록아웃 https://claude.ai/artifact/1hzgEyAufgnDPVMvPvxdhP (사본 `design/v2.0/blockout/`).
 - **브랜치**: 지금은 **`v3`**. `v2` 는 v2.0 그대로, `v1` 은 v1.0 배포본 수정 전용, `main` 은 배포된 v1.0. 다른 PC 는 `git fetch` 후 `git switch v3`.
 - 배포: v3 https://minifia-v3.dhplay.workers.dev (Worker `minifia-v3`, `scripts/deploy-target.mjs`), v2 https://minifia-v2.dhplay.workers.dev (비교용, 변화 없음), v1.0 `https://minifia.dhplay.workers.dev`(변화 없음). `npm run deploy` 가 계정·배포 대상 가드를 거친다(가드는 우회하지 않는다).
@@ -26,7 +26,7 @@
 
 ## 다음 할 일
 
-1. **16페이즈 시작**: 사용자가 캔버스(https://claude.ai/artifact/9y71ePzHX9TamPrkCgt7KT)에서 컬러 에셋 A(도톰한 고유색 그림, 추천)·B(색 동전) 중 고르고 다른 시안 수정 의견을 준다. 단추 배치는 A(오른쪽 한 줄)로 이미 정함. 그 뒤 `/gsd-ui-phase 16` → `/gsd-plan-phase 16` → 실행 → 배포. 세부 결정·기본값(튜토리얼 90초 상한, 첫 판 켜짐·다시 하기 꺼짐, 연습 7단계, 가짜 장소 규칙)은 `docs/decisions/0077-tutorial-and-evidence.md`. 0073-나(이름표)·0074 D-03(같은 목록)을 바꾼다.
-2. **v3.0 실테스트 다시**(사람 2~3명이면 대기실 [봇], 결정 0075) — v2.0 실기기 칸 `.planning/milestones/v2.0-phases/12-sound-polish/12-TEAM-TEST.md` 포함. 볼 것: 튜토리얼 흐름, 심부름 40초(`ERRAND_MS`)·근처 반경 3.0·처리 반경 1.2·기록 상한 6·흔적 3초(모두 `shared/game/phases.ts`), 투표 15초, 8명 동시 가리키기 성능. 아이폰 닉네임 시트 키패드 수정(`b79c0e5a`) 재확인. 통과하면 main 반영.
-3. 정통 판(장치 켜기)은 `RULESET` 값만 바꾸면 된다. 마피아의 심부름 방해·시상에 목격 반영은 Future(0074).
-4. three `0.186.1` 고정, 성능 확인 폰은 iPhone 16 Pro + 크롬 CPU 4배 스로틀(결정 0055). 이력서용 포트폴리오는 v3.0 뒤(`docs/portfolio-request.md`).
+1. **16 실행**: `/gsd-execute-phase 16` (계획 `.planning/phases/16-tutorial-and-evidence/16-01~10-PLAN.md`). 마지막 16-10 이 결정 0079·회귀·배포·HANDOFF 까지 한다.
+2. **17 시안 결정 대기**: 사회자(A 바텐더 3D 인물 추천 / B 시계탑 확성기 / C 파형+자막), 첫 화면 진입(A 큰 카드 추천 / B 작은 단추 / C 자동 시작). 포커스는 C 깜빡이는 테두리로 확정(흐림·손가락 안 씀). 정해지면 0078 에 적고 `/gsd-ui-phase 17` → plan → 실행. 튜토리얼은 실제 게임 화면·엔진 위에 로컬 대본으로 재생한다(0078-7).
+3. **v3.0 실테스트**는 16·17 배포 뒤 한 번에(사람 2~3명이면 대기실 [봇], 결정 0075). v2.0 실기기 칸 `.planning/milestones/v2.0-phases/12-sound-polish/12-TEAM-TEST.md` 포함. 통과하면 main 반영.
+4. 시안용 장면 촬영: 로컬 `npm run dev` + 테스트 방·봇으로 찍는다(`scripts/gallery.mjs` 참고, 광장은 `pickMapViaUi`). three `0.186.1` 고정, 성능 폰 기준 결정 0055. 포트폴리오는 v3.0 뒤.
