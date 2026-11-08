@@ -42,19 +42,26 @@ interface StoredPlayer { id: string; seat: number; errandPlaces?: string[]; erra
 
 const FORBIDDEN_KEYS = ["token", "id", "playerId", "connId", "nicknameKey", "joinSeq", "hostId"];
 /** 어떤 프레임의 어떤 깊이에도 키로 없어야 하는 서버 전용 이름(T-15-25). */
-const SERVER_ONLY_NEW = ["errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick"];
+const SERVER_ONLY_NEW = ["errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick", "errandLast"];
 /**
  * 15페이즈가 view 에 더한 경로 전부(이유 한 줄씩). 이 밖의 새 경로가 이 접두 아래에 보이면 실패한다.
  *  - .view.me.errand(.places[]·.done[]): errand 단계의 산 본인에게만, 장소 id 목록과 처리한 순서(좌표·역할 없음).
  *  - .view.me.record([].seat·.place): 토론 단계에서 3곳을 마친 산 본인에게만, 근처에서 본 좌석·장소 id.
  *  - .view.day.morning.trace: 탈락자가 있는 아침의 모든 view 에 같은 값 하나(조각 id).
+ * 16페이즈(D-10·R-4)가 더한 경로 — 모두에게 같은 공개 값이고 좌표·역할이 없다:
+ *  - .view.day.morning.seen(.seat·.place): 탈락자가 있는 아침에 마지막 목격자가 있을 때만. 목격자 좌석 + 피해자 곁 장소 id 하나.
+ *  - .view.day.evidence(.trace·.seen(.seat·.place)): 아침~처형 단계에서만(밤·끝·대기실 프레임에 있으면 실패), 위 값의 필드별 복사.
  */
 const ALLOWED_NEW_PATHS: ReadonlySet<string> = new Set([
   ".view.me.errand", ".view.me.errand.places", ".view.me.errand.done",
   ".view.me.record", ".view.me.record[].seat", ".view.me.record[].place",
   ".view.day.morning", ".view.day.morning.eliminated", ".view.day.morning.saved", ".view.day.morning.trace",
+  ".view.day.morning.seen", ".view.day.morning.seen.seat", ".view.day.morning.seen.place",
+  ".view.day.evidence", ".view.day.evidence.trace", ".view.day.evidence.seen", ".view.day.evidence.seen.seat", ".view.day.evidence.seen.place",
 ]);
-const NEW_PREFIXES = [".view.me.errand", ".view.me.record", ".view.day.morning"];
+const NEW_PREFIXES = [".view.me.errand", ".view.me.record", ".view.day.morning", ".view.day.evidence"];
+/** day.evidence 가 실리는 단계(아침~처형). 이 밖 단계의 프레임에 있으면 위반이다. */
+const EVIDENCE_PHASE_SET: ReadonlySet<string> = new Set(["morning", "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution"]);
 const WORLD_PATHS = new Set([".t", ".k", ".s", ".p", ".t0", ".v", ".at", ".near", ".ents", ".ents[].s", ".ents[].p", ".ents[].t0", ".ents[].v"]);
 const ROLE_WORDS = new Set<string>(["mafia", "police", "doctor", "citizen", "none"]);
 const OUTFITS = new Set<string>(OUTFIT_IDS);
@@ -89,7 +96,7 @@ function violationsOf(raw: string): string[] {
   }
   for (const [path, value] of stringPaths(msg)) {
     // 장소·흔적 id 가 역할 단어나 의상 id 와 같으면 의상·역할이 샌 것과 구분되지 않는다.
-    if ([".view.me.errand.places[]", ".view.me.errand.done[]", ".view.me.record[].place", ".view.day.morning.trace"].includes(path)) {
+    if ([".view.me.errand.places[]", ".view.me.errand.done[]", ".view.me.record[].place", ".view.day.morning.trace", ".view.day.evidence.trace", ".view.day.evidence.seen.place", ".view.day.morning.seen.place"].includes(path)) {
       if (ROLE_WORDS.has(value) || OUTFITS.has(value)) out.push(`role-like value ${path}=${value}`);
     }
   }
@@ -98,6 +105,8 @@ function violationsOf(raw: string): string[] {
     if (paths.has(".view.me.errand") && msg.view.phase !== "errand") out.push(`errand outside errand: ${msg.view.phase}`);
     if (paths.has(".view.me.record") && msg.view.phase !== "discussion") out.push(`record outside discussion: ${msg.view.phase}`);
     if (paths.has(".view.day.morning.trace") && msg.view.phase !== "morning") out.push(`trace outside morning: ${msg.view.phase}`);
+    if (paths.has(".view.day.morning.seen") && msg.view.phase !== "morning") out.push(`seen outside morning: ${msg.view.phase}`);
+    if (paths.has(".view.day.evidence") && !EVIDENCE_PHASE_SET.has(msg.view.phase)) out.push(`evidence outside morning..execution: ${msg.view.phase}`);
   }
   return out;
 }
@@ -476,6 +485,68 @@ describe("⑤ 아침 흔적 — 역할·의상·좌석·풀 없이 모든 시점
   }, 60_000);
 });
 
+describe("⑦ 마지막 목격 증거 — 서버 전용 errandLast 는 어떤 프레임에도 없고 역할 다섯 시점의 값이 같다 (D-10·R-4, T-16-01·02·03)", () => {
+  it("심부름에서 V 곁에 O 가 있었던 판: 아침~처형 프레임 전부에서 day.evidence 는 {trace, seen:{seat:O, place}} 하나이고, 마피아·경찰·의사·시민·유령이 같은 값이며, errandLast 는 키로도 문자열로도 없다", async () => {
+    const g = await startedGame("errand");
+    const v = withRole(g, "citizen")[0]!;
+    const o = withRole(g, "citizen")[1]!;
+    // V 는 glass 곁, O 는 반경 안, 나머지는 서로 멀리(시험이 독립으로 고른 좌표).
+    const far: Pos[] = [{ x: 520, z: 500 }, { x: 520, z: -60 }, { x: -40, z: 260 }, { x: -60, z: -560 }];
+    const layout: Record<number, Pos> = { [v.seat]: GLASS, [o.seat]: { x: GLASS.x + 20, z: GLASS.z } };
+    g.actors.filter((a) => a.seat !== v.seat && a.seat !== o.seat).forEach((a, i) => (layout[a.seat] = far[i]!));
+    await placeSeats(g.code, layout);
+    await tickNow(g.code);
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    const marks = g.actors.map((a) => mark(a.sock));
+    await advanceTo(g.code, g.socks, "night");
+    for (const m of withRole(g, "mafia")) pickAs(m, v.seat);
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    await advanceTo(g.code, g.socks, "morning");
+    for (const [i, a] of g.actors.entries()) await settle(a.sock, marks[i]!);
+    // 아침 뒤 낮 끝까지(토론·지목·변론·찬반·처형이 아니라 다음 낮의 심부름·토론까지) 넘겨 낮 내내 같은 값임을 본다.
+    await advanceTo(g.code, g.socks, "errand");
+    await advanceTo(g.code, g.socks, "discussion");
+    for (const [i, a] of g.actors.entries()) await settle(a.sock, marks[i]!);
+
+    const framesBy = g.actors.map((a) => a.sock.frames.slice(marks[g.actors.indexOf(a)]!));
+    const evidenceValues = new Set<string>();
+    const phasesWithEvidence = new Set<string>();
+    for (const frames of framesBy) {
+      let afterMorning = false; // 이 소켓이 아침을 받은 뒤인가 — 그 전의 낮·밤 프레임에는 증거가 없어야 한다
+      for (const raw of frames) {
+        const m = JSON.parse(raw) as ServerMessage;
+        if (m.t !== "state") continue;
+        if (m.view.phase === "morning") afterMorning = true;
+        const ev = m.view.day?.evidence;
+        if (ev !== undefined) {
+          expect(afterMorning).toBe(true);
+          evidenceValues.add(JSON.stringify(ev));
+          phasesWithEvidence.add(m.view.phase);
+        } else if (afterMorning) {
+          expect(EVIDENCE_PHASE_SET.has(m.view.phase)).toBe(false); // 아침 뒤 증거 구간 프레임에는 반드시 있다
+        }
+      }
+    }
+    expect(evidenceValues.size).toBe(1);
+    const ev = JSON.parse([...evidenceValues][0]!) as { trace: string; seen: { seat: number; place: string } };
+    expect(Object.keys(ev).sort().join(",")).toBe("seen,trace");
+    expect(Object.keys(ev.seen).sort().join(",")).toBe("place,seat");
+    expect(ev.seen.seat).toBe(o.seat);
+    expect((PLACE_IDS as readonly string[]).includes(ev.seen.place)).toBe(true);
+    expect(OUTFITS.has(ev.trace) || ROLE_WORDS.has(ev.trace) || ROLE_WORDS.has(ev.seen.place)).toBe(false);
+    expect([...phasesWithEvidence].sort().join(",")).toBe(["morning", "dayAnnounce", "errand", "discussion"].sort().join(","));
+    // 다섯 시점(마피아·경찰·의사·시민·유령)의 마지막 view 가 같은 증거를 쥔다
+    for (const a of g.actors) expect(`${a.role}${a.seat}:${JSON.stringify(lastViewOf(a.sock).day?.evidence)}`).toBe(`${a.role}${a.seat}:${JSON.stringify(ev)}`);
+    // errandLast: 이름 키도 문자열도 어떤 프레임에도 없고, 허용 밖 경로 위반이 없다
+    for (const s of g.socks) {
+      expect(s.frames.some((raw) => raw.includes("errandLast"))).toBe(false);
+      expect(violationsOfSock(s).join(" | ")).toBe("");
+    }
+    // 서버의 errandLast 는 아침에 지워졌다
+    expect("errandLast" in ((await storedRoom(g.code)) as unknown as Record<string, unknown>)).toBe(false);
+  }, 120_000);
+});
+
 describe("⑥ 허용 목록 검사는 새 키를 놓치지 않는다 (음성 시험)", () => {
   const stateRaw = (me: Record<string, unknown>, phase = "errand", extra: Record<string, unknown> = {}): string =>
     JSON.stringify({ t: "state", view: { phase, me: { seat: 0, isHost: false, ...me }, day: { n: 1 }, ...extra } });
@@ -488,6 +559,19 @@ describe("⑥ 허용 목록 검사는 새 키를 놓치지 않는다 (음성 시
     expect(violationsOf(stateRaw({ record: [{ seat: 1, place: "glass", role: "mafia" }] }, "discussion")).join("|")).toContain("not allowed .view.me.record[].role");
     expect(violationsOf(stateRaw({}, "morning", { day: { n: 1, morning: { eliminated: 1, trace: "pin", victim: "mafia" } } })).join("|")).toContain("not allowed .view.day.morning.victim");
     expect(violationsOf(stateRaw({ id: "x" })).join("|")).toContain("forbidden .view.me.id");
+    // 16페이즈: 증거 경로 — 허용 안은 통과, 좌표·역할·풀·서버 전용 이름은 실패, 밤·끝 프레임의 evidence 는 실패
+    const day = (evidence: unknown, morning: unknown = undefined): Record<string, unknown> => ({ day: { n: 1, evidence, ...(morning === undefined ? {} : { morning }) } });
+    expect(violationsOf(stateRaw({}, "discussion", day({ trace: "pin", seen: { seat: 1, place: "glass" } })))).toEqual([]);
+    expect(violationsOf(stateRaw({}, "morning", day({ trace: "pin", seen: { seat: 1, place: "glass" } }, { eliminated: 2, trace: "pin", seen: { seat: 1, place: "glass" } })))).toEqual([]);
+    expect(violationsOf(stateRaw({}, "discussion", day({ trace: "pin", seen: { seat: 1, place: "glass", x: 3 } }))).join("|")).toContain("not allowed .view.day.evidence.seen.x");
+    expect(violationsOf(stateRaw({}, "discussion", day({ seen: { seat: 1, place: "glass", role: "mafia" } }))).join("|")).toContain("not allowed .view.day.evidence.seen.role");
+    expect(violationsOf(stateRaw({}, "discussion", day({ trace: "pin", pool: [1] }))).join("|")).toContain("not allowed .view.day.evidence.pool");
+    expect(violationsOf(stateRaw({}, "discussion", { day: { n: 1, errandLast: [{ seat: 1, by: 2, place: "glass" }] } })).join("|")).toContain("server-only .view.day.errandLast");
+    expect(violationsOf(stateRaw({}, "discussion", { errandLast: [] })).join("|")).toContain("server-only .view.errandLast");
+    for (const phase of ["night", "ended", "lobby"]) expect(violationsOf(stateRaw({}, phase, day({ trace: "pin" }))).join("|")).toContain("evidence outside morning..execution");
+    expect(violationsOf(stateRaw({}, "night", day(undefined, { eliminated: 1, trace: "pin", seen: { seat: 1, place: "glass" } }))).join("|")).toContain("seen outside morning");
+    expect(violationsOf(stateRaw({}, "discussion", day({ trace: "mafia" }))).join("|")).toContain("role-like value .view.day.evidence.trace");
+    expect(violationsOf(stateRaw({}, "discussion", day({ seen: { seat: 1, place: "police" } }))).join("|")).toContain("role-like value .view.day.evidence.seen.place");
     expect(violationsOf(stateRaw({ errand: { places: ["glass", "piano", "sax"], done: [] } }, "discussion")).join("|")).toContain("errand outside errand");
     expect(violationsOf(stateRaw({ record: [] }, "night")).join("|")).toContain("record outside discussion");
     expect(violationsOf(stateRaw({ errand: { places: ["mafia"], done: [] } })).join("|")).toContain("role-like value");

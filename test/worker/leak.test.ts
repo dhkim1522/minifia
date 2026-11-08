@@ -172,13 +172,18 @@ const politicsAllowed = (path: string, list: readonly string[] = POLITICS_ALLOWE
  *  - .view.me.errand(.places[]·.done[]): errand 단계의 산 본인에게만. 장소 id 목록과 처리한 순서뿐이고 좌표·역할은 없다(모든 역할의 모양이 같다, D-03).
  *  - .view.me.record([].seat·.place): 토론 단계에서 3곳을 마친 산 본인에게만. 근처에서 본 좌석과 장소 id 뿐이다(D-04).
  *  - .view.day.morning(.eliminated·.saved·.trace): 아침의 모든 view 에 같은 값. trace 는 조각 id 하나뿐이고 탈락자가 있는 아침에만 있다(D-06).
+ * 16페이즈(16-01, D-10·R-4, 결정 0079 예정)가 더한 경로:
+ *  - .view.day.morning.seen(.seat·.place): 탈락자가 있는 아침에 마지막 목격자가 있을 때만, 모두에게 같은 값 — 목격자 좌석 + 피해자 곁 장소 id 하나(좌표·역할 없음).
+ *  - .view.day.evidence(.trace·.seen(.seat·.place)): 아침~처형 단계의 모든 view 에 같은 값(낮 끝까지 유지). 위 morning 의 trace·seen 과 같은 값을 필드별 복사로 싣는다.
  */
 const FIFTEEN_PATHS: ReadonlySet<string> = new Set([
   ".view.me.errand", ".view.me.errand.places", ".view.me.errand.done",
   ".view.me.record", ".view.me.record[].seat", ".view.me.record[].place",
   ".view.day.morning", ".view.day.morning.eliminated", ".view.day.morning.saved", ".view.day.morning.trace",
+  ".view.day.morning.seen", ".view.day.morning.seen.seat", ".view.day.morning.seen.place",
+  ".view.day.evidence", ".view.day.evidence.trace", ".view.day.evidence.seen", ".view.day.evidence.seen.seat", ".view.day.evidence.seen.place",
 ]);
-const FIFTEEN_PREFIXES = [".view.me.errand", ".view.me.record", ".view.day.morning"];
+const FIFTEEN_PREFIXES = [".view.me.errand", ".view.me.record", ".view.day.morning", ".view.day.evidence"];
 /** path 가 15페이즈 접두 중 하나의 그 키 자신 또는 그 아래인가(이름이 겹치는 기존 .view.me.records 는 아니다). */
 const underFifteen = (path: string): boolean => FIFTEEN_PREFIXES.some((p) => path === p || path.startsWith(`${p}.`) || path.startsWith(`${p}[]`));
 /** 경로 목록에서 허용 밖 15페이즈 경로. 비어 있어야 통과다. */
@@ -482,12 +487,16 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     const sawChatMafia = new Set<number>(); // me.chat 이 "mafia" 인 view 를 받은 seat
     const morningsByDay = new Map<number, Set<string>>(); // 일차 → day.morning JSON 모음
     const morningSeen = new Map<number, Set<number>>(); // 일차 → 아침 state 를 받은 seat
+    // 16페이즈(D-10·R-4): "몇 번째 아침의 증거" → 그 뒤 낮 끝까지 받은 day.evidence JSON 모음. 모든 소켓·모든 단계에서 하나여야 한다. 아침 전·밤에는 키가 없다.
+    const evidenceByMorning = new Map<number, Set<string>>();
+    const EVIDENCE_PHASE_SET = new Set(["morning", "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution"]);
     const saw = { errand: new Set<number>(), record: new Set<number>(), trace: false, ally: new Set<number>(), records: new Set<number>(), pick: new Set<number>(), tally: new Set<number>(), sure: new Set<number>(), spectatePicksX: false };
 
     for (const a of actors) {
       let dead = false;
       let phase = "";
       let day = 0;
+      let morningNo = 0; // 이 소켓이 지금까지 본 아침 수
       const alls: number[] = [];
       const mafias: number[] = [];
       const ghosts: number[] = [];
@@ -501,8 +510,17 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
         const paths = keyPaths(msg);
         if (msg.t === "state") {
           const v = msg.view;
+          if (v.phase === "morning" && phase !== "morning") morningNo += 1;
           phase = v.phase;
           if (v.day) day = v.day.n;
+          // 증거 키(16-01): 아침~처형 단계에만 있고 밤·끝·대기실·첫 아침 전에는 없다. 있으면 같은 아침의 값은 모두 같다.
+          const hasEvidence = v.day !== undefined && "evidence" in v.day;
+          if (hasEvidence) {
+            expect(EVIDENCE_PHASE_SET.has(v.phase) && morningNo > 0).toBe(true);
+            const set = evidenceByMorning.get(morningNo) ?? new Set<string>();
+            set.add(JSON.stringify(v.day!.evidence));
+            evidenceByMorning.set(morningNo, set);
+          }
           if (v.players.find((pl) => pl.seat === a.seat)?.alive === false && !dead) {
             dead = true;
             diedAt.set(a.seat, `${phase} ${day}`);
@@ -651,6 +669,12 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     for (const day of [1, 2]) {
       expect(morningsByDay.get(day)!.size).toBe(1);
       expect(morningSeen.get(day)!.size).toBe(6);
+    }
+    // 16페이즈: 두 아침 모두 증거가 있고, 각 아침의 증거는 그 뒤 낮 끝까지 모든 소켓에서 같은 JSON 하나다. 심부름을 하지 않은 판이라 seen 은 없고 trace 만 있다.
+    expect([...evidenceByMorning.keys()].sort()).toEqual([1, 2]);
+    for (const n of [1, 2]) {
+      expect(evidenceByMorning.get(n)!.size).toBe(1);
+      expect(Object.keys(JSON.parse([...evidenceByMorning.get(n)!][0]!) as object)).toEqual(["trace"]);
     }
     const morning1 = JSON.parse([...morningsByDay.get(1)!][0]!) as { eliminated?: number };
     const morning2 = JSON.parse([...morningsByDay.get(2)!][0]!) as { eliminated?: number };
@@ -1696,6 +1720,11 @@ describe("15페이즈 허용 경로 (15-06, D-08, T-15-23)", () => {
     expect(fifteenViolations(keyPaths(ok))).toEqual([]);
     const bad = { view: { me: { errand: { places: [], done: [], near: [1] }, errandNear: [1], record: [{ seat: 1, place: "x", role: "mafia" }] }, day: { morning: { victim: "mafia" } } } };
     expect(fifteenViolations(keyPaths(bad))).toEqual([".view.me.errand.near", ".view.me.record[].role", ".view.day.morning.victim"]);
+    // 16페이즈 증거 경로: 허용 목록 안은 통과, 목록 밖(좌표·역할·고른 사람 풀)은 실패
+    const evidenceOk = { view: { day: { evidence: { trace: "pin", seen: { seat: 1, place: "glass" } }, morning: { eliminated: 2, trace: "pin", seen: { seat: 1, place: "glass" } } } } };
+    expect(fifteenViolations(keyPaths(evidenceOk))).toEqual([]);
+    const evidenceBad = { view: { day: { evidence: { trace: "pin", pool: [1], seen: { seat: 1, place: "glass", x: 1, role: "mafia" } } } } };
+    expect(fifteenViolations(keyPaths(evidenceBad))).toEqual([".view.day.evidence.pool", ".view.day.evidence.seen.x", ".view.day.evidence.seen.role"]);
     // me.errandNear 같은 접두가 이어진 서버 전용 이름은 SERVER_ONLY_KEYS 검사가 마지막 키 이름으로 잡는다.
     expect(keyPaths(bad).filter((pth) => SERVER_ONLY_KEYS.includes(pth.slice(pth.lastIndexOf(".") + 1)))).toEqual([".view.me.errandNear"]);
     // 이름이 겹치는 기존 일지 키는 15페이즈 접두가 아니다.
