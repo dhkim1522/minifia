@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 16
 current_phase_name: 단추 정리·심부름 증거
-current_plan: 4
+current_plan: 5
 status: executing
-stopped_at: Completed 16-03-PLAN.md
-last_updated: "2026-11-08T10:26:07.966Z"
+stopped_at: Completed 16-04-PLAN.md
+last_updated: "2026-11-08T10:38:18.181Z"
 last_activity: 2026-11-08
 last_activity_desc: Phase 16 execution started
-state_head: ea60e65e83f0cf4c3b0a451ecb067bf6c1ad8b77
+state_head: 1ab7d7b8d98b7d94db9510dd3d28efe306d990e8
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 35
-  completed_plans: 28
+  completed_plans: 29
   percent: 60
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 16 (단추 정리·심부름 증거) — EXECUTING
-Current Plan: 4
+Current Plan: 5
 Total Plans in Phase: 10
 Status: Ready to execute
 Last activity: 2026-11-08 — Phase 16 execution started
@@ -226,6 +226,7 @@ Last activity: 2026-11-08 — Phase 16 execution started
 | Phase 16 P01 | 60min | 3 tasks | 22 files |
 | Phase 16 P02 | 10min | 2 tasks | 31 files |
 | Phase 16 P03 | ~30min | 3 tasks | 13 files |
+| Phase 16 P04 | 50min | 3 tasks | 32 files |
 
 ## Accumulated Context
 
@@ -485,6 +486,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 16]: [16-02] 컬러 에셋 변환기는 .ts 를 import 하지 않고 낱말→id 표를 스크립트에 두며, 일치는 단위 시험이 검사한다. 사본은 design/v3.0/assets/{id}.svg, JSX 는 생성물(placeArt.tsx)
 - [Phase 16]: 16-03: 마피아 가짜 장소는 난수 없이 (seat+day)%3 로 정하는 서버 전용 errandFake, 처리는 기존 { ok: false } 경로, 봇 errandGo 는 가짜를 마지막으로 미룸
 - [Phase 16]: 16-03: 화면(actablePlaceOf)은 errandFake 를 모른다 — 마피아의 [처리]가 가짜 곁에서 켜져도 안 차는 것은 본인만 보며 설명 문구 없음(V-25)
+- [Phase 16]: 16-04: ToolButton 은 name(접근성 이름) 필수·글 없음. 이름표 속성과 라벨 span 은 src 에 0건, 아이콘 단추의 불변 규칙은 '모든 button 접근성 이름'(면제 목록 없음)
+- [Phase 16]: 16-04: CSS 라벨 규칙과 E2E 높이 판정(TOOL_ROW_EXTRA 등)은 16-05 가 크기 규칙과 함께 지운다
 
 ### Pending Todos
 
@@ -551,8 +554,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-08T10:26:07.807Z
-Stopped at: Completed 16-03-PLAN.md
+Last session: 2026-11-08T10:38:18.021Z
+Stopped at: Completed 16-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
