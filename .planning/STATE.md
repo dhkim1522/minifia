@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 16
 current_phase_name: 단추 정리·심부름 증거
-current_plan: 7
+current_plan: 8
 status: executing
-stopped_at: Completed 16-06-PLAN.md
-last_updated: "2026-11-08T11:20:24.687Z"
+stopped_at: Completed 16-07-PLAN.md
+last_updated: "2026-11-08T11:50:02.400Z"
 last_activity: 2026-11-08
 last_activity_desc: Phase 16 execution started
-state_head: ed8ff818ccf92ea9fc7a8ee743b01ea804f99034
+state_head: c28863333b698adeffb8e3e56d7d18fc2ecafb6a
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 35
-  completed_plans: 31
+  completed_plans: 32
   percent: 60
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 16 (단추 정리·심부름 증거) — EXECUTING
-Current Plan: 7
+Current Plan: 8
 Total Plans in Phase: 10
 Status: Ready to execute
 Last activity: 2026-11-08 — Phase 16 execution started
@@ -229,6 +229,7 @@ Last activity: 2026-11-08 — Phase 16 execution started
 | Phase 16 P04 | 50min | 3 tasks | 32 files |
 | Phase 16 P05 | 약 2시간 | 3 tasks | 14 files |
 | Phase 16 P06 | 70min | 3 tasks | 30 files |
+| Phase 16 P07 | 35min | 3 tasks | 24 files |
 
 ## Accumulated Context
 
@@ -493,6 +494,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 16]: 16-05: 아이콘 단추는 단추 상자가 곧 면(.mv-tool 44 정사각, 입력줄 48 원), ChatPanel 변경 없음, 다시 하기 입력줄 여백 192
 - [Phase 16]: 16-06: 열 단추 52 원은 data-side-button 이 붙은 것만(게임 떠 있는 단추·시상 [넘기기]는 48 원 제자리), 시트·키보드가 열리면 대기실 열은 그리지 않음
 - [Phase 16]: 16-06: 손님 화면에는 맵 칩·봇 단추를 그리지 않음(서버는 방장만 받는 그대로), 열 최대 높이 sideMaxH 는 useMapInsets 가 잼
+- [Phase 16]: 16-07: 알약은 타일 층과 다른 형제 층(z-tags+1)에 그린다 — 한 층 안에서는 z-index 를 둘로 나눌 수 없다
+- [Phase 16]: 16-07: useMapInsets 에 panelKey 를 더했다 — 아래 패널 요소가 채팅 ↔ 심부름 독으로 바뀌면 안전선을 다시 잰다(안 그러면 옛 값에 멈춤)
+- [Phase 16]: 16-07: E2E EO1 은 화살표와 타일의 겹침을 보지 않는다(눌림 통과 방향 표지), 피할 사각형은 [data-side-button] 전부
 
 ### Pending Todos
 
@@ -559,8 +563,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-08T11:20:24.523Z
-Stopped at: Completed 16-06-PLAN.md
+Last session: 2026-11-08T11:50:02.231Z
+Stopped at: Completed 16-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
