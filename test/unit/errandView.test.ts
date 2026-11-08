@@ -292,6 +292,20 @@ describe("타일·화살표·알약 배치 계획", () => {
     expect(plan.act).toEqual({ id: "glass", x: 8 + 50, y: 476 - 8 - 32 - 32 - 8 - 22 });
   });
 
+  it("(n) 위가 다른 장소 타일에 몇 px 라도 걸리면 아래로 뒤집는다(16-10, 두 장소가 가까울 때 알약이 이웃 타일을 가리지 않는다)", () => {
+    // 위쪽 이웃 타일의 아랫변(187 + 32 = 219)이 알약 윗쪽 상자(216..260)와 3px 겹친다.
+    const items = [{ id: "stool" as PlaceId, x: 100, y: 300 }, { id: "glass" as PlaceId, x: 100, y: 187 }];
+    const plan = placeMarkerPlan({ ...base, avoid: [], items, actId: "stool", pillW: 96 });
+    expect(plan.act!.y).toBe(300 + 32 + 8 + 22);
+    for (const p of plan.pins) expect(overlap(boxOf(plan.act!.x, plan.act!.y, 96, 44), boxOf(p.x, p.y, 64)) && p.id !== "stool").toBe(false);
+  });
+
+  it("(o) 위는 이웃 타일에 걸리고 아래도 막혀 있으면(아래 이웃·화면 아래) 위에 그대로 선다", () => {
+    const items = [{ id: "stool" as PlaceId, x: 100, y: 300 }, { id: "glass" as PlaceId, x: 100, y: 187 }, { id: "piano" as PlaceId, x: 100, y: 413 }];
+    const plan = placeMarkerPlan({ ...base, avoid: [], items, actId: "stool", pillW: 96 });
+    expect(plan.act!.y).toBe(300 - 32 - 8 - 22);
+  });
+
   it("(l) actId 가 items 에 없으면(투영 불가) act 도 없다", () => {
     expect(placeMarkerPlan({ ...base, actId: "sax" }).act).toBeNull();
   });
