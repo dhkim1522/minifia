@@ -250,7 +250,15 @@ function mapView(o: MapOpts): RoomView {
       role: o.role ?? "citizen",
       ...(o.record !== undefined ? { record: o.record } : {}),
     },
-    day: { n: 1, roles: [], ...(o.morning !== undefined ? { morning: o.morning } : {}) },
+    // 서버는 아침~처형에 같은 값을 day.evidence 로도 싣는다(16-01 P-1) — 시험 뷰도 morning 에서 파생한다.
+    day: {
+      n: 1,
+      roles: [],
+      ...(o.morning !== undefined ? { morning: o.morning } : {}),
+      ...(o.morning?.trace !== undefined || o.morning?.seen !== undefined
+        ? { evidence: { ...(o.morning.trace !== undefined ? { trace: o.morning.trace } : {}), ...(o.morning.seen !== undefined ? { seen: o.morning.seen } : {}) } }
+        : {}),
+    },
   } as RoomView;
 }
 
@@ -427,6 +435,19 @@ describe("아침 — 흔적 카드 (TRACE-02·03, D-06)", () => {
     expect(signals.emit.mock.calls.map((c) => (c[0] as { kind: string }).kind).filter((k) => k === "card")).toHaveLength(1);
     expect(card(container)).not.toBeNull();
     expect(band(container)).toBe(TRACE_LINE);
+  });
+
+  it("증거 카드 2행(마지막 목격): 목격자가 있으면 count 1·이름·장소 그림, 없으면 count 0 과 '0'", () => {
+    const seen = mount(mapView({ phase: "morning", morning: { ...MORNING, seen: { seat: 3, place: "glass" } }, endsInMs: 1500 }));
+    const row = card(seen.container)?.querySelector("[data-lastseen-row]");
+    expect(row?.getAttribute("data-lastseen-count")).toBe("1");
+    expect(row?.querySelector(".mv-evidence__victim")?.textContent).toBe(NAMES[2]);
+    expect(row?.querySelector(".mv-evidence__witness")?.textContent).toBe(NAMES[3]);
+    cleanup();
+    const none = mount(mapView({ phase: "morning", morning: MORNING, endsInMs: 1500 }));
+    const zero = card(none.container)?.querySelector("[data-lastseen-row]");
+    expect(zero?.getAttribute("data-lastseen-count")).toBe("0");
+    expect(zero?.querySelector(".mv-evidence__zero")?.textContent).toBe("0");
   });
 
   it("이미 구간 안에서 마운트(재접속·새로 고침)하면 카드는 바로 있고 신호는 0", () => {

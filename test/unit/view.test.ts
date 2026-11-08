@@ -283,6 +283,7 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "runoffVote", // 동점 결선의 개인 선택(결정 0066-4): 서버 전용 — 본인 값은 me.ballot, 공개는 day.runoff 의 voted·tally 뿐
   "whispers", // 귓속말 본문 보관(결정 0066-2, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
   "badgeLog", // 직업 주장 이력(결정 0066-1, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
+  "errandLast", // 심부름 중 피해자 후보별 마지막 관찰자 줄(16페이즈 D-10): 서버 전용 — 공개는 아침의 피해자 한 줄(day.evidence.seen)뿐
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
@@ -298,6 +299,7 @@ const ME_KEYS: ReadonlySet<string> = new Set([
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
   "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown",
+  "evidence", // 아침~처형의 공개 증거(16페이즈 D-10·R-4) — 모두에게 같은 값, 아래 "day.evidence 수명" describe 가 조건을 단언한다
 ]);
 const keysOf = (value: unknown): string => Object.keys((value ?? {}) as object).sort().join(",");
 
@@ -483,6 +485,65 @@ function mafiaSeatsOtherThan(state: RoomState, p: Player): number[] {
     .map((q) => q.seat)
     .sort((a, b) => a - b);
 }
+
+describe("day.evidence 수명 (16페이즈 D-10·R-4)", () => {
+  const SEEN = { seat: 1, place: "glass" } as const;
+  /** 1일차 밤 뒤 피해자가 나온 아침. 서버 상태 morning 에 trace 가 있고, 필요하면 seen 도 얹는다. */
+  const victimMorning = (withSeen: boolean): RoomState => {
+    const { s } = morningWithVictim(5, 1);
+    return withSeen ? { ...s, morning: { ...s.morning!, seen: { ...SEEN } } } : s;
+  };
+  const evidenceOf = (s: RoomState, viewer: Player): unknown => buildView(s, viewer.id, START_AT).day?.evidence;
+  const EVIDENCE_PHASE_LIST: readonly PhaseId[] = ["morning", "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution"];
+
+  it("아침~처형 단계에서 모든 viewer(역할 넷 + 유령)에게 같은 { trace, seen } 이다", () => {
+    const base = victimMorning(true);
+    const ghost = base.players.find((p) => p.alive === false)!;
+    expect(ghost).toBeDefined();
+    for (const phase of EVIDENCE_PHASE_LIST) {
+      const s = { ...base, phase };
+      const values = new Set(s.players.map((p) => JSON.stringify(evidenceOf(s, p))));
+      expect(`${phase}:${[...values].join("|")}`).toBe(`${phase}:${JSON.stringify({ trace: base.morning!.trace, seen: SEEN })}`);
+    }
+  });
+
+  it("실제로 마감을 넘겨도 dayAnnounce·errand·discussion 까지 이어지고 밤에는 키가 없다", () => {
+    let s = victimMorning(true);
+    for (const phase of ["dayAnnounce", "errand", "discussion"] as const) {
+      s = advanceTo(s, phase, 1);
+      expect(`${phase}:${Object.keys((evidenceOf(s, s.players[0]!) ?? {}) as object).sort().join(",")}`).toBe(`${phase}:seen,trace`);
+    }
+  });
+
+  it("night·ended·lobby view 와 state.morning 이 없는 낮에는 키가 없다", () => {
+    const base = victimMorning(true);
+    for (const phase of ["night", "ended", "lobby", "assigning", "roleReveal"] as const) {
+      const s = { ...base, phase };
+      for (const p of s.players) expect(`${phase}:${"evidence" in (buildView(s, p.id, START_AT).day ?? {})}`).toBe(`${phase}:false`);
+    }
+    const { morning: _gone, ...noMorning } = { ...base, phase: "discussion" as const };
+    for (const p of noMorning.players) expect("evidence" in (buildView(noMorning, p.id, START_AT).day ?? {})).toBe(false);
+  });
+
+  it("trace 만 있으면 trace 만, seen 만 있으면 seen 만 만든다(필드별 복사 — 좌표·역할·풀이 없다)", () => {
+    const withTrace = victimMorning(false);
+    expect(JSON.stringify(evidenceOf(withTrace, withTrace.players[0]!))).toBe(JSON.stringify({ trace: withTrace.morning!.trace }));
+    const { trace: _t, ...onlySeen } = victimMorning(true).morning!;
+    const s: RoomState = { ...victimMorning(true), morning: onlySeen };
+    expect(JSON.stringify(evidenceOf(s, s.players[0]!))).toBe(JSON.stringify({ seen: SEEN }));
+    // 서버 상태의 seen 에 여분 키가 있어도 view 로는 seat·place 만 간다
+    const dirty: RoomState = { ...victimMorning(true), morning: { ...victimMorning(true).morning!, seen: { ...SEEN, x: 1, role: "mafia" } as never } };
+    expect(JSON.stringify(evidenceOf(dirty, dirty.players[0]!))).toBe(JSON.stringify({ trace: dirty.morning!.trace, seen: SEEN }));
+  });
+
+  it("morning 단계의 day.morning.seen 도 같은 값이고, 피해자가 없는 아침은 seen 키가 없다", () => {
+    const s = victimMorning(true);
+    expect(JSON.stringify(buildView(s, s.players[0]!.id, START_AT).day?.morning?.seen)).toBe(JSON.stringify(SEEN));
+    const quiet = tick(stateAt("night", 5, 1), stateAt("night", 5, 1).phaseEndsAt!, seededRandInt(1));
+    expect("seen" in (buildView(quiet, quiet.players[0]!.id, START_AT).day?.morning ?? {})).toBe(false);
+    expect("evidence" in (buildView(quiet, quiet.players[0]!.id, START_AT).day ?? {})).toBe(false);
+  });
+});
 
 describe("공개 직업 주장 경로 (결정 0066-1)", () => {
   it("주장 값(직업과 같은 단어)은 players[].badge 에서만 허용되고 다른 경로에 나오면 누출로 잡힌다", () => {

@@ -1,10 +1,14 @@
 // 15페이즈 D-05·D-06 워커 통합(결정 0074): 밤 고르기는 모든 역할이 같은 입력에 같은 응답을 받고, 밤에는 아무도 걷지 않으며,
 // 피해자가 나온 아침에만 모든 소켓에 같은 흔적 조각 id 가 실린다(T-15-10·11·12).
+import { env } from "cloudflare:workers";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { MORNING_MS, MORNING_TRACE_MS, MORNING_VICTIM_MS } from "../../shared/game/phases";
-import { TRACE_PIECE_IDS } from "../../shared/protocol";
+import { restSegment } from "../../shared/game/world";
+import type { Segment, WorldState } from "../../shared/game/world";
+import { PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
 import type { RoleId } from "../../shared/protocol";
-import { advanceTo, editRoom, flushWorld, killSeats, lastViewOf, mapPlayers, mark, moveAs, pickAs, settle, storedRoom, summary, startedGame, withRole, worldFramesOf, worldOf } from "./helpers";
+import { advanceTo, editRoom, writeRoomEdit, flushWorld, killSeats, lastViewOf, mapPlayers, mark, moveAs, pickAs, settle, storedRoom, summary, startedGame, withRole, worldFramesOf, worldOf } from "./helpers";
 import type { Game } from "./helpers";
 
 type Actor = Game["actors"][number];
@@ -197,4 +201,90 @@ describe("아침 흔적 (D-06, T-15-12)", () => {
     const players = (await storedRoom(g.code)).players as Array<Record<string, unknown>>;
     expect(players.some((p) => "nightPick" in p)).toBe(false);
   }, 40_000);
+});
+
+// ---- 16페이즈 D-10·A2: 심부름 중 피해자 곁에 있던 마지막 사람이 아침 증거로 공개된다 ----
+const GLASS = { x: -390, z: -220 }; // 재즈 바 glass 장소 중앙(errandNear.test 와 같은 값)
+const SPOTS = { near: { x: -370, z: -220 }, far: { x: 520, z: 500 }, far2: { x: 520, z: -60 }, far3: { x: -40, z: 260 }, far4: { x: -60, z: -560 } };
+
+/** 메모리의 world 에 좌석별 위치(서 있는 한 점)를 쓴다(evict 없이). */
+async function placeSeats(code: string, bySeat: Record<number, { x: number; z: number }>): Promise<void> {
+  const players = (await storedRoom(code)).players as Array<{ id: string; seat: number }>;
+  const segs: Record<string, Segment> = {};
+  for (const [seatNo, pos] of Object.entries(bySeat)) segs[players.find((p) => p.seat === Number(seatNo))!.id] = restSegment(pos.x, pos.z, Date.now());
+  await runInDurableObject(env.ROOM.getByName(code), (instance) => {
+    const holder = instance as unknown as { world: WorldState };
+    holder.world = { ...holder.world, segs: { ...holder.world.segs, ...segs } };
+  });
+}
+
+/** 표본 알람 한 번(errandTickAt 을 과거로 당기고 evict 없이 돌린다). */
+async function tickNow(code: string): Promise<void> {
+  const stub = env.ROOM.getByName(code);
+  await writeRoomEdit(stub, (room) => ({ ...room, errandTickAt: Date.now() - 1 }));
+  await runDurableObjectAlarm(stub);
+}
+
+describe("마지막 목격 (D-10, A2)", () => {
+  /** errand 에서 위치를 정하고 표본 한 번 → 밤으로 넘겨 마피아 전원이 V 를 고르고 → 아침. 위치는 좌석 번호로 준다. */
+  async function lastSeenMorning(g: Game, v: Actor, spots: Record<number, { x: number; z: number }>): Promise<void> {
+    await placeSeats(g.code, spots);
+    await tickNow(g.code);
+    for (const s of g.socks) await settle(s, mark(s));
+    await advanceTo(g.code, g.socks, "night");
+    for (const m of withRole(g, "mafia")) pickAs(m, v.seat);
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    await advanceTo(g.code, g.socks, "morning");
+  }
+  /** 위치 배정: V 는 glass 곁, 관찰자 O 는 반경 안, 나머지는 서로 멀리. */
+  function spreadWith(g: Game, v: Actor, o: Actor | null): Record<number, { x: number; z: number }> {
+    const rest = g.actors.filter((a) => a.seat !== v.seat && a.seat !== o?.seat);
+    const far = [SPOTS.far, SPOTS.far2, SPOTS.far3, SPOTS.far4, { x: 300, z: 560 }];
+    const out: Record<number, { x: number; z: number }> = { [v.seat]: GLASS };
+    if (o !== null) out[o.seat] = SPOTS.near;
+    rest.forEach((a, i) => (out[a.seat] = far[i]!));
+    return out;
+  }
+
+  it("표본이 V 줄 {seat, by, place} 를 errandLast 에 저장하고, 아침에 모든 소켓의 day.evidence 가 같은 {trace, seen} 이며 errandLast 는 지워진다", async () => {
+    const g = await startedGame("errand");
+    const v = withRole(g, "citizen")[0]!;
+    const o = withRole(g, "citizen")[1]!;
+    await placeSeats(g.code, spreadWith(g, v, o));
+    await tickNow(g.code);
+    const rows = ((await storedRoom(g.code)) as unknown as { errandLast?: Array<{ seat: number; by: number; place: string }> }).errandLast ?? [];
+    const row = rows.find((r) => r.seat === v.seat);
+    expect(`${row?.seat}:${row?.by}`).toBe(`${v.seat}:${o.seat}`);
+    expect((PLACE_IDS as readonly string[]).includes(String(row?.place))).toBe(true);
+    // 반경 밖 사람의 줄은 없다
+    expect(rows.map((r) => r.seat).sort().join(",")).toBe([v.seat, o.seat].sort().join(","));
+
+    for (const s of g.socks) await settle(s, mark(s));
+    await advanceTo(g.code, g.socks, "night");
+    // 밤에도 서버에는 남아 있다
+    expect(((await storedRoom(g.code)) as unknown as { errandLast?: unknown }).errandLast).toBeDefined();
+    for (const m of withRole(g, "mafia")) pickAs(m, v.seat);
+    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    await advanceTo(g.code, g.socks, "morning");
+
+    const evidences = g.socks.map((s) => JSON.stringify(lastViewOf(s).day?.evidence));
+    expect(new Set(evidences).size).toBe(1);
+    const ev = lastViewOf(g.socks[0]!).day?.evidence;
+    expect(ev?.seen).toEqual({ seat: o.seat, place: row!.place });
+    expect(TRACE_PIECE_IDS.includes(ev!.trace!)).toBe(true);
+    for (const s of g.socks) expect(JSON.stringify(lastViewOf(s).day?.morning?.seen)).toBe(JSON.stringify(ev?.seen));
+    expect("errandLast" in ((await storedRoom(g.code)) as unknown as Record<string, unknown>)).toBe(false);
+    for (const s of g.socks) expect(s.frames.slice(-3).join("")).not.toContain("errandLast");
+  }, 60_000);
+
+  it("목격자 없는 아침: V 곁에 아무도 없었으면 day.evidence 에 seen 키가 없고 trace 는 있다", async () => {
+    const g = await startedGame("errand");
+    const v = withRole(g, "citizen")[0]!;
+    await lastSeenMorning(g, v, spreadWith(g, v, null));
+    for (const s of g.socks) {
+      const ev = lastViewOf(s).day?.evidence;
+      expect(`${ev !== undefined && "seen" in ev}:${ev?.trace !== undefined}`).toBe("false:true");
+      expect("seen" in (lastViewOf(s).day?.morning ?? {})).toBe(false);
+    }
+  }, 60_000);
 });
