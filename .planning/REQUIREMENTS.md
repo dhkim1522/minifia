@@ -58,7 +58,7 @@
 
 - [ ] **ERRAND-08**: 마피아가 받는 목록에 처리되지 않는 장소 1곳이 있고, 마크업·네트워크 모양·응답이 시민과 같다(0074 D-03 을 바꾼다)
 - [ ] **EVID-01**: 아침 흔적과 같은 옷을 입은 산 사람의 이름표에 표시가 붙고 그 낮이 끝날 때까지 유지된다
-- [ ] **EVID-02**: 피해자를 마지막으로 근처에서 본 사람(+장소)이 모두에게 공개된다
+- [x] **EVID-02**: 피해자를 마지막으로 근처에서 본 사람(+장소)이 모두에게 공개된다
 - [ ] **EVID-03**: 사회자 문구가 근거(같은 옷·엇갈린 목격)를 가리킨다
 
 ### 배포 (DEPLOY)
@@ -117,7 +117,7 @@
 | ASSET-01 | Phase 16 | Pending |
 | ERRAND-08 | Phase 16 | Pending |
 | EVID-01 | Phase 16 | Pending |
-| EVID-02 | Phase 16 | Pending |
+| EVID-02 | Phase 16 | Complete |
 | EVID-03 | Phase 16 | Pending |
 | DEPLOY-04 | Phase 16 | Pending |
 
