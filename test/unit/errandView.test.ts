@@ -188,104 +188,141 @@ describe("진행·다음 장소·처리 가능", () => {
   });
 });
 
-// ---- 표지 배치 계획 ----
+// ---- 타일·화살표·[처리] 알약 배치 계획 (16-07, D-06·V-20~V-22) ----
 const STAGE: Rect = { left: 0, top: 123, right: 360, bottom: 476 };
-const DOCK: Rect = { left: 296, top: 131, right: 344, bottom: 175 };
+/** 소리 열 첫 칸(오른쪽 위 52 원) */
+const SOUND: Rect = { left: 292, top: 131, right: 344, bottom: 183 };
 const overlap = (a: Rect, b: Rect): boolean => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-const boxOf = (x: number, y: number, size: number): Rect => ({ left: x - size / 2, top: y - size / 2, right: x + size / 2, bottom: y + size / 2 });
+const boxOf = (x: number, y: number, w: number, h: number = w): Rect => ({ left: x - w / 2, top: y - h / 2, right: x + w / 2, bottom: y + h / 2 });
 
-describe("표지 배치 계획", () => {
+describe("타일·화살표·알약 배치 계획", () => {
   const inside = { id: "glass" as PlaceId, x: 100, y: 300 };
+  const base = { stage: STAGE, avoid: [SOUND], items: [inside], me: null, nextId: null, actId: null } as const;
 
-  it("(a) 안쪽 8 inset 안·독 줄과 안 겹치는 장소는 pins 에 들어가고 화살표는 없다", () => {
-    const plan = placeMarkerPlan({ stage: STAGE, dock: DOCK, items: [inside, { id: "piano", x: 250, y: 400 }], nextId: "glass" });
+  it("(a) 타일 상자 64 가 안쪽 8 안이고 avoid 와 안 겹치는 장소만 pins 에 든다", () => {
+    const plan = placeMarkerPlan({ ...base, items: [inside, { id: "piano", x: 250, y: 400 }] });
     expect(JSON.stringify(plan.pins.map((p) => p.id))).toBe(JSON.stringify(["glass", "piano"]));
-    expect(plan.arrow).toBeNull();
     expect(plan.pins[0]).toEqual({ id: "glass", x: 100, y: 300 });
-  });
-
-  it("누르기 상자 44 가 inset 8 안에 정확히 들어가는 경계는 그리고, 1px 라도 넘으면 그리지 않는다", () => {
-    const edgeOk = { id: "glass" as PlaceId, x: 8 + 22, y: 300 };
-    const edgeBad = { id: "piano" as PlaceId, x: 8 + 22 - 1, y: 300 };
-    const plan = placeMarkerPlan({ stage: STAGE, dock: null, items: [edgeOk, edgeBad], nextId: null });
-    expect(JSON.stringify(plan.pins.map((p) => p.id))).toBe(JSON.stringify(["glass"]));
-  });
-
-  it("(b) 다음 장소가 화면 밖이면 pins 에서 빠지고 arrow 가 그 id·스테이지 가장자리(안쪽 26)에 붙고 angle 이 중심→장소 방향", () => {
-    const plan = placeMarkerPlan({ stage: STAGE, dock: DOCK, items: [inside, { id: "sax", x: 700, y: 299.5 }], nextId: "sax" });
-    expect(JSON.stringify(plan.pins.map((p) => p.id))).toBe(JSON.stringify(["glass"]));
-    expect(plan.arrow?.id).toBe("sax");
-    // 중심(180, 299.5)에서 오른쪽(+x)을 향한다 → 오른쪽 가장자리: right - 26, 각도 90°(위 0°, 시계 방향)
-    expect(plan.arrow?.x).toBe(STAGE.right - 26);
-    expect(plan.arrow?.y).toBeCloseTo(299.5, 5);
-    expect(plan.arrow?.angle).toBeCloseTo(90, 5);
-    const down = placeMarkerPlan({ stage: STAGE, dock: DOCK, items: [{ id: "sax", x: 180, y: 900 }], nextId: "sax" });
-    expect(down.arrow?.angle).toBeCloseTo(180, 5);
-    expect(down.arrow?.y).toBe(STAGE.bottom - 26);
-    const left = placeMarkerPlan({ stage: STAGE, dock: null, items: [{ id: "sax", x: -300, y: 299.5 }], nextId: "sax" });
-    expect(left.arrow?.x).toBe(STAGE.left + 26);
-    expect(left.arrow?.angle).toBeCloseTo(-90, 5);
-  });
-
-  it("(c) 다음 장소가 독 줄과 겹치면 pins 에서 빠지고 arrow", () => {
-    const plan = placeMarkerPlan({ stage: STAGE, dock: DOCK, items: [{ id: "glass", x: 320, y: 153 }], nextId: "glass" });
-    expect(plan.pins).toEqual([]);
-    expect(plan.arrow?.id).toBe("glass");
-  });
-
-  it("(d) 다음이 아닌 장소가 밖이면 그냥 그리지 않고, 화살표는 항상 하나뿐이다", () => {
-    const items = [
-      { id: "glass" as PlaceId, x: -200, y: 300 },
-      { id: "piano" as PlaceId, x: 900, y: 300 },
-      { id: "sax" as PlaceId, x: 100, y: 300 },
-    ];
-    const plan = placeMarkerPlan({ stage: STAGE, dock: DOCK, items, nextId: "piano" });
-    expect(JSON.stringify(plan.pins.map((p) => p.id))).toBe(JSON.stringify(["sax"]));
-    expect(plan.arrow?.id).toBe("piano");
-    const none = placeMarkerPlan({ stage: STAGE, dock: DOCK, items, nextId: "sax" });
-    expect(none.arrow).toBeNull();
-    expect(none.pins.map((p) => p.id)).toEqual(["sax"]);
-  });
-
-  it("(e) 화살표 칩이 독 줄 사각형과 겹치면 아래로 밀려 겹침 0, 띠 아래(stage.top + 8) 위로는 안 올라간다", () => {
-    // 위쪽 오른쪽 구석 방향 → 원래 자리가 독 줄과 겹친다
-    const target = { id: "glass" as PlaceId, x: 450, y: 20 };
-    const plan = placeMarkerPlan({ stage: STAGE, dock: DOCK, items: [target], nextId: "glass" });
-    const a = plan.arrow!;
-    expect(overlap(boxOf(a.x, a.y, 36), DOCK)).toBe(false);
-    expect(a.y - 18).toBeGreaterThanOrEqual(STAGE.top + 8);
-    // 독 줄이 없으면 밀리지 않는다 — 윗 가장자리
-    const free = placeMarkerPlan({ stage: STAGE, dock: null, items: [target], nextId: "glass" }).arrow!;
-    expect(free.y).toBe(STAGE.top + 26);
-    expect(a.y).toBeGreaterThan(free.y);
-    // 각도는 중심→장소 방향 그대로
-    expect(a.angle).toBeCloseTo(free.angle, 9);
-    // 가로 가장자리에 붙어도 독 줄 칩 상자와 겹침 0
-    for (const y of [140, 160, 170, 190]) {
-      const p = placeMarkerPlan({ stage: STAGE, dock: DOCK, items: [{ id: "glass", x: 900, y }], nextId: "glass" }).arrow!;
-      expect(overlap(boxOf(p.x, p.y, 36), DOCK), `y=${y}`).toBe(false);
-      expect(p.y - 18).toBeGreaterThanOrEqual(STAGE.top + 8);
-    }
-  });
-
-  it("(f) nextId 가 null 이면 arrow null", () => {
-    const plan = placeMarkerPlan({ stage: STAGE, dock: DOCK, items: [{ id: "glass", x: -500, y: 300 }], nextId: null });
     expect(plan.arrow).toBeNull();
-    expect(plan.pins).toEqual([]);
+    expect(plan.act).toBeNull();
   });
 
-  it("nextId 가 items 에 없으면(투영 불가) arrow 도 없다", () => {
-    const plan = placeMarkerPlan({ stage: STAGE, dock: DOCK, items: [inside], nextId: "sax" });
+  it("(b) 타일 64 가 inset 8 안에 정확히 들어가는 경계는 그리고 1px 라도 넘으면 그리지 않는다", () => {
+    const edgeOk = { id: "glass" as PlaceId, x: 8 + 32, y: 300 };
+    const edgeBad = { id: "piano" as PlaceId, x: 8 + 32 - 1, y: 300 };
+    const topBad = { id: "sax" as PlaceId, x: 180, y: 123 + 8 + 32 - 1 };
+    const bottomOk = { id: "stool" as PlaceId, x: 180, y: 476 - 8 - 32 };
+    const plan = placeMarkerPlan({ ...base, avoid: [], items: [edgeOk, edgeBad, topBad, bottomOk] });
+    expect(JSON.stringify(plan.pins.map((p) => p.id))).toBe(JSON.stringify(["glass", "stool"]));
+  });
+
+  it("(c) 소리 열 사각형과 겹치는 타일은 빠지고 맞닿기만 하면 남는다", () => {
+    const hit = { id: "glass" as PlaceId, x: 318, y: 190 }; // 상자 286..350 × 158..222 — 소리 열과 겹침
+    const touch = { id: "piano" as PlaceId, x: 318, y: 183 + 32 }; // 윗변 183 = 소리 열 아랫변
+    const plan = placeMarkerPlan({ ...base, items: [hit, touch] });
+    expect(JSON.stringify(plan.pins.map((p) => p.id))).toBe(JSON.stringify(["piano"]));
+  });
+
+  it("(d) 화살표: actId 가 null 이고 me·nextId 가 있으면 내 위치에서 56 떨어진 자리, 각도는 목표 방향(위 0°·오른쪽 90°·아래 180°·왼쪽 -90°)", () => {
+    const me = { x: 180, y: 300 };
+    const at = (x: number, y: number) => placeMarkerPlan({ ...base, avoid: [], items: [{ id: "sax", x, y }], me, nextId: "sax" }).arrow!;
+    const up = at(180, 100);
+    expect(up.id).toBe("sax");
+    expect(up.x).toBeCloseTo(180, 6);
+    expect(up.y).toBeCloseTo(300 - 56, 6);
+    expect(up.angle).toBeCloseTo(0, 6);
+    const right = at(600, 300);
+    expect(right.x).toBeCloseTo(180 + 56, 6);
+    expect(right.angle).toBeCloseTo(90, 6);
+    const down = at(180, 460);
+    expect(down.y).toBeCloseTo(356, 6);
+    expect(down.angle).toBeCloseTo(180, 6);
+    const left = at(-100, 300);
+    expect(left.x).toBeCloseTo(124, 6);
+    expect(left.angle).toBeCloseTo(-90, 6);
+    // 내 위치와 목표가 같아도 정해진 값(위)
+    expect(at(180, 300).angle).toBe(0);
+  });
+
+  it("(e) 화살표 40 상자가 avoid·arrowAvoid 와 겹치면 48 로 한 번만 당긴다(다시 겹쳐도 더 당기지 않는다)", () => {
+    const items = [{ id: "sax" as PlaceId, x: 318, y: 60 }];
+    // 내 위치 (318, 240): 위쪽 56 → 중심 (318, 184), 상자 164..204 가 소리 열(~183)과 겹친다
+    const near = placeMarkerPlan({ ...base, items, me: { x: 318, y: 240 }, nextId: "sax" }).arrow!;
+    expect(near.y).toBeCloseTo(240 - 48, 6);
+    // 겹치지 않으면 56
+    const far = placeMarkerPlan({ ...base, items, me: { x: 318, y: 300 }, nextId: "sax" }).arrow!;
+    expect(far.y).toBeCloseTo(300 - 56, 6);
+    // arrowAvoid(내 이름표 사각형)도 같다: 이름표가 발밑 위쪽에 있으면 48
+    const tag: Rect = { left: 150, top: 230, right: 210, bottom: 270 };
+    const tagged = placeMarkerPlan({ ...base, avoid: [], arrowAvoid: [tag], items: [{ id: "sax", x: 180, y: 60 }], me: { x: 180, y: 300 }, nextId: "sax" }).arrow!;
+    expect(tagged.y).toBeCloseTo(300 - 48, 6);
+    // arrowAvoid 는 타일 판정에는 쓰지 않는다
+    const tile = placeMarkerPlan({ ...base, avoid: [], arrowAvoid: [tag], items: [{ id: "glass", x: 180, y: 250 }] });
+    expect(tile.pins.map((p) => p.id)).toEqual(["glass"]);
+  });
+
+  it("(f) 화살표는 스테이지 안쪽 8 + 20 밖으로 나가지 않는다", () => {
+    const a = placeMarkerPlan({ ...base, avoid: [], items: [{ id: "sax", x: 700, y: 200 }], me: { x: 350, y: 130 }, nextId: "sax" }).arrow!;
+    expect(a.x - 20).toBeGreaterThanOrEqual(STAGE.left + 8);
+    expect(a.x + 20).toBeLessThanOrEqual(STAGE.right - 8);
+    expect(a.y - 20).toBeGreaterThanOrEqual(STAGE.top + 8);
+  });
+
+  it("(g) 화살표가 없는 경우: actId 가 있다·nextId null·me null·nextId 가 items 에 없다", () => {
+    const items = [inside, { id: "sax" as PlaceId, x: 250, y: 400 }];
+    const me = { x: 180, y: 300 };
+    expect(placeMarkerPlan({ ...base, items, me, nextId: "sax", actId: "glass" }).arrow).toBeNull();
+    expect(placeMarkerPlan({ ...base, items, me, nextId: null }).arrow).toBeNull();
+    expect(placeMarkerPlan({ ...base, items, me: null, nextId: "sax" }).arrow).toBeNull();
+    expect(placeMarkerPlan({ ...base, items: [inside], me, nextId: "sax" }).arrow).toBeNull();
+  });
+
+  it("(h) 알약: 타일 위 8 + 22 중심. 타일과 겹치지 않는다", () => {
+    const plan = placeMarkerPlan({ ...base, avoid: [], actId: "glass", pillW: 96 });
+    expect(plan.act).toEqual({ id: "glass", x: 100, y: 300 - 32 - 8 - 22 });
+    expect(overlap(boxOf(plan.act!.x, plan.act!.y, 96, 44), boxOf(100, 300, 64))).toBe(false);
     expect(plan.arrow).toBeNull();
   });
 
-  it("(g) 같은 입력 두 번 같은 출력", () => {
-    const input = { stage: STAGE, dock: DOCK, items: [inside, { id: "sax" as PlaceId, x: 700, y: 20 }], nextId: "sax" as PlaceId };
+  it("(i) 위가 stage.top + 8 을 넘으면 아래로 뒤집는다(경계 포함은 위)", () => {
+    const stays = placeMarkerPlan({ ...base, avoid: [], items: [{ id: "glass", x: 180, y: 123 + 8 + 44 + 8 + 32 }], actId: "glass", pillW: 96 });
+    expect(stays.act!.y).toBe(123 + 8 + 22);
+    const flips = placeMarkerPlan({ ...base, avoid: [], items: [{ id: "glass", x: 180, y: 123 + 8 + 44 + 8 + 32 - 1 }], actId: "glass", pillW: 96 });
+    expect(flips.act!.y).toBe(123 + 8 + 44 + 8 + 32 - 1 + 32 + 8 + 22);
+  });
+
+  it("(j) 위가 소리 열에 막히면 아래로 뒤집고 좌우는 안쪽 8 안으로 민다", () => {
+    const plan = placeMarkerPlan({ ...base, items: [{ id: "glass", x: 322, y: 260 }], actId: "glass", pillW: 96 });
+    // 위쪽 중심 y = 198 → 상자 176..220 이 소리 열(131..183)과 겹침 → 아래
+    expect(plan.act!.y).toBe(260 + 32 + 8 + 22);
+    // 오른쪽 안쪽 8(= 352)을 넘지 않게 민다: x = 352 - 48
+    expect(plan.act!.x).toBe(352 - 48);
+    const left = placeMarkerPlan({ ...base, avoid: [], items: [{ id: "glass", x: 40, y: 300 }], actId: "glass", pillW: 100 });
+    expect(left.act!.x).toBe(8 + 50);
+  });
+
+  it("(k) 타일이 그려지지 않는 자리(화면 밖)여도 알약은 투영 점을 안쪽으로 당긴 곳에 선다", () => {
+    const plan = placeMarkerPlan({ ...base, avoid: [], items: [{ id: "glass", x: -100, y: 900 }], actId: "glass", pillW: 100 });
+    expect(plan.pins).toEqual([]);
+    // 타일 중심을 (8+32, bottom-8-32) 로 당기고 그 위 8 + 22
+    expect(plan.act).toEqual({ id: "glass", x: 8 + 50, y: 476 - 8 - 32 - 32 - 8 - 22 });
+  });
+
+  it("(l) actId 가 items 에 없으면(투영 불가) act 도 없다", () => {
+    expect(placeMarkerPlan({ ...base, actId: "sax" }).act).toBeNull();
+  });
+
+  it("(m) 같은 입력 두 번 같은 출력", () => {
+    const input = { ...base, items: [inside, { id: "sax" as PlaceId, x: 700, y: 20 }], me: { x: 180, y: 300 }, nextId: "sax" as PlaceId };
     expect(JSON.stringify(placeMarkerPlan(input))).toBe(JSON.stringify(placeMarkerPlan(input)));
   });
 
-  it("크기 인자(pin·tap·inset·chip)가 기본값(36·44·8·36)을 바꾼다", () => {
-    const plan = placeMarkerPlan({ stage: STAGE, dock: null, items: [{ id: "sax", x: -50, y: 300 }], nextId: "sax", inset: 4, chip: 24 });
-    expect(plan.arrow?.x).toBe(STAGE.left + 4 + 12);
+  it("(n) 크기 인자(tile·inset·arrow·reach·reachShort·pillH·gap)가 기본값(64·8·40·56·48·44·8)을 바꾼다", () => {
+    const small = placeMarkerPlan({ ...base, avoid: [], items: [{ id: "glass", x: 20, y: 300 }], tile: 24, inset: 8 });
+    expect(small.pins.map((p) => p.id)).toEqual(["glass"]);
+    const reach = placeMarkerPlan({ ...base, avoid: [], items: [{ id: "sax", x: 180, y: 100 }], me: { x: 180, y: 300 }, nextId: "sax", reach: 30 }).arrow!;
+    expect(reach.y).toBeCloseTo(270, 6);
+    const pill = placeMarkerPlan({ ...base, avoid: [], actId: "glass", pillW: 90, pillH: 40, gap: 4 });
+    expect(pill.act!.y).toBe(300 - 32 - 4 - 20);
   });
 });
