@@ -144,21 +144,47 @@ describe("채팅 입력줄 단추 (TOOL-04, D-01)", () => {
     expectTextControl(container.querySelector("button[data-chat-newdot]"), "새 글", { name: "새 글" });
   });
 
-  it("단추 크기 CSS: 폭 ≤ 52·누르기 44 이상, 막힘은 불투명도만 (크기는 16-05 가 바꾼다)", () => {
+  it("머리 단추 CSS(V-1): 44×44 정사각, 모서리 radius-badge, 면 night-800, 테두리 1px night-600, 막힘은 불투명도만", () => {
     const tool = rule(".mv-tool");
-    expect(tool).toMatch(/min-width:\s*(var\(--tap-min\)|44px)/);
-    expect(tool).toContain("max-width: 52px");
-    expect(tool).toMatch(/min-height:\s*(var\(--tap-min\)|44px)/);
-    expect(tool).toContain("flex-direction: column");
+    expect(tool).toMatch(/(^|[;\s])width:\s*var\(--tap-min\)/);
+    expect(tool).toMatch(/(^|[;\s])height:\s*var\(--tap-min\)/);
+    expect(tool).not.toContain("max-width");
+    expect(tool).not.toContain("flex-direction: column");
+    expect(rule(".mv-tool--head")).toContain("border-radius: var(--radius-badge)");
+    const face = rule(".mv-tool--head .mv-tool__face");
+    expect(face).toContain("background: var(--night-800)");
+    expect(face).toContain("border: 1px solid var(--night-600)");
     expect(rule('.mv-tool[aria-disabled="true"]')).toContain("opacity: 0.45");
   });
 
-  it("폭 360 에서 입력칸이 약 172 남는다: 입력줄은 동작 44 + 입력칸 + 보내기 44 + 유언 44, 간격 8 뿐(여분 margin 없음)", () => {
-    expect(rule(".mv-chat__form")).toContain("align-items: flex-end");
+  it("입력줄 단추(V-6, A5): 동작·보내기·유언은 48(--control-input) 원이다", () => {
+    for (const sel of [".mv-chat__emote", ".mv-chat__send", ".mv-chat__will"]) {
+      const r = rule(sel);
+      expect(r, sel).toContain("width: var(--control-input)");
+      expect(r, sel).toContain("height: var(--control-input)");
+      expect(r, sel).toContain("border-radius: var(--radius-pill)");
+    }
+  });
+
+  it("폭 360 에서 입력칸이 160 남는다: 동작 48 + 입력칸 + 보내기 48 + 유언 48, 간격 8 뿐(여분 margin·아래 정렬 보정 없음)", () => {
+    expect(rule(".mv-chat__form")).toContain("align-items: center");
     expect(rule(".mv-chat__form")).toContain("gap: var(--space-sm)");
     expect(rule(".mv-chat__will")).not.toContain("margin-left");
-    const w = 360 - 32 - 3 * 44 - 3 * 8;
-    expect(w).toBe(172);
+    const w = 360 - 32 - 3 * 48 - 3 * 8;
+    expect(w).toBe(160);
+  });
+
+  it("CSS 에 아이콘 아래 라벨 규칙이 없다(D-01): 라벨 선택자가 v2.css·rolecard.css 어디에도 없다", () => {
+    const strip = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+    const all = strip(V2_CSS) + strip(readFileSync("src/styles/rolecard.css", "utf8"));
+    for (const sel of LABEL_SELECTOR.split(",").map((x) => x.trim())) {
+      expect(all.includes(sel), sel).toBe(false);
+    }
+  });
+
+  it("빛남: 머리 단추 .is-call 의 빛 모서리는 면(radius-badge)을 따르고, 유언 단추는 원(pill)이다", () => {
+    expect(rule(".mv-tool--head.is-call::after")).toContain("border-radius: var(--radius-badge)");
+    expect(rule(".mv-chat__will.is-call::after")).toContain("border-radius: var(--radius-pill)");
   });
 });
 
@@ -181,11 +207,14 @@ describe("시트 닫기·결과 탭 (TOOL-04, D-01·V-7)", () => {
     expect(btn?.classList.contains("mv-closepill")).toBe(true);
   });
 
-  it("닫기 단추 CSS: 높이 44, inline-flex 알약 (크기는 16-05 가 바꾼다)", () => {
+  it("닫기 단추 CSS(V-7): 44×44 정사각 × 가운데, 글 여백 없음", () => {
     const r = rule(".mv-closepill");
-    expect(r).toMatch(/height:\s*(var\(--tap-min\)|44px)/);
+    expect(r).toMatch(/(^|[;\s])width:\s*var\(--tap-min\)/);
+    expect(r).toMatch(/(^|[;\s])height:\s*var\(--tap-min\)/);
     expect(r).toContain("display: inline-flex");
-    expect(r).toContain("border-radius: var(--radius-pill)");
+    expect(r).toContain("justify-content: center");
+    expect(r).not.toMatch(/padding:\s*0 var\(--space-md\)/);
+    expect(rule(".mf-btn.mv-closepill")).toMatch(/padding:\s*0;/);
   });
 
   const tabProps = (over: Partial<ResultPanelProps> = {}): ResultPanelProps => ({
@@ -282,7 +311,7 @@ describe("머리·떠 있는 단추·옷장 (TOOL-04, D-01)", () => {
     expectIconButton(container.querySelector(".mv-dress-sheet__close"), "닫기");
   });
 
-  it("CSS: 맵 칩·떠 있는 단추의 폭 규칙은 그대로다 (크기는 16-05 가 바꾼다)", () => {
+  it("CSS: 맵 칩·떠 있는 단추의 폭 규칙은 그대로다 (크기는 16-06 이 바꾼다)", () => {
     expect(rule(".mf-mapchip")).toContain("width: var(--tap-min)");
     expect(rule(".mv-float")).toContain("width: var(--control-input)");
   });

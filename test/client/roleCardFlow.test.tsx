@@ -329,18 +329,19 @@ describe("css 규약: 머리말 간격과 [역할 카드] 버튼 (UI-SPEC A·S5)
     expect(rule(phaseCss, ".mf-day__top")).toBe("");
   });
 
-  it("단추는 아이콘 위·라벨 아래 세로 배치, 라벨 14/400 gray-300, 폭 ≤ 52·누르기 영역 44 이상, 점이 밖으로 나오도록 overflow visible (TOOL-01)", () => {
+  it("[내 역할] 단추는 44×44 정사각(radius-badge, night-800 면, 테두리 1px night-600), 라벨 규칙 없음, 점이 밖으로 나오도록 overflow visible (V-1, TOOL-01)", () => {
     const r = rule(roleCss, ".mf-btn.mf-rolecard-btn");
     expect(/position:\s*relative/.test(r)).toBe(true);
     expect(/overflow:\s*visible/.test(r)).toBe(true);
-    expect(/flex-direction:\s*column/.test(r)).toBe(true);
-    expect(/max-width:\s*52px/.test(r)).toBe(true);
-    expect(/min-width:\s*var\(--tap-min\)/.test(r)).toBe(true);
-    expect(/white-space:\s*nowrap/.test(r)).toBe(true);
-    const label = rule(roleCss, ".mf-rolecard-btn__label");
-    expect(/font-size:\s*14px/.test(label) && /font-weight:\s*400/.test(label) && /var\(--gray-300\)/.test(label)).toBe(true);
+    expect(/(^|[;\s])width:\s*var\(--tap-min\)/.test(r)).toBe(true);
+    expect(/(^|[;\s])height:\s*var\(--tap-min\)/.test(r)).toBe(true);
+    expect(/flex-direction:\s*column/.test(r)).toBe(false);
+    expect(/max-width/.test(r)).toBe(false);
+    expect(/border-radius:\s*var\(--radius-badge\)/.test(r)).toBe(true);
+    expect(rule(roleCss, ".mf-rolecard-btn__label")).toBe("");
     const face = rule(roleCss, ".mf-rolecard-btn__face");
-    expect(/width:\s*36px/.test(face) && /height:\s*36px/.test(face)).toBe(true);
+    expect(/width:\s*100%/.test(face) && /height:\s*100%/.test(face)).toBe(true);
+    expect(/var\(--night-800\)/.test(face) && /1px solid var\(--night-600\)/.test(face)).toBe(true);
   });
 
   it("점은 면 오른쪽 위의 gray-100 8px(테두리 night-900 1px), 전환·애니메이션 없음 — v2.0 에서 앰버는 쓰지 않는다", () => {

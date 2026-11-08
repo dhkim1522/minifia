@@ -376,10 +376,10 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
   // 9페이즈(09-28, feedback-4)가 시간 링의 10초 놋쇠·5초 진홍(.mv-ring.is-warn / .is-urgent)을 더했다 — 그 규칙도 뺀다.
   // 09.1-07: 차례 알약의 마지막 5초 진홍(.mf-turn[data-turn-tone=urgent])은 시간 링 .mv-ring.is-urgent 와 같은 시간 신호라 같이 뺀다.
   // 14-01: 사회자 자막 띠(.mv-host*)의 왼쪽 놋쇠 줄·종·10초 놋쇠 막대와 5초 진홍 막대·숫자는 시간 신호·사회자 색이라 같이 뺀다(14-UI-SPEC "색 약속 정리").
-  // 14-06: 이름표 단추가 빛날 때 라벨 700 brass-200(.mv-tool.is-call .mv-tool__label)은 찬반·이름표 빛남과 같은 빛남 신호라 같이 뺀다.
+  // 16-05: 아이콘 단추의 라벨이 없어져 머리 단추 빛남(.mv-tool.is-call)에는 놋쇠 글자 규칙이 없다 — 거를 규칙도 없다.
   // 나머지 규칙(이름표·채팅·시간 링 기본 등)은 7페이즈 규칙 그대로다.
   const WITHOUT_PHASE8_PARTS = V2_CSS.replace(/\/\*[\s\S]*?\*\//g, "").replace(/[^{}]*\{[^{}]*\}/g, (rule) =>
-    /^\s*\.mv-(badge|stamp|rolechip)|^\s*\.mv-chat__sys\.is-hot|^\s*\.mv-will--mafia|^\s*\.mv-chat__card--mafia|^\s*\.mv-ring\.is-(warn|urgent)|^\s*\.mf-turn\[data-turn-tone=|^\s*\.mv-host|^\s*\.mv-tag\.is-call|^\s*\.mv-tool\.is-call/.test(rule) ? "" : rule,
+    /^\s*\.mv-(badge|stamp|rolechip)|^\s*\.mv-chat__sys\.is-hot|^\s*\.mv-will--mafia|^\s*\.mv-chat__card--mafia|^\s*\.mv-ring\.is-(warn|urgent)|^\s*\.mf-turn\[data-turn-tone=|^\s*\.mv-host|^\s*\.mv-tag\.is-call/.test(rule) ? "" : rule,
   );
 
   it("hex 색이 없고 놋쇠 토큰을 쓰지 않으며, 진홍은 crimson-300 글자색 하나뿐이다 (07-UI-SPEC Color: 진홍 글자 예약, 면·큰 글자 금지) — 8페이즈 부품 규칙 제외", () => {
