@@ -42,9 +42,29 @@
 - [x] **TRACE-02**: 피해자가 나온 아침에 사회자가 그 밤 피해자를 고른 사람 중 한 명의 흔적 하나를 공개한다. 흔적은 확정 증거가 아니고(마피아일 수도 다른 역할일 수도 있다) 역할을 드러내지 않는다
 - [x] **TRACE-03**: 아무도 죽지 않은 아침에는 흔적이 없다
 
+### 단추 정리 (TOOL·BTN) — 16페이즈, 결정 0077
+
+- [ ] **TOOL-04**: 아이콘 단추 아래 글 이름표가 어느 화면에도 없고, 모든 아이콘 단추에 비어 있지 않은 접근성 이름이 있다(TOOL-01 을 대체)
+- [ ] **BTN-01**: 머리에는 정사각 44 단추만 있고(대기실 나가기·공유 / 게임 기록·내 역할), 입력줄 단추는 48 원이다
+- [ ] **BTN-02**: 소리·맵(방장)·봇(방장)·옷장이 오른쪽 세로 한 줄의 52 원이고 자막 띠 주변은 비어 있다. 손님에게는 맵·봇이 없다
+
+### 심부름 화면과 컬러 에셋 (ERRAND·ASSET) — 16페이즈
+
+- [ ] **ERRAND-06**: 심부름 시작 2초 카드가 내 장소 3곳을 컬러 그림으로 보여 준다
+- [ ] **ERRAND-07**: 해야 할 장소가 64 타일로 보이고 가장 가까운 곳에 빛·방향 화살표가 있으며, 닿으면 그 장소 위에 [처리]가 뜨고 진행은 점 3개로 보인다(아래 독 없음)
+- [ ] **ASSET-01**: 장소 16·흔적 조각 9 아이콘이 승인 컬러 에셋 A 이고(다시 그리지 않고 이식) id·이름이 1:1 이다
+
+### 심부름 증거 (ERRAND·EVID) — 16페이즈
+
+- [ ] **ERRAND-08**: 마피아가 받는 목록에 처리되지 않는 장소 1곳이 있고, 마크업·네트워크 모양·응답이 시민과 같다(0074 D-03 을 바꾼다)
+- [ ] **EVID-01**: 아침 흔적과 같은 옷을 입은 산 사람의 이름표에 표시가 붙고 그 낮이 끝날 때까지 유지된다
+- [ ] **EVID-02**: 피해자를 마지막으로 근처에서 본 사람(+장소)이 모두에게 공개된다
+- [ ] **EVID-03**: 사회자 문구가 근거(같은 옷·엇갈린 목격)를 가리킨다
+
 ### 배포 (DEPLOY)
 
 - [x] **DEPLOY-03**: v3.0 이 `v3` 브랜치에서 Worker `minifia-v3`(https://minifia-v3.dhplay.workers.dev)로 배포되고 v1.0·v2.0 주소는 그대로 남는다. 누설 검사가 새 메시지·단계로 넓어진 채 통과한다
+- [ ] **DEPLOY-04**: 16페이즈가 누설 검사를 새 view 필드(day.evidence 등)·서버 전용 값(errandFake·errandLast)까지 넓힌 채 `minifia-v3` 에 배포된다(DEPLOY-03 과 같은 방식)
 
 ## Future Requirements
 
@@ -89,12 +109,23 @@
 | TRACE-02 | Phase 15 | Complete |
 | TRACE-03 | Phase 15 | Complete |
 | DEPLOY-03 | Phase 15 | Complete |
+| TOOL-04 | Phase 16 | Pending |
+| BTN-01 | Phase 16 | Pending |
+| BTN-02 | Phase 16 | Pending |
+| ERRAND-06 | Phase 16 | Pending |
+| ERRAND-07 | Phase 16 | Pending |
+| ASSET-01 | Phase 16 | Pending |
+| ERRAND-08 | Phase 16 | Pending |
+| EVID-01 | Phase 16 | Pending |
+| EVID-02 | Phase 16 | Pending |
+| EVID-03 | Phase 16 | Pending |
+| DEPLOY-04 | Phase 16 | Pending |
 
 **Coverage:**
-- v3.0 requirements: 22 total
-- Mapped to phases: 22
+- v3.0 requirements: 33 total
+- Mapped to phases: 33
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-11-07*
-*Last updated: 2026-11-07 after v3.0 milestone start*
+*Last updated: 2026-11-08 — 16페이즈 요구사항 11개 추가(결정 0077·0078, 16-RESEARCH 제안 ID)*
