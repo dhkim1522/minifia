@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v3.0
 milestone_name: 사회자와 증거
-current_phase: 17
-current_phase_name: "튜토리얼 \"첫 사건\""
+current_phase: 18
+current_phase_name: "바로 고칠 것: 증거·조명·튜토리얼 손보기"
 current_plan: 12
-status: verifying
+status: executing
 stopped_at: Phase 18 context gathered
-last_updated: "2026-11-09T13:58:10.011Z"
+last_updated: "2026-11-09T14:52:41.054Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 17 execution started
-state_head: 2692e1cb727bf193fae19b15b3ac96e3eec93a2a
+state_head: b686b3f8a653598ba8e460cce31889ccb8f251d8
 progress:
   total_phases: 9
   completed_phases: 4
-  total_plans: 47
+  total_plans: 58
   completed_plans: 47
   percent: 44
 ---
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 
 ## Current Position
 
-Phase: 17 (튜토리얼 "첫 사건") — EXECUTING
+Phase: 18 (바로 고칠 것: 증거·조명·튜토리얼 손보기) — READY TO EXECUTE
 Current Plan: 12
-Total Plans in Phase: 12
-Status: Phase complete — ready for verification
+Total Plans in Phase: 11
+Status: Ready to execute
 Last activity: 2026-11-09 — Phase 17 execution started
 
 ## Performance Metrics

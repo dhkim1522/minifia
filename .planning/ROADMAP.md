@@ -344,17 +344,26 @@ Plans:
 5. 바뀐 흐름의 E2E 가 통과하고 minifia-v3 에 배포된다
 
 Plans:
+**Wave 1**
 - [ ] 18-01-PLAN.md — 옷 서버 규칙: 시작 때 겹친 옷 해소(beginGame)·남이 직접 고른 옷 잠금(setLook) (wave 1)
 - [ ] 18-02-PLAN.md — 조명 값: PhaseTune.moonColor·광장/바 낮·아침·저녁 새 값·허용 범위 1~3 시험 (wave 1)
 - [ ] 18-03-PLAN.md — 튜토리얼 지도 장면 패널·[내 역할] 숨김(panelless)·장면 2·5·6 고정 카메라 (wave 1)
 - [ ] 18-04-PLAN.md — 낡은 문구 ①: 아침 증거 목격자 없음 eyeOff (wave 1)
+- [ ] 18-11-PLAN.md — 낡은 문구 ②: 밤 띠 "얼굴"(앱·E2E 사본)·역할 확인 공개 예고 삭제 (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 18-05-PLAN.md — 옷장 잠금 화면: DressSheet taken·자물쇠(로비·결과 화면) (wave 2)
 - [ ] 18-06-PLAN.md — 튜토리얼 스포트라이트·[다음] 알약·직업 카드 ROLE_TEXT·장면 5 선 clamp (wave 2)
 - [ ] 18-07-PLAN.md — 조명 렌더 휘도 측정(perf-run --mode light)·필요 시 값 조정·낮 가독 (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 18-08-PLAN.md — 튜토리얼 E2E 판정(TD·TN·TH·EV6~8·TC5)·도윤 자리 측정 (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 18-09-PLAN.md — 옷 E2E: avatar-dress 잠금·trace 옷 유일·같은 옷 표시 ≤ 1 (wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 18-10-PLAN.md — 로컬 전체 회귀·nightload·minifia-v3 배포·지도/0081/HANDOFF·push (wave 5)
-- [ ] 18-11-PLAN.md — 낡은 문구 ②: 밤 띠 "얼굴"(앱·E2E 사본)·역할 확인 공개 예고 삭제 (wave 1)
 
 ### Phase 19: 방장이 고르는 기본 마피아·확장판
 
