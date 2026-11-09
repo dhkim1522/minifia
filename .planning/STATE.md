@@ -7,16 +7,16 @@ current_phase_name: "튜토리얼 \"첫 사건\""
 current_plan: 0
 status: ready_to_plan
 stopped_at: Phase 17 UI-SPEC approved
-last_updated: "2026-11-09T01:28:18.912Z"
+last_updated: "2026-11-09T02:57:03.797Z"
 last_activity: 2026-11-08
 last_activity_desc: Phase 16 complete — 검증 human_needed(실기기 항목 v3.0 끝으로 미룸)
-state_head: 1d8c4ca49bcb3a2422e7644c5f74033264151195
+state_head: 9963ea30b02c096a4c1b3c660c114a7f36790fdd
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 35
+  total_plans: 47
   completed_plans: 35
-  percent: 80
+  percent: 74
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 
 ## Current Position
 
-Phase: 17 (튜토리얼 "첫 사건") — NOT STARTED
+Phase: 17 (튜토리얼 "첫 사건") — READY TO EXECUTE
 Current Plan: 0
-Total Plans in Phase: 0
+Total Plans in Phase: 12
 Status: Ready to plan (Design 캔버스 시안 → /gsd-ui-phase 17 → /gsd-plan-phase 17)
 Last activity: 2026-11-08 — Phase 16 complete (배포 `49b1ad57`, 실기기 확인은 v3.0 끝)
 
