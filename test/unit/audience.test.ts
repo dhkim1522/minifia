@@ -339,7 +339,7 @@ describe("world mover(GHOST-01)", () => {
 });
 
 describe("worldVisibleTo — 접속 스냅샷에 실릴 좌석 (GHOST-01)", () => {
-  it.each(["lobby", "assigning", "roleReveal"] as PhaseId[])("%s: 방 전원", (phase) => {
+  it.each(["lobby", "tutorial", "assigning", "roleReveal"] as PhaseId[])("%s: 방 전원", (phase) => {
     const s = phase === "lobby" ? lobbyOf(6) : sixAt(phase, { day: 1 });
     expect(sorted(worldVisibleTo(s, idOf(0)))).toEqual(ids(0, 1, 2, 3, 4, 5));
     expect(sorted(worldVisibleTo(s, idOf(2)))).toEqual(ids(0, 1, 2, 3, 4, 5));
