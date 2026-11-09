@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 17
 current_phase_name: "튜토리얼 \"첫 사건\""
-current_plan: 9
+current_plan: 10
 status: executing
-stopped_at: Completed 17-06-PLAN.md
-last_updated: "2026-11-09T04:23:52.493Z"
+stopped_at: Completed 17-07-PLAN.md
+last_updated: "2026-11-09T04:37:57.152Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 17 execution started
-state_head: 58496ccfd392f284c0392f94c67498cd725ea35a
+state_head: a142012e05fb39545f051ba5ddc6083e3ce505b8
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 47
-  completed_plans: 43
+  completed_plans: 44
   percent: 80
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 17 (튜토리얼 "첫 사건") — EXECUTING
-Current Plan: 9
+Current Plan: 10
 Total Plans in Phase: 12
 Status: Ready to execute
 Last activity: 2026-11-09 — Phase 17 execution started
@@ -241,6 +241,7 @@ Last activity: 2026-11-09 — Phase 17 execution started
 | Phase 17 P04 | 16 min | 3 tasks | 19 files |
 | Phase 17 P05 | 25 min | 2 tasks | 9 files |
 | Phase 17 P06 | 6min | 2 tasks | 9 files |
+| Phase 17 P07 | 15 min | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -531,6 +532,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 17]: 17-05: 띠 흔들림은 17-04 의 .tut-band.is-shake 유지, 오답마다 새 view 로 임시 내 선택 표시를 비움, 장면 4 기록 카드는 GameMap 기록 카드 자리(D+8)에 둠, 화면의 소리는 playTutorialCue·sayTutorialLine 경유
 - [Phase 17]: 17-06: 튜토리얼 본 표시(minifia.tutorial.seen)는 카드 시작과 방 만들기·참가 성공 때만 저장, 실패 분기에는 저장하지 않는다
 - [Phase 17]: 17-06: tut.warm 호출은 컴포넌트가 아니라 net 훅 useTutorialWarm 에 둔다(소리 호출 자리 시험 규칙)
+- [Phase 17]: 17-07: 방장 스위치는 화면 로컬 상태이고 값은 [시작] 순간 start.tutorial 로만 간다(켬 초기값 첫 판·일반 방)
+- [Phase 17]: 17-07: 끝났음은 RoomScreen ref 로 연결 번호당 한 번만 보내고 tutorial 단계를 벗어나면 로컬 끝남 표시를 비운다
+- [Phase 17]: 17-07: world E2E 360x560 은 방장 패널 +76 으로 방장 스테이지가 172 가 되어 방장 겹침 단계만 건너뛴다(알려진 한계 #24, 문턱 불변)
 
 ### Pending Todos
 
@@ -597,8 +601,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09T04:23:52.124Z
-Stopped at: Completed 17-06-PLAN.md
+Last session: 2026-11-09T04:37:56.793Z
+Stopped at: Completed 17-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
