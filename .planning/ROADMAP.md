@@ -217,7 +217,7 @@ Plans:
 **Goal:** 처음 온 사람이 60~90초 미니 에피소드로 이 게임의 목적·재미·한 판 흐름·직업별 할 일을 겪어 알고, 흥미를 느껴 첫 판으로 이어진다(결정 0078).
 **Requirements**: TUT-01, TUT-02, TUT-03, TUT-04, TUT-05, DEPLOY-05
 **Depends on:** Phase 16
-**Plans:** 10/12 plans executed (6 waves)
+**Plans:** 11/12 plans executed (6 waves)
 
 **Success Criteria:**
 1. 첫 화면(방 만들기·참가 전)에서 튜토리얼을 혼자 시작할 수 있고, 끝나거나 [건너뛰기]하면 첫 화면으로 돌아온다
@@ -246,7 +246,7 @@ Plans:
 - [x] 17-08-PLAN.md — 장면 1 오프닝(램프·비명·밤)·장면 7 직업 카드 4종
 
 **Wave 5**
-- [ ] 17-09-PLAN.md — E2E tutorial-solo(폰 6종)·tutorial-together, 판정 함수, 로컬 실행
+- [x] 17-09-PLAN.md — E2E tutorial-solo(폰 6종)·tutorial-together, 판정 함수, 로컬 실행
 
 **Wave 6**
 - [ ] 17-10-PLAN.md — 네 단계(재개 지점 포함): 로컬 전체 검증(폰 6종 회귀·성능) → 결정 0080 완성·지도 문서 → minifia-v3 배포(계정 가드)·배포본 확인 → HANDOFF·push
@@ -259,7 +259,7 @@ Plans:
 | 14. 사회자 진행과 도구 이름표 | v3.0 | 9/9 | Complete (실기기 확인은 v3.0 끝) | 2026-11-07 |
 | 15. 낮 심부름·목격 기록·밤 흔적 | v3.0 | 10/10 | Complete (배포 `f882224e`) | 2026-11-07 |
 | 16. 단추 정리·심부름 증거 | v3.0 | 10/10 | Complete (배포 `49b1ad57`, 실기기 확인은 v3.0 끝) | 2026-11-08 |
-| 17. 튜토리얼 "첫 사건" | v3.0 | 10/12 | In Progress | - |
+| 17. 튜토리얼 "첫 사건" | v3.0 | 11/12 | In Progress | - |
 
 ## Backlog
 

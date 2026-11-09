@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 17
 current_phase_name: "튜토리얼 \"첫 사건\""
-current_plan: 11
+current_plan: 12
 status: executing
-stopped_at: Completed 17-08-PLAN.md
-last_updated: "2026-11-09T04:50:40.041Z"
+stopped_at: Completed 17-09-PLAN.md
+last_updated: "2026-11-09T05:21:17.918Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 17 execution started
-state_head: b6784fb34cf67f3465c382953f4a2c774ad0398c
+state_head: 6177ab5b3e892a9649459c2a94aa2bc899f25729
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 47
-  completed_plans: 45
+  completed_plans: 46
   percent: 80
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 17 (튜토리얼 "첫 사건") — EXECUTING
-Current Plan: 11
+Current Plan: 12
 Total Plans in Phase: 12
 Status: Ready to execute
 Last activity: 2026-11-09 — Phase 17 execution started
@@ -243,6 +243,7 @@ Last activity: 2026-11-09 — Phase 17 execution started
 | Phase 17 P06 | 6min | 2 tasks | 9 files |
 | Phase 17 P07 | 15 min | 3 tasks | 17 files |
 | Phase 17 P08 | 25 min | 2 tasks | 7 files |
+| Phase 17 P09 | 35 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -539,6 +540,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 17]: 17-08: 서연이 사라진 뒤 이름표도 data-tutorial-gone 으로 숨긴다(런타임은 몸 불투명도만 따름)
 - [Phase 17]: 17-08: 직업 카드 뒤집기는 뒷면 마름모 → 90° → 앞면 두 단계 한 키프레임(.6초), 모션 줄이기는 즉시 앞면
 - [Phase 17]: 17-08: 직업 카드 높이는 minmax(clamp(168,남는높이/2,252),auto) — 작은 폰에서 글이 잘리지 않고 늘어난다
+- [Phase 17]: 17-09: 함께 진행 재접속 E2E 는 손님 새로 고침을 방장 건너뛰기 앞에 둔다(끊긴 사람은 끝난 것으로 세므로 방장이 끝난 뒤 손님이 끊기면 전원 완료, 0080-10) + 끝낸 방장 새로 고침은 기다림
+- [Phase 17]: 17-09: 장면 6 이름표 가장자리 한계는 E8 #29 참고 줄(G2k·G2s)로 남기고 문턱·앱 코드는 그대로(deferred-items.md)
+- [Phase 17]: 17-09: OVERALL_LIMIT_MS 1620→1740초(tutorial 두 흐름 218초 ÷ 병렬 3 ≈ 73초, 60초 단위 올림)
 
 ### Pending Todos
 
@@ -605,8 +609,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09T04:50:39.695Z
-Stopped at: Completed 17-08-PLAN.md
+Last session: 2026-11-09T05:21:17.519Z
+Stopped at: Completed 17-09-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
