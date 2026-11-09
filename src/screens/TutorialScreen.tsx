@@ -1,20 +1,23 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { getEngine } from "../audio/unlock";
 import { useSound } from "../audio/useSound";
-import { say } from "../audio/voice";
 import { FocusRing } from "../components/v2/FocusRing";
 import type { FocusGroup } from "../components/v2/FocusRing";
 import { TutorialHostBand } from "../components/v2/TutorialHostBand";
 import { TutorialNext } from "../components/v2/TutorialNext";
 import { TutorialProgress } from "../components/v2/TutorialProgress";
+import { TutorialEyeMark, TutorialFormula, TutorialLinks } from "../components/v2/TutorialEvidence";
+import { RecordCard } from "../components/v2/RecordCard";
 import { TutorialReveal } from "../components/v2/TutorialReveal";
 import { WorldStage } from "../components/WorldStage";
-import { TUTORIAL_CAST, TUTORIAL_LINES, TUTORIAL_PICK, TUTORIAL_SCENES, WRONG_HINT_AFTER, makeTutorialSend, tutorialSnap, tutorialStageLook, tutorialStageView, tutorialSuspectWalk, tutorialView } from "../game/tutorialScript";
+import { TUTORIAL_CAST, TUTORIAL_LINES, TUTORIAL_PICK, TUTORIAL_SCENES, WRONG_HINT_AFTER, makeTutorialSend, tutorialSnap, tutorialStageLook, tutorialStageView, tutorialSuspectStand, tutorialSuspectWalk, tutorialView } from "../game/tutorialScript";
 import type { TutorialFocusWindow, TutorialLineKey, TutorialSceneNo } from "../game/tutorialScript";
+import type { RecordRow } from "../game/recordView";
+import { faceSrc, seatColorVar } from "../net/assets";
+import { useReducedMotion } from "../net/useReducedMotion";
 import { ChatStore } from "../net/chatStore";
 import { useFixedRoomHeight } from "../net/useFixedRoomHeight";
-import { useTutorialDirector } from "../net/useTutorialDirector";
+import { playTutorialCue, sayTutorialLine, useTutorialDirector } from "../net/useTutorialDirector";
 import { WorldStore } from "../world/store";
 import { GameMap } from "./GameMap";
 import "../styles/phase.css";
@@ -56,10 +59,35 @@ const SUSPECT_BODY_PX = 90;
 interface SceneLayerCtx {
   /** 장면 6 정체 공개 중 */
   revealed: boolean;
+  /** 장면 4 목격 표시(눈·기록 카드)가 떴다 */
+  witnessShown: boolean;
 }
 
-/** 장면 번호로 갈리는 겹침 층: 장면 6 은 정체 공개(정답 뒤 1.1초). 17-05 가 장면 4·5, 17-08 이 1·7 을 더한다 */
+/** 장면 4 에서 실제 RecordCard 에 먹이는 한 줄: 도윤이 가로등 곁(가는 길)에서 목격됐다 */
+const WITNESS_ROWS: readonly RecordRow[] = [{ n: 1, seat: TUTORIAL_CAST.witness.seat, place: TUTORIAL_CAST.witness.place, name: "도윤" }];
+const noopClose = (): void => {};
+
+/** 장면 번호로 갈리는 겹침 층: 4 = 눈 표시 + 실제 목격 기록 카드, 5 = 연결 선 + 수식, 6 = 정체 공개(정답 뒤 1.1초). 17-08 이 1·7 을 더한다 */
 function renderSceneLayer(scene: TutorialSceneNo, ctx: SceneLayerCtx): ReactNode {
+  if (scene === 4 && ctx.witnessShown) {
+    // 기록 카드는 실제 게임의 기록 카드 자리(.mf-game__record, 띠 독 아래 8)에 둔다. 그 자리 클래스는 허용 목록 밖이라 inert 가 붙는다 — 닫기 단추는 눌리지 않는다
+    return (
+      <>
+        <TutorialEyeMark seat={TUTORIAL_CAST.witness.seat} />
+        <div className="mf-game__record">
+          <RecordCard rows={WITNESS_ROWS} faceOf={faceSrc} colorOf={seatColorVar} onClose={noopClose} />
+        </div>
+      </>
+    );
+  }
+  if (scene === 5) {
+    return (
+      <>
+        <TutorialLinks />
+        <TutorialFormula />
+      </>
+    );
+  }
   if (scene === 6 && ctx.revealed) return <TutorialReveal name={CAST_NAME[TUTORIAL_CAST.suspect]} />;
   return null;
 }
@@ -130,8 +158,12 @@ function groupsOf(targets: readonly TutorialFocusWindow["target"][]): FocusGroup
   return out;
 }
 
-/** 장면에 들어갈 때의 위치: 그 장면의 snap 을 epoch 0 으로 넣고, 장면 4 는 도윤이 걸어 들어오는 프레임을 더한다 */
-function enterWorld(store: WorldStore, n: PlayableScene, at: number): void {
+/** 장면에 들어갈 때의 위치: 그 장면의 snap 을 epoch 0 으로 넣고, 장면 4 는 도윤이 걸어 들어오는 프레임을 더한다(모션 줄이기면 걷지 않고 끝점에 서 있다) */
+function enterWorld(store: WorldStore, n: PlayableScene, at: number, reduced: boolean): void {
+  if (n === 4 && reduced) {
+    store.applyFrame(tutorialSuspectStand(at), 0);
+    return;
+  }
   store.applyFrame(tutorialSnap(n, at), 0);
   if (n === 4) store.applyFrame(tutorialSuspectWalk(at), 0);
 }
@@ -162,12 +194,16 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   const first = Math.min(Math.max(initialScene, 1), 7) as PlayableScene;
   const rootRef = useRef<HTMLDivElement>(null);
   useFixedRoomHeight(rootRef);
+  // 모션 줄이기: 장면 4 의 도윤이 걷지 않고 제자리에 나타난다(부품들은 각자 이 설정을 따른다)
+  const reduced = useReducedMotion();
+  const reducedRef = useRef(reduced);
+  reducedRef.current = reduced;
 
   // 로컬 위치·채팅 저장소: 방 화면의 것과 분리된 이 화면만의 것이다. 처음 장면의 위치를 처음 그리기 전에 넣는다
   const [boot] = useState(() => Date.now());
   const [store] = useState(() => {
     const s = new WorldStore();
-    enterWorld(s, first, boot);
+    enterWorld(s, first, boot, reduced);
     return s;
   });
   const [chat] = useState(() => new ChatStore());
@@ -189,11 +225,13 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   // 위 알림(실제 TopToast 경로)과 띠 흔들림 번호
   const [toast, setToast] = useState<PointToast | null>(null);
   const [bandShake, setBandShake] = useState(0);
+  // 장면 4 목격 표시가 뜬 장면(at). tut.eye 큐가 불리는 1.9초에 켜진다
+  const [eyeAt, setEyeAt] = useState<number | null>(null);
 
   const goto = useCallback(
     (n: PlayableScene): void => {
       const at = Date.now();
-      enterWorld(store, n, at);
+      enterWorld(store, n, at, reducedRef.current);
       setCur({ n, at });
     },
     [store],
@@ -228,6 +266,9 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
     scene: cur.n,
     startAt,
     onSay: (key, totalMs) => setSaid((prev) => ({ n: curRef.current.n, text: TUTORIAL_LINES[key], speakMs: totalMs, nonce: (prev?.nonce ?? 0) + 1 })),
+    onCue: (id) => {
+      if (id === "tut.eye" && curRef.current.n === 4) setEyeAt(curRef.current.at);
+    },
     onShowNext: () => setNextFor(curRef.current.n),
     onAuto: () => advanceFrom(curRef.current.n),
     onFocus: (target, on) =>
@@ -242,7 +283,7 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
 
   /** 장면 표 밖에서(오답) 사회자가 말한다 — 새 문장이 이전 음절 예약을 끊는다(say 가 처리) */
   const speak = useCallback((key: TutorialLineKey): void => {
-    const totalMs = say(getEngine(), TUTORIAL_LINES[key]);
+    const totalMs = sayTutorialLine(key);
     setSaid((prev) => ({ n: curRef.current.n, text: TUTORIAL_LINES[key], speakMs: totalMs, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
 
@@ -273,19 +314,19 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
       const v = voteRef.current.at === at ? voteRef.current : freshVote(at);
       if (v.picked) return;
       if (seat === TUTORIAL_CAST.suspect) {
-        getEngine().play(TUTORIAL_PICK.right.sfx);
+        playTutorialCue(TUTORIAL_PICK.right.sfx);
         writeVote({ ...v, picked: true });
         setToast({ id: 1, text: `${CAST_NAME[TUTORIAL_CAST.me]} → ${CAST_NAME[TUTORIAL_CAST.suspect]}`, icon: "point" });
         clearTimeout(revealTimer.current);
         revealTimer.current = setTimeout(() => {
           revealTimer.current = undefined;
           if (curRef.current.at !== at) return;
-          getEngine().play(TUTORIAL_PICK.reveal.sfx);
+          playTutorialCue(TUTORIAL_PICK.reveal.sfx);
           writeVote({ ...voteRef.current, revealed: true });
           setNextFor(6);
         }, REVEAL_AFTER_MS);
       } else {
-        getEngine().play(TUTORIAL_PICK.wrong.sfx);
+        playTutorialCue(TUTORIAL_PICK.wrong.sfx);
         speak(TUTORIAL_PICK.wrong.say);
         writeVote({ ...v, wrong: v.wrong + 1 });
         setBandShake((k) => k + 1);
@@ -355,7 +396,7 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
           ) : null}
         </div>
       </div>
-      {renderSceneLayer(cur.n, { revealed: vote.revealed })}
+      {renderSceneLayer(cur.n, { revealed: vote.revealed, witnessShown: cur.n === 4 && eyeAt === cur.at })}
       <FocusRing groups={focusGroups} />
       {nextShown ? <TutorialNext onNext={() => advanceFrom(cur.n)} /> : null}
       {/* Tab 순서: [건너뛰기] → 지금 허용된 단추 → [다음] → 소리 단추(띠 독). 띠는 읽기만이라 본문 뒤에 둬도 z 로 위에 뜬다 */}

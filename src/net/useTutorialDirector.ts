@@ -25,6 +25,16 @@ export interface TutorialDirectorOptions {
   onFocus?(target: TutorialFocusWindow["target"], on: boolean): void;
 }
 
+/** 장면 표 밖에서(정답·오답에 반응해) 효과음 큐 하나를 낸다 — 켬·끔·잠김은 엔진이 따른다. 화면(screens)은 엔진의 play 를 직접 부르지 않으므로(소리 호출 자리 규칙) 여기를 거친다 */
+export function playTutorialCue(id: TutorialCue): void {
+  getEngine().play(id);
+}
+
+/** 장면 표 밖에서 사회자가 한 문장을 말한다 — 새 문장이 이전 음절 예약을 끊는다(say 가 처리). 말하는 시간(ms)을 돌려준다 */
+export function sayTutorialLine(key: TutorialLineKey): number {
+  return say(getEngine(), TUTORIAL_LINES[key]);
+}
+
 export function useTutorialDirector(options: TutorialDirectorOptions): void {
   const live = useRef(options);
   live.current = options;

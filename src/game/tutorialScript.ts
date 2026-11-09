@@ -344,6 +344,17 @@ export function tutorialSuspectWalk(now: number): WorldFrame {
   return moveFrame(TUTORIAL_CAST.suspect, { p, t0: now, v: MOVE_V });
 }
 
+/** 장면 4 모션 줄이기: 걷지 않고 처음부터 끝점에 서 있는 도윤 + 내 자리의 snap 한 프레임("제자리 등장", UI-SPEC 모션 줄이기) */
+export function tutorialSuspectStand(now: number): Extract<WorldFrame, { k: "snap" }> {
+  return snapOf(
+    [
+      { seat: TUTORIAL_CAST.me, ...TUTORIAL_START },
+      { seat: TUTORIAL_CAST.suspect, ...SUSPECT_WALK.to },
+    ],
+    now,
+  );
+}
+
 // ---- 로컬 send 어댑터 ----
 
 /**
