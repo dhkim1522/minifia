@@ -37,6 +37,8 @@
 | 390×844 | 152 | 306 | 390 × 476 | 296 | 승인 보드 기준 |
 | 402×874 | 152 | 306 | 402 × 506 | 326 | iPhone 16 Pro 시각 비교용 |
 
+방장 아래 패널(17페이즈, 결정 0080-4): 위 표는 손님 값이다. 방장은 [시작] 줄 위에 튜토리얼 스위치 줄(64 + 패널 간격 10 + 줄 위 margin-top 2 = +76, 앱 상수 `LOBBY_HOST_TUTORIAL_EXTRA`)이 더해져 **326 / 382** 이고, 스테이지 사각형은 그만큼 줄어든다(예: 390×844 에서 476 → 400, 402×874 에서 506 → 430, 360×560 에서 248 → 172). 스위치 줄은 `data-tutorial-toggle`, 줄 전체는 `data-tutorial-host` 다.
+
 알려진 한계 (고치지 않는다, 07-UI-SPEC UI Considerations 20):
 
 - 방 높이 640 이하 폰(360×640 · 390×664 · 360×560)은 키보드가 열리면 스테이지가 128(캐릭터 80 + 이름표 26 + 입력 중 22) 미만이라 내 이름표 · 입력 중 칸이 잘릴 수 있다. 최악 360×560 은 12px 만 남는다. 캐릭터 몸만 보이도록 카메라가 맞춘다.
@@ -239,7 +241,7 @@
 | 항목 | 값 |
 |---|---|
 | 머리 단추 | 나가기·공유·내 역할·기록 모두 44×44 정사각(모서리 12, 아이콘 24, 사이 8) |
-| 입력줄 · 닫기 | [동작]·[보내기] 48 원, 닫기 × 44×44. 아래 패널은 250 / 306(방장 튜토리얼 줄은 17페이즈) |
+| 입력줄 · 닫기 | [동작]·[보내기] 48 원, 닫기 × 44×44. 아래 패널은 손님 250 / 306, 방장은 튜토리얼 줄 +76 으로 326 / 382(17페이즈, 아래 절) |
 | 오른쪽 열 | 오른쪽 16, 위 = `--mf-host-bottom + 12`, 지름 52 원, 간격 12. 손님: 소리 · 옷장 / 방장: 소리 · 맵 · 봇 · 옷장 (`data-side-button` = sound · map · bots · dress) |
 | 두 열 접기 | `splitSideColumn(n, maxH)` 가 칸 수를 정한다(한 열 최소 2칸, 두 번째 열은 왼쪽 12 옆). 시트·키보드가 열리면 열이 없다. 결과 화면은 시상식이 끝난 뒤에만 나오고 시상 중 [넘기기]는 제자리 48 원 |
 | 독 | 소리가 열의 첫 칸이라 독 아랫변 D = B + 64(B = 123 / 144 → 187 / 208) |
@@ -259,6 +261,34 @@ E2E 판정(`scripts/e2e/lib.mjs`):
 - 바뀐 옛 흐름: `result-awards`(AW5 [넘기기] 48×48), `map-select`(열 칩), `sound-unlock`(SK4 글 없음), `result-rematch`(RM1 입력줄 여백 192)
 
 알려진 한계: 360×560 방장 대기실 열이 둘로 접힌다. 8자 이름표 양끝 잘림, 머리 [기록] 아이콘 22(V-1 의 24 와 2 차이)는 진행에 지장이 없어 고치지 않는다(결정 0079 알려진 한계).
+
+## 튜토리얼 첫 사건 (17페이즈, 결정 0078·0080)
+
+첫 화면 카드 줄, 방장 스위치 줄, 첫 사건 화면(장면 7개 + 마무리 카드), 기다림 화면이 17페이즈의 화면이다. 숫자의 원천은 코드·`17-UI-SPEC.md` 다: `src/screens/TutorialScreen.tsx`·`src/game/tutorialScript.ts`·`src/styles/tutorial*.css`(0080-13). 장면 2~6 은 실제 `GameMap` 에 가짜 `RoomView` 를 준 화면이라 아래 패널·이름표·증거 카드·진행 점은 15·16페이즈 마크업 그대로다(새로 그리지 않는다).
+
+**첫 화면 카드 줄**(`Home` 에만, `data-tutorial-entry`): 방 코드 칸 위 16, 폭은 [방 만들기]와 같다(좌우 24). 처음 오는 사람은 **큰 카드 높이 84**(인물 48×60 + 글 두 줄 + 알약 "1분", 숨 쉬는 번짐), 한 번 해 본 뒤(저장 키 `minifia.tutorial.seen`)에는 **작은 단추 높이 44**(자리는 같다). 대기실·낮 화면에는 없다. 방장 대기실 스위치 줄의 값은 위 대기실 절(326 / 382)이다.
+
+| # | 장면 | 렌더 | 포커스 대상(`data-tutorial-focus`) | 넘어감 |
+|---|---|---|---|---|
+| 1 | 오프닝 | `WorldStage`, 램프 번짐 → 어둠 → 서연 사라짐 → 밤 장면, 제목 "밤이 되었습니다" | 없음 | 4.6초 뒤 자동 |
+| 2 | 아침 | `WorldStage` 낮, 서연 자리 비어 있음, 사회자 띠 2줄 | 띠 한 줄(1줄 동안) | 2줄 차례에 [다음] |
+| 3 | 심부름 | `GameMap`(`errand`), 타일 2·진행 점 3·[처리] | 우체통 타일 + [처리] 한 묶음 | [처리] → 0.7초 뒤 |
+| 4 | 목격 | 같은 맵, 도윤이 오른쪽에서 걸어 들어옴 + 눈 표시 + 실제 `RecordCard` | 도윤 | 눈 표시 1.5초 뒤 [다음] |
+| 5 | 아침 증거 | `GameMap`(`morning`), 실제 `EvidenceCard`, 선 둘, 수식 줄 | 없음([다음]만) | [다음] |
+| 6 | 투표 | `GameMap`(`nomination`), 이름표 5 | 이름표 4곳(오답 두 번 뒤 도윤만) | 도윤 누름 → 정체 공개 카드 → [다음] |
+| 7 | 직업 카드 | `WorldStage` 밤, 카드 4장 뒤집힘 | [다음] | [다음] → 혼자: 첫 화면, 함께: 기다림 |
+| 8 | 마무리 | 첫 화면(`Home`) 안 마무리 카드(혼자 하기만) | 없음 | [방 만들기]·[참가]·[다시 보기] |
+
+표식: `data-tutorial-screen`(첫 사건 화면 루트, 장면 번호는 `data-tutorial-scene`) · `data-tutorial-focus`(깜빡이는 테두리 상자) · `data-tutorial-next`·`data-tutorial-skip`(44 이상) · `data-tutorial-opening`·`data-tutorial-reveal`·`data-tutorial-role-card`·`data-tutorial-end`·`data-tutorial-replay` · `data-tutorial-formula`·`data-tutorial-eye`·`data-tutorial-links`(증거) · `data-tutorial-wait`·`data-tutorial-count`(기다림 화면, 끝낸 수) · `data-tutorial-entry`·`data-tutorial-toggle`·`data-tutorial-host`(진입·스위치). 낮은 단계 마크업에는 이 표식이 없고 튜토리얼 밖에서는 DOM 에 나오지 않는다.
+
+E2E 판정(`scripts/e2e/lib.mjs`, 흐름 `tutorial-solo`(폰 6종 + 390×844·402×874)·`tutorial-together`(390×844, 방장 + 손님 두 페이지 + 서버 봇), `--only tutorial` 로 둘 다):
+
+- `tutorialFocusChecks` (TF1~TF2) — 포커스 상자의 개수·키가 장면 기대와 같고, 각 상자가 대상 사각형을 사방 8 키운 자리(오차 2)이거나 화면 안쪽 8 로 민 자리다
+- `tutorialBandChecks` (TB1~TB5) — 사회자 띠 파형 막대 5·말하는 동안 `data-speaking` 과 막대 움직임(모션 줄이기는 움직임을 보지 않음)·머리·소리 독·[다음]·포커스 대상과 교차 0·글자 14 이상·시간 행 0
+- `tutorialLeakChecks` (TL1~TL3) — 튜토리얼 밖 화면 DOM 에 가짜 이름 다섯·직업 카드 0, 받은 프레임에 가짜 이름 0, 튜토리얼 중 받은 view 에 `me.role` 0. 흐름은 혼자 하기의 앱 소켓 0·보낸 프레임 0·`/api` 0, 함께 진행의 `tutorialDone` 페이지마다 한 번을 따로 본다
+- 그 밖: `tutorialEntryChecks`(카드 84 · 44·교차 0) · `tutorialOpeningChecks`·`tutorialTimingChecks`(오프닝→장면 2 4.6초 ± 1초, [처리]→장면 4 0.7초 ± 0.5초) · `tutorialRevealChecks`·`tutorialRoleCardChecks`(카드와 [다음] 비교차) · `tutorialDotChecks`·`tutorialSkipChecks`·`tutorialEvidenceChecks`
+
+알려진 한계(진행에 지장 없어 고치지 않는다, 결정 0080): 장면 6 도윤 이름표가 폭 360·390·402 에서 오른쪽 가장자리를 3~29px 넘는다(E2E 참고 줄 G2k·G2s 로 남기고 판정 문턱은 그대로). 장면 7 직업 카드 아래 줄이 360×560 에서 [다음] 아래로 겹친다(참고 줄 TC4, 360×640 은 겹치지 않았다). 360×560 방장 대기실 열 겹침은 위 16페이즈 절과 같다.
 
 ## 자동 검사 (배포본 E2E, 결정 0025)
 

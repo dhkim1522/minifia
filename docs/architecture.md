@@ -116,6 +116,13 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 - 알림음 `ui.host`(결정 0073-4, 14페이즈): 닫힌 신호 `{ kind: "host" }`(인자 없음)가 띠의 단계 키가 바뀐 프레임에 한 번 울린다(합성 종 두 음, 소리 57개). 밤 진입에도 모든 역할이 같은 소리를 듣는 LS-7 예외이고 낮 시작 → 토론은 무음이다.
 - 단추와 알약: `src/components/v2/SoundButton.tsx`. 화면 영역은 `docs/screen-map.md`.
 
+## 튜토리얼 첫 사건 (17페이즈, 결정 0078·0080)
+
+- **서버 게이트(함께 진행)**: 방장이 [시작] 때 `start` 메시지의 `tutorial: true` 를 실으면(서버 기본 꺼짐, 0080-1) 판이 `start → tutorial → assigning` 으로 간다. `tutorial` 단계는 `shared/game/phases.ts` 의 한 줄(`TUTORIAL_MS` 150초, `revealsOwnRole: false`)이고 `worker/room.ts` 가 `tutorialDone` 메시지(필드 없음, 신원은 소켓 첨부 playerId 뿐)를 받아 `shared/game/tutorial.ts` 가 서버 전용 `RoomState.tutorialPassed` 에 더한다. 앉은 사람(봇 제외) 전원이 끝났음을 보내거나 끊기거나(끊긴 사람은 끝난 것으로 센다, 0080-10) 150초가 지나면 `assigning` 으로 가고, 그때 `tutorialPassed` 를 지운다(`tick.ts` 의 `clearTutorial`). 역할은 `beginGame` 이 시작 때 정하지만 `tutorial` 단계 view 에는 어디에도 없다(0080-2, 누설 시험 `leak`·`tutorialLeak`).
+- **공개 값**: `view.tutorial = { done, total, endsAt }`(tutorial 단계에서만, 모두 같은 값 — 누가 끝냈는지는 싣지 않는다), 본인에게만 `me.tutorialDone?: true`(거짓은 키 없음). 재접속하면 `me.tutorialDone` 이 참이면 기다림 화면, 아니면 장면 1 부터(0080-15). RULESET 에 새 스위치는 없다.
+- **혼자 하기는 서버가 모른다**: 첫 화면 카드로 들어가는 혼자 하기는 방·소켓·`/api` 요청이 0 이고 `TutorialScreen` 이 로컬 대본만 돌린다(저장 키 `minifia.tutorial.seen` 만 쓴다, 0080-5·7).
+- **로컬 대본 구조**: `src/game/tutorialScript.ts`(장면 표·문구 키·출연 0080-16) 한 곳이 대본이고, `TutorialScreen` 하나가 장면 1~7 을 그린다. 장면 2~6 은 실제 `GameMap` 에 가짜 `RoomView`·로컬 `WorldStore`/`ChatStore`·로컬 `send` 어댑터를 준다(서버에 아무것도 보내지 않는다). 장면 1·7 은 `WorldStage` 를 직접 쓰고 장면 1→2·6→7 사이에 3D 무대를 다시 만든다(0080-12). 함께 진행은 같은 화면이 끝나면 `tutorialDone` 을 한 번 보내고 기다림 화면으로 간다. 소리는 화면이 자기 훅으로 쥔다(0080-14).
+
 ## 상태 공개 원칙
 
 - 서버는 플레이어마다 다른 상태를 보낸다. 시민에게는 다른 사람의 역할을 보내지 않는다.
