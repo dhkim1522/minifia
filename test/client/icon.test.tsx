@@ -172,3 +172,22 @@ describe("V2Icon 소리 아이콘 (12-07)", () => {
     }
   });
 });
+
+// 17-04: [다음] 단추의 chevronRight — 24 격자, 선 2px, 둥근 끝(직접 그린 선 그림)
+describe("V2Icon chevronRight (17-04)", () => {
+  it("path 를 가진 24 격자 svg 로 그려지고 다른 아이콘과 모양이 다르다", () => {
+    const { container } = render(<V2Icon name={"chevronRight" as V2IconName} />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.getAttribute("stroke-width")).toBe("2");
+    expect(svg?.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.querySelectorAll("path").length).toBeGreaterThan(0);
+    const shape = (name: V2IconName) => {
+      const r = render(<V2Icon name={name} />);
+      return [...r.container.querySelectorAll("path,circle")].map((e) => e.outerHTML).join("");
+    };
+    expect(shape("chevronRight" as V2IconName)).not.toBe(shape("arrow"));
+    expect(shape("chevronRight" as V2IconName)).not.toBe(shape("play"));
+  });
+});

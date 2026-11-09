@@ -53,6 +53,17 @@ describe("NameTag (MAP-07, MAP-01)", () => {
     expect(tag?.textContent).not.toContain("(나)");
   });
 
+  it("17-04: me 이고 이름이 \"나\" 면 글이 \"나\" 하나(접미 없음), 다른 이름은 \" (나)\" 그대로 (0080-16)", () => {
+    const mine = render(<NameTag name="나" color="var(--seat-6)" me />);
+    expect(mine.container.querySelector(".mv-tag__name")?.textContent).toBe("나");
+    mine.unmount();
+    const other = render(<NameTag name="도윤" color="var(--seat-2)" me />);
+    expect(other.container.querySelector(".mv-tag__name")?.textContent).toBe("도윤 (나)");
+    other.unmount();
+    const notMe = render(<NameTag name="나" color="var(--seat-6)" />);
+    expect(notMe.container.querySelector(".mv-tag__name")?.textContent).toBe("나");
+  });
+
   it("끊긴 나도 그려진다: is-me 와 is-away 가 함께 붙는다", () => {
     const { container } = render(<NameTag name="가나다라마바사아" color="var(--seat-8)" me away />);
     const tag = container.querySelector("span.mv-tag");
