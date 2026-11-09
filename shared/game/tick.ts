@@ -31,6 +31,7 @@ import { enterMorning, enterNight } from "./night";
 import { PHASE_DEFS } from "./phases";
 import { RULESET } from "./ruleset";
 import type { RoomState } from "./room";
+import { clearTutorial } from "./tutorial";
 import { resolveVerdict } from "./verdict";
 
 /** 낮 시작 발표 진입: 일차 +1. 연장은 없다(결정 0017-5). */
@@ -51,6 +52,7 @@ export type DeadlineResult = { state: RoomState; stay: boolean; next?: PhaseId }
 
 /** 진입 훅. at 은 진입 시각(= 이전 마감)이다. 인자를 쓰지 않는 훅은 앞의 둘만 받아도 타입이 맞는다. */
 const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt, at: number) => RoomState>> = {
+  assigning: clearTutorial, // 17페이즈(결정 0080-11): tutorial 을 떠나며 서버 전용 tutorialPassed 를 지운다(tutorial 을 거치지 않았으면 같은 객체)
   dayAnnounce: enterDayAnnounce,
   errand: (s, r, at) => assignErrandFake(enterErrand(s, r, at)), // 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts). 16페이즈(결정 0079): 산 마피아의 가짜 한 곳은 난수 없이 뒤에서 정한다
   discussion: enterDiscussion,

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
 import { advanceTo, lastViewOf, mark, nextFrame, seat, send, settle, storedRoom, type StoredRoom, type TestSocket } from "./helpers";
 
-type Stored = StoredRoom & { tutorialPassed?: string[]; players: Array<{ id: string; seat: number }> };
+type Stored = Omit<StoredRoom, "players"> & { tutorialPassed?: string[]; players: Array<{ id: string; seat: number }> };
 
 const inPhase = (phase: string) => (m: ServerMessage): boolean => m.t === "state" && m.view.phase === phase;
 

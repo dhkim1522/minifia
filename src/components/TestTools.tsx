@@ -20,6 +20,7 @@ import "../styles/testtools.css";
 /** 아랫줄 '지금: …' 의 단계 이름. PhaseId 를 모두 키로 두어 4페이즈가 단계를 더하면 타입 오류로 알게 한다. */
 export const TEST_PHASE_LABEL: Readonly<Record<PhaseId, string>> = {
   lobby: "대기실",
+  tutorial: "튜토리얼",
   assigning: "직업 배정",
   roleReveal: "역할 확인",
   dayAnnounce: "낮 시작 발표",

@@ -54,6 +54,7 @@ interface RoomScreenProps {
 // 단계가 바뀔 때만 보이지 않는 aria-live 영역이 읽는 문구. 대기실은 읽을 것이 없다.
 const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   lobby: () => "",
+  tutorial: () => "튜토리얼", // 17페이즈(결정 0080)
   assigning: () => "직업을 배정하고 있습니다",
   roleReveal: () => "역할 확인",
   dayAnnounce: (view) => `${view.day?.n ?? 1}일차 낮이 되었습니다`,

@@ -20,7 +20,7 @@ import type { BotPlan } from "./bots";
 import { hostSuccessor } from "./continuity";
 import { decideMap } from "./maps";
 import { enterNomination } from "./nomination";
-import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS } from "./phases";
+import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS, TUTORIAL_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
 import { RULESET } from "./ruleset";
 import type { RoleId } from "./roles";
@@ -171,6 +171,8 @@ export interface RoomState {
   phaseEndsAt: number | null;
   /** 서버 전용(결정 0074). errand 다음 근처·목격 표본 시각(ms). enterErrand 가 쓰고 sampleErrand 가 옮기고 enterDiscussion 이 키째 지운다. 어떤 view 에도 없다. */
   errandTickAt?: number;
+  /** 서버 전용, view 에 싣지 않는다 — 결정 0080-11. tutorial 단계에서 끝났음을 보낸 player id. markTutorialDone 이 쓰고 assigning 진입 훅(clearTutorial)이 키째 지운다. */
+  tutorialPassed?: string[];
   /** 일차(1부터). dayAnnounce 진입 때 tick 의 진입 훅이 올린다. 없으면 아직 낮이 시작되지 않았다. 뷰에는 DayView.n 으로 실린다. */
   day?: number;
   /** 판 번호(1부터, 결정 D-26). 다시 하기(11-08)가 올린다. 없으면 1 — 옛 저장 방은 읽는 쪽 기본값(roundOf)으로 읽는다. 단계 키 '판:일차:단계'의 앞 부분이고 view.round 로 실린다. */
@@ -405,10 +407,11 @@ export function startGame(
   actorId: string,
   now: number,
   randInt: (n: number) => number,
+  opts?: { tutorial?: boolean },
 ): { ok: true; state: RoomState } | { ok: false; error: StartError } {
   const error = checkStart(state, actorId);
   if (error !== null) return { ok: false, error };
-  return { ok: true, state: { ...beginGame(state, now, randInt), expiresAt: now + ROOM_TTL_MS } };
+  return { ok: true, state: { ...beginGame(state, now, randInt, opts), expiresAt: now + ROOM_TTL_MS } };
 }
 
 /**
@@ -417,7 +420,12 @@ export function startGame(
  * 만료(expiresAt)는 건드리지 않는다 — 시작은 now + ROOM_TTL_MS, 다시 하기는 min(방 생성 + 12시간, now + ROOM_TTL_MS)로 호출하는 쪽이 정한다.
  * players 는 4~8명이어야 한다(호출하는 쪽이 보장). 입력은 바꾸지 않는다.
  */
-export function beginGame(state: RoomState, now: number, randInt: (n: number) => number): RoomState {
+export function beginGame(
+  state: RoomState,
+  now: number,
+  randInt: (n: number) => number,
+  opts?: { tutorial?: boolean },
+): RoomState {
   const seated = [...state.players].sort((a, b) => a.seat - b.seat);
   const orderedIds = seated.map((p) => p.id);
   const shuffled = assignRoles(orderedIds, randInt);
@@ -428,11 +436,13 @@ export function beginGame(state: RoomState, now: number, randInt: (n: number) =>
       : shuffled;
   // 맵은 역할 배정 난수를 모두 쓴 뒤에 정한다(결정 D-21) — 허용 맵이 하나면 난수를 부르지 않아 기존 시드 시험이 그대로다.
   const map = decideMap(state.mapChoice ?? "random", randInt);
+  // 17페이즈(결정 0080-1·2): 방장이 튜토리얼을 켰을 때만 tutorial 단계(150초)로 시작한다 — 역할은 위에서 이미 정했지만 tutorial 은 revealsOwnRole:false 라 view 에 실리지 않는다.
+  const tutorial = opts?.tutorial === true;
   return {
     ...state,
     map,
-    phase: "assigning",
-    phaseEndsAt: now + ASSIGNING_MS,
+    phase: tutorial ? "tutorial" : "assigning",
+    phaseEndsAt: tutorial ? now + TUTORIAL_MS : now + ASSIGNING_MS,
     players: state.players.map((p) => ({ ...p, role: roles.get(p.id) })),
   };
 }

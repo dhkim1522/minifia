@@ -44,6 +44,7 @@ import { castRunoffVote } from "../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
+import { allTutorialDone, markTutorialDone } from "../shared/game/tutorial";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { actErrand, nearSnapFrame, placeCenterFx, sampleErrand } from "../shared/game/errand";
 import { ERRAND_MIN_GAP_MS, ERRAND_TICK_MS } from "../shared/game/phases";
@@ -285,7 +286,10 @@ export class Room extends DurableObject<Env> {
         await this.handleKick(ws, msg.seat);
         return;
       case "start":
-        await this.handleStart(ws);
+        await this.handleStart(ws, msg.tutorial === true);
+        return;
+      case "tutorialDone":
+        await this.handleTutorialDone(ws);
         return;
       case "pick":
         await this.handlePick(ws, msg.target);
@@ -474,14 +478,14 @@ export class Room extends DurableObject<Env> {
   }
 
   // 시작: 판정은 서버 상태와 소켓 첨부의 playerId 로만 한다(연결자 4명 이상, 방장만).
-  private async handleStart(ws: WebSocket): Promise<void> {
+  private async handleStart(ws: WebSocket, tutorial: boolean): Promise<void> {
     const att = this.attachmentOf(ws);
     if (!att || !this.room) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
     const now = Date.now();
-    const result = startGame(this.room, att.playerId, now, cryptoRandInt);
+    const result = startGame(this.room, att.playerId, now, cryptoRandInt, { tutorial });
     if (!result.ok) {
       // 거절되면 클라이언트가 서버 view 대로 다시 그리도록 최신 state 를 함께 보낸다.
       this.sendTo(ws, { t: "error", code: result.error });
@@ -918,6 +922,35 @@ export class Room extends DurableObject<Env> {
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     if (endReached(result.state)) {
+      const prev = this.room;
+      this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
+      await this.afterTransition(prev, now);
+      return null;
+    }
+    this.room = result.state;
+    await this.persistAndBroadcast();
+    return null;
+  }
+
+  // 튜토리얼 끝났음(17페이즈 tutorialDone 메시지, 결정 0078·0080): 신원은 소켓 첨부의 playerId 뿐이다(T-17-02) — 남의 완료를 표시할 수 없다.
+  private async handleTutorialDone(ws: WebSocket): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applyTutorialDone(att.playerId, Date.now());
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // 같은 사람이 또 보내면 같은 객체라 저장·전송이 없다(T-17-03). 전원 완료(allTutorialDone)의 순간 서버가 마감을 지금으로 당겨 tick 으로 정상 마감과 같은 경로를 탄다
+  // (applyEndDiscussion 과 같다) — tutorial → assigning 이고 진입 훅이 tutorialPassed 를 지운다. 단계 틀림·방 밖 사람은 규칙 함수가 WRONG_PHASE·BAD_MESSAGE 로 거절한다.
+  private async applyTutorialDone(playerId: string, now: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = markTutorialDone(this.room, playerId);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    if (allTutorialDone(result.state)) {
       const prev = this.room;
       this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
       await this.afterTransition(prev, now);

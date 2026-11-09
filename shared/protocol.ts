@@ -28,7 +28,7 @@ export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 // 지목이 동률·0표면 바로 night 로 가고, 최다가 정확히 둘 동점이면 동점 결선 runoff 를 거친다(결정 0066-4, 분기는 shared/game/tick.ts). 종료 단계 ended 는 마감이 없다.
 // 순차 직업 주장 단계(claim)는 7페이즈에서 없어졌다 — 낮 시작 발표 다음이 바로 자유 채팅 토론이다(CHAT-06). 옛 공개 연출 단계도 없다(결정 0027).
 export type PhaseId =
-  | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "errand" | "discussion"
+  | "lobby" | "tutorial" | "assigning" | "roleReveal" | "dayAnnounce" | "errand" | "discussion"
   | "nomination" | "runoff" | "showdown" | "defense" | "verdict" | "execution"
   | "night" | "morning" | "ended"; // 8페이즈(결정 0060): 지목 15초 → 변론 20초 → 찬반 10초 → 처형 5.6초(결정 0066-7). 옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 지웠다
 
@@ -272,7 +272,8 @@ export interface ApiError {
 export type ClientMessage =
   | { t: "hello"; token: string }
   | { t: "ping"; c: number }
-  | { t: "start" }
+  | { t: "start"; tutorial?: boolean } // 방장만 대기실에서 — tutorial 은 [시작] 순간의 스위치 값이고 없으면 꺼짐(결정 0080-1). 켜면 방이 tutorial 단계를 거친다
+  | { t: "tutorialDone" } // 튜토리얼 끝났음(결정 0078·0080) — 필드 없음, tutorial 단계의 앉은 사람 누구나. 신원은 소켓 첨부 playerId 뿐
   | { t: "leave" }
   | { t: "kick"; seat: number }
   | { t: "pick"; target: number } // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
@@ -349,6 +350,13 @@ export interface MyInfo {
   errand?: ErrandMine; // errand 단계의 산 본인에게만(15페이즈, 결정 0074). 다른 사람·다른 단계·유령 view 에는 키가 없고 좌표는 싣지 않는다
   record?: RecordLine[]; // 토론 단계에서 심부름 3곳을 모두 처리한 산 본인에게만(줄이 0개여도 빈 배열, D-04). 못 마친 사람·다른 사람·다른 단계·유령 view 에는 키가 없다
   verdictVote?: boolean; // verdict 단계에서 본인이 던진 찬반(본인에게만, 남의 값은 어떤 키로도 싣지 않는다, 8페이즈 결정 0060)
+  tutorialDone?: true; // tutorial 단계에서 본인이 끝났음을 보낸 상태(본인에게만, 거짓은 키 없음, 결정 0080-11). view 에 싣는 일은 17-12
+}
+/** tutorial 단계의 진행 수(결정 0080-10·11) — 모두에게 같은 값이고 역할의 함수가 아니다. total = 앉은 사람(봇 제외), done = 끝났음을 보냈거나 연결이 끊긴 사람. */
+export interface TutorialView {
+  done: number;
+  total: number;
+  endsAt: number;
 }
 export interface RoomView {
   code: string;
@@ -369,6 +377,8 @@ export interface RoomView {
   mapChoice?: MapChoice;
   /** 이번 판의 맵(결정 D-21, 누설 L42). 시작한 뒤에만 키가 있고 모든 참가자에게 같다 — 대기실·시작 전 view 에는 키 자체가 없다. */
   map?: MapId;
+  /** tutorial 단계에서만, 모두에게 같은 값(결정 0080-11). 싣는 일은 17-12 view.ts 가 한다. */
+  tutorial?: TutorialView;
   /** 쉬는 사람 자신의 view 에만(결정 D-13, L38). 다음 판에 준비하지 않아 게임 밖에 있는 사람 — 이 키가 있으면 players 는 자기 한 줄뿐이고 게임 필드는 없다. */
   resting?: true;
 }

@@ -69,10 +69,13 @@ export const ERRAND_MIN_GAP_MS = 250; // 결정 0074 — 같은 사람의 처리
 export const RECORD_MAX = 6; // 결정 0074 — 목격 기록 줄 상한
 export const MORNING_TRACE_MS = 5_000; // 결정 0079(A3) · 흔적 카드가 두 줄이 되어 3→5초, 상한 15→16초 — 시간은 참고 목표(결정 0074 의 흔적 공개 구간)
 
+export const TUTORIAL_MS = 150_000; // 결정 0078·0080 — 함께 진행 튜토리얼 상한(T-6). 이 줄만 고친다
+
 export const VERDICT_MS = 10_000; // 찬반(DAY-06, 결정 0060-1·0060-4) — 조기 종료 없이 마감까지
 
 export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   lobby: Object.freeze({ durationMs: null, next: null, revealsOwnRole: false }), // start 로만 나간다
+  tutorial: Object.freeze({ durationMs: TUTORIAL_MS, next: "assigning", revealsOwnRole: false }), // 17페이즈(결정 0080): 방장이 켰을 때만 start 다음에 낀다 — 전원 완료나 150초 마감이 assigning 으로
   assigning: Object.freeze({ durationMs: ASSIGNING_MS, next: "roleReveal", revealsOwnRole: false }),
   roleReveal: Object.freeze({ durationMs: ROLE_REVEAL_MS, next: "dayAnnounce", revealsOwnRole: true }),
   dayAnnounce: Object.freeze({ durationMs: DAY_ANNOUNCE_MS, next: "errand", revealsOwnRole: true }),

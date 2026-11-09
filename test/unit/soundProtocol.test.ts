@@ -41,6 +41,7 @@ const CLIENT_MESSAGE_KINDS = [
   "testReset",
   "testRole",
   "testSkip",
+  "tutorialDone", // 17페이즈(결정 0080): 소리와 무관한 새 메시지 — 튜토리얼 끝났음. 이 목록은 소리가 만든 메시지가 없다는 것을 고정하는 것이라 17페이즈의 한 줄만 더했다
   "typing",
   "verdict",
   "whisper",

@@ -59,7 +59,10 @@ export const NoteMessageSchema = z.strictObject({
 export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("hello"), token: z.string().min(16).max(128) }),
   z.object({ t: z.literal("ping"), c: z.number() }),
-  z.object({ t: z.literal("start") }),
+  // 시작(결정 0080-1): tutorial 은 방장 [시작] 순간의 스위치 값 — 없으면 꺼짐. 덧붙은 키는 거부한다(T-17-05). 방장·인원 검사는 서버 규칙(checkStart)이 한다.
+  z.strictObject({ t: z.literal("start"), tutorial: z.boolean().optional() }),
+  // 튜토리얼 끝났음(결정 0078·0080): 필드 없음 — 신원은 소켓 첨부 playerId 뿐이고 단계·방 소속은 서버 규칙(shared/game/tutorial.ts)이 본다.
+  z.strictObject({ t: z.literal("tutorialDone") }),
   z.object({ t: z.literal("leave") }),
   z.object({ t: z.literal("kick"), seat: z.number().int().min(0).max(7) }),
   // 빠른 메시지(say)는 07-11, 텍스트 이모티콘(emoji)은 07-12 에 없어졌다 — 옛 번들이 보내도 유니온에 없어 BAD_MESSAGE 다(CHAT-06). 자유 채팅은 아래 ChatMessageSchema.

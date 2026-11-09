@@ -34,6 +34,7 @@ export const SCENES: Readonly<Record<SceneId, SceneDef>> = Object.freeze({
 
 export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
   lobby: "lobby",
+  tutorial: "lobby", // 17페이즈(결정 0080): 튜토리얼 화면이 자기 장면을 그린다 — 기존 화면은 대기실 장면으로 안다
   assigning: "lobby",
   roleReveal: "lobby",
   dayAnnounce: "day",

@@ -21,9 +21,10 @@ import { recipeDurationMs, type BedId, type SfxId } from "./recipes";
 import { EMOTE_OTHERS_DB, emoteSoundGate, flipCue, lightCues, MORNING_SLASH_AT, morningScript, nightCues, plateCues, pickTickSchedule, tickSchedule, verdictScript, willScript, type DuckSpan, type EmoteGateState, type Rng, type ScriptItem } from "./script";
 import type { EmoteSignal, LocalSignal, ResultSignal } from "./signals";
 
-/** 단계 → 침대 표: 15개 단계 전수. null 은 침대 없음(assigning: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
+/** 단계 → 침대 표: 16개 단계 전수. null 은 침대 없음(assigning·tutorial: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
 export const BED_OF: Readonly<Record<PhaseId, BedId | null>> = {
   lobby: "bed.lobby",
+  tutorial: null, // 17페이즈(결정 0080-14): 튜토리얼 화면이 자기 소리를 쓴다 — 침대 없음
   assigning: null,
   roleReveal: "bed.reveal",
   dayAnnounce: "bed.day",

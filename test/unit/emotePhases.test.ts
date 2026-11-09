@@ -14,6 +14,7 @@ import { lobbyOf } from "../helpers/voteState";
 type Kind = "lobby" | "day" | "night" | "silent";
 const KIND: Record<PhaseId, Kind> = {
   lobby: "lobby",
+  tutorial: "silent", // 17페이즈: 튜토리얼 단계는 채팅·동작을 받지 않는다(결정 0080)
   assigning: "silent",
   roleReveal: "silent",
   dayAnnounce: "day",

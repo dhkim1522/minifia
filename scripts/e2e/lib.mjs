@@ -1114,6 +1114,7 @@ export function headerContrastChecks(measure, { expectTimer }) {
 /** 단계 → 배경 장면 id. src/game/scenes.ts 의 PHASE_SCENE 과 같은 표다 — test/unit/scenes.test.ts 가 두 표가 같음을 확인한다. */
 export const EXPECTED_SCENE = {
   lobby: "lobby",
+  tutorial: "lobby", // 17페이즈(결정 0080): 튜토리얼 화면이 자기 장면을 그리기 전까지 대기실 장면
   assigning: "lobby",
   roleReveal: "lobby",
   dayAnnounce: "day",

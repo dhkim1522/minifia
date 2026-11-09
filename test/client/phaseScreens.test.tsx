@@ -400,6 +400,7 @@ describe("단계 안내 aria-live · 단계 전환 (UI-SPEC 접근성·Motion)",
   it("단계 표 라벨(TEST_PHASE_LABEL)은 PhaseId 와 같은 키 집합이다", () => {
     const phases: Record<PhaseId, true> = {
       lobby: true,
+      tutorial: true,
       assigning: true,
       roleReveal: true,
       dayAnnounce: true,
