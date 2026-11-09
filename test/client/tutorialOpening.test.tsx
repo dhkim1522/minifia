@@ -18,6 +18,13 @@ vi.mock("../../src/net/useRoomConnection", () => ({
     return null;
   },
 }));
+const preload = vi.hoisted(() => ({ calls: 0 }));
+vi.mock("../../src/net/assets", async (orig) => ({
+  ...(await orig<typeof import("../../src/net/assets")>()),
+  preloadRoleAssets: () => {
+    preload.calls += 1;
+  },
+}));
 /** manual 이면 가짜 무대가 준비됐다는 알림(onReady)을 바로 부르지 않고 release 로 시험이 부른다 */
 const ctl = vi.hoisted(() => ({ manual: false, release: null as null | (() => void) }));
 vi.mock("../../src/components/WorldStage", async () => {
@@ -40,6 +47,7 @@ beforeEach(() => {
   connection.calls = 0;
   ctl.manual = false;
   ctl.release = null;
+  preload.calls = 0;
   rig = makeRig();
   vi.spyOn(rig.engine, "play").mockImplementation(() => {});
   vi.spyOn(rig.engine, "runScript").mockImplementation(() => {});
@@ -244,6 +252,137 @@ describe("진홍 (T-18)", () => {
   });
 });
 
-// 같은 파일의 Task 2 시험(장면 7)은 아래에 이어진다. fireEvent·next$ 는 거기서 쓴다.
-void fireEvent;
-void next$;
+
+// ---- Task 2: 장면 7 직업 카드 ----
+
+const cards$ = (c: ParentNode) => [...c.querySelectorAll<HTMLElement>("[data-tutorial-role-card]")];
+const ROLE_KINDS = ["citizen", "mafia", "doctor", "police"] as const;
+const NAMES = ["시민", "마피아", "의사", "경찰"] as const;
+const LINES = ["흔적과 목격으로 마피아를 찾아요", "밤에 한 명을 고르고 들키지 않아요", "밤에 한 명을 지켜요", "밤에 한 명이 마피아인지 알아봐요"] as const;
+const BADGE_ANIM = ["a-eye", "a-mask", "a-shield", "a-lens"] as const;
+const setHeight = (h: number): void => {
+  Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: h });
+};
+const bandLine = (c: ParentNode): string | null | undefined => c.querySelector("[data-host-line]")?.textContent;
+
+describe("장면 7 직업 카드: 네 장 고정 2×2", () => {
+  beforeEach(() => setHeight(844));
+
+  it("카드 4개가 citizen·mafia·doctor·police 순서, 접근성 이름·글·그림(alt 빈칸)·배지 svg 하나씩", async () => {
+    const { container } = await mount({ initialScene: 7 });
+    const cards = cards$(container);
+    expect(cards.map((c) => c.getAttribute("data-tutorial-role-card"))).toEqual([...ROLE_KINDS]);
+    cards.forEach((card, i) => {
+      expect(card.getAttribute("aria-label")).toBe(`${NAMES[i]} 카드`);
+      expect(card.textContent).toContain(NAMES[i]);
+      expect(card.textContent).toContain(LINES[i]);
+      const img = card.querySelector("img");
+      expect(img?.getAttribute("alt")).toBe("");
+      expect(img?.getAttribute("src") ?? "").toMatch(new RegExp(`${ROLE_KINDS[i]}`));
+      expect(card.querySelectorAll("[data-role-badge] svg")).toHaveLength(1);
+    });
+    expect(container.querySelectorAll("[data-tutorial-roles]")).toHaveLength(1);
+  });
+
+  it("뒤집기 지연이 .1/.45/.8/1.15초이고 뒷면은 실제 역할 카드 뒷면 마름모다", async () => {
+    const { container } = await mount({ initialScene: 7 });
+    expect(cards$(container).map((c) => c.style.getPropertyValue("--tut-flip-delay"))).toEqual(["100ms", "450ms", "800ms", "1150ms"]);
+    for (const card of cards$(container)) {
+      expect(card.classList.contains("is-flip")).toBe(true);
+      expect(card.querySelectorAll(".mf-card__diamond")).toHaveLength(1);
+    }
+  });
+
+  it("배지의 대표 움직임: 시민 눈·마피아 가면·의사 방패·경찰 돋보기(각각 a-eye·a-mask·a-shield·a-lens)", async () => {
+    const { container } = await mount({ initialScene: 7 });
+    expect(cards$(container)).toHaveLength(4);
+    cards$(container).forEach((card, i) => {
+      expect(card.querySelector("[data-role-badge] svg")?.classList.contains(BADGE_ANIM[i]!)).toBe(true);
+    });
+  });
+
+  it("높이 700 이상에서만 아래 줄 '낮에는 모두 함께 투표해요'", async () => {
+    setHeight(700);
+    const tall = await mount({ initialScene: 7 });
+    expect(tall.container.textContent).toContain("낮에는 모두 함께 투표해요");
+    tall.unmount();
+    cleanup();
+    setHeight(699);
+    const short = await mount({ initialScene: 7 });
+    expect(short.container.textContent).not.toContain("낮에는 모두 함께 투표해요");
+  });
+
+  it("tut.flip 네 번(100·450·800·1150ms), 1500ms 에 사회자 문장", async () => {
+    const { container } = await mount({ initialScene: 7 });
+    advance(99);
+    expect(plays("tut.flip")).toBe(0);
+    advance(1);
+    expect(plays("tut.flip")).toBe(1);
+    advance(350);
+    expect(plays("tut.flip")).toBe(2);
+    advance(350);
+    expect(plays("tut.flip")).toBe(3);
+    advance(350);
+    expect(plays("tut.flip")).toBe(4);
+    expect(hostSays()).toBe(0);
+    advance(349);
+    expect(hostSays()).toBe(0);
+    advance(1);
+    expect(hostSays()).toBe(1);
+    expect(bandLine(container)).toBe("밤에는 저마다 할 일이 있어요");
+  });
+
+  it("[다음] → 혼자는 onEnd('done') 한 번, 함께도 같은 장면이고 끝을 알린다", async () => {
+    const solo = await mount({ initialScene: 7 });
+    expect(next$(solo.container)).not.toBeNull();
+    fireEvent.click(next$(solo.container)!);
+    expect(solo.onEnd).toHaveBeenCalledTimes(1);
+    expect(solo.onEnd).toHaveBeenCalledWith("done");
+    solo.unmount();
+    cleanup();
+    const together = await mount({ initialScene: 7, mode: "together" });
+    expect(cards$(together.container).map((c) => c.getAttribute("data-tutorial-role-card"))).toEqual([...ROLE_KINDS]);
+    fireEvent.click(next$(together.container)!);
+    expect(together.onEnd).toHaveBeenCalledWith("done");
+  });
+
+  it("직업 그림은 마운트 때 미리 부른다(혼자 하기에서도 그림이 미리 온다) — 장면 1 부터 한 번", async () => {
+    preload.calls = 0;
+    await mount({ initialScene: 1 });
+    expect(preload.calls).toBe(1);
+  });
+
+  it("카드는 고정 상수다: 실제 연결을 부르지 않고 카드 종류 밖의 값이 DOM 에 없다(T-17-18)", async () => {
+    const { container } = await mount({ initialScene: 7 });
+    expect(connection.calls).toBe(0);
+    expect(cards$(container)).toHaveLength(4);
+    const kinds = new Set(cards$(container).map((c) => c.getAttribute("data-tutorial-role-card")));
+    expect([...kinds].sort()).toEqual([...ROLE_KINDS].sort());
+  });
+});
+
+describe("장면 7 직업 카드: 모션 줄이기", () => {
+  it("카드는 즉시 앞면(뒤집기 클래스 없음)이고 배지 움직임 클래스가 없다", async () => {
+    setHeight(844);
+    vi.stubGlobal("matchMedia", REDUCED);
+    const { container } = await mount({ initialScene: 7 });
+    expect(cards$(container)).toHaveLength(4);
+    expect(container.querySelectorAll("[data-tutorial-roles] .is-flip")).toHaveLength(0);
+    for (const card of cards$(container)) {
+      const svg = card.querySelector("[data-role-badge] svg")!;
+      expect([...svg.classList].filter((c) => c.startsWith("a-"))).toEqual([]);
+    }
+  });
+
+  it("직업 카드 키프레임은 transform·opacity·filter 만 쓰고 진홍은 .tut-role 선택자에만 있다", () => {
+    const text = css();
+    const blocks = [...text.matchAll(/@keyframes (tut-role-[\w-]+)\s*\{([\s\S]*?)\n\}/g)];
+    expect(blocks.length).toBeGreaterThanOrEqual(5);
+    for (const [, name, body] of blocks) {
+      const props = [...body!.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1]);
+      for (const p of props) expect(["opacity", "transform", "filter"], `${name} 의 ${p}`).toContain(p);
+    }
+    expect(text).toMatch(/\.tut-role--mafia\s*\{[^}]*--crimson-700/);
+    expect(text).toMatch(/\.tut-role--mafia\s+\.tut-role__name\s*\{[^}]*--crimson-300/);
+  });
+});

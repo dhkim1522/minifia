@@ -191,3 +191,29 @@ describe("V2Icon chevronRight (17-04)", () => {
     expect(shape("chevronRight" as V2IconName)).not.toBe(shape("play"));
   });
 });
+
+// 17-08: 직업 카드 배지 아이콘 mask·shield·lens — 승인 시안(Roles.dc.html)의 icon 경로, 24 격자, 선 2px, 둥근 끝
+const V2_ROLE_BADGE: V2IconName[] = ["mask", "shield", "lens"];
+
+describe("V2Icon 직업 배지 아이콘 (17-08)", () => {
+  it.each(V2_ROLE_BADGE)("%s 는 24 격자 svg, 선 2px·둥근 끝이고 path 가 있다", (name) => {
+    const { container } = render(<V2Icon name={name} />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.getAttribute("stroke-width")).toBe("2");
+    expect(svg?.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.querySelectorAll("path").length).toBeGreaterThan(0);
+  });
+
+  it("세 아이콘은 서로 다르고 eye 와도 다른 모양이다", () => {
+    const shape = (name: V2IconName) => {
+      const { container } = render(<V2Icon name={name} />);
+      const out = [...container.querySelectorAll("path,circle")].map((e) => e.outerHTML).join("");
+      cleanup();
+      return out;
+    };
+    const shapes = [...V2_ROLE_BADGE, "eye" as const].map(shape);
+    expect(new Set(shapes).size).toBe(4);
+  });
+});
