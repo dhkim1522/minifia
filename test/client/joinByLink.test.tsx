@@ -93,6 +93,14 @@ describe("링크 참가 화면 (S-02) 트레이서", () => {
     expect(init?.method ?? "GET").toBe("GET");
   });
 
+  it("링크 참가 화면에는 튜토리얼 카드·작은 단추가 없다(T-22)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(preview())));
+    const { container } = render(<App />);
+    await see("2 / 8명이 모였어요");
+    expect(container.querySelectorAll("[data-tutorial-entry]").length).toBe(0);
+    expect(container.querySelectorAll("[data-tutorial-end]").length).toBe(0);
+  });
+
   it("앉은 사람의 인물은 자리별 세트 C 그림(72×96)으로 그려진다", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json(preview())));
     const { container } = render(<App />);

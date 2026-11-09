@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
@@ -169,5 +169,124 @@ describe("첫 화면 큰 카드 (Task 1)", () => {
     const { container } = render(<Home onEnterRoom={vi.fn()} />);
     expect(container.querySelectorAll("[data-tutorial-entry]").length).toBe(0);
     expect(screen.getByRole("button", { name: "방 만들기" })).toBeTruthy();
+  });
+});
+
+// ---- Task 2: 마무리 카드(장면 8)·[다시 보기]·방 입장 때 본 표시 ----
+
+const TOKEN = "t".repeat(43);
+
+describe("마무리 카드 (Task 2, T-1)", () => {
+  function finishTutorial(container: HTMLElement) {
+    fireEvent.click(entry(container, "card")[0] as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "끝" }));
+  }
+
+  it("끝까지 보면 큰 카드 자리에 마무리 카드가 하나 뜨고 tut.warm 이 한 번 나며 입력은 남는다", () => {
+    const play = vi.spyOn(engine, "play");
+    const { container } = render(<Home onEnterRoom={vi.fn()} />);
+    fireEvent.change(codeInput(), { target: { value: "1234" } });
+    finishTutorial(container);
+
+    expect(container.querySelector("[data-tutorial-screen]")).toBeNull();
+    const ends = container.querySelectorAll("[data-tutorial-end]");
+    expect(ends.length).toBe(1);
+    expect(ends[0]!.textContent).toContain("이제 진짜 사건으로");
+    expect(ends[0]!.textContent).toContain("목격과 흔적으로 거짓말을 잡아요");
+    expect(screen.getByRole("button", { name: "다시 보기" }).hasAttribute("data-tutorial-replay")).toBe(true);
+    expect(play.mock.calls.filter(([id]) => id === "tut.warm").length).toBe(1);
+    // 큰 카드 자리에 대신 놓인다(진입 카드·작은 단추는 같은 때에 없다)
+    expect(container.querySelectorAll("[data-tutorial-entry]").length).toBe(0);
+    const actions = container.querySelector(".mf-entry__actions") as HTMLElement;
+    expect(actions.firstElementChild).toBe(ends[0]);
+    expect(codeInput().value).toBe("1234");
+    expect((screen.getByRole("button", { name: "방 만들기" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "참가" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("[다시 보기]는 장면 1 부터 다시(initialScene 없음) 열고 ui.tap 신호를 낸다", () => {
+    const { container } = render(<Home onEnterRoom={vi.fn()} />);
+    finishTutorial(container);
+    sceneProps.length = 0;
+    signalSpy.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "다시 보기" }));
+    expect(signalSpy).toHaveBeenCalledWith({ kind: "tap" });
+    expect(container.querySelector("[data-tutorial-screen]")).not.toBeNull();
+    expect(container.querySelector("[data-tutorial-end]")).toBeNull();
+    expect(sceneProps).toEqual([{ mode: "solo", initialScene: undefined }]);
+  });
+
+  it("마무리 카드는 첫 화면을 다시 마운트하면 사라지고 작은 단추가 된다", () => {
+    const { container, unmount } = render(<Home onEnterRoom={vi.fn()} />);
+    finishTutorial(container);
+    unmount();
+    const again = render(<Home onEnterRoom={vi.fn()} />);
+    expect(again.container.querySelector("[data-tutorial-end]")).toBeNull();
+    expect(entry(again.container, "button").length).toBe(1);
+  });
+
+  it("[건너뛰기]는 TUTORIAL_END_CARD_ON_SKIP 이 거짓이라 마무리 카드가 없다", () => {
+    const { container } = render(<Home onEnterRoom={vi.fn()} />);
+    fireEvent.click(entry(container, "card")[0] as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "건너뛰기" }));
+    expect(container.querySelector("[data-tutorial-end]")).toBeNull();
+  });
+});
+
+describe("방 입장 때 본 표시 (Task 2, T-2)", () => {
+  const type = (el: HTMLElement, value: string) => fireEvent.change(el, { target: { value } });
+
+  it("방 만들기가 성공하면 onEnterRoom 직전에 본 표시가 저장된다", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ code: "0042", token: TOKEN, seat: 0 }), { status: 201 })));
+    let seenAtEnter: string | null = "unset";
+    const onEnter = vi.fn(() => {
+      seenAtEnter = window.localStorage.getItem(SEEN);
+    });
+    render(<Home onEnterRoom={onEnter} />);
+    expect(window.localStorage.getItem(SEEN)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "방 만들기" }));
+    type(screen.getByLabelText("닉네임"), "민수");
+    fireEvent.click(screen.getByRole("button", { name: "만들기" }));
+    await waitFor(() => expect(onEnter).toHaveBeenCalledWith("0042", TOKEN));
+    expect(seenAtEnter).toBe("1");
+  });
+
+  it("참가가 성공하면 onEnterRoom 직전에 본 표시가 저장된다", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: TOKEN, seat: 1 }), { status: 200 })));
+    let seenAtEnter: string | null = "unset";
+    const onEnter = vi.fn(() => {
+      seenAtEnter = window.localStorage.getItem(SEEN);
+    });
+    render(<Home onEnterRoom={onEnter} />);
+    type(codeInput(), "0042");
+    fireEvent.click(screen.getByRole("button", { name: "참가" }));
+    type(screen.getByLabelText("닉네임"), "민수");
+    fireEvent.click(screen.getByRole("button", { name: "참가하기" }));
+    await waitFor(() => expect(onEnter).toHaveBeenCalledWith("0042", TOKEN));
+    expect(seenAtEnter).toBe("1");
+  });
+
+  it("저장된 입장 정보로 바로 돌아가는 분기도 본 표시를 남긴다", () => {
+    window.localStorage.setItem("minifia:session", JSON.stringify({ code: "0042", token: TOKEN }));
+    const onEnter = vi.fn();
+    render(<Home onEnterRoom={onEnter} />);
+    type(codeInput(), "0042");
+    fireEvent.click(screen.getByRole("button", { name: "참가" }));
+    expect(onEnter).toHaveBeenCalledWith("0042", TOKEN);
+    expect(window.localStorage.getItem(SEEN)).toBe("1");
+  });
+
+  it("실패(닉네임 오류)에는 본 표시를 저장하지 않는다", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "NICKNAME_TAKEN" }), { status: 409 })));
+    const onEnter = vi.fn();
+    render(<Home onEnterRoom={onEnter} />);
+    fireEvent.click(screen.getByRole("button", { name: "방 만들기" }));
+    type(screen.getByLabelText("닉네임"), "민수");
+    fireEvent.click(screen.getByRole("button", { name: "만들기" }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(onEnter).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(SEEN)).toBeNull();
   });
 });
