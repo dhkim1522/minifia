@@ -3,9 +3,10 @@
 // 장면 표 한 곳이 그리는 방식·소리 시각·사회자 문구 키·포커스 창·넘어가는 방식을 쥐고(UI-SPEC 첫 사건 장면 계약, 시안 Main.dc.html enter),
 // 가짜 방 상태(RoomView)는 출연 상수(TUTORIAL_CAST)로만 만든다 — 서버 값·내 역할·내 닉네임이 섞일 길이 없다.
 import { UNIT } from "../../shared/game/map";
-import { emptyWorld, restSegment, snapFrame } from "../../shared/game/world";
+import { MOVE_V, emptyWorld, moveFrame, restSegment, snapFrame } from "../../shared/game/world";
 import type { WorldState } from "../../shared/game/world";
-import type { ClientMessage, MapId, OutfitId, PlaceId, PublicPlayer, RoomView, WorldFrame } from "../../shared/protocol";
+import type { ClientMessage, MapId, OutfitId, PhaseId, PlaceId, PublicPlayer, RoomView, WorldFrame } from "../../shared/protocol";
+import type { SceneLook, SeatLook } from "../world/presence";
 
 // ---- 타입 ----
 
@@ -119,9 +120,37 @@ export const TUTORIAL_START: Readonly<{ x: number; z: number }> = { x: 4.4, z: 3
 
 // ---- 장면 표 ----
 
+/** 오프닝 램프 소리 시각: 0.8초부터 0.5초 간격으로 OPENING_LAMPS 번(시안 enter 1) */
+const LAMP_BEATS: readonly TutorialBeat[] = Array.from({ length: OPENING_LAMPS }, (_, i) => ({ at: 800 + 500 * i, sfx: "tut.lampOff" as const }));
+
+/** 시각 목록마다 같은 소리 하나씩 */
+function repeatSfx(sfx: TutorialCue, times: readonly number[]): TutorialBeat[] {
+  return times.map((at) => ({ at, sfx }));
+}
+
+/** 장면 표 8행(n 오름차순). 시각은 장면 시작부터 ms — 시안 Main.dc.html enter() 와 UI-SPEC 첫 사건 장면 계약 그대로 */
 export const TUTORIAL_SCENES: readonly TutorialScene[] = [
-  { n: 1, id: "opening", render: "stage", dot: true, beats: [], focus: [], advance: { kind: "auto", afterMs: 4600 } },
-  { n: 2, id: "morning", render: "map", dot: true, beats: [], focus: [], advance: { kind: "next", showAtMs: 2600 } },
+  {
+    n: 1,
+    id: "opening",
+    render: "stage",
+    dot: true,
+    beats: [...LAMP_BEATS, { at: 2600, sfx: "tut.scream" }],
+    focus: [],
+    advance: { kind: "auto", afterMs: 4600 },
+  },
+  {
+    n: 2,
+    id: "morning",
+    render: "map",
+    dot: true,
+    beats: [
+      { at: 0, sfx: "tut.whoosh", say: "tutorial.morning.victim" },
+      { at: 2600, sfx: "tut.sting", say: "tutorial.morning.mafia" },
+    ],
+    focus: [{ target: "band", from: 0, to: 2600 }],
+    advance: { kind: "next", showAtMs: 2600 },
+  },
   {
     n: 3,
     id: "errand",
@@ -134,16 +163,55 @@ export const TUTORIAL_SCENES: readonly TutorialScene[] = [
     focus: [{ target: "errand", from: 0 }],
     advance: { kind: "act", afterMs: 700 },
   },
-  { n: 4, id: "witness", render: "map", dot: true, beats: [], focus: [], advance: { kind: "next", showAtMs: 3400 } },
-  { n: 5, id: "evidence", render: "map", dot: true, beats: [], focus: [], advance: { kind: "next", showAtMs: 0 } },
-  { n: 6, id: "vote", render: "map", dot: true, beats: [], focus: [], advance: { kind: "pick", revealAfterMs: 1100 } },
-  { n: 7, id: "roles", render: "stage", dot: true, beats: [], focus: [], advance: { kind: "next", showAtMs: 0 } },
-  { n: 8, id: "end", render: "home", dot: false, beats: [], focus: [], advance: { kind: "end" } },
+  {
+    n: 4,
+    id: "witness",
+    render: "map",
+    dot: true,
+    beats: [...repeatSfx("tut.step", [0, 320, 640, 960, 1280]), { at: 1900, sfx: "tut.eye" }, { at: 2250, say: "tutorial.witness" }],
+    focus: [{ target: "suspect", from: 1900, to: 3400 }],
+    advance: { kind: "next", showAtMs: 3400 },
+  },
+  {
+    n: 5,
+    id: "evidence",
+    render: "map",
+    dot: true,
+    beats: [...repeatSfx("tut.link", [400, 900]), { at: 1300, say: "tutorial.link" }],
+    focus: [],
+    advance: { kind: "next", showAtMs: 0 },
+  },
+  {
+    n: 6,
+    id: "vote",
+    render: "map",
+    dot: true,
+    beats: [{ at: 0, sfx: "tut.whoosh", say: "tutorial.vote" }],
+    focus: [{ target: "pickTags", from: 0 }],
+    advance: { kind: "pick", revealAfterMs: 1100 },
+  },
+  {
+    n: 7,
+    id: "roles",
+    render: "stage",
+    dot: true,
+    beats: [...repeatSfx("tut.flip", [100, 450, 800, 1150]), { at: 1500, say: "tutorial.roles" }],
+    focus: [],
+    advance: { kind: "next", showAtMs: 0 },
+  },
+  { n: 8, id: "end", render: "home", dot: false, beats: [{ at: 0, sfx: "tut.warm" }], focus: [], advance: { kind: "end" } },
 ];
+
+/** 장면 6 이름표를 눌렀을 때: 정답(도윤)은 도장, 오답은 버저와 오답 문구, 정체 공개는 팡파르 */
+export const TUTORIAL_PICK = {
+  right: { sfx: "tut.stamp" },
+  wrong: { sfx: "tut.buzz", say: "tutorial.vote.wrong" },
+  reveal: { sfx: "tut.fanfare" },
+} as const;
 
 // ---- 가짜 view ----
 
-/** 출연표에서 공개 플레이어 한 줄. 역할 키는 어디에도 없다 */
+/** 출연표에서 공개 플레이어 한 줄씩. 역할 키는 어디에도 없다 */
 function playersOf(deadSeats: readonly number[]): PublicPlayer[] {
   return TUTORIAL_CAST.seats.map((c) => ({
     seat: c.seat,
@@ -155,37 +223,96 @@ function playersOf(deadSeats: readonly number[]): PublicPlayer[] {
   }));
 }
 
-/** 지도 장면(3·4)의 공통 뼈대. errand 단계는 마감이 없어(phaseEndsAt null) 2초 시작 카드가 뜨지 않는다 */
-function errandView(done: readonly PlaceId[], now: number): RoomView {
+/** 장면 6·5 가 같은 값을 쓰는 낮 증거(실제 판의 EVID-01 처럼 낮 끝까지 같다): 붉은 천 조각과 마지막 목격 */
+function evidenceOf(): { trace: typeof TUTORIAL_CAST.trace; seen: { seat: number; place: PlaceId } } {
+  return { trace: TUTORIAL_CAST.trace, seen: { seat: TUTORIAL_CAST.witness.seat, place: TUTORIAL_CAST.witness.place as PlaceId } };
+}
+
+/** 가짜 view 의 공통 뼈대: 방 코드 없음(방이 아님), 1판, 광장, 나는 5번이고 방장이 아니다 */
+function baseView(phase: PhaseId, now: number, deadSeats: readonly number[], phaseEndsAt: number | null): RoomView {
   return {
     code: "",
-    phase: "errand",
+    phase,
     round: 1,
-    phaseEndsAt: null,
+    phaseEndsAt,
     phaseDurationMs: null,
     serverNow: now,
     minPlayers: 4,
     maxPlayers: 8,
     mapChoice: TUTORIAL_CAST.map as MapId,
     map: TUTORIAL_CAST.map as MapId,
-    players: playersOf([TUTORIAL_CAST.victim]),
-    me: {
-      seat: TUTORIAL_CAST.me,
-      isHost: false,
-      errand: { places: [...TUTORIAL_CAST.errand.places] as PlaceId[], done: [...done] },
-    },
+    players: playersOf(deadSeats),
+    me: { seat: TUTORIAL_CAST.me, isHost: false },
     day: { n: 1, roles: [] },
   };
 }
 
-/** 장면별 가짜 RoomView. 이번 단계에서는 3·4 만 만든다 */
-export function tutorialView(n: 2 | 3 | 4 | 5 | 6, at: { now: number; picked?: boolean }): RoomView {
-  if (n === 3) return errandView([], at.now);
-  if (n === 4) return errandView([TUTORIAL_CAST.errand.target as PlaceId], at.now);
-  throw new Error(`tutorialView(${n}) 는 아직 없다`);
+/** 심부름 장면(3·4): errand 단계는 마감이 없어(phaseEndsAt null) 2초 시작 카드가 뜨지 않는다 */
+function errandView(done: readonly PlaceId[], now: number): RoomView {
+  const v = baseView("errand", now, [TUTORIAL_CAST.victim], null);
+  return { ...v, me: { ...v.me, errand: { places: [...TUTORIAL_CAST.errand.places] as PlaceId[], done: [...done] } } };
 }
 
-// ---- 위치 snap ----
+/**
+ * 지도 장면(2~6)의 가짜 RoomView. 매번 새 객체다.
+ * 2 = 아침(서연 탈락, 흔적 없음) · 3·4 = 심부름(우체통 처리 전·후) · 5 = 아침 증거(마감 now+4000 이라 흔적 구간이 즉시 켜진다) · 6 = 지목(picked 면 나 → 도윤 한 줄)
+ */
+export function tutorialView(n: 2 | 3 | 4 | 5 | 6, at: { now: number; picked?: boolean }): RoomView {
+  const dead = [TUTORIAL_CAST.victim];
+  if (n === 3) return errandView([], at.now);
+  if (n === 4) return errandView([TUTORIAL_CAST.errand.target as PlaceId], at.now);
+  if (n === 2) {
+    const v = baseView("morning", at.now, dead, null);
+    return { ...v, day: { n: 1, roles: [], morning: { eliminated: TUTORIAL_CAST.victim } } };
+  }
+  if (n === 5) {
+    const v = baseView("morning", at.now, dead, at.now + 4000);
+    return { ...v, day: { n: 1, roles: [], morning: { eliminated: TUTORIAL_CAST.victim, ...evidenceOf() }, evidence: evidenceOf() } };
+  }
+  const v = baseView("nomination", at.now, dead, null);
+  const points = at.picked === true ? [{ seat: TUTORIAL_CAST.me, target: TUTORIAL_CAST.suspect }] : [];
+  return { ...v, day: { n: 1, roles: [], evidence: evidenceOf(), points } };
+}
+
+/** 무대 장면(1·7)의 가짜 view: 밤 단계. 7 에서는 서연이 이미 없다 */
+export function tutorialStageView(n: 1 | 7, now: number): RoomView {
+  return baseView("night", now, n === 7 ? [TUTORIAL_CAST.victim] : [], null);
+}
+
+/**
+ * WorldStage 직접 장면의 모양: 카메라는 광장 가운데 고정, 조명은 night 여부, 서연 좌석은 victimGone 이면 불투명도 0(장면 1 에서 사라짐).
+ * 장면 7 에는 서연 자리가 아예 없다.
+ */
+export function tutorialStageLook(n: 1 | 7, s: { night: boolean; victimGone: boolean }): SceneLook {
+  const seats: Record<number, SeatLook> = {};
+  for (const c of TUTORIAL_CAST.seats) {
+    if (c.seat === TUTORIAL_CAST.victim) {
+      if (n === 7) continue;
+      seats[c.seat] = s.victimGone ? { show: true, ghost: false, opacity: 0 } : { show: true, ghost: false };
+      continue;
+    }
+    seats[c.seat] = { show: true, ghost: false };
+  }
+  return { camera: { mode: "fixed", target: { x: 0, z: 0 }, zoom: 1 }, lighting: s.night ? "night" : "talk", tension: 0, seats };
+}
+
+// ---- 위치 ----
+
+/** 지도 장면 2·5·6 과 무대 장면 1·7 에서 좌석이 서는 자리(월드 단위): 광장 가운데 연단 둘레 반지름 약 2.6. 모두 걸을 수 있는 칸이다(시험) */
+export const TUTORIAL_SPOTS: Readonly<Record<number, { x: number; z: number }>> = {
+  0: { x: -2.6, z: 0 },
+  1: { x: 1.3, z: -2.3 },
+  2: { x: -1.3, z: -2.3 },
+  3: { x: -1.3, z: 2.3 },
+  4: { x: 2.6, z: 0 },
+  5: { x: 1.3, z: 2.3 },
+};
+
+/** 장면 4 에서 도윤이 걷는 길(월드 단위): 오른쪽 화면 밖에서 내 근처까지 약 3.3 — MOVE_SPEED 로 1.8초 남짓 */
+export const SUSPECT_WALK: Readonly<{ from: { x: number; z: number }; to: { x: number; z: number } }> = {
+  from: { x: 5.6, z: -1.9 },
+  to: { x: 4.0, z: 1.0 },
+};
 
 /** 서버와 같은 구간 단위(고정소수점)로 쉬는 좌석들의 snap 한 프레임 */
 function snapOf(spots: ReadonlyArray<{ seat: number; x: number; z: number }>, now: number): Extract<WorldFrame, { k: "snap" }> {
@@ -199,10 +326,22 @@ function snapOf(spots: ReadonlyArray<{ seat: number; x: number; z: number }>, no
   return snapFrame(world, players, now);
 }
 
-/** 그 장면에 보이는 좌석의 위치 snap. 이번 단계에서는 3·4(나 하나)만 만든다 */
+/** 그 장면에 보이는 좌석의 위치 snap. 1 = 서연 포함 전원 · 2·5·6·7 = 산 사람 전원 · 3·4 = 나 하나 · 8 은 첫 화면이라 자리가 없다(빈 snap) */
 export function tutorialSnap(n: TutorialSceneNo, now: number): Extract<WorldFrame, { k: "snap" }> {
   if (n === 3 || n === 4) return snapOf([{ seat: TUTORIAL_CAST.me, ...TUTORIAL_START }], now);
-  throw new Error(`tutorialSnap(${n}) 는 아직 없다`);
+  if (n === 8) return snapOf([], now);
+  const seats = TUTORIAL_CAST.seats.filter((c) => n === 1 || c.seat !== TUTORIAL_CAST.victim);
+  return snapOf(
+    seats.map((c) => ({ seat: c.seat, ...TUTORIAL_SPOTS[c.seat]! })),
+    now,
+  );
+}
+
+/** 장면 4: 도윤이 화면 오른쪽 밖에서 SUSPECT_WALK 끝점까지 MOVE_SPEED 로 걷는 move 한 프레임. 시각 now 에 출발한다 */
+export function tutorialSuspectWalk(now: number): WorldFrame {
+  const { from, to } = SUSPECT_WALK;
+  const p = [Math.round(from.x * UNIT), Math.round(from.z * UNIT), Math.round(to.x * UNIT), Math.round(to.z * UNIT)];
+  return moveFrame(TUTORIAL_CAST.suspect, { p, t0: now, v: MOVE_V });
 }
 
 // ---- 로컬 send 어댑터 ----
