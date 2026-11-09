@@ -93,6 +93,7 @@ import {
   reconnectSummary,
   selectFlows,
   CHAT_PANEL_EXTRA,
+  LOBBY_HOST_TUTORIAL_EXTRA,
   LOBBY_PANEL_EXTRA,
   lobbyPanelHeight,
   GAME_PANEL_EXTRA,
@@ -520,6 +521,16 @@ test("채팅 패널 치수 사본: logHeightFor(779) 96 · (780) 152, 채팅 패
   assert.equal(LOBBY_PANEL_EXTRA, 154);
   assert.equal(lobbyPanelHeight(96), 250);
   assert.equal(lobbyPanelHeight(152), 306);
+  // 17-07(0080-4): 방장 패널 +76 = 스위치 줄 64 + 간격 12
+  assert.equal(LOBBY_HOST_TUTORIAL_EXTRA, 76);
+  assert.equal(lobbyPanelHeight(96, true), 326);
+  assert.equal(lobbyPanelHeight(152, true), 382);
+  assert.equal(lobbyPanelHeight(96, false), 250);
+});
+
+test("17-07: view 키 사본에 tutorial·tutorialDone 이 있다", () => {
+  assert.ok(VIEW_TOP_KEYS.has("tutorial"));
+  assert.ok(VIEW_ME_KEYS.has("tutorialDone"));
 });
 
 // ---- H1 헤더 글씨 대비 (결정 0030, 사용자 지시 V-06) ----

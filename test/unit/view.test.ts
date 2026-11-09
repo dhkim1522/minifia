@@ -9,6 +9,7 @@ import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
 import { RULESET } from "../../shared/game/ruleset";
 import { tick } from "../../shared/game/tick";
+import { markTutorialDone } from "../../shared/game/tutorial";
 import { buildPreview, buildView } from "../../shared/game/view";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
@@ -197,6 +198,7 @@ function roleValueLeaks(view: RoomView, spectator = false): string[] {
 /** view 최상위에 올 수 있는 키(허용 목록). */
 const TOP_KEYS: ReadonlySet<string> = new Set([
   "code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map",
+  "tutorial", // tutorial 단계의 진행 수 { done, total, endsAt }(17페이즈, 결정 0080-11) — 모두에게 같은 값, 아래 "tutorial 단계 view 키" 가 조건을 단언한다
 ]);
 
 /** 그 밤에 살아 있는 각 역할이 지금 고른 대상 seat(중복 없음·오름차순). */
@@ -297,6 +299,7 @@ const ME_KEYS: ReadonlySet<string> = new Set([
   "errand", // 심부름 목록·진행(15페이즈, 결정 0074) — errand 단계의 산 본인에게만, 아래 "심부름 me.errand" describe 가 조건을 단언한다
   "record", // 목격 기록(15-02, D-04) — 토론 단계에서 심부름 3곳을 모두 처리한 산 본인에게만, errandNear.test.ts 의 "me.record" describe 가 조건을 단언한다
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
+  "tutorialDone", // 끝났음을 보낸 본인에게만, 값은 true 뿐(17페이즈, 결정 0080-11) — 아래 "tutorial 단계 view 키" 가 조건을 단언한다
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
   "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown",
@@ -804,6 +807,51 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
     }
     expect(views).toBe(SEEDS.length * PHASES.length * (4 + 5 + 6 + 7 + 8));
     expect(violations.join("; ")).toBe("");
+  });
+});
+
+describe("buildView tutorial 단계 view 키 (17-07, 결정 0080-11, 허용 키 사본 TOP_KEYS·ME_KEYS)", () => {
+  /** 켜고 시작한 tutorial 단계 방에서 seat 0 만 끝났음을 보낸 상태 */
+  const tutorialState = (n: number, seed: number): RoomState => {
+    const lobby = lobbyOf(n);
+    const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed), { tutorial: true });
+    if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
+    const first = started.state.players.find((p) => p.seat === 0)!;
+    const marked = markTutorialDone(started.state, first.id);
+    if (!marked.ok) throw new Error("markTutorialDone failed");
+    return marked.state;
+  };
+
+  it("4~8명 × 시드 3개 × 모든 플레이어: 최상위·me 키가 허용 목록 안이고, view.tutorial 은 모두에게 같은 { done, total, endsAt }, me.tutorialDone 은 끝낸 본인에게만(true), 이 단계에 me.role 은 없다", () => {
+    const violations: string[] = [];
+    for (const n of PLAYER_COUNTS) {
+      for (const seed of SEEDS) {
+        const s = tutorialState(n, seed);
+        expect(s.phase).toBe("tutorial");
+        const views = s.players.map((viewer) => ({ viewer, view: buildView(s, viewer.id, START_AT) }));
+        for (const { viewer, view } of views) {
+          const tag = `${n}/${seed}/seat${viewer.seat}`;
+          for (const key of Object.keys(view)) if (!TOP_KEYS.has(key)) violations.push(`${tag}: top-level key ${key}`);
+          for (const key of Object.keys(view.me)) if (!ME_KEYS.has(key)) violations.push(`${tag}: me key ${key}`);
+          if (keysOf(view.tutorial) !== "done,endsAt,total") violations.push(`${tag}: tutorial keys ${keysOf(view.tutorial)}`);
+          if (view.tutorial?.done !== 1 || view.tutorial?.total !== n) violations.push(`${tag}: tutorial ${JSON.stringify(view.tutorial)}`);
+          if ((view.me.tutorialDone === true) !== (viewer.seat === 0)) violations.push(`${tag}: me.tutorialDone ${String(view.me.tutorialDone)}`);
+          if ("role" in view.me) violations.push(`${tag}: me.role in tutorial`);
+        }
+        const same = new Set(views.map(({ view }) => JSON.stringify(view.tutorial)));
+        if (same.size !== 1) violations.push(`${n}/${seed}: tutorial 값이 사람마다 다름`);
+      }
+    }
+    expect(violations.join("; ")).toBe("");
+  });
+
+  it("tutorial 단계가 아닌 view 에는 tutorial·me.tutorialDone 키가 없다", () => {
+    for (const phase of PHASES) {
+      const s = richStateAt(phase, 5, 1);
+      const view = buildView(s, s.players[0]!.id, START_AT);
+      expect("tutorial" in view, phase).toBe(false);
+      expect("tutorialDone" in view.me, phase).toBe(false);
+    }
   });
 });
 
