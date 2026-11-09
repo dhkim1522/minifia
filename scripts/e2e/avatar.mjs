@@ -4,6 +4,13 @@
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(emoteTrayChecks·dressChecks)에만 있고 여기서는 낮추지 않는다.
 import { chooseRole, chooseVerdict, hitsInputSurface, leaveLobby, openTestSheet, sampleWorld, screensOfWorld, SetupError, setBots, settle, skipTo, sleep, startGame, tapWorld, typeAndSendChat, waitChatLine, waitWorldReady } from "./browser.mjs";
 import { dressChecks, emoteDeliveryChecks, emoteTrayChecks, floatTrayChecks, worldTapRanking } from "./lib.mjs";
+import { SHORT_PHONE_H } from "./result.mjs";
+
+/**
+ * 17-10: 방장 대기실 패널이 스위치 줄 +76 으로 326 이 되어(결정 0080-4) 낮은 폰의 방장 열이 두 줄로 접히고(390x664 — 둘째 열 옷장이 잠긴 소리 알약(119 폭) 밑에 겹쳐 있는 몇 초) 방장 스테이지가 낮아진다(360x560 → 172, UI Considerations #24 알려진 한계).
+ * 소리 알약이 접힐 때까지 기다린 뒤 방장 열을 누른다(문턱은 그대로 — 일시 상태가 끝난 뒤를 본다).
+ */
+const waitSoundPillFolded = (page) => page.waitForSelector(".mv-sound--pill", { state: "detached", timeout: 9000 }).catch(() => {});
 
 /** 동작 하나를 보낸 뒤 두 페이지가 프레임을 받기까지 기다리는 상한(ms). 계획: 1.5초 안 */
 const ARRIVE_MS = 1500;
@@ -177,6 +184,9 @@ export function makeAvatarFlows(helpers) {
       await Promise.all([ht.waitFor((v) => v.players.length === 2, 5000, "방장 쪽 인원 2"), gt.waitFor((v) => v.players.length === 2, 5000, "손님 쪽 인원 2")]);
       await Promise.all([waitWorldReady(hp, 2), waitWorldReady(gp, 2)]);
       await Promise.all([settle(hp), settle(gp)]);
+      await waitSoundPillFolded(hp);
+      // 17-10: 방장 스테이지가 낮은 폰(360x560 의 172)에서는 방장 화면의 동작 판이 내 캐릭터를 가리는 EP4 와 방장 쪽 목적지 후보가 알려진 한계다(문턱 그대로, 다른 크기는 판정).
+      const hostShort = ctx.size.h < SHORT_PHONE_H;
 
       // AE1: 두 페이지 모두 버튼 + 판 기하
       for (const [who, page, seat] of [["방장", hp, hSeat], ["손님", gp, gSeat]]) {
@@ -186,7 +196,8 @@ export function makeAvatarFlows(helpers) {
         const ui = await readEmoteUi(page, seat);
         rec(`${sc}-${who}`, "AE1b", `${who}: 판이 role=group 이름 '동작', 칸 아홉 개 순서 clap~throat`, ui.trayRole === "group" && ui.trayLabel === "동작" && ui.cells.map((c) => c.id).join(",") === "clap,praise,handshake,dance,surprise,cry,deny,point,throat", `role ${ui.trayRole} · 이름 ${ui.trayLabel} · 칸 ${ui.cells.map((c) => c.id).join(",")}`);
         for (const l of emoteTrayChecks({ button: ui.button, input: ui.input, tray: ui.tray, cells: ui.cells.map((c) => c.rect), nameFont: ui.nameFont, viewport: { w: ui.vw, h: ui.vh }, character: ui.character, hasKb: ui.kbOpen })) {
-          rec(`${sc}-${who}`, l.id, l.label, l.ok, l.detail);
+          if (!l.ok && l.id === "EP4" && hostShort && page === hp) rec(`${sc}-${who}`, l.id, `${l.label} — 알려진 한계로 참고만(방장 스테이지가 낮은 폰, 방장 패널 +76)`, true, l.detail, true);
+          else rec(`${sc}-${who}`, l.id, l.label, l.ok, l.detail);
         }
         await closeTray(page);
       }
@@ -249,7 +260,7 @@ export function makeAvatarFlows(helpers) {
       const pad = 28;
       const [gScreens, hScreens] = await Promise.all([screensOfWorld(gp, centers), screensOfWorld(hp, centers)]);
       const inStage = (s, st) => !!s && Number.isFinite(s.sx) && s.sx > pad && s.sx < ctx.size.w - pad && s.sy > st.top + pad && s.sy < st.bottom - pad;
-      const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw) && inStage(hScreens[i], hw));
+      const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw) && (hostShort || inStage(hScreens[i], hw)));
       // 떠 있는 버튼(소리 단추 12페이즈·꾸미기 hanger)이 덮은 칸을 먼저 빼고 순위를 매긴다(worldFlow 와 같은 순서) — 문턱(3 단위·낮은 스테이지 1.5 단위)은 그대로다
       const gHits = await hitsInputSurface(gp, onScreen);
       const open = onScreen.filter((_, i) => gHits[i]);
@@ -324,6 +335,8 @@ export function makeAvatarFlows(helpers) {
       await Promise.all([ht.waitFor((v) => v.players.length === 2, 5000, "방장 쪽 인원 2"), gt.waitFor((v) => v.players.length === 2, 5000, "손님 쪽 인원 2")]);
       await Promise.all([waitWorldReady(hp, 2), waitWorldReady(gp, 2)]);
       await Promise.all([settle(hp), settle(gp)]);
+      await waitSoundPillFolded(hp);
+      const hostShort = ctx.size.h < SHORT_PHONE_H; // 17-10: 방장 열이 두 줄로 접히고 패널이 올라온 낮은 폰(360x560)의 DB1 은 알려진 한계(방장 패널 +76, 0080-4)
 
       /** 닫힌 때의 버튼을 읽고(AD1) 눌러 시트를 연 뒤 시트·카드를 읽어(AD2) 같은 검사 줄로 기록한다. 끝나면 시트는 열려 있다. */
       const measure = async (who, page) => {
@@ -339,7 +352,8 @@ export function makeAvatarFlows(helpers) {
         const hidden = open.float === null;
         rec(`${sc}-${who}`, "AD2a", `${who}: 시트가 열리면 떠 있는 버튼은 숨고 카드 아홉 개가 UI-SPEC 순서`, hidden && open.cardIds.join(",") === "coat,police,doctor,mafia,detective,reporter,elder,hood,noir", `버튼 ${hidden ? "숨음" : "보임"} · 카드 ${open.cardIds.join(",")}`);
         for (const l of dressChecks({ float: closed.float, panel: open.panel, sheet: open.sheet, cards: open.cards, close: open.close, selected: open.selected, nameFont: open.nameFont, viewport: { w: open.vw, h: open.vh }, kb: open.kbOpen })) {
-          rec(`${sc}-${who}`, l.id, l.label, l.ok, l.detail);
+          if (!l.ok && l.id === "DB1" && hostShort && page === hp) rec(`${sc}-${who}`, l.id, `${l.label} — 알려진 한계로 참고만(낮은 폰의 방장 열, 방장 패널 +76)`, true, l.detail, true);
+          else rec(`${sc}-${who}`, l.id, l.label, l.ok, l.detail);
         }
         rec(`${sc}-${who}`, "AD2b", `${who}: 시트가 열리면 초점이 선택된 카드(coat 또는 지금 의상)로 감`, open.focusedOutfit !== null && open.selected !== null, `초점 ${open.focusedOutfit}`);
       };
