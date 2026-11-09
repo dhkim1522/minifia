@@ -115,6 +115,73 @@
 .tut-band.is-shake { animation: tut-shake .4s ease-in-out; }
 @keyframes tut-shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
 
+/* ---- 정체 공개(장면 6 뒤, TutorialReveal, 17-05) ----
+   --scrim 막 위 카드 뒤집기 + 도장 + 놋쇠 불꽃 + "눈 + 흔적 로 찾아냈어요". 진홍은 .tut-reveal 선택자 안의 "마피아" 이름·그림 후광뿐이다(T-18).
+   [다음]·진행 점은 막보다 위(z-overlay + 3)라 막 위에서도 눌린다. 모든 애니메이션은 transform·opacity 만 쓴다. */
+.tut-reveal {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-overlay) + 1);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--scrim);
+  animation: tut-reveal-fade var(--dur-fast) ease-out both;
+}
+/* 카드 묶음 아래·오른쪽에 [다음](56 원, 오른쪽 20·아래 28)이 있다 — 묶음이 그 위로 오지 않게 위·아래 여백을 둔다 */
+.tut-reveal__stage { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--space-md); max-height: 100%; padding: 64px 16px 100px; }
+.tut-reveal__card {
+  position: relative;
+  box-sizing: border-box;
+  width: 240px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  background: var(--night-800);
+  border: 1px solid var(--night-600);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+.tut-reveal__card.is-flip { transform-origin: 50% 0; animation: tut-reveal-flip .6s ease-out both; }
+.tut-reveal__art { display: block; width: 144px; height: 192px; object-fit: contain; filter: drop-shadow(0 0 16px color-mix(in srgb, var(--crimson-500) 45%, transparent)); }
+.tut-reveal__who { margin: 0; font-size: 14px; font-weight: 400; line-height: 1.4; color: var(--gray-300); }
+.tut-reveal__title { margin: 0; font-size: 36px; font-weight: 700; line-height: 1.2; color: var(--crimson-300); word-break: keep-all; }
+/* 도장 "정답": 카드 오른쪽 위에 찍힌다(0.6초 지연, 배율 2.4 → 1, 기울기 -16° → -8°) */
+.tut-reveal__stamp {
+  position: absolute;
+  top: -20px;
+  right: -16px;
+  box-sizing: border-box;
+  padding: 0 var(--space-sm);
+  font-family: var(--font-serif);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: .12em;
+  color: var(--brass-200);
+  background: var(--overlay-ink-strong);
+  border: 3px solid var(--brass-400);
+  border-radius: var(--radius-stamp);
+  transform: rotate(-8deg);
+  white-space: nowrap;
+}
+.tut-reveal__stamp.is-pop { animation: tut-reveal-stamp .42s cubic-bezier(.2, .9, .3, 1) .6s both; }
+/* 놋쇠 불꽃 점 14개: 카드 중심에서 방향마다 반지름 120/150/180 으로 0.55초 지연 뒤 퍼지며 사라진다 */
+.tut-reveal__sparks { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.tut-reveal__spark { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: var(--brass-400); opacity: 0; animation: tut-reveal-spark .8s ease-out .55s both; }
+.tut-reveal__spark.is-lamp { background: var(--light-lamp); }
+.tut-reveal__line { display: flex; align-items: center; gap: var(--space-sm); margin: 0; font-size: 16px; font-weight: 700; line-height: 1.5; color: var(--gray-300); }
+.tut-reveal__line.is-rise { animation: tut-reveal-rise .5s ease-out .9s both; }
+.tut-reveal__icons { display: inline-flex; align-items: center; gap: var(--space-xs); color: var(--brass-200); }
+.tut-reveal__icons b { font-size: 24px; font-weight: 700; line-height: 1; }
+@keyframes tut-reveal-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tut-reveal-flip { from { opacity: 0; transform: perspective(700px) rotateX(-90deg); } to { opacity: 1; transform: perspective(700px) rotateX(0); } }
+@keyframes tut-reveal-stamp { from { opacity: 0; transform: scale(2.4) rotate(-16deg); } to { opacity: 1; transform: scale(1) rotate(-8deg); } }
+@keyframes tut-reveal-spark { from { opacity: 1; transform: translate(0, 0) scale(.5); } to { opacity: 0; transform: translate(var(--tut-spark-x), var(--tut-spark-y)) scale(1); } }
+@keyframes tut-reveal-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
 /* 모션 줄이기: 깜빡임을 끄고 정지한 4px 테두리 + 번짐 중간값(테두리는 항상 보인다) */
 @media (prefers-reduced-motion: reduce) {
   .tut-focus, .tut-focus::before, .tut-next::before { animation: none; }
@@ -122,4 +189,6 @@
   /* 말하는 동안 막대는 중간 높이(12)로 고정, 글은 바로 보인다 */
   [data-tutorial-host][data-speaking] .tut-wave__bar { animation: none; transform: scaleY(.6); }
   .tut-band__line[data-say], .tut-band.is-shake { animation: none; }
+  /* 정체 공개: 뒤집기·불꽃·도장 흔들림 없이 완성된 모습이 바로 보인다 */
+  .tut-reveal, .tut-reveal__card.is-flip, .tut-reveal__stamp.is-pop, .tut-reveal__spark, .tut-reveal__line.is-rise { animation: none; }
 }

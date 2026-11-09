@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { getEngine } from "../audio/unlock";
 import { useSound } from "../audio/useSound";
+import { say } from "../audio/voice";
 import { FocusRing } from "../components/v2/FocusRing";
 import type { FocusGroup } from "../components/v2/FocusRing";
 import { TutorialHostBand } from "../components/v2/TutorialHostBand";
 import { TutorialNext } from "../components/v2/TutorialNext";
 import { TutorialProgress } from "../components/v2/TutorialProgress";
+import { TutorialReveal } from "../components/v2/TutorialReveal";
 import { WorldStage } from "../components/WorldStage";
-import { TUTORIAL_CAST, TUTORIAL_LINES, TUTORIAL_SCENES, makeTutorialSend, tutorialSnap, tutorialStageLook, tutorialStageView, tutorialSuspectWalk, tutorialView } from "../game/tutorialScript";
-import type { TutorialFocusWindow, TutorialSceneNo } from "../game/tutorialScript";
+import { TUTORIAL_CAST, TUTORIAL_LINES, TUTORIAL_PICK, TUTORIAL_SCENES, WRONG_HINT_AFTER, makeTutorialSend, tutorialSnap, tutorialStageLook, tutorialStageView, tutorialSuspectWalk, tutorialView } from "../game/tutorialScript";
+import type { TutorialFocusWindow, TutorialLineKey, TutorialSceneNo } from "../game/tutorialScript";
 import { ChatStore } from "../net/chatStore";
 import { useFixedRoomHeight } from "../net/useFixedRoomHeight";
 import { useTutorialDirector } from "../net/useTutorialDirector";
@@ -21,7 +24,8 @@ import "../styles/tutorial.css";
 // 첫 사건 화면(17-04, TUT-03·05, 결정 0078-7·0080-12): 혼자·함께 공통. 대본(tutorialScript, 17-03)을 읽어 실제 게임 화면 위에서 장면 1~7 을 차례로 재생한다.
 // 지도 장면(2~6)은 실제 GameMap 에 가짜 view·로컬 WorldStore·ChatStore·로컬 send 어댑터를 주고, 무대 장면(1·7)은 실제 WorldStage 를 직접 쓴다.
 // 서버·소켓에는 아무것도 보내지 않는다: GameMap·WorldStage 에는 makeTutorialSend 결과만 주고, 실제 연결 훅·fetch·WebSocket 을 가져오지 않는다(T-17-10, 정적 가드).
-// 화면 위에 튜토리얼에만 더하는 층(포커스 상자·진행 점·[건너뛰기]·[다음])을 얹는다. 장면별 연출(목격·증거·투표·정체 공개, 오프닝·직업 카드)은 renderSceneLayer·onPick 자리에 17-05·17-08 이 얹는다.
+// 화면 위에 튜토리얼에만 더하는 층(포커스 상자·진행 점·[건너뛰기]·[다음])을 얹는다. 장면별 연출은 renderSceneLayer·onPoint 자리에 얹는다:
+// 17-05 가 장면 6 의 지목·정체 공개·오답 도움(이 파일)과 장면 4·5 의 눈 표시·기록 카드·연결 선·수식을, 17-08 이 오프닝·직업 카드를 채운다.
 
 /** 이 화면이 재생하는 장면(1~7). 8(마무리 카드)은 이 화면 밖이다 */
 type PlayableScene = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -37,12 +41,26 @@ export interface TutorialScreenProps {
 
 /** [처리] 를 누른 뒤 다음 장면으로 넘어가기까지(ms) — 장면 표의 act afterMs 와 같은 값이다 */
 const ERRAND_NEXT_MS = 700;
+/** 좌석 → 출연 이름(위 알림·정체 공개 글에 쓴다 — 실제 닉네임이 아니다) */
+const CAST_NAME: Readonly<Record<number, string>> = Object.fromEntries(TUTORIAL_CAST.seats.map((c) => [c.seat, c.name]));
+/** 장면 6 정답 뒤 정체 공개까지(ms) — 장면 표의 pick.revealAfterMs 와 같은 값이다 */
+const REVEAL_AFTER_MS = (() => {
+  const adv = TUTORIAL_SCENES.find((x) => x.n === 6)?.advance;
+  return adv?.kind === "pick" ? adv.revealAfterMs : 1100;
+})();
+
 /** 도윤 포커스 상자가 이름표 아래 몸까지 덮도록 더 늘리는 높이(0080-9, 시안 상자 96×132) */
 const SUSPECT_BODY_PX = 90;
 
-/** 장면 번호로 갈리는 겹침 층(17-05·17-08 이 채운다). 지금은 없다 */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 장면 확장 자리: 뒤 계획이 scene 으로 갈라 그린다
-function renderSceneLayer(scene: TutorialSceneNo): ReactNode {
+/** 장면 층이 읽는 화면 상태 */
+interface SceneLayerCtx {
+  /** 장면 6 정체 공개 중 */
+  revealed: boolean;
+}
+
+/** 장면 번호로 갈리는 겹침 층: 장면 6 은 정체 공개(정답 뒤 1.1초). 17-05 가 장면 4·5, 17-08 이 1·7 을 더한다 */
+function renderSceneLayer(scene: TutorialSceneNo, ctx: SceneLayerCtx): ReactNode {
+  if (scene === 6 && ctx.revealed) return <TutorialReveal name={CAST_NAME[TUTORIAL_CAST.suspect]} />;
   return null;
 }
 
@@ -89,6 +107,11 @@ function firstAllowed(root: HTMLElement, n: PlayableScene, nextShown: boolean): 
   return null;
 }
 
+/** 장면 6 오답이 WRONG_HINT_AFTER 번 쌓인 뒤: 정답 이름표 하나만 깜빡인다(T-8) */
+function hintGroups(): FocusGroup[] {
+  return [{ key: `pick-${TUTORIAL_CAST.suspect}`, selectors: [`.mf-world__tag[data-seat="${TUTORIAL_CAST.suspect}"]`], pill: true }];
+}
+
 /** 지금 켜진 포커스 창 → 포커스 상자 묶음 */
 function groupsOf(targets: readonly TutorialFocusWindow["target"][]): FocusGroup[] {
   const out: FocusGroup[] = [];
@@ -112,6 +135,22 @@ function enterWorld(store: WorldStore, n: PlayableScene, at: number): void {
   store.applyFrame(tutorialSnap(n, at), 0);
   if (n === 4) store.applyFrame(tutorialSuspectWalk(at), 0);
 }
+
+/** 위 알림 한 건(GameMap 의 toast prop 모양 — 실제 판의 알림 경로와 같다. 연결 훅을 가져오지 않으려고 모양만 둔다) */
+interface PointToast {
+  id: number;
+  text: string;
+  icon: "point";
+}
+
+/** 장면 6 투표 상태(at 은 그 상태가 속한 장면 시작 시각) */
+interface VoteState {
+  at: number;
+  picked: boolean;
+  wrong: number;
+  revealed: boolean;
+}
+const freshVote = (at: number): VoteState => ({ at, picked: false, wrong: 0, revealed: false });
 
 interface SceneState {
   n: PlayableScene;
@@ -138,6 +177,18 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
 
   const onEndRef = useRef(onEnd);
   onEndRef.current = onEnd;
+
+  // 장면 6 투표 상태: picked(정답을 눌렀다)·wrong(오답 수)·revealed(정체 공개 중). 장면 시작 시각(at)을 같이 들고 있어 장면이 바뀌면 저절로 깨끗해진다
+  const [voteState, setVoteState] = useState<VoteState>(() => freshVote(boot));
+  const voteRef = useRef(voteState);
+  const vote = voteState.at === cur.at ? voteState : freshVote(cur.at);
+  const writeVote = useCallback((next: VoteState): void => {
+    voteRef.current = next;
+    setVoteState(next);
+  }, []);
+  // 위 알림(실제 TopToast 경로)과 띠 흔들림 번호
+  const [toast, setToast] = useState<PointToast | null>(null);
+  const [bandShake, setBandShake] = useState(0);
 
   const goto = useCallback(
     (n: PlayableScene): void => {
@@ -170,6 +221,8 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   const [said, setSaid] = useState<{ n: number; text: string; speakMs: number; nonce: number } | null>(null);
   const line = said !== null && said.n === cur.n ? said : null;
   const focusTargets = focus.n === cur.n ? focus.targets : [];
+  // 장면 6: 정답을 누르면 이름표 상자는 모두 꺼지고, 오답이 쌓이면 도윤 하나만 남는다(T-8)
+  const focusGroups = cur.n === 6 && vote.picked ? [] : cur.n === 6 && vote.wrong >= WRONG_HINT_AFTER ? hintGroups() : groupsOf(focusTargets);
 
   useTutorialDirector({
     scene: cur.n,
@@ -187,12 +240,21 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
       }),
   });
 
+  /** 장면 표 밖에서(오답) 사회자가 말한다 — 새 문장이 이전 음절 예약을 끊는다(say 가 처리) */
+  const speak = useCallback((key: TutorialLineKey): void => {
+    const totalMs = say(getEngine(), TUTORIAL_LINES[key]);
+    setSaid((prev) => ({ n: curRef.current.n, text: TUTORIAL_LINES[key], speakMs: totalMs, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, []);
+
   // [처리] 로컬 어댑터: 장면 3 에서만 0.7초 뒤 다음 장면. 장면이 바뀌거나 언마운트되면 예약을 푼다
   const errandTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     return () => {
       clearTimeout(errandTimer.current);
       errandTimer.current = undefined;
+      clearTimeout(revealTimer.current);
+      revealTimer.current = undefined;
     };
   }, [cur.n]);
   const onErrand = useCallback((): void => {
@@ -202,17 +264,43 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
       advanceFrom(3);
     }, ERRAND_NEXT_MS);
   }, [advanceFrom]);
-  // 장면 6 처리기: 정답(도윤)이면 다음 장면으로, 오답이면 아무것도 하지 않는다(17-05 가 정답·오답 연출로 채운다)
+  // 장면 6 처리기. 정답(도윤): 도장 소리 → 실제 득표 경로(picked 가짜 view)·위 알림 "나 → 도윤" → 1.1초 뒤 정체 공개·fanfare·[다음].
+  // 오답: 버저·"흔적을 떠올려 보세요"·띠 흔들림, 오답이 WRONG_HINT_AFTER 번 쌓이면 포커스는 도윤 하나만. 정답 뒤 눌림은 무시한다.
   const onPoint = useCallback(
     (seat: number): void => {
-      if (curRef.current.n === 6 && seat === TUTORIAL_CAST.suspect) advanceFrom(6);
+      const { n, at } = curRef.current;
+      if (n !== 6) return;
+      const v = voteRef.current.at === at ? voteRef.current : freshVote(at);
+      if (v.picked) return;
+      if (seat === TUTORIAL_CAST.suspect) {
+        getEngine().play(TUTORIAL_PICK.right.sfx);
+        writeVote({ ...v, picked: true });
+        setToast({ id: 1, text: `${CAST_NAME[TUTORIAL_CAST.me]} → ${CAST_NAME[TUTORIAL_CAST.suspect]}`, icon: "point" });
+        clearTimeout(revealTimer.current);
+        revealTimer.current = setTimeout(() => {
+          revealTimer.current = undefined;
+          if (curRef.current.at !== at) return;
+          getEngine().play(TUTORIAL_PICK.reveal.sfx);
+          writeVote({ ...voteRef.current, revealed: true });
+          setNextFor(6);
+        }, REVEAL_AFTER_MS);
+      } else {
+        getEngine().play(TUTORIAL_PICK.wrong.sfx);
+        speak(TUTORIAL_PICK.wrong.say);
+        writeVote({ ...v, wrong: v.wrong + 1 });
+        setBandShake((k) => k + 1);
+      }
     },
-    [advanceFrom],
+    [speak, writeVote],
   );
   const send = useMemo(() => makeTutorialSend({ onErrand, onPoint }), [onErrand, onPoint]);
 
   // 가짜 view 는 장면 시작 때 한 번만 만든다(매 렌더 새로 만들면 마감 시각이 흘러 흔적 구간이 흔들린다)
-  const mapView = useMemo(() => (cur.n >= 2 && cur.n <= 6 ? tutorialView(cur.n as 2 | 3 | 4 | 5 | 6, { now: cur.at }) : null), [cur.n, cur.at]);
+  // 장면 6 은 정답 뒤(picked)에 득표 한 줄이 든 view 로 바뀐다 — 실제 득표 배지·이름표 테두리가 서는 경로다. 오답마다도 새 view 를 줘서 GameMap 의 임시 "내 선택" 표시를 비운다(표가 없으니 테두리도 없다)
+  const picked = cur.n === 6 && vote.picked;
+  const wrongs = cur.n === 6 ? vote.wrong : 0;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- wrongs 는 값이 아니라 "새 객체를 만들 때" 신호다
+  const mapView = useMemo(() => (cur.n >= 2 && cur.n <= 6 ? tutorialView(cur.n as 2 | 3 | 4 | 5 | 6, { now: cur.at, ...(picked ? { picked: true } : {}) }) : null), [cur.n, cur.at, picked, wrongs]);
   const stageView = useMemo(() => (cur.n === 1 || cur.n === 7 ? tutorialStageView(cur.n, cur.at) : null), [cur.n, cur.at]);
   const stageLook = useMemo(() => (cur.n === 1 || cur.n === 7 ? tutorialStageLook(cur.n, { night: true, victimGone: false }) : undefined), [cur.n]);
 
@@ -259,7 +347,7 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
       <div className="mf-room__body">
         <div key={kind} className="mf-phase-enter">
           {kind === "map" && mapView !== null ? (
-            <GameMap view={mapView} store={store} chat={chat} send={send} canSend offset={0} roleCard={roleCard} onLeave={skip} />
+            <GameMap view={mapView} store={store} chat={chat} send={send} canSend offset={0} roleCard={roleCard} toast={cur.n === 6 ? toast : null} onLeave={skip} />
           ) : stageView !== null ? (
             <div className="mf-tut__stage">
               <WorldStage view={stageView} store={store} scene={stageLook} canWalk={false} send={send} canSend offset={0} onNotice={noop} onLeave={skip} onReady={onStageReady} />
@@ -267,11 +355,11 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
           ) : null}
         </div>
       </div>
-      {renderSceneLayer(cur.n)}
-      <FocusRing groups={groupsOf(focusTargets)} />
+      {renderSceneLayer(cur.n, { revealed: vote.revealed })}
+      <FocusRing groups={focusGroups} />
       {nextShown ? <TutorialNext onNext={() => advanceFrom(cur.n)} /> : null}
       {/* Tab 순서: [건너뛰기] → 지금 허용된 단추 → [다음] → 소리 단추(띠 독). 띠는 읽기만이라 본문 뒤에 둬도 z 로 위에 뜬다 */}
-      <TutorialHostBand line={line?.text ?? null} speakMs={line?.speakMs ?? 0} nonce={line?.nonce ?? 0} sound={sound.supported ? sound : null} />
+      <TutorialHostBand line={line?.text ?? null} speakMs={line?.speakMs ?? 0} nonce={line?.nonce ?? 0} shake={bandShake} sound={sound.supported ? sound : null} />
     </div>
   );
 }
