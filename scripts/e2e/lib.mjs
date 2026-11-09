@@ -253,6 +253,8 @@ export const LOG_H_KB = 72;
 export const TALL_ROOM_MIN_H = 780;
 /** 로비 패널 = LOG_H + 154 */
 export const LOBBY_PANEL_EXTRA = 154;
+/** 방장 대기실 패널 증분 = 스위치 줄 64 + 간격 12(chatUi.LOBBY_HOST_TUTORIAL_EXTRA 사본, 0080-4). 방장 패널은 250/306 → 326/382 */
+export const LOBBY_HOST_TUTORIAL_EXTRA = 76;
 /** 채팅 패널(게임 맵의 지목·변론 단계의 입력줄 패널) = LOG_H + 92 */
 export const CHAT_PANEL_EXTRA = 92;
 /** 키보드 열림 패널 = 14 + 72 + 8 + 48 + 8 */
@@ -266,8 +268,8 @@ export function logHeightFor(roomH) {
 }
 
 /** 로비 채팅 패널 높이(chatUi.lobbyPanelHeight 사본). 안전 영역 제외. */
-export function lobbyPanelHeight(logH) {
-  return logH + LOBBY_PANEL_EXTRA;
+export function lobbyPanelHeight(logH, host = false) {
+  return logH + LOBBY_PANEL_EXTRA + (host ? LOBBY_HOST_TUTORIAL_EXTRA : 0);
 }
 
 // ---- 게임 맵 판정 (08-23, 08-UI-SPEC "아래 패널 종류와 높이"·"검사 가능하게 둘 것"). 순수 함수 — 브라우저에서 읽는 값은 08-24 의 readGame 이 만든다. ----
@@ -2872,9 +2874,10 @@ export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time
  * 서버 view 허용 키(13페이즈 그대로, 서버 diff 0). test/unit/view.test.ts 의 TOP_KEYS·ME_KEYS·DAY_KEYS 에 더해, 그 시험의 풍부한 상태가 만들지 않는 9페이즈 상태 의존 키만 더했다:
  * me.will·me.note(유언·쪽지, 결정 0061-9·10)·day.chalk(암살 분필, 결정 0061-14). 실제 판의 state 프레임에는 이 키들이 나온다(emcee-leak 이 처음 걸렸다) — e2eContract 가 "view.test.ts 집합 + 이 셋" 임과
  * 그 셋이 shared/protocol.ts 의 MyInfo·DayView 에 선언된 키임을 고정한다. 14페이즈가 새 키를 더하면 여전히 VK1 이 잡는다.
+ * 17-07: view.tutorial(모두에게 같은 진행 수)·me.tutorialDone(끝났음을 보낸 본인만) 은 tutorial 단계에서만 받는 키다(받을 권리, 결정 0080-11) — view.test.ts 의 TOP_KEYS·ME_KEYS 에도 같이 있다.
  */
-export const VIEW_TOP_KEYS = new Set(["code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map"]);
-export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "errand", "record", "nightTally", "nightSure", "will", "note"]);
+export const VIEW_TOP_KEYS = new Set(["code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map", "tutorial"]);
+export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "errand", "record", "nightTally", "nightSure", "will", "note", "tutorialDone"]);
 export const VIEW_DAY_KEYS = new Set(["n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown", "chalk", "evidence"]);
 /** 밤 역할별 사회자 줄(src/game/hostLine.ts HOST_LINES 의 night.mafia·police·doctor 사본) — 다른 역할 화면에 있으면 누설이다. e2eContract 가 같음을 고정한다. */
 export const HOST_ACT_LINES = {

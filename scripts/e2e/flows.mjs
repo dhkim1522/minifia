@@ -111,6 +111,7 @@ import {
   pcCenterChecks,
   wakeLockChecks,
   GAME_PANEL_EXTRA,
+  LOBBY_HOST_TUTORIAL_EXTRA,
   announceChecks,
   faceListPanelH,
   faceNameFits,
@@ -458,11 +459,14 @@ async function worldFlow(ctx) {
     const pad = 28;
     const [gScreens, hScreens] = await Promise.all([screensOfWorld(gp, centers), screensOfWorld(hp, centers)]);
     const inStage = (sc, st) => !!sc && !!st && Number.isFinite(sc.sx) && sc.sx > pad && sc.sx < ctx.size.w - pad && sc.sy > st.top + pad && sc.sy < st.bottom - pad;
-    const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw.stage) && inStage(hScreens[i], hw.stage));
+    // 17-07: 가장 낮은 폰(360x560)의 방장 패널은 스위치 줄 +76 으로 326 이 되어 방장 스테이지가 172 로 준다(UI Considerations #24 알려진 한계, 고치지 않는다).
+    // 이 크기에서는 목적지를 손님 화면에서만 고르고, 방장이 같은 점으로 걸어가는 마지막 겹침 단계는 건너뛴다(손님 쪽 걷기·동기 판정은 그대로).
+    const hostShort = ctx.size.h < SHORT_PHONE_H;
+    const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw.stage) && (hostShort || inStage(hScreens[i], hw.stage)));
     // 3 단위 이상 먼 칸이 없는 낮은 스테이지(360x560 의 248)는 보이는 칸 중 가장 먼 칸과 더 짧은 걷는 길이 하한을 쓴다(worldTapRanking, 07-20)
     // 떠 있는 버튼(꾸미기 hanger, 10페이즈)·이름표가 덮은 칸은 후보에서 먼저 뺀 뒤 순위를 매긴다 — 가린 칸 때문에 먼 칸이 사라지면 기존 낮은 스테이지 규칙(1.5 단위·0.8초)이 적용된다(문턱은 그대로)
     const [allG, allH] = await Promise.all([hitsInputSurface(gp, onScreen), hitsInputSurface(hp, onScreen.map((c) => ({ sx: c.hx, sy: c.hy })))]);
-    const open = onScreen.filter((_, i) => allG[i] && allH[i]);
+    const open = onScreen.filter((_, i) => allG[i] && (hostShort || allH[i]));
     const { ranked, low, minWalkMs } = worldTapRanking(open, from);
     const target = ranked[0];
     if (!target) throw new SetupError(`탭할 목적지를 찾지 못함(두 화면에 보이는 칸 ${onScreen.length}개, ${low ? "1.5" : "3"} 단위 이상 먼 칸 ${ranked.length}개)`);
@@ -526,8 +530,9 @@ async function worldFlow(ctx) {
       if (ctx.shots) await shot(gp, shotPath(ctx, "world-guest-arrived"));
 
       // 방장도 같은 점으로 걸어가 두 캐릭터가 한 점에 모인다: 겹친 이름표는 앞뒤가 하나로 정해진다(UI-SPEC E2)
-      const hostTap = await tapWorld(hp, ht, hSeat, target.x, target.z);
-      if (hostTap.move) {
+      const hostTap = hostShort ? null : await tapWorld(hp, ht, hSeat, target.x, target.z);
+      if (hostShort) infoRow(ctx, "world/stack", "NT3", "겹친 이름표(방장 화면) — 알려진 한계로 건너뜀", `방장 스테이지가 낮은 폰(${ctx.size.w}x${ctx.size.h})은 방장 패널 +76 때문에 목적지를 누를 칸이 없다(UI Considerations #24)`);
+      else if (hostTap.move) {
         await sleep(segmentDurationMs(hostTap.move) + 1200);
         const stacked = await readWorld(hp);
         recOne(rec, "world/stack", tagStackChecks(stacked.tags));
@@ -573,15 +578,16 @@ const CHAT_LOBBY_EXTRA = 154;
 const CHAT_CONTROL = 48;
 const CHAT_PANEL_EPS = 1;
 
-/** 한 페이지의 로비 채팅 패널 치수 판정. m 은 readChatPanel 의 값. 검사 행 목록을 돌려준다. */
-function chatPanelRows(m) {
+/** 한 페이지의 로비 채팅 패널 치수 판정. m 은 readChatPanel 의 값. host 는 방장 페이지(스위치 줄 +76, 17-07 0080-4). 검사 행 목록을 돌려준다. */
+function chatPanelRows(m, host = false) {
   if (!m) return [{ id: "CP0", label: "채팅 패널을 읽음", ok: false, detail: "패널·기록 칸·입력칸·보내기 중 없는 것이 있음" }];
   const logWant = m.roomH >= CHAT_TALL_ROOM_MIN_H ? CHAT_LOG_TALL : CHAT_LOG_SHORT;
-  const panelWant = logWant + CHAT_LOBBY_EXTRA;
+  const hostExtra = host ? LOBBY_HOST_TUTORIAL_EXTRA : 0;
+  const panelWant = logWant + CHAT_LOBBY_EXTRA + hostExtra;
   const near = (a, b) => Math.abs(a - b) <= CHAT_PANEL_EPS;
   const r1 = (n) => Math.round(n * 10) / 10;
   return [
-    { id: "CP1", label: `로비 패널 높이 ${r1(panelWant)} (방 높이 ${r1(m.roomH)} → 기록 ${logWant} + ${CHAT_LOBBY_EXTRA})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
+    { id: "CP1", label: `로비 패널 높이 ${r1(panelWant)} (방 높이 ${r1(m.roomH)} → 기록 ${logWant} + ${CHAT_LOBBY_EXTRA}${host ? ` + ${hostExtra}(방장 스위치 줄)` : ""})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
     { id: "CP2", label: `기록 칸 높이 ${logWant}`, ok: near(m.log.height, logWant), detail: `기록 칸 ${r1(m.log.height)}` },
     { id: "CP3", label: `입력칸 높이 ${CHAT_CONTROL} · 보내기 ${CHAT_CONTROL}x${CHAT_CONTROL}`, ok: near(m.input.height, CHAT_CONTROL) && near(m.send.height, CHAT_CONTROL) && near(m.send.width, CHAT_CONTROL), detail: `입력칸 ${r1(m.input.height)} · 보내기 ${r1(m.send.width)}x${r1(m.send.height)}` },
     { id: "CP4", label: "입력칸 글자 16px", ok: m.inputFont === 16, detail: `${m.inputFont}px` },
@@ -623,9 +629,9 @@ async function chatLobbyFlow(ctx) {
       const cleared = await gp.locator("[data-chat-input]").inputValue();
       rec(sc, "CL5", "보낸 뒤 손님 입력칸이 비워짐", cleared === "", `입력칸 ${cleared.length}자`);
     }
-    // 패널 치수: 방장·손님 두 화면 모두 UI-SPEC 폰 크기 표대로(방 높이 ≥ 780 이면 306, 아니면 250)
+    // 패널 치수: 방장·손님 두 화면 모두 UI-SPEC 폰 크기 표대로(손님: 방 높이 ≥ 780 이면 306, 아니면 250. 방장: 스위치 줄 +76 → 382·326)
     for (const [who, page] of [["방장", hp], ["손님", gp]]) {
-      for (const r of chatPanelRows(await readChatPanel(page))) rec(`chat-lobby/panel-${who}`, r.id, r.label, r.ok, r.detail);
+      for (const r of chatPanelRows(await readChatPanel(page), who === "방장")) rec(`chat-lobby/panel-${who}`, r.id, r.label, r.ok, r.detail);
     }
     // 입력 중 알약(07-18, CHAT-04): 손님이 글자를 넣기만 하면 방장 화면의 손님 이름표에 data-typing true, 칸을 비우면 사라진다.
     // 서버는 한 사람의 켜짐을 1.5초에 한 번만 중계하니, 위에서 보낸 글의 켜짐과 겹치지 않게 1.7초 쉰다.
