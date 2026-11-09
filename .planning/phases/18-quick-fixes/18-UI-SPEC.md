@@ -1,7 +1,8 @@
 ---
 phase: "18"
 slug: "quick-fixes"
-status: draft
+status: approved
+reviewed_at: "2026-11-09"
 shadcn_initialized: false
 preset: none
 created: "2026-11-09"
@@ -283,6 +284,9 @@ Applicable state considerations resolved: 15 covered, 3 backstop, 1 unresolved
 | 18 | 낮 장면 머리 제목 | 가독 (밝아진 배경 위 글) | 🧪 backstop | { statement: "낮 조명 장면에서 머리 제목·이름표 글자의 렌더 배경 대비가 4.5:1 이상이다(머리 위 scrim 그라데이션 유지)", verification: backstop } |
 | 19 | 밤 띠 문장 | long-text | ✅ covered | "얼굴"이 "이름표"보다 한 글자 짧아 띠 두 줄 안에서 줄 수가 늘지 않는다 |
 
+**점검 엔진 결과 (2026-11-09, ui-consideration-probe)**: 요소 11개에서 54개 항목이 제기됐다. 겹치는 항목은 위 19행이 다룬다. 튜토리얼·밤 띠·증거 아이콘·역할 확인 줄의 loading/error/empty 는 **해당 없음**으로 처리했다. 이 요소들은 서버 응답을 기다리지 않는 정적 화면이거나 로컬 화면이기 때문이다. "시작 때 옷 교체"와 "역할 확인 줄 삭제"는 엔진이 분류하지 못했다. 앞의 것은 #5, 뒤의 것은 #17에서 다룬다. #12는 사용자 확인을 거쳐 알려진 한계로 유지한다.
+
+
 ## 쓰지 않을 것
 
 - 배경 **흐림**(`filter: blur`·`backdrop-filter`): 0081 도 허용하지 않는다. 손가락 포인터·스포트라이트 원뿔(17 의 금지 유지).
@@ -312,12 +316,12 @@ Applicable state considerations resolved: 15 covered, 3 backstop, 1 unresolved
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: FLAG (비차단 — [다음] 한 낱말, 0051·17 승인 선택자라 유지)
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: FLAG (비차단 — 240×56·28·96·100·12 는 4의 배수 고정 치수, 사유 기록)
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-11-09 (gsd-ui-checker, FLAG 2건 비차단)
