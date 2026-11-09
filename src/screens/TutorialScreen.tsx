@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSound } from "../audio/useSound";
 import { FocusRing } from "../components/v2/FocusRing";
@@ -43,6 +43,49 @@ const SUSPECT_BODY_PX = 90;
 /** 장면 번호로 갈리는 겹침 층(17-05·17-08 이 채운다). 지금은 없다 */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 장면 확장 자리: 뒤 계획이 scene 으로 갈라 그린다
 function renderSceneLayer(scene: TutorialSceneNo): ReactNode {
+  return null;
+}
+
+// ---- 허용 목록(T-10, 0080-6, Pitfall 7) ----
+// 튜토리얼은 정해진 한 길로만 눌린다. 장면마다 허용 목록 밖(머리·맵 입력면·심부름 타일 층·아래 패널·오른쪽 단추 열·시트 층, 장면 6 밖의 이름표 층)에 inert 를 붙인다.
+// inert 는 자손이 풀 수 없으므로 허용 대상([처리] 층·이름표 층(장면 6)·[다음]·[건너뛰기]·소리 단추)은 차단 컨테이너 밖에 있어야 한다 —
+// WorldStage 의 [처리] 층(data-errand-act-layer)은 입력면·타일 층·이름표 층의 형제이고, [다음]·[건너뛰기]·소리 단추는 GameMap 밖에 있다.
+// 로컬 어댑터가 이동 메시지를 버리는 것이 세 번째 방어선이다.
+const ALWAYS_BLOCKED = [".mf-game__header", ".mf-world__input", "[data-errand-layer]", "[data-world-panel]", ".mf-game__panel", "[data-side-column]", ".mv-float", ".mf-game__record", "[data-sheet-layer]", ".mf-game__test"] as const;
+/** 어떤 차단 컨테이너도 이 안을 가려선 안 된다(허용 대상 보호막) */
+const ALLOWED = "[data-tutorial-skip], [data-tutorial-next], [data-sound-button], [data-tutorial-host]";
+
+/** 장면 n 에서 막는 곳의 선택자 */
+function blockedSelectors(n: PlayableScene): string[] {
+  const out: string[] = [...ALWAYS_BLOCKED];
+  if (n !== 6) out.push(".mf-world__tags");
+  if (n !== 3) out.push("[data-errand-act-layer]");
+  return out;
+}
+
+/** root 안에서 막을 요소에 inert 를 붙이고, 더는 막지 않을 요소(전에 우리가 붙인 것)에서는 뗀다. 같은 입력이면 아무것도 바꾸지 않는다 */
+function applyInert(root: HTMLElement, n: PlayableScene, marked: Set<Element>): void {
+  const want = new Set<Element>();
+  for (const el of root.querySelectorAll(blockedSelectors(n).join(","))) {
+    if (el.querySelector(ALLOWED) !== null) continue; // 허용 대상을 품은 컨테이너는 막지 않는다
+    want.add(el);
+  }
+  for (const el of [...marked]) {
+    if (want.has(el)) continue;
+    el.removeAttribute("inert");
+    marked.delete(el);
+  }
+  for (const el of want) {
+    if (!el.hasAttribute("inert")) el.setAttribute("inert", "");
+    marked.add(el);
+  }
+}
+
+/** 장면에서 키보드 포커스가 가야 할 첫 허용 단추: [다음] 이 있으면 그것, 아니면 장면 3 은 [처리], 장면 6 은 첫 이름표 */
+function firstAllowed(root: HTMLElement, n: PlayableScene, nextShown: boolean): HTMLElement | null {
+  if (nextShown) return root.querySelector<HTMLElement>("[data-tutorial-next]");
+  if (n === 3) return root.querySelector<HTMLElement>("[data-errand-act]");
+  if (n === 6) return root.querySelector<HTMLElement>('button[data-pick]:not([aria-disabled="true"])');
   return null;
 }
 
@@ -175,6 +218,36 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
 
   // 소리: 혼자·함께 모두 같다(0080-14). 소리 단추는 띠 독에 있고 전역 소리 설정을 따른다. 방 view 가 없어 침대·view 차이 소리는 없다
   const sound = useSound({ active: true, view: null });
+
+  // 허용 목록 차단과 포커스 이동: 렌더마다, 그리고 안쪽 DOM 이 바뀔 때(WorldStage 의 [처리] 알약·이름표 버튼이 나중에 생길 수 있다)마다 맞춘다.
+  // 포커스는 "장면 × [다음] 유무" 가 바뀐 뒤 처음 허용 단추가 생겼을 때 한 번만 옮긴다 — 이미 옮겼으면 사용자의 포커스를 다시 뺏지 않는다
+  const inertMarked = useRef(new Set<Element>());
+  const focusedKey = useRef("");
+  const gate = useRef({ n: cur.n, nextShown });
+  gate.current = { n: cur.n, nextShown };
+  const syncGate = useRef((): void => {});
+  syncGate.current = (): void => {
+    const root = rootRef.current;
+    if (root === null) return;
+    const { n, nextShown: showNext } = gate.current;
+    applyInert(root, n as PlayableScene, inertMarked.current);
+    const key = `${n}:${showNext}`;
+    if (focusedKey.current === key) return;
+    const target = firstAllowed(root, n as PlayableScene, showNext);
+    if (target === null) return;
+    focusedKey.current = key;
+    target.focus({ preventScroll: true });
+  };
+  useLayoutEffect(() => {
+    syncGate.current();
+  });
+  useEffect(() => {
+    const root = rootRef.current;
+    if (root === null || typeof MutationObserver === "undefined") return;
+    const observer = new MutationObserver(() => syncGate.current());
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
 
   const noop = useCallback((): void => {}, []);
   const skip = useCallback((): void => onEndRef.current("skipped"), []);
