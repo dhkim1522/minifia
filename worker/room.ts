@@ -1650,8 +1650,17 @@ export class Room extends DurableObject<Env> {
     // 방에 없거나 최신 연결이 아닌(교체된 낡은) 소켓의 닫힘은 아무것도 바꾸지 않는다.
     const current = this.room.players.find((p) => p.id === att.playerId);
     if (!current || current.connId !== att.connId) return;
-    this.room = detachConnection(this.room, att.playerId, att.connId, Date.now());
-    await this.persistAndBroadcast();
+    const now = Date.now();
+    const prev = this.room;
+    this.room = detachConnection(this.room, att.playerId, att.connId, now);
+    // 튜토리얼 중 끊김은 끝낸 것으로 센다(결정 0080-10): 남은 사람의 연결이 끊긴 순간에도 서버가 전원 완료를 다시 보고,
+    // applyTutorialDone 과 같은 경로(마감을 지금으로 당긴 tick + afterTransition)로 assigning 에 넘긴다.
+    if (this.room.phase === "tutorial" && allTutorialDone(this.room)) {
+      this.room = tick({ ...this.room, phaseEndsAt: now }, now, cryptoRandInt);
+      await this.afterTransition(prev, now);
+    } else {
+      await this.persistAndBroadcast();
+    }
     // 방장이 끊겼거나 대기실이면 알람이 필요하다(이양·정리 마감, D-17·D-18) — 항상 맞춘다.
     await this.reschedule();
     // 연결된 사람이 한 명도 남지 않으면 DO 가 곧 내려갈 수 있으니 대기 중이던 위치를 지금 저장한다(봇은 사람이 아니다).

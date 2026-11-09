@@ -92,14 +92,14 @@ export function audience(state: RoomState, ev: AudienceEvent): ReadonlySet<strin
 
 /**
  * 접속(hello) 스냅샷에 실릴 좌석의 주인들 — 보는 사람 viewerId 별이다(GHOST-01).
- * 로비·assigning·roleReveal 은 방 전원(역할 확인 중 재접속해도 낮 시작에 위치가 있게, RESEARCH A6).
+ * 로비·tutorial·assigning·roleReveal 은 방 전원(역할 확인 중 재접속해도 낮 시작에 위치가 있게, RESEARCH A6). tutorial(17페이즈 Pitfall 6)은 광장 시작 snap 이 그 단계에서도 전원에게 가게 한다 — 위치는 대기실 위치라 역할과 무관하다.
  * 지도 단계는 viewer 가 산 사람이면 산 사람만(errand 는 본인 한 칸), 유령이면 전원. 밤(15페이즈 D-05)은 산 사람이면 역할과 무관하게 본인 한 칸뿐이다. ended·옛 투표 단계·방에 없는 viewer 는 빈 집합이다.
  */
 export function worldVisibleTo(state: RoomState, viewerId: string): ReadonlySet<string> {
   const viewer = state.players.find((p) => p.id === viewerId);
   if (viewer === undefined) return new Set();
   const pick = (pred: (p: Player) => boolean): Set<string> => new Set(state.players.filter(pred).map((p) => p.id));
-  if (state.phase === "lobby" || state.phase === "assigning" || state.phase === "roleReveal") return pick(() => true);
+  if (state.phase === "lobby" || state.phase === "tutorial" || state.phase === "assigning" || state.phase === "roleReveal") return pick(() => true);
   if (!MAP_PHASES.has(state.phase)) return new Set();
   if (!isAlive(viewer)) return pick(() => true);
   // errand(D-02): 산 viewer 는 본인 한 칸뿐 — 근처 사람은 worker 의 근처 snap(nearSnapFrame)이 따로 정한다.
