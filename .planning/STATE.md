@@ -5,17 +5,17 @@ milestone_name: 사회자와 증거
 current_phase: 17
 current_phase_name: "튜토리얼 \"첫 사건\""
 current_plan: 12
-status: executing
-stopped_at: Completed 17-09-PLAN.md
-last_updated: "2026-11-09T05:21:17.918Z"
+status: verifying
+stopped_at: Completed 17-10-PLAN.md
+last_updated: "2026-11-09T06:34:50.694Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 17 execution started
-state_head: 6177ab5b3e892a9649459c2a94aa2bc899f25729
+state_head: 3a333866b8f95bb7c7be8b7d9f2a842cc2eb533b
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 47
-  completed_plans: 46
+  completed_plans: 47
   percent: 80
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 Phase: 17 (튜토리얼 "첫 사건") — EXECUTING
 Current Plan: 12
 Total Plans in Phase: 12
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-09 — Phase 17 execution started
 
 ## Performance Metrics
@@ -244,6 +244,7 @@ Last activity: 2026-11-09 — Phase 17 execution started
 | Phase 17 P07 | 15 min | 3 tasks | 17 files |
 | Phase 17 P08 | 25 min | 2 tasks | 7 files |
 | Phase 17 P09 | 35 min | 3 tasks | 6 files |
+| Phase 17 P10 | 71min | 4 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -543,6 +544,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 17]: 17-09: 함께 진행 재접속 E2E 는 손님 새로 고침을 방장 건너뛰기 앞에 둔다(끊긴 사람은 끝난 것으로 세므로 방장이 끝난 뒤 손님이 끊기면 전원 완료, 0080-10) + 끝낸 방장 새로 고침은 기다림
 - [Phase 17]: 17-09: 장면 6 이름표 가장자리 한계는 E8 #29 참고 줄(G2k·G2s)로 남기고 문턱·앱 코드는 그대로(deferred-items.md)
 - [Phase 17]: 17-09: OVERALL_LIMIT_MS 1620→1740초(tutorial 두 흐름 218초 ÷ 병렬 3 ≈ 73초, 60초 단위 올림)
+- [Phase 17]: 17-10: 방장 패널 +76 이 드러낸 낮은 폰 한계는 알려진 한계로 두고 맵 불러오기 실패 카드의 [다시 시도] 가림만 --mf-panel-h 여백으로 고쳤다. minifia-v3 배포 2026-11-09T06:26:08Z+4858e54f, 결정 0080 완성
 
 ### Pending Todos
 
@@ -609,8 +611,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09T05:21:17.519Z
-Stopped at: Completed 17-09-PLAN.md
+Last session: 2026-11-09T06:34:50.354Z
+Stopped at: Completed 17-10-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
