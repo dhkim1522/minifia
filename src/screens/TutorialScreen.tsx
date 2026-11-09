@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ReactNode } from "react";
 import { useSound } from "../audio/useSound";
 import { FocusRing } from "../components/v2/FocusRing";
+import { MeasuredOpeningFx } from "../components/v2/OpeningFx";
 import type { FocusGroup } from "../components/v2/FocusRing";
 import { TutorialHostBand } from "../components/v2/TutorialHostBand";
 import { TutorialNext } from "../components/v2/TutorialNext";
@@ -28,7 +29,7 @@ import "../styles/tutorial.css";
 // 지도 장면(2~6)은 실제 GameMap 에 가짜 view·로컬 WorldStore·ChatStore·로컬 send 어댑터를 주고, 무대 장면(1·7)은 실제 WorldStage 를 직접 쓴다.
 // 서버·소켓에는 아무것도 보내지 않는다: GameMap·WorldStage 에는 makeTutorialSend 결과만 주고, 실제 연결 훅·fetch·WebSocket 을 가져오지 않는다(T-17-10, 정적 가드).
 // 화면 위에 튜토리얼에만 더하는 층(포커스 상자·진행 점·[건너뛰기]·[다음])을 얹는다. 장면별 연출은 renderSceneLayer·onPoint 자리에 얹는다:
-// 17-05 가 장면 6 의 지목·정체 공개·오답 도움(이 파일)과 장면 4·5 의 눈 표시·기록 카드·연결 선·수식을, 17-08 이 오프닝·직업 카드를 채운다.
+// 17-05 가 장면 6 의 지목·정체 공개·오답 도움(이 파일)과 장면 4·5 의 눈 표시·기록 카드·연결 선·수식을, 17-08 이 장면 1 오프닝(OpeningFx, 2.6·3.3초 무대 모양 전환)과 장면 7 직업 카드를 채운다.
 
 /** 이 화면이 재생하는 장면(1~7). 8(마무리 카드)은 이 화면 밖이다 */
 type PlayableScene = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -54,6 +55,9 @@ const REVEAL_AFTER_MS = (() => {
 
 /** 도윤 포커스 상자가 이름표 아래 몸까지 덮도록 더 늘리는 높이(0080-9, 시안 상자 96×132) */
 const SUSPECT_BODY_PX = 90;
+/** 장면 1 무대 모양이 바뀌는 시각(ms, 장면 시계 기준): 2.6초에 서연이 사라지고 3.3초에 밤 조명이 dur-slow 로 켜진다(UI-SPEC 첫 사건 장면 계약 1행) */
+const OPENING_GONE_MS = 2600;
+const OPENING_NIGHT_MS = 3300;
 
 /** 장면 층이 읽는 화면 상태 */
 interface SceneLayerCtx {
@@ -61,14 +65,17 @@ interface SceneLayerCtx {
   revealed: boolean;
   /** 장면 4 목격 표시(눈·기록 카드)가 떴다 */
   witnessShown: boolean;
+  /** 장면 1 오프닝 연출 층을 그린다(무대가 준비돼 장면 시계가 선 뒤) */
+  openingOn: boolean;
 }
 
 /** 장면 4 에서 실제 RecordCard 에 먹이는 한 줄: 도윤이 가로등 곁(가는 길)에서 목격됐다 */
 const WITNESS_ROWS: readonly RecordRow[] = [{ n: 1, seat: TUTORIAL_CAST.witness.seat, place: TUTORIAL_CAST.witness.place, name: "도윤" }];
 const noopClose = (): void => {};
 
-/** 장면 번호로 갈리는 겹침 층: 4 = 눈 표시 + 실제 목격 기록 카드, 5 = 연결 선 + 수식, 6 = 정체 공개(정답 뒤 1.1초). 17-08 이 1·7 을 더한다 */
+/** 장면 번호로 갈리는 겹침 층: 1 = 오프닝 연출, 4 = 눈 표시 + 실제 목격 기록 카드, 5 = 연결 선 + 수식, 6 = 정체 공개(정답 뒤 1.1초). 17-08 이 7(직업 카드)을 더한다 */
 function renderSceneLayer(scene: TutorialSceneNo, ctx: SceneLayerCtx): ReactNode {
+  if (scene === 1 && ctx.openingOn) return <MeasuredOpeningFx />;
   if (scene === 4 && ctx.witnessShown) {
     // 기록 카드는 실제 게임의 기록 카드 자리(.mf-game__record, 띠 독 아래 8)에 둔다. 그 자리 클래스는 허용 목록 밖이라 inert 가 붙는다 — 닫기 단추는 눌리지 않는다
     return (
@@ -250,6 +257,23 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   const [ready, setReady] = useState<{ n: number; at: number } | null>(null);
   const onStageReady = useCallback((): void => setReady({ n: curRef.current.n, at: Date.now() }), []);
   const startAt = kind === "map" ? cur.at : ready !== null && ready.n === cur.n ? ready.at : null;
+  // 장면 1: 무대 모양 단계(1 = 서연이 사라짐, 2 = 밤 조명). 장면 시계 시작(at)을 같이 들고 있어 다시 들어오면 저절로 0 으로 돌아간다
+  const [opening, setOpening] = useState<{ at: number; step: 1 | 2 } | null>(null);
+  const openingStep = cur.n === 1 && opening !== null && startAt !== null && opening.at === startAt ? opening.step : 0;
+  useEffect(() => {
+    if (cur.n !== 1 || startAt === null) return;
+    const timers = ([[OPENING_GONE_MS, 1], [OPENING_NIGHT_MS, 2]] as const).map(([ms, step]) => {
+      const wait = ms - (Date.now() - startAt);
+      if (wait <= 0) {
+        setOpening({ at: startAt, step });
+        return undefined;
+      }
+      return setTimeout(() => setOpening({ at: startAt, step }), wait);
+    });
+    return () => {
+      for (const t of timers) if (t !== undefined) clearTimeout(t);
+    };
+  }, [cur.n, startAt]);
 
   // 장면별 상태: [다음] 이 나타났는가·켜진 포커스 창. 장면 번호를 같이 들고 있어 장면이 바뀌면 저절로 꺼진다
   const [nextFor, setNextFor] = useState<number | null>(null);
@@ -343,7 +367,10 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   // eslint-disable-next-line react-hooks/exhaustive-deps -- wrongs 는 값이 아니라 "새 객체를 만들 때" 신호다
   const mapView = useMemo(() => (cur.n >= 2 && cur.n <= 6 ? tutorialView(cur.n as 2 | 3 | 4 | 5 | 6, { now: cur.at, ...(picked ? { picked: true } : {}) }) : null), [cur.n, cur.at, picked, wrongs]);
   const stageView = useMemo(() => (cur.n === 1 || cur.n === 7 ? tutorialStageView(cur.n, cur.at) : null), [cur.n, cur.at]);
-  const stageLook = useMemo(() => (cur.n === 1 || cur.n === 7 ? tutorialStageLook(cur.n, { night: true, victimGone: false }) : undefined), [cur.n]);
+  const stageLook = useMemo(() => {
+    if (cur.n === 1) return tutorialStageLook(1, { night: openingStep >= 2, victimGone: openingStep >= 1 });
+    return cur.n === 7 ? tutorialStageLook(7, { night: true, victimGone: false }) : undefined;
+  }, [cur.n, openingStep]);
 
   // 소리: 혼자·함께 모두 같다(0080-14). 소리 단추는 띠 독에 있고 전역 소리 설정을 따른다. 방 view 가 없어 침대·view 차이 소리는 없다
   const sound = useSound({ active: true, view: null });
@@ -383,7 +410,7 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   const roleCard = useMemo(() => ({ unread: false, onOpen: noop }), [noop]);
 
   return (
-    <div ref={rootRef} className="mf-root mf-room mf-tut" data-tutorial-screen="" data-tutorial-scene={cur.n} data-tutorial-mode={mode}>
+    <div ref={rootRef} className="mf-root mf-room mf-tut" data-tutorial-screen="" data-tutorial-scene={cur.n} data-tutorial-mode={mode} {...(openingStep >= 1 ? { "data-tutorial-gone": TUTORIAL_CAST.victim } : {})}>
       <TutorialProgress scene={cur.n} onSkip={skip} />
       <div className="mf-room__body">
         <div key={kind} className="mf-phase-enter">
@@ -396,7 +423,7 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
           ) : null}
         </div>
       </div>
-      {renderSceneLayer(cur.n, { revealed: vote.revealed, witnessShown: cur.n === 4 && eyeAt === cur.at })}
+      {renderSceneLayer(cur.n, { revealed: vote.revealed, witnessShown: cur.n === 4 && eyeAt === cur.at, openingOn: cur.n === 1 && startAt !== null })}
       <FocusRing groups={focusGroups} />
       {nextShown ? <TutorialNext onNext={() => advanceFrom(cur.n)} /> : null}
       {/* Tab 순서: [건너뛰기] → 지금 허용된 단추 → [다음] → 소리 단추(띠 독). 띠는 읽기만이라 본문 뒤에 둬도 z 로 위에 뜬다 */}
