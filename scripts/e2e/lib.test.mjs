@@ -3894,8 +3894,8 @@ test("ERRAND_MARKERS: 열여덟 개(16-07: data-rest 추가, 16-08: 독·칩 대
   assert.equal(ERRAND_LINES.discussionEvidence, "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.");
 });
 
-test("OVERALL_LIMIT_MS: 새 흐름 errand·witness·trace 가 더하는 시간(720초)만큼 900초에서 1620초로 올랐다 (15-09)", () => {
-  assert.equal(OVERALL_LIMIT_MS, 1_620_000);
+test("OVERALL_LIMIT_MS: 15-09 errand·witness·trace(720초)로 900→1620초, 17-09 튜토리얼 두 흐름(solo 폰 6종 약 34초×6 + together 12초 = 218초 ÷ 병렬 3 = 73초, 60초 단위 올림 120초)으로 1620→1740초", () => {
+  assert.equal(OVERALL_LIMIT_MS, 1_740_000);
 });
 
 const RR = (l, t, w, h) => ({ left: l, top: t, width: w, height: h });
