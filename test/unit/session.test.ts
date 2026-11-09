@@ -120,3 +120,31 @@ describe("session 마지막 닉네임", () => {
     expect(loadLastNickname(throwingStorage)).toBe("민수");
   });
 });
+
+describe("session 튜토리얼 본 표시 (결정 0080-5)", () => {
+  it("처음에는 거짓이고 저장 뒤 참이다. 키는 minifia.tutorial.seen, 값은 \"1\"", async () => {
+    const { loadTutorialSeen, saveTutorialSeen, TUTORIAL_SEEN_KEY } = await fresh();
+    const storage = mapStorage();
+    expect(TUTORIAL_SEEN_KEY).toBe("minifia.tutorial.seen");
+    expect(loadTutorialSeen(storage)).toBe(false);
+    saveTutorialSeen(storage);
+    expect(storage.raw.get("minifia.tutorial.seen")).toBe("1");
+    expect(loadTutorialSeen(storage)).toBe(true);
+  });
+
+  it("값이 \"1\" 일 때만 참이다(위조된 다른 값은 본 적 없음)", async () => {
+    const { loadTutorialSeen, TUTORIAL_SEEN_KEY } = await fresh();
+    for (const raw of ["0", "true", "", "2"]) {
+      const storage = mapStorage();
+      storage.setItem(TUTORIAL_SEEN_KEY, raw);
+      expect(loadTutorialSeen(storage)).toBe(false);
+    }
+  });
+
+  it("저장소가 예외를 던져도 저장 뒤 같은 모듈 안에서는 참이다(메모리 대체)", async () => {
+    const { loadTutorialSeen, saveTutorialSeen } = await fresh();
+    expect(loadTutorialSeen(throwingStorage)).toBe(false);
+    saveTutorialSeen(throwingStorage);
+    expect(loadTutorialSeen(throwingStorage)).toBe(true);
+  });
+});
