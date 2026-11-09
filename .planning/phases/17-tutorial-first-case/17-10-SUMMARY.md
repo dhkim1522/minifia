@@ -25,6 +25,7 @@ status: in-progress
 - [x] 단계 1 로컬 검증: npm test 7929 통과(간헐 실패 없음) · E2E 전 흐름 폰 6종 회귀 한 번(5446 중 5433 통과, 실패 13건 → 재실행 통과 또는 알려진 한계로 분류, 제품 수정 1·harness 수정 1) · nightload 평균 59.8fps·끊김 6/419초(5분당 4.3, 재측정) · RULESET 불변 · 위생 통과(새 결과 0)
 - [x] 단계 2 문서: 결정 0080 완성(실행 중 달라진 곳 12항목·알려진 한계·정하지 않은 것) · 0078 개정 표시 · screen-map 튜토리얼 절(방장 패널 326/382·첫 화면 카드 84/44·tutorialFocusChecks) · architecture·product 문단
 - [x] 단계 3 배포: minifia-v3 `2026-11-08T14:29:24Z+49b1ad57` → `2026-11-09T06:26:08Z+4858e54f` · 배포본 smoke full 통과(첫 실행, spread 7ms) · tutorial E2E 폰 6종 solo 6/6·together 30/30 통과 · v1·v2 health 변화 없음 · 개인 계정 확인
+- [x] 단계 4 HANDOFF·push: 요구사항 6개 완료 표시(TUT-01~05·DEPLOY-05) · HANDOFF 5.8KB(≤6144)·머리 셋 · `git push origin v3`
 
 ## 단계 1: 로컬 전체 검증
 
