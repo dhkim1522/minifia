@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useSound } from "../audio/useSound";
 import { FocusRing } from "../components/v2/FocusRing";
 import type { FocusGroup } from "../components/v2/FocusRing";
+import { TutorialHostBand } from "../components/v2/TutorialHostBand";
 import { TutorialNext } from "../components/v2/TutorialNext";
 import { TutorialProgress } from "../components/v2/TutorialProgress";
 import { WorldStage } from "../components/WorldStage";
-import { TUTORIAL_CAST, TUTORIAL_SCENES, makeTutorialSend, tutorialSnap, tutorialStageLook, tutorialStageView, tutorialSuspectWalk, tutorialView } from "../game/tutorialScript";
+import { TUTORIAL_CAST, TUTORIAL_LINES, TUTORIAL_SCENES, makeTutorialSend, tutorialSnap, tutorialStageLook, tutorialStageView, tutorialSuspectWalk, tutorialView } from "../game/tutorialScript";
 import type { TutorialFocusWindow, TutorialSceneNo } from "../game/tutorialScript";
 import { ChatStore } from "../net/chatStore";
 import { useFixedRoomHeight } from "../net/useFixedRoomHeight";
@@ -121,11 +123,15 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   const [nextFor, setNextFor] = useState<number | null>(null);
   const [focus, setFocus] = useState<{ n: number; targets: readonly TutorialFocusWindow["target"][] }>({ n: 0, targets: [] });
   const nextShown = nextFor === cur.n;
+  // 사회자 띠의 지금 문장. 번호(nonce)는 장면과 상관없이 늘어나 같은 글도 새로 말한다. 장면이 바뀌면 띠 글은 저절로 비워진다
+  const [said, setSaid] = useState<{ n: number; text: string; speakMs: number; nonce: number } | null>(null);
+  const line = said !== null && said.n === cur.n ? said : null;
   const focusTargets = focus.n === cur.n ? focus.targets : [];
 
   useTutorialDirector({
     scene: cur.n,
     startAt,
+    onSay: (key, totalMs) => setSaid((prev) => ({ n: curRef.current.n, text: TUTORIAL_LINES[key], speakMs: totalMs, nonce: (prev?.nonce ?? 0) + 1 })),
     onShowNext: () => setNextFor(curRef.current.n),
     onAuto: () => advanceFrom(curRef.current.n),
     onFocus: (target, on) =>
@@ -167,6 +173,9 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   const stageView = useMemo(() => (cur.n === 1 || cur.n === 7 ? tutorialStageView(cur.n, cur.at) : null), [cur.n, cur.at]);
   const stageLook = useMemo(() => (cur.n === 1 || cur.n === 7 ? tutorialStageLook(cur.n, { night: true, victimGone: false }) : undefined), [cur.n]);
 
+  // 소리: 혼자·함께 모두 같다(0080-14). 소리 단추는 띠 독에 있고 전역 소리 설정을 따른다. 방 view 가 없어 침대·view 차이 소리는 없다
+  const sound = useSound({ active: true, view: null });
+
   const noop = useCallback((): void => {}, []);
   const skip = useCallback((): void => onEndRef.current("skipped"), []);
   const roleCard = useMemo(() => ({ unread: false, onOpen: noop }), [noop]);
@@ -188,6 +197,8 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
       {renderSceneLayer(cur.n)}
       <FocusRing groups={groupsOf(focusTargets)} />
       {nextShown ? <TutorialNext onNext={() => advanceFrom(cur.n)} /> : null}
+      {/* Tab 순서: [건너뛰기] → 지금 허용된 단추 → [다음] → 소리 단추(띠 독). 띠는 읽기만이라 본문 뒤에 둬도 z 로 위에 뜬다 */}
+      <TutorialHostBand line={line?.text ?? null} speakMs={line?.speakMs ?? 0} nonce={line?.nonce ?? 0} sound={sound.supported ? sound : null} />
     </div>
   );
 }

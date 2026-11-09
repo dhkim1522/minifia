@@ -233,9 +233,10 @@ describe("소리 큐", () => {
 describe("ui.tap 신호", () => {
   it("[다음]·[건너뛰기] 누름마다 tap 신호가 한 번", async () => {
     const got: LocalSignal[] = [];
+    // 화면이 소리 훅(useSound)으로 신호 처리기를 거므로, 마운트 뒤에 시험 처리기로 바꿔 건다
+    const { container } = await mount({ initialScene: 5 });
     const off = bindSignals((s) => got.push(s));
     try {
-      const { container } = await mount({ initialScene: 5 });
       advance(0);
       fireEvent.click(next$(container)!);
       expect(got.filter((g) => g.kind === "tap")).toHaveLength(1);

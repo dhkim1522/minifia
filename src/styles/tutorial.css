@@ -94,8 +94,32 @@
   animation: tut-ring 1s ease-in-out infinite;
 }
 
+/* ---- 사회자 파형 + 자막 띠(TutorialHostBand, 0078-9 C) ----
+   자리·모양은 실제 띠(.mv-host__band, v2.css)와 같다. 종 아이콘 자리에 파형 막대 5개, 시간 행은 없다. */
+.tut-band { grid-template-columns: auto minmax(0, 1fr); align-items: center; }
+.tut-wave { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs); height: 24px; }
+/* 막대는 높이 20 의 상자를 scaleY 로 줄인다: 정지 .2 = 4(점), 말하는 동안 .2 ↔ 1 = 4 ↔ 20 (합성기만 쓴다) */
+.tut-wave__bar { display: block; width: 4px; height: 20px; border-radius: 2px; background: var(--brass-200); transform: scaleY(.2); }
+[data-tutorial-host][data-speaking] .tut-wave__bar { animation: tut-wave .32s ease-in-out infinite alternate; }
+[data-tutorial-host][data-speaking] .tut-wave__bar:nth-child(1) { animation-delay: 0s; }
+[data-tutorial-host][data-speaking] .tut-wave__bar:nth-child(2) { animation-delay: .1s; }
+[data-tutorial-host][data-speaking] .tut-wave__bar:nth-child(3) { animation-delay: .2s; }
+[data-tutorial-host][data-speaking] .tut-wave__bar:nth-child(4) { animation-delay: .05s; }
+[data-tutorial-host][data-speaking] .tut-wave__bar:nth-child(5) { animation-delay: .15s; }
+@keyframes tut-wave { from { transform: scaleY(.2); } to { transform: scaleY(1); } }
+/* 글: Body 16/700 gray-50, 두 줄까지. 글자가 왼쪽부터 말하는 시간 동안 드러난다(steps(14)) */
+.tut-band__line { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: 16px; font-weight: 700; line-height: 1.4; color: var(--gray-50); }
+.tut-band__line[data-say] { animation: tut-say var(--tut-say-ms, 1.1s) steps(14) both; }
+@keyframes tut-say { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+/* 오답에 띠가 0.4초 흔들린다(17-05 가 shake 로 켠다) */
+.tut-band.is-shake { animation: tut-shake .4s ease-in-out; }
+@keyframes tut-shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
+
 /* 모션 줄이기: 깜빡임을 끄고 정지한 4px 테두리 + 번짐 중간값(테두리는 항상 보인다) */
 @media (prefers-reduced-motion: reduce) {
   .tut-focus, .tut-focus::before, .tut-next::before { animation: none; }
   .tut-focus::before { opacity: .5; }
+  /* 말하는 동안 막대는 중간 높이(12)로 고정, 글은 바로 보인다 */
+  [data-tutorial-host][data-speaking] .tut-wave__bar { animation: none; transform: scaleY(.6); }
+  .tut-band__line[data-say], .tut-band.is-shake { animation: none; }
 }

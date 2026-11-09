@@ -44,8 +44,9 @@ function setVar(room: HTMLElement, name: string, px: number | null): void {
  * 띠 아래로 밀려나는 자리의 기준을 잰다(U-1·U-6·U-8): 헤더 아랫변 + 8 → --mf-host-top, 띠 면 아랫변 → --mf-host-bottom, 독 아랫변 → --mf-host-dock.
  * 값은 방 틀 위 끝 기준이고 가상 뷰포트 이동(--mf-vv-top)을 뺀 값이라 키보드가 열려도 변하지 않는다.
  * 헤더 단추가 헤더 높이를 넘으면(14-05·14-07 이름표) 그 아랫변을 쓴다 — 띠가 단추를 덮지 않게.
+ * 17-04: 첫 사건 화면의 파형 띠(TutorialHostBand)가 같은 변수를 쓰려고 export 한다(동작 그대로).
  */
-function useHostMetrics(rootRef: RefObject<HTMLDivElement | null>, bandRef: RefObject<HTMLDivElement | null>, deps: readonly unknown[]): void {
+export function useHostMetrics(rootRef: RefObject<HTMLDivElement | null>, bandRef: RefObject<HTMLDivElement | null>, deps: readonly unknown[]): void {
   useLayoutEffect(() => {
     const root = rootRef.current;
     const band = bandRef.current;

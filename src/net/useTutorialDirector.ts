@@ -1,9 +1,12 @@
 import { useEffect, useRef } from "react";
-import { TUTORIAL_SCENES } from "../game/tutorialScript";
+import { getEngine } from "../audio/unlock";
+import { hush, say } from "../audio/voice";
+import { TUTORIAL_LINES, TUTORIAL_SCENES } from "../game/tutorialScript";
 import type { TutorialCue, TutorialFocusWindow, TutorialLineKey, TutorialSceneNo } from "../game/tutorialScript";
 
-// 첫 사건의 장면 시각표 예약 훅(17-04, 결정 0078-7): 장면 표(TUTORIAL_SCENES)가 정한 시각에 포커스 창 켜짐·꺼짐, [다음] 등장, 자동 넘김을 부른다.
-// 장면이 바뀌거나 언마운트되면 예약을 전부 취소한다. 시각은 장면 시계 시작(startAt, 로컬 ms)에서 잰다 — 무대 장면은 WorldStage 준비 뒤에 시계를 세운다(UI Considerations #5).
+// 첫 사건의 장면 시각표 예약 훅(17-04, 결정 0078-7): 장면 표(TUTORIAL_SCENES)가 정한 시각에 효과음·사회자 문장(웅얼 목소리)·포커스 창 켜짐·꺼짐·[다음] 등장·자동 넘김을 부른다.
+// 소리는 앱의 엔진(getEngine)에 직접 낸다 — 켬·끔·잠김은 엔진이 따르고, 소리가 꺼져 있어도 말하는 시간(say 의 반환값)은 같아 막대·글이 같은 시간 움직인다(T-13).
+// 장면이 바뀌거나 언마운트되면 예약을 전부 취소하고 남은 음절을 끊는다(hush). 시각은 장면 시계 시작(startAt, 로컬 ms)에서 잰다 — 무대 장면은 WorldStage 준비 뒤에 시계를 세운다(UI Considerations #5).
 // 이 훅은 화면 상태를 모른다: 부르는 쪽이 콜백으로 받아 상태를 바꾼다. 콜백은 최신 것을 ref 로 읽는다(예약은 장면마다 한 번만 건다).
 
 export interface TutorialDirectorOptions {
@@ -39,6 +42,15 @@ export function useTutorialDirector(options: TutorialDirectorOptions): void {
       else timers.push(setTimeout(fn, wait));
     };
 
+    for (const b of def.beats) {
+      at(b.at, () => {
+        if (b.sfx !== undefined) {
+          getEngine().play(b.sfx);
+          live.current.onCue?.(b.sfx);
+        }
+        if (b.say !== undefined) live.current.onSay?.(b.say, say(getEngine(), TUTORIAL_LINES[b.say]));
+      });
+    }
     for (const w of def.focus) {
       at(w.from, () => live.current.onFocus?.(w.target, true));
       if (w.to !== undefined) at(w.to, () => live.current.onFocus?.(w.target, false));
@@ -48,6 +60,7 @@ export function useTutorialDirector(options: TutorialDirectorOptions): void {
 
     return () => {
       for (const t of timers) clearTimeout(t);
+      hush(getEngine());
     };
   }, [scene, startAt]);
 }
