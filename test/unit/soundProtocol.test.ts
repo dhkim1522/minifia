@@ -1,6 +1,6 @@
 // 12-12: 소리가 와이어·서버에 닿지 않음을 고정한다 (LS-9, T-12-47).
 // (가) 서버(shared·worker)는 소리를 모른다 (나) 클라이언트 메시지 종류는 12페이즈 시작 때와 같다
-// (다) src/audio 는 네트워크 API 를 쓰지 않는다 (라) docs/audio.md 레시피 지도가 소리 id 57개를 모두 담는다.
+// (다) src/audio 는 네트워크 API 를 쓰지 않는다 (라) docs/audio.md 레시피 지도가 소리 id 58개를 모두 담는다.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -81,10 +81,10 @@ describe("소리 프로토콜 불변 (LS-9)", () => {
     expect(hits).toEqual([]);
   });
 
-  it("(라) docs/audio.md 레시피 지도가 소리 id 56개를 모두 담는다", () => {
-    expect(SOUND_IDS).toHaveLength(57);
+  it("(라) docs/audio.md 레시피 지도가 소리 id 58개를 모두 담는다", () => {
+    expect(SOUND_IDS).toHaveLength(58);
     expect(BED_IDS).toHaveLength(7);
-    expect(SFX_IDS).toHaveLength(50);
+    expect(SFX_IDS).toHaveLength(51);
     const doc = readFileSync(`${ROOT}docs/audio.md`, "utf8");
     const missing = SOUND_IDS.filter((id) => !doc.includes(`\`${id}\``));
     expect(missing).toEqual([]);

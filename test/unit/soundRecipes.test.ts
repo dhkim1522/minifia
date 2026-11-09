@@ -147,7 +147,7 @@ describe("소리 레시피 — 트레이서 (D-1, D-18)", () => {
   });
 });
 
-// ───────────────────────── Task 2: 57개 전수 ─────────────────────────
+// ───────────────────────── Task 2: 58개 전수 ─────────────────────────
 
 const EXPECTED_BEDS = ["bed.lobby", "bed.reveal", "bed.day", "bed.vote", "bed.night", "bed.dawn", "bed.result"];
 const EXPECTED_SFX = [
@@ -157,14 +157,14 @@ const EXPECTED_SFX = [
   "execution.rise", "verdict.reject", "night.fall", "night.cue", "kill.slash", "morning.dawn", "morning.calm",
   "chalk.draw", "morning.saved", "will.quill", "will.seal", "will.fold", "emote.clap", "emote.praise",
   "emote.handshake", "emote.dance", "emote.surprise", "emote.cry", "emote.deny", "emote.point", "emote.throat",
-  "result.win", "result.lose", "award.plate", "award.final",
+  "result.win", "result.lose", "award.plate", "award.final", "voice.syl",
 ];
 const PRIO0 = ["verdict.heart", "execution.gavel", "kill.slash", "result.win", "result.lose", "award.final"];
 
-describe("소리 레시피 — 57개 전수 (D-1, D-16, D-17)", () => {
-  it("SOUND_IDS 는 57개(침대 7 + 효과음 50)이고 중복이 없으며 목록이 같다", () => {
-    expect(SOUND_IDS).toHaveLength(57);
-    expect(new Set(SOUND_IDS).size).toBe(57);
+describe("소리 레시피 — 58개 전수 (D-1, D-16, D-17)", () => {
+  it("SOUND_IDS 는 58개(침대 7 + 효과음 51)이고 중복이 없으며 목록이 같다", () => {
+    expect(SOUND_IDS).toHaveLength(58);
+    expect(new Set(SOUND_IDS).size).toBe(58);
     expect([...BED_IDS]).toEqual(EXPECTED_BEDS);
     expect([...SFX_IDS]).toEqual(EXPECTED_SFX);
   });
@@ -210,9 +210,9 @@ describe("소리 레시피 — 57개 전수 (D-1, D-16, D-17)", () => {
     expect(planHash(renderPlan(id))).toBe(planHash(plan));
   });
 
-  it("효과음 50개는 서로 다른 해시다(같은 소리 복사 금지)", () => {
+  it("효과음 51개는 서로 다른 해시다(같은 소리 복사 금지)", () => {
     const hashes = SFX_IDS.map((id) => planHash(renderPlan(id)));
-    expect(new Set(hashes).size).toBe(50);
+    expect(new Set(hashes).size).toBe(51);
   });
 
   it.each(BED_IDS)("%s: 발진기 ≤ 6 + 소음 1, 노드·레벨 한계", (id) => {
@@ -255,8 +255,8 @@ describe("소리 레시피 — 57개 전수 (D-1, D-16, D-17)", () => {
     }
   });
 
-  it("버스: 침대 bgm 은 BEDS 만, ui.tap·ui.toggle·ui.deny·ui.card·ui.host·vote.cast 는 ui 버스, 나머지 sfx", () => {
-    const uiIds = new Set(["ui.tap", "ui.toggle", "ui.deny", "ui.card", "ui.host", "vote.cast"]);
+  it("버스: 침대 bgm 은 BEDS 만, ui.tap·ui.toggle·ui.deny·ui.card·ui.host·vote.cast·voice.syl 은 ui 버스, 나머지 sfx", () => {
+    const uiIds = new Set(["ui.tap", "ui.toggle", "ui.deny", "ui.card", "ui.host", "vote.cast", "voice.syl"]);
     for (const id of SFX_IDS) expect(RECIPES[id].bus).toBe(uiIds.has(id) ? "ui" : "sfx");
   });
 
@@ -346,7 +346,7 @@ describe("소리 레시피 — 57개 전수 (D-1, D-16, D-17)", () => {
     expect(() => renderPlan("role.flip", { variant: "mafia" })).toThrow();
   });
 
-  it("화면 대응 표: 57개 모두 한 줄, ambient 는 침대 7개와 night.cue 뿐 (LS-1)", () => {
+  it("화면 대응 표: 58개 모두 한 줄, ambient 는 침대 7개와 night.cue 뿐 (LS-1)", () => {
     expect(Object.keys(SCREEN_COUNTERPART).sort()).toEqual([...SOUND_IDS].sort());
     for (const id of SOUND_IDS) {
       expect(SCREEN_COUNTERPART[id].trim()).not.toBe("");
@@ -356,5 +356,22 @@ describe("소리 레시피 — 57개 전수 (D-1, D-16, D-17)", () => {
     for (const id of SOUND_IDS) {
       expect(SCREEN_COUNTERPART[id].startsWith("ambient")).toBe((AMBIENT_IDS as readonly string[]).includes(id));
     }
+  });
+});
+
+describe("voice.syl — 사회자 웅얼 음절 (17-02, 0078-4·0080-8)", () => {
+  it("ui 버스·prio 2·max 2·gapMs 0, 삼각 75ms + 사인 50ms 두 층, 정점 −6 dBFS 이하", () => {
+    const r = RECIPES["voice.syl"];
+    expect(r.bus).toBe("ui");
+    expect(r.prio).toBe(2);
+    expect(r.max).toBe(2);
+    expect(r.gapMs).toBe(0);
+    expect(r.layers).toHaveLength(2);
+    expect(r.layers.map((l) => l.src)).toEqual(["triangle", "sine"]);
+    expect(r.layers.map((l) => l.dur)).toEqual([75, 50]);
+    expect(recipeDurationMs("voice.syl")).toBeLessThanOrEqual(75 + 60);
+    expect(peakDbEstimate("voice.syl")).toBeLessThanOrEqual(PEAK_DBFS_MAX);
+    expect(SFX_IDS[SFX_IDS.length - 1]).toBe("voice.syl");
+    expect(SCREEN_COUNTERPART["voice.syl"].startsWith("ambient")).toBe(false);
   });
 });
