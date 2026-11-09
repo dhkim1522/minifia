@@ -4,19 +4,19 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 17
 current_phase_name: "튜토리얼 \"첫 사건\""
-current_plan: 0
-status: ready_to_plan
-stopped_at: Phase 17 UI-SPEC approved
-last_updated: "2026-11-09T02:57:03.797Z"
-last_activity: 2026-11-08
-last_activity_desc: Phase 16 complete — 검증 human_needed(실기기 항목 v3.0 끝으로 미룸)
-state_head: 9963ea30b02c096a4c1b3c660c114a7f36790fdd
+current_plan: 2
+status: executing
+stopped_at: Completed 17-01-PLAN.md
+last_updated: "2026-11-09T03:15:33.898Z"
+last_activity: 2026-11-09
+last_activity_desc: Phase 17 execution started
+state_head: db4db6559432209ee8794f2276459eb6c8a085a2
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 47
-  completed_plans: 35
-  percent: 74
+  completed_plans: 36
+  percent: 77
 ---
 
 # Project State
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 
 ## Current Position
 
-Phase: 17 (튜토리얼 "첫 사건") — READY TO EXECUTE
-Current Plan: 0
+Phase: 17 (튜토리얼 "첫 사건") — EXECUTING
+Current Plan: 2
 Total Plans in Phase: 12
-Status: Ready to plan (Design 캔버스 시안 → /gsd-ui-phase 17 → /gsd-plan-phase 17)
-Last activity: 2026-11-08 — Phase 16 complete (배포 `49b1ad57`, 실기기 확인은 v3.0 끝)
+Status: Ready to execute
+Last activity: 2026-11-09 — Phase 17 execution started
 
 ## Performance Metrics
 
@@ -233,6 +233,7 @@ Last activity: 2026-11-08 — Phase 16 complete (배포 `49b1ad57`, 실기기 �
 | Phase 16 P08 | 55min | 3 tasks | 14 files |
 | Phase 16 P09 | 95min | 3 tasks | 23 files |
 | Phase 16 P10 | 약 3h 20m | 4 tasks | 14 files |
+| Phase 17 P01 | 9 min | 1 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -509,6 +510,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 16]: 결정 0079: 16페이즈 확정분 0079-1~14·위임 기본값 V-1~V-7·V-19~V-32(V-8~V-18 은 17 로 이동)·A1~A5 한 장에 기록
 - [Phase 16]: 첫 배포 뒤 알약 배치(이웃 장소 타일 피하기)를 고쳐 minifia-v3 를 한 번 더 배포 — 배포본은 항상 커밋된 코드와 같다
 - [Phase 16]: E2E errand 이름표 수 판정은 퇴장 연출(180ms)과 겹치는 시간 경쟁이라 settleTags 로 고치고 smoke 아침 흔적 길이는 MORNING_TRACE_MS 사본으로 묶는다
+- [Phase 17]: 17-01: start.tutorial 은 서버 기본 꺼짐, 역할은 beginGame 에서 그대로 배정하고 tutorial 단계는 revealsOwnRole:false 로 view 에 역할을 싣지 않는다(0080-1·2)
+- [Phase 17]: 17-01: 서버 전용 tutorialPassed 는 ON_ENTER.assigning=clearTutorial 로 지우고 전원 완료는 applyEndDiscussion 과 같은 tick 경로로 assigning 에 보낸다(0080-11)
 
 ### Pending Todos
 
@@ -575,9 +578,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09T01:28:18.575Z
-Stopped at: Phase 17 UI-SPEC approved
-Resume file: .planning/phases/17-tutorial-first-case/17-UI-SPEC.md
+Last session: 2026-11-09T03:15:33.575Z
+Stopped at: Completed 17-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
