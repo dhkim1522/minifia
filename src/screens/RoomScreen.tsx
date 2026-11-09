@@ -251,7 +251,8 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     [letterT0, letterText],
   );
   const sound = useSound({
-    active: view !== null,
+    // tutorial 단계(17-07, 0080-14·Pitfall 4): 첫 사건 화면(TutorialScreen)이 자기 useSound 하나로 신호를 받는다 — 방 화면의 것은 끄고 문서 이벤트·신호 바인딩을 걸지 않는다
+    active: view !== null && view.phase !== "tutorial",
     hook: soundHook,
     view,
     epoch: connection.epoch,
@@ -426,7 +427,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   return (
     <div ref={roomRef} className="mf-root mf-room">
       {view && banner !== "hidden" && <ReconnectBanner mode={banner} floating={shown?.phase === "lobby"} />}
-      {shown && !shown.resting && status !== "replaced" && status !== "failed" ? (
+      {shown?.phase === "tutorial" && !shown.resting ? null : shown && !shown.resting && status !== "replaced" && status !== "failed" ? (
         <HostBand view={shown} offset={connection.offset} cardSeen={seenFront} local={hostLocal} sound={sound.supported ? sound : null} />
       ) : view && sound.supported ? (
         // 쉬는 사람·안내 화면에는 띠가 없다(T-14-04). 소리 단추만 옛 자리의 독으로 둔다

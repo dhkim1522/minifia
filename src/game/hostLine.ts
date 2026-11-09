@@ -246,6 +246,8 @@ export function hostTimeOf(view: RoomView): boolean {
  */
 export function hostChimeOf(prev: PhaseId | null, cur: PhaseId, fresh: boolean): boolean {
   if (prev === null || fresh || prev === cur) return false;
+  // 17-07(결정 0080-14): 함께 진행 튜토리얼은 자기 띠·소리를 가진다 — 대기실 → tutorial, tutorial → 배정에는 실제 사회자 알림음이 없다(띠·알림음이 겹치지 않게)
+  if (prev === "tutorial" || cur === "tutorial") return false;
   if (prev === "dayAnnounce" && (cur === "discussion" || cur === "errand")) return false;
   return true;
 }

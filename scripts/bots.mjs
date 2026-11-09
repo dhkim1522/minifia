@@ -167,6 +167,7 @@ function onState(bot, view) {
   // 대기실·배정에 있으면(새 판 시작 전, 테스트 방의 대기실 복귀 포함) 낮·밤에 한 번만 행동하는 기록을 비운다 — 새 판 1일차에도 행동한다.
   if (view.phase === "lobby" || view.phase === "assigning") {
     stopTalk(bot);
+    bot.tutorialSent = false;
     bot.talkKey = null;
     bot.nightKey = null;
     bot.voteKey = null;
@@ -175,6 +176,19 @@ function onState(bot, view) {
     return;
   }
   stopLoad(bot);
+  // 튜토리얼(17페이즈, 결정 0080-18): 함께 진행 단계에서 소켓 봇도 끝났음({ t: "tutorialDone" })을 한 번 보낸다 — 안 보내면 150초 상한까지 기다린다.
+  // 이미 서버가 받은 것(me.tutorialDone)이거나 이 판에서 보냈으면 다시 보내지 않는다. 사람처럼 1~3초 뒤에 보낸다.
+  if (view.phase === "tutorial") {
+    stopTalk(bot);
+    if (view.me?.tutorialDone === true || bot.tutorialSent) return;
+    bot.tutorialSent = true;
+    setTimeout(() => {
+      if (bot.view?.phase !== "tutorial") return;
+      sendTo(bot, { t: "tutorialDone" });
+      log(`${bot.nickname}: 튜토리얼 끝났음`);
+    }, 1000 + Math.random() * 2000);
+    return;
+  }
   const day = view.day?.n ?? 0;
   if (view.phase === "discussion") {
     // 낮 토론: 낮마다 50% 확률로 고정 문구 한 줄(2~25초 뒤), 그리고 30~60초 뒤 토론 끝내기 한 번(과반이면 지목으로 넘어간다, DAY-03).

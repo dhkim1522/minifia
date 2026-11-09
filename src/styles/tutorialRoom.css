@@ -77,5 +77,23 @@
 }
 .tut-wait__title { margin: 0; font-family: var(--font-serif); font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--brass-200); text-align: center; word-break: keep-all; }
 .tut-wait__card { width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--space-md); padding: 28px 20px; background: var(--overlay-ink-strong); border: 1px solid var(--night-600); border-radius: var(--radius-md); }
-.tut-wait__msg { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; word-break: keep-all; }
+.tut-wait__check { flex: none; display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; color: var(--night-950); background: var(--brass-400); border-radius: 50%; }
+.tut-wait__msg { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; text-align: center; word-break: keep-all; }
+/* 사람 원: 지름 40, 간격 8. 끝 = 놋쇠 면 + 밤 체크, 아직 = 점선 2 gray-500. 6명 이상이면 두 줄로 접어 가운데 정렬(최대 8) */
+.tut-wait__people { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.tut-wait__people.is-two-rows { max-width: calc(4 * 40px + 3 * 8px); }
+.tut-wait__dot { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 2px dashed var(--gray-500); border-radius: 50%; color: var(--night-950); transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease; }
+.tut-wait__dot.is-done { background: var(--brass-400); border: 2px solid var(--brass-400); }
 .tut-wait__count { margin: 0; font-family: var(--font-serif); font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--brass-200); font-variant-numeric: tabular-nums; }
+/* 시간 막대: 높이 8, 트랙 night-600, 채움 brass-400. 폭 변화는 다시 그리는 간격(250ms)과 같은 길이로 이어 준다 */
+.tut-wait__time { width: 100%; display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); }
+.tut-wait__track { width: 100%; height: 8px; background: var(--night-600); border-radius: var(--radius-pill); overflow: hidden; }
+.tut-wait__fill { height: 100%; background: var(--brass-400); border-radius: var(--radius-pill); transition: width 250ms linear; }
+.tut-wait__sec { font-size: 14px; line-height: 1.4; color: var(--gray-300); font-variant-numeric: tabular-nums; }
+/* 팁 두 장: 2열, 높이 96, 안쪽 12, 아이콘 24 + 글 Label 14 gray-50. 남는 높이가 모자라면 컴포넌트가 그리지 않는다 */
+.tut-wait__tips { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm); }
+.tut-wait__tip { box-sizing: border-box; height: 96px; padding: 12px; display: flex; flex-direction: column; gap: var(--space-sm); color: var(--brass-200); background: var(--night-800); border: 1px solid var(--night-600); border-radius: var(--radius-md); }
+.tut-wait__tip > span { font-size: 14px; line-height: 1.4; color: var(--gray-50); word-break: keep-all; }
+@media (prefers-reduced-motion: reduce) {
+  .tut-wait__fill, .tut-wait__dot { transition: none; }
+}
