@@ -9,7 +9,8 @@ import type { LocalSignal } from "../../src/audio/signals";
 import { SFX_IDS } from "../../src/audio/recipes";
 import { setEngineForTest } from "../../src/audio/unlock";
 import type { WorldStageProps } from "../../src/components/WorldStage";
-import { TUTORIAL_PICK, TUTORIAL_SCENES } from "../../src/game/tutorialScript";
+import { sayItems } from "../../src/audio/voice";
+import { TUTORIAL_LINES, TUTORIAL_PICK, TUTORIAL_SCENES } from "../../src/game/tutorialScript";
 import { makeRig } from "../helpers/soundRig";
 
 const connection = vi.hoisted(() => ({ calls: 0 }));
@@ -243,5 +244,129 @@ describe("ui.tap 신호", () => {
     } finally {
       off();
     }
+  });
+});
+
+// ---- Task 2: 장면 시각표(소리·문구)·사회자 띠 ----
+
+/** 엔진 spy(beforeEach 에서 막아 둔 play·runScript)의 호출을 읽는다 */
+const plays = (id?: string): string[] => (rig.engine.play as unknown as { mock: { calls: [string][] } }).mock.calls.map((c) => c[0]).filter((x) => id === undefined || x === id);
+/** 음절이 있는 목소리 예약(문장 하나) 목록 — 항목 개수 */
+const says = (): number[] =>
+  (rig.engine.runScript as unknown as { mock: { calls: [string, unknown[]][] } }).mock.calls.filter((c) => c[0] === "voice.host" && c[1].length > 0).map((c) => c[1].length);
+/** 목소리를 끊는 호출(빈 대본) 횟수 */
+const hushes = (): number => (rig.engine.runScript as unknown as { mock: { calls: [string, unknown[]][] } }).mock.calls.filter((c) => c[0] === "voice.host" && c[1].length === 0).length;
+const speaking = (c: ParentNode): boolean => c.querySelector("[data-tutorial-host]")?.hasAttribute("data-speaking") === true;
+
+describe("장면 시각표: 소리·문구", () => {
+  it("장면 2: 0ms 에 whoosh 한 번·문장(9글자) 한 번, 2600ms 에 sting·두 번째 문장(11글자)", async () => {
+    const { container } = await mount({ initialScene: 2 });
+    expect(plays("tut.whoosh")).toHaveLength(1);
+    expect(says()).toEqual([9]);
+    expect(container.querySelector("[data-host-line]")?.textContent).toBe(TUTORIAL_LINES["tutorial.morning.victim"]);
+    advance(2599);
+    expect(plays("tut.sting")).toHaveLength(0);
+    advance(1);
+    expect(plays("tut.sting")).toHaveLength(1);
+    expect(says()).toEqual([9, 11]);
+    expect(container.querySelector("[data-host-line]")?.textContent).toBe(TUTORIAL_LINES["tutorial.morning.mafia"]);
+  });
+
+  it("장면 3: 0ms 에 whoosh, 500ms 에 문장", async () => {
+    await mount({ initialScene: 3 });
+    expect(plays("tut.whoosh")).toHaveLength(1);
+    expect(says()).toEqual([]);
+    advance(499);
+    expect(says()).toEqual([]);
+    advance(1);
+    expect(says()).toHaveLength(1);
+  });
+
+  it("장면 4: step 다섯 번(0·320·640·960·1280), eye 1900, 문장 2250", async () => {
+    await mount({ initialScene: 4 });
+    expect(plays("tut.step")).toHaveLength(1);
+    advance(319);
+    expect(plays("tut.step")).toHaveLength(1);
+    advance(1);
+    expect(plays("tut.step")).toHaveLength(2);
+    advance(960);
+    expect(plays("tut.step")).toHaveLength(5);
+    advance(619);
+    expect(plays("tut.eye")).toHaveLength(0);
+    advance(1);
+    expect(plays("tut.eye")).toHaveLength(1);
+    advance(349);
+    expect(says()).toEqual([]);
+    advance(1);
+    expect(says()).toHaveLength(1);
+  });
+
+  it("장면 1: lampOff 두 번(800·1300)·scream 2600, 문장 없음(막대 정지)", async () => {
+    const { container } = await mount({ initialScene: 1 });
+    advance(799);
+    expect(plays("tut.lampOff")).toHaveLength(0);
+    advance(1);
+    expect(plays("tut.lampOff")).toHaveLength(1);
+    advance(500);
+    expect(plays("tut.lampOff")).toHaveLength(2);
+    advance(1299);
+    expect(plays("tut.scream")).toHaveLength(0);
+    advance(1);
+    expect(plays("tut.scream")).toHaveLength(1);
+    expect(says()).toEqual([]);
+    expect(speaking(container)).toBe(false);
+  });
+
+  it("장면이 바뀌면 hush 가 정확히 한 번, 문장·소리 예약은 새 장면 것만 불린다", async () => {
+    const { container } = await mount({ initialScene: 2 });
+    advance(2600);
+    const before = hushes();
+    fireEvent.click(next$(container)!);
+    expect(sceneOf(container)).toBe("3");
+    expect(hushes()).toBe(before + 1);
+    // 장면 3 의 문장은 500ms 에만 한 번(장면 2 의 예약이 되살아나지 않는다)
+    const sayCount = says().length;
+    advance(500);
+    expect(says()).toHaveLength(sayCount + 1);
+    advance(5000);
+    expect(says()).toHaveLength(sayCount + 1);
+  });
+
+  it("[다음] 은 장면 2 의 2600ms 에 sting 과 같이 나타난다 — 장면 표의 시각 그대로", async () => {
+    const { container } = await mount({ initialScene: 2 });
+    advance(2600);
+    expect(next$(container)).not.toBeNull();
+  });
+});
+
+describe("사회자 띠: 말하는 시간·소리 꺼짐", () => {
+  it("말하는 동안 data-speaking 이 켜지고 sayItems 의 totalMs 뒤 꺼진다", async () => {
+    const { container } = await mount({ initialScene: 2 });
+    const total = sayItems(TUTORIAL_LINES["tutorial.morning.victim"]).totalMs;
+    expect(speaking(container)).toBe(true);
+    advance(total - 1);
+    expect(speaking(container)).toBe(true);
+    advance(1);
+    expect(speaking(container)).toBe(false);
+  });
+
+  it("엔진의 소리가 꺼져 있어도 말하는 시간은 같다", async () => {
+    rig.engine.setOn(false);
+    expect(rig.engine.isOn()).toBe(false);
+    const { container } = await mount({ initialScene: 2 });
+    const total = sayItems(TUTORIAL_LINES["tutorial.morning.victim"]).totalMs;
+    expect(speaking(container)).toBe(true);
+    advance(total - 1);
+    expect(speaking(container)).toBe(true);
+    advance(1);
+    expect(speaking(container)).toBe(false);
+  });
+
+  it("소리 단추가 띠 독에 하나 있고, 장면 어디서나 inert 아래가 아니다", async () => {
+    rig.engine.unlock();
+    const { container } = await mount({ initialScene: 3 });
+    const button = container.querySelectorAll("[data-sound-button]");
+    expect(button).toHaveLength(1);
+    expect(button[0]!.closest("[data-tutorial-host]")).not.toBeNull();
   });
 });
