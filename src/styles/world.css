@@ -29,9 +29,9 @@
 /* 화면 낭독기용 목록: 보이지 않지만 읽힌다. */
 .mf-world__sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; list-style: none; }
 
-/* 가림막과 상태 카드(z-modal). 맵이 열리기 전에는 night-950 으로 덮고(불러오는 중·실패 카드), 열리면 dur-med 에 걷힌다.
+/* 가림막과 상태 카드(z-modal). 대기실에서는 아래 패널(--mf-panel-h, 방장은 스위치 줄 +76 으로 326·382)을 뺀 자리의 가운데에 카드를 둔다(17-10: 패널이 [다시 시도] 를 가리던 것). 맵이 열리기 전에는 night-950 으로 덮고(불러오는 중·실패 카드), 열리면 dur-med 에 걷힌다.
    소실·재생성 중에는 night-950 40% 가림막 위에 한 줄 카드, 나갈 때는 night-900 으로 dur-med 에 덮는다. 가림막은 흐름을 밀지 않는다(캔버스 크기 고정). */
-.mf-world__veil { position: absolute; inset: 0; z-index: var(--z-modal); display: flex; align-items: center; justify-content: center; padding: var(--space-lg); background: var(--night-950); opacity: 1; transition: opacity var(--dur-med) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
+.mf-world__veil { position: absolute; inset: 0; z-index: var(--z-modal); display: flex; align-items: center; justify-content: center; padding: var(--space-lg); padding-bottom: calc(var(--space-lg) + var(--mf-panel-h, 0px)); background: var(--night-950); opacity: 1; transition: opacity var(--dur-med) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
 .mf-world.is-open .mf-world__veil { opacity: 0; pointer-events: none; }
 .mf-world.is-redrawing .mf-world__veil { background: color-mix(in srgb, var(--night-950) 40%, transparent); }
 .mf-world.is-exiting .mf-world__veil { background: var(--night-900); opacity: 1; pointer-events: auto; }
