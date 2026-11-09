@@ -43,6 +43,7 @@ import * as resultE2e from "../../scripts/e2e/result.mjs";
 import * as mapSelectE2e from "../../scripts/e2e/mapselect.mjs";
 import { PLACE_IDS } from "../../shared/protocol";
 import { HOST_LINES } from "../../src/game/hostLine";
+import { OPENING_LAMPS, TUTORIAL_CAST, TUTORIAL_DOT_COUNT, TUTORIAL_SCENES, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
 import { ROLE_TEXT } from "../../src/game/roleText";
 import { CEREMONY_TITLE } from "../../src/game/awardText";
 import { RESULT_TEXT } from "../../src/game/verdict";
@@ -820,5 +821,44 @@ describe("서버 계약 소비자 스크립트의 새 단계 흐름 (15-06, DEPL
     const text = scriptText("bots.mjs");
     expect(text).toContain('view.phase === "errand"');
     expect(text).toContain('role !== "citizen"');
+  });
+});
+
+// 17-09: 첫 사건(튜토리얼) E2E 판정의 사본 상수가 앱 대본(src/game/tutorialScript.ts)과 같다 — 어긋나면 점 수·램프 수·오답 도움·시각 판정이 거짓 통과·거짓 실패한다.
+describe("E2E 의 튜토리얼 사본 상수와 앱 대본 (17-09)", () => {
+  const lib = e2eLib as {
+    TUTORIAL_DOT_COUNT: number;
+    OPENING_LAMPS: number;
+    WRONG_HINT_AFTER: number;
+    TUTORIAL_OPENING_MS: number;
+    TUTORIAL_ERRAND_MS: number;
+    TUTORIAL_CAST_E2E: { me: number; victim: number; suspect: number; errandTarget: string; names: readonly string[] };
+  };
+
+  it("TUTORIAL_DOT_COUNT·OPENING_LAMPS·WRONG_HINT_AFTER 가 앱 상수와 같다", () => {
+    expect(lib.TUTORIAL_DOT_COUNT).toBe(TUTORIAL_DOT_COUNT);
+    expect(lib.OPENING_LAMPS).toBe(OPENING_LAMPS);
+    expect(lib.WRONG_HINT_AFTER).toBe(WRONG_HINT_AFTER);
+  });
+
+  it("오프닝 자동 넘김(4600ms)과 [처리] 뒤 지연(700ms)이 장면 표의 시각과 같다", () => {
+    const opening = TUTORIAL_SCENES.find((s) => s.n === 1)?.advance;
+    const errand = TUTORIAL_SCENES.find((s) => s.n === 3)?.advance;
+    expect(opening).toEqual({ kind: "auto", afterMs: lib.TUTORIAL_OPENING_MS });
+    expect(errand).toEqual({ kind: "act", afterMs: lib.TUTORIAL_ERRAND_MS });
+  });
+
+  it("출연 사본(내 좌석·탈락자·도윤·심부름 장소·가짜 이름 다섯)이 TUTORIAL_CAST 와 같다", () => {
+    expect(lib.TUTORIAL_CAST_E2E.me).toBe(TUTORIAL_CAST.me);
+    expect(lib.TUTORIAL_CAST_E2E.victim).toBe(TUTORIAL_CAST.victim);
+    expect(lib.TUTORIAL_CAST_E2E.suspect).toBe(TUTORIAL_CAST.suspect);
+    expect(lib.TUTORIAL_CAST_E2E.errandTarget).toBe(TUTORIAL_CAST.errand.target);
+    const castNames = TUTORIAL_CAST.seats.map((c) => c.name).filter((n) => n !== "나");
+    expect([...lib.TUTORIAL_CAST_E2E.names].sort()).toEqual([...castNames].sort());
+  });
+
+  it("browser.mjs 의 readTutorial 이 쓰는 출연 좌석 상수(5·2·1·mail)가 TUTORIAL_CAST 와 같다", () => {
+    const text = readFileSync(new URL("../../scripts/e2e/browser.mjs", import.meta.url), "utf8");
+    expect(text).toContain(`{ me: ${TUTORIAL_CAST.me}, victim: ${TUTORIAL_CAST.victim}, suspect: ${TUTORIAL_CAST.suspect}, errandTarget: "${TUTORIAL_CAST.errand.target}", extendDown: SUSPECT_EXTEND_DOWN }`);
   });
 });

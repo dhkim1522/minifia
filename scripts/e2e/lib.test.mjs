@@ -184,8 +184,21 @@ import {
   OPENING_LAMPS,
   TUTORIAL_DOT_COUNT,
   WRONG_HINT_AFTER,
+  TUTORIAL_CAST_E2E,
+  TUTORIAL_ERRAND_MS,
+  TUTORIAL_OPENING_MS,
   sentFrameChecks,
+  tutorialBandChecks,
+  tutorialDotChecks,
   tutorialEntryChecks,
+  tutorialEvidenceChecks,
+  tutorialFocusChecks,
+  tutorialLeakChecks,
+  tutorialOpeningChecks,
+  tutorialRevealChecks,
+  tutorialRoleCardChecks,
+  tutorialSkipChecks,
+  tutorialTimingChecks,
   errandCardChecks,
   errandCardWalkChecks,
   errandChecks,
@@ -4483,4 +4496,219 @@ test("sentFrameChecks: once 로 준 종류는 정확히 그 횟수만 보내야 
   assert.equal(sentFrameChecks(["ping"], ["tutorialDone"], { once: ["tutorialDone"] }).ok, false);
   assert.equal(sentFrameChecks(null, []).ok, false); // 측정값 없음
   assert.match(sentFrameChecks(null, []).detail, /측정값 없음/);
+});
+
+// ---- 17-09 Task 2: 장면 판정 (포커스·띠·누설·공개·직업 카드·오프닝·시각) ----
+
+const tutTgt = (key, l, t, w, h) => ({ key, rect: RR(l, t, w, h) });
+const tutBoxAround = (key, l, t, w, h, pad = 8) => ({ key, rect: RR(l - pad, t - pad, w + pad * 2, h + pad * 2) });
+const tutTfFails = (boxes, targets, vp = TV) => tutorialFocusChecks(boxes, targets, vp).filter((l) => !l.ok).map((l) => l.id);
+
+test("tutorialFocusChecks: 상자마다 대상 사각형 ± 8(오차 2) 이면 통과한다", () => {
+  const targets = [tutTgt("errand", 100, 300, 120, 60)];
+  const lines = tutorialFocusChecks([tutBoxAround("errand", 100, 300, 120, 60)], targets, TV);
+  assert.ok(lines.length >= 2 && lines.every((l) => l.ok), JSON.stringify(lines));
+  assert.deepEqual(tutTfFails([{ key: "errand", rect: RR(100 - 8 + 2, 300 - 8, 120 + 16, 60 + 16) }], targets), []); // 오차 2 경계
+  assert.ok(tutTfFails([{ key: "errand", rect: RR(100 - 8 + 2.5, 300 - 8, 120 + 16, 60 + 16) }], targets).length > 0);
+  assert.ok(tutTfFails([{ key: "errand", rect: RR(100 - 8, 300 - 8, 120 + 16 + 3, 60 + 16) }], targets).length > 0);
+  assert.ok(tutTfFails([{ key: "errand", rect: RR(100 - 8, 300 - 8 - 3, 120 + 16, 60 + 16) }], targets).length > 0);
+});
+
+test("tutorialFocusChecks: 화면 안쪽 8 로 밀린 상자는 크기를 그대로 두고 안으로 민 자리면 통과한다", () => {
+  // 대상이 왼쪽 가장자리(left 4)면 상자는 left -4 가 아니라 8 로 밀린다
+  const targets = [tutTgt("band", 4, 70, 380, 56)];
+  assert.deepEqual(tutTfFails([{ key: "band", rect: RR(8, 62, 396, 72) }], targets, { w: 412, h: 844 }), []);
+  assert.ok(tutTfFails([{ key: "band", rect: RR(-4, 62, 396, 72) }], targets, { w: 412, h: 844 }).length > 0); // 안 밀린 상자는 화면 밖
+  // 아래 가장자리
+  const low = [tutTgt("errand", 100, 800, 120, 40)];
+  assert.deepEqual(tutTfFails([{ key: "errand", rect: RR(92, 844 - 8 - 56, 136, 56) }], low), []);
+});
+
+test("tutorialFocusChecks: 개수·키가 기대와 다르면 실패한다(0개 기대에 상자가 있어도 실패)", () => {
+  const four = ["pick-0", "pick-1", "pick-3", "pick-4"].map((k, i) => tutTgt(k, 20 + i * 80, 400, 70, 40));
+  const boxes = four.map((t) => tutBoxAround(t.key, t.rect.left, t.rect.top, t.rect.width, t.rect.height));
+  assert.deepEqual(tutTfFails(boxes, four), []);
+  assert.ok(tutTfFails(boxes.slice(0, 3), four).length > 0);
+  assert.ok(tutTfFails([...boxes, tutBoxAround("band", 20, 70, 300, 56)], four).length > 0);
+  assert.ok(tutTfFails([{ ...boxes[0], key: "pick-2" }, ...boxes.slice(1)], four).length > 0);
+  assert.deepEqual(tutTfFails([], []), []);
+  assert.ok(tutTfFails([tutBoxAround("band", 20, 70, 300, 56)], []).length > 0);
+  const missing = tutorialFocusChecks(null, four, TV);
+  assert.ok(missing.some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(tutorialFocusChecks(boxes, null, TV).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+const tutBandOk = (over = {}) => ({ rect: RR(16, 70, 358, 56), bars: 5, barsMoving: 5, speaking: true, text: "x", fontMin: 16, timers: 0, ...over });
+const tutOthersOk = (over = {}) => ({ header: RR(0, 0, 390, 60), dock: RR(322, 134, 52, 52), next: RR(314, 760, 56, 56), targets: [tutTgt("errand", 100, 400, 100, 50)], ...over });
+const tutTbFails = (band, others, opts) => tutorialBandChecks(band, others, opts).filter((l) => !l.ok).map((l) => l.id);
+
+test("tutorialBandChecks: 막대 5개·머리·소리 독·[다음]·포커스 대상과 교차 0·글자 14 이상·시간 행 0 이면 통과한다", () => {
+  const lines = tutorialBandChecks(tutBandOk(), tutOthersOk(), { speaking: true });
+  assert.ok(lines.length >= 5 && lines.every((l) => l.ok), JSON.stringify(lines));
+});
+
+test("tutorialBandChecks: 막대가 5개가 아니거나 말하는 동안 움직이지 않으면 실패한다, 말이 끝났으면 speaking 이 거짓이어야 한다", () => {
+  assert.ok(tutTbFails(tutBandOk({ bars: 4 }), tutOthersOk()).length > 0);
+  assert.ok(tutTbFails(tutBandOk({ barsMoving: 3 }), tutOthersOk(), { speaking: true }).length > 0);
+  assert.ok(tutTbFails(tutBandOk({ speaking: false, barsMoving: 0 }), tutOthersOk(), { speaking: true }).length > 0);
+  assert.deepEqual(tutTbFails(tutBandOk({ speaking: false, barsMoving: 0 }), tutOthersOk(), { speaking: false }), []);
+  assert.ok(tutTbFails(tutBandOk({ speaking: true }), tutOthersOk(), { speaking: false }).length > 0);
+  // 모션 줄이기: 막대가 움직이지 않아도 말하는 동안 data-speaking 만 참이면 된다
+  assert.deepEqual(tutTbFails(tutBandOk({ barsMoving: 0 }), tutOthersOk(), { speaking: true, reduced: true }), []);
+});
+
+test("tutorialBandChecks: 띠가 머리·소리 독·[다음]·포커스 대상 어느 하나와 겹치면 실패한다", () => {
+  assert.ok(tutTbFails(tutBandOk({ rect: RR(16, 50, 358, 56) }), tutOthersOk()).length > 0); // 머리(0~60)와 겹침
+  assert.ok(tutTbFails(tutBandOk({ rect: RR(16, 130, 358, 56) }), tutOthersOk()).length > 0); // 소리 독(134~186)과 겹침
+  assert.ok(tutTbFails(tutBandOk({ rect: RR(16, 740, 358, 56) }), tutOthersOk()).length > 0); // [다음] 과 겹침
+  assert.ok(tutTbFails(tutBandOk({ rect: RR(16, 380, 358, 56) }), tutOthersOk()).length > 0); // 포커스 대상과 겹침
+  assert.deepEqual(tutTbFails(tutBandOk({ rect: RR(16, 60, 358, 56) }), tutOthersOk()), []); // 머리와 맞닿기만
+  assert.deepEqual(tutTbFails(tutBandOk(), tutOthersOk({ header: null, dock: null, next: null, targets: [] })), []); // 없는 것은 비교하지 않는다
+});
+
+test("tutorialBandChecks: 글자 14 미만·시간 행이 있으면 실패하고 값이 없으면 공허 통과하지 않는다", () => {
+  assert.ok(tutTbFails(tutBandOk({ fontMin: 13.9 }), tutOthersOk()).length > 0);
+  assert.deepEqual(tutTbFails(tutBandOk({ fontMin: 14 }), tutOthersOk()), []);
+  assert.ok(tutTbFails(tutBandOk({ timers: 1 }), tutOthersOk()).length > 0);
+  for (const bad of [null, tutBandOk({ rect: null }), tutBandOk({ fontMin: null }), tutBandOk({ bars: undefined })]) assert.ok(tutorialBandChecks(bad, tutOthersOk()).some((l) => !l.ok && /측정값 없음/.test(l.detail)), JSON.stringify(bad));
+  assert.ok(tutorialBandChecks(tutBandOk(), null).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+test("tutorialLeakChecks: 가짜 이름 다섯·직업 카드·튜토리얼 중 me.role 이 어디에도 없으면 통과한다", () => {
+  assert.deepEqual(TUTORIAL_CAST_E2E.names, ["서연", "도윤", "민준", "지호", "하린"]);
+  const dom = [{ where: "lobby", names: [], tutRoleCards: 0 }, { where: "roleReveal", names: [], tutRoleCards: 0 }];
+  const lines = tutorialLeakChecks({ dom, frames: { hits: {} }, roleInTutorial: 0 });
+  assert.ok(lines.length === 3 && lines.every((l) => l.ok), JSON.stringify(lines));
+});
+
+test("tutorialLeakChecks: 화면 DOM 이나 받은 프레임에 가짜 이름이 나오거나 직업 카드가 있거나 me.role 이 있으면 실패한다", () => {
+  const clean = [{ where: "lobby", names: [], tutRoleCards: 0 }];
+  const fails = (a) => tutorialLeakChecks(a).filter((l) => !l.ok).map((l) => l.id);
+  assert.deepEqual(fails({ dom: clean, frames: { hits: {} }, roleInTutorial: 0 }), []);
+  const dirty = fails({ dom: [{ where: "roleReveal", names: ["도윤"], tutRoleCards: 0 }], frames: { hits: {} }, roleInTutorial: 0 });
+  assert.equal(dirty.length, 1);
+  assert.ok(fails({ dom: [{ where: "lobby", names: [], tutRoleCards: 1 }], frames: { hits: {} }, roleInTutorial: 0 }).length === 1);
+  assert.ok(fails({ dom: clean, frames: { hits: { 하린: 2 } }, roleInTutorial: 0 }).length === 1);
+  assert.ok(fails({ dom: clean, frames: { hits: {} }, roleInTutorial: 1 }).length === 1);
+  const detail = tutorialLeakChecks({ dom: [{ where: "roleReveal", names: ["도윤"], tutRoleCards: 0 }], frames: { hits: {} }, roleInTutorial: 0 }).find((l) => !l.ok).detail;
+  assert.match(detail, /roleReveal/);
+  assert.ok(tutorialLeakChecks({ dom: [], frames: { hits: {} }, roleInTutorial: 0 }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(tutorialLeakChecks({ dom: clean, frames: null, roleInTutorial: 0 }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(tutorialLeakChecks({ dom: clean, frames: { hits: {} }, roleInTutorial: null }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+const tutRevealIn = (over = {}) => ({
+  reveal: { card: RR(123, 170, 144, 280), stamp: RR(150, 300, 90, 40), line: RR(60, 470, 270, 36) },
+  next: RR(314, 760, 56, 56),
+  viewport: TV,
+  ...over,
+});
+const tutTrFails = (a) => tutorialRevealChecks(a).filter((l) => !l.ok).map((l) => l.id);
+
+test("tutorialRevealChecks: 카드·도장·줄·[다음] 이 화면 안에 있고 서로 교차하지 않으면 통과한다(도장은 카드 안에 놓인다)", () => {
+  assert.deepEqual(tutTrFails(tutRevealIn()), []);
+  assert.ok(tutorialRevealChecks(tutRevealIn()).length >= 2);
+});
+
+test("tutorialRevealChecks: [다음] 이 카드·줄·도장과 겹치거나 화면 밖이면 실패한다", () => {
+  assert.ok(tutTrFails(tutRevealIn({ next: RR(314, 400, 56, 56) })).length > 0); // 카드(123~267)는 아니지만 줄 대신: 아래 줄과
+  assert.ok(tutTrFails(tutRevealIn({ next: RR(200, 440, 56, 56) })).length > 0); // 카드와 겹침
+  assert.ok(tutTrFails(tutRevealIn({ next: RR(300, 480, 56, 56) })).length > 0); // 줄과 겹침
+  assert.ok(tutTrFails(tutRevealIn({ reveal: { card: RR(123, 170, 144, 280), stamp: RR(150, 300, 90, 40), line: RR(60, 440, 270, 36) } })).length > 0); // 줄이 카드와 겹침
+  assert.ok(tutTrFails(tutRevealIn({ reveal: { card: RR(123, 170, 144, 280), stamp: RR(150, 440, 90, 60), line: RR(60, 470, 270, 36) } })).length > 0); // 도장이 줄과 겹침
+  assert.ok(tutTrFails(tutRevealIn({ reveal: { card: RR(123, 170, 144, 280), stamp: RR(150, 300, 90, 40), line: RR(-10, 470, 270, 36) } })).length > 0); // 줄이 화면 밖
+  assert.ok(tutTrFails(tutRevealIn({ viewport: { w: 390, h: 480 } })).length > 0); // 줄이 화면 아래 밖
+});
+
+test("tutorialRevealChecks: 측정값이 없으면 공허 통과하지 않는다", () => {
+  for (const a of [tutRevealIn({ reveal: null }), tutRevealIn({ next: null }), tutRevealIn({ viewport: null }), tutRevealIn({ reveal: { card: null, stamp: RR(1, 1, 1, 1), line: RR(1, 1, 1, 1) } })]) {
+    assert.ok(tutorialRevealChecks(a).some((l) => !l.ok && /측정값 없음/.test(l.detail)), JSON.stringify(a));
+  }
+});
+
+const tutRoleCards = (over = {}) => ["citizen", "mafia", "doctor", "police"].map((kind, i) => ({ kind, rect: RR(20 + (i % 2) * 180, 120 + Math.floor(i / 2) * 250, 170, 240), ...(over[kind] ?? {}) }));
+const tutRcFails = (roles, next = RR(314, 760, 56, 56), vp = TV) => tutorialRoleCardChecks({ roles, next, viewport: vp }).filter((l) => !l.ok).map((l) => l.id);
+
+test("tutorialRoleCardChecks: 네 직업 카드가 한 장씩·화면 안·서로·[다음] 과 교차 0 이면 통과한다", () => {
+  assert.deepEqual(tutRcFails(tutRoleCards()), []);
+  assert.equal(tutorialRoleCardChecks({ roles: tutRoleCards(), next: RR(314, 760, 56, 56), viewport: TV }).map((l) => l.id).join(","), "TC1,TC2,TC3,TC4");
+});
+
+test("tutorialRoleCardChecks: 카드 종류·개수·화면 밖·서로 겹침·[다음] 겹침을 각각 자기 id 로 실패시킨다", () => {
+  assert.deepEqual(tutRcFails(tutRoleCards().slice(0, 3)), ["TC1"]);
+  assert.deepEqual(tutRcFails([...tutRoleCards(), tutRoleCards()[0]]), ["TC1"]);
+  assert.deepEqual(tutRcFails(tutRoleCards({ mafia: { rect: RR(370, 120, 170, 240) } })), ["TC2"]);
+  assert.deepEqual(tutRcFails(tutRoleCards({ mafia: { rect: RR(150, 130, 170, 240) } })), ["TC3"]);
+  assert.deepEqual(tutRcFails(tutRoleCards(), RR(300, 500, 56, 56)), ["TC4"]);
+  assert.ok(tutorialRoleCardChecks({ roles: null, next: null, viewport: TV }).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+test("tutorialOpeningChecks: 램프 번짐 2·번쩍임 1·소리 링 3 이고 모션 줄이기에서는 모두 0 이며 어둠이 정지한다", () => {
+  const normal = { present: true, lamps: 2, flash: 1, rings: 3, still: false };
+  assert.ok(tutorialOpeningChecks(normal).every((l) => l.ok));
+  assert.ok(tutorialOpeningChecks({ ...normal, lamps: 1 }).some((l) => !l.ok));
+  assert.ok(tutorialOpeningChecks({ ...normal, flash: 2 }).some((l) => !l.ok));
+  assert.ok(tutorialOpeningChecks({ ...normal, rings: 2 }).some((l) => !l.ok));
+  const reduced = { present: true, lamps: 0, flash: 0, rings: 0, still: true };
+  assert.ok(tutorialOpeningChecks(reduced, { reduced: true }).every((l) => l.ok));
+  assert.ok(tutorialOpeningChecks({ ...reduced, flash: 1 }, { reduced: true }).some((l) => !l.ok));
+  assert.ok(tutorialOpeningChecks({ ...reduced, still: false }, { reduced: true }).some((l) => !l.ok));
+  assert.ok(tutorialOpeningChecks(normal, { reduced: true }).some((l) => !l.ok));
+  assert.ok(tutorialOpeningChecks({ ...normal, present: false }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(tutorialOpeningChecks(null).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+test("tutorialTimingChecks: 오프닝 4.6초 ± 1.0초, [처리] 뒤 0.7초 ± 0.5초 이고 경계는 통과한다", () => {
+  assert.equal(TUTORIAL_OPENING_MS, 4600);
+  assert.equal(TUTORIAL_ERRAND_MS, 700);
+  const ok = (o, e) => tutorialTimingChecks({ openingMs: o, errandMs: e }).every((l) => l.ok);
+  assert.ok(ok(4600, 700));
+  assert.ok(ok(3600, 200));
+  assert.ok(ok(5600, 1200));
+  assert.ok(!ok(3599, 700));
+  assert.ok(!ok(5601, 700));
+  assert.ok(!ok(4600, 199));
+  assert.ok(!ok(4600, 1201));
+  assert.ok(tutorialTimingChecks({ openingMs: 4600, errandMs: null }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(tutorialTimingChecks({ openingMs: 4600 }).filter((l) => l.id === "TM1").every((l) => l.ok)); // 한쪽만 줘도 그쪽만 판정한다
+  assert.equal(tutorialTimingChecks({ openingMs: 4600 }).length, 1);
+});
+
+test("tutorialDotChecks: 점 7개이고 지금 점이 장면 번호와 같다", () => {
+  assert.ok(tutorialDotChecks({ count: 7, now: 3 }, 3).every((l) => l.ok));
+  assert.ok(tutorialDotChecks({ count: 6, now: 3 }, 3).some((l) => !l.ok));
+  assert.ok(tutorialDotChecks({ count: 7, now: 2 }, 3).some((l) => !l.ok));
+  assert.ok(tutorialDotChecks(null, 3).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+test("tutorialSkipChecks: [건너뛰기] 의 누르는 영역이 44×44 이상이고 화면 안이다(알약 32 + 투명 확장)", () => {
+  const skip = { rect: RR(300, 12, 76, 32), hit: RR(298, 6, 80, 44) };
+  assert.ok(tutorialSkipChecks({ skip, viewport: TV }).every((l) => l.ok));
+  assert.ok(tutorialSkipChecks({ skip: { rect: skip.rect, hit: RR(298, 6, 80, 43) }, viewport: TV }).some((l) => !l.ok));
+  assert.ok(tutorialSkipChecks({ skip: { rect: skip.rect, hit: RR(298, 6, 43, 44) }, viewport: TV }).some((l) => !l.ok));
+  assert.ok(tutorialSkipChecks({ skip: { rect: RR(350, 12, 76, 32), hit: RR(348, 6, 80, 44) }, viewport: TV }).some((l) => !l.ok));
+  assert.ok(tutorialSkipChecks({ skip: null, viewport: TV }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+test("tutorialEvidenceChecks: 장면 4 는 눈 1·기록 한 줄, 장면 5 는 증거 카드·선 2·수식 줄이고 수식 줄이 [다음] 과 겹치지 않는다", () => {
+  const s4 = { eye: 1, recordRows: 1, traceCard: null, links: 0, formula: null };
+  assert.ok(tutorialEvidenceChecks(s4, { scene: 4 }).every((l) => l.ok));
+  assert.ok(tutorialEvidenceChecks({ ...s4, eye: 0 }, { scene: 4 }).some((l) => !l.ok));
+  assert.ok(tutorialEvidenceChecks({ ...s4, recordRows: 2 }, { scene: 4 }).some((l) => !l.ok));
+  const s5 = { eye: 0, recordRows: 0, traceCard: RR(16, 130, 358, 120), links: 2, formula: RR(60, 700, 260, 48) };
+  assert.ok(tutorialEvidenceChecks(s5, { scene: 5, next: RR(314, 760, 56, 56) }).every((l) => l.ok));
+  assert.ok(tutorialEvidenceChecks({ ...s5, links: 1 }, { scene: 5, next: RR(314, 760, 56, 56) }).some((l) => !l.ok));
+  assert.ok(tutorialEvidenceChecks({ ...s5, traceCard: null }, { scene: 5, next: RR(314, 760, 56, 56) }).some((l) => !l.ok));
+  assert.ok(tutorialEvidenceChecks({ ...s5, formula: RR(280, 740, 100, 48) }, { scene: 5, next: RR(314, 760, 56, 56) }).some((l) => !l.ok));
+  assert.ok(tutorialEvidenceChecks(null, { scene: 5, next: null }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+test("tutorialEntryChecks kind end: 마무리 카드 1개·진입 카드·단추 0개이고 방 코드 칸·[방 만들기] 와 교차 0", () => {
+  const end = { entry: { cards: 0, buttons: 0, ends: 1, rect: RR(20, 300, 350, 84) } };
+  assert.deepEqual(teFails(entryIn(end), { kind: "end" }), []);
+  assert.ok(teFails(entryIn({ entry: { cards: 0, buttons: 0, ends: 0, rect: null } }), { kind: "end" }).length > 0);
+  assert.ok(teFails(entryIn({ entry: { cards: 1, buttons: 0, ends: 1, rect: RR(20, 300, 350, 84) } }), { kind: "end" }).length > 0);
+  assert.ok(teFails(entryIn(end), { kind: "card" }).length > 0); // 카드 기대에 카드가 없음
+  assert.ok(teFails(entryIn({ entry: { cards: 1, buttons: 0, ends: 1, rect: RR(20, 300, 350, 84) } }), { kind: "card" }).length > 0); // 카드와 마무리 카드가 함께 있으면 실패
+  assert.ok(teFails(entryIn({ ...end, create: RR(20, 370, 350, 52), field: RR(20, 450, 350, 56) }), { kind: "end" }).length > 0);
 });
