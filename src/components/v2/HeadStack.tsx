@@ -26,12 +26,14 @@ import { VoteBadge } from "./VoteBadge";
 // 이름표 위 아이콘의 읽을 이름(승인 bundle.js NameTag 와 같은 문구)
 const MINE_LABEL = "내가 가리킨 사람";
 const DONE_LABEL = "투표함";
+/** 첫 사건(튜토리얼)의 내 이름표는 이름이 이미 "나" 라 접미를 붙이지 않는다(0080-16) */
+const ME_NAME = "나";
 
 export interface NameTagProps {
   name: string;
   /** 자리 구분색 — `var(--seat-1)` ~ `var(--seat-8)` 값 */
   color: string;
-  /** 내 캐릭터: 닉네임 뒤에 " (나)" 와 안쪽 테두리 */
+  /** 내 캐릭터: 닉네임 뒤에 " (나)" 와 안쪽 테두리(이름이 "나" 면 접미 없이 테두리만) */
   me?: boolean;
   /** 연결 끊김: 불투명도 0.55, 점 gray-700 */
   away?: boolean;
@@ -77,7 +79,7 @@ export function NameTag({ name, color, me, away, mine, done, doneLabel, blink, c
           <V2Icon name="eye" size={16} />
         </span>
       ) : null}
-      <span className="mv-tag__name">{me ? `${name} (나)` : name}</span>
+      <span className="mv-tag__name">{me && name !== ME_NAME ? `${name} (나)` : name}</span>
       {traceMark !== undefined ? <span className="mv-sr">흔적과 같은 옷</span> : null}
       {mine ? <V2Icon name="point" size={16} label={MINE_LABEL} /> : null}
       {done ? (

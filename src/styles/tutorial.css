@@ -1,0 +1,101 @@
+/* 첫 사건 화면(17-04, UI-SPEC "포커스 테두리 계약"·"사회자 띠 · 목소리 계약"). 값은 tokens.css 변수만 쓴다(새 토큰·hex 없음).
+   진홍은 쓰지 않는다 — 진홍은 .tut-opening·.tut-reveal·.tut-role 연출 선택자에서만 쓴다(정적 가드, T-18).
+   틀은 방 화면(.mf-room)과 같다: 헤더·맵·아래 패널은 실제 게임 부품이 그리고, 이 파일은 그 위에 얹는 층(포커스 상자·진행 점·[다음])만 맡는다. */
+
+.mf-tut { background: var(--night-950); }
+
+/* 무대 장면(1·7)의 틀: WorldStage 한 장이 방 본문을 채운다. 헤더·아래 패널 없음 */
+.mf-tut__stage { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; isolation: isolate; background: var(--night-950); }
+
+/* 허용 목록 밖은 눌리지 않는다(T-10): 장면마다 inert 를 붙이고, 이중 방어로 눌림도 막는다. 소리 단추·[건너뛰기]·[다음]은 inert 밖에 있다 */
+[data-tutorial-screen] [inert], [data-tutorial-screen] [inert] * { pointer-events: none; }
+
+/* 튜토리얼 안의 기존 호출 빛남(.is-call)은 맥박 없이 정지 테두리만 남긴다 — 깜빡임은 포커스 상자 한 규칙뿐이다(0080-6) */
+[data-tutorial-screen] .is-call::before { animation: none; opacity: 0; }
+
+/* ---- 포커스 상자(FocusRing) ---- */
+/* 상자는 화면 좌표(대상의 getBoundingClientRect)로 놓는다. 이름표 층(--z-tags) 위, 띠(--z-overlay + 1) 위 */
+.tut-focus-layer { display: contents; }
+.tut-focus {
+  position: fixed;
+  z-index: calc(var(--z-overlay) + 2);
+  box-sizing: border-box;
+  border: 4px solid var(--light-lamp);
+  pointer-events: none;
+  animation: tut-ring 1s ease-in-out infinite;
+}
+/* 번짐: 정적 box-shadow 의 불투명도만 깜빡인다(합성기가 처리 — 55fps 영향 최소) */
+.tut-focus::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  box-shadow: 0 0 22px 6px color-mix(in srgb, var(--light-lamp) 55%, transparent);
+  pointer-events: none;
+  animation: tut-glow 1s ease-in-out infinite;
+}
+/* 0%·100% = 테두리 light-lamp + 번짐, 50% = 테두리 20% 불투명 + 번짐 0 (시안 blinkring) */
+@keyframes tut-ring { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+@keyframes tut-glow { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ---- 위 줄: 진행 점 · [건너뛰기] (T-16) ---- */
+.tut-progress {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: calc(var(--z-overlay) + 3);
+  box-sizing: border-box;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 var(--space-xs) 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--overlay-ink);
+}
+.tut-dots { display: flex; align-items: center; gap: var(--space-xs); }
+.tut-dot { display: block; width: 8px; height: 8px; border-radius: var(--space-xs); background: var(--gray-500); }
+.tut-dot[data-state="done"] { background: var(--brass-400); }
+.tut-dot[data-state="now"] { width: 20px; background: var(--light-lamp); }
+/* [건너뛰기]: 글 Label 14/400 gray-300. 누르는 영역은 알약 밖으로 투명하게 44×44 이상 늘린다 */
+.tut-skip { position: relative; height: 32px; padding: 0 10px; border: 0; background: none; color: var(--gray-300); font-family: var(--font-ui); font-size: 14px; font-weight: 400; line-height: 1; cursor: pointer; white-space: nowrap; }
+.tut-skip::before { content: ""; position: absolute; inset: -6px -2px; }
+.tut-skip:focus-visible, .tut-next:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+
+/* ---- [다음] (T-5): 오른쪽 20·아래 28(방 틀이 이미 안전 영역을 비켜 있다), 지름 56 원, 면 night-700 ---- */
+.tut-next {
+  position: absolute;
+  right: 20px;
+  bottom: 28px;
+  z-index: calc(var(--z-overlay) + 3);
+  box-sizing: border-box;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--night-700);
+  color: var(--light-lamp);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+/* 모양 강조는 포커스 테두리와 같은 4px 램프 빛 깜빡임(같은 키프레임) 한 규칙이다 */
+.tut-next::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: 4px solid var(--light-lamp);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: tut-ring 1s ease-in-out infinite;
+}
+
+/* 모션 줄이기: 깜빡임을 끄고 정지한 4px 테두리 + 번짐 중간값(테두리는 항상 보인다) */
+@media (prefers-reduced-motion: reduce) {
+  .tut-focus, .tut-focus::before, .tut-next::before { animation: none; }
+  .tut-focus::before { opacity: .5; }
+}
