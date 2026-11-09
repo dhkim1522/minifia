@@ -3,9 +3,9 @@ phase: "17"
 slug: "tutorial-first-case"
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
 # audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-11-09"
 ---
 
@@ -42,26 +42,26 @@ created: "2026-11-09"
 
 | Requirement | Behavior | Test Type | Automated Command | File Exists | Status |
 |-------------|----------|-----------|-------------------|-------------|--------|
-| TUT-01 | 큰 카드↔작은 단추(`minifia.tutorial.seen`)·Home 에만 | client | `npx vitest run --project client test/client/tutorialEntry.test.tsx` | ❌ W0 | ⬜ pending |
-| TUT-01 | 혼자 하기 8장면·[건너뛰기]·마무리 카드 | client | `npx vitest run --project client test/client/tutorialScreen.test.tsx` | ❌ W0 | ⬜ pending |
-| TUT-01·03 | 폰 6종 기하·장면 순서·소켓 프레임 0 | E2E | `npm run e2e -- --url http://localhost:5173 --only tutorial-solo` | ❌ W0 | ⬜ pending |
-| TUT-02 | `start.tutorial`·`tutorialDone`·전원 완료 조기 종료·150초·봇/끊김 셈 | worker | `npx vitest run --project worker test/worker/tutorial.test.ts` | ❌ W0 | ⬜ pending |
-| TUT-02 | 순수 규칙·`PHASE_DEFS.tutorial` | unit | `npx vitest run --project unit test/unit/tutorial.test.ts` | ❌ W0 | ⬜ pending |
-| TUT-02 | 대기실 스위치 줄·기다림 화면 | client | `npx vitest run --project client test/client/lobby.test.tsx test/client/tutorialWait.test.tsx` | lobby ✅ / wait ❌ W0 | ⬜ pending |
-| TUT-02 | 함께 진행 실제 흐름 | E2E | `npm run e2e -- --url http://localhost:5173 --only tutorial-together` | ❌ W0 | ⬜ pending |
-| TUT-03 | 장면 표·가짜 view(같은 옷·흔적 구간) | unit | `npx vitest run --project unit test/unit/tutorialScript.test.ts` | ❌ W0 | ⬜ pending |
-| TUT-03 | FocusRing·허용 목록 inert·오답 처리 | client | `npx vitest run --project client test/client/focusRing.test.tsx test/client/tutorialGate.test.tsx` | ❌ W0 | ⬜ pending |
-| TUT-03·04 | 사회자 파형 띠·소리 꺼짐에서 막대만 | client | `npx vitest run --project client test/client/tutorialHostBand.test.tsx` | ❌ W0 | ⬜ pending |
-| TUT-04 | 새 효과음 레시피 한계·해시·버스·간격 | unit | `npx vitest run --project unit test/unit/soundRecipes.test.ts test/unit/soundProvenance.test.ts` | ✅ 수정 | ⬜ pending |
-| TUT-04 | 웅얼 목소리 예약 규칙 | unit | `npx vitest run --project unit test/unit/voice.test.ts` | ❌ W0 | ⬜ pending |
-| TUT-04 | `src/audio/**` 정적 가드 | unit | `npx vitest run --project unit test/unit/soundStaticGuard.test.ts` | ✅ | ⬜ pending |
-| TUT-05 | 실제 `send` 는 끝났음 한 번뿐 | client | `npx vitest run --project client test/client/tutorialScreen.test.tsx` | ❌ W0 | ⬜ pending |
-| TUT-05 | 튜토리얼 소스에 역할·실제 닉네임 경로 없음 | unit | `npx vitest run --project unit test/unit/tutorialStaticGuard.test.ts` | ❌ W0 | ⬜ pending |
-| DEPLOY-05 | 누설 전수(`tutorial` 단계 역할 5종 시점 동일·서버 전용 키 없음) | worker | `npx vitest run --project worker test/worker/leak.test.ts test/worker/tutorialLeak.test.ts` | leak ✅ / ❌ W0 | ⬜ pending |
-| 회귀 | `Record<PhaseId>` 표·매트릭스 | typecheck+unit | `npm run typecheck && npx vitest run --project unit test/unit/nyquist-02-phase-matrix.test.ts test/unit/phases.test.ts` | ✅ 수정 | ⬜ pending |
-| 회귀 | E2E 고정값 사본 | unit+node | `npx vitest run --project unit test/unit/e2eContract.test.ts && node --test scripts/e2e/lib.test.mjs` | ✅ 수정 | ⬜ pending |
+| TUT-01 | 큰 카드↔작은 단추(`minifia.tutorial.seen`)·Home 에만 | client | `npx vitest run --project client test/client/tutorialEntry.test.tsx` | ✅ | ✅ green |
+| TUT-01 | 혼자 하기 8장면·[건너뛰기]·마무리 카드 | client | `npx vitest run --project client test/client/tutorialScreen.test.tsx` | ✅ | ✅ green |
+| TUT-01·03 | 폰 6종 기하·장면 순서·소켓 프레임 0 | E2E | `npm run e2e -- --url http://localhost:5173 --only tutorial-solo` | ✅ | ✅ green |
+| TUT-02 | `start.tutorial`·`tutorialDone`·전원 완료 조기 종료·150초·봇/끊김 셈 | worker | `npx vitest run --project worker test/worker/tutorial.test.ts` | ✅ | ✅ green |
+| TUT-02 | 순수 규칙·`PHASE_DEFS.tutorial` | unit | `npx vitest run --project unit test/unit/tutorial.test.ts` | ✅ | ✅ green |
+| TUT-02 | 대기실 스위치 줄·기다림 화면 | client | `npx vitest run --project client test/client/lobby.test.tsx test/client/tutorialWait.test.tsx` | lobby ✅ / wait ✅ | ✅ green |
+| TUT-02 | 함께 진행 실제 흐름 | E2E | `npm run e2e -- --url http://localhost:5173 --only tutorial-together` | ✅ | ✅ green |
+| TUT-03 | 장면 표·가짜 view(같은 옷·흔적 구간) | unit | `npx vitest run --project unit test/unit/tutorialScript.test.ts` | ✅ | ✅ green |
+| TUT-03 | FocusRing·허용 목록 inert·오답 처리 | client | `npx vitest run --project client test/client/focusRing.test.tsx test/client/tutorialGate.test.tsx` | ✅ | ✅ green |
+| TUT-03·04 | 사회자 파형 띠·소리 꺼짐에서 막대만 | client | `npx vitest run --project client test/client/tutorialHostBand.test.tsx` | ✅ | ✅ green |
+| TUT-04 | 새 효과음 레시피 한계·해시·버스·간격 | unit | `npx vitest run --project unit test/unit/soundRecipes.test.ts test/unit/soundProvenance.test.ts` | ✅ 수정 | ✅ green |
+| TUT-04 | 웅얼 목소리 예약 규칙 | unit | `npx vitest run --project unit test/unit/voice.test.ts` | ✅ | ✅ green |
+| TUT-04 | `src/audio/**` 정적 가드 | unit | `npx vitest run --project unit test/unit/soundStaticGuard.test.ts` | ✅ | ✅ green |
+| TUT-05 | 실제 `send` 는 끝났음 한 번뿐 | client | `npx vitest run --project client test/client/tutorialScreen.test.tsx` | ✅ | ✅ green |
+| TUT-05 | 튜토리얼 소스에 역할·실제 닉네임 경로 없음 | unit | `npx vitest run --project unit test/unit/tutorialStaticGuard.test.ts` | ✅ | ✅ green |
+| DEPLOY-05 | 누설 전수(`tutorial` 단계 역할 5종 시점 동일·서버 전용 키 없음) | worker | `npx vitest run --project worker test/worker/leak.test.ts test/worker/tutorialLeak.test.ts` | leak ✅ / ✅ | ✅ green |
+| 회귀 | `Record<PhaseId>` 표·매트릭스 | typecheck+unit | `npm run typecheck && npx vitest run --project unit test/unit/nyquist-02-phase-matrix.test.ts test/unit/phases.test.ts` | ✅ 수정 | ✅ green |
+| 회귀 | E2E 고정값 사본 | unit+node | `npx vitest run --project unit test/unit/e2eContract.test.ts && node --test scripts/e2e/lib.test.mjs` | ✅ 수정 | ✅ green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ✅ green · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -90,11 +90,19 @@ created: "2026-11-09"
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 10s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [ ] Feedback latency < 10s — 미충족 수용(20개 파일 단위 시험 묶음 수십 초, E2E 분 단위)
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-11-09
+
+## Validation Audit 2026-11-09
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
