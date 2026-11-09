@@ -4,7 +4,7 @@
 
 ## 지금 상태
 
-- **v3.0 구현 끝(브랜치 `v3`)**: 13~17페이즈 완료·배포(결정 0072~0080). **17(튜토리얼 "첫 사건", 결정 0078·0080)이 끝났다** — 첫 화면 카드로 혼자 하기(서버 0), 방장 스위치로 함께 진행(서버 `tutorial` 단계 게이트·150초), 파형+자막 띠 사회자·깜빡이는 테두리. 배포 version `2026-11-09T06:26:08Z+4858e54f`(minifia-v3). 남은 것은 v3.0 실테스트.
+- **v3.0 구현 끝(브랜치 `v3`)**: 13~17페이즈 완료·배포(결정 0072~0080). **17(튜토리얼 "첫 사건", 결정 0078·0080)이 끝났다** — 첫 화면 카드로 혼자 하기(서버 0), 방장 스위치로 함께 진행(서버 `tutorial` 단계 게이트·150초), 파형+자막 띠 사회자·깜빡이는 테두리. 배포 version `2026-11-09T06:26:08Z+4858e54f`(minifia-v3). 17 UAT 뒤 할 일 재설계(결정 0081) 진행 중.
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`(페이즈 문서 `v2.0-phases/`). 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터(결정 0047·0048)**: 원본 https://claude.ai/artifact/NP1XfUrYTTqQ5nAB1HKYT5 (사본 `design/v2.0/figure/`, 모듈 `design/v2.0/blockout/character.js`). `3d/mf3d.js` 는 옛 방식이라 안 쓴다.
 - **v3.0 시안**: 17 첫 사건 https://claude.ai/artifact/BLPWgYmeQrKJYekHcBPwR8 (사본 `design/v3.0/first-case/`), 16 https://claude.ai/artifact/9y71ePzHX9TamPrkCgt7KT (사본 `design/v3.0/tutorial/`), 15 https://claude.ai/artifact/X9XPJtc6mm3UdihPA6fNYD.
@@ -26,5 +26,6 @@
 
 ## 다음 할 일
 
-1. **v3.0 실테스트**를 한 번에(팀·실기기, 사람 2~3명이면 대기실 [봇], 결정 0075): 첫 화면 혼자 하기·방장 함께 진행, 웅얼 목소리·깜빡임 체감, 처음 온 사람 반응, 심부름·증거 체감, 가짜 장소 무반응 읽힘, 같은 옷 표시 색(바꿀 곳은 0079-11 표). v2.0 실기기 칸 `.planning/milestones/v2.0-phases/12-sound-polish/12-TEAM-TEST.md` 포함. 통과하면 main 반영.
-2. 시안용 장면 촬영: 로컬 `npm run dev` + 테스트 방·봇으로 찍는다(`scripts/gallery.mjs` 참고, 광장은 `pickMapViaUi`). three `0.186.1` 고정, 성능 폰 기준 결정 0055. 포트폴리오는 v3.0 뒤.
+1. **결정 0081 반영(2026-11-09)**: 17 UAT 피드백과 조사(`docs/research-v3-missions-ux.md`)로 할 일을 다시 설계한다. 순서: ① 바로 고칠 것 4가지(옷 중복 해소, 낮 조명, 튜토리얼 스포트라이트·[다음] 글 단추, 낡은 문구) ② 원인→결과 하루 흐름 + 저녁 등불·밤 집 찾기·아침 현장 조사 + 의심 보드 ③ 방장이 고르는 기본/확장 판 ④ 맵 단계 확장. 로드맵 페이즈 추가부터. 17 UAT Test 3(폰 2대)은 실테스트 때.
+2. **v3.0 실테스트**는 위 반영 뒤 한 번에(팀·실기기, 사람이 적으면 대기실 [봇]). v2.0 실기기 칸 `.planning/milestones/v2.0-phases/12-sound-polish/12-TEAM-TEST.md` 포함. 통과하면 main 반영.
+3. 시안용 장면 촬영은 로컬 + 테스트 방·봇(`scripts/gallery.mjs`). 포트폴리오는 v3.0 뒤.
