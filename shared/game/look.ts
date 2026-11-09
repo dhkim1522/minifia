@@ -57,3 +57,8 @@ export function resolveLookConflicts<P extends { seat: number; look?: OutfitId }
     return look === undefined ? p : { ...p, look };
   });
 }
+
+/** 다른 사람이 직접 고른 옷의 집합(자리 함수 — RED). 구현 전에는 빈 집합이다. */
+export function lockedOutfits(_others: ReadonlyArray<{ look?: OutfitId }>): ReadonlySet<OutfitId> {
+  return new Set<OutfitId>();
+}

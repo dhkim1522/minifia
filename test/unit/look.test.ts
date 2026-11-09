@@ -1,7 +1,7 @@
 // 로비 의상 규칙 단위 시험(10-02, 결정 D-6·L25). 결과는 한 줄 문자열로 비교한다(TAP 증거 규칙).
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_LOOK, LOOK_MIN_GAP_MS, resolveLookConflicts, setLook } from "../../shared/game/look";
+import { DEFAULT_LOOK, LOOK_MIN_GAP_MS, lockedOutfits, resolveLookConflicts, setLook } from "../../shared/game/look";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { OUTFIT_IDS } from "../../shared/protocol";
@@ -143,6 +143,45 @@ describe("시작 때 겹친 옷 풀기 (P18-1, D-01)", () => {
     const a = seats(looks).map((p) => ({ ...p, role: p.seat % 2 === 0 ? "mafia" : "citizen" }));
     const b = seats(looks).map((p) => ({ ...p, role: p.seat % 2 === 0 ? "citizen" : "mafia" }));
     expect(`${line(resolveLookConflicts(a))}|${line(resolveLookConflicts(b))}`).toBe("-,mafia,doctor,police,detective|-,mafia,doctor,police,detective");
+  });
+});
+
+describe("옷장 잠금 (P18-2, D-02)", () => {
+  const withLook = (id: string, look: OutfitId) => (p: Player): Player => (p.id === id ? { ...p, look } : p);
+
+  it("lockedOutfits 는 look 키가 있는 사람의 옷만 모은다(기본 coat·look 없는 사람은 넣지 않는다)", () => {
+    expect([...lockedOutfits([{ look: "hood" }, {}, { look: "noir" }, { look: "hood" }])].sort().join(",")).toBe("hood,noir");
+  });
+
+  it("남이 직접 hood 를 입고 있으면 setLook(hood) 는 BAD_MESSAGE 이고 입력 상태를 바꾸지 않는다", () => {
+    const s = room("lobby", 4, withLook("p1", "hood"));
+    const before = JSON.stringify(s);
+    expect(res(setLook(s, "p0", "hood"))).toBe("BAD_MESSAGE");
+    expect(JSON.stringify(s)).toBe(before);
+  });
+
+  it("남이 look 없이(기본 coat) 있으면 coat 는 잠기지 않는다: 지금 noir 인 사람이 coat 를 고르면 저장된다", () => {
+    const s = room("lobby", 4, withLook("p0", "noir"));
+    const r = setLook(s, "p0", "coat");
+    expect(res(r)).toBe("ok");
+    expect(r.ok ? r.state.players.map((p) => p.look ?? "-").join(",") : "").toBe("coat,-,-,-");
+  });
+
+  it("내가 이미 입은 옷을 다시 보내면 입력 상태 그대로 ok 다(같은 값 검사가 잠금보다 먼저)", () => {
+    const s = room("lobby", 4, withLook("p0", "hood"));
+    const r = setLook(s, "p0", "hood");
+    expect(res(r)).toBe("ok");
+    expect(r.ok && r.state === s).toBe(true);
+  });
+
+  it("결과 단계에서 left 로 남은 사람의 직접 고른 옷도 잠긴다", () => {
+    const s = room("ended", 4, (p) => (p.id === "p1" ? { ...p, look: "hood", left: true as const, connected: false, connId: null } : p));
+    expect(res(setLook(s, "p0", "hood"))).toBe("BAD_MESSAGE");
+  });
+
+  it("검사 순서: 단계가 틀리면 잠긴 옷이어도 WRONG_PHASE 가 먼저다", () => {
+    const s = room("discussion", 4, withLook("p1", "hood"));
+    expect(res(setLook(s, "p0", "hood"))).toBe("WRONG_PHASE");
   });
 });
 

@@ -162,6 +162,41 @@ describe("의상 — 시작 때 겹친 옷 풀기 (D-01, P18-1)", () => {
   });
 });
 
+describe("옷장 잠금 — 서버 (D-02)", () => {
+  it("손님 A 가 hood 를 고른 뒤 손님 B 가 hood 를 보내면 B 의 소켓만 자기 state 한 프레임(오류 없음), 방장·A 소켓은 0프레임, 저장된 방의 B 는 그대로다", async () => {
+    const { s, socks } = await lobby();
+    await sendDress(socks, 1, "hood");
+    await pause(300);
+    const frames = await sendDress(socks, 2, "hood");
+    expect(summary(frames[2]!)).toBe("[state:lobby]");
+    expect(summary(frames[0]!)).toBe("[]");
+    expect(summary(frames[1]!)).toBe("[]");
+    expect(await storedLooks(s.code)).toBe("0:-,1:hood,2:-");
+    expect(viewLooks(socks[2]!)).toBe("0:-,1:hood,2:-");
+  });
+
+  it("남의 기본 coat 는 잠기지 않는다: 직접 고른 사람이 coat 를 고르면 모두에게 반영된다", async () => {
+    const { s, socks } = await lobby();
+    await sendDress(socks, 1, "hood");
+    await pause(300);
+    const frames = await sendDress(socks, 1, "coat");
+    for (const f of frames) expect(summary(f)).toBe("[state:lobby]");
+    expect(await storedLooks(s.code)).toBe("0:-,1:coat,2:-");
+  });
+
+  it("결과(ended) 단계에서도 같다: 남이 직접 고른 옷은 보낸 소켓만 state 한 프레임을 받고 저장은 그대로다", { timeout: 60_000 }, async () => {
+    const g = await endedGame4();
+    const pickIdx = g.socks.indexOf(g.living[0]!.sock);
+    const otherIdx = g.socks.indexOf(g.dead.sock);
+    await sendDress(g.socks, pickIdx, "hood");
+    const before = await storedLooks(g.code);
+    expect(before).toContain(`${g.living[0]!.seat}:hood`);
+    const frames = await sendDress(g.socks, otherIdx, "hood");
+    for (const [i, f] of frames.entries()) expect(`${i}:${summary(f.filter((m) => m.t !== "world"))}`).toBe(`${i}:${i === otherIdx ? "[state:ended]" : "[]"}`);
+    expect(await storedLooks(g.code)).toBe(before);
+  });
+});
+
 // ---- L25·L26: 의상은 공개 값이고 역할의 함수가 아니다 (결정 D-6, 0015) ----
 
 /** 6명 판의 좌석별 역할 배정. B 는 A 에서 마피아와 시민을 맞바꾼 배정이다(경찰·의사 자리는 그대로). */
