@@ -217,7 +217,7 @@ Plans:
 **Goal:** 처음 온 사람이 60~90초 미니 에피소드로 이 게임의 목적·재미·한 판 흐름·직업별 할 일을 겪어 알고, 흥미를 느껴 첫 판으로 이어진다(결정 0078).
 **Requirements**: TBD
 **Depends on:** Phase 16
-**Plans:** 0 plans
+**Plans:** 10 plans (6 waves)
 
 **Success Criteria:**
 1. 첫 화면(방 만들기·참가 전)에서 튜토리얼을 혼자 시작할 수 있고, 끝나거나 [건너뛰기]하면 첫 화면으로 돌아온다
@@ -227,7 +227,27 @@ Plans:
 5. 튜토리얼은 서버 게임 상태를 바꾸지 않고(함께 진행의 끝 신호만 보냄) 역할 정보를 읽거나 보내지 않는다
 
 Plans:
-- [ ] TBD (Design 캔버스 → /gsd-ui-phase 17 → /gsd-plan-phase 17)
+**Wave 1**
+- [ ] 17-01-PLAN.md — 트레이서: 함께 진행 서버 게이트(start.tutorial → tutorial 단계 → tutorialDone·끊김·150초 → assigning)·단계 표 연쇄·누설 검사 확장·요구사항 등록·결정 0080
+- [ ] 17-02-PLAN.md — 사회자 웅얼 목소리(voice.syl·voice.ts)와 효과음 tut.* 12개, 소리 고정값 70
+- [ ] 17-03-PLAN.md — (TDD) 첫 사건 대본: 장면 표·문구·출연·가짜 view·로컬 send 어댑터·정적 가드
+
+**Wave 2**
+- [ ] 17-04-PLAN.md — 트레이서: TutorialScreen(실제 GameMap·WorldStage + 로컬 어댑터)·포커스 깜빡임 테두리·파형 자막 띠·진행 점·[건너뛰기]·[다음]·허용 목록 밖 차단
+
+**Wave 3**
+- [ ] 17-05-PLAN.md — 장면 4 목격·장면 5 증거 연결(선·수식)·장면 6 지목과 정체 공개·오답 도움
+- [ ] 17-06-PLAN.md — 첫 화면 큰 카드 "튜토리얼 진행"·혼자 하기·마무리 카드·작은 단추(minifia.tutorial.seen)
+- [ ] 17-07-PLAN.md — 함께 진행 화면: 방장 스위치(+76)·RoomScreen tutorial 분기·끝났음 하나·기다림 화면·재접속·띠/알림음 정리
+
+**Wave 4**
+- [ ] 17-08-PLAN.md — 장면 1 오프닝(램프·비명·밤)·장면 7 직업 카드 4종
+
+**Wave 5**
+- [ ] 17-09-PLAN.md — E2E tutorial-solo(폰 6종)·tutorial-together, 판정 함수, 로컬 실행
+
+**Wave 6**
+- [ ] 17-10-PLAN.md — 네 단계(재개 지점 포함): 로컬 전체 검증(폰 6종 회귀·성능) → 결정 0080 완성·지도 문서 → minifia-v3 배포(계정 가드)·배포본 확인 → HANDOFF·push
 
 ## Progress
 
@@ -237,7 +257,7 @@ Plans:
 | 14. 사회자 진행과 도구 이름표 | v3.0 | 9/9 | Complete (실기기 확인은 v3.0 끝) | 2026-11-07 |
 | 15. 낮 심부름·목격 기록·밤 흔적 | v3.0 | 10/10 | Complete (배포 `f882224e`) | 2026-11-07 |
 | 16. 단추 정리·심부름 증거 | v3.0 | 10/10 | Complete (배포 `49b1ad57`, 실기기 확인은 v3.0 끝) | 2026-11-08 |
-| 17. 튜토리얼 "첫 사건" | v3.0 | 0/? | Not started | - |
+| 17. 튜토리얼 "첫 사건" | v3.0 | 0/10 | Planned | - |
 
 ## Backlog
 
