@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 17
 current_phase_name: "튜토리얼 \"첫 사건\""
-current_plan: 7
+current_plan: 8
 status: executing
-stopped_at: Completed 17-04-PLAN.md
-last_updated: "2026-11-09T03:58:53.675Z"
+stopped_at: Completed 17-05-PLAN.md
+last_updated: "2026-11-09T04:15:35.791Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 17 execution started
-state_head: 0e6ccd55209e9b7d35583df7337e3d61ce53d891
+state_head: cad2a67470fb1b0fbbc0b2281afb5db26c7333be
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 47
-  completed_plans: 41
+  completed_plans: 42
   percent: 80
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 17 (튜토리얼 "첫 사건") — EXECUTING
-Current Plan: 7
+Current Plan: 8
 Total Plans in Phase: 12
 Status: Ready to execute
 Last activity: 2026-11-09 — Phase 17 execution started
@@ -239,6 +239,7 @@ Last activity: 2026-11-09 — Phase 17 execution started
 | Phase 17 P11 | 6 min | 2 tasks | 3 files |
 | Phase 17 P12 | 10 min | 3 tasks | 8 files |
 | Phase 17 P04 | 16 min | 3 tasks | 19 files |
+| Phase 17 P05 | 25 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -526,6 +527,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 17]: 17-04: [다음]의 4px 램프 빛 깜빡임은 .tut-next 자기 테두리가 맡고 FocusRing 묶음에는 넣지 않는다(같은 곳 이중 상자 방지, UI-SPEC T-5)
 - [Phase 17]: 17-04: 튜토리얼 장면 6 아래 패널(채팅 입력줄 포함)은 숨기지 않고 그리되 inert 로 눌림만 막는다. 도윤은 follow 카메라 투영상 화면 오른쪽 밖(x≈446/390)에서 들어온다
 - [Phase 17]: 17-04: 첫 사건 화면의 허용 목록은 inert 를 DOM 에 직접 붙이는 방식이고 허용 대상은 차단 컨테이너 밖에 둔다. 장면 확장은 renderSceneLayer·onPoint 자리에 17-05·17-08 이 얹는다
+- [Phase 17]: 17-05: 띠 흔들림은 17-04 의 .tut-band.is-shake 유지, 오답마다 새 view 로 임시 내 선택 표시를 비움, 장면 4 기록 카드는 GameMap 기록 카드 자리(D+8)에 둠, 화면의 소리는 playTutorialCue·sayTutorialLine 경유
 
 ### Pending Todos
 
@@ -592,8 +594,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09T03:58:53.317Z
-Stopped at: Completed 17-04-PLAN.md
+Last session: 2026-11-09T04:15:35.382Z
+Stopped at: Completed 17-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
