@@ -4,7 +4,8 @@
 // 앱에는 E2E 전용 단축(URL 장면 번호 등)이 없다 — 실제 사용자 경로(클릭)로만 간다. 150초 시간 초과 경로는 기다리지 않는다(워커 시험 17-12 가 맡는다, 0080-19).
 // 실제 브라우저의 시간 판정은 여유를 둔다: 오프닝 자동 넘김 4.6초 ± 1.0초, [처리] 뒤 0.7초 ± 0.5초(lib.tutorialTimingChecks).
 // helpers 는 flows.mjs 가 넘긴다(errand.mjs·host.mjs 와 같은 모양 — 서로 import 하지 않는다): { recorder, attempt, startHost, openGuest }
-import { SetupError, collectSnapshot, fpsStart, fpsStop, openSoloPage, readHeaderContrast, readTutorial, readTutorialStable, settle, sleep } from "./browser.mjs";
+// together 는 방장·손님 두 페이지(+ 서버 봇 둘)로: 스위치 → 시작 → 두 페이지 첫 사건 → 방장 건너뛰기 → 기다림 n/N → 손님 재접속 → 손님이 끝냄 → 역할 확인, 보낸 프레임은 tutorialDone 한 번뿐.
+import { SetupError, backToLobby, closeSheet, collectSnapshot, fpsStart, fpsStop, openSoloPage, openTestSheet, readHeaderContrast, readTutorial, readTutorialStable, setBots, settle, sleep, startGame, watchSockets } from "./browser.mjs";
 import {
   TUTORIAL_CAST_E2E,
   WRONG_HINT_AFTER,
@@ -16,6 +17,7 @@ import {
   tutorialEntryChecks,
   tutorialEvidenceChecks,
   tutorialFocusChecks,
+  tutorialLeakChecks,
   tutorialOpeningChecks,
   tutorialRevealChecks,
   tutorialRoleCardChecks,
@@ -40,10 +42,15 @@ export const TUTORIAL_WRONG_LINE = "흔적을 떠올려 보세요";
 const WRONG_SEATS = [0, 3];
 const RIGHT_SEAT = TUTORIAL_CAST_E2E.suspect;
 
+const TOGETHER_HOST_NICK = "함께방장";
+const TOGETHER_GUEST_NICK = "손님이둘";
+/** 단계 도달 상한(ms): 튜토리얼 → 배정 3초 → 역할 확인 */
+const PHASE_WAIT_MS = 15_000;
+
 const sceneSel = (n) => `[data-tutorial-screen][data-tutorial-scene="${n}"]`;
 const SCENE_WAIT_MS = 9000;
 
-export function makeTutorialFlows({ recorder, attempt }) {
+export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
   const vpOf = (t) => ({ w: t.vw, h: t.vh });
   /** 기다림 하나를 검사 결과 { ok, detail } 로 바꾼다(attempt 는 값을 돌려주면 그 값을 결과로 쓰므로 값을 버린다) */
   const tryDo = (fn) =>
@@ -403,11 +410,168 @@ export function makeTutorialFlows({ recorder, attempt }) {
     }
   }
 
-  /** tutorial-together: 17-09 Task 3 에서 채운다 */
+  /** 페이지를 다시 열고 새 연결의 첫 state 프레임이 올 때까지 기다린다(추적 값은 이전 연결의 것이 남아 있으므로 순번으로 센다) */
+  async function reconnect(page, tracker, label) {
+    const seq = tracker.seq;
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await tracker.waitFor(() => tracker.seq > seq, 15_000, label);
+  }
+
+  /** 튜토리얼 밖 화면의 DOM 에서 가짜 이름·직업 카드를 센다(이름 목록과 개수만 — DOM 글 원문은 가져오지 않는다) */
+  const readLeakDom = (page, where) =>
+    page.evaluate(
+      ({ names, where: w }) => {
+        const html = document.body.innerHTML;
+        return { where: w, names: names.filter((n) => html.includes(n)), roleCards: document.querySelectorAll("[data-tutorial-role-card]").length };
+      },
+      { names: [...TUTORIAL_CAST_E2E.names], where },
+    );
+
+  /** 단계 도달을 기다리는 기다림 하나를 검사 결과로 바꾼다 */
+  const reaches = (tracker, phase, ms = PHASE_WAIT_MS) =>
+    tryDo(async () => {
+      await tracker.waitFor((v) => v.phase === phase, ms, `${phase} 도착`);
+    });
+
+  /**
+   * tutorial-together(TUT-02·TUT-05, DEPLOY-05): 테스트 방 방장 + 손님 + 서버 봇 둘.
+   * 스위치 초기 꺼짐(테스트 방, 0080-3) → 켜고 시작 → 두 페이지 모두 첫 사건 화면 → 방장이 건너뛰면 기다림 화면 '1 / 2'·사람 원·시간 막대 → 손님 새로 고침(재접속)은 장면 1 →
+   * 손님이 끝내면 두 페이지 모두 역할 확인. 시작부터 역할 확인까지 각 페이지가 보낸 게임 프레임은 tutorialDone 한 번뿐(ping·hello 제외, 방장의 start 는 시작 자체라 뺀다).
+   * 같은 방을 대기실로 되돌려 스위치를 끈 채 시작하면 tutorial 단계 없이 곧장 역할 확인. 튜토리얼 밖 화면(대기실·기다림·역할 확인)의 DOM 과 받은 프레임에 가짜 이름·직업 카드가 없고 튜토리얼 중 view 에 me.role 이 없다.
+   * 150초 시간 초과 경로는 기다리지 않는다(워커 시험 17-12 가 맡는다).
+   */
   async function tutorialTogetherFlow(ctx) {
     const rec = recorder(ctx);
-    rec("tutorial-together/setup", "TT0", "함께 진행 흐름은 Task 3 에서 채운다", true, "", false);
-    await sleep(0);
+    const sc = "tutorial-together";
+    const vp = { w: ctx.size.w, h: ctx.size.h };
+    const t0 = performance.now();
+    const host = await startHost(ctx, "tutorial-together", { nickname: TOGETHER_HOST_NICK });
+    const { page: hp, tracker: ht } = host;
+    let guestHandle = null;
+    const watchers = [];
+    try {
+      const { guest } = await openGuest(ctx, TOGETHER_GUEST_NICK);
+      guestHandle = guest;
+      const { page: gp, tracker: gt } = guest;
+      await ht.waitFor((v) => v.players.length === 2, 8000, "방장 쪽 인원 2");
+      await openTestSheet(hp);
+      await setBots(hp, ht, 2);
+      await closeSheet(hp);
+      await Promise.all([ht.waitFor((v) => v.players.length === 4, 8000, "방장 쪽 인원 4"), gt.waitFor((v) => v.players.length === 4, 8000, "손님 쪽 인원 4")]);
+
+      // 소켓 감시는 새 연결부터 건다 — 페이지가 이미 연 소켓에는 걸 수 없으므로 두 페이지를 다시 열어 새 소켓을 감시한다
+      const hs = watchSockets(hp, { needles: TUTORIAL_CAST_E2E.names });
+      const gs = watchSockets(gp, { needles: TUTORIAL_CAST_E2E.names });
+      watchers.push(hs, gs);
+      await reconnect(hp, ht, "방장 재연결");
+      await reconnect(gp, gt, "손님 재연결");
+      await Promise.all([ht.waitFor((v) => v.phase === "lobby" && v.me?.isHost === true, 8000, "방장 대기실"), gt.waitFor((v) => v.phase === "lobby" && v.me?.isHost === false, 8000, "손님 대기실")]);
+      const dom = [await readLeakDom(hp, "대기실(방장)"), await readLeakDom(gp, "대기실(손님)")];
+
+      // ① 스위치: 테스트 방이라 초기 꺼짐(0080-3). 손님에게는 스위치가 없다
+      const toggle = hp.locator("[data-tutorial-toggle]");
+      await toggle.waitFor({ timeout: 8000 });
+      rec(`${sc}/lobby`, "TG0", "테스트 방 스위치는 초기 꺼짐(aria-checked false)", (await toggle.getAttribute("aria-checked")) === "false", `aria-checked ${await toggle.getAttribute("aria-checked")}`);
+      rec(`${sc}/lobby`, "TG1", "손님 대기실에는 스위치가 없다", (await gp.locator("[data-tutorial-toggle]").count()) === 0, "");
+      await toggle.click();
+      rec(`${sc}/lobby`, "TG2", "누르면 켜짐(aria-checked true)", (await toggle.getAttribute("aria-checked")) === "true", `aria-checked ${await toggle.getAttribute("aria-checked")}`);
+
+      // ② 켜고 시작 → 두 페이지 모두 tutorial 단계·첫 사건 화면
+      const hMark = hs.mark();
+      const gMark = gs.mark();
+      await closeSheet(hp);
+      await hp.locator("[data-lobby-start]").click();
+      const [hTut, gTut] = await Promise.all([reaches(ht, "tutorial"), reaches(gt, "tutorial")]);
+      rec(`${sc}/start`, "TT1", "켜고 시작하면 방장·손님 모두 tutorial 단계", hTut.ok && gTut.ok, `${hTut.detail} ${gTut.detail}`.trim());
+      if (!hTut.ok || !gTut.ok) return;
+      const scenes = await tryDo(async () => {
+        await hp.waitForSelector(`${sceneSel(1)}[data-tutorial-mode="together"]`, { timeout: SCENE_WAIT_MS });
+        await gp.waitForSelector(`${sceneSel(1)}[data-tutorial-mode="together"]`, { timeout: SCENE_WAIT_MS });
+      });
+      rec(`${sc}/start`, "TT2", "두 페이지 모두 첫 사건 화면 장면 1(함께 모드)", scenes.ok, scenes.detail);
+      if (!scenes.ok) return;
+      rec(`${sc}/start`, "TT3", "튜토리얼 단계 view 에 전원 총원 2·끝낸 사람 0", ht.last()?.tutorial?.total === 2 && ht.last()?.tutorial?.done === 0, `done ${ht.last()?.tutorial?.done} / total ${ht.last()?.tutorial?.total}`);
+      rec(`${sc}/start`, "TT4", "튜토리얼 중 내 view 에 role 키가 없다(방장·손님)", !("role" in (ht.last()?.me ?? {})) && !("role" in (gt.last()?.me ?? {})), "");
+
+      // ③ 손님 새로 고침(재접속): 아직 끝내지 않았으니 다시 장면 1. 방장은 끝내지 않았으므로 끊긴 손님이 있어도 전원 완료가 아니다(끊긴 사람은 끝난 것으로 센다, 0080-10)
+      await reconnect(gp, gt, "손님 재접속");
+      const back = await tryDo(async () => {
+        await gp.waitForSelector(`${sceneSel(1)}[data-tutorial-mode="together"]`, { timeout: SCENE_WAIT_MS });
+      });
+      rec(`${sc}/reconnect`, "TR1", "손님이 새로 고치면 다시 장면 1(me.tutorialDone 없음)", back.ok && gt.last()?.me?.tutorialDone !== true && gt.last()?.phase === "tutorial", back.detail);
+      rec(`${sc}/reconnect`, "TR2", "방장은 아직 첫 사건 화면(손님 재접속이 단계를 넘기지 않음)", ht.last()?.phase === "tutorial" && (await hp.locator(sceneSel(1)).count()) === 1, `방장 단계 ${ht.last()?.phase}`);
+
+      // ④ 방장이 건너뛰면 기다림 화면: 1 / 2·사람 원 2·시간 막대
+      await hp.locator("[data-tutorial-skip]").click();
+      const waiting = await tryDo(async () => {
+        await hp.waitForSelector('[data-tutorial-wait] [data-tutorial-count="1/2"]', { timeout: SCENE_WAIT_MS });
+      });
+      rec(`${sc}/wait`, "TW0", "방장이 건너뛰면 기다림 화면 '1 / 2'", waiting.ok, waiting.detail);
+      if (!waiting.ok) return;
+      await settle(hp);
+      const w = await readTutorial(hp);
+      rec(`${sc}/wait`, "TW1", "기다림 화면 사람 원 2개·시간 막대", w.wait !== null && w.wait.people === 2 && w.wait.bar !== null && w.wait.track !== null, w.wait === null ? "측정값 없음(기다림 화면)" : `사람 원 ${w.wait.people}개, 막대 ${w.wait.bar !== null}, 막대 틀 ${w.wait.track !== null}`);
+      const inside = w.wait?.card && w.wait.card.left >= -0.5 && w.wait.card.right <= vp.w + 0.5 && w.wait.card.top >= -0.5 && w.wait.card.bottom <= vp.h + 0.5;
+      rec(`${sc}/wait`, "TW2", "기다림 카드가 화면 안", !!inside, w.wait?.card ? `카드 (${Math.round(w.wait.card.left)},${Math.round(w.wait.card.top)} ${Math.round(w.wait.card.width)}x${Math.round(w.wait.card.height)})` : "측정값 없음(기다림 카드)");
+      const hSnap = await collectSnapshot(hp);
+      hSnap.issues = host.takeIssues();
+      const hBad = genericIssues(hSnap, ctx.size).filter((x) => !x.ok);
+      rec(`${sc}/wait`, "G", "G 공통 검사(기다림 화면: 가로 넘침·탭 44·글자 14·콘솔·요청)", hBad.length === 0, hBad.map((x) => `${x.id} ${x.detail}`).join(" / "));
+      dom.push(await readLeakDom(hp, "기다림(방장)"));
+      rec(`${sc}/wait`, "TW3", "손님은 아직 첫 사건 화면(장면 1)이다", (await gp.locator(sceneSel(1)).count()) === 1, "");
+
+      // 방장 새로 고침: 이미 끝냈으므로(me.tutorialDone) 장면 1 이 아니라 곧바로 기다림 화면
+      await reconnect(hp, ht, "방장 재접속");
+      const hostBack = await tryDo(async () => {
+        await hp.waitForSelector('[data-tutorial-wait] [data-tutorial-count="1/2"]', { timeout: SCENE_WAIT_MS });
+      });
+      rec(`${sc}/reconnect`, "TR3", "끝낸 방장이 새로 고치면 곧바로 기다림 화면(me.tutorialDone 참)", hostBack.ok && ht.last()?.me?.tutorialDone === true && (await hp.locator("[data-tutorial-screen]").count()) === 0, hostBack.detail);
+
+      // ⑤ 손님이 끝내면 두 페이지 모두 역할 확인(전원 완료)
+      await gp.locator("[data-tutorial-skip]").click();
+      const [hRole, gRole] = await Promise.all([reaches(ht, "roleReveal"), reaches(gt, "roleReveal")]);
+      rec(`${sc}/done`, "TD1", "손님이 끝내면 방장·손님 모두 역할 확인", hRole.ok && gRole.ok, `${hRole.detail} ${gRole.detail}`.trim());
+      if (!hRole.ok || !gRole.ok) return;
+      await sleep(400);
+      dom.push(await readLeakDom(hp, "역할 확인(방장)"), await readLeakDom(gp, "역할 확인(손님)"));
+      rec(`${sc}/done`, "TD2", "역할 확인에는 첫 사건 화면이 남지 않는다", (await hp.locator("[data-tutorial-screen], [data-tutorial-wait]").count()) === 0 && (await gp.locator("[data-tutorial-screen], [data-tutorial-wait]").count()) === 0, "");
+
+      // 보낸 프레임: 방장은 시작(start) 뒤, 손님은 시작 전 표시부터 — tutorialDone 한 번뿐(ping·hello 제외)
+      const hf = hs.since(hMark);
+      const hStart = hf.indexOf("start");
+      rec(`${sc}/frames`, "TS3", "방장이 [시작] 으로 start 한 번을 보냈다", hf.filter((t) => t === "start").length === 1, `start ${hf.filter((t) => t === "start").length}건`);
+      const hl = sentFrameChecks(hStart < 0 ? null : hf.slice(hStart + 1), ["tutorialDone", "hello"], { once: ["tutorialDone"] });
+      rec(`${sc}/frames`, "TS1h", `방장 ${hl.label}, tutorialDone 한 번`, hl.ok, hl.detail);
+      const gl = sentFrameChecks(gs.since(gMark), ["tutorialDone", "hello"], { once: ["tutorialDone"] });
+      rec(`${sc}/frames`, "TS1g", `손님 ${gl.label}, tutorialDone 한 번`, gl.ok, gl.detail);
+
+      const tally = (list) => [...list.reduce((m, t) => m.set(t, (m.get(t) ?? 0) + 1), new Map())].map(([t, n]) => `${t}×${n}`).join(" ") || "(없음)";
+      rec(`${sc}/frames`, "TS4", "참고 측정(판정 아님): 시작부터 역할 확인까지 보낸 프레임(t 종류별 횟수)", true, `방장 ${tally(hf)} / 손님 ${tally(gs.since(gMark))}`, true);
+
+      // 누설: 튜토리얼 밖 화면(대기실·기다림·역할 확인)의 DOM·받은 프레임에 가짜 이름·직업 카드 0, 튜토리얼 중 me.role 0
+      const hits = {};
+      for (const src of [hs.hits, gs.hits]) for (const [k, n] of Object.entries(src)) hits[k] = (hits[k] ?? 0) + n;
+      recAll(rec, `${sc}/leak`, tutorialLeakChecks({ dom, frames: { hits }, roleInTutorial: hs.roleInTutorial + gs.roleInTutorial }));
+
+      // ⑥ 같은 방을 대기실로 되돌려 스위치를 끈 채 시작하면 tutorial 단계 없이 곧장 역할 확인
+      await backToLobby(hp, ht);
+      await gt.waitFor((v) => v.phase === "lobby", 8000, "손님 대기실 복귀");
+      const toggle2 = hp.locator("[data-tutorial-toggle]");
+      await toggle2.waitFor({ timeout: 8000 });
+      rec(`${sc}/off`, "TF1", "대기실로 돌아오면 스위치가 꺼져 있다", (await toggle2.getAttribute("aria-checked")) === "false", `aria-checked ${await toggle2.getAttribute("aria-checked")}`);
+      const hFrom = ht.phases.length;
+      const gFrom = gt.phases.length;
+      await startGame(hp, ht);
+      await gt.waitFor((v) => v.phase === "roleReveal", 8000, "손님 역할 확인");
+      const hPhases = ht.phases.slice(hFrom);
+      const gPhases = gt.phases.slice(gFrom);
+      rec(`${sc}/off`, "TF2", "끄고 시작하면 단계 열에 tutorial 이 없고 역할 확인에 닿는다(방장·손님)", !hPhases.includes("tutorial") && !gPhases.includes("tutorial") && hPhases.includes("roleReveal") && gPhases.includes("roleReveal"), `방장 [${hPhases.join(">")}] 손님 [${gPhases.join(">")}]`);
+      rec(`${sc}/off`, "TF3", "끄고 시작하면 첫 사건 화면이 한 번도 없다", (await hp.locator("[data-tutorial-screen], [data-tutorial-wait]").count()) === 0 && (await gp.locator("[data-tutorial-screen], [data-tutorial-wait]").count()) === 0, "");
+      rec(`${sc}/time`, "TTIME", "참고 측정(판정 아님): 흐름 소요 시간", true, `${Math.round((performance.now() - t0) / 1000)}초`, true);
+    } finally {
+      for (const wch of watchers) wch.stop();
+      await guestHandle?.context.close().catch(() => {});
+    }
   }
 
   return { tutorialSoloFlow, tutorialTogetherFlow };

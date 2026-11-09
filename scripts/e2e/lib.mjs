@@ -27,7 +27,9 @@ export const MAX_PARALLEL = 3;
 // 흐름이 늘었다(vote5 등, 04-32) — 기준 수치가 아니라 중단 한도다.
 // 15-09: 새 흐름 errand·witness·trace 가 폰 6종으로 돈다. 흐름마다 실제 40초 심부름(witness·errand)과 최대 15초 아침(trace)을 기다린다 —
 // 한 판 약 90초(errand)·100초(witness)·170초(trace, 밤 둘·아침 둘) × 6 크기 = 약 2160초를 MAX_PARALLEL 3 으로 나눈 720초를 기존 900초에 더해 1620초로 올렸다.
-export const OVERALL_LIMIT_MS = 1_620_000;
+// 17-09: 새 흐름 tutorial-solo(폰 6종, 한 크기 약 34초)·tutorial-together(12초)가 더한다 — 6 × 34 + 12 = 218초를 MAX_PARALLEL 3 으로 나눈 약 73초를 60초 단위로 올려 120초,
+// `--only tutorial` 로컬 실측 81초(걸린 시간)와 맞다. 1620초에서 1740초로 올렸다.
+export const OVERALL_LIMIT_MS = 1_740_000;
 
 // ---- 결과 화면(ended) 판정은 11-05 에 scripts/e2e/result.mjs 로 옮겼다(resultStageChecks) — 옛 카드 격자 계약(04-29 P8)은 지웠다. ----
 
