@@ -16,6 +16,7 @@ import { RoleCardSheet } from "../components/RoleCardSheet";
 import type { RoleCardTab } from "../components/RoleCardSheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
 import { HostBand, HostDock } from "../components/v2/HostBand";
+import { TutorialWait } from "../components/v2/TutorialWait";
 import { MORNING_TEXT, morningText } from "../game/eliminationText";
 import { READY_TEXT } from "../game/resultText";
 import { defenseAnnounce, noExecutionPrefix, winnerText } from "../game/verdict";
@@ -39,6 +40,7 @@ import { BenchView } from "./BenchView";
 import { GameMap } from "./GameMap";
 import { Lobby } from "./Lobby";
 import { ResultScreen } from "./ResultScreen";
+import { TutorialScreen } from "./TutorialScreen";
 import { RoleReveal } from "./RoleReveal";
 import "../styles/phase.css";
 import "../styles/room.css";
@@ -383,6 +385,23 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   }, [phase]);
   const testTools = view !== null && view.me.isHost && view.me.testMode === true;
 
+  // 함께 진행 튜토리얼(17-07, 결정 0080-15): 끝났음을 보낸 연결 번호. 서버로 가는 게임 메시지는 이 하나뿐이고 연결 번호당 한 번만 보낸다.
+  // 같은 프레임에 [다음]·[건너뛰기]가 겹쳐도 ref 가 막는다. 연결 번호가 바뀌면(재접속) 화면의 로컬 끝남 표시는 어긋나 서버 값(me.tutorialDone)만 따른다.
+  // tutorial 단계를 벗어나면 비운다 — 같은 연결에서 다음 판이 다시 튜토리얼을 거쳐도 기다림으로 바로 가지 않는다.
+  const tutorialSentRef = useRef<number | null>(null);
+  const [tutorialSentEpoch, setTutorialSentEpoch] = useState<number | null>(null);
+  useEffect(() => {
+    if (phase === "tutorial") return;
+    tutorialSentRef.current = null;
+    setTutorialSentEpoch(null);
+  }, [phase]);
+  const sendTutorialDone = (): void => {
+    if (tutorialSentRef.current === connection.epoch) return;
+    if (connection.send({ t: "tutorialDone" }) === false) return;
+    tutorialSentRef.current = connection.epoch;
+    setTutorialSentEpoch(connection.epoch);
+  };
+
   // 쫓겨난 이유별 화면은 App 이 고른다(오류 화면·링크 참가 화면).
   useEffect(() => {
     if (status === "removed") onExit(removedReason ?? "room_closed");
@@ -513,6 +532,13 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             onLeave={() => onExit("left")}
             testButton={testButton}
           />
+        );
+      case "tutorial":
+        // 서버가 이미 끝났음을 받았거나(me.tutorialDone) 이 연결에서 보냈으면 기다림, 아니면 장면 1 부터(T-20). 첫 사건 화면은 실제 연결을 받지 않고 onEnd 로만 끝났음을 알린다
+        return view.me.tutorialDone === true || tutorialSentEpoch === connection.epoch ? (
+          <TutorialWait view={view} offset={connection.offset} />
+        ) : (
+          <TutorialScreen mode="together" onEnd={sendTutorialDone} />
         );
       case "assigning":
       case "roleReveal":

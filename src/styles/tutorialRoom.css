@@ -1,0 +1,81 @@
+/* 함께 진행 방 화면(17-07, UI-SPEC "함께 진행 계약"): 방장 스위치 줄(.tut-toggle*)과 기다림 화면(.tut-wait*).
+   값은 tokens.css 변수만 쓴다(새 토큰·hex·진홍 없음). */
+
+/* ---- 방장 스위치 줄: 높이 64, 위 margin 2 (패널 간격 10 + 2 = 12, 방장 패널 +76 = 64 + 12) ---- */
+.tut-toggle {
+  flex: none;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 64px;
+  margin: 2px 0 0;
+  padding: 12px;
+  text-align: left;
+  color: var(--gray-50);
+  font: inherit;
+  background: var(--night-700);
+  border: 1px solid var(--brass-400);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.tut-toggle:disabled { opacity: .5; cursor: default; }
+.tut-toggle__tile {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  color: var(--light-lamp);
+  background: var(--night-900);
+  border-radius: var(--radius-sm);
+}
+.tut-toggle__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.tut-toggle__title { font-size: 16px; line-height: 1.4; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
+.tut-toggle__sub { font-size: 14px; line-height: 1.4; color: var(--gray-300); word-break: keep-all; }
+/* 스위치 48×28, 알 20 (안쪽 4). 켬 = 놋쇠 트랙·밤 알, 끔 = night-600 트랙·gray-300 알 */
+.tut-toggle__switch {
+  flex: none;
+  position: relative;
+  width: 48px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  background: var(--night-600);
+  transition: background var(--dur-fast) ease;
+}
+.tut-toggle__knob {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--gray-300);
+  transition: transform var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+.tut-toggle__switch[data-on="true"] { background: var(--brass-400); }
+.tut-toggle__switch[data-on="true"] .tut-toggle__knob { background: var(--night-950); transform: translateX(20px); }
+@media (prefers-reduced-motion: reduce) {
+  .tut-toggle__switch, .tut-toggle__knob { transition: none; }
+}
+
+/* ---- 기다림 화면 ---- */
+.tut-wait {
+  flex: 1 1 0;
+  min-height: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: max(48px, env(safe-area-inset-top, 0px)) var(--space-lg) var(--space-lg);
+  color: var(--gray-50);
+  background: radial-gradient(ellipse at 50% 30%, var(--night-800), var(--night-900) 55%, var(--night-950));
+}
+.tut-wait__title { margin: 0; font-family: var(--font-serif); font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--brass-200); text-align: center; word-break: keep-all; }
+.tut-wait__card { width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--space-md); padding: 28px 20px; background: var(--overlay-ink-strong); border: 1px solid var(--night-600); border-radius: var(--radius-md); }
+.tut-wait__msg { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; word-break: keep-all; }
+.tut-wait__count { margin: 0; font-family: var(--font-serif); font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--brass-200); font-variant-numeric: tabular-nums; }

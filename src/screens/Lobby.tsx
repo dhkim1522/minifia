@@ -15,6 +15,7 @@ import { FloatAction } from "../components/v2/FloatAction";
 import { MapChip } from "../components/v2/MapChip";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { SideColumn } from "../components/v2/SideColumn";
+import { TutorialToggle } from "../components/v2/TutorialToggle";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
 import type { ChatStore } from "../net/chatStore";
@@ -97,6 +98,9 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   const [locked, setLocked] = useState(false);
   // [시작] 빛남(HOST-03): 한 번 눌러 보냈으면 이 대기실 안에서는 되살아나지 않는다(거절돼 잠금이 풀려도).
   const [startPressed, setStartPressed] = useState(false);
+  // 방장 스위치 '튜토리얼 후 진행'(17-07, 결정 0078-3·0080-1·3): 화면 로컬 상태이고 서버에 방송하지 않는다 — [시작] 순간의 값이 start 메시지로 간다.
+  // 초기값은 첫 판 켜짐, 다시 하기(2판째)와 테스트 방 꺼짐(줄은 보인다).
+  const [tutorialOn, setTutorialOn] = useState(() => (view.round ?? 1) === 1 && view.me.testMode !== true);
   const lockTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(
     () => () => {
@@ -161,7 +165,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       show(`${view.minPlayers}명부터 시작해요`);
       return;
     }
-    send({ t: "start" });
+    send({ t: "start", tutorial: tutorialOn });
     setStartPressed(true);
     setLocked(true);
     lockTimer.current = setTimeout(() => {
@@ -204,6 +208,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       {testButton ? <div className="mf-lobby__test">{testButton}</div> : null}
       <section ref={panelRef} className={kbOpen ? "mf-lobby__panel mf-lobby__panel--kb" : "mf-lobby__panel"} data-world-panel="">
         <ChatPanel {...binding} logHeight={kbOpen ? LOG_H_KB : logH} compact={kbOpen} inputRef={inputRef} />
+        {kbOpen || !isHost ? null : <TutorialToggle on={tutorialOn} disabled={!canSend || locked} onToggle={() => setTutorialOn((v) => !v)} />}
         {kbOpen ? null : (
           <ActionRow>
             {isHost ? (

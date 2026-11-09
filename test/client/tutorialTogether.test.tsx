@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 import "../helpers/singleLineErrors";
 import type { PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
@@ -85,7 +86,7 @@ function conn(view: RoomView, send: RoomConnection["send"], epoch = 1): RoomConn
   } as unknown as RoomConnection;
 }
 
-function mount(view: RoomView, send: RoomConnection["send"] = vi.fn(() => true), epoch = 1) {
+function mount(view: RoomView, send: Mock<RoomConnection["send"]> = vi.fn<RoomConnection["send"]>(() => true), epoch = 1) {
   connectionMock.current = conn(view, send, epoch);
   const ui = () => <RoomScreen code="0042" token={"t".repeat(43)} onExit={() => {}} />;
   const r = render(ui());
@@ -135,7 +136,7 @@ describe("RoomScreen — tutorial 단계 분기 (17-07, TUT-02·TUT-05, T-17-17)
   });
 
   it("보낼 수 없으면(send 가 false) 기다림으로 가지 않고 다시 누르면 다시 보낸다", () => {
-    const send = vi.fn(() => false);
+    const send = vi.fn<RoomConnection["send"]>(() => false);
     const { container } = mount(makeView(), send);
     act(() => {
       fireEvent.click(q(container, "[data-fake-end]")!);
