@@ -110,7 +110,7 @@ const ROLE_PATHS_ALIVE = [
  * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. stats 는 판 통계 카운터(11-01, 결정 D-6, L35)다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)·순차 지목 차례(pickTurn, 결정 0063-1)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
  */
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick", "stats", "badgeLog", "whispers", "disconnectedAt", "left", "errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick", "errandFake"]; // errandPlaces·errandDone·errandNear·errandSeen·errandTickAt·nightPick(15-06, T-15-25): 심부름·밤 선택의 서버 전용 이름 — view 는 me.errand·me.record·me.pick 이라는 다른 이름으로만 본인에게 싣는다. disconnectedAt·left(11-04): 방 연속성 서버 전용 기록 (L43). badgeLog·whispers(11-03): 결과 공개 줄은 v·to 같은 다른 이름을 쓴다 — 서버 전용 이름은 어떤 프레임에도 키로 없다 (L35)
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick", "stats", "badgeLog", "whispers", "disconnectedAt", "left", "errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick", "errandFake", "tutorialPassed"]; // tutorialPassed(17-12, T-17-28): 튜토리얼 끝냄 서버 전용 이름 — view 는 view.tutorial(done·total·endsAt 숫자)과 본인 me.tutorialDone 이라는 다른 이름으로만 싣는다. errandPlaces·errandDone·errandNear·errandSeen·errandTickAt·nightPick(15-06, T-15-25): 심부름·밤 선택의 서버 전용 이름 — view 는 me.errand·me.record·me.pick 이라는 다른 이름으로만 본인에게 싣는다. disconnectedAt·left(11-04): 방 연속성 서버 전용 기록 (L43). badgeLog·whispers(11-03): 결과 공개 줄은 v·to 같은 다른 이름을 쓴다 — 서버 전용 이름은 어떤 프레임에도 키로 없다 (L35)
 /**
  * 서버 전용 이름과 같은 공개 와이어 필드의 경로(08-11, 결정 0060-3·4) — 이 두 경로만 SERVER_ONLY_KEYS 검사에서 빼고 이유를 단다. 목록은 줄이지 않고, 새 경로는 받을 권리 조건이 있을 때만 더한다.
  *  - .view.day.verdict: 처형 단계에서 모두에게 같은 {yes,no,passed} 집계(서버 전용 RoomState.verdict 와 이름만 같다).
@@ -188,6 +188,17 @@ const FIFTEEN_PREFIXES = [".view.me.errand", ".view.me.record", ".view.day.morni
 const underFifteen = (path: string): boolean => FIFTEEN_PREFIXES.some((p) => path === p || path.startsWith(`${p}.`) || path.startsWith(`${p}[]`));
 /** 경로 목록에서 허용 밖 15페이즈 경로. 비어 있어야 통과다. */
 const fifteenViolations = (paths: readonly string[]): string[] => paths.filter((pth) => underFifteen(pth) && !FIFTEEN_PATHS.has(pth));
+/**
+ * 17페이즈(튜토리얼 함께 진행, 결정 0080-10·11, T-17-28)가 view 에 더한 경로 전부 — 새 경로는 이 목록에 받을 권리와 함께 넣어야 하고, 이 접두 아래 이 밖의 키(.view.tutorial.passed·.ids 같은 사람 목록)가 보이면 아래 시험이 실패한다.
+ *  - .view.tutorial(.done·.total·.endsAt): tutorial 단계의 모든 소켓에 같은 값. 끝낸 사람 수·앉은 사람(봇 제외) 수·마감뿐이고 누가 끝냈는지는 없다.
+ *  - .view.me.tutorialDone: 끝났음을 보낸 본인에게만(거짓은 키 없음). 남의 값은 어떤 경로로도 가지 않는다.
+ */
+const TUTORIAL_PATHS: ReadonlySet<string> = new Set([".view.tutorial", ".view.tutorial.done", ".view.tutorial.total", ".view.tutorial.endsAt", ".view.me.tutorialDone"]);
+const TUTORIAL_PREFIXES = [".view.tutorial", ".view.me.tutorialDone"];
+/** path 가 17페이즈 접두 중 하나의 그 키 자신 또는 그 아래인가. */
+const underTutorial = (path: string): boolean => TUTORIAL_PREFIXES.some((p) => path === p || path.startsWith(`${p}.`) || path.startsWith(`${p}[]`));
+/** 경로 목록에서 허용 밖 17페이즈 경로. 비어 있어야 통과다. */
+const tutorialViolations = (paths: readonly string[]): string[] => paths.filter((pth) => underTutorial(pth) && !TUTORIAL_PATHS.has(pth));
 const ROLE_PATHS_DEAD = [...ROLE_PATHS_ALIVE, ".view.spectate.seats[].job"];
 /** ended 단계 프레임에서만 더해지는 허용 경로(D-17, Pitfall 10): 결과 화면의 모든 직업. ended 이전 프레임에서는 누출이다. */
 const ROLE_PATH_ENDED = ".view.result.seats[].job";
@@ -1730,6 +1741,22 @@ describe("15페이즈 허용 경로 (15-06, D-08, T-15-23)", () => {
     // 이름이 겹치는 기존 일지 키는 15페이즈 접두가 아니다.
     expect(fifteenViolations(keyPaths({ view: { me: { records: [{ n: 1, target: 2 }] } } }))).toEqual([]);
     for (const name of ["errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick"]) expect(SERVER_ONLY_KEYS.includes(name)).toBe(true);
+  });
+});
+
+describe("17페이즈 튜토리얼 허용 경로 (17-12, T-17-28)", () => {
+  it("허용 목록 밖 키(.view.tutorial.passed·.ids·.view.me.tutorialDone.x)는 위반으로 잡히고, TUTORIAL_PATHS 만 있는 경로 집합은 위반 0이다", () => {
+    const ok = { view: { tutorial: { done: 1, total: 4, endsAt: 1000 }, me: { tutorialDone: true } } };
+    expect(tutorialViolations(keyPaths(ok))).toEqual([]);
+    // 허용 목록의 모든 경로가 실제로 만들어지는 모양이라 목록이 비어 있지 않다
+    expect(new Set(keyPaths(ok).filter(underTutorial))).toEqual(TUTORIAL_PATHS);
+    const bad = { view: { tutorial: { done: 1, total: 4, endsAt: 1000, passed: ["p1"], ids: [1] }, me: { tutorialDone: { by: 1 } } } };
+    expect(tutorialViolations(keyPaths(bad))).toEqual([".view.tutorial.passed", ".view.tutorial.ids", ".view.me.tutorialDone.by"]);
+    // 서버 전용 이름은 어떤 깊이에서든 마지막 키 이름으로 잡힌다
+    expect(keyPaths({ view: { tutorial: { tutorialPassed: ["p1"] } } }).filter((pth) => SERVER_ONLY_KEYS.includes(pth.slice(pth.lastIndexOf(".") + 1)))).toEqual([".view.tutorial.tutorialPassed"]);
+    expect(SERVER_ONLY_KEYS.includes("tutorialPassed")).toBe(true);
+    // 이름이 겹치지 않는 기존 경로는 17페이즈 접두가 아니다
+    expect(tutorialViolations(keyPaths({ view: { me: { testMode: true }, tutorials: [1] } }))).toEqual([]);
   });
 });
 
