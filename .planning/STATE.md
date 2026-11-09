@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 17
 current_phase_name: "튜토리얼 \"첫 사건\""
-current_plan: 8
+current_plan: 9
 status: executing
-stopped_at: Completed 17-05-PLAN.md
-last_updated: "2026-11-09T04:15:35.791Z"
+stopped_at: Completed 17-06-PLAN.md
+last_updated: "2026-11-09T04:23:52.493Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 17 execution started
-state_head: cad2a67470fb1b0fbbc0b2281afb5db26c7333be
+state_head: 58496ccfd392f284c0392f94c67498cd725ea35a
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 47
-  completed_plans: 42
+  completed_plans: 43
   percent: 80
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 17 (튜토리얼 "첫 사건") — EXECUTING
-Current Plan: 8
+Current Plan: 9
 Total Plans in Phase: 12
 Status: Ready to execute
 Last activity: 2026-11-09 — Phase 17 execution started
@@ -240,6 +240,7 @@ Last activity: 2026-11-09 — Phase 17 execution started
 | Phase 17 P12 | 10 min | 3 tasks | 8 files |
 | Phase 17 P04 | 16 min | 3 tasks | 19 files |
 | Phase 17 P05 | 25 min | 2 tasks | 9 files |
+| Phase 17 P06 | 6min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -528,6 +529,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 17]: 17-04: 튜토리얼 장면 6 아래 패널(채팅 입력줄 포함)은 숨기지 않고 그리되 inert 로 눌림만 막는다. 도윤은 follow 카메라 투영상 화면 오른쪽 밖(x≈446/390)에서 들어온다
 - [Phase 17]: 17-04: 첫 사건 화면의 허용 목록은 inert 를 DOM 에 직접 붙이는 방식이고 허용 대상은 차단 컨테이너 밖에 둔다. 장면 확장은 renderSceneLayer·onPoint 자리에 17-05·17-08 이 얹는다
 - [Phase 17]: 17-05: 띠 흔들림은 17-04 의 .tut-band.is-shake 유지, 오답마다 새 view 로 임시 내 선택 표시를 비움, 장면 4 기록 카드는 GameMap 기록 카드 자리(D+8)에 둠, 화면의 소리는 playTutorialCue·sayTutorialLine 경유
+- [Phase 17]: 17-06: 튜토리얼 본 표시(minifia.tutorial.seen)는 카드 시작과 방 만들기·참가 성공 때만 저장, 실패 분기에는 저장하지 않는다
+- [Phase 17]: 17-06: tut.warm 호출은 컴포넌트가 아니라 net 훅 useTutorialWarm 에 둔다(소리 호출 자리 시험 규칙)
 
 ### Pending Todos
 
@@ -594,8 +597,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09T04:15:35.382Z
-Stopped at: Completed 17-05-PLAN.md
+Last session: 2026-11-09T04:23:52.124Z
+Stopped at: Completed 17-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
