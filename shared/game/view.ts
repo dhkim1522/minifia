@@ -3,7 +3,7 @@
 // 결정 0002 를 "살아 있는 사람에게는 보내지 않는다" 로 좁혀 유지. 직업 키 이름은 role 이 아니라 job 이다(누출 검사가 role 키를 me 밖에서 금지).
 // 밤 필드 받는 사람: pick 본인(생존·밤), allyPicks 생존 마피아(밤), records 경찰(수사)·마피아(암살)·의사(치료) 본인 중 본인 역할 일지 하나(역할 공개 단계 전체), morning 모두(아침만).
 // 낮 필드 받는 사람(8페이즈): points 모두(지목 단계만, 공개 지목 줄), endCount 모두(토론 단계만, 누른 수뿐), voted 모두(찬반 단계만, 던진 좌석뿐), verdict 모두(처형 단계만, 찬반 수), turn 모두(지목 단계만, 차례 순서·마감·확정, 역할 무관),
-// me.endDiscussion·me.verdictVote 본인만(각각 토론·찬반 단계), voteLog 모두(낮 단계마다 항상, 집계 수만),
+// me.endDiscussion·me.verdictVote 본인만(각각 토론·찬반 단계), view.tutorial 모두(tutorial 단계만, done·total·endsAt)·me.tutorialDone 본인만(tutorial 단계, 17페이즈), voteLog 모두(낮 단계마다 항상, 집계 수만),
 // candidate 모두(변론·찬반·처형, 변론자가 있을 때), execution 모두(처형 단계만, seat·phrase), noExecution 모두(처형 무효로 온 밤만, reason 하나).
 // result(승리 팀·모든 직업·판 요약)는 ended 단계에서만, 생존·탈락 구분 없이 모두에게 같게(D-17). 서버 전용 밤 기록(nightLog)은 buildSummary 만 읽고 판 중에는 어떤 view 에도 없다(결정 0020-3).
 // 기본판(결정 0072): 꺼진 장치 키(players[].badge·badgeSwapped, day.turn·runoff·showdown, me.whisperUsed·ballot)는 서버 상태에 값이 있어도(옛 저장 방 포함) 싣지 않는다 — RULESET 이 막는다.
@@ -38,6 +38,7 @@ import { showdownViewOf } from "./showdown";
 import { PHASE_DEFS, RECORD_MAX } from "./phases";
 import { RULESET } from "./ruleset";
 import { isReady } from "./rematch";
+import { tutorialProgress } from "./tutorial";
 import { rolesInPlay } from "./roles";
 import { hostOf, roundOf } from "./room";
 import type { Player, RoomState } from "./room";
@@ -329,6 +330,11 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     myInfo.endDiscussion = true;
   }
 
+  // 튜토리얼 끝났음은 본인에게만(결정 0080-11) — tutorial 단계에서 본인이 tutorialDone 을 보냈을 때만 키를 만든다(거짓은 키 없음). 남의 값·id 목록은 어떤 키로도 싣지 않는다.
+  if (state.phase === "tutorial" && (state.tutorialPassed ?? []).includes(me.id)) {
+    myInfo.tutorialDone = true;
+  }
+
   // 찬반 값은 본인에게만(결정 0053·0060-4, T-08-02) — verdict 단계에서 유권자(변론자를 뺀 산 사람)인 본인이 던진 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.
   if (state.phase === "verdict" && me.verdictVote !== undefined && verdictVotersOf(state).some((p) => p.id === me.id)) {
     myInfo.verdictVote = me.verdictVote;
@@ -394,6 +400,8 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   };
   if (state.phase !== "lobby" && state.map !== undefined) view.map = state.map;
   if (DAY_PHASES.has(state.phase)) view.day = buildDay(state);
+  // 튜토리얼 진행 값은 tutorial 단계의 모든 소켓에 같다(결정 0080-10·11, 허용 목록) — done·total 두 숫자와 마감뿐, 누가 끝냈는지(tutorialPassed)는 서버 전용이다.
+  if (state.phase === "tutorial") view.tutorial = { ...tutorialProgress(state), endsAt: state.phaseEndsAt ?? now };
 
   // 결과는 ended 단계에서만 모두에게 같다(D-17). seats 는 관전자 전용 spectate.seats 와 같은 방식으로 따로 만든다 — spectate 규칙은 그대로 둔다.
   if (state.phase === "ended" && state.winner !== undefined) {
