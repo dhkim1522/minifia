@@ -280,7 +280,7 @@ describe("mount — 지연 로드 본체 (D-19)", () => {
 // ───────────────────────── Task 2: 데이터·한 화면 전체·전부 계산 ─────────────────────────
 
 describe("LAB_GROUPS·SOUND_NAMES — 묶음과 한글 이름 (E)", () => {
-  it("효과음 51개를 일곱 묶음으로 나누고 합집합이 SFX_IDS 전부(중복·누락 0)", () => {
+  it("효과음 63개를 일곱 묶음으로 나누고 합집합이 SFX_IDS 전부(중복·누락 0)", () => {
     expect(LAB_GROUPS).toHaveLength(7);
     const all = LAB_GROUPS.flatMap((g) => [...g.ids]);
     expect(all).toHaveLength(SFX_IDS.length);
@@ -288,13 +288,19 @@ describe("LAB_GROUPS·SOUND_NAMES — 묶음과 한글 이름 (E)", () => {
     expect([...all].sort()).toEqual([...SFX_IDS].sort());
     expect(LAB_GROUPS.map((g) => g.title)).toEqual(["공통·로비·역할", "낮·지목·변론", "판결·처형", "밤·아침", "동작", "결과·시상", "튜토리얼"]);
   });
+  it("튜토리얼 묶음은 tut.* 12개와 voice.syl 이다 (17-02)", () => {
+    const g = LAB_GROUPS.find((x) => x.key === "tutorial")!;
+    expect(g.ids).toHaveLength(13);
+    expect(g.ids.filter((id) => id.startsWith("tut."))).toHaveLength(12);
+    expect(g.ids).toContain("voice.syl");
+  });
   it("ui.host 는 '공통·로비·역할' 묶음에 한 번 있고 이름표는 '사회자 알림' (HOST-02, 14-03)", () => {
     const common = LAB_GROUPS.find((g) => g.key === "common")!;
     expect(common.ids).toContain("ui.host");
     expect(LAB_GROUPS.flatMap((g) => [...g.ids]).filter((id) => id === "ui.host")).toHaveLength(1);
     expect(SOUND_NAMES["ui.host"]).toBe("사회자 알림");
   });
-  it("58개 모두 한글 이름이 있고 한 줄이다", () => {
+  it("70개 모두 한글 이름이 있고 한 줄이다", () => {
     expect(Object.keys(SOUND_NAMES).sort()).toEqual([...SOUND_IDS].sort());
     for (const id of SOUND_IDS) {
       const n = SOUND_NAMES[id];
@@ -303,8 +309,8 @@ describe("LAB_GROUPS·SOUND_NAMES — 묶음과 한글 이름 (E)", () => {
       expect(n.length, id).toBeLessThanOrEqual(16);
     }
   });
-  it("SOUND_LIMITS 는 58·−3·−60·50", () => {
-    expect({ ...SOUND_LIMITS }).toEqual({ count: 58, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
+  it("SOUND_LIMITS 는 70·−3·−60·50", () => {
+    expect({ ...SOUND_LIMITS }).toEqual({ count: 70, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
   });
 });
 
@@ -341,17 +347,17 @@ describe("mount — 한 화면 전체 (E)", () => {
   }
   const hookOf = () => (window as unknown as { __mfSoundLab: LabHook }).__mfSoundLab;
 
-  it("[data-sound-id] 단추가 정확히 58개(침대 7 + 효과음 51)이고 id 가 SOUND_IDS 와 같다", () => {
+  it("[data-sound-id] 단추가 정확히 70개(침대 7 + 효과음 63)이고 id 가 SOUND_IDS 와 같다", () => {
     const { qa } = open();
     const ids = qa("[data-sound-id]").map((b) => b.getAttribute("data-sound-id"));
-    expect(ids).toHaveLength(58);
+    expect(ids).toHaveLength(70);
     expect([...ids].sort()).toEqual([...SOUND_IDS].sort());
   });
 
   it("누르는 대상은 모두 최소 44x44 (인라인 스타일 값)", () => {
     const { qa } = open();
     const targets = qa("button, input[type=range], label");
-    expect(targets.length).toBeGreaterThan(58);
+    expect(targets.length).toBeGreaterThan(70);
     for (const t of targets) {
       const h = parseFloat(t.style.minHeight || "0");
       expect(h, t.outerHTML.slice(0, 80)).toBeGreaterThanOrEqual(44);
@@ -508,7 +514,7 @@ describe("mount — 한 화면 전체 (E)", () => {
     expect(rig.engine.activeNodes()).toBeGreaterThan(0);
   });
 
-  it("[전부 계산]: 58개를 한 번에 하나씩 순차로 렌더하고 훅이 done 이 된다", async () => {
+  it("[전부 계산]: 70개를 한 번에 하나씩 순차로 렌더하고 훅이 done 이 된다", async () => {
     let inflight = 0;
     let maxInflight = 0;
     let n = 0;
@@ -534,7 +540,7 @@ describe("mount — 한 화면 전체 (E)", () => {
     await handle.idle();
     const hook = hookOf();
     expect(hook.done).toBe(true);
-    expect(n).toBe(58);
+    expect(n).toBe(70);
     expect(maxInflight).toBe(1);
     expect(hook.results.map((r) => r.id)).toEqual([...SOUND_IDS]);
     for (const r of hook.results) {
@@ -543,9 +549,9 @@ describe("mount — 한 화면 전체 (E)", () => {
     }
     // 화면 표에도 피크가 보인다
     expect(q('[data-sound-id="kill.slash"]')!.parentElement!.textContent).toMatch(/-12\.0/);
-    // 다시 누르면 새로 58 개(이전 결과를 덮어쓴다)
+    // 다시 누르면 새로 70 개(이전 결과를 덮어쓴다)
     q("[data-sound-calc-all]")!.click();
     await handle.idle();
-    expect(hookOf().results).toHaveLength(58);
+    expect(hookOf().results).toHaveLength(70);
   });
 });

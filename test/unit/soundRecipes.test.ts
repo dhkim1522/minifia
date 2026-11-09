@@ -147,7 +147,7 @@ describe("소리 레시피 — 트레이서 (D-1, D-18)", () => {
   });
 });
 
-// ───────────────────────── Task 2: 58개 전수 ─────────────────────────
+// ───────────────────────── Task 2: 70개 전수 ─────────────────────────
 
 const EXPECTED_BEDS = ["bed.lobby", "bed.reveal", "bed.day", "bed.vote", "bed.night", "bed.dawn", "bed.result"];
 const EXPECTED_SFX = [
@@ -157,14 +157,16 @@ const EXPECTED_SFX = [
   "execution.rise", "verdict.reject", "night.fall", "night.cue", "kill.slash", "morning.dawn", "morning.calm",
   "chalk.draw", "morning.saved", "will.quill", "will.seal", "will.fold", "emote.clap", "emote.praise",
   "emote.handshake", "emote.dance", "emote.surprise", "emote.cry", "emote.deny", "emote.point", "emote.throat",
-  "result.win", "result.lose", "award.plate", "award.final", "voice.syl",
+  "result.win", "result.lose", "award.plate", "award.final",
+  "tut.lampOff", "tut.scream", "tut.whoosh", "tut.sting", "tut.step", "tut.eye", "tut.link", "tut.buzz", "tut.stamp",
+  "tut.fanfare", "tut.flip", "tut.warm", "voice.syl",
 ];
 const PRIO0 = ["verdict.heart", "execution.gavel", "kill.slash", "result.win", "result.lose", "award.final"];
 
-describe("소리 레시피 — 58개 전수 (D-1, D-16, D-17)", () => {
-  it("SOUND_IDS 는 58개(침대 7 + 효과음 51)이고 중복이 없으며 목록이 같다", () => {
-    expect(SOUND_IDS).toHaveLength(58);
-    expect(new Set(SOUND_IDS).size).toBe(58);
+describe("소리 레시피 — 70개 전수 (D-1, D-16, D-17)", () => {
+  it("SOUND_IDS 는 70개(침대 7 + 효과음 63)이고 중복이 없으며 목록이 같다", () => {
+    expect(SOUND_IDS).toHaveLength(70);
+    expect(new Set(SOUND_IDS).size).toBe(70);
     expect([...BED_IDS]).toEqual(EXPECTED_BEDS);
     expect([...SFX_IDS]).toEqual(EXPECTED_SFX);
   });
@@ -210,9 +212,9 @@ describe("소리 레시피 — 58개 전수 (D-1, D-16, D-17)", () => {
     expect(planHash(renderPlan(id))).toBe(planHash(plan));
   });
 
-  it("효과음 51개는 서로 다른 해시다(같은 소리 복사 금지)", () => {
+  it("효과음 63개는 서로 다른 해시다(같은 소리 복사 금지)", () => {
     const hashes = SFX_IDS.map((id) => planHash(renderPlan(id)));
-    expect(new Set(hashes).size).toBe(51);
+    expect(new Set(hashes).size).toBe(63);
   });
 
   it.each(BED_IDS)("%s: 발진기 ≤ 6 + 소음 1, 노드·레벨 한계", (id) => {
@@ -346,7 +348,7 @@ describe("소리 레시피 — 58개 전수 (D-1, D-16, D-17)", () => {
     expect(() => renderPlan("role.flip", { variant: "mafia" })).toThrow();
   });
 
-  it("화면 대응 표: 58개 모두 한 줄, ambient 는 침대 7개와 night.cue 뿐 (LS-1)", () => {
+  it("화면 대응 표: 70개 모두 한 줄, ambient 는 침대 7개와 night.cue 뿐 (LS-1)", () => {
     expect(Object.keys(SCREEN_COUNTERPART).sort()).toEqual([...SOUND_IDS].sort());
     for (const id of SOUND_IDS) {
       expect(SCREEN_COUNTERPART[id].trim()).not.toBe("");
@@ -373,5 +375,57 @@ describe("voice.syl — 사회자 웅얼 음절 (17-02, 0078-4·0080-8)", () => 
     expect(peakDbEstimate("voice.syl")).toBeLessThanOrEqual(PEAK_DBFS_MAX);
     expect(SFX_IDS[SFX_IDS.length - 1]).toBe("voice.syl");
     expect(SCREEN_COUNTERPART["voice.syl"].startsWith("ambient")).toBe(false);
+  });
+});
+
+// 17-02 Task 2: 튜토리얼 장면 효과음 12개 — 층 수는 UI-SPEC 소리 계약 표와 같다 (0080-8)
+const TUT_LAYERS: Readonly<Record<string, number>> = {
+  "tut.lampOff": 2, "tut.scream": 4, "tut.whoosh": 1, "tut.sting": 4, "tut.step": 1, "tut.eye": 2,
+  "tut.link": 1, "tut.buzz": 1, "tut.stamp": 2, "tut.fanfare": 4, "tut.flip": 2, "tut.warm": 4,
+};
+
+describe("tut.* 효과음 12개 — 층 수·버스·한계 (17-02, 0080-8)", () => {
+  it("SFX_IDS 는 tut.* 12개를 이 순서로 voice.syl 앞에 두고 63개다", () => {
+    expect(SFX_IDS).toHaveLength(63);
+    const tut = SFX_IDS.filter((id) => id.startsWith("tut."));
+    expect(tut).toEqual(Object.keys(TUT_LAYERS));
+    expect(SFX_IDS.indexOf("voice.syl")).toBe(SFX_IDS.length - 1);
+    expect(SFX_IDS.indexOf("tut.warm")).toBe(SFX_IDS.length - 2);
+  });
+
+  it.each(Object.entries(TUT_LAYERS))("%s: 층 %i개, sfx 버스, prio 2·max 2·gapMs 0, 한계 안", (id, layers) => {
+    const r = RECIPES[id as keyof typeof RECIPES];
+    expect(r.layers).toHaveLength(layers);
+    expect(r.bus).toBe("sfx");
+    expect(r.prio).toBe(2);
+    expect(r.max).toBe(2);
+    expect(r.gapMs).toBe(0);
+    expect(r.duck).toBeUndefined();
+    expect(recipeDurationMs(id as keyof typeof RECIPES)).toBeLessThanOrEqual(MAX_RECIPE_MS);
+    expect(peakDbEstimate(id as keyof typeof RECIPES)).toBeLessThanOrEqual(PEAK_DBFS_MAX);
+    for (const e of renderPlan(id as keyof typeof RECIPES)) {
+      if (e.kind === "osc") {
+        expect(e.f0).toBeGreaterThanOrEqual(FREQ_MIN);
+        expect(e.f0).toBeLessThanOrEqual(FREQ_MAX);
+        expect(e.f1).toBeGreaterThanOrEqual(FREQ_MIN);
+        expect(e.f1).toBeLessThanOrEqual(FREQ_MAX);
+      }
+    }
+  });
+
+  it("tut.fanfare 는 D·F·A·E 네 음 삼각파, 0.11초 간격", () => {
+    const layers = RECIPES["tut.fanfare"].layers;
+    expect(layers.map((l) => l.src)).toEqual(["triangle", "triangle", "triangle", "triangle"]);
+    expect(layers.map((l) => l.f![0])).toEqual([293.7, 349.2, 440, 659.3]);
+    expect(layers.map((l) => l.at)).toEqual([0, 110, 220, 330]);
+    expect(layers.every((l) => l.dur === 500)).toBe(true);
+  });
+
+  it("튜토리얼 소리 13개는 화면 대응 줄이 ambient 로 시작하지 않는다", () => {
+    for (const id of [...Object.keys(TUT_LAYERS), "voice.syl"]) {
+      const line = SCREEN_COUNTERPART[id as keyof typeof SCREEN_COUNTERPART];
+      expect(line.trim()).not.toBe("");
+      expect(line.startsWith("ambient")).toBe(false);
+    }
   });
 });
