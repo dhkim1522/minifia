@@ -15,7 +15,9 @@ import { preloadEntryAssets } from "../net/assets";
 import { messageForApiError, nicknameErrorText } from "../net/copy";
 import { loadLastNickname, loadSession, loadTutorialSeen, saveLastNickname, saveTutorialSeen } from "../net/session";
 import { preloadWorld } from "../world/runtime";
+import { TutorialEndCard } from "../components/v2/TutorialEndCard";
 import { TutorialEntry } from "../components/v2/TutorialEntry";
+import { TUTORIAL_END_CARD_ON_SKIP } from "../game/tutorialScript";
 import { TutorialScreen } from "./TutorialScreen";
 
 /** 시험판 Worker 별 첫 화면 표식. v1.0(`minifia`)·dev 에는 없다. */
@@ -43,6 +45,8 @@ export function Home({ onEnterRoom }: HomeProps) {
   // App 에 새 화면을 만들지 않고 history 도 건드리지 않는다. seen 은 마운트 때 한 번 읽는다(큰 카드 ↔ 작은 단추).
   const [tutorial, setTutorial] = useState<"off" | "playing">("off");
   const [seen, setSeen] = useState(loadTutorialSeen);
+  // 끝까지 본 뒤 첫 화면에서 큰 카드 자리를 대신하는 마무리 카드. 첫 화면을 다시 마운트하면 사라진다.
+  const [endCard, setEndCard] = useState(false);
   // ?test=1 첫 화면에는 진입로가 없다(T-22)
   const showTutorialEntry = !testModeFromSearch(window.location.search);
 
@@ -72,6 +76,17 @@ export function Home({ onEnterRoom }: HomeProps) {
     // 소리 해제는 TutorialEntry 의 탭 핸들러가 이미 같은 틱에서 먼저 했다. 서버·소켓 요청은 만들지 않는다(T-17-14).
     saveTutorialSeen();
     setSeen(true);
+    setEndCard(false);
+    setTutorial("playing");
+  }
+
+  function handleTutorialEnd(reason: "done" | "skipped") {
+    setTutorial("off");
+    setEndCard(reason === "done" || TUTORIAL_END_CARD_ON_SKIP);
+  }
+
+  function replayTutorial() {
+    setEndCard(false);
     setTutorial("playing");
   }
 
@@ -88,6 +103,7 @@ export function Home({ onEnterRoom }: HomeProps) {
     const stored = loadSession();
     if (stored && stored.code === code) {
       unlockAudio(); // 이 탭도 사용자 제스처다 — 방 화면의 오디오를 여기서 깨운다(D-7)
+      saveTutorialSeen(); // 방에 들어간 브라우저는 다음 첫 화면부터 작은 단추(T-2)
       onEnterRoom(code, stored.token);
       return;
     }
@@ -106,6 +122,7 @@ export function Home({ onEnterRoom }: HomeProps) {
     setBusy(false);
     if (result.ok) {
       saveLastNickname(validation.nickname);
+      saveTutorialSeen(); // 방에 들어간 브라우저는 다음 첫 화면부터 작은 단추(T-2) — 실패 분기에는 저장하지 않는다
       // 입장 성공 직후: 로비 맵 3초 조작 측정(06-19)의 시작점
       performance.mark("room-enter");
       onEnterRoom(result.data.code, result.data.token);
@@ -131,6 +148,7 @@ export function Home({ onEnterRoom }: HomeProps) {
     setBusy(false);
     if (result.ok) {
       saveLastNickname(validation.nickname);
+      saveTutorialSeen(); // 위 방 만들기와 같다(T-2)
       performance.mark("room-enter");
       onEnterRoom(code, result.data.token);
       return;
@@ -148,7 +166,7 @@ export function Home({ onEnterRoom }: HomeProps) {
   }
 
   if (tutorial === "playing") {
-    return <TutorialScreen mode="solo" onEnd={() => setTutorial("off")} />;
+    return <TutorialScreen mode="solo" onEnd={handleTutorialEnd} />;
   }
 
   return (
@@ -159,7 +177,9 @@ export function Home({ onEnterRoom }: HomeProps) {
           <h1 className="mf-t-display">Minifia</h1>
         </header>
         <div className="mf-entry__actions">
-          {showTutorialEntry ? <TutorialEntry seen={seen} onStart={startTutorial} /> : null}
+          {showTutorialEntry ? (
+            endCard ? <TutorialEndCard onReplay={replayTutorial} /> : <TutorialEntry seen={seen} onStart={startTutorial} />
+          ) : null}
           <form className="mf-entry__form" onSubmit={openJoin}>
             <TextField
               label="방 코드"
