@@ -9,14 +9,39 @@ requires:
 provides:
   - 로컬 전체 검증(폰 6종 회귀·nightload)과 성능 JSON
   - 결정 0080 완성(실행 편차·한계·정하지 않은 것)과 0078 개정 표시, 지도·구조·기획 문서
-  - minifia-v3 배포와 배포본 확인(단계 3 에서 채움)
+  - minifia-v3 배포(version 2026-11-09T06:26:08Z+4858e54f)와 배포본 확인
 affects: [v3.0 실테스트]
-status: in-progress
+actuals:
+  tokens: 60000
+  tasks: 4
+  commits: 6
+plan_head_before: f2e04a4710de864dad36641da2a25208ef914b14
+commits: 6
+plan_head_after: 6c623d22f20e5ddfb7b5c8d6432a9fce14a39f6c
+key-files:
+  created:
+    - .planning/phases/17-tutorial-first-case/perf/nightload-390x844-x4.json
+    - .planning/phases/17-tutorial-first-case/perf/nightload-390x844-x4-run1.json
+  modified:
+    - docs/decisions/0080-v3-tutorial-first-case.md
+    - docs/decisions/0078-tutorial-first-case.md
+    - docs/screen-map.md
+    - docs/architecture.md
+    - docs/product.md
+    - scripts/e2e/avatar.mjs
+    - src/styles/world.css
+    - HANDOFF.md
+    - .planning/REQUIREMENTS.md
+key-decisions:
+  - "결정 0080 한 장에 17페이즈 확정분(0080-1~19)·위임 기본값·실행 편차 12항목·알려진 한계·정하지 않은 것을 둔다. 0078 머리에 개정 표시 한 줄"
+  - "17-07 의 방장 패널 +76 이 드러낸 곳은 제품 하나(가림막 카드 [다시 시도] 가 패널에 가림 — 가림막 아래 여백에 --mf-panel-h)만 고치고, 낮은 폰의 방장 열 겹침은 알려진 한계로 두며 E2E 가 알약이 접힐 때까지 기다리거나 참고 행으로 돌린다"
+requirements-completed: [TUT-01, TUT-02, TUT-03, TUT-04, TUT-05, DEPLOY-05]
+status: complete
 ---
 
 # Phase 17 Plan 10: 검증·문서·배포 Summary
 
-(마무리 때 한 줄 요약과 frontmatter 의 commits·actuals 를 채운다.)
+17페이즈를 폰 6종 전 흐름 회귀(로컬)·nightload 59.8fps·결정 0080 완성·minifia-v3 배포(`...+4858e54f`)·HANDOFF 로 닫았다. 검증 중 방장 패널 +76 이 드러낸 제품 하나(맵 불러오기 실패 카드가 패널에 가림)를 고치고, harness 하나(avatar 두 흐름의 낮은 폰 방장 쪽)를 한계에 맞췄다.
 
 ## 진행
 
@@ -105,4 +130,50 @@ status: in-progress
 - **E2E `--only tutorial`**(인자 없는 e2e = 배포본, 93초): tutorial-solo 360x640 177/177 · 390x664 177/177 · 430x932 175/175 · 360x560 177/177 · 402x874 177/177 · 390x844 178/178, tutorial-together 390x844 30/30. 첫 시도에서 모두 통과(재시도 0). 튜토리얼 밖 누설 0(TL1~TL3)·혼자 하기 앱 소켓 0·함께 진행의 끝났음 `tutorialDone` 페이지마다 한 번을 배포본에서 다시 확인했다(T-17-24).
 - 누설 시험(`leak`·`tutorialLeak`)이 통과한 빌드만 배포했다(로컬 `npm test` 7929 통과).
 
-<!-- gsd:write-continue -->
+## Deviations from Plan
+
+### Auto-fixed Issues
+
+**1. [Rule 1 - Bug, 제품] 방장 패널 +76 이 맵 불러오기 실패 카드의 [다시 시도] 를 덮음**
+- **Found during:** 단계 1 (E2E 전 흐름 회귀, perfbudget E1b)
+- **Issue:** 17-07 이 방장 대기실 패널을 326/382 로 올려 390x844 에서 패널 윗변이 462 가 되었고, 가림막 한가운데에 서는 [다시 시도](438~490)의 중심이 패널 위에 놓여 눌러지지 않았다(`elementFromPoint` 로 확인).
+- **Fix:** `.mf-world__veil` 아래 여백에 `--mf-panel-h`(대기실이 이미 정하는 변수, 다른 화면은 0)를 더했다. 카드가 패널을 뺀 자리 가운데에 선다.
+- **Files modified:** src/styles/world.css
+- **Commit:** 2b29522f
+
+**2. [Rule 1 - Bug, E2E 하네스] avatar-dress·avatar-emote 가 낮은 폰의 방장 패널 +76 한계를 따르지 않음**
+- **Found during:** 단계 1 (390x664 avatar-dress S4 4번 연속, 360x560 DB1·EP4·S4)
+- **Issue:** 390x664 방장은 열이 두 줄로 접혀 둘째 열의 옷장이 잠긴 소리 알약 밑에 겹치는 몇 초가 있고, 360x560 방장은 스테이지가 172 로 낮아 동작 판이 캐릭터를 가리고 옷장 아랫변이 패널 윗변 − 8 을 넘으며 방장 쪽 목적지 후보가 0 이다. 이 크기에서 방장 대기실 한계는 17-07 이 이미 알려진 한계로 기록했다(UI Considerations #24).
+- **Fix:** 흐름이 알약이 접힐 때까지 기다린 뒤 방장 열을 누르고, 360x560 의 방장 쪽 DB1·EP4·목적지 후보를 참고 행으로 돌렸다(17-07 이 world 흐름에 한 것과 같다). 판정 함수 `lib.mjs` 의 문턱과 다른 크기는 그대로.
+- **Files modified:** scripts/e2e/avatar.mjs
+- **Commit:** de547bff
+
+**Total deviations:** 2 auto-fixed (제품 1 + 하네스 1). **Impact:** 17페이즈 범위는 그대로. 재배포는 없었다(수정은 모두 배포 전).
+
+## Authentication Gates
+
+없음. `npm run deploy` 맨 앞 계정 가드는 통과했고 우회하지 않았다. 식별자·토큰은 적지 않는다.
+
+## Known Stubs
+
+없음. 이 계획은 검증·문서·배포이며 화면에 흐르는 빈 값·자리표시 문구를 새로 만들지 않았다. 알려진 한계는 결정 0080 에 있다.
+
+## Threat Flags
+
+없음. 새 네트워크 표면·인증 경로·스키마 변경이 없다(T-17-22 계정 가드 통과·배포 전후 health 확인, T-17-23 위생 새 결과 0, T-17-24 누설 시험 통과 빌드만 배포·배포본 tutorial 흐름이 누설 0·혼자 소켓 0 확인, T-17-25 큰 회귀는 로컬 한 번·배포본은 smoke 와 tutorial 흐름만, T-17-SC 패키지 설치 없음).
+
+## Deferred Issues
+
+- tutorial-solo 오프닝 시간 판정(TM1)·띠 막대(TB2)는 전체 회귀처럼 여러 흐름이 함께 돌 때 가끔 흔들린다(단독·같은 크기 재실행 통과). 판정 문턱은 그대로다.
+- 360x560 방장 대기실의 열 겹침·스테이지 172, 390x664 방장의 소리 알약 겹침(8초), 직업 카드 아래 줄, 장면 6 도윤 이름표 가장자리는 결정 0080 알려진 한계.
+- `perfbudget` B2·M1, `errandLeak`·`bots`·`v2Marker` 간헐은 기존 한계(HANDOFF·0080).
+- UI 안전 점검(`ui.safety-gate`)은 설치된 gsd-tools 에 그 명령이 없어 돌리지 못했다.
+
+## 남은 것 (사용자·다음 세션)
+
+- v3.0 실테스트 한 번(팀·실기기, 혼자 하기·함께 진행 포함) — HANDOFF 다음 할 일 1. 통과하면 main 반영.
+- 결정 0080 위임 기본값(0080-1~19·17-UI-SPEC T-1~T-23) 검토, 한 줄씩 바꿀 수 있다.
+
+## Self-Check: PASSED
+
+만든·고친 파일 6개(결정 0080·nightload JSON 둘·avatar.mjs·world.css·HANDOFF) 존재 확인, 커밋 6개(de547bff·2b29522f·605d70e3·4858e54f·699ef5fa·6c623d22) 모두 HEAD 의 조상.
