@@ -621,9 +621,9 @@ test("headerContrastChecks H1: 제목 항목이 없어도 실패한다(대기실
   assert.match(r.detail, /제목/);
 });
 
-test("EXPECTED_SCENE: 단계 열다섯 개(15-01 이 errand 를 더했다)가 모두 장면 id 로 정해져 있다 (옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 PhaseId 와 함께 없어졌고, 결선 runoff·마지막 3인 showdown 은 09.1.1-04·06 이 더했다)", () => {
+test("EXPECTED_SCENE: 단계 열여섯 개(15-01 이 errand, 17-01 이 tutorial 을 더했다)가 모두 장면 id 로 정해져 있다 (옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 PhaseId 와 함께 없어졌고, 결선 runoff·마지막 3인 showdown 은 09.1.1-04·06 이 더했다)", () => {
   assert.deepEqual(Object.keys(EXPECTED_SCENE).sort(), [
-    "assigning", "dayAnnounce", "defense", "discussion", "ended", "errand", "execution", "lobby", "morning", "night", "nomination", "roleReveal", "runoff", "showdown", "verdict",
+    "assigning", "dayAnnounce", "defense", "discussion", "ended", "errand", "execution", "lobby", "morning", "night", "nomination", "roleReveal", "runoff", "showdown", "tutorial", "verdict",
   ]);
   for (const p of ["nomination", "defense", "verdict", "execution", "runoff", "showdown"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
   assert.equal(EXPECTED_SCENE.ended, "night");
@@ -2894,7 +2894,7 @@ test("floatTrayChecks 기본판(결정 0072): 세 시점 모두 떠 있는 버�
 // ---- 12-06: 소리 시험 페이지 sound-render 순수 판정 (D-18, T-12-22) ----
 
 const soundRow = (id, over = {}) => ({ id, peakDb: -9, rmsDb: -30, nan: 0, lengthMs: 300, declaredMs: id.startsWith("bed.") ? null : 300, ok: true, ...over });
-const soundRows = () => [...Array.from({ length: 7 }, (_, i) => soundRow(`bed.${i}`)), ...Array.from({ length: 50 }, (_, i) => soundRow(`sfx.${i}`))];
+const soundRows = () => [...Array.from({ length: 7 }, (_, i) => soundRow(`bed.${i}`)), ...Array.from({ length: 51 }, (_, i) => soundRow(`sfx.${i}`))];
 const soundFails = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
 
 test("SOUND_RENDER_LIMITS: 58개 · 피크 −3 · RMS −60 · 길이 ±50ms (문턱은 이 한 곳)", () => {

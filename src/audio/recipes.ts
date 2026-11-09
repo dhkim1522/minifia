@@ -134,9 +134,10 @@ export const SFX_IDS = [
   "emote.clap", "emote.praise", "emote.handshake", "emote.dance", "emote.surprise", "emote.cry", "emote.deny",
   "emote.point", "emote.throat",
   "result.win", "result.lose", "award.plate", "award.final",
+  "voice.syl",
 ] as const;
 export type SfxId = (typeof SFX_IDS)[number];
-/** 소리 id 57개: 침대 7 + 효과음 50 */
+/** 소리 id 58개: 침대 7 + 효과음 51 */
 export const SOUND_IDS = [...BED_IDS, ...SFX_IDS] as const;
 export type SoundId = BedId | SfxId;
 
@@ -456,6 +457,13 @@ export const RECIPES: Readonly<Record<SfxId, Recipe>> = {
     osc("sine", 0, 1200, 196, 0.8, [30, 1000, 0, 300]),
     osc("sine", 0, 1200, 294, 0.5, [30, 1000, 0, 300]),
   ]),
+
+  // 튜토리얼 사회자 웅얼 목소리(17-02, TUT-04, 결정 0078-4·0080-8): 글자마다 음절 하나. 음높이는 대본 항목의 cents 로만 옮긴다.
+  // 삼각 75ms(205→192.7Hz) + 사인 2배음 50ms(412→389.5Hz), 이득비 0.15:0.035. ui 버스라 효과음 위로 덮이지 않는다. 음성·TTS·녹음 없음
+  "voice.syl": recipe("voice.syl", "ui", 2, -16, [
+    osc("triangle", 0, 75, [205, 192.7], 1, perc(75)),
+    osc("sine", 0, 50, [412, 389.5], 0.035 / 0.15, perc(50)),
+  ]),
 };
 
 // ───────────────────────── 침대 표 ─────────────────────────
@@ -611,6 +619,7 @@ export const SCREEN_COUNTERPART: Readonly<Record<SoundId, string>> = {
   "result.lose": "진 팀의 결과 화면",
   "award.plate": "시상 패가 등장하는 모습",
   "award.final": "마지막 큰 칭호 패가 등장하는 모습",
+  "voice.syl": "사회자 띠 파형 막대가 움직이는 동안 글자마다 한 음절",
 };
 
 /** 분위기 소리(정보가 아니다): 침대 7개와 night.cue */
