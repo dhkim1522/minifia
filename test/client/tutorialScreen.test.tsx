@@ -173,6 +173,10 @@ describe("장면 1~7 끝까지 (가짜 타이머)", () => {
 
     expect(stage.props!.pick).toBeDefined();
     act(() => stage.props!.pick!.onPick(1));
+    // 17-05: 정답은 도장·정체 공개(1100ms 뒤)를 거쳐 [다음] 으로 장면 7 이 된다
+    expect(sceneOf(container)).toBe("6");
+    advance(1100);
+    fireEvent.click(next$(container)!);
     expect(sceneOf(container)).toBe("7");
 
     advance(0);
