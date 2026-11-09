@@ -2,9 +2,10 @@
 import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { resolveLookConflicts } from "../../shared/game/look";
 import { BASIC_RULESET, RULESET } from "../../shared/game/ruleset";
 import type { Ruleset } from "../../shared/game/ruleset";
-import type { RoleId, RoomView, ServerMessage } from "../../shared/protocol";
+import type { OutfitId, RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
   actorsOf,
   advanceTo,
@@ -780,6 +781,10 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
         send(g.sock, { t: "dress", look: dressScript.get(g.seat) });
         for (const sock of socks) await settle(sock, mark(sock));
       }
+      // 시작 때 겹친 옷 풀기(D-01): 기본 coat 가 겹친 나머지 좌석은 남는 옷으로 바뀌어 look 키가 생긴다. 역할이 아닌 대본·좌석만의 함수라 판 내내 같은 값이 실린다.
+      const resolvedScript = new Map<number, string>(
+        resolveLookConflicts(socks.map((_, i) => ({ seat: i, ...(dressScript.has(i) ? { look: dressScript.get(i) as OutfitId } : {}) }))).flatMap((p) => (p.look === undefined ? [] : [[p.seat, p.look] as const])),
+      );
 
       send(room.host, { t: "start" });
       for (const sock of socks) await nextFrame(sock, phaseOf("assigning"));
@@ -1074,7 +1079,7 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
             // 공개 주장(결정 0066-1): badge·badgeSwapped 는 대본에 있는 산 사람 줄에만, 값은 항상 대본의 값이다(실제 역할이 아니다).
             const scripted = badgeScript.get(pl.seat);
             // 공개 의상(결정 D-6): look 은 대본에 있는 좌석 줄에만, 값은 항상 대본의 값이다(실제 역할이 아니다). 판 내내 같은 값이 실린다.
-            if (pl.look !== undefined) expect(`${pl.seat}:${pl.look}`).toBe(`${pl.seat}:${dressScript.get(pl.seat)}`);
+            if (pl.look !== undefined) expect(`${pl.seat}:${pl.look}`).toBe(`${pl.seat}:${resolvedScript.get(pl.seat)}`);
             // 다시 하기 준비(11-08, D-12): ready 는 결과 단계에서 방장(늘 준비)의 줄에만 실린다 — 이 판은 아무도 준비 토글을 하지 않았다. 값은 true 뿐이고 신분과 무관하다.
             const readyKey = v.phase === "ended" && pl.isHost ? ["ready"] : [];
             const base = ["alive", "connected", "isHost", "nickname", "seat", ...readyKey, ...(pl.look !== undefined ? ["look"] : [])].sort();

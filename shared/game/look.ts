@@ -28,3 +28,10 @@ export function setLook(
   if ((actor.look ?? DEFAULT_LOOK) === look) return { ok: true, state };
   return { ok: true, state: { ...state, players: state.players.map((p) => (p.id === actorId ? { ...p, look } : p)) } };
 }
+
+/**
+ * 시작 때 겹친 옷 풀기(자리 함수 — RED). 구현 전에는 입력을 그대로 돌려준다.
+ */
+export function resolveLookConflicts<P extends { seat: number; look?: OutfitId }>(players: readonly P[]): readonly P[] {
+  return players;
+}

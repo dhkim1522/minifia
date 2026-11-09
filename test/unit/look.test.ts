@@ -1,7 +1,7 @@
 // 로비 의상 규칙 단위 시험(10-02, 결정 D-6·L25). 결과는 한 줄 문자열로 비교한다(TAP 증거 규칙).
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_LOOK, LOOK_MIN_GAP_MS, setLook } from "../../shared/game/look";
+import { DEFAULT_LOOK, LOOK_MIN_GAP_MS, resolveLookConflicts, setLook } from "../../shared/game/look";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { OUTFIT_IDS } from "../../shared/protocol";
@@ -104,6 +104,45 @@ describe("setLook — 표 (D-6)", () => {
 
   it("상수: 기본은 coat, 간격은 250ms", () => {
     expect(`${DEFAULT_LOOK}|${LOOK_MIN_GAP_MS}`).toBe("coat|250");
+  });
+});
+
+describe("시작 때 겹친 옷 풀기 (P18-1, D-01)", () => {
+  /** 좌석 0.. 순서대로 look 을 준다(undefined = 고르지 않음). */
+  const seats = (looks: ReadonlyArray<OutfitId | undefined>): Array<{ seat: number; look?: OutfitId }> =>
+    looks.map((look, seat) => (look === undefined ? { seat } : { seat, look }));
+  /** 좌석 순 `look ?? "-"` 한 줄. */
+  const line = (rows: ReadonlyArray<{ seat: number; look?: OutfitId }>): string => [...rows].sort((a, b) => a.seat - b.seat).map((p) => p.look ?? "-").join(",");
+
+  it("8명 전원 기본이면 좌석 0 이 coat 를 지키고 나머지는 OUTFIT_IDS 순서의 빈 옷으로 바뀐다", () => {
+    expect(line(resolveLookConflicts(seats(Array(8).fill(undefined))))).toBe("-,police,doctor,mafia,detective,reporter,elder,hood");
+  });
+
+  it("직접 고른 coat 가 기본 coat 보다 우선이다(좌석 3 이 지키고 기본 셋이 바뀐다)", () => {
+    expect(line(resolveLookConflicts(seats([undefined, undefined, undefined, "coat"])))).toBe("police,doctor,mafia,coat");
+  });
+
+  it("직접 고른 옷끼리는 좌석이 작은 쪽이 지키고, 진 사람 순서는 직접 고름 먼저 → 좌석 오름차순이다", () => {
+    expect(line(resolveLookConflicts(seats([undefined, "mafia", undefined, undefined, "mafia"])))).toBe("-,mafia,doctor,detective,police");
+  });
+
+  it("가로채기가 없다(2패스): 진 사람이 뒤 좌석이 직접 고른 옷을 가져가지 않는다", () => {
+    expect(line(resolveLookConflicts(seats(["police", "police", "coat"])))).toBe("police,doctor,coat");
+  });
+
+  it("겹침이 없으면 입력과 같은 배열 객체를 돌려주고 입력을 바꾸지 않는다", () => {
+    const input = seats([undefined, "police", "doctor"]);
+    const before = JSON.stringify(input);
+    const out = resolveLookConflicts(input);
+    expect(out === input).toBe(true);
+    expect(JSON.stringify(input)).toBe(before);
+  });
+
+  it("역할을 읽지 않는다: seat·look 이 같고 role 만 다른 두 입력의 결과 look 열이 같다", () => {
+    const looks: Array<OutfitId | undefined> = [undefined, "mafia", undefined, "mafia", undefined];
+    const a = seats(looks).map((p) => ({ ...p, role: p.seat % 2 === 0 ? "mafia" : "citizen" }));
+    const b = seats(looks).map((p) => ({ ...p, role: p.seat % 2 === 0 ? "citizen" : "mafia" }));
+    expect(`${line(resolveLookConflicts(a))}|${line(resolveLookConflicts(b))}`).toBe("-,mafia,police,doctor,detective|-,mafia,police,doctor,detective");
   });
 });
 

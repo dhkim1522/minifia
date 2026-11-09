@@ -637,6 +637,42 @@ describe("startGame (ROLE-01, ROOM-03, 결정 0012)", () => {
   });
 });
 
+describe("startGame — 시작 때 겹친 옷 풀기와 난수 순서 (D-01, L25)", () => {
+  const specs: Spec[] = [0, 1, 2, 3, 4].map((i) => ({ id: `p${i}`, seat: i, joinSeq: i, connected: true }));
+  /** 같은 방에 좌석별 look 만 입힌다(undefined = 고르지 않음). */
+  const withLooks = (looks: ReadonlyArray<string | undefined>): RoomState => {
+    const base = room(specs);
+    return { ...base, players: base.players.map((p) => (looks[p.seat] === undefined ? p : { ...p, look: looks[p.seat] })) } as RoomState;
+  };
+  /** startGame 한 번: randInt 호출 인자 열, 좌석 순 역할 열, 맵, 좌석 순 (look ?? coat) 열. */
+  function run(state: RoomState, seed: number): { calls: string; roles: string; map: string; looks: string } {
+    const inner = seededRandInt(seed);
+    const calls: number[] = [];
+    const r = startGame(state, "p0", 0, (n) => {
+      calls.push(n);
+      return inner(n);
+    });
+    if (!r.ok) throw new Error(`expected start ok, got ${r.error}`);
+    const rows = [...r.state.players].sort((a, b) => a.seat - b.seat);
+    return {
+      calls: calls.join(","),
+      roles: rows.map((p) => p.role).join(","),
+      map: String(r.state.map),
+      looks: rows.map((p) => (p as { look?: string }).look ?? "coat").join(","),
+    };
+  }
+
+  it("같은 시드에서 모두 기본이든 좌석 1·2 가 같은 옷을 골랐든 randInt 호출·역할 열·맵이 같고 (look ?? coat) 는 모두 다르다", () => {
+    for (const seed of [1, 2, 3, 7]) {
+      const plain = run(withLooks([]), seed);
+      const clash = run(withLooks([undefined, "hood", "hood"]), seed);
+      expect(`${clash.calls}|${clash.roles}|${clash.map}`).toBe(`${plain.calls}|${plain.roles}|${plain.map}`);
+      expect(new Set(plain.looks.split(",")).size).toBe(5);
+      expect(clash.looks).toBe("coat,hood,police,doctor,mafia");
+    }
+  });
+});
+
 describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14)", () => {
   /** 1페이즈가 저장한 모양: 종착 낮 단계 이름이 문자열 "day" 이고 마감·낮 필드가 없다. */
   function legacyDayRoom(): RoomState {

@@ -111,7 +111,9 @@ describe("의상 — 규칙 완성 (10-02 Task 2, O-8·L26)", () => {
     await advanceTo(room.code, socks, "dayAnnounce");
     await advanceTo(room.code, socks, "discussion");
     for (const k of socks) await settle(k, mark(k));
-    for (const k of socks) expect(viewLooks(k)).toBe(lobbyLooks); // 같은 값이 모든 소켓의 게임 view 에 실린다
+    // 직접 고른 옷은 그대로 남고, 기본 coat 가 겹친 사람(3·4·5)만 시작 때 남는 옷으로 바뀐다 (D-01)
+    const startedLooks = "0:-,1:mafia,2:noir,3:police,4:doctor,5:detective";
+    for (const k of socks) expect(viewLooks(k)).toBe(startedLooks); // 같은 값이 모든 소켓의 게임 view 에 실린다
     // 게임 중 dress: 보낸 소켓만 자기 state 한 프레임
     const before = await storedLooks(room.code);
     const marks = socks.map((k) => mark(k));
@@ -121,7 +123,7 @@ describe("의상 — 규칙 완성 (10-02 Task 2, O-8·L26)", () => {
     expect(summary(got[3]!)).toBe("[state:discussion]");
     for (const i of [0, 1, 2, 4, 5]) expect(summary(got[i]!)).toBe("[]");
     expect(await storedLooks(room.code)).toBe(before);
-    expect(viewLooks(socks[3]!)).toBe(lobbyLooks);
+    expect(viewLooks(socks[3]!)).toBe(startedLooks);
   });
 
   it("재접속(hello)한 소켓의 첫 state 에 모든 사람의 look 이 실려 있다", async () => {
@@ -136,9 +138,27 @@ describe("의상 — 규칙 완성 (10-02 Task 2, O-8·L26)", () => {
 });
 
 describe("의상 — 시작한 판의 기본값", () => {
-  it("아무도 고르지 않고 시작한 판의 모든 view 의 players[] 에는 look 키가 없다(기본 coat 는 키 없음으로 읽는다)", { timeout: 30_000 }, async () => {
+  it("아무도 고르지 않고 시작한 판은 좌석이 가장 작은 사람만 look 키가 없고(기본 coat 를 지킨다) 나머지는 OUTFIT_IDS 순서의 옷이다 (P18-1, D-01)", { timeout: 30_000 }, async () => {
     const g = await startedGame("discussion", 5);
-    for (const k of g.socks) for (const p of lastViewOf(k).players) expect("look" in p).toBe(false);
+    for (const k of g.socks) expect(viewLooks(k)).toBe("0:-,1:police,2:doctor,3:mafia,4:detective,5:reporter");
+  });
+});
+
+describe("의상 — 시작 때 겹친 옷 풀기 (D-01, P18-1)", () => {
+  it("저장된 방에서 두 손님이 같은 옷을 가진 채 시작하면 모든 소켓의 첫 게임 view 에서 (look ?? coat) 가 모두 다르고 좌석이 작은 쪽이 옷을 지킨다", { timeout: 30_000 }, async () => {
+    const room = await seat(3, 0);
+    const socks = [room.host, ...room.guests.map((g) => g.sock)];
+    for (const k of socks) await settle(k, 0);
+    await editRoom(room.code, (r) => mapPlayers(r, (p) => (p.seat === 1 || p.seat === 2 ? { ...p, look: "hood" } : p)));
+    for (const k of socks) await settle(k, mark(k));
+    send(room.host, { t: "start" });
+    const firsts: string[] = [];
+    for (const k of socks) {
+      const m = (await nextFrame(k, (x) => x.t === "state" && x.view.phase === "assigning")) as State;
+      firsts.push(m.view.players.map((p) => `${p.seat}:${p.look ?? "coat"}`).join(","));
+    }
+    expect(firsts).toEqual(Array(4).fill("0:coat,1:hood,2:police,3:doctor"));
+    expect(await storedLooks(room.code)).toBe("0:-,1:hood,2:police,3:doctor");
   });
 });
 
@@ -155,7 +175,8 @@ const DRESS_SCRIPT: ReadonlyArray<{ seat: number; look: string; gapBefore?: numb
   { seat: 4, look: "police" },
   { seat: 2, look: "noir", gapBefore: 300 },
 ];
-const EXPECTED_LOOKS = "0:-,1:mafia,2:noir,3:-,4:police,5:-";
+// 시작 때 겹친 옷 풀기(D-01) 뒤의 모습: 좌석 0 은 기본 coat 를 지키고, 3·5 는 대본에 없는 옷 중 OUTFIT_IDS 순서의 첫 빈 옷(doctor·detective)으로 바뀐다.
+const EXPECTED_LOOKS = "0:-,1:mafia,2:noir,3:doctor,4:police,5:detective";
 
 /** 프레임에서 공개 의상 열만 남긴다: state 의 players[] 좌석·look. */
 const lookColumn = (msgs: ServerMessage[]): string =>
@@ -270,7 +291,7 @@ describe("L25·L26 — 의상은 공개 값이고 역할의 함수가 아니다"
       for (const a of g.actors) if (a !== who) expect(`${a.seat}:${summary(got.get(a.seat)!)}`).toBe(`${a.seat}:[]`);
     }
     expect(new Set(shapes).size).toBe(1);
-    expect(shapes[0]).toBe("[state:discussion]|------");
+    expect(shapes[0]).toBe("[state:discussion]|-LLLLL"); // 시작 때 풀린 옷은 저장된 look 이라 좌석 0 만 키가 없다 — 게임 중 dress 는 이것을 바꾸지 않는다
     expect(JSON.stringify((await storedRoom(g.code)).players)).toBe(before);
   });
 });
@@ -292,6 +313,8 @@ describe("결과 단계 의상 (D-16)", () => {
       expect(lookOf(s, g.living[0]!.seat)).toBe("hood");
       expect(lookOf(s, g.dead.seat)).toBe("noir");
     }
-    expect((await storedRoom(g.code)).players.filter((p) => (p as { look?: string }).look !== undefined).length).toBe(2);
+    // 시작 때 풀린 옷도 저장된 look 이라 다음 판에 그대로 남는다 — 네 명의 (look ?? coat) 는 서로 다르다(D-01)
+    const stored = (await storedRoom(g.code)).players as unknown as Array<{ look?: string }>;
+    expect(new Set(stored.map((p) => p.look ?? "coat")).size).toBe(4);
   });
 });
