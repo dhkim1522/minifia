@@ -7,16 +7,16 @@ current_phase_name: "튜토리얼 \"첫 사건\""
 current_plan: 12
 status: verifying
 stopped_at: Completed 17-10-PLAN.md
-last_updated: "2026-11-09T06:34:50.694Z"
+last_updated: "2026-11-09T12:58:28.836Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 17 execution started
-state_head: 3a333866b8f95bb7c7be8b7d9f2a842cc2eb533b
+state_head: 7fa192e03e7ed5cac7e26e0511b08c5a9714c455
 progress:
-  total_phases: 5
+  total_phases: 9
   completed_phases: 4
   total_plans: 47
   completed_plans: 47
-  percent: 80
+  percent: 44
 ---
 
 # Project State
@@ -573,6 +573,10 @@ None yet.
 - Phase 09.1 inserted after Phase 9: 묶음 B 연출(순차 지목·직업 의상 유령·유언 편지 공개, 결정 0063)
 - Phase 16 added: 튜토리얼·단추 정리·심부름 증거 (2026-11-08 실테스트 피드백, 결정 0077)
 - Phase 17 added: 튜토리얼 "첫 사건" (결정 0078 — 16 에서 튜토리얼을 떼어 냄, 16 이름은 "단추 정리·심부름 증거")
+- Phase 18 added: 결정 0081 반영(17 UAT 후 할 일 재설계)
+- Phase 19 added: 결정 0081 반영(17 UAT 후 할 일 재설계)
+- Phase 20 added: 결정 0081 반영(17 UAT 후 할 일 재설계)
+- Phase 21 added: 결정 0081 반영(17 UAT 후 할 일 재설계)
 
 ## Deferred Items
 
