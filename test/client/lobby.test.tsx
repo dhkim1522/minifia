@@ -403,7 +403,7 @@ describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행�
     const { container } = render(lobby(hostView(4), { send }));
     fireEvent.click(start(container)!);
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith({ t: "start" });
+    expect(send).toHaveBeenCalledWith({ t: "start", tutorial: true });
     fireEvent.click(start(container)!);
     advance(1999);
     fireEvent.click(start(container)!);
@@ -462,7 +462,7 @@ describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행�
     expect(start(container)?.className).toContain("mf-act--primary");
     fireEvent.click(start(container)!);
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith({ t: "start" });
+    expect(send).toHaveBeenCalledWith({ t: "start", tutorial: true });
   });
 
   it("canSend 가 거짓이면 눌러도 start 를 보내지 않고 알림도 없다", () => {
@@ -483,7 +483,7 @@ describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행�
     expect(container.querySelector("[data-lobby-start]") === null).toBe(true);
     expect(container.querySelector(".mv-count") === null).toBe(true);
     // 패널 안 버튼은 채팅 보내기(07-13)·동작 버튼(10-05)과 이 행동 줄 하나뿐이다
-    expect(container.querySelectorAll(".mf-lobby__panel button:not([data-chat-send]):not([data-emote-button])").length).toBe(1);
+    expect(container.querySelectorAll(".mf-lobby__panel button:not([data-chat-send]):not([data-emote-button]):not([data-tutorial-toggle])").length).toBe(1);
   });
 
   it("손님 화면에서 방장이 끊겨 있어도 같은 라벨이다", () => {
@@ -855,7 +855,7 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
   const remeasure = () => act(() => void resizeCallbacks.forEach((cb) => cb()));
   const inputOf = (container: HTMLElement) => container.querySelector("[data-chat-input]") as HTMLInputElement;
   const rootOf = (container: HTMLElement) => container.querySelector("main.mf-lobby") as HTMLElement;
-  const actionButtons = (container: HTMLElement) => container.querySelectorAll(".mf-lobby__panel button:not([data-chat-send]):not([data-emote-button])").length;
+  const actionButtons = (container: HTMLElement) => container.querySelectorAll(".mf-lobby__panel button:not([data-chat-send]):not([data-emote-button]):not([data-tutorial-toggle])").length;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -985,5 +985,98 @@ describe("Lobby — 측정·키보드 코드는 useMapInsets 훅 하나다 (08-1
     expect(src).toContain("useMapInsets(");
     expect(src).not.toContain("new ResizeObserver");
     expect(src).not.toContain("useKeyboardLift(");
+  });
+});
+
+// ---------- 17-07: 방장 스위치 줄 '튜토리얼 후 진행' (TUT-02, 결정 0078-3·0080-1·3, UI Considerations #16) ----------
+
+describe("Lobby — 방장 스위치 줄 '튜토리얼 후 진행' (17-07, TUT-02)", () => {
+  const toggleOf = (container: HTMLElement) => container.querySelector("[data-tutorial-toggle]") as HTMLButtonElement | null;
+  const startOf = (container: HTMLElement) => container.querySelector("[data-lobby-start]") as HTMLButtonElement;
+  const hostPlayers = () => [player(0, "방장님"), player(1, "친구1"), player(2, "친구2"), player(3, "친구3")];
+
+  it("방장(첫 판·일반 방): 스위치 줄 하나, role switch·aria-checked true·aria-label, [시작] 바로 위(같은 패널 안)", () => {
+    const { container } = render(lobby(makeView(hostPlayers(), 0, { round: 1 })));
+    const all = container.querySelectorAll("[data-tutorial-toggle]");
+    expect(all).toHaveLength(1);
+    const t = toggleOf(container)!;
+    expect(t.getAttribute("role")).toBe("switch");
+    expect(t.getAttribute("aria-checked")).toBe("true");
+    expect(t.getAttribute("aria-label")).toBe("튜토리얼 후 진행");
+    expect(t.textContent).toContain("튜토리얼 후 진행");
+    expect(t.textContent).toContain("모두 1분 보고 시작");
+    const panel = container.querySelector(".mf-lobby__panel")!;
+    expect(panel.contains(t)).toBe(true);
+    expect(t.compareDocumentPosition(startOf(container)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("테스트 방 방장(me.testMode)은 꺼짐으로 시작하고 줄은 보인다", () => {
+    const view = makeView(hostPlayers(), 0, { round: 1 });
+    const { container } = render(lobby({ ...view, me: { ...view.me, testMode: true } }));
+    expect(toggleOf(container)?.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("두 번째 판(round 2)은 꺼짐으로 시작한다", () => {
+    const { container } = render(lobby(makeView(hostPlayers(), 0, { round: 2 })));
+    expect(toggleOf(container)?.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("손님에게는 줄이 없다", () => {
+    const { container } = render(lobby(makeView(hostPlayers(), 1, { round: 1 })));
+    expect(container.querySelectorAll("[data-tutorial-toggle]")).toHaveLength(0);
+  });
+
+  it("누르면 켬 ↔ 끔이 바뀌고 [시작]은 그 값을 싣는다 — 켬 {tutorial:true}, 끈 뒤 {tutorial:false}", () => {
+    vi.useFakeTimers();
+    const send = vi.fn();
+    const on = render(lobby(makeView(hostPlayers(), 0, { round: 1 }), { send }));
+    fireEvent.click(startOf(on.container));
+    expect(send).toHaveBeenLastCalledWith({ t: "start", tutorial: true });
+    on.unmount();
+    send.mockClear();
+    const off = render(lobby(makeView(hostPlayers(), 0, { round: 1 }), { send }));
+    fireEvent.click(toggleOf(off.container)!);
+    expect(toggleOf(off.container)?.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(startOf(off.container));
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenLastCalledWith({ t: "start", tutorial: false });
+  });
+
+  it("스위치는 서버로 아무것도 보내지 않는다(값은 [시작] 순간에만 간다, 0080-1)", () => {
+    const send = vi.fn();
+    const { container } = render(lobby(makeView(hostPlayers(), 0, { round: 1 }), { send }));
+    fireEvent.click(toggleOf(container)!);
+    fireEvent.click(toggleOf(container)!);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("연결이 끊겨 보낼 수 없으면(canSend 거짓) 스위치가 disabled 이고 눌러도 바뀌지 않는다", () => {
+    const { container } = render(lobby(makeView(hostPlayers(), 0, { round: 1 }), { canSend: false }));
+    const t = toggleOf(container)!;
+    expect(t.disabled).toBe(true);
+    fireEvent.click(t);
+    expect(t.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("키보드가 열리면 [시작]과 함께 줄도 숨는다", () => {
+    const vv = Object.assign(new EventTarget(), { height: 844, offsetTop: 0 });
+    Object.defineProperty(window, "visualViewport", { value: vv, configurable: true, writable: true });
+    const realInnerH = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", { value: 844, configurable: true, writable: true });
+    vi.useFakeTimers();
+    try {
+      const { container } = render(lobby(makeView(hostPlayers(), 0, { round: 1 })));
+      expect(toggleOf(container)).not.toBeNull();
+      act(() => (container.querySelector("[data-chat-input]") as HTMLInputElement).focus());
+      vv.height = 844 - 336;
+      act(() => void vv.dispatchEvent(new Event("resize")));
+      advance(20);
+      expect(container.querySelector("main.mf-lobby")?.getAttribute("data-kb-open")).toBe("true");
+      expect(toggleOf(container)).toBeNull();
+      expect(container.querySelector("[data-lobby-start]")).toBeNull();
+    } finally {
+      Reflect.deleteProperty(window, "visualViewport");
+      Object.defineProperty(window, "innerHeight", { value: realInnerH, configurable: true, writable: true });
+    }
   });
 });
