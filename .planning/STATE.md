@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 17
 current_phase_name: "튜토리얼 \"첫 사건\""
-current_plan: 4
+current_plan: 5
 status: executing
-stopped_at: Completed 17-03-PLAN.md
-last_updated: "2026-11-09T03:28:21.443Z"
+stopped_at: Completed 17-11-PLAN.md
+last_updated: "2026-11-09T03:30:37.469Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 17 execution started
-state_head: 4b5e5b7b5e8c94996ff0583558565427f625f09f
+state_head: 63109a8bdde007ec70e55af3dca3ad5aac2b3993
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 47
-  completed_plans: 38
+  completed_plans: 39
   percent: 80
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 17 (튜토리얼 "첫 사건") — EXECUTING
-Current Plan: 4
+Current Plan: 5
 Total Plans in Phase: 12
 Status: Ready to execute
 Last activity: 2026-11-09 — Phase 17 execution started
@@ -236,6 +236,7 @@ Last activity: 2026-11-09 — Phase 17 execution started
 | Phase 17 P01 | 9 min | 1 tasks | 19 files |
 | Phase 17 P02 | 25 min | 2 tasks | 11 files |
 | Phase 17 P03 | 18 min | 2 tasks | 3 files |
+| Phase 17 P11 | 6 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -518,6 +519,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 17]: 17-02: tut.step 시작 레벨 −16 dB(짧은 잡음의 RMS 문턱 −60 을 넘기려 올림, 문턱은 그대로)
 - [Phase 17]: 17-03: TUTORIAL_SPOTS 는 연단 둘레 반지름 2.6, SUSPECT_WALK 는 (5.6,-1.9)→(4.0,1.0) 약 1.84초 — 모두 광장 마스크에서 걸을 수 있음을 시험으로 고정
 - [Phase 17]: 17-03: 가짜 view 에 me.chat 을 싣지 않음 — 장면 6 입력줄 표시 방식은 화면 계획이 정한다
+- [Phase 17]: 결정 0080-1~19 를 docs/decisions/0080-v3-tutorial-first-case.md 에 계획 단계 추천안으로 고정(17-11)
 
 ### Pending Todos
 
@@ -584,8 +586,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09T03:28:21.132Z
-Stopped at: Completed 17-03-PLAN.md
+Last session: 2026-11-09T03:30:37.120Z
+Stopped at: Completed 17-11-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
