@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 17
 current_phase_name: "튜토리얼 \"첫 사건\""
-current_plan: 6
+current_plan: 7
 status: executing
-stopped_at: Completed 17-12-PLAN.md
-last_updated: "2026-11-09T03:40:58.400Z"
+stopped_at: Completed 17-04-PLAN.md
+last_updated: "2026-11-09T03:58:53.675Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 17 execution started
-state_head: aa1c71392f33d2c6ffb05353120f66271255d812
+state_head: 0e6ccd55209e9b7d35583df7337e3d61ce53d891
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 47
-  completed_plans: 40
+  completed_plans: 41
   percent: 80
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 17 (튜토리얼 "첫 사건") — EXECUTING
-Current Plan: 6
+Current Plan: 7
 Total Plans in Phase: 12
 Status: Ready to execute
 Last activity: 2026-11-09 — Phase 17 execution started
@@ -238,6 +238,7 @@ Last activity: 2026-11-09 — Phase 17 execution started
 | Phase 17 P03 | 18 min | 2 tasks | 3 files |
 | Phase 17 P11 | 6 min | 2 tasks | 3 files |
 | Phase 17 P12 | 10 min | 3 tasks | 8 files |
+| Phase 17 P04 | 16 min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -522,6 +523,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 17]: 17-03: 가짜 view 에 me.chat 을 싣지 않음 — 장면 6 입력줄 표시 방식은 화면 계획이 정한다
 - [Phase 17]: 결정 0080-1~19 를 docs/decisions/0080-v3-tutorial-first-case.md 에 계획 단계 추천안으로 고정(17-11)
 - [Phase 17]: 17-12: tutorialLeak.test 는 leak.test 의 허용 목록을 import 하지 않고 지역 복사(테스트 파일 import 시 describe 가 같이 돈다), view 동일성 비교는 serverNow 도 뺀다
+- [Phase 17]: 17-04: [다음]의 4px 램프 빛 깜빡임은 .tut-next 자기 테두리가 맡고 FocusRing 묶음에는 넣지 않는다(같은 곳 이중 상자 방지, UI-SPEC T-5)
+- [Phase 17]: 17-04: 튜토리얼 장면 6 아래 패널(채팅 입력줄 포함)은 숨기지 않고 그리되 inert 로 눌림만 막는다. 도윤은 follow 카메라 투영상 화면 오른쪽 밖(x≈446/390)에서 들어온다
+- [Phase 17]: 17-04: 첫 사건 화면의 허용 목록은 inert 를 DOM 에 직접 붙이는 방식이고 허용 대상은 차단 컨테이너 밖에 둔다. 장면 확장은 renderSceneLayer·onPoint 자리에 17-05·17-08 이 얹는다
 
 ### Pending Todos
 
@@ -588,8 +592,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09T03:40:58.035Z
-Stopped at: Completed 17-12-PLAN.md
+Last session: 2026-11-09T03:58:53.317Z
+Stopped at: Completed 17-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
