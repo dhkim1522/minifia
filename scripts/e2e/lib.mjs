@@ -3536,13 +3536,13 @@ const isRectLike = (r) => !!r && [r.left, r.top, r.width, r.height].every(isNum)
 const rectText = (r) => `(${rd(r.left)},${rd(r.top)} ${rd(r.width)}x${rd(r.height)})`;
 
 /**
- * 첫 화면 진입(TUT-01, UI-SPEC "첫 화면 진입 계약"): 큰 카드(`kind: "card"`, 처음) 또는 작은 단추(`kind: "button"`, 한 번 본 뒤) 하나가 화면 안에 있고
+ * 첫 화면 진입(TUT-01, UI-SPEC "첫 화면 진입 계약"): 큰 카드(`kind: "card"`, 처음)·작은 단추(`kind: "button"`, 한 번 본 뒤)·마무리 카드(`kind: "end"`, 끝까지 본 뒤) 중 기대한 하나만 화면 안에 있고
  * 방 코드 칸·[방 만들기] 와 교차 0 이다. entry = { cards, buttons, rect }(rect = 보이는 카드/단추의 사각형), field·create = 방 코드 칸·[방 만들기] 사각형, viewport = { w, h }.
  * 값이 없으면 조용히 통과하지 않고 `측정값 없음` 으로 실패한다. 항상 같은 세 줄(TE1 개수·TE2 화면 안·TE3 교차 0).
  */
 export function tutorialEntryChecks({ entry, field, create, viewport }, { kind = "card" } = {}) {
   const L = {
-    TE1: kind === "card" ? "처음 카드 1개·작은 단추 0개" : "작은 단추 1개·카드 0개",
+    TE1: kind === "card" ? "처음 카드 1개·작은 단추 0개" : kind === "button" ? "작은 단추 1개·카드 0개" : "마무리 카드 1개·진입 카드·작은 단추 0개",
     TE2: "카드·단추가 화면 안(가로 0~폭, 위 0 이상, 아래 높이 이하)",
     TE3: "카드·단추가 방 코드 칸·[방 만들기] 와 교차 0",
   };
@@ -3551,8 +3551,9 @@ export function tutorialEntryChecks({ entry, field, create, viewport }, { kind =
   const lines = [];
   if (!okEntry) lines.push(noMeasure("TE1", L.TE1, "[data-tutorial-entry] 개수 읽기"));
   else {
-    const want = kind === "card" ? { cards: 1, buttons: 0 } : { cards: 0, buttons: 1 };
-    lines.push(result("TE1", L.TE1, entry.cards === want.cards && entry.buttons === want.buttons ? [] : [`카드 ${entry.cards}개·단추 ${entry.buttons}개 (기대 카드 ${want.cards}·단추 ${want.buttons})`]));
+    const want = kind === "card" ? { cards: 1, buttons: 0, ends: 0 } : kind === "button" ? { cards: 0, buttons: 1, ends: 0 } : { cards: 0, buttons: 0, ends: 1 };
+    const ends = isNum(entry.ends) ? entry.ends : 0;
+    lines.push(result("TE1", L.TE1, entry.cards === want.cards && entry.buttons === want.buttons && ends === want.ends ? [] : [`카드 ${entry.cards}개·단추 ${entry.buttons}개·마무리 카드 ${ends}개 (기대 ${want.cards}·${want.buttons}·${want.ends})`]));
   }
   const rect = okEntry && isRectLike(entry.rect) ? entry.rect : null;
   if (rect === null || !okView) lines.push(noMeasure("TE2", L.TE2, "진입 카드·단추 사각형과 화면 크기"));
@@ -3593,3 +3594,216 @@ export function sentFrameChecks(frames, allowed, { once = [] } = {}) {
  * me·victim·suspect 는 좌석 번호, errandTarget 은 심부름 장소 id, names 는 가짜 인물 이름 다섯(나 제외 — 누설 검사 낱말).
  */
 export const TUTORIAL_CAST_E2E = Object.freeze({ me: 5, victim: 2, suspect: 1, errandTarget: "mail", names: Object.freeze(["서연", "도윤", "민준", "지호", "하린"]) });
+
+// ---- 장면 판정 (17-09 Task 2) ----
+// 모든 판정은 { id, label, ok, detail } 줄(들)을 돌려주고, 값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다. 메시지에는 키·개수·사각형만 싣는다(T-17-21).
+
+/** 오프닝 자동 넘김(ms)과 허용 오차 — 앱 장면 표 장면 1 advance.afterMs 사본(e2eContract 가 대조). 실제 브라우저의 시간 판정은 여유를 둔다 */
+export const TUTORIAL_OPENING_MS = 4600;
+export const TUTORIAL_OPENING_TOL_MS = 1000;
+/** [처리] 를 누른 뒤 다음 장면까지(ms)와 허용 오차 — 앱 장면 표 장면 3 advance.afterMs 사본 */
+export const TUTORIAL_ERRAND_MS = 700;
+export const TUTORIAL_ERRAND_TOL_MS = 500;
+/** 포커스 상자 여백(대상 둘레 8)과 화면 가장자리 안쪽 거리(8)·허용 오차 2 — 앱 FocusRing 의 PAD */
+export const TUTORIAL_FOCUS_PAD = 8;
+export const TUTORIAL_FOCUS_TOL = 2;
+/** 사회자 띠 파형 막대 수와 글자 하한 */
+export const TUTORIAL_BAND_BARS = 5;
+export const TUTORIAL_TEXT_MIN = 14;
+/** 오프닝 소리 링 수(앱 OpeningFx 의 RINGS) */
+export const TUTORIAL_OPENING_RINGS = 3;
+/** 직업 카드 종류(장면 7) */
+export const TUTORIAL_ROLE_KINDS = Object.freeze(["citizen", "mafia", "doctor", "police"]);
+
+const isViewport = (v) => !!v && isNum(v.w) && isNum(v.h);
+const sortedKeys = (list) => list.map((x) => String(x.key)).sort();
+
+/**
+ * 포커스 상자(TUT-03): 상자마다 대상 사각형을 사방 8 키운 자리(오차 2) — 화면 안쪽 8 밖이면 크기를 그대로 두고 안으로 민 자리다(앱 FocusRing 과 같은 규칙).
+ * boxes = 읽은 상자 [{ key, rect }], targets = 그 장면에서 기대하는 대상 [{ key, rect }](상자 0개를 기대하면 빈 배열). TF1 = 키·개수, TF2 = 위치.
+ */
+export function tutorialFocusChecks(boxes, targets, viewport) {
+  const L = { TF1: "포커스 상자 개수·키가 장면 기대와 같다", TF2: "포커스 상자가 대상 사각형 ± 8(오차 2) 또는 화면 안쪽 8 로 민 자리" };
+  const okBox = (b) => b && typeof b.key === "string" && isRectLike(b.rect);
+  if (!Array.isArray(boxes) || !boxes.every(okBox) || !Array.isArray(targets) || !targets.every(okBox) || !isViewport(viewport)) {
+    return [noMeasure("TF1", L.TF1, "상자·대상 사각형과 화면 크기"), noMeasure("TF2", L.TF2, "상자·대상 사각형과 화면 크기")];
+  }
+  const have = sortedKeys(boxes);
+  const want = sortedKeys(targets);
+  const same = have.length === want.length && have.every((k, i) => k === want[i]);
+  const tf1 = result("TF1", L.TF1, same ? [] : [`상자 [${have.join(",")}] ≠ 기대 [${want.join(",")}]`]);
+  const bad = [];
+  const pad = TUTORIAL_FOCUS_PAD;
+  for (const t of targets) {
+    const box = boxes.find((b) => b.key === t.key);
+    if (!box) continue; // 개수·키는 TF1 이 맡는다
+    const w = t.rect.width + pad * 2;
+    const h = t.rect.height + pad * 2;
+    const x = Math.max(pad, Math.min(t.rect.left - pad, viewport.w - pad - w));
+    const y = Math.max(pad, Math.min(t.rect.top - pad, viewport.h - pad - h));
+    const diffs = [Math.abs(box.rect.left - x), Math.abs(box.rect.top - y), Math.abs(box.rect.width - w), Math.abs(box.rect.height - h)];
+    if (diffs.some((d) => d > TUTORIAL_FOCUS_TOL)) bad.push(`${t.key} 상자 ${rectText(box.rect)} ≠ 기대 (${rd(x)},${rd(y)} ${rd(w)}x${rd(h)})`);
+  }
+  return [tf1, result("TF2", L.TF2, bad)];
+}
+
+/**
+ * 사회자 띠(TUT-03, HOST): band = { rect, bars, barsMoving, speaking, fontMin, timers }, others = { header, dock, next, targets: [{ key, rect }] }(없는 것은 null — 비교하지 않는다. targets 의 band 키는 띠 자신이라 뺀다).
+ * options.speaking = true(말하는 동안: data-speaking 참·막대가 모두 움직임) / false(말이 끝남: 참이 아니고 막대 정지) / 없음(묻지 않음). options.reduced 면 막대 움직임은 보지 않는다(모션 줄이기).
+ * TB1 막대 5개 · TB2 말하는 상태 · TB3 머리·소리 독·[다음]·포커스 대상과 교차 0 · TB4 글자 14 이상 · TB5 시간 행 0.
+ */
+export function tutorialBandChecks(band, others, { speaking, reduced = false } = {}) {
+  const L = {
+    TB1: `띠 파형 막대 ${TUTORIAL_BAND_BARS}개`,
+    TB2: speaking === true ? "말하는 동안 data-speaking 이 참이고 막대가 움직인다" : speaking === false ? "말이 끝나면 data-speaking 이 꺼지고 막대가 멈춘다" : "말하는 상태(묻지 않음)",
+    TB3: "띠가 머리·소리 독·[다음]·포커스 대상과 교차 0",
+    TB4: `띠 글자 ${TUTORIAL_TEXT_MIN}px 이상`,
+    TB5: "띠에 시간 행 0",
+  };
+  const okBand = !!band && isRectLike(band.rect) && isNum(band.bars) && isNum(band.barsMoving) && typeof band.speaking === "boolean";
+  const none = (id) => noMeasure(id, L[id], "사회자 띠 읽기");
+  const tb1 = okBand ? result("TB1", L.TB1, band.bars === TUTORIAL_BAND_BARS ? [] : [`막대 ${band.bars}개`]) : none("TB1");
+  let tb2 = none("TB2");
+  if (okBand) {
+    const bad = [];
+    if (speaking === true) {
+      if (band.speaking !== true) bad.push("data-speaking 이 참이 아님");
+      if (!reduced && band.barsMoving !== band.bars) bad.push(`움직이는 막대 ${band.barsMoving}/${band.bars}`);
+    } else if (speaking === false) {
+      if (band.speaking !== false) bad.push("말이 끝났는데 data-speaking 이 켜져 있음");
+      if (!reduced && band.barsMoving !== 0) bad.push(`멈춰야 하는데 움직이는 막대 ${band.barsMoving}개`);
+    }
+    tb2 = result("TB2", L.TB2, bad);
+  }
+  let tb3 = none("TB3");
+  if (okBand && others && typeof others === "object") {
+    const bad = [];
+    for (const [name, r] of [["머리", others.header], ["소리 독", others.dock], ["[다음]", others.next]]) if (isRectLike(r) && rectsOverlap(band.rect, r)) bad.push(`${name} ${rectText(r)} 와 겹침`);
+    for (const t of Array.isArray(others.targets) ? others.targets : []) if (t.key !== "band" && isRectLike(t.rect) && rectsOverlap(band.rect, t.rect)) bad.push(`포커스 대상 ${t.key} ${rectText(t.rect)} 와 겹침`);
+    tb3 = result("TB3", L.TB3, bad);
+  }
+  const tb4 = okBand && isNum(band.fontMin) ? result("TB4", L.TB4, band.fontMin >= TUTORIAL_TEXT_MIN ? [] : [`글자 ${rd(band.fontMin)}px`]) : none("TB4");
+  const tb5 = okBand && isNum(band.timers) ? result("TB5", L.TB5, band.timers === 0 ? [] : [`시간 행 ${band.timers}개`]) : none("TB5");
+  return [tb1, tb2, tb3, tb4, tb5];
+}
+
+/**
+ * 누설(TUT-05, T-17-18): dom = 튜토리얼 밖 화면별 [{ where, names: 그 화면 DOM 에서 나온 가짜 이름들, roleCards: data-tutorial-role-card 개수 }](비어 있으면 측정값 없음),
+ * frames = { hits: { 이름: 받은 프레임에서 나온 횟수 } }, roleInTutorial = 튜토리얼 단계에서 받은 view 에 me.role 키가 있던 횟수. TL1 DOM · TL2 받은 프레임 · TL3 me.role.
+ */
+export function tutorialLeakChecks({ dom, frames, roleInTutorial } = {}) {
+  const L = { TL1: "튜토리얼 밖 화면의 DOM 에 가짜 이름 다섯·직업 카드 0", TL2: "받은 프레임에 가짜 이름 다섯 0", TL3: "튜토리얼 중 받은 view 에 me.role 0" };
+  const okDom = Array.isArray(dom) && dom.length > 0 && dom.every((d) => d && typeof d.where === "string" && Array.isArray(d.names) && isNum(d.roleCards));
+  const tl1 = okDom
+    ? result("TL1", L.TL1, dom.flatMap((d) => [...(d.names.length > 0 ? [`${d.where} 에 가짜 이름 ${d.names.join("·")}`] : []), ...(d.roleCards > 0 ? [`${d.where} 에 직업 카드 ${d.roleCards}장`] : [])]))
+    : noMeasure("TL1", L.TL1, "화면별 DOM 읽기");
+  const tl2 = frames && typeof frames.hits === "object" && frames.hits !== null ? result("TL2", L.TL2, Object.entries(frames.hits).filter(([, n]) => n > 0).map(([name, n]) => `${name} ${n}건`)) : noMeasure("TL2", L.TL2, "받은 프레임 감시");
+  const tl3 = isNum(roleInTutorial) ? result("TL3", L.TL3, roleInTutorial === 0 ? [] : [`me.role 이 실린 view ${roleInTutorial}건`]) : noMeasure("TL3", L.TL3, "튜토리얼 단계 view 감시");
+  return [tl1, tl2, tl3];
+}
+
+/**
+ * 장면 6 정체 공개(TUT-03): reveal = { card, stamp, line }, next = [다음]. TR1 모두 화면 안 · TR2 카드·줄·[다음]·도장이 서로 교차 0(도장은 카드 위에 놓이므로 카드와는 비교하지 않는다).
+ */
+export function tutorialRevealChecks({ reveal, next, viewport } = {}) {
+  const L = { TR1: "정체 공개의 카드·도장·줄·[다음] 이 화면 안", TR2: "카드·줄·[다음]·도장이 서로 교차 0(도장은 카드 위)" };
+  const ok = !!reveal && isRectLike(reveal.card) && isRectLike(reveal.stamp) && isRectLike(reveal.line) && isRectLike(next) && isViewport(viewport);
+  if (!ok) return [noMeasure("TR1", L.TR1, "정체 공개 사각형"), noMeasure("TR2", L.TR2, "정체 공개 사각형")];
+  const screen = { left: 0, top: 0, width: viewport.w, height: viewport.h };
+  const parts = { 카드: reveal.card, 도장: reveal.stamp, 줄: reveal.line, "[다음]": next };
+  const out = Object.entries(parts).filter(([, r]) => !rectInside(r, screen)).map(([n, r]) => `${n} ${rectText(r)} 가 ${viewport.w}x${viewport.h} 밖`);
+  const bad = [];
+  for (const [a, b] of [["카드", "줄"], ["카드", "[다음]"], ["줄", "[다음]"], ["도장", "줄"], ["도장", "[다음]"]]) if (rectsOverlap(parts[a], parts[b])) bad.push(`${a} ${rectText(parts[a])} 와 ${b} ${rectText(parts[b])} 겹침`);
+  return [result("TR1", L.TR1, out), result("TR2", L.TR2, bad)];
+}
+
+/**
+ * 장면 7 직업 카드(TUT-04): roles = [{ kind, rect }], next = [다음]. TC1 네 종류 한 장씩 · TC2 화면 안 · TC3 카드끼리 교차 0 · TC4 [다음] 과 교차 0.
+ * 작은 폰(360x560·640)에서 TC4 가 겹치는 것은 알려진 한계(17-08)라 흐름이 그 크기에서만 id 로 골라 참고 줄로 남긴다 — 판정 문턱은 여기서 낮추지 않는다.
+ */
+export function tutorialRoleCardChecks({ roles, next, viewport } = {}) {
+  const L = { TC1: "직업 카드 네 종류가 한 장씩", TC2: "직업 카드가 화면 안", TC3: "직업 카드끼리 교차 0", TC4: "직업 카드와 [다음] 교차 0" };
+  const ok = Array.isArray(roles) && roles.every((r) => r && typeof r.kind === "string" && isRectLike(r.rect)) && isRectLike(next) && isViewport(viewport);
+  if (!ok) return Object.keys(L).map((id) => noMeasure(id, L[id], "직업 카드·[다음] 사각형"));
+  const counts = new Map();
+  for (const r of roles) counts.set(r.kind, (counts.get(r.kind) ?? 0) + 1);
+  const bad1 = [...TUTORIAL_ROLE_KINDS.filter((k) => counts.get(k) !== 1).map((k) => `${k} ${counts.get(k) ?? 0}장`), ...[...counts.keys()].filter((k) => !TUTORIAL_ROLE_KINDS.includes(k)).map((k) => `알 수 없는 종류 ${k}`)];
+  const firsts = TUTORIAL_ROLE_KINDS.map((k) => roles.find((r) => r.kind === k)).filter(Boolean);
+  const screen = { left: 0, top: 0, width: viewport.w, height: viewport.h };
+  const bad2 = firsts.filter((r) => !rectInside(r.rect, screen)).map((r) => `${r.kind} ${rectText(r.rect)} 가 ${viewport.w}x${viewport.h} 밖`);
+  const bad3 = [];
+  for (let i = 0; i < firsts.length; i++) for (let j = i + 1; j < firsts.length; j++) if (rectsOverlap(firsts[i].rect, firsts[j].rect)) bad3.push(`${firsts[i].kind}·${firsts[j].kind} 겹침`);
+  const bad4 = firsts.filter((r) => rectsOverlap(r.rect, next)).map((r) => `${r.kind} ${rectText(r.rect)} 가 [다음] ${rectText(next)} 와 겹침`);
+  return [result("TC1", L.TC1, bad1), result("TC2", L.TC2, bad2), result("TC3", L.TC3, bad3), result("TC4", L.TC4, bad4)];
+}
+
+/**
+ * 장면 1 오프닝(TUT-03): opening = { present, lamps, flash, rings, still }. 보통은 램프 번짐 OPENING_LAMPS·번쩍임 1·소리 링 3 이고 어둠이 움직인다(still 거짓),
+ * options.reduced(모션 줄이기)면 번짐·번쩍임·링 0 이고 어둠이 정지한다(still 참).
+ */
+export function tutorialOpeningChecks(opening, { reduced = false } = {}) {
+  const L = {
+    TO1: reduced ? "모션 줄이기: 램프 번짐 0" : `램프 번짐 ${OPENING_LAMPS}개`,
+    TO2: reduced ? "모션 줄이기: 진홍 번쩍임 0" : "진홍 번쩍임 1개",
+    TO3: reduced ? "모션 줄이기: 소리 링 0" : `소리 링 ${TUTORIAL_OPENING_RINGS}개`,
+    TO4: reduced ? "모션 줄이기: 어둠이 정지" : "어둠이 움직임(정지 아님)",
+  };
+  const ok = !!opening && opening.present === true && isNum(opening.lamps) && isNum(opening.flash) && isNum(opening.rings) && typeof opening.still === "boolean";
+  if (!ok) return Object.keys(L).map((id) => noMeasure(id, L[id], "오프닝 연출 층 읽기"));
+  const want = reduced ? { lamps: 0, flash: 0, rings: 0 } : { lamps: OPENING_LAMPS, flash: 1, rings: TUTORIAL_OPENING_RINGS };
+  const one = (id, got, exp) => result(id, L[id], got === exp ? [] : [`${got}개 (기대 ${exp})`]);
+  return [one("TO1", opening.lamps, want.lamps), one("TO2", opening.flash, want.flash), one("TO3", opening.rings, want.rings), result("TO4", L.TO4, opening.still === reduced ? [] : [`still ${opening.still}`])];
+}
+
+/**
+ * 장면 시각(TUT-03): openingMs = 오프닝 연출 시작 → 장면 2, errandMs = [처리] 누름 → 장면 4(ms). 주어진 키만 판정한다(키가 있고 값이 없으면 측정값 없음).
+ * TM1 4.6초 ± 1.0초 · TM2 0.7초 ± 0.5초(실제 브라우저의 시간 판정은 여유를 둔다).
+ */
+export function tutorialTimingChecks(t) {
+  const out = [];
+  const one = (id, label, got, want, tol) => out.push(isNum(got) ? result(id, label, Math.abs(got - want) <= tol ? [] : [`${Math.round(got)}ms (기대 ${want}±${tol})`]) : noMeasure(id, label, "장면 전환 시각"));
+  if (t && "openingMs" in t) one("TM1", `오프닝 약 ${TUTORIAL_OPENING_MS / 1000}초 뒤 자동으로 장면 2`, t.openingMs, TUTORIAL_OPENING_MS, TUTORIAL_OPENING_TOL_MS);
+  if (t && "errandMs" in t) one("TM2", `[처리] ${TUTORIAL_ERRAND_MS / 1000}초 뒤 장면 4`, t.errandMs, TUTORIAL_ERRAND_MS, TUTORIAL_ERRAND_TOL_MS);
+  return out;
+}
+
+/** 진행 점(T-16): 점 TUTORIAL_DOT_COUNT 개이고 지금 점이 장면 번호와 같다. TD1 개수 · TD2 지금 */
+export function tutorialDotChecks(dots, scene) {
+  const L = { TD1: `진행 점 ${TUTORIAL_DOT_COUNT}개`, TD2: `지금 점이 장면 번호(${scene})와 같다` };
+  if (!dots || !isNum(dots.count) || !isNum(dots.now)) return [noMeasure("TD1", L.TD1, "진행 점 읽기"), noMeasure("TD2", L.TD2, "진행 점 읽기")];
+  return [result("TD1", L.TD1, dots.count === TUTORIAL_DOT_COUNT ? [] : [`점 ${dots.count}개`]), result("TD2", L.TD2, dots.now === scene ? [] : [`지금 점 ${dots.now}`])];
+}
+
+/**
+ * [건너뛰기](T-16): 알약은 높이 32 이지만 누르는 영역을 투명하게 늘려 44×44 이상이어야 한다(G3 의 탭 하한 TAP_MIN, 낮추지 않는다). skip = { rect, hit }.
+ * TK1 누르는 영역 44×44 이상 · TK2 알약이 화면 안
+ */
+export function tutorialSkipChecks({ skip, viewport } = {}) {
+  const L = { TK1: `[건너뛰기] 누르는 영역 ${TAP_MIN}×${TAP_MIN} 이상`, TK2: "[건너뛰기] 가 화면 안" };
+  if (!skip || !isRectLike(skip.rect) || !isRectLike(skip.hit) || !isViewport(viewport)) return [noMeasure("TK1", L.TK1, "건너뛰기 사각형"), noMeasure("TK2", L.TK2, "건너뛰기 사각형")];
+  const small = skip.hit.width + 0.5 < TAP_MIN || skip.hit.height + 0.5 < TAP_MIN;
+  const screen = { left: 0, top: 0, width: viewport.w, height: viewport.h };
+  return [result("TK1", L.TK1, small ? [`누르는 영역 ${rd(skip.hit.width)}x${rd(skip.hit.height)}`] : []), result("TK2", L.TK2, rectInside(skip.rect, screen) ? [] : [`${rectText(skip.rect)} 가 ${viewport.w}x${viewport.h} 밖`])];
+}
+
+/**
+ * 증거 층(TUT-03): ev = { eye, recordRows, traceCard, links, formula }. 장면 4 = EV1 눈 표시 1개 · EV2 기록 카드 한 줄, 장면 5 = EV3 증거 카드 · EV4 연결 선 2개 · EV5 수식 줄이 [다음] 과 교차 0.
+ */
+export function tutorialEvidenceChecks(ev, { scene, next } = {}) {
+  const none = (id, label) => noMeasure(id, label, "증거 층 읽기");
+  if (scene === 4) {
+    const L = { EV1: "목격 눈 표시 1개", EV2: "목격 기록 카드 한 줄" };
+    if (!ev || !isNum(ev.eye) || !isNum(ev.recordRows)) return [none("EV1", L.EV1), none("EV2", L.EV2)];
+    return [result("EV1", L.EV1, ev.eye === 1 ? [] : [`눈 표시 ${ev.eye}개`]), result("EV2", L.EV2, ev.recordRows === 1 ? [] : [`기록 ${ev.recordRows}줄`])];
+  }
+  if (scene === 5) {
+    const L = { EV3: "증거 카드", EV4: "연결 선 2개", EV5: "수식 줄이 [다음] 과 교차 0" };
+    if (!ev || !isNum(ev.links)) return [none("EV3", L.EV3), none("EV4", L.EV4), none("EV5", L.EV5)];
+    return [
+      ev.traceCard === null ? result("EV3", L.EV3, ["증거 카드 없음"]) : isRectLike(ev.traceCard) ? result("EV3", L.EV3, []) : none("EV3", L.EV3),
+      result("EV4", L.EV4, ev.links === 2 ? [] : [`선 ${ev.links}개`]),
+      isRectLike(ev.formula) && isRectLike(next) ? result("EV5", L.EV5, rectsOverlap(ev.formula, next) ? [`수식 ${rectText(ev.formula)} 가 [다음] ${rectText(next)} 와 겹침`] : []) : none("EV5", L.EV5),
+    ];
+  }
+  throw new Error(`tutorialEvidenceChecks: 장면 ${scene} 은 증거 층이 없다`);
+}

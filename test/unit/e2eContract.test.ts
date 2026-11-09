@@ -43,7 +43,7 @@ import * as resultE2e from "../../scripts/e2e/result.mjs";
 import * as mapSelectE2e from "../../scripts/e2e/mapselect.mjs";
 import { PLACE_IDS } from "../../shared/protocol";
 import { HOST_LINES } from "../../src/game/hostLine";
-import { OPENING_LAMPS, TUTORIAL_CAST, TUTORIAL_DOT_COUNT, TUTORIAL_SCENES, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
+import { OPENING_LAMPS, TUTORIAL_CAST, TUTORIAL_DOT_COUNT, TUTORIAL_LINES, TUTORIAL_SCENES, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
 import { ROLE_TEXT } from "../../src/game/roleText";
 import { CEREMONY_TITLE } from "../../src/game/awardText";
 import { RESULT_TEXT } from "../../src/game/verdict";
@@ -860,5 +860,10 @@ describe("E2E 의 튜토리얼 사본 상수와 앱 대본 (17-09)", () => {
   it("browser.mjs 의 readTutorial 이 쓰는 출연 좌석 상수(5·2·1·mail)가 TUTORIAL_CAST 와 같다", () => {
     const text = readFileSync(new URL("../../scripts/e2e/browser.mjs", import.meta.url), "utf8");
     expect(text).toContain(`{ me: ${TUTORIAL_CAST.me}, victim: ${TUTORIAL_CAST.victim}, suspect: ${TUTORIAL_CAST.suspect}, errandTarget: "${TUTORIAL_CAST.errand.target}", extendDown: SUSPECT_EXTEND_DOWN }`);
+  });
+
+  it("tutorial.mjs 의 오답 문구 사본이 대본 tutorial.vote.wrong 문구와 같다", () => {
+    const text = readFileSync(new URL("../../scripts/e2e/tutorial.mjs", import.meta.url), "utf8");
+    expect(text).toContain(`export const TUTORIAL_WRONG_LINE = "${TUTORIAL_LINES["tutorial.vote.wrong"]}";`);
   });
 });

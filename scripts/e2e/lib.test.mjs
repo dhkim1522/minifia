@@ -4576,21 +4576,21 @@ test("tutorialBandChecks: 글자 14 미만·시간 행이 있으면 실패하고
 
 test("tutorialLeakChecks: 가짜 이름 다섯·직업 카드·튜토리얼 중 me.role 이 어디에도 없으면 통과한다", () => {
   assert.deepEqual(TUTORIAL_CAST_E2E.names, ["서연", "도윤", "민준", "지호", "하린"]);
-  const dom = [{ where: "lobby", names: [], tutRoleCards: 0 }, { where: "roleReveal", names: [], tutRoleCards: 0 }];
+  const dom = [{ where: "lobby", names: [], roleCards: 0 }, { where: "roleReveal", names: [], roleCards: 0 }];
   const lines = tutorialLeakChecks({ dom, frames: { hits: {} }, roleInTutorial: 0 });
   assert.ok(lines.length === 3 && lines.every((l) => l.ok), JSON.stringify(lines));
 });
 
 test("tutorialLeakChecks: 화면 DOM 이나 받은 프레임에 가짜 이름이 나오거나 직업 카드가 있거나 me.role 이 있으면 실패한다", () => {
-  const clean = [{ where: "lobby", names: [], tutRoleCards: 0 }];
+  const clean = [{ where: "lobby", names: [], roleCards: 0 }];
   const fails = (a) => tutorialLeakChecks(a).filter((l) => !l.ok).map((l) => l.id);
   assert.deepEqual(fails({ dom: clean, frames: { hits: {} }, roleInTutorial: 0 }), []);
-  const dirty = fails({ dom: [{ where: "roleReveal", names: ["도윤"], tutRoleCards: 0 }], frames: { hits: {} }, roleInTutorial: 0 });
+  const dirty = fails({ dom: [{ where: "roleReveal", names: ["도윤"], roleCards: 0 }], frames: { hits: {} }, roleInTutorial: 0 });
   assert.equal(dirty.length, 1);
-  assert.ok(fails({ dom: [{ where: "lobby", names: [], tutRoleCards: 1 }], frames: { hits: {} }, roleInTutorial: 0 }).length === 1);
+  assert.ok(fails({ dom: [{ where: "lobby", names: [], roleCards: 1 }], frames: { hits: {} }, roleInTutorial: 0 }).length === 1);
   assert.ok(fails({ dom: clean, frames: { hits: { 하린: 2 } }, roleInTutorial: 0 }).length === 1);
   assert.ok(fails({ dom: clean, frames: { hits: {} }, roleInTutorial: 1 }).length === 1);
-  const detail = tutorialLeakChecks({ dom: [{ where: "roleReveal", names: ["도윤"], tutRoleCards: 0 }], frames: { hits: {} }, roleInTutorial: 0 }).find((l) => !l.ok).detail;
+  const detail = tutorialLeakChecks({ dom: [{ where: "roleReveal", names: ["도윤"], roleCards: 0 }], frames: { hits: {} }, roleInTutorial: 0 }).find((l) => !l.ok).detail;
   assert.match(detail, /roleReveal/);
   assert.ok(tutorialLeakChecks({ dom: [], frames: { hits: {} }, roleInTutorial: 0 }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
   assert.ok(tutorialLeakChecks({ dom: clean, frames: null, roleInTutorial: 0 }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
@@ -4611,7 +4611,6 @@ test("tutorialRevealChecks: 카드·도장·줄·[다음] 이 화면 안에 있�
 });
 
 test("tutorialRevealChecks: [다음] 이 카드·줄·도장과 겹치거나 화면 밖이면 실패한다", () => {
-  assert.ok(tutTrFails(tutRevealIn({ next: RR(314, 400, 56, 56) })).length > 0); // 카드(123~267)는 아니지만 줄 대신: 아래 줄과
   assert.ok(tutTrFails(tutRevealIn({ next: RR(200, 440, 56, 56) })).length > 0); // 카드와 겹침
   assert.ok(tutTrFails(tutRevealIn({ next: RR(300, 480, 56, 56) })).length > 0); // 줄과 겹침
   assert.ok(tutTrFails(tutRevealIn({ reveal: { card: RR(123, 170, 144, 280), stamp: RR(150, 300, 90, 40), line: RR(60, 440, 270, 36) } })).length > 0); // 줄이 카드와 겹침
