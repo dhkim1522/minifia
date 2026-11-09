@@ -181,6 +181,11 @@ import {
   ERRAND_PLACE_IDS,
   NIGHT_FACE_ROLES,
   OVERALL_LIMIT_MS,
+  OPENING_LAMPS,
+  TUTORIAL_DOT_COUNT,
+  WRONG_HINT_AFTER,
+  sentFrameChecks,
+  tutorialEntryChecks,
   errandCardChecks,
   errandCardWalkChecks,
   errandChecks,
@@ -4404,4 +4409,78 @@ test("sideColumnChecks: 빠진 입력은 전부 측정값 없음으로 실패한
     assert.equal(lines.length, 6);
     assert.ok(lines.every((l) => !l.ok && /측정값 없음/.test(l.detail)));
   }
+});
+
+// ---- 17-09 튜토리얼 E2E 판정 (tutorialEntryChecks·sentFrameChecks, 사본 상수) ----
+
+test("튜토리얼 사본 상수: 점 7·램프 2·오답 도움 2 (앱 src/game/tutorialScript.ts 와 e2eContract 가 대조)", () => {
+  assert.equal(TUTORIAL_DOT_COUNT, 7);
+  assert.equal(OPENING_LAMPS, 2);
+  assert.equal(WRONG_HINT_AFTER, 2);
+});
+
+const TV = { w: 390, h: 844 };
+const entryIn = (over = {}) => ({
+  entry: { cards: 1, buttons: 0, rect: RR(20, 300, 350, 84) },
+  field: RR(20, 400, 350, 56),
+  create: RR(20, 470, 350, 52),
+  viewport: TV,
+  ...over,
+});
+const teFails = (args, opts) => tutorialEntryChecks(args, opts).filter((l) => !l.ok).map((l) => l.id);
+
+test("tutorialEntryChecks: 카드 1개·화면 안·방 코드 칸·[방 만들기] 와 교차 0 이면 통과한다", () => {
+  const lines = tutorialEntryChecks(entryIn());
+  assert.ok(lines.length >= 3);
+  assert.ok(lines.every((l) => l.ok), JSON.stringify(lines));
+  for (const l of lines) assert.ok(typeof l.id === "string" && typeof l.label === "string" && typeof l.detail === "string");
+});
+
+test("tutorialEntryChecks: 카드가 [방 만들기] 와 1px 이라도 겹치면 실패한다, 맞닿기만 하면 통과한다", () => {
+  assert.deepEqual(teFails(entryIn({ entry: { cards: 1, buttons: 0, rect: RR(20, 300, 350, 84) }, field: RR(20, 384, 350, 56), create: RR(20, 450, 350, 52) })), []);
+  assert.ok(teFails(entryIn({ create: RR(20, 383, 350, 52), field: RR(20, 450, 350, 56) })).length > 0);
+  assert.ok(teFails(entryIn({ create: RR(20, 370, 350, 52), field: RR(20, 450, 350, 56) })).length > 0);
+  assert.ok(teFails(entryIn({ field: RR(20, 370, 350, 56) })).length > 0);
+});
+
+test("tutorialEntryChecks: 카드·단추 개수는 기대 종류 하나뿐이어야 한다(card ↔ button)", () => {
+  assert.ok(teFails(entryIn({ entry: { cards: 2, buttons: 0, rect: RR(20, 300, 350, 84) } })).length > 0);
+  assert.ok(teFails(entryIn({ entry: { cards: 0, buttons: 0, rect: null } })).length > 0);
+  assert.ok(teFails(entryIn({ entry: { cards: 1, buttons: 1, rect: RR(20, 300, 350, 84) } })).length > 0);
+  // 한 번 본 뒤: 작은 단추 1개, 카드 0
+  const btn = { entry: { cards: 0, buttons: 1, rect: RR(20, 300, 350, 44) } };
+  assert.deepEqual(teFails(entryIn(btn), { kind: "button" }), []);
+  assert.ok(teFails(entryIn(btn), { kind: "card" }).length > 0);
+  assert.ok(teFails(entryIn({ entry: { cards: 1, buttons: 0, rect: RR(20, 300, 350, 84) } }), { kind: "button" }).length > 0);
+});
+
+test("tutorialEntryChecks: 화면 밖으로 나간 카드는 실패하고 측정값이 없으면 공허 통과하지 않는다", () => {
+  assert.ok(teFails(entryIn({ entry: { cards: 1, buttons: 0, rect: RR(-3, 300, 350, 84) } })).length > 0);
+  assert.ok(teFails(entryIn({ entry: { cards: 1, buttons: 0, rect: RR(20, 300, 380, 84) } })).length > 0);
+  for (const args of [entryIn({ field: null }), entryIn({ create: null }), entryIn({ viewport: null }), entryIn({ entry: { cards: 1, buttons: 0, rect: null } })]) {
+    const lines = tutorialEntryChecks(args);
+    assert.ok(lines.some((l) => !l.ok && /측정값 없음/.test(l.detail)), JSON.stringify(lines));
+  }
+});
+
+test("sentFrameChecks: 허용 목록 밖 t 가 하나라도 있으면 실패하고 ping 은 늘 허용한다", () => {
+  assert.equal(sentFrameChecks([], []).ok, true);
+  assert.equal(sentFrameChecks(["ping", "ping"], []).ok, true);
+  assert.equal(sentFrameChecks(["ping", "tutorialDone"], ["tutorialDone"]).ok, true);
+  const bad = sentFrameChecks(["ping", "move", "move", "tutorialDone"], ["tutorialDone"]);
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /move/);
+  assert.doesNotMatch(bad.detail, /tutorialDone/);
+  assert.equal(sentFrameChecks(["hello"], ["tutorialDone"]).ok, false);
+  assert.equal(sentFrameChecks(["hello"], ["tutorialDone", "hello"]).ok, true);
+});
+
+test("sentFrameChecks: once 로 준 종류는 정확히 그 횟수만 보내야 한다(끝났음은 한 번)", () => {
+  assert.equal(sentFrameChecks(["ping", "tutorialDone"], ["tutorialDone"], { once: ["tutorialDone"] }).ok, true);
+  const twice = sentFrameChecks(["tutorialDone", "tutorialDone"], ["tutorialDone"], { once: ["tutorialDone"] });
+  assert.equal(twice.ok, false);
+  assert.match(twice.detail, /tutorialDone/);
+  assert.equal(sentFrameChecks(["ping"], ["tutorialDone"], { once: ["tutorialDone"] }).ok, false);
+  assert.equal(sentFrameChecks(null, []).ok, false); // 측정값 없음
+  assert.match(sentFrameChecks(null, []).detail, /측정값 없음/);
 });
