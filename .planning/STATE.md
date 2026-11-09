@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 17
 current_phase_name: "튜토리얼 \"첫 사건\""
-current_plan: 10
+current_plan: 11
 status: executing
-stopped_at: Completed 17-07-PLAN.md
-last_updated: "2026-11-09T04:37:57.152Z"
+stopped_at: Completed 17-08-PLAN.md
+last_updated: "2026-11-09T04:50:40.041Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 17 execution started
-state_head: a142012e05fb39545f051ba5ddc6083e3ce505b8
+state_head: b6784fb34cf67f3465c382953f4a2c774ad0398c
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 47
-  completed_plans: 44
+  completed_plans: 45
   percent: 80
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 17 (튜토리얼 "첫 사건") — EXECUTING
-Current Plan: 10
+Current Plan: 11
 Total Plans in Phase: 12
 Status: Ready to execute
 Last activity: 2026-11-09 — Phase 17 execution started
@@ -242,6 +242,7 @@ Last activity: 2026-11-09 — Phase 17 execution started
 | Phase 17 P05 | 25 min | 2 tasks | 9 files |
 | Phase 17 P06 | 6min | 2 tasks | 9 files |
 | Phase 17 P07 | 15 min | 3 tasks | 17 files |
+| Phase 17 P08 | 25 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -535,6 +536,9 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 17]: 17-07: 방장 스위치는 화면 로컬 상태이고 값은 [시작] 순간 start.tutorial 로만 간다(켬 초기값 첫 판·일반 방)
 - [Phase 17]: 17-07: 끝났음은 RoomScreen ref 로 연결 번호당 한 번만 보내고 tutorial 단계를 벗어나면 로컬 끝남 표시를 비운다
 - [Phase 17]: 17-07: world E2E 360x560 은 방장 패널 +76 으로 방장 스테이지가 172 가 되어 방장 겹침 단계만 건너뛴다(알려진 한계 #24, 문턱 불변)
+- [Phase 17]: 17-08: 서연이 사라진 뒤 이름표도 data-tutorial-gone 으로 숨긴다(런타임은 몸 불투명도만 따름)
+- [Phase 17]: 17-08: 직업 카드 뒤집기는 뒷면 마름모 → 90° → 앞면 두 단계 한 키프레임(.6초), 모션 줄이기는 즉시 앞면
+- [Phase 17]: 17-08: 직업 카드 높이는 minmax(clamp(168,남는높이/2,252),auto) — 작은 폰에서 글이 잘리지 않고 늘어난다
 
 ### Pending Todos
 
@@ -601,8 +605,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09T04:37:56.793Z
-Stopped at: Completed 17-07-PLAN.md
+Last session: 2026-11-09T04:50:39.695Z
+Stopped at: Completed 17-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
