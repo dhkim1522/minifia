@@ -160,4 +160,4 @@ completed: 2026-11-09
 
 - 파일: `src/components/v2/TutorialReveal.tsx`, `src/components/v2/TutorialEvidence.tsx`, `test/client/tutorialScenes.test.tsx` 존재 확인.
 - 커밋: `2bd9adc8`, `388d9581`, `624ac4ef`, `bd050d3f` 모두 HEAD 의 조상.
-- 위생 검사(`git grep -nIiE "torder|티오더|조직|회사|~/project"`): 이 계획 변경분에 새 히트 없음(`seatOrdered` 는 기존).
+- 위생 검사(개인 작업 공통 지침의 패턴): 이 계획 변경분에 새 히트 없음(`seatOrdered` 는 기존).
