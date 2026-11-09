@@ -2249,3 +2249,362 @@ export async function waitErrandDone(page, n, ms = 16_000) {
     return false;
   }
 }
+
+// ---- 17페이즈 첫 사건(튜토리얼) 읽기·소켓 감시 (17-09) ----
+// 값·글은 싣지 않고 사각형과 표식 개수만 읽는다(UI-SPEC "검사 가능하게 둘 것"). 사회자 띠 문장은 고정 대본 문구라 읽는다(닉네임·역할 값 없음).
+
+/** 앱 방 소켓 주소(/api/rooms/{code}/ws)만 센다 — 개발 서버의 HMR 소켓은 앱 소켓이 아니다 */
+const ROOM_WS_PATH = /^\/api\/rooms\/[^/]+\/ws$/;
+
+/**
+ * 한 페이지의 앱 소켓 감시: 열린 앱 소켓 수, 보낸 프레임의 t 목록(순서대로), 받은 프레임에서 needles 가 나온 횟수, 튜토리얼 단계 view 에 me.role 이 실렸는가.
+ * 프레임 원문·토큰·닉네임은 보관하지 않는다 — t 이름과 횟수뿐이다(T-17-21). { opened, other, frames, hits, roleInTutorial, api, mark(), since(i), stop() }
+ */
+export function watchSockets(page, { needles = [] } = {}) {
+  const st = { opened: 0, other: 0, frames: [], hits: {}, roleInTutorial: 0, api: 0 };
+  const tOf = (payload) => {
+    try {
+      const msg = JSON.parse(typeof payload === "string" ? payload : payload.toString("utf8"));
+      return typeof msg?.t === "string" ? msg.t : "(t 없음)";
+    } catch {
+      return "(해석 못함)";
+    }
+  };
+  const onWs = (ws) => {
+    let path = "";
+    try {
+      path = new URL(ws.url()).pathname;
+    } catch {
+      /* 무시 */
+    }
+    if (!ROOM_WS_PATH.test(path)) {
+      st.other += 1;
+      return;
+    }
+    st.opened += 1;
+    ws.on("framesent", ({ payload }) => st.frames.push(tOf(payload)));
+    ws.on("framereceived", ({ payload }) => {
+      const text = typeof payload === "string" ? payload : payload.toString("utf8");
+      for (const n of needles) if (text.includes(n)) st.hits[n] = (st.hits[n] ?? 0) + 1;
+      if (text.includes('"phase":"tutorial"')) {
+        try {
+          const msg = JSON.parse(text);
+          if (msg?.t === "state" && msg.view?.phase === "tutorial" && msg.view.me && "role" in msg.view.me) st.roleInTutorial += 1;
+        } catch {
+          /* 무시 */
+        }
+      }
+    });
+  };
+  const onRequest = (r) => {
+    try {
+      if (new URL(r.url()).pathname.startsWith("/api/")) st.api += 1;
+    } catch {
+      /* 무시 */
+    }
+  };
+  page.on("websocket", onWs);
+  page.on("request", onRequest);
+  return {
+    get opened() {
+      return st.opened;
+    },
+    get other() {
+      return st.other;
+    },
+    get frames() {
+      return st.frames.slice();
+    },
+    get hits() {
+      return { ...st.hits };
+    },
+    get roleInTutorial() {
+      return st.roleInTutorial;
+    },
+    get api() {
+      return st.api;
+    },
+    /** 지금까지 보낸 프레임 수(이 번호부터가 이후 프레임) */
+    mark() {
+      return st.frames.length;
+    },
+    since(i) {
+      return st.frames.slice(i);
+    },
+    stop() {
+      page.off("websocket", onWs);
+      page.off("request", onRequest);
+    },
+  };
+}
+
+/**
+ * 방 없이 첫 화면("/")을 휴대폰 크기로 연다(혼자 하기 검사). 새 컨텍스트라 저장소가 비어 있어 처음 카드가 보인다.
+ * openHostPage 와 같은 대상 밖 요청 차단·콘솔·실패 요청 수집, 맵 훅(?e2e=1 세션 플래그 — 소프트웨어 렌더러 허용)을 켠다. 방 세션은 심지 않는다.
+ * reducedMotion = true 면 컨텍스트가 모션 줄이기(prefers-reduced-motion: reduce)로 열린다. 돌려주는 값: { context, page, takeIssues, sockets }
+ */
+export async function openSoloPage(browser, { origin, size, dpr = 1, reducedMotion = false, needles = [] }) {
+  const context = await browser.newContext({
+    viewport: { width: size.w, height: size.h },
+    deviceScaleFactor: dpr,
+    isMobile: true,
+    hasTouch: true,
+    locale: "ko-KR",
+    ...(reducedMotion ? { reducedMotion: "reduce" } : {}),
+  });
+  try {
+    let issues = { console: [], failed: [], offOrigin: [] };
+    const blocked = new WeakSet();
+    await context.route("**/*", (route) => {
+      const request = route.request();
+      let u;
+      try {
+        u = new URL(request.url());
+      } catch {
+        return route.continue();
+      }
+      if (u.origin === origin || FONT_HOSTS.includes(u.hostname)) return route.continue();
+      blocked.add(request);
+      issues.offOrigin.push(u.origin);
+      return route.abort();
+    });
+    await context.addInitScript((key) => {
+      try {
+        window.sessionStorage.setItem(key, "1");
+      } catch {
+        /* 저장소가 막힌 환경은 훅이 꺼진 채로 둔다 */
+      }
+    }, WORLD_HOOK_KEY);
+    const page = await context.newPage();
+    page.setDefaultTimeout(8000);
+    page.on("console", (m) => {
+      if (m.type() === "error") issues.console.push(m.text().slice(0, 120));
+    });
+    page.on("pageerror", (e) => issues.console.push(String(e?.message ?? e).slice(0, 120)));
+    page.on("requestfailed", (r) => {
+      if (blocked.has(r)) return;
+      let path = "";
+      try {
+        path = new URL(r.url()).pathname;
+      } catch {
+        /* 무시 */
+      }
+      issues.failed.push(`${r.method()} ${path} 실패`);
+    });
+    page.on("response", (r) => {
+      if (r.status() < 400) return;
+      let path = "";
+      try {
+        path = new URL(r.url()).pathname;
+      } catch {
+        /* 무시 */
+      }
+      issues.failed.push(`${r.request().method()} ${path} ${r.status()}`);
+    });
+    const sockets = watchSockets(page, { needles });
+    await page.goto(`${origin}/`, { waitUntil: "domcontentloaded" });
+    return {
+      context,
+      page,
+      sockets,
+      takeIssues() {
+        const out = issues;
+        issues = { console: [], failed: [], offOrigin: [] };
+        return out;
+      },
+    };
+  } catch (e) {
+    await context.close().catch(() => {});
+    throw e;
+  }
+}
+
+/** 튜토리얼 읽기가 쓰는 출연 좌석·심부름 장소·도윤 상자 아래 늘림 — 앱 TUTORIAL_CAST·TutorialScreen SUSPECT_BODY_PX 사본(lib.TUTORIAL_CAST_E2E 를 e2eContract 가 대조) */
+const SUSPECT_EXTEND_DOWN = 90;
+
+/**
+ * 첫 사건 화면·첫 화면 진입·기다림 화면의 사각형과 표식을 한 번에 읽는다. 모든 사각형은 { left, top, width, height, right, bottom } 이고 없으면 null.
+ * 읽지 않는 것: 닉네임·토큰·view 값. 읽는 글: 사회자 띠 한 줄(고정 대본)·기다림 숫자(n/N).
+ */
+export async function readTutorial(page) {
+  return page.evaluate(
+    ({ me, victim, suspect, errandTarget, extendDown }) => {
+      const toRect = (r) => ({ left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom });
+      const shown = (el) => {
+        const r = el.getBoundingClientRect();
+        if (!(r.width > 0 && r.height > 0)) return false;
+        const cs = getComputedStyle(el);
+        return cs.display !== "none" && cs.visibility !== "hidden";
+      };
+      const rectOf = (el) => (el && shown(el) ? toRect(el.getBoundingClientRect()) : null);
+      const q = (sel, root = document) => root.querySelector(sel);
+      const qa = (sel, root = document) => [...root.querySelectorAll(sel)];
+      const unionOf = (rects) => {
+        const rs = rects.filter(Boolean);
+        if (rs.length === 0) return null;
+        const left = Math.min(...rs.map((r) => r.left));
+        const top = Math.min(...rs.map((r) => r.top));
+        const rightE = Math.max(...rs.map((r) => r.right));
+        const bottomE = Math.max(...rs.map((r) => r.bottom));
+        return { left, top, width: rightE - left, height: bottomE - top, right: rightE, bottom: bottomE };
+      };
+      const root = q("[data-tutorial-screen]");
+      const scope = root ?? document;
+      const tagOf = (seat) => q(`.mf-world__tag[data-seat="${seat}"]`, scope);
+
+      const hostEl = root ? q("[data-tutorial-host]", root) : null;
+      const bandEl = hostEl ? q(".mv-host__band", hostEl) : null;
+      let band = null;
+      if (bandEl && shown(bandEl)) {
+        const texts = [...bandEl.querySelectorAll("*")].filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent || "").trim() !== ""));
+        const bars = qa(".tut-wave__bar", bandEl);
+        band = {
+          rect: toRect(bandEl.getBoundingClientRect()),
+          bars: bars.length,
+          barsMoving: bars.filter((b) => getComputedStyle(b).animationName !== "none").length,
+          speaking: hostEl.getAttribute("data-speaking") === "true",
+          text: (q("[data-host-line]", bandEl)?.textContent ?? "").replace(/\s+/g, " ").trim(),
+          fontMin: texts.length === 0 ? null : Math.min(...texts.map((el) => parseFloat(getComputedStyle(el).fontSize))),
+          timers: qa('[role="timer"], [data-host-time]', hostEl).length,
+        };
+      }
+
+      const skipEl = root ? q("[data-tutorial-skip]", root) : null;
+      let skip = null;
+      if (skipEl && shown(skipEl)) {
+        const r = skipEl.getBoundingClientRect();
+        const before = getComputedStyle(skipEl, "::before");
+        const px = (v) => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : 0);
+        const has = before.content !== "none" && before.content !== "normal";
+        const L = has ? px(before.left) : 0;
+        const T = has ? px(before.top) : 0;
+        const R = has ? px(before.right) : 0;
+        const B = has ? px(before.bottom) : 0;
+        skip = { rect: toRect(r), hit: { left: r.left + L, top: r.top + T, width: r.width - L - R, height: r.height - T - B } };
+      }
+
+      const targets = [];
+      const bandTarget = hostEl ? rectOf(q(".mv-host__band", hostEl)) : null;
+      if (bandTarget) targets.push({ key: "band", rect: bandTarget });
+      const errandRect = unionOf([rectOf(q(`button[data-errand-place="${errandTarget}"]`, scope)), rectOf(q("[data-errand-act]", scope))]);
+      if (errandRect) targets.push({ key: "errand", rect: errandRect });
+      const sus = rectOf(tagOf(suspect));
+      if (sus) targets.push({ key: "suspect", rect: { ...sus, height: sus.height + extendDown, bottom: sus.bottom + extendDown } });
+      for (const el of qa(".mf-world__tag[data-seat]", scope)) {
+        const seat = Number(el.getAttribute("data-seat"));
+        if (seat === me || seat === victim) continue;
+        const r = rectOf(el);
+        if (r) targets.push({ key: `pick-${seat}`, rect: r });
+      }
+
+      const entryCard = qa('[data-tutorial-entry="card"]');
+      const entryBtn = qa('[data-tutorial-entry="button"]');
+      const entryEl = entryCard[0] ?? entryBtn[0] ?? null;
+      const endEl = q("[data-tutorial-end]");
+      const createBtn = qa("button").find((b) => (b.textContent ?? "").replace(/\s+/g, " ").trim() === "방 만들기");
+      const reveal = root ? q("[data-tutorial-reveal]", root) : null;
+      const waitEl = q("[data-tutorial-wait]");
+      const dots = root ? qa("[data-tutorial-progress] .tut-dot", root) : [];
+      const nowIdx = dots.findIndex((d) => d.getAttribute("data-state") === "now");
+      const darkEl = q("[data-opening-dark]");
+      const recordCard = root ? q(".mf-game__record [data-record-card]", root) : null;
+      return {
+        vw: window.innerWidth,
+        vh: window.innerHeight,
+        screen: root !== null,
+        scene: root ? Number(root.getAttribute("data-tutorial-scene")) : null,
+        mode: root ? root.getAttribute("data-tutorial-mode") : null,
+        dots: { count: dots.length, now: nowIdx + 1 },
+        skip,
+        next: root ? rectOf(q("[data-tutorial-next]", root)) : null,
+        focus: root ? qa("[data-tutorial-focus]", root).map((el) => ({ key: el.getAttribute("data-tutorial-focus"), rect: toRect(el.getBoundingClientRect()) })) : [],
+        targets,
+        band,
+        dock: hostEl ? rectOf(q(".mv-host__dock", hostEl)) : null,
+        header: root ? rectOf(q(".mf-game__header", root)) : null,
+        opening: {
+          present: q("[data-tutorial-opening]") !== null,
+          lamps: qa("[data-opening-lamp]").length,
+          flash: qa("[data-opening-flash]").length,
+          rings: qa("[data-opening-ring]").length,
+          still: darkEl ? darkEl.classList.contains("is-still") : null,
+        },
+        evidence: {
+          eye: qa("[data-tutorial-eye]").length,
+          recordRows: recordCard ? Number(recordCard.getAttribute("data-record-rows")) : 0,
+          traceCard: root ? rectOf(q("[data-trace-card]", root)) : null,
+          links: qa("path.tut-links__path").length,
+          formula: rectOf(q("[data-tutorial-formula]")),
+        },
+        reveal: reveal
+          ? { card: rectOf(q(".tut-reveal__card", reveal)), stamp: rectOf(q(".tut-reveal__stamp", reveal)), line: rectOf(q(".tut-reveal__line", reveal)) }
+          : null,
+        roles: qa("[data-tutorial-role-card]").map((el) => ({ kind: el.getAttribute("data-tutorial-role-card"), rect: rectOf(el) })),
+        entry: { cards: entryCard.length, buttons: entryBtn.length, ends: endEl ? 1 : 0, rect: rectOf(entryEl) ?? rectOf(endEl) },
+        end: endEl ? { rect: rectOf(endEl), replay: rectOf(q("[data-tutorial-replay]", endEl)) } : null,
+        field: rectOf(q(".mf-entry__form")),
+        create: rectOf(createBtn ?? null),
+        wait: waitEl
+          ? {
+              card: rectOf(q("[data-tutorial-card]", waitEl)),
+              count: q("[data-tutorial-count]", waitEl)?.getAttribute("data-tutorial-count") ?? null,
+              people: qa(".tut-wait__dot", waitEl).length,
+              bar: rectOf(q("[data-tutorial-bar]", waitEl)),
+              track: rectOf(q(".tut-wait__track", waitEl)),
+            }
+          : null,
+      };
+    },
+    { me: 5, victim: 2, suspect: 1, errandTarget: "mail", extendDown: SUSPECT_EXTEND_DOWN },
+  );
+}
+
+const roundRect = (r) => (r ? [r.left, r.top, r.width, r.height].map((n) => Math.round(n * 2) / 2).join(",") : "-");
+const layoutKey = (t) =>
+  [
+    t.scene,
+    t.focus.map((f) => `${f.key}:${roundRect(f.rect)}`).join("|"),
+    t.targets.map((f) => `${f.key}:${roundRect(f.rect)}`).join("|"),
+    roundRect(t.band?.rect),
+    roundRect(t.next),
+    roundRect(t.dock),
+  ].join("#");
+
+/** 위치가 안정될 때까지(3D 투영·걷기·포커스 상자가 같은 값으로 두 번 연속) 읽는다. 못 맞추면 마지막 값에 unstable 을 단다 */
+export async function readTutorialStable(page, { gapMs = 90, tries = 16 } = {}) {
+  let prev = await readTutorial(page);
+  for (let i = 0; i < tries; i++) {
+    await sleep(gapMs);
+    const cur = await readTutorial(page);
+    if (layoutKey(cur) === layoutKey(prev)) return cur;
+    prev = cur;
+  }
+  return { ...prev, unstable: true };
+}
+
+/** requestAnimationFrame 간격으로 평균 fps 를 잰다(참고 측정, 판정 아님) */
+export async function fpsStart(page) {
+  await page.evaluate(() => {
+    const s = { t: [], run: true };
+    window.__tutFps = s;
+    const loop = (now) => {
+      if (!s.run) return;
+      s.t.push(now);
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  });
+}
+
+export async function fpsStop(page) {
+  return page.evaluate(() => {
+    const s = window.__tutFps;
+    if (!s) return null;
+    s.run = false;
+    const t = s.t;
+    if (t.length < 3) return null;
+    let worst = 0;
+    for (let i = 1; i < t.length; i++) worst = Math.max(worst, t[i] - t[i - 1]);
+    return { frames: t.length, avgFps: Math.round((1000 / ((t[t.length - 1] - t[0]) / (t.length - 1))) * 10) / 10, worstMs: Math.round(worst) };
+  });
+}

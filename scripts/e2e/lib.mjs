@@ -3522,3 +3522,74 @@ export function nightFaceChecks(list) {
   const bad5 = [...hits("disabledCount").map((h) => `aria-disabled ${h}`), ...(spread("callCount") === 0 ? [] : [`[data-call] ${by("callCount")}`]), ...list.filter((it) => it.callCount !== it.count).map((it) => `${it.role} 빛남 ${it.callCount} ≠ 칸 ${it.count}`)];
   return [result("NF1", L.NF1, bad1), result("NF2", L.NF2, bad2), result("NF3", L.NF3, hits("eyeHeal")), result("NF4", L.NF4, hits("ringMafia")), result("NF5", L.NF5, bad5), result("NF6", L.NF6, hits("toastAfterTap"))];
 }
+
+// ---- 17페이즈 첫 사건(튜토리얼) 판정 (17-09, TUT-01·TUT-02·TUT-03·TUT-05) ----
+// 사본 상수: 앱 src/game/tutorialScript.ts 와 같아야 한다 — test/unit/e2eContract.test.ts 가 대조한다(.mjs 가 TS 를 직접 import 하지 않는다).
+/** 진행 점 수(장면 1~7). 앱 TUTORIAL_DOT_COUNT 와 같다 */
+export const TUTORIAL_DOT_COUNT = 7;
+/** 오프닝에서 꺼지는 램프 수. 앱 OPENING_LAMPS 와 같다 */
+export const OPENING_LAMPS = 2;
+/** 장면 6 오답이 이만큼 쌓이면 정답 하나만 깜빡인다. 앱 WRONG_HINT_AFTER 와 같다 */
+export const WRONG_HINT_AFTER = 2;
+
+const isRectLike = (r) => !!r && [r.left, r.top, r.width, r.height].every(isNum);
+const rectText = (r) => `(${rd(r.left)},${rd(r.top)} ${rd(r.width)}x${rd(r.height)})`;
+
+/**
+ * 첫 화면 진입(TUT-01, UI-SPEC "첫 화면 진입 계약"): 큰 카드(`kind: "card"`, 처음) 또는 작은 단추(`kind: "button"`, 한 번 본 뒤) 하나가 화면 안에 있고
+ * 방 코드 칸·[방 만들기] 와 교차 0 이다. entry = { cards, buttons, rect }(rect = 보이는 카드/단추의 사각형), field·create = 방 코드 칸·[방 만들기] 사각형, viewport = { w, h }.
+ * 값이 없으면 조용히 통과하지 않고 `측정값 없음` 으로 실패한다. 항상 같은 세 줄(TE1 개수·TE2 화면 안·TE3 교차 0).
+ */
+export function tutorialEntryChecks({ entry, field, create, viewport }, { kind = "card" } = {}) {
+  const L = {
+    TE1: kind === "card" ? "처음 카드 1개·작은 단추 0개" : "작은 단추 1개·카드 0개",
+    TE2: "카드·단추가 화면 안(가로 0~폭, 위 0 이상, 아래 높이 이하)",
+    TE3: "카드·단추가 방 코드 칸·[방 만들기] 와 교차 0",
+  };
+  const okEntry = !!entry && isNum(entry.cards) && isNum(entry.buttons);
+  const okView = !!viewport && isNum(viewport.w) && isNum(viewport.h);
+  const lines = [];
+  if (!okEntry) lines.push(noMeasure("TE1", L.TE1, "[data-tutorial-entry] 개수 읽기"));
+  else {
+    const want = kind === "card" ? { cards: 1, buttons: 0 } : { cards: 0, buttons: 1 };
+    lines.push(result("TE1", L.TE1, entry.cards === want.cards && entry.buttons === want.buttons ? [] : [`카드 ${entry.cards}개·단추 ${entry.buttons}개 (기대 카드 ${want.cards}·단추 ${want.buttons})`]));
+  }
+  const rect = okEntry && isRectLike(entry.rect) ? entry.rect : null;
+  if (rect === null || !okView) lines.push(noMeasure("TE2", L.TE2, "진입 카드·단추 사각형과 화면 크기"));
+  else {
+    const inside = rect.left >= -OVERLAP_EPS && right(rect) <= viewport.w + OVERLAP_EPS && rect.top >= -OVERLAP_EPS && bottom(rect) <= viewport.h + OVERLAP_EPS;
+    lines.push(result("TE2", L.TE2, inside ? [] : [`${rectText(rect)} 가 ${viewport.w}x${viewport.h} 밖`]));
+  }
+  if (rect === null || !isRectLike(field) || !isRectLike(create)) lines.push(noMeasure("TE3", L.TE3, "방 코드 칸·[방 만들기] 사각형"));
+  else {
+    const bad = [];
+    if (rectsOverlap(rect, field)) bad.push(`방 코드 칸 ${rectText(field)} 와 겹침`);
+    if (rectsOverlap(rect, create)) bad.push(`[방 만들기] ${rectText(create)} 와 겹침`);
+    lines.push(result("TE3", L.TE3, bad));
+  }
+  return lines;
+}
+
+/**
+ * 한 페이지가 보낸 소켓 프레임의 t 목록이 허용 목록 안인가(TUT-05). ping 은 늘 허용한다. frames = 보낸 프레임 t 문자열 목록(원문·토큰 없음), 없으면 측정값 없음.
+ * options.once = 정확히 한 번씩만 보내야 하는 t 목록(예: tutorialDone). 판정 메시지는 t 이름과 횟수뿐이다(T-17-21).
+ */
+export function sentFrameChecks(frames, allowed, { once = [] } = {}) {
+  const label = "보낸 프레임이 허용 목록 안(ping 제외)";
+  if (!Array.isArray(frames) || !Array.isArray(allowed)) return noMeasure("TS1", label, "보낸 프레임 t 목록");
+  const ok = new Set([...allowed, "ping"]);
+  const counts = new Map();
+  for (const t of frames) counts.set(String(t), (counts.get(String(t)) ?? 0) + 1);
+  const bad = [...counts].filter(([t]) => !ok.has(t)).map(([t, n]) => `${t} ${n}건`);
+  for (const t of once) {
+    const n = counts.get(t) ?? 0;
+    if (n !== 1) bad.push(`${t} ${n}건 (기대 1건)`);
+  }
+  return result("TS1", label, bad);
+}
+
+/**
+ * 튜토리얼 출연 사본(17-09): 앱 src/game/tutorialScript.ts 의 TUTORIAL_CAST 와 같아야 한다 — test/unit/e2eContract.test.ts 가 대조한다.
+ * me·victim·suspect 는 좌석 번호, errandTarget 은 심부름 장소 id, names 는 가짜 인물 이름 다섯(나 제외 — 누설 검사 낱말).
+ */
+export const TUTORIAL_CAST_E2E = Object.freeze({ me: 5, victim: 2, suspect: 1, errandTarget: "mail", names: Object.freeze(["서연", "도윤", "민준", "지호", "하린"]) });

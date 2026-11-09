@@ -141,6 +141,7 @@ import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
 import { makeErrandFlows } from "./errand.mjs";
+import { makeTutorialFlows } from "./tutorial.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
 const HOST_NICK = "화면검사기";
@@ -3795,6 +3796,9 @@ const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow } = makeHos
 // 심부름·목격 기록·밤 통일·아침 흔적(15페이즈 15-09): errand·witness·trace(폰 6종). 흐름 본문은 errand.mjs, 도우미만 넘긴다
 const { errandFlow, witnessFlow, traceFlow } = makeErrandFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH });
 
+// 첫 사건(튜토리얼, 17페이즈 17-09): tutorial-solo(혼자 하기, 폰 6종)·tutorial-together(함께 진행). 흐름 본문은 tutorial.mjs, 도우미만 넘긴다
+const { tutorialSoloFlow, tutorialTogetherFlow } = makeTutorialFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH });
+
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
   { id: "lobby", run: lobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
@@ -3866,6 +3870,9 @@ export const FLOWS = [
   { id: "errand", run: errandFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "witness", run: witnessFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "trace", run: traceFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  // 17-09: 첫 사건 TUT-01~05. 이름 앞머리 tutorial — --only tutorial 하나로 둘 다 돈다. 혼자 하기는 폰 6종(기하·포커스·띠 판정), 함께 진행은 기다림 화면 기하까지 390x844 한 크기
+  { id: "tutorial-solo", run: tutorialSoloFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  { id: "tutorial-together", run: tutorialTogetherFlow, size: GAME_SIZE },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },
