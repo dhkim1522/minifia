@@ -5,6 +5,8 @@ import { isRoomCode } from "../../shared/roomCode";
 
 export const SESSION_KEY = "minifia:session";
 export const NICKNAME_KEY = "minifia:lastNickname";
+// 튜토리얼 본 표시 — 개인정보 없음, 결정 0080-5. 점 표기는 UI-SPEC T-2 가 정한 문자열 그대로다(위 두 키의 콜론 표기와 다르다).
+export const TUTORIAL_SEEN_KEY = "minifia.tutorial.seen";
 
 export interface StoredSession {
   code: string;
@@ -95,4 +97,13 @@ export function loadLastNickname(storage: StorageLike = browserStorage()): strin
 
 export function saveLastNickname(nickname: string, storage: StorageLike = browserStorage()): void {
   write(NICKNAME_KEY, nickname, storage);
+}
+
+/** 이 브라우저에서 튜토리얼을 시작했거나 방에 들어간 적이 있는가. 값이 "1" 일 때만 참(저장된 값은 믿지 않는다 — 위조해도 카드 모양만 바뀐다) */
+export function loadTutorialSeen(storage: StorageLike = browserStorage()): boolean {
+  return read(TUTORIAL_SEEN_KEY, storage) === "1";
+}
+
+export function saveTutorialSeen(storage: StorageLike = browserStorage()): void {
+  write(TUTORIAL_SEEN_KEY, "1", storage);
 }

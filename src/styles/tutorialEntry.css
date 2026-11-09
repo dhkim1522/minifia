@@ -1,0 +1,108 @@
+/* 첫 화면 튜토리얼 진입(17-06, UI-SPEC "첫 화면 진입 계약", 결정 0080-13). 값은 tokens.css 변수만 쓴다(새 토큰·hex 없음, 진홍 없음).
+   큰 카드·작은 단추·마무리 카드는 모두 .mf-entry__actions 안 흐름 배치다(절대 좌표 없음 — 키보드가 열려도 함께 스크롤된다). */
+
+/* ---- 공통: 카드와 작은 단추의 면·테두리 ---- */
+.tut-entry {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--brass-400);
+  background: var(--overlay-ink-strong);
+  color: var(--gray-50);
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---- 큰 카드(처음 오는 사람): 높이 84, 안쪽 12 16, 모서리 16, 숨 쉬는 번짐 2.4초 ---- */
+.tut-entry--card {
+  height: 84px;
+  padding: 12px var(--space-md);
+  gap: 12px;
+  border-radius: var(--space-md);
+  animation: tut-entry-glow 2.4s ease-in-out infinite;
+}
+.tut-entry__figure { flex: none; width: 48px; height: 60px; object-fit: contain; display: block; }
+.tut-entry__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tut-entry__eyebrow { color: var(--gray-300); white-space: nowrap; }
+.tut-entry__title { color: var(--gray-50); white-space: nowrap; }
+.tut-entry__pill {
+  flex: none;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--brass-400);
+  border-radius: 14px;
+  color: var(--brass-200);
+  white-space: nowrap;
+}
+
+/* 번짐은 box-shadow 18 ↔ 34 사이를 오간다(시안 cardglow) */
+@keyframes tut-entry-glow {
+  0%, 100% { box-shadow: 0 0 18px color-mix(in srgb, var(--light-lamp) 35%, transparent); }
+  50% { box-shadow: 0 0 34px color-mix(in srgb, var(--light-lamp) 60%, transparent); }
+}
+
+/* ---- 작은 단추(한 번 본 뒤): 높이 44, 번짐 없음, 가운데 ---- */
+.tut-entry--button {
+  height: 44px;
+  padding: 0 var(--space-md);
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--radius-badge);
+  color: var(--brass-200);
+}
+.tut-entry__small { font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--brass-200); white-space: nowrap; }
+
+.tut-entry:focus-visible { outline: 2px solid var(--light-lamp); outline-offset: 2px; }
+
+/* ---- 마무리 카드(혼자 하기를 끝까지 본 뒤, 장면 8): 큰 카드 자리, 같은 면·테두리, fadeup ---- */
+.tut-end {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 84px;
+  padding: 12px var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--brass-400);
+  border-radius: var(--space-md);
+  background: var(--overlay-ink-strong);
+  animation: tut-end-fadeup .5s ease-out both;
+}
+.tut-end__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tut-end__title { margin: 0; font-family: var(--font-serif); font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--brass-200); white-space: nowrap; }
+.tut-end__sub { margin: 0; color: var(--gray-300); white-space: nowrap; }
+.tut-end__replay {
+  flex: none;
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 var(--space-md);
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--brass-400);
+  border-radius: var(--radius-badge);
+  background: transparent;
+  color: var(--brass-200);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.tut-end__replay:focus-visible { outline: 2px solid var(--light-lamp); outline-offset: 2px; }
+
+@keyframes tut-end-fadeup { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* 모션 줄이기: 번짐은 멈추고 중간값, 마무리 카드는 바로 보인다 */
+@media (prefers-reduced-motion: reduce) {
+  .tut-entry--card { animation: none; box-shadow: 0 0 26px color-mix(in srgb, var(--light-lamp) 48%, transparent); }
+  .tut-end { animation: none; }
+}
