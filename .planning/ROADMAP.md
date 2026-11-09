@@ -217,7 +217,7 @@ Plans:
 **Goal:** 처음 온 사람이 60~90초 미니 에피소드로 이 게임의 목적·재미·한 판 흐름·직업별 할 일을 겪어 알고, 흥미를 느껴 첫 판으로 이어진다(결정 0078).
 **Requirements**: TBD
 **Depends on:** Phase 16
-**Plans:** 10 plans (6 waves)
+**Plans:** 11 plans (6 waves)
 
 **Success Criteria:**
 1. 첫 화면(방 만들기·참가 전)에서 튜토리얼을 혼자 시작할 수 있고, 끝나거나 [건너뛰기]하면 첫 화면으로 돌아온다
@@ -228,9 +228,10 @@ Plans:
 
 Plans:
 **Wave 1**
-- [ ] 17-01-PLAN.md — 트레이서: 함께 진행 서버 게이트(start.tutorial → tutorial 단계 → tutorialDone·끊김·150초 → assigning)·단계 표 연쇄·누설 검사 확장·요구사항 등록·결정 0080
+- [ ] 17-01-PLAN.md — 트레이서: 함께 진행 서버 게이트(start.tutorial → tutorial 단계 → tutorialDone·끊김·150초 → assigning)·단계 표 연쇄·누설 검사 확장
 - [ ] 17-02-PLAN.md — 사회자 웅얼 목소리(voice.syl·voice.ts)와 효과음 tut.* 12개, 소리 고정값 70
 - [ ] 17-03-PLAN.md — (TDD) 첫 사건 대본: 장면 표·문구·출연·가짜 view·로컬 send 어댑터·정적 가드
+- [ ] 17-11-PLAN.md — 문서: 17페이즈 요구사항 6개 등록(TUT-01~05·DEPLOY-05)·ROADMAP 요구사항 줄·결정 0080 계획 단계 기록
 
 **Wave 2**
 - [ ] 17-04-PLAN.md — 트레이서: TutorialScreen(실제 GameMap·WorldStage + 로컬 어댑터)·포커스 깜빡임 테두리·파형 자막 띠·진행 점·[건너뛰기]·[다음]·허용 목록 밖 차단
