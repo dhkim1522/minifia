@@ -53,6 +53,8 @@ export interface PhaseTune {
   hemi: number;
   /** 달빛 방향광 세기 */
   moon: number;
+  /** 방향광 색(단계별, D-03 — 낮은 따뜻한 회색, 밤은 달빛 남색) */
+  moonColor?: string;
   /** 톤매핑 노출 */
   exposure: number;
   /** [반구 하늘색, 반구 땅색, 배경·안개색] */

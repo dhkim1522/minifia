@@ -176,19 +176,26 @@ describe("광장 단계 조명 표 PLAZA_LIGHT_TUNE (D-22, O-9)", () => {
     }
   });
 
-  it("talk 는 흐린 낮: 하늘이 sky-overcast 계열 보랏빛 회색이고 밝은 맑은 하늘이 아니다(배경 휘도 낮음, 파랑 지배 아님)", () => {
-    const [sky, ground, bg] = PLAZA_LIGHT_TUNE.talk.sky;
-    // sky-overcast #8a8496 (design/tokens.json): 하늘색은 그 값 근처
-    const want = new Color("#8a8496");
-    const got = new Color(sky);
-    expect(Math.abs(got.r - want.r) + Math.abs(got.g - want.g) + Math.abs(got.b - want.b)).toBeLessThan(0.2);
-    expect(lum(sky)).toBeLessThanOrEqual(0.3);
-    expect(lum(ground)).toBeLessThanOrEqual(0.12);
-    expect(lum(bg)).toBeLessThanOrEqual(0.1);
-    for (const hex of [sky, ground, bg]) {
-      const c = new Color(hex);
-      expect(c.b - Math.max(c.r, c.g), hex).toBeLessThan(0.12); // 파랑이 지배적이지 않다
+  it("talk 는 흐린 낮: 하늘·땅·배경 모두 파랑 지배 아님(b − max(r,g) < 0.12). 채도·휘도 허용 범위는 lighting.test.ts 가 잰다", () => {
+    for (const ph of ["talk"] as const) {
+      for (const hex of PLAZA_LIGHT_TUNE[ph].sky) {
+        const c = new Color(hex);
+        expect(c.b - Math.max(c.r, c.g), `${ph}/${hex}`).toBeLessThan(0.12);
+      }
     }
+  });
+
+  it("방향광 색이 단계 표를 따른다: 만든 직후 talk 색, night 에서 달빛 남색, 다시 talk 에서 원래 색, 방향광은 하나뿐(D-03)", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    const hex = (): string => "#" + lightsOf(p.root, DirectionalLight)[0]!.color.getHexString();
+    expect(lightsOf(p.root, DirectionalLight)).toHaveLength(1);
+    expect(hex()).toBe("#eadfd0");
+    p.setLighting("night");
+    expect(hex()).toBe("#c9d4ff");
+    p.setLighting("talk");
+    expect(hex()).toBe("#eadfd0");
+    expect(lightsOf(p.root, DirectionalLight)).toHaveLength(1);
+    p.dispose();
   });
 
   it("모든 단계의 하늘·땅·배경은 talk 의 같은 칸보다 밝지 않다", () => {

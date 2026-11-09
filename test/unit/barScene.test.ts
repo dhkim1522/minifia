@@ -80,7 +80,20 @@ describe("재즈 바 장면 구조 (MAP-01, 렌더 예산)", () => {
     expect(moon.shadow.bias).toBeCloseTo(-0.0015, 6);
     const cam = moon.shadow.camera;
     expect([cam.left, cam.right, cam.top, cam.bottom]).toEqual([-12, 12, 12, -12]);
-    expect("#" + moon.color.getHexString()).toBe(TOKEN_COLORS.moon);
+    expect("#" + moon.color.getHexString()).toBe(LIGHT_TUNE.talk.moonColor);
+    bar.dispose();
+  });
+
+  it("방향광 색이 단계 표를 따른다: 만든 직후 talk 색, night 에서 달빛 남색, 다시 talk 에서 원래 색, 방향광은 하나뿐(D-03)", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    const hex = (): string => "#" + lightsOf(bar.root, DirectionalLight)[0]!.color.getHexString();
+    expect(lightsOf(bar.root, DirectionalLight)).toHaveLength(1);
+    expect(hex()).toBe("#eadfd0");
+    bar.setLighting("night");
+    expect(hex()).toBe(TOKEN_COLORS.moon);
+    bar.setLighting("talk");
+    expect(hex()).toBe("#eadfd0");
+    expect(lightsOf(bar.root, DirectionalLight)).toHaveLength(1);
     bar.dispose();
   });
 
@@ -160,7 +173,7 @@ describe("조명 단계 (talk · vote)", () => {
     expect(LIGHT_TUNE.talk.exposure).toBe(1.25);
     expect(LIGHT_TUNE.vote.exposure).toBe(1.25);
     expect(LIGHT_TUNE.vote.stage).toBeCloseTo(2.0 * 4, 6);
-    expect(LIGHT_TUNE.talk.sky).toEqual(["#524b84", "#2a2034", "#15111f"]);
+    expect(LIGHT_TUNE.talk.sky).toEqual(["#908aa4", "#4a4058", "#38324a"]);
     expect(LIGHT_TUNE.vote.sky).toEqual(["#3a3464", "#1c1428", "#100d19"]);
   });
 
