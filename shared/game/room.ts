@@ -18,6 +18,7 @@ import type {
 } from "../protocol";
 import type { BotPlan } from "./bots";
 import { hostSuccessor } from "./continuity";
+import { resolveLookConflicts } from "./look";
 import { decideMap } from "./maps";
 import { enterNomination } from "./nomination";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS, TUTORIAL_MS } from "./phases";
@@ -418,6 +419,7 @@ export function startGame(
  * 새 판의 본체(startGame 과 다시 하기 rematch 가 함께 쓴다, 11-08): state.players 전원에게 역할을 주고 맵을 정해 assigning 으로 보낸다.
  * 호출 순서·난수 순서는 startGame 이 쓰던 그대로다 — 좌석 오름차순 id 로 assignRoles → 테스트 방 직업 맞바꿈 → decideMap(허용 맵이 하나면 난수를 부르지 않는다).
  * 만료(expiresAt)는 건드리지 않는다 — 시작은 now + ROOM_TTL_MS, 다시 하기는 min(방 생성 + 12시간, now + ROOM_TTL_MS)로 호출하는 쪽이 정한다.
+ * 시작 순간 겹친 옷을 푼다(D-01) — 역할을 붙이기 전에 resolveLookConflicts 를 부르며 난수·역할을 읽지 않으므로 위 난수 순서는 그대로다.
  * players 는 4~8명이어야 한다(호출하는 쪽이 보장). 입력은 바꾸지 않는다.
  */
 export function beginGame(
@@ -443,7 +445,7 @@ export function beginGame(
     map,
     phase: tutorial ? "tutorial" : "assigning",
     phaseEndsAt: tutorial ? now + TUTORIAL_MS : now + ASSIGNING_MS,
-    players: state.players.map((p) => ({ ...p, role: roles.get(p.id) })),
+    players: resolveLookConflicts(state.players).map((p) => ({ ...p, role: roles.get(p.id) })),
   };
 }
 

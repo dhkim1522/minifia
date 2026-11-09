@@ -30,8 +30,30 @@ export function setLook(
 }
 
 /**
- * 시작 때 겹친 옷 풀기(자리 함수 — RED). 구현 전에는 입력을 그대로 돌려준다.
+ * 시작 때 겹친 옷 풀기(결정 0081-1·D-01). 옷은 역할의 함수가 아니다(L25) — seat·look 만 읽고 난수·시각·역할은 받지 않는다.
+ * 2패스: 1패스는 (직접 고름 먼저 → 좌석 오름차순)으로 옷마다 지키는 사람을 모두 정하고, 2패스는 진 사람에게 OUTFIT_IDS 순서로 아직 아무도 안 입은 첫 옷을 준다
+ * (1패스만 쓰면 진 사람이 뒤 좌석이 직접 고른 옷을 가로채 연쇄 변경이 생긴다). 기본 coat 를 지킨 사람은 look 키가 계속 없고, 바뀐 사람만 look 이 생긴다.
+ * 바뀐 사람이 없으면 입력 배열을 그대로(같은 객체) 돌려준다. 입력은 바꾸지 않는다.
  */
 export function resolveLookConflicts<P extends { seat: number; look?: OutfitId }>(players: readonly P[]): readonly P[] {
-  return players;
+  const ranked = [...players].sort((a, b) => Number(a.look === undefined) - Number(b.look === undefined) || a.seat - b.seat);
+  const taken = new Set<OutfitId>();
+  const losers: P[] = [];
+  for (const p of ranked) {
+    const wear = p.look ?? DEFAULT_LOOK;
+    if (taken.has(wear)) losers.push(p);
+    else taken.add(wear);
+  }
+  if (losers.length === 0) return players;
+  const next = new Map<number, OutfitId>();
+  for (const p of losers) {
+    const free = OUTFIT_IDS.find((id) => !taken.has(id)); // 옷 9종 > 자리 8 이라 늘 있다
+    if (free === undefined) continue;
+    taken.add(free);
+    next.set(p.seat, free);
+  }
+  return players.map((p) => {
+    const look = next.get(p.seat);
+    return look === undefined ? p : { ...p, look };
+  });
 }

@@ -377,7 +377,7 @@ describe("방 규칙과 봇", () => {
     expect(Object.hasOwn(result.state, "botPlan")).toBe(false);
     expect(botCount(result.state)).toBe(3);
     for (const p of result.state.players) {
-      expect(`${p.seat}:${sortedKeys(p)}`).toBe(
+      expect(`${p.seat}:${sortedKeys(p).replace("look,", "")}`).toBe(
         `${p.seat}:${isBot(p) ? "connId,connected,id,isBot,joinSeq,nickname,nicknameKey,seat,token" : "connId,connected,id,joinSeq,nickname,nicknameKey,seat,token"}`,
       );
     }
@@ -408,7 +408,7 @@ describe("buildView 와 봇", () => {
     expect(text.includes("isBot") || text.includes("botPlan") || text.includes("token")).toBe(false);
     for (const bot of botsOf(game)) expect(text.includes(bot.id)).toBe(false);
     const view = buildView(game, guestId, 0);
-    for (const p of view.players) expect(sortedKeys(p)).toBe("alive,connected,isHost,nickname,seat");
+    for (const p of view.players) expect(sortedKeys(p).replace("look,", "")).toBe("alive,connected,isHost,nickname,seat"); // look 은 시작 때 풀린 공개 의상(D-01)
     for (const bot of botsOf(game)) expect(view.players.find((p) => p.seat === bot.seat)!.connected).toBe(true);
   });
 

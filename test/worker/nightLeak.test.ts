@@ -367,11 +367,14 @@ describe("메타모픽 (ii) 암살 밤 (L2·L5)", () => {
       await mafiaBusy(mafias);
     });
 
+    // 흔적 조각은 피해자를 고른 두 마피아 중 한 명의 의상 조각이다(D-06). 시작 때 겹친 옷을 풀면(18페이즈 D-01) 두 마피아의 옷이 서로 달라
+    // 서버의 난수 한 번이 조각을 정하므로 구간마다 조각이 다를 수 있다 — 마피아의 행동과 무관한 값이라 비교에서는 조각 이름만 같은 자리표로 접는다.
+    const foldTrace = (col: string): string => col.replace(/"trace":"[A-Za-z]+"/g, '"trace":"-"');
     for (const x of g.actors.filter((a) => a.role !== "mafia")) {
       const i = g.actors.indexOf(x);
-      expect(`${x.role}:${busy[i]}`).toBe(`${x.role}:${quiet[i]}`);
+      expect(`${x.role}:${foldTrace(busy[i]!)}`).toBe(`${x.role}:${foldTrace(quiet[i]!)}`);
       const col = quiet[i]!;
-      // 피해자가 나온 아침에는 흔적 조각 id 하나가 함께 실린다(D-06) — 두 구간에서 열이 같으니 같은 조각이다.
+      // 피해자가 나온 아침에는 흔적 조각 id 하나가 함께 실린다(D-06).
       expect(new RegExp(`"morning":\\{"eliminated":${v.seat},"trace":"[A-Za-z]+"\\}`).test(col)).toBe(true);
       expect(col.includes('"k":"will"') && col.includes("VWILL") && col.includes('"k":"note"') && col.includes("조용히")).toBe(true);
       expect(col.includes('"chalk"')).toBe(true);

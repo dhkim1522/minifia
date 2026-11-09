@@ -78,7 +78,9 @@ describe("Phase 1 역할 흐름 (ROLE-01·ROLE-02·CONN-01) - 시작부터 역�
   it("직렬화된 view 어디에도 남의 역할 이름이나 토큰이 실리지 않는다 (비마피아 viewer)", () => {
     const s = toRoleReveal(8, 5);
     const viewer = s.players.find((p) => p.role === "citizen")!;
-    const json = JSON.stringify(buildView(s, viewer.id, s.phaseEndsAt! - 1));
+    // players[].look 은 역할과 무관한 공개 의상이라(L25, D-01 — 시작 때 풀린 옷에 직업 이름이 나올 수 있다) 의상 열을 뺀 나머지를 본다.
+    const view = buildView(s, viewer.id, s.phaseEndsAt! - 1);
+    const json = JSON.stringify({ ...view, players: view.players.map(({ look: _look, ...rest }) => rest) });
     expect(json).not.toContain("mafia");
     expect(json).not.toContain("police");
     expect(json).not.toContain("doctor");

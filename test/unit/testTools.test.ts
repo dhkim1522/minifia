@@ -319,7 +319,7 @@ describe("resetToLobby", () => {
     if (!r.ok) throw new Error(`resetToLobby failed: ${r.error}`);
     expect(String(r.state.players.length)).toBe(String(before.players.length));
     for (const p of r.state.players) {
-      expect(sortedKeys(p)).toBe("connId,connected,id,joinSeq,nickname,nicknameKey,seat,token");
+      expect(sortedKeys(p).replace("look,", "")).toBe("connId,connected,id,joinSeq,nickname,nicknameKey,seat,token"); // look 은 시작 때 풀린 공개 의상(D-01)
       const old = before.players.find((q) => q.id === p.id)!;
       expect(`${p.seat}|${p.nickname}|${p.connected}|${p.connId}`).toBe(`${old.seat}|${old.nickname}|${old.connected}|${old.connId}`);
     }
@@ -678,7 +678,7 @@ describe("resetToLobby: 투표·처형·종료 필드를 모두 지운다 (END-0
     for (const key of GONE) expect(`${label}:${key}:${Object.hasOwn(r.state, key)}`).toBe(`${label}:${key}:false`);
     for (const p of r.state.players) {
       for (const key of PLAYER_GONE) expect(`${label}:${p.seat}:${key}:${Object.hasOwn(p, key)}`).toBe(`${label}:${p.seat}:${key}:false`);
-      expect(sortedKeys(p)).toBe(p.isBot === true ? "connId,connected,id,isBot,joinSeq,nickname,nicknameKey,seat,token" : "connId,connected,id,joinSeq,nickname,nicknameKey,seat,token");
+      expect(sortedKeys(p).replace("look,", "")).toBe(p.isBot === true ? "connId,connected,id,isBot,joinSeq,nickname,nicknameKey,seat,token" : "connId,connected,id,joinSeq,nickname,nicknameKey,seat,token"); // look 은 시작 때 풀린 공개 의상(D-01)
     }
     expect(sortedKeys(r.state)).toBe("code,createdAt,everConnected,expiresAt,hostId,nextJoinSeq,phase,phaseEndsAt,players,testMode");
   }
@@ -1137,7 +1137,8 @@ describe("resetToLobby — 의상 유지 (10-02, 결정 D-6)", () => {
     const started = stateAt(5, 4, "discussion");
     const dressed: RoomState = {
       ...started,
-      players: started.players.map((p) => (p.seat === 1 ? { ...p, look: "noir" as const } : p.seat === 2 ? { ...p, look: "coat" as const } : p)),
+      // 시작 때 풀린 옷(D-01)을 지워 "아무도 안 고른" 상태에서 시작한다 — 이 시험은 resetToLobby 가 look 을 더하거나 지우지 않는 것을 본다.
+      players: started.players.map(({ look: _look, ...bare }) => bare).map((p) => (p.seat === 1 ? { ...p, look: "noir" as const } : p.seat === 2 ? { ...p, look: "coat" as const } : p)),
     };
     const r = resetToLobby(dressed, dressed.hostId);
     expect(r.ok).toBe(true);
@@ -1150,7 +1151,8 @@ describe("resetToLobby — 의상 유지 (10-02, 결정 D-6)", () => {
     const started = stateAt(5, 4, "discussion");
     const dressed: RoomState = {
       ...started,
-      players: started.players.map((p) => (p.seat === 3 ? { ...p, isBot: true as const, look: "hood" as const } : p)),
+      // 시작 때 풀린 옷(D-01)을 지워 "아무도 안 고른" 상태에서 시작한다 — 이 시험은 resetToLobby 가 look 을 더하거나 지우지 않는 것을 본다.
+      players: started.players.map(({ look: _look, ...bare }) => bare).map((p) => (p.seat === 3 ? { ...p, isBot: true as const, look: "hood" as const } : p)),
     };
     const r = resetToLobby(dressed, dressed.hostId);
     if (!r.ok) throw new Error(r.error);

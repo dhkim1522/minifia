@@ -660,7 +660,7 @@ describe("실제 흐름 (결정 0060-1)", () => {
       expect(v.players.find((p) => p.seat === defender.seat)?.alive).toBe(false);
       // 살아 있는 소켓에는 역할 단어 값이 본인 역할·구성표 경로 밖에 없다(처형 발표에 직업이 실리지 않는다, D-09)
       if (g.actors[i] !== defender) {
-        const stray = roleValuePaths(v).filter((path) => ![".me.role", ".day.roles[]", ".me.chat"].includes(path));
+        const stray = roleValuePaths(v).filter((path) => ![".me.role", ".day.roles[]", ".me.chat", ".players[].look"].includes(path));
         expect(`${i}:${stray.join(",")}`).toBe(`${i}:`);
       }
     }

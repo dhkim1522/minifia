@@ -153,7 +153,7 @@ describe("view: day.candidate · day.execution (D-06, D-09, D-11)", () => {
   });
 
   it("처형 직업 비공개 (D-09): execution 단계 살아 있는 viewer 의 view 에서 역할 단어는 .me.role·.day.roles[] 경로에만 있다", () => {
-    const allowed = new Set([".me.role", ".day.roles[]"]);
+    const allowed = new Set([".me.role", ".day.roles[]", ".players[].look"]); // players[].look 은 역할과 무관한 공개 의상이다(L25, D-01 — 시작 때 풀린 옷에 mafia·police·doctor 가 나올 수 있다)
     for (const n of [4, 5, 6, 7, 8]) {
       for (const seed of SEEDS) {
         const state = stateWithVerdict(n, seed, "execution");
@@ -277,7 +277,7 @@ describe("새 단계 전수 누출 검사 (4~8명 × 변론·처형 두 단계 �
               if (serverOnly.includes(key) && path !== ".day.verdict") violations.push(`${tag}: server-only key at ${path}`);
             }
             for (const entry of view.players) {
-              const keys = Object.keys(entry).sort().join(",");
+              const keys = Object.keys(entry).filter((k) => k !== "look").sort().join(","); // look 은 시작 때 풀린 공개 의상(D-01)
               if (keys !== "alive,connected,isHost,nickname,seat") violations.push(`${tag}: players[] keys ${keys}`);
             }
             const want = ["n", "roles", "voteLog", "candidate"];

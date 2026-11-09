@@ -346,7 +346,8 @@ describe("testReset", () => {
     expect(String(await alarmOf(r.code))).toBe(String(room.expiresAt));
 
     for (const g of r.guests) {
-      const frames = g.sock.frames.slice(marks[allSockets(r).indexOf(g.sock)]!).join("\n");
+      // players[].look 은 역할과 무관한 공개 의상이라(L25, D-01 — 시작 때 풀린 옷에 직업 이름이 나올 수 있다) 의상 값을 뺀 나머지에서 직업 단어를 찾는다.
+      const frames = g.sock.frames.slice(marks[allSockets(r).indexOf(g.sock)]!).join("\n").replace(/"look":"[a-z]+"/g, '"look":""');
       expect(/mafia|police|doctor|citizen/.test(frames)).toBe(false);
     }
     expect(Object.hasOwn(lastView(r.guests[0]!.sock), "day")).toBe(false);

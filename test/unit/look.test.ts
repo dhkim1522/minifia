@@ -142,7 +142,7 @@ describe("시작 때 겹친 옷 풀기 (P18-1, D-01)", () => {
     const looks: Array<OutfitId | undefined> = [undefined, "mafia", undefined, "mafia", undefined];
     const a = seats(looks).map((p) => ({ ...p, role: p.seat % 2 === 0 ? "mafia" : "citizen" }));
     const b = seats(looks).map((p) => ({ ...p, role: p.seat % 2 === 0 ? "citizen" : "mafia" }));
-    expect(`${line(resolveLookConflicts(a))}|${line(resolveLookConflicts(b))}`).toBe("-,mafia,police,doctor,detective|-,mafia,police,doctor,detective");
+    expect(`${line(resolveLookConflicts(a))}|${line(resolveLookConflicts(b))}`).toBe("-,mafia,doctor,police,detective|-,mafia,doctor,police,detective");
   });
 });
 

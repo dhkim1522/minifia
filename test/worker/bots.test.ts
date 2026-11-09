@@ -449,7 +449,7 @@ describe("누출 없음", () => {
         const msg = parse(raw);
         if (msg.t !== "state") continue;
         for (const p of msg.view.players) {
-          expect(`${who}:${Object.keys(p).sort().join(",")}`).toBe(`${who}:alive,connected,isHost,nickname,seat`);
+          expect(`${who}:${Object.keys(p).filter((k) => k !== "look").sort().join(",")}`).toBe(`${who}:alive,connected,isHost,nickname,seat`); // look 은 시작 때 풀린 공개 의상(D-01)
         }
         const hasTestBots = raw.includes("testBots");
         expect(`${who}:${hasTestBots}`).toBe(`${who}:${who === "host" && msg.view.me.testBots !== undefined}`);

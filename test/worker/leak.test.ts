@@ -441,7 +441,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
         // day.turn 은 순차 지목이 켜졌을 때(RULESET.pickTurn)만 지목 단계에 있다. 기본판(결정 0072)에서는 어느 단계에도 키가 없다(07-08, 09.1 — 결정 0063-1).
         expect(`${msg.view.phase}:${Object.hasOwn(msg.view.day ?? {}, "turn")}`).toBe(`${msg.view.phase}:${RULESET.pickTurn && msg.view.phase === "nomination"}`);
         for (const pl of msg.view.players) {
-          expect(Object.keys(pl).sort()).toEqual(["alive", "connected", "isHost", "nickname", "seat"]);
+          expect(Object.keys(pl).sort()).toEqual(["alive", "connected", "isHost", ...(pl.look !== undefined ? ["look"] : []), "nickname", "seat"]); // look 은 공개 의상(D-01 해소 뒤에는 기본 coat 를 지킨 좌석 0 만 키가 없다)
         }
         if (msg.view.phase === "lobby" || msg.view.phase === "assigning") {
           expect(msg.view.me.role).toBeUndefined();
@@ -1773,8 +1773,8 @@ describe("방 연속성 프레임 전수 (D-14·D-17·D-18, L43)", () => {
         const key = path.slice(path.lastIndexOf(".") + 1);
         expect(SERVER_ONLY_KEYS.includes(key) && !ALLOWED_WIRE_PATHS.has(path)).toBe(false);
       }
-      // ready·sat(11-08)는 준비·합류한 사람 줄에만 실리는 공개 표시라 같은 모양 비교에서 뺀다.
-      const shape = (p: object): string => Object.keys(p).filter((k) => k !== "ready" && k !== "sat").sort().join(",");
+      // ready·sat(11-08)는 준비·합류한 사람 줄에만, look 은 의상이 있는 사람 줄에만(시작 때 겹친 옷 풀기 D-01 뒤 기본 coat 를 지킨 사람은 키가 없다) 실리는 공개 표시라 같은 모양 비교에서 뺀다.
+      const shape = (p: object): string => Object.keys(p).filter((k) => k !== "ready" && k !== "sat" && k !== "look").sort().join(",");
       if (msg.t === "state") for (const p of msg.view.players) expect(shape(p)).toBe(shape(msg.view.players[0]!));
     }
   };
@@ -1927,8 +1927,8 @@ describe("다시 하기 · 쉬는 사람 프레임 전수 (D-12~D-16, L38·L39·
       let stored = (await storedRoom(code)) as unknown as StoredShape;
       expect(keysOf(stored).replace("bench,", "")).toBe(ROOM_KEYS);
       expect("bench" in stored).toBe(true);
-      for (const row of stored.players) expect(keysOf(row)).toBe(ROW_KEYS);
-      expect(stored.bench!.map((r) => keysOf(r))).toEqual([BENCH_ROW_KEYS]);
+      for (const row of stored.players) expect(keysOf(row).replace("look,", "")).toBe(ROW_KEYS); // look 은 시작 때 풀린 공개 의상(D-01) — 있어도 없어도 된다
+      expect(stored.bench!.map((r) => keysOf(r).replace("look,", ""))).toEqual([BENCH_ROW_KEYS]); // 쉬기 전 판에서 풀린 look 은 남을 수 있다(D-01)
       expect(await chatKeysOf(code)).toEqual([]);
 
       await advanceTo(code, players, "dayAnnounce");
@@ -1975,7 +1975,7 @@ describe("다시 하기 · 쉬는 사람 프레임 전수 (D-12~D-16, L38·L39·
       for (const s of all) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning" && m.view.round === 3);
       stored = (await storedRoom(code)) as unknown as StoredShape;
       expect(keysOf(stored)).toBe(ROOM_KEYS);
-      for (const row of stored.players) expect(keysOf(row)).toBe(ROW_KEYS);
+      for (const row of stored.players) expect(keysOf(row).replace("look,", "")).toBe(ROW_KEYS); // look 은 시작 때 풀린 공개 의상(D-01) — 있어도 없어도 된다
       expect(stored.players.length).toBe(6);
       expect(await chatKeysOf(code)).toEqual([]);
       await advanceTo(code, all, "roleReveal");
