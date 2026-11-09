@@ -4,19 +4,19 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 17
 current_phase_name: "튜토리얼 \"첫 사건\""
-current_plan: 3
+current_plan: 4
 status: executing
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-11-09T03:21:02.747Z"
+stopped_at: Completed 17-03-PLAN.md
+last_updated: "2026-11-09T03:28:21.443Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 17 execution started
-state_head: e8ee10c72abc04675701c968ff2b98a934bcc4b4
+state_head: 4b5e5b7b5e8c94996ff0583558565427f625f09f
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 47
-  completed_plans: 37
-  percent: 79
+  completed_plans: 38
+  percent: 80
 ---
 
 # Project State
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 17 (튜토리얼 "첫 사건") — EXECUTING
-Current Plan: 3
+Current Plan: 4
 Total Plans in Phase: 12
 Status: Ready to execute
 Last activity: 2026-11-09 — Phase 17 execution started
@@ -235,6 +235,7 @@ Last activity: 2026-11-09 — Phase 17 execution started
 | Phase 16 P10 | 약 3h 20m | 4 tasks | 14 files |
 | Phase 17 P01 | 9 min | 1 tasks | 19 files |
 | Phase 17 P02 | 25 min | 2 tasks | 11 files |
+| Phase 17 P03 | 18 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -515,6 +516,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 17]: 17-01: 서버 전용 tutorialPassed 는 ON_ENTER.assigning=clearTutorial 로 지우고 전원 완료는 applyEndDiscussion 과 같은 tick 경로로 assigning 에 보낸다(0080-11)
 - [Phase 17]: 17-02: tut.fanfare 는 D·F·A·E 네 음 삼각파 한 레시피 4층(시안의 다섯 번째 음·옥타브 겹침 사인은 층 한계로 제외), voice.syl 은 205Hz 레시피 하나에 음높이는 대본 cents 로만
 - [Phase 17]: 17-02: tut.step 시작 레벨 −16 dB(짧은 잡음의 RMS 문턱 −60 을 넘기려 올림, 문턱은 그대로)
+- [Phase 17]: 17-03: TUTORIAL_SPOTS 는 연단 둘레 반지름 2.6, SUSPECT_WALK 는 (5.6,-1.9)→(4.0,1.0) 약 1.84초 — 모두 광장 마스크에서 걸을 수 있음을 시험으로 고정
+- [Phase 17]: 17-03: 가짜 view 에 me.chat 을 싣지 않음 — 장면 6 입력줄 표시 방식은 화면 계획이 정한다
 
 ### Pending Todos
 
@@ -581,8 +584,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09T03:21:02.443Z
-Stopped at: Completed 17-02-PLAN.md
+Last session: 2026-11-09T03:28:21.132Z
+Stopped at: Completed 17-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

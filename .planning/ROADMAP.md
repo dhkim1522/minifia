@@ -217,7 +217,7 @@ Plans:
 **Goal:** 처음 온 사람이 60~90초 미니 에피소드로 이 게임의 목적·재미·한 판 흐름·직업별 할 일을 겪어 알고, 흥미를 느껴 첫 판으로 이어진다(결정 0078).
 **Requirements**: TBD
 **Depends on:** Phase 16
-**Plans:** 2/12 plans executed (6 waves)
+**Plans:** 3/12 plans executed (6 waves)
 
 **Success Criteria:**
 1. 첫 화면(방 만들기·참가 전)에서 튜토리얼을 혼자 시작할 수 있고, 끝나거나 [건너뛰기]하면 첫 화면으로 돌아온다
@@ -230,7 +230,7 @@ Plans:
 **Wave 1**
 - [x] 17-01-PLAN.md — 트레이서: 함께 진행 서버 게이트(start.tutorial → tutorial 단계 → tutorialDone → assigning, tutorialPassed 지움)·PhaseId 연쇄(Record 표·시험 표 한 커밋)
 - [x] 17-02-PLAN.md — 사회자 웅얼 목소리(voice.syl·voice.ts)와 효과음 tut.* 12개, 소리 고정값 70
-- [ ] 17-03-PLAN.md — (TDD) 첫 사건 대본: 장면 표·문구·출연·가짜 view·로컬 send 어댑터·정적 가드
+- [x] 17-03-PLAN.md — (TDD) 첫 사건 대본: 장면 표·문구·출연·가짜 view·로컬 send 어댑터·정적 가드
 - [ ] 17-11-PLAN.md — 문서: 17페이즈 요구사항 6개 등록(TUT-01~05·DEPLOY-05)·ROADMAP 요구사항 줄·결정 0080 계획 단계 기록
 
 **Wave 2**
@@ -259,7 +259,7 @@ Plans:
 | 14. 사회자 진행과 도구 이름표 | v3.0 | 9/9 | Complete (실기기 확인은 v3.0 끝) | 2026-11-07 |
 | 15. 낮 심부름·목격 기록·밤 흔적 | v3.0 | 10/10 | Complete (배포 `f882224e`) | 2026-11-07 |
 | 16. 단추 정리·심부름 증거 | v3.0 | 10/10 | Complete (배포 `49b1ad57`, 실기기 확인은 v3.0 끝) | 2026-11-08 |
-| 17. 튜토리얼 "첫 사건" | v3.0 | 2/12 | In Progress | - |
+| 17. 튜토리얼 "첫 사건" | v3.0 | 3/12 | In Progress | - |
 
 ## Backlog
 
