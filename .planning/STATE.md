@@ -3,14 +3,14 @@ gsd_state_version: "1.0"
 milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 17
-current_phase_name: 튜토리얼 "첫 사건"
+current_phase_name: "튜토리얼 \"첫 사건\""
 current_plan: 0
 status: ready_to_plan
-stopped_at: Phase 16 complete (실기기 확인은 v3.0 끝)
-last_updated: "2026-11-08T14:45:19.746Z"
+stopped_at: Phase 17 UI-SPEC approved
+last_updated: "2026-11-09T01:28:18.912Z"
 last_activity: 2026-11-08
 last_activity_desc: Phase 16 complete — 검증 human_needed(실기기 항목 v3.0 끝으로 미룸)
-state_head: 887b2ab84d915bace545790c05044964ed3cbc0b
+state_head: 1d8c4ca49bcb3a2422e7644c5f74033264151195
 progress:
   total_phases: 5
   completed_phases: 4
@@ -575,9 +575,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-08T14:45:19.588Z
-Stopped at: Completed 16-10-PLAN.md
-Resume file: None
+Last session: 2026-11-09T01:28:18.575Z
+Stopped at: Phase 17 UI-SPEC approved
+Resume file: .planning/phases/17-tutorial-first-case/17-UI-SPEC.md
 
 ## Operator Next Steps
 
