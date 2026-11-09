@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import "../helpers/singleLineErrors";
 import type { PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
+import { bindSignals } from "../../src/audio/signals";
+import type { LocalSignal } from "../../src/audio/signals";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
@@ -169,5 +171,57 @@ describe("RoomScreen — tutorial 단계 분기 (17-07, TUT-02·TUT-05, T-17-17)
     expect(q(container, "[data-tutorial-screen]")).toBeNull();
     expect(q(container, "[data-tutorial-wait]")).toBeNull();
     expect(q(container, ".mf-assign__scene") ?? q(container, "[data-world-stage-fake]")).not.toBeNull();
+  });
+});
+
+describe("RoomScreen — tutorial 단계의 띠·알림음·소리 소유·재접속 (17-07, 0080-14·15, T-20)", () => {
+  it("tutorial 단계에는 실제 사회자 띠·소리 독이 없다(첫 사건 화면이 자기 띠를 그린다) — 기다림 화면에도 없다", () => {
+    const { container } = mount(makeView());
+    expect(container.querySelectorAll("[data-host-band]:not([data-tutorial-host])")).toHaveLength(0);
+    expect(container.querySelectorAll(".mv-host")).toHaveLength(0);
+    expect(container.querySelectorAll("[data-sound-button]")).toHaveLength(0);
+    act(() => {
+      fireEvent.click(q(container, "[data-fake-end]")!);
+    });
+    expect(q(container, "[data-tutorial-wait]")).not.toBeNull();
+    expect(container.querySelectorAll(".mv-host")).toHaveLength(0);
+    expect(container.querySelectorAll("[data-sound-button]")).toHaveLength(0);
+  });
+
+  it("대기실 → tutorial → assigning 전환에는 사회자 알림음 신호가 없다", () => {
+    const got: LocalSignal[] = [];
+    const off = bindSignals((sig) => got.push(sig));
+    try {
+      const { show } = mount(makeView({ phase: "lobby" }));
+      show(makeView());
+      show(makeView({ phase: "assigning" }));
+      expect(got.filter((g) => g.kind === "host")).toHaveLength(0);
+    } finally {
+      off();
+    }
+  });
+
+  it("끝났음을 보낸 뒤 연결 번호가 바뀌고 me.tutorialDone 이 없으면 장면 1 부터 다시, 있으면 기다림 화면", () => {
+    const { container, show } = mount(makeView(), vi.fn<RoomConnection["send"]>(() => true), 1);
+    act(() => {
+      fireEvent.click(q(container, "[data-fake-end]")!);
+    });
+    expect(q(container, "[data-tutorial-wait]")).not.toBeNull();
+    show(makeView(), 2);
+    expect(q(container, "[data-tutorial-screen]")).not.toBeNull();
+    expect(q(container, "[data-tutorial-wait]")).toBeNull();
+    show(makeView({ meDone: true }), 3);
+    expect(q(container, "[data-tutorial-wait]")).not.toBeNull();
+    expect(q(container, "[data-tutorial-screen]")).toBeNull();
+  });
+
+  it("같은 연결에서 다음 판이 다시 tutorial 을 거치면 기다림이 아니라 장면 1 부터다(단계를 벗어나면 로컬 끝남 표시를 비운다)", () => {
+    const { container, show } = mount(makeView());
+    act(() => {
+      fireEvent.click(q(container, "[data-fake-end]")!);
+    });
+    show(makeView({ phase: "assigning" }));
+    show(makeView());
+    expect(q(container, "[data-tutorial-screen]")).not.toBeNull();
   });
 });
