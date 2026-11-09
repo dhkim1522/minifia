@@ -8,7 +8,7 @@
 - 소리 라이브러리: **0** (`package.json` 에 howler·tone·zzfx 등이 없다. 소리는 브라우저 기본 Web Audio 만 쓴다).
 - 레시피(발진기·필터링한 잡음·엔벨로프)는 이 저장소에서 직접 작성했다. 알려진 곡의 선율을 인용하지 않았다. 코드 진행은 일반적인 재즈 화성(Dm9·Gm9·A7♭9)이고 음높이·리듬 배치는 직접 정했다.
 - 작성일: 2026-11-06 (12페이즈).
-- 정적 시험: `test/unit/soundProvenance.test.ts` (오디오 파일·소리 라이브러리가 생기면 아래 표에 행이 있어야 통과), `test/unit/soundProtocol.test.ts` (이 문서의 레시피 지도가 소리 id 58개를 모두 담는지, 서버가 소리를 모르는지), `test/unit/soundStaticGuard.test.ts` (`src/audio/` 가 허용된 입력만 읽는지).
+- 정적 시험: `test/unit/soundProvenance.test.ts` (오디오 파일·소리 라이브러리가 생기면 아래 표에 행이 있어야 통과), `test/unit/soundProtocol.test.ts` (이 문서의 레시피 지도가 소리 id 70개를 모두 담는지, 서버가 소리를 모르는지), `test/unit/soundStaticGuard.test.ts` (`src/audio/` 가 허용된 입력만 읽는지).
 
 ## 샘플을 들일 때 필수 항목
 
@@ -20,7 +20,7 @@
 
 ## 레시피 지도
 
-소리 id 58개(배경음 7 + 효과음 51). 레시피는 `src/audio/recipes.ts` 한 표(`RECIPES`·`BEDS`)가 단일 정의라서 id 하나를 바꾸려면 그 줄만 고치면 된다. 감독 규칙은 `src/audio/director.ts`(공개 view 차이·닫힌 로컬 신호), 시간표 대본은 `src/audio/script.ts` 에 있다. 값(레벨·길이·음높이)은 모두 첫 초안이고 폰으로 듣고 조정한다.
+소리 id 70개(배경음 7 + 효과음 63). 레시피는 `src/audio/recipes.ts` 한 표(`RECIPES`·`BEDS`)가 단일 정의라서 id 하나를 바꾸려면 그 줄만 고치면 된다. 감독 규칙은 `src/audio/director.ts`(공개 view 차이·닫힌 로컬 신호), 시간표 대본은 `src/audio/script.ts` 에 있다. 값(레벨·길이·음높이)은 모두 첫 초안이고 폰으로 듣고 조정한다.
 
 | 소리 id | 일어나는 일 | 정의 → 규칙이 있는 파일 |
 |---------|-------------|--------------------------|
@@ -81,6 +81,18 @@
 | `result.lose` | 내 팀이 짐(결과 조명) | recipes.ts → script.ts |
 | `award.plate` | 시상 패 등장 | recipes.ts → script.ts |
 | `award.final` | 마지막 패 | recipes.ts → script.ts |
+| `tut.lampOff` | 튜토리얼 오프닝: 램프 번짐이 하나 어두워짐(램프 수만큼 대본이 부름) | recipes.ts → src/game/tutorialScript.ts 의 장면 표 |
+| `tut.scream` | 튜토리얼 오프닝: 한 사람이 사라지며 진홍빛이 번쩍임 | recipes.ts → src/game/tutorialScript.ts 의 장면 표 |
+| `tut.whoosh` | 튜토리얼 장면 2·3·6 시작 | recipes.ts → src/game/tutorialScript.ts 의 장면 표 |
+| `tut.sting` | 튜토리얼 장면 2: 무거운 줄이 나옴 | recipes.ts → src/game/tutorialScript.ts 의 장면 표 |
+| `tut.step` | 튜토리얼 장면 4: 발자국이 찍힘(0.32초 간격으로 여러 번) | recipes.ts → src/game/tutorialScript.ts 의 장면 표 |
+| `tut.eye` | 튜토리얼 장면 4: 눈 표시가 켜짐 | recipes.ts → src/game/tutorialScript.ts 의 장면 표 |
+| `tut.link` | 튜토리얼 장면 5: 연결선이 그어짐(두 번) | recipes.ts → src/game/tutorialScript.ts 의 장면 표 |
+| `tut.buzz` | 튜토리얼 장면 6: 오답 지목 | recipes.ts → src/game/tutorialScript.ts 의 장면 표 |
+| `tut.stamp` | 튜토리얼 장면 6: 정답 지목 도장 | recipes.ts → src/game/tutorialScript.ts 의 장면 표 |
+| `tut.fanfare` | 튜토리얼 장면 6: 정체 카드가 뜸(D·F·A·E 네 음) | recipes.ts → src/game/tutorialScript.ts 의 장면 표 |
+| `tut.flip` | 튜토리얼 장면 7: 직업 카드가 뒤집힘(네 장, 0.35초 간격) | recipes.ts → src/game/tutorialScript.ts 의 장면 표 |
+| `tut.warm` | 튜토리얼 장면 8: 따뜻한 조명 | recipes.ts → src/game/tutorialScript.ts 의 장면 표 |
 | `voice.syl` | 튜토리얼 사회자 띠의 웅얼 목소리(글자마다 한 음절, 음높이는 대본 cents) | recipes.ts → voice.ts |
 
 - 소리 없음으로 정한 것: 채팅 수신·보내기, 귓속말 도착, 직업 주장 배지 도장, 준비 토글, 방장 이양, 로비 퇴장, 밤의 모든 UI 조작, 칭호별 개별 소리.
@@ -89,7 +101,7 @@
 ## 시험 페이지
 
 - 열기: `npm run dev` (`--host` 포함) 후 폰에서 `http://<Mac IP>:5173/?sound-lab=1`. 개발 문맥 전용이고 배포본 번들에는 들어가지 않는다.
-- 58개를 ▶ 로 하나씩 듣고, [전부 계산] 으로 오프라인 렌더 검사(피크·NaN·무음·길이)를 헤드리스에서도 돌릴 수 있다.
+- 70개를 ▶ 로 하나씩 듣고, [전부 계산] 으로 오프라인 렌더 검사(피크·NaN·무음·길이)를 헤드리스에서도 돌릴 수 있다.
 - 마음에 들지 않는 id 를 알려 주면 `src/audio/recipes.ts` 의 레시피 한 줄만 고친다. 레벨이 문제면 `gainDb`, 길이면 `dur`, 음높이면 `f0`·`f1`.
 
 ## iOS 메모

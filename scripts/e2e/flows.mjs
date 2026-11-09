@@ -3780,7 +3780,7 @@ const { avatarEmoteFlow, avatarDressFlow, avatarPhasesFlow, avatarPhasesNightFlo
 // 맵 선택 화면(11페이즈 11-13): map-select. 흐름 본문은 mapselect.mjs, 도우미만 넘긴다
 const { mapSelectFlow } = makeMapSelectFlows({ recorder, startHost, openGuest, attempt, LOBBY_HOST_NICK, WORLD_GUEST_NICK, settledResult });
 
-// 소리(12페이즈): sound-render(12-06) 시험 페이지 오프라인 렌더 57개. 흐름 본문은 sound.mjs, 도우미만 넘긴다
+// 소리(12페이즈): sound-render(12-06) 시험 페이지 오프라인 렌더 70개. 흐름 본문은 sound.mjs, 도우미만 넘긴다
 const { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow, soundResultFlow } = makeSoundFlows({ recorder, attempt, startHost, openGame, closeGame, nightScenario });
 
 // 사회자·이름표(14페이즈 14-08): emcee-band(띠, 폰 6종)·emcee-tools·emcee-leak·emcee-sound. 흐름 본문은 host.mjs, 도우미만 넘긴다
@@ -3841,7 +3841,7 @@ export const FLOWS = [
   // 10-08: 단계별 동작 도착(낮 토론·지목·변론·찬반·아침)·유령→산 사람 0건·떠 있는 버튼 숨김·이름표 층 표시 없음 / 밤 마피아→시민 편 0건. 390x844 한 크기(D-18)
   { id: "avatar-phases", run: avatarPhasesFlow, size: GAME_SIZE },
   { id: "avatar-phases-night", run: avatarPhasesNightFlow, size: GAME_SIZE },
-  // 12-06: 소리 시험 페이지 [전부 계산] 57개(피크·NaN·RMS·길이). 방 없이 390x844 한 크기, 소리 출력 없음(OfflineAudioContext)
+  // 12-06: 소리 시험 페이지 [전부 계산] 70개(피크·NaN·RMS·길이). 방 없이 390x844 한 크기, 소리 출력 없음(OfflineAudioContext)
   { id: "sound-render", run: soundRenderFlow, size: GAME_SIZE },
   // 12-07: 소리 켜기·끄기·잠금 해제 — [방 만들기] 탭 → running, 단추 토글, 새로고침 두 갈래(끔=알약 없음 · 켬=알약→탭→running), 숨김→suspended, 단추 위치·겹침. 폰 6종 구성(extraSizes)은 12-12 가 합쳤다
   { id: "sound-unlock", run: soundUnlockFlow, extraSizes: LOBBY_EXTRA_SIZES },

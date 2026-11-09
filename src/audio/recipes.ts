@@ -134,10 +134,12 @@ export const SFX_IDS = [
   "emote.clap", "emote.praise", "emote.handshake", "emote.dance", "emote.surprise", "emote.cry", "emote.deny",
   "emote.point", "emote.throat",
   "result.win", "result.lose", "award.plate", "award.final",
-  "voice.syl",
+  // 튜토리얼(17-02, TUT-04, 결정 0080-8): 장면 효과음 12개 + 사회자 음절. voice.syl 이 끝에 온다
+  "tut.lampOff", "tut.scream", "tut.whoosh", "tut.sting", "tut.step", "tut.eye", "tut.link", "tut.buzz", "tut.stamp",
+  "tut.fanfare", "tut.flip", "tut.warm", "voice.syl",
 ] as const;
 export type SfxId = (typeof SFX_IDS)[number];
-/** 소리 id 58개: 침대 7 + 효과음 51 */
+/** 소리 id 70개: 침대 7 + 효과음 63 */
 export const SOUND_IDS = [...BED_IDS, ...SFX_IDS] as const;
 export type SoundId = BedId | SfxId;
 
@@ -458,6 +460,54 @@ export const RECIPES: Readonly<Record<SfxId, Recipe>> = {
     osc("sine", 0, 1200, 294, 0.5, [30, 1000, 0, 300]),
   ]),
 
+  // 튜토리얼 장면 효과음 12개(17-02, TUT-04, 결정 0080-8). 값은 승인 시안(design/v3.0/first-case/Sound.dc.html)의 소리 시트를 층 한계(4) 안으로 옮긴 것이다.
+  // 같은 소리를 여러 번 내는 것(램프·걸음·뒤집기·링크)은 레시피 하나를 장면 대본이 여러 번 부른다. 시작 레벨은 −16~−24 dB, 듣고 조정은 v3.0 끝 실테스트.
+  "tut.lampOff": recipe("tut.lampOff", "sfx", 2, -18, [
+    osc("sine", 0, 280, [120, 60], 1, [3, 270, 0, 20]),
+    nz(0, 60, bp(900, 900, 1.2), 0.34, perc(60)),
+  ]),
+  "tut.scream": recipe("tut.scream", "sfx", 2, -18, [
+    osc("sawtooth", 0, 700, [1250, 520], 0.13, [20, 680, 0, 40]),
+    osc("sine", 0, 700, [1310, 540], 0.2, [20, 680, 0, 40]),
+    nz(0, 500, bp(1800, 1800, 0.8), 0.3, [10, 490, 0, 30]),
+    osc("sine", 100, 1400, [73, 55], 1, [60, 1340, 0, 80]),
+  ]),
+  "tut.whoosh": recipe("tut.whoosh", "sfx", 2, -20, [nz(0, 320, bp(1400, 1400, 0.6), 1, [60, 260, 0, 40])]),
+  "tut.sting": recipe("tut.sting", "sfx", 2, -18, [
+    osc("sawtooth", 0, 1300, [146.8, 142.4], 0.12, [10, 1290, 0, 60]),
+    osc("sawtooth", 20, 1300, [174.6, 169.4], 0.12, [10, 1290, 0, 60]),
+    osc("sawtooth", 40, 1300, [207.7, 201.5], 0.12, [10, 1290, 0, 60]),
+    osc("sine", 0, 1400, [55, 50], 1, [10, 1390, 0, 60]),
+  ]),
+  "tut.step": recipe("tut.step", "sfx", 2, -16, [nz(0, 50, bp(400, 400, 2), 1, perc(50))]),
+  "tut.eye": recipe("tut.eye", "sfx", 2, -22, [
+    osc("sine", 0, 180, [880, 1320], 1, [3, 170, 0, 20]),
+    osc("sine", 120, 250, [1320, 1318], 0.67, [3, 240, 0, 30]),
+  ]),
+  "tut.link": recipe("tut.link", "sfx", 2, -22, [osc("triangle", 0, 350, [520, 780], 1, [10, 340, 0, 30])]),
+  "tut.buzz": recipe("tut.buzz", "sfx", 2, -24, [osc("square", 0, 250, [140, 110], 1, [3, 240, 0, 20])]),
+  "tut.stamp": recipe("tut.stamp", "sfx", 2, -18, [
+    nz(0, 90, bp(300, 300, 0.7), 0.78, perc(90)),
+    osc("sine", 0, 220, [90, 50], 1, [3, 210, 0, 20]),
+  ]),
+  // D·F·A·E 네 음 삼각파 0.5초, 0.11초 간격. 시안의 다섯 번째 음(C)과 옥타브 겹침 사인은 층 한계(4) 때문에 뺐다
+  "tut.fanfare": recipe("tut.fanfare", "sfx", 2, -22, [
+    osc("triangle", 0, 500, 293.7, 1, [5, 495, 0, 40]),
+    osc("triangle", 110, 500, 349.2, 1, [5, 495, 0, 40]),
+    osc("triangle", 220, 500, 440, 1, [5, 495, 0, 40]),
+    osc("triangle", 330, 500, 659.3, 1, [5, 495, 0, 40]),
+  ]),
+  "tut.flip": recipe("tut.flip", "sfx", 2, -22, [
+    nz(0, 90, bp(2400, 2400, 1.5), 1, perc(90)),
+    osc("triangle", 50, 120, [440, 520], 0.5, [3, 110, 0, 20]),
+  ]),
+  "tut.warm": recipe("tut.warm", "sfx", 2, -24, [
+    osc("sine", 0, 1600, 146.8, 1, [200, 1400, 0, 150]),
+    osc("sine", 50, 1600, 220, 1, [200, 1400, 0, 150]),
+    osc("sine", 100, 1600, 277.2, 1, [200, 1400, 0, 150]),
+    osc("sine", 150, 1600, 329.6, 1, [200, 1400, 0, 150]),
+  ]),
+
   // 튜토리얼 사회자 웅얼 목소리(17-02, TUT-04, 결정 0078-4·0080-8): 글자마다 음절 하나. 음높이는 대본 항목의 cents 로만 옮긴다.
   // 삼각 75ms(205→192.7Hz) + 사인 2배음 50ms(412→389.5Hz), 이득비 0.15:0.035. ui 버스라 효과음 위로 덮이지 않는다. 음성·TTS·녹음 없음
   "voice.syl": recipe("voice.syl", "ui", 2, -16, [
@@ -619,6 +669,18 @@ export const SCREEN_COUNTERPART: Readonly<Record<SoundId, string>> = {
   "result.lose": "진 팀의 결과 화면",
   "award.plate": "시상 패가 등장하는 모습",
   "award.final": "마지막 큰 칭호 패가 등장하는 모습",
+  "tut.lampOff": "오프닝 램프 번짐 하나가 어두워질 때",
+  "tut.scream": "오프닝에서 한 사람이 사라지며 진홍빛이 번쩍일 때",
+  "tut.whoosh": "장면이 바뀌며 새 무대가 미끄러져 들어올 때",
+  "tut.sting": "사회자의 무거운 줄이 나올 때 화면이 어두워지는 모습",
+  "tut.step": "발자국 표시가 하나씩 찍힐 때",
+  "tut.eye": "눈 표시가 켜질 때",
+  "tut.link": "두 사람을 잇는 선이 그어질 때",
+  "tut.buzz": "오답 지목에 줄이 흔들릴 때",
+  "tut.stamp": "정답 지목 도장이 찍힐 때",
+  "tut.fanfare": "정체 카드가 뒤집혀 뜰 때",
+  "tut.flip": "직업 카드 한 장이 뒤집힐 때",
+  "tut.warm": "마지막 장면에 따뜻한 조명이 들어올 때",
   "voice.syl": "사회자 띠 파형 막대가 움직이는 동안 글자마다 한 음절",
 };
 

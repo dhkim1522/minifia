@@ -2157,7 +2157,7 @@ export function dressChecks({ float, panel, sheet, cards, close, selected, nameF
 /** 12페이즈가 새로 더한 시험 페이지 DOM 표식·훅 이름. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지). 이후 계획(소리 단계)이 같은 목록에 더한다. */
 export const SOUND_MARKERS = Object.freeze([
   "data-sound-lab", // 시험 페이지 루트(soundLab.ts)
-  "data-sound-id", // 소리 ▶ 단추 data-sound-id="{id}" (58개)
+  "data-sound-id", // 소리 ▶ 단추 data-sound-id="{id}" (70개)
   "__mfSound", // 테스트 훅 window.__mfSound = { state, on, bed, voices, log, clear }(12-05)
   "__mfSoundLab", // 시험 페이지 훅 window.__mfSoundLab = { done, results }
   "data-sound-button", // 방 화면 소리 단추(SoundButton.tsx, 12-07) — 방 화면에 정확히 하나
@@ -2168,7 +2168,7 @@ export const SOUND_MARKERS = Object.freeze([
  * 오프라인 렌더 합격 문턱 (D-18). 낮추지 않는다: 실패하면 레시피를 고친다(T-12-22).
  * count 는 SOUND_IDS.length, 나머지는 src/debug/soundLabData.ts 의 SOUND_LIMITS 와 같아야 하고 e2eContract 시험이 대조한다.
  */
-export const SOUND_RENDER_LIMITS = Object.freeze({ count: 58, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
+export const SOUND_RENDER_LIMITS = Object.freeze({ count: 70, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
 
 /**
  * sound-render: 시험 페이지 [전부 계산] 결과(window.__mfSoundLab.results)를 판정한다.

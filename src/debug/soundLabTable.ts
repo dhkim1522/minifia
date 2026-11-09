@@ -7,8 +7,8 @@ import type { SfxId, SoundId } from "../audio/recipes";
  * E2E 쪽 문턱(scripts/e2e/lib.mjs SOUND_RENDER_LIMITS)과 같아야 하고 e2eContract 시험이 대조한다.
  */
 export const SOUND_LIMITS = {
-  /** 소리 id 수: 침대 7 + 효과음 51 */
-  count: 58,
+  /** 소리 id 수: 침대 7 + 효과음 63 = 70 */
+  count: 70,
   peakMaxDb: -3,
   rmsMinDb: -60,
   /** 효과음 측정 길이와 선언 길이의 허용 차이(ms) */
@@ -21,7 +21,7 @@ export interface LabGroup {
   ids: readonly SfxId[];
 }
 
-/** 효과음 51개를 단계로 묶는다(UI-SPEC C-2 의 표 제목 순서). 합집합이 SFX_IDS 전부 — 시험이 확인한다 */
+/** 효과음 63개를 단계로 묶는다(UI-SPEC C-2 의 표 제목 순서). 합집합이 SFX_IDS 전부 — 시험이 확인한다 */
 export const LAB_GROUPS: readonly LabGroup[] = [
   { key: "common", title: "공통·로비·역할", ids: ["ui.tap", "ui.toggle", "ui.deny", "ui.card", "ui.host", "lobby.join", "game.start", "role.flip"] },
   {
@@ -33,7 +33,11 @@ export const LAB_GROUPS: readonly LabGroup[] = [
   { key: "night", title: "밤·아침", ids: ["night.fall", "night.cue", "kill.slash", "morning.dawn", "morning.calm", "chalk.draw", "morning.saved", "will.quill", "will.seal", "will.fold"] },
   { key: "emote", title: "동작", ids: ["emote.clap", "emote.praise", "emote.handshake", "emote.dance", "emote.surprise", "emote.cry", "emote.deny", "emote.point", "emote.throat"] },
   { key: "result", title: "결과·시상", ids: ["result.win", "result.lose", "award.plate", "award.final"] },
-  { key: "tutorial", title: "튜토리얼", ids: ["voice.syl"] },
+  {
+    key: "tutorial",
+    title: "튜토리얼",
+    ids: ["tut.lampOff", "tut.scream", "tut.whoosh", "tut.sting", "tut.step", "tut.eye", "tut.link", "tut.buzz", "tut.stamp", "tut.fanfare", "tut.flip", "tut.warm", "voice.syl"],
+  },
 ];
 
 /** 소리마다 한글 이름 한 줄(C-1·C-2 의 '언제' 앞 구절) */
@@ -95,5 +99,17 @@ export const SOUND_NAMES: Readonly<Record<SoundId, string>> = {
   "result.lose": "내 팀 패배",
   "award.plate": "시상 패",
   "award.final": "마지막 패",
+  "tut.lampOff": "오프닝 램프 꺼짐",
+  "tut.scream": "오프닝 비명",
+  "tut.whoosh": "장면 전환 바람",
+  "tut.sting": "무거운 줄 등장",
+  "tut.step": "발자국",
+  "tut.eye": "눈 표시",
+  "tut.link": "연결선",
+  "tut.buzz": "오답 버저",
+  "tut.stamp": "정답 도장",
+  "tut.fanfare": "정체 공개 팡파르",
+  "tut.flip": "카드 뒤집기",
+  "tut.warm": "따뜻한 조명",
   "voice.syl": "사회자 웅얼 음절",
 };
