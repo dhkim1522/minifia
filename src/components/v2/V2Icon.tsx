@@ -7,7 +7,7 @@ import "../../styles/v2.css";
 // v1.0 아이콘(src/components/Icon.tsx)과 이름이 겹쳐도(check·crown) 서로 다른 부품이다: v2 화면은 이 파일을 쓴다.
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
 // arrow(위쪽을 가리킴, 회전해 쓴다)·thread(끝이 풀린 사각 천)는 15페이즈가 더한 선 그림이다. 장소·조각 그림은 컬러 에셋 파일이 맡는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "arrow" | "thread" | "bot" | "hand" | "chevronRight";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "arrow" | "thread" | "bot" | "hand" | "chevronRight" | "mask" | "shield" | "lens";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -134,6 +134,21 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
   ],
   // 17페이즈(첫 사건): [다음] 단추의 오른쪽 꺾쇠(시안 Main.dc.html 의 M9 5l7 7-7 7)
   chevronRight: [["p", "M9 5l7 7-7 7"]],
+  // 17-08(첫 사건 직업 카드 배지): 승인 시안 design/v3.0/first-case/Roles.dc.html 의 icon 경로를 그대로 옮겼다 — 가면(마피아)·방패(의사)·돋보기(경찰)
+  "mask": [
+    ["p", "M3 9c3-2 6-2 9 0 3-2 6-2 9 0 0 5-3 8-6 8-1.5 0-2.3-1.5-3-3-.7 1.5-1.5 3-3 3-3 0-6-3-6-8z"],
+    ["p", "M8 10.5h1.5"],
+    ["p", "M14.5 10.5H16"],
+  ],
+  "shield": [
+    ["p", "M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"],
+    ["p", "M12 9v6"],
+    ["p", "M9 12h6"],
+  ],
+  "lens": [
+    ["p", "M10.5 4.5a6 6 0 110 12 6 6 0 010-12z"],
+    ["p", "M15 15l5.5 5.5"],
+  ],
   // 15페이즈(심부름): 임시 선 그림. 같은 이름의 경로만 나중에 바꾼다.
   arrow: [
     ["p", "M12 20V5"],

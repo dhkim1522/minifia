@@ -10,11 +10,12 @@ import { TutorialProgress } from "../components/v2/TutorialProgress";
 import { TutorialEyeMark, TutorialFormula, TutorialLinks } from "../components/v2/TutorialEvidence";
 import { RecordCard } from "../components/v2/RecordCard";
 import { TutorialReveal } from "../components/v2/TutorialReveal";
+import { TutorialRoleCards } from "../components/v2/TutorialRoleCards";
 import { WorldStage } from "../components/WorldStage";
 import { TUTORIAL_CAST, TUTORIAL_LINES, TUTORIAL_PICK, TUTORIAL_SCENES, WRONG_HINT_AFTER, makeTutorialSend, tutorialSnap, tutorialStageLook, tutorialStageView, tutorialSuspectStand, tutorialSuspectWalk, tutorialView } from "../game/tutorialScript";
 import type { TutorialFocusWindow, TutorialLineKey, TutorialSceneNo } from "../game/tutorialScript";
 import type { RecordRow } from "../game/recordView";
-import { faceSrc, seatColorVar } from "../net/assets";
+import { faceSrc, preloadRoleAssets, seatColorVar } from "../net/assets";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { ChatStore } from "../net/chatStore";
 import { useFixedRoomHeight } from "../net/useFixedRoomHeight";
@@ -73,7 +74,7 @@ interface SceneLayerCtx {
 const WITNESS_ROWS: readonly RecordRow[] = [{ n: 1, seat: TUTORIAL_CAST.witness.seat, place: TUTORIAL_CAST.witness.place, name: "도윤" }];
 const noopClose = (): void => {};
 
-/** 장면 번호로 갈리는 겹침 층: 1 = 오프닝 연출, 4 = 눈 표시 + 실제 목격 기록 카드, 5 = 연결 선 + 수식, 6 = 정체 공개(정답 뒤 1.1초). 17-08 이 7(직업 카드)을 더한다 */
+/** 장면 번호로 갈리는 겹침 층: 1 = 오프닝 연출(17-08), 4 = 눈 표시 + 실제 목격 기록 카드, 5 = 연결 선 + 수식, 6 = 정체 공개(정답 뒤 1.1초), 7 = 직업 카드 4장(17-08) */
 function renderSceneLayer(scene: TutorialSceneNo, ctx: SceneLayerCtx): ReactNode {
   if (scene === 1 && ctx.openingOn) return <MeasuredOpeningFx />;
   if (scene === 4 && ctx.witnessShown) {
@@ -96,6 +97,7 @@ function renderSceneLayer(scene: TutorialSceneNo, ctx: SceneLayerCtx): ReactNode
     );
   }
   if (scene === 6 && ctx.revealed) return <TutorialReveal name={CAST_NAME[TUTORIAL_CAST.suspect]} />;
+  if (scene === 7) return <TutorialRoleCards />;
   return null;
 }
 
@@ -220,6 +222,11 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
 
   const onEndRef = useRef(onEnd);
   onEndRef.current = onEnd;
+
+  // 직업 그림 네 장(장면 7)을 화면이 열릴 때 미리 받는다 — 혼자 하기에서도 마지막 장면 전에 그림이 와 있다(역할과 무관하게 모든 직업을 받는다)
+  useEffect(() => {
+    preloadRoleAssets();
+  }, []);
 
   // 장면 6 투표 상태: picked(정답을 눌렀다)·wrong(오답 수)·revealed(정체 공개 중). 장면 시작 시각(at)을 같이 들고 있어 장면이 바뀌면 저절로 깨끗해진다
   const [voteState, setVoteState] = useState<VoteState>(() => freshVote(boot));

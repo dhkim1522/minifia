@@ -292,6 +292,100 @@
 /* 장면 1 에서 서연이 사라진 뒤(2.6초) 그 이름표도 같이 사라진다 — 몸만 투명해지고 이름표가 빈자리에 떠 있지 않게 한다. 좌석 2 = 출연 상수의 서연(tutorialScript TUTORIAL_CAST.victim) */
 .mf-tut[data-tutorial-gone="2"] .mf-world__tag[data-seat="2"] { visibility: hidden; }
 
+/* ---- 직업 카드 4장(장면 7, TutorialRoleCards, 17-08, T-15) ----
+   2×2(좌우 20·간격 12), 카드 높이 최대 252·작은 폰 최소 168(글이 더 길면 늘어난다), 면 night-800·안쪽 이중 선·radius-lg. 사회자 띠 아래(top 128)에서 시작한다.
+   진홍은 마피아 카드(.tut-role--mafia)의 테두리·이름·배지와 가면 연기 키프레임뿐이다(T-18). 키프레임은 transform·opacity·filter 만 쓴다. */
+.tut-roles {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-overlay);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  padding: calc(var(--mf-host-top, 70px) + 58px) 20px 0;
+  background: var(--scrim);
+  pointer-events: none;
+}
+.tut-roles__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(clamp(168px, calc((var(--mf-room-h, 100dvh) - 240px) / 2), 252px), auto);
+  gap: 12px;
+}
+.tut-role { position: relative; box-sizing: border-box; min-width: 0; --tut-role-color: var(--brass-200); }
+.tut-role--doctor { --tut-role-color: var(--seat-3); }
+.tut-role--police { --tut-role-color: var(--seat-1); }
+.tut-role__face {
+  position: relative;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  background: var(--night-800);
+  border: 1px solid var(--night-600);
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 0 0 5px var(--night-800), inset 0 0 0 6px var(--night-600);
+}
+.tut-role--mafia .tut-role__face { border-color: var(--crimson-700); }
+/* 그림: 3:4 자리를 비워 두고 그림이 오면 불투명도만 바뀐다(레이아웃 이동 없음). 작은 화면은 72×96 */
+.tut-role__art { position: relative; flex: none; display: block; width: 96px; height: 128px; }
+.tut-role__art img { display: block; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity var(--dur-fast) ease-out; }
+.tut-role__art.is-loaded img { opacity: 1; }
+.tut-role__name { font-size: 24px; font-weight: 700; line-height: 1.2; color: var(--tut-role-color); }
+.tut-role--mafia .tut-role__name { color: var(--crimson-300); }
+.tut-role__line { font-size: 14px; font-weight: 400; line-height: 1.35; color: var(--gray-300); word-break: keep-all; }
+/* 배지: 오른쪽 아래 지름 40, 면 night-900, 테두리 2 이름 색. 안의 아이콘이 직업의 대표 움직임을 계속 돈다 */
+.tut-role__badge { position: absolute; right: 8px; bottom: 8px; box-sizing: border-box; width: 40px; height: 40px; display: grid; place-items: center; border: 2px solid var(--tut-role-color); border-radius: 50%; background: var(--night-900); color: var(--tut-role-color); }
+.tut-role--mafia .tut-role__badge { border-color: var(--crimson-300); color: var(--crimson-300); }
+.tut-role__ico.a-eye { animation: tut-role-blink 3s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+.tut-role__ico.a-mask { animation: tut-role-smoke 2.4s ease-in-out infinite; }
+.tut-role__ico.a-shield { animation: tut-role-shield 1.8s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+.tut-role__ico.a-lens { animation: tut-role-lens 2.6s ease-in-out infinite; }
+/* 뒤집기: 처음엔 뒷면 마름모(실제 역할 카드 뒷면 부품)가 덮고, 지연 뒤 .6초 동안 모서리가 보일 때까지 돌았다가(90°) 앞면이 돌아 나온다 */
+.tut-role__back { position: absolute; inset: 0; display: grid; place-items: center; background: var(--night-800); border: 1px solid var(--night-600); border-radius: var(--radius-lg); }
+.tut-role__back .mf-card__diamond { width: 40%; }
+.tut-role--mafia .tut-role__back { border-color: var(--crimson-700); }
+.tut-role.is-flip { animation: tut-role-flip .6s ease-out var(--tut-flip-delay, 0ms) both; }
+.tut-role.is-flip .tut-role__back { animation: tut-role-back .6s linear var(--tut-flip-delay, 0ms) both; }
+.tut-roles__foot { margin: 0; text-align: center; font-size: 16px; font-weight: 700; line-height: 1.5; color: var(--gray-50); animation: tut-fadeup .5s var(--ease-out) 1.6s both; }
+@media (max-height: 700px) {
+  .tut-role__art { width: 72px; height: 96px; }
+  .tut-role__face { padding: 8px 10px; }
+}
+@keyframes tut-role-flip {
+  0% { transform: perspective(700px) rotateY(0); }
+  50% { transform: perspective(700px) rotateY(90deg); }
+  50.01% { transform: perspective(700px) rotateY(-90deg); }
+  100% { transform: perspective(700px) rotateY(0); }
+}
+@keyframes tut-role-back {
+  0%, 49.99% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+@keyframes tut-role-blink {
+  0%, 44%, 52%, 100% { transform: scaleY(1); }
+  48% { transform: scaleY(.1); }
+}
+@keyframes tut-role-smoke {
+  0%, 100% { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--crimson-300) 40%, transparent)); }
+  50% { filter: drop-shadow(0 0 16px color-mix(in srgb, var(--crimson-300) 85%, transparent)); }
+}
+@keyframes tut-role-shield {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+@keyframes tut-role-lens {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(8px, -4px); }
+  50% { transform: translate(0, -8px); }
+  75% { transform: translate(-8px, -4px); }
+}
+
 /* 모션 줄이기: 깜빡임을 끄고 정지한 4px 테두리 + 번짐 중간값(테두리는 항상 보인다) */
 @media (prefers-reduced-motion: reduce) {
   .tut-focus, .tut-focus::before, .tut-next::before { animation: none; }
@@ -307,4 +401,6 @@
   /* 오프닝: 번쩍임·소리 링·램프 번짐은 그리지 않고(부품이 안 만듦), 제목은 바로 보이며 어둠은 .9 로 정지했다가 바로 걷힌다 */
   .tut-opening__lamp, .tut-opening__flash, .tut-opening__rings { display: none; }
   .tut-opening__title { animation: none; }
+  /* 직업 카드: 즉시 앞면(부품이 뒷면·is-flip 을 안 만듦), 배지·아래 줄은 움직이지 않는다 */
+  .tut-role.is-flip, .tut-role.is-flip .tut-role__back, .tut-role__ico, .tut-roles__foot { animation: none; }
 }

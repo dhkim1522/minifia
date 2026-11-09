@@ -382,7 +382,7 @@ describe("장면 7 직업 카드: 모션 줄이기", () => {
       const props = [...body!.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1]);
       for (const p of props) expect(["opacity", "transform", "filter"], `${name} 의 ${p}`).toContain(p);
     }
-    expect(text).toMatch(/\.tut-role--mafia\s*\{[^}]*--crimson-700/);
+    expect(text).toMatch(/\.tut-role--mafia\s+\.tut-role__face\s*\{[^}]*--crimson-700/);
     expect(text).toMatch(/\.tut-role--mafia\s+\.tut-role__name\s*\{[^}]*--crimson-300/);
   });
 });
