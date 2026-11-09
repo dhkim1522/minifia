@@ -4,19 +4,19 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 17
 current_phase_name: "튜토리얼 \"첫 사건\""
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 17-01-PLAN.md
-last_updated: "2026-11-09T03:15:33.898Z"
+stopped_at: Completed 17-02-PLAN.md
+last_updated: "2026-11-09T03:21:02.747Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 17 execution started
-state_head: db4db6559432209ee8794f2276459eb6c8a085a2
+state_head: e8ee10c72abc04675701c968ff2b98a934bcc4b4
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 47
-  completed_plans: 36
-  percent: 77
+  completed_plans: 37
+  percent: 79
 ---
 
 # Project State
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 17 (튜토리얼 "첫 사건") — EXECUTING
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 12
 Status: Ready to execute
 Last activity: 2026-11-09 — Phase 17 execution started
@@ -234,6 +234,7 @@ Last activity: 2026-11-09 — Phase 17 execution started
 | Phase 16 P09 | 95min | 3 tasks | 23 files |
 | Phase 16 P10 | 약 3h 20m | 4 tasks | 14 files |
 | Phase 17 P01 | 9 min | 1 tasks | 19 files |
+| Phase 17 P02 | 25 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -512,6 +513,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 16]: E2E errand 이름표 수 판정은 퇴장 연출(180ms)과 겹치는 시간 경쟁이라 settleTags 로 고치고 smoke 아침 흔적 길이는 MORNING_TRACE_MS 사본으로 묶는다
 - [Phase 17]: 17-01: start.tutorial 은 서버 기본 꺼짐, 역할은 beginGame 에서 그대로 배정하고 tutorial 단계는 revealsOwnRole:false 로 view 에 역할을 싣지 않는다(0080-1·2)
 - [Phase 17]: 17-01: 서버 전용 tutorialPassed 는 ON_ENTER.assigning=clearTutorial 로 지우고 전원 완료는 applyEndDiscussion 과 같은 tick 경로로 assigning 에 보낸다(0080-11)
+- [Phase 17]: 17-02: tut.fanfare 는 D·F·A·E 네 음 삼각파 한 레시피 4층(시안의 다섯 번째 음·옥타브 겹침 사인은 층 한계로 제외), voice.syl 은 205Hz 레시피 하나에 음높이는 대본 cents 로만
+- [Phase 17]: 17-02: tut.step 시작 레벨 −16 dB(짧은 잡음의 RMS 문턱 −60 을 넘기려 올림, 문턱은 그대로)
 
 ### Pending Todos
 
@@ -578,8 +581,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09T03:15:33.575Z
-Stopped at: Completed 17-01-PLAN.md
+Last session: 2026-11-09T03:21:02.443Z
+Stopped at: Completed 17-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
