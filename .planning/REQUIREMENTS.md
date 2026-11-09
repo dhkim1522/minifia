@@ -61,10 +61,19 @@
 - [x] **EVID-02**: 피해자를 마지막으로 근처에서 본 사람(+장소)이 모두에게 공개된다
 - [x] **EVID-03**: 사회자 문구가 근거(같은 옷·엇갈린 목격)를 가리킨다
 
+### 튜토리얼 "첫 사건" (TUT) — 17페이즈, 결정 0078
+
+- [ ] **TUT-01**: 첫 화면(방 코드 없는 화면)의 큰 카드 "튜토리얼 진행"으로 혼자 첫 사건을 시작하고, 끝나거나 [건너뛰기]하면 첫 화면으로 돌아온다. 한 번 본 사람에게는 작은 단추로 줄어든다
+- [ ] **TUT-02**: 방장이 대기실에서 "튜토리얼 후 진행"을 켜고(첫 판 켜짐·다시 하기 꺼짐) 시작하면 모두 튜토리얼을 마친 뒤(또는 150초가 지나면) 역할 배정으로 넘어가고, 끄면 바로 시작한다
+- [ ] **TUT-03**: 첫 사건이 오프닝 → 심부름·목격 → 아침 흔적↔같은 옷↔목격 → 이름표 투표·정답 → 직업 카드 4종 순으로 이어지고, 직접 누르는 곳마다 대상에 램프 빛 4px 깜빡임 테두리가 있으며 사회자는 파형+자막 띠로 말한다(배경 흐림·포인터 없음)
+- [ ] **TUT-04**: 사회자 웅얼 목소리와 새 효과음이 Web Audio 합성으로만 나고(외부 파일 0), 소리 설정·소리 단추와 모션 줄이기를 따른다
+- [ ] **TUT-05**: 튜토리얼은 서버 게임 상태·역할 값을 읽지도 바꾸지도 않는다. 혼자 하기는 네트워크 요청 0건, 함께 진행은 끝났음 메시지 한 가지만 보낸다
+
 ### 배포 (DEPLOY)
 
 - [x] **DEPLOY-03**: v3.0 이 `v3` 브랜치에서 Worker `minifia-v3`(https://minifia-v3.dhplay.workers.dev)로 배포되고 v1.0·v2.0 주소는 그대로 남는다. 누설 검사가 새 메시지·단계로 넓어진 채 통과한다
 - [x] **DEPLOY-04**: 16페이즈가 누설 검사를 새 view 필드(day.evidence 등)·서버 전용 값(errandFake·errandLast)까지 넓힌 채 `minifia-v3` 에 배포된다(DEPLOY-03 과 같은 방식)
+- [ ] **DEPLOY-05**: 17페이즈가 누설 검사를 새 view 필드(view.tutorial·me.tutorialDone)·새 단계·새 메시지·서버 전용 이름(tutorialPassed)까지 넓힌 채 minifia-v3 에 배포된다(DEPLOY-04 와 같은 방식)
 
 ## Future Requirements
 
@@ -120,12 +129,18 @@
 | EVID-02 | Phase 16 | Complete |
 | EVID-03 | Phase 16 | Complete |
 | DEPLOY-04 | Phase 16 | Complete |
+| TUT-01 | Phase 17 | Pending |
+| TUT-02 | Phase 17 | Pending |
+| TUT-03 | Phase 17 | Pending |
+| TUT-04 | Phase 17 | Pending |
+| TUT-05 | Phase 17 | Pending |
+| DEPLOY-05 | Phase 17 | Pending |
 
 **Coverage:**
-- v3.0 requirements: 33 total
-- Mapped to phases: 33
+- v3.0 requirements: 39 total
+- Mapped to phases: 39
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-11-07*
-*Last updated: 2026-11-08 — 16페이즈 요구사항 11개 추가(결정 0077·0078, 16-RESEARCH 제안 ID)*
+*Last updated: 2026-11-09 — 17페이즈 요구사항 6개 추가(결정 0078, 17-RESEARCH 제안 ID)*

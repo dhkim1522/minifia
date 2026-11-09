@@ -215,7 +215,7 @@ Plans:
 ### Phase 17: 튜토리얼 "첫 사건"
 
 **Goal:** 처음 온 사람이 60~90초 미니 에피소드로 이 게임의 목적·재미·한 판 흐름·직업별 할 일을 겪어 알고, 흥미를 느껴 첫 판으로 이어진다(결정 0078).
-**Requirements**: TBD
+**Requirements**: TUT-01, TUT-02, TUT-03, TUT-04, TUT-05, DEPLOY-05
 **Depends on:** Phase 16
 **Plans:** 3/12 plans executed (6 waves)
 
