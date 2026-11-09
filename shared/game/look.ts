@@ -14,7 +14,7 @@ export const LOOK_MIN_GAP_MS = 250;
 
 /**
  * 의상 고르기. 검사 순서가 계약이다: 단계(lobby·ended 가 아니면 WRONG_PHASE) → 행위자(방에 있음, 아니면 BAD_MESSAGE)
- * → 값(OUTFIT_IDS 안, 아니면 BAD_MESSAGE) → 같은 값(저장값 ?? 기본 coat 와 같으면 입력 상태 그대로 ok) → 그 사람의 look 만 바뀐 새 상태.
+ * → 값(OUTFIT_IDS 안, 아니면 BAD_MESSAGE) → 같은 값(저장값 ?? 기본 coat 와 같으면 입력 상태 그대로 ok) → 잠금(다른 사람이 직접 고른 옷, D-02 — 거절은 이유 없이 state 한 프레임, L30) → 그 사람의 look 만 바뀐 새 상태.
  */
 export function setLook(
   state: RoomState,
@@ -26,6 +26,7 @@ export function setLook(
   if (!actor) return { ok: false, error: "BAD_MESSAGE" };
   if (!(OUTFIT_IDS as readonly string[]).includes(look)) return { ok: false, error: "BAD_MESSAGE" };
   if ((actor.look ?? DEFAULT_LOOK) === look) return { ok: true, state };
+  if (lockedOutfits(state.players.filter((p) => p.id !== actorId)).has(look)) return { ok: false, error: "BAD_MESSAGE" }; // 남이 직접 고른 옷 — 거절 이유는 드러내지 않는다(D-02, L30)
   return { ok: true, state: { ...state, players: state.players.map((p) => (p.id === actorId ? { ...p, look } : p)) } };
 }
 
@@ -58,7 +59,10 @@ export function resolveLookConflicts<P extends { seat: number; look?: OutfitId }
   });
 }
 
-/** 다른 사람이 직접 고른 옷의 집합(자리 함수 — RED). 구현 전에는 빈 집합이다. */
-export function lockedOutfits(_others: ReadonlyArray<{ look?: OutfitId }>): ReadonlySet<OutfitId> {
-  return new Set<OutfitId>();
+/**
+ * 다른 사람이 직접 고른 옷(look 키가 있는 옷)의 집합 — 옷장 잠금(결정 0081-1·D-02). 호출 쪽이 "나"를 뺀 목록을 넘긴다.
+ * look 키가 없는 사람의 기본 coat 는 넣지 않는다(고르면 저장되고, 겹침은 시작 때 resolveLookConflicts 가 푼다).
+ */
+export function lockedOutfits(others: ReadonlyArray<{ look?: OutfitId }>): ReadonlySet<OutfitId> {
+  return new Set(others.flatMap((p) => (p.look === undefined ? [] : [p.look])));
 }
