@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 18
 current_phase_name: "바로 고칠 것: 증거·조명·튜토리얼 손보기"
-current_plan: 12
+current_plan: 2
 status: executing
-stopped_at: Phase 18 context gathered
-last_updated: "2026-11-09T14:52:41.054Z"
-last_activity: 2026-11-09
-last_activity_desc: Phase 17 execution started
-state_head: b686b3f8a653598ba8e460cce31889ccb8f251d8
+stopped_at: Completed 18-01-PLAN.md
+last_updated: "2026-11-09T23:57:44.825Z"
+last_activity: 2026-11-10
+last_activity_desc: Phase 18 execution started
+state_head: bf2c7bd1ddb06c42838756f8f8a47939be371b5a
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 58
-  completed_plans: 47
+  completed_plans: 48
   percent: 44
 ---
 
@@ -26,15 +26,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-07)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(평균 10~15분, 참고 목표)을 끝까지 마치는 것
-**Current focus:** Phase 17 — 튜토리얼 "첫 사건"
+**Current focus:** Phase 18 — 바로 고칠 것: 증거·조명·튜토리얼 손보기
 
 ## Current Position
 
-Phase: 18 (바로 고칠 것: 증거·조명·튜토리얼 손보기) — READY TO EXECUTE
-Current Plan: 12
+Phase: 18 (바로 고칠 것: 증거·조명·튜토리얼 손보기) — EXECUTING
+Current Plan: 2
 Total Plans in Phase: 11
 Status: Ready to execute
-Last activity: 2026-11-09 — Phase 17 execution started
+Last activity: 2026-11-10 — Phase 18 execution started
 
 ## Performance Metrics
 
@@ -245,6 +245,7 @@ Last activity: 2026-11-09 — Phase 17 execution started
 | Phase 17 P08 | 25 min | 2 tasks | 7 files |
 | Phase 17 P09 | 35 min | 3 tasks | 6 files |
 | Phase 17 P10 | 71min | 4 tasks | 14 files |
+| Phase 18 P01 | 25min | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -545,6 +546,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 17]: 17-09: 장면 6 이름표 가장자리 한계는 E8 #29 참고 줄(G2k·G2s)로 남기고 문턱·앱 코드는 그대로(deferred-items.md)
 - [Phase 17]: 17-09: OVERALL_LIMIT_MS 1620→1740초(tutorial 두 흐름 218초 ÷ 병렬 3 ≈ 73초, 60초 단위 올림)
 - [Phase 17]: 17-10: 방장 패널 +76 이 드러낸 낮은 폰 한계는 알려진 한계로 두고 맵 불러오기 실패 카드의 [다시 시도] 가림만 --mf-panel-h 여백으로 고쳤다. minifia-v3 배포 2026-11-09T06:26:08Z+4858e54f, 결정 0080 완성
+- [Phase 18]: 옷장 잠금 거절은 BAD_MESSAGE 한 가지 — DO 의 기존 !result.ok 분기가 보낸 소켓에 state 한 프레임만 보내 250ms 간격 위반과 구분되지 않는다(L30)
+- [Phase 18]: 시작 때 겹친 옷 해소는 2패스(직접 고름 먼저·좌석 오름차순, 진 사람은 OUTFIT_IDS 첫 빈 옷), 바뀐 옷은 look 으로 저장되고 players[].look 은 역할 단어 누설 스캔에서 제외(역할과 무관한 공개 의상)
 
 ### Pending Todos
 
@@ -615,9 +618,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09T13:58:09.524Z
-Stopped at: Phase 18 context gathered
-Resume file: .planning/phases/18-quick-fixes/18-CONTEXT.md
+Last session: 2026-11-09T23:57:44.189Z
+Stopped at: Completed 18-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
