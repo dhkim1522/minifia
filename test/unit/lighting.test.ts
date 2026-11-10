@@ -49,8 +49,7 @@ const NIGHT_ROWS: Readonly<Record<string, Readonly<Record<string, Omit<PhaseTune
   },
 };
 
-// 이 태스크는 talk 만 본다. morning·vote 는 다음 태스크가 넓힌다.
-const DAY_ROWS: readonly LightingPhase[] = ["talk"];
+const DAY_ROWS: readonly LightingPhase[] = ["talk", "morning", "vote"];
 
 describe.each(MAPS)("조명 표 허용 범위 — $name (D-03)", ({ name, tune, ratio }) => {
   it("낮 행의 하늘색 sky[0] 채도 (max−min)/max 가 0.20 이하다 (허용 범위 1)", () => {
@@ -73,8 +72,17 @@ describe.each(MAPS)("조명 표 허용 범위 — $name (D-03)", ({ name, tune, 
     }
   });
 
-  it("광장 낮(talk)은 새 값 #eadfd0 방향광을 쓴다", () => {
+  it("방향광 색: talk·morning 은 낮 햇빛색, vote 는 해질녘 색", () => {
     expect(tune.talk.moonColor).toBe("#eadfd0");
+    expect(tune.morning.moonColor).toBe("#e0dad8");
+    expect(tune.vote.moonColor).toBe("#d8b48a");
+  });
+
+  it("순서 감각(표 값만): hemi 는 talk ≥ morning ≥ vote, 배경 sky[2] 휘도는 talk > morning > vote", () => {
+    expect(tune.talk.hemi).toBeGreaterThanOrEqual(tune.morning.hemi);
+    expect(tune.morning.hemi).toBeGreaterThanOrEqual(tune.vote.hemi);
+    expect(lum(tune.talk.sky[2])).toBeGreaterThan(lum(tune.morning.sky[2]));
+    expect(lum(tune.morning.sky[2])).toBeGreaterThan(lum(tune.vote.sky[2]));
   });
 
   it("trial·night·nightCitizen·nightGhost 네 행은 moonColor 만 달빛색이고 나머지는 4a5dabea 와 같다", () => {
