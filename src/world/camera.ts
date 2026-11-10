@@ -8,7 +8,7 @@
 
 import { ringSlots } from "../../shared/game/gather";
 import { HEAD_TOP_Y, STAGE_SPOT, UNIT } from "../../shared/game/map";
-import { lobbyPanelHeight, LOG_H_SHORT, TYPING_PILL_H } from "../game/chatUi";
+import { lobbyPanelHeight, LOG_H, TYPING_PILL_H } from "../game/chatUi";
 
 export interface V3 {
   x: number;
@@ -38,8 +38,8 @@ export const FOLLOW_TAU_MS = 350 / Math.LN10;
 export const RESIZE_SETTLE_MS = 180;
 /** 스테이지 사각형 위 끝 = 헤더 블록 아래 끝(px) */
 export const HEADER_BOTTOM = 62;
-/** DOM 을 재기 전의 기본 아래 패널 높이(px, 안전 영역 제외) = 7페이즈 로비 패널 LOG_H + 154 (짧은 폰 LOG_H 96 → 250). 로비는 패널을 DOM 에서 재서 넘기므로 이 값은 측정 전·측정 불가 환경에서만 쓴다 */
-export const PANEL_HEIGHT = lobbyPanelHeight(LOG_H_SHORT);
+/** DOM 을 재기 전의 기본 아래 패널 높이(px, 안전 영역 제외) = 7페이즈 로비 패널 LOG_H + 154 (LOG_H 68 → 222). 로비는 패널을 DOM 에서 재서 넘기므로 이 값은 측정 전·측정 불가 환경에서만 쓴다 */
+export const PANEL_HEIGHT = lobbyPanelHeight(LOG_H);
 /** 이름표 상자 최대 폭(가정 A1: 전각 8자 + " (나)" + 점·여백). 06-12 E2E 가 실제 폭을 재서 넘으면 고친다 */
 export const NAMETAG_MAX_W = 180;
 /** 이름표 상자 높이(px) */
@@ -51,20 +51,20 @@ export const HEAD_STACK_H = NAMETAG_H + TYPING_PILL_H;
 /**
  * 카메라 목표 이동 한계(월드 단위, 축별 대칭 상자) = 가시성 검사(걷는 영역 0.25 간격 전 격자점 × 6개 폰 크기에서
  * 발과 이름표 180×24 + 입력 중 칸 22 = 머리 위 쌓임 HEAD_STACK_H 가 7페이즈 로비 스테이지 사각형 안, A1: 늘 입력 중 칸이 있다고 보는 최악)을
- * 통과하는 가장 좁은 0.1 단위 값이다. 7페이즈(07-18)에서 스테이지가 채팅 패널(LOG_H + 154)만큼 줄고 이름표 위로 22가 늘어 6페이즈 값 ±4.8 을 ±5.7 로 다시 정했다
- * (6페이즈 시작값 ±4.0 은 폭 360 폰에서 모서리 (5.8, −5.8) 의 이름표가 오른쪽으로 58px 넘쳤고, ±4.8 은 새 스테이지에서 360x640 이 1.5px · 360x560 이 41.5px 넘쳤다).
- * 크기별 최소 pan: 360x640 4.9 · 360x560 5.7 · 390x664 4.6 · 390x844 4.6 · 402x874 4.5 · 430x932 4.3.
- * 한계를 정한 것은 스테이지 높이가 가장 낮은 360x560(로비 스테이지 248 — 모서리 점의 이름표·입력 중 칸이 위로 넘침)이다. 5.7 은 걷는 영역 반폭 5.8 안쪽이다.
+ * 통과하는 가장 좁은 0.1 단위 값이다. 7페이즈(07-18)에서 스테이지가 채팅 패널(LOG_H + 154)만큼 줄고 이름표 위로 22가 늘어 6페이즈 값 ±4.8 을 ±5.7 로 다시 정했다.
+ * 18.1-06 에서 기록 칸이 68 한 값이 되어 로비 패널이 222 로 줄고 스테이지가 커져 ±5.4 로 다시 정했다.
+ * 크기별 최소 pan: 360x640 4.8 · 360x560 5.4 · 390x664 4.6 · 390x844 4.6 · 402x874 4.5 · 430x932 4.3.
+ * 한계를 정한 것은 스테이지 높이가 가장 낮은 360x560(로비 스테이지 276 — 모서리 점의 이름표·입력 중 칸이 위로 넘침)이다. 5.4 는 걷는 영역 반폭 5.8 안쪽이다.
  * 스테이지 < 128 인 키보드 열림 상태는 이 검사 대상이 아니다(UI-SPEC 알려진 한계, A2).
  */
-export const PAN_BOX: Readonly<{ minX: number; maxX: number; minZ: number; maxZ: number }> = { minX: -5.7, maxX: 5.7, minZ: -5.7, maxZ: 5.7 };
+export const PAN_BOX: Readonly<{ minX: number; maxX: number; minZ: number; maxZ: number }> = { minX: -5.4, maxX: 5.4, minZ: -5.4, maxZ: 5.4 };
 /**
- * 연장 바닥 판 반폭(월드 단위, 바닥 아래 y = −0.01 의 정사각형 한 장) = 빈 배경 검사(PAN_BOX 의 9개 목표 × 7페이즈 로비 스테이지
- * 사각형 7×7 표본 광선)가 통과하는 가장 작은 0.5 단위 값 15.0 + 여유 2. 가장 먼 점은 430x932 에서 목표 (−5.7, −5.7) 일 때
- * 스테이지 왼쪽 위 모서리 표본이 닿는 바닥 (−14.89, −9.67) 이다. 크기별 가장 먼 바닥: 360x640 12.0 · 360x560 11.1 · 390x664 12.4 · 390x844 13.7 · 402x874 14.1 · 430x932 14.9.
+ * 연장 바닥 판 반폭(월드 단위, 바닥 아래 y = −0.01 의 정사각형 한 장) = 빈 배경 검사(PAN_BOX 의 9개 목표 × 로비 스테이지
+ * 사각형 7×7 표본 광선)가 통과하는 가장 작은 0.5 단위 값 15.5 + 여유 2. 스테이지가 커지면(18.1-06 패널 222) 위쪽 광선이 더 먼 바닥에 닿아 17 에서 17.5 로 다시 정했다.
+ * 크기별 가장 먼 바닥: 360x640 12.0 · 360x560 11.1 · 390x664 12.4 · 390x844 14.3 · 402x874 14.7 · 430x932 15.5.
  * 스테이지 위(헤더 가림막 뒤)까지는 여유 2 가 덮는다.
  */
-export const PLATE_FAR = 17;
+export const PLATE_FAR = 17.5;
 
 /** 모이는 자리 가운데(월드 단위) = 무대 자리. 지목·변론·찬반·처형 단계의 카메라 고정 목표다(08-08, UI-SPEC 카메라 표) */
 export const GATHER_CENTER: Readonly<{ x: number; z: number }> = { x: STAGE_SPOT.x / UNIT, z: STAGE_SPOT.z / UNIT };

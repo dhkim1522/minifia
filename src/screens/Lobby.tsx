@@ -23,7 +23,7 @@ import type { ChatStore } from "../net/chatStore";
 import { CHAT_TEXT } from "../game/chatText";
 import { DRESS_TEXT } from "../game/dressText";
 import { callTargetsOf } from "../game/hostLine";
-import { LOG_H_KB } from "../game/chatUi";
+import { LOG_H } from "../game/chatUi";
 import { diffRoomViews, toastForDiff } from "../net/roomDiff";
 import { useChat } from "../net/useChat";
 import { useDress } from "../net/useDress";
@@ -111,8 +111,8 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   );
 
   // 키보드(07-19, CHAT-05)·스테이지 사각형 측정(06-15)·기록 칸 높이는 게임 맵(GameMap)과 같은 훅 하나가 맡는다(08-13).
-  // 키보드가 열려 있으면(kbOpen) 행동 줄을 숨기고 기록 칸을 72 로 줄이며 패널이 키보드 위로 올라간다. 아래 패널의 채팅 기록 칸 높이 logH 는 방 높이로 한 번 정한다.
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, sideMaxH, stageInsets } = useMapInsets();
+  // 키보드가 열려 있으면(kbOpen) 행동 줄을 숨기고 패널이 키보드 위로 올라간다. 기록 칸은 LOG_H(68) 한 값.
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen, sideMaxH, stageInsets } = useMapInsets();
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
   const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view, motion });
 
@@ -210,7 +210,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       <TopToast {...toast.props} />
       {testButton ? <div className="mf-lobby__test">{testButton}</div> : null}
       <section ref={panelRef} className={kbOpen ? "mf-lobby__panel mf-lobby__panel--kb" : "mf-lobby__panel"} data-world-panel="">
-        <ChatPanel {...binding} logHeight={kbOpen ? LOG_H_KB : logH} compact={kbOpen} inputRef={inputRef} />
+        <ChatPanel {...binding} logHeight={LOG_H} compact={kbOpen} inputRef={inputRef} />
         {kbOpen || !isHost ? null : <TutorialToggle on={tutorialOn} disabled={!canSend || locked} onToggle={() => setTutorialOn((v) => !v)} />}
         {kbOpen ? null : (
           <ActionRow>
