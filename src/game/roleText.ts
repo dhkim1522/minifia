@@ -2,12 +2,11 @@
 import type { RoleId } from "../../shared/game/roles";
 import type { RoomView } from "../../shared/protocol";
 
-// goal 은 Task 2 에서 지운다(e2eContract 가 아직 읽는다). 화면은 desc 만 그린다.
-export const ROLE_TEXT: Readonly<Record<RoleId, { name: string; desc: string; goal: string }>> = {
-  mafia: { name: "마피아", desc: "당신은 마피아입니다.\n몰래 암살하여 승리하세요.", goal: "밤마다 한 명을 없애 시민 편과 수가 같아지면 승리합니다." },
-  police: { name: "경찰", desc: "당신은 경찰입니다.\n의심되는 사람을 조사하세요.", goal: "밤마다 한 명을 조사해 마피아를 찾아내세요." },
-  doctor: { name: "의사", desc: "당신은 의사입니다.\n시민 팀을 마피아에게서 지키세요.", goal: "밤마다 한 명을 지켜 마피아의 암살을 막으세요." },
-  citizen: { name: "시민", desc: "당신은 시민입니다.\n추리로 마피아를 찾아내세요.", goal: "대화와 투표로 마피아를 모두 처형하면 승리합니다." },
+export const ROLE_TEXT: Readonly<Record<RoleId, { name: string; desc: string }>> = {
+  mafia: { name: "마피아", desc: "당신은 마피아입니다.\n몰래 암살하여 승리하세요." },
+  police: { name: "경찰", desc: "당신은 경찰입니다.\n의심되는 사람을 조사하세요." },
+  doctor: { name: "의사", desc: "당신은 의사입니다.\n시민 팀을 마피아에게서 지키세요." },
+  citizen: { name: "시민", desc: "당신은 시민입니다.\n추리로 마피아를 찾아내세요." },
 };
 
 /** 마피아 동료 줄. 동료가 없으면 "혼자예요". */

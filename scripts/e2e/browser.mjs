@@ -1876,10 +1876,10 @@ export function readCallCount(page) {
   return page.evaluate(() => document.querySelectorAll("[data-call]").length);
 }
 
-/** 띠 문장·역할 목표·빛남 영역 글자(누설 판정용). 열린 시트 안의 목표 칩도 포함한다. */
+/** 띠 문장·역할 문구·빛남 영역 글자(누설 판정용). 열린 시트 안의 역할 문구도 포함한다. */
 export function readRoomText(page) {
   return page.evaluate(() => {
-    const parts = [...document.querySelectorAll("[data-host-line], [data-role-goal], [data-call]")];
+    const parts = [...document.querySelectorAll("[data-host-line], [data-role-line], [data-call]")];
     return parts.map((el) => (el.textContent ?? "").replace(/\s+/g, " ").trim()).join(" | ");
   });
 }
@@ -2535,7 +2535,7 @@ export async function readTutorial(page) {
           roleBtn: qa(".mf-rolecard-btn", scope).length,
           chatInputs: qa('textarea, input[type="text"], input:not([type])', scope).length,
         },
-        roleLines: qa("[data-tutorial-role-card] .tut-role__line", scope).map((el) => (el.textContent ?? "").replace(/\s+/g, " ").trim()),
+        roleLines: qa("[data-tutorial-role-card] .tut-role__line", scope).map((el) => (el.textContent ?? "").trim()),
         focus: root ? qa("[data-tutorial-focus]", root).map((el) => ({ key: el.getAttribute("data-tutorial-focus"), rect: toRect(el.getBoundingClientRect()) })) : [],
         targets,
         band,

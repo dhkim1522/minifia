@@ -2865,14 +2865,14 @@ export function soundResultSkipChecks(input) {
 //   TL1·TL2 toolLabelChecks(list, { labelAttrs, labelEls })   list = [{ name, text, hasIcon }] — 보이는 button·[role=tab] 하나씩(접근성 이름·보이는 글자),
 //       labelAttrs = 이름표 속성(data-tool-label) 요소 수, labelEls = 아이콘 아래 라벨 요소 수(16페이즈 TOOL-04: 둘 다 0, 이름 없는 단추도 0)
 //   HL1~HL4 hostLeakChecks(list)   list = [{ role, ownRole, phase, domText, callCount, line, idle }] — role = 시점(mafia·police·doctor·citizen·ghost), ownRole = 유령의 살았을 때 직업,
-//       domText = 띠·목표·빛남 영역 글자, callCount = `[data-call]` 수, line = 띠 문장, idle = 그 단계에서 할 일이 없는 시점인가
+//       domText = 띠·역할 문구·빛남 영역 글자, callCount = `[data-call]` 수, line = 띠 문장, idle = 그 단계에서 할 일이 없는 시점인가
 //   VK1 viewKeyChecks({ top, me, day })   받은 state 프레임의 최상위·me·day 키 이름 집합(값 없음)
 //   HS1~HS4 hostChimeChecks(segs)   segs = [{ kind: transition|first|reload|dayToDiscussion|muted, name, count, played }] — count = 구간의 ui.host 요청 수, played = 실제 재생된 수
 
 /** 자막 띠 문장의 줄 수 상한(미만): 한 문장·3줄 미만(UI-SPEC 사회자 문구 표 — 2줄까지). */
 export const HOST_LINE_MAX = 3;
 /** E2E 가 읽는 14페이즈 표식(src 에 있어야 한다 — e2eContract 가 확인). */
-export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time", "data-call", "data-role-goal", "data-guide"];
+export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time", "data-call", "data-role-line", "data-guide"];
 /**
  * 서버 view 허용 키(13페이즈 그대로, 서버 diff 0). test/unit/view.test.ts 의 TOP_KEYS·ME_KEYS·DAY_KEYS 에 더해, 그 시험의 풍부한 상태가 만들지 않는 9페이즈 상태 의존 키만 더했다:
  * me.will·me.note(유언·쪽지, 결정 0061-9·10)·day.chalk(암살 분필, 결정 0061-14). 실제 판의 state 프레임에는 이 키들이 나온다(emcee-leak 이 처음 걸렸다) — e2eContract 가 "view.test.ts 집합 + 이 셋" 임과
@@ -2888,12 +2888,12 @@ export const HOST_ACT_LINES = {
   police: "밤이 되었습니다. 조사할 사람의 얼굴을 눌러 주세요.",
   doctor: "밤이 되었습니다. 지킬 사람의 얼굴을 눌러 주세요.",
 };
-/** 역할 목표 문장(src/game/roleText.ts ROLE_TEXT[role].goal 사본). */
-export const GOALS = {
-  mafia: "밤마다 한 명을 없애 시민 편과 수가 같아지면 승리합니다.",
-  police: "밤마다 한 명을 조사해 마피아를 찾아내세요.",
-  doctor: "밤마다 한 명을 지켜 마피아의 암살을 막으세요.",
-  citizen: "대화와 투표로 마피아를 모두 처형하면 승리합니다.",
+/** 역할 카드 문구 한 덩어리 사본 — src/game/roleText.ts ROLE_TEXT[role].desc, 줄바꿈 \n 포함. e2eContract 가 같음을 고정한다. */
+export const ROLE_LINES = {
+  mafia: "당신은 마피아입니다.\n몰래 암살하여 승리하세요.",
+  police: "당신은 경찰입니다.\n의심되는 사람을 조사하세요.",
+  doctor: "당신은 의사입니다.\n시민 팀을 마피아에게서 지키세요.",
+  citizen: "당신은 시민입니다.\n추리로 마피아를 찾아내세요.",
 };
 const isStr = (x) => typeof x === "string";
 
@@ -2980,12 +2980,12 @@ function toolLabelCountCheck(counts, label) {
 
 /**
  * HL1~HL4 누설(HOST-05 ①③④). list = [{ role, ownRole, phase, domText, callCount, line, idle }] — 위 14페이즈 계약.
- * HL1 시점 X 의 띠·목표·빛남 글자에 다른 역할의 act 줄·목표가 없다(유령은 살았을 때 직업의 목표만 허용, act 줄은 어느 것도 없음). HL2 같은 단계 idle 시점끼리 띠 문장이 같다.
+ * HL1 시점 X 의 띠·역할 문구·빛남 글자에 다른 역할의 act 줄·역할 문구가 없다(유령은 살았을 때 직업의 문구만 허용, act 줄은 어느 것도 없음). HL2 같은 단계 idle 시점끼리 띠 문장이 같다.
  * HL3 유령 띠 문장에 마피아·경찰·의사·시민 낱말이 없다. HL4 산 사람의 밤 화면 data-call 수가 역할과 무관하게 같다(15-08: 네 역할 모두 산 사람 칸이 빛난다 — 마피아도 0이 아니다).
  */
 export function hostLeakChecks(list) {
   const L = {
-    HL1: "다른 역할 전용 줄·목표가 화면에 없음",
+    HL1: "다른 역할 전용 줄·역할 문구가 화면에 없음",
     HL2: "할 일 없는 시점끼리 같은 단계의 띠 문장이 같음",
     HL3: "유령 띠 문장에 역할 이름 없음",
     HL4: "산 사람의 밤 화면 data-call 수가 역할과 무관하게 같음",
@@ -3001,7 +3001,8 @@ export function hostLeakChecks(list) {
       const isOwnLiveLine = it.role !== "ghost" && r === own;
       if (!isOwnLiveLine && it.domText.includes(HOST_ACT_LINES[r])) bad1.push(`${it.role}@${it.phase} 화면에 ${r} 밤 줄`);
     }
-    for (const r of Object.keys(GOALS)) if (r !== own && it.domText.includes(GOALS[r])) bad1.push(`${it.role}@${it.phase} 화면에 ${r} 목표`);
+    // readRoomText 가 공백을 한 칸으로 줄여 읽으므로 사본도 같은 정규화(줄바꿈 → 공백)로 비교한다
+    for (const r of Object.keys(ROLE_LINES)) if (r !== own && it.domText.includes(ROLE_LINES[r].replace(/\s+/g, " "))) bad1.push(`${it.role}@${it.phase} 화면에 ${r} 역할 문구`);
   }
   const bad2 = [];
   const idleByPhase = new Map();
@@ -3845,7 +3846,12 @@ export function tutorialLineChecks(ev, { viewport, band, next } = {}) {
  * 장면 7 직업 카드 한 줄 글 사본(18-08): 시민·마피아·의사·경찰 순서. src/game/roleText.ts ROLE_TEXT 의 desc 와 같아야 한다 —
  * test/unit/e2eContract.test.ts 가 대조한다(.mjs 가 TS 를 직접 import 하지 않는다).
  */
-export const TUTORIAL_ROLE_LINES_E2E = Object.freeze(["대화와 투표로 마피아를 찾아요", "밤에 함께 한 명을 지목해요", "밤에 한 명을 살려요", "밤마다 한 명을 조사해요"]);
+export const TUTORIAL_ROLE_LINES_E2E = Object.freeze([
+  "당신은 시민입니다.\n추리로 마피아를 찾아내세요.",
+  "당신은 마피아입니다.\n몰래 암살하여 승리하세요.",
+  "당신은 의사입니다.\n시민 팀을 마피아에게서 지키세요.",
+  "당신은 경찰입니다.\n의심되는 사람을 조사하세요.",
+]);
 
 /** [다음] 알약의 기준 폭(px, 앱 .tut-next width: min(240px, 100% − 48px)) 과 높이 */
 const TUTORIAL_NEXT_W = 240;

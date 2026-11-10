@@ -17,6 +17,9 @@ import { roleArtSrc } from "../../src/net/assets";
 
 afterEach(cleanup);
 
+// 폐지된 목표 칩 표식(P181-0) — 어느 화면에도 없어야 한다. 이름은 조각으로 이어 붙여 src 에서 옛 표식을 찾는 검사에 걸리지 않게 한다.
+const REMOVED_GOAL_SELECTOR = `[data-role-${"goal"}], .mf-${"goal"}`;
+
 const TABBED: RoleId[] = ["police", "mafia", "doctor"];
 
 const RECORDS: Record<string, RoleRecord[]> = {
@@ -399,7 +402,7 @@ describe("RoleCardSheet 역할 문구 한 덩어리 (P181-0, HOST-05)", () => {
     expect(lines[0]!.className).toBe("mf-rolecard__desc");
     expect(lines[0]!.getAttribute("data-role-line")).toBe("");
     expect(lines[0]!.textContent).toBe(ROLE_TEXT[role].desc);
-    expect(document.querySelectorAll("[data-role-goal], .mf-goal").length).toBe(0);
+    expect(document.querySelectorAll(REMOVED_GOAL_SELECTOR).length).toBe(0);
     const text = document.querySelector("dialog")?.textContent ?? "";
     for (const other of ROLE_IDS) {
       if (other === role) continue;

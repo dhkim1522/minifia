@@ -6,6 +6,9 @@ import { ROLE_TEXT, alliesText } from "../../src/game/roleText";
 
 afterEach(cleanup);
 
+// 폐지된 목표 칩 표식(P181-0) — 어느 화면에도 없어야 한다. 이름은 조각으로 이어 붙여 src 에서 옛 표식을 찾는 검사에 걸리지 않게 한다.
+const REMOVED_GOAL_SELECTOR = `[data-role-${"goal"}], .mf-${"goal"}`;
+
 function cardRoot(container: HTMLElement): HTMLElement {
   return container.firstElementChild as HTMLElement;
 }
@@ -82,7 +85,7 @@ describe("RoleCard 앞면 (D-14, E8)", () => {
     const front = container.querySelector(".mf-card__front") as HTMLElement;
     const order = Array.from(front.children).map((el) => el.tagName.toLowerCase() + "." + el.className.split(" ")[0]);
     expect(order).toEqual(["img.mf-card__art", "p.mf-t-display", "p.mf-card__desc", "div.mf-card__divider", "p.mf-card__mates"]);
-    expect(container.querySelectorAll("[data-role-goal], .mf-goal").length).toBe(0);
+    expect(container.querySelectorAll(REMOVED_GOAL_SELECTOR).length).toBe(0);
     expect(container.textContent).not.toContain("목표");
     for (const role of ["police", "doctor", "citizen"] as const) {
       const c = render(<RoleCard role={role} face="front" allies={null} onFlip={vi.fn()} />);
@@ -246,7 +249,7 @@ describe("역할 문구 한 덩어리 (P181-0, A1a·A1d)", () => {
     expect(lines[0]!.getAttribute("data-role-line")).toBe("");
     expect(lines[0]!.textContent).toBe(ROLE_TEXT[role].desc);
     expect(lines[0]!.childNodes.length).toBe(1);
-    expect(container.querySelectorAll("[data-role-goal], .mf-goal").length).toBe(0);
+    expect(container.querySelectorAll(REMOVED_GOAL_SELECTOR).length).toBe(0);
   });
 
   it.each(ROLES)("%s 앞면: 다른 직업 문구의 둘째 문장은 DOM 에 없다 (결정 0021)", (role) => {
