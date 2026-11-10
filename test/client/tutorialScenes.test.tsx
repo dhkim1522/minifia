@@ -25,6 +25,7 @@ const NOW = 1_700_000_000_000;
 
 let rig: ReturnType<typeof makeRig>;
 let zeroRects = false;
+let farTag = false;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -36,11 +37,13 @@ beforeEach(() => {
   setEngineForTest(rig.engine);
   // 사각형: 이름표는 좌석마다 다른 자리의 96×40, 증거 카드의 조각 타일·목격 행 도윤 이름은 고정 사각형. 그 밖의 요소는 0×0 (zeroRects 면 전부 0×0)
   zeroRects = false;
+  farTag = false;
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     const zero = { left: 0, top: 0, width: 0, height: 0 };
     let r = zero;
     if (!zeroRects) {
-      if (this.classList.contains("mf-world__tag")) r = { left: 40 + Number(this.getAttribute("data-seat")) * 100, top: 200, width: 96, height: 40 };
+      if (farTag && this.classList.contains("mf-world__tag") && this.getAttribute("data-seat") === "1") r = { left: 380, top: -30, width: 80, height: 40 };
+      else if (this.classList.contains("mf-world__tag")) r = { left: 40 + Number(this.getAttribute("data-seat")) * 100, top: 200, width: 96, height: 40 };
       else if (this.classList.contains("mv-trace__disc")) r = { left: 30, top: 100, width: 44, height: 44 };
       else if (this.classList.contains("mv-evidence__witness")) r = { left: 150, top: 170, width: 40, height: 24 };
       // 스포트라이트(18-06): 사회자 띠·[처리]·목격 기록 카드·눈 표시도 잰다
@@ -470,5 +473,46 @@ describe("[다음] 알약 (P18-6, D-05)", () => {
     const reduce = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(has(reduce, /\.tut-next\s*\{\s*animation:\s*none/)).toBe(true);
     expect(css.includes("[data-tutorial-screen]:has([data-tutorial-next]) .mv-errand-dots { display: none; }")).toBe(true);
+  });
+});
+
+describe("장면 5 선이 화면 안에서 끝난다 (D-07)", () => {
+  const link = async (): Promise<{ clampPoint: (p: readonly [number, number], w: number, h: number, inset?: number) => [number, number] }> =>
+    (await import("../../src/components/v2/TutorialEvidence")) as never;
+
+  it("clampPoint: 안쪽 8 로 고정, 안이면 그대로", async () => {
+    const { clampPoint } = await link();
+    expect(clampPoint([-20, 5], 390, 844).join(",") === "8,8").toBe(true);
+    expect(clampPoint([400, 900], 390, 844).join(",") === "382,836").toBe(true);
+    expect(clampPoint([100, 200], 390, 844).join(",") === "100,200").toBe(true);
+  });
+
+  it("도윤 이름표가 화면 오른쪽 위 밖이어도 선 두 개의 좌표가 [8, 폭-8]×[8, 높이-8] 안이다", async () => {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 390 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 844 });
+    try {
+      farTag = true;
+      const { container } = await mount({ initialScene: 5 });
+      advance(100);
+      const paths = [...links$(container)!.querySelectorAll("path")];
+      expect(paths.length).toBe(2);
+      for (const path of paths) {
+        for (const attr of ["data-from", "data-to"]) {
+          const [x, y] = path.getAttribute(attr)!.split(",").map(Number) as [number, number];
+          expect(x >= 8 && x <= 382 && y >= 8 && y <= 836).toBe(true);
+        }
+      }
+    } finally {
+      Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: w });
+      Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: h });
+    }
+  });
+
+  it(".tut-links 규칙에 overflow hidden", () => {
+    const css = readFileSync(`${ROOT}src/styles/tutorial.css`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const start = css.indexOf(".tut-links {");
+    expect(/overflow:\s*hidden/.test(css.slice(start, css.indexOf("}", start)))).toBe(true);
   });
 });
