@@ -6,6 +6,8 @@ import { AUTO_SCROLL_SLOP_PX, DUP_SUBMIT_MS, IME_WAIT_MS, TAIL_WINDOW_MS } from 
 import type { EmoteId } from "../../../shared/protocol";
 import { EMOTE_TEXT } from "../../game/chatText";
 import { EmoteTray } from "./EmoteTray";
+import { ChatLines } from "./ChatLines";
+import { ChatLogSheet } from "./ChatLogSheet";
 import { V2Icon, type V2IconName } from "./V2Icon";
 
 // 채팅 패널(기록 칸 + 입력줄). design/v2.0/design-system/components/bundle.js 의 ChatPanel 과
@@ -25,6 +27,7 @@ import { V2Icon, type V2IconName } from "./V2Icon";
 // - 한글 조합: 조합 중에 보내면 compositionend 를 기다려(최대 IME_WAIT_MS) 확정된 값을 보낸다. 같은 문장이 DUP_SUBMIT_MS 안에
 //   다시 제출되면 무시하고, 보낸 직후 TAIL_WINDOW_MS 안에 끝난 조합이 보낸 문장의 끝부분이면 되살아난 꼬리 글자로 보고 한 번 더 비운다.
 //   happy-dom 은 실제 IME 를 재현하지 못하므로 이벤트 순서만 시험한다(실제 조합은 07-19 CDP·07-21 iPhone).
+// - 18.1: 기록 칸 = 두 줄 창 + 누르면 기록 시트(P181-4).
 // - 세 변형: logHeight(고정 높이)·compact(키보드 열림, 아래 여백은 부르는 쪽 CSS)·channel(입력칸 앞 채널 아이콘).
 // - 역할 단어가 든 문구(마피아·유령)는 channelUi 의 해당 채널 분기 안에서만 꺼낸다 — all 이면 DOM 에 그 단어가 없다(T-07-08).
 
@@ -121,6 +124,8 @@ export function ChatPanel(props: ChatPanelProps) {
   const lastKeyRef = useRef<string | null>(messages.length ? (messages[messages.length - 1]?.key ?? null) : null);
   const [newDot, setNewDot] = useState(false);
   const [trayOpen, setTrayOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  const openBtnRef = useRef<HTMLButtonElement | null>(null);
   const hasEmotes = !!onSend && !!props.emotes && props.emotes.length > 0 && !!props.onEmote;
   const emoteBtnRef = useRef<HTMLButtonElement | null>(null);
   const firstCellRef = useRef<HTMLButtonElement | null>(null);
@@ -332,92 +337,14 @@ export function ChatPanel(props: ChatPanelProps) {
           style={{ height: logHeight }}
           onScroll={onScroll}
         >
-          {messages.map((m) => {
-            if (m.kind === "card" && m.card === "ballots" && m.ballots) {
-              // 찬반 기록 카드(UI-SPEC C-3): 제목 줄 없이 머리 "찬성 n"/"반대 m" + 이름들(자리 구분색 점 + 이름). 이름은 텍스트 노드로만 그린다(T-09.1.1-34)
-              return (
-                <div key={m.key} className="mv-chat__card mv-chat__card--ballots" data-card="ballots">
-                  {(["yes", "no"] as const).map((side) => (
-                    <div key={side} className="mv-chat__ballots-side" data-ballot-side={side}>
-                      <span className="mv-chat__ballots-head">
-                        <V2Icon name={side === "yes" ? "thumbUp" : "thumbDown"} size={16} />
-                        <span>{`${side === "yes" ? "찬성" : "반대"} ${m.ballots![side].length}`}</span>
-                      </span>
-                      <span className="mv-chat__ballots-names">
-                        {m.ballots![side].map((v) => (
-                          <span key={v.seat} className="mv-chat__ballots-voter">
-                            <span className="mv-chat__ballots-dot" aria-hidden="true" style={{ "--ballot-seat": `var(--seat-${v.seat + 1})` } as React.CSSProperties} />
-                            <span className="mv-chat__ballots-name">{v.name}</span>
-                          </span>
-                        ))}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              );
-            }
-            if (m.kind === "card") {
-              // 카드 본문·제목은 React 텍스트 노드로만 그린다(T-09-23). 종류는 서버 k 로 정해진 값이다.
-              return (
-                <div key={m.key} className={m.tone === "mafia" ? "mv-chat__card mv-chat__card--mafia" : "mv-chat__card"} data-card={m.card ?? "will"}>
-                  <span className="mv-chat__card-title">
-                    {m.icon ? <V2Icon name={m.icon} size={16} /> : null}
-                    <span>{m.title ?? ""}</span>
-                  </span>
-                  <p className="mv-chat__card-text">{m.text}</p>
-                </div>
-              );
-            }
-            if (m.kind === "whisper") {
-              // 비공개 귓속말 블록(UI-SPEC B-3): 이 줄은 서버가 보낸·받은 사람 소켓에만 보낸 것이라 제3자 DOM 에는 존재하지 않는다(T-09.1.1-25). 제목·본문은 텍스트 노드로만 그린다
-              return (
-                <div key={m.key} className="mv-chat__whisper" data-whisper={m.whisper ?? "in"}>
-                  <span className="mv-chat__whisper-title">
-                    <V2Icon name="whisper" size={16} />
-                    <span>{m.title ?? ""}</span>
-                  </span>
-                  <span className="mv-sr">, </span>
-                  <p className="mv-chat__whisper-text">{m.text}</p>
-                </div>
-              );
-            }
-            if (m.kind !== "player") {
-              // vote 는 아이콘을 point 14 로 정하고, hot 은 아이콘을 그리지 않는다(승인 .mv-chat__sys.is-vote/.is-hot).
-              const icon = m.kind === "vote" ? <V2Icon name="point" size={14} /> : m.kind === "hot" ? null : m.icon ? <V2Icon name={m.icon} size={16} /> : null;
-              const sysCls = m.kind === "vote" ? "mv-chat__sys is-vote" : m.kind === "hot" ? "mv-chat__sys is-hot" : "mv-chat__sys";
-              return (
-                <p key={m.key} className={sysCls} {...(m.whisper === "public" ? { "data-whisper": "public" } : {})}>
-                  {icon}
-                  <span>{m.text}</span>
-                </p>
-              );
-            }
-            // 줄 앞 채널 아이콘은 보는 사람이 유령일 때만(마피아 줄과 유령 줄을 색만으로 가르지 않는다).
-            const mark =
-              channel === "ghost" && m.ch === "mafia" ? (
-                <span className="mv-chat__mark is-mafia">
-                  <V2Icon name="roleMafia" size={14} />
-                </span>
-              ) : channel === "ghost" && m.ch === "ghost" ? (
-                <span className="mv-chat__mark is-ghost">
-                  <V2Icon name="ghost" size={14} />
-                </span>
-              ) : null;
-            return (
-              <p key={m.key} className={m.ch === "mafia" ? "mv-chat__msg is-mafia" : "mv-chat__msg"} data-seat={m.seat} data-ch={m.ch ?? "all"}>
-                {m.seat !== undefined ? <span className="mv-chat__dot" style={{ background: `var(--seat-${m.seat + 1})` }} /> : null}
-                {mark}
-                <span className="mv-chat__name">{m.me ? CHAT_TEXT.me : (m.name ?? "")}</span>
-                <span className="mv-chat__text">{m.text}</span>
-              </p>
-            );
-          })}
+          <ChatLines messages={messages} channel={channel} />
           {notice ? (
             <p className="mv-chat__notice" role="status" data-chat-notice="">
               {notice}
             </p>
           ) : null}
         </div>
+        <button type="button" className="mv-chat__open" data-chat-open="" aria-label={CHAT_TEXT.logOpen} ref={openBtnRef} onClick={() => setLogOpen(true)} />
         {newDot ? (
           <button type="button" className="mv-chat__newdot" data-chat-newdot="" aria-label={CHAT_TEXT.newDot} onClick={jumpToBottom}>
             <span className="mv-chat__newdot-pill">{CHAT_TEXT.newDot}</span>
@@ -515,6 +442,17 @@ export function ChatPanel(props: ChatPanelProps) {
             </div>
           ) : null}
         </form>
+      ) : null}
+      {logOpen ? (
+        <ChatLogSheet
+          messages={messages}
+          channel={channel}
+          quiet={!!quiet}
+          onClose={() => {
+            setLogOpen(false);
+            openBtnRef.current?.focus({ preventScroll: true });
+          }}
+        />
       ) : null}
     </section>
   );

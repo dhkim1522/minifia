@@ -8,6 +8,8 @@ import type { EmoteId } from "../../shared/protocol";
 
 export const CHAT_TEXT = {
   logLabel: "채팅 기록",
+  // 기록 칸 전체를 덮는 단추의 접근성 이름(18.1)
+  logOpen: "채팅 기록 열기",
   send: "보내기",
   newDot: "새 글",
   me: "나",
