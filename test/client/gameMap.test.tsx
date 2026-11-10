@@ -5,7 +5,10 @@ import "../helpers/singleLineErrors";
 import { RULESET } from "../../shared/game/ruleset";
 import type { ClientMessage, PhaseId, PublicPlayer, RoleRecord, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
-import { KB_PANEL_H, LOG_H_KB, LOG_H_SHORT, LOG_H_TALL } from "../../src/game/chatUi";
+import { LOG_H } from "../../src/game/chatUi";
+
+/** 키보드 열림 패널 = 14 + 기록 칸 + 8 + 입력줄 48 + 아래 여백 8 (UI-SPEC B 계약 4: 146) */
+const KB_PANEL = 14 + LOG_H + 8 + 48 + 8;
 import { bindSignals, type LocalSignal } from "../../src/audio/signals";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
@@ -278,7 +281,7 @@ describe("GameMap — 한 장면 키 (DAY-07, 08-13)", () => {
 describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13)", () => {
   const INNER_H = 844;
   const realInnerH = window.innerHeight;
-  const DISCUSSION_PANEL_H = LOG_H_TALL + 154;
+  const DISCUSSION_PANEL_H = LOG_H + 154;
   let panelH = DISCUSSION_PANEL_H;
   let resizeCallbacks: Array<() => void> = [];
 
@@ -398,24 +401,24 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
 
   it("패널이 자라면(ResizeObserver) 스테이지 아래 끝이 따라간다", () => {
     mount(makeView());
-    panelH = LOG_H_TALL + 92;
+    panelH = LOG_H + 92;
     remeasure();
-    expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: LOG_H_TALL + 92 });
+    expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: LOG_H + 92 });
   });
 
-  it("키보드 열림(포커스 + lift 336): data-kb-open, 행동 줄([토론 끝내기]) 없음, 기록 칸 72, 패널 --kb, 스테이지 아래 = 150 + 336", () => {
+  it("키보드 열림(포커스 + lift 336): data-kb-open, 행동 줄([토론 끝내기]) 없음, 기록 칸 68, 패널 --kb, 스테이지 아래 = 146 + 336", () => {
     const vv = installVV(INNER_H);
     const { container } = mount(makeView());
     expect(endButton(container)).not.toBeNull();
     focusWithKeyboard(container, vv, 336);
-    panelH = KB_PANEL_H;
+    panelH = KB_PANEL;
     remeasure();
     expect(gameOf(container).getAttribute("data-kb-open")).toBe("true");
     expect(endButton(container)).toBeNull();
-    expect(logHeight(container)).toBe(`${LOG_H_KB}px`);
+    expect(logHeight(container)).toBe(`${LOG_H}px`);
     expect(container.querySelector(".mv-chat.is-compact")).not.toBeNull();
     expect(container.querySelector(".mf-game__panel")?.classList.contains("mf-game__panel--kb")).toBe(true);
-    expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: KB_PANEL_H + 336 });
+    expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: KB_PANEL + 336 });
   });
 
   it("키보드 열림 경계(lift 60) 아래에서는 행동 줄이 그대로 있고, 블러하면 원래대로 돌아온다", () => {
@@ -425,7 +428,7 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     expect(gameOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(endButton(container)).not.toBeNull();
     focusWithKeyboard(container, vv, 336);
-    panelH = KB_PANEL_H;
+    panelH = KB_PANEL;
     remeasure();
     expect(endButton(container)).toBeNull();
     act(() => inputOf(container).blur());
@@ -433,13 +436,21 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     remeasure();
     expect(gameOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(endButton(container)).not.toBeNull();
-    expect(logHeight(container)).toBe(`${LOG_H_TALL}px`);
+    expect(logHeight(container)).toBe(`${LOG_H}px`);
     expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: DISCUSSION_PANEL_H });
   });
 
-  it("기록 칸 높이는 방 높이로 한 번 정한다: 방 높이 844 → 152, 짧은 방 → 96", () => {
-    const { container } = mount(makeView());
-    expect([LOG_H_TALL, LOG_H_SHORT]).toContain(Number.parseInt(logHeight(container), 10));
+  it("기록 칸 높이는 어느 방 높이에서나 68 한 값이다(P181-3), 패널 표 222·160·146", () => {
+    for (const h of [560, 640, 844, 932]) {
+      Object.defineProperty(window, "innerHeight", { value: h, configurable: true, writable: true });
+      const { container, unmount } = mount(makeView());
+      expect(logHeight(container)).toBe("68px");
+      unmount();
+    }
+    expect(LOG_H).toBe(68);
+    expect(DISCUSSION_PANEL_H).toBe(222);
+    expect(LOG_H + 92).toBe(160);
+    expect(KB_PANEL).toBe(146);
   });
 });
 
