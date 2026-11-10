@@ -24,7 +24,7 @@ import { V2Icon } from "../components/v2/V2Icon";
 import { WorldStage } from "../components/WorldStage";
 import { CEREMONY_TITLE } from "../game/awardText";
 import { DRESS_TEXT } from "../game/dressText";
-import { LOG_H_KB } from "../game/chatUi";
+import { LOG_H } from "../game/chatUi";
 import { castOf, CEREMONY, CEREMONY_CENTER, ceremonyAt, ceremonySnap, ceremonyWindowStart, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, satSlots, skipAward, slotsFor, stateAt, walkSnap, winningTeam } from "../game/resultDirector";
 import type { CeremonyState, ResultState } from "../game/resultDirector";
 import { READY_TEXT } from "../game/resultText";
@@ -145,7 +145,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const toast = useTopToast();
   const { show } = toast;
   const [leaveOpen, setLeaveOpen] = useState(false);
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, sideMaxH, stageInsets } = useMapInsets();
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen, sideMaxH, stageInsets } = useMapInsets();
 
   // 탭 패널(11-07): 현재 탭과 열어 본 탭 집합은 이 화면이 쥔다. 전체가 아닌 탭이면 패널이 확장되고 연출 시계가 멈춘다(D-3, D-25)
   // 18.1: 결과 화면은 RESULT_TABS_SHOWN 이 전체 하나라 tab 은 늘 all 이고 확장·정지 경로에 닿지 않는다(P181-7). 경로는 되돌리기 쉽게 남긴다
@@ -579,7 +579,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
             sendDim={binding.sendDim === true}
             notice={binding.notice ?? null}
             {...(binding.quiet ? { quiet: true } : {})}
-            logHeight={kbOpen ? LOG_H_KB : logH}
+            logHeight={LOG_H}
             compact={kbOpen}
             inputRef={inputRef}
             trailing={readyPill}
