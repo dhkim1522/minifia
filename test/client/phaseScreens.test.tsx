@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
+import { ROLE_TEXT } from "../../src/game/roleText";
 import type { MorningView, PhaseId, RoomView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { MemoryStorage } from "../helpers/memoryStorage";
@@ -663,7 +664,7 @@ describe("C-01 [역할 카드] 시트", () => {
     const img = dialog.querySelector("img");
     expect(img?.getAttribute("src") ?? "").toContain("mafia_default%402x.png");
     expect(within(dialog).queryByRole("heading", { name: "마피아" })).not.toBeNull();
-    expect(sheetHas(dialog, "밤에 함께 한 명을 지목해요")).toBe(true);
+    expect(sheetHas(dialog, ROLE_TEXT.mafia.desc)).toBe(true);
     expect(sheetHas(dialog, "동료 · 민지")).toBe(true);
     expect(dialog.querySelector(".mf-rolecard__back")).toBeNull();
   });
@@ -684,7 +685,7 @@ describe("C-01 [역할 카드] 시트", () => {
     renderRoom(makeView({ phase: "dayAnnounce", role: "police" }));
     const dialog = openRoleCard();
     expect(within(dialog).queryByRole("heading", { name: "경찰" })).not.toBeNull();
-    expect(sheetHas(dialog, "밤마다 한 명을 조사해요")).toBe(true);
+    expect(sheetHas(dialog, ROLE_TEXT.police.desc)).toBe(true);
     expect(dialog.querySelector(".mf-rolecard__back")).toBeNull();
   });
 

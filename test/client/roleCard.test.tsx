@@ -72,16 +72,23 @@ describe("RoleCard 앞면 (D-14, E8)", () => {
     expect(img.getAttribute("width")).toBe("150");
     expect(img.getAttribute("alt")).toBe("");
     expect(screen.getByText("마피아").className).toContain("mf-t-display");
-    expect(screen.getByText("밤에 함께 한 명을 지목해요")).toBeTruthy();
+    expect(container.querySelector(".mf-card__desc")?.textContent).toBe(ROLE_TEXT.mafia.desc);
     expect(screen.getByText("동료 · 서준, 민지")).toBeTruthy();
     expect(container.querySelector(".mf-card__divider")).not.toBeNull();
   });
 
-  it("앞면 마크업 순서: 그림 → 이름 → 설명 → 목표 줄 → 구분선 → 동료 줄", () => {
+  it("앞면 마크업 순서: 그림 → 이름 → 문구 한 덩어리 → (마피아만) 구분선 → 동료 줄, 목표 칩은 없다 (A1a)", () => {
     const { container } = render(<RoleCard role="mafia" face="front" allies={["서준"]} onFlip={vi.fn()} />);
     const front = container.querySelector(".mf-card__front") as HTMLElement;
     const order = Array.from(front.children).map((el) => el.tagName.toLowerCase() + "." + el.className.split(" ")[0]);
-    expect(order).toEqual(["img.mf-card__art", "p.mf-t-display", "p.mf-card__desc", "div.mf-goal", "div.mf-card__divider", "p.mf-card__mates"]);
+    expect(order).toEqual(["img.mf-card__art", "p.mf-t-display", "p.mf-card__desc", "div.mf-card__divider", "p.mf-card__mates"]);
+    expect(container.querySelectorAll("[data-role-goal], .mf-goal").length).toBe(0);
+    expect(container.textContent).not.toContain("목표");
+    for (const role of ["police", "doctor", "citizen"] as const) {
+      const c = render(<RoleCard role={role} face="front" allies={null} onFlip={vi.fn()} />);
+      const f = c.container.querySelector(".mf-card__front") as HTMLElement;
+      expect(Array.from(f.children).map((el) => el.tagName.toLowerCase() + "." + el.className.split(" ")[0])).toEqual(["img.mf-card__art", "p.mf-t-display", "p.mf-card__desc"]);
+    }
   });
 
   it("동료 한 명이면 '동료 · 서준'", () => {
@@ -97,7 +104,7 @@ describe("RoleCard 앞면 (D-14, E8)", () => {
   it("경찰(allies null)은 동료 줄도 구분선도 없다", () => {
     const { container } = render(<RoleCard role="police" face="front" allies={null} onFlip={vi.fn()} />);
     expect(screen.getByText("경찰")).toBeTruthy();
-    expect(screen.getByText("밤마다 한 명을 조사해요")).toBeTruthy();
+    expect(container.querySelector(".mf-card__desc")?.textContent).toBe(ROLE_TEXT.police.desc);
     expect(container.querySelector(".mf-card__mates")).toBeNull();
     expect(container.querySelector(".mf-card__divider")).toBeNull();
     expect((container.querySelector("img") as HTMLImageElement).getAttribute("src")).toContain("police_default%402x.png");
@@ -106,7 +113,7 @@ describe("RoleCard 앞면 (D-14, E8)", () => {
   it("처음부터 앞면(5초 뒤 입장)으로 그려도 앞면이 바로 있고, 앞면이 있는 동안은 카드 이름이 앞면 글자다", () => {
     const { container } = render(<RoleCard role="citizen" face="front" allies={null} onFlip={vi.fn()} />);
     expect(container.querySelector("img")).not.toBeNull();
-    expect(screen.getByText("대화와 투표로 마피아를 찾아요")).toBeTruthy();
+    expect(container.querySelector(".mf-card__desc")?.textContent).toBe(ROLE_TEXT.citizen.desc);
     const root = cardRoot(container);
     expect(root.className).toContain("mf-card--front");
     expect(root.hasAttribute("aria-label")).toBe(false);
@@ -185,11 +192,28 @@ describe("RoleCard 입력", () => {
 });
 
 describe("roleText (역할 문구 한 곳)", () => {
-  it("네 역할의 이름과 한 줄 설명이 UI-SPEC 문구와 같다", () => {
-    expect(ROLE_TEXT.mafia).toMatchObject({ name: "마피아", desc: "밤에 함께 한 명을 지목해요" });
-    expect(ROLE_TEXT.police).toMatchObject({ name: "경찰", desc: "밤마다 한 명을 조사해요" });
-    expect(ROLE_TEXT.doctor).toMatchObject({ name: "의사", desc: "밤에 한 명을 살려요" });
-    expect(ROLE_TEXT.citizen).toMatchObject({ name: "시민", desc: "대화와 투표로 마피아를 찾아요" });
+  const CONFIRMED = {
+    citizen: "당신은 시민입니다.\n추리로 마피아를 찾아내세요.",
+    mafia: "당신은 마피아입니다.\n몰래 암살하여 승리하세요.",
+    police: "당신은 경찰입니다.\n의심되는 사람을 조사하세요.",
+    doctor: "당신은 의사입니다.\n시민 팀을 마피아에게서 지키세요.",
+  } as const;
+  const ROLES = ["mafia", "police", "doctor", "citizen"] as const;
+
+  it.each(ROLES)("ROLE_TEXT[%s].desc 가 사용자 확정 문구와 글자 그대로 같다 (P181-0)", (role) => {
+    expect(ROLE_TEXT[role].desc).toBe(CONFIRMED[role]);
+  });
+
+  it.each(ROLES)("%s desc: `당신은 {name}입니다.\\n` 으로 시작하고 줄바꿈이 하나, 둘째 문장이 비어 있지 않다 (A1c)", (role) => {
+    const desc = ROLE_TEXT[role].desc;
+    expect(desc.startsWith(`당신은 ${ROLE_TEXT[role].name}입니다.\n`)).toBe(true);
+    const parts = desc.split("\n");
+    expect(parts.length).toBe(2);
+    expect(parts[1]!.trim().length).toBeGreaterThan(0);
+  });
+
+  it("네 desc 가 서로 다르다", () => {
+    expect(new Set(ROLES.map((r) => ROLE_TEXT[r].desc)).size).toBe(4);
   });
 
   it("alliesText: 0명 '혼자예요', 1명, 2명", () => {
@@ -210,36 +234,34 @@ describe("RoleCard 빛남 call (HOST-03)", () => {
   });
 });
 
-describe("역할 목표 한 줄 (TOOL-03)", () => {
-  const GOALS = {
-    mafia: "밤마다 한 명을 없애 시민 편과 수가 같아지면 승리합니다.",
-    police: "밤마다 한 명을 조사해 마피아를 찾아내세요.",
-    doctor: "밤마다 한 명을 지켜 마피아의 암살을 막으세요.",
-    citizen: "대화와 투표로 마피아를 모두 처형하면 승리합니다.",
-  } as const;
+describe("역할 문구 한 덩어리 (P181-0, A1a·A1d)", () => {
   const ROLES = ["mafia", "police", "doctor", "citizen"] as const;
+  const second = (r: (typeof ROLES)[number]) => ROLE_TEXT[r].desc.split("\n")[1] ?? "";
 
-  it.each(ROLES)("ROLE_TEXT[%s].goal 이 UI-SPEC 문장과 같다", (role) => {
-    expect(ROLE_TEXT[role].goal).toBe(GOALS[role]);
+  it.each(ROLES)("%s 앞면: .mf-card__desc[data-role-line] 하나, 글이 ROLE_TEXT desc(줄바꿈 포함)와 같고 목표 표식은 없다", (role) => {
+    const { container } = render(<RoleCard role={role} face="front" allies={role === "mafia" ? [] : null} onFlip={vi.fn()} />);
+    const lines = container.querySelectorAll("[data-role-line]");
+    expect(lines.length).toBe(1);
+    expect(lines[0]!.className).toBe("mf-card__desc");
+    expect(lines[0]!.getAttribute("data-role-line")).toBe("");
+    expect(lines[0]!.textContent).toBe(ROLE_TEXT[role].desc);
+    expect(lines[0]!.childNodes.length).toBe(1);
+    expect(container.querySelectorAll("[data-role-goal], .mf-goal").length).toBe(0);
   });
 
-  it.each(ROLES)("%s 앞면: [data-role-goal] 하나 — '목표' 칩 + 자기 문장, 다른 역할 문장은 DOM 에 없다", (role) => {
+  it.each(ROLES)("%s 앞면: 다른 직업 문구의 둘째 문장은 DOM 에 없다 (결정 0021)", (role) => {
     const { container } = render(<RoleCard role={role} face="front" allies={role === "mafia" ? [] : null} onFlip={vi.fn()} />);
-    const goals = container.querySelectorAll("[data-role-goal]");
-    expect(goals.length).toBe(1);
-    expect(goals[0]!.querySelector(".mf-goal__chip")?.textContent).toBe("목표");
-    expect(goals[0]!.querySelector(".mf-goal__text")?.textContent).toBe(GOALS[role]);
     for (const other of ROLES) {
       if (other === role) continue;
-      expect(container.textContent).not.toContain(GOALS[other]);
+      expect(container.textContent).not.toContain(second(other));
     }
   });
 
-  it.each(ROLES)("%s 뒷면 상태(앞면이 마운트되기 전)에는 목표 글자가 없다", (role) => {
+  it.each(ROLES)("%s 뒷면 상태(앞면이 마운트되기 전)에는 문구도 '당신은' 도 없다", (role) => {
     const { container } = render(<RoleCard role={role} face="back" allies={null} onFlip={vi.fn()} />);
-    expect(container.querySelector("[data-role-goal]")).toBeNull();
-    expect(container.textContent).not.toContain("목표");
-    expect(container.textContent).not.toContain("승리");
+    expect(container.querySelector("[data-role-line]")).toBeNull();
+    expect(container.textContent).not.toContain("당신은");
+    expect(container.textContent).not.toContain(second(role));
   });
 });
 

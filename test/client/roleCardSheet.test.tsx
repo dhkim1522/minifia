@@ -257,7 +257,7 @@ describe("RoleCardSheet 내 역할 본문", () => {
     renderSheet({ role: "mafia", allies: [1, 3] });
     const t = document.querySelector<HTMLElement>(".mf-rolecard__t")!;
     const lines = Array.from(t.children).map((el) => el.textContent);
-    expect(lines).toEqual(["마피아", ROLE_TEXT.mafia.desc, `목표${ROLE_TEXT.mafia.goal}`, "동료 · 하윤, 도현"]);
+    expect(lines).toEqual(["마피아", ROLE_TEXT.mafia.desc, "동료 · 하윤, 도현"]);
     cleanup();
     renderSheet({ role: "mafia", allies: [] });
     expect(document.querySelector(".mf-rolecard__t")?.textContent).toContain("혼자예요");
@@ -391,29 +391,31 @@ describe("rolecard.css — 시트 규약", () => {
   });
 });
 
-describe("RoleCardSheet 역할 목표 한 줄 (TOOL-03, HOST-05)", () => {
-  it.each(ROLE_IDS)("%s 앞면: [data-role-goal] 하나 — 자기 목표만, 다른 역할 목표는 DOM 에 없다", (role) => {
+describe("RoleCardSheet 역할 문구 한 덩어리 (P181-0, HOST-05)", () => {
+  it.each(ROLE_IDS)("%s 앞면: [data-role-line] 하나(.mf-rolecard__desc), 자기 문구만 — 다른 직업 둘째 문장은 DOM 에 없고 목표 표식도 없다", (role) => {
     renderSheet({ role, tab: "role" });
-    const goals = document.querySelectorAll("[data-role-goal]");
-    expect(goals.length).toBe(1);
-    expect(goals[0]!.querySelector(".mf-goal__chip")?.textContent).toBe("목표");
-    expect(goals[0]!.querySelector(".mf-goal__text")?.textContent).toBe(ROLE_TEXT[role].goal);
+    const lines = document.querySelectorAll("[data-role-line]");
+    expect(lines.length).toBe(1);
+    expect(lines[0]!.className).toBe("mf-rolecard__desc");
+    expect(lines[0]!.getAttribute("data-role-line")).toBe("");
+    expect(lines[0]!.textContent).toBe(ROLE_TEXT[role].desc);
+    expect(document.querySelectorAll("[data-role-goal], .mf-goal").length).toBe(0);
     const text = document.querySelector("dialog")?.textContent ?? "";
     for (const other of ROLE_IDS) {
       if (other === role) continue;
-      expect(text.includes(ROLE_TEXT[other].goal)).toBe(false);
+      expect(text.includes(ROLE_TEXT[other].desc.split("\n")[1]!)).toBe(false);
     }
   });
 
-  it.each(ROLE_IDS)("%s 뒷면(showBack)에는 목표 줄이 없다", (role) => {
+  it.each(ROLE_IDS)("%s 뒷면(showBack)에는 문구 줄이 없다", (role) => {
     renderSheet({ role, showBack: true });
-    expect(document.querySelector("[data-role-goal]")).toBeNull();
+    expect(document.querySelector("[data-role-line]")).toBeNull();
     const text = document.querySelector("dialog")?.textContent ?? "";
-    for (const r of ROLE_IDS) expect(text.includes(ROLE_TEXT[r].goal)).toBe(false);
+    expect(text).not.toContain("당신은");
   });
 
-  it("역할 없음에는 목표 줄이 없다", () => {
+  it("역할 없음에는 문구 줄이 없다", () => {
     renderSheet({ role: null });
-    expect(document.querySelector("[data-role-goal]")).toBeNull();
+    expect(document.querySelector("[data-role-line]")).toBeNull();
   });
 });
