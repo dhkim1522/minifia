@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 18
 current_phase_name: "바로 고칠 것: 증거·조명·튜토리얼 손보기"
-current_plan: 5
+current_plan: 6
 status: executing
-stopped_at: Completed 18-04-PLAN.md
-last_updated: "2026-11-10T00:17:27.561Z"
+stopped_at: Completed 18-11-PLAN.md
+last_updated: "2026-11-10T00:25:47.710Z"
 last_activity: 2026-11-10
 last_activity_desc: Phase 18 execution started
-state_head: 892e70cbc8af2b186a02a06cc7b1c837d7bc5a86
+state_head: d6abc7635f284d134c695983fffa7218cbf35b4c
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 58
-  completed_plans: 51
+  completed_plans: 52
   percent: 44
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 18 (바로 고칠 것: 증거·조명·튜토리얼 손보기) — EXECUTING
-Current Plan: 5
+Current Plan: 6
 Total Plans in Phase: 11
 Status: Ready to execute
 Last activity: 2026-11-10 — Phase 18 execution started
@@ -249,6 +249,7 @@ Last activity: 2026-11-10 — Phase 18 execution started
 | Phase 18 P02 | 12 min | 2 tasks | 5 files |
 | Phase 18 P03 | 25 min | 2 tasks | 6 files |
 | Phase 18 P04 | 6 min | 1 tasks | 7 files |
+| Phase 18 P11 | 12 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -554,6 +555,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18]: 18-02: PhaseTune.moonColor 필수 칸 — 방향광 색을 단계 표에서 가져오고 밤 네 행은 달빛색 그대로. UI-SPEC 시작값 다섯 곳은 허용 범위를 지키는 값으로 조정(18-07 렌더 측정에서 재조정 가능)
 - [Phase 18]: 튜토리얼 고정 카메라는 GameMap 선택 prop camera 로 덮어쓴다(presence.ts 불변)
 - [Phase 18]: 증거 카드 목격자 없음은 eyeOff 아이콘 하나(label 목격자 없음, gray-300), 숫자 0 삭제 (D-10)
+- [Phase 18]: 18-11: nomination.act 의 '이름표'는 실제 이름표를 누르므로 유지, 밤 띠 네 문장만 '얼굴'로. 귓속말 시트 preNotice 는 남기고 역할 확인 예고만 삭제
 
 ### Pending Todos
 
@@ -624,8 +626,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-10T00:17:26.902Z
-Stopped at: Completed 18-04-PLAN.md
+Last session: 2026-11-10T00:25:47.025Z
+Stopped at: Completed 18-11-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
