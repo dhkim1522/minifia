@@ -148,7 +148,8 @@ export function createScenario(opts: ScenarioOptions): Scenario {
 }
 
 export interface PerfParams {
-  scene: "talk" | "vote";
+  /** 조명 단계. 성능 측정은 talk·vote, 조명 렌더 측정(18-07)은 morning·night 까지 같은 카메라로 찍는다 */
+  scene: "talk" | "morning" | "vote" | "night";
   /** 측정 시간(분). 0.25 = 15초 */
   minutes: number;
   /** 화면 배율 상한을 이 값으로 고정(없으면 사다리 단계의 값) */
@@ -183,8 +184,9 @@ export function parsePerfParams(q: URLSearchParams): PerfParams {
   const seed = num(q.get("seed"));
   const chars = num(q.get("chars"));
   const burst = num(q.get("burst"));
+  const sceneQ = q.get("scene");
   return {
-    scene: q.get("scene") === "vote" ? "vote" : "talk",
+    scene: sceneQ === "vote" || sceneQ === "morning" || sceneQ === "night" ? sceneQ : "talk",
     minutes: minutes !== null && minutes > 0 ? minutes : 5,
     dpr: dpr !== null && dpr > 0 && dpr <= 4 ? dpr : null,
     budget: budget === null ? 0 : Math.max(0, Math.min(5, Math.floor(budget))),

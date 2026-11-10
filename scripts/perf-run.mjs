@@ -28,6 +28,8 @@
 //              `nightload-{크기}-x{감속}.json`(기본 폴더 .planning/phases/09-night-morning/perf/)으로 저장한다. 넘기기·시트 조작 동안은 기록을 멈춘다. 6페이즈 기준(5분 평균 55fps, 끊김 5회)은
 //              baseline 칸에 적을 뿐 판정하지 않는다 — 합격 판정은 실기기 확인(사용자 결정 2026-11-02). 방은 끝에 나가서 지운다. v1.0 주소는 어떤 요청보다 먼저 거부한다.
 //   --map plaza (nightload, 11-13): 시작 전에 방장이 지도 칩 → 맵 탭 → 광장 카드로 광장을 고른다(pickMapViaUi). 저장 이름 끝 `-plaza`, JSON params.map. 없거나 bar 면 이전과 같다.
+//   --mode light (18-07): 광장·재즈 바 × talk·morning·vote·night 정지 화면(?perf=1&shot=1, 시드 1, 사람 6, 코트)을 같은 카메라로 찍어 캔버스 평균 상대 휘도를 재고
+//              순서(talk > morning > vote > night)·배율(talk ≥ 2.0×night, morning ≥ 1.6×night)을 판정한다. 결과 `light-{크기}.json`·`light-{맵}-{단계}.png`. 실패가 있으면 종료 코드 1.
 //   사용 예:   node scripts/perf-run.mjs --mode nightload --url http://localhost:5173 --minutes 5 --throttle 4 --size 390x844
 // 종료 코드: 0 = 결과 저장, 1 = 인자·주소·Chrome·시간 초과·페이지 오류.
 // 가정(A1): 헤드리스 시스템 Chrome 의 CPU 4배 스로틀은 DevTools 와 같은 메커니즘이다. 헤드리스 여부·Chrome 버전은 결과 JSON 의 runner 에 적는다.
@@ -115,7 +117,7 @@ const CHATLOAD_LINES = ["저 아니에요", "누가 수상해요?", "조용한 �
 const CHATLOAD_BASELINE = { avgFps: 55, jankMax: 5, perMinutes: 5, jankMs: JANK_MS, source: "06-PERF-RESULTS.md 조건 B · UI-SPEC 합격 기준 — 5분 평균 ≥ 55fps, 끊김(>50ms) ≤ 5회/5분" };
 
 export const USAGE =
-  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload] [--url 주소] [--scene talk|vote] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--outfits mix|coat] [--burst 1..4] [--map bar|plaza] [--runs 3] [--bots 7] [--sound on|off] [--shot [--file 이름]]";
+  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload|light] [--url 주소] [--scene talk|morning|vote|night] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--outfits mix|coat] [--burst 1..4] [--map bar|plaza] [--runs 3] [--bots 7] [--sound on|off] [--shot [--file 이름]]";
 
 class UsageError extends Error {}
 
@@ -138,7 +140,7 @@ export function parseArgs(argv) {
       case "--url": o.url = need(a, i++); break;
       case "--scene": {
         const v = need(a, i++);
-        if (v !== "talk" && v !== "vote") throw new UsageError(`--scene 은 talk 또는 vote: ${v}`);
+        if (v !== "talk" && v !== "morning" && v !== "vote" && v !== "night") throw new UsageError(`--scene 은 talk, morning, vote 또는 night: ${v}`);
         o.scene = v;
         break;
       }
@@ -155,7 +157,7 @@ export function parseArgs(argv) {
       }
       case "--mode": {
         const v = need(a, i++);
-        if (v !== "perf" && v !== "interactive" && v !== "chatload" && v !== "nightload") throw new UsageError(`--mode 는 perf, interactive, chatload 또는 nightload: ${v}`);
+        if (v !== "perf" && v !== "interactive" && v !== "chatload" && v !== "nightload" && v !== "light") throw new UsageError(`--mode 는 perf, interactive, chatload, nightload 또는 light: ${v}`);
         o.mode = v;
         break;
       }
@@ -210,11 +212,39 @@ export function outputBase(o) {
   return o.shot ? `shot-${base}` : base;
 }
 
-/** 조명 렌더 순서 판정(18-07) — 자리 함수(RED). 실제 판정은 다음 커밋에서 채운다 */
+/** 조명 렌더 판정 문턱(18-07, UI-SPEC 허용 범위 4): 낮 talk 는 night 의 2.0배, 아침 morning 은 1.6배 이상 */
 export const LIGHT_TALK_RATIO = 2.0;
 export const LIGHT_MORNING_RATIO = 1.6;
-export function lightRankVerdict(_means) {
-  return { ok: true, rows: [] };
+
+/**
+ * 조명 렌더 순서·배율 판정(순수). means = { talk, morning, vote, night } 평균 상대 휘도(0~1).
+ * L4a 순서 talk > morning > vote > night, L4b talk ≥ 2.0×night, L4c morning ≥ 1.6×night.
+ * 숫자가 아닌 값이 하나라도 있으면 세 줄 모두 ok false(측정 못 함).
+ */
+export function lightRankVerdict(means) {
+  const { talk, morning, vote, night } = means ?? {};
+  const f = (n) => (typeof n === "number" ? n.toFixed(4) : String(n));
+  const rows = [
+    { id: "L4a", label: "순서 talk > morning > vote > night" },
+    { id: "L4b", label: `talk ≥ night × ${LIGHT_TALK_RATIO}` },
+    { id: "L4c", label: `morning ≥ night × ${LIGHT_MORNING_RATIO}` },
+  ];
+  if ([talk, morning, vote, night].some((v) => typeof v !== "number" || !Number.isFinite(v))) {
+    const detail = `측정 못 함 (talk ${f(talk)}, morning ${f(morning)}, vote ${f(vote)}, night ${f(night)})`;
+    return { ok: false, rows: rows.map((r) => ({ ...r, ok: false, detail })) };
+  }
+  const oks = [
+    talk > morning && morning > vote && vote > night,
+    talk >= night * LIGHT_TALK_RATIO,
+    morning >= night * LIGHT_MORNING_RATIO,
+  ];
+  const details = [
+    `talk ${f(talk)}, morning ${f(morning)}, vote ${f(vote)}, night ${f(night)}`,
+    `talk ${f(talk)} / night ${f(night)} = ${f(talk / night)}배 (문턱 ${LIGHT_TALK_RATIO})`,
+    `morning ${f(morning)} / night ${f(night)} = ${f(morning / night)}배 (문턱 ${LIGHT_MORNING_RATIO})`,
+  ];
+  const out = rows.map((r, i) => ({ ...r, ok: oks[i], detail: details[i] }));
+  return { ok: out.every((r) => r.ok), rows: out };
 }
 
 /** 열 주소: 대상 + 스파이크 쿼리 */
@@ -873,6 +903,80 @@ async function runNightload(browser, o, origin, chrome) {
   return 0;
 }
 
+/** 첫 맵 캔버스만 찍어(이름표·입력층·HUD 는 가려서) 평균 상대 휘도(0~1)를 낸다(18-07). 식: sRGB → 선형 뒤 0.2126R + 0.7152G + 0.0722B 의 평균. readPaintStats(e2e/browser.mjs)와 같은 방법 */
+export async function readCanvasLuminance(page, pngPath = null) {
+  const canvas = page.locator(".mf-world__canvas canvas").first();
+  if ((await canvas.count()) === 0) return null;
+  const png = await canvas.screenshot({ style: ".mf-world__tags,.mf-world__input,[data-perf-hud]{visibility:hidden !important}", timeout: 10_000 });
+  if (pngPath) writeFileSync(pngPath, png);
+  const b64 = png.toString("base64");
+  return page.evaluate(async (data) => {
+    const blob = await (await fetch(`data:image/png;base64,${data}`)).blob();
+    const bmp = await createImageBitmap(blob);
+    const c = document.createElement("canvas");
+    c.width = bmp.width;
+    c.height = bmp.height;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(bmp, 0, 0);
+    const px = ctx.getImageData(0, 0, c.width, c.height).data;
+    const lin = new Float64Array(256);
+    for (let i = 0; i < 256; i++) {
+      const v = i / 255;
+      lin[i] = v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    }
+    let sum = 0;
+    const n = px.length / 4;
+    for (let i = 0; i < px.length; i += 4) sum += 0.2126 * lin[px[i]] + 0.7152 * lin[px[i + 1]] + 0.0722 * lin[px[i + 2]];
+    return n === 0 ? null : sum / n;
+  }, b64);
+}
+
+const LIGHT_MAPS = ["plaza", "bar"];
+const LIGHT_SCENES = ["talk", "morning", "vote", "night"];
+
+/** --mode light(18-07): 맵 × 단계 정지 화면의 평균 휘도를 재고 맵마다 순서·배율을 판정한다. 하나라도 실패하면 1 */
+async function runLight(browser, o, origin) {
+  const lo = { ...o, shot: true, throttle: 1, minutes: 1, seed: 1 };
+  const maps = {};
+  let url0 = "";
+  for (const map of LIGHT_MAPS) {
+    const means = {};
+    for (const scene of LIGHT_SCENES) {
+      const url = `${targetUrl({ ...lo, map, scene }, origin)}&chars=6`;
+      url0 = url0 || url;
+      const context = await browser.newContext({ viewport: { width: o.size.w, height: o.size.h }, deviceScaleFactor: o.dpr, locale: "ko-KR" });
+      try {
+        const page = await context.newPage();
+        const cdp = await context.newCDPSession(page);
+        await cdp.send("Emulation.setDeviceMetricsOverride", { width: o.size.w, height: o.size.h, deviceScaleFactor: o.dpr, mobile: false });
+        await page.goto(url, { waitUntil: "load" });
+        await page.waitForFunction(() => document.querySelector("[data-perf-hud]")?.style.display === "none", null, { timeout: SHOT_WAIT_MS, polling: 500 });
+        const png = join(o.out, `light-${map}-${scene}.png`);
+        means[scene] = await readCanvasLuminance(page, png);
+        console.log(`${map} ${scene}: 평균 휘도 ${means[scene] === null ? "측정 못 함" : means[scene].toFixed(4)}  (${png})`);
+      } catch (e) {
+        means[scene] = null;
+        console.error(`${map} ${scene} 측정 실패: ${e instanceof Error ? e.message.split("\n")[0] : String(e)}`);
+      } finally {
+        await context.close().catch(() => {});
+      }
+    }
+    maps[map] = { means, ...lightRankVerdict(means) };
+  }
+  const runner = { tool: "scripts/perf-run.mjs --mode light", size: `${o.size.w}x${o.size.h}`, dpr: o.dpr, chrome: browser.version(), url: url0 };
+  const json = join(o.out, `light-${o.size.w}x${o.size.h}.json`);
+  writeFileSync(json, `${JSON.stringify({ runner, maps }, null, 2)}\n`);
+  console.log(`결과 저장: ${json}`);
+  let code = 0;
+  for (const [map, v] of Object.entries(maps)) {
+    for (const r of v.rows) {
+      console.log(`${map} ${r.id} ${r.ok ? "통과" : "실패"} — ${r.label}: ${r.detail}`);
+      if (!r.ok) code = 1;
+    }
+  }
+  return code;
+}
+
 async function main() {
   let o;
   try {
@@ -920,6 +1024,15 @@ async function main() {
     let c = 1;
     try {
       c = await runNightload(browser, o, origin, chrome);
+    } finally {
+      await browser.close().catch(() => {});
+    }
+    process.exit(c);
+  }
+  if (o.mode === "light") {
+    let c = 1;
+    try {
+      c = await runLight(browser, o, origin);
     } finally {
       await browser.close().catch(() => {});
     }

@@ -186,7 +186,7 @@ export interface WorldRuntimeDeps {
   autoDegrade?: boolean;
   /** 프레임마다 render 호출·이름표 투영·쓰기에 걸린 CPU 시간(ms). 있을 때만 잰다 — 제품은 넘기지 않는다(06-14 HUD 의 p95) */
   onFrame?(stats: { renderMs: number; tagsMs: number }): void;
-  lighting?: "talk" | "vote";
+  lighting?: LightingPhase;
   loadModules?: () => Promise<WorldModules>;
   /**
    * 방의 맵 id(view.map, 로비·시작 전은 bar — 기본). 렌더러 생성·클라이언트 이동 예측 마스크·입장 방향·무대 윗면 높이를 고른다(MAP-06, D-22).
