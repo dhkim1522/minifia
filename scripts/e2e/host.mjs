@@ -331,7 +331,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         await settleBand(hp, ht, phase).catch(() => {});
         await readTools(hp, rec, `${id}/${phase}`, phase === "nomination" ? "투표" : phase === "night" ? "밤" : "아침");
       }
-      // 결과: 시상식에서 [넘기기] 가 보이는 시점 → 연출이 끝난 패널(탭)
+      // 결과: 시상식에서 [넘기기] 가 보이는 시점 → 연출이 끝난 패널(18.1: 탭 없이 전체 대화 하나)
       await driveToEnd(hp, ht);
       const skipBtn = await attempt(async () => {
         await hp.waitForSelector('[data-float="skip"]', { timeout: 15000 });
@@ -341,14 +341,14 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       if (skipBtn.ok) await readTools(hp, rec, `${id}/ended-ceremony`, "결과 시상식");
       const panel = await attempt(async () => {
         await settledResult(hp);
-        await hp.waitForSelector('[role="tab"]', { timeout: 5000 });
+        await hp.waitForSelector("[data-result-panel]", { timeout: 5000 });
       });
-      rec(`${id}/ended-panel`, "TL0", "결과 연출이 끝나 기록 탭이 보인다", panel.ok, panel.detail);
+      rec(`${id}/ended-panel`, "TL0", "결과 연출이 끝나 결과 패널이 보인다", panel.ok, panel.detail);
       if (panel.ok) {
         const list = await readTools(hp, rec, `${id}/ended-panel`, "결과 패널");
-        // 탭 글은 그대로 보이고(V-7) 이름표 속성은 없다
+        // 18.1(결정 0082): 결과 패널은 탭 없이 전체 대화 하나라 탭 글 판정은 없다. 이름표 속성은 TL 이 0건으로 판정한다.
         const tabs = list.filter((b) => b.cls.includes("tab") && b.text !== "");
-        rec(`${id}/ended-panel`, "TL3", "결과 패널의 탭 글이 보인다(이름표 속성은 TL 이 0건으로 판정)", tabs.length > 0, `탭 ${tabs.length}개(${tabs.map((b) => b.text).join("·")})`);
+        rec(`${id}/ended-panel`, "TL3", "결과 패널에 탭이 없다(18.1, 전체 대화 하나)", tabs.length === 0, `탭 ${tabs.length}개(${tabs.map((b) => b.text).join("·")})`);
       }
     } finally {
       await closeGame(asGame(host));
