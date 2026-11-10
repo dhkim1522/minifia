@@ -685,14 +685,155 @@ export const LIVE_GHOST_ABSENT_PHASES = Object.freeze(["night", "errand"]);
 /** 유령이 걷기 전·후 산 사람 화면의 유령 자리가 같다고 보는 허용 오차(월드 단위) */
 export const GHOST_STILL_TOL = 0.05;
 
-export function liveGhostChecks() {
-  return ["C1", "C2"].map((id) => row(id, "(미구현)", ["미구현"]));
+const isSeatNum = (n) => Number.isInteger(n) && n >= 0;
+
+/**
+ * C1·C2 판정(산 사람 화면 유령). m = readLiveGhost 의 값 { hook, seats: [{ seat, shown, ghostTags, chips }], outfits, roleChips, ghostSeats }.
+ * ctx = { deadSeats, phase }. 밤·심부름(LIVE_GHOST_ABSENT_PHASES)이 아니면 C1 = 탈락 좌석마다 마지막 자리(shown)에 actor 가 있고 `.mv-tag.is-ghost` 이름표가 정확히 1개이며
+ * 훅 의상 표(__mfGhostOutfits)는 없거나 빈 표(산 사람 화면 유령은 훅 표가 아니라 안개 actor 다, L13). 밤·심부름이면 기대가 반대 — shown null·유령 이름표 0.
+ * C2 = [data-role-chip]·[data-ghost-seat] 이 0개(신분 단서 없음, 결정 0021) — 단계와 무관.
+ */
+export function liveGhostChecks(m, { deadSeats, phase } = {}) {
+  const L = {
+    C1: "탈락 좌석이 코트 안개 유령으로 남는다(마지막 자리 actor·is-ghost 이름표 1·의상 훅 표 없음, 밤·심부름은 그리지 않음)",
+    C2: "산 사람 화면에 직업 칩·죽은 자리 표식이 0개다",
+  };
+  const ok = m !== null && typeof m === "object" && m.hook === true && Array.isArray(m.seats) && Array.isArray(deadSeats) && deadSeats.length > 0 && deadSeats.every(isSeatNum);
+  if (!ok) return ["C1", "C2"].map((id) => noMeasure(id, L[id], "월드 훅·탈락 좌석 읽기"));
+  const absent = LIVE_GHOST_ABSENT_PHASES.includes(phase);
+  const bad1 = [];
+  for (const seat of deadSeats) {
+    const r = m.seats.find((x) => x && x.seat === seat);
+    if (!r) {
+      bad1.push(`좌석 ${seat} 측정값 없음(읽기 없음)`);
+      continue;
+    }
+    const drawn = r.shown !== null && r.shown !== undefined;
+    if (absent) {
+      if (drawn) bad1.push(`좌석 ${seat} ${phase} 단계인데 유령 actor 가 있음`);
+      if (r.ghostTags !== 0) bad1.push(`좌석 ${seat} ${phase} 단계인데 유령 이름표 ${r.ghostTags}개`);
+    } else {
+      if (!drawn) bad1.push(`좌석 ${seat} 마지막 자리 actor 없음(shown null)`);
+      if (r.ghostTags !== 1) bad1.push(`좌석 ${seat} 유령 이름표(.mv-tag.is-ghost) ${r.ghostTags}개 (기대 1)`);
+    }
+    if (m.outfits !== null && m.outfits !== undefined && Object.prototype.hasOwnProperty.call(m.outfits, seat)) bad1.push(`좌석 ${seat} 가 의상 훅 표에 있음(${m.outfits[seat]})`);
+  }
+  const bad2 = [];
+  if (!isNum(m.roleChips) || !isNum(m.ghostSeats)) bad2.push("칩·표식 수 측정값 없음");
+  else {
+    if (m.roleChips !== 0) bad2.push(`[data-role-chip] ${m.roleChips}개`);
+    if (m.ghostSeats !== 0) bad2.push(`[data-ghost-seat] ${m.ghostSeats}개`);
+  }
+  for (const r of m.seats) if (r && isNum(r.chips) && r.chips !== 0) bad2.push(`좌석 ${r.seat} 이름표에 직업 칩 ${r.chips}개`);
+  return [row("C1", L.C1, bad1), row("C2", L.C2, bad2)];
 }
-export function ghostViewChecks() {
-  return [row("C3", "(미구현)", ["미구현"])];
+
+/**
+ * C3 판정(유령 화면). m = readLiveGhost 의 값(유령 페이지에서) — seats: [{ seat, chips, ghostTags }], outfits(__mfGhostOutfits 표).
+ * ctx = { jobs: { 좌석: 직업 }, seats? } — 탈락 좌석 전원(기본: jobs 의 키)이 직업 칩 1개·`.mv-tag.is-ghost` 1개·의상 = 그 직업 의상(GHOST_JOB_OUTFIT_E2E, 모르면 coat)이어야 한다.
+ * 한 좌석이라도 사람 모습(의상 표에 없음)으로 남으면 실패.
+ */
+export function ghostViewChecks(m, { jobs = {}, seats } = {}) {
+  const label = "유령 화면: 탈락 좌석 전원이 직업 칩 1개·유령 이름표·그 직업의 유령 의상이다";
+  const list = seats ?? Object.keys(jobs).map(Number);
+  const ok = m !== null && typeof m === "object" && Array.isArray(m.seats) && m.outfits !== null && typeof m.outfits === "object" && m.outfits !== undefined && list.length > 0;
+  if (!ok) return [noMeasure("C3", label, "유령 화면 읽기·의상 표")];
+  const bad = [];
+  for (const seat of list) {
+    const r = m.seats.find((x) => x && x.seat === seat);
+    if (!r) {
+      bad.push(`좌석 ${seat} 측정값 없음(읽기 없음)`);
+      continue;
+    }
+    if (r.chips !== 1) bad.push(`좌석 ${seat} 직업 칩 ${r.chips}개 (기대 1)`);
+    if (r.ghostTags !== 1) bad.push(`좌석 ${seat} 유령 이름표 ${r.ghostTags}개 (기대 1)`);
+    const want = GHOST_JOB_OUTFIT_E2E[jobs[seat]] ?? "coat";
+    const got = m.outfits[seat];
+    if (got !== want) bad.push(`좌석 ${seat} 의상 ${got ?? "없음(사람 모습)"} (기대 ${want}, 직업 ${jobs[seat] ?? "?"})`);
+  }
+  return [row("C3", label, bad)];
 }
-export function ghostStillChecks() {
-  return row("GH12", "(미구현)", ["미구현"]);
+
+/** GH12(뜻 바뀜, C-6): 유령이 걷는 동안 산 사람 화면의 유령 자리(shown)가 그대로다 — 서버가 유령 구간을 보내지 않으므로 마지막 자리에 서 있는다 */
+export function ghostStillChecks(before, after) {
+  const label = "유령이 걷는 동안 산 사람 화면의 유령 자리(shown)가 바뀌지 않는다";
+  if (before === null && after === null) return noMeasure("GH12", label, "걷기 전·후 유령 자리");
+  const bad = [];
+  if (before === null || after === null) bad.push(before === null ? "걷기 전에 유령 자리가 없음" : "걷기 뒤 유령 자리가 사라짐");
+  else if (![before.x, before.z, after.x, after.z].every(isNum)) bad.push("자리 값이 숫자가 아님");
+  else {
+    const d = Math.hypot(after.x - before.x, after.z - before.z);
+    if (d > GHOST_STILL_TOL) bad.push(`자리가 ${fmt(d)} 만큼 옮겨짐 (허용 ${GHOST_STILL_TOL}, (${fmt(before.x)},${fmt(before.z)}) → (${fmt(after.x)},${fmt(after.z)}))`);
+  }
+  return row("GH12", label, bad);
+}
+
+/**
+ * 산 사람/유령 화면 유령 읽기(테스트 훅이 켜진 문맥에서만 값이 있다): 좌석마다 window.__mfWorld.shown(seat) 와 그 좌석 이름표의 `.mv-tag.is-ghost`·직업 칩 수,
+ * 페이지 전체 [data-role-chip]·[data-ghost-seat] 수, window.__mfGhostOutfits 표(없으면 null). 닉네임·글자는 읽지 않는다(T-18.1-19).
+ */
+export function readLiveGhost(page, seats) {
+  return page.evaluate((list) => {
+    const w = window.__mfWorld;
+    const tagOf = (seat) => document.querySelector(`.mf-world__tag[data-seat="${seat}"]`);
+    return {
+      hook: w !== undefined && typeof w.shown === "function",
+      seats: list.map((seat) => {
+        const sh = w ? w.shown(seat) : null;
+        const tag = tagOf(seat);
+        return {
+          seat,
+          shown: sh ? { x: sh.x, z: sh.z } : null,
+          ghostTags: tag ? tag.querySelectorAll(".mv-tag.is-ghost").length : 0,
+          chips: tag ? tag.querySelectorAll("[data-role-chip]").length : 0,
+        };
+      }),
+      outfits: window.__mfGhostOutfits === undefined ? null : { ...window.__mfGhostOutfits },
+      roleChips: document.querySelectorAll("[data-role-chip]").length,
+      ghostSeats: document.querySelectorAll("[data-ghost-seat]").length,
+    };
+  }, seats);
+}
+
+/**
+ * 찬반 기록 카드 overflow backstop(UI-SPEC UI Considerations): 기록 칸에서 창보다 큰 시스템 카드는 위가 잘리고, 기록 시트에서는 카드 전체가 목록 안에 보여야 한다.
+ * 칸에 찬반 카드(`[data-card="ballots"]`)가 있으면 칸 스크린샷을 남기고, 시트를 열어 카드를 목록 안으로 스크롤한 뒤 사각형을 읽고 시트 스크린샷을 남기고 닫는다.
+ * 돌려주는 값: { measured: false, why } 또는 { measured: true, cardH, windowH, cutTop(칸에서 위가 잘린 높이), sheetFits(시트 목록 안에 카드 전체가 듦), listH }. 카드 안 글은 읽지 않는다.
+ */
+export async function measureBallotsBackstop(page, { windowShot, sheetShot }) {
+  const win = await page.evaluate(() => {
+    const rect = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, height: r.height };
+    };
+    const log = document.querySelector("[data-chat-log]");
+    const cards = log ? [...log.querySelectorAll('[data-card="ballots"]')] : [];
+    return { log: rect(log), card: rect(cards[cards.length - 1] ?? null), open: document.querySelector("[data-chat-open]") !== null };
+  });
+  if (!win.log) return { measured: false, why: "기록 칸이 없음" };
+  if (!win.card) return { measured: false, why: "찬반 기록 카드가 기록에 없음" };
+  if (!win.open) return { measured: false, why: "[data-chat-open] 이 없음" };
+  await page.locator("[data-chat-log]").screenshot({ path: windowShot });
+  await page.locator("[data-chat-open]").click({ timeout: 4000 });
+  await page.waitForSelector("dialog[open] .mf-sheet--chatlog", { timeout: 3000 });
+  await sleep(400);
+  const sheet = await page.evaluate(() => {
+    const list = document.querySelector("[data-chat-sheet-log]");
+    const cards = list ? [...list.querySelectorAll('[data-card="ballots"]')] : [];
+    const card = cards[cards.length - 1];
+    if (!list || !card) return { missing: true, list: list !== null, lines: list ? list.children.length : 0, allCards: document.querySelectorAll('[data-card="ballots"]').length, dialogs: document.querySelectorAll("dialog[open]").length };
+    card.scrollIntoView({ block: "nearest" });
+    const l = list.getBoundingClientRect();
+    const c = card.getBoundingClientRect();
+    return { listH: l.height, cardH: c.height, fits: c.top >= l.top - 1 && c.bottom <= l.bottom + 1 };
+  });
+  await sleep(100);
+  await page.screenshot({ path: sheetShot });
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => document.querySelector("dialog[open]") === null, null, { timeout: 2000 }).catch(() => {});
+  if (sheet.missing) return { measured: false, why: `시트 목록에 찬반 기록 카드가 없음(목록 ${sheet.list ? "있음" : "없음"}·줄 ${sheet.lines}개·문서 전체 찬반 카드 ${sheet.allCards}개·열린 대화상자 ${sheet.dialogs}개)` };
+  return { measured: true, cardH: sheet.cardH, windowH: win.log.height, cutTop: Math.max(0, win.log.top - win.card.top), sheetFits: sheet.fits, listH: sheet.listH };
 }
 
 // ---- 흐름 ----

@@ -142,7 +142,7 @@ import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
 import { makeErrandFlows } from "./errand.mjs";
 import { makeTutorialFlows } from "./tutorial.mjs";
-import { chatSheetChecks, chatWindowChecks, makePolishFlows, measureChatSheet, readChatWindow } from "./polish.mjs";
+import { chatSheetChecks, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureBallotsBackstop, measureChatSheet, readChatWindow, readLiveGhost } from "./polish.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
 const HOST_NICK = "화면검사기";
@@ -1730,10 +1730,11 @@ async function dayFlow(ctx) {
         else rec(sc, "AN0", `결과 알림 글자 판정 (${which})`, false, "알림을 보지 못함");
       }
       rec(sc, "EX2", "알림 어디에도 역할 글자가 없다", !texts.some((a) => ROLE_WORD_RE.test(a.text)), `알림 ${texts.map((a) => a.text).join(" → ")}`);
-      const gone = await attempt(async () => {
-        await untilGame(guests[0].page, (g) => !g.tags.some((t) => t.seat === hostSeat), 9000, "처형된 이름표 사라짐");
-      });
-      rec(sc, "EX3", "처형된 사람의 이름표가 산 사람 화면에서 사라진다", gone.ok, gone.detail);
+      // 18.1-09 R3: 처형 연출(알림 + 2.4초 + 여유 0.6초) 뒤 산 사람 화면에는 처형된 사람이 마지막 자리에 코트 안개 유령으로 남는다(C1·C2) — 옛 EX3 '이름표가 사라진다' 를 바꿨다
+      {
+        const lg = await liveGhostSettled(guests[0].page, [hostSeat], 4000);
+        for (const r of lg.rows) rec(sc, r.id, `처형된 사람이 산 사람 화면에 코트 안개 유령으로 남는다 — ${r.label} (${lg.phase})`, r.ok, r.detail, r.ok);
+      }
       const ghosts = await attempt(async () => {
         const gs = await Promise.all(guests.map((x) => readGame(x.page)));
         const bad = gs.map((g) => ghostDomChecks(g.counts).filter((l) => !l.ok)).flat();
@@ -1752,11 +1753,53 @@ async function dayFlow(ctx) {
       });
       const nightSeen = night.ok ? "" : ` · 방장 서버 단계 ${ht.last()?.phase} · 손님 화면 단계 ${(await Promise.all(guests.map((x) => readGame(x.page).then((g) => g.phase).catch(() => "읽기 실패")))).join(",")}`;
       rec(`${id}/night`, "NT1", "처형 뒤 밤으로 간다", night.ok, `${night.detail ?? ""}${nightSeen}`);
+      // 18.1-09 R3(C-6): 산 사람의 밤 화면에는 유령 actor 를 그리지 않는다(서버가 본인·근처만 보내는 단계, 밤 겉보기는 역할마다 같아야 한다)
+      if (night.ok) {
+        const lg = await liveGhostSettled(guests[0].page, [hostSeat], 3000);
+        for (const r of lg.rows) rec(`${id}/night`, r.id, `산 사람의 밤 화면에는 유령을 그리지 않는다 — ${r.label} (${lg.phase})`, r.ok, r.detail, r.ok);
+      }
     }
   } finally {
     await closeGame(game);
   }
 }
+
+/**
+ * 산 사람 페이지의 유령 읽기를 liveGhostChecks 로 판정한다. 연출·렌더가 늦을 수 있어 통과할 때까지 ms 동안 250ms 마다 다시 읽고(문턱은 그대로),
+ * 시간이 다 되면 마지막 판정을 돌려준다. 단계는 읽을 때마다 화면 단계(readGame.phase)로 정한다. 돌려주는 값: { rows, phase }.
+ */
+async function liveGhostSettled(page, deadSeats, ms) {
+  const start = performance.now();
+  let out = { rows: [], phase: "?" };
+  for (;;) {
+    const g = await readGame(page).catch(() => null);
+    const m = await readLiveGhost(page, deadSeats).catch(() => null);
+    out = { rows: liveGhostChecks(m, { deadSeats, phase: g?.phase ?? "?" }), phase: g?.phase ?? "?" };
+    if (out.rows.every((r) => r.ok) || performance.now() - start > ms) return out;
+    await sleep(250);
+  }
+}
+
+/** 탈락 좌석과 직업(서버가 유령에게 준 spectate 직업 목록) — 유령 화면 C3 의 기대 */
+function deadJobsOf(view) {
+  const dead = view.players.filter((p) => p.alive === false).map((p) => p.seat);
+  return { dead, jobs: Object.fromEntries(dead.map((seat) => [seat, view.spectate?.seats?.find((x) => x.seat === seat)?.job])) };
+}
+
+/** 유령 페이지의 유령 화면 읽기를 ghostViewChecks 로 판정한다(통과할 때까지 ms 동안 250ms 마다 다시 읽는다) */
+async function ghostViewSettled(page, view, ms) {
+  const { dead, jobs } = deadJobsOf(view);
+  const start = performance.now();
+  for (;;) {
+    const m = await readLiveGhost(page, dead).catch(() => null);
+    const rows = ghostViewChecks(m, { jobs, seats: dead });
+    if (rows.every((r) => r.ok) || performance.now() - start > ms) return { rows, dead };
+    await sleep(250);
+  }
+}
+
+/** ghost 흐름 단계 순회가 모두 거쳐야 하는 단계(낮 시작·토론·지목·변론·찬반·처형·밤·아침) */
+const STAGE_TARGETS = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"];
 
 // ---- ghost: 처형된 사람은 유령 화면(직업 칩·유령 채널)으로 다음 날도 맵을 걷고, 산 사람 화면·소켓에는 아무것도 없다 ----
 
@@ -1827,6 +1870,8 @@ async function ghostFlow(ctx) {
       const sc = `${id}/outfit`;
       const got = await ghostOutfitMatch(hp, ht.last());
       rec(sc, "GH14", "유령 페이지의 직업 의상 표가 탈락 좌석 전부와 spectate 직업 대응(마피아·경찰·의사 같은 이름, 시민 coat)과 같다", got.ok, got.ok ? got.label : got.detail, true);
+      const first = await ghostViewSettled(hp, ht.last(), 4000);
+      for (const r of first.rows) rec(sc, r.id, `${r.label} (처형 직후 ${ht.last().phase})`, r.ok, r.detail, r.ok);
       const dom = await readGhostOutfits(hp);
       rec(sc, "GH14b", "유령 페이지에도 의상은 DOM 속성이 아니다([data-ghost-outfit] 0개)", dom.domCount === 0, `DOM ${dom.domCount}개`);
       for (let i = 0; i < guests.length; i++) {
@@ -1844,6 +1889,18 @@ async function ghostFlow(ctx) {
       const g0 = await untilGame(hp, (x) => x.phase === "nomination" && x.ghostView, 9000, "다음 날 지목 도착(유령)");
       await settle(hp);
       const movesBefore = guests.map((g) => g.tracker.moves.get(hostSeat)?.n ?? 0);
+      // C-6: 걷기 전 산 사람 화면 유령 자리(마지막으로 받은 구간 자리) — 걷고 난 뒤와 견준다(GH12)
+      const liveBefore = [];
+      for (const g of guests) {
+        const dl = performance.now();
+        let shown = null;
+        while (performance.now() - dl < 4000) {
+          shown = (await readLiveGhost(g.page, [hostSeat]).catch(() => null))?.seats?.[0]?.shown ?? null;
+          if (shown) break;
+          await sleep(250);
+        }
+        liveBefore.push(shown);
+      }
       // 14페이즈: 앱의 스테이지(useMapInsets)는 윗변이 자막 띠 면 아랫변이다 — 목적지도 띠 아래에서 고른다(띠 밑으로 걸어간 유령 이름표는 띠 면이 글자를 덮어 대비를 재지 못한다, 360x560 에서 간헐)
       const bandNow = g0.stage ? await readHostBand(hp) : null;
       const stageBelowBand = g0.stage ? { ...g0.stage, top: Math.max(g0.stage.top, bandNow?.bandRect?.bottom ?? 0) } : null;
@@ -1886,7 +1943,6 @@ async function ghostFlow(ctx) {
       }
       for (let i = 0; i < guests.length; i++) {
         const g = guests[i];
-        await untilGame(g.page, (x) => !x.tags.some((t) => t.seat === hostSeat), 6000, "처형 연출 끝").catch(() => {});
         const gg = await readGame(g.page);
         const gv = g.tracker.last();
         if (!aliveOf(gv).includes(g.seat)) {
@@ -1898,9 +1954,89 @@ async function ghostFlow(ctx) {
         const after = g.tracker.moves.get(hostSeat)?.n ?? 0;
         const before = movesBefore[i];
         rec(sc, "GH11", `유령이 걷는 동안 산 사람 페이지가 유령 좌석 구간을 받지 않는다 (손님${i + 1})`, after === before, `받은 구간 번호 ${before} → ${after}`);
-        rec(sc, "GH12", `산 사람 화면에 유령 이름표가 없다 (손님${i + 1})`, !gg.tags.some((t) => t.seat === hostSeat), `이름표 ${JSON.stringify(gg.tags.map((t) => [t.seat, t.opacity]))}`);
+        // 18.1-09 R3: 옛 GH12 '산 사람 화면에 유령 이름표가 없다' 는 바뀌었다 — 탈락 좌석 전원이 코트 안개 유령으로 남고(C1·C2) 처형된 방장의 자리는 유령이 걸어도 그대로다(GH12, C-6)
+        const deadNow = gv.players.filter((p) => p.alive === false).map((p) => p.seat);
+        const lg = await liveGhostSettled(g.page, deadNow.length > 0 ? deadNow : [hostSeat], 4000);
+        for (const r of lg.rows) rec(sc, r.id, `산 사람 화면 유령 — ${r.label} (손님${i + 1}, 유령이 걸은 뒤, ${lg.phase})`, r.ok, r.detail, r.ok);
+        const liveAfter = (await readLiveGhost(g.page, [hostSeat]).catch(() => null))?.seats?.[0]?.shown ?? null;
+        const still = ghostStillChecks(liveBefore[i], liveAfter);
+        rec(sc, still.id, `${still.label} (손님${i + 1})`, still.ok, still.detail, still.ok);
         await gameGH(ctx, id, `nomination-guest${i + 1}`, g);
       }
+    }
+
+    // 18.1-09 R3(C3·C1·C2): 다음 날 단계를 한 칸씩 넘기며(낮 시작·토론·지목·변론·찬반·처형·밤·아침 중 판이 거치는 것) 단계마다
+    // 유령(방장) 화면은 탈락 좌석 전원이 직업 칩 1개·유령 이름표·그 직업 의상이고, 같은 단계의 산 손님 화면은 탈락 좌석을 코트 안개 유령으로 그린다(밤·심부름은 그리지 않음)
+    {
+      const sc = `${id}/stages`;
+      const covered = [];
+      let prevAlive = aliveOf(ht.last());
+      let backstopDone = false;
+      for (let step = 0; step < 22; step++) {
+        const phase = ht.last().phase;
+        if (phase === "ended") break;
+        if (!covered.includes(phase)) {
+          covered.push(phase);
+          await untilGame(hp, (x) => x.phase === phase && x.ghostView, 8000, `${phase} 유령 화면`).catch(() => {});
+          await Promise.all(guests.map((g) => untilGame(g.page, (x) => x.phase === phase || x.ghostView, 8000, `${phase} 손님 화면`).catch(() => {})));
+          await settle(hp);
+          const view = ht.last();
+          const gv = await ghostViewSettled(hp, view, 4000);
+          for (const r of gv.rows) rec(sc, r.id, `${r.label} (${phase})`, r.ok, r.detail, r.ok);
+          // 찬반 기록 카드 overflow backstop(참고 줄): 첫 처형의 찬반 기록 카드가 기록에 남아 있다 — 칸에서는 위가 잘리고 시트 목록 안에는 카드 전체가 든다.
+          // 처형 단계는 5초라 시트를 여는 동안 밤으로 넘어가 사라질 수 있어, 단계가 길게 머무는 다음 날 지목에서 잰다
+          if (phase === "nomination" && !backstopDone) {
+            backstopDone = true;
+            const g0 = guests.find((g) => aliveOf(g.tracker.last()).includes(g.seat));
+            const ballots = await attempt(async () => {
+              if (!g0) throw new Error("산 손님 없음");
+              mkdirSync(OUT_DIR, { recursive: true });
+              const b = await measureBallotsBackstop(g0.page, { windowShot: join(OUT_DIR, `ghost-ballots-window-${ctx.size.label}.png`), sheetShot: join(OUT_DIR, `ghost-ballots-sheet-${ctx.size.label}.png`) });
+              infoRow(ctx, sc, "EX3b", "참고: 찬반 기록 카드 — 칸에서 위가 잘리고 시트 목록 안에 카드 전체가 든다(판정 아님)", b.measured ? `카드 높이 ${Math.round(b.cardH)} · 칸 높이 ${Math.round(b.windowH)} · 칸 위 끝 위로 벗어난 높이 ${Math.round(b.cutTop)}(칸 높이보다 크면 카드가 칸에서 잘림) · 시트 목록 높이 ${Math.round(b.listH)} · 시트 안에 카드 전체 ${b.sheetFits ? "듦" : "안 듦"}` : `측정 안 함: ${b.why}`);
+            });
+            if (!ballots.ok) infoRow(ctx, sc, "EX3b", "참고: 찬반 기록 카드 overflow backstop(판정 아님)", `읽기 실패: ${ballots.detail}`);
+          }
+          for (let i = 0; i < guests.length; i++) {
+            const g = guests[i];
+            const gview = g.tracker.last();
+            if (!aliveOf(gview).includes(g.seat)) continue; // 죽은 손님은 그 자신이 유령 화면이라 산 사람 규칙의 대상이 아니다
+            // 처형 연출(알림 + 2.4초 + 0.6초)이 도는 중인 좌석은 아직 유령 이름표가 없다 — 처형 단계의 이 판정에서는 빼고, 연출 뒤 단계(밤·아침)와 day 흐름 EX 가 본다
+            const dead = gview.players.filter((p) => p.alive === false && !(phase === "execution" && prevAlive.includes(p.seat))).map((p) => p.seat);
+            if (dead.length === 0) continue;
+            const lg = await liveGhostSettled(g.page, dead, 4000);
+            for (const r of lg.rows) rec(sc, r.id, `산 사람 화면 유령 — ${r.label} (손님${i + 1}, ${phase})`, r.ok, r.detail, r.ok);
+          }
+        }
+        prevAlive = aliveOf(ht.last());
+        if (STAGE_TARGETS.every((x) => covered.includes(x)) || covered.length >= 14) break;
+        // 변론·찬반·처형까지 가려면 이 날 지목에 표가 있어야 한다 — 방장은 이미 죽어 봇이 방장을 가리킬 수 없으니, 산 손님 둘이 산 봇 하나를 가리키고 찬성한다
+        if (phase === "nomination") {
+          // 마피아를 처형하면 시민 승리로 판이 끝나 순회가 짧아진다 — 유령 화면이 아는 직업(spectate)으로 마피아가 아닌 봇을 가리킨다
+          const jobOf = (seat) => ht.last().spectate?.seats?.find((x) => x.seat === seat)?.job;
+          const botSeats = aliveOf(ht.last()).filter((seat) => seat !== hostSeat && !guests.some((g) => g.seat === seat));
+          const botSeat = botSeats.find((seat) => jobOf(seat) !== "mafia") ?? botSeats[0];
+          const picked = await attempt(async () => {
+            if (botSeat === undefined) throw new Error("가리킬 산 봇이 없음");
+            for (const g of guests) if (aliveOf(g.tracker.last()).includes(g.seat)) await tapPick(g.page, botSeat);
+          });
+          if (!picked.ok) infoRow(ctx, sc, "C3p", "지목에 표를 넣지 못해 변론·찬반·처형 단계는 건너뛸 수 있다(판정 아님)", picked.detail);
+        }
+        if (phase === "verdict") {
+          for (const g of guests) {
+            if (!aliveOf(g.tracker.last()).includes(g.seat)) continue;
+            await untilGame(g.page, (x) => x.phase === "verdict" && x.verdictBtns.length === 2, 6000, "찬반 도착").catch(() => {});
+            await chooseVerdict(g.page, true).catch(() => {});
+          }
+        }
+        const next = await attempt(async () => {
+          await skipOnce(hp, ht);
+        });
+        if (!next.ok) {
+          infoRow(ctx, sc, "C3x", "단계를 넘기지 못해 순회를 멈춘다(판정 아님)", next.detail);
+          break;
+        }
+      }
+      infoRow(ctx, sc, "C3i", "참고: 순회에서 확인한 단계(판정 아님)", covered.join(" → "));
     }
   } finally {
     await closeGame(game);
