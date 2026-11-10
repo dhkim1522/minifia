@@ -10,39 +10,17 @@ import {
   CHAT_PANEL_EXTRA,
   LOBBY_PANEL_EXTRA,
   LOG_H,
-  LOG_H_KB,
-  LOG_H_SHORT,
-  LOG_H_TALL,
   NOTICE_MS,
   SEND_DIM_MS,
-  TALL_ROOM_MIN_H,
   TAIL_WINDOW_MS,
   TYPING_EXPIRE_MS,
   TYPING_IDLE_OFF_MS,
   TYPING_PILL_H,
   TYPING_REFRESH_MS,
   lobbyPanelHeight,
-  logHeightFor,
 } from "../../src/game/chatUi";
 
 // 07-03 Task 3: 채팅 패널 치수·시각 상수 한 곳 (07-UI-SPEC 구조 표). DOM 을 읽지 않는 상수·순수 함수뿐이다.
-
-describe("logHeightFor — 기록 칸 고정 높이 (UI-SPEC 구조)", () => {
-  it("방 높이 779 는 96, 780 은 152 — 경계는 780", () => {
-    expect(TALL_ROOM_MIN_H).toBe(780);
-    expect(logHeightFor(779)).toBe(96);
-    expect(logHeightFor(780)).toBe(152);
-  });
-
-  it("작은 값·큰 값도 같은 규칙이다", () => {
-    expect(logHeightFor(560)).toBe(LOG_H_SHORT);
-    expect(logHeightFor(932)).toBe(LOG_H_TALL);
-  });
-
-  it("키보드 열림 기록 칸은 72 이다", () => {
-    expect(LOG_H_KB).toBe(72);
-  });
-});
 
 describe("패널 높이 식 (18.1 B 계약 4 — 기록 칸 68 한 값)", () => {
   it("기록 칸 68 = 24 × 2 + 4 + 8 × 2", () => {

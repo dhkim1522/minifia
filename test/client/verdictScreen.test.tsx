@@ -26,7 +26,6 @@ vi.mock("../../src/net/useMapInsets", async () => {
       panelRef: useRef(null),
       inputRef: useRef(null),
       kbOpen: kb.open,
-      logH: 96,
       stageInsets: undefined,
     }),
   };

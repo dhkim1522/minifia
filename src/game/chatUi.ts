@@ -7,16 +7,6 @@
 /** 기록 칸 높이 — 모든 폰·키보드 열림 한 값(18.1 P181-3): 글줄 24 × 2 + 줄 간격 4 + 위아래 안쪽 8 × 2. 두 줄 창이라 칸 안에서 스크롤하지 않는다(지난 기록은 기록 시트) */
 export const LOG_H = 68;
 
-// 아래 옛 이름들(LOG_H_SHORT·LOG_H_TALL·LOG_H_KB·TALL_ROOM_MIN_H·logHeightFor)은 18.1-07 에서 E2E 사본과 함께 정리한다.
-/** 기록 칸 고정 높이: 방 높이 < 780 */
-export const LOG_H_SHORT = 96;
-/** 기록 칸 고정 높이: 방 높이 ≥ 780 */
-export const LOG_H_TALL = 152;
-/** 키보드가 열렸을 때 기록 칸 높이 */
-export const LOG_H_KB = 72;
-/** 이 높이 이상인 방은 긴 기록 칸을 쓴다 */
-export const TALL_ROOM_MIN_H = 780;
-
 /** 로비 패널 = LOG_H + 154 = 14 + LOG_H + 8 + 48(입력줄) + 10 + 52(행동 줄) + 22 */
 export const LOBBY_PANEL_EXTRA = 154;
 /** 방장 대기실 패널이 손님보다 더 큰 만큼 = 스위치 줄 64 + 간격 12(0080-4, UI-SPEC 함께 진행 계약). 방장 패널은 250/306 → 326/382. E2E 사본(scripts/e2e/lib.mjs)이 같은 값이다 */
@@ -52,11 +42,6 @@ export const AUTO_SCROLL_SLOP_PX = 24;
 export const LOG_FADE_H = 12;
 /** 화면이 들고 있는 기록 줄 수 상한 */
 export const CHAT_KEEP_LINES = 100;
-
-/** 기록 칸 고정 높이 — 방 높이로 한 번 정한다 */
-export function logHeightFor(roomH: number): number {
-  return roomH >= TALL_ROOM_MIN_H ? LOG_H_TALL : LOG_H_SHORT;
-}
 
 export function lobbyPanelHeight(logH: number, host = false): number {
   return logH + LOBBY_PANEL_EXTRA + (host ? LOBBY_HOST_TUTORIAL_EXTRA : 0);

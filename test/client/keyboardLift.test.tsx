@@ -1,7 +1,7 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import type { RefObject } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useChatLogHeight, useKeyboardLift } from "../../src/net/useKeyboardLift";
+import { useKeyboardLift } from "../../src/net/useKeyboardLift";
 
 const INNER_H = 844;
 
@@ -208,58 +208,5 @@ describe("useKeyboardLift: 한 줄 시트(귓속말, 09.1.1-09)의 입력칸도 
     act(() => lineInput.blur());
     expect(css("--mf-kb-lift")).toBe("0px");
     expect(result.current.inSheet).toBe(false);
-  });
-});
-
-describe("useChatLogHeight: LOG_H 고정 (CHAT-05)", () => {
-  let root: HTMLDivElement;
-  let rootH: number;
-  beforeEach(() => {
-    root = document.createElement("div");
-    document.body.append(root);
-    rootH = 844;
-    Object.defineProperty(root, "clientHeight", { configurable: true, get: () => rootH });
-  });
-  // 렌더마다 새 ref 객체를 만들면 훅이 다시 정해 버리므로 훅마다 하나만 만든다
-  const hook = () => {
-    const ref = { current: root } as RefObject<HTMLElement | null>;
-    return renderHook(() => useChatLogHeight(ref, inputRef));
-  };
-
-  it("방 높이 844 는 152, 664 는 96", () => {
-    expect(hook().result.current).toBe(152);
-    rootH = 664;
-    expect(hook().result.current).toBe(96);
-  });
-
-  it("포커스 중에 방 높이가 500 으로 바뀌고 방향이 바뀌어도 값은 그대로다", () => {
-    const { result } = hook();
-    expect(result.current).toBe(152);
-    act(() => input.focus());
-    rootH = 500;
-    act(() => {
-      window.dispatchEvent(new Event("orientationchange"));
-      vi.advanceTimersByTime(40);
-    });
-    expect(result.current).toBe(152);
-  });
-
-  it("방향이 바뀌고 포커스가 없으면 다시 계산한다", () => {
-    const { result } = hook();
-    expect(result.current).toBe(152);
-    rootH = 500;
-    act(() => {
-      window.dispatchEvent(new Event("orientationchange"));
-      vi.advanceTimersByTime(40);
-    });
-    expect(result.current).toBe(96);
-  });
-
-  it("방 높이가 바뀌어도 방향 이벤트가 없으면 다시 정하지 않는다", () => {
-    const { result, rerender } = hook();
-    rootH = 500;
-    rerender();
-    act(() => void vi.advanceTimersByTime(2000));
-    expect(result.current).toBe(152);
   });
 });

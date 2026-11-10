@@ -178,7 +178,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   );
   const logLines = useMemo(() => resultLog.snapshot(), [resultLog, logRevision]); // eslint-disable-line react-hooks/exhaustive-deps
   const contacts = useMemo(() => new Map(view.players.map((p) => [p.seat, p.nickname] as const)), [view.players]);
-  // 확장 높이: 방 높이(루트 높이)로 한 번 정하고 화면 방향·크기가 바뀔 때만 다시 잰다(키보드·주소창으로는 다시 정하지 않는다, useChatLogHeight 와 같은 길)
+  // 확장 높이: 방 높이(루트 높이)로 한 번 정하고 화면 방향·크기가 바뀔 때만 다시 잰다(키보드·주소창으로는 다시 정하지 않는다)
   const [roomH, setRoomH] = useState(0);
   useLayoutEffect(() => {
     const measure = (): void => setRoomH(rootRef.current?.clientHeight || window.innerHeight);
