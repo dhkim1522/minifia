@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { ClientMessage, MapChoice, RoomView } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
+import { lockedOutfits } from "../../shared/game/look";
 import { connectedCount } from "../../shared/game/room";
 import { ActionButton, ActionRow } from "../components/ActionButton";
 import { BotSheet } from "../components/BotSheet";
@@ -123,6 +124,8 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   });
   // 미리 보기·되돌림·전송 간격은 훅이 쥔다. WorldStage 에만 미리 보기가 반영된 stageView 를 넘기고 그 밖(채팅·헤더)은 서버 view 를 쓴다.
   const dress = useDress({ view, send, canSend });
+  // 18-05(D-02): 다른 참가자가 직접 고른 옷 — 서버 view.players 에서 나를 빼고 매 방송 다시 계산한다(서버 잠금과 같은 함수)
+  const taken = useMemo(() => lockedOutfits(view.players.filter((p) => p.seat !== view.me.seat)), [view.players, view.me.seat]);
   const dressBtnRef = useRef<HTMLButtonElement>(null);
   const restoreDressFocus = useRef(false);
   // 시트 탭(11-13): 지도 칩 → 맵 탭, 꾸미기 버튼 → 의상 탭. 칩·맵 탭은 허용 맵이 둘 이상일 때만 있다
@@ -245,6 +248,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           onPick={dress.pick}
           onClose={closeDress}
           disabled={!canSend}
+          taken={taken}
           host={isHost && mapsOn}
           tab={dressTab}
           mapChoice={mapChoice}

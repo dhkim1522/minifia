@@ -23,11 +23,12 @@ export const DRESS_TEXT = {
   open: "옷장", // 14-07(TOOL-01): 꾸미기 → 옷장. 단추 접근성 이름·시트 이름이 한 곳에서 바뀐다
   close: "닫기",
   selected: ", 선택됨",
+  taken: ", 다른 참가자가 입고 있음", // 18-05(D-02): 잠긴 카드 접근성 이름 조각. 항상 "참가자"
 } as const;
 
-/** 카드 이름 + 선택되었으면 ", 선택됨" */
-export function outfitCardName(id: OutfitId, selected: boolean): string {
-  return OUTFIT_LABEL[id] + (selected ? DRESS_TEXT.selected : "");
+/** 카드 이름 + 선택되었으면 ", 선택됨" · 잠겼으면 taken 조각 */
+export function outfitCardName(id: OutfitId, selected: boolean, locked = false): string {
+  return OUTFIT_LABEL[id] + (locked ? DRESS_TEXT.taken : selected ? DRESS_TEXT.selected : "");
 }
 
 // 맵 선택(11-13, D-20): 지도 칩 이름과 시트 맵 탭 카드 이름. 사용자 문자열은 없다 — 고정 문구뿐이다.

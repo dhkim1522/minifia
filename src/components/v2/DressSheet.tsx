@@ -11,6 +11,7 @@ import { V2Icon } from "./V2Icon";
 // 카드 띠는 한 줄 가로 스크롤 스냅이다. 카드를 누르면 onPick(id) — 미리 보기·전송은 부르는 쪽(useDress)이 한다.
 // 11-13(맵 선택): 방장에게만 [맵][의상] 탭(아이콘 44×44, 선택 탭은 아래 2px 줄)이 생긴다. 맵 탭은 카드 3장(재즈 바·광장·랜덤, 96×112 간격 8)이고
 // 누르면 onPickMap(id) 만 부른다 — 미리 보기·낙관 갱신 없이 서버가 mapChoice 를 방송하면 카드가 바뀐다. 손님에게는 탭이 없고 의상 카드만 보인다.
+// 18-05(D-02): 다른 참가자가 직접 고른 옷은 잠금(자물쇠·누름 무시, 알림 없음).
 // 읽을 글은 카드 이름(14px 700 한 줄)뿐이고 사용자 문자열은 받지 않는다. 색은 gray-100 만 쓴다(의상은 역할이 아니다).
 
 export interface DressSheetProps {
@@ -20,6 +21,8 @@ export interface DressSheetProps {
   onClose(): void;
   /** 연결이 끊겼다: 카드가 aria-disabled 가 되고 눌러도 onPick 이 불리지 않는다. 닫기는 그대로 동작한다 */
   disabled?: boolean;
+  /** 다른 사람이 직접 고른 옷. 내 옷(value)은 들어 있어도 잠그지 않는다. 서버 잠금(18-01)과 같은 lockedOutfits 결과 */
+  taken?: ReadonlySet<OutfitId>;
   /** 방장이면 [맵][의상] 탭이 생긴다(11-13). 아니면 탭 행이 없고 의상 카드만 */
   host?: boolean;
   /** 처음 열리는 탭. 지도 칩은 "map", 꾸미기 버튼은 "dress"(기본). 방장이 아니면 무시한다 */
@@ -30,7 +33,7 @@ export interface DressSheetProps {
   onPickMap?(id: MapChoice): void;
 }
 
-export function DressSheet({ value, onPick, onClose, disabled = false, host = false, tab: openTab = "dress", mapChoice = "random", onPickMap }: DressSheetProps) {
+export function DressSheet({ value, onPick, onClose, disabled = false, taken, host = false, tab: openTab = "dress", mapChoice = "random", onPickMap }: DressSheetProps) {
   const stripRef = useRef<HTMLDivElement>(null);
   const mapsRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<"map" | "dress">(host ? openTab : "dress");
@@ -124,22 +127,24 @@ export function DressSheet({ value, onPick, onClose, disabled = false, host = fa
         <div ref={stripRef} className="mv-dress-sheet__strip">
           {DRESS_ORDER.map((id) => {
             const selected = id === value;
+            const locked = taken?.has(id) === true && id !== value;
             return (
               <button
                 key={id}
                 type="button"
                 className={selected ? "mv-dress-card is-selected" : "mv-dress-card"}
                 data-outfit={id}
+                data-taken={locked ? "" : undefined}
                 aria-pressed={selected}
-                aria-label={outfitCardName(id, selected)}
-                aria-disabled={disabled ? "true" : undefined}
+                aria-label={outfitCardName(id, selected, locked)}
+                aria-disabled={disabled || locked ? "true" : undefined}
                 onClick={() => {
-                  if (!disabled) onPick(id);
+                  if (!disabled && !locked) onPick(id);
                 }}
               >
                 <img className="mv-dress-card__img" src={outfitCardSrc(id)} alt={OUTFIT_LABEL[id]} width={64} height={80} draggable={false} />
                 <span className="mv-dress-card__name">{OUTFIT_LABEL[id]}</span>
-                {selected ? <V2Icon name="check" size={12} className="mv-dress-card__check" /> : null}
+                {selected ? <V2Icon name="check" size={12} className="mv-dress-card__check" /> : locked ? <V2Icon name="lock" size={16} className="mv-dress-card__lock" /> : null}
               </button>
             );
           })}
