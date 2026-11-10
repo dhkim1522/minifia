@@ -93,6 +93,64 @@ describe("DressSheet — 부품", () => {
   });
 });
 
+describe("잠긴 옷 (P18-2·3, D-02)", () => {
+  const taken = new Set<(typeof OUTFIT_IDS)[number]>(["hood", "noir"]);
+
+  it("taken 카드만 data-taken·aria-disabled·자물쇠·접근성 이름이 붙는다", () => {
+    const { container } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} taken={taken} />);
+    const locked = [...container.querySelectorAll<HTMLButtonElement>("button[data-outfit][data-taken]")];
+    expect(locked.map((c) => c.dataset.outfit)).toEqual(["hood", "noir"]);
+    for (const card of locked) {
+      const id = card.dataset.outfit as (typeof OUTFIT_IDS)[number];
+      expect(card.getAttribute("aria-disabled")).toBe("true");
+      expect(card.getAttribute("aria-label")).toBe(`${OUTFIT_LABEL[id]}, 다른 참가자가 입고 있음`);
+      expect(card.querySelectorAll("svg.mv-dress-card__lock")).toHaveLength(1);
+    }
+    const open = container.querySelector("button[data-outfit='mafia']")!;
+    expect(open.hasAttribute("data-taken")).toBe(false);
+    expect(open.getAttribute("aria-disabled")).toBeNull();
+    expect(open.querySelector(".mv-dress-card__lock")).toBeNull();
+  });
+
+  it("잠긴 카드를 누르면 onPick 이 불리지 않고 다른 카드는 한 번 불린다", () => {
+    const onPick = vi.fn();
+    const { container } = render(<DressSheet value="coat" onPick={onPick} onClose={() => {}} taken={taken} />);
+    fireEvent.click(container.querySelector("button[data-outfit='hood']")!);
+    fireEvent.click(container.querySelector("button[data-outfit='noir']")!);
+    expect(onPick).not.toHaveBeenCalled();
+    fireEvent.click(container.querySelector("button[data-outfit='police']")!);
+    expect(onPick).toHaveBeenCalledTimes(1);
+    expect(onPick).toHaveBeenCalledWith("police");
+  });
+
+  it("taken 에 내 옷(value)이 들어 있어도 내 카드는 잠기지 않고 선택 표시가 그대로다", () => {
+    const { container } = render(<DressSheet value="hood" onPick={() => {}} onClose={() => {}} taken={taken} />);
+    const mine = container.querySelector("button[data-outfit='hood']")!;
+    expect(mine.hasAttribute("data-taken")).toBe(false);
+    expect(mine.getAttribute("aria-pressed")).toBe("true");
+    expect(mine.getAttribute("aria-label")).toBe("후드, 선택됨");
+    expect(mine.querySelector(".mv-dress-card__check")).not.toBeNull();
+    expect(mine.querySelector(".mv-dress-card__lock")).toBeNull();
+    expect(container.querySelectorAll("[data-outfit][data-taken]")).toHaveLength(1);
+  });
+
+  it("taken 이 없거나 비어 있으면 잠긴 카드가 없다", () => {
+    for (const t of [undefined, new Set<(typeof OUTFIT_IDS)[number]>()]) {
+      const { container, unmount } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} taken={t} />);
+      expect(container.querySelectorAll("[data-taken]")).toHaveLength(0);
+      expect(container.querySelectorAll(".mv-dress-card__lock")).toHaveLength(0);
+      unmount();
+    }
+  });
+
+  it("disabled 와 taken 이 함께면 모든 카드가 aria-disabled 이고 잠긴 카드에만 data-taken", () => {
+    const { container } = render(<DressSheet value="coat" onPick={() => {}} onClose={() => {}} taken={taken} disabled />);
+    const cards = [...container.querySelectorAll("button[data-outfit]")];
+    expect(cards.every((c) => c.getAttribute("aria-disabled") === "true")).toBe(true);
+    expect(container.querySelectorAll("[data-outfit][data-taken]")).toHaveLength(2);
+  });
+});
+
 // ── 로비 통합 ──
 const player = (seat: number, nickname: string, extra: Partial<PublicPlayer> = {}): PublicPlayer => ({ seat, nickname, connected: true, isHost: seat === 0, ...extra });
 const makeView = (players: PublicPlayer[], mySeat = 0): RoomView => ({

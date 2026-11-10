@@ -1080,3 +1080,38 @@ describe("Lobby — 방장 스위치 줄 '튜토리얼 후 진행' (17-07, TUT-0
     }
   });
 });
+
+// 18-05(D-02): 로비 옷장 시트는 서버 view.players 에서 나를 뺀 "직접 고른 옷"을 잠근다
+describe("Lobby — 옷장 잠금 (18-05, D-02)", () => {
+  const openSheet = (container: HTMLElement) => {
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
+    return container.querySelector("[data-dress-sheet]") as HTMLElement;
+  };
+
+  it("다른 참가자가 직접 고른 hood 만 잠기고 look 없는 참가자의 기본 coat 는 잠기지 않는다", () => {
+    const view = makeView([player(0, "민수"), player(1, "영희", { look: "hood" }), player(2, "서준")], 0);
+    const { container } = render(lobby(view));
+    const sheet = openSheet(container);
+    const locked = [...sheet.querySelectorAll<HTMLElement>("[data-outfit][data-taken]")].map((c) => c.dataset.outfit);
+    expect(locked).toEqual(["hood"]);
+    expect(sheet.querySelector("[data-outfit='coat']")?.hasAttribute("data-taken")).toBe(false);
+  });
+
+  it("내 look 이 hood 이고 남도 hood 인 순간에도 내 카드는 잠기지 않는다", () => {
+    const view = makeView([player(0, "민수", { look: "hood" }), player(1, "영희", { look: "hood" })], 0);
+    const { container } = render(lobby(view));
+    const sheet = openSheet(container);
+    expect(sheet.querySelectorAll("[data-outfit][data-taken]")).toHaveLength(0);
+    expect(sheet.querySelector("[data-outfit='hood']")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("남이 옷을 바꾸면 다음 방송에서 카드가 열리고 잠긴다", () => {
+    const first = makeView([player(0, "민수"), player(1, "영희", { look: "hood" })], 0);
+    const { container, rerender } = render(lobby(first));
+    const sheet = openSheet(container);
+    expect(sheet.querySelector("[data-outfit='hood']")?.hasAttribute("data-taken")).toBe(true);
+    rerender(lobby(makeView([player(0, "민수"), player(1, "영희", { look: "noir" })], 0)));
+    expect(sheet.querySelector("[data-outfit='hood']")?.hasAttribute("data-taken")).toBe(false);
+    expect(sheet.querySelector("[data-outfit='noir']")?.hasAttribute("data-taken")).toBe(true);
+  });
+});
