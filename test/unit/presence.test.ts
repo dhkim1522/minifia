@@ -1,5 +1,5 @@
 // 장면 상태 순수 모듈 시험 — GHOST-01·MAP-04·DAY-04·05, 08-UI-SPEC 카메라·조명.
-// 서버 view 하나에서 그 viewer 의 보이는 좌석·카메라·조명·긴장이 정해진다. 산 사람 화면 상태에는 유령 좌석이 없다.
+// 서버 view 하나에서 그 viewer 의 보이는 좌석·카메라·조명·긴장이 정해진다. 산 사람 화면 상태의 탈락 좌석은 직업 단서 없는 ghost 다(18.1).
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 JSON 문자열로 한다.
 import { describe, expect, it } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
@@ -10,6 +10,7 @@ import { GHOST_MIST, jobOutfit } from "../../src/world/ghostOutfit";
 import {
   cameraModeOf,
   executionFade,
+  GHOST_BASE_Y,
   ghostFloatY,
   leaderShift,
   lightingFor,
@@ -65,16 +66,30 @@ function viewOf(phase: PhaseId, opts: ViewOpts = {}): RoomView {
 const points = (...pairs: [number, number][]) => pairs.map(([seat, target]) => ({ seat, target }));
 
 describe("visibleSeats (GHOST-01, T-08-25)", () => {
-  it("산 사람 viewer: 탈락한 좌석 3 은 없고 산 좌석은 ghost false 로만 있다", () => {
+  it("산 사람 viewer: 탈락한 좌석 3 은 ghost 로 남고 산 좌석은 ghost false 다 (18.1 P181-6)", () => {
     const seats = visibleSeats(viewOf("discussion", { dead: [3], mySeat: 0 }));
-    same(Object.keys(seats).map(Number), [0, 1, 2, 4]);
-    same(Object.values(seats).map((s) => s.ghost), [false, false, false, false]);
+    same(Object.keys(seats).map(Number), [0, 1, 2, 3, 4]);
+    same([0, 1, 2, 4].map((n) => seats[n]?.ghost), [false, false, false, false]);
+    same(seats[3], { show: true, ghost: true });
   });
 
-  it("산 사람 viewer 의 상태에는 유령 좌석이 '숨김' 표시로도 없다 (키 자체가 없다)", () => {
-    const seats = visibleSeats(viewOf("discussion", { dead: [3] }));
-    expect(3 in seats).toBe(false);
-    same(Object.values(seats).filter((s) => s.ghost).length, 0);
+  it("산 사람 viewer 의 유령 좌석에는 outfit·costume·opacity 키가 없다 (직업 단서 없음, L13·C-5)", () => {
+    const seat = visibleSeats(viewOf("discussion", { dead: [3] }))[3];
+    expect(seat).toBeDefined();
+    for (const key of ["outfit", "costume", "opacity", "fadeAt"]) expect(key in seat!).toBe(false);
+  });
+
+  it("산 사람 viewer: 밤(마피아·시민 편)·심부름에는 탈락 좌석이 표에 없다 (본인+근처만 보는 단계)", () => {
+    const night = viewOf("night", { dead: [3], mySeat: 1 });
+    expect(3 in visibleSeats(asRole(night, "mafia"))).toBe(false);
+    expect(3 in visibleSeats(asRole(night, "citizen"))).toBe(false);
+    expect(3 in visibleSeats(viewOf("errand", { dead: [3], mySeat: 1 }))).toBe(false);
+  });
+
+  it("산 사람 viewer: 낮 시작~아침 단계에서는 탈락 좌석이 ghost 로 있다", () => {
+    for (const phase of ["dayAnnounce", "discussion", "nomination", "verdict", "execution", "morning"] as const) {
+      same(visibleSeats(viewOf(phase, { dead: [3], mySeat: 0 }))[3], { show: true, ghost: true });
+    }
   });
 
   it("유령 viewer(내 좌석 3 이 탈락): 모든 좌석이 보이고 3 은 ghost true, 산 좌석은 ghost false", () => {
@@ -92,15 +107,17 @@ describe("visibleSeats (GHOST-01, T-08-25)", () => {
 
   it("방에 없는 viewer(내 좌석이 players 에 없음)는 산 사람 규칙을 따른다", () => {
     const seats = visibleSeats(viewOf("discussion", { dead: [3], mySeat: 9 }));
-    expect(3 in seats).toBe(false);
+    same(seats[3], { show: true, ghost: true });
   });
 
-  it("처형 연출 표시 {3: 시작 시각}: 산 사람 viewer 도 3 을 연출 끝(2400ms) 직전까지 본다", () => {
+  it("처형 연출 표시 {3: 시작 시각}: 산 사람 viewer 는 연출 끝(2400ms) 직전까지 ghost 아님 + fadeAt, 끝나면 ghost 로 남는다", () => {
     const view = viewOf("execution", { dead: [3], mySeat: 0 });
     const fading = new Map([[3, 1000]]);
-    expect(3 in visibleSeats(view, fading, 1000)).toBe(true);
-    expect(3 in visibleSeats(view, fading, 1000 + GHOST_FADE_END_MS - 1)).toBe(true);
-    expect(3 in visibleSeats(view, fading, 1000 + GHOST_FADE_END_MS)).toBe(false);
+    same(visibleSeats(view, fading, 1000)[3], { show: true, ghost: false, fadeAt: 1000 });
+    same(visibleSeats(view, fading, 1000 + GHOST_FADE_END_MS - 1)[3], { show: true, ghost: false, fadeAt: 1000 });
+    const after = visibleSeats(view, fading, 1000 + GHOST_FADE_END_MS)[3];
+    same(after, { show: true, ghost: true });
+    expect("fadeAt" in after!).toBe(false);
   });
 
   it("연출 중인 좌석은 fadeAt 으로 시작 시각이 실린다", () => {
@@ -111,7 +128,8 @@ describe("visibleSeats (GHOST-01, T-08-25)", () => {
 
   it("연출 표시에 산 좌석이 섞여 있어도 산 좌석 상태는 바뀌지 않는다", () => {
     const seats = visibleSeats(viewOf("execution", { dead: [3] }), new Map([[1, 0]]), 100);
-    same(Object.keys(seats).map(Number), [0, 1, 2, 4]);
+    same(Object.keys(seats).map(Number), [0, 1, 2, 3, 4]);
+    same(seats[3], { show: true, ghost: true });
   });
 });
 
@@ -243,19 +261,19 @@ describe("sceneLook (위를 묶는다)", () => {
   });
 });
 
-describe("executionFade (DAY-05, UI-SPEC 처형: 1.4초 떠오름 → 2.4초 사라짐)", () => {
+describe("executionFade (DAY-05, 18.1 C-4: 1.4초 떠오름 → 2.4초 안개 유령으로 남음)", () => {
   const at = (ms: number, reduced = false) => executionFade(ms, reduced);
+  const REST = { opacity: GHOST_MIST.opacity, rise: GHOST_BASE_Y };
   it("시간 상수는 dayView 와 같은 출처다", () => {
     same([GHOST_RISE_MS, GHOST_FADE_END_MS], [1400, 2400]);
   });
-  it("0ms: 불투명도 1·높이 0·보임", () => {
-    same(at(0), { opacity: 1, rise: 0, hidden: false });
+  it("0ms: 불투명도 1·높이 0", () => {
+    same(at(0), { opacity: 1, rise: 0 });
   });
   it("700ms: 불투명도 0.8·높이 0.6", () => {
     const f = at(700);
     expect(f.opacity).toBeCloseTo(0.8, 9);
     expect(f.rise).toBeCloseTo(0.6, 9);
-    expect(f.hidden).toBe(false);
   });
   it("1399ms 는 아직 떠오르는 중, 1400ms: 불투명도 0.6·높이 1.2", () => {
     expect(at(1399).opacity).toBeGreaterThan(0.6);
@@ -263,24 +281,27 @@ describe("executionFade (DAY-05, UI-SPEC 처형: 1.4초 떠오름 → 2.4초 사
     expect(at(1400).opacity).toBeCloseTo(0.6, 9);
     expect(at(1400).rise).toBeCloseTo(1.2, 9);
   });
-  it("1900ms: 불투명도 0.3·높이 1.2 그대로", () => {
-    expect(at(1900).opacity).toBeCloseTo(0.3, 9);
-    expect(at(1900).rise).toBeCloseTo(1.2, 9);
-    expect(at(1900).hidden).toBe(false);
+  it("1900ms: 불투명도는 0.6 과 0.26 사이, 높이는 1.2 와 유령 기본 높이 사이", () => {
+    const f = at(1900);
+    expect(f.opacity).toBeGreaterThan(GHOST_MIST.opacity);
+    expect(f.opacity).toBeLessThan(0.6);
+    expect(f.rise).toBeGreaterThan(GHOST_BASE_Y);
+    expect(f.rise).toBeLessThan(1.2);
   });
-  it("2399ms 는 아직 보이고 2400ms 부터 숨김(불투명도 0)", () => {
-    expect(at(2399).hidden).toBe(false);
-    expect(at(2399).opacity).toBeGreaterThan(0);
-    same(at(2400), { opacity: 0, rise: 1.2, hidden: true });
-    same(at(9999).hidden, true);
+  it("2400ms 부터는 안개 유령 끝점(불투명도 0.26·높이 0.35)에 선다 — 사라지지 않는다", () => {
+    expect(at(2399).opacity).toBeGreaterThan(GHOST_MIST.opacity);
+    same(at(2400), REST);
+    same(at(9999), REST);
   });
   it("음수 경과는 0 과 같다", () => {
     same(at(-50), at(0));
   });
-  it("모션 줄이기: 0.6 으로 즉시, 떠오름 없이 2399ms 까지 유지, 2400ms 에 숨김", () => {
-    same(at(0, true), { opacity: 0.6, rise: 0, hidden: false });
-    same(at(2399, true), { opacity: 0.6, rise: 0, hidden: false });
-    same(at(2400, true), { opacity: 0, rise: 0, hidden: true });
+  it("모션 줄이기: 모든 시각에 처음부터 유령 끝점이다", () => {
+    for (const ms of [0, 700, 2399, 2400, 9999]) same(at(ms, true), REST);
+  });
+  it("반환에 hidden 키가 없다", () => {
+    expect("hidden" in at(0)).toBe(false);
+    expect("hidden" in at(5000)).toBe(false);
   });
 });
 

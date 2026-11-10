@@ -1867,7 +1867,7 @@ describe("게임 장면: 보임·유령 (GHOST-01)", () => {
     const r = s.world.renderers[0]!;
     const h3 = r.chars.get(3) as FakeHandle;
     const h2 = r.chars.get(2) as FakeHandle;
-    expect(h3.setGhost).toHaveBeenCalledWith(true);
+    expect(h3.setGhost).toHaveBeenCalledWith(true, 0.26, { color: "#d8e4ff", intensity: 0.85 });
     expect(h3.setGhost).toHaveBeenCalledTimes(1);
     expect(h2.setGhost).not.toHaveBeenCalled();
     expect(tagOf(s.utils, 3)!.querySelector(".mv-head")!.getAttribute("data-ghost")).toBe("true");
@@ -1981,11 +1981,22 @@ describe("유령 직업 의상 안개 우선·복원 (D-7, L32)", () => {
     expect(window.__mfGhostOutfits ?? {}).toEqual({});
   });
 
-  it("outfit 없는 유령(spectate 없음)은 고른 의상 그대로 setGhost(true) 만 된다", async () => {
+  it("outfit 없는 유령(산 사람 화면의 탈락자·spectate 전 순간)은 고른 의상이 마피아여도 기본 코트 안개로 선다 — 훅 표는 비어 있다 (18.1 C-2·C-5)", async () => {
     const s = await openWith({ 3: "mafia" }, { ...ALIVE, 3: { ghost: true } });
     const h3 = handleOf(s, 3);
-    expect(h3.outfit).toBe("mafia");
-    expect(h3.applyOutfit).not.toHaveBeenCalled();
+    expect(outfitCalls(h3)).toEqual(["coat"]);
+    expect(h3.setGhost).toHaveBeenCalledWith(true, 0.26, { color: "#d8e4ff", intensity: 0.85 });
+    expect(window.__mfGhostOutfits ?? {}).toEqual({});
+    frames(100);
+    expect(outfitCalls(h3)).toEqual(["coat"]);
+    // 장면 표에서 ghost 가 풀리면 setGhost(false) 다음 고른 의상으로 돌아온다
+    s.rerender({ scene: sceneOf(ALIVE) });
+    frame();
+    expect(vi.mocked(h3.setGhost!).mock.lastCall).toEqual([false]);
+    expect(outfitCalls(h3)).toEqual(["coat", "mafia"]);
+    const lastGhost = Math.max(...vi.mocked(h3.setGhost!).mock.invocationCallOrder);
+    const lastOutfit = Math.max(...vi.mocked(h3.applyOutfit!).mock.invocationCallOrder);
+    expect(lastOutfit).toBeGreaterThan(lastGhost);
   });
 
   describe("의상이 바뀐 뒤 표정 prewarm 을 다시 건다", () => {
@@ -2086,11 +2097,70 @@ describe("유령 직업 의상 안개 (09.1-09)", () => {
     }
   });
 
-  it("ghost 이지만 outfit 이 없으면(spectate 없는 유령) 지금처럼 setGhost(true) 만 — 의상 호출 없음", async () => {
+  it("ghost 이지만 outfit 이 없으면(산 사람 화면 유령) applyOutfit(coat) 다음 setGhost(true, 0.26, 발광) 이 한 번씩", async () => {
     const s = await open({ scene: sceneOf({ 0: {}, 1: {}, 2: {}, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
     const h3 = s.world.renderers[0]!.chars.get(3) as FakeHandle;
-    expect(h3.applyOutfit).not.toHaveBeenCalled();
-    expect(h3.setGhost).toHaveBeenCalledWith(true);
+    expect(calls(h3).map((c) => c.name)).toEqual(["applyOutfit", "setGhost"]);
+    expect(h3.applyOutfit).toHaveBeenCalledWith("coat");
+    expect(h3.setGhost).toHaveBeenCalledWith(true, 0.26, MIST_GLOW);
+    frames(100);
+    expect(h3.applyOutfit).toHaveBeenCalledTimes(1);
+    expect(h3.setGhost).toHaveBeenCalledTimes(1);
+    expect(window.__mfGhostOutfits ?? {}).toEqual({});
+  });
+});
+
+describe("산 사람 화면의 탈락자 유령 — 마지막 구간에 선다 (18.1 P181-6, C-6)", () => {
+  const ALIVE = { 0: {}, 1: {}, 2: {}, 3: {} };
+  const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
+
+  it("store 구간이 snap 으로 빠져도 ghost 좌석 actor 는 남고(퇴장 없음) 마지막 구간 위치에 선다", async () => {
+    const s = await open({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
+    expect(handleOf(s, 3).root.position.x).toBeCloseTo(4, 6);
+    snap(s.store, [seg(0, [200, 100]), seg(1, [-300, 50]), seg(2, [-100, 400])]);
+    expect(s.store.segOf(3)).toBeUndefined();
+    frames(EXIT_MS * 2);
+    const r = s.world.renderers[0]!;
+    expect(r.chars.has(3)).toBe(true);
+    expect(handleOf(s, 3).disposed).toBe(0);
+    expect(handleOf(s, 3).root.position.x).toBeCloseTo(4, 6);
+    expect(handleOf(s, 3).root.position.z).toBeCloseTo(-2, 6);
+    expect(tagOf(s.utils, 3)).not.toBeNull();
+  });
+
+  it("snap 에서 빠진 뒤에 처음 ghost 가 된 좌석(연출을 막 마친 처형자)도 마지막 구간에 세운다", async () => {
+    const s = await open({ scene: sceneOf({ ...ALIVE, 3: { fadeAt: Date.now() } }) }, { players: FOUR, ents: FOUR_ENTS() });
+    snap(s.store, [seg(0, [200, 100]), seg(1, [-300, 50]), seg(2, [-100, 400])]);
+    frames(GHOST_FADE_END_MS + 100);
+    s.rerender({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) });
+    frames(100);
+    expect(s.world.renderers[0]!.chars.has(3)).toBe(true);
+    expect(handleOf(s, 3).root.position.x).toBeCloseTo(4, 6);
+    expect(handleOf(s, 3).disposed).toBe(0);
+  });
+
+  it("코트 안개: applyOutfit(coat) 다음 setGhost(true, 0.26, 발광), 훅 표(__mfGhostOutfits)는 비어 있다", async () => {
+    const s = await open({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
+    const h3 = handleOf(s, 3);
+    expect(h3.applyOutfit).toHaveBeenCalledWith("coat");
+    expect(h3.setGhost).toHaveBeenCalledWith(true, 0.26, { color: "#d8e4ff", intensity: 0.85 });
+    expect(vi.mocked(h3.applyOutfit!).mock.invocationCallOrder[0]!).toBeLessThan(vi.mocked(h3.setGhost!).mock.invocationCallOrder[0]!);
+    expect(window.__mfGhostOutfits ?? {}).toEqual({});
+  });
+
+  it("ghost 가 풀리면 setGhost(false) 다음 고른 의상으로 돌아온다", async () => {
+    const s = await open({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
+    const h3 = handleOf(s, 3);
+    s.rerender({ scene: sceneOf(ALIVE) });
+    frame();
+    expect(vi.mocked(h3.setGhost!).mock.lastCall).toEqual([false]);
+    expect(vi.mocked(h3.applyOutfit!).mock.lastCall).toEqual(["coat"]);
+  });
+
+  it("마지막 구간도 없는 ghost 좌석은 actor 를 만들지 않는다(오류 없음)", async () => {
+    const s = await open({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) }, { players: FOUR, ents: [seg(0, [200, 100]), seg(1, [-300, 50]), seg(2, [-100, 400])] });
+    expect(() => frames(100)).not.toThrow();
+    expect(s.world.renderers[0]!.chars.has(3)).toBe(false);
   });
 });
 
@@ -2617,7 +2687,7 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       expect(yOf(s, 2)).toBe(0);
     });
 
-    it("fadeAt 좌석은 떠오르며 흐려지고 2400ms 뒤 캐릭터가 지워진다. 이름표도 같이 흐려진다", async () => {
+    it("fadeAt 좌석은 떠오르며 흐려지고 2400ms 뒤에도 지워지지 않고 안개 끝점(0.26·높이 0.35)에 선다. 이름표도 같이 흐려진다", async () => {
       const s = await openGame();
       const r = s.world.renderers[0]!;
       const h3 = r.chars.get(3) as FakeHandle;
@@ -2631,11 +2701,34 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       expect(Number(tagOf(s.utils, 3)!.style.opacity)).toBeLessThan(0.85);
       frames(GHOST_FADE_END_MS - 700 - 16);
       expect(r.chars.has(3)).toBe(true);
-      frames(100);
-      expect(r.chars.has(3)).toBe(false);
-      expect(h3.disposed).toBe(1);
       frames(300);
-      expect(r.chars.has(3)).toBe(false); // 표에 아직 남아 있어도 다시 만들지 않는다
+      expect(r.chars.has(3)).toBe(true); // 연출 뒤에도 지워지지 않는다(18.1 C-4)
+      expect(h3.disposed).toBe(0);
+      expect((h3.setOpacity as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0] as number).toBeCloseTo(0.26, 6);
+      expect(yOf(s, 3)).toBeCloseTo(0.35, 6);
+    });
+
+    it("모션 줄이기면 fadeAt 좌석이 처음부터 불투명도 0.26·높이 0.35 로 선다", async () => {
+      stubReducedMotion(true);
+      const s = await openGame();
+      const h3 = s.world.renderers[0]!.chars.get(3) as FakeHandle;
+      s.rerender({ scene: sceneOf({ ...ALL, 3: { fadeAt: Date.now() } }) });
+      frames(100);
+      expect((h3.setOpacity as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0] as number).toBeCloseTo(0.26, 6);
+      expect(yOf(s, 3)).toBeCloseTo(0.35, 6);
+    });
+
+    it("연출 뒤 장면 표가 fadeAt 없는 ghost 로 바뀌어도 좌석이 지워졌다 다시 생기지 않는다(깜빡임 없음, C-4)", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      const h3 = r.chars.get(3) as FakeHandle;
+      s.rerender({ scene: sceneOf({ ...ALL, 3: { fadeAt: Date.now() } }) });
+      frames(GHOST_FADE_END_MS + 50);
+      s.rerender({ scene: sceneOf({ ...ALL, 3: { ghost: true } }) });
+      frames(100);
+      expect(r.chars.get(3)).toBe(h3);
+      expect(h3.disposed).toBe(0);
+      expect(h3.setGhost).toHaveBeenLastCalledWith(true, 0.26, { color: "#d8e4ff", intensity: 0.85 });
     });
 
     it("유령 시점의 ghost 좌석은 fadeAt 이 있어도 지워지지 않고 유령으로 남는다", async () => {

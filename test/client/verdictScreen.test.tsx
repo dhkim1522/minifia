@@ -462,7 +462,7 @@ describe("처형 화면 (DAY-06)", () => {
     expect(hotLines(m.container)).toEqual(["찬성 5 · 반대 2", "도윤 님 처형"]);
   });
 
-  it("처형된 도윤은 단계 진입 순간부터 한 번도 사라지지 않고 서 있다가, 알림 시작(2.6초)에 fadeAt 이 걸리고 2.4초 뒤(5.0초)에 장면 표에서 빠진다", () => {
+  it("처형된 도윤은 단계 진입 순간부터 한 번도 사라지지 않고 서 있다가, 알림 시작(2.6초)에 fadeAt 이 걸리고 2.4초 뒤(5.0초)에 fadeAt 없는 ghost 로 남는다(18.1 P181-6)", () => {
     const m = mount(verdictView());
     const from = rt.scenes.length;
     m.show(passedView());
@@ -478,21 +478,23 @@ describe("처형 화면 (DAY-06)", () => {
     advance(2399);
     expect(lastScene().seats[4]?.show).toBe(true);
     advance(2);
-    expect(lastScene().seats[4]).toBeUndefined();
-    expect(seatTag(m.container, 4)).toBeNull();
+    // 연출 뒤: 표에서 빠지지 않고 직업 단서 없는 ghost 로 남는다(위치는 런타임이 마지막 구간에서 세운다)
+    expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
+    expect(seatTag(m.container, 4)).not.toBeNull();
+    expect((rt.scenes.slice(from) as SceneLook[]).every((s) => s.seats[4]?.show === true)).toBe(true);
     // 다른 산 사람은 그대로
     expect(lastScene().seats[3]?.show).toBe(true);
     expect(lastScene().seats[3]?.fadeAt).toBeUndefined();
   });
 
-  it("연출이 끝난 뒤 새 view 가 와도(타이머 이후 같은 단계의 갱신) 산 사람 화면에 도윤은 다시 나타나지 않는다", () => {
+  it("연출이 끝난 뒤 새 view 가 와도(타이머 이후 같은 단계의 갱신) 산 사람 화면에 도윤은 ghost 로 남는다", () => {
     const m = enter();
     advance(5100);
     m.show(passedView());
-    expect(lastScene().seats[4]).toBeUndefined();
-    expect(seatTag(m.container, 4)).toBeNull();
+    expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
+    expect(seatTag(m.container, 4)).not.toBeNull();
     advance(10_000);
-    expect(lastScene().seats[4]).toBeUndefined();
+    expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
   });
 
   it("부결(passed false): 2.6초에 '처형 없음' 알림이 1.4초 뜨고 사라지며, 연출(fadeAt)은 어떤 좌석에도 없다", () => {
@@ -559,8 +561,12 @@ describe("처형 화면 (DAY-06)", () => {
     const m = enter();
     expect(lastScene().seats[4]?.ghost).toBe(false);
     expect(lastScene().seats[4]?.fadeAt).toBeDefined();
-    advance(5000);
     expect(m.container.querySelector("[data-ghost]")).toBeNull();
+    advance(5000);
+    // 연출 뒤에는 장면 표가 ghost 로 남기고(산 사람 화면, 직업 단서 없음) 이름표만 is-ghost 모양이다
+    expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
+    expect(m.container.querySelector("[data-ghost-seat]")).toBeNull();
+    expect(m.container.querySelector("[data-role-chip]")).toBeNull();
   });
 });
 

@@ -324,3 +324,54 @@ describe("WorldStore: 근처 snap (15페이즈 D-02, UI-SPEC U-17)", () => {
     expect(store.moveSeqOf(1)).toBe(0);
   });
 });
+
+describe("WorldStore: 마지막 구간 기억 lastSegOf (18.1 C-6, 산 사람 화면 유령 위치)", () => {
+  it("snap 이 좌석을 빼도 segOf 는 비지만 lastSegOf 는 그 좌석의 마지막 구간을 든다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(3, 300, 120)]), 1);
+    store.applyFrame(snap([rest(0)]), 1);
+    expect(store.segOf(3)).toBeUndefined();
+    expect(store.lastSegOf(3)).toEqual({ p: [300, 120], t0: 0, v: 180 });
+  });
+
+  it("move 로 받은 새 구간이 lastSegOf 를 갱신한다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(3)]), 1);
+    store.applyFrame(move(3, [100, 100, 400, 100], 7000), 1);
+    expect(store.lastSegOf(3)).toEqual({ p: [100, 100, 400, 100], t0: 7000, v: 180 });
+    store.applyFrame(snap([rest(0)]), 1);
+    expect(store.lastSegOf(3)).toEqual({ p: [100, 100, 400, 100], t0: 7000, v: 180 });
+  });
+
+  it("근처 snap 이 좌석을 빼도 lastSegOf 는 남는다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(2, 50, 60)]), 1);
+    store.applyFrame(nearSnap([rest(0)]), 1);
+    expect(store.segOf(2)).toBeUndefined();
+    expect(store.lastSegOf(2)).toEqual({ p: [50, 60], t0: 0, v: 180 });
+  });
+
+  it("받은 적 없는 좌석은 undefined 다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0)]), 1);
+    expect(store.lastSegOf(5)).toBeUndefined();
+  });
+
+  it("reset() 뒤에는 지워진다(이전 연결의 위치를 섞지 않는다, T-06-21)", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(3)]), 1);
+    store.reset();
+    expect(store.lastSegOf(3)).toBeUndefined();
+    expect(store.lastSegOf(0)).toBeUndefined();
+  });
+
+  it("retainSeats 로 방을 떠난 좌석은 lastSegOf 에서도 지워진다", () => {
+    const store = new WorldStore();
+    store.applyFrame(snap([rest(0), rest(1), rest(3)]), 1);
+    store.applyFrame(snap([rest(0), rest(1)]), 1);
+    store.retainSeats([0, 3]);
+    expect(store.lastSegOf(1)).toBeUndefined(); // 구간이 이미 빠져 있던 좌석도 view 에 없으면 기억을 지운다
+    expect(store.lastSegOf(3)).toBeDefined(); // view 에 남은(탈락) 좌석의 기억은 산다
+    expect(store.lastSegOf(0)).toBeDefined();
+  });
+});
