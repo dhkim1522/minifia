@@ -35,7 +35,7 @@ import {
   ZOOM_MAJORITY,
   ZOOM_MIN_STAGE_H,
 } from "../../src/world/camera";
-import { CHAT_PANEL_EXTRA, LOG_H_SHORT, lobbyPanelHeight, logHeightFor, TYPING_PILL_H } from "../../src/game/chatUi";
+import { CHAT_PANEL_EXTRA, LOG_H, lobbyPanelHeight, TYPING_PILL_H } from "../../src/game/chatUi";
 import { HEAD_TOP_Y as HEAD_TOP } from "../../shared/game/map";
 import { ringSlots } from "../../shared/game/gather";
 
@@ -200,15 +200,15 @@ describe("스테이지 사각형과 세로 오프셋", () => {
     expect(stageOffsetY(800, 200, 800)).toBe(-100);
   });
 
-  it("stageRect: 위 62 ~ 아래 패널 위 끝(높이 − 250 = 로비 패널 기본값), 폭 전체. 패널 높이를 넘기면 따라간다", () => {
-    expect(stageRect({ w: 390, h: 844 })).toEqual({ top: 62, bottom: 594, left: 0, right: 390 });
-    expect(stageRect({ w: 360, h: 560 })).toEqual({ top: 62, bottom: 310, left: 0, right: 360 });
+  it("stageRect: 위 62 ~ 아래 패널 위 끝(높이 − 222 = 로비 패널 기본값), 폭 전체. 패널 높이를 넘기면 따라간다", () => {
+    expect(stageRect({ w: 390, h: 844 })).toEqual({ top: 62, bottom: 622, left: 0, right: 390 });
+    expect(stageRect({ w: 360, h: 560 })).toEqual({ top: 62, bottom: 338, left: 0, right: 360 });
     expect(stageRect({ w: 390, h: 844 }, 200)).toEqual({ top: 62, bottom: 644, left: 0, right: 390 });
   });
 
-  it("PANEL_HEIGHT 는 DOM 을 재기 전 기본값으로 7페이즈 로비 패널(LOG_H + 154 = 250)이다, HEAD_STACK_H 는 이름표 24 + 입력 중 칸 22 = 46", () => {
-    expect(PANEL_HEIGHT).toBe(lobbyPanelHeight(LOG_H_SHORT));
-    expect(PANEL_HEIGHT).toBe(250);
+  it("PANEL_HEIGHT 는 DOM 을 재기 전 기본값으로 7페이즈 로비 패널(LOG_H 68 + 154 = 222)이다, HEAD_STACK_H 는 이름표 24 + 입력 중 칸 22 = 46", () => {
+    expect(PANEL_HEIGHT).toBe(lobbyPanelHeight(LOG_H));
+    expect(PANEL_HEIGHT).toBe(222);
     expect(TYPING_PILL_H).toBe(22);
     expect(HEAD_STACK_H).toBe(NAMETAG_H + TYPING_PILL_H);
     expect(HEAD_STACK_H).toBe(46);
@@ -292,8 +292,8 @@ type Box = { minX: number; maxX: number; minZ: number; maxZ: number };
 
 const symBox = (p: number): Box => ({ minX: -p, maxX: p, minZ: -p, maxZ: p });
 
-/** 7페이즈 로비 스테이지 사각형: 패널 높이 = LOG_H(방 높이로 정함) + 154 (UI-SPEC 구조 표). 키보드가 열린 상태(스테이지 < 128)는 이 검사 대상이 아니다(A2) */
-const lobbyStage = (size: Size) => stageRect(size, lobbyPanelHeight(logHeightFor(size.h)));
+/** 7페이즈 로비 스테이지 사각형: 패널 높이 = LOG_H(68 한 값) + 154 = 222 (18.1 UI-SPEC B 계약 4). 키보드가 열린 상태(스테이지 < 128)는 이 검사 대상이 아니다(A2) */
+const lobbyStage = (size: Size) => stageRect(size, lobbyPanelHeight(LOG_H));
 
 /** 걷는 영역 [−5.8, 5.8]² 의 0.25 간격 모든 점(끝점 5.8 포함) */
 function walkPoints(): { x: number; z: number }[] {
@@ -382,17 +382,26 @@ function minPanFor(size: Size): number {
 }
 
 describe("STAGE_SIZES (UI-SPEC 폰 크기 표)", () => {
+  it("채팅 패널 160 스테이지 높이는 UI-SPEC 표와 같다 (418·442·710·338·622·652)", () => {
+    const heights = STAGE_SIZES.map((s) => {
+      const r = stageRect(s, LOG_H + CHAT_PANEL_EXTRA);
+      return r.bottom - r.top;
+    });
+    expect(LOG_H + CHAT_PANEL_EXTRA).toBe(160);
+    expect(heights).toEqual([418, 442, 710, 338, 622, 652]);
+  });
+
   it("정확히 6개이고 label 은 폭x높이", () => {
     expect(STAGE_SIZES.map((s) => s.label)).toEqual(["360x640", "390x664", "430x932", "360x560", "390x844", "402x874"]);
     for (const s of STAGE_SIZES) expect(s.label).toBe(`${s.w}x${s.h}`);
   });
 
-  it("로비 스테이지 사각형 높이는 07-UI-SPEC 표와 같다 (328·352·564·248·476·506 — 방 높이 − 62 − (LOG_H + 154))", () => {
+  it("로비 스테이지 사각형 높이는 07-UI-SPEC 표와 같다 (356·380·648·276·560·590 — 방 높이 − 62 − (LOG_H + 154), 18.1 UI-SPEC 표)", () => {
     const heights = STAGE_SIZES.map((s) => {
       const r = lobbyStage(s);
       return r.bottom - r.top;
     });
-    expect(heights).toEqual([328, 352, 564, 248, 476, 506]);
+    expect(heights).toEqual([356, 380, 648, 276, 560, 590]);
   });
 });
 
@@ -577,7 +586,7 @@ describe("zoom 인자 (UI-SPEC 카메라: 과반 연출 확대 1.08)", () => {
 
 describe("gatherView (UI-SPEC 카메라: 이름표가 몸보다 우선, E8 #31 backstop)", () => {
   /** 산 사람 채팅 패널(지목·변론) 기준 스테이지 = 방 높이 − 62 − (LOG_H + 92) */
-  const chatStage = (size: { w: number; h: number }) => stageRect(size, logHeightFor(size.h) + CHAT_PANEL_EXTRA);
+  const chatStage = (size: { w: number; h: number }) => stageRect(size, LOG_H + CHAT_PANEL_EXTRA);
   const stageH = (r: { top: number; bottom: number }) => r.bottom - r.top;
   const EPS = 1e-6;
 

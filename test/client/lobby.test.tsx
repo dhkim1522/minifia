@@ -5,9 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { ClientMessage, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
-import { KB_PANEL_H, LOBBY_PANEL_EXTRA, LOG_H_KB, LOG_H_TALL, lobbyPanelHeight } from "../../src/game/chatUi";
+import { LOBBY_PANEL_EXTRA, LOG_H, lobbyPanelHeight } from "../../src/game/chatUi";
 import { ChatStore } from "../../src/net/chatStore";
 import { WorldStore } from "../../src/world/store";
+
+/** 키보드 열림 패널 = 14 + 기록 칸 + 8 + 입력줄 48 + 아래 여백 8 (UI-SPEC B 계약 4: 146) */
+const KB_PANEL = 14 + LOG_H + 8 + 48 + 8;
 
 // 06-15: 대기실은 지하 재즈 바 맵(WorldStage) 위에 승인 로비 틀(헤더·알림·행동 줄·시트)을 얹는다.
 // WorldStage 는 가벼운 가짜로 바꾼다 — 캔버스·런타임은 worldStage.test 가 따로 본다. 가짜는 받은 props 만 기억한다.
@@ -212,10 +215,23 @@ describe("Lobby — 채팅 패널: 기록 + 입력줄 + 행동 줄 (CHAT-01, 07-
     expect((chat.compareDocumentPosition(wait) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
   });
 
-  it("기록 칸 높이는 방 높이로 한 번 정한 값이다(780 미만 96)", () => {
-    const { container } = render(lobby(makeView(base, 0)));
-    const log = container.querySelector("[data-chat-log]") as HTMLElement;
-    expect(log.style.height).toBe("96px");
+  it("기록 칸 높이는 어느 방 높이에서나 68 한 값이다(P181-3)", () => {
+    const realH = window.innerHeight;
+    try {
+      for (const h of [560, 640, 844, 932]) {
+        Object.defineProperty(window, "innerHeight", { value: h, configurable: true, writable: true });
+        const { container, unmount } = render(lobby(makeView(base, 0)));
+        const log = container.querySelector("[data-chat-log]") as HTMLElement;
+        expect(log.style.height).toBe("68px");
+        unmount();
+      }
+    } finally {
+      Object.defineProperty(window, "innerHeight", { value: realH, configurable: true, writable: true });
+    }
+    expect(LOG_H).toBe(68);
+    expect(lobbyPanelHeight(LOG_H)).toBe(222);
+    expect(lobbyPanelHeight(LOG_H, true)).toBe(298);
+    expect(KB_PANEL).toBe(146);
   });
 
   it("보내기는 단계 키와 함께 chat 메시지를 보낸다 (채널 필드 없음)", () => {
@@ -821,7 +837,7 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
   const INNER_H = 844;
   const realInnerH = window.innerHeight;
   const lobbyView = makeView([player(0, "민수"), player(1, "서준")], 0);
-  let panelH = lobbyPanelHeight(LOG_H_TALL);
+  let panelH = lobbyPanelHeight(LOG_H);
   let resizeCallbacks: Array<() => void> = [];
 
   interface FakeVV extends EventTarget {
@@ -860,7 +876,7 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
   beforeEach(() => {
     vi.useFakeTimers();
     Object.defineProperty(window, "innerHeight", { value: INNER_H, configurable: true, writable: true });
-    panelH = lobbyPanelHeight(LOG_H_TALL);
+    panelH = lobbyPanelHeight(LOG_H);
     resizeCallbacks = [];
     stubLayout();
   });
@@ -880,33 +896,33 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
     advance(20);
   };
 
-  it("포커스 + lift 336: 루트 data-kb-open true, 행동 줄 없음, 기록 칸 72, 패널 --kb, 스테이지 아래 = 150 + 336", () => {
+  it("포커스 + lift 336: 루트 data-kb-open true, 행동 줄 없음, 기록 칸 68, 패널 --kb, 스테이지 아래 = 146 + 336", () => {
     const vv = installVV(INNER_H);
     const { container } = render(lobby(lobbyView));
-    expect(props().stageInsets).toEqual({ top: 62, bottom: lobbyPanelHeight(LOG_H_TALL) });
+    expect(props().stageInsets).toEqual({ top: 62, bottom: lobbyPanelHeight(LOG_H) });
     expect(actionButtons(container)).toBe(1);
     focusWithKeyboard(container, vv, 336);
-    panelH = KB_PANEL_H;
+    panelH = KB_PANEL;
     remeasure();
     expect(rootOf(container).getAttribute("data-kb-open")).toBe("true");
     expect(rootOf(container).style.getPropertyValue("--mf-kb-lift")).toBe("336px");
     expect(actionButtons(container)).toBe(0);
-    expect((container.querySelector("[data-chat-log]") as HTMLElement).style.height).toBe(`${LOG_H_KB}px`);
+    expect((container.querySelector("[data-chat-log]") as HTMLElement).style.height).toBe(`${LOG_H}px`);
     expect(container.querySelector(".mv-chat.is-compact")).not.toBeNull();
     expect(container.querySelector(".mf-lobby__panel")?.classList.contains("mf-lobby__panel--kb")).toBe(true);
-    expect(props().stageInsets).toEqual({ top: 62, bottom: KB_PANEL_H + 336 });
+    expect(props().stageInsets).toEqual({ top: 62, bottom: KB_PANEL + 336 });
   });
 
   it("lift 가 바뀌면(키보드 높이 340) 다시 그리지 않아도 스테이지 아래 끝이 따라간다", () => {
     const vv = installVV(INNER_H);
     const { container } = render(lobby(lobbyView));
     focusWithKeyboard(container, vv, 336);
-    panelH = KB_PANEL_H;
+    panelH = KB_PANEL;
     remeasure();
     vv.height = INNER_H - 340;
     act(() => void vv.dispatchEvent(new Event("resize")));
     advance(20);
-    expect(props().stageInsets?.bottom).toBe(KB_PANEL_H + 340);
+    expect(props().stageInsets?.bottom).toBe(KB_PANEL + 340);
   });
 
   it("포커스 중 lift 60(열림 경계 80 아래): data-kb-open 없음, 행동 줄 있음, 기록 칸 그대로", () => {
@@ -915,7 +931,7 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
     focusWithKeyboard(container, vv, 60);
     expect(rootOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(actionButtons(container)).toBe(1);
-    expect((container.querySelector("[data-chat-log]") as HTMLElement).style.height).toBe(`${LOG_H_TALL}px`);
+    expect((container.querySelector("[data-chat-log]") as HTMLElement).style.height).toBe(`${LOG_H}px`);
     expect(container.querySelector(".mf-lobby__panel")?.classList.contains("mf-lobby__panel--kb")).toBe(false);
   });
 
@@ -923,16 +939,16 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
     const vv = installVV(INNER_H);
     const { container } = render(lobby(lobbyView));
     focusWithKeyboard(container, vv, 336);
-    panelH = KB_PANEL_H;
+    panelH = KB_PANEL;
     remeasure();
     act(() => inputOf(container).blur());
-    panelH = lobbyPanelHeight(LOG_H_TALL);
+    panelH = lobbyPanelHeight(LOG_H);
     remeasure();
     expect(rootOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(rootOf(container).style.getPropertyValue("--mf-kb-lift")).toBe("0px");
     expect(actionButtons(container)).toBe(1);
-    expect((container.querySelector("[data-chat-log]") as HTMLElement).style.height).toBe(`${LOG_H_TALL}px`);
-    expect(props().stageInsets).toEqual({ top: 62, bottom: lobbyPanelHeight(LOG_H_TALL) });
+    expect((container.querySelector("[data-chat-log]") as HTMLElement).style.height).toBe(`${LOG_H}px`);
+    expect(props().stageInsets).toEqual({ top: 62, bottom: lobbyPanelHeight(LOG_H) });
   });
 
   it("vv.offsetTop 120 이면 --mf-vv-top 120px 가 쓰인다(헤더 계열이 이 값만큼 내려온다)", () => {
