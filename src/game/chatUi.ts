@@ -23,8 +23,8 @@ export const LOBBY_PANEL_EXTRA = 154;
 export const LOBBY_HOST_TUTORIAL_EXTRA = 76;
 /** 채팅 패널 = LOG_H + 92 = 14 + LOG_H + 8 + 48 + 22 (UI-SPEC 패널 표). 게임 맵의 채팅 패널 높이 덧셈이다 */
 export const CHAT_PANEL_EXTRA = 92;
-/** 키보드 열림 패널 = 14 + 72 + 8 + 48 + 8(아래 여백, 안전 영역 없음) */
-export const KB_PANEL_H = 150;
+/** 키보드 열림 패널 = 14 + LOG_H + 8 + 48 + 8(아래 여백, 안전 영역 없음) */
+export const KB_PANEL_H = 146;
 /** 키보드 열림 판정: 입력칸에 포커스가 있고 lift 가 이 값을 넘을 때 */
 export const KB_OPEN_MIN_LIFT = 80;
 /** 머리 위 입력 중 알약이 스택을 늘리는 높이(알약 약 18 + 이름표와 간격 4) */
