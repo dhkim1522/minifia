@@ -132,6 +132,13 @@ describe("parsePerfParams", () => {
     const p = parsePerfParams(new URLSearchParams("perf=1&scene=vote&minutes=0.25&dpr=1.5&budget=2&seed=9&chars=5&shot=1&nav=1"));
     expect(p).toEqual({ scene: "vote", minutes: 0.25, dpr: 1.5, budget: 2, seed: 9, chars: 5, shot: true, nav: true, outfits: "coat", burst: 1, map: "bar" });
   });
+  it("scene 은 talk·morning·vote·night 네 값만 받고 나머지는 talk 다(18-07)", () => {
+    for (const sc of ["talk", "morning", "vote", "night"]) {
+      expect(parsePerfParams(new URLSearchParams(`scene=${sc}`)).scene).toBe(sc);
+    }
+    for (const sc of ["trial", "xyz", ""]) expect(parsePerfParams(new URLSearchParams(`scene=${sc}`)).scene).toBe("talk");
+    expect(parsePerfParams(new URLSearchParams("perf=1")).scene).toBe("talk");
+  });
   it("범위 밖·잘못된 값은 기본값 또는 안쪽으로 자른다", () => {
     const p = parsePerfParams(new URLSearchParams("scene=day&minutes=-3&dpr=abc&budget=99&seed=x&chars=40"));
     expect(p.scene).toBe("talk");

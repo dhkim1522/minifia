@@ -210,6 +210,13 @@ export function outputBase(o) {
   return o.shot ? `shot-${base}` : base;
 }
 
+/** 조명 렌더 순서 판정(18-07) — 자리 함수(RED). 실제 판정은 다음 커밋에서 채운다 */
+export const LIGHT_TALK_RATIO = 2.0;
+export const LIGHT_MORNING_RATIO = 1.6;
+export function lightRankVerdict(_means) {
+  return { ok: true, rows: [] };
+}
+
 /** 열 주소: 대상 + 스파이크 쿼리 */
 export function targetUrl(o, origin) {
   const q = new URLSearchParams({ perf: "1", scene: o.scene, minutes: String(o.minutes), dpr: String(o.dpr), seed: String(o.seed), budget: String(o.budget) });
