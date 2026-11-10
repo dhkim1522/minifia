@@ -5,17 +5,17 @@ milestone_name: 사회자와 증거
 current_phase: "18.1"
 current_phase_name: screen-polish
 current_plan: 10
-status: executing
-stopped_at: Completed 18.1-09-PLAN.md
-last_updated: "2026-11-10T19:31:27.981Z"
+status: verifying
+stopped_at: Completed 18.1-10-PLAN.md
+last_updated: "2026-11-10T20:30:58.160Z"
 last_activity: 2026-11-11
 last_activity_desc: Phase 18.1 execution started
-state_head: b3a7a8cf2b99c6b1a015c4f473aa5413d3ff7992
+state_head: 78aa83509e64ce62f3c76d2b3de78f3d28dcce08
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 71
-  completed_plans: 70
+  completed_plans: 71
   percent: 40
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 Phase: 18.1 (screen-polish) — EXECUTING
 Current Plan: 10
 Total Plans in Phase: 10
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-11 — Phase 18.1 execution started
 
 ## Performance Metrics
@@ -268,6 +268,7 @@ Last activity: 2026-11-11 — Phase 18.1 execution started
 | Phase 18.1 P07 | 12min | 3 tasks | 13 files |
 | Phase 18.1 P08 | 1h20m | 3 tasks | 10 files |
 | Phase 18.1 P09 | 약 1시간 30분 | 2 tasks | 3 files |
+| Phase 18.1 P10 | 약 2시간 | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -595,6 +596,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18.1]: 18.1-08: polish-reveal 은 6명판(봇 5)으로 돈다 — 4명판에는 의사가 없다. 시상식 AW9(확장 탭 일시정지)는 확장 탭이 없어 삭제
 - [Phase 18.1]: 18.1-09: 산 사람 화면 유령(C1) 판정은 처형 단계에서 연출 중인 좌석을 빼고, 찬반 기록 카드 backstop 은 처형 단계(5초)가 아니라 다음 날 지목에서 잰다
 - [Phase 18.1]: 18.1-09: B3(기록 시트를 닫은 뒤 포커스가 [data-chat-open])은 폰 6종 모두 실패 — 앱 결함 후보(포커스가 body), 18.1-10 이 판단
+- [Phase 18.1]: 기록 시트를 닫은 뒤 포커스는 언마운트 뒤 effect 에서 [기록 열기] 로 돌린다(모달 dialog 가 열려 있는 동안 focus() 는 무효)
+- [Phase 18.1]: 짧은 폰(높이 600 이하) 튜토리얼 직업 카드 그림은 63x84 로 줄인다(문구·판정 문턱은 그대로)
 
 ### Pending Todos
 
@@ -666,8 +669,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-10T19:31:27.039Z
-Stopped at: Completed 18.1-09-PLAN.md
+Last session: 2026-11-10T20:30:57.290Z
+Stopped at: Completed 18.1-10-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

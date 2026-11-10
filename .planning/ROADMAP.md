@@ -391,7 +391,7 @@ Plans:
 5. 결과 화면은 전체 대화 하나만 있고 역할별 채팅·판 기록 탭이 없다. 서버 기록 보관은 그대로(R5, 결정 0027 유지)
 6. 바뀐 흐름의 폰 6종 E2E 와 전 흐름 회귀가 로컬에서 통과하고 minifia-v3 에 배포된다
 
-**Plans:** 9/10 plans executed
+**Plans:** 10/10 plans executed
 
 Plans:
 **Wave 1**
@@ -414,7 +414,7 @@ Plans:
 - [x] 18.1-09-PLAN.md — E2E: 두 줄 창·기록 시트(chat-lobby)·산 사람 유령·유령 화면 의상(day·ghost) (wave 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 18.1-10-PLAN.md — 로컬 전체 회귀·nightload·minifia-v3 배포·지도/0082/HANDOFF·push (wave 6)
+- [x] 18.1-10-PLAN.md — 로컬 전체 회귀·nightload·minifia-v3 배포·지도/0082/HANDOFF·push (wave 6)
 
 ### Phase 19: 방장이 고르는 기본 마피아·확장판
 
