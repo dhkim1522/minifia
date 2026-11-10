@@ -136,7 +136,7 @@ import {
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
 import { makeMapSelectFlows } from "./mapselect.mjs";
-import { SHORT_PHONE_H, awardChecks, readAwardState, readBenchView, readRematchState, readRestSheet, readResultStage, readResultTabs, readTimeline, rematchChecks, resultSkipChecks, resultStageChecks, resultTabChecks, timelineChecks } from "./result.mjs";
+import { SHORT_PHONE_H, awardChecks, readAwardState, readBenchView, readRematchState, readResultHidden, readRestSheet, readResultStage, rematchChecks, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
@@ -1980,9 +1980,9 @@ async function basicOffFlow(ctx) {
     // OFF3 단계 순서
     recMany(rec, `${id}/order`, basicOrderChecks(ht.phases));
     rec(`${id}/order`, "OFF3b", "투표(nomination)·변론(defense)·찬반(verdict)·처형(execution)을 한 번 이상 지났다", ["nomination", "defense", "verdict", "execution", "night", "morning"].every((p) => ht.phases.includes(p)), `지난 단계 ${[...new Set(ht.phases)].join(",")}`);
-    // OFF4 결과 화면: 탭은 있되 귓속말 탭이 없다
+    // OFF4 결과 화면: 탭이 없다(전체 대화만, 18.1 P181-7) — 귓속말 탭도 당연히 없다
     const tabs = await hp.evaluate(() => ({ all: document.querySelectorAll("[data-result-tab]").length, whisper: document.querySelectorAll('[data-result-tab="whisper"]').length }));
-    rec(`${id}/result`, "OFF4", "결과 화면에 탭이 있고 귓속말 탭(data-result-tab=whisper)이 없다", shown.ok && tabs.all > 0 && tabs.whisper === 0, shown.ok ? `탭 ${tabs.all}개, 귓속말 탭 ${tabs.whisper}개` : shown.detail);
+    rec(`${id}/result`, "OFF4", "결과 화면에 탭이 없다(전체 대화만, 18.1 P181-7)", shown.ok && tabs.all === 0 && tabs.whisper === 0, shown.ok ? `탭 ${tabs.all}개, 귓속말 탭 ${tabs.whisper}개` : shown.detail);
     // OFF5 낮 토론에는 [토론 끝내기] 가 하나 있다(기본판 장치)
     rec(`${id}/discussion`, "OFF5", "토론 단계에 [토론 끝내기] 가 하나 있다", endBtn === 1, `[data-end-discussion] ${endBtn}개`);
   } finally {
@@ -2944,14 +2944,12 @@ async function resultFlow(ctx) {
   }
 }
 
-// ---- result-reveal (11-07, D-2·D-3·D-25): 결과 탭 패널 ----
-// 방장(마피아) + 손님 1(시민) + 봇 2. 낮 1: 방장이 귓속말 → 봇들이 손님을 지목해 처형(손님이 유령) → 밤 1: 손님이 유령 채팅, 방장이 마피아 채팅 → 방장이 봇 한 명을 죽여 마피아 승.
-// 방장 페이지는 연출 구간(모임·뒤집기)을 지나며 탭 등장·시계 정지·무대 탭을, 손님 페이지는 최종 상태의 탭 기하·구분선·진홍·점을 본다. 판이 도는 동안 손님(시민) 페이지의 탭은 0건이어야 한다.
+// ---- result-reveal (11-07, D-2·D-3·D-25 → 18.1 P181-7 로 바뀜): 결과 화면 기록 숨김 ----
+// 방장(마피아) + 손님 1(시민) + 봇 2. 낮 1: 봇들이 손님을 지목해 처형(손님이 유령) → 밤 1: 손님이 유령 채팅을 보내고, 방장이 봇 한 명을 죽여 마피아 승.
+// 18.1 부터 결과 화면은 탭 없이 전체 대화 하나만 그린다. 방장·손님 페이지가 연출 구간(모임·뒤집기·조명·알림)마다와 끝난 뒤에 탭·기록 본문·마피아/유령 줄·보낸 문장이 없고
+// 패널이 확장 없이 160 임을 resultHiddenChecks(RH1~RH4)로 잰다. 서버가 보낸 기록을 앱이 그리지 않는 것은 test/worker 의 프레임 검사(E3)와 짝이다.
 
-const REVEAL_TEXTS = { mafia: "오늘 밤은 조용히 정해요", ghost: "나는 유령이에요 억울해요", whisper: "귓속말 기록 한 줄" };
-// 기본판(결정 0072): 귓속말 장치가 꺼져 있어 결과 탭은 넷이고 귓속말은 보내지 않는다. RULESET.whisper 를 켜면 true 로 바꾼다(탭 다섯·귓속말 탭 검사).
-const REVEAL_WHISPER = false;
-const REVEAL_TAB_COUNT = REVEAL_WHISPER ? 5 : 4;
+const REVEAL_TEXTS = { mafia: "오늘 밤은 조용히 정해요", ghost: "나는 유령이에요 억울해요" };
 
 async function resultRevealFlow(ctx) {
   const id = "result-reveal";
@@ -2960,25 +2958,9 @@ async function resultRevealFlow(ctx) {
   try {
     const { hp, ht, hostSeat, guests } = game;
     const [g] = guests;
-    const live = [];
-    const liveTabs = async (phase) => live.push({ phase, count: await g.page.locator("[data-result-tab]").count() });
 
-    // 낮 1: 판이 도는 동안 탭 0건 + 귓속말 한 줄(방장 → 다른 사람)
     await untilGame(g.page, (x) => x.phase === "discussion", 8000, "토론 도착(손님)");
-    await liveTabs("discussion");
-    const whispered = !REVEAL_WHISPER ? { ok: false, detail: "기본판: 귓속말 꺼짐" } : await attempt(async () => {
-      await hp.locator('[data-float="whisper"]').click({ timeout: 4000 });
-      await hp.locator("[data-pick]").first().waitFor({ state: "attached", timeout: 4000 });
-      await hp.locator("[data-pick]").first().dispatchEvent("click");
-      await hp.locator("[data-line-input]").waitFor({ timeout: 4000 });
-      await hp.locator("[data-line-input]").fill(REVEAL_TEXTS.whisper);
-      await hp.locator("[data-line-send]").click({ timeout: 4000 });
-      await ht.waitFor((v) => v.me.whisperUsed === true, 5000, "서버가 귓속말 사용함으로 확인");
-    });
-    if (REVEAL_WHISPER && !whispered.ok) infoRow(ctx, `${id}/setup`, "RT-W", "귓속말을 보내지 못해 귓속말 탭은 빈 상태로 확인(참고)", whispered.detail);
-
     await step("지목", () => skipTo(hp, ht, "nomination"));
-    await liveTabs("nomination");
     await step("변론", () => skipTo(hp, ht, "defense"));
     await step("찬반", () => skipTo(hp, ht, "verdict"));
     await untilGame(hp, (x) => x.phase === "verdict" && x.verdictBtns.length === 2, 6000, "찬반 도착");
@@ -2986,12 +2968,11 @@ async function resultRevealFlow(ctx) {
     await step("밤", () => skipTo(hp, ht, "night"));
     await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
     await hp.waitForSelector("[data-face]", { timeout: 8000 }); // 15-08: 밤 고르기는 얼굴 목록 칸
-    await liveTabs("night");
     const alive = aliveOf(ht.last());
     if (alive.length !== 3 || !alive.includes(hostSeat)) throw new SetupError(`처형 뒤 생존자가 방장 포함 3명이 아님 (${alive.join(",")})`);
     if (alive.includes(g.seat)) throw new SetupError("손님이 처형되지 않음(봇 지목이 손님이 아님)");
 
-    // 밤 1: 손님(유령)의 유령 채팅과 방장의 마피아 채팅
+    // 밤 1: 손님(유령)의 유령 채팅 — 결과 화면에서 이 문장이 보이면 안 된다(RH3)
     const ghostSent = await attempt(async () => {
       await untilGame(g.page, (x) => x.ghostView, 9000, "유령 화면(손님)");
       await typeAndSendChat(g.page, REVEAL_TEXTS.ghost);
@@ -3003,106 +2984,39 @@ async function resultRevealFlow(ctx) {
     rec(`${id}/setup`, "RT-M", "방장(마피아)에게 밤 채팅 입력칸이 없음(15-08 밤 화면 통일)", mafiaInput === 0, `입력칸 ${mafiaInput}개`);
     await tapFace(hp, (await readNightFaces(hp)).faceSeats.find((x) => x !== hostSeat)); // 15-08: 밤 고르기는 얼굴 목록 칸
     await step("아침", () => skipTo(hp, ht, "morning"));
-    await liveTabs("morning");
 
-    // 방장 페이지: 연출 구간을 지나며 탭 등장·시계 정지·무대 탭
+    // 결과 화면: 방장 페이지가 연출 구간(final 전)을 지나는 동안 단계가 바뀔 때마다 한 번씩 읽는다
     await toEnded(game);
     const sc = `${id}/ended`;
-    const waitRead = async (ok, ms) => {
-      const t0 = Date.now();
-      for (;;) {
-        const r = await readResultTabs(hp);
-        if (r && ok(r)) return r;
-        if (Date.now() - t0 > ms) return r;
-        await sleep(25);
-      }
+    const sent = [REVEAL_TEXTS.mafia, REVEAL_TEXTS.ghost];
+    const recHidden = async (page, scenario) => {
+      for (const row of resultHiddenChecks(await readResultHidden(page), { sent })) recOne(rec, scenario, row);
     };
-    const before = await waitRead((r) => r.tabs.length > 0, 8000);
-    const after = await waitRead((r) => r.tabs.length === REVEAL_TAB_COUNT, 4000);
-    let tapExpanded;
-    let paused;
-    let tapCollapsed;
-    if (after && after.tabs.length === REVEAL_TAB_COUNT && after.stage !== "final") {
-      await hp.locator('[data-result-tab="mafia"]').click({ timeout: 4000 });
-      const opened = await waitRead((r) => r.expanded, 2000);
-      const t0 = Date.now();
-      await sleep(1500);
-      const later = await readResultTabs(hp);
-      paused = { stageAtOpen: opened?.stage, chipsAtOpen: opened?.chips, stageLater: later?.stage, chipsLater: later?.chips, waitedMs: Date.now() - t0 };
-      const mid = { x: ctx.size.w / 2, y: ((later?.headerBottom ?? 62) + (later?.panelTop ?? 200)) / 2 };
-      await hp.mouse.click(mid.x, mid.y);
-      await sleep(150);
-      const folded = await readResultTabs(hp);
-      tapExpanded = { expandedBefore: later?.expanded, expandedAfter: folded?.expanded, stageBefore: later?.stage, stageAfter: folded?.stage };
-      const stageBefore = folded?.stage;
-      await hp.mouse.click(mid.x, mid.y);
-      await sleep(150);
-      const skipped = await readResultTabs(hp);
-      tapCollapsed = { stageBefore, stageAfter: skipped?.stage };
+    const seen = new Set();
+    for (const t0 = Date.now(); Date.now() - t0 < 12000; ) {
+      const stage = await hp.evaluate(() => window.__mfResult?.stage ?? "").catch(() => "");
+      if (stage !== "" && !seen.has(stage)) {
+        seen.add(stage);
+        await recHidden(hp, `${sc}/${stage}`);
+      }
+      if (stage === "final") break;
+      await sleep(80);
     }
-    const reveal = { tabsBefore: { stage: before?.stage, count: before?.tabs.length }, tabsAfter: { stage: after?.stage, count: after?.tabs.length }, live, paused, tapExpanded, tapCollapsed };
-    for (const row of resultTabChecks({ reveal }, { whisper: REVEAL_WHISPER })) recOne(rec, sc, row);
+    const pre = [...seen].filter((x) => x !== "final");
+    rec(sc, "RH0", "연출 구간(final 전)에서 한 번 이상 읽었다", pre.length > 0, `읽은 구간 ${[...seen].join(",") || "없음"}`);
 
-    // 두 페이지가 최종 상태에 닿은 뒤 손님 페이지로 탭 기하를 잰다
+    // 두 페이지가 최종 상태에 닿은 뒤 끝난 모습을 방장·손님 페이지에서 읽는다
     for (const page of [hp, g.page]) {
       try {
         await page.waitForFunction(() => window.__mfResult?.stage === "final", null, { timeout: 12000 });
       } catch {
         throw new SetupError("결과 화면 연출이 final 에 닿지 않음 (window.__mfResult.stage)");
       }
-      await finishCeremony(page); // 11-09: 시상식이 끝난 뒤 탭 기하를 잰다(떠 있는 [넘기기]·패가 없는 상태)
+      await finishCeremony(page); // 11-09: 시상식이 끝난 뒤 최종 모습을 잰다(떠 있는 [넘기기]·패가 없는 상태)
     }
     await checkState(ctx, id, "ended", game.host);
-    const gp = g.page;
-    const layout0 = await readResultTabs(gp);
-    await gp.locator('[data-result-tab="mafia"]').click({ timeout: 4000 });
-    await gp.waitForSelector('[data-result-panel][data-expanded="true"]', { timeout: 4000 });
-    await sleep(300);
-    const layout1 = await readResultTabs(gp);
-    for (const row of resultTabChecks({
-      layout: {
-        roomH: layout1?.roomH,
-        tabBoxes: layout0?.tabBoxes,
-        panelCollapsedH: layout0?.panelH,
-        panelExpandedH: layout1?.panelH,
-        inputPresent: layout1?.inputPresent,
-        iconColors: layout0?.iconColors,
-        crimson: layout0?.crimson,
-        separators: layout1?.separators,
-        dots: { before: layout0?.dots, after: layout1?.dots },
-        headerBottom: layout1?.headerBottom,
-        panelTop: layout1?.panelTop,
-      },
-    }, { whisper: REVEAL_WHISPER })) {
-      recOne(rec, sc, row);
-    }
-
-    // 탭 안 내용: 마피아·유령 줄이 해당 탭에만, 귓속말은 머리줄 + 본문(보냈을 때)
-    const bodyOf = async () => (await readResultTabs(gp))?.bodyText ?? "";
-    // 15-08 뒤: 사람이 보낸 밤 채팅 줄이 없으므로 마피아 탭에는 밤 채팅 줄이 하나도 보이지 않는다(채팅 줄 `[data-chat-line]` 0건·보낼 글 없음).
-    const mafiaBody = await bodyOf();
-    const mafiaChatLines = await gp.locator("[data-result-panel] .mv-chat__msg").count();
-    rec(sc, "RT14", "마피아 탭에 밤 채팅 줄이 없음(밤 채팅 화면 삭제, 15-08)", !mafiaBody.includes(REVEAL_TEXTS.mafia) && mafiaChatLines === 0, `본문 포함 ${mafiaBody.includes(REVEAL_TEXTS.mafia)} · 줄 ${mafiaChatLines}개`);
-    await gp.locator('[data-result-tab="ghost"]').click({ timeout: 4000 });
-    await sleep(150);
-    const ghostBody = await bodyOf();
-    rec(sc, "RT15", "유령 탭에 유령 채팅 줄만 보임", ghostBody.includes(REVEAL_TEXTS.ghost) && !ghostBody.includes(REVEAL_TEXTS.mafia), "유령 탭 본문이 기대와 다름");
-    if (!REVEAL_WHISPER) {
-      // 기본판: 귓속말 탭·머리줄이 아예 없다(꺼진 장치 흔적 없음)
-      const whisperTabs = await gp.locator('[data-result-tab="whisper"]').count();
-      const whisperHeads = await gp.locator("[data-result-whisper]").count();
-      rec(sc, "RT16", "기본판: 귓속말 탭과 귓속말 머리줄이 없음(결정 0072)", whisperTabs === 0 && whisperHeads === 0, `탭 ${whisperTabs}개 · 머리줄 ${whisperHeads}개`);
-    } else {
-    await gp.locator('[data-result-tab="whisper"]').click({ timeout: 4000 });
-    await sleep(150);
-    const whisperRows = await gp.locator("[data-result-whisper]").count();
-    if (whispered.ok) rec(sc, "RT16", "귓속말 탭에 머리줄 + 본문 한 줄과 일차 구분선", whisperRows >= 1 && (await bodyOf()).includes(REVEAL_TEXTS.whisper) && (await readResultTabs(gp))?.separators.some((t) => /^\d+일차$/.test(t)), `머리줄 ${whisperRows}개`);
-    else rec(sc, "RT16", "귓속말 탭: 보낸 귓속말이 없으면 quiet 아이콘 하나(글 없음)", whisperRows === 0 && (await bodyOf()) === "", `머리줄 ${whisperRows}개`);
-    }
-    await gp.locator('[data-result-tab="all"]').click({ timeout: 4000 });
-    await sleep(150);
-    const folded = await readResultTabs(gp);
-    rec(sc, "RT17", "전체 탭으로 돌아오면 접히고 입력칸이 다시 있음", folded?.expanded === false && folded.inputPresent === true, `확장 ${folded?.expanded} · 입력칸 ${folded?.inputPresent}`);
+    await recHidden(hp, `${sc}/after-host`);
+    await recHidden(g.page, `${sc}/after-guest`);
   } finally {
     await closeGame(game);
   }
@@ -3110,7 +3024,7 @@ async function resultRevealFlow(ctx) {
 
 // ---- result-awards (11-09, D-7·D-24·D-25): 시상식 ----
 // 방장(마피아) + 봇 3: 방장이 처형되어 시민 승. ended 도착 뒤 연출 구간은 무대 탭으로 건너뛰고 시상식이 시작되기를 기다려 첫 패에서 기하를 잰다.
-// 확장 탭(기록)을 열어 3초 동안 패 index 가 그대로인지(일시정지) 보고 접으면 이어지는지 본다. 나머지 패는 [넘기기]로 한 장씩 넘기며 순서·진행 숫자를 읽고, 끝난 뒤 헤더·[넘기기]·의상을 본다.
+// (18.1: 확장 탭이 없어져 일시정지·기록 탭 검사는 지웠다.) 나머지 패는 [넘기기]로 한 장씩 넘기며 순서·진행 숫자를 읽고, 끝난 뒤 헤더·[넘기기]·의상을 본다.
 
 async function resultAwardsFlow(ctx) {
   const id = "result-awards";
@@ -3152,25 +3066,6 @@ async function resultAwardsFlow(ctx) {
     const first = await readAwardState(hp);
     if (!first || !first.plate) throw new SetupError("첫 패를 못 읽음");
     await checkState(ctx, id, "plate", game.host);
-
-    // 일시정지: 확장 탭(기록)을 열고 3초 기다린다. 패는 그대로, [넘기기]는 숨고, 접으면 이어진다
-    await hp.locator('[data-result-tab="log"]').click({ timeout: 4000 });
-    await hp.waitForSelector('[data-result-panel][data-expanded="true"]', { timeout: 4000 });
-    const open = await readAwardState(hp);
-    const t0 = Date.now();
-    await sleep(3000);
-    const later = await readAwardState(hp);
-    const waitedMs = Date.now() - t0;
-    await hp.locator('[data-result-tab="all"]').click({ timeout: 4000 });
-    let indexResumed = -1;
-    {
-      const tr = Date.now();
-      while (Date.now() - tr < 5500) {
-        indexResumed = await hp.evaluate(() => window.__mfResult?.shown ?? -1);
-        if (indexResumed > (open?.shown ?? 0)) break;
-        await sleep(50);
-      }
-    }
 
     // 나머지 패: [넘기기]로 한 장씩 넘기며 칭호 순서·진행 숫자를 읽는다
     const n = first.awards.length;
@@ -3219,44 +3114,9 @@ async function resultAwardsFlow(ctx) {
       titleDuring: first.title,
       titleAfter: after?.title,
       floatAfter: after?.floatCount,
-      pause: { indexOpen: open?.shown, indexLater: later?.shown, waitedMs, floatHidden: (open?.floatCount ?? 1) === 0 && (later?.floatCount ?? 1) === 0, plateKept: later?.plate != null, indexResumed },
       costumesDuring: first.costumes,
       costumesAfter: after?.costumes,
       jobBySeat,
-    })) {
-      recOne(rec, sc, row);
-    }
-
-    // 기록 탭(11-11, TL1~TL7): 시상식을 넘긴 뒤 같은 한 판에서 연다 — 별도 흐름을 만들지 않아 실행 시간을 늘리지 않는다
-    await finishCeremony(hp);
-    await hp.locator('[data-result-tab="log"]').click({ timeout: 4000 });
-    try {
-      await hp.waitForSelector('[data-result-panel][data-expanded="true"] [data-day-card]', { timeout: 4000 });
-    } catch {
-      throw new SetupError("기록 탭을 열어도 일차 카드가 그려지지 않음 ([data-day-card])");
-    }
-    await sleep(250);
-    const tl = await readTimeline(hp);
-    if (!tl) throw new SetupError("기록 탭을 못 읽음");
-    const summary = view.result?.summary ?? [];
-    const executed = summary
-      .filter((row) => row.exec?.candidate !== undefined && (row.exec.passed || (row.exec.yes === 0 && row.exec.no === 0)))
-      .map((row) => ({ n: row.n, seat: row.exec.candidate }));
-    const target = tl.cards.length >= 2 ? tl.cards[1].n : (tl.cards[0]?.n ?? 1);
-    await hp.locator(`[data-day-card="${target}"]`).click({ timeout: 2000 });
-    const detailAfter = await hp.evaluate(() => document.querySelector("[data-day-detail]")?.getAttribute("data-day-detail") ?? null);
-    for (const row of timelineChecks({
-      roomH: tl.roomH,
-      dayCount: summary.length,
-      panel: tl.panel,
-      cards: tl.cards,
-      scrollLeft: tl.scrollLeft,
-      detailText: tl.detailText,
-      detailBox: tl.detailBox,
-      chips: tl.chips,
-      executed,
-      jobBySeat,
-      switched: { cards: tl.cards.length, target, before: tl.detail, after: detailAfter },
     })) {
       recOne(rec, sc, row);
     }

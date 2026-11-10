@@ -1,7 +1,7 @@
 // 결과 화면 E2E 순수 판정 단위 테스트 (11-05). 실행: node --test scripts/e2e/result.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { awardChecks, AWARD_PLATE, READY_PILL, SHORT_PHONE_H, rematchChecks, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, RESULT_TAB_IDS, RESULT_TAB_IDS_BASIC, resultSkipChecks, resultStageChecks, resultTabChecks, TIMELINE_CARD, timelineChecks } from "./result.mjs";
+import { awardChecks, AWARD_PLATE, READY_PILL, SHORT_PHONE_H, rematchChecks, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, resultHiddenChecks, resultSkipChecks, resultStageChecks, TIMELINE_CARD } from "./result.mjs";
 
 // 4명판 시민 승: 좌석 0 마피아(진 팀) · 1 시민 · 2 경찰 · 3 의사
 const good = () => ({
@@ -110,126 +110,6 @@ test("상수: 표식 목록·승리 한 줄·직업 의상 표", () => {
   assert.deepEqual({ ...RESULT_JOB_OUTFIT }, { mafia: "mafia", police: "police", doctor: "doctor", citizen: "coat" });
 });
 
-// ---------- 11-07 탭 패널 판정 (RT1~RT13) ----------
-const goodLayout = () => ({
-  roomH: 664,
-  tabBoxes: RESULT_TAB_IDS.map((id) => ({ id, w: 44, h: 44 })),
-  panelCollapsedH: 160,
-  panelExpandedH: 465, // min(round(0.7 × 664), 520)
-  inputPresent: false,
-  iconColors: { all: "rgb(200, 200, 200)", mafia: "rgb(230, 100, 100)", ghost: "rgb(200, 200, 200)", whisper: "rgb(200, 200, 200)", log: "rgb(200, 200, 200)" },
-  crimson: "rgb(230, 100, 100)",
-  separators: ["1밤", "2밤"],
-  dots: { before: ["mafia", "ghost", "whisper"], after: ["ghost", "whisper"] },
-  headerBottom: 62,
-  panelTop: 199,
-});
-const goodReveal = () => ({
-  tabsBefore: { stage: "gather", count: 1 },
-  tabsAfter: { stage: "flip", count: 5 },
-  live: [
-    { phase: "nomination", count: 0 },
-    { phase: "night", count: 0 },
-  ],
-  paused: { stageAtOpen: "flip", chipsAtOpen: 2, stageLater: "flip", chipsLater: 2, waitedMs: 1500 },
-  tapExpanded: { expandedBefore: true, expandedAfter: false, stageBefore: "flip", stageAfter: "flip" },
-  tapCollapsed: { stageBefore: "flip", stageAfter: "light" },
-});
-const tabFailing = (m) => resultTabChecks(m, { whisper: true }).filter((r) => !r.ok).map((r) => r.id);
-const withLayout = (over) => ({ layout: { ...goodLayout(), ...over } });
-const withReveal = (over) => ({ reveal: { ...goodReveal(), ...over } });
-
-test("resultTabChecks: 정상 layout 은 RT1·RT3~RT9 가 통과하고 reveal 은 RT2·RT10~RT13 이 통과한다", () => {
-  const l = resultTabChecks({ layout: goodLayout() }, { whisper: true });
-  assert.deepEqual(l.map((r) => r.id), ["RT1", "RT3", "RT4", "RT5", "RT6", "RT7", "RT8", "RT9"]);
-  for (const r of l) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
-  const v = resultTabChecks({ reveal: goodReveal() }, { whisper: true });
-  assert.deepEqual(v.map((r) => r.id), ["RT2", "RT10", "RT11", "RT12", "RT13"]);
-  for (const r of v) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
-  assert.equal(resultTabChecks({ layout: goodLayout(), reveal: goodReveal() }, { whisper: true }).length, 13);
-  assert.deepEqual(resultTabChecks({}), []);
-});
-
-test("RT1: 탭 버튼이 44×44 미만이거나 다섯 개가 아니면 RT1 만 실패한다", () => {
-  assert.deepEqual(tabFailing(withLayout({ tabBoxes: goodLayout().tabBoxes.map((b, i) => (i === 2 ? { ...b, w: 40 } : b)) })), ["RT1"]);
-  assert.deepEqual(tabFailing(withLayout({ tabBoxes: goodLayout().tabBoxes.slice(0, 4) })), ["RT1"]);
-});
-
-test("RT3: 접힌 패널 높이는 160(방 높이와 무관) ±1", () => {
-  assert.deepEqual(tabFailing(withLayout({ panelCollapsedH: 212 })), ["RT3"]);
-  assert.deepEqual(tabFailing(withLayout({ panelCollapsedH: 161 })), []);
-  assert.deepEqual(tabFailing(withLayout({ panelCollapsedH: 188 })), ["RT3"]); // 옛 짧은 방 값
-  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 160, panelExpandedH: 520 })), []);
-  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 244, panelExpandedH: 520 })), ["RT3"]); // 옛 긴 방 값
-});
-
-test("RT4: 확장 높이 = min(round(0.7 × 방 높이), 520) ±2", () => {
-  assert.deepEqual(tabFailing(withLayout({ panelExpandedH: 400 })), ["RT4"]);
-  assert.deepEqual(tabFailing(withLayout({ panelExpandedH: 467 })), []);
-  assert.deepEqual(tabFailing(withLayout({ panelExpandedH: 468 })), ["RT4"]);
-  assert.deepEqual(tabFailing(withLayout({ roomH: 560, panelExpandedH: 392, panelCollapsedH: 160 })), []);
-  assert.deepEqual(tabFailing(withLayout({ roomH: 932, panelCollapsedH: 160, panelExpandedH: 652 })), ["RT4"]);
-});
-
-test("RT5: 확장에서 입력칸이 있으면 RT5 만 실패한다", () => {
-  assert.deepEqual(tabFailing(withLayout({ inputPresent: true })), ["RT5"]);
-});
-
-test("RT6: 마피아 탭 아이콘만 진홍 — 진홍이 아니거나 다른 탭도 진홍이면 RT6 만 실패한다", () => {
-  const c = goodLayout().iconColors;
-  assert.deepEqual(tabFailing(withLayout({ iconColors: { ...c, mafia: "rgb(1, 2, 3)" } })), ["RT6"]);
-  assert.deepEqual(tabFailing(withLayout({ iconColors: { ...c, ghost: "rgb(230, 100, 100)" } })), ["RT6"]);
-});
-
-test("RT7: 구분선은 없거나(밤 채팅 화면 삭제, 15-08) 모두 `{n}밤` 꼴이어야 한다", () => {
-  assert.deepEqual(tabFailing(withLayout({ separators: ["1일차"] })), ["RT7"]);
-  assert.deepEqual(tabFailing(withLayout({ separators: [] })), []);
-  assert.deepEqual(tabFailing(withLayout({ separators: undefined })), ["RT7"]);
-  assert.deepEqual(tabFailing(withLayout({ separators: ["1밤", "밤"] })), ["RT7"]);
-});
-
-test("RT8: 새 탭 점은 열기 전 마피아·유령·귓속말 셋, 마피아를 연 뒤 유령·귓속말 둘", () => {
-  assert.deepEqual(tabFailing(withLayout({ dots: { before: ["mafia", "ghost"], after: ["ghost", "whisper"] } })), ["RT8"]);
-  assert.deepEqual(tabFailing(withLayout({ dots: { before: ["mafia", "ghost", "whisper", "log"], after: ["ghost", "whisper"] } })), ["RT8"]);
-  assert.deepEqual(tabFailing(withLayout({ dots: { before: ["mafia", "ghost", "whisper"], after: ["mafia", "ghost", "whisper"] } })), ["RT8"]);
-});
-
-test("RT9: 헤더 아래 62 이상, 확장 패널이 헤더를 가리지 않는다", () => {
-  assert.deepEqual(tabFailing(withLayout({ headerBottom: 50 })), ["RT9"]);
-  assert.deepEqual(tabFailing(withLayout({ panelTop: 40 })), ["RT9"]);
-});
-
-test("RT2: 탭은 첫 뒤집기 전 1개, 뒤집기 시작 뒤 5개 — 구간을 놓치면 측정값 없음으로 실패", () => {
-  assert.deepEqual(tabFailing(withReveal({ tabsBefore: { stage: "gather", count: 5 } })), ["RT2"]);
-  assert.deepEqual(tabFailing(withReveal({ tabsAfter: { stage: "flip", count: 1 } })), ["RT2"]);
-  const miss = resultTabChecks(withReveal({ tabsBefore: { stage: "flip", count: 5 } }), { whisper: true }).find((r) => r.id === "RT2");
-  assert.equal(miss.ok, false);
-  assert.match(miss.detail, /측정값 없음/);
-});
-
-test("RT10: 판이 도는 동안 탭이 한 번이라도 있으면 RT10 만 실패, 표본이 없으면 측정값 없음", () => {
-  assert.deepEqual(tabFailing(withReveal({ live: [{ phase: "night", count: 1 }] })), ["RT10"]);
-  assert.deepEqual(tabFailing(withReveal({ live: [] })), ["RT10"]);
-});
-
-test("RT11: 확장 중 연출 시계가 멈춘다 — 단계·칩 수가 늘면 RT11 만 실패, 충분히 기다리지 않았으면 측정값 없음", () => {
-  assert.deepEqual(tabFailing(withReveal({ paused: { stageAtOpen: "flip", chipsAtOpen: 2, stageLater: "flip", chipsLater: 3, waitedMs: 1500 } })), ["RT11"]);
-  assert.deepEqual(tabFailing(withReveal({ paused: { stageAtOpen: "flip", chipsAtOpen: 2, stageLater: "light", chipsLater: 2, waitedMs: 1500 } })), ["RT11"]);
-  assert.deepEqual(tabFailing(withReveal({ paused: { stageAtOpen: "flip", chipsAtOpen: 2, stageLater: "flip", chipsLater: 2, waitedMs: 300 } })), ["RT11"]);
-});
-
-test("RT12: 확장 중 무대 탭은 접기만 한다 — 접히지 않았거나 건너뛰었으면 RT12 만 실패", () => {
-  assert.deepEqual(tabFailing(withReveal({ tapExpanded: { expandedBefore: true, expandedAfter: true, stageBefore: "flip", stageAfter: "flip" } })), ["RT12"]);
-  assert.deepEqual(tabFailing(withReveal({ tapExpanded: { expandedBefore: true, expandedAfter: false, stageBefore: "flip", stageAfter: "light" } })), ["RT12"]);
-  assert.deepEqual(tabFailing(withReveal({ tapExpanded: { expandedBefore: false, expandedAfter: false, stageBefore: "flip", stageAfter: "flip" } })), ["RT12"]);
-});
-
-test("RT13: 접힌 상태의 무대 탭은 4600 이후로 건너뛴다", () => {
-  assert.deepEqual(tabFailing(withReveal({ tapCollapsed: { stageBefore: "flip", stageAfter: "flip" } })), ["RT13"]);
-  assert.deepEqual(tabFailing(withReveal({ tapCollapsed: { stageBefore: "flip", stageAfter: "final" } })), []);
-  assert.deepEqual(tabFailing(withReveal({ tapCollapsed: { stageBefore: "final", stageAfter: "final" } })), ["RT13"]);
-});
-
 test("RESULT_MARKERS 에 탭 표식이 더해졌다", () => {
   for (const m of ["data-result-tab", "data-result-dot", "data-result-divider"]) assert.ok(RESULT_MARKERS.includes(m), m);
 });
@@ -252,16 +132,15 @@ const awardsGood = () => ({
   titleDuring: "시상식",
   titleAfter: "시민 승리",
   floatAfter: 0,
-  pause: { indexOpen: 0, indexLater: 0, waitedMs: 3000, floatHidden: true, plateKept: true, indexResumed: 1 },
   costumesDuring: { 0: "mafia", 1: "coat", 2: "police", 3: "doctor" },
   costumesAfter: {},
   jobBySeat: { 0: "mafia", 1: "citizen", 2: "police", 3: "doctor" },
 });
 const awFailing = (over) => awardChecks({ ...awardsGood(), ...over }).filter((r) => !r.ok).map((r) => r.id);
 
-test("awardChecks: 정상 입력은 AW1~AW10 이 모두 통과한다", () => {
+test("awardChecks: 정상 입력은 AW1~AW8·AW10 이 모두 통과한다", () => {
   const rows = awardChecks(awardsGood());
-  assert.deepEqual(rows.map((r) => r.id), ["AW1", "AW2", "AW3", "AW4", "AW5", "AW6", "AW7", "AW8", "AW9", "AW10"]);
+  assert.deepEqual(rows.map((r) => r.id), ["AW1", "AW2", "AW3", "AW4", "AW5", "AW6", "AW7", "AW8", "AW10"]);
   for (const r of rows) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
 });
 
@@ -322,14 +201,6 @@ test("AW8: 끝난 뒤 [넘기기]가 남아 있으면 AW8 만 실패한다", () 
   assert.deepEqual(awFailing({ floatAfter: 1 }), ["AW8"]);
 });
 
-test("AW9: 확장 탭이 열린 동안 패 index 가 그대로·[넘기기] 숨김·패 유지, 접으면 이어짐", () => {
-  assert.deepEqual(awFailing({ pause: { ...awardsGood().pause, indexLater: 1 } }), ["AW9"]);
-  assert.deepEqual(awFailing({ pause: { ...awardsGood().pause, waitedMs: 1000 } }), ["AW9"]);
-  assert.deepEqual(awFailing({ pause: { ...awardsGood().pause, floatHidden: false } }), ["AW9"]);
-  assert.deepEqual(awFailing({ pause: { ...awardsGood().pause, plateKept: false } }), ["AW9"]);
-  assert.deepEqual(awFailing({ pause: { ...awardsGood().pause, indexResumed: 0 } }), ["AW9"]);
-});
-
 test("AW10: 시상 중에는 직업 의상, 끝난 뒤에는 의상이 걷힘(고른 look)", () => {
   assert.deepEqual(awFailing({ costumesDuring: { 0: "coat", 1: "coat", 2: "police", 3: "doctor" } }), ["AW10"]);
   assert.deepEqual(awFailing({ costumesAfter: { 0: "mafia" } }), ["AW10"]);
@@ -337,7 +208,7 @@ test("AW10: 시상 중에는 직업 의상, 끝난 뒤에는 의상이 걷힘(�
 
 test("측정값이 없으면 조용히 통과하지 않고 해당 항목이 `측정값 없음` 으로 실패한다", () => {
   const rows = awardChecks({});
-  assert.equal(rows.length, 10);
+  assert.equal(rows.length, 9);
   for (const r of rows) {
     assert.equal(r.ok, false, r.id);
     assert.match(r.detail, /측정값 없음/, r.id);
@@ -352,100 +223,8 @@ test("RS4 afterCeremony(11-09): 시상식 뒤에는 직업 의상이 모두 걷�
   assert.equal(failing({}).includes("RS4"), false);
 });
 
-// ---- 11-11 기록 탭(일차 카드 띠·하루 상세) ----
-// 2일차 판, 390×844 (방 844 → 확장 패널 min(round(0.7 × 844), 520) = 520). 카드 72×112, 간격 8, 1일차 선택, 상세는 패널 안에서 스크롤.
-const tlGood = () => ({
-  roomH: 844,
-  dayCount: 2,
-  panel: { top: 324, bottom: 844, height: 520 },
-  cards: [
-    { n: 1, left: 16, top: 392, width: 72, height: 112, pressed: true },
-    { n: 2, left: 96, top: 392, width: 72, height: 112, pressed: false },
-  ],
-  scrollLeft: 0,
-  detailText: "1 4 2 2",
-  detailBox: { top: 520, bottom: 822, overflowY: "auto" },
-  chips: [{ n: 1, role: "citizen" }],
-  executed: [{ n: 1, seat: 4 }],
-  jobBySeat: { 0: "mafia", 1: "mafia", 2: "police", 3: "doctor", 4: "citizen", 5: "citizen" },
-  switched: { cards: 2, target: 2, before: "1", after: "2" },
-});
-const tlFailing = (over) => timelineChecks({ ...tlGood(), ...over }).filter((r) => !r.ok).map((r) => r.id);
-
 test("TIMELINE_CARD 상수: 카드 72×112, 간격 8", () => {
   assert.deepEqual({ ...TIMELINE_CARD }, { w: 72, h: 112, gap: 8 });
-});
-
-test("timelineChecks: 정상 입력은 TL1~TL7 이 모두 통과한다", () => {
-  const rows = timelineChecks(tlGood());
-  assert.deepEqual(rows.map((r) => r.id), ["TL1", "TL2", "TL3", "TL4", "TL5", "TL6", "TL7"]);
-  for (const r of rows) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
-});
-
-test("TL1: 카드 수가 일차 수와 다르거나 0 장이면 TL1 만 실패한다", () => {
-  assert.deepEqual(tlFailing({ dayCount: 3 }), ["TL1"]);
-  assert.deepEqual(tlFailing({ cards: [], dayCount: 0 }).includes("TL1"), true);
-});
-
-test("TL2: 카드 72×112 ±2, 사이 간격 8 ±2 — 한 값씩 어긋나면 TL2 만 실패한다", () => {
-  const c = tlGood().cards;
-  assert.deepEqual(tlFailing({ cards: [{ ...c[0], width: 64 }, c[1]] }), ["TL2"]);
-  assert.deepEqual(tlFailing({ cards: [c[0], { ...c[1], height: 100 }] }), ["TL2"]);
-  assert.deepEqual(tlFailing({ cards: [c[0], { ...c[1], left: 110 }] }), ["TL2"]); // 간격 22
-  assert.deepEqual(tlFailing({ cards: [{ ...c[0], width: 74 }, { ...c[1], left: 98 }] }), []); // ±2
-});
-
-test("TL2: 카드가 한 장이면 간격 검사는 건너뛰고 크기만 본다", () => {
-  const one = { dayCount: 1, cards: [tlGood().cards[0]], switched: { cards: 1, target: 1, before: "1", after: "1" } };
-  assert.deepEqual(tlFailing(one), []);
-  assert.deepEqual(tlFailing({ ...one, cards: [{ ...one.cards[0], height: 90 }] }), ["TL2"]);
-});
-
-test("TL3: 첫 카드만 눌린 상태이고 scrollLeft 0 이다 — 아니면 TL3 만 실패한다", () => {
-  const c = tlGood().cards;
-  assert.deepEqual(tlFailing({ cards: [{ ...c[0], pressed: false }, c[1]] }), ["TL3"]);
-  assert.deepEqual(tlFailing({ cards: [c[0], { ...c[1], pressed: true }] }), ["TL3"]);
-  assert.deepEqual(tlFailing({ scrollLeft: 80 }), ["TL3"]);
-});
-
-test("TL4: 상세 글자에서 숫자·공백을 지우면 빈 문자열이어야 한다 (문장이 있으면 TL4 만 실패)", () => {
-  assert.deepEqual(tlFailing({ detailText: "1 4 표" }), ["TL4"]);
-  assert.deepEqual(tlFailing({ detailText: "지우" }), ["TL4"]);
-  assert.deepEqual(tlFailing({ detailText: "" }), []); // 줄이 없는 날은 빈 상세
-  assert.deepEqual(tlFailing({ detailText: undefined }).includes("TL4"), true); // 측정값 없음
-});
-
-test("TL5: 처형된 날 카드의 칩 직업이 결과의 진짜 직업과 같아야 한다", () => {
-  assert.deepEqual(tlFailing({ chips: [{ n: 1, role: "mafia" }] }), ["TL5"]);
-  assert.deepEqual(tlFailing({ chips: [] }), ["TL5"]); // 처형된 날인데 칩이 없음
-  assert.deepEqual(tlFailing({ executed: [], chips: [] }), []); // 처형이 없으면 칩도 없다
-  assert.deepEqual(tlFailing({ executed: [], chips: [{ n: 1, role: "citizen" }] }), ["TL5"]); // 처형이 없는데 칩이 있음
-});
-
-test("TL6: 확장 패널 높이 min(round(0.7 × 방), 520) ±2, 상세가 패널 안에 있고 스크롤 가능", () => {
-  assert.deepEqual(tlFailing({ panel: { top: 324, bottom: 844, height: 480 } }), ["TL6"]);
-  assert.deepEqual(tlFailing({ detailBox: { top: 520, bottom: 900, overflowY: "auto" } }), ["TL6"]); // 패널 밖
-  assert.deepEqual(tlFailing({ detailBox: { top: 520, bottom: 822, overflowY: "visible" } }), ["TL6"]); // 스크롤 불가
-  // 작은 폰: 방 560 → round(392) = 392
-  assert.deepEqual(tlFailing({ roomH: 560, panel: { top: 168, bottom: 560, height: 392 }, detailBox: { top: 330, bottom: 548, overflowY: "auto" } }), []);
-  assert.deepEqual(tlFailing({ roomH: 560, panel: { top: 168, bottom: 560, height: 520 } }), ["TL6"]);
-});
-
-test("TL7: 다른 카드를 누르면 상세의 일차가 바뀐다 (한 장이면 그대로 유지)", () => {
-  assert.deepEqual(tlFailing({ switched: { cards: 2, target: 2, before: "1", after: "1" } }), ["TL7"]);
-  assert.deepEqual(tlFailing({ switched: { cards: 2, target: 2, before: "1", after: "3" } }), ["TL7"]);
-  assert.deepEqual(tlFailing({ switched: { cards: 1, target: 1, before: "1", after: "1" }, dayCount: 1, cards: [tlGood().cards[0]] }), []);
-  assert.deepEqual(tlFailing({ switched: { cards: 1, target: 1, before: "1", after: "2" }, dayCount: 1, cards: [tlGood().cards[0]] }), ["TL7"]);
-});
-
-test("timelineChecks: 측정값이 없으면 조용히 통과하지 않고 측정값 없음으로 실패한다", () => {
-  const rows = timelineChecks({});
-  assert.equal(rows.length, 7);
-  for (const r of rows) {
-    assert.equal(r.ok, false, r.id);
-    assert.match(r.detail, /측정값 없음/, r.id);
-  }
-  assert.match(timelineChecks(undefined)[0].detail, /측정값 없음/);
 });
 
 test("RESULT_MARKERS: 기록 탭 표식 3개가 더해져 있다 (11-11)", () => {
@@ -584,26 +363,6 @@ test("RESULT_MARKERS: 다시 하기 표식 4개가 더해져 있다 (11-12)", ()
   for (const m of ["data-ready-pill", "data-ready", "data-ready-count", "data-bench-view"]) assert.equal(RESULT_MARKERS.includes(m), true, m);
 });
 
-// ---------- 13-06: 기본판(결정 0072) — 귓속말 탭이 없다 ----------
-const basicLayout = () => ({
-  ...goodLayout(),
-  tabBoxes: RESULT_TAB_IDS_BASIC.map((id) => ({ id, w: 44, h: 44 })),
-  dots: { before: ["mafia", "ghost"], after: ["ghost"] },
-});
-const basicFailing = (m) => resultTabChecks(m).filter((r) => !r.ok).map((r) => r.id);
-
-test("기본판 resultTabChecks: 탭은 귓속말을 뺀 네 개이고 새 탭 점은 마피아·유령 둘, 마피아를 연 뒤 유령 하나", () => {
-  assert.deepEqual([...RESULT_TAB_IDS_BASIC], ["all", "mafia", "ghost", "log"]);
-  assert.deepEqual(basicFailing({ layout: basicLayout() }), []);
-  assert.deepEqual(basicFailing({ reveal: { ...goodReveal(), tabsAfter: { stage: "flip", count: 4 } } }), []);
-});
-
-test("기본판 resultTabChecks: 귓속말 탭·귓속말 점이 보이면(탭 다섯, 점 셋) 실패한다", () => {
-  assert.deepEqual(basicFailing({ layout: { ...basicLayout(), tabBoxes: RESULT_TAB_IDS.map((id) => ({ id, w: 44, h: 44 })) } }), ["RT1"]);
-  assert.deepEqual(basicFailing({ layout: { ...basicLayout(), dots: { before: ["mafia", "ghost", "whisper"], after: ["ghost", "whisper"] } } }), ["RT8"]);
-  assert.deepEqual(basicFailing({ reveal: goodReveal() }), ["RT2"]);
-});
-
 test("AW4 knownShortLimit(14-08 UI#14): 낮은 폰은 '패 아래 150' 미만만 판정에서 빼 AW4k 정보 줄로 남기고, 다른 AW4 어긋남은 그대로 실패한다", () => {
   const small = { ...awardsGood(), viewport: { w: 360, h: 560 }, plateBox: { top: 139, left: 16, width: 328, height: 96 }, stageTop: 131, panelTop: 360, floatBox: { left: 296, top: 200, width: 48, height: AWARD_PLATE.floatH, bottom: 200 + AWARD_PLATE.floatH } };
   assert.deepEqual(awardChecks(small).filter((r) => !r.ok).map((r) => r.id), ["AW4"]); // 360 − 235 = 125 < 150
@@ -616,4 +375,50 @@ test("AW4 knownShortLimit(14-08 UI#14): 낮은 폰은 '패 아래 150' 미만만
   // 폭이 틀리면 한계가 아니라 실패
   assert.deepEqual(awardChecks({ ...small, knownShortLimit: true, plateBox: { ...small.plateBox, width: 300 } }).filter((r) => !r.ok).map((r) => r.id), ["AW4"]);
   assert.equal(SHORT_PHONE_H, 575);
+});
+
+// ---------- 18.1 결과 화면 기록 숨김 (RH1~RH4, UI-SPEC E1·E2) ----------
+const SENT = ["오늘 밤은 조용히 정해요", "나는 유령이에요 억울해요"];
+const hiddenGood = () => ({ tabs: 0, tabRows: 0, bodies: 0, chLines: 0, domText: "시민 승리 전체 대화 안녕하세요", expanded: "false", panelH: 160 });
+const rhFailing = (over, sent = SENT) => resultHiddenChecks({ ...hiddenGood(), ...over }, { sent }).filter((r) => !r.ok).map((r) => r.id);
+
+test("resultHiddenChecks: 정상 입력은 RH1~RH4 가 모두 통과한다", () => {
+  const rows = resultHiddenChecks(hiddenGood(), { sent: SENT });
+  assert.deepEqual(rows.map((r) => r.id), ["RH1", "RH2", "RH3", "RH4"]);
+  for (const r of rows) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
+});
+
+test("RH1: 탭 단추가 하나라도 있거나 탭 행이 있으면 RH1 만 실패한다", () => {
+  assert.deepEqual(rhFailing({ tabs: 1 }), ["RH1"]);
+  assert.deepEqual(rhFailing({ tabRows: 1 }), ["RH1"]);
+});
+
+test("RH2: 기록 본문이 하나라도 있으면 RH2 만 실패한다", () => {
+  assert.deepEqual(rhFailing({ bodies: 1 }), ["RH2"]);
+});
+
+test("RH3: 마피아·유령 줄이 있거나 보낸 문장이 화면 글자에 있으면 RH3 만 실패한다, 결과 줄에는 문장을 싣지 않는다", () => {
+  assert.deepEqual(rhFailing({ chLines: 1 }), ["RH3"]);
+  assert.deepEqual(rhFailing({ domText: `시민 승리 ${SENT[0]}` }), ["RH3"]);
+  assert.deepEqual(rhFailing({ domText: `시민 승리 ${SENT[1]}` }), ["RH3"]);
+  const row = resultHiddenChecks({ ...hiddenGood(), domText: `끝 ${SENT[1]}` }, { sent: SENT }).find((r) => r.id === "RH3");
+  assert.ok(!row.detail.includes(SENT[1]));
+  assert.deepEqual(rhFailing({ domText: `끝 ${SENT[1]}` }, []), []);
+});
+
+test("RH4: 확장 상태이거나 패널 높이가 160 ±1 이 아니면 RH4 만 실패한다", () => {
+  assert.deepEqual(rhFailing({ expanded: "true" }), ["RH4"]);
+  assert.deepEqual(rhFailing({ panelH: 188 }), ["RH4"]);
+  assert.deepEqual(rhFailing({ panelH: 161 }), []);
+  assert.deepEqual(rhFailing({ panelH: 162 }), ["RH4"]);
+});
+
+test("resultHiddenChecks: 입력이 없거나 값이 비면 측정값 없음으로 실패한다", () => {
+  for (const r of resultHiddenChecks(null)) {
+    assert.equal(r.ok, false);
+    assert.match(r.detail, /측정값 없음/);
+  }
+  assert.deepEqual(rhFailing({ tabs: undefined }), ["RH1"]);
+  assert.deepEqual(rhFailing({ expanded: null }), ["RH4"]);
+  assert.deepEqual(rhFailing({ panelH: Number.NaN }), ["RH4"]);
 });

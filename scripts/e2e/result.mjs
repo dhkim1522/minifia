@@ -1,5 +1,6 @@
 // 11페이즈 결과 화면 E2E 판정·읽기 (11-05, 결정 D-1·D-11·D-25, UI-SPEC A-1·A-5).
 // 흐름 본문(resultFlow)은 flows.mjs 에 있고, 이 파일은 순수 검사 함수와 페이지 읽기 도우미만 둔다(flows.mjs 가 이미 3천 줄이다).
+// 18.1(P181-7): 결과 화면 탭은 그리지 않는다 — 탭 판정은 숨김 판정(resultHiddenChecks)으로 바뀌었다.
 // 판정 문턱은 여기에만 있고 흐름은 낮추지 않는다. 직업 의상 대응표는 src/world/ghostOutfit.ts 의 JOB_OUTFIT 과 같아야 하고 test/unit/e2eContract.test.ts 가 대조한다.
 
 /** 결과 화면이 더한 DOM 표식·훅 이름. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지). */
@@ -28,9 +29,6 @@ export const TIMELINE_CARD = Object.freeze({ w: 72, h: 112, gap: 8 });
 
 /** 결과 탭 id, 표시 순서 (src/game/resultText.ts RESULT_TABS 의 사본) */
 export const RESULT_TAB_IDS = Object.freeze(["all", "mafia", "ghost", "whisper", "log"]);
-
-/** 기본판(결정 0072)에서 보이는 결과 탭 — 귓속말 탭은 RULESET.whisper 일 때만 있다(src/game/resultText.ts RESULT_TABS_SHOWN 의 사본) */
-export const RESULT_TAB_IDS_BASIC = Object.freeze(RESULT_TAB_IDS.filter((id) => id !== "whisper"));
 
 /** 직업 → 3D 의상 id (src/world/ghostOutfit.ts JOB_OUTFIT 의 사본) */
 export const RESULT_JOB_OUTFIT = Object.freeze({ mafia: "mafia", police: "police", doctor: "doctor", citizen: "coat" });
@@ -179,203 +177,60 @@ export function readResultStage(page) {
   });
 }
 
-// ---------- 11-07 탭 패널 ----------
-
-const TAB_MIN = 44;
-/** 새 탭 점이 붙는 탭(기록 탭·전체 탭은 없다) */
-const DOT_TAB_IDS = ["ghost", "mafia", "whisper"];
+// ---------- 18.1 결과 화면 기록 숨김 ----------
 
 /**
- * 탭 패널 판정(11-07, UI-SPEC A-3·G). 입력은 두 묶음 중 있는 것만 판정한다: { layout?, reveal? }. 묶음이 있는데 값이 비면 `측정값 없음` 으로 실패한다.
- * layout(최종 상태 한 페이지): roomH · tabBoxes [{id,w,h}] · panelCollapsedH · panelExpandedH(마피아 탭을 연 높이) · inputPresent(확장에서 [data-chat-input]) ·
- *   iconColors { 탭id: 아이콘 계산 색 } · crimson(진홍 토큰의 계산 색) · separators(마피아 탭 구분선 글자들) · dots { before, after }(점이 붙은 탭 id, 열기 전/마피아를 연 뒤) · headerBottom · panelTop(방 위 끝 기준)
- *   RT1 탭 44×44 이상 다섯 · RT3 접힌 188/244 ±1 · RT4 확장 min(round(0.7×방 높이),520) ±2 · RT5 확장에서 입력칸 없음 · RT6 마피아 탭만 진홍 · RT7 구분선은 없거나 모두 `{n}밤` ·
- *   RT8 점: 열기 전 마피아·유령·귓속말, 마피아를 연 뒤 유령·귓속말 · RT9 헤더 아래 62 이상이고 확장 패널이 헤더를 가리지 않음
- * reveal(연출 구간을 지나는 방장 페이지): tabsBefore {stage,count} · tabsAfter {stage,count} · live [{phase,count}] · paused {stageAtOpen,chipsAtOpen,stageLater,chipsLater,waitedMs} ·
- *   tapExpanded {expandedBefore,expandedAfter,stageBefore,stageAfter} · tapCollapsed {stageBefore,stageAfter}
- *   RT2 첫 뒤집기 전 탭 1개·뒤집기 시작 뒤 5개 · RT10 판 중 탭 0건 · RT11 확장 중 시계 정지 · RT12 확장 중 무대 탭은 접기만 · RT13 접힌 무대 탭은 4600 이후로 건너뜀
- * 반환: 항목별 { id, label, ok, detail }.
+ * 결과 화면 숨김 판정(18.1 P181-7, UI-SPEC E1·E2). 입력 m = { tabs, tabRows, bodies, chLines, domText, expanded, panelH }
+ *  tabs `[data-result-tab]` 수 · tabRows `.mf-result__tabs` 수 · bodies `[data-result-body]` 수 · chLines `[data-ch="mafia"]`·`[data-ch="ghost"]` 줄 수 ·
+ *  domText 결과 화면 글자 전체 · expanded 아래 패널의 data-expanded 값(문자열) · panelH 아래 패널 높이.
+ * ctx = { sent }: 판 중에 보낸 마피아·유령 채팅 문장들 — 결과 화면 글자에 없어야 한다(결과 줄에는 포함 여부만 남기고 문장은 싣지 않는다).
+ * RH1 탭 행·탭 단추 0 · RH2 기록 본문 0 · RH3 마피아·유령 줄 0 이고 보낸 문장이 DOM 에 없음 · RH4 확장 없음(data-expanded "false")이고 패널 높이 = RESULT_PANEL_H ±1.
+ * 측정값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다. 반환: 항목별 { id, label, ok, detail }.
  */
-export function resultTabChecks(m = {}, { whisper = false } = {}) {
-  const out = [];
-  const tabIds = whisper ? RESULT_TAB_IDS : RESULT_TAB_IDS_BASIC;
-  if (m.layout !== undefined) out.push(...layoutTabChecks(m.layout, tabIds));
-  if (m.reveal !== undefined) out.push(...revealTabChecks(m.reveal, tabIds));
-  return out;
-}
-
-function layoutTabChecks(l, tabIds) {
+export function resultHiddenChecks(m, { sent = [] } = {}) {
   const L = {
-    RT1: `탭 패널: 탭 버튼 ${tabIds.length}개, 모두 44×44 이상`,
-    RT3: "탭 패널: 접힌 패널 높이 188 · 244",
-    RT4: "탭 패널: 마피아 탭 확장 높이 min(round(0.7 × 방 높이), 520)",
-    RT5: "탭 패널: 확장에서 입력칸 없음",
-    RT6: "탭 패널: 마피아 탭 아이콘만 진홍",
-    RT7: "탭 패널: 마피아 탭 구분선은 없거나 모두 `{n}밤`",
-    RT8: tabIds.includes("whisper") ? "탭 패널: 새 탭 점 — 열기 전 마피아·유령·귓속말, 마피아를 연 뒤 유령·귓속말" : "탭 패널: 새 탭 점 — 열기 전 마피아·유령, 마피아를 연 뒤 유령(귓속말 탭 없음, 결정 0072)",
-    RT9: "탭 패널: 헤더 아래 62 이상, 확장 패널이 헤더를 가리지 않음",
+    RH1: "결과 화면에 탭 행·탭 단추가 없다",
+    RH2: "결과 화면에 기록 본문이 없다",
+    RH3: "결과 화면에 마피아·유령 대화 줄이 없고 보낸 문장도 없다",
+    RH4: `결과 화면 아래 패널이 확장 없이 ${RESULT_PANEL_H} 이다`,
   };
+  const ids = ["RH1", "RH2", "RH3", "RH4"];
+  if (m === null || typeof m !== "object") return ids.map((id) => noMeasure(id, L[id], "결과 화면 읽기 값"));
   const out = [];
-
-  // RT1
-  if (!Array.isArray(l?.tabBoxes)) out.push(noMeasure("RT1", L.RT1, "tabBoxes"));
+  out.push(isNum(m.tabs) && isNum(m.tabRows) ? result("RH1", L.RH1, [...(m.tabs !== 0 ? [`탭 단추 ${m.tabs}개`] : []), ...(m.tabRows !== 0 ? [`탭 행 ${m.tabRows}개`] : [])]) : noMeasure("RH1", L.RH1, "탭 수"));
+  out.push(isNum(m.bodies) ? result("RH2", L.RH2, m.bodies === 0 ? [] : [`기록 본문 ${m.bodies}개`]) : noMeasure("RH2", L.RH2, "본문 수"));
+  if (!isNum(m.chLines) || typeof m.domText !== "string") out.push(noMeasure("RH3", L.RH3, "대화 줄 수·화면 글자"));
   else {
     const bad = [];
-    if (l.tabBoxes.length !== tabIds.length) bad.push(`탭 ${l.tabBoxes.length}개 ≠ ${tabIds.length}개`);
-    for (const b of l.tabBoxes) if (!isNum(b?.w) || !isNum(b?.h) || b.w < TAB_MIN - 0.5 || b.h < TAB_MIN - 0.5) bad.push(`${b?.id} ${b?.w}×${b?.h}`);
-    out.push(result("RT1", L.RT1, bad));
+    if (m.chLines !== 0) bad.push(`마피아·유령 줄 ${m.chLines}개`);
+    const leaked = sent.filter((x) => typeof x === "string" && x !== "" && m.domText.includes(x)).length;
+    if (leaked > 0) bad.push(`보낸 문장 ${leaked}개가 화면 글자에 있음`);
+    out.push(result("RH3", L.RH3, bad));
   }
-
-  // RT3
-  const wantCollapsed = RESULT_PANEL_H;
-  if (!isNum(l?.panelCollapsedH)) out.push(noMeasure("RT3", L.RT3, "panelCollapsedH"));
-  else out.push(result("RT3", L.RT3, Math.abs(l.panelCollapsedH - wantCollapsed) <= 1 ? [] : [`접힌 높이 ${l.panelCollapsedH} ≠ ${wantCollapsed} (±1)`]));
-
-  // RT4
-  if (!isNum(l?.panelExpandedH) || !isNum(l?.roomH)) out.push(noMeasure("RT4", L.RT4, "panelExpandedH·roomH"));
-  else {
-    const want = Math.min(Math.round(0.7 * l.roomH), 520);
-    out.push(result("RT4", L.RT4, Math.abs(l.panelExpandedH - want) <= 2 ? [] : [`확장 높이 ${l.panelExpandedH} ≠ ${want} (±2, 방 ${l.roomH})`]));
-  }
-
-  // RT5
-  if (typeof l?.inputPresent !== "boolean") out.push(noMeasure("RT5", L.RT5, "inputPresent"));
-  else out.push(result("RT5", L.RT5, l.inputPresent ? ["확장된 패널에 입력칸이 있음"] : []));
-
-  // RT6
-  if (!l?.iconColors || typeof l.crimson !== "string" || typeof l.iconColors.mafia !== "string") out.push(noMeasure("RT6", L.RT6, "iconColors·crimson"));
+  if (typeof m.expanded !== "string" || !isNum(m.panelH)) out.push(noMeasure("RH4", L.RH4, "확장 상태·패널 높이"));
   else {
     const bad = [];
-    if (l.iconColors.mafia !== l.crimson) bad.push(`마피아 탭 아이콘 ${l.iconColors.mafia} ≠ 진홍 ${l.crimson}`);
-    for (const [id, c] of Object.entries(l.iconColors)) if (id !== "mafia" && c === l.crimson) bad.push(`${id} 탭 아이콘도 진홍`);
-    out.push(result("RT6", L.RT6, bad));
-  }
-
-  // RT7
-  // 15-10: 산 마피아의 밤 채팅 화면이 없어(15-08) 마피아 탭이 비어 있을 수 있다 — 구분선은 없어도 되고, 있으면 모두 `{n}밤` 꼴이다.
-  if (!Array.isArray(l?.separators)) out.push(noMeasure("RT7", L.RT7, "separators"));
-  else out.push(result("RT7", L.RT7, l.separators.every((t) => /^\d+밤$/.test(t)) ? [] : [`구분선 "${l.separators.join('", "')}"`]));
-
-  // RT8
-  if (!Array.isArray(l?.dots?.before) || !Array.isArray(l?.dots?.after)) out.push(noMeasure("RT8", L.RT8, "dots"));
-  else {
-    const bad = [];
-    const dotsBefore = DOT_TAB_IDS.filter((id) => tabIds.includes(id));
-    const dotsAfter = ["ghost", "whisper"].filter((id) => tabIds.includes(id));
-    if (!sameSet(l.dots.before, dotsBefore)) bad.push(`열기 전 점 [${[...l.dots.before].sort()}] ≠ [${dotsBefore}]`);
-    if (!sameSet(l.dots.after, dotsAfter)) bad.push(`마피아를 연 뒤 점 [${[...l.dots.after].sort()}] ≠ [${dotsAfter}]`);
-    out.push(result("RT8", L.RT8, bad));
-  }
-
-  // RT9
-  if (!isNum(l?.headerBottom) || !isNum(l?.panelTop)) out.push(noMeasure("RT9", L.RT9, "headerBottom·panelTop"));
-  else {
-    const bad = [];
-    if (l.headerBottom < 62 - 1) bad.push(`헤더 아래 ${l.headerBottom} < 62`);
-    if (l.panelTop < l.headerBottom - 1) bad.push(`패널 윗변 ${l.panelTop} 이 헤더 아래 ${l.headerBottom} 를 가림`);
-    out.push(result("RT9", L.RT9, bad));
+    if (m.expanded !== "false") bad.push(`data-expanded ${m.expanded} (기대 false)`);
+    if (Math.abs(m.panelH - RESULT_PANEL_H) > 1) bad.push(`패널 높이 ${Math.round(m.panelH * 10) / 10} (기대 ${RESULT_PANEL_H} ±1)`);
+    out.push(result("RH4", L.RH4, bad));
   }
   return out;
 }
 
-function revealTabChecks(r, tabIds) {
-  const L = {
-    RT2: `탭 패널: 첫 뒤집기 전 탭 1개, 뒤집기 시작 뒤 ${tabIds.length}개`,
-    RT10: "탭 패널: 판이 도는 동안 시민 화면에 탭 0건",
-    RT11: "탭 패널: 확장 중 연출 시계가 멈춤",
-    RT12: "탭 패널: 확장 중 무대 탭은 접기만 함(건너뛰기 아님)",
-    RT13: "탭 패널: 접힌 무대 탭은 4600 이후로 건너뜀",
-  };
-  const out = [];
-
-  // RT2
-  if (!isNum(r?.tabsBefore?.count) || !isNum(r?.tabsAfter?.count)) out.push(noMeasure("RT2", L.RT2, "tabsBefore·tabsAfter"));
-  else if (r.tabsBefore.stage !== "gather") out.push(noMeasure("RT2", L.RT2, `뒤집기 전 구간을 놓침(단계 ${r.tabsBefore.stage})`));
-  else if (r.tabsAfter.stage === "gather") out.push(noMeasure("RT2", L.RT2, "뒤집기 시작 뒤 표본이 아직 모임 구간"));
-  else {
-    const bad = [];
-    if (r.tabsBefore.count !== 1) bad.push(`뒤집기 전 탭 ${r.tabsBefore.count}개 ≠ 1`);
-    if (r.tabsAfter.count !== tabIds.length) bad.push(`뒤집기 시작 뒤 탭 ${r.tabsAfter.count}개 ≠ ${tabIds.length}`);
-    out.push(result("RT2", L.RT2, bad));
-  }
-
-  // RT10
-  if (!Array.isArray(r?.live) || r.live.length === 0) out.push(noMeasure("RT10", L.RT10, "live"));
-  else {
-    const bad = r.live.filter((x) => x.count !== 0).map((x) => `${x.phase} 에 탭 ${x.count}개`);
-    out.push(result("RT10", L.RT10, bad));
-  }
-
-  // RT11
-  const p = r?.paused;
-  if (!p || !isNum(p.chipsAtOpen) || !isNum(p.chipsLater) || typeof p.stageAtOpen !== "string" || typeof p.stageLater !== "string" || !isNum(p.waitedMs)) out.push(noMeasure("RT11", L.RT11, "paused"));
-  else if (p.waitedMs < 1000) out.push(noMeasure("RT11", L.RT11, `기다린 시간 ${p.waitedMs}ms < 1000`));
-  else {
-    const bad = [];
-    if (p.stageLater !== p.stageAtOpen) bad.push(`단계 ${p.stageAtOpen} → ${p.stageLater}`);
-    if (p.chipsLater !== p.chipsAtOpen) bad.push(`칩 ${p.chipsAtOpen} → ${p.chipsLater}`);
-    out.push(result("RT11", L.RT11, bad));
-  }
-
-  // RT12
-  const t = r?.tapExpanded;
-  if (!t || typeof t.expandedBefore !== "boolean" || typeof t.expandedAfter !== "boolean" || typeof t.stageBefore !== "string" || typeof t.stageAfter !== "string") out.push(noMeasure("RT12", L.RT12, "tapExpanded"));
-  else {
-    const bad = [];
-    if (!t.expandedBefore) bad.push("탭 전에 확장되어 있지 않았음");
-    if (t.expandedAfter) bad.push("무대를 탭해도 접히지 않음");
-    if (t.stageAfter !== t.stageBefore) bad.push(`확장 중 탭이 건너뜀(${t.stageBefore} → ${t.stageAfter})`);
-    out.push(result("RT12", L.RT12, bad));
-  }
-
-  // RT13
-  const c = r?.tapCollapsed;
-  if (typeof c?.stageBefore !== "string" || typeof c?.stageAfter !== "string") out.push(noMeasure("RT13", L.RT13, "tapCollapsed"));
-  else if (c.stageBefore !== "gather" && c.stageBefore !== "flip") out.push(noMeasure("RT13", L.RT13, `탭 전 단계 ${c.stageBefore} — 연출 구간을 놓침`));
-  else out.push(result("RT13", L.RT13, ["light", "announce", "final"].includes(c.stageAfter) ? [] : [`탭 뒤 단계 ${c.stageAfter} (light 이후여야 함)`]));
-  return out;
-}
-
-/**
- * 결과 탭 패널 한 번의 읽기(한 번의 evaluate). `.mf-result` 가 없으면 null.
- * { stage, chips(훅), tab(훅), tabs: [id…], tabBoxes: [{id,w,h}], expanded(data-expanded), panelH, panelTop, headerBottom, roomH, inputPresent, separators: [글자…],
- *   dots: [점 붙은 탭 id…], iconColors: {탭id: 색}, crimson(--crimson-300 계산 색), bodyText(탭 몸통 글자) }
- */
-export function readResultTabs(page) {
+/** 결과 화면 숨김 읽기(한 번의 evaluate). `.mf-result` 가 없으면 null. resultHiddenChecks 입력 모양 */
+export function readResultHidden(page) {
   return page.evaluate(() => {
     const root = document.querySelector(".mf-result");
     if (!root) return null;
-    const rr = root.getBoundingClientRect();
     const panel = root.querySelector("[data-result-panel]");
-    const pr = panel ? panel.getBoundingClientRect() : null;
-    const header = root.querySelector("header")?.getBoundingClientRect() ?? null;
-    const tabEls = [...root.querySelectorAll("[data-result-tab]")];
-    const text = (el) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
-    const probe = document.createElement("i");
-    probe.style.color = "var(--crimson-300)";
-    root.appendChild(probe);
-    const crimson = getComputedStyle(probe).color;
-    probe.remove();
     return {
-      stage: window.__mfResult?.stage ?? root.getAttribute("data-result-stage") ?? "",
-      chips: window.__mfResult?.chips ?? -1,
-      tab: window.__mfResult?.tab ?? "",
-      tabs: tabEls.map((e) => e.getAttribute("data-result-tab")),
-      tabBoxes: tabEls.map((e) => {
-        const r = e.getBoundingClientRect();
-        return { id: e.getAttribute("data-result-tab"), w: r.width, h: r.height };
-      }),
-      expanded: panel?.getAttribute("data-expanded") === "true",
-      panelH: pr ? pr.height : Number.NaN,
-      panelTop: pr ? pr.top - rr.top : Number.NaN,
-      headerBottom: header ? header.bottom - rr.top : Number.NaN,
-      roomH: rr.height,
-      inputPresent: panel ? panel.querySelector("[data-chat-input]") !== null : false,
-      separators: [...root.querySelectorAll("[data-result-divider]")].map((e) => text(e)),
-      dots: tabEls.filter((e) => e.querySelector("[data-result-dot]")).map((e) => e.getAttribute("data-result-tab")),
-      iconColors: Object.fromEntries(tabEls.map((e) => [e.getAttribute("data-result-tab"), getComputedStyle(e.querySelector("svg")).color])),
-      crimson,
-      bodyText: text(root.querySelector("[data-result-body]")),
+      tabs: root.querySelectorAll("[data-result-tab]").length,
+      tabRows: root.querySelectorAll(".mf-result__tabs").length,
+      bodies: root.querySelectorAll("[data-result-body]").length,
+      chLines: root.querySelectorAll('[data-ch="mafia"], [data-ch="ghost"]').length,
+      domText: root.textContent ?? "",
+      expanded: panel ? panel.getAttribute("data-expanded") : null,
+      panelH: panel ? panel.getBoundingClientRect().height : Number.NaN,
     };
   });
 }
@@ -383,15 +238,15 @@ export function readResultTabs(page) {
 // ---------- 11-09 시상식 ----------
 
 /**
- * AW1~AW10 시상식 판정(11-09, 결정 D-7·D-24·D-25, UI-SPEC B-3·G). 입력:
+ * AW1~AW8·AW10 시상식 판정(11-09, 결정 D-7·D-24·D-25, UI-SPEC B-3·G). 입력:
  *  viewport {w,h} · stageTop 스테이지 윗변(헤더 아래, 방 위 끝 기준) · panelTop 패널 윗변(= 스테이지 아래 끝, 같은 기준)
  *  plateBox {top,left,width,height} 첫 패의 사각형 · floatBox {left,top,width,height,bottom} 첫 패가 뜬 때의 [넘기기]
  *  progress 패마다 읽은 진행 숫자 문자열 · awards 훅 window.__mfResult.awards ([좌석, 칭호 id][]) · observed 패마다 읽은 data-award-id 열
  *  participants 참가자 수 · winnerTeamSeats 이긴 팀 좌석(서버 view 기준) · winner 승자 · titleDuring 시상 중 헤더 · titleAfter 끝난 뒤 헤더 · floatAfter 끝난 뒤 [data-float="skip"] 수
- *  pause { indexOpen, indexLater, waitedMs, floatHidden, plateKept, indexResumed } 확장 탭을 연 때 패 index · 기다린 뒤 index · 기다린 시간 · [넘기기] 숨김 · 패 유지 · 접은 뒤 index
  *  costumesDuring 첫 패가 뜬 때 런타임이 입은 의상 표 · costumesAfter 시상식 뒤 표 · jobBySeat 서버 view 의 직업 표
  * AW1 패 수 == 참가자 수 == 훅 목록 길이 · AW2 관찰한 칭호 순서 == 훅(서버) 순서 · AW3 마지막 패가 이긴 팀 · AW4 패 기하(AW-PLATE) · AW5 [넘기기] 기하 · AW6 진행 'k / n' ·
- * AW7 헤더 '시상식' → 승리 한 줄 · AW8 끝난 뒤 [넘기기] 없음 · AW9 확장 탭 동안 일시정지 · AW10 시상 중 직업 의상 → 끝난 뒤 걷힘.
+ * AW7 헤더 '시상식' → 승리 한 줄 · AW8 끝난 뒤 [넘기기] 없음 · AW10 시상 중 직업 의상 → 끝난 뒤 걷힘.
+ * 18.1: 확장 탭이 없어져(결과 화면은 전체 대화 하나, P181-7) 옛 AW9(확장 탭을 열면 시상식 일시정지)는 잴 길이 없어 지웠다. id 는 비워 두고 다시 쓰지 않는다.
  * 측정값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
  */
 export function awardChecks(m) {
@@ -404,7 +259,6 @@ export function awardChecks(m) {
     AW6: "시상식: 진행 숫자 'k / n' 이 패마다 1씩 오름",
     AW7: "시상식: 헤더 '시상식' → 끝난 뒤 승리 한 줄",
     AW8: "시상식: 끝난 뒤 [넘기기] 없음",
-    AW9: "시상식: 확장 탭이 열린 동안 일시정지(패 유지, [넘기기] 숨김), 접으면 이어짐",
     AW10: "시상식: 시상 중 직업 의상, 끝난 뒤 걷힘",
   };
   const out = [];
@@ -502,19 +356,6 @@ export function awardChecks(m) {
   if (!isNum(m?.floatAfter)) out.push(noMeasure("AW8", L.AW8, "floatAfter"));
   else out.push(result("AW8", L.AW8, m.floatAfter === 0 ? [] : [`끝난 뒤 [넘기기] ${m.floatAfter}개가 남음`]));
 
-  // AW9
-  const p = m?.pause;
-  if (!isNum(p?.indexOpen) || !isNum(p?.indexLater) || !isNum(p?.waitedMs) || typeof p?.floatHidden !== "boolean" || typeof p?.plateKept !== "boolean" || !isNum(p?.indexResumed)) out.push(noMeasure("AW9", L.AW9, "pause"));
-  else {
-    const bad = [];
-    if (p.waitedMs < 2600) bad.push(`기다린 시간 ${p.waitedMs}ms < 2600 (한 창 2500ms 보다 길어야 일시정지가 증명됨)`);
-    if (p.indexLater !== p.indexOpen) bad.push(`확장 중 패 index ${p.indexOpen} → ${p.indexLater} (멈춰야 함)`);
-    if (!p.floatHidden) bad.push("확장 중 [넘기기]가 보임");
-    if (!p.plateKept) bad.push("확장 중 패가 사라짐");
-    if (!(p.indexResumed > p.indexOpen)) bad.push(`접은 뒤 패 index ${p.indexResumed} (> ${p.indexOpen} 이어야 이어짐)`);
-    out.push(result("AW9", L.AW9, bad));
-  }
-
   // AW10
   if (!m?.costumesDuring || typeof m.costumesDuring !== "object" || !m?.costumesAfter || typeof m.costumesAfter !== "object" || !m?.jobBySeat || typeof m.jobBySeat !== "object") out.push(noMeasure("AW10", L.AW10, "costumesDuring·costumesAfter·jobBySeat"));
   else {
@@ -565,137 +406,6 @@ export function readAwardState(page) {
     };
   });
 }
-
-// ---------- 11-11 기록 탭 ----------
-
-/**
- * TL1~TL7 기록 탭(일차 카드 띠·하루 상세) 판정 (11-11, 결정 D-8, UI-SPEC C). 입력:
- *  roomH 방 높이 · dayCount 서버 view 의 일차 수(result.summary 길이) · panel {top,bottom,height} 확장 패널 사각형
- *  cards [{n,left,top,width,height,pressed}] DOM 순서의 카드 사각형·aria-pressed · scrollLeft 띠의 가로 스크롤
- *  detailText 하루 상세의 보이는 글자 · detailBox {top,bottom,overflowY} 하루 상세 사각형·세로 overflow
- *  chips [{n,role}] 카드 낮 칸의 직업 칩 · executed [{n,seat}] 서버 view 의 처형된 날 · jobBySeat 서버 view 의 직업 표
- *  switched {cards,target,before,after} 다른 카드를 누르기 전후의 data-day-detail (카드가 한 장이면 그 카드를 눌러도 그대로)
- * TL1 카드 수 == 일차 수 · TL2 카드 72×112 ±2, 간격 8 ±2 · TL3 첫 카드만 눌림·scrollLeft 0 · TL4 문장 없음(숫자·공백 외 글자 0) · TL5 처형된 날 칩 직업 == 진짜 직업 ·
- * TL6 확장 높이 min(round(0.7×방),520) ±2, 상세가 패널 안에서 스크롤 · TL7 카드 전환. 측정값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
- */
-export function timelineChecks(m) {
-  const L = {
-    TL1: "기록 탭: 일차 카드 수 == 일차 수",
-    TL2: "기록 탭: 카드 72×112 (±2), 사이 간격 8 (±2)",
-    TL3: "기록 탭: 첫 일차만 선택돼 있고 띠는 처음 위치(scrollLeft 0)",
-    TL4: "기록 탭: 하루 상세에 문장이 없다 (숫자·공백 외 보이는 글자 0)",
-    TL5: "기록 탭: 처형된 날 카드의 직업 칩 == 결과의 진짜 직업",
-    TL6: "기록 탭: 확장 패널 min(round(0.7 × 방 높이), 520) ±2, 상세가 패널 안에서 스크롤",
-    TL7: "기록 탭: 다른 카드를 누르면 하루 상세의 일차가 바뀜",
-  };
-  const out = [];
-  const cards = Array.isArray(m?.cards) ? m.cards : null;
-
-  // TL1
-  if (cards === null || !isNum(m?.dayCount)) out.push(noMeasure("TL1", L.TL1, "cards·dayCount"));
-  else out.push(result("TL1", L.TL1, cards.length === m.dayCount && cards.length > 0 ? [] : [`카드 ${cards.length}장 ≠ 일차 ${m.dayCount}`]));
-
-  // TL2
-  if (cards === null || cards.some((c) => !isNum(c?.left) || !isNum(c?.width) || !isNum(c?.height))) out.push(noMeasure("TL2", L.TL2, "cards 사각형"));
-  else {
-    const bad = [];
-    for (const c of cards) {
-      if (Math.abs(c.width - TIMELINE_CARD.w) > 2) bad.push(`${c.n}일차 폭 ${c.width} ≠ ${TIMELINE_CARD.w} (±2)`);
-      if (Math.abs(c.height - TIMELINE_CARD.h) > 2) bad.push(`${c.n}일차 높이 ${c.height} ≠ ${TIMELINE_CARD.h} (±2)`);
-    }
-    for (let i = 1; i < cards.length; i++) {
-      const gap = cards[i].left - (cards[i - 1].left + cards[i - 1].width);
-      if (Math.abs(gap - TIMELINE_CARD.gap) > 2) bad.push(`${cards[i - 1].n}~${cards[i].n}일차 간격 ${gap} ≠ ${TIMELINE_CARD.gap} (±2)`);
-    }
-    out.push(result("TL2", L.TL2, bad));
-  }
-
-  // TL3
-  if (cards === null || cards.length === 0 || !isNum(m?.scrollLeft)) out.push(noMeasure("TL3", L.TL3, "cards·scrollLeft"));
-  else {
-    const bad = [];
-    if (cards[0].pressed !== true) bad.push("첫 일차가 선택되지 않음");
-    if (cards.slice(1).some((c) => c.pressed === true)) bad.push("첫 일차 외에도 선택된 카드가 있음");
-    if (Math.abs(m.scrollLeft) > 1) bad.push(`scrollLeft ${m.scrollLeft} ≠ 0`);
-    out.push(result("TL3", L.TL3, bad));
-  }
-
-  // TL4
-  if (typeof m?.detailText !== "string") out.push(noMeasure("TL4", L.TL4, "detailText"));
-  else {
-    const words = m.detailText.replace(/[\d\s]/g, "");
-    out.push(result("TL4", L.TL4, words === "" ? [] : [`숫자 외 글자 "${words.slice(0, 20)}"`]));
-  }
-
-  // TL5
-  if (!Array.isArray(m?.chips) || !Array.isArray(m?.executed) || m?.jobBySeat == null) out.push(noMeasure("TL5", L.TL5, "chips·executed·jobBySeat"));
-  else {
-    const bad = [];
-    for (const e of m.executed) {
-      const chip = m.chips.find((c) => c.n === e.n);
-      const want = m.jobBySeat[e.seat];
-      if (!chip) bad.push(`${e.n}일차 처형 카드에 직업 칩 없음`);
-      else if (chip.role !== want) bad.push(`${e.n}일차 칩 ${chip.role} ≠ 진짜 직업 ${want}`);
-    }
-    for (const c of m.chips) if (!m.executed.some((e) => e.n === c.n)) bad.push(`${c.n}일차는 처형이 없는데 직업 칩이 있음`);
-    out.push(result("TL5", L.TL5, bad));
-  }
-
-  // TL6
-  const pn = m?.panel;
-  const db = m?.detailBox;
-  if (!isNum(m?.roomH) || !isNum(pn?.height) || !isNum(pn?.top) || !isNum(pn?.bottom) || !isNum(db?.top) || !isNum(db?.bottom) || typeof db?.overflowY !== "string") out.push(noMeasure("TL6", L.TL6, "roomH·panel·detailBox"));
-  else {
-    const bad = [];
-    const want = Math.min(Math.round(0.7 * m.roomH), 520);
-    if (Math.abs(pn.height - want) > 2) bad.push(`확장 높이 ${pn.height} ≠ ${want} (±2, 방 ${m.roomH})`);
-    if (db.top < pn.top - 1 || db.bottom > pn.bottom + 1) bad.push(`상세 [${db.top}, ${db.bottom}] 가 패널 [${pn.top}, ${pn.bottom}] 밖`);
-    if (!["auto", "scroll"].includes(db.overflowY)) bad.push(`상세 overflow-y ${db.overflowY} (스크롤 불가)`);
-    out.push(result("TL6", L.TL6, bad));
-  }
-
-  // TL7
-  const sw = m?.switched;
-  if (!isNum(sw?.cards) || sw?.before == null || sw?.after == null || sw?.target == null) out.push(noMeasure("TL7", L.TL7, "switched"));
-  else if (sw.cards < 2) out.push(result("TL7", L.TL7, String(sw.after) === String(sw.before) ? [] : [`카드 한 장인데 상세가 ${sw.before} → ${sw.after} 로 바뀜`]));
-  else out.push(result("TL7", L.TL7, String(sw.after) === String(sw.target) && String(sw.after) !== String(sw.before) ? [] : [`${sw.target}일차 카드를 눌렀는데 상세 ${sw.before} → ${sw.after}`]));
-  return out;
-}
-
-/**
- * 기록 탭 한 번의 읽기(한 번의 evaluate). 기록 탭이 열려 있어야 한다. `.mf-result` 나 카드가 없으면 null.
- * { roomH, panel {top,bottom,height}, cards [{n,left,top,width,height,pressed}], scrollLeft, detail(현재 data-day-detail 값),
- *   detailText, detailBox {top,bottom,overflowY}, chips [{n,role}] }
- */
-export function readTimeline(page) {
-  return page.evaluate(() => {
-    const root = document.querySelector(".mf-result");
-    const panelEl = root?.querySelector("[data-result-panel]");
-    const strip = root?.querySelector("[data-timeline-strip]");
-    if (!root || !panelEl || !strip) return null;
-    const rr = root.getBoundingClientRect();
-    const pr = panelEl.getBoundingClientRect();
-    const detailEl = root.querySelector("[data-day-detail]");
-    const dr = detailEl ? detailEl.getBoundingClientRect() : null;
-    const cardEls = [...root.querySelectorAll("[data-day-card]")];
-    return {
-      roomH: rr.height,
-      panel: { top: pr.top - rr.top, bottom: pr.bottom - rr.top, height: pr.height },
-      cards: cardEls.map((e) => {
-        const r = e.getBoundingClientRect();
-        return { n: Number(e.getAttribute("data-day-card")), left: r.left, top: r.top - rr.top, width: r.width, height: r.height, pressed: e.getAttribute("aria-pressed") === "true" };
-      }),
-      scrollLeft: strip.scrollLeft,
-      detail: detailEl ? detailEl.getAttribute("data-day-detail") : null,
-      detailText: detailEl ? (detailEl.textContent ?? "") : undefined,
-      detailBox: dr ? { top: dr.top - rr.top, bottom: dr.bottom - rr.top, overflowY: getComputedStyle(detailEl).overflowY } : null,
-      chips: cardEls
-        .map((e) => ({ n: Number(e.getAttribute("data-day-card")), role: e.querySelector("[data-half=day] [data-role-chip]")?.getAttribute("data-role-chip") ?? null }))
-        .filter((c) => c.role !== null),
-    };
-  });
-}
-
 
 // ---------- 11-12 다시 하기 ----------
 
