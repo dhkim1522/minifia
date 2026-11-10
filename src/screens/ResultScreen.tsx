@@ -104,9 +104,6 @@ function sessionStore(): Storage | null {
   }
 }
 
-/** 탭 행(44)이 패널 위 여백(14)을 먹고 아래 간격 10 을 더해, 접힌 패널 높이를 게임 패널과 같게 두려고 기록 칸에서 덜어 내는 높이(44 + 10 − 14) */
-const TAB_ROW_H = 40;
-
 /** 쉬었던 사람(sat)의 몸 불투명도(UI-SPEC A-5) */
 const SAT_OPACITY = 0.5;
 
@@ -151,6 +148,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const { rootRef, headerRef, panelRef, inputRef, kbOpen, logH, sideMaxH, stageInsets } = useMapInsets();
 
   // 탭 패널(11-07): 현재 탭과 열어 본 탭 집합은 이 화면이 쥔다. 전체가 아닌 탭이면 패널이 확장되고 연출 시계가 멈춘다(D-3, D-25)
+  // 18.1: 결과 화면은 RESULT_TABS_SHOWN 이 전체 하나라 tab 은 늘 all 이고 확장·정지 경로에 닿지 않는다(P181-7). 경로는 되돌리기 쉽게 남긴다
   const [tab, setTab] = useState<ResultTab>("all");
   const [opened, setOpened] = useState<ReadonlySet<ResultTab>>(() => new Set<ResultTab>(["all"]));
   const expanded = tab !== "all";
@@ -581,7 +579,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
             sendDim={binding.sendDim === true}
             notice={binding.notice ?? null}
             {...(binding.quiet ? { quiet: true } : {})}
-            logHeight={kbOpen ? LOG_H_KB : logH - TAB_ROW_H}
+            logHeight={kbOpen ? LOG_H_KB : logH}
             compact={kbOpen}
             inputRef={inputRef}
             trailing={readyPill}
