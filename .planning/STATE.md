@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 18
 current_phase_name: "바로 고칠 것: 증거·조명·튜토리얼 손보기"
-current_plan: 13
+current_plan: 14
 status: executing
-stopped_at: Completed 18-12-PLAN.md
-last_updated: "2026-11-10T10:11:19.900Z"
+stopped_at: Completed 18-13-PLAN.md
+last_updated: "2026-11-10T10:25:06.107Z"
 last_activity: 2026-11-10
 last_activity_desc: Phase 18 execution started
-state_head: ffc10aca6b071950af8345cccc3b9e97d0aaf417
+state_head: 4ca3863526ac6b5633af95cf4cb3e62ad5346b98
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 61
-  completed_plans: 59
+  completed_plans: 60
   percent: 40
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 18 (바로 고칠 것: 증거·조명·튜토리얼 손보기) — EXECUTING
-Current Plan: 13
+Current Plan: 14
 Total Plans in Phase: 14
 Status: Ready to execute
 Last activity: 2026-11-10 — Phase 18 execution started
@@ -257,6 +257,7 @@ Last activity: 2026-11-10 — Phase 18 execution started
 | Phase 18 P09 | 10 min | 2 tasks | 6 files |
 | Phase 18 P10 | 4h | 3 tasks | 9 files |
 | Phase 18 P12 | 60min | 3 tasks | 16 files |
+| Phase 18 P13 | 25m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -570,6 +571,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18]: 18-09: 옷장 잠금 E2E(AL1~AL3)와 한 판 옷 유일·같은 옷 표시 ≤ 1(OU1·OU2)을 폰 6종으로 확인, AVATAR_MARKERS 8개
 - [Phase 18]: 18-10: 배포본 smoke full 은 망 지연 구간에서 통과 못해도 문턱·스크립트 불변, 바뀐 흐름 배포본 E2E 로 확인 후 HANDOFF 에 재확인 기록
 - [Phase 18]: 18-12: 재질 보정은 정점 색 CPU 재작성(albedoGrader), 단계 전이 때만 쓴다. 광장 morning mix 0.5 로 조정
+- [Phase 18]: 18-13: smoke 편차 판정은 서버 시각(view.serverNow) 기준, 문턱 500ms 유지, 도착 편차는 정보용
+- [Phase 18]: 18-13: smoke 재접속 복원 검사는 2일차 errand 안에서(첫 아침에 끝나는 판은 아침에)
 
 ### Pending Todos
 
@@ -641,8 +644,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-10T10:11:18.399Z
-Stopped at: Completed 18-12-PLAN.md
+Last session: 2026-11-10T10:25:05.321Z
+Stopped at: Completed 18-13-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
