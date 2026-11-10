@@ -106,7 +106,7 @@ GREEN `a467eabe` — 세 시험 파일 92 통과, `npm run typecheck` 0, `npm te
 
 ## Issues Encountered
 
-- 위생 검사(`git grep -nIiE "torder|티오더|조직|회사|~/project"`)는 이전 계획이 남긴 기존 일반 용례(`.planning/milestones/...` "공식 조직 패키지" 등)만 잡는다. 이 계획이 건드린 파일은 0 건이다.
+- 위생 검사(개인 작업 공통 지침의 위생 검사 명령)는 이전 계획이 남긴 기존 일반 용례(`.planning/milestones/...` "공식 조직 패키지" 등)만 잡는다. 이 계획이 건드린 파일은 0 건이다.
 
 ## Known Stubs
 

@@ -115,7 +115,7 @@ GREEN: `8f924f17`(Task 1), `5bb3eee2`(Task 2). `npm run typecheck` 오류 0, `np
 ## Issues Encountered
 
 - `npm test` 전체를 처음 돌렸을 때 파일 1개 시험 1건이 실패했다가, 같은 코드로 재실행한 두 번은 모두 통과했다(7979 통과). 이 계획의 변경과 무관한 시간 의존 불안정으로 보며 원인 파일은 첫 실행 출력이 잘려 확인하지 못했다.
-- 위생 검사(`git grep -nIiE "torder|티오더|조직|회사|~/project"`)가 `test/unit/gameRoom.test.ts` 635·636행(`seatOrdered` 변수명의 우연한 일치)을 잡는다. 이 계획이 만든 것이 아니고 범위 밖이라 두었다. 이 계획이 건드린 파일은 0 건이다.
+- 위생 검사(개인 작업 공통 지침의 위생 검사 명령)가 `test/unit/gameRoom.test.ts` 635·636행(`seatOrdered` 변수명의 우연한 일치)을 잡는다. 이 계획이 만든 것이 아니고 범위 밖이라 두었다. 이 계획이 건드린 파일은 0 건이다.
 
 ## Known Stubs
 

@@ -128,7 +128,7 @@ avatar-dress 에서 다른 참가자가 고른 옷만 방장 옷장에 잠기고
 - `npm run typecheck` 통과
 - `npm test` 279 파일 통과·6 건너뜀, 8012 통과·261 건너뜀(알려진 bots 간헐 없이 통과)
 - 인수 기준: `"data-taken"` 1건, `dressLockChecks` avatar.mjs 2건, `outfitUniqueChecks` errand.mjs 2건, `mv-evidence__zero` browser.mjs 0건
-- 위생: `git grep -nIiE "torder|티오더|조직|회사|~/project"` 결과 0
+- 위생: 개인 작업 공통 지침의 위생 검사 명령 결과 0
 - spec-less probe fallback 건너뜀: 요구사항 ID 가 SC-1·SC-5 로 기존 계획 기준이며 별도 spec 이 없어 건너뜀(보이는 건너뜀 기록).
 
 ## Deviations from Plan
