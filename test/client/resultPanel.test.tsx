@@ -4,8 +4,7 @@ import "../helpers/singleLineErrors";
 import type { ResultLogChatLine, ResultLogWhisperLine } from "../../shared/protocol";
 import { ResultPanel } from "../../src/components/v2/ResultPanel";
 import type { ResultPanelProps, ResultTab } from "../../src/components/v2/ResultPanel";
-import { RULESET } from "../../shared/game/ruleset";
-import { RESULT_PANEL_TEXT, RESULT_TABS_SHOWN } from "../../src/game/resultText";
+import { RESULT_TABS, RESULT_TABS_SHOWN } from "../../src/game/resultText";
 import type { ResultLogSnapshot } from "../../src/net/resultLogStore";
 import { tlLog, TL_NAMES, TL_RESULT, TL_VOTE_LOG } from "../helpers/timelineState";
 
@@ -53,79 +52,32 @@ function setup(over: Partial<ResultPanelProps> = {}) {
   return { ...r, onTab, panel: r.container.querySelector<HTMLElement>("[data-result-panel]")! };
 }
 const tabs = (c: ParentNode) => Array.from(c.querySelectorAll<HTMLElement>("[data-result-tab]"));
-const tabOf = (c: ParentNode, id: string) => c.querySelector<HTMLElement>(`[data-result-tab="${id}"]`)!;
 const text = (el: Element | null | undefined) => el?.textContent ?? "";
 
-describe("기본판: 결과 화면 귓속말 탭이 없다 (U-8, UI#14, 결정 0072)", () => {
-  it("보이는 탭 목록은 귓속말을 뺀 all·mafia·ghost·log 이고 탭 행·좌우 화살표키 이동도 그 넷 안이다", () => {
-    if (RULESET.whisper) return;
-    expect([...RESULT_TABS_SHOWN]).toEqual(["all", "mafia", "ghost", "log"]);
-    const { container, onTab } = setup({ tab: "mafia", expanded: true });
-    expect(tabs(container).map((t) => t.getAttribute("data-result-tab"))).toEqual(["all", "mafia", "ghost", "log"]);
-    expect(container.querySelector('[data-result-tab="whisper"]')).toBeNull();
-    fireEvent.keyDown(tabOf(container, "ghost"), { key: "ArrowRight" });
-    expect(onTab).toHaveBeenLastCalledWith("log");
-    fireEvent.keyDown(tabOf(container, "log"), { key: "ArrowRight" });
-    expect(onTab).toHaveBeenLastCalledWith("all");
-    fireEvent.keyDown(tabOf(container, "all"), { key: "ArrowLeft" });
-    expect(onTab).toHaveBeenLastCalledWith("log");
+describe("결과 화면은 전체 대화 하나뿐 — 탭 행 미렌더 (18.1 R5, P181-7)", () => {
+  it("RESULT_TABS_SHOWN 은 전체 하나다(RESULT_TABS 는 그대로 남아 되돌릴 수 있다)", () => {
+    expect([...RESULT_TABS_SHOWN]).toEqual(["all"]);
+    expect([...RESULT_TABS]).toEqual(["all", "mafia", "ghost", "whisper", "log"]);
   });
-});
 
-describe("탭 행 (A-3)", () => {
-  it("tablist 안에 아이콘 탭: 전체·마피아·유령·(귓속말)·기록, 접근성 이름이 붙는다 — 기본판(결정 0072)에서는 귓속말이 빠진 넷", () => {
-    const { container } = setup();
-    const list = container.querySelector("[role=tablist]")!;
-    expect(list).not.toBeNull();
-    const names: Record<string, string> = { all: "전체 대화", mafia: "마피아 밤 대화", ghost: "유령 대화", whisper: "귓속말 기록", log: "판 기록" };
-    expect(tabs(container).map((t) => t.getAttribute("data-result-tab"))).toEqual([...RESULT_TABS_SHOWN]);
-    expect(tabs(container).map((t) => t.getAttribute("aria-label"))).toEqual(RESULT_TABS_SHOWN.map((id) => names[id]));
-    for (const t of tabs(container)) {
-      expect(t.getAttribute("role")).toBe("tab");
-      expect(t.querySelector("svg")).not.toBeNull();
+  it("tabsVisible 이 참이든 거짓이든 탭 행·탭 단추·tablist 가 DOM 에 없다", () => {
+    for (const tabsVisible of [true, false]) {
+      const { container, unmount } = setup({ tabsVisible });
+      expect(container.querySelector(".mf-result__tabs")).toBeNull();
+      expect(container.querySelector("[role=tablist]")).toBeNull();
+      expect(tabs(container)).toHaveLength(0);
+      expect(container.querySelector("[data-result-dot]")).toBeNull();
+      unmount();
     }
   });
 
-  it("tabsVisible 이 거짓이면 전체 탭 하나뿐이다", () => {
-    const { container } = setup({ tabsVisible: false });
-    expect(tabs(container).map((t) => t.getAttribute("data-result-tab"))).toEqual(["all"]);
-  });
-
-  it("선택된 탭만 aria-selected 이고 탭 안 글은 선택 여부와 무관하게 네 탭 모두에 붙으며 이름표 속성은 없다 (16-04 V-7)", () => {
-    const { container } = setup({ tab: "ghost", expanded: true, opened: new Set<ResultTab>(["all", "ghost"]) });
-    expect(tabs(container).map((t) => t.getAttribute("aria-selected"))).toEqual(RESULT_TABS_SHOWN.map((id) => String(id === "ghost")));
-    const labels = Array.from(container.querySelectorAll(".mf-result__tab-label")).map((e) => text(e));
-    expect(labels).toEqual(RESULT_TABS_SHOWN.map((id) => RESULT_PANEL_TEXT.tab[id]));
-    expect(labels).toEqual(["전체", "마피아", "유령", "기록"]);
-    expect(tabs(container).map((t) => t.hasAttribute("data-tool-label"))).toEqual([false, false, false, false]);
-  });
-
-  it("탭을 누르면 onTab(id), 좌우 화살표키는 이웃 탭으로 옮긴다 (끝에서 끝으로 돈다)", () => {
-    const { container, onTab } = setup({ tab: "mafia", expanded: true });
-    fireEvent.click(tabOf(container, "log"));
-    expect(onTab).toHaveBeenLastCalledWith("log");
-    fireEvent.keyDown(tabOf(container, "mafia"), { key: "ArrowRight" });
-    expect(onTab).toHaveBeenLastCalledWith("ghost");
-    fireEvent.keyDown(tabOf(container, "mafia"), { key: "ArrowLeft" });
-    expect(onTab).toHaveBeenLastCalledWith("all");
-    fireEvent.keyDown(tabOf(container, "all"), { key: "ArrowLeft" });
-    expect(onTab).toHaveBeenLastCalledWith("log");
-  });
-
-  it("마피아 탭 아이콘만 진홍 표식(is-mafia)이다", () => {
-    const { container } = setup();
-    expect(tabOf(container, "mafia").classList.contains("is-mafia")).toBe(true);
-    for (const id of RESULT_TABS_SHOWN.filter((x) => x !== "mafia")) expect(tabOf(container, id).classList.contains("is-mafia")).toBe(false);
-  });
-
-  it("새 탭 점(data-result-dot): 열린 적 없는 마피아·유령(·귓속말) 탭에만, 기록·전체 탭에는 없다", () => {
-    const { container } = setup();
-    const dotted = tabs(container).filter((t) => t.querySelector("[data-result-dot]") !== null).map((t) => t.getAttribute("data-result-tab"));
-    expect(dotted).toEqual(RESULT_TABS_SHOWN.filter((id) => id === "mafia" || id === "ghost" || id === "whisper"));
-    cleanup();
-    const again = setup({ opened: new Set<ResultTab>(["all", "mafia", "whisper"]) });
-    const left = tabs(again.container).filter((t) => t.querySelector("[data-result-dot]") !== null).map((t) => t.getAttribute("data-result-tab"));
-    expect(left).toEqual(["ghost"]);
+  it("전체 탭이면 allSlot 이 그대로 들어 있고 확장되지 않으며 탭 글자(전체·마피아·유령·기록)가 화면에 없다", () => {
+    const { container, panel } = setup();
+    expect(container.querySelector("[data-all-slot]")).not.toBeNull();
+    expect(container.querySelector("[data-chat-input]")).not.toBeNull();
+    expect(panel.getAttribute("data-expanded")).toBe("false");
+    expect(container.querySelector(".mf-result__tab-label")).toBeNull();
+    expect(container.querySelector("[data-result-body]")).toBeNull();
   });
 });
 
@@ -220,11 +172,6 @@ describe("유령·귓속말·기록 탭 (A-3)", () => {
     expect(body.querySelector("[data-result-divider]")).toBeNull();
     expect(body.querySelectorAll("svg")).toHaveLength(1);
     expect(text(body).trim()).toBe("");
-  });
-
-  it("탭 아이콘은 줄이 없어도 나타난다 (마피아가 한마디도 안 했다는 사실도 정보)", () => {
-    const { container } = setup({ lines: snap({ mafia: part<ResultLogChatLine>([]) }) });
-    expect(tabOf(container, "mafia")).not.toBeNull();
   });
 
   it("기록 탭은 logSlot 이 채운다 (11-11), 없으면 빈 몸통", () => {

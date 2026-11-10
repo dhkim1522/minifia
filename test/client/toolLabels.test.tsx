@@ -18,7 +18,6 @@ import { makeRig } from "../helpers/soundRig";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, MorningView, PhaseId, RoomView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
-import { RESULT_PANEL_TEXT, RESULT_TABS_SHOWN } from "../../src/game/resultText";
 
 // 방 화면 전수 검사(14-07 Task 2)용 가짜: 연결 훅·에셋 미리 읽기·3D 무대(guide.test.tsx 와 같은 모양).
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
@@ -230,18 +229,14 @@ describe("시트 닫기·결과 탭 (TOOL-04, D-01·V-7)", () => {
     ...over,
   });
 
-  it("결과 기록 탭 넷은 선택 여부와 무관하게 아이콘 + 글자를 그대로 보이고 이름표 속성이 없다", () => {
+  it("결과 패널은 어떤 탭·확장으로 그려도 탭 단추를 그리지 않는다 — 탭 라벨·접근성 이름이 화면에 없다 (18.1 R5, P181-7)", () => {
     for (const sel of ["all", "ghost", "log"] as const) {
-      const { container, unmount } = render(<ResultPanel {...tabProps({ tab: sel, expanded: true })} />);
-      const tabs = [...container.querySelectorAll<HTMLElement>("[data-result-tab]")];
-      expect(tabs.map((t) => t.getAttribute("data-result-tab"))).toEqual([...RESULT_TABS_SHOWN]);
-      for (const t of tabs) {
-        const id = t.getAttribute("data-result-tab") as ResultTab;
-        expectTextControl(t, RESULT_PANEL_TEXT.tab[id], { name: RESULT_PANEL_TEXT.tabName[id] });
-        expect(t.querySelector("svg"), id).not.toBeNull();
-        expect(t.getAttribute("aria-selected")).toBe(id === sel ? "true" : "false");
+      for (const expanded of [false, true]) {
+        const { container, unmount } = render(<ResultPanel {...tabProps({ tab: sel, expanded })} />);
+        expect(container.querySelectorAll("[data-result-tab]")).toHaveLength(0);
+        expect(container.querySelector("[role=tablist]")).toBeNull();
+        unmount();
       }
-      unmount();
     }
   });
 
