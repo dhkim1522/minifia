@@ -15,8 +15,8 @@
 .mv-evidence__dot { flex: none; box-sizing: border-box; width: 12px; height: 12px; border-radius: var(--radius-pill); border: 1px solid var(--night-600); }
 .mv-evidence__victim { max-width: 4em; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-50); text-decoration: line-through; opacity: 0.5; word-break: keep-all; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mv-evidence__eye { display: grid; place-items: center; flex: none; color: var(--brass-200); }
+.mv-evidence__eye--none { color: var(--gray-300); }
 .mv-evidence__witness { font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); word-break: keep-all; white-space: nowrap; }
-.mv-evidence__zero { font-size: 16px; line-height: 1.5; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gray-50); }
 .mv-evidence__place { display: grid; place-items: center; flex: none; box-sizing: border-box; width: 40px; height: 40px; margin-left: auto; border-radius: var(--radius-badge); background: var(--night-700); color: var(--gray-100); }
 /* 이름표 흔적 표시(16-09, V-29): 같은 옷 = 테두리 2 + thread 16 은 조각 색(--trace-mark), 마지막 목격 = eye 16 brass-200. 둘 다 이름 앞에 나란히. 색 값은 데이터에서 사용자 변수로만 온다. */
 .mv-tag[data-trace-mark] { box-shadow: inset 0 0 0 2px var(--trace-mark); }

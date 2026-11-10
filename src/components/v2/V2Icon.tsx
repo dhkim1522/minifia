@@ -6,6 +6,7 @@ import "../../styles/v2.css";
 // 나머지 아이콘은 그것을 쓰는 페이즈(8·9·10페이즈)가 같은 표에 더한다(10페이즈: 동작 아홉 개, hanger 는 10-07 이 더한다).
 // v1.0 아이콘(src/components/Icon.tsx)과 이름이 겹쳐도(check·crown) 서로 다른 부품이다: v2 화면은 이 파일을 쓴다.
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
+// 18페이즈: eyeOff(목격자 없음, eye 에 사선).
 // arrow(위쪽을 가리킴, 회전해 쓴다)·thread(끝이 풀린 사각 천)는 15페이즈가 더한 선 그림이다. 장소·조각 그림은 컬러 에셋 파일이 맡는다.
 export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "arrow" | "thread" | "bot" | "hand" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff";
 
@@ -93,7 +94,12 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
     ["c", 12, 12, 3],
   ],
   heal: [["p", "M9.5 4h5v5.5H20v5h-5.5V20h-5v-5.5H4v-5h5.5z"]],
-  eyeOff: [],
+  // 18페이즈: eyeOff(목격자 없음) — eye 의 두 부품 + 사선
+  eyeOff: [
+    ["p", "M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"],
+    ["c", 12, 12, 3],
+    ["p", "M4 4l16 16"],
+  ],
   // 09.1.1-08(정치·긴장 장치): 직접 그린 새 셋. 말풍선 + 입가 짧은 선(귓속말) · 좌우 화살표 둘(말 바꿈) · 원 + 사선(말 안 함)
   whisper: [
     ["p", "M5 4.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6.5L8 20.5v-4H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"],

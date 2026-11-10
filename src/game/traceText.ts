@@ -16,3 +16,6 @@ export const TRACE_TEXT: Readonly<Record<TracePiece, string>> = {
 
 /** 증거 카드 1행의 고정 보조 줄 — 이름표 표시가 무엇을 뜻하는지만 말한다(색 이름·'범인'·'증거'·'확정' 없음, 시험이 막는다) */
 export const TRACE_MARK_NOTE = "같은 옷을 입은 사람에게 표시";
+
+/** 증거 카드 2행 목격자 없음 아이콘(eyeOff)의 접근성 이름 — 화면에 글로는 보이지 않는다(18페이즈, D-10) */
+export const NO_WITNESS_LABEL = "목격자 없음";
