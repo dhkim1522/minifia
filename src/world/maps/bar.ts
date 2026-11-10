@@ -97,9 +97,9 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   vote: {
     hemi: 0.7 * Math.PI,
     moon: 0.55 * Math.PI,
-    moonColor: TOKEN_COLORS.moon,
+    moonColor: "#d8b48a",
     exposure: 1.25,
-    sky: ["#3a3464", "#1c1428", "#100d19"],
+    sky: ["#3c3a48", "#1c1428", "#100d19"],
     fog: { near: 20, far: 44 },
     stage: 2.0 * 4,
     pendant: PENDANT_TALK * 0.45,
@@ -173,9 +173,9 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   morning: {
     hemi: 0.85 * Math.PI,
     moon: 0.4 * Math.PI,
-    moonColor: TOKEN_COLORS.moon,
+    moonColor: "#e0dad8",
     exposure: 1.25,
-    sky: ["#4d4a6e", "#26202c", "#14111b"],
+    sky: ["#7e7a96", "#3a3446", "#322c40"],
     fog: { near: 20, far: 44 },
     stage: 0,
     pendant: PENDANT_TALK * 0.6,

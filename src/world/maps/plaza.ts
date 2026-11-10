@@ -72,11 +72,11 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   },
   /** 저녁 지목: 가로등 켜짐, 반구·달빛 낮춤, 무대 점광원이 연단을 비춘다 */
   vote: {
-    hemi: 0.43 * Math.PI,
-    moon: 0.25 * Math.PI,
-    moonColor: TOKEN_COLORS.moon,
+    hemi: 0.6 * Math.PI,
+    moon: 0.4 * Math.PI,
+    moonColor: "#d8b48a",
     exposure: 1.25,
-    sky: ["#4a4468", "#1c1428", "#171424"],
+    sky: ["#625e72", "#241a30", "#2c2238"],
     fog: { near: 20, far: 44 },
     stage: 2.0 * 4,
     pendant: LAMP_ON,
@@ -142,11 +142,11 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   },
   /** 아침: talk 보다 약간 낮은 반구, 채도 낮은 흐린 하늘, 가로등은 이미 꺼져 있다 */
   morning: {
-    hemi: 0.85 * Math.PI,
-    moon: 0.4 * Math.PI,
-    moonColor: TOKEN_COLORS.moon,
+    hemi: 0.95 * Math.PI,
+    moon: 0.6 * Math.PI,
+    moonColor: "#e0dad8",
     exposure: 1.25,
-    sky: ["#7a7488", "#342e3e", "#2e2a38"],
+    sky: ["#9a96ae", "#4c485a", "#6a6680"],
     fog: { near: 20, far: 44 },
     stage: 0,
     pendant: 0,

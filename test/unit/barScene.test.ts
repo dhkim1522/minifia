@@ -174,7 +174,7 @@ describe("조명 단계 (talk · vote)", () => {
     expect(LIGHT_TUNE.vote.exposure).toBe(1.25);
     expect(LIGHT_TUNE.vote.stage).toBeCloseTo(2.0 * 4, 6);
     expect(LIGHT_TUNE.talk.sky).toEqual(["#908aa4", "#4a4058", "#38324a"]);
-    expect(LIGHT_TUNE.vote.sky).toEqual(["#3a3464", "#1c1428", "#100d19"]);
+    expect(LIGHT_TUNE.vote.sky).toEqual(["#3c3a48", "#1c1428", "#100d19"]);
   });
 
   it("vote 는 talk 보다 어둡고(반구·달빛·배경) 무대에만 점광원이 있다 — 화면 전체를 밝게 덮지 않는다", () => {
