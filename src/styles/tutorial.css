@@ -357,7 +357,7 @@
 .tut-role__art.is-loaded img { opacity: 1; }
 .tut-role__name { font-size: 24px; font-weight: 700; line-height: 1.2; color: var(--tut-role-color); }
 .tut-role--mafia .tut-role__name { color: var(--crimson-300); }
-.tut-role__line { font-size: 14px; font-weight: 400; line-height: 1.35; color: var(--gray-300); word-break: keep-all; }
+.tut-role__line { font-size: 14px; font-weight: 400; line-height: 1.35; color: var(--gray-300); word-break: keep-all; white-space: pre-line; }
 /* 배지: 오른쪽 아래 지름 40, 면 night-900, 테두리 2 이름 색. 안의 아이콘이 직업의 대표 움직임을 계속 돈다 */
 .tut-role__badge { position: absolute; right: 8px; bottom: 8px; box-sizing: border-box; width: 40px; height: 40px; display: grid; place-items: center; border: 2px solid var(--tut-role-color); border-radius: 50%; background: var(--night-900); color: var(--tut-role-color); }
 .tut-role--mafia .tut-role__badge { border-color: var(--crimson-300); color: var(--crimson-300); }

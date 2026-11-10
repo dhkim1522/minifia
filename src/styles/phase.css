@@ -29,11 +29,7 @@
 .mf-card__diamond { width: 40%; aspect-ratio: 1; }
 /* 직업 그림은 표시 폭 150(3:4). 카드가 낮으면 그림이 먼저 줄어 글자가 잘리지 않는다. */
 .mf-card__art { width: 150px; max-width: 100%; height: auto; flex: 0 1 auto; min-height: 0; object-fit: contain; filter: drop-shadow(0 8px 12px var(--shadow)); }
-.mf-card__desc { font-size: 16px; line-height: 1.5; color: var(--gray-300); margin: 0; word-break: keep-all; }
-/* 역할 목표 한 줄(TOOL-03): 칩 + 문장, 윗줄 구분선. 마피아 문장이 가장 길어(약 30자) 카드 폭에서 2줄까지. 카드·시트가 함께 쓴다. */
-.mf-goal { flex: none; width: 100%; display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); padding-top: var(--space-sm); margin-top: var(--space-xs); border-top: 1px solid var(--night-600); }
-.mf-goal__chip { flex: none; padding: 0 var(--space-sm); border: 1px solid var(--brass-600); border-radius: var(--radius-sm); font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--brass-200); }
-.mf-goal__text { font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--brass-200); word-break: keep-all; text-align: center; }
+.mf-card__desc { font-size: 16px; line-height: 1.5; color: var(--gray-300); margin: 0; word-break: keep-all; white-space: pre-line; }
 .mf-card__divider { flex: none; width: 100%; height: 1px; background: var(--gray-700); }
 .mf-card__mates { flex: none; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); margin: 0; word-break: keep-all; }
 @keyframes mf-card-rise { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -54,15 +50,17 @@
 .mf-pregame { position: relative; flex: 1 1 0; min-height: 0; height: auto; overflow: hidden; isolation: isolate; background: var(--night-950); }
 .mf-pregame__stage { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
 .mf-pregame__content { position: relative; z-index: 1; height: 100%; }
+/* 역할 배정·확인 무대는 꾸밈이라 3D 이름표 층을 보이지 않게 한다 — 제목·띠·소리 단추·카드와 겹쳤다(18.1 P181-1). DOM 은 남겨 런타임 측정·AP7 이 그대로 돈다 */
+.mf-pregame .mf-world__tags { visibility: hidden; }
 .mf-reveal { position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 .mf-reveal__dim { position: absolute; inset: 0; background: var(--scrim); pointer-events: none; z-index: 0; }
 .mf-reveal > :not(.mf-reveal__dim) { position: relative; z-index: 1; }
-/* 머리는 게임 화면 헤더와 같은 모양(62, 맵 위에 얹음). 무대(카드)는 띠 아랫변 + 8 아래에서 시작한다 — HostBand 가 --mf-host-bottom 으로 알리고, 없으면 옛 자리(62 + 8). */
+/* 머리는 게임 화면 헤더와 같은 모양(62, 맵 위에 얹음). 무대(카드)는 소리 단추 독 아랫변 + 8 아래에서 시작한다(18.1 P181-2) — HostBand 가 --mf-host-dock 으로 알리고, 없으면 기존 독 자리 80. */
 .mf-reveal > .mf-reveal__header { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-toast); box-sizing: border-box; height: 62px; padding: var(--space-sm) var(--space-md) 0; pointer-events: none; }
 .mf-reveal__header .mf-btn, .mf-reveal__header .mf-tt { pointer-events: auto; } /* 14-08: 머리가 pointer-events:none 이라 테스트 방 [테스트] 단추가 역할 확인에서 눌리지 않던 것을 푼다 */
 .mf-reveal__header .mv-phase { align-items: flex-start; }
 .mf-reveal__header .mv-phase__title { text-shadow: var(--shadow-text); }
-.mf-reveal__stage { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: calc(var(--mf-host-bottom, 62px) + var(--space-sm)) var(--space-md) 0; }
+.mf-reveal__stage { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: calc(var(--mf-host-dock, 80px) + var(--space-sm)) var(--space-md) 0; }
 /* 빛나는 카드: ::after/::before 의 둥근 모서리를 카드 면과 맞춘다(루트에는 반경이 없다) */
 .mf-card.is-call::after, .mf-card.is-call::before { border-radius: var(--radius-lg); }
 .mf-reveal__hints { flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); padding: var(--space-md) var(--space-lg) var(--space-xl); text-align: center; }
