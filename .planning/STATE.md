@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 18
 current_phase_name: "바로 고칠 것: 증거·조명·튜토리얼 손보기"
-current_plan: 11
-status: verifying
-stopped_at: Completed 18-10-PLAN.md
-last_updated: "2026-11-10T07:15:09.417Z"
+current_plan: 13
+status: executing
+stopped_at: Completed 18-12-PLAN.md
+last_updated: "2026-11-10T10:11:19.900Z"
 last_activity: 2026-11-10
 last_activity_desc: Phase 18 execution started
-state_head: c23913e6e546436eb55c6b9ac5a1908124daa642
+state_head: ffc10aca6b071950af8345cccc3b9e97d0aaf417
 progress:
   total_phases: 10
   completed_phases: 4
-  total_plans: 58
-  completed_plans: 58
+  total_plans: 61
+  completed_plans: 59
   percent: 40
 ---
 
@@ -31,9 +31,9 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 18 (바로 고칠 것: 증거·조명·튜토리얼 손보기) — EXECUTING
-Current Plan: 11
-Total Plans in Phase: 11
-Status: Phase complete — ready for verification
+Current Plan: 13
+Total Plans in Phase: 14
+Status: Ready to execute
 Last activity: 2026-11-10 — Phase 18 execution started
 
 ## Performance Metrics
@@ -256,6 +256,7 @@ Last activity: 2026-11-10 — Phase 18 execution started
 | Phase 18 P08 | 40 min | 3 tasks | 7 files |
 | Phase 18 P09 | 10 min | 2 tasks | 6 files |
 | Phase 18 P10 | 4h | 3 tasks | 9 files |
+| Phase 18 P12 | 60min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -568,6 +569,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18]: 18-08: 도윤 장면 자리 TUTORIAL_SPOTS[1] = (1.3, -1.5) — 후보 A 는 360 폭 1px 모자람, B 는 연단에 걸려 걸을 수 없음, C 채택. 고정 카메라 target·.tut-dim z 는 그대로
 - [Phase 18]: 18-09: 옷장 잠금 E2E(AL1~AL3)와 한 판 옷 유일·같은 옷 표시 ≤ 1(OU1·OU2)을 폰 6종으로 확인, AVATAR_MARKERS 8개
 - [Phase 18]: 18-10: 배포본 smoke full 은 망 지연 구간에서 통과 못해도 문턱·스크립트 불변, 바뀐 흐름 배포본 E2E 로 확인 후 HANDOFF 에 재확인 기록
+- [Phase 18]: 18-12: 재질 보정은 정점 색 CPU 재작성(albedoGrader), 단계 전이 때만 쓴다. 광장 morning mix 0.5 로 조정
 
 ### Pending Todos
 
@@ -639,8 +641,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-10T03:11:03.646Z
-Stopped at: Completed 18-10-PLAN.md
+Last session: 2026-11-10T10:11:18.399Z
+Stopped at: Completed 18-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
