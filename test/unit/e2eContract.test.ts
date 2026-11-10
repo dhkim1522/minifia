@@ -356,9 +356,9 @@ describe("10페이즈 E2E 표식(10-05)", () => {
     .filter((f) => /\.(tsx?|css)$/.test(f));
   const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
 
-  it("AVATAR_MARKERS 가 7개(동작 4 + 의상 3)이고 각 표식이 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
+  it("AVATAR_MARKERS 가 8개(동작 4 + 의상 3 + 잠긴 카드 1)이고 각 표식이 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
     expect(tracked.length).toBeGreaterThan(20);
-    expect(lib.AVATAR_MARKERS.length).toBe(7);
+    expect(lib.AVATAR_MARKERS.length).toBe(8);
     const missing = lib.AVATAR_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
     expect(missing).toEqual([]);
   });

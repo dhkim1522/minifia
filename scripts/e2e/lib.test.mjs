@@ -141,6 +141,7 @@ import {
   emoteDeliveryChecks,
   floatTrayChecks,
   AVATAR_MARKERS,
+  dressLockChecks,
   SOUND_MARKERS,
   SOUND_RENDER_LIMITS,
   soundButtonChecks,
@@ -2682,8 +2683,8 @@ test("emoteTrayChecks: 측정값이 없으면 모든 줄이 측정값 없음으�
   assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
 });
 
-test("AVATAR_MARKERS: 동작 표식 네 개 + 의상 표식 세 개(10-07)", () => {
-  assert.deepEqual([...AVATAR_MARKERS], ["data-emote-button", "data-emote-tray", "data-emote", "__mfEmotes", "data-dress-sheet", "data-outfit", "__mfLooks"]);
+test("AVATAR_MARKERS: 동작 표식 네 개 + 의상 표식 세 개(10-07) + 잠긴 카드 표식(18-09)", () => {
+  assert.deepEqual([...AVATAR_MARKERS], ["data-emote-button", "data-emote-tray", "data-emote", "__mfEmotes", "data-dress-sheet", "data-outfit", "__mfLooks", "data-taken"]);
 });
 
 // ---- 10-07: 꾸미기 버튼·시트·카드 기하 (dressChecks, D-18) ----
@@ -4818,3 +4819,42 @@ test("tutorialRoleLineChecks TC5: 직업 카드 한 줄 넷이 사본과 글자 
   assert.ok(tutorialRoleLineChecks(null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
 });
 
+
+const DRESS_IDS = ["coat", "police", "doctor", "mafia", "detective", "reporter", "elder", "hood", "noir"];
+/** 옷장 카드 아홉 장: taken·pressed 로 지정한 id 만 켠다 */
+const dressCards = ({ taken = [], pressed = [] }) => DRESS_IDS.map((id) => ({ id, taken: taken.includes(id), disabled: taken.includes(id), pressed: pressed.includes(id) }));
+
+test("dressLockChecks AL1~AL3: 다른 사람이 직접 고른 옷만 잠기고 눌러도 옷이 안 바뀐다", () => {
+  const ok = dressLockChecks({ cards: dressCards({ taken: ["mafia"], pressed: ["noir"] }), otherLooks: ["mafia"], myLook: "noir", afterTap: "noir" });
+  assert.equal(ok.map((l) => l.id).join(","), "AL1,AL2,AL3");
+  assert.ok(ok.every((l) => l.ok), JSON.stringify(ok));
+  // 내 옷과 같은 옷을 가진 사람이 있어도(otherLooks 에 내 옷) 내 카드는 잠기지 않는다
+  assert.ok(dressLockChecks({ cards: dressCards({ taken: ["mafia"], pressed: ["noir"] }), otherLooks: ["mafia", "noir"], myLook: "noir", afterTap: "noir" }).every((l) => l.ok));
+  // 내 look 이 없으면 coat
+  assert.ok(dressLockChecks({ cards: dressCards({ taken: ["mafia"], pressed: ["coat"] }), otherLooks: ["mafia"], myLook: "coat", afterTap: "coat" }).every((l) => l.ok));
+  // AL1: 남이 안 고른 hood 가 잠김
+  const hood = dressLockChecks({ cards: dressCards({ taken: ["mafia", "hood"], pressed: ["noir"] }), otherLooks: ["mafia"], myLook: "noir", afterTap: "noir" });
+  assert.equal(hood[0].ok, false);
+  assert.match(hood[0].detail, /hood/);
+  // AL1: 남이 고른 mafia 가 안 잠김
+  const open = dressLockChecks({ cards: dressCards({ taken: [], pressed: ["noir"] }), otherLooks: ["mafia"], myLook: "noir", afterTap: "noir" });
+  assert.equal(open[0].ok, false);
+  assert.match(open[0].detail, /mafia/);
+  // AL2: 잠긴 카드를 눌렀더니 옷이 바뀜
+  const moved = dressLockChecks({ cards: dressCards({ taken: ["mafia"], pressed: ["noir"] }), otherLooks: ["mafia"], myLook: "noir", afterTap: "mafia" });
+  assert.equal(moved[1].ok, false);
+  assert.equal(moved[0].ok, true);
+  // AL3: 내 옷 카드가 잠김, 또는 pressed 아님
+  const mine = dressLockChecks({ cards: dressCards({ taken: ["mafia", "noir"], pressed: [] }), otherLooks: ["mafia"], myLook: "noir", afterTap: "noir" });
+  assert.equal(mine[2].ok, false);
+  // AL3: otherLooks 에 없는 coat 가 잠김
+  const coat = dressLockChecks({ cards: dressCards({ taken: ["mafia", "coat"], pressed: ["noir"] }), otherLooks: ["mafia"], myLook: "noir", afterTap: "noir" });
+  assert.equal(coat[2].ok, false);
+  assert.match(coat[2].detail, /coat/);
+  // 카드가 9장이 아님 / 입력 없음 → 세 줄 모두 측정 못 함
+  for (const bad of [{ cards: dressCards({}).slice(0, 8), otherLooks: [], myLook: "coat", afterTap: "coat" }, null, { cards: dressCards({}), otherLooks: "x", myLook: "coat", afterTap: "coat" }]) {
+    const l = dressLockChecks(bad);
+    assert.equal(l.length, 3);
+    assert.ok(l.every((x) => !x.ok && /측정값 없음/.test(x.detail)));
+  }
+});

@@ -3913,3 +3913,9 @@ export function tutorialRoleLineChecks(roles) {
   });
   return [result("TC5", L.TC5, bad)];
 }
+
+/** 옷장 잠금 판정(18-09, D-02): 자리 함수 — 다음 커밋에서 채운다. */
+export function dressLockChecks(s) {
+  void s;
+  return [];
+}
