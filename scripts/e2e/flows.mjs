@@ -142,7 +142,7 @@ import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
 import { makeErrandFlows } from "./errand.mjs";
 import { makeTutorialFlows } from "./tutorial.mjs";
-import { makePolishFlows } from "./polish.mjs";
+import { chatSheetChecks, chatWindowChecks, makePolishFlows, measureChatSheet, readChatWindow } from "./polish.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
 const HOST_NICK = "화면검사기";
@@ -571,6 +571,13 @@ async function worldFlow(ctx) {
 const CHAT_LOBBY_TEXT = "안녕하세요";
 /** 입력 중 단계(07-18)에서 손님이 넣기만 하고 보내지 않는 글 */
 const CHAT_LOBBY_TYPING = "안";
+/** 두 줄 창(18.1-09, B2)을 재려고 손님이 보내는 서로 다른 여섯 줄 — 서버 연속 전송 한도(5초 5개, CHAT_BURST)를 지키려고 줄마다 1.1초 쉰다 */
+const CHAT_WINDOW_LINES = ["첫째 줄이에요", "둘째 줄이에요", "셋째 줄이에요", "넷째 줄이에요", "다섯째 줄이에요", "여섯째 줄이에요"];
+const CHAT_WINDOW_GAP_MS = 1100;
+/** 긴 줄 backstop: 본문 30자(닉네임 8자 + 본문이 두 줄을 넘어가는 길이) */
+const CHAT_LONG_TEXT = "오늘은 모두 같이 모여서 천천히 이야기를 나눠 봅시다요";
+/** B4: 기록 시트를 열고 닫는 동안 입력칸에 남아 있어야 하는 글 */
+const CHAT_DRAFT_TEXT = "쓰던 글";
 
 // 로비 채팅 패널 치수(UI-SPEC 구조 표). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다 — 값을 바꾸려면 UI-SPEC 과 chatUi.ts 를 먼저 바꾼다.
 /** src/game/chatUi.ts LOG_H 사본 — 18.1 부터 방 높이와 무관 */
@@ -650,6 +657,51 @@ async function chatLobbyFlow(ctx) {
       await hp.waitForSelector(tagTyping, { state: "detached", timeout: 1500 });
     });
     rec(sc, "CL8", "손님이 칸을 비우면 방장 화면 알약이 사라짐", typingOff.ok, typingOff.detail);
+
+    // 18.1-09 R2: 두 줄 창(B1·B2)과 기록 시트(B3·B4)
+    {
+      const wsc = "chat-lobby/window";
+      await hp.waitForTimeout(1700); // 위 입력 중 켜짐과 서버 전송 간격이 겹치지 않게
+      const sent = await attempt(async () => {
+        for (const text of CHAT_WINDOW_LINES) {
+          await typeAndSendChat(gp, text);
+          await Promise.all([waitChatLine(hp, text), waitChatLine(gp, text)]);
+          await gp.waitForTimeout(CHAT_WINDOW_GAP_MS);
+        }
+      });
+      rec(wsc, "B0", `손님이 채팅 ${CHAT_WINDOW_LINES.length}줄을 보내 두 페이지 기록 칸에 모두 도착(${ctx.size.label})`, sent.ok, sent.detail);
+      await Promise.all([settle(hp), settle(gp)]);
+      for (const [who, page] of [["방장", hp], ["손님", gp]]) {
+        const r = await attempt(async () => {
+          for (const row of chatWindowChecks(await readChatWindow(page))) rec(`chat-lobby/window-${who}`, row.id, `${row.label} (${ctx.size.label}, ${who})`, row.ok, row.detail, row.ok);
+        });
+        if (!r.ok) rec(`chat-lobby/window-${who}`, "B2r", `기록 칸을 읽는다(${ctx.size.label}, ${who})`, false, r.detail);
+      }
+      // 기록 시트: 손님 화면에서 쓰던 글을 두고 [닫기]·Esc·끌기로 세 번 열고 닫는다
+      const sheet = await attempt(async () => {
+        for (const row of chatSheetChecks(await measureChatSheet(gp, CHAT_DRAFT_TEXT))) rec(`chat-lobby/sheet`, row.id, `${row.label} (${ctx.size.label})`, row.ok, row.detail, row.ok);
+      });
+      if (!sheet.ok) rec("chat-lobby/sheet", "B3r", `기록 시트를 열고 닫는다(${ctx.size.label})`, false, sheet.detail);
+      await gp.locator("[data-chat-input]").fill("");
+      // backstop: 긴 줄(닉네임 8자 + 본문 30자) — 방장 화면 기록 칸·시트 스크린샷
+      await gp.waitForTimeout(CHAT_WINDOW_GAP_MS);
+      const long = await attempt(async () => {
+        await typeAndSendChat(gp, CHAT_LONG_TEXT);
+        await Promise.all([waitChatLine(hp, CHAT_LONG_TEXT), waitChatLine(gp, CHAT_LONG_TEXT)]);
+        await settle(hp);
+        const rows = chatWindowChecks(await readChatWindow(hp), { long: true });
+        for (const row of rows) if (row.id === "B2L") rec("chat-lobby/long-line", row.id, `${row.label} (${ctx.size.label})`, row.ok, row.detail, row.ok);
+        mkdirSync(OUT_DIR, { recursive: true });
+        await hp.locator("[data-chat-log]").screenshot({ path: join(OUT_DIR, `chat-lobby-long-window-${ctx.size.label}.png`) });
+        await hp.locator("[data-chat-open]").click({ timeout: 4000 });
+        await hp.waitForSelector("dialog[open] .mf-sheet--chatlog", { timeout: 3000 });
+        await sleep(400);
+        await shot(hp, join(OUT_DIR, `chat-lobby-long-sheet-${ctx.size.label}.png`));
+        await hp.keyboard.press("Escape");
+        await hp.waitForFunction(() => document.querySelector("dialog[open]") === null, null, { timeout: 2000 });
+      });
+      if (!long.ok) rec("chat-lobby/long-line", "B2Lr", `긴 줄 backstop(${ctx.size.label})`, false, long.detail);
+    }
     await checkState(ctx, "chat-lobby", "lobby"); // 방장 화면의 G (콘솔 오류·가로 넘침·누르기 크기·글자 크기)
   } finally {
     await g.context.close().catch(() => {});
@@ -884,6 +936,14 @@ async function chatKeyboardFlow(ctx) {
     const still = !!me && !!meAfter && Math.hypot(me.x - meAfter.x, me.z - meAfter.z) < 0.01;
     rec(sc, "KB10", "D4: 포커스 중 맵 탭 → 걷기 요청 없음(위치·구간·링 그대로)", still && moveN() === nBefore && afterTap?.ring === null, `위치 변화 ${me && meAfter ? r1(Math.hypot(me.x - meAfter.x, me.z - meAfter.z)) : "?"} · 새 구간 ${moveN() - nBefore} · 링 ${afterTap?.ring}`);
     rec(sc, "KB11", "D4: 입력칸이 blur 되고 열림 표식이 사라짐", !!afterTap && afterTap.focusOnInput === false && afterTap.kbOpen === null, `포커스 ${afterTap?.focusOnInput} · 열림 ${afterTap?.kbOpen}`);
+    // 18.1-09: 키보드가 닫히며 패널이 제자리로 돌아오면(가짜 키보드는 배치가 즉시 바뀐다) 같은 자리의 손 뗌이 기록 칸([data-chat-open]) 위에 떨어져 기록 시트가 열릴 수 있다.
+    // 이 시트가 열린 채로 있으면 아래 KB14 가 시트 위에서 맵을 찾게 되므로 참고 줄을 남기고 닫는다(판정 아님 — 실기기는 키보드가 애니메이션으로 내려가 다르다).
+    const sheetOpened = await page.evaluate(() => document.querySelector("dialog[open] .mf-sheet--chatlog") !== null);
+    infoRow(ctx, sc, "KB10k", "참고: 키보드를 닫은 맵 탭이 기록 시트까지 열었는가(판정 아님)", sheetOpened ? "열렸음 — Esc 로 닫고 이어감" : "열리지 않음");
+    if (sheetOpened) {
+      await page.keyboard.press("Escape");
+      await page.waitForFunction(() => document.querySelector("dialog[open]") === null, null, { timeout: 2000 }).catch(() => {});
+    }
   }
 
   // 키보드가 닫힌 뒤(가짜 값을 되돌림): 원래 배치로 돌아오고 카메라가 다시 맞는다, 캔버스는 처음부터 끝까지 한 번도 크기를 바꾸지 않았다. 탭은 평소처럼 걷는다.

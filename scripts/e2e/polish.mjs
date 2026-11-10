@@ -481,11 +481,199 @@ export const CHAT_SHEET_CLOSE_MS = 300;
 /** B2 를 재려면 보낸 채팅 줄이 이만큼은 있어야 한다(공허 통과 금지) */
 export const CHAT_MIN_LINES = 6;
 
-export function chatWindowChecks() {
-  return ["B1", "B2"].map((id) => row(id, "(미구현)", ["미구현"]));
+/** 사각형 r 이 [bandTop, bandBottom] 띠와 겹친 높이 */
+const overlapH = (r, bandTop, bandBottom) => Math.max(0, Math.min(bottomOf(r), bandBottom) - Math.max(r.top, bandTop));
+
+/**
+ * B1·B2(·B2L) 판정. m = { log, input, send, lineHeight, msgs } — 기록 칸·입력칸·보내기 사각형, 채팅 줄 높이(px), `.mv-chat__msg` 사각형들(시스템 줄 제외).
+ * B1 기록 칸 높이 68±1·입력칸 48·보내기 48×48. B2 기록 칸의 [위 + 12, 아래] 띠 안에 줄 높이 절반 이상 보이는 채팅 줄이 1~2개
+ * (보낸 줄이 6 미만이면 '측정 조건 미달' 로 실패 — 공허 통과 금지). long 이면 가장 새 줄(마지막)의 보이는 글줄 ≤ 2 이고 그 줄이 칸 아래를 넘치지 않음을 B2L 로 더한다.
+ */
+export function chatWindowChecks(m, { long = false } = {}) {
+  const L = {
+    B1: `기록 칸 ${CHAT_LOG_H}·입력칸 ${CHAT_CONTROL_H}·보내기 ${CHAT_CONTROL_H}x${CHAT_CONTROL_H}`,
+    B2: `보낸 채팅 줄이 ${CHAT_MIN_LINES}개 이상일 때 기록 칸 안에 보이는 채팅 줄이 ${CHAT_WINDOW_MAX_LINES}개 이하`,
+    B2L: "긴 줄: 기록 칸에 가장 새 줄의 끝 두 줄만 보이고 칸 아래를 넘치지 않는다",
+  };
+  const want = long ? ["B1", "B2", "B2L"] : ["B1", "B2"];
+  const ok = m !== null && typeof m === "object" && isRect(m.log) && isRect(m.input) && isRect(m.send) && Array.isArray(m.msgs) && m.msgs.every(isRect) && isNum(m.lineHeight);
+  if (!ok) return want.map((id) => noMeasure(id, L[id], "기록 칸·입력칸·보내기·줄 사각형"));
+  const out = [];
+
+  const bad1 = [];
+  if (Math.abs(m.log.height - CHAT_LOG_H) > TOL) bad1.push(`기록 칸 ${fmt(m.log.height)} (기대 ${CHAT_LOG_H})`);
+  if (Math.abs(m.input.height - CHAT_CONTROL_H) > TOL) bad1.push(`입력칸 ${fmt(m.input.height)} (기대 ${CHAT_CONTROL_H})`);
+  if (Math.abs(m.send.height - CHAT_CONTROL_H) > TOL || Math.abs(m.send.width - CHAT_CONTROL_H) > TOL) bad1.push(`보내기 ${fmt(m.send.width)}x${fmt(m.send.height)} (기대 ${CHAT_CONTROL_H}x${CHAT_CONTROL_H})`);
+  out.push(row("B1", L.B1, bad1));
+
+  const bandTop = m.log.top + CHAT_FADE_H;
+  const bandBottom = bottomOf(m.log);
+  const visible = m.msgs.filter((r) => r.height > 0 && overlapH(r, bandTop, bandBottom) * 2 >= r.height);
+  const bad2 = [];
+  if (m.msgs.length < CHAT_MIN_LINES) bad2.push(`측정 조건 미달: 채팅 줄 ${m.msgs.length}개 (기대 ${CHAT_MIN_LINES}개 이상)`);
+  else if (visible.length > CHAT_WINDOW_MAX_LINES) bad2.push(`보이는 채팅 줄 ${visible.length}개 > 상한 ${CHAT_WINDOW_MAX_LINES}개 (전체 ${m.msgs.length}줄)`);
+  else if (visible.length < 1) bad2.push(`보이는 채팅 줄 0개 (전체 ${m.msgs.length}줄 — 창이 비어 있음)`);
+  const r2 = row("B2", L.B2, bad2);
+  out.push({ ...r2, detail: r2.ok ? `보이는 ${visible.length}줄 / 전체 ${m.msgs.length}줄` : r2.detail });
+
+  if (long) {
+    const last = m.msgs[m.msgs.length - 1];
+    const bad = [];
+    if (!last) bad.push("채팅 줄 없음");
+    else {
+      const n = Math.max(1, Math.round(last.height / m.lineHeight));
+      let seen = 0;
+      for (let i = 0; i < n; i++) {
+        const line = { top: last.top + i * m.lineHeight, height: m.lineHeight };
+        if (overlapH(line, bandTop, bandBottom) * 2 >= m.lineHeight) seen += 1;
+      }
+      if (seen > CHAT_WINDOW_MAX_LINES) bad.push(`보이는 글줄 ${seen}줄 > ${CHAT_WINDOW_MAX_LINES}줄 (가장 새 줄 ${n}글줄)`);
+      if (seen < 1) bad.push(`보이는 글줄 0줄 (가장 새 줄 ${n}글줄)`);
+      if (bottomOf(last) > bottomOf(m.log) + TOL) bad.push(`가장 새 줄 아래 끝 ${fmt(bottomOf(last))} > 기록 칸 아래 ${fmt(bottomOf(m.log))}`);
+      const r = row("B2L", L.B2L, bad);
+      out.push({ ...r, detail: r.ok ? `가장 새 줄 ${n}글줄 중 보이는 ${seen}줄` : r.detail });
+      return out;
+    }
+    out.push(row("B2L", L.B2L, bad));
+  }
+  return out;
 }
-export function chatSheetChecks() {
-  return ["B3", "B4"].map((id) => row(id, "(미구현)", ["미구현"]));
+
+/**
+ * B3·B4 판정. m = { open: { dialog, sheetClass, sheetLines, windowLines }, closes: [{ via, closed, focusOnOpenBtn }], draft: { before, after: [..] } }.
+ * B3 [data-chat-open] 을 누르면 .mf-sheet--chatlog 대화상자가 열리고 시트 줄 수 ≥ 칸 줄 수, [닫기]·끌어 내리기·Esc 셋 모두 닫히고 포커스가 [data-chat-open] 으로 돌아온다.
+ * B4 입력칸의 쓰던 글이 열고 닫는 내내 그대로(처음부터 비어 있으면 잴 것이 없어 실패).
+ */
+export function chatSheetChecks(m) {
+  const L = {
+    B3: "[data-chat-open] 이 기록 시트를 열고 [닫기]·끌어 내리기·Esc 로 닫히며 포커스가 [data-chat-open] 으로 돌아온다",
+    B4: "입력칸에 쓰던 글이 시트를 열고 닫아도 그대로다",
+  };
+  const ok = m !== null && typeof m === "object" && m.open && typeof m.open === "object" && Array.isArray(m.closes) && m.draft && typeof m.draft === "object" && Array.isArray(m.draft.after);
+  if (!ok) return ["B3", "B4"].map((id) => noMeasure(id, L[id], "시트 열기·닫기·입력칸 읽기"));
+  const bad3 = [];
+  if (m.open.dialog !== true) bad3.push("시트(dialog)가 열리지 않음");
+  else if (m.open.sheetClass !== true) bad3.push(".mf-sheet--chatlog 가 아님");
+  if (!isNum(m.open.sheetLines) || !isNum(m.open.windowLines)) bad3.push("줄 수 측정값 없음");
+  else if (m.open.sheetLines < m.open.windowLines) bad3.push(`시트 줄 ${m.open.sheetLines}개 < 칸 줄 ${m.open.windowLines}개`);
+  for (const via of ["button", "escape", "drag"]) {
+    const c = m.closes.find((x) => x && x.via === via);
+    if (!c) bad3.push(`${via} 로 닫기를 재지 못함`);
+    else {
+      if (c.closed !== true) bad3.push(`${via}: ${CHAT_SHEET_CLOSE_MS}ms 안에 안 닫힘`);
+      if (c.focusOnOpenBtn !== true) bad3.push(`${via}: 포커스가 [data-chat-open] 이 아님${typeof c.active === "string" ? `(지금 ${c.active})` : ""}`);
+    }
+  }
+  const bad4 = [];
+  const { before, after } = m.draft;
+  if (typeof before !== "string" || before === "") bad4.push("처음 입력칸이 비어 있음(잴 것이 없음)");
+  else after.forEach((v, i) => v !== before && bad4.push(`${i + 1}번째 닫은 뒤 입력칸 ${typeof v === "string" ? v.length : "?"}자 (기대 ${before.length}자 그대로)`));
+  if (after.length < 3) bad4.push(`닫은 뒤 읽기 ${after.length}번 (기대 3번)`);
+  return [row("B3", L.B3, bad3), row("B4", L.B4, bad4)];
+}
+
+/**
+ * 채팅 두 줄 창 읽기: 기록 칸·입력칸·보내기 사각형, 채팅 줄 높이, `.mv-chat__msg` 사각형들, 칸 안 줄(시스템·카드 포함) 수, [data-chat-open] 수. 칸이 없으면 null.
+ * 채팅 본문·닉네임은 읽지 않는다(T-18.1-19).
+ */
+export function readChatWindow(page) {
+  return page.evaluate(() => {
+    const rect = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+    };
+    const log = document.querySelector("[data-chat-log]");
+    if (!log) return null;
+    const msgs = [...log.querySelectorAll(".mv-chat__msg")];
+    return {
+      log: rect(log),
+      input: rect(document.querySelector("[data-chat-input]")),
+      send: rect(document.querySelector("[data-chat-send]")),
+      lineHeight: msgs[0] ? parseFloat(getComputedStyle(msgs[0]).lineHeight) : 24,
+      msgs: msgs.map(rect),
+      allLines: log.children.length - log.querySelectorAll("[data-chat-notice]").length,
+      openButtons: document.querySelectorAll("[data-chat-open]").length,
+    };
+  });
+}
+
+/** 기록 시트 읽기: 열린 .mf-sheet--chatlog 대화상자 수, 시트 안 줄 수, activeElement 가 [data-chat-open] 인지, 입력칸 값, 대화상자 수. */
+export function readChatSheet(page) {
+  return page.evaluate(() => {
+    const dialogs = [...document.querySelectorAll("dialog[open]")];
+    const sheet = document.querySelector("dialog[open] .mf-sheet--chatlog");
+    const list = document.querySelector("[data-chat-sheet-log]");
+    const input = document.querySelector("[data-chat-input]");
+    return {
+      dialogs: dialogs.length,
+      sheetClass: sheet !== null,
+      sheetLines: list ? list.children.length : 0,
+      focusOnOpenBtn: document.activeElement === document.querySelector("[data-chat-open]"),
+      // 포커스가 어디 있는지(진단용): 태그 + data-* 속성 이름만, 글자는 싣지 않는다
+      active: document.activeElement ? `${document.activeElement.tagName.toLowerCase()}${[...document.activeElement.attributes].filter((a) => a.name.startsWith("data-")).map((a) => `[${a.name}]`).join("")}` : "없음",
+      inputValue: input ? input.value : null,
+    };
+  });
+}
+
+/**
+ * 기록 시트 한 바퀴: [data-chat-open] 을 눌러 열고, via(button·escape·drag)로 닫는다. 닫힘은 닫는 동작이 끝난 시각부터 CHAT_SHEET_CLOSE_MS 안에
+ * dialog[open] 이 없어지는 것, 포커스는 닫힌 직후 activeElement 가 [data-chat-open] 인지 본다. 못 닫히면 Esc 로 정리해 다음 바퀴가 이어지게 한다.
+ * 돌려주는 값: { opened: readChatSheet(열린 직후), close: { via, closed, focusOnOpenBtn }, input: 닫은 뒤 입력칸 값 }.
+ */
+async function chatSheetRound(page, via) {
+  await page.locator("[data-chat-open]").click({ timeout: 4000 });
+  await page.waitForSelector("dialog[open] .mf-sheet--chatlog", { timeout: 3000 });
+  await sleep(350); // 올라오는 연출이 끝나길 기다린다(끌기 잡이가 제자리에 있도록)
+  const opened = await readChatSheet(page);
+  if (via === "button") await page.locator('dialog[open] [aria-label="닫기"]').click({ timeout: 3000 });
+  else if (via === "escape") await page.keyboard.press("Escape");
+  else {
+    const h = await page.locator("dialog[open] .mf-sheet__handle").boundingBox();
+    if (!h) throw new Error("끌기 손잡이를 찾지 못함");
+    const x = h.x + h.width / 2;
+    const y = h.y + h.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y + CHAT_SHEET_DRAG_PX / 2, { steps: 6 });
+    await page.mouse.move(x, y + CHAT_SHEET_DRAG_PX + 20, { steps: 6 });
+    await page.mouse.up();
+  }
+  const t0 = performance.now();
+  let closed = false;
+  try {
+    await page.waitForFunction(() => document.querySelector("dialog[open]") === null, null, { timeout: CHAT_SHEET_CLOSE_MS + 400, polling: "raf" });
+    closed = performance.now() - t0 <= CHAT_SHEET_CLOSE_MS;
+  } catch {
+    closed = false;
+  }
+  const after = await readChatSheet(page);
+  if (after.dialogs > 0) {
+    await page.keyboard.press("Escape");
+    await sleep(500);
+  }
+  return { opened, close: { via, closed, focusOnOpenBtn: after.focusOnOpenBtn, active: after.active }, input: after.inputValue };
+}
+
+/**
+ * 기록 시트 열고 닫기 B3·B4 의 읽기 전부: 입력칸에 draft 를 넣고, 시트를 [닫기]·Esc·끌기로 세 번 열고 닫는다.
+ * 돌려주는 값은 chatSheetChecks 의 입력 모양이다. 닫는 길이 하나 실패해도 나머지는 계속 잰다.
+ */
+export async function measureChatSheet(page, draft) {
+  await page.locator("[data-chat-input]").fill(draft);
+  const before = await page.locator("[data-chat-input]").inputValue();
+  const windowLines = (await readChatWindow(page))?.allLines ?? null;
+  let open = null;
+  const closes = [];
+  const after = [];
+  for (const via of ["button", "escape", "drag"]) {
+    const r = await chatSheetRound(page, via);
+    if (open === null) open = { dialog: r.opened.dialogs > 0, sheetClass: r.opened.sheetClass, sheetLines: r.opened.sheetLines, windowLines };
+    closes.push(r.close);
+    after.push(r.input);
+  }
+  return { open, closes, draft: { before, after } };
 }
 
 // ---- 흐름 ----

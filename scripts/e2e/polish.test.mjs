@@ -378,7 +378,7 @@ test("chatWindowChecks: 줄 높이 절반 이상 보이는 줄만 센다(절반�
   const m = winGood();
   m.msgs[3] = box(16, 500, 328, 24); // 띠 시작 512 → 보이는 높이 12 = 절반 → 센다
   assert.deepEqual(failing(chatWindowChecks(m)), ["B2"]);
-  m.msgs[3] = box(16, 501, 328, 24); // 보이는 높이 11 < 12
+  m.msgs[3] = box(16, 499, 328, 24); // 499~523 → 보이는 높이 11 < 12
   assert.deepEqual(failing(chatWindowChecks(m)), []);
 });
 
