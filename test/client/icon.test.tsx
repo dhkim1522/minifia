@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import "../helpers/singleLineErrors";
@@ -241,5 +242,35 @@ describe("V2Icon eyeOff (18-04)", () => {
     expect(svg?.getAttribute("role")).toBe("img");
     expect(svg?.getAttribute("aria-label")).toBe("목격자 없음");
     expect(svg?.getAttribute("aria-hidden")).toBeNull();
+  });
+});
+
+// 18-05: 옷장 잠금 아이콘 lock — 몸(사각)과 고리(호), 24 격자, 선 2px, 둥근 끝
+describe("V2Icon lock (18-05)", () => {
+  it("24 격자 선 그림이고 path 가 둘(몸 + 고리)이며 eye·eyeOff·check 와 모양이 다르다", () => {
+    const { container } = render(<V2Icon name="lock" />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.getAttribute("stroke-width")).toBe("2");
+    expect(svg?.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg?.querySelectorAll("path")).toHaveLength(2);
+    const shape = (name: V2IconName) => {
+      const r = render(<V2Icon name={name} />);
+      return [...r.container.querySelectorAll("path,circle")].map((e) => e.outerHTML).join("");
+    };
+    for (const other of ["eye", "eyeOff", "check"] as const) expect(shape("lock")).not.toBe(shape(other));
+  });
+});
+
+describe("옷장 자물쇠 CSS 자리 (18-05, v2.css)", () => {
+  const css = readFileSync("src/styles/v2.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const body = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === ".mv-dress-card__lock")?.[2] ?? "";
+
+  it("체크와 같은 자리(오른쪽 위 4·4)에 gray-300 이고 hex 색이 없다", () => {
+    expect(body).toMatch(/position:\s*absolute/);
+    expect(body).toMatch(/top:\s*4px/);
+    expect(body).toMatch(/right:\s*4px/);
+    expect(body).toMatch(/color:\s*var\(--gray-300\)/);
+    expect(body).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
   });
 });
