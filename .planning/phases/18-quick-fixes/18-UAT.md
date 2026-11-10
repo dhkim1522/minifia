@@ -63,5 +63,16 @@ blocked: 0
   reason: "User reported: 3회 실행 모두 실패(2일차 discussion 미도착 / reading 'msg' TypeError / dayAnnounce 도착 편차 704ms)"
   severity: major
   test: 3
-  artifacts: []
-  missing: []
+  root_cause: "서버 결함 없음. smoke.mjs 의 낡은 단언 3개 + 망 환경. (1) :1465~1477 역할 단어 누설 검사가 18-01 의 players[].look 옷 id(police·doctor 등)를 오탐(망과 무관하게 100% 실패). (2) :1416 day.morning 허용 키에 16-01 의 seen 이 없음(5명판 약 70% 실패). (3) :758~759 산 사람만 기다린 뒤 탈락자 프레임까지 읽어 2일차부터 undefined.msg 경쟁 상태. (4) 환경: 이 Mac 에서 workers.dev 가 LA 로 연결돼 도착 편차 500ms 문턱이 망 지터를 잰다(서버 전이 지각은 0~4ms)."
+  artifacts:
+    - path: "scripts/smoke.mjs"
+      issue: ":115·:1416·:759·:925·:1212~1213·:1081~1095"
+    - path: "test/unit/e2eContract.test.ts"
+      issue: "smoke 허용 키·경로와 서버 view 를 묶는 시험 없음"
+  missing:
+    - "look 허용(값은 OUTFIT_IDS 안), day.morning 키를 eliminated·trace·seen 부분집합으로 허용하고 seen 모양 검사"
+    - "execution 대기를 clients 전원 기준으로(또는 탈락자 따로 대기), 결전 :925 도 같게"
+    - "도착 편차를 서버 시각 기준으로 바꾸거나 정보용으로만 찍고 문턱 완화"
+    - "waitUntil 이 소켓 닫힘·소켓별 마지막 프레임 경과를 보고"
+    - "재접속 검사를 긴 단계로 옮기거나 day.n >= dayNo 로 완화"
+  debug_session: "진단 에이전트 보고(서버 결함 없음)"
