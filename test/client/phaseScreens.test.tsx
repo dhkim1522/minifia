@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
-import { RULESET } from "../../shared/game/ruleset";
 import type { MorningView, PhaseId, RoomView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 import { MemoryStorage } from "../helpers/memoryStorage";
@@ -174,7 +173,7 @@ describe("S-05 역할 확인 (GAME-01, ROLE-02, D-13 개정, D-14, D-15, R12)", 
     for (const old of ["카드를 눌러 확인하세요", "카드를 눌러 직업을 확인하세요", "다른 사람에게 보이지 않게 가려 주세요"]) {
       expect(screen.queryByText(old), old).toBeNull();
     }
-    expect(container.querySelectorAll("[data-pre-notice]").length).toBe(1);
+    expect(container.querySelectorAll("[data-pre-notice]").length).toBe(0);
     expect(byRole("button", "역할 카드 뒤집기")).toBeTruthy();
     expect(card(container).classList.contains("mf-card--front")).toBe(false);
   });
@@ -815,53 +814,35 @@ describe("헤더 줄바꿈 금지 (03.1-10, D-16, UI-SPEC A)", () => {
   });
 });
 
-// 11-07: 공개 예고 한 줄(A-4, D-23) — 역할 확인 단계 아래쪽 14px 한 줄을 4초 보이고 줄어든다. 모든 역할이 같은 문구·같은 시간이다(T-11-24)
-describe("공개 예고 (11-07, A-4)", () => {
-  // 기본판(결정 0072)에서는 귓속말이 꺼져 있어 문구에서도 빠진다(U-8)
-  const PRE = RULESET.whisper ? "끝나면 밤 대화와 귓속말이 공개돼요" : "끝나면 밤 대화가 공개돼요";
-  const notice = (c: ParentNode) => c.querySelector<HTMLElement>("[data-pre-notice]");
+// 18-11(D-09): 역할 확인의 공개 예고 줄을 없앴다 — 빈 .mf-reveal__hints 칸은 남아 카드·머리 위치가 바뀌지 않는다. 귓속말 시트(LineSheet)의 예고는 whisperUi 시험이 지킨다
+describe("공개 예고 없음 (18-11, D-09)", () => {
+  const PRE_WORDS = ["공개돼요", "끝나면 밤 대화"];
 
-  it("마운트 직후 보이고 4초 뒤 줄어든다 (data-state shown → gone, 접근성 숨김)", () => {
-    const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "citizen" }));
-    expect(notice(container)?.textContent).toBe(PRE);
-    expect(notice(container)?.getAttribute("data-state")).toBe("shown");
-    expect(notice(container)?.getAttribute("aria-hidden")).toBeNull();
-    advance(3_999);
-    expect(notice(container)?.getAttribute("data-state")).toBe("shown");
-    advance(1);
-    expect(notice(container)?.getAttribute("data-state")).toBe("gone");
-    expect(notice(container)?.getAttribute("aria-hidden")).toBe("true");
-  });
-
-  it("모든 역할에서 같다: 시민·마피아 렌더의 문구와 표시 상태가 같고 역할 단어가 없다", () => {
+  it("역할 넷 모두 [data-pre-notice] 0개·예고 글 없음·빈 hints 칸 1개이고 4초가 지나도 같다(타이머 없음)", () => {
     const rows = (["citizen", "mafia", "police", "doctor"] as const).map((role) => {
       const { container, unmount } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role, allies: role === "mafia" ? [2] : [] }));
-      const n = notice(container)!;
-      const at0 = `${n.textContent}|${n.getAttribute("data-state")}|${n.className}`;
+      const snap = () => {
+        const hints = container.querySelectorAll(".mf-reveal__hints");
+        expect(container.querySelectorAll("[data-pre-notice]").length).toBe(0);
+        for (const w of PRE_WORDS) expect(container.textContent, w).not.toContain(w);
+        expect(hints.length).toBe(1);
+        expect(hints[0].children.length).toBe(0);
+        return `${hints.length}|${hints[0].textContent}`;
+      };
+      const at0 = snap();
       advance(4_000);
-      const at4 = `${notice(container)!.textContent}|${notice(container)!.getAttribute("data-state")}`;
+      const at4 = snap();
       unmount();
       return `${at0}~${at4}`;
     });
     expect(new Set(rows).size).toBe(1);
-    expect(rows[0]).not.toMatch(/마피아|시민|경찰|의사/);
   });
 
-  it("모션 줄이기도 4초 뒤 줄어든다 (표시 시간은 같다)", () => {
-    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }));
-    const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
-    expect(notice(container)?.getAttribute("data-state")).toBe("shown");
-    advance(4_000);
-    expect(notice(container)?.getAttribute("data-state")).toBe("gone");
-    vi.unstubAllGlobals();
-  });
-
-  it("카드를 뒤집어도 문구·시간이 바뀌지 않는다", () => {
+  it("카드를 뒤집어도 예고 줄이 생기지 않고 hints 칸은 비어 있다", () => {
     const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
     fireEvent.click(byRole("button", "역할 카드 뒤집기"));
-    expect(notice(container)?.textContent).toBe(PRE);
-    expect(notice(container)?.getAttribute("data-state")).toBe("shown");
-    advance(4_000);
-    expect(notice(container)?.getAttribute("data-state")).toBe("gone");
+    expect(container.querySelectorAll("[data-pre-notice]").length).toBe(0);
+    expect(container.querySelector(".mf-reveal__hints")?.children.length).toBe(0);
+    expect(stageTimers()).toHaveLength(0);
   });
 });
