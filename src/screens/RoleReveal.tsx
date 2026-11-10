@@ -5,7 +5,6 @@ import { RoleCard } from "../components/RoleCard";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { callTargetsOf } from "../game/hostLine";
 import { allyNicknames } from "../game/roleText";
-import { PRE_NOTICE_MS, RESULT_PANEL_TEXT } from "../game/resultText";
 import { autoFlipDelayMs, initialCardState, onAutoTimer, onTap, sinceStartMs } from "../net/cardFace";
 import type { CardState } from "../net/cardFace";
 import "../styles/phase.css";
@@ -61,13 +60,7 @@ export function RoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleReve
     if (seenFront) onSeenFrontRef.current();
   }, [seenFront]);
 
-  // 공개 예고(11-07, A-4·D-23): 마운트 직후 4초 보이고 줄어든다. 문구·시간이 역할·카드 면과 무관하게 모두에게 같다(T-11-24).
-  // 줄어드는 모양(opacity + 높이)은 CSS 가 data-state 로 하고, 모션 줄이기는 전이만 없이 같은 시각에 접힌다
-  const [noticeShown, setNoticeShown] = useState(true);
-  useEffect(() => {
-    const id = setTimeout(() => setNoticeShown(false), PRE_NOTICE_MS);
-    return () => clearTimeout(id);
-  }, []);
+  // 18페이즈(D-09): 공개 예고 줄 삭제 — 빈 칸은 레이아웃을 지킨다
 
   const allies = allyNicknames(view);
   // 빛남 조건은 me.role 유무와 카드를 봤는가(내 클라이언트 상태)뿐이다 — 모든 역할이 같은 모양(T-14-15)
@@ -83,11 +76,7 @@ export function RoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleReve
       <section className="mf-reveal__stage">
         <RoleCard role={role} face={card.face} allies={allies} call={callCard} onFlip={() => setCard((s) => onTap(s, hasRole))} />
       </section>
-      <div className="mf-reveal__hints">
-        <p className="mf-reveal__pre" data-pre-notice="" data-state={noticeShown ? "shown" : "gone"} {...(noticeShown ? {} : { "aria-hidden": "true" as const })}>
-          {RESULT_PANEL_TEXT.preNotice}
-        </p>
-      </div>
+      <div className="mf-reveal__hints" />
     </main>
   );
 }
