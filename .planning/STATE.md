@@ -7,16 +7,16 @@ current_phase_name: "바로 고칠 것: 증거·조명·튜토리얼 손보기"
 current_plan: 11
 status: verifying
 stopped_at: Completed 18-10-PLAN.md
-last_updated: "2026-11-10T03:11:04.272Z"
+last_updated: "2026-11-10T07:15:09.417Z"
 last_activity: 2026-11-10
 last_activity_desc: Phase 18 execution started
-state_head: 18b271d91f6f3f7f5ec6623c7cd89923beb10236
+state_head: c23913e6e546436eb55c6b9ac5a1908124daa642
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 4
   total_plans: 58
   completed_plans: 58
-  percent: 44
+  percent: 40
 ---
 
 # Project State
@@ -600,6 +600,7 @@ None yet.
 - Phase 19 added: 결정 0081 반영(17 UAT 후 할 일 재설계)
 - Phase 20 added: 결정 0081 반영(17 UAT 후 할 일 재설계)
 - Phase 21 added: 결정 0081 반영(17 UAT 후 할 일 재설계)
+- Phase 18.1 inserted after Phase 18: 화면 손보기 5가지(역할카드·채팅 2줄·유령·시간대 아이콘·결과 기록 숨김) (URGENT)
 
 ## Deferred Items
 
