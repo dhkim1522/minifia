@@ -189,8 +189,8 @@ describe("조명 단계 (talk · vote)", () => {
     bar.setLighting("talk");
     const fog = bar.root.fog!;
     const bg = bar.root.background as { getHexString(): string };
-    expect("#" + bg.getHexString()).toBe("#15111f");
-    expect("#" + (fog.color as { getHexString(): string }).getHexString()).toBe("#15111f");
+    expect("#" + bg.getHexString()).toBe("#38324a");
+    expect("#" + (fog.color as { getHexString(): string }).getHexString()).toBe("#38324a");
     bar.setLighting("vote");
     expect("#" + bg.getHexString()).toBe("#100d19");
     bar.dispose();

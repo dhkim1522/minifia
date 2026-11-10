@@ -42,6 +42,7 @@ import type { MapScene } from "./types";
 // ---------- 조명 시작값 ----------
 // 단위 변환은 bar 와 같다(반구·방향광 = 시안 세기 × π, 점광원 = 시안 세기 × 4). 값은 기본값이고 육안 조정은 실기기 묶음(999.6)의 몫이다.
 // 노출·점광 세기는 bar 의 같은 단계 값을 기준으로 두고, 반구·달빛의 상대 비율만 blockout plaza.js 의 env 를 따른다.
+// 낮 = 흐린 보랏빛 회색 + 따뜻한 햇빛(결정 0081-1, D-03), 밤 행은 그대로.
 // 하늘·안개 색은 모두 talk 의 같은 칸보다 밝지 않다 — 낮도 마피아 분위기(밝고 맑은 하늘 없음, 진홍 없음).
 const LAMP_ON = 1.0 * 4;
 export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
@@ -57,10 +58,11 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
 } = {
   /** 흐린 낮: 가로등·시계탑 조명 꺼짐, 반구가 높다 */
   talk: {
-    hemi: 0.95 * Math.PI,
-    moon: 0.7 * Math.PI,
+    hemi: 1.05 * Math.PI,
+    moon: 0.9 * Math.PI,
+    moonColor: "#eadfd0",
     exposure: 1.25,
-    sky: ["#8a8496", "#3a3446", "#34303f"],
+    sky: ["#aaa4b8", "#5c566a", "#807a8e"],
     fog: { near: 20, far: 44 },
     stage: 0,
     pendant: 0,
@@ -72,6 +74,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   vote: {
     hemi: 0.43 * Math.PI,
     moon: 0.25 * Math.PI,
+    moonColor: TOKEN_COLORS.moon,
     exposure: 1.25,
     sky: ["#4a4468", "#1c1428", "#171424"],
     fog: { near: 20, far: 44 },
@@ -85,6 +88,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   trial: {
     hemi: 0.3 * Math.PI,
     moon: 0.2 * Math.PI,
+    moonColor: TOKEN_COLORS.moon,
     exposure: 1.25,
     sky: ["#3a3464", "#1c1428", "#100d19"],
     fog: { near: 20, far: 44 },
@@ -98,6 +102,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   night: {
     hemi: 0.45 * Math.PI,
     moon: 0.7 * Math.PI,
+    moonColor: TOKEN_COLORS.moon,
     exposure: 1.25,
     sky: ["#2c2c58", "#15122a", "#0a0b16"],
     fog: { near: 20, far: 44 },
@@ -111,6 +116,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   nightCitizen: {
     hemi: 0.05 * Math.PI,
     moon: 0.08 * Math.PI,
+    moonColor: TOKEN_COLORS.moon,
     exposure: 0.75,
     sky: ["#1a1a36", "#0c0a1a", "#05060c"],
     fog: { near: 20, far: 44 },
@@ -124,6 +130,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   nightGhost: {
     hemi: 0.45 * Math.PI,
     moon: 0.7 * Math.PI,
+    moonColor: TOKEN_COLORS.moon,
     exposure: 1.25,
     sky: ["#2c2c58", "#15122a", "#0a0b16"],
     fog: { near: 20, far: 44 },
@@ -137,6 +144,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   morning: {
     hemi: 0.85 * Math.PI,
     moon: 0.4 * Math.PI,
+    moonColor: TOKEN_COLORS.moon,
     exposure: 1.25,
     sky: ["#7a7488", "#342e3e", "#2e2a38"],
     fog: { near: 20, far: 44 },
@@ -394,7 +402,7 @@ export function buildPlazaScene(budget: Budget): MapScene {
   // ----- 조명 -----
   const T = PLAZA_LIGHT_TUNE;
   const hemi = new HemisphereLight(T.talk.sky[0], T.talk.sky[1], T.talk.hemi);
-  const moon = new DirectionalLight(TOKEN_COLORS.moon, T.talk.moon);
+  const moon = new DirectionalLight(T.talk.moonColor, T.talk.moon);
   moon.position.set(T.moonPos.x, T.moonPos.y, T.moonPos.z);
   moon.target.position.set(T.moonTarget.x, T.moonTarget.y, T.moonTarget.z);
   moon.castShadow = budget.shadowMap !== 0;
@@ -463,6 +471,7 @@ export function buildPlazaScene(budget: Budget): MapScene {
     fog.near = t.fog.near;
     fog.far = t.fog.far;
     moon.intensity = t.moon;
+    moon.color.set(t.moonColor);
     self.intensity = t.self;
     const lead = tensionLevel >= 1;
     base.stage = lead ? T.tension.lead : t.stage;

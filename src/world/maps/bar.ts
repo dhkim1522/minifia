@@ -47,6 +47,7 @@ import { PALETTE, TOKEN_COLORS } from "../palette";
 import type { Budget, LightingPhase } from "../renderer";
 
 // ---------- 조명 시작값 (가정 A1) ----------
+// 낮 = 흐린 보랏빛 회색 + 따뜻한 햇빛(결정 0081-1, D-03), 밤 행은 그대로.
 // 반구·방향광 = 시안 세기 × π(r155 조명 단위 변경), 점광원 = 시안 세기 × 4 로 시작한다. 승인 보드와 나란히 놓고 맞추는 일은 06-14 가 한다.
 export interface PhaseTune {
   /** 반구광 세기 */
@@ -54,7 +55,7 @@ export interface PhaseTune {
   /** 달빛 방향광 세기 */
   moon: number;
   /** 방향광 색(단계별, D-03 — 낮은 따뜻한 회색, 밤은 달빛 남색) */
-  moonColor?: string;
+  moonColor: string;
   /** 톤매핑 노출 */
   exposure: number;
   /** [반구 하늘색, 반구 땅색, 배경·안개색] */
@@ -82,8 +83,9 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   talk: {
     hemi: 1.1 * Math.PI,
     moon: 0.85 * Math.PI,
+    moonColor: "#eadfd0",
     exposure: 1.25,
-    sky: ["#524b84", "#2a2034", "#15111f"],
+    sky: ["#908aa4", "#4a4058", "#38324a"],
     fog: { near: 20, far: 44 },
     stage: 0,
     pendant: PENDANT_TALK,
@@ -95,6 +97,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   vote: {
     hemi: 0.7 * Math.PI,
     moon: 0.55 * Math.PI,
+    moonColor: TOKEN_COLORS.moon,
     exposure: 1.25,
     sky: ["#3a3464", "#1c1428", "#100d19"],
     fog: { near: 20, far: 44 },
@@ -110,6 +113,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   trial: {
     hemi: 0.35 * Math.PI,
     moon: 0.2 * Math.PI,
+    moonColor: TOKEN_COLORS.moon,
     exposure: 1.25,
     sky: ["#3a3464", "#1c1428", "#100d19"],
     fog: { near: 20, far: 44 },
@@ -123,6 +127,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   night: {
     hemi: 0.45 * Math.PI,
     moon: 0.7 * Math.PI,
+    moonColor: TOKEN_COLORS.moon,
     exposure: 1.25,
     sky: ["#2c2c58", "#15122a", "#0a0b16"],
     fog: { near: 20, far: 44 },
@@ -140,6 +145,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   nightCitizen: {
     hemi: 0.05 * Math.PI,
     moon: 0.08 * Math.PI,
+    moonColor: TOKEN_COLORS.moon,
     exposure: 0.75,
     sky: ["#1a1a36", "#0c0a1a", "#05060c"],
     fog: { near: 20, far: 44 },
@@ -153,6 +159,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   nightGhost: {
     hemi: 0.45 * Math.PI,
     moon: 0.7 * Math.PI,
+    moonColor: TOKEN_COLORS.moon,
     exposure: 1.25,
     sky: ["#2c2c58", "#15122a", "#0a0b16"],
     fog: { near: 20, far: 44 },
@@ -166,6 +173,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   morning: {
     hemi: 0.85 * Math.PI,
     moon: 0.4 * Math.PI,
+    moonColor: TOKEN_COLORS.moon,
     exposure: 1.25,
     sky: ["#4d4a6e", "#26202c", "#14111b"],
     fog: { near: 20, far: 44 },
@@ -566,7 +574,7 @@ export function buildBarScene(budget: Budget): BarScene {
   // ----- 조명 -----
   const T = LIGHT_TUNE;
   const hemi = new HemisphereLight(T.talk.sky[0], T.talk.sky[1], T.talk.hemi);
-  const moon = new DirectionalLight(TOKEN_COLORS.moon, T.talk.moon);
+  const moon = new DirectionalLight(T.talk.moonColor, T.talk.moon);
   moon.position.set(T.moonPos.x, T.moonPos.y, T.moonPos.z);
   moon.target.position.set(T.moonTarget.x, T.moonTarget.y, T.moonTarget.z);
   moon.castShadow = budget.shadowMap !== 0;
@@ -638,6 +646,7 @@ export function buildBarScene(budget: Budget): BarScene {
     fog.near = t.fog.near;
     fog.far = t.fog.far;
     moon.intensity = t.moon;
+    moon.color.set(t.moonColor);
     self.intensity = t.self;
     // 긴장 1·2: 무대 점광원이 초점 위로 옮겨 선두 세기(초점이 없으면 무대 중앙). 0: 단계 값과 무대 중앙
     const lead = tensionLevel >= 1;
