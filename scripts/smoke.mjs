@@ -177,6 +177,9 @@ export function morningProblems(morning, seats) {
   return problems;
 }
 
+// RED 자리(GREEN 에서 채움)
+export function serverSpread() { return 0; }
+export function linkReport() { return ""; }
 // 역할별 일지 줄의 키 집합(결정 0027-11)
 const RECORD_KEYS = { police: "isMafia,n,target", mafia: "died,n,target", doctor: "n,target" };
 // 거절된 줄의 본문 표식: 어느 클라이언트의 어떤 프레임에도 되돌아오면 안 된다(COMM-04).
