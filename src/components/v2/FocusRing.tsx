@@ -16,7 +16,12 @@ export interface FocusGroup {
   extendDown?: number;
   /** 알약 모서리(radius-pill). 아니면 대상 모서리 + 8 */
   pill?: boolean;
+  /** 상자는 그리지 않고 스포트라이트 구멍만 내는 곳(기록 카드·눈 표시처럼 같이 밝아야 하는 요소) */
+  lit?: readonly string[];
 }
+
+/** 대상 밖을 덮는 night-950 의 불투명도(결정 0081-1-3) */
+export const TUTORIAL_DIM_ALPHA = 0.5;
 
 /** 대상 둘레로 키우는 여백과 화면 가장자리에서 띄우는 거리 */
 const PAD = 8;

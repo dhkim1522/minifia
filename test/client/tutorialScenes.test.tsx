@@ -43,6 +43,11 @@ beforeEach(() => {
       if (this.classList.contains("mf-world__tag")) r = { left: 40 + Number(this.getAttribute("data-seat")) * 100, top: 200, width: 96, height: 40 };
       else if (this.classList.contains("mv-trace__disc")) r = { left: 30, top: 100, width: 44, height: 44 };
       else if (this.classList.contains("mv-evidence__witness")) r = { left: 150, top: 170, width: 40, height: 24 };
+      // 스포트라이트(18-06): 사회자 띠·[처리]·목격 기록 카드·눈 표시도 잰다
+      else if (this.classList.contains("mv-host__band")) r = { left: 16, top: 60, width: 358, height: 64 };
+      else if (this.hasAttribute("data-errand-act")) r = { left: 150, top: 500, width: 90, height: 44 };
+      else if (this.classList.contains("mv-record")) r = { left: 16, top: 140, width: 358, height: 80 };
+      else if (this.classList.contains("tut-eye")) r = { left: 170, top: 160, width: 36, height: 36 };
     }
     return { ...r, right: r.left + r.width, bottom: r.top + r.height, x: r.left, y: r.top, toJSON: () => ({}) } as DOMRect;
   });
@@ -369,5 +374,61 @@ describe("장면 5: 증거 — 실제 증거 카드 + 선 두 개 + 수식 줄",
     const { container } = await mount({ initialScene: 6 });
     expect(links$(container)).toBeNull();
     expect(formula$(container)).toBeNull();
+  });
+});
+
+describe("스포트라이트 구간 (P18-5, D-04)", () => {
+  const dim$ = (c: ParentNode) => c.querySelectorAll("[data-tutorial-dim]").length;
+  const hole$ = (c: ParentNode) => c.querySelectorAll("[data-tutorial-hole]").length;
+
+  it("장면 2: 띠 창(0~2.6초)에만 1개, [다음] 뒤 0개", async () => {
+    const { container } = await mount({ initialScene: 2 });
+    advance(100);
+    expect(dim$(container)).toBe(1);
+    advance(2500);
+    advance(50);
+    expect(next$(container)).not.toBeNull();
+    expect(dim$(container)).toBe(0);
+  });
+
+  it("장면 3: 우체통 + [처리] 구간에 1개", async () => {
+    const { container } = await mount({ initialScene: 3 });
+    advance(100);
+    expect(dim$(container)).toBe(1);
+  });
+
+  it("장면 4: 1.9~3.4초에 1개(도윤 상자 + 기록 카드 + 눈 표시 = 구멍 3개), 3.4초 뒤 0개", async () => {
+    const { container } = await mount({ initialScene: 4 });
+    advance(1000);
+    expect(dim$(container)).toBe(0);
+    advance(900);
+    advance(100);
+    expect(dim$(container)).toBe(1);
+    expect(hole$(container)).toBe(3);
+    advance(1400);
+    advance(50);
+    expect(next$(container)).not.toBeNull();
+    expect(dim$(container)).toBe(0);
+  });
+
+  it("장면 5·7 은 시종 0개", async () => {
+    for (const n of [5, 7] as const) {
+      const { container, unmount } = await mount({ initialScene: n });
+      advance(100);
+      expect(dim$(container)).toBe(0);
+      advance(5000);
+      expect(dim$(container)).toBe(0);
+      unmount();
+    }
+  });
+
+  it("장면 6: 처음 구멍 4개(막 1개), 정답을 누른 뒤 0개", async () => {
+    const { container } = await mount({ initialScene: 6 });
+    advance(50);
+    expect(dim$(container)).toBe(1);
+    expect(hole$(container)).toBe(4);
+    pick(1);
+    advance(50);
+    expect(dim$(container)).toBe(0);
   });
 });

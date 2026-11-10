@@ -251,3 +251,120 @@ describe("tutorial.css 의 깜빡임 (UI-SPEC 포커스 테두리 계약)", () =
     expect(media).toMatch(/\.tut-focus[^{]*\{[^}]*animation:\s*none/);
   });
 });
+
+describe("스포트라이트 (P18-5, D-04)", () => {
+  const dims = (c: ParentNode) => [...c.querySelectorAll<SVGSVGElement>("svg[data-tutorial-dim]")];
+  const holes = (c: ParentNode) => [...c.querySelectorAll<SVGRectElement>("rect[data-tutorial-hole]")];
+
+  it("묶음 하나 → 막 1개(aria-hidden), 구멍 1개, 구멍 좌표 = .tut-focus 좌표(같은 Box)", async () => {
+    const { FocusRing } = await loadRing();
+    rects.set("a", { left: 100, top: 200, width: 96, height: 40 });
+    const { container } = render(
+      <>
+        <button data-t="a">a</button>
+        <FocusRing groups={[{ key: "a", selectors: ['[data-t="a"]'] }]} />
+      </>,
+    );
+    frame();
+    expect(dims(container).length).toBe(1);
+    expect(dims(container)[0]!.getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelectorAll("mask#tut-dim-mask").length).toBe(1);
+    expect(holes(container).length).toBe(1);
+    const box = boxes(container)[0]!;
+    const hole = holes(container)[0]!;
+    expect(Number(hole.getAttribute("x"))).toBe(Number.parseFloat(box.style.left));
+    expect(Number(hole.getAttribute("y"))).toBe(Number.parseFloat(box.style.top));
+    expect(Number(hole.getAttribute("width"))).toBe(Number.parseFloat(box.style.width));
+    expect(Number(hole.getAttribute("height"))).toBe(Number.parseFloat(box.style.height));
+  });
+
+  it("lit 가 있으면 상자 1개 + 구멍 2개(상자 + lit 사각형 사방 8)", async () => {
+    const { FocusRing } = await loadRing();
+    rects.set("a", { left: 100, top: 200, width: 96, height: 40 });
+    rects.set("lit", { left: 300, top: 300, width: 50, height: 50 });
+    const { container } = render(
+      <>
+        <button data-t="a">a</button>
+        <div data-t="lit" id="lit-a" />
+        <FocusRing groups={[{ key: "a", selectors: ['[data-t="a"]'], lit: ["#lit-a"] }]} />
+      </>,
+    );
+    frame();
+    expect(boxes(container).length).toBe(1);
+    expect(holes(container).length).toBe(2);
+    const lit = holes(container)[1]!;
+    expect(Number(lit.getAttribute("x"))).toBe(292);
+    expect(Number(lit.getAttribute("y"))).toBe(292);
+    expect(Number(lit.getAttribute("width"))).toBe(66);
+    expect(Number(lit.getAttribute("height"))).toBe(66);
+  });
+
+  it("묶음 넷(겹침 포함) → 구멍 4개, 막은 1개", async () => {
+    const { FocusRing } = await loadRing();
+    for (const [i, left] of [100, 130, 400, 500].entries()) rects.set(`g${i}`, { left, top: 200, width: 96, height: 40 });
+    const { container } = render(
+      <>
+        {[0, 1, 2, 3].map((i) => (
+          <button key={i} data-t={`g${i}`}>
+            g
+          </button>
+        ))}
+        <FocusRing groups={[0, 1, 2, 3].map((i) => ({ key: `g${i}`, selectors: [`[data-t="g${i}"]`] }))} />
+      </>,
+    );
+    frame();
+    expect(dims(container).length).toBe(1);
+    expect(holes(container).length).toBe(4);
+  });
+
+  it("묶음이 없거나 대상이 0×0 이면 막이 없다", async () => {
+    const { FocusRing } = await loadRing();
+    const none = render(<FocusRing groups={[]} />);
+    frame();
+    expect(dims(none.container).length).toBe(0);
+    cleanup();
+    const zero = render(
+      <>
+        <button data-t="zero">z</button>
+        <FocusRing groups={[{ key: "z", selectors: ['[data-t="zero"]'] }]} />
+      </>,
+    );
+    frame();
+    expect(dims(zero.container).length).toBe(0);
+    expect(boxes(zero.container).length).toBe(0);
+  });
+
+  it("채움 rect: fill-opacity = TUTORIAL_DIM_ALPHA(0.5), mask 는 tut-dim-mask 를 가리킨다", async () => {
+    const { FocusRing, TUTORIAL_DIM_ALPHA } = await loadRing();
+    rects.set("a", { left: 100, top: 200, width: 96, height: 40 });
+    const { container } = render(
+      <>
+        <button data-t="a">a</button>
+        <FocusRing groups={[{ key: "a", selectors: ['[data-t="a"]'] }]} />
+      </>,
+    );
+    frame();
+    expect(TUTORIAL_DIM_ALPHA).toBe(0.5);
+    const fill = container.querySelector(".tut-dim__fill");
+    expect(fill?.getAttribute("fill-opacity") === "0.5").toBe(true);
+    expect(fill?.getAttribute("mask") === "url(#tut-dim-mask)").toBe(true);
+  });
+
+  const CSS = readFileSync("src/styles/tutorial.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const ruleOf = (head: string): string => {
+    const start = CSS.indexOf(head);
+    return start < 0 ? "" : CSS.slice(start, CSS.indexOf("}", start) + 1);
+  };
+
+  it("tutorial.css: .tut-dim 은 fixed·pointer-events none·z-overlay, 채움은 night-950, blur 없음, 모션 줄이기에서 animation none", () => {
+    const dim = ruleOf(".tut-dim {");
+    expect(/position:\s*fixed/.test(dim)).toBe(true);
+    expect(/pointer-events:\s*none/.test(dim)).toBe(true);
+    expect(/z-index:\s*var\(--z-overlay\)/.test(dim)).toBe(true);
+    expect(/fill:\s*var\(--night-950\)/.test(ruleOf(".tut-dim__fill {"))).toBe(true);
+    expect(/backdrop-filter/.test(CSS)).toBe(false);
+    expect(/blur\(/.test(CSS)).toBe(false);
+    const reduce = CSS.slice(CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(/\.tut-dim\s*\{\s*animation:\s*none/.test(reduce)).toBe(true);
+  });
+});
