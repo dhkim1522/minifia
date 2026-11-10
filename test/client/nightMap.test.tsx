@@ -534,7 +534,7 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
       morning: eliminated !== undefined ? { eliminated } : saved ? { saved: true } : {},
     });
 
-  it("밤 → 아침(탈락 있음): 0.4초에 36px 알림 '{닉네임} 님이 당했습니다'(target 아이콘 56), 채팅 패널 all, 아침 조명, 탈락자 캐릭터·이름표가 산 사람 화면에서 사라진다(떠오름 없음)", () => {
+  it("밤 → 아침(탈락 있음): 0.4초에 36px 알림 '{닉네임} 님이 당했습니다'(target 아이콘 56), 채팅 패널 all, 아침 조명, 탈락자는 떠오름 없이 산 사람 화면에 ghost(is-ghost 이름표)로 남는다(18.1 P181-6)", () => {
     const m = mount(night());
     expect(announceText(m.container)).toBe("");
     expect(rosterSeats(m.container)).toEqual([3]); // 09-10: 밤 시민 편 이름표 층에는 내 이름표 하나뿐이다
@@ -549,8 +549,9 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
     expect(icon?.getAttribute("width")).toBe("56");
     expect(icon?.classList.contains("is-death")).toBe(true);
     expect(lastScene().lighting).toBe("morning");
-    expect(rosterSeats(m.container)).toEqual([0, 1, 3, 4, 5]);
-    expect(lastScene().seats[2]).toBeUndefined();
+    expect(rosterSeats(m.container)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(lastScene().seats[2]).toEqual({ show: true, ghost: true });
+    expect(m.container.querySelector('[data-seat="2"] .mv-tag')?.classList.contains("is-ghost")).toBe(true);
     expect(Object.values(lastScene().seats).some((look) => look.fadeAt !== undefined)).toBe(false);
     expect(chatChannel(m.container)).toBe("all");
     expect(titleText(m.container)).toBe("아침");

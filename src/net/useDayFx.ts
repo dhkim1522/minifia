@@ -169,7 +169,7 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
       chat.addSystem(CHAT_TEXT.channelStart.mafia, { scope: "mafia", icon: "roleMafia", at: Date.now() });
     }
 
-    // 처형 떠오름이 끝나면(알림 시작 + 2.4초) 좌석을 놓아준다 — 산 사람 화면에서 그 사람은 영영 없다
+    // 처형 떠오름이 끝나면(알림 시작 + 2.4초) 좌석을 놓아준다 — 해제되면 장면 표가 그 좌석을 코트 안개 유령으로 남긴다(18.1 P181-6)
     for (const f of ev.fx) {
       if (f.kind !== "ghostRise") continue;
       later(f.at + GHOST_FADE_END_MS, () =>
@@ -185,7 +185,7 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
       later(line.at ?? 0, () => chat.addSystem(line.text, { scope: line.scope ?? "all", kind: line.kind, ...(line.icon !== undefined ? { icon: line.icon } : {}), at: Date.now() }));
     }
     // 결과 알림: 한 번에 하나, 새 알림이 이전 것을 바꾼다. 첫 스냅샷·재접속은 dayEvents 가 알림을 만들지 않는다.
-    // 밤에 당한 사람은 아침 알림("암살당했습니다")과 함께 산 사람 화면에서 사라진다(떠오름 없음 — dayEvents 에 fx 가 없다).
+    // 밤에 당한 사람은 아침 알림("암살당했습니다")과 함께 산 사람 화면에서 코트 안개 유령으로 남는다(떠오름 없음 — dayEvents 에 fx 가 없다, 18.1 P181-6).
     const announces = ev.announces;
     // 경찰 조사 결과 카드(NIGHT-09): 본인 기록(me.records)의 같은 연결 view 차이에서만 만든다 — 첫 스냅샷·재접속은 prev 가 없어 null
     const police = reset ? null : policeResultOf(prev, view);

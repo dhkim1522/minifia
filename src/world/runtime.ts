@@ -1399,7 +1399,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
       if (tag.style.opacity !== a.tagAlpha) tag.style.opacity = a.tagAlpha;
       const w = a.tagW !== null && a.tagW > 0 ? a.tagW : NAMETAG_MAX_W;
-      boxes.push({ seat: a.seat, me: a.seat === mine, lead: tag.hasAttribute("data-lead"), turn: tag.hasAttribute("data-turn"), foot: r.project({ x: a.pos.x, y: 0, z: a.pos.z }).sy, x, bottom, w });
+      boxes.push({ seat: a.seat, me: a.seat === mine, ghost: a.ghost, lead: tag.hasAttribute("data-lead"), turn: tag.hasAttribute("data-turn"), foot: r.project({ x: a.pos.x, y: 0, z: a.pos.z }).sy, x, bottom, w });
       // 발밑 고리: 이름표(WorldStage)가 data-ring-kind 로 알린 종류를 캐릭터에 옮긴다(바뀔 때만)
       const kind = tag.getAttribute("data-ring-kind");
       if (kind !== a.ringKind) {

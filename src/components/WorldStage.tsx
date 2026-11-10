@@ -575,15 +575,18 @@ export function WorldStage(props: WorldStageProps) {
           const pickable = current && pick !== undefined && pick.seats.has(p.seat);
           const kickable = !pickable && current && canKick && away && !me;
           const { ring, turn, ...extra } = props.tagProps?.(p.seat) ?? {};
-          // 죽은 좌석 표시(유령 화면에서만 생긴다): 유령 viewer 의 장면 표 ghost 이거나 tagProps 가 ghost 를 준 좌석
-          const ghostSeat = extra.ghost === true || scene?.seats[p.seat]?.ghost === true;
+          // 죽은 자리 표식(유령 시점에서만): GameMap roleTagProps 가 spectate 가 있을 때만 tagProps.ghost 를 준다.
+          // 산 사람 화면의 유령(장면 표 ghost)은 HeadStack is-ghost 만 — 표식·직업 칩은 없다(18.1 C-2·C-5)
+          const ghostSeat = extra.ghost === true;
+          // 산 사람 화면에서 유령의 입력 중 신호는 그리지 않는다(유령 채널은 산 사람에게 보이지 않는다, T-08-44)
+          const hideTyping = scene?.seats[p.seat]?.ghost === true && !ghostSeat;
           const stack = (
             <HeadStack
               name={p.nickname}
               color={seatColor(p.seat)}
               me={me}
               away={away}
-              typing={props.typingSeats?.has(p.seat) === true}
+              typing={!hideTyping && props.typingSeats?.has(p.seat) === true}
               ghost={scene?.seats[p.seat]?.ghost === true ? true : undefined}
               mine={pickable && pick.mine === p.seat ? true : undefined}
               {...extra}
