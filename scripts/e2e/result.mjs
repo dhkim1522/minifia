@@ -38,8 +38,8 @@ export const RESULT_JOB_OUTFIT = Object.freeze({ mafia: "mafia", police: "police
 /** 헤더 승리 한 줄 (src/game/verdict.ts RESULT_TEXT.title 의 사본) */
 export const RESULT_WIN_TITLE = Object.freeze({ citizenWin: "시민 승리", mafiaWin: "마피아 승리" });
 
-/** 아래 패널 높이: 기록 칸 LOG_H(96 · 방 높이 780 이상 152) + 92 = 188 · 244 */
-export const RESULT_PANEL_H = Object.freeze({ short: 188, tall: 244, tallRoomMinH: 780 });
+/** 결과 화면 아래 패널 = 기록 칸 LOG_H 68 + 92 (18.1, 게임 채팅 패널과 같음, 방 높이와 무관) */
+export const RESULT_PANEL_H = 160;
 /** 이 높이(px) 미만의 폰은 방 틀 높이 575 미만의 짧은 폰(360×560 probe) — 14-08 UI#14 알려진 한계 적용 대상 */
 export const SHORT_PHONE_H = 575;
 
@@ -61,7 +61,7 @@ const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x))
 /**
  * RS1~RS8 결과 화면 최종 상태 판정. 입력 { winner, header, chips, seats, dimmed, loserSeats, costumes, jobBySeat, panel, panelWant, stageBottom, roomH, hasLegacy, chatEcho }:
  *  winner 기대 승자 · header 헤더 글자 · chips [data-role-chip] 개수 · seats 참가자 수 · dimmed 런타임이 어둡게 한 좌석(window.__mfResult.dimmed) · loserSeats 진 팀 좌석(서버 view 기준)
- *  costumes 런타임이 입힌 의상 표(좌석 → 의상) · jobBySeat 서버 view.result.seats 의 직업 표(좌석 → 직업) · panel 아래 패널 높이 · panelWant 기대 높이(없으면 방 높이로 계산)
+ *  costumes 런타임이 입힌 의상 표(좌석 → 의상) · jobBySeat 서버 view.result.seats 의 직업 표(좌석 → 직업) · panel 아래 패널 높이 · panelWant 기대 높이(없으면 RESULT_PANEL_H 160)
  *  stageBottom 스테이지 아래 끝(= 패널 위 끝, 방 위 끝 기준) · roomH 방 높이 · hasLegacy 옛 요소 이름 배열(없으면 빈 배열) · chatEcho 내가 보낸 한 줄이 기록 칸에 보였나
  * RS1 헤더 승리 한 줄 · RS2 칩 수 == 참가자 수 · RS3 어두운 좌석 == 진 팀 · RS4 의상 == 직업 의상 표 · RS5 패널 188/244 ±1 · RS6 스테이지 아래 끝 = 방 − 패널 ±1 · RS7 옛 요소 없음 · RS8 채팅 한 줄 전달.
  * afterCeremony(11-09): true 면 시상식이 끝난 뒤 상태로 RS4 를 "의상이 모두 걷힘"으로 본다(기본은 재접속 같은 최종 상태 = 직업 의상).
@@ -111,8 +111,8 @@ export function resultStageChecks(m) {
   }
 
   // RS5
-  const want = isNum(m?.panelWant) ? m.panelWant : isNum(m?.roomH) ? (m.roomH >= RESULT_PANEL_H.tallRoomMinH ? RESULT_PANEL_H.tall : RESULT_PANEL_H.short) : null;
-  if (!isNum(m?.panel) || want === null) out.push(noMeasure("RS5", L.RS5, "panel·roomH"));
+  const want = isNum(m?.panelWant) ? m.panelWant : RESULT_PANEL_H;
+  if (!isNum(m?.panel)) out.push(noMeasure("RS5", L.RS5, "panel"));
   else out.push(result("RS5", L.RS5, Math.abs(m.panel - want) <= 1 ? [] : [`패널 높이 ${m.panel} ≠ ${want} (±1)`]));
 
   // RS6
@@ -227,8 +227,8 @@ function layoutTabChecks(l, tabIds) {
   }
 
   // RT3
-  const wantCollapsed = isNum(l?.roomH) ? (l.roomH >= RESULT_PANEL_H.tallRoomMinH ? RESULT_PANEL_H.tall : RESULT_PANEL_H.short) : null;
-  if (!isNum(l?.panelCollapsedH) || wantCollapsed === null) out.push(noMeasure("RT3", L.RT3, "panelCollapsedH·roomH"));
+  const wantCollapsed = RESULT_PANEL_H;
+  if (!isNum(l?.panelCollapsedH)) out.push(noMeasure("RT3", L.RT3, "panelCollapsedH"));
   else out.push(result("RT3", L.RT3, Math.abs(l.panelCollapsedH - wantCollapsed) <= 1 ? [] : [`접힌 높이 ${l.panelCollapsedH} ≠ ${wantCollapsed} (±1)`]));
 
   // RT4

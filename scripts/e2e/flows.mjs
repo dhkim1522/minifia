@@ -572,9 +572,8 @@ const CHAT_LOBBY_TEXT = "안녕하세요";
 const CHAT_LOBBY_TYPING = "안";
 
 // 로비 채팅 패널 치수(UI-SPEC 구조 표). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다 — 값을 바꾸려면 UI-SPEC 과 chatUi.ts 를 먼저 바꾼다.
-const CHAT_LOG_TALL = 152;
-const CHAT_LOG_SHORT = 96;
-const CHAT_TALL_ROOM_MIN_H = 780;
+/** src/game/chatUi.ts LOG_H 사본 — 18.1 부터 방 높이와 무관 */
+const CHAT_LOG = 68;
 const CHAT_LOBBY_EXTRA = 154;
 const CHAT_CONTROL = 48;
 const CHAT_PANEL_EPS = 1;
@@ -582,13 +581,13 @@ const CHAT_PANEL_EPS = 1;
 /** 한 페이지의 로비 채팅 패널 치수 판정. m 은 readChatPanel 의 값. host 는 방장 페이지(스위치 줄 +76, 17-07 0080-4). 검사 행 목록을 돌려준다. */
 function chatPanelRows(m, host = false) {
   if (!m) return [{ id: "CP0", label: "채팅 패널을 읽음", ok: false, detail: "패널·기록 칸·입력칸·보내기 중 없는 것이 있음" }];
-  const logWant = m.roomH >= CHAT_TALL_ROOM_MIN_H ? CHAT_LOG_TALL : CHAT_LOG_SHORT;
+  const logWant = CHAT_LOG;
   const hostExtra = host ? LOBBY_HOST_TUTORIAL_EXTRA : 0;
   const panelWant = logWant + CHAT_LOBBY_EXTRA + hostExtra;
   const near = (a, b) => Math.abs(a - b) <= CHAT_PANEL_EPS;
   const r1 = (n) => Math.round(n * 10) / 10;
   return [
-    { id: "CP1", label: `로비 패널 높이 ${r1(panelWant)} (방 높이 ${r1(m.roomH)} → 기록 ${logWant} + ${CHAT_LOBBY_EXTRA}${host ? ` + ${hostExtra}(방장 스위치 줄)` : ""})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
+    { id: "CP1", label: `로비 패널 높이 ${r1(panelWant)} (기록 ${logWant} + ${CHAT_LOBBY_EXTRA}${host ? ` + ${hostExtra}(방장 스위치 줄)` : ""})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
     { id: "CP2", label: `기록 칸 높이 ${logWant}`, ok: near(m.log.height, logWant), detail: `기록 칸 ${r1(m.log.height)}` },
     { id: "CP3", label: `입력칸 높이 ${CHAT_CONTROL} · 보내기 ${CHAT_CONTROL}x${CHAT_CONTROL}`, ok: near(m.input.height, CHAT_CONTROL) && near(m.send.height, CHAT_CONTROL) && near(m.send.width, CHAT_CONTROL), detail: `입력칸 ${r1(m.input.height)} · 보내기 ${r1(m.send.width)}x${r1(m.send.height)}` },
     { id: "CP4", label: "입력칸 글자 16px", ok: m.inputFont === 16, detail: `${m.inputFont}px` },
@@ -630,7 +629,7 @@ async function chatLobbyFlow(ctx) {
       const cleared = await gp.locator("[data-chat-input]").inputValue();
       rec(sc, "CL5", "보낸 뒤 손님 입력칸이 비워짐", cleared === "", `입력칸 ${cleared.length}자`);
     }
-    // 패널 치수: 방장·손님 두 화면 모두 UI-SPEC 폰 크기 표대로(손님: 방 높이 ≥ 780 이면 306, 아니면 250. 방장: 스위치 줄 +76 → 382·326)
+    // 패널 치수: 방장·손님 두 화면 모두 UI-SPEC 폰 크기 표대로(18.1: 기록 칸 68 한 값 — 손님 222, 방장은 스위치 줄 +76 → 298)
     for (const [who, page] of [["방장", hp], ["손님", gp]]) {
       for (const r of chatPanelRows(await readChatPanel(page), who === "방장")) rec(`chat-lobby/panel-${who}`, r.id, r.label, r.ok, r.detail);
     }
@@ -741,9 +740,10 @@ async function chatImeFlow(ctx) {
 // 키보드 열림 치수(UI-SPEC 패널과 키보드). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다.
 /** 가상 키보드 높이(폰 크기 표의 K) */
 const KB_LIFT = 336;
-/** 키보드 열림 패널 = 14 + 72 + 8 + 입력줄 48 + 8 = 150 — 앱 상수(chatUi.ts KB_PANEL_H)와 같다(이름표 보정은 16-05 에서 삭제) */
-const KB_PANEL_H = 150;
-const KB_LOG_H = 72;
+/** 키보드 열림 패널 = 14 + 68 + 8 + 입력줄 48 + 8 = 146 — 앱 상수(chatUi.ts KB_PANEL_H)와 같다(이름표 보정은 16-05 에서 삭제) */
+const KB_PANEL_H = 146;
+/** 키보드 열림에서도 기록 칸은 LOG_H 68 한 값(18.1) */
+const KB_LOG_H = 68;
 /** 큰 폰(390x844 이상)은 캐릭터 발과 이름표(입력 중 칸 포함)가 남은 스테이지 안에 모두 있어야 한다. 그 아래 작은 폰은 캐릭터 몸만 본다(가정 A2, 합격 검사 3) */
 const KB_BIG_MIN_H = 800;
 const KB_EPS = 0.5;
