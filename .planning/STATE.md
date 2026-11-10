@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 18
 current_phase_name: "바로 고칠 것: 증거·조명·튜토리얼 손보기"
-current_plan: 3
+current_plan: 4
 status: executing
-stopped_at: Completed 18-02-PLAN.md
-last_updated: "2026-11-10T00:03:45.620Z"
+stopped_at: Completed 18-03-PLAN.md
+last_updated: "2026-11-10T00:13:16.087Z"
 last_activity: 2026-11-10
 last_activity_desc: Phase 18 execution started
-state_head: 3ff6f2ea316ab7090bf9a390d0986fc77685cdf6
+state_head: ba14b9f8038d62e61a8745d2b9ce253428f9aacb
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 58
-  completed_plans: 49
+  completed_plans: 50
   percent: 44
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 18 (바로 고칠 것: 증거·조명·튜토리얼 손보기) — EXECUTING
-Current Plan: 3
+Current Plan: 4
 Total Plans in Phase: 11
 Status: Ready to execute
 Last activity: 2026-11-10 — Phase 18 execution started
@@ -247,6 +247,7 @@ Last activity: 2026-11-10 — Phase 18 execution started
 | Phase 17 P10 | 71min | 4 tasks | 14 files |
 | Phase 18 P01 | 25min | 2 tasks | 15 files |
 | Phase 18 P02 | 12 min | 2 tasks | 5 files |
+| Phase 18 P03 | 25 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -550,6 +551,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18]: 옷장 잠금 거절은 BAD_MESSAGE 한 가지 — DO 의 기존 !result.ok 분기가 보낸 소켓에 state 한 프레임만 보내 250ms 간격 위반과 구분되지 않는다(L30)
 - [Phase 18]: 시작 때 겹친 옷 해소는 2패스(직접 고름 먼저·좌석 오름차순, 진 사람은 OUTFIT_IDS 첫 빈 옷), 바뀐 옷은 look 으로 저장되고 players[].look 은 역할 단어 누설 스캔에서 제외(역할과 무관한 공개 의상)
 - [Phase 18]: 18-02: PhaseTune.moonColor 필수 칸 — 방향광 색을 단계 표에서 가져오고 밤 네 행은 달빛색 그대로. UI-SPEC 시작값 다섯 곳은 허용 범위를 지키는 값으로 조정(18-07 렌더 측정에서 재조정 가능)
+- [Phase 18]: 튜토리얼 고정 카메라는 GameMap 선택 prop camera 로 덮어쓴다(presence.ts 불변)
 
 ### Pending Todos
 
@@ -620,8 +622,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-10T00:03:45.011Z
-Stopped at: Completed 18-02-PLAN.md
+Last session: 2026-11-10T00:13:15.508Z
+Stopped at: Completed 18-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
