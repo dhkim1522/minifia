@@ -16,7 +16,7 @@ actuals:
   tasks: 3
   commits: 4
 plan_head_before: 2842e9b09344572793a7ddb2acd57f752bb7ed41
-plan_head_after: PENDING
+plan_head_after: 18b271d91f6f3f7f5ec6623c7cd89923beb10236
 commits: 4
 key-files:
   created:
@@ -170,3 +170,7 @@ status: complete
 ## Threat Flags
 
 없음 — 새 네트워크·인증·파일 접근 표면 없음(검증·문서·배포만). T-18-23(배포 계정 가드 통과·우회 없음), T-18-24(패턴 원문 교체, 새 결과 0), T-18-25(큰 회귀는 로컬, 배포본은 smoke·바뀐 흐름만 — 다만 smoke 재시도 6번이 DO 쓰기를 썼다)를 지켰다.
+
+## Self-Check: PASSED
+
+- 산출물 3개(nightload JSON 둘·SUMMARY)와 커밋 4개(4b4e9a3d·6ea0749c·f2efdb17·18b271d9)가 HEAD 의 조상이다. `commits: 4` 는 마지막 상태 갱신 커밋을 제외한 값이다.

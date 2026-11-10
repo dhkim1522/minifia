@@ -264,7 +264,7 @@ Plans:
 | 15. 낮 심부름·목격 기록·밤 흔적 | v3.0 | 10/10 | Complete (배포 `f882224e`) | 2026-11-07 |
 | 16. 단추 정리·심부름 증거 | v3.0 | 10/10 | Complete (배포 `49b1ad57`, 실기기 확인은 v3.0 끝) | 2026-11-08 |
 | 17. 튜토리얼 "첫 사건" | v3.0 | 12/12 | In Progress | - |
-| 18. 바로 고칠 것 | v3.0 | 10/11 | In Progress | - |
+| 18. 바로 고칠 것 | v3.0 | 11/11 | In Progress | - |
 | 19. 기본 마피아·확장판 | v3.0 | 0/? | Not started | - |
 | 20. 맵 단계 확장 | v3.0 | 0/? | Not started | - |
 | 21. 원인→결과 하루와 할 일 | v3.0 | 0/? | Not started | - |
@@ -334,7 +334,7 @@ Plans:
 **Goal:** 실테스트 전에, 미션 방향과 무관하게 증거·화면이 제대로 읽히게 고친다(결정 0081-1). 흔적이 한두 명으로 좁혀지고, 낮과 밤이 장면만으로 구분되며, 튜토리얼에서 눌러야 할 곳과 [다음]이 바로 눈에 들어온다.
 **Requirements**: TBD
 **Depends on:** Phase 17
-**Plans:** 10/11 plans executed
+**Plans:** 11/11 plans executed
 
 **Success Criteria:**
 1. 한 판 안에서 두 사람이 같은 옷을 입지 않는다(판 시작 때 겹치는 옷은 남는 옷으로 바뀌고, 대기실 옷장은 이미 누가 입은 옷을 잠근다). 그래서 흔적의 같은 옷 표시는 많아야 한 사람에게 붙는다
@@ -363,7 +363,7 @@ Plans:
 - [x] 18-09-PLAN.md — 옷 E2E: avatar-dress 잠금·trace 옷 유일·같은 옷 표시 ≤ 1 (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 18-10-PLAN.md — 로컬 전체 회귀·nightload·minifia-v3 배포·지도/0081/HANDOFF·push (wave 5)
+- [x] 18-10-PLAN.md — 로컬 전체 회귀·nightload·minifia-v3 배포·지도/0081/HANDOFF·push (wave 5)
 
 ### Phase 19: 방장이 고르는 기본 마피아·확장판
 
