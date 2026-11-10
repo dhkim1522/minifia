@@ -3,6 +3,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   CARD_INNER_INSET,
+  CHAT_CONTROL_H,
+  CHAT_FADE_H,
+  CHAT_LOG_H,
+  CHAT_MIN_LINES,
+  CHAT_SHEET_CLOSE_MS,
+  CHAT_SHEET_DRAG_PX,
+  CHAT_WINDOW_MAX_LINES,
   REVEAL_DOCK_GAP,
   ROLE_ART_MIN_H,
   ROLE_CARD_MAX_LINES,
@@ -15,6 +22,8 @@ import {
   TOD_ABSENT_PHASES,
   TUTORIAL_ROLE_MAX_LINES,
   revealCardChecks,
+  chatSheetChecks,
+  chatWindowChecks,
   revealStageChecks,
   roleLineBoxChecks,
   todAbsentChecks,
@@ -322,4 +331,162 @@ test("todAbsentChecks: 0개면 통과, 1개면 D2 실패, 숫자가 아니면 �
   assert.equal(r.ok, false);
   assert.equal(r.id, "D2");
   assert.match(todAbsentChecks(null, { screen: "lobby" }).detail, /측정값 없음/);
+});
+
+// ---- B 채팅 두 줄 창 (18.1-09) ----
+
+test("채팅 상수: UI-SPEC 값 그대로", () => {
+  assert.equal(CHAT_LOG_H, 68);
+  assert.equal(CHAT_FADE_H, 12);
+  assert.equal(CHAT_WINDOW_MAX_LINES, 2);
+  assert.equal(CHAT_CONTROL_H, 48);
+  assert.equal(CHAT_SHEET_DRAG_PX, 120);
+  assert.equal(CHAT_SHEET_CLOSE_MS, 300);
+  assert.equal(CHAT_MIN_LINES, 6);
+});
+
+// 기록 칸 {top 500, bottom 568}, 줄 높이 24(16px × 1.5)·줄 틈 4·아래 안쪽 여백 8. 띠(흐림 12 아래) = [512, 568].
+// 맨 아래 두 줄이 띠 안(536~560, 508~532 중 512 아래 20px), 위 줄들은 띠 위로 잘려 나간다
+const winGood = () => ({
+  log: box(16, 500, 328, 68),
+  input: box(16, 580, 270, 48),
+  send: box(292, 580, 48, 48),
+  lineHeight: 24,
+  msgs: [box(16, 396, 328, 24), box(16, 424, 328, 24), box(16, 452, 328, 24), box(16, 480, 328, 24), box(16, 508, 328, 24), box(16, 536, 328, 24)],
+});
+
+test("chatWindowChecks: 정상(6줄 중 맨 아래 둘만 보임)은 B1·B2 통과", () => {
+  const rows = chatWindowChecks(winGood());
+  assert.deepEqual(ids(rows), ["B1", "B2"]);
+  assert.deepEqual(failing(rows), []);
+  assert.match(rows[1].detail + rows[1].label, /2/);
+});
+
+test("chatWindowChecks: 줄 셋이 띠 안이면 B2 실패", () => {
+  const m = winGood();
+  m.msgs[3] = box(16, 484, 328, 24); // 띠 위 끝 512 에 닿지 않음 — 안 셈
+  assert.deepEqual(failing(chatWindowChecks(m)), []);
+  m.msgs[3] = box(16, 490, 328, 24); // 490~514 → 보이는 2
+  m.msgs[4] = box(16, 516, 328, 24);
+  m.msgs[5] = box(16, 542, 328, 24);
+  assert.deepEqual(failing(chatWindowChecks(m)), []); // 490~514 는 2px 만 걸쳐 안 셈 — 보이는 건 둘
+  m.msgs[3] = box(16, 500, 328, 24); // 500~524 → 보이는 12 = 절반
+  assert.deepEqual(failing(chatWindowChecks(m)), ["B2"]);
+});
+
+test("chatWindowChecks: 줄 높이 절반 이상 보이는 줄만 센다(절반은 셈, 절반 미만은 안 셈)", () => {
+  const m = winGood();
+  m.msgs[3] = box(16, 500, 328, 24); // 띠 시작 512 → 보이는 높이 12 = 절반 → 센다
+  assert.deepEqual(failing(chatWindowChecks(m)), ["B2"]);
+  m.msgs[3] = box(16, 501, 328, 24); // 보이는 높이 11 < 12
+  assert.deepEqual(failing(chatWindowChecks(m)), []);
+});
+
+test("chatWindowChecks: 줄이 6 미만이면 측정 조건 미달로 B2 실패(공허 통과 금지)", () => {
+  const m = winGood();
+  m.msgs = m.msgs.slice(0, 5);
+  const rows = chatWindowChecks(m);
+  assert.deepEqual(failing(rows), ["B2"]);
+  assert.match(rows[1].detail, /측정 조건 미달/);
+});
+
+test("chatWindowChecks: 보이는 줄이 0 이면 B2 실패(창이 비어 있음)", () => {
+  const m = winGood();
+  m.msgs = m.msgs.map((r, i) => box(16, 100 + i * 28, 328, 24));
+  assert.deepEqual(failing(chatWindowChecks(m)), ["B2"]);
+});
+
+test("chatWindowChecks: 기록 칸 68±1·입력칸 48·보내기 48×48 아니면 B1 실패", () => {
+  assert.deepEqual(failing(chatWindowChecks({ ...winGood(), log: box(16, 500, 328, 69) })), []);
+  assert.deepEqual(failing(chatWindowChecks({ ...winGood(), log: box(16, 500, 328, 70) })), ["B1"]);
+  assert.deepEqual(failing(chatWindowChecks({ ...winGood(), input: box(16, 580, 270, 44) })), ["B1"]);
+  assert.deepEqual(failing(chatWindowChecks({ ...winGood(), send: box(292, 580, 44, 48) })), ["B1"]);
+});
+
+test("chatWindowChecks: 측정값이 없으면 측정값 없음으로 실패", () => {
+  const rows = chatWindowChecks(null);
+  assert.deepEqual(ids(rows), ["B1", "B2"]);
+  for (const r of rows) assert.match(r.detail, /측정값 없음/);
+});
+
+test("chatWindowChecks: long 은 가장 새 줄의 보이는 글줄 ≤ 2 와 칸 안에 끝남을 B2L 로 더한다", () => {
+  // 긴 줄: 3글줄(72px)이 칸 아래(바닥 여백 8)에 끝 맞춤 → 맨 위 글줄(488~512)은 띠 위라 보이는 글줄 2
+  const longMsg = box(16, 488, 328, 72);
+  const long = { ...winGood(), msgs: [...winGood().msgs.slice(0, 5), longMsg] };
+  const rows = chatWindowChecks(long, { long: true });
+  assert.deepEqual(ids(rows), ["B1", "B2", "B2L"]);
+  assert.equal(rows[2].ok, true, rows[2].detail);
+  // 칸 밖으로 넘치면(아래 끝이 칸 아래 +1 초과) 실패
+  const over = { ...winGood(), msgs: [...winGood().msgs.slice(0, 5), box(16, 500, 328, 72)] };
+  assert.equal(chatWindowChecks(over, { long: true })[2].ok, false);
+  // 글줄 셋이 다 보이면 실패 (줄 높이 20, 505~565: 첫 글줄 13px 보임)
+  const three = { ...winGood(), lineHeight: 20, msgs: [...winGood().msgs.slice(0, 5), box(16, 505, 328, 60)] };
+  assert.equal(chatWindowChecks(three, { long: true })[2].ok, false);
+  // long 이 아니면 B2L 줄이 없다
+  assert.deepEqual(ids(chatWindowChecks(long)), ["B1", "B2"]);
+});
+
+// ---- B 기록 시트 (18.1-09) ----
+
+const sheetGood = () => ({
+  open: { dialog: true, sheetClass: true, sheetLines: 7, windowLines: 7 },
+  closes: [
+    { via: "button", closed: true, focusOnOpenBtn: true },
+    { via: "escape", closed: true, focusOnOpenBtn: true },
+    { via: "drag", closed: true, focusOnOpenBtn: true },
+  ],
+  draft: { before: "쓰던 글", after: ["쓰던 글", "쓰던 글", "쓰던 글"] },
+});
+
+test("chatSheetChecks: 정상은 B3·B4 통과", () => {
+  const rows = chatSheetChecks(sheetGood());
+  assert.deepEqual(ids(rows), ["B3", "B4"]);
+  assert.deepEqual(failing(rows), []);
+});
+
+test("chatSheetChecks: 시트가 안 열리거나 .mf-sheet--chatlog 가 아니면 B3 실패", () => {
+  const a = sheetGood();
+  a.open.dialog = false;
+  assert.deepEqual(failing(chatSheetChecks(a)), ["B3"]);
+  const b = sheetGood();
+  b.open.sheetClass = false;
+  assert.deepEqual(failing(chatSheetChecks(b)), ["B3"]);
+});
+
+test("chatSheetChecks: 시트 줄 수가 칸 줄 수보다 적으면 B3 실패", () => {
+  const m = sheetGood();
+  m.open.sheetLines = 5;
+  assert.deepEqual(failing(chatSheetChecks(m)), ["B3"]);
+});
+
+test("chatSheetChecks: 닫히지 않는 길이 하나라도 있으면 B3 실패, 세 길이 다 있어야 한다", () => {
+  const m = sheetGood();
+  m.closes[2].closed = false;
+  assert.deepEqual(failing(chatSheetChecks(m)), ["B3"]);
+  const n = sheetGood();
+  n.closes = n.closes.slice(0, 2);
+  assert.deepEqual(failing(chatSheetChecks(n)), ["B3"]);
+});
+
+test("chatSheetChecks: 포커스가 [data-chat-open] 으로 안 돌아오면 B3 실패", () => {
+  const m = sheetGood();
+  m.closes[1].focusOnOpenBtn = false;
+  const rows = chatSheetChecks(m);
+  assert.deepEqual(failing(rows), ["B3"]);
+  assert.match(rows[0].detail, /escape/);
+});
+
+test("chatSheetChecks: 입력 글이 바뀌거나 비면 B4 실패, 처음부터 비어 있어도 실패", () => {
+  const a = sheetGood();
+  a.draft.after[1] = "";
+  assert.deepEqual(failing(chatSheetChecks(a)), ["B4"]);
+  const b = sheetGood();
+  b.draft = { before: "", after: ["", "", ""] };
+  assert.deepEqual(failing(chatSheetChecks(b)), ["B4"]);
+});
+
+test("chatSheetChecks: 측정값이 없으면 측정값 없음으로 실패", () => {
+  const rows = chatSheetChecks(null);
+  assert.deepEqual(ids(rows), ["B3", "B4"]);
+  for (const r of rows) assert.match(r.detail, /측정값 없음/);
 });

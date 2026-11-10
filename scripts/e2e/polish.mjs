@@ -464,6 +464,30 @@ export async function readTodBadge(page) {
   return m;
 }
 
+// ---- B 채팅 두 줄 창·기록 시트 (18.1-09) ----
+
+/** 기록 칸 높이 (UI-SPEC B1, src/game/chatUi.ts LOG_H 의 사본 — e2eContract 가 lib.mjs LOG_H 와 같음을 고정한다) */
+export const CHAT_LOG_H = 68;
+/** 기록 칸 위 흐림 띠 높이(LOG_FADE_H 사본) — 이 띠 안은 '보이는 줄' 로 세지 않는다 */
+export const CHAT_FADE_H = 12;
+/** 기록 칸 안에 보이는 채팅 줄 상한(B2) */
+export const CHAT_WINDOW_MAX_LINES = 2;
+/** 입력칸·보내기 한 변(B1) */
+export const CHAT_CONTROL_H = 48;
+/** 기록 시트 끌어 닫기 거리 — Sheet 의 문턱 96 보다 크게 */
+export const CHAT_SHEET_DRAG_PX = 120;
+/** 닫기 시작 뒤 대화상자가 없어져야 하는 시간(ms) */
+export const CHAT_SHEET_CLOSE_MS = 300;
+/** B2 를 재려면 보낸 채팅 줄이 이만큼은 있어야 한다(공허 통과 금지) */
+export const CHAT_MIN_LINES = 6;
+
+export function chatWindowChecks() {
+  return ["B1", "B2"].map((id) => row(id, "(미구현)", ["미구현"]));
+}
+export function chatSheetChecks() {
+  return ["B3", "B4"].map((id) => row(id, "(미구현)", ["미구현"]));
+}
+
 // ---- 흐름 ----
 
 /** 판정 줄 목록을 한 줄(통과면 비움, 아니면 실패 id 와 이유)로 접는다 */
