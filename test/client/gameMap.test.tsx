@@ -524,6 +524,44 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
   });
 });
 
+describe("GameMap — 시간대 배지 (R4, P181-5)", () => {
+  const header = (c: ParentNode) => c.querySelector(".mf-game__header") as HTMLElement;
+
+  it("낮 토론: 헤더에 [data-tod] 하나(day) — role=img·낮·img 4장(alt 빈칸), [역할 카드] 바로 앞 형제", () => {
+    const { container } = mount(makeView());
+    const badges = header(container).querySelectorAll("[data-tod]");
+    expect(badges.length).toBe(1);
+    const b = badges[0] as HTMLElement;
+    expect(b.getAttribute("data-tod")).toBe("day");
+    expect(b.getAttribute("role")).toBe("img");
+    expect(b.getAttribute("aria-label")).toBe("낮");
+    const imgs = b.querySelectorAll("img");
+    expect(imgs.length).toBe(4);
+    for (const i of imgs) expect(i.getAttribute("alt")).toBe("");
+    expect(b.parentElement?.classList.contains("mv-phase__side")).toBe(true);
+    expect(b.nextElementSibling?.classList.contains("mf-rolecard-btn")).toBe(true);
+  });
+
+  it("단계마다 lightingOf 대응: 지목·변론 → dusk/저녁, 밤 → night/밤, 아침 → morning/아침, 심부름도 1개", () => {
+    const cells: Array<[PhaseId, string, string]> = [
+      ["dayAnnounce", "day", "낮"],
+      ["errand", "day", "낮"],
+      ["nomination", "dusk", "저녁"],
+      ["defense", "dusk", "저녁"],
+      ["night", "night", "밤"],
+      ["morning", "morning", "아침"],
+    ];
+    for (const [phase, tod, label] of cells) {
+      const { container, unmount } = mount(makeView({ phase, candidate: 1 }));
+      const badges = header(container).querySelectorAll("[data-tod]");
+      expect(badges.length, phase).toBe(1);
+      expect(badges[0]?.getAttribute("data-tod"), phase).toBe(tod);
+      expect(badges[0]?.getAttribute("aria-label"), phase).toBe(label);
+      unmount();
+    }
+  });
+});
+
 describe("GameMap — 지목 어둡게 막 (09.1-07, UI-SPEC A-1)", () => {
   const withTurn = (i: number): RoomView => {
     const v = makeView({ phase: "nomination" });
