@@ -2,7 +2,7 @@
 // 렌더로 재는 허용 범위 4(휘도 순서)·5(가독)는 18-07 의 몫이다.
 import { Color } from "three";
 import { describe, expect, it } from "vitest";
-import { LIGHT_TUNE, type PhaseTune } from "../../src/world/maps/bar";
+import { ALBEDO_NONE, LIGHT_TUNE, type PhaseTune } from "../../src/world/maps/bar";
 import { PLAZA_LIGHT_TUNE } from "../../src/world/maps/plaza";
 import { TOKEN_COLORS } from "../../src/world/palette";
 import type { LightingPhase } from "../../src/world/renderer";
@@ -34,7 +34,7 @@ const rb = (hex: string): { r: number; b: number } => {
 const BAR_PENDANT = 0.9 * 4;
 const LAMP = 1.0 * 4;
 const FOG = { near: 20, far: 44 };
-const NIGHT_ROWS: Readonly<Record<string, Readonly<Record<string, Omit<PhaseTune, "moonColor">>>>> = {
+const NIGHT_ROWS: Readonly<Record<string, Readonly<Record<string, Omit<PhaseTune, "moonColor" | "albedo">>>>> = {
   광장: {
     trial: { hemi: 0.3 * Math.PI, moon: 0.2 * Math.PI, exposure: 1.25, sky: ["#3a3464", "#1c1428", "#100d19"], fog: FOG, stage: 2.0 * 4, pendant: LAMP * 0.06, emissive: { room: 0.06, vote: 1 }, glow: { room: 0.06, vote: 1 }, self: 0 },
     night: { hemi: 0.45 * Math.PI, moon: 0.7 * Math.PI, exposure: 1.25, sky: ["#2c2c58", "#15122a", "#0a0b16"], fog: FOG, stage: 0, pendant: LAMP * 0.7, emissive: { room: 0.7, vote: 0 }, glow: { room: 0.7, vote: 0 }, self: 0 },
@@ -85,10 +85,11 @@ describe.each(MAPS)("조명 표 허용 범위 — $name (D-03)", ({ name, tune, 
     expect(lum(tune.morning.sky[2])).toBeGreaterThan(lum(tune.vote.sky[2]));
   });
 
-  it("trial·night·nightCitizen·nightGhost 네 행은 moonColor 만 달빛색이고 나머지는 4a5dabea 와 같다", () => {
+  it("trial·night·nightCitizen·nightGhost 네 행은 moonColor 만 달빛색이고 albedo 는 ALBEDO_NONE, 나머지는 4a5dabea 와 같다", () => {
     for (const ph of ["trial", "night", "nightCitizen", "nightGhost"] as const) {
-      const { moonColor, ...rest } = tune[ph];
+      const { moonColor, albedo, ...rest } = tune[ph];
       expect(moonColor, ph).toBe(TOKEN_COLORS.moon);
+      expect(albedo, ph).toEqual(ALBEDO_NONE);
       expect(rest, ph).toEqual(NIGHT_ROWS[name]![ph]);
     }
   });

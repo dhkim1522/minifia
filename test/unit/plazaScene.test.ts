@@ -1,12 +1,12 @@
 // 시계탑 광장 장면(maps/plaza.ts)을 WebGL 없이 node 에서 검사한다: 병합 구조·좌표·예산·조명 (MAP-06, D-22).
 // 모범은 barScene.test.ts. 좌표 원문은 design/v2.0/blockout/plaza.js.
-import { BufferGeometry, Color, DirectionalLight, HemisphereLight, Material, Mesh, Object3D, PointLight, Scene, Texture, Vector3 } from "three";
+import { BufferGeometry, Color, DirectionalLight, HemisphereLight, Material, Mesh, MeshStandardMaterial, Object3D, PointLight, Scene, Texture, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
 import { createCharacter, figForSeat } from "../../src/world/character";
 import { buildPlazaScene, PLAZA_CLOCK_HOURS, PLAZA_LIGHT_TUNE } from "../../src/world/maps/plaza";
 import { PLAZA_PALETTE } from "../../src/world/palette";
 import { DRAW_CALL_BUDGET, LADDER } from "../../src/world/renderer";
-import { buildBarScene, LIGHT_TUNE } from "../../src/world/maps/bar";
+import { ALBEDO_NONE, buildBarScene, LIGHT_TUNE } from "../../src/world/maps/bar";
 import { MeshBasicMaterial } from "three";
 import type { LightingPhase } from "../../src/world/renderer";
 
@@ -189,11 +189,11 @@ describe("광장 단계 조명 표 PLAZA_LIGHT_TUNE (D-22, O-9)", () => {
     const p = buildPlazaScene(LADDER[0]!);
     const hex = (): string => "#" + lightsOf(p.root, DirectionalLight)[0]!.color.getHexString();
     expect(lightsOf(p.root, DirectionalLight)).toHaveLength(1);
-    expect(hex()).toBe("#eadfd0");
+    expect(hex()).toBe(PLAZA_LIGHT_TUNE.talk.moonColor);
     p.setLighting("night");
     expect(hex()).toBe("#c9d4ff");
     p.setLighting("talk");
-    expect(hex()).toBe("#eadfd0");
+    expect(hex()).toBe(PLAZA_LIGHT_TUNE.talk.moonColor);
     expect(lightsOf(p.root, DirectionalLight)).toHaveLength(1);
     p.dispose();
   });
@@ -416,5 +416,134 @@ describe("광장 정적 예산: 8명 서로 다른 의상 + 동시 동작 4개 (
     for (const c of [...pc, ...bc]) c.dispose();
     plaza.dispose();
     bar.dispose();
+  });
+});
+
+// ---------- 시간대별 재질 보정 (18-12, G-18-1) ----------
+describe("광장 재질 보정 albedo (18-12, G-18-1)", () => {
+  const GRADED = ["shell", "furniture", "furnitureFar"] as const;
+  const colorArr = (p: ReturnType<typeof buildPlazaScene>, n: string): Float32Array => p.meshes[n]!.geometry.getAttribute("color").array as Float32Array;
+  const snap = (p: ReturnType<typeof buildPlazaScene>): Float32Array[] => GRADED.map((n) => Float32Array.from(colorArr(p, n)));
+  const same = (a: Float32Array, b: Float32Array): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
+  const dist = (a: Color, b: Color): number => Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
+  const floorColor = new Color(PLAZA_PALETTE.floor);
+  /** 정점 색 배열에서 팔레트 바닥색과 같은(원래 색) 정점 번호 */
+  const findFloorVertex = (orig: Float32Array): number => {
+    for (let i = 0; i < orig.length; i += 3) if (Math.abs(orig[i]! - floorColor.r) < 1e-6 && Math.abs(orig[i + 1]! - floorColor.g) < 1e-6 && Math.abs(orig[i + 2]! - floorColor.b) < 1e-6) return i;
+    return -1;
+  };
+  const srgb = (c: Color): { r: number; g: number; b: number; sat: number } => {
+    const n = c.getHex();
+    const r = (n >> 16) & 255;
+    const g = (n >> 8) & 255;
+    const b = n & 255;
+    const max = Math.max(r, g, b);
+    return { r, g, b, sat: max === 0 ? 0 : (max - Math.min(r, g, b)) / max };
+  };
+
+  it("(a) 만든 직후(talk) 바닥 정점 색은 팔레트 바닥색과 다르고 그 색보다 talk tint 에 가깝다", () => {
+    const night = buildPlazaScene(LADDER[0]!);
+    night.setLighting("night");
+    const i = findFloorVertex(colorArr(night, "shell"));
+    expect(i).toBeGreaterThanOrEqual(0);
+    const p = buildPlazaScene(LADDER[0]!);
+    const a = colorArr(p, "shell");
+    const got = new Color(a[i]!, a[i + 1]!, a[i + 2]!);
+    const tint = new Color(PLAZA_LIGHT_TUNE.talk.albedo.tint);
+    expect(dist(got, floorColor)).toBeGreaterThan(1e-3);
+    expect(dist(got, tint)).toBeLessThan(dist(floorColor, tint));
+    night.dispose();
+    p.dispose();
+  });
+
+  it("(b) night 로 가면 정점 색·plate 재질 색이 팔레트 원래 값과 같다", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    p.setLighting("night");
+    const i = findFloorVertex(colorArr(p, "shell"));
+    expect(i).toBeGreaterThanOrEqual(0);
+    const plate = (p.plate.material as MeshStandardMaterial).color;
+    expect(plate.r).toBeCloseTo(floorColor.r, 6);
+    expect(plate.g).toBeCloseTo(floorColor.g, 6);
+    expect(plate.b).toBeCloseTo(floorColor.b, 6);
+    p.dispose();
+  });
+
+  it("(c) talk → night → talk → night 왕복 뒤에도 정점 색 배열이 첫 night 와 정확히 같다(누적 없음)", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    p.setLighting("night");
+    const first = snap(p);
+    p.setLighting("talk");
+    const talk1 = snap(p);
+    p.setLighting("night");
+    p.setLighting("talk");
+    const talk2 = snap(p);
+    p.setLighting("night");
+    const again = snap(p);
+    GRADED.forEach((_, k) => {
+      expect(same(again[k]!, first[k]!), `night ${GRADED[k]}`).toBe(true);
+      expect(same(talk2[k]!, talk1[k]!), `talk ${GRADED[k]}`).toBe(true);
+    });
+    expect(same(talk1[0]!, first[0]!)).toBe(false);
+    p.dispose();
+  });
+
+  it("(d) 조명 단계가 바뀔 때만 color 속성 version 이 는다(긴장·핀·같은 단계 예산 변경으로는 그대로)", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    p.setLighting("talk");
+    const ver = (): number => (p.meshes.shell!.geometry.getAttribute("color") as { version: number }).version;
+    const v0 = ver();
+    p.setTension(1, { x: 1, z: 1 });
+    p.setTension(2, { x: 1, z: 1 });
+    p.setTension(0);
+    p.setPin(null, 1);
+    p.setPin({ x: 0, z: 0, strength: 1 }, 0.5);
+    p.setPin(null, 1);
+    p.applyBudget(p.budget);
+    p.setLighting("talk");
+    expect(ver()).toBe(v0);
+    p.setLighting("vote");
+    expect(ver()).toBeGreaterThan(v0);
+    p.dispose();
+  });
+
+  it("(e) vote·morning·talk 보정 뒤에도 모든 메시 정점 색에 진홍이 없다", () => {
+    const crimsonish = (c: Color): boolean => c.r >= 0.35 && c.r > 1.8 * c.g && c.r > 1.5 * c.b;
+    const p = buildPlazaScene(LADDER[0]!);
+    for (const ph of ["talk", "morning", "vote"] as const) {
+      p.setLighting(ph);
+      for (const m of allMeshes(p.root)) {
+        const col = m.geometry.getAttribute("color");
+        if (!col) continue;
+        for (let i = 0; i < col.count; i += 5) expect(crimsonish(new Color(col.getX(i), col.getY(i), col.getZ(i))), `${ph}/${m.name}`).toBe(false);
+      }
+    }
+    p.dispose();
+  });
+
+  it("(h) 남색 벗어남: talk 의 바닥 정점·plate 는 채도 ≤ 0.20 이고 B ≤ max(R,G), night 의 팔레트 남색은 그렇지 않다", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    const a0 = colorArr(p, "shell");
+    // talk 에서 바닥 정점 번호는 night 의 원래 색으로 찾는다
+    const q = buildPlazaScene(LADDER[0]!);
+    q.setLighting("night");
+    const i = findFloorVertex(colorArr(q, "shell"));
+    expect(i).toBeGreaterThanOrEqual(0);
+    const floorTalk = srgb(new Color(a0[i]!, a0[i + 1]!, a0[i + 2]!));
+    const plateTalk = srgb((p.plate.material as MeshStandardMaterial).color);
+    for (const [name, c] of [["바닥 정점", floorTalk], ["plate", plateTalk]] as const) {
+      expect(c.sat, `${name} 채도 ${JSON.stringify(c)}`).toBeLessThanOrEqual(0.2);
+      expect(c.b, `${name} B ${JSON.stringify(c)}`).toBeLessThanOrEqual(Math.max(c.r, c.g));
+    }
+    const floorNight = srgb(floorColor);
+    expect(floorNight.sat).toBeGreaterThan(0.2);
+    expect(floorNight.b).toBeGreaterThan(Math.max(floorNight.r, floorNight.g));
+    const plateNight = srgb((q.plate.material as MeshStandardMaterial).color);
+    expect(plateNight.sat).toBeGreaterThan(0.2);
+    p.dispose();
+    q.dispose();
+  });
+
+  it("밤 쪽 네 행 albedo 는 ALBEDO_NONE 이다", () => {
+    for (const ph of ["trial", "night", "nightCitizen", "nightGhost"] as const) expect(PLAZA_LIGHT_TUNE[ph].albedo, ph).toEqual(ALBEDO_NONE);
   });
 });

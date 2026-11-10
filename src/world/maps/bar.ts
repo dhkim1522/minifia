@@ -71,6 +71,21 @@ export interface PhaseTune {
   glow: { room: number; vote: number };
   /** 내 캐릭터 위 작은 점광원 세기(밤·시민 편 nightCitizen 에서만 0 보다 크다) */
   self: number;
+  /** 재질 보정(18-12): 정점 색·연장 판 색을 tint 쪽으로 mix 만큼 섞는다. 밤 쪽 행은 ALBEDO_NONE */
+  albedo: AlbedoGrade;
+}
+
+/** 재질 보정 값: 선형 작업 공간에서 out = base × (1 − mix) + tint × mix */
+export interface AlbedoGrade {
+  tint: string;
+  mix: number;
+}
+/** 보정 없음(원래 색 그대로) — 밤 쪽 행과 trial 이 쓴다 */
+export const ALBEDO_NONE: AlbedoGrade = { tint: "#808080", mix: 0 };
+
+/** 자리 함수(RED): 아무것도 하지 않는 보정 함수를 돌려준다 */
+export function albedoGrader(_meshes: readonly Mesh[], _mats: readonly MeshStandardMaterial[]): (g: AlbedoGrade) => void {
+  return () => undefined;
 }
 
 const PENDANT_TALK = 0.9 * 4;
@@ -93,6 +108,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 1, vote: 0.2 },
     glow: { room: 1, vote: 0 },
     self: 0,
+    albedo: ALBEDO_NONE,
   },
   vote: {
     hemi: 0.7 * Math.PI,
@@ -106,6 +122,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0.45, vote: 1 },
     glow: { room: 0.45, vote: 1 },
     self: 0,
+    albedo: ALBEDO_NONE,
   },
   // 08-10 단계 조명 셋. 정확한 값은 기존 talk·vote 에서 파생한 시작값이고 읽힘의 최종 확인은 실기기 몫이다(가정 A2).
   // 하늘·안개 색은 모두 talk 의 같은 칸보다 밝지 않다 — 낮도 마피아 분위기(새 밝은 색면 없음).
@@ -122,6 +139,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0.05, vote: 1 },
     glow: { room: 0.05, vote: 1 },
     self: 0,
+    albedo: ALBEDO_NONE,
   },
   /** 밤: 달빛이 반구보다 세고 무대 점광원은 꺼진다 */
   night: {
@@ -136,6 +154,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0.15, vote: 0.1 },
     glow: { room: 0.15, vote: 0 },
     self: 0,
+    albedo: ALBEDO_NONE,
   },
   /**
    * 밤·산 시민 편(NIGHT-07·10, 가정 A1): 블록아웃 값 반구 0.05·달빛 0.08·노출 0.75·내 캐릭터 빛 1.4 를 단위 변환(반구·달빛 × π, 점광원 × 4)한 거의 깜깜한 방.
@@ -154,6 +173,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0, vote: 0 },
     glow: { room: 0, vote: 0 },
     self: 1.4 * 4,
+    albedo: ALBEDO_NONE,
   },
   /** 밤·유령(가정 A3): 마피아 화면(night)과 같은 달빛·반구, 무대 쪽 기운(vote 그룹 emissive·빛 무리)만 night 의 0.4 배. 모두 보인다 */
   nightGhost: {
@@ -168,6 +188,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0.15, vote: 0.1 * 0.4 },
     glow: { room: 0.15, vote: 0 }, // night 의 vote 빛 무리는 0 이라 0.4 배도 0
     self: 0,
+    albedo: ALBEDO_NONE,
   },
   /** 아침: talk 보다 낮은 반구·달빛(18-07 렌더 측정으로 올림), 채도 낮은 하늘 */
   morning: {
@@ -182,6 +203,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0.7, vote: 0.2 },
     glow: { room: 0.6, vote: 0 },
     self: 0,
+    albedo: ALBEDO_NONE,
   },
   /** 긴장 단계(결정 0049): lead = 1·2 단계에서 초점 위로 옮긴 무대 점광원 세기(vote 의 1.5 배), halfRoom = 2 단계에서 실내 emissive 에 곱하는 값 */
   tension: { lead: 2.0 * 4 * 1.5, halfRoom: 0.5 },

@@ -1,11 +1,11 @@
 // 재즈 바 장면(maps/bar.ts)을 WebGL 없이 node 에서 검사한다: 병합 구조·예산·조명·연장 판·링.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { BufferGeometry, Color, DataTexture, DirectionalLight, HemisphereLight, type Light, Material, Mesh, MeshBasicMaterial, Object3D, PlaneGeometry, PointLight, Scene, TorusGeometry, TubeGeometry, Vector3 } from "three";
+import { BufferAttribute, BufferGeometry, Color, DataTexture, DirectionalLight, HemisphereLight, type Light, Material, Mesh, MeshBasicMaterial, Object3D, MeshStandardMaterial, PlaneGeometry, PointLight, Scene, TorusGeometry, TubeGeometry, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
 import { PLATE_FAR } from "../../src/world/camera";
-import { buildBarScene, LIGHT_TUNE } from "../../src/world/maps/bar";
-import { TOKEN_COLORS } from "../../src/world/palette";
+import { ALBEDO_NONE, albedoGrader, buildBarScene, LIGHT_TUNE } from "../../src/world/maps/bar";
+import { PALETTE, TOKEN_COLORS } from "../../src/world/palette";
 import { createCharacter, figForSeat } from "../../src/world/character";
 import { DRAW_CALL_BUDGET, LADDER, type LightingPhase } from "../../src/world/renderer";
 
@@ -88,11 +88,11 @@ describe("재즈 바 장면 구조 (MAP-01, 렌더 예산)", () => {
     const bar = buildBarScene(LADDER[0]!);
     const hex = (): string => "#" + lightsOf(bar.root, DirectionalLight)[0]!.color.getHexString();
     expect(lightsOf(bar.root, DirectionalLight)).toHaveLength(1);
-    expect(hex()).toBe("#eadfd0");
+    expect(hex()).toBe(LIGHT_TUNE.talk.moonColor);
     bar.setLighting("night");
     expect(hex()).toBe(TOKEN_COLORS.moon);
     bar.setLighting("talk");
-    expect(hex()).toBe("#eadfd0");
+    expect(hex()).toBe(LIGHT_TUNE.talk.moonColor);
     expect(lightsOf(bar.root, DirectionalLight)).toHaveLength(1);
     bar.dispose();
   });
@@ -173,8 +173,9 @@ describe("조명 단계 (talk · vote)", () => {
     expect(LIGHT_TUNE.talk.exposure).toBe(1.25);
     expect(LIGHT_TUNE.vote.exposure).toBe(1.25);
     expect(LIGHT_TUNE.vote.stage).toBeCloseTo(2.0 * 4, 6);
-    expect(LIGHT_TUNE.talk.sky).toEqual(["#908aa4", "#4a4058", "#38324a"]);
-    expect(LIGHT_TUNE.vote.sky).toEqual(["#3c3a48", "#1c1428", "#100d19"]);
+    // 18-12: talk·vote 하늘은 재질 보정과 함께 시간대 색으로 나뉘었다 — 값은 표 참조(허용 범위는 lighting.test.ts)
+    expect(LIGHT_TUNE.talk.sky).toHaveLength(3);
+    expect(LIGHT_TUNE.vote.sky).toHaveLength(3);
   });
 
   it("vote 는 talk 보다 어둡고(반구·달빛·배경) 무대에만 점광원이 있다 — 화면 전체를 밝게 덮지 않는다", () => {
@@ -189,10 +190,10 @@ describe("조명 단계 (talk · vote)", () => {
     bar.setLighting("talk");
     const fog = bar.root.fog!;
     const bg = bar.root.background as { getHexString(): string };
-    expect("#" + bg.getHexString()).toBe("#38324a");
-    expect("#" + (fog.color as { getHexString(): string }).getHexString()).toBe("#38324a");
+    expect("#" + bg.getHexString()).toBe(LIGHT_TUNE.talk.sky[2]);
+    expect("#" + (fog.color as { getHexString(): string }).getHexString()).toBe(LIGHT_TUNE.talk.sky[2]);
     bar.setLighting("vote");
-    expect("#" + bg.getHexString()).toBe("#100d19");
+    expect("#" + bg.getHexString()).toBe(LIGHT_TUNE.vote.sky[2]);
     bar.dispose();
   });
 });
@@ -622,5 +623,149 @@ describe("시민 편 어둠·유령 밤 조명·내 캐릭터 빛 (NIGHT-07, NIG
     expect(bar.lights.self.position.y).toBeCloseTo(2.0, 9);
     expect(bar.lights.self.position.x).toBe(0);
     bar.dispose();
+  });
+});
+
+// ---------- 시간대별 재질 보정 (18-12, G-18-1) ----------
+describe("albedoGrader 단위 (18-12)", () => {
+  const base = [0.1, 0.2, 0.3, 0.5, 0.4, 0.3, 0.9, 0.8, 0.7];
+  const make = (): { geo: BufferGeometry; mat: MeshStandardMaterial; mesh: Mesh } => {
+    const geo = new BufferGeometry();
+    geo.setAttribute("position", new BufferAttribute(new Float32Array(9), 3));
+    geo.setAttribute("color", new BufferAttribute(new Float32Array(base), 3));
+    const mat = new MeshStandardMaterial({ color: "#336699" });
+    return { geo, mat, mesh: new Mesh(geo, mat) };
+  };
+  const arr = (g: BufferGeometry): number[] => Array.from(g.getAttribute("color").array as Float32Array);
+
+  it("grade({tint:#fff, mix:0.5}) 뒤 정점 성분은 base × 0.5 + 1 × 0.5, 재질 color 도 같은 식이다", () => {
+    const { geo, mat, mesh } = make();
+    const c0 = mat.color.clone();
+    const grade = albedoGrader([mesh], [mat]);
+    grade({ tint: "#ffffff", mix: 0.5 });
+    arr(geo).forEach((v, i) => expect(v).toBeCloseTo(base[i]! * 0.5 + 0.5, 6));
+    expect(mat.color.r).toBeCloseTo(c0.r * 0.5 + 0.5, 6);
+    expect(mat.color.g).toBeCloseTo(c0.g * 0.5 + 0.5, 6);
+    expect(mat.color.b).toBeCloseTo(c0.b * 0.5 + 0.5, 6);
+  });
+
+  it("grade(ALBEDO_NONE) 은 처음 값과 정확히 같고, 같은 grade 를 연달아 불러도 누적되지 않는다", () => {
+    const { geo, mat, mesh } = make();
+    const first = arr(geo);
+    const c0 = mat.color.clone();
+    const grade = albedoGrader([mesh], [mat]);
+    grade({ tint: "#ffffff", mix: 0.5 });
+    const once = arr(geo);
+    grade({ tint: "#ffffff", mix: 0.5 });
+    expect(arr(geo)).toEqual(once);
+    grade(ALBEDO_NONE);
+    expect(arr(geo)).toEqual(first);
+    expect(mat.color.equals(c0)).toBe(true);
+  });
+});
+
+describe("재즈 바 재질 보정 albedo (18-12, G-18-1)", () => {
+  const GRADED = ["shell", "furniture", "furnitureFar", "pendants"] as const;
+  type Bar = ReturnType<typeof buildBarScene>;
+  const colorArr = (b: Bar, n: string): Float32Array => b.meshes[n]!.geometry.getAttribute("color").array as Float32Array;
+  const snap = (b: Bar): Float32Array[] => GRADED.map((n) => Float32Array.from(colorArr(b, n)));
+  const same = (a: Float32Array, b: Float32Array): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
+  const dist = (a: Color, b: Color): number => Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
+  const floorColor = new Color(PALETTE.floorA);
+  const findFloorVertex = (orig: Float32Array): number => {
+    for (let i = 0; i < orig.length; i += 3) if (Math.abs(orig[i]! - floorColor.r) < 1e-6 && Math.abs(orig[i + 1]! - floorColor.g) < 1e-6 && Math.abs(orig[i + 2]! - floorColor.b) < 1e-6) return i;
+    return -1;
+  };
+
+  it("(a) 만든 직후(talk) 바닥 정점 색은 팔레트 바닥색과 다르고 그 색보다 talk tint 에 가깝다", () => {
+    const night = buildBarScene(LADDER[0]!);
+    night.setLighting("night");
+    const i = findFloorVertex(colorArr(night, "shell"));
+    expect(i).toBeGreaterThanOrEqual(0);
+    const bar = buildBarScene(LADDER[0]!);
+    const a = colorArr(bar, "shell");
+    const got = new Color(a[i]!, a[i + 1]!, a[i + 2]!);
+    const tint = new Color(LIGHT_TUNE.talk.albedo.tint);
+    expect(dist(got, floorColor)).toBeGreaterThan(1e-3);
+    expect(dist(got, tint)).toBeLessThan(dist(floorColor, tint));
+    night.dispose();
+    bar.dispose();
+  });
+
+  it("(b) night 로 가면 정점 색·plate 재질 색이 팔레트 원래 값과 같다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("night");
+    expect(findFloorVertex(colorArr(bar, "shell"))).toBeGreaterThanOrEqual(0);
+    const plate = (bar.plate.material as MeshStandardMaterial).color;
+    const want = new Color(PALETTE.plate);
+    expect(plate.r).toBeCloseTo(want.r, 6);
+    expect(plate.g).toBeCloseTo(want.g, 6);
+    expect(plate.b).toBeCloseTo(want.b, 6);
+    bar.dispose();
+  });
+
+  it("(c) talk → night → talk → night 왕복 뒤에도 정점 색 배열이 첫 night 와 정확히 같다(누적 없음)", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("night");
+    const first = snap(bar);
+    bar.setLighting("talk");
+    const talk1 = snap(bar);
+    bar.setLighting("night");
+    bar.setLighting("talk");
+    const talk2 = snap(bar);
+    bar.setLighting("night");
+    const again = snap(bar);
+    GRADED.forEach((_, k) => {
+      expect(same(again[k]!, first[k]!), `night ${GRADED[k]}`).toBe(true);
+      expect(same(talk2[k]!, talk1[k]!), `talk ${GRADED[k]}`).toBe(true);
+    });
+    expect(same(talk1[0]!, first[0]!)).toBe(false);
+    bar.dispose();
+  });
+
+  it("(d) 조명 단계가 바뀔 때만 color 속성 version 이 는다(긴장·핀·같은 단계 예산 변경으로는 그대로)", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("talk");
+    const ver = (): number => (bar.meshes.shell!.geometry.getAttribute("color") as { version: number }).version;
+    const v0 = ver();
+    bar.setTension(1, { x: 1, z: 1 });
+    bar.setTension(2, { x: 1, z: 1 });
+    bar.setTension(0);
+    bar.setPin(null, 1);
+    bar.setPin({ x: 0, z: 0, strength: 1 }, 0.5);
+    bar.setPin(null, 1);
+    bar.applyBudget(bar.budget);
+    bar.setLighting("talk");
+    expect(ver()).toBe(v0);
+    bar.setLighting("vote");
+    expect(ver()).toBeGreaterThan(v0);
+    bar.dispose();
+  });
+
+  it("(e) talk·morning·vote 보정 뒤에도 모든 메시 정점 색에 진홍이 없다", () => {
+    const crimsonish = (c: Color): boolean => c.r >= 0.35 && c.r > 1.8 * c.g && c.r > 1.5 * c.b;
+    const bar = buildBarScene(LADDER[0]!);
+    for (const ph of ["talk", "morning", "vote"] as const) {
+      bar.setLighting(ph);
+      for (const n of GRADED) {
+        const col = bar.meshes[n]!.geometry.getAttribute("color");
+        for (let i = 0; i < col.count; i += 5) expect(crimsonish(new Color(col.getX(i), col.getY(i), col.getZ(i))), `${ph}/${n}`).toBe(false);
+      }
+    }
+    bar.dispose();
+  });
+
+  it("(h) talk 의 plate 재질 색은 B ≤ max(R,G) 이다(파랑 우세 아님)", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    const n = (bar.plate.material as MeshStandardMaterial).color.getHex();
+    const r = (n >> 16) & 255;
+    const g = (n >> 8) & 255;
+    const b = n & 255;
+    expect(b).toBeLessThanOrEqual(Math.max(r, g));
+    bar.dispose();
+  });
+
+  it("밤 쪽 네 행 albedo 는 ALBEDO_NONE 이다", () => {
+    for (const ph of ["trial", "night", "nightCitizen", "nightGhost"] as const) expect(LIGHT_TUNE[ph].albedo, ph).toEqual(ALBEDO_NONE);
   });
 });

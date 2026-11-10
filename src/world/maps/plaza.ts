@@ -35,7 +35,7 @@ import { cameraBasis, PLATE_FAR } from "../camera";
 import { CHAR_SCALE } from "../character";
 import { PLAZA_PALETTE as P, TOKEN_COLORS } from "../palette";
 import type { Budget, LightingPhase } from "../renderer";
-import { Bundle, CHALK_OPACITY, CHALK_POINTS, CHALK_RADIUS, makeGlowTexture, tf, under } from "./bar";
+import { ALBEDO_NONE, Bundle, CHALK_OPACITY, CHALK_POINTS, CHALK_RADIUS, makeGlowTexture, tf, under } from "./bar";
 import type { MarkerRing, PhaseTune } from "./bar";
 import type { MapScene } from "./types";
 
@@ -69,6 +69,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0, vote: 0 },
     glow: { room: 0, vote: 0 },
     self: 0,
+    albedo: ALBEDO_NONE,
   },
   /** 저녁 지목: 가로등 켜짐, 반구·달빛 낮춤, 무대 점광원이 연단을 비춘다 */
   vote: {
@@ -83,6 +84,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 1, vote: 0 },
     glow: { room: 1, vote: 0 },
     self: 0,
+    albedo: ALBEDO_NONE,
   },
   /** 변론·처형: 시계탑 조명(무대 점광원)이 연단의 변론자만 비춘다, 가로등은 거의 꺼짐 */
   trial: {
@@ -97,6 +99,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0.06, vote: 1 },
     glow: { room: 0.06, vote: 1 },
     self: 0,
+    albedo: ALBEDO_NONE,
   },
   /** 밤: 가로등 희미 + 달빛 */
   night: {
@@ -111,6 +114,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0.7, vote: 0 },
     glow: { room: 0.7, vote: 0 },
     self: 0,
+    albedo: ALBEDO_NONE,
   },
   /** 밤·산 시민 편: bar 와 같은 거의 깜깜한 광장 + 내 캐릭터 빛 */
   nightCitizen: {
@@ -125,6 +129,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0, vote: 0 },
     glow: { room: 0, vote: 0 },
     self: 1.4 * 4,
+    albedo: ALBEDO_NONE,
   },
   /** 밤·유령: 마피아 화면(night)과 같은 달빛·반구·가로등, 모두 보인다 */
   nightGhost: {
@@ -139,6 +144,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0.7, vote: 0 },
     glow: { room: 0.7, vote: 0 },
     self: 0,
+    albedo: ALBEDO_NONE,
   },
   /** 아침: talk 와 같은 반구·낮은 달빛(18-07 렌더 측정으로 올림), 채도 낮은 흐린 하늘, 가로등은 이미 꺼져 있다 */
   morning: {
@@ -153,6 +159,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0, vote: 0 },
     glow: { room: 0, vote: 0 },
     self: 0,
+    albedo: ALBEDO_NONE,
   },
   tension: { lead: 2.0 * 4 * 1.5, halfRoom: 0.5 },
   point: {
