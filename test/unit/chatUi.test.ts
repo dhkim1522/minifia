@@ -97,6 +97,18 @@ describe("클라이언트 시각 상수 (UI-SPEC 입력 중·보내기·막힘·
   });
 });
 
+describe("기록 칸 높이의 출처는 LOG_H 하나 (18.1 B 계약 4 폐지)", () => {
+  it("방 높이로 기록 칸을 고르던 옛 이름 다섯 개가 export 에 없다", async () => {
+    const keys = Object.keys(await import("../../src/game/chatUi"));
+    for (const gone of ["LOG_H_SHORT", "LOG_H_TALL", "LOG_H_KB", "TALL_ROOM_MIN_H", "logHeightFor"]) expect(keys).not.toContain(gone);
+  });
+
+  it("남기는 이름은 그대로 있다", async () => {
+    const keys = Object.keys(await import("../../src/game/chatUi"));
+    for (const kept of ["LOG_H", "LOG_FADE_H", "KB_PANEL_H", "LOBBY_PANEL_EXTRA", "CHAT_PANEL_EXTRA", "LOBBY_HOST_TUTORIAL_EXTRA", "lobbyPanelHeight"]) expect(keys).toContain(kept);
+  });
+});
+
 describe("chatUi.ts 는 DOM 을 읽지 않는다", () => {
   it("window·document·navigator 참조가 없다", () => {
     const code = readFileSync("src/game/chatUi.ts", "utf8")
