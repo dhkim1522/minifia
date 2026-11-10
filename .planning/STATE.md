@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: "18.1"
 current_phase_name: screen-polish
-current_plan: 5
+current_plan: 6
 status: executing
-stopped_at: Completed 18.1-04-PLAN.md
-last_updated: "2026-11-10T18:04:48.978Z"
+stopped_at: Completed 18.1-05-PLAN.md
+last_updated: "2026-11-10T18:10:26.229Z"
 last_activity: 2026-11-11
 last_activity_desc: Phase 18.1 execution started
-state_head: 80bd301882e275b5bbfc7e9a5b7aa04428cd6c9d
+state_head: d5a57835e59d90aa13f568b1cd9a4dc18e121e32
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 71
-  completed_plans: 65
+  completed_plans: 66
   percent: 40
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 18.1 (screen-polish) — EXECUTING
-Current Plan: 5
+Current Plan: 6
 Total Plans in Phase: 10
 Status: Ready to execute
 Last activity: 2026-11-11 — Phase 18.1 execution started
@@ -263,6 +263,7 @@ Last activity: 2026-11-11 — Phase 18.1 execution started
 | Phase 18.1 P02 | 40min | 2 tasks | 13 files |
 | Phase 18.1 P03 | 20min | 2 tasks | 10 files |
 | Phase 18.1 P04 | 25min | 2 tasks | 10 files |
+| Phase 18.1 P05 | 20min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -583,6 +584,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18.1]: [18.1-02] 산 사람 화면 밤·심부름에는 유령을 그리지 않고(0074-4), 유령은 coat 안개로 Actor.mistOutfit 에 들어 __mfGhostOutfits 는 빈 표
 - [Phase 18.1]: 18.1-03: 시간대 그림은 todOf(phase)=lightingOf 한 함수로 고르고(역할 무관) 배지는 날씨 SVG 4장을 겹쳐 불투명도만 바꾼다. 튜토리얼은 todBadge={false}. 날씨 에셋 채도 차이는 사용자 원본 그대로 두고 사람 눈 확인
 - [Phase 18.1]: 18.1-04: 채팅 줄 렌더는 ChatLines 한 곳으로 모으고 기록 칸은 두 줄 창(늘 맨 아래), 지난 기록·새 글 알약은 기록 시트(ChatLogSheet)가 맡는다
+- [Phase 18.1]: [18.1-05] 결과 화면은 RESULT_TABS_SHOWN = ["all"] 한 상수로 전체 대화 하나만 그린다(탭 코드·기록 부품은 남겨 되돌리기 쉽게, 서버 resultLog 불변)
+- [Phase 18.1]: [18.1-05] ResultPanel 은 보이는 탭이 하나뿐이면 탭 행을 그리지 않고, 결과 화면 기록 칸은 TAB_ROW_H 뺄셈 없이 게임 패널과 같은 logH 를 쓴다(68 은 18.1-06)
 
 ### Pending Todos
 
@@ -654,8 +657,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-10T18:04:48.083Z
-Stopped at: Completed 18.1-04-PLAN.md
+Last session: 2026-11-10T18:10:25.312Z
+Stopped at: Completed 18.1-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

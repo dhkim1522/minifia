@@ -391,7 +391,7 @@ Plans:
 5. 결과 화면은 전체 대화 하나만 있고 역할별 채팅·판 기록 탭이 없다. 서버 기록 보관은 그대로(R5, 결정 0027 유지)
 6. 바뀐 흐름의 폰 6종 E2E 와 전 흐름 회귀가 로컬에서 통과하고 minifia-v3 에 배포된다
 
-**Plans:** 4/10 plans executed
+**Plans:** 5/10 plans executed
 
 Plans:
 **Wave 1**
@@ -399,7 +399,7 @@ Plans:
 - [x] 18.1-02-PLAN.md — R3 산 사람 화면 코트 안개 유령·WorldStore.lastSegOf·밤/심부름 제외·이름표 순위 (wave 1)
 - [x] 18.1-03-PLAN.md — R4 시간대 배지 TimeOfDayBadge·todOf(lightingOf)·튜토리얼 끔·날씨 캐시 규칙 (wave 1)
 - [x] 18.1-04-PLAN.md — R2 두 줄 창·기록 시트 ChatLogSheet·ChatLines (wave 1)
-- [ ] 18.1-05-PLAN.md — R5 결과 화면 전체 대화만(RESULT_TABS_SHOWN 한 상수)·탭 행 미렌더 (wave 1)
+- [x] 18.1-05-PLAN.md — R5 결과 화면 전체 대화만(RESULT_TABS_SHOWN 한 상수)·탭 행 미렌더 (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 18.1-06-PLAN.md — R2 기록 칸 68 한 값: 대기실·게임 맵·결과 연결·카메라 기본 패널 (wave 2)
