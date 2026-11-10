@@ -39,13 +39,16 @@ import * as smoke from "../../scripts/smoke.mjs";
 import * as resultE2e from "../../scripts/e2e/result.mjs";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as mapSelectE2e from "../../scripts/e2e/mapselect.mjs";
+// @ts-expect-error -- 선언 없는 스크립트 모듈
+import * as polishE2e from "../../scripts/e2e/polish.mjs";
+import { TOD_ORDER, todOf } from "../../src/game/timeOfDay";
 import { enterMorning, pickTarget } from "../../shared/game/night";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
 import { OUTFIT_IDS, PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
-import type { OutfitId } from "../../shared/protocol";
+import type { OutfitId, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { HOST_LINES } from "../../src/game/hostLine";
 import { OPENING_LAMPS, TUTORIAL_CAST, TUTORIAL_DOT_COUNT, TUTORIAL_LINES, TUTORIAL_SCENES, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
@@ -961,5 +964,23 @@ describe("E2E 의 튜토리얼 사본 상수와 앱 대본 (17-09)", () => {
   it("tutorial.mjs 의 오답 문구 사본이 대본 tutorial.vote.wrong 문구와 같다", () => {
     const text = readFileSync(new URL("../../scripts/e2e/tutorial.mjs", import.meta.url), "utf8");
     expect(text).toContain(`export const TUTORIAL_WRONG_LINE = "${TUTORIAL_LINES["tutorial.vote.wrong"]}";`);
+  });
+});
+
+describe("E2E 의 시간대 배지 사본과 앱 todOf (18.1-08, D1)", () => {
+  const e = polishE2e as { TOD_BY_PHASE: Record<string, string>; TOD_ABSENT_PHASES: readonly string[]; TOD_IDS: readonly string[] };
+  const ALL_PHASES: PhaseId[] = ["lobby", "tutorial", "assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
+
+  it("TOD_BY_PHASE 의 모든 키에서 값이 todOf(키)와 같다", () => {
+    for (const [phase, tod] of Object.entries(e.TOD_BY_PHASE)) expect(tod, phase).toBe(todOf(phase as PhaseId));
+  });
+
+  it("TOD_BY_PHASE 키와 TOD_ABSENT_PHASES 를 합치면 PhaseId 전부다(겹침 없음)", () => {
+    const keys = Object.keys(e.TOD_BY_PHASE);
+    expect([...keys, ...e.TOD_ABSENT_PHASES].sort()).toEqual([...ALL_PHASES].sort());
+  });
+
+  it("TOD_IDS 가 앱 TOD_ORDER 와 같다", () => {
+    expect([...e.TOD_IDS]).toEqual([...TOD_ORDER]);
   });
 });

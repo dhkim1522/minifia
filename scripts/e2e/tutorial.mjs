@@ -29,6 +29,7 @@ import {
   tutorialSkipChecks,
   tutorialTimingChecks,
 } from "./lib.mjs";
+import { TUTORIAL_ROLE_MAX_LINES, readRoleLineBoxes, roleLineBoxChecks, todAbsentChecks } from "./polish.mjs";
 
 const recOne = (rec, scenario, r) => rec(scenario, r.id, r.label, r.ok, r.detail, r.relaxed === true || r.info === true);
 /** 판정 줄들을 쌓는다. relax 에 든 id 가 실패하면 알려진 한계 참고 줄(통과, 내용 있음)로 남긴다 — 판정 문턱은 바꾸지 않는다 */
@@ -86,8 +87,16 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
   /**
    * 스포트라이트 막(D-04): dimOn = 포커스 상자가 있는 구간(막 1개·구멍이 상자를 덮음·흐림 없음), dimOff = 상자 없는 구간(막 0개). TD 줄은 dot 점 판정(TD1·TD2)과 id 가 겹쳐 `/dim` 시나리오에 따로 쌓는다.
    */
-  const dimOn = (rec, sc, t) => recAll(rec, `${sc}/dim`, tutorialDimChecks(t.dim, { expect: 1, focus: t.focus }));
-  const dimOff = (rec, sc, t) => recAll(rec, `${sc}/dim`, tutorialDimChecks(t.dim, { expect: 0, focus: t.focus }));
+  /** 18.1-08 D2: 튜토리얼의 모든 장면에 시간대 배지가 없다 — 장면마다 부르는 dimOn·dimOff 가 함께 남긴다 */
+  const todOff = (rec, sc, t) => recOne(rec, `${sc}/tod`, todAbsentChecks(t.tod, { screen: "튜토리얼" }));
+  const dimOn = (rec, sc, t) => {
+    recAll(rec, `${sc}/dim`, tutorialDimChecks(t.dim, { expect: 1, focus: t.focus }));
+    todOff(rec, sc, t);
+  };
+  const dimOff = (rec, sc, t) => {
+    recAll(rec, `${sc}/dim`, tutorialDimChecks(t.dim, { expect: 0, focus: t.focus }));
+    todOff(rec, sc, t);
+  };
   /** [다음] 알약(D-05) — 보이는 구간에서만 부른다 */
   function nextLines(rec, sc, t) {
     recAll(rec, sc, tutorialNextChecks(t.next, { viewport: vpOf(t), errandDots: t.errandDots, label: t.nextLabel }));
@@ -391,6 +400,8 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       recAll(rec, sc7, tutorialDotChecks(t.dots, 7));
       recAll(rec, sc7, tutorialRoleCardChecks({ roles: t.roles, next: t.next, viewport: vpOf(t) }), { relax: ctx.size.h <= KNOWN_LIMIT_MAX_H ? ["TC4"] : [], note: "17-08 낮은 폰 직업 카드와 [다음] 겹침, UI Considerations #14" });
       recAll(rec, sc7, tutorialRoleLineChecks(t.roleLines));
+      // 18.1-08 TC6(UI-SPEC A1f): 직업 카드 네 장의 문구가 pre-line·첫 문장 한 줄·둘째 문장 새 줄·각 ≤ 4줄
+      recOne(rec, sc7, roleLineBoxChecks(await readRoleLineBoxes(page, "[data-tutorial-role-card] .tut-role__line"), { max: TUTORIAL_ROLE_MAX_LINES, id: "TC6", count: 4 }));
       focusLines(rec, sc7, t, []);
       dimOff(rec, sc7, t);
       nextLines(rec, sc7, t);

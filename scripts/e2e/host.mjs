@@ -27,6 +27,7 @@ import {
   startGame,
   tapPick,
 } from "./browser.mjs";
+import { TOD_ABSENT_PHASES, TOD_BY_PHASE, readTodBadge, todAbsentChecks, todChecks } from "./polish.mjs";
 import { TIMELESS_PHASES, hostBandChecks, hostChimeChecks, hostLeakChecks, hostOverlapChecks, toolLabelChecks, viewKeyChecks } from "./lib.mjs";
 
 const BAND_NICK = "띠검사방장";
@@ -103,6 +104,23 @@ async function closeTopSheet(page) {
 export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH, settledResult }) {
   const asGame = (host) => ({ host, guests: host.guestPages ?? [] });
 
+  /**
+   * 18.1-08 시간대 배지 한 번 읽기(D1·D4·D5 또는 D2). 게임 맵 단계면 todChecks 줄을, 배지가 없어야 하는 화면(대기실·역할 배정·역할 확인·결과)이면 todAbsentChecks 줄을 쌓는다.
+   * 읽기 실패는 띠 판정을 막지 않고 D0 실패 줄로만 남는다.
+   */
+  async function recordTod(page, rec, sc, phase) {
+    const r = await attempt(async () => {
+      const m = await readTodBadge(page);
+      if (Object.hasOwn(TOD_BY_PHASE, phase)) {
+        for (const l of todChecks(m, { phase })) rec(sc, l.id, `${l.label} (${phase})`, l.ok, l.detail);
+      } else if (TOD_ABSENT_PHASES.includes(phase)) {
+        const l = todAbsentChecks(m.count, { screen: phase });
+        rec(sc, l.id, l.label, l.ok, l.detail);
+      }
+    });
+    if (!r.ok) rec(sc, "D0", `시간대 배지를 읽는다(${phase})`, false, r.detail);
+  }
+
   /** 방장 한 명 + 봇 n 으로 시작 직전(로비)까지 만든다. 시트는 닫아 둔다 */
   async function lobbyWith(ctx, flowId, { bots, role, vote, guests = 0 }) {
     const host = await startHost(ctx, flowId, { nickname: BAND_NICK });
@@ -152,6 +170,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         const band = await readHostBand(hp);
         const f = fold(hostBandChecks(band, { phase, timed: timedOf(view) }));
         rec(sc, "HB", `띠 한 문장·3줄 미만·시간 막대+초·옛 안내/링 없음(${phase}, ${band.text.length}자 문장)`, f.ok, f.detail);
+        await recordTod(hp, rec, sc, phase); // 18.1-08: 시간대 배지 D1·D4·D5(맵 단계) / D2(대기실·역할 확인)
         // 묶음 G·H 를 이름표 모이기 기다림보다 먼저 한다 — 투표 15초 중 기다리는 동안 시간 숫자가 마지막 5초 색(진홍)으로 바뀌어 대비 측정이 흔들리지 않게
         if (GH_PHASES.includes(phase)) await gameGH(ctx, id, phase, host);
         if (TAG_PHASES.includes(phase)) {
@@ -168,15 +187,19 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       await armBandWatch(hp);
       // 배정(3초 창)은 잡히면 읽는다 — 못 잡아도 실패가 아니다(필수 단계에 넣지 않았다)
       let assigningBand = null;
+      let assigningTod = null;
       await startGame(hp, ht, {
         onAssigning: async () => {
           assigningBand = await readHostBand(hp);
+          assigningTod = await hp.locator("[data-tod]").count().catch(() => null); // 18.1-08 D2: 배정 3초 창에는 배지가 없다(수만 센다)
         },
       });
       if (assigningBand !== null) {
         const f = fold(hostBandChecks(assigningBand, { phase: "assigning", timed: false }));
         rec(`${id}/assigning`, "HB", "띠 한 문장·3줄 미만·시간 없음(assigning)", f.ok, f.detail);
         done.add("assigning");
+        const t = todAbsentChecks(assigningTod, { screen: "assigning" });
+        rec(`${id}/assigning`, t.id, t.label, t.ok, t.detail);
       }
       let voted = false;
       for (let steps = 0; ht.last().phase !== "ended" && steps < MAX_STEPS; steps++) {
@@ -235,6 +258,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         const band = await readHostBand(hp);
         const f = fold(hostBandChecks(band, { phase: "ended", timed: timedOf(ht.last()) }));
         rec(sc, "HB", `띠 한 문장·3줄 미만·시간 막대+초·옛 안내/링 없음(ended, ${band.text.length}자 문장)`, f.ok, f.detail);
+        await recordTod(hp, rec, sc, "ended");
       }
       rec(`${id}/coverage`, "EB0b", "결과(ended) 단계의 띠를 읽었다", ok.ok, ok.detail);
     } finally {
