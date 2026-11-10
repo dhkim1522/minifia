@@ -38,10 +38,19 @@ import * as e2eLib from "../../scripts/e2e/lib.mjs";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as perfRun from "../../scripts/perf-run.mjs";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
+import * as smoke from "../../scripts/smoke.mjs";
+// @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as resultE2e from "../../scripts/e2e/result.mjs";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as mapSelectE2e from "../../scripts/e2e/mapselect.mjs";
-import { PLACE_IDS } from "../../shared/protocol";
+import { enterMorning, pickTarget } from "../../shared/game/night";
+import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
+import type { Player, RoomState } from "../../shared/game/room";
+import { tick } from "../../shared/game/tick";
+import { buildView } from "../../shared/game/view";
+import { OUTFIT_IDS, PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
+import type { OutfitId } from "../../shared/protocol";
+import { seededRandInt } from "../helpers/seededRandom";
 import { HOST_LINES } from "../../src/game/hostLine";
 import { OPENING_LAMPS, TUTORIAL_CAST, TUTORIAL_DOT_COUNT, TUTORIAL_LINES, TUTORIAL_SCENES, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
 import { ROLE_TEXT } from "../../src/game/roleText";
@@ -821,6 +830,95 @@ describe("서버 계약 소비자 스크립트의 새 단계 흐름 (15-06, DEPL
     const text = scriptText("bots.mjs");
     expect(text).toContain('view.phase === "errand"');
     expect(text).toContain('role !== "citizen"');
+  });
+});
+
+// 18-13(G-18-3): smoke 의 아침 키·역할 문자열 허용 경로가 서버가 실제로 만드는 view 와 어긋나 배포본 smoke 가 서버 결함 없이 실패했다.
+// 판정 함수(smoke.morningProblems·roleStringAllowed)를 shared 의 실제 전이·buildView 로 만든 아침 view 에 대 본다.
+describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
+  const s = smoke as {
+    OUTFIT_IDS: string[];
+    PLACE_IDS: string[];
+    TRACE_PIECES: string[];
+    MORNING_KEYS: string[];
+    LOOK_PATH: string;
+    ALLOWED_PLAYER_KEYS: string[];
+    OPTIONAL_PLAYER_KEYS: string[];
+    collectRoleStringPaths: (value: unknown, path: string, out: Array<{ path: string; value: string }>) => void;
+    roleStringAllowed: (path: string, value: string, ctx: { spectate: boolean; ended: boolean; frameType: string }) => boolean;
+    morningProblems: (morning: unknown, seats: number[]) => string[];
+  };
+  const START_AT = 10_000;
+
+  /** 6명 판 1일차 밤을 실제 전이로 만든다(test/unit/trace.test.ts 방식). */
+  function nightOf6(seed = 11): RoomState {
+    const created = createRoomState({ code: "0420", hostId: "player-id-0000-aaaa", hostToken: "token-secret-0000-aaaa-0123456789", hostNickname: "이름0", now: 0 });
+    if (!created.ok) throw new Error("createRoomState failed");
+    let lobby = attachConnection(created.state, "player-id-0000-aaaa", "conn-0");
+    for (let i = 1; i < 6; i += 1) {
+      const id = `player-id-000${i}-aaaa`;
+      const joined = joinRoom(lobby, { playerId: id, token: `token-secret-000${i}-aaaa-0123456789`, nickname: `이름${i}` });
+      if (!joined.ok) throw new Error(`joinRoom failed: ${joined.error}`);
+      lobby = attachConnection(joined.state, id, `conn-${i}`);
+    }
+    const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed));
+    if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
+    let state = started.state;
+    while (state.phase !== "night") {
+      if (state.phaseEndsAt === null) throw new Error("phase has no deadline");
+      state = tick(state, state.phaseEndsAt, seededRandInt(seed));
+    }
+    return state;
+  }
+
+  const pickAs = (st: RoomState, actor: Player, target: Player): RoomState => {
+    const r = pickTarget(st, actor.id, target.seat);
+    if (!r.ok) throw new Error(`pickTarget rejected: ${r.error}`);
+    return r.state;
+  };
+
+  it("사본 상수 OUTFIT_IDS·PLACE_IDS·TRACE_PIECES 가 shared/protocol.ts 와 같고 MORNING_KEYS 는 eliminated·seen·trace 다", () => {
+    expect([...s.OUTFIT_IDS]).toEqual([...OUTFIT_IDS]);
+    expect([...s.PLACE_IDS]).toEqual([...PLACE_IDS]);
+    expect([...s.TRACE_PIECES]).toEqual([...TRACE_PIECE_IDS]);
+    expect([...s.MORNING_KEYS]).toEqual(["eliminated", "seen", "trace"]);
+    expect(s.LOOK_PATH).toBe("view.players[].look");
+  });
+
+  it("실제 전이로 만든 아침 view(eliminated·trace·seen, 직업 이름과 같은 옷 look)를 smoke 판정이 통과시키고 누설 검사는 look 한 경로만 허용한다", () => {
+    const night = nightOf6();
+    const mafia = night.players.filter((p) => p.role === "mafia").sort((a, b) => a.seat - b.seat);
+    const citizens = night.players.filter((p) => p.role === "citizen").sort((a, b) => a.seat - b.seat);
+    const [m1, m2] = mafia as [Player, Player];
+    const victim = citizens[0]!;
+    const witness = night.players.find((p) => p.id !== victim.id && p.id !== m1.id)!;
+    // 옷 look: 직업 이름과 같은 단어 셋(서버는 look 을 역할의 함수로 만들지 않는다 — 서버 쪽 증명은 dress.test.ts L25)
+    const looks: OutfitId[] = ["police", "doctor", "mafia"];
+    const dressed: RoomState = { ...night, players: night.players.map((p, i) => (i < 3 ? { ...p, look: looks[i]! } : p)) };
+    const base = enterMorning(pickAs(pickAs(dressed, m1, victim), m2, victim), () => 0);
+    const morningState: RoomState = {
+      ...base,
+      phase: "morning",
+      morning: { ...base.morning, seen: { seat: witness.seat, place: PLACE_IDS[0] } },
+    };
+    const seats = morningState.players.map((p) => p.seat);
+    let lookLeaves = 0;
+    for (const p of morningState.players) {
+      const view = buildView(morningState, p.id, START_AT);
+      const morning = view.day?.morning as Record<string, unknown>;
+      expect(Object.keys(morning).sort(), `${p.nickname} 의 아침 키`).toEqual([...s.MORNING_KEYS]);
+      expect(s.morningProblems(morning, seats)).toEqual([]);
+      const spectator = morningState.players.find((q) => q.id === p.id)?.alive === false;
+      const leaves: Array<{ path: string; value: string }> = [];
+      s.collectRoleStringPaths({ t: "state", view }, "", leaves);
+      for (const l of leaves) {
+        expect(s.roleStringAllowed(l.path, l.value, { spectate: spectator, ended: false, frameType: "state" }), `${p.nickname}: ${l.path}=${l.value}`).toBe(true);
+        if (l.path === s.LOOK_PATH) lookLeaves += 1;
+      }
+      const allowed = new Set([...s.ALLOWED_PLAYER_KEYS, ...s.OPTIONAL_PLAYER_KEYS]);
+      for (const pp of view.players) for (const k of Object.keys(pp)) expect(allowed.has(k), `players 키 ${k}`).toBe(true);
+    }
+    expect(lookLeaves).toBeGreaterThan(0);
   });
 });
 

@@ -24,7 +24,9 @@
 //         --players N (full 단계 인원, 4~8, 기본 5)
 //         --previous-version V (full 단계: /api/health 의 version 이 V 와 같으면 실패 — 재배포 확인)
 // 토큰 값은 어떤 출력에도 찍지 않는다. 채팅 본문도 출력하지 않는다.
+// 가져오면 main 이 돌지 않는다(test/unit/e2eContract.test.ts·scripts/smoke.test.mjs 가 판정 함수를 가져간다).
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exitIfV1 } from "./deploy-target.mjs";
 
@@ -78,8 +80,8 @@ const TYPING_KEYS = ["on", "seat", "t"];
 const CHAT_REJECT_KEYS = ["t", "why"];
 // D5(shared/game/chatRules.ts)의 최소 전송 간격 600ms. 스크립트는 TS 를 import 하지 않는다.
 const CHAT_MIN_GAP_MS = 600;
-const ALLOWED_PLAYER_KEYS = ["alive", "connected", "isHost", "nickname", "seat"];
-const OPTIONAL_PLAYER_KEYS = ["look", "ready", "sat"]; // 공개 선택 키(결정 0068·0069). 기본판(결정 0072)에서 badge·badgeSwapped 는 허용하지 않는다 — 나오면 알 수 없는 플레이어 키로 실패한다.
+export const ALLOWED_PLAYER_KEYS = ["alive", "connected", "isHost", "nickname", "seat"];
+export const OPTIONAL_PLAYER_KEYS = ["look", "ready", "sat"]; // 공개 선택 키(결정 0068·0069). 기본판(결정 0072)에서 badge·badgeSwapped 는 허용하지 않는다 — 나오면 알 수 없는 플레이어 키로 실패한다.
 const PREVIEW_PLAYER_KEYS = ["nickname", "seat"];
 const DAY_SPREAD_LIMIT_MS = 500;
 // shared/game/roles.ts 의 ROLE_TABLE 과 같은 값 (마피아·경찰·의사·시민)
@@ -127,7 +129,14 @@ const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "
 // 기본판(결정 0072): turn·showdown·runoff 는 공개 경로도 없다 — 어떤 프레임에 이름이 나오면 실패한다(T-13-07, 허용 경로를 좁히기만 한다).
 const PUBLIC_KEY_PATHS = { verdict: ["view.day.verdict"], verdictVote: ["view.me.verdictVote"] };
 // 아침 흔적 조각 id 닫힌 집합(shared/protocol.ts TRACE_PIECE_IDS 사본, 결정 0074-5)
-const TRACE_PIECES = ["button", "pin", "whiteCloth", "blackCloth", "brownCloth", "pencil", "grayThread", "navyThread", "redCloth"];
+export const TRACE_PIECES = ["button", "pin", "whiteCloth", "blackCloth", "brownCloth", "pencil", "grayThread", "navyThread", "redCloth"];
+// RED 자리: 판정 함수와 사본 상수는 다음 커밋(GREEN)에서 채운다.
+export const OUTFIT_IDS = [];
+export const PLACE_IDS = [];
+export const MORNING_KEYS = [];
+export const LOOK_PATH = "view.players[].look";
+export function roleStringAllowed() { return true; }
+export function morningProblems() { return []; }
 // 역할별 일지 줄의 키 집합(결정 0027-11)
 const RECORD_KEYS = { police: "isMafia,n,target", mafia: "died,n,target", doctor: "n,target" };
 // 거절된 줄의 본문 표식: 어느 클라이언트의 어떤 프레임에도 되돌아오면 안 된다(COMM-04).
@@ -340,7 +349,7 @@ function collectKeyPaths(value, key, path, out) {
 }
 
 // 값이 직업 이름 문자열인 잎을 경로와 함께 모은다. 배열 인덱스는 [] 로 줄인다.
-function collectRoleStringPaths(value, path, out) {
+export function collectRoleStringPaths(value, path, out) {
   if (typeof value === "string") {
     if (ROLE_IDS.includes(value)) out.push({ path, value });
   } else if (Array.isArray(value)) value.forEach((v) => collectRoleStringPaths(v, `${path}[]`, out));
@@ -1518,25 +1527,30 @@ async function stageFull(url, args) {
   console.log(`SMOKE OK full code=${code} players=${N} spread=${spread}ms discSpread=${discSpread}ms version=${version}`);
 }
 
-const args = parseArgs(process.argv.slice(2));
-const url = resolveBase(args);
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const url = resolveBase(args);
 
-const limitMs = args.stage === "full" && !args.printVersion ? FULL_TOTAL_LIMIT_MS : TOTAL_LIMIT_MS;
-const overall = setTimeout(() => fail(`전체 ${limitMs / 1000}초 제한 초과`), limitMs);
+  const limitMs = args.stage === "full" && !args.printVersion ? FULL_TOTAL_LIMIT_MS : TOTAL_LIMIT_MS;
+  const overall = setTimeout(() => fail(`전체 ${limitMs / 1000}초 제한 초과`), limitMs);
 
-try {
-  if (args.printVersion) {
-    console.log(await getVersion(url.origin));
-  } else if (args.stage === "create") {
-    await stageCreate(url);
-  } else if (args.stage === "full") {
-    await stageFull(url, args);
-  } else {
-    fail(`알 수 없는 단계: ${args.stage}`);
+  try {
+    if (args.printVersion) {
+      console.log(await getVersion(url.origin));
+    } else if (args.stage === "create") {
+      await stageCreate(url);
+    } else if (args.stage === "full") {
+      await stageFull(url, args);
+    } else {
+      fail(`알 수 없는 단계: ${args.stage}`);
+    }
+  } catch (e) {
+    if (process.env.SMOKE_STACK && e instanceof Error) console.error(e.stack);
+    fail(e instanceof Error ? e.message : String(e));
   }
-} catch (e) {
-  if (process.env.SMOKE_STACK && e instanceof Error) console.error(e.stack);
-  fail(e instanceof Error ? e.message : String(e));
+  clearTimeout(overall);
+  process.exit(0);
 }
-clearTimeout(overall);
-process.exit(0);
+
+// 직접 실행할 때만 돈다(perf-run.mjs 와 같은 가드). 가져오면 부작용이 없다.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
