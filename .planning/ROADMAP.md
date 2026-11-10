@@ -383,11 +383,37 @@ Plans:
 4. 투표·최후변론과 관계없이 아침·낮·밤을 적당한 곳에 고정으로 계속 표시(글씨보다 날씨 배경 그림·아이콘이 귀엽고 좋음)
 5. 게임 종료 후 역할별 채팅 내역·기록은 불필요하므로 결과 화면에서 숨김(서버가 보관하는 기록은 그대로 둠, 결정 0027 유지)
 
-**Success Criteria:** TBD (UI-SPEC 에서 정한다. 화면 변경이라 `/gsd-ui-phase 18.1` 먼저, 시안 여부는 사용자에게 묻는다)
-**Plans:** 0 plans
+**Success Criteria:** (UI-SPEC `18.1-UI-SPEC.md` A~E, 기본값 P181-0~7)
+1. 역할 카드·[내 역할] 시트·튜토리얼 직업 카드의 글이 사용자 확정 문구 한 덩어리(`당신은 {직업}입니다.` + 줄바꿈 + 할 일)뿐이고 목표 칩이 없다. 역할 확인 무대의 3D 이름표가 제목·띠·카드와 겹치지 않는다(R1)
+2. 채팅 기록 칸이 모든 폰에서 68(두 줄)이고 칸 안에서 스크롤하지 않으며, 칸을 누르면 기록 시트에서 지난 줄을 본다(R2)
+3. 산 사람 화면에서도 처형·암살된 사람이 마지막 자리에 코트 안개 유령으로 남고 직업 단서가 없다. 유령 시점은 그대로(R3, 결정 0021 유지)
+4. 게임 맵 헤더 [역할 카드] 왼쪽에 아침·낮·저녁·밤 날씨 그림 배지가 늘 있고 장면 조명(lightingOf)과 같은 시간대다. 튜토리얼·로비·결과에는 없다(R4)
+5. 결과 화면은 전체 대화 하나만 있고 역할별 채팅·판 기록 탭이 없다. 서버 기록 보관은 그대로(R5, 결정 0027 유지)
+6. 바뀐 흐름의 폰 6종 E2E 와 전 흐름 회귀가 로컬에서 통과하고 minifia-v3 에 배포된다
+**Plans:** 10 plans
 
 Plans:
-- [ ] TBD (run /gsd-ui-phase 18.1 then /gsd-plan-phase 18.1)
+**Wave 1**
+- [ ] 18.1-01-PLAN.md — R1 역할 카드 확정 문구 한 덩어리·goal 폐지·pre-line 세 곳·역할 확인 이름표 층 숨김·카드 위 끝 독 + 8 (wave 1)
+- [ ] 18.1-02-PLAN.md — R3 산 사람 화면 코트 안개 유령·WorldStore.lastSegOf·밤/심부름 제외·이름표 순위 (wave 1)
+- [ ] 18.1-03-PLAN.md — R4 시간대 배지 TimeOfDayBadge·todOf(lightingOf)·튜토리얼 끔·날씨 캐시 규칙 (wave 1)
+- [ ] 18.1-04-PLAN.md — R2 두 줄 창·기록 시트 ChatLogSheet·ChatLines (wave 1)
+- [ ] 18.1-05-PLAN.md — R5 결과 화면 전체 대화만(RESULT_TABS_SHOWN 한 상수)·탭 행 미렌더 (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 18.1-06-PLAN.md — R2 기록 칸 68 한 값: 대기실·게임 맵·결과 연결·카메라 기본 패널 (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 18.1-07-PLAN.md — R2 KB 146·E2E 채팅/결과 사본·옛 기록 칸 이름·훅 삭제 (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 18.1-08-PLAN.md — E2E: polish-reveal(역할 카드)·배지(emcee-band·tutorial-solo)·결과 화면 숨김 (wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 18.1-09-PLAN.md — E2E: 두 줄 창·기록 시트(chat-lobby)·산 사람 유령·유령 화면 의상(day·ghost) (wave 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 18.1-10-PLAN.md — 로컬 전체 회귀·nightload·minifia-v3 배포·지도/0082/HANDOFF·push (wave 6)
 
 ### Phase 19: 방장이 고르는 기본 마피아·확장판
 
