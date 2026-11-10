@@ -130,3 +130,32 @@ describe("rankTags 선두 가산 (08-12)", () => {
     expect(r.map((t) => t.z)).toEqual([0, 1, 2]);
   });
 });
+
+describe("rankTags 유령 이름표 (18.1 C-3)", () => {
+  it("같은 자리에 겹친 유령 이름표는 발끝이 더 아래여도 산 사람 이름표보다 아래다(산 사람이 위, front)", () => {
+    const r = rankTags([box(1, { foot: 500, ghost: true }), box(2, { foot: 300 })]);
+    expect(zOf(r, 2)).toBeGreaterThan(zOf(r, 1));
+    expect(frontOf(r, 2)).toBe(true);
+    expect(frontOf(r, 1)).toBe(false);
+  });
+
+  it("내 이름표는 내가 유령(유령 시점)이어도 맨 위다", () => {
+    const r = rankTags([box(0, { me: true, foot: 100, ghost: true }), box(1, { foot: 500 }), box(2, { foot: 400, ghost: true })]);
+    expect(zOf(r, 0)).toBeGreaterThan(zOf(r, 1));
+    expect(zOf(r, 1)).toBeGreaterThan(zOf(r, 2));
+    expect(frontOf(r, 0)).toBe(true);
+  });
+
+  it("유령끼리·산 사람끼리는 지금 순위(발끝 y, seat) 그대로다", () => {
+    const r = rankTags([box(0, { foot: 310, ghost: true }), box(1, { foot: 305, ghost: true }), box(2, { foot: 320 }), box(3, { foot: 315 })]);
+    expect(zOf(r, 2)).toBeGreaterThan(zOf(r, 3));
+    expect(zOf(r, 3)).toBeGreaterThan(zOf(r, 0));
+    expect(zOf(r, 0)).toBeGreaterThan(zOf(r, 1));
+  });
+
+  it("선두·차례 가산(+10)은 그대로 받는다(유령은 대상이 아니다)", () => {
+    const r = rankTags([box(0, { foot: 500, ghost: true }), box(1, { foot: 100, lead: true })]);
+    expect(zOf(r, 1)).toBeGreaterThanOrEqual(10);
+    expect(zOf(r, 1)).toBeGreaterThan(zOf(r, 0));
+  });
+});
