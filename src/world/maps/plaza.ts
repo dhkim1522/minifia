@@ -140,10 +140,10 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     glow: { room: 0.7, vote: 0 },
     self: 0,
   },
-  /** 아침: talk 보다 약간 낮은 반구, 채도 낮은 흐린 하늘, 가로등은 이미 꺼져 있다 */
+  /** 아침: talk 와 같은 반구·낮은 달빛(18-07 렌더 측정으로 올림), 채도 낮은 흐린 하늘, 가로등은 이미 꺼져 있다 */
   morning: {
-    hemi: 0.95 * Math.PI,
-    moon: 0.6 * Math.PI,
+    hemi: 1.05 * Math.PI,
+    moon: 0.7 * Math.PI,
     moonColor: "#e0dad8",
     exposure: 1.25,
     sky: ["#9a96ae", "#4c485a", "#6a6680"],

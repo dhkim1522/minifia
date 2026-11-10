@@ -169,10 +169,10 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     glow: { room: 0.15, vote: 0 }, // night 의 vote 빛 무리는 0 이라 0.4 배도 0
     self: 0,
   },
-  /** 아침: talk 보다 약간 낮은 반구, 채도 낮은 하늘 */
+  /** 아침: talk 보다 낮은 반구·달빛(18-07 렌더 측정으로 올림), 채도 낮은 하늘 */
   morning: {
-    hemi: 0.85 * Math.PI,
-    moon: 0.4 * Math.PI,
+    hemi: 1.0 * Math.PI,
+    moon: 0.55 * Math.PI,
     moonColor: "#e0dad8",
     exposure: 1.25,
     sky: ["#7e7a96", "#3a3446", "#322c40"],
