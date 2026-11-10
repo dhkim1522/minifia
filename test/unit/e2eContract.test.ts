@@ -21,9 +21,6 @@ import {
   LOBBY_HOST_TUTORIAL_EXTRA,
   LOBBY_PANEL_EXTRA,
   LOG_H,
-  LOG_H_SHORT,
-  LOG_H_TALL,
-  TALL_ROOM_MIN_H,
   TYPING_PILL_H,
   lobbyPanelHeight,
 } from "../../src/game/chatUi";
@@ -389,7 +386,7 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     RESULT_MARKERS: readonly string[];
     RESULT_JOB_OUTFIT: Record<string, string>;
     RESULT_WIN_TITLE: Record<string, string>;
-    RESULT_PANEL_H: { short: number; tall: number; tallRoomMinH: number };
+    RESULT_PANEL_H: number;
     AWARD_PLATE: { maxW: number; sideMargin: number; h: number; topGap: number; belowMin: number; float: number; floatRight: number; floatGap: number };
     AWARD_CEREMONY_TITLE: string;
     TIMELINE_CARD: { w: number; h: number; gap: number };
@@ -439,9 +436,8 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
   it("직업 의상 표·승리 한 줄·패널 높이가 앱 상수와 같다 (E2E 사본이 어긋나지 않게)", () => {
     expect({ ...r.RESULT_JOB_OUTFIT }).toEqual({ ...JOB_OUTFIT });
     expect({ ...r.RESULT_WIN_TITLE }).toEqual({ citizenWin: RESULT_TEXT.title.citizenWin, mafiaWin: RESULT_TEXT.title.mafiaWin });
-    expect(r.RESULT_PANEL_H.short).toBe(LOG_H_SHORT + RESULT_CHAT_EXTRA);
-    expect(r.RESULT_PANEL_H.tall).toBe(LOG_H_TALL + RESULT_CHAT_EXTRA);
-    expect(r.RESULT_PANEL_H.tallRoomMinH).toBe(TALL_ROOM_MIN_H);
+    expect(r.RESULT_PANEL_H).toBe(LOG_H + RESULT_CHAT_EXTRA);
+    expect(r.RESULT_PANEL_H).toBe(160);
   });
 
   it("시상식 기하·제목이 앱과 같다 (11-09): 패 폭 min(328, 폭 − 32)·높이 96, [넘기기] 지름 48·오른쪽 16, 헤더 '시상식'", () => {
