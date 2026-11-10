@@ -1,4 +1,5 @@
 // 결과 탭 패널·공개 예고의 고정 문구 한 곳 (11-07, UI-SPEC A-3·A-4). 사용자 입력 문자열은 여기 없다 — 닉네임·본문은 화면이 React 텍스트 노드로만 그린다(T-11-22).
+// 18.1: 결과 화면은 전체 대화 하나 — 아래 탭 문구(tab·tabName)는 화면에 나오지 않는다(RESULT_TABS_SHOWN 참고).
 // 마피아·유령 단어가 든 문구(탭 라벨·접근성 이름)는 결과 화면(ended 전용 ResultPanel)에서만 읽는다 — 판 중 화면에는 닿지 않는다(T-11-23).
 import { RULESET } from "../../shared/game/ruleset";
 
@@ -7,9 +8,10 @@ export const RESULT_TABS = ["all", "mafia", "ghost", "whisper", "log"] as const;
 export type ResultTabId = (typeof RESULT_TABS)[number];
 
 /**
- * 화면에 실제로 그리는 탭(순서는 RESULT_TABS 와 같다). 기본판(결정 0072)에서는 귓속말이 꺼져 있어 귓속말 탭을 뺀다(U-8) — RESULT_TABS 와 ResultTabId 는 그대로 둔다(RULESET.whisper 를 켜면 다시 보인다).
+ * 화면에 실제로 그리는 탭. 결과 화면은 전체 대화 하나만(18.1 P181-7·R5, 결정 0082). 다른 탭·본문 부품(ChatRows·WhisperRows·LogBody·TimelineStrip·DayDetail)은 남겨 두고 이 한 곳으로 끈다 — 서버 resultLog 보관·전송은 그대로(0027·0058).
+ * RULESET.whisper 를 켜도 결과 화면 탭은 다시 생기지 않는다 — 탭을 되살리려면 이 상수를 RESULT_TABS(또는 귓속말 거른 목록)로 돌린다.
  */
-export const RESULT_TABS_SHOWN: readonly ResultTabId[] = RESULT_TABS.filter((id) => id !== "whisper" || RULESET.whisper);
+export const RESULT_TABS_SHOWN: readonly ResultTabId[] = ["all"];
 
 export const RESULT_PANEL_TEXT = {
   /** 선택된 탭의 라벨(14px, 아이콘 옆) */

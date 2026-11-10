@@ -18,6 +18,7 @@ import type { V2IconName } from "./V2Icon";
 // 탭 행(아이콘만 44×44, 선택된 탭만 라벨 14px) + 몸통. 전체 탭의 몸통은 allSlot(ResultScreen 이 기존 채팅 패널을 넣는다)이고,
 // 마피아·유령·귓속말 탭은 resultLog 프레임으로 받은 값만 읽는다 — 탭을 열기 전에는 본문이 DOM 에 없다(T-11-23). 기록 탭(11-11)은 view 로 일차 카드 띠와 하루 상세를 그린다(logSlot 이 있으면 그것이 우선).
 // 확장(expanded)이면 패널이 위로 자라고(높이 expandedHeight) 입력줄(allSlot)은 DOM 에서 빠지며 알약 자리(pill, 11-12)만 폭 전체로 남는다.
+// 18.1(P181-7): 보이는 탭이 하나(전체)뿐이면 탭 행을 그리지 않는다 — 결과 화면은 RESULT_TABS_SHOWN 이 전체 하나라 탭 행·확장·기록 본문이 마운트되지 않는다.
 // 줄 모양은 게임 중 채팅 줄과 같은 클래스(mv-chat__msg·dot·name·text)를 쓴다. 닉네임·본문은 React 텍스트 노드로만 그린다(T-11-22).
 
 export type ResultTab = ResultTabId;
@@ -180,7 +181,7 @@ export function ResultPanel(props: ResultPanelProps) {
 
   return (
     <section ref={panelRef} className={cls} style={style} data-world-panel="" data-result-panel="" data-expanded={String(expanded)} data-tab={tab}>
-      {kb ? null : (
+      {!kb && shown.length > 1 ? (
         <div className="mf-result__tabs" role="tablist" aria-label="결과 기록">
           {shown.map((id) => {
             const selected = id === tab;
@@ -205,7 +206,7 @@ export function ResultPanel(props: ResultPanelProps) {
             );
           })}
         </div>
-      )}
+      ) : null}
       {tab === "all" ? (
         body
       ) : (
