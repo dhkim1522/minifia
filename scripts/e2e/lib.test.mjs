@@ -1384,14 +1384,14 @@ test("LOBBY_SIZES: DEFAULT_SIZES 4개 + 390x844 + 402x874 여섯 개이고 LOBBY
   assert.deepEqual(DEFAULT_SIZES.map((x) => x.label), ["360x640", "390x664", "430x932", "360x560"]);
 });
 
-test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·result-awards(11-09 시상식 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand·witness·trace(15-09 심부름·목격 기록·밤 통일/아침 흔적 폰 6종)·tutorial-solo(17-09 혼자 하기 첫 사건 폰 6종) 만 갖는다", () => {
+test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·result-awards(11-09 시상식 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand·witness·trace(15-09 심부름·목격 기록·밤 통일/아침 흔적 폰 6종)·tutorial-solo(17-09 혼자 하기 첫 사건 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
   const run = readFileSync(new URL("./run.mjs", import.meta.url), "utf8");
   assert.match(run, /extraSizes/);
   assert.match(run, /!args\.sizesGiven/);
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)?(?:, skipByDefault: true)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
-  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "result-awards", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "errand", "witness", "trace", "tutorial-solo"]);
+  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "result-awards", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "errand", "witness", "trace", "tutorial-solo", "polish-reveal"]);
 });
 
 test("기본판(결정 0072)에서 꺼진 장치 흐름 7개는 skipByDefault 이고 politics-verdict 는 기본 실행에 남는다 (13-05)", () => {

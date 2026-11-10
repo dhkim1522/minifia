@@ -142,6 +142,7 @@ import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
 import { makeErrandFlows } from "./errand.mjs";
 import { makeTutorialFlows } from "./tutorial.mjs";
+import { makePolishFlows } from "./polish.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
 const HOST_NICK = "화면검사기";
@@ -3799,6 +3800,9 @@ const { errandFlow, witnessFlow, traceFlow } = makeErrandFlows({ recorder, attem
 // 첫 사건(튜토리얼, 17페이즈 17-09): tutorial-solo(혼자 하기, 폰 6종)·tutorial-together(함께 진행). 흐름 본문은 tutorial.mjs, 도우미만 넘긴다
 const { tutorialSoloFlow, tutorialTogetherFlow } = makeTutorialFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH });
 
+// 18.1 화면 다듬기(18.1-08): polish-reveal(역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종). 흐름 본문은 polish.mjs, 도우미만 넘긴다
+const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, closeGame });
+
 export const FLOWS = [
   // lobby·world 는 LOBBY_SIZES 6개 크기로 돈다: 기본 크기 4개에 더해 390x844·402x874 (run.mjs 의 extraSizes)
   { id: "lobby", run: lobbyFlow, extraSizes: LOBBY_EXTRA_SIZES },
@@ -3873,6 +3877,8 @@ export const FLOWS = [
   // 17-09: 첫 사건 TUT-01~05. 이름 앞머리 tutorial — --only tutorial 하나로 둘 다 돈다. 혼자 하기는 폰 6종(기하·포커스·띠 판정), 함께 진행은 기다림 화면 기하까지 390x844 한 크기
   { id: "tutorial-solo", run: tutorialSoloFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "tutorial-together", run: tutorialTogetherFlow, size: GAME_SIZE },
+  // 18.1-08: 역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종
+  { id: "polish-reveal", run: polishRevealFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },
   { id: "deployhold", run: deployHoldFlow, size: RECONNECT_SIZE, skipByDefault: true },
