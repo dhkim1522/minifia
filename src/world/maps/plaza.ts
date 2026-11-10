@@ -159,7 +159,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 0, vote: 0 },
     glow: { room: 0, vote: 0 },
     self: 0,
-    albedo: { tint: "#8e98a6", mix: 0.35 },
+    albedo: { tint: "#8e98a6", mix: 0.5 },
   },
   tension: { lead: 2.0 * 4 * 1.5, halfRoom: 0.5 },
   point: {
