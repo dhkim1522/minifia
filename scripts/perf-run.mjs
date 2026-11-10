@@ -931,6 +931,11 @@ export async function readCanvasLuminance(page, pngPath = null) {
   }, b64);
 }
 
+/** 아래쪽 절반 평균 색 통계(순수, 18-12). r·g·b 는 sRGB 0~255 소수 첫째, sat = (max−min)/max 소수 셋째, blueLead = b − max(r, g) 소수 첫째(양수면 파랑이 앞선다) */
+export function colorStats(r, g, b) {
+  return { r: 0, g: 0, b: 0, sat: 0, blueLead: 0 };
+}
+
 const LIGHT_MAPS = ["plaza", "bar"];
 const LIGHT_SCENES = ["talk", "morning", "vote", "night"];
 

@@ -3,7 +3,7 @@
 // nightload 실행 자체는 이 시험이 하지 않는다(실행과 성능 합격선은 12-12).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LIGHT_MORNING_RATIO, LIGHT_TALK_RATIO, NIGHTLOAD_DWELL, USAGE, lightRankVerdict, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
+import { LIGHT_MORNING_RATIO, LIGHT_TALK_RATIO, NIGHTLOAD_DWELL, USAGE, colorStats, lightRankVerdict, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
 
 test("parseArgs --sound: 기본 on, on·off 를 받는다", () => {
   assert.equal(parseArgs([]).sound, "on");
@@ -151,4 +151,23 @@ test("lightRankVerdict: 숫자가 아닌 값이 있으면 모든 줄이 ok false
   assert.equal(v.ok, false);
   assert.equal(v.rows.length, 3);
   assert.ok(v.rows.every((r) => r.ok === false));
+});
+
+test("colorStats: 남색 아래쪽 절반 근사 (22, 26, 45) → 채도 0.511·blueLead 19", () => {
+  assert.deepEqual(colorStats(22, 26, 45), { r: 22, g: 26, b: 45, sat: 0.511, blueLead: 19 });
+});
+
+test("colorStats: 회색 쪽 (100, 98, 96) → 채도 0.04·blueLead −4", () => {
+  assert.deepEqual(colorStats(100, 98, 96), { r: 100, g: 98, b: 96, sat: 0.04, blueLead: -4 });
+});
+
+test("colorStats: 검정 (0, 0, 0) → 채도 0·blueLead 0", () => {
+  assert.deepEqual(colorStats(0, 0, 0), { r: 0, g: 0, b: 0, sat: 0, blueLead: 0 });
+});
+
+test("colorStats: r·g·b 는 소수 첫째로 반올림한다", () => {
+  const c = colorStats(10.04, 20.06, 30.26);
+  assert.equal(c.r, 10);
+  assert.equal(c.g, 20.1);
+  assert.equal(c.b, 30.3);
 });

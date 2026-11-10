@@ -25,9 +25,14 @@ const saturation = (hex: string): number => {
   const max = Math.max(...ch);
   return max === 0 ? 0 : (max - Math.min(...ch)) / max;
 };
-const rb = (hex: string): { r: number; b: number } => {
+const rb = (hex: string): { r: number; g: number; b: number } => {
   const n = parseInt(hex.slice(1), 16);
-  return { r: (n >> 16) & 255, b: n & 255 };
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+};
+/** 진홍(붉은 쪽이 지배적인 색) 판정 — plazaScene.test.ts 의 crimsonish 와 같은 식 */
+const crimsonish = (hex: string): boolean => {
+  const c = new Color(hex);
+  return c.r >= 0.35 && c.r > 1.8 * c.g && c.r > 1.5 * c.b;
 };
 
 /** 4a5dabea 시점의 밤 쪽 네 행(moonColor 칸 없이). 값을 옮겨 적은 것이라 이 네 행이 바뀌면 시험이 깨진다 */
@@ -60,22 +65,42 @@ describe.each(MAPS)("조명 표 허용 범위 — $name (D-03)", ({ name, tune, 
     for (const ph of DAY_ROWS.filter((p) => p !== "vote")) expect(lum(tune[ph].sky[2]) / lum(tune.night.sky[2]), ph).toBeGreaterThanOrEqual(ratio);
   });
 
-  it("방향광 색온도: 낮 행은 R ≥ B(따뜻한 쪽), 밤·유령은 B > R(달빛 남색) (허용 범위 3)", () => {
-    for (const ph of DAY_ROWS) {
+  it("방향광 색온도(허용 범위 3 개정): talk·vote 는 R ≥ B 따뜻한 쪽, morning 은 서늘하되 옅다, 밤·유령은 B > R 달빛 남색", () => {
+    for (const ph of ["talk", "vote"] as const) {
       const { r, b } = rb(tune[ph].moonColor ?? "#000000");
       expect(r, ph).toBeGreaterThanOrEqual(b);
       expect(tune[ph].moonColor, ph).toBeDefined();
     }
+    const m = tune.morning.moonColor ?? "#000000";
+    expect(rb(m).b, "morning B ≥ R").toBeGreaterThanOrEqual(rb(m).r);
+    expect(saturation(m), "morning 채도 ≤ 0.12").toBeLessThanOrEqual(0.12);
+    expect(saturation(m), "morning 은 달빛 토큰보다 옅다").toBeLessThan(saturation(TOKEN_COLORS.moon));
     for (const ph of ["night", "nightGhost"] as const) {
       const { r, b } = rb(tune[ph].moonColor ?? "#ffffff");
       expect(b, ph).toBeGreaterThan(r);
     }
   });
 
-  it("방향광 색: talk·morning 은 낮 햇빛색, vote 는 해질녘 색", () => {
-    expect(tune.talk.moonColor).toBe("#eadfd0");
-    expect(tune.morning.moonColor).toBe("#e0dad8");
-    expect(tune.vote.moonColor).toBe("#d8b48a");
+  it("방향광 색 성질: talk 는 R ≥ B 이고 채도 ≤ 0.12, vote 는 노을색 R > G > B", () => {
+    const t = tune.talk.moonColor ?? "#000000";
+    expect(rb(t).r).toBeGreaterThanOrEqual(rb(t).b);
+    expect(saturation(t)).toBeLessThanOrEqual(0.12);
+    const v = rb(tune.vote.moonColor ?? "#000000");
+    expect(v.r).toBeGreaterThan(v.g);
+    expect(v.g).toBeGreaterThan(v.b);
+  });
+
+  it("재질 보정 albedo(허용 범위 6): 낮 세 행 0 < mix ≤ 0.6·tint 채도 ≤ 0.25, talk tint R ≥ B·morning tint B ≥ R·vote tint R > B 이고 진홍 아님", () => {
+    for (const ph of DAY_ROWS) {
+      const { tint, mix } = tune[ph].albedo;
+      expect(mix, `${ph} mix`).toBeGreaterThan(0);
+      expect(mix, `${ph} mix`).toBeLessThanOrEqual(0.6);
+      expect(saturation(tint), `${ph} tint 채도`).toBeLessThanOrEqual(0.25);
+      expect(crimsonish(tint), `${ph} 진홍`).toBe(false);
+    }
+    expect(rb(tune.talk.albedo.tint).r).toBeGreaterThanOrEqual(rb(tune.talk.albedo.tint).b);
+    expect(rb(tune.morning.albedo.tint).b).toBeGreaterThanOrEqual(rb(tune.morning.albedo.tint).r);
+    expect(rb(tune.vote.albedo.tint).r).toBeGreaterThan(rb(tune.vote.albedo.tint).b);
   });
 
   it("순서 감각(표 값만): hemi 는 talk ≥ morning ≥ vote, 배경 sky[2] 휘도는 talk > morning > vote", () => {
