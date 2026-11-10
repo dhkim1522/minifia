@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: "18.1"
 current_phase_name: screen-polish
-current_plan: 8
+current_plan: 9
 status: executing
-stopped_at: Completed 18.1-07-PLAN.md
-last_updated: "2026-11-10T18:23:01.955Z"
+stopped_at: Completed 18.1-08-PLAN.md
+last_updated: "2026-11-10T18:48:31.018Z"
 last_activity: 2026-11-11
 last_activity_desc: Phase 18.1 execution started
-state_head: 1fb5640bef4f0f8df3754aeb5cf7b84c31398a95
+state_head: 3ff8bf2b677ced84b1e39e78cae6a0848d54ffef
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 71
-  completed_plans: 68
+  completed_plans: 69
   percent: 40
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 18.1 (screen-polish) — EXECUTING
-Current Plan: 8
+Current Plan: 9
 Total Plans in Phase: 10
 Status: Ready to execute
 Last activity: 2026-11-11 — Phase 18.1 execution started
@@ -266,6 +266,7 @@ Last activity: 2026-11-11 — Phase 18.1 execution started
 | Phase 18.1 P05 | 20min | 2 tasks | 6 files |
 | Phase 18.1 P06 | 15min | 2 tasks | 10 files |
 | Phase 18.1 P07 | 12min | 3 tasks | 13 files |
+| Phase 18.1 P08 | 1h20m | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -590,6 +591,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18.1]: [18.1-05] ResultPanel 은 보이는 탭이 하나뿐이면 탭 행을 그리지 않고, 결과 화면 기록 칸은 TAB_ROW_H 뺄셈 없이 게임 패널과 같은 logH 를 쓴다(68 은 18.1-06)
 - [Phase 18.1]: [18.1-06] 기록 칸 높이 LOG_H = 68 한 값(대기실·게임 맵·결과, 키보드 열림 포함). 스테이지 확대로 PAN_BOX 5.4·PLATE_FAR 17.5 로 다시 정함
 - [Phase 18.1]: 18.1-07: 기록 칸 높이 출처는 LOG_H 하나, KB_PANEL_H 146, E2E 사본(lib·result·flows)은 68·146·160 으로 묶고 옛 이름·useChatLogHeight·MapInsets.logH 삭제
+- [Phase 18.1]: 18.1-08: polish-reveal 은 6명판(봇 5)으로 돈다 — 4명판에는 의사가 없다. 시상식 AW9(확장 탭 일시정지)는 확장 탭이 없어 삭제
 
 ### Pending Todos
 
@@ -661,8 +663,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-10T18:23:01.038Z
-Stopped at: Completed 18.1-07-PLAN.md
+Last session: 2026-11-10T18:48:30.031Z
+Stopped at: Completed 18.1-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

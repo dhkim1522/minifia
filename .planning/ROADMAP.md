@@ -391,7 +391,7 @@ Plans:
 5. 결과 화면은 전체 대화 하나만 있고 역할별 채팅·판 기록 탭이 없다. 서버 기록 보관은 그대로(R5, 결정 0027 유지)
 6. 바뀐 흐름의 폰 6종 E2E 와 전 흐름 회귀가 로컬에서 통과하고 minifia-v3 에 배포된다
 
-**Plans:** 7/10 plans executed
+**Plans:** 8/10 plans executed
 
 Plans:
 **Wave 1**
@@ -408,7 +408,7 @@ Plans:
 - [x] 18.1-07-PLAN.md — R2 KB 146·E2E 채팅/결과 사본·옛 기록 칸 이름·훅 삭제 (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 18.1-08-PLAN.md — E2E: polish-reveal(역할 카드)·배지(emcee-band·tutorial-solo)·결과 화면 숨김 (wave 4)
+- [x] 18.1-08-PLAN.md — E2E: polish-reveal(역할 카드)·배지(emcee-band·tutorial-solo)·결과 화면 숨김 (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 18.1-09-PLAN.md — E2E: 두 줄 창·기록 시트(chat-lobby)·산 사람 유령·유령 화면 의상(day·ghost) (wave 5)
