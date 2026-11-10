@@ -395,6 +395,8 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-dress-card__img { width: 64px; height: 80px; object-fit: contain; pointer-events: none; -webkit-user-drag: none; }
 .mv-dress-card__name { max-width: 100%; font-size: 14px; line-height: 1.2; font-weight: 700; white-space: nowrap; overflow: hidden; }
 .mv-dress-card__check { position: absolute; top: 4px; right: 4px; }
+/* 18-05 잠긴 옷 자물쇠 16 — 체크와 같은 자리, 잠긴 카드는 선택될 수 없다 */
+.mv-dress-card__lock { position: absolute; top: 4px; right: 4px; color: var(--gray-300); }
 .mv-dress-card[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 /* 방장의 [맵][의상] 탭(11-13): 아이콘 44×44, 선택 탭은 아래 2px 줄(gray-100). 맵 탭 카드 3장 96×112 간격 8(합 304) — 그림 80×80 cover + 이름 14px */
 .mv-dress-sheet__tabs { display: flex; align-items: center; }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
+import { lockedOutfits } from "../../shared/game/look";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import type { ClientMessage, EmoteId, MapChoice, MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
@@ -394,6 +395,8 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   // 머리 위 직업 칩: 뒤집힌 사람만. 결과 화면의 ended 경로에서만 만든다(산 사람 장면 표는 건드리지 않는다)
   const jobBySeat = useMemo(() => new Map(cast.map((c) => [c.seat, c.job])), [cast]);
   const flipped = useMemo(() => new Set(state.flipped), [state]);
+  // 18-05(D-02): 다른 참가자가 직접 고른 옷(나간 사람 포함) — 서버 view.players 에서 나를 빼고 다시 계산한다(로비와 같은 규칙)
+  const takenOutfits = useMemo(() => lockedOutfits(view.players.filter((p) => p.seat !== view.me.seat)), [view.players, view.me.seat]);
   // 다시 하기 준비(11-12, D-12): 준비한 사람의 이름표에 체크('준비됨')가 모두에게 같게 붙는다. 서버가 실은 공개 값(players[].ready)뿐이다
   const readySeats = useMemo(() => new Set(view.players.filter((p) => p.ready === true && p.connected).map((p) => p.seat)), [view.players]);
   const tagProps = useCallback(
@@ -605,6 +608,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
           onPick={dress.pick}
           onClose={closeDress}
           disabled={!canSend}
+          taken={takenOutfits}
           host={view.me.isHost && mapsOn}
           tab={dressTab}
           mapChoice={mapChoice}
