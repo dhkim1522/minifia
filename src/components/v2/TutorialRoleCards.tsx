@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import "../../styles/tutorial.css";
+import { ROLE_TEXT } from "../../game/roleText";
 import { roleArtSrc } from "../../net/assets";
 import { useReducedMotion } from "../../net/useReducedMotion";
 import { Diamond } from "../RoleCard";
@@ -9,6 +10,7 @@ import type { V2IconName } from "./V2Icon";
 
 // 첫 사건 장면 7 직업 카드 4장(17-08, 결정 0078-1.5, UI-SPEC "직업 카드 계약"·T-15): 시민·마피아·의사·경찰이 실제 역할 확인 카드처럼 뒷면 마름모에서 앞면으로 뒤집히고,
 // 카드마다 실제 역할 그림(roleArtSrc)·이름·한 줄 설명과 오른쪽 아래 배지의 대표 움직임 하나가 있다. 제목은 화면에 쓰지 않는다(사회자 띠 "밤에는 저마다 할 일이 있어요" — 3초 규칙).
+// 한 줄 설명은 실제 역할 카드와 같은 ROLE_TEXT(18-06, D-08 — 문구 두 곳 금지). 정적 문구 표라 방 view·역할을 읽지 않는다.
 // 카드는 고정 상수 네 종류다: 실제 방의 view·역할·직업 값을 받지도 읽지도 않는다(T-17-18, 정적 가드). 진홍은 마피아 카드(.tut-role--mafia)의 테두리·이름·배지에만 쓴다(T-18).
 // 뒤집기 소리(tut.flip)는 장면 시각표가 같은 시각(100·450·800·1150ms)에 낸다 — 이 부품은 화면 연출만 같은 시각에 맞춘다(지연 --tut-flip-delay).
 // 모션 줄이기: 카드는 즉시 앞면(뒷면·뒤집기 없음), 배지 움직임 없음. 애니메이션은 transform·opacity·filter 뿐이다(tutorial.css).
@@ -18,7 +20,6 @@ type CardKind = "citizen" | "mafia" | "doctor" | "police";
 interface CardDef {
   kind: CardKind;
   name: string;
-  line: string;
   icon: V2IconName;
   /** 배지 대표 움직임 클래스(시안 Roles.dc.html 의 a-eye·a-mask·a-shield·a-lens) */
   anim: "a-eye" | "a-mask" | "a-shield" | "a-lens";
@@ -26,10 +27,10 @@ interface CardDef {
 
 /** 시민 → 마피아 → 의사 → 경찰 순서(시안과 같다) */
 const CARDS: readonly CardDef[] = [
-  { kind: "citizen", name: "시민", line: "흔적과 목격으로 마피아를 찾아요", icon: "eye", anim: "a-eye" },
-  { kind: "mafia", name: "마피아", line: "밤에 한 명을 고르고 들키지 않아요", icon: "mask", anim: "a-mask" },
-  { kind: "doctor", name: "의사", line: "밤에 한 명을 지켜요", icon: "shield", anim: "a-shield" },
-  { kind: "police", name: "경찰", line: "밤에 한 명이 마피아인지 알아봐요", icon: "lens", anim: "a-lens" },
+  { kind: "citizen", name: "시민", icon: "eye", anim: "a-eye" },
+  { kind: "mafia", name: "마피아", icon: "mask", anim: "a-mask" },
+  { kind: "doctor", name: "의사", icon: "shield", anim: "a-shield" },
+  { kind: "police", name: "경찰", icon: "lens", anim: "a-lens" },
 ];
 
 /** 뒤집기 시작 지연(ms): 0.35초 간격 — tutorialScript 의 tut.flip 시각(100·450·800·1150)과 같은 값이다 */
@@ -83,7 +84,7 @@ export function TutorialRoleCards() {
             <div className="tut-role__face">
               <RoleArt kind={c.kind} />
               <span className="tut-role__name">{c.name}</span>
-              <span className="tut-role__line">{c.line}</span>
+              <span className="tut-role__line">{ROLE_TEXT[c.kind].desc}</span>
               <span className="tut-role__badge" data-role-badge="">
                 <V2Icon name={c.icon} size={24} className={reduced ? undefined : `tut-role__ico ${c.anim}`} />
               </span>

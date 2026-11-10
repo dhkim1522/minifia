@@ -69,25 +69,38 @@
 .tut-skip::before { content: ""; position: absolute; inset: -6px -2px; }
 .tut-skip:focus-visible, .tut-next:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 
-/* ---- [다음] (T-5): 오른쪽 20·아래 28(방 틀이 이미 안전 영역을 비켜 있다), 지름 56 원, 면 night-700 ---- */
+/* ---- [다음] (T-5, 18-06 P18-6): 화면 아래 가운데 알약 — 폭 min(240, 화면 − 48)·높이 56·아래 28(방 틀이 이미 안전 영역을 비켜 있다), 면 night-700, 글 '다음' + chevron.
+   가운데 정렬은 left·right 0 + margin-inline auto 로 한다(나타날 때 tut-fadeup 이 transform 을 쓰므로 transform 정렬 금지) ---- */
 .tut-next {
   position: absolute;
-  right: 20px;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
   bottom: 28px;
   z-index: calc(var(--z-overlay) + 3);
   box-sizing: border-box;
-  width: 56px;
+  width: min(240px, calc(100% - 48px));
   height: 56px;
-  display: grid;
-  place-items: center;
-  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg);
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: var(--night-700);
-  color: var(--light-lamp);
+  color: var(--gray-50);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.5;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  animation: tut-fadeup .3s var(--ease-out) both;
 }
+.tut-next__ico { color: var(--light-lamp); }
+/* [다음]이 보이면 같은 아래 자리의 장면 4 심부름 진행 점은 숨긴다(P18-11) */
+[data-tutorial-screen]:has([data-tutorial-next]) .mv-errand-dots { display: none; }
 /* 모양 강조는 포커스 테두리와 같은 4px 램프 빛 깜빡임(같은 키프레임) 한 규칙이다 */
 .tut-next::before {
   content: "";
@@ -95,7 +108,7 @@
   inset: 0;
   box-sizing: border-box;
   border: 4px solid var(--light-lamp);
-  border-radius: 50%;
+  border-radius: inherit;
   pointer-events: none;
   animation: tut-ring 1s ease-in-out infinite;
 }
@@ -309,7 +322,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-xl);
-  padding: calc(var(--mf-host-top, 70px) + 58px) 20px 0;
+  padding: calc(var(--mf-host-top, 70px) + 58px) 20px 96px;
   background: var(--scrim);
   pointer-events: none;
 }
@@ -396,6 +409,7 @@
 @media (prefers-reduced-motion: reduce) {
   .tut-focus, .tut-focus::before, .tut-next::before { animation: none; }
   .tut-dim { animation: none; }
+  .tut-next { animation: none; }
   .tut-focus::before { opacity: .5; }
   /* 말하는 동안 막대는 중간 높이(12)로 고정, 글은 바로 보인다 */
   [data-tutorial-host][data-speaking] .tut-wave__bar { animation: none; transform: scaleY(.6); }
