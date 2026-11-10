@@ -1,8 +1,44 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import "../helpers/singleLineErrors";
 import { ChatPanel, type ChatPanelMessage, type ChatPanelProps } from "../../src/components/v2/ChatPanel";
+
+const V2_CSS = readFileSync("src/styles/v2.css", "utf8");
+
+function rulesFor(css: string, selector: string): string[] {
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  return [...bare.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter((m) => (m[1] ?? "").split(",").some((s) => s.trim().startsWith(selector) && !/[\w-]/.test(s.trim().charAt(selector.length))))
+    .map((m) => m[2] ?? "");
+}
+
+// happy-dom 은 레이아웃이 없다. 요소 치수를 프로토타입에서 정하고 scrollTop 은 요소마다 따로 든다.
+const tops = new WeakMap<object, number>();
+let dims = { scrollHeight: 500, clientHeight: 100 };
+const protoDescs: Record<string, PropertyDescriptor | undefined> = {};
+function stubGeometry() {
+  for (const k of ["scrollHeight", "clientHeight", "scrollTop"]) protoDescs[k] = Object.getOwnPropertyDescriptor(HTMLElement.prototype, k) ?? Object.getOwnPropertyDescriptor(Element.prototype, k);
+  Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get: () => dims.scrollHeight });
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => dims.clientHeight });
+  Object.defineProperty(HTMLElement.prototype, "scrollTop", {
+    configurable: true,
+    get() {
+      return tops.get(this) ?? 0;
+    },
+    set(v: number) {
+      tops.set(this, v);
+    },
+  });
+}
+function restoreGeometry() {
+  for (const k of ["scrollHeight", "clientHeight", "scrollTop"]) {
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>)[k];
+    const d = protoDescs[k];
+    if (d) Object.defineProperty(Element.prototype, k, d);
+  }
+}
 
 afterEach(() => {
   cleanup();
@@ -112,5 +148,104 @@ describe("채팅 기록 시트 (P181-4, B 계약 3)", () => {
     expect(list.querySelector("i")).toBeNull();
     expect(list.querySelector(".mv-chat__name")?.textContent).toBe("<i>n</i>");
     expect(list.querySelector(".mv-chat__text")?.textContent).toBe("<b>x</b>");
+  });
+});
+
+describe("기록 시트 따라가기·새 글 알약·빈 상태 (B 계약 3)", () => {
+  const MORE: ChatPanelMessage[] = [...LINES, { key: "d", kind: "player", seat: 0, name: "철수", text: "새 줄", ch: "all" }];
+  const listOf = () => dialog()?.querySelector("[data-chat-sheet-log]") as HTMLElement;
+  const dotOf = () => dialog()?.querySelector("button[data-chat-newdot]") ?? null;
+
+  function setup() {
+    dims = { scrollHeight: 500, clientHeight: 100 };
+    stubGeometry();
+  }
+  afterEach(restoreGeometry);
+
+  it("처음 열면 시트 목록이 맨 아래다", () => {
+    setup();
+    const { container } = render(<Harness />);
+    fireEvent.click(openBtn(container));
+    expect(listOf().scrollTop).toBe(500);
+  });
+
+  it("바닥 24px 안이면 새 줄을 따라가고 알약이 없다", () => {
+    setup();
+    const { container, rerender } = render(<Harness />);
+    fireEvent.click(openBtn(container));
+    listOf().scrollTop = 380;
+    fireEvent.scroll(listOf());
+    rerender(<Harness messages={MORE} />);
+    expect(listOf().scrollTop).toBe(500);
+    expect(dotOf()).toBeNull();
+  });
+
+  it("위로 올려 읽는 중이면 끌어내리지 않고 새 글 알약(aria-label 새 글)이 뜬다", () => {
+    setup();
+    const { container, rerender } = render(<Harness />);
+    fireEvent.click(openBtn(container));
+    listOf().scrollTop = 300;
+    fireEvent.scroll(listOf());
+    rerender(<Harness messages={MORE} />);
+    expect(listOf().scrollTop).toBe(300);
+    const dot = dotOf();
+    expect(dot?.getAttribute("aria-label")).toBe("새 글");
+    expect(dot?.textContent).toBe("새 글");
+  });
+
+  it("알약을 누르면 맨 아래로 가고 사라진다", () => {
+    setup();
+    const { container, rerender } = render(<Harness />);
+    fireEvent.click(openBtn(container));
+    listOf().scrollTop = 300;
+    fireEvent.scroll(listOf());
+    rerender(<Harness messages={MORE} />);
+    fireEvent.click(dotOf() as Element);
+    expect(listOf().scrollTop).toBe(500);
+    expect(dotOf()).toBeNull();
+  });
+
+  it("직접 바닥까지 내리면 알약이 사라진다", () => {
+    setup();
+    const { container, rerender } = render(<Harness />);
+    fireEvent.click(openBtn(container));
+    listOf().scrollTop = 300;
+    fireEvent.scroll(listOf());
+    rerender(<Harness messages={MORE} />);
+    expect(dotOf()).not.toBeNull();
+    listOf().scrollTop = 395;
+    fireEvent.scroll(listOf());
+    expect(dotOf()).toBeNull();
+  });
+
+  it("quiet(재접속 복원)면 알약을 만들지 않는다", () => {
+    setup();
+    const { container, rerender } = render(<Harness />);
+    fireEvent.click(openBtn(container));
+    listOf().scrollTop = 300;
+    fireEvent.scroll(listOf());
+    rerender(<Harness messages={MORE} quiet />);
+    expect(dotOf()).toBeNull();
+  });
+
+  it("줄이 0개면 quiet 아이콘 하나뿐이고 글자가 없다", () => {
+    const { container } = render(<Harness messages={[]} />);
+    fireEvent.click(openBtn(container));
+    const empty = dialog()?.querySelector("[data-chat-sheet-empty]");
+    expect(empty).not.toBeNull();
+    expect(empty?.querySelectorAll("svg").length).toBe(1);
+    expect((empty?.textContent ?? "").trim()).toBe("");
+    expect(dialog()?.querySelector("[data-chat-sheet-log]")).toBeNull();
+  });
+
+  it("스타일: 시트 높이 min(60dvh, 440px), 목록 스크롤·overscroll contain, 알약 44×44 는 기존 규칙", () => {
+    const sheet = rulesFor(V2_CSS, ".mf-sheet.mf-sheet--chatlog").join(";");
+    expect(sheet).toContain("height: min(60dvh, 440px)");
+    const list = rulesFor(V2_CSS, ".mv-chat__sheetlog").join(";");
+    expect(list).toContain("overflow-y: auto");
+    expect(list).toContain("overscroll-behavior: contain");
+    const dot = rulesFor(V2_CSS, ".mv-chat__newdot").join(";");
+    expect(dot).toMatch(/width:\s*(var\(--tap-min\)|44px)/);
+    expect(dot).toMatch(/height:\s*(var\(--tap-min\)|44px)/);
   });
 });

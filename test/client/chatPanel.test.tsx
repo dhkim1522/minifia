@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { ChatPanel, type ChatPanelMessage, type ChatPanelProps } from "../../src/components/v2/ChatPanel";
 import { V2Icon } from "../../src/components/v2/V2Icon";
+import { LOG_FADE_H } from "../../src/game/chatUi";
 
 afterEach(() => {
   cleanup();
@@ -594,7 +595,7 @@ describe("ChatPanel 막힘 알림 (UI-SPEC 막힘 알림)", () => {
   });
 });
 
-describe("ChatPanel 자동 스크롤과 새 메시지 점 (UI-SPEC 기록 칸 동작)", () => {
+describe("ChatPanel 두 줄 창 (18.1 B 계약 1·2·3)", () => {
   // happy-dom 은 레이아웃이 없다(scrollHeight 0). 치수를 요소에 직접 정한다.
   function geometry(log: HTMLElement, g: { scrollHeight: number; clientHeight: number; scrollTop: number }) {
     const state = { top: g.scrollTop };
@@ -605,81 +606,64 @@ describe("ChatPanel 자동 스크롤과 새 메시지 점 (UI-SPEC 기록 칸 �
   }
   const MORE: ChatPanelMessage[] = [...TWO_LINES, { key: "c", kind: "player", seat: 0, name: "철수", text: "새 줄", ch: "all" }];
 
-  it("처음에는 맨 아래로 따라간다", () => {
+  it("기록 칸은 is-window 이고 위로 올려 놓아도 새 줄이 오면 언제나 맨 아래로 간다", () => {
     const { container, rerender } = render(<Harness />);
     const log = logOf(container);
-    const st = geometry(log, { scrollHeight: 500, clientHeight: 100, scrollTop: 400 });
-    rerender(<Harness messages={MORE} />);
-    expect(st.top).toBe(500);
-    expect(container.querySelector("[data-chat-newdot]")).toBeNull();
-  });
-
-  it("바닥 24px 이내면 새 줄을 따라가고 점이 없다", () => {
-    const { container, rerender } = render(<Harness />);
-    const log = logOf(container);
-    const st = geometry(log, { scrollHeight: 500, clientHeight: 100, scrollTop: 380 });
+    expect(log.classList.contains("is-window")).toBe(true);
+    const st = geometry(log, { scrollHeight: 500, clientHeight: 68, scrollTop: 100 });
     fireEvent.scroll(log);
     rerender(<Harness messages={MORE} />);
     expect(st.top).toBe(500);
-    expect(container.querySelector("[data-chat-newdot]")).toBeNull();
   });
 
-  it("위로 올려 읽는 중이면 끌어내리지 않고 새 글 알약(누르기 44×44, aria-label)을 띄운다", () => {
+  it("패널 어디에도 새 글 알약이 생기지 않는다(위로 올려 읽는 상태가 없다)", () => {
     const { container, rerender } = render(<Harness />);
     const log = logOf(container);
-    const st = geometry(log, { scrollHeight: 500, clientHeight: 100, scrollTop: 300 });
+    geometry(log, { scrollHeight: 500, clientHeight: 68, scrollTop: 100 });
     fireEvent.scroll(log);
     rerender(<Harness messages={MORE} />);
-    expect(st.top).toBe(300);
-    const dot = container.querySelector("button[data-chat-newdot]");
-    expect(dot?.getAttribute("aria-label")).toBe("새 글");
-    expect(dot?.textContent).toBe("새 글");
-    const body = rulesFor(V2_CSS, ".mv-chat__newdot").join(";");
-    expect(body).toMatch(/width:\s*(var\(--tap-min\)|44px)/);
-    expect(body).toMatch(/height:\s*(var\(--tap-min\)|44px)/);
-  });
-
-  it("점을 누르면 맨 아래로 가고 점이 사라진다", () => {
-    const { container, rerender } = render(<Harness />);
-    const log = logOf(container);
-    const st = geometry(log, { scrollHeight: 500, clientHeight: 100, scrollTop: 300 });
-    fireEvent.scroll(log);
-    rerender(<Harness messages={MORE} />);
-    const dot = container.querySelector("button[data-chat-newdot]");
-    expect(dot).not.toBeNull();
-    fireEvent.click(dot as Element);
-    expect(st.top).toBe(500);
     expect(container.querySelector("[data-chat-newdot]")).toBeNull();
   });
 
-  it("직접 바닥까지 내려 읽으면 점이 사라진다", () => {
+  it("막힘 알림이 뜨면 맨 아래 그대로다", () => {
     const { container, rerender } = render(<Harness />);
     const log = logOf(container);
-    const st = geometry(log, { scrollHeight: 500, clientHeight: 100, scrollTop: 300 });
-    fireEvent.scroll(log);
-    rerender(<Harness messages={MORE} />);
-    expect(container.querySelector("[data-chat-newdot]")).not.toBeNull();
-    st.top = 395;
-    fireEvent.scroll(log);
-    expect(container.querySelector("[data-chat-newdot]")).toBeNull();
-  });
-
-  it("quiet(재접속 복원)면 위로 올려 읽는 중이어도 점을 만들지 않는다", () => {
-    const { container, rerender } = render(<Harness />);
-    const log = logOf(container);
-    geometry(log, { scrollHeight: 500, clientHeight: 100, scrollTop: 300 });
-    fireEvent.scroll(log);
-    rerender(<Harness messages={MORE} quiet />);
-    expect(container.querySelector("[data-chat-newdot]")).toBeNull();
-  });
-
-  it("막힘 알림이 뜨면 기록 칸을 맨 아래로 내려 알림이 보이게 한다", () => {
-    const { container, rerender } = render(<Harness />);
-    const log = logOf(container);
-    const st = geometry(log, { scrollHeight: 500, clientHeight: 100, scrollTop: 300 });
-    fireEvent.scroll(log);
+    const st = geometry(log, { scrollHeight: 500, clientHeight: 68, scrollTop: 300 });
     rerender(<Harness notice="조금 천천히 보내요" />);
     expect(st.top).toBe(500);
+  });
+
+  it("logbox 에 페이드 높이 변수 --mv-chat-fade: 12px 가 있고 LOG_FADE_H 는 12 이다", () => {
+    const { container } = render(<Harness />);
+    const box = container.querySelector(".mv-chat__logbox") as HTMLElement;
+    expect(box.style.getPropertyValue("--mv-chat-fade")).toBe("12px");
+    expect(LOG_FADE_H).toBe(12);
+  });
+
+  it("열기 단추 안에 안내 화살표(.mv-chat__open-arrow 안 svg)가 하나 있다", () => {
+    const { container } = render(<Harness />);
+    const arrows = container.querySelectorAll("button[data-chat-open] .mv-chat__open-arrow svg");
+    expect(arrows.length).toBe(1);
+  });
+
+  it("스타일: is-window overflow hidden, 위 12px 페이드(night-900 → 투명), 투명 열기 단추, 회전한 화살표, hex 없음", () => {
+    const win = rulesFor(V2_CSS, ".mv-chat__log.is-window").join(";");
+    expect(win).toContain("overflow: hidden");
+    const fade = rulesFor(V2_CSS, ".mv-chat__logbox::before").join(";");
+    expect(fade).toContain("height: var(--mv-chat-fade");
+    expect(fade).toContain("linear-gradient");
+    expect(fade).toContain("var(--night-900)");
+    expect(fade).toContain("pointer-events: none");
+    const open = rulesFor(V2_CSS, ".mv-chat__open").join(";");
+    expect(open).toContain("position: absolute");
+    expect(open).toContain("inset: 0");
+    expect(open).toMatch(/background:\s*transparent/);
+    expect(open).toMatch(/border:\s*0/);
+    const arrow = rulesFor(V2_CSS, ".mv-chat__open-arrow").join(";");
+    expect(arrow).toContain("rotate(-90deg)");
+    expect(arrow).toContain("var(--gray-300)");
+    expect(arrow).toContain("opacity: 0.8");
+    for (const body of [win, fade, open, arrow]) expect(body).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
   });
 });
 
