@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { setEngineForTest } from "../../src/audio/unlock";
 import { OPENING_LAMPS, TUTORIAL_CAST } from "../../src/game/tutorialScript";
+import { ROLE_TEXT } from "../../src/game/roleText";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { tutorialStage as stage } from "../helpers/fakeTutorialStage";
 import { makeRig } from "../helpers/soundRig";
@@ -258,12 +259,20 @@ describe("진홍 (T-18)", () => {
 const cards$ = (c: ParentNode) => [...c.querySelectorAll<HTMLElement>("[data-tutorial-role-card]")];
 const ROLE_KINDS = ["citizen", "mafia", "doctor", "police"] as const;
 const NAMES = ["시민", "마피아", "의사", "경찰"] as const;
-const LINES = ["흔적과 목격으로 마피아를 찾아요", "밤에 한 명을 고르고 들키지 않아요", "밤에 한 명을 지켜요", "밤에 한 명이 마피아인지 알아봐요"] as const;
+// 직업 카드 한 줄은 실제 역할 카드와 같은 출처(ROLE_TEXT, 18-06 D-08)
+const LINES = [ROLE_TEXT.citizen.desc, ROLE_TEXT.mafia.desc, ROLE_TEXT.doctor.desc, ROLE_TEXT.police.desc] as const;
 const BADGE_ANIM = ["a-eye", "a-mask", "a-shield", "a-lens"] as const;
 const setHeight = (h: number): void => {
   Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: h });
 };
 const bandLine = (c: ParentNode): string | null | undefined => c.querySelector("[data-host-line]")?.textContent;
+
+describe("장면 7 직업 카드: 아래 예약 (P18-6)", () => {
+  it(".tut-roles 의 아래 padding 이 96px", () => {
+    const body = css().match(/\.tut-roles\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(/padding:[^;]*\s96px\s*;/.test(body) || /padding-bottom:\s*96px/.test(body)).toBe(true);
+  });
+});
 
 describe("장면 7 직업 카드: 네 장 고정 2×2", () => {
   beforeEach(() => setHeight(844));
@@ -275,7 +284,7 @@ describe("장면 7 직업 카드: 네 장 고정 2×2", () => {
     cards.forEach((card, i) => {
       expect(card.getAttribute("aria-label")).toBe(`${NAMES[i]} 카드`);
       expect(card.textContent).toContain(NAMES[i]);
-      expect(card.textContent).toContain(LINES[i]);
+      expect((card.textContent ?? "").includes(LINES[i]!)).toBe(true);
       const img = card.querySelector("img");
       expect(img?.getAttribute("alt")).toBe("");
       expect(img?.getAttribute("src") ?? "").toMatch(new RegExp(`${ROLE_KINDS[i]}`));

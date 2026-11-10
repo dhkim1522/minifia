@@ -432,3 +432,43 @@ describe("스포트라이트 구간 (P18-5, D-04)", () => {
     expect(dim$(container)).toBe(0);
   });
 });
+
+describe("[다음] 알약 (P18-6, D-05)", () => {
+  const css = readFileSync(`${ROOT}src/styles/tutorial.css`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const rule = (head: string): string => {
+    const start = css.indexOf(head);
+    return start < 0 ? "" : css.slice(start, css.indexOf("}", start) + 1);
+  };
+  const has = (body: string, re: RegExp): boolean => re.test(body);
+
+  it("버튼: data-tutorial-next·aria-label 다음·라벨 글 다음·chevronRight svg 하나(20)", async () => {
+    const { container } = await mount({ initialScene: 2 });
+    advance(2600);
+    advance(50);
+    const btn = next$(container)!;
+    expect(btn === null).toBe(false);
+    expect(btn.getAttribute("aria-label")).toBe("다음");
+    expect(btn.querySelector(".tut-next__label")?.textContent === "다음").toBe(true);
+    expect(btn.querySelectorAll("svg").length).toBe(1);
+    expect(btn.querySelector("svg")?.getAttribute("width") === "20").toBe(true);
+  });
+
+  it(".tut-next 규칙: 아래 가운데 알약 240×56, transform 없음", () => {
+    const body = rule(".tut-next {");
+    expect(has(body, /bottom:\s*28px/)).toBe(true);
+    expect(has(body, /height:\s*56px/)).toBe(true);
+    expect(has(body, /width:\s*min\(240px,\s*calc\(100% - 48px\)\)/)).toBe(true);
+    expect(has(body, /margin-inline:\s*auto/)).toBe(true);
+    expect(has(body, /left:\s*0/)).toBe(true);
+    expect(has(body, /right:\s*0/)).toBe(true);
+    expect(has(body, /border-radius:\s*var\(--radius-pill\)/)).toBe(true);
+    expect(has(body, /transform/)).toBe(false);
+  });
+
+  it("테두리는 알약을 따라가고, 모션 줄이기에서 애니메이션 없음, 장면 4 진행 점 숨김 규칙", () => {
+    expect(has(rule(".tut-next::before {"), /border-radius:\s*inherit/)).toBe(true);
+    const reduce = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(has(reduce, /\.tut-next\s*\{\s*animation:\s*none/)).toBe(true);
+    expect(css.includes("[data-tutorial-screen]:has([data-tutorial-next]) .mv-errand-dots { display: none; }")).toBe(true);
+  });
+});
