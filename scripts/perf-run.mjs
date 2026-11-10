@@ -117,7 +117,7 @@ const CHATLOAD_LINES = ["저 아니에요", "누가 수상해요?", "조용한 �
 const CHATLOAD_BASELINE = { avgFps: 55, jankMax: 5, perMinutes: 5, jankMs: JANK_MS, source: "06-PERF-RESULTS.md 조건 B · UI-SPEC 합격 기준 — 5분 평균 ≥ 55fps, 끊김(>50ms) ≤ 5회/5분" };
 
 export const USAGE =
-  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload|light] [--url 주소] [--scene talk|morning|vote|night] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--outfits mix|coat] [--burst 1..4] [--map bar|plaza] [--runs 3] [--bots 7] [--sound on|off] [--shot [--file 이름]]";
+  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload|light] [--url 주소] [--scene talk|morning|vote|night] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--outfits mix|coat] [--burst 1..4] [--map bar|plaza] [--runs 3] [--bots 7] [--sound on|off] [--shot [--file 이름]] (--mode light 는 JSON 에 아래쪽 절반 평균 색 colors 도 남긴다, 18-12)";
 
 class UsageError extends Error {}
 
@@ -933,7 +933,36 @@ export async function readCanvasLuminance(page, pngPath = null) {
 
 /** 아래쪽 절반 평균 색 통계(순수, 18-12). r·g·b 는 sRGB 0~255 소수 첫째, sat = (max−min)/max 소수 셋째, blueLead = b − max(r, g) 소수 첫째(양수면 파랑이 앞선다) */
 export function colorStats(r, g, b) {
-  return { r: 0, g: 0, b: 0, sat: 0, blueLead: 0 };
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d1 = (v) => Math.round(v * 10) / 10 || 0;
+  return { r: d1(r), g: d1(g), b: d1(b), sat: max === 0 ? 0 : Math.round(((max - min) / max) * 1000) / 1000, blueLead: d1(b - Math.max(r, g)) };
+}
+
+/** 화면 아래쪽 절반(바닥·연장 판 영역) 행의 sRGB 0~255 평균 { r, g, b } (18-12). readCanvasLuminance 와 같은 방법으로 PNG 를 페이지 안에서 읽는다 */
+export async function readLowerHalfColor(page, png) {
+  const b64 = png.toString("base64");
+  return page.evaluate(async (data) => {
+    const blob = await (await fetch(`data:image/png;base64,${data}`)).blob();
+    const bmp = await createImageBitmap(blob);
+    const c = document.createElement("canvas");
+    c.width = bmp.width;
+    c.height = bmp.height;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(bmp, 0, 0);
+    const y0 = Math.floor(c.height / 2);
+    const px = ctx.getImageData(0, y0, c.width, c.height - y0).data;
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    const n = px.length / 4;
+    for (let i = 0; i < px.length; i += 4) {
+      r += px[i];
+      g += px[i + 1];
+      b += px[i + 2];
+    }
+    return n === 0 ? null : { r: r / n, g: g / n, b: b / n };
+  }, b64);
 }
 
 const LIGHT_MAPS = ["plaza", "bar"];
@@ -946,6 +975,7 @@ async function runLight(browser, o, origin) {
   let url0 = "";
   for (const map of LIGHT_MAPS) {
     const means = {};
+    const colors = {};
     for (const scene of LIGHT_SCENES) {
       const url = `${targetUrl({ ...lo, map, scene }, origin)}&chars=6`;
       url0 = url0 || url;
@@ -958,15 +988,19 @@ async function runLight(browser, o, origin) {
         await page.waitForFunction(() => document.querySelector("[data-perf-hud]")?.style.display === "none", null, { timeout: SHOT_WAIT_MS, polling: 500 });
         const png = join(o.out, `light-${map}-${scene}.png`);
         means[scene] = await readCanvasLuminance(page, png);
-        console.log(`${map} ${scene}: 평균 휘도 ${means[scene] === null ? "측정 못 함" : means[scene].toFixed(4)}  (${png})`);
+        const lower = means[scene] === null ? null : await readLowerHalfColor(page, readFileSync(png));
+        colors[scene] = lower === null ? null : colorStats(lower.r, lower.g, lower.b);
+        const cs = colors[scene] === null ? "" : `, 아래쪽 절반 sat ${colors[scene].sat} blueLead ${colors[scene].blueLead}`;
+        console.log(`${map} ${scene}: 평균 휘도 ${means[scene] === null ? "측정 못 함" : means[scene].toFixed(4)}${cs}  (${png})`);
       } catch (e) {
         means[scene] = null;
+        colors[scene] = null;
         console.error(`${map} ${scene} 측정 실패: ${e instanceof Error ? e.message.split("\n")[0] : String(e)}`);
       } finally {
         await context.close().catch(() => {});
       }
     }
-    maps[map] = { means, ...lightRankVerdict(means) };
+    maps[map] = { means, colors, ...lightRankVerdict(means) };
   }
   const runner = { tool: "scripts/perf-run.mjs --mode light", size: `${o.size.w}x${o.size.h}`, dpr: o.dpr, chrome: browser.version(), url: url0 };
   const json = join(o.out, `light-${o.size.w}x${o.size.h}.json`);

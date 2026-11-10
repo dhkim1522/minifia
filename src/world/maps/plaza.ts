@@ -150,7 +150,7 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   morning: {
     hemi: 1.05 * Math.PI,
     moon: 0.7 * Math.PI,
-    moonColor: "#e0dad8",
+    moonColor: "#e2e8ee",
     exposure: 1.25,
     sky: ["#aab4c2", "#545c66", "#8a94a2"],
     fog: { near: 20, far: 44 },

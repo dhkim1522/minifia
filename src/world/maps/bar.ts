@@ -224,7 +224,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   morning: {
     hemi: 1.0 * Math.PI,
     moon: 0.55 * Math.PI,
-    moonColor: "#e0dad8",
+    moonColor: "#e2e8ee",
     exposure: 1.25,
     sky: ["#9aa2b0", "#444a54", "#3c4048"],
     fog: { near: 20, far: 44 },
