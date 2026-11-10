@@ -27,7 +27,7 @@ import {
   waitErrandDone,
   walkToPlace,
 } from "./browser.mjs";
-import { ERRAND_E2E_MS, ERRAND_LINES, ERRAND_NEAR_R_E2E, ERRAND_PER_PERSON, TRACE_WINDOW_MS, errandCardChecks, errandCardWalkChecks, errandChecks, errandOverlapChecks, errandParityChecks, expectedMarks, hostChimeChecks, nightFaceChecks, recordChecks, traceChecks, traceMarkChecks } from "./lib.mjs";
+import { ERRAND_E2E_MS, ERRAND_LINES, ERRAND_NEAR_R_E2E, ERRAND_PER_PERSON, TRACE_WINDOW_MS, errandCardChecks, errandCardWalkChecks, errandChecks, errandOverlapChecks, errandParityChecks, expectedMarks, hostChimeChecks, nightFaceChecks, outfitUniqueChecks, recordChecks, traceChecks, traceMarkChecks } from "./lib.mjs";
 
 const NICK = "심부름방장";
 /** 손님 이름(모두 4자 — emcee-band 와 같은 이름 규칙) */
@@ -522,6 +522,8 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
         const f = fold(traceMarkChecks({ stage: "morning", expectTrace: expectMorning.trace, expectSeen: expectMorning.seen, ...m }));
         rec(`${id}/morning1`, "TC7", `${all[i].role}${all[i].seat === victim ? "(탈락)" : ""}: 같은 옷 산 사람(${expectMorning.trace.length}명)·마지막 목격자(${expectMorning.seen.length}명) 이름표에만 표시`, f.ok, f.detail);
       }
+      // OU1·OU2 (18-09, D-01): 시작 때 겹친 옷이 풀려 한 판 옷이 모두 다르고, 같은 옷 표시는 많아야 한 이름표(테스트 방 봇은 look 없이 들어온다)
+      for (const l of outfitUniqueChecks({ players: ht.last().players, traceSeats: morningMarks[0].trace })) rec(`${id}/morning1`, l.id, l.label, l.ok, l.detail);
       rec(`${id}/morning1`, "TR7", "마피아·시민·경찰·의사·유령이 같은 표시 좌석 집합을 본다", new Set(morningMarks.map((m) => JSON.stringify([m.trace, m.seen]))).size === 1, `서로 다른 집합 ${new Set(morningMarks.map((m) => JSON.stringify([m.trace, m.seen]))).size}가지`);
       rec(`${id}/morning1`, "TR1", "모든 사람(유령 포함)에게 같은 카드 글자", texts.size === 1, `서로 다른 카드 글자 ${texts.size}가지`);
       rec(`${id}/morning1`, "TR2", "카드가 뜨는 동안 띠가 trace 문장이다", inWin.every((t) => t.bandLine === ERRAND_LINES.trace), `다른 문장 ${inWin.filter((t) => t.bandLine !== ERRAND_LINES.trace).length}곳`);

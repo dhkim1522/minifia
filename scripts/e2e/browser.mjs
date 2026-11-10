@@ -2101,7 +2101,7 @@ export function readTrace(page) {
       // 2행(마지막 목격, 16-09): 표식 수·목격 count·이름 줄 수(가장 긴 쪽)·카드 밖 넘침
       lastseenRows: qa("[data-lastseen-row]").length,
       lastseenCount: row ? row.getAttribute("data-lastseen-count") : null,
-      rowLines: row ? Math.max(1, ...[...row.querySelectorAll(".mv-evidence__victim, .mv-evidence__witness, .mv-evidence__zero")].map((el) => lines(el) ?? 1)) : null,
+      rowLines: row ? Math.max(1, ...[...row.querySelectorAll(".mv-evidence__victim, .mv-evidence__witness")].map((el) => lines(el) ?? 1)) : null,
       rowOverflow: row ? row.scrollWidth > row.clientWidth + 1 : null,
       cardRect: box(card),
       bandRect: box(document.querySelector("[data-host-band] .mv-host__band")),

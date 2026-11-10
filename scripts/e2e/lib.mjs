@@ -3953,8 +3953,26 @@ export function dressLockChecks(s) {
   return [result("AL1", L.AL1, bad1), result("AL2", L.AL2, bad2), result("AL3", L.AL3, bad3)];
 }
 
-/** 한 판 옷 유일·같은 옷 표시 판정(18-09, D-01): 자리 함수 — 다음 커밋에서 채운다. */
+/**
+ * OU1·OU2 한 판 옷 유일·같은 옷 표시(18-09, D-01·SC-1). s = { players: view.players([{ seat, look?, left? }]), traceSeats: 이름표에 같은 옷 표시가 붙은 좌석 배열 }.
+ * OU1 앉은 사람(left 아님)의 (look ?? "coat") 이 서로 다르다 — 겹치면 옷 id 와 좌석을 나열 · OU2 같은 옷 표시 이름표가 많아야 1개.
+ * players 가 배열이 아니거나 traceSeats 가 정수 배열이 아니면 두 줄 모두 측정 못 함이다. detail 에는 옷 id·좌석 번호·개수만 싣는다(역할·닉네임 없음, 옷은 공개 값 L25).
+ */
 export function outfitUniqueChecks(s) {
-  void s;
-  return [];
+  const L = {
+    OU1: "한 판 안에서 옷이 서로 다르다(D-01)",
+    OU2: "같은 옷 표시 이름표가 많아야 1개(SC-1)",
+  };
+  if (!s || !Array.isArray(s.players) || !s.players.every((p) => p && Number.isInteger(p.seat)) || !Array.isArray(s.traceSeats) || !s.traceSeats.every((x) => Number.isInteger(x))) {
+    return Object.keys(L).map((id) => noMeasure(id, L[id], "view.players 와 같은 옷 표시 좌석"));
+  }
+  const byOutfit = new Map();
+  for (const p of s.players) {
+    if (p.left === true) continue;
+    const wear = p.look ?? "coat";
+    byOutfit.set(wear, [...(byOutfit.get(wear) ?? []), p.seat]);
+  }
+  const bad1 = [...byOutfit].filter(([, seats]) => seats.length > 1).map(([wear, seats]) => `옷 ${wear} 를 좌석 [${[...seats].sort((a, b) => a - b)}] 이 같이 입음`);
+  const bad2 = s.traceSeats.length <= 1 ? [] : [`같은 옷 표시 ${s.traceSeats.length}개 좌석 [${[...s.traceSeats].sort((a, b) => a - b)}]`];
+  return [result("OU1", L.OU1, bad1), result("OU2", L.OU2, bad2)];
 }
