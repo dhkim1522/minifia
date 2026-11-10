@@ -84,15 +84,17 @@ describe("장면 3: 허용 목록 밖은 inert", () => {
 });
 
 describe("장면 6: 이름표만 열린다", () => {
-  it(".mf-world__tags 는 inert 가 없고 머리·입력면·아래 패널은 inert", async () => {
+  it(".mf-world__tags 는 inert 가 없고 머리·입력면은 inert, 아래 패널은 없다", async () => {
     const { container } = await mount(6);
     expect(q(container, ".mf-world__tags")!.hasAttribute("inert")).toBe(false);
     expect(inertAbove(q(container, "[data-pick]"))).toBe(false);
-    for (const sel of [".mf-game__header", ".mf-world__input", "[data-world-panel]"]) {
+    for (const sel of [".mf-game__header", ".mf-world__input"]) {
       const el = q(container, sel);
       expect(el, `${sel} 가 있어야 한다`).not.toBeNull();
       expect(el!.hasAttribute("inert"), `${sel} 는 inert`).toBe(true);
     }
+    // 18-03: 아래 패널은 막아 두는 것이 아니라 DOM 에 없다
+    expect(q(container, "[data-world-panel]") === null, "[data-world-panel] 이 DOM 에 없다").toBe(true);
   });
 
   it("장면 5 에서 6 으로 갈 때 이름표 층의 inert 가 풀린다", async () => {

@@ -10,7 +10,9 @@ import { SFX_IDS } from "../../src/audio/recipes";
 import { setEngineForTest } from "../../src/audio/unlock";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { sayItems } from "../../src/audio/voice";
-import { TUTORIAL_LINES, TUTORIAL_PICK, TUTORIAL_SCENES } from "../../src/game/tutorialScript";
+import { TUTORIAL_LINES, TUTORIAL_PICK, TUTORIAL_SCENES, tutorialView } from "../../src/game/tutorialScript";
+import { ChatStore } from "../../src/net/chatStore";
+import { WorldStore } from "../../src/world/store";
 import { makeRig } from "../helpers/soundRig";
 
 const connection = vi.hoisted(() => ({ calls: 0 }));
@@ -373,5 +375,26 @@ describe("사회자 띠: 말하는 시간·소리 꺼짐", () => {
     const button = container.querySelectorAll("[data-sound-button]");
     expect(button).toHaveLength(1);
     expect(button[0]!.closest("[data-tutorial-host]")).not.toBeNull();
+  });
+});
+
+describe("지도 장면에 아래 패널·[내 역할]이 없다 (D-06)", () => {
+  it.each([2, 3, 4, 5, 6] as const)("장면 %i: 패널·[내 역할]·입력칸이 DOM 에 없고 머리·[건너뛰기]·사회자 띠는 있다", async (n) => {
+    const { container } = await mount({ initialScene: n });
+    advance(0);
+    expect(container.querySelectorAll("[data-world-panel]").length).toBe(0);
+    expect(container.querySelectorAll(".mf-game__panel").length).toBe(0);
+    expect(container.querySelectorAll(".mf-rolecard-btn").length).toBe(0);
+    expect(container.querySelectorAll("textarea, input[type=\"text\"]").length).toBe(0);
+    expect(container.querySelector(".mf-game__header")).not.toBeNull();
+    expect(skip$(container)).not.toBeNull();
+    expect(container.querySelector("[data-tutorial-host]")).not.toBeNull();
+  });
+
+  it("튜토리얼 밖 실제 판처럼 panelless 없이 그리면 아래 패널이 1개다(실제 판 불변)", async () => {
+    const { GameMap } = await import("../../src/screens/GameMap");
+    const view = tutorialView(2, { now: NOW });
+    const { container } = render(<GameMap view={view} store={new WorldStore()} chat={new ChatStore()} send={() => true} canSend offset={0} />);
+    expect(container.querySelectorAll("[data-world-panel]").length).toBe(1);
   });
 });
