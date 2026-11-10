@@ -2883,9 +2883,9 @@ export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMo
 export const VIEW_DAY_KEYS = new Set(["n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown", "chalk", "evidence"]);
 /** 밤 역할별 사회자 줄(src/game/hostLine.ts HOST_LINES 의 night.mafia·police·doctor 사본) — 다른 역할 화면에 있으면 누설이다. e2eContract 가 같음을 고정한다. */
 export const HOST_ACT_LINES = {
-  mafia: "밤이 되었습니다. 없앨 사람의 이름표를 눌러 주세요.",
-  police: "밤이 되었습니다. 조사할 사람의 이름표를 눌러 주세요.",
-  doctor: "밤이 되었습니다. 지킬 사람의 이름표를 눌러 주세요.",
+  mafia: "밤이 되었습니다. 없앨 사람의 얼굴을 눌러 주세요.",
+  police: "밤이 되었습니다. 조사할 사람의 얼굴을 눌러 주세요.",
+  doctor: "밤이 되었습니다. 지킬 사람의 얼굴을 눌러 주세요.",
 };
 /** 역할 목표 문장(src/game/roleText.ts ROLE_TEXT[role].goal 사본). */
 export const GOALS = {
