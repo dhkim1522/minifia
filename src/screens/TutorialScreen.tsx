@@ -12,7 +12,7 @@ import { RecordCard } from "../components/v2/RecordCard";
 import { TutorialReveal } from "../components/v2/TutorialReveal";
 import { TutorialRoleCards } from "../components/v2/TutorialRoleCards";
 import { WorldStage } from "../components/WorldStage";
-import { TUTORIAL_CAST, TUTORIAL_LINES, TUTORIAL_PICK, TUTORIAL_SCENES, WRONG_HINT_AFTER, makeTutorialSend, tutorialSnap, tutorialStageLook, tutorialStageView, tutorialSuspectStand, tutorialSuspectWalk, tutorialView } from "../game/tutorialScript";
+import { TUTORIAL_CAST, TUTORIAL_LINES, TUTORIAL_PICK, TUTORIAL_SCENES, WRONG_HINT_AFTER, makeTutorialSend, tutorialSnap, tutorialStageLook, tutorialStageView, tutorialSuspectStand, tutorialSuspectWalk, tutorialView, tutorialCameraOf } from "../game/tutorialScript";
 import type { TutorialFocusWindow, TutorialLineKey, TutorialSceneNo } from "../game/tutorialScript";
 import type { RecordRow } from "../game/recordView";
 import { faceSrc, preloadRoleAssets, seatColorVar } from "../net/assets";
@@ -421,7 +421,7 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
       <div className="mf-room__body">
         <div key={kind} className="mf-phase-enter">
           {kind === "map" && mapView !== null ? (
-            <GameMap view={mapView} store={store} chat={chat} send={send} canSend offset={0} panelless toast={cur.n === 6 ? toast : null} onLeave={skip} />
+            <GameMap view={mapView} store={store} chat={chat} send={send} canSend offset={0} panelless camera={tutorialCameraOf(cur.n)} toast={cur.n === 6 ? toast : null} onLeave={skip} />
           ) : stageView !== null ? (
             <div className="mf-tut__stage">
               <WorldStage view={stageView} store={store} scene={stageLook} canWalk={false} send={send} canSend offset={0} onNotice={noop} onLeave={skip} onReady={onStageReady} />

@@ -298,12 +298,15 @@ export function tutorialStageLook(n: 1 | 7, s: { night: boolean; victimGone: boo
 
 // ---- 카메라 (P18-8) ----
 
-/** 광장 가운데 고정·줌 1 (자리 표시 — 18-03 GREEN 에서 채운다) */
+/**
+ * 튜토리얼 지도 장면 2·5·6 의 카메라: 광장 가운데 고정·줌 1. 광장 가운데 = GATHER_CENTER, 지목 단계와 같은 구도 —
+ * 장면 5 의 선이 화면 안 도윤에게 닿게(P18-8). target 은 18-08 이 폰 6종 측정으로 조정할 수 있다.
+ */
 export const TUTORIAL_FIXED_CAMERA: CameraMode = { mode: "fixed", target: { x: 0, z: 0 }, zoom: 1 };
 
-/** 지도 장면 n 의 카메라 덮어쓰기. 없으면 실제 판의 sceneLook 카메라 그대로 (자리 함수 — 늘 undefined) */
-export function tutorialCameraOf(_n: number): CameraMode | undefined {
-  return undefined;
+/** 지도 장면 n 의 카메라 덮어쓰기: 2·5·6 은 고정, 그 밖(3·4 는 나를 따라간다)은 undefined — 실제 판의 sceneLook 카메라 그대로 */
+export function tutorialCameraOf(n: number): CameraMode | undefined {
+  return n === 2 || n === 5 || n === 6 ? TUTORIAL_FIXED_CAMERA : undefined;
 }
 
 // ---- 위치 ----

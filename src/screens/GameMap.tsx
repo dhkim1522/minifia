@@ -67,6 +67,7 @@ import { useMapInsets } from "../net/useMapInsets";
 import { useReducedMotion } from "../net/useReducedMotion";
 import type { RoomConnection } from "../net/useRoomConnection";
 import { sceneLook } from "../world/presence";
+import type { CameraMode } from "../world/presence";
 import { worldTestHooksEnabled } from "../world/testHooks";
 import type { RingKind } from "../world/runtime";
 import type { WorldStore } from "../world/store";
@@ -137,6 +138,8 @@ interface GameMapProps {
   roleCard?: { unread: boolean; onOpen: () => void };
   /** 튜토리얼 지도 장면처럼 아래 패널을 그리지 않는다. 심부름 단계는 이 값과 무관하게 패널이 없다(16-08) */
   panelless?: boolean;
+  /** 튜토리얼이 카메라를 정해 덮어쓴다(18-03, P18-8). 없으면 sceneLook 의 카메라 그대로 — 실제 판은 넘기지 않는다 */
+  camera?: CameraMode;
   /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 헤더 아래 왼쪽에 놓는다 */
   testButton?: ReactNode;
   /** 지금 띄울 결과 알림 글자·아이콘(useDayFx 가 서버 view 의 차이로 만든다). 없으면 null */
@@ -208,7 +211,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, panelless, testButton, announce = null, toast: pointToast = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onHostLocal, onLeave }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, panelless, camera, testButton, announce = null, toast: pointToast = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onHostLocal, onLeave }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드·기록 칸 높이는 대기실과 같은 훅이다. 키보드가 열려 있으면 행동 줄을 숨기고 기록 칸을 72 로 줄인다(07-19).
@@ -833,8 +836,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   }, [ballots === null, announceText]);
 
   const scene = useMemo(
-    () => sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) }),
-    [view, stageH, fading, mine, verdictZoom],
+    () => ({
+      ...sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) }),
+      ...(camera ? { camera } : {}),
+    }),
+    [view, stageH, fading, mine, verdictZoom, camera],
   );
 
   return (
