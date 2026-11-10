@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Icon } from "../../src/components/Icon";
@@ -265,6 +266,38 @@ describe("역할 문구 한 덩어리 (P181-0, A1a·A1d)", () => {
     expect(container.querySelector("[data-role-line]")).toBeNull();
     expect(container.textContent).not.toContain("당신은");
     expect(container.textContent).not.toContain(second(role));
+  });
+});
+
+
+/** CSS 파일에서 선택자 하나가 들어간 규칙 본문들을 합쳐 돌려준다(주석 제거, 공백 한 칸). */
+function cssRule(css: string, selector: string): string {
+  const bodies: string[] = [];
+  for (const m of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    const selectors = m[1]!.replace(/\/\*[\s\S]*?\*\//g, "").split(",").map((x) => x.trim());
+    if (selectors.includes(selector)) bodies.push(m[2]!);
+  }
+  expect(bodies.length, `규칙 ${selector}`).toBeGreaterThan(0);
+  return bodies.join(" ").replace(/\s+/g, " ");
+}
+
+describe("문구 줄바꿈 CSS (A-1 계약 3·7)", () => {
+  const read = (f: string) => readFileSync(`src/styles/${f}`, "utf8");
+  it.each([
+    ["phase.css", ".mf-card__desc"],
+    ["rolecard.css", ".mf-rolecard__desc"],
+    ["tutorial.css", ".tut-role__line"],
+  ])("%s 의 %s 는 white-space: pre-line 과 word-break: keep-all 이다", (file, selector) => {
+    const body = cssRule(read(file), selector);
+    expect(body).toContain("white-space: pre-line");
+    expect(body).toContain("word-break: keep-all");
+  });
+
+  it("phase.css·rolecard.css 에 .mf-goal 로 시작하는 선택자가 없다(목표 칩 CSS 삭제)", () => {
+    for (const f of ["phase.css", "rolecard.css"]) {
+      const code = read(f).replace(/\/\*[\s\S]*?\*\//g, "");
+      expect(/\.mf-goal/.test(code), f).toBe(false);
+    }
   });
 });
 

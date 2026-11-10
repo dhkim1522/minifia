@@ -145,6 +145,38 @@ describe("PreGame 무대 틀", () => {
   });
 });
 
+describe("역할 확인 무대 CSS (P181-1·P181-2)", () => {
+  const css = readFileSync("src/styles/phase.css", "utf8");
+  const rule = (selector: string): string => {
+    const bodies: string[] = [];
+    for (const m of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const selectors = m[1]!.replace(/\/\*[\s\S]*?\*\//g, "").split(",").map((x) => x.trim());
+      if (selectors.includes(selector)) bodies.push(m[2]!);
+    }
+    expect(bodies.length, `규칙 ${selector}`).toBeGreaterThan(0);
+    return bodies.join(" ").replace(/\s+/g, " ");
+  };
+
+  it("역할 확인: 이름표 층 숨김·카드 위 끝 = 독 + 8 (P181-1·P181-2)", () => {
+    const tags = rule(".mf-pregame .mf-world__tags");
+    expect(tags).toContain("visibility: hidden");
+    expect(tags).not.toContain("display: none");
+    const stage = rule(".mf-reveal__stage");
+    expect(stage).toContain("var(--mf-host-dock, 80px)");
+    expect(stage).not.toContain("--mf-host-bottom");
+  });
+
+  it("이름표 DOM 은 지우지 않는다: 가짜 무대 상자는 역할 확인에서도 그대로 있다", () => {
+    const view = makeView("roleReveal");
+    const { container } = render(
+      <PreGame view={view} store={new WorldStore()} send={vi.fn()} canSend offset={0} onLeave={vi.fn()}>
+        <RoleReveal view={view} offset={0} myRoleButton={<button type="button">역할 카드</button>} onSeenFront={vi.fn()} />
+      </PreGame>,
+    );
+    expect(container.querySelector(".mf-pregame__stage [data-world-stage-fake]")).not.toBeNull();
+  });
+});
+
 describe("RoomScreen: 배정 → 확인 사이에 무대가 다시 만들어지지 않는다", () => {
   it("assigning 에서 roleReveal 로 넘어가도 WorldStage 는 한 번만 마운트된다", () => {
     connectionMock.current = conn(makeView("assigning"));
