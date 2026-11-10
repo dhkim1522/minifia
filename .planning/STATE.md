@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 18
 current_phase_name: "바로 고칠 것: 증거·조명·튜토리얼 손보기"
-current_plan: 8
+current_plan: 9
 status: executing
-stopped_at: Completed 18-06-PLAN.md
-last_updated: "2026-11-10T00:54:58.803Z"
+stopped_at: Completed 18-07-PLAN.md
+last_updated: "2026-11-10T01:10:34.025Z"
 last_activity: 2026-11-10
 last_activity_desc: Phase 18 execution started
-state_head: a0471dd0a761be9b742bb6764590f5763bb039a0
+state_head: 68c7a02cfe6672c7160aa8b04911351a9ec245ac
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 58
-  completed_plans: 54
+  completed_plans: 55
   percent: 44
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 18 (바로 고칠 것: 증거·조명·튜토리얼 손보기) — EXECUTING
-Current Plan: 8
+Current Plan: 9
 Total Plans in Phase: 11
 Status: Ready to execute
 Last activity: 2026-11-10 — Phase 18 execution started
@@ -252,6 +252,7 @@ Last activity: 2026-11-10 — Phase 18 execution started
 | Phase 18 P11 | 12 min | 2 tasks | 7 files |
 | Phase 18 P05 | 15 min | 2 tasks | 10 files |
 | Phase 18 P06 | 25 min | 3 tasks | 9 files |
+| Phase 18 P07 | 25 min | 2 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -560,6 +561,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18]: 18-11: nomination.act 의 '이름표'는 실제 이름표를 누르므로 유지, 밤 띠 네 문장만 '얼굴'로. 귓속말 시트 preNotice 는 남기고 역할 확인 예고만 삭제
 - [Phase 18]: 18-05: 옷장 잠금은 서버 view.players 에서 나를 뺀 lockedOutfits 로 매 렌더 계산하고, 내 옷은 남이 같은 옷을 가져도 잠그지 않는다
 - [Phase 18]: 18-06: 스포트라이트 장면 4 lit 은 컨테이너 대신 .mf-game__record > .mv-record 카드 본체를 쓴다
+- [Phase 18]: 18-07: 조명 렌더 측정은 ?perf=1&shot=1 같은 카메라 정지 화면(perf-run --mode light). morning 행만 0.05π 씩 올렸고(광장 1.05π/0.7π, 바 1.0π/0.55π), 남은 판정(vote<night, 바 morning 1.53배)은 18-10 HANDOFF 로
 
 ### Pending Todos
 
@@ -630,8 +632,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-10T00:54:58.144Z
-Stopped at: Completed 18-06-PLAN.md
+Last session: 2026-11-10T01:10:33.351Z
+Stopped at: Completed 18-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
