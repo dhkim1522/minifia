@@ -32,7 +32,7 @@ describe("시간대 표 (todOf, D 계약 3)", () => {
   });
 
   it("장면 조명과 어긋나지 않는다 — talk→day, vote·trial→dusk, night→night, morning→morning", () => {
-    const byLight = { talk: "day", vote: "dusk", trial: "dusk", night: "night", morning: "morning" } as const;
+    const byLight = { talk: "day", vote: "dusk", trial: "dusk", night: "night", nightCitizen: "night", nightGhost: "night", morning: "morning" } as const;
     for (const phase of Object.keys(EXPECT) as PhaseId[]) {
       expect(todOf(phase), phase).toBe(byLight[lightingOf(phase)]);
     }
