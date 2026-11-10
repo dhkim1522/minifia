@@ -632,8 +632,8 @@ describe("startGame (ROLE-01, ROOM-03, 결정 0012)", () => {
     const pool: RoleId[] = [];
     for (const role of ROLE_IDS) for (let i = 0; i < ROLE_TABLE[4][role]; i += 1) pool.push(role);
     for (let i = pool.length - 1; i >= 1; i -= 1) [pool[i], pool[0]] = [pool[0]!, pool[i]!];
-    const seatOrdered = ["s0", "s1", "s3", "s5"];
-    expect(seatOrdered.map((id) => byId.get(id)).join(",")).toBe(pool.join(","));
+    const seatSequence = ["s0", "s1", "s3", "s5"];
+    expect(seatSequence.map((id) => byId.get(id)).join(",")).toBe(pool.join(","));
   });
 });
 
