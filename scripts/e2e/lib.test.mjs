@@ -194,6 +194,7 @@ import {
   tutorialEvidenceChecks,
   tutorialFocusChecks,
   tutorialLeakChecks,
+  tutorialLineChecks,
   tutorialOpeningChecks,
   tutorialRevealChecks,
   tutorialRoleCardChecks,
@@ -4710,4 +4711,47 @@ test("tutorialEntryChecks kind end: 마무리 카드 1개·진입 카드·단추
   assert.ok(teFails(entryIn(end), { kind: "card" }).length > 0); // 카드 기대에 카드가 없음
   assert.ok(teFails(entryIn({ entry: { cards: 1, buttons: 0, ends: 1, rect: RR(20, 300, 350, 84) } }), { kind: "card" }).length > 0); // 카드와 마무리 카드가 함께 있으면 실패
   assert.ok(teFails(entryIn({ ...end, create: RR(20, 370, 350, 52), field: RR(20, 450, 350, 56) }), { kind: "end" }).length > 0);
+});
+
+test("tutorialLineChecks EV6~EV8: 장면 5 선 두 개의 끝과 도윤 이름표가 화면 안쪽 8 안이고 증거 카드·띠·수식 줄·[다음] 과 교차 0", () => {
+  const vp = { w: 390, h: 844 };
+  const ev = {
+    traceCard: RR(16, 130, 358, 120),
+    formula: RR(95, 700, 200, 44),
+    lines: [
+      { from: [60, 300], to: [200, 420] },
+      { from: [80, 320], to: [230, 420] },
+    ],
+    suspectTag: RR(170, 424, 90, 40),
+  };
+  const opts = { viewport: vp, band: { rect: RR(16, 70, 358, 52) }, next: RR(75, 760, 240, 56) };
+  const run = (e, o = opts) => tutorialLineChecks(e, o);
+  const by = (lines, id) => lines.find((l) => l.id === id);
+  const good = run(ev);
+  assert.deepEqual(good.map((l) => l.id), ["EV6", "EV7", "EV8"]);
+  assert.ok(good.every((l) => l.ok));
+  // 선 하나의 끝이 화면 밖
+  const out = run({ ...ev, lines: [ev.lines[0], { from: [80, 320], to: [395, 40] }] });
+  assert.equal(by(out, "EV6").ok, false);
+  assert.ok(/395/.test(by(out, "EV6").detail));
+  assert.equal(by(out, "EV7").ok, true);
+  // 안쪽 8 안이 아닌 곳(왼쪽 5)
+  assert.equal(by(run({ ...ev, lines: [{ from: [5, 300], to: [200, 420] }, ev.lines[1]] }), "EV6").ok, false);
+  // 이름표가 오른쪽 밖
+  const wide = run({ ...ev, suspectTag: RR(350, 424, 90, 40) });
+  assert.equal(by(wide, "EV7").ok, false);
+  assert.equal(by(wide, "EV6").ok, true);
+  // 이름표가 증거 카드·띠·수식 줄·[다음] 과 겹침
+  const onCard = run({ ...ev, suspectTag: RR(170, 200, 90, 40) });
+  assert.equal(by(onCard, "EV8").ok, false);
+  assert.ok(/증거 카드/.test(by(onCard, "EV8").detail));
+  assert.ok(/사회자 띠/.test(by(run({ ...ev, suspectTag: RR(170, 90, 90, 40) }), "EV8").detail));
+  assert.ok(/수식 줄/.test(by(run({ ...ev, suspectTag: RR(170, 690, 90, 40) }), "EV8").detail));
+  assert.ok(/\[다음\]/.test(by(run({ ...ev, suspectTag: RR(170, 770, 90, 40) }), "EV8").detail));
+  // 선이 1개이거나 이름표 사각형이 null 이면 세 줄 모두 측정 못 함
+  for (const bad of [{ ...ev, lines: [ev.lines[0]] }, { ...ev, suspectTag: null }, null]) {
+    const r = run(bad);
+    assert.equal(r.length, 3);
+    assert.ok(r.every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  }
 });

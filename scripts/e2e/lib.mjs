@@ -3809,3 +3809,13 @@ export function tutorialEvidenceChecks(ev, { scene, next } = {}) {
   }
   throw new Error(`tutorialEvidenceChecks: 장면 ${scene} 은 증거 층이 없다`);
 }
+
+/** 장면 5 선·도윤 이름표가 들어와야 하는 화면 안쪽 여백(px, UI-SPEC 장면 5 계약 — 앱 clampPoint 의 inset 8 과 같다) */
+export const TUTORIAL_LINE_INSET = 8;
+
+/** 장면 5 선·도윤 이름표 판정(EV6~EV8) — 자리 함수(18-08 RED): 아직 아무 줄도 돌려주지 않는다 */
+export function tutorialLineChecks(ev, opts) {
+  void ev;
+  void opts;
+  return [];
+}
