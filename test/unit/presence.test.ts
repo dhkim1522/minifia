@@ -241,12 +241,13 @@ describe("tensionOf (UI-SPEC 단계 조명: 선두·과반·찬반)", () => {
 });
 
 describe("sceneLook (위를 묶는다)", () => {
-  it("순차 지목 과반 + 스테이지 400: 고정·확대 없음·vote 조명·긴장 0·초점 없음, 산 사람 viewer 에는 유령 좌석이 없다", () => {
+  it("순차 지목 과반 + 스테이지 400: 고정·확대 없음·vote 조명·긴장 0·초점 없음, 산 사람 viewer 의 탈락 좌석 4 는 ghost 다", () => {
     const view = viewOf("nomination", { dead: [4], day: { turn: { order: [0, 1, 2, 3, 4], i: 3, endsAt: 9000 }, points: points([0, 2], [1, 2], [3, 2]) } });
     const look = sceneLook(view, { stageH: 400 });
     same(look.camera, { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
     same([look.lighting, look.tension, look.focusSeat], ["vote", 0, undefined]);
-    same(Object.keys(look.seats).map(Number), [0, 1, 2, 3]);
+    same(Object.keys(look.seats).map(Number), [0, 1, 2, 3, 4]);
+    same(look.seats[4], { show: true, ghost: true });
   });
   it("토론: 따라가기·talk·긴장 0·초점 없음", () => {
     const look = sceneLook(viewOf("discussion"), { stageH: 400 });
@@ -415,10 +416,11 @@ describe("sceneLook 의 pointAt (지목 방향)", () => {
     const look = sceneLook(view, { stageH: 400, mine: 4 });
     same([look.seats[1]?.pointAt, look.seats[3]?.pointAt], [4, 2]);
   });
-  it("그리지 않는 좌석(탈락한 산 사람 화면 밖)에는 pointAt 이 생기지 않는다", () => {
+  it("탈락한 좌석(산 사람 화면의 ghost)에는 남의 지목 줄이 있어도 pointAt 이 생기지 않는다", () => {
     const v = viewOf("nomination", { count: 6, mySeat: 1, dead: [3], day: { points: points([1, 2], [3, 2]) } });
     const look = sceneLook(v, { stageH: 400 });
-    expect(3 in look.seats).toBe(false);
+    same(look.seats[3], { show: true, ghost: true });
+    expect(look.seats[3]?.pointAt).toBeUndefined();
   });
 });
 
@@ -492,12 +494,14 @@ describe("visibleSeats — 밤 시민 편 좌석 표 (T-09-21, 결정 0002·0021
       same(seats[2], { show: true, ghost: false });
     }
   });
-  it("밤·산 마피아는 산 좌석 전부, 밤·유령은 모두(탈락 좌석 ghost), 아침·산 사람은 산 좌석 전부", () => {
+  it("밤·산 마피아는 산 좌석 전부(탈락 좌석 없음), 밤·유령은 모두(탈락 좌석 ghost), 아침·산 사람은 탈락 좌석도 ghost 로 있다", () => {
     same(Object.keys(visibleSeats(asRole(viewOf("night", { mySeat: 1, dead: [4] }), "mafia"))).map(Number), [0, 1, 2, 3]);
     const ghost = visibleSeats(asRole(viewOf("night", { mySeat: 4, dead: [4] }), "citizen"));
     same(Object.keys(ghost).map(Number), [0, 1, 2, 3, 4]);
     expect(ghost[4]?.ghost).toBe(true);
-    same(Object.keys(visibleSeats(asRole(viewOf("morning", { mySeat: 1, dead: [4] }), "citizen"))).map(Number), [0, 1, 2, 3]);
+    const morning = visibleSeats(asRole(viewOf("morning", { mySeat: 1, dead: [4] }), "citizen"));
+    same(Object.keys(morning).map(Number), [0, 1, 2, 3, 4]);
+    same(morning[4], { show: true, ghost: true });
   });
   it("낮 단계의 시민은 산 좌석 전부를 본다(밤에만 줄어든다)", () => {
     same(Object.keys(visibleSeats(asRole(viewOf("discussion", { mySeat: 1 }), "citizen"))).map(Number), [0, 1, 2, 3, 4]);

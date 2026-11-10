@@ -12,6 +12,8 @@ export type EmoteListener = (frame: EmoteFrame) => void;
  * - snap: epoch 가 더 낡았으면 버리고, 아니면 구간을 통째로 바꾼다(이전 연결의 위치를 병합하지 않는다).
  *   새 연결의 첫 snap 이든 같은 연결의 다시 snap(대기실 복귀)이든 등장 연출 없이 바로 맞춘다.
  *   예외: near 표시가 있고 이미 준비된 같은 epoch 의 snap 은 근처 표본이라 새로 보이는 좌석이 등장 대상이다(15페이즈).
+ * - 마지막 구간 기억(lastSegs, 18.1 C-6): snap 이 좌석을 빼도(탈락자는 산 사람 소켓의 다음 snap 에 없다) 그 좌석이 마지막으로 받은 구간은 남긴다.
+ *   산 사람 화면이 탈락한 좌석을 유령으로 세울 자리다. 이전 연결의 위치는 섞지 않는다 — reset() 과 retainSeats()(방을 떠난 좌석)에서만 지운다.
  * - move: 더 낡은 epoch 는 버린다. 더 새 epoch 의 move 는 그 snap 이 오기 전이라 버리고 준비 상태를 푼다.
  *   같은 연결에서 처음 보는 seat 의 move 만 등장 대상이다.
  */
@@ -19,6 +21,7 @@ export class WorldStore {
   private epoch = -1;
   private ready = false;
   private segs = new Map<number, Segment>();
+  private lastSegs = new Map<number, Segment>();
   private entered = new Set<number>();
   private moveSeqs = new Map<number, number>();
   private listeners = new Set<WorldStoreListener>();
@@ -36,10 +39,12 @@ export class WorldStore {
         for (const s of [...this.entered]) if (!next.has(s)) this.entered.delete(s);
         for (const s of [...this.moveSeqs.keys()]) if (!next.has(s)) this.moveSeqs.delete(s);
         this.segs = next;
+        this.rememberAll(next);
         this.notify();
         return;
       }
       this.segs = next;
+      this.rememberAll(next);
       this.entered.clear();
       this.moveSeqs.clear();
       this.epoch = epoch;
@@ -58,6 +63,7 @@ export class WorldStore {
     if (!this.ready) return;
     if (!this.segs.has(frame.s)) this.entered.add(frame.s);
     this.segs.set(frame.s, { p: [...frame.p], t0: frame.t0, v: frame.v });
+    this.lastSegs.set(frame.s, { p: [...frame.p], t0: frame.t0, v: frame.v });
     this.moveSeqs.set(frame.s, (this.moveSeqs.get(frame.s) ?? 0) + 1);
     this.notify();
   }
@@ -85,6 +91,7 @@ export class WorldStore {
     this.epoch = -1;
     this.ready = false;
     this.segs.clear();
+    this.lastSegs.clear();
     this.entered.clear();
     this.moveSeqs.clear();
     if (changed) this.notify();
@@ -114,6 +121,14 @@ export class WorldStore {
     return this.segs.get(seat);
   }
 
+  /**
+   * 탈락한 좌석을 산 사람 화면에 유령으로 세울 마지막 구간(18.1 C-6). snap 이 그 좌석을 빼도 남는다.
+   * 이전 연결의 위치는 섞지 않는다(reset 에서 지움) — 새로고침·재접속 뒤에는 받은 적 없는 좌석이라 undefined.
+   */
+  lastSegOf(seat: number): Segment | undefined {
+    return this.lastSegs.get(seat);
+  }
+
   /** 서버 시각 serverNow 의 위치(월드 단위). 서버와 같은 shared positionAt 이라 같은 시각이면 같은 값이다(MAP-05). */
   positionOf(seat: number, serverNow: number): { x: number; z: number } | null {
     const seg = this.segs.get(seat);
@@ -136,6 +151,7 @@ export class WorldStore {
       this.entered.delete(s);
       this.moveSeqs.delete(s);
     }
+    for (const s of [...this.lastSegs.keys()]) if (!keep.has(s)) this.lastSegs.delete(s);
     if (removed.length > 0) this.notify();
     return removed;
   }
@@ -145,6 +161,10 @@ export class WorldStore {
     return () => {
       this.listeners.delete(cb);
     };
+  }
+
+  private rememberAll(next: ReadonlyMap<number, Segment>): void {
+    for (const [s, seg] of next) this.lastSegs.set(s, { p: [...seg.p], t0: seg.t0, v: seg.v });
   }
 
   private notify(): void {

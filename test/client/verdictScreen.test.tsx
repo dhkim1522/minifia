@@ -512,13 +512,14 @@ describe("처형 화면 (DAY-06)", () => {
     expect(lastScene().seats[4]?.show).toBe(true);
   });
 
-  it("재접속 첫 화면이 처형 단계(A1): 알림·채팅 줄·연출이 없고, 처형된 사람은 산 사람 화면에 없다", () => {
+  it("재접속 첫 화면이 처형 단계(A1): 알림·채팅 줄·연출이 없고, 처형된 사람은 연출 없이 ghost 로 남는다", () => {
     const { container } = mount(passedView());
     advance(5000);
     expect(announceText(container)).toBe("");
     expect(container.querySelectorAll(".mv-chat__sys").length).toBe(0);
-    expect(rt.scenes.every((s) => (s as SceneLook).seats[4] === undefined)).toBe(true);
-    expect(seatTag(container, 4)).toBeNull();
+    // 연출은 없지만(fadeAt 없음) 탈락자는 ghost 로 남는다(위치는 이 연결이 받은 적 없으면 런타임이 그리지 않는다)
+    expect(rt.scenes.every((s) => (s as SceneLook).seats[4]?.fadeAt === undefined)).toBe(true);
+    expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
   });
 
   it("역할 비공개(결정 0053-2): 처형 단계 DOM 전체에 마피아·경찰·의사·시민이 없고 직업 칩·진홍도 없다", () => {
@@ -565,7 +566,6 @@ describe("처형 화면 (DAY-06)", () => {
     advance(5000);
     // 연출 뒤에는 장면 표가 ghost 로 남기고(산 사람 화면, 직업 단서 없음) 이름표만 is-ghost 모양이다
     expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
-    expect(m.container.querySelector("[data-ghost-seat]")).toBeNull();
     expect(m.container.querySelector("[data-role-chip]")).toBeNull();
   });
 });
