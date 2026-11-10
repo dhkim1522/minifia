@@ -204,6 +204,14 @@ describe("장면 1~7 끝까지 (가짜 타이머)", () => {
   });
 });
 
+describe("시간대 배지는 튜토리얼에 없다 (18.1 Q5, D 계약 2)", () => {
+  it.each([1, 2, 3, 4, 5, 6, 7] as const)("장면 %i: [data-tod] 가 0개", async (n) => {
+    const { container } = await mount({ initialScene: n });
+    expect(container.querySelectorAll("[data-tod]").length).toBe(0);
+    expect(container.querySelector(".mv-tod")).toBeNull();
+  });
+});
+
 describe("[건너뛰기] 는 어느 장면에서나 onEnd(skipped) 한 번", () => {
   it.each([1, 2, 3, 4, 5, 6, 7] as const)("장면 %i", async (n) => {
     const { container, onEnd } = await mount({ initialScene: n });

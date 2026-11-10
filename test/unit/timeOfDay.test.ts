@@ -1,3 +1,4 @@
+import { readFileSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { PhaseId } from "../../shared/protocol";
 import { lightingOf } from "../../src/world/presence";
@@ -43,4 +44,21 @@ describe("시간대 표 (todOf, D 계약 3)", () => {
     expect(TOD_ORDER).toEqual(["morning", "day", "dusk", "night"]);
     expect(todSrc("day")).toBe(`/weather/weather-day.svg?v=${ASSET_VERSION}`);
   });
+});
+
+// D3: 날씨 에셋은 사용자 원본 그대로 — 정사각·가볍고·외부 참조 없음·큰 원본 사본과 바이트가 같다.
+describe("날씨 에셋 계약 (D3)", () => {
+  for (const tod of ["morning", "day", "dusk", "night"] as const) {
+    const file = `public/weather/weather-${tod}.svg`;
+    it(`${tod}: 정사각 viewBox·≤ 8KB·외부 참조·script 없음·원본 사본과 같다`, () => {
+      expect(statSync(file).size).toBeLessThanOrEqual(8192);
+      const svg = readFileSync(file, "utf8");
+      const vb = /viewBox="0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)"/.exec(svg);
+      expect(vb, "viewBox").not.toBeNull();
+      expect(vb![1]).toBe(vb![2]);
+      for (const bad of ["<script", "href", "<image", "<style", "<animate", "@keyframes", "<text"]) expect(svg, bad).not.toContain(bad);
+      for (const m of svg.matchAll(/url\(/g)) expect(svg.slice(m.index!, m.index! + 5)).toBe("url(#");
+      expect(readFileSync(file).equals(readFileSync(`design/v3.0/weather/weather-${tod}.svg`))).toBe(true);
+    });
+  }
 });
