@@ -3,10 +3,29 @@ phase: 18-quick-fixes
 plan: "14"
 subsystem: deploy
 tags: [deploy, smoke, gap-closure, g-18-1, g-18-3, sc-2, sc-5]
-status: in_progress
+status: complete
+requirements: [SC-2, SC-5]
+gap_ids: [G-18-1, G-18-3]
+
+actuals:
+  tokens: 8000
+  tasks: 3
+  commits: 3
+
+plan_head_before: 722eb5652d8f7e80732182b11a99ae233ab1abe7
+plan_head_after: ab0df26cb5a1524562fa44a39c13ff1d92918559
+commits: 3
+
+key-files:
+  modified:
+    - HANDOFF.md
+    - docs/decisions/0081-v3-missions-flow-and-modes.md
+    - .planning/phases/18-quick-fixes/18-14-SUMMARY.md
 ---
 
 # Phase 18 Plan 14: gap 수정 배포·배포본 재검증 요약
+
+**조명(18-12)·smoke(18-13) 수정을 minifia-v3 에 배포(`6ea0749c` → `722eb565`)했고, 배포본 tutorial-solo 폰 6종 통과·smoke full 4/5 통과(고친 유형 0회)를 확인했다.**
 
 ## 진행
 
@@ -49,3 +68,30 @@ status: in_progress
 - R2 해석(추정): 서버 시각 편차 0 인 다른 4회와 달리 이 회차는 서버 판정에 도달하기 전에 HTTP 전송이 실패했다. 서버 결함 증거는 없다. 문턱은 그대로 둔다. 같은 `fetch failed` 가 반복되면 smoke 의 HTTP 요청(특히 40초 대기 뒤 첫 요청) 오류 원인 출력(`cause`)을 더하는 것을 다음 후보로 둔다. 이 계획에서는 고치지 않는다.
 - 도착 편차(망 포함, 정보용)는 최대 1248ms 까지 나오지만 판정에 쓰지 않는다(18-13 근거).
 - DO 쓰기 한도: 500/1101 없음.
+
+## 단계 3 — 문서·push
+
+- 결정 0081 "실행 중 달라진 곳": 18-07 남은 조명 문제 줄을 "18-12 시간대별 재질·하늘" 줄로 바꾸고 "18-13 smoke" 줄을 더했다. "18-02·18-07 낮 조명" 줄은 그대로.
+- HANDOFF.md 5950바이트(한도 6144): 새 version, 18 조명 눈 확인(약하면 다음 손잡이는 바 창 빛), smoke 4/5, 다음 할 일 `/gsd-plan-phase 18.1`.
+- `npx vitest run test/unit/handoff.test.ts` 통과. 위생 `git grep` 은 이 계획이 바꾼 파일에서 0건(전체 결과는 `.planning/milestones/` 옛 문서의 일반 용례·이전 페이즈 SUMMARY 의 검사 기록 문구뿐, 이 계획 변경 아님). 계정 이메일·ID·토큰은 어디에도 적지 않았다.
+- `git push origin v3` 완료(`ab0df26c`).
+
+## Deviations from Plan
+
+None - plan executed exactly as written. (`npm test` 첫 실행의 2건 실패 간헐과 smoke R2 `fetch failed` 는 위 단계 절에 기록했다. 둘 다 코드 수정 없이 재실행·반복으로 가렸고 문턱은 바꾸지 않았다.)
+
+## 남은 것
+
+- G-18-1: 배포본 조명의 사람 눈 확인(HANDOFF "18 조명 눈 확인")은 v3.0 실테스트로 넘어갔다. 측정 판정은 통과.
+- G-18-3: 목표(5회 중 4회) 달성. smoke 의 `fetch failed` 가 반복되면 HTTP 요청 오류 원인(`cause`) 출력을 더한다.
+- 다음: 18.1 화면 손보기 → 19.
+
+## Known Stubs
+
+None.
+
+## Self-Check: PASSED
+
+- FOUND: 18-14-SUMMARY.md, HANDOFF.md, docs/decisions/0081-v3-missions-flow-and-modes.md
+- FOUND commits: 92d9421a, 35f43881, ab0df26c(원격 v3 에 있음)
+- 배포본 health version `2026-11-10T10:31:13Z+722eb565`, v1·v2 변화 없음.
