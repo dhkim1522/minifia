@@ -676,6 +676,25 @@ export async function measureChatSheet(page, draft) {
   return { open, closes, draft: { before, after } };
 }
 
+// ---- C 산 사람 화면 유령·유령 화면 직업 의상 (18.1-09) ----
+
+/** 직업 → 유령 의상(src/world/ghostOutfit.ts 표 사본, flows.mjs GHOST_JOB_OUTFIT 과 같은 값). 알 수 없으면 coat */
+export const GHOST_JOB_OUTFIT_E2E = Object.freeze({ mafia: "mafia", police: "police", doctor: "doctor", citizen: "coat" });
+/** 산 사람 화면이 탈락자 유령을 그리지 않는 단계(밤·심부름 — 서버가 본인(+근처)만 보내는 단계, 18.1-02 선택) */
+export const LIVE_GHOST_ABSENT_PHASES = Object.freeze(["night", "errand"]);
+/** 유령이 걷기 전·후 산 사람 화면의 유령 자리가 같다고 보는 허용 오차(월드 단위) */
+export const GHOST_STILL_TOL = 0.05;
+
+export function liveGhostChecks() {
+  return ["C1", "C2"].map((id) => row(id, "(미구현)", ["미구현"]));
+}
+export function ghostViewChecks() {
+  return [row("C3", "(미구현)", ["미구현"])];
+}
+export function ghostStillChecks() {
+  return row("GH12", "(미구현)", ["미구현"]);
+}
+
 // ---- 흐름 ----
 
 /** 판정 줄 목록을 한 줄(통과면 비움, 아니면 실패 id 와 이유)로 접는다 */

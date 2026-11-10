@@ -10,6 +10,9 @@ import {
   CHAT_SHEET_CLOSE_MS,
   CHAT_SHEET_DRAG_PX,
   CHAT_WINDOW_MAX_LINES,
+  GHOST_JOB_OUTFIT_E2E,
+  GHOST_STILL_TOL,
+  LIVE_GHOST_ABSENT_PHASES,
   REVEAL_DOCK_GAP,
   ROLE_ART_MIN_H,
   ROLE_CARD_MAX_LINES,
@@ -24,6 +27,9 @@ import {
   revealCardChecks,
   chatSheetChecks,
   chatWindowChecks,
+  ghostStillChecks,
+  ghostViewChecks,
+  liveGhostChecks,
   revealStageChecks,
   roleLineBoxChecks,
   todAbsentChecks,
@@ -489,4 +495,155 @@ test("chatSheetChecks: 측정값이 없으면 측정값 없음으로 실패", ()
   const rows = chatSheetChecks(null);
   assert.deepEqual(ids(rows), ["B3", "B4"]);
   for (const r of rows) assert.match(r.detail, /측정값 없음/);
+});
+
+// ---- C 산 사람 화면 유령 (18.1-09) ----
+
+test("유령 상수: 직업 의상 표·밤/심부름 단계·위치 허용 오차", () => {
+  assert.deepEqual({ ...GHOST_JOB_OUTFIT_E2E }, { mafia: "mafia", police: "police", doctor: "doctor", citizen: "coat" });
+  assert.deepEqual([...LIVE_GHOST_ABSENT_PHASES].sort(), ["errand", "night"]);
+  assert.equal(GHOST_STILL_TOL, 0.05);
+});
+
+// 산 사람 화면: 죽은 좌석 [3] 이 마지막 자리에 코트 안개 유령으로 남아 있다
+const liveGood = () => ({
+  hook: true,
+  seats: [{ seat: 3, shown: { x: 1.5, z: -2 }, ghostTags: 1, chips: 0 }],
+  outfits: {},
+  roleChips: 0,
+  ghostSeats: 0,
+});
+const liveRows = (over = {}, ctx = {}) => liveGhostChecks({ ...liveGood(), ...over }, { deadSeats: [3], phase: "discussion", ...ctx });
+
+test("liveGhostChecks: 정상(shown·is-ghost 이름표 1·빈 의상 표·칩 0·표식 0)은 C1·C2 통과", () => {
+  const rows = liveRows();
+  assert.deepEqual(ids(rows), ["C1", "C2"]);
+  assert.deepEqual(failing(rows), []);
+});
+
+test("liveGhostChecks: 의상 표가 없는 페이지(null)도 통과, 빈 표도 통과", () => {
+  assert.deepEqual(failing(liveRows({ outfits: null })), []);
+});
+
+test("liveGhostChecks: shown 이 null 이면 C1 실패", () => {
+  assert.deepEqual(failing(liveRows({ seats: [{ seat: 3, shown: null, ghostTags: 1, chips: 0 }] })), ["C1"]);
+});
+
+test("liveGhostChecks: is-ghost 이름표가 0개거나 2개면 C1 실패", () => {
+  assert.deepEqual(failing(liveRows({ seats: [{ seat: 3, shown: { x: 0, z: 0 }, ghostTags: 0, chips: 0 }] })), ["C1"]);
+  assert.deepEqual(failing(liveRows({ seats: [{ seat: 3, shown: { x: 0, z: 0 }, ghostTags: 2, chips: 0 }] })), ["C1"]);
+});
+
+test("liveGhostChecks: 의상 표에 그 좌석이 있으면 C1 실패(산 사람 화면은 늘 빈 표)", () => {
+  assert.deepEqual(failing(liveRows({ outfits: { 3: "coat" } })), ["C1"]);
+});
+
+test("liveGhostChecks: 직업 칩·죽은 자리 표식이 있으면 C2 실패", () => {
+  assert.deepEqual(failing(liveRows({ roleChips: 1 })), ["C2"]);
+  assert.deepEqual(failing(liveRows({ ghostSeats: 1 })), ["C2"]);
+  assert.deepEqual(failing(liveRows({ seats: [{ seat: 3, shown: { x: 0, z: 0 }, ghostTags: 1, chips: 1 }] })), ["C2"]);
+});
+
+test("liveGhostChecks: 밤·심부름은 기대가 반대 — shown null·유령 이름표 0 이어야 통과", () => {
+  for (const phase of LIVE_GHOST_ABSENT_PHASES) {
+    const none = { seats: [{ seat: 3, shown: null, ghostTags: 0, chips: 0 }] };
+    assert.deepEqual(failing(liveRows(none, { phase })), [], phase);
+    assert.deepEqual(failing(liveRows({}, { phase })), ["C1"], phase);
+    assert.deepEqual(failing(liveRows({ ...none, seats: [{ seat: 3, shown: null, ghostTags: 1, chips: 0 }] }, { phase })), ["C1"], phase);
+  }
+});
+
+test("liveGhostChecks: 밤에도 직업 칩·표식은 0 이어야 한다(C2)", () => {
+  const none = { seats: [{ seat: 3, shown: null, ghostTags: 0, chips: 0 }], roleChips: 1 };
+  assert.deepEqual(failing(liveRows(none, { phase: "night" })), ["C2"]);
+});
+
+test("liveGhostChecks: 좌석이 둘이면 둘 다 판정, 하나만 빠져도 C1 실패", () => {
+  const two = { seats: [{ seat: 3, shown: { x: 0, z: 0 }, ghostTags: 1, chips: 0 }, { seat: 5, shown: { x: 1, z: 1 }, ghostTags: 1, chips: 0 }] };
+  assert.deepEqual(failing(liveGhostChecks({ ...liveGood(), ...two }, { deadSeats: [3, 5], phase: "discussion" })), []);
+  const bad = { seats: [two.seats[0], { seat: 5, shown: null, ghostTags: 1, chips: 0 }] };
+  const rows = liveGhostChecks({ ...liveGood(), ...bad }, { deadSeats: [3, 5], phase: "discussion" });
+  assert.deepEqual(failing(rows), ["C1"]);
+  assert.match(rows[0].detail, /5/);
+});
+
+test("liveGhostChecks: 죽은 좌석을 읽지 못했거나 훅이 없으면 측정값 없음", () => {
+  assert.match(liveRows({ seats: [] })[0].detail, /측정값 없음/);
+  assert.match(liveGhostChecks({ ...liveGood(), hook: false }, { deadSeats: [3], phase: "discussion" })[0].detail, /측정값 없음/);
+  assert.match(liveGhostChecks(null, { deadSeats: [3], phase: "discussion" })[0].detail, /측정값 없음/);
+  assert.match(liveGhostChecks(liveGood(), { deadSeats: [], phase: "discussion" })[0].detail, /측정값 없음/);
+});
+
+// ---- C3 유령 화면 ----
+
+const viewGood = () => ({
+  seats: [
+    { seat: 1, chips: 1, ghostTags: 1 },
+    { seat: 3, chips: 1, ghostTags: 1 },
+    { seat: 4, chips: 1, ghostTags: 1 },
+  ],
+  outfits: { 1: "mafia", 3: "coat", 4: "doctor" },
+});
+const viewJobs = { 1: "mafia", 3: "citizen", 4: "doctor" };
+
+test("ghostViewChecks: 칩 1·is-ghost 1·의상 = 직업 대응이면 C3 통과", () => {
+  const rows = ghostViewChecks(viewGood(), { jobs: viewJobs });
+  assert.deepEqual(ids(rows), ["C3"]);
+  assert.deepEqual(failing(rows), []);
+});
+
+test("ghostViewChecks: 한 좌석 의상이 직업 대응과 다르면 실패, 사람 모습(표에 없음)도 실패", () => {
+  const a = viewGood();
+  a.outfits[1] = "coat"; // 기대 mafia
+  assert.deepEqual(failing(ghostViewChecks(a, { jobs: viewJobs })), ["C3"]);
+  const b = viewGood();
+  delete b.outfits[4];
+  const rows = ghostViewChecks(b, { jobs: viewJobs });
+  assert.deepEqual(failing(rows), ["C3"]);
+  assert.match(rows[0].detail, /4/);
+});
+
+test("ghostViewChecks: 직업을 모르면(spectate 없음) coat 가 기대", () => {
+  const m = { seats: [{ seat: 2, chips: 1, ghostTags: 1 }], outfits: { 2: "coat" } };
+  assert.deepEqual(failing(ghostViewChecks(m, { jobs: {} , seats: [2] })), []);
+});
+
+test("ghostViewChecks: 칩이 0 이거나 is-ghost 이름표가 0 이면 실패", () => {
+  const a = viewGood();
+  a.seats[1].chips = 0;
+  assert.deepEqual(failing(ghostViewChecks(a, { jobs: viewJobs })), ["C3"]);
+  const b = viewGood();
+  b.seats[2].ghostTags = 0;
+  assert.deepEqual(failing(ghostViewChecks(b, { jobs: viewJobs })), ["C3"]);
+});
+
+test("ghostViewChecks: 의상 표가 없거나(null) 좌석 읽기가 빠졌으면 측정값 없음·실패", () => {
+  assert.match(ghostViewChecks({ ...viewGood(), outfits: null }, { jobs: viewJobs })[0].detail, /측정값 없음/);
+  const m = viewGood();
+  m.seats = m.seats.slice(0, 2);
+  assert.equal(ghostViewChecks(m, { jobs: viewJobs })[0].ok, false);
+  assert.match(ghostViewChecks(null, { jobs: viewJobs })[0].detail, /측정값 없음/);
+});
+
+test("ghostViewChecks: 직업 대응은 GHOST_JOB_OUTFIT_E2E 와 같다(시민 coat)", () => {
+  const m = { seats: [{ seat: 0, chips: 1, ghostTags: 1 }], outfits: { 0: GHOST_JOB_OUTFIT_E2E.citizen } };
+  assert.deepEqual(failing(ghostViewChecks(m, { jobs: { 0: "citizen" } })), []);
+  assert.deepEqual(failing(ghostViewChecks({ ...m, outfits: { 0: "mafia" } }, { jobs: { 0: "citizen" } })), ["C3"]);
+});
+
+// ---- GH12 (뜻 바뀜: 산 사람 화면 유령 자리 고정, C-6) ----
+
+test("ghostStillChecks: 같은 자리면 통과, 허용 오차 안이면 통과, 벗어나면 실패", () => {
+  const a = { x: 1.5, z: -2 };
+  assert.equal(ghostStillChecks(a, { x: 1.5, z: -2 }).ok, true);
+  assert.equal(ghostStillChecks(a, { x: 1.52, z: -2.03 }).ok, true);
+  const bad = ghostStillChecks(a, { x: 2.5, z: -2 });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.id, "GH12");
+});
+
+test("ghostStillChecks: 한쪽이 null 이면 실패(유령이 사라졌거나 처음부터 없음), 측정값 없음", () => {
+  assert.equal(ghostStillChecks({ x: 0, z: 0 }, null).ok, false);
+  assert.equal(ghostStillChecks(null, { x: 0, z: 0 }).ok, false);
+  assert.match(ghostStillChecks(null, null).detail, /측정값 없음/);
 });
