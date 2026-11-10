@@ -13,9 +13,8 @@ import {
   HEADER_BG_PERCENTILE,
   HEADER_CONTRAST_MIN,
   ONE_LINE_FACTOR,
-  LOG_H_SHORT,
-  LOG_H_TALL,
-  logHeightFor,
+  LOG_H,
+  KB_PANEL_H,
   OVERLAP_EPS,
   TAP_ALLOW,
   TAP_MIN,
@@ -537,21 +536,17 @@ test("lineCount: 높이를 줄 높이로 나눈 줄 수", () => {
 
 const size = { w: 360, h: 640, mySeat: 0 };
 
-test("채팅 패널 치수 사본: logHeightFor(779) 96 · (780) 152, 채팅 패널 = LOG_H + 92, 로비 패널 = LOG_H + 154", () => {
-  assert.equal(LOG_H_SHORT, 96);
-  assert.equal(LOG_H_TALL, 152);
-  assert.equal(logHeightFor(779), 96);
-  assert.equal(logHeightFor(780), 152);
-  assert.equal(logHeightFor(560), 96);
+test("채팅 패널 치수 사본: LOG_H 68 · KB_PANEL_H 146, 채팅 패널 = LOG_H + 92, 로비 패널 = LOG_H + 154 (18.1 B 계약 4)", () => {
+  assert.equal(LOG_H, 68);
+  assert.equal(KB_PANEL_H, 146);
+  assert.equal(KB_PANEL_H, 14 + LOG_H + 8 + 48 + 8);
   assert.equal(CHAT_PANEL_EXTRA, 92);
   assert.equal(LOBBY_PANEL_EXTRA, 154);
-  assert.equal(lobbyPanelHeight(96), 250);
-  assert.equal(lobbyPanelHeight(152), 306);
+  assert.equal(lobbyPanelHeight(LOG_H), 222);
   // 17-07(0080-4): 방장 패널 +76 = 스위치 줄 64 + 간격 12
   assert.equal(LOBBY_HOST_TUTORIAL_EXTRA, 76);
-  assert.equal(lobbyPanelHeight(96, true), 326);
-  assert.equal(lobbyPanelHeight(152, true), 382);
-  assert.equal(lobbyPanelHeight(96, false), 250);
+  assert.equal(lobbyPanelHeight(LOG_H, true), 298);
+  assert.equal(lobbyPanelHeight(LOG_H, false), 222);
 });
 
 test("17-07: view 키 사본에 tutorial·tutorialDone 이 있다", () => {
@@ -687,13 +682,13 @@ test("04-30·06-17·08-23: 닫기 — 승인 목록은 네 건(결정 0056 의 �
 
 // ---- 08-23: 게임 맵 판정 (UI-SPEC "아래 패널 종류와 높이"·"검사 가능하게 둘 것") ----
 
-test("gamePanelHeight: 토론 LOG_H+154 · 채팅 +92 · 찬반 투표자 +218 · 찬반 보기 +126 (UI-SPEC 표의 여섯 폰 값, 이름표 보정 없음 — 16-05)", () => {
-  assert.equal(gamePanelHeight(780, "talk"), 152 + 154);
-  assert.equal(gamePanelHeight(640, "chat"), 96 + 92);
-  assert.equal(gamePanelHeight(844, "verdictVoter"), 152 + 218);
-  assert.equal(gamePanelHeight(664, "verdictViewer"), 96 + 126);
-  // UI-SPEC 폰 크기 표: [방 높이, 토론, 채팅, 투표자, 보기]
-  for (const [h, talk, chat, voter, viewer] of [[640, 250, 188, 314, 222], [664, 250, 188, 314, 222], [932, 306, 244, 370, 278], [560, 250, 188, 314, 222], [844, 306, 244, 370, 278], [874, 306, 244, 370, 278]]) {
+test("gamePanelHeight: 토론 LOG_H+154 · 채팅 +92 · 찬반 투표자 +218 · 찬반 보기 +126 (기록 칸 68 한 값 — 방 높이와 무관, 이름표 보정 없음 — 16-05)", () => {
+  assert.equal(gamePanelHeight(780, "talk"), 222);
+  assert.equal(gamePanelHeight(640, "chat"), 160);
+  assert.equal(gamePanelHeight(844, "verdictVoter"), 286);
+  assert.equal(gamePanelHeight(640, "verdictViewer"), 194);
+  // 방 높이를 바꿔도 값이 같다: [방 높이, 토론, 채팅, 투표자, 보기]
+  for (const [h, talk, chat, voter, viewer] of [[640, 222, 160, 286, 194], [664, 222, 160, 286, 194], [932, 222, 160, 286, 194], [560, 222, 160, 286, 194], [844, 222, 160, 286, 194], [874, 222, 160, 286, 194]]) {
     assert.deepEqual([gamePanelHeight(h, "talk"), gamePanelHeight(h, "chat"), gamePanelHeight(h, "verdictVoter"), gamePanelHeight(h, "verdictViewer")], [talk, chat, voter, viewer], `방 높이 ${h}`);
   }
   assert.deepEqual({ ...GAME_PANEL_EXTRA }, { talk: 154, chat: 92, verdictVoter: 218, verdictViewer: 126 });

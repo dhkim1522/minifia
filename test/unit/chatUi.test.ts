@@ -9,6 +9,7 @@ import {
   KB_PANEL_H,
   CHAT_PANEL_EXTRA,
   LOBBY_PANEL_EXTRA,
+  LOG_H,
   LOG_H_KB,
   LOG_H_SHORT,
   LOG_H_TALL,
@@ -43,43 +44,29 @@ describe("logHeightFor — 기록 칸 고정 높이 (UI-SPEC 구조)", () => {
   });
 });
 
-describe("패널 높이 식 (UI-SPEC 폰 크기 표)", () => {
-  it("로비 패널 = LOG_H + 154, 14 + 8 + 48 + 10 + 52 + 22 에서 나온다", () => {
+describe("패널 높이 식 (18.1 B 계약 4 — 기록 칸 68 한 값)", () => {
+  it("기록 칸 68 = 24 × 2 + 4 + 8 × 2", () => {
+    expect(LOG_H).toBe(68);
+    expect(LOG_H).toBe(24 * 2 + 4 + 8 * 2);
+  });
+
+  it("로비 패널 = LOG_H + 154, 14 + 8 + 48 + 10 + 52 + 22 에서 나온다 — 대기실 손님 222·방장 298", () => {
     expect(LOBBY_PANEL_EXTRA).toBe(154);
     expect(LOBBY_PANEL_EXTRA).toBe(14 + 8 + 48 + 10 + 52 + 22);
-    expect(lobbyPanelHeight(96)).toBe(250);
-    expect(lobbyPanelHeight(152)).toBe(306);
+    expect(lobbyPanelHeight(LOG_H)).toBe(222);
+    expect(lobbyPanelHeight(LOG_H, true)).toBe(298);
   });
 
-  it("채팅 패널 = LOG_H + 92, 14 + 8 + 48 + 22 에서 나온다", () => {
+  it("채팅 패널 = LOG_H + 92, 14 + 8 + 48 + 22 에서 나온다 — 160", () => {
     expect(CHAT_PANEL_EXTRA).toBe(92);
     expect(CHAT_PANEL_EXTRA).toBe(14 + 8 + 48 + 22);
-    expect(96 + CHAT_PANEL_EXTRA).toBe(188);
-    expect(152 + CHAT_PANEL_EXTRA).toBe(244);
+    expect(LOG_H + CHAT_PANEL_EXTRA).toBe(160);
   });
 
-  it("키보드 열림 패널 150 = 14 + 72 + 8 + 48 + 8, 열림 판정 lift > 80", () => {
-    expect(KB_PANEL_H).toBe(150);
-    expect(KB_PANEL_H).toBe(14 + LOG_H_KB + 8 + 48 + 8);
+  it("키보드 열림 패널 146 = 14 + LOG_H + 8 + 48 + 8, 열림 판정 lift > 80", () => {
+    expect(KB_PANEL_H).toBe(146);
+    expect(KB_PANEL_H).toBe(14 + LOG_H + 8 + 48 + 8);
     expect(KB_OPEN_MIN_LIFT).toBe(80);
-  });
-
-  it("UI-SPEC 폰 표의 여섯 크기가 식으로 나온다", () => {
-    const phones: Array<[string, number, number, number, number]> = [
-      // [크기, 방 높이, 로비 패널, 채팅 패널, 기록 칸]
-      ["360x640", 640, 250, 188, 96],
-      ["390x664", 664, 250, 188, 96],
-      ["430x932", 932, 306, 244, 152],
-      ["360x560", 560, 250, 188, 96],
-      ["390x844", 844, 306, 244, 152],
-      ["402x874", 874, 306, 244, 152],
-    ];
-    for (const [, roomH, lobby, chat, log] of phones) {
-      const h = logHeightFor(roomH);
-      expect(h).toBe(log);
-      expect(lobbyPanelHeight(h)).toBe(lobby);
-      expect(h + CHAT_PANEL_EXTRA).toBe(chat);
-    }
   });
 
   it("입력 중 칸 22px", () => {

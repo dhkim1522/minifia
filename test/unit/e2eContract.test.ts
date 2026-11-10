@@ -20,13 +20,12 @@ import {
   KB_PANEL_H,
   LOBBY_HOST_TUTORIAL_EXTRA,
   LOBBY_PANEL_EXTRA,
-  LOG_H_KB,
+  LOG_H,
   LOG_H_SHORT,
   LOG_H_TALL,
   TALL_ROOM_MIN_H,
   TYPING_PILL_H,
   lobbyPanelHeight,
-  logHeightFor,
 } from "../../src/game/chatUi";
 import { RESTORED_MS } from "../../src/net/linkReducer";
 import { STAGE_SIZES } from "../../src/world/camera";
@@ -142,25 +141,21 @@ describe("E2E 재접속·예산 사본과 앱 상수 (06-18)", () => {
 describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 사본 일치 규약)", () => {
   // 08-23: 옛 테이블 사본(TABLE_PANEL_EXTRA·tablePanelHeight·expectedPanelH·PANEL_H 157)은 지웠다 — 사본 이름은 앱과 같은 CHAT_PANEL_EXTRA 다.
   type ChatCopy = {
-    LOG_H_SHORT: number;
-    LOG_H_TALL: number;
-    LOG_H_KB: number;
-    TALL_ROOM_MIN_H: number;
+    LOG_H: number;
     LOBBY_PANEL_EXTRA: number;
     CHAT_PANEL_EXTRA: number;
     KB_PANEL_H: number;
     TYPING_PILL_H: number;
-    logHeightFor: (roomH: number) => number;
     LOBBY_HOST_TUTORIAL_EXTRA: number;
     lobbyPanelHeight: (logH: number, host?: boolean) => number;
   };
   const lib = e2eLib as unknown as ChatCopy;
 
-  it("상수 여덟 개가 chatUi 와 같다(LOBBY_PANEL_EXTRA·CHAT_PANEL_EXTRA·KB_PANEL_H 포함)", () => {
-    expect(lib.LOG_H_SHORT).toBe(LOG_H_SHORT);
-    expect(lib.LOG_H_TALL).toBe(LOG_H_TALL);
-    expect(lib.LOG_H_KB).toBe(LOG_H_KB);
-    expect(lib.TALL_ROOM_MIN_H).toBe(TALL_ROOM_MIN_H);
+  it("상수가 chatUi 와 같다(LOG_H·LOBBY_PANEL_EXTRA·CHAT_PANEL_EXTRA·KB_PANEL_H 포함, 18.1 B 계약 4)", () => {
+    expect(lib.LOG_H).toBe(LOG_H);
+    expect(lib.LOG_H).toBe(68);
+    expect(lib.KB_PANEL_H).toBe(146);
+    expect(KB_PANEL_H).toBe(146);
     expect(lib.LOBBY_PANEL_EXTRA).toBe(LOBBY_PANEL_EXTRA);
     expect(lib.LOBBY_HOST_TUTORIAL_EXTRA).toBe(LOBBY_HOST_TUTORIAL_EXTRA); // 17-07(0080-4): 방장 스위치 줄 64 + 간격 12
     expect(lib.CHAT_PANEL_EXTRA).toBe(CHAT_PANEL_EXTRA);
@@ -173,10 +168,9 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     for (const gone of ["TABLE_PANEL_EXTRA", "PANEL_H", "HEADER_H", "tablePanelHeight", "expectedPanelH"]) expect(keys).not.toContain(gone);
   });
 
-  it("logHeightFor 가 경계 779·780 을 포함한 방 높이에서 chatUi 와 같은 값을 낸다", () => {
-    for (const h of [0, 560, 640, 664, 779, 780, 844, 874, 932, 2000]) expect(lib.logHeightFor(h)).toBe(logHeightFor(h));
-    expect(lib.logHeightFor(779)).toBe(LOG_H_SHORT);
-    expect(lib.logHeightFor(780)).toBe(LOG_H_TALL);
+  it("lib 에 옛 기록 칸 사본 이름이 없다(기록 칸 높이는 LOG_H 하나)", () => {
+    const keys = Object.keys(e2eLib as Record<string, unknown>);
+    for (const gone of ["LOG_H_SHORT", "LOG_H_TALL", "LOG_H_KB", "TALL_ROOM_MIN_H", "logHeightFor"]) expect(keys).not.toContain(gone);
   });
 
   it("GAME_PANEL_EXTRA 의 채팅(92)·토론(154)은 앱의 CHAT_PANEL_EXTRA·LOBBY_PANEL_EXTRA 와 같고, 찬반 두 값(218·126)은 UI-SPEC 표 값에 숫자 줄 +15 를 더한 값이다(0062-2) (08-23)", () => {
@@ -196,18 +190,19 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
       expect(rule(sel)).toContain("height: var(--control-input)");
     }
     for (const roomH of [560, 640, 664, 779, 780, 844, 874, 932]) {
-      expect(gamePanelHeight(roomH, "chat")).toBe(logHeightFor(roomH) + CHAT_PANEL_EXTRA);
-      expect(gamePanelHeight(roomH, "talk")).toBe(logHeightFor(roomH) + LOBBY_PANEL_EXTRA);
+      expect(gamePanelHeight(roomH, "chat")).toBe(LOG_H + CHAT_PANEL_EXTRA);
+      expect(gamePanelHeight(roomH, "talk")).toBe(LOG_H + LOBBY_PANEL_EXTRA);
     }
   });
 
-  it("lobbyPanelHeight 사본이 chatUi 와 같고, 채팅 패널 높이는 logH + CHAT_PANEL_EXTRA 다", () => {
-    for (const logH of [LOG_H_SHORT, LOG_H_TALL, LOG_H_KB]) expect(lib.lobbyPanelHeight(logH)).toBe(lobbyPanelHeight(logH));
+  it("lobbyPanelHeight 사본이 chatUi 와 같고, 채팅 패널 높이는 LOG_H + CHAT_PANEL_EXTRA 다", () => {
+    expect(lib.lobbyPanelHeight(LOG_H)).toBe(lobbyPanelHeight(LOG_H));
+    expect(lib.lobbyPanelHeight(LOG_H)).toBe(222);
     // 17-07(0080-4): 방장 패널은 +76(LOBBY_HOST_TUTORIAL_EXTRA) — 앱 값과 E2E 사본이 같다
-    for (const logH of [LOG_H_SHORT, LOG_H_TALL]) expect(lib.lobbyPanelHeight(logH, true)).toBe(lobbyPanelHeight(logH, true));
-    expect(lib.lobbyPanelHeight(LOG_H_SHORT, true)).toBe(326);
-    expect(lib.lobbyPanelHeight(LOG_H_TALL, true)).toBe(382);
-    for (const roomH of [560, 640, 664, 779, 780, 844, 932]) expect(lib.logHeightFor(roomH) + lib.CHAT_PANEL_EXTRA).toBe(logHeightFor(roomH) + CHAT_PANEL_EXTRA);
+    expect(lib.lobbyPanelHeight(LOG_H, true)).toBe(lobbyPanelHeight(LOG_H, true));
+    expect(lib.lobbyPanelHeight(LOG_H, true)).toBe(298);
+    expect(lib.LOG_H + lib.CHAT_PANEL_EXTRA).toBe(LOG_H + CHAT_PANEL_EXTRA);
+    expect(LOG_H + CHAT_PANEL_EXTRA).toBe(160);
   });
 });
 
