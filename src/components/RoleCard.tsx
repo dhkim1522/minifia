@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { RoleId } from "../../shared/game/roles";
 import { ROLE_TEXT, alliesText } from "../game/roleText";
-import { RoleGoal } from "./RoleGoal";
 import { roleArtSrc } from "../net/assets";
 import "../styles/phase.css";
 
@@ -73,8 +72,7 @@ function CardFront({ role, allies, hidden }: { role: RoleId; allies: string[] | 
     <div className="mf-card__face mf-card__front" aria-hidden={hidden ? "true" : undefined}>
       <img className="mf-card__art" src={src} srcSet={srcSet} width={150} alt="" draggable={false} />
       <p className="mf-t-display">{text.name}</p>
-      <p className="mf-card__desc">{text.desc}</p>
-      <RoleGoal goal={text.goal} />
+      <p className="mf-card__desc" data-role-line="">{text.desc}</p>
       {allies !== null ? (
         <>
           <div className="mf-card__divider" aria-hidden="true" />
