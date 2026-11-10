@@ -53,15 +53,30 @@ describe("EvidenceCard", () => {
     expect(row.querySelectorAll(".mv-evidence__place")).toHaveLength(1);
   });
 
-  it("목격자가 없으면 count=0, 눈 + '0' 글자만 있고 장소 svg 가 없다", () => {
+  it("목격자가 없으면 count=0, eyeOff 아이콘 하나('목격자 없음')만 있고 숫자 0·장소·목격자 이름이 없다", () => {
     const { container } = render(<EvidenceCard piece="pin" victim={VICTIM} witness={null} />);
     const row = container.querySelector("[data-lastseen-row]") as HTMLElement;
     expect(row.getAttribute("data-lastseen-count")).toBe("0");
-    expect(row.querySelector(".mv-evidence__zero")?.textContent).toBe("0");
+    expect(row.querySelector(".mv-evidence__victim")?.textContent).toBe("서준");
     expect(row.querySelector(".mv-evidence__place")).toBeNull();
     expect(row.querySelector(".mv-evidence__witness")).toBeNull();
-    // 눈 아이콘 하나만 있다
-    expect(row.querySelectorAll("svg")).toHaveLength(1);
+    expect(row.textContent).not.toContain("0");
+    const svgs = row.querySelectorAll("svg");
+    expect(svgs).toHaveLength(1);
+    expect(svgs[0].getAttribute("role")).toBe("img");
+    expect(svgs[0].getAttribute("aria-label")).toBe("목격자 없음");
+    expect(svgs[0].getAttribute("width")).toBe("24");
+    expect(row.querySelector(".mv-evidence__eye--none svg")).toBe(svgs[0]);
+  });
+
+  it("목격자가 있으면 eye 아이콘(aria-hidden) + 이름 + 장소 svg, '목격자 없음' 요소가 없다", () => {
+    const { container } = render(<EvidenceCard piece="pin" victim={VICTIM} witness={WITNESS} />);
+    const row = container.querySelector("[data-lastseen-row]") as HTMLElement;
+    const eye = row.querySelector(".mv-evidence__eye svg") as SVGElement;
+    expect(eye.getAttribute("aria-hidden")).toBe("true");
+    expect(row.querySelector(".mv-evidence__eye--none")).toBeNull();
+    expect(row.querySelector('[aria-label="목격자 없음"]')).toBeNull();
+    expect(row.querySelectorAll(".mv-evidence__place svg")).toHaveLength(1);
   });
 
   it("카드 안에 button·[data-call] 이 없다", () => {

@@ -217,3 +217,29 @@ describe("V2Icon 직업 배지 아이콘 (17-08)", () => {
     expect(new Set(shapes).size).toBe(4);
   });
 });
+
+// 18-04: 목격자 없음 아이콘 eyeOff — eye 윤곽·눈동자 + 사선, 24 격자, 선 2px, 둥근 끝
+describe("V2Icon eyeOff (18-04)", () => {
+  it("24 격자 선 그림이고 path 가 둘 이상(눈 윤곽 + 사선)이며 eye 와 모양이 다르다", () => {
+    const { container } = render(<V2Icon name="eyeOff" />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.getAttribute("stroke-width")).toBe("2");
+    expect(svg?.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.querySelectorAll("path").length).toBeGreaterThanOrEqual(2);
+    const shape = (name: V2IconName) => {
+      const r = render(<V2Icon name={name} />);
+      return [...r.container.querySelectorAll("path,circle")].map((e) => e.outerHTML).join("");
+    };
+    expect(shape("eyeOff")).not.toBe(shape("eye"));
+  });
+
+  it("label 을 주면 role=img 와 aria-label 이 붙는다", () => {
+    const { container } = render(<V2Icon name="eyeOff" label="목격자 없음" />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("role")).toBe("img");
+    expect(svg?.getAttribute("aria-label")).toBe("목격자 없음");
+    expect(svg?.getAttribute("aria-hidden")).toBeNull();
+  });
+});

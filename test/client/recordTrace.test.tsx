@@ -422,7 +422,7 @@ describe("아침 — 흔적 카드 (TRACE-02·03, D-06)", () => {
     expect(band(container)).toBe(TRACE_LINE);
   });
 
-  it("증거 카드 2행(마지막 목격): 목격자가 있으면 count 1·이름·장소 그림, 없으면 count 0 과 '0'", () => {
+  it("증거 카드 2행(마지막 목격): 목격자가 있으면 count 1·이름·장소 그림, 없으면 count 0 과 '목격자 없음' 아이콘", () => {
     const seen = mount(mapView({ phase: "morning", morning: { ...MORNING, seen: { seat: 3, place: "glass" } }, endsInMs: 1500 }));
     const row = card(seen.container)?.querySelector("[data-lastseen-row]");
     expect(row?.getAttribute("data-lastseen-count")).toBe("1");
@@ -432,7 +432,7 @@ describe("아침 — 흔적 카드 (TRACE-02·03, D-06)", () => {
     const none = mount(mapView({ phase: "morning", morning: MORNING, endsInMs: 1500 }));
     const zero = card(none.container)?.querySelector("[data-lastseen-row]");
     expect(zero?.getAttribute("data-lastseen-count")).toBe("0");
-    expect(zero?.querySelector(".mv-evidence__zero")?.textContent).toBe("0");
+    expect(zero?.querySelectorAll('svg[role="img"][aria-label="목격자 없음"]')).toHaveLength(1);
   });
 
   it("이미 구간 안에서 마운트(재접속·새로 고침)하면 카드는 바로 있고 신호는 0", () => {
