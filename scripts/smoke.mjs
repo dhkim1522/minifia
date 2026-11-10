@@ -130,13 +130,53 @@ const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "
 const PUBLIC_KEY_PATHS = { verdict: ["view.day.verdict"], verdictVote: ["view.me.verdictVote"] };
 // 아침 흔적 조각 id 닫힌 집합(shared/protocol.ts TRACE_PIECE_IDS 사본, 결정 0074-5)
 export const TRACE_PIECES = ["button", "pin", "whiteCloth", "blackCloth", "brownCloth", "pencil", "grayThread", "navyThread", "redCloth"];
-// RED 자리: 판정 함수와 사본 상수는 다음 커밋(GREEN)에서 채운다.
-export const OUTFIT_IDS = [];
-export const PLACE_IDS = [];
-export const MORNING_KEYS = [];
+// 사본 상수(스크립트는 TS 를 import 하지 않는다): test/unit/e2eContract.test.ts 가 shared 와 같은지 묶는다.
+// shared/protocol.ts OUTFIT_IDS — 공개 의상 id. 직업 이름과 같은 단어(police·doctor·mafia)가 있지만 역할의 함수가 아니다(결정 D-6, 서버 쪽 증명 test/unit/dress.test.ts).
+export const OUTFIT_IDS = ["coat", "police", "doctor", "mafia", "detective", "reporter", "elder", "hood", "noir"];
+// shared/protocol.ts PLACE_IDS — 심부름 장소 id(마지막 목격 seen.place 의 닫힌 집합)
+export const PLACE_IDS = [
+  "glass", "piano", "sax", "stool", "door", "poster", "record", "candle",
+  "clock", "fountain", "bench", "lamp", "mail", "tree", "flower", "stand",
+];
+// 아침 day.morning 이 가질 수 있는 키(MorningView 중 이번 판이 만드는 셋). 이번 판은 eliminated 필수다.
+export const MORNING_KEYS = ["eliminated", "seen", "trace"];
+// 옷 id 는 이 경로에서만 직업 이름 단어를 허용한다(값이 OUTFIT_IDS 안일 때만).
 export const LOOK_PATH = "view.players[].look";
-export function roleStringAllowed() { return true; }
-export function morningProblems() { return []; }
+
+/** 직업 이름 문자열 잎(path, value)이 허용되는가. 순수 함수 — fail·process.exit 를 부르지 않는다. */
+export function roleStringAllowed(path, value, ctx) {
+  if (ALLOWED_ROLE_STRING_PATHS.has(path)) return true;
+  if (ctx.spectate && path === "view.spectate.seats[].job") return true;
+  if (ctx.ended && ENDED_ROLE_STRING_PATHS.has(path)) return true;
+  if (ctx.frameType === "resultLog" && path === "part") return true; // 결과 로그 조각 이름(결정 0069) — 역할이 아니라 채널 이름
+  if (path === LOOK_PATH && OUTFIT_IDS.includes(value)) return true; // 18-01 공개 옷 id. citizen 같은 옷 id 가 아닌 값은 여전히 실패
+  return false;
+}
+
+/**
+ * 아침 day.morning 모양 문제 목록(비면 통과). seats 는 이 판의 좌석 번호들.
+ * 키는 MORNING_KEYS 부분집합 + eliminated 필수, trace 는 닫힌 조각 id, seen 은 {seat, place} 둘뿐이고 seat 는 판의 좌석·place 는 PLACE_IDS 안.
+ */
+export function morningProblems(morning, seats) {
+  const problems = [];
+  if (morning === null || typeof morning !== "object" || Array.isArray(morning)) return ["아침 day.morning 이 객체가 아님"];
+  const keys = Object.keys(morning);
+  const extra = keys.filter((k) => !MORNING_KEYS.includes(k));
+  if (extra.length > 0) problems.push(`아침 day.morning 에 허용 밖 키가 있음: ${extra.sort().join(",")}`);
+  if (morning.eliminated === undefined) problems.push("아침 day.morning 에 eliminated 가 없음");
+  if (morning.trace !== undefined && !TRACE_PIECES.includes(morning.trace)) problems.push(`아침 day.morning.trace 가 닫힌 조각 id 가 아님: ${JSON.stringify(morning.trace)}`);
+  if (morning.seen !== undefined) {
+    const seen = morning.seen;
+    if (seen === null || typeof seen !== "object" || Array.isArray(seen)) problems.push("아침 day.morning.seen 이 객체가 아님");
+    else {
+      if (Object.keys(seen).sort().join(",") !== "place,seat") problems.push(`아침 day.morning.seen 의 키가 place,seat 가 아님: ${Object.keys(seen).sort().join(",")}`);
+      if (!Number.isInteger(seen.seat) || !seats.includes(seen.seat)) problems.push(`아침 day.morning.seen.seat 가 판의 좌석이 아님: ${JSON.stringify(seen.seat)}`);
+      if (!PLACE_IDS.includes(seen.place)) problems.push(`아침 day.morning.seen.place 가 닫힌 장소 id 가 아님: ${JSON.stringify(seen.place)}`);
+    }
+  }
+  return problems;
+}
+
 // 역할별 일지 줄의 키 집합(결정 0027-11)
 const RECORD_KEYS = { police: "isMafia,n,target", mafia: "died,n,target", doctor: "n,target" };
 // 거절된 줄의 본문 표식: 어느 클라이언트의 어떤 프레임에도 되돌아오면 안 된다(COMM-04).
@@ -1419,11 +1459,9 @@ async function stageFull(url, args) {
     if (JSON.stringify(v.day?.morning) !== morningJson) fail(`${clients[i].nickname} 의 day.morning 이 다른 클라이언트와 다름`);
   });
   const morning = morningViews[0].day.morning;
-  // day.morning 은 탈락자 seat 하나뿐이다(문구 번호·유언 본문·쪽지가 없다, 결정 0061-17). 유언은 chat 카드로만 간다.
-  // 15페이즈(결정 0074-5): 흔적 조각 id(`trace`, 닫힌 집합 9개 중 하나)가 더해질 수 있다 — 그 밖의 키는 여전히 없다.
-  const morningKeys = Object.keys(morning).sort().join(",");
-  if (morningKeys !== "eliminated" && morningKeys !== "eliminated,trace") fail(`아침 day.morning 의 키가 eliminated(+trace)가 아님: ${morningKeys}`);
-  if (morning.trace !== undefined && !TRACE_PIECES.includes(morning.trace)) fail(`아침 day.morning.trace 가 닫힌 조각 id 가 아님: ${JSON.stringify(morning.trace)}`);
+  // day.morning: eliminated 필수 + trace(15페이즈, 결정 0074-5)·seen(16페이즈 D-10) 선택. 모양 판정은 morningProblems — test/unit/e2eContract.test.ts 가 서버 view 와 묶는다.
+  const morningIssues = morningProblems(morning, clients.map((c) => c.seat));
+  if (morningIssues.length > 0) fail(morningIssues[0]);
   if (morning.eliminated !== targetX) fail(`아침 탈락자가 지목한 seat(${targetX})가 아님: ${morning.eliminated}`);
   morningViews.forEach((v, i) => {
     for (const p of v.players) {
@@ -1469,9 +1507,8 @@ async function stageFull(url, args) {
     }
   }
   // (f) 역할 문자열은 허용 경로에만: 모든 프레임에서 view.me.role·view.day.roles[] (채널 이름 mafia 가 든 ch·lines[].ch·view.me.chat 은 위 채널 단언이 본다),
-  //     탈락한 사람의 탈락 이후에는 view.spectate.seats[].job, ended 프레임에는 view.result.seats[].job 도 허용. 처형 단계의 다른 사람 프레임에는 역할 단어가 없다.
+  //     탈락한 사람의 탈락 이후에는 view.spectate.seats[].job, ended 프레임에는 view.result.seats[].job, 공개 옷 id 는 view.players[].look(값이 OUTFIT_IDS 안일 때만, 18-13) 도 허용. 처형 단계의 다른 사람 프레임에는 역할 단어가 없다.
   //     마피아 동료 seat·records 의 isMafia·died 는 숫자·불리언이라 문자열 검사에 걸리지 않는다.
-  const ROLE_ALLOWED_ALWAYS = ALLOWED_ROLE_STRING_PATHS;
   for (const c of clients) {
     for (const f of c.frames) {
       if (!f.msg) continue;
@@ -1479,10 +1516,7 @@ async function stageFull(url, args) {
       collectRoleStringPaths(f.msg, "", leaves);
       const allowSpectate = c.ghostFrom !== undefined && f.at >= c.ghostFrom;
       const allowResult = f.msg.view?.phase === "ended";
-      const bad = leaves.filter(
-        (l) => !ROLE_ALLOWED_ALWAYS.has(l.path) && !(allowSpectate && l.path === "view.spectate.seats[].job") && !(allowResult && ENDED_ROLE_STRING_PATHS.has(l.path)) &&
-          !(f.msg.t === "resultLog" && l.path === "part"), // 결과 로그 조각 이름(결정 0069) — 역할이 아니라 채널 이름
-      );
+      const bad = leaves.filter((l) => !roleStringAllowed(l.path, l.value, { spectate: allowSpectate, ended: allowResult, frameType: f.msg.t }));
       if (bad.length > 0) fail(`${c.nickname} 의 프레임에 허용 경로 밖 역할 문자열이 있음: ${[...new Set(bad.map((l) => l.path))].join(",")}`);
     }
   }
