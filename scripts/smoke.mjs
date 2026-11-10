@@ -83,6 +83,9 @@ const CHAT_MIN_GAP_MS = 600;
 export const ALLOWED_PLAYER_KEYS = ["alive", "connected", "isHost", "nickname", "seat"];
 export const OPTIONAL_PLAYER_KEYS = ["look", "ready", "sat"]; // 공개 선택 키(결정 0068·0069). 기본판(결정 0072)에서 badge·badgeSwapped 는 허용하지 않는다 — 나오면 알 수 없는 플레이어 키로 실패한다.
 const PREVIEW_PLAYER_KEYS = ["nickname", "seat"];
+// 낮 시작 발표·토론 진입 편차의 판정 문턱. 재는 대상은 서버 시각(각 클라이언트 첫 프레임의 view.serverNow 차)이다 — 도착 시각 차가 아니다(18-13, G-18-3).
+// 근거: 서버는 방송 한 번에 Date.now() 를 한 번 재서 모든 소켓에 같은 serverNow 를 싣는다 → 이 차이는 서버가 단계를 모두에게 같은 순간 넘겼는가만 잰다(어떤 클라이언트가 방송이 아닌 나중 프레임으로 처음 받으면 커져 여전히 잡힌다).
+// 도착 시각 차는 한 기기에서 먼 엣지까지의 망 지터라 제품이 고칠 수 없고 실제 플레이어는 각자 다른 망이다. 문턱을 올리면 서버 회귀까지 놓치므로 문턱은 그대로 두고 재는 대상만 바꾸며, 도착 편차는 info·SMOKE OK 줄에 숫자로 남긴다.
 const DAY_SPREAD_LIMIT_MS = 500;
 // shared/game/roles.ts 의 ROLE_TABLE 과 같은 값 (마피아·경찰·의사·시민)
 const EXPECTED_ROLES = {
@@ -177,9 +180,35 @@ export function morningProblems(morning, seats) {
   return problems;
 }
 
-// RED 자리(GREEN 에서 채움)
-export function serverSpread() { return 0; }
-export function linkReport() { return ""; }
+/**
+ * 서버 시각 편차: 각 view.serverNow 의 최대 - 최소(반올림 ms). 서버는 방송 한 번에 Date.now() 를 한 번 재서 모든 소켓의 view 에 같은 값을 싣는다(worker/room.ts broadcast).
+ * 그래서 클라이언트마다 단계 첫 프레임의 serverNow 가 크게 다르면 서버가 단계를 나눠 넘겼거나 그 클라이언트가 방송이 아닌 나중 프레임으로 처음 받은 것이다.
+ * 하나라도 유한한 숫자가 아니거나 빈 배열이면 null.
+ */
+export function serverSpread(views) {
+  if (views.length === 0) return null;
+  const nows = views.map((v) => v?.serverNow);
+  if (!nows.every((n) => typeof n === "number" && Number.isFinite(n))) return null;
+  return Math.round(Math.max(...nows) - Math.min(...nows));
+}
+
+/**
+ * 연결 상태 한 줄(실패 메시지용). 닉네임·소켓 상태·close code·마지막 프레임 경과 ms·마지막 단계 이름만 담는다 — 토큰·채팅 본문·프레임 원문은 넣지 않는다.
+ * 마지막 프레임은 지금 소켓 id(client.sockets)의 마지막 프레임, 단계는 그 클라이언트의 마지막 state view.phase.
+ */
+export function linkReport(clients, now) {
+  return clients
+    .map((c) => {
+      const closed = c.unexpectedClose !== null && c.unexpectedClose !== undefined;
+      const sock = closed ? `닫힘(code ${c.unexpectedClose})` : c.ws && typeof c.ws.readyState === "number" && c.ws.readyState !== 1 ? "닫힘(정상 종료 중)" : "열림";
+      const last = c.frames.filter((f) => f.sock === c.sockets).at(-1);
+      const age = last === undefined ? "프레임 없음" : `마지막 프레임 ${Math.round(now - last.at)} ms 전`;
+      const phase = c.frames.filter((f) => f.msg && f.msg.t === "state").at(-1)?.msg.view?.phase ?? "-";
+      return `${c.nickname}: 소켓 ${sock} · ${age} · 단계 ${phase}`;
+    })
+    .join(" / ");
+}
+
 // 역할별 일지 줄의 키 집합(결정 0027-11)
 const RECORD_KEYS = { police: "isMafia,n,target", mafia: "died,n,target", doctor: "n,target" };
 // 거절된 줄의 본문 표식: 어느 클라이언트의 어떤 프레임에도 되돌아오면 안 된다(COMM-04).
@@ -327,10 +356,17 @@ async function stageCreate(url) {
 // ---- full 단계: 다인원 한 판 ----
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// stageFull 이 클라이언트를 만든 직후 채운다. waitUntil 이 기다리는 동안 예기치 않은 소켓 닫힘을 바로 알리고, 시간 초과 메시지에 연결 상태를 붙인다.
+let watched = [];
+// 스크립트가 일부러 닫은 소켓: 늦게 오는 close 이벤트를 예기치 않은 닫힘으로 세지 않는다(소켓 단위 판정).
+const closingSockets = new WeakSet();
+
 async function waitUntil(pred, ms, label) {
   const start = performance.now();
   while (!pred()) {
-    if (performance.now() - start > ms) fail(`${label} (${ms / 1000}초 제한 초과)`);
+    const dropped = watched.find((c) => c.unexpectedClose !== null);
+    if (dropped) fail(`${label}: ${dropped.nickname} 소켓이 예상 밖으로 닫힘 (code ${dropped.unexpectedClose}) — ${linkReport(watched, performance.now())}`);
+    if (performance.now() - start > ms) fail(`${label} (${ms / 1000}초 제한 초과) — ${linkReport(watched, performance.now())}`);
     await sleep(20);
   }
 }
@@ -358,7 +394,7 @@ function openSocket(wsBase, code, client) {
       if (msg && msg.t === "state") resolve();
     });
     ws.addEventListener("close", (ev) => {
-      if (!client.expectClose && client.ws === ws) client.unexpectedClose = ev.code;
+      if (!client.expectClose && client.ws === ws && !closingSockets.has(ws)) client.unexpectedClose = ev.code;
       if (!opened) reject(new Error(`${client.nickname} 소켓이 열리기 전에 닫힘 (code ${ev.code})`));
     });
     ws.addEventListener("error", () => { if (!opened) reject(new Error(`${client.nickname} WebSocket 연결 오류`)); });
@@ -370,6 +406,7 @@ function closeSocket(client) {
     const ws = client.ws;
     if (!ws || ws.readyState === WebSocket.CLOSED) return resolve();
     client.expectClose = true;
+    closingSockets.add(ws);
     ws.addEventListener("close", () => resolve());
     ws.close();
     setTimeout(resolve, 2000);
@@ -466,6 +503,7 @@ async function stageFull(url, args) {
   // (2) 방장 "스모크1" 로 방 만들기 → 미리보기
   const clients = [];
   for (let i = 1; i <= N; i++) clients.push(newClient(`스모크${i}`));
+  watched = clients;
   const host = clients[0];
   const created = await http(0, "POST", "/api/rooms", { nickname: host.nickname });
   if (created.status !== 201) fail(`POST /api/rooms 상태 ${created.status}`);
@@ -807,7 +845,7 @@ async function stageFull(url, args) {
     }
 
     // (f) 처형(DAY-07, 결정 0053): 처형된 사람과 찬반 수만 공개하고 역할 키는 없다. 부결은 없다(전원 찬성).
-    await waitUntil(() => allSee(alive, "execution", n), VERDICT_WAIT_MS, `${label} 찬반 마감 뒤 execution 이 모든 클라이언트에 오지 않음`);
+    await waitUntil(() => allSee(clients, "execution", n), VERDICT_WAIT_MS, `${label} 찬반 마감 뒤 execution 이 모든 클라이언트에 오지 않음`);
     const execViews = clients.map((c) => firstState(c, "execution", inDay(n)).msg.view);
     for (const [i, ev] of execViews.entries()) {
       const c = clients[i];
@@ -973,7 +1011,7 @@ async function stageFull(url, args) {
     }
 
     // (e) 처형: victim 이 2표를 받아 찬반 없이 처형 단계로 — verdict.last, ballots 없음, 좌석만 공개
-    await waitUntil(() => allSee(alive, "execution", n), SHOWDOWN_REVEAL_MS + STATE_LIMIT_MS, `${label} 공개 마감 뒤 execution 이 모든 클라이언트에 오지 않음`);
+    await waitUntil(() => allSee(clients, "execution", n), SHOWDOWN_REVEAL_MS + STATE_LIMIT_MS, `${label} 공개 마감 뒤 execution 이 모든 클라이언트에 오지 않음`);
     for (const c of clients) {
       const ev = firstState(c, "execution", inDay(n)).msg.view;
       if (ev.day.execution?.seat !== victim.seat || Object.keys(ev.day.execution).sort().join(",") !== "seat") fail(`${c.nickname} 의 ${label} day.execution 이 {seat ${victim.seat}} 뿐이 아님: ${JSON.stringify(ev.day.execution)}`);
@@ -1128,23 +1166,37 @@ async function stageFull(url, args) {
   sendChat(ghostClient, GHOST_TEXT);
   await waitUntil(() => hasLine(ghostClient, ghostAt, "ghost", ghostClient.seat, GHOST_TEXT), STATE_LIMIT_MS, "탈락자 chat 줄이 탈락자 자신에게 돌아오지 않음");
   await sleep(300);
-  // 재접속 복원(CHAT-05): 산 시민 편(경찰)이 다시 붙으면 hello 직후 chatLog 로 자기가 받았던 공개 줄만 돌아온다 — mafia·ghost 줄은 0.
-  // 마피아가 다시 붙으면 공개 줄에 더해 밤 마피아 줄도 돌아온다. 복원이 라이브보다 넓어지지 않는다(T-07-35).
-  const townLines = await reconnectAndReplay(policeClient, "산 시민 편");
-  if (townLines.some((l) => l.ch !== "all")) fail(`산 시민 편 재접속 chatLog 에 ch all 밖의 줄이 있음: ${[...new Set(townLines.map((l) => l.ch))].join(",")}`);
-  if (townLines.map((l) => l.text).join("|") !== [...DAY_TEXTS, trial1.ballotsText, WILL_TEXT].join("|")) fail("산 시민 편 재접속 chatLog 의 낮 줄 + 찬반 기록 카드 + 유언 카드 순서·본문이 받은 순서와 다름");
-  const mafiaLines = await reconnectAndReplay(talker, "마피아");
-  if (!mafiaLines.some((l) => l.ch === "mafia" && l.text === NIGHT_TEXT && l.seat === talker.seat)) fail("마피아 재접속 chatLog 에 밤 마피아 줄이 없음");
-  if (mafiaLines.some((l) => l.ch === "ghost")) fail("마피아 재접속 chatLog 에 ghost 줄이 있음");
-  info(`재접속 복원: 산 시민 편 ${townLines.length}줄(전부 ch all, 찬반 기록·유언 카드 포함), 마피아 ${mafiaLines.length}줄`);
+  // 재접속 복원 검사는 짧은 단계 경계(아침 → 2초 dayAnnounce)를 걸치지 않게 한다(18-13, G-18-3): 판이 이어지면 2일차 errand(40초) 안에서,
+  // 첫 아침에 판이 끝나면(4명 판, 다음 단계가 ended 라 허용 전이) 아침에 한 번 한다. 단언 내용은 그대로이고 끝에서 한 번 돌았음을 확인한다.
+  let replayDone = null; // 검사를 한 단계 이름
+  async function checkReplay(where) {
+    if (replayDone !== null) fail("재접속 복원 검사를 두 번 부름");
+    replayDone = where;
+    // 재접속 복원(CHAT-05): 산 시민 편(경찰)이 다시 붙으면 hello 직후 chatLog 로 자기가 받았던 공개 줄만 돌아온다 — mafia·ghost 줄은 0.
+    // 마피아가 다시 붙으면 공개 줄에 더해 밤 마피아 줄도 돌아온다. 복원이 라이브보다 넓어지지 않는다(T-07-35).
+    const townLines = await reconnectAndReplay(policeClient, "산 시민 편");
+    if (townLines.some((l) => l.ch !== "all")) fail(`산 시민 편 재접속 chatLog 에 ch all 밖의 줄이 있음: ${[...new Set(townLines.map((l) => l.ch))].join(",")}`);
+    if (townLines.map((l) => l.text).join("|") !== [...DAY_TEXTS, trial1.ballotsText, WILL_TEXT].join("|")) fail("산 시민 편 재접속 chatLog 의 낮 줄 + 찬반 기록 카드 + 유언 카드 순서·본문이 받은 순서와 다름");
+    const mafiaLines = await reconnectAndReplay(talker, "마피아");
+    if (!mafiaLines.some((l) => l.ch === "mafia" && l.text === NIGHT_TEXT && l.seat === talker.seat)) fail("마피아 재접속 chatLog 에 밤 마피아 줄이 없음");
+    if (mafiaLines.some((l) => l.ch === "ghost")) fail("마피아 재접속 chatLog 에 ghost 줄이 있음");
+    info(`재접속 복원: 산 시민 편 ${townLines.length}줄(전부 ch all, 찬반 기록·유언 카드 포함), 마피아 ${mafiaLines.length}줄`);
+    info(`재접속 복원 검사 단계: ${where}`);
+  }
 
   // (16) 다음 낮들: 승패가 날 때까지 낮을 같은 방식으로 돈다. 마피아가 남은 날은 마피아 한 명을 처형하고(처형으로 끝나는 판 포함),
   //      그 밤에는 아무도 행동하지 않아 아침에 탈락자가 없다. 마지막은 모든 클라이언트가 ended 에서 같은 승리 팀을 본다.
   let winner = winnerNow();
+  if (winner !== null) await checkReplay("morning"); // 첫 아침에 판이 끝남: 다음 단계가 ended 라 경계를 걸치지 않는다
   let dayNo = 1;
   while (winner === null) {
     dayNo += 1;
     await waitUntil(() => allSee(aliveNow(), "dayAnnounce", dayNo), dayNo === 2 ? MORNING_WAIT_MS : NIGHT_WAIT_MS, `아침 마감 뒤 dayAnnounce(day.n ${dayNo}) 가 산 클라이언트에 오지 않음`);
+    if (dayNo === 2) {
+      // 40초 errand 안에서 다시 붙는다: 아침 → dayAnnounce(2초) 경계를 걸칠 수 없다.
+      await waitUntil(() => allSee(aliveNow(), "errand", dayNo), STATE_LIMIT_MS + 5000, "2일차 dayAnnounce 뒤 errand 가 산 클라이언트에 오지 않음");
+      await checkReplay("errand(2일차)");
+    }
     // 하루 갈래는 산 사람 수가 아니라 서버가 보낸 단계로 고른다. 기본판(결정 0072)은 산 사람이 3명이어도 discussion 이다 — showdown 이 오면 전이 표(PHASE_NEXT)가 실패시킨다.
     await waitUntil(
       () => aliveNow().every((c) => lastView(c)?.day?.n === dayNo && (lastView(c).phase === "discussion" || lastView(c).phase === "showdown")),
@@ -1173,6 +1225,7 @@ async function stageFull(url, args) {
       if (!owner || sj.job !== owner.role) fail(`${c.nickname} 의 ended result.seats 의 seat ${sj.seat} job(${sj.job})이 그 클라이언트의 역할(${owner?.role})과 다름`);
     }
   }
+  if (replayDone === null) fail("재접속 복원 검사가 돌지 않음");
   info(`판 끝: ${dayNo}일차, ${winner}, 탈락 ${dead.size}명`);
   for (const c of clients) if (c.unexpectedClose !== null) fail(`${c.nickname} 소켓이 예상 밖으로 닫힘 (code ${c.unexpectedClose})`);
 
@@ -1254,15 +1307,24 @@ async function stageFull(url, args) {
   const ends = new Set();
   for (const c of clients) for (const f of states(c)) if (f.msg.view.phase === "roleReveal") ends.add(f.msg.view.phaseEndsAt);
   if (ends.size !== 1) fail(`roleReveal 의 phaseEndsAt 이 클라이언트마다 다름 (${ends.size}종)`);
-  // 낮 시작 발표·discussion 진입 도착 편차
+  // 낮 시작 발표·discussion 진입 편차: 도착 시각 차(정보용)와 서버 시각 차(판정)
   const spreadOf = (phase) => {
     const at = clients.map((c) => firstState(c, phase).at);
     return Math.round(Math.max(...at) - Math.min(...at));
   };
-  const spread = spreadOf("dayAnnounce");
-  const discSpread = spreadOf("discussion");
-  if (spread >= DAY_SPREAD_LIMIT_MS) fail(`dayAnnounce 도착 편차 ${spread}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
-  if (discSpread >= DAY_SPREAD_LIMIT_MS) fail(`discussion 도착 편차 ${discSpread}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
+  const arrivalSpread = spreadOf("dayAnnounce");
+  const arrivalDiscSpread = spreadOf("discussion");
+  // 실패 판정은 서버 시각(각 클라이언트 첫 프레임의 view.serverNow) 기준이다. 문턱 500ms 는 그대로.
+  const serverSpreadOf = (phase) => {
+    const ms = serverSpread(clients.map((c) => firstState(c, phase).msg.view));
+    if (ms === null) fail(`${phase} 서버 시각 편차 측정 못 함 (view.serverNow 가 숫자가 아님)`);
+    return ms;
+  };
+  const spread = serverSpreadOf("dayAnnounce");
+  const discSpread = serverSpreadOf("discussion");
+  if (spread >= DAY_SPREAD_LIMIT_MS) fail(`dayAnnounce 서버 시각 편차 ${spread}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
+  if (discSpread >= DAY_SPREAD_LIMIT_MS) fail(`discussion 서버 시각 편차 ${discSpread}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
+  info(`도착 편차(망 포함, 정보용) dayAnnounce ${arrivalSpread}ms · discussion ${arrivalDiscSpread}ms`);
 
   // 서버 전용·삭제된 키는 어떤 프레임에도 없다(결정 0027-3). 옛 직업 주장 키(claim*·turn·claimLog)가 다시 나오면 회귀다(CHAT-06). turn 은 view.day.turn 만 공개이고 pickTurn 은 어디에도 없다.
   // state 어디에도 messages·extendUsed 키가 없다(결정 0017-7): 채팅 줄은 state 가 아니라 chat 프레임으로만 온다.
@@ -1561,7 +1623,7 @@ async function stageFull(url, args) {
     if (bytes.length > maxKB * 1024) fail(`${path} 용량 ${(bytes.length / 1024).toFixed(1)}KB > 상한 ${maxKB}KB`);
   }
 
-  console.log(`SMOKE OK full code=${code} players=${N} spread=${spread}ms discSpread=${discSpread}ms version=${version}`);
+  console.log(`SMOKE OK full code=${code} players=${N} serverSpread=${spread}ms/${discSpread}ms arrivalSpread=${arrivalSpread}ms/${arrivalDiscSpread}ms version=${version}`);
 }
 
 async function main() {
