@@ -172,7 +172,7 @@ import { dropSockets } from "./browser.mjs";
 import {
   FLOAT_BOX_H,
   FLOAT_LABEL_EXTRA,
-  GOALS,
+  ROLE_LINES,
   HOST_ACT_LINES,
   VIEW_DAY_KEYS,
   VIEW_ME_KEYS,
@@ -3729,23 +3729,27 @@ test("toolLabelChecks: 목록이 비었거나 모양이 틀리거나 개수가 �
   }
 });
 
-test("HOST_ACT_LINES·GOALS: 역할별 줄·목표 문장 표", () => {
+test("HOST_ACT_LINES·ROLE_LINES: 역할별 줄·역할 문구 표", () => {
   assert.deepEqual(Object.keys(HOST_ACT_LINES).sort(), ["doctor", "mafia", "police"]);
-  assert.deepEqual(Object.keys(GOALS).sort(), ["citizen", "doctor", "mafia", "police"]);
+  assert.deepEqual(Object.keys(ROLE_LINES).sort(), ["citizen", "doctor", "mafia", "police"]);
 });
 
 const leakItem = (role, over = {}) => ({ role, ownRole: role === "ghost" ? "mafia" : role, phase: "night", domText: "밤이 되었습니다.", callCount: 0, line: "밤이 되었습니다.", idle: false, ...over });
 
-test("hostLeakChecks HL1: 내 역할 줄·목표만 있으면 통과, 다른 역할 act 줄·목표가 있으면 실패", () => {
-  const rs = hostLeakChecks([leakItem("police", { domText: HOST_ACT_LINES.police + " " + GOALS.police })]);
+// readRoomText 가 공백을 한 칸으로 줄여 읽으므로 사본도 같은 정규화로 만든다(줄바꿈 → 공백)
+const flat = (s) => s.replace(/\s+/g, " ");
+
+test("hostLeakChecks HL1: 내 역할 줄·문구만 있으면 통과, 다른 역할 act 줄·문구가 있으면 실패", () => {
+  const rs = hostLeakChecks([leakItem("police", { domText: HOST_ACT_LINES.police + " " + flat(ROLE_LINES.police) })]);
   assert.equal(rs.find((r) => r.id === "HL1").ok, true);
   const act = hostLeakChecks([leakItem("citizen", { domText: HOST_ACT_LINES.mafia })]).find((r) => r.id === "HL1");
   assert.equal(act.ok, false);
   assert.match(act.detail, /citizen/);
-  const goal = hostLeakChecks([leakItem("doctor", { domText: GOALS.mafia })]).find((r) => r.id === "HL1");
+  const goal = hostLeakChecks([leakItem("doctor", { domText: flat(ROLE_LINES.mafia) })]).find((r) => r.id === "HL1");
   assert.equal(goal.ok, false);
-  // 유령은 자기 직업 줄·다른 직업 줄 모두 띠에 없어야 한다 — 자기 직업의 목표 문장만 허용
-  const ghost = hostLeakChecks([leakItem("ghost", { ownRole: "mafia", domText: GOALS.mafia })]).find((r) => r.id === "HL1");
+  assert.match(goal.detail, /doctor@night 화면에 mafia 역할 문구/);
+  // 유령은 자기 직업 줄·다른 직업 줄 모두 띠에 없어야 한다 — 자기 직업의 역할 문구만 허용
+  const ghost = hostLeakChecks([leakItem("ghost", { ownRole: "mafia", domText: flat(ROLE_LINES.mafia) })]).find((r) => r.id === "HL1");
   assert.equal(ghost.ok, true, ghost.detail);
   assert.equal(hostLeakChecks([leakItem("ghost", { ownRole: "mafia", domText: HOST_ACT_LINES.mafia })]).find((r) => r.id === "HL1").ok, false);
 });
@@ -4809,13 +4813,14 @@ test("tutorialHiddenChecks TH1: 아래 패널·[내 역할]·채팅 입력칸이
 });
 
 test("tutorialRoleLineChecks TC5: 직업 카드 한 줄 넷이 사본과 글자 그대로 같다", () => {
-  const lines = ["대화와 투표로 마피아를 찾아요", "밤에 함께 한 명을 지목해요", "밤에 한 명을 살려요", "밤마다 한 명을 조사해요"];
+  const lines = ["당신은 시민입니다.\n추리로 마피아를 찾아내세요.", "당신은 마피아입니다.\n몰래 암살하여 승리하세요.", "당신은 의사입니다.\n시민 팀을 마피아에게서 지키세요.", "당신은 경찰입니다.\n의심되는 사람을 조사하세요."];
   assert.equal([...TUTORIAL_ROLE_LINES_E2E].join("|"), lines.join("|"));
   const ok = tutorialRoleLineChecks(lines);
   assert.equal(ok.map((l) => l.id).join(","), "TC5");
   assert.ok(ok.every((l) => l.ok));
-  assert.equal(tutorialRoleLineChecks([lines[0], lines[1], "밤에 한 명을 살려요.", lines[3]])[0].ok, false);
+  assert.equal(tutorialRoleLineChecks([lines[0], lines[1], lines[2] + ".", lines[3]])[0].ok, false);
   assert.equal(tutorialRoleLineChecks([lines[1], lines[0], lines[2], lines[3]])[0].ok, false); // 순서가 다름
+  assert.equal(tutorialRoleLineChecks([lines[0].replace("\n", " "), lines[1], lines[2], lines[3]])[0].ok, false); // 줄바꿈이 공백으로 바뀌면 다름
   assert.equal(tutorialRoleLineChecks(lines.slice(0, 3))[0].ok, false);
   assert.ok(tutorialRoleLineChecks(null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
 });

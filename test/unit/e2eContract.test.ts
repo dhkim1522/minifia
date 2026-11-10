@@ -680,7 +680,7 @@ describe("12페이즈 sound-result E2E (12-11)", () => {
 describe("14페이즈 사회자·이름표 E2E 사본과 제품 값 (14-08, 사본 일치 규약)", () => {
   type L = {
     HOST_ACT_LINES: Record<string, string>;
-    GOALS: Record<string, string>;
+    ROLE_LINES: Record<string, string>;
     VIEW_TOP_KEYS: ReadonlySet<string>;
     VIEW_ME_KEYS: ReadonlySet<string>;
     VIEW_DAY_KEYS: ReadonlySet<string>;
@@ -689,9 +689,11 @@ describe("14페이즈 사회자·이름표 E2E 사본과 제품 값 (14-08, 사�
   const lib = e2eLib as unknown as L;
   const root = new URL("../../", import.meta.url);
 
-  it("HOST_ACT_LINES 는 src/game/hostLine.ts 의 밤 역할별 줄과, GOALS 는 roleText.ts 의 목표 문장과 한 글자도 다르지 않다", () => {
+  it("HOST_ACT_LINES 는 src/game/hostLine.ts 의 밤 역할별 줄과, ROLE_LINES 는 roleText.ts 의 역할 문구(desc)와 한 글자도 다르지 않다", () => {
     expect(lib.HOST_ACT_LINES).toEqual({ mafia: HOST_LINES["night.mafia"], police: HOST_LINES["night.police"], doctor: HOST_LINES["night.doctor"] });
-    expect(lib.GOALS).toEqual({ mafia: ROLE_TEXT.mafia.goal, police: ROLE_TEXT.police.goal, doctor: ROLE_TEXT.doctor.goal, citizen: ROLE_TEXT.citizen.goal });
+    expect(lib.ROLE_LINES).toEqual({ mafia: ROLE_TEXT.mafia.desc, police: ROLE_TEXT.police.desc, doctor: ROLE_TEXT.doctor.desc, citizen: ROLE_TEXT.citizen.desc });
+    // A1c: goal 키 폐지 — 문구는 desc 하나뿐
+    for (const r of ["mafia", "police", "doctor", "citizen"] as const) expect(Object.hasOwn(ROLE_TEXT[r], "goal"), `${r}.goal`).toBe(false);
   });
 
   /** view.test.ts 의 `const NAME ... = new Set([ "a", "b" ])` 안 문자열 목록(줄 주석은 뺀다). 서버 view 허용 목록은 이 페이즈에서 그대로다. */
@@ -731,7 +733,7 @@ describe("14페이즈 사회자·이름표 E2E 사본과 제품 값 (14-08, 사�
       .split("\n")
       .filter((f) => /\.(tsx?|css)$/.test(f));
     const all = tracked.map((f) => readFileSync(new URL(f, root), "utf8")).join("\n");
-    expect(lib.HOST_MARKERS).toEqual(["data-host-band", "data-host-line", "data-host-time", "data-call", "data-role-goal", "data-guide"]);
+    expect(lib.HOST_MARKERS).toEqual(["data-host-band", "data-host-line", "data-host-time", "data-call", "data-role-line", "data-guide"]);
     expect(lib.HOST_MARKERS.filter((m) => !all.includes(m))).toEqual([]);
   });
 });
