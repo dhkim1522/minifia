@@ -2534,6 +2534,8 @@ export async function readTutorial(page) {
           recordRows: recordCard ? Number(recordCard.getAttribute("data-record-rows")) : 0,
           traceCard: root ? rectOf(q("[data-trace-card]", root)) : null,
           links: qa("path.tut-links__path").length,
+          lines: qa("path.tut-links__path").map((p) => ({ from: (p.dataset.from ?? "").split(",").map(Number), to: (p.dataset.to ?? "").split(",").map(Number) })),
+          suspectTag: rectOf(tagOf(suspect)),
           formula: rectOf(q("[data-tutorial-formula]")),
         },
         reveal: reveal

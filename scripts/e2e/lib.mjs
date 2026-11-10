@@ -3813,9 +3813,29 @@ export function tutorialEvidenceChecks(ev, { scene, next } = {}) {
 /** 장면 5 선·도윤 이름표가 들어와야 하는 화면 안쪽 여백(px, UI-SPEC 장면 5 계약 — 앱 clampPoint 의 inset 8 과 같다) */
 export const TUTORIAL_LINE_INSET = 8;
 
-/** 장면 5 선·도윤 이름표 판정(EV6~EV8) — 자리 함수(18-08 RED): 아직 아무 줄도 돌려주지 않는다 */
-export function tutorialLineChecks(ev, opts) {
-  void ev;
-  void opts;
-  return [];
+/**
+ * 장면 5 선·도윤 이름표(18-08, UI-SPEC 장면 5 계약 1·2·3): ev = { lines: [{ from: [x, y], to: [x, y] }] ×2, suspectTag, traceCard, formula }, band = { rect }, next = [다음] 사각형.
+ * EV6 선 두 개의 시작·끝이 [8, w−8]×[8, h−8] 안 · EV7 도윤 이름표 사각형이 같은 안쪽 상자 안 · EV8 이름표가 증거 카드·사회자 띠·수식 줄·[다음] 과 교차 0.
+ * 선이 2개가 아니거나 이름표 사각형·화면 크기를 못 읽으면 세 줄 모두 측정 못 함이다. detail 에는 숫자·사각형만 싣는다(닉네임·역할 없음).
+ */
+export function tutorialLineChecks(ev, { viewport, band, next } = {}) {
+  const L = {
+    EV6: `장면 5 선 두 개의 시작·끝이 화면 안쪽 ${TUTORIAL_LINE_INSET} 안`,
+    EV7: `도윤 이름표가 화면 안쪽 ${TUTORIAL_LINE_INSET} 안`,
+    EV8: "도윤 이름표가 증거 카드·사회자 띠·수식 줄·[다음] 과 교차 0",
+  };
+  const isPt = (p) => Array.isArray(p) && p.length === 2 && isNum(p[0]) && isNum(p[1]);
+  const ok = !!ev && Array.isArray(ev.lines) && ev.lines.length === 2 && ev.lines.every((l) => l && isPt(l.from) && isPt(l.to)) && isRectLike(ev.suspectTag) && isViewport(viewport);
+  if (!ok) return Object.keys(L).map((id) => noMeasure(id, L[id], "장면 5 선 좌표·도윤 이름표 사각형"));
+  const inner = { left: TUTORIAL_LINE_INSET, top: TUTORIAL_LINE_INSET, width: viewport.w - 2 * TUTORIAL_LINE_INSET, height: viewport.h - 2 * TUTORIAL_LINE_INSET };
+  const ptOut = (p) => p[0] < inner.left - OVERLAP_EPS || p[0] > inner.left + inner.width + OVERLAP_EPS || p[1] < inner.top - OVERLAP_EPS || p[1] > inner.top + inner.height + OVERLAP_EPS;
+  const bad6 = [];
+  ev.lines.forEach((l, i) => {
+    for (const [name, p] of [["시작", l.from], ["끝", l.to]]) if (ptOut(p)) bad6.push(`선 ${i + 1} ${name} (${rd(p[0])},${rd(p[1])}) 가 ${viewport.w}x${viewport.h} 안쪽 ${TUTORIAL_LINE_INSET} 밖`);
+  });
+  const bad7 = rectInside(ev.suspectTag, inner) ? [] : [`이름표 ${rectText(ev.suspectTag)} 가 ${viewport.w}x${viewport.h} 안쪽 ${TUTORIAL_LINE_INSET} 밖`];
+  const others = [["증거 카드", ev.traceCard], ["사회자 띠", band && band.rect], ["수식 줄", ev.formula], ["[다음]", next]];
+  if (others.some(([, r]) => !isRectLike(r))) return [result("EV6", L.EV6, bad6), result("EV7", L.EV7, bad7), noMeasure("EV8", L.EV8, `${others.filter(([, r]) => !isRectLike(r)).map(([n]) => n).join("·")} 사각형`)];
+  const bad8 = others.filter(([, r]) => rectsOverlap(ev.suspectTag, r)).map(([n, r]) => `이름표 ${rectText(ev.suspectTag)} 가 ${n} ${rectText(r)} 와 겹침`);
+  return [result("EV6", L.EV6, bad6), result("EV7", L.EV7, bad7), result("EV8", L.EV8, bad8)];
 }

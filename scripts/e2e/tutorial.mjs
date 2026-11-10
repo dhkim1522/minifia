@@ -18,6 +18,7 @@ import {
   tutorialEvidenceChecks,
   tutorialFocusChecks,
   tutorialLeakChecks,
+  tutorialLineChecks,
   tutorialOpeningChecks,
   tutorialRevealChecks,
   tutorialRoleCardChecks,
@@ -292,6 +293,7 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       recAll(rec, sc5, tutorialDotChecks(t.dots, 5));
       focusLines(rec, sc5, t, []);
       recAll(rec, sc5, tutorialEvidenceChecks(t.evidence, { scene: 5, next: t.next }));
+      recAll(rec, sc5, tutorialLineChecks(t.evidence, { viewport: vpOf(t), band: t.band, next: t.next }), { relax: ctx.size.h <= 560 ? ["EV6", "EV7", "EV8"] : [], note: "360x560 참고 행(UI-SPEC 장면 5)" });
       bandLines(rec, sc5, t, [], {});
       await gLine(rec, ctx, solo, sc5);
       await hLine(rec, page, sc5);
