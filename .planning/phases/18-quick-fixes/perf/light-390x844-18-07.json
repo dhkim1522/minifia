@@ -1,0 +1,69 @@
+{
+  "runner": {
+    "tool": "scripts/perf-run.mjs --mode light",
+    "size": "390x844",
+    "dpr": 2,
+    "chrome": "157.0.8103.39",
+    "url": "http://localhost:5173/?perf=1&scene=talk&minutes=1&dpr=2&seed=1&budget=0&map=plaza&shot=1&chars=6"
+  },
+  "maps": {
+    "plaza": {
+      "means": {
+        "talk": 0.01715897254540141,
+        "morning": 0.011811746455407309,
+        "vote": 0.004390269696739493,
+        "night": 0.006906894081254415
+      },
+      "ok": false,
+      "rows": [
+        {
+          "id": "L4a",
+          "label": "순서 talk > morning > vote > night",
+          "ok": false,
+          "detail": "talk 0.0172, morning 0.0118, vote 0.0044, night 0.0069"
+        },
+        {
+          "id": "L4b",
+          "label": "talk ≥ night × 2",
+          "ok": true,
+          "detail": "talk 0.0172 / night 0.0069 = 2.4843배 (문턱 2)"
+        },
+        {
+          "id": "L4c",
+          "label": "morning ≥ night × 1.6",
+          "ok": true,
+          "detail": "morning 0.0118 / night 0.0069 = 1.7101배 (문턱 1.6)"
+        }
+      ]
+    },
+    "bar": {
+      "means": {
+        "talk": 0.02009476208055695,
+        "morning": 0.010496493295779319,
+        "vote": 0.004426873796519718,
+        "night": 0.0068714071296523075
+      },
+      "ok": false,
+      "rows": [
+        {
+          "id": "L4a",
+          "label": "순서 talk > morning > vote > night",
+          "ok": false,
+          "detail": "talk 0.0201, morning 0.0105, vote 0.0044, night 0.0069"
+        },
+        {
+          "id": "L4b",
+          "label": "talk ≥ night × 2",
+          "ok": true,
+          "detail": "talk 0.0201 / night 0.0069 = 2.9244배 (문턱 2)"
+        },
+        {
+          "id": "L4c",
+          "label": "morning ≥ night × 1.6",
+          "ok": false,
+          "detail": "morning 0.0105 / night 0.0069 = 1.5276배 (문턱 1.6)"
+        }
+      ]
+    }
+  }
+}
