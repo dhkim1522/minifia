@@ -142,6 +142,7 @@ import {
   floatTrayChecks,
   AVATAR_MARKERS,
   dressLockChecks,
+  outfitUniqueChecks,
   SOUND_MARKERS,
   SOUND_RENDER_LIMITS,
   soundButtonChecks,
@@ -4855,6 +4856,36 @@ test("dressLockChecks AL1~AL3: 다른 사람이 직접 고른 옷만 잠기고 �
   for (const bad of [{ cards: dressCards({}).slice(0, 8), otherLooks: [], myLook: "coat", afterTap: "coat" }, null, { cards: dressCards({}), otherLooks: "x", myLook: "coat", afterTap: "coat" }]) {
     const l = dressLockChecks(bad);
     assert.equal(l.length, 3);
+    assert.ok(l.every((x) => !x.ok && /측정값 없음/.test(x.detail)));
+  }
+});
+
+test("outfitUniqueChecks OU1·OU2: 한 판 옷이 모두 다르고 같은 옷 표시는 많아야 1명", () => {
+  const six = [{ seat: 0 }, { seat: 1, look: "police" }, { seat: 2, look: "doctor" }, { seat: 3, look: "mafia" }, { seat: 4, look: "detective" }, { seat: 5, look: "reporter" }];
+  const ok = outfitUniqueChecks({ players: six, traceSeats: [3] });
+  assert.equal(ok.map((l) => l.id).join(","), "OU1,OU2");
+  assert.ok(ok.every((l) => l.ok), JSON.stringify(ok));
+  assert.ok(outfitUniqueChecks({ players: six, traceSeats: [] }).every((l) => l.ok)); // 표시 0개도 통과(많아야 1)
+  // OU1: 좌석 0·1 이 둘 다 look 없음(coat 둘)
+  const dup = outfitUniqueChecks({ players: [{ seat: 0 }, { seat: 1 }, ...six.slice(2)], traceSeats: [] });
+  assert.equal(dup[0].ok, false);
+  assert.match(dup[0].detail, /coat/);
+  assert.match(dup[0].detail, /0/);
+  assert.match(dup[0].detail, /1/);
+  assert.equal(dup[1].ok, true);
+  // coat 와 명시한 coat 도 같은 옷
+  assert.equal(outfitUniqueChecks({ players: [{ seat: 0 }, { seat: 1, look: "coat" }], traceSeats: [] })[0].ok, false);
+  // 나간 사람의 옷은 뺀다
+  assert.equal(outfitUniqueChecks({ players: [{ seat: 0 }, { seat: 1, look: "coat", left: true }, { seat: 2, look: "noir" }], traceSeats: [] })[0].ok, true);
+  // OU2: 표시 좌석이 둘
+  const two = outfitUniqueChecks({ players: six, traceSeats: [1, 4] });
+  assert.equal(two[0].ok, true);
+  assert.equal(two[1].ok, false);
+  assert.match(two[1].detail, /1/);
+  // 읽지 못함
+  for (const bad of [{ players: null, traceSeats: [] }, { players: six, traceSeats: "x" }, null]) {
+    const l = outfitUniqueChecks(bad);
+    assert.equal(l.length, 2);
     assert.ok(l.every((x) => !x.ok && /측정값 없음/.test(x.detail)));
   }
 });

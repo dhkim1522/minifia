@@ -3952,3 +3952,9 @@ export function dressLockChecks(s) {
   if (coat && coat.taken && !s.otherLooks.includes("coat")) bad3.push("coat 카드가 잠김(남이 고르지 않음)");
   return [result("AL1", L.AL1, bad1), result("AL2", L.AL2, bad2), result("AL3", L.AL3, bad3)];
 }
+
+/** 한 판 옷 유일·같은 옷 표시 판정(18-09, D-01): 자리 함수 — 다음 커밋에서 채운다. */
+export function outfitUniqueChecks(s) {
+  void s;
+  return [];
+}
