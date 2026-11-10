@@ -11,6 +11,7 @@ import type { AwardLine, GameWinner, MapId, RoomView, SummaryRow, VoteLogEntry }
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
+import { logHeightFor } from "../../src/game/chatUi";
 import { RESULT_TABS_SHOWN } from "../../src/game/resultText";
 import { GATHER_CENTER } from "../../src/world/camera";
 import { openPlaza } from "../helpers/playable";
@@ -813,6 +814,21 @@ describe("결과 화면 기록 숨김 (18.1 R5, P181-7)", () => {
     m.rerenderRoom(makeView(), onEvent());
     expect(m.container.querySelector("[data-result-tab]")).toBeNull();
     vi.unstubAllGlobals();
+  });
+
+  it("기록 칸 높이는 게임 채팅 패널과 같은 값이다 — 탭 행 몫(40)을 덜어 내지 않는다 (B 계약 5, E2)", () => {
+    const orig = window.innerHeight;
+    try {
+      for (const h of [600, 900]) {
+        Object.defineProperty(window, "innerHeight", { configurable: true, value: h });
+        const r = renderRoom(makeView(), onEvent());
+        const log = r.container.querySelector<HTMLElement>("[data-chat-log]")!;
+        expect(log.style.height).toBe(`${logHeightFor(h)}px`);
+        r.unmount();
+      }
+    } finally {
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: orig });
+    }
   });
 
   it("보이는 탭 상수는 전체 하나이고 확장·시계 정지 경로에 닿지 않는다 — 무대 탭은 건너뛰기만 한다", () => {
