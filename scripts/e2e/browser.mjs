@@ -2517,6 +2517,25 @@ export async function readTutorial(page) {
         dots: { count: dots.length, now: nowIdx + 1 },
         skip,
         next: root ? rectOf(q("[data-tutorial-next]", root)) : null,
+        nextLabel: root ? (q("[data-tutorial-next]", root)?.textContent ?? "").replace(/\s+/g, " ").trim() : null,
+        errandDots: rectOf(q(".mv-errand-dots", scope)),
+        dim: (() => {
+          const els = qa("[data-tutorial-dim]", scope);
+          const cs = els[0] ? getComputedStyle(els[0]) : null;
+          return { count: els.length, holes: qa("[data-tutorial-hole]", scope).map((h) => {
+            // mask 안의 rect 는 그려지는 상자가 없어 getBoundingClientRect 가 0 이다 — 속성(svg 사용자 단위 = px)에 svg 의 화면 원점을 더한다
+            const o = els[0].getBoundingClientRect();
+            const a = (n) => Number(h.getAttribute(n));
+            return { left: o.left + a("x"), top: o.top + a("y"), width: a("width"), height: a("height"), right: o.left + a("x") + a("width"), bottom: o.top + a("y") + a("height") };
+          }), backdrop: cs ? (cs.backdropFilter ?? cs.webkitBackdropFilter ?? "none") : null, filter: cs ? cs.filter : null };
+        })(),
+        hidden: {
+          worldPanel: qa("[data-world-panel]", scope).length,
+          gamePanel: qa(".mf-game__panel", scope).length,
+          roleBtn: qa(".mf-rolecard-btn", scope).length,
+          chatInputs: qa('textarea, input[type="text"], input:not([type])', scope).length,
+        },
+        roleLines: qa("[data-tutorial-role-card] .tut-role__line", scope).map((el) => (el.textContent ?? "").replace(/\s+/g, " ").trim()),
         focus: root ? qa("[data-tutorial-focus]", root).map((el) => ({ key: el.getAttribute("data-tutorial-focus"), rect: toRect(el.getBoundingClientRect()) })) : [],
         targets,
         band,

@@ -3842,33 +3842,74 @@ export function tutorialLineChecks(ev, { viewport, band, next } = {}) {
 
 /**
  * 장면 7 직업 카드 한 줄 글 사본(18-08): 시민·마피아·의사·경찰 순서. src/game/roleText.ts ROLE_TEXT 의 desc 와 같아야 한다 —
- * test/unit/e2eContract.test.ts 가 대조한다(.mjs 가 TS 를 직접 import 하지 않는다). 자리값(18-08 RED): 아직 비어 있다.
+ * test/unit/e2eContract.test.ts 가 대조한다(.mjs 가 TS 를 직접 import 하지 않는다).
  */
-export const TUTORIAL_ROLE_LINES_E2E = [];
+export const TUTORIAL_ROLE_LINES_E2E = Object.freeze(["대화와 투표로 마피아를 찾아요", "밤에 함께 한 명을 지목해요", "밤에 한 명을 살려요", "밤마다 한 명을 조사해요"]);
 
-/** 스포트라이트 막 판정(TD1~TD3) — 자리 함수(18-08 RED) */
-export function tutorialDimChecks(dim, opts) {
-  void dim;
-  void opts;
-  return [];
+/** [다음] 알약의 기준 폭(px, 앱 .tut-next width: min(240px, 100% − 48px)) 과 높이 */
+const TUTORIAL_NEXT_W = 240;
+const TUTORIAL_NEXT_SIDE = 48;
+const TUTORIAL_NEXT_H = 56;
+/** [다음] 가로 가운데 허용 오차(px) */
+const TUTORIAL_NEXT_CENTER_TOL = 4;
+
+/**
+ * 스포트라이트 막(18-08, D-04): dim = { count, holes: [사각형…], backdrop, filter }, expect = 이 구간에 기대하는 막 개수(0 또는 1), focus = [{ rect }] 포커스 상자들.
+ * TD1 [data-tutorial-dim] 개수 = expect · TD2(expect 1) 포커스 상자마다 중심·폭·높이 차가 모두 TUTORIAL_FOCUS_TOL 이하인 구멍이 있다(여분 구멍은 lit 이라 괜찮다) ·
+ * TD3(expect 1) 막의 계산 스타일 backdrop-filter·filter 가 none(흐림 없음). expect 0 이면 TD1 한 줄뿐이다.
+ */
+export function tutorialDimChecks(dim, { expect, focus } = {}) {
+  const L = { TD1: `스포트라이트 막 ${expect}개`, TD2: "구멍이 포커스 상자를 덮음(중심·크기 오차 2px)", TD3: "막에 흐림(backdrop-filter·filter) 없음" };
+  const ids = expect === 1 ? ["TD1", "TD2", "TD3"] : ["TD1"];
+  if (!dim || !isNum(dim.count) || !Array.isArray(dim.holes) || !(expect === 0 || expect === 1) || !Array.isArray(focus)) return ids.map((id) => noMeasure(id, L[id], "스포트라이트 막 읽기"));
+  const td1 = result("TD1", L.TD1, dim.count === expect ? [] : [`막 ${dim.count}개`]);
+  if (expect === 0) return [td1];
+  const near = (a, b) => {
+    const cx = a.left + a.width / 2 - (b.left + b.width / 2);
+    const cy = a.top + a.height / 2 - (b.top + b.height / 2);
+    return Math.max(Math.abs(cx), Math.abs(cy), Math.abs(a.width - b.width), Math.abs(a.height - b.height)) <= TUTORIAL_FOCUS_TOL;
+  };
+  const holes = dim.holes.filter(isRectLike);
+  const bad2 = focus.filter((f) => isRectLike(f.rect) && !holes.some((h) => near(h, f.rect))).map((f) => `상자 ${rectText(f.rect)} 를 덮는 구멍 없음(구멍 ${holes.length}개${holes.length > 0 ? `: ${holes.map(rectText).join(" ")}` : ""})`);
+  const blurred = (v) => typeof v === "string" && v !== "none" && v !== "";
+  const bad3 = typeof dim.backdrop === "string" && typeof dim.filter === "string" ? [...(blurred(dim.backdrop) ? [`backdrop-filter ${dim.backdrop}`] : []), ...(blurred(dim.filter) ? [`filter ${dim.filter}`] : [])] : null;
+  return [td1, result("TD2", L.TD2, bad2), bad3 === null ? noMeasure("TD3", L.TD3, "막 계산 스타일") : result("TD3", L.TD3, bad3)];
 }
 
-/** [다음] 알약 판정(TN3·TN4) — 자리 함수(18-08 RED) */
-export function tutorialNextChecks(next, opts) {
-  void next;
-  void opts;
-  return [];
+/**
+ * [다음] 알약(18-08, D-05): next = [다음] 사각형, opts = { viewport, errandDots, label }. TN3 폭 ≥ min(240, w−48) − 1 · 높이 56 ± 1 · |가로 중심 − w/2| ≤ 4 · 글 "다음" ·
+ * TN4 심부름 진행 점이 숨어 있거나(null) [다음] 과 교차 0. errandDots 가 undefined 면 읽지 못한 것이다.
+ */
+export function tutorialNextChecks(next, { viewport, errandDots, label } = {}) {
+  const L = { TN3: "[다음] 알약: 폭·높이·가로 가운데·글 다음", TN4: "심부름 진행 점이 숨었거나 [다음] 과 교차 0" };
+  if (!isRectLike(next) || !isViewport(viewport) || errandDots === undefined) return Object.keys(L).map((id) => noMeasure(id, L[id], "[다음] 사각형·진행 점"));
+  const need = Math.min(TUTORIAL_NEXT_W, viewport.w - TUTORIAL_NEXT_SIDE) - 1;
+  const bad3 = [];
+  if (next.width < need) bad3.push(`폭 ${rd(next.width)} (기대 ${need} 이상)`);
+  if (Math.abs(next.height - TUTORIAL_NEXT_H) > 1) bad3.push(`높이 ${rd(next.height)} (기대 ${TUTORIAL_NEXT_H}±1)`);
+  const dx = next.left + next.width / 2 - viewport.w / 2;
+  if (Math.abs(dx) > TUTORIAL_NEXT_CENTER_TOL) bad3.push(`가로 중심이 화면 가운데에서 ${rd(dx)} 어긋남`);
+  if (label !== "다음") bad3.push(`글 "${typeof label === "string" ? label : ""}"`);
+  const bad4 = errandDots !== null && isRectLike(errandDots) && rectsOverlap(errandDots, next) ? [`진행 점 ${rectText(errandDots)} 가 [다음] ${rectText(next)} 와 겹침`] : [];
+  return [result("TN3", L.TN3, bad3), result("TN4", L.TN4, bad4)];
 }
 
-/** 장면 2~6 숨김 판정(TH1) — 자리 함수(18-08 RED) */
+/** 튜토리얼 지도 장면 2~6(18-08, D-06): hidden = { worldPanel, gamePanel, roleBtn, chatInputs } 개수. TH1 아래 패널·[내 역할]·채팅 입력칸이 모두 0 */
 export function tutorialHiddenChecks(hidden) {
-  void hidden;
-  return [];
+  const L = { TH1: "아래 패널·[내 역할]·채팅 입력칸 0개" };
+  const keys = [["worldPanel", "[data-world-panel]"], ["gamePanel", ".mf-game__panel"], ["roleBtn", "[내 역할] 단추"], ["chatInputs", "채팅 입력칸"]];
+  if (!hidden || keys.some(([k]) => !isNum(hidden[k]))) return [noMeasure("TH1", L.TH1, "숨김 대상 개수")];
+  return [result("TH1", L.TH1, keys.filter(([k]) => hidden[k] !== 0).map(([k, n]) => `${n} ${hidden[k]}개`))];
 }
 
-/** 직업 카드 한 줄 글 판정(TC5) — 자리 함수(18-08 RED) */
+/** 장면 7 직업 카드 한 줄 글(18-08, D-08): roles = 카드 순서대로 한 줄 글 배열. TC5 TUTORIAL_ROLE_LINES_E2E 와 글자 그대로 같다 */
 export function tutorialRoleLineChecks(roles) {
-  void roles;
-  return [];
+  const L = { TC5: "직업 카드 한 줄 글 넷이 ROLE_TEXT 와 글자 그대로 같다" };
+  if (!Array.isArray(roles) || !roles.every((r) => typeof r === "string")) return [noMeasure("TC5", L.TC5, "직업 카드 한 줄 글")];
+  const bad = [];
+  if (roles.length !== TUTORIAL_ROLE_LINES_E2E.length) bad.push(`카드 ${roles.length}장 (기대 ${TUTORIAL_ROLE_LINES_E2E.length})`);
+  TUTORIAL_ROLE_LINES_E2E.forEach((want, i) => {
+    if (roles[i] !== want) bad.push(`${i + 1}번째 "${roles[i] ?? ""}" (기대 "${want}")`);
+  });
+  return [result("TC5", L.TC5, bad)];
 }
-

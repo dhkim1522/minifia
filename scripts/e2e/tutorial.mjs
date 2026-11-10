@@ -13,15 +13,19 @@ import {
   headerContrastChecks,
   sentFrameChecks,
   tutorialBandChecks,
+  tutorialDimChecks,
   tutorialDotChecks,
   tutorialEntryChecks,
   tutorialEvidenceChecks,
   tutorialFocusChecks,
+  tutorialHiddenChecks,
   tutorialLeakChecks,
   tutorialLineChecks,
+  tutorialNextChecks,
   tutorialOpeningChecks,
   tutorialRevealChecks,
   tutorialRoleCardChecks,
+  tutorialRoleLineChecks,
   tutorialSkipChecks,
   tutorialTimingChecks,
 } from "./lib.mjs";
@@ -77,6 +81,20 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
   function bandLines(rec, sc, t, expectedTargets, opts) {
     const targets = expectedTargets.map((k) => t.targets.find((x) => x.key === k)).filter(Boolean);
     recAll(rec, sc, tutorialBandChecks(t.band, { header: t.header, dock: t.dock, next: t.next, targets }, opts));
+  }
+
+  /**
+   * 스포트라이트 막(D-04): dimOn = 포커스 상자가 있는 구간(막 1개·구멍이 상자를 덮음·흐림 없음), dimOff = 상자 없는 구간(막 0개). TD 줄은 dot 점 판정(TD1·TD2)과 id 가 겹쳐 `/dim` 시나리오에 따로 쌓는다.
+   */
+  const dimOn = (rec, sc, t) => recAll(rec, `${sc}/dim`, tutorialDimChecks(t.dim, { expect: 1, focus: t.focus }));
+  const dimOff = (rec, sc, t) => recAll(rec, `${sc}/dim`, tutorialDimChecks(t.dim, { expect: 0, focus: t.focus }));
+  /** [다음] 알약(D-05) — 보이는 구간에서만 부른다 */
+  function nextLines(rec, sc, t) {
+    recAll(rec, sc, tutorialNextChecks(t.next, { viewport: vpOf(t), errandDots: t.errandDots, label: t.nextLabel }));
+  }
+  /** 장면 2~6 에는 아래 패널·[내 역할]·채팅 입력칸이 없다(D-06) */
+  function hiddenLines(rec, sc, t) {
+    recAll(rec, sc, tutorialHiddenChecks(t.hidden));
   }
 
   /**
@@ -200,6 +218,8 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       recAll(rec, sc2, tutorialDotChecks(t.dots, 2));
       rec(sc2, "TN1", "[다음] 은 2.6초 전에는 없다", t.next === null, "");
       focusLines(rec, sc2, t, ["band"]);
+      dimOn(rec, sc2, t);
+      hiddenLines(rec, sc2, t);
       bandLines(rec, sc2, t, [], { speaking: true });
       const next2 = await tryDo(() => page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS }));
       rec(sc2, "TN2", "2.6초 뒤 [다음] 이 나타난다", next2.ok, next2.detail);
@@ -207,6 +227,8 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       await waitSpeaking(page, 1500).catch(() => {});
       t = await readTutorialStable(page);
       focusLines(rec, sc2, t, []);
+      dimOff(rec, sc2, t);
+      nextLines(rec, sc2, t);
       bandLines(rec, sc2, t, [], { speaking: true });
       recAll(rec, sc2, tutorialSkipChecks({ skip: t.skip, viewport: vpOf(t) }));
       const silent2 = await tryDo(() => waitSilent(page));
@@ -225,12 +247,14 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       t = await readTutorialStable(page);
       recAll(rec, sc3, tutorialDotChecks(t.dots, 3));
       focusLines(rec, sc3, t, ["errand"]);
+      dimOn(rec, sc3, t);
+      hiddenLines(rec, sc3, t);
       bandLines(rec, sc3, t, ["errand"], { speaking: true });
       await gLine(rec, ctx, solo, sc3);
       await hLine(rec, page, sc3);
       const before = await readMe(page);
       const taps = await page.evaluate(() => {
-        const header = document.querySelector(".mf-game__header button");
+        const header = document.querySelector(".mf-game__header");
         const hr = header ? header.getBoundingClientRect() : null;
         const stage = document.querySelector("[data-world-stage]");
         const sr = stage ? stage.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
@@ -252,7 +276,7 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       const after = await readMe(page);
       const stillScene3 = (await page.locator(sceneSel(3)).count()) === 1;
       const samePos = before.x !== null && after.x !== null && Math.abs(before.x - after.x) < 0.05 && Math.abs(before.z - after.z) < 0.05 && before.ring === after.ring;
-      rec(sc3, "TT1", "허용 목록 밖 터치(맵 빈 곳·머리 단추)에 반응이 없다: 장면 3 그대로", stillScene3 && taps.empty !== null && taps.header !== null, `장면 3 ${stillScene3}, 빈 곳 ${taps.empty !== null}, 머리 단추 ${taps.header !== null}`);
+      rec(sc3, "TT1", "허용 목록 밖 터치(맵 빈 곳·머리 영역)에 반응이 없다: 장면 3 그대로", stillScene3 && taps.empty !== null && taps.header !== null, `장면 3 ${stillScene3}, 빈 곳 ${taps.empty !== null}, 머리 영역 ${taps.header !== null}`);
       rec(sc3, "TT2", "허용 목록 밖 터치 뒤 내 위치·목적지 링이 그대로다", samePos, `전 ${before.x === null ? "읽지 못함" : `(${before.x.toFixed(2)},${before.z.toFixed(2)})`} 후 ${after.x === null ? "읽지 못함" : `(${after.x.toFixed(2)},${after.z.toFixed(2)})`}`);
       await page.locator("[data-errand-act]").click();
       const pressedAt = performance.now();
@@ -274,12 +298,16 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       t = await readTutorialStable(page);
       recAll(rec, sc4, tutorialDotChecks(t.dots, 4));
       focusLines(rec, sc4, t, ["suspect"]);
+      dimOn(rec, sc4, t);
+      hiddenLines(rec, sc4, t);
       recAll(rec, sc4, tutorialEvidenceChecks(t.evidence, { scene: 4 }));
       bandLines(rec, sc4, t, ["suspect"], {});
       const next4 = await tryDo(() => page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS }));
       rec(sc4, "TN2", "3.4초 뒤 [다음] 이 나타난다", next4.ok, next4.detail);
       if (!next4.ok) return;
       t = await readTutorialStable(page);
+      dimOff(rec, sc4, t);
+      nextLines(rec, sc4, t);
       bandLines(rec, sc4, t, [], {});
       await gLine(rec, ctx, solo, sc4);
       await page.locator("[data-tutorial-next]").click();
@@ -292,6 +320,9 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       t = await readTutorialStable(page);
       recAll(rec, sc5, tutorialDotChecks(t.dots, 5));
       focusLines(rec, sc5, t, []);
+      dimOff(rec, sc5, t);
+      hiddenLines(rec, sc5, t);
+      nextLines(rec, sc5, t);
       recAll(rec, sc5, tutorialEvidenceChecks(t.evidence, { scene: 5, next: t.next }));
       recAll(rec, sc5, tutorialLineChecks(t.evidence, { viewport: vpOf(t), band: t.band, next: t.next }), { relax: ctx.size.h <= 560 ? ["EV6", "EV7", "EV8"] : [], note: "360x560 참고 행(UI-SPEC 장면 5)" });
       {
@@ -312,6 +343,8 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       t = await readTutorialStable(page);
       recAll(rec, sc6, tutorialDotChecks(t.dots, 6));
       focusLines(rec, sc6, t, ["pick-0", "pick-1", "pick-3", "pick-4"]);
+      dimOn(rec, sc6, t);
+      hiddenLines(rec, sc6, t);
       bandLines(rec, sc6, t, ["pick-0", "pick-1", "pick-3", "pick-4"], {});
       await gLine(rec, ctx, solo, sc6);
       await hLine(rec, page, sc6);
@@ -326,6 +359,7 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
         const expected = i + 1 >= WRONG_HINT_AFTER ? [`pick-${RIGHT_SEAT}`] : ["pick-0", "pick-1", "pick-3", "pick-4"];
         rec(sc6, `TV${i + 3}`, `오답 ${i + 1}번 뒤 포커스 상자 ${expected.length}개`, st.focus.length === expected.length, `상자 ${st.focus.length}개`);
         focusLines(rec, sc6, st, expected);
+        dimOn(rec, sc6, st);
       }
       await page.locator(`[data-pick="${RIGHT_SEAT}"]`).click();
       const reveal = await attempt(async () => {
@@ -337,6 +371,8 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       await sleep(1900);
       t = await readTutorialStable(page);
       focusLines(rec, sc6, t, []);
+      dimOff(rec, `${sc6}/reveal`, t);
+      nextLines(rec, `${sc6}/reveal`, t);
       recAll(rec, sc6, tutorialRevealChecks({ reveal: t.reveal, next: t.next, viewport: vpOf(t) }));
       await gLine(rec, ctx, solo, `${sc6}/reveal`);
       if (wide) {
@@ -354,7 +390,10 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       t = await readTutorialStable(page);
       recAll(rec, sc7, tutorialDotChecks(t.dots, 7));
       recAll(rec, sc7, tutorialRoleCardChecks({ roles: t.roles, next: t.next, viewport: vpOf(t) }), { relax: ctx.size.h <= KNOWN_LIMIT_MAX_H ? ["TC4"] : [], note: "17-08 낮은 폰 직업 카드와 [다음] 겹침, UI Considerations #14" });
+      recAll(rec, sc7, tutorialRoleLineChecks(t.roleLines));
       focusLines(rec, sc7, t, []);
+      dimOff(rec, sc7, t);
+      nextLines(rec, sc7, t);
       bandLines(rec, sc7, t, [], {});
       await gLine(rec, ctx, solo, sc7);
       await page.locator("[data-tutorial-next]").click();
