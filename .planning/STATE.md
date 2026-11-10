@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: "18.1"
 current_phase_name: screen-polish
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 18.1-01-PLAN.md
-last_updated: "2026-11-10T17:44:16.495Z"
+stopped_at: Completed 18.1-02-PLAN.md
+last_updated: "2026-11-10T17:52:49.464Z"
 last_activity: 2026-11-11
 last_activity_desc: Phase 18.1 execution started
-state_head: 8ba4d44336dfe012182368d46ad3365d729a920c
+state_head: 41f5fce6c4b5e3bd7fa8a05e63637ea823e56aec
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 71
-  completed_plans: 62
+  completed_plans: 63
   percent: 40
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 18.1 (screen-polish) — EXECUTING
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 10
 Status: Ready to execute
 Last activity: 2026-11-11 — Phase 18.1 execution started
@@ -260,6 +260,7 @@ Last activity: 2026-11-11 — Phase 18.1 execution started
 | Phase 18 P13 | 25m | 2 tasks | 3 files |
 | Phase 18 P14 | 50min | 3 tasks | 3 files |
 | Phase 18.1 P01 | 35min | 3 tasks | 15 files |
+| Phase 18.1 P02 | 40min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -576,6 +577,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18]: 18-13: smoke 편차 판정은 서버 시각(view.serverNow) 기준, 문턱 500ms 유지, 도착 편차는 정보용
 - [Phase 18]: 18-13: smoke 재접속 복원 검사는 2일차 errand 안에서(첫 아침에 끝나는 판은 아침에)
 - [Phase 18.1]: [18.1-01] 역할 카드·시트·튜토리얼 직업 카드는 ROLE_TEXT.desc 한 덩어리(첫 문장 뒤 \n, pre-line)만 그린다. goal 필드·RoleGoal 폐지, 3D 이름표 층은 visibility hidden, 카드 위 끝은 --mf-host-dock + 8
+- [Phase 18.1]: [18.1-02] C-6: 산 사람 화면 유령 위치는 WorldStore.lastSegOf(마지막으로 받은 구간, reset·retainSeats 에서만 지움). 재접속 뒤엔 받은 적 없는 좌석 유령은 그리지 않음
+- [Phase 18.1]: [18.1-02] 산 사람 화면 밤·심부름에는 유령을 그리지 않고(0074-4), 유령은 coat 안개로 Actor.mistOutfit 에 들어 __mfGhostOutfits 는 빈 표
 
 ### Pending Todos
 
@@ -647,8 +650,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-10T17:44:15.572Z
-Stopped at: Completed 18.1-01-PLAN.md
+Last session: 2026-11-10T17:52:48.586Z
+Stopped at: Completed 18.1-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
