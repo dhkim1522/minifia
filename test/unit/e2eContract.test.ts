@@ -862,6 +862,11 @@ describe("E2E 의 튜토리얼 사본 상수와 앱 대본 (17-09)", () => {
     expect(text).toContain(`{ me: ${TUTORIAL_CAST.me}, victim: ${TUTORIAL_CAST.victim}, suspect: ${TUTORIAL_CAST.suspect}, errandTarget: "${TUTORIAL_CAST.errand.target}", extendDown: SUSPECT_EXTEND_DOWN }`);
   });
 
+  it("TUTORIAL_ROLE_LINES_E2E 가 ROLE_TEXT 의 시민·마피아·의사·경찰 desc 와 같다 (18-08)", () => {
+    const lines = (e2eLib as { TUTORIAL_ROLE_LINES_E2E: readonly string[] }).TUTORIAL_ROLE_LINES_E2E;
+    expect(lines.join("|")).toBe([ROLE_TEXT.citizen.desc, ROLE_TEXT.mafia.desc, ROLE_TEXT.doctor.desc, ROLE_TEXT.police.desc].join("|"));
+  });
+
   it("tutorial.mjs 의 오답 문구 사본이 대본 tutorial.vote.wrong 문구와 같다", () => {
     const text = readFileSync(new URL("../../scripts/e2e/tutorial.mjs", import.meta.url), "utf8");
     expect(text).toContain(`export const TUTORIAL_WRONG_LINE = "${TUTORIAL_LINES["tutorial.vote.wrong"]}";`);

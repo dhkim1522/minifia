@@ -3839,3 +3839,36 @@ export function tutorialLineChecks(ev, { viewport, band, next } = {}) {
   const bad8 = others.filter(([, r]) => rectsOverlap(ev.suspectTag, r)).map(([n, r]) => `이름표 ${rectText(ev.suspectTag)} 가 ${n} ${rectText(r)} 와 겹침`);
   return [result("EV6", L.EV6, bad6), result("EV7", L.EV7, bad7), result("EV8", L.EV8, bad8)];
 }
+
+/**
+ * 장면 7 직업 카드 한 줄 글 사본(18-08): 시민·마피아·의사·경찰 순서. src/game/roleText.ts ROLE_TEXT 의 desc 와 같아야 한다 —
+ * test/unit/e2eContract.test.ts 가 대조한다(.mjs 가 TS 를 직접 import 하지 않는다). 자리값(18-08 RED): 아직 비어 있다.
+ */
+export const TUTORIAL_ROLE_LINES_E2E = [];
+
+/** 스포트라이트 막 판정(TD1~TD3) — 자리 함수(18-08 RED) */
+export function tutorialDimChecks(dim, opts) {
+  void dim;
+  void opts;
+  return [];
+}
+
+/** [다음] 알약 판정(TN3·TN4) — 자리 함수(18-08 RED) */
+export function tutorialNextChecks(next, opts) {
+  void next;
+  void opts;
+  return [];
+}
+
+/** 장면 2~6 숨김 판정(TH1) — 자리 함수(18-08 RED) */
+export function tutorialHiddenChecks(hidden) {
+  void hidden;
+  return [];
+}
+
+/** 직업 카드 한 줄 글 판정(TC5) — 자리 함수(18-08 RED) */
+export function tutorialRoleLineChecks(roles) {
+  void roles;
+  return [];
+}
+

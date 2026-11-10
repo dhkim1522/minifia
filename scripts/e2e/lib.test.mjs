@@ -189,16 +189,21 @@ import {
   TUTORIAL_OPENING_MS,
   sentFrameChecks,
   tutorialBandChecks,
+  tutorialDimChecks,
   tutorialDotChecks,
   tutorialEntryChecks,
   tutorialEvidenceChecks,
   tutorialFocusChecks,
+  tutorialHiddenChecks,
   tutorialLeakChecks,
   tutorialLineChecks,
+  tutorialNextChecks,
   tutorialOpeningChecks,
   tutorialRevealChecks,
   tutorialRoleCardChecks,
+  tutorialRoleLineChecks,
   tutorialSkipChecks,
+  TUTORIAL_ROLE_LINES_E2E,
   tutorialTimingChecks,
   errandCardChecks,
   errandCardWalkChecks,
@@ -4755,3 +4760,61 @@ test("tutorialLineChecks EV6~EV8: 장면 5 선 두 개의 끝과 도윤 이름�
     assert.ok(r.every((l) => !l.ok && /측정값 없음/.test(l.detail)));
   }
 });
+
+test("tutorialDimChecks TD1~TD3: 막 개수·구멍이 포커스 상자를 덮음(2px)·흐림 없음", () => {
+  const focus = [{ key: "band", rect: RR(16, 70, 358, 52) }];
+  const dim = { count: 1, holes: [RR(17, 70, 358, 53)], backdrop: "none", filter: "none" };
+  const by = (lines, id) => lines.find((l) => l.id === id);
+  const good = tutorialDimChecks(dim, { expect: 1, focus });
+  assert.equal(good.map((l) => l.id).join(","), "TD1,TD2,TD3");
+  assert.ok(good.every((l) => l.ok));
+  assert.equal(by(tutorialDimChecks({ ...dim, holes: [RR(19, 70, 358, 52)] }, { expect: 1, focus }), "TD2").ok, false); // 구멍 중심 3px 어긋남
+  assert.equal(by(tutorialDimChecks({ ...dim, holes: [] }, { expect: 1, focus }), "TD2").ok, false);
+  assert.equal(by(tutorialDimChecks({ ...dim, holes: [RR(60, 400, 40, 40), RR(17, 70, 358, 53)] }, { expect: 1, focus }), "TD2").ok, true); // 여분 구멍(lit)은 괜찮다
+  const none = tutorialDimChecks({ count: 0, holes: [], backdrop: null, filter: null }, { expect: 0, focus: [] });
+  assert.equal(none.length, 1);
+  assert.ok(none.every((l) => l.ok));
+  assert.equal(by(tutorialDimChecks(dim, { expect: 0, focus: [] }), "TD1").ok, false); // 0 기대인데 막 1개
+  assert.equal(by(tutorialDimChecks({ ...dim, count: 0, holes: [] }, { expect: 1, focus }), "TD1").ok, false);
+  assert.equal(by(tutorialDimChecks({ ...dim, backdrop: "blur(4px)" }, { expect: 1, focus }), "TD3").ok, false);
+  assert.equal(by(tutorialDimChecks({ ...dim, filter: "blur(2px)" }, { expect: 1, focus }), "TD3").ok, false);
+  assert.ok(tutorialDimChecks(null, { expect: 1, focus }).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+test("tutorialNextChecks TN3·TN4: [다음] 알약 폭·높이·가운데·글, 진행 점과 교차 0", () => {
+  const by = (lines, id) => lines.find((l) => l.id === id);
+  const at390 = RR(75, 760, 240, 56);
+  const good = tutorialNextChecks(at390, { viewport: { w: 390, h: 844 }, errandDots: null, label: "다음" });
+  assert.equal(good.map((l) => l.id).join(","), "TN3,TN4");
+  assert.ok(good.every((l) => l.ok));
+  assert.ok(tutorialNextChecks(RR(60, 500, 240, 56), { viewport: { w: 360, h: 640 }, errandDots: null, label: "다음" }).every((l) => l.ok)); // 360 폭에서 240
+  assert.equal(by(tutorialNextChecks(RR(60, 500, 200, 56), { viewport: { w: 360, h: 640 }, errandDots: null, label: "다음" }), "TN3").ok, false); // 폭 모자람
+  assert.ok(tutorialNextChecks(RR(48, 500, 264, 56), { viewport: { w: 360, h: 640 }, errandDots: null, label: "다음" }).every((l) => l.ok)); // 넉넉한 폭은 괜찮다
+  assert.equal(by(tutorialNextChecks(RR(85, 760, 240, 56), { viewport: { w: 390, h: 844 }, errandDots: null, label: "다음" }), "TN3").ok, false); // 중심 10px 어긋남
+  assert.equal(by(tutorialNextChecks(RR(75, 760, 240, 58), { viewport: { w: 390, h: 844 }, errandDots: null, label: "다음" }), "TN3").ok, false); // 높이
+  assert.equal(by(tutorialNextChecks(at390, { viewport: { w: 390, h: 844 }, errandDots: null, label: "" }), "TN3").ok, false); // 글이 비어 있음
+  assert.equal(by(tutorialNextChecks(at390, { viewport: { w: 390, h: 844 }, errandDots: RR(150, 780, 90, 12), label: "다음" }), "TN4").ok, false);
+  assert.equal(by(tutorialNextChecks(at390, { viewport: { w: 390, h: 844 }, errandDots: RR(150, 700, 90, 12), label: "다음" }), "TN4").ok, true);
+  assert.ok(tutorialNextChecks(null, { viewport: { w: 390, h: 844 }, errandDots: null, label: "다음" }).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+test("tutorialHiddenChecks TH1: 아래 패널·[내 역할]·채팅 입력칸이 모두 0", () => {
+  assert.ok(tutorialHiddenChecks({ worldPanel: 0, gamePanel: 0, roleBtn: 0, chatInputs: 0 }).every((l) => l.ok));
+  assert.equal(tutorialHiddenChecks({ worldPanel: 0, gamePanel: 0, roleBtn: 1, chatInputs: 0 })[0].ok, false);
+  assert.equal(tutorialHiddenChecks({ worldPanel: 1, gamePanel: 0, roleBtn: 0, chatInputs: 0 })[0].id, "TH1");
+  assert.equal(tutorialHiddenChecks({ worldPanel: 0, gamePanel: 0, roleBtn: 0, chatInputs: 2 })[0].ok, false);
+  assert.ok(tutorialHiddenChecks(null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+test("tutorialRoleLineChecks TC5: 직업 카드 한 줄 넷이 사본과 글자 그대로 같다", () => {
+  const lines = ["대화와 투표로 마피아를 찾아요", "밤에 함께 한 명을 지목해요", "밤에 한 명을 살려요", "밤마다 한 명을 조사해요"];
+  assert.equal([...TUTORIAL_ROLE_LINES_E2E].join("|"), lines.join("|"));
+  const ok = tutorialRoleLineChecks(lines);
+  assert.equal(ok.map((l) => l.id).join(","), "TC5");
+  assert.ok(ok.every((l) => l.ok));
+  assert.equal(tutorialRoleLineChecks([lines[0], lines[1], "밤에 한 명을 살려요.", lines[3]])[0].ok, false);
+  assert.equal(tutorialRoleLineChecks([lines[1], lines[0], lines[2], lines[3]])[0].ok, false); // 순서가 다름
+  assert.equal(tutorialRoleLineChecks(lines.slice(0, 3))[0].ok, false);
+  assert.ok(tutorialRoleLineChecks(null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
