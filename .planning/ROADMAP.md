@@ -390,11 +390,12 @@ Plans:
 4. 게임 맵 헤더 [역할 카드] 왼쪽에 아침·낮·저녁·밤 날씨 그림 배지가 늘 있고 장면 조명(lightingOf)과 같은 시간대다. 튜토리얼·로비·결과에는 없다(R4)
 5. 결과 화면은 전체 대화 하나만 있고 역할별 채팅·판 기록 탭이 없다. 서버 기록 보관은 그대로(R5, 결정 0027 유지)
 6. 바뀐 흐름의 폰 6종 E2E 와 전 흐름 회귀가 로컬에서 통과하고 minifia-v3 에 배포된다
-**Plans:** 10 plans
+
+**Plans:** 1/10 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 18.1-01-PLAN.md — R1 역할 카드 확정 문구 한 덩어리·goal 폐지·pre-line 세 곳·역할 확인 이름표 층 숨김·카드 위 끝 독 + 8 (wave 1)
+- [x] 18.1-01-PLAN.md — R1 역할 카드 확정 문구 한 덩어리·goal 폐지·pre-line 세 곳·역할 확인 이름표 층 숨김·카드 위 끝 독 + 8 (wave 1)
 - [ ] 18.1-02-PLAN.md — R3 산 사람 화면 코트 안개 유령·WorldStore.lastSegOf·밤/심부름 제외·이름표 순위 (wave 1)
 - [ ] 18.1-03-PLAN.md — R4 시간대 배지 TimeOfDayBadge·todOf(lightingOf)·튜토리얼 끔·날씨 캐시 규칙 (wave 1)
 - [ ] 18.1-04-PLAN.md — R2 두 줄 창·기록 시트 ChatLogSheet·ChatLines (wave 1)

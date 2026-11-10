@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: "18.1"
 current_phase_name: screen-polish
-current_plan: 14
+current_plan: 2
 status: executing
-stopped_at: Completed 18-14-PLAN.md
-last_updated: "2026-11-10T16:00:57.949Z"
-last_activity: 2026-11-10
-last_activity_desc: Phase 18 execution started
-state_head: ac1bd0fbee7e2537e765cfc398051c6f6336ed92
+stopped_at: Completed 18.1-01-PLAN.md
+last_updated: "2026-11-10T17:44:16.495Z"
+last_activity: 2026-11-11
+last_activity_desc: Phase 18.1 execution started
+state_head: 8ba4d44336dfe012182368d46ad3365d729a920c
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 71
-  completed_plans: 61
+  completed_plans: 62
   percent: 40
 ---
 
@@ -26,15 +26,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-07)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(평균 10~15분, 참고 목표)을 끝까지 마치는 것
-**Current focus:** Phase 18 — 바로 고칠 것: 증거·조명·튜토리얼 손보기
+**Current focus:** Phase 18.1 — screen-polish
 
 ## Current Position
 
-Phase: 18.1 (screen-polish) — READY TO EXECUTE
-Current Plan: 14
+Phase: 18.1 (screen-polish) — EXECUTING
+Current Plan: 2
 Total Plans in Phase: 10
 Status: Ready to execute
-Last activity: 2026-11-10 — Phase 18 execution started
+Last activity: 2026-11-11 — Phase 18.1 execution started
 
 ## Performance Metrics
 
@@ -259,6 +259,7 @@ Last activity: 2026-11-10 — Phase 18 execution started
 | Phase 18 P12 | 60min | 3 tasks | 16 files |
 | Phase 18 P13 | 25m | 2 tasks | 3 files |
 | Phase 18 P14 | 50min | 3 tasks | 3 files |
+| Phase 18.1 P01 | 35min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -574,6 +575,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18]: 18-12: 재질 보정은 정점 색 CPU 재작성(albedoGrader), 단계 전이 때만 쓴다. 광장 morning mix 0.5 로 조정
 - [Phase 18]: 18-13: smoke 편차 판정은 서버 시각(view.serverNow) 기준, 문턱 500ms 유지, 도착 편차는 정보용
 - [Phase 18]: 18-13: smoke 재접속 복원 검사는 2일차 errand 안에서(첫 아침에 끝나는 판은 아침에)
+- [Phase 18.1]: [18.1-01] 역할 카드·시트·튜토리얼 직업 카드는 ROLE_TEXT.desc 한 덩어리(첫 문장 뒤 \n, pre-line)만 그린다. goal 필드·RoleGoal 폐지, 3D 이름표 층은 visibility hidden, 카드 위 끝은 --mf-host-dock + 8
 
 ### Pending Todos
 
@@ -645,8 +647,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-10T10:57:05.039Z
-Stopped at: Completed 18-14-PLAN.md
+Last session: 2026-11-10T17:44:15.572Z
+Stopped at: Completed 18.1-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
