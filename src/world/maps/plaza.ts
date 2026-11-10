@@ -35,14 +35,14 @@ import { cameraBasis, PLATE_FAR } from "../camera";
 import { CHAR_SCALE } from "../character";
 import { PLAZA_PALETTE as P, TOKEN_COLORS } from "../palette";
 import type { Budget, LightingPhase } from "../renderer";
-import { ALBEDO_NONE, Bundle, CHALK_OPACITY, CHALK_POINTS, CHALK_RADIUS, makeGlowTexture, tf, under } from "./bar";
+import { ALBEDO_NONE, albedoGrader, Bundle, CHALK_OPACITY, CHALK_POINTS, CHALK_RADIUS, makeGlowTexture, tf, under } from "./bar";
 import type { MarkerRing, PhaseTune } from "./bar";
 import type { MapScene } from "./types";
 
 // ---------- 조명 시작값 ----------
 // 단위 변환은 bar 와 같다(반구·방향광 = 시안 세기 × π, 점광원 = 시안 세기 × 4). 값은 기본값이고 육안 조정은 실기기 묶음(999.6)의 몫이다.
 // 노출·점광 세기는 bar 의 같은 단계 값을 기준으로 두고, 반구·달빛의 상대 비율만 blockout plaza.js 의 env 를 따른다.
-// 낮 = 흐린 보랏빛 회색 + 따뜻한 햇빛(결정 0081-1, D-03), 밤 행은 그대로.
+// 낮 = 회백~살짝 따뜻, 아침 = 서늘한 옅은 푸른빛, 저녁 = 노을(결정 0081-1, D-03). 재질 색은 albedo 로 단계마다 섞는다(18-12, G-18-1). 밤 쪽 행은 그대로.
 // 하늘·안개 색은 모두 talk 의 같은 칸보다 밝지 않다 — 낮도 마피아 분위기(밝고 맑은 하늘 없음, 진홍 없음).
 const LAMP_ON = 1.0 * 4;
 export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
@@ -62,14 +62,14 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     moon: 0.9 * Math.PI,
     moonColor: "#eadfd0",
     exposure: 1.25,
-    sky: ["#aaa4b8", "#5c566a", "#807a8e"],
+    sky: ["#c2beb6", "#6a665e", "#a29e96"],
     fog: { near: 20, far: 44 },
     stage: 0,
     pendant: 0,
     emissive: { room: 0, vote: 0 },
     glow: { room: 0, vote: 0 },
     self: 0,
-    albedo: ALBEDO_NONE,
+    albedo: { tint: "#9a948a", mix: 0.45 },
   },
   /** 저녁 지목: 가로등 켜짐, 반구·달빛 낮춤, 무대 점광원이 연단을 비춘다 */
   vote: {
@@ -77,14 +77,14 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     moon: 0.4 * Math.PI,
     moonColor: "#d8b48a",
     exposure: 1.25,
-    sky: ["#625e72", "#241a30", "#2c2238"],
+    sky: ["#a8968e", "#3a2e2e", "#6a585a"],
     fog: { near: 20, far: 44 },
     stage: 2.0 * 4,
     pendant: LAMP_ON,
     emissive: { room: 1, vote: 0 },
     glow: { room: 1, vote: 0 },
     self: 0,
-    albedo: ALBEDO_NONE,
+    albedo: { tint: "#8c766c", mix: 0.3 },
   },
   /** 변론·처형: 시계탑 조명(무대 점광원)이 연단의 변론자만 비춘다, 가로등은 거의 꺼짐 */
   trial: {
@@ -152,14 +152,14 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     moon: 0.7 * Math.PI,
     moonColor: "#e0dad8",
     exposure: 1.25,
-    sky: ["#9a96ae", "#4c485a", "#6a6680"],
+    sky: ["#aab4c2", "#545c66", "#8a94a2"],
     fog: { near: 20, far: 44 },
     stage: 0,
     pendant: 0,
     emissive: { room: 0, vote: 0 },
     glow: { room: 0, vote: 0 },
     self: 0,
-    albedo: ALBEDO_NONE,
+    albedo: { tint: "#8e98a6", mix: 0.35 },
   },
   tension: { lead: 2.0 * 4 * 1.5, halfRoom: 0.5 },
   point: {
@@ -351,6 +351,9 @@ export function buildPlazaScene(budget: Budget): MapScene {
   meshes.glowRoom!.renderOrder = 2;
   meshes.glowTower!.renderOrder = 2;
   for (const m of Object.values(meshes)) root.add(m);
+  // 재질 보정(18-12): 조명을 받는 정점 색 묶음과 연장 판 재질 color 를 단계가 바뀔 때만 다시 쓴다
+  const grade = albedoGrader([meshes.shell!, meshes.furniture!, meshes.furnitureFar!], [matPlate]);
+  let gradedFor: LightingPhase | null = null;
   root.add(handsGroup);
   for (const h of [...hourHands, ...minuteHands]) meshes[h.name] = h;
 
@@ -470,6 +473,10 @@ export function buildPlazaScene(budget: Budget): MapScene {
   const applyLook = (): void => {
     const t = T[phase];
     const b = current;
+    if (gradedFor !== phase) {
+      grade(t.albedo);
+      gradedFor = phase;
+    }
     hemi.color.set(t.sky[0]);
     hemi.groundColor.set(t.sky[1]);
     hemi.intensity = t.hemi;

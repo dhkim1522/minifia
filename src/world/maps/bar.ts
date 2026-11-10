@@ -47,7 +47,7 @@ import { PALETTE, TOKEN_COLORS } from "../palette";
 import type { Budget, LightingPhase } from "../renderer";
 
 // ---------- 조명 시작값 (가정 A1) ----------
-// 낮 = 흐린 보랏빛 회색 + 따뜻한 햇빛(결정 0081-1, D-03), 밤 행은 그대로.
+// 낮 = 회백~살짝 따뜻, 아침 = 서늘한 옅은 푸른빛, 저녁 = 노을(결정 0081-1, D-03). 재질 색은 albedo 로 단계마다 섞는다(18-12, G-18-1). 밤 쪽 행은 그대로.
 // 반구·방향광 = 시안 세기 × π(r155 조명 단위 변경), 점광원 = 시안 세기 × 4 로 시작한다. 승인 보드와 나란히 놓고 맞추는 일은 06-14 가 한다.
 export interface PhaseTune {
   /** 반구광 세기 */
@@ -83,9 +83,39 @@ export interface AlbedoGrade {
 /** 보정 없음(원래 색 그대로) — 밤 쪽 행과 trial 이 쓴다 */
 export const ALBEDO_NONE: AlbedoGrade = { tint: "#808080", mix: 0 };
 
-/** 자리 함수(RED): 아무것도 하지 않는 보정 함수를 돌려준다 */
-export function albedoGrader(_meshes: readonly Mesh[], _mats: readonly MeshStandardMaterial[]): (g: AlbedoGrade) => void {
-  return () => undefined;
+/**
+ * 재질 보정기(18-12, G-18-1): 메시들의 정점 색("color" 속성)과 재질 color 의 원래 값을 복사해 두고,
+ * 돌려주는 함수가 불릴 때마다 원래 값 × (1 − mix) + tint × mix 를 다시 쓴다(선형 작업 공간). 언제나 복사본에서 계산하므로 누적되지 않고,
+ * mix 0 이면 복사본을 그대로 돌려놓아 원래 값과 정확히 같다. 단계가 바뀔 때만 불러야 한다(정점 수만큼 쓰는 일이다).
+ */
+export function albedoGrader(meshes: readonly Mesh[], mats: readonly MeshStandardMaterial[]): (g: AlbedoGrade) => void {
+  const verts = meshes.map((m) => {
+    const attr = m.geometry.getAttribute("color") as BufferAttribute;
+    return { attr, base: Float32Array.from(attr.array as Float32Array) };
+  });
+  const matBase = mats.map((m) => m.color.clone());
+  return (g: AlbedoGrade): void => {
+    const tint = new Color(g.tint);
+    const keep = 1 - g.mix;
+    for (const { attr, base } of verts) {
+      const arr = attr.array as Float32Array;
+      if (g.mix === 0) arr.set(base);
+      else {
+        const size = attr.itemSize;
+        for (let i = 0; i < arr.length; i += size) {
+          arr[i] = base[i]! * keep + tint.r * g.mix;
+          arr[i + 1] = base[i + 1]! * keep + tint.g * g.mix;
+          arr[i + 2] = base[i + 2]! * keep + tint.b * g.mix;
+          if (size > 3) arr[i + 3] = base[i + 3]!;
+        }
+      }
+      attr.needsUpdate = true;
+    }
+    mats.forEach((m, k) => {
+      if (g.mix === 0) m.color.copy(matBase[k]!);
+      else m.color.copy(matBase[k]!).lerp(tint, g.mix);
+    });
+  };
 }
 
 const PENDANT_TALK = 0.9 * 4;
@@ -100,7 +130,7 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     moon: 0.85 * Math.PI,
     moonColor: "#eadfd0",
     exposure: 1.25,
-    sky: ["#908aa4", "#4a4058", "#38324a"],
+    sky: ["#aaa69e", "#524e48", "#46423e"],
     fog: { near: 20, far: 44 },
     stage: 0,
     pendant: PENDANT_TALK,
@@ -108,21 +138,21 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     emissive: { room: 1, vote: 0.2 },
     glow: { room: 1, vote: 0 },
     self: 0,
-    albedo: ALBEDO_NONE,
+    albedo: { tint: "#9a948a", mix: 0.3 },
   },
   vote: {
     hemi: 0.7 * Math.PI,
     moon: 0.55 * Math.PI,
     moonColor: "#d8b48a",
     exposure: 1.25,
-    sky: ["#3c3a48", "#1c1428", "#100d19"],
+    sky: ["#8e7e78", "#2c2224", "#241c20"],
     fog: { near: 20, far: 44 },
     stage: 2.0 * 4,
     pendant: PENDANT_TALK * 0.45,
     emissive: { room: 0.45, vote: 1 },
     glow: { room: 0.45, vote: 1 },
     self: 0,
-    albedo: ALBEDO_NONE,
+    albedo: { tint: "#8c766c", mix: 0.25 },
   },
   // 08-10 단계 조명 셋. 정확한 값은 기존 talk·vote 에서 파생한 시작값이고 읽힘의 최종 확인은 실기기 몫이다(가정 A2).
   // 하늘·안개 색은 모두 talk 의 같은 칸보다 밝지 않다 — 낮도 마피아 분위기(새 밝은 색면 없음).
@@ -196,14 +226,14 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     moon: 0.55 * Math.PI,
     moonColor: "#e0dad8",
     exposure: 1.25,
-    sky: ["#7e7a96", "#3a3446", "#322c40"],
+    sky: ["#9aa2b0", "#444a54", "#3c4048"],
     fog: { near: 20, far: 44 },
     stage: 0,
     pendant: PENDANT_TALK * 0.6,
     emissive: { room: 0.7, vote: 0.2 },
     glow: { room: 0.6, vote: 0 },
     self: 0,
-    albedo: ALBEDO_NONE,
+    albedo: { tint: "#8e98a6", mix: 0.25 },
   },
   /** 긴장 단계(결정 0049): lead = 1·2 단계에서 초점 위로 옮긴 무대 점광원 세기(vote 의 1.5 배), halfRoom = 2 단계에서 실내 emissive 에 곱하는 값 */
   tension: { lead: 2.0 * 4 * 1.5, halfRoom: 0.5 },
@@ -540,6 +570,9 @@ export function buildBarScene(budget: Budget): BarScene {
   meshes.glowRoom!.renderOrder = 2;
   meshes.glowVote!.renderOrder = 2;
   for (const m of Object.values(meshes)) root.add(m);
+  // 재질 보정(18-12): 조명을 받는 정점 색 묶음과 연장 판 재질 color 를 단계가 바뀔 때만 다시 쓴다
+  const grade = albedoGrader([meshes.shell!, meshes.furniture!, meshes.furnitureFar!, meshes.pendants!], [matPlate]);
+  let gradedFor: LightingPhase | null = null;
 
   // 분필 윤곽: 처음부터 만들어 두고 숨긴다(보이기만 바꾼다). 바닥에 눕는 선이라 이동을 막지 않는다
   const chalk = new Mesh(
@@ -660,6 +693,10 @@ export function buildBarScene(budget: Budget): BarScene {
   const applyLook = (): void => {
     const t = T[phase];
     const b = current;
+    if (gradedFor !== phase) {
+      grade(t.albedo);
+      gradedFor = phase;
+    }
     hemi.color.set(t.sky[0]);
     hemi.groundColor.set(t.sky[1]);
     hemi.intensity = t.hemi;
