@@ -92,6 +92,17 @@ describe("ChatPanel 기록 칸 (CHAT-01)", () => {
     expect(second.textContent).toBe("지호 님 입장");
   });
 
+  it("기록 칸 형제로 투명 열기 단추 button[data-chat-open] 이 하나 있고 이름은 '채팅 기록 열기' 이다 (18.1 P181-4)", () => {
+    const { container } = render(<Harness />);
+    const btns = container.querySelectorAll(".mv-chat__logbox > button[data-chat-open]");
+    expect(btns.length).toBe(1);
+    const b = btns[0] as HTMLButtonElement;
+    expect(b.getAttribute("type")).toBe("button");
+    expect(b.getAttribute("aria-label")).toBe("채팅 기록 열기");
+    expect(container.querySelector("[data-chat-log] > p.mv-chat__sys")).not.toBeNull();
+    expect(container.querySelector("[data-chat-log] > p.mv-chat__msg")).not.toBeNull();
+  });
+
   it("내 줄(me)의 이름은 '나' 이다", () => {
     const msgs: ChatPanelMessage[] = [{ key: "m", kind: "player", seat: 0, name: "철수", me: true, text: "나야", ch: "all" }];
     const { container } = render(<Harness messages={msgs} />);
