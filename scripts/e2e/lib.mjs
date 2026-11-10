@@ -1963,6 +1963,7 @@ export const AVATAR_MARKERS = Object.freeze([
   "data-dress-sheet", // 로비 꾸미기 시트(DressSheet, 10-07)
   "data-outfit", // 시트의 카드 data-outfit="{id}"
   "__mfLooks", // 테스트 훅 window.__mfLooks = { 좌석: 의상 id }(10-04)
+  "data-taken", // 옷장 잠긴 카드(DressSheet, 18-05 — 다른 참가자가 직접 고른 옷)
 ]);
 
 /**
@@ -3914,8 +3915,40 @@ export function tutorialRoleLineChecks(roles) {
   return [result("TC5", L.TC5, bad)];
 }
 
-/** 옷장 잠금 판정(18-09, D-02): 자리 함수 — 다음 커밋에서 채운다. */
+/**
+ * AL1~AL3 옷장 잠금(18-09, D-02·SC-1). s = { cards: [{ id, taken, disabled, pressed }] 아홉 장, otherLooks: 다른 사람이 직접 고른 look 목록(서버 view),
+ * myLook: 내 look(없으면 "coat"), afterTap: 잠긴 카드를 누르고 1.5초 뒤 내 look }.
+ * AL1 data-taken 카드 id 집합 = otherLooks 집합 − {myLook} · AL2 잠긴 카드를 눌러도 내 옷이 그대로(afterTap = myLook) ·
+ * AL3 내 옷 카드는 잠기지 않고 눌림 표시이며, otherLooks 에 없는 coat(기본 옷) 카드는 잠기지 않는다.
+ * 카드가 아홉 장이 아니거나 입력 모양이 틀리면 세 줄 모두 측정 못 함이다. detail 에는 옷 id·개수만 싣는다(역할·닉네임 없음, 옷은 공개 값 L25).
+ */
 export function dressLockChecks(s) {
-  void s;
-  return [];
+  const L = {
+    AL1: "잠긴(data-taken) 카드 = 다른 참가자가 직접 고른 옷(내 옷 제외)",
+    AL2: "잠긴 카드를 눌러도 1.5초 뒤 내 옷이 그대로",
+    AL3: "내 옷 카드와 기본 coat 카드는 잠기지 않는다",
+  };
+  const ids = Object.keys(L);
+  const okCard = (c) => c && typeof c.id === "string" && typeof c.taken === "boolean" && typeof c.pressed === "boolean";
+  if (!s || !Array.isArray(s.cards) || s.cards.length !== 9 || !s.cards.every(okCard) || !Array.isArray(s.otherLooks) || !s.otherLooks.every((x) => typeof x === "string") || typeof s.myLook !== "string" || typeof s.afterTap !== "string") {
+    return ids.map((id) => noMeasure(id, L[id], "옷장 카드 아홉 장·다른 참가자 옷·누른 뒤 내 옷"));
+  }
+  const want = new Set(s.otherLooks.filter((x) => x !== s.myLook));
+  const got = new Set(s.cards.filter((c) => c.taken).map((c) => c.id));
+  const bad1 = [];
+  const extra = [...got].filter((x) => !want.has(x));
+  const missing = [...want].filter((x) => !got.has(x));
+  if (extra.length > 0) bad1.push(`남이 고르지 않았는데 잠김 [${extra}]`);
+  if (missing.length > 0) bad1.push(`남이 골랐는데 안 잠김 [${missing}]`);
+  const bad2 = s.afterTap === s.myLook ? [] : [`누른 뒤 내 옷 ${s.afterTap} (기대 ${s.myLook})`];
+  const bad3 = [];
+  const mine = s.cards.find((c) => c.id === s.myLook);
+  if (!mine) bad3.push(`내 옷 ${s.myLook} 카드를 못 찾음`);
+  else {
+    if (mine.taken) bad3.push(`내 옷 ${s.myLook} 카드가 잠김`);
+    if (!mine.pressed) bad3.push(`내 옷 ${s.myLook} 카드가 눌림 표시 아님`);
+  }
+  const coat = s.cards.find((c) => c.id === "coat");
+  if (coat && coat.taken && !s.otherLooks.includes("coat")) bad3.push("coat 카드가 잠김(남이 고르지 않음)");
+  return [result("AL1", L.AL1, bad1), result("AL2", L.AL2, bad2), result("AL3", L.AL3, bad3)];
 }

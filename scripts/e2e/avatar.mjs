@@ -3,7 +3,7 @@
 // helpers: { recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave, openGame, closeGame, untilGame }  (10-08 이 판 만들기 도우미 셋을 더했다)
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(emoteTrayChecks·dressChecks)에만 있고 여기서는 낮추지 않는다.
 import { chooseRole, chooseVerdict, hitsInputSurface, leaveLobby, openTestSheet, sampleWorld, screensOfWorld, SetupError, setBots, settle, skipTo, sleep, startGame, tapWorld, typeAndSendChat, waitChatLine, waitWorldReady } from "./browser.mjs";
-import { dressChecks, emoteDeliveryChecks, emoteTrayChecks, floatTrayChecks, worldTapRanking } from "./lib.mjs";
+import { dressChecks, dressLockChecks, emoteDeliveryChecks, emoteTrayChecks, floatTrayChecks, worldTapRanking } from "./lib.mjs";
 import { SHORT_PHONE_H } from "./result.mjs";
 
 /**
@@ -111,6 +111,7 @@ function readDressUi(page) {
       sheet: rect(q("[data-dress-sheet]")),
       cards: qa("[data-dress-sheet] button[data-outfit]").map((el) => rect(el)),
       cardIds: qa("[data-dress-sheet] button[data-outfit]").map((el) => el.getAttribute("data-outfit")),
+      cardStates: qa("[data-dress-sheet] button[data-outfit]").map((el) => ({ id: el.getAttribute("data-outfit"), taken: el.hasAttribute("data-taken"), disabled: el.getAttribute("aria-disabled") === "true", pressed: el.getAttribute("aria-pressed") === "true" })),
       close: rect(q('[data-dress-sheet] button[aria-label="닫기"]')),
       selected: sel[0] ? { rect: rect(sel[0]), pressedCount: sel.length } : null,
       nameFont: names.length > 0 ? Math.min(...names) : null,
@@ -321,7 +322,7 @@ export function makeAvatarFlows(helpers) {
   /**
    * avatar-dress (D-18): 방장·손님 로비. AD1 두 페이지의 떠 있는 버튼 기하 · AD2 시트가 패널을 덮고 떠 있는 버튼이 숨으며 카드 기하가 맞음 ·
    * AD3 손님이 mafia 를 고르면 손님 화면 500ms·방장 화면 1500ms 안에 반영(손님이 실제 마피아가 아니어도 된다) · AD4 방장이 noir 를 골라 두 화면의 __mfLooks 가 같음 ·
-   * AD5 시트를 닫으면 사라지고 초점이 꾸미기 버튼으로 돌아옴 · AD6 게임을 시작해 낮이 되어도 같은 look 이고 꾸미기 버튼·시트가 없음.
+   * AL1~AL3 손님이 고른 mafia 가 방장 옷장에서 잠기고 눌러도 방장 옷이 그대로(18-09) · AD5 시트를 닫으면 사라지고 초점이 꾸미기 버튼으로 돌아옴 · AD6 게임을 시작해 낮이 되어도 같은 look 이고 꾸미기 버튼·시트가 없음.
    */
   async function avatarDressFlow(ctx) {
     const rec = recorder(ctx);
@@ -389,6 +390,16 @@ export function makeAvatarFlows(helpers) {
         return !!a && !!b && a[hSeat] === "noir" && a[gSeat] === "mafia" && b[hSeat] === "noir" && b[gSeat] === "mafia";
       }, DRESS_PEER_MS);
       rec(sc4, "AD4", `두 페이지의 __mfLooks 가 { 방장: noir, 손님: mafia } 로 같음(${DRESS_PEER_MS}ms 안)`, same !== null, same === null ? `방장 ${JSON.stringify(await readLooks(hp))} · 손님 ${JSON.stringify(await readLooks(gp))}` : "");
+
+      // AL1~AL3 (18-09, D-02): 손님이 고른 mafia 가 방장 옷장에서 잠기고, 눌러도 방장 옷이 그대로다(방장 시트는 AD4 에서 열려 있다)
+      const scL = "avatar-dress/lock";
+      const lockOpen = await readDressUi(hp);
+      const otherLooks = ht.last().players.filter((p) => p.seat !== hSeat && typeof p.look === "string").map((p) => p.look);
+      await hp.locator(`${DRESS_SHEET} button[data-outfit="mafia"]`).click({ force: true, timeout: 3000 }); // aria-disabled 카드는 Playwright 가 기다리므로 force — 실제 누름 이벤트는 그대로 간다
+      await sleep(1500);
+      const viewLook = ht.last().players.find((p) => p.seat === hSeat)?.look ?? "coat";
+      const hookLook = (await readLooks(hp))?.[hSeat] ?? "coat";
+      for (const l of dressLockChecks({ cards: lockOpen.cardStates, otherLooks, myLook: "noir", afterTap: viewLook === hookLook ? viewLook : `${viewLook}|${hookLook}` })) rec(scL, l.id, l.label, l.ok, l.detail);
 
       // AD5: 손님도 닫는다
       await gp.locator(`${DRESS_SHEET} button[aria-label="닫기"]`).click({ timeout: 3000 });
