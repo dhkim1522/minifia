@@ -15,6 +15,7 @@ status: in-progress
 (중단되면 이 절과 `git log --oneline --grep "(18-10)"` 로 끊긴 단계부터 다시 시작한다.)
 
 - [x] 단계 1 로컬 검증: npm test 8012 통과(실패 0) · E2E 전 흐름 폰 6종 회귀 한 번(5797 중 5792 통과, 실패 5건 → 3건은 재실행 통과, perfbudget 3건은 13페이즈부터의 알려진 한계) · nightload 평균 59.7fps(두 번 측정, 끊김 5분당 5.0·7.1 — 아래 설명) · RULESET 불변 · 위생 통과(새 결과 0)
+- [x] 단계 2 배포: minifia-v3 `2026-11-09T06:26:08Z+4858e54f` → `2026-11-10T02:35:10Z+6ea0749c` · 배포본 E2E tutorial-solo 폰 6종·avatar-dress 폰 6종 통과 · v1·v2 health 변화 없음 · 개인 계정 확인 · **배포본 smoke full 은 6번 모두 시간 편차·소켓·`.msg` 로 실패(망 지연 구간, 문턱 불변) — 재확인 필요**
 
 ## 단계 1: 로컬 전체 검증
 
@@ -81,5 +82,28 @@ status: in-progress
 
 - 바뀐 파일(`git diff --name-only 4a5dabea..HEAD` 의 남은 파일 101개)에 `~/personal/CLAUDE.md` 위생 검사를 돌렸더니, 18-02·18-03·18-04·18-09 SUMMARY 에 검사 명령 문장 자체(금지 표현을 나열한 패턴)가 적혀 있어 걸렸다. 공개 레포라 그 줄을 "개인 작업 공통 지침의 위생 검사 명령"으로 바꿨다(`fix(18-10)`). 이후 새 결과 0. 기존 `seatOrdered` 변수명의 우연한 일치(`test/unit/gameRoom.test.ts`)는 이 페이즈가 바꾼 파일이 아니라 그대로다.
 - 이 SUMMARY 에는 패턴 문자열을 적지 않는다.
+
+## 단계 2: minifia-v3 배포
+
+- 개인 계정 확인(배포 가드 `scripts/check-account.mjs` 통과, 계정 식별자 적지 않음).
+- 배포 전 version: minifia-v3 `2026-11-09T06:26:08Z+4858e54f` · v1 `2026-10-29T14:52:03Z+cb6979c` · v2 `2026-11-06T13:49:18Z+e51942c6`.
+- 배포: `npm run deploy`(계정·배포 대상 가드 통과, 우회 없음) → 약 12초 뒤 minifia-v3 `2026-11-10T02:35:10Z+6ea0749c`. v1 `...+cb6979c`·v2 `...+e51942c6` 는 배포 전과 같다(변화 없음).
+- **배포본 E2E `--only tutorial-solo,avatar-dress`: 통과(126초)** — avatar-dress 폰 6종 35/35, tutorial-solo 360x640 219/219 · 390x664 217/217 · 430x932 217/217 · 360x560 219/219 · 390x844 218/218 · 402x874 217/217.
+- `node scripts/smoke.mjs --prod --stage create`: 통과(방 코드 발급, 새 version 확인).
+- **배포본 smoke full(`--stage full --players 5 --previous-version 2026-11-09T06:26:08Z+4858e54f`): 6번 돌아 한 번도 통과하지 못했다.**
+
+| 시도 | 실패 지점 |
+|---|---|
+| 1 | `Cannot read properties of undefined (reading 'msg')`(재접속 복원 로그 뒤, 스택 미수집) |
+| 2 | 스모크1 소켓이 예상 밖으로 닫힘(code 1006), 판 끝 뒤 |
+| 3 | `.msg` 읽기 오류(1과 같음, 재접속 복원 로그 뒤) |
+| 4 | 로비 채팅 줄이 10초 안에 모두에게 오지 않음(`SMOKE_STACK=1`, 판 시작 전) |
+| 5 | dayAnnounce 도착 편차 5378ms ≥ 500ms(판 끝 뒤) |
+| 6 | dayAnnounce 도착 편차 610ms ≥ 500ms(판 끝 뒤) |
+
+  - 기능 판정(심부름 5명 같은 마감·처형·밤 누설 0·재접속 복원·판 끝 winner)은 시도 2·5·6 에서 모두 통과했고, 실패한 것은 시간 편차·소켓·`.msg` 읽기다. `.msg` 읽기 실패는 15-10 에서 한 번 있었고 HANDOFF 에 "원인 미확정" 으로 기록된 그 간헐이다.
+  - 시도 당시 이 Mac 에서 workers.dev 로의 연결이 평소보다 느렸다(`curl` 측정: TCP 0.15초·TLS 0.5초·첫 바이트 0.9초, 같은 시각 `www.cloudflare.com` 은 0.04초). 17-10 의 같은 smoke 는 첫 실행에 편차 7ms 로 통과했다. 다만 시도 1·3 의 `.msg` 원인은 스택을 못 얻어 망 때문이라고 단정하지 못한다.
+  - 판정 문턱(500ms 등)은 낮추지 않았고 스크립트도 고치지 않았다. DO 하루 쓰기 한도(결정 0076)를 아끼려 6번에서 멈췄다. 망이 풀린 뒤 `node scripts/smoke.mjs --prod --stage full --players 5 --previous-version 2026-11-09T06:26:08Z+4858e54f` 를 한 번 더 돌려 확인하라고 HANDOFF 확인 대기에 적었다.
+  - 배포 자체(health version 변경·v1/v2 불변)와 바뀐 흐름 배포본 E2E 는 확인되었다.
 
 <!-- gsd:write-continue -->
