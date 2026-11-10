@@ -294,6 +294,11 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       focusLines(rec, sc5, t, []);
       recAll(rec, sc5, tutorialEvidenceChecks(t.evidence, { scene: 5, next: t.next }));
       recAll(rec, sc5, tutorialLineChecks(t.evidence, { viewport: vpOf(t), band: t.band, next: t.next }), { relax: ctx.size.h <= 560 ? ["EV6", "EV7", "EV8"] : [], note: "360x560 참고 행(UI-SPEC 장면 5)" });
+      {
+        const tag = t.evidence.suspectTag;
+        const pt = (p) => `(${Math.round(p[0])},${Math.round(p[1])})`;
+        rec(sc5, "EVm", "참고 측정(판정 아님): 도윤 이름표 사각형·선 끝 좌표", true, `이름표 ${tag ? `(${Math.round(tag.left)},${Math.round(tag.top)} ${Math.round(tag.width)}x${Math.round(tag.height)})` : "읽지 못함"} · 선 ${t.evidence.lines.map((l) => `${pt(l.from)}→${pt(l.to)}`).join(" / ")}`, true);
+      }
       bandLines(rec, sc5, t, [], {});
       await gLine(rec, ctx, solo, sc5);
       await hLine(rec, page, sc5);
