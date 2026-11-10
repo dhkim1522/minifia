@@ -119,8 +119,8 @@ function measureLines(scope: ParentNode): LineGeom[] {
     if (src === null) continue;
     out.push({
       key: spec.key,
-      from: [round1(src.left + src.width / 2), round1(src.top + src.height / 2)],
-      to: [round1(tag.left + tag.width * spec.at), round1(tag.top - 2)],
+      from: clampPoint([src.left + src.width / 2, src.top + src.height / 2], window.innerWidth, window.innerHeight),
+      to: clampPoint([tag.left + tag.width * spec.at, tag.top - 2], window.innerWidth, window.innerHeight),
       width: spec.width,
       delayMs: spec.delayMs,
     });
@@ -130,9 +130,9 @@ function measureLines(scope: ParentNode): LineGeom[] {
 
 const sameLines = (a: LineGeom[], b: LineGeom[]): boolean => a.length === b.length && a.every((l, i) => l.key === b[i]!.key && l.from[0] === b[i]!.from[0] && l.from[1] === b[i]!.from[1] && l.to[0] === b[i]!.to[0] && l.to[1] === b[i]!.to[1]);
 
-/** 화면 안쪽 inset 으로 고정한 점(자리 값 — 18-06 RED) */
-export function clampPoint(p: readonly [number, number], _w: number, _h: number, _inset = 8): [number, number] {
-  return [p[0], p[1]];
+/** 점을 화면 안쪽 inset([inset, 폭−inset]×[inset, 높이−inset])으로 고정한다(18-06, D-07). 곡선 제어점은 두 끝점의 x 와 그 사이 y 라서 끝점이 안이면 곡선도 안이다 */
+export function clampPoint(p: readonly [number, number], w: number, h: number, inset = 8): [number, number] {
+  return [round1(Math.min(Math.max(p[0], inset), w - inset)), round1(Math.min(Math.max(p[1], inset), h - inset))];
 }
 
 /** 세로로 굽은 부드러운 곡선 */
