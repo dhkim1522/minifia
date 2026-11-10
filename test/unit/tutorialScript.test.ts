@@ -475,6 +475,15 @@ describe("tutorialSnap·tutorialSuspectWalk — 서버와 같은 구간 단위",
     }
   });
 
+  it("도윤 자리는 다른 좌석과 1.2 이상 떨어져 있다 (18-08, D-07)", async () => {
+    const { TUTORIAL_SPOTS } = await loadScript();
+    const me = TUTORIAL_SPOTS[1]!;
+    for (const [seat, p] of Object.entries(TUTORIAL_SPOTS)) {
+      if (Number(seat) === 1) continue;
+      expect(Math.hypot(p.x - me.x, p.z - me.z), `좌석 ${seat}`).toBeGreaterThanOrEqual(1.2);
+    }
+  });
+
   it("도윤 걷기: move 한 프레임(s 1), 1.6~2.0초 걸리고 선분이 걸을 수 있다", async () => {
     const { tutorialSuspectWalk } = await loadScript();
     const f = tutorialSuspectWalk(NOW);
