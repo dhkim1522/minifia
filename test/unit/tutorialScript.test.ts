@@ -5,6 +5,7 @@ import { actablePlaceOf, errandProgress, placeCentersOf, startCardOn } from "../
 import { traceWindowOf } from "../../src/game/recordView";
 import { sameOutfitSeats } from "../../src/game/traceMark";
 import { lineWalkable } from "../../shared/game/map";
+import { GATHER_CENTER } from "../../src/world/camera";
 import { mapOf } from "../../shared/game/maps";
 import { ERRAND_ACT_R } from "../../shared/game/phases";
 import { segmentEndsAt } from "../../shared/game/world";
@@ -497,5 +498,22 @@ describe("tutorialSnap·tutorialSuspectWalk — 서버와 같은 구간 단위",
     const d = Math.hypot(end.x - TUTORIAL_START.x, end.z - TUTORIAL_START.z);
     expect(d).toBeLessThan(3);
     expect(d).toBeGreaterThan(1);
+  });
+});
+
+describe("튜토리얼 카메라 (P18-8, D-07)", () => {
+  it("TUTORIAL_FIXED_CAMERA 는 광장 가운데(GATHER_CENTER) 고정·줌 1 이다", async () => {
+    const { TUTORIAL_FIXED_CAMERA } = await loadScript();
+    expect(TUTORIAL_FIXED_CAMERA).toEqual({ mode: "fixed", target: { x: GATHER_CENTER.x, z: GATHER_CENTER.z }, zoom: 1 });
+  });
+
+  it.each([2, 5, 6])("장면 %i 은 고정 카메라", async (n) => {
+    const { tutorialCameraOf, TUTORIAL_FIXED_CAMERA } = await loadScript();
+    expect(tutorialCameraOf(n) === TUTORIAL_FIXED_CAMERA, "고정 카메라 상수를 돌려준다").toBe(true);
+  });
+
+  it.each([1, 3, 4, 7])("장면 %i 은 덮어쓰지 않는다(undefined)", async (n) => {
+    const { tutorialCameraOf } = await loadScript();
+    expect(tutorialCameraOf(n) === undefined).toBe(true);
   });
 });

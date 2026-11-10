@@ -398,3 +398,18 @@ describe("지도 장면에 아래 패널·[내 역할]이 없다 (D-06)", () => 
     expect(container.querySelectorAll("[data-world-panel]").length).toBe(1);
   });
 });
+
+describe("튜토리얼 지도 장면의 카메라 (P18-8, D-07)", () => {
+  it.each([2, 5, 6] as const)("장면 %i: WorldStage 가 받은 카메라가 광장 가운데 고정·줌 1", async (n) => {
+    await mount({ initialScene: n });
+    advance(0);
+    const cam = stage.props!.scene?.camera;
+    expect(cam?.mode === "fixed" && cam.zoom === 1 && cam.target.x === 0 && cam.target.z === 0, "광장 가운데 고정·줌 1").toBe(true);
+  });
+
+  it.each([3, 4] as const)("장면 %i: 나를 따라간다", async (n) => {
+    await mount({ initialScene: n });
+    advance(0);
+    expect(stage.props!.scene?.camera.mode).toBe("follow");
+  });
+});

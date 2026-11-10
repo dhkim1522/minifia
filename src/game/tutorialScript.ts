@@ -6,7 +6,7 @@ import { UNIT } from "../../shared/game/map";
 import { MOVE_V, emptyWorld, moveFrame, restSegment, snapFrame } from "../../shared/game/world";
 import type { WorldState } from "../../shared/game/world";
 import type { ClientMessage, MapId, OutfitId, PhaseId, PlaceId, PublicPlayer, RoomView, WorldFrame } from "../../shared/protocol";
-import type { SceneLook, SeatLook } from "../world/presence";
+import type { CameraMode, SceneLook, SeatLook } from "../world/presence";
 
 // ---- 타입 ----
 
@@ -294,6 +294,16 @@ export function tutorialStageLook(n: 1 | 7, s: { night: boolean; victimGone: boo
     seats[c.seat] = { show: true, ghost: false };
   }
   return { camera: { mode: "fixed", target: { x: 0, z: 0 }, zoom: 1 }, lighting: s.night ? "night" : "talk", tension: 0, seats };
+}
+
+// ---- 카메라 (P18-8) ----
+
+/** 광장 가운데 고정·줌 1 (자리 표시 — 18-03 GREEN 에서 채운다) */
+export const TUTORIAL_FIXED_CAMERA: CameraMode = { mode: "fixed", target: { x: 0, z: 0 }, zoom: 1 };
+
+/** 지도 장면 n 의 카메라 덮어쓰기. 없으면 실제 판의 sceneLook 카메라 그대로 (자리 함수 — 늘 undefined) */
+export function tutorialCameraOf(_n: number): CameraMode | undefined {
+  return undefined;
 }
 
 // ---- 위치 ----
