@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode, type Ref } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type CSSProperties, type ReactNode, type Ref } from "react";
 import "../../styles/v2.css";
 import { CHAT_MAX_GRAPHEMES } from "../../../shared/game/chatRules";
 import { CHAT_TEXT } from "../../game/chatText";
-import { AUTO_SCROLL_SLOP_PX, DUP_SUBMIT_MS, IME_WAIT_MS, TAIL_WINDOW_MS } from "../../game/chatUi";
+import { DUP_SUBMIT_MS, IME_WAIT_MS, LOG_FADE_H, TAIL_WINDOW_MS } from "../../game/chatUi";
 import type { EmoteId } from "../../../shared/protocol";
 import { EMOTE_TEXT } from "../../game/chatText";
 import { EmoteTray } from "./EmoteTray";
@@ -109,10 +109,6 @@ function channelUi(channel: "all" | "mafia" | "ghost"): ChannelUi {
   return { label: CHAT_TEXT.inputLabel.all, hint: undefined, icon: null };
 }
 
-function atBottom(el: HTMLElement): boolean {
-  return el.scrollHeight - el.scrollTop - el.clientHeight <= AUTO_SCROLL_SLOP_PX;
-}
-
 export function ChatPanel(props: ChatPanelProps) {
   const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef, onWill, willOpen, willSaved, callInput, callWill, trailing } = props;
   const fieldRef = useRef<HTMLInputElement | null>(null);
@@ -120,9 +116,6 @@ export function ChatPanel(props: ChatPanelProps) {
   const composingRef = useRef(false);
   const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSentRef = useRef<{ text: string; at: number } | null>(null);
-  const atBottomRef = useRef(true);
-  const lastKeyRef = useRef<string | null>(messages.length ? (messages[messages.length - 1]?.key ?? null) : null);
-  const [newDot, setNewDot] = useState(false);
   const [trayOpen, setTrayOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const openBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -143,42 +136,12 @@ export function ChatPanel(props: ChatPanelProps) {
     [],
   );
 
-  // 자동 스크롤: 바뀌기 전에 바닥 24px 이내였으면 따라가고, 위로 올려 읽는 중이면 끌어내리지 않고 점을 띄운다.
+  // 두 줄 창(18.1): 칸 안에서는 스크롤하지 않는다. 새 줄·막힘 알림이 오면 언제나 맨 아래(가장 새 줄)로 따라간다.
+  // 지난 기록은 칸을 눌러 여는 기록 시트에서 읽는다.
   useLayoutEffect(() => {
-    const el = logRef.current;
-    if (!el) return;
-    const lastKey = messages.length ? (messages[messages.length - 1]?.key ?? null) : null;
-    const added = lastKey !== lastKeyRef.current;
-    lastKeyRef.current = lastKey;
-    if (atBottomRef.current) {
-      el.scrollTop = el.scrollHeight;
-    } else if (added && !quiet) {
-      setNewDot(true);
-    }
-  }, [messages, quiet]);
-
-  // 막힘 알림은 기록 칸 맨 아래 줄이라 뜰 때 바닥으로 내려 보이게 한다.
-  useLayoutEffect(() => {
-    const el = logRef.current;
-    if (!notice || !el) return;
-    el.scrollTop = el.scrollHeight;
-    atBottomRef.current = true;
-  }, [notice]);
-
-  const onScroll = () => {
-    const el = logRef.current;
-    if (!el) return;
-    const bottom = atBottom(el);
-    atBottomRef.current = bottom;
-    if (bottom) setNewDot(false);
-  };
-
-  const jumpToBottom = () => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-    atBottomRef.current = true;
-    setNewDot(false);
-  };
+  }, [messages, notice]);
 
   const bindInput = (el: HTMLInputElement | null) => {
     fieldRef.current = el;
@@ -326,16 +289,15 @@ export function ChatPanel(props: ChatPanelProps) {
 
   return (
     <section className={rootCls} data-chat-panel="" data-chat-channel={channel}>
-      <div className="mv-chat__logbox">
+      <div className="mv-chat__logbox" style={{ "--mv-chat-fade": `${LOG_FADE_H}px` } as CSSProperties}>
         <div
           ref={logRef}
-          className="mv-chat__log"
+          className="mv-chat__log is-window"
           data-chat-log=""
           role="log"
           aria-live="polite"
           aria-label={CHAT_TEXT.logLabel}
           style={{ height: logHeight }}
-          onScroll={onScroll}
         >
           <ChatLines messages={messages} channel={channel} />
           {notice ? (
@@ -344,12 +306,11 @@ export function ChatPanel(props: ChatPanelProps) {
             </p>
           ) : null}
         </div>
-        <button type="button" className="mv-chat__open" data-chat-open="" aria-label={CHAT_TEXT.logOpen} ref={openBtnRef} onClick={() => setLogOpen(true)} />
-        {newDot ? (
-          <button type="button" className="mv-chat__newdot" data-chat-newdot="" aria-label={CHAT_TEXT.newDot} onClick={jumpToBottom}>
-            <span className="mv-chat__newdot-pill">{CHAT_TEXT.newDot}</span>
-          </button>
-        ) : null}
+        <button type="button" className="mv-chat__open" data-chat-open="" aria-label={CHAT_TEXT.logOpen} ref={openBtnRef} onClick={() => setLogOpen(true)}>
+          <span className="mv-chat__open-arrow" aria-hidden="true">
+            <V2Icon name="chevronRight" size={16} />
+          </span>
+        </button>
       </div>
       {onSend ? (
         <form className="mv-chat__form" onSubmit={onSubmit}>

@@ -136,6 +136,18 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 
 /* 기록 칸 바깥 상자: 새 메시지 점이 줄과 함께 스크롤되지 않게 기록 칸 밖에 둔다 */
 .mv-chat__logbox { position: relative; }
+/* 18.1 두 줄 창(P181-4): 칸 안 스크롤 없음, 위 12px 는 잘린 줄을 덮는 페이드, 칸 전체가 기록 시트를 여는 투명 단추 */
+.mv-chat__log.is-window { overflow: hidden; }
+.mv-chat__logbox::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: var(--mv-chat-fade, 12px); border-radius: var(--radius-badge) var(--radius-badge) 0 0; background: linear-gradient(var(--night-900), transparent); pointer-events: none; z-index: 1; }
+.mv-chat__open { position: absolute; inset: 0; z-index: 2; margin: 0; padding: 0; border: 0; border-radius: var(--radius-badge); background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mv-chat__open:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mv-chat__open-arrow { position: absolute; top: 4px; right: 6px; display: inline-flex; color: var(--gray-300); opacity: 0.8; transform: rotate(-90deg); }
+/* 기록 시트: 제목 없이 채널 아이콘 하나와 줄 목록 */
+.mf-sheet.mf-sheet--chatlog { height: min(60dvh, 440px); display: flex; flex-direction: column; }
+.mv-chat__sheet-chan { display: inline-flex; color: var(--gray-300); padding: 0 var(--space-md); }
+.mv-chat__sheetbox { position: relative; flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.mv-chat__sheetlog { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.mv-chat__sheet-empty { flex: 1 1 0; display: grid; place-items: center; color: var(--gray-300); }
 /* 새 글 알림(14페이즈 TOOL-01): 점이 아니라 14px 글자 알약. 누르기 영역은 44×44 그대로(투명), 알약은 그 안 가운데 */
 .mv-chat__newdot { position: absolute; right: 0; bottom: 0; display: grid; place-items: center; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; background: transparent; cursor: pointer; }
 .mv-chat__newdot-pill { display: inline-block; padding: 0 var(--space-sm); border-radius: var(--radius-pill); background: var(--gray-100); color: var(--night-900); font-family: var(--font-ui); font-size: 14px; line-height: 22px; font-weight: 400; white-space: nowrap; animation: mv-chat-pulse 1.6s ease-in-out infinite; }

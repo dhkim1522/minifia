@@ -855,22 +855,11 @@ describe("ChatPanel 귓속말 줄 (09.1.1-09, UI-SPEC B-3)", () => {
     expect(title).toContain("color: var(--gray-50)");
   });
 
-  it("새 귓속말 줄도 위로 올려 읽는 중이면 새 메시지 점을 켠다(복원이면 quiet 라 꺼진다)", () => {
-    const g = (log: HTMLElement) => {
-      Object.defineProperty(log, "scrollHeight", { configurable: true, get: () => 500 });
-      Object.defineProperty(log, "clientHeight", { configurable: true, get: () => 100 });
-      Object.defineProperty(log, "scrollTop", { configurable: true, get: () => 300, set: () => {} });
-    };
+  it("새 귓속말 줄이 와도 패널에는 새 글 알약이 없다(지난 기록·알약은 기록 시트가 맡는다, 18.1)", () => {
     const { container, rerender } = render(<Harness />);
-    g(logOf(container));
     fireEvent.scroll(logOf(container));
     rerender(<Harness messages={[...TWO_LINES, WHISPERS[0]!]} />);
-    expect(container.querySelector("[data-chat-newdot]")).not.toBeNull();
-    const q = render(<Harness />);
-    g(logOf(q.container));
-    fireEvent.scroll(logOf(q.container));
-    q.rerender(<Harness messages={[...TWO_LINES, WHISPERS[0]!]} quiet />);
-    expect(q.container.querySelector("[data-chat-newdot]")).toBeNull();
+    expect(container.querySelector("[data-chat-newdot]")).toBeNull();
   });
 });
 

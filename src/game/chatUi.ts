@@ -42,8 +42,10 @@ export const IME_WAIT_MS = 100;
 export const DUP_SUBMIT_MS = 300;
 /** 보낸 직후 이 시간 안에 끝난 조합이 보낸 문장의 끝부분이면 되살아난 꼬리 글자로 보고 비운다(가정 A2) */
 export const TAIL_WINDOW_MS = 500;
-/** 기록 칸 바닥에서 이 거리 안이면 맨 아래에 있다고 보고 새 줄을 따라간다 */
+/** 기록 시트 목록 바닥에서 이 거리 안이면 맨 아래에 있다고 보고 새 줄을 따라간다 */
 export const AUTO_SCROLL_SLOP_PX = 24;
+/** 기록 칸 위쪽 사라지는 그라데이션 높이(18.1 UI-SPEC Spacing 예외 12). 두 줄 창에서 잘린 줄이 어색하지 않게 */
+export const LOG_FADE_H = 12;
 /** 화면이 들고 있는 기록 줄 수 상한 */
 export const CHAT_KEEP_LINES = 100;
 
