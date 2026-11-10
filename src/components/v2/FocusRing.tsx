@@ -3,7 +3,8 @@ import type { CSSProperties } from "react";
 import "../../styles/tutorial.css";
 
 // 첫 사건의 포커스 테두리(17-04, 결정 0078-8, UI-SPEC "포커스 테두리 계약"): 지금 눌러야 하는 곳 하나(또는 같은 일을 하는 한 묶음)를
-// 램프 빛 4px 로 1초 주기로 깜빡이게 하는 상자. 배경 흐림·어둠·손가락 포인터는 없다.
+// 램프 빛 4px 로 1초 주기로 깜빡이게 하는 상자. 대상 밖은 night-950 50% 로 어둡게(결정 0081-1-3, 0078-8 개정) 하고 흐림·손가락 포인터는 없다.
+// 어둡게 하는 막은 화면 전체 svg 한 장이고 구멍은 mask 의 검은 둥근 사각형들이다(겹쳐도 밝게 남는다). 구멍은 상자와 같은 측정 Box + lit 요소(상자는 안 그림).
 // 위치는 시안 좌표가 아니라 대상의 DOM 사각형을 rAF 로 재서 쓴다(폰 6종·3D 투영 이동에 맞춘다). 직전과 같으면 상태를 바꾸지 않는다(T-17-11).
 // 대상 사각형을 사방 8 키운 상자이고, 화면 안쪽 8 밖이면 안으로 민다. 대상을 못 쟀으면(0×0·없음) 그리지 않는다(Pitfall 11).
 // 상자는 눌림을 받지 않고(pointer-events none) 읽히지 않는다(aria-hidden). 깜빡임은 opacity 만이다(tutorial.css).
@@ -34,6 +35,8 @@ interface Box {
   width: number;
   height: number;
   radius: string;
+  /** 스포트라이트 구멍의 숫자 반지름(pill 은 height / 2) */
+  rx: number;
 }
 
 /** 대상 요소 하나의 모서리 반지름 px (읽지 못하면 null) */
@@ -72,20 +75,26 @@ function measure(scope: ParentNode, group: FocusGroup): Box | null {
   y = Math.max(PAD, Math.min(y, maxY));
   width = Math.round(width * 10) / 10;
   height = Math.round(height * 10) / 10;
+  const radiusPx = (radius ?? FALLBACK_RADIUS - PAD) + PAD;
   return {
     left: Math.round(x * 10) / 10,
     top: Math.round(y * 10) / 10,
     width,
     height,
-    radius: group.pill === true ? "var(--radius-pill)" : `${(radius ?? FALLBACK_RADIUS - PAD) + PAD}px`,
+    radius: group.pill === true ? "var(--radius-pill)" : `${radiusPx}px`,
+    rx: group.pill === true ? Math.round((height / 2) * 10) / 10 : radiusPx,
   };
 }
 
 function same(a: Box | null | undefined, b: Box | null | undefined): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
-  return a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height && a.radius === b.radius;
+  return a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height && a.radius === b.radius && a.rx === b.rx;
 }
+
+const litKey = (key: string, i: number): string => `${key}:lit:${i}`;
+/** 화면에 하나뿐이라 고정 id 를 쓴다(useId 의 콜론이 url(#…) 참조를 흔든다) */
+const MASK_ID = "tut-dim-mask";
 
 export function FocusRing({ groups }: { groups: readonly FocusGroup[] }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -106,12 +115,16 @@ export function FocusRing({ groups }: { groups: readonly FocusGroup[] }) {
       setBoxes((prev) => {
         const next: Record<string, Box> = {};
         let changed = false;
+        const put = (key: string, box: Box | null): void => {
+          if (box === null) return;
+          const before = prev[key];
+          next[key] = same(before, box) && before !== undefined ? before : box;
+          if (before !== next[key]) changed = true;
+        };
         for (const group of live.current) {
-          const box = measure(scope, group);
-          if (box === null) continue;
-          const before = prev[group.key];
-          next[group.key] = same(before, box) && before !== undefined ? before : box;
-          if (before !== next[group.key]) changed = true;
+          put(group.key, measure(scope, group));
+          // lit 요소는 같은 측정으로 재되 상자는 그리지 않는다(구멍만)
+          (group.lit ?? []).forEach((selector, i) => put(litKey(group.key, i), measure(scope, { key: group.key, selectors: [selector] })));
         }
         if (!changed && Object.keys(prev).length === Object.keys(next).length) return prev;
         return next;
@@ -122,8 +135,33 @@ export function FocusRing({ groups }: { groups: readonly FocusGroup[] }) {
     return () => cancelAnimationFrame(raf);
   }, [hasGroups]);
 
+  // 막은 포커스 상자를 그리는 동안에만 켠다(대상을 못 쟀거나 사라지면 막도 없다). 구멍 = 각 묶음의 상자 + lit 사각형
+  const holes: Box[] = [];
+  for (const g of groups) {
+    const own = boxes[g.key];
+    if (own !== undefined) holes.push(own);
+    (g.lit ?? []).forEach((_, i) => {
+      const lit = boxes[litKey(g.key, i)];
+      if (lit !== undefined) holes.push(lit);
+    });
+  }
+  const dimmed = groups.some((g) => boxes[g.key] !== undefined);
+
   return (
     <div ref={rootRef} className="tut-focus-layer" aria-hidden="true">
+      {dimmed ? (
+        <svg className="tut-dim" data-tutorial-dim="" aria-hidden="true" focusable="false">
+          <defs>
+            <mask id={MASK_ID} maskUnits="userSpaceOnUse" x="0" y="0" width="100%" height="100%">
+              <rect x="0" y="0" width="100%" height="100%" fill="white" />
+              {holes.map((h, i) => (
+                <rect key={i} data-tutorial-hole="" x={h.left} y={h.top} width={h.width} height={h.height} rx={h.rx} fill="black" />
+              ))}
+            </mask>
+          </defs>
+          <rect className="tut-dim__fill" x="0" y="0" width="100%" height="100%" fillOpacity={TUTORIAL_DIM_ALPHA} mask={`url(#${MASK_ID})`} />
+        </svg>
+      ) : null}
       {groups.map((g) => {
         const box = boxes[g.key];
         if (box === undefined) return null;

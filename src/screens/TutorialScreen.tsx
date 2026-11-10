@@ -155,7 +155,10 @@ function groupsOf(targets: readonly TutorialFocusWindow["target"][]): FocusGroup
   for (const target of targets) {
     if (target === "band") out.push({ key: "band", selectors: ["[data-tutorial-host] .mv-host__band"] });
     else if (target === "errand") out.push({ key: "errand", selectors: [`button[data-errand-place="${TUTORIAL_CAST.errand.target}"]`, "[data-errand-act]"] });
-    else if (target === "suspect") out.push({ key: "suspect", selectors: [`.mf-world__tag[data-seat="${TUTORIAL_CAST.suspect}"]`], extendDown: SUSPECT_BODY_PX });
+    else if (target === "suspect") {
+      // 도윤 상자 + 같이 밝아야 하는 목격 기록 카드·눈 표시(스포트라이트 구멍만, 18-06)
+      out.push({ key: "suspect", selectors: [`.mf-world__tag[data-seat="${TUTORIAL_CAST.suspect}"]`], extendDown: SUSPECT_BODY_PX, lit: [".mf-game__record > .mv-record", "[data-tutorial-eye]"] });
+    }
     else {
       // 지목할 수 있는 이름표 전부(나·탈락자 제외) — 각각 상자 하나, 알약 모서리
       for (const c of TUTORIAL_CAST.seats) {
