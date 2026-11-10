@@ -119,6 +119,18 @@ export function ChatPanel(props: ChatPanelProps) {
   const [trayOpen, setTrayOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const openBtnRef = useRef<HTMLButtonElement | null>(null);
+  // 기록 시트를 닫은 뒤 포커스를 [기록 열기] 로 돌린다. onClose 안에서 바로 주면 모달 <dialog> 가 아직
+  // 열려 있어(뒤 문서가 inert) 포커스가 옮겨지지 않고 body 로 떨어진다 — 언마운트(dialog.close) 뒤 effect 에서 준다.
+  const logWasOpenRef = useRef(false);
+  useEffect(() => {
+    if (logOpen) {
+      logWasOpenRef.current = true;
+      return;
+    }
+    if (!logWasOpenRef.current) return;
+    logWasOpenRef.current = false;
+    openBtnRef.current?.focus({ preventScroll: true });
+  }, [logOpen]);
   const hasEmotes = !!onSend && !!props.emotes && props.emotes.length > 0 && !!props.onEmote;
   const emoteBtnRef = useRef<HTMLButtonElement | null>(null);
   const firstCellRef = useRef<HTMLButtonElement | null>(null);
@@ -409,10 +421,7 @@ export function ChatPanel(props: ChatPanelProps) {
           messages={messages}
           channel={channel}
           quiet={!!quiet}
-          onClose={() => {
-            setLogOpen(false);
-            openBtnRef.current?.focus({ preventScroll: true });
-          }}
+          onClose={() => setLogOpen(false)}
         />
       ) : null}
     </section>
