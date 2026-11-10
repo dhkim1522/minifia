@@ -414,7 +414,6 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
 
   const noop = useCallback((): void => {}, []);
   const skip = useCallback((): void => onEndRef.current("skipped"), []);
-  const roleCard = useMemo(() => ({ unread: false, onOpen: noop }), [noop]);
 
   return (
     <div ref={rootRef} className="mf-root mf-room mf-tut" data-tutorial-screen="" data-tutorial-scene={cur.n} data-tutorial-mode={mode} {...(openingStep >= 1 ? { "data-tutorial-gone": TUTORIAL_CAST.victim } : {})}>
@@ -422,7 +421,7 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
       <div className="mf-room__body">
         <div key={kind} className="mf-phase-enter">
           {kind === "map" && mapView !== null ? (
-            <GameMap view={mapView} store={store} chat={chat} send={send} canSend offset={0} roleCard={roleCard} toast={cur.n === 6 ? toast : null} onLeave={skip} />
+            <GameMap view={mapView} store={store} chat={chat} send={send} canSend offset={0} panelless toast={cur.n === 6 ? toast : null} onLeave={skip} />
           ) : stageView !== null ? (
             <div className="mf-tut__stage">
               <WorldStage view={stageView} store={store} scene={stageLook} canWalk={false} send={send} canSend offset={0} onNotice={noop} onLeave={skip} onReady={onStageReady} />
