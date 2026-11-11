@@ -143,7 +143,7 @@ describe("ChatPanel 입력줄 제출 한 길 (CHAT-01)", () => {
     const onChangeSpy = vi.fn();
     const { container } = render(<Harness onSend={onSend} onChangeSpy={onChangeSpy} />);
     const inp = input(container);
-    inp.focus();
+    act(() => inp.focus());
     expect(sendBtn(container).getAttribute("aria-disabled")).toBe("true");
     fireEvent.change(inp, { target: { value: "안녕하세요" } });
     expect(sendBtn(container).getAttribute("aria-disabled")).toBe("false");
@@ -173,6 +173,8 @@ describe("ChatPanel 입력줄 제출 한 길 (CHAT-01)", () => {
   it("값이 공백만이면 보내기는 aria-disabled true 이고 눌러도 onSend 가 없다", () => {
     const onSend = vi.fn();
     const { container } = render(<Harness onSend={onSend} initial="   " />);
+    expect(container.querySelector("[data-chat-send]")).toBeNull();
+    act(() => input(container).focus());
     expect(sendBtn(container).getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(sendBtn(container));
     fireEvent.submit(form(container));
@@ -215,7 +217,7 @@ describe("ChatPanel 입력칸 계약 (CHAT-05, UI-SPEC 패널과 키보드)", ()
   });
 
   it("보내기는 글 없는 아이콘 단추다(16페이즈 TOOL-04): aria-label '보내기'", () => {
-    const { container } = render(<Harness />);
+    const { container } = render(<Harness initial="안녕" />);
     const btn = sendBtn(container);
     expect(btn.getAttribute("aria-label")).toBe("보내기");
     expect(btn.getAttribute("type")).toBe("submit");
@@ -794,6 +796,124 @@ describe("ChatPanel 제자리에서 늘어나는 기록 칸 (0083-4)", () => {
   });
 });
 
+describe("ChatPanel [보내기]는 입력 중이거나 쓴 글이 있을 때만, 유언 단추와 교대로 (0083-4·0083-5)", () => {
+  const openBtn = (c: HTMLElement) => c.querySelector("button[data-chat-open]") as HTMLButtonElement;
+  const send = (c: HTMLElement) => c.querySelector("[data-chat-send]");
+  const will = (c: HTMLElement) => c.querySelector("[data-will-button]");
+
+  it("글이 비고 포커스가 없으면 [보내기] 가 DOM 에 없다", () => {
+    const { container } = render(<Harness />);
+    expect(send(container)).toBeNull();
+  });
+
+  it("입력칸에 포커스를 주면 [보내기] 하나(aria-disabled true)가 생기고 기록 칸이 늘어난다, 글을 쓰면 aria-disabled false", () => {
+    const { container } = render(<Harness />);
+    act(() => input(container).focus());
+    expect(container.querySelectorAll("[data-chat-send]").length).toBe(1);
+    expect(send(container)?.getAttribute("aria-disabled")).toBe("true");
+    expect(openBtn(container).getAttribute("aria-expanded")).toBe("true");
+    expect(logOf(container).classList.contains("is-open")).toBe(true);
+    fireEvent.change(input(container), { target: { value: "안녕" } });
+    expect(send(container)?.getAttribute("aria-disabled")).toBe("false");
+  });
+
+  it("글이 있는 채 blur 해도 [보내기] 는 남고, 글을 지우고 blur 하면 사라진다", () => {
+    const { container } = render(<Harness />);
+    const inp = input(container);
+    act(() => inp.focus());
+    fireEvent.change(inp, { target: { value: "쓰는 중" } });
+    act(() => inp.blur());
+    expect(send(container)).not.toBeNull();
+    act(() => inp.focus());
+    fireEvent.change(inp, { target: { value: "" } });
+    expect(send(container)).not.toBeNull();
+    act(() => inp.blur());
+    expect(send(container)).toBeNull();
+  });
+
+  it("보낸 뒤 포커스는 입력칸에 남고 [보내기] 도 남는다", () => {
+    const onSend = vi.fn();
+    const { container } = render(<Harness onSend={onSend} />);
+    const inp = input(container);
+    act(() => inp.focus());
+    fireEvent.change(inp, { target: { value: "안녕" } });
+    fireEvent.click(send(container) as Element);
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(inp);
+    expect(send(container)).not.toBeNull();
+  });
+
+  it("onWill 이 있으면 어느 때도 [보내기] 와 유언 단추가 함께 있지 않다(빈·포커스 없음: 유언만, 포커스 또는 글: 보내기만)", () => {
+    const { container } = render(<Harness onWill={() => {}} />);
+    const inp = input(container);
+    const both = () => container.querySelectorAll("[data-chat-send], [data-will-button]").length;
+    expect(will(container)).not.toBeNull();
+    expect(send(container)).toBeNull();
+    act(() => inp.focus());
+    expect(will(container)).toBeNull();
+    expect(send(container)).not.toBeNull();
+    expect(both()).toBe(1);
+    fireEvent.change(inp, { target: { value: "글" } });
+    act(() => inp.blur());
+    expect(will(container)).toBeNull();
+    expect(send(container)).not.toBeNull();
+    fireEvent.change(inp, { target: { value: "" } });
+    expect(will(container)).not.toBeNull();
+    expect(send(container)).toBeNull();
+    expect(both()).toBe(1);
+  });
+
+  it("유언 단추가 보일 때 willSaved 점·aria-label·callWill 은 그대로다", () => {
+    const { container } = render(<Harness onWill={() => {}} willSaved callWill />);
+    expect(will(container)?.getAttribute("aria-label")).toBe("유언 쓰기, 저장됨");
+    expect(container.querySelector(".mv-chat__will-dot")).not.toBeNull();
+    expect(will(container)?.classList.contains("is-call")).toBe(true);
+  });
+
+  it("늘어난 상태에서 [data-chat-open] 을 누르면 접히고 입력칸이 blur 되며 쓰던 글은 그대로다", () => {
+    const { container } = render(<Harness onWill={() => {}} />);
+    const inp = input(container);
+    act(() => inp.focus());
+    fireEvent.change(inp, { target: { value: "쓰던 글" } });
+    expect(document.activeElement).toBe(inp);
+    fireEvent.click(openBtn(container));
+    expect(openBtn(container).getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).not.toBe(inp);
+    expect(inp.value).toBe("쓰던 글");
+  });
+
+  it("두 줄 창을 눌러 늘려도 입력칸 포커스는 생기지 않아 [보내기] 가 나타나지 않는다", () => {
+    const { container } = render(<Harness onWill={() => {}} />);
+    fireEvent.click(openBtn(container));
+    expect(document.activeElement).not.toBe(input(container));
+    expect(send(container)).toBeNull();
+    expect(will(container)).not.toBeNull();
+  });
+
+  it("단계(메시지)가 바뀌거나 포커스가 풀려도 저절로 접지 않는다", () => {
+    const { container, rerender } = render(<Harness />);
+    act(() => input(container).focus());
+    act(() => input(container).blur());
+    rerender(<Harness messages={[...TWO_LINES, { key: "z", kind: "system", text: "단계" }]} />);
+    expect(openBtn(container).getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("trailing 은 [보내기] 가 있을 때도 없을 때도 입력줄 맨 끝 자식이다", () => {
+    const t = <button type="button" data-probe="">알약</button>;
+    const { container } = render(<Harness trailing={t} onWill={() => {}} />);
+    const slot = container.querySelector("[data-chat-trailing]");
+    expect(container.querySelector(".mv-chat__form")?.lastElementChild).toBe(slot);
+    act(() => input(container).focus());
+    expect(container.querySelector(".mv-chat__form")?.lastElementChild).toBe(container.querySelector("[data-chat-trailing]"));
+  });
+
+  it("유언 단추가 없는 화면은 입력칸이 남는 자리를 모두 쓴다(flex 1) — 입력칸 규칙에 고정 폭이 없다", () => {
+    const field = rulesFor(V2_CSS, ".mv-chat__field").join(";");
+    expect(field).toContain("flex: 1");
+    expect(field).not.toMatch(/(^|[;\s])width:/);
+  });
+});
+
 describe("ChatPanel 보내기 상태와 키보드 열림 (UI-SPEC 입력 상태표)", () => {
   it("sendDim 이면 보내기만 is-dim 이 되고 입력칸은 계속 쓸 수 있다", () => {
     const { container } = render(<Harness sendDim initial="안녕" />);
@@ -887,17 +1007,16 @@ describe("ChatPanel 깃펜 버튼 (WILL-01)", () => {
     const onWill = vi.fn();
     const onChangeSpy = vi.fn();
     const { container } = render(<Harness onWill={onWill} onChangeSpy={onChangeSpy} />);
+    expect(container.querySelector("[data-chat-send]")).toBeNull();
     const btn = pen(container);
     expect(btn, "button[data-will-button]").toBeInstanceOf(HTMLButtonElement);
     expect(btn?.getAttribute("aria-label")).toBe("유언 쓰기");
     expect(btn?.getAttribute("type")).toBe("button");
     expect(btn?.classList.contains("mv-chat__will")).toBe(true);
     expect(btn?.querySelector("svg")).not.toBeNull();
-    // [입력칸][보내기][깃펜]: 깃펜은 입력칸·보내기 버튼보다 뒤, form 의 마지막 요소다(feedback-11, 사용자 결정 2026-11-03)
+    // [입력칸][깃펜]: 깃펜은 입력칸보다 뒤, form 의 마지막 요소다(feedback-11, 사용자 결정 2026-11-03). 보내기가 보일 때는 같은 자리에 보내기가 온다(0083-5)
     const field = container.querySelector(".mv-chat__field") as Element;
-    const sendBtn = container.querySelector("[data-chat-send]") as Element;
     expect(field.compareDocumentPosition(btn as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(sendBtn.compareDocumentPosition(btn as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(container.querySelector(".mv-chat__form")?.lastElementChild).toBe(btn);
     fireEvent.click(btn as Element);
     expect(onWill).toHaveBeenCalledTimes(1);
@@ -1049,7 +1168,7 @@ describe("ChatPanel ballots 카드 (09.1.1-12)", () => {
 // 11-12 Task 1: 입력줄 오른쪽 끝 trailing 슬롯(결과 화면의 다시 하기 알약). 입력칸·보내기 버튼 뒤, form 의 마지막 요소다.
 describe("ChatPanel trailing 슬롯 (11-12)", () => {
   it("trailing 이 있으면 보내기 버튼 뒤 form 의 마지막에 data-chat-trailing 래퍼로 들어간다", () => {
-    const { container } = render(<Harness trailing={<button type="button" data-probe="">알약</button>} />);
+    const { container } = render(<Harness initial="안녕" trailing={<button type="button" data-probe="">알약</button>} />);
     const slot = container.querySelector("[data-chat-trailing]");
     expect(slot).not.toBeNull();
     expect(slot?.querySelector("[data-probe]")).not.toBeNull();

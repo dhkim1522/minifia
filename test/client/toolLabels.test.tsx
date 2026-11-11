@@ -90,8 +90,12 @@ describe("채팅 입력줄 단추 (TOOL-04, D-01)", () => {
   it("동작·보내기·유언 단추는 글 없이 아이콘과 aria-label 만 가진다", () => {
     const { container } = mount();
     expectIconButton(container.querySelector("[data-emote-button]"), "동작 고르기");
-    expectIconButton(container.querySelector("[data-chat-send]"), "보내기");
     expectIconButton(container.querySelector("[data-will-button]"), "유언 쓰기");
+    // 보내기는 입력 중이거나 쓴 글이 있을 때만 유언 단추 자리에 뜬다(0083-5)
+    expect(container.querySelector("[data-chat-send]")).toBeNull();
+    fireEvent.change(container.querySelector("input[data-chat-input]") as Element, { target: { value: "글" } });
+    expectIconButton(container.querySelector("[data-chat-send]"), "보내기");
+    expect(container.querySelector("[data-will-button]")).toBeNull();
   });
 
   it("유언이 저장돼 있으면 접근성 이름만 '유언 쓰기, 저장됨' 이 된다", () => {
@@ -102,20 +106,24 @@ describe("채팅 입력줄 단추 (TOOL-04, D-01)", () => {
 
   it("보내기가 막혀(aria-disabled) 있어도 이름은 남는다", () => {
     const { container } = mount({ sendDisabled: true });
-    expect(container.querySelector("[data-chat-send]")?.getAttribute("aria-disabled")).toBe("true");
-    expectIconButton(container.querySelector("[data-chat-send]"), "보내기");
     expectIconButton(container.querySelector("[data-emote-button]"), "동작 고르기");
     expectIconButton(container.querySelector("[data-will-button]"), "유언 쓰기");
+    fireEvent.change(container.querySelector("input[data-chat-input]") as Element, { target: { value: "글" } });
+    expect(container.querySelector("[data-chat-send]")?.getAttribute("aria-disabled")).toBe("true");
+    expectIconButton(container.querySelector("[data-chat-send]"), "보내기");
   });
 
   it("각 입력줄 단추는 아이콘(svg) 하나를 가진 .mv-tool 이고 라벨 요소가 없다", () => {
     const { container } = mount();
-    for (const sel of ["[data-emote-button]", "[data-chat-send]", "[data-will-button]"]) {
+    const check = (sel: string) => {
       const b = container.querySelector(sel);
       expect(b?.classList.contains("mv-tool"), sel).toBe(true);
       expect(b?.querySelectorAll("svg").length, sel).toBe(1);
       expect(b?.querySelector(LABEL_SELECTOR), sel).toBeNull();
-    }
+    };
+    for (const sel of ["[data-emote-button]", "[data-will-button]"]) check(sel);
+    fireEvent.change(container.querySelector("input[data-chat-input]") as Element, { target: { value: "글" } });
+    check("[data-chat-send]");
   });
 
   it("빛나는 [유언] 은 is-call 표식을 단다", () => {

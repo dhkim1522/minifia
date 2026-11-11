@@ -1,7 +1,8 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, render, renderHook } from "@testing-library/react";
 import type { RefObject } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useKeyboardLift } from "../../src/net/useKeyboardLift";
+import { useMapInsets } from "../../src/net/useMapInsets";
 
 const INNER_H = 844;
 
@@ -208,5 +209,73 @@ describe("useKeyboardLift: 한 줄 시트(귓속말, 09.1.1-09)의 입력칸도 
     act(() => lineInput.blur());
     expect(css("--mf-kb-lift")).toBe("0px");
     expect(result.current.inSheet).toBe(false);
+  });
+});
+
+// 0083-4: 늘어난 기록 칸의 식 재료. 측정 훅이 화면 루트에 방 높이와 패널의 기록 칸 밖 높이를 쓴다(대기실·게임 맵·결과가 모두 이 훅).
+describe("useMapInsets: 늘어난 기록 칸의 식 재료 --mf-room-h·--mf-panel-rest (0083-4)", () => {
+  const realOffset = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+  const realClient = Object.getOwnPropertyDescriptor(Element.prototype, "clientHeight");
+  beforeEach(() => {
+    // 레이아웃이 없다: data-h 가 곧 높이(떼어진 요소는 0), 루트의 clientHeight 는 data-ch
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.isConnected ? Number(this.dataset.h ?? 0) : 0;
+      },
+    });
+    Object.defineProperty(Element.prototype, "clientHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.isConnected ? Number(this.dataset.ch ?? 0) : 0;
+      },
+    });
+  });
+  afterEach(() => {
+    if (realOffset) Object.defineProperty(HTMLElement.prototype, "offsetHeight", realOffset);
+    if (realClient) Object.defineProperty(Element.prototype, "clientHeight", realClient);
+  });
+
+  function Probe({ panelless = false, logH = 68 }: { panelless?: boolean; logH?: number }) {
+    const { rootRef, headerRef, panelRef } = useMapInsets(false, panelless);
+    return (
+      <main ref={rootRef} data-ch="844">
+        <header ref={headerRef} data-h="62" />
+        {panelless ? null : (
+          <section ref={panelRef} data-h={String(172 + logH)}>
+            <div data-chat-log="" data-h={String(logH)} />
+          </section>
+        )}
+      </main>
+    );
+  }
+
+  it("패널 240·기록 칸 68 이면 루트에 --mf-room-h 844px, --mf-panel-rest 172px 가 쓰인다", () => {
+    const { container } = render(<Probe />);
+    const main = container.querySelector("main") as HTMLElement;
+    expect(main.style.getPropertyValue("--mf-room-h")).toBe("844px");
+    expect(main.style.getPropertyValue("--mf-panel-rest")).toBe("172px");
+  });
+
+  it("기록 칸이 늘어나(300) 패널이 커져도 --mf-panel-rest 는 그대로 172px 이다(측정이 서로를 다시 바꾸지 않는다)", () => {
+    const { container, rerender } = render(<Probe />);
+    rerender(<Probe logH={300} />);
+    const main = container.querySelector("main") as HTMLElement;
+    expect(main.style.getPropertyValue("--mf-panel-rest")).toBe("172px");
+  });
+
+  it("패널이 없는 단계(panelless)에서는 --mf-panel-rest 를 쓰지 않는다", () => {
+    const { container } = render(<Probe panelless />);
+    const main = container.querySelector("main") as HTMLElement;
+    expect(main.style.getPropertyValue("--mf-panel-rest")).toBe("");
+  });
+
+  it("값이 바뀔 때만 쓴다(같은 값으로 다시 재도 setProperty 를 다시 부르지 않는다)", () => {
+    const { container, rerender } = render(<Probe />);
+    const main = container.querySelector("main") as HTMLElement;
+    const spy = vi.spyOn(main.style, "setProperty");
+    rerender(<Probe />);
+    window.dispatchEvent(new Event("resize"));
+    expect(spy.mock.calls.filter(([n]) => n === "--mf-room-h" || n === "--mf-panel-rest")).toHaveLength(0);
   });
 });
