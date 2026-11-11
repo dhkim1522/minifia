@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: "18.1"
 current_phase_name: screen-polish
-current_plan: 16
+current_plan: 17
 status: executing
-stopped_at: Completed 18.1-15-PLAN.md
-last_updated: "2026-11-11T08:38:24.650Z"
+stopped_at: Completed 18.1-16-PLAN.md
+last_updated: "2026-11-11T08:56:31.206Z"
 last_activity: 2026-11-11
 last_activity_desc: Phase 18.1 execution started
-state_head: b83a3a94ea9e4eb29306b488515e8c12e5d7ba4e
+state_head: 590dce77e51ac25f46929a09c4f93eb675ea929b
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 79
-  completed_plans: 76
+  completed_plans: 77
   percent: 40
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 18.1 (screen-polish) — EXECUTING
-Current Plan: 16
+Current Plan: 17
 Total Plans in Phase: 18
 Status: Ready to execute
 Last activity: 2026-11-11 — Phase 18.1 execution started
@@ -274,6 +274,7 @@ Last activity: 2026-11-11 — Phase 18.1 execution started
 | Phase 18.1 P13 | 18 min | 3 tasks | 18 files |
 | Phase 18.1 P14 | 60min | 3 tasks | 20 files |
 | Phase 18.1 P15 | 15min | 3 tasks | 15 files |
+| Phase 18.1 P16 | 75min | 3 tasks | 23 files |
 
 ## Accumulated Context
 
@@ -610,6 +611,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18.1]: 18.1-13: 큰 글(.mf-announce.is-top)은 --mf-host-bottom + 16 아래, 좌우 76 비움으로 띠·소리 단추를 피한다. 36px 유지, 좁은 폭에서 감김. 편지 있는 아침 8자 이름은 390폭 3줄(0083-10)
 - [Phase 18.1]: 18.1-14: 기록 칸은 제자리에서 clamp(68, 방 − 키보드 − 띠 − 120 − 패널 나머지, 300) 높이로 늘어난다(0083-4). 포커스로 켜기만, 닫기는 [data-chat-open] 하나(접을 때 blur). [보내기]는 입력 중·쓴 글 있을 때만 유언 단추와 교대(0083-5). chat-keyboard 큰 폰 판정은 스테이지 ≥120 으로 바뀐 계약
 - [Phase 18.1]: 18.1-15: 튜토리얼 스위치 한 줄 44(+54 → 방장 패널 276), 유언 저장 = 서버 확인 안 기다리고 닫기, 밤 [유언] 단추 점·이름 '유언, 저장됨'
+- [Phase 18.1]: 18.1-16: 결과 화면 시상식 삭제 — 헤더 제목은 5600ms(finalAtMs)에 승패로 바뀐 뒤 유지, 오른쪽 열도 5600ms, 최종 상태는 직업 의상 유지(고른 옷은 다음 판 대기실에서 보임), 소리 대본·서버 awards 는 남김
+- [Phase 18.1]: 18.1-16: [보내기] 는 포커스·글이 있을 때만 나오고 기록 칸은 늘어난 채 남으므로 결과 E2E 는 RS5 전에 접고 RM1 은 포커스를 준 줄에서 잰다
 
 ### Pending Todos
 
@@ -681,8 +684,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-11T08:38:23.484Z
-Stopped at: Completed 18.1-15-PLAN.md
+Last session: 2026-11-11T08:56:30.158Z
+Stopped at: Completed 18.1-16-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
