@@ -173,6 +173,9 @@ import {
   FLOAT_LABEL_EXTRA,
   ROLE_LINES,
   HOST_ACT_LINES,
+  HOST_BLANK_PHASES,
+  HOST_LINE_MAX,
+  HOST_OFF_PHASES,
   VIEW_DAY_KEYS,
   VIEW_ME_KEYS,
   VIEW_TOP_KEYS,
@@ -904,12 +907,26 @@ test("guideChecks UX1: 글자가 공백뿐이면 실패", () => {
   assert.match(r.detail, /글자/);
 });
 
-test("guideChecks UX1(14페이즈): 띠 문장은 3줄 미만 — 두 줄은 통과, 세 줄은 실패", () => {
+test("guideChecks UX1(18.1-12): 띠 문장은 한 줄 — 한 줄은 통과, 두 줄은 실패(HOST_LINE_MAX 는 2)", () => {
+  assert.equal(HOST_LINE_MAX, 2);
+  const one = guideChecks(gOk({ items: [{ text: "안내", inBand: true, height: 20, lineHeight: 20 }] }), { phase: "discussion" });
+  assert.equal(one.ok, true, one.detail);
   const two = guideChecks(gOk({ items: [{ text: "안내", inBand: true, height: 40, lineHeight: 20 }] }), { phase: "discussion" });
-  assert.equal(two.ok, true, two.detail);
-  const three = guideChecks(gOk({ items: [{ text: "안내", inBand: true, height: 60, lineHeight: 20 }] }), { phase: "discussion" });
-  assert.equal(three.ok, false);
-  assert.match(three.detail, /3줄/);
+  assert.equal(two.ok, false);
+  assert.match(two.detail, /2줄/);
+});
+
+test("guideChecks UX1(18.1-12): 큰 글이 말하는 단계(처형·아침)와 심부름은 빈 글도 통과, 그 밖 단계는 빈 글이면 실패", () => {
+  const blank = gOk({ items: [{ text: "", inBand: true, height: 20, lineHeight: 20 }] });
+  for (const phase of [...HOST_BLANK_PHASES, "errand"]) assert.equal(guideChecks(blank, { phase }).ok, true, phase);
+  for (const phase of ["discussion", "dayAnnounce", "night", "defense"]) {
+    const r = guideChecks(blank, { phase });
+    assert.equal(r.ok, false, phase);
+    assert.match(r.detail, /글자/);
+  }
+  // 개수 0·2 는 빈 글 허용 단계에서도 지금처럼 실패
+  assert.equal(guideChecks(gOk({ count: 0, items: [] }), { phase: "execution" }).ok, false);
+  assert.equal(guideChecks(gOk({ count: 2, items: [blank.items[0], blank.items[0]] }), { phase: "morning" }).ok, false);
 });
 
 test("guideChecks UX1(14페이즈): 안내 문장이 띠 밖이면 실패한다", () => {
@@ -3601,26 +3618,27 @@ test("SOUND_SCRIPT_STEPS: 13-05 투표 단계는 기본판 — bed.vote·phase.v
 // ---- 14페이즈(14-08): 띠·이름표·누설·알림음·view 키 판정 ----
 
 const bandOk = (over = {}) => ({
-  bands: 1, lineCount: 1, lineH: 40, lineLH: 20, guideCount: 1, guideInBand: true,
-  timeText: "42초", barShown: true, oldHint: 0, oldRing: 0, oldTimer: 0, ...over,
+  bands: 1, lineCount: 1, lineH: 20, lineLH: 20, guideCount: 1, guideInBand: true,
+  timeText: "42초", barShown: true, oldHint: 0, oldRing: 0, oldTimer: 0,
+  text: "의심 가는 사람을 이야기해 주세요", bells: 0, faceHidden: false, ...over,
 });
 
-test("hostBandChecks: 시간 있는 단계 — 띠 하나·문장 하나·data-guide 띠 안·두 줄·막대+초 는 통과(HB1~HB5)", () => {
+test("hostBandChecks: 시간 있는 단계 — 띠 하나·문장 하나·data-guide 띠 안·한 줄·막대+초·종 0·면 보임·글 있음 은 통과(HB1~HB7)", () => {
   const rs = hostBandChecks(bandOk(), { phase: "discussion", timed: true });
-  assert.deepEqual(rs.map((r) => r.id), ["HB1", "HB2", "HB3", "HB4", "HB5"]);
+  assert.deepEqual(rs.map((r) => r.id), ["HB1", "HB2", "HB3", "HB4", "HB5", "HB6", "HB7"]);
   for (const r of rs) assert.equal(r.ok, true, r.id + r.detail);
 });
 
 test("hostBandChecks: 시간 없는 단계는 막대·숫자가 둘 다 없어야 통과, 하나만 있어도 실패", () => {
-  const ok = hostBandChecks(bandOk({ timeText: "", barShown: false }), { phase: "lobby", timed: false });
+  const ok = hostBandChecks(bandOk({ timeText: "", barShown: false, faceHidden: true }), { phase: "lobby", timed: false });
   for (const r of ok) assert.equal(r.ok, true, r.id + r.detail);
-  const bar = hostBandChecks(bandOk({ timeText: "", barShown: true }), { phase: "lobby", timed: false }).find((r) => r.id === "HB4");
+  const bar = hostBandChecks(bandOk({ timeText: "", barShown: true, faceHidden: true }), { phase: "lobby", timed: false }).find((r) => r.id === "HB4");
   assert.equal(bar.ok, false);
-  const txt = hostBandChecks(bandOk({ timeText: "3초", barShown: false }), { phase: "lobby", timed: false }).find((r) => r.id === "HB4");
+  const txt = hostBandChecks(bandOk({ timeText: "3초", barShown: false, faceHidden: true }), { phase: "lobby", timed: false }).find((r) => r.id === "HB4");
   assert.equal(txt.ok, false);
 });
 
-test("hostBandChecks: 띠 0·2개, data-guide 0개·띠 밖, 세 줄, 옛 안내·링·타이머 는 각각 실패한다", () => {
+test("hostBandChecks: 띠 0·2개, data-guide 0개·띠 밖, 두 줄, 옛 안내·링·타이머 는 각각 실패한다", () => {
   const bad = (over, id) => {
     const r = hostBandChecks(bandOk(over), { phase: "discussion", timed: true }).find((x) => x.id === id);
     assert.equal(r.ok, false, id + JSON.stringify(over));
@@ -3631,6 +3649,7 @@ test("hostBandChecks: 띠 0·2개, data-guide 0개·띠 밖, 세 줄, 옛 안내
   bad({ lineCount: 2 }, "HB1");
   bad({ guideCount: 0 }, "HB2");
   bad({ guideInBand: false }, "HB2");
+  assert.match(bad({ lineH: 40 }, "HB3").detail, /2줄/);
   assert.match(bad({ lineH: 60 }, "HB3").detail, /3줄/);
   bad({ timeText: "1:05" }, "HB4");
   bad({ barShown: false }, "HB4");
@@ -3639,8 +3658,42 @@ test("hostBandChecks: 띠 0·2개, data-guide 0개·띠 밖, 세 줄, 옛 안내
   bad({ oldTimer: 1 }, "HB5");
 });
 
+test("hostBandChecks HB6: 종 0개 + 띠 면 보임/숨김이 단계 기대와 같다 — 숨는 단계는 대기실·결과(HOST_OFF_PHASES)", () => {
+  assert.deepEqual([...HOST_OFF_PHASES], ["lobby", "ended"]);
+  const hb6 = (over, phase) => hostBandChecks(bandOk({ timeText: "", barShown: false, ...over }), { phase, timed: false }).find((r) => r.id === "HB6");
+  assert.equal(hb6({ bells: 1 }, "discussion").ok, false);
+  assert.match(hb6({ bells: 1 }, "discussion").detail, /종/);
+  assert.equal(hb6({ faceHidden: false }, "lobby").ok, false);
+  assert.match(hb6({ faceHidden: false }, "lobby").detail, /보임/);
+  assert.equal(hb6({ faceHidden: false }, "ended").ok, false);
+  assert.equal(hb6({ faceHidden: true }, "discussion").ok, false);
+  assert.match(hb6({ faceHidden: true }, "discussion").detail, /숨/);
+  assert.equal(hb6({ faceHidden: true }, "lobby").ok, true);
+  assert.equal(hb6({ faceHidden: false }, "discussion").ok, true);
+});
+
+test("hostBandChecks HB7: 비는 단계(처형·아침)는 빈 글, 그 밖 보이는 단계는 글 있음, 심부름은 둘 다 허용", () => {
+  assert.deepEqual([...HOST_BLANK_PHASES], ["execution", "morning"]);
+  const hb7 = (text, phase) => hostBandChecks(bandOk({ text }), { phase, timed: true }).find((r) => r.id === "HB7");
+  for (const phase of HOST_BLANK_PHASES) {
+    assert.equal(hb7("", phase).ok, true, phase);
+    const r = hb7("찬성이 많아 처형됩니다", phase);
+    assert.equal(r.ok, false, phase);
+    assert.match(r.detail, /빈 글/);
+  }
+  const empty = hb7("", "discussion");
+  assert.equal(empty.ok, false);
+  assert.match(empty.detail, /글 없음/);
+  assert.equal(hb7("  ", "night").ok, false);
+  assert.equal(hb7("모두 모여 주세요", "dayAnnounce").ok, true);
+  assert.equal(hb7("", "errand").ok, true);
+  assert.equal(hb7("빛나는 곳을 찾아 처리해 주세요", "errand").ok, true);
+  // 숨는 단계의 숨은 문장은 이 판정이 보지 않는다
+  assert.equal(hostBandChecks(bandOk({ text: "대기실입니다. 친구들이 모일 때까지 기다려 주세요.", timeText: "", barShown: false, faceHidden: true }), { phase: "lobby", timed: false }).find((r) => r.id === "HB7").ok, true);
+});
+
 test("hostBandChecks: 측정값이 없거나 숫자가 아니면 조용히 통과하지 않고 측정값 없음으로 실패", () => {
-  for (const b of [undefined, null, {}, bandOk({ bands: "1" }), bandOk({ lineH: undefined }), bandOk({ lineLH: 0 }), bandOk({ timeText: null }), bandOk({ guideInBand: undefined }), bandOk({ oldHint: undefined })]) {
+  for (const b of [undefined, null, {}, bandOk({ bands: "1" }), bandOk({ lineH: undefined }), bandOk({ lineLH: 0 }), bandOk({ timeText: null }), bandOk({ guideInBand: undefined }), bandOk({ oldHint: undefined }), bandOk({ bells: undefined }), bandOk({ faceHidden: "no" }), bandOk({ text: null })]) {
     const rs = hostBandChecks(b, { phase: "discussion", timed: true });
     assert.ok(rs.some((r) => !r.ok && /측정값 없음/.test(r.detail)), JSON.stringify(b));
     assert.equal(rs.every((r) => r.ok), false);
@@ -3726,6 +3779,7 @@ test("toolLabelChecks: 목록이 비었거나 모양이 틀리거나 개수가 �
 
 test("HOST_ACT_LINES·ROLE_LINES: 역할별 줄·역할 문구 표", () => {
   assert.deepEqual(Object.keys(HOST_ACT_LINES).sort(), ["doctor", "mafia", "police"]);
+  assert.deepEqual({ ...HOST_ACT_LINES }, { mafia: "없앨 사람의 얼굴을 눌러 주세요", police: "조사할 사람의 얼굴을 눌러 주세요", doctor: "지킬 사람의 얼굴을 눌러 주세요" });
   assert.deepEqual(Object.keys(ROLE_LINES).sort(), ["citizen", "doctor", "mafia", "police"]);
 });
 
@@ -3897,8 +3951,8 @@ test("ERRAND_MARKERS: 열여덟 개(16-07: data-rest 추가, 16-08: 독·칩 대
   assert.ok(ERRAND_MARKERS.every((m) => /^data-(errand-|near-|record-|trace-|lastseen-|seen-|rest$)/.test(m)));
   assert.equal(ERRAND_PLACE_IDS.length, 16);
   assert.equal(ERRAND_PER_PERSON, 3);
-  assert.equal(ERRAND_LINES.trace, "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.");
-  assert.equal(ERRAND_LINES.discussionEvidence, "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.");
+  assert.equal(ERRAND_LINES.trace, ""); // 18.1-12: 흔적 구간은 증거 카드가 말한다 — 띠 문장은 빈 글
+  assert.equal(ERRAND_LINES.discussionEvidence, "같은 옷과 엇갈린 목격을 살펴보세요");
 });
 
 test("OVERALL_LIMIT_MS: 15-09 errand·witness·trace(720초)로 900→1620초, 17-09 튜토리얼 두 흐름(solo 폰 6종 약 34초×6 + together 12초 = 218초 ÷ 병렬 3 = 73초, 60초 단위 올림 120초)으로 1620→1740초", () => {
@@ -3973,6 +4027,11 @@ test("errandChecks: 항목 하나씩 어긋나게 하면 해당 판정만 실패
   assert.deepEqual(fails(errandChecks(errandDone({ bandLine: ERRAND_LINES.act }))), ["EA3"]);
   assert.deepEqual(fails(errandChecks(errandOk({ bandLine: ERRAND_LINES.done }))), ["EA3"]);
   assert.deepEqual(fails(errandChecks(errandOk({ panelCount: 1 }))), ["EA3"]);
+  // 18.1-12: 시작 카드가 떠 있는 동안은 띠 문장이 빈 글이다 — 카드가 없는데 빈 글이면 실패
+  assert.deepEqual(fails(errandChecks(errandOk({ bandLine: "", cards: 1 }))), []);
+  assert.deepEqual(fails(errandChecks(errandOk({ bandLine: "", cards: 0 }))), ["EA3"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ bandLine: "", cards: undefined }))), ["EA3"]);
+  assert.deepEqual(fails(errandChecks(errandOk({ bandLine: ERRAND_LINES.done, cards: 1 }))), ["EA3"]);
   // 진행 점 줄: 줄 수·aria-label·aria-live·보이는 글자
   assert.deepEqual(fails(errandChecks(errandOk({ dotsRows: 0 }))), ["EA11"]);
   assert.deepEqual(fails(errandChecks(errandOk({ dotsAria: "진행 1/3" }))), ["EA11"]);

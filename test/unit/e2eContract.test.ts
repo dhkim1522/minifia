@@ -50,7 +50,7 @@ import { buildView } from "../../shared/game/view";
 import { OUTFIT_IDS, PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
 import type { OutfitId, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
-import { HOST_LINES } from "../../src/game/hostLine";
+import { HOST_HIDDEN_PHASES, HOST_LINES, type HostKey } from "../../src/game/hostLine";
 import { OPENING_LAMPS, TUTORIAL_CAST, TUTORIAL_DOT_COUNT, TUTORIAL_LINES, TUTORIAL_SCENES, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
 import { ROLE_TEXT } from "../../src/game/roleText";
 import { CEREMONY_TITLE } from "../../src/game/awardText";
@@ -679,6 +679,9 @@ describe("14페이즈 사회자·이름표 E2E 사본과 제품 값 (14-08, 사�
     VIEW_ME_KEYS: ReadonlySet<string>;
     VIEW_DAY_KEYS: ReadonlySet<string>;
     HOST_MARKERS: readonly string[];
+    HOST_BLANK_PHASES: readonly string[];
+    HOST_OFF_PHASES: readonly string[];
+    HOST_LINE_MAX: number;
   };
   const lib = e2eLib as unknown as L;
   const root = new URL("../../", import.meta.url);
@@ -688,6 +691,19 @@ describe("14페이즈 사회자·이름표 E2E 사본과 제품 값 (14-08, 사�
     expect(lib.ROLE_LINES).toEqual({ mafia: ROLE_TEXT.mafia.desc, police: ROLE_TEXT.police.desc, doctor: ROLE_TEXT.doctor.desc, citizen: ROLE_TEXT.citizen.desc });
     // A1c: goal 키 폐지 — 문구는 desc 하나뿐
     for (const r of ["mafia", "police", "doctor", "citizen"] as const) expect(Object.hasOwn(ROLE_TEXT[r], "goal"), `${r}.goal`).toBe(false);
+  });
+
+  it("18.1-12: HOST_BLANK_PHASES 의 단계마다 그 단계 키들의 줄이 모두 빈 문자열이고, 빈 줄인 키는 모두 그 단계들 안에 있다", () => {
+    const keysOf: Record<string, HostKey[]> = { execution: ["execution.passed", "execution.failed"], morning: ["morning", "trace"] };
+    expect([...lib.HOST_BLANK_PHASES].sort()).toEqual(Object.keys(keysOf).sort());
+    for (const phase of lib.HOST_BLANK_PHASES) for (const key of keysOf[phase]!) expect(HOST_LINES[key], `${phase}/${key}`).toBe("");
+    const blankKeys = (Object.keys(HOST_LINES) as HostKey[]).filter((k) => HOST_LINES[k] === "").sort();
+    expect(blankKeys).toEqual(Object.values(keysOf).flat().sort());
+  });
+
+  it("18.1-12: HOST_OFF_PHASES 는 앱의 HOST_HIDDEN_PHASES 와 같고, 한 줄 문턱(HOST_LINE_MAX)은 2 다", () => {
+    expect([...lib.HOST_OFF_PHASES]).toEqual([...HOST_HIDDEN_PHASES]);
+    expect(lib.HOST_LINE_MAX).toBe(2);
   });
 
   /** view.test.ts 의 `const NAME ... = new Set([ "a", "b" ])` 안 문자열 목록(줄 주석은 뺀다). 서버 view 허용 목록은 이 페이즈에서 그대로다. */
