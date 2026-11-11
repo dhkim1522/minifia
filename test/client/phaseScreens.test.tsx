@@ -311,7 +311,8 @@ describe("S-04 역할 배정 (GAME-01, D-12, R11, E7, T-01-44)", () => {
   it("배정 화면: 문구 둘·맥박 링 3개가 있고 테이블은 없으며 [역할 카드] 은 없다", () => {
     const { container } = renderRoom(makeView({ phase: "assigning" }));
     expect(byText("직업을 배정하고 있습니다…")).toBeTruthy();
-    expect(byText("잠시만 기다려 주세요")).toBeTruthy();
+    // 18.1-12: 띠 문장(assigning)도 같은 말이라 화면 글(.mf-t-label)로 좁혀 찾는다
+    expect(container.querySelector(".mf-t-label")?.textContent).toBe("잠시만 기다려 주세요");
     // 08-19: 사용자 확정(2026-11-02) 임시 처리 — v1.0 테이블 상자를 뺐다. 머리 .mf-assign__bar · 빈 패널 .mf-assign__panel 만 남는다
     expect(screen.queryByRole("group", { name: "테이블" })).toBeNull();
     expect(container.querySelector(".mf-assign__scene")).toBeNull();

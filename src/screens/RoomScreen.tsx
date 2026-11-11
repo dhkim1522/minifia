@@ -333,9 +333,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const [roleCard, setRoleCard] = useState<{ open: boolean; tab: RoleCardTab }>({ open: false, tab: "role" });
   const [seenFront, setSeenFront] = useState(false);
   // 맵 화면이 알리는 띠용 클라이언트 상태(15-07): 목격 기록을 열었는가·아침 흔적 구간인가. 같은 값이면 상태를 바꾸지 않는다
-  const [hostLocal, setHostLocal] = useState<Pick<HostLocal, "recordOpened" | "traceOn">>({});
-  const onHostLocal = useCallback((next: Pick<HostLocal, "recordOpened" | "traceOn">): void => {
-    setHostLocal((prev) => (prev.recordOpened === next.recordOpened && prev.traceOn === next.traceOn ? prev : next));
+  // 18.1-12: 심부름 시작 카드가 떠 있는가(startCard)도 함께 — 카드가 같은 말을 하는 동안 띠 문장이 비는 데 쓴다
+  const [hostLocal, setHostLocal] = useState<Pick<HostLocal, "recordOpened" | "traceOn" | "startCard">>({});
+  const onHostLocal = useCallback((next: Pick<HostLocal, "recordOpened" | "traceOn" | "startCard">): void => {
+    setHostLocal((prev) => (prev.recordOpened === next.recordOpened && prev.traceOn === next.traceOn && prev.startCard === next.startCard ? prev : next));
   }, []);
   const onSeenFront = useCallback(() => setSeenFront(true), []);
 

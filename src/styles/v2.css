@@ -179,7 +179,10 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
  * 띠는 누를 수 없고(pointer-events none) 독의 소리 단추만 받는다. 층은 옛 소리 단추와 같다: 재접속 띠·[테스트]·지도 칩(z-overlay)보다 위, 시트·모달(z-modal)보다 아래. 키보드가 열려도 헤더와 같이 가상 뷰포트를 따라간다(--mf-vv-top). */
 .mv-host { position: absolute; top: var(--mf-host-top, 70px); left: var(--space-md); right: var(--space-md); z-index: calc(var(--z-overlay) + 1); display: flex; flex-direction: column; align-items: stretch; gap: var(--space-sm); pointer-events: none; transform: translateY(var(--mf-vv-top, 0px)); }
 .mv-host__band { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--space-sm); row-gap: var(--space-sm); align-items: center; box-sizing: border-box; padding: var(--space-sm) var(--space-md); border-left: 4px solid var(--brass-400); border-radius: var(--radius-badge); background: var(--overlay-ink-strong); box-shadow: var(--shadow-badge); font-family: var(--font-ui); }
-.mv-host__line { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-50); word-break: keep-all; overflow-wrap: break-word; }
+.mv-host__line { margin: 0; min-height: 1.4em; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-50); word-break: keep-all; overflow-wrap: break-word; }
+/* 18.1-12: 초가 없는 대기실·결과는 띠 면을 지우지 않고 보이지 않게만 한다 — 한 줄 자리는 그대로라 소리 단추·오른쪽 열·스테이지 윗변이 같은 자리다. 숨은 문장은 길어도 한 줄로 고정한다 */
+.mv-host__band.is-off { visibility: hidden; }
+.mv-host__band.is-off .mv-host__line { white-space: nowrap; overflow: hidden; }
 .mv-host__time { display: inline-flex; align-items: baseline; justify-content: flex-end; min-width: 40px; color: var(--gray-50); font-variant-numeric: tabular-nums; white-space: nowrap; transition: color 1s linear; }
 .mv-host__time b { font-size: 16px; line-height: 1.4; font-weight: 700; }
 .mv-host__time span { font-size: 14px; line-height: 1.4; font-weight: 400; }

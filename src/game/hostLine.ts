@@ -11,6 +11,7 @@
 // 역할별 줄(밤 마피아·경찰·의사)은 그 역할 분기 안에서 키가 정해진 뒤에만 꺼낸다(T-09-29 선례) — 여러 역할 줄을 모은 배열은 없다.
 // 18.1-12(결정 0083-8): 띠 문장은 "할 일 한 구절"(앞말·마침표·닉네임 없음, 공백 포함 19자 이하)이라 닉네임·아침 결과 문장은 읽지 않는다.
 // 빈 문자열 = 큰 글·시작 카드가 같은 말을 하는 동안(처형·아침·흔적 구간·심부름 시작 카드) — 대체 문장으로 바꾸지 않는다(대체 문장은 키가 fallback 일 때만).
+// local.startCard(클라이언트 상태)는 심부름 단계 문장만 비운다 — 키·빛남 대상은 바꾸지 않는다.
 import type { PhaseId, PlaceId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import { connectedCount } from "../../shared/game/room";
@@ -46,6 +47,8 @@ export interface HostLocal {
   recordOpened?: boolean;
   /** 지금이 아침 흔적 구간인가(15-07, 클라이언트 상태 — 서버 시계로 화면이 정한다) */
   traceOn?: boolean;
+  /** 심부름 시작 카드("오늘 갈 곳")가 내 화면에 떠 있는가(18.1-12, 클라이언트 상태). 떠 있는 동안 카드가 같은 말을 하므로 띠 문장은 비어 있다 */
+  startCard?: boolean;
 }
 
 /**
@@ -159,9 +162,29 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
   }
 }
 
-/** 한 줄 — 키의 줄 그대로. 빈 줄은 빈 줄이다(큰 글·시작 카드가 말하는 동안). 대체 문장은 키가 fallback 일 때만(HOST_FALLBACK) */
+/**
+ * 한 줄 — 키의 줄 그대로. 빈 줄은 빈 줄이다(큰 글·시작 카드가 말하는 동안). 대체 문장은 키가 fallback 일 때만(HOST_FALLBACK).
+ * 심부름 단계에서 시작 카드가 떠 있으면(local.startCard) 키·빛남 대상은 그대로 두고 문장만 비운다(카드가 같은 말을 한다).
+ */
 export function hostLineOf(view: RoomView, local: HostLocal = {}): string {
+  if (view.phase === "errand" && local.startCard === true) return "";
   return HOST_LINES[hostKeyOf(view, local)];
+}
+
+/** 띠 면이 보이지 않는 단계: 대기실·결과(초가 없다). 면의 한 줄 자리는 그대로 차지한다(18.1-12) */
+export const HOST_HIDDEN_PHASES: readonly PhaseId[] = Object.freeze(["lobby", "ended"] as const);
+
+/** 띠의 세 상태: show = 문장(+초·막대), blank = 문장 없이 초·막대만, off = 면을 보이지 않게(자리는 남는다) */
+export type HostBandMode = "show" | "blank" | "off";
+
+/**
+ * 띠 상태. 숨는 단계(HOST_HIDDEN_PHASES)이거나 문장이 비었는데 시간 행도 없으면 off(빈 상자가 뜨지 않게 하는 안전 규칙),
+ * 문장이 비었고 시간 행이 있으면 blank, 그 밖은 show.
+ */
+export function hostBandModeOf(view: RoomView, line: string): HostBandMode {
+  if (HOST_HIDDEN_PHASES.includes(view.phase)) return "off";
+  if (line === "") return hostTimeOf(view) ? "blank" : "off";
+  return "show";
 }
 
 export type CallTool = "start" | "card" | "chat" | "will" | "verdict" | "errand" | "record";

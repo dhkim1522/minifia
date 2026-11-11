@@ -165,8 +165,8 @@ interface GameMapProps {
   onEvent?: RoomConnection["onEvent"];
   /** 연결 번호. 바뀐 첫 스냅샷은 배지 효과(팝·알약)를 내지 않고 현재 상태로 바로 그린다(09.1.1-08). 기본 0 */
   epoch?: number;
-  /** 사회자 띠가 읽는 클라이언트 상태(15-07): 목격 기록을 열었는가·아침 흔적 구간인가. 방 화면이 띠에 넘긴다. 언마운트 때 빈 값 */
-  onHostLocal?: (local: Pick<HostLocal, "recordOpened" | "traceOn">) => void;
+  /** 사회자 띠가 읽는 클라이언트 상태(15-07·18.1-12): 목격 기록을 열었는가·아침 흔적 구간인가·심부름 시작 카드가 떠 있는가. 방 화면이 띠에 넘긴다. 언마운트 때 빈 값 */
+  onHostLocal?: (local: Pick<HostLocal, "recordOpened" | "traceOn" | "startCard">) => void;
   /** 맵을 쓸 수 없는 기기의 불가 카드 [처음으로] */
   onLeave?: () => void;
 }
@@ -494,11 +494,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     if (!marksOn || evidence?.trace === undefined) return null;
     return { same: new Set(sameOutfitSeats(view.players, evidence.trace)), color: TRACE_MARK[evidence.trace], seen: evidence.seen?.seat };
   }, [marksOn, evidence, view.players]);
-  // 사회자 띠가 같은 상태를 읽는다(RoomScreen 이 HostBand 에 넘긴다). 언마운트하면 비운다
-  useEffect(() => {
-    onHostLocal?.({ recordOpened, traceOn: traceShown });
-  }, [onHostLocal, recordOpened, traceShown]);
-  useEffect(() => () => onHostLocal?.({}), [onHostLocal]);
 
   // 빛남(14-04, HOST-03·04, U-7): 13 의 투표 처음 3초 깜빡임을 대체한다. 대상은 callTargetsOf(view)(공개 정보·내 역할만) 하나가 정하고,
   // 같은 단계 안에서 내가 그 도구를 쓰면 즉시 꺼져 되살아나지 않는다(서버가 거절해도 다시 켜지 않는다). "썼음" 은 단계 키(단계·일차·변론자) 하나로 쥐어 키가 바뀌면 자동으로 풀린다.
@@ -741,6 +736,13 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const errandOn = view.phase === "errand" && meAlive;
   const errandMine = useMemo(() => (errandOn ? errandProgress(view) : null), [errandOn, view]);
   const errandCardOn = useErrandStartCard(view, offset, rootRef);
+  // 사회자 띠가 같은 상태를 읽는다(RoomScreen 이 HostBand 에 넘긴다). 언마운트하면 비운다.
+  // startCard(18.1-12): 시작 카드가 내 화면에 떠 있는 동안 — 카드가 같은 말을 하므로 띠 문장이 빈다(ErrandStartCard 를 그리는 조건과 같다)
+  const startCard = errandCardOn && errandMine !== null;
+  useEffect(() => {
+    onHostLocal?.({ recordOpened, traceOn: traceShown, startCard });
+  }, [onHostLocal, recordOpened, traceShown, startCard]);
+  useEffect(() => () => onHostLocal?.({}), [onHostLocal]);
   const errandCenters = useMemo(() => (errandMine === null ? NO_CENTERS : placeCentersOf(view)), [errandMine === null, view]);
   const errandPos = useErrandPos(store, view.me.seat, () => Date.now() + offset, errandCenters, errandMine?.done ?? NO_PLACE_IDS, errandMine !== null);
   const callTarget = useMemo(
@@ -930,7 +932,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         // 심부름 단계에는 아래 패널이 없다(16-08, V-23): 진행 점 3 이 화면 아래 가운데에 떠 있다. 유령·목록 없음은 점도 없다(지켜본다).
         // 시작 2초 카드는 막 + 카드이고 눌림을 통과한다 — 닫는 누름은 useErrandStartCard 가 루트에서 받는다.
         <>
-          {errandCardOn && errandMine !== null ? <ErrandStartCard places={errandMine.places} /> : null}
+          {startCard && errandMine !== null ? <ErrandStartCard places={errandMine.places} /> : null}
           {errandMine !== null ? <ErrandDots total={errandMine.total} done={errandMine.n} /> : null}
         </>
       ) : noPanel ? null : (
