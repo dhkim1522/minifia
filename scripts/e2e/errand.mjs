@@ -119,6 +119,7 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
         doneAttr: r.doneAttr,
         progressText: r.progressText,
         bandLine: r.bandLine,
+        cards: r.cards,
         panelCount: r.panelCount,
         dotsRows: r.dotsRows,
         dotsAria: r.dotsAria,
@@ -526,7 +527,7 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
       for (const l of outfitUniqueChecks({ players: ht.last().players, traceSeats: morningMarks[0].trace })) rec(`${id}/morning1`, l.id, l.label, l.ok, l.detail);
       rec(`${id}/morning1`, "TR7", "마피아·시민·경찰·의사·유령이 같은 표시 좌석 집합을 본다", new Set(morningMarks.map((m) => JSON.stringify([m.trace, m.seen]))).size === 1, `서로 다른 집합 ${new Set(morningMarks.map((m) => JSON.stringify([m.trace, m.seen]))).size}가지`);
       rec(`${id}/morning1`, "TR1", "모든 사람(유령 포함)에게 같은 카드 글자", texts.size === 1, `서로 다른 카드 글자 ${texts.size}가지`);
-      rec(`${id}/morning1`, "TR2", "카드가 뜨는 동안 띠가 trace 문장이다", inWin.every((t) => t.bandLine === ERRAND_LINES.trace), `다른 문장 ${inWin.filter((t) => t.bandLine !== ERRAND_LINES.trace).length}곳`);
+      rec(`${id}/morning1`, "TR2", "카드가 뜨는 동안 띠 문장은 빈 글이다(증거 카드가 말한다 — 18.1-12)", inWin.every((t) => t.bandLine === ERRAND_LINES.trace), `다른 문장 ${inWin.filter((t) => t.bandLine !== ERRAND_LINES.trace).length}곳`);
       rec(`${id}/morning1`, "TR6", "마피아 둘이 같은 사람을 골라 그 사람이 탈락한다(흔적 구간 읽기 전제)", ht.last().day?.morning?.eliminated === victim, `탈락 ${ht.last().day?.morning?.eliminated === victim ? "기대한 사람" : "다른 사람 또는 없음"}`);
       await gameGH(ctx, id, "morning-trace", all[0]);
       const cardSound = await soundCount(hp, "ui.card");
@@ -575,7 +576,8 @@ export function makeErrandFlows({ recorder, attempt, startHost, openGuest, close
       const nobodyDied = resolved !== undefined && resolved.eliminated === undefined && resolved.trace === undefined;
       const f2 = fold(noVictim.flatMap((t) => traceChecks({ expectCard: false, cards: t.cards, announceVisible: t.announceVisible })));
       rec(`${id}/morning2`, "TC", "피해자 없는 아침: 흔적 카드 0개(모든 사람)", f2.ok, f2.detail);
-      rec(`${id}/morning2`, "TR4", "피해자 없는 아침의 띠는 trace 문장이 아니다", noVictim.every((t) => t.bandLine !== ERRAND_LINES.trace), `trace 문장 ${noVictim.filter((t) => t.bandLine === ERRAND_LINES.trace).length}곳`);
+      // 18.1-12: 흔적 구간 문장도 빈 글이라 trace 문장과 구별되지 않는다 — 카드 0개(위 TC)와 흔적 키 없음(TR5)이 구별을 맡고, 여기서는 아침 띠가 큰 글을 되풀이하지 않는지 본다
+      rec(`${id}/morning2`, "TR4", "피해자 없는 아침의 띠 문장은 빈 글이다(큰 글이 말한다)", noVictim.every((t) => t.bandLine === ""), `빈 글이 아닌 곳 ${noVictim.filter((t) => t.bandLine !== "").length}곳`);
       rec(`${id}/morning2`, "TR5", "둘째 아침에는 흔적 키가 없다(갈린 밤 — 아무도 탈락하지 않음)", nobodyDied, `morning ${JSON.stringify(Object.keys(resolved ?? {}))}`);
     } finally {
       await closeGame(asGame(host));

@@ -142,8 +142,8 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
   // ---- emcee-band ----
 
   /**
-   * emcee-band (HOST-01, TOOL-02, UI#13): 방장(경찰) + 4자 이름 사람 손님 7 = 8명판을 로비부터 결과까지 한 칸씩 넘기며 단계마다 띠를 읽는다 — 띠 하나·문장 하나·data-guide 가 띠 안·3줄 미만·
-   * 시간 단계의 막대 + 'n초'·옛 안내줄/링/타이머 0건(hostBandChecks). 투표·밤에서 이름표 단추끼리·띠와 겹침 0(hostOverlapChecks).
+   * emcee-band (HOST-01, TOOL-02, UI#13): 방장(경찰) + 4자 이름 사람 손님 7 = 8명판을 로비부터 결과까지 한 칸씩 넘기며 단계마다 띠를 읽는다 — 띠 하나·문장 하나·data-guide 가 띠 안·한 줄·
+   * 시간 단계의 막대 + 'n초'·옛 안내줄/링/타이머 0건·종 0개·대기실·결과는 면 숨김·처형·아침은 빈 글(hostBandChecks HB1~HB7, 18.1-12). 투표·밤에서 이름표 단추끼리·띠와 겹침 0(hostOverlapChecks).
    * 맵 단계(토론·투표·밤·아침)는 묶음 G(14px·가로 넘침·콘솔 오류)와 H(제목·띠 문장·띠 시간 글자 대비)를 받는다. 폰 6종(extraSizes)이라 360x560 의 가장자리 잘림은 알려진 한계로 기록만 한다(판정은 그대로).
    */
   async function emceeBandFlow(ctx) {
@@ -169,8 +169,20 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         const view = ht.last();
         const band = await readHostBand(hp);
         const f = fold(hostBandChecks(band, { phase, timed: timedOf(view) }));
-        rec(sc, "HB", `띠 한 문장·3줄 미만·시간 막대+초·옛 안내/링 없음(${phase}, ${band.text.length}자 문장)`, f.ok, f.detail);
+        rec(sc, "HB", `띠 한 구절·한 줄·종 없음·시간 막대+초·옛 안내/링 없음·비는/숨는 단계(${phase}, ${band.text.length}자 문장)`, f.ok, f.detail);
         await recordTod(hp, rec, sc, phase); // 18.1-08: 시간대 글자 D1·D4·D5(맵 단계) / D2(대기실·역할 확인)
+        // HB8(18.1-12): 대기실에서 띠 면이 숨어도 한 줄 자리는 그대로라 소리 단추 윗변이 승인 after n1 과 같은 자리(390x844 에서 118 ± 1). 다른 폰 크기는 값만 기록한다
+        if (phase === "lobby") {
+          const top = band.soundTop;
+          const exact = ctx.size.w === 390 && ctx.size.h === 844;
+          const fine = typeof top === "number" && Math.abs(top - 118) <= 1;
+          rec(sc, "HB8", `소리 단추 윗변이 승인 자리(390x844 에서 118 ± 1)${exact ? "" : " — 이 크기는 값만 기록"}`, exact ? fine : typeof top === "number", typeof top === "number" ? `윗변 ${Math.round(top * 10) / 10}px(${ctx.size.label})` : "소리 단추 측정값 없음", true);
+        }
+        // HB9(18.1-12, 참고 줄): 띠 면 아랫변·소리 독 아랫변 — 18.1-13 이 큰 글 자리를 잡는 데 쓴다(판정 아님, 값만 남긴다)
+        if (phase === "discussion" || phase === "execution") {
+          const r1 = (v) => (typeof v === "number" ? Math.round(v * 10) / 10 : "없음");
+          rec(sc, "HB9", `띠 면 아랫변·소리 독 아랫변 기록(${phase}, 참고)`, true, `띠 면 아랫변 ${r1(band.bandRect?.bottom)}px · 독 아랫변 ${r1(band.dockBottom)}px · 면 높이 ${r1(band.bandRect?.height)}px(${ctx.size.label})`, true);
+        }
         // 묶음 G·H 를 이름표 모이기 기다림보다 먼저 한다 — 투표 15초 중 기다리는 동안 시간 숫자가 마지막 5초 색(진홍)으로 바뀌어 대비 측정이 흔들리지 않게
         if (GH_PHASES.includes(phase)) await gameGH(ctx, id, phase, host);
         if (TAG_PHASES.includes(phase)) {
@@ -196,7 +208,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       });
       if (assigningBand !== null) {
         const f = fold(hostBandChecks(assigningBand, { phase: "assigning", timed: false }));
-        rec(`${id}/assigning`, "HB", "띠 한 문장·3줄 미만·시간 없음(assigning)", f.ok, f.detail);
+        rec(`${id}/assigning`, "HB", "띠 한 구절·한 줄·종 없음·시간 없음(assigning)", f.ok, f.detail);
         done.add("assigning");
         const t = todAbsentChecks(assigningTod, { screen: "assigning" });
         rec(`${id}/assigning`, t.id, t.label, t.ok, t.detail);
@@ -236,7 +248,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         if (!hit) continue;
         done.add(phase);
         const f = fold(hostBandChecks(hit, { phase, timed: timedMs[phase] >= HOST_TIME_MIN_MS }));
-        rec(`${id}/${phase}`, "HB", `띠 한 문장·3줄 미만·시간 막대+초·옛 안내/링 없음(${phase}, 띠 감시, ${hit.text.length}자 문장)`, f.ok, f.detail);
+        rec(`${id}/${phase}`, "HB", `띠 한 구절·한 줄·종 없음·시간 막대+초·옛 안내/링 없음·비는/숨는 단계(${phase}, 띠 감시, ${hit.text.length}자 문장)`, f.ok, f.detail);
       }
       const missingMap = BAND_REQUIRED.filter((p) => p !== "ended" && !done.has(p));
       rec(`${id}/coverage`, "EB0", "띠를 읽은 단계가 대기실·역할 확인·낮 시작·토론·투표·변론·찬반·처형·밤·아침을 모두 덮는다", missingMap.length === 0, `못 읽은 단계: ${missingMap.join(", ")}`);
@@ -257,7 +269,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       if (ok.ok) {
         const band = await readHostBand(hp);
         const f = fold(hostBandChecks(band, { phase: "ended", timed: timedOf(ht.last()) }));
-        rec(sc, "HB", `띠 한 문장·3줄 미만·시간 막대+초·옛 안내/링 없음(ended, ${band.text.length}자 문장)`, f.ok, f.detail);
+        rec(sc, "HB", `띠 한 구절·한 줄·종 없음·시간 막대+초·옛 안내/링 없음·비는/숨는 단계(ended, ${band.text.length}자 문장)`, f.ok, f.detail);
         await recordTod(hp, rec, sc, "ended");
       }
       rec(`${id}/coverage`, "EB0b", "결과(ended) 단계의 띠를 읽었다", ok.ok, ok.detail);

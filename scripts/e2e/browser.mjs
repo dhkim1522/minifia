@@ -1784,7 +1784,7 @@ export function readResult(page) {
 
 /**
  * 띠 읽기(hostBandChecks 입력): [data-host-band] 수, [data-host-line] 수·높이·줄 높이, [data-guide] 수와 띠 안 여부, [data-host-time] 글자·막대,
- * 옛 안내줄(.mv-phase__hint)·링(.mv-ring)·m:ss 타이머(.mf-timer) 수. 문장 글자와 띠 사각형(겹침 판정용)도 함께 싣는다. 값은 DOM 에서만 읽는다.
+ * 옛 안내줄(.mv-phase__hint)·링(.mv-ring)·m:ss 타이머(.mf-timer) 수. 문장 글자와 띠 사각형(겹침 판정용)도 함께 싣는다. 18.1-12: 종 수(bells)·면 숨김(faceHidden)·소리 단추 윗변(soundTop)도. 값은 DOM 에서만 읽는다.
  */
 export function readHostBand(page) {
   return page.evaluate(() => {
@@ -1801,6 +1801,7 @@ export function readHostBand(page) {
     const bar = document.querySelector("[data-host-band] .mv-host__bar");
     const guides = qa("[data-guide]");
     const face = document.querySelector("[data-host-band] .mv-host__band");
+    const sound = document.querySelector("[data-sound-button]");
     return {
       bands: qa("[data-host-band]").length,
       lineCount: qa("[data-host-line]").length,
@@ -1814,6 +1815,11 @@ export function readHostBand(page) {
       oldRing: qa(".mv-ring").length,
       oldTimer: qa(".mf-timer").length,
       text: line ? (line.textContent ?? "").replace(/\s+/g, " ").trim() : "",
+      // 18.1-12: 종 아이콘 수(띠 면 안 svg·종 요소 — 0)·면 계산된 visibility(숨은 단계만 hidden)·소리 단추 윗변(자리가 승인안과 같은가). 면 사각형은 숨어도 그대로 읽힌다(자리는 남는다)
+      bells: face ? face.querySelectorAll("svg, .mv-host__bell").length : null,
+      faceHidden: face ? getComputedStyle(face).visibility === "hidden" : null,
+      soundTop: sound ? sound.getBoundingClientRect().top : null,
+      dockBottom: document.querySelector("[data-host-band] .mv-host__dock") ? document.querySelector("[data-host-band] .mv-host__dock").getBoundingClientRect().bottom : null,
       bandRect: box(face),
       vw: window.innerWidth,
     };
@@ -1921,9 +1927,12 @@ export function armBandWatch(page) {
       const time = document.querySelector("[data-host-time]");
       const bar = document.querySelector("[data-host-band] .mv-host__bar");
       const guides = qa("[data-guide]");
+      const face = document.querySelector("[data-host-band] .mv-host__band");
       snaps.push({
         phase,
         text,
+        bells: face ? face.querySelectorAll("svg, .mv-host__bell").length : null,
+        faceHidden: face ? getComputedStyle(face).visibility === "hidden" : null,
         bands: qa("[data-host-band]").length,
         lineCount: qa("[data-host-line]").length,
         lineH: line.getBoundingClientRect().height,

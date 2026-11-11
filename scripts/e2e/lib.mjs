@@ -1157,18 +1157,18 @@ const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 const noMeasure = (id, label, what) => result(id, label, [`측정값 없음(${what})`]);
 
 /**
- * UX1 지금 할 일 문장이 한 화면에 하나, 글자가 있고 자막 띠 안이며 3줄 미만이고(14페이즈 — 옛 헤더 한 줄 규칙을 띠로 옮김), 시간 있는 단계에는 타이머가 있다 (D-08, UI-SPEC 8.4).
+ * UX1 지금 할 일 문장이 한 화면에 하나, 글자가 있고(처형·아침·심부름은 큰 글·시작 카드가 말하므로 빈 글도 통과 — 18.1-12) 자막 띠 안이며 한 줄이고, 시간 있는 단계에는 타이머가 있다 (D-08, UI-SPEC 8.4).
  * g = { count, items: [{ text, inBand, height, lineHeight }], timers } — 모양은 위 5페이즈 계약.
  */
 export function guideChecks(g, { phase }) {
-  const label = "지금 할 일 문장 하나·띠 안·3줄 미만·타이머";
+  const label = "지금 할 일 문장 하나·띠 안·한 줄·타이머";
   if (!g || !isNum(g.count) || !Array.isArray(g.items) || !isNum(g.timers)) return noMeasure("UX1", label, "안내 문장 개수·항목·타이머 수");
   if (g.count === 0) return result("UX1", label, ["안내 문장 요소 없음"]);
   if (g.count !== 1) return result("UX1", label, [`안내 문장 요소 ${g.count}개 ≠ 1`]);
   const it = g.items[0];
   if (!it || typeof it.text !== "string" || typeof it.inBand !== "boolean") return noMeasure("UX1", label, "안내 문장 글자");
   const bad = [];
-  if (it.text.trim() === "") bad.push("안내 문장 글자가 비어 있음");
+  if (it.text.trim() === "" && !HOST_BLANK_PHASES.includes(phase) && phase !== "errand") bad.push("안내 문장 글자가 비어 있음");
   if (!it.inBand) bad.push("안내 문장이 자막 띠 밖에 있음");
   else {
     if (!isNum(it.height) || !isNum(it.lineHeight) || it.lineHeight <= 0) return noMeasure("UX1", label, "띠 문장 높이·줄 높이");
@@ -2845,11 +2845,12 @@ export function soundResultSkipChecks(input) {
 
 // ---- 14페이즈 계약 (14-08) — 사회자 띠·도구 단추 이름·누설·알림음 판정이 받는 값의 모양 ----
 // 판정은 모두 이 파일의 순수 함수고 흐름(scripts/e2e/host.mjs)은 읽기만 한다. 값이 없거나 모양이 틀리면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다. 문턱은 여기서만 정하고 낮추지 않는다.
-//   HB1~HB5 hostBandChecks(b, { phase, timed })
+//   HB1~HB7 hostBandChecks(b, { phase, timed })
 //     b = { bands, lineCount, lineH, lineLH, guideCount, guideInBand, timeText, barShown, oldHint, oldRing, oldTimer }
 //       bands = `[data-host-band]` 수, lineCount = `[data-host-line]` 수, lineH·lineLH = 그 문장 요소의 높이·계산된 줄 높이,
 //       guideCount = `[data-guide]` 수, guideInBand = 그것이 띠 안인가, timeText = `[data-host-time]` 글자(없으면 ""), barShown = 시간 막대가 보이는가,
-//       oldHint·oldRing·oldTimer = `.mv-phase__hint`·`.mv-ring`·`.mf-timer` 수(옛 헤더 안내줄·시간 링·m:ss 타이머)
+//       oldHint·oldRing·oldTimer = `.mv-phase__hint`·`.mv-ring`·`.mf-timer` 수(옛 헤더 안내줄·시간 링·m:ss 타이머),
+//       text = 문장 글자(공백 정리), bells = 띠 면 안의 종 아이콘 수(svg·.mv-host__bell — 18.1-12 부터 0), faceHidden = 띠 면 계산된 visibility 가 hidden 인가(대기실·결과만 참)
 //   hostOverlapChecks({ band, tags })   band = 띠 사각형, tags = 이름표 단추 사각형 목록(투표·밤)
 //   TL1·TL2 toolLabelChecks(list, { labelAttrs, labelEls })   list = [{ name, text, hasIcon }] — 보이는 button·[role=tab] 하나씩(접근성 이름·보이는 글자),
 //       labelAttrs = 이름표 속성(data-tool-label) 요소 수, labelEls = 아이콘 아래 라벨 요소 수(16페이즈 TOOL-04: 둘 다 0, 이름 없는 단추도 0)
@@ -2858,8 +2859,12 @@ export function soundResultSkipChecks(input) {
 //   VK1 viewKeyChecks({ top, me, day })   받은 state 프레임의 최상위·me·day 키 이름 집합(값 없음)
 //   HS1~HS4 hostChimeChecks(segs)   segs = [{ kind: transition|first|reload|dayToDiscussion|muted, name, count, played }] — count = 구간의 ui.host 요청 수, played = 실제 재생된 수
 
-/** 자막 띠 문장의 줄 수 상한(미만): 한 문장·3줄 미만(UI-SPEC 사회자 문구 표 — 2줄까지). */
-export const HOST_LINE_MAX = 3;
+/** 자막 띠 문장의 줄 수 상한(미만): 한 줄(18.1-12, 결정 0083-8 — 보이는 문장은 공백 포함 19자 이하라 폭 360 에서도 한 줄). 낮추지 않는다. */
+export const HOST_LINE_MAX = 2;
+/** 띠 면이 보이지 않는 단계(src/game/hostLine.ts HOST_HIDDEN_PHASES 사본 — e2eContract 가 같음을 고정). 면의 한 줄 자리는 그대로라 visibility hidden 이다. */
+export const HOST_OFF_PHASES = ["lobby", "ended"];
+/** 띠 문장이 비는 단계(큰 글·증거 카드가 말한다): 처형·아침(흔적 구간 포함). e2eContract 가 이 단계 키들의 줄이 모두 빈 문자열임을 고정한다. 심부름은 시작 카드가 떠 있는 동안만 비어 이 목록에 없다. */
+export const HOST_BLANK_PHASES = ["execution", "morning"];
 /** E2E 가 읽는 14페이즈 표식(src 에 있어야 한다 — e2eContract 가 확인). */
 export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time", "data-call", "data-role-line", "data-guide"];
 /**
@@ -2873,9 +2878,9 @@ export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMo
 export const VIEW_DAY_KEYS = new Set(["n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown", "chalk", "evidence"]);
 /** 밤 역할별 사회자 줄(src/game/hostLine.ts HOST_LINES 의 night.mafia·police·doctor 사본) — 다른 역할 화면에 있으면 누설이다. e2eContract 가 같음을 고정한다. */
 export const HOST_ACT_LINES = {
-  mafia: "밤이 되었습니다. 없앨 사람의 얼굴을 눌러 주세요.",
-  police: "밤이 되었습니다. 조사할 사람의 얼굴을 눌러 주세요.",
-  doctor: "밤이 되었습니다. 지킬 사람의 얼굴을 눌러 주세요.",
+  mafia: "없앨 사람의 얼굴을 눌러 주세요",
+  police: "조사할 사람의 얼굴을 눌러 주세요",
+  doctor: "지킬 사람의 얼굴을 눌러 주세요",
 };
 /** 역할 카드 문구 한 덩어리 사본 — src/game/roleText.ts ROLE_TEXT[role].desc, 줄바꿈 \n 포함. e2eContract 가 같음을 고정한다. */
 export const ROLE_LINES = {
@@ -2886,16 +2891,18 @@ export const ROLE_LINES = {
 };
 const isStr = (x) => typeof x === "string";
 
-/** HB1~HB5 자막 띠 판정(HOST-01, TOOL-02). b = 위 14페이즈 계약. */
+/** HB1~HB7 자막 띠 판정(HOST-01, TOOL-02, 18.1-12 결정 0083-8). b = 위 14페이즈 계약. */
 export function hostBandChecks(b, { phase, timed }) {
   const L = {
     HB1: `띠 하나·문장 하나(${phase})`,
     HB2: "data-guide 하나가 띠 안",
-    HB3: `띠 문장 ${HOST_LINE_MAX}줄 미만`,
+    HB3: "띠 문장 한 줄",
     HB4: timed ? "시간 막대 + 'n초'" : "시간 없는 단계는 막대·숫자 없음",
     HB5: "옛 안내줄·링·m:ss 타이머 없음",
+    HB6: `종 0개 + 띠 면 ${HOST_OFF_PHASES.includes(phase) ? "숨김" : "보임"}`,
+    HB7: HOST_BLANK_PHASES.includes(phase) ? "띠 문장 빈 글(큰 글이 말한다)" : phase === "errand" ? "띠 문장 글 있음 또는 시작 카드 중 빈 글" : HOST_OFF_PHASES.includes(phase) ? "숨는 단계(문장은 판정 밖)" : "띠 문장 글 있음",
   };
-  const ids = ["HB1", "HB2", "HB3", "HB4", "HB5"];
+  const ids = ["HB1", "HB2", "HB3", "HB4", "HB5", "HB6", "HB7"];
   const nm = (id, what) => noMeasure(id, L[id], what);
   if (!b || typeof b !== "object") return ids.map((id) => nm(id, "띠 읽기 값"));
   const out = [];
@@ -2924,6 +2931,24 @@ export function hostBandChecks(b, { phase, timed }) {
     if (b.oldTimer > 0) bad.push(`.mf-timer ${b.oldTimer}개`);
     out.push(result("HB5", L.HB5, bad));
   } else out.push(nm("HB5", "옛 안내줄·링·타이머 수"));
+  // HB6: 종 아이콘 0개, 띠 면 보임/숨김이 단계 기대와 같다
+  if (isNum(b.bells) && typeof b.faceHidden === "boolean") {
+    const bad = [];
+    if (b.bells > 0) bad.push(`종 아이콘 ${b.bells}개`);
+    const wantHidden = HOST_OFF_PHASES.includes(phase);
+    if (wantHidden && !b.faceHidden) bad.push(`${phase} 의 띠 면이 보임(숨겨야 한다)`);
+    if (!wantHidden && b.faceHidden) bad.push(`${phase} 의 띠 면이 숨겨져 있음(보여야 한다)`);
+    out.push(result("HB6", L.HB6, bad));
+  } else out.push(nm("HB6", "종 수·띠 면 숨김 여부"));
+  // HB7: 비는 단계는 빈 글, 그 밖 보이는 단계는 글 있음. 심부름은 시작 카드 중에는 비므로 둘 다 허용, 숨는 단계의 숨은 문장은 보지 않는다
+  if (isStr(b.text)) {
+    const bad = [];
+    const empty = b.text.trim() === "";
+    if (HOST_BLANK_PHASES.includes(phase)) {
+      if (!empty) bad.push(`${phase} 의 띠 문장이 빈 글이 아님('${b.text.trim()}')`);
+    } else if (!HOST_OFF_PHASES.includes(phase) && phase !== "errand" && empty) bad.push(`${phase} 의 띠 문장이 비었음(글 없음)`);
+    out.push(result("HB7", L.HB7, bad));
+  } else out.push(nm("HB7", "띠 문장 글자"));
   return out;
 }
 
@@ -3057,7 +3082,7 @@ export function hostChimeChecks(segs) {
 // 판정은 모두 이 파일의 순수 함수고 흐름(scripts/e2e/errand.mjs)은 읽기만 한다. 값이 없거나 모양이 틀리면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다(공허 통과 금지, T-15-36).
 // 문턱은 여기서만 정하고 낮추지 않는다. 결과 줄에는 장소 id·진행 수·개수·단계 이름만 쓴다(닉네임·토큰 없음, T-15-35).
 //   EA1~EA11 errandChecks(s)   (16-07: 처리 입구가 아래 독 [처리] 에서 장소 위 알약으로 바뀌어 EA3 를 고치고 EA7~EA10 을 더했다. 16-08: 아래 패널·독·칩이 없어지고 진행 점 줄이 생겨 EA1·EA2·EA3 를 고치고 EA11 을 더했다)
-//     s = { total(진행 점 수), places: [{ id, done, hidden, call, rest }], doneAttr(data-done 점 수), progressText("n/N" — data-errand-progress 속성), bandLine(띠 문장), panelCount(아래 패널·독·칩 수 — 0 이어야 한다),
+//     s = { total(진행 점 수), places: [{ id, done, hidden, call, rest }], doneAttr(data-done 점 수), progressText("n/N" — data-errand-progress 속성), bandLine(띠 문장 — 시작 카드가 떠 있는 동안은 빈 글), cards(시작 카드 수 — 18.1-12 부터 EA3 가 빈 글을 받아들이는 근거), panelCount(아래 패널·독·칩 수 — 0 이어야 한다),
 //           dotsRows([data-errand-dots] 수), dotsAria(그 aria-label), dotsLive(그 aria-live), dotsText(점 줄의 보이는 글자 — 없어야 한다),
 //           callCount([data-call] 수), callKinds([data-call] 요소 종류 목록: "act"|"tile"|"arrow"|"other"), reach("out" 반경 밖|"in" 반경 안|"done" 3곳 완료), actCount([data-errand-act] 수), arrowCount(보이는 화살표 수),
 //           tiles(보이는 타일 사각형 목록), seatsInWorld(__mfWorld.seats() 중 나 말고 수), nearSeats(그 가운데 근처 반경 + 여유 안), tagSeats(나 말고 이름표 수), attrValues(ERRAND_MARKERS 속성 값 전부) }
@@ -3121,12 +3146,12 @@ export const ERRAND_CARD_LINE = "가는 길에 본 사람이 기록돼요";
 export const ERRAND_STATE_ATTRS = ["data-done", "data-call", "data-rest", "data-errand-act"];
 /** 사회자 띠 문장 사본(src/game/hostLine.ts HOST_LINES 의 errand·witness·trace·discussion 줄 — e2eContract 가 같음을 고정). */
 export const ERRAND_LINES = {
-  act: "심부름 시간입니다. 빛나는 곳을 찾아 처리해 주세요.",
-  done: "심부름을 마쳤습니다. 곧 토론이 시작됩니다.",
-  witness: "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.",
-  discussionAct: "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.",
-  trace: "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.",
-  discussionEvidence: "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.",
+  act: "빛나는 곳을 찾아 처리해 주세요",
+  done: "곧 토론이 시작됩니다",
+  witness: "기록 단추로 본 것을 확인해 주세요",
+  discussionAct: "의심 가는 사람을 이야기해 주세요",
+  trace: "", // 18.1-12: 흔적 구간은 증거 카드가 말한다 — 띠 문장은 빈 글
+  discussionEvidence: "같은 옷과 엇갈린 목격을 살펴보세요",
 };
 /** 의상 → 조각 id 사본(shared/game/trace.ts TRACE_OF_OUTFIT — e2eContract 가 같음을 고정). 공개 players[].look 에서 같은 옷 좌석을 셈하는 데만 쓴다. */
 export const TRACE_OF_OUTFIT_E2E = {
@@ -3199,7 +3224,9 @@ export function errandChecks(s) {
     const complete = s.doneAttr >= s.total;
     if (complete) {
       if (s.bandLine.trim() !== ERRAND_LINES.done) bad.push("3/3 인데 띠 문장이 errand.done 이 아님");
-    } else if (s.bandLine.trim() !== ERRAND_LINES.act) bad.push("미완인데 띠 문장이 errand.act 가 아님");
+    } else if (s.bandLine.trim() === "" && isNum(s.cards) && s.cards > 0) {
+      // 18.1-12: 시작 카드("오늘 갈 곳")가 떠 있는 동안은 카드가 같은 말을 해 띠 문장이 비어 있다
+    } else if (s.bandLine.trim() !== ERRAND_LINES.act) bad.push("미완인데 띠 문장이 errand.act 가 아님(시작 카드 중이면 빈 글)");
     if (s.panelCount !== 0) bad.push(`아래 패널·독·칩 ${s.panelCount}개 ≠ 0`);
     out.push(result("EA3", L.EA3, bad));
   } else out.push(noMeasure("EA3", L.EA3, "띠 문장·아래 패널·독·칩 수"));
