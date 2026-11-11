@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { PhaseId } from "../../shared/protocol";
 import { lightingOf } from "../../src/world/presence";
@@ -58,5 +59,12 @@ describe("헤더 시간대 낱말 (todWordOf, 결정 0083-1)", () => {
   it("밤·아침은 단계 이름이 같은 낱말이라 한 단어다(null)", () => {
     expect(todWordOf("night", "밤")).toBeNull();
     expect(todWordOf("morning", "아침")).toBeNull();
+  });
+});
+
+describe("날씨 배지 삭제 (0083-1)", () => {
+  it("public/weather 폴더가 없고 _headers 에 날씨 캐시 규칙이 없다", () => {
+    expect(existsSync("public/weather")).toBe(false);
+    expect(readFileSync("public/_headers", "utf8")).not.toContain("weather");
   });
 });

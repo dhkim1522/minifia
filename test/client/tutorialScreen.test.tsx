@@ -204,11 +204,12 @@ describe("장면 1~7 끝까지 (가짜 타이머)", () => {
   });
 });
 
-describe("시간대 배지는 튜토리얼에 없다 (18.1 Q5, D 계약 2)", () => {
+describe("시간대 글자는 튜토리얼에 없다 (0083-1)", () => {
   it.each([1, 2, 3, 4, 5, 6, 7] as const)("장면 %i: [data-tod] 가 0개", async (n) => {
     const { container } = await mount({ initialScene: n });
     expect(container.querySelectorAll("[data-tod]").length).toBe(0);
-    expect(container.querySelector(".mv-tod")).toBeNull();
+    expect(container.querySelector(".mv-phase__tod")).toBeNull();
+    expect(container.querySelector(".mv-phase__sep")).toBeNull();
   });
 });
 
