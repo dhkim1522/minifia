@@ -217,6 +217,27 @@ describe("errand 화면: 시작 카드 2초 (D-06, V-19, ERRAND-06)", () => {
     expect(card(m.container)).toBeNull();
   });
 
+  it("18.1-12: 시작 카드가 떠 있는 동안 띠 문장은 빈 글이고(초·막대는 있다), 걷히면 '빛나는 곳을 찾아 처리해 주세요' 가 나온다", () => {
+    const bandLine = (c: ParentNode) => c.querySelector("[data-host-line]")?.textContent;
+    at(500);
+    const { container } = mount(makeView());
+    expect(card(container)).not.toBeNull();
+    expect(bandLine(container)).toBe("");
+    expect(container.querySelector("[data-host-time]")).not.toBeNull();
+    expect(container.querySelector(".mv-host__band")!.classList.contains("is-off")).toBe(false);
+    advance(2_000);
+    expect(card(container)).toBeNull();
+    expect(bandLine(container)).toBe("빛나는 곳을 찾아 처리해 주세요");
+  });
+
+  it("18.1-12: 카드를 눌러 닫으면 띠 문장이 바로 나온다", () => {
+    at(500);
+    const { container } = mount(makeView());
+    expect(container.querySelector("[data-host-line]")?.textContent).toBe("");
+    fireEvent.pointerDown(container.querySelector("[data-world-stage-fake]")!);
+    expect(container.querySelector("[data-host-line]")?.textContent).toBe("빛나는 곳을 찾아 처리해 주세요");
+  });
+
   it("카드·막은 눌림을 통과한다(CSS)·마피아와 시민의 카드 마크업이 같다", () => {
     at(500);
     const htmls: string[] = [];

@@ -32,6 +32,9 @@ interface ViewOpts {
   endsIn?: number | null;
   durationMs?: number;
   resting?: boolean;
+  /** 18.1-12: 처형 판결(day.verdict) · 아침 결과(day.morning) */
+  passed?: boolean;
+  morning?: Record<string, unknown>;
 }
 
 function makeView(o: ViewOpts): RoomView {
@@ -51,7 +54,7 @@ function makeView(o: ViewOpts): RoomView {
       { seat: 3, nickname: "도현", connected: true, isHost: false },
     ],
     me: { seat: 0, isHost: true, role: "citizen" },
-    day: { n: 1, roles: ["mafia", "police", "citizen"] },
+    day: { n: 1, roles: ["mafia", "police", "citizen"], ...(o.passed !== undefined ? { candidate: 1, verdict: { yes: 3, no: 1, passed: o.passed } } : {}), ...(o.morning !== undefined ? { morning: o.morning } : {}) },
     ...(o.resting ? { resting: true as const } : {}),
   } as RoomView;
 }
@@ -155,6 +158,58 @@ describe("자막 띠 트레이서 (HOST-01, TOOL-02)", () => {
       const el = container.querySelector(sel)!;
       expect(el.getAttribute(sel.slice(1, -1))).toBe("");
     }
+  });
+});
+
+// ---- 18.1-12: 띠 세 상태(show·blank·off, 결정 0083-8) ----
+describe("띠 세 상태 (18.1-12)", () => {
+  const face = (c: HTMLElement) => c.querySelector<HTMLElement>(".mv-host__band")!;
+
+  it("대기실·결과: 띠 면은 is-off + aria-hidden 이고 표식 셋은 하나씩, 소리 독은 그대로 그려진다", () => {
+    const rig = makeRig();
+    rig.engine.unlock();
+    setEngineForTest(rig.engine);
+    for (const phase of ["lobby", "ended"] as const) {
+      const { container, unmount } = renderRoom(makeView({ phase, endsIn: null }));
+      expect(face(container).classList.contains("is-off"), phase).toBe(true);
+      expect(face(container).getAttribute("aria-hidden"), phase).toBe("true");
+      expect(container.querySelectorAll("[data-host-band]"), phase).toHaveLength(1);
+      expect(container.querySelectorAll("[data-host-line]"), phase).toHaveLength(1);
+      expect(container.querySelectorAll("[data-guide]"), phase).toHaveLength(1);
+      expect(container.querySelector(".mv-host__dock [data-sound-button]"), phase).not.toBeNull();
+      unmount();
+    }
+  });
+
+  it("처형: 띠 면은 보이고(is-off 없음) 문장 p 는 빈 글, 초와 막대는 있다 — 큰 글이 결과를 말한다", () => {
+    const { container } = renderRoom(makeView({ phase: "execution", endsIn: 5_000, passed: true }));
+    expect(face(container).classList.contains("is-off")).toBe(false);
+    expect(face(container).hasAttribute("aria-hidden")).toBe(false);
+    expect(container.querySelector("[data-host-line]")?.textContent).toBe("");
+    expect(container.querySelector("[data-host-time]")?.textContent).toBe("5초");
+    expect(container.querySelectorAll(".mv-host__bar")).toHaveLength(1);
+  });
+
+  it("아침: 문장 p 는 빈 글, 초·막대가 있다", () => {
+    const { container } = renderRoom(makeView({ phase: "morning", endsIn: 5_000, morning: { eliminated: 2 } }));
+    expect(face(container).classList.contains("is-off")).toBe(false);
+    expect(container.querySelector("[data-host-line]")?.textContent).toBe("");
+    expect(container.querySelector("[data-host-time]")?.textContent).toBe("5초");
+  });
+
+  it("낮 시작: 한 구절이 있고(큰 글은 없다) 시간 행은 없다(2초 단계)", () => {
+    const { container } = renderRoom(makeView({ phase: "dayAnnounce", endsIn: 2_000 }));
+    expect(face(container).classList.contains("is-off")).toBe(false);
+    expect(container.querySelector("[data-host-line]")?.textContent).toBe("모두 모여 주세요");
+    expect(container.querySelector("[data-host-time]")).toBeNull();
+    expect(container.querySelector("[data-announce]")).toBeNull();
+  });
+
+  it("v2.css: is-off 는 visibility hidden, 숨은 문장은 줄바꿈 없음·넘침 숨김, 빈 문장도 한 줄 높이", () => {
+    const css = readFileSync("src/styles/v2.css", "utf8");
+    expect(css).toMatch(/\.mv-host__band\.is-off\s*\{[^}]*visibility:\s*hidden/);
+    expect(css).toMatch(/\.mv-host__band\.is-off\s+\.mv-host__line\s*\{[^}]*white-space:\s*nowrap[^}]*overflow:\s*hidden|\.mv-host__band\.is-off\s+\.mv-host__line\s*\{[^}]*overflow:\s*hidden[^}]*white-space:\s*nowrap/);
+    expect(css).toMatch(/\.mv-host__line\s*\{[^}]*min-height:\s*1\.4em/);
   });
 });
 

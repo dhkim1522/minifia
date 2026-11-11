@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
 import type { EvidenceView, MorningView, PhaseId, PlaceId, RecordLine, RoomView } from "../../shared/protocol";
-import { HOST_FALLBACK, HOST_LINES, callTargetsOf, hostChimeOf, hostKeyOf, hostLineOf, hostTimeOf, type HostKey, type HostLocal } from "../../src/game/hostLine";
+import { HOST_FALLBACK, HOST_HIDDEN_PHASES, HOST_LINES, callTargetsOf, hostBandModeOf, hostChimeOf, hostKeyOf, hostLineOf, hostTimeOf, type HostKey, type HostLocal } from "../../src/game/hostLine";
 
 // 14-01: 사회자 문구 표(UI-SPEC "사회자 문구 표")와 파생 판정. 표가 단일 출처다 — 시험과 표가 어긋나면 표를 따른다.
 // 마지막 describe 는 HOST-05(T-14-01): 문장·빛남 대상은 내 view 의 허용 목록 값만 읽는다.
@@ -237,6 +237,85 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     expect(hostLineOf(makeView({ phase: "morning", morning: { eliminated: 2 } }))).toBe("");
     expect(hostLineOf(makeView({ phase: "morning", morning: { eliminated: 2, trace: "pin" } }), { traceOn: true })).toBe("");
     expect(hostLineOf(makeView({ phase: "viking" as PhaseId }))).toBe("잠시만 기다려 주세요");
+  });
+});
+
+describe("18.1-12 띠 상태 hostBandModeOf (0083-8)", () => {
+  const mode = (spec: Spec, local?: HostLocal) => {
+    const view = makeView(spec);
+    return hostBandModeOf(view, hostLineOf(view, local));
+  };
+
+  it("숨는 단계는 대기실·결과다", () => {
+    expect([...HOST_HIDDEN_PHASES].sort()).toEqual(["ended", "lobby"]);
+  });
+
+  it("대기실·결과 view 는 off — 방장·손님 모두", () => {
+    expect(mode({ phase: "lobby", host: true, endsAt: null })).toBe("off");
+    expect(mode({ phase: "lobby", seat: 1, host: false, endsAt: null })).toBe("off");
+    expect(mode({ phase: "ended", endsAt: null })).toBe("off");
+  });
+
+  it("처형·아침(흔적 구간 포함) view 는 blank — 빈 줄이고 시간 행이 있다", () => {
+    expect(mode({ phase: "execution", candidate: 1, passed: true })).toBe("blank");
+    expect(mode({ phase: "execution", candidate: 1, passed: false })).toBe("blank");
+    expect(mode({ phase: "morning", morning: { eliminated: 2 }, durationMs: 5000 })).toBe("blank");
+    expect(mode({ phase: "morning", morning: { eliminated: 2, trace: "pin" }, durationMs: 5000 }, { traceOn: true })).toBe("blank");
+  });
+
+  it("낮 시작(한 구절·시간 행 없음)·토론·투표·밤·역할 배정은 show", () => {
+    expect(mode({ phase: "dayAnnounce", durationMs: 2000 })).toBe("show");
+    expect(hostTimeOf(makeView({ phase: "dayAnnounce", durationMs: 2000 }))).toBe(false);
+    for (const phase of ["assigning", "roleReveal", "discussion", "nomination"] as const) expect(mode({ phase, durationMs: 15_000 }), phase).toBe("show");
+    expect(mode({ phase: "defense", candidate: 1 })).toBe("show");
+    expect(mode({ phase: "verdict", candidate: 1 })).toBe("show");
+    for (const role of ["mafia", "police", "doctor", "citizen"] as const) expect(mode({ phase: "night", role }), role).toBe("show");
+  });
+
+  it("빈 줄인데 시간 행도 없는 가짜 입력은 off(빈 상자가 뜨지 않게 하는 안전 규칙)", () => {
+    expect(hostBandModeOf(makeView({ phase: "execution", candidate: 1, passed: true, endsAt: null }), "")).toBe("off");
+    expect(hostBandModeOf(makeView({ phase: "morning", morning: {}, durationMs: 2000 }), "")).toBe("off");
+  });
+
+  it("줄이 있으면 숨는 단계가 아닌 한 show — 시간 행이 없어도", () => {
+    expect(hostBandModeOf(makeView({ phase: "discussion", endsAt: null }), "의심 가는 사람을 이야기해 주세요")).toBe("show");
+    expect(hostBandModeOf(makeView({ phase: "lobby", host: true, endsAt: null }), HOST_LINES["lobby.ready"])).toBe("off");
+  });
+});
+
+describe("18.1-12 심부름 시작 카드 startCard (0083-8)", () => {
+  const ERR = { phase: "errand" as const, map: "bar" as const, errand: ERR_PART };
+
+  it("시작 카드가 떠 있으면 문장은 빈 줄이다 — 산 사람(시민·마피아)·3곳 완료 모두", () => {
+    for (const role of ["citizen", "mafia"] as RoleId[]) expect(hostLineOf(makeView({ ...ERR, role }), { startCard: true })).toBe("");
+    expect(hostLineOf(makeView({ ...ERR, errand: ERR_DONE }), { startCard: true })).toBe("");
+  });
+
+  it("카드가 걷히면 '빛나는 곳을 찾아 처리해 주세요', startCard 가 없어도 같다", () => {
+    expect(hostLineOf(makeView(ERR), { startCard: false })).toBe("빛나는 곳을 찾아 처리해 주세요");
+    expect(hostLineOf(makeView(ERR))).toBe("빛나는 곳을 찾아 처리해 주세요");
+  });
+
+  it("키·빛남 대상은 startCard 와 무관하다", () => {
+    for (const pos of POSES) {
+      const view = makeView(ERR);
+      expect(hostKeyOf(view, { pos, startCard: true })).toBe(hostKeyOf(view, { pos, startCard: false }));
+      expect(callTargetsOf(view, { pos, startCard: true })).toEqual(callTargetsOf(view, { pos, startCard: false }));
+    }
+    expect(hostKeyOf(makeView(ERR), { startCard: true })).toBe("errand.act");
+  });
+
+  it("심부름이 아닌 단계에서는 startCard 가 문장을 바꾸지 않는다", () => {
+    for (const phase of ["discussion", "nomination", "night"] as const) {
+      const view = makeView({ phase });
+      expect(hostLineOf(view, { startCard: true })).toBe(hostLineOf(view));
+    }
+  });
+
+  it("심부름 단계 시작 카드 중 띠 상태는 blank(시간 행 있음), 걷히면 show", () => {
+    const view = makeView(ERR);
+    expect(hostBandModeOf(view, hostLineOf(view, { startCard: true }))).toBe("blank");
+    expect(hostBandModeOf(view, hostLineOf(view, { startCard: false }))).toBe("show");
   });
 });
 

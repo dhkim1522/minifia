@@ -678,6 +678,17 @@ describe("GameMap — 낮 시작 결과 알림과 채팅 줄 (E5 #17~#19)", () =
     expect(announces(m.container).length).toBe(0);
   });
 
+  it("18.1-12: 낮 시작은 큰 글 없이 띠 한 구절이다 — 산 사람 '모두 모여 주세요', 유령 '지켜봐 주세요', 시간 행은 없다", () => {
+    const line = (c: ParentNode) => c.querySelector("[data-host-line]")?.textContent;
+    const alive = mount(makeView({ phase: "dayAnnounce", n: 2, noClock: true }));
+    expect(announces(alive.container).length).toBe(0);
+    expect(line(alive.container)).toBe("모두 모여 주세요");
+    alive.unmount();
+    const ghost = mount(makeView({ phase: "dayAnnounce", n: 2, noClock: true, dead: [0] }));
+    expect(announces(ghost.container).length).toBe(0);
+    expect(line(ghost.container)).toBe("지켜봐 주세요");
+  });
+
   it("처음 받은 스냅샷이 낮 시작이면(재접속·새로 고침) 알림도 '일차' 줄도 없다", () => {
     const { container } = mount(makeView({ phase: "dayAnnounce", n: 2, noClock: true }));
     expect(announces(container).length).toBe(0);
