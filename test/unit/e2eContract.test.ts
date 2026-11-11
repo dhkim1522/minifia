@@ -18,11 +18,15 @@ import { RESULT_PANEL_TEXT, RESULT_TABS } from "../../src/game/resultText";
 import {
   CHAT_PANEL_EXTRA,
   KB_PANEL_H,
+  KB_PANEL_REST,
   LOBBY_HOST_TUTORIAL_EXTRA,
   LOBBY_PANEL_EXTRA,
   LOG_H,
+  LOG_OPEN_MAX,
+  OPEN_STAGE_MIN,
   TYPING_PILL_H,
   lobbyPanelHeight,
+  openLogHeight,
 } from "../../src/game/chatUi";
 import { RESTORED_MS } from "../../src/net/linkReducer";
 import { STAGE_SIZES } from "../../src/world/camera";
@@ -161,6 +165,31 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     expect(lib.CHAT_PANEL_EXTRA).toBe(CHAT_PANEL_EXTRA);
     expect(lib.KB_PANEL_H).toBe(KB_PANEL_H);
     expect(lib.TYPING_PILL_H).toBe(TYPING_PILL_H);
+  });
+
+  it("늘어난 기록 칸 상수(LOG_OPEN_MAX·OPEN_STAGE_MIN·KB_PANEL_REST) 사본이 chatUi 와 같다 (0083-4)", () => {
+    const l = e2eLib as unknown as { LOG_OPEN_MAX: number; OPEN_STAGE_MIN: number; KB_PANEL_REST: number };
+    expect(l.LOG_OPEN_MAX).toBe(LOG_OPEN_MAX);
+    expect(l.OPEN_STAGE_MIN).toBe(OPEN_STAGE_MIN);
+    expect(l.KB_PANEL_REST).toBe(KB_PANEL_REST);
+    const p = polishE2e as unknown as { CHAT_OPEN_MAX: number; CHAT_OPEN_STAGE_MIN: number; CHAT_KB_PANEL_REST: number };
+    expect(p.CHAT_OPEN_MAX).toBe(LOG_OPEN_MAX);
+    expect(p.CHAT_OPEN_STAGE_MIN).toBe(OPEN_STAGE_MIN);
+    expect(p.CHAT_KB_PANEL_REST).toBe(KB_PANEL_REST);
+  });
+
+  it("늘어난 높이 식 사본(polish.chatOpenHeight)과 openLogHeight 가 고정 입력 표에서 같은 값이다(다섯 + 폰 6종의 방 높이)", () => {
+    const copy = (polishE2e as unknown as { chatOpenHeight: (i: { roomH: number; lift: number; hostBottom: number; panelRest: number }) => number }).chatOpenHeight;
+    const rows = [
+      { roomH: 844, lift: 0, hostBottom: 126, panelRest: 154 },
+      { roomH: 844, lift: 336, hostBottom: 126, panelRest: 78 },
+      { roomH: 640, lift: 0, hostBottom: 126, panelRest: 154 },
+      { roomH: 640, lift: 260, hostBottom: 126, panelRest: 78 },
+      { roomH: 560, lift: 260, hostBottom: 126, panelRest: 78 },
+    ];
+    // 폰 6종(360x560·360x640·375x667·390x664·390x844·412x915)의 방 높이 × 키보드 없음·있음 × 손님·방장 패널 나머지
+    for (const roomH of [560, 640, 667, 664, 844, 915]) for (const lift of [0, 336]) for (const panelRest of [78, 154, 230]) rows.push({ roomH, lift, hostBottom: 124.6, panelRest });
+    for (const r of rows) expect(copy(r), JSON.stringify(r)).toBe(openLogHeight(r));
   });
 
   it("지운 테이블 상수의 사본은 lib 에 없다(TABLE_PANEL_EXTRA·PANEL_H·tablePanelHeight·expectedPanelH)", () => {

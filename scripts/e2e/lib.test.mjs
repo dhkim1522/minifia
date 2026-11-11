@@ -15,6 +15,9 @@ import {
   ONE_LINE_FACTOR,
   LOG_H,
   KB_PANEL_H,
+  KB_PANEL_REST,
+  LOG_OPEN_MAX,
+  OPEN_STAGE_MIN,
   OVERLAP_EPS,
   TAP_ALLOW,
   TAP_MIN,
@@ -544,6 +547,11 @@ test("채팅 패널 치수 사본: LOG_H 68 · KB_PANEL_H 146, 채팅 패널 = L
   assert.equal(LOG_H, 68);
   assert.equal(KB_PANEL_H, 146);
   assert.equal(KB_PANEL_H, 14 + LOG_H + 8 + 48 + 8);
+  // 0083-4: 늘어난 기록 칸 — 키보드 패널의 기록 칸 밖 높이·상한·스테이지 최소
+  assert.equal(KB_PANEL_REST, 78);
+  assert.equal(KB_PANEL_H, LOG_H + KB_PANEL_REST);
+  assert.equal(LOG_OPEN_MAX, 300);
+  assert.equal(OPEN_STAGE_MIN, 120);
   assert.equal(CHAT_PANEL_EXTRA, 92);
   assert.equal(LOBBY_PANEL_EXTRA, 154);
   assert.equal(lobbyPanelHeight(LOG_H), 222);

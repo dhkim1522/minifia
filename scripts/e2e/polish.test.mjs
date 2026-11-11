@@ -7,8 +7,9 @@ import {
   CHAT_FADE_H,
   CHAT_LOG_H,
   CHAT_MIN_LINES,
-  CHAT_SHEET_CLOSE_MS,
-  CHAT_SHEET_DRAG_PX,
+  CHAT_KB_PANEL_REST,
+  CHAT_OPEN_MAX,
+  CHAT_OPEN_STAGE_MIN,
   CHAT_WINDOW_MAX_LINES,
   GHOST_JOB_OUTFIT_E2E,
   GHOST_STILL_TOL,
@@ -25,7 +26,8 @@ import {
   TOD_WORD,
   TUTORIAL_ROLE_MAX_LINES,
   revealCardChecks,
-  chatSheetChecks,
+  chatOpenChecks,
+  chatOpenHeight,
   chatWindowChecks,
   ghostStillChecks,
   ghostViewChecks,
@@ -349,8 +351,9 @@ test("채팅 상수: UI-SPEC 값 그대로", () => {
   assert.equal(CHAT_FADE_H, 12);
   assert.equal(CHAT_WINDOW_MAX_LINES, 2);
   assert.equal(CHAT_CONTROL_H, 48);
-  assert.equal(CHAT_SHEET_DRAG_PX, 120);
-  assert.equal(CHAT_SHEET_CLOSE_MS, 300);
+  assert.equal(CHAT_OPEN_MAX, 300);
+  assert.equal(CHAT_OPEN_STAGE_MIN, 120);
+  assert.equal(CHAT_KB_PANEL_REST, 78);
   assert.equal(CHAT_MIN_LINES, 6);
 });
 
@@ -435,68 +438,115 @@ test("chatWindowChecks: long 은 가장 새 줄의 보이는 글줄 ≤ 2 와 �
   assert.deepEqual(ids(chatWindowChecks(long)), ["B1", "B2"]);
 });
 
-// ---- B 기록 시트 (18.1-09) ----
+// ---- B 늘어나는 기록 칸 (18.1-14, 0083-4·0083-5) ----
 
-const sheetGood = () => ({
-  open: { dialog: true, sheetClass: true, sheetLines: 7, windowLines: 7 },
-  closes: [
-    { via: "button", closed: true, focusOnOpenBtn: true },
-    { via: "escape", closed: true, focusOnOpenBtn: true },
-    { via: "drag", closed: true, focusOnOpenBtn: true },
-  ],
-  draft: { before: "쓰던 글", after: ["쓰던 글", "쓰던 글", "쓰던 글"] },
+test("늘어난 높이 식 사본: chatUi.test 의 다섯 입력과 같은 값(300·184·240·68·68)", () => {
+  assert.equal(chatOpenHeight({ roomH: 844, lift: 0, hostBottom: 126, panelRest: 154 }), 300);
+  assert.equal(chatOpenHeight({ roomH: 844, lift: 336, hostBottom: 126, panelRest: 78 }), 184);
+  assert.equal(chatOpenHeight({ roomH: 640, lift: 0, hostBottom: 126, panelRest: 154 }), 240);
+  assert.equal(chatOpenHeight({ roomH: 640, lift: 260, hostBottom: 126, panelRest: 78 }), 68);
+  assert.equal(chatOpenHeight({ roomH: 560, lift: 260, hostBottom: 126, panelRest: 78 }), 68);
 });
 
-test("chatSheetChecks: 정상은 B3·B4 통과", () => {
-  const rows = chatSheetChecks(sheetGood());
-  assert.deepEqual(ids(rows), ["B3", "B4"]);
+const F0 = { roomH: 844, lift: 0, hostBottom: 126, panelRest: 154 }; // 식의 값 300
+const openGood = () => ({
+  collapsed: { logH: 68, expanded: false },
+  opened: { logH: 300, expanded: true, dialogs: 0, focusOnInput: false, formula: F0 },
+  closed: { logH: 68, expanded: false },
+  byInput: { logH: 300, expanded: true, focusOnInput: true, formula: F0 },
+  draft: { before: "쓰던 글", after: "쓰던 글" },
+  send: [
+    { state: "empty-blur", send: 0, will: 0 },
+    { state: "focus", send: 1, will: 0 },
+    { state: "text-blur", send: 1, will: 0 },
+    { state: "cleared-blur", send: 0, will: 0 },
+  ],
+});
+
+test("chatOpenChecks: 정상은 B3·B4·B5 통과", () => {
+  const rows = chatOpenChecks(openGood());
+  assert.deepEqual(ids(rows), ["B3", "B4", "B5"]);
   assert.deepEqual(failing(rows), []);
 });
 
-test("chatSheetChecks: 시트가 안 열리거나 .mf-sheet--chatlog 가 아니면 B3 실패", () => {
-  const a = sheetGood();
-  a.open.dialog = false;
-  assert.deepEqual(failing(chatSheetChecks(a)), ["B3"]);
-  const b = sheetGood();
-  b.open.sheetClass = false;
-  assert.deepEqual(failing(chatSheetChecks(b)), ["B3"]);
+test("chatOpenChecks B3: dialog 가 1 이면 실패", () => {
+  const m = openGood();
+  m.opened.dialogs = 1;
+  assert.deepEqual(failing(chatOpenChecks(m)), ["B3"]);
 });
 
-test("chatSheetChecks: 시트 줄 수가 칸 줄 수보다 적으면 B3 실패", () => {
-  const m = sheetGood();
-  m.open.sheetLines = 5;
-  assert.deepEqual(failing(chatSheetChecks(m)), ["B3"]);
+test("chatOpenChecks B3: 높이가 식의 값보다 4 다르면 실패, ±1 은 통과", () => {
+  const a = openGood();
+  a.opened.logH = 296;
+  assert.deepEqual(failing(chatOpenChecks(a)), ["B3"]);
+  const b = openGood();
+  b.opened.logH = 299;
+  assert.deepEqual(failing(chatOpenChecks(b)), []);
 });
 
-test("chatSheetChecks: 닫히지 않는 길이 하나라도 있으면 B3 실패, 세 길이 다 있어야 한다", () => {
-  const m = sheetGood();
-  m.closes[2].closed = false;
-  assert.deepEqual(failing(chatSheetChecks(m)), ["B3"]);
-  const n = sheetGood();
-  n.closes = n.closes.slice(0, 2);
-  assert.deepEqual(failing(chatSheetChecks(n)), ["B3"]);
+test("chatOpenChecks B3: 두 줄 창 단추가 입력칸에 포커스를 주면 실패, 다시 눌러 68 로 안 돌아오면 실패", () => {
+  const a = openGood();
+  a.opened.focusOnInput = true;
+  assert.deepEqual(failing(chatOpenChecks(a)), ["B3"]);
+  const b = openGood();
+  b.closed.logH = 300;
+  assert.deepEqual(failing(chatOpenChecks(b)), ["B3"]);
+  const c = openGood();
+  c.opened.expanded = false;
+  assert.deepEqual(failing(chatOpenChecks(c)), ["B3"]);
 });
 
-test("chatSheetChecks: 포커스가 [data-chat-open] 으로 안 돌아오면 B3 실패", () => {
-  const m = sheetGood();
-  m.closes[1].focusOnOpenBtn = false;
-  const rows = chatSheetChecks(m);
-  assert.deepEqual(failing(rows), ["B3"]);
-  assert.match(rows[0].detail, /escape/);
+test("chatOpenChecks B3: 자리가 없는 폰(식의 값 68)은 늘어나도 68 이면 통과", () => {
+  const m = openGood();
+  const tight = { roomH: 560, lift: 260, hostBottom: 126, panelRest: 78 };
+  m.opened = { ...m.opened, logH: 68, formula: tight };
+  m.byInput = { ...m.byInput, logH: 68, formula: tight };
+  assert.deepEqual(failing(chatOpenChecks(m)), []);
 });
 
-test("chatSheetChecks: 입력 글이 바뀌거나 비면 B4 실패, 처음부터 비어 있어도 실패", () => {
-  const a = sheetGood();
-  a.draft.after[1] = "";
-  assert.deepEqual(failing(chatSheetChecks(a)), ["B4"]);
-  const b = sheetGood();
-  b.draft = { before: "", after: ["", "", ""] };
-  assert.deepEqual(failing(chatSheetChecks(b)), ["B4"]);
+test("chatOpenChecks B4: 입력칸을 눌러도 안 늘어나거나 쓰던 글이 비면 실패", () => {
+  const a = openGood();
+  a.byInput.expanded = false;
+  assert.deepEqual(failing(chatOpenChecks(a)), ["B4"]);
+  const b = openGood();
+  b.draft.after = "";
+  assert.deepEqual(failing(chatOpenChecks(b)), ["B4"]);
+  const c = openGood();
+  c.draft = { before: "", after: "" };
+  assert.deepEqual(failing(chatOpenChecks(c)), ["B4"]);
+  const d = openGood();
+  d.byInput.focusOnInput = false;
+  assert.deepEqual(failing(chatOpenChecks(d)), ["B4"]);
 });
 
-test("chatSheetChecks: 측정값이 없으면 측정값 없음으로 실패", () => {
-  const rows = chatSheetChecks(null);
-  assert.deepEqual(ids(rows), ["B3", "B4"]);
+test("chatOpenChecks B5: 빈·포커스 없음에서 [보내기] 가 있거나, 포커스·글에서 없으면 실패", () => {
+  const a = openGood();
+  a.send[0].send = 1;
+  assert.deepEqual(failing(chatOpenChecks(a)), ["B5"]);
+  const b = openGood();
+  b.send[1].send = 0;
+  assert.deepEqual(failing(chatOpenChecks(b)), ["B5"]);
+  const c = openGood();
+  c.send[2].send = 0;
+  assert.deepEqual(failing(chatOpenChecks(c)), ["B5"]);
+  const d = openGood();
+  d.send[3].send = 1;
+  assert.deepEqual(failing(chatOpenChecks(d)), ["B5"]);
+});
+
+test("chatOpenChecks B5: [보내기] 와 유언 단추가 함께 있으면 실패, 유언 단추가 교대로 있으면 통과", () => {
+  const a = openGood();
+  a.send[1].will = 1;
+  assert.deepEqual(failing(chatOpenChecks(a)), ["B5"]);
+  const b = openGood();
+  b.send[0].will = 1;
+  b.send[3].will = 1;
+  assert.deepEqual(failing(chatOpenChecks(b)), []);
+});
+
+test("chatOpenChecks: 측정값이 없으면 측정값 없음으로 실패", () => {
+  const rows = chatOpenChecks(null);
+  assert.deepEqual(ids(rows), ["B3", "B4", "B5"]);
   for (const r of rows) assert.match(r.detail, /측정값 없음/);
 });
 
