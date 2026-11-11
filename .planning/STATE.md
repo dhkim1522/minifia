@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: "18.1"
 current_phase_name: screen-polish
-current_plan: 17
+current_plan: 18
 status: executing
-stopped_at: Completed 18.1-16-PLAN.md
-last_updated: "2026-11-11T08:56:31.206Z"
+stopped_at: Completed 18.1-17-PLAN.md
+last_updated: "2026-11-11T09:22:42.623Z"
 last_activity: 2026-11-11
 last_activity_desc: Phase 18.1 execution started
-state_head: 590dce77e51ac25f46929a09c4f93eb675ea929b
+state_head: 7e1c66b8d991b67623dbb07cbd11a993c9a7c2ae
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 79
-  completed_plans: 77
+  completed_plans: 78
   percent: 40
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 18.1 (screen-polish) — EXECUTING
-Current Plan: 17
+Current Plan: 18
 Total Plans in Phase: 18
 Status: Ready to execute
 Last activity: 2026-11-11 — Phase 18.1 execution started
@@ -275,6 +275,7 @@ Last activity: 2026-11-11 — Phase 18.1 execution started
 | Phase 18.1 P14 | 60min | 3 tasks | 20 files |
 | Phase 18.1 P15 | 15min | 3 tasks | 15 files |
 | Phase 18.1 P16 | 75min | 3 tasks | 23 files |
+| Phase 18.1 P17 | 75min | 3 tasks | 24 files |
 
 ## Accumulated Context
 
@@ -613,6 +614,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18.1]: 18.1-15: 튜토리얼 스위치 한 줄 44(+54 → 방장 패널 276), 유언 저장 = 서버 확인 안 기다리고 닫기, 밤 [유언] 단추 점·이름 '유언, 저장됨'
 - [Phase 18.1]: 18.1-16: 결과 화면 시상식 삭제 — 헤더 제목은 5600ms(finalAtMs)에 승패로 바뀐 뒤 유지, 오른쪽 열도 5600ms, 최종 상태는 직업 의상 유지(고른 옷은 다음 판 대기실에서 보임), 소리 대본·서버 awards 는 남김
 - [Phase 18.1]: 18.1-16: [보내기] 는 포커스·글이 있을 때만 나오고 기록 칸은 늘어난 채 남으므로 결과 E2E 는 RS5 전에 접고 RM1 은 포커스를 준 줄에서 잰다
+- [Phase 18.1]: 18.1-17: 탈락자는 직업과 무관하게 ghost_default 유령 그림 스프라이트 하나(0083-2). 밝기 배율 talk 1·morning 0.95·vote 0.85·trial 0.8·night 0.6·nightGhost 0.7 확정, 그림 없으면 반투명 몸 대체, 훅 window.__mfGhosts
 
 ### Pending Todos
 
@@ -684,8 +686,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-11T08:56:30.158Z
-Stopped at: Completed 18.1-16-PLAN.md
+Last session: 2026-11-11T09:22:41.587Z
+Stopped at: Completed 18.1-17-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
