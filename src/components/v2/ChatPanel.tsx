@@ -2,12 +2,11 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type Keyb
 import "../../styles/v2.css";
 import { CHAT_MAX_GRAPHEMES } from "../../../shared/game/chatRules";
 import { CHAT_TEXT } from "../../game/chatText";
-import { DUP_SUBMIT_MS, IME_WAIT_MS, LOG_FADE_H, TAIL_WINDOW_MS } from "../../game/chatUi";
+import { AUTO_SCROLL_SLOP_PX, DUP_SUBMIT_MS, IME_WAIT_MS, LOG_FADE_H, LOG_H, LOG_OPEN_MAX, OPEN_STAGE_MIN, TAIL_WINDOW_MS } from "../../game/chatUi";
 import type { EmoteId } from "../../../shared/protocol";
 import { EMOTE_TEXT } from "../../game/chatText";
 import { EmoteTray } from "./EmoteTray";
 import { ChatLines } from "./ChatLines";
-import { ChatLogSheet } from "./ChatLogSheet";
 import { V2Icon, type V2IconName } from "./V2Icon";
 
 // 채팅 패널(기록 칸 + 입력줄). design/v2.0/design-system/components/bundle.js 의 ChatPanel 과
@@ -27,7 +26,8 @@ import { V2Icon, type V2IconName } from "./V2Icon";
 // - 한글 조합: 조합 중에 보내면 compositionend 를 기다려(최대 IME_WAIT_MS) 확정된 값을 보낸다. 같은 문장이 DUP_SUBMIT_MS 안에
 //   다시 제출되면 무시하고, 보낸 직후 TAIL_WINDOW_MS 안에 끝난 조합이 보낸 문장의 끝부분이면 되살아난 꼬리 글자로 보고 한 번 더 비운다.
 //   happy-dom 은 실제 IME 를 재현하지 못하므로 이벤트 순서만 시험한다(실제 조합은 07-19 CDP·07-21 iPhone).
-// - 18.1: 기록 칸 = 두 줄 창 + 누르면 기록 시트(P181-4).
+// - 18.1: 기록 칸 = 두 줄 창. 0083-4: 누르면 별도 시트 없이 제자리에서 위로 늘어난다(open 상태 하나, [data-chat-open] 이 aria-expanded 로 말한다).
+//   늘어난 높이는 CSS 한 규칙(.mv-chat__log.is-open 의 clamp, chatUi.openLogHeight 와 같은 식)이 그린다 — 키보드가 움직여도 다시 그리지 않는다.
 // - 세 변형: logHeight(고정 높이)·compact(키보드 열림, 아래 여백은 부르는 쪽 CSS)·channel(입력칸 앞 채널 아이콘).
 // - 역할 단어가 든 문구(마피아·유령)는 channelUi 의 해당 채널 분기 안에서만 꺼낸다 — all 이면 DOM 에 그 단어가 없다(T-07-08).
 
@@ -117,20 +117,13 @@ export function ChatPanel(props: ChatPanelProps) {
   const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSentRef = useRef<{ text: string; at: number } | null>(null);
   const [trayOpen, setTrayOpen] = useState(false);
-  const [logOpen, setLogOpen] = useState(false);
-  const openBtnRef = useRef<HTMLButtonElement | null>(null);
-  // 기록 시트를 닫은 뒤 포커스를 [기록 열기] 로 돌린다. onClose 안에서 바로 주면 모달 <dialog> 가 아직
-  // 열려 있어(뒤 문서가 inert) 포커스가 옮겨지지 않고 body 로 떨어진다 — 언마운트(dialog.close) 뒤 effect 에서 준다.
-  const logWasOpenRef = useRef(false);
-  useEffect(() => {
-    if (logOpen) {
-      logWasOpenRef.current = true;
-      return;
-    }
-    if (!logWasOpenRef.current) return;
-    logWasOpenRef.current = false;
-    openBtnRef.current?.focus({ preventScroll: true });
-  }, [logOpen]);
+  // 기록 칸이 늘어나 있다(0083-4). 켜는 길: [data-chat-open] 누름. 끄는 길: 같은 단추 하나.
+  const [open, setOpen] = useState(false);
+  // 늘어난 칸을 위로 올려 읽는 중이면 새 줄이 와도 끌어내리지 않고 새 글 알약을 띄운다(접힌 상태에는 없다)
+  const [newDot, setNewDot] = useState(false);
+  const atBottomRef = useRef(true);
+  const lastKey = messages.length ? (messages[messages.length - 1]?.key ?? null) : null;
+  const lastKeyRef = useRef<string | null>(lastKey);
   const hasEmotes = !!onSend && !!props.emotes && props.emotes.length > 0 && !!props.onEmote;
   const emoteBtnRef = useRef<HTMLButtonElement | null>(null);
   const firstCellRef = useRef<HTMLButtonElement | null>(null);
@@ -148,12 +141,42 @@ export function ChatPanel(props: ChatPanelProps) {
     [],
   );
 
-  // 두 줄 창(18.1): 칸 안에서는 스크롤하지 않는다. 새 줄·막힘 알림이 오면 언제나 맨 아래(가장 새 줄)로 따라간다.
-  // 지난 기록은 칸을 눌러 여는 기록 시트에서 읽는다.
+  // 접힌 두 줄 창(18.1): 칸 안에서는 스크롤하지 않는다. 새 줄·막힘 알림이 오면 언제나 맨 아래(가장 새 줄)로 따라간다.
+  // 늘어난 칸(0083-4): 열 때 맨 아래이고, 맨 아래(여유 AUTO_SCROLL_SLOP_PX)에 있을 때만 새 줄을 따라간다.
+  // 위로 올려 읽는 중 새 줄이 오면 새 글 알약(quiet 면 없음).
   useLayoutEffect(() => {
+    const added = lastKey !== lastKeyRef.current;
+    lastKeyRef.current = lastKey;
+    const el = logRef.current;
+    if (!el) return;
+    if (!open || atBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    } else if (added && !quiet) {
+      setNewDot(true);
+    }
+  }, [messages, notice, lastKey, open, quiet]);
+
+  const onLogScroll = () => {
+    const el = logRef.current;
+    if (!el || !open) return;
+    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight <= AUTO_SCROLL_SLOP_PX;
+    atBottomRef.current = bottom;
+    if (bottom) setNewDot(false);
+  };
+
+  const jumpToBottom = () => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, notice]);
+    atBottomRef.current = true;
+    setNewDot(false);
+  };
+
+  // [data-chat-open]: 접힌 두 줄 창은 전체가 누르는 영역, 늘어난 칸에서는 오른쪽 위 44×44. 누를 때마다 맨 아래부터 다시 시작한다.
+  const toggleLog = () => {
+    atBottomRef.current = true;
+    setNewDot(false);
+    setOpen((o) => !o);
+  };
 
   const bindInput = (el: HTMLInputElement | null) => {
     fieldRef.current = el;
@@ -301,15 +324,27 @@ export function ChatPanel(props: ChatPanelProps) {
 
   return (
     <section className={rootCls} data-chat-panel="" data-chat-channel={channel}>
-      <div className="mv-chat__logbox" style={{ "--mv-chat-fade": `${LOG_FADE_H}px` } as CSSProperties}>
+      <div
+        className={open ? "mv-chat__logbox is-open" : "mv-chat__logbox"}
+        // 숫자 한 곳은 chatUi.ts 다 — CSS 가 읽는 변수로 넘긴다(.mv-chat__log.is-open 의 clamp)
+        style={
+          {
+            "--mv-chat-fade": `${LOG_FADE_H}px`,
+            "--mv-chat-log-min": `${LOG_H}px`,
+            "--mv-chat-open-max": `${LOG_OPEN_MAX}px`,
+            "--mv-chat-open-stage-min": `${OPEN_STAGE_MIN}px`,
+          } as CSSProperties
+        }
+      >
         <div
           ref={logRef}
-          className="mv-chat__log is-window"
+          className={open ? "mv-chat__log is-open" : "mv-chat__log is-window"}
           data-chat-log=""
           role="log"
           aria-live="polite"
           aria-label={CHAT_TEXT.logLabel}
-          style={{ height: logHeight }}
+          style={open ? undefined : { height: logHeight }}
+          onScroll={onLogScroll}
         >
           <ChatLines messages={messages} channel={channel} />
           {notice ? (
@@ -318,11 +353,16 @@ export function ChatPanel(props: ChatPanelProps) {
             </p>
           ) : null}
         </div>
-        <button type="button" className="mv-chat__open" data-chat-open="" aria-label={CHAT_TEXT.logOpen} ref={openBtnRef} onClick={() => setLogOpen(true)}>
+        <button type="button" className="mv-chat__open" data-chat-open="" aria-label={open ? CHAT_TEXT.logClose : CHAT_TEXT.logOpen} aria-expanded={open} onClick={toggleLog}>
           <span className="mv-chat__open-arrow" aria-hidden="true">
             <V2Icon name="chevronRight" size={16} />
           </span>
         </button>
+        {open && newDot ? (
+          <button type="button" className="mv-chat__newdot" data-chat-newdot="" aria-label={CHAT_TEXT.newDot} onClick={jumpToBottom}>
+            <span className="mv-chat__newdot-pill">{CHAT_TEXT.newDot}</span>
+          </button>
+        ) : null}
       </div>
       {onSend ? (
         <form className="mv-chat__form" onSubmit={onSubmit}>
@@ -415,14 +455,6 @@ export function ChatPanel(props: ChatPanelProps) {
             </div>
           ) : null}
         </form>
-      ) : null}
-      {logOpen ? (
-        <ChatLogSheet
-          messages={messages}
-          channel={channel}
-          quiet={!!quiet}
-          onClose={() => setLogOpen(false)}
-        />
       ) : null}
     </section>
   );

@@ -145,14 +145,15 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-chat__open { position: absolute; inset: 0; z-index: 2; margin: 0; padding: 0; border: 0; border-radius: var(--radius-badge); background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .mv-chat__open:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 .mv-chat__open-arrow { position: absolute; top: 4px; right: 6px; display: inline-flex; color: var(--gray-300); opacity: 0.8; transform: rotate(-90deg); }
-/* 기록 시트: 제목 없이 채널 아이콘 하나와 줄 목록 */
-.mf-sheet.mf-sheet--chatlog { height: min(60dvh, 440px); display: flex; flex-direction: column; }
-.mv-chat__sheet-chan { display: inline-flex; color: var(--gray-300); padding: 0 var(--space-md); }
-.mv-chat__sheetbox { position: relative; flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
-.mv-chat__sheetlog { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.mv-chat__sheet-empty { flex: 1 1 0; display: grid; place-items: center; color: var(--gray-300); }
+/* 늘어난 기록 칸(0083-4): 제자리에서 위로 커진다 — 높이 = clamp(68, 방 높이 − 키보드 올림 − 띠 아랫변 − 스테이지 최소 − 패널의 기록 칸 밖 높이, 300).
+ * chatUi.openLogHeight 와 같은 식이다(E2E 사본·e2eContract 가 고정). 변수: --mf-room-h·--mf-panel-rest(useMapInsets), --mf-kb-lift(useKeyboardLift), --mf-host-bottom(HostBand).
+ * 상수 셋(68·300·120)은 ChatPanel 이 기록 상자 변수로 넘긴다. 위쪽 페이드와 두 줄 창 규칙은 접힌 상태에만 있다. */
+.mv-chat__log.is-open { height: clamp(var(--mv-chat-log-min, 68px), calc(var(--mf-room-h, 844px) - var(--mf-kb-lift, 0px) - var(--mf-host-bottom, 126px) - var(--mv-chat-open-stage-min, 120px) - var(--mf-panel-rest, 154px)), var(--mv-chat-open-max, 300px)); overflow-y: auto; overscroll-behavior: contain; }
+.mv-chat__logbox.is-open::before { display: none; }
+.mv-chat__logbox.is-open .mv-chat__open { inset: 0 0 auto auto; width: var(--tap-min); height: var(--tap-min); border-radius: var(--radius-badge); }
+.mv-chat__logbox.is-open .mv-chat__open-arrow { top: 50%; right: 50%; transform: translate(50%, -50%) rotate(90deg); }
 /* 새 글 알림(14페이즈 TOOL-01): 점이 아니라 14px 글자 알약. 누르기 영역은 44×44 그대로(투명), 알약은 그 안 가운데 */
-.mv-chat__newdot { position: absolute; right: 0; bottom: 0; display: grid; place-items: center; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; background: transparent; cursor: pointer; }
+.mv-chat__newdot { position: absolute; z-index: 2; right: 0; bottom: 0; display: grid; place-items: center; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; background: transparent; cursor: pointer; }
 .mv-chat__newdot-pill { display: inline-block; padding: 0 var(--space-sm); border-radius: var(--radius-pill); background: var(--gray-100); color: var(--night-900); font-family: var(--font-ui); font-size: 14px; line-height: 22px; font-weight: 400; white-space: nowrap; animation: mv-chat-pulse 1.6s ease-in-out infinite; }
 @keyframes mv-chat-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(1.25); } }
 
