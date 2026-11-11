@@ -320,10 +320,30 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
   });
 
   // 18.1-13(0083-10): 큰 글 위 끝은 띠 면 아랫변(--mf-host-bottom) + 16 — 같은 변수를 방 틀에서 상속으로 읽는다. 못 읽으면 126 + 16 = 142
+  // happy-dom 의 getComputedStyle 은 사용자 지정 속성을 자식에게 상속하지 않아(브라우저는 한다) 조상을 거슬러 올라가며 읽는 가짜로 상속을 흉내 낸다
+  const inheritCustomProps = () => {
+    const real = window.getComputedStyle.bind(window);
+    return vi.spyOn(window, "getComputedStyle").mockImplementation(((el: Element, pseudo?: string | null) => {
+      const cs = real(el, pseudo);
+      return new Proxy(cs, {
+        get(target, key) {
+          if (key !== "getPropertyValue") return Reflect.get(target, key) as unknown;
+          return (name: string): string => {
+            for (let n: Element | null = el; n !== null; n = n.parentElement) {
+              const v = real(n).getPropertyValue(name);
+              if (v !== "") return v;
+            }
+            return "";
+          };
+        },
+      });
+    }) as typeof window.getComputedStyle);
+  };
   it("방 틀에 --mf-host-bottom: 100px 가 있으면 큰 글 위 끝은 116 이고 묶음 윗변은 116 + 43 + 20, 가용도 그만큼 달라진다", () => {
     const frame = document.createElement("div");
     frame.style.setProperty("--mf-host-bottom", "100px");
     document.body.appendChild(frame);
+    const spy = inheritCustomProps();
     try {
       const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 2, 36: 2, 28: 2 })} getInputTop={() => 520} />, { container: frame.appendChild(document.createElement("div")) });
       tick(400);
@@ -333,6 +353,7 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
       expect(pv(root, "--lw-top")).toBe("179px"); // 116 + 43 + 20
       expect(pv(root, "--lw-h")).toBe("337px"); // 520 − 4 − 179
     } finally {
+      spy.mockRestore();
       frame.remove();
     }
   });
@@ -341,11 +362,13 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
     const frame = document.createElement("div");
     frame.style.setProperty("--mf-host-bottom", "0px");
     document.body.appendChild(frame);
+    const spy = inheritCustomProps();
     try {
       const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 2, 36: 2, 28: 2 })} getInputTop={() => 520} />, { container: frame.appendChild(document.createElement("div")) });
       tick(400);
       expect(pv(letterOf(r.container)!, "--lw-top")).toBe("205px");
     } finally {
+      spy.mockRestore();
       frame.remove();
     }
   });

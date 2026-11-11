@@ -158,8 +158,9 @@
   font-weight: 400;
 }
 .mf-letter-measure.is-fallback .mf-letter-measure__text { font-family: var(--font-serif); font-weight: 700; }
-/* 아침 알림 글자와 같은 모양(.mf-announce__body·__text)을 알림이 서는 폭(좌우 16)에서 재어 가용 높이에 쓴다 */
-.mf-letter-measure__announce { position: absolute; left: -16px; right: -16px; top: 0; display: flex; justify-content: center; }
+/* 아침 알림 글자와 같은 모양(.mf-announce__body·__text)을 큰 글이 서는 폭에서 재어 가용 높이에 쓴다 — game.css .mf-announce.is-top 의 좌우 여백(16 + 52 + 8)과 같다.
+   이 틀은 화면 좌우 32 안쪽에서 시작하므로 그만큼을 뺀다 */
+.mf-letter-measure__announce { position: absolute; left: calc(var(--space-md) + 52px + var(--space-sm) - 32px); right: calc(var(--space-md) + 52px + var(--space-sm) - 32px); top: 0; display: flex; justify-content: center; }
 
 @keyframes mf-letter-rise {
   from { opacity: 0; transform: translateY(60px) rotate(-3deg) scale(0.92); }

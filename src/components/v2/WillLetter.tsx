@@ -46,8 +46,10 @@ export interface WillLetterProps {
 
 const css = (vars: Record<string, string | number>): CSSProperties => vars as CSSProperties;
 
-/** 헤더 아래 알림 윗변(72), 알림 아래 간격(20), 입력줄과의 간격(4). 알림이 1줄일 때 높이 43(측정이 안 되는 환경의 추정값) */
-const ANNOUNCE_TOP = 72;
+/** 큰 글 위 끝 = 띠 면 아랫변(--mf-host-bottom) + 16(0083-10). 변수를 못 읽으면(값 없음·0) 아랫변 126 으로 본다 — game.css .mf-announce.is-top 과 같은 식 */
+const HOST_BOTTOM_FALLBACK = 126;
+const ANNOUNCE_TOP_GAP = 16;
+/** 알림 아래 간격(20), 입력줄과의 간격(4). 알림이 1줄일 때 높이 43(측정이 안 되는 환경의 추정값) */
 const ANNOUNCE_GAP = 20;
 const INPUT_GAP = 4;
 const ANNOUNCE_H_GUESS = 43;
@@ -185,9 +187,12 @@ export function WillLetter({ letter, reducedMotion, splitLines, getInputTop, onL
     const split = (tier: LetterTier, band: SealBand | null): string[] => (splitLines !== undefined ? splitLines(text, tier, band) : textEl !== null ? splitByRects(textEl, text, tier, band) : [text]);
     const announceH = shell?.querySelector("[data-measure-announce]")?.getBoundingClientRect().height ?? 0;
     const ah = announceH > 0 ? announceH : ANNOUNCE_H_GUESS;
+    // 큰 글 위 끝: 방 틀의 --mf-host-bottom(띠 면 아랫변)을 상속으로 읽고 16 을 더한다
+    const hostBottom = shell !== null ? Number.parseFloat(getComputedStyle(shell).getPropertyValue("--mf-host-bottom")) : Number.NaN;
+    const announceTop = (hostBottom > 0 ? hostBottom : HOST_BOTTOM_FALLBACK) + ANNOUNCE_TOP_GAP;
     const rawInputTop = getInputTop?.() ?? null;
     const inputTop = rawInputTop !== null && rawInputTop > 0 ? rawInputTop : null;
-    const avail = inputTop === null ? Number.POSITIVE_INFINITY : inputTop - ANNOUNCE_TOP - ah - AVAIL_REST;
+    const avail = inputTop === null ? Number.POSITIVE_INFINITY : inputTop - announceTop - ah - AVAIL_REST;
 
     /**
      * 편지지 높이 p 에서 글 단계·줄·덩어리 윗변을 정한다. 먼저 chooseTier(안쪽 p − 56)가 고른 단계의 줄이 가운데(또는 인장 윗변 위)에 앉으면 그대로 두고,
@@ -217,7 +222,7 @@ export function WillLetter({ letter, reducedMotion, splitLines, getInputTop, onL
       chosen = fit(paperH);
     }
     const { tier, lines } = chosen;
-    const top = ANNOUNCE_TOP + ah + ANNOUNCE_GAP;
+    const top = announceTop + ah + ANNOUNCE_GAP;
     setPlan({
       lines,
       tier,

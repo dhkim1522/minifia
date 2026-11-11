@@ -47,8 +47,8 @@
 .mf-announce__body { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); max-width: 100%; }
 .mf-announce__icon { flex: none; color: var(--gray-300); filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--night-950) 70%, transparent)); }
 .mf-announce__text { display: block; max-width: 100%; text-align: center; font-family: var(--font-ui); font-size: 36px; line-height: 1.2; font-weight: 700; color: var(--gray-50); text-shadow: var(--shadow-text); word-break: keep-all; overflow-wrap: anywhere; animation: mf-announce-in 600ms var(--ease-out) both; }
-/* 유언 편지가 있는 아침(09.1-11, UI-SPEC C-2): 위 240 대신 헤더 아래 72 — 나머지(36px·뒤 어둡게 62%)는 그대로 */
-.mf-announce.is-top { padding-top: 72px; }
+/* 처형과 유언 편지가 있는 아침(0083-10): 위 240 대신 띠 아래에서 시작 — 위 끝 = 띠 면 아랫변(--mf-host-bottom, 값이 없으면 126) + 16, 좌우는 소리 단추 폭(52) + 8 만큼 양쪽 같게 더 비워 단추와 겹치지 않는다(가운데 맞춤 유지). 36px·뒤 어둡게 62% 는 그대로, 좁아진 폭에서 keep-all 로 감긴다 */
+.mf-announce.is-top { padding-top: calc(var(--mf-host-bottom, 126px) + var(--space-md)); padding-left: calc(var(--space-md) + 52px + var(--space-sm)); padding-right: calc(var(--space-md) + 52px + var(--space-sm)); }
 @keyframes mf-announce-dim { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mf-announce-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .mf-announce, .mf-announce__text { animation: none; } }
