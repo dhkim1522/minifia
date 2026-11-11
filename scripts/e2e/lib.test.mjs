@@ -813,6 +813,14 @@ test("announceChecks: 36px·1줄·keep-all 통과, 2줄 통과, 3줄 실패, 28p
   assert.equal(idsOk(announceChecks({ fontPx: 36.4, lineCount: 1, wordBreak: "keep-all" })).AN1, true);
 });
 
+test("announceChecks maxLines 3(큰 글이 띠·소리 단추를 피해 좁아진 자리, 18.1-13): 3줄은 통과, 4줄은 실패, 기본(2줄)은 그대로", () => {
+  assert.equal(idsOk(announceChecks({ fontPx: 36, lineCount: 3, wordBreak: "keep-all" }, { maxLines: 3 })).AN2, true);
+  const four = announceChecks({ fontPx: 36, lineCount: 4, wordBreak: "keep-all" }, { maxLines: 3 }).find((l) => l.id === "AN2");
+  assert.equal(four.ok, false);
+  assert.match(four.detail, /4줄/);
+  assert.equal(idsOk(announceChecks({ fontPx: 36, lineCount: 3, wordBreak: "keep-all" })).AN2, false);
+});
+
 test("announceChecks: 값이 없으면 조용히 통과하지 않고 측정값 없음으로 실패한다", () => {
   for (const m of [null, undefined, {}, { fontPx: 36 }]) {
     const lines = announceChecks(m);

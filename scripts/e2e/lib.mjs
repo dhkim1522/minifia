@@ -840,15 +840,16 @@ export function showdownChecks(input) {
 /**
  * 결과 알림 판정(AN1~AN3). m = { fontPx, lineCount, wordBreak } — `[data-announce]` 의 계산된 글자 크기·줄 수·word-break.
  * AN1 글자 36px(28px 로 줄이지 않는다) · AN2 한두 줄 · AN3 word-break keep-all.
+ * opts.maxLines = 3 은 큰 글이 띠·소리 단추를 피해 좁아진 자리(.mf-announce.is-top, 18.1-13 결정 0083-10)에서 8자 이름이 세 줄로 감기는 것을 허용한다. 글자 크기·keep-all 은 그대로다.
  */
-export function announceChecks(m) {
+export function announceChecks(m, { maxLines = 2 } = {}) {
   const label1 = "결과 알림 글자 36px";
-  const label2 = "결과 알림이 한두 줄";
+  const label2 = maxLines >= 3 ? "결과 알림이 세 줄 이하(띠·소리 단추를 피해 좁아진 폭)" : "결과 알림이 한두 줄";
   const label3 = "결과 알림 word-break keep-all";
   if (!m || typeof m !== "object") return [noMeasure("AN1", label1, "announce"), noMeasure("AN2", label2, "announce"), noMeasure("AN3", label3, "announce")];
   return [
     isNum(m.fontPx) ? result("AN1", label1, Math.abs(m.fontPx - 36) <= 0.5 ? [] : [`${fmt(m.fontPx)}px`]) : noMeasure("AN1", label1, "fontPx"),
-    isNum(m.lineCount) ? result("AN2", label2, m.lineCount >= 1 && m.lineCount <= 2 ? [] : [`${m.lineCount}줄`]) : noMeasure("AN2", label2, "lineCount"),
+    isNum(m.lineCount) ? result("AN2", label2, m.lineCount >= 1 && m.lineCount <= maxLines ? [] : [`${m.lineCount}줄`]) : noMeasure("AN2", label2, "lineCount"),
     typeof m.wordBreak === "string" ? result("AN3", label3, m.wordBreak === "keep-all" ? [] : [`word-break ${m.wordBreak}`]) : noMeasure("AN3", label3, "wordBreak"),
   ];
 }
@@ -1838,54 +1839,67 @@ export function selectFlows(flows, only) {
   return flows.filter((f) => keys.some((k) => f.id.includes(k) || k.startsWith(f.id)));
 }
 
-// ---- 판결 순간 연출 (09.1.1-13, 결정 0066-3·7, UI-SPEC C) ----
-/** 찬반 기록 알약 높이(얼굴만 2단계는 얼굴 지름)와 허용 오차 */
-export const BALLOT_PILL_H = 32;
-/** 알림 아랫변과 묶음 윗변 사이 간격(--space-md) */
-export const BALLOT_GAP_ANNOUNCE = 16;
-/** 묶음 아랫변과 패널 윗변 사이 간격(--space-sm) */
-export const BALLOT_GAP_PANEL = 8;
-/** 이름이 있는 알약 글자 하한 */
-export const BALLOT_NAME_MIN = 14;
+// ---- 판결 순간 연출 (09.1.1-13, 결정 0066-3·7, UI-SPEC C · 18.1-13 결정 0083-9·0083-10) ----
+/** 두 숫자 덩이가 한 줄이라고 볼 세로 가운데 차 상한(px) */
+export const BALLOT_ROW_TOL = 4;
 
 /**
- * 찬반 기록 묶음 배치 판정(BF1~BF6). root = .mv-ballots 사각형, groups = [{ side, rect }], pills = [{ side, rect, nameFont }](nameFont 는 이름이 없는 2단계에서 null),
- * panelTop = 아래 패널 윗변, announceBottom = 결과 알림 아랫변(알림이 없으면 null), viewport = { w, h }, compact = 얼굴만 2단계.
- * BF1 묶음·알약이 화면 안 · BF2 묶음 윗변 ≥ 알림 아랫변 + 16 · BF3 묶음 아랫변 ≤ 패널 윗변 − 8 · BF4 이름 글자 ≥ 14 · BF5 찬성 묶음이 반대 묶음 위 · BF6 알약(얼굴) 높이 32±1.
+ * 찬반 숫자 줄 판정(BF1~BF3, 18.1-13 결정 0083-9). 처형의 찬반은 큰 글 아래 한 줄의 숫자 둘이다.
+ * root = .mv-ballots 사각형, groups = [{ side, rect, text }](찬성이 먼저), pillCount = [data-ballot-seat] 개수, panelTop = 아래 패널 윗변,
+ * announceBottom = 큰 글 아랫변(없으면 null), viewport = { w, h }.
+ * BF1 덩이가 정확히 둘(찬성 → 반대)이고 글자가 "찬성 N"·"반대 N" 이며 얼굴 칩·알약이 0개 ·
+ * BF2 덩이 윗변 ≥ 큰 글 아랫변 · 덩이 아랫변 ≤ 패널 윗변 · 두 덩이가 한 줄(세로 가운데 차 ${BALLOT_ROW_TOL} 이하) · BF3 덩이가 화면 안.
  * 0.5px 오차(OVERLAP_EPS)를 허용한다.
  */
-export function ballotFitChecks({ root, groups, pills, panelTop, announceBottom, viewport, compact }) {
+export function ballotCountChecks({ root, groups, pillCount, panelTop, announceBottom, viewport }) {
   const labels = {
-    BF1: "찬반 묶음·알약이 화면 안",
-    BF2: "묶음 윗변이 결과 알림 아랫변 + 16 아래",
-    BF3: "묶음 아랫변이 패널 윗변 − 8 위",
-    BF4: `이름 글자 ${BALLOT_NAME_MIN}px 이상`,
-    BF5: "찬성 묶음이 반대 묶음보다 위",
-    BF6: `알약(2단계는 얼굴) 높이 ${BALLOT_PILL_H}±1`,
+    BF1: "찬반이 숫자 덩이 둘('찬성 N'·'반대 N')이고 얼굴 칩·알약이 없다",
+    BF2: "숫자 줄이 큰 글 아래·패널 위의 한 줄이다",
+    BF3: "숫자 덩이가 화면 안",
   };
   const rectOk = (r) => r && [r.left, r.top, r.width, r.height].every(isNum);
   const groupsOk = Array.isArray(groups) && groups.length > 0 && groups.every((g) => rectOk(g?.rect));
-  const pillsOk = Array.isArray(pills) && pills.length > 0 && pills.every((p) => rectOk(p?.rect));
   const vpOk = viewport && isNum(viewport.w) && isNum(viewport.h);
-  if (!groupsOk || !pillsOk || !rectOk(root) || !vpOk || !isNum(panelTop)) {
-    return Object.entries(labels).map(([id, label]) => noMeasure(id, label, "묶음·알약·패널"));
+  if (!groupsOk || !rectOk(root) || !vpOk || !isNum(panelTop) || !isNum(pillCount)) {
+    return Object.entries(labels).map(([id, label]) => noMeasure(id, label, "숫자 덩이·패널"));
   }
-  const screen = { left: 0, top: 0, right: viewport.w, bottom: viewport.h };
-  const out = [...groups, ...pills].filter((x) => !rectInside(x.rect, screen)).map((x) => `${x.side} ${fmt(x.rect.left)},${fmt(x.rect.top)} ${fmt(x.rect.width)}x${fmt(x.rect.height)}`);
-  const lines = [result("BF1", labels.BF1, out)];
+  const bad1 = [];
+  const sides = groups.map((g) => g.side);
+  if (groups.length !== 2 || sides[0] !== "yes" || sides[1] !== "no") bad1.push(`덩이 ${groups.length}개(${sides.join(",")}) — 찬성 → 반대 둘이어야 한다`);
+  for (const g of groups) {
+    const want = g.side === "yes" ? "찬성" : "반대";
+    if (!new RegExp(`^${want} \\d+$`).test((g.text ?? "").trim())) bad1.push(`${g.side} 글자 "${(g.text ?? "").trim()}"`);
+  }
+  if (pillCount !== 0) bad1.push(`알약·얼굴 칩 ${pillCount}개`);
+  const lines = [result("BF1", labels.BF1, bad1)];
   const top = Math.min(...groups.map((g) => g.rect.top));
   const lowest = Math.max(...groups.map((g) => bottom(g.rect)));
-  lines.push(result("BF2", labels.BF2, isNum(announceBottom) && top < announceBottom + BALLOT_GAP_ANNOUNCE - OVERLAP_EPS ? [`묶음 윗변 ${fmt(top)} < 알림 아랫변 ${fmt(announceBottom)} + ${BALLOT_GAP_ANNOUNCE}`] : []));
-  lines.push(result("BF3", labels.BF3, lowest > panelTop - BALLOT_GAP_PANEL + OVERLAP_EPS ? [`묶음 아랫변 ${fmt(lowest)} > 패널 윗변 ${fmt(panelTop)} − ${BALLOT_GAP_PANEL}`] : []));
-  const named = pills.filter((p) => !compact && p.nameFont !== null);
-  const smallText = named.filter((p) => !isNum(p.nameFont) || p.nameFont < BALLOT_NAME_MIN).map((p) => `${p.side} 글자 ${p.nameFont}`);
-  lines.push(result("BF4", labels.BF4, smallText));
-  const yes = groups.find((g) => g.side === "yes");
-  const no = groups.find((g) => g.side === "no");
-  lines.push(!yes || !no ? noMeasure("BF5", labels.BF5, "찬성·반대 묶음 둘") : result("BF5", labels.BF5, yes.rect.top < no.rect.top ? [] : [`찬성 윗변 ${fmt(yes.rect.top)} ≥ 반대 윗변 ${fmt(no.rect.top)}`]));
-  const wrong = pills.filter((p) => Math.abs(p.rect.height - BALLOT_PILL_H) > 1 + 1e-9 || (compact && Math.abs(p.rect.width - BALLOT_PILL_H) > 1 + 1e-9)).map((p) => `${p.side} ${fmt(p.rect.width)}x${fmt(p.rect.height)}`);
-  lines.push(result("BF6", labels.BF6, wrong));
+  const bad2 = [];
+  if (isNum(announceBottom) && top < announceBottom - OVERLAP_EPS) bad2.push(`덩이 윗변 ${fmt(top)} < 큰 글 아랫변 ${fmt(announceBottom)}`);
+  if (lowest > panelTop + OVERLAP_EPS) bad2.push(`덩이 아랫변 ${fmt(lowest)} > 패널 윗변 ${fmt(panelTop)}`);
+  const centers = groups.map((g) => g.rect.top + g.rect.height / 2);
+  const spread = Math.max(...centers) - Math.min(...centers);
+  if (spread > BALLOT_ROW_TOL + 1e-9) bad2.push(`두 덩이 세로 가운데 차 ${fmt(spread)} > ${BALLOT_ROW_TOL}(두 줄로 갈림)`);
+  lines.push(result("BF2", labels.BF2, bad2));
+  const screen = { left: 0, top: 0, right: viewport.w, bottom: viewport.h };
+  lines.push(result("BF3", labels.BF3, groups.filter((g) => !rectInside(g.rect, screen)).map((g) => `${g.side} ${fmt(g.rect.left)},${fmt(g.rect.top)} ${fmt(g.rect.width)}x${fmt(g.rect.height)}`)));
   return lines;
+}
+
+/**
+ * 큰 글 자리 판정(AC1·AC2, 18.1-13 결정 0083-10). announce = 큰 글 글자 사각형(줄 사각형의 합), band = 자막 띠 면 사각형, sound = 소리 단추 사각형.
+ * AC1 큰 글 윗변이 띠 면 아랫변 아래(0.5px 허용) · AC2 큰 글이 소리 단추와 겹치지 않는다(가로·세로 모두 겹칠 때만 실패).
+ */
+export function announceClearChecks({ announce, band, sound }) {
+  const labels = {
+    AC1: "큰 글이 자막 띠 면 아래에서 시작한다",
+    AC2: "큰 글이 소리 단추와 겹치지 않는다",
+  };
+  const rectOk = (r) => r && [r.left, r.top, r.width, r.height].every(isNum);
+  const miss = (id, what) => noMeasure(id, labels[id], what);
+  const ac1 = !rectOk(announce) || !rectOk(band) ? miss("AC1", "큰 글·띠 면") : result("AC1", labels.AC1, announce.top < bottom(band) - OVERLAP_EPS ? [`큰 글 윗변 ${fmt(announce.top)} < 띠 면 아랫변 ${fmt(bottom(band))}`] : []);
+  const ac2 = !rectOk(announce) || !rectOk(sound) ? miss("AC2", "큰 글·소리 단추") : result("AC2", labels.AC2, rectsOverlap(announce, sound) ? [`큰 글 ${fmt(announce.left)},${fmt(announce.top)} ${fmt(announce.width)}x${fmt(announce.height)} 이 소리 단추 ${fmt(sound.left)},${fmt(sound.top)} ${fmt(sound.width)}x${fmt(sound.height)} 와 겹친다`] : []);
+  return [ac1, ac2];
 }
 
 /** 판결 순간 시간표 허용 오차(ms): 관찰 시계는 처형 단계가 화면에 처음 보인 시각이라 서버 시각과 지연만큼 어긋난다 */

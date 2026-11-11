@@ -1595,6 +1595,26 @@ export function readLetterWatch(page, { stop = true } = {}) {
 }
 
 /**
+ * 큰 글 자리 판정(announceClearChecks, 18.1-13)에 쓸 사각형을 읽는다: 큰 글 글자 사각형(.mf-announce__text 줄들의 합), 자막 띠 면, 소리 단추.
+ * 큰 글이 없으면 announce 는 null(띠·소리 단추는 있으면 읽는다). 큰 글 등장 애니메이션(600ms)이 끝난 뒤에 부른다.
+ */
+export function readAnnounceClear(page) {
+  return page.evaluate(() => {
+    const rectOf = (r) => (r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height } : null);
+    const textEl = document.querySelector("[data-announce] .mf-announce__text");
+    let announce = null;
+    if (textEl) {
+      const range = document.createRange();
+      range.selectNodeContents(textEl);
+      announce = rectOf(range.getBoundingClientRect());
+    }
+    const band = document.querySelector("[data-host-band] .mv-host__band");
+    const sound = document.querySelector("[data-sound-button]");
+    return { announce, band: rectOf(band?.getBoundingClientRect()), sound: rectOf(sound?.getBoundingClientRect()), text: (textEl?.textContent ?? "").trim() };
+  });
+}
+
+/**
  * 지금 떠 있는 유언 편지를 읽는다(09.1-11): 편지지·글 줄(글자 사각형)·인장 사각형, 머리글 글자·크기·색, 편지지 바탕색, 글 줄 글꼴 이름과 대체 글꼴 여부, 알림이 위(is-top)인지.
  * 편지가 없으면 null. 등장(700ms)·인장(500ms) 애니메이션이 끝난 뒤에 부른다 — 움직이는 중에는 사각형이 변한다.
  */

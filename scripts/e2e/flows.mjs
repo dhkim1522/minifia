@@ -6,6 +6,7 @@ import {
   SetupError,
   armAnnounceWatch,
   armLetterWatch,
+  readAnnounceClear,
   readLetter,
   readLetterWatch,
   chooseRole,
@@ -113,6 +114,7 @@ import {
   GAME_PANEL_EXTRA,
   LOBBY_HOST_TUTORIAL_EXTRA,
   announceChecks,
+  announceClearChecks,
   faceListPanelH,
   faceNameFits,
   tagInStage,
@@ -1741,6 +1743,12 @@ async function dayFlow(ctx) {
         return bad.length === 0 ? true : { ok: false, detail: bad.map((l) => l.detail).join("; ") };
       });
       rec(sc, "EX4", "처형 뒤 산 사람 화면에 유령 표식·문구가 없다", ghosts.ok, ghosts.detail);
+      // 18.1-13(0083-9): 처형 중에는 찬반 단추 줄을 접는다 — 산 사람(투표자) 화면에도 [data-verdict-row] 가 없고 패널은 채팅 패널 높이다
+      {
+        const gx = await readGame(guests[0].page);
+        rec(sc, "EX5", "처형 단계 패널에 찬반 단추 줄이 없다([data-verdict-row] 0개, 찬반 단추 0개)", gx.verdictRow === null && (gx.verdictBtns?.length ?? 0) === 0, `찬반 줄 ${gx.verdictRow === null ? "없음" : "있음"} · 찬반 단추 ${gx.verdictBtns?.length ?? "?"}개`);
+        panelRow(rec, sc, "EX5b", gx, h, "chat", humans[1].who);
+      }
     }
 
     // 밤
@@ -2430,6 +2438,12 @@ async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe
   }
   const snap = await readLetter(hp);
   recMany(rec, sc, letterChecks(snap), " (편지)");
+  // 18.1-13(0083-10): 편지가 있는 아침의 큰 글은 띠 면 아래에서 시작하고 소리 단추와 겹치지 않는다
+  recMany(rec, sc, announceClearChecks(await readAnnounceClear(hp)), " (편지가 있는 아침의 큰 글)");
+  if (ctx.shots) {
+    mkdirSync(OUT_DIR, { recursive: true });
+    await shot(hp, join(OUT_DIR, `morning-letter-${ctx.size.label}.png`));
+  }
   if (snap) {
     rec(sc, "LT12", "머리글이 '{이름} 님의 유언' 이고 글 줄을 이으면 저장한 유언과 같다(줄이 잘리지 않았다)", snap.head?.text === `${name} 님의 유언` && snap.lines.length > 0 && wills.some((w) => (snap.lineTexts ?? []).join("").replace(/\s/g, "") === w.replace(/\s/g, "")), `머리글 ${snap.head?.text}, 줄 ${JSON.stringify(snap.lineTexts)}`);
     infoRow(ctx, sc, "LT13", "참고: 편지 글꼴·단계(판정 아님)", `글꼴 ${snap.family}, ${snap.lineFontPx}px, 줄 ${snap.lineCount}개, 편지지 높이 ${Math.round(snap.paperH)}, 대체 글꼴 ${snap.fallback}`);
@@ -2537,7 +2551,8 @@ async function nightAssassin(ctx) {
     const chalk = await nightUntil(hp, (x) => x.chalk !== null, 2000);
     rec(sc, "MA1", "아침에 암살 현장 분필([data-chalk])이 있다", !!chalk && /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(chalk.chalk), `chalk ${chalk?.chalk ?? "없음"}`);
     rec(sc, "MA2", `아침 알림이 '${victim} 님이 당했습니다' 이다`, morning?.text === `${victim} 님이 당했습니다`, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
-    if (morning) recMany(rec, sc, announceChecks(morning), " (아침)");
+    // 편지가 있는 아침의 큰 글은 띠·소리 단추를 피해 좁은 자리(.is-top)라 8자 이름이 세 줄까지 감길 수 있다(18.1-13)
+    if (morning) recMany(rec, sc, announceChecks(morning, { maxLines: 3 }), " (아침)");
     // 유언 편지(09.1-11): 일반 화면은 아침 0.4초에 편지가 뜨고 T0 + 5.0초에 접히며 카드가 채팅에 나온다. 편지가 걷힌 뒤에 아래 카드·G 검사를 본다.
     await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: ANNOUNCE_MORNING_AT + 600, announceRe: /님이 당했습니다$/, wills: BOT_WILL_TEXTS, name: victim });
     const cards = await nightUntil(hp, (x) => x.cards.some((c) => c.kind === "will") && x.cards.some((c) => c.kind === "note"), 7000);

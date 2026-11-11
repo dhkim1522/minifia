@@ -3,8 +3,8 @@
 // 두 흐름 모두 폰 6종(LOBBY_EXTRA_SIZES)으로 돈다. 방장 화면과 손님 화면 둘을 함께 본다.
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(floatButtonChecks·sheetFitChecks·claimBadgeChecks·pickButtonChecks)에 있고 여기서는 낮추지 않는다.
 // 귓속말 본문(canary)은 결과 표와 오류 문구에 쓰지 않는다 — 있는지 없는지(불리언)만 남긴다(T-09.1.1-28).
-import { chooseVerdict, hitsInputSurface, installFakeViewport, readGame, readHostBand, readChatLines, sampleWorld, screensOfWorld, SetupError, settle, skipTo, sleep, tapTurnPick, tapWorld } from "./browser.mjs";
-import { FLOAT_BOX_H, ballotFitChecks, claimBadgeChecks, floatButtonChecks, gamePanelHeight, graphemeCount, pickButtonChecks, rectInside, rectsOverlap, runoffChecks, sheetFitChecks, showdownChecks, verdictTimelineChecks } from "./lib.mjs";
+import { chooseVerdict, hitsInputSurface, installFakeViewport, readAnnounceClear, readGame, readHostBand, readChatLines, sampleWorld, screensOfWorld, SetupError, settle, skipTo, sleep, tapTurnPick, tapWorld } from "./browser.mjs";
+import { FLOAT_BOX_H, announceClearChecks, ballotCountChecks, claimBadgeChecks, floatButtonChecks, gamePanelHeight, graphemeCount, pickButtonChecks, rectInside, rectsOverlap, runoffChecks, sheetFitChecks, showdownChecks, verdictTimelineChecks } from "./lib.mjs";
 
 /** 31자소 본문: 입력칸이 30자소로 자르는지 본다. 앞 30자소가 실제로 서버에 가는 본문(canary)이다 */
 const LONG_31 = "귓속말카나리아본문은제삼자에게보이면안돼요가나다라마바사아자차";
@@ -962,14 +962,14 @@ export function makePoliticsFlows(h) {
   /**
    * 판결 순간(09.1.1-13, UI-SPEC 흐름 E2E ③, 결정 0066-3·7): 방장 + 봇 7(8인판, 이름 8자), 봇은 모두 찬성·방장을 지목 → 방장이 변론자.
    * 둘째 판(봇 모두 반대 → 부결, 변론자가 산 채로 남음)에서 처형 진입 2.0초에 새로 고침을 건다. 시계는 페이지가 처형 단계를 처음 그린 시각(= 0)이고, 서버 시각과의 어긋남(지연)만큼 허용 오차가 있다(lib.mjs VERDICT_TOL).
-   * 첫째 판: 시간표(VT1~VT6)·묶음 배치(BF1~BF6, 알림 한 줄인 1.6초와 처형 알림 3.2초 두 번)·채팅 카드·직업 칩 없음·찬반 진행 중 view 에 day.ballots 없음.
+   * 첫째 판: 시간표(VT1~VT6)·찬반 숫자 줄(BF1~BF3)·큰 글 자리(AC1·AC2) — 큰 글이 한 줄인 1.6초와 처형 큰 글 3.2초 두 번 —·채팅 카드(이름은 여기에 남는다)·직업 칩 없음·찬반 진행 중 view 에 day.ballots 없음.
+   * 18.1-13(결정 0083-9·0083-10): 찬반은 숫자 둘이라 얼굴 칩·이름 알약이 없고(BF1), 큰 글은 띠 면·소리 단추와 겹치지 않는다(AC1·AC2).
    */
   async function politicsVerdictFlow(ctx) {
     const id = "politics-verdict";
     const rec = recorder(ctx);
-    // 방장(변론자) 닉네임을 8자로 두어 처형 알림 "○○○○○○○○ 님 처형"이 폭 360 에서 두 줄로 감기는 최악 모양에서 묶음이 알림과 겹치지 않는지(BF2, 3.2초)까지 본다.
-    // 봇 이름은 1~8자 무작위라 이름 글자 수 합 36 이상(평균 5 이상)이 될 때까지 다시 앉혀 알약이 한 줄 2개로 접히는 8인판 최악 모양(R=4)에 가깝게 만든다
-    const OPEN = { guests: 0, bots: 7, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion", hostNick: "방장님이방장님이", minBotNameChars: 36 };
+    // 방장(변론자) 닉네임을 8자로 두어 처형 알림 "○○○○○○○○ 님 처형"이 소리 단추 폭만큼 좁아진 큰 글 폭에서 여러 줄로 감기는 최악 모양에서도 숫자 줄이 큰 글과 겹치지 않고 큰 글이 띠·소리 단추를 피하는지(BF2·AC1·AC2, 3.2초)까지 본다.
+    const OPEN = { guests: 0, bots: 7, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion", hostNick: "방장님이방장님이" };
     const sc = `${id}/main`;
 
     // ---- 첫째 판 ----
@@ -1057,27 +1057,22 @@ export function makePoliticsFlows(h) {
           const header = q(".mf-game__header");
           return {
             root: rect(root),
-            groups: qa("[data-ballot-side]", root).map((g) => ({ side: g.getAttribute("data-ballot-side"), rect: rect(g) })),
-            pills: qa("[data-ballot-seat]", root).map((p) => {
-              const nm = q(".mv-ballots__name", p);
-              return { side: p.classList.contains("is-no") ? "no" : "yes", rect: rect(p), nameFont: nm ? parseFloat(getComputedStyle(nm).fontSize) : null };
-            }),
+            groups: qa("[data-ballot-side]", root).map((g) => ({ side: g.getAttribute("data-ballot-side"), rect: rect(g), text: (g.textContent ?? "").trim() })),
             panelTop: panel ? panel.getBoundingClientRect().top : null,
             announceBottom: ann ? ann.getBoundingClientRect().bottom : null,
             announceText: ann ? (ann.textContent ?? "").trim() : null,
             viewport: { w: window.innerWidth, h: window.innerHeight },
-            compact: root.getAttribute("data-compact") === "true",
             // 14페이즈: 앱의 스테이지 사각형(useMapInsets)은 윗변이 헤더가 아니라 자막 띠 면 아랫변이다 — 줌 문턱(스테이지 360 이상)은 그 높이로 본다
             stageH: header && panel ? panel.getBoundingClientRect().top - Math.max(header.getBoundingClientRect().bottom, q("[data-host-band] .mv-host__band")?.getBoundingClientRect().bottom ?? 0) : null,
             roleChips: qa("[data-role-chip]").length,
-            pillCount: qa("[data-ballot-seat]", root).length,
+            pillCount: qa("[data-ballot-seat], .mv-ballots__pill, .mv-ballots__face", root).length,
           };
         });
       const m1 = await measure();
       if (m1 === null) throw new Error("1.6초에 찬반 묶음이 없다");
-      recLines(rec, `${id}/fit`, ballotFitChecks(m1), " (1.6초 알림 한 줄)");
-      const rows = new Set(m1.pills.map((p) => Math.round(p.rect.top))).size;
-      rec(`${id}/fit`, "BF7", "알약이 봇 7명(찬성 7 · 반대 0)이다", m1.pillCount === 7, `알약 ${m1.pillCount}개 · 줄 수 R=${rows} · 이름 글자 수 ${bots.map((b) => graphemeCount(b.nickname)).join(",")} · ${m1.compact ? "얼굴만(2단계)" : "이름 알약"} · 알림 "${m1.announceText}"`, true);
+      recLines(rec, `${id}/fit`, ballotCountChecks(m1), " (1.6초 큰 글 한 줄)");
+      recLines(rec, `${id}/fit`, announceClearChecks(await readAnnounceClear(hp)), " (1.6초 큰 글)");
+      rec(`${id}/fit`, "BF-info", "숫자 덩이 글자(참고)", true, `${m1.groups.map((g) => g.text).join(" · ")} · 큰 글 "${m1.announceText}"`, true);
       // 처형된 변론자(방장)는 이 순간부터 유령 시점이라 칩이 정상이다 — 산 사람 화면의 칩 없음은 부결 판(둘째 판)에서 본다
       const expectZoom = m1.stageH !== null && m1.stageH >= 360;
       // G 공통 검사는 묶음이 있는 지금 한 번
@@ -1087,7 +1082,10 @@ export function makePoliticsFlows(h) {
       await waitRel(3200, "3.2초");
       const m2 = await measure();
       if (m2 === null) throw new Error("3.2초에 찬반 묶음이 없다");
-      recLines(rec, `${id}/fit`, ballotFitChecks(m2), " (3.2초 처형 알림)");
+      recLines(rec, `${id}/fit`, ballotCountChecks(m2), " (3.2초 처형 큰 글)");
+      const clear2 = await readAnnounceClear(hp);
+      recLines(rec, `${id}/fit`, announceClearChecks(clear2), " (3.2초 처형 큰 글)");
+      rec(`${id}/fit`, "AC-info", "큰 글 줄 수(참고, 8자 이름)", true, `큰 글 "${clear2.text}" · 높이 ${clear2.announce ? Math.round(clear2.announce.height) : "-"}px · 폭 ${clear2.announce ? Math.round(clear2.announce.width) : "-"}px`, true);
 
       // V6 4.6초 뒤: 묶음은 없고 채팅 카드가 있다
       await waitRel(4900, "4.9초");
@@ -1140,6 +1138,7 @@ export function makePoliticsFlows(h) {
                 stage: el.getAttribute("data-stage"),
                 enter: el.querySelectorAll(".is-enter").length,
                 pending: el.querySelectorAll(".is-pending").length,
+                sides: el.querySelectorAll("[data-ballot-side]").length,
                 pills: el.querySelectorAll("[data-ballot-seat]").length,
                 dim: document.querySelector(".mf-game__dim")?.getAttribute("data-dim") ?? null,
               };
@@ -1151,10 +1150,10 @@ export function makePoliticsFlows(h) {
           throw new SetupError("새로 고침 뒤 4.6초 안에 묶음을 못 봄(느린 새로 고침)");
         }
         const s = await handle.jsonValue();
-        if (s.stage !== "both" || s.enter !== 0 || s.pending !== 0 || s.pills !== 7) return { ok: false, detail: `첫 화면 묶음 stage ${s.stage} · 등장 모션 ${s.enter} · 대기 ${s.pending} · 알약 ${s.pills}` };
-        return { ok: true, detail: `stage ${s.stage} · 알약 ${s.pills}` };
+        if (s.stage !== "both" || s.enter !== 0 || s.pending !== 0 || s.sides !== 2 || s.pills !== 0) return { ok: false, detail: `첫 화면 숫자 줄 stage ${s.stage} · 등장 모션 ${s.enter} · 대기 ${s.pending} · 덩이 ${s.sides} · 알약 ${s.pills}` };
+        return { ok: true, detail: `stage ${s.stage} · 덩이 ${s.sides}` };
       });
-      rec(sc2, "V9", "(부결 판) 처형 진입 2.0초에 새로 고침하면 첫 화면에 찬반 묶음이 애니메이션 없이 바로 있다(두 묶음·알약 7개)", first.ok, first.detail);
+      rec(sc2, "V9", "(부결 판) 처형 진입 2.0초에 새로 고침하면 첫 화면에 찬반 숫자 줄이 애니메이션 없이 바로 있다(숫자 덩이 둘·알약 0개)", first.ok, first.detail);
       const alive = await hp.evaluate(() => ({ chips: document.querySelectorAll("[data-role-chip]").length, ghost: document.querySelector("[data-ghost-view]") !== null }));
       rec(sc2, "V8", "산 사람 화면(부결로 살아남은 변론자)에 직업 칩이 없다", alive.chips === 0 && !alive.ghost, `칩 ${alive.chips}개 · 유령 시점 ${alive.ghost}`);
       const dimNow = await hp.evaluate(() => document.querySelector(".mf-game__dim")?.getAttribute("data-dim") ?? null);
