@@ -124,10 +124,10 @@ describe("채팅 입력줄 단추 (TOOL-04, D-01)", () => {
   });
 
   it("새 메시지 알림은 글 '새 글' 알약이다(이름표 속성 없음)", async () => {
-    // 위로 올려 읽는 중 새 줄이 오면 점이 뜬다 — 18.1 부터 점은 기록 시트 안에 있다(기록 칸 단추를 눌러 연다).
+    // 위로 올려 읽는 중 새 줄이 오면 점이 뜬다 — 0083-4 부터 늘어난 기록 칸 안에 있다(기록 칸 단추를 눌러 늘린다).
     const { container, rerender } = render(<Harness messages={[{ key: "a", kind: "player", seat: 0, name: "가", text: "하나", ch: "all" }]} />);
     fireEvent.click(container.querySelector("button[data-chat-open]") as Element);
-    const log = document.querySelector("[data-chat-sheet-log]") as HTMLElement;
+    const log = container.querySelector("[data-chat-log]") as HTMLElement;
     const st = { top: 300 };
     Object.defineProperty(log, "scrollHeight", { configurable: true, get: () => 500 });
     Object.defineProperty(log, "clientHeight", { configurable: true, get: () => 100 });
@@ -141,7 +141,7 @@ describe("채팅 입력줄 단추 (TOOL-04, D-01)", () => {
         ]}
       />,
     );
-    expectTextControl(document.querySelector("button[data-chat-newdot]"), "새 글", { name: "새 글" });
+    expectTextControl(container.querySelector("button[data-chat-newdot]"), "새 글", { name: "새 글" });
   });
 
   it("머리 단추 CSS(V-1): 44×44 정사각, 모서리 radius-badge, 면 night-800, 테두리 1px night-600, 막힘은 불투명도만", () => {

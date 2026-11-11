@@ -7,6 +7,10 @@ import {
   IME_WAIT_MS,
   KB_OPEN_MIN_LIFT,
   KB_PANEL_H,
+  KB_PANEL_REST,
+  LOG_OPEN_MAX,
+  OPEN_STAGE_MIN,
+  openLogHeight,
   CHAT_PANEL_EXTRA,
   LOBBY_PANEL_EXTRA,
   LOG_H,
@@ -84,6 +88,36 @@ describe("기록 칸 높이의 출처는 LOG_H 하나 (18.1 B 계약 4 폐지)",
   it("남기는 이름은 그대로 있다", async () => {
     const keys = Object.keys(await import("../../src/game/chatUi"));
     for (const kept of ["LOG_H", "LOG_FADE_H", "KB_PANEL_H", "LOBBY_PANEL_EXTRA", "CHAT_PANEL_EXTRA", "LOBBY_HOST_TUTORIAL_EXTRA", "lobbyPanelHeight"]) expect(keys).toContain(kept);
+  });
+});
+
+describe("늘어난 기록 칸 높이 openLogHeight (0083-4)", () => {
+  it("상수: 상한 300·스테이지 최소 120·키보드 패널의 기록 칸 밖 높이 78, KB_PANEL_H 는 LOG_H + KB_PANEL_REST", () => {
+    expect(LOG_OPEN_MAX).toBe(300);
+    expect(OPEN_STAGE_MIN).toBe(120);
+    expect(KB_PANEL_REST).toBe(14 + 8 + 48 + 8);
+    expect(KB_PANEL_H).toBe(LOG_H + KB_PANEL_REST);
+  });
+
+  it.each([
+    [{ roomH: 844, lift: 0, hostBottom: 126, panelRest: 154 }, 300],
+    [{ roomH: 844, lift: 336, hostBottom: 126, panelRest: 78 }, 184],
+    [{ roomH: 640, lift: 0, hostBottom: 126, panelRest: 154 }, 240],
+    [{ roomH: 640, lift: 260, hostBottom: 126, panelRest: 78 }, 68],
+    [{ roomH: 560, lift: 260, hostBottom: 126, panelRest: 78 }, 68],
+  ])("openLogHeight(%j) = %i", (input, want) => {
+    expect(openLogHeight(input)).toBe(want);
+  });
+
+  it("결과는 언제나 정수이고 LOG_H 이상 LOG_OPEN_MAX 이하다", () => {
+    for (const roomH of [400, 560, 600.5, 667, 740, 844, 1200])
+      for (const lift of [0, 120, 333.3])
+        for (const panelRest of [78, 154, 230]) {
+          const h = openLogHeight({ roomH, lift, hostBottom: 125.4, panelRest });
+          expect(Number.isInteger(h)).toBe(true);
+          expect(h).toBeGreaterThanOrEqual(LOG_H);
+          expect(h).toBeLessThanOrEqual(LOG_OPEN_MAX);
+        }
   });
 });
 

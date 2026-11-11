@@ -667,6 +667,133 @@ describe("ChatPanel 두 줄 창 (18.1 B 계약 1·2·3)", () => {
   });
 });
 
+describe("ChatPanel 제자리에서 늘어나는 기록 칸 (0083-4)", () => {
+  function geometry(log: HTMLElement, g: { scrollHeight: number; clientHeight: number; scrollTop: number }) {
+    const state = { top: g.scrollTop };
+    Object.defineProperty(log, "scrollHeight", { configurable: true, get: () => g.scrollHeight });
+    Object.defineProperty(log, "clientHeight", { configurable: true, get: () => g.clientHeight });
+    Object.defineProperty(log, "scrollTop", { configurable: true, get: () => state.top, set: (v: number) => (state.top = v) });
+    return state;
+  }
+  const MORE: ChatPanelMessage[] = [...TWO_LINES, { key: "c", kind: "player", seat: 0, name: "철수", text: "새 줄", ch: "all" }];
+  const openBtn = (c: HTMLElement) => c.querySelector("button[data-chat-open]") as HTMLButtonElement;
+  const dot = (c: HTMLElement) => c.querySelector("button[data-chat-newdot]");
+
+  it("접힌 상태: aria-expanded false·이름 '채팅 기록 열기', 기록 칸은 is-window 이고 인라인 높이 logHeight", () => {
+    const { container } = render(<Harness logHeight={68} />);
+    expect(openBtn(container).getAttribute("aria-expanded")).toBe("false");
+    expect(openBtn(container).getAttribute("aria-label")).toBe("채팅 기록 열기");
+    const log = logOf(container);
+    expect(log.classList.contains("is-window")).toBe(true);
+    expect(log.classList.contains("is-open")).toBe(false);
+    expect(log.style.height).toBe("68px");
+  });
+
+  it("누르면 시트 없이 제자리에서 늘어난다: aria-expanded true·이름 '채팅 기록 접기'·is-open·인라인 높이 없음·dialog 0·입력칸 포커스 없음", () => {
+    const { container } = render(<Harness logHeight={68} />);
+    fireEvent.click(openBtn(container));
+    expect(openBtn(container).getAttribute("aria-expanded")).toBe("true");
+    expect(openBtn(container).getAttribute("aria-label")).toBe("채팅 기록 접기");
+    const log = logOf(container);
+    expect(log.classList.contains("is-open")).toBe(true);
+    expect(log.classList.contains("is-window")).toBe(false);
+    expect(log.style.height).toBe("");
+    expect(document.querySelectorAll("dialog").length).toBe(0);
+    expect(document.activeElement).not.toBe(input(container));
+  });
+
+  it("같은 단추를 다시 누르면 접힌다(is-window·인라인 높이 복귀)", () => {
+    const { container } = render(<Harness logHeight={68} />);
+    fireEvent.click(openBtn(container));
+    fireEvent.click(openBtn(container));
+    expect(openBtn(container).getAttribute("aria-expanded")).toBe("false");
+    expect(logOf(container).classList.contains("is-window")).toBe(true);
+    expect(logOf(container).style.height).toBe("68px");
+  });
+
+  it("기록 상자에 상수 셋이 CSS 변수로 있다(상한·스테이지 최소·페이드)", () => {
+    const { container } = render(<Harness />);
+    const box = container.querySelector(".mv-chat__logbox") as HTMLElement;
+    expect(box.style.getPropertyValue("--mv-chat-open-max")).toBe("300px");
+    expect(box.style.getPropertyValue("--mv-chat-open-stage-min")).toBe("120px");
+    expect(box.style.getPropertyValue("--mv-chat-log-min")).toBe("68px");
+  });
+
+  it("늘어난 상태에서 맨 아래에 있으면 새 줄이 올 때 맨 아래로 따라간다", () => {
+    const { container, rerender } = render(<Harness />);
+    fireEvent.click(openBtn(container));
+    const log = logOf(container);
+    const st = geometry(log, { scrollHeight: 500, clientHeight: 200, scrollTop: 290 });
+    fireEvent.scroll(log);
+    rerender(<Harness messages={MORE} />);
+    expect(st.top).toBe(500);
+    expect(dot(container)).toBeNull();
+  });
+
+  it("위로 올려 읽는 중이면 끌어내리지 않고 새 글 알약(aria-label 새 글) 하나가 뜬다, 누르면 맨 아래로 가고 사라진다", () => {
+    const { container, rerender } = render(<Harness />);
+    fireEvent.click(openBtn(container));
+    const log = logOf(container);
+    const st = geometry(log, { scrollHeight: 500, clientHeight: 200, scrollTop: 100 });
+    fireEvent.scroll(log);
+    rerender(<Harness messages={MORE} />);
+    expect(st.top).toBe(100);
+    const pills = container.querySelectorAll("button[data-chat-newdot]");
+    expect(pills.length).toBe(1);
+    expect(pills[0]?.getAttribute("aria-label")).toBe("새 글");
+    fireEvent.click(pills[0] as Element);
+    expect(st.top).toBe(500);
+    expect(dot(container)).toBeNull();
+  });
+
+  it("직접 바닥까지 내리면 알약이 사라지고, quiet(복원 중)면 알약을 만들지 않는다", () => {
+    const { container, rerender } = render(<Harness />);
+    fireEvent.click(openBtn(container));
+    const log = logOf(container);
+    const st = geometry(log, { scrollHeight: 500, clientHeight: 200, scrollTop: 100 });
+    fireEvent.scroll(log);
+    rerender(<Harness messages={MORE} />);
+    expect(dot(container)).not.toBeNull();
+    st.top = 295;
+    fireEvent.scroll(log);
+    expect(dot(container)).toBeNull();
+    st.top = 100;
+    fireEvent.scroll(log);
+    rerender(<Harness messages={[...MORE, { key: "d", kind: "system", text: "또" }]} quiet />);
+    expect(dot(container)).toBeNull();
+  });
+
+  it("접힌 상태에는 알약이 없고, 접으면 다시 맨 아래(가장 새 줄)로 간다", () => {
+    const { container, rerender } = render(<Harness />);
+    const log = logOf(container);
+    const st = geometry(log, { scrollHeight: 500, clientHeight: 68, scrollTop: 100 });
+    fireEvent.scroll(log);
+    rerender(<Harness messages={MORE} />);
+    expect(dot(container)).toBeNull();
+    fireEvent.click(openBtn(container));
+    st.top = 50;
+    fireEvent.scroll(log);
+    fireEvent.click(openBtn(container));
+    expect(st.top).toBe(500);
+  });
+
+  it("스타일: .mv-chat__log.is-open 은 clamp 와 방 높이·키보드 올림·띠 아랫변·패널 나머지 네 변수를 쓰고, 시트 규칙은 없다", () => {
+    const open = rulesFor(V2_CSS, ".mv-chat__log.is-open").join(";");
+    expect(open).toContain("clamp(");
+    for (const v of ["--mf-room-h", "--mf-kb-lift", "--mf-host-bottom", "--mf-panel-rest"]) expect(open, v).toContain(v);
+    expect(open).toContain("overflow-y: auto");
+    expect(open).toContain("overscroll-behavior: contain");
+    const bare = V2_CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(bare).not.toContain("mf-sheet--chatlog");
+    expect(bare).not.toContain("mv-chat__sheet");
+  });
+
+  it("화살표는 늘어난 상태에서 아래를 향한다(.is-open 단추 안 화살표 회전)", () => {
+    const arrow = rulesFor(V2_CSS, ".mv-chat__logbox.is-open .mv-chat__open-arrow").join(";");
+    expect(arrow).toContain("rotate(90deg)");
+  });
+});
+
 describe("ChatPanel 보내기 상태와 키보드 열림 (UI-SPEC 입력 상태표)", () => {
   it("sendDim 이면 보내기만 is-dim 이 되고 입력칸은 계속 쓸 수 있다", () => {
     const { container } = render(<Harness sendDim initial="안녕" />);
