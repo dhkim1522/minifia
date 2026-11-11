@@ -12,7 +12,6 @@
 - **브랜치**: 지금은 **`v3`**. `v2` 는 v2.0 그대로, `v1` 은 v1.0 배포본 수정 전용, `main` 은 배포된 v1.0. 다른 PC 는 `git fetch` 후 `git switch v3`.
 - 배포: v3 https://minifia-v3.dhplay.workers.dev (Worker `minifia-v3`, `scripts/deploy-target.mjs`), v2 https://minifia-v2.dhplay.workers.dev (비교용, 변화 없음), v1.0 `https://minifia.dhplay.workers.dev`(변화 없음). `npm run deploy` 가 계정·배포 대상 가드를 거친다(가드는 우회하지 않는다).
 - 도구 메모: 버전은 `/api/health`. `npm run e2e` 는 인자가 없으면 배포본을 검사한다(로컬은 `npm run dev` 후 `-- --url http://localhost:5173 --only 흐름1,흐름2`). 전체 로컬 회귀는 약 26분(제한 29분). `backdrop-filter` 는 비접두 한 번만.
-- 2026-11-02 원격 이력 재작성: 다른 PC 의 옛 clone 은 새로 clone.
 - 커밋 제외: `design/backgrounds/indoor-draft/`, `Claude outputs/`, `.planning/milestone.lock`, `.planning/state.json`.
 
 ## 확인 대기 (사용자 답·확인이 필요한 것)
@@ -29,6 +28,6 @@
 
 ## 다음 할 일
 
-1. **화면 설계 먼저, 그 뒤 한 번에 수정**(사용자 제안·합의 2026-11-11): 지금 배포본(minifia-v3)을 390×844 로 주요 화면(대기실·역할 카드·낮 토론·지목·변론·투표·밤·심부름·아침 결과·유령 시점·튜토리얼·결과판) 캡처 → Design 캔버스에 현재 화면 지도 → 수정할 곳을 표시한 설계안 승인 → 승인본을 `design/` 에 저장 → 18.1 고침 계획을 그 기준으로 다시 정리해 한 번에 실행·배포. 옛 캡처(`scripts/e2e/out/`)는 18.1 이전이라 쓰지 않는다. 설계·계획 구간은 사용자가 Fable 5.2 로 하려 해서 세션을 재시작한다(실행은 Sonnet 5.5).
+1. **화면 설계 먼저, 그 뒤 한 번에 수정**(사용자 제안·합의 2026-11-11): 지금 배포본(minifia-v3)을 390×844 로 주요 화면(대기실·역할 카드·낮 토론·지목·변론·투표·밤·심부름·아침 결과·유령 시점·튜토리얼·결과판) 캡처 → Design 캔버스에 현재 화면 지도 → 수정할 곳을 표시한 설계안 승인 → 승인본을 `design/` 에 저장 → 18.1 고침 계획을 그 기준으로 다시 정리해 한 번에 실행·배포. 설계·계획 구간은 사용자가 Fable 5.2 로 하려 해서 세션을 재시작한다(실행은 Sonnet 5.5).
 2. **19 방장이 고르는 기본 마피아·확장판(결정 0081-6)** — `/gsd-discuss-phase 19`. 이어서 20·21. 17 UAT Test 3(폰 2대)은 실테스트 때.
 3. **v3.0 실테스트**는 페이즈 19~21 뒤 한 번에(팀·실기기, 사람이 적으면 대기실 [봇]). v2.0 실기기 칸 `.planning/milestones/v2.0-phases/12-sound-polish/12-TEAM-TEST.md` 포함. 통과하면 main 반영.
