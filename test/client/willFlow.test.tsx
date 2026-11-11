@@ -162,17 +162,37 @@ describe("유언 한 번 저장 — 밤 시민 [유언] (WILL-01, 트레이서)"
     expect(willBtn(container)?.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("쓰고 [저장] → {t:'will', text} 한 번, 서버 me.will 이 오기 전에는 '저장', 온 뒤에는 '저장됨'", () => {
+  it("쓰고 [저장] → {t:'will', text} 한 번, 곧바로 창이 닫히고 초점이 [유언] 단추로 돌아간다(0083-6). 저장됨은 서버가 me.will 을 돌려준 뒤 단추의 점·이름으로 안다", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
     const m = mount(makeView(), { send });
     fireEvent.click(willBtn(m.container)!);
     fireEvent.change(area(m.container), { target: { value: "범인은 2번" } });
     fireEvent.click(saveBtn(m.container));
     expect(sent(send).filter((x) => x.t === "will")).toEqual([{ t: "will", text: "범인은 2번" }]);
-    expect(saveBtn(m.container).textContent).toBe("저장");
+    expect(sheet(m.container)).toBeNull();
+    expect(document.activeElement).toBe(willBtn(m.container));
+    expect(willBtn(m.container)?.hasAttribute("data-will-saved")).toBe(false);
     m.show(makeView({ will: "범인은 2번" }));
-    expect(sheet(m.container)).not.toBeNull();
-    expect(saveBtn(m.container).textContent).toBe("저장됨");
+    expect(sheet(m.container)).toBeNull();
+    expect(sent(send).filter((x) => x.t === "will")).toHaveLength(1);
+    expect(willBtn(m.container)?.hasAttribute("data-will-saved")).toBe(true);
+    expect(willBtn(m.container)?.getAttribute("aria-label")).toBe("유언, 저장됨");
+    expect(m.container.querySelectorAll(".mf-game__will-dot")).toHaveLength(1);
+  });
+
+  it("밤 시민·경찰·의사의 [유언] 단추: me.will 이 없으면 data-will-saved 없음·이름 '유언'·점 없음, 있으면 켜진다(0083-6)", () => {
+    for (const seat of [1, 2, 3]) {
+      const a = mount(makeView({ mySeat: seat }));
+      expect(willBtn(a.container)?.hasAttribute("data-will-saved"), `seat ${seat}`).toBe(false);
+      expect(willBtn(a.container)?.getAttribute("aria-label") ?? "유언", `seat ${seat}`).toBe("유언");
+      expect(a.container.querySelector(".mf-game__will-dot")).toBeNull();
+      cleanup();
+      const b = mount(makeView({ mySeat: seat, will: "남긴 말" }));
+      expect(willBtn(b.container)?.hasAttribute("data-will-saved"), `seat ${seat}`).toBe(true);
+      expect(willBtn(b.container)?.getAttribute("aria-label"), `seat ${seat}`).toBe("유언, 저장됨");
+      expect(b.container.querySelectorAll(".mf-game__will-dot")).toHaveLength(1);
+      cleanup();
+    }
   });
 
   it("me.will 이 있는 view 에서 열면 textarea 가 그 값으로 채워지고 '저장됨'이다. 같은 값은 보내지 않는다", () => {
@@ -215,6 +235,7 @@ describe("유언 한 번 저장 — 밤 시민 [유언] (WILL-01, 트레이서)"
     fireEvent.change(area(m.container), { target: { value: "가나" } });
     fireEvent.click(saveBtn(m.container));
     fireEvent.blur(area(m.container));
+    fireEvent.click(willBtn(m.container)!);
     fireEvent.click(closeBtn(m.container));
     expect(typings(send)).toEqual([]);
     expect(sent(send).every((x) => x.t === "will")).toBe(true);
@@ -261,7 +282,7 @@ describe("깃펜 배선 (WILL-01, UI-SPEC 281행)", () => {
     fireEvent.focus(area(m.container));
     fireEvent.change(area(m.container), { target: { value: "범인은 셋" } });
     fireEvent.click(saveBtn(m.container));
-    fireEvent.click(closeBtn(m.container));
+    expect(sheet(m.container)).toBeNull();
     expect(typings(send)).toEqual([]);
   });
 
@@ -294,27 +315,32 @@ describe("깃펜 배선 (WILL-01, UI-SPEC 281행)", () => {
 });
 
 describe("저장 실패 · 빈 칸 · 사망 (E7 #36~#38)", () => {
-  it("소켓이 닫혀 못 보내면(send false) 위 알림 뒤 시트가 열린 채 '저장'이다", () => {
+  it("소켓이 닫혀 못 보내면(send false) 위 알림 한 번 뒤 창은 닫히고, 다시 열면 쓰던 글이 '저장'과 함께 남아 있다(0083-6)", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => false);
     const m = mount(makeView(), { send });
     fireEvent.click(willBtn(m.container)!);
     fireEvent.change(area(m.container), { target: { value: "급해" } });
     fireEvent.click(saveBtn(m.container));
     expect(toastText(m.container)).toBe(FAIL);
-    expect(sheet(m.container)).not.toBeNull();
+    expect(sheet(m.container)).toBeNull();
+    fireEvent.click(willBtn(m.container)!);
+    expect(area(m.container).value).toBe("급해");
     expect(saveBtn(m.container).textContent).toBe("저장");
   });
 
-  it("보낸 뒤 거절(error)이 오면 같은 알림 한 번만(지금은 고를 수 없어요 가 겹치지 않는다)이고 '저장됨'이 되지 않는다", () => {
+  it("보낸 뒤 거절(error)이 오면 같은 알림 한 번만(지금은 고를 수 없어요 가 겹치지 않는다)이고 저장됨 표시가 없다. 창은 닫힌 채, 다시 열면 쓰던 글이 남아 있다", () => {
     const { handlers, onEvent } = withHandlers();
     const m = mount(makeView(), { onEvent });
     fireEvent.click(willBtn(m.container)!);
     fireEvent.change(area(m.container), { target: { value: "급해" } });
     fireEvent.click(saveBtn(m.container));
+    expect(sheet(m.container)).toBeNull();
     emitError(handlers, "WRONG_PHASE");
     expect(toastText(m.container)).toBe(FAIL);
+    expect(willBtn(m.container)?.hasAttribute("data-will-saved")).toBe(false);
+    fireEvent.click(willBtn(m.container)!);
+    expect(area(m.container).value).toBe("급해");
     expect(saveBtn(m.container).textContent).toBe("저장");
-    expect(sheet(m.container)).not.toBeNull();
   });
 
   it("IN-01: 조합 중 [저장] → [닫기] 후 조합이 끝나면 will 메시지 1회이고 시트가 닫히며 오류 알림이 없다", () => {
@@ -346,6 +372,9 @@ describe("저장 실패 · 빈 칸 · 사망 (E7 #36~#38)", () => {
     expect(toastText(m.container)).toBe("");
     act(() => void vi.advanceTimersByTime(200));
     expect(toastText(m.container)).toBe(FAIL);
+    expect(sheet(m.container)).toBeNull();
+    fireEvent.click(willBtn(m.container)!);
+    expect(area(m.container).value).toBe("느림");
     expect(saveBtn(m.container).textContent).toBe("저장");
     cleanup();
     // 제때 오면 알림 없음
@@ -356,7 +385,7 @@ describe("저장 실패 · 빈 칸 · 사망 (E7 #36~#38)", () => {
     ok.show(makeView({ will: "빠름" }));
     act(() => void vi.advanceTimersByTime(5000));
     expect(toastText(ok.container)).toBe("");
-    expect(saveBtn(ok.container).textContent).toBe("저장됨");
+    expect(willBtn(ok.container)?.hasAttribute("data-will-saved")).toBe(true);
   });
 
   it("앞뒤 공백·겹친 공백은 서버가 정리한 값과 같으면 저장됨이다(실패로 오인하지 않는다)", () => {
@@ -368,7 +397,7 @@ describe("저장 실패 · 빈 칸 · 사망 (E7 #36~#38)", () => {
     m.show(makeView({ will: "두 칸" }));
     act(() => void vi.advanceTimersByTime(5000));
     expect(toastText(m.container)).toBe("");
-    expect(saveBtn(m.container).textContent).toBe("저장됨");
+    expect(willBtn(m.container)?.hasAttribute("data-will-saved")).toBe(true);
   });
 
   it("빈 칸으로 저장하면 {t:'will', text:''} 를 보내고 서버 me.will 이 없어지면 '저장됨'·점이 꺼진다. 확인을 묻지 않는다", () => {
@@ -381,9 +410,10 @@ describe("저장 실패 · 빈 칸 · 사망 (E7 #36~#38)", () => {
     fireEvent.click(saveBtn(m.container));
     expect(sent(send).filter((x) => x.t === "will")).toEqual([{ t: "will", text: "" }]);
     expect(m.container.querySelector('[role="alertdialog"], [role="dialog"]:not(.mv-will)')).toBeNull();
+    expect(sheet(m.container)).toBeNull();
     m.show(makeView({ phase: "discussion" }));
-    expect(saveBtn(m.container).textContent).toBe("저장됨");
     expect(m.container.querySelector(".mv-chat__will-dot")).toBeNull();
+    expect(willBtn(m.container)?.getAttribute("aria-label")).toBe("유언 쓰기");
   });
 
   it("시트가 열린 채 내가 죽은 view 가 오면 시트가 닫히고 깃펜이 없다. 단계가 로비로 가도 닫힌다", () => {
@@ -398,6 +428,43 @@ describe("저장 실패 · 빈 칸 · 사망 (E7 #36~#38)", () => {
     fireEvent.click(willBtn(n.container)!);
     n.show(makeView({ phase: "lobby" }));
     expect(n.container.querySelector("[data-will-sheet]")).toBeNull();
+  });
+});
+
+describe("유언은 저장하면 창이 닫힌다 (0083-6) — 낮·최후 변론·밤", () => {
+  const cases: Array<[string, ViewOpts]> = [
+    ["낮 토론(깃펜)", { phase: "discussion" }],
+    ["최후 변론(변론자)", { phase: "defense" }],
+    ["밤([유언] 단추)", { phase: "night" }],
+  ];
+  for (const [name, opts] of cases) {
+    it(`${name}: [저장] → will 한 번 보내고 곧바로 창이 닫히며 초점이 연 단추로 돌아간다. 저장됨은 단추가 말한다. 쪽지 창은 그대로다`, () => {
+      const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+      const m = mount(makeView(opts), { send });
+      const btn = willBtn(m.container)!;
+      fireEvent.click(btn);
+      fireEvent.change(area(m.container), { target: { value: "마지막 말" } });
+      fireEvent.click(saveBtn(m.container));
+      expect(sent(send).filter((x) => x.t === "will")).toEqual([{ t: "will", text: "마지막 말" }]);
+      expect(sheet(m.container)).toBeNull();
+      expect(document.activeElement).toBe(willBtn(m.container));
+      expect(typings(send)).toEqual([]);
+      m.show(makeView({ ...opts, will: "마지막 말" }));
+      expect(willBtn(m.container)?.getAttribute("aria-label")).toMatch(/저장됨$/);
+      expect(sent(send).filter((x) => x.t === "will")).toHaveLength(1);
+    });
+  }
+
+  it("마피아 쪽지 창은 [저장] 뒤에도 열려 있고 '저장됨'으로 남는다(0083-6 은 유언만)", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(makeView({ mySeat: 0, nightSure: 2 }), { send });
+    fireEvent.click(noteBtn(m.container)!);
+    fireEvent.change(area(m.container), { target: { value: "조용히" } });
+    fireEvent.click(saveBtn(m.container));
+    expect(sheet(m.container, "note")).not.toBeNull();
+    m.show(makeView({ mySeat: 0, nightSure: 2, note: "조용히" }));
+    expect(sheet(m.container, "note")).not.toBeNull();
+    expect(saveBtn(m.container).textContent).toBe("저장됨");
   });
 });
 
