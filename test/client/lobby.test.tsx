@@ -230,7 +230,7 @@ describe("Lobby — 채팅 패널: 기록 + 입력줄 + 행동 줄 (CHAT-01, 07-
     }
     expect(LOG_H).toBe(68);
     expect(lobbyPanelHeight(LOG_H)).toBe(222);
-    expect(lobbyPanelHeight(LOG_H, true)).toBe(298);
+    expect(lobbyPanelHeight(LOG_H, true)).toBe(276);
     expect(KB_PANEL).toBe(146);
   });
 

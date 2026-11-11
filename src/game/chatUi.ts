@@ -11,8 +11,8 @@ export const LOG_H = 68;
 
 /** 로비 패널 = LOG_H + 154 = 14 + LOG_H + 8 + 48(입력줄) + 10 + 52(행동 줄) + 22 */
 export const LOBBY_PANEL_EXTRA = 154;
-/** 방장 대기실 패널이 손님보다 더 큰 만큼 = 스위치 줄 64 + 간격 12(0080-4, UI-SPEC 함께 진행 계약). 방장 패널은 250/306 → 326/382. E2E 사본(scripts/e2e/lib.mjs)이 같은 값이다 */
-export const LOBBY_HOST_TUTORIAL_EXTRA = 76;
+/** 방장 대기실 패널이 손님보다 더 큰 만큼 = 스위치 줄 44 + 간격 10(0083-3, 18.1-15). 방장 패널은 기록 칸 68 일 때 276. E2E 사본(scripts/e2e/lib.mjs)이 같은 값이다 */
+export const LOBBY_HOST_TUTORIAL_EXTRA = 54;
 /** 채팅 패널 = LOG_H + 92 = 14 + LOG_H + 8 + 48 + 22 (UI-SPEC 패널 표). 게임 맵의 채팅 패널 높이 덧셈이다 */
 export const CHAT_PANEL_EXTRA = 92;
 /** 키보드 열림 패널에서 기록 칸 밖의 높이 = 14 + 8 + 48 + 8(아래 여백, 안전 영역 없음) */

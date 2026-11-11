@@ -22,6 +22,7 @@ import {
   TYPING_PILL_H,
   TYPING_REFRESH_MS,
   lobbyPanelHeight,
+  LOBBY_HOST_TUTORIAL_EXTRA,
 } from "../../src/game/chatUi";
 
 // 07-03 Task 3: 채팅 패널 치수·시각 상수 한 곳 (07-UI-SPEC 구조 표). DOM 을 읽지 않는 상수·순수 함수뿐이다.
