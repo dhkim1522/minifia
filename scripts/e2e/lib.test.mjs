@@ -1419,14 +1419,14 @@ test("LOBBY_SIZES: DEFAULT_SIZES 4개 + 390x844 + 402x874 여섯 개이고 LOBBY
   assert.deepEqual(DEFAULT_SIZES.map((x) => x.label), ["360x640", "390x664", "430x932", "360x560"]);
 });
 
-test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·result-awards(11-09 시상식 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand·witness·trace(15-09 심부름·목격 기록·밤 통일/아침 흔적 폰 6종)·tutorial-solo(17-09 혼자 하기 첫 사건 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
+test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand·witness·trace(15-09 심부름·목격 기록·밤 통일/아침 흔적 폰 6종)·tutorial-solo(17-09 혼자 하기 첫 사건 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
   const run = readFileSync(new URL("./run.mjs", import.meta.url), "utf8");
   assert.match(run, /extraSizes/);
   assert.match(run, /!args\.sizesGiven/);
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)?(?:, skipByDefault: true)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
-  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "result-awards", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "errand", "witness", "trace", "tutorial-solo", "polish-reveal"]);
+  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "errand", "witness", "trace", "tutorial-solo", "polish-reveal"]);
 });
 
 test("기본판(결정 0072)에서 꺼진 장치 흐름 7개는 skipByDefault 이고 politics-verdict 는 기본 실행에 남는다 (13-05)", () => {
@@ -3474,9 +3474,9 @@ test("soundEmoteLeakChecks: 입력 모양이 틀리면 측정값 없음으로 �
   assert.ok(leak({ ...eOk(), day: undefined }).some((l) => l.id === "E3" && !l.ok && /측정값 없음/.test(l.detail)));
 });
 
-// ---- 12-11: 결과·시상 소리 sound-result 순수 판정 (D-15·D-21·T-12-41·T-12-44) ----
+// ---- 12-11: 결과 소리 sound-result 순수 판정 (D-15·D-21·T-12-41·T-12-44) — 18.1-16: 시상식이 없어 시상 소리(award.*)는 0회여야 한다 ----
 const rl = (id, at) => ({ id, at, gain: 1, played: true });
-/** 참가자 4명 · 패 3개인 정상 로그: bed.result → 뒤집기 4(1200+400i) → 승패 4600 → 패 소리 6500·9000·11500(마지막이 final) */
+/** 참가자 4명인 정상 로그: bed.result → 뒤집기 4(1200+400i) → 승패 4600 + 박수. 시상 소리는 없다 */
 const resultLog = () => [
   rl("bed.result", 0),
   rl("role.flip", 1200),
@@ -3485,12 +3485,8 @@ const resultLog = () => [
   rl("role.flip", 2400),
   rl("result.lose", 4600),
   rl("emote.clap", 4600),
-  rl("award.plate", 6500),
-  rl("emote.clap", 6500),
-  rl("award.plate", 9000),
-  rl("award.final", 11500),
 ];
-const rOk = () => ({ log: resultLog(), participants: 4, awards: 3, expectWin: false, reloadLog: [rl("bed.result", 10)] });
+const rOk = () => ({ log: resultLog(), participants: 4, expectWin: false, reloadLog: [rl("bed.result", 10)] });
 const rFails = (over) => soundResultChecks({ ...rOk(), ...over }).filter((l) => !l.ok).map((l) => l.id);
 
 test("soundResultChecks: 정상 로그는 R1~R6 통과", () => {
@@ -3508,8 +3504,8 @@ test("R2: role.flip 은 min(참가자, 8) — 누락·초과 실패, 9명 이상
   assert.deepEqual(rFails({ log: resultLog().filter((e) => e.at !== 2400) }), ["R2"]);
   assert.deepEqual(rFails({ log: [...resultLog(), rl("role.flip", 2800)] }), ["R2"]);
   const eight = [rl("bed.result", 0), ...Array.from({ length: 8 }, (_, i) => rl("role.flip", 1200 + 400 * i)), rl("result.win", 4600)];
-  assert.deepEqual(rFails({ log: eight, participants: 8, awards: 0, expectWin: true }), []);
-  assert.deepEqual(rFails({ log: eight, participants: 12, awards: 0, expectWin: true }), []);
+  assert.deepEqual(rFails({ log: eight, participants: 8, expectWin: true }), []);
+  assert.deepEqual(rFails({ log: eight, participants: 12, expectWin: true }), []);
 });
 
 test("R3: result.win/lose 가 정확히 한 번이고 expectWin 쪽이어야 한다", () => {
@@ -3519,20 +3515,21 @@ test("R3: result.win/lose 가 정확히 한 번이고 expectWin 쪽이어야 한
   assert.deepEqual(rFails({ expectWin: undefined }), []);
 });
 
-test("R4: award.plate 는 패 수 − 1, award.final 은 한 번이고 마지막", () => {
-  assert.deepEqual(rFails({ awards: 4 }), ["R4"]);
-  assert.deepEqual(rFails({ log: resultLog().filter((e) => e.id !== "award.final") }), ["R4"]);
-  assert.deepEqual(rFails({ log: [...resultLog(), rl("award.plate", 14000)] }), ["R4"]);
-  assert.deepEqual(rFails({ log: [...resultLog(), rl("award.final", 14000)] }), ["R4"]);
-  assert.deepEqual(rFails({ log: resultLog().filter((e) => !e.id.startsWith("award.")), awards: 0 }), []);
-  assert.deepEqual(rFails({ log: resultLog(), awards: 0 }), ["R4"]);
+test("R4(18.1-16): 시상 소리 award.plate·award.final 은 0회여야 하고 1회라도 있으면 실패", () => {
+  assert.deepEqual(rFails({}), []);
+  assert.deepEqual(rFails({ log: [...resultLog(), rl("award.plate", 6500)] }), ["R4"]);
+  assert.deepEqual(rFails({ log: [...resultLog(), rl("award.final", 11500)] }), ["R4"]);
+  assert.deepEqual(rFails({ log: [...resultLog(), rl("award.plate", 6500), rl("award.final", 11500)] }), ["R4"]);
+  assert.match(soundResultChecks({ ...rOk(), log: [...resultLog(), rl("award.plate", 6500)] }).find((l) => l.id === "R4").detail, /award/);
+  // 박수(emote.clap)는 시상 소리가 아니다
+  assert.deepEqual(rFails({ log: [...resultLog(), rl("emote.clap", 6500)] }), []);
 });
 
-test("R5: 순서가 뒤집히면 실패(뒤집기 < 승패 < 시상)", () => {
+test("R5: 첫 뒤집기가 승패보다 먼저여야 한다(뒤집기 < 승패)", () => {
   const swapped = resultLog().map((e) => (e.id === "result.lose" ? { ...e, at: 1000 } : e));
   assert.deepEqual(rFails({ log: swapped }), ["R5"]);
   const late = resultLog().map((e) => (e.id === "result.lose" ? { ...e, at: 7000 } : e));
-  assert.deepEqual(rFails({ log: late }), ["R5"]);
+  assert.deepEqual(rFails({ log: late }), []); // 시상 뒤 순서는 더 보지 않는다
 });
 
 test("R6: 새로고침 로그에 role.flip·result.*·award.*·game.start 가 있으면 실패, bed.result 가 없어도 실패", () => {

@@ -428,9 +428,16 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
   const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
 
   it("RESULT_MARKERS 가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
-    expect(r.RESULT_MARKERS).toEqual(["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider", "data-award-plate", "data-award-id", "data-float-count", "data-day-card", "data-day-detail", "data-whisper-pair", "data-ready-pill", "data-ready", "data-ready-count", "data-bench-view"]);
+    expect(r.RESULT_MARKERS).toEqual(["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider", "data-day-card", "data-day-detail", "data-whisper-pair", "data-ready-pill", "data-ready", "data-ready-count", "data-bench-view"]);
     const missing = r.RESULT_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
     expect(missing).toEqual([]);
+  });
+
+  it("시상식 표식(칭호 패·패 id·넘기기 진행 숫자)은 src/ 에 없고 E2E 목록에도 없다 (18.1-16, 0083-7)", () => {
+    for (const gone of ["data-award-plate", "data-award-id", "data-float-count"]) {
+      expect(r.RESULT_MARKERS, gone).not.toContain(gone);
+      expect(sources.filter((s) => s.text.includes(gone)).map((s) => s.f), gone).toEqual([]);
+    }
   });
 
   it("표식은 결과 화면·테스트 훅에 각각 있다", () => {
