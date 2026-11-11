@@ -211,6 +211,7 @@ import {
   tutorialRoleCardChecks,
   tutorialRoleLineChecks,
   tutorialSkipChecks,
+  toggleRowChecks,
   TUTORIAL_ROLE_LINES_E2E,
   tutorialTimingChecks,
   errandCardChecks,
@@ -4972,4 +4973,24 @@ test("outfitUniqueChecks OU1·OU2: 한 판 옷이 모두 다르고 같은 옷 �
     assert.equal(l.length, 2);
     assert.ok(l.every((x) => !x.ok && /측정값 없음/.test(x.detail)));
   }
+});
+
+test("toggleRowChecks(TG3, 0083-3): 스위치 줄이 기록 칸 위 한 줄 — 높이 44·기록 칸과 같은 폭·아랫변 + 10 = 기록 칸 윗변·글자 '튜토리얼 먼저' 한 줄", () => {
+  const good = { toggle: rect(16, 100, 358, 44), log: rect(16, 154, 358, 68), text: "튜토리얼 먼저", lines: 1 };
+  assert.ok(toggleRowChecks(good).every((l) => l.ok));
+  assert.equal(toggleRowChecks(good)[0].id, "TG3");
+  // 기록 칸 뒤에 있으면(옛 자리: 입력줄 아래) 실패
+  assert.ok(toggleRowChecks({ ...good, toggle: rect(16, 300, 358, 44) }).some((l) => !l.ok));
+  // 높이 64(옛 두 줄 줄)
+  assert.ok(toggleRowChecks({ ...good, toggle: rect(16, 80, 358, 64) }).some((l) => !l.ok));
+  // 간격 10 이 아님
+  assert.ok(toggleRowChecks({ ...good, log: rect(16, 170, 358, 68) }).some((l) => !l.ok));
+  // 폭이 기록 칸과 다름
+  assert.ok(toggleRowChecks({ ...good, toggle: rect(16, 100, 300, 44) }).some((l) => !l.ok));
+  // 글자가 두 줄이거나 옛 문구
+  assert.ok(toggleRowChecks({ ...good, lines: 2 }).some((l) => !l.ok));
+  assert.ok(toggleRowChecks({ ...good, text: "튜토리얼 후 진행모두 1분 보고 시작" }).some((l) => !l.ok));
+  // 측정값 없음
+  assert.ok(toggleRowChecks(null).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(toggleRowChecks({ ...good, log: null }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
 });
