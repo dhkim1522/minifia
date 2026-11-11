@@ -1,6 +1,7 @@
 // 11페이즈 결과 화면 E2E 판정·읽기 (11-05, 결정 D-1·D-11·D-25, UI-SPEC A-1·A-5).
 // 흐름 본문(resultFlow)은 flows.mjs 에 있고, 이 파일은 순수 검사 함수와 페이지 읽기 도우미만 둔다(flows.mjs 가 이미 3천 줄이다).
 // 18.1(P181-7): 결과 화면 탭은 그리지 않는다 — 탭 판정은 숨김 판정(resultHiddenChecks)으로 바뀌었다.
+// 18.1-16(결정 0083-7): 시상식이 없다 — 시상 판정·읽기·기하 상수는 지웠고 단계 판정(RS10)이 "연출이 끝난 뒤 제목이 승패로 남고 시상 표식이 0" 을 잰다.
 // 판정 문턱은 여기에만 있고 흐름은 낮추지 않는다. 직업 의상 대응표는 src/world/ghostOutfit.ts 의 JOB_OUTFIT 과 같아야 하고 test/unit/e2eContract.test.ts 가 대조한다.
 
 /** 결과 화면이 더한 DOM 표식·훅 이름. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지). */
@@ -12,9 +13,6 @@ export const RESULT_MARKERS = Object.freeze([
   "data-result-tab", // 탭 버튼 data-result-tab="{all|mafia|ghost|whisper|log}" (11-07)
   "data-result-dot", // 처음 나타난 마피아·유령·귓속말 탭의 점 표식 (11-07)
   "data-result-divider", // 탭 안 `{n}밤`·`{n}일차` 구분선 (11-07)
-  "data-award-plate", // 시상식 칭호 패 (11-09)
-  "data-award-id", // 패의 칭호 id (11-09)
-  "data-float-count", // 떠 있는 [넘기기] 위의 진행 숫자 'k / n' (11-09, 버튼은 기존 data-float="skip")
   "data-day-card", // 기록 탭 일차 카드 data-day-card="{n}" (aria-pressed) (11-11)
   "data-day-detail", // 기록 탭 하루 상세 data-day-detail="{n}" (11-11)
   "data-whisper-pair", // 하루 상세의 귓속말 쌍 버튼 (11-11)
@@ -41,13 +39,6 @@ export const RESULT_PANEL_H = 160;
 /** 이 높이(px) 미만의 폰은 방 틀 높이 575 미만의 짧은 폰(360×560 probe) — 14-08 UI#14 알려진 한계 적용 대상 */
 export const SHORT_PHONE_H = 575;
 
-/** 시상식(11-09, UI-SPEC B-3·G): 패 기하와 떠 있는 [넘기기] 기하. test/unit/e2eContract.test.ts 가 앱 CSS 와 대조한다 */
-/** floatH: 16-04 가 이름표를 없애고 16-06 이 상자를 곧 면으로 합쳐 [넘기기] 단추 상자는 48×48 원이다(시상식 [넘기기]는 열 밖 제자리, 지름 52 가 아니다) */
-export const AWARD_PLATE = Object.freeze({ maxW: 328, sideMargin: 32, h: 96, topGap: 8, belowMin: 150, float: 48, floatH: 48, floatRight: 16, floatGap: 8 });
-
-/** 시상식 헤더 제목 (src/game/awardText.ts CEREMONY_TITLE 의 사본) */
-export const AWARD_CEREMONY_TITLE = "시상식";
-
 /** 다시 하기 알약(11-12, UI-SPEC D-1·G): 96×48, 입력줄 = [입력 flex][보내기 48 원][알약 96], 요소 사이 8, 좌우 16 → 입력칸 폭 = 폭 − 192. test/unit/e2eContract.test.ts 가 앱 CSS 와 대조한다 */
 export const READY_PILL = Object.freeze({ w: 96, h: 48, inputExtra: 192 });
 
@@ -62,7 +53,7 @@ const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x))
  *  costumes 런타임이 입힌 의상 표(좌석 → 의상) · jobBySeat 서버 view.result.seats 의 직업 표(좌석 → 직업) · panel 아래 패널 높이 · panelWant 기대 높이(없으면 RESULT_PANEL_H 160)
  *  stageBottom 스테이지 아래 끝(= 패널 위 끝, 방 위 끝 기준) · roomH 방 높이 · hasLegacy 옛 요소 이름 배열(없으면 빈 배열) · chatEcho 내가 보낸 한 줄이 기록 칸에 보였나
  * RS1 헤더 승리 한 줄 · RS2 칩 수 == 참가자 수 · RS3 어두운 좌석 == 진 팀 · RS4 의상 == 직업 의상 표 · RS5 패널 188/244 ±1 · RS6 스테이지 아래 끝 = 방 − 패널 ±1 · RS7 옛 요소 없음 · RS8 채팅 한 줄 전달.
- * afterCeremony(11-09): true 면 시상식이 끝난 뒤 상태로 RS4 를 "의상이 모두 걷힘"으로 본다(기본은 재접속 같은 최종 상태 = 직업 의상).
+ * RS10(18.1-16): hold = { title: 최종 상태에 닿았을 때 헤더 글자, later: 3초 뒤 헤더 글자, marks: 시상 표식(패·[넘기기]·진행 숫자) 수 }. title·later 가 둘 다 승리 한 줄 사본이고 marks 가 0 이어야 통과.
  * 측정값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다. 반환: 항목별 { id, label, ok, detail } 배열.
  */
 export function resultStageChecks(m) {
@@ -71,11 +62,11 @@ export function resultStageChecks(m) {
     RS2: "결과 화면: 직업 칩 수 == 참가자 수",
     RS3: "결과 화면: 어두운 좌석 == 진 팀",
     RS4: "결과 화면: 모두 직업 의상(런타임이 입은 값)",
-    RS4after: "결과 화면: 시상식 뒤 직업 의상이 걷힘(고른 look)",
     RS5: "결과 화면: 아래 패널 높이 188 · 244",
     RS6: "결과 화면: 스테이지 아래 끝 == 방 높이 − 패널",
     RS7: "결과 화면: 옛 카드·배너·[처음으로]·방 닫힘 안내 없음",
     RS8: "결과 화면: 채팅 한 줄이 기록 칸에 보임",
+    RS10: "결과 화면: 최종 상태 뒤 제목이 승패로 남고 3초 뒤에도 같으며 시상 표식 0",
   };
   const out = [];
 
@@ -92,11 +83,8 @@ export function resultStageChecks(m) {
   if (!Array.isArray(m?.dimmed) || !Array.isArray(m?.loserSeats)) out.push(noMeasure("RS3", L.RS3, "dimmed·loserSeats"));
   else out.push(result("RS3", L.RS3, sameSet(m.dimmed, m.loserSeats) ? [] : [`어두운 좌석 [${[...m.dimmed].sort()}] ≠ 진 팀 [${[...m.loserSeats].sort()}]`]));
 
-  // RS4 — afterCeremony(11-09): 시상식이 끝나면 직업 의상이 걷히고 고른 look 으로 돌아온다(의상 유지가 눈에 보인다, D-1) — 런타임이 입은 직업 의상 표가 비어야 한다
-  if (m?.afterCeremony === true) {
-    if (!m?.costumes || typeof m.costumes !== "object") out.push(noMeasure("RS4", L.RS4after, "costumes"));
-    else out.push(result("RS4", L.RS4after, Object.keys(m.costumes).length === 0 ? [] : [`직업 의상이 남음: ${JSON.stringify(m.costumes)}`]));
-  } else if (!m?.costumes || typeof m.costumes !== "object" || !m?.jobBySeat || typeof m.jobBySeat !== "object") out.push(noMeasure("RS4", L.RS4, "costumes·jobBySeat"));
+  // RS4 — 연출이 끝나도 직업 의상이 남는다(재접속 경로와 같은 모습, 0083-7)
+  if (!m?.costumes || typeof m.costumes !== "object" || !m?.jobBySeat || typeof m.jobBySeat !== "object") out.push(noMeasure("RS4", L.RS4, "costumes·jobBySeat"));
   else {
     const bad = [];
     for (const [seat, job] of Object.entries(m.jobBySeat)) {
@@ -128,6 +116,18 @@ export function resultStageChecks(m) {
   if (typeof m?.chatEcho !== "boolean") out.push(noMeasure("RS8", L.RS8, "chatEcho"));
   else out.push(result("RS8", L.RS8, m.chatEcho ? [] : ["내가 보낸 한 줄이 기록 칸에 나타나지 않음"]));
 
+  // RS10
+  const hold = m?.hold;
+  if (!Object.hasOwn(RESULT_WIN_TITLE, m?.winner) || typeof hold?.title !== "string" || typeof hold?.later !== "string" || !isNum(hold?.marks)) out.push(noMeasure("RS10", L.RS10, "winner·hold.title·hold.later·hold.marks"));
+  else {
+    const want = RESULT_WIN_TITLE[m.winner];
+    const bad = [];
+    if (hold.title !== want) bad.push(`최종 상태 헤더 "${hold.title}" ≠ "${want}"`);
+    if (hold.later !== want) bad.push(`3초 뒤 헤더 "${hold.later}" ≠ "${want}"`);
+    if (hold.marks !== 0) bad.push(`시상 표식 ${hold.marks}개가 있음`);
+    out.push(result("RS10", L.RS10, bad));
+  }
+
   return out;
 }
 
@@ -147,7 +147,7 @@ export function resultSkipChecks({ before, after, seats } = {}) {
 
 /**
  * 결과 화면 한 번의 읽기(한 번의 evaluate). `.mf-result` 가 없으면 null.
- * { stage(루트 data-result-stage), header(h1 글자), chips([data-role-chip] 수), hook(window.__mfResult 사본 — awards 포함 — 또는 null), panel(패널 높이), panelTop(방 위 끝 기준 패널 위 끝), roomH, legacy(남은 옛 요소 이름 배열) }
+ * { stage(루트 data-result-stage), header(h1 글자), chips([data-role-chip] 수), hook(window.__mfResult 사본 또는 null), marks(시상 표식 수), panel(패널 높이), panelTop(방 위 끝 기준 패널 위 끝), roomH, legacy(남은 옛 요소 이름 배열) }
  */
 export function readResultStage(page) {
   return page.evaluate(() => {
@@ -161,14 +161,15 @@ export function readResultStage(page) {
     for (const sel of [".mf-result__grid", ".mf-result__banner", ".mf-result__card", ".mf-result__foot", ".mf-result__sm"]) if (root.querySelector(sel)) legacy.push(sel);
     if ([...root.querySelectorAll("button")].some((b) => text(b) === "처음으로")) legacy.push("[처음으로]");
     if (text(root).includes("30분")) legacy.push("방 닫힘 안내");
-    const hook = window.__mfResult
-      ? { stage: window.__mfResult.stage, chips: window.__mfResult.chips, dimmed: [...window.__mfResult.dimmed], costumes: { ...window.__mfResult.costumes }, awards: [...(window.__mfResult.awards ?? [])] }
-      : null;
+    const hook = window.__mfResult ? { stage: window.__mfResult.stage, chips: window.__mfResult.chips, dimmed: [...window.__mfResult.dimmed], costumes: { ...window.__mfResult.costumes } } : null;
+    // 시상 표식: 이름에 award 나 float-count 가 든 속성을 단 요소(칭호 패·패 자리·진행 숫자)와 떠 있는 [넘기기] — 0 이어야 한다(0083-7)
+    const marks = [...root.querySelectorAll("*")].filter((el) => el.getAttributeNames().some((n) => /award|float-count/.test(n))).length + root.querySelectorAll('[data-float="skip"]').length;
     return {
       stage: root.getAttribute("data-result-stage") ?? "",
       header: text(root.querySelector("h1")),
       chips: root.querySelectorAll("[data-role-chip]").length,
       hook,
+      marks,
       panel: pr ? pr.height : Number.NaN,
       panelTop: pr ? pr.top - rr.top : Number.NaN,
       roomH: rr.height,
@@ -235,178 +236,6 @@ export function readResultHidden(page) {
   });
 }
 
-// ---------- 11-09 시상식 ----------
-
-/**
- * AW1~AW8·AW10 시상식 판정(11-09, 결정 D-7·D-24·D-25, UI-SPEC B-3·G). 입력:
- *  viewport {w,h} · stageTop 스테이지 윗변(헤더 아래, 방 위 끝 기준) · panelTop 패널 윗변(= 스테이지 아래 끝, 같은 기준)
- *  plateBox {top,left,width,height} 첫 패의 사각형 · floatBox {left,top,width,height,bottom} 첫 패가 뜬 때의 [넘기기]
- *  progress 패마다 읽은 진행 숫자 문자열 · awards 훅 window.__mfResult.awards ([좌석, 칭호 id][]) · observed 패마다 읽은 data-award-id 열
- *  participants 참가자 수 · winnerTeamSeats 이긴 팀 좌석(서버 view 기준) · winner 승자 · titleDuring 시상 중 헤더 · titleAfter 끝난 뒤 헤더 · floatAfter 끝난 뒤 [data-float="skip"] 수
- *  costumesDuring 첫 패가 뜬 때 런타임이 입은 의상 표 · costumesAfter 시상식 뒤 표 · jobBySeat 서버 view 의 직업 표
- * AW1 패 수 == 참가자 수 == 훅 목록 길이 · AW2 관찰한 칭호 순서 == 훅(서버) 순서 · AW3 마지막 패가 이긴 팀 · AW4 패 기하(AW-PLATE) · AW5 [넘기기] 기하 · AW6 진행 'k / n' ·
- * AW7 헤더 '시상식' → 승리 한 줄 · AW8 끝난 뒤 [넘기기] 없음 · AW10 시상 중 직업 의상 → 끝난 뒤 걷힘.
- * 18.1: 확장 탭이 없어져(결과 화면은 전체 대화 하나, P181-7) 옛 AW9(확장 탭을 열면 시상식 일시정지)는 잴 길이 없어 지웠다. id 는 비워 두고 다시 쓰지 않는다.
- * 측정값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
- */
-export function awardChecks(m) {
-  const L = {
-    AW1: "시상식: 패 수 == 참가자 수(모두 하나 이상 받음)",
-    AW2: "시상식: 패 순서 == 서버가 보낸 칭호 순서",
-    AW3: "시상식: 마지막 패가 이긴 팀",
-    AW4: "시상식: 패 기하 AW-PLATE (폭 min(328, 폭 − 32) · 높이 96 · 스테이지 윗변 + 8 · 아래 150 이상)",
-    AW5: "시상식: [넘기기] 48×48 원(열 밖 제자리) · 오른쪽 16 · 위 칸",
-    AW6: "시상식: 진행 숫자 'k / n' 이 패마다 1씩 오름",
-    AW7: "시상식: 헤더 '시상식' → 끝난 뒤 승리 한 줄",
-    AW8: "시상식: 끝난 뒤 [넘기기] 없음",
-    AW10: "시상식: 시상 중 직업 의상, 끝난 뒤 걷힘",
-  };
-  const out = [];
-  const awards = Array.isArray(m?.awards) ? m.awards : null;
-  const obs = Array.isArray(m?.observed) ? m.observed : null;
-
-  // AW1
-  if (!isNum(m?.participants) || awards === null || obs === null) out.push(noMeasure("AW1", L.AW1, "participants·awards·observed"));
-  else {
-    const bad = [];
-    if (awards.length !== m.participants) bad.push(`칭호 ${awards.length}개 ≠ 참가자 ${m.participants}명`);
-    if (obs.length !== awards.length) bad.push(`관찰한 패 ${obs.length}장 ≠ 칭호 ${awards.length}개`);
-    out.push(result("AW1", L.AW1, bad));
-  }
-
-  // AW2
-  if (awards === null || obs === null) out.push(noMeasure("AW2", L.AW2, "awards·observed"));
-  else {
-    const want = awards.map((a) => a[1]);
-    out.push(result("AW2", L.AW2, want.length === obs.length && want.every((id, i) => id === obs[i]) ? [] : [`관찰 [${obs}] ≠ 서버 [${want}]`]));
-  }
-
-  // AW3
-  if (awards === null || awards.length === 0 || !Array.isArray(m?.winnerTeamSeats)) out.push(noMeasure("AW3", L.AW3, "awards·winnerTeamSeats"));
-  else {
-    const last = awards[awards.length - 1][0];
-    out.push(result("AW3", L.AW3, m.winnerTeamSeats.includes(last) ? [] : [`마지막 패 좌석 ${last} 은 이긴 팀 [${m.winnerTeamSeats}] 이 아님`]));
-  }
-
-  // AW4
-  let known = "";
-  const pb = m?.plateBox;
-  if (!isNum(pb?.top) || !isNum(pb?.left) || !isNum(pb?.width) || !isNum(pb?.height) || !isNum(m?.viewport?.w) || !isNum(m?.stageTop) || !isNum(m?.panelTop)) out.push(noMeasure("AW4", L.AW4, "plateBox·viewport·stageTop·panelTop"));
-  else {
-    const bad = [];
-    const wantW = Math.min(AWARD_PLATE.maxW, m.viewport.w - AWARD_PLATE.sideMargin);
-    if (Math.abs(pb.width - wantW) > 2) bad.push(`폭 ${pb.width} ≠ ${wantW} (±2)`);
-    if (Math.abs(pb.height - AWARD_PLATE.h) > 2) bad.push(`높이 ${pb.height} ≠ ${AWARD_PLATE.h} (±2)`);
-    // 스테이지 윗변 = 자막 띠가 있으면 띠 아랫변, 없으면 헤더 아랫변(14페이즈, readAwardState)
-    const wantTop = m.stageTop + AWARD_PLATE.topGap;
-    if (Math.abs(pb.top - wantTop) > 2) bad.push(`위 ${pb.top} ≠ 스테이지 윗변 ${m.stageTop} + ${AWARD_PLATE.topGap} (±2)`);
-    const center = pb.left + pb.width / 2;
-    if (Math.abs(center - m.viewport.w / 2) > 2) bad.push(`가로 가운데 ${center} ≠ ${m.viewport.w / 2} (±2)`);
-    const below = m.panelTop - (pb.top + pb.height);
-    // 14-08 UI#14 알려진 한계: 가장 낮은 폰(360×560)은 자막 띠가 스테이지 윗부분을 차지해 패 아래 스테이지가 150 에 못 미친다 — 이 한 항목만 판정에서 빼고 잰 값을 AW4k 로 남긴다(문턱은 그대로)
-    if (below < AWARD_PLATE.belowMin) {
-      if (m.knownShortLimit === true) known = `패 아래 스테이지 ${below} < ${AWARD_PLATE.belowMin}`;
-      else bad.push(`패 아래 스테이지 ${below} < ${AWARD_PLATE.belowMin}`);
-    }
-    out.push(result("AW4", L.AW4, bad));
-  }
-
-  // AW5
-  const fb = m?.floatBox;
-  if (!isNum(fb?.left) || !isNum(fb?.width) || !isNum(fb?.height) || !isNum(fb?.bottom) || !isNum(m?.viewport?.w) || !isNum(m?.panelTop)) out.push(noMeasure("AW5", L.AW5, "floatBox·viewport·panelTop"));
-  else {
-    const bad = [];
-    if (Math.abs(fb.width - AWARD_PLATE.float) > 1 || Math.abs(fb.height - AWARD_PLATE.floatH) > 1) bad.push(`상자 ${fb.width}×${fb.height} ≠ ${AWARD_PLATE.float}×${AWARD_PLATE.floatH} (±1, 상자가 곧 면 48)`);
-    const right = m.viewport.w - (fb.left + fb.width);
-    if (Math.abs(right - AWARD_PLATE.floatRight) > 1) bad.push(`오른쪽 여백 ${right} ≠ ${AWARD_PLATE.floatRight} (±1)`);
-    // 위 칸: 윗변이 `패널 윗변 − 8 − (칸 둘 48×2 + 사이 8)` 이하 — 아래 칸(11-12 의 [옷장] 자리)을 비운 위 칸에 선다. 14-07 이름표로 단추 상자가 길어져도 줄 자리(.mf-float 의 예약 높이)는
-    // 그대로라 윗변은 옛 자리이고 아랫변이 길어진 만큼 내려온다 — 시상 중에는 아래 칸 단추가 없어(옷장은 시상이 끝나야 나온다) 겹치지 않고, 아랫변은 패널 윗변 − 8 안에 있어야 한다
-    const topLimit = m.panelTop - AWARD_PLATE.floatGap - (AWARD_PLATE.float * 2 + AWARD_PLATE.floatGap) + 1;
-    if (fb.top > topLimit) bad.push(`윗변 ${fb.top} > ${topLimit} (아래 칸 자리를 비운 위 칸이어야 함)`);
-    if (fb.bottom > m.panelTop - AWARD_PLATE.floatGap + 0.5) bad.push(`아랫변 ${fb.bottom} > 패널 윗변 − 8 (${m.panelTop - AWARD_PLATE.floatGap})`);
-    out.push(result("AW5", L.AW5, bad));
-  }
-
-  // AW6
-  if (!Array.isArray(m?.progress) || awards === null) out.push(noMeasure("AW6", L.AW6, "progress·awards"));
-  else {
-    const bad = [];
-    m.progress.forEach((text, i) => {
-      const hit = /^(\d+) \/ (\d+)$/.exec(typeof text === "string" ? text : "");
-      if (!hit) bad.push(`#${i + 1} "${text}" 가 'k / n' 꼴이 아님`);
-      else {
-        if (Number(hit[1]) !== i + 1) bad.push(`#${i + 1} k ${hit[1]} ≠ ${i + 1}`);
-        if (Number(hit[2]) !== awards.length) bad.push(`#${i + 1} n ${hit[2]} ≠ ${awards.length}`);
-      }
-    });
-    if (m.progress.length === 0) bad.push("진행 숫자를 한 번도 못 읽음");
-    out.push(result("AW6", L.AW6, bad));
-  }
-
-  // AW7
-  if (typeof m?.titleDuring !== "string" || typeof m?.titleAfter !== "string" || !Object.hasOwn(RESULT_WIN_TITLE, m?.winner)) out.push(noMeasure("AW7", L.AW7, "titleDuring·titleAfter·winner"));
-  else {
-    const bad = [];
-    if (m.titleDuring !== AWARD_CEREMONY_TITLE) bad.push(`시상 중 헤더 "${m.titleDuring}" ≠ "${AWARD_CEREMONY_TITLE}"`);
-    if (m.titleAfter !== RESULT_WIN_TITLE[m.winner]) bad.push(`끝난 뒤 헤더 "${m.titleAfter}" ≠ "${RESULT_WIN_TITLE[m.winner]}"`);
-    out.push(result("AW7", L.AW7, bad));
-  }
-
-  // AW8
-  if (!isNum(m?.floatAfter)) out.push(noMeasure("AW8", L.AW8, "floatAfter"));
-  else out.push(result("AW8", L.AW8, m.floatAfter === 0 ? [] : [`끝난 뒤 [넘기기] ${m.floatAfter}개가 남음`]));
-
-  // AW10
-  if (!m?.costumesDuring || typeof m.costumesDuring !== "object" || !m?.costumesAfter || typeof m.costumesAfter !== "object" || !m?.jobBySeat || typeof m.jobBySeat !== "object") out.push(noMeasure("AW10", L.AW10, "costumesDuring·costumesAfter·jobBySeat"));
-  else {
-    const bad = [];
-    for (const [seat, job] of Object.entries(m.jobBySeat)) {
-      const want = Object.hasOwn(RESULT_JOB_OUTFIT, job) ? RESULT_JOB_OUTFIT[job] : undefined;
-      if (want === undefined) bad.push(`자리 ${seat} 직업 "${job}" 를 모름`);
-      else if (m.costumesDuring[seat] !== want) bad.push(`시상 중 자리 ${seat}(${job}) 의상 ${m.costumesDuring[seat] ?? "없음"} ≠ ${want}`);
-    }
-    if (Object.keys(m.costumesAfter).length !== 0) bad.push(`끝난 뒤 직업 의상이 남음: ${JSON.stringify(m.costumesAfter)}`);
-    out.push(result("AW10", L.AW10, bad));
-  }
-  if (known !== "") out.push({ id: "AW4k", label: "알려진 한계(UI#14): 낮은 폰의 패 아래 스테이지가 150 에 못 미침(판정 아님)", ok: true, detail: known, info: true });
-  return out;
-}
-
-/**
- * 시상식 한 번의 읽기(한 번의 evaluate). `.mf-result` 가 없으면 null.
- * { title(h1 글자), shown(훅 shown), awards(훅 awards 사본), costumes(훅), stageTop(헤더 아랫변, 방 위 끝 기준), panelTop, viewport,
- *   plate: { id, top, left, width, height, text } | null, float: { left, top, width, height, bottom, count(진행 숫자 글자) } | null, floatCount([data-float="skip"] 수), bodyOverflow }
- */
-export function readAwardState(page) {
-  return page.evaluate(() => {
-    const root = document.querySelector(".mf-result");
-    if (!root) return null;
-    const rr = root.getBoundingClientRect();
-    const text = (el) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
-    const header = root.querySelector("header")?.getBoundingClientRect() ?? null;
-    const band = document.querySelector("[data-host-band] .mv-host__band")?.getBoundingClientRect() ?? null;
-    const panel = root.querySelector("[data-result-panel]")?.getBoundingClientRect() ?? null;
-    const plateEl = root.querySelector("[data-award-plate]");
-    const pr = plateEl ? plateEl.getBoundingClientRect() : null;
-    const floatEl = root.querySelector('[data-float="skip"]');
-    const fr = floatEl ? floatEl.getBoundingClientRect() : null;
-    const hook = window.__mfResult ?? null;
-    return {
-      title: text(root.querySelector("h1")),
-      shown: hook ? hook.shown : -1,
-      awards: hook ? hook.awards.map((a) => [a[0], a[1]]) : [],
-      costumes: hook ? { ...hook.costumes } : {},
-      // 14페이즈: 시상 패는 자막 띠 아래 8 에 선다 — 띠가 있으면 띠 면 아랫변, 없으면 헤더 아랫변이 스테이지 윗변이다
-      stageTop: band ? band.bottom - rr.top : header ? header.bottom - rr.top : Number.NaN,
-      panelTop: panel ? panel.top - rr.top : Number.NaN,
-      viewport: { w: rr.width, h: rr.height },
-      plate: pr ? { id: plateEl.getAttribute("data-award-id") ?? "", top: pr.top - rr.top, left: pr.left - rr.left, width: pr.width, height: pr.height, text: text(plateEl) } : null,
-      float: fr ? { left: fr.left - rr.left, top: fr.top - rr.top, width: fr.width, height: fr.height, bottom: fr.bottom - rr.top, count: text(floatEl.querySelector("[data-float-count]")) } : null,
-      floatCount: root.querySelectorAll('[data-float="skip"]').length,
-    };
-  });
-}
-
 // ---------- 11-12 다시 하기 ----------
 
 const within = (a, b, tol) => isNum(a) && isNum(b) && Math.abs(a - b) <= tol;
@@ -418,9 +247,9 @@ const has = (x) => x !== undefined && x !== null;
  *  count {text,dim,disabled}·countWant {n,m,minPlayers} 방장 알약(준비 전) · countFull·countFullWant 준비를 마친 뒤 · toast 인원 부족 토스트 · minPlayers · roundUnchanged 토스트 뒤 판이 그대로
  *  sheet {title,buttons,faces,extraText} 쉬게 될 사람 확인 시트 · restingWant 쉬게 될 사람 수 · round {before,after,phases} 시작 뒤 참가자 페이지 · benchView 쉬는 페이지에 BenchView
  *  bench {timers,chatInputs,floats,text,buttons} 쉬는 페이지 · looks·looksWant 새 판의 look · chat {before,old} 이전 판 채팅 · sat {seats,want,chipsOnSat,chips,participants} 다음 결과
- *  ceremony {pillActive,plateVsPill,skipVsPill} 시상 중 · early {disabled} 승리 조명 전.
+ *  afterLight {pillActive,marks} 승리 조명 뒤(시상 표식 수 포함) · early {disabled} 승리 조명 전.
  * RM1 알약 96×48 ±1 · 입력칸 폭 − 192 ±2 · RM2 손님 토글 전후 반대 · RM3 방장 n/m · RM4 4명 미만 토스트 · RM5 쉬는 사람 시트 · RM6 시작 후 round + 1·assigning·BenchView ·
- * RM7 쉬는 페이지에 타이머·채팅 입력·떠 있는 버튼 없음 · RM8 의상 유지 · RM9 이전 판 채팅 0줄 · RM10 쉬었던 사람 sat·칩 없음 · RM11 시상 중 알약 활성·겹침 없음 · RM12 조명 전 비활성.
+ * RM7 쉬는 페이지에 타이머·채팅 입력·떠 있는 버튼 없음 · RM8 의상 유지 · RM9 이전 판 채팅 0줄 · RM10 쉬었던 사람 sat·칩 없음 · RM11 승리 조명 뒤 알약 활성·시상 표식 0 · RM12 조명 전 비활성.
  * 측정값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
  */
 export function rematchChecks(m) {
@@ -435,7 +264,7 @@ export function rematchChecks(m) {
     RM8: "다시 하기: 고른 의상이 새 판에도 유지",
     RM9: "다시 하기: 새 판 기록 칸에 이전 판 채팅 0줄",
     RM10: "다시 하기: 쉬었던 사람은 결과에 sat 이고 직업 칩이 없음",
-    RM11: "다시 하기: 시상 중 알약 활성, 패·[넘기기]와 겹치지 않음",
+    RM11: "다시 하기: 승리 조명 뒤 알약 활성, 시상 표식(패·[넘기기]·진행 숫자) 없음",
     RM12: "다시 하기: 승리 조명 전 알약 비활성",
   };
   const out = [];
@@ -552,13 +381,12 @@ export function rematchChecks(m) {
   }
 
   // RM11
-  const c = m?.ceremony;
-  if (!c || !has(c.pillActive) || !has(c.plateVsPill) || !has(c.skipVsPill)) miss("RM11", "ceremony");
+  const c = m?.afterLight;
+  if (!c || !has(c.pillActive) || !isNum(c.marks)) miss("RM11", "afterLight");
   else {
     const bad = [];
-    if (c.pillActive !== true) bad.push("시상 중 알약이 비활성");
-    if (c.plateVsPill !== false) bad.push("패와 알약이 겹침");
-    if (c.skipVsPill !== false) bad.push("[넘기기]와 알약이 겹침");
+    if (c.pillActive !== true) bad.push("승리 조명 뒤 알약이 비활성");
+    if (c.marks !== 0) bad.push(`시상 표식 ${c.marks}개가 있음`);
     add("RM11", bad);
   }
 
@@ -570,7 +398,7 @@ export function rematchChecks(m) {
 }
 
 /**
- * 결과 화면 알약 한 장: 알약·입력칸·패·[넘기기] 사각형과 알약 상태. 알약이 없으면 pill 은 null. 결과 화면이 아니면 null.
+ * 결과 화면 알약 한 장: 알약·입력칸 사각형과 알약 상태, 시상 표식 수(marks). 알약이 없으면 pill 은 null. 결과 화면이 아니면 null.
  * (rect 는 뷰포트 좌표다 — 겹침 판정은 같은 좌표계끼리만 본다)
  */
 export function readRematchState(page) {
@@ -599,8 +427,7 @@ export function readRematchState(page) {
       inactive: pillEl?.getAttribute("data-inactive") === "true",
       label: pillEl?.getAttribute("aria-label") ?? null,
       inputWidth: input ? input.getBoundingClientRect().width : Number.NaN,
-      plate: rect(root.querySelector("[data-award-plate]")),
-      skip: rect(root.querySelector('[data-float="skip"]')),
+      marks: [...root.querySelectorAll("*")].filter((el) => el.getAttributeNames().some((n) => /award|float-count/.test(n))).length + root.querySelectorAll('[data-float="skip"]').length,
       dress: rect(root.querySelector('[data-float="dress"]')),
       toast: toast ? text(toast) : "",
       chips: root.ownerDocument.querySelectorAll("[data-role-chip]").length,

@@ -37,10 +37,10 @@ const EXECUTION_WATCH_MS = 3800;
 const VERDICT_PIN_SETTLE_MS = 1200;
 /** 낮 동작 소리·밤 동작 소리가 로그에 도착하기를 기다리는 상한(ms) */
 const EMOTE_ARRIVE_MS = 6000;
-/** 결과 연출이 시상 패를 모두 보이는 데까지 기다리는 상한(ms): 5.6초 + 패 1장당 2.5초(넘기기로 줄인다) 안쪽 */
-const RESULT_AWARD_WAIT_MS = 14000;
-/** 마지막 패 소리와 박수가 로그에 쌓이도록 기다리는 시간(ms) */
-const RESULT_TAIL_MS = 600;
+/** 결과 연출이 최종 상태(final, 5.6초)에 닿기를 기다리는 상한(ms) */
+const RESULT_FINAL_WAIT_MS = 12000;
+/** 최종 상태에 닿은 뒤 늦게 오는 소리(시상 소리가 새는 경우)까지 로그에 쌓이도록 기다리는 시간(ms) */
+const RESULT_TAIL_MS = 3000;
 /** 건너뛰기 변형: 탭 뒤 원래 조명 시각(4600ms)을 넘겨 늦게 오는 소리가 없는지 볼 때까지 기다리는 시간(ms) */
 const RESULT_SKIP_WATCH_MS = 5200;
 
@@ -588,7 +588,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
   }
 
   /**
-   * sound-result 본판 (D-21): ended 도착 순간부터 연출 시계를 건너뛰지 않고 끝까지 본다. 시상은 패가 뜰 때까지 기다린 뒤 [넘기기]로 줄인다(패마다 소리는 한 번).
+   * sound-result 본판 (D-21): ended 도착 순간부터 연출 시계를 건너뛰지 않고 최종 상태(final)까지 본다. 시상식이 없어(18.1-16, 0083-7) 시상 소리는 0회여야 한다 — 최종 상태 뒤 3초까지 로그를 받는다.
    * 로그는 ended 도착 직전에 비운다. 판정은 lib.mjs soundResultChecks(R1~R5), 새로고침 직후 로그는 R6.
    */
   async function soundResultMain(ctx, rec) {
@@ -607,23 +607,13 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       const seats = view.result?.seats ?? [];
       const mine = seats.find((x) => x.seat === view.me.seat);
       const expectWin = mine ? (mine.job === "mafia") === (view.result?.winner === "mafiaWin") : undefined;
-      const hooks = await attempt(async () => {
-        await hp.waitForFunction(() => (window.__mfResult?.awards?.length ?? 0) > 0, null, { timeout: 8000 });
+      // 연출이 끝(final)까지 도는지 본다 — 이어서 3초를 더 받아 늦게 새는 시상 소리까지 잡는다
+      const finals = await attempt(async () => {
+        await hp.waitForFunction(() => window.__mfResult?.stage === "final", null, { timeout: RESULT_FINAL_WAIT_MS });
+        await sleep(RESULT_TAIL_MS);
       });
-      rec(sc, "SR1", "결과 화면 훅에 시상 칭호 목록이 있다", hooks.ok, hooks.detail);
-      if (!hooks.ok) return;
-      const awards = await hp.evaluate(() => window.__mfResult.awards.length);
-
-      // 시상: 패가 뜰 때까지 기다린 뒤 [넘기기]. 마지막 패는 소리가 쌓이도록 잠깐 기다린다
-      const paged = await attempt(async () => {
-        for (let k = 0; k < awards; k += 1) {
-          await hp.waitForFunction((w) => window.__mfResult?.shown === w, k, { timeout: RESULT_AWARD_WAIT_MS });
-          if (k < awards - 1) await hp.locator('[data-float="skip"]').click({ timeout: 2000 });
-          else await sleep(RESULT_TAIL_MS);
-        }
-      });
-      rec(sc, "SR2", `시상 패 ${awards}장이 차례로 뜬다`, paged.ok, paged.detail);
-      if (!paged.ok) return;
+      rec(sc, "SR1", "결과 연출이 최종 상태(final)에 닿고 그 뒤 3초를 기다린다", finals.ok, finals.detail);
+      if (!finals.ok) return;
       const log = await readLog(hp);
 
       // 같은 페이지 새로고침: 연출 없는 마운트라 침대만
@@ -638,13 +628,13 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
         rec(sc, "SR4", "결과 구간 훅 로그를 읽었다", false, "window.__mfSound 훅이 없음");
         return;
       }
-      for (const line of soundResultChecks({ log, participants: seats.length, awards, expectWin, reloadLog })) recOne(rec, sc, line);
+      for (const line of soundResultChecks({ log, participants: seats.length, expectWin, reloadLog })) recOne(rec, sc, line);
       const counts = (l, p) => l.filter((e) => p(e.id)).length;
       infoRow(
         rec,
         `${sc}-info`,
         "SRi-1",
-        `참고: role.flip ${counts(log, (id) => id === "role.flip")}개 · result.win/lose ${counts(log, (id) => id.startsWith("result."))}회 · award.plate ${counts(log, (id) => id === "award.plate")}개 · award.final ${counts(log, (id) => id === "award.final")}개 · 박수 ${counts(log, (id) => id === "emote.clap")}개 · 참가자 ${seats.length} · 패 ${awards}`,
+        `참고: role.flip ${counts(log, (id) => id === "role.flip")}개 · result.win/lose ${counts(log, (id) => id.startsWith("result."))}회 · award.* ${counts(log, (id) => id.startsWith("award."))}개 · 박수 ${counts(log, (id) => id === "emote.clap")}개 · 참가자 ${seats.length}`,
       );
     } finally {
       await closeGame(game);

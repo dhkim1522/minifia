@@ -138,7 +138,7 @@ import {
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
 import { makeMapSelectFlows } from "./mapselect.mjs";
-import { SHORT_PHONE_H, awardChecks, readAwardState, readBenchView, readRematchState, readResultHidden, readRestSheet, readResultStage, rematchChecks, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
+import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readRestSheet, readResultStage, rematchChecks, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
@@ -3030,26 +3030,10 @@ async function pollPage(page, fn, ms) {
   return false;
 }
 
-/**
- * 시상식(11-09)을 끝까지 넘긴다: 떠 있는 [넘기기]가 없어질 때까지 누르고 직업 의상이 걷힐 때까지(+600ms) 기다린다.
- * 연출 시계가 final(5600)에 닿으면 시상식이 시작되므로, 최종 상태를 재는 흐름은 이것을 먼저 부른다. 칭호 목록이 없는 서버(옛 서버)는 시상식이 없어 바로 돌아온다.
- */
-async function finishCeremony(page) {
-  for (let i = 0; i < 24; i++) {
-    const btn = page.locator('[data-float="skip"]');
-    if ((await btn.count()) === 0) break;
-    await btn.click({ timeout: 2000 }).catch(() => {});
-    await sleep(80);
-  }
-  await page
-    .waitForFunction(() => {
-      const h = window.__mfResult;
-      return !h || h.awards.length === 0 || Object.keys(h.costumes).length === 0;
-    }, null, { timeout: 5000 })
-    .catch(() => {});
-}
+/** 결과 화면(11-05): ended 도착 뒤 연출 시계가 final 에 닿을 때까지 기다린 뒤 RS1~RS8·RS10 으로 판정한다(18.1-16: 시상식이 없어 final 이 보이면 바로 잰다, RS10 은 final 뒤 3초 동안 제목·시상 표식을 본다). skipProbe 면 먼저 연출 구간에서 무대를 한 번 탭해 건너뛰기(RS9)를 본다. */
+/** RS10: 최종 상태에 닿은 뒤 제목이 그대로인지 보는 대기(ms) */
+const RESULT_HOLD_MS = 3000;
 
-/** 결과 화면(11-05): ended 도착 뒤 연출 시계가 final 에 닿을 때까지 기다린 뒤 RS1~RS8 로 판정한다. skipProbe 면 먼저 연출 구간에서 무대를 한 번 탭해 건너뛰기(RS9)를 본다. */
 async function resultState(ctx, id, game, { winner, n, skipProbe = false }) {
   const rec = recorder(ctx);
   const sc = `${id}/ended`;
@@ -3088,7 +3072,10 @@ async function resultState(ctx, id, game, { winner, n, skipProbe = false }) {
   } catch {
     throw new SetupError("결과 화면 연출이 final 에 닿지 않음 (window.__mfResult.stage)");
   }
-  await finishCeremony(hp); // 11-09: final(5600)부터 시상식이 돈다 — 끝까지 넘겨 승리 한 줄·고른 look 상태를 잰다
+  // RS10(18.1-16): 최종 상태에 닿은 때의 제목·시상 표식을 읽고 3초 뒤 다시 읽는다 — 헤더가 승패로 남고 패·[넘기기]가 한 번도 없어야 한다
+  const holdFirst = await readResultStage(hp);
+  await sleep(RESULT_HOLD_MS);
+  const holdLater = await readResultStage(hp);
   await checkState(ctx, id, `ended-${winner}`, game.host);
 
   // 채팅 한 줄: 결과 단계에서도 전체 채팅이 오간다(D-11). 보낸 줄이 기록 칸에 보여야 한다.
@@ -3098,6 +3085,7 @@ async function resultState(ctx, id, game, { winner, n, skipProbe = false }) {
     await waitChatLine(hp, text);
   });
 
+  await collapseChatLog(hp); // 18.1-14: 줄을 보내는 동안 포커스가 있어 기록 칸이 늘어나 있다 — 쉬는 높이(160)를 재려고 접는다
   const read = await readResultStage(hp);
   if (read === null) {
     rec(sc, "RS1", "결과 화면이 그려짐", false, "측정값 없음(.mf-result)");
@@ -3117,7 +3105,7 @@ async function resultState(ctx, id, game, { winner, n, skipProbe = false }) {
     roomH: read.roomH,
     hasLegacy: read.legacy,
     chatEcho: echo.ok,
-    afterCeremony: (read.hook?.awards?.length ?? 0) > 0, // 시상식이 있었으면 직업 의상은 걷혀 있다(고른 look 으로 복귀)
+    hold: holdFirst && holdLater ? { title: holdFirst.header, later: holdLater.header, marks: Math.max(holdFirst.marks, holdLater.marks, read.marks) } : undefined,
   })) {
     recOne(rec, sc, row);
   }
@@ -3230,114 +3218,10 @@ async function resultRevealFlow(ctx) {
       } catch {
         throw new SetupError("결과 화면 연출이 final 에 닿지 않음 (window.__mfResult.stage)");
       }
-      await finishCeremony(page); // 11-09: 시상식이 끝난 뒤 최종 모습을 잰다(떠 있는 [넘기기]·패가 없는 상태)
     }
     await checkState(ctx, id, "ended", game.host);
     await recHidden(hp, `${sc}/after-host`);
     await recHidden(g.page, `${sc}/after-guest`);
-  } finally {
-    await closeGame(game);
-  }
-}
-
-// ---- result-awards (11-09, D-7·D-24·D-25): 시상식 ----
-// 방장(마피아) + 봇 3: 방장이 처형되어 시민 승. ended 도착 뒤 연출 구간은 무대 탭으로 건너뛰고 시상식이 시작되기를 기다려 첫 패에서 기하를 잰다.
-// (18.1: 확장 탭이 없어져 일시정지·기록 탭 검사는 지웠다.) 나머지 패는 [넘기기]로 한 장씩 넘기며 순서·진행 숫자를 읽고, 끝난 뒤 헤더·[넘기기]·의상을 본다.
-
-async function resultAwardsFlow(ctx) {
-  const id = "result-awards";
-  const rec = recorder(ctx);
-  const sc = `${id}/ended`;
-  const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "mafia", vote: { exec: "yes", pick: "host" }, to: "nomination" });
-  try {
-    const { hp, ht } = game;
-    await step("defense", () => skipTo(hp, ht, "defense"));
-    await step("verdict", () => skipTo(hp, ht, "verdict"));
-    await step("execution", () => skipTo(hp, ht, "execution"));
-    await step("ended", () => toEnded(game));
-    await ht.waitFor((v) => v.phase === "ended", 8000, "종료 도달");
-    const view = ht.last();
-    const winner = view.result?.winner;
-    const seats = view.result?.seats ?? [];
-    const jobBySeat = Object.fromEntries(seats.map((x) => [x.seat, x.job]));
-    const winnerTeamSeats = seats.filter((x) => (x.job === "mafia") === (winner === "mafiaWin")).map((x) => x.seat);
-
-    // 연출 구간(모임·뒤집기)은 무대 탭으로 건너뛴다 — 4600 으로 점프하고 5600 에 시상식이 시작된다
-    const inWindow = await pollPage(hp, () => ["gather", "flip"].includes(window.__mfResult?.stage ?? ""), 4000);
-    if (inWindow) {
-      const mid = await hp.evaluate(() => {
-        const root = document.querySelector(".mf-result");
-        const head = root?.querySelector("header")?.getBoundingClientRect();
-        const panel = root?.querySelector("[data-result-panel]")?.getBoundingClientRect();
-        if (!root || !head || !panel) return null;
-        return { x: window.innerWidth / 2, y: (head.bottom + panel.top) / 2 };
-      });
-      if (!mid) throw new SetupError("결과 화면 스테이지 가운데를 못 잼");
-      await hp.mouse.click(mid.x, mid.y);
-    }
-    try {
-      await hp.waitForFunction(() => (window.__mfResult?.shown ?? -1) >= 0, null, { timeout: 12000 });
-    } catch {
-      throw new SetupError("시상식 첫 패가 뜨지 않음 (window.__mfResult.shown, 칭호 목록 " + (await hp.evaluate(() => window.__mfResult?.awards?.length ?? "훅 없음")) + ")");
-    }
-    await sleep(300); // 패 페이드 180ms
-    const first = await readAwardState(hp);
-    if (!first || !first.plate) throw new SetupError("첫 패를 못 읽음");
-    await checkState(ctx, id, "plate", game.host);
-
-    // 나머지 패: [넘기기]로 한 장씩 넘기며 칭호 순서·진행 숫자를 읽는다
-    const n = first.awards.length;
-    const observed = [first.plate.id];
-    const progress = [first.float?.count ?? ""];
-    const windowOf = async () => {
-      const t = await hp.locator("[data-float-count]").first().textContent({ timeout: 1500 }).catch(() => null);
-      const m = /^(\d+) \/ (\d+)$/.exec((t ?? "").trim());
-      return m ? Number(m[1]) - 1 : -1;
-    };
-    for (let want = 1; want < n; want++) {
-      for (let guard = 0; guard < 12 && (await windowOf()) < want; guard++) {
-        await hp.locator('[data-float="skip"]').click({ timeout: 2000 });
-        await sleep(100);
-      }
-      try {
-        await hp.waitForFunction((w) => window.__mfResult?.shown === w, want, { timeout: 5000 });
-      } catch {
-        throw new SetupError(`패 ${want + 1}/${n} 가 뜨지 않음`);
-      }
-      await sleep(250);
-      const st = await readAwardState(hp);
-      observed.push(st?.plate?.id ?? "");
-      progress.push(st?.float?.count ?? "");
-    }
-
-    // 마지막 패에서 한 번 더 넘기면 시상식이 끝난다
-    await hp.locator('[data-float="skip"]').click({ timeout: 2000 });
-    await hp.waitForFunction(() => document.querySelector('[data-float="skip"]') === null, null, { timeout: 4000 }).catch(() => {});
-    await hp.waitForFunction(() => Object.keys(window.__mfResult?.costumes ?? { x: 1 }).length === 0, null, { timeout: 4000 }).catch(() => {});
-    const after = await readAwardState(hp);
-
-    for (const row of awardChecks({
-      knownShortLimit: first.viewport.h < SHORT_PHONE_H, // 14-08 UI#14: 360×560 의 패 아래 스테이지 150 미만만 알려진 한계로 남긴다(AW4k)
-      viewport: first.viewport,
-      stageTop: first.stageTop,
-      panelTop: first.panelTop,
-      plateBox: first.plate,
-      floatBox: first.float,
-      progress,
-      awards: first.awards,
-      observed,
-      participants: seats.length,
-      winnerTeamSeats,
-      winner,
-      titleDuring: first.title,
-      titleAfter: after?.title,
-      floatAfter: after?.floatCount,
-      costumesDuring: first.costumes,
-      costumesAfter: after?.costumes,
-      jobBySeat,
-    })) {
-      recOne(rec, sc, row);
-    }
   } finally {
     await closeGame(game);
   }
@@ -3366,14 +3250,26 @@ async function playRematchGame(game, voters) {
   await step("ended", () => toEnded(game));
 }
 
-/** 시상식이 있으면 끝까지 넘기고 final 에 닿은 뒤의 알약 상태를 읽는다 */
+/** final 에 닿은 뒤(시상식이 없다, 18.1-16)의 알약 상태를 읽을 수 있을 때까지 기다린다 */
 async function settledResult(page) {
   await page.waitForFunction(() => window.__mfResult?.stage === "final", null, { timeout: 15000 });
-  await finishCeremony(page);
   await sleep(250);
 }
 
 const pillBy = (page) => page.locator("[data-ready-pill]");
+
+/**
+ * RM1 읽기(18.1-16, 0083-5 뒤): [보내기] 는 입력칸에 포커스가 있거나 글이 있을 때만 나온다 — 쉬는 줄은 [입력][알약] 이라 입력칸이 48 + 8 넓다.
+ * RM1 의 기대(폭 − 192 = 보내기 48 · 알약 96 · 간격 16 · 좌우 32)는 [보내기] 가 있을 때의 줄이므로, 입력칸에 포커스를 준 채 읽고 접는다.
+ */
+async function readRematchSendRow(page) {
+  await page.locator("[data-chat-input]").focus();
+  await sleep(250);
+  const state = await readRematchState(page).catch(() => null);
+  await collapseChatLog(page);
+  await page.evaluate(() => document.activeElement?.blur?.());
+  return state;
+}
 
 async function resultRematchFlow(ctx) {
   const id = "result-rematch";
@@ -3387,7 +3283,7 @@ async function resultRematchFlow(ctx) {
     await Promise.all([ht, A.tracker, B.tracker, C.tracker].map((t) => t.waitFor((v) => v.phase === "ended" && v.result !== undefined, 10000, "종료 도달")));
     const round1 = ht.last().round ?? 1;
 
-    // 승리 조명(4600) 전: 알약은 비활성 (RM12). 이어서 무대를 탭해 4600 으로 건너뛰면 시상이 시작된다 — 패·[넘기기]와 알약이 겹치지 않아야 한다 (RM11)
+    // 승리 조명(4600) 전: 알약은 비활성 (RM12). 이어서 무대를 탭해 4600 으로 건너뛴다 — 알약이 활성이고 시상 표식(패·[넘기기])이 없어야 한다 (RM11, 18.1-16: 시상식이 없다)
     const inWindow = await pollPage(hp, () => ["gather", "flip"].includes(window.__mfResult?.stage ?? ""), 4000);
     if (!inWindow) throw new SetupError("연출 구간(모임·뒤집기)을 놓침");
     const early = await readRematchState(hp);
@@ -3401,16 +3297,15 @@ async function resultRematchFlow(ctx) {
     if (!mid) throw new SetupError("결과 화면 스테이지 가운데를 못 잼");
     await hp.mouse.click(mid.x, mid.y);
     try {
-      await hp.waitForFunction(() => (window.__mfResult?.shown ?? -1) >= 0, null, { timeout: 12000 });
+      await hp.waitForFunction(() => ["light", "announce", "final"].includes(window.__mfResult?.stage ?? ""), null, { timeout: 4000 });
     } catch {
-      throw new SetupError("시상식 첫 패가 뜨지 않음 (window.__mfResult.shown)");
+      throw new SetupError("무대 탭 뒤 승리 조명 단계(light)에 닿지 않음 (window.__mfResult.stage)");
     }
     await sleep(300);
     const during = await readRematchState(hp);
-    const ceremony = {
+    const afterLight = {
       pillActive: !!during?.pill && during.inactive === false,
-      plateVsPill: during?.plate && during?.pill ? rectsOverlap(during.plate, during.pill) : undefined,
-      skipVsPill: during?.skip && during?.pill ? rectsOverlap(during.skip, during.pill) : undefined,
+      marks: during?.marks,
     };
 
     // 모두 최종 상태로
@@ -3431,6 +3326,7 @@ async function resultRematchFlow(ctx) {
 
     // 알약: 준비 전 방장 n/m = 방장·봇 2 / 연결된 5 (흐림), 인원 부족 탭 → 토스트 (RM3·RM4)
     const hostBefore = await readRematchState(hp);
+    const hostSendRow = await readRematchSendRow(hp); // RM1 은 [보내기] 가 있는 줄에서 잰다
     // 흐린 알약은 aria-disabled 라 Playwright 가 비활성으로 보고 기다린다 — 실제 탭처럼 좌표에 눌러야 한다(흐려도 탭은 토스트를 부른다)
     await step("방장 알약(토스트)", () => pillBy(hp).click({ timeout: 4000, force: true }));
     await sleep(350);
@@ -3495,7 +3391,7 @@ async function resultRematchFlow(ctx) {
     const accept = {
       viewport: { w: REMATCH_HOST_SIZE.w, h: REMATCH_HOST_SIZE.h },
       pillBox: hostBefore?.pill ? { width: hostBefore.pill.width, height: hostBefore.pill.height } : undefined,
-      inputWidth: hostBefore?.inputWidth,
+      inputWidth: hostSendRow?.inputWidth,
       guestPill: guestBefore && guestAfter ? { before: { ready: guestBefore.ready, pressed: guestBefore.pressed }, after: { ready: guestAfter.ready, pressed: guestAfter.pressed } } : undefined,
       count: hostBefore ? { text: hostBefore.count ?? "", dim: hostBefore.dim, disabled: hostBefore.disabled } : undefined,
       countWant: { n: 2, m: 5, minPlayers: 4 },
@@ -3513,12 +3409,12 @@ async function resultRematchFlow(ctx) {
       looksWant: { [A.seat]: "noir" },
       chat: { before: chatBefore, old: chatOld },
       sat,
-      ceremony,
+      afterLight,
       early: early?.pill ? { disabled: early.inactive } : undefined,
     };
     for (const row of rematchChecks(accept)) recOne(rec, sc, row);
     // 손님 크기(430×932)에서도 알약 96×48·입력칸 폭 − 192
-    const guestState = await readRematchState(B.page).catch(() => null);
+    const guestState = await readRematchSendRow(B.page).catch(() => null);
     if (guestState?.pill) {
       const only = rematchChecks({ viewport: { w: REMATCH_GUEST_SIZE.w, h: REMATCH_GUEST_SIZE.h }, pillBox: { width: guestState.pill.width, height: guestState.pill.height }, inputWidth: guestState.inputWidth }).find((r) => r.id === "RM1");
       rec(sc, "RM1b", `${only.label} (손님 ${REMATCH_GUEST_SIZE.label})`, only.ok, only.detail);
@@ -3902,7 +3798,6 @@ export const FLOWS = [
   { id: "night-sizes", run: nightSizesFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "result", run: resultFlow, size: GAME_SIZE },
   { id: "result-reveal", run: resultRevealFlow, extraSizes: LOBBY_EXTRA_SIZES },
-  { id: "result-awards", run: resultAwardsFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 다시 하기(11-12): 방장 360×560 + 손님 430×932 실제 페이지 4개 + 봇 1 / 방장 이양은 390×844 한 크기
   { id: "result-rematch", run: resultRematchFlow, size: REMATCH_HOST_SIZE },
   { id: "host-handoff", run: hostHandoffFlow, size: HANDOFF_SIZE },
@@ -3941,7 +3836,7 @@ export const FLOWS = [
   { id: "sound-script", run: soundScriptFlow, size: GAME_SIZE },
   // 12-09: 밤 소리 동일성 — 방장(마피아) + 비마피아 손님 셋의 밤 로그가 같은 id 집합·큐 2~4개, 밤 UI 무음, 암살음은 피해자 페이지에만 1회, 밤 중간 새로고침은 night.fall 없음. 밤 30초를 실제로 기다린다
   { id: "sound-night-parity", run: soundNightParityFlow, size: GAME_SIZE },
-  // 12-11: 결과·시상 소리 — ended 도착부터 role.flip 개수(최대 8)·result.win/lose 1회·award.plate(패 수−1)·award.final 1회·순서, 새로고침은 bed.result 만. 무대 탭 건너뛰기 변형 한 판 포함. 390x844 한 크기
+  // 12-11: 결과 소리 — ended 도착부터 role.flip 개수(최대 8)·result.win/lose 1회·시상 소리 0회(18.1-16)·순서, 새로고침은 bed.result 만. 무대 탭 건너뛰기 변형 한 판 포함. 390x844 한 크기
   { id: "sound-result", run: soundResultFlow, size: GAME_SIZE },
   // 14-08: 사회자 띠(HOST-01·TOOL-02) 폰 6종 / 도구 이름표 전수(TOOL-01) / 역할 다섯 시점 누설(HOST-05) / 알림음(HOST-02). 이름 앞머리 emcee — host-handoff 와 --only 앞부분 일치가 겹치지 않는다
   { id: "emcee-band", run: emceeBandFlow, extraSizes: LOBBY_EXTRA_SIZES },

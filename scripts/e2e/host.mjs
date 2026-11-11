@@ -343,14 +343,8 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         await settleBand(hp, ht, phase).catch(() => {});
         await readTools(hp, rec, `${id}/${phase}`, phase === "nomination" ? "투표" : phase === "night" ? "밤" : "아침");
       }
-      // 결과: 시상식에서 [넘기기] 가 보이는 시점 → 연출이 끝난 패널(18.1: 탭 없이 전체 대화 하나)
+      // 결과: 연출이 끝난 패널(18.1: 탭 없이 전체 대화 하나, 18.1-16: 시상식 없음)
       await driveToEnd(hp, ht);
-      const skipBtn = await attempt(async () => {
-        await hp.waitForSelector('[data-float="skip"]', { timeout: 15000 });
-        await settle(hp);
-      });
-      rec(`${id}/ended-ceremony`, "TL0", "결과 시상식에서 [넘기기] 가 보인다", skipBtn.ok, skipBtn.detail);
-      if (skipBtn.ok) await readTools(hp, rec, `${id}/ended-ceremony`, "결과 시상식");
       const panel = await attempt(async () => {
         await settledResult(hp);
         await hp.waitForSelector("[data-result-panel]", { timeout: 5000 });

@@ -2758,18 +2758,19 @@ export function soundEmoteLeakChecks(input) {
   return out;
 }
 
-/** 결과·시상 소리 일회성 id(새로고침·재접속 로그에 있으면 안 된다) */
+/** 결과 소리 일회성 id(새로고침·재접속 로그에 있으면 안 된다). award.* 는 화면이 더는 내지 않지만 로그에 새어 들어오면 잡는다 */
 const RESULT_ONE_SHOTS = ["role.flip", "result.win", "result.lose", "game.start"];
 const isResultOneShot = (id) => RESULT_ONE_SHOTS.includes(id) || id.startsWith("award.");
 
 /**
- * 결과·시상 소리 판정 (sound-result, D-15·D-21·T-12-41·T-12-44). 순수 함수 — 문턱은 여기에만 있고 흐름은 낮추지 않는다.
- * input = { log, participants, awards, expectWin?, reloadLog } — log 는 ended 도착 직전에 비운 뒤 시상 끝까지 받은 훅 로그, reloadLog 는 같은 페이지를 새로고침한 직후 로그.
+ * 결과 소리 판정 (sound-result, D-15·D-21·T-12-41·T-12-44). 순수 함수 — 문턱은 여기에만 있고 흐름은 낮추지 않는다.
+ * input = { log, participants, expectWin?, reloadLog } — log 는 ended 도착 직전에 비운 뒤 최종 상태 뒤까지 받은 훅 로그, reloadLog 는 같은 페이지를 새로고침한 직후 로그.
+ * 18.1-16(결정 0083-7): 결과 화면에 시상식이 없어 시상 소리(award.plate·award.final)는 0회여야 한다.
  *   R1 결과 구간 로그의 첫 침대 요청이 bed.result
  *   R2 role.flip 개수 == min(참가자 수, 8)
  *   R3 result.win + result.lose 가 정확히 1회 (expectWin 이 있으면 그 쪽 id)
- *   R4 award.plate == 패 수 − 1, award.final == 1회이고 award.* 의 마지막 (패가 없으면 둘 다 0)
- *   R5 순서: 첫 role.flip < result.win/lose < 첫 award.*
+ *   R4 award.plate·award.final 이 0회 (award.* 가 하나도 없다)
+ *   R5 순서: 첫 role.flip < result.win/lose
  *   R6 새로고침 로그: bed.result 가 있고 role.flip·result.*·award.*·game.start 가 없다
  */
 export function soundResultChecks(input) {
@@ -2777,20 +2778,19 @@ export function soundResultChecks(input) {
     R1: "결과 구간의 첫 침대 요청이 bed.result",
     R2: "role.flip 이 참가자 수(최대 8)만큼",
     R3: "result.win/lose 가 정확히 한 번(내 팀에 맞는 쪽)",
-    R4: "award.plate 가 패 수 − 1, award.final 이 한 번이고 마지막",
-    R5: "순서: 뒤집기 < 승패 < 시상",
+    R4: "시상 소리(award.plate·award.final)가 0회",
+    R5: "순서: 뒤집기 < 승패",
     R6: "새로고침 로그는 bed.result 만(일회성 소리 없음)",
   };
   const log = validLog(input?.log) ? input.log : null;
   const reload = validLog(input?.reloadLog) ? input.reloadLog : null;
   const n = input?.participants;
-  const awards = input?.awards;
   const out = [];
   const idsOf = (l, pred) => l.filter((e) => pred(e.id));
   const at = (e) => (e ? e.at : null);
 
-  if (log === null || !Number.isInteger(n) || n < 1 || !Number.isInteger(awards) || awards < 0) {
-    for (const id of ["R1", "R2", "R3", "R4", "R5"]) out.push(noMeasure(id, labels[id], "결과 구간 훅 로그·참가자 수·패 수"));
+  if (log === null || !Number.isInteger(n) || n < 1) {
+    for (const id of ["R1", "R2", "R3", "R4", "R5"]) out.push(noMeasure(id, labels[id], "결과 구간 훅 로그·참가자 수"));
   } else {
     const firstBed = log.find((e) => e.id.startsWith("bed."));
     out.push(result("R1", labels.R1, firstBed?.id === "bed.result" ? [] : [`첫 침대 요청 ${firstBed?.id ?? "(없음)"}`]));
@@ -2810,25 +2810,17 @@ export function soundResultChecks(input) {
 
     const plates = idsOf(log, (id) => id === "award.plate");
     const finals = idsOf(log, (id) => id === "award.final");
-    const allAward = idsOf(log, (id) => id.startsWith("award.")).sort((a, b) => a.at - b.at);
     const bad4 = [];
-    if (awards === 0) {
-      if (plates.length + finals.length !== 0) bad4.push(`패가 없는데 award.* ${plates.length + finals.length}개`);
-    } else {
-      if (plates.length !== awards - 1) bad4.push(`award.plate ${plates.length}개 ≠ ${awards - 1}`);
-      if (finals.length !== 1) bad4.push(`award.final ${finals.length}개 ≠ 1`);
-      else if (allAward[allAward.length - 1]?.id !== "award.final") bad4.push("award.final 이 마지막이 아님");
-    }
+    if (plates.length !== 0) bad4.push(`award.plate ${plates.length}개 ≠ 0`);
+    if (finals.length !== 0) bad4.push(`award.final ${finals.length}개 ≠ 0`);
     out.push(result("R4", labels.R4, bad4));
 
     const bad5 = [];
     const firstFlip = at(flips.sort((a, b) => a.at - b.at)[0]);
     const light = at(wl[0]);
-    const firstAward = at(allAward[0]);
     if (firstFlip === null || light === null) bad5.push("role.flip 또는 result.win/lose 가 없어 순서를 못 잼");
     else {
       if (!(firstFlip < light)) bad5.push(`첫 role.flip(${Math.round(firstFlip)}) ≥ 승패(${Math.round(light)})`);
-      if (firstAward !== null && !(light < firstAward)) bad5.push(`승패(${Math.round(light)}) ≥ 첫 award.*(${Math.round(firstAward)})`);
     }
     out.push(result("R5", labels.R5, bad5));
   }
