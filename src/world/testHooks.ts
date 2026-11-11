@@ -33,11 +33,11 @@ export interface WorldTestHooks {
 declare global {
   interface Window {
     __mfWorld?: WorldTestHooks;
-    /** 유령 직업 의상 표(좌석 → 의상 id, 09.1-09). 런타임이 이미 그리는 의상뿐이고 산 사람 페이지는 늘 빈 객체다(L13) */
-    __mfGhostOutfits?: Readonly<Record<number, string>>;
+    /** 유령 그림으로 그리고 있는 좌석(오름차순)과 그림 준비 여부(0083-2). 좌석 번호뿐이고 직업·의상은 싣지 않는다(L13, T-18.1-41) */
+    __mfGhosts?: { seats: number[]; ready: boolean };
     /** 핀 조명(09.1.1-11): 지금 비추는 좌석(없으면 null)·이동 중 여부·켜짐 수준(0~1)·카메라 줌(09.1.1-13, 소수 셋째 자리). 런타임이 이미 정한 값뿐이다 */
     __mfPin?: { seat: number | null; moving: boolean; strength: number; zoom: number };
-    /** 좌석별 고른 의상 표(좌석 → 의상 id, 10-04, L33). 이 화면이 받은 view 의 look 사본이다(유령 직업 의상 안개와 별개). 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다 */
+    /** 좌석별 고른 의상 표(좌석 → 의상 id, 10-04, L33). 이 화면이 받은 view 의 look 사본이다(결과 화면 직업 의상과 별개). 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다 */
     __mfLooks?: Readonly<Record<number, string>>;
     /** 지금 렌더러에 올린 맵 id(11-13, L33): 로비·시작 전은 "bar". 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다 */
     __mfMap?: "bar" | "plaza";
@@ -128,19 +128,19 @@ export function installWorldTestHooks(runtime: HookRuntime, store: WorldStore): 
 }
 
 /**
- * window.__mfGhostOutfits 를 설치하고(처음엔 빈 표) 갱신·해제 함수를 돌려준다. 테스트 훅이 켜진 문맥에서만 부른다(T-09.1-23).
- * 해제는 다른 설치가 덮어썼으면 지우지 않는다(__mfWorld 와 같은 규칙). 의상은 DOM 속성으로 싣지 않는다(L13).
+ * window.__mfGhosts 를 설치하고(처음엔 좌석 없음·준비 안 됨) 갱신·해제 함수를 돌려준다. 테스트 훅이 켜진 문맥에서만 부른다(T-18.1-41).
+ * 해제는 다른 설치가 덮어썼으면 지우지 않는다(__mfWorld 와 같은 규칙). 좌석 번호와 준비 여부뿐이다(L13).
  */
-export function installGhostOutfitsHook(): { set(outfits: Readonly<Record<number, string>>): void; off(): void } {
-  let mine: Readonly<Record<number, string>> = {};
-  window.__mfGhostOutfits = mine;
+export function installGhostsHook(): { set(state: { seats: number[]; ready: boolean }): void; off(): void } {
+  let mine: { seats: number[]; ready: boolean } = { seats: [], ready: false };
+  window.__mfGhosts = mine;
   return {
-    set(outfits) {
-      mine = { ...outfits };
-      window.__mfGhostOutfits = mine;
+    set(state) {
+      mine = { seats: [...state.seats], ready: state.ready };
+      window.__mfGhosts = mine;
     },
     off() {
-      if (window.__mfGhostOutfits === mine) delete window.__mfGhostOutfits;
+      if (window.__mfGhosts === mine) delete window.__mfGhosts;
     },
   };
 }
@@ -187,7 +187,7 @@ export function installEmotesHook(): { set(state: { last: { seat: number; id: st
 
 /**
  * window.__mfLooks 를 설치하고(처음엔 빈 표) 갱신·해제 함수를 돌려준다. 테스트 훅이 켜진 문맥에서만 부른다(L33).
- * 해제는 다른 설치가 덮어썼으면 지우지 않는다(__mfGhostOutfits 와 같은 규칙). 의상은 DOM 속성으로 싣지 않는다.
+ * 해제는 다른 설치가 덮어썼으면 지우지 않는다(__mfGhosts 와 같은 규칙). 의상은 DOM 속성으로 싣지 않는다.
  */
 export function installLooksHook(): { set(looks: Readonly<Record<number, string>>): void; off(): void } {
   let mine: Readonly<Record<number, string>> = {};

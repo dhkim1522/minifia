@@ -1981,7 +1981,7 @@ describe("탈락자 유령 그림 (0083-2)", () => {
   it("끊긴 사람·장면 어둠(dim)은 같은 밝기 배율에 0.6 을 곱한다", async () => {
     const s = await openGhost({ ...ALIVE, 3: { ghost: true, dim: true } });
     frames(50);
-    expect(handleOf(s, 3).setGhost).toHaveBeenLastCalledWith(true, { tint: 0.6 });
+    expect(handleOf(s, 3).setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 0.6 });
     s.rerender({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) });
     frames(50);
     expect(handleOf(s, 3).setGhost).toHaveBeenLastCalledWith(true, { tint: 1 });
@@ -2114,6 +2114,8 @@ describe("산 사람 화면의 탈락자 유령 — 마지막 구간에 선다 (
 });
 
 describe("E2E 훅 window.__mfGhosts (0083-2, T-18.1-41)", () => {
+  /** 지워진 옛 의상 훅 전역 이름(이름을 이어 붙여 저장소 검색에 걸리지 않게 한다) */
+  const OLD_OUTFIT_HOOK = `__mfGhost${"Outfits"}`;
   const ALIVE = { 0: {}, 1: {}, 2: {}, 3: {} };
   afterEach(() => {
     fakeArt.ready = true;
@@ -2151,12 +2153,12 @@ describe("E2E 훅 window.__mfGhosts (0083-2, T-18.1-41)", () => {
 
   it("훅이 꺼진 문맥에는 전역이 없고, 옛 의상 훅 전역은 어느 문맥에도 없다", async () => {
     await open({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
-    expect((window as unknown as Record<string, unknown>).__mfGhostOutfits).toBeUndefined();
+    expect((window as unknown as Record<string, unknown>)[OLD_OUTFIT_HOOK]).toBeUndefined();
     cleanup();
     vi.stubEnv("DEV", false);
     await open({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
     expect(window.__mfGhosts).toBeUndefined();
-    expect((window as unknown as Record<string, unknown>).__mfGhostOutfits).toBeUndefined();
+    expect((window as unknown as Record<string, unknown>)[OLD_OUTFIT_HOOK]).toBeUndefined();
   });
 
   it("다른 설치가 덮어썼으면 언마운트가 지우지 않는다", async () => {

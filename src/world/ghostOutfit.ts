@@ -14,6 +14,3 @@ export const JOB_OUTFIT: Readonly<Record<string, OutfitId>> = {
 export function jobOutfit(job: string | undefined): OutfitId {
   return (job !== undefined && Object.hasOwn(JOB_OUTFIT, job) ? JOB_OUTFIT[job] : undefined) ?? "coat";
 }
-
-/** 안개 유령 재질(시안 GhostCostume 'mist'): 몸 불투명도 0.26, 발광 #d8e4ff 세기 0.85, 색은 의상 원래 색 */
-export const GHOST_MIST = { opacity: 0.26, emissive: "#d8e4ff", intensity: 0.85 } as const;

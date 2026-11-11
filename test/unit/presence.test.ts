@@ -565,7 +565,7 @@ describe("탈락자 장면 표는 직업과 무관하다 (결정 0083-2, L13)", 
   });
 
   it("튜토리얼 지도 장면(아침·투표)의 피해자 좌석은 { show, ghost } 이고 의상 키가 없다", () => {
-    for (const phase of ["morning", "vote"] as const) {
+    for (const phase of ["morning", "nomination"] as const) {
       const seat = visibleSeats(viewOf(phase, { dead: [2], mySeat: 0 }))[2];
       same(seat, { show: true, ghost: true });
     }

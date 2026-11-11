@@ -19,12 +19,18 @@ import {
   type Object3D,
   RingGeometry,
   SphereGeometry,
+  Sprite,
+  SpriteMaterial,
+  SRGBColorSpace,
+  type Texture,
+  TextureLoader,
   TorusGeometry,
   Uint32BufferAttribute,
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { MOVE_SPEED } from "../../shared/game/world";
+import { ghostSpriteSrc } from "../net/assets";
 import { emoteCycles, REDUCED_Y_SCALE } from "./emoteCap";
 import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
 
@@ -719,12 +725,13 @@ export interface WorldCharacter {
   /** 표정 바꾸기(원문 setFace) — 머리만 다시 병합(캐시). 모르는 이름은 기본 표정 */
   setFace(id: FaceId): void;
   /**
-   * 유령(처형당한 사람): 이 캐릭터 관절 메시만 복제 재질(transparent·depthWrite false·opacity 기본 0.6)로 바꾸고 발밑 원판을 숨긴다.
-   * 끄면 공유 재질로 돌아오고 복제 재질은 해제한다. 켠 채 다시 켜면 불투명도·발광만 바꾼다(GHOST-01).
-   * glow(09.1-09, 안개 유령)가 있으면 복제 재질의 emissive·emissiveIntensity 를 정한다 — 색은 의상 원래 색을 두고 발광이 덮는다. 없으면 발광 0
+   * 유령(탈락한 사람, 0083-2): 켜면 관절 메시·투명 조각·발밑 원판을 숨기고 유령 그림 스프라이트(늘 카메라를 향한다) 하나를 캐릭터 뿌리에 세운다.
+   * 로컬 높이 2.45(머리 꼭대기 = 화면에서 캐릭터만큼의 키)·폭 높이 × 0.75·아래 가운데가 발밑. opts.opacity 는 불투명도(기본 0.88), opts.tint 는 밝기 배율(회색, 기본 1)이다.
+   * 켠 채 다시 부르면 준 값만 바꾼다. 끄면 스프라이트를 숨기고 몸·원판이 돌아온다.
+   * 그림(setGhostArt)이 아직 없거나 불러오지 못했으면 스프라이트 없이 예전 반투명 몸(불투명도 0.6, 발광 없음)으로 대신하고, 그림이 오면 다음 update 부터 그림으로 바뀐다.
    */
-  setGhost(on: boolean, opacity?: number, glow?: GhostGlow): void;
-  /** 유령일 때만 복제 재질의 불투명도를 바꾼다(유령이 아니면 무시) */
+  setGhost(on: boolean, opts?: GhostOpts): void;
+  /** 유령일 때만 유령 그림(또는 대체 몸)의 불투명도를 바꾼다(유령이 아니면 무시) */
   setOpacity(alpha: number): void;
   /**
    * 동작의 마지막 자세를 해제할 때까지 유지한다(DAY-04 손가락). POSE_BLEND_MS 에 걸쳐 섞여 들어가고 null 이면 섞여 나온다.
@@ -755,11 +762,45 @@ export interface WorldCharacter {
 /** 동작이 쓰는 표정 — 첫 동작 재생에서 머리 병합이 생기지 않게 유휴 시간에 미리 만든다(O-10) */
 const PREWARM_FACES = ["angry", "sus", "surprise", "happy", "cry"] as const;
 
-/** 안개 유령의 발광(09.1-09, 시안 GhostCostume 'mist'): 복제 재질의 emissive 색과 세기 */
-export interface GhostGlow {
-  color: string;
-  intensity: number;
+/** 유령 그림 값(0083-2): 불투명도(0~1)와 밝기 배율(0~1 회색). 주지 않은 값은 그대로 둔다(처음엔 0.88·1) */
+export interface GhostOpts {
+  opacity?: number;
+  tint?: number;
 }
+
+// ---------- 유령 그림 텍스처 (모듈에서 한 번, 모든 유령이 함께 쓴다) ----------
+
+/** 유령 그림 텍스처. 불러오기 전·실패는 null — 그동안 유령은 예전 반투명 몸으로 선다 */
+let ghostArt: Texture | null = null;
+/** 유령 그림이 준비됐나(E2E 훅 window.__mfGhosts 의 ready) */
+export function ghostArtReady(): boolean {
+  return ghostArt !== null;
+}
+/** 유령 그림 텍스처를 정한다(불러오기 완료 때·시험). null 이면 없는 것으로 돌아간다 */
+export function setGhostArt(texture: Texture | null): void {
+  ghostArt = texture;
+}
+// 문서가 있는 환경에서만 불러온다(node 시험·워커에는 없다). 실패하면 null 그대로 — 탈락자가 사라지지 않는다(T-18.1-42)
+if (typeof document !== "undefined") {
+  new TextureLoader().load(
+    ghostSpriteSrc(),
+    (t) => {
+      t.colorSpace = SRGBColorSpace;
+      setGhostArt(t);
+    },
+    undefined,
+    () => {},
+  );
+}
+
+/** 유령 그림 기본 불투명도(presence.ts GHOST_SPRITE.opacity 와 같은 값) */
+const GHOST_ART_OPACITY = 0.88;
+/** 유령 그림의 로컬 높이(머리 꼭대기 값, update 의 headY 와 같다)와 폭 비(3:4) */
+const GHOST_ART_H = 2.45;
+const GHOST_ART_ASPECT = 0.75;
+/** 동작을 받은 유령이 한 번 튀는 높이(로컬)와 시간(ms) */
+const GHOST_HOP_H = 0.18;
+const GHOST_HOP_MS = 420;
 
 /** 모든 캐릭터가 함께 쓰는 병합 재질(버텍스 컬러). 피부 0.7·놋쇠 금속감의 작은 차이는 합친다(가정 A1) */
 const bodyMaterial = new MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 });
@@ -767,7 +808,7 @@ const bodyMaterial = new MeshStandardMaterial({ vertexColors: true, roughness: 0
 const glassMaterial = new MeshStandardMaterial({ color: "#9ec2ff", transparent: true, opacity: 0.6 });
 const shadowMaterial = new MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.3, depthWrite: false });
 const shadowGeometry = new CircleGeometry(0.42, 24);
-/** 유령 기본 불투명도(UI-SPEC 유령 모양, presence.ts GHOST_OPACITY 와 같은 값) */
+/** 대체 몸(그림이 없을 때)의 불투명도(UI-SPEC 유령 모양, presence.ts GHOST_OPACITY 와 같은 값) */
 const GHOST_DEFAULT_OPACITY = 0.6;
 /** 발밑 고리 모양(그림자 원판 반지름 0.42 바깥) */
 const RING_INNER = 0.5;
@@ -813,8 +854,15 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   let lastPoseFace = "base";
   let dim = false;
   let disposed = false;
-  /** 유령일 때만 있는 이 캐릭터 전용 복제 재질 */
+  /** 대체 몸(그림이 없는 유령)일 때만 있는 이 캐릭터 전용 복제 재질 */
   let ghostMat: MeshStandardMaterial | null = null;
+  /** 유령 상태(켜짐·불투명도·밝기 배율)와 유령 그림 스프라이트(그림이 준비된 뒤 처음 켤 때 만든다) */
+  let ghostOn = false;
+  let ghostAlpha = GHOST_ART_OPACITY;
+  let ghostTint = 1;
+  let sprite: Sprite | null = null;
+  /** 유령이 동작을 받은 뒤 지난 시간(ms, null = 튀지 않음)과 그 동작이 모션 줄이기인지 */
+  let hopAge: number | null = null;
   /** 발밑 고리(있을 때만) */
   let ring: Mesh | null = null;
   /** 밤 선택 표시: 켜짐 · 고리 조임·맥박 여부 · 켠 뒤 지난 시간(s) · 윤곽 껍질 재질과 껍질들(관절 메시마다 하나) */
@@ -883,7 +931,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   function refreshGlass(): void {
     const o = OUTFITS[outfitId];
     const shown = parts.armB.filter((p) => p.glass && isShown(p.tag, o, fig, face));
-    if (shown.length === 0) {
+    if (shown.length === 0 || spriteShown()) {
       if (glassMesh) glassMesh.visible = false;
       return;
     }
@@ -901,6 +949,10 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
     }
     glassMesh.geometry = geo;
     glassMesh.visible = true;
+  }
+  /** 지금 몸 대신 유령 그림이 보이나 */
+  function spriteShown(): boolean {
+    return ghostOn && ghostArt !== null;
   }
   refreshGlass();
 
@@ -945,6 +997,65 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
     refresh(["head"]);
   }
 
+  /** 지금 화면에 올린 유령 모습이 그림인가(그림이 나중에 오거나 사라지면 update 가 다시 맞춘다) */
+  let appliedSprite = false;
+  /** 유령 상태를 보이는 것에 맞춘다: 그림이 있으면 몸을 숨기고 스프라이트, 없으면 예전 반투명 몸(0.6) */
+  function applyGhost(): void {
+    if (!ghostOn) {
+      if (ghostMat) {
+        for (const j of JOINTS) meshes[j].material = bodyMaterial;
+        ghostMat.dispose();
+        ghostMat = null;
+      }
+      for (const j of JOINTS) meshes[j].visible = true;
+      if (sprite) sprite.visible = false;
+      disc.visible = true;
+      appliedSprite = false;
+      refreshGlass();
+      return;
+    }
+    disc.visible = false;
+    if (ghostArt !== null) {
+      if (ghostMat) {
+        for (const j of JOINTS) meshes[j].material = bodyMaterial;
+        ghostMat.dispose();
+        ghostMat = null;
+      }
+      for (const j of JOINTS) meshes[j].visible = false;
+      if (!sprite) {
+        const mat = new SpriteMaterial({ map: ghostArt, transparent: true, depthWrite: false, toneMapped: false, fog: false });
+        sprite = new Sprite(mat);
+        sprite.name = "ghost-sprite";
+        sprite.center.set(0.5, 0); // 아래 가운데가 발밑
+        sprite.scale.set(GHOST_ART_H * GHOST_ART_ASPECT, GHOST_ART_H, 1);
+        root.add(sprite);
+      }
+      const mat = sprite.material;
+      if (mat.map !== ghostArt) {
+        mat.map = ghostArt;
+        mat.needsUpdate = true;
+      }
+      mat.opacity = ghostAlpha;
+      mat.color.setRGB(ghostTint, ghostTint, ghostTint);
+      sprite.visible = true;
+      appliedSprite = true;
+      refreshGlass();
+      return;
+    }
+    // 대체 몸: 그림이 오기 전·불러오기 실패 — 탈락자가 사라지지 않는다(T-18.1-42)
+    if (sprite) sprite.visible = false;
+    for (const j of JOINTS) meshes[j].visible = true;
+    if (!ghostMat) {
+      ghostMat = bodyMaterial.clone();
+      ghostMat.transparent = true;
+      ghostMat.depthWrite = false;
+      for (const j of JOINTS) meshes[j].material = ghostMat;
+    }
+    ghostMat.opacity = Math.min(ghostAlpha, GHOST_DEFAULT_OPACITY);
+    appliedSprite = false;
+    refreshGlass();
+  }
+
   let walkPhase = 0;
   /** 걷기 자세가 섞인 비율(0 = 서 있는 자세, 1 = 걷기 자세). POSE_BLEND_MS 에 걸쳐 오간다 */
   let walkMix = 0;
@@ -974,6 +1085,19 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   return {
     root,
     update(dt, t, moving) {
+      if (ghostOn && spriteShown() !== appliedSprite) applyGhost(); // 그림이 나중에 왔다(또는 사라졌다)
+      if (ghostOn && appliedSprite && sprite) {
+        // 유령 그림: 몸 자세는 재생하지 않는다. 동작을 받았으면 한 번 통통 튄다
+        if (hopAge !== null) {
+          hopAge += dt * 1000;
+          const k = hopAge / GHOST_HOP_MS;
+          if (k >= 1) {
+            hopAge = null;
+            sprite.position.y = 0;
+          } else sprite.position.y = Math.sin(Math.PI * k) * GHOST_HOP_H;
+        }
+        return { headY: GHOST_ART_H * CHAR_SCALE };
+      }
       if (moving) walkPhase += dt * WALK_PHASE_RATE;
       walkMix = Math.min(1, Math.max(0, walkMix + ((moving ? 1 : -1) * dt * 1000) / POSE_BLEND_MS));
       // 0 이하는 서 있는 자세 객체, 1 이상은 걷기 자세 객체 그대로(보간 오차 없음)
@@ -1015,7 +1139,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
         pickAge += dt;
         if (ring) ring.scale.setScalar(pickAnimate ? pickRingScale(pickAge, t) : 1);
       }
-      return { headY: (2.45 + pose.y) * CHAR_SCALE };
+      return { headY: (GHOST_ART_H + (ghostOn ? 0 : pose.y)) * CHAR_SCALE };
     },
     setYaw(yaw) {
       root.rotation.y = yaw;
@@ -1032,7 +1156,13 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       releaseOtherOutfits();
     },
     playEmote(id, opts) {
-      if (!disposed && Object.hasOwn(EMOTES, id)) emote = { id, t: 0, stopT: null, reduced: opts?.reduced === true };
+      if (disposed || !Object.hasOwn(EMOTES, id)) return;
+      // 유령 그림은 몸 자세가 없다 — 대신 한 번 튀어 "보냈는데 아무 일도 없음" 을 막는다(모션 줄이기면 없다)
+      if (ghostOn && spriteShown()) {
+        if (opts?.reduced !== true) hopAge = 0;
+        return;
+      }
+      emote = { id, t: 0, stopT: null, reduced: opts?.reduced === true };
     },
     prewarm(faceId) {
       if (disposed) return;
@@ -1047,32 +1177,24 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
     setFace(id) {
       if (!disposed) showFace(id);
     },
-    setGhost(on, opacity = GHOST_DEFAULT_OPACITY, glow) {
+    setGhost(on, opts) {
       if (disposed) return;
       if (!on) {
-        if (!ghostMat) return;
-        for (const j of JOINTS) meshes[j].material = bodyMaterial;
-        ghostMat.dispose();
-        ghostMat = null;
-        disc.visible = true;
+        if (!ghostOn) return;
+        ghostOn = false;
+        hopAge = null;
+        if (sprite) sprite.position.y = 0;
+        applyGhost();
         return;
       }
-      if (!ghostMat) {
-        ghostMat = bodyMaterial.clone();
-        ghostMat.transparent = true;
-        ghostMat.depthWrite = false;
-        for (const j of JOINTS) meshes[j].material = ghostMat;
-        disc.visible = false;
+      if (!ghostOn) {
+        ghostOn = true;
+        ghostAlpha = GHOST_ART_OPACITY;
+        ghostTint = 1;
       }
-      ghostMat.opacity = clamp01(opacity);
-      // 발광은 복제 재질에만 — 공유 재질(bodyMaterial)은 건드리지 않는다
-      if (glow) {
-        ghostMat.emissive.set(glow.color);
-        ghostMat.emissiveIntensity = glow.intensity;
-      } else {
-        ghostMat.emissive.set(0x000000);
-        ghostMat.emissiveIntensity = 0;
-      }
+      if (opts?.opacity !== undefined) ghostAlpha = clamp01(opts.opacity);
+      if (opts?.tint !== undefined) ghostTint = clamp01(opts.tint);
+      applyGhost();
     },
     holdPose(id) {
       if (disposed) return;
@@ -1131,8 +1253,9 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       if (ring) ring.scale.setScalar(pickAnimate ? pickRingScale(pickAge, 0) : 1);
     },
     setOpacity(alpha) {
-      if (disposed || !ghostMat) return;
-      ghostMat.opacity = clamp01(alpha);
+      if (disposed || !ghostOn) return;
+      ghostAlpha = clamp01(alpha);
+      applyGhost();
     },
     meshCount() {
       let n = 0;
@@ -1147,6 +1270,11 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       if (ghostMat) {
         ghostMat.dispose();
         ghostMat = null;
+      }
+      if (sprite) {
+        root.remove(sprite);
+        sprite.material.dispose(); // 텍스처는 모든 유령이 함께 쓰니 해제하지 않는다
+        sprite = null;
       }
       dropPickShells();
       if (ring) {
@@ -1165,6 +1293,8 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
 
 /** 06-10 렌더러의 CharacterKit 모양에 맞춘 생성기 — 의상 id 를 모르면 기본 코트로 만든다 */
 export const characterKit = {
+  /** 유령 그림 텍스처가 준비됐나 — 런타임이 E2E 훅 window.__mfGhosts 의 ready 로 알린다 */
+  ghostReady: ghostArtReady,
   create(figIndex: number, outfitId: string): WorldCharacter {
     return createCharacter(figIndex, Object.hasOwn(OUTFITS, outfitId) ? (outfitId as OutfitId) : "coat");
   },

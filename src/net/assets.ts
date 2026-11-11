@@ -59,6 +59,11 @@ export function ghostSrc(): { src: string; srcSet: string } {
   return { src: png("ghost", "ghost", 2), srcSet: `${png("ghost", "ghost", 2)} 2x, ${png("ghost", "ghost", 4)} 4x` };
 }
 
+// 3D 장면의 유령 그림 스프라이트 텍스처 주소(0083-2). 4x 한 장을 모든 탈락자가 함께 쓴다. 입장 때 미리 받는 목록(ghostSrc)과 같은 파일이다.
+export function ghostSpriteSrc(): string {
+  return png("ghost", "ghost", 4);
+}
+
 // 로비 꾸미기 카드 그림(10-07, 승인 디자인 시스템 사본 아홉 장). 표시 64×80, 파일 240×300 이라 한 장으로 충분하다. 인물별 그림은 만들지 않는다(O-3).
 export function outfitCardSrc(id: OutfitId): string {
   return `/outfits/outfit-${id}.png?v=${ASSET_VERSION}`;

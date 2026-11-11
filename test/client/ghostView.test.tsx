@@ -448,24 +448,22 @@ describe("유령은 산 사람과 상호작용하지 않는다 (REQUIREMENTS Out
   });
 });
 
-// ---- 09.1-09: 장면 표의 직업 의상 (결정 0063-2, L13) ----
-describe("유령 직업 의상 — 장면 표 (L13)", () => {
-  const outfitSeats = (scene: SceneLook) => Object.entries(scene.seats).filter(([, s]) => "outfit" in s);
+// ---- 18.1-17: 장면 표에 직업이 비치지 않는다 (결정 0083-2, L13) ----
+describe("유령 시점 — 장면 표에 의상 값이 실리지 않는다 (L13)", () => {
+  const outfitSeats = (scene: SceneLook) => Object.entries(scene.seats).filter(([, s]) => "outfit" in s || "costume" in s);
 
-  it("유령 view: 탈락 좌석 4 에 직업 의상이 실린다(citizen → coat), 산 좌석에는 키가 없다", () => {
+  it("유령 view: 탈락 좌석 4 는 ghost 이고 의상 값이 없다", () => {
     mount(makeView({ mySeat: 4, dead: [4] }));
-    const seats = lastScene().seats;
-    expect(seats[4]?.outfit).toBe("coat");
-    expect(outfitSeats(lastScene()).map(([k]) => k)).toEqual(["4"]);
+    expect(lastScene().seats[4]?.ghost).toBe(true);
+    expect(outfitSeats(lastScene())).toEqual([]);
   });
 
-  it("마피아였던 탈락자는 mafia 의상", () => {
+  it("마피아였던 탈락자와 시민이었던 탈락자의 장면 표 항목이 같다", () => {
     mount(makeView({ mySeat: 4, dead: [0, 4] }));
-    expect(lastScene().seats[0]?.outfit).toBe("mafia");
-    expect(lastScene().seats[4]?.outfit).toBe("coat");
+    expect(JSON.stringify(lastScene().seats[0])).toBe(JSON.stringify(lastScene().seats[4]));
   });
 
-  it("같은 판의 산 사람 view: 장면 표 어디에도 outfit 키가 없고 DOM 에 [data-ghost-outfit] 도 없다", () => {
+  it("같은 판의 산 사람 view: 장면 표 어디에도 의상 키가 없고 DOM 에 [data-ghost-outfit] 도 없다", () => {
     const { container } = mount(makeView({ mySeat: 0, dead: [4] }));
     expect(outfitSeats(lastScene())).toEqual([]);
     expect(container.querySelectorAll("[data-ghost-outfit]").length).toBe(0);

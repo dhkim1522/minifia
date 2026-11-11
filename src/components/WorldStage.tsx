@@ -14,7 +14,7 @@ import type { SceneLook } from "../world/presence";
 import { initialMapStatus } from "../world/status";
 import type { MapStatusState } from "../world/status";
 import type { WorldStore } from "../world/store";
-import { installEmotesHook, installGhostOutfitsHook, installLooksHook, installMapHook, installPinHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
+import { installEmotesHook, installGhostsHook, installLooksHook, installMapHook, installPinHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
 import { MapStatusCard } from "./MapStatusCard";
 import { ErrandAct } from "./v2/ErrandAct";
 import { ErrandArrow, ErrandMarker } from "./v2/ErrandMarker";
@@ -331,8 +331,8 @@ export function WorldStage(props: WorldStageProps) {
     if (host === null || tagLayer === null) return;
     // 테스트 훅은 ?e2e=1(세션 저장) 또는 개발 빌드에서만 — 같은 조건에서 소프트웨어 렌더러도 허용한다(E2E 헤드리스, RESEARCH A13)
     const hooksOn = worldTestHooksEnabled(window.location.search, sessionStore(), import.meta.env.DEV);
-    // window.__mfGhostOutfits(유령 직업 의상 표, 09.1-09): 같은 훅 문맥에서만. 의상은 DOM 속성으로 싣지 않는다(L13)
-    const outfitsHook = hooksOn ? installGhostOutfitsHook() : null;
+    // window.__mfGhosts(유령 그림으로 그리는 좌석·그림 준비 여부, 0083-2): 같은 훅 문맥에서만. 좌석 번호뿐이고 DOM 속성이 아니다(L13)
+    const ghostsHook = hooksOn ? installGhostsHook() : null;
     // window.__mfPin(핀 조명 대상·이동 중 여부, 09.1.1-11): 같은 훅 문맥에서만. DOM 이 아니다
     const pinHook = hooksOn ? installPinHook() : null;
     // window.__mfEmotes(받은 동작 프레임·재생 중 좌석, 10-03, L33): 같은 훅 문맥에서만. DOM 이 아니다
@@ -362,7 +362,7 @@ export function WorldStage(props: WorldStageProps) {
         if (at === null) root.removeAttribute("data-ring");
         else root.setAttribute("data-ring", `${at.x.toFixed(2)},${at.z.toFixed(2)}`);
       },
-      onGhostOutfits: outfitsHook?.set,
+      onGhosts: ghostsHook?.set,
       onPin: pinHook?.set,
       onEmotes: emotesHook?.set,
       onLooks: looksHook?.set,
@@ -386,7 +386,7 @@ export function WorldStage(props: WorldStageProps) {
     void runtime.start();
     return () => {
       offHooks?.();
-      outfitsHook?.off();
+      ghostsHook?.off();
       pinHook?.off();
       emotesHook?.off();
       looksHook?.off();

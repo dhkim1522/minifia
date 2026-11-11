@@ -21,8 +21,7 @@ import { createTapGate } from "./input";
 import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment, stepYaw, travelYaw } from "./motion";
 import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
-import { GHOST_MIST, jobOutfit } from "./ghostOutfit";
-import { executionFade, GHOST_OPACITY, ghostFloatY, stageLiftY } from "./presence";
+import { EXEC_END_OPACITY, executionFade, GHOST_OPACITY, GHOST_SPRITE, ghostFloatY, ghostTintOf, stageLiftY } from "./presence";
 import { easeInOut, pinAt, pinLevel, pinLights } from "./pinPlan";
 import type { SceneLook } from "./presence";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
@@ -199,14 +198,17 @@ export interface WorldRuntimeDeps {
   storage?: Storage | null;
   /** 목적지 링이 생기거나(탭)·보정되거나(구간 끝점)·없어질 때 한 번씩 불린다 — 루트의 data-ring 용 */
   onRing?: (at: { x: number; z: number } | null) => void;
-  /** 지금 입힌 유령 직업 의상 표(좌석 → 의상 id)가 바뀔 때만 한 번 불린다 — E2E 훅 window.__mfGhostOutfits 용(09.1-09). 산 사람 화면은 늘 빈 표다 */
-  onGhostOutfits?: (outfits: Readonly<Record<number, string>>) => void;
+  /**
+   * 유령 그림으로 그리고 있는 좌석(오름차순)과 그림 준비 여부가 바뀔 때만 한 번 불린다 — E2E 훅 window.__mfGhosts 용(0083-2, T-18.1-41).
+   * 좌석 번호와 준비 여부뿐이다(직업·의상 없음)
+   */
+  onGhosts?: (state: { seats: number[]; ready: boolean }) => void;
   /**
    * 결과 화면(11-05)이 장면 표의 costume 으로 실제로 입힌 직업 의상 표(좌석 → 의상 id)와 scene dim 으로 어두워진 좌석(오름차순)이 바뀔 때만 한 번 불린다.
    * 화면이 정한 값이 아니라 런타임이 적용한 값이다(E2E 훅 window.__mfResult). 제품 화면은 넘기지 않아도 된다. 결과 장면이 아니면 한 번도 불리지 않는다
    */
   onCostumes?: (costumes: Readonly<Record<number, string>>, dimmed: readonly number[]) => void;
-  /** 그리는 좌석별 고른 의상 표(좌석 → 의상 id, 직업 의상 안개와 무관)가 바뀔 때만 한 번 불린다 — E2E 훅 window.__mfLooks 용(10-04, L33). 제품은 넘기지 않는다 */
+  /** 그리는 좌석별 고른 의상 표(좌석 → 의상 id, 결과 화면 직업 의상과 무관)가 바뀔 때만 한 번 불린다 — E2E 훅 window.__mfLooks 용(10-04, L33). 제품은 넘기지 않는다 */
   onLooks?: (looks: Readonly<Record<number, string>>) => void;
   /** 핀 조명이 지금 비추는 좌석(없으면 null)·이동 중 여부·켜짐 수준(0~1)이 바뀔 때 불린다 — E2E 훅 window.__mfPin 용(09.1.1-11). 제품은 넘기지 않는다 */
   onPin?: (pin: { seat: number | null; moving: boolean; strength: number }) => void;
@@ -319,20 +321,17 @@ interface Actor {
   fadeOpacity: number;
   /** 지금 유령으로 그리고 있나(handle.setGhost 에 마지막으로 보낸 값) */
   ghost: boolean;
-  /** 유령 직업 의상 + 안개를 입었나(그 의상 id, 없으면 null) — 장면 표에 outfit 이 있을 때만(spectate 를 받은 유령 분기) */
-  ghostOutfit: string | null;
-  /**
-   * 산 사람 화면의 탈락자(장면 표 ghost 인데 outfit 키 없음)가 입은 기본 코트 안개 의상(없으면 null, 18.1 C-2·C-5).
-   * ghostOutfit(E2E 훅 표 __mfGhostOutfits 의 원천)에 넣지 않는다 — 산 사람 화면의 훅 표는 늘 비어 있다.
-   */
-  mistOutfit: OutfitId | null;
-  /** 결과 화면 장면 표(costume)로 지금 입고 있는 직업 의상(없으면 null) — 고른 look·유령 안개와 별개 */
+  /** 유령이 된 시각(ms) — 유령 그림이 0 → 0.88 로 오르는 시작점 */
+  ghostAt: number;
+  /** handle.setGhost 에 마지막으로 보낸 밝기 배율(유령일 때) */
+  ghostTint: number;
+  /** 결과 화면 장면 표(costume)로 지금 입고 있는 직업 의상(없으면 null) — 고른 look 과 별개 */
   costume: string | null;
   /** 연결 끊김으로 어둡게 그리나 */
   away: boolean;
   /** 결과 화면 장면 표(dim)로 어둡게 그리나 */
   sceneDim: boolean;
-  /** 서버가 준 고른 의상(view.players[].look, 없으면 coat) — 유령 안개 중에도 여기에 최신 값을 두고 안개가 끝나면 이 의상으로 돌아온다 */
+  /** 서버가 준 고른 의상(view.players[].look, 없으면 coat) — 결과 화면 직업 의상을 입는 중에도 여기에 최신 값을 두고 걷히면 이 의상으로 돌아온다 */
   look: string;
   /** 등장 시작 시각(없으면 서 있다) */
   enter: number | null;
@@ -665,14 +664,18 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     deps.onCostumes(map, dimmed);
   }
 
-  /** 유령 직업 의상 표가 바뀌었나(적용·해제·액터 제거) — 프레임 끝에서 한 번 알린다 */
-  let ghostOutfitsDirty = false;
-  function emitGhostOutfits(): void {
-    if (!ghostOutfitsDirty) return;
-    ghostOutfitsDirty = false;
-    const map: Record<number, string> = {};
-    for (const a of actors.values()) if (a.ghostOutfit !== null) map[a.seat] = a.ghostOutfit;
-    deps.onGhostOutfits?.(map);
+  /** 유령 그림으로 그리는 좌석 목록과 그림 준비 여부가 바뀌었으면 프레임 끝에서 한 번 알린다 */
+  let ghostsSent = "";
+  function emitGhosts(): void {
+    if (deps.onGhosts === undefined) return;
+    const seats: number[] = [];
+    for (const a of actors.values()) if (a.ghost) seats.push(a.seat);
+    seats.sort((x, y) => x - y);
+    const ready = kit?.ghostReady?.() === true;
+    const sig = JSON.stringify([seats, ready]);
+    if (sig === ghostsSent) return;
+    ghostsSent = sig;
+    deps.onGhosts({ seats, ready });
   }
 
   /** 동작이 쓰는 표정의 머리 병합을 표정마다 따로 유휴 시간에 미리 만든다(O-10). requestIdleCallback 이 없으면 첫 사용 때 병합한다 */
@@ -697,7 +700,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     a.idleId = null;
   }
 
-  /** 그리는 좌석의 고른 의상 표가 바뀌었을 때만 알린다(E2E 훅용). 안개 의상과 무관하게 a.look 이다 */
+  /** 그리는 좌석의 고른 의상 표가 바뀌었을 때만 알린다(E2E 훅용). 결과 화면 직업 의상과 무관하게 a.look 이다 */
   let looksSent = "";
   function emitLooks(): void {
     if (deps.onLooks === undefined) return;
@@ -722,7 +725,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
   function removeActor(a: Actor): void {
     cancelPrewarm(a);
-    if (a.ghostOutfit !== null) ghostOutfitsDirty = true;
     renderer?.removeCharacter(a.seat);
     a.handle.dispose();
     actors.delete(a.seat);
@@ -747,12 +749,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (a === undefined) continue;
       a.away = !p.connected;
       refreshDim(a);
-      // 서버가 준 look 이 바뀌면 그 좌석만 갈아입는다. 안개 중이면 안개 의상을 건드리지 않고 값만 갱신한다(안개가 끝날 때 최신 look 으로 돌아온다).
-      // 결과 화면의 직업 의상(costume)을 입는 중에도 같다 — costume 이 걷힐 때 최신 look 으로 돌아온다
+      // 서버가 준 look 이 바뀌면 그 좌석만 갈아입는다. 결과 화면의 직업 의상(costume)을 입는 중에는 값만 갱신한다 — costume 이 걷힐 때 최신 look 으로 돌아온다
       const want = p.look ?? DEFAULT_LOOK;
       if (want !== a.look) {
         a.look = want;
-        if (a.ghostOutfit === null && a.mistOutfit === null && a.costume === null) wear(a, want);
+        if (a.costume === null) wear(a, want);
       }
     }
     emitLooks();
@@ -783,8 +784,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       ringKind: null,
       fadeOpacity: 1,
       ghost: false,
-      ghostOutfit: null,
-      mistOutfit: null,
+      ghostAt: 0,
+      ghostTint: 1,
       costume: null,
       away: false,
       sceneDim: false,
@@ -1060,6 +1061,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const gone: Actor[] = [];
     const walkingSeats = new Set<number>(); // 이번 프레임 걸은 좌석 — 동작이 끊긴 것으로 보아 재생 목록에서 뺀다
     const mySeat = deps.mySeat();
+    const lightNow = look?.lighting ?? deps.lighting ?? "talk";
     for (const a of actors.values()) {
       const server = segFor(a.seat);
       if ((server === undefined || !isShown(a.seat)) && a.exit === null) {
@@ -1068,53 +1070,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
       const seatLook = look?.seats[a.seat];
       const wantGhost = seatLook?.ghost === true;
-      // 유령 직업 의상 + 안개(09.1-09, B-3): 의상 교체와 재질은 같은 프레임에 — 의상 먼저, 그다음 안개. 의상은 장면 표(spectate 에서 온 값)에 있을 때만
-      const wantOutfit = wantGhost ? (seatLook?.outfit ?? null) : null;
-      // 산 사람 화면의 탈락자(outfit 키도 결과 화면 costume 도 없음)는 기본 코트 안개 — 마피아였어도 coat, 훅 표(ghostOutfit)에는 넣지 않는다(18.1 C-2·C-5)
-      const wantMist = wantGhost && wantOutfit === null && seatLook?.costume === undefined;
-      if (wantOutfit !== null) {
-        if (wantOutfit !== a.ghostOutfit || !a.ghost) {
-          if (wantOutfit !== a.ghostOutfit) a.handle.applyOutfit?.(wantOutfit);
-          a.ghost = true;
-          a.ghostOutfit = wantOutfit;
-          a.mistOutfit = null;
-          a.handle.setGhost?.(true, GHOST_MIST.opacity, { color: GHOST_MIST.emissive, intensity: GHOST_MIST.intensity });
-          ghostOutfitsDirty = true;
-        }
-      } else if (wantMist) {
-        if (a.mistOutfit === null || !a.ghost) {
-          const coat = jobOutfit(undefined);
-          if (a.ghostOutfit !== coat) a.handle.applyOutfit?.(coat);
-          if (a.ghostOutfit !== null) {
-            a.ghostOutfit = null;
-            ghostOutfitsDirty = true;
-          }
-          a.mistOutfit = coat;
-          if (!a.ghost) {
-            a.ghost = true;
-            a.handle.setGhost?.(true, GHOST_MIST.opacity, { color: GHOST_MIST.emissive, intensity: GHOST_MIST.intensity });
-          }
-        }
-      } else if (wantGhost !== a.ghost || a.ghostOutfit !== null || a.mistOutfit !== null) {
-        const hadMist = a.ghostOutfit !== null || a.mistOutfit !== null;
-        a.ghost = wantGhost;
-        a.handle.setGhost?.(wantGhost);
-        if (hadMist) {
-          // 안개가 끝났다(유령 장면이 아니거나 spectate 의상이 없어졌다): 고른 의상으로 돌아온다(D-7). 안개 중 바뀐 look 도 a.look 에 이미 최신이다
-          if (a.ghostOutfit !== null) ghostOutfitsDirty = true;
-          a.ghostOutfit = null;
-          a.mistOutfit = null;
-          wear(a, a.look);
-        }
-      }
-      // 결과 화면 직업 의상(11-05): 장면 표에 costume 이 있고 안개 의상이 없을 때만 입는다. 걷히면 고른 look 으로 돌아온다. 유령(탈락자)은 반투명 그대로 입는다
-      const wantCostume = a.ghostOutfit === null && a.mistOutfit === null ? (seatLook?.costume ?? null) : null;
+      // 결과 화면 직업 의상(11-05): 장면 표에 costume 이 있을 때만 입는다(탈락자는 유령 그림이라 입지 않는다, 0083-2). 걷히면 고른 look 으로 돌아온다
+      const wantCostume = wantGhost ? null : (seatLook?.costume ?? null);
       if (wantCostume !== a.costume) {
         if (wantCostume !== null) {
           a.handle.applyOutfit?.(wantCostume);
           cancelPrewarm(a);
           prewarmLater(a);
-        } else if (a.ghostOutfit === null && a.mistOutfit === null) {
+        } else {
           wear(a, a.look);
         }
         a.costume = wantCostume;
@@ -1123,6 +1086,24 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (wantSceneDim !== a.sceneDim) {
         a.sceneDim = wantSceneDim;
         refreshDim(a);
+      }
+      // 탈락자는 누구든 같은 유령 그림(0083-2): 켤 때 불투명도 0(모션 줄이기면 바로 0.88)에서 inMs 동안 올린다.
+      // 밝기는 조명 단계 배율(밤 < 저녁 ≤ 낮) × 끊김·진 팀 어둠 0.6 — 어두운 장면에서는 밝기만 낮추고 색은 그대로
+      const ghostTint = ghostTintOf(lightNow) * (a.dim ? 0.6 : 1);
+      if (wantGhost && !a.ghost) {
+        const start = reduced ? GHOST_SPRITE.opacity : 0;
+        a.ghost = true;
+        a.ghostAt = now;
+        a.ghostTint = ghostTint;
+        a.fadeOpacity = start;
+        a.handle.setGhost?.(true, { opacity: start, tint: ghostTint });
+      } else if (!wantGhost && a.ghost) {
+        a.ghost = false;
+        a.fadeOpacity = 1;
+        a.handle.setGhost?.(false);
+      } else if (a.ghost && ghostTint !== a.ghostTint) {
+        a.ghostTint = ghostTint;
+        a.handle.setGhost?.(true, { tint: ghostTint });
       }
       // 손가락 자세: 지목 중인 좌석만 유지하고, 풀리면 평소 자세로 돌아온다
       const pointAt = seatLook?.pointAt;
@@ -1188,22 +1169,24 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         alpha = e;
         if (p >= 1) a.enter = null;
       }
-      // 처형 연출(fadeAt): 떠오르며 흐려져 안개 유령의 끝점(0.26·높이 0.35)에 선다. ghost 좌석은 연출 없이 유령으로 선다
+      // 처형 연출(fadeAt): 떠오르며 흐려져 끝점(0.26·높이 0.35)에 선다. 연출이 끝나 좌석이 ghost 가 되면 같은 자리에 유령 그림이 나타난다. ghost 좌석은 연출 없이 유령으로 선다
       let rise = 0;
       let fade = 1;
-      let tagFade = 1; // 이름표는 몸처럼 0.6 까지만 흐려지고, 몸이 안개로 더 흐려지는 동안 불투명으로 돌아온다(유령 이름표는 불투명 is-ghost, 끝에 깜빡이지 않게)
+      let tagFade = 1; // 이름표는 몸처럼 0.6 까지만 흐려지고, 몸이 끝점으로 더 흐려지는 동안 불투명으로 돌아온다(유령 이름표는 불투명 is-ghost, 끝에 깜빡이지 않게)
       const fadeAt = wantGhost ? undefined : seatLook?.fadeAt;
       if (fadeAt !== undefined && a.exit === null) {
         const f = executionFade(now - fadeAt, reduced);
         rise = f.rise;
         fade = f.opacity;
-        tagFade = fade >= GHOST_OPACITY ? fade : GHOST_OPACITY + ((1 - GHOST_OPACITY) * (GHOST_OPACITY - fade)) / (GHOST_OPACITY - GHOST_MIST.opacity);
+        tagFade = fade >= GHOST_OPACITY ? fade : GHOST_OPACITY + ((1 - GHOST_OPACITY) * (GHOST_OPACITY - fade)) / (GHOST_OPACITY - EXEC_END_OPACITY);
       }
       // 결과 화면의 반투명 좌석(쉬었던 사람, 11-12): 장면 표의 opacity 와 처형 연출 불투명도 중 낮은 쪽을 몸에 쓴다. 이름표(alpha)는 연출만 따른다
-      const bodyFade = Math.min(fade, seatLook?.opacity ?? 1);
+      // 유령 그림은 등장 올림(0 → GHOST_SPRITE.opacity, 모션 줄이기면 바로)을 몸 불투명도 자리에 쓴다
+      const ghostIn = a.ghost ? (reduced ? GHOST_SPRITE.opacity : GHOST_SPRITE.opacity * Math.min(1, (now - a.ghostAt) / GHOST_SPRITE.inMs)) : fade;
+      const bodyFade = Math.min(ghostIn, seatLook?.opacity ?? 1);
       if (bodyFade !== a.fadeOpacity) {
         a.fadeOpacity = bodyFade;
-        a.handle.setOpacity?.(bodyFade === 1 && a.ghost ? (a.ghostOutfit !== null || a.mistOutfit !== null ? GHOST_MIST.opacity : GHOST_OPACITY) : bodyFade);
+        a.handle.setOpacity?.(bodyFade);
       }
       alpha = Math.min(alpha, tagFade);
       // 높이: 등장 낙하 + (장면이 있을 때) 무대 위 0.29 + 유령 떠다님 + 처형 떠오름
@@ -1350,7 +1333,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       removeActor(a);
       if (a.tag !== null) a.tag.style.opacity = "0";
     }
-    emitGhostOutfits();
+    emitGhosts();
     emitCostumes();
     sweepEmotes(Date.now(), walkingSeats);
     resync = false;

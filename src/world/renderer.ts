@@ -37,9 +37,9 @@ export interface CharacterHandle {
   update(dt: number, t: number, moving: boolean): { headY: number };
   setYaw(yaw: number): void;
   setDim(on: boolean): void;
-  /** 유령(반투명) 켜기/끄기 — 시험 가짜 객체 호환을 위해 optional (08-10) */
-  setGhost?(on: boolean, opacity?: number, glow?: { color: string; intensity: number }): void;
-  /** 의상 바꾸기 — 유령 직업 의상(09.1-09). 시험 가짜 호환을 위해 optional */
+  /** 유령 그림 켜기/끄기(0083-2) — opts 는 불투명도·밝기 배율. 시험 가짜 객체 호환을 위해 optional (08-10) */
+  setGhost?(on: boolean, opts?: { opacity?: number; tint?: number }): void;
+  /** 의상 바꾸기 — 고른 의상·결과 화면 직업 의상. 시험 가짜 호환을 위해 optional */
   applyOutfit?(id: string): void;
   setOpacity?(alpha: number): void;
   /** 손가락 유지 자세·발밑 고리 — optional (08-10) */
