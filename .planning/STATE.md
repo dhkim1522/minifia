@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: "18.1"
 current_phase_name: screen-polish
-current_plan: 13
+current_plan: 14
 status: executing
-stopped_at: Completed 18.1-12-PLAN.md
-last_updated: "2026-11-11T07:43:01.683Z"
+stopped_at: Completed 18.1-13-PLAN.md
+last_updated: "2026-11-11T08:03:39.164Z"
 last_activity: 2026-11-11
 last_activity_desc: Phase 18.1 execution started
-state_head: f4199baee6df7a298b3f31169a3e2fd3d6505880
+state_head: d42a34f791907fbc861e9ce32c3ab679568799d5
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 79
-  completed_plans: 73
+  completed_plans: 74
   percent: 40
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 18.1 (screen-polish) — EXECUTING
-Current Plan: 13
+Current Plan: 14
 Total Plans in Phase: 18
 Status: Ready to execute
 Last activity: 2026-11-11 — Phase 18.1 execution started
@@ -271,6 +271,7 @@ Last activity: 2026-11-11 — Phase 18.1 execution started
 | Phase 18.1 P10 | 약 2시간 | 3 tasks | 12 files |
 | Phase 18.1 P11 | 25min | 3 tasks | 26 files |
 | Phase 18.1 P12 | 35min | 3 tasks | 18 files |
+| Phase 18.1 P13 | 18 min | 3 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -603,6 +604,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18.1]: [18.1-11] 헤더 시간대는 날씨 배지 대신 단계 이름 앞 옅은 낱말(낮·저녁, 밤·아침은 한 단어), 결정 0083-1
 - [Phase 18.1]: [18.1-12] 닉네임을 띠에서 뺐다: 문장은 고정 문자열, HOST-05 허용 목록에서 닉네임·아침 결과 하위 값 삭제
 - [Phase 18.1]: [18.1-12] 낮 시작은 큰 글 없이 띠 한 구절(모두 모여 주세요/지켜봐 주세요), 숨은 문장은 말줄임표 없이 nowrap+overflow hidden(0052-2)
+- [Phase 18.1]: 18.1-13: 처형의 찬반은 숫자 둘(BallotReveal)이고 이름은 서버 찬반 기록 카드가 남긴다. 처형 단계 찬반 단추 줄은 접는다(0083-9)
+- [Phase 18.1]: 18.1-13: 큰 글(.mf-announce.is-top)은 --mf-host-bottom + 16 아래, 좌우 76 비움으로 띠·소리 단추를 피한다. 36px 유지, 좁은 폭에서 감김. 편지 있는 아침 8자 이름은 390폭 3줄(0083-10)
 
 ### Pending Todos
 
@@ -674,8 +677,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-11T07:43:00.625Z
-Stopped at: Completed 18.1-12-PLAN.md
+Last session: 2026-11-11T08:03:38.130Z
+Stopped at: Completed 18.1-13-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
