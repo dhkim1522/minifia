@@ -6,14 +6,13 @@ import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import type { ClientMessage, EmoteId, MapChoice, MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { Button } from "../components/Button";
-import { AwardPlate } from "../components/v2/AwardPlate";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Sheet } from "../components/Sheet";
 import { ToolButton } from "../components/ToolButton";
 import { Icon } from "../components/Icon";
 import { ChatPanel } from "../components/v2/ChatPanel";
 import { DressSheet } from "../components/v2/DressSheet";
-import { FloatAction, FloatActions } from "../components/v2/FloatAction";
+import { FloatAction } from "../components/v2/FloatAction";
 import { MapChip } from "../components/v2/MapChip";
 import { SideColumn } from "../components/v2/SideColumn";
 import { ReadyPill } from "../components/v2/ReadyPill";
@@ -22,14 +21,13 @@ import type { ResultTab } from "../components/v2/ResultPanel";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { V2Icon } from "../components/v2/V2Icon";
 import { WorldStage } from "../components/WorldStage";
-import { CEREMONY_TITLE } from "../game/awardText";
 import { DRESS_TEXT } from "../game/dressText";
 import { LOG_H } from "../game/chatUi";
-import { castOf, CEREMONY, CEREMONY_CENTER, ceremonyAt, ceremonySnap, ceremonyWindowStart, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, satSlots, skipAward, slotsFor, stateAt, walkSnap, winningTeam } from "../game/resultDirector";
-import type { CeremonyState, ResultState } from "../game/resultDirector";
+import { castOf, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, satSlots, slotsFor, stateAt, walkSnap, winningTeam } from "../game/resultDirector";
+import type { ResultState } from "../game/resultDirector";
 import { READY_TEXT } from "../game/resultText";
 import { RESULT_TEXT } from "../game/verdict";
-import { faceSrc, seatColorVar } from "../net/assets";
+import { faceSrc } from "../net/assets";
 import type { ChatStore } from "../net/chatStore";
 import type { ResultLogStore } from "../net/resultLogStore";
 import { useChat } from "../net/useChat";
@@ -76,22 +74,19 @@ export interface ResultScreenProps {
 // 아래 패널은 접힌 게임 패널과 같은 높이의 전체 채팅 한 줄이다(동작 버튼 없음). 헤더 [나가기]는 로비와 같은 확인 시트를 연다.
 
 /** 결과 화면 장면: 카메라 무대 중심 고정, 밤 조명, 이긴 팀 조명 구간에만 무대 가운데 점 조명 */
-function sceneOf(cast: ReturnType<typeof castOf>, state: ResultState, ceremony: CeremonyState | null, calm: boolean, sat: readonly number[] = []): SceneLook {
+function sceneOf(cast: ReturnType<typeof castOf>, state: ResultState, sat: readonly number[] = []): SceneLook {
   const seats: Record<number, SeatLook> = {};
   // 쉬었다가 합류한 사람(11-12, D-13): 참가자 밖 별도 자리에 반투명 0.5 로 선다. 직업 의상·어둠·칩이 없다
   for (const seat of sat) seats[seat] = { show: true, ghost: false, opacity: SAT_OPACITY };
-  // 시상식(11-09): 패가 뜬 창의 수상자는 진 팀이라도 어둡지 않다(패는 늘 읽힌다), 모두 자리로 돌아온 뒤 0.6초에 직업 의상이 걷히고 고른 look 으로 돌아간다
-  const award = ceremony?.phase === "award" ? ceremony.seat : null;
-  const redressed = ceremony?.phase === "done" && (ceremony.redressed || calm); // 모션 줄이기는 끝나는 즉시 look 으로 돌아온다
   for (const c of cast) {
-    const costume = redressed ? undefined : state.costumes[c.seat];
-    seats[c.seat] = { show: true, ghost: !c.alive, ...(costume !== undefined ? { costume } : {}), ...(state.dimmed.includes(c.seat) && c.seat !== award ? { dim: true as const } : {}) };
+    const costume = state.costumes[c.seat];
+    seats[c.seat] = { show: true, ghost: !c.alive, ...(costume !== undefined ? { costume } : {}), ...(state.dimmed.includes(c.seat) ? { dim: true as const } : {}) };
   }
   return {
     camera: { mode: "fixed", target: { x: GATHER_CENTER.x, z: GATHER_CENTER.z }, zoom: 1 },
     lighting: "night",
     tension: 0,
-    pin: award !== null ? { mode: "turn", seat: award } : state.lit ? { mode: "point", x: GATHER_CENTER.x, z: GATHER_CENTER.z } : null,
+    pin: state.lit ? { mode: "point", x: GATHER_CENTER.x, z: GATHER_CENTER.z } : null,
     seats,
   };
 }
@@ -200,21 +195,11 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
 
   // 연출 시계(각자 폰 안): 마운트 때 한 번 정한 연출 여부. 직전 단계가 처형·아침인 마운트에서만 시간표를 돈다. 재접속·처음 마운트·모션 줄이기는 곧바로 최종 상태다(이후 view 가 다시 와도 되돌아가지 않는다)
   const reduced = useReducedMotion();
-  const reducedRef = useRef(reduced);
-  reducedRef.current = reduced;
   const arrival = arrivedFrom === "execution" || arrivedFrom === "morning";
   const [reveal] = useState<boolean>(() => !reduced && arrival);
-  // 시상식(11-09): 서버가 보낸 칭호 목록을 재정렬 없이 그대로 재생한다(좌석이 출연자 표에 없는 줄은 뺀다). 연출 마운트(execution·morning 에서 온 것)에서만 돈다 — 재접속·늦게 본 사람은 시상식 없이 최종 상태다(O-4).
-  // 모션 줄이기는 앞 연출(모임·뒤집기·조명)은 건너뛰어도 시상식은 걷기·박수 없이 패만 재생한다.
-  const awards = useMemo(() => {
-    const seats = new Set(cast.map((c) => c.seat));
-    return (result.awards ?? []).filter((a) => seats.has(a.seat));
-  }, [result.awards, cast]);
-  const [ceremonyOn] = useState<boolean>(() => arrival && awards.length > 0);
-  const timed = reveal || ceremonyOn;
-  const awardN = ceremonyOn ? awards.length : 0;
+  // 서버가 view.result 에 싣는 칭호 목록은 읽지도 그리지도 않는다(결정 0083-7). 연출은 시간표가 5600ms 최종 상태에서 끝난다
   // mark = 마지막으로 닿은 시간표 시각. 상태는 mark 의 순수 함수(stateAt)라 프레임마다 다시 그리지 않고 표시각마다 한 번 바꾼다
-  const [mark, setMark] = useState<number>(reveal ? 0 : tl.ceremonyStartMs);
+  const [mark, setMark] = useState<number>(reveal ? 0 : tl.finalAtMs);
   const [skipped, setSkipped] = useState(false);
   const [cues, setCues] = useState<ClapCues>([]);
   const markRef = useRef(mark);
@@ -230,8 +215,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const mapId: MapId = view.map ?? "bar";
 
   const state = useMemo(() => stateAt(mark, cast, winner), [mark, cast, winner]);
-  const ceremony = useMemo(() => (ceremonyOn ? ceremonyAt(mark, awards, cast) : null), [ceremonyOn, mark, awards, cast]);
-  const scene = useMemo(() => sceneOf(cast, state, ceremony, reduced, satSeats), [cast, state, ceremony, reduced, satSeats]);
+  const scene = useMemo(() => sceneOf(cast, state, satSeats), [cast, state, satSeats]);
 
   // 위치: 모두 자기 둘레 자리로. 연출이면 스토어의 마지막 위치에서 걷는 구간(1200ms), 아니면 한 점 구간이다. 런타임이 만들어지기 전(레이아웃 효과)에 먹여 첫 프레임부터 맞다.
   // 서버 상태가 아니라 이 폰의 연출이다 — 서버 시각 기준(t0 = 지금 + offset)으로 만들어 런타임이 서버 구간과 똑같이 그린다. 새 연결(epoch)이면 다시 먹인다
@@ -257,37 +241,9 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     feed(reveal && markRef.current < tl.flipStartMs);
   }, [feed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 시상식 걷기(11-09, D-7): 창이 바뀔 때마다 한 번 새 snap 을 먹인다 — 이번 수상자는 무대 가운데로 900ms 안에 걷고, 앞사람은 자기 자리로 걷는다(건너뛰는 중이면 순간 이동).
-  // 나머지는 자리에 서 있다. 마지막 창 뒤에는 마지막 수상자가 자리로 돌아간다. 모션 줄이기는 걷지 않는다. 서버 상태가 아니라 이 폰의 연출이다(판정과 무관, T-11-16)
-  const ceremonyRef = useRef<CeremonyState | null>(null);
-  ceremonyRef.current = ceremony;
-  const instant = useRef(false);
-  const cerKey = ceremony === null ? "none" : ceremony.phase === "award" ? `a${ceremony.index}` : "done";
-  useLayoutEffect(() => {
-    const c = ceremonyRef.current;
-    const quick = instant.current;
-    instant.current = false;
-    if (c === null || reducedRef.current) return;
-    const t0 = Date.now() + offsetRef.current;
-    const starts: Record<number, { x: number; z: number } | undefined> = {};
-    for (const seat of Object.keys(slots).map(Number)) starts[seat] = store.positionOf(seat, t0) ?? undefined;
-    const back = quick ? 0 : CEREMONY.walkMs;
-    const moves: Record<number, { to: readonly [number, number]; ms: number }> = {};
-    if (c.phase === "award") {
-      moves[c.seat] = { to: CEREMONY_CENTER, ms: CEREMONY.walkMs };
-      const home = c.prevSeat === null ? undefined : slots[c.prevSeat];
-      if (c.prevSeat !== null && home !== undefined) moves[c.prevSeat] = { to: home, ms: back };
-    } else {
-      const home = c.lastSeat === null ? undefined : slots[c.lastSeat];
-      if (c.lastSeat !== null && home !== undefined) moves[c.lastSeat] = { to: home, ms: back };
-    }
-    store.applyFrame({ t: "world", k: "snap", at: t0, ents: ceremonySnap(slots, starts, t0, moves) }, Math.max(store.currentEpoch(), epoch));
-  }, [cerKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // 표시각마다 setTimeout 으로 단계를 바꾼다. 조명이 켜지는 순간 이긴 팀 박수 큐(최대 4)를 만든다(T-11-17)
-  // 시상식 박수(11-09): 패가 뜨는 마크(창 시작 + 900)에서만 큐를 만든다. 모션 줄이기는 박수가 없다. 한 창 4명을 넘지 않는다(ceremonyAt 이 정한다, T-11-33)
-  // 소리 신호(12-11, D-15): 시계가 단계·뒤집힘 수·패 index 를 바꾸는 이 goto 에서만, 사건마다 한 번 나간다. 건너뛰어 지나친 마크는 goto 를 거치지 않으니 신호도 없다.
-  // 연출 없는 마운트(재접속·처음 마운트)는 reveal·시상 마크가 없어 신호가 없다. 인자는 정수·불리언뿐이다(좌석·직업·닉네임·칭호 없음)
+  // 소리 신호(12-11, D-15): 시계가 단계·뒤집힘 수를 바꾸는 이 goto 에서만, 사건마다 한 번 나간다(flip·light 둘). 건너뛰어 지나친 마크는 goto 를 거치지 않으니 신호도 없다.
+  // 연출 없는 마운트(재접속·처음 마운트)는 reveal 이 없어 신호가 없다. 인자는 정수·불리언뿐이다(좌석·직업·닉네임 없음)
   const myCast = cast.find((c) => c.seat === view.me.seat);
   const iWin = myCast === undefined ? true : myCast.team === winningTeam(winner);
   const iWinRef = useRef(iWin);
@@ -298,21 +254,13 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
       setMark(m);
       const clap = stateAt(m, cast, winner).clap;
       if (clap.length > 0) setCues(clap.map((seat) => ({ seat, id: "clap" as const, nonce: ++nonce.current })));
-      else if (ceremonyOn && !reducedRef.current) {
-        const c = ceremonyAt(m, awards, cast);
-        if (c?.phase === "award" && c.plate && m === ceremonyWindowStart(c.index) + CEREMONY.plateAtMs) setCues(c.clap.map((seat) => ({ seat, id: "clap" as const, nonce: ++nonce.current })));
-      }
       if (reveal && m >= tl.flipStartMs && m < tl.lightAtMs) {
         const i = (m - tl.flipStartMs) / tl.flipGapMs;
         if (Number.isInteger(i) && i < cast.length) emitSignal({ kind: "result", step: "flip", i });
       }
       if (reveal && m === tl.lightAtMs) emitSignal({ kind: "result", step: "light", win: iWinRef.current });
-      if (ceremonyOn) {
-        const c = ceremonyAt(m, awards, cast);
-        if (c?.phase === "award" && c.plate && m === ceremonyWindowStart(c.index) + CEREMONY.plateAtMs) emitSignal({ kind: "result", step: "plate", k: c.index, total: c.total });
-      }
     },
-    [cast, winner, ceremonyOn, awards, reveal], // eslint-disable-line react-hooks/exhaustive-deps
+    [cast, winner, reveal], // eslint-disable-line react-hooks/exhaustive-deps
   );
   // 모션 줄이기로 곧바로 최종 상태가 열린 도착: 승패 소리 한 번만(뒤집기·조명 시계가 없다). 부모의 소리 훅 효과가 같은 커밋에서 새 단계를 먼저 받도록 한 틱 미룬다
   const lightSent = useRef(false);
@@ -328,26 +276,26 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     (from: number) => {
       clock.current = { base: from, since: Date.now() };
       for (const t of timers.current) clearTimeout(t);
-      timers.current = markTimes(cast.length, awardN)
+      timers.current = markTimes(cast.length)
         .filter((m) => m > from)
         .map((m) => setTimeout(() => goto(m), m - from));
     },
-    [cast.length, awardN, goto],
+    [cast.length, goto],
   );
   useEffect(() => {
-    if (!timed) return;
-    schedule(reveal ? 0 : tl.ceremonyStartMs);
-    if (reveal) goto(0);
+    if (!reveal) return;
+    schedule(0);
+    goto(0);
     return () => {
       for (const t of timers.current) clearTimeout(t);
       timers.current = [];
     };
     // 마운트 한 번: 연출은 처음 받은 결과에서만 돈다(이후 같은 result 가 다시 와도 시계를 다시 시작하지 않는다)
-  }, [timed]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [reveal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 확장 중 정지(D-25): 전체가 아닌 탭이 열려 있는 동안 대기 타이머를 취소하고 경과를 보존한다. 접히면 그 경과부터 남은 표시각을 다시 건다. 연출이 아닌 마운트는 타이머가 없어 아무 일도 없다
   useEffect(() => {
-    if (!timed) return;
+    if (!reveal) return;
     if (expanded) {
       if (pausedAt.current !== null) return;
       pausedAt.current = clock.current.base + (Date.now() - clock.current.since);
@@ -358,7 +306,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
       pausedAt.current = null;
       schedule(from);
     }
-  }, [expanded, timed, schedule]);
+  }, [expanded, reveal, schedule]);
 
   // 건너뛰기(D-25): 4600 전의 무대 탭 한 번이면 4600 상태로 점프한다(전원 뒤집힘 + 조명, 승리 알림은 건너뜀). 남은 시간표는 이어진다. 4600 이후 탭은 아무 일 없다
   const skip = useCallback(() => {
@@ -374,21 +322,6 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     if (tab !== "all") setTab("all");
     else skip();
   }, [tab, skip]);
-
-  // 시상 넘기기(11-09, D-25): 떠 있는 [넘기기]나 패 탭이 현재 창을 즉시 끝내고 다음 사람으로 보낸다(앞사람은 순간 이동). 같은 프레임에 여러 번 눌러도 마크가 한 칸씩 간다
-  const skipAwardNow = useCallback(() => {
-    if (!ceremonyOn) return;
-    const next = skipAward(markRef.current, awards.length);
-    if (next === markRef.current) return;
-    instant.current = true;
-    schedule(next);
-    goto(next);
-  }, [ceremonyOn, awards.length, schedule, goto]);
-  // 패 탭: 패널이 확장되어 있으면 접기만 한다(무대 탭과 같다). 아니면 다음 사람으로
-  const onPlateTap = useCallback(() => {
-    if (tab !== "all") setTab("all");
-    else skipAwardNow();
-  }, [tab, skipAwardNow]);
 
   // 머리 위 직업 칩: 뒤집힌 사람만. 결과 화면의 ended 경로에서만 만든다(산 사람 장면 표는 건드리지 않는다)
   const jobBySeat = useMemo(() => new Map(cast.map((c) => [c.seat, c.job])), [cast]);
@@ -422,14 +355,6 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   useLayoutEffect(() => {
     hook.current?.patch({ tab });
   }, [tab]);
-  // 시상 훅(11-09): awards 는 서버 목록 그대로 [좌석, 칭호 id][], shown 은 지금 패의 목록 index(없으면 -1)
-  useLayoutEffect(() => {
-    hook.current?.patch({ awards: awards.map((a) => [a.seat, a.award] as [number, string]) });
-  }, [awards]);
-  const shownIndex = ceremony?.phase === "award" && ceremony.plate ? ceremony.index : -1;
-  useLayoutEffect(() => {
-    hook.current?.patch({ shown: shownIndex });
-  }, [shownIndex]);
   // 쉬었던 사람 훅(11-12): sat 좌석 오름차순. 값은 좌석 번호뿐이다(DOM 속성이 아니다)
   useLayoutEffect(() => {
     hook.current?.patch({ sat: satSeats });
@@ -464,7 +389,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     if (t) show(t.text, t.icon);
   }, [view, epoch, show]);
 
-  // 꾸미기(11-12, D-16): 시상식이 끝났거나 시상식이 없는 최종 상태에서 아래 칸에 [꾸미기]. 로비와 같은 DressSheet·useDress(서버 dress 문이 ended 를 연다). 바꾼 의상은 직업 의상이 걷힌 뒤 보인다
+  // 꾸미기(11-12, D-16): 연출이 끝난 최종 상태에서 오른쪽 열에 [꾸미기]. 로비와 같은 DressSheet·useDress(서버 dress 문이 ended 를 연다). 바꾼 의상은 직업 의상에 가려 다음 판 대기실에서 보인다
   const [dressOpen, setDressOpen] = useState(false);
   const dress = useDress({ view, send, canSend });
   const dressBtnRef = useRef<HTMLButtonElement>(null);
@@ -490,14 +415,11 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     restoreDressFocus.current = false;
     dressBtnRef.current?.focus();
   }, [dressOpen]);
-  const ceremonyDone = mark >= tl.ceremonyStartMs && (!ceremonyOn || ceremony?.phase === "done");
+  const finished = mark >= tl.finalAtMs;
 
   const readyPill = <ReadyPill host={rematch.isHost} on={rematch.mine} n={rematch.ready} m={rematch.total} dim={rematch.isHost && !rematch.canStart} inactive={!pillActive || !canSend} onPress={rematch.press} />;
 
-  const inAward = ceremony?.phase === "award";
-  const title = inAward ? CEREMONY_TITLE : RESULT_TEXT.title[state.title];
-  const plateLine = ceremony?.phase === "award" && ceremony.plate ? awards[ceremony.index] : undefined;
-  const plateTop = (stageInsets?.top ?? 62) + 8;
+  const title = RESULT_TEXT.title[state.title];
   return (
     <main ref={rootRef} className="mf-root mf-result" data-result-stage={state.stage} data-reveal={String(reveal)} data-winner={winner} data-kb-open={kbOpen ? "true" : undefined}>
       <WorldStage
@@ -520,10 +442,8 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
       <header ref={headerRef} className="mf-result__header">
         {/* 머리 단추: 아이콘 단추, 이름은 aria-label "나가기" */}
         <ToolButton name="나가기" icon={<Icon name="back" />} disabled={!canSend} onClick={() => setLeaveOpen(true)} />
-        <h1 className="mf-result__title" data-title={inAward ? "ceremony" : state.title}>
-          {inAward ? (
-            <V2Icon name="trophy" size={24} className="mf-result__title-icon" />
-          ) : state.title === "result" ? null : (
+        <h1 className="mf-result__title" data-title={state.title}>
+          {state.title === "result" ? null : (
             <V2Icon name={state.title === "mafiaWin" ? "roleMafia" : "roleCitizen"} size={28} className={state.title === "mafiaWin" ? "mf-result__title-icon is-mafia" : "mf-result__title-icon"} />
           )}
           <span>{title}</span>
@@ -536,20 +456,6 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         <div className="mf-result__announce" data-result-announce="" data-winner={winner} role="img" aria-label={RESULT_TEXT.title[winner]}>
           <V2Icon name={winner === "mafiaWin" ? "roleMafia" : "roleCitizen"} size={56} className={winner === "mafiaWin" ? "mf-result__announce-icon is-mafia" : "mf-result__announce-icon"} />
           <span className="mf-result__announce-text">{RESULT_TEXT.title[winner]}</span>
-        </div>
-      ) : null}
-      {/* 시상식 칭호 패(11-09): 스테이지 윗변 + 8, 가로 가운데. 창이 바뀌면 key 로 새로 떠서 180ms 페이드가 다시 돈다. 패를 누르면 다음 사람으로 넘어간다 */}
-      {plateLine !== undefined && ceremony?.phase === "award" ? (
-        <div className="mf-result__award" style={{ top: plateTop }} data-award-slot="">
-          <AwardPlate
-            key={ceremony.index}
-            name={contacts.get(plateLine.seat) ?? ""}
-            color={seatColorVar(plateLine.seat)}
-            award={plateLine.award}
-            {...(plateLine.k !== undefined ? { k: plateLine.k } : {})}
-            {...(plateLine.at !== undefined ? { at: plateLine.at } : {})}
-            onTap={onPlateTap}
-          />
         </div>
       ) : null}
       <ResultPanel
@@ -587,14 +493,8 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         }
         pill={readyPill}
       />
-      {/* 떠 있는 [넘기기](11-09, UI-SPEC B-3·G): 오른쪽 16, 위 칸(아래 칸은 11-12 의 [꾸미기] 자리), 위에 'k / n'. 시상 중에만, 확장 탭이 열려 있으면 숨는다 */}
-      {ceremony?.phase === "award" && !expanded ? (
-        <FloatActions>
-          <FloatAction kind="skip" icon="skip" label="넘기기" count={`${ceremony.index + 1} / ${ceremony.total}`} onPress={skipAwardNow} />
-        </FloatActions>
-      ) : null}
-      {/* 시상식이 끝난 뒤 오른쪽 세로 한 줄(16-06 D-05·V-5): 소리(독) · 맵(방장) · 옷장. 손님은 소리 · 옷장 */}
-      {ceremonyDone && !expanded && !dressOpen ? (
+      {/* 연출이 끝나면(5600) 오른쪽 세로 한 줄(16-06 D-05·V-5): 소리(독) · 맵(방장) · 옷장. 손님은 소리 · 옷장 */}
+      {finished && !expanded && !dressOpen ? (
         <SideColumn soundSlot maxHeight={sideMaxH}>
           {mapsOn && view.me.isHost ? <MapChip key="map" choice={mapChoice} host onPress={() => openDress("map")} /> : null}
           <FloatAction key="dress" ref={dressBtnRef} kind="dress" side="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={() => openDress()} />

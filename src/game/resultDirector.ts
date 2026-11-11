@@ -4,7 +4,7 @@
 // 직업 의상 대응은 ghostOutfit.ts 의 jobOutfit 한 곳을 재사용한다 — 새 표를 만들지 않는다.
 import { ringSlots } from "../../shared/game/gather";
 import { isAlive } from "../../shared/game/alive";
-import { snapToWalkable, STAGE_SPOT } from "../../shared/game/map";
+import { snapToWalkable } from "../../shared/game/map";
 import { mapOf } from "../../shared/game/maps";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, MapId, RoomView, WorldSeg } from "../../shared/protocol";
@@ -13,7 +13,7 @@ import { jobOutfit } from "../world/ghostOutfit";
 
 /**
  * 결과 시간표(ms, 연출 시계는 각자 폰 안): 0~1200 모두 자기 자리로 모임 · 1200+400i 좌석 오름차순 i 번째가 뒤집힘 ·
- * 4600 이긴 팀 조명(진 팀 어둠)과 박수 + 중앙 승리 알림 · 5200 알림 끝 · 5600 시상식 시작(11-09 가 쓴다)이고 헤더가 승리 한 줄이 된다.
+ * 4600 이긴 팀 조명(진 팀 어둠)과 박수 + 중앙 승리 알림 · 5200 알림 끝 · 5600 최종 상태(연출 끝)이고 헤더가 승리 한 줄이 된다(18.1-16, 결정 0083-7: 시상식은 없다).
  */
 export const RESULT_TIMELINE = {
   gatherMs: 1200,
@@ -21,7 +21,7 @@ export const RESULT_TIMELINE = {
   flipGapMs: 400,
   lightAtMs: 4600,
   announceEndMs: 5200,
-  ceremonyStartMs: 5600,
+  finalAtMs: 5600,
 } as const;
 
 /** 확장 패널 높이의 상한(px) */
@@ -31,9 +31,6 @@ export const RESULT_PANEL_MAX_H = 520;
 export function resultPanelHeight(roomH: number): number | undefined {
   return roomH > 0 ? Math.min(Math.round(0.7 * roomH), RESULT_PANEL_MAX_H) : undefined;
 }
-
-/** 시상식 시작 시각(11-09 가 이 상수를 읽는다) */
-export const CEREMONY_START_MS = RESULT_TIMELINE.ceremonyStartMs;
 
 /** 박수는 이긴 팀 좌석 오름차순 최대 이만큼(동시 재생 상한, T-11-17) */
 export const CLAP_MAX = 4;
@@ -86,7 +83,7 @@ export interface ResultState {
 /** ended view 의 result 와 players 로 출연자 표를 만든다(좌석 오름차순). 직업은 result.seats 에서만 읽는다 */
 export function castOf(view: RoomView & { result: NonNullable<RoomView["result"]> }): CastMember[] {
   const aliveBySeat = new Map(view.players.map((p) => [p.seat, isAlive(p)]));
-  // 쉬었다가 합류한 사람(sat, 11-12)은 참가자가 아니다 — 링 자리·직업 칩·승패·시상 어디에도 들지 않는다(서버도 result.seats 에 싣지 않는다, 여기서 한 번 더 막는다)
+  // 쉬었다가 합류한 사람(sat, 11-12)은 참가자가 아니다 — 링 자리·직업 칩·승패 어디에도 들지 않는다(서버도 result.seats 에 싣지 않는다, 여기서 한 번 더 막는다)
   const sat = new Set(view.players.filter((p) => p.sat === true).map((p) => p.seat));
   return [...view.result.seats]
     .filter((s) => !sat.has(s.seat))
@@ -165,7 +162,7 @@ export function holdSnap(slots: Record<number, readonly [number, number]>, t0: n
 export function stateAt(t: number, cast: readonly CastMember[], winner: GameWinner): ResultState {
   const tl = RESULT_TIMELINE;
   const at = Math.max(0, t);
-  if (at >= tl.ceremonyStartMs) return finalState(cast, winner);
+  if (at >= tl.finalAtMs) return finalState(cast, winner);
   const stage: ResultStage = at < tl.flipStartMs ? "gather" : at < tl.lightAtMs ? "flip" : at < tl.announceEndMs ? "light" : "announce";
   const count = at < tl.flipStartMs ? 0 : Math.min(cast.length, Math.floor((at - tl.flipStartMs) / tl.flipGapMs) + 1);
   const flipped = cast.slice(0, count).map((c) => c.seat);
@@ -184,12 +181,11 @@ export function stateAt(t: number, cast: readonly CastMember[], winner: GameWinn
   };
 }
 
-/** 상태가 바뀌는 시각(오름차순, 중복 없음). 화면은 마크마다 setTimeout 으로 단계를 바꾼다 — 프레임마다 다시 그리지 않는다. n = 참가자 수, awardN = 시상 칭호 수(11-09, 없으면 0) */
-export function markTimes(n: number, awardN = 0): number[] {
+/** 상태가 바뀌는 시각(오름차순, 중복 없음). 화면은 마크마다 setTimeout 으로 단계를 바꾼다 — 프레임마다 다시 그리지 않는다. n = 참가자 수. 마지막 마크가 최종 상태 시각이다 */
+export function markTimes(n: number): number[] {
   const tl = RESULT_TIMELINE;
-  const times = new Set<number>([0, tl.lightAtMs, tl.announceEndMs, tl.ceremonyStartMs]);
+  const times = new Set<number>([0, tl.lightAtMs, tl.announceEndMs, tl.finalAtMs]);
   for (let i = 0; i < n; i++) times.add(tl.flipStartMs + tl.flipGapMs * i);
-  for (const m of ceremonyMarks(awardN)) times.add(m);
   return [...times].sort((a, b) => a - b);
 }
 
@@ -211,132 +207,5 @@ export function walkSnap(slots: Record<number, readonly [number, number]>, start
       const dist = Math.hypot(sx - x0, sz - z0);
       if (dist === 0) return { s, p: [sx, sz], t0, v: 0 };
       return { s, p: [x0, z0, sx, sz], t0, v: Math.max(1, Math.ceil(dist / seconds)) };
-    });
-}
-
-// ---------- 시상식 (11-09, 결정 D-7·D-24·D-25, UI-SPEC B-3) ----------
-// 시간표: 5600 에 시작, i 번째 칭호 창은 [5600 + 2500i, 5600 + 2500(i + 1)). 창 시작 0ms 앞사람은 자기 자리로 걷고 이번 사람은 무대 가운데로 걷기 시작(0~900),
-// 900ms 에 패가 뜨고 나머지 최대 4명이 박수, 2500ms 에 다음 창. 마지막 창이 끝나면 모두 자리 복귀 걷기, +600ms 에 직업 의상이 걷힌다(고른 look 으로).
-// 서버가 정렬해 보낸 칭호 순서를 그대로 쓴다 — 여기서 재정렬하지 않는다. 시각은 모두 인자다.
-
-export const CEREMONY = {
-  /** 한 명당 길이 */
-  windowMs: 2500,
-  /** 무대 가운데로 걷는 시간(= 스포트라이트를 받는 구간) */
-  walkMs: 900,
-  /** 패가 뜨는 시각(창 시작 기준) */
-  plateAtMs: 900,
-  /** 마지막 창이 끝나고 직업 의상이 걷히기까지 */
-  redressDelayMs: 600,
-} as const;
-
-/** 무대 가운데(서버 고정소수점). 서버 이동 마스크에는 예외 점이고 로컬 연출 구간이라 판정과 무관하다 */
-export const CEREMONY_CENTER: readonly [number, number] = [STAGE_SPOT.x, STAGE_SPOT.z];
-
-/** i 번째 창이 시작하는 시각 */
-export const ceremonyWindowStart = (i: number): number => CEREMONY_START_MS + CEREMONY.windowMs * i;
-/** n 개 창이 모두 끝나는 시각(= done 시작, 복귀 걷기 시작) */
-export const ceremonyEnd = (n: number): number => ceremonyWindowStart(n);
-
-/** 시상식에서 상태가 바뀌는 시각(창 시작·패 등장·끝·의상 복귀). 칭호가 없으면 빈 목록 */
-export function ceremonyMarks(n: number): number[] {
-  if (n <= 0) return [];
-  const out: number[] = [];
-  for (let i = 0; i < n; i++) out.push(ceremonyWindowStart(i), ceremonyWindowStart(i) + CEREMONY.plateAtMs);
-  out.push(ceremonyEnd(n), ceremonyEnd(n) + CEREMONY.redressDelayMs);
-  return out;
-}
-
-export type CeremonyState =
-  | {
-      phase: "award";
-      /** 지금 창의 목록 index */
-      index: number;
-      total: number;
-      /** 지금 무대로 나온 사람 */
-      seat: number;
-      /** 앞사람(자리로 돌아간다). 첫 창은 null */
-      prevSeat: number | null;
-      /** 창 시작 0~900: 걷는 중 */
-      walking: boolean;
-      /** 패가 떠 있나(900 이후) */
-      plate: boolean;
-      /** 박수 대상: 패가 뜬 뒤 나머지 중 좌석 오름차순 최대 CLAP_MAX (탈락자 포함) */
-      clap: number[];
-    }
-  | {
-      phase: "done";
-      total: number;
-      /** 모두 자리 복귀 걷기 시작 시각 */
-      returnAt: number;
-      /** 직업 의상이 걷히는 시각(returnAt + 600) */
-      redressAt: number;
-      redressed: boolean;
-      /** 마지막으로 무대에 있던 사람(복귀 걷기 대상) */
-      lastSeat: number | null;
-    };
-
-/** 시각 t(연출 시계 ms)의 시상식 상태. 5600 이전이거나 칭호가 없으면 null (재접속·옛 서버는 시상식이 없다) */
-export function ceremonyAt(t: number, awards: readonly { seat: number }[], cast: readonly CastMember[]): CeremonyState | null {
-  const n = awards.length;
-  if (n === 0 || t < CEREMONY_START_MS) return null;
-  const rel = t - CEREMONY_START_MS;
-  if (rel >= CEREMONY.windowMs * n) {
-    const returnAt = ceremonyEnd(n);
-    return { phase: "done", total: n, returnAt, redressAt: returnAt + CEREMONY.redressDelayMs, redressed: t >= returnAt + CEREMONY.redressDelayMs, lastSeat: awards[n - 1]?.seat ?? null };
-  }
-  const index = Math.floor(rel / CEREMONY.windowMs);
-  const local = rel - index * CEREMONY.windowMs;
-  const seat = awards[index]!.seat;
-  const plate = local >= CEREMONY.plateAtMs;
-  return {
-    phase: "award",
-    index,
-    total: n,
-    seat,
-    prevSeat: index > 0 ? awards[index - 1]!.seat : null,
-    walking: !plate,
-    plate,
-    clap: plate ? cast.filter((c) => c.seat !== seat).slice(0, CLAP_MAX).map((c) => c.seat) : [],
-  };
-}
-
-/**
- * 건너뛰기(D-25): 현재 창을 즉시 끝내고 다음 창 0ms(마지막 창이면 done 시작)의 시각을 돌려준다. 시상식 밖이면 t 그대로.
- * 부르는 쪽이 돌려받은 시각을 새 마크로 쓰므로 같은 프레임에 여러 번 눌러도 한 칸씩 안전하게 간다.
- */
-export function skipAward(t: number, n: number): number {
-  if (n <= 0 || t < CEREMONY_START_MS) return t;
-  const rel = t - CEREMONY_START_MS;
-  if (rel >= CEREMONY.windowMs * n) return t;
-  return ceremonyWindowStart(Math.floor(rel / CEREMONY.windowMs) + 1);
-}
-
-/**
- * 시상식 걷기 snap 의 구간들. 모든 좌석을 한 snap 에 담는다(snap 은 구간을 통째로 바꾼다):
- * moves 에 있는 좌석은 to 로 ms 안에 도착하게 걷고(출발 위치를 모르거나 ms 가 0 이거나 이미 거기면 한 점 구간 = 순간 이동), 나머지는 자기 둘레 자리에 서 있다.
- * p 는 고정소수점 정수, v 는 도착이 ms 를 넘지 않게 올림한 고정소수점 거리/초. 모두 같은 t0.
- */
-export function ceremonySnap(
-  slots: Record<number, readonly [number, number]>,
-  starts: Readonly<Record<number, { x: number; z: number } | undefined>>,
-  t0: number,
-  moves: Readonly<Record<number, { to: readonly [number, number]; ms: number } | undefined>>,
-): WorldSeg[] {
-  return Object.keys(slots)
-    .map(Number)
-    .sort((a, b) => a - b)
-    .map((s) => {
-      const move = moves[s];
-      const [sx, sz] = slots[s]!;
-      if (move === undefined) return { s, p: [sx, sz], t0, v: 0 };
-      const [tx, tz] = move.to;
-      const from = starts[s];
-      if (from === undefined || move.ms <= 0) return { s, p: [tx, tz], t0, v: 0 };
-      const x0 = Math.round(from.x * 100);
-      const z0 = Math.round(from.z * 100);
-      const dist = Math.hypot(tx - x0, tz - z0);
-      if (dist === 0) return { s, p: [tx, tz], t0, v: 0 };
-      return { s, p: [x0, z0, tx, tz], t0, v: Math.max(1, Math.ceil(dist / (move.ms / 1000))) };
     });
 }
