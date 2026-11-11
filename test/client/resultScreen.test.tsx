@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
@@ -392,7 +392,8 @@ describe("E2E 훅 window.__mfResult (11-05)", () => {
   it("stage·칩 수·어두워진 좌석·입은 의상 표를 싣고 언마운트하면 지운다 (DOM 속성이 아니다)", () => {
     const r = renderRoom(makeView());
     const hook = (window as unknown as { __mfResult?: { stage: string; chips: number; dimmed: number[]; costumes: Record<number, string> } }).__mfResult;
-    expect(hook).toEqual({ stage: "final", chips: 5, dimmed: [3], costumes: { 0: "coat", 1: "police", 2: "doctor", 3: "mafia", 4: "coat" }, tab: "all", awards: [], shown: -1, sat: [] });
+    expect(Object.keys(hook!).sort()).toEqual(["chips", "costumes", "dimmed", "sat", "stage", "tab"]); // 시상 필드(awards·shown)는 없다(0083-7)
+    expect(hook).toEqual({ stage: "final", chips: 5, dimmed: [3], costumes: { 0: "coat", 1: "police", 2: "doctor", 3: "mafia", 4: "coat" }, tab: "all", sat: [] });
     expect(r.container.querySelector('[data-result-stage="final"]')).not.toBeNull();
     // 루트 속성에 역할·의상을 싣지 않는다 — 직업은 칩([data-role-chip])의 속성과 접근성 이름뿐이다
     const root = r.container.querySelector("main")!;
@@ -717,6 +718,19 @@ describe("result.css 연출 정적 단언 (11-05)", () => {
     expect(css).toMatch(/\.mf-result__announce-text\s*\{[^}]*font-size:\s*36px/);
     expect(css).toMatch(/mv-rolechip[^{]*\{[^}]*animation:\s*mf-chip-flip 300ms/);
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*mv-rolechip[^}]*animation:\s*none/);
+  });
+  it("시상 패 규칙·keyframes 와 [넘기기] 진행 숫자 규칙이 없다 (0083-7) — 가운데 승리 알림·헤더 제목·아이콘 규칙은 그대로다", () => {
+    expect(css).not.toMatch(/award/i);
+    expect(readFileSync("src/styles/v2.css", "utf8")).not.toContain("mv-float__count");
+    expect(css).toContain(".mf-result__announce");
+    expect(css).toContain(".mf-result__title");
+    expect(css).toContain(".mf-result__title-icon");
+  });
+  it("시상 부품·문구 모듈과 [넘기기] 종류·진행 숫자 속성이 저장소에 없다 (0083-7)", () => {
+    for (const gone of ["src/components/v2/AwardPlate.tsx", "src/game/awardText.ts", "test/client/awardPlate.test.tsx", "test/unit/awardText.test.ts"]) expect(existsSync(gone), gone).toBe(false);
+    const float = readFileSync("src/components/v2/FloatAction.tsx", "utf8");
+    expect(float).not.toContain('"skip"');
+    expect(float).not.toContain("data-float-count");
   });
   it("전이·애니메이션은 opacity·transform 만 쓴다", () => {
     const frames = [...css.matchAll(/@keyframes[^{]+\{([\s\S]*?\n)\}/g)].map((m) => m[1]!).join("\n");
