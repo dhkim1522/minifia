@@ -27,6 +27,7 @@ import {
   tutorialRoleCardChecks,
   tutorialRoleLineChecks,
   tutorialSkipChecks,
+  toggleRowChecks,
   tutorialTimingChecks,
 } from "./lib.mjs";
 import { TUTORIAL_ROLE_MAX_LINES, readRoleLineBoxes, roleLineBoxChecks, todAbsentChecks } from "./polish.mjs";
@@ -532,6 +533,24 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       rec(`${sc}/lobby`, "TG1", "손님 대기실에는 스위치가 없다", (await gp.locator("[data-tutorial-toggle]").count()) === 0, "");
       await toggle.click();
       rec(`${sc}/lobby`, "TG2", "누르면 켜짐(aria-checked true)", (await toggle.getAttribute("aria-checked")) === "true", `aria-checked ${await toggle.getAttribute("aria-checked")}`);
+      // TG3(0083-3): 스위치 줄은 기록 칸 위 한 줄 — 높이 44·기록 칸과 같은 폭·간격 10·글자 '튜토리얼 먼저' 한 줄
+      const toggleRow = await hp.evaluate(() => {
+        const rectOf = (el) => {
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+        };
+        const t = document.querySelector("[data-tutorial-toggle]");
+        const title = t?.querySelector(".tut-toggle__title");
+        const lh = title ? parseFloat(getComputedStyle(title).lineHeight) : NaN;
+        return {
+          toggle: rectOf(t),
+          log: rectOf(document.querySelector(".mf-lobby__panel [data-chat-log]")),
+          text: (t?.textContent ?? "").trim(),
+          lines: title && lh > 0 ? Math.round(title.getBoundingClientRect().height / lh) : null,
+        };
+      });
+      recAll(rec, `${sc}/lobby`, toggleRowChecks(toggleRow));
 
       // ② 켜고 시작 → 두 페이지 모두 tutorial 단계·첫 사건 화면
       const hMark = hs.mark();

@@ -463,7 +463,7 @@ async function worldFlow(ctx) {
     const pad = 28;
     const [gScreens, hScreens] = await Promise.all([screensOfWorld(gp, centers), screensOfWorld(hp, centers)]);
     const inStage = (sc, st) => !!sc && !!st && Number.isFinite(sc.sx) && sc.sx > pad && sc.sx < ctx.size.w - pad && sc.sy > st.top + pad && sc.sy < st.bottom - pad;
-    // 17-07: 가장 낮은 폰(360x560)의 방장 패널은 스위치 줄 +76 으로 326 이 되어 방장 스테이지가 172 로 준다(UI Considerations #24 알려진 한계, 고치지 않는다).
+    // 17-07: 가장 낮은 폰(360x560)의 방장 패널은 스위치 줄 +54(18.1-15 에서 +76 → +54)가 더해져 방장 스테이지가 낮다(UI Considerations #24 알려진 한계, 고치지 않는다).
     // 이 크기에서는 목적지를 손님 화면에서만 고르고, 방장이 같은 점으로 걸어가는 마지막 겹침 단계는 건너뛴다(손님 쪽 걷기·동기 판정은 그대로).
     const hostShort = ctx.size.h < SHORT_PHONE_H;
     const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw.stage) && (hostShort || inStage(hScreens[i], hw.stage)));
@@ -535,7 +535,7 @@ async function worldFlow(ctx) {
 
       // 방장도 같은 점으로 걸어가 두 캐릭터가 한 점에 모인다: 겹친 이름표는 앞뒤가 하나로 정해진다(UI-SPEC E2)
       const hostTap = hostShort ? null : await tapWorld(hp, ht, hSeat, target.x, target.z);
-      if (hostShort) infoRow(ctx, "world/stack", "NT3", "겹친 이름표(방장 화면) — 알려진 한계로 건너뜀", `방장 스테이지가 낮은 폰(${ctx.size.w}x${ctx.size.h})은 방장 패널 +76 때문에 목적지를 누를 칸이 없다(UI Considerations #24)`);
+      if (hostShort) infoRow(ctx, "world/stack", "NT3", "겹친 이름표(방장 화면) — 알려진 한계로 건너뜀", `방장 스테이지가 낮은 폰(${ctx.size.w}x${ctx.size.h})은 방장 패널 스위치 줄(+54) 때문에 목적지를 누를 칸이 없다(UI Considerations #24)`);
       else if (hostTap.move) {
         await sleep(segmentDurationMs(hostTap.move) + 1200);
         const stacked = await readWorld(hp);
@@ -588,7 +588,7 @@ const CHAT_LOBBY_EXTRA = 154;
 const CHAT_CONTROL = 48;
 const CHAT_PANEL_EPS = 1;
 
-/** 한 페이지의 로비 채팅 패널 치수 판정. m 은 readChatPanel 의 값. host 는 방장 페이지(스위치 줄 +76, 17-07 0080-4). 검사 행 목록을 돌려준다. */
+/** 한 페이지의 로비 채팅 패널 치수 판정. m 은 readChatPanel 의 값. host 는 방장 페이지(스위치 줄 +54, 18.1-15 0083-3). 검사 행 목록을 돌려준다. */
 function chatPanelRows(m, host = false) {
   if (!m) return [{ id: "CP0", label: "채팅 패널을 읽음", ok: false, detail: "패널·기록 칸·입력칸 중 없는 것이 있음" }];
   const logWant = CHAT_LOG;
@@ -638,7 +638,7 @@ async function chatLobbyFlow(ctx) {
       const cleared = await gp.locator("[data-chat-input]").inputValue();
       rec(sc, "CL5", "보낸 뒤 손님 입력칸이 비워짐", cleared === "", `입력칸 ${cleared.length}자`);
     }
-    // 패널 치수: 방장·손님 두 화면 모두 UI-SPEC 폰 크기 표대로(18.1: 기록 칸 68 한 값 — 손님 222, 방장은 스위치 줄 +76 → 298).
+    // 패널 치수: 방장·손님 두 화면 모두 UI-SPEC 폰 크기 표대로(18.1: 기록 칸 68 한 값 — 손님 222, 방장은 스위치 줄 +54 → 276).
     // 손님은 글을 보내느라 입력칸에 포커스가 있어 기록 칸이 늘어나 있다(0083-4) — 접힌 상태를 재려고 먼저 접는다
     await collapseChatLog(gp);
     for (const [who, page] of [["방장", hp], ["손님", gp]]) {
@@ -2386,15 +2386,21 @@ async function waitMorningAnnounce(page, ms, re = MORNING_SENTENCE_RE) {
   }
 }
 
-/** 유언·쪽지 시트(kind = "will"|"note")에 글을 쓰고 [저장] 을 눌러 서버가 같은 글을 돌려줄 때까지 기다린 뒤 닫는다. */
+/**
+ * 유언·쪽지 시트(kind = "will"|"note")에 글을 쓰고 [저장] 을 눌러 서버가 같은 글을 돌려줄 때까지 기다린다.
+ * 유언은 저장하면 창이 저절로 닫힌다(0083-6) — 닫기를 누르지 않고 사라지기를 기다린다. 쪽지는 열린 채 '저장됨' 이라 [닫기]로 닫는다.
+ */
 async function writeSheet(page, tracker, kind, text) {
   const sheet = page.locator(`[data-will-sheet="${kind}"]`);
   await sheet.waitFor({ state: "visible", timeout: 4000 });
   await sheet.locator("textarea").fill(text);
   await sheet.locator(".mv-will__save").click();
+  if (kind === "will") await sheet.waitFor({ state: "detached", timeout: 3000 });
   await tracker.waitFor((v) => (kind === "note" ? v.me.note : v.me.will) === text, 4000, `${kind} 저장 확인`);
-  await sheet.locator(".mv-will__close").click();
-  await sheet.waitFor({ state: "detached", timeout: 3000 });
+  if (kind === "note") {
+    await sheet.locator(".mv-will__close").click();
+    await sheet.waitFor({ state: "detached", timeout: 3000 });
+  }
 }
 
 /**
