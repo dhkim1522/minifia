@@ -7,7 +7,7 @@ import { direct, directSignal } from "../../src/audio/director";
 import { SCREEN_COUNTERPART } from "../../src/audio/recipes";
 import { awardScript, flipCue, lightCues, plateCues, RESULT_AT, resultScript } from "../../src/audio/script";
 import { SIGNAL_KINDS, type LocalSignal } from "../../src/audio/signals";
-import { CEREMONY, RESULT_TIMELINE } from "../../src/game/resultDirector";
+import { RESULT_TIMELINE } from "../../src/game/resultDirector";
 
 function av(phase: PhaseId): AudioView {
   return {
@@ -41,12 +41,12 @@ describe("11페이즈 상수 대조 (T-12-42)", () => {
     expect(RESULT_AT.flipFirst).toBe(RESULT_TIMELINE.flipStartMs);
     expect(RESULT_AT.flipStep).toBe(RESULT_TIMELINE.flipGapMs);
     expect(RESULT_AT.verdict).toBe(RESULT_TIMELINE.lightAtMs);
-    expect(RESULT_AT.awardBase).toBe(RESULT_TIMELINE.ceremonyStartMs);
+    expect(RESULT_AT.awardBase).toBe(RESULT_TIMELINE.finalAtMs);
   });
 
-  it("시상 창 길이·패 등장 오프셋이 CEREMONY 와 같다", () => {
-    expect(RESULT_AT.awardStep).toBe(CEREMONY.windowMs);
-    expect(RESULT_AT.awardLead).toBe(CEREMONY.plateAtMs);
+  it("시상 대본 상수는 그대로다 (18.1-16: 화면의 시상식은 지웠고 소리 대본·시험 페이지만 남는다)", () => {
+    expect(RESULT_AT.awardStep).toBe(2500);
+    expect(RESULT_AT.awardLead).toBe(900);
   });
 });
 
