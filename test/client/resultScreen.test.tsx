@@ -216,13 +216,19 @@ describe("결과 화면: 3D 무대 위 한 장면의 최종 상태 (D-1, A-5)", 
     expect(stage.props!.canWalk).toBe(false);
   });
 
-  it("모든 사람(산 사람·탈락자)을 그린다: seats 의 show true, 탈락자만 ghost, 직업 의상이 입혀져 있다", () => {
+  it("모든 사람(산 사람·탈락자)을 그린다: seats 의 show true, 탈락자만 ghost(직업 의상 없음), 산 사람은 직업 의상이 입혀져 있다", () => {
     renderRoom(makeView({ dead: [2] }));
     const seats = scene().seats;
     expect(Object.keys(seats).map(Number)).toEqual([0, 1, 2, 3, 4]);
     expect(Object.values(seats).every((l) => l.show === true)).toBe(true);
     expect(Object.values(seats).map((l) => l.ghost)).toEqual([false, false, true, false, false]);
-    expect(Object.values(seats).map((l) => l.costume)).toEqual(["coat", "police", "doctor", "mafia", "coat"]);
+    expect(Object.values(seats).map((l) => l.costume)).toEqual(["coat", "police", undefined, "mafia", "coat"]);
+    expect("costume" in seats[2]!).toBe(false);
+  });
+
+  it("탈락한 진 팀 좌석은 유령 그림 그대로 어둡다 — 의상 키 없이 ghost 와 dim 만 (0083-2)", () => {
+    renderRoom(makeView({ dead: [3] }));
+    expect(scene().seats[3]).toEqual({ show: true, ghost: true, dim: true });
   });
 
   it("진 팀은 어둡다: 시민 승이면 마피아 편, 마피아 승이면 시민 편", () => {
@@ -526,6 +532,21 @@ describe("결과 시간표 연출 (A-1)", () => {
     expect(costumeCount()).toBe(1);
     expect(scene().seats[0]!.costume).toBe("coat");
     expect(hookOf()).toMatchObject({ stage: "flip", chips: 1 });
+  });
+
+  it("탈락자는 연출 처음부터 유령 그림이고 뒤집힌 뒤에도 의상이 없다 — 직업 표식은 순서대로 뒤집힌다 (0083-2)", () => {
+    const r = reveal({ dead: [2] });
+    expect(scene().seats[2]!.ghost).toBe(true);
+    expect("costume" in scene().seats[2]!).toBe(false);
+    advance(1200 + 400 * 2); // 0·1·2 번이 뒤집힌 시각
+    expect(chips(r.container).map((c) => c.dataset.roleChip)).toEqual(["citizen", "police", "doctor"]);
+    expect(scene().seats[2]!.ghost).toBe(true);
+    expect("costume" in scene().seats[2]!).toBe(false);
+    expect(costumeCount()).toBe(2); // 산 좌석 0·1 만 직업 의상
+    expect(Object.keys(hookOf().costumes).map(Number)).toEqual([0, 1]);
+    advance(5600);
+    expect(Object.keys(hookOf().costumes).map(Number)).toEqual([0, 1, 3, 4]);
+    expect(chips(r.container)).toHaveLength(5);
   });
 
   it("1200+400i 마다 한 명씩 늘어난다 (좌석 오름차순), 4600 전까지 flip", () => {

@@ -79,7 +79,7 @@ describe("finalState (A-5)", () => {
     const s = finalState(cast, "citizenWin");
     expect(s.stage).toBe("final");
     expect(s.flipped).toEqual([0, 1, 2, 3, 4, 5]);
-    expect(s.costumes).toEqual({ 0: "coat", 1: "police", 2: "doctor", 3: "mafia", 4: "coat", 5: "mafia" });
+    expect(s.costumes).toEqual({ 0: "coat", 1: "police", 3: "mafia", 4: "coat", 5: "mafia" }); // 탈락한 2 번은 유령 그림이라 직업 의상이 없다
     expect(s.dimmed).toEqual([3, 5]);
     expect(s.lit).toBe(true);
     expect(s.announce).toBe(false);
@@ -94,10 +94,23 @@ describe("finalState (A-5)", () => {
     expect(s.title).toBe("mafiaWin");
   });
 
-  it("의상은 ghostOutfit 의 jobOutfit 한 곳과 같다 (새 표 없음)", () => {
+  it("의상은 jobOutfit 한 곳과 같다 (새 표 없음)", () => {
     const cast = castOf(viewOf(JOBS));
     const s = finalState(cast, "citizenWin");
     for (const c of cast) expect(s.costumes[c.seat]).toBe(jobOutfit(c.job));
+  });
+
+  it("직업 의상 표에는 판이 끝났을 때 살아 있던 좌석만 있다 — 탈락 좌석은 없고, 뒤집힌 목록·진 팀 어둠은 생사와 무관하다 (0083-2)", () => {
+    const cast = castOf(viewOf(JOBS, [2, 3]));
+    const s = finalState(cast, "citizenWin");
+    expect(Object.keys(s.costumes).map(Number)).toEqual([0, 1, 4, 5]);
+    expect(s.flipped).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(s.dimmed).toEqual([3, 5]);
+    for (const t of [1200, 1200 + 400 * 2, 1200 + 400 * 3, 4600, 5199]) {
+      const m = stateAt(t, cast, "citizenWin");
+      expect(Object.keys(m.costumes).map(Number)).toEqual(m.flipped.filter((x) => x !== 2 && x !== 3));
+      expect(m.flipped).toEqual([0, 1, 2, 3, 4, 5].slice(0, Math.min(6, Math.floor((t - 1200) / 400) + 1)));
+    }
   });
 });
 
@@ -139,7 +152,7 @@ describe("stateAt — 시간표 표", () => {
     for (let i = 0; i < 6; i++) {
       const s = at(RESULT_TIMELINE.flipStartMs + RESULT_TIMELINE.flipGapMs * i);
       expect(s.flipped).toEqual([0, 1, 2, 3, 4, 5].slice(0, i + 1));
-      expect(Object.keys(s.costumes).map(Number)).toEqual(s.flipped);
+      expect(Object.keys(s.costumes).map(Number)).toEqual(s.flipped.filter((seat) => seat !== 2)); // 탈락한 2 번은 의상이 없다
       expect(at(RESULT_TIMELINE.flipStartMs + RESULT_TIMELINE.flipGapMs * i - 1).flipped.length).toBe(i);
     }
     expect(at(3999).stage).toBe("flip"); // 마지막 사람이 뒤집힌 뒤 4600 전까지
