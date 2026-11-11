@@ -173,7 +173,9 @@ describe("18.1-12 띠 한 구절 (0083-8)", () => {
   it("처형·아침: 띠 문장은 빈 글(큰 글이 말한다)이고 [data-guide] 는 그래도 하나다 — 모든 시점", () => {
     for (const phase of ["execution", "morning"] as const) {
       for (const vp of ALL_VIEWPOINTS) {
-        const { container, unmount } = renderCell(phase, vp);
+        const view = cellView(phase, vp);
+        if (phase === "execution") view.day!.verdict = { yes: 3, no: 1, passed: true };
+        const { container, unmount } = renderRoom(view);
         expect(squish(onlyGuide(container, `${phase}/${vp}`).textContent), `${phase}/${vp}`).toBe("");
         unmount();
       }

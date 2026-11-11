@@ -1,7 +1,7 @@
 // 사회자 문구 표와 그 파생 판정(14페이즈, 결정 0073 예정 — HOST-01·03·05, UI-SPEC "사회자 문구 표").
 // 자막 문장은 서버가 만들지 않는다. 클라이언트가 받은 자기 view 만으로 이 파일의 순수 함수가 한 줄을 만든다 — 서버·프로토콜 diff 0.
 // 읽는 값은 허용 목록뿐이다: phase · phaseEndsAt · phaseDurationMs · minPlayers · me.seat · me.role · me.isHost ·
-// players[].{seat, nickname, alive, connected} · day.candidate · day.verdict.passed · day.morning(morningText 가 읽는 하위 값) · local.cardSeen ·
+// players[].{seat, alive, connected} · day.candidate · day.verdict.passed · day.morning(유무) · local.cardSeen ·
 // (15-04) me.errand.places · me.errand.done · view.map(심부름 목록·진행·맵 id — 내 view 의 값) · local.pos(내 월드 좌표, 클라이언트 상태) ·
 // (15-07) me.record 의 유무(불리언 — 줄 내용 seat·place 는 읽지 않는다) · day.morning.trace 의 유무 · local.recordOpened · local.traceOn(클라이언트 상태).
 // (16-09) day.evidence.trace 의 유무(모두에게 같은 공개 값 — 조각 값·day.evidence.seen·players[].look 은 읽지 않는다).
@@ -9,11 +9,12 @@
 // players[].job · spectate · me.allies · me.records · me.pick · me.verdictVote · day.points · day.turn · day.voteLog · day.roles 등 그 밖은 읽지 않는다
 // (유령 줄도 남의 직업을 말하지 않는다). 시각·난수·DOM·window 를 읽지 않는다. 시험(test/unit/hostLine.test.ts "HOST-05")이 읽은 경로를 기록해 고정한다.
 // 역할별 줄(밤 마피아·경찰·의사)은 그 역할 분기 안에서 키가 정해진 뒤에만 꺼낸다(T-09-29 선례) — 여러 역할 줄을 모은 배열은 없다.
+// 18.1-12(결정 0083-8): 띠 문장은 "할 일 한 구절"(앞말·마침표·닉네임 없음, 공백 포함 19자 이하)이라 닉네임·아침 결과 문장은 읽지 않는다.
+// 빈 문자열 = 큰 글·시작 카드가 같은 말을 하는 동안(처형·아침·흔적 구간·심부름 시작 카드) — 대체 문장으로 바꾸지 않는다(대체 문장은 키가 fallback 일 때만).
 import type { PhaseId, PlaceId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import { connectedCount } from "../../shared/game/room";
 import { actablePlaceOf, errandProgress, nextPlaceOf, placeCentersOf } from "./errandView";
-import { morningText } from "./eliminationText";
 import { TIMELESS_PHASES } from "./scenes";
 
 /** 문구 표의 키 하나 = 한 줄. 15페이즈는 errand.*·witness·trace 를 채웠고, 16페이즈는 trace 문장을 고치고 discussion.evidence 를 더했다. */
@@ -33,8 +34,8 @@ export type HostKey =
   | "witness" | "trace"
   | "fallback";
 
-/** 키를 찾지 못했을 때의 한 줄 — 빈 띠는 없다(UI#1) */
-export const HOST_FALLBACK = "잠시만 기다려 주세요.";
+/** 키를 찾지 못했을 때의 한 줄(마침표 없음) */
+export const HOST_FALLBACK = "잠시만 기다려 주세요";
 
 /** 클라이언트 상태: 역할 카드 앞면을 본 적이 있는가 */
 export interface HostLocal {
@@ -47,47 +48,49 @@ export interface HostLocal {
   traceOn?: boolean;
 }
 
-/** 함수 줄은 채울 한 가지 값을 받는다: 이름이 있는 줄은 "{닉네임}", morning 은 아침 결과 문장(마침표 없음) */
-type Line = string | ((fill: string) => string);
-
-/** 문구 표(UI-SPEC 단일 출처, 합쇼체). 앞 문장 = 무슨 일, 뒤 문장 = 내 할 일. 빈 문자열은 예약 행이다. */
-export const HOST_LINES: Readonly<Record<HostKey, Line>> = {
+/**
+ * 문구 표(결정 0083-8, 합쇼체, 마침표 없음). 보이는 줄은 할 일 한 구절이고 공백 포함 19자 이하다(폭 360 한 줄).
+ * lobby.*·ended 는 띠 면이 보이지 않아 화면에 나오지 않는다(옛 문장 그대로). 빈 문자열은 큰 글·시작 카드가 말하는 동안이다.
+ */
+export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   "lobby.ready": "모두 모였습니다. 시작 단추를 눌러 주세요.",
   "lobby.gather": "대기실입니다. 친구들이 모일 때까지 기다려 주세요.",
   "lobby.guest": "대기실입니다. 방장이 시작할 때까지 기다려 주세요.",
-  assigning: "역할을 나누고 있습니다. 잠시만 기다려 주세요.",
-  "roleReveal.act": "역할이 정해졌습니다. 내 역할 카드를 확인해 주세요.",
-  "roleReveal.wait": "확인하셨으면 그대로 기다려 주세요.",
-  "dayAnnounce.wait": "낮이 되었습니다. 모두 모여 주세요.",
-  "dayAnnounce.ghost": "낮이 되었습니다. 유령은 지켜봐 주세요.",
-  "discussion.act": "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.",
-  "discussion.evidence": "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.",
-  "discussion.ghost": "유령은 지켜보며 유령끼리 이야기할 수 있습니다.",
-  "nomination.act": "투표 시간입니다. 처형할 사람의 이름표를 눌러 주세요.",
-  "nomination.ghost": "투표가 진행 중입니다. 지켜봐 주세요.",
-  "defense.act": "지목되셨습니다. 마지막으로 하실 말씀과 유언을 남겨 주세요.",
-  "defense.wait": (name) => `${name} 님의 최후 변론 시간입니다.`,
-  "defense.ghost": (name) => `${name} 님의 최후 변론 시간입니다.`,
-  "verdict.act": (name) => `${name} 님을 처형할지 찬성 또는 반대를 눌러 주세요.`,
-  "verdict.wait": "다른 분들이 찬반을 정하고 있습니다.",
-  "verdict.ghost": (name) => `${name} 님의 처형 찬반 투표 중입니다.`,
-  "execution.passed": (name) => `찬성이 많아 ${name} 님이 처형됩니다.`,
-  "execution.failed": "반대가 많아 처형은 없습니다.",
-  "night.mafia": "밤이 되었습니다. 없앨 사람의 얼굴을 눌러 주세요.",
-  "night.police": "밤이 되었습니다. 조사할 사람의 얼굴을 눌러 주세요.",
-  "night.doctor": "밤이 되었습니다. 지킬 사람의 얼굴을 눌러 주세요.",
-  "night.citizen": "밤이 되었습니다. 한 명의 얼굴을 눌러 주세요.",
-  "night.ghost": "밤이 되었습니다. 모두의 밤 행동을 지켜봐 주세요.",
-  morning: (result) => `아침이 밝았습니다. ${result}.`,
+  assigning: "잠시만 기다려 주세요",
+  "roleReveal.act": "내 역할 카드를 확인해 주세요",
+  "roleReveal.wait": "그대로 기다려 주세요",
+  "dayAnnounce.wait": "모두 모여 주세요",
+  "dayAnnounce.ghost": "지켜봐 주세요",
+  "discussion.act": "의심 가는 사람을 이야기해 주세요",
+  "discussion.evidence": "같은 옷과 엇갈린 목격을 살펴보세요",
+  "discussion.ghost": "유령끼리 이야기할 수 있습니다",
+  "nomination.act": "처형할 사람의 이름표를 눌러 주세요",
+  "nomination.ghost": "지켜봐 주세요",
+  "defense.act": "마지막 말과 유언을 남겨 주세요",
+  "defense.wait": "변론을 들어 주세요",
+  "defense.ghost": "변론을 지켜봐 주세요",
+  "verdict.act": "찬성 또는 반대를 눌러 주세요",
+  "verdict.wait": "결과를 기다려 주세요",
+  "verdict.ghost": "지켜봐 주세요",
+  // 큰 글(처형 결과)이 말한다
+  "execution.passed": "",
+  "execution.failed": "",
+  "night.mafia": "없앨 사람의 얼굴을 눌러 주세요",
+  "night.police": "조사할 사람의 얼굴을 눌러 주세요",
+  "night.doctor": "지킬 사람의 얼굴을 눌러 주세요",
+  "night.citizen": "한 명의 얼굴을 눌러 주세요",
+  "night.ghost": "모두의 밤 행동을 지켜봐 주세요",
+  // 큰 글(아침 결과)·증거 카드(흔적 구간)가 말한다
+  morning: "",
   ended: "게임이 끝났습니다. 다음 판을 준비해 주세요.",
-  // 15페이즈(UI-SPEC 표 원문, 합쇼체·역할 단어 없음). 마피아도 같은 문장이다.
-  "errand.act": "심부름 시간입니다. 빛나는 곳을 찾아 처리해 주세요.",
-  "errand.done": "심부름을 마쳤습니다. 곧 토론이 시작됩니다.",
-  "errand.ghost": "심부름 시간입니다. 유령은 지켜봐 주세요.",
-  // 15페이즈(UI-SPEC 표 원문): 목격 기록이 있는 토론, 피해자 있는 아침의 흔적 구간. 마피아도 같은 문장이다.
-  // 16페이즈(D-11): 흔적 문장은 "표시했습니다"로 근거를 가리키고, 흔적이 있는 날 토론은 discussion.evidence 다. 둘 다 '범인'·'증거'·'확정' 없이 공개된 두 근거(같은 옷·목격)만 말한다.
-  witness: "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.",
-  trace: "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.",
+  // 15페이즈(UI-SPEC 표 원문, 합쇼체·역할 단어 없음). 마피아도 같은 문장이다. 심부름 시작 카드가 떠 있는 동안은 hostLineOf 가 빈 줄을 돌려준다(18.1-12).
+  "errand.act": "빛나는 곳을 찾아 처리해 주세요",
+  "errand.done": "곧 토론이 시작됩니다",
+  "errand.ghost": "지켜봐 주세요",
+  // 15페이즈(UI-SPEC 표 원문): 목격 기록이 있는 토론. 마피아도 같은 문장이다. 16페이즈(D-11): 흔적이 있는 날 토론은 discussion.evidence 다 —
+  // '범인'·'증거'·'확정' 없이 공개된 두 근거(같은 옷·목격)만 말한다.
+  witness: "기록 단추로 본 것을 확인해 주세요",
+  trace: "",
   fallback: HOST_FALLBACK,
 };
 
@@ -95,11 +98,6 @@ export const HOST_LINES: Readonly<Record<HostKey, Line>> = {
 function isGhost(view: RoomView): boolean {
   const mine = view.players.find((p) => p.seat === view.me.seat);
   return mine !== undefined && !isAlive(mine);
-}
-
-function nicknameOf(view: RoomView, seat: number | undefined): string | undefined {
-  if (seat === undefined) return undefined;
-  return view.players.find((p) => p.seat === seat)?.nickname;
 }
 
 /** 단계 × 상태(act|wait|ghost) × 역할(밤만) → 키. 꺼진 장치 단계(결선·마지막 3인)와 모르는 단계는 fallback */
@@ -161,18 +159,9 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
   }
 }
 
-/** 한 줄. 키 줄이 비었거나 필요한 이름·아침 결과가 없으면 HOST_FALLBACK */
+/** 한 줄 — 키의 줄 그대로. 빈 줄은 빈 줄이다(큰 글·시작 카드가 말하는 동안). 대체 문장은 키가 fallback 일 때만(HOST_FALLBACK) */
 export function hostLineOf(view: RoomView, local: HostLocal = {}): string {
-  const key = hostKeyOf(view, local);
-  const line = HOST_LINES[key];
-  if (typeof line === "string") return line === "" ? HOST_FALLBACK : line;
-  if (key === "morning") {
-    const result = morningText(view.day?.morning, (seat) => nicknameOf(view, seat)).text;
-    return line(result);
-  }
-  // 이름이 필요한 줄: 변론자(day.candidate) 닉네임
-  const name = nicknameOf(view, view.day?.candidate);
-  return name === undefined ? HOST_FALLBACK : line(name);
+  return HOST_LINES[hostKeyOf(view, local)];
 }
 
 export type CallTool = "start" | "card" | "chat" | "will" | "verdict" | "errand" | "record";
