@@ -1,4 +1,4 @@
-// 18.1 화면 E2E (18.1-08) — 역할 확인 카드(R1)·시간대 배지(R4)의 판정·읽기와 새 흐름 polish-reveal.
+// 18.1 화면 E2E (18.1-08) — 역할 확인 카드(R1)·시간대 글자(R4, 0083-1)의 판정·읽기와 새 흐름 polish-reveal.
 // 판정은 순수 함수(playwright·네트워크 없음, 단위 시험은 polish.test.mjs)이고 흐름은 화면을 읽기만 한다.
 // 결과 줄(detail)에는 크기·직업·단계·숫자·사각형만 싣는다 — 닉네임·토큰·채팅 본문은 싣지 않는다(T-18.1-15).
 // 문턱은 UI-SPEC(18.1-UI-SPEC.md A1·A2·D) 값 그대로다. 실패를 줄이려고 낮추지 않는다. 앱 결함은 SUMMARY 에 분류해 남긴다.
@@ -21,16 +21,18 @@ export const TUTORIAL_ROLE_MAX_LINES = 4;
 export const ROLE_ART_MIN_H = 64;
 /** 카드 면 안쪽 틀선(.mf-card__face::after inset, A1e) */
 export const CARD_INNER_INSET = 14;
-/** 시간대 배지 한 변(D 계약 4) */
-export const TOD_BOX = 44;
-/** 배지의 헤더 안 세로 범위(D 계약 1: 위 8~52) */
-export const TOD_HEADER_Y = Object.freeze([8, 52]);
+/** 헤더 시간대 글자 한 줄 높이 상한(24px × 줄 높이 1.2 ≈ 29 — 두 줄이면 58, 0083-1) */
+export const TOD_LINE_MAX_H = 40;
 /** 카드 위 끝과 소리 단추 독 아랫변의 최소 간격(P181-2, A2b) */
 export const REVEAL_DOCK_GAP = 8;
-/** 게임 헤더 높이(.mf-game__header, D4 — 배지가 헤더를 키우지 않는다) */
+/** 게임 헤더 높이(.mf-game__header, D4 — 시간대 글자가 헤더를 키우지 않는다) */
 export const GAME_HEADER_H = 62;
 /** 시간대 id 네 개, 표시 순서 (src/game/timeOfDay.ts TOD_ORDER 의 사본) */
 export const TOD_IDS = Object.freeze(["morning", "day", "dusk", "night"]);
+/** 시간대 → 헤더 낱말 (src/game/timeOfDay.ts TOD_LABEL 의 사본 — test/unit/e2eContract.test.ts 가 같음을 고정한다) */
+export const TOD_WORD = Object.freeze({ morning: "아침", day: "낮", dusk: "저녁", night: "밤" });
+/** 낱말 요소 없이 단계 이름 한 단어로만 쓰는 시간대(밤·아침 — 단계 이름이 낱말과 같다, 0083-1) */
+const ONE_WORD_TODS = Object.freeze(["morning", "night"]);
 /** 게임 맵 단계 → 시간대 (src/game/timeOfDay.ts todOf 의 사본 — test/unit/e2eContract.test.ts 가 모든 키에서 같음을 고정한다) */
 export const TOD_BY_PHASE = Object.freeze({
   dayAnnounce: "day",
@@ -45,7 +47,7 @@ export const TOD_BY_PHASE = Object.freeze({
   night: "night",
   morning: "morning",
 });
-/** 배지를 그리지 않는 단계(대기실·튜토리얼·역할 배정·역할 확인·결과, D 계약 2) */
+/** 시간대 글자를 그리지 않는 단계(대기실·튜토리얼·역할 배정·역할 확인·결과, D 계약 2) */
 export const TOD_ABSENT_PHASES = Object.freeze(["lobby", "tutorial", "assigning", "roleReveal", "ended"]);
 
 /** 허용 오차(px) — 반올림·서브픽셀 */
@@ -211,86 +213,72 @@ export function roleLineBoxChecks(boxes, { max, id, count }) {
   return row(id, label, bad);
 }
 
-// ---- D 시간대 배지 ----
+// ---- D 헤더 시간대 글자 (0083-1) ----
 
 /**
- * D1·D4·D5 판정(게임 맵 단계 하나). 입력 m = { count, tod, rect, radius, imgs: [{ src, naturalWidth, opacity }], title, roleBtn, band, soundButtons: [rect], header }
- * ctx = { phase }. 사각형은 같은 좌표계(보이는 화면)이고, 헤더 안 y 는 header.top 을 뺀 값으로 본다.
- * D1 배지 1개·값 = TOD_BY_PHASE[phase]·헤더 안(y 8~52 ±1)·제목·[역할 카드]·띠와 겹침 없음 ·
- * D4 사회자 띠·소리 단추 자리가 배지 때문에 밀리지 않음(배지가 둘과 겹치지 않고 헤더 높이 62) ·
- * D5 img 4장 모두 불러와짐·지금 시간대만 불투명도 1·44×44·원형.
+ * D1·D4·D5 판정(게임 맵 단계 하나). 입력 m = { count, tod, word, titleText, line, title, header, headerButtons: [rect], oldBadges, weatherImgs } (readTodHead).
+ * ctx = { phase }. 사각형은 같은 좌표계(보이는 화면)다.
+ * D1 [data-tod] 하나·값 = TOD_BY_PHASE[phase]·낱말 규칙(밤·아침은 낱말 요소 없음, 낮·저녁은 TOD_WORD 낱말) ·
+ * D4 헤더 높이 62·시간대 글자가 한 줄·글자 오른쪽 끝이 헤더 단추 왼쪽 끝을 넘지 않음 ·
+ * D5 옛 날씨 배지(.mv-tod) 0개·날씨 그림 요소 0개.
  */
 export function todChecks(m, { phase }) {
   const L = {
-    D1: `시간대 배지가 하나·값 ${TOD_BY_PHASE[phase] ?? "?"}·헤더 안 제자리·제목·[역할 카드]·띠와 겹치지 않는다`,
-    D4: "배지가 사회자 띠·소리 단추와 겹치지 않고 헤더 높이가 그대로다",
-    D5: "배지 그림 4장이 불러와지고 지금 시간대만 보이며 44×44 원형이다",
+    D1: `시간대 글자가 하나·값 ${TOD_BY_PHASE[phase] ?? "?"}·낱말 규칙대로다(밤·아침은 한 단어)`,
+    D4: "헤더 높이가 그대로고 시간대 글자가 한 줄이며 헤더 단추와 겹치지 않는다",
+    D5: "옛 날씨 배지와 날씨 그림이 없다",
   };
-  if (m === null || typeof m !== "object") return ["D1", "D4", "D5"].map((id) => noMeasure(id, L[id], "배지 읽기 값"));
+  if (m === null || typeof m !== "object") return ["D1", "D4", "D5"].map((id) => noMeasure(id, L[id], "시간대 글자 읽기 값"));
   const out = [];
   const want = TOD_BY_PHASE[phase];
 
   // D1
-  if (!isNum(m.count)) out.push(noMeasure("D1", L.D1, "배지 수"));
+  if (!isNum(m.count)) out.push(noMeasure("D1", L.D1, "[data-tod] 수"));
   else {
     const bad = [];
-    if (want === undefined) bad.push(`${phase} 는 배지가 있는 맵 단계가 아님`);
-    if (m.count !== 1) bad.push(`배지 ${m.count}개 (기대 1)`);
+    if (want === undefined) bad.push(`${phase} 는 시간대 글자가 있는 맵 단계가 아님`);
+    if (m.count !== 1) bad.push(`[data-tod] ${m.count}개 (기대 1)`);
     else {
       if (m.tod !== want) bad.push(`값 ${m.tod} (기대 ${want})`);
-      if (!isRect(m.rect)) bad.push("측정값 없음(배지 사각형)");
-      else {
-        const top0 = isRect(m.header) ? m.header.top : 0;
-        const y0 = m.rect.top - top0;
-        const y1 = bottomOf(m.rect) - top0;
-        if (y0 < TOD_HEADER_Y[0] - TOL || y1 > TOD_HEADER_Y[1] + TOL) bad.push(`배지 y ${fmt(y0)}~${fmt(y1)} (기대 ${TOD_HEADER_Y[0]}~${TOD_HEADER_Y[1]} ±${TOL})`);
-        for (const [name, r] of [["제목", m.title], ["[역할 카드]", m.roleBtn], ["띠", m.band]]) {
-          if (!isRect(r)) bad.push(`측정값 없음(${name} 사각형)`);
-          else if (rectsOverlap(m.rect, r)) bad.push(`배지 ${rectText(m.rect)} 가 ${name} ${rectText(r)} 와 겹침`);
-        }
+      if (want !== undefined) {
+        if (ONE_WORD_TODS.includes(want)) {
+          if (m.word !== null) bad.push(`${want} 는 한 단어인데 낱말 요소 '${m.word}' 가 있음`);
+        } else if (m.word !== TOD_WORD[want]) bad.push(`낱말 ${m.word === null ? "없음" : `'${m.word}'`} (기대 '${TOD_WORD[want]}')`);
       }
+      if (typeof m.titleText !== "string" || m.titleText === "") bad.push("측정값 없음(단계 이름 글자)");
     }
     out.push(row("D1", L.D1, bad));
   }
 
   // D4
-  if (!isRect(m.rect) || !isRect(m.band) || !Array.isArray(m.soundButtons) || !isRect(m.header)) out.push(noMeasure("D4", L.D4, "배지·띠·소리 단추·헤더 사각형"));
+  if (!isRect(m.line) || !isRect(m.title) || !isRect(m.header) || !Array.isArray(m.headerButtons) || !m.headerButtons.every(isRect)) out.push(noMeasure("D4", L.D4, "헤더 줄·제목·헤더·헤더 단추 사각형"));
   else {
     const bad = [];
-    if (rectsOverlap(m.rect, m.band)) bad.push(`배지가 띠 ${rectText(m.band)} 와 겹침`);
-    m.soundButtons.forEach((s, i) => {
-      if (rectsOverlap(m.rect, s)) bad.push(`배지가 소리 단추 ${i} ${rectText(s)} 와 겹침`);
-    });
     if (Math.abs(m.header.height - GAME_HEADER_H) > TOL) bad.push(`헤더 높이 ${fmt(m.header.height)} (기대 ${GAME_HEADER_H})`);
+    if (m.line.height > TOD_LINE_MAX_H) bad.push(`헤더 줄 높이 ${fmt(m.line.height)} (한 줄 상한 ${TOD_LINE_MAX_H} — 줄이 바뀜)`);
+    const right = Math.max(rightOf(m.line), rightOf(m.title));
+    m.headerButtons.forEach((b, i) => {
+      if (right > b.left + TOL) bad.push(`헤더 줄 오른쪽 끝 ${fmt(right)} 가 헤더 단추 ${i} 왼쪽 끝 ${fmt(b.left)} 를 넘음`);
+    });
     out.push(row("D4", L.D4, bad));
   }
 
   // D5
-  const imgs = Array.isArray(m.imgs) ? m.imgs : null;
-  if (imgs === null || !imgs.every((i) => isNum(i.naturalWidth) && isNum(i.opacity) && typeof i.src === "string") || !isRect(m.rect) || !isNum(m.radius)) out.push(noMeasure("D5", L.D5, "배지 그림·크기·반경"));
+  if (!isNum(m.oldBadges) || !isNum(m.weatherImgs)) out.push(noMeasure("D5", L.D5, "옛 배지·날씨 그림 수"));
   else {
     const bad = [];
-    if (imgs.length !== TOD_IDS.length) bad.push(`그림 ${imgs.length}장 (기대 ${TOD_IDS.length})`);
-    imgs.forEach((i, k) => {
-      if (i.naturalWidth <= 0) bad.push(`그림 ${k} 가 불러와지지 않음(naturalWidth ${i.naturalWidth})`);
-    });
-    const on = imgs.filter((i) => i.opacity > 0.99);
-    const off = imgs.filter((i) => i.opacity < 0.01);
-    if (on.length !== 1) bad.push(`불투명도 1 인 그림 ${on.length}장 (기대 1)`);
-    else if (want !== undefined && !on[0].src.includes(`weather-${want}.svg`)) bad.push("보이는 그림이 지금 시간대가 아님");
-    if (on.length + off.length !== imgs.length) bad.push("전환 중인 그림이 있음(불투명도가 0·1 이 아님)");
-    if (Math.abs(m.rect.width - TOD_BOX) > TOL || Math.abs(m.rect.height - TOD_BOX) > TOL) bad.push(`배지 ${fmt(m.rect.width)}×${fmt(m.rect.height)} (기대 ${TOD_BOX}×${TOD_BOX})`);
-    if (m.radius < TOD_BOX / 2) bad.push(`border-radius ${fmt(m.radius)} (기대 ≥ ${TOD_BOX / 2}, 원형)`);
+    if (m.oldBadges !== 0) bad.push(`옛 배지 ${m.oldBadges}개 (기대 0)`);
+    if (m.weatherImgs !== 0) bad.push(`날씨 그림 ${m.weatherImgs}개 (기대 0)`);
     out.push(row("D5", L.D5, bad));
   }
   return out;
 }
 
-/** D2: 배지를 그리지 않는 화면에 `[data-tod]` 가 0개다. screen = 화면 이름(로비·역할 확인 등) */
+/** D2: 시간대 글자를 그리지 않는 화면에 `[data-tod]` 가 0개다. screen = 화면 이름(로비·역할 확인 등) */
 export function todAbsentChecks(count, { screen }) {
-  const label = `시간대 배지가 없다(${screen})`;
-  if (!isNum(count)) return noMeasure("D2", label, "배지 수");
-  return row("D2", label, count === 0 ? [] : [`배지 ${count}개 (기대 0)`]);
+  const label = `시간대 글자가 없다(${screen})`;
+  if (!isNum(count)) return noMeasure("D2", label, "[data-tod] 수");
+  return row("D2", label, count === 0 ? [] : [`[data-tod] ${count}개 (기대 0)`]);
 }
 
 // ---- 페이지 읽기 ----
@@ -428,40 +416,32 @@ export function readRoleLineBoxes(page, selector) {
   }, selector);
 }
 
-/** 시간대 배지 읽기: [data-tod] 수와(있으면) 값·사각형·반경·그림 네 장과 비교용 사각형. 그림 전환(420ms)이 끝나길 최대 1.2초 기다린다 */
-export async function readTodBadge(page) {
-  const read = () =>
-    page.evaluate(() => {
-      const rect = (el) => {
-        if (!el) return null;
-        const r = el.getBoundingClientRect();
-        return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
-      };
-      const shown = (el) => {
-        const cs = getComputedStyle(el);
-        return cs.visibility !== "hidden" && cs.display !== "none" && el.getBoundingClientRect().width > 0;
-      };
-      const els = [...document.querySelectorAll("[data-tod]")];
-      const el = els[0] ?? null;
-      return {
-        count: els.length,
-        tod: el ? el.getAttribute("data-tod") : null,
-        rect: rect(el),
-        radius: el ? parseFloat(getComputedStyle(el).borderTopLeftRadius) : null,
-        imgs: el ? [...el.querySelectorAll("img")].map((i) => ({ src: i.getAttribute("src") ?? "", naturalWidth: i.naturalWidth, opacity: Number(getComputedStyle(i).opacity) })) : [],
-        title: rect(document.querySelector(".mf-game__header .mv-phase__title")),
-        roleBtn: rect(document.querySelector(".mf-game__header .mf-rolecard-btn")),
-        band: rect(document.querySelector("[data-host-band] .mv-host__band")),
-        soundButtons: [...document.querySelectorAll(".mv-sound")].filter(shown).map(rect),
-        header: rect(document.querySelector(".mf-game__header")),
-      };
-    });
-  let m = await read();
-  for (let i = 0; i < 12 && m.count > 0 && m.imgs.some((x) => x.opacity > 0.01 && x.opacity < 0.99); i++) {
-    await sleep(100);
-    m = await read();
-  }
-  return m;
+/** 헤더 시간대 글자 읽기: [data-tod] 수와(있으면) 값·낱말·단계 이름 글자, 헤더 줄·제목·헤더·헤더 단추 사각형, 옛 배지·날씨 그림 수 */
+export function readTodHead(page) {
+  return page.evaluate(() => {
+    const rect = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+    };
+    const els = [...document.querySelectorAll("[data-tod]")];
+    const el = els[0] ?? null;
+    const word = el ? el.querySelector(".mv-phase__tod") : null;
+    const header = document.querySelector(".mf-game__header");
+    const title = header ? header.querySelector(".mv-phase__title") : null;
+    return {
+      count: els.length,
+      tod: el ? el.getAttribute("data-tod") : null,
+      word: word ? (word.textContent ?? "") : null,
+      titleText: title ? (title.textContent ?? "") : null,
+      line: rect(el),
+      title: rect(title),
+      header: rect(header),
+      headerButtons: header ? [...header.querySelectorAll("button")].map(rect) : [],
+      oldBadges: document.querySelectorAll(".mv-tod").length,
+      weatherImgs: [...document.querySelectorAll("img")].filter((i) => (i.getAttribute("src") ?? "").includes("/weather/")).length,
+    };
+  });
 }
 
 // ---- B 채팅 두 줄 창·기록 시트 (18.1-09) ----

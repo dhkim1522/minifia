@@ -87,7 +87,7 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
   /**
    * 스포트라이트 막(D-04): dimOn = 포커스 상자가 있는 구간(막 1개·구멍이 상자를 덮음·흐림 없음), dimOff = 상자 없는 구간(막 0개). TD 줄은 dot 점 판정(TD1·TD2)과 id 가 겹쳐 `/dim` 시나리오에 따로 쌓는다.
    */
-  /** 18.1-08 D2: 튜토리얼의 모든 장면에 시간대 배지가 없다 — 장면마다 부르는 dimOn·dimOff 가 함께 남긴다 */
+  /** 18.1-08 D2: 튜토리얼의 모든 장면에 시간대 글자가 없다 — 장면마다 부르는 dimOn·dimOff 가 함께 남긴다 */
   const todOff = (rec, sc, t) => recOne(rec, `${sc}/tod`, todAbsentChecks(t.tod, { screen: "튜토리얼" }));
   const dimOn = (rec, sc, t) => {
     recAll(rec, `${sc}/dim`, tutorialDimChecks(t.dim, { expect: 1, focus: t.focus }));

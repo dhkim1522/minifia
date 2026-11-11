@@ -2536,7 +2536,7 @@ export async function readTutorial(page) {
           chatInputs: qa('textarea, input[type="text"], input:not([type])', scope).length,
         },
         roleLines: qa("[data-tutorial-role-card] .tut-role__line", scope).map((el) => (el.textContent ?? "").trim()),
-        tod: qa("[data-tod]").length, // 18.1-08 D2: 튜토리얼에는 시간대 배지가 없다
+        tod: qa("[data-tod]").length, // 18.1-08 D2: 튜토리얼에는 시간대 글자가 없다
         focus: root ? qa("[data-tutorial-focus]", root).map((el) => ({ key: el.getAttribute("data-tutorial-focus"), rect: toRect(el.getBoundingClientRect()) })) : [],
         targets,
         band,
