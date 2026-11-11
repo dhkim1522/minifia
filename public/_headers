@@ -8,9 +8,6 @@
 # 로비 꾸미기 카드 그림 아홉 장(10-07). 주소 끝 ?v= 값(ASSET_VERSION)으로 교체를 바로 반영한다.
 /outfits/*
   Cache-Control: public, max-age=86400
-# 시간대 배지 날씨 그림 네 장(18.1). 주소 끝 ?v= 값(ASSET_VERSION)으로 교체를 바로 반영한다.
-/weather/*
-  Cache-Control: public, max-age=86400
 # 꾸미기 시트 맵 카드 그림 두 장(11-13). 주소 끝 ?v= 값(ASSET_VERSION)으로 교체를 바로 반영한다.
 /maps/*
   Cache-Control: public, max-age=86400
