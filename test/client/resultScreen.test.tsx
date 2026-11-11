@@ -399,7 +399,7 @@ describe("E2E 훅 window.__mfResult (11-05)", () => {
     const r = renderRoom(makeView());
     const hook = (window as unknown as { __mfResult?: { stage: string; chips: number; dimmed: number[]; costumes: Record<number, string> } }).__mfResult;
     expect(Object.keys(hook!).sort()).toEqual(["chips", "costumes", "dimmed", "sat", "stage", "tab"]); // 시상 필드(awards·shown)는 없다(0083-7)
-    expect(hook).toEqual({ stage: "final", chips: 5, dimmed: [3], costumes: { 0: "coat", 1: "police", 2: "doctor", 3: "mafia", 4: "coat" }, tab: "all", sat: [] });
+    expect(hook).toEqual({ stage: "final", chips: 5, dimmed: [3], costumes: { 0: "coat", 1: "police", 3: "mafia", 4: "coat" }, tab: "all", sat: [] });
     expect(r.container.querySelector('[data-result-stage="final"]')).not.toBeNull();
     // 루트 속성에 역할·의상을 싣지 않는다 — 직업은 칩([data-role-chip])의 속성과 접근성 이름뿐이다
     const root = r.container.querySelector("main")!;
@@ -557,7 +557,7 @@ describe("결과 시간표 연출 (A-1)", () => {
       expect(chips(r.container)).toHaveLength(i);
       advance(1);
       expect(chips(r.container)).toHaveLength(i + 1);
-      expect(costumeCount()).toBe(i + 1);
+      expect(costumeCount()).toBe(i + 1 - (i + 1 >= 3 ? 1 : 0)); // 탈락한 2 번은 의상이 없다
     }
     expect(chips(r.container).map((c) => c.dataset.roleChip)).toEqual(["citizen", "police", "doctor", "mafia", "citizen"]);
     advance(1799); // 2800 → 4599
@@ -584,7 +584,7 @@ describe("결과 시간표 연출 (A-1)", () => {
     expect(a.querySelector("svg")).not.toBeNull();
     expect(title(r.container)).toBe("결과");
     expect(hookOf()).toMatchObject({ stage: "light", chips: 5, dimmed: [3] });
-    expect(hookOf().costumes).toEqual({ 0: "coat", 1: "police", 2: "doctor", 3: "mafia", 4: "coat" });
+    expect(hookOf().costumes).toEqual({ 0: "coat", 1: "police", 3: "mafia", 4: "coat" });
   });
 
   it("마피아 승 알림은 마피아 승리 + 진홍 아이콘 표식", () => {
@@ -984,13 +984,13 @@ describe("시상식 없는 결과 (18.1-16, 0083-7)", () => {
     expect(r.container.querySelectorAll("[data-side-column]")).toHaveLength(1);
   });
 
-  it("최종 상태: 모든 좌석이 직업 의상을 입은 채 남는다 (연출 뒤 30초를 돌려도 걷히지 않는다)", () => {
+  it("최종 상태: 산 좌석이 직업 의상을 입은 채 남는다 — 탈락 좌석은 유령 그림 (연출 뒤 30초를 돌려도 걷히지 않는다)", () => {
     const r = arrive();
     advance(5600);
-    expect(costumeCount()).toBe(5);
+    expect(costumeCount()).toBe(4);
     advance(30_000);
-    expect(costumeCount()).toBe(5);
-    expect(Object.keys((window as unknown as { __mfResult: { costumes: object } }).__mfResult.costumes)).toHaveLength(5);
+    expect(costumeCount()).toBe(4);
+    expect(Object.keys((window as unknown as { __mfResult: { costumes: object } }).__mfResult.costumes)).toHaveLength(4);
     expect(chips(r.container)).toHaveLength(5);
     expect(scene().pin).toEqual({ mode: "point", x: GATHER_CENTER.x, z: GATHER_CENTER.z });
   });

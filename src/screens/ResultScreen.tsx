@@ -68,7 +68,7 @@ export interface ResultScreenProps {
 }
 
 // 결과 화면(11-05, 결정 D-1·D-11, UI-SPEC A-1·A-5): 3D 무대 위의 한 장면이다. 모든 사람이 무대 둘레 자리에 서 있고, 머리 위 직업 칩이 뒤집혀 있고,
-// 모두 직업 의상을 입고, 진 팀은 어둡고 이긴 팀은 무대 가운데 조명을 받는다. 읽는 글은 헤더의 승리 한 줄뿐이다(결정 0051).
+// 산 사람은 직업 의상을 입고 탈락자는 유령 그림으로 서며(0083-2), 진 팀은 어둡고 이긴 팀은 무대 가운데 조명을 받는다. 읽는 글은 헤더의 승리 한 줄뿐이다(결정 0051).
 // 직업은 view.result.seats 에서만 읽고(resultDirector.castOf) 판 중 장면 경로(visibleSeats)에는 두지 않는다(T-11-15).
 // 연출 값(누가 어디에 서고 언제 뒤집히는지)은 resultDirector 만 계산하고 이 파일은 그 값을 그린다.
 // 아래 패널은 접힌 게임 패널과 같은 높이의 전체 채팅 한 줄이다(동작 버튼 없음). 헤더 [나가기]는 로비와 같은 확인 시트를 연다.
@@ -79,7 +79,7 @@ function sceneOf(cast: ReturnType<typeof castOf>, state: ResultState, sat: reado
   // 쉬었다가 합류한 사람(11-12, D-13): 참가자 밖 별도 자리에 반투명 0.5 로 선다. 직업 의상·어둠·칩이 없다
   for (const seat of sat) seats[seat] = { show: true, ghost: false, opacity: SAT_OPACITY };
   for (const c of cast) {
-    const costume = state.costumes[c.seat];
+    const costume = state.costumes[c.seat]; // 탈락 좌석은 표에 없다 — 유령 그림(진 팀이면 어둡게)
     seats[c.seat] = { show: true, ghost: !c.alive, ...(costume !== undefined ? { costume } : {}), ...(state.dimmed.includes(c.seat) ? { dim: true as const } : {}) };
   }
   return {

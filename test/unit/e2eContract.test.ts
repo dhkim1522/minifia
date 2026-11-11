@@ -58,7 +58,7 @@ import { HOST_HIDDEN_PHASES, HOST_LINES, type HostKey } from "../../src/game/hos
 import { OPENING_LAMPS, TUTORIAL_CAST, TUTORIAL_DOT_COUNT, TUTORIAL_LINES, TUTORIAL_SCENES, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
 import { ROLE_TEXT } from "../../src/game/roleText";
 import { RESULT_TEXT } from "../../src/game/verdict";
-import { JOB_OUTFIT } from "../../src/world/ghostOutfit";
+import { JOB_OUTFIT } from "../../src/world/jobOutfit";
 import { CHAT_PANEL_EXTRA as RESULT_CHAT_EXTRA } from "../../src/game/chatUi";
 
 describe("E2E 의 TIMELESS_PHASES 와 앱 상수", () => {

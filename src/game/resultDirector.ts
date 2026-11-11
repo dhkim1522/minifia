@@ -1,7 +1,7 @@
 // 결과 화면 연출 디렉터 (11-05, 결정 D-1·D-11·D-25, UI-SPEC A-1·A-5). React·DOM·three 를 모르는 순수 모듈이다 — 시각은 모두 인자다.
 // 화면(ResultScreen)은 여기서 나온 값을 그릴 뿐이다: 누가 어느 자리에 서는지(slotsFor), 언제 누가 뒤집히는지, 이긴 팀 조명·진 팀 어둠이 언제 켜지는지.
 // 직업은 ended 의 result.seats 에서만 읽는다(T-11-15). 판 중 장면 경로(visibleSeats)에는 이 모듈을 쓰지 않는다.
-// 직업 의상 대응은 ghostOutfit.ts 의 jobOutfit 한 곳을 재사용한다 — 새 표를 만들지 않는다.
+// 직업 의상 대응은 jobOutfit.ts 의 jobOutfit 한 곳을 재사용한다 — 새 표를 만들지 않는다. 직업 의상은 판이 끝났을 때 살아 있던 사람만 입는다(탈락자는 유령 그림, 0083-2).
 import { ringSlots } from "../../shared/game/gather";
 import { isAlive } from "../../shared/game/alive";
 import { snapToWalkable } from "../../shared/game/map";
@@ -9,7 +9,7 @@ import { mapOf } from "../../shared/game/maps";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, MapId, RoomView, WorldSeg } from "../../shared/protocol";
 import type { OutfitId } from "../world/characterData";
-import { jobOutfit } from "../world/ghostOutfit";
+import { jobOutfit } from "../world/jobOutfit";
 
 /**
  * 결과 시간표(ms, 연출 시계는 각자 폰 안): 0~1200 모두 자기 자리로 모임 · 1200+400i 좌석 오름차순 i 번째가 뒤집힘 ·
@@ -51,7 +51,7 @@ export interface CastMember {
   seat: number;
   job: RoleId;
   team: ResultTeam;
-  /** 판이 끝났을 때 살아 있었나(탈락자는 유령 반투명 모양에 직업 의상을 입는다) */
+  /** 판이 끝났을 때 살아 있었나(산 사람만 직업 의상을 입고, 탈락자는 유령 그림으로 선다 — 직업 표식은 생사와 무관하게 뒤집힌다) */
   alive: boolean;
 }
 
@@ -65,7 +65,7 @@ export interface ResultState {
   stage: ResultStage;
   /** 뒤집힌 좌석(좌석 오름차순 = 뒤집힌 순서). 이 사람들의 RoleChip 이 보이고 직업 의상을 입는다 */
   flipped: number[];
-  /** 좌석 → 입을 직업 의상(뒤집힌 사람만) */
+  /** 좌석 → 입을 직업 의상(뒤집힌 산 사람만 — 탈락 좌석은 없다) */
   costumes: Record<number, OutfitId>;
   /** 어두워질 좌석(조명이 켜진 뒤의 진 팀) */
   dimmed: number[];
@@ -123,7 +123,7 @@ export function satSlots(seats: readonly number[], mapId: MapId): Record<number,
 const costumeOf = (cast: readonly CastMember[], seats: readonly number[]): Record<number, OutfitId> => {
   const out: Record<number, OutfitId> = {};
   const want = new Set(seats);
-  for (const c of cast) if (want.has(c.seat)) out[c.seat] = jobOutfit(c.job);
+  for (const c of cast) if (c.alive && want.has(c.seat)) out[c.seat] = jobOutfit(c.job);
   return out;
 };
 

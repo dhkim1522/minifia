@@ -6,7 +6,7 @@ import type { RoleId } from "../../shared/game/roles";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS } from "../../src/game/dayView";
 import { GATHER_CENTER, ZOOM_MAJORITY, ZOOM_MIN_STAGE_H } from "../../src/world/camera";
-import { jobOutfit } from "../../src/world/ghostOutfit";
+import { jobOutfit } from "../../src/world/jobOutfit";
 import {
   cameraModeOf,
   EXEC_END_OPACITY,

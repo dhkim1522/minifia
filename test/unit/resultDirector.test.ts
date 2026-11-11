@@ -8,7 +8,7 @@ import { snapToWalkable } from "../../shared/game/map";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import * as director from "../../src/game/resultDirector";
 import { castOf, CLAP_MAX, finalState, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, SAT_RADIUS_FX, satSlots, slotsFor, stateAt, teamOf, walkSnap } from "../../src/game/resultDirector";
-import { jobOutfit } from "../../src/world/ghostOutfit";
+import { jobOutfit } from "../../src/world/jobOutfit";
 
 const JOBS: RoleId[] = ["citizen", "police", "doctor", "mafia", "citizen", "mafia"];
 

@@ -47,7 +47,7 @@ export interface NameTagProps {
   blink?: boolean;
   /** 빛남(14-04): 지금 눌러야 할 이름표. is-call(light-lamp 테두리 + 정지 빛, 처음 약 6초 맥박). 소리 없음 */
   call?: boolean;
-  /** 유령 표식(is-ghost). 이름표는 불투명 — 몸이 0.26 안개라 직업은 RoleChip 이 알린다(09.1-09) */
+  /** 유령 표식(is-ghost). 이름표는 불투명 — 몸이 유령 그림이라 직업은 RoleChip 이 알린다(0083-2) */
   ghost?: boolean;
   /** 아침 흔적과 같은 옷을 입은 산 사람(16-09, V-29): 조각 색 값(TRACE_MARK 의 닫힌 표 값). 이름 앞 thread 16 + 테두리 2 — 색은 스타일의 --trace-mark 로만 간다 */
   traceMark?: string;
