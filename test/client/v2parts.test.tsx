@@ -471,6 +471,33 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
   });
 });
 
+describe("PhaseHeader 시간대 글자 (결정 0083-1)", () => {
+  it("tod 를 주면 [data-tod] 하나 안에 낱말·가운뎃점(aria-hidden)·제목이 한 줄로 있다", () => {
+    const { container } = render(<PhaseHeader title="토론" tod={{ id: "day", word: "낮" }} />);
+    const lines = container.querySelectorAll("[data-tod]");
+    expect(lines.length).toBe(1);
+    expect(lines[0]?.getAttribute("data-tod")).toBe("day");
+    expect(lines[0]?.querySelector(".mv-phase__tod")?.textContent).toBe("낮");
+    expect(lines[0]?.querySelector(".mv-phase__sep")?.getAttribute("aria-hidden")).toBe("true");
+    expect(lines[0]?.querySelector(".mv-phase__title")?.textContent).toBe("토론");
+  });
+
+  it("word 가 null 이면 낱말·가운뎃점이 없고 [data-tod] 는 있다", () => {
+    const { container } = render(<PhaseHeader title="밤" tod={{ id: "night", word: null }} />);
+    expect(container.querySelectorAll("[data-tod]").length).toBe(1);
+    expect(container.querySelector(".mv-phase__tod")).toBeNull();
+    expect(container.querySelector(".mv-phase__sep")).toBeNull();
+    expect(container.querySelector(".mv-phase__title")?.textContent).toBe("밤");
+  });
+
+  it("tod 를 안 주면 [data-tod] 0개·마크업 그대로", () => {
+    const { container } = render(<PhaseHeader title="대기실" />);
+    expect(container.querySelector("[data-tod]")).toBeNull();
+    expect(container.querySelector(".mv-phase__line")).toBeNull();
+    expect(container.querySelector(".mv-phase__text > .mv-phase__title")?.textContent).toBe("대기실");
+  });
+});
+
 describe("PhaseHeader (결정 0051-5)", () => {
   it("showHint false 면 안내가 접히고, time·total 이 없으면 시간 링이 없다", () => {
     const { container } = render(<PhaseHeader title="대기실" hint="바닥을 눌러 걸어요" showHint={false} />);

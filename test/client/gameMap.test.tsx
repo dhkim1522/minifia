@@ -34,6 +34,9 @@ vi.mock("../../src/components/WorldStage", async () => {
 });
 
 const { RoomScreen } = await import("../../src/screens/RoomScreen");
+const { GameMap } = await import("../../src/screens/GameMap");
+const { WorldStore } = await import("../../src/world/store");
+const { ChatStore } = await import("../../src/net/chatStore");
 
 const player = (seat: number, extra: Partial<PublicPlayer> = {}): PublicPlayer => ({
   seat,
@@ -467,10 +470,10 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
     });
 
   // 14-02(U-2·U-3, TOOL-02): 기본판 헤더는 제목 + [역할 카드] 뿐이다. 안내 줄은 자막 띠가, 남은 시간은 띠의 막대 + 초가 맡는다.
-  it("기본판 낮 토론 산 사람: 헤더는 제목 '낮 토론' + [역할 카드] 뿐 — 안내 줄·시간 링·타이머가 없다", () => {
+  it("기본판 낮 토론 산 사람: 헤더는 제목 '토론'(앞에 옅은 낱말 '낮') + [역할 카드] 뿐 — 안내 줄·시간 링·타이머가 없다", () => {
     const { container } = mount(makeView());
     const header = container.querySelector(".mf-game__header") as HTMLElement;
-    expect(header.querySelector(".mv-phase__title")?.textContent).toBe("낮 토론");
+    expect(header.querySelector(".mv-phase__title")?.textContent).toBe("토론");
     expect(header.querySelectorAll(".mv-phase__title").length).toBe(1);
     expect(header.querySelector(".mv-phase__hint")).toBeNull();
     expect(header.querySelector(".mv-ring")).toBeNull();
@@ -535,41 +538,69 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
   });
 });
 
-describe("GameMap — 시간대 배지 (R4, P181-5)", () => {
+describe("GameMap — 헤더 시간대 글자 (0083-1)", () => {
   const header = (c: ParentNode) => c.querySelector(".mf-game__header") as HTMLElement;
+  const word = (c: ParentNode) => header(c).querySelector(".mv-phase__tod");
 
-  it("낮 토론: 헤더에 [data-tod] 하나(day) — role=img·낮·img 4장(alt 빈칸), [역할 카드] 바로 앞 형제", () => {
+  it("낮 토론: [data-tod=day] 하나 안에 낱말 '낮'·제목 '토론', 헤더에 img 0개, [역할 카드] 단추 하나", () => {
     const { container } = mount(makeView());
-    const badges = header(container).querySelectorAll("[data-tod]");
-    expect(badges.length).toBe(1);
-    const b = badges[0] as HTMLElement;
-    expect(b.getAttribute("data-tod")).toBe("day");
-    expect(b.getAttribute("role")).toBe("img");
-    expect(b.getAttribute("aria-label")).toBe("낮");
-    const imgs = b.querySelectorAll("img");
-    expect(imgs.length).toBe(4);
-    for (const i of imgs) expect(i.getAttribute("alt")).toBe("");
-    expect(b.parentElement?.classList.contains("mv-phase__side")).toBe(true);
-    expect(b.nextElementSibling?.classList.contains("mf-rolecard-btn")).toBe(true);
+    const lines = header(container).querySelectorAll("[data-tod]");
+    expect(lines.length).toBe(1);
+    expect(lines[0]?.getAttribute("data-tod")).toBe("day");
+    expect(lines[0]?.classList.contains("mv-phase__line")).toBe(true);
+    expect(word(container)?.textContent).toBe("낮");
+    expect(lines[0]?.querySelector(".mv-phase__sep")?.getAttribute("aria-hidden")).toBe("true");
+    expect(lines[0]?.querySelector(".mv-phase__title")?.textContent).toBe("토론");
+    expect(header(container).querySelectorAll("img").length).toBe(0);
+    expect(header(container).querySelectorAll(".mf-rolecard-btn").length).toBe(1);
   });
 
-  it("단계마다 lightingOf 대응: 지목·변론 → dusk/저녁, 밤 → night/밤, 아침 → morning/아침, 심부름도 1개", () => {
-    const cells: Array<[PhaseId, string, string]> = [
-      ["dayAnnounce", "day", "낮"],
-      ["errand", "day", "낮"],
-      ["nomination", "dusk", "저녁"],
-      ["defense", "dusk", "저녁"],
-      ["night", "night", "밤"],
-      ["morning", "morning", "아침"],
+  it("토론에서 지목으로 넘어가면 '낮 · 토론' 이 '저녁 · 투표' 로 바뀐다", () => {
+    const m = mount(makeView());
+    expect(header(m.container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("day");
+    m.show(makeView({ phase: "nomination", candidate: 1 }));
+    expect(header(m.container).querySelectorAll("[data-tod]").length).toBe(1);
+    expect(header(m.container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("dusk");
+    expect(word(m.container)?.textContent).toBe("저녁");
+    expect(header(m.container).querySelector(".mv-phase__title")?.textContent).toBe("투표");
+  });
+
+  it("단계마다 todOf 대응: 낱말·제목", () => {
+    const cells: Array<[PhaseId, string, string | null, string]> = [
+      ["dayAnnounce", "day", "낮", "토론"],
+      ["errand", "day", "낮", "심부름"],
+      ["nomination", "dusk", "저녁", "투표"],
+      ["defense", "dusk", "저녁", "최후 변론"],
+      ["verdict", "dusk", "저녁", "찬반"],
+      ["execution", "dusk", "저녁", "처형"],
     ];
-    for (const [phase, tod, label] of cells) {
+    for (const [phase, tod, w, title] of cells) {
       const { container, unmount } = mount(makeView({ phase, candidate: 1 }));
-      const badges = header(container).querySelectorAll("[data-tod]");
-      expect(badges.length, phase).toBe(1);
-      expect(badges[0]?.getAttribute("data-tod"), phase).toBe(tod);
-      expect(badges[0]?.getAttribute("aria-label"), phase).toBe(label);
+      const lines = header(container).querySelectorAll("[data-tod]");
+      expect(lines.length, phase).toBe(1);
+      expect(lines[0]?.getAttribute("data-tod"), phase).toBe(tod);
+      expect(word(container)?.textContent ?? null, phase).toBe(w);
+      expect(header(container).querySelector(".mv-phase__title")?.textContent, phase).toBe(title);
       unmount();
     }
+  });
+
+  it("밤·아침은 한 단어: 낱말 요소·가운뎃점 0개, data-tod 는 night·morning", () => {
+    for (const [phase, tod, title] of [["night", "night", "밤"], ["morning", "morning", "아침"]] as const) {
+      const { container, unmount } = mount(makeView({ phase }));
+      expect(header(container).querySelector("[data-tod]")?.getAttribute("data-tod"), phase).toBe(tod);
+      expect(word(container), phase).toBeNull();
+      expect(header(container).querySelector(".mv-phase__sep"), phase).toBeNull();
+      expect(header(container).querySelector(".mv-phase__title")?.textContent, phase).toBe(title);
+      unmount();
+    }
+  });
+
+  it("tod={false} 로 그리면 [data-tod] 가 없다", () => {
+    const { container } = render(<GameMap view={makeView()} store={new WorldStore()} chat={new ChatStore()} send={() => true} tod={false} />);
+    expect(container.querySelectorAll("[data-tod]").length).toBe(0);
+    expect(container.querySelector(".mv-phase__tod")).toBeNull();
+    expect(container.querySelector(".mv-phase__title")?.textContent).toBe("토론");
   });
 });
 

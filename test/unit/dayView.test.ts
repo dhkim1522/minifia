@@ -436,8 +436,8 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
   const hdr = (v: RoomView) => headerFor(v);
 
   it("낮 시작·낮 토론", () => {
-    same(hdr(viewOf("dayAnnounce")), { title: "낮 토론" });
-    same(hdr(viewOf("discussion")), { title: "낮 토론", hint: "이야기하며 마피아를 찾아요" });
+    same(hdr(viewOf("dayAnnounce")), { title: "토론" });
+    same(hdr(viewOf("discussion")), { title: "토론", hint: "이야기하며 마피아를 찾아요" });
   });
 
   it("지목: 순차 진행의 안내 (UI-SPEC Copywriting)", () => {
@@ -479,7 +479,7 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
 
   it("유령은 같은 제목에 '모두의 직업이 보여요'(밤은 '모두의 직업과 밤 행동이 보여요')", () => {
     const g = { players: ghostPlayers, mySeat: 0 };
-    same(hdr(viewOf("discussion", g)), { title: "낮 토론", hint: "모두의 직업이 보여요" });
+    same(hdr(viewOf("discussion", g)), { title: "토론", hint: "모두의 직업이 보여요" });
     same(hdr(nominationOf([], g)), { title: "투표", hint: "모두의 직업이 보여요" });
     same(hdr(defenseView(g)), { title: "최후 변론", hint: "모두의 직업이 보여요" });
     same(hdr(verdictView(g)), { title: "찬반", hint: "모두의 직업이 보여요" });

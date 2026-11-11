@@ -1,11 +1,9 @@
-import { readFileSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { PhaseId } from "../../shared/protocol";
 import { lightingOf } from "../../src/world/presence";
-import { ASSET_VERSION } from "../../src/net/assets";
-import { TOD_LABEL, TOD_ORDER, todOf, todSrc, type TimeOfDay } from "../../src/game/timeOfDay";
+import { TOD_LABEL, TOD_ORDER, todOf, todWordOf, type TimeOfDay } from "../../src/game/timeOfDay";
 
-// 18.1-03(R4, P181-5, UI-SPEC D 계약 3): 시간대 그림은 공개 단계 하나로 정한다. 모든 PhaseId 를 표로 고정한다.
+// 18.1-11(결정 0083-1): 헤더 시간대는 공개 단계 하나로 정한 글자다. 모든 PhaseId 를 표로 고정한다.
 const EXPECT: Record<PhaseId, TimeOfDay> = {
   lobby: "day",
   tutorial: "day",
@@ -39,26 +37,26 @@ describe("시간대 표 (todOf, D 계약 3)", () => {
     }
   });
 
-  it("라벨·순서·주소", () => {
+  it("라벨·순서", () => {
     expect(TOD_LABEL).toEqual({ morning: "아침", day: "낮", dusk: "저녁", night: "밤" });
     expect(TOD_ORDER).toEqual(["morning", "day", "dusk", "night"]);
-    expect(todSrc("day")).toBe(`/weather/weather-day.svg?v=${ASSET_VERSION}`);
   });
 });
 
-// D3: 날씨 에셋은 사용자 원본 그대로 — 정사각·가볍고·외부 참조 없음·큰 원본 사본과 바이트가 같다.
-describe("날씨 에셋 계약 (D3)", () => {
-  for (const tod of ["morning", "day", "dusk", "night"] as const) {
-    const file = `public/weather/weather-${tod}.svg`;
-    it(`${tod}: 정사각 viewBox·≤ 8KB·외부 참조·script 없음·원본 사본과 같다`, () => {
-      expect(statSync(file).size).toBeLessThanOrEqual(8192);
-      const svg = readFileSync(file, "utf8");
-      const vb = /viewBox="0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)"/.exec(svg);
-      expect(vb, "viewBox").not.toBeNull();
-      expect(vb![1]).toBe(vb![2]);
-      for (const bad of ["<script", "href", "<image", "<style", "<animate", "@keyframes", "<text"]) expect(svg, bad).not.toContain(bad);
-      for (const m of svg.matchAll(/url\(/g)) expect(svg.slice(m.index!, m.index! + 5)).toBe("url(#");
-      expect(readFileSync(file).equals(readFileSync(`design/v3.0/weather/weather-${tod}.svg`))).toBe(true);
-    });
-  }
+describe("헤더 시간대 낱말 (todWordOf, 결정 0083-1)", () => {
+  it("낮·저녁은 낱말이 있다", () => {
+    expect(todWordOf("discussion", "토론")).toBe("낮");
+    expect(todWordOf("dayAnnounce", "토론")).toBe("낮");
+    expect(todWordOf("errand", "심부름")).toBe("낮");
+    expect(todWordOf("nomination", "투표")).toBe("저녁");
+    expect(todWordOf("runoff", "결선")).toBe("저녁");
+    expect(todWordOf("defense", "최후 변론")).toBe("저녁");
+    expect(todWordOf("verdict", "찬반")).toBe("저녁");
+    expect(todWordOf("execution", "처형")).toBe("저녁");
+  });
+
+  it("밤·아침은 단계 이름이 같은 낱말이라 한 단어다(null)", () => {
+    expect(todWordOf("night", "밤")).toBeNull();
+    expect(todWordOf("morning", "아침")).toBeNull();
+  });
 });
