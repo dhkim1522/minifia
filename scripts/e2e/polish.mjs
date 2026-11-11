@@ -444,7 +444,7 @@ export function readTodHead(page) {
   });
 }
 
-// ---- B 채팅 두 줄 창·기록 시트 (18.1-09) ----
+// ---- B 채팅 두 줄 창·늘어나는 기록 칸 (18.1-09, 18.1-14) ----
 
 /** 기록 칸 높이 (UI-SPEC B1, src/game/chatUi.ts LOG_H 의 사본 — e2eContract 가 lib.mjs LOG_H 와 같음을 고정한다) */
 export const CHAT_LOG_H = 68;
@@ -454,12 +454,25 @@ export const CHAT_FADE_H = 12;
 export const CHAT_WINDOW_MAX_LINES = 2;
 /** 입력칸·보내기 한 변(B1) */
 export const CHAT_CONTROL_H = 48;
-/** 기록 시트 끌어 닫기 거리 — Sheet 의 문턱 96 보다 크게 */
-export const CHAT_SHEET_DRAG_PX = 120;
-/** 닫기 시작 뒤 대화상자가 없어져야 하는 시간(ms) */
-export const CHAT_SHEET_CLOSE_MS = 300;
+/** 늘어난 기록 칸 높이 상한(chatUi.LOG_OPEN_MAX 사본, 0083-4) */
+export const CHAT_OPEN_MAX = 300;
+/** 늘어난 기록 칸 위, 띠 아래에 남기는 스테이지 최소 높이(chatUi.OPEN_STAGE_MIN 사본) */
+export const CHAT_OPEN_STAGE_MIN = 120;
+/** 키보드 열림 패널에서 기록 칸 밖의 높이(chatUi.KB_PANEL_REST 사본) = 14 + 8 + 48 + 8 */
+export const CHAT_KB_PANEL_REST = 78;
+/** 늘어난 칸 높이 식의 기본 띠 아랫변(CSS 변수가 없을 때 .mv-chat__log.is-open 이 쓰는 값) */
+export const CHAT_HOST_BOTTOM_DEFAULT = 126;
 /** B2 를 재려면 보낸 채팅 줄이 이만큼은 있어야 한다(공허 통과 금지) */
 export const CHAT_MIN_LINES = 6;
+
+/**
+ * 늘어난 기록 칸 높이 식 사본(chatUi.openLogHeight, 0083-4) = clamp(68, 방 높이 − 키보드 올림 − 띠 아랫변 − 스테이지 최소 − 패널의 기록 칸 밖 높이, 300), 정수.
+ * test/unit/e2eContract.test.ts 가 같은 입력 표에서 openLogHeight 와 같은 값임을 고정한다.
+ */
+export function chatOpenHeight({ roomH, lift, hostBottom, panelRest }) {
+  const room = roomH - lift - hostBottom - CHAT_OPEN_STAGE_MIN - panelRest;
+  return Math.round(Math.min(CHAT_OPEN_MAX, Math.max(CHAT_LOG_H, room)));
+}
 
 /** 사각형 r 이 [bandTop, bandBottom] 띠와 겹친 높이 */
 const overlapH = (r, bandTop, bandBottom) => Math.max(0, Math.min(bottomOf(r), bandBottom) - Math.max(r.top, bandTop));
@@ -471,19 +484,20 @@ const overlapH = (r, bandTop, bandBottom) => Math.max(0, Math.min(bottomOf(r), b
  */
 export function chatWindowChecks(m, { long = false } = {}) {
   const L = {
-    B1: `기록 칸 ${CHAT_LOG_H}·입력칸 ${CHAT_CONTROL_H}·보내기 ${CHAT_CONTROL_H}x${CHAT_CONTROL_H}`,
+    B1: `기록 칸 ${CHAT_LOG_H}·입력칸 ${CHAT_CONTROL_H}·보내기(있으면) ${CHAT_CONTROL_H}x${CHAT_CONTROL_H}`,
     B2: `보낸 채팅 줄이 ${CHAT_MIN_LINES}개 이상일 때 기록 칸 안에 보이는 채팅 줄이 ${CHAT_WINDOW_MAX_LINES}개 이하`,
     B2L: "긴 줄: 기록 칸에 가장 새 줄의 끝 두 줄만 보이고 칸 아래를 넘치지 않는다",
   };
   const want = long ? ["B1", "B2", "B2L"] : ["B1", "B2"];
-  const ok = m !== null && typeof m === "object" && isRect(m.log) && isRect(m.input) && isRect(m.send) && Array.isArray(m.msgs) && m.msgs.every(isRect) && isNum(m.lineHeight);
+  // 접힌 창에서 빈 입력·포커스 없음이면 [보내기] 가 없다(0083-5) — 있으면 48×48 이다
+  const ok = m !== null && typeof m === "object" && isRect(m.log) && isRect(m.input) && (m.send === null || isRect(m.send)) && Array.isArray(m.msgs) && m.msgs.every(isRect) && isNum(m.lineHeight);
   if (!ok) return want.map((id) => noMeasure(id, L[id], "기록 칸·입력칸·보내기·줄 사각형"));
   const out = [];
 
   const bad1 = [];
   if (Math.abs(m.log.height - CHAT_LOG_H) > TOL) bad1.push(`기록 칸 ${fmt(m.log.height)} (기대 ${CHAT_LOG_H})`);
   if (Math.abs(m.input.height - CHAT_CONTROL_H) > TOL) bad1.push(`입력칸 ${fmt(m.input.height)} (기대 ${CHAT_CONTROL_H})`);
-  if (Math.abs(m.send.height - CHAT_CONTROL_H) > TOL || Math.abs(m.send.width - CHAT_CONTROL_H) > TOL) bad1.push(`보내기 ${fmt(m.send.width)}x${fmt(m.send.height)} (기대 ${CHAT_CONTROL_H}x${CHAT_CONTROL_H})`);
+  if (m.send !== null && (Math.abs(m.send.height - CHAT_CONTROL_H) > TOL || Math.abs(m.send.width - CHAT_CONTROL_H) > TOL)) bad1.push(`보내기 ${fmt(m.send.width)}x${fmt(m.send.height)} (기대 ${CHAT_CONTROL_H}x${CHAT_CONTROL_H})`);
   out.push(row("B1", L.B1, bad1));
 
   const bandTop = m.log.top + CHAT_FADE_H;
@@ -520,36 +534,77 @@ export function chatWindowChecks(m, { long = false } = {}) {
 }
 
 /**
- * B3·B4 판정. m = { open: { dialog, sheetClass, sheetLines, windowLines }, closes: [{ via, closed, focusOnOpenBtn }], draft: { before, after: [..] } }.
- * B3 [data-chat-open] 을 누르면 .mf-sheet--chatlog 대화상자가 열리고 시트 줄 수 ≥ 칸 줄 수, [닫기]·끌어 내리기·Esc 셋 모두 닫히고 포커스가 [data-chat-open] 으로 돌아온다.
- * B4 입력칸의 쓰던 글이 열고 닫는 내내 그대로(처음부터 비어 있으면 잴 것이 없어 실패).
+ * B3·B4·B5 판정(0083-4·0083-5). m = { collapsed, opened, closed, byInput, draft, send }:
+ *  - collapsed·closed = { logH, expanded } 접힌 두 줄 창(처음, 그리고 같은 단추를 다시 누른 뒤)
+ *  - opened = { logH, expanded, dialogs, focusOnInput, formula } 두 줄 창을 누른 뒤. byInput = { logH, expanded, focusOnInput, formula } 입력칸을 눌러서.
+ *    formula = { roomH, lift, hostBottom, panelRest } 식의 재료(화면에서 읽은 값)
+ *  - draft = { before, after } 쓰던 글(접었다 펴기 전·후 입력칸 값), send = [{ state, send, will, rect? }] 네 경우의 [보내기]·유언 단추 수
+ * B3 두 줄 창을 누르면 dialog 없이 같은 자리에서 늘어나(aria-expanded, 높이 = 식의 값 ± 1) 입력칸에 포커스가 없고, 같은 단추를 다시 누르면 68 로 돌아온다.
+ * B4 입력칸을 누르면 늘어나고(포커스, 높이 = 식의 값 ± 1) 쓰던 글이 접었다 펴도 남는다(처음부터 비어 있으면 잴 것이 없어 실패).
+ * B5 [보내기] 는 빈·포커스 없음 = 없음, 포커스 = 있음, 글(blur) = 있음, 지우고 blur = 없음이고 어느 때도 유언 단추와 함께 있지 않다.
  */
-export function chatSheetChecks(m) {
+export function chatOpenChecks(m) {
   const L = {
-    B3: "[data-chat-open] 이 기록 시트를 열고 [닫기]·끌어 내리기·Esc 로 닫히며 포커스가 [data-chat-open] 으로 돌아온다",
-    B4: "입력칸에 쓰던 글이 시트를 열고 닫아도 그대로다",
+    B3: "두 줄 창을 누르면 시트 없이 제자리에서 식의 높이로 늘어나고(입력칸 포커스 없음) 같은 단추로 68 로 접힌다",
+    B4: "입력칸을 누르면 식의 높이로 늘어나고 쓰던 글이 접었다 펴도 남는다",
+    B5: "[보내기] 는 입력 중이거나 쓴 글이 있을 때만 있고 유언 단추와 함께 있지 않다",
   };
-  const ok = m !== null && typeof m === "object" && m.open && typeof m.open === "object" && Array.isArray(m.closes) && m.draft && typeof m.draft === "object" && Array.isArray(m.draft.after);
-  if (!ok) return ["B3", "B4"].map((id) => noMeasure(id, L[id], "시트 열기·닫기·입력칸 읽기"));
+  const formulaOk = (f) => f && typeof f === "object" && isNum(f.roomH) && isNum(f.lift) && isNum(f.hostBottom) && isNum(f.panelRest);
+  const ok =
+    m !== null &&
+    typeof m === "object" &&
+    m.collapsed &&
+    isNum(m.collapsed.logH) &&
+    m.opened &&
+    isNum(m.opened.logH) &&
+    formulaOk(m.opened.formula) &&
+    m.closed &&
+    isNum(m.closed.logH) &&
+    m.byInput &&
+    isNum(m.byInput.logH) &&
+    formulaOk(m.byInput.formula) &&
+    m.draft &&
+    typeof m.draft === "object" &&
+    Array.isArray(m.send);
+  if (!ok) return ["B3", "B4", "B5"].map((id) => noMeasure(id, L[id], "늘어난 기록 칸 높이·식 재료·[보내기] 읽기"));
+
   const bad3 = [];
-  if (m.open.dialog !== true) bad3.push("시트(dialog)가 열리지 않음");
-  else if (m.open.sheetClass !== true) bad3.push(".mf-sheet--chatlog 가 아님");
-  if (!isNum(m.open.sheetLines) || !isNum(m.open.windowLines)) bad3.push("줄 수 측정값 없음");
-  else if (m.open.sheetLines < m.open.windowLines) bad3.push(`시트 줄 ${m.open.sheetLines}개 < 칸 줄 ${m.open.windowLines}개`);
-  for (const via of ["button", "escape", "drag"]) {
-    const c = m.closes.find((x) => x && x.via === via);
-    if (!c) bad3.push(`${via} 로 닫기를 재지 못함`);
-    else {
-      if (c.closed !== true) bad3.push(`${via}: ${CHAT_SHEET_CLOSE_MS}ms 안에 안 닫힘`);
-      if (c.focusOnOpenBtn !== true) bad3.push(`${via}: 포커스가 [data-chat-open] 이 아님${typeof c.active === "string" ? `(지금 ${c.active})` : ""}`);
-    }
-  }
+  if (Math.abs(m.collapsed.logH - CHAT_LOG_H) > TOL || m.collapsed.expanded !== false) bad3.push(`처음 접힌 칸 ${fmt(m.collapsed.logH)}${m.collapsed.expanded === false ? "" : " 늘어나 있음"} (기대 ${CHAT_LOG_H} 접힘)`);
+  const wantOpened = chatOpenHeight(m.opened.formula);
+  if (m.opened.expanded !== true) bad3.push("두 줄 창을 눌러도 aria-expanded 가 true 가 아님");
+  if (m.opened.dialogs !== 0) bad3.push(`열린 대화상자 ${m.opened.dialogs}개 (기대 0 — 시트 없음)`);
+  if (Math.abs(m.opened.logH - wantOpened) > TOL) bad3.push(`늘어난 칸 ${fmt(m.opened.logH)} (식의 값 ${wantOpened})`);
+  if (m.opened.focusOnInput !== false) bad3.push("두 줄 창을 눌렀는데 입력칸에 포커스가 생김");
+  if (Math.abs(m.closed.logH - CHAT_LOG_H) > TOL || m.closed.expanded !== false) bad3.push(`다시 눌러 접은 칸 ${fmt(m.closed.logH)}${m.closed.expanded === false ? "" : " 늘어나 있음"} (기대 ${CHAT_LOG_H} 접힘)`);
+
   const bad4 = [];
+  const wantByInput = chatOpenHeight(m.byInput.formula);
+  if (m.byInput.expanded !== true) bad4.push("입력칸을 눌러도 aria-expanded 가 true 가 아님");
+  if (m.byInput.focusOnInput !== true) bad4.push("입력칸을 눌렀는데 포커스가 없음");
+  if (Math.abs(m.byInput.logH - wantByInput) > TOL) bad4.push(`늘어난 칸 ${fmt(m.byInput.logH)} (식의 값 ${wantByInput})`);
   const { before, after } = m.draft;
   if (typeof before !== "string" || before === "") bad4.push("처음 입력칸이 비어 있음(잴 것이 없음)");
-  else after.forEach((v, i) => v !== before && bad4.push(`${i + 1}번째 닫은 뒤 입력칸 ${typeof v === "string" ? v.length : "?"}자 (기대 ${before.length}자 그대로)`));
-  if (after.length < 3) bad4.push(`닫은 뒤 읽기 ${after.length}번 (기대 3번)`);
-  return [row("B3", L.B3, bad3), row("B4", L.B4, bad4)];
+  else if (after !== before) bad4.push(`접었다 편 뒤 입력칸 ${typeof after === "string" ? after.length : "?"}자 (기대 ${before.length}자 그대로)`);
+
+  const bad5 = [];
+  const WANT_SEND = { "empty-blur": 0, focus: 1, "text-blur": 1, "cleared-blur": 0 };
+  for (const [state, want] of Object.entries(WANT_SEND)) {
+    const r = m.send.find((x) => x && x.state === state);
+    if (!r) {
+      bad5.push(`${state} 를 재지 못함`);
+      continue;
+    }
+    if ((r.send > 0 ? 1 : 0) !== want) bad5.push(`${state}: [보내기] ${r.send}개 (기대 ${want})`);
+    if (r.send > 0 && r.will > 0) bad5.push(`${state}: [보내기] ${r.send}개와 유언 단추 ${r.will}개가 함께 있음`);
+    if (r.send > 0 && r.rect && (Math.abs(r.rect.width - CHAT_CONTROL_H) > TOL || Math.abs(r.rect.height - CHAT_CONTROL_H) > TOL)) bad5.push(`${state}: [보내기] ${fmt(r.rect.width)}x${fmt(r.rect.height)} (기대 ${CHAT_CONTROL_H}x${CHAT_CONTROL_H})`);
+  }
+  const r3 = row("B3", L.B3, bad3);
+  const r4 = row("B4", L.B4, bad4);
+  return [
+    { ...r3, detail: r3.ok ? `늘어난 칸 ${fmt(m.opened.logH)}(식 ${wantOpened})` : r3.detail },
+    { ...r4, detail: r4.ok ? `입력칸으로 늘어난 칸 ${fmt(m.byInput.logH)}(식 ${wantByInput})` : r4.detail },
+    row("B5", L.B5, bad5),
+  ];
 }
 
 /**
@@ -578,82 +633,103 @@ export function readChatWindow(page) {
   });
 }
 
-/** 기록 시트 읽기: 열린 .mf-sheet--chatlog 대화상자 수, 시트 안 줄 수, activeElement 가 [data-chat-open] 인지, 입력칸 값, 대화상자 수. */
-export function readChatSheet(page) {
-  return page.evaluate(() => {
-    const dialogs = [...document.querySelectorAll("dialog[open]")];
-    const sheet = document.querySelector("dialog[open] .mf-sheet--chatlog");
-    const list = document.querySelector("[data-chat-sheet-log]");
+/**
+ * 늘어난 기록 칸 읽기(0083-4): 기록 칸 높이, [data-chat-open] 의 aria-expanded, 열린 대화상자 수, 입력칸 포커스·값, [보내기]·유언 단추 수(와 [보내기] 사각형),
+ * 높이 식의 재료 = { 방 높이(화면 루트), 키보드 올림(--mf-kb-lift), 띠 아랫변(--mf-host-bottom, 없으면 126), 패널의 기록 칸 밖 높이(패널 − 기록 칸) }. 칸이 없으면 null.
+ * 채팅 본문·닉네임은 읽지 않는다.
+ */
+export function readChatOpen(page) {
+  return page.evaluate((hostDefault) => {
+    const log = document.querySelector("[data-chat-log]");
+    if (!log) return null;
+    const btn = document.querySelector("[data-chat-open]");
     const input = document.querySelector("[data-chat-input]");
-    return {
-      dialogs: dialogs.length,
-      sheetClass: sheet !== null,
-      sheetLines: list ? list.children.length : 0,
-      focusOnOpenBtn: document.activeElement === document.querySelector("[data-chat-open]"),
-      // 포커스가 어디 있는지(진단용): 태그 + data-* 속성 이름만, 글자는 싣지 않는다
-      active: document.activeElement ? `${document.activeElement.tagName.toLowerCase()}${[...document.activeElement.attributes].filter((a) => a.name.startsWith("data-")).map((a) => `[${a.name}]`).join("")}` : "없음",
-      inputValue: input ? input.value : null,
+    const root = log.closest("main") ?? document.body;
+    const panel = log.closest('[class*="__panel"]') ?? root;
+    const cs = getComputedStyle(root);
+    const num = (v) => {
+      const n = parseFloat(v);
+      return Number.isFinite(n) ? n : null;
     };
-  });
+    const send = document.querySelector("[data-chat-send]");
+    const sr = send ? send.getBoundingClientRect() : null;
+    const logH = log.getBoundingClientRect().height;
+    return {
+      logH,
+      expanded: btn ? btn.getAttribute("aria-expanded") === "true" : null,
+      dialogs: document.querySelectorAll("dialog[open]").length,
+      focusOnInput: document.activeElement === input,
+      inputValue: input ? input.value : null,
+      sendCount: document.querySelectorAll("[data-chat-send]").length,
+      willCount: document.querySelectorAll("[data-will-button]").length,
+      sendRect: sr ? { width: sr.width, height: sr.height } : null,
+      formula: {
+        roomH: root.clientHeight,
+        lift: num(cs.getPropertyValue("--mf-kb-lift")) ?? 0,
+        hostBottom: num(cs.getPropertyValue("--mf-host-bottom")) ?? hostDefault,
+        panelRest: panel.getBoundingClientRect().height - logH,
+      },
+    };
+  }, CHAT_HOST_BOTTOM_DEFAULT);
+}
+
+/** [data-chat-open] 의 aria-expanded 가 want 가 될 때까지 기다린 뒤 레이아웃이 가라앉도록 잠깐 쉰다 */
+async function waitChatExpanded(page, want) {
+  await page.waitForSelector(`[data-chat-open][aria-expanded="${want}"]`, { timeout: 3000 });
+  await sleep(200);
 }
 
 /**
- * 기록 시트 한 바퀴: [data-chat-open] 을 눌러 열고, via(button·escape·drag)로 닫는다. 닫힘은 닫는 동작이 끝난 시각부터 CHAT_SHEET_CLOSE_MS 안에
- * dialog[open] 이 없어지는 것, 포커스는 닫힌 직후 activeElement 가 [data-chat-open] 인지 본다. 못 닫히면 Esc 로 정리해 다음 바퀴가 이어지게 한다.
- * 돌려주는 값: { opened: readChatSheet(열린 직후), close: { via, closed, focusOnOpenBtn }, input: 닫은 뒤 입력칸 값 }.
+ * 늘어나는 기록 칸 B3·B4·B5 의 읽기 전부(0083-4·0083-5). 접힌 채 빈 입력·포커스 없음에서 시작해야 한다. 쓰던 글 draft 로:
+ * 두 줄 창 누르기(늘어남·포커스 없음) → 다시 누르기(접힘) → 입력칸 누르기(늘어남·포커스) → 글 쓰기·blur → 접었다 펴기 → 글 지우기·blur. 끝나면 접어 둔다.
+ * 돌려주는 값은 chatOpenChecks 의 입력 모양이다. 읽지 못한 단계가 있으면 null.
  */
-async function chatSheetRound(page, via) {
-  await page.locator("[data-chat-open]").click({ timeout: 4000 });
-  await page.waitForSelector("dialog[open] .mf-sheet--chatlog", { timeout: 3000 });
-  await sleep(350); // 올라오는 연출이 끝나길 기다린다(끌기 잡이가 제자리에 있도록)
-  const opened = await readChatSheet(page);
-  if (via === "button") await page.locator('dialog[open] [aria-label="닫기"]').click({ timeout: 3000 });
-  else if (via === "escape") await page.keyboard.press("Escape");
-  else {
-    const h = await page.locator("dialog[open] .mf-sheet__handle").boundingBox();
-    if (!h) throw new Error("끌기 손잡이를 찾지 못함");
-    const x = h.x + h.width / 2;
-    const y = h.y + h.height / 2;
-    await page.mouse.move(x, y);
-    await page.mouse.down();
-    await page.mouse.move(x, y + CHAT_SHEET_DRAG_PX / 2, { steps: 6 });
-    await page.mouse.move(x, y + CHAT_SHEET_DRAG_PX + 20, { steps: 6 });
-    await page.mouse.up();
-  }
-  const t0 = performance.now();
-  let closed = false;
-  try {
-    await page.waitForFunction(() => document.querySelector("dialog[open]") === null, null, { timeout: CHAT_SHEET_CLOSE_MS + 400, polling: "raf" });
-    closed = performance.now() - t0 <= CHAT_SHEET_CLOSE_MS;
-  } catch {
-    closed = false;
-  }
-  const after = await readChatSheet(page);
-  if (after.dialogs > 0) {
-    await page.keyboard.press("Escape");
-    await sleep(500);
-  }
-  return { opened, close: { via, closed, focusOnOpenBtn: after.focusOnOpenBtn, active: after.active }, input: after.inputValue };
-}
+export async function measureChatOpen(page, draft) {
+  const input = page.locator("[data-chat-input]");
+  const blur = () => page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+  const slim = (r) => (r ? { logH: r.logH, expanded: r.expanded } : null);
+  const send = [];
+  const note = (state, r) => r && send.push({ state, send: r.sendCount, will: r.willCount, rect: r.sendRect });
+  const toggle = () => page.locator("[data-chat-open]").click({ timeout: 4000 });
 
-/**
- * 기록 시트 열고 닫기 B3·B4 의 읽기 전부: 입력칸에 draft 를 넣고, 시트를 [닫기]·Esc·끌기로 세 번 열고 닫는다.
- * 돌려주는 값은 chatSheetChecks 의 입력 모양이다. 닫는 길이 하나 실패해도 나머지는 계속 잰다.
- */
-export async function measureChatSheet(page, draft) {
-  await page.locator("[data-chat-input]").fill(draft);
-  const before = await page.locator("[data-chat-input]").inputValue();
-  const windowLines = (await readChatWindow(page))?.allLines ?? null;
-  let open = null;
-  const closes = [];
-  const after = [];
-  for (const via of ["button", "escape", "drag"]) {
-    const r = await chatSheetRound(page, via);
-    if (open === null) open = { dialog: r.opened.dialogs > 0, sheetClass: r.opened.sheetClass, sheetLines: r.opened.sheetLines, windowLines };
-    closes.push(r.close);
-    after.push(r.input);
-  }
-  return { open, closes, draft: { before, after } };
+  const collapsed = await readChatOpen(page);
+  note("empty-blur", collapsed);
+  await toggle();
+  await waitChatExpanded(page, "true");
+  const opened = await readChatOpen(page);
+  await toggle();
+  await waitChatExpanded(page, "false");
+  const closed = await readChatOpen(page);
+
+  await input.click({ timeout: 4000 });
+  await waitChatExpanded(page, "true");
+  const byInput = await readChatOpen(page);
+  note("focus", byInput);
+  await input.fill(draft);
+  const before = await input.inputValue();
+  await blur();
+  await sleep(150);
+  note("text-blur", await readChatOpen(page));
+  await toggle();
+  await waitChatExpanded(page, "false");
+  await toggle();
+  await waitChatExpanded(page, "true");
+  const after = await input.inputValue();
+  await input.fill("");
+  await blur();
+  await sleep(150);
+  note("cleared-blur", await readChatOpen(page));
+  await toggle();
+  await waitChatExpanded(page, "false");
+  if (!collapsed || !opened || !closed || !byInput) return null;
+  return {
+    collapsed: slim(collapsed),
+    opened: { ...slim(opened), dialogs: opened.dialogs, focusOnInput: opened.focusOnInput, formula: opened.formula },
+    closed: slim(closed),
+    byInput: { ...slim(byInput), focusOnInput: byInput.focusOnInput, formula: byInput.formula },
+    draft: { before, after },
+    send,
+  };
 }
 
 // ---- C 산 사람 화면 유령·유령 화면 직업 의상 (18.1-09) ----
@@ -776,11 +852,11 @@ export function readLiveGhost(page, seats) {
 }
 
 /**
- * 찬반 기록 카드 overflow backstop(UI-SPEC UI Considerations): 기록 칸에서 창보다 큰 시스템 카드는 위가 잘리고, 기록 시트에서는 카드 전체가 목록 안에 보여야 한다.
- * 칸에 찬반 카드(`[data-card="ballots"]`)가 있으면 칸 스크린샷을 남기고, 시트를 열어 카드를 목록 안으로 스크롤한 뒤 사각형을 읽고 시트 스크린샷을 남기고 닫는다.
- * 돌려주는 값: { measured: false, why } 또는 { measured: true, cardH, windowH, cutTop(칸에서 위가 잘린 높이), sheetFits(시트 목록 안에 카드 전체가 듦), listH }. 카드 안 글은 읽지 않는다.
+ * 찬반 기록 카드 overflow backstop(UI-SPEC UI Considerations): 접힌 기록 칸에서는 창보다 큰 시스템 카드의 위가 잘리고, 늘어난 기록 칸(0083-4)에서는 카드 전체가 칸 안에 보여야 한다.
+ * 칸에 찬반 카드(`[data-card="ballots"]`)가 있으면 칸 스크린샷을 남기고, [data-chat-open] 으로 칸을 늘려 카드를 칸 안으로 스크롤한 뒤 사각형을 읽고 스크린샷을 남기고 접는다.
+ * 돌려주는 값: { measured: false, why } 또는 { measured: true, cardH, windowH, cutTop(접힌 칸에서 위가 잘린 높이), openFits(늘어난 칸 안에 카드 전체가 듦), openH(늘어난 칸 높이) }. 카드 안 글은 읽지 않는다.
  */
-export async function measureBallotsBackstop(page, { windowShot, sheetShot }) {
+export async function measureBallotsBackstop(page, { windowShot, openShot }) {
   const win = await page.evaluate(() => {
     const rect = (el) => {
       if (!el) return null;
@@ -796,24 +872,23 @@ export async function measureBallotsBackstop(page, { windowShot, sheetShot }) {
   if (!win.open) return { measured: false, why: "[data-chat-open] 이 없음" };
   await page.locator("[data-chat-log]").screenshot({ path: windowShot });
   await page.locator("[data-chat-open]").click({ timeout: 4000 });
-  await page.waitForSelector("dialog[open] .mf-sheet--chatlog", { timeout: 3000 });
-  await sleep(400);
-  const sheet = await page.evaluate(() => {
-    const list = document.querySelector("[data-chat-sheet-log]");
+  await waitChatExpanded(page, "true");
+  const open = await page.evaluate(() => {
+    const list = document.querySelector("[data-chat-log]");
     const cards = list ? [...list.querySelectorAll('[data-card="ballots"]')] : [];
     const card = cards[cards.length - 1];
-    if (!list || !card) return { missing: true, list: list !== null, lines: list ? list.children.length : 0, allCards: document.querySelectorAll('[data-card="ballots"]').length, dialogs: document.querySelectorAll("dialog[open]").length };
+    if (!list || !card) return { missing: true, list: list !== null, lines: list ? list.children.length : 0, allCards: document.querySelectorAll('[data-card="ballots"]').length };
     card.scrollIntoView({ block: "nearest" });
     const l = list.getBoundingClientRect();
     const c = card.getBoundingClientRect();
     return { listH: l.height, cardH: c.height, fits: c.top >= l.top - 1 && c.bottom <= l.bottom + 1 };
   });
   await sleep(100);
-  await page.screenshot({ path: sheetShot });
-  await page.keyboard.press("Escape");
-  await page.waitForFunction(() => document.querySelector("dialog[open]") === null, null, { timeout: 2000 }).catch(() => {});
-  if (sheet.missing) return { measured: false, why: `시트 목록에 찬반 기록 카드가 없음(목록 ${sheet.list ? "있음" : "없음"}·줄 ${sheet.lines}개·문서 전체 찬반 카드 ${sheet.allCards}개·열린 대화상자 ${sheet.dialogs}개)` };
-  return { measured: true, cardH: sheet.cardH, windowH: win.log.height, cutTop: Math.max(0, win.log.top - win.card.top), sheetFits: sheet.fits, listH: sheet.listH };
+  await page.screenshot({ path: openShot });
+  await page.locator('[data-chat-open][aria-expanded="true"]').click({ timeout: 4000 }).catch(() => {});
+  await page.waitForSelector('[data-chat-open][aria-expanded="false"]', { timeout: 2000 }).catch(() => {});
+  if (open.missing) return { measured: false, why: `늘어난 칸에 찬반 기록 카드가 없음(칸 ${open.list ? "있음" : "없음"}·줄 ${open.lines}개·문서 전체 찬반 카드 ${open.allCards}개)` };
+  return { measured: true, cardH: open.cardH, windowH: win.log.height, cutTop: Math.max(0, win.log.top - win.card.top), openFits: open.fits, openH: open.listH };
 }
 
 // ---- 흐름 ----

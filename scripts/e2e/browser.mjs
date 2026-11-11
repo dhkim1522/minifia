@@ -649,6 +649,19 @@ export function readSideColumn(page) {
 }
 
 /**
+ * 늘어나 있는 기록 칸을 접는다(0083-4): [data-chat-open] 을 눌러 aria-expanded 를 false 로 만든다(입력칸 포커스도 풀린다). 이미 접혀 있으면 아무 일도 하지 않는다.
+ * 채팅 입력칸에 포커스를 주거나 글을 보내면 칸이 늘어나므로, 접힌 두 줄 창(높이 68)을 재는 흐름은 재기 전에 이것으로 접는다. 접었으면 true.
+ */
+export async function collapseChatLog(page) {
+  const open = page.locator('[data-chat-open][aria-expanded="true"]');
+  if ((await open.count()) === 0) return false;
+  await open.click({ timeout: 4000 });
+  await page.waitForSelector('[data-chat-open][aria-expanded="false"]', { timeout: 3000 });
+  await sleep(200);
+  return true;
+}
+
+/**
  * 채팅 입력칸에 글을 쓰고 [보내기] 를 누른다(07-13). 값은 fill 로 한 번에 넣는다 — 한글 조합 이벤트는 만들지 않는다(실제 IME 는 07-19 몫).
  * 보내기 버튼이 활성(aria-disabled "false")이 될 때까지 기다린 뒤 누르므로, 글자가 React 상태에 닿기 전에 누르는 일이 없다.
  */
@@ -735,14 +748,15 @@ export function readChatPanel(page) {
     const input = document.querySelector("[data-chat-input]");
     const send = document.querySelector("[data-chat-send]");
     const header = document.querySelector(".mf-lobby__header");
-    if (!room || !panel || !log || !input || !send) return null;
+    // 접힌 창에서 빈 입력·포커스 없음이면 [보내기] 가 없다(0083-5) — send 는 null 일 수 있다
+    if (!room || !panel || !log || !input) return null;
     return {
       roomH: room.getBoundingClientRect().height,
       panel: box(panel),
       log: box(log),
       input: box(input),
       inputFont: parseFloat(getComputedStyle(input).fontSize),
-      send: box(send),
+      send: send ? box(send) : null,
       stageTop: header ? header.getBoundingClientRect().bottom : null,
       stageBottom: panel.getBoundingClientRect().top,
     };
@@ -827,6 +841,11 @@ export function readKeyboardState(page, mySeat) {
       innerHeight: window.innerHeight,
       vv,
       kbOpen: root.getAttribute("data-kb-open"),
+      roomH: root.clientHeight,
+      hostBottom: (() => {
+        const v = parseFloat(getComputedStyle(root).getPropertyValue("--mf-host-bottom"));
+        return Number.isFinite(v) ? v : 126;
+      })(),
       lift: root.parentElement ? getComputedStyle(root.closest(".mf-room") ?? root).getPropertyValue("--mf-kb-lift").trim() : "",
       focusOnInput: document.activeElement === input,
       panel: rect(panel),

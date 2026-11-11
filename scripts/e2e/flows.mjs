@@ -41,6 +41,7 @@ import {
   openPerfPage,
   openTestSheet,
   readLinkState,
+  collapseChatLog,
   readChatLines,
   readChatPanel,
   readKeyboardState,
@@ -77,7 +78,6 @@ import {
   RECONNECT_ROUNDS,
   REOPEN_ROUNDS,
   RESTORED_GONE_MS,
-  TAP_MIN,
   WORLD_SYNC_TOL,
   budgetChecks,
   chunkFailChecks,
@@ -144,7 +144,7 @@ import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
 import { makeErrandFlows } from "./errand.mjs";
 import { makeTutorialFlows } from "./tutorial.mjs";
-import { chatSheetChecks, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureBallotsBackstop, measureChatSheet, readChatWindow, readLiveGhost } from "./polish.mjs";
+import { CHAT_KB_PANEL_REST, CHAT_OPEN_STAGE_MIN, chatOpenChecks, chatOpenHeight, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureBallotsBackstop, measureChatOpen, readChatWindow, readLiveGhost } from "./polish.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
 const HOST_NICK = "화면검사기";
@@ -578,7 +578,7 @@ const CHAT_WINDOW_LINES = ["첫째 줄이에요", "둘째 줄이에요", "셋째
 const CHAT_WINDOW_GAP_MS = 1100;
 /** 긴 줄 backstop: 본문 30자(닉네임 8자 + 본문이 두 줄을 넘어가는 길이) */
 const CHAT_LONG_TEXT = "오늘은 모두 같이 모여서 천천히 이야기를 나눠 봅시다요";
-/** B4: 기록 시트를 열고 닫는 동안 입력칸에 남아 있어야 하는 글 */
+/** B4: 기록 칸을 늘렸다 접는 동안 입력칸에 남아 있어야 하는 글 */
 const CHAT_DRAFT_TEXT = "쓰던 글";
 
 // 로비 채팅 패널 치수(UI-SPEC 구조 표). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다 — 값을 바꾸려면 UI-SPEC 과 chatUi.ts 를 먼저 바꾼다.
@@ -590,7 +590,7 @@ const CHAT_PANEL_EPS = 1;
 
 /** 한 페이지의 로비 채팅 패널 치수 판정. m 은 readChatPanel 의 값. host 는 방장 페이지(스위치 줄 +76, 17-07 0080-4). 검사 행 목록을 돌려준다. */
 function chatPanelRows(m, host = false) {
-  if (!m) return [{ id: "CP0", label: "채팅 패널을 읽음", ok: false, detail: "패널·기록 칸·입력칸·보내기 중 없는 것이 있음" }];
+  if (!m) return [{ id: "CP0", label: "채팅 패널을 읽음", ok: false, detail: "패널·기록 칸·입력칸 중 없는 것이 있음" }];
   const logWant = CHAT_LOG;
   const hostExtra = host ? LOBBY_HOST_TUTORIAL_EXTRA : 0;
   const panelWant = logWant + CHAT_LOBBY_EXTRA + hostExtra;
@@ -599,9 +599,8 @@ function chatPanelRows(m, host = false) {
   return [
     { id: "CP1", label: `로비 패널 높이 ${r1(panelWant)} (기록 ${logWant} + ${CHAT_LOBBY_EXTRA}${host ? ` + ${hostExtra}(방장 스위치 줄)` : ""})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
     { id: "CP2", label: `기록 칸 높이 ${logWant}`, ok: near(m.log.height, logWant), detail: `기록 칸 ${r1(m.log.height)}` },
-    { id: "CP3", label: `입력칸 높이 ${CHAT_CONTROL} · 보내기 ${CHAT_CONTROL}x${CHAT_CONTROL}`, ok: near(m.input.height, CHAT_CONTROL) && near(m.send.height, CHAT_CONTROL) && near(m.send.width, CHAT_CONTROL), detail: `입력칸 ${r1(m.input.height)} · 보내기 ${r1(m.send.width)}x${r1(m.send.height)}` },
+    { id: "CP3", label: `입력칸 높이 ${CHAT_CONTROL} · 접힌 빈 입력에는 [보내기] 가 없음(0083-5)`, ok: near(m.input.height, CHAT_CONTROL) && m.send === null, detail: `입력칸 ${r1(m.input.height)} · 보내기 ${m.send === null ? "없음" : `${r1(m.send.width)}x${r1(m.send.height)}`}` },
     { id: "CP4", label: "입력칸 글자 16px", ok: m.inputFont === 16, detail: `${m.inputFont}px` },
-    { id: "CP5", label: `보내기 누르는 영역 ≥ ${TAP_MIN} 이고 눌림`, ok: m.send.width + 0.5 >= TAP_MIN && m.send.height + 0.5 >= TAP_MIN && m.send.hit, detail: `${r1(m.send.width)}x${r1(m.send.height)} hit ${m.send.hit}` },
     { id: "CP6", label: "스테이지 사각형 아래 끝 = 방 높이 − 패널 높이", ok: near(m.stageBottom, m.roomH - m.panel.height), detail: `아래 끝 ${r1(m.stageBottom)} · 방 높이 − 패널 ${r1(m.roomH - m.panel.height)}` },
   ];
 }
@@ -639,7 +638,9 @@ async function chatLobbyFlow(ctx) {
       const cleared = await gp.locator("[data-chat-input]").inputValue();
       rec(sc, "CL5", "보낸 뒤 손님 입력칸이 비워짐", cleared === "", `입력칸 ${cleared.length}자`);
     }
-    // 패널 치수: 방장·손님 두 화면 모두 UI-SPEC 폰 크기 표대로(18.1: 기록 칸 68 한 값 — 손님 222, 방장은 스위치 줄 +76 → 298)
+    // 패널 치수: 방장·손님 두 화면 모두 UI-SPEC 폰 크기 표대로(18.1: 기록 칸 68 한 값 — 손님 222, 방장은 스위치 줄 +76 → 298).
+    // 손님은 글을 보내느라 입력칸에 포커스가 있어 기록 칸이 늘어나 있다(0083-4) — 접힌 상태를 재려고 먼저 접는다
+    await collapseChatLog(gp);
     for (const [who, page] of [["방장", hp], ["손님", gp]]) {
       for (const r of chatPanelRows(await readChatPanel(page), who === "방장")) rec(`chat-lobby/panel-${who}`, r.id, r.label, r.ok, r.detail);
     }
@@ -660,7 +661,7 @@ async function chatLobbyFlow(ctx) {
     });
     rec(sc, "CL8", "손님이 칸을 비우면 방장 화면 알약이 사라짐", typingOff.ok, typingOff.detail);
 
-    // 18.1-09 R2: 두 줄 창(B1·B2)과 기록 시트(B3·B4)
+    // 18.1-09 R2: 두 줄 창(B1·B2)과 늘어나는 기록 칸(B3·B4·B5, 18.1-14)
     {
       const wsc = "chat-lobby/window";
       await hp.waitForTimeout(1700); // 위 입력 중 켜짐과 서버 전송 간격이 겹치지 않게
@@ -672,6 +673,7 @@ async function chatLobbyFlow(ctx) {
         }
       });
       rec(wsc, "B0", `손님이 채팅 ${CHAT_WINDOW_LINES.length}줄을 보내 두 페이지 기록 칸에 모두 도착(${ctx.size.label})`, sent.ok, sent.detail);
+      await collapseChatLog(gp); // 줄을 보내는 동안 포커스가 있어 늘어나 있다 — 접힌 두 줄 창을 잰다
       await Promise.all([settle(hp), settle(gp)]);
       for (const [who, page] of [["방장", hp], ["손님", gp]]) {
         const r = await attempt(async () => {
@@ -679,13 +681,13 @@ async function chatLobbyFlow(ctx) {
         });
         if (!r.ok) rec(`chat-lobby/window-${who}`, "B2r", `기록 칸을 읽는다(${ctx.size.label}, ${who})`, false, r.detail);
       }
-      // 기록 시트: 손님 화면에서 쓰던 글을 두고 [닫기]·Esc·끌기로 세 번 열고 닫는다
-      const sheet = await attempt(async () => {
-        for (const row of chatSheetChecks(await measureChatSheet(gp, CHAT_DRAFT_TEXT))) rec(`chat-lobby/sheet`, row.id, `${row.label} (${ctx.size.label})`, row.ok, row.detail, row.ok);
+      // 늘어나는 기록 칸(0083-4·0083-5): 손님 화면에서 두 줄 창·입력칸을 눌러 식의 높이로 늘어나는지, 쓰던 글이 남는지, [보내기] 가 입력 중·쓴 글이 있을 때만 있는지 본다
+      const open = await attempt(async () => {
+        for (const row of chatOpenChecks(await measureChatOpen(gp, CHAT_DRAFT_TEXT))) rec("chat-lobby/open", row.id, `${row.label} (${ctx.size.label})`, row.ok, row.detail, row.ok);
       });
-      if (!sheet.ok) rec("chat-lobby/sheet", "B3r", `기록 시트를 열고 닫는다(${ctx.size.label})`, false, sheet.detail);
-      await gp.locator("[data-chat-input]").fill("");
-      // backstop: 긴 줄(닉네임 8자 + 본문 30자) — 방장 화면 기록 칸·시트 스크린샷
+      if (!open.ok) rec("chat-lobby/open", "B3r", `늘어나는 기록 칸을 읽는다(${ctx.size.label})`, false, open.detail);
+      await collapseChatLog(gp);
+      // backstop: 긴 줄(닉네임 8자 + 본문 30자) — 방장 화면 접힌 기록 칸·늘어난 기록 칸 스크린샷
       await gp.waitForTimeout(CHAT_WINDOW_GAP_MS);
       const long = await attempt(async () => {
         await typeAndSendChat(gp, CHAT_LONG_TEXT);
@@ -696,11 +698,10 @@ async function chatLobbyFlow(ctx) {
         mkdirSync(OUT_DIR, { recursive: true });
         await hp.locator("[data-chat-log]").screenshot({ path: join(OUT_DIR, `chat-lobby-long-window-${ctx.size.label}.png`) });
         await hp.locator("[data-chat-open]").click({ timeout: 4000 });
-        await hp.waitForSelector("dialog[open] .mf-sheet--chatlog", { timeout: 3000 });
+        await hp.waitForSelector('[data-chat-open][aria-expanded="true"]', { timeout: 3000 });
         await sleep(400);
-        await shot(hp, join(OUT_DIR, `chat-lobby-long-sheet-${ctx.size.label}.png`));
-        await hp.keyboard.press("Escape");
-        await hp.waitForFunction(() => document.querySelector("dialog[open]") === null, null, { timeout: 2000 });
+        await shot(hp, join(OUT_DIR, `chat-lobby-long-open-${ctx.size.label}.png`));
+        await collapseChatLog(hp);
       });
       if (!long.ok) rec("chat-lobby/long-line", "B2Lr", `긴 줄 backstop(${ctx.size.label})`, false, long.detail);
     }
@@ -795,10 +796,8 @@ async function chatImeFlow(ctx) {
 // 키보드 열림 치수(UI-SPEC 패널과 키보드). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다.
 /** 가상 키보드 높이(폰 크기 표의 K) */
 const KB_LIFT = 336;
-/** 키보드 열림 패널 = 14 + 68 + 8 + 입력줄 48 + 8 = 146 — 앱 상수(chatUi.ts KB_PANEL_H)와 같다(이름표 보정은 16-05 에서 삭제) */
-const KB_PANEL_H = 146;
-/** 키보드 열림에서도 기록 칸은 LOG_H 68 한 값(18.1) */
-const KB_LOG_H = 68;
+/** 키보드 열림 패널 = KB_PANEL_REST 78(14 + 8 + 입력줄 48 + 8) + 기록 칸. 포커스가 기록 칸을 늘리므로(0083-4) 기록 칸은 식의 값(chatOpenHeight)이고, 늘어날 자리가 없는 폰은 68 그대로다(앱 상수 chatUi.ts) */
+const KB_PANEL_REST = CHAT_KB_PANEL_REST;
 /** 큰 폰(390x844 이상)은 캐릭터 발과 이름표(입력 중 칸 포함)가 남은 스테이지 안에 모두 있어야 한다. 그 아래 작은 폰은 캐릭터 몸만 본다(가정 A2, 합격 검사 3) */
 const KB_BIG_MIN_H = 800;
 const KB_EPS = 0.5;
@@ -861,14 +860,18 @@ async function chatKeyboardFlow(ctx) {
     const stageTop = k.headerBottom;
     const stageBottom = k.panel.top;
     rec(sc, `KB1-${ms}`, `포커스 ${ms}ms: 패널·입력줄 아래 ≤ 보이는 영역 아래(검사 1), 패널은 키보드 바로 위`, k.panel.bottom <= vvBottom + KB_EPS && k.input.bottom <= vvBottom + KB_EPS && near(k.panel.bottom, vvBottom, 1), `패널 아래 ${r1(k.panel.bottom)} · 입력줄 아래 ${r1(k.input.bottom)} · 보이는 영역 아래 ${r1(vvBottom)}`);
-    rec(sc, `KB2-${ms}`, `포커스 ${ms}ms: data-kb-open true·행동 줄 없음·기록 칸 ${KB_LOG_H}·패널 ${KB_PANEL_H}`, k.kbOpen === "true" && k.actionButtons === 0 && near(k.log.height, KB_LOG_H, 1) && near(k.panel.height, KB_PANEL_H, 1), `열림 ${k.kbOpen} · 행동 줄 버튼 ${k.actionButtons} · 기록 칸 ${r1(k.log.height)} · 패널 ${r1(k.panel.height)}`);
+    const logWant = chatOpenHeight({ roomH: k.roomH, lift: Number.parseFloat(k.lift) || 0, hostBottom: k.hostBottom, panelRest: KB_PANEL_REST });
+    rec(sc, `KB2-${ms}`, `포커스 ${ms}ms: data-kb-open true·행동 줄 없음·기록 칸 = 식의 값(${logWant})·패널 = ${KB_PANEL_REST} + 기록 칸`, k.kbOpen === "true" && k.actionButtons === 0 && near(k.log.height, logWant, 1) && near(k.panel.height, KB_PANEL_REST + k.log.height, 1), `열림 ${k.kbOpen} · 행동 줄 버튼 ${k.actionButtons} · 기록 칸 ${r1(k.log.height)}(식 ${logWant}: 방 ${r1(k.roomH)} − 키보드 ${k.lift} − 띠 ${r1(k.hostBottom)} − ${CHAT_OPEN_STAGE_MIN} − ${KB_PANEL_REST}) · 패널 ${r1(k.panel.height)}`);
     rec(sc, `KB3-${ms}`, `포커스 ${ms}ms: 캔버스 크기 불변·ResizeObserver 호출 0(검사 2)`, k.roCalls === 0 && k.host.w === closed.host.w && k.host.h === closed.host.h && k.canvas?.attrW === closed.canvas?.attrW && k.canvas?.attrH === closed.canvas?.attrH && k.canvas?.cssW === closed.canvas?.cssW && k.canvas?.cssH === closed.canvas?.cssH, `호출 ${k.roCalls} · 호스트 ${k.host.w}x${k.host.h}(기준 ${closed.host.w}x${closed.host.h}) · canvas ${k.canvas?.attrW}x${k.canvas?.attrH} css ${k.canvas?.cssW}x${k.canvas?.cssH}(기준 ${closed.canvas?.attrW}x${closed.canvas?.attrH} css ${closed.canvas?.cssW}x${closed.canvas?.cssH})`);
     const feet = k.feet?.sy;
     const headY = k.stack ? k.stack.bottom : null;
     const stageH = stageBottom - stageTop;
     if (big) {
-      const ok = feet !== undefined && feet >= stageTop - KB_EPS && feet <= stageBottom + KB_EPS && k.stack !== null && k.stack.top >= stageTop - KB_EPS && k.stack.bottom <= stageBottom + KB_EPS && k.typing === true;
-      rec(sc, `KB4-${ms}`, `포커스 ${ms}ms: 내 캐릭터 발과 이름표(입력 중 칸 포함)가 남은 스테이지 안(검사 3, 큰 폰)`, ok, `스테이지 ${r1(stageTop)}~${r1(stageBottom)}(높이 ${r1(stageH)}) · 발 ${r1(feet)} · 이름표 스택 ${r1(k.stack?.top)}~${r1(k.stack?.bottom)} · 입력 중 ${k.typing}`);
+      // 0083-4: 키보드 + 늘어난 기록 칸은 스테이지를 일부러 줄인다 — 띠 아랫변과 패널 윗변 사이가 OPEN_STAGE_MIN(120) 이상이면 계약대로다. 이름표 스택(입력 중 칸 포함)은 이 높이에 다 못 들 수 있어 판정이 아니라 참고다.
+      const bandBottom = Math.max(stageTop, k.hostBottom);
+      const openStageH = stageBottom - bandBottom;
+      const ok = feet !== undefined && feet >= bandBottom - KB_EPS && feet <= stageBottom + KB_EPS && openStageH >= CHAT_OPEN_STAGE_MIN - 1 && k.typing === true;
+      rec(sc, `KB4-${ms}`, `포커스 ${ms}ms: 내 캐릭터 발이 남은 스테이지(띠 아랫변~패널 윗변) 안이고 그 높이 ≥ ${CHAT_OPEN_STAGE_MIN}(검사 3, 큰 폰, 0083-4 바뀐 계약)`, ok, `스테이지 ${r1(bandBottom)}~${r1(stageBottom)}(높이 ${r1(openStageH)}) · 발 ${r1(feet)} · 입력 중 ${k.typing} · 이름표 스택 ${r1(k.stack?.top)}~${r1(k.stack?.bottom)}(참고)`);
     } else {
       // 작은 폰: 스테이지가 128 미만이라 이름표·입력 중 칸이 잘릴 수 있다(알려진 한계, 가정 A2) — 몸(머리 ~ 발)이 스테이지와 겹치는지만 본다
       const ok = feet !== undefined && headY !== null && Math.max(headY, stageTop) <= Math.min(feet, stageBottom) + KB_EPS;
@@ -876,7 +879,7 @@ async function chatKeyboardFlow(ctx) {
     }
   }
   if (big && opened[1000]) {
-    infoRow(ctx, sc, "KB-INFO", "큰 폰 남은 스테이지 높이(참고, UI-SPEC 128 이상)", `${r1(opened[1000].panel.top - opened[1000].headerBottom)}px`);
+    infoRow(ctx, sc, "KB-INFO", "큰 폰 남은 스테이지 높이(참고: 띠 아랫변~패널 윗변, 늘어난 기록 칸 계약은 120 이상)", `${r1(opened[1000].panel.top - Math.max(opened[1000].headerBottom, opened[1000].hostBottom))}px`);
   }
 
   // iOS 가 화면을 위로 밀면(vv.offsetTop 120) 헤더가 그만큼 내려오고, 창 스크롤로 되돌리지 않는다(scrollY 0)
@@ -938,19 +941,17 @@ async function chatKeyboardFlow(ctx) {
     const still = !!me && !!meAfter && Math.hypot(me.x - meAfter.x, me.z - meAfter.z) < 0.01;
     rec(sc, "KB10", "D4: 포커스 중 맵 탭 → 걷기 요청 없음(위치·구간·링 그대로)", still && moveN() === nBefore && afterTap?.ring === null, `위치 변화 ${me && meAfter ? r1(Math.hypot(me.x - meAfter.x, me.z - meAfter.z)) : "?"} · 새 구간 ${moveN() - nBefore} · 링 ${afterTap?.ring}`);
     rec(sc, "KB11", "D4: 입력칸이 blur 되고 열림 표식이 사라짐", !!afterTap && afterTap.focusOnInput === false && afterTap.kbOpen === null, `포커스 ${afterTap?.focusOnInput} · 열림 ${afterTap?.kbOpen}`);
-    // 18.1-09: 키보드가 닫히며 패널이 제자리로 돌아오면(가짜 키보드는 배치가 즉시 바뀐다) 같은 자리의 손 뗌이 기록 칸([data-chat-open]) 위에 떨어져 기록 시트가 열릴 수 있다.
-    // 이 시트가 열린 채로 있으면 아래 KB14 가 시트 위에서 맵을 찾게 되므로 참고 줄을 남기고 닫는다(판정 아님 — 실기기는 키보드가 애니메이션으로 내려가 다르다).
-    const sheetOpened = await page.evaluate(() => document.querySelector("dialog[open] .mf-sheet--chatlog") !== null);
-    infoRow(ctx, sc, "KB10k", "참고: 키보드를 닫은 맵 탭이 기록 시트까지 열었는가(판정 아님)", sheetOpened ? "열렸음 — Esc 로 닫고 이어감" : "열리지 않음");
-    if (sheetOpened) {
-      await page.keyboard.press("Escape");
-      await page.waitForFunction(() => document.querySelector("dialog[open]") === null, null, { timeout: 2000 }).catch(() => {});
-    }
+    // 0083-4: 키보드가 닫혀도 늘어난 기록 칸은 저절로 접히지 않는다(닫기는 [data-chat-open] 하나). 키보드가 닫히며 패널이 내려오면 같은 자리의 손 뗌이
+    // [data-chat-open] 위에 떨어져 접힐 수도 있어(가짜 키보드는 배치가 즉시 바뀐다 — 실기기는 애니메이션) 판정이 아니라 참고 줄로 남기고, 아래 KB12 는 어느 쪽이든 접은 뒤 잰다.
+    const stillOpen = await page.evaluate(() => document.querySelector('[data-chat-open][aria-expanded="true"]') !== null);
+    infoRow(ctx, sc, "KB10k", "참고: 키보드를 닫은 맵 탭 뒤 기록 칸이 늘어난 채인가(판정 아님)", stillOpen ? "늘어난 채" : "접혔음(손 뗌이 [data-chat-open] 위에 떨어짐)");
   }
 
   // 키보드가 닫힌 뒤(가짜 값을 되돌림): 원래 배치로 돌아오고 카메라가 다시 맞는다, 캔버스는 처음부터 끝까지 한 번도 크기를 바꾸지 않았다. 탭은 평소처럼 걷는다.
   await page.evaluate(() => window.__mfVv.set(window.innerHeight, 0));
   await page.waitForTimeout(500);
+  await collapseChatLog(page); // 늘어난 채로 남아 있으면 접는다 — 접힌 두 줄 창의 원래 패널 높이로 돌아오는지 본다
+  await page.waitForTimeout(300);
   const restored = await readKeyboardState(page, mySeat);
   if (restored) {
     const stageTop = restored.headerBottom;
@@ -1991,7 +1992,7 @@ async function ghostFlow(ctx) {
           const view = ht.last();
           const gv = await ghostViewSettled(hp, view, 4000);
           for (const r of gv.rows) rec(sc, r.id, `${r.label} (${phase})`, r.ok, r.detail, r.ok);
-          // 찬반 기록 카드 overflow backstop(참고 줄): 첫 처형의 찬반 기록 카드가 기록에 남아 있다 — 칸에서는 위가 잘리고 시트 목록 안에는 카드 전체가 든다.
+          // 찬반 기록 카드 overflow backstop(참고 줄): 첫 처형의 찬반 기록 카드가 기록에 남아 있다 — 접힌 칸에서는 위가 잘리고 늘어난 칸 안에는 카드 전체가 든다.
           // 처형 단계는 5초라 시트를 여는 동안 밤으로 넘어가 사라질 수 있어, 단계가 길게 머무는 다음 날 지목에서 잰다
           if (phase === "nomination" && !backstopDone) {
             backstopDone = true;
@@ -1999,8 +2000,8 @@ async function ghostFlow(ctx) {
             const ballots = await attempt(async () => {
               if (!g0) throw new Error("산 손님 없음");
               mkdirSync(OUT_DIR, { recursive: true });
-              const b = await measureBallotsBackstop(g0.page, { windowShot: join(OUT_DIR, `ghost-ballots-window-${ctx.size.label}.png`), sheetShot: join(OUT_DIR, `ghost-ballots-sheet-${ctx.size.label}.png`) });
-              infoRow(ctx, sc, "EX3b", "참고: 찬반 기록 카드 — 칸에서 위가 잘리고 시트 목록 안에 카드 전체가 든다(판정 아님)", b.measured ? `카드 높이 ${Math.round(b.cardH)} · 칸 높이 ${Math.round(b.windowH)} · 칸 위 끝 위로 벗어난 높이 ${Math.round(b.cutTop)}(칸 높이보다 크면 카드가 칸에서 잘림) · 시트 목록 높이 ${Math.round(b.listH)} · 시트 안에 카드 전체 ${b.sheetFits ? "듦" : "안 듦"}` : `측정 안 함: ${b.why}`);
+              const b = await measureBallotsBackstop(g0.page, { windowShot: join(OUT_DIR, `ghost-ballots-window-${ctx.size.label}.png`), openShot: join(OUT_DIR, `ghost-ballots-open-${ctx.size.label}.png`) });
+              infoRow(ctx, sc, "EX3b", "참고: 찬반 기록 카드 — 접힌 칸에서 위가 잘리고 늘어난 칸 안에 카드 전체가 든다(판정 아님)", b.measured ? `카드 높이 ${Math.round(b.cardH)} · 접힌 칸 높이 ${Math.round(b.windowH)} · 칸 위 끝 위로 벗어난 높이 ${Math.round(b.cutTop)}(칸 높이보다 크면 카드가 칸에서 잘림) · 늘어난 칸 높이 ${Math.round(b.openH)} · 늘어난 칸 안에 카드 전체 ${b.openFits ? "듦" : "안 듦"}` : `측정 안 함: ${b.why}`);
             });
             if (!ballots.ok) infoRow(ctx, sc, "EX3b", "참고: 찬반 기록 카드 overflow backstop(판정 아님)", `읽기 실패: ${ballots.detail}`);
           }

@@ -255,6 +255,12 @@ export const LOBBY_HOST_TUTORIAL_EXTRA = 76;
 export const CHAT_PANEL_EXTRA = 92;
 /** 키보드 열림 패널 = 14 + LOG_H + 8 + 48 + 8 */
 export const KB_PANEL_H = 146;
+/** 키보드 열림 패널에서 기록 칸 밖의 높이(chatUi.KB_PANEL_REST 사본, 0083-4) = 14 + 8 + 48 + 8 — KB_PANEL_H = LOG_H + 이 값 */
+export const KB_PANEL_REST = 78;
+/** 늘어난 기록 칸 높이 상한(chatUi.LOG_OPEN_MAX 사본, 0083-4) */
+export const LOG_OPEN_MAX = 300;
+/** 늘어난 기록 칸 위, 띠 아래에 남기는 스테이지 최소 높이(chatUi.OPEN_STAGE_MIN 사본). 식 사본은 polish.mjs chatOpenHeight */
+export const OPEN_STAGE_MIN = 120;
 /** 머리 위 입력 중 알약이 스택을 늘리는 높이 */
 export const TYPING_PILL_H = 22;
 
