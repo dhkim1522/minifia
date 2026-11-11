@@ -1,10 +1,10 @@
 // 06-11 3D 캐릭터 — 원본 design/v2.0/blockout/character.js(결정 0048)를 관절 병합으로 옮긴 모듈 (MAP-01, MAP-02).
 // WebGL 없이 node 에서 장면 그래프로 검사한다.
-import { BufferGeometry, CircleGeometry, Color, type Group, type Material, type Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D } from "three";
-import { describe, expect, it, vi } from "vitest";
+import { BufferGeometry, CircleGeometry, Color, type Group, type Material, type Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, type Sprite, type SpriteMaterial, Texture } from "three";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { emoteDurationMs } from "../../src/world/emoteCap";
-import { CHAR_SCALE, characterKit, createCharacter, figForSeat, POSE_BLEND_MS, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
+import { CHAR_SCALE, characterKit, createCharacter, figForSeat, POSE_BLEND_MS, setGhostArt, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
 import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, type OutfitId } from "../../src/world/characterData";
 
 function meshes(root: Object3D, visibleOnly = true): Mesh[] {
@@ -614,43 +614,6 @@ describe("유령 setGhost (GHOST-01)", () => {
     expect(shared.depthWrite).toBe(true);
   });
 
-  it("안개(09.1-09): setGhost(true, 0.26, 발광) — 불투명도 0.26, 발광 #d8e4ff 세기 0.85, 투명·깊이쓰기 끔, 원판 숨김", () => {
-    const c = createCharacter(0, "coat");
-    c.setGhost(true, 0.26, { color: "#d8e4ff", intensity: 0.85 });
-    const list = bodyMeshes(c.root);
-    expect(list).toHaveLength(6);
-    for (const m of list) {
-      expect(matOf(m).opacity).toBeCloseTo(0.26, 9);
-      expect(matOf(m).emissive.getHexString()).toBe("d8e4ff");
-      expect(matOf(m).emissiveIntensity).toBeCloseTo(0.85, 9);
-      expect(matOf(m).transparent).toBe(true);
-      expect(matOf(m).depthWrite).toBe(false);
-    }
-    expect(discOf(c.root)).toBeUndefined();
-  });
-
-  it("glow 없이 부르면 발광 0 이고 공유 재질은 발광이 없다(처형 연출 경로 그대로)", () => {
-    const c = createCharacter(0, "coat");
-    const shared = matOf(bodyMeshes(c.root)[0]);
-    c.setGhost(true, 0.6, { color: "#d8e4ff", intensity: 0.85 });
-    c.setGhost(true, 0.6); // 안개 → 발광 없음으로 되돌린다
-    expect(matOf(bodyMeshes(c.root)[0]).emissive.getHex()).toBe(0);
-    c.setGhost(false);
-    expect(matOf(bodyMeshes(c.root)[0])).toBe(shared);
-    expect(shared.emissive.getHex()).toBe(0);
-    expect(shared.emissiveIntensity).toBe(1);
-  });
-
-  it("꾸민 의상(detective)에 직업 의상(mafia)을 입힌 뒤 안개를 켜면 의상이 바뀌고 재질은 복제 하나다", () => {
-    const c = createCharacter(0, "detective");
-    c.applyOutfit("mafia");
-    c.setGhost(true, 0.26, { color: "#d8e4ff", intensity: 0.85 });
-    expect(new Set(bodyMeshes(c.root).map((m) => matOf(m))).size).toBe(1);
-    // 의상이 바뀌어도(병합 지오메트리 교체) 복제 재질이 유지된다
-    c.applyOutfit("police");
-    for (const m of bodyMeshes(c.root)) expect(matOf(m).opacity).toBeCloseTo(0.26, 9);
-  });
-
   it("켜면 발밑 그림자 원판이 숨고, 끄면 다시 보인다", () => {
     const c = createCharacter(0, "coat");
     c.setGhost(true);
@@ -665,7 +628,7 @@ describe("유령 setGhost (GHOST-01)", () => {
     c.setOpacity(0.3); // 유령이 아니면 효과 없음
     expect(shared.opacity).toBe(1);
     expect(matOf(bodyMeshes(c.root)[0])).toBe(shared);
-    c.setGhost(true, 0.5);
+    c.setGhost(true, { opacity: 0.5 });
     expect(matOf(bodyMeshes(c.root)[0]).opacity).toBeCloseTo(0.5, 9);
     c.setOpacity(0.3);
     for (const m of bodyMeshes(c.root)) expect(matOf(m).opacity).toBeCloseTo(0.3, 9);
@@ -743,6 +706,142 @@ describe("유령 setGhost (GHOST-01)", () => {
     c.setFace("happy");
     for (const m of bodyMeshes(c.root)) expect(matOf(m)).toBe(clone);
     c.setDim(false);
+  });
+});
+
+// ---------- 18.1-17: 유령 그림 스프라이트 (0083-2) ----------
+
+describe("유령 그림 스프라이트 (0083-2)", () => {
+  const spriteOf = (root: Object3D): Sprite | undefined => root.children.find((o) => (o as Sprite).isSprite === true && o.name === "ghost-sprite") as Sprite | undefined;
+  const shown = (root: Object3D): Mesh[] => meshes(root).filter((m) => (m.material as MeshStandardMaterial).vertexColors === true);
+  const matOf = (s: Sprite): SpriteMaterial => s.material;
+
+  beforeEach(() => {
+    setGhostArt(new Texture());
+  });
+  afterEach(() => {
+    setGhostArt(null);
+  });
+
+  it("켜면 관절 메시가 모두 안 보이고 원판이 숨고 이름 있는 스프라이트 하나가 아래 가운데 기준으로 선다(높이 2.45, 폭 × 0.75)", () => {
+    const c = createCharacter(0, "coat");
+    c.setGhost(true);
+    expect(shown(c.root)).toHaveLength(0);
+    expect(discOf(c.root)).toBeUndefined();
+    const s = spriteOf(c.root);
+    expect(s).toBeDefined();
+    expect(s!.visible).toBe(true);
+    expect(s!.scale.y).toBeCloseTo(2.45, 9);
+    expect(s!.scale.x).toBeCloseTo(2.45 * 0.75, 9);
+    expect(s!.center.x).toBeCloseTo(0.5, 9);
+    expect(s!.center.y).toBeCloseTo(0, 9);
+    expect(s!.position.y).toBeCloseTo(0, 9);
+    expect(matOf(s!).transparent).toBe(true);
+    expect(matOf(s!).depthWrite).toBe(false);
+    expect(matOf(s!).opacity).toBeCloseTo(0.88, 9);
+    expect(c.meshCount()).toBe(0);
+  });
+
+  it("opts 의 opacity·tint 를 재질에 싣는다(색은 회색 배율)", () => {
+    const c = createCharacter(0, "coat");
+    c.setGhost(true, { opacity: 0.5, tint: 0.6 });
+    const m = matOf(spriteOf(c.root)!);
+    expect(m.opacity).toBeCloseTo(0.5, 9);
+    expect(m.color.r).toBeCloseTo(0.6, 9);
+    expect(m.color.g).toBeCloseTo(0.6, 9);
+    expect(m.color.b).toBeCloseTo(0.6, 9);
+    c.setGhost(true, { tint: 0.9 }); // 켠 채 다시 부르면 값만 바꾼다
+    expect(matOf(spriteOf(c.root)!).color.r).toBeCloseTo(0.9, 9);
+    expect(matOf(spriteOf(c.root)!).opacity).toBeCloseTo(0.5, 9);
+  });
+
+  it("setOpacity 는 유령일 때 스프라이트 불투명도를 바꾸고, 유령이 아니면 무시한다", () => {
+    const c = createCharacter(0, "coat");
+    c.setOpacity(0.3);
+    expect(spriteOf(c.root)).toBeUndefined();
+    c.setGhost(true);
+    c.setOpacity(0.3);
+    expect(matOf(spriteOf(c.root)!).opacity).toBeCloseTo(0.3, 9);
+  });
+
+  it("끄면 스프라이트가 숨고 몸·원판이 돌아오며, 켜고 끄기를 되풀이해도 스프라이트는 하나다", () => {
+    const c = createCharacter(0, "coat");
+    for (let n = 0; n < 3; n++) {
+      c.setGhost(true);
+      c.setGhost(false);
+    }
+    c.setGhost(true);
+    expect(c.root.children.filter((o) => (o as Sprite).isSprite === true)).toHaveLength(1);
+    c.setGhost(false);
+    expect(spriteOf(c.root)!.visible).toBe(false);
+    expect(shown(c.root)).toHaveLength(6);
+    expect(discOf(c.root)).toBeDefined();
+  });
+
+  it("dispose 가 스프라이트 재질을 해제하고, 공유 텍스처는 해제하지 않는다", () => {
+    const tex = new Texture();
+    setGhostArt(tex);
+    const texSpy = vi.spyOn(tex, "dispose");
+    const c = createCharacter(0, "coat");
+    c.setGhost(true);
+    const spriteMat = matOf(spriteOf(c.root)!);
+    const matSpy = vi.spyOn(spriteMat, "dispose");
+    c.dispose();
+    expect(matSpy).toHaveBeenCalledTimes(1);
+    expect(texSpy).not.toHaveBeenCalled();
+  });
+
+  it("유령일 때 update 의 headY 는 자세와 무관하게 머리 꼭대기 값이다", () => {
+    const c = createCharacter(0, "coat");
+    c.setGhost(true);
+    c.playEmote("surprise");
+    for (let i = 0; i < 20; i++) expect(c.update(0.016, i * 0.016, false).headY).toBeCloseTo(2.45 * CHAR_SCALE, 9);
+  });
+
+  it("동작을 받으면 스프라이트가 0 → 최대 0.18 → 0 으로 한 번 튀고(420ms) 몸 관절 자세는 재생되지 않는다", () => {
+    const c = createCharacter(0, "coat");
+    c.setGhost(true);
+    const s = spriteOf(c.root)!;
+    const rest = (c.root.getObjectByName("armA") as Object3D).rotation.clone();
+    c.playEmote("clap");
+    let peak = 0;
+    let t = 0;
+    for (let i = 0; i < 40; i++) {
+      c.update(0.016, t, false);
+      t += 0.016;
+      peak = Math.max(peak, s.position.y);
+    }
+    expect(peak).toBeGreaterThan(0.15);
+    expect(peak).toBeLessThanOrEqual(0.18 + 1e-9);
+    expect(s.position.y).toBeCloseTo(0, 9); // 640ms 뒤에는 제자리
+    const now = (c.root.getObjectByName("armA") as Object3D).rotation;
+    expect(now.x).toBeCloseTo(rest.x, 2);
+  });
+
+  it("모션 줄이기면 튀지 않는다", () => {
+    const c = createCharacter(0, "coat");
+    c.setGhost(true);
+    const s = spriteOf(c.root)!;
+    c.playEmote("clap", { reduced: true });
+    for (let i = 0; i < 30; i++) {
+      c.update(0.016, i * 0.016, false);
+      expect(s.position.y).toBe(0);
+    }
+  });
+
+  it("그림이 아직 없으면 스프라이트 없이 예전 반투명 몸(0.6)이고, 그림이 오면 그 프레임부터 그림으로 바뀐다", () => {
+    setGhostArt(null);
+    const c = createCharacter(0, "coat");
+    c.setGhost(true, { opacity: 0.88, tint: 0.7 });
+    expect(spriteOf(c.root)).toBeUndefined();
+    expect(shown(c.root)).toHaveLength(6);
+    for (const m of shown(c.root)) expect((m.material as MeshStandardMaterial).opacity).toBeCloseTo(0.6, 9);
+    expect(discOf(c.root)).toBeUndefined();
+    setGhostArt(new Texture());
+    c.update(0.016, 0, false);
+    expect(shown(c.root)).toHaveLength(0);
+    expect(spriteOf(c.root)!.visible).toBe(true);
+    expect(matOf(spriteOf(c.root)!).color.r).toBeCloseTo(0.7, 9);
   });
 });
 

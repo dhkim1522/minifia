@@ -6,12 +6,15 @@ import type { RoleId } from "../../shared/game/roles";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS } from "../../src/game/dayView";
 import { GATHER_CENTER, ZOOM_MAJORITY, ZOOM_MIN_STAGE_H } from "../../src/world/camera";
-import { GHOST_MIST, jobOutfit } from "../../src/world/ghostOutfit";
+import { jobOutfit } from "../../src/world/ghostOutfit";
 import {
   cameraModeOf,
+  EXEC_END_OPACITY,
   executionFade,
   GHOST_BASE_Y,
+  GHOST_SPRITE,
   ghostFloatY,
+  ghostTintOf,
   leaderShift,
   lightingFor,
   lightingOf,
@@ -262,9 +265,9 @@ describe("sceneLook (위를 묶는다)", () => {
   });
 });
 
-describe("executionFade (DAY-05, 18.1 C-4: 1.4초 떠오름 → 2.4초 안개 유령으로 남음)", () => {
+describe("executionFade (DAY-05: 1.4초 떠오름 → 2.4초 끝점에 선 뒤 유령 그림으로 바뀐다)", () => {
   const at = (ms: number, reduced = false) => executionFade(ms, reduced);
-  const REST = { opacity: GHOST_MIST.opacity, rise: GHOST_BASE_Y };
+  const REST = { opacity: EXEC_END_OPACITY, rise: GHOST_BASE_Y };
   it("시간 상수는 dayView 와 같은 출처다", () => {
     same([GHOST_RISE_MS, GHOST_FADE_END_MS], [1400, 2400]);
   });
@@ -284,13 +287,13 @@ describe("executionFade (DAY-05, 18.1 C-4: 1.4초 떠오름 → 2.4초 안개 �
   });
   it("1900ms: 불투명도는 0.6 과 0.26 사이, 높이는 1.2 와 유령 기본 높이 사이", () => {
     const f = at(1900);
-    expect(f.opacity).toBeGreaterThan(GHOST_MIST.opacity);
+    expect(f.opacity).toBeGreaterThan(EXEC_END_OPACITY);
     expect(f.opacity).toBeLessThan(0.6);
     expect(f.rise).toBeGreaterThan(GHOST_BASE_Y);
     expect(f.rise).toBeLessThan(1.2);
   });
-  it("2400ms 부터는 안개 유령 끝점(불투명도 0.26·높이 0.35)에 선다 — 사라지지 않는다", () => {
-    expect(at(2399).opacity).toBeGreaterThan(GHOST_MIST.opacity);
+  it("2400ms 부터는 끝점(불투명도 0.26·높이 0.35)에 선다 — 사라지지 않는다", () => {
+    expect(at(2399).opacity).toBeGreaterThan(EXEC_END_OPACITY);
     same(at(2400), REST);
     same(at(9999), REST);
   });
@@ -519,11 +522,11 @@ describe("sceneLook — 시민·경찰·의사의 밤 장면 값이 같다 (NIGH
   });
 });
 
-// ---- 09.1-09: 유령 직업 의상 (결정 0063-2, UI-SPEC B-2·L13) ----
-describe("유령 직업 의상 (결정 0063-2, L13)", () => {
+// ---- 18.1-17: 탈락자는 누구든 같은 유령 그림 (결정 0083-2, L13) ----
+describe("탈락자 장면 표는 직업과 무관하다 (결정 0083-2, L13)", () => {
   const JOBS_BY_SEAT: RoleId[] = ["mafia", "police", "doctor", "citizen", "citizen"];
-  const ghostView = (phase: PhaseId = "discussion"): RoomView => {
-    const v = viewOf(phase, { dead: [1, 3], mySeat: 3 });
+  const ghostView = (dead: number[], phase: PhaseId = "discussion"): RoomView => {
+    const v = viewOf(phase, { dead, mySeat: dead[0] ?? 0 });
     return { ...v, spectate: { seats: JOBS_BY_SEAT.map((job, seat) => ({ seat, job })) } };
   };
 
@@ -532,34 +535,62 @@ describe("유령 직업 의상 (결정 0063-2, L13)", () => {
     same([jobOutfit(undefined), jobOutfit("unknown")], ["coat", "coat"]);
   });
 
-  it("GHOST_MIST 는 시안 mist 값(0.26·#d8e4ff·0.85)", () => {
-    same(GHOST_MIST, { opacity: 0.26, emissive: "#d8e4ff", intensity: 0.85 });
+  it("산 사람 viewer: 연출 뒤 탈락 좌석은 { show, ghost } 뿐이다 — outfit·costume·opacity 키가 없다", () => {
+    const seats = visibleSeats(viewOf("discussion", { dead: [3], mySeat: 0 }));
+    same(seats[3], { show: true, ghost: true });
+    for (const key of ["outfit", "costume", "opacity"]) expect(key in seats[3]!).toBe(false);
   });
 
-  it("유령 viewer: 탈락 좌석마다 그 직업의 의상, 산 좌석에는 outfit 키가 없다", () => {
-    const seats = visibleSeats(ghostView());
-    same([seats[1]?.outfit, seats[3]?.outfit], ["police", "coat"]);
-    for (const n of [0, 2, 4]) expect("outfit" in (seats[n] as object)).toBe(false);
+  it("유령 viewer(spectate 있음): 탈락 좌석도 같은 모양이고, 마피아였던 좌석과 시민이었던 좌석의 표가 같다", () => {
+    const seats = visibleSeats(ghostView([0, 3]));
+    same(seats[0], { show: true, ghost: true });
+    same(seats[3], { show: true, ghost: true });
+    expect(flat(seats[0])).toBe(flat(seats[3]));
+    for (const look of Object.values(seats)) expect("outfit" in look).toBe(false);
   });
 
-  it("직업 표가 마피아·의사인 탈락자도 같은 표로 입는다", () => {
-    const v = viewOf("discussion", { dead: [0, 2, 3], mySeat: 3 });
-    const seats = visibleSeats({ ...v, spectate: { seats: JOBS_BY_SEAT.map((job, seat) => ({ seat, job })) } });
-    same([seats[0]?.outfit, seats[2]?.outfit, seats[3]?.outfit], ["mafia", "doctor", "coat"]);
+  it("spectate 없이 내 alive 만 false 여도 같은 모양이다", () => {
+    same(visibleSeats(viewOf("discussion", { dead: [3], mySeat: 3 }))[3], { show: true, ghost: true });
   });
 
-  it("spectate 없이 내 alive 만 false 면 탈락 좌석에도 outfit 키가 없다(재료가 없으면 만들지 않는다)", () => {
-    const seats = visibleSeats(viewOf("discussion", { dead: [3], mySeat: 3 }));
-    same(seats[3]?.ghost, true);
-    expect("outfit" in (seats[3] as object)).toBe(false);
-  });
-
-  it("산 사람 viewer: 어떤 좌석에도 outfit 키가 없다 — 처형 연출 중인 좌석도", () => {
+  it("처형 연출 중인 좌석은 ghost 아님 + fadeAt 이고 의상 키가 없다", () => {
     const view = viewOf("execution", { dead: [3], mySeat: 0 });
-    for (const seats of [visibleSeats(view), visibleSeats(view, new Map([[3, 1000]]), 1500)]) {
-      for (const look of Object.values(seats)) expect("outfit" in look).toBe(false);
+    const seats = visibleSeats(view, new Map([[3, 1000]]), 1500);
+    same(seats[3], { show: true, ghost: false, fadeAt: 1000 });
+  });
+
+  it("산 사람의 밤·심부름에는 탈락 좌석이 없다(겉보기 같음)", () => {
+    expect(3 in visibleSeats(viewOf("night", { dead: [3], mySeat: 0 }))).toBe(false);
+    expect(3 in visibleSeats(viewOf("errand", { dead: [3], mySeat: 0 }))).toBe(false);
+  });
+
+  it("튜토리얼 지도 장면(아침·투표)의 피해자 좌석은 { show, ghost } 이고 의상 키가 없다", () => {
+    for (const phase of ["morning", "vote"] as const) {
+      const seat = visibleSeats(viewOf(phase, { dead: [2], mySeat: 0 }))[2];
+      same(seat, { show: true, ghost: true });
     }
-    expect(3 in visibleSeats(view, new Map([[3, 1000]]), 1500)).toBe(true);
+  });
+});
+
+describe("유령 그림 값 (GHOST_SPRITE·ghostTintOf)", () => {
+  it("불투명도는 0.85~0.90, 비율은 3:4, 등장은 0.3초", () => {
+    expect(GHOST_SPRITE.opacity).toBeGreaterThanOrEqual(0.85);
+    expect(GHOST_SPRITE.opacity).toBeLessThanOrEqual(0.9);
+    expect(GHOST_SPRITE.aspect).toBe(0.75);
+    expect(GHOST_SPRITE.inMs).toBe(300);
+  });
+  const STAGES = ["talk", "vote", "trial", "night", "nightCitizen", "nightGhost", "morning"] as const;
+  it("모든 조명 단계에서 0.45~1 이다", () => {
+    for (const s of STAGES) {
+      expect(ghostTintOf(s)).toBeGreaterThanOrEqual(0.45);
+      expect(ghostTintOf(s)).toBeLessThanOrEqual(1);
+    }
+  });
+  it("밤 계열 < 저녁 계열(vote·trial) ≤ 낮(talk) — 밝기만 바뀐다", () => {
+    for (const night of ["night", "nightCitizen", "nightGhost"] as const) {
+      for (const dusk of ["vote", "trial"] as const) expect(ghostTintOf(night)).toBeLessThan(ghostTintOf(dusk));
+    }
+    for (const dusk of ["vote", "trial"] as const) expect(ghostTintOf(dusk)).toBeLessThanOrEqual(ghostTintOf("talk"));
   });
 });
 
