@@ -77,6 +77,10 @@
 .mf-game__will { background: var(--night-700); border-color: var(--night-600); color: var(--gray-100); }
 .mf-game__will[aria-pressed="true"] { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
 .mf-game__will[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+/* 저장 표시(0083-6): 깃펜 아이콘 오른쪽 위 점 — 채팅 깃펜 점(.mv-chat__will-dot)과 같은 크기·색. 눌린 면(gray-100)에서는 night-900 으로 뒤집어 보인다 */
+.mf-game__will-icon { position: relative; display: inline-flex; }
+.mf-game__will-dot { position: absolute; top: -2px; right: -4px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); }
+.mf-game__will[aria-pressed="true"] .mf-game__will-dot { background: var(--night-900); }
 
 /* 밤 마피아 아래 행동 줄 [쪽지] (UI-SPEC 228행): 면 night-700·글자 gray-100. 진홍은 아이콘 하나에만(면·테두리에는 쓰지 않는다), 확정 전은 불투명도 0.45 */
 .mf-game__note { background: var(--night-700); border-color: var(--night-600); color: var(--gray-100); }

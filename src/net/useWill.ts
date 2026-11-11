@@ -5,6 +5,8 @@
 //
 // 저장 확인(가정 A2): 서버가 본인(쪽지는 산 마피아)에게 보낸 view 의 me.will·me.note 가 보낸 글의 정리한 값과 같아지면 저장됨이다.
 // WILL_SAVE_TIMEOUT_MS 안에 안 바뀌거나 거절(rejected 증가)이 오면 실패다 — 500ms 간격 초과로 서버가 조용히 버린 경우도 여기서 드러난다.
+// 저장 뒤: 유언은 [저장]을 누르면 보내고 곧바로 창이 닫힌다(0083-6, close 와 같은 길) — 서버 확인은 기다리지 않고, 저장됨은 깃펜·[유언] 단추의 표시(hasWill)로 안다.
+// 쪽지는 열린 채 '저장됨' 으로 남고 [닫기]로 닫는다. 실패(거절·3초 확인 없음)는 위 알림 한 번이고, 다시 열면 쓰던 글이 남아 있다.
 // 초안: 서버 값이 기준이고, 저장하지 못한 글만 이 훅이 종류별로 기억해 다시 열면 이어 쓴다(쪽지는 확정이 풀려도 남는다, E2 #19).
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
@@ -45,6 +47,7 @@ export interface WillApi {
   /** 지금 쪽지를 쓸 수 있는가: 밤 산 마피아 + 확정 */
   noteReady: boolean;
   openSheet: (kind: WillKind, opener: HTMLElement | null) => void;
+  /** 유언은 보내고 곧바로 닫는다(close 와 같은 길, 0083-6). 쪽지는 보내고 열어 둔다 */
   save: (text: string) => void;
   close: (text: string) => void;
 }
@@ -166,16 +169,6 @@ export function useWill({ view, send, canSend = true, rejected = 0, onFail, busy
     [canSend, send, serverWill, serverNote, setPendingBoth],
   );
 
-  const save = useCallback(
-    (text: string) => {
-      if (open === null) return;
-      const waiting = pendingRef.current;
-      if (waiting !== null && waiting.kind === open && waiting.text === text) return; // 같은 글을 보내고 기다리는 중이면 다시 보내지 않는다
-      if (submit(open, text) === "failed") live.current.onFail();
-    },
-    [open, submit],
-  );
-
   const close = useCallback(
     (text: string) => {
       if (open === null) return;
@@ -194,6 +187,20 @@ export function useWill({ view, send, canSend = true, rejected = 0, onFail, busy
       finish(true);
     },
     [open, submit, finish],
+  );
+
+  const save = useCallback(
+    (text: string) => {
+      if (open === null) return;
+      if (open === "will") {
+        close(text); // 0083-6: 유언은 저장하면 닫힌다
+        return;
+      }
+      const waiting = pendingRef.current;
+      if (waiting !== null && waiting.kind === open && waiting.text === text) return; // 같은 글을 보내고 기다리는 중이면 다시 보내지 않는다
+      if (submit(open, text) === "failed") live.current.onFail();
+    },
+    [open, submit, close],
   );
 
   const openSheet = useCallback(

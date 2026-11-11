@@ -229,13 +229,18 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
             className="mf-act mf-game__will"
             aria-pressed={willOpen}
             aria-disabled={canSend ? undefined : "true"}
+            // 저장 표시(0083-6): 유언은 저장하면 창이 닫히니 저장됨은 단추가 말한다 — 값은 서버가 본인에게만 보낸 me.will
+            {...(willSaved ? { "data-will-saved": "", "aria-label": "유언, 저장됨" } : {})}
             data-will-button=""
             onClick={(e) => {
               if (!canSend) return;
               onOpenWill?.(e.currentTarget);
             }}
           >
-            <V2Icon name="quill" size={22} />
+            <span className="mf-game__will-icon">
+              <V2Icon name="quill" size={22} />
+              {willSaved ? <i className="mf-game__will-dot" aria-hidden="true" /> : null}
+            </span>
             <span className="mf-act__label">유언</span>
           </button>
         </ActionRow>

@@ -233,8 +233,8 @@ describe("유언 한 번 저장 — 밤 시민 [유언] (WILL-01, 트레이서)"
     fireEvent.focus(area(m.container));
     fireEvent.change(area(m.container), { target: { value: "가" } });
     fireEvent.change(area(m.container), { target: { value: "가나" } });
-    fireEvent.click(saveBtn(m.container));
     fireEvent.blur(area(m.container));
+    fireEvent.click(saveBtn(m.container));
     fireEvent.click(willBtn(m.container)!);
     fireEvent.click(closeBtn(m.container));
     expect(typings(send)).toEqual([]);
