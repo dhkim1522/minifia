@@ -163,7 +163,8 @@ import {
   basicOrderChecks,
   sheetFitChecks,
   claimBadgeChecks,
-  ballotFitChecks,
+  announceClearChecks,
+  ballotCountChecks,
   verdictTimelineChecks,
   parseRgb,
 } from "./lib.mjs";
@@ -2457,75 +2458,83 @@ test("claimBadgeChecks: 측정값이 없으면 통과시키지 않는다", () =>
 
 // ---- 판결 순간 연출 (09.1.1-13) ----
 const VIEW_360x640 = { w: 360, h: 640 };
-/** 8인판 R=4 모양: 찬성 묶음 알약 4줄(2개씩), 반대는 비었다. 알림 아랫변 115, 패널 윗변 640-188 */
+/** 18.1-13: 처형의 찬반은 숫자 둘이다. 큰 글 아랫변 185, 숫자 줄 윗변 201, 패널 윗변 452 */
 const ballotGood = (over = {}) => ({
-  root: rect(16, 131, 328, 313),
+  root: rect(16, 201, 328, 28),
   groups: [
-    { side: "yes", rect: rect(16, 131, 328, 28 + 4 * 40) },
-    { side: "no", rect: rect(16, 131 + 28 + 4 * 40 + 16, 328, 28) },
+    { side: "yes", rect: rect(100, 201, 70, 28), text: "찬성 4" },
+    { side: "no", rect: rect(210, 201, 70, 28), text: "반대 0" },
   ],
-  pills: [
-    { side: "yes", rect: rect(16, 167, 150, 32), nameFont: 14 },
-    { side: "yes", rect: rect(174, 167, 150, 32), nameFont: 14 },
-    { side: "no", rect: rect(16, 360, 150, 32), nameFont: 14 },
-  ],
+  pillCount: 0,
   panelTop: 452,
-  announceBottom: 115,
+  announceBottom: 185,
   viewport: VIEW_360x640,
-  compact: false,
   ...over,
 });
 
-test("ballotFitChecks: 기대 모양(R=4)은 BF1~BF6 이 모두 통과하고 줄 모양은 { id, label, ok, detail }", () => {
-  const lines = ballotFitChecks(ballotGood());
-  assert.deepEqual(idsOk(lines), { BF1: true, BF2: true, BF3: true, BF4: true, BF5: true, BF6: true });
+test("ballotCountChecks: 기대 모양(숫자 덩이 둘·알약 0)은 BF1~BF3 이 모두 통과하고 줄 모양은 { id, label, ok, detail }", () => {
+  const lines = ballotCountChecks(ballotGood());
+  assert.deepEqual(idsOk(lines), { BF1: true, BF2: true, BF3: true });
   for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
 });
 
-test("ballotFitChecks BF1: 묶음이나 알약이 화면 밖으로 나가면 실패한다(0.5px 오차 허용)", () => {
-  assert.equal(idsOk(ballotFitChecks(ballotGood({ pills: [{ side: "yes", rect: rect(300, 167, 70, 32), nameFont: 14 }, { side: "no", rect: rect(16, 360, 150, 32), nameFont: 14 }] }))).BF1, false);
-  assert.equal(idsOk(ballotFitChecks(ballotGood({ groups: [{ side: "yes", rect: rect(16.4, 131, 343.6, 100) }, { side: "no", rect: rect(16, 250, 328, 28) }] }))).BF1, true);
+test("ballotCountChecks BF1: 덩이가 둘이 아니거나 글자가 '찬성 N'·'반대 N' 이 아니거나 알약이 1개라도 있으면 실패한다", () => {
+  assert.equal(idsOk(ballotCountChecks(ballotGood({ pillCount: 1 }))).BF1, false);
+  assert.equal(idsOk(ballotCountChecks(ballotGood({ groups: [ballotGood().groups[0]] }))).BF1, false);
+  assert.equal(idsOk(ballotCountChecks(ballotGood({ groups: [{ side: "yes", rect: rect(100, 201, 70, 28), text: "찬성 4" }, { side: "no", rect: rect(210, 201, 70, 28), text: "서연 민준" }] }))).BF1, false);
+  const swapped = ballotGood({ groups: [{ side: "no", rect: rect(210, 201, 70, 28), text: "반대 0" }, { side: "yes", rect: rect(100, 201, 70, 28), text: "찬성 4" }] });
+  assert.equal(idsOk(ballotCountChecks(swapped)).BF1, false, "찬성이 먼저(왼쪽)여야 한다");
 });
 
-test("ballotFitChecks BF2: 묶음 윗변이 알림 아랫변 + 16 보다 위면 실패(0.5px 허용), 알림이 두 줄이면 겹쳐 실패", () => {
-  assert.equal(idsOk(ballotFitChecks(ballotGood({ announceBottom: 130 }))).BF2, false);
-  assert.equal(idsOk(ballotFitChecks(ballotGood({ announceBottom: 115.4 }))).BF2, true);
-  assert.equal(idsOk(ballotFitChecks(ballotGood({ announceBottom: null }))).BF2, true, "알림이 없으면 이 검사는 건너뛴다(통과)");
+test("ballotCountChecks BF2: 큰 글 아래·패널 위·한 줄(두 덩이 세로 가운데 차 4 이하)", () => {
+  assert.equal(idsOk(ballotCountChecks(ballotGood({ announceBottom: 230 }))).BF2, false, "덩이가 큰 글과 겹친다");
+  assert.equal(idsOk(ballotCountChecks(ballotGood({ announceBottom: 201.4 }))).BF2, true, "0.5px 오차 허용");
+  assert.equal(idsOk(ballotCountChecks(ballotGood({ announceBottom: null }))).BF2, true, "큰 글이 없으면 그 검사는 건너뛴다");
+  assert.equal(idsOk(ballotCountChecks(ballotGood({ panelTop: 220 }))).BF2, false, "패널 윗변 아래로 내려간다");
+  const two = ballotGood({ groups: [{ side: "yes", rect: rect(100, 201, 70, 28), text: "찬성 4" }, { side: "no", rect: rect(100, 240, 70, 28), text: "반대 0" }] });
+  assert.equal(idsOk(ballotCountChecks(two)).BF2, false, "두 줄로 갈렸다");
 });
 
-test("ballotFitChecks BF3: 묶음 아랫변이 패널 윗변 − 8 을 넘으면 실패", () => {
-  assert.equal(idsOk(ballotFitChecks(ballotGood({ panelTop: 365 }))).BF3, false);
-  assert.equal(idsOk(ballotFitChecks(ballotGood({ panelTop: 371 }))).BF3, true);
+test("ballotCountChecks BF3: 덩이가 화면 밖으로 나가면 실패한다(0.5px 오차 허용)", () => {
+  const out = ballotGood({ groups: [{ side: "yes", rect: rect(100, 201, 70, 28), text: "찬성 4" }, { side: "no", rect: rect(310, 201, 70, 28), text: "반대 0" }] });
+  assert.equal(idsOk(ballotCountChecks(out)).BF3, false);
+  const edge = ballotGood({ groups: [{ side: "yes", rect: rect(-0.4, 201, 70, 28), text: "찬성 4" }, { side: "no", rect: rect(210, 201, 70, 28), text: "반대 0" }] });
+  assert.equal(idsOk(ballotCountChecks(edge)).BF3, true);
 });
 
-test("ballotFitChecks BF4: 이름이 있는 알약 글자가 14 미만이면 실패, 2단계(compact)는 이름이 없어 건너뛴다", () => {
-  const small = ballotGood({ pills: [{ side: "yes", rect: rect(16, 167, 150, 32), nameFont: 13 }, { side: "no", rect: rect(16, 360, 150, 32), nameFont: 14 }] });
-  assert.equal(idsOk(ballotFitChecks(small)).BF4, false);
-  const faces = ballotGood({ compact: true, pills: [{ side: "yes", rect: rect(16, 167, 32, 32), nameFont: null }, { side: "no", rect: rect(16, 360, 32, 32), nameFont: null }] });
-  assert.equal(idsOk(ballotFitChecks(faces)).BF4, true);
+test("ballotCountChecks: 측정값이 없으면 통과시키지 않는다", () => {
+  const lines = ballotCountChecks({ root: null, groups: null, pillCount: null, panelTop: null, announceBottom: null, viewport: null });
+  assert.equal(lines.length, 3);
+  assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
 });
 
-test("ballotFitChecks BF5: 찬성 묶음이 반대 묶음보다 위가 아니면 실패, 묶음이 하나뿐이면 측정값 없음으로 실패", () => {
-  const swapped = ballotGood();
-  swapped.groups = [swapped.groups[1], swapped.groups[0]].map((g, i) => ({ ...g, side: i === 0 ? "yes" : "no" }));
-  assert.equal(idsOk(ballotFitChecks(swapped)).BF5, false);
-  const one = ballotFitChecks(ballotGood({ groups: [ballotGood().groups[0]] })).find((l) => l.id === "BF5");
-  assert.equal(one.ok, false);
-  assert.match(one.detail, /측정값 없음/);
+/** 큰 글 글자 사각형(띠 아래 142 부터), 띠 면 아랫변 124.6, 소리 단추 사각형(오른쪽 위 52x52) */
+const clearGood = (over = {}) => ({
+  announce: rect(76, 142, 208, 86),
+  band: rect(16, 70, 328, 54.6),
+  sound: rect(292, 117.6, 52, 52),
+  ...over,
 });
 
-test("ballotFitChecks BF6: 알약 높이 32±1(compact 는 얼굴 지름 32±1)", () => {
-  const tall = ballotGood({ pills: [{ side: "yes", rect: rect(16, 167, 150, 34), nameFont: 14 }, { side: "no", rect: rect(16, 360, 150, 32), nameFont: 14 }] });
-  assert.equal(idsOk(ballotFitChecks(tall)).BF6, false);
-  const ok = ballotGood({ pills: [{ side: "yes", rect: rect(16, 167, 150, 32.9), nameFont: 14 }, { side: "no", rect: rect(16, 360, 150, 31.2), nameFont: 14 }] });
-  assert.equal(idsOk(ballotFitChecks(ok)).BF6, true);
-  const faces = ballotGood({ compact: true, pills: [{ side: "yes", rect: rect(16, 167, 24, 24), nameFont: null }, { side: "no", rect: rect(16, 360, 32, 32), nameFont: null }] });
-  assert.equal(idsOk(ballotFitChecks(faces)).BF6, false);
+test("announceClearChecks: 큰 글이 띠 면 아래에 있고 소리 단추와 안 겹치면 AC1·AC2 통과", () => {
+  const lines = announceClearChecks(clearGood());
+  assert.deepEqual(idsOk(lines), { AC1: true, AC2: true });
+  for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
 });
 
-test("ballotFitChecks: 측정값이 없으면 통과시키지 않는다", () => {
-  const lines = ballotFitChecks({ root: null, groups: null, pills: null, panelTop: null, announceBottom: null, viewport: null, compact: false });
-  assert.equal(lines.length, 6);
+test("announceClearChecks AC1: 큰 글 윗변이 띠 면 아랫변보다 위면 실패(0.5px 허용)", () => {
+  assert.equal(idsOk(announceClearChecks(clearGood({ announce: rect(76, 100, 208, 86) }))).AC1, false);
+  assert.equal(idsOk(announceClearChecks(clearGood({ announce: rect(76, 124.2, 208, 86), sound: rect(292, 300, 52, 52) }))).AC1, true);
+});
+
+test("announceClearChecks AC2: 큰 글이 소리 단추와 가로·세로 모두 겹치면 실패, 변만 닿으면 통과", () => {
+  assert.equal(idsOk(announceClearChecks(clearGood({ announce: rect(76, 142, 240, 86) }))).AC2, false);
+  assert.equal(idsOk(announceClearChecks(clearGood({ announce: rect(76, 142, 216, 86) }))).AC2, true);
+});
+
+test("announceClearChecks: 측정값이 없으면 통과시키지 않는다", () => {
+  const lines = announceClearChecks({ announce: null, band: null, sound: null });
+  assert.equal(lines.length, 2);
   assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
 });
 
