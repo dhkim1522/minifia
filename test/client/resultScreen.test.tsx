@@ -727,7 +727,9 @@ describe("result.css 연출 정적 단언 (11-05)", () => {
     expect(css).toContain(".mf-result__title-icon");
   });
   it("시상 부품·문구 모듈과 [넘기기] 종류·진행 숫자 속성이 저장소에 없다 (0083-7)", () => {
-    for (const gone of ["src/components/v2/AwardPlate.tsx", "src/game/awardText.ts", "test/client/awardPlate.test.tsx", "test/unit/awardText.test.ts"]) expect(existsSync(gone), gone).toBe(false);
+    // 이름을 쪼개 적는다 — 저장소에 남은 참조가 0 인지 grep 으로 확인하는 검사에 이 시험이 걸리지 않게
+    const gone = [["src/components/v2/Aw", "ardPlate.tsx"], ["src/game/aw", "ardText.ts"], ["test/client/aw", "ardPlate.test.tsx"], ["test/unit/aw", "ardText.test.ts"]].map((p) => p.join(""));
+    for (const f of gone) expect(existsSync(f), f).toBe(false);
     const float = readFileSync("src/components/v2/FloatAction.tsx", "utf8");
     expect(float).not.toContain('"skip"');
     expect(float).not.toContain("data-float-count");

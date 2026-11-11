@@ -116,7 +116,7 @@ describe("열 단추 표식·모양 (V-2)", () => {
       <>
         <FloatAction kind="bots" side="bots" icon="bot" label="봇" onPress={() => {}} />
         <FloatAction kind="dress" side="dress" icon="hanger" label="옷장" onPress={() => {}} />
-        <FloatAction kind="skip" icon="skip" label="넘기기" onPress={() => {}} />
+        <FloatAction kind="whisper" icon="whisper" label="귓속말" onPress={() => {}} />
       </>,
     );
     expect([...container.querySelectorAll("[data-float]")].map((e) => e.getAttribute("data-side-button"))).toEqual(["bots", "dress", null]);

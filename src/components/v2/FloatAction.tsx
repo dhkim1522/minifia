@@ -19,7 +19,7 @@ export function FloatActions({ children, ref, single }: { children: ReactNode; r
 
 export interface FloatActionProps {
   /** E2E·누설 검사가 읽는 표식 */
-  kind: "claim" | "whisper" | "dress" | "skip" | "bots";
+  kind: "claim" | "whisper" | "dress" | "bots";
   /** 오른쪽 열(SideColumn)의 칸이면 값을 준다 — data-side-button 이 달리고 지름 52 원이 된다(16-06). 안 주면 48 원 떠 있는 단추 */
   side?: "bots" | "dress";
   /** 안에 그릴 아이콘 24 */
@@ -34,13 +34,11 @@ export interface FloatActionProps {
   dot?: boolean;
   /** 남은 횟수 점(귓속말) — data-float-left 로만 싣는다 */
   left?: number;
-  /** 버튼 위에 14px 로 얹는 진행 숫자(시상식 [넘기기] 의 'k / n', 11-09). 장식이라 스크린리더에는 읽히지 않는다 */
-  count?: string;
   onPress(el: HTMLButtonElement): void;
   ref?: Ref<HTMLButtonElement>;
 }
 
-export function FloatAction({ kind, side, icon, label, pressed, disabled, dot, left, count, onPress, ref }: FloatActionProps) {
+export function FloatAction({ kind, side, icon, label, pressed, disabled, dot, left, onPress, ref }: FloatActionProps) {
   return (
     <button
       ref={ref}
@@ -60,11 +58,6 @@ export function FloatAction({ kind, side, icon, label, pressed, disabled, dot, l
     >
       <V2Icon name={icon} size={24} />
       {dot ? <span className="mv-float__dot" aria-hidden="true" /> : null}
-      {count !== undefined ? (
-        <span className="mv-float__count" data-float-count="" aria-hidden="true">
-          {count}
-        </span>
-      ) : null}
     </button>
   );
 }

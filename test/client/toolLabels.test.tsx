@@ -285,14 +285,6 @@ describe("머리·떠 있는 단추·옷장 (TOOL-04, D-01)", () => {
     expectIconButton(container.querySelector("[data-float=dress]"), "옷장");
   });
 
-  it("FloatAction(넘기기): 글 없이 아이콘, 위 'k / n' 은 장식으로 유지된다", () => {
-    const { container } = render(<FloatAction kind="skip" icon="skip" label="넘기기" count="2 / 5" onPress={() => {}} />);
-    const b = container.querySelector("[data-float=skip]");
-    expectIconButton(b, "넘기기");
-    expect(b?.querySelector("[data-float-count]")?.textContent).toBe("2 / 5");
-    expect(b?.querySelector("[data-float-count]")?.getAttribute("aria-hidden")).toBe("true");
-  });
-
   it("FloatAction 막힘(aria-disabled)도 이름이 남는다", () => {
     const { container } = render(<FloatAction kind="dress" icon="hanger" label="옷장" disabled onPress={() => {}} />);
     expect(container.querySelector("[data-float=dress]")?.getAttribute("aria-disabled")).toBe("true");

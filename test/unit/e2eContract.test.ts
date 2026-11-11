@@ -57,7 +57,6 @@ import { seededRandInt } from "../helpers/seededRandom";
 import { HOST_HIDDEN_PHASES, HOST_LINES, type HostKey } from "../../src/game/hostLine";
 import { OPENING_LAMPS, TUTORIAL_CAST, TUTORIAL_DOT_COUNT, TUTORIAL_LINES, TUTORIAL_SCENES, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
 import { ROLE_TEXT } from "../../src/game/roleText";
-import { CEREMONY_TITLE } from "../../src/game/awardText";
 import { RESULT_TEXT } from "../../src/game/verdict";
 import { JOB_OUTFIT } from "../../src/world/ghostOutfit";
 import { CHAT_PANEL_EXTRA as RESULT_CHAT_EXTRA } from "../../src/game/chatUi";
@@ -419,8 +418,6 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     RESULT_JOB_OUTFIT: Record<string, string>;
     RESULT_WIN_TITLE: Record<string, string>;
     RESULT_PANEL_H: number;
-    AWARD_PLATE: { maxW: number; sideMargin: number; h: number; topGap: number; belowMin: number; float: number; floatRight: number; floatGap: number };
-    AWARD_CEREMONY_TITLE: string;
     TIMELINE_CARD: { w: number; h: number; gap: number };
     READY_PILL: { w: number; h: number; inputExtra: number };
   };
@@ -448,16 +445,6 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     expect(has("components/v2/ResultPanel.tsx", "data-result-divider")).toBe(true);
     expect(has("screens/ResultScreen.tsx", "patch({ tab })")).toBe(true);
     expect(has("world/testHooks.ts", "tab: string")).toBe(true);
-    // 11-09: 시상식 표식 — 패(data-award-plate·data-award-id)·떠 있는 [넘기기](data-float="skip")·진행 숫자·훅 awards/shown
-    expect(has("components/v2/AwardPlate.tsx", "data-award-plate")).toBe(true);
-    expect(has("components/v2/AwardPlate.tsx", "data-award-id")).toBe(true);
-    expect(has("components/v2/FloatAction.tsx", "data-float-count")).toBe(true);
-    expect(has("components/v2/FloatAction.tsx", '"skip"')).toBe(true);
-    expect(has("screens/ResultScreen.tsx", 'kind="skip"')).toBe(true);
-    expect(has("screens/ResultScreen.tsx", "patch({ awards")).toBe(true);
-    expect(has("screens/ResultScreen.tsx", "patch({ shown")).toBe(true);
-    expect(has("world/testHooks.ts", "awards: [number, string][]")).toBe(true);
-    expect(has("world/testHooks.ts", "shown: number")).toBe(true);
   });
 
   it("탭 id 와 접근성 이름·구분선 꼴이 앱 상수와 같다 (11-07, E2E 사본이 어긋나지 않게)", () => {
@@ -470,16 +457,6 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     expect({ ...r.RESULT_WIN_TITLE }).toEqual({ citizenWin: RESULT_TEXT.title.citizenWin, mafiaWin: RESULT_TEXT.title.mafiaWin });
     expect(r.RESULT_PANEL_H).toBe(LOG_H + RESULT_CHAT_EXTRA);
     expect(r.RESULT_PANEL_H).toBe(160);
-  });
-
-  it("시상식 기하·제목이 앱과 같다 (11-09): 패 폭 min(328, 폭 − 32)·높이 96, [넘기기] 지름 48·오른쪽 16, 헤더 '시상식'", () => {
-    const css = readFileSync(new URL("src/styles/result.css", root), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-    const plate = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === ".mv-award")?.[2] ?? "";
-    expect(plate).toContain(`height: ${r.AWARD_PLATE.h}px`);
-    expect(plate).toContain(`min(${r.AWARD_PLATE.maxW}px, calc(100% - ${r.AWARD_PLATE.sideMargin}px))`);
-    expect(r.AWARD_PLATE.float).toBe(48);
-    expect(r.AWARD_PLATE.floatRight).toBe(16);
-    expect(r.AWARD_CEREMONY_TITLE).toBe(CEREMONY_TITLE);
   });
 
   it("기록 탭 카드 기하가 앱과 같다 (11-11): 카드 72×112 · 간격은 --space-sm · 표식은 컴포넌트에 있다", () => {
