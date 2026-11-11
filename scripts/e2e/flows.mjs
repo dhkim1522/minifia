@@ -14,7 +14,7 @@ import {
   pressEndDiscussion,
   readAnnounceWatch,
   readGame,
-  readGhostOutfits,
+  readGhosts,
   readGhostTagContrast,
   setBotVote,
   skipOnce,
@@ -1733,10 +1733,10 @@ async function dayFlow(ctx) {
         else rec(sc, "AN0", `결과 알림 글자 판정 (${which})`, false, "알림을 보지 못함");
       }
       rec(sc, "EX2", "알림 어디에도 역할 글자가 없다", !texts.some((a) => ROLE_WORD_RE.test(a.text)), `알림 ${texts.map((a) => a.text).join(" → ")}`);
-      // 18.1-09 R3: 처형 연출(알림 + 2.4초 + 여유 0.6초) 뒤 산 사람 화면에는 처형된 사람이 마지막 자리에 코트 안개 유령으로 남는다(C1·C2) — 옛 EX3 '이름표가 사라진다' 를 바꿨다
+      // 18.1-09 R3: 처형 연출(알림 + 2.4초 + 여유 0.6초) 뒤 산 사람 화면에는 처형된 사람이 마지막 자리에 유령 그림으로 남는다(C1·C2) — 옛 EX3 '이름표가 사라진다' 를 바꿨다
       {
         const lg = await liveGhostSettled(guests[0].page, [hostSeat], 4000);
-        for (const r of lg.rows) rec(sc, r.id, `처형된 사람이 산 사람 화면에 코트 안개 유령으로 남는다 — ${r.label} (${lg.phase})`, r.ok, r.detail, r.ok);
+        for (const r of lg.rows) rec(sc, r.id, `처형된 사람이 산 사람 화면에 유령 그림으로 남는다 — ${r.label} (${lg.phase})`, r.ok, r.detail, r.ok);
       }
       const ghosts = await attempt(async () => {
         const gs = await Promise.all(guests.map((x) => readGame(x.page)));
@@ -1825,22 +1825,18 @@ async function executeHost(game) {
   await skipTo(hp, ht, "execution");
 }
 
-/** 직업 → 의상 대응(앱 src/world/ghostOutfit.ts 의 표 사본, UI-SPEC B-2). 알 수 없으면 coat */
-const GHOST_JOB_OUTFIT = { mafia: "mafia", police: "police", doctor: "doctor", citizen: "coat" };
-const sortedEntries = (o) => Object.entries(o).map(([k, v]) => [Number(k), v]).sort((a, b) => a[0] - b[0]);
+const sortedNums = (list) => [...list].map(Number).sort((a, b) => a - b);
 
-/** window.__mfGhostOutfits(e2e 전용 의상 표)를 읽어 유령 페이지의 의상 표가 탈락 좌석 전부의 spectate 직업 대응과 같아질 때까지 6초 기다린다. detail 에 좌석:직업→의상 을 남긴다 */
-async function ghostOutfitMatch(hp, view) {
-  const dead = view.players.filter((p) => p.alive === false).map((p) => p.seat);
-  const jobs = Object.fromEntries(dead.map((seat) => [seat, view.spectate?.seats?.find((x) => x.seat === seat)?.job]));
-  const want = Object.fromEntries(dead.map((seat) => [seat, GHOST_JOB_OUTFIT[jobs[seat]] ?? "coat"]));
-  const label = dead.map((seat) => `${seat}:${jobs[seat]}→${want[seat]}`).join(", ");
+/** window.__mfGhosts(e2e 전용 유령 훅)를 읽어 유령 페이지의 유령 그림 좌석이 탈락 좌석 전부와 같고 그림이 준비될 때까지 6초 기다린다. 직업과 무관하다(0083-2). detail 에 좌석:직업 을 남긴다 */
+async function ghostHookMatch(hp, view) {
+  const { dead, jobs } = deadJobsOf(view);
+  const label = dead.map((seat) => `${seat}:${jobs[seat] ?? "?"}`).join(", ");
   const r = await attempt(async () => {
     const start = performance.now();
     for (;;) {
-      const o = await readGhostOutfits(hp);
-      if (o.outfits !== null && JSON.stringify(sortedEntries(o.outfits)) === JSON.stringify(sortedEntries(want))) return;
-      if (performance.now() - start > 6000) throw new Error(`기대 ${JSON.stringify(want)} · 실제 ${JSON.stringify(o.outfits)}`);
+      const o = await readGhosts(hp);
+      if (o.ghosts !== null && o.ghosts.ready && JSON.stringify(sortedNums(o.ghosts.seats)) === JSON.stringify(sortedNums(dead))) return;
+      if (performance.now() - start > 6000) throw new Error(`기대 좌석 ${JSON.stringify(sortedNums(dead))} · 실제 ${JSON.stringify(o.ghosts)}`);
       await sleep(150);
     }
   });
@@ -1874,20 +1870,22 @@ async function ghostFlow(ctx) {
       }
     }
 
-    // 직업 의상(09.1-09, 결정 0063-2): 유령 페이지는 탈락 좌석마다 spectate 직업의 의상을 입고, 산 사람 페이지에는 의상 재료가 없다(L13)
+    // 유령 그림(0083-2): 탈락자는 직업과 무관하게 모두 같은 유령 그림이고, 직업은 이름표의 칩으로만 보인다. 산 사람 페이지에도 의상 재료가 없다(L13)
     {
       const sc = `${id}/outfit`;
-      const got = await ghostOutfitMatch(hp, ht.last());
-      rec(sc, "GH14", "유령 페이지의 직업 의상 표가 탈락 좌석 전부와 spectate 직업 대응(마피아·경찰·의사 같은 이름, 시민 coat)과 같다", got.ok, got.ok ? got.label : got.detail, true);
+      const got = await ghostHookMatch(hp, ht.last());
+      rec(sc, "GH14", "유령 페이지의 유령 그림 훅(__mfGhosts)이 탈락 좌석 전부와 같고 그림이 준비됐다(직업과 무관)", got.ok, got.ok ? got.label : got.detail, true);
       const first = await ghostViewSettled(hp, ht.last(), 4000);
       for (const r of first.rows) rec(sc, r.id, `${r.label} (처형 직후 ${ht.last().phase})`, r.ok, r.detail, r.ok);
-      const dom = await readGhostOutfits(hp);
+      const dom = await readGhosts(hp);
       rec(sc, "GH14b", "유령 페이지에도 의상은 DOM 속성이 아니다([data-ghost-outfit] 0개)", dom.domCount === 0, `DOM ${dom.domCount}개`);
       for (let i = 0; i < guests.length; i++) {
         const g = guests[i];
         if (!aliveOf(g.tracker.last()).includes(g.seat)) continue;
-        const r = await readGhostOutfits(g.page);
-        rec(sc, "GH15", `산 사람 페이지에는 직업 의상 표가 없거나 비어 있고 [data-ghost-outfit] 이 0개다 — L13 (손님${i + 1})`, (r.outfits === null || Object.keys(r.outfits).length === 0) && r.domCount === 0, `표 ${JSON.stringify(r.outfits)}, DOM ${r.domCount}개`);
+        const r = await readGhosts(g.page);
+        const deadNow = g.tracker.last().players.filter((p) => p.alive === false).map((p) => p.seat);
+        const shape = r.ghosts !== null && JSON.stringify(r.ghosts.keys) === JSON.stringify(["ready", "seats"]) && r.ghosts.seats.every((seat) => deadNow.includes(seat));
+        rec(sc, "GH15", `산 사람 페이지의 유령 훅에는 좌석 번호·준비 여부뿐이고(탈락 좌석만) [data-ghost-outfit] 이 0개다 — L13 (손님${i + 1})`, shape && r.domCount === 0, `훅 ${JSON.stringify(r.ghosts)}, 탈락 ${deadNow}, DOM ${r.domCount}개`);
       }
     }
 
@@ -1945,10 +1943,10 @@ async function ghostFlow(ctx) {
         if (judgedPool.length > 0 || occluded.length === 0) rec(sc, "GH13", "유령 이름표 글자 대비가 4.5:1 이상이다(이름표는 불투명)", worst !== null && worst >= 4.5, detail, true);
         rec(sc, "GH13b", "유령 이름표 불투명도가 1 이다(이름표 면에 흐림이 없다)", pool.length > 0 && pool.every((c) => c.opacity === 1), detail, true);
       }
-      // 밤에 더 죽은 사람이 있으면 그 직업 의상도 같은 표에 들어 있다(마피아·경찰·의사 의상까지 보인다)
+      // 밤에 더 죽은 사람이 있으면 그 사람도 같은 유령 그림이다(마피아·경찰·의사였어도 모습이 같다)
       {
-        const again = await ghostOutfitMatch(hp, ht.last());
-        rec(sc, "GH14c", "다음 날에도 의상 표가 탈락 좌석 전부의 직업 대응과 같다(밤에 죽은 사람 포함)", again.ok, again.ok ? again.label : again.detail, true);
+        const again = await ghostHookMatch(hp, ht.last());
+        rec(sc, "GH14c", "다음 날에도 유령 그림 훅이 탈락 좌석 전부와 같다(밤에 죽은 사람 포함)", again.ok, again.ok ? again.label : again.detail, true);
       }
       for (let i = 0; i < guests.length; i++) {
         const g = guests[i];
@@ -1963,7 +1961,7 @@ async function ghostFlow(ctx) {
         const after = g.tracker.moves.get(hostSeat)?.n ?? 0;
         const before = movesBefore[i];
         rec(sc, "GH11", `유령이 걷는 동안 산 사람 페이지가 유령 좌석 구간을 받지 않는다 (손님${i + 1})`, after === before, `받은 구간 번호 ${before} → ${after}`);
-        // 18.1-09 R3: 옛 GH12 '산 사람 화면에 유령 이름표가 없다' 는 바뀌었다 — 탈락 좌석 전원이 코트 안개 유령으로 남고(C1·C2) 처형된 방장의 자리는 유령이 걸어도 그대로다(GH12, C-6)
+        // 18.1-09 R3: 옛 GH12 '산 사람 화면에 유령 이름표가 없다' 는 바뀌었다 — 탈락 좌석 전원이 유령 그림으로 남고(C1·C2) 처형된 방장의 자리는 유령이 걸어도 그대로다(GH12, C-6)
         const deadNow = gv.players.filter((p) => p.alive === false).map((p) => p.seat);
         const lg = await liveGhostSettled(g.page, deadNow.length > 0 ? deadNow : [hostSeat], 4000);
         for (const r of lg.rows) rec(sc, r.id, `산 사람 화면 유령 — ${r.label} (손님${i + 1}, 유령이 걸은 뒤, ${lg.phase})`, r.ok, r.detail, r.ok);
@@ -1975,7 +1973,7 @@ async function ghostFlow(ctx) {
     }
 
     // 18.1-09 R3(C3·C1·C2): 다음 날 단계를 한 칸씩 넘기며(낮 시작·토론·지목·변론·찬반·처형·밤·아침 중 판이 거치는 것) 단계마다
-    // 유령(방장) 화면은 탈락 좌석 전원이 직업 칩 1개·유령 이름표·그 직업 의상이고, 같은 단계의 산 손님 화면은 탈락 좌석을 코트 안개 유령으로 그린다(밤·심부름은 그리지 않음)
+    // 유령(방장) 화면은 탈락 좌석 전원이 직업 칩 1개·유령 이름표·유령 그림이고(직업과 무관), 같은 단계의 산 손님 화면은 탈락 좌석을 유령 그림으로 그린다(밤·심부름은 그리지 않음)
     {
       const sc = `${id}/stages`;
       const covered = [];
@@ -3044,6 +3042,7 @@ async function resultState(ctx, id, game, { winner, n, skipProbe = false }) {
   const seats = view.result?.seats ?? [];
   const jobBySeat = Object.fromEntries(seats.map((x) => [x.seat, x.job]));
   const loserSeats = seats.filter((x) => (x.job === "mafia") === (winner === "citizenWin")).map((x) => x.seat);
+  const deadSeats = view.players.filter((p) => p.alive === false).map((p) => p.seat); // 판이 끝났을 때 탈락한 좌석 — 유령 그림(0083-2)
 
   if (skipProbe) {
     // 연출 구간(모임·뒤집기)에서 무대 빈 곳을 실제 마우스로 한 번 탭한다(D-25). 구간을 놓쳤으면 RS9 는 측정값 없음으로 실패하지 않고 정보 행으로 남긴다.
@@ -3100,6 +3099,8 @@ async function resultState(ctx, id, game, { winner, n, skipProbe = false }) {
     loserSeats,
     costumes: read.hook?.costumes,
     jobBySeat,
+    deadSeats,
+    ghosts: read.ghosts,
     panel: read.panel,
     stageBottom: read.panelTop,
     roomH: read.roomH,

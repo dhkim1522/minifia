@@ -2,7 +2,7 @@
 // 흐름 본문(resultFlow)은 flows.mjs 에 있고, 이 파일은 순수 검사 함수와 페이지 읽기 도우미만 둔다(flows.mjs 가 이미 3천 줄이다).
 // 18.1(P181-7): 결과 화면 탭은 그리지 않는다 — 탭 판정은 숨김 판정(resultHiddenChecks)으로 바뀌었다.
 // 18.1-16(결정 0083-7): 시상식이 없다 — 시상 판정·읽기·기하 상수는 지웠고 단계 판정(RS10)이 "연출이 끝난 뒤 제목이 승패로 남고 시상 표식이 0" 을 잰다.
-// 판정 문턱은 여기에만 있고 흐름은 낮추지 않는다. 직업 의상 대응표는 src/world/ghostOutfit.ts 의 JOB_OUTFIT 과 같아야 하고 test/unit/e2eContract.test.ts 가 대조한다.
+// 판정 문턱은 여기에만 있고 흐름은 낮추지 않는다. 직업 의상 대응표는 src/world/jobOutfit.ts 의 JOB_OUTFIT 과 같아야 하고 test/unit/e2eContract.test.ts 가 대조한다.
 
 /** 결과 화면이 더한 DOM 표식·훅 이름. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지). */
 export const RESULT_MARKERS = Object.freeze([
@@ -28,7 +28,7 @@ export const TIMELINE_CARD = Object.freeze({ w: 72, h: 112, gap: 8 });
 /** 결과 탭 id, 표시 순서 (src/game/resultText.ts RESULT_TABS 의 사본) */
 export const RESULT_TAB_IDS = Object.freeze(["all", "mafia", "ghost", "whisper", "log"]);
 
-/** 직업 → 3D 의상 id (src/world/ghostOutfit.ts JOB_OUTFIT 의 사본) */
+/** 직업 → 3D 의상 id (src/world/jobOutfit.ts JOB_OUTFIT 의 사본). 결과 화면에서 산 사람만 입는다 */
 export const RESULT_JOB_OUTFIT = Object.freeze({ mafia: "mafia", police: "police", doctor: "doctor", citizen: "coat" });
 
 /** 헤더 승리 한 줄 (src/game/verdict.ts RESULT_TEXT.title 의 사본) */
@@ -50,9 +50,9 @@ const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x))
 /**
  * RS1~RS8 결과 화면 최종 상태 판정. 입력 { winner, header, chips, seats, dimmed, loserSeats, costumes, jobBySeat, panel, panelWant, stageBottom, roomH, hasLegacy, chatEcho }:
  *  winner 기대 승자 · header 헤더 글자 · chips [data-role-chip] 개수 · seats 참가자 수 · dimmed 런타임이 어둡게 한 좌석(window.__mfResult.dimmed) · loserSeats 진 팀 좌석(서버 view 기준)
- *  costumes 런타임이 입힌 의상 표(좌석 → 의상) · jobBySeat 서버 view.result.seats 의 직업 표(좌석 → 직업) · panel 아래 패널 높이 · panelWant 기대 높이(없으면 RESULT_PANEL_H 160)
+ *  costumes 런타임이 입힌 의상 표(좌석 → 의상) · jobBySeat 서버 view.result.seats 의 직업 표(좌석 → 직업) · deadSeats 판이 끝났을 때 탈락한 좌석 · ghosts 유령 훅 사본({ seats, ready }) · panel 아래 패널 높이 · panelWant 기대 높이(없으면 RESULT_PANEL_H 160)
  *  stageBottom 스테이지 아래 끝(= 패널 위 끝, 방 위 끝 기준) · roomH 방 높이 · hasLegacy 옛 요소 이름 배열(없으면 빈 배열) · chatEcho 내가 보낸 한 줄이 기록 칸에 보였나
- * RS1 헤더 승리 한 줄 · RS2 칩 수 == 참가자 수 · RS3 어두운 좌석 == 진 팀 · RS4 의상 == 직업 의상 표 · RS5 패널 188/244 ±1 · RS6 스테이지 아래 끝 = 방 − 패널 ±1 · RS7 옛 요소 없음 · RS8 채팅 한 줄 전달.
+ * RS1 헤더 승리 한 줄 · RS2 칩 수 == 참가자 수 · RS3 어두운 좌석 == 진 팀 · RS4 산 좌석 의상 == 직업 의상 표, 탈락 좌석은 의상 없이 유령 그림(훅 seats) · RS5 패널 188/244 ±1 · RS6 스테이지 아래 끝 = 방 − 패널 ±1 · RS7 옛 요소 없음 · RS8 채팅 한 줄 전달.
  * RS10(18.1-16): hold = { title: 최종 상태에 닿았을 때 헤더 글자, later: 3초 뒤 헤더 글자, marks: 시상 표식(패·[넘기기]·진행 숫자) 수 }. title·later 가 둘 다 승리 한 줄 사본이고 marks 가 0 이어야 통과.
  * 측정값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다. 반환: 항목별 { id, label, ok, detail } 배열.
  */
@@ -61,7 +61,7 @@ export function resultStageChecks(m) {
     RS1: "결과 화면: 헤더가 승리 한 줄",
     RS2: "결과 화면: 직업 칩 수 == 참가자 수",
     RS3: "결과 화면: 어두운 좌석 == 진 팀",
-    RS4: "결과 화면: 모두 직업 의상(런타임이 입은 값)",
+    RS4: "결과 화면: 산 사람은 직업 의상, 탈락자는 의상 없이 유령 그림(런타임이 그린 값)",
     RS5: "결과 화면: 아래 패널 높이 188 · 244",
     RS6: "결과 화면: 스테이지 아래 끝 == 방 높이 − 패널",
     RS7: "결과 화면: 옛 카드·배너·[처음으로]·방 닫힘 안내 없음",
@@ -83,16 +83,25 @@ export function resultStageChecks(m) {
   if (!Array.isArray(m?.dimmed) || !Array.isArray(m?.loserSeats)) out.push(noMeasure("RS3", L.RS3, "dimmed·loserSeats"));
   else out.push(result("RS3", L.RS3, sameSet(m.dimmed, m.loserSeats) ? [] : [`어두운 좌석 [${[...m.dimmed].sort()}] ≠ 진 팀 [${[...m.loserSeats].sort()}]`]));
 
-  // RS4 — 연출이 끝나도 직업 의상이 남는다(재접속 경로와 같은 모습, 0083-7)
-  if (!m?.costumes || typeof m.costumes !== "object" || !m?.jobBySeat || typeof m.jobBySeat !== "object") out.push(noMeasure("RS4", L.RS4, "costumes·jobBySeat"));
-  else {
+  // RS4 — 연출이 끝나도 산 사람의 직업 의상이 남고(재접속 경로와 같은 모습, 0083-7) 탈락자는 직업 의상 없이 유령 그림이다(0083-2)
+  if (!m?.costumes || typeof m.costumes !== "object" || !m?.jobBySeat || typeof m.jobBySeat !== "object" || !Array.isArray(m?.deadSeats) || !m?.ghosts || !Array.isArray(m.ghosts.seats)) {
+    out.push(noMeasure("RS4", L.RS4, "costumes·jobBySeat·deadSeats·ghosts"));
+  } else {
     const bad = [];
+    const dead = m.deadSeats.map(Number);
     for (const [seat, job] of Object.entries(m.jobBySeat)) {
+      if (dead.includes(Number(seat))) {
+        if (m.costumes[seat] !== undefined) bad.push(`탈락 자리 ${seat} 에 직업 의상 ${m.costumes[seat]} 가 있음`);
+        if (!m.ghosts.seats.includes(Number(seat))) bad.push(`탈락 자리 ${seat} 가 유령 훅 seats 에 없음`);
+        continue;
+      }
       const want = Object.hasOwn(RESULT_JOB_OUTFIT, job) ? RESULT_JOB_OUTFIT[job] : undefined;
       if (want === undefined) bad.push(`자리 ${seat} 직업 "${job}" 를 모름`);
       else if (m.costumes[seat] !== want) bad.push(`자리 ${seat}(${job}) 의상 ${m.costumes[seat] ?? "없음"} ≠ ${want}`);
     }
     for (const seat of Object.keys(m.costumes)) if (!Object.hasOwn(m.jobBySeat, seat)) bad.push(`자리 ${seat} 는 참가자가 아닌데 의상이 있음`);
+    for (const seat of m.ghosts.seats) if (!dead.includes(seat)) bad.push(`산 자리 ${seat} 가 유령 그림으로 그려짐`);
+    if (dead.length > 0 && m.ghosts.ready !== true) bad.push("유령 그림을 불러오지 못함(ready 거짓)");
     out.push(result("RS4", L.RS4, bad));
   }
 
@@ -162,6 +171,7 @@ export function readResultStage(page) {
     if ([...root.querySelectorAll("button")].some((b) => text(b) === "처음으로")) legacy.push("[처음으로]");
     if (text(root).includes("30분")) legacy.push("방 닫힘 안내");
     const hook = window.__mfResult ? { stage: window.__mfResult.stage, chips: window.__mfResult.chips, dimmed: [...window.__mfResult.dimmed], costumes: { ...window.__mfResult.costumes } } : null;
+    const ghosts = window.__mfGhosts ? { seats: [...window.__mfGhosts.seats], ready: window.__mfGhosts.ready } : null;
     // 시상 표식: 이름에 award 나 float-count 가 든 속성을 단 요소(칭호 패·패 자리·진행 숫자)와 떠 있는 [넘기기] — 0 이어야 한다(0083-7)
     const marks = [...root.querySelectorAll("*")].filter((el) => el.getAttributeNames().some((n) => /award|float-count/.test(n))).length + root.querySelectorAll('[data-float="skip"]').length;
     return {
@@ -169,6 +179,7 @@ export function readResultStage(page) {
       header: text(root.querySelector("h1")),
       chips: root.querySelectorAll("[data-role-chip]").length,
       hook,
+      ghosts,
       marks,
       panel: pr ? pr.height : Number.NaN,
       panelTop: pr ? pr.top - rr.top : Number.NaN,
