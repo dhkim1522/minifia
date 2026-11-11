@@ -78,8 +78,8 @@ import "../styles/sheet.css";
 import "../styles/testtools.css";
 
 /** 단계가 시작되고 안내 한 줄이 보이는 시간(결정 0051-5: 안내는 한 번, 그리고 사라진다) */
-/** 찬반 묶음의 기본 윗변(알림 한 줄 아래: 72 + 43 + 16)과 알림 아랫변 사이 간격 — v2.css .mv-ballots 의 기본값과 같다 */
-const BALLOT_TOP = 131;
+/** 찬반 숫자 줄의 기본 윗변(띠 아래 큰 글 한 줄 아래: 142 + 43 + 16)과 큰 글 아랫변 사이 간격 — v2.css .mv-ballots 의 기본값과 같다 */
+const BALLOT_TOP = 201;
 const BALLOT_GAP = 16;
 const HINT_MS = 2500;
 /** 서버가 단계 어긋난 행동을 거절했을 때 위 알림(UI-SPEC Copywriting Contract, 7페이즈 "지금은 보낼 수 없어요" 문구 계열) */
@@ -826,22 +826,19 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const verdictZoom = moment.active && !reducedMotion ? moment.zoom : undefined;
   const ballots = moment.active && moment.stage !== "none" && moment.stage !== "gone" ? ballotsOf(view) : null;
 
-  // 찬반 묶음 윗변(--mf-ballot-top): 기본은 알림 한 줄 아래(131). 8자 이름 "… 님 처형" 처럼 알림이 두 줄로 감기면 알림 아랫변 + 16 으로 내려간다 — 묶음은 알림과 겹치지 않는다
+  // 찬반 숫자 줄 윗변(--mf-ballot-top): 기본은 큰 글 한 줄 아래(201). 8자 이름 "… 님 처형" 처럼 큰 글이 두 줄로 감기면 큰 글 아랫변 + 16 으로 내려간다 — 숫자 줄은 큰 글과 겹치지 않는다
   const announceText = shownAnnounce?.text;
-  const [ballotTop, setBallotTop] = useState(BALLOT_TOP);
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
     if (ballots === null) {
       root.style.removeProperty("--mf-ballot-top");
-      setBallotTop(BALLOT_TOP);
       return;
     }
     const body = root.querySelector<HTMLElement>("[data-announce] .mf-announce__body");
     const bottom = body ? body.getBoundingClientRect().bottom - root.getBoundingClientRect().top : 0;
     const top = Math.max(BALLOT_TOP, Math.ceil(bottom + BALLOT_GAP));
     root.style.setProperty("--mf-ballot-top", `${top}px`);
-    setBallotTop(top);
   }, [ballots === null, announceText]);
 
   const scene = useMemo(
@@ -917,7 +914,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} />
       <KillFx nonce={killNonce} reducedMotion={reducedMotion} />
       <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(letter !== null || moment.active ? { placement: "top" as const } : {})} />
-      {ballots !== null ? <BallotReveal yes={ballots.yes} no={ballots.no} stage={moment.stage === "yes" ? "yes" : "both"} instant={moment.instant} reducedMotion={reducedMotion} fitKey={ballotTop} /> : null}
+      {ballots !== null ? <BallotReveal yes={ballots.yes} no={ballots.no} stage={moment.stage === "yes" ? "yes" : "both"} instant={moment.instant} reducedMotion={reducedMotion} /> : null}
       {letter !== null ? <WillLetter key={`${letter.t0}:${letter.seat}`} letter={letter} reducedMotion={reducedMotion} getInputTop={letterInputTop} onLive={setLetterLive} /> : null}
       {policeResult !== null ? (
         <PoliceResultCard

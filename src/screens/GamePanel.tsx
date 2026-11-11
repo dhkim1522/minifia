@@ -59,7 +59,7 @@ export interface GamePanelProps {
 
 /**
  * 게임 맵 화면의 아래 패널(UI-SPEC "아래 패널 종류와 높이"). 단계마다 행동 줄이 다르다.
- * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + HeadCount, 08-16)을 얹는다 — 변론·처형·유령은 채팅만이거나 뒤 계획이 이 틀 위에 얹는다.
+ * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + HeadCount, 08-16)을 얹는다 — 변론·처형·유령은 채팅만이다(처형은 찬반 줄을 접는다, 18.1-13 결정 0083-9).
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
 export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef }: GamePanelProps) {
@@ -69,11 +69,6 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   // 찬반도 같다: 내 선택은 누른 즉시 보이되 서버 view(me.verdictVote)가 오면 서버 값이 이긴다(DAY-06).
   const serverVerdict: Verdict | null = view.me.verdictVote === undefined ? null : view.me.verdictVote ? "yes" : "no";
   const [verdict, chooseVerdict] = useViewChoice<Verdict | null>(view, serverVerdict);
-  // 서버는 처형 단계에 내 찬반 값을 보내지 않는다 — 처형 단계의 비활성 찬반 줄은 찬반 때 마지막으로 보인 내 선택을 그대로 보여 준다
-  const lastVerdict = useRef<Verdict | null>(null);
-  useEffect(() => {
-    if (view.phase === "verdict") lastVerdict.current = verdict ?? null;
-  }, [view.phase, verdict]);
   // 밤 경찰·의사의 선택(NIGHT-09): 내가 누른 얼굴은 즉시 눌린 모양이 되고 서버 view(me.pick)가 오면 서버 값이 이긴다.
   const [nightPick, chooseNightPick] = useViewChoice<number | undefined>(view, view.me.pick);
   const seenRejects = useRef(rejected);
@@ -99,7 +94,6 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   const inVerdict = view.phase === "verdict" && !kbOpen;
   const showVerdict = inVerdict && meAlive && !isDefender; // 찬반 버튼 + 숫자
   const showVerdictDots = inVerdict && !showVerdict; // 변론자 본인·유령: 숫자만(보기 패널)
-  const showExecPicker = view.phase === "execution" && meAlive && !isDefender && !kbOpen; // 처형 단계: 결과가 나와 비활성(불투명도 0.45)
   const voted = view.day?.voted?.length ?? 0;
   const pressVerdict = (v: Verdict): void => {
     if (!canSend) return;
@@ -151,11 +145,6 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
       data-world-panel=""
       {...(veiled ? { "data-will-hide-panel": "true" } : {})}
     >
-      {showExecPicker ? (
-        <div className="mf-game__verdict" data-verdict-row="">
-          <VerdictPicker {...(lastVerdict.current ? { value: lastVerdict.current } : {})} onChange={() => {}} disabled />
-        </div>
-      ) : null}
       {showVerdict || showVerdictDots ? (
         <div className="mf-game__verdict" data-verdict-row="">
           {showVerdict ? (

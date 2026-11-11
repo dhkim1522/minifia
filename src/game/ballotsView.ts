@@ -3,7 +3,7 @@
 import type { RoomView } from "../../shared/protocol";
 import { seatColorVar } from "../net/assets";
 
-/** 알약 한 개의 근거 */
+/** 한 사람의 찬반 근거(채팅 기록 카드·화면 읽기 한 줄이 쓴다) */
 export interface Voter {
   seat: number;
   name: string;
@@ -41,9 +41,4 @@ const sideText = (label: string, voters: readonly Voter[]): string =>
 /** 스크린리더용 한 줄 "찬성 3명: 지호, 민준, 서연. 반대 2명: 하은, 태오." */
 export function ballotsSummary(b: BallotLists): string {
   return `${sideText("찬성", b.yes)} ${sideText("반대", b.no)}`;
-}
-
-/** 알약 줄 수 R(두 묶음 합)에 필요한 높이(UI-SPEC C-2: 72 + 40R) */
-export function ballotRowsNeed(rows: number): number {
-  return 72 + 40 * rows;
 }
