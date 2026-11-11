@@ -300,9 +300,9 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
   it("3단계로도 넘으면 3단계(28/32)로 두고 편지지를 가용 높이까지 키운다(하한 220)", () => {
     const grow = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 12, 36: 10, 28: 9 })} getInputTop={() => 640} />);
     tick(400);
-    // 가용 = 640 − 72 − 43(1줄 추정) − 40 − 30 = 455 → 340 을 넘어 가용까지
+    // 가용 = 640 − 142(띠 아랫변 126 + 16, 변수가 없을 때의 기본) − 43(1줄 추정) − 40 − 30 = 385 → 340 을 넘어 가용까지
     expect(pv(paperOf(grow.container), "--lw-font")).toBe("28px");
-    expect(pv(paperOf(grow.container), "--lw-paper-h")).toBe("455px");
+    expect(pv(paperOf(grow.container), "--lw-paper-h")).toBe("385px");
     grow.unmount();
     const floor = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 12, 36: 10, 28: 9 })} getInputTop={() => 300} />);
     tick(400);
@@ -310,13 +310,44 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
   });
 
   it("입력줄 윗변이 알려지면 편지지 높이는 min(340, 가용) 하한 220, 묶음은 알림 아래에서 입력줄 윗변 사이에 놓인다", () => {
-    const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 2, 36: 2, 28: 2 })} getInputTop={() => 450} />);
+    const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 2, 36: 2, 28: 2 })} getInputTop={() => 520} />);
     tick(400);
-    // 가용 = 450 − 72 − 43 − 40 − 30 = 265
+    // 가용 = 520 − 142 − 43 − 40 − 30 = 265
     expect(pv(paperOf(r.container), "--lw-paper-h")).toBe("265px");
     const root = letterOf(r.container)!;
-    expect(pv(root, "--lw-top")).toBe("135px");
-    expect(pv(root, "--lw-h")).toBe("311px");
+    expect(pv(root, "--lw-top")).toBe("205px"); // 142 + 43 + 20
+    expect(pv(root, "--lw-h")).toBe("311px"); // 520 − 4 − 205
+  });
+
+  // 18.1-13(0083-10): 큰 글 위 끝은 띠 면 아랫변(--mf-host-bottom) + 16 — 같은 변수를 방 틀에서 상속으로 읽는다. 못 읽으면 126 + 16 = 142
+  it("방 틀에 --mf-host-bottom: 100px 가 있으면 큰 글 위 끝은 116 이고 묶음 윗변은 116 + 43 + 20, 가용도 그만큼 달라진다", () => {
+    const frame = document.createElement("div");
+    frame.style.setProperty("--mf-host-bottom", "100px");
+    document.body.appendChild(frame);
+    try {
+      const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 2, 36: 2, 28: 2 })} getInputTop={() => 520} />, { container: frame.appendChild(document.createElement("div")) });
+      tick(400);
+      // 가용 = 520 − 116 − 43 − 40 − 30 = 291
+      expect(pv(paperOf(r.container), "--lw-paper-h")).toBe("291px");
+      const root = letterOf(r.container)!;
+      expect(pv(root, "--lw-top")).toBe("179px"); // 116 + 43 + 20
+      expect(pv(root, "--lw-h")).toBe("337px"); // 520 − 4 − 179
+    } finally {
+      frame.remove();
+    }
+  });
+
+  it("변수가 0 이거나 없으면 기본 126 기준(142)이다", () => {
+    const frame = document.createElement("div");
+    frame.style.setProperty("--mf-host-bottom", "0px");
+    document.body.appendChild(frame);
+    try {
+      const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 2, 36: 2, 28: 2 })} getInputTop={() => 520} />, { container: frame.appendChild(document.createElement("div")) });
+      tick(400);
+      expect(pv(letterOf(r.container)!, "--lw-top")).toBe("205px");
+    } finally {
+      frame.remove();
+    }
   });
 
   it("긴 글이 인장 자리에 닿으면 머리글 아래에 붙이고 인장 옆 줄(윗변에서 192 아래)의 오른쪽을 88 비운다", () => {
@@ -459,15 +490,45 @@ describe("편지 글꼴 대기·시계 기준 수명·모션 줄이기 (C-3·C-5
   });
 });
 
-describe("아침 알림 위치: 편지가 있으면 위 72 (C-2)", () => {
-  it("ResultAnnounce placement=top 은 .is-top, 기본은 아니다. game.css 의 is-top 은 위 패딩 72 만 바꾼다", () => {
+describe("아침 알림 위치: 큰 글은 띠 아래에서 시작한다 (C-2, 0083-10)", () => {
+  const rule = (css: string, sel: string): string => css.split("\n").find((l) => l.startsWith(sel)) ?? "";
+  it("ResultAnnounce placement=top 은 .is-top, 기본은 아니다", () => {
     const a = render(<ResultAnnounce text="알림" />);
     expect(a.container.querySelector(".mf-announce")!.classList.contains("is-top")).toBe(false);
     a.unmount();
     const b = render(<ResultAnnounce text="알림" placement="top" />);
     expect(b.container.querySelector(".mf-announce")!.classList.contains("is-top")).toBe(true);
+  });
+
+  it("game.css: .mf-announce.is-top 의 위 여백은 띠 면 아랫변(--mf-host-bottom, 기본 126) + space-md 이고 고정 72 가 아니다", () => {
     const css = readFileSync("src/styles/game.css", "utf8");
-    expect(css).toMatch(/\.mf-announce\.is-top\s*\{[^}]*padding-top:\s*72px/);
+    const top = rule(css, ".mf-announce.is-top");
+    expect(top).toMatch(/--mf-host-bottom,\s*126px/);
+    expect(top).toMatch(/var\(--space-md\)/);
+    expect(top).not.toMatch(/padding-top:\s*72px/);
+  });
+
+  it("game.css: .is-top 의 좌우 여백은 양쪽이 같고 소리 단추 지름 52 를 포함한다(가운데 맞춤 유지)", () => {
+    const css = readFileSync("src/styles/game.css", "utf8");
+    const top = rule(css, ".mf-announce.is-top");
+    const m = /padding-left:\s*([^;]+);\s*padding-right:\s*([^;]+);/.exec(top);
+    expect(m, top).not.toBeNull();
+    expect(m![1]).toBe(m![2]);
+    expect(m![1]).toMatch(/52px/);
+  });
+
+  it("game.css: 기본 .mf-announce 의 위 240 은 그대로다", () => {
+    const css = readFileSync("src/styles/game.css", "utf8");
+    expect(rule(css, ".mf-announce {")).toMatch(/padding:\s*240px var\(--space-md\) 0/);
+  });
+
+  it("letter.css: 알림 높이를 재는 틀의 좌우는 새 큰 글 폭과 같다(양쪽 같고 52px 를 포함)", () => {
+    const css = readFileSync("src/styles/letter.css", "utf8");
+    const line = css.split("\n").find((l) => l.startsWith(".mf-letter-measure__announce")) ?? "";
+    const m = /left:\s*([^;]+);\s*right:\s*([^;]+);/.exec(line);
+    expect(m, line).not.toBeNull();
+    expect(m![1]).toBe(m![2]);
+    expect(m![1]).toMatch(/52px/);
   });
 
   it("방 화면: 편지가 있는 아침의 알림은 is-top 으로 올라가 편지와 함께 걷히고, 편지가 없는 아침은 위 240 그대로", () => {
