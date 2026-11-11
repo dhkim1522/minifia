@@ -1007,26 +1007,37 @@ describe("Lobby — 측정·키보드 코드는 useMapInsets 훅 하나다 (08-1
   });
 });
 
-// ---------- 17-07: 방장 스위치 줄 '튜토리얼 후 진행' (TUT-02, 결정 0078-3·0080-1·3, UI Considerations #16) ----------
+// ---------- 17-07 → 18.1-15: 방장 스위치 한 줄 '튜토리얼 먼저' (TUT-02, 결정 0078-3·0080-1·3·0083-3) ----------
 
-describe("Lobby — 방장 스위치 줄 '튜토리얼 후 진행' (17-07, TUT-02)", () => {
+describe("Lobby — 방장 스위치 한 줄 '튜토리얼 먼저' (17-07, TUT-02, 18.1-15 0083-3)", () => {
   const toggleOf = (container: HTMLElement) => container.querySelector("[data-tutorial-toggle]") as HTMLButtonElement | null;
   const startOf = (container: HTMLElement) => container.querySelector("[data-lobby-start]") as HTMLButtonElement;
   const hostPlayers = () => [player(0, "방장님"), player(1, "친구1"), player(2, "친구2"), player(3, "친구3")];
 
-  it("방장(첫 판·일반 방): 스위치 줄 하나, role switch·aria-checked true·aria-label, [시작] 바로 위(같은 패널 안)", () => {
+  it("방장(첫 판·일반 방): 스위치 줄 하나, role switch·aria-checked true·이름 '튜토리얼 먼저', 기록 칸 앞(같은 패널 안)·[시작]은 기록 칸 뒤, 설명 줄 없음", () => {
     const { container } = render(lobby(makeView(hostPlayers(), 0, { round: 1 })));
     const all = container.querySelectorAll("[data-tutorial-toggle]");
     expect(all).toHaveLength(1);
     const t = toggleOf(container)!;
     expect(t.getAttribute("role")).toBe("switch");
     expect(t.getAttribute("aria-checked")).toBe("true");
-    expect(t.getAttribute("aria-label")).toBe("튜토리얼 후 진행");
-    expect(t.textContent).toContain("튜토리얼 후 진행");
-    expect(t.textContent).toContain("모두 1분 보고 시작");
+    expect(t.getAttribute("aria-label")).toBe("튜토리얼 먼저");
+    expect(t.textContent).toBe("튜토리얼 먼저");
+    expect(t.querySelector(".tut-toggle__sub")).toBeNull();
     const panel = container.querySelector(".mf-lobby__panel")!;
     expect(panel.contains(t)).toBe(true);
-    expect(t.compareDocumentPosition(startOf(container)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const log = panel.querySelector("[data-chat-log]")!;
+    expect(log).not.toBeNull();
+    expect(t.compareDocumentPosition(log) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(log.compareDocumentPosition(startOf(container)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("스타일: .tut-toggle 높이 44px, 위 margin 0, 설명 줄 규칙 없음", () => {
+    const css = readFileSync("src/styles/tutorialRoom.css", "utf8");
+    const rule = css.match(/\.tut-toggle\s*\{[^}]*\}/)![0];
+    expect(rule).toMatch(/height:\s*44px/);
+    expect(rule).toMatch(/margin:\s*0\b/);
+    expect(css).not.toContain("tut-toggle__sub");
   });
 
   it("테스트 방 방장(me.testMode)은 꺼짐으로 시작하고 줄은 보인다", () => {

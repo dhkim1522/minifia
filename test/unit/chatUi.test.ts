@@ -32,11 +32,12 @@ describe("패널 높이 식 (18.1 B 계약 4 — 기록 칸 68 한 값)", () => 
     expect(LOG_H).toBe(24 * 2 + 4 + 8 * 2);
   });
 
-  it("로비 패널 = LOG_H + 154, 14 + 8 + 48 + 10 + 52 + 22 에서 나온다 — 대기실 손님 222·방장 298", () => {
+  it("로비 패널 = LOG_H + 154, 14 + 8 + 48 + 10 + 52 + 22 에서 나온다 — 대기실 손님 222·방장 276", () => {
     expect(LOBBY_PANEL_EXTRA).toBe(154);
     expect(LOBBY_PANEL_EXTRA).toBe(14 + 8 + 48 + 10 + 52 + 22);
     expect(lobbyPanelHeight(LOG_H)).toBe(222);
-    expect(lobbyPanelHeight(LOG_H, true)).toBe(298);
+    expect(LOBBY_HOST_TUTORIAL_EXTRA).toBe(54); // 스위치 줄 44 + 간격 10 (18.1-15, 0083-3)
+    expect(lobbyPanelHeight(LOG_H, true)).toBe(276);
   });
 
   it("채팅 패널 = LOG_H + 92, 14 + 8 + 48 + 22 에서 나온다 — 160", () => {

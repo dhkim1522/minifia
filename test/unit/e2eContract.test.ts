@@ -161,7 +161,7 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     expect(lib.KB_PANEL_H).toBe(146);
     expect(KB_PANEL_H).toBe(146);
     expect(lib.LOBBY_PANEL_EXTRA).toBe(LOBBY_PANEL_EXTRA);
-    expect(lib.LOBBY_HOST_TUTORIAL_EXTRA).toBe(LOBBY_HOST_TUTORIAL_EXTRA); // 17-07(0080-4): 방장 스위치 줄 64 + 간격 12
+    expect(lib.LOBBY_HOST_TUTORIAL_EXTRA).toBe(LOBBY_HOST_TUTORIAL_EXTRA); // 17-07(0080-4): 방장 스위치 줄 44 + 간격 10 (18.1-15)
     expect(lib.CHAT_PANEL_EXTRA).toBe(CHAT_PANEL_EXTRA);
     expect(lib.KB_PANEL_H).toBe(KB_PANEL_H);
     expect(lib.TYPING_PILL_H).toBe(TYPING_PILL_H);
@@ -227,9 +227,9 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
   it("lobbyPanelHeight 사본이 chatUi 와 같고, 채팅 패널 높이는 LOG_H + CHAT_PANEL_EXTRA 다", () => {
     expect(lib.lobbyPanelHeight(LOG_H)).toBe(lobbyPanelHeight(LOG_H));
     expect(lib.lobbyPanelHeight(LOG_H)).toBe(222);
-    // 17-07(0080-4): 방장 패널은 +76(LOBBY_HOST_TUTORIAL_EXTRA) — 앱 값과 E2E 사본이 같다
+    // 18.1-15(0083-3): 방장 패널은 +54(LOBBY_HOST_TUTORIAL_EXTRA) — 앱 값과 E2E 사본이 같다
     expect(lib.lobbyPanelHeight(LOG_H, true)).toBe(lobbyPanelHeight(LOG_H, true));
-    expect(lib.lobbyPanelHeight(LOG_H, true)).toBe(298);
+    expect(lib.lobbyPanelHeight(LOG_H, true)).toBe(276);
     expect(lib.LOG_H + lib.CHAT_PANEL_EXTRA).toBe(LOG_H + CHAT_PANEL_EXTRA);
     expect(LOG_H + CHAT_PANEL_EXTRA).toBe(160);
   });

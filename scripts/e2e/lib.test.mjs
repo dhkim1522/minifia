@@ -555,9 +555,9 @@ test("채팅 패널 치수 사본: LOG_H 68 · KB_PANEL_H 146, 채팅 패널 = L
   assert.equal(CHAT_PANEL_EXTRA, 92);
   assert.equal(LOBBY_PANEL_EXTRA, 154);
   assert.equal(lobbyPanelHeight(LOG_H), 222);
-  // 17-07(0080-4): 방장 패널 +76 = 스위치 줄 64 + 간격 12
-  assert.equal(LOBBY_HOST_TUTORIAL_EXTRA, 76);
-  assert.equal(lobbyPanelHeight(LOG_H, true), 298);
+  // 18.1-15(0083-3): 방장 패널 +54 = 스위치 줄 44 + 간격 10
+  assert.equal(LOBBY_HOST_TUTORIAL_EXTRA, 54);
+  assert.equal(lobbyPanelHeight(LOG_H, true), 276);
   assert.equal(lobbyPanelHeight(LOG_H, false), 222);
 });
 
