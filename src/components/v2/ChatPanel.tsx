@@ -122,6 +122,8 @@ export function ChatPanel(props: ChatPanelProps) {
   // 늘어난 칸을 위로 올려 읽는 중이면 새 줄이 와도 끌어내리지 않고 새 글 알약을 띄운다(접힌 상태에는 없다)
   const [newDot, setNewDot] = useState(false);
   const atBottomRef = useRef(true);
+  // 입력칸에 포커스가 있다. 포커스를 받으면 기록 칸이 늘어나고 [보내기] 가 유언 단추 자리에 뜬다(0083-4·0083-5)
+  const [focused, setFocused] = useState(false);
   const lastKey = messages.length ? (messages[messages.length - 1]?.key ?? null) : null;
   const lastKeyRef = useRef<string | null>(lastKey);
   const hasEmotes = !!onSend && !!props.emotes && props.emotes.length > 0 && !!props.onEmote;
@@ -175,7 +177,19 @@ export function ChatPanel(props: ChatPanelProps) {
   const toggleLog = () => {
     atBottomRef.current = true;
     setNewDot(false);
+    if (open) fieldRef.current?.blur();
     setOpen((o) => !o);
+  };
+
+  // 입력칸을 누르면 기록 칸이 커지고 키보드도 열린다(켜기만). 접는 길은 [data-chat-open] 하나다 — 포커스가 풀려도 저절로 접지 않는다.
+  const onFocus = () => {
+    setFocused(true);
+    if (!open) {
+      atBottomRef.current = true;
+      setNewDot(false);
+      setOpen(true);
+    }
+    latest.current.onInputFocus?.();
   };
 
   const bindInput = (el: HTMLInputElement | null) => {
@@ -237,6 +251,7 @@ export function ChatPanel(props: ChatPanelProps) {
   };
 
   const onBlur = () => {
+    setFocused(false);
     if (composingRef.current) {
       composingRef.current = false;
       latest.current.onComposingChange?.(false);
@@ -319,6 +334,8 @@ export function ChatPanel(props: ChatPanelProps) {
   const ui = channelUi(channel);
   const blank = value.trim() === "";
   const sendOff = blank || !!sendDisabled;
+  // [보내기] 는 입력 중이거나 쓴 글이 있을 때만 보이고, 보이는 동안 같은 자리의 유언 단추는 없다(0083-5)
+  const showSend = focused || !blank;
   const rootCls = ["mv-chat", onSend && ui.icon && "has-chan", compact && "is-compact"].filter(Boolean).join(" ");
   const sendCls = sendDim ? "mv-tool mv-chat__send is-dim" : "mv-tool mv-chat__send";
 
@@ -413,24 +430,26 @@ export function ChatPanel(props: ChatPanelProps) {
               onCompositionStart={onCompositionStart}
               onCompositionEnd={onCompositionEnd}
               onKeyDown={onKeyDown}
-              onFocus={() => latest.current.onInputFocus?.()}
+              onFocus={onFocus}
               onBlur={onBlur}
             />
           </div>
-          <button
-            type="submit"
-            className={sendCls}
-            data-chat-send=""
-            aria-label={CHAT_TEXT.send}
-            aria-disabled={sendOff ? "true" : "false"}
-            // 누르는 순간 포커스가 버튼으로 옮겨 가면 입력칸이 blur 되어 키보드가 닫히고 패널이 손가락 밑에서 내려간다(Chromium·Android). 포커스는 입력칸에 둔다(07-19, 합격 검사 6).
-            onMouseDown={(e) => e.preventDefault()}
-          >
-            <span className="mv-tool__face">
-              <V2Icon name="send" size={22} />
-            </span>
-          </button>
-          {onWill ? (
+          {showSend ? (
+            <button
+              type="submit"
+              className={sendCls}
+              data-chat-send=""
+              aria-label={CHAT_TEXT.send}
+              aria-disabled={sendOff ? "true" : "false"}
+              // 누르는 순간 포커스가 버튼으로 옮겨 가면 입력칸이 blur 되어 키보드가 닫히고 패널이 손가락 밑에서 내려간다(Chromium·Android). 포커스는 입력칸에 둔다(07-19, 합격 검사 6).
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <span className="mv-tool__face">
+                <V2Icon name="send" size={22} />
+              </span>
+            </button>
+          ) : null}
+          {onWill && !showSend ? (
             <button
               type="button"
               className={callWill ? "mv-tool mv-chat__will is-call" : "mv-tool mv-chat__will"}

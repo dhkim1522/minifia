@@ -896,6 +896,8 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
     advance(20);
   };
 
+  const openLog = (c: HTMLElement) => (c.querySelector("[data-chat-log]") as HTMLElement).classList.contains("is-open") && (c.querySelector("[data-chat-log]") as HTMLElement).style.height === "";
+
   it("포커스 + lift 336: 루트 data-kb-open true, 행동 줄 없음, 기록 칸 68, 패널 --kb, 스테이지 아래 = 146 + 336", () => {
     const vv = installVV(INNER_H);
     const { container } = render(lobby(lobbyView));
@@ -907,7 +909,8 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
     expect(rootOf(container).getAttribute("data-kb-open")).toBe("true");
     expect(rootOf(container).style.getPropertyValue("--mf-kb-lift")).toBe("336px");
     expect(actionButtons(container)).toBe(0);
-    expect((container.querySelector("[data-chat-log]") as HTMLElement).style.height).toBe(`${LOG_H}px`);
+    // 포커스가 기록 칸을 늘린다(0083-4): 인라인 높이 없이 CSS 식이 높이를 정한다
+    expect(openLog(container)).toBe(true);
     expect(container.querySelector(".mv-chat.is-compact")).not.toBeNull();
     expect(container.querySelector(".mf-lobby__panel")?.classList.contains("mf-lobby__panel--kb")).toBe(true);
     expect(props().stageInsets).toEqual({ top: 62, bottom: KB_PANEL + 336 });
@@ -925,17 +928,17 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
     expect(props().stageInsets?.bottom).toBe(KB_PANEL + 340);
   });
 
-  it("포커스 중 lift 60(열림 경계 80 아래): data-kb-open 없음, 행동 줄 있음, 기록 칸 그대로", () => {
+  it("포커스 중 lift 60(열림 경계 80 아래): data-kb-open 없음, 행동 줄 있음, 기록 칸은 포커스로 늘어남", () => {
     const vv = installVV(INNER_H);
     const { container } = render(lobby(lobbyView));
     focusWithKeyboard(container, vv, 60);
     expect(rootOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(actionButtons(container)).toBe(1);
-    expect((container.querySelector("[data-chat-log]") as HTMLElement).style.height).toBe(`${LOG_H}px`);
+    expect(openLog(container)).toBe(true);
     expect(container.querySelector(".mf-lobby__panel")?.classList.contains("mf-lobby__panel--kb")).toBe(false);
   });
 
-  it("블러하면 원래대로: data-kb-open 없음, 행동 줄 복귀, 기록 칸 원래 값, 스테이지 아래 = 원래 패널 높이", () => {
+  it("블러하면 원래대로: data-kb-open 없음, 행동 줄 복귀, 기록 칸은 접지 않고 늘어난 채(닫기는 단추 하나), 스테이지 아래 = 원래 패널 높이", () => {
     const vv = installVV(INNER_H);
     const { container } = render(lobby(lobbyView));
     focusWithKeyboard(container, vv, 336);
@@ -947,7 +950,7 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
     expect(rootOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(rootOf(container).style.getPropertyValue("--mf-kb-lift")).toBe("0px");
     expect(actionButtons(container)).toBe(1);
-    expect((container.querySelector("[data-chat-log]") as HTMLElement).style.height).toBe(`${LOG_H}px`);
+    expect(openLog(container)).toBe(true);
     expect(props().stageInsets).toEqual({ top: 62, bottom: lobbyPanelHeight(LOG_H) });
   });
 

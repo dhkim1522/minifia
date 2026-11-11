@@ -7,6 +7,7 @@
 //    14-01: 위 끝은 헤더 아랫변과 자막 띠 면([data-host-band] .mv-host__band) 아랫변 중 큰 쪽이다.
 //    16-08: 심부름 단계는 아래 패널이 없다(panelless) — 아래 끝은 0(화면 아래)이다.
 //    재서 넘기는 값이라 패널이 자라도(채팅·단계별 행동 줄) 같은 길로 따라간다. 측정이 0 이면(레이아웃 없는 환경) 넘기지 않고 WorldStage 기본값을 쓴다.
+//    늘어난 기록 칸(0083-4)의 식 재료: 루트에 --mf-room-h(루트 높이)와 --mf-panel-rest(패널 높이 − 패널 안 [data-chat-log] 높이, 기록 칸이 커져도 변하지 않는 값)를 값이 바뀔 때만 쓴다.
 //    지목(09.1-08, UI-SPEC A-1): turnActive 이면 루트 안의 `[data-turn-block]`(차례 알약, GameMap 이 ref 를 넘기지 않고 이 훅이 루트에서 찾는다)의 막대 아랫변을 함께 재서
 //    위 끝을 mapStageTop(알약·막대 아랫변 + 4)으로 내린다. 막대가 없을 때(모이는 중·끝 알림)는 마지막으로 잰 값, 없으면 기본값(160 · 압축 124). 작은 폰이면 압축형(turnCompact)을 알려 준다.
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -48,6 +49,15 @@ function hostBandBottom(room: HTMLElement | null, root: HTMLElement | null): num
   return bottom > 0 ? bottom : 0;
 }
 
+/** CSS 변수(px)를 값이 바뀔 때만 쓴다. null 이면 지운다(패널·기록 칸이 없는 단계) */
+function writeVar(el: HTMLElement | null, name: string, px: number | null): void {
+  if (el === null) return;
+  const next = px === null ? "" : `${px}px`;
+  if (el.style.getPropertyValue(name) === next) return;
+  if (next === "") el.style.removeProperty(name);
+  else el.style.setProperty(name, next);
+}
+
 /**
  * turnActive: 지금 지목 또는 결선 단계이고 알약 부품(`[data-turn-block]`)이 그려진다(blockModeOf !== null)
  * panelless: 아래 패널이 없는 단계(심부름, 16-08)다. 패널 없이도 위 끝은 지금처럼 재고 아래 끝은 0 으로 알린다. 재는 효과가 패널 요소를 시작 때 한 번 쥐므로
@@ -85,6 +95,9 @@ export function useMapInsets(turnActive = false, panelless = false): MapInsets {
       const hostBottom = hostBandBottom(roomRef.current, rootRef.current);
       if (hostBottom > headerBottom) headerBottom = hostBottom;
       const roomH = rootRef.current?.clientHeight ?? 0;
+      writeVar(rootRef.current, "--mf-room-h", roomH > 0 ? roomH : null);
+      const logH = panelless || panel === null ? 0 : (panel.querySelector<HTMLElement>("[data-chat-log]")?.offsetHeight ?? 0);
+      writeVar(rootRef.current, "--mf-panel-rest", logH > 0 ? bottom - logH : null);
       if (roomH > 0) setSideMaxH(Math.max(0, roomH - bottom - 8 - (headerBottom + 12)));
       let top = headerBottom;
       if (turnActive) {

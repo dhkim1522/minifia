@@ -215,7 +215,7 @@ describe("useKeyboardLift: 한 줄 시트(귓속말, 09.1.1-09)의 입력칸도 
 // 0083-4: 늘어난 기록 칸의 식 재료. 측정 훅이 화면 루트에 방 높이와 패널의 기록 칸 밖 높이를 쓴다(대기실·게임 맵·결과가 모두 이 훅).
 describe("useMapInsets: 늘어난 기록 칸의 식 재료 --mf-room-h·--mf-panel-rest (0083-4)", () => {
   const realOffset = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
-  const realClient = Object.getOwnPropertyDescriptor(Element.prototype, "clientHeight");
+  const realClient = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
   beforeEach(() => {
     // 레이아웃이 없다: data-h 가 곧 높이(떼어진 요소는 0), 루트의 clientHeight 는 data-ch
     Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
@@ -224,7 +224,7 @@ describe("useMapInsets: 늘어난 기록 칸의 식 재료 --mf-room-h·--mf-pan
         return this.isConnected ? Number(this.dataset.h ?? 0) : 0;
       },
     });
-    Object.defineProperty(Element.prototype, "clientHeight", {
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
       configurable: true,
       get(this: HTMLElement) {
         return this.isConnected ? Number(this.dataset.ch ?? 0) : 0;
@@ -233,7 +233,8 @@ describe("useMapInsets: 늘어난 기록 칸의 식 재료 --mf-room-h·--mf-pan
   });
   afterEach(() => {
     if (realOffset) Object.defineProperty(HTMLElement.prototype, "offsetHeight", realOffset);
-    if (realClient) Object.defineProperty(Element.prototype, "clientHeight", realClient);
+    if (realClient) Object.defineProperty(HTMLElement.prototype, "clientHeight", realClient);
+    else Reflect.deleteProperty(HTMLElement.prototype, "clientHeight");
   });
 
   function Probe({ panelless = false, logH = 68 }: { panelless?: boolean; logH?: number }) {

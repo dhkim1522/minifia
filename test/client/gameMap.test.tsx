@@ -418,7 +418,9 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     remeasure();
     expect(gameOf(container).getAttribute("data-kb-open")).toBe("true");
     expect(endButton(container)).toBeNull();
-    expect(logHeight(container)).toBe(`${LOG_H}px`);
+    // 포커스가 기록 칸을 늘린다(0083-4): 인라인 높이 없이 CSS 식이 높이를 정한다
+    expect(logHeight(container)).toBe("");
+    expect(container.querySelector("[data-chat-log]")?.classList.contains("is-open")).toBe(true);
     expect(container.querySelector(".mv-chat.is-compact")).not.toBeNull();
     expect(container.querySelector(".mf-game__panel")?.classList.contains("mf-game__panel--kb")).toBe(true);
     expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: KB_PANEL + 336 });
@@ -439,7 +441,8 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     remeasure();
     expect(gameOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(endButton(container)).not.toBeNull();
-    expect(logHeight(container)).toBe(`${LOG_H}px`);
+    // 블러해도 늘어난 기록 칸은 저절로 접지 않는다(닫기는 [data-chat-open] 하나, 0083-4)
+    expect(logHeight(container)).toBe("");
     expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: DISCUSSION_PANEL_H });
   });
 
@@ -933,7 +936,8 @@ describe("GameMap — 낮 토론 채팅 패널·방장 줄 없음 (CHAT-06, DAY-
     const input = panel.querySelector<HTMLInputElement>("[data-chat-input]")!;
     expect(input.getAttribute("aria-label")).toBe("채팅 입력");
     expect(input.getAttribute("placeholder") ?? "").toBe("");
-    expect(panel.querySelector("[data-chat-send]")?.getAttribute("aria-label")).toBe("보내기");
+    // 보내기는 입력 중이거나 쓴 글이 있을 때만 있다(0083-5)
+    expect(panel.querySelector("[data-chat-send]")).toBeNull();
     expect(container.querySelector('[role="log"]')?.getAttribute("aria-label")).toBe("채팅 기록");
     expect(panel.querySelector(".mv-chat__chan")).toBeNull();
     expect(container.querySelector('button[aria-label="빠른 메시지"], button[aria-label="이모티콘"]')).toBeNull();
