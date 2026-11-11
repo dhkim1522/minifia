@@ -99,56 +99,56 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     ["대기실 방장·시작 가능", { phase: "lobby", host: true }, "모두 모였습니다. 시작 단추를 눌러 주세요.", "lobby.ready"],
     ["대기실 방장·인원 부족", { phase: "lobby", host: true, connected: 3 }, "대기실입니다. 친구들이 모일 때까지 기다려 주세요.", "lobby.gather"],
     ["대기실 손님", { phase: "lobby", seat: 1, host: false }, "대기실입니다. 방장이 시작할 때까지 기다려 주세요.", "lobby.guest"],
-    ["배정", { phase: "assigning" }, "역할을 나누고 있습니다. 잠시만 기다려 주세요.", "assigning"],
-    ["역할 확인, 카드 안 봄", { phase: "roleReveal" }, "역할이 정해졌습니다. 내 역할 카드를 확인해 주세요.", "roleReveal.act", { cardSeen: false }],
-    ["역할 확인, 카드 봄", { phase: "roleReveal" }, "확인하셨으면 그대로 기다려 주세요.", "roleReveal.wait", { cardSeen: true }],
-    ["낮 시작 산 사람", { phase: "dayAnnounce" }, "낮이 되었습니다. 모두 모여 주세요.", "dayAnnounce.wait"],
-    ["낮 시작 유령", { phase: "dayAnnounce", ghost: true }, "낮이 되었습니다. 유령은 지켜봐 주세요.", "dayAnnounce.ghost"],
-    ["심부름 산 사람(시민)", { phase: "errand", role: "citizen", map: "bar", errand: ERR_PART }, "심부름 시간입니다. 빛나는 곳을 찾아 처리해 주세요.", "errand.act"],
-    ["심부름 산 사람(마피아, 같은 문장)", { phase: "errand", role: "mafia", map: "bar", errand: ERR_PART }, "심부름 시간입니다. 빛나는 곳을 찾아 처리해 주세요.", "errand.act"],
-    ["심부름 3곳 완료(경찰)", { phase: "errand", role: "police", map: "bar", errand: ERR_DONE }, "심부름을 마쳤습니다. 곧 토론이 시작됩니다.", "errand.done"],
-    ["심부름 3곳 완료(마피아, 같은 문장)", { phase: "errand", role: "mafia", map: "bar", errand: ERR_DONE }, "심부름을 마쳤습니다. 곧 토론이 시작됩니다.", "errand.done"],
-    ["심부름 유령", { phase: "errand", ghost: true }, "심부름 시간입니다. 유령은 지켜봐 주세요.", "errand.ghost"],
-    ["심부름 목록 없는 산 사람", { phase: "errand", map: "bar" }, "심부름 시간입니다. 빛나는 곳을 찾아 처리해 주세요.", "errand.act"],
-    ["토론 산 사람", { phase: "discussion" }, "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.", "discussion.act"],
-    ["토론 흔적이 있는 날, 기록 없음", { phase: "discussion", evidence: { trace: "pin" } }, "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.", "discussion.evidence"],
-    ["토론 흔적이 있는 날, 기록 있고 안 열었음 — witness 가 먼저", { phase: "discussion", evidence: { trace: "pin" }, record: REC_SOME }, "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.", "witness"],
-    ["토론 흔적이 있는 날, 기록 열었음", { phase: "discussion", evidence: { trace: "pin" }, record: REC_SOME }, "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.", "discussion.evidence", { recordOpened: true }],
-    ["토론 흔적이 있는 날(마피아, 같은 문장)", { phase: "discussion", role: "mafia", evidence: { trace: "redCloth" } }, "토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.", "discussion.evidence"],
-    ["토론 흔적 없고 목격만 있는 날은 discussion.act", { phase: "discussion", evidence: { seen: { seat: 1, place: "glass" } } }, "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.", "discussion.act"],
-    ["토론 흔적이 있는 날 유령", { phase: "discussion", ghost: true, evidence: { trace: "pin" } }, "유령은 지켜보며 유령끼리 이야기할 수 있습니다.", "discussion.ghost"],
-    ["토론 유령", { phase: "discussion", ghost: true }, "유령은 지켜보며 유령끼리 이야기할 수 있습니다.", "discussion.ghost"],
-    ["토론 기록 있는 산 사람(안 열었음 — 시민 시점)", { phase: "discussion", role: "citizen", record: REC_SOME }, "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.", "witness"],
-    ["토론 기록 있는 산 사람(마피아, 같은 문장)", { phase: "discussion", role: "mafia", record: REC_SOME }, "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.", "witness"],
-    ["토론 기록 줄 0개(빈 배열도 기록이 있다)", { phase: "discussion", record: [] }, "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.", "witness"],
-    ["토론 기록 열었음", { phase: "discussion", record: REC_SOME }, "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.", "discussion.act", { recordOpened: true }],
-    ["토론 기록 없음(못 마친 사람)", { phase: "discussion" }, "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.", "discussion.act"],
-    ["토론 유령은 기록이 있어도 ghost", { phase: "discussion", ghost: true, record: REC_SOME }, "유령은 지켜보며 유령끼리 이야기할 수 있습니다.", "discussion.ghost"],
-    ["투표 산 사람", { phase: "nomination" }, "투표 시간입니다. 처형할 사람의 이름표를 눌러 주세요.", "nomination.act"],
-    ["투표 유령", { phase: "nomination", ghost: true }, "투표가 진행 중입니다. 지켜봐 주세요.", "nomination.ghost"],
-    ["변론 본인", { phase: "defense", candidate: 0 }, "지목되셨습니다. 마지막으로 하실 말씀과 유언을 남겨 주세요.", "defense.act"],
-    ["변론 남", { phase: "defense", candidate: 1 }, "하윤 님의 최후 변론 시간입니다.", "defense.wait"],
-    ["변론 유령", { phase: "defense", candidate: 1, ghost: true }, "하윤 님의 최후 변론 시간입니다.", "defense.ghost"],
-    ["찬반 변론자 아닌 산 사람", { phase: "verdict", candidate: 1 }, "하윤 님을 처형할지 찬성 또는 반대를 눌러 주세요.", "verdict.act"],
-    ["찬반 변론자 본인", { phase: "verdict", candidate: 0 }, "다른 분들이 찬반을 정하고 있습니다.", "verdict.wait"],
-    ["찬반 유령", { phase: "verdict", candidate: 1, ghost: true }, "하윤 님의 처형 찬반 투표 중입니다.", "verdict.ghost"],
-    ["처형 통과", { phase: "execution", candidate: 1, passed: true }, "찬성이 많아 하윤 님이 처형됩니다.", "execution.passed"],
-    ["처형 통과 유령(같은 문장)", { phase: "execution", candidate: 1, passed: true, ghost: true }, "찬성이 많아 하윤 님이 처형됩니다.", "execution.passed"],
-    ["처형 부결", { phase: "execution", candidate: 1, passed: false }, "반대가 많아 처형은 없습니다.", "execution.failed"],
-    ["밤 마피아", { phase: "night", role: "mafia" }, "밤이 되었습니다. 없앨 사람의 얼굴을 눌러 주세요.", "night.mafia"],
-    ["밤 경찰", { phase: "night", role: "police" }, "밤이 되었습니다. 조사할 사람의 얼굴을 눌러 주세요.", "night.police"],
-    ["밤 의사", { phase: "night", role: "doctor" }, "밤이 되었습니다. 지킬 사람의 얼굴을 눌러 주세요.", "night.doctor"],
-    ["밤 시민", { phase: "night", role: "citizen" }, "밤이 되었습니다. 한 명의 얼굴을 눌러 주세요.", "night.citizen"],
-    ["밤 유령", { phase: "night", role: "police", ghost: true }, "밤이 되었습니다. 모두의 밤 행동을 지켜봐 주세요.", "night.ghost"],
-    ["아침 피해자", { phase: "morning", morning: { eliminated: 2 } }, "아침이 밝았습니다. 민지 님이 당했습니다.", "morning"],
-    ["아침 구출", { phase: "morning", morning: { saved: true } }, "아침이 밝았습니다. 누군가 살아났습니다.", "morning"],
-    ["아침 무사", { phase: "morning", morning: {} }, "아침이 밝았습니다. 아무 일도 없었습니다.", "morning"],
-    ["아침 유령(같은 문장)", { phase: "morning", morning: {}, ghost: true }, "아침이 밝았습니다. 아무 일도 없었습니다.", "morning"],
-    ["아침 흔적 구간(모두에게 같은 문장)", { phase: "morning", morning: { eliminated: 2, trace: "pin" } }, "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.", "trace", { traceOn: true }],
-    ["아침 흔적 구간 유령(같은 문장)", { phase: "morning", morning: { eliminated: 2, trace: "pin" }, ghost: true }, "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.", "trace", { traceOn: true }],
-    ["아침 흔적 구간 전(피해자 문장)", { phase: "morning", morning: { eliminated: 2, trace: "pin" } }, "아침이 밝았습니다. 민지 님이 당했습니다.", "morning", { traceOn: false }],
-    ["아침 흔적 없는 아침은 traceOn 이어도 morning", { phase: "morning", morning: { eliminated: 2 } }, "아침이 밝았습니다. 민지 님이 당했습니다.", "morning", { traceOn: true }],
-    ["아침 구출은 traceOn 이어도 morning", { phase: "morning", morning: { saved: true } }, "아침이 밝았습니다. 누군가 살아났습니다.", "morning", { traceOn: true }],
+    ["배정", { phase: "assigning" }, "잠시만 기다려 주세요", "assigning"],
+    ["역할 확인, 카드 안 봄", { phase: "roleReveal" }, "내 역할 카드를 확인해 주세요", "roleReveal.act", { cardSeen: false }],
+    ["역할 확인, 카드 봄", { phase: "roleReveal" }, "그대로 기다려 주세요", "roleReveal.wait", { cardSeen: true }],
+    ["낮 시작 산 사람", { phase: "dayAnnounce" }, "모두 모여 주세요", "dayAnnounce.wait"],
+    ["낮 시작 유령", { phase: "dayAnnounce", ghost: true }, "지켜봐 주세요", "dayAnnounce.ghost"],
+    ["심부름 산 사람(시민)", { phase: "errand", role: "citizen", map: "bar", errand: ERR_PART }, "빛나는 곳을 찾아 처리해 주세요", "errand.act"],
+    ["심부름 산 사람(마피아, 같은 문장)", { phase: "errand", role: "mafia", map: "bar", errand: ERR_PART }, "빛나는 곳을 찾아 처리해 주세요", "errand.act"],
+    ["심부름 3곳 완료(경찰)", { phase: "errand", role: "police", map: "bar", errand: ERR_DONE }, "곧 토론이 시작됩니다", "errand.done"],
+    ["심부름 3곳 완료(마피아, 같은 문장)", { phase: "errand", role: "mafia", map: "bar", errand: ERR_DONE }, "곧 토론이 시작됩니다", "errand.done"],
+    ["심부름 유령", { phase: "errand", ghost: true }, "지켜봐 주세요", "errand.ghost"],
+    ["심부름 목록 없는 산 사람", { phase: "errand", map: "bar" }, "빛나는 곳을 찾아 처리해 주세요", "errand.act"],
+    ["토론 산 사람", { phase: "discussion" }, "의심 가는 사람을 이야기해 주세요", "discussion.act"],
+    ["토론 흔적이 있는 날, 기록 없음", { phase: "discussion", evidence: { trace: "pin" } }, "같은 옷과 엇갈린 목격을 살펴보세요", "discussion.evidence"],
+    ["토론 흔적이 있는 날, 기록 있고 안 열었음 — witness 가 먼저", { phase: "discussion", evidence: { trace: "pin" }, record: REC_SOME }, "기록 단추로 본 것을 확인해 주세요", "witness"],
+    ["토론 흔적이 있는 날, 기록 열었음", { phase: "discussion", evidence: { trace: "pin" }, record: REC_SOME }, "같은 옷과 엇갈린 목격을 살펴보세요", "discussion.evidence", { recordOpened: true }],
+    ["토론 흔적이 있는 날(마피아, 같은 문장)", { phase: "discussion", role: "mafia", evidence: { trace: "redCloth" } }, "같은 옷과 엇갈린 목격을 살펴보세요", "discussion.evidence"],
+    ["토론 흔적 없고 목격만 있는 날은 discussion.act", { phase: "discussion", evidence: { seen: { seat: 1, place: "glass" } } }, "의심 가는 사람을 이야기해 주세요", "discussion.act"],
+    ["토론 흔적이 있는 날 유령", { phase: "discussion", ghost: true, evidence: { trace: "pin" } }, "유령끼리 이야기할 수 있습니다", "discussion.ghost"],
+    ["토론 유령", { phase: "discussion", ghost: true }, "유령끼리 이야기할 수 있습니다", "discussion.ghost"],
+    ["토론 기록 있는 산 사람(안 열었음 — 시민 시점)", { phase: "discussion", role: "citizen", record: REC_SOME }, "기록 단추로 본 것을 확인해 주세요", "witness"],
+    ["토론 기록 있는 산 사람(마피아, 같은 문장)", { phase: "discussion", role: "mafia", record: REC_SOME }, "기록 단추로 본 것을 확인해 주세요", "witness"],
+    ["토론 기록 줄 0개(빈 배열도 기록이 있다)", { phase: "discussion", record: [] }, "기록 단추로 본 것을 확인해 주세요", "witness"],
+    ["토론 기록 열었음", { phase: "discussion", record: REC_SOME }, "의심 가는 사람을 이야기해 주세요", "discussion.act", { recordOpened: true }],
+    ["토론 기록 없음(못 마친 사람)", { phase: "discussion" }, "의심 가는 사람을 이야기해 주세요", "discussion.act"],
+    ["토론 유령은 기록이 있어도 ghost", { phase: "discussion", ghost: true, record: REC_SOME }, "유령끼리 이야기할 수 있습니다", "discussion.ghost"],
+    ["투표 산 사람", { phase: "nomination" }, "처형할 사람의 이름표를 눌러 주세요", "nomination.act"],
+    ["투표 유령", { phase: "nomination", ghost: true }, "지켜봐 주세요", "nomination.ghost"],
+    ["변론 본인", { phase: "defense", candidate: 0 }, "마지막 말과 유언을 남겨 주세요", "defense.act"],
+    ["변론 남", { phase: "defense", candidate: 1 }, "변론을 들어 주세요", "defense.wait"],
+    ["변론 유령", { phase: "defense", candidate: 1, ghost: true }, "변론을 지켜봐 주세요", "defense.ghost"],
+    ["찬반 변론자 아닌 산 사람", { phase: "verdict", candidate: 1 }, "찬성 또는 반대를 눌러 주세요", "verdict.act"],
+    ["찬반 변론자 본인", { phase: "verdict", candidate: 0 }, "결과를 기다려 주세요", "verdict.wait"],
+    ["찬반 유령", { phase: "verdict", candidate: 1, ghost: true }, "지켜봐 주세요", "verdict.ghost"],
+    ["처형 통과", { phase: "execution", candidate: 1, passed: true }, "", "execution.passed"],
+    ["처형 통과 유령(같은 문장)", { phase: "execution", candidate: 1, passed: true, ghost: true }, "", "execution.passed"],
+    ["처형 부결", { phase: "execution", candidate: 1, passed: false }, "", "execution.failed"],
+    ["밤 마피아", { phase: "night", role: "mafia" }, "없앨 사람의 얼굴을 눌러 주세요", "night.mafia"],
+    ["밤 경찰", { phase: "night", role: "police" }, "조사할 사람의 얼굴을 눌러 주세요", "night.police"],
+    ["밤 의사", { phase: "night", role: "doctor" }, "지킬 사람의 얼굴을 눌러 주세요", "night.doctor"],
+    ["밤 시민", { phase: "night", role: "citizen" }, "한 명의 얼굴을 눌러 주세요", "night.citizen"],
+    ["밤 유령", { phase: "night", role: "police", ghost: true }, "모두의 밤 행동을 지켜봐 주세요", "night.ghost"],
+    ["아침 피해자", { phase: "morning", morning: { eliminated: 2 } }, "", "morning"],
+    ["아침 구출", { phase: "morning", morning: { saved: true } }, "", "morning"],
+    ["아침 무사", { phase: "morning", morning: {} }, "", "morning"],
+    ["아침 유령(같은 문장)", { phase: "morning", morning: {}, ghost: true }, "", "morning"],
+    ["아침 흔적 구간(모두에게 같은 문장)", { phase: "morning", morning: { eliminated: 2, trace: "pin" } }, "", "trace", { traceOn: true }],
+    ["아침 흔적 구간 유령(같은 문장)", { phase: "morning", morning: { eliminated: 2, trace: "pin" }, ghost: true }, "", "trace", { traceOn: true }],
+    ["아침 흔적 구간 전(피해자 문장)", { phase: "morning", morning: { eliminated: 2, trace: "pin" } }, "", "morning", { traceOn: false }],
+    ["아침 흔적 없는 아침은 traceOn 이어도 morning", { phase: "morning", morning: { eliminated: 2 } }, "", "morning", { traceOn: true }],
+    ["아침 구출은 traceOn 이어도 morning", { phase: "morning", morning: { saved: true } }, "", "morning", { traceOn: true }],
     ["결과", { phase: "ended", endsAt: null }, "게임이 끝났습니다. 다음 판을 준비해 주세요.", "ended"],
   ];
 
@@ -158,19 +158,17 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     expect(hostLineOf(view, local)).toBe(line);
   });
 
-  it("아침 문장은 마침표 하나로 끝난다", () => {
-    for (const morning of [{ eliminated: 2 }, { saved: true as const }, {}]) {
-      const line = hostLineOf(makeView({ phase: "morning", morning }));
-      expect(line.endsWith(".")).toBe(true);
-      expect(line.endsWith("..")).toBe(false);
-    }
-  });
-
-  it("이름이 필요한 키에서 변론자 닉네임을 못 찾으면 HOST_FALLBACK", () => {
-    expect(hostLineOf(makeView({ phase: "defense", ghost: true }))).toBe(HOST_FALLBACK);
-    expect(hostLineOf(makeView({ phase: "defense", candidate: 9 }))).toBe(HOST_FALLBACK);
-    expect(hostLineOf(makeView({ phase: "verdict", candidate: 9 }))).toBe(HOST_FALLBACK);
-    expect(hostLineOf(makeView({ phase: "execution", passed: true }))).toBe(HOST_FALLBACK);
+  it("18.1-12: 변론·찬반·처형 줄에 닉네임이 없다 — 이름이 8자여도 같은 문장이고 변론자를 못 찾아도 문장이 나온다 (0083-8)", () => {
+    const spec = { phase: "defense" as const, candidate: 1 };
+    const named = makeView(spec);
+    const longName = makeView(spec);
+    longName.players = longName.players.map((p) => (p.seat === 1 ? { ...p, nickname: LONG_NAME } : p));
+    expect(hostLineOf(longName)).toBe(hostLineOf(named));
+    expect(hostLineOf(named)).toBe("변론을 들어 주세요");
+    expect(hostLineOf(makeView({ phase: "defense", ghost: true }))).toBe("변론을 지켜봐 주세요");
+    expect(hostLineOf(makeView({ phase: "defense", candidate: 9 }))).toBe("변론을 들어 주세요");
+    expect(hostLineOf(makeView({ phase: "verdict", candidate: 9 }))).toBe("찬성 또는 반대를 눌러 주세요");
+    expect(hostLineOf(makeView({ phase: "execution", passed: true }))).toBe("");
   });
 
   it("day.morning 이 없는 아침, 역할 없는 역할 확인, 꺼진 장치 단계(결선·마지막 3인), 모르는 단계는 HOST_FALLBACK", () => {
@@ -182,12 +180,15 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     expect(hostKeyOf(makeView({ phase: "runoff" }))).toBe("fallback");
   });
 
-  it("예약 키는 이제 없다: errand·witness·trace·discussion.evidence 모두 채워졌고 UI-SPEC 원문이다 (15-07·16-09)", () => {
-    expect(HOST_LINES.witness).toBe("토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.");
-    expect(HOST_LINES.trace).toBe("흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.");
-    expect(HOST_LINES["discussion.evidence"]).toBe("토론입니다. 같은 옷과 엇갈린 목격을 살펴보세요.");
+  it("18.1-12: 표의 문장은 모두 문자열이고, 빈 문자열은 큰 글·시작 카드가 말하는 키(처형·아침·흔적)뿐이다 — 빈 줄을 대체 문장으로 바꾸지 않는다", () => {
+    const empty = (Object.keys(HOST_LINES) as HostKey[]).filter((key) => HOST_LINES[key] === "").sort();
+    expect(empty).toEqual(["execution.failed", "execution.passed", "morning", "trace"]);
+    for (const key of Object.keys(HOST_LINES) as HostKey[]) expect(typeof HOST_LINES[key], key).toBe("string");
+    expect(HOST_LINES.witness).toBe("기록 단추로 본 것을 확인해 주세요");
+    expect(HOST_LINES["discussion.evidence"]).toBe("같은 옷과 엇갈린 목격을 살펴보세요");
+    expect(HOST_LINES["discussion.act"]).toBe("의심 가는 사람을 이야기해 주세요");
+    expect(HOST_FALLBACK).toBe("잠시만 기다려 주세요");
     expect(Object.keys(HOST_LINES)).not.toContain("errand");
-    for (const key of Object.keys(HOST_LINES) as HostKey[]) expect(HOST_LINES[key]).not.toBe("");
     expect(new Set(matrixKeys())).toContain("witness");
   });
 
@@ -197,8 +198,15 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     }
   });
 
-  it("모든 줄은 8자 닉네임을 넣어도 36자 이하이다 (UI#2 — 실제 줄 수는 14-08 E2E 가 잰다)", () => {
-    for (const text of allLines()) expect(text.length, text).toBeLessThanOrEqual(36);
+  it("18.1-12: 보이는 띠 줄(대기실·결과 제외, 빈 줄 제외)은 공백 포함 19자 이하·마침표 없음·'입니다.'·'되었습니다.' 없음 — 폭 360 한 줄 (0073-1)", () => {
+    const visible = (Object.keys(HOST_LINES) as HostKey[]).filter((key) => !key.startsWith("lobby.") && key !== "ended").map((key) => HOST_LINES[key]).filter((text) => text !== "");
+    expect(visible.length).toBeGreaterThan(20);
+    for (const text of visible) {
+      expect([...text].length, text).toBeLessThanOrEqual(19);
+      expect(text.endsWith("."), text).toBe(false);
+      expect(text, text).not.toContain("입니다.");
+      expect(text, text).not.toContain("되었습니다.");
+    }
   });
 
   it("할 일 없는 산 사람 줄은 역할에 따라 달라지지 않는다 (밤 act 만 역할별)", () => {
@@ -222,8 +230,13 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     expect(new Set(roles.map((role) => hostLineOf(makeView({ phase: "night", role })))).size).toBe(4);
   });
 
-  it("빈 줄(키 줄이 빈 문자열)은 HOST_FALLBACK 을 돌려준다 — 빈 띠는 없다 (UI#1)", () => {
-    for (const spec of matrixSpecs()) expect(hostLineOf(makeView(spec)).length).toBeGreaterThan(0);
+  it("18.1-12: 낮 시작은 산 사람 '모두 모여 주세요'·유령 '지켜봐 주세요', 처형·아침·흔적 구간은 빈 문장이고 모르는 단계만 대체 문장이다", () => {
+    expect(hostLineOf(makeView({ phase: "dayAnnounce" }))).toBe("모두 모여 주세요");
+    expect(hostLineOf(makeView({ phase: "dayAnnounce", ghost: true }))).toBe("지켜봐 주세요");
+    for (const passed of [true, false]) expect(hostLineOf(makeView({ phase: "execution", candidate: 1, passed }))).toBe("");
+    expect(hostLineOf(makeView({ phase: "morning", morning: { eliminated: 2 } }))).toBe("");
+    expect(hostLineOf(makeView({ phase: "morning", morning: { eliminated: 2, trace: "pin" } }), { traceOn: true })).toBe("");
+    expect(hostLineOf(makeView({ phase: "viking" as PhaseId }))).toBe("잠시만 기다려 주세요");
   });
 });
 
@@ -404,7 +417,6 @@ const ALLOWED_EXACT: ReadonlySet<string> = new Set([
   "players",
   "players[]",
   "players[].seat",
-  "players[].nickname",
   "players[].alive",
   "players[].connected",
   "day",
@@ -412,6 +424,8 @@ const ALLOWED_EXACT: ReadonlySet<string> = new Set([
   "day.verdict",
   "day.verdict.passed",
   "day.morning",
+  // 18.1-12: 아침 흔적 구간 키 판정은 흔적의 유무만 본다. 피해자·구출 같은 아침 결과 값은 읽지 않는다(문장이 비었다)
+  "day.morning.trace",
   // 15-04: 내 심부름 목록·진행과 이번 판의 맵 id(공개) — 내 view 의 값뿐이다
   "map",
   "me.errand",
@@ -423,8 +437,8 @@ const ALLOWED_EXACT: ReadonlySet<string> = new Set([
   "day.evidence",
   "day.evidence.trace",
 ]);
-/** morningText 가 읽는 하위 값 */
-const ALLOWED_PREFIX = ["day.morning."];
+/** 18.1-12: 하위 값 허용 접두사는 없다 — 닉네임·아침 결과 문장은 더는 읽지 않는다 */
+const ALLOWED_PREFIX: readonly string[] = [];
 
 function recorder(root: object, log: Set<string>): object {
   const wrap = (target: object, path: string): object =>
@@ -471,11 +485,7 @@ function matrixKeys(): HostKey[] {
 }
 
 function allLines(): string[] {
-  return (Object.keys(HOST_LINES) as HostKey[]).flatMap((key) => {
-    const line = HOST_LINES[key];
-    if (typeof line === "string") return [line];
-    return [line(LONG_NAME)];
-  });
+  return (Object.keys(HOST_LINES) as HostKey[]).map((key) => HOST_LINES[key]);
 }
 
 /** 15-07: 클라이언트 상태 recordOpened·traceOn 의 모든 조합 */
@@ -512,6 +522,27 @@ describe("HOST-05 허용 목록만 읽는다 (T-14-01)", () => {
     void view.spectate;
     void (view.players[0] as unknown as { job: unknown }).job;
     expect([...log].filter((p) => !isAllowed(p)).sort()).toEqual(["me.allies", "players[].job", "spectate"]);
+  });
+
+  it("18.1-12: hostLineOf 는 players[].nickname 과 day.morning 의 하위 값(eliminated·saved)을 읽지 않는다 — 문장이 닉네임·아침 결과를 싣지 않는다", () => {
+    for (const spec of matrixSpecs()) {
+      for (const local of [{}, { traceOn: true }, { cardSeen: true }]) {
+        const log = new Set<string>();
+        hostLineOf(recorder(makeView({ ...spec, noise: true }), log) as RoomView, local);
+        expect([...log].filter((p) => p === "players[].nickname" || p === "day.morning.eliminated" || p === "day.morning.saved"), spec.phase).toEqual([]);
+      }
+    }
+  });
+
+  it("18.1-12: 밤 역할 줄은 그 역할 분기에서만 나온다 — 다른 역할의 줄과 겹치지 않는다(누설 방지, HOST-05)", () => {
+    const own = { mafia: "없앨 사람의 얼굴을 눌러 주세요", police: "조사할 사람의 얼굴을 눌러 주세요", doctor: "지킬 사람의 얼굴을 눌러 주세요" } as const;
+    for (const role of ["mafia", "police", "doctor"] as const) {
+      expect(hostLineOf(makeView({ phase: "night", role }))).toBe(own[role]);
+    }
+    for (const role of ["citizen", undefined] as const) {
+      expect(Object.values(own)).not.toContain(hostLineOf(makeView({ phase: "night", ...(role ? { role } : {}) })));
+    }
+    expect(Object.values(own)).not.toContain(hostLineOf(makeView({ phase: "night", role: "mafia", ghost: true })));
   });
 
   it("허용 목록 밖 값(allies·records·pick·verdictVote·nightTally·spectate·job·points·turn·voteLog·roles)을 채운 view 와 지운 view 의 결과가 같다", () => {

@@ -264,8 +264,8 @@ const mount = (view: RoomView) => {
   };
 };
 
-const WITNESS = "토론 시간입니다. 기록 단추로 본 것을 확인해 주세요.";
-const DISCUSS = "토론 시간입니다. 의심 가는 사람을 이야기해 주세요.";
+const WITNESS = "기록 단추로 본 것을 확인해 주세요";
+const DISCUSS = "의심 가는 사람을 이야기해 주세요";
 const band = (c: ParentNode): string => c.querySelector("[data-host-line]")?.textContent ?? "";
 const recordButton = (c: ParentNode): HTMLButtonElement | null => c.querySelector("button[aria-label='기록']");
 const calls = (c: ParentNode): HTMLElement[] => [...c.querySelectorAll<HTMLElement>("[data-call]")];
@@ -402,8 +402,9 @@ describe("아침 — 흔적 카드 (TRACE-02·03, D-06)", () => {
 
   const MORNING: MorningView = { eliminated: 2, trace: "pencil" };
   const card = (c: ParentNode): HTMLElement | null => c.querySelector("[data-trace-card]");
-  const MORNING_LINE = "아침이 밝았습니다. 서준 님이 당했습니다.";
-  const TRACE_LINE = "흔적이 남았습니다. 같은 옷을 입은 사람을 표시했습니다.";
+  // 18.1-12: 아침·흔적 구간은 큰 글·증거 카드가 말한다 — 띠 문장은 빈 글이다
+  const MORNING_LINE = "";
+  const TRACE_LINE = "";
 
   it("구간 전(마감 7초 전): 카드 0개·띠 morning, 2초 뒤 카드 1개·띠 trace, 소리 신호는 구간 전에 한 번(delayMs 2000)뿐", () => {
     const { container } = mount(mapView({ phase: "morning", morning: MORNING, endsInMs: 7000 }));
@@ -447,7 +448,7 @@ describe("아침 — 흔적 카드 (TRACE-02·03, D-06)", () => {
     for (const morning of [{} as MorningView, { saved: true } as MorningView, { eliminated: 2 } as MorningView]) {
       const { container } = mount(mapView({ phase: "morning", morning, endsInMs: 1500 }));
       expect(card(container)).toBeNull();
-      expect(band(container).startsWith("아침이 밝았습니다.")).toBe(true);
+      expect(band(container)).toBe("");
       cleanup();
     }
     expect(signals.emit.mock.calls.filter((c) => (c[0] as { kind: string }).kind === "card")).toHaveLength(0);

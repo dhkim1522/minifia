@@ -159,6 +159,28 @@ describe("UX-01 띠 문장: night·morning (14-02)", () => {
   });
 });
 
+describe("18.1-12 띠 한 구절 (0083-8)", () => {
+  it("토론·밤: 띠 문장은 앞말 없는 한 구절이고 띠 안에 종 아이콘(svg)이 없다", () => {
+    const discussion = renderRoom(makeView({ phase: "discussion", viewpoint: "citizen", endsIn: 90_000 }));
+    expect(squish(onlyGuide(discussion.container, "discussion").textContent)).toBe("의심 가는 사람을 이야기해 주세요");
+    expect(discussion.container.querySelectorAll("[data-host-band] svg")).toHaveLength(0);
+    discussion.unmount();
+    const night = renderRoom(makeView({ phase: "night", viewpoint: "police", endsIn: 30_000 }));
+    expect(squish(onlyGuide(night.container, "night").textContent)).toBe("조사할 사람의 얼굴을 눌러 주세요");
+    expect(night.container.querySelectorAll("[data-host-band] svg")).toHaveLength(0);
+  });
+
+  it("처형·아침: 띠 문장은 빈 글(큰 글이 말한다)이고 [data-guide] 는 그래도 하나다 — 모든 시점", () => {
+    for (const phase of ["execution", "morning"] as const) {
+      for (const vp of ALL_VIEWPOINTS) {
+        const { container, unmount } = renderCell(phase, vp);
+        expect(squish(onlyGuide(container, `${phase}/${vp}`).textContent), `${phase}/${vp}`).toBe("");
+        unmount();
+      }
+    }
+  });
+});
+
 describe("UX-01 처형 없이 온 밤 (14-02)", () => {
   it("처형 무효로 온 밤: 마피아 하나 = 마피아 줄, 시민 하나 = 시민 줄(모두 띠 안)", () => {
     const mafia = renderRoom(makeView({ phase: "night", viewpoint: "mafia", endsIn: 30_000, noExecution: "tie" }));

@@ -95,7 +95,11 @@ describe("자막 띠 트레이서 (HOST-01, TOOL-02)", () => {
     const { container } = renderRoom(makeView({ phase: "discussion" }));
     expect(bands(container)).toHaveLength(1);
     const line = container.querySelector("[data-host-line]");
-    expect(line?.textContent).toBe("토론 시간입니다. 의심 가는 사람을 이야기해 주세요.");
+    expect(line?.textContent).toBe("의심 가는 사람을 이야기해 주세요");
+    expect(container.querySelectorAll("[data-host-band] svg")).toHaveLength(0); // 18.1-12: 종 아이콘 없음
+    expect(container.querySelectorAll("[data-host-band] .mv-host__bell")).toHaveLength(0);
+    expect(container.querySelectorAll("[data-host-band] .mv-host__bar")).toHaveLength(1);
+    expect(container.querySelectorAll("[data-host-band] p")).toHaveLength(1);
     const time = container.querySelector<HTMLElement>("[data-host-time]");
     expect(time?.textContent).toBe("90초");
     expect(time?.getAttribute("role")).toBe("timer");
@@ -114,7 +118,7 @@ describe("자막 띠 트레이서 (HOST-01, TOOL-02)", () => {
 
   it("유령 토론: 관전 줄", () => {
     const { container } = renderRoom(makeView({ phase: "discussion", ghost: true }));
-    expect(container.querySelector("[data-host-line]")?.textContent).toBe("유령은 지켜보며 유령끼리 이야기할 수 있습니다.");
+    expect(container.querySelector("[data-host-line]")?.textContent).toBe("유령끼리 이야기할 수 있습니다");
   });
 
   it("대기실: 띠는 있고 시간 행은 없다", () => {
@@ -240,7 +244,7 @@ describe("띠 아래 자리 (U-1·U-6·U-8)", () => {
 
   it("연결이 끊겨도 띠는 마지막 문장과 시간 행을 유지한다 (U-9)", () => {
     const { container } = renderRoom(makeView({ phase: "discussion" }), { status: "reconnecting", banner: "reconnecting", canSend: false });
-    expect(container.querySelector("[data-host-line]")?.textContent).toBe("토론 시간입니다. 의심 가는 사람을 이야기해 주세요.");
+    expect(container.querySelector("[data-host-line]")?.textContent).toBe("의심 가는 사람을 이야기해 주세요");
     expect(container.querySelector("[data-host-time]")?.textContent).toBe("90초");
   });
 
