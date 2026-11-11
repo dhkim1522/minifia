@@ -19,7 +19,6 @@ import type { WillLetter as WillLetterState } from "../net/useWillLetter";
 import { SceneCurtain } from "../components/SceneCurtain";
 import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
-import { TimeOfDayBadge } from "../components/v2/TimeOfDayBadge";
 import { ToolButton } from "../components/ToolButton";
 import { RecordCard } from "../components/v2/RecordCard";
 import { EvidenceCard } from "../components/v2/EvidenceCard";
@@ -37,6 +36,7 @@ import { WorldStage } from "../components/WorldStage";
 import type { ErrandLayerProps, WorldPick } from "../components/WorldStage";
 import { ERRAND_NEAR_R, PICK_TURN_MS } from "../../shared/game/phases";
 import { LOG_H } from "../game/chatUi";
+import { todOf, todWordOf } from "../game/timeOfDay";
 import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
@@ -137,8 +137,8 @@ interface GameMapProps {
   offset?: number;
   /** 헤더의 [역할 카드] 아이콘 버튼 재료: 안 읽은 일지가 있는가와 여는 동작 */
   roleCard?: { unread: boolean; onOpen: () => void };
-  /** 시간대 배지(18.1 P181-5). 튜토리얼만 false — 17·18 레이아웃을 건드리지 않는다. 기본 true */
-  todBadge?: boolean;
+  /** 헤더 시간대 글자(0083-1, "낮 · 토론"). 튜토리얼만 false — 17·18 레이아웃을 건드리지 않는다. 기본 true */
+  tod?: boolean;
   /** 튜토리얼 지도 장면처럼 아래 패널을 그리지 않는다. 심부름 단계는 이 값과 무관하게 패널이 없다(16-08) */
   panelless?: boolean;
   /** 튜토리얼이 카메라를 정해 덮어쓴다(18-03, P18-8). 없으면 sceneLook 의 카메라 그대로 — 실제 판은 넘기지 않는다 */
@@ -176,14 +176,17 @@ interface GameMapProps {
  * 꺼진 장치 화면(day.turn 이 있는 순차 지목·결선·마지막 3인·귓속말 모드, 결정 0072 선례)은 13페이즈 계약 그대로 접히는 안내 줄 + 시간·차례 링을 쓴다.
  * 기본판에서는 서버가 그 view 를 보내지 않는다. 시간 링의 다시 그리기가 맵 화면 전체로 번지지 않게 시계 훅은 꺼진 장치 갈래 부품 안에 둔다.
  */
-function MapHeader({ view, offset, hintOn, hintOverride, extra }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode }) {
+function MapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode; tod: boolean }) {
   const legacy = blockModeOf(view) !== null || hintOverride !== undefined;
-  if (!legacy) return <PhaseHeader title={headerFor(view).title} extra={extra} />;
-  return <LegacyMapHeader view={view} offset={offset} hintOn={hintOn} {...(hintOverride !== undefined ? { hintOverride } : {})} extra={extra} />;
+  if (!legacy) {
+    const title = headerFor(view).title;
+    return <PhaseHeader title={title} {...(tod ? { tod: { id: todOf(view.phase), word: todWordOf(view.phase, title) } } : {})} extra={extra} />;
+  }
+  return <LegacyMapHeader view={view} offset={offset} hintOn={hintOn} {...(hintOverride !== undefined ? { hintOverride } : {})} extra={extra} tod={tod} />;
 }
 
 /** 꺼진 장치 화면의 헤더: 제목 + 접히는 안내 + (서버 마감 기준 시간·차례 링) + 링 왼쪽 [역할 카드] (13페이즈 계약 그대로) */
-function LegacyMapHeader({ view, offset, hintOn, hintOverride, extra }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode }) {
+function LegacyMapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode; tod: boolean }) {
   const head = headerFor(view);
   // 순차 지목·결선은 단계 마감이 아니라 알약·막대와 같은 값(blockLook)으로 링을 그린다(UI-SPEC A-3·D-3). 지목의 세부 단계 길이 3000/8000/900/2000 이나 결선 앞머리 1000 은 링 비율에 쓰지 않는다.
   const blocked = blockModeOf(view) !== null;
@@ -196,6 +199,7 @@ function LegacyMapHeader({ view, offset, hintOn, hintOverride, extra }: { view: 
   return (
     <PhaseHeader
       title={head.title}
+      {...(tod ? { tod: { id: todOf(view.phase), word: todWordOf(view.phase, head.title) } } : {})}
       {...(hintOverride !== undefined ? { hint: hintOverride } : head.hint !== undefined ? { hint: head.hint } : {})}
       showHint={hintOverride !== undefined || hintOn}
       {...(timing ? { time, total } : {})}
@@ -214,7 +218,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, todBadge = true, panelless, camera, testButton, announce = null, toast: pointToast = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onHostLocal, onLeave }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, tod = true, panelless, camera, testButton, announce = null, toast: pointToast = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onHostLocal, onLeave }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드는 대기실과 같은 훅이다. 기록 칸은 LOG_H(68) 한 값 — 키보드가 열리면 행동 줄만 숨긴다(07-19, 18.1 P181-3).
@@ -856,15 +860,15 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           offset={offset}
           hintOn={hintOn}
           {...(whisper.mode ? { hintOverride: WHISPER_TEXT.modeHint } : {})}
+          tod={tod}
           extra={
-            witnessRows !== null || todBadge || roleCard ? (
+            witnessRows !== null || roleCard ? (
               <>
                 {witnessRows !== null ? (
                   <span className="mf-game__record-slot" data-record-button="">
                     <ToolButton name="기록" icon={<V2Icon name="timeline" size={22} />} call={recordCall} expanded={recordOpen} onClick={toggleRecord} />
                   </span>
                 ) : null}
-                {todBadge ? <TimeOfDayBadge phase={view.phase} /> : null}
                 {roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null}
               </>
             ) : null

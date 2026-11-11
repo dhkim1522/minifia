@@ -424,7 +424,7 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
       <div className="mf-room__body">
         <div key={kind} className="mf-phase-enter">
           {kind === "map" && mapView !== null ? (
-            <GameMap view={mapView} store={store} chat={chat} send={send} canSend offset={0} panelless todBadge={false} camera={tutorialCameraOf(cur.n)} toast={cur.n === 6 ? toast : null} onLeave={skip} />
+            <GameMap view={mapView} store={store} chat={chat} send={send} canSend offset={0} panelless tod={false} camera={tutorialCameraOf(cur.n)} toast={cur.n === 6 ? toast : null} onLeave={skip} />
           ) : stageView !== null ? (
             <div className="mf-tut__stage">
               <WorldStage view={stageView} store={store} scene={stageLook} canWalk={false} send={send} canSend offset={0} onNotice={noop} onLeave={skip} onReady={onStageReady} />

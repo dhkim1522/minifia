@@ -30,6 +30,9 @@
 .mv-phase { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); color: var(--gray-100); font-family: var(--font-ui); }
 .mv-phase__text { display: flex; flex-direction: column; gap: var(--space-xs); min-width: 0; }
 .mv-phase__title { font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); }
+/* 헤더 시간대 글자(0083-1): 한 줄, 낱말·가운뎃점만 옅게. 제목 글자는 그대로라 대비가 유지된다 */
+.mv-phase__line { display: flex; align-items: baseline; gap: var(--space-sm); flex-wrap: nowrap; white-space: nowrap; }
+.mv-phase__tod, .mv-phase__sep { font-size: 24px; line-height: 1.2; font-weight: 400; color: var(--gray-300); opacity: 0.72; }
 .mv-phase__hint { font-size: 14px; line-height: 1.4; color: var(--gray-300); max-height: 40px; overflow: hidden; transition: opacity var(--dur-med), max-height var(--dur-med); }
 .mv-phase__hint.is-folded { opacity: 0; max-height: 0; }
 .mv-ring { position: relative; width: 44px; height: 44px; flex: none; display: grid; place-items: center; }

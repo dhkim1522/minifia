@@ -16,7 +16,7 @@
 .mf-game__header .mf-btn, .mf-game__header .mv-tool { pointer-events: auto; }
 .mf-game__record-slot { display: contents; }
 .mf-game__header .mv-phase { align-items: flex-start; }
-.mf-game__header .mv-phase__title, .mf-game__header .mv-phase__hint { text-shadow: var(--shadow-text); }
+.mf-game__header .mv-phase__title, .mf-game__header .mv-phase__tod, .mf-game__header .mv-phase__sep, .mf-game__header .mv-phase__hint { text-shadow: var(--shadow-text); }
 /* 접히는 안내 줄 높이(한 줄)만큼만 헤더 아래로 삐져나온다 */
 .mf-game__header .mv-phase__text { gap: 0; }
 

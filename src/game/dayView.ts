@@ -44,9 +44,9 @@ export const DAY_COPY = {
   announceNight: "밤이 되었습니다",
   // ---- 단계 제목 ----
   titles: {
-    dayAnnounce: "낮 토론",
+    dayAnnounce: "토론", // 앞의 "낮" 은 헤더 시간대 낱말이 말한다(결정 0083-1)
     errand: "심부름", // 15페이즈 UI-SPEC: 심부름 단계 제목(헤더)
-    discussion: "낮 토론",
+    discussion: "토론",
     nomination: "투표",
     runoff: "결선",
     showdown: SHOWDOWN_COPY.title,
