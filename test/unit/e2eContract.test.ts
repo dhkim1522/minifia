@@ -41,7 +41,7 @@ import * as resultE2e from "../../scripts/e2e/result.mjs";
 import * as mapSelectE2e from "../../scripts/e2e/mapselect.mjs";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as polishE2e from "../../scripts/e2e/polish.mjs";
-import { TOD_ORDER, todOf } from "../../src/game/timeOfDay";
+import { TOD_LABEL, TOD_ORDER, todOf } from "../../src/game/timeOfDay";
 import { enterMorning, pickTarget } from "../../shared/game/night";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
@@ -967,8 +967,8 @@ describe("E2E 의 튜토리얼 사본 상수와 앱 대본 (17-09)", () => {
   });
 });
 
-describe("E2E 의 시간대 배지 사본과 앱 todOf (18.1-08, D1)", () => {
-  const e = polishE2e as { TOD_BY_PHASE: Record<string, string>; TOD_ABSENT_PHASES: readonly string[]; TOD_IDS: readonly string[] };
+describe("E2E 의 시간대 사본과 앱 todOf·TOD_LABEL (18.1-11, 0083-1)", () => {
+  const e = polishE2e as { TOD_BY_PHASE: Record<string, string>; TOD_ABSENT_PHASES: readonly string[]; TOD_IDS: readonly string[]; TOD_WORD: Record<string, string> };
   const ALL_PHASES: PhaseId[] = ["lobby", "tutorial", "assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
 
   it("TOD_BY_PHASE 의 모든 키에서 값이 todOf(키)와 같다", () => {
@@ -982,5 +982,9 @@ describe("E2E 의 시간대 배지 사본과 앱 todOf (18.1-08, D1)", () => {
 
   it("TOD_IDS 가 앱 TOD_ORDER 와 같다", () => {
     expect([...e.TOD_IDS]).toEqual([...TOD_ORDER]);
+  });
+
+  it("TOD_WORD 의 네 값이 앱 TOD_LABEL 과 같다(0083-1)", () => {
+    expect({ ...e.TOD_WORD }).toEqual({ ...TOD_LABEL });
   });
 });

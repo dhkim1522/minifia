@@ -18,11 +18,11 @@ import {
   ROLE_CARD_MAX_LINES,
   ROLE_CARD_MAX_LINES_SHORT_DOCTOR,
   ROLE_SHEET_MAX_LINES,
-  TOD_BOX,
   TOD_BY_PHASE,
-  TOD_HEADER_Y,
   TOD_IDS,
   TOD_ABSENT_PHASES,
+  TOD_LINE_MAX_H,
+  TOD_WORD,
   TUTORIAL_ROLE_MAX_LINES,
   revealCardChecks,
   chatSheetChecks,
@@ -50,8 +50,8 @@ test("상수: UI-SPEC 값 그대로", () => {
   assert.equal(TUTORIAL_ROLE_MAX_LINES, 4);
   assert.equal(ROLE_ART_MIN_H, 64);
   assert.equal(CARD_INNER_INSET, 14);
-  assert.equal(TOD_BOX, 44);
-  assert.deepEqual([...TOD_HEADER_Y], [8, 52]);
+  assert.equal(TOD_LINE_MAX_H, 40);
+  assert.deepEqual({ ...TOD_WORD }, { morning: "아침", day: "낮", dusk: "저녁", night: "밤" });
   assert.equal(REVEAL_DOCK_GAP, 8);
   assert.deepEqual([...TOD_IDS], ["morning", "day", "dusk", "night"]);
 });
@@ -246,19 +246,21 @@ test("roleLineBoxChecks: 상자가 없거나 비면 측정값 없음으로 실�
 
 // ---- todChecks ----
 
+const WORD_OF = { day: "낮", dusk: "저녁", night: null, morning: null };
+const TITLE_OF = { dayAnnounce: "토론", errand: "심부름", discussion: "토론", nomination: "투표", runoff: "결선", showdown: "마지막 3인", defense: "최후 변론", verdict: "찬반", execution: "처형", night: "밤", morning: "아침" };
 const todGood = (phase = "discussion") => {
   const tod = TOD_BY_PHASE[phase];
   return {
     count: 1,
     tod,
-    rect: box(248, 8, 44, 44),
-    radius: 9999,
-    imgs: TOD_IDS.map((x) => ({ src: `/weather/weather-${x}.svg?v=1`, naturalWidth: 88, opacity: x === tod ? 1 : 0 })),
-    title: box(16, 8, 150, 29),
-    roleBtn: box(300, 8, 44, 44),
-    band: box(16, 62, 328, 60),
-    soundButtons: [box(292, 130, 52, 52)],
+    word: WORD_OF[tod],
+    titleText: TITLE_OF[phase],
+    line: box(16, 18, 150, 29),
+    title: box(76, 18, 90, 29),
     header: box(0, 0, 360, 62),
+    headerButtons: [box(300, 8, 44, 44)],
+    oldBadges: 0,
+    weatherImgs: 0,
   };
 };
 
@@ -268,7 +270,7 @@ test("todChecks: 정상 입력은 D1·D4·D5 통과", () => {
   for (const r of rows) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
 });
 
-test("todChecks: 모든 맵 단계의 기대값이 통과", () => {
+test("todChecks: 모든 맵 단계의 기대 입력이 통과", () => {
   for (const phase of Object.keys(TOD_BY_PHASE)) assert.deepEqual(failing(todChecks(todGood(phase), { phase })), [], phase);
 });
 
@@ -276,53 +278,54 @@ test("todChecks: 값이 단계 기대와 다르면 D1 실패", () => {
   assert.deepEqual(failing(todChecks({ ...todGood("discussion"), tod: "night" }, { phase: "discussion" })), ["D1"]);
 });
 
-test("todChecks: 배지가 0개거나 2개면 D1 실패", () => {
+test("todChecks: [data-tod] 가 0개거나 2개면 D1 실패", () => {
   assert.ok(failing(todChecks({ ...todGood(), count: 0 }, { phase: "discussion" })).includes("D1"));
   assert.ok(failing(todChecks({ ...todGood(), count: 2 }, { phase: "discussion" })).includes("D1"));
 });
 
-test("todChecks: 헤더 밖(y 8~52 벗어남)이면 D1 실패, ±1 은 허용", () => {
-  assert.deepEqual(failing(todChecks({ ...todGood(), rect: box(248, 20, 44, 44) }, { phase: "discussion" })).includes("D1"), true);
-  assert.deepEqual(failing(todChecks({ ...todGood(), rect: box(248, 9, 44, 44) }, { phase: "discussion" })), []);
+test("todChecks: 밤인데 낱말 요소가 있으면 D1 실패, 아침도 같다", () => {
+  assert.deepEqual(failing(todChecks({ ...todGood("night"), word: "밤" }, { phase: "night" })), ["D1"]);
+  assert.deepEqual(failing(todChecks({ ...todGood("morning"), word: "아침" }, { phase: "morning" })), ["D1"]);
 });
 
-test("todChecks: 배지가 [역할 카드]·제목과 겹치면 D1 실패", () => {
-  assert.ok(failing(todChecks({ ...todGood(), rect: box(290, 8, 44, 44) }, { phase: "discussion" })).includes("D1"));
-  assert.ok(failing(todChecks({ ...todGood(), rect: box(100, 8, 44, 44) }, { phase: "discussion" })).includes("D1"));
+test("todChecks: 토론인데 낱말이 없거나 '저녁' 이면 D1 실패", () => {
+  assert.deepEqual(failing(todChecks({ ...todGood(), word: null }, { phase: "discussion" })), ["D1"]);
+  assert.deepEqual(failing(todChecks({ ...todGood(), word: "저녁" }, { phase: "discussion" })), ["D1"]);
 });
 
-test("todChecks: img 하나가 naturalWidth 0 이면 D5 실패", () => {
-  const g = todGood();
-  g.imgs[2] = { ...g.imgs[2], naturalWidth: 0 };
-  assert.deepEqual(failing(todChecks(g, { phase: "discussion" })), ["D5"]);
-});
-
-test("todChecks: 불투명도 1 이 둘이거나 지금 그림이 아니면 D5 실패", () => {
-  const g = todGood();
-  g.imgs[3] = { ...g.imgs[3], opacity: 1 };
-  assert.deepEqual(failing(todChecks(g, { phase: "discussion" })), ["D5"]);
-  const h = todGood();
-  h.imgs = h.imgs.map((i) => ({ ...i, opacity: i.src.includes("night") ? 1 : 0 }));
-  assert.deepEqual(failing(todChecks(h, { phase: "discussion" })), ["D5"]);
-});
-
-test("todChecks: 크기가 44×44 가 아니거나 원이 아니면 D5 실패", () => {
-  assert.deepEqual(failing(todChecks({ ...todGood(), rect: box(248, 8, 40, 44) }, { phase: "discussion" })).includes("D5"), true);
-  assert.deepEqual(failing(todChecks({ ...todGood(), radius: 4 }, { phase: "discussion" })), ["D5"]);
-});
-
-test("todChecks: 배지가 소리 단추와 겹치거나 헤더 높이가 62 가 아니면 D4 실패", () => {
-  assert.deepEqual(failing(todChecks({ ...todGood(), soundButtons: [box(250, 20, 52, 52)] }, { phase: "discussion" })), ["D4"]);
+test("todChecks: 헤더 높이가 62 가 아니면 D4 실패, ±1 은 허용", () => {
   assert.deepEqual(failing(todChecks({ ...todGood(), header: box(0, 0, 360, 70) }, { phase: "discussion" })), ["D4"]);
+  assert.deepEqual(failing(todChecks({ ...todGood(), header: box(0, 0, 360, 63) }, { phase: "discussion" })), []);
 });
 
-test("todChecks: 측정값이 없으면 측정값 없음으로 실패", () => {
+test("todChecks: 헤더 줄이 두 줄 높이면 D4 실패", () => {
+  assert.deepEqual(failing(todChecks({ ...todGood(), line: box(16, 18, 90, 58), title: box(16, 47, 90, 29) }, { phase: "discussion" })), ["D4"]);
+});
+
+test("todChecks: 헤더 줄 오른쪽 끝이 헤더 단추 왼쪽 끝을 넘으면 D4 실패", () => {
+  assert.deepEqual(failing(todChecks({ ...todGood(), title: box(76, 18, 240, 29) }, { phase: "discussion" })), ["D4"]);
+  assert.deepEqual(failing(todChecks({ ...todGood(), headerButtons: [box(100, 8, 44, 44)] }, { phase: "discussion" })), ["D4"]);
+  assert.deepEqual(failing(todChecks({ ...todGood(), headerButtons: [] }, { phase: "discussion" })), []);
+});
+
+test("todChecks: 옛 배지 수 1 이거나 날씨 그림 수 1 이면 D5 실패", () => {
+  assert.deepEqual(failing(todChecks({ ...todGood(), oldBadges: 1 }, { phase: "discussion" })), ["D5"]);
+  assert.deepEqual(failing(todChecks({ ...todGood(), weatherImgs: 1 }, { phase: "discussion" })), ["D5"]);
+});
+
+test("todChecks: 측정값이 없으면 측정값 없음으로 실패(공허 통과 금지)", () => {
   const rows = todChecks(null, { phase: "discussion" });
   assert.deepEqual(ids(rows), ["D1", "D4", "D5"]);
   for (const r of rows) {
     assert.equal(r.ok, false);
     assert.match(r.detail, /측정값 없음/);
   }
+  const g = todGood();
+  delete g.line;
+  assert.match(todChecks(g, { phase: "discussion" }).find((r) => r.id === "D4").detail, /측정값 없음/);
+  const h = todGood();
+  delete h.oldBadges;
+  assert.match(todChecks(h, { phase: "discussion" }).find((r) => r.id === "D5").detail, /측정값 없음/);
 });
 
 test("todChecks: 게임 맵 밖 단계를 부르면 D1 실패(호출 실수)", () => {
