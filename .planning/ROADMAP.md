@@ -391,7 +391,7 @@ Plans:
 5. 결과 화면은 전체 대화 하나만 있고 역할별 채팅·판 기록 탭이 없다. 서버 기록 보관은 그대로(R5, 결정 0027 유지)
 6. 바뀐 흐름의 폰 6종 E2E 와 전 흐름 회귀가 로컬에서 통과하고 minifia-v3 에 배포된다
 
-**Plans:** 10/10 plans executed
+**Plans:** 10/10 plans executed (UAT gap closure 8 plans 남음)
 
 Plans:
 **Wave 1**
@@ -415,6 +415,16 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 - [x] 18.1-10-PLAN.md — 로컬 전체 회귀·nightload·minifia-v3 배포·지도/0082/HANDOFF·push (wave 6)
+
+**Gap closure (18.1-UAT G-18.1-1~5, 결정 0083)** *(wave 는 gap 실행 안의 순서 — 같은 파일을 고쳐 한 줄로 잇는다)*
+- [ ] 18.1-11-PLAN.md — G-18.1-1 헤더 시간대 글자("낮 · 토론")·날씨 배지와 그림 삭제·E2E todChecks (wave 1)
+- [ ] 18.1-12-PLAN.md — G-18.1-5 자막 띠 한 구절 + 초 + 막대·종 삭제·비는 단계(처형·아침·심부름 시작 카드)/숨는 단계(대기실·결과) (wave 2)
+- [ ] 18.1-13-PLAN.md — G-18.1-5 처형 찬반 숫자 둘·찬반 줄 접기·큰 글은 띠 아래(편지 배치 포함) (wave 3)
+- [ ] 18.1-14-PLAN.md — G-18.1-3 기록 창 제자리 늘어남(기록 시트 삭제)·[보내기]와 유언 단추 교대 (wave 4)
+- [ ] 18.1-15-PLAN.md — G-18.1-3 방장 튜토리얼 스위치 기록 칸 위 한 줄·유언 저장하면 닫힘 (wave 5)
+- [ ] 18.1-16-PLAN.md — G-18.1-4 결과 화면 시상식만 삭제(모이기·뒤집기·승리 알림 연출 유지, 연출 뒤 헤더 승패 유지) (wave 6)
+- [ ] 18.1-17-PLAN.md — G-18.1-2 탈락자는 유령 그림 ghost_default 하나(3D 스프라이트)·안개 코드 삭제 (wave 7)
+- [ ] 18.1-18-PLAN.md — 로컬 전체 회귀·nightload·minifia-v3 배포·0083/지도/UI-SPEC/HANDOFF·push (wave 8)
 
 ### Phase 19: 방장이 고르는 기본 마피아·확장판
 
