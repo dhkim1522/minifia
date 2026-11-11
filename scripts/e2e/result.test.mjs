@@ -14,6 +14,9 @@ const good = () => ({
   loserSeats: [0],
   costumes: { 0: "mafia", 1: "coat", 2: "police", 3: "doctor" },
   jobBySeat: { 0: "mafia", 1: "citizen", 2: "police", 3: "doctor" },
+  // 18.1-17: 판이 끝났을 때 탈락한 좌석(없음)과 유령 그림 훅(window.__mfGhosts 사본)
+  deadSeats: [],
+  ghosts: { seats: [], ready: true },
   panel: 160,
   panelWant: 160,
   stageBottom: 504,
@@ -56,6 +59,21 @@ test("RS4: 의상이 직업 표와 다르거나 빠지거나 남으면 RS4 만 �
   assert.deepEqual(failing({ costumes: { 0: "mafia", 1: "coat", 2: "police" } }), ["RS4"]);
   assert.deepEqual(failing({ costumes: { 0: "mafia", 1: "coat", 2: "police", 3: "doctor", 4: "coat" } }), ["RS4"]);
   assert.deepEqual(failing({ jobBySeat: { 0: "wizard", 1: "citizen", 2: "police", 3: "doctor" } }), ["RS4"]);
+});
+
+test("RS4(18.1-17): 산 좌석만 직업 의상, 탈락 좌석은 의상 없이 유령 훅 seats 에 있으면 통과한다", () => {
+  const dead = { deadSeats: [2], costumes: { 0: "mafia", 1: "coat", 3: "doctor" }, ghosts: { seats: [2], ready: true } };
+  assert.deepEqual(failing(dead), []);
+});
+
+test("RS4(18.1-17): 탈락 좌석에 의상이 있으면 실패, 유령 훅 seats 에 없거나 ready 거짓이면 실패, 훅이 없으면 측정값 없음", () => {
+  const base = { deadSeats: [2], costumes: { 0: "mafia", 1: "coat", 3: "doctor" }, ghosts: { seats: [2], ready: true } };
+  assert.deepEqual(failing({ ...base, costumes: { ...base.costumes, 2: "police" } }), ["RS4"]);
+  assert.deepEqual(failing({ ...base, ghosts: { seats: [], ready: true } }), ["RS4"]);
+  assert.deepEqual(failing({ ...base, ghosts: { seats: [2], ready: false } }), ["RS4"]);
+  assert.deepEqual(failing({ ...base, costumes: { 0: "mafia", 1: "coat" } }), ["RS4"]); // 산 좌석 3 의 의상이 빠짐
+  const rows = resultStageChecks({ ...good(), ...base, ghosts: null });
+  assert.match(rows.find((r) => r.id === "RS4").detail, /측정값 없음/);
 });
 
 test("RS5: 패널 높이가 160(기록 칸 68 + 92, 방 높이와 무관) ±1 이 아니면 RS5 만 실패한다", () => {
