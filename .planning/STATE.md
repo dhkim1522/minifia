@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: "18.1"
 current_phase_name: screen-polish
-current_plan: 10
-status: verifying
-stopped_at: Completed 18.1-10-PLAN.md
-last_updated: "2026-11-10T20:30:58.160Z"
+current_plan: 12
+status: executing
+stopped_at: Completed 18.1-11-PLAN.md
+last_updated: "2026-11-11T07:20:30.630Z"
 last_activity: 2026-11-11
 last_activity_desc: Phase 18.1 execution started
-state_head: 78aa83509e64ce62f3c76d2b3de78f3d28dcce08
+state_head: 2a12ad0e63824fae4ab5134ba006b005383786fb
 progress:
   total_phases: 10
   completed_phases: 4
-  total_plans: 71
-  completed_plans: 71
+  total_plans: 79
+  completed_plans: 72
   percent: 40
 ---
 
@@ -31,9 +31,9 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 18.1 (screen-polish) — EXECUTING
-Current Plan: 10
-Total Plans in Phase: 10
-Status: Phase complete — ready for verification
+Current Plan: 12
+Total Plans in Phase: 18
+Status: Ready to execute
 Last activity: 2026-11-11 — Phase 18.1 execution started
 
 ## Performance Metrics
@@ -269,6 +269,7 @@ Last activity: 2026-11-11 — Phase 18.1 execution started
 | Phase 18.1 P08 | 1h20m | 3 tasks | 10 files |
 | Phase 18.1 P09 | 약 1시간 30분 | 2 tasks | 3 files |
 | Phase 18.1 P10 | 약 2시간 | 3 tasks | 12 files |
+| Phase 18.1 P11 | 25min | 3 tasks | 26 files |
 
 ## Accumulated Context
 
@@ -598,6 +599,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18.1]: 18.1-09: B3(기록 시트를 닫은 뒤 포커스가 [data-chat-open])은 폰 6종 모두 실패 — 앱 결함 후보(포커스가 body), 18.1-10 이 판단
 - [Phase 18.1]: 기록 시트를 닫은 뒤 포커스는 언마운트 뒤 effect 에서 [기록 열기] 로 돌린다(모달 dialog 가 열려 있는 동안 focus() 는 무효)
 - [Phase 18.1]: 짧은 폰(높이 600 이하) 튜토리얼 직업 카드 그림은 63x84 로 줄인다(문구·판정 문턱은 그대로)
+- [Phase 18.1]: [18.1-11] 헤더 시간대는 날씨 배지 대신 단계 이름 앞 옅은 낱말(낮·저녁, 밤·아침은 한 단어), 결정 0083-1
 
 ### Pending Todos
 
@@ -669,8 +671,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-10T20:30:57.290Z
-Stopped at: Completed 18.1-10-PLAN.md
+Last session: 2026-11-11T07:20:29.592Z
+Stopped at: Completed 18.1-11-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
