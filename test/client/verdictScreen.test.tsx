@@ -444,12 +444,20 @@ describe("처형 화면 (DAY-06)", () => {
     expect(hotLines(m.container)).toEqual(["찬성 5 · 반대 2"]);
   });
 
-  it("0ms 에 VerdictPicker 는 disabled 이고 내가 고른 찬성이 눌린 채 남는다(서버는 처형 단계에 내 값을 안 보낸다)", () => {
+  it("처형 단계에는 찬반 단추 줄이 없다 — [data-verdict-row] 0개·찬반 단추 0개이고 채팅 패널은 있다(18.1-13, 결정 0083-9)", () => {
     const m = enter();
-    const yes = verdictBtn(m.container, "yes");
-    expect(verdictBtns(m.container).every((b) => b.disabled)).toBe(true);
-    expect(yes?.getAttribute("aria-pressed")).toBe("true");
+    expect(m.container.querySelectorAll("[data-verdict-row]").length).toBe(0);
+    expect(verdictBtns(m.container).length).toBe(0);
     expect(countOf(m.container)).toBeNull();
+    expect(m.container.querySelector("[data-chat-panel]")).not.toBeNull();
+  });
+
+  it("처형 단계는 어느 시점(산 사람·유령·변론자)에서 보아도 찬반 단추 줄이 없다", () => {
+    for (const mySeat of [0, 3, 4]) {
+      cleanup();
+      const m = enter(passedView({ mySeat }));
+      expect(m.container.querySelectorAll("[data-verdict-row]").length, `seat ${mySeat}`).toBe(0);
+    }
   });
 
   it("2.6초: 알림이 '도윤 님 처형' 으로 바뀌고 hot 줄 '도윤 님 처형' 이 더해진다(찬성·반대 줄은 다시 만들지 않는다)", () => {
@@ -621,10 +629,32 @@ describe("판결 순간 연출 — 시간표 (09.1.1-13)", () => {
     expect(lastScene().camera).toMatchObject({ mode: "fixed", zoom: 1, zoomMs: 600 });
   });
 
-  it("결과 알림은 위 72(is-top) 자리에 뜬다", () => {
+  it("결과 알림은 띠 아래(is-top) 자리에 뜬다(0083-10)", () => {
     const m = enter();
     advance(600);
     expect(announce(m.container)?.className).toContain("is-top");
+  });
+
+  // 이름은 화면의 숫자 둘이 아니라 기록 줄(서버 찬반 기록 카드)이 남긴다 — 같은 정보를 두 번 쓰지 않는다(18.1-13)
+  it("기록 줄: 서버 찬반 기록 카드가 4.6초에 채팅 기록에 도착하고 찬성·반대한 사람의 이름이 들어 있다", () => {
+    const listeners: Array<(e: never, meta: { epoch: number }) => void> = [];
+    const onEvent = vi.fn((l: (typeof listeners)[number]) => {
+      listeners.push(l);
+      return () => {};
+    }) as unknown as RoomConnection["onEvent"];
+    const m = mount(makeView({ phase: "verdict", count: 8, candidate: 4 }), { onEvent });
+    m.show(execView());
+    act(() => listeners.forEach((l) => l({ t: "chat", ch: "all", seat: 4, seq: 1, text: "0,1,2,5,6|3,7", at: NOW, k: "ballots" } as never, { epoch: 1 })));
+    const card = () => m.container.querySelector<HTMLElement>('[data-card="ballots"]');
+    advance(4599);
+    expect(card()).toBeNull();
+    advance(1);
+    expect(card()).not.toBeNull();
+    const text = card()?.textContent ?? "";
+    for (const name of ["민수", "영희", "서준", "하은", "유진"]) expect(text, name).toContain(name); // 찬성
+    for (const name of ["지아", "태오"]) expect(text, name).toContain(name); // 반대
+    expect(text).toContain("찬성 5");
+    expect(text).toContain("반대 2");
   });
 
   it("모든 viewer 가 같은 연출을 본다: 변론자(탈락)·살아 있는 시민·유령 시점 모두 같은 묶음 시간표와 같은 장면 표", () => {
@@ -707,8 +737,8 @@ describe("판결 순간 연출 — 시간표 (09.1.1-13)", () => {
     expect(root.style.getPropertyValue("--mf-panel-h")).toMatch(/px$/);
   });
 
-  // 알림이 두 줄로 감기면(8자 이름 "… 님 처형", 알림 아랫변 158) 묶음 윗변이 알림 아랫변 + 16 으로 내려간다 — 한 줄이면 131 그대로(E2E BF2)
-  it("묶음 윗변 변수 --mf-ballot-top: 알림 아랫변이 115 이하면 131, 158.4 면 175(올림), 묶음이 없으면 변수가 없다", () => {
+  // 알림이 두 줄로 감기면(8자 이름 "… 님 처형") 숫자 줄 윗변이 알림 아랫변 + 16 으로 내려간다 — 한 줄이면 기본 201(142 + 43 + 16) 그대로(E2E BF2)
+  it("숫자 줄 윗변 변수 --mf-ballot-top: 알림 아랫변이 185 이하(115 포함)면 201, 228.4 면 245(올림), 묶음이 없으면 변수가 없다", () => {
     const bottomOf = { v: 115 };
     const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
       const isBody = this.classList.contains("mf-announce__body");
@@ -719,10 +749,10 @@ describe("판결 순간 연출 — 시간표 (09.1.1-13)", () => {
       const m = enter();
       const root = m.container.querySelector("main.mf-game") as HTMLElement;
       advance(600);
-      expect(root.style.getPropertyValue("--mf-ballot-top")).toBe("131px");
-      bottomOf.v = 158.4;
+      expect(root.style.getPropertyValue("--mf-ballot-top")).toBe("201px");
+      bottomOf.v = 228.4;
       advance(2000); // 2.6초: 알림이 바뀐다
-      expect(root.style.getPropertyValue("--mf-ballot-top")).toBe("175px");
+      expect(root.style.getPropertyValue("--mf-ballot-top")).toBe("245px");
       advance(2000); // 4.6초: 묶음이 사라진다
       expect(root.style.getPropertyValue("--mf-ballot-top")).toBe("");
     } finally {

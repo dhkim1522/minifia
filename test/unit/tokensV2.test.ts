@@ -263,9 +263,15 @@ describe("찬반 기록 CSS 규칙 (09.1.1-12)", () => {
   const rules = [...V2.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: (m[1] ?? "").trim(), body: m[2] ?? "" }));
   const NEW = rules.filter((r) => /(mv-ballots|mv-chat__ballots|mv-chat__card--ballots)/.test(r.selector));
 
-  it("새 규칙이 있다(머리·알약·얼굴·이름·채팅 카드)", () => {
-    for (const sel of [".mv-ballots", ".mv-ballots__head", ".mv-ballots__pill", ".mv-ballots__face", ".mv-ballots__name", ".mv-chat__ballots-name"]) {
+  it("새 규칙이 있다(숫자 덩이 줄·덩이·채팅 카드)", () => {
+    for (const sel of [".mv-ballots", ".mv-ballots__body", ".mv-ballots__group", ".mv-chat__ballots-name"]) {
       expect(NEW.some((r) => r.selector === sel), sel).toBe(true);
+    }
+  });
+
+  it("얼굴 칩·이름 알약 규칙이 없다(18.1-13, 결정 0083-9)", () => {
+    for (const sel of [".mv-ballots__pill", ".mv-ballots__face", ".mv-ballots__name", ".mv-ballots__row", ".mv-ballots__head"]) {
+      expect(NEW.some((r) => r.selector.startsWith(sel)), sel).toBe(false);
     }
   });
 
@@ -292,20 +298,24 @@ describe("찬반 기록 CSS 규칙 (09.1.1-12)", () => {
     expect(NEW.some((r) => /font-size/.test(r.body))).toBe(true);
   });
 
-  it("찬성/반대 알약은 테두리 변수 gray-100 / gray-500 으로만 갈린다", () => {
-    const body = (sel: string) => NEW.find((r) => r.selector === sel)?.body ?? "";
-    expect(body(".mv-ballots__pill")).toMatch(/border:\s*1\.5px solid var\(--gray-100\)/);
-    expect(body(".mv-ballots__pill.is-no")).toMatch(/border-color:\s*var\(--gray-500\)/);
-    expect(body(".mv-ballots__pill")).toMatch(/background:\s*var\(--overlay-ink\)/);
-  });
-
-  it("영역은 포인터 이벤트를 받지 않고 알약 높이 32·묶음 머리 28이다", () => {
+  it("영역은 포인터 이벤트를 받지 않고 기본 윗변 201 에서 가로 16 여백으로 시작한다", () => {
     const body = (sel: string) => NEW.find((r) => r.selector === sel)?.body ?? "";
     expect(body(".mv-ballots")).toMatch(/pointer-events:\s*none/);
-    expect(body(".mv-ballots")).toMatch(/top:\s*var\(--mf-ballot-top,\s*131px\)/);
-    expect(body(".mv-ballots")).toMatch(/--mf-panel-h/);
-    expect(body(".mv-ballots__pill")).toMatch(/height:\s*32px/);
-    expect(body(".mv-ballots__head")).toMatch(/height:\s*28px/);
+    expect(body(".mv-ballots")).toMatch(/top:\s*var\(--mf-ballot-top,\s*201px\)/);
+    expect(body(".mv-ballots")).toMatch(/left:\s*var\(--space-md\)/);
+    expect(body(".mv-ballots")).toMatch(/right:\s*var\(--space-md\)/);
+  });
+
+  it("숫자 덩이 줄은 가로 한 줄 가운데이고 덩이는 아이콘 + 숫자를 가로로 놓는다(16px 굵게)", () => {
+    const body = (sel: string) => NEW.find((r) => r.selector === sel)?.body ?? "";
+    expect(body(".mv-ballots__body")).toMatch(/display:\s*flex/);
+    expect(body(".mv-ballots__body")).toMatch(/flex-direction:\s*row/);
+    expect(body(".mv-ballots__body")).toMatch(/justify-content:\s*center/);
+    expect(body(".mv-ballots__body")).not.toMatch(/flex-wrap:\s*wrap/);
+    expect(body(".mv-ballots__group")).toMatch(/display:\s*(inline-)?flex/);
+    expect(body(".mv-ballots__group")).toMatch(/align-items:\s*center/);
+    expect(body(".mv-ballots__group")).toMatch(/font-size:\s*16px/);
+    expect(body(".mv-ballots__group")).toMatch(/font-weight:\s*700/);
   });
 });
 

@@ -1,7 +1,7 @@
 // 찬반 목록 모델 시험 — UI-SPEC C-2. 입력은 day.ballots 와 players 뿐이다(역할을 읽지 않는다, T-09.1.1-33).
 import { describe, expect, it } from "vitest";
 import type { PublicPlayer, RoomView } from "../../shared/protocol";
-import { ballotRowsNeed, ballotsOf, ballotsSummary } from "../../src/game/ballotsView";
+import { ballotsOf, ballotsSummary } from "../../src/game/ballotsView";
 
 const NAMES = ["서연", "민준", "도윤", "지호", "하윤", "태오", "하은", "지우"];
 const players: PublicPlayer[] = NAMES.map((nickname, seat) => ({ seat, nickname, connected: true, isHost: seat === 0 }));
@@ -52,13 +52,5 @@ describe("ballotsSummary", () => {
     const b = ballotsOf(view({ yes: [], no: [2] }))!;
     expect(ballotsSummary(b)).toBe("찬성 0명. 반대 1명: 도윤.");
     expect(ballotsSummary({ yes: [], no: [] })).toBe("찬성 0명. 반대 0명.");
-  });
-});
-
-describe("ballotRowsNeed", () => {
-  it("72 + 40·R (UI-SPEC 필요 높이 식)", () => {
-    expect(ballotRowsNeed(4)).toBe(232);
-    expect(ballotRowsNeed(2)).toBe(152);
-    expect(ballotRowsNeed(0)).toBe(72);
   });
 });
