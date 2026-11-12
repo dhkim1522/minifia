@@ -432,8 +432,10 @@ describe("마을의 길 (D-19) — 서버가 문을 지나는 길을 정한다",
     expect(`${targets.length} ${bad.join(",")}`).toBe("31 ");
   });
 
-  it("걷는 칸은 모두 입장 지점에서 닿는다(닫힌 구멍 없음)", () => {
-    expect(rasterTown().removed.length + (walkCount(TOWN_MASK) > 600 ? 0 : 1000)).toBe(0);
+  it("메운 칸(닿지 않는 칸)은 시계탑 뒤 북서 모서리 가장자리 13칸뿐이고 걷는 칸은 943개다", () => {
+    const removed = rasterTown().removed.map((cell) => cellCenterFx(cell.c, cell.r, TOWN_MAP));
+    const onEdge = removed.every((m) => (m.x === -975 && m.z <= -675) || (m.z === -975 && m.x <= -675));
+    expect(`${removed.length}/${onEdge}/${walkCount(TOWN_MASK)}`).toBe("13/true/943");
   });
 });
 
