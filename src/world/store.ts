@@ -25,6 +25,9 @@ export interface DoorEvent {
  *   산 사람 화면이 탈락한 좌석을 유령으로 세울 자리다. 이전 연결의 위치는 섞지 않는다 — reset() 과 retainSeats()(방을 떠난 좌석)에서만 지운다.
  * - move: 더 낡은 epoch 는 버린다. 더 새 epoch 의 move 는 그 snap 이 오기 전이라 버리고 준비 상태를 푼다.
  *   같은 연결에서 처음 보는 seat 의 move 만 등장 대상이다.
+ * - door(20페이즈 D-15): epoch 규칙은 move 와 같다. vanish 는 좌석을 빼고(마지막 구간 기억은 남긴다) appear 는 구간을 넣되 등장 대상이 아니다 —
+ *   둘 다 문 목록(takeDoor)에 오른다. zone 표시가 있고 이미 준비된 같은 epoch 의 snap 은 내가 구역을 넘어 받은 새 구역 사람들이라
+ *   통째로 바꾸고 빠진 좌석은 사라짐, 새 좌석은 나타남으로 문 목록에 올린다. 그 밖의 snap(near 포함)은 문 목록을 만들지 않는다.
  */
 export class WorldStore {
   private epoch = -1;
@@ -33,10 +36,11 @@ export class WorldStore {
   private lastSegs = new Map<number, Segment>();
   private entered = new Set<number>();
   private moveSeqs = new Map<number, number>();
+  private doorEvents: DoorEvent[] = [];
   private listeners = new Set<WorldStoreListener>();
   private emoteListeners = new Set<EmoteListener>();
 
-  /** 연결 epoch 와 함께 world 프레임을 적용한다. snap = 모두의 구간을 통째로 바꾼다, move = 한 사람의 새 구간 */
+  /** 연결 epoch 와 함께 world 프레임을 적용한다. snap = 모두의 구간을 통째로 바꾼다, move = 한 사람의 새 구간, door = 문 통과로 사라짐·나타남 */
   applyFrame(frame: WorldFrame, epoch: number): void {
     if (epoch < this.epoch) return;
     if (frame.k === "snap") {
@@ -52,10 +56,25 @@ export class WorldStore {
         this.notify();
         return;
       }
+      if (frame.zone === true && this.ready && epoch === this.epoch) {
+        // 새 구역 snap(20페이즈 D-14): 내가 문을 지나 보이는 사람이 바뀌었다 — 사본을 통째로 바꾸고 빠진 좌석은 사라짐, 새 좌석은 나타남으로 문 목록에 올린다.
+        // 등장 연출 대상은 아니다(문 연출이다). 이동 응답 세기는 남은 좌석에 한해 이어 간다(문을 지나는 내 예측 구간을 끊지 않는다).
+        const gone = [...this.segs.keys()].filter((s) => !next.has(s)).sort((a, b) => a - b);
+        const came = [...next.keys()].filter((s) => !this.segs.has(s)).sort((a, b) => a - b);
+        for (const s of gone) this.doorEvents.push({ seat: s, kind: "vanish" });
+        for (const s of came) this.doorEvents.push({ seat: s, kind: "appear" });
+        for (const s of [...this.entered]) if (!next.has(s)) this.entered.delete(s);
+        for (const s of [...this.moveSeqs.keys()]) if (!next.has(s)) this.moveSeqs.delete(s);
+        this.segs = next;
+        this.rememberAll(next);
+        this.notify();
+        return;
+      }
       this.segs = next;
       this.rememberAll(next);
       this.entered.clear();
       this.moveSeqs.clear();
+      this.doorEvents = [];
       this.epoch = epoch;
       this.ready = true;
       this.notify();
@@ -70,7 +89,24 @@ export class WorldStore {
       return;
     }
     if (!this.ready) return;
-    if (frame.k === "door") return; // 자리(20-02 RED): 구현은 다음 커밋
+    if (frame.k === "door") {
+      if (frame.e === "vanish") {
+        // 사라짐: 좌표가 없는 프레임이다 — 좌석을 사본에서 뺄 뿐이고, 마지막으로 본 구간(lastSegs)은 남아 런타임이 그 자리에서 옅어지게 한다.
+        if (!this.segs.has(frame.s)) return;
+        this.segs.delete(frame.s);
+        this.entered.delete(frame.s);
+        this.moveSeqs.delete(frame.s);
+        this.doorEvents.push({ seat: frame.s, kind: "vanish", d: frame.d });
+      } else {
+        // 나타남: 구간은 내 구역 안으로 자른 것이다. 등장 대상(entered)에는 넣지 않는다 — 방에 새로 온 사람이 아니라 문을 지난 사람이다.
+        this.segs.set(frame.s, { p: [...frame.p], t0: frame.t0, v: frame.v });
+        this.lastSegs.set(frame.s, { p: [...frame.p], t0: frame.t0, v: frame.v });
+        this.entered.delete(frame.s);
+        this.doorEvents.push({ seat: frame.s, kind: "appear", d: frame.d });
+      }
+      this.notify();
+      return;
+    }
     if (!this.segs.has(frame.s)) this.entered.add(frame.s);
     this.segs.set(frame.s, { p: [...frame.p], t0: frame.t0, v: frame.v });
     this.lastSegs.set(frame.s, { p: [...frame.p], t0: frame.t0, v: frame.v });
@@ -104,6 +140,7 @@ export class WorldStore {
     this.lastSegs.clear();
     this.entered.clear();
     this.moveSeqs.clear();
+    this.doorEvents = [];
     if (changed) this.notify();
   }
 
@@ -152,9 +189,14 @@ export class WorldStore {
     return out;
   }
 
-  /** 자리(20-02 RED): 구현은 다음 커밋 */
+  /**
+   * 문 통과로 사라지거나 나타난 좌석(받은 순서). 한 번 꺼내면 비워진다(20페이즈 D-15).
+   * 사라진 좌석이 옅어질 자리는 lastSegOf(seat), 나타난 좌석의 구간은 segOf(seat) 다.
+   */
   takeDoor(): DoorEvent[] {
-    return [];
+    const out = this.doorEvents;
+    this.doorEvents = [];
+    return out;
   }
 
   /** view 에 없는 seat 의 구간을 지우고 지운 seat 를 돌려준다(퇴장 연출용). 지운 seat 의 늦은 move 는 새 사람으로 다시 나타난다. */
@@ -167,6 +209,7 @@ export class WorldStore {
       this.moveSeqs.delete(s);
     }
     for (const s of [...this.lastSegs.keys()]) if (!keep.has(s)) this.lastSegs.delete(s);
+    if (this.doorEvents.some((e) => !keep.has(e.seat))) this.doorEvents = this.doorEvents.filter((e) => keep.has(e.seat));
     if (removed.length > 0) this.notify();
     return removed;
   }

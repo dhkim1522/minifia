@@ -5,7 +5,7 @@
 // 클라이언트가 보내는 것은 목적지 두 정수뿐이다 — 속도·경로·출발점·시각은 서버가 정한다(T-06-10).
 // 입력 월드는 바꾸지 않고 새 객체를 돌려준다. 삼각함수 없이 사칙연산·제곱근만 써서 서버와 폰이 같은 값을 얻는다.
 import type { WorldFrame, ZoneId } from "../protocol";
-import { MOVE_COORD_LIMIT } from "../protocol";
+import { MOVE_COORD_LIMIT, ZONE_IDS } from "../protocol";
 import type { MapDef } from "./map";
 import { UNIT, cellCenterFx, lineWalkable, routeFx, snapToWalkable, walkableCells } from "./map";
 
@@ -291,7 +291,7 @@ export function moveFrame(seat: number, seg: Segment): Extract<WorldFrame, { k: 
 
 // ---- 입장·퇴장·복귀와 저장/복원·스냅샷 ----
 
-/** 저장 모양. 끝난 구간은 한 점으로 접힌다. lastMoveAt·wanderAt 은 싣지 않는다(가정 A1). lay·home 은 있을 때만 싣는다(옛 저장값은 없이 그대로 읽힌다). */
+/** 저장 모양. 끝난 구간은 한 점으로 접힌다. lastMoveAt·wanderAt 은 싣지 않는다(가정 A1). lay·home·zones 는 있을 때만 싣는다(옛 저장값은 없이 그대로 읽힌다). */
 export interface StoredWorld {
   v: 1;
   segs: Record<string, Segment>;
@@ -300,7 +300,7 @@ export interface StoredWorld {
   zones?: Record<string, ZoneId>;
 }
 
-/** 퇴장: 구간·간격·배회 기록과 모이는 자리·토론이 끝난 자리 기억 중 그 사람 몫을 지운다. */
+/** 퇴장: 구간·간격·배회 기록과 모이는 자리·토론이 끝난 자리·구역 기억 중 그 사람 몫을 지운다. */
 export function despawnPlayer(w: WorldState, playerId: string): WorldState {
   const out: WorldState = {
     segs: withoutKey(w.segs, playerId),
@@ -308,10 +308,11 @@ export function despawnPlayer(w: WorldState, playerId: string): WorldState {
     wanderAt: withoutKey(w.wanderAt, playerId),
   };
   const withLay: WorldState = w.lay === undefined ? out : { ...out, lay: { key: w.lay.key, slots: withoutKey(w.lay.slots, playerId) } };
-  return w.home === undefined ? withLay : { ...withLay, home: { day: w.home.day, pos: withoutKey(w.home.pos, playerId) } };
+  const withHome: WorldState = w.home === undefined ? withLay : { ...withLay, home: { day: w.home.day, pos: withoutKey(w.home.pos, playerId) } };
+  return w.zones === undefined ? withHome : { ...withHome, zones: withoutKey(w.zones, playerId) };
 }
 
-/** 대기실 복귀: 방에 있는 모두를 자기 seat 입장 지점 한 점으로 세운다. 방에 없는 사람과 간격·배회 기록은 버린다. */
+/** 대기실 복귀: 방에 있는 모두를 자기 seat 입장 지점 한 점으로 세운다. 방에 없는 사람과 간격·배회 기록·구역 기억은 버린다(다음 맞추기가 알림 없이 다시 기억한다). */
 export function respawnAll(_w: WorldState, players: readonly { id: string; seat: number }[], now: number, map: MapDef): WorldState {
   let out = emptyWorld();
   for (const pl of players) out = spawnPlayer(out, pl.id, pl.seat, now, map);
@@ -341,6 +342,7 @@ export function compactWorld(w: WorldState, now: number): StoredWorld {
     for (const id of Object.keys(w.home.pos)) pos[id] = [w.home.pos[id]![0], w.home.pos[id]![1]];
     out.home = { day: w.home.day, pos };
   }
+  if (w.zones !== undefined) out.zones = { ...w.zones };
   return out;
 }
 
@@ -420,9 +422,24 @@ function parseStoredHome(raw: unknown, ids: ReadonlySet<string>): HomeMemo | nul
   return { day, pos: out };
 }
 
+/** 저장된 구역 기억(20페이즈, T-20-08): 방에 있는 id 이고 값이 ZONE_IDS 안일 때만 살린다. 하나도 없으면 null — 기억이 없는 사람은 다음 맞추기가 알림 없이 지금 위치로 기억한다. */
+function parseStoredZones(raw: unknown, ids: ReadonlySet<string>): Record<string, ZoneId> | null {
+  if (!isRecord(raw)) return null;
+  const out: Record<string, ZoneId> = {};
+  let any = false;
+  for (const id of Object.keys(raw)) {
+    if (!ids.has(id)) continue;
+    const zone = ZONE_IDS.find((z) => z === raw[id]);
+    if (zone === undefined) continue;
+    out[id] = zone;
+    any = true;
+  }
+  return any ? out : null;
+}
+
 /**
  * 하이버네이션·배포 뒤 복원. 모르는 모양·방에 없는 사람·막힌 점·범위 밖 점·v ≤ 0 은 버리고 그 사람을 입장 지점에 세운다.
- * 결과에는 방에 있는 사람만 들어 있고 간격·배회 기록은 비어 있다. lay·home 은 형태가 맞을 때만 되살린다(없는 옛 저장값은 없이 읽힌다).
+ * 결과에는 방에 있는 사람만 들어 있고 간격·배회 기록은 비어 있다. lay·home·zones 는 형태가 맞을 때만 되살린다(없는 옛 저장값은 없이 읽힌다).
  */
 export function restoreWorld(stored: unknown, players: readonly { id: string; seat: number }[], now: number, map: MapDef): WorldState {
   const segsRaw: Record<string, unknown> | null =
@@ -436,7 +453,8 @@ export function restoreWorld(stored: unknown, players: readonly { id: string; se
   const ids = new Set(players.map((pl) => pl.id));
   const lay = isRecord(stored) && stored.v === 1 ? parseStoredLay(stored.lay, ids) : null;
   const home = isRecord(stored) && stored.v === 1 ? parseStoredHome(stored.home, ids) : null;
-  return { ...out, ...(lay === null ? {} : { lay }), ...(home === null ? {} : { home }) };
+  const zones = isRecord(stored) && stored.v === 1 ? parseStoredZones(stored.zones, ids) : null;
+  return { ...out, ...(lay === null ? {} : { lay }), ...(home === null ? {} : { home }), ...(zones === null ? {} : { zones }) };
 }
 
 /** 접속 때 모두의 지금 구간. seat 오름차순, 방에 있고 world 에 있는 사람만, 접기 규칙은 compactWorld 와 같다. */
