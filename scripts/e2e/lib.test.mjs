@@ -166,6 +166,8 @@ import {
   BASIC_ABSENT_ATTR_PREFIX,
   BASIC_FORBIDDEN_LINES,
   basicModeChecks,
+  BASIC_OFF_VIEW_KEYS,
+  basicViewKeyChecks,
   soundRenderChecks,
   soundNightParityChecks,
   soundVerdictTimingChecks,
@@ -4918,6 +4920,31 @@ test("BM3: 띠 글에 금지 문구가 들어 있으면 실패하고, 본 글이
 test("basicModeChecks: 빠진 입력은 세 줄 모두 실패한다(공허 통과 금지)", () => {
   assert.equal(bmFails({}), "BM1,BM2,BM3");
   assert.equal(bmFails(undefined), "BM1,BM2,BM3");
+});
+
+test("BASIC_OFF_VIEW_KEYS: 기본 마피아에서 서버가 싣지 않는 키는 me.errand·me.record·day.evidence 이고 모두 허용 목록에 있는 실제 키다", () => {
+  assert.equal(BASIC_OFF_VIEW_KEYS.me.join(","), "errand,record");
+  assert.equal(BASIC_OFF_VIEW_KEYS.day.join(","), "evidence");
+  assert.ok(Object.isFrozen(BASIC_OFF_VIEW_KEYS) && Object.isFrozen(BASIC_OFF_VIEW_KEYS.me) && Object.isFrozen(BASIC_OFF_VIEW_KEYS.day));
+  assert.equal(BASIC_OFF_VIEW_KEYS.me.filter((k) => !VIEW_ME_KEYS.has(k)).join(","), "");
+  assert.equal(BASIC_OFF_VIEW_KEYS.day.filter((k) => !VIEW_DAY_KEYS.has(k)).join(","), "");
+});
+
+test("basicViewKeyChecks BM1k: 받은 키에 me.errand·me.record·day.evidence 가 있으면 실패하고 경로를 적는다, 받은 me 키가 없으면 측정값 없음", () => {
+  const ok = basicViewKeyChecks({ me: new Set(["seat", "isHost", "role", "pick"]), day: new Set(["n", "roles", "voteLog", "morning", "chalk"]) });
+  assert.equal(`${ok.id}:${ok.ok}:${ok.detail}`, "BM1k:true:");
+  assert.equal(Object.keys(ok).sort().join(","), "detail,id,label,ok");
+  // 배열도 받는다. 첫날만 돌아 day 키가 적어도 통과한다(day 는 비어 있을 수 없지만 판정은 me 키로 측정 여부를 본다)
+  assert.equal(basicViewKeyChecks({ me: ["seat", "role"], day: ["n"] }).ok, true);
+  const bad = basicViewKeyChecks({ me: new Set(["seat", "errand", "record"]), day: new Set(["n", "evidence"]) });
+  assert.equal(`${bad.ok}:${bad.detail}`, "false:me.errand; me.record; day.evidence");
+  assert.equal(basicViewKeyChecks({ me: new Set(["seat", "record"]), day: new Set(["n"]) }).detail, "me.record");
+  assert.equal(basicViewKeyChecks({ me: new Set(["seat"]), day: new Set(["evidence"]) }).detail, "day.evidence");
+  for (const none of [undefined, null, {}, { me: new Set(), day: new Set(["n"]) }, { me: ["seat"], day: null }, { me: "seat", day: [] }]) {
+    const r = basicViewKeyChecks(none);
+    assert.equal(r.ok, false);
+    assert.match(r.detail, /측정값 없음/);
+  }
 });
 
 // ---- 17-09 튜토리얼 E2E 판정 (tutorialEntryChecks·sentFrameChecks, 사본 상수) ----

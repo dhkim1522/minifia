@@ -2846,6 +2846,12 @@ export function basicModeChecks(input) {
   return out;
 }
 
+export const BASIC_OFF_VIEW_KEYS = Object.freeze({ me: Object.freeze([]), day: Object.freeze([]) });
+/** 자리 함수(19-07 RED) */
+export function basicViewKeyChecks() {
+  return { id: "", label: "", ok: true, detail: "" };
+}
+
 // ---- 12페이즈 sound-script (12-08, 결정 D-21): 단계 구간마다 기대 소리 id 가 순서대로 ----
 
 /**
