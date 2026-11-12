@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>마을 맵 배치 A</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0a0e1c}
+a{color:#a9aebb}a:hover{color:#e6e8ee}
+</style>
+</helmet>
+<div style="width: 600px; height: 700px; box-sizing: border-box; background: #0e1326; color: #e6e8ee; font-family: 'Gowun Dodum', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; word-break: keep-all; display: flex; flex-direction: column">
+
+<!-- 위에서 본 배치: 1단위 = 28px, 가운데가 (0,0), 걷는 영역 약 20×20 -->
+<div style="position: relative; width: 600px; height: 600px; background: #151c36" role="img" aria-label="마을 맵 배치 A: 가운데 광장, 네 변 가운데에 실내 방 넷, 네 모서리에 집 둘씩">
+
+<!-- 광장 바닥(지금 광장 그대로) -->
+<div style="position: absolute; left: 138px; top: 138px; width: 324px; height: 324px; border-radius: 10px; background: #2a3157"></div>
+<!-- 연단 -->
+<div style="position: absolute; left: 261px; top: 261px; width: 78px; height: 78px; border-radius: 50%; background: #c9c3b8"></div>
+<!-- 시계탑 -->
+<div style="position: absolute; left: 143px; top: 143px; width: 73px; height: 73px; border-radius: 6px; background: #3a4470; border: 2px solid #6b7180"></div>
+
+<!-- 실내 방 넷: 북 우체국 · 동 술집 · 남 진료소 · 서 경찰서 (문은 광장 쪽 밝은 띠) -->
+<div style="position: absolute; left: 236px; top: 20px; width: 128px; height: 95px; border-radius: 6px; background: #1e2847; border: 2px solid #ffcf8a; display: grid; place-items: center; color: #ffcf8a; font-size: 15px">우체국</div>
+<div style="position: absolute; left: 279px; top: 112px; width: 42px; height: 6px; background: #ffcf8a"></div>
+
+<div style="position: absolute; left: 485px; top: 236px; width: 95px; height: 128px; border-radius: 6px; background: #1e2847; border: 2px solid #ffcf8a; display: grid; place-items: center; color: #ffcf8a; font-size: 15px">술집</div>
+<div style="position: absolute; left: 482px; top: 279px; width: 6px; height: 42px; background: #ffcf8a"></div>
+
+<div style="position: absolute; left: 236px; top: 485px; width: 128px; height: 95px; border-radius: 6px; background: #1e2847; border: 2px solid #ffcf8a; display: grid; place-items: center; color: #ffcf8a; font-size: 15px">진료소</div>
+<div style="position: absolute; left: 279px; top: 482px; width: 42px; height: 6px; background: #ffcf8a"></div>
+
+<div style="position: absolute; left: 20px; top: 236px; width: 95px; height: 128px; border-radius: 6px; background: #1e2847; border: 2px solid #ffcf8a; display: grid; place-items: center; color: #ffcf8a; font-size: 15px">경찰서</div>
+<div style="position: absolute; left: 112px; top: 279px; width: 6px; height: 42px; background: #ffcf8a"></div>
+
+<!-- 집 여덟: 모서리마다 둘, 문패의 원이 주인 좌석 색 -->
+<div style="position: absolute; left: 126px; top: 31px; width: 67px; height: 67px; border-radius: 6px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: end center; padding-bottom: 4px; box-sizing: border-box"><span style="width: 20px; height: 20px; border-radius: 50%; background: #e0a458"></span></div>
+<div style="position: absolute; left: 31px; top: 126px; width: 67px; height: 67px; border-radius: 6px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: center end; padding-right: 4px; box-sizing: border-box"><span style="width: 20px; height: 20px; border-radius: 50%; background: #7fb3a3"></span></div>
+<div style="position: absolute; left: 406px; top: 31px; width: 67px; height: 67px; border-radius: 6px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: end center; padding-bottom: 4px; box-sizing: border-box"><span style="width: 20px; height: 20px; border-radius: 50%; background: #8fa3d9"></span></div>
+<div style="position: absolute; left: 502px; top: 126px; width: 67px; height: 67px; border-radius: 6px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: center start; padding-left: 4px; box-sizing: border-box"><span style="width: 20px; height: 20px; border-radius: 50%; background: #d98a9e"></span></div>
+<div style="position: absolute; left: 126px; top: 502px; width: 67px; height: 67px; border-radius: 6px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: start center; padding-top: 4px; box-sizing: border-box"><span style="width: 20px; height: 20px; border-radius: 50%; background: #b79bd6"></span></div>
+<div style="position: absolute; left: 31px; top: 406px; width: 67px; height: 67px; border-radius: 6px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: center end; padding-right: 4px; box-sizing: border-box"><span style="width: 20px; height: 20px; border-radius: 50%; background: #c9c3b8"></span></div>
+<div style="position: absolute; left: 406px; top: 502px; width: 67px; height: 67px; border-radius: 6px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: start center; padding-top: 4px; box-sizing: border-box"><span style="width: 20px; height: 20px; border-radius: 50%; background: #9ec27a"></span></div>
+<div style="position: absolute; left: 502px; top: 406px; width: 67px; height: 67px; border-radius: 6px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: center start; padding-left: 4px; box-sizing: border-box"><span style="width: 20px; height: 20px; border-radius: 50%; background: #d9b25f"></span></div>
+</div>
+
+<!-- 범례 -->
+<div style="height: 100px; box-sizing: border-box; padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5; color: #a9aebb">
+<div style="display: flex; gap: 20px; flex-wrap: wrap">
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 16px; height: 12px; border: 2px solid #ffcf8a; background: #1e2847"></span>실내 방 (금빛 띠가 문)</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 14px; height: 14px; border: 2px solid #6b7180; background: #2b2f38"></span>집 (원 = 주인 문패)</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 14px; height: 14px; border-radius: 50%; background: #c9c3b8"></span>연단</span>
+</div>
+<span>문이 모두 광장을 향해 누가 어느 방에 들어가는지 광장에서 보인다. 집 앞은 방 옆 골목이라 조용하다.</span>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":600,"height":700}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

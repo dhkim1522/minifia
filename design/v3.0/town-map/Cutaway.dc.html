@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>실내 보이기 규칙</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0a0e1c}
+a{color:#a9aebb}a:hover{color:#e6e8ee}
+</style>
+</helmet>
+<div style="width: 600px; height: 700px; box-sizing: border-box; padding: 24px; background: #0e1326; color: #e6e8ee; font-family: 'Gowun Dodum', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; word-break: keep-all; display: flex; flex-direction: column; gap: 20px">
+
+<!-- 1. 내가 밖에 있을 때 -->
+<div style="display: flex; gap: 20px; align-items: center">
+<div style="position: relative; flex: none; width: 260px; height: 180px; border-radius: 10px; background: #151c36" role="img" aria-label="밖에서 본 방: 지붕이 덮여 안이 보이지 않는다">
+<div style="position: absolute; left: 60px; top: 20px; width: 140px; height: 96px; border-radius: 6px; background: #3a3f4b; border: 2px solid #6b7180; display: grid; place-items: center"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#ffcf8a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="7" width="14" height="11" rx="2"/><path d="M5 9l7 5 7-5"/></svg></div>
+<div style="position: absolute; left: 109px; top: 113px; width: 42px; height: 6px; background: #ffcf8a"></div>
+<span style="position: absolute; left: 119px; top: 138px; width: 22px; height: 22px; border-radius: 50%; background: #e6e8ee; border: 2px solid #0e1326" aria-hidden="true"></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #f1f2f5">내가 밖에 있을 때</h2>
+<p style="margin: 0; font-size: 15px; line-height: 1.6; color: #a9aebb">방은 지붕이 덮여 있고 간판 그림만 보인다. 안에 누가 있는지 서버가 알려 주지 않는다.</p>
+</div>
+</div>
+
+<!-- 2. 내가 방 안에 있을 때 -->
+<div style="display: flex; gap: 20px; align-items: center">
+<div style="position: relative; flex: none; width: 260px; height: 180px; border-radius: 10px; background: #151c36" role="img" aria-label="안에서 본 방: 지붕과 앞벽이 걷히고 같은 방 사람만 보인다">
+<div style="position: absolute; left: 60px; top: 20px; width: 140px; height: 96px; border-radius: 6px; background: #4a3f36; border: 2px dashed #ffcf8a"></div>
+<div style="position: absolute; left: 70px; top: 28px; width: 34px; height: 16px; border-radius: 3px; background: #6b5a48" aria-hidden="true"></div>
+<span style="position: absolute; left: 108px; top: 62px; width: 22px; height: 22px; border-radius: 50%; background: #e6e8ee; border: 2px solid #0e1326" aria-hidden="true"></span>
+<span style="position: absolute; left: 150px; top: 48px; width: 22px; height: 22px; border-radius: 50%; background: #d98a9e; border: 2px solid #0e1326" aria-hidden="true"></span>
+<div style="position: absolute; left: 109px; top: 113px; width: 42px; height: 6px; background: #ffcf8a"></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #f1f2f5">내가 방 안에 있을 때</h2>
+<p style="margin: 0; font-size: 15px; line-height: 1.6; color: #a9aebb">그 방의 지붕과 앞벽이 0.25초에 걷힌다. 같은 방 사람만 보이고, 밖의 사람은 사라진다.</p>
+</div>
+</div>
+
+<!-- 3. 문을 지날 때 -->
+<div style="display: flex; gap: 20px; align-items: center">
+<div style="position: relative; flex: none; width: 260px; height: 180px; border-radius: 10px; background: #151c36" role="img" aria-label="문을 지나는 사람: 문 앞에서 옅어지며 사라진다">
+<div style="position: absolute; left: 60px; top: 20px; width: 140px; height: 96px; border-radius: 6px; background: #3a3f4b; border: 2px solid #6b7180"></div>
+<div style="position: absolute; left: 109px; top: 113px; width: 42px; height: 6px; background: #ffcf8a"></div>
+<span style="position: absolute; left: 119px; top: 122px; width: 22px; height: 22px; border-radius: 50%; background: #8fa3d9; opacity: 0.35; border: 2px solid #0e1326" aria-hidden="true"></span>
+<span style="position: absolute; left: 119px; top: 148px; width: 22px; height: 22px; border-radius: 50%; background: #8fa3d9; border: 2px solid #0e1326" aria-hidden="true"></span>
+<span style="position: absolute; left: 50px; top: 146px; width: 22px; height: 22px; border-radius: 50%; background: #e6e8ee; border: 2px solid #0e1326" aria-hidden="true"></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #f1f2f5">누가 문을 지날 때</h2>
+<p style="margin: 0; font-size: 15px; line-height: 1.6; color: #a9aebb">밖에서 보면 문 앞에서 옅어지며 사라진다. 들어가는 것을 본 사람만 그 사람이 어디 있는지 안다.</p>
+</div>
+</div>
+
+<p style="margin: 0; font-size: 14px; line-height: 1.6; color: #a9aebb">유령(탈락자)과 결과 화면은 모든 방의 지붕을 걷어 전체를 본다. 집은 들어갈 수 없고 문패에 주인 얼굴이 보인다.</p>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":600,"height":700}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
