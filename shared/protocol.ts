@@ -488,6 +488,12 @@ export type OutfitId = (typeof OUTFIT_IDS)[number];
 
 /** 맵 id(결정 D-22). 맵은 shared/game/maps.ts 의 MAPS 표에 등록한다. */
 export type MapId = "bar" | "plaza";
+/** 실내 방 id(20페이즈 D-06): 우체국·술집·진료소·경찰서. 방이 있는 맵(shared/game/mapTown.ts)의 RoomDef 와 같은 합집합이다. */
+export const ROOM_IDS = ["post", "pub", "clinic", "police"] as const;
+export type RoomId = (typeof ROOM_IDS)[number];
+/** 구역 id(20페이즈 D-13): 광장(방 밖 전부) 또는 방 하나. 구역은 위치의 순수 함수이고 서버가 판정한다(shared/game/zones.ts) — 클라이언트 메시지에 구역 값은 없다. */
+export const ZONE_IDS = ["plaza", ...ROOM_IDS] as const;
+export type ZoneId = (typeof ZONE_IDS)[number];
 /** 방장의 선택(결정 D-20): 맵 하나 또는 무작위(기본). 무작위의 결과는 시작 때 서버가 정한다. */
 export type MapChoice = MapId | "random";
 /** 서버 스키마(strictObject enum)와 화면이 같이 읽는 선택 값 목록. */
