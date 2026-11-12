@@ -31,6 +31,7 @@ import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
 import { enterMorning, enterNight } from "./night";
 import { PHASE_DEFS, nextPhaseOf } from "./phases";
 import { RULESET, modeOf, rulesetOf } from "./ruleset";
+import type { Ruleset } from "./ruleset";
 import type { RoomState } from "./room";
 import { clearTutorial } from "./tutorial";
 import { resolveVerdict } from "./verdict";
@@ -69,12 +70,17 @@ const ON_DEADLINE: Partial<Record<PhaseId, (s: RoomState, at: number) => Deadlin
   // 마지막 3인 결전은 RULESET.showdown 일 때만(결정 0072) — 꺼지면 키를 만들지 않아 표의 기본 next(discussion)로 간다.
   ...(RULESET.showdown ? { dayAnnounce: routeAfterDayAnnounce } : {}),
   showdown: stepShowdown,
-  nomination: RULESET.pickTurn ? stepNomination : resolveNomination,
+  nomination: RULESET.pickTurn ? stepNomination : (s) => resolveNomination(s), // 두 번째 인자 at(마감 시각)이 규칙 자리로 들어가지 않게 감싼다
   runoff: stepRunoff,
   verdict: resolveVerdict,
   execution: routeAfterExecution,
   morning: routeAfterMorning,
 };
+
+/** 자리 함수(19-02 RED) — 아직 규칙을 읽지 않고 모듈 표를 그대로 돌려준다. */
+export function hooksOf(_rules: Ruleset): { enter: typeof ON_ENTER; deadline: typeof ON_DEADLINE } {
+  return { enter: ON_ENTER, deadline: ON_DEADLINE };
+}
 
 /**
  * 마감이 지난 단계를 다음 단계로 넘긴다. 새 마감은 now 가 아니라 "이전 마감 + 다음 단계 길이" 로 연쇄 계산해,
