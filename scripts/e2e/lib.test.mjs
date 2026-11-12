@@ -150,6 +150,17 @@ import {
   sideColumnChecks,
   SIDE_COLUMN_EXCEPTIONS,
   SIDE_ORDER,
+  HOST_RAIL_E2E,
+  HOST_RAIL_MARKERS,
+  HOST_RAIL_ORDER,
+  LAMP_RGB,
+  NIGHT600_RGB,
+  MODE_NAMES_E2E,
+  hostRailChecks,
+  hostRailLayoutE2E,
+  hostRailMeasure,
+  modeChipChecks,
+  modeSheetChecks,
   soundRenderChecks,
   soundNightParityChecks,
   soundVerdictTimingChecks,
@@ -4393,18 +4404,16 @@ test("hostChimeChecks HS3: 낮 시작 → 심부름(dayToErrand) 0번이어야 �
 
 // ---- 16-06: sideColumnChecks (SC1~SC6) ----
 
-/** 360×640 방장 대기실 정상값: 띠 면 아랫변 123, 열 윗변 135(= 123 + 12), 오른쪽 16 → left 292, 칸 52·간격 12 */
+/** 360×640 방장 대기실 정상값(19페이즈: 방장도 오른쪽 열은 소리·옷장 둘): 띠 면 아랫변 123, 열 윗변 135(= 123 + 12), 오른쪽 16 → left 292, 칸 52·간격 12 */
 function sideIn(over = {}) {
   const b = (side, top, left = 292, extra = {}) => ({ side, rect: rect(left, top, 52, 52), ...extra });
   return {
     viewport: { w: 360, h: 640 },
     screen: "lobby",
     host: true,
-    mapsOn: true,
-    botsOn: true,
-    buttons: [b("sound", 135), b("map", 199), b("bots", 263), b("dress", 327)],
+    buttons: [b("sound", 135), b("dress", 199)],
     band: rect(16, 70, 328, 53),
-    panelTop: 390,
+    panelTop: 418,
     head: [{ kind: "leave", rect: rect(16, 8, 44, 44) }, { kind: "share", rect: rect(300, 8, 44, 44) }],
     test: rect(16, 131, 90, 44),
     ...over,
@@ -4412,24 +4421,24 @@ function sideIn(over = {}) {
 }
 const scFails = (args) => soundFails(sideColumnChecks(args));
 
-test("sideColumnChecks: 정상값(방장 넷)은 SC1~SC6 모두 통과, 줄 모양은 { id, label, ok, detail }", () => {
+test("sideColumnChecks: 정상값(방장도 소리·옷장 둘)은 SC1~SC6 모두 통과, 줄 모양은 { id, label, ok, detail }", () => {
   const lines = sideColumnChecks(sideIn());
   assert.deepEqual(lines.map((l) => l.id), ["SC1", "SC2", "SC3", "SC4", "SC5", "SC6"]);
   assert.deepEqual(soundFails(lines), []);
-  assert.deepEqual([...SIDE_ORDER], ["sound", "map", "bots", "dress"]);
+  assert.deepEqual([...SIDE_ORDER], ["sound", "dress"]);
 });
 
-test("sideColumnChecks: 손님(소리·옷장 둘)과 게임 화면(소리 하나)도 통과한다", () => {
+test("sideColumnChecks: 참가자(소리·옷장 둘)와 게임 화면(소리 하나)도 통과한다", () => {
   const b = (side, top) => ({ side, rect: rect(292, top, 52, 52) });
   assert.deepEqual(scFails(sideIn({ host: false, buttons: [b("sound", 135), b("dress", 199)] })), []);
   assert.deepEqual(scFails(sideIn({ screen: "game", host: false, buttons: [b("sound", 135)], test: null })), []);
 });
 
 test("SC1: 지름 52±1 원이 아니면 실패 — 경계 51 / 53 통과, 50.99 실패. 소리 알약은 높이 52·폭 112 이상", () => {
-  const withMap = (w, h) => sideIn({ buttons: sideIn().buttons.map((x) => (x.side === "map" ? { ...x, rect: rect(292 + (52 - w), 199, w, h) } : x)) });
-  assert.deepEqual(scFails(withMap(51, 51)).includes("SC1"), false);
-  assert.deepEqual(scFails(withMap(50.99, 52)).includes("SC1"), true);
-  assert.deepEqual(scFails(withMap(52, 44)).includes("SC1"), true);
+  const withDress = (w, h) => sideIn({ buttons: sideIn().buttons.map((x) => (x.side === "dress" ? { ...x, rect: rect(292 + (52 - w), 199, w, h) } : x)) });
+  assert.deepEqual(scFails(withDress(51, 51)).includes("SC1"), false);
+  assert.deepEqual(scFails(withDress(50.99, 52)).includes("SC1"), true);
+  assert.deepEqual(scFails(withDress(52, 44)).includes("SC1"), true);
   const pill = (w) => sideIn({ buttons: sideIn().buttons.map((x) => (x.side === "sound" ? { ...x, rect: rect(344 - w, 135, w, 52), pill: true } : x)) });
   assert.deepEqual(scFails(pill(120)), []);
   assert.deepEqual(scFails(pill(111)), ["SC1"]);
@@ -4437,45 +4446,39 @@ test("SC1: 지름 52±1 원이 아니면 실패 — 경계 51 / 53 통과, 50.99
 
 test("SC2: 열 단추끼리·띠 주변 8·아래 패널·머리 단추·[테스트] 와 겹치면 실패, 맞닿기만 하면 통과", () => {
   const move = (side, rc) => ({ buttons: sideIn().buttons.map((x) => (x.side === side ? { ...x, rect: rc } : x)) });
-  assert.ok(scFails(sideIn(move("map", rect(292, 180, 52, 52)))).includes("SC2")); // 소리와 겹침
+  assert.ok(scFails(sideIn(move("dress", rect(292, 180, 52, 52)))).includes("SC2")); // 소리와 겹침
   assert.ok(scFails(sideIn({ band: rect(16, 70, 328, 70) })).includes("SC2")); // 띠 아래 8 안(열 윗변 135 < 띠 아랫변 140 + 8)
-  assert.ok(scFails(sideIn({ panelTop: 380 })).includes("SC2")); // 옷장 아랫변 379 > 372
+  assert.ok(scFails(sideIn({ panelTop: 255 })).includes("SC2")); // 옷장 아랫변 251 > 247
   assert.ok(scFails(sideIn({ head: [{ kind: "share", rect: rect(300, 100, 44, 44) }] })).includes("SC2"));
   assert.ok(scFails(sideIn({ test: rect(250, 131, 60, 44) })).includes("SC2"));
   assert.deepEqual(scFails(sideIn({ band: rect(16, 70, 328, 53) })), []); // 띠 아랫변 123 + 8 = 131 ≤ 열 윗변 135
-  assert.deepEqual(scFails(sideIn({ panelTop: 379 + 8 })), []); // 옷장 아랫변 379 = 패널 윗변 − 8
+  assert.deepEqual(scFails(sideIn({ panelTop: 251 + 8 })), []); // 옷장 아랫변 251 = 패널 윗변 − 8
 });
 
-test("SC2: 360×560 방장 대기실만 알려진 한계 예외 — 잰 값은 남기고 실패로 세지 않는다. 다른 조합은 같은 겹침이 실패다", () => {
-  assert.ok(SIDE_COLUMN_EXCEPTIONS.length >= 1 && SIDE_COLUMN_EXCEPTIONS.every((e) => typeof e.reason === "string" && e.reason.length > 10));
-  const overlapping = { panelTop: 300 };
-  const exc = sideColumnChecks(sideIn({ ...overlapping, viewport: { w: 360, h: 560 } })).find((l) => l.id === "SC2");
-  assert.equal(exc.ok, true);
-  assert.equal(exc.known, true);
-  assert.match(exc.detail, /알려진 한계/);
-  assert.ok(scFails(sideIn({ ...overlapping, viewport: { w: 360, h: 640 } })).includes("SC2"));
-  assert.ok(scFails(sideIn({ ...overlapping, viewport: { w: 360, h: 560 }, host: false, buttons: [{ side: "sound", rect: rect(292, 135, 52, 52) }, { side: "dress", rect: rect(292, 250, 52, 52) }] })).includes("SC2"));
-  assert.ok(scFails(sideIn({ ...overlapping, viewport: { w: 360, h: 560 }, screen: "result" })).includes("SC2"));
+test("SC2: 알려진 한계 예외가 없다(19페이즈) — 360×560 방장 대기실도 겹치면 실패한다", () => {
+  assert.equal(SIDE_COLUMN_EXCEPTIONS.length, 0);
+  const sc2 = sideColumnChecks(sideIn({ panelTop: 240, viewport: { w: 360, h: 560 } })).find((l) => l.id === "SC2");
+  assert.equal(sc2.ok, false);
+  assert.equal(sc2.known, undefined);
+  assert.doesNotMatch(sc2.detail, /알려진 한계/);
 });
 
-test("SC3: 손님에게 맵·봇이 있거나, 방장인데 켜진 맵·봇이 없거나, 순서가 틀리면 실패", () => {
+test("SC3: 맵·봇이 오른쪽 열에 있으면 방장 화면도 실패(19페이즈: 방장 전용은 왼쪽 줄), 소리·옷장 개수·순서가 틀려도 실패", () => {
   const b = (side, top) => ({ side, rect: rect(292, top, 52, 52) });
-  assert.ok(scFails(sideIn({ host: false, buttons: [b("sound", 135), b("map", 199), b("dress", 263)] })).includes("SC3")); // 손님에게 맵
-  assert.ok(scFails(sideIn({ host: false, buttons: [b("sound", 135), b("bots", 199), b("dress", 263)] })).includes("SC3")); // 손님에게 봇
-  assert.ok(scFails(sideIn({ buttons: [b("sound", 135), b("map", 199), b("dress", 263)] })).includes("SC3")); // 방장인데 봇 없음
-  assert.deepEqual(scFails(sideIn({ botsOn: false, buttons: [b("sound", 135), b("map", 199), b("dress", 263)] })), []); // 봇 도구가 꺼진 방
-  assert.deepEqual(scFails(sideIn({ mapsOn: false, buttons: [b("sound", 135), b("bots", 199), b("dress", 263)] })), []);
-  assert.ok(scFails(sideIn({ buttons: [b("sound", 135), b("bots", 199), b("map", 263), b("dress", 327)] })).includes("SC3")); // 순서
-  assert.ok(scFails(sideIn({ buttons: [b("map", 135), b("bots", 199), b("dress", 263)] })).includes("SC3")); // 소리 없음
+  assert.ok(scFails(sideIn({ buttons: [b("sound", 135), b("map", 199), b("dress", 263)] })).includes("SC3")); // 방장 열에 맵
+  assert.ok(scFails(sideIn({ buttons: [b("sound", 135), b("bots", 199), b("dress", 263)] })).includes("SC3")); // 방장 열에 봇
+  assert.ok(scFails(sideIn({ host: false, buttons: [b("sound", 135), b("map", 199), b("dress", 263)] })).includes("SC3")); // 참가자 열에 맵
+  assert.match(sideColumnChecks(sideIn({ buttons: [b("sound", 135), b("map", 199), b("dress", 263)] })).find((l) => l.id === "SC3").detail, /map/);
+  assert.ok(scFails(sideIn({ buttons: [b("dress", 135), b("sound", 199)] })).includes("SC3")); // 순서
+  assert.ok(scFails(sideIn({ buttons: [b("dress", 135)] })).includes("SC3")); // 소리 없음
+  assert.ok(scFails(sideIn({ buttons: [b("sound", 135)] })).includes("SC3")); // 대기실에 옷장 없음
   assert.ok(scFails(sideIn({ screen: "game", host: false, buttons: [b("sound", 135), b("dress", 199)] })).includes("SC3")); // 게임 화면에 옷장
 });
 
-test("SC3: 두 열이면 오른쪽 열부터 위에서 아래로 읽는다 — 소리·맵 | 봇·옷장 통과, 열이 뒤집히면 실패", () => {
+test("SC3: 두 열이면 오른쪽 열부터 읽는다 — 소리가 오른쪽이면 순서 통과, 옷장이 오른쪽이면 실패", () => {
   const cell = (side, top, left) => ({ side, rect: rect(left, top, 52, 52) });
-  const ok = [cell("sound", 135, 292), cell("map", 199, 292), cell("bots", 135, 228), cell("dress", 199, 228)];
-  assert.deepEqual(scFails(sideIn({ buttons: ok })), []);
-  const flipped = [cell("sound", 135, 292), cell("map", 199, 292), cell("bots", 135, 228), cell("dress", 199, 228)].map((x) => (x.side === "bots" ? cell("bots", 199, 228) : x.side === "dress" ? cell("dress", 135, 228) : x));
-  assert.ok(scFails(sideIn({ buttons: flipped })).includes("SC3"));
+  assert.ok(!scFails(sideIn({ buttons: [cell("sound", 135, 292), cell("dress", 135, 228)] })).includes("SC3"));
+  assert.ok(scFails(sideIn({ buttons: [cell("dress", 135, 292), cell("sound", 135, 228)] })).includes("SC3"));
 });
 
 test("SC4: 머리에는 44 정사각 단추 둘뿐 — 개수·크기가 틀리면 실패, 결과 화면처럼 하나(expectHead 1)도 통과", () => {
@@ -4495,12 +4498,12 @@ test("SC5: 열 윗변 = 띠 아랫변 + 12 (±2), 오른쪽 여백 16 (±1)", ()
   assert.ok(scFails(sideIn({ band: null })).includes("SC5")); // 기준이 없으면 실패
 });
 
-test("SC6: 열 안 간격 12(±1), 열 사이 12(±1), 첫 열 두 칸 이상", () => {
+test("SC6: 열 안 간격 12(±1), 첫 열 두 칸 이상", () => {
   const b = (side, top, left = 292) => ({ side, rect: rect(left, top, 52, 52) });
-  assert.ok(scFails(sideIn({ buttons: [b("sound", 135), b("map", 195), b("bots", 259), b("dress", 323)] })).includes("SC6")); // 소리·맵 간격 8
-  assert.ok(!scFails(sideIn({ buttons: [b("sound", 135), b("map", 198), b("bots", 261), b("dress", 324)] })).includes("SC6")); // 간격 11
-  assert.ok(scFails(sideIn({ buttons: [b("sound", 135), b("map", 199), b("bots", 135, 220), b("dress", 199, 220)] })).includes("SC6")); // 열 사이 20
-  assert.ok(scFails(sideIn({ buttons: [b("sound", 135), b("map", 135, 228), b("bots", 199, 228), b("dress", 263, 228)] })).includes("SC6")); // 첫 열 한 칸
+  assert.ok(scFails(sideIn({ buttons: [b("sound", 135), b("dress", 195)] })).includes("SC6")); // 간격 8
+  assert.ok(!scFails(sideIn({ buttons: [b("sound", 135), b("dress", 198)] })).includes("SC6")); // 간격 11
+  assert.ok(scFails(sideIn({ buttons: [b("sound", 135), b("dress", 135, 220)] })).includes("SC6")); // 두 열인데 열 사이 20·첫 열 한 칸
+  assert.ok(scFails(sideIn({ buttons: [b("sound", 135), b("dress", 135, 228)] })).includes("SC6")); // 첫 열 한 칸
 });
 
 test("sideColumnChecks: 빠진 입력은 전부 측정값 없음으로 실패한다(공허 통과 금지)", () => {
@@ -4509,6 +4512,302 @@ test("sideColumnChecks: 빠진 입력은 전부 측정값 없음으로 실패한
     assert.equal(lines.length, 6);
     assert.ok(lines.every((l) => !l.ok && /측정값 없음/.test(l.detail)));
   }
+});
+
+// ---- 19-06: 방장 줄 hostRailChecks(HR1~HR8)·참가자 칩 modeChipChecks(CH1·CH2)·판 종류 시트 modeSheetChecks(MS1·MS1g) ----
+
+const LAMP = "rgb(255, 207, 138)";
+const N600 = "rgb(42, 55, 96)";
+const railBtn = (id, top, left = 16, extra = {}) => ({ id, rect: rect(left, top, 52, 52), borderColor: LAMP, color: LAMP, isCall: false, role: id === "tutorial" ? "switch" : null, ariaChecked: id === "tutorial" ? "false" : null, ...extra });
+/**
+ * 390×844 방장 대기실(테스트 방) 확장판 정상값: 띠 면 아랫변 123, [테스트] 131~175, 줄 윗변 183(= 123 + 12 + 48), 왕관 표식 20 + 12, 단추 넷 215·279·343·407(아랫변 459),
+ * 패널 222(윗변 622) → 줄 최대 높이 431(= 622 − 8 − 135 − 48). 오른쪽 열은 소리·옷장 둘(left 322).
+ */
+function railIn(over = {}) {
+  return {
+    viewport: { w: 390, h: 844 },
+    screen: "lobby",
+    host: true,
+    mode: "extended",
+    kbOpen: false,
+    mapsOn: true,
+    botsOn: true,
+    rail: { rect: rect(16, 183, 52, 276), ariaLabel: "방장 전용" },
+    buttons: [railBtn("mode", 215), railBtn("map", 279), railBtn("bots", 343), railBtn("tutorial", 407)],
+    crown: rect(16, 183, 52, 20),
+    chip: null,
+    band: rect(16, 70, 358, 53),
+    panel: rect(0, 622, 390, 222),
+    head: [{ kind: "나가기", rect: rect(16, 8, 44, 44) }, { kind: "공유", rect: rect(330, 8, 44, 44) }],
+    test: rect(16, 131, 90, 44),
+    toast: null,
+    side: [{ side: "sound", rect: rect(322, 135, 52, 52), borderColor: N600 }, { side: "dress", rect: rect(322, 199, 52, 52), borderColor: N600 }],
+    panelToggles: 0,
+    ...over,
+  };
+}
+/** 왕관 표식이 없는 한 열(단추가 줄 윗변 183 부터). panelTop 으로 줄 최대 높이를 정한다(최대 높이 = panelTop − 191) */
+function railNoCrown(panelTop, over = {}) {
+  return railIn({ rail: { rect: rect(16, 183, 52, 244), ariaLabel: "방장 전용" }, crown: null, buttons: [railBtn("mode", 183), railBtn("map", 247), railBtn("bots", 311), railBtn("tutorial", 375)], panel: rect(0, panelTop, 390, 222), ...over });
+}
+/** 결과 화면 방장 정상값: [테스트] 없음 → 줄 윗변 135, 표식 + 단추 둘(167·231), 머리 단추 하나 */
+function railResult(over = {}) {
+  return railIn({ screen: "result", rail: { rect: rect(16, 135, 52, 148), ariaLabel: "방장 전용" }, crown: rect(16, 135, 52, 20), buttons: [railBtn("mode", 167), railBtn("map", 231)], test: null, head: [{ kind: "나가기", rect: rect(16, 8, 44, 44) }], panel: rect(0, 600, 390, 244), ...over });
+}
+const guestChip = (over = {}) => ({ mode: "extended", name: "확장판", rect: rect(16, 191, 96, 32), tag: "div", tabIndex: -1, ...over });
+const hrFails = (args) => soundFails(hostRailChecks(args));
+const hrLine = (args, id) => {
+  const line = hostRailChecks(args).find((l) => l.id === id);
+  assert.ok(line, `${id} 줄이 없음`);
+  return line;
+};
+const moveBtn = (s, id, rc) => ({ buttons: s.buttons.map((x) => (x.id === id ? { ...x, rect: rc } : x)) });
+const editBtn = (s, id, extra) => ({ buttons: s.buttons.map((x) => (x.id === id ? { ...x, ...extra } : x)) });
+
+test("hostRail 사본 상수: 지름 52·간격 12·표식 20·왼쪽 16·테스트 방 48·칩 32/20, 순서 mode·map·bots·tutorial, 색 둘, 판 이름 둘, 표식 여섯", () => {
+  assert.deepEqual({ ...HOST_RAIL_E2E }, { cell: 52, gap: 12, crownH: 20, left: 16, testShift: 48, chipH: 32, chipTop: 20 });
+  assert.deepEqual([...HOST_RAIL_ORDER], ["mode", "map", "bots", "tutorial"]);
+  assert.equal(LAMP_RGB, LAMP);
+  assert.equal(NIGHT600_RGB, N600);
+  assert.deepEqual({ ...MODE_NAMES_E2E }, { basic: "기본 마피아", extended: "확장판" });
+  assert.deepEqual([...HOST_RAIL_MARKERS], ["data-host-rail", "data-host-rail-btn", "data-host-rail-crown", "data-mode-chip", "data-mode-sheet", "data-mode-card"]);
+});
+
+test("hostRailLayoutE2E: F-2 세 갈래 — 표식 한 열 · 표식 없는 한 열 · 두 열(한 열 최소 2칸)", () => {
+  assert.deepEqual(hostRailLayoutE2E(4, 276), { crown: true, columns: [4] });
+  assert.deepEqual(hostRailLayoutE2E(4, 275), { crown: false, columns: [4] });
+  assert.deepEqual(hostRailLayoutE2E(4, 244), { crown: false, columns: [4] });
+  assert.deepEqual(hostRailLayoutE2E(4, 243), { crown: false, columns: [3, 1] });
+  assert.deepEqual(hostRailLayoutE2E(4, 174), { crown: false, columns: [2, 2] });
+  assert.deepEqual(hostRailLayoutE2E(4, 40), { crown: false, columns: [2, 2] });
+  assert.deepEqual(hostRailLayoutE2E(3, 212), { crown: true, columns: [3] });
+  assert.deepEqual(hostRailLayoutE2E(3, 174), { crown: false, columns: [2, 1] });
+  assert.deepEqual(hostRailLayoutE2E(2, 148), { crown: true, columns: [2] });
+  assert.deepEqual(hostRailLayoutE2E(0, 500), { crown: false, columns: [] });
+  assert.deepEqual(hostRailLayoutE2E(3, Number.POSITIVE_INFINITY), { crown: true, columns: [3] });
+});
+
+test("hostRailChecks: 정상값(390×844 방장 대기실 확장판)은 HR1~HR8 모두 통과, 줄 모양은 { id, label, ok, detail }", () => {
+  const lines = hostRailChecks(railIn());
+  assert.deepEqual(lines.map((l) => l.id), ["HR1", "HR2", "HR3", "HR4", "HR5", "HR6", "HR7", "HR8"]);
+  assert.deepEqual(soundFails(lines), []);
+  for (const l of lines) assert.deepEqual(Object.keys(l).filter((k) => ["id", "label", "ok", "detail"].includes(k)).sort(), ["detail", "id", "label", "ok"]);
+  assert.deepEqual(hostRailMeasure(railIn()), { bandBottom: 123, shift: 48, maxH: 431, n: 4, crown: true, columns: [4], expect: { crown: true, columns: [4] } });
+});
+
+test("hostRailChecks: 기본 마피아 대기실(단추 셋)·결과 화면(단추 둘, HR1~HR6)·봇 도구가 꺼진 방도 통과한다", () => {
+  const basic = railIn({ mode: "basic", rail: { rect: rect(16, 183, 52, 212), ariaLabel: "방장 전용" }, buttons: [railBtn("mode", 215), railBtn("map", 279), railBtn("bots", 343)] });
+  assert.deepEqual(hrFails(basic), []);
+  const res = hostRailChecks(railResult());
+  assert.deepEqual(res.map((l) => l.id), ["HR1", "HR2", "HR3", "HR4", "HR5", "HR6"]);
+  assert.deepEqual(soundFails(res), []);
+  const noBots = railIn({ botsOn: false, rail: { rect: rect(16, 183, 52, 212), ariaLabel: "방장 전용" }, buttons: [railBtn("mode", 215), railBtn("map", 279), railBtn("tutorial", 343)] });
+  assert.deepEqual(hrFails(noBots), []);
+});
+
+test("HR1: 줄은 방장 대기실·결과에만 — 참가자(줄 없음)는 통과, 방장인데 없음·참가자인데 있음·키보드 열림·게임 중에 있으면 실패", () => {
+  const guest = railIn({ host: false, rail: null, buttons: [], crown: null, chip: guestChip() });
+  assert.deepEqual(hostRailChecks(guest).map((l) => l.id), ["HR1", "HR8"]);
+  assert.deepEqual(hrFails(guest), []);
+  assert.ok(hrFails(railIn({ rail: null, buttons: [], crown: null })).includes("HR1")); // 방장인데 줄 없음
+  assert.ok(hostRailChecks(railIn({ rail: null, buttons: [], crown: null })).every((l) => !l.ok || l.id === "HR8")); // 줄이 없으면 나머지도 통과로 세지 않는다
+  assert.ok(hrFails(railIn({ host: false })).includes("HR1")); // 참가자 화면에 줄
+  assert.ok(hrFails(railIn({ chip: guestChip() })).includes("HR1")); // 방장 화면에 참가자 칩
+  // 키보드 열림: 줄·칩 모두 0 이어야 하고 그때는 HR1 한 줄만 낸다
+  const kb = railIn({ kbOpen: true, rail: null, buttons: [], crown: null });
+  assert.deepEqual(hostRailChecks(kb).map((l) => l.id), ["HR1"]);
+  assert.deepEqual(hrFails(kb), []);
+  assert.deepEqual(hrFails(railIn({ kbOpen: true })), ["HR1"]);
+  assert.deepEqual(hrFails(railIn({ kbOpen: true, host: false, rail: null, buttons: [], crown: null, chip: guestChip() })), ["HR1"]);
+  // 게임 중: 방장도 줄·칩 0
+  assert.deepEqual(hrFails(railIn({ screen: "game", rail: null, buttons: [], crown: null, test: null })), []);
+  assert.deepEqual(hrFails(railIn({ screen: "game" })), ["HR1"]);
+});
+
+test("HR2: 지름 52±1·칸 사이 12±1·왼쪽 16±1·줄 윗변 = 띠 아랫변 + 12(+48 테스트 방) ±2", () => {
+  const s = railIn();
+  assert.ok(hrFails(railIn(moveBtn(s, "map", rect(16, 279, 50, 50)))).includes("HR2")); // 지름 50
+  assert.ok(!hrFails(railIn(moveBtn(s, "map", rect(16, 279, 51, 51)))).includes("HR2"));
+  assert.ok(hrFails(railIn(moveBtn(s, "tutorial", rect(16, 411, 52, 52)))).includes("HR2")); // 간격 16
+  const shifted = (dy, dx = 0) => railIn({ crown: rect(16 + dx, 183 + dy, 52, 20), buttons: s.buttons.map((x) => ({ ...x, rect: rect(x.rect.left + dx, x.rect.top + dy, 52, 52) })) });
+  assert.ok(hrFails(shifted(0, 4)).includes("HR2")); // 왼쪽 20
+  assert.ok(!hrFails(shifted(0, 1)).includes("HR2"));
+  assert.ok(hrFails(shifted(6)).includes("HR2")); // 윗변 +6
+  assert.ok(!hrFails(shifted(2)).includes("HR2"));
+  assert.ok(hrFails(shifted(2.01)).includes("HR2"));
+  assert.ok(hrFails(shifted(-2.01)).includes("HR2"));
+  // [테스트] 가 없는 방은 띠 아랫변 + 12 가 기대다 — 48 내려온 줄은 실패
+  assert.ok(hrFails(railIn({ test: null })).includes("HR2"));
+  assert.ok(hrFails(shifted(-48)).includes("HR2")); // [테스트] 가 있는데 48 올라가 있으면 실패
+  const plain = railIn({ test: null, crown: rect(16, 135, 52, 20), buttons: s.buttons.map((x) => ({ ...x, rect: rect(16, x.rect.top - 48, 52, 52) })) });
+  assert.ok(!hrFails(plain).includes("HR2"));
+  assert.ok(hrFails(railIn({ band: null })).includes("HR2")); // 기준이 없으면 실패
+  // 두 열: 열 사이 12±1
+  const two = (gapX) => railNoCrown(391, { buttons: [railBtn("mode", 183), railBtn("map", 247), railBtn("bots", 311), railBtn("tutorial", 183, 68 + gapX)] });
+  assert.ok(!hrFails(two(12)).includes("HR2"));
+  assert.ok(hrFails(two(20)).includes("HR2"));
+});
+
+test("HR3: 줄이 아래 패널(윗변 − 8)·머리 단추·[테스트]·알림·띠·오른쪽 열과 겹치면 실패하고 무엇과 겹쳤는지 적는다", () => {
+  const s = railIn();
+  const near = hrLine(railIn({ panel: rect(0, 463, 390, 222) }), "HR3"); // 줄 아랫변 459 = 패널 윗변 − 4
+  assert.equal(near.ok, false);
+  assert.match(near.detail, /패널/);
+  assert.equal(hrLine(railIn({ panel: rect(0, 467, 390, 222) }), "HR3").ok, true); // 459 = 467 − 8
+  assert.match(hrLine(railIn({ head: [{ kind: "나가기", rect: rect(16, 200, 44, 44) }, s.head[1]] }), "HR3").detail, /머리/);
+  assert.match(hrLine(railIn({ test: rect(16, 170, 90, 44) }), "HR3").detail, /테스트/);
+  assert.match(hrLine(railIn({ toast: rect(40, 220, 200, 40) }), "HR3").detail, /알림/);
+  assert.equal(hrLine(railIn({ toast: rect(95, 131, 200, 40) }), "HR3").ok, true); // 가운데 알림은 줄(16~68)과 가로로 떨어져 있다
+  assert.match(hrLine(railIn({ band: rect(16, 70, 358, 120) }), "HR3").detail, /띠/);
+  assert.match(hrLine(railIn({ side: [s.side[0], { ...s.side[1], rect: rect(40, 300, 52, 52) }] }), "HR3").detail, /오른쪽 열/);
+  assert.match(hrLine(railIn({ side: [s.side[0], { ...s.side[1], rect: rect(76, 300, 52, 52) }] }), "HR3").detail, /오른쪽 열/); // 줄 오른쪽 끝 68 과 8 떨어짐(< 16)
+});
+
+test("HR4: 순서·개수 — 확장판 mode·map·bots·tutorial, 기본 마피아 앞 셋, 결과 앞 둘. 오른쪽 열은 소리·옷장 둘", () => {
+  const s = railIn();
+  const swapped = railIn({ buttons: [railBtn("mode", 215), railBtn("bots", 279), railBtn("map", 343), railBtn("tutorial", 407)] });
+  assert.ok(hrFails(swapped).includes("HR4"));
+  assert.ok(hrFails(railIn({ mode: "basic" })).includes("HR4")); // 기본 마피아 대기실에 tutorial
+  assert.ok(hrFails(railIn({ buttons: s.buttons.slice(0, 3) })).includes("HR4")); // 확장판인데 셋
+  assert.ok(hrFails(railResult({ buttons: [railBtn("mode", 167), railBtn("map", 231), railBtn("bots", 295)] })).includes("HR4")); // 결과 화면에 봇
+  assert.ok(hrFails(railIn({ side: [...s.side, { side: "map", rect: rect(322, 263, 52, 52), borderColor: N600 }] })).includes("HR4")); // 오른쪽 열에 맵
+  assert.ok(hrFails(railIn({ side: [s.side[0]] })).includes("HR4")); // 옷장 없음
+  // 두 열은 왼쪽 열부터 위에서 아래로 읽는다
+  const two = railNoCrown(391, { buttons: [railBtn("mode", 183), railBtn("map", 247), railBtn("bots", 311), railBtn("tutorial", 183, 80)] });
+  assert.ok(!hrFails(two).includes("HR4"));
+  const twoBad = railNoCrown(391, { buttons: [railBtn("tutorial", 183), railBtn("map", 247), railBtn("bots", 311), railBtn("mode", 183, 80)] });
+  assert.ok(hrFails(twoBad).includes("HR4"));
+});
+
+test("HR5: 줄 단추 테두리·아이콘이 금빛(rgb(255, 207, 138)), 오른쪽 열 테두리는 night-600 — 줄 단추가 night-600 이거나 .is-call 이면 실패", () => {
+  const s = railIn();
+  assert.ok(hrFails(railIn(editBtn(s, "map", { borderColor: N600 }))).includes("HR5"));
+  assert.ok(hrFails(railIn(editBtn(s, "bots", { isCall: true }))).includes("HR5"));
+  assert.ok(hrFails(railIn(editBtn(s, "mode", { color: "rgb(230, 232, 240)" }))).includes("HR5"));
+  // 켜진 토글은 금빛 채움이라 아이콘 색이 어둡다 — 테두리만 본다
+  assert.ok(!hrFails(railIn(editBtn(s, "tutorial", { ariaChecked: "true", color: "rgb(12, 16, 32)" }))).includes("HR5"));
+  assert.ok(hrFails(railIn({ side: [s.side[0], { ...s.side[1], borderColor: LAMP }] })).includes("HR5")); // 오른쪽 열이 금빛
+  assert.ok(hrFails(railIn({ side: [] })).includes("HR5")); // 견줄 오른쪽 열이 없으면 실패
+});
+
+test("HR6: 왕관 표식·열 수는 F-2 식대로 — 문턱보다 10 큰데 표식 없음은 실패, 문턱 ±2 안은 참고 줄(info), 표식이 없어도 접근성 이름은 있어야 한다", () => {
+  // n = 4 표식 문턱 276. 최대 높이 = panelTop − 191
+  assert.equal(hrLine(railNoCrown(477), "HR6").ok, false); // 최대 높이 286, 표식 없음
+  const edge = hrLine(railNoCrown(468), "HR6"); // 최대 높이 277
+  assert.equal(edge.ok, true);
+  assert.equal(edge.info, true);
+  assert.match(edge.detail, /277/);
+  assert.equal(hrLine(railIn({ panel: rect(0, 466, 390, 222) }), "HR6").info, true); // 최대 높이 275, 표식 있음 — 경계라 판정하지 않는다
+  const plain = hrLine(railNoCrown(461), "HR6"); // 최대 높이 270 → 표식 없는 한 열
+  assert.equal(plain.ok, true);
+  assert.notEqual(plain.info, true);
+  assert.equal(hrLine(railIn({ panel: rect(0, 461, 390, 222) }), "HR6").ok, false); // 최대 높이 270 인데 표식 있음
+  assert.equal(hrLine(railNoCrown(461, { rail: { rect: rect(16, 183, 52, 244), ariaLabel: "" } }), "HR6").ok, false); // 표식도 이름도 없음
+  assert.equal(hrLine(railIn({ rail: { rect: rect(16, 183, 52, 276), ariaLabel: null } }), "HR6").ok, false);
+  // 두 열: 최대 높이 200 → [3, 1], 174 → [2, 2]
+  const three = railNoCrown(391, { buttons: [railBtn("mode", 183), railBtn("map", 247), railBtn("bots", 311), railBtn("tutorial", 183, 80)] });
+  assert.deepEqual(hrFails(three), []);
+  const twoTwo = railNoCrown(365, { buttons: [railBtn("mode", 183), railBtn("map", 247), railBtn("bots", 183, 80), railBtn("tutorial", 247, 80)] });
+  assert.deepEqual(hrFails(twoTwo), []);
+  assert.equal(hrLine(railNoCrown(391), "HR6").ok, false); // 최대 높이 200 인데 한 열 넷
+  assert.equal(hrLine(railNoCrown(365, { buttons: three.buttons }), "HR6").ok, false); // 최대 높이 174 인데 [3, 1]
+});
+
+test("HR7: 튜토리얼 토글은 role=switch·aria-checked, 기본 마피아에는 없고, 패널 안 옛 스위치 줄은 0", () => {
+  const s = railIn();
+  assert.ok(hrFails(railIn(editBtn(s, "tutorial", { role: null }))).includes("HR7"));
+  assert.ok(hrFails(railIn(editBtn(s, "tutorial", { ariaChecked: null }))).includes("HR7"));
+  assert.ok(hrFails(railIn({ mode: "basic" })).includes("HR7")); // 기본 마피아인데 토글이 있음
+  assert.ok(hrFails(railIn({ buttons: s.buttons.slice(0, 3) })).includes("HR7")); // 확장판인데 토글이 없음
+  assert.ok(hrFails(railIn({ panelToggles: 1 })).includes("HR7"));
+  assert.match(hrLine(railIn({ panelToggles: undefined }), "HR7").detail, /측정값 없음/);
+});
+
+test("HR8: 대기실 패널 높이는 방장·참가자 모두 222(±1) — 276 은 실패", () => {
+  assert.ok(hrFails(railIn({ panel: rect(0, 568, 390, 276) })).includes("HR8"));
+  assert.ok(!hrFails(railIn({ panel: rect(0, 621, 390, 223) })).includes("HR8"));
+  assert.ok(hrFails(railIn({ panel: rect(0, 620.5, 390, 223.5) })).includes("HR8"));
+  const guest = railIn({ host: false, rail: null, buttons: [], crown: null, chip: guestChip(), panel: rect(0, 568, 390, 276) });
+  assert.deepEqual(hrFails(guest), ["HR8"]);
+});
+
+test("hostRailChecks: 빠진 입력은 전부 측정값 없음으로 실패한다(공허 통과 금지)", () => {
+  for (const args of [{}, railIn({ viewport: null }), railIn({ screen: "map" }), railIn({ host: undefined }), railIn({ mode: "x" }), railIn({ buttons: null }), railIn({ rail: undefined }), railIn({ side: null }), railIn({ head: null }), railIn({ panel: null })]) {
+    const lines = hostRailChecks(args);
+    assert.equal(lines.length, 8);
+    assert.ok(lines.every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  }
+  assert.equal(hostRailMeasure({}), null);
+});
+
+/** 참가자 대기실(테스트 방) 칩 정상값: 윗변 191(= 123 + 20 + 48), 왼쪽 16, 높이 32 */
+function chipIn(over = {}) {
+  const s = railIn();
+  return { viewport: s.viewport, viewMode: "extended", chip: guestChip(), band: s.band, panel: s.panel, head: s.head, test: s.test, toast: null, side: s.side, ...over };
+}
+const chFails = (args) => soundFails(modeChipChecks(args));
+
+test("modeChipChecks CH1: 칩 표식·이름이 view.mode 와 같고 포커스를 받지 않는다", () => {
+  const lines = modeChipChecks(chipIn());
+  assert.deepEqual(lines.map((l) => l.id), ["CH1", "CH2"]);
+  assert.deepEqual(soundFails(lines), []);
+  assert.deepEqual(chFails(chipIn({ viewMode: "basic", chip: guestChip({ mode: "basic", name: "기본 마피아" }) })), []);
+  assert.ok(chFails(chipIn({ viewMode: "basic" })).includes("CH1")); // 서버 값과 다름
+  assert.ok(chFails(chipIn({ chip: guestChip({ name: "기본 마피아" }) })).includes("CH1")); // 이름이 표식과 다름
+  assert.ok(chFails(chipIn({ chip: guestChip({ tabIndex: 0 }) })).includes("CH1"));
+  assert.ok(chFails(chipIn({ chip: guestChip({ tag: "button" }) })).includes("CH1"));
+  assert.deepEqual(chFails(chipIn({ chip: null })), ["CH1", "CH2"]); // 칩이 없으면 둘 다 실패
+});
+
+test("modeChipChecks CH2: 높이 32·왼쪽 16·윗변 = 띠 아랫변 + 20(+48 테스트 방), 다른 요소와 교차 0", () => {
+  assert.ok(chFails(chipIn({ chip: guestChip({ rect: rect(16, 191, 96, 40) }) })).includes("CH2"));
+  assert.ok(chFails(chipIn({ chip: guestChip({ rect: rect(20, 191, 96, 32) }) })).includes("CH2"));
+  assert.ok(chFails(chipIn({ chip: guestChip({ rect: rect(16, 197, 96, 32) }) })).includes("CH2"));
+  assert.ok(!chFails(chipIn({ chip: guestChip({ rect: rect(16, 193, 96, 32) }) })).includes("CH2"));
+  assert.ok(chFails(chipIn({ test: null })).includes("CH2")); // [테스트] 가 없으면 143 이 기대
+  assert.deepEqual(chFails(chipIn({ test: null, chip: guestChip({ rect: rect(16, 143, 96, 32) }) })), []);
+  assert.ok(chFails(chipIn({ test: rect(16, 160, 90, 44) })).includes("CH2")); // [테스트] 와 겹침
+  assert.ok(chFails(chipIn({ toast: rect(60, 180, 200, 40) })).includes("CH2"));
+  assert.ok(chFails(chipIn({ panel: rect(0, 200, 390, 222) })).includes("CH2"));
+  assert.ok(chFails(chipIn({ band: null })).includes("CH2"));
+  assert.ok(modeChipChecks({}).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.equal(modeChipChecks({}).length, 2);
+});
+
+/** 폭 360 판 종류 시트 정상값: 두 칸 158×140, 간격 12, 고른 칸은 서버 값(확장판) */
+function modeSheetIn(over = {}) {
+  return {
+    viewport: { w: 360, h: 640 },
+    viewMode: "extended",
+    sheet: rect(0, 400, 360, 240),
+    cards: [{ mode: "basic", rect: rect(16, 470, 158, 140), pressed: "false" }, { mode: "extended", rect: rect(186, 470, 158, 140), pressed: "true" }],
+    ...over,
+  };
+}
+const msFails = (args) => soundFails(modeSheetChecks(args));
+
+test("modeSheetChecks MS1: 두 칸(기본 마피아·확장판)이 있고 고른 칸의 aria-pressed 가 view.mode 와 같다", () => {
+  const lines = modeSheetChecks(modeSheetIn());
+  assert.deepEqual(lines.map((l) => l.id), ["MS1", "MS1g"]);
+  assert.deepEqual(soundFails(lines), []);
+  const s = modeSheetIn();
+  assert.ok(msFails(modeSheetIn({ viewMode: "basic" })).includes("MS1")); // 고른 칸이 서버 값과 다름
+  assert.ok(msFails(modeSheetIn({ cards: s.cards.map((c) => ({ ...c, pressed: "true" })) })).includes("MS1")); // 둘 다 눌림
+  assert.ok(msFails(modeSheetIn({ cards: s.cards.map((c) => ({ ...c, pressed: "false" })) })).includes("MS1")); // 눌린 칸 없음
+  assert.ok(msFails(modeSheetIn({ cards: [s.cards[1]] })).includes("MS1")); // 한 칸
+  assert.ok(msFails(modeSheetIn({ cards: [s.cards[1], s.cards[0]].map((c, i) => ({ ...c, rect: s.cards[i].rect })) })).includes("MS1")); // 순서가 확장판·기본 마피아
+});
+
+test("modeSheetChecks MS1g: 두 칸 높이가 같고(±1) 시트가 화면 안, 칸이 시트 안", () => {
+  const s = modeSheetIn();
+  const tall = (dh) => modeSheetIn({ cards: [s.cards[0], { ...s.cards[1], rect: rect(186, 470, 158, 140 + dh) }] });
+  assert.ok(!msFails(tall(1)).includes("MS1g"));
+  assert.ok(msFails(tall(2)).includes("MS1g")); // 설명이 두 줄로 접힌 칸만 길어짐
+  assert.ok(msFails(modeSheetIn({ sheet: rect(0, 410, 360, 240) })).includes("MS1g")); // 아랫변 650 > 640
+  assert.ok(msFails(modeSheetIn({ sheet: rect(-4, 400, 368, 240) })).includes("MS1g"));
+  assert.ok(msFails(modeSheetIn({ cards: [s.cards[0], { ...s.cards[1], rect: rect(210, 470, 158, 140) }] })).includes("MS1g")); // 칸이 시트 밖
+  assert.ok(modeSheetChecks({}).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.equal(modeSheetChecks({}).length, 2);
 });
 
 // ---- 17-09 튜토리얼 E2E 판정 (tutorialEntryChecks·sentFrameChecks, 사본 상수) ----

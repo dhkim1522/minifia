@@ -59,6 +59,10 @@ import { ROLE_TEXT } from "../../src/game/roleText";
 import { RESULT_TEXT } from "../../src/game/verdict";
 import { JOB_OUTFIT } from "../../src/world/jobOutfit";
 import { CHAT_PANEL_EXTRA as RESULT_CHAT_EXTRA } from "../../src/game/chatUi";
+import { hostRailLayout } from "../../src/components/v2/HostRail";
+import { SIDE_CELL, SIDE_GAP } from "../../src/components/v2/SideColumn";
+import { MODE_TEXT } from "../../src/game/modeText";
+import { GAME_MODES } from "../../shared/protocol";
 
 describe("E2E 의 TIMELESS_PHASES 와 앱 상수", () => {
   it("scripts/e2e/lib.mjs 의 TIMELESS_PHASES 가 src/game/scenes.ts 의 같은 이름 상수와 같은 목록이다", () => {
@@ -530,19 +534,25 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
     expect(text).not.toMatch(/role=|seat|nonce|mafia/i);
   });
 
-  // 19-04(D-13): 봇 단추가 방장 줄(data-host-rail-btn)로 옮겨 가 오른쪽 열 표식 값에서 bots 가 빠졌다. E2E 사본 SIDE_ORDER 와 그 판정은 19-06 이 줄 판정과 함께 고친다
-  it("SIDE_MARKERS(16-06 오른쪽 열 표식)가 src/ 에 있고, data-side-button 값은 sound·map·dress 고정 낱말뿐이다(T-16-14)", () => {
+  // 19-04·19-05(D-13): 봇·맵 단추가 방장 줄(data-host-rail-btn)로 옮겨 가 오른쪽 열은 방장도 소리·옷장 둘이다. 19-06: E2E 사본 SIDE_ORDER 도 둘이다.
+  // src 에 남은 값 map 은 어느 화면도 쓰지 않는 MapChip 의 줄 아닌 변형 한 곳뿐이다 — 화면이 그 변형을 다시 쓰면 아래 단언이 잡는다
+  it("SIDE_MARKERS(16-06 오른쪽 열 표식)가 src/ 에 있고, 화면이 쓰는 data-side-button 값은 sound·dress 고정 낱말뿐이다(T-16-14)", () => {
     const side = e2eLib as unknown as { SIDE_MARKERS: readonly string[]; SIDE_ORDER: readonly string[] };
     expect(side.SIDE_MARKERS).toEqual(["data-side-column", "data-side-button"]);
     expect(side.SIDE_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)))).toEqual([]);
-    expect(side.SIDE_ORDER).toEqual(["sound", "map", "bots", "dress"]);
-    const values = new Set<string>();
+    expect(side.SIDE_ORDER.join(",")).toBe("sound,dress");
+    const found: { value: string; f: string }[] = [];
     for (const s of sources) {
-      for (const m of s.text.replace(/\/\/.*$/gm, "").matchAll(/data-side-button(?:"?\s*[:=]\s*|=)\{?"([a-z]+)"/g)) values.add(m[1]!);
-      for (const m of s.text.replace(/\/\/.*$/gm, "").matchAll(/<FloatAction\b[^>]*\sside="([a-z]+)"/g)) values.add(m[1]!);
+      for (const m of s.text.replace(/\/\/.*$/gm, "").matchAll(/data-side-button(?:"?\s*[:=]\s*|=)\{?"([a-z]+)"/g)) found.push({ value: m[1]!, f: s.f });
+      for (const m of s.text.replace(/\/\/.*$/gm, "").matchAll(/<FloatAction\b[^>]*\sside="([a-z]+)"/g)) found.push({ value: m[1]!, f: s.f });
     }
-    expect([...values].sort().join(",")).toBe("dress,map,sound");
-    expect([...values].filter((v) => !side.SIDE_ORDER.includes(v)).join(",")).toBe("");
+    expect([...new Set(found.map((x) => x.value))].sort().join(",")).toBe("dress,map,sound");
+    const outside = found.filter((x) => !side.SIDE_ORDER.includes(x.value));
+    expect(outside.map((x) => `${x.value}@${x.f}`).join(",")).toBe("map@src/components/v2/MapChip.tsx");
+    // 화면은 MapChip 을 줄 변형(rail)으로만 쓴다 — 오른쪽 열에 맵이 다시 생기지 않는다
+    const uses = sources.filter((s) => s.f.startsWith("src/screens/")).flatMap((s) => [...s.text.matchAll(/<MapChip\b[^>]*>/g)].map((m) => m[0]));
+    expect(uses.length).toBeGreaterThan(0);
+    expect(uses.filter((u) => !/\srail[\s/>]/.test(u))).toEqual([]);
   });
 
   it("E2E 문턱 개수는 SOUND_IDS.length 와 같고, 앱 쪽 SOUND_LIMITS 와 한 글자도 다르지 않다(문턱 완화 방지, T-12-22)", () => {
@@ -1016,5 +1026,109 @@ describe("E2E 의 시간대 사본과 앱 todOf·TOD_LABEL (18.1-11, 0083-1)", (
 
   it("TOD_WORD 의 네 값이 앱 TOD_LABEL 과 같다(0083-1)", () => {
     expect({ ...e.TOD_WORD }).toEqual({ ...TOD_LABEL });
+  });
+});
+
+describe("19페이즈 방장 줄·판 종류 E2E 사본 계약 (19-06, T-19-18·T-19-19)", () => {
+  type Layout = { crown: boolean; columns: number[] };
+  const lib = e2eLib as unknown as {
+    HOST_RAIL_E2E: { cell: number; gap: number; crownH: number; left: number; testShift: number; chipH: number; chipTop: number };
+    HOST_RAIL_MARKERS: readonly string[];
+    HOST_RAIL_ORDER: readonly string[];
+    LAMP_RGB: string;
+    NIGHT600_RGB: string;
+    MODE_NAMES_E2E: Record<string, string>;
+    LOG_H: number;
+    lobbyPanelHeight(logH: number): number;
+    hostRailLayoutE2E(n: number, maxH: number): Layout;
+  };
+  const root = new URL("../../", import.meta.url);
+  const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter((f) => /\.(tsx?|css)$/.test(f));
+  const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
+  const tokens = readFileSync(new URL("src/styles/tokens.css", root), "utf8");
+  const css = readFileSync(new URL("src/styles/v2.css", root), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const body = (sel: string): string => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === sel)?.[2] ?? "";
+  /** tokens.css 의 #rrggbb 토큰을 getComputedStyle 이 주는 "rgb(r, g, b)" 글로 바꾼다 */
+  const rgbOf = (name: string): string => {
+    const m = new RegExp(`${name}:\\s*#([0-9a-fA-F]{6})\\b`).exec(tokens);
+    if (!m) throw new Error(`${name} 토큰을 못 찾음`);
+    const hex = m[1]!;
+    return `rgb(${parseInt(hex.slice(0, 2), 16)}, ${parseInt(hex.slice(2, 4), 16)}, ${parseInt(hex.slice(4, 6), 16)})`;
+  };
+
+  it("HOST_RAIL_E2E 의 지름·간격이 SideColumn 의 SIDE_CELL·SIDE_GAP 과 같고, 나머지 치수가 v2.css 의 줄·칩 규칙과 같다", () => {
+    expect(lib.HOST_RAIL_E2E.cell).toBe(SIDE_CELL);
+    expect(lib.HOST_RAIL_E2E.gap).toBe(SIDE_GAP);
+    expect(body(".mf-hostrail")).toContain("left: var(--space-md)");
+    expect(/--space-md:\s*(\d+)px/.exec(tokens)?.[1]).toBe(String(lib.HOST_RAIL_E2E.left));
+    expect(body(".mf-hostrail")).toContain(`top: calc(var(--mf-host-bottom, 62px) + ${lib.HOST_RAIL_E2E.gap}px)`);
+    expect(body(".mf-hostrail[data-test-shift]")).toContain(`+ ${lib.HOST_RAIL_E2E.gap}px + ${lib.HOST_RAIL_E2E.testShift}px)`);
+    expect(body(".mf-hostrail__crown")).toContain(`height: ${lib.HOST_RAIL_E2E.crownH}px`);
+    expect(body(".mf-hostrail__crown")).toContain(`margin-bottom: ${lib.HOST_RAIL_E2E.gap}px`);
+    expect(body(".mf-hostrail__cols")).toContain(`gap: ${lib.HOST_RAIL_E2E.gap}px`);
+    expect(body(".mf-hostrail__col")).toContain(`gap: ${lib.HOST_RAIL_E2E.gap}px`);
+    expect(body(".mv-hostrail-btn")).toContain("width: var(--control-button)");
+    expect(/--control-button:\s*(\d+)px/.exec(tokens)?.[1]).toBe(String(lib.HOST_RAIL_E2E.cell));
+    expect(body(".mf-modechip")).toContain(`height: ${lib.HOST_RAIL_E2E.chipH}px`);
+    expect(body(".mf-modechip")).toContain(`top: calc(var(--mf-host-bottom, 62px) + ${lib.HOST_RAIL_E2E.chipTop}px)`);
+    expect(body(".mf-modechip[data-test-shift]")).toContain(`+ ${lib.HOST_RAIL_E2E.chipTop}px + ${lib.HOST_RAIL_E2E.testShift}px)`);
+  });
+
+  it("hostRailLayoutE2E 가 n 0..5 × 최대 높이 100..600(4 간격)과 측정 전(무한)에서 앱 hostRailLayout 과 같다", () => {
+    const diff: string[] = [];
+    for (let n = 0; n <= 5; n++) {
+      for (const maxH of [...Array.from({ length: 126 }, (_, i) => 100 + i * 4), Number.POSITIVE_INFINITY]) {
+        const want = hostRailLayout(n, maxH);
+        const got = lib.hostRailLayoutE2E(n, maxH);
+        if (got.crown !== want.crown || got.columns.join(",") !== want.columns.join(",")) diff.push(`${n}@${maxH}`);
+      }
+    }
+    expect(diff.slice(0, 5).join(" ")).toBe("");
+  });
+
+  it("MODE_NAMES_E2E 가 MODE_TEXT.name 과 같고 키가 GAME_MODES 와 같다, 줄의 접근성 이름은 '방장 전용'", () => {
+    const flat = (o: Record<string, string>): string => Object.keys(o).sort().map((k) => `${k}=${o[k]}`).join(",");
+    expect(flat(lib.MODE_NAMES_E2E)).toBe(flat(MODE_TEXT.name));
+    expect(Object.keys(lib.MODE_NAMES_E2E).sort().join(",")).toBe([...GAME_MODES].sort().join(","));
+    expect(MODE_TEXT.rail).toBe("방장 전용");
+  });
+
+  it("색 사본 둘이 tokens.css 의 --light-lamp·--night-600 과 같고 서로 다르다, 줄 단추·오른쪽 열 단추가 그 토큰을 테두리에 쓴다", () => {
+    expect(lib.LAMP_RGB).toBe(rgbOf("--light-lamp"));
+    expect(lib.NIGHT600_RGB).toBe(rgbOf("--night-600"));
+    expect(lib.LAMP_RGB).not.toBe(lib.NIGHT600_RGB);
+    expect(body(".mv-hostrail-btn")).toContain("border: 1.5px solid var(--light-lamp)");
+    expect(body(".mv-hostrail-btn")).toContain("color: var(--light-lamp)");
+    expect(body(".mv-float")).toContain("border: 1px solid var(--night-600)");
+    expect(body(".mv-sound")).toContain("border: 1px solid var(--night-600)");
+  });
+
+  it("대기실 패널 기대 높이(HR8)는 222 = lobbyPanelHeight(LOG_H) 이다", () => {
+    expect(lib.lobbyPanelHeight(lib.LOG_H)).toBe(222);
+  });
+
+  it("새 DOM 표식 여섯이 git 이 추적하는 src/ 에 있고 값은 enum 낱말뿐이다 — 좌석·역할 값이 실리지 않는다", () => {
+    expect(lib.HOST_RAIL_MARKERS.join(",")).toBe("data-host-rail,data-host-rail-btn,data-host-rail-crown,data-mode-chip,data-mode-sheet,data-mode-card");
+    expect(lib.HOST_RAIL_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)))).toEqual([]);
+    const text = (file: string): string => sources.find((s) => s.f.endsWith(file))!.text.replace(/\/\/.*$/gm, "");
+    // 줄 단추 표식 값: HostRailButton 의 id 유니언 + MapChip 줄 변형의 "map" = HOST_RAIL_ORDER
+    const union = /id: ((?:"[a-z]+"(?: \| )?)+);/.exec(text("components/v2/HostRailButton.tsx"))?.[1] ?? "";
+    const ids = [...union.matchAll(/"([a-z]+)"/g)].map((m) => m[1]!);
+    expect(text("components/v2/HostRailButton.tsx")).toContain("data-host-rail-btn={id}");
+    expect(text("components/v2/MapChip.tsx")).toContain('"data-host-rail-btn": "map"');
+    expect([...ids, "map"].sort().join(",")).toBe([...lib.HOST_RAIL_ORDER].sort().join(","));
+    expect(lib.HOST_RAIL_ORDER.join(",")).toBe("mode,map,bots,tutorial");
+    // 칩·시트 칸 표식 값은 GameMode(= GAME_MODES)뿐이다
+    expect(text("components/v2/ModeChip.tsx")).toContain("data-mode-chip={mode}");
+    expect(text("components/v2/ModeChip.tsx")).toMatch(/mode: GameMode;/);
+    expect(text("components/ModeSheet.tsx")).toContain("data-mode-card={m}");
+    expect(text("components/ModeSheet.tsx")).toContain("MODE_ORDER.map((m)");
+    // 값 없는 표식 셋
+    expect(text("components/v2/HostRail.tsx")).toContain('data-host-rail=""');
+    expect(text("components/v2/HostRail.tsx")).toContain('data-host-rail-crown=""');
+    expect(text("components/ModeSheet.tsx")).toContain('data-mode-sheet=""');
+    for (const f of ["components/v2/HostRail.tsx", "components/v2/HostRailButton.tsx", "components/v2/ModeChip.tsx", "components/ModeSheet.tsx"]) expect(text(f), f).not.toMatch(/seat|nonce|mafia|police|doctor/i);
   });
 });

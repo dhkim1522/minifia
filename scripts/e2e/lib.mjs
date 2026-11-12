@@ -2425,6 +2425,30 @@ export function sideColumnChecks(s = {}) {
   return out;
 }
 
+// ---- 19페이즈 방장 줄 hostRailChecks (19-06, 결정 D-13·D-14, UI-SPEC F·"검증 표식과 E2E 판정") ----
+// 자리 함수(RED): 판정 본문은 다음 커밋에서 채운다.
+export const HOST_RAIL_E2E = Object.freeze({});
+export const HOST_RAIL_MARKERS = Object.freeze([]);
+export const HOST_RAIL_ORDER = Object.freeze([]);
+export const LAMP_RGB = "";
+export const NIGHT600_RGB = "";
+export const MODE_NAMES_E2E = Object.freeze({});
+export function hostRailLayoutE2E() {
+  return { crown: false, columns: [] };
+}
+export function hostRailMeasure() {
+  return null;
+}
+export function hostRailChecks() {
+  return [];
+}
+export function modeChipChecks() {
+  return [];
+}
+export function modeSheetChecks() {
+  return [];
+}
+
 // ---- 12페이즈 sound-script (12-08, 결정 D-21): 단계 구간마다 기대 소리 id 가 순서대로 ----
 
 /**
