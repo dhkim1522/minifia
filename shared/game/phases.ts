@@ -9,6 +9,7 @@
 // 표는 데이터만 둔다 — 진입 전이(훅)는 tick.ts 의 ON_ENTER 표에 있다.
 import type { PhaseId } from "../protocol";
 import { RULESET } from "./ruleset";
+import type { Ruleset } from "./ruleset";
 
 export interface PhaseDef {
   /** 단계 길이(ms). null 이면 시간으로 끝나지 않는다. */
@@ -92,3 +93,8 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   showdown: Object.freeze({ durationMs: SHOWDOWN_GATHER_MS, next: "night", revealsOwnRole: true }), // 마지막 3인 결전 — 진입 길이 = 모이기, 그 뒤 길이는 showdownStepMs. 2표 이상이면 훅이 execution 으로
   verdict: Object.freeze({ durationMs: VERDICT_MS, next: "execution", revealsOwnRole: true }),
 });
+
+/** 기본 다음 단계(자리 함수, 19-01 RED). */
+export function nextPhaseOf(phase: PhaseId, _rules: Ruleset): PhaseId | null {
+  return PHASE_DEFS[phase].next;
+}

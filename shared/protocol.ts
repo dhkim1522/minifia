@@ -490,6 +490,12 @@ export type MapChoice = MapId | "random";
 /** 서버 스키마(strictObject enum)와 화면이 같이 읽는 선택 값 목록. */
 export const MAP_CHOICES = ["bar", "plaza", "random"] as const;
 
+/** 판 종류(결정 0081-6, 19페이즈 D-01): 기본 마피아(basic) · 확장판(extended). 방 상태의 공개 값이고 서버 스키마(strictObject enum)와 화면이 같이 읽는다. */
+export const GAME_MODES = ["basic", "extended"] as const;
+export type GameMode = (typeof GAME_MODES)[number];
+/** 판 종류 기본값(D-01·D-04): 고르지 않은 방·mode 없이 저장된 옛 방은 확장판이다. */
+export const DEFAULT_MODE: GameMode = "extended";
+
 /**
  * 동작 프레임(결정 D-12). 키는 t·seat·id·n 뿐이다 — 채널·역할·player id·시각이 없다.
  * n 은 채널(all·mafia·ghost)별 번호다: 방 전체로 세면 받지 못한 프레임의 틈이 시민 편에 새므로 채팅 seq 와 같은 이유로 따로 센다(결정 0068).

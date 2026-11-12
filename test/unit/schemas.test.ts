@@ -158,6 +158,22 @@ describe("ClientMessageSchema mapPick (11-06, D-20)", () => {
   });
 });
 
+// 19-01: 판 종류 고르기(결정 0081-6, D-05) — 값은 basic|extended enum 뿐이다. 신원은 소켓 첨부 playerId.
+describe("ClientMessageSchema modePick (19-01, D-05)", () => {
+  it.each(["basic", "extended"])("modePick %s 는 받는다", (mode) => {
+    expect(ClientMessageSchema.safeParse({ t: "modePick", mode }).success).toBe(true);
+  });
+  it.each([
+    ["덧붙은 키", { t: "modePick", mode: "basic", seat: 1 }],
+    ["알 수 없는 값", { t: "modePick", mode: "fast" }],
+    ["mode 없음", { t: "modePick" }],
+    ["null", { t: "modePick", mode: null }],
+    ["대문자", { t: "modePick", mode: "Basic" }],
+  ])("modePick 거부: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
+
 // 09.1.1-02: 귓속말(결정 0066-2) — 대상 좌석(0..7 정수)과 본문(1..200 UTF-16)뿐이고 덧붙은 키는 거부한다. 신원은 소켓 첨부 playerId.
 describe("ClientMessageSchema whisper (09.1.1-02, 결정 0066-2)", () => {
   it.each([

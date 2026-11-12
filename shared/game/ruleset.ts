@@ -2,6 +2,7 @@
 // 직업 주장 배지(0066-1)·귓속말(0066-2)·순차 지목(0063-1)·동점 결선(0066-4)·마지막 3인 결전(0066-5) 코드는 지우지 않고 이 값으로 끈다.
 // 판 이름·고르기 화면은 없다(D-01) — 정통 판(장치 켜기)은 나중 과제이고, 그때도 이 한 곳의 값만 바뀐다.
 // 다른 모듈을 import 하지 않는다(순환 방지).
+import type { GameMode } from "../protocol";
 
 export interface Ruleset {
   /** 직업 주장 배지(결정 0066-1). */
@@ -25,3 +26,17 @@ export const BASIC_RULESET: Ruleset = Object.freeze({
 });
 
 export const RULESET: Ruleset = BASIC_RULESET;
+
+// ---- 19-01 자리 함수(RED) — 판 종류 규칙은 다음 커밋이 채운다 ----
+/** 판 종류의 규칙(자리 함수). */
+export function rulesetOf(_mode: GameMode): Ruleset {
+  return BASIC_RULESET;
+}
+/** 방 상태·view 의 판 종류(자리 함수). */
+export function modeOf(_holder: { readonly mode?: unknown }): GameMode {
+  return "extended";
+}
+/** 정치 장치가 하나라도 켜졌는가(자리 함수). */
+export function politicsOn(_rules: Ruleset): boolean {
+  return true;
+}
