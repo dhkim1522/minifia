@@ -464,14 +464,13 @@ async function worldFlow(ctx) {
     const pad = 28;
     const [gScreens, hScreens] = await Promise.all([screensOfWorld(gp, centers), screensOfWorld(hp, centers)]);
     const inStage = (sc, st) => !!sc && !!st && Number.isFinite(sc.sx) && sc.sx > pad && sc.sx < ctx.size.w - pad && sc.sy > st.top + pad && sc.sy < st.bottom - pad;
-    // 17-07: 가장 낮은 폰(360x560)의 방장 패널은 스위치 줄 +54(18.1-15 에서 +76 → +54)가 더해져 방장 스테이지가 낮다(UI Considerations #24 알려진 한계, 고치지 않는다).
-    // 이 크기에서는 목적지를 손님 화면에서만 고르고, 방장이 같은 점으로 걸어가는 마지막 겹침 단계는 건너뛴다(손님 쪽 걷기·동기 판정은 그대로).
-    const hostShort = ctx.size.h < SHORT_PHONE_H;
-    const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw.stage) && (hostShort || inStage(hScreens[i], hw.stage)));
+    // 19-08: 방장 패널이 참가자와 같은 222 가 되어(결정 0086, 스위치 줄 +54 삭제) 가장 낮은 폰(360x560)도 두 화면에 보이는 칸에서 목적지를 고른다 —
+    // 17-07 의 "이 크기는 손님 화면에서만 고르고 방장 겹침 단계를 건너뛴다"는 예외를 없앴다.
+    const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw.stage) && inStage(hScreens[i], hw.stage));
     // 3 단위 이상 먼 칸이 없는 낮은 스테이지(360x560 의 248)는 보이는 칸 중 가장 먼 칸과 더 짧은 걷는 길이 하한을 쓴다(worldTapRanking, 07-20)
     // 떠 있는 버튼(꾸미기 hanger, 10페이즈)·이름표가 덮은 칸은 후보에서 먼저 뺀 뒤 순위를 매긴다 — 가린 칸 때문에 먼 칸이 사라지면 기존 낮은 스테이지 규칙(1.5 단위·0.8초)이 적용된다(문턱은 그대로)
     const [allG, allH] = await Promise.all([hitsInputSurface(gp, onScreen), hitsInputSurface(hp, onScreen.map((c) => ({ sx: c.hx, sy: c.hy })))]);
-    const open = onScreen.filter((_, i) => allG[i] && (hostShort || allH[i]));
+    const open = onScreen.filter((_, i) => allG[i] && allH[i]);
     const { ranked, low, minWalkMs } = worldTapRanking(open, from);
     const target = ranked[0];
     if (!target) throw new SetupError(`탭할 목적지를 찾지 못함(두 화면에 보이는 칸 ${onScreen.length}개, ${low ? "1.5" : "3"} 단위 이상 먼 칸 ${ranked.length}개)`);
@@ -535,9 +534,8 @@ async function worldFlow(ctx) {
       if (ctx.shots) await shot(gp, shotPath(ctx, "world-guest-arrived"));
 
       // 방장도 같은 점으로 걸어가 두 캐릭터가 한 점에 모인다: 겹친 이름표는 앞뒤가 하나로 정해진다(UI-SPEC E2)
-      const hostTap = hostShort ? null : await tapWorld(hp, ht, hSeat, target.x, target.z);
-      if (hostShort) infoRow(ctx, "world/stack", "NT3", "겹친 이름표(방장 화면) — 알려진 한계로 건너뜀", `방장 스테이지가 낮은 폰(${ctx.size.w}x${ctx.size.h})은 방장 패널 스위치 줄(+54) 때문에 목적지를 누를 칸이 없다(UI Considerations #24)`);
-      else if (hostTap.move) {
+      const hostTap = await tapWorld(hp, ht, hSeat, target.x, target.z);
+      if (hostTap.move) {
         await sleep(segmentDurationMs(hostTap.move) + 1200);
         const stacked = await readWorld(hp);
         recOne(rec, "world/stack", tagStackChecks(stacked.tags));
@@ -638,7 +636,7 @@ async function chatLobbyFlow(ctx) {
       const cleared = await gp.locator("[data-chat-input]").inputValue();
       rec(sc, "CL5", "보낸 뒤 손님 입력칸이 비워짐", cleared === "", `입력칸 ${cleared.length}자`);
     }
-    // 패널 치수: 방장·손님 두 화면 모두 UI-SPEC 폰 크기 표대로(18.1: 기록 칸 68 한 값 — 손님 222, 방장은 스위치 줄 +54 → 276).
+    // 패널 치수: 방장·손님 두 화면 모두 UI-SPEC 폰 크기 표대로(18.1: 기록 칸 68 한 값 — 19페이즈부터 방장도 손님과 같은 222, 결정 0086).
     // 손님은 글을 보내느라 입력칸에 포커스가 있어 기록 칸이 늘어나 있다(0083-4) — 접힌 상태를 재려고 먼저 접는다
     await collapseChatLog(gp);
     for (const [who, page] of [["방장", hp], ["손님", gp]]) {
@@ -941,8 +939,8 @@ async function chatKeyboardFlow(ctx) {
     const still = !!me && !!meAfter && Math.hypot(me.x - meAfter.x, me.z - meAfter.z) < 0.01;
     rec(sc, "KB10", "D4: 포커스 중 맵 탭 → 걷기 요청 없음(위치·구간·링 그대로)", still && moveN() === nBefore && afterTap?.ring === null, `위치 변화 ${me && meAfter ? r1(Math.hypot(me.x - meAfter.x, me.z - meAfter.z)) : "?"} · 새 구간 ${moveN() - nBefore} · 링 ${afterTap?.ring}`);
     rec(sc, "KB11", "D4: 입력칸이 blur 되고 열림 표식이 사라짐", !!afterTap && afterTap.focusOnInput === false && afterTap.kbOpen === null, `포커스 ${afterTap?.focusOnInput} · 열림 ${afterTap?.kbOpen}`);
-    // 0083-4: 키보드가 닫혀도 늘어난 기록 칸은 저절로 접히지 않는다(닫기는 [data-chat-open] 하나). 키보드가 닫히며 패널이 내려오면 같은 자리의 손 뗌이
-    // [data-chat-open] 위에 떨어져 접힐 수도 있어(가짜 키보드는 배치가 즉시 바뀐다 — 실기기는 애니메이션) 판정이 아니라 참고 줄로 남기고, 아래 KB12 는 어느 쪽이든 접은 뒤 잰다.
+    // 0083-4: 키보드가 닫혀도 늘어난 기록 칸은 저절로 접히지 않는다(닫기는 [data-chat-open] 하나). 키보드가 닫히며 배치가 바뀌면 같은 자리의 뒤따르는 click 이
+    // 새로 그 자리에 온 단추([data-chat-open]·방장 줄)를 누를 수 있었다 — 19-08 부터 앱이 그 click 을 삼킨다(WorldStage swallowDismissClick). 참고 줄은 그대로 남기고, 아래 KB12 는 어느 쪽이든 접은 뒤 잰다.
     const stillOpen = await page.evaluate(() => document.querySelector('[data-chat-open][aria-expanded="true"]') !== null);
     infoRow(ctx, sc, "KB10k", "참고: 키보드를 닫은 맵 탭 뒤 기록 칸이 늘어난 채인가(판정 아님)", stillOpen ? "늘어난 채" : "접혔음(손 뗌이 [data-chat-open] 위에 떨어짐)");
   }
