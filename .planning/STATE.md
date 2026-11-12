@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v3.0
 milestone_name: 사회자와 증거
-current_phase: "18.1"
-current_phase_name: screen-polish
-current_plan: 18
-status: verifying
-stopped_at: Completed 18.1-18-PLAN.md
-last_updated: "2026-11-11T10:12:53.038Z"
-last_activity: 2026-11-11
-last_activity_desc: Phase 18.1 execution started
-state_head: 081b5bb71ffc0e998d5bcb152e3945e67af3aeb9
+current_phase: "19"
+current_phase_name: game-modes
+current_plan: 2
+status: executing
+stopped_at: Completed 19-01-PLAN.md
+last_updated: "2026-11-12T12:07:46.680Z"
+last_activity: 2026-11-12
+last_activity_desc: Phase 19 plan 01 완료 (판 종류 서버)
+state_head: 5515a7277f84f6ba8a27e4f6e1fbfb85c29003f0
 progress:
   total_phases: 10
   completed_phases: 4
-  total_plans: 79
-  completed_plans: 79
+  total_plans: 87
+  completed_plans: 80
   percent: 40
 ---
 
@@ -26,15 +26,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-07)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(평균 10~15분, 참고 목표)을 끝까지 마치는 것
-**Current focus:** Phase 18.1 — screen-polish
+**Current focus:** Phase 19 — game-modes
 
 ## Current Position
 
-Phase: 18.1 (screen-polish) — EXECUTING
-Current Plan: 18
-Total Plans in Phase: 18
-Status: Phase complete — ready for verification
-Last activity: 2026-11-11 — Phase 18.1 execution started
+Phase: 19 (game-modes) — EXECUTING
+Current Plan: 2
+Total Plans in Phase: 8
+Status: Ready to execute
+Last activity: 2026-11-12 — 19-01 완료 (판 종류 서버: modePick·basic 판 차단)
 
 ## Performance Metrics
 
@@ -277,6 +277,7 @@ Last activity: 2026-11-11 — Phase 18.1 execution started
 | Phase 18.1 P16 | 75min | 3 tasks | 23 files |
 | Phase 18.1 P17 | 75min | 3 tasks | 24 files |
 | Phase 18.1 P18 | 약 1시간 40분 | 3 tasks | 13 files |
+| Phase 19 P01 | 22 min | 3 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -617,6 +618,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 18.1]: 18.1-16: [보내기] 는 포커스·글이 있을 때만 나오고 기록 칸은 늘어난 채 남으므로 결과 E2E 는 RS5 전에 접고 RM1 은 포커스를 준 줄에서 잰다
 - [Phase 18.1]: 18.1-17: 탈락자는 직업과 무관하게 ghost_default 유령 그림 스프라이트 하나(0083-2). 밝기 배율 talk 1·morning 0.95·vote 0.85·trial 0.8·night 0.6·nightGhost 0.7 확정, 그림 없으면 반투명 몸 대체, 훅 window.__mfGhosts
 - [Phase 18.1]: 18.1-18: 처형 0.6~2.6초 큰 글·숫자 줄 같은 말과 배정 화면 같은 말은 알림 시간표·띠 표를 바꾸지 않고 알려진 한계로 둔다(결정 0083)
+- [Phase 19]: 19-01: 판 종류는 방 상태의 optional 공개 값(mode)이고 읽는 곳은 modeOf(state) — 규칙은 rulesetOf(mode), 서버 순수 함수는 마지막 선택 인자 rules 로 받는다. RULESET·BASIC_RULESET 은 19-02 가 지울 때까지 extended 규칙 객체를 가리킨다
 
 ### Pending Todos
 
@@ -688,8 +690,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-11T10:12:52.000Z
-Stopped at: Completed 18.1-18-PLAN.md
+Last session: 2026-11-12T12:07:45.389Z
+Stopped at: Completed 19-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
