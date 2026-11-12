@@ -131,7 +131,7 @@ export function createScenario(opts: ScenarioOptions): Scenario {
         const here = positionAtFx(segs[seat]!, t);
         const rand = rands[seat]!;
         const cell = cells[Math.floor(rand() * cells.length)]!;
-        const p = routeFx(map, here, cellCenterFx(cell.c, cell.r));
+        const p = routeFx(map, here, cellCenterFx(cell.c, cell.r, map));
         segs[seat] = { p, t0: t, v: MOVE_V };
         out.push({ kind: "move", at: t, seat, p: [...p], t0: t, v: MOVE_V });
         nextWander[seat] = t + WANDER_MIN_MS + Math.floor(rand() * WANDER_SPAN_MS);

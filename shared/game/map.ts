@@ -1,4 +1,5 @@
 // 재즈 바 이동 격자와 경로(결정 0044-17: 클라이언트는 목적지만, 서버가 경로를 정한다).
+// 격자는 맵마다 다를 수 있다(20페이즈 D-04): 한 변 칸 수(size)·원점(origin)·이동 한계(walkHalf)를 MapDef 에서 읽고, 없으면 재즈 바 값(GRID_ORIGIN·WALK_HALF)이다.
 // 현재 시각·난수를 읽지 않고, 삼각함수·hypot 없이 정수·제곱근·사칙연산만 쓴다(RESEARCH R4) — 서버와 클라이언트가 같은 값을 얻게.
 
 /** 1 월드 단위 = 100 (고정소수점, 와이어·저장 공통) */
@@ -198,10 +199,16 @@ export const BAR_MAP: MapDef = { id: "bar", size: GRID_SIZE, mask: parseMask(BAR
 
 /** 칸 한 변(고정소수점) = CELL × UNIT */
 const CELL_FX = 50;
-/** 격자 원점(고정소수점) = GRID_ORIGIN × UNIT */
-const ORIGIN_FX = -700;
-/** 이동 한계(고정소수점) = WALK_HALF × UNIT */
-const LIMIT_FX = 580;
+
+/** 맵의 격자 원점(고정소수점) = origin × UNIT. origin 이 없으면 재즈 바 값 −700. */
+function originFx(map: Pick<MapDef, "origin"> | undefined): number {
+  return Math.round((map?.origin ?? GRID_ORIGIN) * UNIT);
+}
+
+/** 맵의 이동 한계(고정소수점) = walkHalf × UNIT. walkHalf 가 없으면 재즈 바 값 580. */
+function limitFx(map: Pick<MapDef, "walkHalf">): number {
+  return Math.round((map.walkHalf ?? WALK_HALF) * UNIT);
+}
 
 interface Pt {
   x: number;
@@ -239,14 +246,16 @@ export function isWalkable(map: MapDef, c: number, r: number): boolean {
   return map.mask[r * map.size + c] === 1;
 }
 
-/** 고정소수점 좌표(1/100 단위)가 속한 칸. 범위 밖도 계산한다(걸을 수 있는지는 isWalkable 로). */
-export function cellOfFx(xFx: number, zFx: number, _map?: Pick<MapDef, "origin">): { c: number; r: number } {
-  return { c: Math.floor((xFx - ORIGIN_FX) / CELL_FX), r: Math.floor((zFx - ORIGIN_FX) / CELL_FX) };
+/** 고정소수점 좌표(1/100 단위)가 속한 칸. 범위 밖도 계산한다(걸을 수 있는지는 isWalkable 로). map 을 주면 그 맵의 원점, 없으면 재즈 바 원점이다. */
+export function cellOfFx(xFx: number, zFx: number, map?: Pick<MapDef, "origin">): { c: number; r: number } {
+  const o = originFx(map);
+  return { c: Math.floor((xFx - o) / CELL_FX), r: Math.floor((zFx - o) / CELL_FX) };
 }
 
-/** 칸 번호의 중심을 고정소수점 정수 좌표로. */
-export function cellCenterFx(c: number, r: number, _map?: Pick<MapDef, "origin">): { x: number; z: number } {
-  return { x: ORIGIN_FX + c * CELL_FX + CELL_FX / 2, z: ORIGIN_FX + r * CELL_FX + CELL_FX / 2 };
+/** 칸 번호의 중심을 고정소수점 정수 좌표로. map 을 주면 그 맵의 원점, 없으면 재즈 바 원점이다. */
+export function cellCenterFx(c: number, r: number, map?: Pick<MapDef, "origin">): { x: number; z: number } {
+  const o = originFx(map);
+  return { x: o + c * CELL_FX + CELL_FX / 2, z: o + r * CELL_FX + CELL_FX / 2 };
 }
 
 /** 걸을 수 있는 모든 칸 번호를 행 우선으로. */
@@ -260,18 +269,19 @@ export function walkableCells(map: MapDef): { c: number; r: number }[] {
   return out;
 }
 
-function clampFx(v: number): number {
-  return v < -LIMIT_FX ? -LIMIT_FX : v > LIMIT_FX ? LIMIT_FX : v;
+function clampFx(v: number, limit: number): number {
+  return v < -limit ? -limit : v > limit ? limit : v;
 }
 
 /**
- * 고정소수점 점을 걸을 수 있는 점으로 보정한다. 먼저 ±580 으로 자르고, 점이 닿는 칸이 모두 걸을 수 있으면
+ * 고정소수점 점을 걸을 수 있는 점으로 보정한다. 먼저 맵의 이동 한계(재즈 바·광장 ±580)로 자르고, 점이 닿는 칸이 모두 걸을 수 있으면
  * 그 좌표 그대로, 아니면 가장 가까운 걸을 수 있는 칸 중심(정수 제곱거리 → 행 → 열 순 결정적 동률 처리)으로 옮긴다.
  * snapped 는 결과가 입력과 다르면 true 다. 걸을 수 있는 칸이 하나도 없으면 자른 좌표를 돌려준다.
  */
 export function snapToWalkable(map: MapDef, p: { x: number; z: number }): { x: number; z: number; snapped: boolean } {
-  const x = clampFx(p.x);
-  const z = clampFx(p.z);
+  const limit = limitFx(map);
+  const x = clampFx(p.x, limit);
+  const z = clampFx(p.z, limit);
   if (lineWalkable(map, { x, z }, { x, z })) return { x, z, snapped: x !== p.x || z !== p.z };
   let bestD = Infinity;
   let bx = x;
@@ -280,7 +290,7 @@ export function snapToWalkable(map: MapDef, p: { x: number; z: number }): { x: n
   for (let r = 0; r < map.size; r++) {
     for (let c = 0; c < map.size; c++) {
       if (map.mask[r * map.size + c] !== 1) continue;
-      const m = cellCenterFx(c, r);
+      const m = cellCenterFx(c, r, map);
       const d = (m.x - x) * (m.x - x) + (m.z - z) * (m.z - z);
       if (d < bestD) {
         bestD = d;
@@ -438,10 +448,11 @@ export function lineWalkable(map: MapDef, a: { x: number; z: number }, b: { x: n
 /** 예외 없는 슈퍼커버 판정(본체). */
 function lineWalkableBase(map: MapDef, a: { x: number; z: number }, b: { x: number; z: number }): boolean {
   const span = map.size * CELL_FX;
-  let ax = a.x - ORIGIN_FX;
-  let az = a.z - ORIGIN_FX;
-  let bx = b.x - ORIGIN_FX;
-  let bz = b.z - ORIGIN_FX;
+  const o = originFx(map);
+  let ax = a.x - o;
+  let az = a.z - o;
+  let bx = b.x - o;
+  let bz = b.z - o;
   if (ax < 0 || az < 0 || bx < 0 || bz < 0 || ax > span || az > span || bx > span || bz > span) return false;
   if (ax > bx) {
     [ax, bx] = [bx, ax];
@@ -552,7 +563,7 @@ function pickStageDoor(map: MapDef, stage: { x: number; z: number }, other: { x:
   for (let r = 0; r < map.size; r++) {
     for (let c = 0; c < map.size; c++) {
       if (map.mask[r * map.size + c] !== 1) continue;
-      const m = cellCenterFx(c, r);
+      const m = cellCenterFx(c, r, map);
       const d1 = (m.x - stage.x) * (m.x - stage.x) + (m.z - stage.z) * (m.z - stage.z);
       if (d1 > STAGE_REACH_FX * STAGE_REACH_FX) continue;
       const cost = Math.sqrt(d1) + Math.sqrt((m.x - other.x) * (m.x - other.x) + (m.z - other.z) * (m.z - other.z));
@@ -587,12 +598,12 @@ function routeViaStage(map: MapDef, s: { x: number; z: number }, e: { x: number;
 function routeBase(map: MapDef, from: { x: number; z: number }, to: { x: number; z: number }): number[] {
   const s = snapToWalkable(map, from);
   const e = snapToWalkable(map, to);
-  const sc = cellOfFx(s.x, s.z);
-  const ec = cellOfFx(e.x, e.z);
+  const sc = cellOfFx(s.x, s.z, map);
+  const ec = cellOfFx(e.x, e.z, map);
   if ((sc.c === ec.c && sc.r === ec.r) || lineWalkable(map, s, e)) return [s.x, s.z, e.x, e.z];
   const cells = findPath(map, sc, ec);
   if (cells === null) return [s.x, s.z];
-  const pts: Pt[] = cells.map((cell) => cellCenterFx(cell.c, cell.r));
+  const pts: Pt[] = cells.map((cell) => cellCenterFx(cell.c, cell.r, map));
   pts[0] = { x: s.x, z: s.z };
   pts[pts.length - 1] = { x: e.x, z: e.z };
   const flat: number[] = [];

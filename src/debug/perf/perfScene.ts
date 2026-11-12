@@ -187,7 +187,7 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
   const navDots: { el: HTMLElement; x: number; z: number }[] = [];
   if (p.nav) {
     for (const c of walkableCells(map)) {
-      const fx = cellCenterFx(c.c, c.r);
+      const fx = cellCenterFx(c.c, c.r, map);
       const el = makeDot();
       navLayer.append(el);
       navDots.push({ el, x: fx.x / UNIT, z: fx.z / UNIT });

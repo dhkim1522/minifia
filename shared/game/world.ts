@@ -481,7 +481,7 @@ export function planWander(
     cells ??= walkableCells(map);
     if (cells.length > 0) {
       const cell = cells[randInt(cells.length)]!;
-      moves.push({ playerId: bot.id, dest: cellCenterFx(cell.c, cell.r) });
+      moves.push({ playerId: bot.id, dest: cellCenterFx(cell.c, cell.r, map) });
     }
     wanderAt[bot.id] = now + WANDER_MIN_MS + randInt(WANDER_SPAN_MS);
   }
