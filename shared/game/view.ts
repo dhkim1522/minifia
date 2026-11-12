@@ -36,7 +36,7 @@ import { pointLinesOf, turnViewOf } from "./nomination";
 import { runoffVotersOf, runoffViewOf } from "./runoff";
 import { showdownViewOf } from "./showdown";
 import { PHASE_DEFS, RECORD_MAX } from "./phases";
-import { RULESET } from "./ruleset";
+import { RULESET, modeOf } from "./ruleset";
 import { isReady } from "./rematch";
 import { tutorialProgress } from "./tutorial";
 import { rolesInPlay } from "./roles";
@@ -203,6 +203,8 @@ function buildRestingView(state: RoomState, resting: Player, now: number): RoomV
     players: [row],
     me: { seat: resting.seat, isHost: false },
     mapChoice: state.mapChoice ?? "random",
+    // 판 종류는 공개 값이다(19페이즈 D-12) — 쉬는 사람도 같은 값을 받는다.
+    mode: modeOf(state),
     resting: true,
   };
   if (state.phase !== "lobby" && state.map !== undefined) view.map = state.map;
@@ -397,6 +399,8 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     me: myInfo,
     // 방장이 고른 맵은 공개 값이다(역할의 함수 아님, L44). 결정된 맵은 시작한 뒤에만 키가 생긴다(L42).
     mapChoice: state.mapChoice ?? "random",
+    // 판 종류는 모든 소켓에 같은 공개 값이다(19페이즈 D-05·D-12) — 역할의 함수가 아니다. mode 없는 방은 extended 다(D-04).
+    mode: modeOf(state),
   };
   if (state.phase !== "lobby" && state.map !== undefined) view.map = state.map;
   if (DAY_PHASES.has(state.phase)) view.day = buildDay(state);

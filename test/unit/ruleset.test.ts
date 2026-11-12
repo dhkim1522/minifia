@@ -8,9 +8,9 @@ const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string): string => readFileSync(`${ROOT}${rel}`, "utf8");
 
 describe("기본판 설정 RULESET (결정 0072)", () => {
-  it("RULESET 은 BASIC_RULESET 과 같은 객체이고 다섯 값이 모두 꺼짐이며 얼려 있다", () => {
+  it("RULESET 은 BASIC_RULESET 과 같은 객체이고 정치 장치 다섯은 모두 꺼짐·확장판 세 플래그는 켜짐이며 얼려 있다 (19-01: 옮기는 동안 기본 판 extended 의 규칙을 가리킨다)", () => {
     expect(RULESET === BASIC_RULESET).toBe(true);
-    expect(JSON.stringify(RULESET)).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false }));
+    expect(JSON.stringify(RULESET)).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false, errand: true, witness: true, trace: true }));
     expect(Object.isFrozen(BASIC_RULESET)).toBe(true);
   });
 

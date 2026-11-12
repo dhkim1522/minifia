@@ -3,7 +3,7 @@ import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { resolveLookConflicts } from "../../shared/game/look";
-import { BASIC_RULESET, RULESET } from "../../shared/game/ruleset";
+import { BASIC_RULESET, RULESET, politicsOn } from "../../shared/game/ruleset";
 import type { Ruleset } from "../../shared/game/ruleset";
 import type { OutfitId, RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
@@ -1654,7 +1654,7 @@ describe("허용 경로 고정 (L24, 결정 0072·T-13-14)", () => {
   it("POLITICS_ALLOWED_PATHS 는 설정이 켜진 장치의 경로만이다 — 기본판에서는 찬반 기록 하나뿐이고, 모두 켜면 정확히 이 목록이다. 넓히려면 이유를 적고 이 기대값을 같이 고친다", () => {
     expect([...politicsPathsFor(BASIC_RULESET)]).toEqual([".view.day.ballots.*"]);
     expect([...POLITICS_ALLOWED_PATHS]).toEqual([...politicsPathsFor(RULESET)]);
-    const allOn: Ruleset = { badge: true, whisper: true, pickTurn: true, runoff: true, showdown: true };
+    const allOn: Ruleset = { badge: true, whisper: true, pickTurn: true, runoff: true, showdown: true, errand: true, witness: true, trace: true };
     expect([...politicsPathsFor(allOn)]).toEqual([
       ".view.players[].badge",
       ".view.players[].badgeSwapped",
@@ -2000,7 +2000,7 @@ function phaseKeyOfView(sock: TestSocket): string {
 // ---- 기본판 전수 검사 (13-04, FLOW-03, 결정 0072, D-05, T-13-11·T-13-13) ----
 
 // 다섯 장치가 모두 꺼진 기본판에서만 뜻이 있다(하나라도 켜면 그 장치의 경로가 정당하게 나온다 — 켜진 장치는 위의 켜짐 전용 describe 들이 본다).
-describe.skipIf(Object.values(RULESET).some(Boolean))("기본판 — 꺼진 장치 키 0건 (FLOW-03, 결정 0072)", () => {
+describe.skipIf(politicsOn(RULESET))("기본판 — 꺼진 장치 키 0건 (FLOW-03, 결정 0072)", () => {
   /** 한 판 전체의 프레임에서 있으면 안 되는 view 키 경로(접두 포함). 허용 경로는 넓히지 않았다 — 이 경로들은 허용 목록에도 없다. */
   const OFF_KEY_PATHS = [
     ".view.players[].badge",

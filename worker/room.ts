@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, MapChoice, OutfitId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
+import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, GameMode, MapChoice, OutfitId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
 import { botMafiaTarget, botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { isAlive } from "../shared/game/alive";
@@ -52,6 +52,7 @@ import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
 import type { MapDef } from "../shared/game/map";
 import { mapOf, pickMap, roomMapId } from "../shared/game/maps";
+import { pickMode } from "../shared/game/mode";
 import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
@@ -347,6 +348,9 @@ export class Room extends DurableObject<Env> {
       case "mapPick":
         await this.handleMapPick(ws, msg.map);
         return;
+      case "modePick":
+        await this.handleModePick(ws, msg.mode);
+        return;
       case "ready":
         await this.handleReady(ws, msg.on, msg.round);
         return;
@@ -601,6 +605,24 @@ export class Room extends DurableObject<Env> {
       return;
     }
     const result = pickMap(this.room, att.playerId, choice);
+    if (!result.ok) {
+      this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, Date.now()) });
+      return;
+    }
+    if (result.state === this.room) return;
+    this.room = result.state;
+    await this.persistAndBroadcast();
+  }
+
+  // 판 종류 고르기(19-01, 결정 0081-6 D-05): 신원은 소켓 첨부의 playerId 뿐이다. 방장·단계(대기실·결과)·허용 값은 규칙 함수(pickMode)가 서버 상태로 판정한다(T-19-01).
+  // 어떤 거절이든(방장 아님·판 진행 중·허용 밖 값) 사람·사유와 무관하게 같은 응답 — 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임(L40, T-19-02). 같은 값은 무변화(프레임 0).
+  private async handleModePick(ws: WebSocket, mode: GameMode): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = pickMode(this.room, att.playerId, mode);
     if (!result.ok) {
       this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, Date.now()) });
       return;

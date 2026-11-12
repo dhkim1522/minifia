@@ -287,6 +287,7 @@ export type ClientMessage =
   | { t: "ready"; on: boolean; round: number } // 다시 하기 준비(결정 D-12) — 결과 단계의 손님이 토글한다. round 는 지금 보는 판 번호(1 이상 정수)이고 어긋나면 서버가 버린다. 신원은 소켓 첨부 playerId 뿐
   | { t: "rematch"; round: number } // 다시 하기 시작(결정 D-12) — 방장만, 결과 단계에서, round 가 서버 판 번호와 같고 준비한 연결 참가자(방장·봇 포함)가 4명 이상일 때. 서버가 모든 조건을 판정하고 거절 응답은 사유와 무관하게 같다(L40)
   | { t: "mapPick"; map: MapChoice } // 맵 선택(결정 D-20) — 방장이 대기실·결과 단계에서만. 값은 enum 뿐이고 서버가 방장·단계·허용 값을 판정한다. 거절은 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임(L40)
+  | { t: "modePick"; mode: GameMode } // 판 종류 고르기(결정 0081-6, 19페이즈 D-05) — 방장이 대기실·결과 단계에서만. 값은 enum 뿐이고 서버가 방장·단계·허용 값을 판정한다. 거절은 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임(L40)
   | { t: "verdict"; agree: boolean } // 찬반 — 찬성 true / 반대 false, 변론자·유령은 거부, 마지막 값이 유효(DAY-06)
   // 테스트 방 방장 도구(결정 0022). 일반 방은 BAD_MESSAGE 로 거부한다. role null = 무작위.
   | { t: "testSkip" }
@@ -375,6 +376,8 @@ export interface RoomView {
   result?: GameResult; // ended 단계에서만, 모두에게(D-17)
   /** 방장이 고른 맵(결정 D-20). 서버는 항상 싣는다(기본 "random") — 공개 값이고 역할의 함수가 아니다. 타입을 optional 로 둔 것은 화면 시험의 리터럴을 한꺼번에 바꾸지 않기 위해서다(화면은 `view.mapChoice ?? "random"`). */
   mapChoice?: MapChoice;
+  /** 방장이 고른 판 종류(결정 0081-6, 19페이즈 D-05·D-12). 서버는 늘 싣는다(기본 "extended") — 공개 값이고 역할의 함수가 아니며 모든 소켓에 같다. 타입을 optional 로 둔 것은 화면 시험의 리터럴을 한꺼번에 바꾸지 않기 위해서다(화면은 modeOf(view)). */
+  mode?: GameMode;
   /** 이번 판의 맵(결정 D-21, 누설 L42). 시작한 뒤에만 키가 있고 모든 참가자에게 같다 — 대기실·시작 전 view 에는 키 자체가 없다. */
   map?: MapId;
   /** tutorial 단계에서만, 모두에게 같은 값(결정 0080-11). 싣는 일은 17-12 view.ts 가 한다. */

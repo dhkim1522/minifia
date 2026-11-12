@@ -1,6 +1,7 @@
 // 단계 정의 표. 코드 분기 대신 데이터 한 곳에 둔다(roles.ts 의 ROLE_TABLE 과 같은 원칙) —
 // 이후 페이즈는 이 표에 행을 더하는 방식으로만 단계를 늘린다(D-01).
 // 역할 확인(roleReveal) 뒤에는 낮 단계(dayAnnounce → errand → discussion)가 돈다(errand 는 15페이즈 결정 0074). 순차 주장 단계는 7페이즈에서 없어졌다(CHAT-06).
+// basic 판은 dayAnnounce → discussion 이다(19페이즈 D-08) — 표의 next 는 그대로 두고 nextPhaseOf 가 판 규칙으로 고른다.
 // 기본판 낮 흐름(결정 0072, 8페이즈 결정 0060-1·DAY-07): discussion → nomination(투표, 동시 15초) → defense → verdict → execution → night → morning → dayAnnounce.
 // 승패가 나면 execution·morning 의 마감에서 ended(마감 없음)로 간다. 투표 동점·0표는 결선 없이 night 다. 순차 지목(0063-1)·동점 결선 runoff(0066-4)·마지막 3인 결전 showdown(0066-5)은
 // ruleset.ts 의 RULESET 이 켜졌을 때만 돈다(기본판은 모두 꺼짐). 분기(투표 동률·0표 → night 등)는 tick.ts 의 ON_DEADLINE 이
@@ -94,7 +95,11 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   verdict: Object.freeze({ durationMs: VERDICT_MS, next: "execution", revealsOwnRole: true }),
 });
 
-/** 기본 다음 단계(자리 함수, 19-01 RED). */
-export function nextPhaseOf(phase: PhaseId, _rules: Ruleset): PhaseId | null {
+/**
+ * 기본 다음 단계(19페이즈 D-08). 단계 표(PHASE_DEFS)는 데이터 그대로 두고, 판 규칙에 따라 갈리는 한 곳만 여기서 고른다:
+ * 낮 시작 발표 다음은 심부름이 켜진 판(extended)이면 errand, 꺼진 판(basic)이면 바로 discussion 이다. 마감 훅이 돌려준 분기(next)가 이 값보다 먼저다(tick.ts).
+ */
+export function nextPhaseOf(phase: PhaseId, rules: Ruleset): PhaseId | null {
+  if (phase === "dayAnnounce") return rules.errand ? "errand" : "discussion";
   return PHASE_DEFS[phase].next;
 }

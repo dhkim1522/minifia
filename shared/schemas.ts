@@ -1,7 +1,7 @@
 // 서버 전용 입력 검증 스키마(zod 값 import). Worker 만 이 파일을 import 한다 — src/ 가 import 하면 클라이언트 번들에 zod 가 들어간다.
 import { z } from "zod";
 import { NICKNAME_MAX_UTF16 } from "./nickname";
-import { CHAT_TEXT_MAX_UTF16, EMOTE_IDS, MAP_CHOICES, MAX_TEST_BOTS, MOVE_COORD_LIMIT, OUTFIT_IDS, PHASE_KEY_MAX } from "./protocol";
+import { CHAT_TEXT_MAX_UTF16, EMOTE_IDS, GAME_MODES, MAP_CHOICES, MAX_TEST_BOTS, MOVE_COORD_LIMIT, OUTFIT_IDS, PHASE_KEY_MAX } from "./protocol";
 import type { ChatSendMessage, ClientMessage, CreateRoomBody, EmoteSendMessage, JoinRoomBody, MoveMessage, NoteSendMessage, TypingSendMessage, WillSendMessage } from "./protocol";
 
 // 상한은 UTF-16 길이다. 제품 규칙(8 자소)은 validateNickname 이 판정한다 — 여기서 64 처럼 낮게 잡으면
@@ -84,6 +84,8 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.strictObject({ t: z.literal("dress"), look: z.enum(OUTFIT_IDS) }),
   // 맵 선택(결정 D-20, 11-06): 값은 enum 뿐 — 방장·단계·허용 맵은 서버 규칙(shared/game/maps.ts pickMap)이 본다. 신원은 소켓 첨부 playerId.
   z.strictObject({ t: z.literal("mapPick"), map: z.enum(MAP_CHOICES) }),
+  // 판 종류 고르기(결정 0081-6, 19-01 D-05): 값은 enum 뿐 — 방장·단계는 서버 규칙(shared/game/mode.ts pickMode)이 본다. 신원은 소켓 첨부 playerId.
+  z.strictObject({ t: z.literal("modePick"), mode: z.enum(GAME_MODES) }),
   // 다시 하기(결정 D-12, 11-08): 준비 토글과 시작. round 는 1 이상 정수 — 신원은 소켓 첨부 playerId 뿐이고 방장·단계·판 번호·인원은 서버 규칙(shared/game/rematch.ts)이 본다.
   z.strictObject({ t: z.literal("ready"), on: z.boolean(), round: z.number().int().min(1) }),
   z.strictObject({ t: z.literal("rematch"), round: z.number().int().min(1) }),

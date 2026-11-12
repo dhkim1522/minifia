@@ -28,6 +28,7 @@ const CLIENT_MESSAGE_KINDS = [
   "kick",
   "leave",
   "mapPick",
+  "modePick", // 19페이즈(결정 0081-6): 소리와 무관한 새 메시지 — 판 종류 고르기. 이 목록은 소리가 만든 메시지가 없다는 것을 고정하는 것이라 19페이즈의 한 줄만 더했다
   "move",
   "note",
   "pick",

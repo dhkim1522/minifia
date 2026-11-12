@@ -2,7 +2,7 @@
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
-import type { MapChoice, MapId, PlaceId, RecordLine } from "../protocol";
+import type { GameMode, MapChoice, MapId, PlaceId, RecordLine } from "../protocol";
 import type {
   AssassinationRecord,
   BadgeId,
@@ -217,6 +217,8 @@ export interface RoomState {
   bench?: Player[];
   /** 방장이 고른 맵(결정 D-20). 공개 값이다(view.mapChoice). 없으면 "random" — pickMap 이 쓰고, 대기실 복귀·다시 하기 뒤에도 남는다. */
   mapChoice?: MapChoice;
+  /** 방장이 고른 판 종류(결정 0081-6, 19페이즈 D-05). 공개 값이다(view.mode). 없으면 "extended" — 읽는 곳은 모두 modeOf(state)(D-04). pickMode 가 쓰고, 다시 하기·대기실 복귀 뒤에도 남는다(D-06). */
+  mode?: GameMode;
   /** 서버 전용 결정값(결정 D-21). startGame 이 mapChoice 로 정해 싣는다 — 시작 전에는 어떤 view·프레임에도 싣지 않는다(L42). 대기실 복귀가 버린다. */
   map?: MapId;
   /** 서버 전용(결정 0022). 방을 만들 때만 정해지는 테스트 방 표시 — true 일 때만 키가 있다. 테스트 방 방장 도구의 문이다. */

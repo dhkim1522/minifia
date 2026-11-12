@@ -16,6 +16,7 @@
 // runoff: 동점 결선(결정 0066-4, RULESET.runoff 가 켜졌을 때만) — 지목 집계가 최다 정확히 둘 동점이면 next "runoff". stepRunoff 가 앞머리 → 투표 → 결과를 stay 사슬로 걷고 마지막에 집계(많이 받은 후보면 defense, 동점이면 night).
 // 난수는 세 번째 인자로만 받는다 — 방 DO 는 cryptoRandInt, 테스트는 seededRandInt.
 // 분기(4페이즈): 마감 훅이 next 를 돌려주면 그 단계로, 없으면 단계 표(PHASE_DEFS)의 기본 next 로 간다. 표는 데이터만 두고 분기는 훅이 정한다.
+// 판 종류(19페이즈 D-08): 기본 다음 단계는 nextPhaseOf(단계, rulesetOf(modeOf(상태))) 가 고른다 — basic 판은 낮 시작 발표 다음이 errand 가 아니라 discussion 이다.
 // 진입 훅의 세 번째 인자 at 은 진입 시각(= 이전 마감)이다 — 시각을 스스로 읽지 않는 순수 규칙이 "진입 + 30분" 같은 계산을 할 때 쓴다.
 import type { PhaseId } from "../protocol";
 import { emptyGameCloseAt, nextContinuityAt } from "./continuity";
@@ -28,8 +29,8 @@ import { enterNomination, enterVote, stepNomination, resolveNomination } from ".
 import { stepRunoff } from "./runoff";
 import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
 import { enterMorning, enterNight } from "./night";
-import { PHASE_DEFS } from "./phases";
-import { RULESET } from "./ruleset";
+import { PHASE_DEFS, nextPhaseOf } from "./phases";
+import { RULESET, modeOf, rulesetOf } from "./ruleset";
 import type { RoomState } from "./room";
 import { clearTutorial } from "./tutorial";
 import { resolveVerdict } from "./verdict";
@@ -97,7 +98,9 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
       closing = resolved.state;
       branch = resolved.next;
     }
-    const next = branch ?? PHASE_DEFS[closing.phase].next;
+    // 판 규칙은 한 걸음마다 방 상태에서 얻는다(19페이즈 D-08) — 전역 값이 아니다. 마감 훅의 분기가 먼저고, 없으면 규칙이 고른 기본 다음 단계다.
+    const rules = rulesetOf(modeOf(closing));
+    const next = branch ?? nextPhaseOf(closing.phase, rules);
     if (next === null) break;
     const duration = PHASE_DEFS[next].durationMs;
     const entered: RoomState = {

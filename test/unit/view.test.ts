@@ -198,6 +198,7 @@ function roleValueLeaks(view: RoomView, spectator = false): string[] {
 /** view 최상위에 올 수 있는 키(허용 목록). */
 const TOP_KEYS: ReadonlySet<string> = new Set([
   "code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map",
+  "mode", // 판 종류 공개 값(19페이즈 D-05) — 모든 소켓에 같은 값이고 역할의 함수가 아니다
   "tutorial", // tutorial 단계의 진행 수 { done, total, endsAt }(17페이즈, 결정 0080-11) — 모두에게 같은 값, 아래 "tutorial 단계 view 키" 가 조건을 단언한다
 ]);
 
@@ -2282,8 +2283,9 @@ describe("준비 players[].ready · players[].sat (11-08, D-12·D-13)", () => {
 });
 
 describe("쉬는 사람 view (11-08, D-13, 누설 L38)", () => {
-  const RESTING_TOP = "code,mapChoice,maxPlayers,me,minPlayers,phase,phaseDurationMs,phaseEndsAt,players,resting,round,serverNow";
-  const RESTING_TOP_MAP = "code,map,mapChoice,maxPlayers,me,minPlayers,phase,phaseDurationMs,phaseEndsAt,players,resting,round,serverNow";
+  // 19-01: mode(판 종류 공개 값, D-12)는 쉬는 사람도 같은 값을 받는다 — 이름만 길어진 이 시험 제목의 목록에 한 키를 더했다.
+  const RESTING_TOP = "code,mapChoice,maxPlayers,me,minPlayers,mode,phase,phaseDurationMs,phaseEndsAt,players,resting,round,serverNow";
+  const RESTING_TOP_MAP = "code,map,mapChoice,maxPlayers,me,minPlayers,mode,phase,phaseDurationMs,phaseEndsAt,players,resting,round,serverNow";
   const sitter = {
     id: "sit-id-0001",
     token: "token-sitter-secret-0123456789",
