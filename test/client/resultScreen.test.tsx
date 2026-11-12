@@ -9,6 +9,7 @@ import type { RoleId } from "../../shared/game/roles";
 import type { AwardLine, GameMode, GameWinner, MapId, RoomView, SummaryRow, VoteLogEntry } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import type { WorldStageProps } from "../../src/components/WorldStage";
+import type { ResultPanelProps } from "../../src/components/v2/ResultPanel";
 import type { RoomConnection, RoomEvent } from "../../src/net/useRoomConnection";
 import { LOG_H } from "../../src/game/chatUi";
 import { RESULT_TABS_SHOWN } from "../../src/game/resultText";
@@ -63,6 +64,21 @@ vi.mock("../../src/components/WorldStage", async () => {
           return role ? createElement(RoleChip, { key: p.seat, role }) : null;
         }),
       );
+    },
+  };
+});
+
+// 19-05: 진짜 ResultPanel 을 그대로 그리되 받은 props 를 쥔다(DOM 은 달라지지 않는다). 탭 행이 숨은 뒤(18.1)로는 화면 조작으로 기록 늘림(expanded)에 닿을 수 없어,
+// 그 경로를 보는 시험만 onTab 을 직접 부른다
+const panel = vi.hoisted(() => ({ props: null as null | ResultPanelProps }));
+vi.mock("../../src/components/v2/ResultPanel", async (importOriginal) => {
+  const m = await importOriginal<typeof import("../../src/components/v2/ResultPanel")>();
+  const { createElement } = await import("react");
+  return {
+    ...m,
+    ResultPanel: (props: ResultPanelProps) => {
+      panel.props = props;
+      return createElement(m.ResultPanel, props);
     },
   };
 });
@@ -179,6 +195,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   stage.props = null;
   stage.mounts = 0;
+  panel.props = null;
   sigs.got.length = 0;
   delete (window as { __mfResult?: unknown }).__mfResult;
 });
@@ -1673,6 +1690,123 @@ describe("결과 화면 방장 줄과 판 종류 (19-05, D-06·D-13)", () => {
     expect(map!.hasAttribute("data-side-button")).toBe(false);
     fireEvent.click(map!);
     expect(r.container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
+  });
+
+  // ---- 숨김 조건과 화면 이동 (P19-16): 기록 늘림 · 꾸미기 시트 · 키보드, 가상 뷰포트 ----
+  const count = (c: ParentNode) => `${rails(c)},${chipCount(c)}`;
+  const expandedOf = (c: ParentNode) => c.querySelector("[data-result-panel]")?.getAttribute("data-expanded") ?? "없음";
+  const dressBtn = (c: ParentNode) => c.querySelector<HTMLElement>('[data-float="dress"]');
+  /** 가짜 visualViewport(높이 844)를 깔고 fn 을 돌린 뒤 되돌린다. open() 은 입력칸 포커스 + 키보드 336, shut() 은 블러 + 원래 높이 */
+  const withKeyboard = (fn: (kb: { open(c: ParentNode): void; shut(c: ParentNode): void }) => void) => {
+    const vv = Object.assign(new EventTarget(), { height: 844, offsetTop: 0 });
+    Object.defineProperty(window, "visualViewport", { value: vv, configurable: true, writable: true });
+    const realInnerH = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", { value: 844, configurable: true, writable: true });
+    const input = (c: ParentNode) => c.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    // 훅은 다음 프레임(rAF)과 100ms 뒤 다시 읽기로 높이를 잰다. 이 파일은 시계를 과거(NOW)로 돌려 두어 가짜 rAF 의 다음 프레임까지가 16~32ms 로 달라지므로, 다시 읽기(100ms)까지 넉넉히 넘긴다
+    const resize = (h: number) => {
+      vv.height = h;
+      act(() => void vv.dispatchEvent(new Event("resize")));
+      advance(120);
+    };
+    try {
+      fn({
+        open: (c) => {
+          act(() => input(c).focus());
+          resize(844 - 336);
+        },
+        shut: (c) => {
+          act(() => input(c).blur());
+          resize(844);
+        },
+      });
+    } finally {
+      Reflect.deleteProperty(window, "visualViewport");
+      Object.defineProperty(window, "innerHeight", { value: realInnerH, configurable: true, writable: true });
+    }
+  };
+  const kbOf = (c: ParentNode) => c.querySelector("main.mf-result")?.getAttribute("data-kb-open") ?? "없음";
+
+  it("방장: 연출 뒤 전체 기록이 늘어난 동안(expanded)에는 줄이 없고, 접으면 다시 있다", () => {
+    const r = renderRoom(makeView({ me: 0 }));
+    expect(count(r.container)).toBe("1,0");
+    act(() => panel.props!.onTab("mafia"));
+    expect(expandedOf(r.container)).toBe("true");
+    expect(count(r.container)).toBe("0,0");
+    act(() => stage.props!.onStageTap!()); // 무대 탭 = 접기
+    expect(expandedOf(r.container)).toBe("false");
+    expect(count(r.container)).toBe("1,0");
+  });
+
+  it("참가자: 연출 뒤 전체 기록이 늘어난 동안(expanded)에는 칩이 없고, 접으면 다시 있다", () => {
+    const r = renderRoom(makeView({ me: 1 }));
+    expect(count(r.container)).toBe("0,1");
+    act(() => panel.props!.onTab("mafia"));
+    expect(expandedOf(r.container)).toBe("true");
+    expect(count(r.container)).toBe("0,0");
+    act(() => stage.props!.onStageTap!());
+    expect(expandedOf(r.container)).toBe("false");
+    expect(count(r.container)).toBe("0,1");
+  });
+
+  it("방장: 꾸미기 시트를 열면(옷장·줄의 [맵] 어느 쪽이든) 줄이 없고 닫으면 다시 있다", () => {
+    const r = renderRoom(makeView({ me: 0 }));
+    expect(count(r.container)).toBe("1,0");
+    fireEvent.click(dressBtn(r.container)!);
+    expect(r.container.querySelectorAll("button[data-outfit]").length).toBeGreaterThan(1);
+    expect(count(r.container)).toBe("0,0");
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+    advance(300);
+    expect(r.container.querySelectorAll("button[data-outfit]")).toHaveLength(0);
+    expect(count(r.container)).toBe("1,0");
+    fireEvent.click(r.container.querySelector<HTMLElement>("[data-host-rail] [data-map-chip]")!);
+    expect(r.container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
+    expect(count(r.container)).toBe("0,0");
+  });
+
+  it("참가자: 꾸미기 시트를 열면 칩이 없고 닫으면 다시 있다", () => {
+    const r = renderRoom(makeView({ me: 1 }));
+    expect(count(r.container)).toBe("0,1");
+    fireEvent.click(dressBtn(r.container)!);
+    expect(r.container.querySelectorAll("button[data-outfit]").length).toBeGreaterThan(1);
+    expect(count(r.container)).toBe("0,0");
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+    advance(300);
+    expect(count(r.container)).toBe("0,1");
+  });
+
+  it("방장: 키보드가 열리면(data-kb-open) 줄이 없고 닫히면 다시 있다", () => {
+    withKeyboard((kb) => {
+      const r = renderRoom(makeView({ me: 0 }));
+      expect(count(r.container)).toBe("1,0");
+      kb.open(r.container);
+      expect(kbOf(r.container)).toBe("true");
+      expect(count(r.container)).toBe("0,0");
+      kb.shut(r.container);
+      expect(kbOf(r.container)).toBe("없음");
+      expect(count(r.container)).toBe("1,0");
+    });
+  });
+
+  it("참가자: 키보드가 열리면(data-kb-open) 칩이 없고 닫히면 다시 있다", () => {
+    withKeyboard((kb) => {
+      const r = renderRoom(makeView({ me: 1 }));
+      expect(count(r.container)).toBe("0,1");
+      kb.open(r.container);
+      expect(kbOf(r.container)).toBe("true");
+      expect(count(r.container)).toBe("0,0");
+      kb.shut(r.container);
+      expect(kbOf(r.container)).toBe("없음");
+      expect(count(r.container)).toBe("0,1");
+    });
+  });
+
+  it("result.css: 가상 뷰포트 이동 줄(--mf-vv-top)에 방장 줄·판 종류 칩이 오른쪽 열과 함께 묶여 있다", () => {
+    const css = readFileSync("src/styles/result.css", "utf8");
+    const line = css.split("\n").find((l) => l.includes("translateY(var(--mf-vv-top")) ?? "";
+    const selectors = (line.split("{")[0] ?? "").split(",").map((x) => x.trim());
+    const want = [".mf-result .mv-side", ".mf-result .mf-hostrail", ".mf-result .mf-modechip"];
+    expect(want.filter((w) => selectors.includes(w)).join(" | ")).toBe(want.join(" | "));
   });
 });
 
