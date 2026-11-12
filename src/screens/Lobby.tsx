@@ -3,17 +3,22 @@ import type { ReactNode } from "react";
 import type { ClientMessage, MapChoice, RoomView } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import { lockedOutfits } from "../../shared/game/look";
+import { modeOf } from "../../shared/game/ruleset";
 import { connectedCount } from "../../shared/game/room";
 import { ActionButton, ActionRow } from "../components/ActionButton";
 import { BotSheet } from "../components/BotSheet";
 import { ToolButton } from "../components/ToolButton";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
+import { ModeSheet } from "../components/ModeSheet";
 import { ShareSheet } from "../components/ShareSheet";
 import { ChatPanel } from "../components/v2/ChatPanel";
 import { DressSheet } from "../components/v2/DressSheet";
 import { FloatAction } from "../components/v2/FloatAction";
+import { HostRail } from "../components/v2/HostRail";
+import { HostRailButton } from "../components/v2/HostRailButton";
 import { MapChip } from "../components/v2/MapChip";
+import { ModeChip } from "../components/v2/ModeChip";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { SideColumn } from "../components/v2/SideColumn";
 import { TutorialToggle } from "../components/v2/TutorialToggle";
@@ -24,7 +29,8 @@ import { CHAT_TEXT } from "../game/chatText";
 import { DRESS_TEXT } from "../game/dressText";
 import { callTargetsOf } from "../game/hostLine";
 import { LOG_H } from "../game/chatUi";
-import { diffRoomViews, toastForDiff } from "../net/roomDiff";
+import { MODE_TEXT } from "../game/modeText";
+import { diffRoomViews, modeToastOf, toastForDiff } from "../net/roomDiff";
 import { useChat } from "../net/useChat";
 import { useDress } from "../net/useDress";
 import { useMyMotion } from "../net/useMyMotion";
@@ -57,16 +63,18 @@ interface LobbyProps {
   exiting?: boolean;
   /** [나가기] 확인 뒤 불린다. 방을 나간 결과와 관계없이 첫 화면으로 간다(01-13 의 RoomScreen 이 onExit("left") 를 넘긴다) */
   onLeave?: () => void;
-  /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 헤더 아래 왼쪽에 놓는다 */
+  /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 헤더 아래 왼쪽에 놓는다. 방장 줄·판 종류 칩은 그 아래로 내려간다(19-04, P19-5) */
   testButton?: ReactNode;
 }
 
 // S-03 대기실(06-15, 07-13): 지하 재즈 바 맵(WorldStage) 위에 승인 로비 틀을 얹는다 — 위쪽 가림막, 헤더([나가기]·PhaseHeader "대기실"·[공유]),
 // 위 알림(TopToast), 아래 패널의 채팅 기록 + 입력줄 + 행동 줄 하나. 방 코드는 공유 시트 안에서만 보인다. 읽을 글은 "대기실" 과 접히는 한 줄뿐이다(3초 규칙).
+// 19-04(D-13): 방장 전용 조작([판 종류]·[맵]·[봇])은 왼쪽 세로 줄(HostRail)에 모으고 오른쪽 열은 모두가 쓰는 [소리]·[옷장]만 둔다. 참가자에게는 줄 마크업이 없고 읽기 전용 판 종류 칩 하나가 있다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)은 WorldStage 가 React 텍스트 노드로만 그린다.
 export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offset = 0, bannerVisible = false, exiting = false, onLeave, testButton }: LobbyProps) {
   // 입장·퇴장·방장 변경 알림: 서버가 보낸 스냅샷 두 개의 차이로만 만든다. 처음 열 때·epoch 가 바뀐 직후(재연결)에는
   // 직전 스냅샷을 비워 지난 일을 다시 알리지 않는다. 재접속 띠가 떠 있는 동안은 알림을 띄우지 않되 기준선은 갱신한다.
+  // 판 종류 바뀜(19-04, P19-9)도 같은 규칙으로 참가자에게만 한 줄 — 한 번에 하나라 순서는 방장 변경 > 입장 > 퇴장 > 판 종류다.
   const toast = useTopToast();
   const { show } = toast;
   const prevView = useRef<RoomView | null>(null);
@@ -78,10 +86,15 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       prevEpoch.current = epoch;
       prevView.current = null;
     }
-    const diff = diffRoomViews(prevView.current, view);
+    const prev = prevView.current;
+    const diff = diffRoomViews(prev, view);
     prevView.current = view;
     const t = toastForDiff(diff);
-    if (t && !bannerVisible) show(t.text, t.icon);
+    const modeText = t ? null : modeToastOf(prev, view);
+    if (!bannerVisible) {
+      if (t) show(t.text, t.icon);
+      else if (modeText) show(modeText);
+    }
     // 입장·퇴장은 위 알림과 같은 문구로 기록 칸에도 시스템 줄로 남긴다. 재접속 띠가 떠 있어도 기록은 남기고,
     // 재연결 첫 상태(prevView 가 비어 diff 가 빈 결과)에서는 만들지 않는다. 방장 변경은 crown 시스템 줄로 남긴다(UI-SPEC E.1, 로컬 생성·저장 안 함).
     const at = Date.now() + offsetRef.current; // 서버 줄은 서버 시각이다 — 같은 기준으로 끼워 넣는다(WR-02)
@@ -92,7 +105,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
 
   // 열려 있는 시트. 화면이 기억하는 상태는 이것과 [시작] 잠금뿐이다.
   // 내보내기는 누른 시점의 닉네임을 같이 들고 있어 그사이 view 가 바뀌어도 제목이 흔들리지 않는다.
-  const [sheet, setSheet] = useState<{ kind: "leave" } | { kind: "share" } | { kind: "bots" } | { kind: "kick"; seat: number; nickname: string } | null>(null);
+  const [sheet, setSheet] = useState<{ kind: "leave" } | { kind: "share" } | { kind: "bots" } | { kind: "mode" } | { kind: "kick"; seat: number; nickname: string } | null>(null);
   const closeSheet = () => setSheet(null);
 
   // [시작] 2초 잠금. 시작이 거절되면 서버가 다시 보낸 view 대로 그린다.
@@ -150,13 +163,39 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   const connected = connectedCount(view.players);
   const isHost = view.me.isHost;
   const botsOn = isHost && view.me.testBots !== undefined;
+  // 판 종류(19-04, D-05): 단추 이름·시트의 고른 칸·참가자 칩은 서버가 방송한 view.mode 만 따른다. 고르면 보내기만 하고 미리 바꾸지 않는다(P19-6)
+  const mode = modeOf(view);
+  const modeBtnRef = useRef<HTMLButtonElement>(null);
+  const restoreModeFocus = useRef(false);
+  const openMode = () => {
+    inputRef.current?.blur();
+    setSheet({ kind: "mode" });
+  };
+  const closeMode = () => {
+    restoreModeFocus.current = true;
+    setSheet(null);
+  };
+  const modeOpen = sheet?.kind === "mode";
+  // 시트를 닫으면 초점을 [판 종류] 단추로 돌려준다(꾸미기 시트의 restoreDressFocus 와 같은 방식)
+  useEffect(() => {
+    if (modeOpen || !restoreModeFocus.current) return;
+    restoreModeFocus.current = false;
+    modeBtnRef.current?.focus();
+  }, [modeOpen]);
+  // 방장을 넘겨주면 열려 있던 판 종류 시트는 닫는다 — 다시 방장이 됐을 때 저절로 뜨지 않게
+  useEffect(() => {
+    if (!isHost) setSheet((s) => (s?.kind === "mode" ? null : s));
+  }, [isHost]);
+  // 테스트 방([테스트] 단추가 왼쪽 위에 있음): 줄·칩이 그 아래(48)에서 시작하고 줄 최대 높이도 그만큼 줄어든다(P19-5, F-1)
+  const testShift = Boolean(testButton);
   // 맵 선택(11-13): 칩과 카드는 서버가 방송한 view.mapChoice 만 따른다. 보내기만 하고 미리 바꾸지 않는다
   const mapChoice: MapChoice = view.mapChoice ?? "random";
   const pickMap = (map: MapChoice) => {
     if (canSend) send({ t: "mapPick", map });
   };
-  // 맵 단추는 방장에게만 그린다(16-06 V-5, T-16-13): 손님은 맵을 고르지 못하고 서버도 방장의 mapPick 만 받는다
-  const mapChip = mapsOn && isHost ? <MapChip choice={mapChoice} host onPress={() => openDress("map")} /> : null;
+  // 맵 단추는 방장에게만 그린다(16-06 V-5, T-16-13): 참가자는 맵을 고르지 못하고 서버도 방장의 mapPick 만 받는다.
+  // 19-04: 방장 줄의 칸이다(rail). 연결이 끊기면 다른 줄 단추처럼 눌러도 아무 일 없다. 눌림 속성은 결과 화면과 같은 모양으로 둔다(꾸미기 시트가 열리면 줄을 그리지 않는다)
+  const mapChip = mapsOn && isHost ? <MapChip key="map" rail pressed={dressOpen && dressTab === "map"} choice={mapChoice} host={canSend} onPress={() => openDress("map")} /> : null;
   const host = view.players.find((p) => p.isHost);
   const full = view.players.length >= view.maxPlayers;
   // 서버 checkStart 와 같은 기준(연결된 사람 수)을 쓴다. 버튼 모양은 표시용이고 판정은 서버가 한다.
@@ -231,14 +270,22 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           </ActionRow>
         )}
       </section>
-      {dressOpen || kbOpen ? null : (
-        // 오른쪽 세로 한 줄(16-06 D-05): 소리(독) · 맵(방장) · 봇(방장) · 옷장. 손님은 소리 · 옷장
-        <SideColumn soundSlot maxHeight={sideMaxH}>
+      {/* 꾸미기 시트·키보드가 열린 동안에는 줄·칩·오른쪽 열을 그리지 않는다(P19-16) */}
+      {dressOpen || kbOpen ? null : isHost ? (
+        // 방장 전용 왼쪽 세로 줄(19-04 D-13): 판 종류 · 맵(허용 맵 둘 이상) · 봇(봇 도구가 켜진 방). 방장 판정은 서버 view 의 isHost 뿐이고 참가자에게는 마크업이 없다(T-19-13)
+        <HostRail maxHeight={testShift ? Math.max(0, sideMaxH - 48) : sideMaxH} testShift={testShift}>
+          <HostRailButton key="mode" ref={modeBtnRef} id="mode" icon="deck" label={MODE_TEXT.aria(mode)} pressed={modeOpen} disabled={!canSend} onPress={openMode} />
           {mapChip}
           {/* 결정 0075: 방장만 [봇] — 서버가 방장 대기실 view 에만 me.testBots 를 싣는다 */}
-          {botsOn ? (
-            <FloatAction key="bots" kind="bots" side="bots" icon="bot" label="봇" pressed={sheet?.kind === "bots"} disabled={!canSend} onPress={() => setSheet({ kind: "bots" })} />
-          ) : null}
+          {botsOn ? <HostRailButton key="bots" id="bots" icon="bot" label="봇" pressed={sheet?.kind === "bots"} disabled={!canSend} onPress={() => setSheet({ kind: "bots" })} /> : null}
+        </HostRail>
+      ) : (
+        // 참가자: 읽기 전용 판 종류 칩 하나(D-07)
+        <ModeChip mode={mode} testShift={testShift} />
+      )}
+      {dressOpen || kbOpen ? null : (
+        // 오른쪽 세로 한 줄: 방장도 소리 · 옷장(19-04, 방장 전용은 왼쪽 줄)
+        <SideColumn soundSlot maxHeight={sideMaxH}>
           <FloatAction key="dress" ref={dressBtnRef} kind="dress" side="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={() => openDress()} />
         </SideColumn>
       )}
@@ -278,6 +325,17 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
         />
       ) : null}
       {sheet?.kind === "bots" && botsOn ? <BotSheet view={view} canSend={canSend} send={send} onClose={closeSheet} /> : null}
+      {modeOpen && isHost ? (
+        <ModeSheet
+          mode={mode}
+          canSend={canSend}
+          onPick={(next) => {
+            // 보내기만 한다 — 표시는 서버가 방송한 view.mode 가 바꾼다. 방장 판정·거절은 서버 몫이다(결정 0002)
+            if (canSend) send({ t: "modePick", mode: next });
+          }}
+          onClose={closeMode}
+        />
+      ) : null}
       {sheet?.kind === "share" ? <ShareSheet code={view.code} hostNickname={host?.nickname ?? ""} full={full} onClose={closeSheet} /> : null}
     </main>
   );

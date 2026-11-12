@@ -37,5 +37,6 @@
 .mf-lobby__panel--kb { bottom: var(--mf-kb-lift, 0px); padding-bottom: 8px; }
 
 /* iOS 가 키보드를 위해 화면을 위로 밀면(vv.offsetTop > 0) 헤더 계열이 그만큼 내려와 보이는 영역 맨 위에 머문다. window.scrollTo 로 되돌리지 않는다(깜빡임).
-   --mf-vv-top 은 포커스가 없을 때 0 이라 평소에는 움직이지 않는다. 재접속 띠(.mf-reconnect--floating)는 방 틀 직속이라 같은 변수를 방 틀에서 읽는다. */
-.mf-lobby__scrim, .mf-lobby__header, .mf-lobby__test, .mf-lobby .mv-side, .mf-lobby .mv-toast, .mf-reconnect--floating { transform: translateY(var(--mf-vv-top, 0px)); }
+   --mf-vv-top 은 포커스가 없을 때 0 이라 평소에는 움직이지 않는다. 재접속 띠(.mf-reconnect--floating)는 방 틀 직속이라 같은 변수를 방 틀에서 읽는다.
+   19-04: 방장 줄(.mf-hostrail)·판 종류 칩(.mf-modechip)도 오른쪽 열과 같은 줄에 묶는다. */
+.mf-lobby__scrim, .mf-lobby__header, .mf-lobby__test, .mf-lobby .mv-side, .mf-lobby .mf-hostrail, .mf-lobby .mf-modechip, .mf-lobby .mv-toast, .mf-reconnect--floating { transform: translateY(var(--mf-vv-top, 0px)); }
