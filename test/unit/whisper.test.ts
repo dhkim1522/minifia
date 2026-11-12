@@ -1,11 +1,12 @@
 // 귓속말 규칙 단위 시험(09.1.1-02, 결정 0066-2). 결과는 한 줄 문자열로 비교한다(TAP 증거 규칙).
 import { describe, expect, it } from "vitest";
 import { WHISPER_MAX_GRAPHEMES, WHISPER_PER_DAY, WHISPER_PHASES, sendWhisper, whisperUsedToday } from "../../shared/game/whisper";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { buildView } from "../../shared/game/view";
 import type { PhaseId } from "../../shared/protocol";
+const GAME_RULES = rulesetOf("extended");
 
 function player(i: number, extra: Partial<Player> = {}): Player {
   return {
@@ -128,8 +129,8 @@ describe("view — me.whisperUsed 와 whispers 비노출", () => {
   };
   it("보낸 사람 본인의 discussion view 에만 me.whisperUsed:true", () => {
     const s = sent();
-    // 기본판(결정 0072)에서는 귓속말이 꺼져 있어 서버 상태에 기록이 있어도 키가 없다(RULESET.whisper 를 켜면 true).
-    expect(buildView(s, "p1", 5).me.whisperUsed).toBe(RULESET.whisper ? true : undefined);
+    // 기본판(결정 0072)에서는 귓속말이 꺼져 있어 서버 상태에 기록이 있어도 키가 없다(판 규칙의 whisper 를 켜면 true).
+    expect(buildView(s, "p1", 5).me.whisperUsed).toBe(GAME_RULES.whisper ? true : undefined);
     for (const id of ["p0", "p2", "p3"]) expect("whisperUsed" in buildView(s, id, 5).me).toBe(false);
   });
   it("보내기 전·다른 단계·다음 일차에는 키가 없다", () => {

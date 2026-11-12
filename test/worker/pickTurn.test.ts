@@ -6,7 +6,8 @@ import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
 import type { Actor } from "./helpers";
 import { alarmOf, closePhase, connect, editRoom, hello, lastViewOf, mark, nextFrame, send, settle, startedGame, storedRoom, summary, until } from "./helpers";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
+const GAME_RULES = rulesetOf("extended");
 
 const GAP_MS = 900;
 const TURN_MS = 8000;
@@ -41,8 +42,8 @@ async function dropSocket(code: string, who: Actor): Promise<void> {
   });
 }
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 를 켜면 다시 돈다
-describe.skipIf(!RULESET.pickTurn)("순차 지목 — 끊긴 차례 (M-3)", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 pickTurn 를 켜면 다시 돈다
+describe.skipIf(!GAME_RULES.pickTurn)("순차 지목 — 끊긴 차례 (M-3)", () => {
   it("차례 주인이 끊겨도 차례 상태·마감·알람은 그대로이고, 다시 붙으면 같은 마감과 지금까지의 지목 줄을 받고 지목이 받아들여진다", { timeout: 30_000 }, async () => {
     const { code, actors, a, b, others } = await atSecondTurn();
     const before = await storedRoom(code);
@@ -123,8 +124,8 @@ describe.skipIf(!RULESET.pickTurn)("순차 지목 — 끊긴 차례 (M-3)", () =
   });
 });
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 를 켜면 다시 돈다
-describe.skipIf(!RULESET.pickTurn)("순차 지목 — 알람 따라잡기", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 pickTurn 를 켜면 다시 돈다
+describe.skipIf(!GAME_RULES.pickTurn)("순차 지목 — 알람 따라잡기", () => {
   it("저장된 마감이 30초 전이면 알람 한 번에 여러 차례가 기권으로 지나가 모든 소켓이 같은 차례·같은 마감을 본다 (새 마감 = 이전 마감 + 단계 길이)", { timeout: 30_000 }, async () => {
     const g = await startedGame("nomination", 3);
     await closePhase(g.code); // 첫 차례 시작

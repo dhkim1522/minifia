@@ -18,12 +18,13 @@ import {
   nominationMaxMs,
 } from "../../shared/game/phases";
 import { ROOM_TTL_MS } from "../../shared/game/room";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
 import type { Player, RoomState } from "../../shared/game/room";
 import { enterDayAnnounce, nextWakeAt, tick } from "../../shared/game/tick";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, castVerdicts, stateWithVerdict } from "../helpers/voteState";
 import type { PhaseId } from "../../shared/protocol";
+const GAME_RULES = rulesetOf("extended");
 
 function player(i: number, connected: boolean): Player {
   return {
@@ -58,8 +59,8 @@ function stateIn(
 }
 
 /** 투표 단계 전체 길이·진입 길이: 기본판(결정 0072)은 동시 투표 15초, 순차 지목이 켜지면 차례 사슬 최대·모이기. */
-const NOM_SPAN_MS = RULESET.pickTurn ? nominationMaxMs(4) : NOMINATION_MS;
-const NOM_ENTER_MS = RULESET.pickTurn ? NOMINATION_GATHER_MS : NOMINATION_MS;
+const NOM_SPAN_MS = GAME_RULES.pickTurn ? nominationMaxMs(4) : NOMINATION_MS;
+const NOM_ENTER_MS = GAME_RULES.pickTurn ? NOMINATION_GATHER_MS : NOMINATION_MS;
 /** errand 진입(15페이즈, 결정 0074)이 난수를 쓴다 — 낮 시작을 지나는 tick 은 같은 시드의 난수 함수를 새로 받는다. */
 const rnd = (): ((n: number) => number) => seededRandInt(7);
 /** 낮 시작 발표 마감부터 토론 마감까지의 앞부분: 낮 시작 발표 + 심부름(15페이즈). */
@@ -140,8 +141,8 @@ describe("tick (순수 단계 진행)", () => {
     expect(Object.keys(next).includes("extendUsed")).toBe(false);
   });
 
-  // 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다
-  it.skipIf(!RULESET.pickTurn)("토론 마감(T)에 지목으로 넘어가 마감 T+3000(모이기), 일차는 그대로다 (토론 → 지목, DAY-07, 결정 0063-1)", () => {
+  // 기본판(결정 0072)에서 꺼짐 — 판 규칙의 pickTurn 을 켜면 다시 돈다
+  it.skipIf(!GAME_RULES.pickTurn)("토론 마감(T)에 지목으로 넘어가 마감 T+3000(모이기), 일차는 그대로다 (토론 → 지목, DAY-07, 결정 0063-1)", () => {
     const T = 100_000;
     const s: RoomState = {
       ...stateIn("discussion", T),
@@ -155,8 +156,8 @@ describe("tick (순수 단계 진행)", () => {
     expect(JSON.stringify(next.pickTurn)).toBe(JSON.stringify({ order: [0, 1, 2, 3], i: -1 }));
   });
 
-  // 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다
-  it.skipIf(!RULESET.pickTurn)("표가 없는 지목을 한 번에 따라잡으면(T + nominationMaxMs(4)) 표의 기본 다음 단계(변론)가 아니라 밤으로 간다 — 훅의 next 가 표보다 앞선다 (결정 0060-1, 0063-1)", () => {
+  // 기본판(결정 0072)에서 꺼짐 — 판 규칙의 pickTurn 을 켜면 다시 돈다
+  it.skipIf(!GAME_RULES.pickTurn)("표가 없는 지목을 한 번에 따라잡으면(T + nominationMaxMs(4)) 표의 기본 다음 단계(변론)가 아니라 밤으로 간다 — 훅의 next 가 표보다 앞선다 (결정 0060-1, 0063-1)", () => {
     const T = 100_000;
     const s: RoomState = { ...stateIn("discussion", T), day: 1 };
     const nomination = tick(s, T);
@@ -171,8 +172,8 @@ describe("tick (순수 단계 진행)", () => {
     expect(tick(nomination, end - 1).phase).toBe("nomination");
   });
 
-  // 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다
-  it.skipIf(!RULESET.pickTurn)("차례를 한 걸음씩 따라가면 마감이 이전 마감 + 그 단계 길이로 이어진다: 모이기 → 차례 8000 → (기권) 사이 900 → 다음 차례 8000 …", () => {
+  // 기본판(결정 0072)에서 꺼짐 — 판 규칙의 pickTurn 을 켜면 다시 돈다
+  it.skipIf(!GAME_RULES.pickTurn)("차례를 한 걸음씩 따라가면 마감이 이전 마감 + 그 단계 길이로 이어진다: 모이기 → 차례 8000 → (기권) 사이 900 → 다음 차례 8000 …", () => {
     const T = 100_000;
     let s = tick({ ...stateIn("discussion", T), day: 1 }, T);
     const chain: string[] = [];
@@ -198,8 +199,8 @@ describe("tick (순수 단계 진행)", () => {
     expect(tie.voteLog?.[0]?.cand?.votes.length).toBe(3);
   });
 
-  // 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
-  it.skipIf(!RULESET.runoff)("지목 마감에 최다가 정확히 둘 동점이면 결선(마감 +1000)으로, 아무도 안 던지고 결선을 지나면 밤(마감 사슬 1000+5000+1500)으로 간다 (결정 0066-4)", () => {
+  // 기본판(결정 0072)에서 꺼짐 — 판 규칙의 runoff 를 켜면 다시 돈다
+  it.skipIf(!GAME_RULES.runoff)("지목 마감에 최다가 정확히 둘 동점이면 결선(마감 +1000)으로, 아무도 안 던지고 결선을 지나면 밤(마감 사슬 1000+5000+1500)으로 간다 (결정 0066-4)", () => {
     const T = 100_000;
     const nomination = tick({ ...stateIn("discussion", T), day: 1 }, T);
     const tieEnd = castPoints(nomination, { 0: 2, 1: 2, 2: 0, 3: 0 });

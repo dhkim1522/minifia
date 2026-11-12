@@ -3,10 +3,11 @@
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { NOMINATION_GATHER_MS, NOMINATION_MS } from "../../shared/game/phases";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
 import { alarmOf, advanceTo, collect, createRoom, driveToEnded, editRoom, mapPlayers, nextFrame, seat, send, skipOnce, skipThrough, storedRoom, wanderTimes } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
+const GAME_RULES = rulesetOf("extended");
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
 const parse = (raw: string): ServerMessage => JSON.parse(raw) as ServerMessage;
@@ -282,7 +283,7 @@ describe("testSkip", () => {
     send(r.host, { t: "testSkip" });
     for (const sock of allSockets(r)) {
       const msg = (await nextFrame(sock, isPhase("nomination"))) as Extract<ServerMessage, { t: "state" }>;
-      expect(`${msg.view.phase}/${msg.view.phaseDurationMs}`).toBe(`nomination/${RULESET.pickTurn ? NOMINATION_GATHER_MS : NOMINATION_MS}`); // 기본판(결정 0072)은 15000, 순차 지목을 켜면 모이기 3000
+      expect(`${msg.view.phase}/${msg.view.phaseDurationMs}`).toBe(`nomination/${GAME_RULES.pickTurn ? NOMINATION_GATHER_MS : NOMINATION_MS}`); // 기본판(결정 0072)은 15000, 순차 지목을 켜면 모이기 3000
     }
     expect(String(await alarmOf(r.code))).toBe(String((await stored(r.code)).phaseEndsAt));
     for (const s of allSockets(r)) s.cursor = s.frames.length;

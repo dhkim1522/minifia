@@ -6,7 +6,6 @@ import "../helpers/singleLineErrors";
 import { phaseKey } from "../../shared/game/audience";
 import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
-import { RULESET } from "../../shared/game/ruleset";
 import type { AwardLine, GameWinner, MapId, RoomView, SummaryRow, VoteLogEntry } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import type { WorldStageProps } from "../../src/components/WorldStage";

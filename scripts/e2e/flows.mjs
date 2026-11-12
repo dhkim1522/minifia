@@ -3808,7 +3808,7 @@ export const FLOWS = [
   // 13페이즈 기본판(결정 0072): basic-off = 봇 판 한 판 전체(로비 → 낮 → 밤 → 결과)에서 꺼진 장치 DOM·프레임·단계 순서·결과 탭 0건, basic-vote = 8명 투표 화면(이름표 버튼 7개 44×44·무가림, 묶음 G·H). 폰 6종은 basic-vote 만
   { id: "basic-off", run: basicOffFlow, size: GAME_SIZE },
   { id: "basic-vote", run: basicVoteFlow, extraSizes: LOBBY_EXTRA_SIZES },
-  // 기본판(결정 0072, 13페이즈)에서 꺼진 장치의 흐름 7개(politics-badge·whisper·pin·runoff·runoff-tie·showdown·showdown-tie)는 지우지 않고 기본 실행에서 뺀다 — RULESET 을 켰을 때만 --only 로 돈다. politics-verdict(판결 순간 연출, D-06)는 그대로 돈다.
+  // 기본판(결정 0072, 13페이즈)에서 꺼진 장치의 흐름 7개(politics-badge·whisper·pin·runoff·runoff-tie·showdown·showdown-tie)는 지우지 않고 기본 실행에서 뺀다 — 판 규칙(rulesetOf)에서 그 장치를 켰을 때만 --only 로 돈다. politics-verdict(판결 순간 연출, D-06)는 그대로 돈다.
   // 9.1.1 페이즈 정치 긴장(09.1.1-10): 직업 배지(떠 있는 버튼→칩→이름표 배지→말 바꿈)·귓속말(모드→한 줄 시트→당사자만 본문). 둘 다 폰 6종, 방장·손님 두 화면
   { id: "politics-badge", run: politicsBadgeFlow, extraSizes: LOBBY_EXTRA_SIZES, skipByDefault: true },
   { id: "politics-whisper", run: politicsWhisperFlow, extraSizes: LOBBY_EXTRA_SIZES, skipByDefault: true },

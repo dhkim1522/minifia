@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
 import type { ClientMessage, EvidenceView, GameMode, MorningView, PhaseId, PublicPlayer, RecordLine, RoleRecord, RoomView } from "../../shared/protocol";
 import { LineSheet } from "../../src/components/v2/LineSheet";
 import { floatVisible } from "../../src/game/badgeView";
@@ -15,6 +15,7 @@ import { LOG_H } from "../../src/game/chatUi";
 const KB_PANEL = 14 + LOG_H + 8 + 48 + 8;
 import { bindSignals, type LocalSignal } from "../../src/audio/signals";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
+const GAME_RULES = rulesetOf("extended");
 
 // 08-13: 낮 시작~처형은 맵(WorldStage) 위 GameMap 한 화면이다. WorldStage 는 받은 props 만 쥐는 가짜로 바꾼다(캔버스·런타임은 worldStage.test 몫).
 // RoomScreen 을 거쳐 그려 장면 키("gameMap")까지 함께 본다 — 연결은 반환값을 시험이 정하는 가짜다.
@@ -835,8 +836,8 @@ describe("GameMap — 거절 알림의 소리 신호 (12-10, ui.deny)", () => {
     expect(denies(sig.seen)).toEqual([{ kind: "deny" }]);
   });
 
-  // 기본판(결정 0072)에서 꺼짐 — RULESET.badge·whisper 를 켜면 다시 돈다(떠 있는 버튼이 있어야 성립한다)
-  it.skipIf(!RULESET.badge)("③ 직업 배지 거절: deny 한 번", () => {
+  // 기본판(결정 0072)에서 꺼짐 — 판 규칙의 badge·whisper 를 켜면 다시 돈다(떠 있는 버튼이 있어야 성립한다)
+  it.skipIf(!GAME_RULES.badge)("③ 직업 배지 거절: deny 한 번", () => {
     const f = errFeed();
     const { container } = mount(makeView({ count: 6 }), { onEvent: f.onEvent });
     const sig = withSignals();
@@ -848,7 +849,7 @@ describe("GameMap — 거절 알림의 소리 신호 (12-10, ui.deny)", () => {
     expect(denies(sig.seen)).toEqual([{ kind: "deny" }]);
   });
 
-  it.skipIf(!RULESET.whisper)("④ 귓속말 거절: deny 한 번", () => {
+  it.skipIf(!GAME_RULES.whisper)("④ 귓속말 거절: deny 한 번", () => {
     const f = errFeed();
     const { container } = mount(makeView(), { onEvent: f.onEvent });
     const sig = withSignals();

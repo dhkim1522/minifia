@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { BadgeId, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
 import { BADGE_TEXT, badgeFxOf, chipsOf, claimLabel, claimLook, floatLabel, floatVisible, myClaim, sayLine } from "../../src/game/badgeView";
+const GAME_RULES = rulesetOf("extended");
 
 // 09.1.1-08: 직업 주장 배지의 순수 모델(UI-SPEC A). 서버 view.players[].badge 만 읽고 시각·난수가 없다.
 const NAMES = ["민수", "영희", "서준", "지아", "도윤", "하은"];
@@ -73,14 +74,14 @@ describe("claimLook — 이름표 모서리 배지의 재료 (UI-SPEC A-1)", () 
 
 describe("기본판 floatVisible — 어느 단계에서도 거짓 (U-8, 결정 0072)", () => {
   const ALL = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"] as PhaseId[];
-  it("산 사람에게도 모든 단계에서 떠 있는 버튼이 없다(RULESET.badge 가 꺼져 있을 때)", () => {
-    if (RULESET.badge) return;
+  it("산 사람에게도 모든 단계에서 떠 있는 버튼이 없다(판 규칙의 badge 가 꺼져 있을 때)", () => {
+    if (GAME_RULES.badge) return;
     expect(ALL.map((phase) => `${phase}:${floatVisible(makeView({ phase }))}`).join(" ")).toBe(ALL.map((phase) => `${phase}:false`).join(" "));
   });
 });
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.badge 를 켜면 다시 돈다.
-describe.skipIf(!RULESET.badge)("floatVisible — 떠 있는 버튼이 보이는 단계 (UI-SPEC A-2)", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 badge 를 켜면 다시 돈다.
+describe.skipIf(!GAME_RULES.badge)("floatVisible — 떠 있는 버튼이 보이는 단계 (UI-SPEC A-2)", () => {
   it.each(["dayAnnounce", "discussion", "nomination", "showdown"] as PhaseId[])("%s 에서 산 사람에게 보인다", (phase) => {
     expect(floatVisible(makeView({ phase }))).toBe(true);
   });

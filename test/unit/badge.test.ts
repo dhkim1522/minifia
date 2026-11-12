@@ -2,11 +2,12 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { BADGE_ORDER, BADGE_PHASES, badgeChoicesOf, setBadge } from "../../shared/game/badge";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { buildView } from "../../shared/game/view";
 import type { BadgeId, PhaseId } from "../../shared/protocol";
+const GAME_RULES = rulesetOf("extended");
 
 function player(i: number, extra: Partial<Player> = {}): Player {
   return {
@@ -154,8 +155,8 @@ describe("view — 공개 주장 노출 (결정 0066-1)", () => {
     s = ok(s, "p1", "police");
     return s;
   };
-  // 기본판(결정 0072)에서 꺼짐 — RULESET.badge 를 켜면 다시 돈다. 꺼진 상태의 키 없음은 view.test.ts "기본판 view 게이트" 가 본다.
-  it.skipIf(!RULESET.badge)("산 사람의 badge·badgeSwapped 는 모든 시점의 view 에 같은 값이고 값이 없는 좌석에는 키가 없다", () => {
+  // 기본판(결정 0072)에서 꺼짐 — 판 규칙의 badge 를 켜면 다시 돈다. 꺼진 상태의 키 없음은 view.test.ts "기본판 view 게이트" 가 본다.
+  it.skipIf(!GAME_RULES.badge)("산 사람의 badge·badgeSwapped 는 모든 시점의 view 에 같은 값이고 값이 없는 좌석에는 키가 없다", () => {
     const s = claimed("discussion");
     const got = s.players.map((v) => {
       const rows = buildView(s, v.id, 10_000).players;
@@ -165,7 +166,7 @@ describe("view — 공개 주장 노출 (결정 0066-1)", () => {
     expect(got[0]).toContain("1:alive,badge,badgeSwapped,connected,isHost,nickname,seat:police");
     expect(got[0]).toContain("2:alive,connected,isHost,nickname,seat:undefined");
   });
-  it.skipIf(!RULESET.badge)("badgeSwapped 는 말 바꿈이 있을 때만 키가 생긴다", () => {
+  it.skipIf(!GAME_RULES.badge)("badgeSwapped 는 말 바꿈이 있을 때만 키가 생긴다", () => {
     const s = ok(room("discussion"), "p1", "police");
     const row = buildView(s, "p0", 10_000).players.find((r) => r.seat === 1)!;
     expect(Object.keys(row).sort().join(",")).toBe("alive,badge,connected,isHost,nickname,seat");
@@ -189,7 +190,7 @@ describe("view — 공개 주장 노출 (결정 0066-1)", () => {
         if (text.includes("badgeLog")) bad.push(`${phase}/${v.seat}: badgeLog`);
         const row = buildView(t, v.id, 10_000).players.find((r) => r.seat === 1)!;
         // 기본판(결정 0072)에서는 서버 상태에 값이 있어도 어떤 view 에도 badge 키가 없다.
-        if (row.badge !== (RULESET.badge ? "citizen" : undefined)) bad.push(`${phase}/${v.seat}: badge ${String(row.badge)}`);
+        if (row.badge !== (GAME_RULES.badge ? "citizen" : undefined)) bad.push(`${phase}/${v.seat}: badge ${String(row.badge)}`);
       }
     }
     expect(bad.join(" | ")).toBe("");

@@ -1,9 +1,10 @@
 // 직업 주장 배지 워커 통합 테스트(09.1.1-01, 결정 0066-1): 주장은 공개 값이라 바뀌면 모든 소켓이 각자 view 를 받는다.
 import { describe, expect, it } from "vitest";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
 import type { RoleId, ServerMessage } from "../../shared/protocol";
 import { connect, editRoom, hello, lastViewOf, mapPlayers, mark, pause, send, settle, startedGame, stable, storedRoom, summary, toPhase } from "./helpers";
 import type { Game } from "./helpers";
+const GAME_RULES = rulesetOf("extended");
 
 type State = Extract<ServerMessage, { t: "state" }>;
 
@@ -17,8 +18,8 @@ async function sendBadge(g: Game, from: Game["actors"][number], role: string): P
   return out;
 }
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.badge 를 켜면 다시 돈다. 꺼진 상태의 거절은 basicOff.test.ts 가 본다.
-describe.skipIf(!RULESET.badge)("직업 주장 — 트레이서 (결정 0066-1)", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 badge 를 켜면 다시 돈다. 꺼진 상태의 거절은 basicOff.test.ts 가 본다.
+describe.skipIf(!GAME_RULES.badge)("직업 주장 — 트레이서 (결정 0066-1)", () => {
   it("토론에서 손님이 citizen 을 걸면 네 소켓이 정확히 한 프레임씩 받고 그 좌석의 players[].badge 가 citizen 이며 badgeSwapped 키는 없다", async () => {
     const g = await startedGame("discussion", 3);
     const claimer = g.actors[1]!;
@@ -52,8 +53,8 @@ describe.skipIf(!RULESET.badge)("직업 주장 — 트레이서 (결정 0066-1)"
   });
 });
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.badge 를 켜면 다시 돈다. 꺼진 상태의 거절은 basicOff.test.ts 가 본다.
-describe.skipIf(!RULESET.badge)("직업 주장 — 규칙 완성 (결정 0066-1)", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 badge 를 켜면 다시 돈다. 꺼진 상태의 거절은 basicOff.test.ts 가 본다.
+describe.skipIf(!GAME_RULES.badge)("직업 주장 — 규칙 완성 (결정 0066-1)", () => {
   it("말 바꿈: police 를 걸었다가 mafia 로 바꾸면 모든 소켓이 mafia + badgeSwapped 를 받고 이전 값(police)은 프레임 어디에도 없다", async () => {
     const g = await startedGame("discussion", 3);
     const claimer = g.actors[1]!;
@@ -190,8 +191,8 @@ const claimColumn = (msgs: ServerMessage[]): string =>
     ),
   );
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.badge 를 켜면 다시 돈다. 꺼진 상태의 거절은 basicOff.test.ts 가 본다.
-describe.skipIf(!RULESET.badge)("L18 — 직업 주장은 공개 값이고 역할의 함수가 아니다", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 badge 를 켜면 다시 돈다. 꺼진 상태의 거절은 basicOff.test.ts 가 본다.
+describe.skipIf(!GAME_RULES.badge)("L18 — 직업 주장은 공개 값이고 역할의 함수가 아니다", () => {
   it("역할 배정만 다른 두 판 A·B 에서 같은 대본을 보내면 모든 좌석 소켓의 players[].badge·badgeSwapped 열이 같다", async () => {
     const a = await playScript(ROLES_A);
     const b = await playScript(ROLES_B);

@@ -23,10 +23,11 @@ import {
   nominationMaxMs,
 } from "../../shared/game/phases";
 import { enterDiscussion, phaseDurationOf } from "../../shared/game/discussion";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { castPoints, nominationSpanMs, startedAt } from "../helpers/voteState";
+const GAME_RULES = rulesetOf("extended");
 
 /** n 명이 산 채로 지목 단계에 있는 방(1일차). */
 function nominationOf(n = 5): RoomState {
@@ -128,8 +129,8 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
     expect(hasNominateKey(r.state)).toBe(false);
   });
 
-  // 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
-  it.skipIf(!RULESET.runoff)("최다가 정확히 둘 동점이면 next 가 runoff 이고 후보 둘이 낮은 좌석부터 서며 그날 줄에는 candidate 가 없다 (결정 0066-4)", () => {
+  // 기본판(결정 0072)에서 꺼짐 — 판 규칙의 runoff 를 켜면 다시 돈다
+  it.skipIf(!GAME_RULES.runoff)("최다가 정확히 둘 동점이면 next 가 runoff 이고 후보 둘이 낮은 좌석부터 서며 그날 줄에는 candidate 가 없다 (결정 0066-4)", () => {
     const r = resolveNomination(withPoints(nominationOf(), { 0: 2, 1: 2, 2: 0, 3: 0, 4: 1 }));
     const cand = r.state.voteLog?.at(-1)?.cand;
     expect(`${String(r.next)} ${keysOf(cand ?? {})} ${JSON.stringify(r.state.verdict)} ${JSON.stringify(r.state.runoff)}`).toBe(
@@ -165,7 +166,7 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
 describe("vote.test 에서 옮긴 뜻 (08-28, DAY-06·07)", () => {
   it("단계 표: 지목 진입 길이는 기본판 15000ms(순차 지목이 켜지면 모이기 3000ms)이고 기본 다음 단계는 defense, 역할 노출은 true 다 (옛 단계 표 시험의 새 흐름 행)", () => {
     const d = PHASE_DEFS.nomination;
-    expect(`${d.durationMs}/${d.next}/${d.revealsOwnRole}`).toBe(`${RULESET.pickTurn ? 3000 : 15000}/defense/true`);
+    expect(`${d.durationMs}/${d.next}/${d.revealsOwnRole}`).toBe(`${GAME_RULES.pickTurn ? 3000 : 15000}/defense/true`);
   });
 
   it("던진 뒤 연결이 끊긴 사람의 표도 센다 (옛 CONN-02)", () => {
@@ -480,13 +481,13 @@ describe("시험 도우미: 지목 방식과 무관 (09.1-03)", () => {
     expect(`${String(s.pickTurn?.i)} ${nominates}`).toBe("4 0>1,1>-,2>1,3>1");
   });
 
-  // 기본판(결정 0072)에서 꺼짐 — 차례 없는 지목이 동시 투표이므로 castPoints 가 던지지 않는다. RULESET.pickTurn 을 켜면 다시 돈다
-  it.skipIf(!RULESET.pickTurn)("castPoints 는 pickTurn 이 없는 지목 상태를 받으면 Error (차례 없는 옛 동시 지목은 없다, 09.1-05)", () => {
+  // 기본판(결정 0072)에서 꺼짐 — 차례 없는 지목이 동시 투표이므로 castPoints 가 던지지 않는다. 판 규칙의 pickTurn 을 켜면 다시 돈다
+  it.skipIf(!GAME_RULES.pickTurn)("castPoints 는 pickTurn 이 없는 지목 상태를 받으면 Error (차례 없는 옛 동시 지목은 없다, 09.1-05)", () => {
     expect(() => castPoints(nominationOf(4), { 0: 1, 1: 0 })).toThrow();
   });
 
   it("nominationSpanMs: 전환 뒤 startedAt 의 지목 길이는 기본판 투표 15000ms, 순차 지목이면 차례 사슬 전체 길이 nominationMaxMs(4) 다 (전원 기권)", () => {
-    expect(nominationSpanMs(startedAt(4, 1, "nomination"), 2)).toBe(RULESET.pickTurn ? nominationMaxMs(4) : 15_000);
+    expect(nominationSpanMs(startedAt(4, 1, "nomination"), 2)).toBe(GAME_RULES.pickTurn ? nominationMaxMs(4) : 15_000);
   });
 
   it("nominationSpanMs 는 지목이 아닌 상태를 받으면 Error", () => {

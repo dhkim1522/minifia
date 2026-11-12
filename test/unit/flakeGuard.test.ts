@@ -19,8 +19,8 @@ describe("D-26 간헐 실패를 skip·재시도로 덮지 않는다", () => {
   it("testTools·helpers·waitHelpers·bots 시험에 skip·todo·재시도가 하나도 없다", () => {
     for (const rel of FILES) {
       const src = code(rel);
-      // 13-02(결정 0072): 꺼진 장치(RULESET)에 묶인 skipIf(!RULESET.x) 는 간헐 실패를 덮는 우회가 아니라 규칙 설정에 따른 조건이라 허용한다. 그 밖의 skip·todo·skipIf 는 그대로 막는다.
-      expect(`${rel}:skip:${/\b(?:it|test|describe)\.(?:skip|todo)\b|\b(?:it|test|describe)\.skipIf\((?!\s*!RULESET\.)/.test(src)}`).toBe(`${rel}:skip:false`);
+      // 13-02(결정 0072): 꺼진 장치(판 규칙 — 시험 파일의 GAME_RULES = rulesetOf("extended"))에 묶인 skipIf(!GAME_RULES.x) 는 간헐 실패를 덮는 우회가 아니라 규칙 설정에 따른 조건이라 허용한다. 그 밖의 skip·todo·skipIf 는 그대로 막는다.
+      expect(`${rel}:skip:${/\b(?:it|test|describe)\.(?:skip|todo)\b|\b(?:it|test|describe)\.skipIf\((?!\s*!GAME_RULES\.)/.test(src)}`).toBe(`${rel}:skip:false`);
       expect(`${rel}:x:${/\b(?:xit|xtest|xdescribe)\s*\(/.test(src)}`).toBe(`${rel}:x:false`);
       expect(`${rel}:retry:${/\bretry\b|retryTimes/i.test(src)}`).toBe(`${rel}:retry:false`);
     }

@@ -3,12 +3,13 @@
 import { describe, expect, it } from "vitest";
 import { pickTarget } from "../../shared/game/night";
 import { DISCUSSION_MS, ERRAND_MS, SHOWDOWN_GATHER_MS } from "../../shared/game/phases";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
 import { seededRandInt } from "../helpers/seededRandom";
+const GAME_RULES = rulesetOf("extended");
 
 function lobbyOf(n: number): RoomState {
   const created = createRoomState({ code: "0420", hostId: "pid-0000-aaaa", hostToken: "tok-secret-0000-aaaa-0123456789", hostNickname: "이름0", now: 0 });
@@ -64,7 +65,7 @@ describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", (
             }
             // 낮 시작 발표 마감 다음이 심부름(15페이즈, 마감 = 이전 마감 + ERRAND_MS)이고 그 마감 다음이 토론(+ DISCUSSION_MS)이다.
             // 단 산 사람이 정확히 셋이고 결전이 켜져 있으면 낮 시작 다음이 마지막 3인 결전(모이기 SHOWDOWN_GATHER_MS)이다(결정 0066-5).
-            const last3 = RULESET.showdown && living(s).length === 3; // 기본판(결정 0072)은 산 셋도 토론이다
+            const last3 = GAME_RULES.showdown && living(s).length === 3; // 기본판(결정 0072)은 산 셋도 토론이다
             const after = tick(s, s.phaseEndsAt!, rand);
             if (last3) {
               expect(after.phase).toBe("showdown");

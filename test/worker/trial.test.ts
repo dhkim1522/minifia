@@ -9,7 +9,8 @@ import { runDurableObjectAlarm } from "cloudflare:test";
 import { ringSlots } from "../../shared/game/gather";
 import { advanceTo, alarmOf, chatMsg, closePhase, connect, editRoom, endAs, flushWorld, ghostsOf, hello, killSeats, lastViewOf, layOf, mark, mapPlayers, pause, pointAs, send, settle, startedGame, storedRoom, summary, toPhase, verdictAs, worldFramesOf, worldOf } from "./helpers";
 import type { Actor, Game } from "./helpers";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
+const GAME_RULES = rulesetOf("extended");
 
 const viewsOf = (msgs: ServerMessage[]): RoomView[] =>
   msgs.filter((m): m is Extract<ServerMessage, { t: "state" }> => m.t === "state").map((m) => m.view);
@@ -144,8 +145,8 @@ describe("투표 — 동시 (결정 0072, DAY-04)", () => {
   });
 });
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다
-describe.skipIf(!RULESET.pickTurn)("지목 — 순차 (결정 0063-1, L15)", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 pickTurn 을 켜면 다시 돈다
+describe.skipIf(!GAME_RULES.pickTurn)("지목 — 순차 (결정 0063-1, L15)", () => {
   it("지목에 들어가면 모든 소켓의 첫 view 가 day.turn = { order: 좌석 오름차순, i: -1 } 이고 마감은 진입 + 3000, 길이 3000 이다", async () => {
     const g = await nominationRoom();
     const order = g.actors.map((a) => a.seat).sort((x, y) => x - y);
@@ -611,7 +612,7 @@ async function verdictAll(g: Game, agreeBySeat: Record<number, boolean>): Promis
 }
 
 /** 투표 진입 길이: 기본판(결정 0072)은 동시 투표 15초, 순차 지목이 켜지면 모이기 3초. */
-const NOM_ENTER_MS = RULESET.pickTurn ? NOMINATION_GATHER_MS : NOMINATION_MS;
+const NOM_ENTER_MS = GAME_RULES.pickTurn ? NOMINATION_GATHER_MS : NOMINATION_MS;
 
 describe("실제 흐름 (결정 0060-1)", () => {
   it("토론 끝내기 과반 → 지목(마감 = 그 시각 + 3000, 모이기) → 4:1 지목 → 변론(변론자 무대) → 찬반 3:1 → 처형(변론자 탈락·유령) → 밤", async () => {
@@ -681,8 +682,8 @@ describe("실제 흐름 (결정 0060-1)", () => {
     expect(lastViews(g).map((v) => v.day?.noExecution?.reason).join(",")).toBe("noVotes,noVotes,noVotes,noVotes,noVotes");
   }, 60_000);
 
-  // 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
-  it.skipIf(!RULESET.runoff)("지목이 2:2 로 갈려 결선도 동점(아무도 안 던짐)이면 결선 세 걸음 뒤 밤이고 reason 은 tie 이며 아무도 탈락하지 않는다 (결정 0066-4)", async () => {
+  // 기본판(결정 0072)에서 꺼짐 — 판 규칙의 runoff 를 켜면 다시 돈다
+  it.skipIf(!GAME_RULES.runoff)("지목이 2:2 로 갈려 결선도 동점(아무도 안 던짐)이면 결선 세 걸음 뒤 밤이고 reason 은 tie 이며 아무도 탈락하지 않는다 (결정 0066-4)", async () => {
     const { g } = await toNominationByEnd();
     const [s0, s1, s2, s3] = g.actors.map((a) => a.seat);
     await pointAll(g, { [s0!]: s2!, [s1!]: s2!, [s2!]: s0!, [s3!]: s0! });

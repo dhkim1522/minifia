@@ -3,7 +3,7 @@ import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { resolveLookConflicts } from "../../shared/game/look";
-import { BASIC_RULESET, RULESET, politicsOn } from "../../shared/game/ruleset";
+import { politicsOn, rulesetOf } from "../../shared/game/ruleset";
 import type { Ruleset } from "../../shared/game/ruleset";
 import type { OutfitId, RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
@@ -42,6 +42,7 @@ import {
 } from "./helpers";
 import type { Actor as SeatedActor, Game, TestSocket } from "./helpers";
 import { RICH_EXTRA, RICH_TEXT, chatKeysOf, endedGame4, helloForLog, readyUp, richEndedGame6, toEndedByMafia, until } from "./helpers";
+const GAME_RULES = rulesetOf("extended");
 
 interface Player {
   nickname: string;
@@ -102,7 +103,7 @@ const ROLE_PATHS_ALIVE = [
   // 결정 0066-1, 공개 주장 값 — 증명은 badge.test.ts L18(실제 역할만 다른 두 판의 열이 같다). 허용 경로는 이 하나뿐이고,
   // 6명 한 판 전수 검사는 이 경로의 값이 항상 방금 보낸 주장 대본의 값(실제 역할이 아니다)임을 단언한다.
   // 기본판(결정 0072)에서는 이 경로가 꺼져 있어 허용하지 않는다 — 켜져 있을 때만 목록에 든다(허용 경로를 넓히지 않고 좁힌다, T-13-14).
-  ...(RULESET.badge ? [".view.players[].badge"] : []),
+  ...(GAME_RULES.badge ? [".view.players[].badge"] : []),
   // 결정 D-6, 공개 의상 값 — 증명은 dress.test.ts L25(역할 배정만 다른 두 판의 look 열이 같다). 의상 id 에도 직업 이름과 같은 단어(mafia·police·doctor)가 있다.
   // 6명 한 판 전수 검사는 이 경로의 값이 항상 로비에서 방금 보낸 의상 대본의 값(실제 역할이 아니다)임을 단언한다.
   ".view.players[].look",
@@ -164,7 +165,7 @@ function politicsPathsFor(r: Ruleset): readonly string[] {
   };
   return POLITICS_PATHS_FULL.filter((p) => on[p] === true);
 }
-const POLITICS_ALLOWED_PATHS: readonly string[] = politicsPathsFor(RULESET);
+const POLITICS_ALLOWED_PATHS: readonly string[] = politicsPathsFor(GAME_RULES);
 /** path 가 list(기본은 POLITICS_ALLOWED_PATHS)에 드는가(`.*` 로 끝나는 항목은 그 경로 자신 또는 그 아래). */
 const politicsAllowed = (path: string, list: readonly string[] = POLITICS_ALLOWED_PATHS): boolean =>
   list.some((p) => (p.endsWith(".*") ? path === p.slice(0, -2) || path.startsWith(`${p.slice(0, -1)}`) : path === p));
@@ -438,8 +439,8 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
         // 8페이즈(08-07): 처형 단계의 .view.day.verdict({yes,no,passed})는 공개 와이어 필드다(서버 전용 verdict 와 이름만 같다). 전체 누설 스캔 개편은 08-09.
         for (const path of paths) expect(path !== ".view.day.verdict" && SERVER_ONLY_KEYS.includes(path.slice(path.lastIndexOf(".") + 1))).toBe(false);
         if (msg.t !== "state") continue;
-        // day.turn 은 순차 지목이 켜졌을 때(RULESET.pickTurn)만 지목 단계에 있다. 기본판(결정 0072)에서는 어느 단계에도 키가 없다(07-08, 09.1 — 결정 0063-1).
-        expect(`${msg.view.phase}:${Object.hasOwn(msg.view.day ?? {}, "turn")}`).toBe(`${msg.view.phase}:${RULESET.pickTurn && msg.view.phase === "nomination"}`);
+        // day.turn 은 순차 지목이 켜졌을 때(판 규칙의 pickTurn)만 지목 단계에 있다. 기본판(결정 0072)에서는 어느 단계에도 키가 없다(07-08, 09.1 — 결정 0063-1).
+        expect(`${msg.view.phase}:${Object.hasOwn(msg.view.day ?? {}, "turn")}`).toBe(`${msg.view.phase}:${GAME_RULES.pickTurn && msg.view.phase === "nomination"}`);
         for (const pl of msg.view.players) {
           expect(Object.keys(pl).sort()).toEqual(["alive", "connected", "isHost", ...(pl.look !== undefined ? ["look"] : []), "nickname", "seat"]); // look 은 공개 의상(D-01 해소 뒤에는 기본 coat 를 지킨 좌석 0 만 키가 없다)
         }
@@ -930,14 +931,14 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
       // 직업 주장 대본(결정 0066-1): 마피아 A 가 citizen 을 걸었다가 police 로 바꾸고(말 바꿈), 시민 X 가 mafia 를 건다. 프레임 검사는 players[].badge 값이 이 대본의 값뿐임을 본다.
       // 기본판(결정 0072)에서는 주장·귓속말이 꺼져 있다: 같은 대본을 보내도 보낸 소켓만 오류 한 프레임(BAD_MESSAGE)을 받고, 어떤 프레임에도 players[].badge 가 없다. 켜지면 기존 대본 그대로다.
       const badgeScript = new Map<number, ReadonlySet<string>>(
-        RULESET.badge
+        GAME_RULES.badge
           ? [
               [mafiaA.seat, new Set(["citizen", "police"])],
               [victimX.seat, new Set(["mafia"])],
             ]
           : [],
       );
-      if (RULESET.badge) {
+      if (GAME_RULES.badge) {
         await act(mafiaA, { t: "badge", role: "citizen" });
         await act(victimX, { t: "badge", role: "mafia" });
         await pause(300); // 같은 사람의 주장 간격(250ms) 밖
@@ -1457,8 +1458,8 @@ async function walkNomination(g: Game, pickIdx: ReadonlySet<number>): Promise<vo
   for (const sock of g.socks) await settle(sock, mark(sock));
 }
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다. 꺼진 상태의 키 검사는 파일 끝의 기본판 describe 가 본다.
-describe.skipIf(!RULESET.pickTurn)("지목 차례는 역할의 함수가 아니다 (L14, 결정 0063-1)", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 pickTurn 을 켜면 다시 돈다. 꺼진 상태의 키 검사는 파일 끝의 기본판 describe 가 본다.
+describe.skipIf(!GAME_RULES.pickTurn)("지목 차례는 역할의 함수가 아니다 (L14, 결정 0063-1)", () => {
   const TABLES: Record<"a" | "b", RoleId[]> = {
     a: ["mafia", "mafia", "police", "doctor", "citizen", "citizen"],
     b: ["citizen", "police", "mafia", "citizen", "mafia", "doctor"],
@@ -1490,8 +1491,8 @@ describe.skipIf(!RULESET.pickTurn)("지목 차례는 역할의 함수가 아니�
   });
 });
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다.
-describe.skipIf(!RULESET.pickTurn)("차례 아닌 지목은 보낸 사람에게만 (L15, 결정 0063-1)", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 pickTurn 을 켜면 다시 돈다.
+describe.skipIf(!GAME_RULES.pickTurn)("차례 아닌 지목은 보낸 사람에게만 (L15, 결정 0063-1)", () => {
   it("지목 단계 내내(모이기·차례·확정 뒤·끝 알림) 차례 아닌 산 사람·유령의 point 는 보낸 소켓에만 오류+state 가 가고 다른 소켓은 프레임 0, 저장 상태는 그대로다", { timeout: 90_000 }, async () => {
     const g = await startedGame("discussion");
     const ghost = withRole(g, "citizen")[0]!;
@@ -1610,8 +1611,8 @@ describe("탈락 직후 산 사람 (L12, 결정 0021·0037)", () => {
   });
 });
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다.
-describe.skipIf(!RULESET.runoff)("동점 결선 프레임 전수 (결정 0066-4, L20·L24)", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 runoff 를 켜면 다시 돈다.
+describe.skipIf(!GAME_RULES.runoff)("동점 결선 프레임 전수 (결정 0066-4, L20·L24)", () => {
   it("결선 전 과정의 모든 소켓 프레임: 서버 전용 이름은 없고 새 경로는 RUNOFF_WIRE_PATHS 뿐이며 개인 선택은 본인 me.ballot 에만 있다", { timeout: 90_000 }, async () => {
     const g = await startedGame("nomination");
     const starts = g.socks.map((sock) => mark(sock));
@@ -1652,8 +1653,8 @@ describe.skipIf(!RULESET.runoff)("동점 결선 프레임 전수 (결정 0066-4,
 
 describe("허용 경로 고정 (L24, 결정 0072·T-13-14)", () => {
   it("POLITICS_ALLOWED_PATHS 는 설정이 켜진 장치의 경로만이다 — 기본판에서는 찬반 기록 하나뿐이고, 모두 켜면 정확히 이 목록이다. 넓히려면 이유를 적고 이 기대값을 같이 고친다", () => {
-    expect([...politicsPathsFor(BASIC_RULESET)]).toEqual([".view.day.ballots.*"]);
-    expect([...POLITICS_ALLOWED_PATHS]).toEqual([...politicsPathsFor(RULESET)]);
+    expect([...politicsPathsFor(rulesetOf("basic"))]).toEqual([".view.day.ballots.*"]);
+    expect([...POLITICS_ALLOWED_PATHS]).toEqual([...politicsPathsFor(GAME_RULES)]);
     const allOn: Ruleset = { badge: true, whisper: true, pickTurn: true, runoff: true, showdown: true, errand: true, witness: true, trace: true };
     expect([...politicsPathsFor(allOn)]).toEqual([
       ".view.players[].badge",
@@ -1675,7 +1676,7 @@ describe("허용 경로 고정 (L24, 결정 0072·T-13-14)", () => {
   });
 
   it("기본판의 허용 경로는 꺼진 장치의 경로를 받아들이지 않는다", () => {
-    const basic = politicsPathsFor(BASIC_RULESET);
+    const basic = politicsPathsFor(rulesetOf("basic"));
     for (const path of [".view.players[].badge", ".view.players[].badgeSwapped", ".to", ".lines[].to", ".view.me.ballot", ".view.me.whisperUsed", ".view.day.runoff", ".view.day.runoff.step", ".view.day.showdown.i", ".view.day.verdict.last"]) {
       expect(`${path}:${politicsAllowed(path, basic)}`).toBe(`${path}:false`);
     }
@@ -1683,8 +1684,8 @@ describe("허용 경로 고정 (L24, 결정 0072·T-13-14)", () => {
   });
 });
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 을 켜면 다시 돈다.
-describe.skipIf(!RULESET.showdown)("마지막 3인 결전 프레임 전수 (결정 0066-5, L21·L24)", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 showdown 을 켜면 다시 돈다.
+describe.skipIf(!GAME_RULES.showdown)("마지막 3인 결전 프레임 전수 (결정 0066-5, L21·L24)", () => {
   it("결전 전 과정의 모든 소켓 프레임: 서버 전용 이름은 없고 새 경로는 POLITICS_ALLOWED_PATHS 뿐이며 개인 선택은 마감 전 본인 me.ballot 에만 있다", { timeout: 90_000 }, async () => {
     const g = await threeAliveGame();
     const starts = g.socks.map((sock) => mark(sock));
@@ -2000,7 +2001,7 @@ function phaseKeyOfView(sock: TestSocket): string {
 // ---- 기본판 전수 검사 (13-04, FLOW-03, 결정 0072, D-05, T-13-11·T-13-13) ----
 
 // 다섯 장치가 모두 꺼진 기본판에서만 뜻이 있다(하나라도 켜면 그 장치의 경로가 정당하게 나온다 — 켜진 장치는 위의 켜짐 전용 describe 들이 본다).
-describe.skipIf(politicsOn(RULESET))("기본판 — 꺼진 장치 키 0건 (FLOW-03, 결정 0072)", () => {
+describe.skipIf(politicsOn(GAME_RULES))("기본판 — 꺼진 장치 키 0건 (FLOW-03, 결정 0072)", () => {
   /** 한 판 전체의 프레임에서 있으면 안 되는 view 키 경로(접두 포함). 허용 경로는 넓히지 않았다 — 이 경로들은 허용 목록에도 없다. */
   const OFF_KEY_PATHS = [
     ".view.players[].badge",

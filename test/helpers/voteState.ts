@@ -63,7 +63,7 @@ const seatToId = (state: RoomState, seat: number): string => {
 
 /**
  * seat → 지목 대상 seat 를 실제 규칙 함수로 주입한다(지목 단계여야 한다). 거부되면 테스트 준비가 틀린 것이다.
- *  - pickTurn 이 없으면(기본판 동시 투표) 좌석마다 castPoint. 있으면(RULESET.pickTurn) 차례를 좌석 순으로 끝 알림까지 걷는다: 대상이 정해진 사람만 자기 차례에 castTurnPoint,
+ *  - pickTurn 이 없으면(기본판 동시 투표) 좌석마다 castPoint. 있으면(판 규칙의 pickTurn) 차례를 좌석 순으로 끝 알림까지 걷는다: 대상이 정해진 사람만 자기 차례에 castTurnPoint,
  *    나머지는 기권으로 한 걸음 넘긴다. 돌려주는 상태는 끝 알림 자리(i = order.length)다 — 다음 tick(phaseEndsAt) 이 집계한다.
  */
 export function castPoints(state: RoomState, targetBySeat: Record<number, number>): RoomState {

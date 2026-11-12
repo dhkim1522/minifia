@@ -2,10 +2,11 @@
 // 모든 소켓이 받은 실제 프레임을 모아 ① 서버 전용 tutorialPassed 가 어떤 깊이에도 없고 ② 새 공개 경로가 허용 목록 안이며 ③ 역할 낱말 문자열이 허용 경로 밖에 없고
 // ④ tutorial 단계 view 가 역할이 다른 모든 소켓에서 같음(본인 값 me.seat·me.isHost·me.tutorialDone 만 뺀다)을 단언한다. 허용 목록·검사 도우미는 leak.test.ts 와 같은 모양이다(테스트 파일끼리 가져오지 않는다).
 import { describe, expect, it } from "vitest";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
 import { framesOf, lastViewOf, mark, nextFrame, seat, send, settle, storedRoom } from "./helpers";
 import type { TestSocket } from "./helpers";
+const GAME_RULES = rulesetOf("extended");
 
 type StateMsg = Extract<ServerMessage, { t: "state" }>;
 
@@ -29,7 +30,7 @@ function stringPaths(value: unknown, path = ""): Array<[string, string]> {
 
 const ROLE_WORDS = new Set(["mafia", "police", "doctor", "citizen", "none"]);
 /** 살아 있는 소켓이 역할 값 문자열을 받아도 되는 경로(leak.test.ts ROLE_PATHS_ALIVE 와 같다). tutorial 단계에는 아무것도 해당하지 않아야 한다. */
-const ROLE_PATHS_ALIVE = [".view.me.role", ".view.day.roles[]", ".view.me.chat", ...(RULESET.badge ? [".view.players[].badge"] : []), ".view.players[].look"];
+const ROLE_PATHS_ALIVE = [".view.me.role", ".view.day.roles[]", ".view.me.chat", ...(GAME_RULES.badge ? [".view.players[].badge"] : []), ".view.players[].look"];
 /** tutorial 의 새 공개 경로(leak.test.ts TUTORIAL_PATHS 와 같다): view.tutorial 은 tutorial 단계의 모든 소켓, me.tutorialDone 은 보낸 본인만. */
 const TUTORIAL_PATHS: ReadonlySet<string> = new Set([".view.tutorial", ".view.tutorial.done", ".view.tutorial.total", ".view.tutorial.endsAt", ".view.me.tutorialDone"]);
 const TUTORIAL_PREFIXES = [".view.tutorial", ".view.me.tutorialDone"];

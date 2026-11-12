@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { BOT_CHAT_LINES, BOT_WILL_LINES } from "../../shared/game/bots";
 import { LAST_WORD_CHIPS } from "../../shared/game/showdown";
 import { PHASE_DEFS, PICK_TURN_MS } from "../../shared/game/phases";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
   advanceTo,
@@ -32,6 +32,7 @@ import {
   worldOf,
 } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
+const GAME_RULES = rulesetOf("extended");
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
 const parse = (raw: string): ServerMessage => JSON.parse(raw) as ServerMessage;
@@ -505,8 +506,8 @@ describe("봇 투표·변론", () => {
   }, 30_000);
 });
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
-describe.skipIf(!RULESET.runoff)("봇 결선 투표 (09.1.1-05, 결정 0066-4)", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 runoff 를 켜면 다시 돈다
+describe.skipIf(!GAME_RULES.runoff)("봇 결선 투표 (09.1.1-05, 결정 0066-4)", () => {
   it("결선 투표 창(step 1)에서 후보가 아닌 봇이 사람과 같은 길로 한 표씩 던지고, 집계 뒤 변론 또는 밤으로 이어지며, 프레임에는 개인 선택·봇 계획이 새지 않는다", async () => {
     const r = await botRoomAt("nomination"); // 방장(좌석 0) + 봇 3(좌석 1~3)
     const botSeats = await botSeatsOf(r.code);
@@ -551,7 +552,7 @@ describe("누출 없음: 투표·변론·처형·종료", () => {
     await start(r);
     const botIds = (await botsOf(r.code)).map((b) => b.id);
     await driveToEnded(r, async (stage) => {
-      if (stage === "nomination" && RULESET.pickTurn) await walkToBotPoint(r.code); // 순차 지목(RULESET.pickTurn): 봇 차례가 와서 지목이 끝날 때까지(결정 0063-1)
+      if (stage === "nomination" && GAME_RULES.pickTurn) await walkToBotPoint(r.code); // 순차 지목(판 규칙의 pickTurn): 봇 차례가 와서 지목이 끝날 때까지(결정 0063-1)
       else await forceBotsDue(r.code); // 기본판(결정 0072): 동시 투표 — 봇 표가 한꺼번에 저장된다
     });
     for (const sock of allSockets(r)) await settle(sock, mark(sock));
@@ -581,8 +582,8 @@ const planKinds = async (code: string): Promise<string> => {
 const countWith = async (code: string, key: string): Promise<number> => ((await playersOf(code)) as unknown as Array<Record<string, unknown>>).filter((p) => p[key] !== undefined).length;
 
 describe("봇 지목·찬반·토론 끝내기", () => {
-  // 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다
-  it.skipIf(!RULESET.pickTurn)("nomination: 봇 차례가 시작된 알람 사슬 안에서 그 봇의 point 가 저장되고(차례 시작 − 확정 < 1000ms), 계획 키는 차례마다 nomination:${마감} 으로 바뀌고, 방장의 day.points 에 봇 줄만 쌓인다", async () => {
+  // 기본판(결정 0072)에서 꺼짐 — 판 규칙의 pickTurn 을 켜면 다시 돈다
+  it.skipIf(!GAME_RULES.pickTurn)("nomination: 봇 차례가 시작된 알람 사슬 안에서 그 봇의 point 가 저장되고(차례 시작 − 확정 < 1000ms), 계획 키는 차례마다 nomination:${마감} 으로 바뀌고, 방장의 day.points 에 봇 줄만 쌓인다", async () => {
     const r = await seatQuiet(0, { testMode: true });
     send(r.host, { t: "testBots", count: 3 });
     await nextFrame(r.host, lobbyOf(4));
@@ -780,8 +781,8 @@ describe("봇 유언·밤 고르기 (09-12, 결정 0061-18; 15-03: 접근 걷기
   }, 30_000);
 });
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 을 켜면 다시 돈다
-describe.skipIf(!RULESET.showdown)("봇 마지막 3인 (09.1.1-07, 결정 0066-5)", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 showdown 을 켜면 다시 돈다
+describe.skipIf(!GAME_RULES.showdown)("봇 마지막 3인 (09.1.1-07, 결정 0066-5)", () => {
   /** 방장(좌석 0) + 봇 3(좌석 1~3) 중 봇 3 이 죽은 낮의 마지막 3인(차례 순서 [0, 1, 2], 봇은 1·2)을 세운다. 단계 마감은 멀리 둔다. */
   async function showdownRoom(i: number): Promise<Seated> {
     const r = await botRoomAt("nomination");

@@ -53,11 +53,12 @@ import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, startedFrom, stateWithVerdict } from "../helpers/voteState";
 import { toggleEnd } from "../../shared/game/discussion";
 import { castPoint, castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
 import { castVerdict } from "../../shared/game/verdict";
 import { castRunoffVote, runoffStepMs, stepRunoff } from "../../shared/game/runoff";
 import { RUNOFF_VOTE_MS, SHOWDOWN_POINT_MS, SHOWDOWN_TURN_MS } from "../../shared/game/phases";
 import { LAST_WORD_CHIPS, acceptLastWord, castShowdownPoint, showdownStepMs, stepShowdown } from "../../shared/game/showdown";
+const GAME_RULES = rulesetOf("extended");
 
 const START_AT = 10_000;
 const HOST_ID = "player-id-0000-aaaa";
@@ -751,7 +752,7 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
     expect(nomination.phase).toBe("nomination");
     const next = syncBotPlan(nomination, nowOf(nomination), seededRandInt(5));
     expect(String(next.botPlan?.key)).toBe(`nomination:${nomination.phaseEndsAt}`);
-    // 기본판(결정 0072) 투표는 동시라 진입 직후 산 봇(4명)마다 point 한 행이 선다 — 순차 차례 계획은 "봇 차례 지목" describe 가 본다(RULESET.pickTurn).
+    // 기본판(결정 0072) 투표는 동시라 진입 직후 산 봇(4명)마다 point 한 행이 선다 — 순차 차례 계획은 "봇 차례 지목" describe 가 본다(판 규칙의 pickTurn).
     expect(stepsOf(next).map((s) => s.act.t).join(",")).toBe("point,point,point,point");
   });
 
@@ -1311,8 +1312,8 @@ function runoffVoteAt(seed: number, step: 0 | 1 | 2 = 1): RoomState {
 }
 const runoffNow = (s: RoomState): number => s.phaseEndsAt! - RUNOFF_VOTE_MS;
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 을 켜면 다시 돈다
-describe.skipIf(!RULESET.runoff)("봇 결선 투표 계획 (09.1.1-05)", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 runoff 을 켜면 다시 돈다
+describe.skipIf(!GAME_RULES.runoff)("봇 결선 투표 계획 (09.1.1-05)", () => {
   it("상수: 500 + [0, 2500) ms — 투표 창 5초에서 마감 − 500 안에 든다", () => {
     expect(RUNOFF_BOT_BASE_MS).toBe(500);
     expect(RUNOFF_BOT_SPAN_MS).toBe(2_500);
@@ -1428,8 +1429,8 @@ const turnNow = (s: RoomState): number => s.phaseEndsAt! - SHOWDOWN_TURN_MS;
 const pointNow = (s: RoomState): number => s.phaseEndsAt! - SHOWDOWN_POINT_MS;
 const idAt = (s: RoomState, seat: number): string => s.players.find((p) => p.seat === seat)!.id;
 
-// 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 을 켜면 다시 돈다
-describe.skipIf(!RULESET.showdown)("봇 마지막 3인 계획 (09.1.1-07)", () => {
+// 기본판(결정 0072)에서 꺼짐 — 판 규칙의 showdown 을 켜면 다시 돈다
+describe.skipIf(!GAME_RULES.showdown)("봇 마지막 3인 계획 (09.1.1-07)", () => {
   it("상수: 지목 지연 500 + [0, 2500) ms — 지목 창 8초에서 마감 − 500 안에 든다", () => {
     expect(SHOWDOWN_BOT_POINT_BASE_MS).toBe(500);
     expect(SHOWDOWN_BOT_POINT_SPAN_MS).toBe(2_500);
@@ -1607,7 +1608,7 @@ describe("기본판 투표 봇 계획 (결정 0072)", () => {
     expect(synced.botPlan?.steps.length).toBe(3);
   });
 
-  it.skipIf(RULESET.pickTurn)("RULESET.pickTurn 이 꺼져 있으면 turnPointSteps 의 순차 계획은 쓰이지 않는다", () => {
+  it.skipIf(GAME_RULES.pickTurn)("판 규칙의 pickTurn 이 꺼져 있으면 turnPointSteps 의 순차 계획은 쓰이지 않는다", () => {
     const state = voteAt(9);
     const steps = planBotSteps(state, nowOf(state), seededRandInt(1));
     expect(steps.every((x) => x.act.t === "point")).toBe(true);

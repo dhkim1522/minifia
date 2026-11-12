@@ -16,7 +16,7 @@ import {
 } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, ERRAND_MS, NOMINATION_GATHER_MS, ROLE_REVEAL_MS } from "../../shared/game/phases";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
 import { tick } from "../../shared/game/tick";
 import type { PhaseId } from "../../shared/protocol";
 import { ROLE_IDS, ROLE_TABLE } from "../../shared/game/roles";
@@ -25,6 +25,7 @@ import { seededRandInt } from "../helpers/seededRandom";
 import { onlyBar } from "../helpers/playable";
 import { buildView } from "../../shared/game/view";
 import { nicknameKey, validateNickname } from "../../shared/nickname";
+const GAME_RULES = rulesetOf("extended");
 
 interface Spec {
   id: string;
@@ -777,8 +778,8 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
   });
 
   // 09.1-04(결정 0063-1): 배포 순간 진행 중이던 옛 지목 방(차례 정보 없음)은 지목을 지금 시각부터 다시 시작한다.
-  // 기본판(결정 0072)에서 꺼짐 — RULESET.pickTurn 을 켜면 다시 돈다.
-  it.skipIf(!RULESET.pickTurn)("차례 없는 옛 지목 방은 지목을 다시 시작한다 (결정 0063-1)", () => {
+  // 기본판(결정 0072)에서 꺼짐 — 판 규칙의 pickTurn 을 켜면 다시 돈다.
+  it.skipIf(!GAME_RULES.pickTurn)("차례 없는 옛 지목 방은 지목을 다시 시작한다 (결정 0063-1)", () => {
     const base = { ...fullRoom([0, 1, 2, 3]), phase: "nomination" as PhaseId, phaseEndsAt: 77_000, day: 2 };
     const stored: RoomState = { ...base, players: base.players.map((p, i) => (i < 2 ? { ...p, nominate: 3 } : p)) };
     const got = normalizeStoredRoom(stored, 5_000);

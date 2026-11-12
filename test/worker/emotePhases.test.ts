@@ -24,7 +24,8 @@ import {
   withRole,
 } from "./helpers";
 import type { Actor, Game } from "./helpers";
-import { RULESET } from "../../shared/game/ruleset";
+import { rulesetOf } from "../../shared/game/ruleset";
+const GAME_RULES = rulesetOf("extended");
 
 /** 모든 위치 구간이 끝날 때까지 기다린다(모이기 걷기 뒤). */
 async function standStill(code: string): Promise<void> {
@@ -118,8 +119,8 @@ describe("동작 — 이동이 막힌 단계에서도 도착한다 (10-08, AVTR-
     expect(row(await sendAndCount(g, dead, "cry"))).toBe(want(g, [dead.seat]));
   }, 120_000);
 
-  // 기본판(결정 0072)에서 꺼짐 — RULESET.runoff 를 켜면 다시 돈다
-  it.skipIf(!RULESET.runoff)("동점 결선 앞머리(runoff): 산 사람의 동작이 여섯 모두에게 간다", async () => {
+  // 기본판(결정 0072)에서 꺼짐 — 판 규칙의 runoff 를 켜면 다시 돈다
+  it.skipIf(!GAME_RULES.runoff)("동점 결선 앞머리(runoff): 산 사람의 동작이 여섯 모두에게 간다", async () => {
     const g = await startedGame("nomination");
     // 좌석 0·1 이 각각 2표로 동점(최다 정확히 둘): runoff.test.ts 와 같은 표
     await pointAll(g.code, g.actors, { 0: 1, 1: 0, 2: 0, 3: 1, 4: 2 });
@@ -129,8 +130,8 @@ describe("동작 — 이동이 막힌 단계에서도 도착한다 (10-08, AVTR-
     expect(row(await sendAndCount(g, sender, "clap"))).toBe(want(g, stored));
   }, 120_000);
 
-  // 기본판(결정 0072)에서 꺼짐 — RULESET.showdown 을 켜면 다시 돈다
-  it.skipIf(!RULESET.showdown)("마지막 3인(showdown) 모이기: 산 사람의 동작이 산 사람 셋과 탈락자에게 간다", async () => {
+  // 기본판(결정 0072)에서 꺼짐 — 판 규칙의 showdown 을 켜면 다시 돈다
+  it.skipIf(!GAME_RULES.showdown)("마지막 3인(showdown) 모이기: 산 사람의 동작이 산 사람 셋과 탈락자에게 간다", async () => {
     const g = await threeAliveGame();
     await closePhase(g.code);
     for (const s of g.socks) await settle(s, mark(s));

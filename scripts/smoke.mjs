@@ -5,7 +5,7 @@
 // → 찬반 10초(DAY-06: 변론자는 못 던짐, 값 변경은 본인에게만) → 처형 5초(DAY-07: 수만 공개, 역할 키 없음) → 밤 30초(역할별 행동·마피아 채널 채팅)
 // → 아침 5초(탈락 발표·탈락자 채널 채팅) → 승패가 날 때까지 다음 낮을 같은 방식으로 돌아 ended 에서 끝난다.
 // 기본판(결정 0072)에서는 산 사람이 3명이어도 같은 토론 → 투표 흐름이다 — 하루 반복은 서버가 보낸 단계(discussion·showdown)로 갈래를 고른다.
-// 아래 마지막 3인 결전(09.1.1, 결정 0066-5, RULESET.showdown 을 켠 판)은 이렇게 돈다: 모이기 2초 → 좌석 순서로 한마디(8초 차례, 차례 주인의 chat 이 그 차례의 한마디, 시간 초과는 건너뜀)
+// 아래 마지막 3인 결전(09.1.1, 결정 0066-5, 판 규칙(rulesetOf)의 showdown 을 켠 판)은 이렇게 돈다: 모이기 2초 → 좌석 순서로 한마디(8초 차례, 차례 주인의 chat 이 그 차례의 한마디, 시간 초과는 건너뜀)
 // → 동시 지목 8초(남의 선택은 마감 전에 어느 프레임에도 없고 던진 좌석만 공개) → 공개 1.5초 → 2표 이상이면 찬반 없이 처형(day.verdict.last, day.ballots 없음)·아니면 처형 없는 밤.
 // 첫 낮은 마피아가 아닌 시민 한 명을 처형하고 그날 밤 다른 시민이 암살당한다. 마피아가 남아 있는 날은 마피아 한 명을 처형해 판을 끝낸다.
 // 자유 채팅 규칙(CHAT-01·02·03·05·06): 낮 토론의 산 사람 줄은 모두에게 ch all 로 seq 틈 없이 가고 보낸 사람에게도 돌아온다.
@@ -42,7 +42,7 @@ const ERRAND_WAIT_MS = ERRAND_MS + STATE_LIMIT_MS;
 const NOMINATION_MS = 15_000;
 // 봇 지연 등 서버 간격: 한 사람이 지목을 바꾸는 최소 간격(applyPoint)은 250ms 라 바꾸기 전에 이만큼 기다린다.
 const POINT_CHANGE_GAP_MS = 300;
-// 순차 지목(결정 0063-1, RULESET.pickTurn)의 길이 사본 — 기본판에서는 서버가 쓰지 않는다. 아래 마지막 3인 구간의 차례 사이 간격이 PICK_GAP_MS 를 쓴다.
+// 순차 지목(결정 0063-1, 판 규칙(rulesetOf)의 pickTurn)의 길이 사본 — 기본판에서는 서버가 쓰지 않는다. 아래 마지막 3인 구간의 차례 사이 간격이 PICK_GAP_MS 를 쓴다.
 const PICK_GAP_MS = 900;
 const DEFENSE_MS = 20_000;
 const VERDICT_MS = 10_000;
@@ -1204,7 +1204,7 @@ async function stageFull(url, args) {
       `${dayNo}일차 dayAnnounce·errand 다음에 discussion 이 오지 않음`,
     );
     if (lastView(aliveNow()[0]).phase === "showdown") {
-      // 기본판(결정 0072)에서는 서버가 이 단계에 들어가지 않는다 — RULESET.showdown 을 켠 판의 마지막 3인 결전. 처형 대상이 마피아면 2표로 판이 끝난다.
+      // 기본판(결정 0072)에서는 서버가 이 단계에 들어가지 않는다 — 판 규칙(rulesetOf)의 showdown 을 켠 판의 마지막 3인 결전. 처형 대상이 마피아면 2표로 판이 끝난다.
       await runShowdownDay(dayNo, aliveNow().find((c) => c.role === "mafia"));
     } else {
       await runExecutionDay(dayNo, aliveNow().find((c) => c.role === "mafia"));
