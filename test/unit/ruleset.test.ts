@@ -20,10 +20,10 @@ describe("기본판 설정 RULESET (결정 0072)", () => {
     const literal = ["tick.ts", "phases.ts", "nomination.ts", "room.ts"].filter((f) => /\b(pickTurn|runoff|showdown|badge|whisper)\s*:\s*(true|false)\b/.test(read(`shared/game/${f}`)));
     expect(literal.join(",")).toBe("");
   });
-  it("방 DO 와 view 는 설정을 RULESET 으로 읽는다 (13-04, 꺼진 메시지·꺼진 view 키)", () => {
+  it("방 DO 와 view 는 규칙을 방 상태의 판 종류에서 얻는다 — rulesetOf 를 가져온다 (19-02 D-03, 꺼진 메시지·꺼진 view 키)", () => {
     const room = read("worker/room.ts");
     const view = read("shared/game/view.ts");
-    expect(`${/import \{[^}]*\bRULESET\b[^}]*\} from "..\/shared\/game\/ruleset"/.test(room)}/${/import \{[^}]*\bRULESET\b[^}]*\} from "\.\/ruleset"/.test(view)}`).toBe("true/true");
+    expect(`${/import \{[^}]*\brulesetOf\b[^}]*\} from "..\/shared\/game\/ruleset"/.test(room)}/${/import \{[^}]*\brulesetOf\b[^}]*\} from "\.\/ruleset"/.test(view)}`).toBe("true/true");
   });
   it("화면 모델은 설정을 RULESET 으로 읽는다 (13-04, 떠 있는 버튼·결과 탭 진입점)", () => {
     const has = (rel: string): boolean => /import \{[^}]*\bRULESET\b[^}]*\} from "[^"]*shared\/game\/ruleset"/.test(read(rel));

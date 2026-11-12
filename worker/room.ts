@@ -37,7 +37,8 @@ import { sendWhisper } from "../shared/game/whisper";
 import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared/game/will";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
-import { RULESET } from "../shared/game/ruleset";
+import { modeOf, rulesetOf } from "../shared/game/ruleset";
+import type { Ruleset } from "../shared/game/ruleset";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { castPoint, castTurnPoint, turnStartOf } from "../shared/game/nomination";
 import { castRunoffVote } from "../shared/game/runoff";
@@ -336,7 +337,7 @@ export class Room extends DurableObject<Env> {
         return;
       case "badge":
         // 기본판(결정 0072)에서 꺼진 장치 — 지원하지 않는 기능과 같게 보인다: 오류 한 프레임만(state·저장·방송 없음).
-        if (!RULESET.badge) {
+        if (!this.rulesNow().badge) {
           this.rejectDisabled(ws);
           return;
         }
@@ -358,7 +359,7 @@ export class Room extends DurableObject<Env> {
         await this.handleRematch(ws, msg.round);
         return;
       case "whisper":
-        if (!RULESET.whisper) {
+        if (!this.rulesNow().whisper) {
           this.rejectDisabled(ws);
           return;
         }
@@ -1074,9 +1075,14 @@ export class Room extends DurableObject<Env> {
   // 일반 방은 error 프레임만(state·저장·방송 없음): 이 기능이 없는 방에서는 알 수 없는 메시지와 같게 보인다.
   // 그 밖의 거부는 sendRejection(오류 + 그 소켓에만 최신 state).
   // 기본판(결정 0072, D-05)에서 꺼진 메시지(badge·whisper)의 거절: 보낸 소켓에만 오류 한 프레임 — state·저장·방송·채팅 줄 없음.
-  // 처리기 본체(handleBadge·handleWhisper)는 지우지 않는다. RULESET 값을 켜면 이 문이 열린다.
+  // 처리기 본체(handleBadge·handleWhisper)는 지우지 않는다. 그 방의 판 규칙(rulesNow)에서 값을 켜면 이 문이 열린다.
   private rejectDisabled(ws: WebSocket): void {
     this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+  }
+
+  /** 이 방의 판 규칙(19페이즈 D-03) — 전역 값이 아니라 방 상태의 판 종류에서 얻는다. 방이 아직 없으면 기본 판의 규칙이다(정치 장치는 두 판 모두 꺼짐이라 거절 응답이 같다). */
+  private rulesNow(): Ruleset {
+    return rulesetOf(modeOf(this.room ?? {}));
   }
 
   private rejectTestTool(ws: WebSocket, playerId: string, code: WsErrorCode): void {

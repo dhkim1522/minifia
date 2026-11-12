@@ -4,12 +4,11 @@
 // basic 판은 dayAnnounce → discussion 이다(19페이즈 D-08) — 표의 next 는 그대로 두고 nextPhaseOf 가 판 규칙으로 고른다.
 // 기본판 낮 흐름(결정 0072, 8페이즈 결정 0060-1·DAY-07): discussion → nomination(투표, 동시 15초) → defense → verdict → execution → night → morning → dayAnnounce.
 // 승패가 나면 execution·morning 의 마감에서 ended(마감 없음)로 간다. 투표 동점·0표는 결선 없이 night 다. 순차 지목(0063-1)·동점 결선 runoff(0066-4)·마지막 3인 결전 showdown(0066-5)은
-// ruleset.ts 의 RULESET 이 켜졌을 때만 돈다(기본판은 모두 꺼짐). 분기(투표 동률·0표 → night 등)는 tick.ts 의 ON_DEADLINE 이
+// 판 규칙(ruleset.ts 의 rulesetOf)이 켜졌을 때만 돈다(두 판 모두 꺼짐). 분기(투표 동률·0표 → night 등)는 tick.ts 의 ON_DEADLINE 이
 // next 로 정한다 — 이 표의 next 는 "기본 다음 단계" 데이터일 뿐이다.
 // 단계 길이는 이 파일 한 곳에서만 정한다(6페이즈 플레이테스트가 여기만 고친다).
 // 표는 데이터만 둔다 — 진입 전이(훅)는 tick.ts 의 ON_ENTER 표에 있다.
 import type { PhaseId } from "../protocol";
-import { RULESET } from "./ruleset";
 import type { Ruleset } from "./ruleset";
 
 export interface PhaseDef {
@@ -38,7 +37,7 @@ export const VERDICT_LEAD_MS = 600;
 export const EXECUTION_MS = 5_000 + VERDICT_LEAD_MS; // 처형 발표 5초(D-01, VOTE-04) + 판결 앞머리 0.6초(결정 0066-7)
 /** 투표(nomination) 15초 — 기본판 동시 투표(결정 0072, 8페이즈 결정 0060-3). 모이는 걷기도 이 15초 안이다. */
 export const NOMINATION_MS = 15_000;
-// 순차 지목(결정 0063-1·0063-4, 09.1 M-5, RULESET.pickTurn 일 때만). 모이기 → 산 사람 좌석 순서로 한 명씩 차례 → 확정 뒤 사이 → 끝 알림 → 집계. 플레이테스트 뒤 이 네 줄만 고친다.
+// 순차 지목(결정 0063-1·0063-4, 09.1 M-5, 판 규칙의 pickTurn 일 때만). 모이기 → 산 사람 좌석 순서로 한 명씩 차례 → 확정 뒤 사이 → 끝 알림 → 집계. 플레이테스트 뒤 이 네 줄만 고친다.
 export const NOMINATION_GATHER_MS = 3_000; // 결정 0063-1, M-5 기본값 · 플레이테스트 뒤 이 줄만 고친다 — 지목 시작 때 모이는 시간
 export const PICK_TURN_MS = 8_000; // 결정 0063-1, M-5 기본값 · 플레이테스트 뒤 이 줄만 고친다 — 한 사람의 차례(못 고르면 기권)
 export const PICK_GAP_MS = 900; // 결정 0063-1, M-5 기본값 · 플레이테스트 뒤 이 줄만 고친다 — 차례가 확정된 뒤 다음 차례까지
@@ -89,7 +88,8 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   morning: Object.freeze({ durationMs: MORNING_MS, next: "dayAnnounce", revealsOwnRole: true }),
   ended: Object.freeze({ durationMs: null, next: null, revealsOwnRole: true }), // 마감이 없다 — 방 만료가 끝낸다
   // 8페이즈 단계(결정 0060): discussion.next 가 nomination 이다. 옛 처형 여부·후보 선택·후보 공개 행은 08-22 에 지웠다.
-  nomination: Object.freeze({ durationMs: RULESET.pickTurn ? NOMINATION_GATHER_MS : NOMINATION_MS, next: "defense", revealsOwnRole: true }), // 기본판 투표 15초 동시. 순차 지목이 켜지면 진입 길이 = 모이기, 그 뒤 길이는 차례 사슬 nominationStepMs. 동률·0표면 훅이 night 로
+  // 투표 15초 동시(결정 0072). 순차 지목이 켜진 판에서는 이 값이 자리 값이다 — 진입 훅 enterNomination 이 state.pickTurn 을 만들고 tick 이 진입 훅 뒤 phaseDurationOf 로 길이를 다시 구한다(nominationStepMs 의 모이기 길이, 그 뒤는 차례 사슬). 동률·0표면 훅이 night 로
+  nomination: Object.freeze({ durationMs: NOMINATION_MS, next: "defense", revealsOwnRole: true }),
   runoff: Object.freeze({ durationMs: RUNOFF_INTRO_MS, next: "defense", revealsOwnRole: true }), // 지목 동점(최다 정확히 둘) 결선 — 진입 길이 = 앞머리, 그 뒤 길이는 runoffStepMs. 결선도 동점이면 훅이 night 로
   showdown: Object.freeze({ durationMs: SHOWDOWN_GATHER_MS, next: "night", revealsOwnRole: true }), // 마지막 3인 결전 — 진입 길이 = 모이기, 그 뒤 길이는 showdownStepMs. 2표 이상이면 훅이 execution 으로
   verdict: Object.freeze({ durationMs: VERDICT_MS, next: "execution", revealsOwnRole: true }),

@@ -23,7 +23,7 @@ import { decideMap } from "./maps";
 import { enterNomination } from "./nomination";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS, TUTORIAL_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
-import { RULESET, modeOf } from "./ruleset";
+import { modeOf, rulesetOf } from "./ruleset";
 import type { RoleId } from "./roles";
 
 export const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
@@ -504,9 +504,9 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   const isLegacyReveal = phase === LEGACY_PHASES.claimReveal;
   const isLegacyClaim = phase === LEGACY_PHASES.claim;
   const isLegacyVote = LEGACY_VOTE_PHASES.includes(phase);
-  // 순차 지목이 켜졌을 때만 — 기본판 동시 투표 방은 그대로 둔다(DO 재기동마다 투표를 다시 시작하던 결함 방지).
+  // 순차 지목이 켜진 판(저장된 방의 판 규칙)일 때만 — 동시 투표 방은 그대로 둔다(DO 재기동마다 투표를 다시 시작하던 결함 방지).
   // 09.1-04(결정 0063-1): 차례 정보 없이 저장된 지목 방(배포 순간 진행 중이던 판)은 지목을 지금 시각부터 다시 시작한다 — 그날 지목 표는 지워진다(공개 정보, 한 번뿐).
-  const isLegacyNomination = RULESET.pickTurn && stored.phase === "nomination" && stored.pickTurn === undefined;
+  const isLegacyNomination = rulesetOf(modeOf(stored)).pickTurn && stored.phase === "nomination" && stored.pickTurn === undefined;
   const hasOldVoteRoomKey = Object.hasOwn(stored, "lastExecPhrase");
   const hasOldVotePlayerKeys = stored.players.some((p) => LEGACY_VOTE_PLAYER_KEYS.some((key) => Object.hasOwn(p, key)));
   const hasOldClaimState = LEGACY_CLAIM_STATE_KEYS.some((key) => Object.hasOwn(stored, key));
