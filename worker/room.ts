@@ -57,6 +57,7 @@ import { pickMode } from "../shared/game/mode";
 import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
+import { clipToZone, zoneAt } from "../shared/game/zones";
 import { ClientMessageSchema } from "../shared/schemas";
 import { cryptoRandInt, randomToken } from "./random";
 
@@ -1492,7 +1493,7 @@ export class Room extends DurableObject<Env> {
   // 지금 단계의 배치(지목 둘레 자리·변론 무대·부결 복귀)를 서버가 걷게 한다(DAY-04·05, 결정 0060-7).
   // 단계 전환 이벤트가 아니라 지금 단계의 배치를 맞춘다 — 알람 따라잡기·퇴거에도 안전(RESEARCH 패턴 4). 키가 world.lay.key 와 같으면 아무것도 하지 않는다(멱등).
   // 이동마다 지금 위치에서 경로를 만들고(planMoveSegment) 150ms 간격·lastMoveAt 을 건드리지 않는 forceSegment 로 적용한 뒤(Pitfall 5)
-  // 그 사람이 움직인 것으로 emitWorld 한다(산 사람의 이동은 방 전원에게, A2). 배치 기억 lay 는 world 저장에 실려 퇴거 뒤에도 자리가 뒤섞이지 않는다.
+  // 그 사람이 움직인 것으로 emitMove 한다(산 사람의 이동은 방 전원에게, A2 — 방이 있는 맵에서는 구역으로 거른다, 20페이즈 D-14). 배치 기억 lay 는 world 저장에 실려 퇴거 뒤에도 자리가 뒤섞이지 않는다.
   // 밤·아침은 layoutKey 가 null 이고 syncHome 이 맞춘다(결정 0061-3·4).
   private syncLayout(now: number): void {
     const room = this.room;
@@ -1507,7 +1508,7 @@ export class Room extends DurableObject<Env> {
       if (!me || !cur) continue;
       const seg = planMoveSegment(cur, m.dest, now, this.mapDef());
       this.world = forceSegment(this.world, m.playerId, seg);
-      this.emitWorld(moveFrame(me.seat, seg), m.playerId);
+      this.emitMove(me, seg, now);
     }
     this.world = { ...this.world, lay: { key: layout.key, slots: layout.slots } };
     this.markWorldDirty();
@@ -1898,7 +1899,7 @@ export class Room extends DurableObject<Env> {
 
   // ======== 로비 이동 구역(06-08): move 처리 · 전송 · 저장/복원 · 봇 배회 ========
   // 규칙 한눈에:
-  //  - 전송: world 프레임은 emitWorld 한 곳으로만 나간다. 로비는 방 전원, 지도 단계는 움직인 사람 기준(산 사람 → 전원, 유령 → 유령만, 결정 0060-8).
+  //  - 전송: world 프레임은 emitWorld 한 곳으로만 나간다(이동 구간은 emitMove 가 구역으로 나눠 같은 deliver 길로 보낸다). 로비는 방 전원, 지도 단계는 움직인 사람 기준(산 사람 → 전원, 유령 → 유령만, 결정 0060-8).
   //  - 순서: 프레임을 먼저 보내고 저장은 뒤에 한다 — output gate 가 쓰기 뒤의 전송을 붙잡기 때문이다(RESEARCH R6).
   //  - 저장: 이동 뒤 2000ms 디바운스 한 번(markWorldDirty). 나가기·내보내기·로비를 떠나는 시작·마지막 사람 연결 끊김·알람에서는 즉시(flushWorld).
   //  - 키: room 키와 분리된 "world" 키. 생성자가 두 키를 한 번에 읽어 restoreWorld 로 되살린다.
@@ -1925,8 +1926,8 @@ export class Room extends DurableObject<Env> {
     if (!result.ok) return;
     this.world = result.world;
     this.emoteRates.delete(playerId); // 이동 요청이 받아들여지면 동작 기록을 지운다(D-10)
-    // 전송이 먼저, 저장은 뒤(디바운스) — output gate 가 쓰기 뒤의 전송을 붙잡으므로(RESEARCH R6). 받는 사람은 움직인 사람 기준이다(emitWorld).
-    this.emitWorld(moveFrame(me.seat, result.seg), playerId);
+    // 전송이 먼저, 저장은 뒤(디바운스) — output gate 가 쓰기 뒤의 전송을 붙잡으므로(RESEARCH R6). 받는 사람은 움직인 사람 기준이고 방이 있는 맵에서는 구역으로 거른다(emitMove).
+    this.emitMove(me, result.seg, now);
     this.markWorldDirty();
   }
 
@@ -2014,6 +2015,39 @@ export class Room extends DurableObject<Env> {
     const room = this.room;
     if (!room) return;
     this.deliver(audience(room, { k: "world", mover: moverId }), frame);
+  }
+
+  // 한 사람의 새 이동 구간을 보낸다(applyMove·syncLayout 공통). 방이 없는 맵(재즈 바·광장·대기실)은 emitWorld 그대로다.
+  // 방이 있는 맵(마을, 20페이즈 D-13·D-14)은 audience 가 정한 받는 사람을 구역으로 다시 나눈다 — 받는 사람 집합 규칙은 바꾸지 않는다:
+  //  - 본인과 유령(탈락자 관전, 결정 0021): 전체 구간.
+  //  - 지금 움직인 사람과 같은 구역에 있는 산 사람: 그 구역에 머무는 동안의 구간만(clipToZone — 문턱에서 끝난다).
+  //  - 다른 구역의 산 사람·위치가 없는 사람: 보내지 않는다.
+  // 다른 구역 산 사람의 좌표는 네트워크로도 가지 않는다(결정 0002·0021) — 화면에서 숨기는 것으로 대신하지 않는다.
+  // 구역은 서버가 가진 구간의 지금 위치로만 정한다(zoneAt). 문을 지나는 순간의 사라짐·나타남과 구역별 snap 은 20-02 가 더한다.
+  private emitMove(me: Player, seg: Segment, now: number): void {
+    const room = this.room;
+    if (!room) return;
+    const map = this.mapDef();
+    const full = moveFrame(me.seat, seg);
+    if (map.rooms === undefined || map.rooms.length === 0) {
+      this.emitWorld(full, me.id);
+      return;
+    }
+    const ids = audience(room, { k: "world", mover: me.id });
+    const zone = zoneAt(map, seg, now);
+    const whole = new Set<string>();
+    const sameZone = new Set<string>();
+    for (const p of room.players) {
+      if (!ids.has(p.id)) continue;
+      if (p.id === me.id || !isAlive(p)) {
+        whole.add(p.id);
+        continue;
+      }
+      const cur = Object.prototype.hasOwnProperty.call(this.world.segs, p.id) ? this.world.segs[p.id] : undefined;
+      if (cur !== undefined && zoneAt(map, cur, now) === zone) sameZone.add(p.id);
+    }
+    this.deliver(whole, full);
+    if (sameZone.size > 0) this.deliver(sameZone, moveFrame(me.seat, clipToZone(map, seg, now)));
   }
 
   private sendTo(ws: WebSocket, msg: ServerMessage): void {
