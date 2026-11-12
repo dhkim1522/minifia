@@ -2301,27 +2301,25 @@ export function soundButtonChecks({ viewport, button, header, test, toast, banne
 
 // ---- 16페이즈 오른쪽 세로 한 줄 열 sideColumnChecks (16-06, 결정 D-05, UI-SPEC V-2~V-5) ----
 
-/** 열 단추의 위 → 아래 순서(오른쪽 열부터, 열 안은 위부터). 맵·봇은 방장에게만 있다 */
-export const SIDE_ORDER = Object.freeze(["sound", "map", "bots", "dress"]);
-/** 앱이 더한 DOM 표식(16-06). 값은 SIDE_ORDER 의 고정 낱말뿐이다(역할·좌석 없음, T-16-14). e2eContract 가 git 추적 src/ 에 있는지·값이 낱말뿐인지 본다 */
+/** 열 단추의 위 → 아래 순서(오른쪽 열부터, 열 안은 위부터). 19페이즈: 방장도 소리·옷장 둘이다 — 맵·봇은 왼쪽 방장 줄로 옮겨 갔다(hostRailChecks 가 본다) */
+export const SIDE_ORDER = Object.freeze(["sound", "dress"]);
+/** 앱이 더한 DOM 표식(16-06). 화면이 쓰는 값은 SIDE_ORDER 의 고정 낱말뿐이다(역할·좌석 없음, T-16-14). e2eContract 가 git 추적 src/ 에 있는지·값이 낱말뿐인지 본다 */
 export const SIDE_MARKERS = Object.freeze(["data-side-column", "data-side-button"]);
 
 /**
- * 알려진 한계로 두고 고치지 않는 폰·화면 조합(사용자 메모 '작은 화면 문제는 그대로', UI Considerations #21 unresolved, 결정 0079).
- * 360×560 방장 대기실은 열 두 개와 아래 패널(250)이 겹칠 수 있다 — 14 의 위쪽 비좁음과 같은 한계. 이 조합의 SC2(교차)는 잰 값을 남기되 실패로 세지 않는다.
- * 목록 밖 조합은 그대로 판정한다 — 예외를 넓히려면 이유를 적어 여기에 한 줄을 더해야 한다.
+ * 알려진 한계로 두고 고치지 않는 폰·화면 조합({ w, h, host, screen, reason }). 이 조합의 SC2(교차)는 잰 값을 남기되 실패로 세지 않는다.
+ * 지금은 비어 있다: 가장 낮은 폰의 방장 대기실 예외(16-06)는 19페이즈에 방장 오른쪽 열이 소리·옷장 둘이 되어 접히지 않으므로 지웠다 — 왼쪽 방장 줄이 접히는 것은 실패가 아니고 교차는 hostRailChecks HR3 이 그대로 판정한다.
+ * 예외를 넓히려면 이유를 적어 여기에 한 줄을 더해야 한다.
  */
-export const SIDE_COLUMN_EXCEPTIONS = Object.freeze([
-  Object.freeze({ w: 360, h: 560, host: true, screen: "lobby", reason: "360×560 방장 대기실: 열 두 개와 아래 패널이 겹칠 수 있는 알려진 한계(UI Considerations #21, 결정 0079)" }),
-]);
+export const SIDE_COLUMN_EXCEPTIONS = Object.freeze([]);
 
 /**
  * 오른쪽 열 판정 (SC1~SC6). 사각형은 { left, top, width, height, right, bottom }.
- * s = { viewport {w,h} · screen "lobby"|"result"|"game" · host 방장 화면인가 · mapsOn·botsOn 이 방에서 맵·봇 도구가 켜져 있나 ·
+ * s = { viewport {w,h} · screen "lobby"|"result"|"game" · host 방장 화면인가 ·
  *       buttons [{ side, rect, pill? }]([data-side-button]) · band 자막 띠 면 사각형|null · panelTop 아래 패널 윗변|null ·
  *       head [{ kind, rect }] 머리 단추(나가기·공유) · expectHead 머리 단추 개수(기본 2) · test [테스트] 사각형|null }.
  * SC1 열 단추는 지름 52±1 원(알약 소리는 높이 52±1·폭 112 이상) · SC2 열 단추끼리·자막 띠(좌우·아래 8 여유)·아래 패널(윗변 − 8)·머리 단추·[테스트] 와 교차 0(예외 조합은 SIDE_COLUMN_EXCEPTIONS) ·
- * SC3 방장은 map(mapsOn)·bots(botsOn)가 있고 손님은 없다, 소리·옷장(대기실·결과)이 있고 순서는 sound·map·bots·dress ·
+ * SC3 방장·참가자 모두 소리·옷장(대기실·결과), 게임 화면은 소리 하나. 맵·봇이 열에 있으면 실패(19페이즈: 방장 전용은 왼쪽 줄). 순서는 sound·dress ·
  * SC4 머리에는 44 정사각 단추뿐(개수 expectHead) · SC5 열 윗변 = 띠 아랫변 + 12 ±2, 가장 오른쪽 단추의 오른쪽 여백 16 ±1 ·
  * SC6 열 안 간격 12 ±1, 두 열이면 열 사이 12 ±1, 첫 열(오른쪽)은 두 칸 이상.
  */
@@ -2329,7 +2327,7 @@ export function sideColumnChecks(s = {}) {
   const L = {
     SC1: `열 단추는 지름 ${SIDE_BUTTON_SIZE}±1 원(소리 알약은 높이 ${SIDE_BUTTON_SIZE}·폭 ${SOUND_BUTTON_GEOMETRY.pillMinW} 이상)`,
     SC2: "열 단추끼리·자막 띠(좌우·아래 8 이내)·아래 패널·머리 단추·[테스트]와 교차 0",
-    SC3: "방장은 맵·봇(켜진 방), 손님은 없다 · 소리·옷장 · 순서 소리·맵·봇·옷장",
+    SC3: "방장·참가자 모두 소리·옷장(게임 화면은 소리만) · 순서 소리·옷장",
     SC4: "머리 단추는 44 정사각뿐(나가기·공유)",
     SC5: `열 윗변 = 띠 아랫변 + ${SIDE_GAP}(±2) · 오른쪽 여백 16(±1)`,
     SC6: `열 안 간격 ${SIDE_GAP}(±1) · 열 사이 ${SIDE_GAP}(±1) · 첫 열은 두 칸 이상`,
@@ -2375,10 +2373,6 @@ export function sideColumnChecks(s = {}) {
   if (count("sound") !== 1) bad3.push(`소리 ${count("sound")}개`);
   if (s.screen !== "game" && count("dress") !== 1) bad3.push(`옷장 ${count("dress")}개`);
   if (s.screen === "game" && count("dress") !== 0) bad3.push(`게임 화면에 옷장 ${count("dress")}개`);
-  const wantMap = s.host && s.screen !== "game" && s.mapsOn === true;
-  const wantBots = s.host && s.screen === "lobby" && s.botsOn === true;
-  if (count("map") !== (wantMap ? 1 : 0)) bad3.push(`맵 ${count("map")}개(기대 ${wantMap ? 1 : 0})`);
-  if (count("bots") !== (wantBots ? 1 : 0)) bad3.push(`봇 ${count("bots")}개(기대 ${wantBots ? 1 : 0})`);
   // 순서: 오른쪽 열(오른쪽변이 큰 쪽)부터, 열 안은 위부터
   const ordered = [...btns].sort((a, b) => (Math.abs(right(b.r) - right(a.r)) > 6 ? right(b.r) - right(a.r) : a.r.top - b.r.top)).map((b) => b.side).filter((x) => SIDE_ORDER.includes(x));
   const want = SIDE_ORDER.filter((x) => ordered.includes(x));
@@ -2426,27 +2420,332 @@ export function sideColumnChecks(s = {}) {
 }
 
 // ---- 19페이즈 방장 줄 hostRailChecks (19-06, 결정 D-13·D-14, UI-SPEC F·"검증 표식과 E2E 판정") ----
-// 자리 함수(RED): 판정 본문은 다음 커밋에서 채운다.
-export const HOST_RAIL_E2E = Object.freeze({});
-export const HOST_RAIL_MARKERS = Object.freeze([]);
-export const HOST_RAIL_ORDER = Object.freeze([]);
-export const LAMP_RGB = "";
-export const NIGHT600_RGB = "";
-export const MODE_NAMES_E2E = Object.freeze({});
-export function hostRailLayoutE2E() {
-  return { crown: false, columns: [] };
+// 방장 전용 조작은 왼쪽 세로 줄([data-host-rail])에, 참가자에게는 읽기 전용 판 종류 칩([data-mode-chip])이 있다. 판정 문턱은 이 절 한 곳에만 둔다(T-19-18) —
+// 흐름(modes.mjs·mapselect.mjs·tutorial.mjs)은 화면을 읽어 넘기기만 한다. 앱 값과의 사본 일치는 test/unit/e2eContract.test.ts 가 고정한다.
+
+/** 줄 치수 사본: 칸 지름·칸 사이·왕관 표식 높이·왼쪽 여백·테스트 방에서 내려오는 높이, 참가자 칩 높이·띠 아래 간격(src/styles/v2.css .mf-hostrail·.mf-modechip) */
+export const HOST_RAIL_E2E = Object.freeze({ cell: 52, gap: 12, crownH: 20, left: 16, testShift: 48, chipH: 32, chipTop: 20 });
+/** 앱이 더한 DOM 표식(19-03~19-05). 값은 enum 낱말뿐이다(역할·좌석 없음, T-19-19) */
+export const HOST_RAIL_MARKERS = Object.freeze(["data-host-rail", "data-host-rail-btn", "data-host-rail-crown", "data-mode-chip", "data-mode-sheet", "data-mode-card"]);
+/** 줄 단추의 위 → 아래 순서([data-host-rail-btn] 값). 봇은 대기실의 테스트 방, 튜토리얼 토글은 대기실의 확장판에만 있다 */
+export const HOST_RAIL_ORDER = Object.freeze(["mode", "map", "bots", "tutorial"]);
+/** 줄 단추의 테두리·아이콘 색(--light-lamp 사본) · 오른쪽 열 단추의 테두리 색(--night-600 사본). getComputedStyle 이 주는 글 그대로 */
+export const LAMP_RGB = "rgb(255, 207, 138)";
+export const NIGHT600_RGB = "rgb(42, 55, 96)";
+/** 판 이름(src/game/modeText.ts MODE_TEXT.name 사본) — 참가자 칩 글·시트 칸 이름 */
+export const MODE_NAMES_E2E = Object.freeze({ basic: "기본 마피아", extended: "확장판" });
+/** 줄의 접근성 이름(MODE_TEXT.rail 사본) — 왕관 표식이 빠져도 남는다 */
+const HOST_RAIL_NAME = "방장 전용";
+/** 줄의 오른쪽 끝과 오른쪽 열의 왼쪽 끝 사이 최소 간격(UI-SPEC F-1) */
+const HOST_RAIL_SIDE_CLEAR = 16;
+/** 배치 식의 경계 여유: 잰 최대 높이가 문턱과 이 값 안이면 표식·열 수를 판정하지 않고 참고 줄로 남긴다 */
+const HOST_RAIL_EDGE = 2;
+
+/**
+ * 줄 안 단추 수 n 과 줄 최대 높이로 표식 여부와 열(왼쪽부터 칸 수)을 고른다 — src/components/v2/HostRail.tsx hostRailLayout 사본(UI-SPEC F-2).
+ * ① n·52 + (n−1)·12 + 32 ≤ 최대 높이 → 표식 + 한 열 ② n·52 + (n−1)·12 ≤ 최대 높이 → 표식 없는 한 열 ③ 아니면 한 열 최소 2칸으로 나눈 열들.
+ */
+export function hostRailLayoutE2E(n, maxH) {
+  const { cell, gap, crownH } = HOST_RAIL_E2E;
+  if (!(n > 0)) return { crown: false, columns: [] };
+  if (!Number.isFinite(maxH)) return { crown: true, columns: [n] };
+  const height = n * cell + (n - 1) * gap;
+  if (height + crownH + gap <= maxH) return { crown: true, columns: [n] };
+  if (height <= maxH) return { crown: false, columns: [n] };
+  const k = Math.max(2, Math.floor((maxH + gap) / (cell + gap)));
+  const columns = [];
+  for (let left = n; left > 0; left -= k) columns.push(Math.min(k, left));
+  return { crown: false, columns };
 }
-export function hostRailMeasure() {
-  return null;
+
+const railRectOk = (r) => !!r && allNum(r.left, r.top, r.width, r.height);
+const railModeOk = (m) => m === "basic" || m === "extended";
+/** 줄 단추를 열로 나눈다: 왼쪽변이 6 넘게 다르면 다른 열. 왼쪽 열부터, 열 안은 위부터 */
+function railColumns(buttons) {
+  const cols = [];
+  for (const b of [...buttons].sort((a, c) => a.rect.left - c.rect.left)) {
+    const last = cols[cols.length - 1];
+    if (last && Math.abs(last[0].rect.left - b.rect.left) <= 6) last.push(b);
+    else cols.push([b]);
+  }
+  for (const col of cols) col.sort((a, b) => a.rect.top - b.rect.top);
+  return cols;
 }
-export function hostRailChecks() {
-  return [];
+/** 줄이 있어야 하는 화면인가: 방장의 대기실·결과(연출 뒤), 키보드가 닫혀 있을 때 */
+const railExpected = (s) => s.host === true && s.screen !== "game" && s.kbOpen !== true;
+/** hostRailChecks 가 판정을 시작할 수 있는 입력인가 */
+function railInputOk(s) {
+  const base =
+    !!s && !!s.viewport && allNum(s.viewport.w, s.viewport.h) && ["lobby", "result", "game"].includes(s.screen) && typeof s.host === "boolean" && railModeOk(s.mode) &&
+    (s.rail === null || (!!s.rail && railRectOk(s.rail.rect))) && Array.isArray(s.buttons) && s.buttons.every((b) => !!b && typeof b.id === "string" && railRectOk(b.rect)) &&
+    (s.crown === null || railRectOk(s.crown)) && (s.chip === null || (!!s.chip && railRectOk(s.chip.rect)));
+  if (!base) return false;
+  if (s.screen === "lobby" && s.kbOpen !== true && !railRectOk(s.panel)) return false;
+  if (!railExpected(s)) return true;
+  return (
+    railRectOk(s.panel) && (s.band === null || railRectOk(s.band)) && Array.isArray(s.head) && s.head.every((h) => !!h && railRectOk(h.rect)) &&
+    (s.test === null || railRectOk(s.test)) && (s.toast === null || railRectOk(s.toast)) && Array.isArray(s.side) && s.side.every((b) => !!b && typeof b.side === "string" && railRectOk(b.rect))
+  );
 }
-export function modeChipChecks() {
-  return [];
+
+/**
+ * 잰 값에서 배치 식의 입력과 결과를 뽑는다(판정 아님 — 흐름이 폰별 실측 표를 참고 줄로 남길 때 쓴다).
+ * { bandBottom 띠 면 아랫변, shift 테스트 방 48|0, maxH 줄 최대 높이(= 패널 윗변 − 8 − (띠 아랫변 + 12) − shift), n 단추 수, crown 표식 있음, columns 실제 열별 칸 수, expect 식이 고른 배치 }. 못 재면 null.
+ */
+export function hostRailMeasure(s) {
+  if (!railInputOk(s) || !railExpected(s) || !s.rail || !s.band || s.buttons.length === 0) return null;
+  const shift = s.test ? HOST_RAIL_E2E.testShift : 0;
+  const bandBottom = bottom(s.band);
+  const maxH = s.panel.top - 8 - (bandBottom + HOST_RAIL_E2E.gap) - shift;
+  const n = s.buttons.length;
+  return { bandBottom, shift, maxH, n, crown: s.crown !== null, columns: railColumns(s.buttons).map((c) => c.length), expect: hostRailLayoutE2E(n, maxH) };
 }
-export function modeSheetChecks() {
-  return [];
+
+/**
+ * 방장 줄 판정 (HR1~HR8). 사각형은 { left, top, width, height, right, bottom }.
+ * s = { viewport {w,h} · screen "lobby"|"result"|"game" · host 방장 화면인가 · mode 서버 view.mode("basic"|"extended") · kbOpen 키보드 열림(기본 false) ·
+ *       mapsOn 허용 맵이 둘 이상인가 · botsOn 봇 도구가 켜진 방(테스트 방)인가 ·
+ *       rail { rect, ariaLabel }|null([data-host-rail]) · buttons [{ id, rect, borderColor, color, isCall, role, ariaChecked }](보이는 [data-host-rail-btn]) · crown 왕관 표식 사각형|null ·
+ *       chip { mode, name, rect, tag, tabIndex }|null([data-mode-chip]) · band 자막 띠 면 사각형|null · panel 아래 패널 사각형 · head [{ kind, rect }] 머리 단추 ·
+ *       test [테스트] 사각형|null(있으면 줄이 48 내려온 테스트 방) · toast 떠 있는 위 알림 사각형|null · side [{ side, rect, borderColor }] 오른쪽 열 단추 · panelToggles 패널 안 옛 스위치 줄 수 }.
+ * 줄이 있어야 하는 화면(방장 대기실·결과, 키보드 닫힘)은 HR1~HR6(대기실은 HR7·HR8 도), 그 밖은 HR1(대기실이고 키보드가 닫혀 있으면 HR8 도)만 낸다. 못 잰 입력은 여덟 줄 모두 "측정값 없음" 실패다.
+ * HR1 방장 대기실·결과에만 줄이 있고 참가자·게임 중·키보드 열림에는 없다(게임 중·키보드 열림에는 칩도 없다) ·
+ * HR2 단추 지름 52±1 · 열 안 간격 12±1 · 열 사이 12±1 · 왼쪽 16±1 · 줄 윗변 = 띠 아랫변 + 12(테스트 방 + 48) ±2 · 표식 높이 20±1 과 그 아래 12±1 ·
+ * HR3 줄(표식 + 단추)이 아래 패널(윗변 − 8)·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열 단추와 교차 0, 오른쪽 열과는 가로 16 이상 떨어진다 ·
+ * HR4 순서·개수: 대기실 mode·map(mapsOn)·bots(botsOn)·tutorial(확장판만), 결과 mode·map. 오른쪽 열은 소리·옷장 둘 ·
+ * HR5 줄 단추 테두리·아이콘 색 = LAMP_RGB(켜진 토글은 금빛 채움이라 테두리만), 오른쪽 열 단추 테두리 = NIGHT600_RGB, 줄 단추에 .is-call 없음 ·
+ * HR6 왕관 표식 유무·열별 칸 수가 hostRailLayoutE2E(n, 잰 최대 높이)와 같다(최대 높이 ±2 안에서 배치가 갈리면 판정하지 않고 info), 줄의 접근성 이름은 "방장 전용" ·
+ * HR7 튜토리얼 토글은 확장판에만 있고 role=switch·aria-checked, 패널 안 옛 스위치 줄 0 · HR8 대기실 패널 높이 222±1(방장·참가자 같다).
+ */
+export function hostRailChecks(s = {}) {
+  const E = HOST_RAIL_E2E;
+  const panelH = lobbyPanelHeight(LOG_H);
+  const L = {
+    HR1: "방장 줄은 방장 대기실·결과에만(참가자·게임 중·키보드 열림에는 없다)",
+    HR2: `줄 단추 지름 ${E.cell}±1 · 칸 사이 ${E.gap}±1 · 왼쪽 ${E.left}±1 · 윗변 = 띠 아랫변 + ${E.gap}(테스트 방 + ${E.testShift}) ±2`,
+    HR3: "줄이 아래 패널·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열과 교차 0",
+    HR4: "줄 순서·개수: 판 종류·맵·봇·튜토리얼(기본 마피아 앞 셋, 결과 앞 둘) · 오른쪽 열은 소리·옷장",
+    HR5: "줄 단추 테두리·아이콘은 금빛(--light-lamp), 오른쪽 열 테두리는 --night-600 · 줄 단추에 빛남(.is-call) 없음",
+    HR6: `왕관 표식·열 수는 F-2 식대로 · 줄의 접근성 이름 "${HOST_RAIL_NAME}"`,
+    HR7: "튜토리얼 토글: 확장판에만 · role=switch·aria-checked · 패널 안 옛 스위치 줄 0",
+    HR8: `대기실 패널 높이 ${panelH}±1(방장·참가자 같다)`,
+  };
+  if (!railInputOk(s)) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "viewport·screen·host·mode·rail·buttons·crown·chip·band·panel·head·test·toast·side"));
+  const out = [];
+  const expected = railExpected(s);
+  const lobby = s.screen === "lobby";
+  const hr8 = () => out.push(result("HR8", L.HR8, Math.abs(s.panel.height - panelH) <= 1 ? [] : [`패널 높이 ${fmt(s.panel.height)} (기대 ${panelH})`]));
+
+  // HR1
+  const bad1 = [];
+  const railShown = s.rail !== null || s.buttons.length > 0;
+  if (expected) {
+    if (s.rail === null) bad1.push("방장 화면에 줄이 없음");
+    else if (s.buttons.length === 0) bad1.push("줄에 단추가 없음");
+    if (s.chip !== null) bad1.push("방장 화면에 참가자 칩이 있음");
+  } else {
+    const why = s.kbOpen === true ? "키보드가 열려 있는데" : s.screen === "game" ? "게임 중인데" : "참가자 화면인데";
+    if (railShown) bad1.push(`${why} 줄이 있음(단추 ${s.buttons.length}개)`);
+    if ((s.kbOpen === true || s.screen === "game") && s.chip !== null) bad1.push(`${why} 판 종류 칩이 있음`);
+  }
+  out.push(result("HR1", L.HR1, bad1));
+  if (!expected) {
+    if (lobby && s.kbOpen !== true) hr8();
+    return out;
+  }
+  if (s.rail === null || s.buttons.length === 0) {
+    for (const id of ["HR2", "HR3", "HR4", "HR5", "HR6"]) out.push(noMeasure(id, L[id], "줄이 없어 잴 수 없음"));
+  } else {
+    const btns = s.buttons;
+    const cols = railColumns(btns);
+    const parts = [...btns.map((b) => ({ name: b.id, r: b.rect })), ...(s.crown ? [{ name: "표식", r: s.crown }] : [])];
+    const shift = s.test ? E.testShift : 0;
+
+    // HR2
+    const bad2 = [];
+    for (const b of btns) if (Math.abs(b.rect.width - E.cell) > 1 || Math.abs(b.rect.height - E.cell) > 1) bad2.push(`${b.id} ${fmt(b.rect.width)}x${fmt(b.rect.height)}`);
+    for (const col of cols) {
+      for (let i = 1; i < col.length; i++) {
+        const gap = col[i].rect.top - bottom(col[i - 1].rect);
+        if (Math.abs(gap - E.gap) > 1) bad2.push(`${col[i - 1].id}·${col[i].id} 간격 ${fmt(gap)}`);
+      }
+    }
+    for (let i = 1; i < cols.length; i++) {
+      const gap = Math.min(...cols[i].map((b) => b.rect.left)) - Math.max(...cols[i - 1].map((b) => right(b.rect)));
+      if (Math.abs(gap - E.gap) > 1) bad2.push(`열 ${i}·${i + 1} 사이 ${fmt(gap)}`);
+    }
+    const minLeft = Math.min(...parts.map((p) => p.r.left));
+    if (Math.abs(minLeft - E.left) > 1) bad2.push(`왼쪽 여백 ${fmt(minLeft)} (기대 ${E.left})`);
+    if (!s.band) bad2.push("자막 띠 사각형 없음(기준을 알 수 없다)");
+    else {
+      const wantTop = bottom(s.band) + E.gap + shift;
+      const top = Math.min(...parts.map((p) => p.r.top));
+      if (Math.abs(top - wantTop) > 2) bad2.push(`줄 윗변 ${fmt(top)} (띠 아랫변 ${fmt(bottom(s.band))} + ${E.gap}${shift ? ` + ${shift}` : ""} = ${fmt(wantTop)})`);
+    }
+    if (s.crown) {
+      if (Math.abs(s.crown.height - E.crownH) > 1) bad2.push(`표식 높이 ${fmt(s.crown.height)} (기대 ${E.crownH})`);
+      const under = Math.min(...btns.map((b) => b.rect.top)) - bottom(s.crown);
+      if (Math.abs(under - E.gap) > 1) bad2.push(`표식 아래 간격 ${fmt(under)} (기대 ${E.gap})`);
+    }
+    out.push(result("HR2", L.HR2, bad2));
+
+    // HR3
+    const bad3 = [];
+    const hit = (what, r) => {
+      for (const p of parts) if (rectsOverlap(p.r, r)) bad3.push(`${p.name}·${what} (${overlapText(p.r, r)})`);
+    };
+    const lowest = parts.reduce((a, p) => (bottom(p.r) > bottom(a.r) ? p : a));
+    if (bottom(lowest.r) > s.panel.top - 8 + OVERLAP_EPS) bad3.push(`${lowest.name} 아랫변 ${fmt(bottom(lowest.r))} > 패널 윗변 − 8 = ${fmt(s.panel.top - 8)}`);
+    for (const h of s.head) hit(`머리 ${h.kind ?? "?"}`, h.rect);
+    if (s.band) hit("자막 띠", s.band);
+    if (s.test) hit("[테스트]", s.test);
+    if (s.toast) hit("위 알림", s.toast);
+    for (const b of s.side) hit(`오른쪽 열 ${b.side}`, b.rect);
+    if (s.side.length > 0) {
+      const railRight = Math.max(...parts.map((p) => right(p.r)));
+      const sideLeft = Math.min(...s.side.map((b) => b.rect.left));
+      if (sideLeft - railRight < HOST_RAIL_SIDE_CLEAR - OVERLAP_EPS) bad3.push(`오른쪽 열과 가로 ${fmt(sideLeft - railRight)} (최소 ${HOST_RAIL_SIDE_CLEAR})`);
+    }
+    out.push(result("HR3", L.HR3, bad3));
+
+    // HR4
+    const bad4 = [];
+    const want = HOST_RAIL_ORDER.filter((id) => (id === "mode" ? true : id === "map" ? s.mapsOn === true : id === "bots" ? lobby && s.botsOn === true : lobby && s.mode === "extended"));
+    const got = cols.flat().map((b) => b.id);
+    if (got.join(",") !== want.join(",")) bad4.push(`줄 ${got.join("·") || "없음"} (기대 ${want.join("·")})`);
+    const sides = s.side.map((b) => b.side).sort();
+    if (sides.join(",") !== "dress,sound") bad4.push(`오른쪽 열 ${sides.join("·") || "없음"} (기대 소리·옷장 둘)`);
+    out.push(result("HR4", L.HR4, bad4));
+
+    // HR5
+    const bad5 = [];
+    for (const b of btns) {
+      if (b.borderColor !== LAMP_RGB) bad5.push(`${b.id} 테두리 ${b.borderColor}`);
+      const filled = b.role === "switch" && b.ariaChecked === "true";
+      if (!filled && b.color !== LAMP_RGB) bad5.push(`${b.id} 아이콘 ${b.color}`);
+      if (b.isCall !== false) bad5.push(`${b.id} 에 빛남(.is-call)`);
+    }
+    if (s.side.length === 0) bad5.push("견줄 오른쪽 열 단추가 없음");
+    for (const b of s.side) if (b.borderColor !== NIGHT600_RGB) bad5.push(`오른쪽 열 ${b.side} 테두리 ${b.borderColor}`);
+    out.push(result("HR5", L.HR5, bad5));
+
+    // HR6
+    const bad6 = [];
+    if (s.rail.ariaLabel !== HOST_RAIL_NAME) bad6.push(`줄의 접근성 이름 "${s.rail.ariaLabel ?? ""}" (기대 "${HOST_RAIL_NAME}")`);
+    const m = hostRailMeasure(s);
+    let edgeNote = null;
+    if (!m) bad6.push("자막 띠 사각형 없음(줄 최대 높이를 알 수 없다)");
+    else {
+      const key = (l) => `${l.crown ? "표식 + " : ""}[${l.columns.join(",")}]`;
+      const actual = key({ crown: m.crown, columns: m.columns });
+      // 잰 최대 높이 ±2 안에서 식의 답이 갈리면(표식 문턱·열 문턱 근처) 어느 쪽이 맞는지 가를 수 없다 — 판정하지 않고 잰 값을 남긴다
+      if (key(hostRailLayoutE2E(m.n, m.maxH - HOST_RAIL_EDGE)) !== key(hostRailLayoutE2E(m.n, m.maxH + HOST_RAIL_EDGE))) {
+        edgeNote = `경계(판정 아님): 줄 최대 높이 ${fmt(m.maxH)} ±${HOST_RAIL_EDGE} 안에서 배치가 갈린다 — 실제 ${actual}, 식 ${key(m.expect)}`;
+      } else if (actual !== key(m.expect)) bad6.push(`실제 ${actual} (줄 최대 높이 ${fmt(m.maxH)}·단추 ${m.n} → 기대 ${key(m.expect)})`);
+    }
+    out.push(bad6.length === 0 && edgeNote !== null ? { id: "HR6", label: L.HR6, ok: true, detail: edgeNote, info: true } : result("HR6", L.HR6, bad6));
+  }
+
+  if (lobby) {
+    // HR7
+    if (!isNum(s.panelToggles)) out.push(noMeasure("HR7", L.HR7, "panelToggles"));
+    else {
+      const bad7 = [];
+      const toggles = s.buttons.filter((b) => b.id === "tutorial");
+      if (s.mode === "extended") {
+        if (toggles.length !== 1) bad7.push(`확장판인데 토글 ${toggles.length}개`);
+        for (const t of toggles) {
+          if (t.role !== "switch") bad7.push(`role ${t.role ?? "없음"}`);
+          if (t.ariaChecked !== "true" && t.ariaChecked !== "false") bad7.push(`aria-checked ${t.ariaChecked ?? "없음"}`);
+        }
+      } else if (toggles.length !== 0) bad7.push(`기본 마피아인데 토글 ${toggles.length}개`);
+      if (s.panelToggles !== 0) bad7.push(`패널 안 옛 스위치 줄 ${s.panelToggles}개`);
+      out.push(result("HR7", L.HR7, bad7));
+    }
+    hr8();
+  }
+  return out;
+}
+
+/**
+ * 참가자의 판 종류 칩 판정 (CH1·CH2).
+ * s = { viewport {w,h} · viewMode 서버 view.mode · chip { mode, name, rect, tag, tabIndex }|null · band 자막 띠 면 사각형|null · panel 아래 패널 사각형 ·
+ *       head [{ kind, rect }] · test [테스트] 사각형|null · toast 위 알림 사각형|null · side [{ side, rect }] 오른쪽 열 단추 }.
+ * CH1 칩 표식(data-mode-chip)이 view.mode 와 같고 글이 그 판 이름이며 포커스를 받지 않는다(tabIndex < 0, 단추·링크·입력이 아님) ·
+ * CH2 높이 32±1 · 왼쪽 16±1 · 윗변 = 띠 아랫변 + 20(테스트 방 + 48) ±2 · 아래 패널(윗변 − 8)·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열과 교차 0.
+ */
+export function modeChipChecks(s = {}) {
+  const E = HOST_RAIL_E2E;
+  const L = {
+    CH1: "참가자 칩: 표식·이름이 서버 판 종류와 같고 누를 수 없다(포커스 없음)",
+    CH2: `참가자 칩: 높이 ${E.chipH}±1 · 왼쪽 ${E.left}±1 · 윗변 = 띠 아랫변 + ${E.chipTop}(테스트 방 + ${E.testShift}) ±2 · 다른 요소와 교차 0`,
+  };
+  const valid =
+    !!s && !!s.viewport && allNum(s.viewport.w, s.viewport.h) && railModeOk(s.viewMode) &&
+    (s.chip === null || (!!s.chip && railRectOk(s.chip.rect) && typeof s.chip.mode === "string" && typeof s.chip.name === "string" && typeof s.chip.tag === "string" && isNum(s.chip.tabIndex))) &&
+    (s.band === null || railRectOk(s.band)) && railRectOk(s.panel) && Array.isArray(s.head) && s.head.every((h) => !!h && railRectOk(h.rect)) &&
+    (s.test === null || railRectOk(s.test)) && (s.toast === null || railRectOk(s.toast)) && Array.isArray(s.side) && s.side.every((b) => !!b && railRectOk(b.rect));
+  if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "viewport·viewMode·chip·band·panel·head·test·toast·side"));
+  if (s.chip === null) return [result("CH1", L.CH1, ["참가자 화면에 판 종류 칩이 없음"]), noMeasure("CH2", L.CH2, "칩이 없어 잴 수 없음")];
+  const c = s.chip;
+  const bad1 = [];
+  if (c.mode !== s.viewMode) bad1.push(`칩 ${c.mode} (서버 ${s.viewMode})`);
+  if (c.name !== MODE_NAMES_E2E[c.mode]) bad1.push(`칩 글 "${c.name}" (기대 "${MODE_NAMES_E2E[c.mode] ?? "?"}")`);
+  if (c.tabIndex >= 0) bad1.push(`tabIndex ${c.tabIndex}`);
+  if (["button", "a", "input", "select", "textarea"].includes(c.tag.toLowerCase())) bad1.push(`<${c.tag.toLowerCase()}> 라 누를 수 있음`);
+  const bad2 = [];
+  if (Math.abs(c.rect.height - E.chipH) > 1) bad2.push(`높이 ${fmt(c.rect.height)} (기대 ${E.chipH})`);
+  if (Math.abs(c.rect.left - E.left) > 1) bad2.push(`왼쪽 여백 ${fmt(c.rect.left)} (기대 ${E.left})`);
+  if (!s.band) bad2.push("자막 띠 사각형 없음(기준을 알 수 없다)");
+  else {
+    const shift = s.test ? E.testShift : 0;
+    const wantTop = bottom(s.band) + E.chipTop + shift;
+    if (Math.abs(c.rect.top - wantTop) > 2) bad2.push(`윗변 ${fmt(c.rect.top)} (띠 아랫변 ${fmt(bottom(s.band))} + ${E.chipTop}${shift ? ` + ${shift}` : ""} = ${fmt(wantTop)})`);
+  }
+  if (bottom(c.rect) > s.panel.top - 8 + OVERLAP_EPS) bad2.push(`아랫변 ${fmt(bottom(c.rect))} > 패널 윗변 − 8 = ${fmt(s.panel.top - 8)}`);
+  const hit = (what, r) => {
+    if (rectsOverlap(c.rect, r)) bad2.push(`${what} (${overlapText(c.rect, r)})`);
+  };
+  for (const h of s.head) hit(`머리 ${h.kind ?? "?"}`, h.rect);
+  if (s.band) hit("자막 띠", s.band);
+  if (s.test) hit("[테스트]", s.test);
+  if (s.toast) hit("위 알림", s.toast);
+  for (const b of s.side) hit(`오른쪽 열 ${b.side ?? "?"}`, b.rect);
+  return [result("CH1", L.CH1, bad1), result("CH2", L.CH2, bad2)];
+}
+
+/**
+ * 판 종류 시트 판정 (MS1·MS1g). s = { viewport {w,h} · viewMode 서버 view.mode · sheet 시트 면 사각형 · cards [{ mode, rect, pressed "true"|"false" }]([data-mode-card]) }.
+ * MS1 칸이 기본 마피아·확장판 둘(왼쪽부터)이고 눌림(aria-pressed)은 서버 판 종류의 칸 하나뿐 ·
+ * MS1g 두 칸의 윗변·높이가 같다(±1 — 설명이 두 줄로 접혀도) · 칸은 44 이상 · 시트가 화면 안 · 칸이 시트 안.
+ */
+export function modeSheetChecks(s = {}) {
+  const L = {
+    MS1: "판 종류 시트: 두 칸(기본 마피아·확장판), 눌린 칸 = 서버 판 종류",
+    MS1g: "판 종류 시트: 두 칸 높이 같음(±1) · 시트가 화면 안 · 칸이 시트 안",
+  };
+  const valid =
+    !!s && !!s.viewport && allNum(s.viewport.w, s.viewport.h) && railModeOk(s.viewMode) && railRectOk(s.sheet) &&
+    Array.isArray(s.cards) && s.cards.length > 0 && s.cards.every((c) => !!c && typeof c.mode === "string" && railRectOk(c.rect) && typeof c.pressed === "string");
+  if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "viewport·viewMode·sheet·cards[{mode, rect, pressed}]"));
+  const cards = [...s.cards].sort((a, b) => a.rect.left - b.rect.left);
+  const bad1 = [];
+  const order = cards.map((c) => c.mode).join(",");
+  if (order !== Object.keys(MODE_NAMES_E2E).join(",")) bad1.push(`칸 ${order} (기대 ${Object.keys(MODE_NAMES_E2E).join(",")})`);
+  const pressed = cards.filter((c) => c.pressed === "true").map((c) => c.mode);
+  if (pressed.join(",") !== s.viewMode) bad1.push(`눌린 칸 ${pressed.join("·") || "없음"} (서버 ${s.viewMode})`);
+  const bad2 = [];
+  if (cards.length === 2) {
+    if (Math.abs(cards[0].rect.height - cards[1].rect.height) > 1) bad2.push(`칸 높이 ${fmt(cards[0].rect.height)} · ${fmt(cards[1].rect.height)}`);
+    if (Math.abs(cards[0].rect.top - cards[1].rect.top) > 1) bad2.push(`칸 윗변 ${fmt(cards[0].rect.top)} · ${fmt(cards[1].rect.top)}`);
+  } else bad2.push(`칸 ${cards.length}개`);
+  for (const c of cards) {
+    if (c.rect.width + OVERLAP_EPS < TAP_MIN || c.rect.height + OVERLAP_EPS < TAP_MIN) bad2.push(`${c.mode} 칸 ${fmt(c.rect.width)}x${fmt(c.rect.height)} < ${TAP_MIN}`);
+    if (!rectInside(c.rect, s.sheet)) bad2.push(`${c.mode} 칸이 시트 밖`);
+  }
+  const screen = { left: 0, top: 0, width: s.viewport.w, height: s.viewport.h, right: s.viewport.w, bottom: s.viewport.h };
+  if (!rectInside(s.sheet, screen)) bad2.push(`시트 (${fmt(s.sheet.left)},${fmt(s.sheet.top)})~(${fmt(right(s.sheet))},${fmt(bottom(s.sheet))}) 가 화면 ${s.viewport.w}x${s.viewport.h} 밖`);
+  return [result("MS1", L.MS1, bad1), result("MS1g", L.MS1g, bad2)];
 }
 
 // ---- 12페이즈 sound-script (12-08, 결정 D-21): 단계 구간마다 기대 소리 id 가 순서대로 ----
