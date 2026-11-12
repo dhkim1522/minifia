@@ -4890,14 +4890,14 @@ test("tutorialHiddenChecks TH1: 아래 패널·[내 역할]·채팅 입력칸이
 });
 
 test("tutorialRoleLineChecks TC5: 직업 카드 한 줄 넷이 사본과 글자 그대로 같다", () => {
-  const lines = ["당신은 시민입니다.\n추리로 마피아를 찾아내세요.", "당신은 마피아입니다.\n몰래 암살하여 승리하세요.", "당신은 의사입니다.\n시민 팀을 마피아에게서 지키세요.", "당신은 경찰입니다.\n의심되는 사람을 조사하세요."];
+  const lines = ["추리로 마피아를 찾아내세요.", "몰래 암살하여 승리하세요.", "시민 팀을 마피아에게서 지키세요.", "의심되는 사람을 조사하세요."];
   assert.equal([...TUTORIAL_ROLE_LINES_E2E].join("|"), lines.join("|"));
   const ok = tutorialRoleLineChecks(lines);
   assert.equal(ok.map((l) => l.id).join(","), "TC5");
   assert.ok(ok.every((l) => l.ok));
   assert.equal(tutorialRoleLineChecks([lines[0], lines[1], lines[2] + ".", lines[3]])[0].ok, false);
   assert.equal(tutorialRoleLineChecks([lines[1], lines[0], lines[2], lines[3]])[0].ok, false); // 순서가 다름
-  assert.equal(tutorialRoleLineChecks([lines[0].replace("\n", " "), lines[1], lines[2], lines[3]])[0].ok, false); // 줄바꿈이 공백으로 바뀌면 다름
+  assert.equal(tutorialRoleLineChecks([`당신은 시민입니다.\n${lines[0]}`, lines[1], lines[2], lines[3]])[0].ok, false); // 없앤 첫 문장이 다시 붙으면 다름
   assert.equal(tutorialRoleLineChecks(lines.slice(0, 3))[0].ok, false);
   assert.ok(tutorialRoleLineChecks(null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
 });

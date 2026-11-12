@@ -401,7 +401,7 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       recAll(rec, sc7, tutorialDotChecks(t.dots, 7));
       recAll(rec, sc7, tutorialRoleCardChecks({ roles: t.roles, next: t.next, viewport: vpOf(t) }), { relax: ctx.size.h <= KNOWN_LIMIT_MAX_H ? ["TC4"] : [], note: "17-08 낮은 폰 직업 카드와 [다음] 겹침, UI Considerations #14" });
       recAll(rec, sc7, tutorialRoleLineChecks(t.roleLines));
-      // 18.1-08 TC6(UI-SPEC A1f): 직업 카드 네 장의 문구가 pre-line·첫 문장 한 줄·둘째 문장 새 줄·각 ≤ 4줄
+      // 18.1-08 TC6(UI-SPEC A1f): 직업 카드 네 장의 문구가 한 문장(줄바꿈 문자 없음)·각 ≤ 3줄
       recOne(rec, sc7, roleLineBoxChecks(await readRoleLineBoxes(page, "[data-tutorial-role-card] .tut-role__line"), { max: TUTORIAL_ROLE_MAX_LINES, id: "TC6", count: 4 }));
       focusLines(rec, sc7, t, []);
       dimOff(rec, sc7, t);

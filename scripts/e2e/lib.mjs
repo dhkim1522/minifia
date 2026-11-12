@@ -2894,12 +2894,12 @@ export const HOST_ACT_LINES = {
   police: "조사할 사람의 얼굴을 눌러 주세요",
   doctor: "지킬 사람의 얼굴을 눌러 주세요",
 };
-/** 역할 카드 문구 한 덩어리 사본 — src/game/roleText.ts ROLE_TEXT[role].desc, 줄바꿈 \n 포함. e2eContract 가 같음을 고정한다. */
+/** 역할 카드 문구 사본 — src/game/roleText.ts ROLE_TEXT[role].desc, 할 일 한 문장(줄바꿈 없음, 2026-11-12 첫 문장 제거). e2eContract 가 같음을 고정한다. */
 export const ROLE_LINES = {
-  mafia: "당신은 마피아입니다.\n몰래 암살하여 승리하세요.",
-  police: "당신은 경찰입니다.\n의심되는 사람을 조사하세요.",
-  doctor: "당신은 의사입니다.\n시민 팀을 마피아에게서 지키세요.",
-  citizen: "당신은 시민입니다.\n추리로 마피아를 찾아내세요.",
+  mafia: "몰래 암살하여 승리하세요.",
+  police: "의심되는 사람을 조사하세요.",
+  doctor: "시민 팀을 마피아에게서 지키세요.",
+  citizen: "추리로 마피아를 찾아내세요.",
 };
 const isStr = (x) => typeof x === "string";
 
@@ -3895,10 +3895,10 @@ export function tutorialLineChecks(ev, { viewport, band, next } = {}) {
  * test/unit/e2eContract.test.ts 가 대조한다(.mjs 가 TS 를 직접 import 하지 않는다).
  */
 export const TUTORIAL_ROLE_LINES_E2E = Object.freeze([
-  "당신은 시민입니다.\n추리로 마피아를 찾아내세요.",
-  "당신은 마피아입니다.\n몰래 암살하여 승리하세요.",
-  "당신은 의사입니다.\n시민 팀을 마피아에게서 지키세요.",
-  "당신은 경찰입니다.\n의심되는 사람을 조사하세요.",
+  "추리로 마피아를 찾아내세요.",
+  "몰래 암살하여 승리하세요.",
+  "시민 팀을 마피아에게서 지키세요.",
+  "의심되는 사람을 조사하세요.",
 ]);
 
 /** [다음] 알약의 기준 폭(px, 앱 .tut-next width: min(240px, 100% − 48px)) 과 높이 */

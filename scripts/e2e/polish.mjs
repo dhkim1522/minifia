@@ -9,14 +9,16 @@ import { closeRoleCard, openRoleCard, settle, skipTo, sleep } from "./browser.mj
 
 // ---- 사본·UI-SPEC 값 ----
 
-/** 역할 카드 문구의 카드 줄 수 상한(UI-SPEC A-1 계약 2·A1b) */
-export const ROLE_CARD_MAX_LINES = 3;
-/** 360×560 의사만 4줄 허용(알려진 한계, UI-SPEC A-1 계약 2) */
-export const ROLE_CARD_MAX_LINES_SHORT_DOCTOR = 4;
+// 줄 수 상한 넷은 2026-11-12 에 하나씩 낮췄다(3·4·4·4 → 2·3·3·3). 사용자 요청으로 첫 문장(정체 선언, 언제나 한 줄)을 없애 문구가 할 일 한 문장만 남았고,
+// 남은 문장은 글자·글꼴·열 폭이 그대로라 접히는 자리도 그대로다 — 줄 수가 정확히 한 줄 줄어든다(UI-SPEC A-1 확정 문구 표의 "둘째 문장 폭" 189·173·190·219px).
+/** 역할 카드 문구의 카드 줄 수 상한(UI-SPEC A-1 계약 2·A1b) — 안쪽 146px 에서 시민·마피아·경찰 2줄 */
+export const ROLE_CARD_MAX_LINES = 2;
+/** 360×560 의사만 3줄 허용(알려진 한계, UI-SPEC A-1 계약 2 — 219px 문장이 146px 에서 세 줄로 접힌다) */
+export const ROLE_CARD_MAX_LINES_SHORT_DOCTOR = 3;
 /** [내 역할] 시트 문구 줄 수 상한(A1b) */
-export const ROLE_SHEET_MAX_LINES = 4;
-/** 튜토리얼 직업 카드 문구 줄 수 상한(A1b·A1f) */
-export const TUTORIAL_ROLE_MAX_LINES = 4;
+export const ROLE_SHEET_MAX_LINES = 3;
+/** 튜토리얼 직업 카드 문구 줄 수 상한(A1b·A1f) — 열 130px@360 에서 의사 3줄 */
+export const TUTORIAL_ROLE_MAX_LINES = 3;
 /** 직업 그림 높이 하한(A-1 계약 6·A1e) */
 export const ROLE_ART_MIN_H = 64;
 /** 카드 면 안쪽 틀선(.mf-card__face::after inset, A1e) */
@@ -71,33 +73,31 @@ function linesOf(b) {
   return isNum(b.lines) ? b.lines : null;
 }
 
-/** 한 줄 문구 상자의 공통 문제 목록(줄바꿈 보존·첫 문장 한 줄·둘째 문장 새 줄·줄 수 상한) */
+/** 문구 상자의 공통 문제 목록: 한 문장(줄바꿈 문자 없음 — newlines 는 글자 안의 \n 수)·줄 수 1 이상 상한 이하 */
 function lineBoxProblems(b, max, who) {
   const bad = [];
   const n = linesOf(b);
   if (n === null) return [`${who} 줄 수 측정값 없음`];
-  if (b.whiteSpace !== "pre-line") bad.push(`${who} white-space ${b.whiteSpace} (기대 pre-line)`);
-  if (b.firstLines !== 1) bad.push(`${who} 첫 문장 ${b.firstLines}줄 (기대 1줄)`);
-  if (b.secondNewLine !== true) bad.push(`${who} 둘째 문장이 새 줄에서 시작하지 않음`);
+  if (b.newlines !== 0) bad.push(`${who} 줄바꿈 문자 ${isNum(b.newlines) ? `${b.newlines}개` : "측정값 없음"} (기대 0 — 한 문장)`);
   if (n > max) bad.push(`${who} ${n}줄 > 상한 ${max}줄`);
-  if (n < 2) bad.push(`${who} ${n}줄 (기대 2줄 이상)`);
+  if (n < 1) bad.push(`${who} ${n}줄 (기대 1줄 이상)`);
   return bad;
 }
 
 // ---- A1 역할 확인 카드 앞면 ----
 
 /**
- * A1a~A1e 판정. 입력 m = { face, inner, children: [{ kind, rect }], desc: { height, lineHeight, whiteSpace, text, firstLines, secondNewLine }, blocks, goalCount, domText }
+ * A1a~A1e 판정. 입력 m = { face, inner, children: [{ kind, rect }], desc: { height, lineHeight, text, newlines, lines }, blocks, goalCount, domText }
  *  face 카드 앞면 사각형 · inner 안쪽 14 틀선 사각형 · children 앞면 직접 자식(kind: art|name|desc|divider|mates) · desc 문구 요소 읽기
  *  blocks 앞면의 글 덩어리(p) 수 · goalCount 문서의 `.mf-goal`·`[data-role-goal]` 수 · domText 앞면 글자 전체.
  * ctx = { size: { w, h }, role }.
- * A1a 글 덩어리 = 이름 + 문구(마피아는 + 동료 줄), 목표 줄 0 · A1b 줄 구성(첫 문장 한 줄·둘째 문장 새 줄·pre-line·전체 ≤ 3줄, 360×560 의사만 4) ·
+ * A1a 글 덩어리 = 이름 + 문구(마피아는 + 동료 줄), 목표 줄 0 · A1b 한 문장(줄바꿈 문자 없음)·전체 ≤ 2줄(360×560 의사만 3) ·
  * A1c 문구 = ROLE_LINES 사본 · A1d 다른 직업 문장 없음 · A1e 자식이 안쪽 틀 안·서로 교차 없음·그림 높이 ≥ 64.
  */
 export function revealCardChecks(m, { size, role }) {
   const L = {
     A1a: "카드 글 덩어리가 이름 + 문구(마피아는 + 동료 줄)뿐이고 목표 줄이 없다",
-    A1b: "문구 첫 줄이 한 줄·둘째 문장이 새 줄·전체 줄 수가 상한 이하",
+    A1b: "문구가 한 문장(줄바꿈 문자 없음)이고 전체 줄 수가 상한 이하",
     A1c: "문구가 ROLE_TEXT 와 글자 그대로 같다",
     A1d: "자기 직업의 문구만 있고 다른 직업의 문장은 없다",
     A1e: "카드 앞면 자식이 안쪽 틀 안에서 서로 겹치지 않고 직업 그림 높이 ≥ 64",
@@ -136,7 +136,7 @@ export function revealCardChecks(m, { size, role }) {
     const bad = [];
     for (const [r, text] of Object.entries(ROLE_LINES)) {
       if (r === role) continue;
-      for (const sentence of text.split("\n")) if (m.domText.includes(sentence)) bad.push(`${ROLE_NAMES[r]} 문장이 화면에 있음`);
+      if (m.domText.includes(text)) bad.push(`${ROLE_NAMES[r]} 문장이 화면에 있음`);
     }
     out.push(row("A1d", L.A1d, bad));
   }
@@ -197,11 +197,11 @@ export function revealStageChecks(m) {
 // ---- 문구 상자(시트·튜토리얼 카드 공용) ----
 
 /**
- * 한 줄 문구 상자 목록 판정 — [내 역할] 시트(max 4, id A1s)·튜토리얼 직업 카드(max 4, id TC6)가 쓴다. 한 줄(row) 하나를 돌려준다.
- * boxes[i] = { height, lineHeight 또는 lines, whiteSpace, firstLines, secondNewLine, goalCount? }, count 가 있으면 상자 개수가 그 수여야 한다.
+ * 문구 상자 목록 판정 — [내 역할] 시트(max 3, id A1s)·튜토리얼 직업 카드(max 3, id TC6)가 쓴다. 한 줄(row) 하나를 돌려준다.
+ * boxes[i] = { height, lineHeight 또는 lines, newlines, goalCount? }, count 가 있으면 상자 개수가 그 수여야 한다.
  */
 export function roleLineBoxChecks(boxes, { max, id, count }) {
-  const label = `직업 문구가 pre-line·첫 문장 한 줄·둘째 문장 새 줄·${max}줄 이하`;
+  const label = `직업 문구가 한 문장(줄바꿈 문자 없음)·${max}줄 이하`;
   if (!Array.isArray(boxes) || boxes.length === 0) return noMeasure(id, label, "문구 상자");
   const bad = [];
   if (count !== undefined && boxes.length !== count) bad.push(`문구 상자 ${boxes.length}개 (기대 ${count})`);
@@ -312,30 +312,14 @@ export function readRevealCard(page) {
       const cs = getComputedStyle(descEl);
       const node = [...descEl.childNodes].find((n) => n.nodeType === 3);
       const text = descEl.textContent ?? "";
-      let firstLines = null;
-      let secondNewLine = null;
       let lines = null;
       if (node) {
-        const len = node.data.length;
-        const idx = node.data.indexOf("\n");
         const all = document.createRange();
         all.setStart(node, 0);
-        all.setEnd(node, len);
+        all.setEnd(node, node.data.length);
         lines = tops(all).length;
-        if (idx > 0 && idx < len - 1) {
-          const first = document.createRange();
-          first.setStart(node, 0);
-          first.setEnd(node, idx);
-          const second = document.createRange();
-          second.setStart(node, idx + 1);
-          second.setEnd(node, idx + 2);
-          const ft = tops(first);
-          const st = tops(second);
-          firstLines = ft.length;
-          secondNewLine = st.length > 0 && st[0] > Math.max(...ft) + 3;
-        }
       }
-      desc = { height: descEl.getBoundingClientRect().height, lineHeight: parseFloat(cs.lineHeight), whiteSpace: cs.whiteSpace, text, firstLines, secondNewLine, lines };
+      desc = { height: descEl.getBoundingClientRect().height, lineHeight: parseFloat(cs.lineHeight), text, newlines: text.split("\n").length - 1, lines };
     }
     return {
       face: fr,
@@ -373,7 +357,7 @@ export function readRevealStage(page) {
 }
 
 /**
- * 문구 상자 읽기(선택자에 맞는 요소마다): 높이·줄 높이·white-space·줄 수·첫 문장 줄 수·둘째 문장이 새 줄인지·문서의 목표 줄 수.
+ * 문구 상자 읽기(선택자에 맞는 요소마다): 높이·줄 높이·줄 수·글자 안의 줄바꿈 문자 수·문서의 목표 줄 수.
  * 인라인 요소(튜토리얼 카드 글)는 높이가 줄 높이를 뜻하지 않아 height 를 비우고 lines(글자 범위의 줄 수)만 둔다.
  */
 export function readRoleLineBoxes(page, selector) {
@@ -388,30 +372,14 @@ export function readRoleLineBoxes(page, selector) {
       const cs = getComputedStyle(el);
       const node = [...el.childNodes].find((n) => n.nodeType === 3);
       let lines = null;
-      let firstLines = null;
-      let secondNewLine = null;
       if (node) {
-        const len = node.data.length;
-        const idx = node.data.indexOf("\n");
         const all = document.createRange();
         all.setStart(node, 0);
-        all.setEnd(node, len);
+        all.setEnd(node, node.data.length);
         lines = tops(all).length;
-        if (idx > 0 && idx < len - 1) {
-          const first = document.createRange();
-          first.setStart(node, 0);
-          first.setEnd(node, idx);
-          const second = document.createRange();
-          second.setStart(node, idx + 1);
-          second.setEnd(node, idx + 2);
-          const ft = tops(first);
-          const st = tops(second);
-          firstLines = ft.length;
-          secondNewLine = st.length > 0 && st[0] > Math.max(...ft) + 3;
-        }
       }
       const block = cs.display !== "inline";
-      return { height: block ? el.getBoundingClientRect().height : null, lineHeight: parseFloat(cs.lineHeight), whiteSpace: cs.whiteSpace, lines, firstLines, secondNewLine, goalCount };
+      return { height: block ? el.getBoundingClientRect().height : null, lineHeight: parseFloat(cs.lineHeight), lines, newlines: (el.textContent ?? "").split("\n").length - 1, goalCount };
     });
   }, selector);
 }

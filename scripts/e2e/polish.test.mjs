@@ -46,10 +46,10 @@ const failing = (rows) => rows.filter((r) => !r.ok).map((r) => r.id);
 // ---- 상수 ----
 
 test("상수: UI-SPEC 값 그대로", () => {
-  assert.equal(ROLE_CARD_MAX_LINES, 3);
-  assert.equal(ROLE_CARD_MAX_LINES_SHORT_DOCTOR, 4);
-  assert.equal(ROLE_SHEET_MAX_LINES, 4);
-  assert.equal(TUTORIAL_ROLE_MAX_LINES, 4);
+  assert.equal(ROLE_CARD_MAX_LINES, 2);
+  assert.equal(ROLE_CARD_MAX_LINES_SHORT_DOCTOR, 3);
+  assert.equal(ROLE_SHEET_MAX_LINES, 3);
+  assert.equal(TUTORIAL_ROLE_MAX_LINES, 3);
   assert.equal(ROLE_ART_MIN_H, 64);
   assert.equal(CARD_INNER_INSET, 14);
   assert.equal(TOD_LINE_MAX_H, 40);
@@ -79,9 +79,9 @@ const cardGood = (role = "citizen") => {
     children: [
       { kind: "art", rect: box(100, 230, 160, 130) },
       { kind: "name", rect: box(100, 370, 160, 43) },
-      { kind: "desc", rect: box(100, 420, 160, 72) },
+      { kind: "desc", rect: box(100, 420, 160, 48) },
     ],
-    desc: { height: 72, lineHeight: 24, whiteSpace: "pre-line", text: ROLE_LINES[role], firstLines: 1, secondNewLine: true },
+    desc: { height: 48, lineHeight: 24, text: ROLE_LINES[role], newlines: 0 },
     blocks: 2,
     goalCount: 0,
     domText: ROLE_LINES[role],
@@ -109,25 +109,27 @@ test("revealCardChecks: 글 덩어리가 3개(시민)면 A1a 실패", () => {
   assert.deepEqual(failing(cardCheck({ blocks: 3 })), ["A1a"]);
 });
 
-test("revealCardChecks: 4줄(높이 96)은 360×560 의사만 통과", () => {
-  const four = { desc: { ...cardGood("doctor").desc, height: 96 } };
-  const d = (size, role) => failing(revealCardChecks({ ...cardGood(role), ...four }, { size, role }));
+test("revealCardChecks: 3줄(높이 72)은 360×560 의사만 통과", () => {
+  const three = { desc: { ...cardGood("doctor").desc, height: 72 } };
+  const d = (size, role) => failing(revealCardChecks({ ...cardGood(role), ...three }, { size, role }));
   assert.deepEqual(d({ w: 360, h: 560 }, "doctor"), []);
   assert.deepEqual(d({ w: 360, h: 640 }, "doctor"), ["A1b"]);
   assert.ok(d({ w: 360, h: 560 }, "citizen").includes("A1b"));
 });
 
-test("revealCardChecks: pre-line 이 아니면 A1b 실패", () => {
-  assert.deepEqual(failing(cardCheck({ desc: { ...cardGood().desc, whiteSpace: "normal" } })), ["A1b"]);
+test("revealCardChecks: 문구에 줄바꿈 문자가 있거나 그 수를 못 읽으면 A1b 실패", () => {
+  assert.deepEqual(failing(cardCheck({ desc: { ...cardGood().desc, newlines: 1 } })), ["A1b"]);
+  const { newlines: _gone, ...noCount } = cardGood().desc;
+  assert.deepEqual(failing(cardCheck({ desc: noCount })), ["A1b"]);
 });
 
-test("revealCardChecks: 첫 문장이 두 줄이거나 둘째 문장이 새 줄이 아니면 A1b 실패", () => {
-  assert.deepEqual(failing(cardCheck({ desc: { ...cardGood().desc, firstLines: 2 } })), ["A1b"]);
-  assert.deepEqual(failing(cardCheck({ desc: { ...cardGood().desc, secondNewLine: false } })), ["A1b"]);
+test("revealCardChecks: 한 줄(높이 24)은 통과, 0줄은 A1b 실패", () => {
+  assert.deepEqual(failing(cardCheck({ desc: { ...cardGood().desc, height: 24 } })), []);
+  assert.deepEqual(failing(cardCheck({ desc: { ...cardGood().desc, height: 0 } })), ["A1b"]);
 });
 
 test("revealCardChecks: 문구가 ROLE_LINES 와 다르면 A1c 실패", () => {
-  assert.deepEqual(failing(cardCheck({ desc: { ...cardGood().desc, text: "당신은 시민입니다. 추리로 마피아를 찾아내세요." } })), ["A1c"]);
+  assert.deepEqual(failing(cardCheck({ desc: { ...cardGood().desc, text: `${ROLE_LINES.citizen} ` } })), ["A1c"]);
 });
 
 test("revealCardChecks: 다른 직업 문장이 DOM 에 있으면 A1d 실패", () => {
@@ -208,42 +210,39 @@ test("revealStageChecks: 측정값이 없으면 측정값 없음으로 실패", 
 
 // ---- roleLineBoxChecks ----
 
-const lineGood = () => ({ height: 60, lineHeight: 20, whiteSpace: "pre-line", firstLines: 1, secondNewLine: true, goalCount: 0 });
+const lineGood = () => ({ height: 40, lineHeight: 20, newlines: 0, goalCount: 0 });
 
-test("roleLineBoxChecks: pre-line·3줄·둘째 문장 새 줄이면 통과", () => {
-  const r = roleLineBoxChecks([lineGood()], { max: 4, id: "A1s" });
+test("roleLineBoxChecks: 한 문장(줄바꿈 문자 없음)·2줄이면 통과", () => {
+  const r = roleLineBoxChecks([lineGood()], { max: 3, id: "A1s" });
   assert.equal(r.id, "A1s");
   assert.equal(r.ok, true, r.detail);
 });
 
-test("roleLineBoxChecks: 4줄 상한 — 80/20 통과, 100/20 실패", () => {
-  assert.equal(roleLineBoxChecks([{ ...lineGood(), height: 80 }], { max: 4, id: "x" }).ok, true);
-  assert.equal(roleLineBoxChecks([{ ...lineGood(), height: 100 }], { max: 4, id: "x" }).ok, false);
+test("roleLineBoxChecks: 3줄 상한 — 20/20·60/20 통과, 80/20 실패", () => {
+  assert.equal(roleLineBoxChecks([{ ...lineGood(), height: 20 }], { max: 3, id: "x" }).ok, true);
+  assert.equal(roleLineBoxChecks([{ ...lineGood(), height: 60 }], { max: 3, id: "x" }).ok, true);
+  assert.equal(roleLineBoxChecks([{ ...lineGood(), height: 80 }], { max: 3, id: "x" }).ok, false);
 });
 
-test("roleLineBoxChecks: white-space normal 이면 실패", () => {
-  assert.equal(roleLineBoxChecks([{ ...lineGood(), whiteSpace: "normal" }], { max: 4, id: "x" }).ok, false);
-});
-
-test("roleLineBoxChecks: 둘째 문장이 새 줄이 아니거나 첫 문장이 접히면 실패", () => {
-  assert.equal(roleLineBoxChecks([{ ...lineGood(), secondNewLine: false }], { max: 4, id: "x" }).ok, false);
-  assert.equal(roleLineBoxChecks([{ ...lineGood(), firstLines: 2 }], { max: 4, id: "x" }).ok, false);
+test("roleLineBoxChecks: 줄바꿈 문자가 있거나 그 수를 못 읽으면 실패", () => {
+  assert.equal(roleLineBoxChecks([{ ...lineGood(), newlines: 1 }], { max: 3, id: "x" }).ok, false);
+  assert.equal(roleLineBoxChecks([{ height: 40, lineHeight: 20, goalCount: 0 }], { max: 3, id: "x" }).ok, false);
 });
 
 test("roleLineBoxChecks: 목표 줄이 남아 있으면 실패", () => {
-  assert.equal(roleLineBoxChecks([{ ...lineGood(), goalCount: 1 }], { max: 4, id: "x" }).ok, false);
+  assert.equal(roleLineBoxChecks([{ ...lineGood(), goalCount: 1 }], { max: 3, id: "x" }).ok, false);
 });
 
 test("roleLineBoxChecks: height 가 없으면 lines 로 센다(튜토리얼 인라인 글)", () => {
-  assert.equal(roleLineBoxChecks([{ lines: 4, whiteSpace: "pre-line", firstLines: 1, secondNewLine: true }], { max: 4, id: "x" }).ok, true);
-  assert.equal(roleLineBoxChecks([{ lines: 5, whiteSpace: "pre-line", firstLines: 1, secondNewLine: true }], { max: 4, id: "x" }).ok, false);
+  assert.equal(roleLineBoxChecks([{ lines: 3, newlines: 0 }], { max: 3, id: "x" }).ok, true);
+  assert.equal(roleLineBoxChecks([{ lines: 4, newlines: 0 }], { max: 3, id: "x" }).ok, false);
 });
 
 test("roleLineBoxChecks: 상자가 없거나 비면 측정값 없음으로 실패, expect 개수를 지키지 않아도 실패", () => {
-  assert.match(roleLineBoxChecks([], { max: 4, id: "x" }).detail, /측정값 없음/);
-  assert.match(roleLineBoxChecks(null, { max: 4, id: "x" }).detail, /측정값 없음/);
-  assert.equal(roleLineBoxChecks([lineGood()], { max: 4, id: "x", count: 4 }).ok, false);
-  assert.equal(roleLineBoxChecks([lineGood(), lineGood(), lineGood(), lineGood()], { max: 4, id: "x", count: 4 }).ok, true);
+  assert.match(roleLineBoxChecks([], { max: 3, id: "x" }).detail, /측정값 없음/);
+  assert.match(roleLineBoxChecks(null, { max: 3, id: "x" }).detail, /측정값 없음/);
+  assert.equal(roleLineBoxChecks([lineGood()], { max: 3, id: "x", count: 4 }).ok, false);
+  assert.equal(roleLineBoxChecks([lineGood(), lineGood(), lineGood(), lineGood()], { max: 3, id: "x", count: 4 }).ok, true);
 });
 
 // ---- todChecks ----

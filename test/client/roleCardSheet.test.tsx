@@ -395,7 +395,7 @@ describe("rolecard.css — 시트 규약", () => {
 });
 
 describe("RoleCardSheet 역할 문구 한 덩어리 (P181-0, HOST-05)", () => {
-  it.each(ROLE_IDS)("%s 앞면: [data-role-line] 하나(.mf-rolecard__desc), 자기 문구만 — 다른 직업 둘째 문장은 DOM 에 없고 목표 표식도 없다", (role) => {
+  it.each(ROLE_IDS)("%s 앞면: [data-role-line] 하나(.mf-rolecard__desc), 자기 문구만 — 다른 직업 문구는 DOM 에 없고 목표 표식도 없다", (role) => {
     renderSheet({ role, tab: "role" });
     const lines = document.querySelectorAll("[data-role-line]");
     expect(lines.length).toBe(1);
@@ -406,7 +406,7 @@ describe("RoleCardSheet 역할 문구 한 덩어리 (P181-0, HOST-05)", () => {
     const text = document.querySelector("dialog")?.textContent ?? "";
     for (const other of ROLE_IDS) {
       if (other === role) continue;
-      expect(text.includes(ROLE_TEXT[other].desc.split("\n")[1]!)).toBe(false);
+      expect(text.includes(ROLE_TEXT[other].desc)).toBe(false);
     }
   });
 
@@ -414,7 +414,7 @@ describe("RoleCardSheet 역할 문구 한 덩어리 (P181-0, HOST-05)", () => {
     renderSheet({ role, showBack: true });
     expect(document.querySelector("[data-role-line]")).toBeNull();
     const text = document.querySelector("dialog")?.textContent ?? "";
-    expect(text).not.toContain("당신은");
+    expect(text).not.toContain(ROLE_TEXT[role].desc);
   });
 
   it("역할 없음에는 문구 줄이 없다", () => {

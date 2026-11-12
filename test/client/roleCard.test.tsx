@@ -197,10 +197,10 @@ describe("RoleCard 입력", () => {
 
 describe("roleText (역할 문구 한 곳)", () => {
   const CONFIRMED = {
-    citizen: "당신은 시민입니다.\n추리로 마피아를 찾아내세요.",
-    mafia: "당신은 마피아입니다.\n몰래 암살하여 승리하세요.",
-    police: "당신은 경찰입니다.\n의심되는 사람을 조사하세요.",
-    doctor: "당신은 의사입니다.\n시민 팀을 마피아에게서 지키세요.",
+    citizen: "추리로 마피아를 찾아내세요.",
+    mafia: "몰래 암살하여 승리하세요.",
+    police: "의심되는 사람을 조사하세요.",
+    doctor: "시민 팀을 마피아에게서 지키세요.",
   } as const;
   const ROLES = ["mafia", "police", "doctor", "citizen"] as const;
 
@@ -208,12 +208,16 @@ describe("roleText (역할 문구 한 곳)", () => {
     expect(ROLE_TEXT[role].desc).toBe(CONFIRMED[role]);
   });
 
-  it.each(ROLES)("%s desc: `당신은 {name}입니다.\\n` 으로 시작하고 줄바꿈이 하나, 둘째 문장이 비어 있지 않다 (A1c)", (role) => {
+  // 2026-11-12 사용자 요청: 첫 문장(정체 선언)을 없애 할 일 한 문장만 남긴다.
+  it.each(ROLES)("%s desc: 한 문장이고 줄바꿈이 없다, 정체 선언('당신은')으로 시작하지 않는다 (A1c)", (role) => {
     const desc = ROLE_TEXT[role].desc;
-    expect(desc.startsWith(`당신은 ${ROLE_TEXT[role].name}입니다.\n`)).toBe(true);
-    const parts = desc.split("\n");
-    expect(parts.length).toBe(2);
-    expect(parts[1]!.trim().length).toBeGreaterThan(0);
+    expect(desc).not.toContain("\n");
+    expect(desc).not.toContain("당신은");
+    expect(desc.trim()).toBe(desc);
+    expect(desc.length).toBeGreaterThan(0);
+    // 마침표는 끝에 하나뿐이다(한 문장).
+    expect(desc.endsWith(".")).toBe(true);
+    expect(desc.split(".").length).toBe(2);
   });
 
   it("네 desc 가 서로 다르다", () => {
@@ -240,9 +244,9 @@ describe("RoleCard 빛남 call (HOST-03)", () => {
 
 describe("역할 문구 한 덩어리 (P181-0, A1a·A1d)", () => {
   const ROLES = ["mafia", "police", "doctor", "citizen"] as const;
-  const second = (r: (typeof ROLES)[number]) => ROLE_TEXT[r].desc.split("\n")[1] ?? "";
+  const line = (r: (typeof ROLES)[number]) => ROLE_TEXT[r].desc;
 
-  it.each(ROLES)("%s 앞면: .mf-card__desc[data-role-line] 하나, 글이 ROLE_TEXT desc(줄바꿈 포함)와 같고 목표 표식은 없다", (role) => {
+  it.each(ROLES)("%s 앞면: .mf-card__desc[data-role-line] 하나, 글이 ROLE_TEXT desc 와 같고 목표 표식은 없다", (role) => {
     const { container } = render(<RoleCard role={role} face="front" allies={role === "mafia" ? [] : null} onFlip={vi.fn()} />);
     const lines = container.querySelectorAll("[data-role-line]");
     expect(lines.length).toBe(1);
@@ -253,19 +257,18 @@ describe("역할 문구 한 덩어리 (P181-0, A1a·A1d)", () => {
     expect(container.querySelectorAll(REMOVED_GOAL_SELECTOR).length).toBe(0);
   });
 
-  it.each(ROLES)("%s 앞면: 다른 직업 문구의 둘째 문장은 DOM 에 없다 (결정 0021)", (role) => {
+  it.each(ROLES)("%s 앞면: 다른 직업 문구는 DOM 에 없다 (결정 0021)", (role) => {
     const { container } = render(<RoleCard role={role} face="front" allies={role === "mafia" ? [] : null} onFlip={vi.fn()} />);
     for (const other of ROLES) {
       if (other === role) continue;
-      expect(container.textContent).not.toContain(second(other));
+      expect(container.textContent).not.toContain(line(other));
     }
   });
 
-  it.each(ROLES)("%s 뒷면 상태(앞면이 마운트되기 전)에는 문구도 '당신은' 도 없다", (role) => {
+  it.each(ROLES)("%s 뒷면 상태(앞면이 마운트되기 전)에는 문구가 없다", (role) => {
     const { container } = render(<RoleCard role={role} face="back" allies={null} onFlip={vi.fn()} />);
     expect(container.querySelector("[data-role-line]")).toBeNull();
-    expect(container.textContent).not.toContain("당신은");
-    expect(container.textContent).not.toContain(second(role));
+    expect(container.textContent).not.toContain(line(role));
   });
 });
 
