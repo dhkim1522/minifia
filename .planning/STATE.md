@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v3.0
 milestone_name: 사회자와 증거
-current_phase: 19
-current_phase_name: game-modes
-current_plan: 8
-status: verifying
-stopped_at: Completed 19-08-PLAN.md
-last_updated: "2026-11-12T16:54:08.958Z"
+current_phase: 20
+current_phase_name: map-expansion
+current_plan: 2
+status: executing
+stopped_at: Completed 20-01-PLAN.md
+last_updated: "2026-11-12T21:10:18.810Z"
 last_activity: 2026-11-13
-last_activity_desc: Phase 19 plan 08 완료 (전체 회귀·배포 71a10fc8·결정 0086)
-state_head: 97320b17f96fc6cf0e2f7e73b124323b20a5ec90
+last_activity_desc: Phase 20 plan 01 완료 (마을 맵 서버 뼈대)
+state_head: ed1a2dc14ce6ab353c38e80d0d69118669f9e68e
 progress:
   total_phases: 10
   completed_phases: 5
-  total_plans: 87
-  completed_plans: 87
+  total_plans: 97
+  completed_plans: 88
   percent: 50
 ---
 
@@ -26,15 +26,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-07)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(평균 10~15분, 참고 목표)을 끝까지 마치는 것
-**Current focus:** Phase 19 — game-modes
+**Current focus:** Phase 20 — map-expansion
 
 ## Current Position
 
-Phase: 19 (game-modes) — EXECUTING
-Current Plan: 8
-Total Plans in Phase: 8
-Status: Phase complete — ready for verification
-Last activity: 2026-11-13 — 19-08 완료 (로컬 전체 검증·폰 6종 E2E 전 흐름 회귀 7039 중 7036(남은 3건은 perfbudget 알려진 한계), 회귀가 찾은 앱 결함 하나 고침, minifia-v3 배포 `2026-11-12T16:47:00Z+71a10fc8`·smoke 통과, 결정 0086·화면 지도·HANDOFF. 19페이즈 계획 8/8 — 페이즈 검증 대기, 실기기 확인은 v3.0 끝 실테스트)
+Phase: 20 (map-expansion) — EXECUTING
+Current Plan: 2
+Total Plans in Phase: 10
+Status: Ready to execute
+Last activity: 2026-11-13 — 20-01 완료 (마을 맵 서버 뼈대: town 등록·확장판은 마을·격자 일반화·구역 판정·이동 프레임 구역 거르기. npm test 8361 통과)
 
 ## Performance Metrics
 
@@ -285,6 +285,7 @@ Last activity: 2026-11-13 — 19-08 완료 (로컬 전체 검증·폰 6종 E2E �
 | Phase 19 P06 | 36 min | 3 tasks | 9 files |
 | Phase 19 P07 | 20 min | 3 tasks | 7 files |
 | Phase 19 P08 | 52min | 3 tasks | 17 files |
+| Phase 20 P01 | 26min | 2 tasks | 23 files |
 
 ## Accumulated Context
 
@@ -633,6 +634,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 19]: 19-06: 방장 줄·판 종류 E2E(mode-rail 폰 6종·mode-pick)를 만들고 바뀐 흐름을 로컬에서 통과시켰다. 오른쪽 열 판정은 방장도 소리·옷장 둘이고 360x560 예외를 지웠다. 360x560 에서 두 열로 접힌 줄의 둘째 열과 위 알림 겹침은 앱을 고치지 않고 E2E 의 알려진 한계(HR3 fold-toast)로 뒀다 — 사용자 확인 필요. F-2 기대 표는 판정하지 않고 폰 6종 실측 표가 확정값이다
 - [Phase 19]: 19-07: 기본 마피아 완주·누설 E2E(mode-basic·mode-leak)를 만들고 확장판 대조 흐름(basic-off·emcee-leak·trace)과 함께 로컬에서 통과시켰다. 띠 금지 문구는 넷이다 — errand.ghost 는 다른 유령 줄과 같은 문장이라 뺐다. 받은 키 판정(BM1k: me.errand·me.record·day.evidence 0건)과 판 종류 적용 확인(LKm)을 더했다. 앱은 고치지 않았다
 - [Phase 19]: 19-08: 전 흐름 회귀가 찾은 앱 결함(키보드를 닫은 맵 탭의 뒤따르는 click 이 새로 그려진 방장 줄 단추를 누름)을 고침 — 같은 자리 10px·0.5초 안 click 한 번 삼킴. 360x560 접힌 줄과 위 알림 겹침은 알려진 한계로 받아들임(결정 0086)
+- [Phase 20]: 20-01: 격자는 맵마다(MapDef origin·walkHalf, 없으면 재즈 바 값) — 칸을 다루는 호출은 마지막 인자로 맵을 넘긴다. 구역은 위치의 순수 함수 zoneOf 이고 방 DO emitMove 가 이동 프레임을 본인·유령 / 같은 구역 / 다른 구역으로 나눈다. 확장판의 고정 맵은 MODE_MAPS(시험은 setup 이 잠그고 openTown 으로 켠다)
+- [Phase 20]: 20-01: MapChoice 는 MAP_CHOICES 값만(town 은 고를 수 없는 맵). 좌석 0·7 집의 문 앞 자리는 시계탑 뒤 머리 가림 때문에 집 모서리 쪽 칸 — 21 의 집 앞 조사 자리를 정할 때 확인
 
 ### Pending Todos
 
@@ -704,8 +707,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-12T16:54:08.349Z
-Stopped at: Completed 19-08-PLAN.md
+Last session: 2026-11-12T21:10:18.042Z
+Stopped at: Completed 20-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
