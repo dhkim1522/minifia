@@ -1,4 +1,5 @@
 // 14페이즈 사회자·이름표 E2E 흐름 (14-08): emcee-band(자막 띠, 폰 6종)·emcee-tools(도구 이름표 전수)·emcee-leak(역할 다섯 시점 누설)·emcee-sound(알림음).
+// 19-07(D-12): mode-leak — emcee-leak 과 같은 본문을 기본 마피아 판으로 돈다(역할 다섯 시점). 이름 앞머리가 mode 라 `--only emcee-leak` 은 이 흐름을 고르지 않는다.
 // 이름 앞머리는 emcee — 기존 host-handoff 와 `--only host` 앞부분 일치가 겹치지 않게 한다. 흐름은 화면을 읽기만 하고 판정은 lib.mjs 의 순수 함수(hostBandChecks 등)에 맡긴다:
 // 판정 문턱은 여기서 낮추지 않는다(T-14-21). 닉네임·토큰은 결과 줄에 남기지 않는다(T-14-22) — 단계 이름·역할 이름·개수만 쓴다.
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makeHostFlows(helpers)` 로 받는다(sound.mjs·politics.mjs 와 같은 모양 — 서로 import 하지 않는다).
@@ -10,6 +11,7 @@ import {
   closeRoleCard,
   openRoleCard,
   openTestSheet,
+  pickModeViaRail,
   readBandWatch,
   readCallCount,
   readHostBand,
@@ -121,8 +123,8 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
     if (!r.ok) rec(sc, "D0", `시간대 글자를 읽는다(${phase})`, false, r.detail);
   }
 
-  /** 방장 한 명 + 봇 n 으로 시작 직전(로비)까지 만든다. 시트는 닫아 둔다 */
-  async function lobbyWith(ctx, flowId, { bots, role, vote, guests = 0 }) {
+  /** 방장 한 명 + 봇 n 으로 시작 직전(로비)까지 만든다. 시트는 닫아 둔다. mode("basic"|"extended", 19-07)를 주면 직업을 정한 뒤 방장 줄의 [판 종류] 로 그 판 종류를 고른다(안 주면 서버 기본값 그대로) */
+  async function lobbyWith(ctx, flowId, { bots, role, vote, guests = 0, mode = undefined }) {
     const host = await startHost(ctx, flowId, { nickname: BAND_NICK });
     const { page: hp, tracker: ht } = host;
     host.guestPages = [];
@@ -135,6 +137,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
     if (bots > 0) await setBots(hp, ht, bots);
     await setBotVote(hp, ht, vote);
     await chooseRole(hp, ht, role);
+    if (mode) await pickModeViaRail(hp, ht, mode); // 테스트 도구 시트를 닫고 [판 종류] 시트에서 고른 뒤 그 시트도 닫는다
     await closeSheet(hp);
     return host;
   }
@@ -376,10 +379,11 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
   /**
    * 한 판을 한 시점(role = 방장 직업)으로 걸으며 단계마다 띠·목표·빛남 DOM 을 읽어 items 에 쌓는다.
    * ghost 판이면 방장이 투표로 처형되어 탈락한 뒤부터 시점이 ghost 가 된다(ownRole 은 살았을 때 직업).
+   * mode(19-07)를 주면 그 판 종류로 걷고, 걸은 판의 마지막 view.mode 와 errand 단계를 지났는지를 played 에 남긴다(판 종류가 실제로 적용됐는지의 근거).
    */
-  async function walkLeak(ctx, flowId, role, ghostGame, items, viewKeys) {
+  async function walkLeak(ctx, flowId, role, ghostGame, items, viewKeys, { mode = undefined, played = [] } = {}) {
     const rec = recorder(ctx);
-    const host = await lobbyWith(ctx, flowId, { bots: 5, role, vote: ghostGame ? { exec: "yes", pick: "host" } : { exec: "yes", pick: "other" } });
+    const host = await lobbyWith(ctx, flowId, { bots: 5, role, vote: ghostGame ? { exec: "yes", pick: "host" } : { exec: "yes", pick: "other" }, mode });
     try {
       const { page: hp, tracker: ht } = host;
       const seen = new Set();
@@ -435,6 +439,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       for (const k of ht.viewKeys.top) viewKeys.top.add(k);
       for (const k of ht.viewKeys.me) viewKeys.me.add(k);
       for (const k of ht.viewKeys.day) viewKeys.day.add(k);
+      played.push({ role: ghostGame ? "ghost" : role, mode: ht.last()?.mode ?? "extended", errand: ht.phases.includes("errand"), ended: ht.last()?.phase === "ended" });
       return ghostGame ? seen.has(`ghost/night`) : true;
     } finally {
       await closeGame(asGame(host));
@@ -442,27 +447,43 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
   }
 
   /**
-   * emcee-leak (HOST-05, T-14-19·20): 역할 다섯 시점(마피아·경찰·의사·시민 + 처형되어 탈락한 유령)으로 판을 걸으며 ① 띠·목표·빛남 DOM 에 다른 역할 전용 줄·목표가 없다 ②
+   * 역할 다섯 시점(마피아·경찰·의사·시민 + 처형되어 탈락한 유령)으로 판을 걸으며 ① 띠·목표·빛남 DOM 에 다른 역할 전용 줄·목표가 없다 ②
    * 받은 state 프레임의 view 키(최상위·me·day)가 13페이즈 허용 목록 안이다 ③ 같은 단계 할 일 없는 시점끼리 띠 문장이 같다 ④ 산 마피아 밤 data-call 0개·유령 띠에 역할 이름 없음.
+   * mode 를 주면 다섯 판 모두 그 판 종류로 돌고, 실제로 그 판 종류였는지(LKm)를 한 줄 더 남긴다 — 판 종류가 적용되지 않은 채 통과하는 것을 막는다(T-19-22).
    */
-  async function emceeLeakFlow(ctx) {
-    const id = "emcee-leak";
+  async function leakFlow(ctx, id, mode = undefined) {
     const rec = recorder(ctx);
     const items = [];
     const viewKeys = { top: new Set(), me: new Set(), day: new Set() };
+    const played = [];
     for (const role of ["mafia", "police", "doctor", "citizen"]) {
-      await walkLeak(ctx, id, role, false, items, viewKeys);
+      await walkLeak(ctx, id, role, false, items, viewKeys, { mode, played });
     }
-    const reachedGhost = await walkLeak(ctx, id, "police", true, items, viewKeys);
+    const reachedGhost = await walkLeak(ctx, id, "police", true, items, viewKeys, { mode, played });
     const seats = new Set(items.map((i) => (i.role === "ghost" ? "ghost" : i.role)));
     const missingRoles = ["mafia", "police", "doctor", "citizen", "ghost"].filter((r) => !seats.has(r));
     rec(`${id}/coverage`, "LK1", "역할 다섯 시점(마피아·경찰·의사·시민·유령)을 모두 읽었다", missingRoles.length === 0 && reachedGhost, `못 읽은 시점: ${missingRoles.join(", ")}${reachedGhost ? "" : " (유령 판에서 탈락 뒤 밤에 닿지 못함)"}`);
     const nights = items.filter((i) => i.phase === "night").length;
     rec(`${id}/coverage`, "LK2", "밤 화면을 시점마다 읽었다(마피아·경찰·의사·시민·유령 5곳)", nights >= 5, `밤 읽기 ${nights}곳`);
+    if (mode) {
+      const off = played.filter((p) => p.mode !== mode || (mode === "basic" && p.errand) || !p.ended);
+      rec(
+        `${id}/coverage`,
+        "LKm",
+        `다섯 판 모두 판 종류가 ${mode} 이고 결과까지 갔다${mode === "basic" ? "(심부름 단계 없음)" : ""}`,
+        played.length === 5 && off.length === 0,
+        played.length !== 5 ? `걸은 판 ${played.length}개` : off.length > 0 ? off.map((p) => `${p.role} 판: mode ${p.mode}${p.errand ? " · errand 를 지남" : ""}${p.ended ? "" : " · 끝나지 않음"}`).join(" / ") : `판 ${played.length}개`,
+      );
+    }
     for (const l of hostLeakChecks(items)) rec(`${id}/leak`, l.id, `${l.label} (읽기 ${items.length}곳)`, l.ok, l.detail);
     const k = viewKeyChecks(viewKeys);
     rec(`${id}/frames`, k.id, `${k.label} (최상위 ${viewKeys.top.size}·me ${viewKeys.me.size}·day ${viewKeys.day.size}개)`, k.ok, k.detail);
   }
+
+  /** emcee-leak (HOST-05, T-14-19·20): 확장판(서버 기본값) 판의 역할 다섯 시점 누설 — 본문은 leakFlow */
+  const emceeLeakFlow = (ctx) => leakFlow(ctx, "emcee-leak");
+  /** mode-leak (19-07, D-12, T-19-21): 기본 마피아 판의 역할 다섯 시점 누설 — 판정 id 는 emcee-leak 과 같고(LK1·LK2·HL1~HL4·VK1) LKm 이 더해진다 */
+  const modeLeakFlow = (ctx) => leakFlow(ctx, "mode-leak", "basic");
 
   // ---- emcee-sound ----
 
@@ -554,5 +575,5 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
     }
   }
 
-  return { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow };
+  return { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow, modeLeakFlow };
 }

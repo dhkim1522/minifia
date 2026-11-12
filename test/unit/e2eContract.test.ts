@@ -1181,4 +1181,16 @@ describe("19페이즈 기본 마피아 판 E2E 사본 계약 (19-07, T-19-22)", 
     // 앞머리가 다른 표식(예: data-errand 단독)을 삼키지 않도록 끝이 "-" 다
     expect(lib.BASIC_ABSENT_ATTR_PREFIX.endsWith("-")).toBe(true);
   });
+
+  it("mode-basic·mode-leak 은 390x844(GAME_SIZE)로 flows.mjs 에 등록돼 있고, 누설 흐름은 emcee-leak 과 같은 본문(leakFlow)을 기본 마피아로 돈다", () => {
+    const flows = readFileSync(new URL("scripts/e2e/flows.mjs", root), "utf8");
+    expect(flows).toMatch(/\{ id: "mode-basic", run: modeBasicFlow, size: GAME_SIZE \}/);
+    expect(flows).toMatch(/\{ id: "mode-leak", run: modeLeakFlow, size: GAME_SIZE \}/);
+    const modes = readFileSync(new URL("scripts/e2e/modes.mjs", root), "utf8");
+    expect(modes).toMatch(/async function modeBasicFlow/);
+    expect(modes).toMatch(/offScannerScript\(BASIC_ABSENT_SELECTORS, BASIC_ABSENT_ATTR_PREFIX\)/);
+    const host = readFileSync(new URL("scripts/e2e/host.mjs", root), "utf8");
+    expect(host).toContain('const emceeLeakFlow = (ctx) => leakFlow(ctx, "emcee-leak");');
+    expect(host).toContain('const modeLeakFlow = (ctx) => leakFlow(ctx, "mode-leak", "basic");');
+  });
 });

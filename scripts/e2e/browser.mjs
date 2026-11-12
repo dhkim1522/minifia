@@ -1389,6 +1389,31 @@ export function readOffScan(page) {
 }
 
 /**
+ * 자막 띠 글 감시 스크립트(19-07 mode-basic, BM3). 페이지가 만들어질 때 넣는 init 스크립트 문자열이다 —
+ * 100ms 마다 [data-host-line] 의 글(공백을 한 칸으로 줄인 것)을 window.__mfHostLines.lines 에 중복 없이 모은다. 빈 글은 모으지 않는다.
+ * 단계마다 한 번 읽는 readHostBand 는 단계 안에서 바뀌는 줄을 놓치므로, 한 판 전체에서 띠가 한 번이라도 말한 문장을 남기려고 이 감시를 쓴다. 읽기는 readHostLines.
+ */
+export function hostLineScannerScript() {
+  return `(() => {
+    const state = { lines: [], scans: 0 };
+    window.__mfHostLines = state;
+    setInterval(() => {
+      if (!document.body) return;
+      state.scans += 1;
+      for (const el of document.querySelectorAll("[data-host-line]")) {
+        const text = (el.textContent ?? "").replace(/\\s+/g, " ").trim();
+        if (text !== "" && !state.lines.includes(text)) state.lines.push(text);
+      }
+    }, 100);
+  })();`;
+}
+
+/** hostLineScannerScript 가 모은 결과: { lines: [띠 글], scans }. 감시가 없으면 null. 글에는 띠 문장만 있다(닉네임이 들어갈 수 있으니 결과 줄에는 개수만 남긴다) */
+export function readHostLines(page) {
+  return page.evaluate(() => (window.__mfHostLines ? { lines: [...window.__mfHostLines.lines], scans: window.__mfHostLines.scans } : null));
+}
+
+/**
  * 테스트 방 [다음 단계로 넘기기] 를 정확히 한 번 눌러 단계(또는 마감 시각)가 바뀔 때까지 기다린다(13-05 basic-off).
  * 목표 단계를 정하지 않고 한 칸씩 가므로 동률·0표처럼 단계가 건너뛰는 판에서도 멈추지 않는다. 이미 ended 면 아무것도 하지 않는다.
  */

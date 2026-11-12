@@ -1,21 +1,26 @@
 // 19페이즈 방장 줄·판 종류 E2E 흐름 (19-06, 결정 D-05·D-06·D-07·D-10·D-13·D-14·D-18): mode-rail(방장 줄·참가자 칩·판 종류 시트의 기하와 색, 폰 6종)·mode-pick(판 종류 선택이 방송·새로고침·재접속·다시 하기에 남는가, 390x844).
-// 이름 앞머리 mode — 기존 흐름 이름과 `--only` 부분 일치가 겹치지 않는다(`--only mode` 가 mode-* 둘만 고른다).
-// 흐름은 화면을 읽기만 하고 판정은 lib.mjs 의 순수 함수(hostRailChecks·modeChipChecks·modeSheetChecks)에 맡긴다 — 문턱 숫자는 여기에 두지 않는다(T-19-18).
+// 19-07(D-08·D-09·D-11·D-18): mode-basic(기본 마피아 봇 판 완주 — 심부름·기록·흔적 표식 0건, 단계 순서, 띠 금지 문구 0, 390x844). 역할 다섯 시점 누설(mode-leak)의 본문은 host.mjs 에 있다.
+// 이름 앞머리 mode — 기존 흐름 이름과 `--only` 부분 일치가 겹치지 않는다(`--only mode` 가 mode-* 만 고른다).
+// 흐름은 화면을 읽기만 하고 판정은 lib.mjs 의 순수 함수(hostRailChecks·modeChipChecks·modeSheetChecks·basicModeChecks)에 맡긴다 — 문턱 숫자는 여기에 두지 않는다(T-19-18·T-19-22).
 // 결과 줄에는 닉네임·토큰을 남기지 않는다 — 표식 값·판 이름·단계 이름·개수·사각형 수치만 쓴다.
 // E2E 방은 모두 테스트 방이라 대기실 줄은 [테스트] 단추 아래(띠 아랫변 + 12 + 48)에서 시작한다. 일반 방 자리(띠 아랫변 + 12)는 화면 시험(test/client)이 맡는다.
-// helpers 는 flows.mjs 가 넘긴다(errand.mjs·mapselect.mjs 와 같은 모양 — 서로 import 하지 않는다): { recorder, attempt, startHost, openGuest, settledResult }
+// helpers 는 flows.mjs 가 넘긴다(errand.mjs·mapselect.mjs 와 같은 모양 — 서로 import 하지 않는다): { recorder, attempt, startHost, openGuest, openGame, closeGame, settledResult }
 import {
   SetupError,
   chooseRole,
   closeModeSheet,
   closeSheet,
   collapseChatLog,
+  hostLineScannerScript,
   installFakeViewport,
+  offScannerScript,
   openModeSheet,
   openTestSheet,
   pickModeViaRail,
+  readHostLines,
   readHostRail,
   readModeSheet,
+  readOffScan,
   setBotVote,
   setBots,
   settle,
@@ -25,7 +30,7 @@ import {
   waitWorldReady,
   watchSockets,
 } from "./browser.mjs";
-import { MODE_NAMES_E2E, hostRailChecks, hostRailMeasure, modeChipChecks, modeSheetChecks } from "./lib.mjs";
+import { BASIC_ABSENT_ATTR_PREFIX, BASIC_ABSENT_SELECTORS, MODE_NAMES_E2E, basicModeChecks, hostRailChecks, hostRailMeasure, modeChipChecks, modeSheetChecks } from "./lib.mjs";
 
 const HOST_NICK = "판종류방장";
 const GUEST_NICK = "참가자하나";
@@ -35,6 +40,10 @@ const KB_LIFT = 336;
 const KB_SIZES = ["360x560", "390x844"];
 /** 한 판을 결과까지 넘기는 칸 수 상한(단계는 한 번에 하나씩 넘어간다) */
 const MAX_STEPS = 40;
+/** 기본 마피아 완주 흐름의 칸 수 상한(basic-off 와 같은 넉넉한 값 — 봇 투표가 갈려 날이 길어져도 ended 에 닿게) */
+const BASIC_MAX_STEPS = 90;
+/** 기본 마피아에서 서버가 싣지 않는 view 키(UI-SPEC E-1 의 판정 근거: 심부름·목격 기록·증거). 키 이름만 본다 */
+const BASIC_OFF_VIEW_KEYS = { me: ["errand", "record"], day: ["evidence"] };
 /** 이 빌드는 허용 맵이 둘 이상이라 줄에 [맵] 이 있다(map-select 흐름이 같은 전제를 쓴다) */
 const MAPS_ON = true;
 
@@ -76,7 +85,7 @@ const railArgs = (m, { screen, host, mode, botsOn, kbOpen = false }) => ({
 const chipArgs = (m, viewMode) => ({ viewport: { w: m.vw, h: m.vh }, viewMode, chip: m.chip, band: m.band, panel: m.panel, head: m.head, test: m.test, toast: m.toast, side: m.side });
 const sheetArgs = (m, viewMode) => ({ viewport: { w: m.vw, h: m.vh }, viewMode, sheet: m.sheet, cards: m.cards });
 
-export function makeModeFlows({ recorder, attempt, startHost, openGuest, settledResult }) {
+export function makeModeFlows({ recorder, attempt, startHost, openGuest, openGame, closeGame, settledResult }) {
   /** 판정 줄을 그대로 쌓는다. tag 는 id 꼬리(같은 판정을 화면·역할별로 가른다), who 는 라벨 머리 */
   const recLines = (rec, sc, lines, { tag = "", who = "" } = {}) => {
     for (const l of lines) rec(sc, `${l.id}${tag}`, `${who}${l.label}`, l.ok, l.detail, l.info === true);
@@ -383,5 +392,61 @@ export function makeModeFlows({ recorder, attempt, startHost, openGuest, settled
     }
   }
 
-  return { modeRailFlow, modePickFlow };
+  /**
+   * mode-basic (D-08·D-09·D-11·D-18, UI-SPEC E·BM1~BM3, 390x844): 방장(시민) + 참가자 한 명 + 봇 넷의 기본 마피아 판을 대기실부터 결과까지 한 칸씩 넘긴다.
+   * 방장·참가자 두 페이지에 감시 둘(없어야 할 표식 100ms·띠 글 100ms)을 처음부터 걸어 두고, 끝난 뒤 페이지마다 basicModeChecks 로 잰다 —
+   * BM1 심부름·흔적·목격 표시·증거 카드·[기록] 단추 0건 · BM2 심부름 없는 단계 순서로 완주 · BM3 띠에 심부름·기록·증거 안내 0.
+   * 봇은 낮은 자리의 참가자를 지목·찬성하므로 참가자는 첫날 탈락해 유령 화면으로 밤·아침을 본다(유령 시점의 표식 0건도 같이 잰다). 봇이 심부름 없이 투표·밤 고르기를 해 판이 끝나는지가 BM0 이다(D-11).
+   */
+  async function modeBasicFlow(ctx) {
+    const id = "mode-basic";
+    const rec = recorder(ctx);
+    const scripts = [offScannerScript(BASIC_ABSENT_SELECTORS, BASIC_ABSENT_ATTR_PREFIX), hostLineScannerScript()];
+    const game = await openGame(ctx, id, { guests: 1, bots: 4, role: "citizen", vote: { exec: "yes", pick: "other" }, to: null, mode: "basic", hostInitScripts: scripts, guestInitScripts: scripts });
+    try {
+      const { hp, ht } = game;
+      const { page: gp, tracker: gt } = game.guests[0];
+      let steps = 0;
+      const walked = await attempt(async () => {
+        while (ht.last().phase !== "ended" && steps < BASIC_MAX_STEPS) {
+          await skipOnce(hp, ht);
+          steps += 1;
+          await sleep(250); // 감시(100ms)가 이 단계 화면을 한 번은 보게
+        }
+        if (ht.last().phase !== "ended") throw new Error(`${steps}칸을 넘겼는데 ${ht.last().phase} 에서 끝나지 않음`);
+        await Promise.all([ht.waitFor((v) => v.phase === "ended" && v.result !== undefined, 10000, "방장 결과 도달"), gt.waitFor((v) => v.phase === "ended" && v.result !== undefined, 10000, "참가자 결과 도달")]);
+      });
+      rec(`${id}/flow`, "BM0", "기본 마피아 봇 판(방장 + 참가자 + 봇 넷)이 대기실부터 결과(ended)까지 닿는다 (D-11·D-18)", walked.ok, walked.detail || `${steps}칸`);
+      if (!walked.ok) return;
+      const shown = await attempt(async () => {
+        await Promise.all([settledResult(hp), settledResult(gp)]);
+      });
+
+      const scenarioOf = { BM1: `${id}/dom`, BM2: `${id}/order`, BM3: `${id}/band` };
+      for (const [who, page, tracker] of [
+        ["방장", hp, ht],
+        ["참가자", gp, gt],
+      ]) {
+        const [scan, band] = await Promise.all([readOffScan(page), readHostLines(page)]);
+        for (const l of basicModeChecks({ phases: tracker.phases, scan, lines: band?.lines ?? null })) rec(scenarioOf[l.id], `${l.id}-${who}`, `${who}: ${l.label}`, l.ok, l.detail);
+        // 참고(판정 아님): 감시 횟수·본 단계 열·띠 글 수 — 띠 글 원문은 남기지 않는다
+        rec(`${id}/dom`, `BM1i-${who}`, `${who}: 감시가 돈 횟수와 본 단계 열(참고)`, true, scan === null ? "감시 없음" : `감시 ${scan.scans}회 · ${scan.phases.join(" → ")}`, true);
+        rec(`${id}/order`, `BM2i-${who}`, `${who}: 받은 단계 열(참고)`, true, tracker.phases.join(">"), true);
+        rec(`${id}/band`, `BM3i-${who}`, `${who}: 감시가 모은 띠 글 수(참고)`, true, band === null ? "감시 없음" : `띠 글 ${band.lines.length}가지 · 감시 ${band.scans}회`, true);
+        // 프레임: 심부름·목격 기록·증거 키가 한 번도 오지 않았다(키가 비어 있는 것이 아니라 없다, D-08)
+        const got = [...BASIC_OFF_VIEW_KEYS.me.filter((k) => tracker.viewKeys.me.has(k)).map((k) => `me.${k}`), ...BASIC_OFF_VIEW_KEYS.day.filter((k) => tracker.viewKeys.day.has(k)).map((k) => `day.${k}`)];
+        rec(`${id}/frames`, `BM1k-${who}`, `${who}: 받은 state 프레임에 me.errand·me.record·day.evidence 키가 0건이다`, tracker.viewKeys.me.size > 0 && got.length === 0, tracker.viewKeys.me.size === 0 ? "측정값 없음(받은 me 키 0개)" : got.length > 0 ? got.join(", ") : `me 키 ${tracker.viewKeys.me.size}개 · day 키 ${tracker.viewKeys.day.size}개`);
+      }
+
+      // 판 종류 값: 두 페이지의 마지막 view.mode, 결과 화면 연출 뒤 방장 줄 [판 종류] 이름(D-06 결과 화면 쪽)
+      rec(`${id}/mode`, "BMm", "결과에 닿은 두 페이지의 view.mode 가 basic 이다", modeOf(ht) === "basic" && modeOf(gt) === "basic", `방장 ${modeOf(ht)} · 참가자 ${modeOf(gt)}`);
+      const rail = shown.ok ? await readHostRail(hp).catch(() => null) : null;
+      const label = rail?.buttons?.find((b) => b.id === "mode")?.label;
+      rec(`${id}/mode`, "BMn", `결과 화면 연출 뒤 방장 줄 [판 종류] 단추의 이름이 "${toastOf("basic")}"`, shown.ok && label === toastOf("basic"), shown.ok ? `이름 "${label ?? "단추 없음"}"` : shown.detail);
+    } finally {
+      await closeGame(game);
+    }
+  }
+
+  return { modeRailFlow, modePickFlow, modeBasicFlow };
 }

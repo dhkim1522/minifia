@@ -3770,8 +3770,8 @@ const { mapSelectFlow } = makeMapSelectFlows({ recorder, startHost, openGuest, a
 // 소리(12페이즈): sound-render(12-06) 시험 페이지 오프라인 렌더 70개. 흐름 본문은 sound.mjs, 도우미만 넘긴다
 const { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow, soundResultFlow } = makeSoundFlows({ recorder, attempt, startHost, openGame, closeGame, nightScenario });
 
-// 사회자·이름표(14페이즈 14-08): emcee-band(띠, 폰 6종)·emcee-tools·emcee-leak·emcee-sound. 흐름 본문은 host.mjs, 도우미만 넘긴다
-const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow } = makeHostFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH, settledResult });
+// 사회자·이름표(14페이즈 14-08): emcee-band(띠, 폰 6종)·emcee-tools·emcee-leak·emcee-sound. 흐름 본문은 host.mjs, 도우미만 넘긴다. modeLeakFlow(19-07)는 emcee-leak 본문을 기본 마피아 판으로 돈다
+const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow, modeLeakFlow } = makeHostFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH, settledResult });
 
 // 심부름·목격 기록·밤 통일·아침 흔적(15페이즈 15-09): errand·witness·trace(폰 6종). 흐름 본문은 errand.mjs, 도우미만 넘긴다
 const { errandFlow, witnessFlow, traceFlow } = makeErrandFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH });
@@ -3779,8 +3779,8 @@ const { errandFlow, witnessFlow, traceFlow } = makeErrandFlows({ recorder, attem
 // 첫 사건(튜토리얼, 17페이즈 17-09): tutorial-solo(혼자 하기, 폰 6종)·tutorial-together(함께 진행). 흐름 본문은 tutorial.mjs, 도우미만 넘긴다
 const { tutorialSoloFlow, tutorialTogetherFlow } = makeTutorialFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH });
 
-// 방장 줄·판 종류(19페이즈 19-06): mode-rail(폰 6종)·mode-pick. 흐름 본문은 modes.mjs, 도우미만 넘긴다
-const { modeRailFlow, modePickFlow } = makeModeFlows({ recorder, attempt, startHost, openGuest, openGame, closeGame, settledResult });
+// 방장 줄·판 종류(19페이즈 19-06): mode-rail(폰 6종)·mode-pick. 19-07: modeBasicFlow(기본 마피아 완주). 흐름 본문은 modes.mjs, 도우미만 넘긴다
+const { modeRailFlow, modePickFlow, modeBasicFlow } = makeModeFlows({ recorder, attempt, startHost, openGuest, openGame, closeGame, settledResult });
 
 // 18.1 화면 다듬기(18.1-08): polish-reveal(역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종). 흐름 본문은 polish.mjs, 도우미만 넘긴다
 const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, closeGame });
@@ -3858,9 +3858,12 @@ export const FLOWS = [
   // 17-09: 첫 사건 TUT-01~05. 이름 앞머리 tutorial — --only tutorial 하나로 둘 다 돈다. 혼자 하기는 폰 6종(기하·포커스·띠 판정), 함께 진행은 기다림 화면 기하까지 390x844 한 크기
   { id: "tutorial-solo", run: tutorialSoloFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "tutorial-together", run: tutorialTogetherFlow, size: GAME_SIZE },
-  // 19-06: 방장 줄(HR1~HR8)·참가자 칩(CH)·판 종류 시트(MS1) 기하와 색은 폰 6종, 판 종류 선택의 방송·새로고침·재접속·다시 하기 유지(MS2·MS3·D-10)는 390x844 한 크기. 이름 앞머리 mode — --only mode 하나로 둘 다 돈다
+  // 19-06: 방장 줄(HR1~HR8)·참가자 칩(CH)·판 종류 시트(MS1) 기하와 색은 폰 6종, 판 종류 선택의 방송·새로고침·재접속·다시 하기 유지(MS2·MS3·D-10)는 390x844 한 크기. 이름 앞머리 mode — --only mode 하나로 모두 돈다
   { id: "mode-rail", run: modeRailFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "mode-pick", run: modePickFlow, size: GAME_SIZE },
+  // 19-07: 19페이즈 판 종류 — 기본 마피아 봇 판 완주(BM0~BM3)와 역할 다섯 시점 누설(LK·HL·VK, 본문은 host.mjs). 이름 앞머리 mode
+  { id: "mode-basic", run: modeBasicFlow, size: GAME_SIZE },
+  { id: "mode-leak", run: modeLeakFlow, size: GAME_SIZE },
   // 18.1-08: 역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종
   { id: "polish-reveal", run: polishRevealFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
