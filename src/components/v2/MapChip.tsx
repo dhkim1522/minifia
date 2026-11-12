@@ -15,6 +15,9 @@ export interface MapChipProps {
   /** 방장인가. 아니면 읽기 전용 */
   host: boolean;
   onPress(): void;
+  /** 19페이즈 자리: 방장 줄 변형(다음 커밋이 채운다) */
+  rail?: boolean;
+  pressed?: boolean;
 }
 
 const ICON: Readonly<Record<MapChoice, V2IconName>> = { bar: "mapBar", plaza: "mapPlaza", random: "shuffle" };

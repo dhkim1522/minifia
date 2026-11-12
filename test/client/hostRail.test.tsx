@@ -4,7 +4,11 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { ModeSheet } from "../../src/components/ModeSheet";
+import { HostRail, hostRailLayout } from "../../src/components/v2/HostRail";
 import { HostRailButton } from "../../src/components/v2/HostRailButton";
+import { MapChip } from "../../src/components/v2/MapChip";
+import { ModeChip } from "../../src/components/v2/ModeChip";
+import { splitSideColumn } from "../../src/components/v2/SideColumn";
 import { V2Icon } from "../../src/components/v2/V2Icon";
 import type { V2IconName } from "../../src/components/v2/V2Icon";
 import { MODE_ORDER, MODE_TEXT } from "../../src/game/modeText";
@@ -14,13 +18,15 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-// 주석을 뺀 CSS 에서 선택자 하나의 규칙 본문을 꺼낸다(없으면 빈 문자열).
+// 주석을 뺀 CSS 에서 선택자 하나의 규칙을 꺼낸다(없으면 빈 문자열).
 const strip = (path: string) => readFileSync(path, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 const V2 = strip("src/styles/v2.css");
 const SHEET = strip("src/styles/sheet.css");
+// 선택자는 줄 머리(또는 앞 규칙 바로 뒤)에서 시작하는 것만 본다 — 다른 규칙의 선택자 목록 끝에 붙은 같은 이름과 섞이지 않게.
 const ruleOf = (css: string, selector: string): string => {
-  const at = css.indexOf(`${selector} {`);
-  return at < 0 ? "" : css.slice(at, css.indexOf("}", at) + 1);
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const found = new RegExp(`(?:^|[}\\n])[ \\t]*(${escaped} \\{[^}]*\\})`).exec(css);
+  return found?.[1] ?? "";
 };
 
 // 그려진 도형을 한 줄로: 경로는 "p d", 원은 "c cx cy r".
@@ -246,5 +252,280 @@ describe("ModeSheet — 판 종류 두 칸 시트 (19-03, D-05·D-15, UI-SPEC B,
     expect(ruleOf(SHEET, '.mf-mode-card[aria-disabled="true"]')).toContain("opacity: 0.45");
     // 금빛은 방장 줄 단추의 색이다 — 시트 CSS 에는 쓰지 않는다
     expect(SHEET.includes("--light-lamp")).toBe(false);
+  });
+});
+
+// ── Task 2: 방장 줄 틀 · 맵 단추 줄 변형 · 참가자 칩 ──
+
+const layoutOf = (n: number, maxH: number) => JSON.stringify(hostRailLayout(n, maxH));
+const one = (crown: boolean, n: number) => JSON.stringify({ crown, columns: [n] });
+
+describe("hostRailLayout — 왕관 표식과 열 고르기 (19-03, UI-SPEC F-2, P19-2·P19-3)", () => {
+  it("표식까지 들어가면 한 열 + 표식이다(경계 포함): n·52 + (n−1)·12 + 32 ≤ 최대 높이", () => {
+    expect([layoutOf(4, 276), layoutOf(3, 212), layoutOf(2, 148), layoutOf(1, 84)].join(" ")).toBe([one(true, 4), one(true, 3), one(true, 2), one(true, 1)].join(" "));
+  });
+
+  it("표식만 안 들어가면 표식 없는 한 열이다", () => {
+    expect([layoutOf(4, 275), layoutOf(4, 244), layoutOf(3, 211)].join(" ")).toBe([one(false, 4), one(false, 4), one(false, 3)].join(" "));
+  });
+
+  it("한 열도 안 들어가면 splitSideColumn 의 두 열이고 표식이 없다", () => {
+    expect(layoutOf(4, 243)).toBe(JSON.stringify({ crown: false, columns: [3, 1] }));
+    // UI-SPEC F-2 표의 360×560: 띠 두 줄 174 → [2,2], 한 줄 195 → [3,1], 기본 마피아(n=3) 174 → [2,1]
+    expect([layoutOf(4, 174), layoutOf(4, 195), layoutOf(3, 174)].join(" ")).toBe(
+      [
+        { crown: false, columns: [2, 2] },
+        { crown: false, columns: [3, 1] },
+        { crown: false, columns: [2, 1] },
+      ]
+        .map((x) => JSON.stringify(x))
+        .join(" "),
+    );
+    for (const [n, maxH] of [[4, 243], [4, 174], [5, 116], [3, 100]] as const) {
+      expect(JSON.stringify(hostRailLayout(n, maxH).columns)).toBe(JSON.stringify(splitSideColumn(n, maxH)));
+    }
+  });
+
+  it("단추가 없으면 열이 없고, 높이를 아직 모르면(무한) 표식 한 열이다", () => {
+    expect(layoutOf(0, 500)).toBe(JSON.stringify({ crown: false, columns: [] }));
+    expect(layoutOf(3, Infinity)).toBe(one(true, 3));
+  });
+});
+
+const railButtons = (onPress: () => void = () => {}) => [
+  <HostRailButton key="mode" id="mode" icon="deck" label="판 종류: 확장판" onPress={onPress} />,
+  <MapChip key="map" rail choice="random" host onPress={onPress} />,
+  <HostRailButton key="bots" id="bots" icon="bot" label="봇" onPress={onPress} />,
+  <HostRailButton key="tutorial" id="tutorial" icon="book" label="튜토리얼 먼저" switchOn onPress={onPress} />,
+];
+const colsOf = (container: HTMLElement) =>
+  [...container.querySelectorAll(".mf-hostrail__col")]
+    .map((col) => [...col.querySelectorAll("[data-host-rail-btn]")].map((b) => b.getAttribute("data-host-rail-btn")).join(","))
+    .join(" | ");
+
+describe("HostRail — 방장 줄 틀 (19-03, D-13, UI-SPEC A·F-2)", () => {
+  it("넉넉하면 role=group '방장 전용' 줄 하나에 왕관 표식 + 한 열, 단추는 준 순서대로다", () => {
+    const { container } = render(<HostRail maxHeight={500}>{railButtons()}</HostRail>);
+    const rails = [...container.querySelectorAll("[data-host-rail]")];
+    expect(rails.length).toBe(1);
+    const rail = rails[0]!;
+    expect(rail.getAttribute("role")).toBe("group");
+    expect(rail.getAttribute("aria-label")).toBe("방장 전용");
+    expect(rail.classList.contains("mf-hostrail")).toBe(true);
+    expect(rail.hasAttribute("tabindex")).toBe(false);
+    expect(rail.hasAttribute("data-test-shift")).toBe(false);
+    const crowns = [...rail.querySelectorAll("[data-host-rail-crown]")];
+    expect(crowns.length).toBe(1);
+    expect(crowns[0]?.getAttribute("role")).toBe("img");
+    expect(crowns[0]?.getAttribute("aria-label")).toBe("방장 전용");
+    expect(crowns[0]?.querySelector("svg")?.getAttribute("width")).toBe("20");
+    expect(crowns[0]?.querySelector("button")).toBeNull();
+    expect(colsOf(container)).toBe("mode,map,bots,tutorial");
+    // 표식이 열 묶음보다 먼저(위)다
+    expect([...rail.children].map((c) => c.className).join(" > ")).toBe("mf-hostrail__crown > mf-hostrail__cols");
+    // 표식 값은 고정 낱말뿐이다(T-19-11)
+    expect([...rail.querySelectorAll("[data-host-rail-btn]")].every((b) => ["mode", "map", "bots", "tutorial"].includes(b.getAttribute("data-host-rail-btn") ?? ""))).toBe(true);
+    // 줄에 보이는 글이 없다(D-15)
+    expect((rail.textContent ?? "").trim()).toBe("");
+  });
+
+  it("한 열에 안 들어가면 표식 없이 두 열로 나뉘고 줄의 접근성 이름은 남는다", () => {
+    const { container } = render(<HostRail maxHeight={180}>{railButtons()}</HostRail>);
+    expect(container.querySelectorAll("[data-host-rail-crown]").length).toBe(0);
+    expect(colsOf(container)).toBe("mode,map,bots | tutorial");
+    expect(container.querySelector("[data-host-rail]")?.getAttribute("aria-label")).toBe("방장 전용");
+  });
+
+  it("표식만 안 들어가면 표식 없는 한 열이다", () => {
+    const { container } = render(<HostRail maxHeight={250}>{railButtons()}</HostRail>);
+    expect(container.querySelectorAll("[data-host-rail-crown]").length).toBe(0);
+    expect(colsOf(container)).toBe("mode,map,bots,tutorial");
+  });
+
+  it("null 자식은 칸이 아니다 — 기본 마피아 판처럼 토글이 빠지면 셋으로 센다", () => {
+    const { container } = render(
+      <HostRail maxHeight={212}>
+        {railButtons().slice(0, 3)}
+        {null}
+        {false}
+      </HostRail>,
+    );
+    expect(colsOf(container)).toBe("mode,map,bots");
+    expect(container.querySelectorAll("[data-host-rail-crown]").length).toBe(1);
+  });
+
+  it("testShift 면 data-test-shift 를 단다(테스트 방 단추 아래로, P19-5)", () => {
+    const { container } = render(
+      <HostRail maxHeight={500} testShift>
+        {railButtons()}
+      </HostRail>,
+    );
+    expect(container.querySelector("[data-host-rail]")?.hasAttribute("data-test-shift")).toBe(true);
+  });
+
+  it("단추가 하나도 없으면 줄을 그리지 않는다", () => {
+    const { container } = render(<HostRail maxHeight={500}>{null}</HostRail>);
+    expect(container.querySelector("[data-host-rail]")).toBeNull();
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("줄 안의 단추는 그대로 눌린다", () => {
+    const onPress = vi.fn();
+    const { container } = render(<HostRail maxHeight={500}>{railButtons(onPress)}</HostRail>);
+    expect(container.querySelectorAll("[data-host-rail-btn]").length).toBe(4);
+    for (const b of container.querySelectorAll("[data-host-rail-btn]")) fireEvent.click(b);
+    expect(onPress).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe("MapChip 줄 변형 (19-03, P19-4)", () => {
+  it("rail 이면 방장 단추 모양·표식 map 이고 data-side-button 이 없다. 아이콘·data-map-chip·이름은 그대로다", () => {
+    const { container } = render(<MapChip rail choice="plaza" host onPress={() => {}} />);
+    const chip = container.querySelector("[data-map-chip]");
+    expect(chip?.getAttribute("data-host-rail-btn")).toBe("map");
+    expect(chip?.getAttribute("data-map-chip")).toBe("plaza");
+    expect(chip?.className).toBe("mf-mapchip mv-hostrail-btn");
+    expect(chip?.hasAttribute("data-side-button")).toBe(false);
+    expect(chip?.getAttribute("aria-label")).toBe("맵 광장");
+    expect(chip?.getAttribute("aria-pressed")).toBe("false");
+    expect(chip?.querySelector("svg")).not.toBeNull();
+  });
+
+  it("rail + pressed 면 aria-pressed=true 다(꾸미기 시트의 맵 탭이 열려 있음)", () => {
+    const { container } = render(<MapChip rail pressed choice="bar" host onPress={() => {}} />);
+    expect(container.querySelector("[data-map-chip]")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("rail 이어도 누르면 onPress 한 번, 방장이 아니면 0번이다", () => {
+    const onPress = vi.fn();
+    const a = render(<MapChip rail choice="random" host onPress={onPress} />);
+    expect(a.container.querySelector("[data-host-rail-btn]")).not.toBeNull();
+    fireEvent.click(a.container.querySelector("[data-map-chip]")!);
+    expect(onPress).toHaveBeenCalledTimes(1);
+    a.unmount();
+    const b = render(<MapChip rail choice="random" host={false} onPress={onPress} />);
+    fireEvent.click(b.container.querySelector("[data-map-chip]")!);
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it("rail 없이 그리면 지금 마크업 그대로다(기존 화면은 바뀌지 않는다)", () => {
+    const { container } = render(<MapChip choice="bar" host onPress={() => {}} />);
+    const chip = container.querySelector("[data-map-chip]");
+    expect(chip?.getAttribute("data-side-button")).toBe("map");
+    expect(chip?.className).toBe("mf-mapchip");
+    expect(chip?.hasAttribute("data-host-rail-btn")).toBe(false);
+    expect(chip?.hasAttribute("aria-pressed")).toBe(false);
+  });
+});
+
+describe("ModeChip — 참가자 읽기 전용 칩 (19-03, D-07, UI-SPEC C)", () => {
+  it("누를 수 없는 정적 글이다: button 아님·tabindex 없음·aria-label 없음, 글은 '판 종류: {이름}'", () => {
+    const { container } = render(<ModeChip mode="basic" />);
+    const chips = [...container.querySelectorAll("[data-mode-chip]")];
+    expect(chips.length).toBe(1);
+    const chip = chips[0]!;
+    expect(chip.getAttribute("data-mode-chip")).toBe("basic");
+    expect(chip.tagName).not.toBe("BUTTON");
+    expect(container.querySelector("button")).toBeNull();
+    expect(chip.hasAttribute("tabindex")).toBe(false);
+    expect(chip.hasAttribute("aria-label")).toBe(false);
+    expect(chip.hasAttribute("role")).toBe(false);
+    expect(chip.hasAttribute("aria-live")).toBe(false);
+    expect(chip.hasAttribute("data-test-shift")).toBe(false);
+    expect(chip.classList.contains("mf-modechip")).toBe(true);
+    expect(chip.textContent).toBe("판 종류: 기본 마피아");
+    // 보이는 글은 판 이름뿐이고 앞 글은 화면에 안 보이는 접근성 글이다
+    expect(chip.querySelector(".mf-sr-only")?.textContent).toBe("판 종류: ");
+    expect([...chip.querySelectorAll("span:not(.mf-sr-only)")].map((s) => s.textContent).join("|")).toBe("기본 마피아");
+    const svg = chip.querySelector("svg");
+    expect(svg?.getAttribute("width")).toBe("16");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("확장판은 '판 종류: 확장판', testShift 면 data-test-shift 를 단다", () => {
+    const { container } = render(<ModeChip mode="extended" testShift />);
+    const chip = container.querySelector("[data-mode-chip]");
+    expect(chip?.getAttribute("data-mode-chip")).toBe("extended");
+    expect(chip?.textContent).toBe("판 종류: 확장판");
+    expect(chip?.hasAttribute("data-test-shift")).toBe(true);
+  });
+});
+
+describe("방장 줄·칩 CSS (19-03, UI-SPEC A-1·C-1·Color, T-19-12)", () => {
+  const TOP = "top: calc(var(--mf-host-bottom, 62px) + 12px)";
+
+  it("줄의 위 시작은 오른쪽 열(.mv-side)과 같은 식이고 왼쪽 16·같은 층·눌림 통과다", () => {
+    expect(ruleOf(V2, ".mv-side")).toContain(TOP);
+    const rail = ruleOf(V2, ".mf-hostrail");
+    expect(rail).toContain(TOP);
+    expect(rail).toContain("left: var(--space-md)");
+    expect(rail).toContain("z-index: var(--z-overlay)");
+    expect(rail).toContain("pointer-events: none");
+    expect(rail).toContain("position: absolute");
+  });
+
+  it("테스트 방은 줄·칩이 48px 더 내려온다(P19-5)", () => {
+    expect(ruleOf(V2, ".mf-hostrail[data-test-shift]")).toContain("top: calc(var(--mf-host-bottom, 62px) + 12px + 48px)");
+    expect(ruleOf(V2, ".mf-modechip[data-test-shift]")).toContain("top: calc(var(--mf-host-bottom, 62px) + 20px + 48px)");
+  });
+
+  it("왕관 표식은 52×20·아래 12·금빛, 열 묶음은 가로 12, 열은 세로 12 다", () => {
+    const crown = ruleOf(V2, ".mf-hostrail__crown");
+    expect(crown).toContain("width: var(--control-button)");
+    expect(crown).toContain("height: 20px");
+    expect(crown).toContain("margin-bottom: 12px");
+    expect(crown).toContain("color: var(--light-lamp)");
+    const cols = ruleOf(V2, ".mf-hostrail__cols");
+    expect(cols).toContain("flex-direction: row");
+    expect(cols).toContain("gap: 12px");
+    const col = ruleOf(V2, ".mf-hostrail__col");
+    expect(col).toContain("flex-direction: column");
+    expect(col).toContain("gap: 12px");
+  });
+
+  it("칩은 줄 위 시작 + 8(= + 20px)·높이 32 알약·1px night-600·night-900·14px/400 이고 눌림을 통과시킨다", () => {
+    const chip = ruleOf(V2, ".mf-modechip");
+    expect(chip).toContain("top: calc(var(--mf-host-bottom, 62px) + 20px)");
+    expect(chip).toContain("left: var(--space-md)");
+    expect(chip).toContain("height: 32px");
+    expect(chip).toContain("border-radius: var(--radius-pill)");
+    expect(chip).toContain("border: 1px solid var(--night-600)");
+    expect(chip).toContain("background: var(--night-900)");
+    expect(chip).toContain("color: var(--gray-100)");
+    expect(chip).toContain("font-size: 14px");
+    expect(chip).toContain("font-weight: 400");
+    expect(chip).toContain("padding: 0 12px");
+    expect(chip).toContain("gap: var(--space-sm)");
+    expect(chip).toContain("pointer-events: none");
+    expect(chip).toContain("z-index: var(--z-overlay)");
+  });
+
+  it("시트 층이 열려 있는 동안 오른쪽 열과 함께 줄·칩도 숨는다", () => {
+    const at = V2.indexOf(".mf-room:has([data-sheet-layer]) .mv-side");
+    expect(at).toBeGreaterThan(-1);
+    // 그 규칙의 선택자 목록(앞 규칙의 닫는 중괄호 뒤부터 여는 중괄호까지)과 본문
+    const start = V2.lastIndexOf("}", at) + 1;
+    const selectors = V2.slice(start, V2.indexOf("{", at));
+    expect(selectors).toContain(".mf-room:has([data-sheet-layer]) .mf-hostrail");
+    expect(selectors).toContain(".mf-room:has([data-sheet-layer]) .mf-modechip");
+    expect(V2.slice(at, V2.indexOf("}", at))).toContain("visibility: hidden");
+  });
+
+  it("방장 단추는 깜빡이지 않는다 — 빛남(.is-call) 선택자에 줄 단추가 없다", () => {
+    const rules = V2.split("}").filter((r) => r.includes("is-call") && (r.includes("mv-hostrail-btn") || r.includes("mf-hostrail")));
+    expect(rules.length).toBe(0);
+    // 새 모션이 없다: 줄·칩 규칙에 animation·transition 이 없다
+    const mine = V2.split("}").filter((r) => /\.(mf-hostrail|mv-hostrail-btn|mf-modechip)/.test(r.split("{")[0] ?? ""));
+    expect(mine.length).toBeGreaterThan(8);
+    expect(mine.filter((r) => /animation|transition/.test(r)).length).toBe(0);
+  });
+
+  it("모션 줄이기에서는 누름 변형도 끈다", () => {
+    expect(/@media \(prefers-reduced-motion: reduce\) \{\s*\.mv-hostrail-btn:active \{ transform: none; \}/.test(V2)).toBe(true);
+  });
+
+  it("줄·칩 CSS 에 hex 색이 없다(토큰만)", () => {
+    const mine = V2.split("}").filter((r) => /mf-hostrail|mv-hostrail-btn|mf-modechip/.test(r));
+    expect(mine.filter((r) => /#[0-9a-fA-F]{3,8}\b/.test(r)).length).toBe(0);
   });
 });
