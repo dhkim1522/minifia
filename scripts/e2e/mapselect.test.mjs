@@ -1,7 +1,7 @@
 // 맵 선택 E2E 순수 판정 단위 테스트 (11-13). 실행: node --test scripts/e2e/mapselect.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MAP_CHIP, MAP_CARD, MAP_MARKERS, mapChoiceChecks } from "./mapselect.mjs";
+import { MAP_CHIP, MAP_CARD, MAP_MARKERS, mapChoiceChecks, mapRailChecks } from "./mapselect.mjs";
 
 const box = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
 
@@ -92,4 +92,83 @@ test("측정값이 없으면 해당 항목이 실패한다(거짓 통과 없음)
   const rows = mapChoiceChecks({ viewport: { w: 360, h: 560 } });
   assert.equal(rows.length, 6);
   for (const r of rows) assert.equal(r.ok, false, r.id);
+});
+
+// ---- 20-07: [맵] 숨김 mapRailChecks (TM11, D-02·P20-16) — 확장판은 늘 마을이라 [맵] 단추·맵 탭이 없고, 기본 마피아로 되돌리면 이전 맵 선택과 함께 다시 있다 ----
+
+/** 확장판 대기실(테스트 방) 정상값: 줄은 판 종류·봇·튜토리얼, [옷장]으로 연 시트에 맵 탭·카드 0 */
+const hidden = (over = {}) => ({ screen: "lobby", mode: "extended", viewMode: "extended", railButtons: ["mode", "bots", "tutorial"], tabs: 0, ...over });
+/** 기본 마피아로 되돌린 대기실 정상값: 줄은 판 종류·맵·봇, 맵 선택은 이전 값 그대로이고 칩도 그 값 */
+const shown = (over = {}) => ({ screen: "lobby", mode: "basic", viewMode: "basic", railButtons: ["mode", "map", "bots"], mapChoice: "plaza", prevChoice: "plaza", chipId: "plaza", ...over });
+/** 판정 줄은 늘 하나다 */
+const one = (m) => {
+  const rows = mapRailChecks(m);
+  assert.equal(rows.length, 1, `판정 줄 ${rows.length}개`);
+  return rows[0];
+};
+
+test("TM11a: 확장판 줄에 map 이 없고 시트에 맵 탭이 없으면 통과한다", () => {
+  const r = one({ mode: "extended", railButtons: ["mode", "bots"], tabs: 0 });
+  assert.equal(r.id, "TM11a");
+  assert.equal(r.ok, true, r.detail);
+  assert.deepEqual(Object.keys(r).sort(), ["detail", "id", "label", "ok"]);
+  assert.equal(one(hidden()).ok, true);
+  assert.equal(one(hidden({ railButtons: ["mode"] })).ok, true); // 봇 도구가 꺼진 방·튜토리얼이 없는 화면도 [맵] 만 없으면 된다
+});
+
+test("TM11a: 확장판 줄에 map 이 있으면 실패하고 개수와 줄 이름을 말한다. 시트에 맵 탭·카드가 있어도, 서버 판 종류가 다른 값이어도 실패한다", () => {
+  const r = one(hidden({ railButtons: ["mode", "map", "bots", "tutorial"] }));
+  assert.equal(r.id, "TM11a");
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /map 1개/);
+  assert.match(r.detail, /mode·map·bots·tutorial/);
+  const t = one(hidden({ tabs: 2 }));
+  assert.equal(t.ok, false);
+  assert.match(t.detail, /맵 탭·카드 2개/);
+  const v = one(hidden({ viewMode: "basic" }));
+  assert.equal(v.ok, false);
+  assert.match(v.detail, /basic/);
+});
+
+test("TM11b: 기본 마피아 줄에 map 이 하나 있고 맵 선택이 이전 값과 같으면 통과, 다르면 두 값을 말하며 실패한다", () => {
+  const r = one(shown());
+  assert.equal(r.id, "TM11b");
+  assert.equal(r.ok, true, r.detail);
+  assert.equal(one({ mode: "basic", railButtons: ["mode", "map"], mapChoice: "random", prevChoice: "random" }).ok, true); // 칩 값·서버 판 종류는 주면 본다
+  const changed = one(shown({ mapChoice: "random", chipId: "random" }));
+  assert.equal(changed.ok, false);
+  assert.match(changed.detail, /random/);
+  assert.match(changed.detail, /plaza/);
+});
+
+test("TM11b: 기본 마피아인데 map 이 없거나 둘이면, 칩 값이 맵 선택과 다르면, 서버 판 종류가 다른 값이면 실패한다", () => {
+  const none = one(shown({ railButtons: ["mode", "bots"] }));
+  assert.equal(none.ok, false);
+  assert.match(none.detail, /map 0개/);
+  assert.equal(one(shown({ railButtons: ["mode", "map", "map", "bots"] })).ok, false);
+  const chip = one(shown({ chipId: "bar" }));
+  assert.equal(chip.ok, false);
+  assert.match(chip.detail, /bar/);
+  assert.equal(one(shown({ chipId: null })).ok, false); // 칩을 못 읽음
+  assert.equal(one(shown({ viewMode: "extended" })).ok, false);
+});
+
+test("TM11c: 결과 화면은 같은 판정을 TM11c-숨김(확장판)·TM11c-복귀(기본 마피아)로 낸다", () => {
+  const hide = one(hidden({ screen: "result", railButtons: ["mode"] }));
+  assert.equal(hide.id, "TM11c-숨김");
+  assert.equal(hide.ok, true, hide.detail);
+  assert.match(hide.label, /결과 화면/);
+  assert.equal(one(hidden({ screen: "result", railButtons: ["mode", "map"] })).ok, false);
+  const back = one(shown({ screen: "result", railButtons: ["mode", "map"] }));
+  assert.equal(back.id, "TM11c-복귀");
+  assert.equal(back.ok, true, back.detail);
+  assert.equal(one(shown({ screen: "result", railButtons: ["mode"] })).ok, false);
+});
+
+test("mapRailChecks: 못 잰 입력은 측정값 없음으로 실패한다(공허 통과 금지)", () => {
+  for (const m of [undefined, {}, { mode: "x", railButtons: [], tabs: 0 }, hidden({ railButtons: null }), hidden({ railButtons: [1] }), hidden({ tabs: undefined }), shown({ mapChoice: undefined }), shown({ prevChoice: null })]) {
+    const r = one(m);
+    assert.equal(r.ok, false);
+    assert.match(r.detail, /측정값 없음/);
+  }
 });

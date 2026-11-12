@@ -122,6 +122,11 @@ export function mapChoiceChecks(m) {
   return out;
 }
 
+/** 자리 함수(20-07 RED): 판정 줄을 아직 내지 않는다 */
+export function mapRailChecks() {
+  return [];
+}
+
 const CHIP = "[data-map-chip]";
 const SHEET = "[data-dress-sheet]";
 const DRESS_FLOAT = '[data-float="dress"]';

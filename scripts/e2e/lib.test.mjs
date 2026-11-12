@@ -160,6 +160,7 @@ import {
   hostRailChecks,
   hostRailLayoutE2E,
   hostRailMeasure,
+  railMapsOn,
   modeChipChecks,
   modeSheetChecks,
   BASIC_ABSENT_SELECTORS,
@@ -4707,6 +4708,34 @@ test("HR4: 순서·개수 — 확장판 mode·map·bots·tutorial, 기본 마피
   assert.ok(!hrFails(two).includes("HR4"));
   const twoBad = railNoCrown(391, { buttons: [railBtn("tutorial", 183), railBtn("map", 247), railBtn("bots", 311), railBtn("mode", 183, 80)] });
   assert.ok(hrFails(twoBad).includes("HR4"));
+});
+
+test("railMapsOn(20-07, D-02·P20-16): [맵] 칸은 허용 맵이 둘 이상이고 판 종류가 기본 마피아일 때만 있다 — 확장판은 늘 마을이라 고를 것이 없다", () => {
+  assert.equal(railMapsOn(true, "basic"), true);
+  assert.equal(railMapsOn(true, "extended"), false);
+  assert.equal(railMapsOn(false, "basic"), false);
+  assert.equal(railMapsOn(false, "extended"), false);
+  assert.equal(railMapsOn(true, undefined), false); // 판 종류를 모르면 앱의 기본값(확장판)과 같이 없는 쪽
+  assert.equal(railMapsOn(1, "basic"), false); // 참 비슷한 값은 받지 않는다
+});
+
+test("HR4(20-07): 흐름이 넘기는 mapsOn = railMapsOn(허용 맵 둘 이상, 판 종류) — 확장판 대기실 mode·bots·tutorial, 기본 마피아 mode·map·bots, 결과 화면 확장판 mode 하나", () => {
+  const three = { rect: rect(16, 183, 52, 212), ariaLabel: "방장 전용" };
+  // 확장판 대기실: 줄에 [맵] 이 없다(단추 셋). [맵] 이 남아 있으면 HR4 가 잡는다
+  const ext = railIn({ mapsOn: railMapsOn(true, "extended"), rail: three, buttons: [railBtn("mode", 215), railBtn("bots", 279), railBtn("tutorial", 343)] });
+  assert.deepEqual(hrFails(ext), []);
+  assert.deepEqual(hrFails(railIn({ mapsOn: railMapsOn(true, "extended") })), ["HR4"]); // 옛 줄(mode·map·bots·tutorial)
+  assert.match(hrLine(railIn({ mapsOn: railMapsOn(true, "extended") }), "HR4").detail, /mode·map·bots·tutorial \(기대 mode·bots·tutorial\)/);
+  // 기본 마피아 대기실: [맵] 이 있다. 없으면 HR4 가 잡는다
+  const basic = railIn({ mode: "basic", mapsOn: railMapsOn(true, "basic"), rail: three, buttons: [railBtn("mode", 215), railBtn("map", 279), railBtn("bots", 343)] });
+  assert.deepEqual(hrFails(basic), []);
+  const basicNoMap = railIn({ mode: "basic", mapsOn: railMapsOn(true, "basic"), rail: { rect: rect(16, 183, 52, 148), ariaLabel: "방장 전용" }, buttons: [railBtn("mode", 215), railBtn("bots", 279)] });
+  assert.deepEqual(hrFails(basicNoMap), ["HR4"]);
+  // 결과 화면: 확장판은 [판 종류] 하나(표식 20 + 12 + 단추 52 = 84), 기본 마피아는 [판 종류]·[맵]
+  const resExt = railResult({ mapsOn: railMapsOn(true, "extended"), rail: { rect: rect(16, 135, 52, 84), ariaLabel: "방장 전용" }, buttons: [railBtn("mode", 167)] });
+  assert.deepEqual(hrFails(resExt), []);
+  assert.deepEqual(hrFails(railResult({ mapsOn: railMapsOn(true, "extended") })), ["HR4"]); // 결과 화면 확장판에 [맵] 이 남음
+  assert.deepEqual(hrFails(railResult({ mode: "basic", mapsOn: railMapsOn(true, "basic") })), []);
 });
 
 test("HR5: 줄 단추 테두리·아이콘이 금빛(rgb(255, 207, 138)), 오른쪽 열 테두리는 night-600 — 줄 단추가 night-600 이거나 .is-call 이면 실패", () => {

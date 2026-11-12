@@ -2467,6 +2467,11 @@ export function hostRailLayoutE2E(n, maxH) {
   return { crown: false, columns };
 }
 
+/** 자리 함수(20-07 RED): 지금은 옛 동작 그대로 허용 맵 수만 본다 */
+export function railMapsOn(playableMany) {
+  return playableMany === true;
+}
+
 const railRectOk = (r) => !!r && allNum(r.left, r.top, r.width, r.height);
 const railModeOk = (m) => m === "basic" || m === "extended";
 /** 줄 단추를 열로 나눈다: 왼쪽변이 6 넘게 다르면 다른 열. 왼쪽 열부터, 열 안은 위부터 */
