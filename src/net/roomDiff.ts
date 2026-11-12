@@ -1,7 +1,10 @@
 // 서버가 보낸 대기실 스냅샷 두 개의 차이. 서버는 입장·퇴장·방장 변경 이벤트를 따로 보내지 않는다 —
 // 재접속 때 지난 일을 다시 보여 주지 않도록 알림은 모두 이 차이에서만 만든다.
 // 알림 문구는 결정 0051 · 06-UI-SPEC Copywriting "입장·퇴장·방장 알림": "방장 · {닉네임}"(왕관), "{닉네임} 님 입장", "{닉네임} 님 퇴장".
+// 19페이즈(P19-9): 판 종류 바뀜 한 줄(modeToastOf)도 같은 규칙이다 — view 두 개의 차이로만, 방장 본인·첫 스냅샷에는 없다.
+import { modeOf } from "../../shared/game/ruleset";
 import type { RoomView } from "../../shared/protocol";
+import { MODE_TEXT } from "../game/modeText";
 
 export interface RoomDiff {
   joined: { seat: number; nickname: string }[];
@@ -48,7 +51,13 @@ export function toastForDiff(diff: RoomDiff): LobbyToast | null {
   return null;
 }
 
-/** 19페이즈 자리: 판 종류 바뀜 알림(다음 커밋이 채운다). */
-export function modeToastOf(_prev: RoomView | null, _next: RoomView): string | null {
-  return null;
+/**
+ * 판 종류가 바뀌었다는 참가자용 한 줄(P19-9): "판 종류: 확장판" / "판 종류: 기본 마피아". 대기실·결과 화면이 TopToast 로 띄운다.
+ * 서버 view 두 개의 차이로만 만든다 — prev 가 null 이면(처음 열 때·재연결 직후) 없고, 방장 본인에게도 없다(시트에서 봤다).
+ * mode 키가 없는 view 는 읽는 쪽 기본값(확장판)으로 본다(modeOf).
+ */
+export function modeToastOf(prev: RoomView | null, next: RoomView): string | null {
+  if (!prev || next.me.isHost) return null;
+  const mode = modeOf(next);
+  return modeOf(prev) === mode ? null : MODE_TEXT.changed(mode);
 }
