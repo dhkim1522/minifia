@@ -1,9 +1,11 @@
 // 11페이즈 맵 선택 E2E (11-13, 결정 D-20·D-21, UI-SPEC F-2·G; 16-06: 칩은 52 원, 참가자에게는 칩이 없다; 19-06: 칩은 오른쪽 열이 아니라 왼쪽 방장 줄의 칸이다): 지도 칩·꾸미기 시트 맵 탭·카드 기하, 선택이 모든 페이지에 반영,
 // 시작 뒤 모두 같은 맵, 광장에서 한 판이 ended 까지. 흐름 본문은 이 파일에 둔다(flows.mjs 의 도우미는 `makeMapSelectFlows(helpers)` 로 받는다 — avatar.mjs 와 같은 모양).
 // helpers: { recorder, startHost, openGuest, attempt, LOBBY_HOST_NICK, WORLD_GUEST_NICK, settledResult }
-// 판정 문턱은 아래 순수 검사 함수(mapChoiceChecks)에만 있고 흐름은 낮추지 않는다. 칩·카드 기하는 src/styles/v2.css 와 같아야 하고 test/unit/e2eContract.test.ts 가 대조한다.
-import { SetupError, chooseRole, chooseVerdict, clickInDialog, closeSheet, openTestSheet, readGame, readHostRail, readSideColumn, setBotVote, setBots, settle, skipTo, sleep, startGame, waitWorldReady } from "./browser.mjs";
-import { hostRailChecks, hostRailMeasure, modeChipChecks, sideColumnChecks } from "./lib.mjs";
+// 20페이즈(20-07, D-02·P20-16): 확장판은 늘 마을이라 맵 선택은 기본 마피아에서 본다 — 흐름은 먼저 확장판(서버 기본값)에 [맵] 단추·맵 탭이 없음을 보고(TM11a),
+// 방장 줄의 [판 종류] 로 기본 마피아로 바꿔 [맵] 이 이전 맵 선택과 함께 생김을 본 뒤(TM11b) 맵을 고른다. 결과 화면에서도 같은 숨김·복귀를 본다(TM11c).
+// 판정 문턱은 아래 순수 검사 함수(mapChoiceChecks·mapRailChecks)에만 있고 흐름은 낮추지 않는다. 칩·카드 기하는 src/styles/v2.css 와 같아야 하고 test/unit/e2eContract.test.ts 가 대조한다.
+import { SetupError, chooseRole, chooseVerdict, clickInDialog, closeSheet, openTestSheet, pickModeViaRail, readGame, readHostRail, readSideColumn, setBotVote, setBots, settle, skipTo, sleep, startGame, waitWorldReady } from "./browser.mjs";
+import { hostRailChecks, hostRailMeasure, modeChipChecks, railMapsOn, sideColumnChecks } from "./lib.mjs";
 
 /** 앱이 더한 DOM 표식·훅 이름. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지) */
 export const MAP_MARKERS = Object.freeze([
@@ -122,9 +124,43 @@ export function mapChoiceChecks(m) {
   return out;
 }
 
-/** 자리 함수(20-07 RED): 판정 줄을 아직 내지 않는다 */
-export function mapRailChecks() {
-  return [];
+/**
+ * TM11 [맵] 숨김 판정(20-07, D-02·P20-16, UI-SPEC TM11). 판정 줄은 늘 하나다.
+ * m = { screen "lobby"(기본)|"result" · mode 이 단계에서 기대하는 판 종류 "extended"|"basic" · viewMode 서버 view.mode(주면 mode 와 같아야 한다) ·
+ *       railButtons 방장 줄 단추 표식 배열([data-host-rail-btn], 위 → 아래) ·
+ *       확장판: tabs [옷장]으로 연 꾸미기 시트의 맵 탭 + 맵 카드 수 ·
+ *       기본 마피아: mapChoice 지금 서버 맵 선택 · prevChoice 확장판으로 있던 동안의 맵 선택(둘이 같아야 한다) · chipId 줄의 [맵] 칩 값(주면 mapChoice 와 같아야 한다) }.
+ * 두 판 모두 줄에 mode 단추가 있어야 한다(줄을 못 읽은 화면이 "[맵] 없음"으로 통과하지 못하게).
+ * 확장판: 줄에 map 0개 · 맵 탭·카드 0개 → 대기실 TM11a, 결과 화면 TM11c-숨김.
+ * 기본 마피아: 줄에 map 정확히 하나 · 맵 선택이 이전 값 그대로 → 대기실 TM11b, 결과 화면 TM11c-복귀.
+ * 결과 줄에는 표식 이름·개수·맵 id 만 남는다(닉네임·토큰 없음, T-20-24).
+ */
+export function mapRailChecks(m) {
+  const where = m?.screen === "result" ? "결과 화면" : "대기실";
+  const onResult = m?.screen === "result";
+  const mode = m?.mode;
+  if (mode !== "extended" && mode !== "basic") return [noMeasure(onResult ? "TM11c" : "TM11", `${where}: [맵] 숨김 (TM11)`, "mode")];
+  const hide = mode === "extended";
+  const id = onResult ? (hide ? "TM11c-숨김" : "TM11c-복귀") : hide ? "TM11a" : "TM11b";
+  const label = hide ? `${where}: 확장판에는 방장 줄의 [맵] 단추·꾸미기 시트의 맵 탭이 없다 (TM11)` : `${where}: 기본 마피아로 되돌리면 [맵] 단추가 이전 맵 선택과 함께 다시 있다 (TM11)`;
+  if (!Array.isArray(m.railButtons) || m.railButtons.some((b) => typeof b !== "string")) return [noMeasure(id, label, "railButtons")];
+  if (hide && !isNum(m.tabs)) return [noMeasure(id, label, "tabs")];
+  if (!hide && (typeof m.mapChoice !== "string" || typeof m.prevChoice !== "string")) return [noMeasure(id, label, "mapChoice·prevChoice")];
+  const bad = [];
+  if (m.viewMode !== undefined && m.viewMode !== mode) bad.push(`서버 판 종류 ${m.viewMode} ≠ ${mode}`);
+  // 줄 자체를 못 읽은 화면(단추 0)이 "[맵] 없음"으로 통과하지 못하게: 방장 줄에는 늘 [판 종류] 가 있다
+  if (!m.railButtons.includes("mode")) bad.push(`방장 줄을 읽지 못함(mode 단추 없음) — 줄 ${m.railButtons.join("·") || "없음"}`);
+  const maps = m.railButtons.filter((b) => b === "map").length;
+  const railText = m.railButtons.join("·") || "없음";
+  if (hide) {
+    if (maps !== 0) bad.push(`확장판 줄에 map ${maps}개 — 줄 ${railText}`);
+    if (m.tabs !== 0) bad.push(`꾸미기 시트에 맵 탭·카드 ${m.tabs}개`);
+  } else {
+    if (maps !== 1) bad.push(`기본 마피아 줄에 map ${maps}개 ≠ 1 — 줄 ${railText}`);
+    if (m.mapChoice !== m.prevChoice) bad.push(`맵 선택 ${m.mapChoice} ≠ 이전 ${m.prevChoice}`);
+    if (m.chipId !== undefined && m.chipId !== m.mapChoice) bad.push(`칩 ${m.chipId ?? "없음"} ≠ 맵 선택 ${m.mapChoice}`);
+  }
+  return [result(id, label, bad)];
 }
 
 const CHIP = "[data-map-chip]";
@@ -203,7 +239,21 @@ export async function pickMapViaUi(page, tracker, id) {
 }
 
 /**
- * 흐름 map-select 와 그 도우미를 만든다. 칩·시트 기하는 로비에서, 선택 반영은 모든 페이지에서, 시작 뒤 맵은 훅(__mfMap)으로, 광장 한 판은 ended 까지 본다.
+ * 방장 페이지(대기실 또는 결과 화면)에서 방장 줄의 [판 종류] → 시트의 칸으로 판 종류를 고르고 서버 값(view.mode)이 바뀔 때까지 기다린 뒤 시트를 닫는다(20-07).
+ * 확장판은 늘 마을이라 [맵] 단추가 없다 — 맵을 고르려면(pickMapViaUi) 먼저 이것으로 "basic" 을 고른다. 이미 그 값이면 칸을 누르지 않는다.
+ * 열려 있는 꾸미기 시트(줄이 숨는다)·테스트 도구 시트는 먼저 닫는다. 셀렉터는 modes.mjs 가 쓰는 browser.mjs pickModeViaRail 그대로다
+ * ([data-host-rail] [data-host-rail-btn="mode"] → [data-mode-sheet] [data-mode-card="{mode}"]).
+ * @param {import("playwright-core").Page} page 방장 페이지 (로비 또는 결과 화면)
+ * @param {{ last(): any, waitFor(pred: (v: any) => boolean, ms: number, label: string): Promise<any> }} tracker
+ * @param {"basic"|"extended"} mode
+ */
+export async function pickModeViaUi(page, tracker, mode) {
+  await closeDressSheet(page);
+  await pickModeViaRail(page, tracker, mode);
+}
+
+/**
+ * 흐름 map-select 와 그 도우미를 만든다. 20페이즈: 확장판은 늘 마을이라 맵 선택은 기본 마피아에서 본다(먼저 TM11a·TM11b, 결과 화면에서 TM11c). 칩·시트 기하는 로비에서, 선택 반영은 모든 페이지에서, 시작 뒤 맵은 훅(__mfMap)으로, 광장 한 판은 ended 까지 본다.
  * 시작 전 view 에 map 키가 없음은 워커 시험(L42)이 이미 고정했으므로 여기서는 훅 값으로만 본다.
  */
 export function makeMapSelectFlows(helpers) {
@@ -212,9 +262,10 @@ export function makeMapSelectFlows(helpers) {
   /**
    * 왼쪽 방장 줄·참가자 칩 판정(19-06)을 방장·참가자 두 페이지에서 쌓는다. 시트가 닫혀 있을 때 부른다(시트가 열리면 줄이 숨는다).
    * 판 종류는 서버가 보낸 값(view.mode)을 쓴다. 이 방은 테스트 방이라 봇 도구가 켜져 있다(대기실 줄에 [봇]).
+   * 줄의 [맵] 칸은 기본 마피아에만 있다(20-07) — 이 빌드는 허용 맵이 둘 이상이다.
    */
   async function recRail(rec, sc, pre, screen, ht, hp, gp, gt) {
-    const railIn = (m, host, mode) => ({ viewport: { w: m.vw, h: m.vh }, screen, host, mode, kbOpen: false, mapsOn: true, botsOn: ht.last()?.me?.testBots !== undefined, rail: m.rail, buttons: m.buttons, crown: m.crown, chip: m.chip, band: m.band, panel: m.panel, head: m.head, test: m.test, toast: m.toast, side: m.side, panelToggles: m.panelToggles });
+    const railIn = (m, host, mode) => ({ viewport: { w: m.vw, h: m.vh }, screen, host, mode, kbOpen: false, mapsOn: railMapsOn(true, mode), botsOn: ht.last()?.me?.testBots !== undefined, rail: m.rail, buttons: m.buttons, crown: m.crown, chip: m.chip, band: m.band, panel: m.panel, head: m.head, test: m.test, toast: m.toast, side: m.side, panelToggles: m.panelToggles });
     const [h, g] = await Promise.all([readHostRail(hp), readHostRail(gp)]);
     const hMode = ht.last()?.mode ?? "extended";
     const gMode = gt.last()?.mode ?? "extended";
@@ -226,7 +277,24 @@ export function makeMapSelectFlows(helpers) {
     for (const r of modeChipChecks({ viewport: { w: g.vw, h: g.vh }, viewMode: gMode, chip: g.chip, band: g.band, panel: g.panel, head: g.head, test: g.test, toast: g.toast, side: g.side })) rec(sc, `${pre}${r.id}`, r.label, r.ok, r.detail, r.info === true);
   }
 
-  /** 테스트 시트로 로비로 되돌린다(선택 mapChoice 는 방에 남는다) */
+  /** 서버가 보낸 판 종류(키가 없으면 확장판) */
+  const modeOf = (tracker) => tracker.last()?.mode ?? "extended";
+
+  /**
+   * TM11 의 "없음" 쪽 측정(방장 페이지, 대기실·결과 화면): 줄 단추 표식을 읽고, [옷장]으로 꾸미기 시트를 열어 맵 탭 + 맵 카드 수를 센 뒤 닫는다.
+   * 시트가 열리면 줄이 숨으므로 줄을 먼저 읽는다.
+   */
+  async function readMapHidden(page) {
+    const rail = await readHostRail(page);
+    await page.locator(DRESS_FLOAT).click({ timeout: 3000 });
+    await page.waitForSelector(`${SHEET} button[data-outfit]`, { timeout: 2000 });
+    await sleep(200);
+    const ui = await readMapUi(page);
+    await closeDressSheet(page);
+    return { railButtons: rail.buttons.map((b) => b.id), tabs: ui.tabs.length + ui.cards.length };
+  }
+
+  /** 테스트 시트로 로비로 되돌린다(선택 mapChoice 는 방에 남는다, 판 종류도 남는다) */
   async function backToLobbyViaSheet(page, tracker) {
     await openTestSheet(page);
     await clickInDialog(page, "테스트 도구", "대기실로 되돌리기");
@@ -251,6 +319,27 @@ export function makeMapSelectFlows(helpers) {
       await Promise.all([waitWorldReady(hp, 4), waitWorldReady(gp, 4)]);
       await Promise.all([settle(hp), settle(gp)]);
 
+      // ── 20페이즈(D-02·P20-16, TM11): 확장판은 늘 마을이라 맵 선택은 기본 마피아에서 본다 ──
+      const sc0 = "map-select/mode";
+      // (가) TM11a — 확장판(서버 기본값)에는 방장 줄의 [맵] 단추도, [옷장]으로 연 시트의 맵 탭도 없다
+      const hide0 = await readMapHidden(hp);
+      const prevChoice = ht.last()?.mapChoice ?? "random";
+      for (const r of mapRailChecks({ screen: "lobby", mode: "extended", viewMode: modeOf(ht), railButtons: hide0.railButtons, tabs: hide0.tabs })) rec(sc0, r.id, r.label, r.ok, r.detail);
+      // (나) TM11b — 방장 줄의 [판 종류] 로 기본 마피아를 고르면 [맵] 단추가 생기고 맵 선택은 그대로다
+      const toBasic = await attempt(async () => {
+        await pickModeViaUi(hp, ht, "basic");
+        await gt.waitFor((v) => v.mode === "basic", 4000, "참가자 쪽 판 종류 basic");
+      });
+      rec(sc0, "TM11p", "방장이 [판 종류] 로 기본 마피아를 고르면 방장·참가자 모두 판 종류가 기본 마피아", toBasic.ok, toBasic.detail);
+      if (!toBasic.ok) return;
+      // 참가자 화면의 판 종류 알림(한 줄, 1.5초)이 사라진 뒤에 잰다 — 아래 줄·칩 기하가 알림 없는 화면을 본다
+      await until(async () => (await readHostRail(gp)).toast === null, 4000);
+      await Promise.all([settle(hp), settle(gp)]);
+      const [railB, uiB] = [await readHostRail(hp), await readMapUi(hp)];
+      const shown = mapRailChecks({ screen: "lobby", mode: "basic", viewMode: modeOf(ht), railButtons: railB.buttons.map((b) => b.id), mapChoice: ht.last()?.mapChoice ?? "random", prevChoice, chipId: uiB.chip?.id ?? null });
+      for (const r of shown) rec(sc0, r.id, r.label, r.ok, r.detail);
+      if (shown.some((r) => !r.ok)) return; // [맵] 단추가 없으면 아래 단계가 누를 것이 없다
+
       // ── 로비: 칩(MS1·MS2·MS6) ──
       const sc = "map-select/lobby";
       const h0 = await readMapUi(hp);
@@ -264,7 +353,7 @@ export function makeMapSelectFlows(helpers) {
         const col = await readSideColumn(pg);
         for (const r of sideColumnChecks({ viewport: { w: h0.vw, h: h0.vh }, screen: "lobby", host: isHost, ...col })) rec(sc, `${r.id}-${who}`, `${who} 열: ${r.label}`, r.ok, r.detail, r.info === true);
       }
-      // 왼쪽 방장 줄(19-06 HR1~HR8): 지도 칩이 줄의 칸이다 — 방장은 줄(판 종류·맵·봇·튜토리얼), 참가자는 줄 없음 + 판 종류 칩
+      // 왼쪽 방장 줄(19-06 HR1~HR8): 지도 칩이 줄의 칸이다 — 방장은 줄(기본 마피아: 판 종류·맵·봇), 참가자는 줄 없음 + 판 종류 칩
       await recRail(rec, sc, "", "lobby", ht, hp, gp, gt);
 
       // ── 방장이 칩을 눌러 맵 탭 ──
@@ -336,7 +425,7 @@ export function makeMapSelectFlows(helpers) {
         return a !== null && a === b;
       }, 6000);
       const [sm, sg] = await Promise.all([readMapHook(hp), readMapHook(gp)]);
-      rec(sc3, "MS10", "랜덤으로 시작하면 두 페이지의 __mfMap 이 같은 값(bar 또는 plaza)이고 서버 view.map 과 같음", same !== null && (sm === "bar" || sm === "plaza") && sm === ht.last().map && sg === gt.last().map, `방장 ${sm}(view ${ht.last().map}) · 손님 ${sg}(view ${gt.last().map})`);
+      rec(sc3, "MS10", "랜덤으로 시작하면(기본 마피아 판) 두 페이지의 __mfMap 이 같은 값(bar 또는 plaza — 마을 아님)이고 서버 view.map 과 같음", same !== null && (sm === "bar" || sm === "plaza") && sm === ht.last().map && sg === gt.last().map, `방장 ${sm}(view ${ht.last().map}) · 손님 ${sg}(view ${gt.last().map})`);
       await backToLobbyViaSheet(hp, ht);
       await gt.waitFor((v) => v.phase === "lobby", 4000, "손님 대기실 복귀");
       await Promise.all([waitWorldReady(hp, 4), waitWorldReady(gp, 4)]);
@@ -393,7 +482,7 @@ export function makeMapSelectFlows(helpers) {
         const col = await readSideColumn(pg);
         for (const r of sideColumnChecks({ viewport: { w: hr.vw, h: hr.vh }, screen: "result", host: isHost, expectHead: 1, ...col })) rec(sc5, `R-${r.id}-${who}`, `결과 ${who} 열: ${r.label}`, r.ok, r.detail, r.info === true);
       }
-      // 결과 화면 왼쪽 방장 줄(19-06 HR1~HR6): 연출이 끝난 뒤 줄(판 종류·맵)이 머리 단추·아래 패널([다시 하기] 줄)·오른쪽 열과 겹치지 않는다
+      // 결과 화면 왼쪽 방장 줄(19-06 HR1~HR6): 연출이 끝난 뒤 줄(기본 마피아 판: 판 종류·맵)이 머리 단추·아래 패널([다시 하기] 줄)·오른쪽 열과 겹치지 않는다
       await recRail(rec, sc5, "R-", "result", ht, hp, gp, gt);
       await hp.locator(CHIP).click({ timeout: 3000 });
       await hp.waitForSelector(`${SHEET} button[data-map-card]`, { timeout: 2000 });
@@ -422,6 +511,28 @@ export function makeMapSelectFlows(helpers) {
         else rec(sc5, `R-${r.id}`, `결과 화면: ${r.label}`, r.ok, r.detail);
       }
       await closeDressSheet(hp);
+
+      // ── TM11c — 결과 화면: 방장이 확장판으로 바꾸면 [맵] 이 사라지고 기본 마피아로 되돌리면 이전 맵 선택과 함께 다시 생긴다 ──
+      const sc6 = "map-select/result-mode";
+      const prevResult = ht.last()?.mapChoice ?? "random";
+      const toExt = await attempt(async () => {
+        await pickModeViaUi(hp, ht, "extended");
+        await gt.waitFor((v) => (v.mode ?? "extended") === "extended", 4000, "참가자 쪽 판 종류 extended");
+      });
+      rec(sc6, "TM11q", "결과 화면에서 방장이 [판 종류] 로 확장판을 고르면 방장·참가자 모두 판 종류가 확장판", toExt.ok, toExt.detail);
+      if (!toExt.ok) return;
+      await sleep(300);
+      const hideR = await readMapHidden(hp);
+      for (const r of mapRailChecks({ screen: "result", mode: "extended", viewMode: modeOf(ht), railButtons: hideR.railButtons, tabs: hideR.tabs })) rec(sc6, r.id, r.label, r.ok, r.detail);
+      const backBasic = await attempt(async () => {
+        await pickModeViaUi(hp, ht, "basic");
+        await gt.waitFor((v) => v.mode === "basic", 4000, "참가자 쪽 판 종류 basic");
+      });
+      rec(sc6, "TM11r", "결과 화면에서 기본 마피아로 되돌리면 방장·참가자 모두 판 종류가 기본 마피아", backBasic.ok, backBasic.detail);
+      if (!backBasic.ok) return;
+      await sleep(300);
+      const [railR, uiR] = [await readHostRail(hp), await readMapUi(hp)];
+      for (const r of mapRailChecks({ screen: "result", mode: "basic", viewMode: modeOf(ht), railButtons: railR.buttons.map((b) => b.id), mapChoice: ht.last()?.mapChoice ?? "random", prevChoice: prevResult, chipId: uiR.chip?.id ?? null })) rec(sc6, r.id, r.label, r.ok, r.detail);
     } finally {
       await g.context.close().catch(() => {});
     }

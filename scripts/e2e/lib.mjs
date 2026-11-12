@@ -2467,9 +2467,12 @@ export function hostRailLayoutE2E(n, maxH) {
   return { crown: false, columns };
 }
 
-/** 자리 함수(20-07 RED): 지금은 옛 동작 그대로 허용 맵 수만 본다 */
-export function railMapsOn(playableMany) {
-  return playableMany === true;
+/**
+ * 줄에 [맵] 칸이 있어야 하는가(20-07, D-02·P20-16) — 앱 Lobby·ResultScreen 의 mapsOn(허용 맵이 둘 이상 && 판 종류가 기본 마피아) 사본.
+ * 확장판은 늘 마을이라 고를 것이 없어 [맵] 단추·맵 탭을 그리지 않는다. hostRailChecks 의 mapsOn 입력은 흐름이 이 함수로 만든다(mode 는 서버 view.mode).
+ */
+export function railMapsOn(playableMany, mode) {
+  return playableMany === true && mode === "basic";
 }
 
 const railRectOk = (r) => !!r && allNum(r.left, r.top, r.width, r.height);
@@ -2518,7 +2521,7 @@ export function hostRailMeasure(s) {
 /**
  * 방장 줄 판정 (HR1~HR8). 사각형은 { left, top, width, height, right, bottom }.
  * s = { viewport {w,h} · screen "lobby"|"result"|"game" · host 방장 화면인가 · mode 서버 view.mode("basic"|"extended") · kbOpen 키보드 열림(기본 false) ·
- *       mapsOn 허용 맵이 둘 이상인가 · botsOn 봇 도구가 켜진 방(테스트 방)인가 ·
+ *       mapsOn 줄에 [맵] 칸이 있어야 하는가(railMapsOn(허용 맵 둘 이상, mode) — 20-07 부터 기본 마피아에만 있다) · botsOn 봇 도구가 켜진 방(테스트 방)인가 ·
  *       rail { rect, ariaLabel }|null([data-host-rail]) · buttons [{ id, rect, borderColor, color, isCall, role, ariaChecked }](보이는 [data-host-rail-btn]) · crown 왕관 표식 사각형|null ·
  *       chip { mode, name, rect, tag, tabIndex }|null([data-mode-chip]) · band 자막 띠 면 사각형|null · panel 아래 패널 사각형 · head [{ kind, rect }] 머리 단추 ·
  *       test [테스트] 사각형|null(있으면 줄이 48 내려온 테스트 방) · toast 떠 있는 위 알림 사각형|null · side [{ side, rect, borderColor }] 오른쪽 열 단추 · panelToggles 패널 안 옛 스위치 줄 수 }.
@@ -2527,7 +2530,7 @@ export function hostRailMeasure(s) {
  * HR2 단추 지름 52±1 · 열 안 간격 12±1 · 열 사이 12±1 · 왼쪽 16±1 · 줄 윗변 = 띠 아랫변 + 12(테스트 방 + 48) ±2 · 표식 높이 20±1 과 그 아래 12±1 ·
  * HR3 줄(표식 + 단추)이 아래 패널(윗변 − 8)·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열 단추와 교차 0, 오른쪽 열과는 가로 16 이상 떨어진다
  *     (접힌 줄의 둘째 열과 위 알림의 겹침만 HOST_RAIL_KNOWN_LIMITS 의 알려진 한계 — 잰 값을 남기고 실패로 세지 않는다) ·
- * HR4 순서·개수: 대기실 mode·map(mapsOn)·bots(botsOn)·tutorial(확장판만), 결과 mode·map. 오른쪽 열은 소리·옷장 둘 ·
+ * HR4 순서·개수: 대기실 mode·map(mapsOn)·bots(botsOn)·tutorial(확장판만), 결과 mode·map(mapsOn). 오른쪽 열은 소리·옷장 둘 ·
  * HR5 줄 단추 테두리·아이콘 색 = LAMP_RGB(켜진 토글은 금빛 채움이라 테두리만), 오른쪽 열 단추 테두리 = NIGHT600_RGB, 줄 단추에 .is-call 없음 ·
  * HR6 왕관 표식 유무·열별 칸 수가 hostRailLayoutE2E(n, 잰 최대 높이)와 같다(최대 높이 ±2 안에서 배치가 갈리면 판정하지 않고 info), 줄의 접근성 이름은 "방장 전용" ·
  * HR7 튜토리얼 토글은 확장판에만 있고 role=switch·aria-checked, 패널 안 옛 스위치 줄 0 · HR8 대기실 패널 높이 222±1(방장·참가자 같다).
@@ -2539,7 +2542,7 @@ export function hostRailChecks(s = {}) {
     HR1: "방장 줄은 방장 대기실·결과에만(참가자·게임 중·키보드 열림에는 없다)",
     HR2: `줄 단추 지름 ${E.cell}±1 · 칸 사이 ${E.gap}±1 · 왼쪽 ${E.left}±1 · 윗변 = 띠 아랫변 + ${E.gap}(테스트 방 + ${E.testShift}) ±2`,
     HR3: "줄이 아래 패널·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열과 교차 0",
-    HR4: "줄 순서·개수: 판 종류·맵·봇·튜토리얼(기본 마피아 앞 셋, 결과 앞 둘) · 오른쪽 열은 소리·옷장",
+    HR4: "줄 순서·개수: 판 종류·맵(기본 마피아만)·봇·튜토리얼(확장판만), 결과는 판 종류·맵(기본 마피아만) · 오른쪽 열은 소리·옷장",
     HR5: "줄 단추 테두리·아이콘은 금빛(--light-lamp), 오른쪽 열 테두리는 --night-600 · 줄 단추에 빛남(.is-call) 없음",
     HR6: `왕관 표식·열 수는 F-2 식대로 · 줄의 접근성 이름 "${HOST_RAIL_NAME}"`,
     HR7: "튜토리얼 토글: 확장판에만 · role=switch·aria-checked · 패널 안 옛 스위치 줄 0",

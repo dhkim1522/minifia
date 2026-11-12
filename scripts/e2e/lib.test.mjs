@@ -4527,6 +4527,7 @@ const LAMP = "rgb(255, 207, 138)";
 const N600 = "rgb(42, 55, 96)";
 const railBtn = (id, top, left = 16, extra = {}) => ({ id, rect: rect(left, top, 52, 52), borderColor: LAMP, color: LAMP, isCall: false, role: id === "tutorial" ? "switch" : null, ariaChecked: id === "tutorial" ? "false" : null, ...extra });
 /**
+ * 20-07 부터 앱의 확장판 줄에는 [맵] 이 없다(실제 줄 모양은 아래 "HR4(20-07)" 시험이 본다). 이 정상값은 단추 넷짜리 줄의 기하·색·접힘을 재는 판정용 입력이라 mapsOn 을 켠 채 둔다.
  * 390×844 방장 대기실(테스트 방) 확장판 정상값: 띠 면 아랫변 123, [테스트] 131~175, 줄 윗변 183(= 123 + 12 + 48), 왕관 표식 20 + 12, 단추 넷 215·279·343·407(아랫변 459),
  * 패널 222(윗변 622) → 줄 최대 높이 431(= 622 − 8 − 135 − 48). 오른쪽 열은 소리·옷장 둘(left 322).
  */

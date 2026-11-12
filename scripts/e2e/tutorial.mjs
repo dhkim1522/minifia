@@ -28,6 +28,7 @@ import {
   tutorialRoleLineChecks,
   tutorialSkipChecks,
   hostRailChecks,
+  railMapsOn,
   tutorialTimingChecks,
 } from "./lib.mjs";
 import { TUTORIAL_ROLE_MAX_LINES, readRoleLineBoxes, roleLineBoxChecks, todAbsentChecks } from "./polish.mjs";
@@ -541,7 +542,7 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
         host: true,
         mode: ht.last()?.mode ?? "extended",
         kbOpen: false,
-        mapsOn: true,
+        mapsOn: railMapsOn(true, ht.last()?.mode ?? "extended"),
         botsOn: ht.last()?.me?.testBots !== undefined,
         rail: rail.rail,
         buttons: rail.buttons,

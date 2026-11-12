@@ -130,6 +130,14 @@ test("TM11a: 확장판 줄에 map 이 있으면 실패하고 개수와 줄 이�
   assert.match(v.detail, /basic/);
 });
 
+test("TM11a·TM11b: 줄을 못 읽었으면(단추 0·mode 없음) [맵] 이 없어도 통과하지 않는다", () => {
+  const empty = one(hidden({ railButtons: [] }));
+  assert.equal(empty.ok, false);
+  assert.match(empty.detail, /mode 단추 없음/);
+  assert.equal(one(hidden({ railButtons: ["bots", "tutorial"] })).ok, false);
+  assert.equal(one(shown({ railButtons: ["map", "bots"] })).ok, false);
+});
+
 test("TM11b: 기본 마피아 줄에 map 이 하나 있고 맵 선택이 이전 값과 같으면 통과, 다르면 두 값을 말하며 실패한다", () => {
   const r = one(shown());
   assert.equal(r.id, "TM11b");

@@ -30,7 +30,7 @@ import {
   waitWorldReady,
   watchSockets,
 } from "./browser.mjs";
-import { BASIC_ABSENT_ATTR_PREFIX, BASIC_ABSENT_SELECTORS, MODE_NAMES_E2E, basicModeChecks, basicViewKeyChecks, hostRailChecks, hostRailMeasure, modeChipChecks, modeSheetChecks } from "./lib.mjs";
+import { BASIC_ABSENT_ATTR_PREFIX, BASIC_ABSENT_SELECTORS, MODE_NAMES_E2E, basicModeChecks, basicViewKeyChecks, hostRailChecks, hostRailMeasure, modeChipChecks, modeSheetChecks, railMapsOn } from "./lib.mjs";
 
 const HOST_NICK = "판종류방장";
 const GUEST_NICK = "참가자하나";
@@ -42,7 +42,7 @@ const KB_SIZES = ["360x560", "390x844"];
 const MAX_STEPS = 40;
 /** 기본 마피아 완주 흐름의 칸 수 상한(basic-off 와 같은 넉넉한 값 — 봇 투표가 갈려 날이 길어져도 ended 에 닿게) */
 const BASIC_MAX_STEPS = 90;
-/** 이 빌드는 허용 맵이 둘 이상이라 줄에 [맵] 이 있다(map-select 흐름이 같은 전제를 쓴다) */
+/** 이 빌드는 허용 맵이 둘 이상이다(map-select 흐름이 같은 전제를 쓴다). 줄의 [맵] 칸은 여기에 판 종류가 기본 마피아일 때만 있다(20-07, D-02 — railMapsOn) */
 const MAPS_ON = true;
 
 const modeOf = (tracker) => tracker.last()?.mode ?? "extended";
@@ -66,7 +66,7 @@ const railArgs = (m, { screen, host, mode, botsOn, kbOpen = false }) => ({
   host,
   mode,
   kbOpen,
-  mapsOn: MAPS_ON,
+  mapsOn: railMapsOn(MAPS_ON, mode),
   botsOn,
   rail: m.rail,
   buttons: m.buttons,
@@ -127,9 +127,9 @@ export function makeModeFlows({ recorder, attempt, startHost, openGuest, openGam
   }
 
   /**
-   * mode-rail (D-13·D-14·D-07, 폰 6종): 대기실에서 방장 줄(확장판 넷 → 기본 마피아 셋)과 참가자 칩, 판 종류 시트를 잰다.
+   * mode-rail (D-13·D-14·D-07, 폰 6종): 대기실에서 방장 줄(확장판 셋: 판 종류·봇·튜토리얼 → 기본 마피아 셋: 판 종류·맵·봇, 20-07 D-02)과 참가자 칩, 판 종류 시트를 잰다.
    * ① 확장판: 방장 HR1~HR8 · 참가자 HR1·HR8·CH1·CH2 ② [판 종류] → 시트 MS1·MS1g ③ 기본 마피아: 방장 HR1~HR8(토글 없음)·참가자 칩·알림 한 줄
-   * ④ 키보드 열림(두 크기만): 줄·칩 0 ⑤ 확장판으로 되돌림: 줄 넷·칩 복귀.
+   * ④ 키보드 열림(두 크기만): 줄·칩 0 ⑤ 확장판으로 되돌림: 줄 셋([맵] 없음·토글 복귀)·칩 복귀.
    */
   async function modeRailFlow(ctx) {
     const id = "mode-rail";
@@ -198,7 +198,7 @@ export function makeModeFlows({ recorder, attempt, startHost, openGuest, openGam
         }
       }
 
-      // ── ⑤ 확장판으로 되돌린다: 줄이 다시 넷, 참가자 칩 복귀 ──
+      // ── ⑤ 확장판으로 되돌린다: 줄이 다시 판 종류·봇·튜토리얼([맵] 없음), 참가자 칩 복귀 ──
       const sc5 = `${id}/back`;
       const back = await attempt(async () => {
         await pickModeViaRail(hp, ht, "extended");
@@ -213,7 +213,7 @@ export function makeModeFlows({ recorder, attempt, startHost, openGuest, openGam
         ...hostRailChecks(railArgs(g5, { screen: "lobby", host: false, mode: "extended", botsOn })).map((l) => ({ ...l, who: "참가자" })),
         ...modeChipChecks(chipArgs(g5, modeOf(gt))).map((l) => ({ ...l, who: "참가자" })),
       ].filter((l) => !l.ok);
-      rec(sc5, "MR5", "되돌린 뒤 방장 줄 넷(튜토리얼 토글 복귀)·참가자 칩이 처음과 같은 판정(HR·CH)을 통과", failed.length === 0, failed.map((l) => `${l.who} ${l.id} ${l.detail}`).join(" / "));
+      rec(sc5, "MR5", "되돌린 뒤 방장 줄(튜토리얼 토글 복귀·[맵] 없음)·참가자 칩이 처음과 같은 판정(HR·CH)을 통과", failed.length === 0, failed.map((l) => `${l.who} ${l.id} ${l.detail}`).join(" / "));
     } finally {
       await room.guest.context.close().catch(() => {});
     }
