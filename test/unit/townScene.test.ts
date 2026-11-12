@@ -1,15 +1,18 @@
 // 마을 장면(maps/town.ts)을 WebGL 없이 node 에서 검사한다: 광장 가운데 재사용·방 넷·집 여덟·그리기 예산·조명 열·강등 (20페이즈 D-05~D-10·D-20·D-21).
 // 모범은 plazaScene.test.ts. 좌표 원문은 shared/game/mapTown.ts(서버와 같은 표), 생김새의 기준은 design/v3.0/town-map/ 의 A 안.
-import { Box3, BufferGeometry, DirectionalLight, HemisphereLight, Material, Mesh, MeshBasicMaterial, Object3D, PlaneGeometry, PointLight, Scene, Vector3 } from "three";
-import { describe, expect, it } from "vitest";
-import { TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
+import { Box3, BufferGeometry, DataTexture, DirectionalLight, HemisphereLight, Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry, PointLight, Scene, Vector3 } from "three";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { TOWN_HOUSES, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
 import { ROOM_IDS } from "../../shared/protocol";
 import { plateFarOf } from "../../src/world/camera";
 import { createCharacter, figForSeat } from "../../src/world/character";
-import { buildTownScene } from "../../src/world/maps/town";
-import { TOWN_LIT } from "../../src/world/palette";
+import { atlasCellAt, buildTownScene, CUTAWAY_MS, drawSeatCell, drawSignCell, TOWN_ATLAS } from "../../src/world/maps/town";
+import type { AtlasCtx } from "../../src/world/maps/town";
+import type { MapScene } from "../../src/world/maps/types";
+import { SEAT_COLORS, TOWN_LIT, TOWN_PALETTE } from "../../src/world/palette";
 import { DRAW_CALL_BUDGET, LADDER } from "../../src/world/renderer";
 import type { LightingPhase } from "../../src/world/renderer";
+import type { RoomId } from "../../shared/protocol";
 
 const PHASES: readonly LightingPhase[] = ["talk", "vote", "trial", "night", "nightCitizen", "nightGhost", "morning"];
 
@@ -288,5 +291,323 @@ describe("마을 예산 사다리 (P20-17, 강등 4단계)", () => {
     expect(() => t.dispose()).not.toThrow();
     expect(geo).toBeGreaterThan(0);
     expect(atlas).toBe(1);
+  });
+});
+
+// ---------- Task 2: 컷어웨이 재질 따라가기와 집 주인 ----------
+
+const cutMat = (t: MapScene, id: RoomId): MeshStandardMaterial => t.meshes[`cut-${id}`]!.material as MeshStandardMaterial;
+const signMat = (t: MapScene, id: RoomId): MeshStandardMaterial => t.meshes[`sign-${id}`]!.material as MeshStandardMaterial;
+const ALL_ROOMS: ReadonlySet<RoomId> = new Set(ROOM_IDS);
+const NO_ROOMS: ReadonlySet<RoomId> = new Set();
+/** 덮인 방: 불투명 재질·깊이 쓰기 켬·메시와 간판이 보인다 */
+function expectClosed(t: MapScene, id: RoomId): void {
+  expect(t.roofs!()[id], id).toBe(1);
+  for (const m of [cutMat(t, id), signMat(t, id)]) {
+    expect(m.transparent, id).toBe(false);
+    expect(m.depthWrite, id).toBe(true);
+    expect(m.opacity, id).toBe(1);
+  }
+  expect(t.meshes[`cut-${id}`]!.visible, id).toBe(true);
+  expect(t.meshes[`sign-${id}`]!.visible, id).toBe(true);
+}
+/** 걷힌 방: 메시와 간판을 끈다 */
+function expectOpen(t: MapScene, id: RoomId): void {
+  expect(t.roofs!()[id], id).toBe(0);
+  expect(t.meshes[`cut-${id}`]!.visible, id).toBe(false);
+  expect(t.meshes[`sign-${id}`]!.visible, id).toBe(false);
+}
+
+describe("컷어웨이 재질 따라가기 setCutaway (D-10, P20-7)", () => {
+  it("처음에는 넷 모두 덮여 있다. 한 방을 열면 0.25초에 따라간다: 0.1초 뒤 0 과 1 사이(투명·깊이 쓰기 끔), 0.3초 뒤 0 이고 메시·간판이 꺼진다. 나머지 셋은 그대로다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    expect(t.roofs!()).toEqual({ post: 1, pub: 1, clinic: 1, police: 1 });
+    for (const id of ROOM_IDS) expectClosed(t, id);
+    t.setCutaway!(new Set<RoomId>(["post"]), false);
+    // 틱이 오기 전에는 그대로다(목표만 바뀐다)
+    expect(t.roofs!().post).toBe(1);
+    t.update!(0.1, 0.1);
+    const a = t.roofs!().post;
+    expect(a).toBeCloseTo(0.6, 6);
+    for (const m of [cutMat(t, "post"), signMat(t, "post")]) {
+      expect(m.transparent).toBe(true);
+      expect(m.depthWrite).toBe(false);
+      expect(m.opacity).toBeCloseTo(a, 6);
+    }
+    expect(t.meshes["cut-post"]!.visible).toBe(true);
+    t.update!(0.2, 0.3);
+    expectOpen(t, "post");
+    for (const id of ["pub", "clinic", "police"] as const) expectClosed(t, id);
+    t.dispose();
+  });
+
+  it("연출 시간 상수 CUTAWAY_MS 는 250 이다(런타임·모션 줄이기가 읽는다)", () => {
+    expect(CUTAWAY_MS).toBe(250);
+  });
+
+  it("걷히는 도중에 닫으라고 하면 지금 값에서 이어 올라간다 — 0 이나 1 로 건너뛰지 않는다. 다 덮이면 불투명 재질로 돌아온다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setCutaway!(new Set<RoomId>(["pub"]), false);
+    t.update!(0.125, 0.125);
+    expect(t.roofs!().pub).toBeCloseTo(0.5, 6);
+    t.setCutaway!(NO_ROOMS, false);
+    expect(t.roofs!().pub).toBeCloseTo(0.5, 6);
+    t.update!(0.05, 0.175);
+    expect(t.roofs!().pub).toBeCloseTo(0.7, 6);
+    expect(cutMat(t, "pub").transparent).toBe(true);
+    // 덮이는 도중에 다시 열어도 지금 값에서 내려간다
+    t.setCutaway!(new Set<RoomId>(["pub"]), false);
+    t.update!(0.05, 0.225);
+    expect(t.roofs!().pub).toBeCloseTo(0.5, 6);
+    t.setCutaway!(NO_ROOMS, false);
+    t.update!(1, 1.225);
+    expectClosed(t, "pub");
+    t.dispose();
+  });
+
+  it("instant 는 틱 없이 바로 놓는다: 넷 모두 열면 0, 모두 닫으면 1 이고 불투명 재질·깊이 쓰기 켬. 그 뒤의 틱은 값을 바꾸지 않는다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setCutaway!(ALL_ROOMS, true);
+    for (const id of ROOM_IDS) expectOpen(t, id);
+    t.update!(0.1, 0.1);
+    for (const id of ROOM_IDS) expectOpen(t, id);
+    t.setCutaway!(NO_ROOMS, true);
+    for (const id of ROOM_IDS) expectClosed(t, id);
+    t.update!(0.1, 0.2);
+    for (const id of ROOM_IDS) expectClosed(t, id);
+    // 도중 값에서도 instant 는 바로 목표로 간다
+    t.setCutaway!(new Set<RoomId>(["clinic"]), false);
+    t.update!(0.1, 0.3);
+    t.setCutaway!(new Set<RoomId>(["clinic"]), true);
+    expectOpen(t, "clinic");
+    t.dispose();
+  });
+
+  it("dt 가 0 이거나 음수면 움직이지 않는다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setCutaway!(new Set<RoomId>(["police"]), false);
+    t.update!(0, 0);
+    t.update!(-1, 0);
+    expect(t.roofs!().police).toBe(1);
+    t.dispose();
+  });
+
+  it("뒷벽·실내 바닥·소품·벽등·문턱 띠는 걷힘과 무관하게 늘 보인다. 집은 걷히지 않는다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    const keep = ["roomStatic", "roomProps", "emissiveIndoor", "glowIndoor", "houseBody", "housePlate", "houseMark"];
+    t.setCutaway!(ALL_ROOMS, true);
+    for (const n of keep) expect(t.meshes[n]!.visible, n).toBe(true);
+    t.setCutaway!(new Set<RoomId>(["post"]), false);
+    t.update!(0.1, 0.1);
+    for (const n of keep) expect(t.meshes[n]!.visible, n).toBe(true);
+    // 걷힌 방은 그리기 호출이 둘씩 준다(컷 메시·간판)
+    const t2 = buildTownScene(LADDER[0]!);
+    const n0 = visibleMeshes(t2.root).length;
+    t2.setCutaway!(ALL_ROOMS, true);
+    expect(visibleMeshes(t2.root).length).toBe(n0 - 8);
+    t.dispose();
+    t2.dispose();
+  });
+
+  it("강등 4단계와 함께: 덮인 방의 간판은 4단계에서 꺼지고 0 으로 돌아오면 켜진다. 걷힌 방의 간판은 어느 단계에서도 꺼져 있다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setCutaway!(new Set<RoomId>(["post"]), true);
+    t.applyBudget(LADDER[4]!);
+    expect(t.meshes["sign-post"]!.visible).toBe(false);
+    expect(t.meshes["sign-pub"]!.visible).toBe(false);
+    expect(t.meshes["cut-pub"]!.visible).toBe(true);
+    t.applyBudget(LADDER[0]!);
+    expect(t.meshes["sign-post"]!.visible).toBe(false);
+    expect(t.meshes["cut-post"]!.visible).toBe(false);
+    expect(t.meshes["sign-pub"]!.visible).toBe(true);
+    t.dispose();
+  });
+});
+
+/** 병합 묶음의 판 수(판 하나 = 정점 4) */
+const quads = (m: Mesh): number => (m.geometry.getAttribute("position")?.count ?? 0) / 4;
+/** quad 번째 판의 UV 가운데가 가리키는 아틀라스 칸 */
+function cellOfQuad(m: Mesh, quad: number): number {
+  const uv = m.geometry.getAttribute("uv");
+  let u = 0;
+  let v = 0;
+  for (let k = 0; k < 4; k++) {
+    u += uv.getX(quad * 4 + k) / 4;
+    v += uv.getY(quad * 4 + k) / 4;
+  }
+  return atlasCellAt(u, v);
+}
+/** 집 한 채의 창 수: 면마다 둘 */
+const PANES = 8;
+
+describe("집 주인 setOwners (D-07, P20-6)", () => {
+  it("처음에는 모든 집이 주인 없는 집이다: 창 64칸이 모두 꺼진 묶음이고 문패·지붕 표식은 빈 판 칸을 가리킨다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    expect(quads(t.meshes.houseWinDark!)).toBe(8 * PANES);
+    expect(quads(t.meshes.houseWinLit!)).toBe(0);
+    expect(t.meshes.houseWinLit!.visible).toBe(false);
+    for (let i = 0; i < 8; i++) {
+      expect(cellOfQuad(t.meshes.housePlate!, i), `plate ${i}`).toBe(TOWN_ATLAS.blank);
+      expect(cellOfQuad(t.meshes.houseMark!, i), `mark ${i}`).toBe(TOWN_ATLAS.blank);
+    }
+    t.dispose();
+  });
+
+  it("setOwners([0, 2, 5]): 켜진 창 = 3채 × 8, 꺼진 창 = 5채 × 8. 문패·지붕 표식의 UV 가 0·2·5 는 좌석 칸, 나머지는 빈 판 칸이다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setOwners!([0, 2, 5]);
+    expect(quads(t.meshes.houseWinLit!)).toBe(3 * PANES);
+    expect(quads(t.meshes.houseWinDark!)).toBe(5 * PANES);
+    expect(t.meshes.houseWinLit!.visible).toBe(true);
+    expect(t.meshes.houseWinDark!.visible).toBe(true);
+    TOWN_HOUSES.forEach((h, i) => {
+      const want = [0, 2, 5].includes(h.seat) ? TOWN_ATLAS.seat0 + h.seat : TOWN_ATLAS.blank;
+      expect(cellOfQuad(t.meshes.housePlate!, i), `plate ${h.seat}`).toBe(want);
+      expect(cellOfQuad(t.meshes.houseMark!, i), `mark ${h.seat}`).toBe(want);
+    });
+    // 켜진 창은 주인 있는 집 둘레에만 있다
+    const lit = boxOf(t.meshes.houseWinLit!);
+    expect(lit.min.x).toBeLessThan(-5.0);
+    expect(lit.max.x).toBeGreaterThan(8.4);
+    expect(lit.min.z).toBeLessThan(-8.4);
+    expect(lit.max.z).toBeGreaterThan(8.4);
+    // 강등 4단계에서도 창과 문패는 남는다(지붕 표식만 꺼진다)
+    t.applyBudget(LADDER[4]!);
+    expect(t.meshes.houseWinLit!.visible).toBe(true);
+    expect(t.meshes.housePlate!.visible).toBe(true);
+    expect(t.meshes.houseMark!.visible).toBe(false);
+    t.dispose();
+  });
+
+  it("다시 부르면 그 값으로 바뀐다: 여덟 모두 주인이면 꺼진 창 묶음이 비고, setOwners([]) 면 모든 집이 빈 판·꺼진 창이다. 범위 밖 좌석은 무시한다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setOwners!([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(quads(t.meshes.houseWinLit!)).toBe(8 * PANES);
+    expect(quads(t.meshes.houseWinDark!)).toBe(0);
+    expect(t.meshes.houseWinDark!.visible).toBe(false);
+    for (let i = 0; i < 8; i++) expect(cellOfQuad(t.meshes.houseMark!, i)).toBe(TOWN_ATLAS.seat0 + TOWN_HOUSES[i]!.seat);
+    t.setOwners!([]);
+    expect(quads(t.meshes.houseWinLit!)).toBe(0);
+    expect(quads(t.meshes.houseWinDark!)).toBe(8 * PANES);
+    for (let i = 0; i < 8; i++) {
+      expect(cellOfQuad(t.meshes.housePlate!, i)).toBe(TOWN_ATLAS.blank);
+      expect(cellOfQuad(t.meshes.houseMark!, i)).toBe(TOWN_ATLAS.blank);
+    }
+    expect(() => t.setOwners!([-1, 8, 1.5, 3])).not.toThrow();
+    expect(quads(t.meshes.houseWinLit!)).toBe(1 * PANES);
+    expect(cellOfQuad(t.meshes.housePlate!, 3)).toBe(TOWN_ATLAS.seat0 + 3);
+    t.dispose();
+  });
+
+  it("아틀라스 칸: 간판 넷·좌석 여덟·빈 판 하나가 서로 다른 칸이고 방 간판은 자기 방의 칸을 가리킨다", () => {
+    const cells = [...ROOM_IDS.map((id) => TOWN_ATLAS.sign[id]), ...Array.from({ length: 8 }, (_, n) => TOWN_ATLAS.seat0 + n), TOWN_ATLAS.blank];
+    expect(new Set(cells).size).toBe(13);
+    for (const c of cells) expect(c).toBeLessThan(TOWN_ATLAS.cols * TOWN_ATLAS.rows);
+    const t = buildTownScene(LADDER[0]!);
+    for (const id of ROOM_IDS) expect(cellOfQuad(t.meshes[`sign-${id}`]!, 0), id).toBe(TOWN_ATLAS.sign[id]);
+    t.dispose();
+  });
+
+  it("node(document 없음)에서 아틀라스는 1×1 DataTexture 이고 간판·문패·표식이 같은 텍스처를 나눠 쓴다. setOwners 가 던지지 않는다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    const map = (t.meshes.housePlate!.material as MeshStandardMaterial).map;
+    expect(map).toBeInstanceOf(DataTexture);
+    expect((map!.image as { width: number; height: number }).width).toBe(1);
+    expect((t.meshes.houseMark!.material as MeshStandardMaterial).map).toBe(map);
+    for (const id of ROOM_IDS) expect(signMat(t, id).map, id).toBe(map);
+    expect(() => t.setOwners!([0, 1, 2, 3, 4, 5, 6, 7])).not.toThrow();
+    t.dispose();
+  });
+});
+
+/** 캔버스 2D 문맥을 흉내 낸 객체: 부른 메서드와 인자를 적는다. 글자 그리기(fillText)는 없다 — 부르면 던진다(결정 0051) */
+function fakeCtx(): { ctx: AtlasCtx; calls: Record<string, unknown[][]>; styles: { fill: string[]; stroke: string[] } } {
+  const calls: Record<string, unknown[][]> = {};
+  const styles = { fill: [] as string[], stroke: [] as string[] };
+  const raw: Record<string, unknown> = { lineWidth: 0, lineCap: "", lineJoin: "" };
+  for (const n of ["save", "restore", "beginPath", "closePath", "moveTo", "arcTo", "arc", "fill", "stroke", "clip", "clearRect", "fillRect", "drawImage", "translate", "scale"])
+    raw[n] = (...a: unknown[]): void => {
+      (calls[n] ??= []).push(a);
+    };
+  Object.defineProperty(raw, "fillStyle", { set: (v: string) => styles.fill.push(v), get: () => styles.fill.at(-1) ?? "" });
+  Object.defineProperty(raw, "strokeStyle", { set: (v: string) => styles.stroke.push(v), get: () => styles.stroke.at(-1) ?? "" });
+  return { ctx: raw as unknown as AtlasCtx, calls, styles };
+}
+
+describe("아틀라스 그리기 함수 (UI Considerations partial, D-20)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("얼굴 그림이 오기 전에는 좌석 색 원만 그린다(drawImage 없음). 얼굴이 오면 그 칸 안에 drawImage 한 번", () => {
+    const cell = TOWN_ATLAS.seat0 + 2;
+    const px = TOWN_ATLAS.cellPx;
+    const x0 = (cell % TOWN_ATLAS.cols) * px;
+    const y0 = Math.floor(cell / TOWN_ATLAS.cols) * px;
+    const before = fakeCtx();
+    drawSeatCell(before.ctx, cell, 2, null);
+    expect(before.calls.arc).toHaveLength(1);
+    expect(before.calls.fill).toHaveLength(1);
+    expect(before.styles.fill).toEqual([SEAT_COLORS[2]]);
+    expect(before.calls.drawImage).toBeUndefined();
+    // 원은 그 칸 가운데에 있고 칸을 넘지 않는다
+    const [cx, cy, r] = before.calls.arc![0] as [number, number, number];
+    expect(cx).toBe(x0 + px / 2);
+    expect(cy).toBe(y0 + px / 2);
+    expect(r).toBeLessThanOrEqual(px / 2);
+    expect(r).toBeGreaterThan(px * 0.4);
+
+    const after = fakeCtx();
+    const face = { tag: "face" } as unknown as CanvasImageSource;
+    drawSeatCell(after.ctx, cell, 2, face);
+    expect(after.styles.fill).toEqual([SEAT_COLORS[2]]);
+    expect(after.calls.clip).toHaveLength(1);
+    expect(after.calls.drawImage).toHaveLength(1);
+    const [img, dx, dy, dw, dh] = after.calls.drawImage![0] as [unknown, number, number, number, number];
+    expect(img).toBe(face);
+    expect(dx).toBeGreaterThanOrEqual(x0);
+    expect(dy).toBeGreaterThanOrEqual(y0);
+    expect(dx + dw).toBeLessThanOrEqual(x0 + px);
+    expect(dy + dh).toBeLessThanOrEqual(y0 + px);
+    // 그리기 상태를 남기지 않는다(잘라 내기가 다음 칸에 새지 않게)
+    expect(after.calls.save).toHaveLength(after.calls.restore!.length);
+  });
+
+  it("좌석 8 이상·음수도 face-0~7 과 같은 규칙으로 좌석 색을 고른다", () => {
+    const a = fakeCtx();
+    drawSeatCell(a.ctx, TOWN_ATLAS.seat0, 9, null);
+    drawSeatCell(a.ctx, TOWN_ATLAS.seat0, -1, null);
+    expect(a.styles.fill).toEqual([SEAT_COLORS[1], SEAT_COLORS[7]]);
+  });
+
+  it("간판 그림 넷은 어두운 판 위에 램프 금빛 선(굵기 1.8·둥근 끝)으로만 그린다: 봉투 2 · 잔 3 · 십자 1 · 방패 3 경로, 글자 없음", () => {
+    const seen: string[] = [];
+    vi.stubGlobal(
+      "Path2D",
+      class {
+        constructor(d: string) {
+          seen.push(d);
+        }
+      },
+    );
+    const want: Record<RoomId, number> = { post: 2, pub: 3, clinic: 1, police: 3 };
+    for (const id of ROOM_IDS) {
+      seen.length = 0;
+      const c = fakeCtx();
+      drawSignCell(c.ctx, TOWN_ATLAS.sign[id], id);
+      expect(seen, id).toHaveLength(want[id]);
+      expect(c.calls.stroke, id).toHaveLength(want[id]);
+      expect(c.calls.fillRect, id).toHaveLength(1);
+      expect(c.styles.fill, id).toEqual([TOWN_PALETTE.plate]);
+      expect(c.styles.stroke, id).toEqual([TOWN_PALETTE.sign]);
+      expect((c.ctx as unknown as { lineWidth: number }).lineWidth, id).toBe(1.8);
+      expect((c.ctx as unknown as { lineCap: string }).lineCap, id).toBe("round");
+      // 24 격자를 칸에 맞춰 줄인다(선 굵기가 같이 줄어 비율이 1.8/24 로 남는다)
+      const [k] = c.calls.scale![0] as [number, number];
+      expect(k * 24).toBeLessThanOrEqual(TOWN_ATLAS.cellPx);
+      expect(k * 24).toBeGreaterThan(TOWN_ATLAS.cellPx * 0.6);
+    }
+    // 봉투는 승인 시안(Cutaway)의 경로 그대로다
+    seen.length = 0;
+    drawSignCell(fakeCtx().ctx, TOWN_ATLAS.sign.post, "post");
+    expect(seen).toContain("M5 9l7 5 7-5");
   });
 });
