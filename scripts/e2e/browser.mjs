@@ -2188,7 +2188,7 @@ export function readMarks(page) {
 
 /**
  * 밤 얼굴 목록 한 시점(nightFaceChecks 입력의 값 부분): { count, itemH, listH, eyeHeal, ringMafia, callCount, disabledCount, toastShown, faceSeats: number[] }
- * eyeHeal = 칸 안 `.mv-face__mark` 의 아이콘(svg) 수(고른 칸에 eye·heal 이 그려지면 0 이 아니다), ringMafia = data-ring-kind="mafia" 수.
+ * eyeHeal = 칸 안 `.mv-face__mark` 의 역할 아이콘(svg) 수(고른 칸에 eye·heal 이 그려지면 0 이 아니다. 역할과 무관한 V 체크 data-mark-icon="check" 는 세지 않는다, 결정 0084-4), ringMafia = data-ring-kind="mafia" 수.
  */
 export function readNightFaces(page) {
   return page.evaluate(() => {
@@ -2202,7 +2202,7 @@ export function readNightFaces(page) {
       count: faces.length,
       itemH: faces.length > 0 ? faces[0].getBoundingClientRect().height : 0,
       listH: list ? list.getBoundingClientRect().height : 0,
-      eyeHeal: qa("[data-face-list] .mv-face__mark svg").length,
+      eyeHeal: qa('[data-face-list] .mv-face__mark:not([data-mark-icon="check"]) svg').length,
       ringMafia: qa('[data-ring-kind="mafia"]').length,
       callCount: qa("[data-face][data-call]").length,
       disabledCount: qa("[data-face][aria-disabled='true']").length,

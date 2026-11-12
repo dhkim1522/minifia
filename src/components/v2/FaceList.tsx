@@ -87,7 +87,7 @@ export function FaceList({ faces, value, onPick, icon, label = "대상", disable
               {f.name}
             </span>
             {on && (
-              <span className="mv-face__mark">
+              <span className="mv-face__mark" data-mark-icon={icon ?? "check"}>
                 <V2Icon name={icon ?? "check"} size={18} />
               </span>
             )}
