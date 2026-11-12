@@ -89,3 +89,8 @@ export const PLAZA_PALETTE = {
   planter: "#3a3f4b",
   treeDark: "#0b1024",
 } as const;
+
+// ---------- 마을(20페이즈) 자리: 값은 GREEN 에서 채운다 ----------
+export const SEAT_COLORS: readonly string[] = [];
+export const TOWN_PALETTE: Readonly<Record<string, string>> = {};
+export const TOWN_LIT: Readonly<Record<string, { indoor: number; houseOwned: number }>> = {};

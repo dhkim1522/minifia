@@ -8,6 +8,7 @@
 
 import { ringSlots } from "../../shared/game/gather";
 import { HEAD_TOP_Y, STAGE_SPOT, UNIT } from "../../shared/game/map";
+import type { MapId } from "../../shared/protocol";
 import { lobbyPanelHeight, LOG_H, TYPING_PILL_H } from "../game/chatUi";
 
 export interface V3 {
@@ -65,6 +66,14 @@ export const PAN_BOX: Readonly<{ minX: number; maxX: number; minZ: number; maxZ:
  * 스테이지 위(헤더 가림막 뒤)까지는 여유 2 가 덮는다.
  */
 export const PLATE_FAR = 17.5;
+
+/** 자리(20-04 RED): 맵별 값은 GREEN 에서 채운다 */
+export function panBoxOf(_mapId: MapId): typeof PAN_BOX {
+  return PAN_BOX;
+}
+export function plateFarOf(_mapId: MapId): number {
+  return PLATE_FAR;
+}
 
 /** 모이는 자리 가운데(월드 단위) = 무대 자리. 지목·변론·찬반·처형 단계의 카메라 고정 목표다(08-08, UI-SPEC 카메라 표) */
 export const GATHER_CENTER: Readonly<{ x: number; z: number }> = { x: STAGE_SPOT.x / UNIT, z: STAGE_SPOT.z / UNIT };
