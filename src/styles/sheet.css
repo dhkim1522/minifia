@@ -58,6 +58,25 @@
 .mf-share__buttons { display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-sm); }
 .mf-share__block { display: flex; flex-direction: column; gap: var(--space-xs); }
 
+/* 판 종류 시트(19-03, UI-SPEC B, 시안 design/v3.0/host-rail/ModeSheet.dc.html): 제목 아래 두 칸 격자(간격 12).
+   칸 = 아이콘 40(선 1.6) + 이름 16/700 + 한 줄 설명 14/400(최대 2줄), 간격 8. 두 칸 높이는 같게 늘어난다.
+   고른 칸은 밝은 회색 테두리 2px + night-700 + 오른쪽 위 V 배지 24 원이다. 금빛은 방장 줄 단추의 색이라 여기서는 쓰지 않는다(P19-15).
+   고른 칸은 테두리가 1px 굵어진 만큼 안쪽 여백을 1px 줄여 선택이 옮겨 가도 안의 그림·글이 움직이지 않는다. */
+/* 시트 면: 공용 틀(.mf-sheet)은 night-800 인데 이 시트만 시안대로 night-900 + 위 테두리 1px night-600 이다. 칸(night-800)·고른 칸(night-700)이 면과 구별되게 한다 */
+.mf-sheet.mf-mode-sheet { background: var(--night-900); border-top: 1px solid var(--night-600); }
+.mf-mode-sheet__body { display: flex; flex-direction: column; gap: var(--space-md); }
+.mf-mode-sheet__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.mf-mode-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); box-sizing: border-box; margin: 0; padding: var(--space-md) 12px; border: 1px solid var(--night-600); border-radius: var(--radius-md); background: var(--night-800); color: var(--gray-100); font-family: var(--font-ui); text-align: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mf-mode-card[aria-pressed="true"] { padding: calc(var(--space-md) - 1px) 11px; border: 2px solid var(--gray-100); background: var(--night-700); }
+.mf-mode-card[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.mf-mode-card:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mf-mode-card__icon { flex: none; width: 40px; height: 40px; stroke-width: 1.6; }
+.mf-mode-card__name { font-size: 16px; line-height: 1.5; font-weight: 700; word-break: keep-all; }
+.mf-mode-card[aria-pressed="true"] .mf-mode-card__name { color: var(--gray-50); }
+.mf-mode-card__desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
+.mf-mode-card__badge { position: absolute; top: var(--space-sm); right: var(--space-sm); display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--radius-pill); background: var(--gray-100); color: var(--night-900); }
+.mf-mode-card__badge .mv-icon { stroke-width: 2.4; }
+
 @media (prefers-reduced-motion: reduce) {
   .mf-sheet, .mf-sheet-scrim { transition-duration: 0.01ms; }
 }

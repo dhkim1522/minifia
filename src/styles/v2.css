@@ -450,6 +450,18 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-side__col { display: flex; flex-direction: column; align-items: center; gap: 12px; pointer-events: none; }
 .mv-side__slot { display: block; flex: none; width: var(--control-button); height: var(--control-button); pointer-events: none; }
 
+/* 방장 줄 단추 (19-03, D-13·D-14, UI-SPEC A-3·A-4, 시안 A): 지름 52 원(--control-button, P19-1), 테두리 1.5px 램프 금빛, 금빛 아이콘 24, 바탕 night-700. 금빛은 방장 전용을 나타내는 색이다.
+ * 이 단추는 깜빡이지도 번지지도 않는다 — 빛남 클래스(지금 누를 것)의 선택자 줄에 넣지 않는다. 정지한 금빛(방장 전용)과 깜빡이는 금빛(지금 누를 것)을 가르는 것은 움직임이다.
+ * 눌림(시트 열림)은 안쪽 2px 금빛 링, 켜진 토글(role=switch)은 금빛 채움 + night-900 아이콘, 사용 불가는 0.45. 누름은 scale(0.94) 하나뿐이고 모션 줄이기에서는 끈다.
+ * 맵 단추(.mf-mapchip)가 줄 변형일 때 이 클래스를 함께 달므로 .mf-mapchip 규칙보다 뒤에 둔다(같은 명시도, 뒤가 이긴다). */
+.mv-hostrail-btn { position: relative; display: grid; place-items: center; flex: none; box-sizing: border-box; width: var(--control-button); height: var(--control-button); margin: 0; padding: 0; border: 1.5px solid var(--light-lamp); border-radius: var(--radius-pill); background: var(--night-700); color: var(--light-lamp); font-family: var(--font-ui); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
+.mv-hostrail-btn[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--light-lamp); }
+.mv-hostrail-btn[role="switch"][aria-checked="true"] { background: var(--light-lamp); border-color: var(--light-lamp); color: var(--night-900); }
+.mv-hostrail-btn[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.mv-hostrail-btn:focus-visible { outline: 2px solid var(--light-lamp); outline-offset: 2px; }
+.mv-hostrail-btn:active { transform: scale(0.94); }
+@media (prefers-reduced-motion: reduce) { .mv-hostrail-btn:active { transform: none; } }
+
 /* 심부름 부품(15-04·16-07, UI-SPEC "심부름 화면 계약"·V-20~V-22). 새 토큰·hex 없음 — 빛남은 14 의 .is-call 을 그대로 쓰고 타일 빛만 테두리 3·번짐 26 으로 키운다.
  * 위치는 층이 inline transform 으로 쓰므로 위치를 쓰는 요소(타일·화살표·알약)에는 transform 애니메이션·:active 변형을 걸지 않는다(그림·배지 같은 자식에만).
  * 이 블록은 파일 끝에 둔다(시험이 첫 .mv-errand 부터 끝까지를 본다). */

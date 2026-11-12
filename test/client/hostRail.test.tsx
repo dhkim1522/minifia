@@ -225,6 +225,8 @@ describe("ModeSheet — 판 종류 두 칸 시트 (19-03, D-05·D-15, UI-SPEC B,
   });
 
   it("CSS: 두 칸 격자 간격 12, 고른 칸은 2px gray-100 + night-700(금빛 아님, P19-15), V 배지 24 원, 아이콘 40 은 선 1.6", () => {
+    // 시트 면은 시안대로 night-900 — 칸(night-800)·고른 칸(night-700)이 면과 구별된다
+    expect(ruleOf(SHEET, ".mf-sheet.mf-mode-sheet")).toContain("background: var(--night-900)");
     const grid = ruleOf(SHEET, ".mf-mode-sheet__grid");
     expect(grid).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
     expect(grid).toContain("gap: 12px");
