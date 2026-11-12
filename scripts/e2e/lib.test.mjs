@@ -151,6 +151,7 @@ import {
   SIDE_COLUMN_EXCEPTIONS,
   SIDE_ORDER,
   HOST_RAIL_E2E,
+  HOST_RAIL_KNOWN_LIMITS,
   HOST_RAIL_MARKERS,
   HOST_RAIL_ORDER,
   LAMP_RGB,
@@ -4660,6 +4661,30 @@ test("HR3: 줄이 아래 패널(윗변 − 8)·머리 단추·[테스트]·알�
   assert.match(hrLine(railIn({ band: rect(16, 70, 358, 120) }), "HR3").detail, /띠/);
   assert.match(hrLine(railIn({ side: [s.side[0], { ...s.side[1], rect: rect(40, 300, 52, 52) }] }), "HR3").detail, /오른쪽 열/);
   assert.match(hrLine(railIn({ side: [s.side[0], { ...s.side[1], rect: rect(76, 300, 52, 52) }] }), "HR3").detail, /오른쪽 열/); // 줄 오른쪽 끝 68 과 8 떨어짐(< 16)
+});
+
+test("HR3 알려진 한계: 줄이 두 열로 접힌 화면에서 둘째 열 단추와 위 알림의 겹침만 판정하지 않는다 — 첫 열·다른 요소와 겹치면 그대로 실패", () => {
+  assert.ok(HOST_RAIL_KNOWN_LIMITS.length === 1 && HOST_RAIL_KNOWN_LIMITS.every((k) => typeof k.id === "string" && typeof k.reason === "string" && k.reason.length > 20));
+  // 360×560 테스트 방 실측 모양: [2,2] — 첫 열 16, 둘째 열 80, 윗변 183·247. 알림은 가운데(77~283)에 195~235
+  const folded = (over = {}) => railNoCrown(365, { buttons: [railBtn("mode", 183), railBtn("map", 247), railBtn("bots", 183, 80), railBtn("tutorial", 247, 80)], ...over });
+  const known = hrLine(folded({ toast: rect(77, 195, 206, 40) }), "HR3");
+  assert.equal(known.ok, true);
+  assert.equal(known.known, true);
+  assert.equal(known.info, true);
+  assert.match(known.detail, /알려진 한계/);
+  assert.match(known.detail, /bots·위 알림/);
+  assert.deepEqual(hrFails(folded({ toast: rect(77, 195, 206, 40) })), []);
+  // 알림이 첫 열(16~68)까지 덮으면 실패
+  const first = hrLine(folded({ toast: rect(40, 195, 243, 40) }), "HR3");
+  assert.equal(first.ok, false);
+  assert.match(first.detail, /mode·위 알림/);
+  // 접힌 줄이라도 다른 요소와 겹치면 실패하고 둘 다 적는다
+  const both = hrLine(folded({ toast: rect(77, 195, 206, 40), head: [{ kind: "나가기", rect: rect(16, 200, 44, 44) }, railIn().head[1]] }), "HR3");
+  assert.equal(both.ok, false);
+  assert.match(both.detail, /머리/);
+  assert.match(both.detail, /위 알림/);
+  // 한 열 줄은 예외가 없다
+  assert.equal(hrLine(railIn({ toast: rect(40, 220, 200, 40) }), "HR3").ok, false);
 });
 
 test("HR4: 순서·개수 — 확장판 mode·map·bots·tutorial, 기본 마피아 앞 셋, 결과 앞 둘. 오른쪽 열은 소리·옷장 둘", () => {

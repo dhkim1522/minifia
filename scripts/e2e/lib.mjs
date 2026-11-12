@@ -2438,6 +2438,15 @@ export const MODE_NAMES_E2E = Object.freeze({ basic: "기본 마피아", extende
 const HOST_RAIL_NAME = "방장 전용";
 /** 줄의 오른쪽 끝과 오른쪽 열의 왼쪽 끝 사이 최소 간격(UI-SPEC F-1) */
 const HOST_RAIL_SIDE_CLEAR = 16;
+/**
+ * 알려진 한계로 두고 고치지 않는 겹침(사용자 메모 '작은 화면 문제는 그대로'). HR3 은 이 겹침의 잰 값을 남기되 실패로 세지 않는다 — 목록 밖 겹침은 그대로 판정한다.
+ * fold-toast: 줄이 두 열로 접힌 화면(가장 낮은 폰 360×560 의 방장 대기실)에서 둘째 열 단추가 위 알림(가운데, 1.5초 떠 있다 사라진다)과 같은 높이에 온다.
+ *   알림은 눌림을 통과시켜(pointer-events: none) 단추는 그대로 눌리고, 첫 열(왼쪽 16~68)·한 열 줄은 알림과 가로로 떨어져 있어 예외가 아니다.
+ *   UI-SPEC F-1 의 "알림과 가로로 겹치지 않는다"는 한 열(16~68)을 전제로 쓴 문장이다. 19-06 E2E 가 폰 6종에서 처음 쟀다. 예외를 넓히려면 이유를 적어 여기에 한 줄을 더한다.
+ */
+export const HOST_RAIL_KNOWN_LIMITS = Object.freeze([
+  Object.freeze({ id: "fold-toast", reason: "두 열로 접힌 방장 줄의 둘째 열 단추와 위 알림(1.5초, 눌림 통과)이 겹칠 수 있는 알려진 한계 — 첫 열·한 열 줄은 예외가 아니다" }),
+]);
 /** 배치 식의 경계 여유: 잰 최대 높이가 문턱과 이 값 안이면 표식·열 수를 판정하지 않고 참고 줄로 남긴다 */
 const HOST_RAIL_EDGE = 2;
 
@@ -2511,7 +2520,8 @@ export function hostRailMeasure(s) {
  * 줄이 있어야 하는 화면(방장 대기실·결과, 키보드 닫힘)은 HR1~HR6(대기실은 HR7·HR8 도), 그 밖은 HR1(대기실이고 키보드가 닫혀 있으면 HR8 도)만 낸다. 못 잰 입력은 여덟 줄 모두 "측정값 없음" 실패다.
  * HR1 방장 대기실·결과에만 줄이 있고 참가자·게임 중·키보드 열림에는 없다(게임 중·키보드 열림에는 칩도 없다) ·
  * HR2 단추 지름 52±1 · 열 안 간격 12±1 · 열 사이 12±1 · 왼쪽 16±1 · 줄 윗변 = 띠 아랫변 + 12(테스트 방 + 48) ±2 · 표식 높이 20±1 과 그 아래 12±1 ·
- * HR3 줄(표식 + 단추)이 아래 패널(윗변 − 8)·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열 단추와 교차 0, 오른쪽 열과는 가로 16 이상 떨어진다 ·
+ * HR3 줄(표식 + 단추)이 아래 패널(윗변 − 8)·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열 단추와 교차 0, 오른쪽 열과는 가로 16 이상 떨어진다
+ *     (접힌 줄의 둘째 열과 위 알림의 겹침만 HOST_RAIL_KNOWN_LIMITS 의 알려진 한계 — 잰 값을 남기고 실패로 세지 않는다) ·
  * HR4 순서·개수: 대기실 mode·map(mapsOn)·bots(botsOn)·tutorial(확장판만), 결과 mode·map. 오른쪽 열은 소리·옷장 둘 ·
  * HR5 줄 단추 테두리·아이콘 색 = LAMP_RGB(켜진 토글은 금빛 채움이라 테두리만), 오른쪽 열 단추 테두리 = NIGHT600_RGB, 줄 단추에 .is-call 없음 ·
  * HR6 왕관 표식 유무·열별 칸 수가 hostRailLayoutE2E(n, 잰 최대 높이)와 같다(최대 높이 ±2 안에서 배치가 갈리면 판정하지 않고 info), 줄의 접근성 이름은 "방장 전용" ·
@@ -2599,14 +2609,23 @@ export function hostRailChecks(s = {}) {
     for (const h of s.head) hit(`머리 ${h.kind ?? "?"}`, h.rect);
     if (s.band) hit("자막 띠", s.band);
     if (s.test) hit("[테스트]", s.test);
-    if (s.toast) hit("위 알림", s.toast);
+    // 위 알림: 접힌 줄의 둘째 열부터는 알려진 한계(HOST_RAIL_KNOWN_LIMITS fold-toast), 첫 열·표식·한 열 줄은 그대로 판정한다
+    const known3 = [];
+    if (s.toast) {
+      for (const p of parts) {
+        if (!rectsOverlap(p.r, s.toast)) continue;
+        const beyondFirst = cols.length > 1 && p.r.left - minLeft > 6;
+        (beyondFirst ? known3 : bad3).push(`${p.name}·위 알림 (${overlapText(p.r, s.toast)})`);
+      }
+    }
     for (const b of s.side) hit(`오른쪽 열 ${b.side}`, b.rect);
     if (s.side.length > 0) {
       const railRight = Math.max(...parts.map((p) => right(p.r)));
       const sideLeft = Math.min(...s.side.map((b) => b.rect.left));
       if (sideLeft - railRight < HOST_RAIL_SIDE_CLEAR - OVERLAP_EPS) bad3.push(`오른쪽 열과 가로 ${fmt(sideLeft - railRight)} (최소 ${HOST_RAIL_SIDE_CLEAR})`);
     }
-    out.push(result("HR3", L.HR3, bad3));
+    if (bad3.length === 0 && known3.length > 0) out.push({ id: "HR3", label: L.HR3, ok: true, detail: `알려진 한계(판정 아님): ${HOST_RAIL_KNOWN_LIMITS[0].reason} — ${known3.join("; ")}`, known: true, info: true });
+    else out.push(result("HR3", L.HR3, [...bad3, ...known3]));
 
     // HR4
     const bad4 = [];
