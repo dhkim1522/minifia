@@ -26,7 +26,10 @@ import {
 import type { MapDef, Obstacle, RoomDef, Spawn } from "../../shared/game/map";
 import { PLAZA_MAP, PLAZA_MASK, PLAZA_OBSTACLES, PLAZA_PLACES, PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
 import { TOWN_DOOR_EXEMPT, TOWN_HOUSES, TOWN_MAP, TOWN_MASK, TOWN_OBSTACLES, TOWN_PLACES, TOWN_PROPS, TOWN_ROOMS, TOWN_SPAWNS } from "../../shared/game/mapTown";
-import { MAPS, PLAYABLE_MAPS, mapOf } from "../../shared/game/maps";
+import { MAPS, MODE_MAPS, PLAYABLE_MAPS, mapOf, roomMapId, startMapOf } from "../../shared/game/maps";
+import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
+import type { RoomState } from "../../shared/game/room";
+import { SHIPPED_MODE_MAPS, lockModeMaps, openTown } from "../helpers/playable";
 import { clipToZone, zoneAt, zoneOf } from "../../shared/game/zones";
 import { MOVE_V, positionAtFx, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
@@ -474,5 +477,90 @@ describe("mapTown.ts 소스 규약", () => {
 
   it("DOM·workerd API 를 쓰지 않는다(순수 모듈)", () => {
     expect(source).not.toMatch(/\b(document|window|crypto|fetch)\b/);
+  });
+});
+
+// ───────────────────────── 판 종류의 고정 맵 (D-02·D-03) ─────────────────────────
+
+describe("판 종류의 고정 맵 MODE_MAPS·startMapOf (D-02·D-03)", () => {
+  const HOST = "player-id-0000-aaaa";
+  function lobby(n = 6, extra: Partial<RoomState> = {}): RoomState {
+    const created = createRoomState({ code: "0420", hostId: HOST, hostToken: "token-secret-0000-aaaa-0123456789", hostNickname: "이름0", now: 0 });
+    if (!created.ok) throw new Error("createRoomState failed");
+    let state = attachConnection(created.state, HOST, "conn-0");
+    for (let i = 1; i < n; i += 1) {
+      const id = `player-id-000${i}-aaaa`;
+      const joined = joinRoom(state, { playerId: id, token: `token-secret-000${i}-aaaa-0123456789`, nickname: `이름${i}` });
+      if (!joined.ok) throw new Error(`joinRoom failed: ${joined.error}`);
+      state = attachConnection(joined.state, id, `conn-${i}`);
+    }
+    return { ...state, ...extra };
+  }
+  /** 같은 시드로 시작해 "맵|좌석:역할…|난수 호출 인자…" 한 줄로. */
+  function run(state: RoomState, seed = 77): string {
+    const calls: number[] = [];
+    const base = seededRandInt(seed);
+    const r = startGame(state, HOST, 1000, (n) => (calls.push(n), base(n)));
+    if (!r.ok) throw new Error(`start failed: ${r.error}`);
+    return `${r.state.map}|${r.state.players.map((p) => `${p.seat}:${p.role}`).join(",")}|${calls.join(",")}`;
+  }
+  const mapOfRun = (line: string): string => line.split("|")[0]!;
+  const restOfRun = (line: string): string => line.split("|").slice(1).join("|");
+
+  it("제품 표는 확장판 → town 한 칸이다 (시험 잠금 전에 뜬 사본)", () => {
+    expect(JSON.stringify(SHIPPED_MODE_MAPS)).toBe('{"extended":"town"}');
+  });
+
+  it("단위 시험은 잠겨 있다(test/unit/setup.ts) — openTown 은 그 시험 동안만 켜고 되돌린다", () => {
+    const before = JSON.stringify(MODE_MAPS);
+    const close = openTown();
+    const during = JSON.stringify(MODE_MAPS);
+    close();
+    expect(`${before} ${during} ${JSON.stringify(MODE_MAPS)}`).toBe('{} {"extended":"town"} {}');
+  });
+
+  it("lockModeMaps 는 켜진 표를 끄고, 돌려준 함수가 되돌린다", () => {
+    const close = openTown();
+    const unlock = lockModeMaps();
+    const locked = JSON.stringify(MODE_MAPS);
+    unlock();
+    const back = JSON.stringify(MODE_MAPS);
+    close();
+    expect(`${locked} ${back} ${JSON.stringify(MODE_MAPS)}`).toBe('{} {"extended":"town"} {}');
+  });
+
+  it("startMapOf: 판 종류의 고정 맵이 있으면 그 값, 없으면 정해진 맵 그대로", () => {
+    const locked = [startMapOf("extended", "plaza"), startMapOf("basic", "plaza")].join(",");
+    const close = openTown();
+    const open = [startMapOf("extended", "plaza"), startMapOf("extended", "bar"), startMapOf("basic", "plaza")].join(",");
+    close();
+    expect(`${locked} / ${open} / ${startMapOf("extended", "plaza")}`).toBe("plaza,plaza / town,town,plaza / plaza");
+  });
+
+  it("확장판 판: 잠금 중에는 decideMap 결과, openTown 중에는 town 이고 역할 표·난수 호출 순서가 같다 (D-02, 난수 순서 불변)", () => {
+    const locked = run(lobby(6));
+    const close = openTown();
+    const open = run(lobby(6));
+    const picked = run(lobby(6, { mapChoice: "plaza" }));
+    close();
+    const lockedPicked = run(lobby(6, { mapChoice: "plaza" }));
+    expect(`${/^(bar|plaza)$/.test(mapOfRun(locked))} ${mapOfRun(open)} ${restOfRun(open) === restOfRun(locked)} ${mapOfRun(picked)} ${mapOfRun(lockedPicked)} ${restOfRun(picked) === restOfRun(lockedPicked)}`).toBe(
+      "true town true town plaza true",
+    );
+  });
+
+  it("기본 마피아 판은 openTown 중에도 방장 선택(decideMap)대로다", () => {
+    const close = openTown();
+    const got = [mapOfRun(run(lobby(6, { mode: "basic", mapChoice: "plaza" }))), mapOfRun(run(lobby(6, { mode: "basic", mapChoice: "bar" })))].join(",");
+    close();
+    expect(got).toBe("plaza,bar");
+  });
+
+  it("대기실은 state.map 이 town 이어도 재즈 바다, 시작한 확장판 판은 town 이다 (D-03)", () => {
+    const close = openTown();
+    const started = startGame(lobby(6), HOST, 1000, seededRandInt(3));
+    close();
+    if (!started.ok) throw new Error("start failed");
+    expect(`${roomMapId({ ...lobby(6), map: "town" })} ${roomMapId(started.state)} ${started.state.phase}`).toBe("bar town assigning");
   });
 });

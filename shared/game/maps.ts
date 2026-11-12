@@ -1,6 +1,6 @@
 // 맵 표와 선택 규칙(MAP-06, 결정 D-20·D-21·D-22) — 순수 모듈: 시각·난수는 인자로만 받는다.
 // 맵은 MAPS 표에 한 줄을 등록하면 늘어난다. 서버의 이동 판정은 방의 맵(roomMapId → mapOf)을 읽고, 클라이언트는 view.map 으로 같은 표를 읽는다.
-import type { MapChoice, MapId } from "../protocol";
+import type { GameMode, MapChoice, MapId } from "../protocol";
 import { BAR_MAP } from "./map";
 import type { MapDef } from "./map";
 import { PLAZA_MAP } from "./mapPlaza";
@@ -47,6 +47,14 @@ export function pickMap(
   if (choice !== "random" && !playable.includes(choice)) return { ok: false };
   if ((state.mapChoice ?? "random") === choice) return { ok: true, state };
   return { ok: true, state: { ...state, mapChoice: choice } };
+}
+
+/** 자리 값(RED): 구현 전이라 표가 비어 있다. */
+export const MODE_MAPS: Partial<Record<GameMode, MapId>> = {};
+
+/** 자리 함수(RED): 구현 전. */
+export function startMapOf(_mode: GameMode, decided: MapId): MapId {
+  return decided;
 }
 
 /** 방의 지금 맵: 대기실은 늘 bar(D-22), 시작한 뒤에는 state.map(없으면 bar). */

@@ -6,7 +6,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     projects: [
-      { test: { name: "unit", environment: "node", include: ["test/unit/**/*.test.ts"] } },
+      { test: { name: "unit", environment: "node", include: ["test/unit/**/*.test.ts"], setupFiles: ["test/unit/setup.ts"] } },
       {
         plugins: [react()],
         test: { name: "client", environment: "happy-dom", include: ["test/client/**/*.test.{ts,tsx}"] },
