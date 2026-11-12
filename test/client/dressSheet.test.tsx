@@ -472,24 +472,27 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
     expect(container.querySelector("[data-map-chip]")?.getAttribute("aria-label")).toBe("맵 광장");
   });
 
-  it("[테스트] 버튼은 왼쪽 위 묶음(.mf-lobby__test)에 혼자 있고 칩은 오른쪽 열로 옮겨 갔다 (16-06 A5)", () => {
+  it("[테스트] 버튼은 왼쪽 위 묶음(.mf-lobby__test)에 혼자 있고 칩은 그 아래 방장 줄에 있다 (16-06 A5 → 19-04 D-13)", () => {
     const { container } = render(lobby(hostView(), () => {}, { testButton: <button type="button">테스트</button> }));
     const slot = container.querySelector(".mf-lobby__test")!;
     expect([...slot.children].map((c) => c.textContent)).toEqual(["테스트"]);
     expect(slot.querySelector("[data-map-chip]")).toBeNull();
-    expect(container.querySelector("[data-side-column] [data-map-chip]")).not.toBeNull();
+    expect(container.querySelectorAll("[data-host-rail][data-test-shift] [data-map-chip]")).toHaveLength(1);
+    expect(container.querySelectorAll("[data-side-column] [data-map-chip]")).toHaveLength(0);
   });
 
-  it("[테스트] 버튼이 없으면 .mf-lobby__test 가 없고 칩은 열에 있다", () => {
+  it("[테스트] 버튼이 없으면 .mf-lobby__test 가 없고 칩은 방장 줄에 있다", () => {
     const { container } = render(lobby(hostView()));
     expect(container.querySelector(".mf-lobby__map")).toBeNull();
     expect(container.querySelector(".mf-lobby__test")).toBeNull();
-    expect(container.querySelector("[data-side-column] [data-map-chip]")).not.toBeNull();
+    expect(container.querySelectorAll("[data-host-rail] [data-map-chip]")).toHaveLength(1);
+    expect(container.querySelectorAll("[data-side-column] [data-map-chip]")).toHaveLength(0);
   });
 
-  it("방장 대기실 열(봇 단추 없는 방)은 소리 자리 다음 [map, dress] 다 (위 → 아래)", () => {
+  it("방장 대기실(봇 단추 없는 방): 오른쪽 열은 소리 자리 다음 [dress] 하나, 맵 단추는 왼쪽 방장 줄의 [판 종류] 아래다 (19-04 D-13)", () => {
     const { container } = render(lobby(hostView()));
-    expect([...container.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button"))).toEqual(["map", "dress"]);
+    expect([...container.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button")).join(",")).toBe("dress");
+    expect([...container.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).filter((id) => id !== "tutorial").join(",")).toBe("mode,map");
     expect(container.querySelectorAll("[data-side-column]")).toHaveLength(1);
     expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
   });

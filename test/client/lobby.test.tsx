@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { ClientMessage, PublicPlayer, RoomView } from "../../shared/protocol";
+import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { LOBBY_PANEL_EXTRA, LOG_H, lobbyPanelHeight } from "../../src/game/chatUi";
 import { ChatStore } from "../../src/net/chatStore";
@@ -156,24 +157,25 @@ describe("Lobby — 맵 로비 틀 (MAP-01, 06-15)", () => {
   });
 });
 
-describe("Lobby — 오른쪽 한 줄 열: 방장 넷·손님 둘 (16-06 D-05, V-2·V-5)", () => {
+describe("Lobby — 오른쪽 한 줄 열: 방장도 둘(소리·옷장) (16-06 D-05 → 19-04 D-13, UI-SPEC A-12)", () => {
   const players = [player(0, "민수"), player(1, "영희"), player(2, "서준")];
-  const side = (c: ParentNode) => [...c.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button"));
+  const side = (c: ParentNode) => [...c.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button")).join(",");
 
-  it("손님: 소리 자리 다음 [dress] 뿐이다 — 맵 칩·봇 단추가 없다 (T-16-13)", () => {
+  it("참가자: 소리 자리 다음 [dress] 뿐이다 — 맵 칩·봇 단추가 없다 (T-16-13)", () => {
     const { container } = render(lobby(makeView(players, 2)));
-    expect(side(container)).toEqual(["dress"]);
+    expect(side(container)).toBe("dress");
     expect(container.querySelector("[data-map-chip], [data-float='bots']")).toBeNull();
     expect(container.querySelectorAll("[data-side-column]")).toHaveLength(1);
     expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
   });
 
-  it("방장 + 봇 도구가 켜진 방: [bots, dress] 순서(맵이 켜지면 맵이 맨 위)이고 열 밖에 떠 있는 단추 묶음이 없다", () => {
+  it("방장 + 봇 도구가 켜진 방: 오른쪽 열은 참가자와 같은 [dress] 하나이고 맵·봇 단추는 열에 없다", () => {
     const view = makeView(players, 0);
     view.me = { ...view.me, testBots: 0 };
     const { container } = render(lobby(view));
-    expect(side(container)).toEqual(expect.arrayContaining(["bots", "dress"]));
-    expect(side(container).indexOf("bots")).toBeLessThan(side(container).indexOf("dress"));
+    expect(side(container)).toBe("dress");
+    expect(container.querySelectorAll("[data-side-column] [data-map-chip], [data-side-column] [data-float='bots']")).toHaveLength(0);
+    expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
     expect(container.querySelector("[data-float-stack]")).toBeNull();
     for (const b of container.querySelectorAll("[data-side-button]")) {
       expect(b.textContent).toBe(""); // 글 없음(접근성 이름만)
@@ -181,16 +183,274 @@ describe("Lobby — 오른쪽 한 줄 열: 방장 넷·손님 둘 (16-06 D-05, V
     }
   });
 
-  it("방장도 봇 도구가 없으면(testBots 없음) 봇 단추가 없다", () => {
+  it("방장도 봇 도구가 없으면(testBots 없음) 봇 단추가 어디에도 없다", () => {
     const { container } = render(lobby(makeView(players, 0)));
-    expect(side(container)).not.toContain("bots");
-    expect(side(container)).toContain("dress");
+    expect(container.querySelector("[data-float='bots']")).toBeNull();
+    expect(side(container)).toBe("dress");
   });
 
   it("꾸미기 시트가 열려 있는 동안 열을 그리지 않는다", () => {
     const { container } = render(lobby(makeView(players, 2)));
     fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     expect(container.querySelector("[data-side-column]")).toBeNull();
+  });
+});
+
+describe("Lobby — 방장 줄과 판 종류 (19-04, D-13·D-05·D-07)", () => {
+  const four = () => [player(0, "민수"), player(1, "영희"), player(2, "서준"), player(3, "하윤")];
+  /** 방장 view: 4명, 봇 도구 켜짐(testBots 2) */
+  const hostView = (extra: Partial<RoomView> = {}): RoomView => {
+    const v = makeView(four(), 0, extra);
+    return { ...v, me: { ...v.me, testBots: 2 } };
+  };
+  const guestView = (extra: Partial<RoomView> = {}): RoomView => makeView(four(), 2, extra);
+  /** 줄 안 단추 표식(위 → 아래). [튜토리얼 먼저]는 아래 describe 가 따로 본다 */
+  const railIds = (c: ParentNode) =>
+    [...c.querySelectorAll("[data-host-rail] [data-host-rail-btn]")]
+      .map((e) => e.getAttribute("data-host-rail-btn"))
+      .filter((id) => id !== "tutorial")
+      .join(",");
+  const expectedRail = PLAYABLE_MAPS.length > 1 ? "mode,map,bots" : "mode,bots";
+  const side = (c: ParentNode) => [...c.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button")).join(",");
+  const modeBtn = (c: ParentNode) => c.querySelector('[data-host-rail-btn="mode"]') as HTMLButtonElement | null;
+  const card = (mode: "basic" | "extended") => document.querySelector(`[data-mode-card="${mode}"]`) as HTMLButtonElement | null;
+  const pressedCards = () => `basic=${card("basic")?.getAttribute("aria-pressed") ?? "없음"},extended=${card("extended")?.getAttribute("aria-pressed") ?? "없음"}`;
+  const chipOf = (c: ParentNode) => c.querySelector("[data-mode-chip]");
+  /** [판 종류] 단추가 하나 있음을 확인하고 누른다 */
+  const pressMode = (c: ParentNode) => {
+    expect(c.querySelectorAll('[data-host-rail-btn="mode"]')).toHaveLength(1);
+    fireEvent.click(modeBtn(c)!);
+  };
+
+  it("방장: 왼쪽 줄 하나에 위에서부터 [판 종류]·[맵]·[봇], 오른쪽 열은 [옷장] 하나(첫 칸은 소리 자리)다", () => {
+    const { container } = render(lobby(hostView()));
+    expect(container.querySelectorAll("[data-host-rail]")).toHaveLength(1);
+    expect(railIds(container)).toBe(expectedRail);
+    expect(side(container)).toBe("dress");
+    expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
+    expect(container.querySelectorAll("[data-side-column] [data-map-chip], [data-side-column] [data-float='bots']")).toHaveLength(0);
+    expect(modeBtn(container)?.getAttribute("aria-label")).toBe("판 종류: 확장판");
+    expect(container.querySelector('[data-host-rail-btn="bots"]')?.getAttribute("aria-label")).toBe("봇");
+    expect(chipOf(container)).toBeNull(); // 방장에게는 칩이 없다
+  });
+
+  it("봇 도구가 없는 방장은 줄에 [봇]이 없다(칸으로 세지 않는다)", () => {
+    const { container } = render(lobby(makeView(four(), 0)));
+    expect(railIds(container)).toBe(PLAYABLE_MAPS.length > 1 ? "mode,map" : "mode");
+  });
+
+  it("[판 종류] → 시트가 열리고 확장판이 골라져 있다. [기본 마피아]를 누르면 modePick 이 한 번 가고 표시는 서버 값이 올 때까지 그대로다", () => {
+    const send = vi.fn((_msg: ClientMessage) => true);
+    const { container, rerender } = render(lobby(hostView(), { send }));
+    expect(document.querySelector("[data-mode-sheet]")).toBeNull();
+    pressMode(container);
+    expect(document.querySelectorAll("[data-mode-sheet]")).toHaveLength(1);
+    expect(pressedCards()).toBe("basic=false,extended=true");
+    expect(modeBtn(container)?.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(card("basic")!);
+    expect(JSON.stringify(send.mock.calls.map((c) => c[0]))).toBe(JSON.stringify([{ t: "modePick", mode: "basic" }]));
+    expect(pressedCards()).toBe("basic=false,extended=true"); // 낙관 갱신 없음(P19-6)
+    expect(modeBtn(container)?.getAttribute("aria-label")).toBe("판 종류: 확장판");
+    rerender(lobby(hostView({ mode: "basic" }), { send }));
+    expect(pressedCards()).toBe("basic=true,extended=false");
+    expect(modeBtn(container)?.getAttribute("aria-label")).toBe("판 종류: 기본 마피아");
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("[판 종류]를 누르면 채팅 입력칸의 포커스를 먼저 푼다", () => {
+    const { container } = render(lobby(hostView()));
+    const input = container.querySelector("[data-chat-input]") as HTMLInputElement;
+    const blur = vi.spyOn(input, "blur");
+    pressMode(container);
+    expect(blur).toHaveBeenCalledTimes(1);
+    expect(document.querySelectorAll("[data-mode-sheet]")).toHaveLength(1);
+  });
+
+  it("시트를 [닫기]로 닫으면 초점이 [판 종류] 단추로 돌아온다", () => {
+    vi.useFakeTimers();
+    const { container } = render(lobby(hostView()));
+    pressMode(container);
+    fireEvent.click(within(screen.getByRole("dialog", { name: "판 종류" })).getByRole("button", { name: "닫기" }));
+    advance(260);
+    expect(document.querySelector("[data-mode-sheet]")).toBeNull();
+    expect(document.activeElement?.getAttribute("data-host-rail-btn") ?? "없음").toBe("mode");
+    expect(modeBtn(container)?.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("연결이 끊기면(canSend 거짓) 줄 단추가 모두 aria-disabled 이고 눌러도 시트가 열리지 않는다", () => {
+    const { container } = render(lobby(hostView(), { canSend: false }));
+    const btns = [...container.querySelectorAll("[data-host-rail] [data-host-rail-btn]")];
+    expect(btns.length).toBeGreaterThanOrEqual(2);
+    expect(btns.map((b) => b.getAttribute("aria-disabled")).join(",")).toBe(btns.map(() => "true").join(","));
+    pressMode(container);
+    expect(document.querySelector("[data-mode-sheet]")).toBeNull();
+    fireEvent.click(container.querySelector('[data-host-rail-btn="bots"]')!);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("시트가 열린 채 연결이 끊기면 칸을 눌러도 아무것도 보내지 않는다", () => {
+    const send = vi.fn((_msg: ClientMessage) => true);
+    const { container, rerender } = render(lobby(hostView(), { send }));
+    pressMode(container);
+    rerender(lobby(hostView(), { send, canSend: false }));
+    fireEvent.click(card("basic")!);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("참가자: 방장 줄 마크업이 없고(미렌더) 왼쪽 위에 읽기 전용 칩 하나 '판 종류: 확장판' (T-19-13)", () => {
+    const { container } = render(lobby(guestView()));
+    expect(container.querySelectorAll("[data-host-rail], [data-host-rail-btn]")).toHaveLength(0);
+    expect(container.querySelectorAll("[data-mode-chip]")).toHaveLength(1);
+    expect(chipOf(container)?.getAttribute("data-mode-chip")).toBe("extended");
+    expect(chipOf(container)?.textContent).toBe("판 종류: 확장판");
+    expect(chipOf(container)?.tagName).toBe("DIV"); // 누를 수 없다
+  });
+
+  it("참가자: 판 종류가 바뀐 view 가 오면 칩이 바뀌고 알림 한 줄 '판 종류: 기본 마피아' → 다시 바뀌면 '판 종류: 확장판'", () => {
+    const { container, rerender } = render(lobby(guestView()));
+    expect(toastText(container)).toBe("");
+    rerender(lobby(guestView({ mode: "basic" })));
+    expect(chipOf(container)?.getAttribute("data-mode-chip")).toBe("basic");
+    expect(chipOf(container)?.textContent).toBe("판 종류: 기본 마피아");
+    expect(toastText(container)).toBe("판 종류: 기본 마피아");
+    expect(toastOn(container)).toBe(true);
+    rerender(lobby(guestView({ mode: "extended" })));
+    expect(toastText(container)).toBe("판 종류: 확장판");
+  });
+
+  it("알림이 없는 때: 방장 본인 · 처음 그릴 때 · 재연결 직후(epoch) · 재접속 띠가 떠 있는 동안", () => {
+    const host = render(lobby(hostView()));
+    host.rerender(lobby(hostView({ mode: "basic" })));
+    expect(toastText(host.container)).toBe("");
+    host.unmount();
+    const first = render(<StrictMode>{lobby(guestView({ mode: "basic" }))}</StrictMode>);
+    expect(toastText(first.container)).toBe("");
+    first.unmount();
+    const re = render(lobby(guestView(), { epoch: 0 }));
+    re.rerender(lobby(guestView({ mode: "basic" }), { epoch: 1 }));
+    expect(toastText(re.container)).toBe("");
+    re.unmount();
+    const band = render(lobby(guestView(), { bannerVisible: true }));
+    band.rerender(lobby(guestView({ mode: "basic" }), { bannerVisible: true }));
+    expect(toastText(band.container)).toBe("");
+    // 띠가 사라져도 그사이 바뀜은 기준선에 들어가 뒤늦게 알리지 않는다
+    band.rerender(lobby(guestView({ mode: "basic" }), { bannerVisible: false }));
+    expect(toastText(band.container)).toBe("");
+  });
+
+  it("같은 방송에 입장과 판 종류 바뀜이 함께면 입장 알림이 먼저다(방장 변경 > 입장 > 퇴장 > 판 종류)", () => {
+    const { container, rerender } = render(lobby(guestView()));
+    rerender(lobby(makeView([...four(), player(4, "지아")], 2, { mode: "basic" })));
+    expect(toastText(container)).toBe("지아 님 입장");
+    expect(chipOf(container)?.getAttribute("data-mode-chip")).toBe("basic");
+  });
+
+  it("방장이 바뀌어 내가 방장이 되면 칩이 사라지고 줄이 나온다 — 서버 view 의 isHost 로만", () => {
+    const { container, rerender } = render(lobby(guestView()));
+    expect(`${container.querySelectorAll("[data-host-rail]").length}/${container.querySelectorAll("[data-mode-chip]").length}`).toBe("0/1");
+    const players = four().map((p) => ({ ...p, isHost: p.seat === 2 }));
+    rerender(lobby(makeView(players, 2)));
+    expect(`${container.querySelectorAll("[data-host-rail]").length}/${container.querySelectorAll("[data-mode-chip]").length}`).toBe("1/0");
+    // 거꾸로: 방장을 넘겨주면 줄이 사라지고 칩이 나온다
+    rerender(lobby(guestView()));
+    expect(`${container.querySelectorAll("[data-host-rail]").length}/${container.querySelectorAll("[data-mode-chip]").length}`).toBe("0/1");
+  });
+
+  it("꾸미기 시트가 열린 동안에는 줄도 칩도 그리지 않는다 (P19-16)", () => {
+    const host = render(lobby(hostView()));
+    expect(host.container.querySelectorAll("[data-host-rail]")).toHaveLength(1);
+    fireEvent.click(within(host.container).getByRole("button", { name: "옷장" }));
+    expect(host.container.querySelectorAll("[data-host-rail]")).toHaveLength(0);
+    host.unmount();
+    const guest = render(lobby(guestView()));
+    expect(guest.container.querySelectorAll("[data-mode-chip]")).toHaveLength(1);
+    fireEvent.click(within(guest.container).getByRole("button", { name: "옷장" }));
+    expect(guest.container.querySelectorAll("[data-mode-chip]")).toHaveLength(0);
+  });
+
+  it("키보드가 열린 동안에는 줄도 칩도 그리지 않는다 (P19-16)", () => {
+    const vv = Object.assign(new EventTarget(), { height: 844, offsetTop: 0 });
+    Object.defineProperty(window, "visualViewport", { value: vv, configurable: true, writable: true });
+    const realInnerH = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", { value: 844, configurable: true, writable: true });
+    vi.useFakeTimers();
+    try {
+      for (const [view, sel] of [[hostView(), "[data-host-rail]"], [guestView(), "[data-mode-chip]"]] as const) {
+        vv.height = 844;
+        const { container, unmount } = render(lobby(view));
+        expect(container.querySelectorAll(sel)).toHaveLength(1);
+        act(() => (container.querySelector("[data-chat-input]") as HTMLInputElement).focus());
+        vv.height = 844 - 336;
+        act(() => void vv.dispatchEvent(new Event("resize")));
+        advance(20);
+        expect(container.querySelector("main.mf-lobby")?.getAttribute("data-kb-open")).toBe("true");
+        expect(container.querySelectorAll(sel)).toHaveLength(0);
+        unmount();
+      }
+    } finally {
+      Reflect.deleteProperty(window, "visualViewport");
+      Object.defineProperty(window, "innerHeight", { value: realInnerH, configurable: true, writable: true });
+    }
+  });
+
+  it("테스트 방([테스트] 단추가 있음)은 줄·칩이 그 아래에서 시작한다(data-test-shift), 없으면 표식이 없다 (P19-5)", () => {
+    const test = <button type="button">테스트</button>;
+    const host = render(lobby(hostView(), { testButton: test }));
+    expect(host.container.querySelector("[data-host-rail]")?.hasAttribute("data-test-shift")).toBe(true);
+    host.unmount();
+    const plain = render(lobby(hostView()));
+    expect(plain.container.querySelector("[data-host-rail]")?.hasAttribute("data-test-shift")).toBe(false);
+    plain.unmount();
+    const guest = render(lobby(guestView(), { testButton: test }));
+    expect(guest.container.querySelector("[data-mode-chip]")?.hasAttribute("data-test-shift")).toBe(true);
+    guest.unmount();
+    const plainGuest = render(lobby(guestView()));
+    expect(plainGuest.container.querySelector("[data-mode-chip]")?.hasAttribute("data-test-shift")).toBe(false);
+  });
+
+  it("테스트 방은 줄 최대 높이도 48 줄어든다 — 왕관 표식까지 들어가던 높이에서 [테스트]가 있으면 표식이 빠진다 (F-1)", () => {
+    // 기본 마피아 방: 줄 단추가 [판 종류]·([맵])·[봇] 으로 고정이다(튜토리얼 토글 없음)
+    const n = PLAYABLE_MAPS.length > 1 ? 3 : 2;
+    const withCrown = n * 52 + (n - 1) * 12 + 32;
+    const panelH = lobbyPanelHeight(LOG_H);
+    // 오른쪽 열 최대 높이 = 방 높이 − 패널 − 8 − (헤더 62 + 12) = 표식까지의 높이 + 40 (48 을 빼면 표식이 안 들어간다)
+    const roomH = withCrown + 40 + panelH + 8 + 62 + 12;
+    const offset = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("mf-lobby__panel")) return panelH;
+      if (this.classList.contains("mf-lobby__header")) return 62;
+      return 0;
+    });
+    const client = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("mf-lobby") ? roomH : 0;
+    });
+    try {
+      const crowns = (c: ParentNode) => `${c.querySelectorAll("[data-host-rail]").length}/${c.querySelectorAll("[data-host-rail-crown]").length}/${c.querySelectorAll(".mf-hostrail__col").length}`;
+      const plain = render(lobby(hostView({ mode: "basic" })));
+      expect(crowns(plain.container)).toBe("1/1/1");
+      plain.unmount();
+      const test = render(lobby(hostView({ mode: "basic" }), { testButton: <button type="button">테스트</button> }));
+      expect(crowns(test.container)).toBe("1/0/1");
+    } finally {
+      offset.mockRestore();
+      client.mockRestore();
+    }
+  });
+
+  it("[시작] 단추는 그대로다: 패널 행동 줄 안, 같은 클래스·접근성 이름, 방장 줄에 들어가지 않는다 (D-17)", () => {
+    const { container } = render(lobby(hostView()));
+    const start = container.querySelector("[data-lobby-start]") as HTMLButtonElement;
+    expect(start.closest(".mf-lobby__panel") !== null).toBe(true);
+    expect(start.closest("[data-host-rail]")).toBeNull();
+    expect(start.getAttribute("aria-label")).toBe("게임 시작, 4명 모임");
+    expect(start.classList.contains("mv-hostrail-btn")).toBe(false);
+    expect(container.querySelectorAll("[data-host-rail] [data-lobby-start]")).toHaveLength(0);
+  });
+
+  it("가상 뷰포트가 밀리면 줄·칩도 헤더 계열과 함께 내려온다 (lobby.css)", () => {
+    const css = readFileSync("src/styles/lobby.css", "utf8");
+    const rule = (css.split("}").find((r) => r.includes(".mf-lobby .mv-side") && r.includes("translateY(var(--mf-vv-top")) ?? "").replace(/\s+/g, " ");
+    expect(rule.includes(".mf-lobby .mf-hostrail")).toBe(true);
+    expect(rule.includes(".mf-lobby .mf-modechip")).toBe(true);
   });
 });
 
