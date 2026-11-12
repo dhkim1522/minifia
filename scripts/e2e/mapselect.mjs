@@ -1,9 +1,9 @@
-// 11페이즈 맵 선택 E2E (11-13, 결정 D-20·D-21, UI-SPEC F-2·G; 16-06: 칩은 오른쪽 열의 52 원, 손님에게는 칩이 없다): 지도 칩·꾸미기 시트 맵 탭·카드 기하, 선택이 모든 페이지에 반영,
+// 11페이즈 맵 선택 E2E (11-13, 결정 D-20·D-21, UI-SPEC F-2·G; 16-06: 칩은 52 원, 참가자에게는 칩이 없다; 19-06: 칩은 오른쪽 열이 아니라 왼쪽 방장 줄의 칸이다): 지도 칩·꾸미기 시트 맵 탭·카드 기하, 선택이 모든 페이지에 반영,
 // 시작 뒤 모두 같은 맵, 광장에서 한 판이 ended 까지. 흐름 본문은 이 파일에 둔다(flows.mjs 의 도우미는 `makeMapSelectFlows(helpers)` 로 받는다 — avatar.mjs 와 같은 모양).
 // helpers: { recorder, startHost, openGuest, attempt, LOBBY_HOST_NICK, WORLD_GUEST_NICK, settledResult }
 // 판정 문턱은 아래 순수 검사 함수(mapChoiceChecks)에만 있고 흐름은 낮추지 않는다. 칩·카드 기하는 src/styles/v2.css 와 같아야 하고 test/unit/e2eContract.test.ts 가 대조한다.
-import { chooseRole, chooseVerdict, clickInDialog, closeSheet, openTestSheet, readGame, readSideColumn, setBotVote, setBots, settle, skipTo, sleep, startGame, waitWorldReady } from "./browser.mjs";
-import { sideColumnChecks } from "./lib.mjs";
+import { SetupError, chooseRole, chooseVerdict, clickInDialog, closeSheet, openTestSheet, readGame, readHostRail, readSideColumn, setBotVote, setBots, settle, skipTo, sleep, startGame, waitWorldReady } from "./browser.mjs";
+import { hostRailChecks, hostRailMeasure, modeChipChecks, sideColumnChecks } from "./lib.mjs";
 
 /** 앱이 더한 DOM 표식·훅 이름. test/unit/e2eContract.test.ts 가 각각이 git 추적 src/ 파일에 실제로 있는지 확인한다(이름 오타 방지) */
 export const MAP_MARKERS = Object.freeze([
@@ -14,10 +14,10 @@ export const MAP_MARKERS = Object.freeze([
 ]);
 
 /**
- * 칩(16-06 V-2·V-5): 오른쪽 열의 두 번째 칸 — 상자가 곧 지름 52 원 · 오른쪽 16 · 위 = 자막 띠 아랫변 + 12(열 윗변) + 64(소리 칸 52 + 간격 12).
- * 칸 나누기는 한 열 최소 2개라 맵 칸은 언제나 오른쪽 열의 둘째 칸이다.
+ * 칩(16-06 V-2·V-5, 19-06): 상자가 곧 지름 52 원이고 왼쪽 방장 줄([data-host-rail])의 칸이다.
+ * 줄 안의 자리(왼쪽 16·띠 아랫변 + 12·칸 사이 12·접힘)는 lib.mjs hostRailChecks HR2 가 잰다 — 여기서는 크기와 "화면 왼쪽 절반에 있다"만 본다.
  */
-export const MAP_CHIP = Object.freeze({ disc: 52, hit: 52, right: 16, below: 76 });
+export const MAP_CHIP = Object.freeze({ disc: 52, hit: 52 });
 /** 맵 카드: 96×112, 간격 8, 합 304 */
 export const MAP_CARD = Object.freeze({ w: 96, h: 112, gap: 8, total: 304 });
 
@@ -32,16 +32,16 @@ const inside = (inner, outer) => inner.left >= outer.left - 0.5 && inner.right <
 
 /**
  * MS1~MS6 맵 선택 화면 판정. 입력 (Box = { left, top, width, height, right, bottom }):
- *  viewport {w,h} · headerBottom 헤더 아래 끝(자막 띠가 있으면 띠 아랫변) · chip { disc, hit, label } 방장 칩(상자가 곧 면이라 disc = hit) · guest { chipCount } 손님 화면의 칩 수
+ *  viewport {w,h} · chip { disc, hit, label } 방장 칩(상자가 곧 면이라 disc = hit) · guest { chipCount } 참가자 화면의 칩 수
  *  sheet 방장 시트(맵 탭이 열린 채) · tabs 시트 탭 상자 · guestTabs 손님 시트의 탭 수 · cards 맵 카드 상자 · selected 선택 카드 수 · selectedId 선택 카드 id · selectedWant 기대 선택(기본 random)
  *  testBtn [테스트] 버튼 상자(없으면 null) · tags 이름표 상자.
- * MS1 칩 52±1(원)·오른쪽 16±1·위 = 헤더(띠) 아래 + 76 ±2(열 윗변 12 + 소리 칸 64) · MS2 손님 화면에 칩 없음(T-16-13)
+ * MS1 칩 52±1(원)이고 화면 왼쪽 절반(방장 줄)에 있다 — 줄 안 자리는 hostRailChecks HR2 · MS2 참가자 화면에 칩 없음(T-16-13)
  *  MS3 방장 시트 탭 둘(각 44×44 이상)·손님 시트 탭 없음 · MS4 카드 3장 96×112 ±2·사이 8 ±2·합 304 이하·시트 안 · MS5 선택 카드 정확히 하나(기본 random)
  *  MS6 MC-OVERLAP: 칩 누르기 영역이 [테스트] 버튼·이름표와 겹치지 않음.
  */
 export function mapChoiceChecks(m) {
   const L = {
-    MS1: "지도 칩: 52 원·오른쪽 16·헤더(띠) 아래 76(열 윗변 12 + 소리 칸 64)",
+    MS1: "지도 칩: 52 원·화면 왼쪽(방장 줄의 칸)",
     MS2: "지도 칩: 손님 화면에는 없다(방장만)",
     MS3: "꾸미기 시트: 방장은 [맵][의상] 탭 둘(44×44 이상), 손님은 탭 없음",
     MS4: "꾸미기 시트 맵 탭: 카드 3장 96×112·간격 8·합 304 이하·시트 안",
@@ -54,15 +54,12 @@ export function mapChoiceChecks(m) {
 
   // MS1
   const chip = m?.chip;
-  if (!isBox(chip?.disc) || !isBox(chip?.hit) || !isNum(m?.headerBottom)) miss("MS1", "chip.disc·hit·headerBottom");
+  if (!isBox(chip?.disc) || !isBox(chip?.hit) || !isNum(m?.viewport?.w)) miss("MS1", "chip.disc·hit·viewport.w");
   else {
     const bad = [];
     if (!within(chip.disc.width, MAP_CHIP.disc, 1) || !within(chip.disc.height, MAP_CHIP.disc, 1)) bad.push(`시각 ${r1(chip.disc.width)}x${r1(chip.disc.height)} ≠ ${MAP_CHIP.disc}`);
     if (chip.hit.width + 0.5 < MAP_CHIP.hit || chip.hit.height + 0.5 < MAP_CHIP.hit) bad.push(`누르기 ${r1(chip.hit.width)}x${r1(chip.hit.height)} < ${MAP_CHIP.hit}`);
-    const marginRight = isNum(m?.viewport?.w) ? m.viewport.w - chip.disc.right : NaN;
-    if (!within(marginRight, MAP_CHIP.right, 1)) bad.push(`오른쪽 여백 ${r1(marginRight)} ≠ ${MAP_CHIP.right}`);
-    const wantTop = m.headerBottom + MAP_CHIP.below;
-    if (!within(chip.disc.top, wantTop, 2)) bad.push(`위 ${r1(chip.disc.top)} ≠ 헤더(띠) 아래 ${r1(m.headerBottom)} + ${MAP_CHIP.below}`);
+    if (chip.disc.right > m.viewport.w / 2 + 0.5) bad.push(`칩 오른쪽 끝 ${r1(chip.disc.right)} 이 화면 왼쪽 절반(${r1(m.viewport.w / 2)}) 밖 — 방장 줄이 아니다`);
     add("MS1", bad);
   }
 
@@ -142,14 +139,10 @@ export function readMapUi(page) {
       return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
     };
     const chip = q("[data-map-chip]");
-    const header = q(".mf-lobby__header, .mf-result__header");
-    const band = q("[data-host-band] .mv-host__band");
     const pressed = qa("[data-dress-sheet] button[data-map-card][aria-pressed='true']");
     return {
       vw: window.innerWidth,
       vh: window.innerHeight,
-      // 14페이즈: 칩은 자막 띠 면(.mv-host__band) 아래 8 에 선다 — 띠가 있으면 그 아랫변, 없으면 헤더 아랫변이 기준이다(입력 이름은 headerBottom 그대로)
-      headerBottom: band ? band.getBoundingClientRect().bottom : header ? header.getBoundingClientRect().bottom : null,
       chip: chip ? { disc: rect(chip), hit: rect(chip), label: chip.getAttribute("aria-label"), id: chip.getAttribute("data-map-chip"), ariaDisabled: chip.getAttribute("aria-disabled") === "true" } : null,
       sheet: rect(q("[data-dress-sheet]")),
       tabs: qa("[data-dress-sheet] button[data-map-tab]").map((el) => rect(el)),
@@ -211,6 +204,23 @@ export async function pickMapViaUi(page, tracker, id) {
 export function makeMapSelectFlows(helpers) {
   const { recorder, startHost, openGuest, attempt, LOBBY_HOST_NICK, WORLD_GUEST_NICK, settledResult } = helpers;
 
+  /**
+   * 왼쪽 방장 줄·참가자 칩 판정(19-06)을 방장·참가자 두 페이지에서 쌓는다. 시트가 닫혀 있을 때 부른다(시트가 열리면 줄이 숨는다).
+   * 판 종류는 서버가 보낸 값(view.mode)을 쓴다. 이 방은 테스트 방이라 봇 도구가 켜져 있다(대기실 줄에 [봇]).
+   */
+  async function recRail(rec, sc, pre, screen, ht, hp, gp, gt) {
+    const railIn = (m, host, mode) => ({ viewport: { w: m.vw, h: m.vh }, screen, host, mode, kbOpen: false, mapsOn: true, botsOn: ht.last()?.me?.testBots !== undefined, rail: m.rail, buttons: m.buttons, crown: m.crown, chip: m.chip, band: m.band, panel: m.panel, head: m.head, test: m.test, toast: m.toast, side: m.side, panelToggles: m.panelToggles });
+    const [h, g] = await Promise.all([readHostRail(hp), readHostRail(gp)]);
+    const hMode = ht.last()?.mode ?? "extended";
+    const gMode = gt.last()?.mode ?? "extended";
+    const hostIn = railIn(h, true, hMode);
+    for (const r of hostRailChecks(hostIn)) rec(sc, `${pre}${r.id}-방장`, `방장 줄: ${r.label}`, r.ok, r.detail, r.info === true);
+    const m = hostRailMeasure(hostIn);
+    rec(sc, `${pre}HRM`, `실측(판정 아님): ${screen === "result" ? "결과 화면" : "대기실"} 방장 줄`, true, m ? `띠 아랫변 ${r1(m.bandBottom)} · 패널 윗변 ${r1(h.panel.top)} · 줄 최대 높이 ${r1(m.maxH)}${m.shift ? `(테스트 방 −${m.shift} 포함)` : ""} · 단추 ${m.n} · 표식 ${m.crown ? "있음" : "없음"} · 열 [${m.columns.join(",")}] · 식 ${m.expect.crown ? "표식 + " : ""}[${m.expect.columns.join(",")}]` : "잴 수 없음(줄·띠 없음)", true);
+    for (const r of hostRailChecks(railIn(g, false, gMode))) rec(sc, `${pre}${r.id}-참가자`, `참가자: ${r.label}`, r.ok, r.detail, r.info === true);
+    for (const r of modeChipChecks({ viewport: { w: g.vw, h: g.vh }, viewMode: gMode, chip: g.chip, band: g.band, panel: g.panel, head: g.head, test: g.test, toast: g.toast, side: g.side })) rec(sc, `${pre}${r.id}`, r.label, r.ok, r.detail, r.info === true);
+  }
+
   /** 테스트 시트로 로비로 되돌린다(선택 mapChoice 는 방에 남는다) */
   async function backToLobbyViaSheet(page, tracker) {
     await openTestSheet(page);
@@ -244,11 +254,13 @@ export function makeMapSelectFlows(helpers) {
       rec(sc, "MC1", "로비 무대는 늘 재즈 바(__mfMap = bar, 두 페이지)", h0.map === "bar" && g0.map === "bar", `방장 ${h0.map} · 손님 ${g0.map}`);
       // 손님 화면에는 칩이 없다(16-06: 맵은 방장만, T-16-13)
       const guestInfo = { chipCount: await gp.locator(CHIP).count() };
-      // 오른쪽 열(16-06 SC1~SC6): 방장은 소리·맵·봇·옷장, 손님은 소리·옷장
-      for (const [who, pg, isHost] of [["방장", hp, true], ["손님", gp, false]]) {
+      // 오른쪽 열(16-06 SC1~SC6): 방장도 소리·옷장(19페이즈), 참가자도 소리·옷장
+      for (const [who, pg, isHost] of [["방장", hp, true], ["참가자", gp, false]]) {
         const col = await readSideColumn(pg);
-        for (const r of sideColumnChecks({ viewport: { w: h0.vw, h: h0.vh }, screen: "lobby", host: isHost, mapsOn: true, botsOn: isHost, ...col })) rec(sc, `${r.id}-${who}`, `${who} 열: ${r.label}`, r.ok, r.detail, r.info === true);
+        for (const r of sideColumnChecks({ viewport: { w: h0.vw, h: h0.vh }, screen: "lobby", host: isHost, ...col })) rec(sc, `${r.id}-${who}`, `${who} 열: ${r.label}`, r.ok, r.detail, r.info === true);
       }
+      // 왼쪽 방장 줄(19-06 HR1~HR8): 지도 칩이 줄의 칸이다 — 방장은 줄(판 종류·맵·봇·튜토리얼), 참가자는 줄 없음 + 판 종류 칩
+      await recRail(rec, sc, "", "lobby", ht, hp, gp, gt);
 
       // ── 방장이 칩을 눌러 맵 탭 ──
       await hp.locator(CHIP).click({ timeout: 3000 });
@@ -263,7 +275,6 @@ export function makeMapSelectFlows(helpers) {
       await closeDressSheet(gp);
       const rows = mapChoiceChecks({
         viewport: { w: hOpen.vw, h: hOpen.vh },
-        headerBottom: h0.headerBottom,
         chip: h0.chip, // 시트가 열리면 열(칩)이 사라지므로 닫힌 때 읽은 값
         guest: guestInfo,
         sheet: hOpen.sheet,
@@ -276,12 +287,14 @@ export function makeMapSelectFlows(helpers) {
         tags: h0.tags.filter(Boolean),
       });
       // MS6 는 두 번에 나눠 본다: 방장 칩이 [테스트] 버튼(왼쪽 위)과 겹치지 않음, 방장 칩이 이름표와 겹치지 않음. 이름표 쪽은 칩이 오른쪽 열로 옮겨져 손님 화면에는 없다.
-      const hostBtn = mapChoiceChecks({ viewport: { w: hOpen.vw, h: hOpen.vh }, headerBottom: h0.headerBottom, chip: h0.chip, guest: guestInfo, sheet: hOpen.sheet, tabs: hOpen.tabs, guestTabs: 0, cards: hOpen.cards, selected: hOpen.selected, selectedId: hOpen.selectedId, testBtn: h0.testBtn, tags: [] }).find((r) => r.id === "MS6");
-      const guestTags = mapChoiceChecks({ viewport: { w: h0.vw, h: h0.vh }, headerBottom: h0.headerBottom, chip: h0.chip, guest: guestInfo, sheet: hOpen.sheet, tabs: hOpen.tabs, guestTabs: 0, cards: hOpen.cards, selected: hOpen.selected, selectedId: hOpen.selectedId, testBtn: null, tags: h0.tags.filter(Boolean) }).find((r) => r.id === "MS6");
+      const hostBtn = mapChoiceChecks({ viewport: { w: hOpen.vw, h: hOpen.vh }, chip: h0.chip, guest: guestInfo, sheet: hOpen.sheet, tabs: hOpen.tabs, guestTabs: 0, cards: hOpen.cards, selected: hOpen.selected, selectedId: hOpen.selectedId, testBtn: h0.testBtn, tags: [] }).find((r) => r.id === "MS6");
+      const guestTags = mapChoiceChecks({ viewport: { w: h0.vw, h: h0.vh }, chip: h0.chip, guest: guestInfo, sheet: hOpen.sheet, tabs: hOpen.tabs, guestTabs: 0, cards: hOpen.cards, selected: hOpen.selected, selectedId: hOpen.selectedId, testBtn: null, tags: h0.tags.filter(Boolean) }).find((r) => r.id === "MS6");
       for (const r of rows) {
         if (r.id === "MS6") {
           rec(sc, "MS6a", "방장 칩이 [테스트] 버튼과 겹치지 않음 (MC-OVERLAP)", hostBtn.ok, hostBtn.detail);
-          rec(sc, "MS6b", "방장 칩이 이름표와 겹치지 않음 (MC-OVERLAP)", guestTags.ok, guestTags.detail);
+          // 19-06(UI-SPEC F-1): 방장 줄은 스테이지 위 오버레이라 이름표와의 겹침은 오른쪽 열과 같은 정책 — 눌림은 가려지지 않으므로 판정하지 않고 잰 값을 참고 줄로 남긴다
+          if (guestTags.ok) rec(sc, "MS6b", "방장 칩이 이름표와 겹치지 않음 (MC-OVERLAP)", true, "");
+          else rec(sc, "MS6bk", "참고(판정 아님, UI-SPEC F-1): 방장 줄의 지도 칩이 이름표와 겹침", true, guestTags.detail, true);
         } else rec(sc, r.id, r.label, r.ok, r.detail);
       }
 
@@ -361,15 +374,22 @@ export function makeMapSelectFlows(helpers) {
 
       // ── 결과 화면: 칩이 보이고 카드 선택이 mapChoice 와 같다 ──
       const sc5 = "map-select/result";
+      // 연출이 끝나기 전(final 전)에는 방장 줄도 참가자 칩도 DOM 에 없다(19-05) — 연출 구간을 놓쳤으면 판정할 수 없으니 새 방으로 다시 돈다
+      await Promise.all([hp, gp].map((pg) => pg.waitForFunction(() => typeof window.__mfResult?.stage === "string", null, { timeout: 6000 })));
+      const [hEarly, gEarly] = await Promise.all([readHostRail(hp), readHostRail(gp)]);
+      if (hEarly.stage === null || hEarly.stage === "final" || gEarly.stage === null || gEarly.stage === "final") throw new SetupError(`결과 연출 구간을 놓침(방장 ${hEarly.stage} · 참가자 ${gEarly.stage})`);
+      rec(sc5, "R-HR0", "결과 연출이 끝나기 전에는 방장 줄·참가자 칩이 없다", hEarly.rail === null && hEarly.buttons.length === 0 && hEarly.chip === null && gEarly.rail === null && gEarly.chip === null, `단계 ${hEarly.stage}/${gEarly.stage} · 방장 줄 ${hEarly.rail === null ? 0 : 1}·단추 ${hEarly.buttons.length} · 참가자 칩 ${gEarly.chip === null ? 0 : 1}`);
       await Promise.all([settledResult(hp), settledResult(gp)]);
       const hr = await readMapUi(hp);
       const gr = await readMapUi(gp);
       rec(sc5, "MS14", "결과 화면에서 방장 칩이 서버 mapChoice(광장)를 보이고 손님 화면에는 칩이 없다", hr.chip?.label === "맵 광장" && gr.chip === null, `방장 ${hr.chip?.label} · 손님 ${gr.chip?.label ?? "없음"}`);
-      // 결과 화면 오른쪽 열(16-06): 방장 소리·맵·옷장, 손님 소리·옷장 — 시트가 열리면 열이 사라지므로 시트를 열기 전에 읽는다
-      for (const [who, pg, isHost] of [["방장", hp, true], ["손님", gp, false]]) {
+      // 결과 화면 오른쪽 열(16-06): 방장도 소리·옷장(19페이즈), 참가자도 소리·옷장 — 시트가 열리면 열이 사라지므로 시트를 열기 전에 읽는다
+      for (const [who, pg, isHost] of [["방장", hp, true], ["참가자", gp, false]]) {
         const col = await readSideColumn(pg);
-        for (const r of sideColumnChecks({ viewport: { w: hr.vw, h: hr.vh }, screen: "result", host: isHost, mapsOn: true, botsOn: false, expectHead: 1, ...col })) rec(sc5, `R-${r.id}-${who}`, `결과 ${who} 열: ${r.label}`, r.ok, r.detail, r.info === true);
+        for (const r of sideColumnChecks({ viewport: { w: hr.vw, h: hr.vh }, screen: "result", host: isHost, expectHead: 1, ...col })) rec(sc5, `R-${r.id}-${who}`, `결과 ${who} 열: ${r.label}`, r.ok, r.detail, r.info === true);
       }
+      // 결과 화면 왼쪽 방장 줄(19-06 HR1~HR6): 연출이 끝난 뒤 줄(판 종류·맵)이 머리 단추·아래 패널([다시 하기] 줄)·오른쪽 열과 겹치지 않는다
+      await recRail(rec, sc5, "R-", "result", ht, hp, gp, gt);
       await hp.locator(CHIP).click({ timeout: 3000 });
       await hp.waitForSelector(`${SHEET} button[data-map-card]`, { timeout: 2000 });
       await sleep(200);
@@ -377,7 +397,6 @@ export function makeMapSelectFlows(helpers) {
       rec(sc5, "MS15", "결과 화면 방장 시트의 선택 카드가 mapChoice(plaza)와 같음", hro.selectedId === "plaza" && hro.selected === 1, `선택 ${hro.selectedId} ${hro.selected}개`);
       const rr = mapChoiceChecks({
         viewport: { w: hro.vw, h: hro.vh },
-        headerBottom: hr.headerBottom,
         chip: hr.chip, // 시트가 열리면 열(칩)이 사라지므로 닫힌 때 읽은 값
         guest: { chipCount: gr.chip === null ? 0 : 1 },
         sheet: hro.sheet,
@@ -392,9 +411,9 @@ export function makeMapSelectFlows(helpers) {
       });
       for (const r of rr) {
         if (!["MS1", "MS3", "MS4", "MS5", "MS6"].includes(r.id)) continue;
-        // 14-08 UI#14 알려진 한계: 가장 낮은 폰(360×560, 방 높이 575 미만)의 결과 화면은 띠 아래로 내려온 칩이 이름표 한 칸과 겹칠 수 있다 —
-        // 눌림은 가려지지 않는다. 판정에서 빼고 잰 값을 그대로 남긴다(고치지 않는다). 다른 크기 5종은 그대로 판정한다.
-        if (r.id === "MS6" && !r.ok && hro.vh < 575) rec(sc5, `R-${r.id}k`, `알려진 한계(UI#14): 결과 화면 낮은 폰(${hro.vw}x${hro.vh})의 지도 칩이 이름표와 겹침(판정 아님)`, true, r.detail, true);
+        // 19-06(UI-SPEC F-1): 결과 화면에는 [테스트] 가 없어 MS6 은 이름표와의 겹침뿐이다. 방장 줄은 스테이지 위 오버레이라 이름표와의 겹침은 판정하지 않고 잰 값을 참고 줄로 남긴다
+        // (14-08 UI#14 의 "가장 낮은 폰만 예외"를 줄 정책으로 바꿨다 — 눌림은 가려지지 않는다. 줄과 다른 조작 요소의 교차는 위 R-HR3 이 판정한다)
+        if (r.id === "MS6" && !r.ok) rec(sc5, `R-${r.id}k`, `참고(판정 아님, UI-SPEC F-1): 결과 화면(${hro.vw}x${hro.vh}) 방장 줄의 지도 칩이 이름표와 겹침`, true, r.detail, true);
         else rec(sc5, `R-${r.id}`, `결과 화면: ${r.label}`, r.ok, r.detail);
       }
       await closeDressSheet(hp);

@@ -649,6 +649,110 @@ export function readSideColumn(page) {
 }
 
 /**
+ * 방장 줄·참가자 칩(19-06): hostRailChecks·modeChipChecks 가 받는 값을 한 번에 읽는다. 대기실·결과·게임 화면 모두 읽는다. 값·닉네임은 싣지 않는다(표식 enum·사각형·색·고정 문구뿐).
+ * rail 은 [data-host-rail] 이 DOM 에 있으면 { rect, ariaLabel, hidden }(시트 층에 가려 숨은 것도 "있음"이다 — 없어야 하는 화면에서는 숨어 있어도 실패), 없으면 null.
+ * buttons 는 보이는 [data-host-rail-btn] 만(숨은 줄은 단추 0개로 읽혀 "줄에 단추가 없음"이 된다 — 시트가 닫힌 뒤에 읽는다).
+ * 반환: { vw, vh, kbOpen, stage(결과 연출 단계|null), rail, buttons [{ id, rect, borderColor, color, isCall, role, ariaChecked, ariaDisabled, label }], crown, chip { mode, name, rect, tag, tabIndex, hidden }|null,
+ *        band, panel, head [{ kind, rect }], test, toast, toastText, side [{ side, rect, borderColor, pill }], panelToggles }
+ */
+export function readHostRail(page) {
+  return page.evaluate(() => {
+    const rect = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+    };
+    const shown = (el) => getComputedStyle(el).visibility !== "hidden" && el.getBoundingClientRect().width > 0;
+    const railEl = document.querySelector("[data-host-rail]");
+    const crownEl = document.querySelector("[data-host-rail-crown]");
+    const chipEl = document.querySelector("[data-mode-chip]");
+    const panel = document.querySelector(".mf-lobby__panel, .mf-result__panel");
+    const toastEl = [...document.querySelectorAll(".mv-toast.is-on .mv-toast__text")].find((el) => (el.textContent ?? "").trim() !== "" && shown(el)) ?? null;
+    return {
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      kbOpen: document.querySelector('[data-kb-open="true"]') !== null,
+      stage: window.__mfResult?.stage ?? null,
+      rail: railEl ? { rect: rect(railEl), ariaLabel: railEl.getAttribute("aria-label"), hidden: !shown(railEl) } : null,
+      buttons: [...document.querySelectorAll("[data-host-rail-btn]")].filter(shown).map((el) => {
+        const cs = getComputedStyle(el);
+        return {
+          id: el.getAttribute("data-host-rail-btn"),
+          rect: rect(el),
+          borderColor: cs.borderTopColor,
+          color: cs.color,
+          isCall: el.classList.contains("is-call"),
+          role: el.getAttribute("role"),
+          ariaChecked: el.getAttribute("aria-checked"),
+          ariaDisabled: el.getAttribute("aria-disabled"),
+          label: el.getAttribute("aria-label"),
+        };
+      }),
+      crown: crownEl && shown(crownEl) ? rect(crownEl) : null,
+      chip: chipEl ? { mode: chipEl.getAttribute("data-mode-chip"), name: (chipEl.querySelector(".mf-modechip__name")?.textContent ?? "").trim(), rect: rect(chipEl), tag: chipEl.tagName.toLowerCase(), tabIndex: chipEl.tabIndex, hidden: !shown(chipEl) } : null,
+      band: rect(document.querySelector("[data-host-band] .mv-host__band")),
+      panel: rect(panel),
+      head: [...document.querySelectorAll(".mf-lobby__header button, .mf-result__header button, .mf-game__header button")].filter(shown).map((el) => ({ kind: el.getAttribute("aria-label") ?? "?", rect: rect(el) })),
+      test: rect(document.querySelector(".mf-lobby__test .mf-tt, .mf-game__test .mf-tt")),
+      toast: rect(toastEl),
+      toastText: toastEl ? (toastEl.textContent ?? "").trim() : null,
+      side: [...document.querySelectorAll("[data-side-button]")].filter(shown).map((el) => ({ side: el.getAttribute("data-side-button"), rect: rect(el), borderColor: getComputedStyle(el).borderTopColor, pill: el.classList.contains("mv-sound--pill") })),
+      panelToggles: panel ? panel.querySelectorAll(".tut-toggle").length : null,
+    };
+  });
+}
+
+const MODE_SHEET_LABEL = "판 종류";
+
+/** 판 종류 시트(19-06): 시트 면과 두 칸의 사각형·눌림. modeSheetChecks 입력의 일부 { sheet, cards } + 화면 크기. 시트가 없으면 sheet null·cards [] */
+export function readModeSheet(page) {
+  return page.evaluate(() => {
+    const rect = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+    };
+    const body = document.querySelector("[data-mode-sheet]");
+    return {
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      sheet: rect(body ? (body.closest(".mf-sheet") ?? body) : null),
+      cards: [...document.querySelectorAll("[data-mode-sheet] [data-mode-card]")].map((el) => ({ mode: el.getAttribute("data-mode-card"), rect: rect(el), pressed: el.getAttribute("aria-pressed") ?? "" })),
+    };
+  });
+}
+
+/** 방장 줄의 [판 종류] 를 눌러 시트를 연다(올라오는 움직임이 끝날 때까지 기다린다). 테스트 도구 시트가 열려 있으면 줄이 숨어 있으므로 먼저 닫는다 */
+export async function openModeSheet(page) {
+  await closeSheet(page).catch(() => {});
+  await page.locator('[data-host-rail] [data-host-rail-btn="mode"]').click({ timeout: 4000 });
+  await page.locator(`dialog[aria-label="${MODE_SHEET_LABEL}"].mf-dialog--open`).waitFor({ state: "attached", timeout: 5000 });
+  await page.waitForTimeout(300);
+}
+
+/** 판 종류 시트를 [닫기] 로 닫는다(없으면 아무것도 하지 않는다) */
+export async function closeModeSheet(page) {
+  await closeSheet(page, MODE_SHEET_LABEL);
+  await page.waitForTimeout(200);
+}
+
+/**
+ * 방장 페이지(대기실 또는 결과 화면)에서 [판 종류] → 시트의 칸을 눌러 서버 값(view.mode)이 mode 가 될 때까지 기다린 뒤 시트를 닫는다.
+ * 이미 그 값이면 칸을 누르지 않는다(같은 칸은 앱도 보내지 않는다). 표시는 서버 방송만 따른다 — 미리 바뀌지 않는다.
+ * @param {import("playwright-core").Page} page 방장 페이지
+ * @param {{ last(): any, waitFor(pred: (v: any) => boolean, ms: number, label: string): Promise<any> }} tracker
+ * @param {"basic"|"extended"} mode
+ */
+export async function pickModeViaRail(page, tracker, mode) {
+  await openModeSheet(page);
+  if ((tracker.last()?.mode ?? "extended") !== mode) {
+    await page.locator(`[data-mode-sheet] [data-mode-card="${mode}"]`).click({ timeout: 3000 });
+    await tracker.waitFor((v) => (v.mode ?? "extended") === mode, 4000, `판 종류 ${mode} 반영`);
+  }
+  await closeModeSheet(page);
+}
+
+/**
  * 늘어나 있는 기록 칸을 접는다(0083-4): [data-chat-open] 을 눌러 aria-expanded 를 false 로 만든다(입력칸 포커스도 풀린다). 이미 접혀 있으면 아무 일도 하지 않는다.
  * 채팅 입력칸에 포커스를 주거나 글을 보내면 칸이 늘어나므로, 접힌 두 줄 창(높이 68)을 재는 흐름은 재기 전에 이것으로 접는다. 접었으면 true.
  */

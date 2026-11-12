@@ -221,7 +221,6 @@ import {
   tutorialRoleCardChecks,
   tutorialRoleLineChecks,
   tutorialSkipChecks,
-  toggleRowChecks,
   TUTORIAL_ROLE_LINES_E2E,
   tutorialTimingChecks,
   errandCardChecks,
@@ -1428,14 +1427,14 @@ test("LOBBY_SIZES: DEFAULT_SIZES 4개 + 390x844 + 402x874 여섯 개이고 LOBBY
   assert.deepEqual(DEFAULT_SIZES.map((x) => x.label), ["360x640", "390x664", "430x932", "360x560"]);
 });
 
-test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand·witness·trace(15-09 심부름·목격 기록·밤 통일/아침 흔적 폰 6종)·tutorial-solo(17-09 혼자 하기 첫 사건 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
+test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand·witness·trace(15-09 심부름·목격 기록·밤 통일/아침 흔적 폰 6종)·tutorial-solo(17-09 혼자 하기 첫 사건 폰 6종)·mode-rail(19-06 방장 줄 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
   const run = readFileSync(new URL("./run.mjs", import.meta.url), "utf8");
   assert.match(run, /extraSizes/);
   assert.match(run, /!args\.sizesGiven/);
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)?(?:, skipByDefault: true)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
-  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "errand", "witness", "trace", "tutorial-solo", "polish-reveal"]);
+  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "errand", "witness", "trace", "tutorial-solo", "mode-rail", "polish-reveal"]);
 });
 
 test("기본판(결정 0072)에서 꺼진 장치 흐름 7개는 skipByDefault 이고 politics-verdict 는 기본 실행에 남는다 (13-05)", () => {
@@ -5267,24 +5266,4 @@ test("outfitUniqueChecks OU1·OU2: 한 판 옷이 모두 다르고 같은 옷 �
     assert.equal(l.length, 2);
     assert.ok(l.every((x) => !x.ok && /측정값 없음/.test(x.detail)));
   }
-});
-
-test("toggleRowChecks(TG3, 0083-3): 스위치 줄이 기록 칸 위 한 줄 — 높이 44·기록 칸과 같은 폭·아랫변 + 10 = 기록 칸 윗변·글자 '튜토리얼 먼저' 한 줄", () => {
-  const good = { toggle: rect(16, 100, 358, 44), log: rect(16, 154, 358, 68), text: "튜토리얼 먼저", lines: 1 };
-  assert.ok(toggleRowChecks(good).every((l) => l.ok));
-  assert.equal(toggleRowChecks(good)[0].id, "TG3");
-  // 기록 칸 뒤에 있으면(옛 자리: 입력줄 아래) 실패
-  assert.ok(toggleRowChecks({ ...good, toggle: rect(16, 300, 358, 44) }).some((l) => !l.ok));
-  // 높이 64(옛 두 줄 줄)
-  assert.ok(toggleRowChecks({ ...good, toggle: rect(16, 80, 358, 64) }).some((l) => !l.ok));
-  // 간격 10 이 아님
-  assert.ok(toggleRowChecks({ ...good, log: rect(16, 170, 358, 68) }).some((l) => !l.ok));
-  // 폭이 기록 칸과 다름
-  assert.ok(toggleRowChecks({ ...good, toggle: rect(16, 100, 300, 44) }).some((l) => !l.ok));
-  // 글자가 두 줄이거나 옛 문구
-  assert.ok(toggleRowChecks({ ...good, lines: 2 }).some((l) => !l.ok));
-  assert.ok(toggleRowChecks({ ...good, text: "튜토리얼 후 진행모두 1분 보고 시작" }).some((l) => !l.ok));
-  // 측정값 없음
-  assert.ok(toggleRowChecks(null).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
-  assert.ok(toggleRowChecks({ ...good, log: null }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
 });

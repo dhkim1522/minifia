@@ -4128,25 +4128,7 @@ export function tutorialDotChecks(dots, scene) {
   return [result("TD1", L.TD1, dots.count === TUTORIAL_DOT_COUNT ? [] : [`점 ${dots.count}개`]), result("TD2", L.TD2, dots.now === scene ? [] : [`지금 점 ${dots.now}`])];
 }
 
-/**
- * 방장 대기실 튜토리얼 스위치 줄(TG3, 결정 0083-3): 기록 칸 위 한 줄. m = { toggle, log, text, lines } — toggle·log 는 사각형, text 는 줄의 글자, lines 는 글자 줄 수.
- * 높이 44 ± 1 · 좌우가 기록 칸과 같음 ± 1 · 아랫변 + 10 = 기록 칸 윗변 ± 1(기록 칸 뒤에 있으면 실패) · 글자 '튜토리얼 먼저' 한 줄(설명 줄 없음)
- */
-export const TOGGLE_ROW_H = 44;
-export const TOGGLE_ROW_GAP = 10;
-export function toggleRowChecks(m) {
-  const label = `방장 스위치 줄: 기록 칸 위 한 줄(높이 ${TOGGLE_ROW_H}, 간격 ${TOGGLE_ROW_GAP}, '튜토리얼 먼저')`;
-  if (!m || !isRectLike(m.toggle) || !isRectLike(m.log)) return [noMeasure("TG3", label, "스위치 줄·기록 칸 사각형")];
-  const bad = [];
-  const near = (a, b) => Math.abs(a - b) <= 1;
-  if (!near(m.toggle.height, TOGGLE_ROW_H)) bad.push(`높이 ${rd(m.toggle.height)} (기대 ${TOGGLE_ROW_H})`);
-  if (!near(m.toggle.left, m.log.left) || !near(m.toggle.left + m.toggle.width, m.log.left + m.log.width)) bad.push(`폭 ${rd(m.toggle.left)}~${rd(m.toggle.left + m.toggle.width)} 가 기록 칸 ${rd(m.log.left)}~${rd(m.log.left + m.log.width)} 와 다름`);
-  const gap = m.log.top - (m.toggle.top + m.toggle.height);
-  if (!near(gap, TOGGLE_ROW_GAP)) bad.push(`스위치 아랫변과 기록 칸 윗변 사이 ${rd(gap)} (기대 ${TOGGLE_ROW_GAP}, 기록 칸 뒤면 음수)`);
-  if (m.text !== "튜토리얼 먼저") bad.push(`글자 "${m.text}"`);
-  if (m.lines !== 1) bad.push(`글자 ${m.lines}줄`);
-  return [result("TG3", label, bad)];
-}
+// 방장 대기실 튜토리얼 스위치 줄 판정(TG3, 결정 0083-3)은 19-06 에 지웠다 — 스위치가 패널의 한 줄에서 방장 줄의 토글로 옮겨 가 hostRailChecks(HR2·HR5·HR7)가 본다.
 
 /**
  * [건너뛰기](T-16): 알약은 높이 32 이지만 누르는 영역을 투명하게 늘려 44×44 이상이어야 한다(G3 의 탭 하한 TAP_MIN, 낮추지 않는다). skip = { rect, hit }.

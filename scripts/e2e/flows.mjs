@@ -40,6 +40,7 @@ import {
   openHostPage,
   openPerfPage,
   openTestSheet,
+  pickModeViaRail,
   readLinkState,
   collapseChatLog,
   readChatLines,
@@ -143,6 +144,7 @@ import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
 import { makeErrandFlows } from "./errand.mjs";
 import { makeTutorialFlows } from "./tutorial.mjs";
+import { makeModeFlows } from "./modes.mjs";
 import { CHAT_KB_PANEL_REST, CHAT_OPEN_STAGE_MIN, chatOpenChecks, chatOpenHeight, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureBallotsBackstop, measureChatOpen, readChatWindow, readLiveGhost } from "./polish.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
@@ -245,9 +247,9 @@ async function lobbyFlow(ctx) {
   const g1 = await readGuide(page);
   recOne(rec, "lobby/lobby", guideChecks(g1, { phase: "lobby" }));
   recOne(rec, "lobby/lobby", docHeightChecks(g1, { h }));
-  // 16-06 오른쪽 한 줄 열: 방장은 소리·맵·봇·옷장 52 원, 머리에는 44 정사각 둘, 교차 없음(360×560 방장은 문서화한 예외)
+  // 16-06 오른쪽 한 줄 열: 방장도 소리·옷장 52 원 둘(19페이즈 — 맵·봇은 왼쪽 방장 줄, mode-rail 흐름이 잰다), 머리에는 44 정사각 둘, 교차 없음(예외 조합 없음)
   const sideHost = await readSideColumn(page);
-  for (const r of sideColumnChecks({ viewport: { w, h }, screen: "lobby", host: true, mapsOn: true, botsOn: tracker.last()?.me?.testBots !== undefined, ...sideHost })) recOne(rec, "lobby/lobby", r);
+  for (const r of sideColumnChecks({ viewport: { w, h }, screen: "lobby", host: true, ...sideHost })) recOne(rec, "lobby/lobby", r);
 
   // 방 코드는 헤더에 없고 공유 시트 안에서만 보인다
   const share = await attempt(async () => {
@@ -1413,8 +1415,11 @@ async function untilGame(page, pred, ms = 6000, label = "게임 화면") {
   }
 }
 
-/** 방장 + 손님(사람 페이지) + 봇 → 시작 → to 단계까지. 돌려주는 값: { host, hp, ht, hostSeat, guests: [{ context, page, tracker, takeIssues, seat }] } */
-async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], guestSize = undefined, minBotNameChars = 0, hostInitScripts = [], guestNames = GAME_GUESTS } = {}) {
+/**
+ * 방장 + 손님(사람 페이지) + 봇 → 시작 → to 단계까지. 돌려주는 값: { host, hp, ht, hostSeat, guests: [{ context, page, tracker, takeIssues, seat }] }
+ * mode("basic"|"extended", 19-06)를 주면 봇·직업을 정한 뒤 시작 전에 방장 줄의 [판 종류] 로 그 판 종류를 고른다(안 주면 서버 기본값 그대로).
+ */
+async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], guestSize = undefined, minBotNameChars = 0, hostInitScripts = [], guestNames = GAME_GUESTS, mode = undefined } = {}) {
   const host = await startHost(ctx, flowId, { ...(hostNick ? { nickname: hostNick } : {}), ...(hostInitScripts.length > 0 ? { initScripts: hostInitScripts } : {}) });
   const { page: hp, tracker: ht } = host;
   const pages = [];
@@ -1434,6 +1439,7 @@ async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", v
   }
   if (bots > 0) await setBotVote(hp, ht, vote);
   await chooseRole(hp, ht, role);
+  if (mode) await pickModeViaRail(hp, ht, mode); // 테스트 도구 시트를 닫고 [판 종류] 시트에서 고른다
   await startGame(hp, ht);
   if (to) await skipTo(hp, ht, to);
   return { host, hp, ht, hostSeat: ht.last().me.seat, guests: pages };
@@ -3773,6 +3779,9 @@ const { errandFlow, witnessFlow, traceFlow } = makeErrandFlows({ recorder, attem
 // 첫 사건(튜토리얼, 17페이즈 17-09): tutorial-solo(혼자 하기, 폰 6종)·tutorial-together(함께 진행). 흐름 본문은 tutorial.mjs, 도우미만 넘긴다
 const { tutorialSoloFlow, tutorialTogetherFlow } = makeTutorialFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH });
 
+// 방장 줄·판 종류(19페이즈 19-06): mode-rail(폰 6종)·mode-pick. 흐름 본문은 modes.mjs, 도우미만 넘긴다
+const { modeRailFlow, modePickFlow } = makeModeFlows({ recorder, attempt, startHost, openGuest, openGame, closeGame, settledResult });
+
 // 18.1 화면 다듬기(18.1-08): polish-reveal(역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종). 흐름 본문은 polish.mjs, 도우미만 넘긴다
 const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, closeGame });
 
@@ -3849,6 +3858,9 @@ export const FLOWS = [
   // 17-09: 첫 사건 TUT-01~05. 이름 앞머리 tutorial — --only tutorial 하나로 둘 다 돈다. 혼자 하기는 폰 6종(기하·포커스·띠 판정), 함께 진행은 기다림 화면 기하까지 390x844 한 크기
   { id: "tutorial-solo", run: tutorialSoloFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "tutorial-together", run: tutorialTogetherFlow, size: GAME_SIZE },
+  // 19-06: 방장 줄(HR1~HR8)·참가자 칩(CH)·판 종류 시트(MS1) 기하와 색은 폰 6종, 판 종류 선택의 방송·새로고침·재접속·다시 하기 유지(MS2·MS3·D-10)는 390x844 한 크기. 이름 앞머리 mode — --only mode 하나로 둘 다 돈다
+  { id: "mode-rail", run: modeRailFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  { id: "mode-pick", run: modePickFlow, size: GAME_SIZE },
   // 18.1-08: 역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종
   { id: "polish-reveal", run: polishRevealFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다

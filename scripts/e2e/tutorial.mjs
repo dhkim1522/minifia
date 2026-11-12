@@ -5,7 +5,7 @@
 // 실제 브라우저의 시간 판정은 여유를 둔다: 오프닝 자동 넘김 4.6초 ± 1.0초, [처리] 뒤 0.7초 ± 0.5초(lib.tutorialTimingChecks).
 // helpers 는 flows.mjs 가 넘긴다(errand.mjs·host.mjs 와 같은 모양 — 서로 import 하지 않는다): { recorder, attempt, startHost, openGuest }
 // together 는 방장·손님 두 페이지(+ 서버 봇 둘)로: 스위치 → 시작 → 두 페이지 첫 사건 → 방장 건너뛰기 → 기다림 n/N → 손님 재접속 → 손님이 끝냄 → 역할 확인, 보낸 프레임은 tutorialDone 한 번뿐.
-import { SetupError, backToLobby, closeSheet, collectSnapshot, fpsStart, fpsStop, openSoloPage, openTestSheet, readHeaderContrast, readTutorial, readTutorialStable, setBots, settle, sleep, startGame, watchSockets } from "./browser.mjs";
+import { SetupError, backToLobby, closeSheet, collectSnapshot, fpsStart, fpsStop, openSoloPage, openTestSheet, readHeaderContrast, readHostRail, readTutorial, readTutorialStable, setBots, settle, sleep, startGame, watchSockets } from "./browser.mjs";
 import {
   TUTORIAL_CAST_E2E,
   WRONG_HINT_AFTER,
@@ -27,7 +27,7 @@ import {
   tutorialRoleCardChecks,
   tutorialRoleLineChecks,
   tutorialSkipChecks,
-  toggleRowChecks,
+  hostRailChecks,
   tutorialTimingChecks,
 } from "./lib.mjs";
 import { TUTORIAL_ROLE_MAX_LINES, readRoleLineBoxes, roleLineBoxChecks, todAbsentChecks } from "./polish.mjs";
@@ -533,24 +533,30 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       rec(`${sc}/lobby`, "TG1", "손님 대기실에는 스위치가 없다", (await gp.locator("[data-tutorial-toggle]").count()) === 0, "");
       await toggle.click();
       rec(`${sc}/lobby`, "TG2", "누르면 켜짐(aria-checked true)", (await toggle.getAttribute("aria-checked")) === "true", `aria-checked ${await toggle.getAttribute("aria-checked")}`);
-      // TG3(0083-3): 스위치 줄은 기록 칸 위 한 줄 — 높이 44·기록 칸과 같은 폭·간격 10·글자 '튜토리얼 먼저' 한 줄
-      const toggleRow = await hp.evaluate(() => {
-        const rectOf = (el) => {
-          if (!el) return null;
-          const r = el.getBoundingClientRect();
-          return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
-        };
-        const t = document.querySelector("[data-tutorial-toggle]");
-        const title = t?.querySelector(".tut-toggle__title");
-        const lh = title ? parseFloat(getComputedStyle(title).lineHeight) : NaN;
-        return {
-          toggle: rectOf(t),
-          log: rectOf(document.querySelector(".mf-lobby__panel [data-chat-log]")),
-          text: (t?.textContent ?? "").trim(),
-          lines: title && lh > 0 ? Math.round(title.getBoundingClientRect().height / lh) : null,
-        };
-      });
-      recAll(rec, `${sc}/lobby`, toggleRowChecks(toggleRow));
+      // TG3(19-06, D-13): 스위치는 패널의 한 줄이 아니라 왼쪽 방장 줄의 토글이다 — 줄 안의 52 원·금빛 테두리·role=switch, 패널 안 옛 스위치 줄 0 (hostRailChecks HR2·HR5·HR7)
+      const rail = await readHostRail(hp);
+      const railLines = hostRailChecks({
+        viewport: { w: rail.vw, h: rail.vh },
+        screen: "lobby",
+        host: true,
+        mode: ht.last()?.mode ?? "extended",
+        kbOpen: false,
+        mapsOn: true,
+        botsOn: ht.last()?.me?.testBots !== undefined,
+        rail: rail.rail,
+        buttons: rail.buttons,
+        crown: rail.crown,
+        chip: rail.chip,
+        band: rail.band,
+        panel: rail.panel,
+        head: rail.head,
+        test: rail.test,
+        toast: rail.toast,
+        side: rail.side,
+        panelToggles: rail.panelToggles,
+      }).filter((l) => ["HR2", "HR5", "HR7"].includes(l.id));
+      rec(`${sc}/lobby`, "TG3", "스위치는 방장 줄 안의 토글이다(줄 판정 HR2 치수·HR5 색·HR7 role=switch·패널 안 스위치 줄 0 이 모두 나온다)", railLines.length === 3 && rail.buttons.some((b) => b.id === "tutorial"), `판정 ${railLines.map((l) => l.id).join("·") || "없음"} · 줄 단추 ${rail.buttons.map((b) => b.id).join("·") || "없음"}`);
+      recAll(rec, `${sc}/lobby`, railLines.map((l) => ({ ...l, id: `TG3-${l.id}` })));
 
       // ② 켜고 시작 → 두 페이지 모두 tutorial 단계·첫 사건 화면
       const hMark = hs.mark();

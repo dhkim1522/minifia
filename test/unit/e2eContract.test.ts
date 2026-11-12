@@ -617,7 +617,7 @@ describe("12페이즈 sound-night-parity E2E (12-09)", () => {
 });
 
 describe("11페이즈 맵 선택 E2E 표식·기하 (11-13)", () => {
-  const maps = mapSelectE2e as unknown as { MAP_MARKERS: readonly string[]; MAP_CHIP: { disc: number; hit: number; right: number; below: number }; MAP_CARD: { w: number; h: number; gap: number; total: number } };
+  const maps = mapSelectE2e as unknown as { MAP_MARKERS: readonly string[]; MAP_CHIP: { disc: number; hit: number }; MAP_CARD: { w: number; h: number; gap: number; total: number } };
   const root = new URL("../../", import.meta.url);
   const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
     .split("\n")
@@ -637,7 +637,8 @@ describe("11페이즈 맵 선택 E2E 표식·기하 (11-13)", () => {
     expect(body(".mf-mapchip")).toContain("width: var(--control-button)");
     expect(body(".mf-mapchip")).toContain("height: var(--control-button)");
     expect(maps.MAP_CHIP.hit).toBe(52);
-    expect(maps.MAP_CHIP.right).toBe(16);
+    // 19-06: 칩은 왼쪽 방장 줄의 칸이다 — 줄 안 자리(왼쪽 16·띠 아래 12)는 lib.mjs HOST_RAIL_E2E 계약이 고정한다
+    expect(Object.keys(maps.MAP_CHIP).sort().join(",")).toBe("disc,hit");
     const card = body(".mv-map-card");
     expect(card).toContain(`width: ${maps.MAP_CARD.w}px`);
     expect(card).toContain(`height: ${maps.MAP_CARD.h}px`);
@@ -1103,6 +1104,20 @@ describe("19페이즈 방장 줄·판 종류 E2E 사본 계약 (19-06, T-19-18·
     expect(body(".mv-hostrail-btn")).toContain("color: var(--light-lamp)");
     expect(body(".mv-float")).toContain("border: 1px solid var(--night-600)");
     expect(body(".mv-sound")).toContain("border: 1px solid var(--night-600)");
+  });
+
+  it("mode-rail 은 폰 6종(extraSizes), mode-pick 은 390x844(GAME_SIZE)로 flows.mjs 에 등록돼 있고 흐름 본문은 modes.mjs 에, 판정은 lib.mjs 에 있다", () => {
+    const flows = readFileSync(new URL("scripts/e2e/flows.mjs", root), "utf8");
+    expect(flows).toMatch(/\{ id: "mode-rail", run: modeRailFlow, extraSizes: LOBBY_EXTRA_SIZES \}/);
+    expect(flows).toMatch(/\{ id: "mode-pick", run: modePickFlow, size: GAME_SIZE \}/);
+    const modes = readFileSync(new URL("scripts/e2e/modes.mjs", root), "utf8");
+    expect(modes).toMatch(/async function modeRailFlow/);
+    expect(modes).toMatch(/async function modePickFlow/);
+    const libText = readFileSync(new URL("scripts/e2e/lib.mjs", root), "utf8");
+    for (const fn of ["hostRailChecks", "modeChipChecks", "modeSheetChecks"]) {
+      expect(libText, fn).toMatch(new RegExp(`export function ${fn}\\b`));
+      expect(modes, fn).toContain(fn);
+    }
   });
 
   it("대기실 패널 기대 높이(HR8)는 222 = lobbyPanelHeight(LOG_H) 이다", () => {
