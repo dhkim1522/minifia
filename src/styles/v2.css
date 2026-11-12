@@ -442,7 +442,8 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 /* 시트(유언·쪽지·배지 등, .mf-will-layer)가 열려 있는 동안 단추는 비켜선다 — 시트는 .mf-game 의 쌓임 맥락(isolation) 안이라
  * z-modal 이어도 방 루트에 있는 단추(z 51) 위로 올라가지 못해 폭 360×높이 560 에서 시트 [닫기]를 가렸다(12-12 회귀에서 발견). 시트가 닫히면 바로 돌아온다. */
 .mf-room:has([data-sheet-layer]) > .mv-host .mv-sound { visibility: hidden; pointer-events: none; }
-.mf-room:has([data-sheet-layer]) .mv-side { visibility: hidden; pointer-events: none; }
+/* 19-03: 방장 줄(.mf-hostrail)과 참가자 칩(.mf-modechip)도 오른쪽 열과 같은 층이라 같은 줄에서 함께 비켜선다 */
+.mf-room:has([data-sheet-layer]) .mf-hostrail, .mf-room:has([data-sheet-layer]) .mf-modechip, .mf-room:has([data-sheet-layer]) .mv-side { visibility: hidden; pointer-events: none; }
 
 /* 오른쪽 세로 한 줄 열 (16-06, D-05·V-2·V-3): 오른쪽 16, 위 = 자막 띠 아랫변 + 12, 칸 지름 52·간격 12. 열은 오른쪽부터(row-reverse) 놓이고 넘치면 왼쪽 12 옆에 두 번째 열이 생긴다(칸 나누기는 splitSideColumn).
  * 이름표 층(z-tags 10) 위, 띠(z-overlay + 1) 아래. 열 자체는 눌림을 통과시키고 단추만 받는다. 첫 칸 .mv-side__slot 은 독의 소리 단추 자리를 비워 둔다. */
@@ -461,6 +462,20 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-hostrail-btn:focus-visible { outline: 2px solid var(--light-lamp); outline-offset: 2px; }
 .mv-hostrail-btn:active { transform: scale(0.94); }
 @media (prefers-reduced-motion: reduce) { .mv-hostrail-btn:active { transform: none; } }
+
+/* 방장 전용 왼쪽 세로 줄 (19-03, D-13, UI-SPEC A-1·A-5·F-2, 시안 A): 왼쪽 16, 위 = 자막 띠 아랫변 + 12 — 오른쪽 열(.mv-side)과 같은 식이라 두 줄의 윗변이 같다. 같은 층(z-overlay).
+ * 줄 자체는 눌림을 통과시키고 단추만 받는다. 왕관 표식(52×20, 아래 12, 금빛)은 줄이 한 열에 표식까지 들어갈 때만 그려진다(HostRail 의 hostRailLayout). 넘치면 첫 열 오른쪽 12 옆에 두 번째 열이 생긴다.
+ * 테스트 방([테스트] 단추가 같은 왼쪽 위 자리, 높이 44)은 그 아랫변 + 8 = 평소 위 시작 + 48 에서 시작한다(data-test-shift, P19-5). 새 모션 없음. */
+.mf-hostrail { position: absolute; top: calc(var(--mf-host-bottom, 62px) + 12px); left: var(--space-md); z-index: var(--z-overlay); display: flex; flex-direction: column; align-items: flex-start; pointer-events: none; }
+.mf-hostrail[data-test-shift] { top: calc(var(--mf-host-bottom, 62px) + 12px + 48px); }
+.mf-hostrail__crown { display: grid; place-items: center; flex: none; width: var(--control-button); height: 20px; margin-bottom: 12px; color: var(--light-lamp); pointer-events: none; }
+.mf-hostrail__cols { display: flex; flex-direction: row; align-items: flex-start; gap: 12px; pointer-events: none; }
+.mf-hostrail__col { display: flex; flex-direction: column; align-items: center; gap: 12px; pointer-events: none; }
+
+/* 참가자의 판 종류 칩 (19-03, D-07, UI-SPEC C, 시안 Guest): 읽기 전용 — 눌림을 통과시킨다. 왼쪽 16, 위 = 방장 줄 위 시작 + 8(P19-11), 높이 32 알약, 아이콘 16 + 판 이름(간격 8).
+ * 오른쪽 열과 같은 층·같은 숨김 규칙. 테스트 방은 줄과 같이 48 더 내려온다. */
+.mf-modechip { position: absolute; top: calc(var(--mf-host-bottom, 62px) + 20px); left: var(--space-md); z-index: var(--z-overlay); display: inline-flex; align-items: center; gap: var(--space-sm); box-sizing: border-box; height: 32px; padding: 0 12px; border: 1px solid var(--night-600); border-radius: var(--radius-pill); background: var(--night-900); color: var(--gray-100); font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 400; white-space: nowrap; pointer-events: none; }
+.mf-modechip[data-test-shift] { top: calc(var(--mf-host-bottom, 62px) + 20px + 48px); }
 
 /* 심부름 부품(15-04·16-07, UI-SPEC "심부름 화면 계약"·V-20~V-22). 새 토큰·hex 없음 — 빛남은 14 의 .is-call 을 그대로 쓰고 타일 빛만 테두리 3·번짐 26 으로 키운다.
  * 위치는 층이 inline transform 으로 쓰므로 위치를 쓰는 요소(타일·화살표·알약)에는 transform 애니메이션·:active 변형을 걸지 않는다(그림·배지 같은 자식에만).
