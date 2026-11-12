@@ -610,4 +610,60 @@ describe("아틀라스 그리기 함수 (UI Considerations partial, D-20)", () =
     drawSignCell(fakeCtx().ctx, TOWN_ATLAS.sign.post, "post");
     expect(seen).toContain("M5 9l7 5 7-5");
   });
+
+  it("캔버스가 있는 환경: 처음에는 간판 넷·좌석 색 원 여덟·빈 판만 그리고 얼굴을 부르지 않는다. setOwners 가 주인 좌석의 얼굴만 같은 출처 경로로 한 번씩 부르고, 도착하면 그 칸만 다시 그려 텍스처를 올린다. dispose 뒤에 온 얼굴은 버린다 (T-20-16)", () => {
+    const c = fakeCtx();
+    const canvas = { width: 0, height: 0, getContext: (kind: string) => (kind === "2d" ? c.ctx : null) };
+    const images: { src: string; onload: (() => void) | null }[] = [];
+    vi.stubGlobal("document", { createElement: (tag: string) => (tag === "canvas" ? canvas : null) });
+    vi.stubGlobal("Path2D", class {});
+    vi.stubGlobal(
+      "Image",
+      class {
+        onload: (() => void) | null = null;
+        private at = "";
+        get src(): string {
+          return this.at;
+        }
+        set src(v: string) {
+          this.at = v;
+          images.push(this);
+        }
+      },
+    );
+    const t = buildTownScene(LADDER[0]!);
+    const map = (t.meshes.housePlate!.material as MeshStandardMaterial).map!;
+    expect(map).not.toBeInstanceOf(DataTexture);
+    expect(map.image).toBe(canvas);
+    expect(canvas.width).toBe(TOWN_ATLAS.cols * TOWN_ATLAS.cellPx);
+    expect(canvas.height).toBe(TOWN_ATLAS.rows * TOWN_ATLAS.cellPx);
+    // 간판 넷의 선(2 + 3 + 1 + 3)과 빈 판 윤곽 하나, 좌석 색 원 여덟
+    expect(c.calls.stroke).toHaveLength(10);
+    expect(c.calls.arc).toHaveLength(8);
+    expect(c.styles.fill.filter((x) => (SEAT_COLORS as readonly string[]).includes(x))).toEqual([...SEAT_COLORS]);
+    expect(c.calls.drawImage).toBeUndefined();
+    expect(images).toHaveLength(0);
+
+    t.setOwners!([2, 5]);
+    expect(images.map((i) => i.src)).toEqual(["/characters/faces/face-2.png", "/characters/faces/face-5.png"]);
+    // 아직 안 왔다: 원만 있는 채로 그려진다
+    expect(c.calls.drawImage).toBeUndefined();
+    const v0 = map.version;
+    images[0]!.onload!();
+    expect(c.calls.drawImage).toHaveLength(1);
+    expect(c.calls.drawImage![0]![0]).toBe(images[0]);
+    const px = TOWN_ATLAS.cellPx;
+    const cell = TOWN_ATLAS.seat0 + 2;
+    const dx = c.calls.drawImage![0]![1] as number;
+    const dy = c.calls.drawImage![0]![2] as number;
+    expect(Math.floor(dx / px)).toBe(cell % TOWN_ATLAS.cols);
+    expect(Math.floor(dy / px)).toBe(Math.floor(cell / TOWN_ATLAS.cols));
+    expect(map.version).toBe(v0 + 1);
+    // 같은 좌석을 다시 주인으로 불러도 얼굴을 또 부르지 않는다
+    t.setOwners!([2, 5, 7]);
+    expect(images.map((i) => i.src)).toEqual(["/characters/faces/face-2.png", "/characters/faces/face-5.png", "/characters/faces/face-7.png"]);
+    t.dispose();
+    images[1]!.onload!();
+    expect(c.calls.drawImage).toHaveLength(1);
+  });
 });

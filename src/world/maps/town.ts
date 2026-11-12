@@ -19,6 +19,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { TOWN_HOUSES, TOWN_OBSTACLES, TOWN_PROPS, TOWN_ROOM_OUTER, TOWN_ROOMS } from "../../../shared/game/mapTown";
 import { ROOM_IDS } from "../../../shared/protocol";
 import type { RoomId } from "../../../shared/protocol";
+import { faceSrc } from "../../net/assets";
 import { plateFarOf } from "../camera";
 import { PLAZA_PALETTE, SEAT_COLORS, TOWN_LIT, TOWN_PALETTE as C } from "../palette";
 import type { Budget, LightingPhase } from "../renderer";
@@ -26,6 +27,9 @@ import { Bundle, tf } from "./bar";
 import { buildPlaza } from "./plaza";
 import type { PlazaPiece, PlazaPieceCtx } from "./plaza";
 import type { MapScene } from "./types";
+
+/** 지붕·앞벽·간판이 걷히고 덮이는 시간(ms, UI-SPEC P20-7). 런타임(20-05)·모션 줄이기(20-08)가 읽는다 */
+export const CUTAWAY_MS = 250;
 
 // ---------- 치수(UI-SPEC 치수표 B·C. 자리는 mapTown 의 표가 원천이고 여기에는 생김새 치수만 둔다) ----------
 /** 방 벽 꼭대기 = 지붕판 아랫면. mapTown 의 방 장애물 중 이 높이에서 시작하는 것이 지붕판이다 */
@@ -163,8 +167,11 @@ export function drawBlankCell(ctx: AtlasCtx, cell: number): void {
   ctx.restore();
 }
 
-/** 좌석 칸: 좌석 색 원(얼굴 그림을 얹는 것은 Task 2) */
-function drawSeatCell(ctx: AtlasCtx, cell: number, seat: number): void {
+/**
+ * 좌석 칸: 좌석 색 원. 얼굴 그림이 왔으면(face) 원 안에 얼굴을 얹는다. 아직 안 왔으면(null) 원만 그린다 —
+ * 깨지거나 빈 칸이 보이지 않고, 얼굴이 오면 이 칸만 한 번 다시 그린다(UI Considerations partial).
+ */
+export function drawSeatCell(ctx: AtlasCtx, cell: number, seat: number, face: CanvasImageSource | null): void {
   const { x, y, s } = cellRect(cell);
   const r = s / 2 - s * 0.03;
   ctx.save();
@@ -173,11 +180,17 @@ function drawSeatCell(ctx: AtlasCtx, cell: number, seat: number): void {
   ctx.arc(x + s / 2, y + s / 2, r, 0, Math.PI * 2);
   ctx.fillStyle = SEAT_COLORS[seatIndex(seat)]!;
   ctx.fill();
+  if (face !== null) {
+    ctx.clip();
+    ctx.drawImage(face, x + s / 2 - r, y + s / 2 - r, r * 2, r * 2);
+  }
   ctx.restore();
 }
 
 interface Atlas {
   texture: Texture;
+  /** 그 좌석의 얼굴 그림을 한 번 불러 도착하면 칸을 다시 그린다. 실패하면 좌석 색 원으로 남는다 */
+  face(seat: number): void;
   dispose(): void;
 }
 
@@ -204,15 +217,35 @@ function makeAtlas(): Atlas {
     const texture = new DataTexture(new Uint8Array([0x0e, 0x13, 0x26, 255]), 1, 1, RGBAFormat);
     texture.colorSpace = SRGBColorSpace;
     texture.needsUpdate = true;
-    return { texture, dispose: () => texture.dispose() };
+    return { texture, face: () => undefined, dispose: () => texture.dispose() };
   }
   const { canvas, ctx } = c;
   for (const id of ROOM_IDS) drawSignCell(ctx, TOWN_ATLAS.sign[id], id);
-  for (let n = 0; n < 8; n++) drawSeatCell(ctx, TOWN_ATLAS.seat0 + n, n);
+  for (let n = 0; n < 8; n++) drawSeatCell(ctx, TOWN_ATLAS.seat0 + n, n, null);
   drawBlankCell(ctx, TOWN_ATLAS.blank);
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
-  return { texture, dispose: () => texture.dispose() };
+  const asked = new Set<number>();
+  let dead = false;
+  return {
+    texture,
+    face(seat: number): void {
+      const n = seatIndex(seat);
+      if (dead || asked.has(n) || typeof Image === "undefined") return;
+      asked.add(n);
+      const img = new Image();
+      img.onload = (): void => {
+        if (dead) return;
+        drawSeatCell(ctx, TOWN_ATLAS.seat0 + n, n, img);
+        texture.needsUpdate = true;
+      };
+      img.src = faceSrc(n);
+    },
+    dispose(): void {
+      dead = true;
+      texture.dispose();
+    },
+  };
 }
 
 // ---------- 아틀라스 판 지오메트리 ----------
@@ -402,7 +435,7 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
     mesh.geometry = list.length > 0 ? b.build(mat, mesh.name).geometry : new BufferGeometry();
     mesh.visible = list.length > 0;
   };
-  const fillHouses = (seats: readonly number[]): void => {
+  const setOwners = (seats: readonly number[]): void => {
     const owned = new Set(seats.filter((s) => Number.isInteger(s) && s >= 0 && s < 8));
     const lit: Matrix4[] = [];
     const dark: Matrix4[] = [];
@@ -414,11 +447,12 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
       const cell = has ? TOWN_ATLAS.seat0 + h.seat : TOWN_ATLAS.blank;
       setCellUv(plateUv, i, cell);
       setCellUv(markUv, i, cell);
+      if (has) atlas.face(h.seat);
     });
     setWindows(winLit, new Bundle(), matEmHouse, C.paneLit, lit);
     setWindows(winDark, new Bundle(), matProp, C.paneDark, dark);
   };
-  fillHouses([]);
+  setOwners([]);
 
   // ----- 컷어웨이: 방마다 지붕·앞벽·간판의 불투명도 하나 -----
   let propsFull = true;
@@ -436,6 +470,26 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
     }
     c.mesh.visible = c.alpha > 0;
     c.sign.visible = c.alpha > 0 && propsFull;
+  };
+  const setCutaway = (open: ReadonlySet<RoomId>, instant: boolean): void => {
+    for (const id of ROOM_IDS) {
+      const c = cuts[id];
+      c.want = open.has(id) ? 0 : 1;
+      if (instant && c.alpha !== c.want) {
+        c.alpha = c.want;
+        applyCut(c);
+      }
+    }
+  };
+  const update = (dt: number): void => {
+    const step = (Math.max(0, dt) * 1000) / CUTAWAY_MS;
+    for (const id of ROOM_IDS) {
+      const c = cuts[id];
+      if (c.alpha === c.want || step === 0) continue;
+      // 지금 값에서 목표 쪽으로 — 도중에 목표가 바뀌어도 튀지 않는다
+      c.alpha = c.want > c.alpha ? Math.min(c.want, c.alpha + step) : Math.max(c.want, c.alpha - step);
+      applyCut(c);
+    }
   };
 
   return {
@@ -455,11 +509,11 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
       houseMark.visible = propsFull;
       for (const id of ROOM_IDS) applyCut(cuts[id]);
     },
+    update,
     dispose: () => atlas.dispose(),
-    // 자리(Task 2 가 채운다): 걷힘 따라가기와 집 주인. 지금은 네 방 모두 덮여 있고 모든 집이 주인 없는 집이다
     hooks: {
-      setCutaway: () => undefined,
-      setOwners: () => undefined,
+      setCutaway,
+      setOwners,
       roofs: () => ({ post: cuts.post.alpha, pub: cuts.pub.alpha, clinic: cuts.clinic.alpha, police: cuts.police.alpha }),
     },
   };
