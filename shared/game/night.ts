@@ -7,6 +7,8 @@
 import type { AssassinationRecord, InvestigationRecord, MorningView, TreatmentRecord } from "../protocol";
 import { isAlive } from "./alive";
 import type { Player, RoomState } from "./room";
+import { modeOf, rulesetOf } from "./ruleset";
+import type { Ruleset } from "./ruleset";
 import { pickTracePiece } from "./trace";
 import type { RandInt } from "./tick";
 
@@ -146,8 +148,10 @@ export function resolveNight(state: RoomState): ResolvedNight {
  * 흔적(morning.trace): 탈락자가 있을 때만, 그 밤 피해자를 고른 산 사람(피해자 본인 제외) 풀에서 한 명의 의상 조각 하나. 풀은 nightPick 을 지우기 전의 players 로 만든다.
  * 구출·무효 밤은 trace 키가 없다.
  * 마지막 목격(16페이즈 D-10): 탈락자가 있고 errandLast 에 그 seat 줄이 있으면 morning.seen = { seat: 관찰자, place }. 어느 분기든 반환 상태에서 errandLast 를 지운다(서버 전용, 피해자 아닌 사람의 줄은 공개되지 않는다).
+ * 판 규칙(19페이즈 D-08): 흔적은 rules.trace, 마지막 목격은 rules.witness 가 켜진 판에서만 만든다. 흔적은 심부름과 무관하게 nightPick·look 으로 만들어지므로 basic 에서 여기서 막는다 —
+ * basic 판은 흔적 난수도 부르지 않는다. errandLast 를 지우는 처리는 판과 무관하게 그대로다. rules 를 안 받으면 방 상태의 판 종류에서 얻는다(전역 값이 아니다).
  */
-export function enterMorning(state: RoomState, randInt: RandInt = () => 0): RoomState {
+export function enterMorning(state: RoomState, randInt: RandInt = () => 0, rules: Ruleset = rulesetOf(modeOf(state))): RoomState {
   const result = resolveNight(state);
   const players: Player[] = state.players.map((p) => {
     const { nightPick: _nightPick, ...kept } = p;
@@ -162,8 +166,8 @@ export function enterMorning(state: RoomState, randInt: RandInt = () => 0): Room
     };
     return result.eliminated === p.seat ? { ...withRecords, alive: false } : withRecords;
   });
-  const piece = result.eliminated === undefined ? undefined : pickTracePiece(state, result.eliminated, randInt);
-  const seenRow = result.eliminated === undefined ? undefined : state.errandLast?.find((row) => row.seat === result.eliminated);
+  const piece = result.eliminated === undefined || !rules.trace ? undefined : pickTracePiece(state, result.eliminated, randInt);
+  const seenRow = result.eliminated === undefined || !rules.witness ? undefined : state.errandLast?.find((row) => row.seat === result.eliminated);
   const morning: MorningView =
     result.eliminated !== undefined
       ? {

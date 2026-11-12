@@ -1,7 +1,7 @@
 // 서버 내부 방 상태와 순수 전이 함수. 이 타입은 클라이언트로 보내지 않는다 — 공개 모양은 view.ts 의 buildView 가 만든다.
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
-import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
+import { GAME_MODES, MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import type { GameMode, MapChoice, MapId, PlaceId, RecordLine } from "../protocol";
 import type {
   AssassinationRecord,
@@ -23,7 +23,7 @@ import { decideMap } from "./maps";
 import { enterNomination } from "./nomination";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS, TUTORIAL_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
-import { RULESET } from "./ruleset";
+import { RULESET, modeOf } from "./ruleset";
 import type { RoleId } from "./roles";
 
 export const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
@@ -441,7 +441,8 @@ export function beginGame(
   // 맵은 역할 배정 난수를 모두 쓴 뒤에 정한다(결정 D-21) — 허용 맵이 하나면 난수를 부르지 않아 기존 시드 시험이 그대로다.
   const map = decideMap(state.mapChoice ?? "random", randInt);
   // 17페이즈(결정 0080-1·2): 방장이 튜토리얼을 켰을 때만 tutorial 단계(150초)로 시작한다 — 역할은 위에서 이미 정했지만 tutorial 은 revealsOwnRole:false 라 view 에 실리지 않는다.
-  const tutorial = opts?.tutorial === true;
+  // 19페이즈(D-10): 튜토리얼은 확장판(심부름·증거)을 가르친다(결정 0081-6) — basic 방은 tutorial: true 로 시작해도 튜토리얼 없이 assigning 으로 간다.
+  const tutorial = opts?.tutorial === true && modeOf(state) === "extended";
   return {
     ...state,
     map,
@@ -493,6 +494,7 @@ const LEGACY_CHAT_ROOM_KEYS = ["nextMessageSeq", "nextNightSeq"] as const;
  * - 모든 플레이어에서 옛 주장 필드 넷을 키째 뺀다.
  * 채팅은 서버에 저장하지 않는다(결정 0017-7) — 배포 전 저장된 messages 는 깨어날 때 지운다.
  * 채팅 옛 번호·쿨다운 필드(결정 0058 로 대체): 방 키 nextMessageSeq·nextNightSeq 와 Player 키 lastSendAt 도 키째 뺀다.
+ * - 판 종류(19페이즈 D-04, T-19-05): 허용 밖 값이 저장된 mode 는 키째 뺀다 — 읽는 쪽 기본값(modeOf → extended)이 받는다. mode 가 없거나 올바른 값인 방은 그대로다(같은 객체).
  * 아무것도 해당하지 않으면 같은 객체를 돌려준다(DO 생성자의 "바뀌었을 때만 저장·알람" 규칙이 이 동일성에 기댄다).
  * 새 optional 필드가 없는 옛 상태는 읽는 쪽 기본값이 받는다(RESEARCH Pattern 6).
  */
@@ -510,8 +512,9 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   const hasOldClaimState = LEGACY_CLAIM_STATE_KEYS.some((key) => Object.hasOwn(stored, key));
   const hasOldMessages = Object.hasOwn(stored, "messages");
   const hasOldChatRoomKeys = LEGACY_CHAT_ROOM_KEYS.some((key) => Object.hasOwn(stored, key));
+  const hasBadMode = Object.hasOwn(stored, "mode") && !(GAME_MODES as readonly unknown[]).includes(stored.mode);
   const hasOldPlayerFields = stored.players.some((p) => LEGACY_CLAIM_KEYS.some((key) => Object.hasOwn(p, key)) || Object.hasOwn(p, "lastSendAt"));
-  if (!isLegacyDay && !isLegacyReveal && !isLegacyClaim && !isLegacyVote && !isLegacyNomination && !hasOldVoteRoomKey && !hasOldVotePlayerKeys && !hasOldClaimState && !hasOldMessages && !hasOldChatRoomKeys && !hasOldPlayerFields) return stored;
+  if (!isLegacyDay && !isLegacyReveal && !isLegacyClaim && !isLegacyVote && !isLegacyNomination && !hasOldVoteRoomKey && !hasOldVotePlayerKeys && !hasOldClaimState && !hasOldMessages && !hasOldChatRoomKeys && !hasOldPlayerFields && !hasBadMode) return stored;
   // 옛 키는 구조 분해로만 뺀다. 필드 선언이 RoomState 에서 사라져도 컴파일되게 지역 교차 타입으로 받는다.
   const {
     messages: _dropped,
@@ -536,6 +539,10 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
     nextNightSeq?: unknown;
   };
   let next: RoomState = rest;
+  if (hasBadMode) {
+    const { mode: _mode, ...kept } = next;
+    next = kept;
+  }
   if (hasOldPlayerFields) {
     next = {
       ...next,

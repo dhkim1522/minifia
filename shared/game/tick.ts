@@ -60,7 +60,7 @@ const ON_ENTER: Partial<Record<PhaseId, (s: RoomState, randInt: RandInt, at: num
   nomination: RULESET.pickTurn ? enterNomination : enterVote,
   execution: enterExecution,
   night: enterNight,
-  morning: enterMorning,
+  morning: (s, r) => enterMorning(s, r), // 세 번째 인자 at(진입 시각)이 enterMorning 의 rules 자리로 들어가지 않게 감싼다(19페이즈) — 규칙은 방 상태의 판 종류에서 얻는다
   ended: enterEnded,
 };
 

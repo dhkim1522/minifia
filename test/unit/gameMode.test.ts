@@ -314,7 +314,7 @@ describe("다시 하기·대기실 복귀 뒤에도 mode 가 남는다 (D-06)", 
   /** 끝난 판(전원 준비). */
   const ended = (extra: Partial<RoomState>): RoomState => {
     const s = started(4);
-    return { ...s, phase: "ended", phaseEndsAt: null, winner: "citizen", ...extra, players: s.players.map((p) => ({ ...p, ready: true })) };
+    return { ...s, phase: "ended", phaseEndsAt: null, winner: "citizenWin", ...extra, players: s.players.map((p) => ({ ...p, ready: true })) };
   };
   it("mode basic 인 ended 방의 다시 하기 결과는 mode basic 이다", () => {
     const r = rematch(ended({ mode: "basic" }), HOST, 1, 500_000, seededRandInt(2));

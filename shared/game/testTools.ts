@@ -169,7 +169,7 @@ function botsVoteNow(state: RoomState, randInt: RandInt): RoomState {
 /**
  * 같은 방을 대기실로 되돌린다: 허용 목록 리터럴로 방·플레이어를 다시 만든다 — 상태를 펼쳐 복사하지 않아
  * 역할·주장·밤 선택·수사 기록·탈락·일차·아침 결과·투표·처형·종료 필드(voteLog·verdict·execution·nightLog·winner, nominate·verdictVote·endVote)와 앞으로 늘어날 게임 필드도 자동으로 빠진다.
- * 남기는 것: 방 식별·수명·방장·가입 순번·앉은 사람(자리·닉네임·연결)·testMode·testRole·testBotVote.
+ * 남기는 것: 방 식별·수명·방장·가입 순번·앉은 사람(자리·닉네임·연결)·mapChoice·mode(판 종류, 19페이즈 D-06)·testMode·testRole·testBotVote.
  */
 export function resetToLobby(state: RoomState, actorId: string): TestToolResult {
   const denied = checkTestHost(state, actorId);
@@ -203,6 +203,8 @@ export function resetToLobby(state: RoomState, actorId: string): TestToolResult 
     testMode: true,
     // 고른 맵은 대기실로 돌아와도 남고(결정 D-20), 이번 판의 결정값 map 은 버린다 — 다음 시작이 다시 정한다.
     ...(state.mapChoice !== undefined ? { mapChoice: state.mapChoice } : {}),
+    // 판 종류도 대기실 복귀 뒤 남는다(19페이즈 D-06) — 방장이 대기실에서 다시 고를 수 있다.
+    ...(state.mode !== undefined ? { mode: state.mode } : {}),
     ...(state.testRole !== undefined ? { testRole: state.testRole } : {}),
     // 봇 투표 설정도 testRole 처럼 남는다(P-13) — 같은 방의 다음 판에서도 봇이 같은 규칙으로 던진다.
     ...(state.testBotVote !== undefined ? { testBotVote: state.testBotVote } : {}),

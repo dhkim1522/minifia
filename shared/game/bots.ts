@@ -40,6 +40,8 @@
 import { isAlive } from "./alive";
 import { ERRAND_COUNT, SHOWDOWN_TURN_MS } from "./phases";
 import type { Player, RoomState } from "./room";
+import { modeOf, rulesetOf } from "./ruleset";
+import type { Ruleset } from "./ruleset";
 import { LAST_WORD_CHIPS } from "./showdown";
 import type { RandInt } from "./tick";
 
@@ -285,7 +287,7 @@ function showdownSteps(state: RoomState, bot: Player, now: number, randInt: Rand
   return [];
 }
 
-function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): BotStep[] {
+function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt, rules: Ruleset): BotStep[] {
   const steps: BotStep[] = [];
   const add = (at: number, act: BotAct): void => {
     steps.push({ at, botId: bot.id, act });
@@ -296,12 +298,15 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
     add(at, { t: "chat", text });
   };
   if (state.phase === "errand") {
-    // 심부름(15페이즈): 장소마다 걸어가고(errandGo) 9초·11초 뒤 처리한다(errandAct — 두 번째는 못 닿았을 때의 재시도, 이미 처리했으면 무해). 난수 없음.
-    for (let k = 0; k < ERRAND_COUNT; k++) {
-      const goAt = now + ERRAND_BOT_FIRST_MS + k * ERRAND_BOT_STEP_MS;
-      add(goAt, { t: "errandGo" });
-      add(goAt + ERRAND_BOT_ACT_MS, { t: "errandAct" });
-      add(goAt + ERRAND_BOT_RETRY_MS, { t: "errandAct" });
+    // 봇은 방의 판 규칙을 따른다(19페이즈 D-11): 심부름이 꺼진 판(basic)은 errand 단계 상태가 남아 있어도 심부름 행동을 계획하지 않는다.
+    if (rules.errand) {
+      // 심부름(15페이즈): 장소마다 걸어가고(errandGo) 9초·11초 뒤 처리한다(errandAct — 두 번째는 못 닿았을 때의 재시도, 이미 처리했으면 무해). 난수 없음.
+      for (let k = 0; k < ERRAND_COUNT; k++) {
+        const goAt = now + ERRAND_BOT_FIRST_MS + k * ERRAND_BOT_STEP_MS;
+        add(goAt, { t: "errandGo" });
+        add(goAt + ERRAND_BOT_ACT_MS, { t: "errandAct" });
+        add(goAt + ERRAND_BOT_RETRY_MS, { t: "errandAct" });
+      }
     }
   } else if (state.phase === "discussion") {
     const first = now + DISCUSSION_FIRST_BASE_MS + randInt(DISCUSSION_FIRST_SPAN_MS);
@@ -352,14 +357,15 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
 /**
  * 지금 단계에서 살아 있는 봇들의 행동 계획(at 오름차순, 같으면 원래 순서). 사람이 한 명도 연결되어 있지 않으면 빈 배열 —
  * 버려진 테스트 방이 봇 알람으로 계속 깨지 않게 한다. 봇은 seat 오름차순으로, 봇마다 위 순서로 randInt 를 부른다.
+ * 판 규칙(19페이즈 D-11)은 마지막 선택 인자로 받고, 안 받으면 방 상태의 판 종류에서 얻는다(전역 값이 아니다).
  */
-export function planBotSteps(state: RoomState, now: number, randInt: RandInt): BotStep[] {
+export function planBotSteps(state: RoomState, now: number, randInt: RandInt, rules: Ruleset = rulesetOf(modeOf(state))): BotStep[] {
   if (!state.players.some((p) => !isBot(p) && p.connected)) return [];
   if (state.phaseEndsAt === null) return [];
   const limit = state.phaseEndsAt - BOT_END_MARGIN_MS;
   const all: BotStep[] = [];
   for (const bot of state.players.filter((p) => isBot(p) && isAlive(p)).sort(bySeat)) {
-    const planned = planFor(state, bot, now, randInt);
+    const planned = planFor(state, bot, now, randInt, rules);
     planned.forEach((step, i) => {
       if (step.at >= limit) return;
       // typing 은 바로 다음 단계(짝 chat)가 마감 여유 안일 때만 남긴다(09-24).

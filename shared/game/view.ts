@@ -36,7 +36,8 @@ import { pointLinesOf, turnViewOf } from "./nomination";
 import { runoffVotersOf, runoffViewOf } from "./runoff";
 import { showdownViewOf } from "./showdown";
 import { PHASE_DEFS, RECORD_MAX } from "./phases";
-import { RULESET, modeOf } from "./ruleset";
+import { RULESET, modeOf, rulesetOf } from "./ruleset";
+import type { Ruleset } from "./ruleset";
 import { isReady } from "./rematch";
 import { tutorialProgress } from "./tutorial";
 import { rolesInPlay } from "./roles";
@@ -82,8 +83,9 @@ const EVIDENCE_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
 /**
  * 낮 정보. 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드는 싣지 않는다.
  * 읽는 쪽이 기본값을 쥔다: 일차 없으면 1(RESEARCH Pattern 6).
+ * 판 규칙(19페이즈 D-08): 흔적(rules.trace)·마지막 목격(rules.witness)이 꺼진 판은 서버 상태에 값이 남아 있어도 싣지 않는다 — 값이 빈 것이 아니라 키가 없다.
  */
-function buildDay(state: RoomState): DayView {
+function buildDay(state: RoomState, rules: Ruleset): DayView {
   const day: DayView = {
     n: state.day ?? 1,
     roles: rolesInPlay(state.players.length),
@@ -142,9 +144,9 @@ function buildDay(state: RoomState): DayView {
     if (result?.eliminated !== undefined) {
       morning.eliminated = result.eliminated;
       // 흔적(15페이즈 D-06): 서버가 정한 조각 id 하나를 모든 view 에 같은 값으로 필드별 복사한다 — 좌석·의상·역할·풀은 없다.
-      if (result.trace !== undefined) morning.trace = result.trace;
+      if (rules.trace && result.trace !== undefined) morning.trace = result.trace;
       // 마지막 목격(16페이즈 D-10): 좌석과 장소 id 만 필드별로 복사한다 — 좌표·역할은 없다.
-      if (result.seen !== undefined) morning.seen = { seat: result.seen.seat, place: result.seen.place };
+      if (rules.witness && result.seen !== undefined) morning.seen = { seat: result.seen.seat, place: result.seen.place };
     } else if (result?.saved === true) {
       // 의사 구출은 saved 하나만 공개한다 — 보호받은 사람이 누구인지·쪽지는 어디에도 싣지 않는다(결정 0061-12, 0044-22).
       morning.saved = true;
@@ -153,11 +155,12 @@ function buildDay(state: RoomState): DayView {
   }
   // 증거(16페이즈 D-10·R-4): 피해자가 나온 아침부터 처형까지 모두에게 같은 값을 싣는다(day.chalk 와 같은 "그날 낮 동안" 선례). 밤·끝·대기실에는 만들지 않는다(enterNight 가 morning 을 지운다).
   // 필드별 복사 — 조각 id 와 {seat, place} 뿐이고 역할·의상 id·좌표·피해자를 고른 사람 풀은 어디에도 없다.
-  if (EVIDENCE_PHASES.has(state.phase) && (state.morning?.trace !== undefined || state.morning?.seen !== undefined)) {
+  // 판 규칙(19페이즈 D-08): trace 칸은 rules.trace, seen 칸은 rules.witness 가 켜진 판에서만 채운다. 둘 다 없으면 evidence 키를 만들지 않는다(basic 판 — 값이 빈 것이 아니라 키가 없다).
+  if (EVIDENCE_PHASES.has(state.phase) && state.morning !== undefined) {
     const evidence: EvidenceView = {};
-    if (state.morning.trace !== undefined) evidence.trace = state.morning.trace;
-    if (state.morning.seen !== undefined) evidence.seen = { seat: state.morning.seen.seat, place: state.morning.seen.place };
-    day.evidence = evidence;
+    if (rules.trace && state.morning.trace !== undefined) evidence.trace = state.morning.trace;
+    if (rules.witness && state.morning.seen !== undefined) evidence.seen = { seat: state.morning.seen.seat, place: state.morning.seen.place };
+    if (evidence.trace !== undefined || evidence.seen !== undefined) day.evidence = evidence;
   }
   // 암살 현장 분필(MORN-01, 결정 0061-14): 방 DO 가 채운 좌표를 그날 낮 동안 모두에게 같은 값으로 싣는다. 필드별 복사이고, 없으면 키 자체가 없다.
   // 구출·무효 밤에는 DO 가 채우지 않으므로 어디에도 드러나지 않는다(결정 0044-22). 다음 밤 진입 훅이 지운다.
@@ -216,6 +219,8 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   if (resting !== undefined) return buildRestingView(state, resting, now);
   const me = state.players.find((p) => p.id === playerId);
   if (!me) throw new Error("buildView: player is not in this room");
+  // 판 규칙은 방 상태의 판 종류에서 한 번 얻는다(19페이즈 D-08) — 꺼진 판의 심부름·기록·흔적 키는 서버 상태에 값이 있어도 싣지 않는다(값이 빈 것이 아니라 키가 없다).
+  const rules = rulesetOf(modeOf(state));
 
   const players: PublicPlayer[] = [...state.players]
     .sort((a, b) => a.seat - b.seat)
@@ -277,12 +282,13 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   if (me.id === state.hostId && state.phase === "lobby") myInfo.testBots = botCount(state);
 
   // 내 심부름(15페이즈, 결정 0074)은 errand 단계의 산 본인에게만 — 목록·진행뿐이고 좌표·역할은 없다. 필드별 복사라 서버 상태 객체를 펼치지 않는다.
-  if (state.phase === "errand" && isAlive(me) && me.errandPlaces !== undefined) {
+  if (rules.errand && state.phase === "errand" && isAlive(me) && me.errandPlaces !== undefined) {
     myInfo.errand = { places: [...me.errandPlaces], done: [...(me.errandDone ?? [])] };
   }
 
   // 내 목격 기록(D-04)은 토론 단계에서 심부름 3곳을 모두 처리한 산 본인에게만 — 줄이 0개여도 빈 배열. 필드별 복사({seat, place})라 서버 상태를 펼치지 않고, 역할을 읽지 않는다.
   if (
+    rules.witness &&
     state.phase === "discussion" &&
     isAlive(me) &&
     me.errandPlaces !== undefined &&
@@ -403,7 +409,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     mode: modeOf(state),
   };
   if (state.phase !== "lobby" && state.map !== undefined) view.map = state.map;
-  if (DAY_PHASES.has(state.phase)) view.day = buildDay(state);
+  if (DAY_PHASES.has(state.phase)) view.day = buildDay(state, rules);
   // 튜토리얼 진행 값은 tutorial 단계의 모든 소켓에 같다(결정 0080-10·11, 허용 목록) — done·total 두 숫자와 마감뿐, 누가 끝냈는지(tutorialPassed)는 서버 전용이다.
   if (state.phase === "tutorial") view.tutorial = { ...tutorialProgress(state), endsAt: state.phaseEndsAt ?? now };
 
