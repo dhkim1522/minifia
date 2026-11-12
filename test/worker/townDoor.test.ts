@@ -6,33 +6,40 @@
 // 알람 시각을 읽는 시험은 문까지 몇 초 걸리는 먼 자리(FAR_SPOT)에서 출발해, 읽기 전에 알람이 제때 깨어나 버리는 일을 피한다.
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임은 문자열로 비교한다.
 import { env } from "cloudflare:workers";
-import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { TOWN_MAP, TOWN_ROOMS } from "../../shared/game/mapTown";
-import { MOVE_V } from "../../shared/game/world";
-import type { Segment, WorldState } from "../../shared/game/world";
-import { nextCrossingAt, zoneOf } from "../../shared/game/zones";
+import { nextCrossingAt } from "../../shared/game/zones";
 import type { ServerMessage } from "../../shared/protocol";
 import {
   advanceTo,
+  alarmAndCollect,
   alarmOf,
   connect,
+  doorCount,
   flushWorld,
   ghostsOf,
   hello,
   idOfSeat,
   mark,
   memWorld,
+  mentions,
   moveAs,
+  passDoor,
   pause,
   placeSeats,
   settle,
   shiftSeg,
+  snapLine,
   startedGame,
   storedRoom,
   townGame,
+  walkSeat,
   withRole,
   worldOf,
+  worldsIn as worlds,
+  zoneSnaps,
+  zonesOfPts,
 } from "./helpers";
 import type { Actor, Game } from "./helpers";
 
@@ -49,16 +56,6 @@ const PLAZA_SPOT = { x: 320, z: 180 };
 /** 우체국에서 가장 먼 광장 쪽 자리(맞은편 진료소 문 앞). 우체국 문턱까지 걸어서 7초 넘게 걸린다. */
 const FAR_SPOT = TOWN_ROOMS.find((r) => r.id === "clinic")!.front;
 
-const worlds = (msgs: ServerMessage[]): World[] => msgs.filter((m): m is World => m.t === "world");
-/** 점 목록이 지나는 구역(중복 없이, 처음 나온 순서). */
-function zonesOfPts(p: readonly number[]): string {
-  const seen: string[] = [];
-  for (let i = 0; i + 1 < p.length; i += 2) {
-    const zone = zoneOf(TOWN_MAP, p[i]!, p[i + 1]!);
-    if (!seen.includes(zone)) seen.push(zone);
-  }
-  return seen.join(">");
-}
 const endOf = (p: readonly number[]): string => `${p[p.length - 2]},${p[p.length - 1]}`;
 /** 그 좌석의 문 프레임들을 한 줄로: "개수: vanish:post keys=d,e,k,s,t | appear:post [구역] end=x,z". 사라짐은 키 이름을 그대로 적는다(좌표 키가 없음을 보인다). */
 function doorLine(msgs: ServerMessage[], seatNo: number): string {
@@ -70,19 +67,6 @@ function doorLine(msgs: ServerMessage[], seatNo: number): string {
   };
   return `${doors.length}: ${doors.map(one).join(" | ")}`;
 }
-/** 문 프레임 수(좌석 무관). */
-const doorCount = (msgs: ServerMessage[]): number => worlds(msgs).filter((f) => f.k === "door").length;
-/** zone 표시가 붙은 snap 들. */
-const zoneSnaps = (msgs: ServerMessage[]): Snap[] => worlds(msgs).filter((f): f is Snap => f.k === "snap" && (f as { zone?: unknown }).zone === true);
-/** snap 한 개를 한 줄로: "seats=0,2 others=[post]" — others 는 보는 사람(me) 말고 다른 좌석들의 점이 지나는 구역. */
-function snapLine(f: Snap | undefined, me: number): string {
-  if (f === undefined) return "none";
-  const others = f.ents.filter((e) => e.s !== me).flatMap((e) => e.p);
-  return `seats=${f.ents.map((e) => e.s).join(",")} others=[${zonesOfPts(others)}]`;
-}
-/** 그 좌석이 실린 world 프레임 수(move·door 의 s, snap 의 ents). "그 사람에 대해 아무것도 받지 않았다" 의 증명에 쓴다. */
-const mentions = (msgs: ServerMessage[], seatNo: number): number =>
-  worlds(msgs).filter((f) => (f.k === "snap" ? f.ents.some((e) => e.s === seatNo) : f.s === seatNo)).length;
 /** 그 좌석의 move 프레임들: "개수: [구역] end=x,z". */
 function moveLine(msgs: ServerMessage[], seatNo: number): string {
   const moves = worlds(msgs).filter((f) => f.k === "move" && f.s === seatNo);
@@ -115,36 +99,6 @@ async function scene(aAt: { x: number; z: number }): Promise<Scene> {
   for (const r of rest) spots[r.seat] = PLAZA_SPOT;
   await placeSeats(g.code, spots);
   return { g, a, b, c, d, rest, of: (frames, who) => frames[g.actors.indexOf(who)]! };
-}
-
-/** 메모리 구간을 직접 쓴다(걷기 요청 없이 — 알람이 따로 걸리지 않는다). agoMs 전에 출발한 것으로 둔다. 구역 기억은 건드리지 않는다. */
-async function walkSeat(code: string, seatNo: number, p: number[], agoMs = 0): Promise<Segment> {
-  const id = await idOfSeat(code, seatNo);
-  const seg: Segment = { p, t0: Date.now() - agoMs, v: MOVE_V };
-  await runInDurableObject(env.ROOM.getByName(code), (instance) => {
-    const holder = instance as unknown as { world: WorldState };
-    holder.world = { ...holder.world, segs: { ...holder.world.segs, [id]: seg } };
-  });
-  return seg;
-}
-
-/**
- * 그 좌석의 다음 문 통과가 이미 지난 것으로 만든다(구간 출발을 앞당긴다).
- * 이미 넘었으면(시험이 느리게 돌아 실제 시간이 문턱을 지났다) 아무것도 하지 않는다 — 그 통과는 제때 깨어난 알람이나 다음 알람이 낸다.
- */
-async function passDoor(code: string, seatNo: number): Promise<void> {
-  const seg = (await memWorld(code)).segs[await idOfSeat(code, seatNo)]!;
-  const now = Date.now();
-  const tc = nextCrossingAt(TOWN_MAP, seg, now);
-  if (tc !== null) await shiftSeg(code, seatNo, tc - now + 40);
-}
-
-/** 알람을 한 번 돌리고 모든 소켓을 flush 해 marks 이후의 프레임을 소켓별로 돌려준다. */
-async function alarmAndCollect(g: Game, marks: number[]): Promise<ServerMessage[][]> {
-  await runDurableObjectAlarm(env.ROOM.getByName(g.code));
-  const out: ServerMessage[][] = [];
-  for (let i = 0; i < g.socks.length; i++) out.push(await settle(g.socks[i]!, marks[i]!));
-  return out;
 }
 
 /** 걷기 요청 → (보낸 쪽 flush) → 문턱을 지난 것으로 → 알람. 걷기 요청 전부터의 프레임을 돌려준다. */

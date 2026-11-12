@@ -136,6 +136,7 @@ export function nearIdsOf(
   posOf: (id: string) => Pos | undefined,
   viewerId: string,
   radiusFx: number,
+  _map?: Pick<MapDef, "rooms">,
 ): string[] {
   const viewer = players.find((p) => p.id === viewerId);
   if (viewer === undefined || !isAlive(viewer)) return [];
@@ -216,6 +217,7 @@ export function nearSnapFrame(
   players: readonly Who[],
   viewerId: string,
   now: number,
+  _map?: Pick<MapDef, "rooms">,
 ): Extract<WorldFrame, { k: "snap" }> {
   const has = (id: string): boolean => Object.prototype.hasOwnProperty.call(world.segs, id);
   const posOf = (id: string): Pos | undefined => (has(id) ? positionAtFx(world.segs[id]!, now) : undefined);
