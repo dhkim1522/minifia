@@ -572,7 +572,7 @@ describe("WorldStage: 서버 구간대로 걷기와 카메라 (MAP-02, MAP-03)",
     }
   });
 
-  it("결정 0059: 서버 구간이 RTT/2 늦게 와도 한 프레임에 튀지 않고 SEG_BLEND_MS 뒤 서버 위치에 맞는다", async () => {
+  it("결정 0059: 서버 구간이 RTT/2 늦게 와도 한 프레임에 튀지 않고 서버 구간을 그 시간만큼 앞선 시각으로 그리며, 도착하면 서버 위치와 같다", async () => {
     const s = await open();
     const mine = s.world.renderers[0]!.chars.get(0)!;
     const base = s.store.segOf(0);
@@ -581,26 +581,129 @@ describe("WorldStage: 서버 구간대로 걷기와 카메라 (MAP-02, MAP-03)",
     const pred = predictSegment(base, DEST, sent)!;
     frames(96);
     move(s.store, asWorldSeg(pred, sent + 77));
-    const injectedAt = Date.now();
     let prev = posOf(mine);
     let maxStep = 0;
-    let checked = 0;
     for (let t = 0; t < 300; t += 16) {
       frame(16);
       const cur = posOf(mine);
       maxStep = Math.max(maxStep, dist(cur, prev));
       prev = cur;
-      if (Date.now() - injectedAt >= SEG_BLEND_MS + 32) {
-        const server = s.store.positionOf(0, Date.now())!;
-        expect(Math.abs(cur.x - server.x)).toBeLessThan(1e-6);
-        expect(Math.abs(cur.z - server.z)).toBeLessThan(1e-6);
-        checked++;
-      }
+      // 그리는 구간은 서버 구간이다(결정 0002) — 서버가 탭을 늦게 받은 77ms 만큼 앞선 시각의 위치
+      const ahead = s.store.positionOf(0, Date.now() + 77)!;
+      expect(Math.abs(cur.x - ahead.x)).toBeLessThan(1e-6);
+      expect(Math.abs(cur.z - ahead.z)).toBeLessThan(1e-6);
     }
     expect(maxStep).toBeLessThanOrEqual(0.04);
-    expect(checked).toBeGreaterThan(0);
-    frames(MOVE_ACK_TIMEOUT_MS * 2);
+    frames(MOVE_ACK_TIMEOUT_MS * 2); // 도착(약 2.4초) 뒤
+    const server = s.store.positionOf(0, Date.now())!;
+    expect(dist(posOf(mine), server)).toBeLessThan(1e-6);
     expect(s.props.onNotice).not.toHaveBeenCalled(); // 응답이 왔으니 응답 없음 시계는 멈췄다
+  });
+
+  // ---- 움직임 밀림(18.1 실기기 재확인 2026-11-12): 서버 응답이 올 때 내 캐릭터가 뒤로 끌려갔다 ----
+  // 원인: 서버는 탭을 업링크 시간(u)만큼 늦게 받아 같은 길을 u 늦게 출발시킨다. 응답이 오면 그리던 예측 위치(서버보다 u × 1.8 앞)를
+  // 150ms 안에 서버 위치로 끌어당겼고, 그 속도(최대 u × 1.8 × 10/초)가 u > 100ms 에서 걷는 속도 1.8 을 넘어 화면에서 뒤로 걸었다.
+  /** 예측 길 위 시각 t 의 진행 방향 단위 벡터(1ms 앞 위치와의 차이) */
+  const headingAt = (g: Segment, t: number): { x: number; z: number } => {
+    const a = positionAt(g, t);
+    const b = positionAt(g, t + 1);
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    return len === 0 ? { x: 0, z: 0 } : { x: (b.x - a.x) / len, z: (b.z - a.z) / len };
+  };
+
+  it("밀림: 서버 응답이 업링크 150ms 만큼 늦은 구간이어도 내 캐릭터는 뒤로 걷지 않고 그리던 걸음을 그대로 잇는다", async () => {
+    const s = await open();
+    const mine = s.world.renderers[0]!.chars.get(0)!;
+    const base = s.store.segOf(0);
+    tapAt(surface(s.utils), 250, 340);
+    const sent = Date.now();
+    const pred = predictSegment(base, DEST, sent)!;
+    frames(208); // 업링크 150 + 다운링크 58
+    move(s.store, asWorldSeg(pred, sent + 150)); // 서버는 150ms 늦게 받아 같은 길을 150ms 늦게 출발시킨다
+    let prev = posOf(mine);
+    let minAlong = Infinity;
+    let maxOff = 0;
+    for (let t = 0; t < 480; t += 16) {
+      const dir = headingAt(pred, Date.now());
+      frame(16);
+      const cur = posOf(mine);
+      minAlong = Math.min(minAlong, (cur.x - prev.x) * dir.x + (cur.z - prev.z) * dir.z);
+      prev = cur;
+      maxOff = Math.max(maxOff, dist(cur, positionAt(pred, Date.now())));
+    }
+    expect(minAlong).toBeGreaterThan(1.8 * 0.016 * 0.9); // 한 프레임도 뒤로 가거나 멈칫하지 않는다(고치기 전: −0.0142 — 뒤로 걸었다)
+    expect(maxOff).toBeLessThan(1e-6); // 응답 전과 같은 걸음: 예측 길의 지금 위치 = 서버 구간의 (지금 + 150ms) 위치
+    // 서버 위치의 진실은 그대로다(결정 0002): 서버 구간은 150ms 뒤처져 있고, 도착하면 같은 자리다
+    const server = s.store.positionOf(0, Date.now())!;
+    expect(dist(server, positionAt(pred, Date.now() - 150))).toBeLessThan(1e-6);
+    frames(4000);
+    expect(dist(posOf(mine), s.store.positionOf(0, Date.now())!)).toBeLessThan(1e-6);
+    expect(dist(posOf(mine), { x: 5, z: 4 })).toBeLessThan(1e-6);
+    expect(s.props.onNotice).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["30ms 빨리", 120],
+    ["30ms 늦게", 180],
+  ])("밀림: 앞선 채 걷는 중 다시 탭하면 그리던 자리에서 이어 걷고, 둘째 응답이 %s 와도 뒤로 가거나 멈칫하지 않는다", async (_name, uplink2) => {
+    const s = await open();
+    const mine = s.world.renderers[0]!.chars.get(0)!;
+    const base = s.store.segOf(0);
+    tapAt(surface(s.utils), 250, 340);
+    const sent1 = Date.now();
+    const pred1 = predictSegment(base, DEST, sent1)!;
+    frames(208);
+    const seg1: Segment = { p: pred1.p, t0: sent1 + 150, v: pred1.v };
+    move(s.store, asWorldSeg(seg1));
+    frames(304);
+    const beforeTap = posOf(mine);
+    tapAt(surface(s.utils), 150, 320); // 바닥 (−5, 2) — 거의 반대쪽
+    const sent2 = Date.now();
+    // 예측은 내 캐릭터의 시각(탭 시각 + 앞섬 150)에 그리던 자리에서 출발한다 — 서버가 150ms 뒤에 받으면 만들 구간과 같다
+    const pred2 = predictSegment(seg1, { x: -500, z: 200 }, sent2 + 150)!;
+    frame(16);
+    expect(dist(posOf(mine), beforeTap)).toBeLessThanOrEqual(1.8 * 0.066 * 1.05); // 탭 순간에 튀지 않는다(누른 50ms + 한 프레임의 걸음)
+    frames(192);
+    // 누르는 동안 프레임 없이 흐른 50ms 의 걸음을 섞고 나면 예측 길의 (서버 시각 + 150) 위치다
+    expect(dist(posOf(mine), positionAt(pred2, Date.now() + 150))).toBeLessThan(1e-6);
+    const seg2 = predictSegment(seg1, { x: -500, z: 200 }, sent2 + uplink2)!; // 서버가 실제로 만든 구간
+    move(s.store, asWorldSeg(seg2));
+    let prev = posOf(mine);
+    let minAlong = Infinity;
+    let maxStep = 0;
+    for (let t = 0; t < 320; t += 16) {
+      const dir = headingAt(seg2, Date.now() + uplink2);
+      frame(16);
+      const cur = posOf(mine);
+      minAlong = Math.min(minAlong, (cur.x - prev.x) * dir.x + (cur.z - prev.z) * dir.z);
+      maxStep = Math.max(maxStep, dist(cur, prev));
+      prev = cur;
+    }
+    expect(minAlong).toBeGreaterThan(1.8 * 0.016 * 0.6);
+    expect(maxStep).toBeLessThanOrEqual(0.04);
+    // 남은 작은 차이(30ms × 1.8)를 섞은 뒤에는 서버 구간의 (서버 시각 + 이번 업링크) 위치다
+    expect(dist(posOf(mine), positionAt(seg2, Date.now() + uplink2))).toBeLessThan(1e-6);
+    frames(6000);
+    expect(dist(posOf(mine), s.store.positionOf(0, Date.now())!)).toBeLessThan(1e-6);
+    expect(dist(posOf(mine), { x: -5, z: 2 })).toBeLessThan(1e-6);
+    expect(s.props.onNotice).not.toHaveBeenCalled();
+  });
+
+  it("밀림: 도착해 서 있으면 앞섬이 풀려, 뒤이어 서버가 걷게 한 구간은 서버 시각 그대로 그린다", async () => {
+    const s = await open();
+    const mine = s.world.renderers[0]!.chars.get(0)!;
+    const base = s.store.segOf(0);
+    tapAt(surface(s.utils), 250, 340);
+    const sent = Date.now();
+    const pred = predictSegment(base, DEST, sent)!;
+    frames(208);
+    move(s.store, asWorldSeg(pred, sent + 150));
+    frames(4000); // 도착하고 서버 시각으로도 구간이 끝났다
+    expect(dist(posOf(mine), { x: 5, z: 4 })).toBeLessThan(1e-6);
+    move(s.store, seg(0, [500, 400, 300, 400], Date.now(), 180)); // 서버 주도 이동(모이기 등)
+    frames(SEG_BLEND_MS + 32);
+    expect(dist(posOf(mine), s.store.positionOf(0, Date.now())!)).toBeLessThan(1e-6);
+    expect(mine.root.position.x).toBeLessThan(4.9);
   });
 
   it("결정 0059: 응답이 없으면 1.5초 뒤 알림 한 번, 링이 사라지고 내 캐릭터는 서버 위치로 150ms 에 걸쳐 돌아간다", async () => {
@@ -706,6 +809,23 @@ describe("G-07-9 섞기·방향 (결정 0059)", () => {
     expect(blended).toBe(true);
   });
 
+  it("밀림 점검(남의 캐릭터): 남의 새 구간이 150ms 늦게 도착해도 따라잡는 방향으로만 섞여 뒤로 걷지 않는다", async () => {
+    const s = await open();
+    const other = s.world.renderers[0]!.chars.get(1)!;
+    // 남은 (−3, 0.5) 에 서 있다가 +x 로 걷는다. 프레임은 출발 150ms 뒤에야 도착했다(다운링크) — 그린 자리는 서버 위치보다 0.27 뒤다
+    move(s.store, seg(1, [-300, 50, 300, 50], Date.now() - 150, 180));
+    let prev = posOf(other);
+    let minAlong = Infinity;
+    for (let t = 0; t < 320; t += 16) {
+      frame(16);
+      const cur = posOf(other);
+      minAlong = Math.min(minAlong, cur.x - prev.x);
+      prev = cur;
+    }
+    expect(minAlong).toBeGreaterThan(1.8 * 0.016 * 0.99); // 언제나 걷는 속도 이상으로 앞으로만 간다
+    expect(dist(posOf(other), s.store.positionOf(1, Date.now())!)).toBeLessThan(1e-6); // 남은 서버 시각 그대로(결정 0059-4)
+  });
+
   it("결정 0059: 3 단위 넘게 떨어진 새 구간(순간이동)은 섞지 않고 바로 맞춘다", async () => {
     const s = await open();
     const other = s.world.renderers[0]!.chars.get(1)!;
@@ -744,9 +864,12 @@ describe("G-07-9 섞기·방향 (결정 0059)", () => {
     frame(16);
     expect(root.getAttribute("data-ring")).toBe("-5.00,2.00");
     frames(SEG_BLEND_MS + 48);
-    const want = s.store.positionOf(0, Date.now())!;
+    // 둘째 응답의 서버 구간을 그린다 — 서버가 둘째 탭을 늦게 받은 77ms 만큼 앞선 시각의 위치(걷는 동안)
+    const want = s.store.positionOf(0, Date.now() + 77)!;
     expect(dist(posOf(mine), want)).toBeLessThan(1e-6);
-    frames(MOVE_ACK_TIMEOUT_MS * 2);
+    frames(MOVE_ACK_TIMEOUT_MS * 4); // 도착 뒤에는 서버 위치와 같다
+    expect(dist(posOf(mine), s.store.positionOf(0, Date.now())!)).toBeLessThan(1e-6);
+    expect(dist(posOf(mine), { x: -5, z: 2 })).toBeLessThan(1e-6);
     expect(s.props.onNotice).not.toHaveBeenCalled();
   });
 
@@ -775,9 +898,12 @@ describe("G-07-9 섞기·방향 (결정 0059)", () => {
     const pred = predictSegment(base, { x: 500, z: 400 }, sent)!;
     frames(96);
     expect(dist(posOf(mine), { x: 2, z: 1 })).toBeGreaterThan(0.1);
-    move(s.store, { s: 0, p: pred.p, t0: sent + 77, v: pred.v });
+    // 서버 구간: 출발점이 예측과 0.3 단위 다르고(다른 길) 77ms 늦게 출발, 끝점은 같다 — 남는 위치 차이를 섞지 않고 다음 프레임에 바로 그 구간 위에 선다
+    const server = { s: 0, p: [pred.p[0]! - 30, pred.p[1]!, ...pred.p.slice(2)], t0: sent + 77, v: pred.v };
+    move(s.store, server);
     frame(16);
-    expect(dist(posOf(mine), s.store.positionOf(0, Date.now())!)).toBeLessThan(1e-6);
+    expect(dist(posOf(mine), positionAt(server, Date.now() + 77))).toBeLessThan(1e-6);
+    expect(dist(posOf(mine), positionAt(pred, Date.now()))).toBeGreaterThan(0.05);
   });
 
   it("결정 0059: +x 로 걸으면 방향은 한 프레임에 YAW_TURN_RATE × dt 까지만 돌고 150ms 안에 π/2 가 된다", async () => {

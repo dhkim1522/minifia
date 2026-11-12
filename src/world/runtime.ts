@@ -1,5 +1,6 @@
 // 로비 맵 런타임: rAF 한 루프가 서버 시각의 위치로 모든 캐릭터를 놓고, 카메라가 내 캐릭터를 따라가고, 렌더하고, 이름표를 투영한다.
 // 내 캐릭터는 탭하자마자 서버와 같은 공용 길찾기로 예측 구간을 그리고, 내 서버 구간이 오면 그쪽으로 맞춘다(결정 0059).
+// 맞출 때 뒤로 끌려가지 않게 내 캐릭터만 서버 시각 + 앞섬(서버가 탭을 늦게 받은 만큼)으로 그린다(결정 0085).
 // 위치의 진실은 계속 서버 구간이다(sample() 은 서버 값 그대로). 남의 캐릭터는 예측하지 않는다.
 // 그릴 구간이 바뀌면 화면 위치 차이를 SEG_BLEND_MS 에 걸쳐 줄인다.
 //
@@ -907,7 +908,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
   }
 
-  function updateRing(r: WorldRenderer, now: number, sNow: number): void {
+  /** ownNow = 내 캐릭터를 그리는 시각(서버 시각 + 앞섬) — 링은 화면에서 내 캐릭터가 닿는 순간에 사라진다 */
+  function updateRing(r: WorldRenderer, now: number, ownNow: number): void {
     const g = ring;
     if (g === null) return;
     if (g.acked) {
@@ -921,7 +923,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
           g.to = null;
         }
       }
-      if (g.fadeStart === null && sNow >= g.endsAt) g.fadeStart = now;
+      if (g.fadeStart === null && ownNow >= g.endsAt) g.fadeStart = now;
     }
     let opacity = 1;
     if (g.fadeStart !== null) {
@@ -1045,6 +1047,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     } else {
       observeOwnMove(now);
     }
+    // 내 캐릭터의 시각(결정 0085): 서버 시각 + 앞섬(OwnMoves.lead — 서버가 내 탭을 늦게 받은 만큼). 예측을 서버 구간으로 바꿀 때 뒤로 끌려가지 않게 한다.
+    // 서 있으면(서버 구간이 끝났으면) 앞섬을 0 으로 되돌린다. 남의 캐릭터는 언제나 서버 시각 그대로다(결정 0059-4).
+    own.settle(sNow, store.segOf(deps.mySeat()));
+    const ownNow = sNow + own.lead();
 
     for (const seat of store.takeEntered()) pendingEntered.add(seat);
     for (const seat of store.seats()) {
@@ -1111,12 +1117,13 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         a.pointing = pointAt !== undefined;
         a.handle.holdPose?.(a.pointing ? "point" : null);
       }
-      // 그릴 구간: 내 자리는 예측 중이면 예측, 남은 언제나 서버 구간(결정 0059-4)
+      // 그릴 구간: 내 자리는 예측 중이면 예측, 남은 언제나 서버 구간(결정 0059-4). 그릴 시각: 내 자리는 앞섬을 더한 ownNow, 남은 서버 시각
       const eff = a.exit !== null || server === undefined ? undefined : a.seat === mySeat ? own.effective(server) : server;
-      const live = eff === undefined ? null : positionAt(eff, sNow);
+      const segNow = a.seat === mySeat ? ownNow : sNow;
+      const live = eff === undefined ? null : positionAt(eff, segNow);
       if (eff !== undefined && eff !== a.seg) {
         // 구간이 바뀌었다: 새 구간이 직전 프레임에도 이어졌다면 있었을 자리와 지금 그린 자리의 차이를 잡는다(한 프레임 걸음은 차이가 아니다)
-        const was = positionAt(eff, sNow - Math.max(gapMs, 0));
+        const was = positionAt(eff, segNow - Math.max(gapMs, 0));
         const ox = a.pos.x - was.x;
         const oz = a.pos.z - was.z;
         const far = ox * ox + oz * oz > BLEND_SNAP_DIST * BLEND_SNAP_DIST;
@@ -1135,7 +1142,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (resync) {
         a.yawGoal = null;
       } else {
-        const target = eff === undefined ? null : travelYaw(eff, sNow);
+        const target = eff === undefined ? null : travelYaw(eff, segNow);
         if (target !== null) a.yawGoal = target;
         else if (pointAt !== undefined) {
           // 서 있는 채 가리킨다: 대상 쪽을 본다(걷는 중에는 걷는 방향이 먼저)
@@ -1313,7 +1320,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }, RESIZE_DEBOUNCE_MS);
     }
 
-    updateRing(r, now, sNow);
+    updateRing(r, now, ownNow);
     updateCue(r, now);
 
     // 소실·재생성·포기 중에는 GL 을 그리지 않는다(이름표와 서버 위치 갱신은 계속한다)
@@ -1442,7 +1449,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (ring !== null && !ring.acked && mineSeg !== undefined) ackRing(ring, mineSeg, Date.now());
       return;
     }
-    own.sent(predictSegment(own.effective(store.segOf(deps.mySeat())), dest, at, map));
+    // 예측은 화면에 그리던 자리에서 잇는다: 내 캐릭터의 시각(탭 시각 + 앞섬)에 출발한다. 걷는 중 다시 탭해도 서버가 만들 구간과 출발점이 같다
+    own.sent(predictSegment(own.effective(store.segOf(deps.mySeat())), dest, at + own.lead(), map));
     clearAckTimer();
     ackTimer = setTimeout(() => {
       ackTimer = null;

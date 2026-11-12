@@ -65,7 +65,7 @@
 | `data-emote-button` · `data-emote-tray` · `data-emote="{id}"` | 입력줄 맨 왼쪽 버튼 · 동작 판(5+4) · 칸 | 10페이즈(결정 0068). 판이 열려 있으면 떠 있는 버튼이 숨고, 걷는 중·동작 재생 중에는 칸이 `aria-disabled`. 기하는 `10-UI-SPEC.md` 의 F 절 |
 | `data-float="dress"` · `data-dress-sheet` · `data-outfit="{id}"` | 로비 꾸미기 버튼 · 패널을 덮는 한 줄 카드 띠 · 카드 | 로비에서만(게임 단계에는 없음). 카드는 `aria-pressed`, 선택 카드 이름에 "선택됨". `data-taken` = 다른 참가자가 직접 고른 옷(잠금·자물쇠, 18), 시작 때 겹친 옷은 서버가 푼다(결정 0081-1) |
 | `window.__mfEmotes` · `window.__mfLooks` | 테스트 훅 | 마지막 동작 프레임·재생 중 좌석 / 좌석 → 의상 id (`?e2e=1`·개발 빌드만) |
-| `window.__mfWorld` | 전역 | `sample(seat, t)` 로 걷는 중 서버 구간 위치를 읽음. `shown(seat)` = 마지막 프레임에 그린 위치(내 예측·구간 섞기 포함)와 프레임 시각. `?e2e=1` 또는 개발 빌드에서만 생김 |
+| `window.__mfWorld` | 전역 | `sample(seat, t)` 로 걷는 중 서버 구간 위치를 읽음. `shown(seat)` = 마지막 프레임에 그린 위치(내 예측·구간 섞기·내 캐릭터 시각 앞섬(결정 0085) 포함)와 프레임 시각. `?e2e=1` 또는 개발 빌드에서만 생김 |
 | `data-sound-button` · `data-sound-state="{on\|off\|locked}"` | 소리 단추(방 화면 한 곳) | 12페이즈(결정 0070). 단추 하나뿐, 상태 셋. 역할 값 없음 |
 | `data-sound-lab` · `data-sound-id="{id}"` · `window.__mfSound` · `window.__mfSoundLab` | 시험 페이지 · 소리 행 · 테스트 훅 | `/?sound-lab=1`(개발·`?e2e=1` 문맥만). `__mfSound` = 상태 + 요청 로그(id·시각만), `__mfSoundLab` = 오프라인 렌더 결과 56개 |
 

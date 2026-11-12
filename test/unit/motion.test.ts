@@ -1,9 +1,10 @@
 // 결정 0059 의 예측·섞기·방향·응답 판정 순수 계산(src/world/motion.ts). 시각은 모두 인자다.
 import { describe, expect, it } from "vitest";
 import { BAR_MAP } from "../../shared/game/map";
-import { type WorldState, emptyWorld, requestMove, spawnPlayer } from "../../shared/game/world";
+import { MOVE_SPEED, type WorldState, emptyWorld, positionAt, requestMove, segmentEndsAt, spawnPlayer } from "../../shared/game/world";
 import {
   BLEND_SNAP_DIST,
+  OWN_LEAD_MAX_MS,
   SEG_BLEND_MS,
   YAW_TURN_RATE,
   blendRemaining,
@@ -66,6 +67,112 @@ describe("blendRemaining — 구간 교체 때 남은 화면 위치 차이 비�
       expect(prev - cur).toBeLessThanOrEqual(1.5 / SEG_BLEND_MS + 1e-12);
       prev = cur;
     }
+  });
+});
+
+describe("움직임 밀림의 원인과 시각 앞섬 (18.1 실기기 재확인 2026-11-12)", () => {
+  // 서 있다가 (0,0) → (600,0) 으로 걷는다. 클라이언트는 탭 시각 1000 에 예측을 만들고, 서버는 업링크 u 뒤에 받아 같은 길을 u 늦게 출발시킨다.
+  const TAP = 1000;
+  const predOf = (lead = 0) => ({ p: [0, 0, 600, 0], t0: TAP + lead, v: 180 });
+  const serverOf = (uplink: number) => ({ p: [0, 0, 600, 0], t0: TAP + uplink, v: 180 });
+  /** 옛 방식: 응답 순간의 위치 차이(예측 − 서버)를 SEG_BLEND_MS 에 걸쳐 0 으로 줄일 때 1ms 동안 +x 로 나아간 거리의 최솟값 */
+  const minStepWhenPulled = (uplink: number, answerAt: number): number => {
+    const server = serverOf(uplink);
+    const off = positionAt(predOf(), answerAt).x - positionAt(server, answerAt).x;
+    let min = Infinity;
+    for (let ms = 0; ms < SEG_BLEND_MS; ms++) {
+      const at = (e: number): number => positionAt(server, answerAt + e).x + off * blendRemaining(e);
+      min = Math.min(min, at(ms + 1) - at(ms));
+    }
+    return min;
+  };
+
+  it("원인: 예측은 서버 구간보다 업링크 × 속도만큼 앞서 있고, 그 차이를 150ms 에 당기면 업링크 100ms 초과부터 뒤로 걷는다", () => {
+    const answerAt = TAP + 150 + 58; // 업링크 150 + 다운링크 58
+    expect(positionAt(predOf(), answerAt).x - positionAt(serverOf(150), answerAt).x).toBeCloseTo(MOVE_SPEED * 0.15, 9); // 0.27 단위 앞
+    expect(minStepWhenPulled(150, answerAt)).toBeLessThan(0); // 뒤로 간다
+    expect(minStepWhenPulled(78, TAP + 156)).toBeGreaterThan(0); // 결정 0059 가 잰 왕복 155ms(업링크 78ms): 뒤로 가지는 않지만
+    expect(minStepWhenPulled(78, TAP + 156)).toBeLessThan((MOVE_SPEED / 1000) * 0.25); // 걷는 속도의 4분의 1 아래로 멈칫한다
+  });
+
+  it("고침: 응답이 오면 출발 시각 차이를 앞섬으로 넘겨 서버 구간을 (서버 시각 + 앞섬)으로 그린다 — 그리던 예측 위치와 정확히 이어진다", () => {
+    const own = createOwnMoves(0);
+    expect(own.lead()).toBe(0);
+    const pred = predOf(own.lead());
+    own.sent(pred);
+    const server = serverOf(150);
+    const answerAt = TAP + 208;
+    const before = positionAt(own.effective(undefined)!, answerAt + own.lead());
+    expect(own.observe(1, server)).toBe("answered");
+    expect(own.lead()).toBe(150);
+    const after = positionAt(own.effective(server)!, answerAt + own.lead());
+    expect(after.x).toBeCloseTo(before.x, 9);
+    expect(after.z).toBeCloseTo(before.z, 9);
+    // 서버 위치의 진실은 그대로다: 서버 시각의 위치는 150ms 뒤처져 있고 끝점은 같다
+    expect(positionAt(server, answerAt).x).toBeCloseTo(before.x - MOVE_SPEED * 0.15, 9);
+    expect(positionAt(server, segmentEndsAt(server))).toEqual({ x: 6, z: 0 });
+  });
+
+  it("걷는 중 다시 탭: 예측이 (탭 시각 + 앞섬)에 출발하므로 다음 응답의 앞섬은 그 탭의 업링크가 된다(쌓이지 않는다)", () => {
+    const own = createOwnMoves(0);
+    own.sent(predOf(0));
+    own.observe(1, serverOf(150));
+    expect(own.lead()).toBe(150);
+    own.sent({ p: [100, 0, 600, 0], t0: 2000 + own.lead(), v: 180 }); // 둘째 탭(서버 시각 2000)의 예측
+    expect(own.observe(2, { p: [95, 0, 600, 0], t0: 2000 + 120, v: 180 })).toBe("answered"); // 이번에는 120ms 걸렸다
+    expect(own.lead()).toBe(120);
+  });
+
+  it("앞섬은 0 ~ OWN_LEAD_MAX_MS 로 자른다", () => {
+    const slow = createOwnMoves(0);
+    slow.sent(predOf(0));
+    slow.observe(1, serverOf(OWN_LEAD_MAX_MS + 400));
+    expect(slow.lead()).toBe(OWN_LEAD_MAX_MS);
+    const early = createOwnMoves(0);
+    early.sent(predOf(0));
+    early.observe(1, serverOf(-40)); // 시계 추정이 서버보다 앞선 경우
+    expect(early.lead()).toBe(0);
+  });
+
+  it("끝점이 다른 서버 구간·내가 보내지 않은 이동·응답 없음(expire)은 앞섬을 바꾸지 않는다", () => {
+    const own = createOwnMoves(0);
+    own.sent(predOf(0));
+    own.observe(1, serverOf(150));
+    expect(own.observe(2, { p: [0, 0, 0, 300], t0: 5000, v: 180 })).toBeNull(); // 서버가 걷게 한 이동
+    expect(own.lead()).toBe(150);
+    own.sent({ p: [0, 0, 300, 0], t0: 6000 + 150, v: 180 });
+    expect(own.observe(3, { p: [0, 0, 0, 500], t0: 6100, v: 180 })).toBe("answered"); // 대기는 끝났지만 끝점이 다르다
+    expect(own.lead()).toBe(150);
+    own.sent({ p: [0, 0, 300, 0], t0: 7000 + 150, v: 180 });
+    expect(own.expire().cleared).toBe(true);
+    expect(own.lead()).toBe(150);
+  });
+
+  it("settle: 예측 중이 아니고 서버 구간이 서버 시각으로도 끝났을 때만 앞섬을 0 으로 되돌린다, reset 은 바로 0", () => {
+    const own = createOwnMoves(0);
+    own.sent(predOf(0));
+    const server = serverOf(150);
+    own.observe(1, server);
+    const end = segmentEndsAt(server);
+    own.settle(end - 1, server); // 서버 시각으로는 아직 걷는 중
+    expect(own.lead()).toBe(150);
+    own.sent({ p: [600, 0, 0, 0], t0: end + 150, v: 180 });
+    own.settle(end + 5000, server); // 예측 중에는 건드리지 않는다
+    expect(own.lead()).toBe(150);
+    expect(own.expire().cleared).toBe(true);
+    own.settle(end, server);
+    expect(own.lead()).toBe(0);
+
+    const again = createOwnMoves(0);
+    again.sent(predOf(0));
+    again.observe(1, server);
+    again.settle(end - 1, undefined); // 서버 구간이 없으면 0
+    expect(again.lead()).toBe(0);
+    again.sent(predOf(0));
+    again.observe(2, server);
+    expect(again.lead()).toBe(150);
+    again.reset(2);
+    expect(again.lead()).toBe(0);
   });
 });
 
