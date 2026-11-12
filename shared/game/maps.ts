@@ -4,10 +4,11 @@ import type { MapChoice, MapId } from "../protocol";
 import { BAR_MAP } from "./map";
 import type { MapDef } from "./map";
 import { PLAZA_MAP } from "./mapPlaza";
+import { TOWN_MAP } from "./mapTown";
 import type { RoomState } from "./room";
 
 /** 맵 표(결정 D-22). 맵을 늘리려면 MapId 에 id 를 더하고 여기에 한 줄을 등록한다 — Record 라 빠뜨리면 컴파일이 실패한다. */
-export const MAPS: Readonly<Record<MapId, MapDef>> = { bar: BAR_MAP, plaza: PLAZA_MAP };
+export const MAPS: Readonly<Record<MapId, MapDef>> = { bar: BAR_MAP, plaza: PLAZA_MAP, town: TOWN_MAP };
 
 /** id 의 맵. */
 export function mapOf(id: MapId): MapDef {

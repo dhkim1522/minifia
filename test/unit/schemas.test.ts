@@ -28,11 +28,11 @@ describe("옛 투표 메시지(execVote·candidateVote)는 와이어에서 사�
 });
 
 // 로비 이동 입력(결정 0044-17, T-06-09) — 목적지 두 정수뿐이다.
-describe("MoveMessageSchema (strictObject, 정수 ±700)", () => {
+describe("MoveMessageSchema (strictObject, 정수 ±1200 — 마을 바깥 판 ±12, 20페이즈 P20-0)", () => {
   it.each([
-    ["원점 근처", { t: "move", x: 0, z: -700 }],
-    ["양 끝", { t: "move", x: 700, z: 700 }],
-    ["음의 끝", { t: "move", x: -700, z: 0 }],
+    ["원점 근처", { t: "move", x: 0, z: -1200 }],
+    ["양 끝", { t: "move", x: 1200, z: 1200 }],
+    ["음의 끝", { t: "move", x: -1200, z: 0 }],
   ])("받는다: %s", (_name, msg) => {
     expect(MoveMessageSchema.safeParse(msg).success).toBe(true);
   });
@@ -40,10 +40,10 @@ describe("MoveMessageSchema (strictObject, 정수 ±700)", () => {
   it.each([
     ["소수 x", { t: "move", x: 1.5, z: 0 }],
     ["소수 z", { t: "move", x: 0, z: 0.25 }],
-    ["x 701", { t: "move", x: 701, z: 0 }],
-    ["x -701", { t: "move", x: -701, z: 0 }],
-    ["z 701", { t: "move", x: 0, z: 701 }],
-    ["z -701", { t: "move", x: 0, z: -701 }],
+    ["x 1201", { t: "move", x: 1201, z: 0 }],
+    ["x -1201", { t: "move", x: -1201, z: 0 }],
+    ["z 1201", { t: "move", x: 0, z: 1201 }],
+    ["z -1201", { t: "move", x: 0, z: -1201 }],
     ["덧붙은 seat", { t: "move", x: 0, z: 0, seat: 1 }],
     ["덧붙은 속도 v", { t: "move", x: 0, z: 0, v: 9999 }],
     ["덧붙은 시각 t0", { t: "move", x: 0, z: 0, t0: 1 }],
@@ -62,13 +62,13 @@ describe("MoveMessageSchema (strictObject, 정수 ±700)", () => {
 
 // 06-08: move 는 ClientMessage 유니온의 멤버다 — 방 DO 가 ClientMessageSchema 로만 받는다.
 describe("ClientMessageSchema move (06-08, 결정 0044-17)", () => {
-  it("받는다: 정수 ±700 목적지", () => {
-    expect(ClientMessageSchema.safeParse({ t: "move", x: -700, z: 700 }).success).toBe(true);
+  it("받는다: 정수 ±1200 목적지", () => {
+    expect(ClientMessageSchema.safeParse({ t: "move", x: -1200, z: 1200 }).success).toBe(true);
   });
 
   it.each([
     ["소수", { t: "move", x: 1.5, z: 0 }],
-    ["범위 밖", { t: "move", x: 701, z: 0 }],
+    ["범위 밖", { t: "move", x: 1201, z: 0 }],
     ["덧붙은 seat", { t: "move", x: 0, z: 0, seat: 1 }],
     ["z 빠짐", { t: "move", x: 0 }],
   ])("거부한다: %s", (_name, msg) => {

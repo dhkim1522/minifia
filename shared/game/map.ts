@@ -32,7 +32,7 @@ export interface PlaceDef {
 
 export interface MapDef {
   /** protocol.ts 의 MapId 와 같은 합집합이다 — 이 파일은 import 가 없는 순수 모듈이라(소스 규약 시험) 타입을 되풀이해 적는다. 어긋나면 maps.ts 의 MAPS(Record<MapId, MapDef>)가 컴파일에서 잡는다. */
-  id: "bar" | "plaza";
+  id: "bar" | "plaza" | "town";
   size: number;
   /** 격자 원점(월드 단위, x·z 공통). 없으면 GRID_ORIGIN(재즈 바·광장). 격자는 맵마다 다를 수 있다(20페이즈 D-04). */
   origin?: number;

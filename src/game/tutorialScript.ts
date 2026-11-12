@@ -5,7 +5,7 @@
 import { UNIT } from "../../shared/game/map";
 import { MOVE_V, emptyWorld, moveFrame, restSegment, snapFrame } from "../../shared/game/world";
 import type { WorldState } from "../../shared/game/world";
-import type { ClientMessage, MapId, OutfitId, PhaseId, PlaceId, PublicPlayer, RoomView, WorldFrame } from "../../shared/protocol";
+import type { ClientMessage, MapChoice, MapId, OutfitId, PhaseId, PlaceId, PublicPlayer, RoomView, WorldFrame } from "../../shared/protocol";
 import type { CameraMode, SceneLook, SeatLook } from "../world/presence";
 
 // ---- 타입 ----
@@ -239,7 +239,7 @@ function baseView(phase: PhaseId, now: number, deadSeats: readonly number[], pha
     serverNow: now,
     minPlayers: 4,
     maxPlayers: 8,
-    mapChoice: TUTORIAL_CAST.map as MapId,
+    mapChoice: TUTORIAL_CAST.map as MapChoice,
     map: TUTORIAL_CAST.map as MapId,
     players: playersOf(deadSeats),
     me: { seat: TUTORIAL_CAST.me, isHost: false },

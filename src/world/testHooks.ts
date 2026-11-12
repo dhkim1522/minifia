@@ -1,6 +1,7 @@
 // E2E 훅(T-06-27). window.__mfWorld 는 ?e2e=1(세션 저장) 또는 개발 빌드에서만 생긴다 — 일반 사용자 주소(쿼리 없는 배포본)에는 없다.
 // 캐릭터가 3D 메시라 DOM 에 위치가 없다: E2E 가 같은 시각의 위치를 읽는 유일한 경로다(낡은 DOM 속성에 기대지 않는다, 리서치 Pitfall 6).
 // 노출하는 것은 이미 화면에 그려진 로비 위치·렌더러 통계뿐이다(신원·역할·토큰 없음).
+import type { MapId } from "../../shared/protocol";
 import type { StorageLike } from "../net/session";
 import type { RendererStats, WorldRenderer } from "./renderer";
 import type { MapStatus, MapStatusState } from "./status";
@@ -40,7 +41,7 @@ declare global {
     /** 좌석별 고른 의상 표(좌석 → 의상 id, 10-04, L33). 이 화면이 받은 view 의 look 사본이다(결과 화면 직업 의상과 별개). 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다 */
     __mfLooks?: Readonly<Record<number, string>>;
     /** 지금 렌더러에 올린 맵 id(11-13, L33): 로비·시작 전은 "bar". 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다 */
-    __mfMap?: "bar" | "plaza";
+    __mfMap?: MapId;
     /** 동작 훅(10-03, L33): 이 화면이 받은 마지막 emote 프레임의 사본과 지금 사람 동작을 재생 중인 좌석. DOM 속성으로 싣지 않는다 */
     __mfEmotes?: { last: { seat: number; id: string; n: number } | null; playing: readonly number[] };
     /**
@@ -207,7 +208,7 @@ export function installLooksHook(): { set(looks: Readonly<Record<number, string>
  * window.__mfMap 을 설치한다(11-13): 이 런타임이 올린 맵 id. 맵이 바뀌면 새 런타임이 다시 설치한다. 테스트 훅이 켜진 문맥에서만 부른다(L33).
  * 해제는 다른 설치가 덮어썼으면 지우지 않는다(다른 값이면 그대로 둔다). 값은 DOM 속성이 아니다.
  */
-export function installMapHook(mapId: "bar" | "plaza"): { off(): void } {
+export function installMapHook(mapId: MapId): { off(): void } {
   window.__mfMap = mapId;
   return {
     off() {

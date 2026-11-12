@@ -249,6 +249,7 @@ export function ghostFloatY(tSec: number, reduced: boolean): number {
 export const STAGE_TOPS: Readonly<Record<MapId, { r: number; y: number }>> = {
   bar: { r: STAGE_TOP_R, y: STAGE_TOP_Y },
   plaza: { r: 1.05, y: 0.46 },
+  town: { r: 1.05, y: 0.46 }, // 마을 가운데는 광장 연단 그대로다(20페이즈 D-05)
 };
 
 /** 단위 좌표 발 위치의 무대 위 높이: 그 맵의 무대 윗면 반경 안(경계 포함)이면 윗면 높이, 아니면 0. 맵 id 를 안 주면 재즈 바(0.29, 반경 1.18) */
