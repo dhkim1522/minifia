@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>판 종류 고르기</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0a0e1c}
+a{color:#a9aebb}a:hover{color:#e6e8ee}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #151c36; color: #e6e8ee; font-family: 'Gowun Dodum', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; word-break: keep-all">
+
+<div style="position: absolute; left: 45px; top: 250px; width: 300px; height: 180px; border-radius: 50%; background: #2a3760" aria-hidden="true"></div>
+<div style="position: absolute; left: 120px; top: 300px; width: 150px; height: 80px; border-radius: 50%; background: #c9c3b8" aria-hidden="true"></div>
+<div style="position: absolute; left: 0; top: 0; width: 390px; height: 844px; background: rgba(10, 14, 28, 0.6)" aria-hidden="true"></div>
+
+<section aria-label="판 종류" style="position: absolute; left: 0; bottom: 0; width: 390px; box-sizing: border-box; padding: 20px 16px 24px; background: #0e1326; border-top: 1px solid #2a3760; border-radius: 20px 20px 0 0; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #f1f2f5">판 종류</h2>
+<button type="button" aria-label="닫기" style="width: 44px; height: 44px; border-radius: 999px; border: 1px solid #2a3760; background: #1e2847; color: #e6e8ee; display: grid; place-items: center; padding: 0"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></button>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+<button type="button" aria-pressed="false" style="box-sizing: border-box; padding: 16px 12px; border-radius: 14px; border: 1px solid #2a3760; background: #151c36; color: #e6e8ee; font-family: inherit; display: flex; flex-direction: column; align-items: center; gap: 10px">
+<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 16 0v3H4z"/><path d="M2 15h20"/><path d="M8 19h8"/></svg>
+<span style="font-size: 17px; font-weight: 700">기본 마피아</span>
+<span style="font-size: 14px; line-height: 1.4; color: #a9aebb">토론하고 투표해요</span>
+</button>
+<button type="button" aria-pressed="true" style="position: relative; box-sizing: border-box; padding: 16px 12px; border-radius: 14px; border: 2px solid #e6e8ee; background: #1e2847; color: #f1f2f5; font-family: inherit; display: flex; flex-direction: column; align-items: center; gap: 10px">
+<span style="position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 999px; background: #e6e8ee; color: #0e1326; display: grid; place-items: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg></span>
+<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M14.500 14.500L21 21"/><path d="M8 10h4"/></svg>
+<span style="font-size: 17px; font-weight: 700">확장판</span>
+<span style="font-size: 14px; line-height: 1.4; color: #a9aebb">증거를 찾아 추리해요</span>
+</button>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
