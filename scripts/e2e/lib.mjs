@@ -249,8 +249,6 @@ export const ONE_LINE_FACTOR = 1.6;
 export const LOG_H = 68;
 /** 로비 패널 = LOG_H + 154 */
 export const LOBBY_PANEL_EXTRA = 154;
-/** 방장 대기실 패널 증분 = 스위치 줄 44 + 간격 10(chatUi.LOBBY_HOST_TUTORIAL_EXTRA 사본, 0083-3). 방장 패널은 222 → 276 */
-export const LOBBY_HOST_TUTORIAL_EXTRA = 54;
 /** 채팅 패널(게임 맵의 지목·변론 단계의 입력줄 패널) = LOG_H + 92 */
 export const CHAT_PANEL_EXTRA = 92;
 /** 키보드 열림 패널 = 14 + LOG_H + 8 + 48 + 8 */
@@ -264,9 +262,9 @@ export const OPEN_STAGE_MIN = 120;
 /** 머리 위 입력 중 알약이 스택을 늘리는 높이 */
 export const TYPING_PILL_H = 22;
 
-/** 로비 채팅 패널 높이(chatUi.lobbyPanelHeight 사본). 안전 영역 제외. */
-export function lobbyPanelHeight(logH, host = false) {
-  return logH + LOBBY_PANEL_EXTRA + (host ? LOBBY_HOST_TUTORIAL_EXTRA : 0);
+/** 로비 채팅 패널 높이(chatUi.lobbyPanelHeight 사본). 안전 영역 제외. 방장 패널 = 참가자 패널(19-04, P19-12) */
+export function lobbyPanelHeight(logH) {
+  return logH + LOBBY_PANEL_EXTRA;
 }
 
 // ---- 게임 맵 판정 (08-23, 08-UI-SPEC "아래 패널 종류와 높이"·"검사 가능하게 둘 것"). 순수 함수 — 브라우저에서 읽는 값은 08-24 의 readGame 이 만든다. ----

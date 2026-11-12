@@ -112,7 +112,6 @@ import {
   pcCenterChecks,
   wakeLockChecks,
   GAME_PANEL_EXTRA,
-  LOBBY_HOST_TUTORIAL_EXTRA,
   announceChecks,
   announceClearChecks,
   faceListPanelH,
@@ -588,16 +587,15 @@ const CHAT_LOBBY_EXTRA = 154;
 const CHAT_CONTROL = 48;
 const CHAT_PANEL_EPS = 1;
 
-/** 한 페이지의 로비 채팅 패널 치수 판정. m 은 readChatPanel 의 값. host 는 방장 페이지(스위치 줄 +54, 18.1-15 0083-3). 검사 행 목록을 돌려준다. */
-function chatPanelRows(m, host = false) {
+/** 한 페이지의 로비 채팅 패널 치수 판정. m 은 readChatPanel 의 값. 방장 패널 = 참가자 패널(19-04, P19-12). 검사 행 목록을 돌려준다. */
+function chatPanelRows(m) {
   if (!m) return [{ id: "CP0", label: "채팅 패널을 읽음", ok: false, detail: "패널·기록 칸·입력칸 중 없는 것이 있음" }];
   const logWant = CHAT_LOG;
-  const hostExtra = host ? LOBBY_HOST_TUTORIAL_EXTRA : 0;
-  const panelWant = logWant + CHAT_LOBBY_EXTRA + hostExtra;
+  const panelWant = logWant + CHAT_LOBBY_EXTRA;
   const near = (a, b) => Math.abs(a - b) <= CHAT_PANEL_EPS;
   const r1 = (n) => Math.round(n * 10) / 10;
   return [
-    { id: "CP1", label: `로비 패널 높이 ${r1(panelWant)} (기록 ${logWant} + ${CHAT_LOBBY_EXTRA}${host ? ` + ${hostExtra}(방장 스위치 줄)` : ""})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
+    { id: "CP1", label: `로비 패널 높이 ${r1(panelWant)} (기록 ${logWant} + ${CHAT_LOBBY_EXTRA})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
     { id: "CP2", label: `기록 칸 높이 ${logWant}`, ok: near(m.log.height, logWant), detail: `기록 칸 ${r1(m.log.height)}` },
     { id: "CP3", label: `입력칸 높이 ${CHAT_CONTROL} · 접힌 빈 입력에는 [보내기] 가 없음(0083-5)`, ok: near(m.input.height, CHAT_CONTROL) && m.send === null, detail: `입력칸 ${r1(m.input.height)} · 보내기 ${m.send === null ? "없음" : `${r1(m.send.width)}x${r1(m.send.height)}`}` },
     { id: "CP4", label: "입력칸 글자 16px", ok: m.inputFont === 16, detail: `${m.inputFont}px` },
@@ -642,7 +640,7 @@ async function chatLobbyFlow(ctx) {
     // 손님은 글을 보내느라 입력칸에 포커스가 있어 기록 칸이 늘어나 있다(0083-4) — 접힌 상태를 재려고 먼저 접는다
     await collapseChatLog(gp);
     for (const [who, page] of [["방장", hp], ["손님", gp]]) {
-      for (const r of chatPanelRows(await readChatPanel(page), who === "방장")) rec(`chat-lobby/panel-${who}`, r.id, r.label, r.ok, r.detail);
+      for (const r of chatPanelRows(await readChatPanel(page))) rec(`chat-lobby/panel-${who}`, r.id, r.label, r.ok, r.detail);
     }
     // 입력 중 알약(07-18, CHAT-04): 손님이 글자를 넣기만 하면 방장 화면의 손님 이름표에 data-typing true, 칸을 비우면 사라진다.
     // 서버는 한 사람의 켜짐을 1.5초에 한 번만 중계하니, 위에서 보낸 글의 켜짐과 겹치지 않게 1.7초 쉰다.
