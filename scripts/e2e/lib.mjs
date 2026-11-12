@@ -2768,13 +2768,82 @@ export function modeSheetChecks(s = {}) {
 }
 
 // ---- 19페이즈 기본 마피아 판 basicModeChecks (19-07, 결정 D-08·D-09, UI-SPEC E-1·E-3·BM1~BM3) ----
+// 기본 마피아(view.mode basic)는 서버가 심부름·목격 기록·흔적 키를 싣지 않아 화면이 그 요소를 그리지 않는다. 숨김이 아니라 DOM 에 없어야 한다.
+// 여기서 "기본 마피아"는 19페이즈의 판 종류다 — 위 13페이즈 "기본판"(꺼진 장치, OFF*)과 다른 축이고 두 판 종류 모두 기본판이다.
 
-export const BASIC_ABSENT_SELECTORS = Object.freeze([]);
-export const BASIC_ABSENT_ATTR_PREFIX = "";
-export const BASIC_FORBIDDEN_LINES = Object.freeze([]);
-/** 자리 함수(19-07 RED) */
-export function basicModeChecks() {
-  return [];
+/**
+ * 기본 마피아 한 판 전체에서 한 번도 DOM 에 있으면 안 되는 선택자(UI-SPEC E-1): 아침 흔적 표시·같은 옷 표시(이름표)·마지막 목격 줄·증거 카드·[기록] 머리 단추.
+ * 감시는 browser.mjs offScannerScript 가 100ms 마다 한다. 표식이 실제로 앱에 있는지는 e2eContract 가 본다(빈 선택자 금지, T-19-22).
+ */
+export const BASIC_ABSENT_SELECTORS = Object.freeze(["[data-trace-mark]", "[data-seen-mark]", "[data-lastseen-row]", "[data-trace-card]", "[data-record-button]"]);
+/** 심부름 요소의 속성 앞머리(시작 카드·장소 타일·화살표·[처리]·진행 점·층) — 이 앞머리로 시작하는 속성이 하나도 없어야 한다 */
+export const BASIC_ABSENT_ATTR_PREFIX = "data-errand-";
+/**
+ * 기본 마피아에서 자막 띠([data-host-line])에 나오면 안 되는 사회자 줄(UI-SPEC E-3) — src/game/hostLine.ts HOST_LINES 의 errand.act·errand.done·witness·discussion.evidence 사본.
+ * errand.ghost("지켜봐 주세요")는 낮 발표·투표·찬반의 유령 줄과 같은 문장이라 넣지 않는다(기본 마피아의 유령 화면에 그대로 나온다). e2eContract 가 같음을 고정한다.
+ */
+export const BASIC_FORBIDDEN_LINES = Object.freeze(["빛나는 곳을 찾아 처리해 주세요", "곧 토론이 시작됩니다", "기록 단추로 본 것을 확인해 주세요", "같은 옷과 엇갈린 목격을 살펴보세요"]);
+
+/** BM1 의 감시 횟수 하한 — 이보다 적게 돈 감시는 한 판을 덮지 못했다(공허 통과 금지, T-19-22) */
+const BASIC_SCAN_MIN = 20;
+/** 기본 마피아에서 허용되는 단계 전이(연속 중복은 접은 뒤). errand·tutorial·runoff·showdown 은 어느 쪽에도 없다 — 낮 발표 다음은 토론이다(D-08). */
+const MODE_BASIC_TRANSITIONS = Object.freeze({
+  lobby: ["assigning"],
+  assigning: ["roleReveal"],
+  roleReveal: ["dayAnnounce"],
+  dayAnnounce: ["discussion", "ended"],
+  discussion: ["nomination"],
+  nomination: ["defense", "night"],
+  defense: ["verdict"],
+  verdict: ["execution"],
+  execution: ["night", "ended"],
+  night: ["morning"],
+  morning: ["dayAnnounce", "ended"],
+  ended: [],
+});
+/** 한 판 완주로 치려면 지나야 하는 단계(BM2) — 낮 한 번과 밤·아침 한 번, 그리고 결과 */
+const MODE_BASIC_REQUIRED = Object.freeze(["discussion", "nomination", "night", "morning", "ended"]);
+
+/**
+ * 기본 마피아 한 판 판정(BM1~BM3, UI-SPEC "검증 표식과 E2E 판정"). 한 페이지(방장 또는 참가자)가 한 판 동안 모은 값을 받는다.
+ * phases = 받은 state 의 phase 열 · scan = readOffScan 결과 { scans, seen: { 선택자: { n, phase, name? } } } · lines = readHostLines 가 모은 띠 글(중복 없는 목록).
+ * BM1 감시가 20회 넘게 돌았고 없어야 할 선택자·속성을 한 번도 못 봤다 · BM2 errand 없이 역할 확인 → 낮 발표 → 토론 → 투표(→ 변론 → 찬반 → 처형) → 밤 → 아침 순서로 결과까지 갔다 ·
+ * BM3 띠 글에 금지 문구가 없다. 값이 없으면 `측정값 없음` 으로 실패한다(띠 글을 하나도 못 본 판도).
+ */
+export function basicModeChecks(input) {
+  const { phases, scan, lines } = input ?? {};
+  const L = {
+    BM1: `심부름(${BASIC_ABSENT_ATTR_PREFIX}*)·흔적·목격 표시·증거 카드·[기록] 단추가 한 판 전체에서 DOM 에 0건이다`,
+    BM2: "단계 순서가 기본 마피아다(낮 발표 → 토론 → 투표 → 변론 → 찬반 → 처형 → 밤 → 아침, 심부름 없음)",
+    BM3: "자막 띠에 심부름·목격 기록·증거 안내 문구가 한 번도 나오지 않는다",
+  };
+  const out = [];
+
+  if (!scan || typeof scan !== "object" || !isNum(scan.scans) || !scan.seen || typeof scan.seen !== "object") out.push(noMeasure("BM1", L.BM1, "감시 결과"));
+  else if (scan.scans <= BASIC_SCAN_MIN) out.push(result("BM1", L.BM1, [`측정값 부족(감시 ${scan.scans}회 ≤ ${BASIC_SCAN_MIN})`]));
+  else out.push(result("BM1", L.BM1, Object.entries(scan.seen).map(([sel, v]) => `${sel} ${v?.n ?? "?"}건(${v?.phase ?? "?"}${v?.name ? `, ${v.name}` : ""})`)));
+
+  if (!Array.isArray(phases) || phases.length === 0 || phases.some((p) => typeof p !== "string")) out.push(noMeasure("BM2", L.BM2, "phases[]"));
+  else {
+    const seq = phases.filter((p, i) => i === 0 || p !== phases[i - 1]);
+    const bad = [];
+    if (seq.includes("errand")) bad.push("errand 단계가 나왔다");
+    for (let i = 1; i < seq.length; i++) {
+      const allowed = MODE_BASIC_TRANSITIONS[seq[i - 1]];
+      if (allowed === undefined || !allowed.includes(seq[i])) {
+        bad.push(`${seq[i - 1]} → ${seq[i]} 는 기본 마피아 전이가 아님`);
+        break;
+      }
+    }
+    const missing = MODE_BASIC_REQUIRED.filter((p) => !seq.includes(p));
+    if (missing.length > 0) bad.push(`지나지 않은 단계 ${missing.join(",")}`);
+    out.push(result("BM2", L.BM2, bad));
+  }
+
+  const texts = Array.isArray(lines) ? lines.filter((t) => typeof t === "string" && t.trim() !== "") : [];
+  if (texts.length === 0) out.push(noMeasure("BM3", L.BM3, "본 띠 글 0개"));
+  else out.push(result("BM3", L.BM3, BASIC_FORBIDDEN_LINES.filter((f) => texts.some((t) => t.includes(f))).map((f) => `띠에 '${f}'`)));
+  return out;
 }
 
 // ---- 12페이즈 sound-script (12-08, 결정 D-21): 단계 구간마다 기대 소리 id 가 순서대로 ----
