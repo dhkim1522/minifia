@@ -24,7 +24,7 @@ export interface LineSheetPeer {
 }
 
 export interface LineSheetProps {
-  /** 자리 속성(19-02 RED) — 아직 읽지 않는다 */
+  /** 그 판 규칙의 귓속말 켜짐(19페이즈 D-03) — 공개 예고 문구가 귓속말을 함께 말할지 정한다. 화면이 view.mode 에서 얻어 넘기고, 없으면 꺼짐이다 */
   whisper?: boolean;
   /** 상대 칩(얼굴 + 이름 + whisper 아이콘). 없으면 title 을 쓴다 */
   peer?: LineSheetPeer;
@@ -49,7 +49,7 @@ export interface LineSheetProps {
 const LINE_TEXT = { send: "보내기", close: "닫기", inputLabel: "귓속말 입력" } as const;
 
 export function LineSheet(props: LineSheetProps) {
-  const { peer, title, icon = "whisper", value, onChange, onSend, onClose, max = WHISPER_MAX_GRAPHEMES, placeholder, inputLabel = LINE_TEXT.inputLabel, disabled } = props;
+  const { peer, title, icon = "whisper", value, onChange, onSend, onClose, max = WHISPER_MAX_GRAPHEMES, placeholder, inputLabel = LINE_TEXT.inputLabel, disabled, whisper = false } = props;
   const fieldRef = useRef<HTMLInputElement | null>(null);
   const composed = useComposedText(fieldRef);
   const inputId = useId();
@@ -92,7 +92,7 @@ export function LineSheet(props: LineSheetProps) {
       {/* 공개 예고(11-07, A-4): 귓속말 시트가 열려 있는 동안 항상 위쪽에 있다. 모두에게 같은 문구 */}
       {peer ? (
         <p className="mv-line__notice" data-pre-notice="">
-          {RESULT_PANEL_TEXT.preNotice(false)}
+          {RESULT_PANEL_TEXT.preNotice(whisper)}
         </p>
       ) : null}
       <div className="mv-line__head">

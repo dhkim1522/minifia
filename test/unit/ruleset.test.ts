@@ -25,10 +25,10 @@ describe("기본판 설정 RULESET (결정 0072)", () => {
     const view = read("shared/game/view.ts");
     expect(`${/import \{[^}]*\brulesetOf\b[^}]*\} from "..\/shared\/game\/ruleset"/.test(room)}/${/import \{[^}]*\brulesetOf\b[^}]*\} from "\.\/ruleset"/.test(view)}`).toBe("true/true");
   });
-  it("화면 모델은 설정을 RULESET 으로 읽는다 (13-04, 떠 있는 버튼·결과 탭 진입점)", () => {
-    const has = (rel: string): boolean => /import \{[^}]*\bRULESET\b[^}]*\} from "[^"]*shared\/game\/ruleset"/.test(read(rel));
-    expect(["src/game/badgeView.ts", "src/game/whisperView.ts", "src/game/resultText.ts"].map((f) => `${f}:${has(f)}`).join(" ")).toBe(
-      "src/game/badgeView.ts:true src/game/whisperView.ts:true src/game/resultText.ts:true",
+  it("화면 모델은 규칙을 view.mode 에서 얻는다 — rulesetOf 를 가져오고, 문구 표는 규칙을 가져오지 않고 인자로 받는다 (19-02 D-03)", () => {
+    const has = (rel: string): boolean => /import \{[^}]*\brulesetOf\b[^}]*\} from "[^"]*shared\/game\/ruleset"/.test(read(rel));
+    expect(["src/game/badgeView.ts", "src/game/whisperView.ts", "src/screens/GameMap.tsx", "src/game/resultText.ts"].map((f) => `${f}:${has(f)}`).join(" ")).toBe(
+      "src/game/badgeView.ts:true src/game/whisperView.ts:true src/screens/GameMap.tsx:true src/game/resultText.ts:false",
     );
   });
 });
