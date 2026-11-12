@@ -1273,9 +1273,9 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
     expect(skip(r.container)).toBeNull();
   });
 
-  it("방장이면 5600 에 오른쪽 열 [dress] 와 왼쪽 줄(맵 단추 포함)이 한 번에 나타난다 — 떠 있는 [넘기기]는 없다 (16-06 D-05 → 19-05 D-13)", () => {
-    const r = renderRoom(executionView());
-    r.rerenderRoom(makeView({ me: 0, awards: AW }));
+  it("방장이면 5600 에 오른쪽 열 [dress] 와 왼쪽 줄(맵 단추 포함 — 기본 마피아 판, 20-07 D-02)이 한 번에 나타난다 — 떠 있는 [넘기기]는 없다 (16-06 D-05 → 19-05 D-13)", () => {
+    const r = renderRoom({ ...executionView(), mode: "basic" });
+    r.rerenderRoom({ ...makeView({ me: 0, awards: AW }), mode: "basic" });
     advance(5600 - 100);
     expect(r.container.querySelector("[data-side-column]")).toBeNull();
     expect(r.container.querySelector("[data-host-rail]")).toBeNull();
@@ -1367,23 +1367,25 @@ describe("결과 단계 지도 칩과 맵 탭 (11-13, D-20·O-11)", () => {
   const sideButtons = (c: ParentNode) => [...c.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button"));
   const railIds = (c: ParentNode) => [...c.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).join(",");
   const withMap = (v: RoomView, mapChoice: "bar" | "plaza" | "random", map?: "bar" | "plaza"): RoomView => ({ ...v, mapChoice, ...(map ? { map } : {}) });
+  // 20-07(D-02): [맵] 단추·맵 탭은 기본 마피아 판에만 있다 — 이 묶음의 판은 기본 마피아다(확장판의 숨김은 아래 "결과 화면 방장 줄과 판 종류" 묶음이 본다)
+  const basicView = (o: Parameters<typeof makeView>[0] = {}): RoomView => ({ ...makeView(o), mode: "basic" });
 
   it("칩은 방장에게만 보이고 서버의 mapChoice(random 이 정해진 뒤에도 choice, 결과 map 은 노출하지 않음)를 따른다", () => {
     for (const [choice, map, name] of [["plaza", undefined, "맵 광장"], ["random", "plaza", "맵 랜덤"], ["bar", "bar", "맵 재즈 바"]] as const) {
-      const r = renderRoom(withMap(makeView({ me: 0 }), choice, map));
+      const r = renderRoom(withMap(basicView({ me: 0 }), choice, map));
       expect(chip(r.container)?.getAttribute("aria-label")).toBe(name);
       r.unmount();
     }
   });
 
   it("참가자 화면에는 칩이 없다 — 오른쪽 열은 [dress] 하나(16-06 V-5, T-16-13)", () => {
-    const r = renderRoom(withMap(makeView({ me: 1 }), "plaza"));
+    const r = renderRoom(withMap(basicView({ me: 1 }), "plaza"));
     expect(chip(r.container)).toBeNull();
     expect(sideButtons(r.container)).toEqual(["dress"]);
   });
 
   it("최종 상태에서 방장의 오른쪽 열은 소리 자리 다음 [dress] 하나이고 맵 단추는 왼쪽 줄의 둘째 칸이다 (16-06 D-05 → 19-05 D-13)", () => {
-    const r = renderRoom(makeView({ me: 0 }));
+    const r = renderRoom(basicView({ me: 0 }));
     expect(r.container.querySelectorAll("[data-side-column]")).toHaveLength(1);
     expect(sideButtons(r.container).join(",")).toBe("dress");
     expect(r.container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
@@ -1394,12 +1396,12 @@ describe("결과 단계 지도 칩과 맵 탭 (11-13, D-20·O-11)", () => {
   });
 
   it("mapChoice 가 없는 옛 view 는 랜덤으로 읽는다", () => {
-    const r = renderRoom(makeView());
+    const r = renderRoom(basicView());
     expect(chip(r.container)?.getAttribute("aria-label")).toBe("맵 랜덤");
   });
 
   it("방장이 누르면 맵 탭으로 시트가 열리고 카드를 누르면 {t:'mapPick', map} 만 간다 — 서버 값이 오기 전에는 바뀌지 않는다", () => {
-    const r = renderRoom(makeView({ me: 0 }));
+    const r = renderRoom(basicView({ me: 0 }));
     fireEvent.click(chip(r.container)!);
     expect(r.container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
     expect(r.container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
@@ -1408,21 +1410,21 @@ describe("결과 단계 지도 칩과 맵 탭 (11-13, D-20·O-11)", () => {
     fireEvent.click(r.container.querySelector("button[data-map-card='plaza']")!);
     expect(r.send.mock.calls.map((c) => c[0])).toEqual([{ t: "mapPick", map: "plaza" }]);
     expect(r.container.querySelector("button[data-map-card='random']")?.getAttribute("aria-pressed")).toBe("true");
-    r.rerenderRoom(withMap(makeView({ me: 0 }), "plaza"));
+    r.rerenderRoom(withMap(basicView({ me: 0 }), "plaza"));
     expect(r.container.querySelector("button[data-map-card='plaza']")?.getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "닫기" }));
     expect(chip(r.container)?.getAttribute("aria-label")).toBe("맵 광장");
   });
 
   it("방장이 [꾸미기]로 열면 의상 탭이고 탭 둘이 있다", () => {
-    const r = renderRoom(makeView({ me: 0 }));
+    const r = renderRoom(basicView({ me: 0 }));
     fireEvent.click(r.container.querySelector<HTMLElement>("[data-float='dress']")!);
     expect(r.container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
     expect(r.container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
   });
 
   it("참가자는 꾸미기 시트에 탭이 없다", () => {
-    const r = renderRoom(makeView({ me: 1 }));
+    const r = renderRoom(basicView({ me: 1 }));
     expect(chip(r.container)).toBeNull();
     fireEvent.click(r.container.querySelector<HTMLElement>("[data-float='dress']")!);
     expect(r.container.querySelector("[data-map-tab]")).toBeNull();
@@ -1434,7 +1436,7 @@ describe("결과 단계 지도 칩과 맵 탭 (11-13, D-20·O-11)", () => {
     const saved = [...list];
     list.splice(0, list.length, "bar");
     try {
-      const r = renderRoom(makeView());
+      const r = renderRoom(basicView());
       expect(chip(r.container)).toBeNull();
     } finally {
       list.splice(0, list.length, ...saved);
@@ -1444,7 +1446,7 @@ describe("결과 단계 지도 칩과 맵 탭 (11-13, D-20·O-11)", () => {
 });
 
 // ---------- 19-05: 결과 화면 방장 줄과 판 종류 (D-05·D-06·D-07·D-13, UI-SPEC D 절, P19-10·P19-13) ----------
-// 연출이 끝난 뒤(5600) 방장은 왼쪽 줄 [판 종류]·[맵], 참가자는 읽기 전용 칩. 고른 표시는 서버 view.mode 만 따른다(결정 0002)
+// 연출이 끝난 뒤(5600) 방장은 왼쪽 줄 [판 종류]·[맵](20-07 D-02: [맵]은 기본 마피아 판에만), 참가자는 읽기 전용 칩. 고른 표시는 서버 view.mode 만 따른다(결정 0002)
 describe("결과 화면 방장 줄과 판 종류 (19-05, D-06·D-13)", () => {
   let restore = () => {};
   beforeEach(() => {
@@ -1487,9 +1489,9 @@ describe("결과 화면 방장 줄과 판 종류 (19-05, D-06·D-13)", () => {
     fireEvent.click(modeBtn(c)!);
   };
 
-  it("방장(최종 상태): 왼쪽 줄 하나에 위에서부터 [판 종류]·[맵]뿐이고 [봇]·[튜토리얼 먼저]는 없다. 오른쪽 열은 [옷장] 하나(첫 칸은 소리 자리)다", () => {
+  it("방장(최종 상태, 기본 마피아): 왼쪽 줄 하나에 위에서부터 [판 종류]·[맵]뿐이고 [봇]·[튜토리얼 먼저]는 없다. 오른쪽 열은 [옷장] 하나(첫 칸은 소리 자리)다", () => {
     // 봇 도구 값이 실려 와도(대기실 전용 키) 결과 화면 줄에는 [봇]이 없다
-    const v = makeView({ me: 0 });
+    const v = withMode(makeView({ me: 0 }), "basic");
     const r = renderRoom({ ...v, me: { ...v.me, testBots: 2 } });
     expect(rails(r.container)).toBe(1);
     expect(railIds(r.container)).toBe("mode,map");
@@ -1497,9 +1499,57 @@ describe("결과 화면 방장 줄과 판 종류 (19-05, D-06·D-13)", () => {
     expect(side(r.container)).toBe("dress");
     expect(r.container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
     expect(r.container.querySelectorAll("[data-side-column] [data-map-chip]")).toHaveLength(0);
-    expect(modeBtn(r.container)?.getAttribute("aria-label")).toBe("판 종류: 확장판");
+    expect(modeBtn(r.container)?.getAttribute("aria-label")).toBe("판 종류: 기본 마피아");
     expect(r.container.querySelector("[data-host-rail]")?.getAttribute("aria-label")).toBe("방장 전용");
     expect(chipCount(r.container)).toBe(0); // 방장에게는 칩이 없다
+  });
+
+  // ---- 20-07 (D-02·P20-16): 확장판은 늘 마을이라 고를 것이 없다 — [맵] 단추·맵 탭은 기본 마피아 판에만 ----
+  it("방장(최종 상태, 확장판 = mode 키 없음·extended): 줄은 [판 종류] 하나이고 [맵]이 없다. 오른쪽 열은 그대로 [옷장] 하나다", () => {
+    for (const v of [makeView({ me: 0 }), withMode(makeView({ me: 0 }), "extended")]) {
+      const r = renderRoom({ ...v, mapChoice: "plaza", me: { ...v.me, testBots: 2 } });
+      expect(rails(r.container)).toBe(1);
+      expect(railIds(r.container)).toBe("mode");
+      expect(r.container.querySelectorAll('[data-host-rail-btn="map"], [data-map-chip]')).toHaveLength(0);
+      expect(side(r.container)).toBe("dress");
+      expect(modeBtn(r.container)?.getAttribute("aria-label")).toBe("판 종류: 확장판");
+      r.unmount();
+    }
+  });
+
+  it("확장판 → 기본 마피아로 view 가 바뀌면 [맵]이 생기고 고른 맵은 view.mapChoice 그대로다. 확장판으로 되돌리면 다시 사라진다", () => {
+    const mapName = (c: ParentNode) => c.querySelector("[data-host-rail] [data-map-chip]")?.getAttribute("aria-label") ?? "없음";
+    const at = (mode: GameMode): RoomView => ({ ...withMode(makeView({ me: 0 }), mode), mapChoice: "plaza" });
+    const r = renderRoom(at("extended"));
+    expect(`${railIds(r.container)} ${mapName(r.container)}`).toBe("mode 없음");
+    r.rerenderRoom(at("basic"));
+    expect(`${railIds(r.container)} ${mapName(r.container)}`).toBe("mode,map 맵 광장");
+    r.rerenderRoom(at("extended"));
+    expect(`${railIds(r.container)} ${mapName(r.container)}`).toBe("mode 없음");
+  });
+
+  it("확장판 방장이 [옷장]으로 연 시트에는 탭 줄이 없다. 기본 마피아에서 맵 탭으로 연 시트는 확장판이 되면 의상 탭이 된다 (P20-16)", () => {
+    const ext = renderRoom(makeView({ me: 0 }));
+    fireEvent.click(ext.container.querySelector<HTMLElement>('[data-float="dress"]')!);
+    expect(ext.container.querySelectorAll("[data-map-tab], [data-map-card]")).toHaveLength(0);
+    expect(ext.container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
+    ext.unmount();
+    const r = renderRoom(withMode(makeView({ me: 0 }), "basic"));
+    fireEvent.click(r.container.querySelector<HTMLElement>("[data-host-rail] [data-map-chip]")!);
+    expect(r.container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
+    r.rerenderRoom(withMode(makeView({ me: 0 }), "extended"));
+    expect(r.container.querySelectorAll("[data-dress-sheet]")).toHaveLength(1);
+    expect(r.container.querySelectorAll("[data-map-tab], [data-map-card]")).toHaveLength(0);
+    expect(r.container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
+  });
+
+  it("참가자 화면은 두 판 모두 [맵] 단추가 없다", () => {
+    for (const mode of ["extended", "basic"] as const) {
+      const r = renderRoom({ ...withMode(makeView({ me: 1 }), mode), mapChoice: "plaza" });
+      expect(r.container.querySelectorAll('[data-host-rail-btn="map"], [data-map-chip]')).toHaveLength(0);
+      expect(chipCount(r.container)).toBe(1);
+      r.unmount();
+    }
   });
 
   it("허용 맵이 하나뿐이면 줄은 [판 종류] 하나다", () => {
@@ -1508,7 +1558,7 @@ describe("결과 화면 방장 줄과 판 종류 (19-05, D-06·D-13)", () => {
     const saved = [...list];
     list.splice(0, list.length, "bar");
     try {
-      const r = renderRoom(makeView({ me: 0 }));
+      const r = renderRoom(withMode(makeView({ me: 0 }), "basic"));
       expect(railIds(r.container)).toBe("mode");
     } finally {
       list.splice(0, list.length, ...saved);
@@ -1516,9 +1566,9 @@ describe("결과 화면 방장 줄과 판 종류 (19-05, D-06·D-13)", () => {
     }
   });
 
-  it("방장: 연출이 끝나기 전(5600 전)에는 줄·칩이 없고 5600 에 줄이 오른쪽 열과 함께 나타난다", () => {
-    const r = renderRoom(executionView());
-    r.rerenderRoom(makeView({ me: 0 }));
+  it("방장: 연출이 끝나기 전(5600 전)에는 줄·칩이 없고 5600 에 줄이 오른쪽 열과 함께 나타난다 (기본 마피아 판 — 줄에 [맵]이 있다)", () => {
+    const r = renderRoom(withMode(executionView(), "basic"));
+    r.rerenderRoom(withMode(makeView({ me: 0 }), "basic"));
     for (const ms of [0, 1200, 3400, 900]) {
       advance(ms);
       expect(`${rails(r.container)},${chipCount(r.container)}`).toBe("0,0");
@@ -1589,7 +1639,7 @@ describe("결과 화면 방장 줄과 판 종류 (19-05, D-06·D-13)", () => {
   });
 
   it("연결이 끊기면(canSend 거짓) 줄 단추가 모두 aria-disabled 이고 눌러도 시트가 열리지 않는다. 열린 채 끊기면 칸을 눌러도 보내지 않는다", () => {
-    const off = renderRoom(makeView({ me: 0 }), { canSend: false });
+    const off = renderRoom(withMode(makeView({ me: 0 }), "basic"), { canSend: false }); // 기본 마피아 판: 줄 단추가 둘([판 종류]·[맵])이다
     const btns = [...off.container.querySelectorAll("[data-host-rail] [data-host-rail-btn]")];
     expect(btns).toHaveLength(2);
     expect(btns.map((b) => b.getAttribute("aria-disabled")).join(",")).toBe("true,true");
@@ -1683,7 +1733,7 @@ describe("결과 화면 방장 줄과 판 종류 (19-05, D-06·D-13)", () => {
   });
 
   it("줄의 [맵]을 누르면 꾸미기 시트의 맵 탭이 열린다(대기실과 같은 줄 변형: 금빛 방장 단추, 오른쪽 열 표식 없음)", () => {
-    const r = renderRoom(makeView({ me: 0 }));
+    const r = renderRoom(withMode(makeView({ me: 0 }), "basic"));
     const map = r.container.querySelector<HTMLElement>("[data-host-rail] [data-map-chip]");
     expect(map?.getAttribute("data-host-rail-btn") ?? "없음").toBe("map");
     expect(map!.classList.contains("mv-hostrail-btn")).toBe(true);
@@ -1750,7 +1800,7 @@ describe("결과 화면 방장 줄과 판 종류 (19-05, D-06·D-13)", () => {
   });
 
   it("방장: 꾸미기 시트를 열면(옷장·줄의 [맵] 어느 쪽이든) 줄이 없고 닫으면 다시 있다", () => {
-    const r = renderRoom(makeView({ me: 0 }));
+    const r = renderRoom(withMode(makeView({ me: 0 }), "basic"));
     expect(count(r.container)).toBe("1,0");
     fireEvent.click(dressBtn(r.container)!);
     expect(r.container.querySelectorAll("button[data-outfit]").length).toBeGreaterThan(1);
