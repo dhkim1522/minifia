@@ -5,18 +5,18 @@ milestone_name: 사회자와 증거
 current_phase: 19
 current_phase_name: game-modes
 current_plan: 8
-status: executing
-stopped_at: Completed 19-07-PLAN.md
-last_updated: "2026-11-12T16:00:05.168Z"
+status: verifying
+stopped_at: Completed 19-08-PLAN.md
+last_updated: "2026-11-12T16:54:08.958Z"
 last_activity: 2026-11-13
-last_activity_desc: Phase 19 plan 07 완료 (기본 마피아 완주·누설 E2E, 두 판 로컬 통과)
-state_head: 7b2b407684ef18b63a401b2ca7e8fcc909b958cd
+last_activity_desc: Phase 19 plan 08 완료 (전체 회귀·배포 71a10fc8·결정 0086)
+state_head: 97320b17f96fc6cf0e2f7e73b124323b20a5ec90
 progress:
   total_phases: 10
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 87
-  completed_plans: 86
-  percent: 40
+  completed_plans: 87
+  percent: 50
 ---
 
 # Project State
@@ -33,8 +33,8 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 Phase: 19 (game-modes) — EXECUTING
 Current Plan: 8
 Total Plans in Phase: 8
-Status: Ready to execute
-Last activity: 2026-11-13 — 19-07 완료 (기본 마피아 완주 mode-basic·역할 다섯 시점 누설 mode-leak 흐름과 판정 BM1~BM3·BM1k, 확장판 대조 basic-off·emcee-leak·trace 까지 다섯 흐름 로컬 통과. 앱 변경 없음. 19-06 의 360x560 접힌 줄과 위 알림 겹침은 여전히 사용자 확인 필요. 전체 회귀·문서·배포는 19-08)
+Status: Phase complete — ready for verification
+Last activity: 2026-11-13 — 19-08 완료 (로컬 전체 검증·폰 6종 E2E 전 흐름 회귀 7039 중 7036(남은 3건은 perfbudget 알려진 한계), 회귀가 찾은 앱 결함 하나 고침, minifia-v3 배포 `2026-11-12T16:47:00Z+71a10fc8`·smoke 통과, 결정 0086·화면 지도·HANDOFF. 19페이즈 계획 8/8 — 페이즈 검증 대기, 실기기 확인은 v3.0 끝 실테스트)
 
 ## Performance Metrics
 
@@ -284,6 +284,7 @@ Last activity: 2026-11-13 — 19-07 완료 (기본 마피아 완주 mode-basic·
 | Phase 19 P05 | 12 min | 2 tasks | 3 files |
 | Phase 19 P06 | 36 min | 3 tasks | 9 files |
 | Phase 19 P07 | 20 min | 3 tasks | 7 files |
+| Phase 19 P08 | 52min | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -631,6 +632,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 19]: 19-05: 결과 화면의 방장 조작([판 종류]·[맵])도 연출이 끝난 뒤 왼쪽 줄에 그리고 오른쪽 열은 방장도 소리·옷장이다. 줄·칩은 연출 중·기록 늘림·꾸미기 시트·키보드 동안 그리지 않는다. 판 종류 알림은 연출 중에도 참가자에게 뜬다
 - [Phase 19]: 19-06: 방장 줄·판 종류 E2E(mode-rail 폰 6종·mode-pick)를 만들고 바뀐 흐름을 로컬에서 통과시켰다. 오른쪽 열 판정은 방장도 소리·옷장 둘이고 360x560 예외를 지웠다. 360x560 에서 두 열로 접힌 줄의 둘째 열과 위 알림 겹침은 앱을 고치지 않고 E2E 의 알려진 한계(HR3 fold-toast)로 뒀다 — 사용자 확인 필요. F-2 기대 표는 판정하지 않고 폰 6종 실측 표가 확정값이다
 - [Phase 19]: 19-07: 기본 마피아 완주·누설 E2E(mode-basic·mode-leak)를 만들고 확장판 대조 흐름(basic-off·emcee-leak·trace)과 함께 로컬에서 통과시켰다. 띠 금지 문구는 넷이다 — errand.ghost 는 다른 유령 줄과 같은 문장이라 뺐다. 받은 키 판정(BM1k: me.errand·me.record·day.evidence 0건)과 판 종류 적용 확인(LKm)을 더했다. 앱은 고치지 않았다
+- [Phase 19]: 19-08: 전 흐름 회귀가 찾은 앱 결함(키보드를 닫은 맵 탭의 뒤따르는 click 이 새로 그려진 방장 줄 단추를 누름)을 고침 — 같은 자리 10px·0.5초 안 click 한 번 삼킴. 360x560 접힌 줄과 위 알림 겹침은 알려진 한계로 받아들임(결정 0086)
 
 ### Pending Todos
 
@@ -702,8 +704,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-12T16:00:04.634Z
-Stopped at: Completed 19-07-PLAN.md
+Last session: 2026-11-12T16:54:08.349Z
+Stopped at: Completed 19-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

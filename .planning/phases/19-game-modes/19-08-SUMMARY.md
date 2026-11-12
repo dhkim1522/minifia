@@ -2,11 +2,118 @@
 phase: 19-game-modes
 plan: "08"
 subsystem: release
-tags: [e2e, regression, deploy, docs, decision-record]
-status: in-progress
+tags: [e2e, regression, deploy, decision-record, docs, host-rail, game-mode]
+
+requires:
+  - phase: 19-game-modes
+    provides: "19-01~19-07 — 판 종류 서버·화면·방장 줄·두 판 E2E"
+provides:
+  - "로컬 전체 검증과 폰 6종 E2E 전 흐름 회귀 한 번(47개 흐름, 마지막 상태 7039 중 7036)"
+  - "회귀가 찾은 앱 결함 수정: 키보드를 닫은 맵 탭의 뒤따르는 click 이 새로 그려진 방장 줄 단추를 누르지 않는다"
+  - "minifia-v3 배포 version 2026-11-12T16:47:00Z+71a10fc8 (smoke full 통과)"
+  - "결정 기록 0086, 화면 지도·기획서·구조 문서·ROADMAP·HANDOFF 갱신"
+affects: [20-map-rooms, 21-day-flow, v3.0 실테스트]
+
+actuals:
+  tokens: 27000
+  tasks: 3
+  commits: 5
+plan_head_before: fad4aa7a3573a50e1872bcaeac4a7df7a5e41cf3
+plan_head_after: 97320b17f96fc6cf0e2f7e73b124323b20a5ec90
+
+tech-stack:
+  added: []
+  patterns:
+    - "배치가 바뀌는 탭(포커스 해제)은 뒤따르는 같은 자리 click 을 한 번 삼킨다(WorldStage swallowDismissClick)"
+    - "전 흐름 회귀는 --only 묶음 일곱으로 나눠 차례로 돈다(겹치지 않는 부분 문자열 묶음)"
+
+key-files:
+  created:
+    - docs/decisions/0086-v3-game-modes.md
+    - .planning/phases/19-game-modes/19-08-SUMMARY.md
+  modified:
+    - src/components/WorldStage.tsx
+    - test/client/worldStage.test.tsx
+    - scripts/e2e/flows.mjs
+    - scripts/e2e/avatar.mjs
+    - docs/screen-map.md
+    - docs/product.md
+    - docs/architecture.md
+    - docs/decisions/0079-v3-buttons-and-evidence.md
+    - docs/decisions/0081-v3-missions-flow-and-modes.md
+    - docs/decisions/0083-v3-screen-fix-plan.md
+    - docs/decisions/0084-v3-ghost-3d-and-pick-check.md
+    - docs/decisions/0085-v3-own-move-time-lead.md
+    - HANDOFF.md
+    - .planning/ROADMAP.md
+    - .planning/WINDOWS.md
+    - .planning/STATE.md
+
+key-decisions:
+  - "키보드를 닫은 맵 탭과 같은 자리(10px)·0.5초 안의 click 을 한 번 삼킨다 — 포커스가 풀리며 새로 그려진 방장 줄·오른쪽 열 단추가 눌리지 않게"
+  - "360x560 접힌 방장 줄의 둘째 열과 위 알림 겹침은 알려진 한계로 받아들인다(사용자 방침, 열린 항목 7 닫음)"
+  - "전제가 없어진 E2E 의 360x560 방장 예외 셋(world·avatar-emote·avatar-dress)을 없앤다 — 판정이 더 엄격해진다"
+
+patterns-established:
+  - "배포 전 version 은 문서가 아니라 /api/health 에서 읽는다(HANDOFF 의 값과 달랐다)"
+
+requirements-completed: [D-05, D-18, D-19]
+
+coverage:
+  - id: D1
+    description: "로컬 전체 검증(typecheck·build·스크립트 시험·npm test)과 폰 6종 E2E 전 흐름 회귀 한 번"
+    requirement: D-18
+    verification:
+      - kind: unit
+        ref: "npm test — 8293 통과·261 건너뜀·실패 0"
+        status: pass
+      - kind: unit
+        ref: "node --test scripts/*.test.mjs scripts/e2e/*.test.mjs — 667 통과"
+        status: pass
+      - kind: e2e
+        ref: "node scripts/e2e/run.mjs --url http://localhost:5173 (묶음 일곱) — 마지막 상태 7039 중 7036, 남은 3건은 perfbudget B2·M1 알려진 한계"
+        status: fail
+    human_judgment: true
+    rationale: "perfbudget B2·M1 은 13페이즈부터의 알려진 한계라 실패 줄이 남는다. errand 간헐 실패(재실행 통과)를 받아들일지도 사람이 본다"
+  - id: D2
+    description: "키보드를 닫은 맵 탭의 뒤따르는 click 삼킴(회귀가 찾은 앱 결함 수정)"
+    verification:
+      - kind: unit
+        ref: "test/client/worldStage.test.tsx#키보드를 닫은 탭에 뒤따르는 click (5개)"
+        status: pass
+      - kind: e2e
+        ref: "chat-keyboard 폰 6종 141/141(고친 뒤), 묶음 A 731/731"
+        status: pass
+    human_judgment: false
+  - id: D3
+    description: "minifia-v3 배포와 health version·smoke full 확인"
+    requirement: D-19
+    verification:
+      - kind: other
+        ref: "curl /api/health — 2026-11-12T16:47:00Z+71a10fc8, 다른 두 배포본 그대로"
+        status: pass
+      - kind: integration
+        ref: "scripts/smoke.mjs --prod --stage full --players 5 — SMOKE OK(첫 시도)"
+        status: pass
+    human_judgment: false
+  - id: D4
+    description: "결정 기록 0086·화면 지도·기획서·구조 문서·ROADMAP 성공 기준 1·HANDOFF"
+    requirement: D-05
+    verification:
+      - kind: unit
+        ref: "test/unit/handoff.test.ts (5217바이트, 머리 셋)"
+        status: pass
+    human_judgment: true
+    rationale: "문서 내용(결정 요지·알려진 한계)이 맞는지는 사용자가 돌아와 읽고 한 줄씩 바꿀 수 있다. 실기기 눈 확인은 v3.0 끝 실테스트"
+
+duration: 52min
+completed: 2026-11-13
+status: complete
 ---
 
 # Phase 19 Plan 08: 전체 회귀·배포·결정 기록 Summary
+
+**폰 6종 E2E 전 흐름 회귀가 찾은 앱 결함(키보드를 닫은 맵 탭의 click 이 새로 그려진 방장 줄 [봇] 단추를 누름)을 고치고, 개인 계정 확인 뒤 minifia-v3 에 `2026-11-12T16:47:00Z+71a10fc8` 로 배포해 smoke 로 확인했으며, 결정 0086 과 화면 지도·HANDOFF 를 남기고 v3 를 push 했다.**
 
 ## 진행
 
@@ -14,6 +121,7 @@ status: in-progress
 
 - [x] 단계 1 로컬 검증: npm test 8293 통과(실패 0, 건너뜀 261) · 스크립트 시험 667 통과 · typecheck·build exit 0 · E2E 전 흐름(47개) 폰 6종 회귀 한 번 6971 중 6962 통과(실패 9건: chat-keyboard 3건 → 앱 결함을 고친 뒤 통과 · errand 3건 간헐 → 재실행 통과 · perfbudget 3건은 13페이즈부터의 알려진 한계) · RULESET 0줄 · 위생 검사 통과(새 결과 0)
 - [x] 단계 2 배포: minifia-v3 `2026-11-12T10:59:05Z+d53d5905` → `2026-11-12T16:47:00Z+71a10fc8` · 범위 diff 37개(서버 14: shared 13·worker 1) · 개인 계정 확인 · smoke full 통과(첫 시도)
+- [x] 단계 3 문서·push: 결정 0086 신설(0086-1~19·위임 기본값·계획·실행 중 달라진 곳·폰 6종 실측·알려진 한계) · 0081-6·0083-3·0079-3 에 0086 표시, 0084·0085 상태를 배포됨으로 · 화면 지도(오른쪽 열 방장 둘·왼쪽 방장 줄·칩·패널 222·실측 표·새 흐름 넷) · 기획서·구조 문서 한 줄씩 · ROADMAP 성공 기준 1(D-05)·19 완료 표시 · HANDOFF 5217바이트(≤6144)·머리 셋 · 열린 항목 7 닫음 · 위생 검사 통과(새 결과 0) · `git push origin v3`
 
 ## 단계 1: 로컬 전체 검증
 
@@ -172,3 +280,94 @@ src/styles/tutorialRoom.css
 src/styles/v2.css
 worker/room.ts
 ```
+
+## 단계 3: 문서
+
+- **결정 0086**(`docs/decisions/0086-v3-game-modes.md`, 새 파일): 결정 0086-1~19(19-CONTEXT D-01~D-19 를 한 줄씩), 위임 기본값(P19-0~P19-17), 계획 단계에서 고른 것, 실행 중 달라진 곳(19-01~19-08), 폰 6종 실측, 알려진 한계, 정하지 않은 것. 성공 기준 1 을 D-05 방식으로 바꾼 이유는 0086-5 에 있다.
+- **바뀐 결정 표시**: 0081-6 "(구현: 결정 0086 …)", 0083-3 "(0086 으로 바뀜 …)", 0079-3 "(0086 으로 바뀜 …)". 본문은 지우지 않았다.
+- **화면 지도**(`docs/screen-map.md`): 대기실 표에 "왼쪽 방장 줄 / 참가자 칩" 행, 오른쪽 열은 방장도 소리·옷장, 방장 패널 = 참가자 패널 222(276·옛 증분 상수 이름 삭제), 방장 줄 접기 식과 실측 표 둘(테스트 방 실측·일반 방 계산), 알려진 한계 둘(접힌 줄과 위 알림·이름표 가림), 표식 여섯, 결과 화면 절, 16·17페이즈 절의 낡은 줄, 자동 검사 절에 19페이즈 흐름 넷과 판정 id.
+- **ROADMAP**: Phase 19 성공 기준 1 을 D-05 문구로, 체크 줄과 진행 표를 완료(배포 `71a10fc8`·결정 0086·실기기 확인은 v3.0 끝)로.
+- **HANDOFF**: 13~19 완료·배포 version, 위임 기본값 줄에 19, 19 눈 확인 줄, 18.1 눈 확인의 유령을 3D 유령으로, 다음 할 일 1 을 20 으로. 5217바이트.
+- **`.planning/WINDOWS.md`**: 19-06 이 적은 열린 항목 7(접힌 줄과 위 알림 겹침)을 "알려진 한계로 받아들임(사용자 방침, 2026-11-12)" 으로 닫았다(waived). 열린 항목 4 → 3.
+
+## Task 커밋
+
+| Task | 커밋 | 내용 |
+| --- | --- | --- |
+| 1 | `a0944711` fix | 키보드를 닫은 탭의 뒤따르는 click 삼킴(WorldStage + 시험 5개) |
+| 1 | `f7efaed8` test | 낡은 360x560 방장 예외를 E2E 에서 없앰(world·avatar) |
+| 1 | `71a10fc8` test | 로컬 전체 검증·전 흐름 회귀(SUMMARY 단계 1) — 배포된 커밋 |
+| 2 | `fd22b093` docs | minifia-v3 배포 결과(SUMMARY 단계 2) |
+| 3 | `97320b17` docs | 결정 0086·화면 지도·HANDOFF |
+
+`commits: 5` 는 이 SUMMARY 를 마무리하는 커밋 앞에서 잰 값이다(`git rev-list --count fad4aa7a..97320b17`). SUMMARY·STATE·ROADMAP 진행을 담은 마지막 커밋이 하나 더 있다.
+
+## 계획과 달라진 점
+
+### 고친 것
+
+**1. [Rule 1 - 버그] 키보드를 닫은 맵 탭이 방장 줄 단추를 눌렀다**
+- **찾은 때:** Task 1, 전 흐름 회귀의 chat-keyboard 360x640·390x664·360x560(스스로 다시 시도한 4번 모두 실패 — 재현됨)
+- **무엇:** 위 "첫 실행" 표. 계획은 "19-01~19-07 이 넘긴 앱 결함이 있으면 고친다"였고 넘어온 것은 없었다 — 이것은 회귀가 새로 찾은 것이다.
+- **고친 것:** `src/components/WorldStage.tsx` 에 `swallowDismissClick`. 입력칸을 blur 한 탭과 같은 자리(10px)·0.5초 안의 click 을 창의 capture 단계에서 한 번 삼킨다. 자리가 다르거나 늦은 click, 걷는 탭은 건드리지 않는다. 시험을 먼저 썼다(5개 중 2개가 실패하는 것을 본 뒤 구현).
+- **실기기에서:** 가짜 키보드 E2E 의 탭은 실제로는 키보드가 덮는 자리였다. 다만 큰 폰에서도 보이는 스테이지의 왼쪽 가장자리(방장 줄 자리)를 눌러 키보드를 닫으면 같은 일이 생길 수 있고, 19페이즈 전에도 오른쪽 열에서 같은 일이 가능했다. 실기기 확인은 v3.0 실테스트.
+- **파일:** src/components/WorldStage.tsx, test/client/worldStage.test.tsx · **커밋:** `a0944711`
+
+**2. [Rule 1 - 판정] 전제가 없어진 360x560 방장 예외를 없앴다**
+- 위 "함께 고친 판정". 19-06 이 넘긴 `world` 의 `hostShort` 에 더해 `avatar-emote`·`avatar-dress` 의 같은 예외도 함께 없앴다(계획에는 world 만 적혀 있었다). · **커밋:** `f7efaed8`
+
+**3. [Rule 2 - 문서] 계획의 파일 목록 밖 문서 넷을 고쳤다**
+- `docs/product.md`(판 종류 한 줄, 튜토리얼 함께 진행 문장), `docs/architecture.md`(`modePick` 한 줄) — 결정이 바뀌면 원천 문서를 고친다는 저장소 규칙.
+- `docs/decisions/0084`·`0085` 의 상태 줄 "로컬 반영·배포 전" → "구현·배포됨" — 배포 전 health 가 이미 그 커밋들을 담은 `d53d5905` 였다.
+- `.planning/WINDOWS.md` 항목 7 닫음(이월 메모). · **커밋:** `97320b17`
+
+### 계획에 없던 작은 선택
+
+4. **전 흐름 회귀를 묶음 일곱으로 나눴다.** 계획은 한 번 실행을 백그라운드로 돌리라고 했지만 명령당 시간 제한 때문에 `--only` 묶음으로 나눠 차례로 돌렸다. 묶음끼리 겹치지 않고 skipByDefault 흐름을 고르지 않게 부분 문자열을 골랐다(`avatar-phases` 가 `avatar-phases-night` 도 골라 그 흐름만 두 번 돌았다 — 둘 다 5/5).
+5. **이미 돈 흐름도 다시 돌렸다.** 이월 메모는 19-06·19-07 이 돌린 흐름은 빠진 크기만 채워도 된다고 했지만, 한 커밋에서 전 흐름을 한 번 본 표가 되도록 모두 돌렸다.
+6. **커밋을 셋 더 나눴다.** 계획의 Task 1 은 `fix` + `test` 둘인데 판정 정리(`f7efaed8`)를 따로 두었다. SUMMARY 마무리(이 파일·STATE·ROADMAP 진행)는 `commits` 를 잰 값으로 적으려고 문서 커밋 뒤에 따로 커밋했다(19-04·19-05 와 같다).
+7. **ROADMAP 진행 표의 19 를 손으로 "Complete" 로 적었다.** 도구(`roadmap.update-plan-progress`)는 8/8 · "In Progress" 로 둔다(페이즈 검증 전). 이월 메모가 완료 표시를 요구해 배포 version·결정 번호와 함께 적었다 — **페이즈 검증(verifier)은 아직 돌지 않았다.**
+8. **배포된 커밋은 `71a10fc8` 이고 그 뒤 커밋은 문서뿐이다**(`git diff --stat 71a10fc8..HEAD -- src shared worker public` 은 비어 있다).
+9. **nightload 성능 측정은 하지 않았다**(계획 그대로 — 3D 장면을 바꾸지 않았다).
+10. **개발 서버는 끄지 않았다.** 시작할 때 이미 떠 있던 것을 썼다.
+
+---
+
+**합계:** 고친 것 3(버그 1·판정 1·문서 1) + 작은 선택 7.
+**영향:** 1번은 앱 코드 변경이고 배포에 들어갔다. 나머지는 판정을 더 엄격하게 하거나 문서를 사실에 맞춘 것이다.
+
+## Threat 처리
+
+| Threat | 처리 |
+| --- | --- |
+| T-19-24 배포 대상 계정 | `node scripts/check-account.mjs` 종료 코드 0 을 먼저 보고 `npm run deploy` 를 가드 우회 없이 돌렸다. 계정 식별자는 어디에도 적지 않았다 |
+| T-19-25 공개 저장소 누설 | 커밋마다 위생 검사를 저장소 전체로 돌려 새 결과 0(HEAD 기준 줄 수가 커밋 전후 같다). smoke·배포 출력은 작업 트리 밖 임시 파일 |
+| T-19-26 저장된 옛 방 | 읽는 쪽 기본값이 확장판(19-01 시험). 배포 뒤 smoke full 한 판 통과 |
+| T-19-27 DO 하루 쓰기 한도 | 회귀는 모두 로컬. 배포본은 health 와 smoke 1회뿐 |
+| T-19-SC 패키지 설치 | 설치 없음 |
+
+## 알려진 한계
+
+- **perfbudget B2·M1**: 점광원 4 > 3(2건), 지오메트리 35 > 25(1건). 13페이즈부터 지속, 문턱 불변.
+- **errand 간헐 실패(원인 미확정)**: 전 흐름 회귀 첫 실행에서 HS3(알림음 기록을 읽지 못함)가 세 크기에서, 세 크기 다시 실행에서 430x932 의 EA3(띠 문장) 3줄이 실패했다. 430x932 단독 두 번과 폰 6종 다시 한 번은 모두 통과했다. 같은 판정이 이어서 실패하지 않아 고치지 않았다 — 부하가 걸린 실행에서 다시 나올 수 있다.
+- **360x560 방장 대기실**: 줄이 두 열로 접히면 입장 알림이 둘째 열 단추를 약 1.5초 덮는다(단추는 눌린다). 고치지 않는다(사용자 방침). 결정 0086.
+- **결과 화면의 `expanded` 조건**은 지금 켜질 일이 없고, **`MapChip` 의 줄 아닌 변형**은 어느 화면도 쓰지 않은 채 남아 있다(결정 0086).
+- **click 삼킴의 범위**: 키보드를 닫은 뒤 0.5초 안에 같은 자리(10px)를 일부러 다시 누르면 그 한 번은 먹지 않는다.
+- **실기기 확인은 v3.0 끝 실테스트**: 방장 왼쪽 줄 색·왕관 표식·판 종류 시트·참가자 칩·기본 마피아 한 판, 키보드를 닫는 탭.
+- **페이즈 검증**은 이 계획 밖이다(ROADMAP 완료 표시는 이월 메모에 따른 것).
+
+## Known Stubs
+
+없음.
+
+## 다음에 알아야 할 것 (20페이즈)
+
+- 전 흐름 회귀는 `--only` 묶음 일곱(위 표)으로 나눠 약 31분이다. `reconnect` 하나가 287초, 묶음 F(emcee·errand·witness·trace)가 407초로 길다.
+- 배포 전 version 은 HANDOFF 가 아니라 `/api/health` 에서 읽는다.
+- 포커스가 풀리며 배치가 바뀌는 곳에 새 단추를 그릴 때는 `chat-keyboard` 를 폰 6종으로 돌려 본다(가짜 키보드는 배치가 즉시 바뀌어 이런 겹침을 잘 잡는다).
+- `HOST_RAIL_KNOWN_LIMITS`(접힌 줄과 위 알림)는 받아들인 한계다 — 방장 줄 단추 수가 늘면(20·21페이즈) 접히는 크기가 늘어난다. 줄에 단추를 더하면 `mode-rail` 실측 표를 다시 뜬다.
+
+## Self-Check: PASSED
+
+- 파일 여섯(결정 0086·SUMMARY·WorldStage·시험·화면 지도·HANDOFF) 있음, 커밋 다섯(`a0944711`·`f7efaed8`·`71a10fc8`·`fd22b093`·`97320b17`) HEAD 의 조상
+- 배포본 `/api/health` version `2026-11-12T16:47:00Z+71a10fc8`, ROADMAP "19-CONTEXT D-05" 1줄, 진행 절에 단계 1~3
