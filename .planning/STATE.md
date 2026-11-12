@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: 4
+current_plan: 5
 status: executing
-stopped_at: Completed 20-04-PLAN.md
-last_updated: "2026-11-12T22:25:54.473Z"
+stopped_at: Completed 20-07-PLAN.md
+last_updated: "2026-11-12T22:45:02.071Z"
 last_activity: 2026-11-13
-last_activity_desc: Phase 20 plan 04 완료 (마을 3D 장면)
-state_head: dfa633a8d4f0f79a841c60da73d7dd202aea832b
+last_activity_desc: Phase 20 plan 07 완료 (확장판 [맵] 단추·맵 탭 숨김)
+state_head: 3cac6ea9e6d52d01c3f3e65d670b2a65ccb6959d
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 97
-  completed_plans: 90
+  completed_plans: 91
   percent: 50
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 20 (map-expansion) — EXECUTING
-Current Plan: 4
+Current Plan: 5
 Total Plans in Phase: 10
 Status: Ready to execute
-Last activity: 2026-11-13 — 20-04 완료 (마을 3D 장면: buildTownScene — 광장 가운데 재사용·방 넷 컷 메시·지붕 위 간판·집 여덟 문패·TOWN_LIT·setCutaway·setOwners. 정적 그리기 호출 최대 30. unit+client 7837 통과). 20-03(심부름·목격·아침 snap 구역 거르기)은 아직 남았다
+Last activity: 2026-11-13 — 20-07 완료 (확장판에서 방장 줄 [맵] 단추·꾸미기 시트 맵 탭 숨김, map-select E2E 를 기본 마피아 판으로·TM11 판정. 로컬 E2E map-select 폰 6종 82/82 · mode-rail 폰 6종 통과, unit+client 7848 통과). 20-03(심부름·목격·아침 snap 구역 거르기)은 아직 남았다
 
 ## Performance Metrics
 
@@ -288,6 +288,7 @@ Last activity: 2026-11-13 — 20-04 완료 (마을 3D 장면: buildTownScene —
 | Phase 20 P01 | 26min | 2 tasks | 23 files |
 | Phase 20 P02 | 48min | 2 tasks | 10 files |
 | Phase 20 P04 | 20min | 2 tasks | 7 files |
+| Phase 20 P07 | 17min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -642,6 +643,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 20]: 20-02: 남은 것 — 밤·아침 순간이동 뒤 settleZones 와 심부름 근처 snap·목격 기록의 구역 거르기는 20-03. 워커 시험의 마을 도우미는 test/worker/helpers.ts(townGame·placeSeats·memWorld·shiftSeg)
 - [Phase 20]: 20-04: 마을 장면은 광장 빌더를 선택 인자로 다시 부른다(buildPlaza + PlazaPiece 조각) — 방·집의 벽·문·소품은 mapTown 의 장애물 원문을 그대로 세우고, 걷힘은 방마다 재질 불투명도 하나(setCutaway·roofs, CUTAWAY_MS 250), 집 주인은 setOwners 가 창 묶음과 문패·표식 UV 를 바꾼다. 간판·문패는 발광이 아니라 조명을 받는 재질이다
 - [Phase 20]: 20-04: 남은 것 — 렌더러 연결·언제 걷을지·카메라 한계 확정(panBoxOf·plateFarOf 는 시작값)·화면에서 간판 읽힘 확인은 20-05. 매 프레임 scene.update 를 불러야 걷힌다. 장면을 새로 만든 뒤에는 setCutaway(…, true)·setOwners 를 다시 부른다
+- [Phase 20]: 20-07: 방장 줄의 [맵] 단추와 꾸미기 시트의 맵 탭은 기본 마피아 판에만 있다(mapsOn = 허용 맵 둘 이상 && modeOf(view) === "basic") — 확장판은 늘 마을이라 고를 것이 없다. view.mapChoice 는 남아 기본 마피아로 되돌리면 그대로 다시 나타난다. E2E 는 hostRailChecks 의 mapsOn 을 railMapsOn(허용 맵 둘 이상, 서버 view.mode)으로 넘기고, 맵을 고르기 전에 pickModeViaUi(…, "basic") 을 부른다(perf-run --map bar|plaza 는 20-09)
 
 ### Pending Todos
 
@@ -713,8 +715,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-12T22:25:53.665Z
-Stopped at: Completed 20-04-PLAN.md
+Last session: 2026-11-12T22:45:01.247Z
+Stopped at: Completed 20-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

@@ -105,7 +105,7 @@ coverage:
         status: pass
     human_judgment: false
 
-duration: 20min
+duration: 17min
 completed: 2026-11-13
 ---
 
@@ -115,9 +115,9 @@ completed: 2026-11-13
 
 ## Performance
 
-- **Duration:** 약 20분
+- **Duration:** 17분
 - **Started:** 2026-11-12T22:27:41Z
-- **Completed:** 2026-11-12T22:48:00Z
+- **Completed:** 2026-11-12T22:44:30Z
 - **Tasks:** 2
 - **Files modified:** 12
 
