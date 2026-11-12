@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, GameMode, MapChoice, OutfitId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
+import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, GameMode, MapChoice, OutfitId, RemovedReason, RoomId, RoomPreview, ServerMessage, WorldFrame, WsErrorCode, ZoneId } from "../shared/protocol";
 import { botMafiaTarget, botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { isAlive } from "../shared/game/alive";
@@ -57,7 +57,7 @@ import { pickMode } from "../shared/game/mode";
 import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
-import { clipToZone, zoneAt } from "../shared/game/zones";
+import { clipToZone, nextCrossingAt, reconcileZones, zoneAt } from "../shared/game/zones";
 import { ClientMessageSchema } from "../shared/schemas";
 import { cryptoRandInt, randomToken } from "./random";
 
@@ -1250,7 +1250,9 @@ export class Room extends DurableObject<Env> {
     // 위치는 단계가 바뀌었는지와 무관하게 '지금 단계가 요구하는 모습'으로 맞춘다(멱등, 알람 따라잡기·퇴거에도 안전).
     // 새 유령 snap 은 전환 때만 보낸다: 퇴거로 비워진 ghostSnapped 때문에 깨어날 때마다 같은 snap 을 다시 보내지 않는다(08 동작 유지).
     await this.syncHome(now);
-    this.syncLayout(now);
+    // 전환 없이 배치만 맞춘 경우(알람 따라잡기·퇴거)에는 뒤에 reschedule 이 없을 수 있다 — 새 구간이 문을 지나면 그 시각의 알람을 여기서 건다(이를 때만, 결정 0076).
+    const doorAt = this.syncLayout(now);
+    if (doorAt !== null) await this.alarmBy(doorAt);
   }
 
   /**
@@ -1448,14 +1450,35 @@ export class Room extends DurableObject<Env> {
   }
 
   // 보는 사람 한 명에게 갈 지금 위치 프레임 한 곳(15-02, D-02): errand 단계의 산 사람은 본인 + 근처(nearSnapFrame), 그 밖은 worldVisibleTo 로 거른 snapFrame.
-  // 보낼 좌석이 없는 단계(ended 등)는 null — 보내지 않는다. handleHello·snapEachViewer·snapNewGhosts 가 모두 이 함수를 쓴다.
-  private snapFrameFor(viewer: Player, now: number): WorldFrame | null {
+  // 보낼 좌석이 없는 단계(ended 등)는 null — 보내지 않는다. handleHello·snapEachViewer·snapNewGhosts·syncZones 가 모두 이 함수를 쓴다.
+  // 방이 있는 맵의 산 사람(20페이즈 D-14, T-20-06)은 그 위에 구역으로 한 번 더 거른다: 본인 + 지금 같은 구역에 있는 사람만 싣고,
+  // 걷는 중인 남의 구간은 그 구역에 머무는 동안으로 자른다(clipToZone — 지나온 길도, 문을 지난 뒤의 길도 싣지 않는다).
+  // 구역은 구역 기억이 아니라 서버가 가진 구간의 지금 위치로 판정한다 — 기억을 맞추기 전(판 시작 snap·순간이동 직후)에도 다른 구역의 좌표가 실리지 않는다.
+  // 유령은 구역과 무관하게 모두의 전체 구간을 받는다(D-16, 결정 0021). errand 의 근처 snap 에 구역을 얹는 것은 20-03 이다(D-17).
+  private snapFrameFor(viewer: Player, now: number): Extract<WorldFrame, { k: "snap" }> | null {
     const room = this.room;
     if (!room) return null;
     const visible = worldVisibleTo(room, viewer.id);
     if (visible.size === 0) return null;
     if (room.phase === "errand" && isAlive(viewer)) return nearSnapFrame(this.world, room.players, viewer.id, now);
-    return snapFrame(this.world, room.players.filter((q) => visible.has(q.id)), now);
+    const shown = room.players.filter((q) => visible.has(q.id));
+    const base = snapFrame(this.world, shown, now);
+    const map = this.mapDef();
+    if (map.rooms === undefined || map.rooms.length === 0 || !isAlive(viewer)) return base;
+    const segOf = (id: string): Segment | undefined => (Object.prototype.hasOwnProperty.call(this.world.segs, id) ? this.world.segs[id] : undefined);
+    const mine = segOf(viewer.id);
+    const zone = mine === undefined ? null : zoneAt(map, mine, now);
+    const bySeat = new Map(shown.map((q) => [q.seat, q.id]));
+    const ents = base.ents.flatMap((e) => {
+      const id = bySeat.get(e.s);
+      if (id === viewer.id) return [e];
+      const seg = id === undefined ? undefined : segOf(id);
+      if (seg === undefined || zone === null || zoneAt(map, seg, now) !== zone) return [];
+      if (e.p.length <= 2) return [e]; // 서 있는 사람(접힌 한 점)은 그대로
+      const cut = clipToZone(map, seg, now);
+      return [{ s: e.s, p: cut.p, t0: cut.t0, v: cut.v }];
+    });
+    return { ...base, ents };
   }
 
   // errand 의 근처 snap 을 산 사람마다 한 명씩 보낸다(D-02) — 새 무차별 방송 길을 만들지 않고 deliver 한 명씩(결정 0002·0021).
@@ -1495,23 +1518,31 @@ export class Room extends DurableObject<Env> {
   // 이동마다 지금 위치에서 경로를 만들고(planMoveSegment) 150ms 간격·lastMoveAt 을 건드리지 않는 forceSegment 로 적용한 뒤(Pitfall 5)
   // 그 사람이 움직인 것으로 emitMove 한다(산 사람의 이동은 방 전원에게, A2 — 방이 있는 맵에서는 구역으로 거른다, 20페이즈 D-14). 배치 기억 lay 는 world 저장에 실려 퇴거 뒤에도 자리가 뒤섞이지 않는다.
   // 밤·아침은 layoutKey 가 null 이고 syncHome 이 맞춘다(결정 0061-3·4).
-  private syncLayout(now: number): void {
+  // 돌려주는 값(20페이즈 D-14): 새로 만든 구간들 가운데 산 사람이 문을 지나는 가장 이른 시각(없으면 null). 전환 경로(afterTransition)는 뒤따르는 reschedule 이 알람에 넣는다.
+  private syncLayout(now: number): number | null {
     const room = this.room;
-    if (!room) return;
+    if (!room) return null;
     const key = layoutKey(room);
-    if (key === null || key === this.world.lay?.key) return;
+    if (key === null || key === this.world.lay?.key) return null;
     const layout = layoutFor(room, this.world, now);
-    if (layout === null) return;
+    if (layout === null) return null;
+    // 새 구간을 만들기 전에 구역 기억을 지금 위치로 맞춘다 — emitMove 가 받는 사람을 그 기억으로 나눈다.
+    this.syncZones(now);
+    const map = this.mapDef();
+    let doorAt: number | null = null;
     for (const m of layout.moves) {
       const me = room.players.find((p) => p.id === m.playerId);
       const cur = Object.prototype.hasOwnProperty.call(this.world.segs, m.playerId) ? this.world.segs[m.playerId] : undefined;
       if (!me || !cur) continue;
-      const seg = planMoveSegment(cur, m.dest, now, this.mapDef());
+      const seg = planMoveSegment(cur, m.dest, now, map);
       this.world = forceSegment(this.world, m.playerId, seg);
       this.emitMove(me, seg, now);
+      const at = isAlive(me) ? nextCrossingAt(map, seg, now) : null;
+      if (at !== null && (doorAt === null || at < doorAt)) doorAt = at;
     }
     this.world = { ...this.world, lay: { key: layout.key, slots: layout.slots } };
     this.markWorldDirty();
+    return doorAt;
   }
 
   // 방금 탈락한 사람(처형·아침)에게만 모두의 위치 snap 을 보낸다 — 그 전까지 받지 못한 다른 유령의 위치를 맞춘다(GHOST-01).
@@ -1545,7 +1576,9 @@ export class Room extends DurableObject<Env> {
     this.syncWanderPlan(Date.now());
     const wanderAt = this.wanderActive() ? nextWanderAt(this.world, this.wanderBots().map((b) => b.id)) : null;
     const wake = nextWakeAt(this.room);
-    await this.ctx.storage.setAlarm(Math.min(wake, botAt ?? Number.POSITIVE_INFINITY, wanderAt ?? Number.POSITIVE_INFINITY));
+    // 다음 문 통과(20페이즈 D-14)도 같은 알람 하나에 합친다 — 그 시각에 알람이 깨어 사라짐·나타남을 낸다. 방이 없는 맵은 null 이라 알람이 예전과 같다.
+    const doorAt = this.nextZoneAt(Date.now());
+    await this.ctx.storage.setAlarm(Math.min(wake, botAt ?? Number.POSITIVE_INFINITY, wanderAt ?? Number.POSITIVE_INFINITY, doorAt ?? Number.POSITIVE_INFINITY));
   }
 
   async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
@@ -1575,6 +1608,8 @@ export class Room extends DurableObject<Env> {
       await this.advance(Date.now());
       await this.runDueBots(Date.now());
       this.runBotWander(Date.now());
+      // 문 통과(20페이즈 D-14): 이 알람이 통과 시각에 깨어났거나 다른 일로 깨어났거나, 그 사이에 구역을 넘은 사람을 여기서 알린다.
+      this.syncZones(Date.now());
       await this.runErrandTick(Date.now());
       await this.reschedule();
     } catch (err) {
@@ -1631,6 +1666,8 @@ export class Room extends DurableObject<Env> {
     // state 다음에 이 소켓에만 지금 위치를 보낸다 — 보는 사람별로 거른다(결정 0060-8, T-08-11): 로비·assigning·roleReveal 은 모두,
     // 지도 단계는 산 사람이면 산 사람만·유령이면 모두(worldVisibleTo). 보낼 좌석이 없는 단계(ended 등)는 snap 을 보내지 않는다.
     // 클라이언트 epoch 가 첫 state 에서 오르는 규약(WR-03)과 맞는 순서다.
+    // 마을(20페이즈 D-14): snap 을 만들기 전에 구역 기억을 맞춘다 — 아직 알리지 않은 문 통과가 있으면 먼저 나가고, snap 은 같은 구역 사람만 싣는다(snapFrameFor).
+    this.syncZones(Date.now());
     const helloFrame = this.snapFrameFor(player, Date.now());
     if (helloFrame !== null) this.sendTo(ws, helloFrame);
     // 그다음 이 소켓에만 보관 줄을 한 프레임으로 돌려준다 — 줄이 없어도 빈 배열로 보낸다(D2, 결정 0058-3).
@@ -1922,13 +1959,20 @@ export class Room extends DurableObject<Env> {
     // 무대 자리(0,0)는 변론자를 서버가 세우는 한 점이다. 공용 걷기 판정이 그 점만 예외로 받으므로(08-04) 클라이언트 입력으로는 정확히 그 목적지를 버린다 —
     // 옆 점은 막힌 칸이라 걸을 수 있는 칸 중심으로 보정되어 무대 자리가 되지 않는다.
     if (dest.x === STAGE_SPOT.x && dest.z === STAGE_SPOT.z) return;
-    const result = requestMove(this.world, playerId, dest, now, this.mapDef());
+    // 새 구간을 만들기 전에 구역 기억을 지금 위치로 맞춘다(20페이즈 D-14) — 아직 알리지 않은 문 통과가 먼저 나가고, emitMove 가 받는 사람을 그 기억으로 나눈다.
+    this.syncZones(now);
+    const map = this.mapDef();
+    const result = requestMove(this.world, playerId, dest, now, map);
     if (!result.ok) return;
     this.world = result.world;
     this.emoteRates.delete(playerId); // 이동 요청이 받아들여지면 동작 기록을 지운다(D-10)
     // 전송이 먼저, 저장은 뒤(디바운스) — output gate 가 쓰기 뒤의 전송을 붙잡으므로(RESEARCH R6). 받는 사람은 움직인 사람 기준이고 방이 있는 맵에서는 구역으로 거른다(emitMove).
     this.emitMove(me, result.seg, now);
     this.markWorldDirty();
+    // 산 사람의 새 구간이 문을 지나면 그 시각에 알람이 깨어야 한다(유령은 구역으로 거르지 않아 필요 없다). 이 함수는 동기라 기다리지 않는다 —
+    // 이 경로(move 메시지·대기실 봇 배회)에는 뒤따르는 알람 쓰기가 없어 순서가 엇갈리지 않는다.
+    const doorAt = isAlive(me) ? nextCrossingAt(map, result.seg, now) : null;
+    if (doorAt !== null) void this.alarmBy(doorAt).catch((err: unknown) => console.error("door alarm failed", err instanceof Error ? err.name : "unknown"));
   }
 
   // 위치 저장: 2초 디바운스 한 번(T-06-19). 이미 타이머가 있으면 새로 걸지 않는다 — 연속 이동에도 쓰기는 2초에 한 번이다.
@@ -2023,7 +2067,8 @@ export class Room extends DurableObject<Env> {
   //  - 지금 움직인 사람과 같은 구역에 있는 산 사람: 그 구역에 머무는 동안의 구간만(clipToZone — 문턱에서 끝난다).
   //  - 다른 구역의 산 사람·위치가 없는 사람: 보내지 않는다.
   // 다른 구역 산 사람의 좌표는 네트워크로도 가지 않는다(결정 0002·0021) — 화면에서 숨기는 것으로 대신하지 않는다.
-  // 구역은 서버가 가진 구간의 지금 위치로만 정한다(zoneAt). 문을 지나는 순간의 사라짐·나타남과 구역별 snap 은 20-02 가 더한다.
+  // 받는 사람의 구역은 구역 기억(world.zones)이다 — 부르는 쪽이 새 구간을 만들기 전에 syncZones 로 지금 위치에 맞춰 둔다. 그래야 문 프레임(사라짐·나타남)과
+  // 이동 프레임이 같은 기준으로 나뉜다. 움직인 사람의 기억이 새 구간의 지금 구역과 다르면(맞추지 못한 상태) 같은 구역 전송을 하지 않는다(닫힌 쪽으로 실패 — 다음 syncZones 가 문 프레임으로 알린다).
   private emitMove(me: Player, seg: Segment, now: number): void {
     const room = this.room;
     if (!room) return;
@@ -2035,6 +2080,7 @@ export class Room extends DurableObject<Env> {
     }
     const ids = audience(room, { k: "world", mover: me.id });
     const zone = zoneAt(map, seg, now);
+    const synced = this.zoneMemo(me.id) === zone;
     const whole = new Set<string>();
     const sameZone = new Set<string>();
     for (const p of room.players) {
@@ -2043,11 +2089,93 @@ export class Room extends DurableObject<Env> {
         whole.add(p.id);
         continue;
       }
-      const cur = Object.prototype.hasOwnProperty.call(this.world.segs, p.id) ? this.world.segs[p.id] : undefined;
-      if (cur !== undefined && zoneAt(map, cur, now) === zone) sameZone.add(p.id);
+      if (synced && this.zoneMemo(p.id) === zone) sameZone.add(p.id);
     }
     this.deliver(whole, full);
     if (sameZone.size > 0) this.deliver(sameZone, moveFrame(me.seat, clipToZone(map, seg, now)));
+  }
+
+  // ---- 문 통과(20페이즈 D-14·D-15·D-16): 구역 기억 · 사라짐·나타남 · 통과 알람 ----
+
+  /** 그 사람의 구역 기억(서버가 마지막으로 알린 구역). 아직 없으면 undefined. */
+  private zoneMemo(id: string): ZoneId | undefined {
+    const zones = this.world.zones;
+    return zones !== undefined && Object.prototype.hasOwnProperty.call(zones, id) ? zones[id] : undefined;
+  }
+
+  // 구역 기억을 지금 위치로 맞추고, 그 사이 문을 지난 산 사람마다 양쪽 구역에 알린다(D-14). 방이 없는 맵에서는 아무것도 하지 않는다.
+  // 부르는 곳: 새 구간을 만들기 전(applyMove·syncLayout), 알람, 재접속 snap 앞(handleHello). 프레임을 보내고 저장은 기존 2초 디바운스에 얹는다(쓰기가 늘지 않는다, T-20-07).
+  //  - 구역이 바뀌지 않은 산 사람 V 가운데 그 사람을 볼 수 있는 사람(worldVisibleTo — 심부름·밤은 본인뿐이라 문 프레임이 없다):
+  //    V 의 구역이 떠난 구역이면 사라짐(좌석·문의 방뿐, 좌표 없음), 들어간 구역이면 나타남(그 구역 안으로 자른 구간).
+  //    문 위치까지만 알린다 — 넘어간 뒤 어디로 갔는지는 떠난 구역에 보내지 않고, 넘기 전의 길은 들어간 구역에 보내지 않는다.
+  //  - 이번에 구역이 바뀐 산 사람 본인: 문 프레임 대신 새 구역 사람들이 담긴 snap 한 개(zone 표시, 근처 snap 이면 그대로).
+  //    같은 순간 함께 바뀐 다른 사람의 문 프레임도 받지 않는다 — 그 snap 이 이미 지금 모습이다.
+  //  - 유령: 아무것도 받지 않는다. 이미 모두의 전체 구간을 받는다(D-16, 결정 0021·0083-2).
+  // 기억이 없던 사람(판 시작·저장값 없음)은 알림 없이 지금 구역을 기억할 뿐이다(T-20-08).
+  private syncZones(now: number): void {
+    const room = this.room;
+    if (!room) return;
+    const map = this.mapDef();
+    if (map.rooms === undefined || map.rooms.length === 0) return;
+    const living = room.players
+      .filter((p) => isAlive(p) && Object.prototype.hasOwnProperty.call(this.world.segs, p.id))
+      .sort((x, y) => x.seat - y.seat);
+    const { world, changes } = reconcileZones(map, this.world, living.map((p) => p.id), now);
+    if (world === this.world) return;
+    this.world = world;
+    // 처음 기억하는 것(알림 없음)만으로는 저장 타이머를 걸지 않는다: 문을 지나려면 먼저 걸어야 하고 그 걷기가 저장을 건다(applyMove·syncLayout 의 markWorldDirty) —
+    // 그 저장에 이 기억이 함께 실린다. 기억만 잃은 채 다시 깨어나면 다음 맞추기가 알림 없이 다시 기억한다.
+    if (changes.length === 0) return;
+    this.markWorldDirty();
+    const changed = new Set(changes.map((c) => c.id));
+    const steady = living.filter((v) => !changed.has(v.id)).map((v) => ({ id: v.id, zone: this.zoneMemo(v.id), sees: worldVisibleTo(room, v.id) }));
+    const doorOf = (near: ZoneId, far: ZoneId): RoomId | null => (near !== "plaza" ? near : far !== "plaza" ? far : null);
+    for (const c of changes) {
+      const mover = living.find((p) => p.id === c.id);
+      const seg = this.world.segs[c.id];
+      if (mover === undefined || seg === undefined) continue;
+      const left = new Set(steady.filter((v) => v.zone === c.from && v.sees.has(c.id)).map((v) => v.id));
+      const joined = new Set(steady.filter((v) => v.zone === c.to && v.sees.has(c.id)).map((v) => v.id));
+      const leftDoor = doorOf(c.from, c.to);
+      const joinedDoor = doorOf(c.to, c.from);
+      if (left.size > 0 && leftDoor !== null) this.deliver(left, { t: "world", k: "door", e: "vanish", s: mover.seat, d: leftDoor });
+      if (joined.size > 0 && joinedDoor !== null) {
+        const cut = clipToZone(map, seg, now);
+        this.deliver(joined, { t: "world", k: "door", e: "appear", s: mover.seat, d: joinedDoor, p: cut.p, t0: cut.t0, v: cut.v });
+      }
+    }
+    for (const p of living) {
+      if (!changed.has(p.id)) continue;
+      const frame = this.snapFrameFor(p, now);
+      if (frame === null) continue;
+      this.deliver(new Set([p.id]), frame.near === true ? frame : { ...frame, zone: true });
+    }
+  }
+
+  // 알람이 깨어야 할 다음 문 통과 시각: 산 사람 구간들의 nextCrossingAt 최솟값. 방이 없는 맵·넘을 사람이 없으면 null.
+  // 구역 기억이 이미 지금 위치와 다른 사람이 있으면(통과 시각의 알람이 다른 알람 쓰기에 밀렸다) 지금을 돌려줘 곧바로 깨어나게 한다.
+  private nextZoneAt(now: number): number | null {
+    const room = this.room;
+    if (!room) return null;
+    const map = this.mapDef();
+    if (map.rooms === undefined || map.rooms.length === 0) return null;
+    let min: number | null = null;
+    for (const p of room.players) {
+      if (!isAlive(p) || !Object.prototype.hasOwnProperty.call(this.world.segs, p.id)) continue;
+      const seg = this.world.segs[p.id]!;
+      const memo = this.zoneMemo(p.id);
+      if (memo !== undefined && memo !== zoneAt(map, seg, now)) return now;
+      const at = nextCrossingAt(map, seg, now);
+      if (at !== null && (min === null || at < min)) min = at;
+    }
+    return min;
+  }
+
+  // 알람을 at 까지 당긴다 — 지금 걸린 알람이 없거나 더 늦을 때만 쓴다(결정 0076: 알람 쓰기는 이를 때만, T-20-07). 지워진 방에는 걸지 않는다.
+  private async alarmBy(at: number): Promise<void> {
+    const cur = await this.ctx.storage.getAlarm();
+    if (!this.room) return;
+    if (cur === null || cur > at) await this.ctx.storage.setAlarm(at);
   }
 
   private sendTo(ws: WebSocket, msg: ServerMessage): void {

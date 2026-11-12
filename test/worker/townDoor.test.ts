@@ -13,6 +13,7 @@ import type { Segment, WorldState } from "../../shared/game/world";
 import { nextCrossingAt, zoneOf } from "../../shared/game/zones";
 import type { ServerMessage } from "../../shared/protocol";
 import {
+  advanceTo,
   alarmOf,
   connect,
   flushWorld,
@@ -40,6 +41,8 @@ type Snap = Extract<World, { k: "snap" }>;
 const POST = TOWN_ROOMS.find((r) => r.id === "post")!;
 /** 우체국 안의 또 다른 걷는 칸 중심(방 안 자리와 다른 곳). */
 const POST_SIDE = { x: 75, z: -775 };
+/** 우체국 안쪽 깊은 걷는 칸 중심(편지 장소 자리). 문턱까지 1초쯤 걸린다. */
+const POST_DEEP = { x: 75, z: -875 };
 /** 광장 한가운데 근처의 걷는 자리(입장 지점 0). 우체국 문까지 걸어서 몇 초 걸린다. */
 const PLAZA_SPOT = { x: 320, z: 180 };
 
@@ -296,6 +299,43 @@ describe("문 통과 시각의 알람과 구역 기억의 저장 (T-20-07·T-20-
     const frames = await alarmAndCollect(s.g, marks);
     const got = `${doorLine(s.of(frames, s.b), s.a.seat)} // ${doorLine(s.of(frames, s.c), s.a.seat).replace(/ end=.*/, "")} // ${zoneSnaps(s.of(frames, s.a)).length}`;
     expect(got).toBe("1: vanish:post keys=d,e,k,s,t // 1: appear:post [post] // 1");
+  });
+});
+
+describe("알람 맞추기(reschedule)에 문 통과가 들어간다 (D-14, 결정 0076)", () => {
+  it("단계 배치(syncLayout)로 방 안 사람이 걸어 나올 때: 통과 시각이 알람에 들어가고, 넘는 순간 광장의 산 사람은 광장 쪽 나타남 하나를 받는다", { timeout: 60_000 }, async () => {
+    const s = await scene(PLAZA_SPOT);
+    await placeSeats(s.g.code, { [s.c.seat]: POST_DEEP });
+    await flushWorld(s.g.code);
+    const marks = s.g.socks.map((k) => mark(k));
+    await advanceTo(s.g.code, s.g.socks, "nomination");
+    const seg = (await memWorld(s.g.code)).segs[await idOfSeat(s.g.code, s.c.seat)]!;
+    const tc = nextCrossingAt(TOWN_MAP, seg, seg.t0);
+    const alarm = await alarmOf(s.g.code);
+    const armed = tc !== null && alarm !== null && alarm <= tc;
+    await passDoor(s.g.code, s.c.seat);
+    const frames = await alarmAndCollect(s.g, marks);
+    // 광장의 산 사람이 그 사람에 대해 받은 모든 좌표(move·door·snap)
+    const seenByB = worlds(s.of(frames, s.b)).flatMap((f) => (f.k === "snap" ? f.ents.filter((e) => e.s === s.c.seat).flatMap((e) => e.p) : f.s === s.c.seat && "p" in f ? f.p : []));
+    const got = `armed=${armed} b:${doorLine(s.of(frames, s.b), s.c.seat).replace(/ end=.*/, "")} seen=[${zonesOfPts(seenByB)}] c:${zoneSnaps(s.of(frames, s.c)).length}`;
+    expect(got).toBe("armed=true b:1: appear:post [plaza] seen=[plaza] c:1");
+  });
+
+  it("통과 시각의 알람이 다른 알람 쓰기에 밀려 사라졌어도, 다음 알람 맞추기가 곧바로 깨워 문 통과를 낸다", { timeout: 60_000 }, async () => {
+    const s = await scene(POST.front);
+    // 이미 문턱을 지난 구간을 직접 쓴다 — 통과 알람은 걸린 적이 없고(단계 마감 알람뿐) 구역 기억은 아직 plaza 다.
+    await walkSeat(s.g.code, s.a.seat, [POST.front.x, POST.front.z, POST.inside.x, POST.inside.z], 2000);
+    const from = mark(s.b.sock);
+    const far = ((await alarmOf(s.g.code)) ?? 0) > Date.now() + 3000;
+    await runInDurableObject(env.ROOM.getByName(s.g.code), async (instance) => {
+      await (instance as unknown as { reschedule: () => Promise<void> }).reschedule();
+    });
+    let seen: ServerMessage[] = [];
+    for (let i = 0; i < 40 && doorCount(seen) === 0; i += 1) {
+      await pause(60);
+      seen = await settle(s.b.sock, from);
+    }
+    expect(`far=${far} ${doorLine(seen, s.a.seat)}`).toBe("far=true 1: vanish:post keys=d,e,k,s,t");
   });
 });
 
