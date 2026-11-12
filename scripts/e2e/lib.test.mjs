@@ -95,7 +95,6 @@ import {
   reconnectSummary,
   selectFlows,
   CHAT_PANEL_EXTRA,
-  LOBBY_HOST_TUTORIAL_EXTRA,
   LOBBY_PANEL_EXTRA,
   lobbyPanelHeight,
   GAME_PANEL_EXTRA,
@@ -556,10 +555,9 @@ test("채팅 패널 치수 사본: LOG_H 68 · KB_PANEL_H 146, 채팅 패널 = L
   assert.equal(CHAT_PANEL_EXTRA, 92);
   assert.equal(LOBBY_PANEL_EXTRA, 154);
   assert.equal(lobbyPanelHeight(LOG_H), 222);
-  // 18.1-15(0083-3): 방장 패널 +54 = 스위치 줄 44 + 간격 10
-  assert.equal(LOBBY_HOST_TUTORIAL_EXTRA, 54);
-  assert.equal(lobbyPanelHeight(LOG_H, true), 276);
-  assert.equal(lobbyPanelHeight(LOG_H, false), 222);
+  // 19-04(P19-12): 방장 패널 = 참가자 패널 222. 예전의 두 번째 인자(방장)를 줘도 같고, 방장 증분 상수 사본은 없다
+  assert.equal(lobbyPanelHeight(LOG_H, true), 222);
+  assert.equal(/export const LOBBY_HOST_[A-Z_]+ =/.test(readFileSync(new URL("./lib.mjs", import.meta.url), "utf8")), false);
 });
 
 test("17-07: view 키 사본에 tutorial·tutorialDone 이 있다", () => {

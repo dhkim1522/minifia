@@ -22,8 +22,10 @@ import {
   TYPING_PILL_H,
   TYPING_REFRESH_MS,
   lobbyPanelHeight,
-  LOBBY_HOST_TUTORIAL_EXTRA,
 } from "../../src/game/chatUi";
+
+/** 19-04(P19-12)에서 지운 방장 패널 증분 상수의 이름(그대로 적지 않는다 — 남은 곳을 찾는 검색에 걸리지 않게) */
+const GONE_HOST_EXTRA = ["LOBBY", "HOST", "TUTORIAL", "EXTRA"].join("_");
 
 // 07-03 Task 3: 채팅 패널 치수·시각 상수 한 곳 (07-UI-SPEC 구조 표). DOM 을 읽지 않는 상수·순수 함수뿐이다.
 
@@ -33,12 +35,13 @@ describe("패널 높이 식 (18.1 B 계약 4 — 기록 칸 68 한 값)", () => 
     expect(LOG_H).toBe(24 * 2 + 4 + 8 * 2);
   });
 
-  it("로비 패널 = LOG_H + 154, 14 + 8 + 48 + 10 + 52 + 22 에서 나온다 — 대기실 손님 222·방장 276", () => {
+  it("로비 패널 = LOG_H + 154, 14 + 8 + 48 + 10 + 52 + 22 에서 나온다 — 대기실은 방장·참가자 모두 222 (19-04, P19-12)", async () => {
     expect(LOBBY_PANEL_EXTRA).toBe(154);
     expect(LOBBY_PANEL_EXTRA).toBe(14 + 8 + 48 + 10 + 52 + 22);
     expect(lobbyPanelHeight(LOG_H)).toBe(222);
-    expect(LOBBY_HOST_TUTORIAL_EXTRA).toBe(54); // 스위치 줄 44 + 간격 10 (18.1-15, 0083-3)
-    expect(lobbyPanelHeight(LOG_H, true)).toBe(276);
+    // 방장 증분이 없다: 예전의 두 번째 인자(방장)를 줘도 값이 같고, 증분 상수는 내보내지 않는다
+    expect((lobbyPanelHeight as (logH: number, host?: boolean) => number)(LOG_H, true)).toBe(222);
+    expect(Object.keys(await import("../../src/game/chatUi")).includes(GONE_HOST_EXTRA)).toBe(false);
   });
 
   it("채팅 패널 = LOG_H + 92, 14 + 8 + 48 + 22 에서 나온다 — 160", () => {
@@ -89,7 +92,7 @@ describe("기록 칸 높이의 출처는 LOG_H 하나 (18.1 B 계약 4 폐지)",
 
   it("남기는 이름은 그대로 있다", async () => {
     const keys = Object.keys(await import("../../src/game/chatUi"));
-    for (const kept of ["LOG_H", "LOG_FADE_H", "KB_PANEL_H", "LOBBY_PANEL_EXTRA", "CHAT_PANEL_EXTRA", "LOBBY_HOST_TUTORIAL_EXTRA", "lobbyPanelHeight"]) expect(keys).toContain(kept);
+    for (const kept of ["LOG_H", "LOG_FADE_H", "KB_PANEL_H", "LOBBY_PANEL_EXTRA", "CHAT_PANEL_EXTRA", "lobbyPanelHeight"]) expect(keys).toContain(kept);
   });
 });
 

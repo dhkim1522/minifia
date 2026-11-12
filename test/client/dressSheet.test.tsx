@@ -489,10 +489,10 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
     expect(container.querySelectorAll("[data-side-column] [data-map-chip]")).toHaveLength(0);
   });
 
-  it("방장 대기실(봇 단추 없는 방): 오른쪽 열은 소리 자리 다음 [dress] 하나, 맵 단추는 왼쪽 방장 줄의 [판 종류] 아래다 (19-04 D-13)", () => {
+  it("방장 대기실(봇 단추 없는 방): 오른쪽 열은 소리 자리 다음 [dress] 하나, 맵 단추는 왼쪽 방장 줄의 [판 종류] 아래·[튜토리얼 먼저] 위다 (19-04 D-13)", () => {
     const { container } = render(lobby(hostView()));
     expect([...container.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button")).join(",")).toBe("dress");
-    expect([...container.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).filter((id) => id !== "tutorial").join(",")).toBe("mode,map");
+    expect([...container.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).join(",")).toBe("mode,map,tutorial");
     expect(container.querySelectorAll("[data-side-column]")).toHaveLength(1);
     expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
   });

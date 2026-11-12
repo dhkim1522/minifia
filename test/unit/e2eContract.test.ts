@@ -19,7 +19,6 @@ import {
   CHAT_PANEL_EXTRA,
   KB_PANEL_H,
   KB_PANEL_REST,
-  LOBBY_HOST_TUTORIAL_EXTRA,
   LOBBY_PANEL_EXTRA,
   LOG_H,
   LOG_OPEN_MAX,
@@ -149,7 +148,6 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     CHAT_PANEL_EXTRA: number;
     KB_PANEL_H: number;
     TYPING_PILL_H: number;
-    LOBBY_HOST_TUTORIAL_EXTRA: number;
     lobbyPanelHeight: (logH: number, host?: boolean) => number;
   };
   const lib = e2eLib as unknown as ChatCopy;
@@ -160,7 +158,8 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     expect(lib.KB_PANEL_H).toBe(146);
     expect(KB_PANEL_H).toBe(146);
     expect(lib.LOBBY_PANEL_EXTRA).toBe(LOBBY_PANEL_EXTRA);
-    expect(lib.LOBBY_HOST_TUTORIAL_EXTRA).toBe(LOBBY_HOST_TUTORIAL_EXTRA); // 17-07(0080-4): 방장 스위치 줄 44 + 간격 10 (18.1-15)
+    // 19-04(P19-12): 방장 패널 증분 상수는 앱에도 E2E 사본에도 없다(이름을 그대로 적지 않는다 — 남은 곳을 찾는 검색에 걸리지 않게)
+    expect(Object.keys(e2eLib).includes(["LOBBY", "HOST", "TUTORIAL", "EXTRA"].join("_"))).toBe(false);
     expect(lib.CHAT_PANEL_EXTRA).toBe(CHAT_PANEL_EXTRA);
     expect(lib.KB_PANEL_H).toBe(KB_PANEL_H);
     expect(lib.TYPING_PILL_H).toBe(TYPING_PILL_H);
@@ -226,9 +225,9 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
   it("lobbyPanelHeight 사본이 chatUi 와 같고, 채팅 패널 높이는 LOG_H + CHAT_PANEL_EXTRA 다", () => {
     expect(lib.lobbyPanelHeight(LOG_H)).toBe(lobbyPanelHeight(LOG_H));
     expect(lib.lobbyPanelHeight(LOG_H)).toBe(222);
-    // 18.1-15(0083-3): 방장 패널은 +54(LOBBY_HOST_TUTORIAL_EXTRA) — 앱 값과 E2E 사본이 같다
-    expect(lib.lobbyPanelHeight(LOG_H, true)).toBe(lobbyPanelHeight(LOG_H, true));
-    expect(lib.lobbyPanelHeight(LOG_H, true)).toBe(276);
+    // 19-04(P19-12): 방장 패널 = 참가자 패널. 예전의 두 번째 인자(방장)를 줘도 앱·E2E 사본 모두 222 다
+    expect(lib.lobbyPanelHeight(LOG_H, true)).toBe(222);
+    expect((lobbyPanelHeight as (logH: number, host?: boolean) => number)(LOG_H, true)).toBe(222);
     expect(lib.LOG_H + lib.CHAT_PANEL_EXTRA).toBe(LOG_H + CHAT_PANEL_EXTRA);
     expect(LOG_H + CHAT_PANEL_EXTRA).toBe(160);
   });
