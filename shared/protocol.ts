@@ -411,10 +411,18 @@ export interface WorldSeg {
   t0: number;
   v: number;
 }
-/** 서버 → 클라이언트 world 프레임(상태가 아니라 이벤트). move = 한 사람의 새 구간, snap = 접속 때 모두의 지금 구간. */
+/**
+ * 서버 → 클라이언트 world 프레임(상태가 아니라 이벤트). move = 한 사람의 새 구간, snap = 접속 때 모두의 지금 구간.
+ * door = 문 통과(20페이즈 D-14, 방이 있는 맵에서만): 한 사람이 구역을 넘는 순간 한 번 간다. d 는 지나간 문의 방이다.
+ * - vanish: 떠나는 구역의 산 사람에게. 좌석과 방 id 뿐이고 좌표가 없다(문 위치까지만 — 넘어간 뒤 어디로 갔는지는 보내지 않는다).
+ * - appear: 들어가는 구역의 산 사람에게. 구간은 그 구역 안으로 자른 것이다(넘기 전의 길·다음 구역의 길은 싣지 않는다).
+ */
 export type WorldFrame =
   | { t: "world"; k: "move"; s: number; p: number[]; t0: number; v: number }
-  | { t: "world"; k: "snap"; at: number; ents: WorldSeg[]; near?: true }; // near = errand 의 근처 snap(근처 산 사람만, 15페이즈 D-02). 값은 true 뿐이고 역할·좌석과 무관하다
+  | { t: "world"; k: "door"; e: "vanish"; s: number; d: RoomId }
+  | { t: "world"; k: "door"; e: "appear"; s: number; d: RoomId; p: number[]; t0: number; v: number }
+  // near = errand 의 근처 snap(근처 산 사람만, 15페이즈 D-02). zone = 구역이 바뀐 본인에게만 가는 새 구역 snap(20페이즈 D-14). 둘 다 값은 true 뿐이고 역할·좌석과 무관하다
+  | { t: "world"; k: "snap"; at: number; ents: WorldSeg[]; near?: true; zone?: true };
 
 // ---- 7페이즈 자유 채팅 계약(결정 0058, 07-02) ----
 // 키 이름은 ch·seat·seq·text·at·on·why·lines·pk 만 쓴다 — test/worker/leak.test.ts 의 FORBIDDEN_KEYS 에 id·playerId 가 있다.

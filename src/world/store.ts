@@ -2,10 +2,19 @@
 // 위치의 진실은 서버 구간이고 이 스토어는 서버가 보낸 구간만 든다. 내 예측 구간은 런타임이 따로 든다(결정 0059).
 import type { Segment } from "../../shared/game/world";
 import { positionAt } from "../../shared/game/world";
-import type { EmoteFrame, WorldFrame } from "../../shared/protocol";
+import type { EmoteFrame, RoomId, WorldFrame } from "../../shared/protocol";
 
 export type WorldStoreListener = () => void;
 export type EmoteListener = (frame: EmoteFrame) => void;
+/**
+ * 문 통과로 사라지거나 나타난 좌석 한 건(20페이즈 D-15). d 는 지나간 문의 방 — 서버의 door 프레임에서 온 것만 있고,
+ * 내가 구역을 넘어 받은 새 구역 snap 으로 바뀐 좌석에는 없다(그 사람들은 문을 지난 것이 아니라 내 시야가 바뀐 것이다).
+ */
+export interface DoorEvent {
+  seat: number;
+  kind: "vanish" | "appear";
+  d?: RoomId;
+}
 
 /**
  * epoch 규칙(CONN-04, T-06-21): 새 연결의 첫 state 마다 epoch 가 1 늘고 서버는 [state, snap] 순서로 보낸다.
@@ -61,6 +70,7 @@ export class WorldStore {
       return;
     }
     if (!this.ready) return;
+    if (frame.k === "door") return; // 자리(20-02 RED): 구현은 다음 커밋
     if (!this.segs.has(frame.s)) this.entered.add(frame.s);
     this.segs.set(frame.s, { p: [...frame.p], t0: frame.t0, v: frame.v });
     this.lastSegs.set(frame.s, { p: [...frame.p], t0: frame.t0, v: frame.v });
@@ -140,6 +150,11 @@ export class WorldStore {
     const out = [...this.entered].sort((x, y) => x - y);
     this.entered.clear();
     return out;
+  }
+
+  /** 자리(20-02 RED): 구현은 다음 커밋 */
+  takeDoor(): DoorEvent[] {
+    return [];
   }
 
   /** view 에 없는 seat 의 구간을 지우고 지운 seat 를 돌려준다(퇴장 연출용). 지운 seat 의 늦은 move 는 새 사람으로 다시 나타난다. */

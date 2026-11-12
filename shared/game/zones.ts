@@ -4,7 +4,7 @@
 import type { ZoneId } from "../protocol";
 import type { MapDef } from "./map";
 import { positionAtFx } from "./world";
-import type { Segment } from "./world";
+import type { Segment, WorldState } from "./world";
 
 /** 고정소수점 점의 구역. 방이 없는 맵(재즈 바·광장)은 늘 plaza 다. 안쪽 사각형의 경계 위(문턱의 안쪽 면 포함)는 바깥이다. */
 export function zoneOf(map: Pick<MapDef, "rooms">, xFx: number, zFx: number): ZoneId {
@@ -70,4 +70,24 @@ export function clipToZone(map: Pick<MapDef, "rooms">, seg: Segment, from: numbe
   if (out.length < 4) return rest;
   for (let i = 0; i + 1 < out.length; i += 2) if (zoneOf(map, out[i]!, out[i + 1]!) !== zone0) return rest;
   return { p: out, t0: start, v: seg.v };
+}
+
+/** 구역이 바뀐 한 사람(문 통과). from·to 가운데 plaza 가 아닌 쪽이 지나간 문의 방이다. */
+export interface ZoneChange {
+  id: string;
+  from: ZoneId;
+  to: ZoneId;
+}
+
+// 자리 함수(20-02 RED): 구현은 다음 커밋.
+export function nextCrossingAt(_map: Pick<MapDef, "rooms">, _seg: Segment, _after: number): number | null {
+  return null;
+}
+
+export function reconcileZones(_map: Pick<MapDef, "rooms">, w: WorldState, _ids: readonly string[], _now: number): { world: WorldState; changes: ZoneChange[] } {
+  return { world: w, changes: [] };
+}
+
+export function settleZones(_map: Pick<MapDef, "rooms">, w: WorldState, _ids: readonly string[], _now: number): WorldState {
+  return w;
 }

@@ -4,7 +4,7 @@
 // 좌표는 1/100 단위 정수(UNIT = 100), 시각은 서버 ms, 속도 v 는 단위/초 × 100(= 고정소수점 거리/초)이다.
 // 클라이언트가 보내는 것은 목적지 두 정수뿐이다 — 속도·경로·출발점·시각은 서버가 정한다(T-06-10).
 // 입력 월드는 바꾸지 않고 새 객체를 돌려준다. 삼각함수 없이 사칙연산·제곱근만 써서 서버와 폰이 같은 값을 얻는다.
-import type { WorldFrame } from "../protocol";
+import type { WorldFrame, ZoneId } from "../protocol";
 import { MOVE_COORD_LIMIT } from "../protocol";
 import type { MapDef } from "./map";
 import { UNIT, cellCenterFx, lineWalkable, routeFx, snapToWalkable, walkableCells } from "./map";
@@ -36,6 +36,11 @@ export interface WorldState {
   wanderAt: Readonly<Record<string, number>>;
   lay?: LayoutMemo;
   home?: HomeMemo;
+  /**
+   * 구역 기억(20페이즈 D-14): 사람(player id) → 서버가 마지막으로 알린 구역. 문 통과 프레임을 한 번만 내는 근거다(shared/game/zones.ts reconcileZones).
+   * 서버 전용 상태이고 어떤 프레임에도 싣지 않는다. 방이 없는 맵에서는 생기지 않는다.
+   */
+  zones?: Readonly<Record<string, ZoneId>>;
 }
 
 /**
@@ -292,6 +297,7 @@ export interface StoredWorld {
   segs: Record<string, Segment>;
   lay?: LayoutMemo;
   home?: HomeMemo;
+  zones?: Record<string, ZoneId>;
 }
 
 /** 퇴장: 구간·간격·배회 기록과 모이는 자리·토론이 끝난 자리 기억 중 그 사람 몫을 지운다. */
