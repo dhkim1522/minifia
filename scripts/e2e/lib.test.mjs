@@ -162,6 +162,10 @@ import {
   hostRailMeasure,
   modeChipChecks,
   modeSheetChecks,
+  BASIC_ABSENT_SELECTORS,
+  BASIC_ABSENT_ATTR_PREFIX,
+  BASIC_FORBIDDEN_LINES,
+  basicModeChecks,
   soundRenderChecks,
   soundNightParityChecks,
   soundVerdictTimingChecks,
@@ -4832,6 +4836,88 @@ test("modeSheetChecks MS1g: 두 칸 높이가 같고(±1) 시트가 화면 안, 
   assert.ok(msFails(modeSheetIn({ cards: [s.cards[0], { ...s.cards[1], rect: rect(210, 470, 158, 140) }] })).includes("MS1g")); // 칸이 시트 밖
   assert.ok(modeSheetChecks({}).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
   assert.equal(modeSheetChecks({}).length, 2);
+});
+
+// ---- 19-07 기본 마피아 판 E2E 판정 (basicModeChecks BM1~BM3, 없어야 할 표식·금지 문구 사본) ----
+
+/** 기본 마피아 한 판의 단계 열(첫날 처형 → 밤 → 아침 → 둘째 날 처형으로 끝). 심부름이 없다 */
+const BM_PHASES = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "ended"];
+const BM_LINES = ["모두 모여 주세요", "의심 가는 사람을 이야기해 주세요"];
+const bmIn = (over = {}) => ({ phases: BM_PHASES, scan: { scans: 120, seen: {}, phases: ["lobby", "roleReveal", "discussion"] }, lines: BM_LINES, ...over });
+const bmFails = (input) => basicModeChecks(input).filter((l) => !l.ok).map((l) => l.id).join(",");
+const bmDetail = (input, id) => basicModeChecks(input).find((l) => l.id === id)?.detail ?? "(줄 없음)";
+
+test("기본 마피아 사본 상수: 없어야 할 선택자 다섯·속성 앞머리 data-errand-·금지 문구 넷(동결)", () => {
+  assert.equal(BASIC_ABSENT_SELECTORS.join(","), "[data-trace-mark],[data-seen-mark],[data-lastseen-row],[data-trace-card],[data-record-button]");
+  assert.ok(Object.isFrozen(BASIC_ABSENT_SELECTORS));
+  assert.equal(BASIC_ABSENT_ATTR_PREFIX, "data-errand-");
+  assert.equal(BASIC_FORBIDDEN_LINES.join("|"), "빛나는 곳을 찾아 처리해 주세요|곧 토론이 시작됩니다|기록 단추로 본 것을 확인해 주세요|같은 옷과 엇갈린 목격을 살펴보세요");
+  assert.ok(Object.isFrozen(BASIC_FORBIDDEN_LINES));
+});
+
+test("basicModeChecks: 정상 입력(심부름 없는 한 판·감시 120회·띠 글 둘)은 BM1~BM3 모두 통과, 줄 모양은 { id, label, ok, detail }", () => {
+  const lines = basicModeChecks(bmIn());
+  assert.equal(lines.map((l) => l.id).join(","), "BM1,BM2,BM3");
+  assert.equal(bmFails(bmIn()), "");
+  for (const l of lines) assert.equal(Object.keys(l).sort().join(","), "detail,id,label,ok");
+  // 연속 중복(같은 단계의 새 프레임)은 접고, 지목 0표로 처형 없이 밤으로 가는 날·아침에 끝나는 판도 통과한다
+  const noExec = ["roleReveal", "roleReveal", "dayAnnounce", "discussion", "discussion", "nomination", "night", "morning", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
+  assert.equal(bmFails(bmIn({ phases: noExec })), "");
+});
+
+test("BM1: 없어야 할 표식을 한 번이라도 보면 실패하고 선택자·단계를 적는다, 감시 횟수가 20 이하면 측정값 부족", () => {
+  const seenMark = bmIn({ scan: { scans: 120, seen: { "[data-trace-mark]": { n: 1, phase: "morning" } } } });
+  assert.equal(bmFails(seenMark), "BM1");
+  assert.match(bmDetail(seenMark, "BM1"), /\[data-trace-mark\] 1건\(morning\)/);
+  const seenAttr = bmIn({ scan: { scans: 120, seen: { "data-errand-*": { n: 1, phase: "errand", name: "data-errand-layer" } } } });
+  assert.equal(bmFails(seenAttr), "BM1");
+  assert.match(bmDetail(seenAttr, "BM1"), /data-errand-layer/);
+  const few = bmIn({ scan: { scans: 5, seen: {} } });
+  assert.equal(bmFails(few), "BM1");
+  assert.match(bmDetail(few, "BM1"), /측정값 부족/);
+  assert.equal(bmFails(bmIn({ scan: { scans: 20, seen: {} } })), "BM1"); // 20 은 아직 부족(> 20)
+  assert.equal(bmFails(bmIn({ scan: { scans: 21, seen: {} } })), "");
+  assert.match(bmDetail(bmIn({ scan: null }), "BM1"), /측정값 없음/);
+  assert.match(bmDetail(bmIn({ scan: { seen: {} } }), "BM1"), /측정값 없음/);
+});
+
+test("BM2: errand 가 나오거나 낮 발표 다음이 토론이 아니거나 ended·밤·아침을 지나지 않으면 실패", () => {
+  const withErrand = BM_PHASES.flatMap((p) => (p === "dayAnnounce" ? ["dayAnnounce", "errand"] : [p]));
+  assert.equal(bmFails(bmIn({ phases: withErrand })), "BM2");
+  assert.match(bmDetail(bmIn({ phases: withErrand }), "BM2"), /errand/);
+  const skipTalk = BM_PHASES.filter((p) => p !== "discussion");
+  assert.equal(bmFails(bmIn({ phases: skipTalk })), "BM2");
+  assert.match(bmDetail(bmIn({ phases: skipTalk }), "BM2"), /dayAnnounce → nomination/);
+  const noEnd = BM_PHASES.slice(0, -1);
+  assert.equal(bmFails(bmIn({ phases: noEnd })), "BM2");
+  assert.match(bmDetail(bmIn({ phases: noEnd }), "BM2"), /ended/);
+  // 첫날 처형으로 바로 끝난 판은 밤·아침을 못 봤으므로 한 판 완주 측정이 아니다
+  const dayOnly = ["roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "ended"];
+  assert.match(bmDetail(bmIn({ phases: dayOnly }), "BM2"), /night/);
+  assert.equal(bmFails(bmIn({ phases: ["roleReveal", "dayAnnounce", "discussion", "tutorial"] })), "BM2");
+  assert.match(bmDetail(bmIn({ phases: [] }), "BM2"), /측정값 없음/);
+  assert.match(bmDetail(bmIn({ phases: null }), "BM2"), /측정값 없음/);
+  assert.match(bmDetail(bmIn({ phases: ["discussion", 3] }), "BM2"), /측정값 없음/);
+});
+
+test("BM3: 띠 글에 금지 문구가 들어 있으면 실패하고, 본 글이 없으면 측정값 없음", () => {
+  for (const line of ["빛나는 곳을 찾아 처리해 주세요", "곧 토론이 시작됩니다", "기록 단추로 본 것을 확인해 주세요", "같은 옷과 엇갈린 목격을 살펴보세요"]) {
+    const hit = bmIn({ lines: [...BM_LINES, line] });
+    assert.equal(bmFails(hit), "BM3", line);
+    assert.ok(bmDetail(hit, "BM3").includes(line), line);
+  }
+  // 띠 글이 문구를 품고 있어도(앞뒤에 다른 글) 잡는다
+  assert.equal(bmFails(bmIn({ lines: ["  기록 단추로 본 것을 확인해 주세요 12초"] })), "BM3");
+  // 유령의 "지켜봐 주세요" 는 낮 발표·투표·찬반에서도 쓰는 문장이라 금지 문구가 아니다
+  assert.equal(bmFails(bmIn({ lines: [...BM_LINES, "지켜봐 주세요"] })), "");
+  assert.match(bmDetail(bmIn({ lines: [] }), "BM3"), /측정값 없음/);
+  assert.match(bmDetail(bmIn({ lines: null }), "BM3"), /측정값 없음/);
+  assert.match(bmDetail(bmIn({ lines: ["", "   "] }), "BM3"), /측정값 없음/);
+});
+
+test("basicModeChecks: 빠진 입력은 세 줄 모두 실패한다(공허 통과 금지)", () => {
+  assert.equal(bmFails({}), "BM1,BM2,BM3");
+  assert.equal(bmFails(undefined), "BM1,BM2,BM3");
 });
 
 // ---- 17-09 튜토리얼 E2E 판정 (tutorialEntryChecks·sentFrameChecks, 사본 상수) ----

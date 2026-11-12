@@ -2767,6 +2767,16 @@ export function modeSheetChecks(s = {}) {
   return [result("MS1", L.MS1, bad1), result("MS1g", L.MS1g, bad2)];
 }
 
+// ---- 19페이즈 기본 마피아 판 basicModeChecks (19-07, 결정 D-08·D-09, UI-SPEC E-1·E-3·BM1~BM3) ----
+
+export const BASIC_ABSENT_SELECTORS = Object.freeze([]);
+export const BASIC_ABSENT_ATTR_PREFIX = "";
+export const BASIC_FORBIDDEN_LINES = Object.freeze([]);
+/** 자리 함수(19-07 RED) */
+export function basicModeChecks() {
+  return [];
+}
+
 // ---- 12페이즈 sound-script (12-08, 결정 D-21): 단계 구간마다 기대 소리 id 가 순서대로 ----
 
 /**

@@ -1147,3 +1147,38 @@ describe("19페이즈 방장 줄·판 종류 E2E 사본 계약 (19-06, T-19-18·
     for (const f of ["components/v2/HostRail.tsx", "components/v2/HostRailButton.tsx", "components/v2/ModeChip.tsx", "components/ModeSheet.tsx"]) expect(text(f), f).not.toMatch(/seat|nonce|mafia|police|doctor/i);
   });
 });
+
+describe("19페이즈 기본 마피아 판 E2E 사본 계약 (19-07, T-19-22)", () => {
+  const lib = e2eLib as unknown as {
+    BASIC_ABSENT_SELECTORS: readonly string[];
+    BASIC_ABSENT_ATTR_PREFIX: string;
+    BASIC_FORBIDDEN_LINES: readonly string[];
+  };
+  const root = new URL("../../", import.meta.url);
+  const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter((f) => f.endsWith(".tsx"));
+  const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
+  /** 기본 마피아에서 닿지 않는 사회자 줄의 키(UI-SPEC E-3) */
+  const OFF_KEYS: readonly HostKey[] = ["errand.act", "errand.done", "errand.ghost", "witness", "discussion.evidence"];
+
+  it("BASIC_FORBIDDEN_LINES 는 HOST_LINES 의 심부름·목격 기록·증거 줄 값이다 — 기본 마피아에서도 쓰는 다른 키와 글이 같은 줄(errand.ghost)만 빠진다", () => {
+    const others = (Object.keys(HOST_LINES) as HostKey[]).filter((k) => !OFF_KEYS.includes(k)).map((k) => HOST_LINES[k]);
+    const want = OFF_KEYS.map((k) => HOST_LINES[k]).filter((v) => v !== "" && !others.includes(v));
+    expect(lib.BASIC_FORBIDDEN_LINES.join("|")).toBe(want.join("|"));
+    // 글이 겹쳐 금지 문구로 쓸 수 없는 키는 errand.ghost 하나다(dayAnnounce.ghost 등과 같은 문장) — 늘거나 줄면 사본과 이 설명을 같이 고친다
+    expect(OFF_KEYS.filter((k) => others.includes(HOST_LINES[k])).join(",")).toBe("errand.ghost");
+    expect(lib.BASIC_FORBIDDEN_LINES.length).toBe(4);
+  });
+
+  it("BASIC_ABSENT_SELECTORS 의 속성과 BASIC_ABSENT_ATTR_PREFIX 로 시작하는 속성이 git 이 추적하는 src 의 .tsx 에 있다(빈 선택자 금지)", () => {
+    expect(lib.BASIC_ABSENT_SELECTORS.length).toBe(5);
+    const attrs = lib.BASIC_ABSENT_SELECTORS.map((sel) => /^\[(data-[a-z-]+)\]$/.exec(sel)?.[1] ?? `모양이 다름:${sel}`);
+    expect(attrs.filter((a) => !sources.some((s) => s.text.includes(`${a}=`))).join(",")).toBe("");
+    expect(lib.BASIC_ABSENT_ATTR_PREFIX).toBe("data-errand-");
+    const named = new Set(sources.flatMap((s) => [...s.text.matchAll(/data-errand-[a-z-]+/g)].map((m) => m[0])));
+    expect(named.size).toBeGreaterThan(0);
+    // 앞머리가 다른 표식(예: data-errand 단독)을 삼키지 않도록 끝이 "-" 다
+    expect(lib.BASIC_ABSENT_ATTR_PREFIX.endsWith("-")).toBe(true);
+  });
+});
