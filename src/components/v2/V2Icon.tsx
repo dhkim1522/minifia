@@ -8,7 +8,7 @@ import "../../styles/v2.css";
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
 // 18페이즈: eyeOff(목격자 없음, eye 에 사선)·lock(옷장 잠금).
 // arrow(위쪽을 가리킴, 회전해 쓴다)·thread(끝이 풀린 사각 천)는 15페이즈가 더한 선 그림이다. 장소·조각 그림은 컬러 에셋 파일이 맡는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "arrow" | "thread" | "bot" | "hand" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff" | "lock";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "arrow" | "thread" | "bot" | "hand" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff" | "lock" | "deck" | "book" | "modeBasic" | "modeExtended";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -94,6 +94,11 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
     ["c", 12, 12, 3],
   ],
   heal: [["p", "M9.5 4h5v5.5H20v5h-5.5V20h-5v-5.5H4v-5h5.5z"]],
+  // 19페이즈 자리(경로는 다음 커밋이 채운다)
+  deck: [],
+  book: [],
+  modeBasic: [],
+  modeExtended: [],
   // 18페이즈: lock(옷장 잠금) — 몸 + 고리
   lock: [
     ["p", "M6 11h12v9H6z"],
