@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { RULESET } from "../../shared/game/ruleset";
-import type { ClientMessage, PhaseId, PublicPlayer, RoleRecord, RoomView } from "../../shared/protocol";
+import type { ClientMessage, EvidenceView, GameMode, MorningView, PhaseId, PublicPlayer, RecordLine, RoleRecord, RoomView } from "../../shared/protocol";
+import { LineSheet } from "../../src/components/v2/LineSheet";
+import { floatVisible } from "../../src/game/badgeView";
+import { RESULT_PANEL_TEXT } from "../../src/game/resultText";
+import { whisperVisible } from "../../src/game/whisperView";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { LOG_H } from "../../src/game/chatUi";
 
@@ -1185,5 +1189,116 @@ describe("GameMap — 기본판 투표 (결정 0072)", () => {
     mount({ ...seq, day: { ...seq.day!, turn: { order: [0, 1, 2, 3], i: 0, endsAt: NOW + 8000 } } });
     expect(stage.props?.pick?.group).toBe("지목");
     expect(document.querySelector("[data-turn-block]")).not.toBeNull();
+  });
+});
+
+// 19-02(D-03·D-09, UI-SPEC E-1): 기본 마피아 판 화면. 서버가 기록·흔적 키를 싣지 않고 화면은 키가 없으면 그리지 않는다 — 숨김이 아니라 DOM 에 없다.
+// 화면의 규칙 판정은 view.mode 에서 얻은 판 규칙이다(전역 값이 아니다).
+describe("GameMap — 기본 마피아 판 화면 (19-02, D-09)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const REC: RecordLine[] = [
+    { seat: 1, place: "glass" },
+    { seat: 2, place: "piano" },
+  ];
+  const EVIDENCE: EvidenceView = { trace: "pin", seen: { seat: 3, place: "glass" } };
+  /** 서버가 싣는 모양 그대로: basic 판에는 me.record·day.evidence·morning.trace·seen 키가 없다 */
+  const modeView = (mode: GameMode, o: ViewOpts = {}, extra: { record?: RecordLine[]; morning?: MorningView; evidence?: EvidenceView; endsInMs?: number } = {}): RoomView => {
+    const v = makeView(o);
+    return {
+      ...v,
+      mode,
+      ...(extra.endsInMs !== undefined ? { phaseEndsAt: NOW + extra.endsInMs } : {}),
+      me: { ...v.me, ...(extra.record !== undefined ? { record: extra.record } : {}) },
+      day: { ...v.day!, ...(extra.morning !== undefined ? { morning: extra.morning } : {}), ...(extra.evidence !== undefined ? { evidence: extra.evidence } : {}) },
+    };
+  };
+  /** 기록·흔적·증거 요소의 DOM 수와 이름표 표시 수 */
+  const census = (c: ParentNode): string => {
+    const n = (sel: string): number => c.querySelectorAll(sel).length;
+    const tags = [0, 1, 2, 3].map((seat) => (stage.props?.tagProps?.(seat) ?? {}) as { traceMark?: unknown; seenMark?: unknown });
+    const marks = tags.filter((t) => t.traceMark !== undefined || t.seenMark !== undefined).length;
+    return `기록 단추 ${n("button[aria-label='기록']")}·칸 ${n("[data-record-button]")}·카드 ${n("[data-record-card]")}·증거 카드 ${n("[data-trace-card]")}·목격 줄 ${n("[data-lastseen-row]")}·이름표 표시 ${marks}`;
+  };
+  const NONE = "기록 단추 0·칸 0·카드 0·증거 카드 0·목격 줄 0·이름표 표시 0";
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+
+  it("basic 토론: [기록] 머리 단추·목격 기록 카드·증거 카드·이름표 표시가 DOM 에 없고 [내 역할] 과 사회자 줄(토론 문구)은 그대로다", () => {
+    const { container } = mount(modeView("basic", { phase: "discussion" }));
+    expect(census(container)).toBe(NONE);
+    expect(container.querySelector("[data-host-line]")?.textContent).toBe("의심 가는 사람을 이야기해 주세요");
+    expect(container.querySelectorAll("[data-end-discussion]").length).toBe(1);
+  });
+
+  it("같은 토론 view 가 extended + me.record + day.evidence 면 [기록] 이 하나이고 이름표 표시가 붙는다 (지금 그대로)", () => {
+    const { container } = mount(modeView("extended", { phase: "discussion" }, { record: REC, evidence: EVIDENCE }));
+    expect(container.querySelectorAll("button[aria-label='기록']").length).toBe(1);
+    expect(container.querySelectorAll("[data-record-button]").length).toBe(1);
+    expect(stage.props?.tagProps?.(3)).toMatchObject({ seenMark: true });
+  });
+
+  it("basic 아침(morning.eliminated 뿐): 흔적 구간이 지나도 증거 카드·이름표 표시가 없고 탈락 발표는 그대로 있다", () => {
+    const { container } = mount(modeView("basic", { phase: "morning", dead: [2] }, { morning: { eliminated: 2 }, endsInMs: 7000 }));
+    expect(census(container)).toBe(NONE);
+    advance(2500);
+    expect(census(container)).toBe(NONE);
+    expect(container.textContent).toContain("서준 님이 당했습니다");
+  });
+
+  it("같은 아침이 extended + 흔적이면 구간 뒤 증거 카드가 하나다 (지금 그대로)", () => {
+    const morning: MorningView = { eliminated: 2, trace: "pin", seen: { seat: 3, place: "glass" } };
+    const { container } = mount(modeView("extended", { phase: "morning", dead: [2] }, { morning, evidence: EVIDENCE, endsInMs: 7000 }));
+    advance(2500);
+    expect(container.querySelectorAll("[data-trace-card]").length).toBe(1);
+  });
+
+  it("basic 의 낮 단계(투표·변론·찬반·처형) 어디에도 기록·흔적·증거 요소가 없다", () => {
+    const phases: PhaseId[] = ["nomination", "defense", "verdict", "execution"];
+    const seen = phases.map((phase) => {
+      const { container, unmount } = mount(modeView("basic", { phase, candidate: 1, verdict: { yes: 2, no: 1, passed: true } }));
+      const row = `${phase}:${census(container) === NONE}`;
+      unmount();
+      return row;
+    });
+    expect(seen.join(" ")).toBe("nomination:true defense:true verdict:true execution:true");
+  });
+
+  it("귓속말·배지 진입점은 두 판 모두 없다 (정치 장치는 두 판의 규칙에서 꺼짐)", () => {
+    const seen = (["basic", "extended"] as const).map((mode) => {
+      const v = modeView(mode, { phase: "discussion" });
+      const { container, unmount } = mount(v);
+      const row = `${mode}:${whisperVisible(v)}/${floatVisible(v)}/${container.querySelectorAll("[data-badge-live]").length}`;
+      unmount();
+      return row;
+    });
+    expect(seen.join(" ")).toBe("basic:false/false/0 extended:false/false/0");
+  });
+});
+
+// 19-02(D-03): 귓속말 시트의 공개 예고 문구는 전역 값이 아니라 받은 규칙 값으로 정한다 — LineSheet 는 whisper 속성을, 문구 표는 인자를 받는다.
+describe("공개 예고 문구 — 규칙은 인자다 (19-02, D-03)", () => {
+  const noticeOf = (whisper?: boolean): string => {
+    const { container, unmount } = render(
+      <LineSheet peer={{ seat: 1, name: "영희" }} value="" onChange={() => {}} onSend={() => {}} onClose={() => {}} {...(whisper === undefined ? {} : { whisper })} />,
+    );
+    const text = container.querySelector("[data-pre-notice]")?.textContent ?? "";
+    unmount();
+    return text;
+  };
+
+  it("문구 표: 귓속말이 꺼진 판은 '끝나면 밤 대화가 공개돼요', 켜진 규칙은 귓속말을 함께 말한다", () => {
+    expect(RESULT_PANEL_TEXT.preNotice(false)).toBe("끝나면 밤 대화가 공개돼요");
+    expect(RESULT_PANEL_TEXT.preNotice(true)).toBe("끝나면 밤 대화와 귓속말이 공개돼요");
+  });
+
+  it("LineSheet: whisper 속성이 없거나 false 면 밤 대화만, true 면 귓속말을 함께 말한다", () => {
+    expect([noticeOf(), noticeOf(false), noticeOf(true)].join(" | ")).toBe("끝나면 밤 대화가 공개돼요 | 끝나면 밤 대화가 공개돼요 | 끝나면 밤 대화와 귓속말이 공개돼요");
   });
 });

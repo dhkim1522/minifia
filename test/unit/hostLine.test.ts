@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
-import type { EvidenceView, MorningView, PhaseId, PlaceId, RecordLine, RoomView } from "../../shared/protocol";
+import type { EvidenceView, GameMode, MorningView, PhaseId, PlaceId, RecordLine, RoomView } from "../../shared/protocol";
 import { HOST_FALLBACK, HOST_HIDDEN_PHASES, HOST_LINES, callTargetsOf, hostBandModeOf, hostChimeOf, hostKeyOf, hostLineOf, hostTimeOf, type HostKey, type HostLocal } from "../../src/game/hostLine";
 
 // 14-01: 사회자 문구 표(UI-SPEC "사회자 문구 표")와 파생 판정. 표가 단일 출처다 — 시험과 표가 어긋나면 표를 따른다.
@@ -37,6 +39,8 @@ interface Spec {
   record?: RecordLine[];
   /** 16-09: 낮의 증거(day.evidence). 없으면 키 자체가 없다 */
   evidence?: EvidenceView;
+  /** 19페이즈: 판 종류(view.mode). 없으면 키 자체가 없다 */
+  mode?: GameMode;
 }
 
 function makeView(o: Spec): RoomView {
@@ -83,6 +87,7 @@ function makeView(o: Spec): RoomView {
     day,
   };
   if (o.map !== undefined) view.map = o.map;
+  if (o.mode !== undefined) view.mode = o.mode;
   if (o.noise) view.spectate = { seats: [{ seat: 1, job: "mafia" }], picks: { mafia: [1], police: [], doctor: [] } };
   return view as unknown as RoomView;
 }
@@ -783,5 +788,63 @@ describe("16-09 discussion.evidence (D-11, EVID-03, T-16-21)", () => {
 
   it("문구에 '범인'·'증거'·'확정'·색 이름이 없다", () => {
     for (const k of ["trace", "discussion.evidence"] as const) for (const w of ["범인", "증거", "확정", "빨간", "붉은", "검은"]) expect(HOST_LINES[k] as string).not.toContain(w);
+  });
+});
+
+// 19-02(UI-SPEC E-3·P19-17, T-19-09): 기본 마피아 판의 사회자 줄. 서버가 basic 판에 me.errand·me.record·day.evidence 를 싣지 않고 errand 단계에 들어가지 않으므로
+// 심부름·목격 기록·증거 문구에 닿는 길이 없다. hostKeyOf 는 판 종류를 읽지 않는다 — 키가 없어서 닿지 않는 것이다(새 분기 없음).
+describe("기본 마피아 판의 사회자 줄 (19-02, E-3)", () => {
+  const OFF_KEYS: readonly HostKey[] = ["errand.act", "errand.done", "errand.ghost", "witness", "discussion.evidence"];
+  const BASIC_PHASES: readonly PhaseId[] = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"];
+  const ROLES: readonly RoleId[] = ["citizen", "mafia", "police", "doctor"];
+  /** basic 판의 단계 view — 서버가 싣는 모양 그대로 me.errand·me.record·day.evidence 가 없고 아침은 eliminated 뿐이다 */
+  const basicView = (phase: PhaseId, o: Partial<Spec> = {}): RoomView =>
+    makeView({ phase, mode: "basic", candidate: 1, ...(phase === "execution" ? { passed: true } : {}), ...(phase === "morning" ? { morning: { eliminated: 2 } } : {}), ...o });
+  const LOCALS: readonly HostLocal[] = [{}, { recordOpened: true }, { traceOn: true }, { cardSeen: true }];
+
+  it("단계 여덟 × 역할 넷 × 산 사람·유령 × 화면 상태 어디서도 키가 심부름·목격 기록·증거 키가 아니다", () => {
+    const hits: string[] = [];
+    let seen = 0;
+    for (const phase of BASIC_PHASES) {
+      for (const role of ROLES) {
+        for (const ghost of [false, true]) {
+          for (const local of LOCALS) {
+            const key = hostKeyOf(basicView(phase, { role, ghost }), local);
+            seen += 1;
+            if (OFF_KEYS.includes(key)) hits.push(`${phase}/${role}/${ghost}:${key}`);
+          }
+        }
+      }
+    }
+    expect(hits.join(" ")).toBe("");
+    expect(seen).toBe(8 * 4 * 2 * 4);
+  });
+
+  it("낮 시작 발표는 dayAnnounce.wait, 토론은 discussion.act 다 (문구 그대로)", () => {
+    expect(`${hostKeyOf(basicView("dayAnnounce"))}/${hostKeyOf(basicView("discussion"))}`).toBe("dayAnnounce.wait/discussion.act");
+    expect(`${hostLineOf(basicView("dayAnnounce"))}/${hostLineOf(basicView("discussion"))}`).toBe("모두 모여 주세요/의심 가는 사람을 이야기해 주세요");
+  });
+
+  it("문장으로 봐도 같다 — 어느 단계의 사회자 줄도 심부름·기록·증거 문구가 아니다", () => {
+    // errand.ghost 의 문장("지켜봐 주세요")은 다른 단계의 유령 줄과 같은 문장이라 문장으로는 가를 수 없다 — 그 키는 위의 키 단언이 본다. 여기서는 꺼진 키에만 있는 문장 넷을 본다.
+    const shared = new Set((Object.keys(HOST_LINES) as HostKey[]).filter((k) => !OFF_KEYS.includes(k)).map((k) => HOST_LINES[k] as string));
+    const offLines = OFF_KEYS.map((k) => HOST_LINES[k] as string).filter((line) => !shared.has(line));
+    const hits = BASIC_PHASES.flatMap((phase) => [false, true].map((ghost) => hostLineOf(basicView(phase, { ghost })))).filter((line) => offLines.includes(line));
+    expect(offLines.join(" | ")).toBe("빛나는 곳을 찾아 처리해 주세요 | 곧 토론이 시작됩니다 | 기록 단추로 본 것을 확인해 주세요 | 같은 옷과 엇갈린 목격을 살펴보세요");
+    expect(hits.join(" | ")).toBe("");
+  });
+
+  it("아침의 흔적 구간 키(trace)도 basic 의 view 로는 화면이 켜지 않는다 — 흔적 조각이 없으면 morning 이다", () => {
+    expect(hostKeyOf(basicView("morning"))).toBe("morning");
+  });
+
+  it("대조: 같은 토론이 extended 이고 me.record·day.evidence 가 있으면 witness → discussion.evidence 다 (판이 아니라 키가 정한다)", () => {
+    const ext = makeView({ phase: "discussion", mode: "extended", record: REC_SOME, evidence: { trace: "pin" } });
+    expect(`${hostKeyOf(ext)}/${hostKeyOf(ext, { recordOpened: true })}`).toBe("witness/discussion.evidence");
+  });
+
+  it("hostLine.ts 는 판 종류를 읽지 않는다 — 새 분기를 만들지 않았다 (P19-17)", () => {
+    const src = readFileSync(fileURLToPath(new URL("../../src/game/hostLine.ts", import.meta.url)), "utf8");
+    expect(/\bview\.mode\b|\bmodeOf\b|\brulesetOf\b/.test(src)).toBe(false);
   });
 });

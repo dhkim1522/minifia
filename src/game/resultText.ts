@@ -20,7 +20,7 @@ export const RESULT_PANEL_TEXT = {
   tabName: { all: "전체 대화", mafia: "마피아 밤 대화", ghost: "유령 대화", whisper: "귓속말 기록", log: "판 기록" },
   /** 공개 예고(귓속말 보내기 시트 위쪽 항상). 모두에게 같은 문구라 역할 정보를 나르지 않는다 */
   // 기본판(결정 0072)에서는 귓속말이 꺼져 있어 문구에서도 뺀다(U-8: 꺼진 장치의 글이 없다). RULESET.whisper 를 켜면 원래 문구다.
-  preNotice: RULESET.whisper ? "끝나면 밤 대화와 귓속말이 공개돼요" : "끝나면 밤 대화가 공개돼요",
+  preNotice: (_whisper: boolean): string => (RULESET.whisper ? "끝나면 밤 대화와 귓속말이 공개돼요" : "끝나면 밤 대화가 공개돼요"), // 자리 함수(19-02 RED) — 아직 인자를 읽지 않는다
 } as const;
 
 /** 마피아 탭의 구분선: 줄의 n 이 바뀔 때마다 앞에 한 번 */

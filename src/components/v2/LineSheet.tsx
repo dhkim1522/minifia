@@ -24,6 +24,8 @@ export interface LineSheetPeer {
 }
 
 export interface LineSheetProps {
+  /** 자리 속성(19-02 RED) — 아직 읽지 않는다 */
+  whisper?: boolean;
   /** 상대 칩(얼굴 + 이름 + whisper 아이콘). 없으면 title 을 쓴다 */
   peer?: LineSheetPeer;
   /** peer 대신 윗줄에 보이는 제목(마지막 한마디 직접 쓰기는 "한마디") */
@@ -90,7 +92,7 @@ export function LineSheet(props: LineSheetProps) {
       {/* 공개 예고(11-07, A-4): 귓속말 시트가 열려 있는 동안 항상 위쪽에 있다. 모두에게 같은 문구 */}
       {peer ? (
         <p className="mv-line__notice" data-pre-notice="">
-          {RESULT_PANEL_TEXT.preNotice}
+          {RESULT_PANEL_TEXT.preNotice(false)}
         </p>
       ) : null}
       <div className="mv-line__head">
