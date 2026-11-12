@@ -188,11 +188,11 @@ describe("마을 그리기 예산 (D-21, P20-17, T-20-15)", () => {
     t.dispose();
   });
 
-  it("재질을 방·집마다 새로 만들지 않는다: 고유 재질 24 이하(광장 14 + 컷 4 + 간판 4 + 발광·빛 무리·아틀라스)", () => {
+  it("재질을 방·집마다 새로 만들지 않는다: 고유 재질 26 이하(광장 13 + 컷 4 + 간판 4 + 방 발광·집 창·빛 무리·아틀라스 4)", () => {
     const t = buildTownScene(LADDER[0]!);
     const set = new Set<Material>();
     for (const m of allMeshes(t.root)) for (const x of mats(m)) set.add(x);
-    expect(set.size).toBeLessThanOrEqual(24);
+    expect(set.size).toBeLessThanOrEqual(26);
     t.dispose();
   });
 });
@@ -246,7 +246,7 @@ describe("마을 예산 사다리 (P20-17, 강등 4단계)", () => {
     t.applyBudget(LADDER[4]!);
     expect(LADDER[4]!.props).toBe("reduced");
     for (const n of DECOR) expect(t.meshes[n]!.visible, n).toBe(false);
-    for (const n of ["roomStatic", "houseBody", "housePlate", "houseWinLit", "houseWinDark", ...ROOM_IDS.map((id) => `cut-${id}`)]) expect(t.meshes[n]!.visible, n).toBe(true);
+    for (const n of ["roomStatic", "houseBody", "housePlate", "houseWinDark", ...ROOM_IDS.map((id) => `cut-${id}`)]) expect(t.meshes[n]!.visible, n).toBe(true);
     expect(visibleMeshes(t.root).length).toBeLessThan(n0);
     t.applyBudget(LADDER[0]!);
     for (const n of DECOR) expect(t.meshes[n]!.visible, n).toBe(true);

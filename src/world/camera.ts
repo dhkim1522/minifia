@@ -67,12 +67,18 @@ export const PAN_BOX: Readonly<{ minX: number; maxX: number; minZ: number; maxZ:
  */
 export const PLATE_FAR = 17.5;
 
-/** 자리(20-04 RED): 맵별 값은 GREEN 에서 채운다 */
-export function panBoxOf(_mapId: MapId): typeof PAN_BOX {
-  return PAN_BOX;
+/**
+ * 맵별 카메라 목표 이동 한계. 재즈 바·광장은 PAN_BOX 그대로다. 마을은 걷기 한계 ±10 에서 광장과 같은 여유 0.4 를 뺀 ±9.6 이 시작값이다(UI-SPEC P20-15).
+ * 마을 값은 20-05 가 기존 가시성 검사(6종 폰 × 0.25 간격 격자점)를 마을 격자로 다시 돌려 통과하는 가장 작은 값으로 확정한다.
+ */
+const TOWN_PAN_BOX: typeof PAN_BOX = { minX: -9.6, maxX: 9.6, minZ: -9.6, maxZ: 9.6 };
+export function panBoxOf(mapId: MapId): typeof PAN_BOX {
+  return mapId === "town" ? TOWN_PAN_BOX : PAN_BOX;
 }
-export function plateFarOf(_mapId: MapId): number {
-  return PLATE_FAR;
+/** 맵별 연장 바닥 판 반폭. 재즈 바·광장은 PLATE_FAR 그대로, 마을은 22 가 시작값이다(P20-15 — 한계가 넓어지면 위쪽 광선이 더 먼 바닥에 닿는다. 확정은 20-05 의 빈 배경 검사) */
+const TOWN_PLATE_FAR = 22;
+export function plateFarOf(mapId: MapId): number {
+  return mapId === "town" ? TOWN_PLATE_FAR : PLATE_FAR;
 }
 
 /** 모이는 자리 가운데(월드 단위) = 무대 자리. 지목·변론·찬반·처형 단계의 카메라 고정 목표다(08-08, UI-SPEC 카메라 표) */

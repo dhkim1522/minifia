@@ -7,6 +7,7 @@
 //   2b furnitureFar(벤치 다리·나무 가지)  3 brass(서는 자리 표시 8)  4 emissiveRoom(가로등 구)  4b emissiveRoomFar(건물 불 켜진 창)
 //   5 emissiveTower(시계판 두 면·시계탑 조명 구, PhaseTune.emissive.vote 칸을 쓴다)  6 glowRoom(가로등 빛 무리)·glowTower(시계탑 조명 빛 무리, glow.vote 칸)
 //   7 plate(연장 판)  8 hands(시계 바늘 4, 시침·분침 × 두 면).  강등 사다리 4단계(props reduced)는 2b·4b 를 끈다.
+// 마을(maps/town.ts, 20-04)은 이 본문을 buildPlaza 의 선택 인자(건물 앞면 없음·바닥 판 24×24·덧붙일 조각)로 다시 부른다. buildPlazaScene 의 결과는 그대로다.
 // 칸 이름 대응(PhaseTune 구조를 그대로 쓰기 위해): emissive.room/glow.room = 가로등, emissive.vote/glow.vote = 시계탑 조명(blockout 의 trial 그룹), stage = 무대 점광원, pendant = 가로등 점광원.
 import {
   AdditiveBlending,
@@ -188,7 +189,57 @@ const LAMPS: readonly (readonly [number, number])[] = [
 ];
 const SEAT_RADIUS = 2.6;
 
+/** 덧붙일 장면 조각이 광장 빌더에게서 받는 것: 같은 root·공유 소품 재질·빛 무리 재질 공장·정지 카메라를 보는 기저 */
+export interface PlazaPieceCtx {
+  root: Scene;
+  /** 정점 색 소품 재질(roughness 0.85). 조각의 벽·바닥·몸통이 같이 쓴다 */
+  matProp: MeshStandardMaterial;
+  /** 빛 무리 재질 하나(가산 합성·깊이 쓰기 끔). 조각마다 불투명도를 따로 조절할 때 새로 만든다 */
+  glowMat: () => MeshBasicMaterial;
+  /** 정지 카메라(고정 방위)를 보는 회전. 판을 한 번 놓고 매 프레임 계산하지 않는다 */
+  facing: Matrix4;
+  /** 화면 위쪽 단위벡터(월드) — 카메라를 보는 판의 아랫변을 기둥 위에 맞출 때 쓴다 */
+  up: Vector3;
+  /** 빛 무리 쿼드 한 장을 묶음에 더한다(크기·자리·알파) */
+  glow: (b: Bundle, hex: string, size: number, x: number, y: number, z: number, k: number) => void;
+}
+
+/** 덧붙인 장면 조각이 돌려주는 것. 메시는 빌더가 root 에 붙이고 dispose 때 지오메트리·재질을 같이 푼다 */
+export interface PlazaPiece {
+  meshes: Record<string, Mesh>;
+  /** 재질 보정(albedoGrader) 대상: 조명을 받는 정점 색 묶음 */
+  graded: readonly Mesh[];
+  /** 단계·예산·어둡게 하기(핀 조명·긴장 2단계가 가로등에 곱하는 비율)가 바뀔 때마다 */
+  setLook?(phase: LightingPhase, budget: Budget, dim: number): void;
+  applyBudget?(b: Budget): void;
+  update?(dt: number, t: number): void;
+  /** 메시 밖의 자원(텍스처 등)을 푼다 */
+  dispose?(): void;
+  /** 장면에 그대로 얹는 선택 훅(MapScene 의 마을 훅) */
+  hooks?: Pick<MapScene, "setCutaway" | "setOwners" | "roofs">;
+}
+
+/**
+ * 광장 빌더의 선택 인자(20-04). 기본값이 곧 광장 장면이고, 마을(maps/town.ts)이 같은 본문을 다른 값으로 부른다 — 가운데 광장을 복사하지 않는다(D-05).
+ */
+export interface PlazaOpts {
+  /** 뒤 두 가장자리의 건물 앞면 넷을 만들지. 마을에서는 그 자리가 방·집이다 */
+  facades: boolean;
+  /** 바닥 판 반폭(광장 20 → 40×40, 마을 12 → 24×24) */
+  floorHalf: number;
+  /** 연장 판 반폭 */
+  plateFar: number;
+  /** 덧붙일 장면 조각(방·집 등) */
+  piece?: (ctx: PlazaPieceCtx) => PlazaPiece;
+}
+const PLAZA_OPTS: PlazaOpts = { facades: true, floorHalf: 20, plateFar: PLATE_FAR };
+
 export function buildPlazaScene(budget: Budget): MapScene {
+  return buildPlaza(budget, PLAZA_OPTS);
+}
+
+/** 광장 장면의 본문. buildPlazaScene 은 기본 인자로 부른 결과와 같다 */
+export function buildPlaza(budget: Budget, opts: PlazaOpts): MapScene {
   const root = new Scene();
 
   // ----- 재질 -----
@@ -222,8 +273,8 @@ export function buildPlazaScene(budget: Budget): MapScene {
     b.add(new PlaneGeometry(size, size), hex, m, 1, k);
   };
 
-  // 바닥 판 40 × 40(y −0.06, 높이 0.1)과 자갈 14 × 14 칸(칸 0.96, 높이 0.08, 색 3가지 순환)
-  shell.box(40, 0.1, 40, P.floor, tf(0, -0.06, 0));
+  // 바닥 판 40 × 40(y −0.06, 높이 0.1 — 마을은 24 × 24)과 자갈 14 × 14 칸(칸 0.96, 높이 0.08, 색 3가지 순환)
+  shell.box(opts.floorHalf * 2, 0.1, opts.floorHalf * 2, P.floor, tf(0, -0.06, 0));
   for (let ix = 0; ix < 14; ix++) for (let iz = 0; iz < 14; iz++) shell.box(0.96, 0.08, 0.96, P.cobbles[(ix * 3 + iz * 5) % 3]!, tf(-6.5 + ix, 0.04, -6.5 + iz));
 
   // 연단: 아래 단 반지름 1.4/1.45 높이 0.18, 위 단 1.05/1.08 높이 0.2(윗면 0.46)
@@ -298,10 +349,12 @@ export function buildPlazaScene(budget: Budget): MapScene {
       }
     }
   };
-  facade(-1.0, -7.4, 4.2, 4.6, 0, P.facades[0]!);
-  facade(3.4, -7.4, 3.6, 3.8, 0, P.facades[1]!);
-  facade(-7.4, -0.6, 4.2, 4.2, Math.PI / 2, P.facades[2]!);
-  facade(-7.4, 3.6, 3.6, 5.0, Math.PI / 2, P.facades[3]!);
+  if (opts.facades) {
+    facade(-1.0, -7.4, 4.2, 4.6, 0, P.facades[0]!);
+    facade(3.4, -7.4, 3.6, 3.8, 0, P.facades[1]!);
+    facade(-7.4, -0.6, 4.2, 4.2, Math.PI / 2, P.facades[2]!);
+    facade(-7.4, 3.6, 3.6, 5.0, Math.PI / 2, P.facades[3]!);
+  }
 
   // 벤치 2: 앉는 널·등널은 몸, 다리는 먼 소품
   for (const [bx, bz, bry] of [
@@ -335,7 +388,8 @@ export function buildPlazaScene(budget: Budget): MapScene {
     furnitureFar: furnitureFar.build(matProp, "furnitureFar"),
     brass: brass.build(matBrass, "brass"),
     emissiveRoom: emRoom.build(matEmRoom, "emissiveRoom"),
-    emissiveRoomFar: emRoomFar.build(matEmRoom, "emissiveRoomFar"),
+    // 불 켜진 건물 창은 건물 앞면이 있을 때만 있다(빈 묶음은 병합할 수 없다)
+    ...(emRoomFar.size > 0 ? { emissiveRoomFar: emRoomFar.build(matEmRoom, "emissiveRoomFar") } : {}),
     emissiveTower: emTower.build(matEmTower, "emissiveTower"),
     glowRoom: glowRoom.build(matGlowRoom, "glowRoom"),
     glowTower: glowTower.build(matGlowTower, "glowTower"),
@@ -350,9 +404,12 @@ export function buildPlazaScene(budget: Budget): MapScene {
   // 빛 무리는 투명 합성이라 불투명 메시 뒤에 그린다
   meshes.glowRoom!.renderOrder = 2;
   meshes.glowTower!.renderOrder = 2;
+  // 덧붙일 장면 조각(마을의 방·집): 같은 재질·기저로 자기 메시를 만들어 돌려준다. 그림자·보이기는 조각이 정한다
+  const piece = opts.piece?.({ root, matProp, glowMat, facing, up: new Vector3(basis.up.x, basis.up.y, basis.up.z), glow }) ?? null;
+  if (piece) Object.assign(meshes, piece.meshes);
   for (const m of Object.values(meshes)) root.add(m);
   // 재질 보정(18-12): 조명을 받는 정점 색 묶음과 연장 판 재질 color 를 단계가 바뀔 때만 다시 쓴다
-  const grade = albedoGrader([meshes.shell!, meshes.furniture!, meshes.furnitureFar!], [matPlate]);
+  const grade = albedoGrader([meshes.shell!, meshes.furniture!, meshes.furnitureFar!, ...(piece?.graded ?? [])], [matPlate]);
   let gradedFor: LightingPhase | null = null;
   root.add(handsGroup);
   for (const h of [...hourHands, ...minuteHands]) meshes[h.name] = h;
@@ -382,7 +439,7 @@ export function buildPlazaScene(budget: Budget): MapScene {
   root.add(chalk);
 
   // 연장 판: 바닥 판(윗면 −0.01, 아랫면 −0.11) 바로 아래의 정사각형 한 장 — 바닥 판 밖(걸을 수 없는 영역)을 어둠으로 채운다
-  const plate = new Mesh(new PlaneGeometry(PLATE_FAR * 2, PLATE_FAR * 2), matPlate);
+  const plate = new Mesh(new PlaneGeometry(opts.plateFar * 2, opts.plateFar * 2), matPlate);
   plate.name = "plate";
   plate.rotation.x = -Math.PI / 2;
   plate.position.y = -0.115;
@@ -456,6 +513,8 @@ export function buildPlazaScene(budget: Budget): MapScene {
   const TOWER_FLOOR = 0.25;
 
   const applyPin = (): void => {
+    // 조각의 발광(방 등·집 창)은 가로등과 같은 비율로 어두워진다: 긴장 2단계의 절반 × 핀 조명의 어둡게 하기
+    piece?.setLook?.(phase, current, (tensionLevel === 2 ? T.tension.halfRoom : 1) * (pinState === null ? 1 : pinDim));
     if (pinState === null) {
       stage.intensity = base.stage;
       stage.position.set(base.x, T.point.stage.y, base.z);
@@ -527,6 +586,7 @@ export function buildPlazaScene(budget: Budget): MapScene {
     const goal = phase === "trial" ? 18.5 + ((((t % 30) + 30) % 30) / 30) * 0.5 : clockWant;
     clockShown += (goal - clockShown) * Math.min(1, Math.max(0, dt) * CLOCK_FOLLOW);
     setHands();
+    piece?.update?.(dt, t);
   };
 
   const setLighting = (next: LightingPhase): void => {
@@ -575,7 +635,8 @@ export function buildPlazaScene(budget: Budget): MapScene {
     // 소품 reduced: 먼 소품(벤치 다리·나무 가지·불 켜진 창)을 뺀다
     const far = b.props === "full";
     meshes.furnitureFar!.visible = far;
-    meshes.emissiveRoomFar!.visible = far;
+    if (meshes.emissiveRoomFar) meshes.emissiveRoomFar.visible = far;
+    piece?.applyBudget?.(b);
     setLighting(phase);
   };
   applyBudget(budget);
@@ -612,6 +673,8 @@ export function buildPlazaScene(budget: Budget): MapScene {
       for (const x of mats) x.dispose();
       glowMap.dispose();
       moon.shadow.map?.dispose();
+      piece?.dispose?.();
     },
+    ...piece?.hooks,
   };
 }
