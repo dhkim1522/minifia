@@ -505,7 +505,8 @@ describe("방장 줄·칩 CSS (19-03, UI-SPEC A-1·C-1·Color, T-19-12)", () => 
     expect(at).toBeGreaterThan(-1);
     // 그 규칙의 선택자 목록(앞 규칙의 닫는 중괄호 뒤부터 여는 중괄호까지)과 본문
     const start = V2.lastIndexOf("}", at) + 1;
-    const selectors = V2.slice(start, V2.indexOf("{", at));
+    // 실패 보고가 한 줄이 되도록 줄바꿈을 접는다
+    const selectors = V2.slice(start, V2.indexOf("{", at)).replace(/\s+/g, " ").trim();
     expect(selectors).toContain(".mf-room:has([data-sheet-layer]) .mf-hostrail");
     expect(selectors).toContain(".mf-room:has([data-sheet-layer]) .mf-modechip");
     expect(V2.slice(at, V2.indexOf("}", at))).toContain("visibility: hidden");
