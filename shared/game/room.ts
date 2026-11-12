@@ -19,7 +19,7 @@ import type {
 import type { BotPlan } from "./bots";
 import { hostSuccessor } from "./continuity";
 import { resolveLookConflicts } from "./look";
-import { decideMap } from "./maps";
+import { decideMap, startMapOf } from "./maps";
 import { enterNomination } from "./nomination";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS, TUTORIAL_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
@@ -439,7 +439,8 @@ export function beginGame(
       ? giveRoleTo(shuffled, orderedIds, state.hostId, state.testRole)
       : shuffled;
   // 맵은 역할 배정 난수를 모두 쓴 뒤에 정한다(결정 D-21) — 허용 맵이 하나면 난수를 부르지 않아 기존 시드 시험이 그대로다.
-  const map = decideMap(state.mapChoice ?? "random", randInt);
+  // 판 종류의 고정 맵(20페이즈 D-02: 확장판은 늘 마을)은 그 결과를 덮기만 한다 — decideMap 을 먼저 그대로 불러 난수 순서가 바뀌지 않는다.
+  const map = startMapOf(modeOf(state), decideMap(state.mapChoice ?? "random", randInt));
   // 17페이즈(결정 0080-1·2): 방장이 튜토리얼을 켰을 때만 tutorial 단계(150초)로 시작한다 — 역할은 위에서 이미 정했지만 tutorial 은 revealsOwnRole:false 라 view 에 실리지 않는다.
   // 19페이즈(D-10): 튜토리얼은 확장판(심부름·증거)을 가르친다(결정 0081-6) — basic 방은 tutorial: true 로 시작해도 튜토리얼 없이 assigning 으로 간다.
   const tutorial = opts?.tutorial === true && modeOf(state) === "extended";

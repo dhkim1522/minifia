@@ -463,10 +463,10 @@ describe("WorldStage: 탭 → move (MAP-02)", () => {
     expect(s.send).toHaveBeenCalledTimes(2);
   });
 
-  it("목적지가 방 밖이어도 보내는 정수는 방 한계 ±700 안이다", async () => {
+  it("목적지가 방 밖이어도 보내는 정수는 좌표 한계 ±1200 안이다 (MOVE_COORD_LIMIT, 20페이즈 P20-0)", async () => {
     const s = await open();
     tapAt(surface(s.utils), 5000, -5000);
-    expect(s.send).toHaveBeenCalledWith({ t: "move", x: 700, z: -700 });
+    expect(s.send).toHaveBeenCalledWith({ t: "move", x: 1200, z: -1200 });
   });
 });
 

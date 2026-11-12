@@ -49,15 +49,19 @@ export function pickMap(
   return { ok: true, state: { ...state, mapChoice: choice } };
 }
 
-/** 자리 값(RED): 구현 전이라 표가 비어 있다. */
-export const MODE_MAPS: Partial<Record<GameMode, MapId>> = {};
+/**
+ * 판 종류의 고정 맵(20페이즈 D-02): 확장판 판은 방장 선택과 상관없이 늘 마을에서 시작한다. 기본 마피아는 칸이 없어 방장 선택(decideMap)대로다.
+ * PLAYABLE_MAPS 처럼 한 곳에서 바꾸는 표다 — town 은 PLAYABLE_MAPS 에 넣지 않는다(맵 카드·칩에 나오지 않는다, UI-SPEC P20-16).
+ * 시험은 이 표의 extended 칸을 지워 잠그고(test/unit/setup.ts·test/worker/setup.ts), 마을이 필요한 시험만 test/helpers/playable.ts 의 openTown() 으로 켠다.
+ */
+export const MODE_MAPS: Partial<Record<GameMode, MapId>> = { extended: "town" };
 
-/** 자리 함수(RED): 구현 전. */
-export function startMapOf(_mode: GameMode, decided: MapId): MapId {
-  return decided;
+/** 시작하는 판의 맵: 판 종류의 고정 맵이 있으면 그 값, 없으면 decideMap 이 정한 값 그대로. 난수를 부르지 않는다 — decideMap 을 먼저 불러 난수 순서를 그대로 둔다(beginGame). */
+export function startMapOf(mode: GameMode, decided: MapId): MapId {
+  return (Object.hasOwn(MODE_MAPS, mode) ? MODE_MAPS[mode] : undefined) ?? decided;
 }
 
-/** 방의 지금 맵: 대기실은 늘 bar(D-22), 시작한 뒤에는 state.map(없으면 bar). */
+/** 방의 지금 맵: 대기실은 늘 bar(D-22, 20페이즈 D-03 — 확장판 방의 대기실도 재즈 바다), 시작한 뒤에는 state.map(없으면 bar). */
 export function roomMapId(state: Pick<RoomState, "phase" | "map">): MapId {
   return state.phase === "lobby" ? "bar" : (state.map ?? "bar");
 }
