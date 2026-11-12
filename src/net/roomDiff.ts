@@ -47,3 +47,8 @@ export function toastForDiff(diff: RoomDiff): LobbyToast | null {
   if (left) return { text: `${left.nickname} 님 퇴장` };
   return null;
 }
+
+/** 19페이즈 자리: 판 종류 바뀜 알림(다음 커밋이 채운다). */
+export function modeToastOf(_prev: RoomView | null, _next: RoomView): string | null {
+  return null;
+}

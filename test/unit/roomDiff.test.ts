@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { PublicPlayer, RoomView } from "../../shared/protocol";
-import { diffRoomViews, toastForDiff } from "../../src/net/roomDiff";
+import type { GameMode, PublicPlayer, RoomView } from "../../shared/protocol";
+import { diffRoomViews, modeToastOf, toastForDiff } from "../../src/net/roomDiff";
 
 const p = (seat: number, nickname: string, extra: Partial<PublicPlayer> = {}): PublicPlayer => ({
   seat,
@@ -131,5 +131,50 @@ describe("toastForDiff — 한 번에 하나, v2 말투 (결정 0051 · UI-SPEC 
     const leave = toastForDiff({ joined: [], left: [{ seat: 1, nickname: nick }], newHost: null });
     expect(join?.text.length).toBeLessThanOrEqual(13);
     expect(leave?.text.length).toBeLessThanOrEqual(13);
+  });
+});
+
+// 19-03 (P19-9): 판 종류가 바뀌었다는 한 줄은 서버 view 두 개의 차이로만 만든다. 방장 본인·처음 열 때·재연결 직후에는 만들지 않는다.
+describe("modeToastOf — 판 종류 바뀜 알림 (19-03, P19-9)", () => {
+  const players = [p(0, "민수", { isHost: true }), p(1, "서준")];
+  // mode 를 안 주면 키가 없는 view(옛 방·시험 리터럴) — 읽는 쪽 기본값은 확장판이다
+  const as = (mySeat: number, mode?: GameMode): RoomView => (mode === undefined ? view(players, mySeat) : { ...view(players, mySeat), mode });
+  const text = (prev: RoomView | null, next: RoomView) => String(modeToastOf(prev, next));
+
+  it("이전 스냅샷이 없으면(처음 열 때·재연결 직후) 알리지 않는다", () => {
+    expect(text(null, as(1, "basic"))).toBe("null");
+    expect(text(null, as(1, "extended"))).toBe("null");
+  });
+
+  it("참가자는 바뀐 판 이름 한 줄을 받는다: 확장판 → 기본 마피아", () => {
+    expect(text(as(1, "extended"), as(1, "basic"))).toBe("판 종류: 기본 마피아");
+  });
+
+  it("참가자는 바뀐 판 이름 한 줄을 받는다: 기본 마피아 → 확장판", () => {
+    expect(text(as(1, "basic"), as(1, "extended"))).toBe("판 종류: 확장판");
+  });
+
+  it("방장 본인에게는 띄우지 않는다(시트에서 봤다)", () => {
+    expect(as(0, "basic").me.isHost).toBe(true);
+    expect(text(as(0, "extended"), as(0, "basic"))).toBe("null");
+    expect(text(as(0, "basic"), as(0, "extended"))).toBe("null");
+  });
+
+  it("판 종류가 그대로면 알리지 않는다", () => {
+    expect(text(as(1, "basic"), as(1, "basic"))).toBe("null");
+    expect(text(as(1, "extended"), as(1, "extended"))).toBe("null");
+  });
+
+  it("mode 키가 없으면 확장판으로 읽는다: 둘 다 없으면 그대로, 한쪽만 basic 이면 바뀐 것이다", () => {
+    expect(text(as(1), as(1))).toBe("null");
+    expect(text(as(1), as(1, "extended"))).toBe("null");
+    expect(text(as(1), as(1, "basic"))).toBe("판 종류: 기본 마피아");
+    expect(text(as(1, "basic"), as(1))).toBe("판 종류: 확장판");
+  });
+
+  it("판 종류와 함께 사람이 드나들어도 판 종류 한 줄은 그대로 나온다(기존 차이 계산은 건드리지 않는다)", () => {
+    const next: RoomView = { ...view([...players, p(2, "하윤")], 1), mode: "basic" };
+    expect(text(as(1, "extended"), next)).toBe("판 종류: 기본 마피아");
+    same(diffRoomViews(as(1, "extended"), next).joined, [{ seat: 2, nickname: "하윤" }]);
   });
 });
