@@ -33,6 +33,10 @@ export interface MapDef {
   /** protocol.ts 의 MapId 와 같은 합집합이다 — 이 파일은 import 가 없는 순수 모듈이라(소스 규약 시험) 타입을 되풀이해 적는다. 어긋나면 maps.ts 의 MAPS(Record<MapId, MapDef>)가 컴파일에서 잡는다. */
   id: "bar" | "plaza";
   size: number;
+  /** 격자 원점(월드 단위, x·z 공통). 없으면 GRID_ORIGIN(재즈 바·광장). 격자는 맵마다 다를 수 있다(20페이즈 D-04). */
+  origin?: number;
+  /** 이동 한계 ±(월드 단위). 없으면 WALK_HALF. */
+  walkHalf?: number;
   mask: Uint8Array;
   spawns: readonly Spawn[];
   /**
@@ -42,6 +46,24 @@ export interface MapDef {
   stage?: { x: number; z: number };
   /** 심부름 장소 후보(결정 0074, 맵당 8곳). 없는 맵(시험용)은 심부름 목록이 빈 배열이다. */
   places?: readonly PlaceDef[];
+  /** 실내 방(20페이즈 D-06·D-13). 없는 맵(재즈 바·광장)은 구역이 광장 하나다. */
+  rooms?: readonly RoomDef[];
+}
+
+/**
+ * 실내 방 하나(고정소수점). id 는 protocol.ts 의 RoomId 와 같은 합집합이다 — 이 파일은 import 없는 순수 모듈이라 되풀이해 적고,
+ * 어긋나면 mapTown.ts·zones.ts 의 Record<RoomId, …> 가 컴파일에서 잡는다.
+ */
+export interface RoomDef {
+  id: "post" | "pub" | "clinic" | "police";
+  /** 벽 안쪽 사각형. 이 사각형의 엄격한 안쪽이 그 방 구역이고 경계(문턱 포함)는 바깥이다(zones.ts zoneOf). */
+  inner: { x0: number; z0: number; x1: number; z1: number };
+  /** 문 중심 = 문 벽 두께의 가운데. */
+  door: { x: number; z: number };
+  /** 문 앞 목적지: 문 중심에서 바깥으로 1.0 에 가장 가까운 걷는 칸 중심(UI-SPEC P20-10). */
+  front: { x: number; z: number };
+  /** 방 안 자리: 안쪽 사각형 가운데에서 가장 가까운 걷는 칸 중심. */
+  inside: { x: number; z: number };
 }
 
 /** 변론자가 서는 무대 위 자리(고정소수점). 블록아웃 design/v2.0/screens/bar.js 의 ctx.center 와 같은 점이다(높이 0.29 는 화면 규칙, A4). */
@@ -55,10 +77,15 @@ export const STAGE_REACH_FX = 300;
  */
 export const TO_CAMERA: { x: number; y: number; z: number } = { x: 12.0208153, y: 11.9, z: 12.0208153 };
 
-/** 장애물 원문. floor 는 바닥을 막는지(false 면 가려짐 검사에만 쓴다). 길이 단위는 월드 단위. */
-export type Obstacle =
+/**
+ * 장애물 원문. floor 는 바닥을 막는지(false 면 가려짐 검사에만 쓴다). 길이 단위는 월드 단위.
+ * room 은 그 장애물이 속한 방, cut 은 방 안에 들어가면 걷히는 부분(지붕·앞벽·문 위 이마)이다(20페이즈 D-10) —
+ * 마스크를 만들 때 그 방 안 칸의 머리 가림 시험에서만 뺀다. 재즈 바·광장 원문에는 두 키가 없다.
+ */
+export type Obstacle = (
   | { kind: "circle"; x: number; z: number; r: number; y0: number; y1: number; floor: boolean }
-  | { kind: "rect"; x: number; z: number; w: number; d: number; rot: number; y0: number; y1: number; floor: boolean };
+  | { kind: "rect"; x: number; z: number; w: number; d: number; rot: number; y0: number; y1: number; floor: boolean }
+) & { room?: RoomDef["id"]; cut?: true };
 
 /**
  * 재즈 바 장애물 원문(design/v2.0/blockout/bar.js). 길이는 월드 단위, rot 는 three 의 rotation.y(라디안).
@@ -213,12 +240,12 @@ export function isWalkable(map: MapDef, c: number, r: number): boolean {
 }
 
 /** 고정소수점 좌표(1/100 단위)가 속한 칸. 범위 밖도 계산한다(걸을 수 있는지는 isWalkable 로). */
-export function cellOfFx(xFx: number, zFx: number): { c: number; r: number } {
+export function cellOfFx(xFx: number, zFx: number, _map?: Pick<MapDef, "origin">): { c: number; r: number } {
   return { c: Math.floor((xFx - ORIGIN_FX) / CELL_FX), r: Math.floor((zFx - ORIGIN_FX) / CELL_FX) };
 }
 
 /** 칸 번호의 중심을 고정소수점 정수 좌표로. */
-export function cellCenterFx(c: number, r: number): { x: number; z: number } {
+export function cellCenterFx(c: number, r: number, _map?: Pick<MapDef, "origin">): { x: number; z: number } {
   return { x: ORIGIN_FX + c * CELL_FX + CELL_FX / 2, z: ORIGIN_FX + r * CELL_FX + CELL_FX / 2 };
 }
 
