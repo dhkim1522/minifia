@@ -1,18 +1,15 @@
 // 20-01 트레이서: 확장판 판이 마을(town)에서 시작하고(D-01·D-02·D-03), 산 사람의 이동 프레임이 구역으로 걸러진다(D-13·D-14·D-19, 위협 T-20-01·T-20-02).
 // 본인·유령은 전체 구간을, 같은 구역의 산 사람은 문턱에서 끝나는 구간만 받고, 다른 구역의 산 사람에게는 그 프레임이 가지 않는다("오지 않았음" 은 settle 로 증명한다).
-// 이 폴더는 판 종류의 고정 맵을 잠가 두므로(test/worker/setup.ts) 마을 판은 openTown() 으로 그 시험 동안만 켠다. 위치는 메모리의 world 에 직접 쓴다.
+// 이 폴더는 판 종류의 고정 맵을 잠가 두므로(test/worker/setup.ts) 마을 판은 openTown() 으로 그 시험 동안만 켠다. 위치는 메모리의 world 에 직접 쓴다(helpers 의 townGame·placeSeats).
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임은 문자열로 비교한다.
-import { env } from "cloudflare:workers";
-import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { lineWalkable } from "../../shared/game/map";
 import { TOWN_MAP, TOWN_ROOMS } from "../../shared/game/mapTown";
-import { restSegment } from "../../shared/game/world";
-import type { Segment, WorldState } from "../../shared/game/world";
 import { zoneOf } from "../../shared/game/zones";
 import type { PhaseId, ServerMessage } from "../../shared/protocol";
 import { openTown } from "../helpers/playable";
 import {
+  actorOf,
   actorsOf,
   advanceTo,
   endedGame4,
@@ -23,12 +20,14 @@ import {
   moveAs,
   nextFrame,
   observe,
+  placeSeats,
   readyUp,
   seat,
   send,
   settle,
   startedGame,
   storedRoom,
+  townGame,
   withRole,
   worldFramesOf,
 } from "./helpers";
@@ -44,30 +43,6 @@ const POST_SIDE = { x: 75, z: -775 };
 const PLAZA_SPOT = { x: 320, z: 180 };
 
 const isAssigning = (m: ServerMessage): boolean => m.t === "state" && m.view.phase === "assigning";
-const actorOf = (g: Game, seatNo: number): Actor => g.actors.find((a) => a.seat === seatNo)!;
-const idOfSeat = async (code: string, seatNo: number): Promise<string> =>
-  ((await storedRoom(code)) as unknown as { players: Array<{ id: string; seat: number }> }).players.find((p) => p.seat === seatNo)!.id;
-
-/** 좌석 → 고정소수점 위치(서 있는 한 점)로 메모리 world 를 정한다. */
-async function placeSeats(code: string, bySeat: Record<number, { x: number; z: number }>): Promise<void> {
-  const segs: Record<string, Segment> = {};
-  for (const [s, pos] of Object.entries(bySeat)) segs[await idOfSeat(code, Number(s))] = restSegment(pos.x, pos.z, Date.now());
-  await runInDurableObject(env.ROOM.getByName(code), (instance) => {
-    const holder = instance as unknown as { world: WorldState };
-    holder.world = { ...holder.world, segs: { ...holder.world.segs, ...segs } };
-  });
-}
-
-/** 마을에서 시작한 확장판 판(방장 + 참가자 guests 명)을 phase 까지 넘긴다. 맵은 시작 때 정해져 저장되므로 그 뒤에는 잠금과 무관하다. */
-async function townGame(phase: PhaseId, guests = 5): Promise<Game> {
-  const close = openTown();
-  try {
-    return await startedGame(phase, guests);
-  } finally {
-    close();
-  }
-}
-
 /** 기본 마피아로 고른 4명 판을 phase 까지 넘긴다(startedGame 과 같은 순서). 고정 맵을 켠 채(제품과 같은 표) 시작해도 방장 선택대로여야 한다. */
 async function basicGame(phase: PhaseId): Promise<Game> {
   const close = openTown();

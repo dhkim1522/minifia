@@ -3,7 +3,12 @@ import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { expect } from "vitest";
 import { phaseKey } from "../../shared/game/audience";
-import type { ChatLineWire, CreateRoomResponse, PhaseId, RoleId, RoomView, ServerMessage } from "../../shared/protocol";
+import { TOWN_MAP } from "../../shared/game/mapTown";
+import { restSegment } from "../../shared/game/world";
+import type { Segment, WorldState } from "../../shared/game/world";
+import { zoneOf } from "../../shared/game/zones";
+import type { ChatLineWire, CreateRoomResponse, PhaseId, RoleId, RoomView, ServerMessage, ZoneId } from "../../shared/protocol";
+import { openTown } from "../helpers/playable";
 
 export interface TestSocket {
   ws: WebSocket;
@@ -1055,4 +1060,62 @@ export async function toEndedByMafia(code: string, socks: TestSocket[]): Promise
   await closePhase(code);
   for (const s of socks) await nextFrame(s, isPhaseFrame("ended"));
   return victims;
+}
+
+// ---- 20페이즈 마을 판 도우미(20-01 의 town.test.ts 지역 도우미를 옮겼다 — townDoor.test.ts 와 함께 쓴다, 20-02) ----
+
+/** 그 좌석의 사람. */
+export const actorOf = (g: Game, seatNo: number): Actor => g.actors.find((a) => a.seat === seatNo)!;
+
+/** 그 좌석의 player id(저장된 방에서 읽는다 — evict 하지 않는다). */
+export const idOfSeat = async (code: string, seatNo: number): Promise<string> =>
+  ((await storedRoom(code)) as unknown as { players: Array<{ id: string; seat: number }> }).players.find((p) => p.seat === seatNo)!.id;
+
+/** 마을에서 시작한 확장판 판(방장 + 참가자 guests 명)을 phase 까지 넘긴다. 맵은 시작 때 정해져 저장되므로 그 뒤에는 잠금과 무관하다. */
+export async function townGame(phase: PhaseId, guests = 5): Promise<Game> {
+  const close = openTown();
+  try {
+    return await startedGame(phase, guests);
+  } finally {
+    close();
+  }
+}
+
+/**
+ * 마을 판 전용: 좌석 → 고정소수점 위치(서 있는 한 점)로 메모리 world 를 정한다. 시험이 사람을 그 자리에 "놓는" 것이라
+ * 구역 기억(world.zones)도 그 자리의 구역으로 함께 맞춘다 — 놓은 것이 문 통과로 알려지지 않게(서버의 settleZones 와 같은 뜻).
+ * 메모리에만 쓴다: 뒤에 evict 하는 도우미(advanceTo·killSeats)를 부르려면 먼저 flushWorld 로 저장한다.
+ */
+export async function placeSeats(code: string, bySeat: Record<number, { x: number; z: number }>): Promise<void> {
+  const segs: Record<string, Segment> = {};
+  const zones: Record<string, ZoneId> = {};
+  for (const [s, pos] of Object.entries(bySeat)) {
+    const id = await idOfSeat(code, Number(s));
+    segs[id] = restSegment(pos.x, pos.z, Date.now());
+    zones[id] = zoneOf(TOWN_MAP, pos.x, pos.z);
+  }
+  await runInDurableObject(env.ROOM.getByName(code), (instance) => {
+    const holder = instance as unknown as { world: WorldState };
+    holder.world = { ...holder.world, segs: { ...holder.world.segs, ...segs }, zones: { ...(holder.world.zones ?? {}), ...zones } };
+  });
+}
+
+/** 메모리 world(private world) 사본. 구간·구역 기억을 읽을 때 쓴다. */
+export async function memWorld(code: string): Promise<WorldState> {
+  let out: WorldState | undefined;
+  await runInDurableObject(env.ROOM.getByName(code), (instance) => {
+    out = (instance as unknown as { world: WorldState }).world;
+  });
+  return out!;
+}
+
+/** 그 좌석의 메모리 구간 출발 시각을 ms 만큼 앞당긴다 — 실제 시간을 기다리지 않고 "걷기 시작한 지 ms 지난" 상태를 만든다(문턱을 이미 지난 상태 등). */
+export async function shiftSeg(code: string, seatNo: number, ms: number): Promise<void> {
+  const id = await idOfSeat(code, seatNo);
+  await runInDurableObject(env.ROOM.getByName(code), (instance) => {
+    const holder = instance as unknown as { world: WorldState };
+    const seg = holder.world.segs[id];
+    if (seg === undefined) throw new Error("shiftSeg: 구간이 없다");
+    holder.world = { ...holder.world, segs: { ...holder.world.segs, [id]: { p: [...seg.p], t0: seg.t0 - ms, v: seg.v } } };
+  });
 }
