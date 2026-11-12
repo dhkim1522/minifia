@@ -13,6 +13,7 @@ import { zoneOf } from "../../shared/game/zones";
 import type { PhaseId, ServerMessage } from "../../shared/protocol";
 import { openTown } from "../helpers/playable";
 import {
+  actorsOf,
   advanceTo,
   endedGame4,
   flushWorld,
@@ -62,6 +63,27 @@ async function townGame(phase: PhaseId, guests = 5): Promise<Game> {
   const close = openTown();
   try {
     return await startedGame(phase, guests);
+  } finally {
+    close();
+  }
+}
+
+/** 기본 마피아로 고른 4명 판을 phase 까지 넘긴다(startedGame 과 같은 순서). 고정 맵을 켠 채(제품과 같은 표) 시작해도 방장 선택대로여야 한다. */
+async function basicGame(phase: PhaseId): Promise<Game> {
+  const close = openTown();
+  try {
+    const room = await seat(3, 0);
+    const socks = [room.host, ...room.guests.map((g) => g.sock)];
+    send(room.host, { t: "modePick", mode: "basic" });
+    for (const s of socks) await nextFrame(s, (m) => m.t === "state" && m.view.mode === "basic");
+    send(room.host, { t: "start" });
+    for (const s of socks) await nextFrame(s, isAssigning);
+    await advanceTo(room.code, socks, "dayAnnounce");
+    for (const s of socks) await settle(s, mark(s));
+    const actors = actorsOf(room);
+    await advanceTo(room.code, socks, phase);
+    for (const s of socks) await settle(s, mark(s));
+    return { code: room.code, socks, actors };
   } finally {
     close();
   }
@@ -192,6 +214,19 @@ describe("방이 없는 맵은 구역이 하나다 — 재즈 바 판의 이동 
     const frames = await observe(g, a, () => moveAs(a, 25, -575));
     const lines = g.actors.map((who) => movesOf(frames[g.actors.indexOf(who)]!, a.seat).map((f) => JSON.stringify(f)).join("|"));
     expect(`${String(lastViewOf(a.sock).map)} ${new Set(lines).size} ${lines[0]!.length > 0 && !lines[0]!.includes("|")}`).toBe("bar 1 true");
+  });
+});
+
+describe("기본 마피아 판은 고정 맵이 켜져 있어도 재즈 바 그대로다 (D-02·D-04)", () => {
+  it("기본 마피아 판의 이동 요청은 모든 소켓이 같은 move 프레임 하나를 받고, 우체국 자리로 가라는 요청도 재즈 바의 걷는 자리로 보정된다", { timeout: 60_000 }, async () => {
+    const g = await basicGame("discussion");
+    const a = actorOf(g, 0);
+    const frames = await observe(g, a, () => moveAs(a, POST.inside.x, POST.inside.z));
+    const lines = g.actors.map((who) => movesOf(frames[g.actors.indexOf(who)]!, a.seat).map((f) => f.p.join(",")).join("|"));
+    const end = lines[0]!.split(",").slice(-2).map(Number);
+    expect(`${String(lastViewOf(a.sock).mode)}/${String(lastViewOf(a.sock).map)} ${new Set(lines).size} ${lines[0]!.length > 0 && !lines[0]!.includes("|")} ${Math.abs(end[0]!) <= 580 && Math.abs(end[1]!) <= 580}`).toBe(
+      "basic/bar 1 true true",
+    );
   });
 });
 
