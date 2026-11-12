@@ -30,7 +30,7 @@ import {
   waitWorldReady,
   watchSockets,
 } from "./browser.mjs";
-import { BASIC_ABSENT_ATTR_PREFIX, BASIC_ABSENT_SELECTORS, MODE_NAMES_E2E, basicModeChecks, hostRailChecks, hostRailMeasure, modeChipChecks, modeSheetChecks } from "./lib.mjs";
+import { BASIC_ABSENT_ATTR_PREFIX, BASIC_ABSENT_SELECTORS, MODE_NAMES_E2E, basicModeChecks, basicViewKeyChecks, hostRailChecks, hostRailMeasure, modeChipChecks, modeSheetChecks } from "./lib.mjs";
 
 const HOST_NICK = "판종류방장";
 const GUEST_NICK = "참가자하나";
@@ -42,8 +42,6 @@ const KB_SIZES = ["360x560", "390x844"];
 const MAX_STEPS = 40;
 /** 기본 마피아 완주 흐름의 칸 수 상한(basic-off 와 같은 넉넉한 값 — 봇 투표가 갈려 날이 길어져도 ended 에 닿게) */
 const BASIC_MAX_STEPS = 90;
-/** 기본 마피아에서 서버가 싣지 않는 view 키(UI-SPEC E-1 의 판정 근거: 심부름·목격 기록·증거). 키 이름만 본다 */
-const BASIC_OFF_VIEW_KEYS = { me: ["errand", "record"], day: ["evidence"] };
 /** 이 빌드는 허용 맵이 둘 이상이라 줄에 [맵] 이 있다(map-select 흐름이 같은 전제를 쓴다) */
 const MAPS_ON = true;
 
@@ -434,8 +432,8 @@ export function makeModeFlows({ recorder, attempt, startHost, openGuest, openGam
         rec(`${id}/order`, `BM2i-${who}`, `${who}: 받은 단계 열(참고)`, true, tracker.phases.join(">"), true);
         rec(`${id}/band`, `BM3i-${who}`, `${who}: 감시가 모은 띠 글 수(참고)`, true, band === null ? "감시 없음" : `띠 글 ${band.lines.length}가지 · 감시 ${band.scans}회`, true);
         // 프레임: 심부름·목격 기록·증거 키가 한 번도 오지 않았다(키가 비어 있는 것이 아니라 없다, D-08)
-        const got = [...BASIC_OFF_VIEW_KEYS.me.filter((k) => tracker.viewKeys.me.has(k)).map((k) => `me.${k}`), ...BASIC_OFF_VIEW_KEYS.day.filter((k) => tracker.viewKeys.day.has(k)).map((k) => `day.${k}`)];
-        rec(`${id}/frames`, `BM1k-${who}`, `${who}: 받은 state 프레임에 me.errand·me.record·day.evidence 키가 0건이다`, tracker.viewKeys.me.size > 0 && got.length === 0, tracker.viewKeys.me.size === 0 ? "측정값 없음(받은 me 키 0개)" : got.length > 0 ? got.join(", ") : `me 키 ${tracker.viewKeys.me.size}개 · day 키 ${tracker.viewKeys.day.size}개`);
+        const k = basicViewKeyChecks(tracker.viewKeys);
+        rec(`${id}/frames`, `${k.id}-${who}`, `${who}: ${k.label} (me ${tracker.viewKeys.me.size}·day ${tracker.viewKeys.day.size}개)`, k.ok, k.detail);
       }
 
       // 판 종류 값: 두 페이지의 마지막 view.mode, 결과 화면 연출 뒤 방장 줄 [판 종류] 이름(D-06 결과 화면 쪽)

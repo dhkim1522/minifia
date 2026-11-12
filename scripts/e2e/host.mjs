@@ -30,7 +30,7 @@ import {
   tapPick,
 } from "./browser.mjs";
 import { TOD_ABSENT_PHASES, TOD_BY_PHASE, readTodHead, todAbsentChecks, todChecks } from "./polish.mjs";
-import { TIMELESS_PHASES, hostBandChecks, hostChimeChecks, hostLeakChecks, hostOverlapChecks, toolLabelChecks, viewKeyChecks } from "./lib.mjs";
+import { TIMELESS_PHASES, basicViewKeyChecks, hostBandChecks, hostChimeChecks, hostLeakChecks, hostOverlapChecks, toolLabelChecks, viewKeyChecks } from "./lib.mjs";
 
 const BAND_NICK = "띠검사방장";
 /** 8명 투표 화면 시험용 손님 일곱(모두 4자 — UI-SPEC "이름표 버튼 8개 … (4자 이름, 폰 6종)", basic-vote 와 같은 이름). 봇 이름은 첫 봇이 8자 고정이라 4자 이름 전제가 맞지 않는다(결정 0052-3 과 같은 이유) */
@@ -478,11 +478,18 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
     for (const l of hostLeakChecks(items)) rec(`${id}/leak`, l.id, `${l.label} (읽기 ${items.length}곳)`, l.ok, l.detail);
     const k = viewKeyChecks(viewKeys);
     rec(`${id}/frames`, k.id, `${k.label} (최상위 ${viewKeys.top.size}·me ${viewKeys.me.size}·day ${viewKeys.day.size}개)`, k.ok, k.detail);
+    // 기본 마피아: 다섯 판에서 받은 키에 심부름·목격 기록·증거 키가 없다(D-08 — 값이 빈 것이 아니라 키가 없다)
+    if (mode === "basic") {
+      const b = basicViewKeyChecks(viewKeys);
+      rec(`${id}/frames`, b.id, `${b.label} (다섯 판)`, b.ok, b.detail);
+    }
+    // 참고(판정 아님): 받은 me·day 키 이름 — 두 판 종류의 차이를 SUMMARY 에서 견준다(키 이름뿐, 값 없음)
+    rec(`${id}/frames`, "VK1i", "받은 me·day 키 이름(참고)", true, `me [${[...viewKeys.me].sort().join(",")}] · day [${[...viewKeys.day].sort().join(",")}]`, true);
   }
 
   /** emcee-leak (HOST-05, T-14-19·20): 확장판(서버 기본값) 판의 역할 다섯 시점 누설 — 본문은 leakFlow */
   const emceeLeakFlow = (ctx) => leakFlow(ctx, "emcee-leak");
-  /** mode-leak (19-07, D-12, T-19-21): 기본 마피아 판의 역할 다섯 시점 누설 — 판정 id 는 emcee-leak 과 같고(LK1·LK2·HL1~HL4·VK1) LKm 이 더해진다 */
+  /** mode-leak (19-07, D-12, T-19-21): 기본 마피아 판의 역할 다섯 시점 누설 — 판정 id 는 emcee-leak 과 같고(LK1·LK2·HL1~HL4·VK1) LKm·BM1k 가 더해진다 */
   const modeLeakFlow = (ctx) => leakFlow(ctx, "mode-leak", "basic");
 
   // ---- emcee-sound ----

@@ -2846,10 +2846,23 @@ export function basicModeChecks(input) {
   return out;
 }
 
-export const BASIC_OFF_VIEW_KEYS = Object.freeze({ me: Object.freeze([]), day: Object.freeze([]) });
-/** 자리 함수(19-07 RED) */
-export function basicViewKeyChecks() {
-  return { id: "", label: "", ok: true, detail: "" };
+/**
+ * 기본 마피아에서 서버가 싣지 않는 view 키(UI-SPEC E-1 의 판정 근거, D-08): 심부름(me.errand)·목격 기록(me.record)·증거(day.evidence). 값이 빈 것이 아니라 키가 없다.
+ * 아침 흔적(day.morning.trace)은 한 단계 안쪽 키라 프레임 키 집합에 잡히지 않는다 — 화면 쪽 BM1([data-trace-mark])과 서버 시험(modeBasic.test)이 맡는다.
+ */
+export const BASIC_OFF_VIEW_KEYS = Object.freeze({ me: Object.freeze(["errand", "record"]), day: Object.freeze(["evidence"]) });
+
+/**
+ * BM1k 기본 마피아 판에서 받은 state 프레임의 키에 심부름·목격 기록·증거 키가 없다. keys = { me, day } — 배열 또는 Set(tracker.viewKeys 모양, 키 이름뿐).
+ * 받은 me 키가 하나도 없으면 프레임을 못 본 것이라 `측정값 없음` 으로 실패한다.
+ */
+export function basicViewKeyChecks(keys) {
+  const label = "받은 state 프레임에 me.errand·me.record·day.evidence 키가 0건이다";
+  const asArr = (v) => (v instanceof Set ? [...v] : Array.isArray(v) ? v : null);
+  const me = asArr(keys?.me);
+  const day = asArr(keys?.day);
+  if (me === null || day === null || me.length === 0) return noMeasure("BM1k", label, "받은 state 프레임 키");
+  return result("BM1k", label, [...BASIC_OFF_VIEW_KEYS.me.filter((k) => me.includes(k)).map((k) => `me.${k}`), ...BASIC_OFF_VIEW_KEYS.day.filter((k) => day.includes(k)).map((k) => `day.${k}`)]);
 }
 
 // ---- 12페이즈 sound-script (12-08, 결정 D-21): 단계 구간마다 기대 소리 id 가 순서대로 ----
