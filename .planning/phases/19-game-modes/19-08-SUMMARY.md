@@ -13,6 +13,7 @@ status: in-progress
 (중단되면 이 절과 `git log --oneline --grep "(19-08)"` 로 끊긴 단계부터 다시 시작한다.)
 
 - [x] 단계 1 로컬 검증: npm test 8293 통과(실패 0, 건너뜀 261) · 스크립트 시험 667 통과 · typecheck·build exit 0 · E2E 전 흐름(47개) 폰 6종 회귀 한 번 6971 중 6962 통과(실패 9건: chat-keyboard 3건 → 앱 결함을 고친 뒤 통과 · errand 3건 간헐 → 재실행 통과 · perfbudget 3건은 13페이즈부터의 알려진 한계) · RULESET 0줄 · 위생 검사 통과(새 결과 0)
+- [x] 단계 2 배포: minifia-v3 `2026-11-12T10:59:05Z+d53d5905` → `2026-11-12T16:47:00Z+71a10fc8` · 범위 diff 37개(서버 14: shared 13·worker 1) · 개인 계정 확인 · smoke full 통과(첫 시도)
 
 ## 단계 1: 로컬 전체 검증
 
@@ -115,3 +116,59 @@ status: in-progress
 - 판정 문턱은 건드리지 않았다(예외를 없앤 것이라 판정이 더 엄격해졌다).
 
 개발 서버는 시작할 때 이미 떠 있던 것을 그대로 썼고 끄지 않았다(내가 띄운 것이 아니다).
+
+## 단계 2: 배포
+
+| 배포본 | 배포 전 `/api/health` version | 배포 후 |
+| --- | --- | --- |
+| minifia-v3 | `2026-11-12T10:59:05Z+d53d5905` | **`2026-11-12T16:47:00Z+71a10fc8`** (HEAD `71a10fc8`) |
+| minifia (v1.0) | `2026-10-29T14:52:03Z+cb6979c` | 그대로 |
+| minifia-v2 | `2026-11-06T13:49:18Z+e51942c6` | 그대로 |
+
+- 배포 전 값이 HANDOFF 에 적혀 있던 `eb0463b5` 가 아니라 `d53d5905` 였다 — 2026-11-12 에 3D 유령·움직임 밀림 수정(결정 0084·0085)이 이미 배포되어 있었다. 그래서 0084·0085 의 상태 줄을 "배포됨"으로 고쳤다(단계 3).
+- **개인 계정 확인**: `node scripts/check-account.mjs` 종료 코드 0. 그 뒤 `npm run deploy`(계정 가드 → 빌드 → 배포 대상 가드 → 배포)를 우회 없이 한 번 돌렸다. 종료 코드 0.
+- **smoke full 1회**: `SMOKE_STACK=1 node scripts/smoke.mjs --prod --stage full --players 5 --previous-version <배포 전 version>` → `SMOKE OK full players=5 serverSpread=0ms/0ms arrivalSpread=1906ms/11ms`, version 이 새 값. 첫 시도 통과(연결·서버 시각 편차·한도 문제 없음). 출력은 작업 트리 밖 임시 파일에만 두었다.
+- 배포본을 대상으로 한 E2E 는 돌리지 않았다(결정 0076, DO 하루 쓰기 한도).
+- 서버가 바뀐 배포다(판 종류·`modePick`). 저장된 옛 방은 mode 가 없어 확장판으로 읽힌다(D-04, 19-01 시험).
+
+배포 범위(`git diff --name-only d53d5905..71a10fc8 -- src shared worker public index.html wrangler.jsonc package.json package-lock.json`, 37개):
+
+```
+shared/game/bots.ts
+shared/game/mode.ts
+shared/game/night.ts
+shared/game/nomination.ts
+shared/game/phases.ts
+shared/game/rematch.ts
+shared/game/room.ts
+shared/game/ruleset.ts
+shared/game/testTools.ts
+shared/game/tick.ts
+shared/game/view.ts
+shared/protocol.ts
+shared/schemas.ts
+src/components/ModeSheet.tsx
+src/components/WorldStage.tsx
+src/components/v2/HostRail.tsx
+src/components/v2/HostRailButton.tsx
+src/components/v2/LineSheet.tsx
+src/components/v2/MapChip.tsx
+src/components/v2/ModeChip.tsx
+src/components/v2/TutorialToggle.tsx
+src/components/v2/V2Icon.tsx
+src/game/badgeView.ts
+src/game/chatUi.ts
+src/game/modeText.ts
+src/game/resultText.ts
+src/game/whisperView.ts
+src/net/roomDiff.ts
+src/screens/GameMap.tsx
+src/screens/Lobby.tsx
+src/screens/ResultScreen.tsx
+src/styles/lobby.css
+src/styles/result.css
+src/styles/sheet.css
+src/styles/tutorialRoom.css
+src/styles/v2.css
+worker/room.ts
+```
