@@ -141,9 +141,10 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   const taken = useMemo(() => lockedOutfits(view.players.filter((p) => p.seat !== view.me.seat)), [view.players, view.me.seat]);
   const dressBtnRef = useRef<HTMLButtonElement>(null);
   const restoreDressFocus = useRef(false);
-  // 시트 탭(11-13): 지도 칩 → 맵 탭, 꾸미기 버튼 → 의상 탭. 칩·맵 탭은 허용 맵이 둘 이상일 때만 있다
+  // 시트 탭(11-13): 지도 칩 → 맵 탭, 꾸미기 버튼 → 의상 탭. 칩·맵 탭은 허용 맵이 둘 이상이고 판 종류가 기본 마피아일 때만 있다.
+  // 20-07(D-02·P20-16): 확장판은 늘 마을이라 고를 것이 없다 — [맵] 단추·맵 탭을 그리지 않는다. view.mapChoice 는 그대로 남아 기본 마피아로 되돌리면 다시 쓰인다
   const [dressTab, setDressTab] = useState<"map" | "dress">("dress");
-  const mapsOn = PLAYABLE_MAPS.length > 1;
+  const mapsOn = PLAYABLE_MAPS.length > 1 && modeOf(view) === "basic";
   const openDress = (tab: "map" | "dress" = "dress") => {
     inputRef.current?.blur();
     setDressTab(tab);
@@ -279,13 +280,13 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       </section>
       {/* 꾸미기 시트·키보드가 열린 동안에는 줄·칩·오른쪽 열을 그리지 않는다(P19-16) */}
       {dressOpen || kbOpen ? null : isHost ? (
-        // 방장 전용 왼쪽 세로 줄(19-04 D-13): 판 종류 · 맵(허용 맵 둘 이상) · 봇(봇 도구가 켜진 방) · 튜토리얼 먼저(확장판만). 방장 판정은 서버 view 의 isHost 뿐이고 참가자에게는 마크업이 없다(T-19-13)
+        // 방장 전용 왼쪽 세로 줄(19-04 D-13): 판 종류 · 맵(허용 맵 둘 이상 + 기본 마피아만, 20-07) · 봇(봇 도구가 켜진 방) · 튜토리얼 먼저(확장판만). 방장 판정은 서버 view 의 isHost 뿐이고 참가자에게는 마크업이 없다(T-19-13)
         <HostRail maxHeight={testShift ? Math.max(0, sideMaxH - 48) : sideMaxH} testShift={testShift}>
           <HostRailButton key="mode" ref={modeBtnRef} id="mode" icon="deck" label={MODE_TEXT.aria(mode)} pressed={modeOpen} disabled={!canSend} onPress={openMode} />
           {mapChip}
           {/* 결정 0075: 방장만 [봇] — 서버가 방장 대기실 view 에만 me.testBots 를 싣는다 */}
           {botsOn ? <HostRailButton key="bots" id="bots" icon="bot" label="봇" pressed={sheet?.kind === "bots"} disabled={!canSend} onPress={() => setSheet({ kind: "bots" })} /> : null}
-          {/* 맨 아래 칸이라 사라져도 위 칸들의 자리가 움직이지 않는다. [시작] 잠금 2초 동안은 눌리지 않는다 */}
+          {/* 맨 아래 칸이다. 판 종류가 바뀌면 이 칸과 [맵] 칸이 서로 바뀐다(확장판: 이 칸, 기본 마피아: [맵] — 20-07). [시작] 잠금 2초 동안은 눌리지 않는다 */}
           {mode === "extended" ? <HostRailButton key="tutorial" id="tutorial" icon="book" label="튜토리얼 먼저" switchOn={tutorialOn} disabled={!canSend || locked} onPress={pressTutorial} /> : null}
         </HostRail>
       ) : (

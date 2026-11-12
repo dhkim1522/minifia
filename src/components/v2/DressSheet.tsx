@@ -23,7 +23,7 @@ export interface DressSheetProps {
   disabled?: boolean;
   /** 다른 사람이 직접 고른 옷. 내 옷(value)은 들어 있어도 잠그지 않는다. 서버 잠금(18-01)과 같은 lockedOutfits 결과 */
   taken?: ReadonlySet<OutfitId>;
-  /** 방장이면 [맵][의상] 탭이 생긴다(11-13). 아니면 탭 행이 없고 의상 카드만 */
+  /** 맵을 고를 수 있는 방장(허용 맵 둘 이상 + 기본 마피아, 20-07)이면 [맵][의상] 탭이 생긴다(11-13). 아니면 탭 행이 없고 의상 카드만. 열린 채 거짓이 되면 의상 탭으로 돌아간다 */
   host?: boolean;
   /** 처음 열리는 탭. 지도 칩은 "map", 꾸미기 버튼은 "dress"(기본). 방장이 아니면 무시한다 */
   tab?: "map" | "dress";
@@ -37,6 +37,11 @@ export function DressSheet({ value, onPick, onClose, disabled = false, taken, ho
   const stripRef = useRef<HTMLDivElement>(null);
   const mapsRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<"map" | "dress">(host ? openTab : "dress");
+  // 20-07(D-02·P20-16): 열려 있는 동안 맵 탭이 사라지면(방장이 확장판으로 바꿨다 — 확장판은 늘 마을이라 고를 것이 없다, 또는 방장을 넘겼다) 의상 탭으로 돌아간다.
+  // 탭 줄은 host 일 때만 그리므로 함께 사라진다. 다시 host 가 되어도 저절로 맵 탭으로 돌아가지 않는다
+  useEffect(() => {
+    if (!host) setTab("dress");
+  }, [host]);
   // 열릴 때 한 번(탭을 바꿀 때 초점은 탭 버튼에 둔다): 지금 의상(맵 탭이면 지금 맵) 카드가 띠 가운데로 오도록 맞추고(즉시, 모션 줄이기와 같다) 그 카드로 초점을 준다(스크롤은 위에서 이미 했다)
   useEffect(() => {
     const card = (tab === "map" ? mapsRef.current : stripRef.current)?.querySelector<HTMLElement>("button[aria-pressed='true']");

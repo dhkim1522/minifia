@@ -404,9 +404,10 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const dress = useDress({ view, send, canSend });
   const dressBtnRef = useRef<HTMLButtonElement>(null);
   const restoreDressFocus = useRef(false);
-  // 시트 탭(11-13): 지도 칩 → 맵 탭, [꾸미기] → 의상 탭. 칩·맵 탭은 허용 맵이 둘 이상일 때만 있다. 결과 단계의 선택은 다음 판 설정이다(서버가 ended 에서 받는다). 19-05: 지도 칩은 방장 줄의 칸이다
+  // 시트 탭(11-13): 지도 칩 → 맵 탭, [꾸미기] → 의상 탭. 칩·맵 탭은 허용 맵이 둘 이상이고 판 종류가 기본 마피아일 때만 있다. 결과 단계의 선택은 다음 판 설정이다(서버가 ended 에서 받는다). 19-05: 지도 칩은 방장 줄의 칸이다.
+  // 20-07(D-02·P20-16): 확장판은 늘 마을이라 고를 것이 없다 — [맵] 단추·맵 탭을 그리지 않는다. view.mapChoice 는 그대로 남아 기본 마피아로 되돌리면 다시 쓰인다
   const [dressTab, setDressTab] = useState<"map" | "dress">("dress");
-  const mapsOn = PLAYABLE_MAPS.length > 1;
+  const mapsOn = PLAYABLE_MAPS.length > 1 && modeOf(view) === "basic";
   const mapChoice: MapChoice = view.mapChoice ?? "random";
   const pickMap = (map: MapChoice) => {
     if (canSend) send({ t: "mapPick", map });
@@ -529,7 +530,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         }
         pill={readyPill}
       />
-      {/* 연출이 끝나면(5600) 방장 전용 왼쪽 세로 줄(19-05 D-13, 대기실과 같은 규칙): 판 종류 · 맵(허용 맵 둘 이상). [봇]·[튜토리얼 먼저]는 대기실 전용이라 없다.
+      {/* 연출이 끝나면(5600) 방장 전용 왼쪽 세로 줄(19-05 D-13, 대기실과 같은 규칙): 판 종류 · 맵(허용 맵 둘 이상 + 기본 마피아만, 20-07 — 확장판이면 [판 종류] 하나). [봇]·[튜토리얼 먼저]는 대기실 전용이라 없다.
           방장 판정은 서버 view 의 isHost 뿐이고 참가자에게는 줄 마크업이 없다(T-19-16) — 참가자는 읽기 전용 판 종류 칩 하나를 본다(P19-10).
           전체 기록이 늘어난 동안·꾸미기 시트·키보드가 열린 동안에는 줄·칩을 그리지 않는다(P19-16) */}
       {!finished || expanded || dressOpen || kbOpen ? null : isHost ? (
