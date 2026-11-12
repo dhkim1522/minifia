@@ -1,11 +1,12 @@
 // 06-11 3D 캐릭터 — 원본 design/v2.0/blockout/character.js(결정 0048)를 관절 병합으로 옮긴 모듈 (MAP-01, MAP-02).
 // WebGL 없이 node 에서 장면 그래프로 검사한다.
-import { BufferGeometry, CircleGeometry, Color, type Group, type Material, type Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, type Sprite, type SpriteMaterial, Texture } from "three";
+import { Box3, BufferGeometry, CircleGeometry, Color, type Group, type Material, type Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D } from "three";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { emoteDurationMs } from "../../src/world/emoteCap";
 import { CHAR_SCALE, characterKit, createCharacter, figForSeat, POSE_BLEND_MS, setGhostArt, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
 import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, type OutfitId } from "../../src/world/characterData";
+import { CAM_YAW } from "../../src/world/camera";
 
 function meshes(root: Object3D, visibleOnly = true): Mesh[] {
   const out: Mesh[] = [];
@@ -584,7 +585,13 @@ describe("자세 섞기 (결정 0059)", () => {
 
 // ---------- 08-10 Task 1: 유령 setGhost (GHOST-01) ----------
 
-describe("유령 setGhost (GHOST-01)", () => {
+describe("유령 setGhost (GHOST-01, 3D 유령 없이 대체 몸)", () => {
+  beforeEach(() => {
+    setGhostArt(null);
+  });
+  afterEach(() => {
+    setGhostArt(true);
+  });
   /** 관절 메시(병합 재질 또는 유령 복제 재질)만 — 원판·고리는 vertexColors 가 없다 */
   function bodyMeshes(root: Object3D): Mesh[] {
     return meshes(root).filter((m) => (m.material as MeshStandardMaterial).vertexColors === true);
@@ -709,86 +716,91 @@ describe("유령 setGhost (GHOST-01)", () => {
   });
 });
 
-// ---------- 18.1-17: 유령 그림 스프라이트 (0083-2) ----------
+// ---------- 18.1-17 → 결정 0084: 3D 유령 ----------
 
-describe("유령 그림 스프라이트 (0083-2)", () => {
-  const spriteOf = (root: Object3D): Sprite | undefined => root.children.find((o) => (o as Sprite).isSprite === true && o.name === "ghost-sprite") as Sprite | undefined;
+describe("3D 유령 (0083-2, 0084)", () => {
+  const ghostOf = (root: Object3D): Object3D | undefined => root.children.find((o) => o.name === "ghost-3d");
+  const bodyOf = (root: Object3D): Mesh => ghostOf(root)!.getObjectByName("ghost-body") as Mesh;
+  const matOf = (root: Object3D): MeshStandardMaterial => bodyOf(root).material as MeshStandardMaterial;
   const shown = (root: Object3D): Mesh[] => meshes(root).filter((m) => (m.material as MeshStandardMaterial).vertexColors === true);
-  const matOf = (s: Sprite): SpriteMaterial => s.material;
 
   beforeEach(() => {
-    setGhostArt(new Texture());
+    setGhostArt(true);
   });
   afterEach(() => {
-    setGhostArt(null);
+    setGhostArt(true);
   });
 
-  it("켜면 관절 메시가 모두 안 보이고 원판이 숨고 이름 있는 스프라이트 하나가 아래 가운데 기준으로 선다(높이 2.45, 폭 × 0.75)", () => {
+  it("켜면 관절 메시가 모두 안 보이고 원판이 숨고 3D 유령 묶음 하나가 선다(높이 약 2.45, 발밑 0)", () => {
     const c = createCharacter(0, "coat");
     c.setGhost(true);
     expect(shown(c.root)).toHaveLength(0);
     expect(discOf(c.root)).toBeUndefined();
-    const s = spriteOf(c.root);
-    expect(s).toBeDefined();
-    expect(s!.visible).toBe(true);
-    expect(s!.scale.y).toBeCloseTo(2.45, 9);
-    expect(s!.scale.x).toBeCloseTo(2.45 * 0.75, 9);
-    expect(s!.center.x).toBeCloseTo(0.5, 9);
-    expect(s!.center.y).toBeCloseTo(0, 9);
-    expect(s!.position.y).toBeCloseTo(0, 9);
-    expect(matOf(s!).transparent).toBe(true);
-    expect(matOf(s!).depthWrite).toBe(false);
-    expect(matOf(s!).opacity).toBeCloseTo(0.88, 9);
-    expect(c.meshCount()).toBe(0);
+    const g = ghostOf(c.root)!;
+    expect(g).toBeDefined();
+    expect(g.visible).toBe(true);
+    c.root.updateMatrixWorld(true);
+    const box = new Box3().setFromObject(g);
+    expect(box.min.y / CHAR_SCALE).toBeCloseTo(0, 1);
+    expect(box.max.y / CHAR_SCALE).toBeCloseTo(2.45, 1);
+    expect(c.meshCount()).toBe(11); // 3D 유령의 메시(몸·눈 막대 4·입·볼 2·팔 2·후광)
   });
 
-  it("opts 의 opacity·tint 를 재질에 싣는다(색은 회색 배율)", () => {
+  it("전부 불투명이다(기본 불투명도 1, transparent 거짓)", () => {
     const c = createCharacter(0, "coat");
-    c.setGhost(true, { opacity: 0.5, tint: 0.6 });
-    const m = matOf(spriteOf(c.root)!);
-    expect(m.opacity).toBeCloseTo(0.5, 9);
-    expect(m.color.r).toBeCloseTo(0.6, 9);
-    expect(m.color.g).toBeCloseTo(0.6, 9);
-    expect(m.color.b).toBeCloseTo(0.6, 9);
-    c.setGhost(true, { tint: 0.9 }); // 켠 채 다시 부르면 값만 바꾼다
-    expect(matOf(spriteOf(c.root)!).color.r).toBeCloseTo(0.9, 9);
-    expect(matOf(spriteOf(c.root)!).opacity).toBeCloseTo(0.5, 9);
+    c.setGhost(true);
+    ghostOf(c.root)!.traverse((o) => {
+      const m = (o as Mesh).material as MeshStandardMaterial | undefined;
+      if (m) {
+        expect(m.transparent).toBe(false);
+        expect(m.opacity).toBe(1);
+      }
+    });
   });
 
-  it("setOpacity 는 유령일 때 스프라이트 불투명도를 바꾸고, 유령이 아니면 무시한다", () => {
+  it("opts 의 opacity 는 1 미만일 때만 투명으로 바꾸고 tint 는 몸 색에 곱한다", () => {
+    const c = createCharacter(0, "coat");
+    c.setGhost(true);
+    const full = matOf(c.root).color.r;
+    c.setGhost(true, { opacity: 0.5, tint: 0.6 });
+    expect(matOf(c.root).transparent).toBe(true);
+    expect(matOf(c.root).opacity).toBeCloseTo(0.5, 9);
+    expect(matOf(c.root).color.r).toBeCloseTo(full * 0.6, 6);
+    c.setGhost(true, { opacity: 1 });
+    expect(matOf(c.root).transparent).toBe(false);
+  });
+
+  it("setOpacity 는 유령일 때 불투명도를 바꾸고, 유령이 아니면 무시한다", () => {
     const c = createCharacter(0, "coat");
     c.setOpacity(0.3);
-    expect(spriteOf(c.root)).toBeUndefined();
+    expect(ghostOf(c.root)).toBeUndefined();
     c.setGhost(true);
     c.setOpacity(0.3);
-    expect(matOf(spriteOf(c.root)!).opacity).toBeCloseTo(0.3, 9);
+    expect(matOf(c.root).opacity).toBeCloseTo(0.3, 9);
   });
 
-  it("끄면 스프라이트가 숨고 몸·원판이 돌아오며, 켜고 끄기를 되풀이해도 스프라이트는 하나다", () => {
+  it("끄면 유령이 숨고 몸·원판이 돌아오며, 켜고 끄기를 되풀이해도 유령 묶음은 하나다", () => {
     const c = createCharacter(0, "coat");
     for (let n = 0; n < 3; n++) {
       c.setGhost(true);
       c.setGhost(false);
     }
     c.setGhost(true);
-    expect(c.root.children.filter((o) => (o as Sprite).isSprite === true)).toHaveLength(1);
+    expect(c.root.children.filter((o) => o.name === "ghost-3d")).toHaveLength(1);
     c.setGhost(false);
-    expect(spriteOf(c.root)!.visible).toBe(false);
+    expect(ghostOf(c.root)!.visible).toBe(false);
     expect(shown(c.root)).toHaveLength(6);
     expect(discOf(c.root)).toBeDefined();
   });
 
-  it("dispose 가 스프라이트 재질을 해제하고, 공유 텍스처는 해제하지 않는다", () => {
-    const tex = new Texture();
-    setGhostArt(tex);
-    const texSpy = vi.spyOn(tex, "dispose");
+  it("dispose 가 유령의 지오메트리·재질을 해제한다", () => {
     const c = createCharacter(0, "coat");
     c.setGhost(true);
-    const spriteMat = matOf(spriteOf(c.root)!);
-    const matSpy = vi.spyOn(spriteMat, "dispose");
+    const geoSpy = vi.spyOn(bodyOf(c.root).geometry, "dispose");
+    const matSpy = vi.spyOn(matOf(c.root), "dispose");
     c.dispose();
+    expect(geoSpy).toHaveBeenCalledTimes(1);
     expect(matSpy).toHaveBeenCalledTimes(1);
-    expect(texSpy).not.toHaveBeenCalled();
   });
 
   it("유령일 때 update 의 headY 는 자세와 무관하게 머리 꼭대기 값이다", () => {
@@ -798,10 +810,20 @@ describe("유령 그림 스프라이트 (0083-2)", () => {
     for (let i = 0; i < 20; i++) expect(c.update(0.016, i * 0.016, false).headY).toBeCloseTo(2.45 * CHAR_SCALE, 9);
   });
 
-  it("동작을 받으면 스프라이트가 0 → 최대 0.18 → 0 으로 한 번 튀고(420ms) 몸 관절 자세는 재생되지 않는다", () => {
+  it("캐릭터가 어느 쪽을 보든 유령은 카메라(CAM_YAW)를 본다", () => {
     const c = createCharacter(0, "coat");
     c.setGhost(true);
-    const s = spriteOf(c.root)!;
+    for (const yaw of [0, 1, -2.2, 3]) {
+      c.setYaw(yaw);
+      c.update(0.016, 0, false);
+      expect(ghostOf(c.root)!.rotation.y + c.root.rotation.y).toBeCloseTo(CAM_YAW, 9);
+    }
+  });
+
+  it("동작을 받으면 유령이 0 → 최대 0.18 → 0 으로 한 번 튀고(420ms) 몸 관절 자세는 재생되지 않는다", () => {
+    const c = createCharacter(0, "coat");
+    c.setGhost(true);
+    const g = ghostOf(c.root)!;
     const rest = (c.root.getObjectByName("armA") as Object3D).rotation.clone();
     c.playEmote("clap");
     let peak = 0;
@@ -809,11 +831,11 @@ describe("유령 그림 스프라이트 (0083-2)", () => {
     for (let i = 0; i < 40; i++) {
       c.update(0.016, t, false);
       t += 0.016;
-      peak = Math.max(peak, s.position.y);
+      peak = Math.max(peak, g.position.y);
     }
     expect(peak).toBeGreaterThan(0.15);
     expect(peak).toBeLessThanOrEqual(0.18 + 1e-9);
-    expect(s.position.y).toBeCloseTo(0, 9); // 640ms 뒤에는 제자리
+    expect(g.position.y).toBeCloseTo(0, 9); // 640ms 뒤에는 제자리
     const now = (c.root.getObjectByName("armA") as Object3D).rotation;
     expect(now.x).toBeCloseTo(rest.x, 2);
   });
@@ -821,27 +843,26 @@ describe("유령 그림 스프라이트 (0083-2)", () => {
   it("모션 줄이기면 튀지 않는다", () => {
     const c = createCharacter(0, "coat");
     c.setGhost(true);
-    const s = spriteOf(c.root)!;
+    const g = ghostOf(c.root)!;
     c.playEmote("clap", { reduced: true });
     for (let i = 0; i < 30; i++) {
       c.update(0.016, i * 0.016, false);
-      expect(s.position.y).toBe(0);
+      expect(g.position.y).toBe(0);
     }
   });
 
-  it("그림이 아직 없으면 스프라이트 없이 예전 반투명 몸(0.6)이고, 그림이 오면 그 프레임부터 그림으로 바뀐다", () => {
+  it("3D 유령을 쓰지 않는 상태면 예전 반투명 몸(0.6)이고, 다시 쓰면 그 프레임부터 3D 유령으로 바뀐다", () => {
     setGhostArt(null);
     const c = createCharacter(0, "coat");
     c.setGhost(true, { opacity: 0.88, tint: 0.7 });
-    expect(spriteOf(c.root)).toBeUndefined();
+    expect(ghostOf(c.root)).toBeUndefined();
     expect(shown(c.root)).toHaveLength(6);
     for (const m of shown(c.root)) expect((m.material as MeshStandardMaterial).opacity).toBeCloseTo(0.6, 9);
     expect(discOf(c.root)).toBeUndefined();
-    setGhostArt(new Texture());
+    setGhostArt(true);
     c.update(0.016, 0, false);
     expect(shown(c.root)).toHaveLength(0);
-    expect(spriteOf(c.root)!.visible).toBe(true);
-    expect(matOf(spriteOf(c.root)!).color.r).toBeCloseTo(0.7, 9);
+    expect(ghostOf(c.root)!.visible).toBe(true);
   });
 });
 

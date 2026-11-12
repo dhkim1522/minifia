@@ -1987,7 +1987,7 @@ describe("탈락자 유령 그림 (0083-2)", () => {
     expect(handleOf(s, 3).setGhost).toHaveBeenLastCalledWith(true, { tint: 1 });
   });
 
-  it("좌석이 ghost 가 된 직후 inMs(300ms) 동안 불투명도가 0 에서 0.88 로 오른다", async () => {
+  it("좌석이 ghost 가 된 직후 inMs(300ms) 동안 불투명도가 0 에서 1 로 오른다", async () => {
     const s = await openGhost(ALIVE);
     const h3 = handleOf(s, 3);
     s.rerender({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) });
@@ -1996,20 +1996,20 @@ describe("탈락자 유령 그림 (0083-2)", () => {
     frames(160);
     const mid = vi.mocked(h3.setOpacity!).mock.calls.at(-1)![0] as number;
     expect(mid).toBeGreaterThan(0.2);
-    expect(mid).toBeLessThan(0.88);
+    expect(mid).toBeLessThan(1);
     frames(400);
-    expect(vi.mocked(h3.setOpacity!).mock.calls.at(-1)![0]).toBeCloseTo(0.88, 9);
+    expect(vi.mocked(h3.setOpacity!).mock.calls.at(-1)![0]).toBeCloseTo(1, 9);
     const seen = vi.mocked(h3.setOpacity!).mock.calls.map((c) => c[0] as number);
     expect([...seen].sort((a, b) => a - b)).toEqual(seen); // 오르기만 한다
   });
 
-  it("모션 줄이기면 처음부터 0.88 이다", async () => {
+  it("모션 줄이기면 처음부터 1 이다", async () => {
     stubReducedMotion(true);
     const s = await openGhost({ ...ALIVE, 3: { ghost: true } });
     const h3 = handleOf(s, 3);
-    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0.88, tint: 1 });
+    expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 1, tint: 1 });
     frames(400);
-    for (const c of vi.mocked(h3.setOpacity!).mock.calls) expect(c[0]).toBeCloseTo(0.88, 9);
+    for (const c of vi.mocked(h3.setOpacity!).mock.calls) expect(c[0]).toBeCloseTo(1, 9);
   });
 
   it("ghost 가 풀리면 setGhost(false) 이고 의상 바꾸기는 한 번도 없다", async () => {
@@ -2041,7 +2041,7 @@ describe("탈락자 유령 그림 (0083-2)", () => {
     expect(handleOf(s, 3)).toBe(h3);
     expect(h3.disposed).toBe(0);
     expect(h3.setGhost).toHaveBeenCalledWith(true, { opacity: 0, tint: 1 });
-    expect(vi.mocked(h3.setOpacity!).mock.calls.at(-1)![0]).toBeCloseTo(0.88, 9);
+    expect(vi.mocked(h3.setOpacity!).mock.calls.at(-1)![0]).toBeCloseTo(1, 9);
   });
 
   describe("의상이 바뀐 뒤 표정 prewarm 을 다시 건다", () => {

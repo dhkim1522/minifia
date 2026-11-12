@@ -192,7 +192,7 @@ export const EXEC_END_OPACITY = 0.26;
  * 유령 그림(ghost_default, 0083-2) 값: 불투명도 0.88(85~90%), 등장 시간 0.3초(처형 연출이 끝나 좌석이 ghost 가 될 때), 폭:높이 = 3:4.
  * 키는 캐릭터와 같다(character.ts 의 로컬 높이 2.45 = 이름표가 서는 머리 꼭대기).
  */
-export const GHOST_SPRITE = { opacity: 0.88, inMs: 300, aspect: 0.75 } as const;
+export const GHOST_SPRITE = { opacity: 1, inMs: 300, aspect: 0.75 } as const;
 
 /**
  * 조명 단계별 유령 그림 밝기 배율(0.45~1). 어두운 장면에서는 밝기만 낮춘다 — 색조·채도는 그대로(0083-2).

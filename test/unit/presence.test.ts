@@ -574,8 +574,7 @@ describe("탈락자 장면 표는 직업과 무관하다 (결정 0083-2, L13)", 
 
 describe("유령 그림 값 (GHOST_SPRITE·ghostTintOf)", () => {
   it("불투명도는 0.85~0.90, 비율은 3:4, 등장은 0.3초", () => {
-    expect(GHOST_SPRITE.opacity).toBeGreaterThanOrEqual(0.85);
-    expect(GHOST_SPRITE.opacity).toBeLessThanOrEqual(0.9);
+    expect(GHOST_SPRITE.opacity).toBe(1); // 3D 유령은 불투명(0084)
     expect(GHOST_SPRITE.aspect).toBe(0.75);
     expect(GHOST_SPRITE.inMs).toBe(300);
   });

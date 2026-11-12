@@ -316,13 +316,14 @@ describe("밤 산 사람 모두 — 같은 얼굴 목록(D-05, TRACE-01, T-15-31
     expect(new Set(sigs).size).toBe(1);
   });
 
-  it("고른 뒤에도 아이콘(eye·heal)은 없고 고른 칸만 is-on·aria-pressed, 빛남은 모두 꺼진다 — 네 역할 같다", () => {
+  it("고른 뒤에도 역할 아이콘(eye·heal)은 없고 V 체크만 있고 고른 칸만 is-on·aria-pressed, 빛남은 모두 꺼진다 — 네 역할 같다", () => {
     for (const mySeat of [0, 1, 2, 3]) {
       const m = mount(makeView({ mySeat }));
       fireEvent.click(faceOf(m.container, 3)!);
       expect(pressed(m.container, 3), `seat ${mySeat}`).toBe("true");
       expect(faceOf(m.container, 3)?.className).toContain("is-on");
-      expect(m.container.querySelectorAll("[data-face] svg")).toHaveLength(0);
+      expect(m.container.querySelectorAll("[data-face] svg")).toHaveLength(1); // 역할과 무관한 V 체크(고른 칸 원 안)
+      expect(faceOf(m.container, 3)?.querySelector(".mv-face__mark svg")).not.toBeNull();
       m.show(makeView({ mySeat, pick: 3 }));
       expect(m.container.querySelectorAll("[data-face][data-call]")).toHaveLength(0);
       cleanup();

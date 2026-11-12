@@ -26,7 +26,7 @@ export interface FaceListProps {
   /** 고른 칸의 seat. 아직 안 골랐으면 없음 */
   value?: number;
   onPick?: (seat: number) => void;
-  /** 고른 칸 오른쪽 위 원 안의 행동 아이콘. 없으면 원만 그린다 */
+  /** 고른 칸 오른쪽 위 원 안의 아이콘. 없으면 V 체크(check)를 그린다 */
   icon?: "eye" | "heal";
   /** 묶음 이름 */
   label?: string;
@@ -86,7 +86,11 @@ export function FaceList({ faces, value, onPick, icon, label = "대상", disable
               <i className="mv-face__dot" style={{ background: f.color }} />
               {f.name}
             </span>
-            {on && <span className="mv-face__mark">{icon && <V2Icon name={icon} size={18} />}</span>}
+            {on && (
+              <span className="mv-face__mark">
+                <V2Icon name={icon ?? "check"} size={18} />
+              </span>
+            )}
             {f.seat === sure ? (
               <span className="mv-face__count" role="img" aria-label="확정">
                 <V2Icon name="check" size={14} />

@@ -19,18 +19,14 @@ import {
   type Object3D,
   RingGeometry,
   SphereGeometry,
-  Sprite,
-  SpriteMaterial,
-  SRGBColorSpace,
-  type Texture,
-  TextureLoader,
   TorusGeometry,
   Uint32BufferAttribute,
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { MOVE_SPEED } from "../../shared/game/world";
-import { ghostSpriteSrc } from "../net/assets";
+import { CAM_YAW } from "./camera";
+import { buildGhost3d, type Ghost3d } from "./ghost3d";
 import { emoteCycles, REDUCED_Y_SCALE } from "./emoteCap";
 import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
 
@@ -768,36 +764,23 @@ export interface GhostOpts {
   tint?: number;
 }
 
-// ---------- 유령 그림 텍스처 (모듈에서 한 번, 모든 유령이 함께 쓴다) ----------
+// ---------- 3D 유령 (결정 0084: 2D 그림 → 3D 조립 유령) ----------
 
-/** 유령 그림 텍스처. 불러오기 전·실패는 null — 그동안 유령은 예전 반투명 몸으로 선다 */
-let ghostArt: Texture | null = null;
-/** 유령 그림이 준비됐나(E2E 훅 window.__mfGhosts 의 ready) */
+/** 3D 유령을 쓰나. 켜져 있는 것이 기본이고, false 면 예전 반투명 몸으로 대신한다(시험·비상용) */
+let ghostArt = true;
+/** 3D 유령이 준비됐나(E2E 훅 window.__mfGhosts 의 ready) — 불러올 파일이 없으니 늘 참이다 */
 export function ghostArtReady(): boolean {
-  return ghostArt !== null;
+  return ghostArt;
 }
-/** 유령 그림 텍스처를 정한다(불러오기 완료 때·시험). null 이면 없는 것으로 돌아간다 */
-export function setGhostArt(texture: Texture | null): void {
-  ghostArt = texture;
-}
-// 문서가 있는 환경에서만 불러온다(node 시험·워커에는 없다). 실패하면 null 그대로 — 탈락자가 사라지지 않는다(T-18.1-42)
-if (typeof document !== "undefined") {
-  new TextureLoader().load(
-    ghostSpriteSrc(),
-    (t) => {
-      t.colorSpace = SRGBColorSpace;
-      setGhostArt(t);
-    },
-    undefined,
-    () => {},
-  );
+/** 3D 유령 사용 여부를 정한다. null 이면 없는 것으로 돌아간다(대체 몸) */
+export function setGhostArt(art: unknown): void {
+  ghostArt = art !== null;
 }
 
 /** 유령 그림 기본 불투명도(presence.ts GHOST_SPRITE.opacity 와 같은 값) */
-const GHOST_ART_OPACITY = 0.88;
+const GHOST_ART_OPACITY = 1;
 /** 유령 그림의 로컬 높이(머리 꼭대기 값, update 의 headY 와 같다)와 폭 비(3:4) */
 const GHOST_ART_H = 2.45;
-const GHOST_ART_ASPECT = 0.75;
 /** 동작을 받은 유령이 한 번 튀는 높이(로컬)와 시간(ms) */
 const GHOST_HOP_H = 0.18;
 const GHOST_HOP_MS = 420;
@@ -860,7 +843,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   let ghostOn = false;
   let ghostAlpha = GHOST_ART_OPACITY;
   let ghostTint = 1;
-  let sprite: Sprite | null = null;
+  let sprite: Ghost3d | null = null;
   /** 유령이 동작을 받은 뒤 지난 시간(ms, null = 튀지 않음)과 그 동작이 모션 줄이기인지 */
   let hopAge: number | null = null;
   /** 발밑 고리(있을 때만) */
@@ -952,7 +935,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   }
   /** 지금 몸 대신 유령 그림이 보이나 */
   function spriteShown(): boolean {
-    return ghostOn && ghostArt !== null;
+    return ghostOn && ghostArt;
   }
   refreshGlass();
 
@@ -1008,14 +991,14 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
         ghostMat = null;
       }
       for (const j of JOINTS) meshes[j].visible = true;
-      if (sprite) sprite.visible = false;
+      if (sprite) sprite.root.visible = false;
       disc.visible = true;
       appliedSprite = false;
       refreshGlass();
       return;
     }
     disc.visible = false;
-    if (ghostArt !== null) {
+    if (ghostArt) {
       if (ghostMat) {
         for (const j of JOINTS) meshes[j].material = bodyMaterial;
         ghostMat.dispose();
@@ -1023,27 +1006,18 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       }
       for (const j of JOINTS) meshes[j].visible = false;
       if (!sprite) {
-        const mat = new SpriteMaterial({ map: ghostArt, transparent: true, depthWrite: false, toneMapped: false, fog: false });
-        sprite = new Sprite(mat);
-        sprite.name = "ghost-sprite";
-        sprite.center.set(0.5, 0); // 아래 가운데가 발밑
-        sprite.scale.set(GHOST_ART_H * GHOST_ART_ASPECT, GHOST_ART_H, 1);
-        root.add(sprite);
+        sprite = buildGhost3d();
+        root.add(sprite.root);
       }
-      const mat = sprite.material;
-      if (mat.map !== ghostArt) {
-        mat.map = ghostArt;
-        mat.needsUpdate = true;
-      }
-      mat.opacity = ghostAlpha;
-      mat.color.setRGB(ghostTint, ghostTint, ghostTint);
-      sprite.visible = true;
+      sprite.setOpacity(ghostAlpha);
+      sprite.setTint(ghostTint);
+      sprite.root.visible = true;
       appliedSprite = true;
       refreshGlass();
       return;
     }
     // 대체 몸: 그림이 오기 전·불러오기 실패 — 탈락자가 사라지지 않는다(T-18.1-42)
-    if (sprite) sprite.visible = false;
+    if (sprite) sprite.root.visible = false;
     for (const j of JOINTS) meshes[j].visible = true;
     if (!ghostMat) {
       ghostMat = bodyMaterial.clone();
@@ -1093,9 +1067,11 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
           const k = hopAge / GHOST_HOP_MS;
           if (k >= 1) {
             hopAge = null;
-            sprite.position.y = 0;
-          } else sprite.position.y = Math.sin(Math.PI * k) * GHOST_HOP_H;
+            sprite.root.position.y = 0;
+          } else sprite.root.position.y = Math.sin(Math.PI * k) * GHOST_HOP_H;
         }
+        sprite.update(t);
+        sprite.root.rotation.y = CAM_YAW - root.rotation.y; // 늘 카메라를 본다
         return { headY: GHOST_ART_H * CHAR_SCALE };
       }
       if (moving) walkPhase += dt * WALK_PHASE_RATE;
@@ -1183,7 +1159,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
         if (!ghostOn) return;
         ghostOn = false;
         hopAge = null;
-        if (sprite) sprite.position.y = 0;
+        if (sprite) sprite.root.position.y = 0;
         applyGhost();
         return;
       }
@@ -1272,8 +1248,8 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
         ghostMat = null;
       }
       if (sprite) {
-        root.remove(sprite);
-        sprite.material.dispose(); // 텍스처는 모든 유령이 함께 쓰니 해제하지 않는다
+        root.remove(sprite.root);
+        sprite.dispose();
         sprite = null;
       }
       dropPickShells();

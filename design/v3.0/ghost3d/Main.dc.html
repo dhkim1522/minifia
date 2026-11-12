@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>3D 유령</title>
+<script src="./support.js"></script>
+<script src="/_blob/ab416f283543a04cc2d3e500f6b0abad"></script>
+<script src="/_blob/6029a97f425224a854d71dfa7658e238"></script>
+<script src="./ghost3d.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0e1326}
+a{color:#a9aebb}a:hover{color:#e6e8ee}
+.btn:focus-visible{outline:2px solid #e6e8ee;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1280px; height: 700px; box-sizing: border-box; padding: 36px 40px; background: #0e1326; color: #e6e8ee; font-family: 'Gowun Dodum', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; word-break: keep-all; display: flex; flex-direction: column; gap: 16px">
+
+<header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-size: 14px; color: #a9aebb; letter-spacing: 0.04em">캐릭터 · 탈락자</p>
+<h1 style="margin: 0; font-size: 30px; line-height: 1.25; color: #f1f2f5">3D 유령</h1>
+</div>
+<p style="margin: 0; max-width: 640px; font-size: 15px; line-height: 1.6; color: #a9aebb; text-align: right">탈락한 사람은 누구든 이 유령 하나로 마지막 자리에 서요. 인물과 같은 3D 장난감 느낌이고 전부 불투명해요. 직업을 알 수 있는 단서는 없어요.</p>
+</header>
+
+<div style="position: relative; width: 1200px; height: 470px; border-radius: 18px; overflow: hidden; border: 1px solid #2a3760; background: #151c36">
+<canvas id="ghostCanvas" aria-label="3D 유령 앞·3/4·옆·뒤와 인물 키 비교" style="position: absolute; left: 0; top: 0; width: 1200px; height: 470px; display: block"></canvas>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: 1200px">
+<span style="font-size: 16px; font-weight: 700; color: #f1f2f5; text-align: center">앞</span>
+<span style="font-size: 16px; font-weight: 700; color: #f1f2f5; text-align: center">3/4</span>
+<span style="font-size: 16px; font-weight: 700; color: #f1f2f5; text-align: center">옆</span>
+<span style="font-size: 16px; font-weight: 700; color: #f1f2f5; text-align: center">뒤</span>
+<span style="font-size: 16px; font-weight: 700; color: #f1f2f5; text-align: center">인물과 키 비교</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<span style="font-size: 14px; color: #a9aebb; margin-right: 4px">장면 밝기</span>
+<sc-for list="{{ lights }}" as="l" hint-placeholder-count="3">
+<button type="button" class="btn" onClick="{{ l.pick }}" aria-pressed="{{ l.pressed }}" style="min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid {{ l.border }}; background: {{ l.bg }}; color: {{ l.fg }}; font-family: inherit; font-size: 15px; cursor: pointer">{{ l.label }}</button>
+</sc-for>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":700}}'>
+var W = 1200, H = 470, SPAN = 10.4;
+var LIGHTS = [
+  { id: 'day', label: '낮', tint: 1, bg: '#2a3157', fog: 0.95 },
+  { id: 'dusk', label: '저녁', tint: 0.85, bg: '#221f3d', fog: 0.7 },
+  { id: 'night', label: '밤', tint: 0.62, bg: '#10142b', fog: 0.5 }
+];
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { light: 'day' };
+  }
+
+  componentDidMount() {
+    var self = this;
+    this.alive = true;
+    (function boot() {
+      if (!self.alive) return;
+      var canvas = document.getElementById('ghostCanvas');
+      if (!window.THREE || !window.MFGhost || !window.MF3D || !canvas) { setTimeout(boot, 60); return; }
+      self.start(canvas);
+    })();
+  }
+
+  componentWillUnmount() {
+    this.alive = false;
+    cancelAnimationFrame(this.raf);
+    if (this.io) this.io.disconnect();
+    if (this.renderer) this.renderer.dispose();
+  }
+
+  start(canvas) {
+    var self = this;
+    var r = this.renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); r.setSize(W, H, false);
+    r.outputEncoding = THREE.sRGBEncoding; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 0.95;
+    var scene = this.scene = new THREE.Scene(); scene.background = new THREE.Color('#2a3157');
+    this.hemi = new THREE.HemisphereLight('#a9b6e0', '#1e2140', 0.8); scene.add(this.hemi);
+    this.key = new THREE.DirectionalLight('#f2e6da', 0.9); this.key.position.set(3, 8, 9); scene.add(this.key);
+    var cam = new THREE.OrthographicCamera(-SPAN / 2, SPAN / 2, SPAN / 2 * H / W, -SPAN / 2 * H / W, 0.1, 100);
+    cam.position.set(0, 1.5 + Math.sin(0.12) * 20, Math.cos(0.12) * 20); cam.lookAt(0, 1.5, 0);
+
+    var step = SPAN / 5, SC = 0.83;
+    // 유령 넷: 앞 · 3/4 · 옆 · 뒤
+    var yaws = [0, 0.8, Math.PI / 2, Math.PI];
+    this.ghosts = yaws.map(function (yaw, i) {
+      var g = MFGhost.build();
+      g.root.scale.setScalar(SC);
+      g.root.position.set(-SPAN / 2 + step * (i + 0.5), -0.4, 0);
+      g.root.rotation.y = yaw;
+      scene.add(g.root); return g;
+    });
+    // 인물 한 명(키 비교)
+    this.person = null;
+    try {
+      var ch = new MF3D.Character('citizen', { castShadow: false });
+      ch.x = -SPAN / 2 + step * 4.5; ch.yaw = ch.yawTo = 0.12;
+      ch.optimize(); scene.add(ch.root); this.person = ch;
+    } catch (e) { this.person = null; }
+    this.applyLight();
+
+    this.visible = true;
+    if (window.IntersectionObserver) { this.io = new IntersectionObserver(function (es) { self.visible = es[0].isIntersecting; }); this.io.observe(canvas); }
+    var last = performance.now(), acc = 0, clock = 0;
+    function frame(now) {
+      if (!self.alive) return;
+      var dt = Math.min((now - last) / 1000, 0.05); last = now; acc += dt; clock += dt;
+      if (self.visible && !document.hidden && acc >= 1 / 30) {
+        self.ghosts.forEach(function (g, i) { g.update(clock + i * 0.5); });
+        if (self.person) self.person.update(acc);
+        r.render(scene, cam);
+        acc = 0;
+      }
+      self.raf = requestAnimationFrame(frame);
+    }
+    this.raf = requestAnimationFrame(frame);
+  }
+
+  applyLight() {
+    var cur = LIGHTS.filter(function (l) { return l.id === this.state.light; }, this)[0] || LIGHTS[0];
+    this.scene.background.set(cur.bg);
+    this.hemi.intensity = 0.8 * cur.fog; this.key.intensity = 0.9 * cur.fog;
+    this.ghosts.forEach(function (g) { g.setTint(cur.tint); });
+  }
+
+  renderVals() {
+    var self = this, cur = this.state.light;
+    return {
+      lights: LIGHTS.map(function (l) {
+        var on = l.id === cur;
+        return { label: l.label, pressed: on ? 'true' : 'false', bg: on ? '#e6e8ee' : '#1e2847', fg: on ? '#0e1326' : '#e6e8ee', border: on ? '#e6e8ee' : '#2a3760',
+          pick: function () { self.setState({ light: l.id }, function () { if (self.scene) self.applyLight(); }); } };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

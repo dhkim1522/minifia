@@ -88,10 +88,10 @@ describe("FaceList — 고른 칸·줄바꿈·그림 실패·칸 수 (E1 #2~#5)"
     expect(off.querySelector(".mv-face__mark")).toBeNull();
   });
 
-  it("icon 이 없으면 고른 칸에도 원 안 아이콘이 없다", () => {
+  it("icon 이 없으면 고른 칸 원 안에 V 체크가 그려진다(빈 원 금지)", () => {
     const { container } = render(<FaceList faces={[face(0)]} value={0} />);
     expect(container.querySelector(".mv-face__mark")).toBeTruthy();
-    expect(container.querySelector(".mv-face__mark svg")).toBeNull();
+    expect(container.querySelector(".mv-face__mark svg")).toBeTruthy();
   });
 
   it("img error → data-face-fallback=true, 자리 구분색 원으로 대신하고 이름·선택은 그대로", () => {
@@ -170,10 +170,11 @@ describe("FaceList — 고른 칸·줄바꿈·그림 실패·칸 수 (E1 #2~#5)"
 describe("FaceList — 마피아 합의 배지 tally·sure (15페이즈 D-05, 결정 0074)", () => {
   const faces = [face(0), face(2), face(5)];
 
-  it("tally·sure 가 없으면 배지 요소가 없고 아이콘 없는 고른 칸도 svg 가 없다", () => {
+  it("tally·sure 가 없으면 배지 요소가 없고 고른 칸의 svg 는 원 안 V 체크 하나뿐이다", () => {
     const { container } = render(<FaceList faces={faces} value={2} />);
     expect(container.querySelector(".mv-face__count")).toBeNull();
-    expect(container.querySelector("[data-face] svg")).toBeNull();
+    expect(container.querySelectorAll("[data-face] svg")).toHaveLength(1);
+    expect(container.querySelector(".mv-face__mark svg")).not.toBeNull();
   });
 
   it("tally 는 1 이상인 칸에 숫자 배지, sure 칸은 숫자 대신 check(접근성 이름 '확정')", () => {
