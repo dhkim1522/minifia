@@ -40,6 +40,30 @@ function chatInputFocused(): boolean {
   return el instanceof HTMLElement && el.matches("[data-chat-input]");
 }
 
+/** 키보드를 닫은 탭의 뒤따르는 click 을 삼키는 시간·거리(px). 터치의 click 은 손을 뗀 직후 같은 자리에 온다 */
+const DISMISS_CLICK_MS = 500;
+const DISMISS_CLICK_PX = 10;
+
+/**
+ * D4 보강(19-08): 키보드를 닫은 탭에 뒤따르는 같은 자리의 click 을 한 번 삼킨다.
+ * 포커스가 풀리면 키보드 동안 그리지 않던 방장 줄·오른쪽 열이 손가락 아래에 새로 그려질 수 있고, 터치의 click 은 그때 다시 맞춰 보아 새 단추를 누른다.
+ * 자리가 다르거나 시간이 지난 click 은 건드리지 않는다.
+ */
+function swallowDismissClick(x: number, y: number): void {
+  const off = (): void => {
+    window.removeEventListener("click", onClick, true);
+    window.clearTimeout(timer);
+  };
+  const onClick = (e: MouseEvent): void => {
+    if (Math.abs(e.clientX - x) > DISMISS_CLICK_PX || Math.abs(e.clientY - y) > DISMISS_CLICK_PX) return;
+    e.stopPropagation();
+    e.preventDefault();
+    off();
+  };
+  const timer = window.setTimeout(off, DISMISS_CLICK_MS);
+  window.addEventListener("click", onClick, true);
+}
+
 const SCENE_LABEL = "지하 재즈 바 로비. 바닥을 누르면 그쪽으로 걸어가요";
 
 /** 이름표는 런타임이 첫 위치를 놓을 때까지 보이지 않는다(옛 자리 0,0 에서 한 프레임 번쩍이지 않게). 값이 늘 같아 React 가 다시 쓰지 않는다. */
@@ -527,7 +551,10 @@ export function WorldStage(props: WorldStageProps) {
           if (at === null) return;
           // D4: 입력칸에 포커스가 있는 동안의 탭은 키보드만 닫는다(blur). 걷기 요청도 링도 없다. 닫힌 뒤의 탭부터 평소처럼 걷는다.
           if (typing) {
-            if (chatInputFocused()) (document.activeElement as HTMLElement).blur();
+            if (chatInputFocused()) {
+              (document.activeElement as HTMLElement).blur();
+              swallowDismissClick(e.clientX, e.clientY);
+            }
             return;
           }
           onTap(at.x, at.y);

@@ -537,6 +537,76 @@ describe("WorldStage: 입력칸에 포커스가 있을 때의 탭은 키보드�
     expect(document.activeElement).toBe(input);
     expect(s.send).not.toHaveBeenCalled();
   });
+
+  // 19-08: 터치 탭 뒤에는 같은 자리에 click 이 한 번 더 온다. 포커스가 풀리면 방장 줄·오른쪽 열이 그 자리에 새로 그려질 수 있어
+  // (키보드가 열린 동안에는 그리지 않는다), 키보드를 닫은 탭의 click 이 새로 나타난 단추를 누르면 안 된다.
+  describe("키보드를 닫은 탭에 뒤따르는 click", () => {
+    const appeared = (): { el: HTMLButtonElement; clicks: () => number } => {
+      const el = document.createElement("button");
+      el.setAttribute("data-appeared", "");
+      let n = 0;
+      el.addEventListener("click", () => {
+        n += 1;
+      });
+      document.body.append(el);
+      return { el, clicks: () => n };
+    };
+    afterEach(() => {
+      act(() => {
+        vi.advanceTimersByTime(1000); // 남은 삼킴 창을 닫는다
+      });
+      for (const el of document.querySelectorAll("body > button[data-appeared]")) el.remove();
+    });
+
+    it("같은 자리의 click 은 새로 나타난 단추를 누르지 않는다", async () => {
+      const s = await open();
+      chatInput();
+      tapAt(surface(s.utils), 250, 340);
+      const b = appeared();
+      fireEvent.click(b.el, { clientX: 250, clientY: 340 });
+      expect(b.clicks()).toBe(0);
+    });
+
+    it("삼키는 것은 한 번뿐이다 — 다음 click 은 같은 자리여도 그대로 간다", async () => {
+      const s = await open();
+      chatInput();
+      tapAt(surface(s.utils), 250, 340);
+      const b = appeared();
+      fireEvent.click(b.el, { clientX: 250, clientY: 340 });
+      fireEvent.click(b.el, { clientX: 250, clientY: 340 });
+      expect(b.clicks()).toBe(1);
+    });
+
+    it("다른 자리의 click 은 그대로 간다", async () => {
+      const s = await open();
+      chatInput();
+      tapAt(surface(s.utils), 250, 340);
+      const b = appeared();
+      fireEvent.click(b.el, { clientX: 40, clientY: 600 });
+      expect(b.clicks()).toBe(1);
+    });
+
+    it("잠깐(0.5초) 뒤의 click 은 같은 자리여도 그대로 간다", async () => {
+      const s = await open();
+      chatInput();
+      tapAt(surface(s.utils), 250, 340);
+      const b = appeared();
+      act(() => {
+        vi.advanceTimersByTime(600);
+      });
+      fireEvent.click(b.el, { clientX: 250, clientY: 340 });
+      expect(b.clicks()).toBe(1);
+    });
+
+    it("포커스가 없던 탭(걷기)은 click 을 삼키지 않는다", async () => {
+      const s = await open();
+      tapAt(surface(s.utils), 250, 340);
+      expect(s.send).toHaveBeenCalledTimes(1);
+      const b = appeared();
+      fireEvent.click(b.el, { clientX: 250, clientY: 340 });
+      expect(b.clicks()).toBe(1);
+    });
+  });
 });
 
 describe("WorldStage: 서버 구간대로 걷기와 카메라 (MAP-02, MAP-03)", () => {
