@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 20-01-PLAN.md
-last_updated: "2026-11-12T21:10:18.810Z"
+stopped_at: Completed 20-02-PLAN.md
+last_updated: "2026-11-12T22:03:22.551Z"
 last_activity: 2026-11-13
-last_activity_desc: Phase 20 plan 01 완료 (마을 맵 서버 뼈대)
-state_head: ed1a2dc14ce6ab353c38e80d0d69118669f9e68e
+last_activity_desc: Phase 20 plan 02 완료 (문 통과 프레임·구역 기억)
+state_head: 931754aa6c37cdab0bcedf357a273b2834fb5313
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 97
-  completed_plans: 88
+  completed_plans: 89
   percent: 50
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 20 (map-expansion) — EXECUTING
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 10
 Status: Ready to execute
-Last activity: 2026-11-13 — 20-01 완료 (마을 맵 서버 뼈대: town 등록·확장판은 마을·격자 일반화·구역 판정·이동 프레임 구역 거르기. npm test 8361 통과)
+Last activity: 2026-11-13 — 20-02 완료 (문 통과 프레임: door vanish·appear·본인 zone snap, 구역 기억 저장·통과 알람, 재접속 snap 구역 거르기, 저장소 takeDoor. npm test 8412 통과 1회 · bots.test 알려진 간헐 실패 1건 1회 — deferred-items.md)
 
 ## Performance Metrics
 
@@ -286,6 +286,7 @@ Last activity: 2026-11-13 — 20-01 완료 (마을 맵 서버 뼈대: town 등�
 | Phase 19 P07 | 20 min | 3 tasks | 7 files |
 | Phase 19 P08 | 52min | 3 tasks | 17 files |
 | Phase 20 P01 | 26min | 2 tasks | 23 files |
+| Phase 20 P02 | 48min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -636,6 +637,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 19]: 19-08: 전 흐름 회귀가 찾은 앱 결함(키보드를 닫은 맵 탭의 뒤따르는 click 이 새로 그려진 방장 줄 단추를 누름)을 고침 — 같은 자리 10px·0.5초 안 click 한 번 삼킴. 360x560 접힌 줄과 위 알림 겹침은 알려진 한계로 받아들임(결정 0086)
 - [Phase 20]: 20-01: 격자는 맵마다(MapDef origin·walkHalf, 없으면 재즈 바 값) — 칸을 다루는 호출은 마지막 인자로 맵을 넘긴다. 구역은 위치의 순수 함수 zoneOf 이고 방 DO emitMove 가 이동 프레임을 본인·유령 / 같은 구역 / 다른 구역으로 나눈다. 확장판의 고정 맵은 MODE_MAPS(시험은 setup 이 잠그고 openTown 으로 켠다)
 - [Phase 20]: 20-01: MapChoice 는 MAP_CHOICES 값만(town 은 고를 수 없는 맵). 좌석 0·7 집의 문 앞 자리는 시계탑 뒤 머리 가림 때문에 집 모서리 쪽 칸 — 21 의 집 앞 조사 자리를 정할 때 확인
+- [Phase 20]: 20-02: 문 통과는 방 DO syncZones 한 곳이 낸다 — 구역 기억(world.zones)과 지금 위치가 다른 산 사람마다 떠난 구역에 door vanish(좌표 없음), 들어간 구역에 door appear(그 구역 안 구간), 본인에게 zone snap. 통과 시각은 알람(reschedule 의 nextZoneAt, 걷기 요청은 alarmBy 로 이를 때만)이고 snap 은 구역 기억이 아니라 지금 위치로 거른다. 화면은 store.takeDoor() 로 받는다(연출은 20-06)
+- [Phase 20]: 20-02: 남은 것 — 밤·아침 순간이동 뒤 settleZones 와 심부름 근처 snap·목격 기록의 구역 거르기는 20-03. 워커 시험의 마을 도우미는 test/worker/helpers.ts(townGame·placeSeats·memWorld·shiftSeg)
 
 ### Pending Todos
 
@@ -707,8 +710,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-12T21:10:18.042Z
-Stopped at: Completed 20-01-PLAN.md
+Last session: 2026-11-12T22:03:21.775Z
+Stopped at: Completed 20-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
