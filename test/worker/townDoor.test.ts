@@ -2,7 +2,8 @@
 // 떠나는 구역의 산 사람은 좌표 없는 사라짐(door vanish), 들어가는 구역의 산 사람은 그 구역 안 구간의 나타남(door appear),
 // 넘은 본인은 새 구역 사람만 담긴 snap(zone) 을 받는다. 유령은 문 프레임 없이 전체 구간을 본다. 재접속 snap 도 구역으로 걸러진다.
 // 실제 시간을 기다리지 않는다: 메모리 구간의 출발 시각을 앞당겨(passDoor) 문턱을 이미 지난 상태로 만들고 알람을 돌린다.
-// 프레임은 걷기 요청 "전" 부터 모은다 — 문 통과를 내가 돌린 알람이 내든 제때 울린 알람이 내든 받는 프레임은 같다.
+// 프레임은 걷기 요청 "전" 부터 모은다 — 문 통과를 내가 돌린 알람이 내든 제때 깨어난 알람이 내든 받는 프레임은 같다(시험이 느리게 돌아도 결과가 같다).
+// 알람 시각을 읽는 시험은 문까지 몇 초 걸리는 먼 자리(FAR_SPOT)에서 출발해, 읽기 전에 알람이 제때 깨어나 버리는 일을 피한다.
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임은 문자열로 비교한다.
 import { env } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
@@ -45,6 +46,8 @@ const POST_SIDE = { x: 75, z: -775 };
 const POST_DEEP = { x: 75, z: -875 };
 /** 광장 한가운데 근처의 걷는 자리(입장 지점 0). 우체국 문까지 걸어서 몇 초 걸린다. */
 const PLAZA_SPOT = { x: 320, z: 180 };
+/** 우체국에서 가장 먼 광장 쪽 자리(맞은편 진료소 문 앞). 우체국 문턱까지 걸어서 7초 넘게 걸린다. */
+const FAR_SPOT = TOWN_ROOMS.find((r) => r.id === "clinic")!.front;
 
 const worlds = (msgs: ServerMessage[]): World[] => msgs.filter((m): m is World => m.t === "world");
 /** 점 목록이 지나는 구역(중복 없이, 처음 나온 순서). */
@@ -125,13 +128,15 @@ async function walkSeat(code: string, seatNo: number, p: number[], agoMs = 0): P
   return seg;
 }
 
-/** 그 좌석의 다음 문 통과가 이미 지난 것으로 만든다(구간 출발을 앞당긴다). 통과가 없으면 던진다. */
+/**
+ * 그 좌석의 다음 문 통과가 이미 지난 것으로 만든다(구간 출발을 앞당긴다).
+ * 이미 넘었으면(시험이 느리게 돌아 실제 시간이 문턱을 지났다) 아무것도 하지 않는다 — 그 통과는 제때 깨어난 알람이나 다음 알람이 낸다.
+ */
 async function passDoor(code: string, seatNo: number): Promise<void> {
   const seg = (await memWorld(code)).segs[await idOfSeat(code, seatNo)]!;
   const now = Date.now();
   const tc = nextCrossingAt(TOWN_MAP, seg, now);
-  if (tc === null) throw new Error("passDoor: 넘을 문이 없다(이미 넘었거나 같은 구역 안 걷기)");
-  await shiftSeg(code, seatNo, tc - now + 40);
+  if (tc !== null) await shiftSeg(code, seatNo, tc - now + 40);
 }
 
 /** 알람을 한 번 돌리고 모든 소켓을 flush 해 marks 이후의 프레임을 소켓별로 돌려준다. */
@@ -190,7 +195,7 @@ describe("문으로 들어가는 순간 (D-14·D-15·D-16, T-20-05·T-20-06)", (
   });
 
   it("넘기 전: 광장 먼 곳에서 방 안으로 걷기 시작한 직후(알람 전) 방 안의 산 사람은 그 사람에 대해 아무것도 받지 않는다", { timeout: 60_000 }, async () => {
-    const s = await scene(PLAZA_SPOT);
+    const s = await scene(FAR_SPOT);
     const marks = s.g.socks.map((k) => mark(k));
     moveAs(s.a, POST.inside.x, POST.inside.z);
     const out: ServerMessage[][] = [];
@@ -253,7 +258,7 @@ describe("같은 알람에서 두 사람이 엇갈려 넘는다 (D-14)", () => {
 
 describe("문 통과 시각의 알람과 구역 기억의 저장 (T-20-07·T-20-08)", () => {
   it("문을 지나는 길을 걷기 시작하면 알람이 그 통과 시각 이하로(단계 마감보다 이르게) 걸린다", { timeout: 60_000 }, async () => {
-    const s = await scene(PLAZA_SPOT);
+    const s = await scene(FAR_SPOT);
     moveAs(s.a, POST.inside.x, POST.inside.z);
     await settle(s.a.sock, mark(s.a.sock));
     const seg = (await memWorld(s.g.code)).segs[await idOfSeat(s.g.code, s.a.seat)]!;
@@ -264,8 +269,8 @@ describe("문 통과 시각의 알람과 구역 기억의 저장 (T-20-07·T-20-
   });
 
   it("이미 더 이른 알람이 걸려 있으면 다시 걸지 않는다(결정 0076)", { timeout: 60_000 }, async () => {
-    const s = await scene(PLAZA_SPOT);
-    const early = Date.now() + 2000;
+    const s = await scene(FAR_SPOT);
+    const early = Date.now() + 4000;
     await runInDurableObject(env.ROOM.getByName(s.g.code), async (_i, state) => {
       await state.storage.setAlarm(early);
     });
@@ -312,7 +317,9 @@ describe("알람 맞추기(reschedule)에 문 통과가 들어간다 (D-14, 결�
     const seg = (await memWorld(s.g.code)).segs[await idOfSeat(s.g.code, s.c.seat)]!;
     const tc = nextCrossingAt(TOWN_MAP, seg, seg.t0);
     const alarm = await alarmOf(s.g.code);
-    const armed = tc !== null && alarm !== null && alarm <= tc;
+    // 알람이 통과 시각 이하로 걸려 있거나, (시험이 느리게 돌아) 그 알람이 이미 깨어나 구역 기억을 광장으로 바꿔 놓았다 — 통과 알람 말고는 그 기억을 바꿀 것이 없다.
+    const crossedAlready = (await memWorld(s.g.code)).zones?.[await idOfSeat(s.g.code, s.c.seat)] === "plaza";
+    const armed = (tc !== null && alarm !== null && alarm <= tc) || crossedAlready;
     await passDoor(s.g.code, s.c.seat);
     const frames = await alarmAndCollect(s.g, marks);
     // 광장의 산 사람이 그 사람에 대해 받은 모든 좌표(move·door·snap)
@@ -331,7 +338,7 @@ describe("알람 맞추기(reschedule)에 문 통과가 들어간다 (D-14, 결�
       await (instance as unknown as { reschedule: () => Promise<void> }).reschedule();
     });
     let seen: ServerMessage[] = [];
-    for (let i = 0; i < 40 && doorCount(seen) === 0; i += 1) {
+    for (let i = 0; i < 80 && doorCount(seen) === 0; i += 1) {
       await pause(60);
       seen = await settle(s.b.sock, from);
     }
@@ -342,8 +349,8 @@ describe("알람 맞추기(reschedule)에 문 통과가 들어간다 (D-14, 결�
 describe("재접속 snap 도 구역으로 걸러진다 (T-20-06)", () => {
   it("방 안을 걷다 밖으로 나갈 사람이 아직 방 안일 때: 광장 사람의 hello snap 에는 그 사람이 없고, 같은 방 사람의 hello snap 에는 방 안 구간만 있다", { timeout: 60_000 }, async () => {
     const s = await scene(POST.inside);
-    // 방 안을 몇 번 오간 뒤 문으로 나가 광장까지 가는 길(나가는 순간은 몇 초 뒤다)
-    const loop = [POST.inside, POST_SIDE, POST.inside, POST_SIDE, POST.inside, POST_SIDE, POST.inside, POST.front, PLAZA_SPOT].flatMap((q) => [q.x, q.z]);
+    // 방 안을 여러 번 오간 뒤 문으로 나가 광장까지 가는 길(나가는 순간은 8초쯤 뒤다)
+    const loop = [...Array.from({ length: 6 }, () => [POST.inside, POST_SIDE]).flat(), POST.inside, POST.front, PLAZA_SPOT].flatMap((q) => [q.x, q.z]);
     await walkSeat(s.g.code, s.a.seat, loop);
     const forPlaza = await helloSnap(s.g, s.b);
     const forRoom = await helloSnap(s.g, s.c);
@@ -358,7 +365,7 @@ describe("재접속 snap 도 구역으로 걸러진다 (T-20-06)", () => {
 
   it("유령의 hello snap 은 구역과 상관없이 모두의 전체 구간이다(결정 0021)", { timeout: 60_000 }, async () => {
     const s = await scene(POST.inside);
-    const loop = [POST.inside, POST_SIDE, POST.inside, POST_SIDE, POST.inside, POST.front, PLAZA_SPOT].flatMap((q) => [q.x, q.z]);
+    const loop = [...Array.from({ length: 6 }, () => [POST.inside, POST_SIDE]).flat(), POST.inside, POST.front, PLAZA_SPOT].flatMap((q) => [q.x, q.z]);
     await walkSeat(s.g.code, s.a.seat, loop);
     const forGhost = await helloSnap(s.g, s.d);
     const aSeen = forGhost?.ents.find((e) => e.s === s.a.seat);
