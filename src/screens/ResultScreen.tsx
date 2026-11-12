@@ -530,8 +530,9 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         pill={readyPill}
       />
       {/* 연출이 끝나면(5600) 방장 전용 왼쪽 세로 줄(19-05 D-13, 대기실과 같은 규칙): 판 종류 · 맵(허용 맵 둘 이상). [봇]·[튜토리얼 먼저]는 대기실 전용이라 없다.
-          방장 판정은 서버 view 의 isHost 뿐이고 참가자에게는 줄 마크업이 없다(T-19-16) — 참가자는 읽기 전용 판 종류 칩 하나를 본다(P19-10) */}
-      {!finished ? null : isHost ? (
+          방장 판정은 서버 view 의 isHost 뿐이고 참가자에게는 줄 마크업이 없다(T-19-16) — 참가자는 읽기 전용 판 종류 칩 하나를 본다(P19-10).
+          전체 기록이 늘어난 동안·꾸미기 시트·키보드가 열린 동안에는 줄·칩을 그리지 않는다(P19-16) */}
+      {!finished || expanded || dressOpen || kbOpen ? null : isHost ? (
         <HostRail maxHeight={sideMaxH}>
           <HostRailButton key="mode" ref={modeBtnRef} id="mode" icon="deck" label={MODE_TEXT.aria(mode)} pressed={modeOpen} disabled={!canSend} onPress={openMode} />
           {mapsOn ? <MapChip key="map" rail pressed={dressOpen && dressTab === "map"} choice={mapChoice} host={canSend} onPress={() => openDress("map")} /> : null}
