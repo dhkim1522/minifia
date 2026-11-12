@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: "19"
 current_phase_name: game-modes
-current_plan: 5
+current_plan: 6
 status: executing
-stopped_at: Completed 19-04-PLAN.md
-last_updated: "2026-11-12T14:51:41.524Z"
-last_activity: 2026-11-12
-last_activity_desc: Phase 19 plan 04 완료 (대기실 방장 줄 배선·방장 패널 222)
-state_head: b0764a7b09b99ab3626ec6228f03b0b91721a850
+stopped_at: Completed 19-05-PLAN.md
+last_updated: "2026-11-12T15:03:43.023Z"
+last_activity: 2026-11-13
+last_activity_desc: Phase 19 plan 05 완료 (결과 화면 방장 줄 배선·참가자 칩)
+state_head: fba9b4f27fa770639fd0a242e3427de44a1ff286
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 87
-  completed_plans: 83
+  completed_plans: 84
   percent: 40
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 19 (game-modes) — EXECUTING
-Current Plan: 5
+Current Plan: 6
 Total Plans in Phase: 8
 Status: Ready to execute
-Last activity: 2026-11-12 — 19-04 완료 (대기실 방장 줄·판 종류 시트 배선·참가자 칩·튜토리얼 토글 이동·방장 패널 222, 결과 화면은 19-05·E2E 판정은 19-06)
+Last activity: 2026-11-13 — 19-05 완료 (결과 화면 방장 줄 [판 종류]·[맵]·판 종류 시트 배선·참가자 칩·알림, 줄·칩 숨김 조건. E2E 판정은 19-06)
 
 ## Performance Metrics
 
@@ -281,6 +281,7 @@ Last activity: 2026-11-12 — 19-04 완료 (대기실 방장 줄·판 종류 시
 | Phase 19 P02 | 23 min | 3 tasks | 56 files |
 | Phase 19 P03 | 12 min | 3 tasks | 12 files |
 | Phase 19 P04 | 약 2시간(대기 포함) | 2 tasks | 12 files |
+| Phase 19 P05 | 12 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -625,6 +626,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 19]: 19-02: 전역 판 규칙 상수는 없다 — 서버는 방 상태의 판 종류에서(tick 의 판별 훅 표 hooksOf·HOOKS), 화면은 view.mode 에서 rulesetOf(modeOf(…)) 로 규칙을 얻는다. 옛 상수 이름은 코드 폴더 다섯 어디에도 적지 않는다(ruleset.test 가 주석까지 잡는다)
 - [Phase 19]: 19-03: 방장 전용 = 정지한 금빛 테두리 단추(.mv-hostrail-btn, 왼쪽 줄 HostRail), 지금 누를 것 = 깜빡이는 금빛(.is-call) — 줄 단추는 깜빡이지 않는다. 판 종류 시트(ModeSheet)는 보내기만 하고 고른 표시는 서버 값(view.mode)만 따른다. 부품만 만들었고 배선은 19-04·19-05
 - [Phase 19]: 19-04: 대기실 방장 전용 조작([판 종류]·[맵]·[봇]·[튜토리얼 먼저])은 왼쪽 방장 줄, 오른쪽 열은 방장도 소리·옷장. 튜토리얼 스위치는 줄 토글이라 방장 패널 = 참가자 패널 222(방장 증분 상수 삭제). 기본 마피아면 토글 미렌더·start tutorial false. E2E 판정(오른쪽 열 방장 기대·맵 단추 자리·tutorial.mjs TG3)은 19-06 이 고친다
+- [Phase 19]: 19-05: 결과 화면의 방장 조작([판 종류]·[맵])도 연출이 끝난 뒤 왼쪽 줄에 그리고 오른쪽 열은 방장도 소리·옷장이다. 줄·칩은 연출 중·기록 늘림·꾸미기 시트·키보드 동안 그리지 않는다. 판 종류 알림은 연출 중에도 참가자에게 뜬다
 
 ### Pending Todos
 
@@ -696,8 +698,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-12T14:51:40.172Z
-Stopped at: Completed 19-04-PLAN.md
+Last session: 2026-11-12T15:03:41.619Z
+Stopped at: Completed 19-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
