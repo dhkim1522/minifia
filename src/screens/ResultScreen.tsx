@@ -3,17 +3,22 @@ import type { RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { lockedOutfits } from "../../shared/game/look";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
+import { modeOf } from "../../shared/game/ruleset";
 import type { ClientMessage, EmoteId, MapChoice, MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { Button } from "../components/Button";
 import { ConfirmSheet } from "../components/ConfirmSheet";
+import { ModeSheet } from "../components/ModeSheet";
 import { Sheet } from "../components/Sheet";
 import { ToolButton } from "../components/ToolButton";
 import { Icon } from "../components/Icon";
 import { ChatPanel } from "../components/v2/ChatPanel";
 import { DressSheet } from "../components/v2/DressSheet";
 import { FloatAction } from "../components/v2/FloatAction";
+import { HostRail } from "../components/v2/HostRail";
+import { HostRailButton } from "../components/v2/HostRailButton";
 import { MapChip } from "../components/v2/MapChip";
+import { ModeChip } from "../components/v2/ModeChip";
 import { SideColumn } from "../components/v2/SideColumn";
 import { ReadyPill } from "../components/v2/ReadyPill";
 import { ResultPanel } from "../components/v2/ResultPanel";
@@ -23,6 +28,7 @@ import { V2Icon } from "../components/v2/V2Icon";
 import { WorldStage } from "../components/WorldStage";
 import { DRESS_TEXT } from "../game/dressText";
 import { LOG_H } from "../game/chatUi";
+import { MODE_TEXT } from "../game/modeText";
 import { castOf, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, satSlots, slotsFor, stateAt, walkSnap, winningTeam } from "../game/resultDirector";
 import type { ResultState } from "../game/resultDirector";
 import { READY_TEXT } from "../game/resultText";
@@ -32,7 +38,7 @@ import type { ChatStore } from "../net/chatStore";
 import type { ResultLogStore } from "../net/resultLogStore";
 import { useChat } from "../net/useChat";
 import { useDress } from "../net/useDress";
-import { diffRoomViews, toastForDiff } from "../net/roomDiff";
+import { diffRoomViews, modeToastOf, toastForDiff } from "../net/roomDiff";
 import { useMapInsets } from "../net/useMapInsets";
 import { useReady } from "../net/useReady";
 import { useReducedMotion } from "../net/useReducedMotion";
@@ -376,6 +382,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     if (rematchToast !== null) show(rematchToast.text);
   }, [rematchToast, show]);
   // 방장 이양 알림(11-12, D-17): 서버 view 두 개의 차이로만 만든다(방장이 다른 좌석으로 바뀐 것). 첫 스냅샷·재연결 직후에는 없다. 입장·퇴장 알림과 기록 줄은 결과 단계에 없다
+  // 판 종류 바뀜(19-05, P19-9)도 같은 규칙으로 참가자에게만 한 줄 — 한 번에 하나라 방장 변경이 먼저다. 연출 중에도 뜬다(칩은 연출이 끝난 뒤에 나온다)
   const prevView = useRef<RoomView | null>(null);
   const prevEpoch = useRef(epoch);
   useEffect(() => {
@@ -383,10 +390,13 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
       prevEpoch.current = epoch;
       prevView.current = null;
     }
-    const diff = diffRoomViews(prevView.current, view);
+    const prev = prevView.current;
+    const diff = diffRoomViews(prev, view);
     prevView.current = view;
     const t = toastForDiff({ joined: [], left: [], newHost: diff.newHost });
+    const modeText = t ? null : modeToastOf(prev, view);
     if (t) show(t.text, t.icon);
+    else if (modeText) show(modeText);
   }, [view, epoch, show]);
 
   // 꾸미기(11-12, D-16): 연출이 끝난 최종 상태에서 오른쪽 열에 [꾸미기]. 로비와 같은 DressSheet·useDress(서버 dress 문이 ended 를 연다). 바꾼 의상은 직업 의상에 가려 다음 판 대기실에서 보인다
@@ -394,7 +404,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const dress = useDress({ view, send, canSend });
   const dressBtnRef = useRef<HTMLButtonElement>(null);
   const restoreDressFocus = useRef(false);
-  // 시트 탭(11-13): 지도 칩 → 맵 탭, [꾸미기] → 의상 탭. 칩·맵 탭은 허용 맵이 둘 이상일 때만 있다. 결과 단계의 선택은 다음 판 설정이다(서버가 ended 에서 받는다)
+  // 시트 탭(11-13): 지도 칩 → 맵 탭, [꾸미기] → 의상 탭. 칩·맵 탭은 허용 맵이 둘 이상일 때만 있다. 결과 단계의 선택은 다음 판 설정이다(서버가 ended 에서 받는다). 19-05: 지도 칩은 방장 줄의 칸이다
   const [dressTab, setDressTab] = useState<"map" | "dress">("dress");
   const mapsOn = PLAYABLE_MAPS.length > 1;
   const mapChoice: MapChoice = view.mapChoice ?? "random";
@@ -416,6 +426,32 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
     dressBtnRef.current?.focus();
   }, [dressOpen]);
   const finished = mark >= tl.finalAtMs;
+
+  // 판 종류(19-05, D-05·D-06): 결과 단계의 선택은 다음 판 설정이다(서버가 ended 에서 받는다). 단추 이름·시트의 고른 칸·참가자 칩은 서버가 방송한 view.mode 만 따른다.
+  // 고르면 보내기만 하고 미리 바꾸지 않는다(P19-6). 눌러 둔 다시 하기 준비는 건드리지 않는다(P19-13)
+  const isHost = view.me.isHost;
+  const mode = modeOf(view);
+  const [modeOpen, setModeOpen] = useState(false);
+  const modeBtnRef = useRef<HTMLButtonElement>(null);
+  const restoreModeFocus = useRef(false);
+  const openMode = () => {
+    inputRef.current?.blur();
+    setModeOpen(true);
+  };
+  const closeMode = () => {
+    restoreModeFocus.current = true;
+    setModeOpen(false);
+  };
+  // 시트를 닫으면 초점을 [판 종류] 단추로 돌려준다(꾸미기 시트의 restoreDressFocus 와 같은 방식)
+  useEffect(() => {
+    if (modeOpen || !restoreModeFocus.current) return;
+    restoreModeFocus.current = false;
+    modeBtnRef.current?.focus();
+  }, [modeOpen]);
+  // 방장을 넘겨주면 열려 있던 판 종류 시트는 닫는다 — 다시 방장이 됐을 때 저절로 뜨지 않게
+  useEffect(() => {
+    if (!isHost) setModeOpen(false);
+  }, [isHost]);
 
   const readyPill = <ReadyPill host={rematch.isHost} on={rematch.mine} n={rematch.ready} m={rematch.total} dim={rematch.isHost && !rematch.canStart} inactive={!pillActive || !canSend} onPress={rematch.press} />;
 
@@ -493,10 +529,19 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         }
         pill={readyPill}
       />
-      {/* 연출이 끝나면(5600) 오른쪽 세로 한 줄(16-06 D-05·V-5): 소리(독) · 맵(방장) · 옷장. 손님은 소리 · 옷장 */}
+      {/* 연출이 끝나면(5600) 방장 전용 왼쪽 세로 줄(19-05 D-13, 대기실과 같은 규칙): 판 종류 · 맵(허용 맵 둘 이상). [봇]·[튜토리얼 먼저]는 대기실 전용이라 없다.
+          방장 판정은 서버 view 의 isHost 뿐이고 참가자에게는 줄 마크업이 없다(T-19-16) — 참가자는 읽기 전용 판 종류 칩 하나를 본다(P19-10) */}
+      {!finished ? null : isHost ? (
+        <HostRail maxHeight={sideMaxH}>
+          <HostRailButton key="mode" ref={modeBtnRef} id="mode" icon="deck" label={MODE_TEXT.aria(mode)} pressed={modeOpen} disabled={!canSend} onPress={openMode} />
+          {mapsOn ? <MapChip key="map" rail pressed={dressOpen && dressTab === "map"} choice={mapChoice} host={canSend} onPress={() => openDress("map")} /> : null}
+        </HostRail>
+      ) : (
+        <ModeChip mode={mode} />
+      )}
+      {/* 연출이 끝나면(5600) 오른쪽 세로 한 줄(16-06 D-05·V-5): 방장도 소리 · 옷장, 방장 전용은 왼쪽 줄(19-05) */}
       {finished && !expanded && !dressOpen ? (
         <SideColumn soundSlot maxHeight={sideMaxH}>
-          {mapsOn && view.me.isHost ? <MapChip key="map" choice={mapChoice} host onPress={() => openDress("map")} /> : null}
           <FloatAction key="dress" ref={dressBtnRef} kind="dress" side="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={() => openDress()} />
         </SideColumn>
       ) : null}
@@ -511,6 +556,17 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
           tab={dressTab}
           mapChoice={mapChoice}
           onPickMap={pickMap}
+        />
+      ) : null}
+      {modeOpen && isHost ? (
+        <ModeSheet
+          mode={mode}
+          canSend={canSend}
+          onPick={(next) => {
+            // 보내기만 한다 — 표시는 서버가 방송한 view.mode 가 바꾼다. 방장·단계 판정과 거절은 서버 몫이다(결정 0002)
+            if (canSend) send({ t: "modePick", mode: next });
+          }}
+          onClose={closeMode}
         />
       ) : null}
       {rematch.confirm !== null ? <RestSheet faces={rematch.confirm.resting} onStart={rematch.confirmStart} onCancel={rematch.cancelConfirm} /> : null}
