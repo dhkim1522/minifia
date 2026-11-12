@@ -57,7 +57,7 @@ import { pickMode } from "../shared/game/mode";
 import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
-import { clipToZone, nextCrossingAt, reconcileZones, zoneAt } from "../shared/game/zones";
+import { clipToZone, nextCrossingAt, reconcileZones, settleZones, zoneAt } from "../shared/game/zones";
 import { ClientMessageSchema } from "../shared/schemas";
 import { cryptoRandInt, randomToken } from "./random";
 
@@ -1411,6 +1411,8 @@ export class Room extends DurableObject<Env> {
   // 밤은 산 사람 전원, 아침은 산 사람 + 그 밤의 피해자(마피아가 걸은 구간을 버린다, UI-SPEC A1). home 이 없는 사람은 teleportHome 이 건드리지 않는다(fail-safe).
   // 전송은 새 길을 만들지 않는다: 소켓마다 worldVisibleTo 로 거른 snapFrame 을 deliver 한 명씩(연구 Don't Hand-Roll).
   // 밤의 시민 편은 본인 한 칸, 아침은 산 사람 소켓 모두가 같은 좌석·같은 좌표다. 방금 탈락한 피해자는 이 snap 으로 ghostSnapped 에 올라 같은 snap 을 두 번 받지 않는다(A3).
+  // 방이 있는 맵(20페이즈 D-14): 순간이동은 문을 지나지 않으므로 구역 기억을 알림 없이 새 자리로 맞추고(settleZones) snap 이 화면을 통째로 바꾼다 —
+  // 맞추지 않으면 다음 syncZones 가 이 순간이동을 문 통과로 알린다(사라짐·나타남·zone snap). 아침 snap 은 snapFrameFor 가 구역으로 걸러 같은 구역 사람만 싣는다.
   private async syncHome(now: number): Promise<void> {
     const room = this.room;
     if (!room || room.day === undefined) return;
@@ -1422,6 +1424,7 @@ export class Room extends DurableObject<Env> {
       const victimNow = room.morning?.eliminated;
       const movedNow = room.players.filter((p) => isAlive(p) || (victimNow !== undefined && p.seat === victimNow)).map((p) => p.id);
       this.world = { ...teleportHome(this.world, movedNow, now), lay: { key: staleKey, slots: this.world.lay?.slots ?? {} } };
+      this.world = settleZones(this.mapDef(), this.world, movedNow, now);
       await this.flushWorld();
       this.snapEachViewer(now);
       return;
@@ -1432,6 +1435,7 @@ export class Room extends DurableObject<Env> {
     const victimSeat = room.phase === "morning" ? room.morning?.eliminated : undefined;
     const moved = room.players.filter((p) => isAlive(p) || (victimSeat !== undefined && p.seat === victimSeat)).map((p) => p.id);
     this.world = { ...teleportHome(this.world, moved, now), lay: { key, slots: this.world.lay?.slots ?? {} } };
+    this.world = settleZones(this.mapDef(), this.world, moved, now);
     await this.flushWorld();
     this.snapEachViewer(now);
   }
@@ -1454,13 +1458,13 @@ export class Room extends DurableObject<Env> {
   // 방이 있는 맵의 산 사람(20페이즈 D-14, T-20-06)은 그 위에 구역으로 한 번 더 거른다: 본인 + 지금 같은 구역에 있는 사람만 싣고,
   // 걷는 중인 남의 구간은 그 구역에 머무는 동안으로 자른다(clipToZone — 지나온 길도, 문을 지난 뒤의 길도 싣지 않는다).
   // 구역은 구역 기억이 아니라 서버가 가진 구간의 지금 위치로 판정한다 — 기억을 맞추기 전(판 시작 snap·순간이동 직후)에도 다른 구역의 좌표가 실리지 않는다.
-  // 유령은 구역과 무관하게 모두의 전체 구간을 받는다(D-16, 결정 0021). errand 의 근처 snap 에 구역을 얹는 것은 20-03 이다(D-17).
+  // 유령은 구역과 무관하게 모두의 전체 구간을 받는다(D-16, 결정 0021). errand 의 근처 snap 은 nearSnapFrame 이 맵을 받아 같은 구역만 싣는다(D-17 — 근처 원 안이면서 같은 구역).
   private snapFrameFor(viewer: Player, now: number): Extract<WorldFrame, { k: "snap" }> | null {
     const room = this.room;
     if (!room) return null;
     const visible = worldVisibleTo(room, viewer.id);
     if (visible.size === 0) return null;
-    if (room.phase === "errand" && isAlive(viewer)) return nearSnapFrame(this.world, room.players, viewer.id, now);
+    if (room.phase === "errand" && isAlive(viewer)) return nearSnapFrame(this.world, room.players, viewer.id, now, this.mapDef());
     const shown = room.players.filter((q) => visible.has(q.id));
     const base = snapFrame(this.world, shown, now);
     const map = this.mapDef();
@@ -1487,7 +1491,7 @@ export class Room extends DurableObject<Env> {
     if (!room || room.phase !== "errand") return;
     for (const viewer of room.players) {
       if (!isAlive(viewer)) continue;
-      this.deliver(new Set([viewer.id]), nearSnapFrame(this.world, room.players, viewer.id, now));
+      this.deliver(new Set([viewer.id]), nearSnapFrame(this.world, room.players, viewer.id, now, this.mapDef()));
     }
   }
 

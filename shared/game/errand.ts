@@ -13,6 +13,7 @@ import { ERRAND_ACT_R, ERRAND_COUNT, ERRAND_NEAR_R, ERRAND_TICK_MS, ERRAND_VIEW_
 import type { RoomState } from "./room";
 import { positionAtFx, snapFrame, truncateSegment } from "./world";
 import type { WorldState } from "./world";
+import { clipToZone, zoneOf } from "./zones";
 
 /** 난수 함수: [0, n) 정수. roles.ts 의 randInt 와 같은 계약이다. */
 type RandInt = (n: number) => number;
@@ -127,26 +128,34 @@ export function actErrand(
 type Pos = { x: number; z: number };
 type Who = { id: string; seat: number; alive?: boolean };
 
+/** 방(구역)이 있는 맵인가. 없으면 구역이 하나라 근처 판정이 거리뿐이다. */
+const hasRooms = (map: Pick<MapDef, "rooms">): boolean => (map.rooms ?? []).length > 0;
+
 /**
  * 근처 사람 id: viewer 가 산 사람일 때 산 다른 사람 중 위치 사이 거리 ≤ radiusFx(경계 포함)인 id(seat 오름차순).
  * viewer 가 죽었거나 viewer·대상의 위치가 없으면 빈 배열·제외. 자기 자신은 없다.
+ * map 을 주고 그 맵에 방이 있으면 같은 구역만(20페이즈 D-17·D-18) — 벽 너머는 근처가 아니다: viewer 위치와 대상 위치의 zoneOf 가 같아야 한다.
+ * map 이 없거나 방이 없는 맵(재즈 바·광장)이면 거리만 본다.
  */
 export function nearIdsOf(
   players: readonly Who[],
   posOf: (id: string) => Pos | undefined,
   viewerId: string,
   radiusFx: number,
-  _map?: Pick<MapDef, "rooms">,
+  map?: Pick<MapDef, "rooms">,
 ): string[] {
   const viewer = players.find((p) => p.id === viewerId);
   if (viewer === undefined || !isAlive(viewer)) return [];
   const mine = posOf(viewerId);
   if (mine === undefined) return [];
+  const walled = map !== undefined && hasRooms(map) ? map : null;
+  const zone = walled === null ? null : zoneOf(walled, mine.x, mine.z);
   return players
     .filter((p) => p.id !== viewerId && isAlive(p))
     .filter((p) => {
       const there = posOf(p.id);
-      return there !== undefined && distSq(mine, there) <= radiusFx * radiusFx;
+      if (there === undefined || distSq(mine, there) > radiusFx * radiusFx) return false;
+      return walled === null || zoneOf(walled, there.x, there.z) === zone;
     })
     .sort((a, b) => a.seat - b.seat)
     .map((p) => p.id);
@@ -158,6 +167,7 @@ export function nearIdsOf(
  * errandNear 는 새 집합(좌석 오름차순)으로 바꾸고 errandTickAt = at + ERRAND_TICK_MS. errand 단계가 아니면 입력 그대로, 입력 상태는 바꾸지 않는다.
  * 마지막 목격(16페이즈 D-10, 서버 전용 errandLast): 산 사람 B 마다 반경 안의 다른 산 사람 중 B 에게 가장 가까운 A(거리가 같으면 낮은 좌석)를 찾아 있으면
  * { seat: B.seat, by: A.seat, place: B 곁 장소 id } 로 B 의 줄을 덮어쓴다. 반경 안에 아무도 없는 표본은 이전 줄을 남긴다(마지막 관찰자 유지). 장소를 못 구하면 덮어쓰지 않는다.
+ * 근처는 nearIdsOf 에 방의 맵을 넘겨 구한다 — 방이 있는 맵에서는 같은 구역만(20페이즈 D-17·D-18): 벽 너머는 근처가 아니라 목격 줄에도, 마지막 목격의 관찰자에도 오르지 않는다.
  * 관찰자의 역할·심부름 진행은 읽지 않는다(이 파일의 불변식).
  */
 export function sampleErrand(state: RoomState, posOf: (id: string) => Pos | undefined, at: number): RoomState {
@@ -167,7 +177,7 @@ export function sampleErrand(state: RoomState, posOf: (id: string) => Pos | unde
   const seatOf = new Map(state.players.map((p) => [p.id, p.seat] as const));
   const players = state.players.map((a) => {
     if (!isAlive(a)) return a;
-    const nearSeats = nearIdsOf(state.players, posOf, a.id, radiusFx).map((id) => seatOf.get(id) as number);
+    const nearSeats = nearIdsOf(state.players, posOf, a.id, radiusFx, map).map((id) => seatOf.get(id) as number);
     const before = new Set(a.errandNear ?? []);
     const seen: RecordLine[] = [...(a.errandSeen ?? [])];
     for (const seat of nearSeats) {
@@ -188,7 +198,7 @@ export function sampleErrand(state: RoomState, posOf: (id: string) => Pos | unde
     let by: number | undefined;
     let byD = Infinity;
     // nearIdsOf 는 seat 오름차순 — 엄격한 < 로 가르면 거리가 같을 때 낮은 좌석이 남는다.
-    for (const id of nearIdsOf(state.players, posOf, b.id, radiusFx)) {
+    for (const id of nearIdsOf(state.players, posOf, b.id, radiusFx, map)) {
       const other = state.players.find((p) => p.id === id);
       const there = other === undefined ? undefined : posOf(id);
       if (other === undefined || there === undefined) continue;
@@ -211,22 +221,26 @@ export function sampleErrand(state: RoomState, posOf: (id: string) => Pos | unde
 /**
  * errand 의 근처 snap(D-02): 본인(전체 구간, snapFrame 과 같은 접기 규칙) + 근처 산 사람(지금부터 ERRAND_VIEW_HORIZON_MS 만큼 자른 구간), seat 오름차순.
  * 반경 밖 사람은 어떤 모양으로도 없다. near: true 표시가 붙는다 — 클라이언트가 빠진 사람을 사라진 것으로 읽는다.
+ * map 을 주고 그 맵에 방이 있으면 같은 구역만(20페이즈 D-17·D-18) — 벽 너머는 근처가 아니다: 다른 구역 사람은 반경 안이어도 싣지 않고,
+ * 근처 사람의 구간은 자른 뒤 그 구역에 머무는 동안으로 한 번 더 자른다(clipToZone — 문턱 뒤 좌표는 싣지 않는다). 본인 구간은 그대로다.
  */
 export function nearSnapFrame(
   world: WorldState,
   players: readonly Who[],
   viewerId: string,
   now: number,
-  _map?: Pick<MapDef, "rooms">,
+  map?: Pick<MapDef, "rooms">,
 ): Extract<WorldFrame, { k: "snap" }> {
   const has = (id: string): boolean => Object.prototype.hasOwnProperty.call(world.segs, id);
   const posOf = (id: string): Pos | undefined => (has(id) ? positionAtFx(world.segs[id]!, now) : undefined);
-  const nearIds = new Set(nearIdsOf(players, posOf, viewerId, ERRAND_NEAR_R * UNIT));
+  const nearIds = new Set(nearIdsOf(players, posOf, viewerId, ERRAND_NEAR_R * UNIT, map));
+  const walled = map !== undefined && hasRooms(map) ? map : null;
   const own = snapFrame(world, players.filter((p) => p.id === viewerId), now).ents;
   const near = [...players]
     .filter((p) => nearIds.has(p.id))
     .map((p) => {
-      const t = truncateSegment(world.segs[p.id]!, now, ERRAND_VIEW_HORIZON_MS);
+      const ahead = truncateSegment(world.segs[p.id]!, now, ERRAND_VIEW_HORIZON_MS);
+      const t = walled === null ? ahead : clipToZone(walled, ahead, now);
       return { s: p.seat, p: t.p, t0: t.t0, v: t.v };
     });
   const ents = [...own, ...near].sort((a, b) => a.s - b.s);
