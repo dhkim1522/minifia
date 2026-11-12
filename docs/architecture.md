@@ -85,6 +85,7 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 ## 결과 공개·다시 하기·방 연속성·맵 (11페이즈, 결정 0069)
 
 - 판 번호 `round`(`view.round`)가 단계 키 `'{판}:{일차}:{단계}'` 앞에 붙는다(`phaseKey` 한 곳). 새 메시지는 `ready{on,round}`·`rematch{round}`·`mapPick{map}`이고 거절은 오류 없이 보낸 소켓에 `state` 한 프레임이다.
+- 판 종류(19페이즈, 결정 0086): 방장이 대기실·결과 단계에서 `modePick{mode}`(`basic`·`extended`)를 보내면 서버가 방장·단계·허용 값을 판정해 방 상태 `mode` 에 저장하고 모두에게 `view.mode` 로 방송한다(거절은 `mapPick` 과 같은 모양). 다시 하기에서 유지되고, 저장된 옛 방(mode 없음)은 확장판으로 읽는다. 기본 마피아는 심부름 단계에 들어가지 않고 `me.errand`·`me.record`·`day.evidence`·아침 흔적 키를 싣지 않는다.
 - 결과 단계 채팅은 `CHAT_PHASES`·`channelOf`(ended 에서 null)가 아니라 `applyChat`·`audience` 분기·`view.me.chat` 으로 열린다. 전체 채널 하나, 동작·입력 중은 서버가 버린다.
 - `resultLog{part,i,end,lines}` 프레임: mafia → ghost → whisper → claim → ballots, 40줄 청크, ended 진입 때 한 번과 hello 재전송(`shared/game/resultLog.ts`). 신분별 차이 없음, ended 전용.
 - `result.awards`: 칭호 점수·동점·패 순서를 서버가 끝내고(`shared/game/awards.ts`) 화면은 재정렬하지 않는다. 입력은 서버 전용 `Player.stats`(판 중 `say`·`emote`).
