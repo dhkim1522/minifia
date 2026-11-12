@@ -711,3 +711,12 @@ Resume file: None
 ## Operator Next Steps
 
 - Start the next milestone with /gsd-new-milestone
+
+## Deferred Verification
+
+| Phase | State | Resume |
+|-------|-------|--------|
+| 18.1 | verification_deferred_human | /gsd-verify-work 18.1 |
+| 19 | verification_deferred_human | /gsd-verify-work 19 |
+
+> 사용자 방침(2026-11-12): 실기기 확인은 v3.0 끝 실테스트에서 한 번에 한다. 자동 진행은 멈추지 않고 20·21로 이어 간다.
