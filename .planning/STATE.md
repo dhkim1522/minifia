@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: 3
+current_plan: 4 완료 → 다음 21-05 (같은 단추로 심지 자르기·가로등 공개 값)
 status: executing
-stopped_at: Completed 21-03-PLAN.md
-last_updated: "2026-11-13T07:02:46.440Z"
+stopped_at: Completed 21-04-PLAN.md
+last_updated: "2026-11-13T07:21:32.053Z"
 last_activity: 2026-11-13
-last_activity_desc: Phase 21 plan 03 완료 (가로등 8곳 장소·그림 별칭·사본)
-state_head: 12577e370af30a54eaeb67302a67f03662d5cf48
+last_activity_desc: Phase 21 plan 04 완료 (가짜 심부름 장소 제거·저녁 목격 기록이 토론까지)
+state_head: c1c001034fde74ef16d37b873410b71949f6797a
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 115
-  completed_plans: 100
+  completed_plans: 101
   percent: 60
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 21 (cause-effect-missions) — IN PROGRESS
-Current Plan: 3 완료 → 다음 21-04 (가짜 심부름 장소 걷어 내기·저녁 목격 기록이 토론까지)
+Current Plan: 4 완료 → 다음 21-05 (같은 단추로 심지 자르기·가로등 공개 값)
 Total Plans in Phase: 18
 Status: Executing Phase 21
-Last activity: 2026-11-13 — 21-03 완료 (마을 심부름 장소를 가로등 lamp0~lamp7 8곳으로, 등불 n = 좌석 n 집, 기둥 자리 TOWN_LAMPS[n].pole. PLACE_IDS 24곳·그림 별칭 placeArtOf·낱말·E2E·smoke 사본. npm test 8645 통과·실패 0, typecheck 초록). 임시 옮겨 심기(저녁 값 → 토론 me.record)는 21-04 가 지운다
+Last activity: 2026-11-13 — 21-04 완료 (마피아 가짜 심부름 장소 errandFake 제거·모든 역할 같은 처리 규칙, enterNight 가 저녁 목록·진행·목격 줄을 토론까지 남김. npm test 8646 통과·실패 0, typecheck 초록). 이전: 21-03 완료 (마을 심부름 장소를 가로등 lamp0~lamp7 8곳으로, 등불 n = 좌석 n 집, 기둥 자리 TOWN_LAMPS[n].pole. PLACE_IDS 24곳·그림 별칭 placeArtOf·낱말·E2E·smoke 사본. npm test 8645 통과·실패 0, typecheck 초록). 임시 옮겨 심기(저녁 값 → 토론 me.record)는 21-04 가 지운다
 
 ## Performance Metrics
 
@@ -292,6 +292,7 @@ Last activity: 2026-11-13 — 21-03 완료 (마을 심부름 장소를 가로등
 | Phase 20 P05 | 20min | 2 tasks | 14 files |
 | Phase 20 P08 | 1.5h | 3 tasks | 5 files |
 | Phase 20 P10 | 50min | 3 tasks | 7 files |
+| Phase 21 P04 | 약 1시간 | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -722,8 +723,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T07:02:45.428Z
-Stopped at: Completed 21-03-PLAN.md
+Last session: 2026-11-13T07:21:31.059Z
+Stopped at: Completed 21-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
