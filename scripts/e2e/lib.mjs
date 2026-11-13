@@ -4459,3 +4459,153 @@ export function outfitUniqueChecks(s) {
   const bad2 = s.traceSeats.length <= 1 ? [] : [`같은 옷 표시 ${s.traceSeats.length}개 좌석 [${[...s.traceSeats].sort((a, b) => a - b)}]`];
   return [result("OU1", L.OU1, bad1), result("OU2", L.OU2, bad2)];
 }
+
+// ---- 마을 맵 E2E (20-08, UI-SPEC TM1~TM10, 결정 D-10·D-11·D-14·D-15·D-19·D-21·D-22) ----
+
+/**
+ * 마을 맵 앱 상수의 사본(월드 단위). 값은 shared/game/mapTown.ts 의 TOWN_ROOM_OUTER·TOWN_ROOMS(고정소수점 / 100)·src/world/camera.ts panBoxOf("town")·
+ * src/world/maps/town.ts CUTAWAY_MS·src/world/runtime.ts DOOR_FADE_MS 와 같다 — test/unit/e2eContract.test.ts 가 앱 값과 대조한다(사본 일치 규약).
+ * outer = 벽 바깥 윤곽(door = 문 있는 면), inner = 벽 두께를 뺀 안쪽 사각형(zone 이 방 id 가 되는 곳), front = 문 앞 걷는 칸 중심, inside = 방 안 자리(두 번째 누름의 목적지).
+ */
+export const TOWN_E2E = {
+  ROOMS: {
+    post: { outer: { x0: -2.3, z0: -10, x1: 2.3, z1: -6.6, door: "s" }, inner: { x0: -2, z0: -9.7, x1: 2, z1: -6.9 }, front: { x: -0.25, z: -5.75 }, inside: { x: -0.25, z: -8.25 } },
+    pub: { outer: { x0: 6.6, z0: -2.3, x1: 10, z1: 2.3, door: "w" }, inner: { x0: 6.9, z0: -2, x1: 9.7, z1: 2 }, front: { x: 5.75, z: -0.25 }, inside: { x: 8.25, z: -0.25 } },
+    clinic: { outer: { x0: -2.3, z0: 6.6, x1: 2.3, z1: 10, door: "n" }, inner: { x0: -2, z0: 6.9, x1: 2, z1: 9.7 }, front: { x: -0.25, z: 5.75 }, inside: { x: -0.25, z: 8.25 } },
+    police: { outer: { x0: -10, z0: -2.3, x1: -6.6, z1: 2.3, door: "e" }, inner: { x0: -9.7, z0: -2, x1: -6.9, z1: 2 }, front: { x: -5.75, z: -0.25 }, inside: { x: -8.25, z: -0.25 } },
+  },
+  PAN: { minX: -9.6, maxX: 9.6, minZ: -9.6, maxZ: 9.6 },
+  /** 방 하나를 걷고 덮는 시간(ms) */
+  CUTAWAY_MS: 250,
+  /** 문을 지나는 사람이 옅어지고 나타나는 시간(ms) */
+  DOOR_FADE_MS: 200,
+};
+
+const TOWN_ROOM_IDS = Object.keys(TOWN_E2E.ROOMS);
+/** 컷어웨이 판정을 읽는 시각(ms): 0.25초 연출 + 여유 0.05초 — 흐름이 방에 든 순간부터 이 시간 뒤의 roofs 를 roofsAt300 에 넣는다 */
+const TOWN_ROOF_READ_MS = 300;
+const townRoofsOk = (r) => !!r && typeof r === "object" && TOWN_ROOM_IDS.every((id) => isNum(r[id]));
+const townNum = (n) => String(Math.round(n * 100) / 100);
+
+/**
+ * 마을 판정 순수 함수(20-08). kind 로 TM 줄 묶음을 고른다 — 흐름은 화면 값을 읽어 m 에 담기만 하고 문턱은 여기에만 있다(T-20-28).
+ * 결과 줄은 { id, label, ok, detail } 이고 참고 줄은 info: true(ok 고정)다. detail 에는 좌석·방 id·숫자만 싣는다(닉네임·토큰 없음, T-20-26).
+ *  - "map"     TM1  m = { lobby: 대기실 __mfMap[], game: 시작 뒤 __mfMap[] }
+ *  - "room"    TM2  m = { room, zone, open, roofsAt300 } — 방에 들어간 뒤 0.3초에 읽은 __mfTown
+ *  - "exit"    TM3  m = { zone, open, roofsAt300 } — 나온 뒤 0.3초
+ *  - "sight"   TM4·TM4s·TM5·TM5a  m = { inSeat, outSeats, outTagVisible, sameRoom: { aSeesB, bSeesA }, vanishAt, goneAt, appearAt }
+ *  - "roof"    TM6  m = { room, ring, zone } — 닫힌 방 지붕을 한 번 누른 뒤
+ *  - "owners"  TM7  m = { seats, owners }
+ *  - "ghost"   TM8  m = { open } — 유령 화면 또는 결과 화면
+ *  - "walk"    TM9·TM9s·TM9i  m = { arriveMs, limitMs, tag, stage, overlaps }
+ *  - "reduced" TM10·TM10d  m = { room, zone, roofsWhenZone, doorSeen }
+ */
+export function townChecks(kind, m) {
+  switch (kind) {
+    case "map": {
+      const label = "확장판을 시작하면 두 페이지의 __mfMap 이 town 이고 대기실은 bar 다";
+      if (!m || !Array.isArray(m.lobby) || !Array.isArray(m.game) || m.lobby.length === 0 || m.game.length === 0) return [noMeasure("TM1", label, "대기실·시작 뒤 __mfMap")];
+      const bad = [];
+      m.lobby.forEach((v, i) => v !== "bar" && bad.push(`대기실 ${i + 1}번 화면 ${v}`));
+      m.game.forEach((v, i) => v !== "town" && bad.push(`시작 뒤 ${i + 1}번 화면 ${v}`));
+      return [result("TM1", label, bad)];
+    }
+    case "room": {
+      const label = "방에 들어가면 zone·open 이 그 방이고 0.3초 안에 그 방 roofs 0·나머지 1";
+      if (!m || typeof m.zone !== "string" || !Array.isArray(m.open) || !townRoofsOk(m.roofsAt300)) return [noMeasure("TM2", label, "zone·open·roofs")];
+      const room = m.room ?? m.zone;
+      const bad = [];
+      if (!TOWN_ROOM_IDS.includes(room)) bad.push(`방 ${room} 을 모름`);
+      if (m.zone !== room) bad.push(`zone ${m.zone} ≠ ${room}`);
+      if (m.open.length !== 1 || m.open[0] !== room) bad.push(`open [${m.open}] ≠ [${room}]`);
+      for (const id of TOWN_ROOM_IDS) {
+        const want = id === room ? 0 : 1;
+        if (m.roofsAt300[id] !== want) bad.push(`roofs.${id} ${townNum(m.roofsAt300[id])} ≠ ${want}`);
+      }
+      return [result("TM2", label, bad)];
+    }
+    case "exit": {
+      const label = "방에서 나오면 zone plaza·open 비어 있음·0.3초 안에 roofs 전부 1";
+      if (!m || typeof m.zone !== "string" || !Array.isArray(m.open) || !townRoofsOk(m.roofsAt300)) return [noMeasure("TM3", label, "zone·open·roofs")];
+      const bad = [];
+      if (m.zone !== "plaza") bad.push(`zone ${m.zone} ≠ plaza`);
+      if (m.open.length !== 0) bad.push(`open [${m.open}] 가 비어 있지 않음`);
+      for (const id of TOWN_ROOM_IDS) if (m.roofsAt300[id] !== 1) bad.push(`roofs.${id} ${townNum(m.roofsAt300[id])} ≠ 1`);
+      return [result("TM3", label, bad)];
+    }
+    case "sight": {
+      const L = {
+        TM4: "밖 탭의 seats 에 안 탭 좌석이 없고 이름표도 보이지 않는다",
+        TM4s: "같은 방 두 탭은 서로 보인다",
+        TM5: "들어갈 때 밖 탭에서 data-door=vanish 가 좌석이 빠지기 전에 보인다",
+        TM5a: "나올 때 밖 탭에서 data-door=appear 가 보인다",
+      };
+      if (!m || !Number.isInteger(m.inSeat) || !Array.isArray(m.outSeats)) return Object.keys(L).map((id) => noMeasure(id, L[id], "좌석·시각"));
+      const bad4 = [];
+      if (m.outSeats.includes(m.inSeat)) bad4.push(`밖 탭 seats [${m.outSeats}] 에 좌석 ${m.inSeat}`);
+      if (m.outTagVisible !== false) bad4.push(`밖 탭에 좌석 ${m.inSeat} 이름표가 보임`);
+      const same = m.sameRoom;
+      const bad4s = [];
+      if (!same || typeof same.aSeesB !== "boolean" || typeof same.bSeesA !== "boolean") bad4s.push("측정값 없음(서로 보이는지)");
+      else {
+        if (!same.aSeesB) bad4s.push("첫 탭이 둘째 탭을 못 봄");
+        if (!same.bSeesA) bad4s.push("둘째 탭이 첫 탭을 못 봄");
+      }
+      const bad5 = [];
+      if (!isNum(m.vanishAt)) bad5.push("vanish 를 못 봄");
+      else if (!isNum(m.goneAt)) bad5.push("좌석이 seats 에서 빠지지 않음");
+      else if (m.vanishAt > m.goneAt) bad5.push(`좌석이 먼저 빠짐(빠진 ${townNum(m.goneAt)}ms < vanish ${townNum(m.vanishAt)}ms)`);
+      const bad5a = isNum(m.appearAt) ? [] : ["appear 를 못 봄"];
+      return [result("TM4", L.TM4, bad4), result("TM4s", L.TM4s, bad4s), result("TM5", L.TM5, bad5), result("TM5a", L.TM5a, bad5a)];
+    }
+    case "roof": {
+      const label = "닫힌 방 지붕 가운데를 한 번 누르면 링이 그 방 문 앞 칸이고 zone 은 plaza 로 남는다";
+      const def = m ? TOWN_E2E.ROOMS[m.room] : undefined;
+      if (!def || !m.ring || !isNum(m.ring.x) || !isNum(m.ring.z) || typeof m.zone !== "string") return [noMeasure("TM6", label, "방·링·zone")];
+      const bad = [];
+      if (Math.abs(m.ring.x - def.front.x) > 0.05 || Math.abs(m.ring.z - def.front.z) > 0.05) bad.push(`링 (${townNum(m.ring.x)}, ${townNum(m.ring.z)}) ≠ ${m.room} 문 앞 (${def.front.x}, ${def.front.z})`);
+      if (m.zone !== "plaza") bad.push(`zone ${m.zone} ≠ plaza`);
+      return [result("TM6", label, bad)];
+    }
+    case "owners": {
+      const label = "owners 길이 = 좌석 수이고 좌석이 모자란 집은 owners 에 없다";
+      if (!m || !Array.isArray(m.seats) || !Array.isArray(m.owners) || m.seats.length === 0) return [noMeasure("TM7", label, "좌석·owners")];
+      const bad = [];
+      if (m.owners.length !== m.seats.length) bad.push(`owners ${m.owners.length}개 ≠ 좌석 ${m.seats.length}개`);
+      const extra = m.owners.filter((s) => !m.seats.includes(s));
+      if (extra.length > 0) bad.push(`좌석에 없는 집 [${extra}]`);
+      return [result("TM7", label, bad)];
+    }
+    case "ghost": {
+      const label = "유령·결과 화면은 네 방이 모두 열려 있다(open 길이 4)";
+      if (!m || !Array.isArray(m.open)) return [noMeasure("TM8", label, "open")];
+      const bad = [];
+      if (m.open.length !== TOWN_ROOM_IDS.length) bad.push(`open ${m.open.length}개 [${m.open}] ≠ ${TOWN_ROOM_IDS.length}`);
+      else if (new Set(m.open).size !== TOWN_ROOM_IDS.length || !TOWN_ROOM_IDS.every((id) => m.open.includes(id))) bad.push(`open [${m.open}] 에 방이 겹치거나 빠짐`);
+      return [result("TM8", label, bad)];
+    }
+    case "walk": {
+      const L = { TM9: "문 앞까지 시간 안에 걸어 도착한다", TM9s: "내 이름표가 스테이지 안이다" };
+      const info = { id: "TM9i", label: "이름표 겹침(참고, 판정 아님)", ok: true, info: true, detail: m && isNum(m.overlaps) ? `이름표 겹침 ${m.overlaps}쌍` : "겹침 측정 없음" };
+      if (!m) return [noMeasure("TM9", L.TM9, "도착 시간"), noMeasure("TM9s", L.TM9s, "이름표·스테이지"), info];
+      const bad9 = [];
+      if (!isNum(m.arriveMs)) bad9.push("도착하지 못함");
+      else if (!isNum(m.limitMs)) bad9.push("시간 한도 없음");
+      else if (m.arriveMs > m.limitMs) bad9.push(`도착 ${Math.round(m.arriveMs)}ms > 한도 ${Math.round(m.limitMs)}ms`);
+      const line9s = tagInStage({ tag: m.tag, stage: m.stage });
+      return [result("TM9", L.TM9, bad9), result("TM9s", L.TM9s, line9s ? [] : [`이름표 ${JSON.stringify(m.tag)} 스테이지 ${JSON.stringify(m.stage)}`]), info];
+    }
+    case "reduced": {
+      const L = { TM10: "모션 줄이기: 방에 들어가면 같은 틱에 그 방 roofs 0", TM10d: "모션 줄이기: door 연출이 없다" };
+      if (!m || typeof m.room !== "string") return Object.keys(L).map((id) => noMeasure(id, L[id], "방·roofs"));
+      const bad = [];
+      if (m.zone !== m.room) bad.push(`zone ${m.zone} ≠ ${m.room}`);
+      else if (!isNum(m.roofsWhenZone)) bad.push("zone 이 바뀐 틱의 roofs 를 못 읽음");
+      else if (m.roofsWhenZone !== 0) bad.push(`zone 이 바뀐 틱의 roofs.${m.room} ${townNum(m.roofsWhenZone)} ≠ 0`);
+      const badD = isNum(m.doorSeen) ? (m.doorSeen === 0 ? [] : [`door 연출 ${m.doorSeen}건`]) : ["측정값 없음(door)"];
+      return [result("TM10", L.TM10, bad), result("TM10d", L.TM10d, badD)];
+    }
+    default:
+      throw new Error(`townChecks: 모르는 종류 ${kind}`);
+  }
+}
