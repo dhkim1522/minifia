@@ -3,6 +3,7 @@
 // 재즈 바·광장과 같은 규칙으로 만든다 — 시각·난수 없는 순수 모듈이고(삼각함수 없이 사칙연산만), 마스크는 장애물 원문과 시험(test/unit/mapTown.test.ts)으로 묶인다.
 // 마스크를 다시 만드는 명령: `MAP_PRINT=1 npx vitest run test/unit/mapTown.test.ts -t 래스터화`
 // 가로등 좌표를 다시 만드는 명령: `MAP_PRINT=1 npx vitest run test/unit/mapTown.test.ts -t 가로등`
+// 단서 지점 좌표를 다시 만드는 명령: `MAP_PRINT=1 npx vitest run test/unit/mapTown.test.ts -t 단서`
 import type { LampPlaceId, RoomId } from "../protocol";
 import { STAGE_SPOT, parseMask } from "./map";
 import type { MapDef, Obstacle, PlaceDef, RoomDef, Spawn } from "./map";
@@ -17,6 +18,11 @@ interface RectFx {
 }
 type Side = "n" | "s" | "e" | "w";
 
+/** 고정소수점 점(월드 단위 ×100). */
+interface Pt {
+  x: number;
+  z: number;
+}
 /** 벽 두께 0.3 */
 const WALL_FX = 30;
 /** 문 폭 1.5 의 절반 */
@@ -267,5 +273,20 @@ export const TOWN_MASK: readonly string[] = [
 /** 마을 이동 맵(UI-SPEC P20-0): 48×48 · 칸 0.5 · 원점 −12 · 걷기 한계 ±10. 무대 자리는 광장 연단 그대로다. */
 export const TOWN_MAP: MapDef = { id: "town", size: 48, origin: -12, walkHalf: 10, mask: parseMask(TOWN_MASK), spawns: TOWN_SPAWNS, stage: STAGE_SPOT, places: TOWN_PLACES, rooms: TOWN_ROOMS };
 
-/** 자리 값(RED 단계) — 지점 표는 GREEN 에서 MAP_PRINT 출력으로 채운다. */
-export const TOWN_CLUE_SPOTS: Readonly<Record<number, readonly [{ x: number; z: number }, { x: number; z: number }, { x: number; z: number }]>> = {};
+/**
+ * 아침 현장의 단서 지점(21페이즈 D-13, UI-SPEC P21-16): 좌석 n 의 집 앞 셋 — ① 발자국 = 집 문 앞(front), ② 옷 조각·③ 창문 = front 에서 문 면에 나란한 방향(문이 남·북이면 x, 동·서면 z)으로 +1.6·−1.6 인 점에서
+ * 가장 가까운 걷는 칸 중심. 모두 걷는 칸 중심·zone plaza·서로 1.3 이상·입장 지점에서 길이가 닿는다(시험이 지킨다). 고정소수점(월드 단위 ×100)이다.
+ * 좌석 0·7 의 집은 20페이즈 한계(문 앞이 시계탑 뒤 모서리 칸)대로 front 가 모서리 쪽이라 −1.6 점이 막힌 칸이 되어 ③ 을 문이 바라보는 쪽(광장 쪽)으로 0.5 씩 3칸 옮겼다
+ * (0: ③ = (−2.25, −4.75), 7: ③ = (−4.75, −2.25)). 나머지 여섯은 정의식 점 그대로다.
+ * 좌표는 리터럴이다 — 다시 만드는 명령: `MAP_PRINT=1 npx vitest run test/unit/mapTown.test.ts -t 단서`
+ */
+export const TOWN_CLUE_SPOTS: Readonly<Record<number, readonly [Pt, Pt, Pt]>> = {
+  0: [{ x: -375, z: -675 }, { x: -225, z: -625 }, { x: -225, z: -475 }],
+  1: [{ x: 475, z: -625 }, { x: 625, z: -625 }, { x: 325, z: -625 }],
+  2: [{ x: 625, z: -525 }, { x: 625, z: -375 }, { x: 625, z: -675 }],
+  3: [{ x: 625, z: 475 }, { x: 625, z: 625 }, { x: 625, z: 325 }],
+  4: [{ x: 475, z: 625 }, { x: 625, z: 625 }, { x: 325, z: 625 }],
+  5: [{ x: -525, z: 625 }, { x: -375, z: 625 }, { x: -675, z: 625 }],
+  6: [{ x: -625, z: 475 }, { x: -625, z: 625 }, { x: -625, z: 325 }],
+  7: [{ x: -675, z: -375 }, { x: -625, z: -225 }, { x: -475, z: -225 }],
+};

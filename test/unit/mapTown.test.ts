@@ -544,11 +544,11 @@ describe("마을 가로등 8곳 (D-05·D-07·P21-15)", () => {
 
 // 21페이즈 D-13·P21-16: 아침 현장의 단서 지점 셋 — 집 n 의 문 앞(front)이 ①, 문 면을 따라 ±1.6 이 ②·③.
 /** 단서 지점 정의식(×100 고정소수점): ① = front, ②·③ = front 에서 문 면에 나란한 방향(문이 남·북이면 x, 동·서면 z)으로 +1.6·−1.6 → 가장 가까운 걷는 칸 중심.
- * 조건(셋 모두 걷는 칸 · 서로 ≥ 1.3 · zone plaza)을 어기면 그 지점을 문에서 멀어지는 쪽 걷는 칸으로 0.5 씩 옮긴다(최대 4칸). */
+ * 조건(셋 모두 걷는 칸 · 서로 ≥ 1.3 · zone plaza)을 어기면 그 지점을 문 앞에서 광장 쪽(문이 바라보는 쪽)으로 0.5 씩 옮긴다(최대 4칸). */
 function clueDefOf(seat: number): { spots: { x: number; z: number }[]; shifted: number[] } {
   const house = TOWN_HOUSES[seat]!;
   const alongX = house.face === "n" || house.face === "s";
-  const outward = { x: house.face === "w" ? 1 : house.face === "e" ? -1 : 0, z: house.face === "n" ? -1 : house.face === "s" ? 1 : 0 };
+  const outward = { x: house.face === "e" ? 1 : house.face === "w" ? -1 : 0, z: house.face === "n" ? -1 : house.face === "s" ? 1 : 0 };
   const side = (d: number): { x: number; z: number } => (alongX ? { x: house.front.x + d, z: house.front.z } : { x: house.front.x, z: house.front.z + d });
   const spots = [house.front, nearestWalkCenter(TOWN_MAP, side(160)), nearestWalkCenter(TOWN_MAP, side(-160))];
   const shifted = [0, 0, 0];
