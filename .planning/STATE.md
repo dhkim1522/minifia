@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 21 (cause-effect-missions) — IN PROGRESS
-Current Plan: 1 완료 → 다음 21-02 (기존 시험 회귀 정리)
+Current Plan: 2 완료 → 다음 21-03 (가로등 8곳)
 Total Plans in Phase: 18
 Status: Executing Phase 21
-Last activity: 2026-11-13 — 21-01 완료 (확장판 하루 순서 roleReveal → errand → night → (morning) → discussion, 처형 없는 날은 저녁으로, 마을 밤 집 앞 순간이동·토론 모이기 `{일차}:talk`). 새 시험 통과, 기존 시험 다수가 깨진 채 21-02 로 넘김(단위 3 파일 무한 루프)
+Last activity: 2026-11-13 — 21-02 완료 (확장판 하루 순서로 깨진 단위 177·워커 313개를 갈래 가·나·다로 정리, npm test 8614 통과·실패 0. 시험 삭제·skip·약화 0, 제품 코드 변경 없음). 임시 옮겨 심기(저녁 값 → 토론 me.record)는 21-04 가 지운다
 
 ## Performance Metrics
 
@@ -723,7 +723,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 ## Session Continuity
 
 Last session: 2026-11-13T03:37:09.789Z
-Stopped at: Completed 21-01-PLAN.md
+Stopped at: Completed 21-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
