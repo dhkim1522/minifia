@@ -59,6 +59,11 @@ export interface SceneLook {
   seats: Record<number, SeatLook>;
   /** 암살 현장 분필 자리(월드 단위). 서버 공개 값 day.chalk 를 UNIT 으로 나눈 것이고 유령·산 사람 viewer 가 같은 자리를 본다(결정 0061-14) */
   chalk?: { x: number; z: number };
+  /**
+   * 네 방 모두 걷힘(마을, D-11·P20-8): 유령·탈락자 관전 화면과 결과 화면만 싣는다. 산 사람 화면에는 키가 없다 — 산 사람은 내가 든 방 하나만 걷힌다.
+   * 서버가 이미 모두를 보내는 viewer 라 지붕을 걷어도 새로 알려지는 것이 없다(결정 0021)
+   */
+  roomsOpen?: true;
 }
 
 /** 이 viewer 가 유령인지: 서버가 탈락한 본인 view 에만 싣는 spectate 가 있거나, 내 좌석이 탈락으로 내려온 경우 */
@@ -178,6 +183,7 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
     pin: pinOf(view),
     seats,
     ...(chalk !== undefined ? { chalk: { x: chalk.x / UNIT, z: chalk.z / UNIT } } : {}),
+    ...(isGhostViewer(view) ? { roomsOpen: true as const } : {}),
   };
 }
 

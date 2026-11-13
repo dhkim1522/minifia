@@ -1,7 +1,7 @@
 // E2E 훅(T-06-27). window.__mfWorld 는 ?e2e=1(세션 저장) 또는 개발 빌드에서만 생긴다 — 일반 사용자 주소(쿼리 없는 배포본)에는 없다.
 // 캐릭터가 3D 메시라 DOM 에 위치가 없다: E2E 가 같은 시각의 위치를 읽는 유일한 경로다(낡은 DOM 속성에 기대지 않는다, 리서치 Pitfall 6).
 // 노출하는 것은 이미 화면에 그려진 로비 위치·렌더러 통계뿐이다(신원·역할·토큰 없음).
-import type { MapId } from "../../shared/protocol";
+import type { MapId, RoomId, ZoneId } from "../../shared/protocol";
 import type { StorageLike } from "../net/session";
 import type { RendererStats, WorldRenderer } from "./renderer";
 import type { MapStatus, MapStatusState } from "./status";
@@ -42,6 +42,12 @@ declare global {
     __mfLooks?: Readonly<Record<number, string>>;
     /** 지금 렌더러에 올린 맵 id(11-13, L33): 로비·시작 전은 "bar". 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다 */
     __mfMap?: MapId;
+    /**
+     * 마을 훅(20-05, L33): zone = 내 그려진 위치의 구역, open = 열린 방 목표, roofs = 지붕 불투명도(1 덮임 ~ 0 걷힘, 소수 둘째), owners = 불 켜진 집 좌석,
+     * veiled = 벽 뒤 규칙으로 이름표가 숨은 좌석, door = 진행 중인 문 연출(veiled·door 는 20-06 이 채운다). 서버 view 에 없는 화면 계산값이지만
+     * 이 화면이 이미 받은 좌석·내 위치에서 계산한 것뿐이라 남의 위치·구역을 새로 알리지 않는다. 마을 판 + 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다
+     */
+    __mfTown?: TownHookState;
     /** 동작 훅(10-03, L33): 이 화면이 받은 마지막 emote 프레임의 사본과 지금 사람 동작을 재생 중인 좌석. DOM 속성으로 싣지 않는다 */
     __mfEmotes?: { last: { seat: number; id: string; n: number } | null; playing: readonly number[] };
     /**
@@ -50,6 +56,16 @@ declare global {
      */
     __mfResult?: ResultHookState;
   }
+}
+
+/** window.__mfTown 의 모양(20-05, UI-SPEC E2E 훅 표) */
+export interface TownHookState {
+  zone: ZoneId;
+  open: RoomId[];
+  roofs: Record<RoomId, number>;
+  owners: number[];
+  veiled: number[];
+  door: { seat: number; kind: "vanish" | "appear" }[];
 }
 
 /** window.__mfResult 의 모양(11-05) */
@@ -213,6 +229,24 @@ export function installMapHook(mapId: MapId): { off(): void } {
   return {
     off() {
       if (window.__mfMap === mapId) delete window.__mfMap;
+    },
+  };
+}
+
+/**
+ * window.__mfTown 을 설치하고(처음엔 네 방 모두 덮인 빈 상태) 일부만 갱신하는 patch 와 해제 함수를 돌려준다. 마을 판 + 훅이 켜진 문맥에서만 부른다(L33).
+ * 해제는 다른 설치가 덮어썼으면 지우지 않는다. 값은 DOM 속성이 아니다.
+ */
+export function installTownHook(): { patch(next: Partial<TownHookState>): void; off(): void } {
+  let mine: TownHookState = { zone: "plaza", open: [], roofs: { post: 1, pub: 1, clinic: 1, police: 1 }, owners: [], veiled: [], door: [] };
+  window.__mfTown = mine;
+  return {
+    patch(next) {
+      mine = { ...mine, ...next };
+      window.__mfTown = mine;
+    },
+    off() {
+      if (window.__mfTown === mine) delete window.__mfTown;
     },
   };
 }

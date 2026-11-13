@@ -9,7 +9,10 @@
 import { snapToWalkable, UNIT } from "../../shared/game/map";
 import type { Spawn } from "../../shared/game/map";
 import { mapOf } from "../../shared/game/maps";
-import type { MapId } from "../../shared/protocol";
+import { ROOM_IDS } from "../../shared/protocol";
+import type { MapId, RoomId, ZoneId } from "../../shared/protocol";
+import { zoneOf } from "../../shared/game/zones";
+import { cutawayOf, sameRooms } from "./cutaway";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
@@ -215,6 +218,11 @@ export interface WorldRuntimeDeps {
   onPin?: (pin: { seat: number | null; moving: boolean; strength: number }) => void;
   /** 사람 동작이 시작되거나 재생 목록이 바뀔 때 불린다 — E2E 훅 window.__mfEmotes 용(10-03, L33). last 는 마지막으로 받아 그린 프레임의 사본, playing 은 재생 중 좌석(도착 순서). 제품은 넘기지 않는다 */
   onEmotes?: (state: { last: { seat: number; id: EmoteId; n: number } | null; playing: readonly number[] }) => void;
+  /**
+   * 마을 판에서 내 구역·열린 방 목표·지붕 불투명도(소수 둘째)·집 주인 좌석이 바뀔 때만 불린다 — E2E 훅 window.__mfTown 용(20-05, L33). 이미 받은 값에서 계산한 것뿐이다.
+   * 방이 없는 맵(재즈 바·광장)에서는 한 번도 불리지 않는다. 제품은 넘기지 않는다
+   */
+  onTown?: (state: { zone: ZoneId; open: RoomId[]; roofs: Record<RoomId, number>; owners: number[] }) => void;
   /** 카메라 줌이 렌더러에 새로 보내질 때 소수 셋째 자리로 불린다 — E2E 훅 window.__mfPin.zoom 용(09.1.1-13). 제품은 넘기지 않는다 */
   onZoom?: (zoom: number) => void;
   /**
@@ -404,6 +412,15 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   /** 내 캐릭터 빛: 마지막으로 보낸 자리 키(nightCitizen 이 아니면 "-") */
   let selfLightKey: string | null = "-";
   let zoomSent = 1;
+  /**
+   * 마을 컷어웨이·집 주인(20-05): 방이 있는 맵에서만 쓴다. cutSent = 렌더러에 마지막으로 보낸 열린 방 집합(null = 이 렌더러에는 아직 안 보냄 → 다음에 보낼 때 instant),
+   * ownersKey = 마지막으로 보낸 집 주인 좌석 키, townKey = onTown 에 마지막으로 알린 값의 키
+   */
+  const hasRooms = (map.rooms?.length ?? 0) > 0;
+  let cutSent: ReadonlySet<RoomId> | null = null;
+  let ownerSeats: number[] = [];
+  let ownersKey: string | null = null;
+  let townKey: string | null = null;
   /** 지금 그리는 확대와, 고정 카메라로 옮기는 중인 전환(고정이 아니면 null) */
   let zoomCur = 1;
   let fixed: { zoom: number; start: number; from: { x: number; z: number; off: number; zoom: number } } | null = null;
@@ -562,6 +579,12 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         dispatch({ t: "lost", at: Date.now() });
       }
       return;
+    }
+    // 장면 그래프는 recreate 를 넘어 살지만 연출 없이 지금 목표를 다시 놓는다: 다음 프레임이 열린 방을 instant 로 한 번 더 보내고 집 주인도 다시 보낸다(20-05)
+    if (e.t === "recreated") {
+      cutSent = null;
+      townKey = null;
+      sendOwners(true);
     }
     dispatch({ t: e.t });
   }
@@ -742,6 +765,51 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   }
 
   /** view 가 바뀔 때마다: view 에 없는 seat 의 구간을 지우고 퇴장 연출, 끊김 어둡게를 맞춘다 */
+  /** 집 주인(D-07): 이번 판에 앉은 좌석(오름차순)이 바뀔 때만 렌더러에 보낸다. force 면 같아도 다시 보낸다(recreate 뒤). 방이 없는 맵에서는 보내지 않는다 */
+  function sendOwners(force: boolean): void {
+    if (!hasRooms || renderer === null) return;
+    const seats = [...new Set(deps.players().map((p) => p.seat))].sort((a, b) => a - b);
+    const key = seats.join(",");
+    if (!force && key === ownersKey) return;
+    ownersKey = key;
+    ownerSeats = seats;
+    renderer.setOwners?.(seats);
+  }
+
+  /**
+   * 컷어웨이(D-10·D-11, P20-8): 내 그려진 위치의 구역(서버와 같은 zoneOf)으로 열 방을 정하고 바뀔 때만 렌더러에 보낸다.
+   * 유령·결과 화면(roomsOpen)은 네 방 모두. 내 몸이 아직 없으면(첫 프레임 전) 보내지 않는다 — 장면은 덮인 채로 시작하므로 처음 걷힘이 연출로 보이지 않게 기다린다.
+   * 이 렌더러에 처음 보내거나 recreate 뒤거나 모션 줄이기면 instant
+   */
+  function updateTown(r: WorldRenderer, reduced: boolean): void {
+    if (!hasRooms) return;
+    const all = look?.roomsOpen === true;
+    const mine = actors.get(deps.mySeat());
+    const zone: ZoneId | null = mine === undefined ? null : zoneOf(map, Math.round(mine.pos.x * UNIT), Math.round(mine.pos.z * UNIT));
+    const open = cutawayOf(zone, all);
+    let sent = cutSent;
+    if (all || mine !== undefined) {
+      if (sent === null || !sameRooms(sent, open)) {
+        r.setCutaway?.(open, reduced || sent === null);
+        cutSent = open;
+        sent = open;
+      }
+    }
+    if (deps.onTown === undefined) return;
+    const roofs = r.roofs?.() ?? { post: 1, pub: 1, clinic: 1, police: 1 };
+    const round2 = (v: number): number => Math.round(v * 100) / 100;
+    const state = {
+      zone: zone ?? "plaza",
+      open: ROOM_IDS.filter((id) => (sent ?? open).has(id)),
+      roofs: { post: round2(roofs.post), pub: round2(roofs.pub), clinic: round2(roofs.clinic), police: round2(roofs.police) },
+      owners: [...ownerSeats],
+    };
+    const key = JSON.stringify(state);
+    if (key === townKey) return;
+    townKey = key;
+    deps.onTown(state);
+  }
+
   function syncPlayers(): void {
     if (disposed) return;
     const players = deps.players();
@@ -760,6 +828,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
     }
     emitLooks();
+    sendOwners(false);
     // 닉네임·표시가 바뀔 수 있어 이름표 폭을 다음 프레임에 다시 잰다
     for (const a of actors.values()) a.tagW = null;
   }
@@ -1286,6 +1355,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
 
     updatePin(r, dt * 1000, sNow, reduced);
+    updateTown(r, reduced);
 
     // 내 캐릭터 빛(NIGHT-07): nightCitizen 조명에서만 내 캐릭터 위로 따라가고, 다른 단계에서는 기본 자리(세기는 조명 단계가 0 으로 만든다).
     // 광원은 렌더러가 처음부터 갖고 있다 — 여기서 만들거나 지우지 않는다(Pitfall 7)

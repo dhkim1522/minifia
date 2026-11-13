@@ -94,6 +94,7 @@ function sceneOf(cast: ReturnType<typeof castOf>, state: ResultState, sat: reado
     tension: 0,
     pin: state.lit ? { mode: "point", x: GATHER_CENTER.x, z: GATHER_CENTER.z } : null,
     seats,
+    roomsOpen: true, // 판이 끝난 뒤라 마을의 네 방 모두 걷힌다(D-11)
   };
 }
 

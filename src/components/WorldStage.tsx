@@ -14,7 +14,7 @@ import type { SceneLook } from "../world/presence";
 import { initialMapStatus } from "../world/status";
 import type { MapStatusState } from "../world/status";
 import type { WorldStore } from "../world/store";
-import { installEmotesHook, installGhostsHook, installLooksHook, installMapHook, installPinHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
+import { installEmotesHook, installGhostsHook, installLooksHook, installMapHook, installPinHook, installTownHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
 import { MapStatusCard } from "./MapStatusCard";
 import { ErrandAct } from "./v2/ErrandAct";
 import { ErrandArrow, ErrandMarker } from "./v2/ErrandMarker";
@@ -365,6 +365,8 @@ export function WorldStage(props: WorldStageProps) {
     const looksHook = hooksOn ? installLooksHook() : null;
     // window.__mfMap(이 렌더러에 올린 맵 id, 11-13, L33): 같은 훅 문맥에서만. DOM 이 아니다
     const mapHook = hooksOn ? installMapHook(mapId) : null;
+    // window.__mfTown(내 구역·열린 방·지붕 불투명도·집 주인, 20-05, L33): 마을 판 + 같은 훅 문맥에서만. 이미 받은 값에서 계산한 것뿐이고 DOM 이 아니다
+    const townHook = hooksOn && mapId === "town" ? installTownHook() : null;
     const runtime = createWorldRuntime({
       host,
       tagLayer,
@@ -392,6 +394,7 @@ export function WorldStage(props: WorldStageProps) {
       onLooks: looksHook?.set,
       onCostumes: (costumes, dimmed) => live.current.props.onCostumes?.(costumes, dimmed),
       onZoom: pinHook?.setZoom,
+      onTown: townHook === null ? undefined : (state) => townHook.patch(state),
       onProject: (project, now) => {
         const { props: p } = live.current;
         const layer = errandRef.current;
@@ -415,6 +418,7 @@ export function WorldStage(props: WorldStageProps) {
       emotesHook?.off();
       looksHook?.off();
       mapHook?.off();
+      townHook?.off();
       runtime.dispose();
       if (runtimeRef.current === runtime) runtimeRef.current = null;
     };
