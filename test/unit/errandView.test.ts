@@ -8,7 +8,7 @@ import { BAR_PLACES, UNIT } from "../../shared/game/map";
 import { PLAZA_PLACES } from "../../shared/game/mapPlaza";
 import { ERRAND_ACT_R, ERRAND_MS } from "../../shared/game/phases";
 import type { Player, RoomState } from "../../shared/game/room";
-import { PLACE_IDS } from "../../shared/protocol";
+import { LAMP_PLACE_IDS, PLACE_IDS } from "../../shared/protocol";
 import type { PlaceId, RoomView } from "../../shared/protocol";
 import { V2Icon } from "../../src/components/v2/V2Icon";
 import type { V2IconName } from "../../src/components/v2/V2Icon";
@@ -32,14 +32,14 @@ function viewOf(map: "bar" | "plaza" | undefined, errand: { places: PlaceId[]; d
 }
 
 describe("장소 낱말·아이콘", () => {
-  it("장소 아이콘은 16개다 — PLACE_IDS 16 = 재즈 바 후보 8 + 광장 후보 8 (계획의 16·18 불일치는 16 이 맞다: 18 은 arrow·thread 를 더한 새 아이콘 이름 수)", () => {
-    expect(PLACE_IDS.length).toBe(16);
-    expect(BAR_PLACES.length + PLAZA_PLACES.length).toBe(16);
-    expect(new Set([...BAR_IDS, ...PLAZA_IDS]).size).toBe(16);
-    expect(JSON.stringify([...BAR_IDS, ...PLAZA_IDS].sort())).toBe(JSON.stringify([...PLACE_IDS].sort()));
+  it("장소 id 는 24개다 — PLACE_IDS 24 = 재즈 바 후보 8 + 광장 후보 8 + 마을 가로등 8 (21페이즈 D-05). 그림 에셋은 앞 16개뿐이고 가로등은 lamp 그림을 함께 쓴다", () => {
+    expect(PLACE_IDS.length).toBe(24);
+    expect(BAR_PLACES.length + PLAZA_PLACES.length + LAMP_PLACE_IDS.length).toBe(24);
+    expect(new Set([...BAR_IDS, ...PLAZA_IDS, ...LAMP_PLACE_IDS]).size).toBe(24);
+    expect(JSON.stringify([...BAR_IDS, ...PLAZA_IDS, ...LAMP_PLACE_IDS].sort())).toBe(JSON.stringify([...PLACE_IDS].sort()));
   });
 
-  it("PLACE_NAME 은 16개 id 모두의 키를 가지고 같은 맵 안의 낱말이 서로 다르다", () => {
+  it("PLACE_NAME 은 24개 id 모두의 키를 가지고 같은 맵 안의 낱말이 서로 다르다", () => {
     expect(JSON.stringify(Object.keys(PLACE_NAME).sort())).toBe(JSON.stringify([...PLACE_IDS].sort()));
     for (const ids of [BAR_IDS, PLAZA_IDS]) {
       const words = ids.map((id) => PLACE_NAME[id as PlaceId]);
