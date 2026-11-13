@@ -26,15 +26,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-07)
 
 **Core value:** 링크 하나로 모인 친구들이 설명 없이 정통 마피아 한 판(평균 10~15분, 참고 목표)을 끝까지 마치는 것
-**Current focus:** Phase 20 — map-expansion
+**Current focus:** Phase 21 — cause-effect-missions
 
 ## Current Position
 
-Phase: 20 (map-expansion) — COMPLETE (배포 07d6afee, 검증은 v3.0 끝 실테스트로 미룸)
-Current Plan: 10
-Total Plans in Phase: 10
-Status: Phase complete — ready for verification
-Last activity: 2026-11-13 — 20-10 완료 (로컬 전 흐름 폰 6종 회귀 통과, minifia-v3 배포 `2026-11-13T03:30:33Z+07d6afee`, smoke full 통과, 결정 0087). 20 페이즈 10/10. 다음 21
+Phase: 21 (cause-effect-missions) — IN PROGRESS
+Current Plan: 1 완료 → 다음 21-02 (기존 시험 회귀 정리)
+Total Plans in Phase: 18
+Status: Executing Phase 21
+Last activity: 2026-11-13 — 21-01 완료 (확장판 하루 순서 roleReveal → errand → night → (morning) → discussion, 처형 없는 날은 저녁으로, 마을 밤 집 앞 순간이동·토론 모이기 `{일차}:talk`). 새 시험 통과, 기존 시험 다수가 깨진 채 21-02 로 넘김(단위 3 파일 무한 루프)
 
 ## Performance Metrics
 
@@ -723,7 +723,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 ## Session Continuity
 
 Last session: 2026-11-13T03:37:09.789Z
-Stopped at: Completed 20-10-PLAN.md
+Stopped at: Completed 21-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
