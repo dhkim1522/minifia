@@ -2302,7 +2302,11 @@ describe("마을 문 연출 (20-06, D-15·P20-9)", () => {
     expect(lit).toBeGreaterThan(0);
     doorEvent(s.store, "vanish", 2);
     frame(16);
-    frames(150);
+    frames(150); // 불투명도 0.5 아래(몸은 아직 있다): 핀이 꺼지기 시작한다(켜짐 수준이 내려간다)
+    expect(r.chars.has(2)).toBe(true);
+    const dimming = r.setPin.mock.calls.at(-1)![0] as { strength: number } | null;
+    expect(dimming === null || dimming.strength < 0.85).toBe(true);
+    frames(700); // 끄는 시간(420ms)이 지나면 완전히 꺼진다
     expect(r.setPin.mock.calls.at(-1)![0]).toBeNull();
   });
 });
