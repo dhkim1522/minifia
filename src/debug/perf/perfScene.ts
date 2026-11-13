@@ -78,7 +78,7 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
   const serverNow = (): number => wall0 + elapsed();
 
   const store = new WorldStore();
-  // ?map=plaza 면 광장 마스크·입장 지점으로 걷고 런타임이 광장 장면을 올린다(기본 bar)
+  // ?map=plaza|town 이면 그 맵의 마스크·입장 지점으로 걷고 런타임이 그 장면을 올린다(기본 bar)
   const map = mapOf(p.map);
   const scenario = createScenario({ seed: p.seed, chars: p.chars, map, burst: p.burst });
   store.applyFrame({ t: "world", k: "snap", at: wall0, ents: scenario.initial().map((e) => ({ s: e.s, p: e.p, t0: wall0 + e.t0, v: e.v })) }, 1);

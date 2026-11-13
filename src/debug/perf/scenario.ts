@@ -166,7 +166,7 @@ export interface PerfParams {
   outfits: "coat" | "mix";
   /** 같은 시각에 동작하는 사람 수 1~4 */
   burst: number;
-  /** 장면과 걷기 시나리오의 맵(MAP-06): bar = 지하 재즈 바(기본), plaza = 시계탑 광장. 광장 성능 측정(11-10)용 */
+  /** 장면과 걷기 시나리오의 맵(MAP-06): bar = 지하 재즈 바(기본), plaza = 시계탑 광장, town = 마을(20-09). 맵별 성능 측정용 */
   map: MapId;
 }
 
@@ -196,6 +196,6 @@ export function parsePerfParams(q: URLSearchParams): PerfParams {
     nav: q.get("nav") === "1",
     outfits: q.get("outfits") === "mix" ? "mix" : "coat",
     burst: burst !== null && Number.isInteger(burst) && burst >= 1 && burst <= 4 ? burst : 1,
-    map: q.get("map") === "plaza" ? "plaza" : "bar",
+    map: q.get("map") === "plaza" ? "plaza" : q.get("map") === "town" ? "town" : "bar",
   };
 }

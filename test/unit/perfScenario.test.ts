@@ -298,7 +298,7 @@ describe("광장 성능 측정 입구 (MAP-06, 11-10 Task 3)", () => {
       }
       const x = m.p[m.p.length - 2]!;
       const z = m.p[m.p.length - 1]!;
-      expect(isWalkable(TOWN_MAP, Math.floor((x / UNIT - TOWN_MAP.origin) / 0.5), Math.floor((z / UNIT - TOWN_MAP.origin) / 0.5))).toBe(true);
+      expect(isWalkable(TOWN_MAP, Math.floor((x / UNIT - (TOWN_MAP.origin ?? 0)) / 0.5), Math.floor((z / UNIT - (TOWN_MAP.origin ?? 0)) / 0.5))).toBe(true);
     }
   });
 
