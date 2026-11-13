@@ -3,9 +3,13 @@
 // 서버 전용 값은 이 파일에 없다. 시각·난수·DOM 을 읽지 않는다. 글은 TRACE_TEXT 와 UI-SPEC Copywriting 닫힌 표(발자국 하나~여덟·먼저 손댄 흔적·
 // 어두워서 못 봤어요·목격 n·단서 없음)에서만 온다 — 역할 연상어·'범인'·'증거'·'확정' 이 없다. 사람은 '참가자' 로 부른다.
 import { isAlive } from "../../shared/game/alive";
+import { UNIT } from "../../shared/game/map";
+import { TOWN_CLUE_SPOTS } from "../../shared/game/mapTown";
+import { ERRAND_ACT_R, MORNING_SCENE_MS } from "../../shared/game/phases";
 import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import type { ClueLine, ClueSpotId, PublicPlayer, RecordLine, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
+import { ANNOUNCE_MORNING_AT, ANNOUNCE_MORNING_MS, ANNOUNCE_POLICE_AT, ANNOUNCE_POLICE_MS } from "./dayView";
 import { sameOutfitSeats } from "./traceMark";
 import { TRACE_TEXT } from "./traceText";
 
@@ -147,4 +151,72 @@ export function boardMarksOf(players: ReadonlyArray<Pick<PublicPlayer, "seat" | 
     }
   }
   return out;
+}
+
+/**
+ * 아침 · 현장 조사 화면인가(21-13, D-13·D-16): 확장판의 아침이고 현장(피해자 집, 미수면 노린 집)이 있다. 현장이 없는 밤은 아침 단계 자체가 없다(D-17).
+ * 산 사람인지(유령은 지점·카드·[살펴보기] 가 없다)는 부르는 쪽이 본다. 역할을 읽지 않는다
+ */
+export function sceneMorningOf(view: Pick<RoomView, "phase" | "mode" | "day">): boolean {
+  return view.phase === "morning" && rulesetOf(modeOf(view)).errand && view.day?.scene !== undefined;
+}
+
+/** 결과 알림(큰 글) 뒤 지점이 서는 시각(단계 시작 기준 ms): 보통 알림(0.4초 뒤 2.4초 동안)이 끝나는 때 */
+export const SCENE_ON_AFTER_MS = ANNOUNCE_MORNING_AT + ANNOUNCE_MORNING_MS;
+/** 알림이 더 길게 보이는 아침(경찰 결과 알림 2.6초 뒤 2.2초)의 끝. 이때가 지나면 알림이 보이든 말든 선다 — 역할을 읽지 않고 알림이 아직 떠 있는지(announceShown)만 본다 */
+export const SCENE_ON_MAX_MS = ANNOUNCE_POLICE_AT + ANNOUNCE_POLICE_MS;
+
+/**
+ * 아침 지점이 서기까지 남은 ms(0 이면 지금). 서버 시계 기준이다 — 단계 시작 = phaseEndsAt − 단계 길이.
+ * 기본 시각(SCENE_ON_AFTER_MS)이 지나도 결과 알림이 아직 보이면(announceShown) 최대 시각까지 기다린다. 재접속·늦은 합류는 0 이라 연출 없이 바로 선다.
+ */
+export function sceneDelayMs(view: Pick<RoomView, "phaseEndsAt" | "phaseDurationMs">, serverNow: number, announceShown: boolean): number {
+  if (view.phaseEndsAt === null) return 0;
+  const start = view.phaseEndsAt - (view.phaseDurationMs ?? MORNING_SCENE_MS);
+  const elapsed = serverNow - start;
+  if (elapsed >= SCENE_ON_MAX_MS) return 0;
+  if (elapsed >= SCENE_ON_AFTER_MS) return announceShown ? SCENE_ON_MAX_MS - elapsed : 0;
+  return SCENE_ON_AFTER_MS - elapsed;
+}
+
+/** 현장 집의 단서 지점 세 곳(월드 단위). 집이 없거나 표가 없으면 빈 배열. 번호 1~3 순서 */
+export function clueSpotPointsOf(house: number | undefined): Array<{ spot: ClueSpotId; x: number; z: number }> {
+  const pts = house === undefined ? undefined : TOWN_CLUE_SPOTS[house];
+  if (pts === undefined) return [];
+  return ([1, 2, 3] as const).map((spot) => ({ spot, x: pts[spot - 1]!.x / UNIT, z: pts[spot - 1]!.z / UNIT }));
+}
+
+/**
+ * 내 발밑 기준 지점: act = 처리 반경(ERRAND_ACT_R) 안의 안 살핀 지점 중 가장 가까운 것(같으면 번호 작은 것, 서버 판정과 같은 고정소수점 거리),
+ * next = 위치와 무관하게 안 살핀 지점 중 가장 가까운 것(위치를 모르면 첫 번째). 안 살핀 지점이 없으면 둘 다 null. 살핀 결과(touched 포함)는 모두 살핀 것이다
+ */
+export function sceneNearOf(
+  pos: { x: number; z: number } | null | undefined,
+  house: number | undefined,
+  inspected: readonly ClueSpotId[],
+): { act: ClueSpotId | null; next: ClueSpotId | null } {
+  let act: ClueSpotId | null = null;
+  let actD = Infinity;
+  let next: ClueSpotId | null = null;
+  let nextD = Infinity;
+  const reach = Math.round(ERRAND_ACT_R * UNIT);
+  for (const pt of clueSpotPointsOf(house)) {
+    if (inspected.includes(pt.spot)) continue;
+    if (pos === null || pos === undefined) {
+      next ??= pt.spot;
+      continue;
+    }
+    const dx = Math.round(pt.x * UNIT) - Math.round(pos.x * UNIT);
+    const dz = Math.round(pt.z * UNIT) - Math.round(pos.z * UNIT);
+    const d = dx * dx + dz * dz;
+    if (d < nextD) {
+      nextD = d;
+      next = pt.spot;
+    }
+    if (d <= reach * reach && d < actD) {
+      actD = d;
+      act = pt.spot;
+    }
+  }
+  return { act, next };
 }

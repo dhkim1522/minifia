@@ -20,7 +20,7 @@ export interface HostBandProps {
   /** 역할 카드 앞면을 본 적이 있는가(클라이언트 상태) */
   cardSeen: boolean;
   /** 클라이언트 상태(15-07·18.1-12): 목격 기록을 열었는가·아침 흔적 구간인가·심부름 시작 카드가 떠 있는가. 맵 화면이 알린다. 없으면 모두 거짓 */
-  local?: Pick<HostLocal, "recordOpened" | "traceOn" | "startCard">;
+  local?: Pick<HostLocal, "recordOpened" | "traceOn" | "startCard" | "sceneOn">;
   /** 소리를 지원하는 환경이면 독에 단추를 둔다 */
   sound?: SoundView | null;
 }

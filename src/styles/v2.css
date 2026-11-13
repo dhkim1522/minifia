@@ -533,7 +533,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-clue-chip.is-faint > svg { color: var(--gray-300); }
 .mv-clue-chip--chip.is-faint { border: 1px dashed var(--gray-500); }
 .mv-clue-chip--card.is-faint { border: 1px dashed var(--gray-500); opacity: 0.75; }
-@keyframes mv-clue-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes mv-clue-rise { from { opacity: 0; transform: translateY(8px); } }
 @media (prefers-reduced-motion: reduce) {
   .mv-clue-chip--card { animation: none; }
 }

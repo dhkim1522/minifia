@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { phaseKey } from "../../shared/game/audience";
-import type { ClientMessage, EmoteId, MapId, PlaceId, PublicPlayer, RoomView } from "../../shared/protocol";
-import { HOUSE_ROOF_TOP_Y, TOWN_HOUSES } from "../../shared/game/mapTown";
+import type { ClientMessage, ClueSpotId, EmoteId, MapId, PlaceId, PublicPlayer, RoomView } from "../../shared/protocol";
+import { HOUSE_ROOF_TOP_Y, TOWN_HOUSES, TOWN_LAMPS } from "../../shared/game/mapTown";
 import { MOVE_COORD_LIMIT } from "../../shared/protocol";
+import { clueSpotPointsOf } from "../game/causalView";
+import type { SpotState } from "../game/causalView";
 import { placeMarkerPlan } from "../game/errandView";
 import type { Rect } from "../game/errandView";
 import { useReducedMotion } from "../net/useReducedMotion";
@@ -18,7 +20,9 @@ import type { WorldStore } from "../world/store";
 import { installEmotesHook, installGhostsHook, installLooksHook, installMapHook, installPinHook, installTownHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
 import { MapStatusCard } from "./MapStatusCard";
 import { ErrandAct } from "./v2/ErrandAct";
+import { ClueSpot } from "./v2/ClueSpot";
 import { ErrandArrow, ErrandMarker } from "./v2/ErrandMarker";
+import { LampOffMark } from "./v2/LampOffMark";
 import { HousePick } from "./v2/HousePick";
 import type { HousePickProps, HousePlateView } from "./v2/HousePick";
 import { HeadStack } from "./v2/HeadStack";
@@ -111,6 +115,31 @@ export interface HouseLayerProps extends Omit<HousePickProps, "plates"> {
   plates: ReadonlyArray<Omit<HousePlateView, "x" | "y">>;
 }
 
+/**
+ * 아침 현장 층 입력(21-13, P21-13): 현장 집의 단서 지점 셋(지점 상태는 내가 살핀 결과)과 꺼진 등불. 위치는 이 층이 쓴다 —
+ * 지점은 바닥(y 0)에서(좌표는 서버 표 TOWN_CLUE_SPOTS 를 clueSpotPointsOf 가 월드 단위로 읽는다), 꺼진 등불은 가로등 기둥 TOWN_LAMPS[n].pole 의 구 높이(y 2.6)에서 투영한다(심부름 층과 같은 방식). 좌석·역할은 이 층에 들어오지 않는다
+ */
+export interface ClueLayerProps {
+  /** 현장 집 좌석(day.scene.house). 없거나 spotsOn 이 거짓이면 지점을 그리지 않는다(유령·결과 알림 중) */
+  house?: number;
+  spotsOn: boolean;
+  /** 지점별 상태 = 내가 살핀 결과(살피기 전에는 모두 fresh) */
+  states: Readonly<Record<ClueSpotId, SpotState>>;
+  /** 처리 반경 안 안 살핀 지점(있으면 독의 [살펴보기] 가 빛난다) */
+  actSpot: ClueSpotId | null;
+  /** 가장 가까운 안 살핀 지점(반경 밖일 때 이 지점이 빛난다) */
+  nextSpot: ClueSpotId | null;
+  /** 꺼진 등불의 가로등 번호(공개 값에서만) */
+  lampsOff: readonly number[];
+  /** 지점 표식을 눌렀다는 알림(걷기는 이 층이 바닥 탭과 같은 경로로 한다) */
+  onWalk?(spot: ClueSpotId): void;
+}
+
+/** 꺼진 등불 표식 높이: 가로등 기둥 구(y) */
+const LAMP_GLOBE_Y = 2.6;
+const SPOT_HALF = 26; // 지점 표식 52 의 절반
+const LAMP_OFF_HALF = 18; // 꺼진 등불 표식 36 의 절반
+
 /** 판 좌표가 이 거리(px)보다 덜 움직였으면 같은 자리로 본다 */
 const HOUSE_SAME_PX = 0.5;
 type HousePts = Readonly<Record<number, { x: number; y: number }>>;
@@ -135,6 +164,31 @@ interface ErrandWriteCache {
   tag: Rect | null;
 }
 
+/** 층이 피할 사각형·스테이지 사각형을 잰다(RECT_TTL_MS 마다 한 번 — 프레임마다 레이아웃을 강제하지 않는다) */
+function measureLayerCache(host: HTMLElement, insets: { top: number; bottom: number }, now: number): ErrandWriteCache {
+  const w = host.clientWidth || window.innerWidth;
+  const h = host.clientHeight || window.innerHeight;
+  const base = host.getBoundingClientRect();
+  const rel = (el: Element): Rect => {
+    const d = el.getBoundingClientRect();
+    return { left: d.left - base.left, top: d.top - base.top, right: d.right - base.left, bottom: d.bottom - base.top };
+  };
+  const avoid = [...host.ownerDocument.querySelectorAll("[data-side-button]")].map(rel);
+  // 진행 점 줄(16-08, V-23): 아래 패널이 없는 심부름 스테이지는 화면 아래까지 넓어서 타일·알약은 점 줄 윗변 − 8 위에만 놓는다.
+  // 스테이지 아래 끝을 점 줄 윗변으로 올리고(안쪽 여백 8 이 윗변 − 8 이 된다) 줄 자체도 피할 사각형에 더한다.
+  let stageBottom = h - insets.bottom;
+  const dotsEl = host.ownerDocument.querySelector("[data-errand-dots]");
+  if (dotsEl !== null) {
+    const dr = rel(dotsEl);
+    if (dr.bottom > dr.top) {
+      avoid.push({ left: dr.left, top: dr.top - 8, right: dr.right, bottom: dr.bottom });
+      stageBottom = Math.min(stageBottom, dr.top);
+    }
+  }
+  const tagEl = host.querySelector(".mf-world__tag[data-me]");
+  return { at: now, stage: { left: 0, top: insets.top, right: w, bottom: stageBottom }, avoid, tag: tagEl === null ? null : rel(tagEl) };
+}
+
 /** 프레임 투영 쓰기 — 숨김·transform·빛남·후광·링 점만 DOM 에 직접 쓴다. 값이 같으면 쓰지 않는다 */
 function writeErrandLayer(
   layer: HTMLElement,
@@ -147,29 +201,7 @@ function writeErrandLayer(
   cache: { current: ErrandWriteCache | null },
   now: number,
 ): void {
-  if (cache.current === null || now - cache.current.at >= RECT_TTL_MS) {
-    const w = host.clientWidth || window.innerWidth;
-    const h = host.clientHeight || window.innerHeight;
-    const base = host.getBoundingClientRect();
-    const rel = (el: Element): Rect => {
-      const d = el.getBoundingClientRect();
-      return { left: d.left - base.left, top: d.top - base.top, right: d.right - base.left, bottom: d.bottom - base.top };
-    };
-    const avoid = [...host.ownerDocument.querySelectorAll("[data-side-button]")].map(rel);
-    // 진행 점 줄(16-08, V-23): 아래 패널이 없는 심부름 스테이지는 화면 아래까지 넓어서 타일·알약은 점 줄 윗변 − 8 위에만 놓는다.
-    // 스테이지 아래 끝을 점 줄 윗변으로 올리고(안쪽 여백 8 이 윗변 − 8 이 된다) 줄 자체도 피할 사각형에 더한다.
-    let stageBottom = h - insets.bottom;
-    const dotsEl = host.ownerDocument.querySelector("[data-errand-dots]");
-    if (dotsEl !== null) {
-      const dr = rel(dotsEl);
-      if (dr.bottom > dr.top) {
-        avoid.push({ left: dr.left, top: dr.top - 8, right: dr.right, bottom: dr.bottom });
-        stageBottom = Math.min(stageBottom, dr.top);
-      }
-    }
-    const tagEl = host.querySelector(".mf-world__tag[data-me]");
-    cache.current = { at: now, stage: { left: 0, top: insets.top, right: w, bottom: stageBottom }, avoid, tag: tagEl === null ? null : rel(tagEl) };
-  }
+  if (cache.current === null || now - cache.current.at >= RECT_TTL_MS) cache.current = measureLayerCache(host, insets, now);
   const { stage, avoid, tag } = cache.current;
   const items: Array<{ id: PlaceId; x: number; y: number }> = [];
   for (const pl of cfg.places) {
@@ -266,6 +298,91 @@ function writeErrandLayer(
   }
 }
 
+/**
+ * 아침 현장 층 프레임 쓰기(21-13): 지점 표식 52 는 상자 전체가 스테이지 안쪽(8) 안일 때만 그리고, 아니면 숨기고 가장 가까운 안 살핀 지점이 화면 밖이면 ErrandArrow 가 그쪽을 가리킨다.
+ * 꺼진 등불은 기둥 구 높이(y 2.6)를 투영해 36 상자가 안쪽에 있을 때만 그린다(화면 밖이면 그리지 않는다 — 화살표 없음). 값이 같으면 쓰지 않는다
+ */
+function writeClueLayer(
+  layer: HTMLElement,
+  host: HTMLElement,
+  cfg: ClueLayerProps,
+  project: (x: number, z: number) => { sx: number; sy: number } | null,
+  at: (x: number, y: number, z: number) => { sx: number; sy: number } | null,
+  mine: { x: number; z: number } | null,
+  insets: { top: number; bottom: number },
+  cache: { current: ErrandWriteCache | null },
+  now: number,
+): void {
+  if (cache.current === null || now - cache.current.at >= RECT_TTL_MS) cache.current = measureLayerCache(host, insets, now);
+  const { stage, avoid, tag } = cache.current;
+  const toggle = (el: Element, name: string, on: boolean): void => {
+    if (on === el.hasAttribute(name)) return;
+    if (on) el.setAttribute(name, "");
+    else el.removeAttribute(name);
+  };
+  const place = (el: HTMLElement, x: number, y: number, half: number): void => {
+    const t = `translate(${Math.round(x - half)}px, ${Math.round(y - half)}px)`;
+    if (el.style.transform !== t) el.style.transform = t;
+    if (el.hidden) el.hidden = false;
+  };
+  const hide = (el: HTMLElement): void => {
+    if (!el.hidden) el.hidden = true;
+  };
+  const inner = { left: stage.left + 8, top: stage.top + 8, right: stage.right - 8, bottom: stage.bottom - 8 };
+  const fits = (x: number, y: number, half: number): boolean => x - half >= inner.left && x + half <= inner.right && y - half >= inner.top && y + half <= inner.bottom;
+
+  const points = clueSpotPointsOf(cfg.house);
+  const items: Array<{ id: string; x: number; y: number }> = [];
+  for (const pt of points) {
+    const q = project(pt.x, pt.z);
+    if (q !== null) items.push({ id: String(pt.spot), x: q.sx, y: q.sy });
+  }
+  const me = mine === null ? null : project(mine.x, mine.z);
+  const plan = placeMarkerPlan<string>({
+    stage,
+    avoid,
+    items,
+    me: me === null ? null : { x: me.sx, y: me.sy },
+    nextId: cfg.actSpot === null && cfg.nextSpot !== null ? String(cfg.nextSpot) : null,
+    actId: null,
+    tile: SPOT_HALF * 2,
+    ...(tag !== null ? { arrowAvoid: [tag] } : {}),
+  });
+  const shown = new Map(plan.pins.map((p) => [p.id, p]));
+  for (const el of layer.querySelectorAll<HTMLElement>("button[data-clue-spot]")) {
+    const spot = Number(el.getAttribute("data-clue-spot")) as ClueSpotId;
+    const pin = shown.get(String(spot));
+    if (pin === undefined) {
+      hide(el);
+      el.classList.remove("is-call");
+      toggle(el, "data-call", false);
+      continue;
+    }
+    place(el, pin.x, pin.y, SPOT_HALF);
+    const on = cfg.actSpot === null && cfg.nextSpot === spot && cfg.states[spot] === "fresh";
+    el.classList.toggle("is-call", on);
+    toggle(el, "data-call", on);
+  }
+  const arrowEl = layer.querySelector<HTMLElement>("[data-errand-arrow]");
+  if (arrowEl !== null) {
+    // 가장 가까운 안 살핀 지점이 그려졌으면(화면 안) 화살표는 없다
+    const arrow = plan.arrow !== null && !shown.has(plan.arrow.id) ? plan.arrow : null;
+    if (arrow === null) hide(arrowEl);
+    else {
+      place(arrowEl, arrow.x, arrow.y, ARROW_HALF);
+      const turn = arrowEl.querySelector<HTMLElement>(".mv-errand-arrow__turn");
+      const rot = `rotate(${Math.round(arrow.angle * 10) / 10}deg)`;
+      if (turn !== null && turn.style.transform !== rot) turn.style.transform = rot;
+    }
+  }
+  for (const el of layer.querySelectorAll<HTMLElement>("[data-lamp-off]")) {
+    const lamp = TOWN_LAMPS[Number(el.getAttribute("data-lamp-off"))];
+    const q = lamp === undefined ? null : at(lamp.pole.x, LAMP_GLOBE_Y, lamp.pole.z);
+    if (q === null || !fits(q.sx, q.sy, LAMP_OFF_HALF)) hide(el);
+    else place(el, q.sx, q.sy, LAMP_OFF_HALF);
+  }
+}
+
 export interface WorldStageProps {
   view: RoomView;
   store: WorldStore;
@@ -310,6 +427,8 @@ export interface WorldStageProps {
   errand?: ErrandLayerProps;
   /** 밤 집 판 층(21-12, 확장판 마을 밤의 산 사람). 있으면 이름표 층 위에 집 8채 지붕의 판을 그린다 */
   houses?: HouseLayerProps;
+  /** 아침 현장 층(21-13, 확장판 현장이 있는 아침). 있으면 이름표 층 아래에 현장 집 단서 지점 셋·꺼진 등불·가까운 지점 화살표를 그린다 */
+  clues?: ClueLayerProps;
   /** 이름표를 그리지 않는다(21-12, D-11 — 확장판 마을 밤은 몸만 작게 보이고 이름표가 없다. 유령도 같다). 판 위 이름은 접근성 이름으로만 있다 */
   tagsOff?: boolean;
   onNotice(text: string): void;
@@ -347,9 +466,11 @@ export function WorldStage(props: WorldStageProps) {
   const tagRef = useRef<HTMLDivElement>(null);
   const errandRef = useRef<HTMLDivElement>(null);
   const errandActRef = useRef<HTMLDivElement>(null);
+  const clueRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<WorldRuntime | null>(null);
   const [tracker] = useState(createTapTracker);
   const [errandCache] = useState<{ current: ErrandWriteCache | null }>(() => ({ current: null }));
+  const [clueCache] = useState<{ current: ErrandWriteCache | null }>(() => ({ current: null }));
   // 밤 집 판 좌표(21-12): 프레임 콜백이 지붕 꼭대기를 투영해 두 프레임 연속 같은 자리면(카메라가 멎었다) 그때부터 판이 선다. 그 뒤 자리가 바뀌면 따라간다
   const [housePts, setHousePts] = useState<HousePts | null>(null);
   const housePtsRef = useRef<HousePts | null>(null);
@@ -461,10 +582,13 @@ export function WorldStage(props: WorldStageProps) {
           }
         }
         const layer = errandRef.current;
-        if (layer === null || p.errand === undefined) return;
+        const clueLayer = clueRef.current;
+        if ((layer === null || p.errand === undefined) && (clueLayer === null || p.clues === undefined)) return;
         const mine = p.store.positionOf(p.view.me.seat, now + p.offset);
         const ins = p.stageInsets;
-        writeErrandLayer(layer, errandActRef.current, host, p.errand, project, mine, { top: ins?.top ?? HEADER_BOTTOM, bottom: ins?.bottom ?? PANEL_HEIGHT }, errandCache, now);
+        const insets = { top: ins?.top ?? HEADER_BOTTOM, bottom: ins?.bottom ?? PANEL_HEIGHT };
+        if (layer !== null && p.errand !== undefined) writeErrandLayer(layer, errandActRef.current, host, p.errand, project, mine, insets, errandCache, now);
+        if (clueLayer !== null && p.clues !== undefined) writeClueLayer(clueLayer, host, p.clues, project, at, mine, insets, clueCache, now);
       },
       allowSoftware: hooksOn,
       loadModules: live.current.props.loadModules,
@@ -589,6 +713,19 @@ export function WorldStage(props: WorldStageProps) {
     sendWalk(at);
   };
 
+  // 아침 현장 표지: 그 지점으로 걷는다(바닥 탭과 같은 경로 — 서버로 가는 메시지는 move 하나뿐). 살피기는 독의 [살펴보기] 로만 한다
+  const onCluePin = (spot: ClueSpotId): void => {
+    const { props: p } = live.current;
+    const runtime = runtimeRef.current;
+    const pt = clueSpotPointsOf(p.clues?.house).find((q) => q.spot === spot);
+    if (p.clues === undefined || pt === undefined) return;
+    p.clues.onWalk?.(spot);
+    if (p.canWalk === false || runtime === null || !p.canSend || p.exiting) return;
+    const at = runtime.walkTo(pt.x, pt.z);
+    if (at === null) return;
+    sendWalk(at);
+  };
+
   const mySeat = view.me.seat;
   const here = new Set(view.players.map((p) => p.seat));
   const scene = props.scene;
@@ -647,6 +784,19 @@ export function WorldStage(props: WorldStageProps) {
       {props.errand ? (
         <div ref={errandActRef} className="mf-world__errand-act" data-errand-act-layer="">
           {props.errand.actId !== null && props.errand.dock !== true ? <ErrandAct id={props.errand.actId} call={false} hidden onPress={() => live.current.props.errand?.onAct?.()} /> : null}
+        </div>
+      ) : null}
+      {props.clues ? (
+        <div ref={clueRef} className="mf-world__clues" data-clue-layer="">
+          {props.clues.spotsOn && props.clues.house !== undefined
+            ? clueSpotPointsOf(props.clues.house).map((pt) => (
+                <ClueSpot key={pt.spot} spot={pt.spot} state={props.clues!.states[pt.spot]} call={false} hidden onWalk={() => onCluePin(pt.spot)} />
+              ))
+            : null}
+          {props.clues.lampsOff.map((n) => (
+            <LampOffMark key={n} n={n} hidden />
+          ))}
+          {props.clues.spotsOn && props.clues.house !== undefined ? <ErrandArrow angle={0} call={false} hidden /> : null}
         </div>
       ) : null}
       {props.houses ? (

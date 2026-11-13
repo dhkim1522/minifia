@@ -116,3 +116,12 @@
 /* 근처 반경 링: 굵기 2·gray-50 35% 점선, 정지 모양(모션 줄이기와 무관). 처리 반경은 그리지 않는다 */
 .mf-world__ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; fill: none; stroke: var(--gray-50); stroke-opacity: 0.35; stroke-width: 2; stroke-dasharray: 6 6; stroke-linejoin: round; }
 
+
+/* 아침 현장 층(21-13): 심부름 층과 같은 규칙 — 이름표 층보다 한 단 아래, 층 전체는 눌림 통과, 지점 표식 버튼만 받는다. 위치·숨김은 런타임 프레임 콜백이 DOM 에 직접 쓴다 */
+.mf-world__clues { position: absolute; inset: 0; z-index: calc(var(--z-tags) - 1); pointer-events: none; overflow: hidden; }
+.mf-world__clues > .mv-clue-spot, .mf-world__clues > .mv-lamp-off, .mf-world__clues > .mv-errand-arrow { left: 0; top: 0; }
+.mf-world__clues > .mv-clue-spot { pointer-events: auto; }
+.mf-world__clues [hidden] { display: none; }
+/* 받은 단서 카드 줄(21-13): 독 바로 위 겹침 줄(아래 = 키보드 올림 + 독 높이(--mf-panel-h) + 8), 좌우 16, 눌림 통과, 카드는 flex 1 1 140px 로 줄바꿈 */
+.mf-game__clues { position: absolute; left: var(--space-md); right: var(--space-md); bottom: calc(var(--mf-kb-lift, 0px) + var(--mf-panel-h, 0px) + var(--space-sm)); z-index: calc(var(--z-tags) + 1); display: flex; flex-wrap: wrap; gap: var(--space-sm); pointer-events: none; }
+.mf-game__clues > .mv-clue-chip { flex: 1 1 140px; }

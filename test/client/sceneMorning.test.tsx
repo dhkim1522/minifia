@@ -67,7 +67,7 @@ interface Opts {
   morning?: { eliminated?: number; saved?: true };
   skipPhase?: boolean;
   skipCount?: number;
-  /** 단계가 시작된 뒤 지난 ms(서버 시계) */
+  /** 단계가 시작된 뒤 지난 ms — Date.now()=NOW 에서 본 값이다(단계 시작을 그만큼 앞으로 옮긴다) */
   elapsed?: number;
   mode?: "basic" | "extended";
 }
@@ -90,7 +90,7 @@ function makeView(o: Opts = {}): RoomView {
     phase: "morning",
     phaseEndsAt: NOW + 30_000 - (o.elapsed ?? 0),
     phaseDurationMs: 30_000,
-    serverNow: NOW + (o.elapsed ?? 0),
+    serverNow: NOW,
     mode: o.mode ?? "extended",
     map: "town",
     minPlayers: 3,
@@ -194,13 +194,13 @@ describe("sceneDelayMs: 결과 알림이 끝난 뒤 (순수)", () => {
   const base = makeView();
   it("단계 시작 직후는 기본 시각까지, 알림이 아직 보이면 최대 시각까지 기다린다", () => {
     expect(sceneDelayMs(base, NOW, false)).toBe(SCENE_ON_AFTER_MS);
-    expect(sceneDelayMs(makeView({ elapsed: 1000 }), NOW + 1000, false)).toBe(SCENE_ON_AFTER_MS - 1000);
-    expect(sceneDelayMs(makeView({ elapsed: SCENE_ON_AFTER_MS }), NOW + SCENE_ON_AFTER_MS, true)).toBe(SCENE_ON_MAX_MS - SCENE_ON_AFTER_MS);
-    expect(sceneDelayMs(makeView({ elapsed: SCENE_ON_AFTER_MS }), NOW + SCENE_ON_AFTER_MS, false)).toBe(0);
+    expect(sceneDelayMs(makeView({ elapsed: 1000 }), NOW, false)).toBe(SCENE_ON_AFTER_MS - 1000);
+    expect(sceneDelayMs(makeView({ elapsed: SCENE_ON_AFTER_MS }), NOW, true)).toBe(SCENE_ON_MAX_MS - SCENE_ON_AFTER_MS);
+    expect(sceneDelayMs(makeView({ elapsed: SCENE_ON_AFTER_MS }), NOW, false)).toBe(0);
   });
   it("재접속·늦은 합류(최대 시각을 지났다)는 알림이 보여도 바로 0", () => {
-    expect(sceneDelayMs(makeView({ elapsed: SCENE_ON_MAX_MS }), NOW + SCENE_ON_MAX_MS, true)).toBe(0);
-    expect(sceneDelayMs(makeView({ elapsed: 20_000 }), NOW + 20_000, false)).toBe(0);
+    expect(sceneDelayMs(makeView({ elapsed: SCENE_ON_MAX_MS }), NOW, true)).toBe(0);
+    expect(sceneDelayMs(makeView({ elapsed: 20_000 }), NOW, false)).toBe(0);
   });
 });
 
