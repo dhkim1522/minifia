@@ -415,7 +415,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     ? view.me.ballot
     : undefined;
   const [mine, chooseMine] = useViewChoice<number | undefined>(view, serverMine);
-  // 밤 집 판(21-12): 내가 누른 집은 즉시 고른 표시가 되고 서버 view(me.pick)가 오면 서버 값이 이긴다 — 지금 얼굴 목록(GamePanel)과 같은 규칙. 거절은 아래 rejects 효과가 서버 값으로 되돌린다
+  // 밤 집 판(HousePick, 21-12): 내가 누른 집은 즉시 고른 표시가 되고 서버 view(me.pick)가 오면 서버 값이 이긴다 — 지금 얼굴 목록(GamePanel)과 같은 규칙. 거절은 아래 rejects 효과가 서버 값으로 되돌린다
   const [housePick, chooseHouse] = useViewChoice<number | undefined>(view, view.me.pick);
   // 순차 지목(결정 0063-1): 이름표는 내 차례에만 버튼이다. 누르면 그 차례는 끝난다 — 깜빡임·버튼이 사라지고 취소·바꾸기는 없다.
   // pickedTurn = 내가 이미 누른 차례 번호. 서버가 거절하면 비워 다시 고를 수 있게 한다.
