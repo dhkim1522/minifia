@@ -2,7 +2,7 @@
 // 확장판 4명 판 저녁: 산 사람 셋이 누르면 모든 소켓의 day.skipCount 가 3이고 단계는 그대로, 넷째가 누르면 night 로 바뀐다.
 // 단계는 마감을 당겨 걷고 실제 시간을 기다리지 않는다. 실패 출력은 한 줄이어야 해서(TAP) 값은 문자열로 견준다.
 import { describe, expect, it } from "vitest";
-import { advanceTo, killSeats, lastViewOf, mark, send, settle, startedGame } from "./helpers";
+import { advanceTo, editRoom, killSeats, lastViewOf, mark, mapPlayers, send, settle, startedGame } from "./helpers";
 import type { Actor, Game } from "./helpers";
 
 const json = (v: unknown): string => JSON.stringify(v);
@@ -72,5 +72,28 @@ describe("저녁 [건너뛰기] — 모두 누르면 일찍 넘어간다 (D-23)"
       await quiet(g);
     }
     expect(json(living.map((a) => lastViewOf(a.sock).phase))).toBe(json(living.map(() => "discussion")));
+  }, 60_000);
+
+  it("봇은 분모에서 빠진다 — 사람 셋이 모두 누르면 봇이 안 눌러도 넘어간다(21-06 이탈 1)", async () => {
+    const g = await startedGame("errand", 3);
+    await editRoom(g.code, (room) => mapPlayers(room, (p) => (p.seat === g.actors[3]!.seat ? { ...p, isBot: true } : p)));
+    for (const a of g.actors.slice(0, 3)) {
+      skipAs(a, true);
+      await quiet(g);
+    }
+    expect(json(g.actors.slice(0, 3).map((a) => lastViewOf(a.sock).phase))).toBe(json(Array(3).fill("night")));
+  }, 60_000);
+
+  it("접속이 끊긴 사람은 막지 않는다 — 접속 중인 사람 셋이 누르면 넘어간다, 둘만 눌렀으면 그대로", async () => {
+    const g = await startedGame("errand", 3);
+    await editRoom(g.code, (room) => mapPlayers(room, (p) => (p.seat === g.actors[3]!.seat ? { ...p, connected: false } : p)));
+    for (const a of g.actors.slice(0, 2)) {
+      skipAs(a, true);
+      await quiet(g);
+    }
+    const waiting = json(g.actors.slice(0, 3).map((a) => lastViewOf(a.sock).phase));
+    skipAs(g.actors[2]!, true);
+    await quiet(g);
+    expect(`${waiting} ${json(g.actors.slice(0, 3).map((a) => lastViewOf(a.sock).phase))}`).toBe(`${json(Array(3).fill("errand"))} ${json(Array(3).fill("night"))}`);
   }, 60_000);
 });

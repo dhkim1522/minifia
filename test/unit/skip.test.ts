@@ -66,6 +66,18 @@ describe("skipCountOf·skipReached·clearSkip", () => {
     expect(skipReached(dead)).toBe(true); // 산 사람 셋이 모두 눌렀다
   });
 
+  it("skipReached 의 분모는 산 사람 중 사람(봇 아님)이고 접속 중인 사람뿐 — 봇·접속 끊긴 사람은 막지 않고, 그런 사람이 하나도 없으면 false", () => {
+    const s = evening();
+    const mark = (seats: number[], patch: Record<string, unknown>): RoomState => ({ ...s, players: s.players.map((p) => (seats.includes(p.seat) ? { ...p, ...patch } : p)) });
+    const withBot = press(mark([3], { isBot: true as const }), [0, 1, 2]);
+    const withOffline = press(mark([3], { connected: false }), [0, 1, 2]);
+    const onlyOne = press(mark([1, 2, 3], { connected: false }), [0]);
+    const noneLeft = press(mark([0, 1, 2, 3], { connected: false }), [0, 1, 2, 3]);
+    const humanPending = press(mark([3], { isBot: true as const }), [0, 1]);
+    const botPressedHumansNot = press(mark([3], { isBot: true as const }), [3]);
+    expect(json([skipReached(withBot), skipReached(withOffline), skipReached(onlyOne), skipReached(noneLeft), skipReached(humanPending), skipReached(botPressedHumansNot)])).toBe("[true,true,true,false,false,false]");
+  });
+
   it("clearSkip 은 모든 skipVote 키를 지우고, 없으면 같은 객체다", () => {
     const s = evening();
     const cleared = clearSkip(press(s, [0, 2]));
