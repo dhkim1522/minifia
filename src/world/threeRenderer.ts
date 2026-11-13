@@ -159,6 +159,12 @@ async function build(opts: Opts): Promise<WorldRenderer> {
     setOwners(seats: readonly number[]): void {
       bar.setOwners?.(seats);
     },
+    setLamps(lit: readonly number[], instant: boolean): void {
+      bar.setLamps?.(lit, instant);
+    },
+    setClue(house: number | null, instant: boolean): void {
+      bar.setClue?.(house, instant);
+    },
     roofs(): Readonly<Record<RoomId, number>> {
       return bar.roofs?.() ?? { post: 1, pub: 1, clinic: 1, police: 1 };
     },

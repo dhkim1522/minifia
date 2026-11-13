@@ -5,6 +5,7 @@
 // 읽는 것은 공개 정보(players·alive·day.points·day.candidate)와 본인 유령 여부(spectate·내 alive)뿐이다.
 import { isAlive } from "../../shared/game/alive";
 import { STAGE_SPOT, UNIT } from "../../shared/game/map";
+import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import type { MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
 import { pointSeatsOf, revealPoints, showdownStageOf } from "../game/showdownView";
@@ -64,6 +65,11 @@ export interface SceneLook {
    * 서버가 이미 모두를 보내는 viewer 라 지붕을 걷어도 새로 알려지는 것이 없다(결정 0021)
    */
   roomsOpen?: true;
+  /**
+   * 마을 확장판의 3D 값(21페이즈 D-06·D-13·D-24·D-26): lamps = 지금 켜진 모양으로 그릴 가로등 번호(오름차순), clue = 아침 현장 집의 좌석(없으면 null).
+   * 서버가 모두에게 같게 보낸 공개 값(day.lamps·day.scene.house)뿐이라 역할마다 달라지지 않는다. 마을 + 확장판이 아니면 키가 없다(기본 마피아·다른 맵은 장면이 부르지 않는다)
+   */
+  town?: { lamps: readonly number[]; clue: number | null };
 }
 
 /** 이 viewer 가 유령인지: 서버가 탈락한 본인 view 에만 싣는 spectate 가 있거나, 내 좌석이 탈락으로 내려온 경우 */
@@ -165,6 +171,22 @@ export function tensionOf(view: RoomView): Tension {
   return { level: 0 };
 }
 
+/**
+ * 마을 확장판 등불(21페이즈 D-06·D-08): 저녁(errand)·밤·아침 모두 서버가 준 day.lamps(켜진 등불) 그대로다.
+ * 키가 없거나 다른 단계(토론·지목·변론·로비 — 낮 화면은 등불을 끈다)·기본 마피아는 빈 배열. 화면은 등불이 꺼진 이유를 모른다(켜짐/꺼짐뿐)
+ */
+export function townLampsOf(view: RoomView): number[] {
+  if (!rulesetOf(modeOf(view)).errand) return [];
+  if (view.phase !== "errand" && view.phase !== "night" && view.phase !== "morning") return [];
+  return [...(view.day?.lamps ?? [])].sort((a, b) => a - b);
+}
+
+/** 마을 확장판 아침 현장(D-13·D-26): 아침에 day.scene 이 있으면 그 집 좌석(모두에게 같다), 아니면 null */
+export function townClueOf(view: RoomView): number | null {
+  if (!rulesetOf(modeOf(view)).errand || view.phase !== "morning") return null;
+  return view.day?.scene?.house ?? null;
+}
+
 /** 위 계산을 한 장면으로 묶는다. stageH = 이 단계의 스테이지 사각형 높이(px), mine = 내 낙관적 지목 대상(서버 응답 전) */
 export function sceneLook(view: RoomView, opts: { stageH: number; fading?: ReadonlyMap<number, number>; now?: number; mine?: number; verdictZoom?: number }): SceneLook {
   const tension = tensionOf(view);
@@ -184,6 +206,7 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
     seats,
     ...(chalk !== undefined ? { chalk: { x: chalk.x / UNIT, z: chalk.z / UNIT } } : {}),
     ...(isGhostViewer(view) ? { roomsOpen: true as const } : {}),
+    ...(view.map === "town" && rulesetOf(modeOf(view)).errand ? { town: { lamps: townLampsOf(view), clue: townClueOf(view) } } : {}),
   };
 }
 

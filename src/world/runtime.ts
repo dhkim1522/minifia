@@ -15,6 +15,7 @@ import { zoneOf } from "../../shared/game/zones";
 import { cutawayOf, headVeiled, sameRooms, tapTarget } from "./cutaway";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
+import { windowsLitOf } from "../game/causalView";
 import { NETWORK_TEXT } from "../net/copy";
 import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, panBoxOf, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { FIGS } from "./characterData";
@@ -227,7 +228,18 @@ export interface WorldRuntimeDeps {
    * 마을 판에서 내 구역·열린 방 목표·지붕 불투명도(소수 둘째)·집 주인 좌석이 바뀔 때만 불린다 — E2E 훅 window.__mfTown 용(20-05, L33). 이미 받은 값에서 계산한 것뿐이다.
    * 방이 없는 맵(재즈 바·광장)에서는 한 번도 불리지 않는다. 제품은 넘기지 않는다
    */
-  onTown?: (state: { zone: ZoneId; open: RoomId[]; roofs: Record<RoomId, number>; owners: number[]; veiled: number[]; door: { seat: number; kind: "vanish" | "appear" }[] }) => void;
+  onTown?: (state: {
+    zone: ZoneId;
+    open: RoomId[];
+    roofs: Record<RoomId, number>;
+    owners: number[];
+    veiled: number[];
+    door: { seat: number; kind: "vanish" | "appear" }[];
+    /** 장면에 마지막으로 넘긴 켜진 가로등·켜진 창의 집 좌석·현장 decal 보임(21페이즈, 공개 장면 값) */
+    lamps: number[];
+    windows: number[];
+    clue: boolean;
+  }) => void;
   /** 카메라 줌이 렌더러에 새로 보내질 때 소수 셋째 자리로 불린다 — E2E 훅 window.__mfPin.zoom 용(09.1.1-13). 제품은 넘기지 않는다 */
   onZoom?: (zoom: number) => void;
   /**
@@ -444,6 +456,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let ownerSeats: number[] = [];
   let ownersKey: string | null = null;
   let townKey: string | null = null;
+  /**
+   * 마을 확장판 등불·현장(21페이즈 D-24·D-26): 렌더러에 마지막으로 보낸 값의 키(null = 이 렌더러에는 아직 안 보냄 → 다음에 보낼 때 instant — 첫 그리기·재접속·단계 중간 합류·컨텍스트 복구).
+   * lampsNow·clueNow = 마지막으로 보낸 값(__mfTown 용)
+   */
+  let lampsKey: string | null = null;
+  let clueKey: string | null = null;
+  let lampsNow: number[] = [];
+  let clueNow: number | null = null;
   /** 지금 열려 있는 방(updateTown 이 정한 목표 집합) — 벽 뒤 이름표 숨김·건물 누르기가 읽는다. 이 프레임의 구역은 다음 프레임 숨김에 반영된다 */
   let townOpen: ReadonlySet<RoomId> = new Set<RoomId>();
   /** 지금 그리는 확대와, 고정 카메라로 옮기는 중인 전환(고정이 아니면 null) */
@@ -615,6 +635,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (e.t === "recreated") {
       cutSent = null;
       townKey = null;
+      lampsKey = null;
+      clueKey = null;
       sendOwners(true);
     }
     dispatch({ t: e.t });
@@ -841,6 +863,29 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   }
 
   /**
+   * 켜진 당번 가로등·아침 현장 decal(21페이즈 D-24·D-26): 장면 표의 town 값(서버가 모두에게 같게 준 day.lamps·day.scene.house)이 바뀔 때만 렌더러에 보낸다.
+   * town 이 없으면(기본 마피아·로비·마을 밖) 한 번도 부르지 않는다. 이 렌더러에 처음 보내거나 recreate 뒤거나 모션 줄이기면 instant(연출 없이 지금 값)
+   */
+  function updateTownCause(r: WorldRenderer, reduced: boolean): void {
+    if (!hasRooms) return;
+    const town = look?.town;
+    if (town === undefined) return;
+    const lamps = [...town.lamps].sort((a, b) => a - b);
+    const lk = lamps.join(",");
+    if (lk !== lampsKey) {
+      r.setLamps?.(lamps, reduced || lampsKey === null);
+      lampsKey = lk;
+      lampsNow = lamps;
+    }
+    const ck = town.clue === null ? "-" : String(town.clue);
+    if (ck !== clueKey) {
+      r.setClue?.(town.clue, reduced || clueKey === null);
+      clueKey = ck;
+      clueNow = town.clue;
+    }
+  }
+
+  /**
    * 컷어웨이(D-10·D-11, P20-8): 내 그려진 위치의 구역(서버와 같은 zoneOf)으로 열 방을 정하고 바뀔 때만 렌더러에 보낸다.
    * 유령·결과 화면(roomsOpen)은 네 방 모두. 내 몸이 아직 없으면(첫 프레임 전) 보내지 않는다 — 장면은 덮인 채로 시작하므로 처음 걷힘이 연출로 보이지 않게 기다린다.
    * 이 렌더러에 처음 보내거나 recreate 뒤거나 모션 줄이기면 instant
@@ -870,6 +915,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       owners: [...ownerSeats],
       veiled: [...veiledNow].sort((x, y) => x - y),
       door: [...doorNow].sort((x, y) => x.seat - y.seat),
+      lamps: [...lampsNow],
+      // 확장판(등불을 한 번이라도 보냈다)은 주인 ∩ 켜진 등불, 그 밖의 마을 판은 20페이즈 그대로 주인 전부
+      windows: lampsKey === null ? [...ownerSeats] : windowsLitOf(ownerSeats, lampsNow),
+      clue: clueNow !== null,
     };
     const key = JSON.stringify(state);
     if (key === townKey) return;
@@ -1459,6 +1508,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
 
     updatePin(r, dt * 1000, sNow, reduced);
+    updateTownCause(r, reduced);
     updateTown(r, reduced);
 
     // 내 캐릭터 빛(NIGHT-07): nightCitizen 조명에서만 내 캐릭터 위로 따라가고, 다른 단계에서는 기본 자리(세기는 조명 단계가 0 으로 만든다).

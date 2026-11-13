@@ -66,6 +66,12 @@ export interface TownHookState {
   owners: number[];
   veiled: number[];
   door: { seat: number; kind: "vanish" | "appear" }[];
+  /** 지금 켜진 모양으로 그려진(장면에 넘긴) 가로등 번호, 오름차순(21페이즈). 확장판이 아니면 빈 배열. 공개 장면 값이다 */
+  lamps: number[];
+  /** 켜진 창의 집 좌석, 오름차순: 확장판은 주인 ∩ lamps, 그 밖의 마을 판은 주인 전부(20페이즈 그대로) */
+  windows: number[];
+  /** 아침 현장 단서 decal 이 보이는가 */
+  clue: boolean;
 }
 
 /** window.__mfResult 의 모양(11-05) */
@@ -238,7 +244,7 @@ export function installMapHook(mapId: MapId): { off(): void } {
  * 해제는 다른 설치가 덮어썼으면 지우지 않는다. 값은 DOM 속성이 아니다.
  */
 export function installTownHook(): { patch(next: Partial<TownHookState>): void; off(): void } {
-  let mine: TownHookState = { zone: "plaza", open: [], roofs: { post: 1, pub: 1, clinic: 1, police: 1 }, owners: [], veiled: [], door: [] };
+  let mine: TownHookState = { zone: "plaza", open: [], roofs: { post: 1, pub: 1, clinic: 1, police: 1 }, owners: [], veiled: [], door: [], lamps: [], windows: [], clue: false };
   window.__mfTown = mine;
   return {
     patch(next) {
