@@ -758,6 +758,11 @@ export function makeCausalFlows({ recorder, openGame, closeGame }) {
         await pressScene(hp);
         await ht.waitFor((v) => (v.me.clues ?? []).some((c) => c.spot === n), 3000, `지점 ${n} 살피기 반영`);
         await sleep(300);
+        if (n === 2) {
+          // 첫 카드 한 장: 아직 안 살핀 표식 ①③ 은 카드 줄에 가려지지 않는다
+          const s2 = await readScene(hp);
+          lines(rec, `${sc3}/one-card`, sceneSpotChecks({ w, h, spots: s2.spots.map((s) => ({ n: s.n, state: s.state, rect: s.rect })), dock: s2.dock, cardRow: s2.cardRow, expectStates: ["fresh", "done", "fresh"] }));
+        }
       }
       const s1 = await readScene(hp);
       lines(rec, `${sc3}/cards`, sceneSpotChecks({ w, h, spots: s1.spots.map((s) => ({ n: s.n, state: s.state, rect: s.rect })), dock: s1.dock, cardRow: s1.cardRow, expectStates: ["done", "done", "done"] }));

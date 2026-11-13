@@ -4883,6 +4883,7 @@ export function causalWindowChecks(m) {
  * LH6 아침 현장 표식. m = { w, h, spots: [{ n, state, rect }], dock, cardRow(없으면 null), expectStates?: 번호 순 기대 상태 }.
  * LH6a 표식 3·상태가 fresh|done|blurred(기대가 있으면 같음) · LH6b 표식끼리·독·카드 줄과 겹침 0 · LH6c 카드 줄이 독 위에 얹히고 높이 ≤ 96.
  * 360×560 은 스테이지 328 중 아래 96 을 카드 줄이 덮을 수 있다(UI-SPEC, 진행에 지장 없음) — 그 폰은 카드 줄과의 겹침을 판정 대신 참고 줄(LH6i)로 남긴다.
+ * 그 밖의 폰도 카드 줄이 '이미 살핀' 표식을 덮는 것은 참고 줄이다(더 누를 곳이 아니다). 아직 안 살핀(fresh) 표식을 덮는 것만 판정 실패다.
  */
 export function sceneSpotChecks(m) {
   const L = { LH6a: "표식 3·상태 fresh|done|blurred", LH6b: "표식끼리·독·카드 줄과 겹침 0", LH6c: `카드 줄이 독 위에 얹히고 높이 ≤ ${CAUSAL_CARD_ROW_MAX_H}` };
@@ -4903,7 +4904,8 @@ export function sceneSpotChecks(m) {
     for (let j = i + 1; j < m.spots.length; j++) if (rectsOverlap(s.rect, m.spots[j].rect)) bad2.push(`${name}·표식 ${m.spots[j].n ?? j + 1} 겹침(${overlapText(s.rect, m.spots[j].rect)})`);
     if (rectsOverlap(s.rect, m.dock)) bad2.push(`${name} 이 독과 겹침(${overlapText(s.rect, m.dock)})`);
     if (row && rectsOverlap(s.rect, row)) {
-      if (small) coveredBy.push(name);
+      // 이미 살핀(done·blurred) 표식을 카드 줄이 덮는 것은 진행에 지장이 없다(더 누를 곳이 아니다) — 참고 줄. 아직 안 살핀(fresh) 표식을 덮으면 막히므로 판정 실패다(360×560 은 UI-SPEC 이 알려진 한계로 둔 폰이라 모두 참고 줄)
+      if (small || s.state !== "fresh") coveredBy.push(name);
       else bad2.push(`${name} 이 카드 줄과 겹침(${overlapText(s.rect, row)})`);
     }
   });
@@ -4913,7 +4915,7 @@ export function sceneSpotChecks(m) {
     if (row.height > CAUSAL_CARD_ROW_MAX_H + 1) bad3.push(`카드 줄 높이 ${rd(row.height)} > ${CAUSAL_CARD_ROW_MAX_H}`);
   }
   const lines = [result("LH6a", L.LH6a, bad1), result("LH6b", L.LH6b, bad2), result("LH6c", L.LH6c, bad3)];
-  if (small) lines.push({ id: "LH6i", label: "알려진 한계(UI-SPEC, 판정 아님): 360×560 에서 카드 줄이 스테이지 아래쪽을 덮을 수 있다", ok: true, info: true, detail: coveredBy.length > 0 ? `카드 줄이 ${coveredBy.join("·")} 을 덮음` : "카드 줄이 표식을 덮지 않음" });
+  if (small || coveredBy.length > 0) lines.push({ id: "LH6i", label: "알려진 한계(UI-SPEC, 판정 아님): 카드 줄이 이미 살핀 표식(360×560 은 모든 표식)을 덮을 수 있다 — 진행에 지장 없음", ok: true, info: true, detail: coveredBy.length > 0 ? `카드 줄이 ${coveredBy.join("·")} 을 덮음` : "카드 줄이 표식을 덮지 않음" });
   return lines;
 }
 

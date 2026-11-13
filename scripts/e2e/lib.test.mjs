@@ -5770,6 +5770,12 @@ test("sceneSpotChecks LH6·LH11: 표식 3·상태·겹침 없음, 360×560 카�
   assert.equal(lineOf(small, "LH6b").ok, true);
   assert.equal(lineOf(small, "LH6i").ok, true);
   assert.match(lineOf(small, "LH6i").detail, /덮/);
+  // 이미 살핀 표식을 카드 줄이 덮는 것은 참고 줄(진행에 지장 없음), 아직 안 살핀 표식을 덮으면 실패
+  const doneCovered = sceneSpotChecks({ ...covered, h: 664, spots: [base.spots[0], { n: 2, state: "done", rect: r(170, 560, 52, 52) }, base.spots[2]], expectStates: ["fresh", "done", "fresh"] });
+  assert.equal(lineOf(doneCovered, "LH6b").ok, true);
+  assert.equal(lineOf(doneCovered, "LH6i").ok, true);
+  assert.match(lineOf(doneCovered, "LH6i").detail, /표식 2/);
+  assert.equal(lineOf(sceneSpotChecks({ ...covered, h: 664 }), "LH6b").ok, false);
   assert.equal(lineOf(sceneSpotChecks({ ...base, cardRow: r(8, 700, 374, 96) }), "LH6c").ok, false);
   assert.equal(lineOf(sceneSpotChecks({ ...base, spots: [{ n: 1, state: "bogus", rect: r(60, 300, 52, 52) }, base.spots[1], base.spots[2]] }), "LH6a").ok, false);
 });
