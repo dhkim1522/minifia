@@ -27,18 +27,31 @@ export function RecordCard({ rows, faceOf, colorOf, onClose }: RecordCardProps):
           <V2Icon name="close" size={20} />
         </button>
       </div>
-      {rows.length === 0 ? null : (
-        <ul className="mv-record__rows">
-          {rows.map((r) => (
-            <li key={r.n} className="mv-record__row" data-record-row="">
-              <span className="mv-record__n">{r.n}</span>
-              <PlaceArt id={r.place} size={24} />
-              <img className="mv-record__face" src={faceOf(r.seat)} alt="" draggable={false} style={{ borderColor: colorOf(r.seat) }} />
-              <span className="mv-record__name">{r.name}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      {rows.length === 0 ? null : <RecordRows rows={rows} faceOf={faceOf} colorOf={colorOf} />}
     </section>
+  );
+}
+
+export interface RecordRowsProps {
+  rows: readonly RecordRow[];
+  faceOf: (seat: number) => string;
+  colorOf: (seat: number) => string;
+  /** 이미 탈락한 좌석(공개 값). 그 줄의 얼굴만 흐린 회색(is-ghost) — 닉네임 글은 그대로이고 새 글은 없다(21-14) */
+  ghostSeats?: ReadonlySet<number>;
+}
+
+// 목격 기록 줄 목록(RecordCard 와 의심 보드가 함께 쓴다, 21-14). DOM 은 카드 안에서 쓰일 때와 같다.
+export function RecordRows({ rows, faceOf, colorOf, ghostSeats }: RecordRowsProps): ReactElement {
+  return (
+    <ul className="mv-record__rows">
+      {rows.map((r) => (
+        <li key={r.n} className="mv-record__row" data-record-row="">
+          <span className="mv-record__n">{r.n}</span>
+          <PlaceArt id={r.place} size={24} />
+          <img className={ghostSeats?.has(r.seat) ? "mv-record__face is-ghost" : "mv-record__face"} src={faceOf(r.seat)} alt="" draggable={false} style={{ borderColor: colorOf(r.seat) }} />
+          <span className="mv-record__name">{r.name}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

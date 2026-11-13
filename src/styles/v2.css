@@ -594,3 +594,29 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
   .mv-record { animation: none; }
   .mv-trace { animation: none; }
 }
+
+/* 21페이즈 토론 · 의심 보드(21-14, P21-14·D-18~D-20). 시안 design/v3.0/lamp-house/Board.dc.html 의 카드 면(night-800 + 1px night-600 + 둥근 14)·칩 줄·4열 얼굴 줄을 따른다.
+ * 위치는 GameMap 이 .mf-game__record(위 독 + 8 ~ 아래 패널 위 − 8)로 정한다. 새 토큰·hex 없음. 넘치면 본문만 스크롤하고 머리(닫기 44)는 고정이다. 등장은 opacity 뿐. */
+.mv-suspect-board { display: flex; flex-direction: column; box-sizing: border-box; width: 100%; max-height: 100%; padding: 0 12px 12px; border: 1px solid var(--night-600); border-radius: var(--radius-md); background: var(--night-800); color: var(--gray-50); font-family: var(--font-ui); animation: mv-suspect-in var(--dur-fast) var(--ease-out); }
+.mv-suspect-board__head { display: flex; flex: none; align-items: center; gap: var(--space-sm); height: var(--tap-min); margin: var(--space-xs) 0; color: var(--light-lamp); }
+.mv-suspect-board__title { flex: 1; min-width: 0; font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
+.mv-suspect-board__body { display: flex; flex-direction: column; flex: 1 1 auto; gap: 12px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.mv-suspect-board__chips { display: flex; flex-wrap: wrap; flex: none; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.mv-suspect-board__chip { display: flex; min-width: 0; }
+.mv-suspect-board__witness { position: relative; display: flex; margin: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.mv-suspect-board__witness::after { content: ""; position: absolute; inset: -6px 0; }
+.mv-suspect-board__witness:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; border-radius: var(--radius-pill); }
+.mv-suspect-board .mv-record__rows { flex: none; overflow: visible; }
+.mv-suspect-board__faces { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); flex: none; gap: var(--space-sm); }
+.mv-suspect-board__face { position: relative; display: grid; place-items: center; box-sizing: border-box; height: 64px; border: 2px solid transparent; border-radius: 10px; background: var(--night-700); }
+.mv-suspect-board.is-compact .mv-suspect-board__face { height: 56px; }
+.mv-suspect-board__face[data-board-mark] { border: 2px solid var(--light-lamp); }
+.mv-suspect-board__img { box-sizing: border-box; width: 30px; height: 30px; border: 2px solid var(--night-600); border-radius: var(--radius-pill); object-fit: cover; background: var(--night-800); }
+.mv-suspect-board__badges { position: absolute; top: 2px; right: 2px; display: flex; flex-direction: row-reverse; pointer-events: none; }
+.mv-suspect-board__badge { display: grid; place-items: center; box-sizing: border-box; width: 18px; height: 18px; border-radius: var(--radius-pill); background: var(--light-lamp); color: var(--night-900); }
+.mv-suspect-board__badge + .mv-suspect-board__badge { margin-right: -6px; }
+.mv-record__face.is-ghost { filter: brightness(0.45) grayscale(1); }
+@keyframes mv-suspect-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .mv-suspect-board { animation: none; }
+}
