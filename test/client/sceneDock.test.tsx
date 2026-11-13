@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
-import { DOCK_H, DOCK_ROW_H, HOLD_MS, SceneDock } from "../../src/components/v2/SceneDock";
-import type { SceneDockProps } from "../../src/components/v2/SceneDock";
+import { DOCK_H, DOCK_ROW_H, HOLD_MS, NIGHT_DOCK_H, NIGHT_GUIDE_H, NIGHT_ROW_H, SceneDock } from "../../src/components/v2/SceneDock";
+import type { SceneDockNightProps, SceneDockProps } from "../../src/components/v2/SceneDock";
 import { LOG_H } from "../../src/game/chatUi";
 
 // 21-11 Task 1 (D-06·D-23·D-24, P21-1·P21-6·P21-8): 저녁·아침 독. 읽기 전용 기록 두 줄 + 금빛 [켜기](길게 누르기 hold) + [건너뛰기] 토글.
@@ -278,5 +278,76 @@ describe("SceneDock: 스타일 계약 (토큰만, 새 값 없음)", () => {
     expect(r).toMatch(/height: 56px/);
     const block = V2_CSS.slice(V2_CSS.indexOf(".mv-scene-dock"), V2_CSS.indexOf(".mv-errand-pin {"));
     expect(block).not.toMatch(/#[0-9a-fA-F]{3,6}\b/);
+  });
+});
+
+// 21-12 Task 1 (D-25, P21-1): 밤 변형. 위 안내 한 줄 24(안 골랐으면 범례, 골랐으면 한 문장) + 아래 행동 줄 52([쪽지]/[유언] 은 쓰는 쪽이 넘긴다). 네 역할이 같은 틀이다.
+describe("SceneDock 밤 변형 (D-25)", () => {
+  const night = (over: Partial<SceneDockNightProps> = {}): SceneDockNightProps => ({
+    variant: "night",
+    picked: false,
+    actions: <button type="button" data-test-action="">유언</button>,
+    ...over,
+  });
+  const guide = (c: ParentNode): HTMLElement => c.querySelector<HTMLElement>("[data-dock-guide]")!;
+
+  it("안 골랐으면 범례 두 칸('불 켜진 창'·'꺼진 창')이 있고 안내 문장은 없다", () => {
+    const { container } = render(<SceneDock {...night()} />);
+    const legend = Array.from(guide(container).querySelectorAll<HTMLElement>("[data-dock-legend]"));
+    expect(legend.map((l) => l.textContent).join("|")).toBe("불 켜진 창|꺼진 창");
+    expect(legend.map((l) => l.getAttribute("data-dock-legend")).join("|")).toBe("lit|dark");
+    expect(guide(container).textContent).not.toContain("바꿀 수");
+  });
+
+  it("골랐으면 '고른 집은 바꿀 수 있어요' 한 줄이고 범례는 없다", () => {
+    const { container } = render(<SceneDock {...night({ picked: true })} />);
+    expect(guide(container).textContent).toBe("고른 집은 바꿀 수 있어요");
+    expect(container.querySelectorAll("[data-dock-legend]").length).toBe(0);
+  });
+
+  it("actions 자리에 넘긴 단추가 그대로 있고 기록 칸·입력줄·[켜기]·[건너뛰기] 는 없다", () => {
+    const { container } = render(<SceneDock {...night()} />);
+    const slot = container.querySelector<HTMLElement>("[data-dock-actions]")!;
+    expect(slot.querySelector("[data-test-action]")!.textContent).toBe("유언");
+    expect(container.querySelector("[data-chat-log]")).toBeNull();
+    expect(container.querySelector("[data-chat-input]")).toBeNull();
+    expect(container.querySelector("[data-errand-act]")).toBeNull();
+    expect(container.querySelector("[data-skip-phase]")).toBeNull();
+  });
+
+  it("독 루트는 패널 자리 표식·밤 표식과 ref 를 받고 lifted·veiled 속성은 지금 패널과 같다", () => {
+    const ref = { current: null as HTMLElement | null };
+    const { container } = render(<SceneDock {...night({ panelRef: ref })} />);
+    const root = container.querySelector<HTMLElement>("[data-scene-dock]")!;
+    expect(root.hasAttribute("data-world-panel")).toBe(true);
+    expect(root.hasAttribute("data-dock-night")).toBe(true);
+    expect(root.classList.contains("mf-game__dock--night")).toBe(true);
+    expect(ref.current).toBe(root);
+    cleanup();
+    const v = render(<SceneDock {...night({ veiled: true, lifted: true })} />).container.querySelector<HTMLElement>("[data-scene-dock]")!;
+    expect(v.getAttribute("data-will-hide-panel")).toBe("true");
+    expect(v.classList.contains("mf-game__panel--kb")).toBe(true);
+  });
+
+  it("독 높이 122 = 위 14 + 안내 24 + 간격 10 + 행동 줄 52 + 아래 22", () => {
+    expect(NIGHT_DOCK_H).toBe(14 + NIGHT_GUIDE_H + 10 + NIGHT_ROW_H + 22);
+    expect(NIGHT_DOCK_H).toBe(122);
+    expect(GAME_CSS).toMatch(/\.mf-game__dock--night\s*\{[^}]*min-height: 122px/);
+    expect(V2_CSS.match(/\.mv-scene-dock__guide\s*\{([^}]*)\}/)?.[1]).toMatch(/height: 24px/);
+  });
+
+  it("같은 입력이면 같은 DOM 이다(역할 prop 이 없다) — 안내·범례 문장은 단추 칸을 빼면 모두 같다", () => {
+    const a = render(<SceneDock {...night()} />).container.innerHTML;
+    cleanup();
+    const b = render(<SceneDock {...night({ actions: <button type="button" data-test-action="">쪽지</button> })} />).container.innerHTML;
+    expect(a.replace(/유언/, "X")).toBe(b.replace(/쪽지/, "X"));
+  });
+
+  it("범례 점은 10px 사각 점 둘이고 토큰만 쓴다", () => {
+    const dot = V2_CSS.match(/\.mv-scene-dock__dot\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(dot).toMatch(/width: 10px/);
+    expect(dot).toMatch(/height: 10px/);
+    expect(V2_CSS.match(/\.mv-scene-dock__dot--lit\s*\{([^}]*)\}/)?.[1]).toMatch(/var\(--light-lamp\)/);
+    expect(V2_CSS.match(/\.mv-scene-dock__dot--dark\s*\{([^}]*)\}/)?.[1]).toMatch(/var\(--night-700\)/);
   });
 });
