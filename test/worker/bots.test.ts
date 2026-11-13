@@ -20,6 +20,7 @@ import {
   flushWorld,
   mapPlayers,
   nextFrame,
+  pickBasic,
   seat,
   send,
   skipOnce,
@@ -86,7 +87,9 @@ const stored = async (code: string): Promise<Raw> => (await storedRoom(code)) as
 const playersOf = async (code: string): Promise<BotRaw[]> => (await stored(code)).players as BotRaw[];
 const botsOf = async (code: string): Promise<BotRaw[]> => (await playersOf(code)).filter((p) => p.isBot === true).sort((a, b) => a.seat - b.seat);
 
-async function start(r: Seated): Promise<void> {
+/** 21페이즈 규칙 나: 이 파일의 봇 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — 확장판은 mode 로 고른다(extended 면 판 종류를 고르지 않는다). */
+async function start(r: Seated, mode: "basic" | "extended" = "basic"): Promise<void> {
+  if (mode === "basic") await pickBasic(r);
   send(r.host, { t: "start" });
   for (const s of allSockets(r)) await nextFrame(s, isPhase("assigning"));
 }

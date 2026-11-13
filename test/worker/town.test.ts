@@ -207,7 +207,7 @@ describe("기본 마피아 판은 고정 맵이 켜져 있어도 재즈 바 그�
 
 describe("다시 하기로 시작한 확장판 판도 마을이다 (D-02)", () => {
   it("끝난 판에서 모두 준비하고 방장이 rematch 하면 round 2 의 view.map 이 모든 소켓에서 town 이다", { timeout: 60_000 }, async () => {
-    const g = await endedGame4();
+    const g = await endedGame4("extended"); // 확장판 판의 다시 하기(21페이즈 규칙 가)
     const host = g.socks[0]!;
     await readyUp(g.socks.slice(1), g.socks, 4);
     const close = openTown();

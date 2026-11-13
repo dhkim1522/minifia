@@ -6,7 +6,7 @@ import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
-import { awaitTransition, clearBotSteps, connect, createRoom, hello, mapPlayers, nextFrame, seat, send, skipOnce, skipThrough, storedRoom, writeRoomEdit, type TestSocket } from "./helpers";
+import { awaitTransition, clearBotSteps, connect, createRoom, hello, mapPlayers, nextFrame, pickBasic, seat, send, skipOnce, skipThrough, storedRoom, writeRoomEdit, type TestSocket } from "./helpers";
 
 // ---- 가짜 소켓 ----
 
@@ -140,6 +140,7 @@ describe("손으로 정한 봇 표를 봇의 남은 계획이 덮지 않는다 (
     const socks = [r.host, ...r.guests.map((g) => g.sock)];
     send(r.host, { t: "testBots", count: 3 });
     await nextFrame(r.host, (m) => m.t === "state" && m.view.phase === "lobby" && m.view.players.length === 5);
+    await pickBasic(r); // 21페이즈 규칙 나: 지목 0표가 곧바로 밤으로 가고 승패가 이어지는 기본 마피아 흐름
     send(r.host, { t: "start" });
     for (const s of socks) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
     await skipThrough(r, "nomination");

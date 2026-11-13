@@ -26,6 +26,7 @@ import {
   phaseKeyOf,
   pause,
   pickAs,
+  pickBasic,
   pointAll,
   resetChatRates,
   runoffAll,
@@ -337,7 +338,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
 
     await forceDue(code, "phaseEndsAt");
     expect(await runDurableObjectAlarm(stub)).toBe(true);
-    await waitAll("dayAnnounce");
+    await waitAll("errand"); // 21페이즈(규칙 가): 확장판은 낮 시작 발표 없이 역할 확인 다음이 곧 저녁이다
     await probe(true);
 
     // ---- 두 밤·두 아침을 실제 행동과 마피아 채팅으로 돌린다 ----
@@ -364,10 +365,10 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     // 채팅 줄 번호는 채널별로 DO 가 센다(저장·복원은 07-14) — 단계를 넘길 때 DO 를 evict 하지 않는 advanceToKeep 으로 넘겨 라이브 번호가 이어지는지 본다. 복원은 아래 끝에서 따로 본다.
     // 같은 사람의 연속 전송은 600ms 간격·같은 문장 3초 제한(D5)에 걸리므로 줄마다 보낸 사람을 달리한다.
 
-    // 1일차: 토론(살아 있는 시민 Y 가 공개 한 줄 — all 줄 1번) → 밤 (07-08: 순차 주장 단계 없음)
-    await advanceToKeep(code, socks, "discussion");
-    await probe(true);
-    await act(victimY, chatMsg(victimY.sock, "저 아니에요"));
+    // 21페이즈(규칙 가): 하루는 저녁 → 밤 → 아침 → 토론 → 지목 순서다. 1일차 저녁(위에서 닿았다) → 밤 → 아침(X 탈락) → 토론 → (처형 없는 날) 2일차 저녁 → 밤 → 아침(Y 탈락).
+    // 채팅 줄 번호는 채널별로 DO 가 센다(저장·복원은 07-14) — 단계를 넘길 때 DO 를 evict 하지 않는 advanceToKeep 으로 넘겨 라이브 번호가 이어지는지 본다. 복원은 아래 끝에서 따로 본다.
+    // 같은 사람의 연속 전송은 600ms 간격·같은 문장 3초 제한(D5)에 걸리므로 줄마다 보낸 사람을 달리한다.
+    for (const p of players) await flush(p.sock);
     await advanceToKeep(code, socks, "night");
     await probe(true);
 
@@ -386,11 +387,17 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     await advanceToKeep(code, socks, "morning"); // X 탈락
     await probe(true);
 
-    // 2일차: 토론(경찰이 공개 한 줄 — all 줄 2번, 탈락자 X 가 탈락자 줄 — ghost 줄 1번) → 밤(마피아 둘이 Y 를, 경찰이 마피아 B 를 지목, 마피아 B 가 채팅 — mafia 줄 2번) → 아침
+    // 1일차 토론(아침 다음이 곧 토론): 살아 있는 시민 Y 와 경찰이 공개 한 줄씩(all 줄 1·2번), 탈락자 X 가 탈락자 줄(ghost 줄 1번).
     await advanceToKeep(code, socks, "discussion");
     await probe(true);
+    await act(victimY, chatMsg(victimY.sock, "저 아니에요"));
     await act(police, chatMsg(police.sock, "누가 수상해요?"));
     await act(victimX, chatMsg(victimX.sock, "구경 중이에요"));
+    // 처형 없는 날(지목 0표)은 곧바로 2일차 저녁이다.
+    await advanceToKeep(code, socks, "errand");
+    await probe(true);
+
+    // 2일차 밤(마피아 둘이 Y 를, 경찰이 마피아 B 를 지목, 마피아 B 가 채팅 — mafia 줄 2번) → 아침
     await advanceToKeep(code, socks, "night");
     await probe(true);
     await act(mafiaA, { t: "pick", target: victimY.seat });
@@ -787,6 +794,7 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
         resolveLookConflicts(socks.map((_, i) => ({ seat: i, ...(dressScript.has(i) ? { look: dressScript.get(i) as OutfitId } : {}) }))).flatMap((p) => (p.look === undefined ? [] : [[p.seat, p.look] as const])),
       );
 
+      await pickBasic(room); // 21페이즈 규칙 나: 낮 시작 발표가 있는 기본 마피아 흐름
       send(room.host, { t: "start" });
       for (const sock of socks) await nextFrame(sock, phaseOf("assigning"));
       await advanceTo(code, socks, "dayAnnounce");
@@ -1843,6 +1851,7 @@ describe("맵 선택 프레임 전수 (D-20·D-21, L40·L42·L44)", () => {
       expect(lastViewOf(sock).mapChoice).toBe("bar");
       for (const m of stateFrames(sock)) expect("map" in m.view).toBe(false);
     }
+    await pickBasic(room); // 21페이즈 규칙 나: 낮 시작 발표가 있는 기본 마피아 흐름
     send(room.host, { t: "start" });
     for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
     await advanceTo(room.code, socks, "dayAnnounce");
@@ -1878,7 +1887,7 @@ describe("맵 선택 프레임 전수 (D-20·D-21, L40·L42·L44)", () => {
 describe("다시 하기 · 쉬는 사람 프레임 전수 (D-12~D-16, L38·L39·L44)", () => {
   const GAME1 = [RICH_TEXT.mafia1, RICH_TEXT.mafia2, RICH_TEXT.ghostA, RICH_TEXT.ghostP, RICH_TEXT.whisper, RICH_EXTRA.will];
   const GAME2 = ["GAME2-CHAT-CANARY", "GAME2-WILL-CANARY", "GAME2-WHISPER-CANARY"];
-  const ROOM_KEYS = "code,createdAt,everConnected,expiresAt,hostId,map,nextJoinSeq,phase,phaseEndsAt,players,round";
+  const ROOM_KEYS = "code,createdAt,everConnected,expiresAt,hostId,map,mode,nextJoinSeq,phase,phaseEndsAt,players,round"; // mode: 방장이 고른 판 종류(기본 마피아)는 다시 하기 뒤에도 남는다(19페이즈 D-06, 21페이즈 규칙 나)
   const ROW_KEYS = "connId,connected,id,joinSeq,nickname,nicknameKey,role,seat,token";
   const BENCH_ROW_KEYS = "connId,connected,id,joinSeq,nickname,nicknameKey,seat,token";
   type StoredShape = { bench?: Array<Record<string, unknown>>; players: Array<Record<string, unknown>> } & Record<string, unknown>;

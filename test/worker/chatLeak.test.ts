@@ -1,3 +1,4 @@
+// 21페이즈(규칙 나): 이 파일의 낮·밤·아침 규칙 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — startedGame 의 mode "basic". 확장판 순서는 causalDay 가 본다.
 // 07-14: 채팅·입력 중 누설 검사 (a)~(d) (UI-SPEC "검사 가능하게 둘 것", CHAT-02·03, T-07-35·37).
 // "오지 않았음" 은 settle(ping/pong)로 증명한다. 6명 판(마피아 둘·경찰·의사·시민 둘)을 실제로 시작해 돌린다.
 import { describe, expect, it } from "vitest";
@@ -21,7 +22,7 @@ async function observe(g: Game, first: Actor, act: () => void | Promise<void>): 
 
 describe("누설 검사 (a) — 밤 마피아의 채팅·입력 중은 시민 편 소켓에 부채널이 없다 (T-07-37)", () => {
   it("마피아가 가만히 있는 구간과 채팅·입력 중을 보내는 구간에서 시민 편 소켓이 받는 프레임 열이 같다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const [mafiaA, mafiaB] = withRole(g, "mafia") as [Actor, Actor];
     const townIdx = g.actors.map((a, i) => ({ a, i })).filter((x) => x.a.role !== "mafia").map((x) => x.i);
     expect(townIdx.length).toBe(4);
@@ -50,7 +51,7 @@ describe("누설 검사 (a) — 밤 마피아의 채팅·입력 중은 시민 �
 
 describe("누설 검사 (b) — 탈락자의 채팅·입력 중은 산 사람 소켓에 0건 (CHAT-03)", () => {
   it("낮에 탈락자 X 가 입력 중과 채팅을 보내면 탈락자 Z 만 받고 산 사람은 한 프레임도 받지 않는다", async () => {
-    const g = await startedGame("discussion");
+    const g = await startedGame("discussion", 5, { mode: "basic" });
     const [x, z] = withRole(g, "citizen") as [Actor, Actor];
     await killSeats(g, [x.seat, z.seat]);
 
@@ -74,7 +75,7 @@ describe("누설 검사 (b) — 탈락자의 채팅·입력 중은 산 사람 �
 
 describe("누설 검사 (c) — 단계 키가 틀린 줄은 더 넓은 채널로 가지 않고 폐기된다 (T-07-24)", () => {
   it("밤의 단계 키로 아침 뒤에 도착한 마피아 줄·입력 중은 모든 소켓에 0건이고 보낸 소켓만 chatReject phase 를 받으며 저장도 되지 않는다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const mafiaA = withRole(g, "mafia")[0]!;
     const nightKey = `1:1:night`;
     await advanceTo(g.code, g.socks, "morning");
@@ -108,7 +109,7 @@ describe("누설 검사 (d) — 재접속 chatLog 도 같은 audience 를 지난
   };
 
   it("밤에 시민 C 는 mafia·ghost 0건, 막 탈락한 X 는 탈락 전 mafia 줄 없이 탈락 뒤 줄만, 마피아 B 는 mafia 줄만 되돌려 받고 프레임 키는 허용 목록 안이다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const [mafiaA, mafiaB] = withRole(g, "mafia") as [Actor, Actor];
     const [citizenC, victimX] = withRole(g, "citizen") as [Actor, Actor];
 
@@ -143,7 +144,7 @@ describe("누설 검사 (d) — 재접속 chatLog 도 같은 audience 를 지난
   }, 30_000);
 
   it("아침 카드(k)가 든 재접속 chatLog 의 키는 허용 목록 안이고 k 값은 will·note 뿐이다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const v = withRole(g, "citizen")[0]!;
     await editRoom(g.code, (room) => mapPlayers(room, (p) => (p.seat === v.seat ? { ...p, will: "유언" } : p)));
     const mafias = withRole(g, "mafia");

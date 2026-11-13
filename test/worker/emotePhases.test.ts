@@ -1,3 +1,4 @@
+// 21페이즈(규칙 나): 이 파일의 낮·밤·아침 규칙 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — startedGame 의 mode "basic". 확장판 순서는 causalDay 가 본다.
 // 10-08 Task 1: 이동이 막힌 실제 단계에서 동작이 도착한다 (D-12·D-14, AVTR-05). 채팅과 같이 이동 차단과 무관하게 서버가 받는다.
 // 워커로 본 단계: nomination · defense · verdict · execution · morning(한 판을 이어서) / runoff(앞머리) / showdown(모이기) / night(마피아→시민 0프레임).
 // 걷는 중에는 서버가 버리므로(D-10) 보내기 전에 모든 구간이 끝나길 기다린다. 간격 기록은 resetEmoteRates 로 비운다.
@@ -65,7 +66,7 @@ const want = (g: Game, seats: number[]): string => g.actors.map((a) => a.seat).s
 
 describe("동작 — 이동이 막힌 단계에서도 도착한다 (10-08, AVTR-05)", () => {
   it("지목 → 변론 → 찬반 → 처형 → 밤 → 아침: 산 사람의 동작은 산 사람 모두와 탈락자에게, 탈락자의 동작은 탈락자에게만 간다", async () => {
-    const g = await startedGame("nomination");
+    const g = await startedGame("nomination", 5, { mode: "basic" });
     const citizens = withRole(g, "citizen");
     const target = citizens[0]!; // 처형될 시민
     const lively = g.actors.filter((a) => a !== target);
@@ -99,7 +100,7 @@ describe("동작 — 이동이 막힌 단계에서도 도착한다 (10-08, AVTR-
   }, 120_000);
 
   it("밤: 마피아의 동작은 산 시민·경찰·의사 0프레임, 마피아 둘과 탈락자만 받는다 / 탈락자의 동작은 탈락자만 받는다 / 아침: 산 사람 → 모두", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     await at(g, "night");
     const [m1, m2] = withRole(g, "mafia") as [Actor, Actor];
     const dead = withRole(g, "citizen")[0]!;
@@ -121,7 +122,7 @@ describe("동작 — 이동이 막힌 단계에서도 도착한다 (10-08, AVTR-
 
   // 기본판(결정 0072)에서 꺼짐 — 판 규칙의 runoff 를 켜면 다시 돈다
   it.skipIf(!GAME_RULES.runoff)("동점 결선 앞머리(runoff): 산 사람의 동작이 여섯 모두에게 간다", async () => {
-    const g = await startedGame("nomination");
+    const g = await startedGame("nomination", 5, { mode: "basic" });
     // 좌석 0·1 이 각각 2표로 동점(최다 정확히 둘): runoff.test.ts 와 같은 표
     await pointAll(g.code, g.actors, { 0: 1, 1: 0, 2: 0, 3: 1, 4: 2 });
     await at(g, "runoff");

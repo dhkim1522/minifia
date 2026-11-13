@@ -1,3 +1,4 @@
+// 21페이즈(규칙 나): 이 파일의 낮·밤·아침 규칙 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — startedGame 의 mode "basic". 확장판 순서는 causalDay 가 본다.
 // 아침 공개의 서버 층 DO 시험(09-14, MORN-01·MORN-02, WILL-01, NIGHT-12, 결정 0061-11·14).
 // 사망 전환(처형·암살)에서 서버가 유언·쪽지 카드를 한 번만 만든다. 카드는 all 채널 줄이고 k 가 will/note 다.
 import { env } from "cloudflare:workers";
@@ -20,7 +21,7 @@ const cardText = (c: Card): string => `${c.ch}/${c.k ?? "-"}/${c.seat}/${c.text}
 
 /** 처형으로 끝나는 낮: defender 에게 will(있으면)을 저장해 두고 지목 → 변론 → 찬반 통과 → 처형 진입까지 끌고 간다. 처형 진입 전 mark 를 돌려준다. */
 async function execute(will: string | undefined): Promise<{ g: Game; defender: Game["actors"][number]; marks: number[] }> {
-  const g = await startedGame("nomination");
+  const g = await startedGame("nomination", 5, { mode: "basic" });
   const defender = withRole(g, "citizen")[0]!;
   if (will !== undefined) {
     await editRoom(g.code, (room) => mapPlayers(room, (p) => (p.seat === defender.seat ? { ...p, will } : p)));
@@ -73,7 +74,7 @@ interface Night {
 
 /** 밤 6명 판: 시민 V 에게 will(있으면)을 저장하고 마피아 전원이 V 를 골라 확정시킨 뒤, 쪽지(있으면)를 마피아 A 가 남긴다. */
 async function nightOf(will: string | undefined, note: string | undefined): Promise<Night> {
-  const g = await startedGame("night");
+  const g = await startedGame("night", 5, { mode: "basic" });
   const v = withRole(g, "citizen")[0]!;
   if (will !== undefined) await editRoom(g.code, (room) => mapPlayers(room, (p) => (p.seat === v.seat ? { ...p, will } : p)));
   const mafias = withRole(g, "mafia");
@@ -129,7 +130,7 @@ describe("아침 카드: 피해자 유언 + 마피아 쪽지 (WILL-01, NIGHT-12,
   }, 40_000);
 
   it("마피아 선택이 갈려 아침이 무효이면 카드 0장, 분필 없음이다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const [a, b] = withRole(g, "mafia") as [Actor, Actor];
     const [c1, c2] = withRole(g, "citizen") as [Actor, Actor];
     await editRoom(g.code, (room) => mapPlayers(room, (p) => (p.seat === c1.seat ? { ...p, will: "유언" } : p)));
@@ -176,7 +177,7 @@ describe("분필 좌표 (MORN-01, 결정 0061-14)", () => {
   }, 40_000);
 
   it("알람 따라잡기로 처형과 암살이 한 번에 지나간 전환은 사망마다 카드를 한 번씩, 그 밤 피해자의 분필과 함께 낸다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const [x, v] = withRole(g, "citizen") as [Actor, Actor];
     const home = await homeBySeat(g.code);
     const marks = g.socks.map((s) => mark(s));

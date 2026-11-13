@@ -6,7 +6,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import type { BotStep } from "../../shared/game/bots";
 import type { ServerMessage } from "../../shared/protocol";
-import { advanceTo, editRoom, mapPlayers, mark, nextFrame, pause, seat, send, settle, storedRoom, until } from "./helpers";
+import { advanceTo, editRoom, mapPlayers, mark, nextFrame, pause, pickBasic, seat, send, settle, storedRoom, until } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 type TypingFrame = Extract<ServerMessage, { t: "typing" }>;
@@ -30,6 +30,7 @@ async function botRoom(phase: "discussion" | "night"): Promise<{ r: Seated; sock
   send(r.host, { t: "testBots", count: 3 });
   await until("봇 셋", async () => (await playersOf(r.code)).filter((p) => p.isBot === true).length === 3);
   for (const s of socks) await settle(s, mark(s));
+  await pickBasic(r); // 21페이즈 규칙 나: 낮 토론·밤 봇 입력 중 시험은 기본 마피아 흐름으로 본다
   send(r.host, { t: "start" });
   for (const s of socks) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
   await advanceTo(r.code, socks, phase);

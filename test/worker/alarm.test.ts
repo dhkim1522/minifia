@@ -2,9 +2,9 @@ import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { DISCUSSION_MS, ERRAND_MS, ERRAND_TICK_MS } from "../../shared/game/phases";
+import { DISCUSSION_MS, ERRAND_MS, ERRAND_TICK_MS, NIGHT_MS } from "../../shared/game/phases";
 import { ROOM_TTL_MS, UNCONNECTED_ROOM_TTL_MS } from "../../shared/game/room";
-import { alarmOf, closed, connect, createRoom, editRoom, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
+import { alarmOf, closed, connect, createRoom, editRoom, forceDue, hello, nextFrame, pickBasic, seat, send, storedRoom } from "./helpers";
 import type { Seated } from "./helpers";
 
 const phaseIs = (phase: string) => (m: ServerMessage) => m.t === "state" && m.view.phase === phase;
@@ -22,8 +22,10 @@ async function viewsOf(r: Seated, phase: string): Promise<RoomView[]> {
   return views;
 }
 
-async function startedRoom(): Promise<Seated> {
+/** 기본은 확장판(저녁이 먼저), mode "basic" 이면 시작 전에 기본 마피아로 연다(21페이즈 — 낮 시작 발표·늘 있는 아침). */
+async function startedRoom(mode: "basic" | "extended" = "extended"): Promise<Seated> {
   const r = await seat(3, 0);
+  if (mode === "basic") await pickBasic(r);
   send(r.host, { t: "start" });
   await viewsOf(r, "assigning");
   return r;
@@ -42,8 +44,8 @@ describe("알람", () => {
     expect(views.every((v) => v.phaseDurationMs === 15000)).toBe(true);
   });
 
-  it("roleReveal 마감 뒤 알람은 모두를 dayAnnounce 로 넘기고 마감은 이전 마감 + 2000, 다음 알람은 그 마감이다", async () => {
-    const r = await startedRoom();
+  it("roleReveal 마감 뒤 알람은 모두를 dayAnnounce 로 넘기고 마감은 이전 마감 + 2000, 다음 알람은 그 마감이다 (기본 마피아, 규칙 나)", async () => {
+    const r = await startedRoom("basic");
     await forceDue(r.code, "phaseEndsAt");
     await runDurableObjectAlarm(env.ROOM.getByName(r.code));
     await viewsOf(r, "roleReveal");
@@ -61,54 +63,90 @@ describe("알람", () => {
     expect(await alarmOf(r.code)).toBe(forced + 2000);
   });
 
-  it("낮 한 바퀴와 밤·아침(dayAnnounce → errand → discussion → nomination → night → morning → dayAnnounce)을 알람이 차례로 넘기고 저장된 일차는 2 가 된다", async () => {
+  it("roleReveal 마감 뒤 알람은 확장판 모두를 저녁(errand)으로 넘기고 마감은 이전 마감 + 40000, 알람은 근처 표본 시각이다 (21페이즈 D-01, 규칙 가)", async () => {
     const r = await startedRoom();
-    const stub = env.ROOM.getByName(r.code);
-    const advance = async (): Promise<number> => {
-      await forceDue(r.code, "phaseEndsAt");
-      const forced = (await storedRoom(r.code)).phaseEndsAt!;
-      expect(await runDurableObjectAlarm(stub)).toBe(true);
-      return forced;
-    };
-    await advance(); // assigning → roleReveal
+    await forceDue(r.code, "phaseEndsAt");
+    await runDurableObjectAlarm(env.ROOM.getByName(r.code));
     await viewsOf(r, "roleReveal");
-    await advance(); // roleReveal → dayAnnounce
-    await viewsOf(r, "dayAnnounce");
-    expect((await storedRoom(r.code) as { day?: number }).day).toBe(1);
+    await forceDue(r.code, "phaseEndsAt");
+    const forced = (await storedRoom(r.code)).phaseEndsAt!;
+    expect(await runDurableObjectAlarm(env.ROOM.getByName(r.code))).toBe(true);
 
-    const stepInto = async (phase: string, ms: number, wakeAfterMs = ms): Promise<void> => {
-      const forced = await advance();
-      const views = await viewsOf(r, phase);
-      expect(views.every((v) => v.phaseEndsAt === forced + ms)).toBe(true);
-      expect(views.every((v) => v.phaseDurationMs === ms)).toBe(true);
-      expect(await alarmOf(r.code)).toBe(forced + wakeAfterMs);
-    };
-    // 07-08: 순차 주장 단계가 없다 — 15페이즈(결정 0074): 낮 시작 발표 마감 다음이 심부름이고 그 마감 다음이 토론이다
-    // 15-02: errand 에서는 알람이 마감보다 이른 근처·목격 표본 시각(진입 + ERRAND_TICK_MS)에 걸린다 — 마감은 그대로 진입 + ERRAND_MS.
-    await stepInto("errand", ERRAND_MS, ERRAND_TICK_MS);
-    await stepInto("discussion", DISCUSSION_MS);
-
-    // 지목(지목이 0표이므로 다음은 night): 지목 방식과 무관하게(09.1-03) 알람을 거듭하며 매번 마감 = 당긴 마감 + 그 view 의 단계 길이, 저장된 알람 = 그 마감이다.
-    let phase = "";
-    let nominationSteps = 0;
-    for (let guard = 0; phase !== "night"; guard += 1) {
-      expect(guard).toBeLessThan(60);
-      const forced = await advance();
-      phase = (await storedRoom(r.code)).phase;
-      expect(guard === 0 ? "nomination" : phase === "night" ? "night" : "nomination").toBe(phase);
-      const views = await viewsOf(r, phase);
-      const ms = views[0]!.phaseDurationMs!;
-      expect(views.every((v) => v.phaseEndsAt === forced + ms && v.phaseDurationMs === ms)).toBe(true);
-      expect(await alarmOf(r.code)).toBe(forced + ms);
-      if (phase === "night") expect(ms).toBe(30_000);
-      else nominationSteps += 1;
-    }
-    expect(nominationSteps).toBeGreaterThanOrEqual(1);
-
-    await stepInto("morning", 5_000);
-    await stepInto("dayAnnounce", 2_000);
-    expect((await storedRoom(r.code) as { day?: number }).day).toBe(2);
+    const views = await viewsOf(r, "errand");
+    expect(views.every((v) => v.phaseEndsAt === forced + ERRAND_MS)).toBe(true);
+    expect(views.every((v) => v.phaseDurationMs === ERRAND_MS)).toBe(true);
+    const room = await storedRoom(r.code);
+    expect(`${room.phase}/${(room as { day?: number }).day}/${room.phaseEndsAt}`).toBe(`errand/1/${forced + ERRAND_MS}`);
+    expect(await alarmOf(r.code)).toBe(forced + ERRAND_TICK_MS);
   });
+
+  // 21페이즈: 한 바퀴가 판 종류마다 다르다 — 기본 마피아(규칙 나)는 낮 시작 발표 → 토론 → 지목 → 밤 → 아침 → 낮 시작 발표,
+  // 확장판(규칙 가)은 저녁 → 밤 → 토론(현장 없는 밤은 아침 없이) → 지목 → 저녁(처형 없는 날). 일차는 두 판 모두 2 가 된다.
+  for (const mode of ["basic", "extended"] as const) {
+    it(`${mode === "basic" ? "낮 한 바퀴와 밤·아침(dayAnnounce → discussion → nomination → night → morning → dayAnnounce)" : "확장판 한 바퀴(errand → night → discussion → nomination → errand)"}을 알람이 차례로 넘기고 저장된 일차는 2 가 된다`, async () => {
+      const r = await startedRoom(mode);
+      const stub = env.ROOM.getByName(r.code);
+      const advance = async (): Promise<number> => {
+        await forceDue(r.code, "phaseEndsAt");
+        const forced = (await storedRoom(r.code)).phaseEndsAt!;
+        expect(await runDurableObjectAlarm(stub)).toBe(true);
+        return forced;
+      };
+      await advance(); // assigning → roleReveal
+      await viewsOf(r, "roleReveal");
+      const stepInto = async (phase: string, ms: number, wakeAfterMs = ms): Promise<void> => {
+        const forced = await advance();
+        const views = await viewsOf(r, phase);
+        expect(views.every((v) => v.phaseEndsAt === forced + ms)).toBe(true);
+        expect(views.every((v) => v.phaseDurationMs === ms)).toBe(true);
+        expect(await alarmOf(r.code)).toBe(forced + wakeAfterMs);
+      };
+      // 07-08: 순차 주장 단계가 없다. 15-02: errand 에서는 알람이 마감보다 이른 근처·목격 표본 시각(진입 + ERRAND_TICK_MS)에 걸린다 — 마감은 그대로 진입 + ERRAND_MS.
+      if (mode === "basic") {
+        await advance(); // roleReveal → dayAnnounce
+        await viewsOf(r, "dayAnnounce");
+        expect((await storedRoom(r.code) as { day?: number }).day).toBe(1);
+        await stepInto("discussion", DISCUSSION_MS);
+      } else {
+        await stepInto("errand", ERRAND_MS, ERRAND_TICK_MS); // 첫 저녁 = 1일차
+        expect((await storedRoom(r.code) as { day?: number }).day).toBe(1);
+        await stepInto("night", NIGHT_MS);
+        await stepInto("discussion", DISCUSSION_MS); // 아무도 고르지 않은 밤은 현장이 없어 아침 없이 토론으로 간다
+      }
+
+      // 지목(지목이 0표이므로 다음은 기본 마피아 night · 확장판 errand): 지목 방식과 무관하게(09.1-03) 알람을 거듭하며 매번 마감 = 당긴 마감 + 그 view 의 단계 길이, 저장된 알람 = 그 마감이다.
+      const after = mode === "basic" ? "night" : "errand";
+      let phase = "";
+      let nominationSteps = 0;
+      for (let guard = 0; phase !== after; guard += 1) {
+        expect(guard).toBeLessThan(60);
+        const forced = await advance();
+        phase = (await storedRoom(r.code)).phase;
+        expect(guard === 0 ? "nomination" : phase === after ? after : "nomination").toBe(phase);
+        const views = await viewsOf(r, phase);
+        const ms = views[0]!.phaseDurationMs!;
+        expect(views.every((v) => v.phaseEndsAt === forced + ms && v.phaseDurationMs === ms)).toBe(true);
+        if (phase === "errand") {
+          // 알람 따라잡기로 늦게 닿은 저녁은 첫 표본 시각을 지금 + 1초로 옮긴다(worker/room.ts afterTransition) — 정확한 값은 시험 속도에 달려 있어 범위로 본다(앞선 첫 저녁은 정확한 값을 본다).
+          const wake = await alarmOf(r.code);
+          expect(wake).toBeGreaterThanOrEqual(forced + ERRAND_TICK_MS);
+          expect(wake).toBeLessThan(forced + ms);
+        } else {
+          expect(await alarmOf(r.code)).toBe(forced + ms);
+        }
+        if (phase === "night") expect(ms).toBe(30_000);
+        else if (phase === "errand") expect(ms).toBe(ERRAND_MS);
+        else nominationSteps += 1;
+      }
+      expect(nominationSteps).toBeGreaterThanOrEqual(1);
+
+      if (mode === "basic") {
+        await stepInto("morning", 5_000);
+        await stepInto("dayAnnounce", 2_000);
+      }
+      expect((await storedRoom(r.code) as { day?: number }).day).toBe(2);
+    });
+  }
 
   it("방 만료 알람은 모든 소켓을 4003 'room_closed' 로 닫고 미리보기가 404 다", async () => {
     const r = await startedRoom();

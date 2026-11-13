@@ -1,3 +1,4 @@
+// 21페이즈(규칙 나): 이 파일의 낮·밤·아침 규칙 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — startedGame 의 mode "basic". 확장판 순서는 causalDay 가 본다.
 // review-WR-01, 결정 0061-3·4, 알람 지연 재현 (09-24).
 // 알람이 아침 길이 이상 늦어 한 번의 tick 이 밤 → 아침 → 낮 시작을 지나가도, 밤에 걸은 마피아의 구간이 버려지고 산 사람 전원이 home 에 서며
 // 소켓마다 아침 경로와 같은 규칙(worldVisibleTo)의 snap 을 한 번 받는다. 정상 경로 누설 시험은 nightLeak.test.ts 가 그대로 지킨다.
@@ -42,7 +43,7 @@ function visibleSeats(landed: string, home: string, viewerSeat: number, pool: nu
 
 /** 밤에 마피아 둘이 시민 한 명을 고르고 마피아 한 명이 걷게 한 뒤, 아침 길이 + 1초 늦게 알람을 돌려 낮 시작 쪽으로 한 번에 따라잡는다. */
 async function lateCatchup(withVictim: boolean): Promise<{ g: Game; victim: Game["actors"][number]; walker: Game["actors"][number]; home: string; before: string; got: ServerMessage[][]; marks: number[] }> {
-  const g = await startedGame("night");
+  const g = await startedGame("night", 5, { mode: "basic" });
   const [walker, other] = withRole(g, "mafia") as [Game["actors"][number], Game["actors"][number]];
   const victim = withRole(g, "citizen")[0]!;
   if (withVictim) {

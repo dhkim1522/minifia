@@ -3,7 +3,7 @@
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { MORNING_MS, MORNING_TRACE_MS, MORNING_VICTIM_MS } from "../../shared/game/phases";
+import { MORNING_SCENE_MS } from "../../shared/game/phases";
 import { restSegment } from "../../shared/game/world";
 import type { Segment, WorldState } from "../../shared/game/world";
 import { PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
@@ -89,8 +89,8 @@ describe("밤 고르기 — 모든 역할이 같은 입력에 같은 응답 (D-0
     expect(lastViewOf(c2.sock).day?.morning?.eliminated).toBe(c1.seat);
   }, 40_000);
 
-  it("시민만 마피아를 고르고 마피아가 아무도 안 고르면 아무도 탈락하지 않는다", async () => {
-    const g = await startedGame("night");
+  it("시민만 마피아를 고르고 마피아가 아무도 안 고르면 아무도 탈락하지 않는다 (기본 마피아 — 아침이 늘 있다, 21페이즈 규칙 나)", async () => {
+    const g = await startedGame("night", 5, { mode: "basic" });
     const mafia = withRole(g, "mafia")[0]!;
     for (const c of withRole(g, "citizen")) pickAs(c, mafia.seat);
     for (const a of g.actors) await settle(a.sock, mark(a.sock));
@@ -167,10 +167,10 @@ describe("아침 흔적 (D-06, T-15-12)", () => {
     expect(lastViewOf(g.socks[0]!).day?.morning?.trace).toBe("redCloth");
   }, 40_000);
 
-  it("아침 길이는 흔적이 있으면 기본 + 탈락 + 3초다(phaseDurationMs)", async () => {
+  it("확장판의 아침 길이는 탈락·흔적과 무관하게 현장 장면 길이 하나다(phaseDurationMs, 21페이즈 D-03, 규칙 가)", async () => {
     const g = await startedGame("night");
     await assassinate(g);
-    expect(lastViewOf(g.socks[0]!).phaseDurationMs).toBe(MORNING_MS + MORNING_VICTIM_MS + MORNING_TRACE_MS);
+    expect(lastViewOf(g.socks[0]!).phaseDurationMs).toBe(MORNING_SCENE_MS);
   }, 40_000);
 
   it("구출: 의사가 확정 대상을 지키면 morning 에 saved 만 있고 trace 키가 없으며 아침은 기본 길이다", async () => {
@@ -181,11 +181,11 @@ describe("아침 흔적 (D-06, T-15-12)", () => {
     for (const a of g.actors) await settle(a.sock, mark(a.sock));
     await advanceTo(g.code, g.socks, "morning");
     for (const s of g.socks) expect(JSON.stringify(lastViewOf(s).day?.morning)).toBe('{"saved":true}');
-    expect(lastViewOf(g.socks[0]!).phaseDurationMs).toBe(MORNING_MS);
+    expect(lastViewOf(g.socks[0]!).phaseDurationMs).toBe(MORNING_SCENE_MS); // 확장판 아침은 구출이어도 현장 장면 길이 하나다(21페이즈 D-03, 규칙 가)
   }, 40_000);
 
-  it("무효 밤: 마피아가 갈려 아무도 안 죽으면 morning 이 {} 이고 trace 가 없다", async () => {
-    const g = await startedGame("night");
+  it("무효 밤: 마피아가 갈려 아무도 안 죽으면 morning 이 {} 이고 trace 가 없다 (기본 마피아 — 확장판은 현장 없는 밤이 아침 없이 토론으로 간다, 21페이즈 규칙 나)", async () => {
+    const g = await startedGame("night", 5, { mode: "basic" });
     const [m1, m2] = withRole(g, "mafia") as [Actor, Actor];
     const [c1, c2] = withRole(g, "citizen") as [Actor, Actor];
     pickAs(m1, c1.seat);

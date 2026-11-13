@@ -1,8 +1,8 @@
 // 20-03: 마을 한 판의 world 프레임 누설 전수(D-16·D-18·D-22, 위협 T-20-12).
-// 심부름(근처·목격) → 토론(걷기·문 통과·재접속·채팅) → 지목 모이기(강제 걷기) → 밤 → 아침을 한 번 걷고,
+// 저녁 심부름(근처·목격) → 밤(집 앞 순간이동) → 토론(걷기·문 통과·재접속·채팅) → 지목 모이기(강제 걷기)를 한 번 걷고(21페이즈: 확장판 하루 순서 — 옛 순서는 심부름 → 토론 → 지목 → 밤 → 아침),
 // 산 사람 소켓이 그 동안 받은 "모든" world 프레임에서 남의 좌표가 그 프레임 시각의 받는 사람 구역 안인지 한 곳(judge)에서 판정한다.
 // 받는 사람의 구역은 그 사람이 받은 자기 구간(자기 move·snap 의 자기 칸)을 따라가며 구한다 — 서버 메모리를 다시 읽지 않는다.
-// 고정된 두 사람이 기준이다: V 는 광장에, W 는 우체국 안에 서 있다(지목 모이기 전까지 움직이지 않는다). 나머지가 방을 드나든다.
+// 고정된 두 사람이 기준이다: V 는 광장에, W 는 우체국 안에 서 있다(밤이 되기 전까지 움직이지 않는다). 나머지가 방을 드나든다.
 // 유령은 방 안 좌표를 포함해 모두를 보고(D-16), 채팅은 구역과 무관하게 간다(D-16).
 // 실제 시간을 기다리지 않는다: 문 통과는 구간 출발을 앞당기고(passDoor) 알람을 돌린다. 프레임은 처음부터 끝까지 모은다 — 통과를 내가 돌린 알람이 내든 제때 깨어난 알람이 내든 불변식은 같다.
 // 프레임 수는 실제 시간에 깨어난 심부름 표본 수에 따라 달라지므로 개수는 "있다" 로만 단언한다. 실패 출력은 한 줄이어야 해서(TAP) 문자열로 비교한다.
@@ -28,6 +28,7 @@ import {
   passDoor,
   placeSeats,
   settle,
+  shiftSeg,
   storedRoom,
   townGame,
   withRole,
@@ -172,7 +173,7 @@ interface Run {
   z: Actor;
   ghost: Actor;
   tapes: Map<Actor, Tape>;
-  /** 지목 모이기 직전까지 V·W 가 받은 프레임 수(그때까지 둘은 서 있다) */
+  /** 밤이 되기 직전까지 V·W 가 받은 프레임 수(그때까지 둘은 서 있다) */
   cut: { v: number; w: number };
   /** 첫 표본 뒤 저장된 목격 줄: "V=[…] W=[…]" */
   seenAfterFirst: string;
@@ -216,6 +217,17 @@ async function walk(g: Game, who: Actor, dest: Pt, through = true): Promise<void
   for (const k of g.socks) await settle(k, mark(k));
 }
 
+/** 그 좌석이 dest 로 걷기를 마친 것으로 한다(문을 지나지 않는 광장 걷기 — 구간 출발을 앞당겨 실제 시간을 기다리지 않는다). */
+async function arrive(g: Game, who: Actor, dest: Pt): Promise<void> {
+  await clearRates(g.code);
+  await clearMoveGaps(g.code);
+  moveAs(who, dest.x, dest.z);
+  await settle(who.sock, mark(who.sock));
+  await shiftSeg(g.code, who.seat, 120_000);
+  await runDurableObjectAlarm(env.ROOM.getByName(g.code));
+  for (const k of g.socks) await settle(k, mark(k));
+}
+
 const memoOf = async (g: Game, who: Actor): Promise<string> => String((await memWorld(g.code)).zones?.[await idOfSeat(g.code, who.seat)]);
 
 /** 마을 한 판을 심부름부터 아침까지 한 번 걷는다. */
@@ -245,11 +257,21 @@ async function playOnce(): Promise<Run> {
   await sampleWalking(g, x, [IN_DOOR.x, IN_DOOR.z, POST.front.x, POST.front.z]); // 문으로 나가는 길(표본 때는 아직 방 안)
   await takeAll();
 
-  // ---- 토론: X 는 경찰서로, Y 는 우체국으로 들어갔다 나온다. 사이에 V·W·유령이 재접속한다 ----
-  await placeSeats(code, { [x.seat]: POLICE.front, [y.seat]: POST.front });
+  // 21페이즈(규칙 가): 하루는 저녁 → 밤 → 토론이다 — 밤이 되면 모두 자기 집 앞(광장)으로 순간이동한다(우체국 안의 W 도 나온다). 이 순간이동까지가 "서 있는" 구간이다.
+  const cut = { v: tapes.get(v)!.msgs.length, w: tapes.get(w)!.msgs.length };
+  await flushWorld(code);
+  await advanceTo(code, g.socks, "night");
+  await takeAll();
+
+  // ---- 토론(현장 없는 밤은 아침 없이 토론): X 는 경찰서로, W·Y 는 우체국으로 들어갔다 나온다. 사이에 V·W·유령이 재접속한다 ----
   await flushWorld(code);
   await advanceTo(code, g.socks, "discussion");
+  await arrive(g, x, POLICE.front);
+  await arrive(g, y, POST.front);
+  await arrive(g, w, POST.front);
+  await takeAll();
   await walk(g, x, POLICE.inside);
+  await walk(g, w, POST.inside);
   await walk(g, y, POST_SIDE);
   await walk(g, y, POST_DEEP, false);
   for (const who of [v, w, ghost]) await tapes.get(who)!.reconnect(g);
@@ -258,7 +280,6 @@ async function playOnce(): Promise<Run> {
   await settle(w.sock, mark(w.sock));
   await takeAll();
   const zonesBeforeGather = `W=${await memoOf(g, w)} X=${await memoOf(g, x)} Y=${await memoOf(g, y)}`;
-  const cut = { v: tapes.get(v)!.msgs.length, w: tapes.get(w)!.msgs.length };
 
   // ---- 지목 모이기: 서버가 모두를 걷게 한다 — W 는 우체국에서, X 는 경찰서에서 문을 지나 나온다 ----
   await flushWorld(code);
@@ -268,15 +289,6 @@ async function playOnce(): Promise<Run> {
   await runDurableObjectAlarm(env.ROOM.getByName(code));
   await takeAll();
   const zonesAfterGather = `W=${await memoOf(g, w)} X=${await memoOf(g, x)}`;
-
-  // ---- 밤 → 아침: 토론이 끝난 자리(W 우체국 안, X 경찰서 안)로 순간이동한다 ----
-  await flushWorld(code);
-  await advanceTo(code, g.socks, "night");
-  await takeAll();
-  await flushWorld(code);
-  await advanceTo(code, g.socks, "morning");
-  await runDurableObjectAlarm(env.ROOM.getByName(code));
-  await takeAll();
   return { g, v, w, x, y, z, ghost, tapes, cut, seenAfterFirst, zonesBeforeGather, zonesAfterGather };
 }
 
@@ -309,10 +321,10 @@ describe("마을 한 판: 산 사람이 받은 모든 world 프레임의 남의 
     expect(got.join(" // ")).toBe("0 none // 0 none // 0 none");
   });
 
-  it("지목 모이기 전까지 V 의 구역은 줄곧 광장, W 는 줄곧 우체국이고 — 그 뒤 W 는 문을 지나 광장으로 나왔다가 밤에 우체국으로 돌아간다", T, async () => {
+  it("밤이 되기 전까지 V 의 구역은 줄곧 광장, W 는 줄곧 우체국이고 — 그 뒤 W 는 밤에 집 앞(광장)으로 옮겨지고, 토론에서 우체국으로 들어갔다가 지목 모이기에 문을 지나 광장으로 나온다 (21페이즈, 규칙 가)", T, async () => {
     const r = await play();
     const got = `V=${verdictOf(r, r.v, r.cut.v).trail} W=${verdictOf(r, r.w, r.cut.w).trail} | 끝까지 V=${verdictOf(r, r.v).trail} W=${verdictOf(r, r.w).trail}`;
-    expect(got).toBe("V=plaza W=post | 끝까지 V=plaza W=post>plaza>post");
+    expect(got).toBe("V=plaza W=post | 끝까지 V=plaza W=post>plaza>post>plaza");
   });
 
   it("지나간 경로: 근처 snap·이동·문 사라짐·문 나타남·snap 이 V 와 W 모두에게 남의 좌표와 함께 왔고, W 는 문을 지날 때 zone snap 을 받았다", T, async () => {

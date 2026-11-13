@@ -19,6 +19,7 @@ import {
   actorsOf,
   advanceTo,
   connect,
+  eveningRowsOf,
   flushWorld,
   ghostsOf,
   lastViewOf,
@@ -28,6 +29,7 @@ import {
   observe,
   pause,
   pickAs,
+  regraftEvening,
   seat,
   send,
   settle,
@@ -186,13 +188,13 @@ const snapsOf = (msgs: ServerMessage[]): SnapFrame[] => msgs.filter((m): m is Sn
 const seatsOfSnap = (f: SnapFrame | undefined): string => (f === undefined ? "none" : f.ents.map((e) => e.s).sort((a, b) => a - b).join(","));
 const expectedSeats = (layout: Record<number, Pos>, seatNo: number): string => [seatNo, ...nearOf(layout, seatNo)].sort((a, b) => a - b).join(",");
 
-/** 낮 시작에서 멈춘 판(errand 진입 전환을 시험이 직접 일으키려고). */
-async function startedAtDayAnnounce(): Promise<Game> {
+/** 역할 확인에서 멈춘 판(errand 진입 전환을 시험이 직접 일으키려고) — 21페이즈: 확장판은 역할 확인 다음이 곧 저녁이다. */
+async function startedAtRoleReveal(): Promise<Game> {
   const room = await seat(5, 0);
   const socks = [room.host, ...room.guests.map((x) => x.sock)];
   send(room.host, { t: "start" });
   for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
-  await advanceTo(room.code, socks, "dayAnnounce");
+  await advanceTo(room.code, socks, "roleReveal");
   for (const sock of socks) await settle(sock, mark(sock));
   return { code: room.code, socks, actors: actorsOf(room) };
 }
@@ -303,7 +305,7 @@ describe("② 위치 비공개 — 산 사람은 본인 + 근처만, 유령은 �
   }, 40_000);
 
   it("errand 로 들어오는 전환: 산 사람마다 본인 + 근처 snap, 유령 snap 은 전원(near 표시 없음)", async () => {
-    const g = await startedAtDayAnnounce();
+    const g = await startedAtRoleReveal();
     await placeSeats(g.code, L1);
     await flushWorld(g.code);
     const ghostActor = actorOf(g, 5);
@@ -318,22 +320,27 @@ describe("② 위치 비공개 — 산 사람은 본인 + 근처만, 유령은 �
     for (const s of g.socks) expect(violationsOfSock(s).join(" | ")).toBe("");
   }, 40_000);
 
-  it("errand 를 벗어난 토론 전환에서만 전체 snap 이 가고, 다음 날 errand 진입에서 다시 근처 snap 이 간다", async () => {
+  it("errand 를 벗어난 밤 전환은 본인 집 앞 snap 뿐이고, 전체 snap 은 토론 모이기 전환에서만 가며, 다음 저녁 errand 진입에서 다시 근처 snap 이 간다 (21페이즈, 규칙 가)", async () => {
     const g = await startedGame("errand");
     await placeSeats(g.code, L1);
     await flushWorld(g.code);
     let marks = g.actors.map((a) => mark(a.sock));
+    await advanceTo(g.code, g.socks, "night");
+    for (const [i, a] of g.actors.entries()) {
+      const last = snapsOf(await settle(a.sock, marks[i]!)).at(-1);
+      expect(`${a.seat}:${seatsOfSnap(last)}:${last?.near === undefined}`).toBe(`${a.seat}:${a.seat}:true`); // 밤: 모두 자기 집 앞 한 점 — 남의 위치는 없다
+    }
+    marks = g.actors.map((a) => mark(a.sock));
     await advanceTo(g.code, g.socks, "discussion");
     for (const [i, a] of g.actors.entries()) {
       const last = snapsOf(await settle(a.sock, marks[i]!)).at(-1);
-      expect(`${a.seat}:${seatsOfSnap(last)}:${last?.near === undefined}`).toBe(`${a.seat}:0,1,2,3,4,5:true`);
+      expect(`${a.seat}:${seatsOfSnap(last)}:${last?.near === undefined}`).toBe(`${a.seat}:0,1,2,3,4,5:true`); // 토론 모이기: 전원
     }
-    await advanceTo(g.code, g.socks, "dayAnnounce"); // 다음 날 낮 시작
-    for (const a of g.actors) await settle(a.sock, mark(a.sock));
+    await advanceTo(g.code, g.socks, "nomination"); // 지목이 0표로 끝나면 처형 없이 곧장 다음 저녁이다 — 저녁 진입 직전에 배치를 놓는다
     await placeSeats(g.code, L2);
     await flushWorld(g.code);
     marks = g.actors.map((a) => mark(a.sock));
-    await advanceTo(g.code, g.socks, "errand");
+    await advanceTo(g.code, g.socks, "errand"); // 다음 저녁
     for (const [i, a] of g.actors.entries()) {
       const last = snapsOf(await settle(a.sock, marks[i]!)).at(-1);
       expect(`${a.seat}:${seatsOfSnap(last)}:${last?.near}`).toBe(`${a.seat}:${expectedSeats(L2, a.seat)}:true`);
@@ -363,6 +370,7 @@ describe("③ 목격 기록 — 3곳을 마친 산 본인에게만 (D-04, T-15-2
         p.seat === a.seat ? { ...p, errandPlaces: ["glass", "piano", "sax"], errandDone: ["glass", "piano", "sax"] } : p.seat === b.seat ? { ...p, errandPlaces: ["glass", "piano", "sax"], errandDone: ["glass", "piano"] } : p,
       ),
     }));
+    const evening = await eveningRowsOf(g.code);
     // errand 단계 view 에는 아직 record 가 없다.
     expect(`${a.role}:${"record" in lastViewOf(a.sock).me}`).toBe(`${a.role}:false`);
     await ghostsOf(g, [ghost.seat]);
@@ -371,7 +379,9 @@ describe("③ 목격 기록 — 3곳을 마친 산 본인에게만 (D-04, T-15-2
     // 같은 토큰으로 다시 연결하면 옛 소켓은 닫힌다 — 이후 단계 전환은 살아 있는 소켓(유령은 새 소켓)으로만 기다린다.
     const live = [...g.actors.filter((x) => x !== ghost).map((x) => x.sock), ghostSock];
     await advanceTo(g.code, live, "discussion");
-    for (const s of live) await settle(s, 0);
+    // 21페이즈: 밤 진입이 저녁의 목록·진행·목격 줄을 지운다(21-04 가 토론까지 남기도록 바꾼다). 그때까지 저녁에 쌓인 값을 토론 상태에 옮겨 심고 모든 소켓이 새 state 를 받게 한다 —
+    // 이 시험이 보는 것은 토론 view 의 me.record 구조·비공개 경계이고 그 규칙은 그대로다(규칙 다).
+    await regraftEvening(g.code, evening, live, g.actors.find((x) => x !== ghost && x !== a)!.sock);
     return { g, a, b, ghost, ghostSock, marks, live };
   }
 
@@ -399,8 +409,8 @@ describe("③ 목격 기록 — 3곳을 마친 산 본인에게만 (D-04, T-15-2
 
   it("record 는 토론 단계 프레임에서만 나타난다 — errand·밤·아침 state 프레임에는 키가 없다", async () => {
     const { g, a, live } = await recordGame("doctor", false);
+    await advanceTo(g.code, live, "errand"); // 21페이즈: 토론 다음 지목이 0표로 끝나면 다음 저녁, 이어 밤 — 아침은 현장이 있을 때만 온다
     await advanceTo(g.code, live, "night");
-    await advanceTo(g.code, live, "morning");
     const phasesWithRecord = new Set<string>();
     for (const raw of a.sock.frames) {
       const m = JSON.parse(raw) as ServerMessage;
@@ -493,7 +503,8 @@ describe("⑤ 아침 흔적 — 역할·의상·좌석·풀 없이 모든 시점
     expect(JSON.stringify(lastViewOf(g.socks[0]!).day?.morning)).toBe(JSON.stringify({ saved: true }));
     for (const s of g.socks) expect(violationsOfSock(s).join(" | ")).toBe("");
 
-    const h = await startedGame("night");
+    // 아무도 안 고른 밤: 확장판은 현장이 없어 아침 없이 토론으로 가므로 아침이 늘 있는 기본 마피아로 본다(21페이즈 규칙 나).
+    const h = await startedGame("night", 5, { mode: "basic" });
     await advanceTo(h.code, h.socks, "morning");
     for (const a of h.actors) await settle(a.sock, 0);
     expect(JSON.stringify(lastViewOf(h.socks[0]!).day?.morning)).toBe("{}");
@@ -518,9 +529,9 @@ describe("⑦ 마지막 목격 증거 — 서버 전용 errandLast 는 어떤 �
     for (const a of g.actors) await settle(a.sock, mark(a.sock));
     await advanceTo(g.code, g.socks, "morning");
     for (const [i, a] of g.actors.entries()) await settle(a.sock, marks[i]!);
-    // 아침 뒤 낮 끝까지(토론·지목·변론·찬반·처형이 아니라 다음 낮의 심부름·토론까지) 넘겨 낮 내내 같은 값임을 본다.
-    await advanceTo(g.code, g.socks, "errand");
+    // 아침 뒤 낮 끝까지(21페이즈: 토론 → 지목 → 처형 없는 날의 다음 저녁까지) 넘겨 낮 내내 같은 값임을 본다.
     await advanceTo(g.code, g.socks, "discussion");
+    await advanceTo(g.code, g.socks, "errand");
     for (const [i, a] of g.actors.entries()) await settle(a.sock, marks[i]!);
 
     const framesBy = g.actors.map((a) => a.sock.frames.slice(marks[g.actors.indexOf(a)]!));
@@ -549,7 +560,7 @@ describe("⑦ 마지막 목격 증거 — 서버 전용 errandLast 는 어떤 �
     expect(ev.seen.seat).toBe(o.seat);
     expect((PLACE_IDS as readonly string[]).includes(ev.seen.place)).toBe(true);
     expect(OUTFITS.has(ev.trace) || ROLE_WORDS.has(ev.trace) || ROLE_WORDS.has(ev.seen.place)).toBe(false);
-    expect([...phasesWithEvidence].sort().join(",")).toBe(["morning", "dayAnnounce", "errand", "discussion"].sort().join(","));
+    expect([...phasesWithEvidence].sort().join(",")).toBe(["morning", "discussion", "nomination", "errand"].sort().join(","));
     // 다섯 시점(마피아·경찰·의사·시민·유령)의 마지막 view 가 같은 증거를 쥔다
     for (const a of g.actors) expect(`${a.role}${a.seat}:${JSON.stringify(lastViewOf(a.sock).day?.evidence)}`).toBe(`${a.role}${a.seat}:${JSON.stringify(ev)}`);
     // errandLast: 이름 키도 문자열도 어떤 프레임에도 없고, 허용 밖 경로 위반이 없다

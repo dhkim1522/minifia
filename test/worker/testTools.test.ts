@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { NOMINATION_GATHER_MS, NOMINATION_MS } from "../../shared/game/phases";
 import { rulesetOf } from "../../shared/game/ruleset";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
-import { alarmOf, advanceTo, collect, createRoom, driveToEnded, editRoom, mapPlayers, nextFrame, seat, send, skipOnce, skipThrough, storedRoom, wanderTimes } from "./helpers";
+import { alarmOf, advanceTo, collect, createRoom, driveToEnded, editRoom, mapPlayers, nextFrame, pickBasic, seat, send, skipOnce, skipThrough, storedRoom, wanderTimes } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 const GAME_RULES = rulesetOf("extended");
 
@@ -58,7 +58,9 @@ type Raw = Record<string, unknown>;
 const stored = async (code: string): Promise<Raw> => (await storedRoom(code)) as unknown as Raw;
 
 /** 방장이 시작하고 assigning 을 모든 소켓이 받을 때까지. */
+/** 21페이즈 규칙 나: 이 파일의 testSkip·testReset 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다. */
 async function start(r: Seated): Promise<void> {
+  await pickBasic(r);
   send(r.host, { t: "start" });
   for (const s of allSockets(r)) await nextFrame(s, isPhase("assigning"));
 }

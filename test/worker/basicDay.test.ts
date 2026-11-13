@@ -1,3 +1,4 @@
+// 21페이즈(규칙 나): 이 파일의 낮·밤·아침 규칙 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — startedGame 의 mode "basic". 확장판 순서는 causalDay 가 본다.
 // 기본판 낮 흐름 DO 시험(13-01, FLOW-01·02·03·04, 결정 0072).
 // 설정은 shared/game/ruleset.ts 의 판 규칙 한 곳이다(모두 꺼짐).
 // 토론 끝내기 → 투표(동시, 15초, 마감까지 바꾸기) → 최후 변론 → 찬반 → 처형(찬반 기록 카드) → 밤을 실제 방 DO 와 소켓 프레임으로 끝까지 돈다.
@@ -19,7 +20,7 @@ const pointsLines = (g: Game): string[] => g.socks.map((s) => JSON.stringify(las
 
 describe("기본판 낮 흐름 (FLOW-01·04, 결정 0072)", () => {
   it("토론 끝내기 과반 → 15초 동시 투표(바꾸기 포함) → 변론 → 찬반 → 처형(찬반 기록 카드 한 장) → 밤, day.turn·runoff·showdown 은 한 번도 없다", async () => {
-    const g = await startedGame("discussion", 3); // 4명 판: 과반 3
+    const g = await startedGame("discussion", 3, { mode: "basic" }); // 4명 판: 과반 3
     const start = g.socks.map(mark);
     const before = Date.now();
     for (const a of g.actors.slice(0, 3)) {
@@ -100,7 +101,7 @@ describe("기본판 낮 분기 (FLOW-02·03, 결정 0072)", () => {
   const seenPhases = (g: Game, from: number[]): string[] => g.socks.flatMap((s, i) => viewsOf(framesOf(s).slice(from[i]!)).map((v) => v.phase));
 
   it("2:2 동점으로 투표가 마감되면 결선 없이 모든 소켓이 night 와 day.noExecution.reason tie 를 받고 runoff 프레임이 0이다", async () => {
-    const g = await startedGame("nomination", 3);
+    const g = await startedGame("nomination", 3, { mode: "basic" });
     const from = g.socks.map(mark);
     const [s0, s1, s2, s3] = g.actors.map((a) => a.seat);
     await pointAll(g.code, g.actors, { [s0!]: s2!, [s1!]: s2!, [s2!]: s0!, [s3!]: s0! });
@@ -111,23 +112,22 @@ describe("기본판 낮 분기 (FLOW-02·03, 결정 0072)", () => {
   }, 60_000);
 
   it("0표로 투표가 마감되면 night 이고 reason 은 noVotes 다", async () => {
-    const g = await startedGame("nomination", 3);
+    const g = await startedGame("nomination", 3, { mode: "basic" });
     await pointAll(g.code, g.actors, {});
     await settleAll(g);
     expect((await storedRoom(g.code)).phase).toBe("night");
     expect(g.socks.map((s) => lastViewOf(s).day?.noExecution?.reason).join(",")).toBe("noVotes,noVotes,noVotes,noVotes");
   }, 60_000);
 
-  it("산 사람이 정확히 셋인 낮 시작 발표 마감 뒤에는 심부름을 지나 토론으로 가고 showdown 프레임이 0이다", async () => {
+  it("산 사람이 정확히 셋인 낮 시작 발표 마감 뒤에는 곧바로 토론으로 가고(기본 마피아는 심부름 단계가 없다) showdown 프레임이 0이다", async () => {
     const g = await threeAliveGame();
     const from = g.socks.map(mark);
-    await closePhase(g.code); // 낮 시작 → 심부름(15페이즈)
-    await settleAll(g);
-    expect((await storedRoom(g.code)).phase).toBe("errand");
-    await closePhase(g.code); // 심부름 → 토론
+    await closePhase(g.code); // 낮 시작 → 토론(19페이즈 D-08, 21페이즈 규칙 나)
     await settleAll(g);
     expect((await storedRoom(g.code)).phase).toBe("discussion");
     expect(g.socks.map((s) => lastViewOf(s).phase).join(",")).toBe("discussion,discussion,discussion,discussion");
-    expect(seenPhases(g, from).filter((p) => p === "showdown").length).toBe(0);
+    const seen = seenPhases(g, from);
+    expect(seen.filter((p) => p === "showdown").length).toBe(0);
+    expect(seen.filter((p) => p === "errand").length).toBe(0);
   }, 60_000);
 });

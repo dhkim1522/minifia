@@ -1,3 +1,4 @@
+// 21페이즈(규칙 나): 이 파일의 낮·밤·아침 규칙 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — startedGame 의 mode "basic". 확장판 순서는 causalDay 가 본다.
 // 11-03 Task 2: resultLog 프레임 전송 — ended 진입 한 번·신분별 동일·hello 재전송·판 중 0건 (결정 D-9·D-10, 누설 L35·L36, 위협 T-11-07·T-11-08).
 import { env } from "cloudflare:workers";
 import { evictDurableObject } from "cloudflare:test";
@@ -115,7 +116,7 @@ describe("resultLog 누설 — 판 중 0건, ended 뒤 모두 같게 (L35·L36, 
   });
 
   it("판 중 어느 순간의 hello(재접속)도 resultLog 를 받지 않는다", { timeout: 60_000 }, async () => {
-    const g = await startedGame("discussion", 5);
+    const g = await startedGame("discussion", 5, { mode: "basic" });
     const reconnect = async (token: string): Promise<string[]> => {
       const sock = await connect(g.code);
       send(sock, { t: "hello", token });

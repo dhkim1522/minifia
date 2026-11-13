@@ -1,3 +1,4 @@
+// 21페이즈(규칙 나): 이 파일의 낮·밤·아침 규칙 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — startedGame 의 mode "basic". 확장판 순서는 causalDay 가 본다.
 // NIGHT-07 누설 증명, 결정 0061-2·3·4, UI-SPEC L1·L5·L9, RESEARCH 메타모픽 설계 (09-09; 09-16 이 구간 A/B 비교를 더한다).
 // 밤에 시민 편 소켓은 마피아의 활동에서 한 프레임도 받지 않고, 진입 snap 은 본인 한 칸뿐이다(네트워크로도 가지 않는다 — 화면에서 숨기는 방식이 아니다, 결정 0002).
 // "오지 않았음" 은 settle(ping/pong)로 증명한다. 실패 출력은 한 줄이어야 해서(TAP) 프레임은 요약 문자열로 비교한다.
@@ -9,7 +10,7 @@ import { PHASE_DEFS } from "../../shared/game/phases";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { nominationSpanMs } from "../helpers/voteState";
-import { advanceTo, chatSend, chatKeysOf, connect, editRoom, mapPlayers, endAs, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, restoreStorage, segEndsBySeat, settle, snapSeatsOf, snapshotStorage, stable, startedGame, storedRoom, summary, typingSend, withRole, worldFramesOf, worldOf } from "./helpers";
+import { advanceTo, chatSend, chatKeysOf, connect, editRoom, mapPlayers, endAs, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, pickBasic, restoreStorage, segEndsBySeat, settle, snapSeatsOf, snapshotStorage, stable, startedGame, storedRoom, summary, typingSend, withRole, worldFramesOf, worldOf } from "./helpers";
 import type { Game } from "./helpers";
 
 /** 마지막 world snap 의 '좌석:x,z' 오름차순 문자열. snap 이 없으면 'none'. */
@@ -30,7 +31,7 @@ const homeRows = (home: string, seats: number[]): string =>
 
 /** 토론 중 두 사람이 걷게 해 home 이 선 자리와 달라지게 하고, 지목까지 넘긴 판. 지목 직후 home 을 함께 돌려준다. */
 async function nominationWithWalkers(): Promise<{ g: Game; home: string }> {
-  const g = await startedGame("discussion");
+  const g = await startedGame("discussion", 5, { mode: "basic" });
   moveAs(withRole(g, "citizen")[0]!, -120, 60);
   moveAs(withRole(g, "mafia")[0]!, 160, -80);
   for (const sock of g.socks) await settle(sock, mark(sock));
@@ -86,7 +87,7 @@ describe("밤 진입 — 트레이서 (NIGHT-07, 결정 0061-3·5)", () => {
 describe("아침 진입 — 모두 home (결정 0061-4, UI-SPEC A1·L5)", () => {
   /** 밤에 마피아 둘이 시민 V 를 고르고 마피아 A 가 걷게 한 뒤 아침으로 넘긴다. */
   async function morningAfterWalk(): Promise<{ g: Game; victim: Game["actors"][number]; walker: Game["actors"][number]; home: string; got: ServerMessage[][]; marks: number[] }> {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const [walker, other] = withRole(g, "mafia") as [Game["actors"][number], Game["actors"][number]];
     const victim = withRole(g, "citizen")[0]!;
     pickAs(walker, victim.seat);
@@ -125,7 +126,7 @@ describe("아침 진입 — 모두 home (결정 0061-4, UI-SPEC A1·L5)", () => 
   }, 40_000);
 
   it("알람이 늦어 토론에서 지목·밤을 지나 아침으로 한 번에 따라잡아도 아침 위치가 토론이 끝난 자리(home)다", async () => {
-    const g = await startedGame("discussion");
+    const g = await startedGame("discussion", 5, { mode: "basic" });
     moveAs(withRole(g, "citizen")[0]!, -120, 60);
     moveAs(withRole(g, "mafia")[0]!, 160, -80);
     for (const sock of g.socks) await settle(sock, mark(sock));
@@ -150,7 +151,7 @@ describe("아침 진입 — 모두 home (결정 0061-4, UI-SPEC A1·L5)", () => 
 
 describe("직접 불변식 L1 — 밤 동안 시민 편 소켓은 마피아 활동에서 한 프레임도 받지 않는다 (NIGHT-07)", () => {
   it("산 마피아 둘이 move ×3·pick·chat·typing 을 보내는 구간에 순수 시민 두 소켓과 경찰·의사 소켓의 settle 결과가 [] 다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const [a, b] = withRole(g, "mafia") as [Game["actors"][number], Game["actors"][number]];
     const target = withRole(g, "citizen")[0]!;
 
@@ -200,6 +201,7 @@ describe("세 경로 동일성 — 테스트 넘기기·토론 끝내기도 단�
     for (const sock of socks) await settle(sock, mark(sock));
     send(r.host, { t: "testRole", role: "mafia" });
     await settle(r.host, mark(r.host));
+    await pickBasic(r); // 21페이즈 규칙 나: 토론 → 지목 → 밤의 순서가 늘 같은 기본 마피아 흐름
     send(r.host, { t: "start" });
     for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
     await skipThrough(r, "nomination");
@@ -217,7 +219,7 @@ describe("세 경로 동일성 — 테스트 넘기기·토론 끝내기도 단�
   }, 40_000);
 
   it("산 사람 전원이 토론 끝내기를 눌러 과반으로 지목에 들어가도 토론 마지막 자리가 home 으로 기록된다", async () => {
-    const g = await startedGame("discussion");
+    const g = await startedGame("discussion", 5, { mode: "basic" });
     moveAs(withRole(g, "citizen")[0]!, -120, 60);
     for (const sock of g.socks) await settle(sock, mark(sock));
     await flushWorld(g.code);
@@ -232,7 +234,7 @@ describe("세 경로 동일성 — 테스트 넘기기·토론 끝내기도 단�
 
 describe("재접속 첫 snap — 라이브 진입 snap 과 같은 좌석 규칙 (L9, 결정 0061-3·4)", () => {
   it("밤 중간에 시민이 새 소켓으로 hello 하면 첫 프레임 열이 [state, world snap(본인 한 칸, home), chatLog] 이고 마피아도 본인 한 칸이다(15-03 D-05)", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const home = await homeBySeat(g.code);
     const citizen = withRole(g, "citizen")[0]!;
     const mafia = withRole(g, "mafia")[0]!;
@@ -247,7 +249,7 @@ describe("재접속 첫 snap — 라이브 진입 snap 과 같은 좌석 규칙 
   }, 40_000);
 
   it("아침 중간에 시민이 hello 하면 산 사람 전원의 home 좌표 snap 을 받는다", async () => {
-    const g = await startedGame("morning");
+    const g = await startedGame("morning", 5, { mode: "basic" });
     const home = await homeBySeat(g.code);
     const citizen = withRole(g, "citizen")[0]!;
 
@@ -265,11 +267,11 @@ describe("재접속 첫 snap — 라이브 진입 snap 과 같은 좌석 규칙 
 type Actor = Game["actors"][number];
 
 /** 밤 진입 직후 상태에서 script 를 돌리고 아침 → 낮 시작까지 넘긴 뒤, 소켓마다 그 구간의 프레임 열(stable)을 돌려준다. */
-async function segment(g: Game, script: () => Promise<void>): Promise<string[]> {
+async function segment(g: Game, script: () => Promise<void>, after: "dayAnnounce" | "discussion" = "dayAnnounce"): Promise<string[]> {
   const marks = g.socks.map((s) => mark(s));
   await script();
   await advanceTo(g.code, g.socks, "morning");
-  await advanceTo(g.code, g.socks, "dayAnnounce");
+  await advanceTo(g.code, g.socks, after); // 기본 마피아는 아침 다음이 낮 시작 발표, 확장판은 곧 토론(21페이즈)
   const cols: string[] = [];
   for (let i = 0; i < g.socks.length; i += 1) cols.push(stable(await settle(g.socks[i]!, marks[i]!)));
   return cols;
@@ -296,7 +298,7 @@ async function mafiaBusy(mafias: Actor[]): Promise<void> {
 
 describe("저장소 스냅샷·복원 도우미", () => {
   it("스냅샷 뒤 저장소를 바꿔도 복원하면 room·world·chat 키가 스냅샷 때와 같다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     await flushWorld(g.code);
     const snap = await snapshotStorage(g.code);
     const before = JSON.stringify([await worldOf(g.code), await chatKeysOf(g.code), await homeBySeat(g.code)]);
@@ -315,7 +317,7 @@ describe("저장소 스냅샷·복원 도우미", () => {
 
 describe("메타모픽 (i) 무사 밤 (L2)", () => {
   it("마피아가 서로 다른 시민을 고르고 움직이고 말해도 가만히 있던 밤과 시민·경찰·의사 소켓의 프레임 열이 같다 (둘 다 무사)", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const mafias = withRole(g, "mafia");
     const citizens = withRole(g, "citizen");
     await flushWorld(g.code);
@@ -346,7 +348,7 @@ describe("메타모픽 (i) 무사 밤 (L2)", () => {
 
 describe("메타모픽 (ii) 암살 밤 (L2·L5)", () => {
   it("마피아 둘이 같은 시민 V 를 고르고 같은 쪽지를 남긴 두 밤 — 움직이고 말했든 가만히 있었든 시민 편 소켓의 프레임 열이 같고 V 사망·카드 두 장·같은 분필이다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night"); // 흔적 조각은 확장판 규칙이다(21페이즈, 규칙 가) — 피해자가 있는 밤이라 확장판도 아침이 온다
     const mafias = withRole(g, "mafia");
     const v = withRole(g, "citizen")[0]!;
     await editRoom(g.code, (room) => mapPlayers(room, (p) => (p.seat === v.seat ? { ...p, will: "VWILL" } : p)));
@@ -360,12 +362,12 @@ describe("메타모픽 (ii) 암살 밤 (L2·L5)", () => {
       send(mafias[0]!.sock, { t: "note", text: "조용히" });
       await settle(mafias[0]!.sock, mark(mafias[0]!.sock));
     };
-    const quiet = await segment(g, assassinate);
+    const quiet = await segment(g, assassinate, "discussion");
     await restoreStorage(g.code, snap);
     const busy = await segment(g, async () => {
       await assassinate();
       await mafiaBusy(mafias);
-    });
+    }, "discussion");
 
     // 흔적 조각은 피해자를 고른 두 마피아 중 한 명의 의상 조각이다(D-06). 시작 때 겹친 옷을 풀면(18페이즈 D-01) 두 마피아의 옷이 서로 달라
     // 서버의 난수 한 번이 조각을 정하므로 구간마다 조각이 다를 수 있다 — 마피아의 행동과 무관한 값이라 비교에서는 조각 이름만 같은 자리표로 접는다.
@@ -385,7 +387,7 @@ describe("메타모픽 (ii) 암살 밤 (L2·L5)", () => {
 
 describe("재접속 L9 — 밤 중간 hello 의 첫 프레임 열이 구간과 무관하다", () => {
   it("마피아가 움직이고 말한 밤과 가만히 있던 밤 모두 시민의 새 소켓이 받는 [state, world snap(본인 한 칸), chatLog] 가 같다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const mafias = withRole(g, "mafia");
     const [c0, c1] = withRole(g, "citizen") as [Actor, Actor];
     const snap = await snapshotStorage(g.code);
@@ -417,7 +419,7 @@ function keyPaths(v: unknown, prefix = ""): string[] {
 describe("아침 길이·구출 개별 알림 없음 (L6, MORN-03·MORN-04)", () => {
   /** 구출 / 마피아 미선택 / 마피아 불일치 중 하나의 밤을 아침으로 넘기고 순수 시민 한 명의 아침 view 와 구출 대상·타 시민의 아침 진입 프레임 요약을 돌려준다. */
   async function morningOf(kind: "saved" | "none" | "split"): Promise<{ g: Game; view: ReturnType<typeof lastViewOf>; savedFrames: string; otherFrames: string }> {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const mafias = withRole(g, "mafia");
     const [v, other] = withRole(g, "citizen") as [Actor, Actor];
     const doctor = withRole(g, "doctor")[0]!;

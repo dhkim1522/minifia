@@ -1,3 +1,4 @@
+// 21페이즈(규칙 나): 이 파일의 낮·밤·아침 규칙 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — startedGame 의 mode "basic". 확장판 순서는 causalDay 가 본다.
 // 06-08: 방 DO 의 로비 이동(MAP-02) — move 한 번이 서버 경로가 되어 연결된 모든 소켓에 같은 world.move 로 간다.
 // 입장 위치(MAP-01)·hello 뒤 snap(MAP-05)·조용한 거절(UI-SPEC "서버가 막은 탭에 문구 없음")을 DO 밖에서 소켓으로 본다.
 import { env } from "cloudflare:workers";
@@ -23,6 +24,7 @@ import {
   lastViewOf,
   mark,
   nextFrame,
+  pickBasic,
   seat,
   send,
   settle,
@@ -433,8 +435,8 @@ async function settleAll(socks: TestSocket[], marks: number[], first: number): P
 
 /** 5명 판을 phase 단계로 옮긴다. 밤·아침은 실제 흐름으로, 지목·변론·찬반·처형은 저장 상태를 옮겨서(흐름 전환 전, 가정 A3) 들어간다. */
 async function gameAt(phase: PhaseId): Promise<Game5> {
-  if (phase === "night" || phase === "morning" || phase === "discussion") return startedGame(phase, 4);
-  const g = await startedGame("discussion", 4);
+  if (phase === "night" || phase === "morning" || phase === "discussion") return startedGame(phase, 4, { mode: "basic" });
+  const g = await startedGame("discussion", 4, { mode: "basic" });
   await toPhase(g.code, phase, (room) => ({ ...room, verdict: { passed: false, candidate: g.actors[1]!.seat } }));
   for (const sock of g.socks) await settle(sock, mark(sock));
   return g;
@@ -474,9 +476,10 @@ describe("단계별 이동 — 산 사람은 막히고 유령은 걷는다 (MAP-
     expect(got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",")).toBe("1,1,1,1,1");
   }, 40_000);
 
-  it("dayAnnounce: 산 사람의 move 는 모든 소켓이 world.move 로 받는다", async () => {
+  it("dayAnnounce: 산 사람의 move 는 모든 소켓이 world.move 로 받는다 (기본 마피아 — 낮 시작 발표는 이 판에만 있다, 21페이즈 규칙 나)", async () => {
     const s = await seat(3, 0);
     const socks = [s.host, ...s.guests.map((gst) => gst.sock)];
+    await pickBasic(s);
     send(s.host, { t: "start" });
     for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
     await advanceTo(s.code, socks, "dayAnnounce");
@@ -507,7 +510,7 @@ describe("밤 이동 — 산 사람은 역할과 무관하게 걷지 못한다 (
   const worldCounts = (got: ServerMessage[][]): string => got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",");
 
   it("산 마피아의 move 는 어느 소켓에도 world 프레임·오류가 없다 (시민·경찰·의사와 같다)", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const [mafiaA] = withRole(g, "mafia") as [(typeof g.actors)[number]];
     const marks = g.socks.map((sock) => mark(sock));
     send(mafiaA.sock, { t: "move", x: 300, z: 100 });
@@ -517,7 +520,7 @@ describe("밤 이동 — 산 사람은 역할과 무관하게 걷지 못한다 (
   }, 40_000);
 
   it("유령 소켓도 산 마피아의 걸음을 받지 않고, 산 사람도 0프레임이다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const [mafiaA] = withRole(g, "mafia") as [(typeof g.actors)[number]];
     const doomed = withRole(g, "citizen").slice(0, 1);
     const { ghosts, living } = await ghostsOf(g, doomed.map((a) => a.seat));
@@ -530,7 +533,7 @@ describe("밤 이동 — 산 사람은 역할과 무관하게 걷지 못한다 (
   }, 40_000);
 
   it("산 비마피아의 move 는 어느 소켓에도 프레임·오류가 없다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const marks = g.socks.map((sock) => mark(sock));
     const mover = g.actors.find((a) => a.role === "citizen")!;
     send(mover.sock, { t: "move", x: 300, z: 100 });
@@ -551,7 +554,7 @@ async function reconnectSnapSeats(code: string, token: string): Promise<string> 
 
 describe("밤 재접속 첫 snap (NIGHT-07, L9, 결정 0061-3)", () => {
   it("밤에 시민이 새 소켓으로 hello 하면 첫 world snap 의 좌석이 본인 하나뿐이고, 마피아가 hello 해도 본인 하나뿐이다 (15페이즈 D-05)", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const citizen = withRole(g, "citizen")[0]!;
     const mafia = withRole(g, "mafia")[0]!;
     expect(await reconnectSnapSeats(g.code, citizen.token)).toBe(`${citizen.seat}`);
@@ -559,7 +562,7 @@ describe("밤 재접속 첫 snap (NIGHT-07, L9, 결정 0061-3)", () => {
   }, 40_000);
 
   it("밤에 경찰·의사도 본인 한 칸이고, 유령이 hello 하면 전원이다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const police = withRole(g, "police")[0]!;
     const doctor = withRole(g, "doctor")[0]!;
     const victim = withRole(g, "citizen")[0]!;
@@ -590,7 +593,7 @@ describe("무대 자리 (0,0) 입력 차단 (08-04 Threat Flag)", () => {
 
 describe("home 기억 (결정 0061-5)", () => {
   it("토론이 끝나 지목에 들어가는 순간 각자 토론 마지막 구간의 끝점이 일차와 함께 즉시 저장된다 (지목 배치 슬롯이 아니다)", async () => {
-    const g = await startedGame("discussion");
+    const g = await startedGame("discussion", 5, { mode: "basic" });
     const walker = withRole(g, "citizen")[0]!;
     const mafia = withRole(g, "mafia")[0]!;
     moveAs(walker, -120, 60);

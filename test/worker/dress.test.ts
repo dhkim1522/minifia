@@ -108,8 +108,7 @@ describe("의상 — 규칙 완성 (10-02 Task 2, O-8·L26)", () => {
     expect(lobbyLooks).toBe(`0:-,${room.guests[0]!.seat}:mafia,${room.guests[1]!.seat}:noir,3:-,4:-,5:-`);
     send(room.host, { t: "start" });
     for (const k of socks) await nextFrame(k, (m) => m.t === "state" && m.view.phase === "assigning");
-    await advanceTo(room.code, socks, "dayAnnounce");
-    await advanceTo(room.code, socks, "discussion");
+    await advanceTo(room.code, socks, "discussion"); // 21페이즈: 확장판은 낮 시작 발표 없이 저녁·밤을 지나 토론에 닿는다(규칙 다)
     for (const k of socks) await settle(k, mark(k));
     // 직접 고른 옷은 그대로 남고, 기본 coat 가 겹친 사람(3·4·5)만 시작 때 남는 옷으로 바뀐다 (D-01)
     const startedLooks = "0:-,1:mafia,2:noir,3:police,4:doctor,5:detective";
@@ -239,8 +238,7 @@ async function playDress(assign: readonly RoleId[]): Promise<{ code: string; lob
   for (const [i, k] of socks.entries()) lobbyBySeat.push(await settle(k, marks[i]!));
   send(room.host, { t: "start" });
   for (const k of socks) await nextFrame(k, (m) => m.t === "state" && m.view.phase === "assigning");
-  await advanceTo(room.code, socks, "dayAnnounce");
-  await advanceTo(room.code, socks, "discussion");
+  await advanceTo(room.code, socks, "discussion"); // 21페이즈: 확장판은 낮 시작 발표 없이 저녁·밤을 지나 토론에 닿는다(규칙 다)
   for (const k of socks) await settle(k, mark(k));
   await editRoom(room.code, (r) => mapPlayers(r, (p) => ({ ...p, role: assign[p.seat as number] })));
   for (const k of socks) await settle(k, mark(k));

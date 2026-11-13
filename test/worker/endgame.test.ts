@@ -19,6 +19,7 @@ import {
   lastViewOf,
   mark,
   nextFrame,
+  pickBasic,
   seat,
   send,
   settle,
@@ -52,6 +53,7 @@ interface Game4 {
 /** 4명 방(마피아 1·경찰 1·시민 2, 방장 + 연결 손님 3)을 시작해 지목까지 넘긴다. */
 async function atNomination4(): Promise<Game4> {
   const r = await seat(3, 0);
+  await pickBasic(r); // 21페이즈 규칙 나: 승패·아침으로 끝나는 판 시험은 처형 → 밤 → 아침 흐름이 늘 있는 기본 마피아로 본다
   send(r.host, { t: "start" });
   for (const s of allSockets(r)) await nextFrame(s, isPhase("assigning"));
   await advanceTo(r.code, allSockets(r), "nomination");

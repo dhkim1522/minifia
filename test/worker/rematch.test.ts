@@ -1,3 +1,4 @@
+// 21페이즈(규칙 나): 이 파일의 낮·밤·아침 규칙 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — startedGame 의 mode "basic". 확장판 순서는 causalDay 가 본다.
 // 다시 하기 (11-08, D-12·D-15, REMATCH-01) — 끝난 판에서 모두 준비한 채 방장이 rematch 하면 같은 방이 round 2 의 assigning 으로 가고 이전 판 흔적이 없다 (누설 L39).
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
@@ -167,7 +168,7 @@ describe("다시 하기 거절 응답은 오라클이 아니다 (L40, T-11-27)",
   });
 
   it("게임 중(단계 틀림): 손님의 ready·rematch 와 방장의 ready·rematch 도 같은 응답이고 상태는 그대로다", { timeout: 60_000 }, async () => {
-    const game = await startedGame("discussion", 5);
+    const game = await startedGame("discussion", 5, { mode: "basic" });
     const [host, guest] = game.socks as [TestSocket, TestSocket, ...TestSocket[]];
     const before = JSON.stringify(await storedRoom(game.code));
     const shapes: string[] = [];

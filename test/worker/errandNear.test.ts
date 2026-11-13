@@ -26,6 +26,8 @@ import {
   worldFramesOf,
   writeRoomEdit,
   flushWorld,
+  eveningRowsOf,
+  regraftEvening,
 } from "./helpers";
 import type { Actor, Game } from "./helpers";
 
@@ -61,13 +63,13 @@ async function tickNow(code: string): Promise<void> {
   await runDurableObjectAlarm(stub);
 }
 
-/** startedGame 은 dayAnnounce 를 지나 목표 단계로 가므로, 낮 시작에서 멈춘 판은 여기서 만든다(errand 로 들어오는 전환을 시험이 직접 일으키려고). */
-async function startedAtDayAnnounce(): Promise<Game> {
+/** 역할 확인에서 멈춘 판을 여기서 만든다(errand 로 들어오는 전환을 시험이 직접 일으키려고) — 21페이즈: 확장판은 역할 확인 다음이 곧 저녁이다. */
+async function startedAtRoleReveal(): Promise<Game> {
   const room = await seat(5, 0);
   const socks = [room.host, ...room.guests.map((x) => x.sock)];
   send(room.host, { t: "start" });
   for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
-  await advanceTo(room.code, socks, "dayAnnounce");
+  await advanceTo(room.code, socks, "roleReveal");
   for (const sock of socks) await settle(sock, mark(sock));
   return { code: room.code, socks, actors: actorsOf(room) };
 }
@@ -184,7 +186,10 @@ describe("목격 기록 (D-04)", () => {
     // errand 의 view 에는 아직 record 가 없다
     expect("record" in lastViewOf(actorOf(g, 0).sock).me).toBe(false);
     const marks = g.actors.map((x) => mark(x.sock));
+    const evening = await eveningRowsOf(g.code);
     await advanceTo(g.code, g.socks, "discussion");
+    // 21페이즈: 밤 진입이 저녁 값을 지운다(21-04 가 토론까지 남기도록 바꾼다) — 저녁에 쌓인 값을 토론 상태에 옮겨 심고 새 state 를 받는다(규칙 다).
+    await regraftEvening(g.code, evening, g.socks, actorOf(g, 2).sock);
     for (const x of g.actors) await settle(x.sock, 0);
     const meOf = (seatNo: number) => lastViewOf(actorOf(g, seatNo).sock).me;
     expect(JSON.stringify(meOf(0).record)).toBe(JSON.stringify([{ seat: 1, place: "glass" }, { seat: 1, place: "glass" }]));
@@ -212,7 +217,7 @@ describe("목격 기록 (D-04)", () => {
 
 describe("errand 진입·hello 의 snap (D-02)", () => {
   it("errand 로 들어오는 전환에서 산 사람마다 근처 snap 을 받고, 재접속(hello)은 같은 규칙, 유령 hello 는 전원", async () => {
-    const g = await startedAtDayAnnounce();
+    const g = await startedAtRoleReveal();
     await placeSeats(g.code, SIX_SPREAD);
     await flushWorld(g.code);
     const marks = g.actors.map((x) => mark(x.sock));

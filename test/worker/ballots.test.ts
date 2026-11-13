@@ -1,3 +1,4 @@
+// 21페이즈(규칙 나): 이 파일의 낮·밤·아침 규칙 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — startedGame 의 mode "basic". 확장판 순서는 causalDay 가 본다.
 // 찬반 기록 공개의 서버 층 DO 시험(09.1.1-03, POL-03, 결정 0066-3·0066-7, L19).
 // 찬반 마감 훅이 편든 좌석 목록을 남기고, 처형 단계 view 가 모든 소켓에 같은 목록을 싣는다. 찬반 진행 중에는 던진 좌석(voted)뿐이다.
 import { env } from "cloudflare:workers";
@@ -25,7 +26,7 @@ async function toVerdictFor(g: Game, defender: Game["actors"][number]): Promise<
 
 /** 지목 -> 변론 -> 찬반까지 끌고 간 판: 시민 한 명이 변론자, 나머지(5명)는 좌석 오름차순 유권자다. */
 async function toVerdict(): Promise<{ g: Game; defender: Game["actors"][number]; voters: Game["actors"] }> {
-  const g = await startedGame("nomination");
+  const g = await startedGame("nomination", 5, { mode: "basic" });
   const defender = g.actors.find((a) => a.role === "citizen")!;
   const voters = await toVerdictFor(g, defender);
   return { g, defender, voters };
@@ -139,7 +140,7 @@ describe("ballots 카드 (결정 0066-3, O-8)", () => {
   }, 60_000);
 
   it("지목 0표(처형 단계 없음)로 밤에 가면 ballots 카드가 없다", async () => {
-    const g = await startedGame("nomination");
+    const g = await startedGame("nomination", 5, { mode: "basic" });
     await pointAll(g.code, g.actors, {});
     expect((await storedRoom(g.code)).phase).toBe("night");
     expect(Object.values(await chatRecordsOf(g.code)).filter((r) => r.k === "ballots").length).toBe(0);

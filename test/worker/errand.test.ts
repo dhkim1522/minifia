@@ -263,7 +263,7 @@ describe("응답 동일성 · 스키마", () => {
     const afterPhase = await press(g, living);
     expect(afterDeath).toBe("[state]|[][][][][]");
     expect(afterPhase).toBe("[state]|[][][][][]");
-    expect(await doneOf(g.code, livingId)).toEqual([]);
+    expect((await doneOf(g.code, livingId)) ?? []).toEqual([]); // 21페이즈: 밤 진입이 저녁의 처리 목록을 키째 지운다 — 키가 없는 것도 "처리한 곳 없음"이다(규칙 다)
   }, 60_000);
 
   it("스키마: {t:'errand'} 에 다른 키가 붙으면 BAD_MESSAGE 오류 한 프레임", async () => {

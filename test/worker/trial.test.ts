@@ -1,3 +1,4 @@
+// 21페이즈(규칙 나): 이 파일의 낮·밤·아침 규칙 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — startedGame 의 mode "basic". 확장판 순서는 causalDay 가 본다.
 // DAY-03~06 DO 시험, 결정 0060. 위쪽 describe 는 저장 상태를 지목·찬반 단계로 옮겨(toPhase) 들어가고,
 // 맨 아래 "실제 흐름" describe(08-11)가 토론 끝내기부터 마감 훅으로 한 판을 끝까지 돈다.
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
@@ -45,7 +46,7 @@ async function settleAllSocks(g: Game): Promise<void> {
 
 /** 방장 + 손님 3 = 4명 판을 시작해 진입 훅을 지나 지목(모이는 중)에 넣는다. actors[0] 은 방장이다. */
 async function nominationRoom(): Promise<Game> {
-  const g = await startedGame("discussion", 3);
+  const g = await startedGame("discussion", 3, { mode: "basic" });
   await advanceTo(g.code, g.socks, "nomination");
   await settleAllSocks(g); // 지목에 들어가면 서버가 산 사람을 둘레 자리로 걷게 한다 — 그 world 프레임을 관찰 구간 밖으로 비운다(08-09)
   return g;
@@ -120,13 +121,13 @@ describe("투표 — 동시 (결정 0072, DAY-04)", () => {
   });
 
   it("지목 단계가 아니면(discussion) 보낸 소켓만 WRONG_PHASE 와 최신 state 를 받는다", async () => {
-    const g = await startedGame("discussion", 3);
+    const g = await startedGame("discussion", 3, { mode: "basic" });
     const [a, b] = [g.actors[1]!, g.actors[2]!];
     expect(lines(await castAll(g, () => pointAs(a.sock, b.seat)))).toBe("[] [error:WRONG_PHASE,state:discussion] [] []");
   });
 
   it("옛 번들의 처형 여부·후보 선택 메시지는 보낸 소켓만 BAD_MESSAGE 를 받는다(08-21, T-08-10)", async () => {
-    const g = await startedGame("discussion", 3);
+    const g = await startedGame("discussion", 3, { mode: "basic" });
     const a = g.actors[1]!;
     const old1 = await castAll(g, () => send(a.sock, { t: "execVote", agree: true }));
     const old2 = await castAll(g, () => send(a.sock, { t: "candidateVote", target: 0 }));
@@ -220,13 +221,13 @@ describe.skipIf(!GAME_RULES.pickTurn)("지목 — 순차 (결정 0063-1, L15)", 
   }, 40_000);
 
   it("지목 단계가 아니면(discussion) 보낸 소켓만 WRONG_PHASE 와 최신 state 를 받는다", async () => {
-    const g = await startedGame("discussion", 3);
+    const g = await startedGame("discussion", 3, { mode: "basic" });
     const [a, b] = [g.actors[1]!, g.actors[2]!];
     expect(lines(await castAll(g, () => pointAs(a.sock, b.seat)))).toBe("[] [error:WRONG_PHASE,state:discussion] [] []");
   });
 
   it("옛 번들의 처형 여부·후보 선택 메시지는 보낸 소켓만 BAD_MESSAGE 를 받는다(08-21, T-08-10)", async () => {
-    const g = await startedGame("discussion", 3);
+    const g = await startedGame("discussion", 3, { mode: "basic" });
     const a = g.actors[1]!;
     const old1 = await castAll(g, () => send(a.sock, { t: "execVote", agree: true }));
     const old2 = await castAll(g, () => send(a.sock, { t: "candidateVote", target: 0 }));
@@ -255,7 +256,7 @@ async function storedRoomSeats(code: string): Promise<number[]> {
 
 /** 방장 + 손님 4 = 5명 판을 시작해 찬반 단계로 옮긴다. 변론자는 마지막 좌석 사람(actors[4])이다. */
 async function verdictRoom(): Promise<Game> {
-  const g = await startedGame("discussion", 4);
+  const g = await startedGame("discussion", 4, { mode: "basic" });
   const defender = g.actors[4]!;
   await toPhase(g.code, "verdict", (room) => ({ ...room, verdict: { passed: false, candidate: defender.seat } }));
   await settleAllSocks(g); // 찬반에 들어가면 변론자가 무대로 걷는다(08-09) — 그 world 프레임을 관찰 구간 밖으로 비운다
@@ -335,7 +336,7 @@ describe("찬반 방송 규율 (DAY-06, 결정 0053, T-08-02)", () => {
 
 describe("토론 끝내기 (DAY-03, 결정 0060-2)", () => {
   it("누르면 네 소켓 모두의 day.endCount 가 1 이고 me.endDiscussion 은 누른 사람에게만 있다; 취소하면 0 이고 키가 사라진다", async () => {
-    const g = await startedGame("discussion", 3);
+    const g = await startedGame("discussion", 3, { mode: "basic" });
     const a = g.actors[1]!;
     const on = await castAll(g, () => endAs(a.sock, true));
     expect(lines(on)).toBe("[state:discussion] [state:discussion] [state:discussion] [state:discussion]");
@@ -348,14 +349,14 @@ describe("토론 끝내기 (DAY-03, 결정 0060-2)", () => {
   });
 
   it("같은 값을 다시 누르면 프레임이 없다", async () => {
-    const g = await startedGame("discussion", 3);
+    const g = await startedGame("discussion", 3, { mode: "basic" });
     const a = g.actors[1]!;
     await castAll(g, () => endAs(a.sock, true));
     expect(lines(await castAll(g, () => endAs(a.sock, true)))).toBe("[] [] [] []");
   });
 
   it("과반(산 4 중 3)에 닿는 순간 마감을 지금으로 당겨 다음 단계로 넘기고 새 마감은 now + 다음 단계 길이이며 알람이 따라 옮겨진다", async () => {
-    const g = await startedGame("discussion", 3);
+    const g = await startedGame("discussion", 3, { mode: "basic" });
     const [a, b, c] = [g.actors[1]!, g.actors[2]!, g.actors[3]!];
     await castAll(g, () => endAs(a.sock, true));
     const two = await castAll(g, () => endAs(b.sock, true));
@@ -374,7 +375,7 @@ describe("토론 끝내기 (DAY-03, 결정 0060-2)", () => {
   });
 
   it("유령의 토론 끝내기는 BAD_MESSAGE 이다", async () => {
-    const g = await startedGame("discussion", 3);
+    const g = await startedGame("discussion", 3, { mode: "basic" });
     const ghost = g.actors[3]!;
     await killSeats(g, [ghost.seat]);
     expect(lines(await castAll(g, () => endAs(ghost.sock, true)))).toBe("[] [] [] [error:BAD_MESSAGE,state:discussion]");
@@ -422,7 +423,7 @@ function pointedAt(target: number): (room: Record<string, unknown>) => Record<st
 
 describe("모이기·무대 배치(결정 0060-7)", () => {
   it("지목에 들어간 뒤 아무 메시지나 오면 산 사람 5명이 둘레 자리 5곳으로 걷고 모든 소켓이 다섯 걸음을 받으며 배치 키는 '일차:ring' 이다", async () => {
-    const g = await startedGame("discussion", 4);
+    const g = await startedGame("discussion", 4, { mode: "basic" });
     await toPhase(g.code, "nomination");
     const marks = g.socks.map(mark);
     await flushAll(g, marks);
@@ -438,7 +439,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
   }, 40_000);
 
   it("같은 상태에서 메시지가 한 번 더 와도 새 world 프레임이 없다(멱등)", async () => {
-    const g = await startedGame("discussion", 4);
+    const g = await startedGame("discussion", 4, { mode: "basic" });
     await toPhase(g.code, "nomination");
     await flushAll(g, g.socks.map(mark));
     const marks = g.socks.map(mark);
@@ -447,7 +448,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
   }, 40_000);
 
   it("서버 주도 이동은 lastMoveAt 을 건드리지 않고, world 저장값에 lay 가 있다", async () => {
-    const g = await startedGame("discussion", 4);
+    const g = await startedGame("discussion", 4, { mode: "basic" });
     await toPhase(g.code, "nomination");
     await flushAll(g, g.socks.map(mark));
     expect((await layOf(g.code)).lastMoveAtCount).toBe(0);
@@ -458,7 +459,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
   }, 40_000);
 
   it("유령은 줄을 서지 않는다 — 산 사람 3명만 걷고 유령 소켓도 그 걸음을 본다", async () => {
-    const g = await startedGame("discussion", 4);
+    const g = await startedGame("discussion", 4, { mode: "basic" });
     const doomed = g.actors.filter((a) => a.role !== "mafia").slice(0, 2);
     const { ghosts, living } = await ghostsOf(g, doomed.map((a) => a.seat));
     await toPhase(g.code, "nomination");
@@ -473,7 +474,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
   }, 40_000);
 
   it("지목이 끝나 변론이 되면 변론자만 무대 [0,0] 으로 걷고 나머지는 새 프레임이 없다", async () => {
-    const g = await startedGame("discussion", 4);
+    const g = await startedGame("discussion", 4, { mode: "basic" });
     const defender = g.actors[3]!;
     await toPhase(g.code, "nomination", pointedAt(defender.seat));
     await flushAll(g, g.socks.map(mark));
@@ -490,7 +491,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
   }, 40_000);
 
   it("알람이 늦어 지목 배치 없이 변론에 닿아도 변론자는 무대로, 나머지 넷은 둘레 자리로 선다", async () => {
-    const g = await startedGame("discussion", 4);
+    const g = await startedGame("discussion", 4, { mode: "basic" });
     const defender = g.actors[3]!;
     await toPhase(g.code, "nomination", pointedAt(defender.seat));
     const marks = g.socks.map(mark);
@@ -508,7 +509,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
 
   it("처형이 부결이면 변론자가 자기 둘레 자리로 돌아오고, 통과면 변론자는 움직이지 않는다", async () => {
     for (const passed of [false, true]) {
-      const g = await startedGame("discussion", 4);
+      const g = await startedGame("discussion", 4, { mode: "basic" });
       const defender = g.actors[3]!;
       await toPhase(g.code, "nomination", pointedAt(defender.seat));
       await flushAll(g, g.socks.map(mark));
@@ -564,7 +565,7 @@ const lastViews = (g: Game): RoomView[] => g.socks.map((s) => lastViewOf(s));
 
 /** 방장 포함 5명 판을 토론에서 시작해, 과반(3명)이 토론 끝내기를 눌러 지목으로 넘긴다. */
 async function toNominationByEnd(): Promise<{ g: Game; before: number; after: number }> {
-  const g = await startedGame("discussion", 4);
+  const g = await startedGame("discussion", 4, { mode: "basic" });
   const before = Date.now();
   for (const a of g.actors.slice(0, 3)) {
     endAs(a.sock, true);
@@ -798,7 +799,7 @@ describe("실제 흐름 (결정 0060-1)", () => {
   }, 60_000);
 
   it("죽은 사람의 지목은 BAD_MESSAGE 이고 저장은 그대로다", async () => {
-    const g = await startedGame("discussion", 3);
+    const g = await startedGame("discussion", 3, { mode: "basic" });
     const ghost = g.actors[3]!;
     await killSeats(g, [ghost.seat]);
     await toPhase(g.code, "nomination");
@@ -851,7 +852,7 @@ describe("실제 흐름 (결정 0060-1)", () => {
 // 08-22: 배포 순간 옛 처형 여부 투표·후보 선택·후보 공개 단계에 있던 방(결정 0060-12, T-08-52). 깨어날 때 정규화가 토론으로 옮기고 알람을 새 마감으로 건다.
 describe("옛 투표 단계로 저장된 방 (08-22, DAY-07)", () => {
   it.each(["execVote", "candidateVote", "candidateVoteReveal"])("%s 로 저장된 방에 다시 접속하면 view 단계는 discussion 이고 알람은 새 마감으로 걸린다", async (oldPhase) => {
-    const g = await startedGame("discussion", 3);
+    const g = await startedGame("discussion", 3, { mode: "basic" });
     const host = g.actors[0]!;
     await editRoom(g.code, (room) =>
       mapPlayers(

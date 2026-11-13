@@ -1,3 +1,4 @@
+// 21페이즈(규칙 나): 이 파일의 낮·밤·아침 규칙 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — startedGame 의 mode "basic". 확장판 순서는 causalDay 가 본다.
 // 10-01: 동작 누설 검사 L27~L30 (UI-SPEC A-3, 결정 D-12·D-19, 위협 T-10-01·02·04·05).
 // "오지 않았음" 은 settle(ping/pong)로 증명한다. 6명 판(마피아 둘·경찰·의사·시민 둘)을 실제로 시작해 돌린다.
 // 동작 프레임은 이 파일 안에서 키 집합({t,seat,id,n})과 값(역할 단어가 아닌 id)을 단언한다 — leak.test.ts 의 허용 목록은 넓히지 않는다(L34).
@@ -30,7 +31,7 @@ const CONTRACT = "id,n,seat,t/ok";
 
 describe("동작 누설 검사 L27~L30 (D-12, D-19, O-7)", () => {
   it("(a) L27 밤: 마피아의 동작은 산 시민·경찰·의사 소켓에 0건이고 마피아 둘과 탈락자는 정확히 한 프레임씩 받는다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const [mafiaA, mafiaB] = withRole(g, "mafia") as [Actor, Actor];
     const [citizenX] = withRole(g, "citizen") as [Actor, Actor];
     await killSeats(g, [citizenX.seat]);
@@ -55,7 +56,7 @@ describe("동작 누설 검사 L27~L30 (D-12, D-19, O-7)", () => {
   }, 30_000);
 
   it("(b) L27 낮: 탈락자의 동작은 탈락자만 받고 산 사람 소켓은 0프레임이다(보낸 탈락자 자신은 한 프레임)", async () => {
-    const g = await startedGame("discussion");
+    const g = await startedGame("discussion", 5, { mode: "basic" });
     const [x, z] = withRole(g, "citizen") as [Actor, Actor];
     await killSeats(g, [x.seat, z.seat]);
     for (const s of g.socks) await settle(s, mark(s));
@@ -76,7 +77,7 @@ describe("동작 누설 검사 L27~L30 (D-12, D-19, O-7)", () => {
   }, 30_000);
 
   it("(c) L29 단계 키: 밤 단계 키로 아침 뒤에 도착한 마피아 동작은 모든 소켓 0프레임(보낸 소켓 포함)이고 저장소에도 흔적이 없다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const mafiaA = withRole(g, "mafia")[0]!;
     await advanceTo(g.code, g.socks, "morning");
     for (const s of g.socks) await settle(s, mark(s));
@@ -92,7 +93,7 @@ describe("동작 누설 검사 L27~L30 (D-12, D-19, O-7)", () => {
   }, 30_000);
 
   it("(d) L30 신분별 버림: 밤의 산 시민·경찰·의사, 역할 배정·역할 확인 단계의 동작은 보낸 소켓 포함 0프레임이다", async () => {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const town = g.actors.filter((a) => a.role !== "mafia");
     for (const a of town) {
       const got = await observe(g, a, () => emoteSend(a.sock, "clap"));
@@ -110,7 +111,7 @@ describe("동작 누설 검사 L27~L30 (D-12, D-19, O-7)", () => {
   }, 30_000);
 
   it("(e) 채널별 n: 낮 all 채널 n 은 1·2, 밤 마피아 채널은 1 부터 따로 세고, 시민 편이 받은 emote 프레임의 n 은 틈 없이 이어진다", async () => {
-    const g = await startedGame("discussion");
+    const g = await startedGame("discussion", 5, { mode: "basic" });
     const [mafiaA, mafiaB] = withRole(g, "mafia") as [Actor, Actor];
     const citizens = withRole(g, "citizen") as [Actor, Actor];
     await pause(1500); // 낮 시작 배치 걷기가 끝난 뒤

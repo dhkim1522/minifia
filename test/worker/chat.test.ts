@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { PhaseId, ServerMessage } from "../../shared/protocol";
-import { actorsOf, advanceTo, chatSend, chatsOf, connect, createRoom, editRoom, hello, joinOk, mapPlayers, mark, nextFrame, resetChatRates, seat, send, settle, skipThrough, storedRoom, summary, typingSend, pointAll, verdictAll } from "./helpers";
+import { actorsOf, advanceTo, chatSend, chatsOf, connect, createRoom, editRoom, hello, joinOk, mapPlayers, mark, nextFrame, pickBasic, resetChatRates, seat, send, settle, skipThrough, storedRoom, summary, typingSend, pointAll, verdictAll } from "./helpers";
 import type { Actor, TestSocket } from "./helpers";
 
 /** settle 이 돌려준 프레임 가운데 typing 만 한 줄 문자열로(실패 보고가 한 줄이어야 한다). */
@@ -95,9 +95,11 @@ interface Game {
   actors: Actor[];
 }
 
+/** 21페이즈 규칙 나: 이 파일의 채팅·입력 중 채널 시험은 기본 마피아 흐름(낮 시작 발표·늘 있는 아침)에서 본다 — 시작 전에 기본 마피아로 연다. */
 async function startedAt(phase: PhaseId): Promise<Game> {
   const room = await seat(5, 0);
   const socks = [room.host, ...room.guests.map((g) => g.sock)];
+  await pickBasic(room);
   send(room.host, { t: "start" });
   for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
   await advanceTo(room.code, socks, "dayAnnounce");
@@ -550,6 +552,7 @@ describe("채팅 — 채널별 줄 번호 (리서치 Pitfall 1, 결정 0058-5)",
   it("줄 번호: 낮 all 줄 번호에는 밤 마피아 줄 때문에 생긴 틈이 없고 mafia 번호는 판 내내 이어진다", async () => {
     const room = await seat(5, 0, { testMode: true });
     const socks = [room.host, ...room.guests.map((x) => x.sock)];
+    await pickBasic(room); // 21페이즈 규칙 나: 낮 시작 발표·아침이 늘 있는 기본 마피아 흐름
     send(room.host, { t: "start" });
     for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
     await skipThrough(room, "dayAnnounce");

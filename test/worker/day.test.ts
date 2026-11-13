@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
 import { env } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { advanceTo, alarmOf, chatMsg, collect, connect, flat, forceDue, hello, nextFrame, nextState, seat, send, storedRoom } from "./helpers";
+import { advanceTo, alarmOf, chatMsg, collect, connect, flat, forceDue, hello, nextFrame, nextState, pickBasic, seat, send, storedRoom } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
@@ -17,6 +17,7 @@ const viewsIn = (sock: TestSocket, phase: string): RoomView[] =>
 /** 방장 + 연결 손님 4명(5명 방)을 시작하고 낮 토론까지 알람을 넘긴다(07-08: 낮 시작 발표 다음이 바로 토론). */
 async function startedAt(phase: "discussion", guests = 4): Promise<Seated> {
   const r = await seat(guests, 0);
+  await pickBasic(r); // 21페이즈 규칙 나: 이 파일은 기본 마피아의 낮 토론·밤·아침·낮 시작 발표 흐름을 본다
   send(r.host, { t: "start" });
   for (const s of allSockets(r)) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
   await advanceTo(r.code, allSockets(r), phase);
@@ -250,9 +251,10 @@ describe("옛 저장 방 정규화 (RESEARCH Pattern 6)", () => {
 
 // 07-08: 순차 주장 단계 제거(CHAT-06) — 역할 확인 → 낮 시작 발표 → 바로 낮 토론이고, claim 메시지는 거부된다.
 describe("순차 주장 단계 제거 (07-08, CHAT-06)", () => {
-  it("07-08 시작한 방은 dayAnnounce 다음 바로 discussion 이고 어느 소켓도 claim 단계 state 를 받지 않으며 day 에 turn 이 없다", async () => {
+  it("07-08 시작한 방은 dayAnnounce 다음 바로 discussion 이고 어느 소켓도 claim 단계 state 를 받지 않으며 day 에 turn 이 없다 (기본 마피아, 규칙 나)", async () => {
     const r = await seat(3, 0);
     const sockets = allSockets(r);
+    await pickBasic(r);
     send(r.host, { t: "start" });
     for (const s of sockets) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
     await advanceTo(r.code, sockets, "discussion");

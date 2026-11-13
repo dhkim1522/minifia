@@ -6,7 +6,8 @@
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { TOWN_ROOMS } from "../../shared/game/mapTown";
+import { TOWN_HOUSES, TOWN_MAP, TOWN_ROOMS } from "../../shared/game/mapTown";
+import { zoneOf } from "../../shared/game/zones";
 import { MOVE_V } from "../../shared/game/world";
 import type { WorldState } from "../../shared/game/world";
 import type { ServerMessage } from "../../shared/protocol";
@@ -16,18 +17,21 @@ import {
   alarmAndCollect,
   connect,
   doorCount,
+  eveningRowsOf,
   flushWorld,
   hello,
   idOfSeat,
   lastViewOf,
   mark,
   memWorld,
-  passDoor,
+  pickAs,
   placeSeats,
+  regraftEvening,
   settle,
   snapLine,
   storedRoom,
   townGame,
+  withRole,
   worldsIn,
   writeRoomEdit,
   zoneSnaps,
@@ -138,7 +142,10 @@ describe("목격 기록·마지막 목격은 같은 구역 사람만 적는다 (
       ...room,
       players: (room.players as StoredPlayer[]).map((p) => (p.seat <= 1 ? { ...p, errandPlaces: done, errandDone: done } : p)),
     }));
+    const evening = await eveningRowsOf(g.code);
     await advanceTo(g.code, g.socks, "discussion");
+    // 21페이즈: 밤 진입이 저녁 값을 지운다(21-04 가 토론까지 남기도록 바꾼다) — 저녁에 쌓인 값을 토론 상태에 옮겨 심고 새 state 를 받는다(규칙 다).
+    await regraftEvening(g.code, evening, g.socks, actorOf(g, 3).sock);
     for (const x of g.actors) await settle(x.sock, 0);
     const record = (seatNo: number): string => JSON.stringify(lastViewOf(actorOf(g, seatNo).sock).me.record);
     expect(`${record(0)} ${record(1)}`).toBe('[{"seat":2,"place":"mail"}] []');
@@ -146,25 +153,24 @@ describe("목격 기록·마지막 목격은 같은 구역 사람만 적는다 (
 });
 
 /**
- * 마을 토론에서 좌석 0·2 를 우체국 안에 세운 채(토론이 끝난 자리 = 우체국 안) 지목으로 넘기고, 둘이 모이는 길에 문을 지나 광장으로 나온 것까지 알린다.
- * 그 뒤 밤이 되면 둘은 우체국 안 자리로 순간이동한다 — 구역 기억(광장)과 새 자리(우체국)가 어긋난 채다.
+ * 마을 저녁에 좌석 0·2 를 우체국 안에 세운다(구역 기억도 우체국). 밤이 되면 둘은 집 앞으로 순간이동한다 — 구역 기억(우체국)과 새 자리(집 앞)가 어긋난 채다.
+ * 21페이즈: 확장판은 저녁 → 밤이라 밤 진입이 곧 순간이동이다(규칙 가, 옛 시험은 토론이 끝난 자리로 돌아오는 순간이동을 봤다).
  */
-async function gatheredFromPost(): Promise<Game> {
-  const g = await townGame("discussion");
+async function eveningInPost(): Promise<Game> {
+  const g = await townGame("errand");
   await placeSeats(g.code, SPREAD);
-  await flushWorld(g.code);
-  await advanceTo(g.code, g.socks, "nomination");
-  await passDoor(g.code, 0);
-  await passDoor(g.code, 2);
-  await alarmAndCollect(g, g.socks.map((k) => mark(k)));
   await flushWorld(g.code);
   return g;
 }
 const memoOf = async (g: Game, seatNo: number): Promise<string> => String((await memWorld(g.code)).zones?.[await idOfSeat(g.code, seatNo)]);
+const houseZone = (seatNo: number): string => {
+  const front = TOWN_HOUSES.find((h) => h.seat === seatNo)!.front;
+  return zoneOf(TOWN_MAP, front.x, front.z);
+};
 
 describe("밤·아침 순간이동 뒤 구역 기억 (settleZones, T-20-11)", () => {
-  it("밤: 광장에서 우체국 안 자리로 옮겨진 사람은 snap 을 한 번만 받고(zone snap 이 따로 가지 않는다) 구역 기억이 새 자리로 맞춰진다", { timeout: 90_000 }, async () => {
-    const g = await gatheredFromPost();
+  it("밤: 우체국 안에서 집 앞으로 옮겨진 사람은 snap 을 한 번만 받고(zone snap 이 따로 가지 않는다) 구역 기억이 새 자리로 맞춰진다", { timeout: 90_000 }, async () => {
+    const g = await eveningInPost();
     const before = `${await memoOf(g, 0)},${await memoOf(g, 2)}`;
     const marks = g.socks.map((k) => mark(k));
     await advanceTo(g.code, g.socks, "night");
@@ -172,12 +178,16 @@ describe("밤·아침 순간이동 뒤 구역 기억 (settleZones, T-20-11)", ()
     for (let i = 0; i < g.socks.length; i++) frames.push(await settle(g.socks[i]!, marks[i]!));
     const moved = of(g, frames, actorOf(g, 0));
     const got = `before=${before} snaps=${snapsOf(moved).length} zoneSnaps=${zoneSnaps(moved).length} doors=${frames.map(doorCount).join("")} memory=${await memoOf(g, 0)},${await memoOf(g, 2)}`;
-    expect(got).toBe("before=plaza,plaza snaps=1 zoneSnaps=0 doors=000000 memory=post,post");
+    expect(got).toBe(`before=post,post snaps=1 zoneSnaps=0 doors=000000 memory=${houseZone(0)},${houseZone(2)}`);
   });
 
-  it("아침: 우체국 안에서 깨어난 사람은 밖의 산 사람의 아침 snap 에 없고, 그 사람의 아침 snap 에는 같은 방 사람만 있다 — 문 프레임은 없다", { timeout: 90_000 }, async () => {
-    const g = await gatheredFromPost();
+  it("아침: 집 앞에서 깨어난 사람의 아침 snap 에는 산 사람 모두가 같은 구역(집 앞)으로 있고 문 프레임·zone snap 이 없다", { timeout: 90_000 }, async () => {
+    const g = await eveningInPost();
     await advanceTo(g.code, g.socks, "night");
+    for (const k of g.socks) await settle(k, mark(k));
+    // 마피아 전원이 같은 시민을 골라 아침(현장)이 오게 한다 — 확장판은 피해자가 있는 밤에만 아침이 있다.
+    const victim = withRole(g, "citizen")[0]!;
+    for (const m of withRole(g, "mafia")) pickAs(m, victim.seat);
     for (const k of g.socks) await settle(k, mark(k));
     await flushWorld(g.code);
     const marks = g.socks.map((k) => mark(k));
@@ -186,12 +196,16 @@ describe("밤·아침 순간이동 뒤 구역 기억 (settleZones, T-20-11)", ()
     await runDurableObjectAlarm(env.ROOM.getByName(g.code));
     const frames: ServerMessage[][] = [];
     for (let i = 0; i < g.socks.length; i++) frames.push(await settle(g.socks[i]!, marks[i]!));
-    const line = (seatNo: number): string => {
-      const snaps = snapsOf(of(g, frames, actorOf(g, seatNo)));
-      return `${seatNo}: ${snaps.length} ${snapLine(snaps.at(-1), seatNo)}`;
+    const aliveSeats = g.actors.filter((a) => a !== victim).map((a) => a.seat).sort((a, b) => a - b).join(",");
+    const line = (who: Actor): string => {
+      const snaps = snapsOf(of(g, frames, who));
+      const last = snaps.at(-1);
+      const others = last?.ents.filter((e) => e.s !== who.seat).flatMap((e) => e.p) ?? [];
+      return `${who.seat}: ${snaps.length} seats=${last?.ents.map((e) => e.s).sort((a, b) => a - b).join(",")} others=[${zonesOfPts(others)}]`;
     };
-    const coords = of(g, frames, actorOf(g, 1)).flatMap((m) => (m.t === "world" && m.k === "snap" ? m.ents.filter((e) => e.s !== 1).flatMap((e) => e.p) : []));
-    const got = `${[0, 1, 2].map(line).join(" | ")} outsideSaw=[${zonesOfPts(coords)}] doors=${frames.map(doorCount).join("")} zoneSnaps=${frames.map((f) => zoneSnaps(f).length).join("")}`;
-    expect(got).toBe("0: 1 seats=0,2 others=[post] | 1: 1 seats=1,3,4,5 others=[plaza] | 2: 1 seats=0,2 others=[post] outsideSaw=[plaza] doors=000000 zoneSnaps=000000");
+    const alive = g.actors.filter((a) => a !== victim);
+    const got = `${alive.map(line).join(" | ")} doors=${frames.map(doorCount).join("")} zoneSnaps=${frames.map((f) => zoneSnaps(f).length).join("")}`;
+    const want = `${alive.map((a) => `${a.seat}: 1 seats=${aliveSeats} others=[${zonesOfPts(alive.filter((o) => o !== a).flatMap((o) => { const f = TOWN_HOUSES.find((h) => h.seat === o.seat)!.front; return [f.x, f.z]; }))}]`).join(" | ")} doors=000000 zoneSnaps=000000`;
+    expect(got).toBe(want);
   });
 });

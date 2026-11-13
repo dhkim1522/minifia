@@ -5,7 +5,7 @@ import { env } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
-import { actorsOf, advanceTo, chatKeysOf, chatLogOf, chatRecordsOf, chatSend, chatsOf, connect, createRoom, editRoom, framesOf, hello, helloForLog, joinOk, lineText, mapPlayers, mark, nextFrame, pickAs, seat, send, settle, skipThrough, startedGame, storedRoom, until } from "./helpers";
+import { actorsOf, advanceTo, chatKeysOf, chatLogOf, chatRecordsOf, chatSend, chatsOf, connect, createRoom, editRoom, framesOf, hello, helloForLog, joinOk, lineText, mapPlayers, mark, nextFrame, pickAs, pickBasic, seat, send, settle, skipThrough, startedGame, storedRoom, until } from "./helpers";
 import type { Actor, Seated } from "./helpers";
 
 /** 프레임 목록을 'state,world.snap,chatLog' 같은 한 줄 종류 열로(실패 보고가 한 줄이어야 한다). */
@@ -124,6 +124,7 @@ async function replayOf(code: string, token: string): Promise<string[]> {
 async function startedSix(): Promise<{ room: Seated; actors: Actor[] }> {
   const room = await seat(5, 0, { testMode: true });
   const socks = [room.host, ...room.guests.map((x) => x.sock)];
+  await pickBasic(room); // 21페이즈 규칙 나: 낮 시작 발표·늘 있는 아침이 있는 기본 마피아 흐름
   send(room.host, { t: "start" });
   for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
   await skipThrough(room, "dayAnnounce");
@@ -243,7 +244,7 @@ describe("채팅 보관 — 상한·리셋·방 삭제 (결정 0058-4·7, T-07-3
 describe("아침 카드 재접속 복원 (MORN-02, 결정 0061-11)", () => {
   /** 밤: 시민 V 가 유언을 남겼고 마피아 전원이 V 를 골라 확정, 마피아 A 가 쪽지를 남긴 채 아침으로 넘긴다. */
   async function morningWithCards(): Promise<{ g: Awaited<ReturnType<typeof startedGame>>; v: Actor }> {
-    const g = await startedGame("night");
+    const g = await startedGame("night", 5, { mode: "basic" });
     const v = withRole(g.actors, "citizen")[0]!;
     await editRoom(g.code, (room) => mapPlayers(room, (p) => (p.seat === v.seat ? { ...p, will: "2번을 봐요" } : p)));
     const mafias = withRole(g.actors, "mafia");

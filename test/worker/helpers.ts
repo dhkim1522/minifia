@@ -1,4 +1,6 @@
 // 워커 통합 테스트 도우미. 테스트마다 만들기 응답의 새 코드를 쓴다(고정 코드 재사용 금지).
+// 21페이즈: 확장판(기본)의 하루는 역할 확인 → 저녁(errand) → 밤 → (현장이 있을 때만 아침) → 토론이다 — 낮 시작 발표는 없고, 단계를 걷는 도우미는 판 종류의 순서를 따라 목표에 닿는다.
+// 낮 시작 발표·늘 있는 아침이 필요한 시험은 startedGame 의 mode 인자로 기본 마피아("basic")를 연다.
 import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { expect } from "vitest";
@@ -7,7 +9,7 @@ import { TOWN_MAP } from "../../shared/game/mapTown";
 import { MOVE_V, restSegment } from "../../shared/game/world";
 import type { Segment, WorldState } from "../../shared/game/world";
 import { nextCrossingAt, zoneOf } from "../../shared/game/zones";
-import type { ChatLineWire, CreateRoomResponse, PhaseId, RoleId, RoomView, ServerMessage, ZoneId } from "../../shared/protocol";
+import type { ChatLineWire, CreateRoomResponse, GameMode, PhaseId, RoleId, RoomView, ServerMessage, ZoneId } from "../../shared/protocol";
 import { openTown } from "../helpers/playable";
 
 export interface TestSocket {
@@ -389,9 +391,10 @@ export async function runoffAll(code: string, actors: Actor[], voteBySeat: Reado
 
 /** 4명 판에서 좌석 3 을 죽인 낮 시작 발표 — 산 사람 정확히 셋(좌석 0·1·2). 지난 낮의 개인 키를 일부러 남겨 청소를 확인한다. */
 export async function threeAliveGame(): Promise<Game> {
-  // startedGame 은 목표 단계 state 를 이미 읽어 버려서 dayAnnounce 에는 쓸 수 없다 — 시작해 낮 시작 발표에 머문다.
+  // startedGame 은 목표 단계 state 를 이미 읽어 버려서 dayAnnounce 에는 쓸 수 없다 — 시작해 낮 시작 발표에 머문다. 낮 시작 발표는 기본 마피아에만 있다(21페이즈).
   const room = await seat(3, 0);
   const socks = [room.host, ...room.guests.map((x) => x.sock)];
+  await pickBasic(room);
   send(room.host, { t: "start" });
   for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
   await advanceTo(room.code, socks, "dayAnnounce");
@@ -467,6 +470,36 @@ export async function editRoom(code: string, edit: (room: Record<string, unknown
   const stub = env.ROOM.getByName(code);
   await writeRoomEdit(stub, edit);
   await evictDurableObject(stub);
+}
+
+/**
+ * 21페이즈: 저녁(errand)의 목록·진행·목격 줄(errandPlaces·errandDone·errandSeen)을 좌석별로 읽어 둔다.
+ * 확장판은 저녁 → 밤 → 토론이고 밤 진입이 이 값을 지운다(21-04 가 밤·아침을 지나 토론까지 남기도록 바꾼다) — 토론 view 의 me.record 를 보는 시험은
+ * 이 값을 읽어 두었다가 토론 상태에 regraftEvening 으로 옮겨 심는다. 21-04 가 끝나면 옮겨 심기는 필요 없다.
+ */
+export async function eveningRowsOf(code: string): Promise<Map<number, Record<string, unknown>>> {
+  const players = ((await storedRoom(code)) as unknown as { players: Array<{ seat: number; errandPlaces?: unknown; errandDone?: unknown; errandSeen?: unknown }> }).players;
+  return new Map(
+    players.map((p) => [
+      p.seat,
+      { errandPlaces: p.errandPlaces, errandDone: p.errandDone, ...(p.errandSeen === undefined ? {} : { errandSeen: p.errandSeen }) },
+    ]),
+  );
+}
+
+/**
+ * eveningRowsOf 로 읽어 둔 저녁 값을 지금(토론) 저장된 방에 좌석별로 다시 심고, 모든 소켓이 새 state 를 받게 한다 —
+ * 산 사람 소켓 talker 가 토론 끝내기를 한 번 켰다 끈다(저장된 값은 그대로 돌아온다). socks 는 살아 있는(연결된) 소켓 전부.
+ */
+export async function regraftEvening(code: string, evening: Map<number, Record<string, unknown>>, socks: TestSocket[], talker: TestSocket): Promise<void> {
+  await writeRoomEdit(env.ROOM.getByName(code), (room) => ({
+    ...room,
+    players: (room.players as Array<{ seat: number }>).map((p) => ({ ...p, ...(evening.get(p.seat) ?? {}) })),
+  }));
+  for (const on of [true, false]) {
+    send(talker, { t: "endDiscussion", on });
+    for (const s of socks) await settle(s, mark(s));
+  }
 }
 
 /**
@@ -711,19 +744,37 @@ export interface Game {
 
 /**
  * 6명 판(방장 + 손님 5, guests 로 바꿀 수 있다)을 시작해 원하는 단계까지 마감을 당기고, 모든 소켓의 프레임을 ping/pong 으로 flush 해 둔 채 돌려준다.
- * 역할은 무작위라 dayAnnounce 에서 읽는다. 마피아 둘·경찰·의사·시민 둘이다.
+ * 역할은 무작위라 roleReveal 에서 읽는다. 마피아 둘·경찰·의사·시민 둘이다.
+ * 판 종류(21페이즈): 기본은 확장판이다 — 역할 확인 다음부터 판 규칙의 순서(저녁 → 밤 → 토론 …)로 걷는다. opts.mode "basic" 이면 시작 전에 방장이 modePick 을 보내
+ * 기본 마피아(낮 시작 발표 → 토론, 밤 → 아침 → 낮 시작 발표)로 연다. 확장판에는 낮 시작 발표가 없고 아침은 밤 선택이 있을 때만 오므로 그 둘을 목표로 받으면 한 줄 오류다.
  */
-export async function startedGame(phase: PhaseId, guests = 5): Promise<Game> {
+export async function startedGame(phase: PhaseId, guests = 5, opts: { mode?: GameMode } = {}): Promise<Game> {
+  if (opts.mode !== "basic" && phase === "dayAnnounce") throw new Error("확장판에는 낮 시작 발표가 없다 — startedGame(…, { mode: \"basic\" }) 으로 연다");
+  if (opts.mode !== "basic" && phase === "morning") throw new Error("확장판의 아침은 밤 선택(현장)이 있을 때만 온다 — mode basic 으로 열거나 밤 선택을 넣고 advanceTo 한다");
   const room = await seat(guests, 0);
   const socks = [room.host, ...room.guests.map((g) => g.sock)];
+  if (opts.mode === "basic") {
+    send(room.host, { t: "modePick", mode: "basic" });
+    for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.mode === "basic");
+  }
   send(room.host, { t: "start" });
   for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
-  await advanceTo(room.code, socks, "dayAnnounce");
+  await advanceTo(room.code, socks, "roleReveal");
   for (const sock of socks) await settle(sock, mark(sock));
   const actors = actorsOf(room);
-  await advanceTo(room.code, socks, phase);
+  if (phase !== "roleReveal") await advanceTo(room.code, socks, phase);
   for (const sock of socks) await settle(sock, mark(sock));
   return { code: room.code, socks, actors };
+}
+
+/**
+ * 시작 전 대기실에서 방장이 판 종류를 기본 마피아로 고른다(21페이즈) — 모든 연결 소켓이 view.mode 가 basic 인 state 를 받을 때까지 기다린다.
+ * 직접 start 를 보내는 시험이 낮 시작 발표·늘 있는 아침 흐름을 보려고 start 앞에 부른다(startedGame 은 opts.mode 로 같은 일을 한다).
+ */
+export async function pickBasic(seated: Seated): Promise<void> {
+  const socks = [seated.host, ...seated.guests.map((g) => g.sock)];
+  send(seated.host, { t: "modePick", mode: "basic" });
+  for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.mode === "basic");
 }
 
 /** 역할이 role 인 사람들(seat 오름차순). */
@@ -938,8 +989,9 @@ const isPhaseFrame = (phase: PhaseId) => (m: ServerMessage): boolean => m.t === 
  * 4명 판(마피아 1·경찰 1·시민 2)을 처형으로 끝까지 모아 ended 에 둔다: 마피아가 처형되어 시민이 이긴다.
  * dead 는 처형된 마피아(탈락자), living 은 산 세 사람. 모든 소켓이 ended state 를 받은 뒤 돌려준다.
  */
-export async function endedGame4(): Promise<{ code: string; socks: TestSocket[]; actors: Actor[]; dead: Actor; living: Actor[] }> {
-  const g = await startedGame("nomination", 3);
+export async function endedGame4(mode: GameMode = "basic"): Promise<{ code: string; socks: TestSocket[]; actors: Actor[]; dead: Actor; living: Actor[] }> {
+  // 21페이즈 규칙 나: 기본은 처형 → 종료까지의 기본 마피아 흐름이다 — 판 종류는 다시 하기 뒤에도 남아(19페이즈 D-06) 다음 판도 낮 시작 발표가 있는 흐름이다. 확장판의 다시 하기를 보는 시험은 "extended" 를 준다.
+  const g = await startedGame("nomination", 3, { mode });
   const mafia = withRole(g, "mafia")[0]!;
   const police = withRole(g, "police")[0]!;
   const [c0, c1] = withRole(g, "citizen") as [Actor, Actor];
@@ -984,7 +1036,8 @@ export interface RichGame6 {
  * 밤에 의사·경찰을 탈락시켜 마피아 B 와 시민 둘만 남기고 B 가 마피아 채널에 두 줄, 탈락한 A·경찰이 유령 채널에 한 줄씩 → B 가 X 를 죽여 1 대 1 로 아침 마감에 ended.
  */
 export async function richEndedGame6(opts: { extras?: boolean } = {}): Promise<RichGame6> {
-  const g = await startedGame("discussion", 5);
+  // 21페이즈 규칙 나: 이 시나리오(1일차 처형 → 밤 → 아침 마감에 종료)는 기본 마피아 흐름이다 — 판 종류는 다시 하기 뒤에도 남는다(19페이즈 D-06).
+  const g = await startedGame("discussion", 5, { mode: "basic" });
   const [mafiaA, mafiaB] = withRole(g, "mafia") as [Actor, Actor];
   const police = withRole(g, "police")[0]!;
   const doctor = withRole(g, "doctor")[0]!;

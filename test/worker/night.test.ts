@@ -2,7 +2,7 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
 import type { RoomView, RoleId, ServerMessage } from "../../shared/protocol";
-import { advanceTo, alarmOf, chatMsg, collect, connect, forceDue, hello, nextFrame, phaseKeyOf, seat, send, storedRoom } from "./helpers";
+import { advanceTo, alarmOf, chatMsg, collect, connect, forceDue, hello, nextFrame, phaseKeyOf, pickBasic, seat, send, storedRoom } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
 interface Actor {
@@ -64,8 +64,9 @@ function actorsOf(r: Seated): Actor[] {
 const withRole = (actors: Actor[], role: RoleId): Actor[] => actors.filter((a) => a.role === role);
 
 /** 연결 `players` 명 방을 시작해 밤까지 넘긴다. */
-async function startedAtNight(players: number): Promise<Seated> {
+async function startedAtNight(players: number, mode: "basic" | "extended" = "basic"): Promise<Seated> {
   const r = await seat(players - 1, 0);
+  if (mode === "basic") await pickBasic(r); // 21페이즈 규칙 나: 이 파일의 밤 → 아침 시험은 선택이 갈려도 아침이 오는 기본 마피아 흐름이다 — 확장판은 mode 로 고른다
   send(r.host, { t: "start" });
   for (const s of allSockets(r)) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
   await advanceTo(r.code, allSockets(r), "night");
@@ -158,7 +159,7 @@ describe("밤 행동 한 줄 (NIGHT-02)", () => {
 
 describe("마피아 전원 일치 (NIGHT-08, 결정 0061-6)", () => {
   it("6명 판: 마피아 둘이 같은 시민을 고르고 마감하면 모든 소켓이 같은 day.morning { eliminated, trace } 를 받는다", async () => {
-    const r = await startedAtNight(6);
+    const r = await startedAtNight(6, "extended"); // 흔적 조각은 확장판 규칙이다(21페이즈, 규칙 가)
     const actors = actorsOf(r);
     const [a, b] = withRole(actors, "mafia") as [Actor, Actor];
     const victim = withRole(actors, "citizen")[0]!;
