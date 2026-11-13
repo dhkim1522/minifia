@@ -25,7 +25,7 @@ import {
 } from "../../shared/game/map";
 import type { MapDef, Obstacle, RoomDef, Spawn } from "../../shared/game/map";
 import { PLAZA_MAP, PLAZA_MASK, PLAZA_OBSTACLES, PLAZA_PLACES, PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
-import { TOWN_DOOR_EXEMPT, TOWN_HOUSES, TOWN_MAP, TOWN_MASK, TOWN_OBSTACLES, TOWN_PLACES, TOWN_PROPS, TOWN_ROOMS, TOWN_SPAWNS } from "../../shared/game/mapTown";
+import { TOWN_DOOR_EXEMPT, TOWN_HOUSES, TOWN_LAMPS, TOWN_MAP, TOWN_MASK, TOWN_OBSTACLES, TOWN_PLACES, TOWN_PROPS, TOWN_ROOMS, TOWN_SPAWNS } from "../../shared/game/mapTown";
 import { MAPS, MODE_MAPS, PLAYABLE_MAPS, mapOf, roomMapId, startMapOf } from "../../shared/game/maps";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
@@ -442,28 +442,103 @@ describe("마을의 길 (D-19) — 서버가 문을 지나는 길을 정한다",
   });
 });
 
-describe("마을 장소 8곳 (D-08·P20-20)", () => {
-  const rectGap = (o: Obstacle, x: number, z: number): number => (o.kind === "rect" ? Math.hypot(Math.max(Math.abs(x - o.x) - o.w / 2, 0), Math.max(Math.abs(z - o.z) - o.d / 2, 0)) : Infinity);
+// 21페이즈 D-05·D-07·P21-15: 마을 심부름 장소 8곳 = 가로등 lamp0~lamp7, 가로등 n 의 짝은 좌석 n 의 집이다.
+/** 가로등 정의식(월드 단위 ×100 고정소수점): 집 n 의 front 에서 (0,0) 쪽 단위 방향으로 1.5 간 점 → 가장 가까운 걷는 칸 중심. 조건을 어기면 문 면에 나란히 이웃 집에서 멀어지는 쪽으로 0.5 씩 최대 3칸 옮긴다. */
+function lampDefOf(seat: number): { base: { x: number; z: number }; cell: { x: number; z: number }; shifted: number } {
+  const house = TOWN_HOUSES[seat]!;
+  const len = Math.hypot(house.front.x, house.front.z);
+  const base = { x: Math.round(house.front.x - (house.front.x / len) * 150), z: Math.round(house.front.z - (house.front.z / len) * 150) };
+  const alongX = house.face === "n" || house.face === "s"; // 문 면이 가로로 놓였으면 면에 나란한 축은 x
+  const neighbor = TOWN_HOUSES[seat ^ 1]!; // 좌석 (0,1)(2,3)(4,5)(6,7) 이 한 면을 나눈다
+  const away = alongX ? Math.sign(house.x - neighbor.x) : Math.sign(house.z - neighbor.z);
+  const okAt = (cell: { x: number; z: number }): boolean =>
+    Math.hypot(cell.x - house.front.x, cell.z - house.front.z) >= 130 &&
+    TOWN_HOUSES.every((o) => o.seat === seat || Math.hypot(cell.x - o.front.x, cell.z - o.front.z) > Math.hypot(cell.x - house.front.x, cell.z - house.front.z));
+  for (let k = 0; k <= 3; k++) {
+    const moved = alongX ? { x: base.x + away * 50 * k, z: base.z } : { x: base.x, z: base.z + away * 50 * k };
+    const cell = nearestWalkCenter(TOWN_MAP, moved);
+    if (okAt(cell)) return { base, cell, shifted: k };
+  }
+  return { base, cell: nearestWalkCenter(TOWN_MAP, base), shifted: -1 };
+}
 
-  it("id 는 PLACE_IDS 안의 여덟 가지이고 방 안 넷(mail·glass·flower·poster)은 각 방, 광장 넷은 plaza 다", () => {
-    const got = TOWN_PLACES.map((p) => `${p.id}:${zoneOf(TOWN_MAP, fx(p.x), fx(p.z))}`).sort().join(" ");
-    expect(`${TOWN_PLACES.every((p) => (PLACE_IDS as readonly string[]).includes(p.id))}/${new Set(TOWN_PLACES.map((p) => p.id)).size} ${got}`).toBe(
-      "true/8 bench:plaza clock:plaza flower:clinic fountain:plaza glass:pub mail:post poster:police tree:plaza",
-    );
+if (process.env.MAP_PRINT === "1") {
+  describe("가로등 좌표 출력(MAP_PRINT=1 일 때만)", () => {
+    it("가로등 8곳 정의식 결과를 줄로 출력", () => {
+      const lines = TOWN_HOUSES.map((h) => {
+        const d = lampDefOf(h.seat);
+        const cx = d.cell.x / 100;
+        const cz = d.cell.z / 100;
+        const len = Math.hypot(h.x - cx, h.z - cz);
+        const px = Math.round((cx + ((h.x - cx) / len) * 0.5) * 1000) / 1000;
+        const pz = Math.round((cz + ((h.z - cz) / len) * 0.5) * 1000) / 1000;
+        return `  { seat: ${h.seat}, id: "lamp${h.seat}", x: ${cx}, z: ${cz}, pole: { x: ${px}, z: ${pz} } }, // 정의식 점 ${d.base.x / 100},${d.base.z / 100} · 옮김 ${d.shifted}칸`;
+      });
+      process.stdout.write(`\nLAMPS\n${lines.join("\n")}\n`);
+    });
+  });
+}
+
+describe("마을 가로등 8곳 (D-05·D-07·P21-15)", () => {
+  const lamps = TOWN_LAMPS;
+
+  it("TOWN_LAMPS 는 8줄이고 좌석 0~7 순, id 는 lamp{좌석}, TOWN_PLACES 는 그 {id, x, z} 와 같은 JSON 이다", () => {
+    const want = Array.from({ length: 8 }, (_, i) => `${i}:lamp${i}`).join(" ");
+    expect(`${lamps.map((l) => `${l.seat}:${l.id}`).join(" ")} / ${JSON.stringify(TOWN_PLACES)}`).toBe(`${want} / ${JSON.stringify(lamps.map(({ id, x, z }) => ({ id, x, z })))}`);
+    expect(lamps.length).toBe(8);
   });
 
-  it("모두 걷는 자리이고 서로 2.0 이상 떨어져 있다. 광장 넷은 광장 좌표 그대로, 방 안 넷은 걷는 칸 중심이고 소품에서 한 칸(0.5) 이상이다", () => {
-    const walk = TOWN_PLACES.every((p) => lineWalkable(TOWN_MAP, { x: fx(p.x), z: fx(p.z) }, { x: fx(p.x), z: fx(p.z) }));
+  it("장소 중심은 걷는 칸 중심이고 plaza 이며 서로 2.0 이상, 자기 집 문 앞과 1.3 이상, 입장 지점 0 에서 길이 닿는다", () => {
+    const from = { x: fx(TOWN_SPAWNS[0]!.x), z: fx(TOWN_SPAWNS[0]!.z) };
     let minGap = Infinity;
-    for (let i = 0; i < TOWN_PLACES.length; i++) for (let j = i + 1; j < TOWN_PLACES.length; j++) minGap = Math.min(minGap, Math.hypot(TOWN_PLACES[i]!.x - TOWN_PLACES[j]!.x, TOWN_PLACES[i]!.z - TOWN_PLACES[j]!.z));
-    const plazaSame = ["clock", "bench", "tree", "fountain"].every((id) => {
-      const a = TOWN_PLACES.find((p) => p.id === id);
-      const b = PLAZA_PLACES.find((p) => p.id === id)!;
-      return a !== undefined && a.x === b.x && a.z === b.z;
+    for (let i = 0; i < lamps.length; i++) for (let j = i + 1; j < lamps.length; j++) minGap = Math.min(minGap, Math.hypot(lamps[i]!.x - lamps[j]!.x, lamps[i]!.z - lamps[j]!.z));
+    const center = lamps.every((l) => isCenterOfWalkCell({ x: fx(l.x), z: fx(l.z) }));
+    const plaza = lamps.every((l) => zoneOf(TOWN_MAP, fx(l.x), fx(l.z)) === "plaza");
+    const apart = lamps.every((l) => Math.hypot(fx(l.x) - TOWN_HOUSES[l.seat]!.front.x, fx(l.z) - TOWN_HOUSES[l.seat]!.front.z) >= 130);
+    const reach = lamps.every((l) => {
+      const p = routeFx(TOWN_MAP, from, { x: fx(l.x), z: fx(l.z) });
+      return Math.hypot(p[p.length - 2]! - fx(l.x), p[p.length - 1]! - fx(l.z)) <= 30;
     });
-    const indoor = TOWN_PLACES.filter((p) => zoneOf(TOWN_MAP, fx(p.x), fx(p.z)) !== "plaza");
-    const indoorOk = indoor.length === 4 && indoor.every((p) => isCenterOfWalkCell({ x: fx(p.x), z: fx(p.z) }) && TOWN_PROPS.every((o) => rectGap(o, p.x, p.z) >= 0.5 - 1e-9));
-    expect(`${TOWN_PLACES.length}/${walk}/${minGap >= 2}/${plazaSame}/${indoorOk}`).toBe("8/true/true/true/true");
+    expect(`${lamps.length}/${center}/${plaza}/${minGap >= 2}/${apart}/${reach}`).toBe("8/true/true/true/true/true");
+  });
+
+  it("집 n 의 문 앞에서 가장 가까운 가로등이 n 이다(여덟 모두)", () => {
+    const got = TOWN_HOUSES.map((h) => {
+      let best = -1;
+      let bestD = Infinity;
+      for (const l of lamps) {
+        const d = Math.hypot(fx(l.x) - h.front.x, fx(l.z) - h.front.z);
+        if (d < bestD) {
+          bestD = d;
+          best = l.seat;
+        }
+      }
+      return `${h.seat}>${best}`;
+    });
+    expect(got.join(" ")).toBe("0>0 1>1 2>2 3>3 4>4 5>5 6>6 7>7");
+  });
+
+  it("장소 중심은 정의식 결과(필요하면 면을 따라 옮긴 칸)와 같고, 기둥 자리는 장소 중심에서 집 중심 쪽으로 0.5 다", () => {
+    const want = TOWN_HOUSES.map((h) => xz(lampDefOf(h.seat).cell));
+    expect(lamps.map((l) => xz({ x: fx(l.x), z: fx(l.z) })).join(" ")).toBe(want.join(" "));
+    const poles = lamps.map((l) => {
+      const h = TOWN_HOUSES[l.seat]!;
+      const toHouse = Math.hypot(h.x - l.x, h.z - l.z);
+      const gap = Math.hypot(l.pole.x - l.x, l.pole.z - l.z);
+      const dot = ((l.pole.x - l.x) * (h.x - l.x) + (l.pole.z - l.z) * (h.z - l.z)) / (gap * toHouse);
+      return Math.abs(gap - 0.5) <= 0.01 && dot > 0.999;
+    });
+    expect(poles.join(",")).toBe(Array.from({ length: 8 }, () => "true").join(","));
+  });
+
+  it("기둥은 걷기 장애물이 아니다 — 장소 중심·기둥 자리 칸이 모두 걷는 칸이고 TOWN_MASK 는 그대로다", () => {
+    const walk = lamps.map((l) => lineWalkable(TOWN_MAP, { x: fx(l.x), z: fx(l.z) }, { x: fx(l.x), z: fx(l.z) }));
+    expect(`${walk.join(",")}/${walkCount(TOWN_MASK)}`).toBe(`${Array.from({ length: 8 }, () => "true").join(",")}/943`);
+  });
+
+  it("PLACE_IDS 는 기존 16곳 뒤에 lamp0~lamp7 이 붙은 24곳이고 서로 다르다", () => {
+    const tail = (PLACE_IDS as readonly string[]).slice(16).join(",");
+    expect(`${PLACE_IDS.length}/${new Set(PLACE_IDS).size}/${tail}`).toBe("24/24/lamp0,lamp1,lamp2,lamp3,lamp4,lamp5,lamp6,lamp7");
   });
 });
 

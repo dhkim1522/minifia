@@ -176,6 +176,16 @@ export const TOWN_SPAWNS: readonly Spawn[] = PLAZA_SPAWNS;
  * 방 안 넷은 우체국 mail · 술집 glass · 진료소 flower · 경찰서 poster — 그 방의 걷는 칸 중심이고 소품에서 한 칸(0.5) 이상 떨어져 있다.
  * 광장 넷(clock·bench·tree·fountain)은 PLAZA_PLACES 좌표 그대로다. 서로 2.0 이상(시험이 지킨다).
  */
+export interface LampDef {
+  seat: number;
+  id: string;
+  x: number;
+  z: number;
+  pole: { x: number; z: number };
+}
+/** 가로등 8곳(RED 자리 값 — 다음 커밋에서 채운다). */
+export const TOWN_LAMPS: readonly LampDef[] = [];
+
 export const TOWN_PLACES: readonly PlaceDef[] = [
   { id: "mail", x: 0.75, z: -8.75 },
   { id: "glass", x: 8.75, z: -0.75 },
