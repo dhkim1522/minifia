@@ -10,7 +10,7 @@ import { BAR_MAP, snapToWalkable } from "../../shared/game/map";
 import { PLAZA_MAP } from "../../shared/game/mapPlaza";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
-import type { OutfitId, PublicPlayer, RoomView, WorldSeg } from "../../shared/protocol";
+import type { OutfitId, PublicPlayer, RoomId, RoomView, WorldSeg } from "../../shared/protocol";
 import { WorldStage } from "../../src/components/WorldStage";
 import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
@@ -42,6 +42,10 @@ export interface FakeRenderer extends WorldRenderer {
   setPin: Mock<(pin: { x: number; z: number; strength: number } | null, dim: number) => void>;
   setChalk: Mock<(at: { x: number; z: number } | null, opacity: number) => void>;
   setSelfLight: Mock<(at: { x: number; z: number } | null) => void>;
+  /** 마을 컷어웨이·집 주인(20-05): 부른 인자를 기록한다. 재즈 바·광장에서는 한 번도 불리지 않아야 한다 */
+  setCutaway: Mock<(open: ReadonlySet<RoomId>, instant: boolean) => void>;
+  setOwners: Mock<(seats: readonly number[]) => void>;
+  roofs: Mock<() => Record<RoomId, number>>;
   emit(e: RendererStatusEvent): void;
   lost: boolean;
   renders: number;
@@ -72,6 +76,9 @@ export function makeFakeRenderer(): FakeRenderer {
     setPin: vi.fn(),
     setChalk: vi.fn(),
     setSelfLight: vi.fn(),
+    setCutaway: vi.fn(),
+    setOwners: vi.fn(),
+    roofs: vi.fn(() => ({ post: 1, pub: 1, clinic: 1, police: 1 })),
     addCharacter(seat: number, c: CharacterHandle) {
       r.chars.set(seat, c);
     },
@@ -2024,6 +2031,118 @@ describe("마을 카메라 (20-05, D-12·P20-15)", () => {
     const r = s.world.renderers[0]!;
     frames(600);
     expect(r.views.at(-1)!.target.x).toBeCloseTo(PAN_BOX.maxX, 6);
+  });
+});
+
+describe("마을 컷어웨이·집 주인·__mfTown (20-05, D-07·D-10·D-11)", () => {
+  const townView = (players: PublicPlayer[] = TWO): RoomView => ({ ...makeView(players, 0), map: "town" });
+  const IN_POST = (): WorldSeg[] => [seg(0, [0, -825]), seg(1, [-300, 50])];
+  const names = (s: ReadonlySet<RoomId>): string => [...s].sort().join(",");
+
+  it("내가 우체국 안이면 첫 프레임에 그 방만 instant 로 한 번 보낸다. 같은 자리의 다음 프레임은 다시 보내지 않는다", async () => {
+    const s = await open({ view: townView() }, { ents: IN_POST() });
+    const r = s.world.renderers[0]!;
+    expect(r.setCutaway).toHaveBeenCalledTimes(1);
+    const [open1, instant] = r.setCutaway.mock.calls[0]!;
+    expect(names(open1)).toBe("post");
+    expect(instant).toBe(true);
+    frames(100);
+    expect(r.setCutaway).toHaveBeenCalledTimes(1);
+  });
+
+  it("광장으로 나오면 빈 집합을 instant false 로 보낸다(0.25초 연출은 렌더러 몫)", async () => {
+    const s = await open({ view: townView() }, { ents: IN_POST() });
+    const r = s.world.renderers[0]!;
+    move(s.store, seg(0, [0, -825, 0, -300], Date.now(), 180));
+    frames(3500);
+    expect(r.setCutaway).toHaveBeenCalledTimes(2);
+    const [open2, instant] = r.setCutaway.mock.calls[1]!;
+    expect(names(open2)).toBe("");
+    expect(instant).toBe(false);
+  });
+
+  it("모션 줄이기면 나올 때도 instant true 다", async () => {
+    stubReducedMotion(true);
+    const s = await open({ view: townView() }, { ents: IN_POST() });
+    const r = s.world.renderers[0]!;
+    move(s.store, seg(0, [0, -825, 0, -300], Date.now(), 180));
+    frames(3500);
+    expect(r.setCutaway).toHaveBeenCalledTimes(2);
+    expect(r.setCutaway.mock.calls[1]![1]).toBe(true);
+  });
+
+  it("recreated 이벤트 뒤 첫 프레임은 지금 집합을 instant 로 한 번 더 보낸다", async () => {
+    const s = await open({ view: townView() }, { ents: IN_POST() });
+    const r = s.world.renderers[0]!;
+    r.emit({ t: "recreated" });
+    frame();
+    expect(r.setCutaway).toHaveBeenCalledTimes(2);
+    expect(names(r.setCutaway.mock.calls[1]![0])).toBe("post");
+    expect(r.setCutaway.mock.calls[1]![1]).toBe(true);
+    expect(r.setOwners).toHaveBeenCalledTimes(2);
+  });
+
+  it("scene.roomsOpen(유령·결과)이면 내 위치와 무관하게 네 방 모두 열린 집합이다", async () => {
+    const s = await open({ view: townView(), scene: sceneOf({ 0: {}, 1: {} }, { roomsOpen: true }) }, { ents: [seg(0, [0, 0]), seg(1, [-300, 50])] });
+    const r = s.world.renderers[0]!;
+    expect(r.setCutaway).toHaveBeenCalledTimes(1);
+    expect(names(r.setCutaway.mock.calls[0]![0])).toBe("clinic,police,post,pub");
+  });
+
+  it("내 몸이 그려지기 전에는 모두 덮인 집합(빈 집합)을 보내지 않고, 그려지면 지금 구역을 보낸다", async () => {
+    const s = await open({ view: townView() }, { ents: null });
+    const r = s.world.renderers[0]!;
+    expect(r.setCutaway).not.toHaveBeenCalled();
+    snap(s.store, IN_POST());
+    frame();
+    expect(r.setCutaway).toHaveBeenCalledTimes(1);
+    expect(names(r.setCutaway.mock.calls[0]![0])).toBe("post");
+  });
+
+  it("집 주인: 좌석 [0,1,3] 으로 시작하면 setOwners 한 번, 같은 좌석으로 다시 맞추면 부르지 않고 좌석이 바뀌면 다시 부른다", async () => {
+    const players = [player(0, "민지"), player(1, "철수"), player(3, "바다")];
+    const s = await open({ view: townView(players) }, { players, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(3, [400, -200])] });
+    const r = s.world.renderers[0]!;
+    expect(r.setOwners).toHaveBeenCalledTimes(1);
+    expect(r.setOwners).toHaveBeenLastCalledWith([0, 1, 3]);
+    s.rerender({ view: townView([...players]) });
+    frame();
+    expect(r.setOwners).toHaveBeenCalledTimes(1);
+    const more = [...players, player(5, "하나")];
+    s.rerender({ view: townView(more) });
+    frame();
+    expect(r.setOwners).toHaveBeenCalledTimes(2);
+    expect(r.setOwners).toHaveBeenLastCalledWith([0, 1, 3, 5]);
+  });
+
+  it("재즈 바·광장에서는 setCutaway·setOwners 를 한 번도 부르지 않는다", async () => {
+    const bar = await open({ view: { ...makeView(TWO, 0), map: "bar" } });
+    expect(bar.world.renderers[0]!.setCutaway).not.toHaveBeenCalled();
+    expect(bar.world.renderers[0]!.setOwners).not.toHaveBeenCalled();
+    cleanup();
+    const plaza = await open({ view: { ...makeView(TWO, 0), map: "plaza" } });
+    frames(200);
+    expect(plaza.world.renderers[0]!.setCutaway).not.toHaveBeenCalled();
+    expect(plaza.world.renderers[0]!.setOwners).not.toHaveBeenCalled();
+  });
+
+  it("window.__mfTown: 내가 우체국 안이면 zone post·open [post]·owners 는 view 좌석·veiled·door 는 빈 배열이고, 렌더러의 지붕 불투명도를 소수 둘째 자리로 싣는다", async () => {
+    const s = await open({ view: townView() }, { ents: IN_POST() });
+    const r = s.world.renderers[0]!;
+    r.roofs.mockReturnValue({ post: 0.3333333, pub: 1, clinic: 1, police: 1 });
+    frames(50);
+    expect(window.__mfTown).toEqual({ zone: "post", open: ["post"], roofs: { post: 0.33, pub: 1, clinic: 1, police: 1 }, owners: [0, 1], veiled: [], door: [] });
+    s.utils.unmount();
+    expect(window.__mfTown).toBeUndefined();
+  });
+
+  it("window.__mfTown 은 마을이 아니면 없고, 훅이 꺼진 문맥에도 없다", async () => {
+    await open({ view: { ...makeView(TWO, 0), map: "bar" } });
+    expect(window.__mfTown).toBeUndefined();
+    cleanup();
+    vi.stubEnv("DEV", false);
+    await open({ view: townView() }, { ents: IN_POST() });
+    expect(window.__mfTown).toBeUndefined();
   });
 });
 

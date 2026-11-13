@@ -232,6 +232,11 @@ describe("결과 화면: 3D 무대 위 한 장면의 최종 상태 (D-1, A-5)", 
     expect(stage.props!.canWalk).toBe(false);
   });
 
+  it("장면: 마을의 네 방 모두 걷힌다(roomsOpen true, 20-05 D-11)", () => {
+    renderRoom(makeView());
+    expect(scene().roomsOpen).toBe(true);
+  });
+
   it("모든 사람(산 사람·탈락자)을 그린다: seats 의 show true, 탈락자만 ghost(직업 의상 없음), 산 사람은 직업 의상이 입혀져 있다", () => {
     renderRoom(makeView({ dead: [2] }));
     const seats = scene().seats;

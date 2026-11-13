@@ -468,6 +468,24 @@ describe("sceneLook 의 chalk (MORN-01, 결정 0061-14)", () => {
   });
 });
 
+describe("sceneLook 의 roomsOpen (20-05, D-11·P20-8)", () => {
+  it("유령 viewer(spectate 있음)의 장면에는 roomsOpen true 가 실린다", () => {
+    const look = sceneLook(viewOf("discussion", { dead: [1], mySeat: 1, spectate: true }), { stageH: 400 });
+    expect(look.roomsOpen).toBe(true);
+  });
+
+  it("spectate 없이 내 좌석만 탈락이어도 유령 viewer 라 roomsOpen 이 실린다 (모이기 고정 카메라 단계도 같다)", () => {
+    expect(sceneLook(viewOf("discussion", { dead: [2], mySeat: 2 }), { stageH: 400 }).roomsOpen).toBe(true);
+    expect(sceneLook(viewOf("nomination", { dead: [2], mySeat: 2 }), { stageH: 400 }).roomsOpen).toBe(true);
+  });
+
+  it("산 viewer 의 장면에는 roomsOpen 키 자체가 없다", () => {
+    for (const phase of ["discussion", "nomination", "night", "morning"] as const) expect("roomsOpen" in sceneLook(viewOf(phase), { stageH: 400 })).toBe(false);
+    // 남이 탈락한 판에서도 산 viewer 에게는 없다
+    expect("roomsOpen" in sceneLook(viewOf("discussion", { dead: [3], mySeat: 0 }), { stageH: 400 })).toBe(false);
+  });
+});
+
 // ---- 09-10 Task 2: 밤 조명·좌석 표 (NIGHT-07, NIGHT-10, E3 #20) ----
 const asRole = (view: RoomView, role: RoleId): RoomView => ({ ...view, me: { ...view.me, role } });
 
