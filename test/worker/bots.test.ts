@@ -8,6 +8,7 @@ import { LAST_WORD_CHIPS } from "../../shared/game/showdown";
 import { PHASE_DEFS, PICK_TURN_MS } from "../../shared/game/phases";
 import { rulesetOf } from "../../shared/game/ruleset";
 import { WORLD_FLUSH_MS } from "../../shared/game/world";
+import { openTown } from "../helpers/playable";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
   advanceTo,
@@ -930,4 +931,53 @@ describe("기본판 봇 방 자동 완주 (FLOW-05, 결정 0072)", () => {
     // 지나간 일수·처형 수는 판마다 다르다(봇 난수) — 하한만 본다. 실제 값은 13-02-SUMMARY 에 옮겼다(예: 2~4일, 처형 2명, 마피아 승리).
     expect(fail("지나간 일수·처형 수") && `${days >= 1}/${executions >= 0}`).toBe("true/true");
   }, 180_000);
+});
+
+// ---- 21-07: 확장판 마을 봇 방 자동 완주 (D-29) ----
+describe("확장판 마을 봇 방 자동 완주 (21-07, D-29)", () => {
+  it("방장(사람, 아무 행동 없음) + 서버 봇 다섯이 마을에서 새 하루 순서(저녁 → 밤 → 아침 → 토론 …)로 봇 행동과 단계 마감만으로 ended 까지 한 판을 끝낸다 — 낮 시작 발표는 한 번도 없다", async () => {
+    const r = await seatQuiet(0, { testMode: true });
+    send(r.host, { t: "testBots", count: 5 });
+    await nextFrame(r.host, lobbyOf(6));
+    await sendAndSettle(r.host, { t: "testRole", role: "citizen" });
+    const close = openTown(); // 맵은 시작 때 정해져 저장되므로 시작하는 동안만 마을로 연다
+    try {
+      await start(r, "extended");
+    } finally {
+      close();
+    }
+    const planned = ["discussion", "nomination", "verdict", "night", "defense"];
+    let rounds = 0;
+    for (; rounds < 400; rounds += 1) {
+      const room = await stored(r.code);
+      if (room.phase === "ended") break;
+      const plan = room.botPlan as { steps: unknown[] } | undefined;
+      if (plan !== undefined && plan.steps.length > 0) {
+        await forceBotsDue(r.code);
+        continue;
+      }
+      await closePhase(r.code);
+      // 새 단계의 봇 계획이 저장될 때까지 기다린다 — 계획이 서지 않는 단계(저녁·아침 등)는 바로 넘어간다.
+      for (let i = 0; i < 60; i += 1) {
+        const now = await stored(r.code);
+        if (!planned.includes(String(now.phase))) break;
+        if ((now.botPlan as { key?: string } | undefined)?.key === `${String(now.phase)}:${String(now.phaseEndsAt)}`) break;
+        await sleep(25);
+      }
+    }
+    await settle(r.host, mark(r.host));
+    const views = collect(r.host)
+      .map(parse)
+      .filter((m): m is State => m.t === "state")
+      .map((m) => m.view);
+    const seen: PhaseId[] = [];
+    for (const v of views) if (seen.at(-1) !== v.phase) seen.push(v.phase);
+    const trail = seen.join(">");
+    const fail = (why: string): string => `${why} | 지나간 단계: ${trail}`;
+    expect(fail(`ended 에 닿는다(${rounds}회)`) && (await stored(r.code)).phase).toBe("ended");
+    expect(fail("낮 시작 발표·저녁·밤") && `${seen.includes("dayAnnounce")}/${seen.includes("errand")}/${seen.includes("night")}`).toBe("false/true/true");
+    expect(fail("마을 판") && String((await stored(r.code)).map)).toBe("town");
+    const result = views.at(-1)!.result;
+    expect(fail("결과 winner") && String(result?.winner === "citizenWin" || result?.winner === "mafiaWin")).toBe("true");
+  }, 240_000);
 });
