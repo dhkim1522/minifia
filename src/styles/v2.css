@@ -515,6 +515,29 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-house-pick__me { position: absolute; right: 1px; bottom: 1px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); pointer-events: none; }
 .mv-house-pick__plate .mv-face__count { right: -8px; bottom: -8px; }
 
+/* 아침 현장 부품(21-13, UI-SPEC P21-13 · 아침 표). 새 토큰·hex 없음 — 안 살핀 표식의 빛남은 14 의 is-call 을 그대로 쓰고 살핌·먼저 손댄 흔적은 회색 계열이다.
+ * 위치·숨김은 맵 층(WorldStage)이 프레임마다 DOM 에 직접 쓴다. 심부름 부품 블록(아래)은 시험이 첫 줄부터 파일 끝까지를 보므로 이 블록은 그 앞에 둔다. */
+.mv-clue-spot { position: absolute; display: grid; place-items: center; box-sizing: border-box; width: 52px; height: 52px; margin: 0; padding: 0; border: 2px solid var(--light-lamp); border-radius: var(--radius-pill); background: var(--night-800); color: var(--light-lamp); box-shadow: 0 0 14px 3px color-mix(in srgb, var(--light-lamp) 50%, transparent); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
+.mv-clue-spot:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mv-clue-spot[data-state="done"] { border-color: var(--gray-500); background: var(--gray-800); color: var(--gray-300); box-shadow: none; }
+.mv-clue-spot[data-state="blurred"] { border-style: dashed; border-color: var(--gray-500); background: var(--gray-800); color: var(--gray-300); box-shadow: none; opacity: 0.6; }
+.mv-clue-spot.is-call::after { border-width: 3px; }
+.mv-clue-spot__badge { position: absolute; top: -6px; right: -6px; display: grid; place-items: center; box-sizing: border-box; width: 20px; height: 20px; border-radius: var(--radius-pill); background: var(--gray-100); color: var(--night-900); }
+.mv-lamp-off { position: absolute; display: grid; place-items: center; box-sizing: border-box; width: 36px; height: 36px; border: 2px dashed var(--gray-500); border-radius: var(--radius-pill); color: var(--gray-300); opacity: 0.6; pointer-events: none; }
+.mv-clue-chip { display: inline-flex; align-items: center; box-sizing: border-box; min-width: 0; color: var(--gray-50); font-family: var(--font-ui); word-break: keep-all; }
+.mv-clue-chip__text { min-width: 0; }
+.mv-clue-chip > svg { flex: none; color: var(--light-lamp); }
+.mv-clue-chip--chip { gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--light-lamp); border-radius: var(--radius-pill); font-size: 14px; line-height: 1.4; font-weight: 400; }
+.mv-clue-chip--card { gap: 8px; height: 44px; padding: 0 12px; border: 1px solid var(--night-600); border-radius: var(--radius-md); background: var(--night-800); font-size: 14px; line-height: 1.4; font-weight: 700; animation: mv-clue-rise var(--dur-fast) var(--ease-out); }
+.mv-clue-chip.is-faint { color: var(--gray-300); }
+.mv-clue-chip.is-faint > svg { color: var(--gray-300); }
+.mv-clue-chip--chip.is-faint { border: 1px dashed var(--gray-500); }
+.mv-clue-chip--card.is-faint { border: 1px dashed var(--gray-500); opacity: 0.75; }
+@keyframes mv-clue-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .mv-clue-chip--card { animation: none; }
+}
+
 /* 심부름 부품(15-04·16-07, UI-SPEC "심부름 화면 계약"·V-20~V-22). 새 토큰·hex 없음 — 빛남은 14 의 .is-call 을 그대로 쓰고 타일 빛만 테두리 3·번짐 26 으로 키운다.
  * 위치는 층이 inline transform 으로 쓰므로 위치를 쓰는 요소(타일·화살표·알약)에는 transform 애니메이션·:active 변형을 걸지 않는다(그림·배지 같은 자식에만).
  * 이 블록은 파일 끝에 둔다(시험이 첫 .mv-errand 부터 끝까지를 본다). */

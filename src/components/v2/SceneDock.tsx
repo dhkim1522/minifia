@@ -14,7 +14,7 @@ import { V2Icon } from "./V2Icon";
 // 채울 뿐이고, 길게 눌렀는지는 떼는 순간 onPress(hold) 의 인자 하나로만 나간다 — 그 값으로 무엇이 일어나는지는 서버가 정한다(눈으로 구별되지 않는다, P21-8).
 // 21-12 밤 변형(variant "night", D-25): 기록 칸 없이 위 안내 한 줄 24(안 골랐으면 범례 '불 켜진 창'·'꺼진 창', 골랐으면 바꿀 수 있다는 한 문장) + 아래 행동 줄 52.
 // 행동 줄은 쓰는 쪽이 넘긴 단추 그대로다([쪽지]/[유언] 은 지금 GamePanel 의 줄) — 이 부품은 역할을 모르고 같은 입력이면 같은 DOM 이다. 높이 122.
-// 21-13 이 아침 변형을 같은 부품에 더한다(primary.kind "scene" 은 아침 [살펴보기] 자리).
+// 21-13 아침 변형: 같은 낮 독(기록 두 줄 + 행동 줄)에서 primary.kind "scene" 이 아침 [살펴보기] 자리다 — 흰 알약(돋보기 22 + 글), 표식 data-scene-act, 길게 누르기 없음.
 
 /** 길게 누르기로 보는 시간(ms). 채움 막대의 길이와 같다 */
 export const HOLD_MS = 600;
@@ -91,7 +91,7 @@ function fillStyle(holding: boolean, reduced: boolean): CSSProperties {
 
 const PRIMARY_TEXT = {
   lamp: { label: "켜기", aria: "등불 켜기", icon: "flame" },
-  scene: { label: "살펴보기", aria: "살펴보기", icon: "eye" },
+  scene: { label: "살펴보기", aria: "살펴보기", icon: "lens" },
 } as const;
 
 function PrimaryButton({ primary }: { primary: SceneDockPrimary }) {
@@ -102,14 +102,16 @@ function PrimaryButton({ primary }: { primary: SceneDockPrimary }) {
   const off = primary.disabled || primary.done;
   const text = PRIMARY_TEXT[primary.kind];
 
+  // 아침 [살펴보기] 는 길게 누르기가 없다(21-13): 채움 막대를 채우지 않고 늘 onPress(false) 하나만 낸다
+  const holdable = primary.kind === "lamp";
   const finish = (hold: boolean): void => {
     handledAt.current = Date.now();
-    primary.onPress(hold);
+    primary.onPress(holdable && hold);
   };
   const onDown = (e: PointerEvent<HTMLButtonElement>): void => {
     if (off || (e.button !== undefined && e.button > 0)) return;
     downAt.current = Date.now();
-    setHolding(true);
+    if (holdable) setHolding(true);
   };
   const onUp = (): void => {
     const at = downAt.current;
