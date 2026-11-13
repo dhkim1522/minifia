@@ -1456,14 +1456,14 @@ test("LOBBY_SIZES: DEFAULT_SIZES 4개 + 390x844 + 402x874 여섯 개이고 LOBBY
   assert.deepEqual(DEFAULT_SIZES.map((x) => x.label), ["360x640", "390x664", "430x932", "360x560"]);
 });
 
-test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand·witness·trace(15-09 심부름·목격 기록·밤 통일/아침 흔적 폰 6종)·tutorial-solo(17-09 혼자 하기 첫 사건 폰 6종)·mode-rail(19-06 방장 줄 폰 6종)·town-walk(20-08 마을 문 앞 걷기 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
+test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand·witness·trace(15-09 심부름·목격 기록·밤 통일/아침 흔적 폰 6종)·tutorial-solo(17-09 혼자 하기 첫 사건 폰 6종)·mode-rail(19-06 방장 줄 폰 6종)·town-walk(20-08 마을 문 앞 걷기 폰 6종)·causal-sizes(21-16 원인→결과 하루 겹침·보임 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
   const run = readFileSync(new URL("./run.mjs", import.meta.url), "utf8");
   assert.match(run, /extraSizes/);
   assert.match(run, /!args\.sizesGiven/);
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)?(?:, skipByDefault: true)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
-  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "errand", "witness", "trace", "tutorial-solo", "mode-rail", "town-walk", "polish-reveal"]);
+  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "errand", "witness", "trace", "tutorial-solo", "mode-rail", "town-walk", "causal-sizes", "polish-reveal"]);
 });
 
 test("기본판(결정 0072)에서 꺼진 장치 흐름 7개는 skipByDefault 이고 politics-verdict 는 기본 실행에 남는다 (13-05)", () => {
@@ -5805,15 +5805,24 @@ test("domShapeDiff LH3·LH9: 값·글은 무시하고 태그·속성 이름·클
   assert.deepEqual(d2, []);
   const e = '<section class="p x" data-world-panel=""><button class="b" data-call="">k</button></section>';
   assert.ok(domShapeDiff(a, e).length >= 1);
+  const placed = '<div class="w"><button class="pin" hidden="" style="left:1px">a</button></div>';
+  const shown = '<div class="w"><button class="pin" style="left:90px">a</button></div>';
+  assert.deepEqual(domShapeDiff(placed, shown), []);
+  assert.equal(domShapeDiff(placed, shown, { ignoreAttrs: ["style"] }).length, 2);
+  const near = '<div class="w"><button class="pin is-call" data-call="">a</button></div>';
+  const far = '<div class="w"><button class="pin">a</button></div>';
+  assert.equal(domShapeDiff(near, far).length, 2);
+  assert.deepEqual(domShapeDiff(near, far, { ignoreAttrs: ["style", "hidden", "data-call"], ignoreClasses: ["is-call"] }), []);
   const img = '<div><img src="a.png" alt=""><br><svg><path d="M0"></path></svg><!-- c --></div>';
   assert.deepEqual(domShapeDiff(img, img.replace("a.png", "b.png")), []);
   assert.ok(domShapeDiff(img, img.replace("<br>", "")).length >= 1);
 });
 
 test("causalReducedChecks LH14: 모션 줄이기에서 전환 시간이 모두 0", () => {
-  assert.ok(okAll(causalReducedChecks({ items: [{ name: "카드", ms: 0 }, { name: "채움", ms: 0 }] })));
+  assert.ok(okAll(causalReducedChecks({ items: [{ name: "카드", ms: 0 }, { name: "채움", ms: 0.01 }] })));
   const bad = causalReducedChecks({ items: [{ name: "카드", ms: 0 }, { name: "채움", ms: 600 }] });
   assert.equal(lineOf(bad, "LH14").ok, false);
   assert.match(lineOf(bad, "LH14").detail, /채움/);
   assert.equal(lineOf(causalReducedChecks({ items: [] }), "LH14").ok, false);
+  assert.equal(lineOf(causalReducedChecks({ items: [{ name: "측정 실패", ms: -1 }] }), "LH14").ok, false);
 });

@@ -4946,8 +4946,11 @@ export function boardChecks(m) {
   return lines;
 }
 
-/** 이 HTML 조각을 노드 줄(경로 — 태그.클래스[속성 이름])의 목록으로 바꾼다. 값·글·주석은 버린다(style 속성은 위치라 뺀다) */
-function domShapeLines(html) {
+/** 구조 비교가 기본으로 버리는 속성: 투영·위치를 프레임마다 DOM 에 직접 쓰는 style·hidden(화면 위치의 함수이지 역할의 함수가 아니다) */
+export const DOM_SHAPE_IGNORE_ATTRS = Object.freeze(["style", "hidden"]);
+
+/** 이 HTML 조각을 노드 줄(경로 — 태그.클래스[속성 이름])의 목록으로 바꾼다. 값·글·주석은 버린다(ignore 속성은 위치라 뺀다) */
+function domShapeLines(html, ignore = DOM_SHAPE_IGNORE_ATTRS, ignoreClasses = []) {
   const lines = [];
   const stack = [];
   const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
@@ -4965,8 +4968,8 @@ function domShapeLines(html) {
     let classes = [];
     for (const a of rest.replace(/\/\s*$/, "").matchAll(/([^\s=/>"']+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g)) {
       const name = a[1].toLowerCase();
-      if (name === "class") classes = (a[2] ?? a[3] ?? a[4] ?? "").split(/\s+/).filter(Boolean).sort();
-      else if (name !== "style") names.push(name);
+      if (name === "class") classes = (a[2] ?? a[3] ?? a[4] ?? "").split(/\s+/).filter((c) => c && !ignoreClasses.includes(c)).sort();
+      else if (!ignore.includes(name)) names.push(name);
     }
     const here = `${tag}${classes.length > 0 ? `.${classes.join(".")}` : ""}[${names.sort().join(",")}]`;
     const path = stack.length > 0 ? `${stack.map((s) => s.line).join(" > ")} > ${here}` : here;
@@ -4979,12 +4982,12 @@ function domShapeLines(html) {
 /**
  * LH3·LH9 두 DOM 문자열(outerHTML)의 구조 차이. 태그·속성 이름·클래스(정렬)만 견주고 속성 값·글·style 은 보지 않는다.
  * 같은 경로 줄의 개수가 다르면 그 경로를 한 줄로 돌려준다(글·값은 줄에 싣지 않는다). opt.allow = 무시할 경로 정규식 목록(허용 목록 — 밤 행동 줄·산 마피아 합의 배지),
- * opt.names = [A 이름, B 이름]. 차이가 없으면 빈 배열.
+ * opt.names = [A 이름, B 이름], opt.ignoreAttrs = 이름을 보지 않을 속성(기본 style·hidden — 위치를 프레임마다 쓰는 값), opt.ignoreClasses = 보지 않을 클래스(위치 때문에 켜지는 is-call 등). 차이가 없으면 빈 배열.
  */
-export function domShapeDiff(a, b, { allow = [], names = ["A", "B"] } = {}) {
+export function domShapeDiff(a, b, { allow = [], names = ["A", "B"], ignoreAttrs = DOM_SHAPE_IGNORE_ATTRS, ignoreClasses = [] } = {}) {
   const count = (html) => {
     const map = new Map();
-    for (const l of domShapeLines(html)) map.set(l, (map.get(l) ?? 0) + 1);
+    for (const l of domShapeLines(html, ignoreAttrs, ignoreClasses)) map.set(l, (map.get(l) ?? 0) + 1);
     return map;
   };
   const ca = count(a);
@@ -5000,9 +5003,11 @@ export function domShapeDiff(a, b, { allow = [], names = ["A", "B"] } = {}) {
   return out;
 }
 
-/** LH14 모션 줄이기: 켜짐·꺼짐·카드 올라옴·decal 의 전환(transition) 시간이 모두 0. m = { items: [{ name, ms }] } */
+/** 모션 줄이기에서 '즉시'로 보는 전환 시간 상한(ms): 앱의 전역 규칙(base.css prefers-reduced-motion)이 animationend 를 살리려고 0.01ms 를 쓴다 — 한 프레임(16.7ms)보다 훨씬 짧아 보이는 전환은 0 이다 */
+export const CAUSAL_INSTANT_MS = 1;
+/** LH14 모션 줄이기: 켜짐·꺼짐·카드 올라옴·decal 의 전환(transition) 시간이 모두 즉시(≤ 1ms, 앱 전역 0.01ms). m = { items: [{ name, ms }] } */
 export function causalReducedChecks(m) {
-  const label = "모션 줄이기: 켜짐·꺼짐·카드 올라옴 전환 시간이 모두 0";
+  const label = "모션 줄이기: 켜짐·꺼짐·카드 올라옴 전환 시간이 모두 0(앱 전역 0.01ms)";
   if (!m || !Array.isArray(m.items) || m.items.length === 0 || !m.items.every((i) => i && isStr(i.name) && isNum(i.ms))) return [noMeasure("LH14", label, "전환 시간")];
-  return [result("LH14", label, m.items.filter((i) => i.ms !== 0).map((i) => `${i.name} 전환 ${i.ms}ms ≠ 0`))];
+  return [result("LH14", label, m.items.filter((i) => !(i.ms >= 0 && i.ms <= CAUSAL_INSTANT_MS)).map((i) => `${i.name} 전환 ${i.ms}ms ≠ 0`))];
 }

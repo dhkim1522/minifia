@@ -2417,6 +2417,37 @@ export function readStartCard(page) {
   });
 }
 
+/**
+ * 요소 한가운데를 ms 동안 누르고 뗀다(저녁 [켜기] 의 길게 누르기 0.6초 이상, 21-16). 누르는 동안 채움 막대 등 DOM 변화는 부른 쪽이 읽는다(onHold 가 있으면 누른 채 한 번 부른다).
+ * 요소가 없거나 크기가 0 이면 null, 아니면 { x, y }.
+ */
+export async function longPress(page, selector, ms, onHold = null) {
+  const pt = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
+  }, selector);
+  if (!pt) return null;
+  await page.mouse.move(pt.x, pt.y);
+  await page.mouse.down();
+  if (onHold) {
+    await sleep(Math.max(0, Math.floor(ms / 2)));
+    await onHold();
+    await sleep(Math.max(0, ms - Math.floor(ms / 2)));
+  } else await sleep(ms);
+  await page.mouse.up();
+  return pt;
+}
+
+/**
+ * 한 영역의 DOM 문자열(outerHTML, 없으면 빈 문자열). 마피아 탭·시민 탭 구조 비교(21-16 causal-leak)가 lib.mjs domShapeDiff 에 넘긴다 —
+ * 값·글은 그 함수가 버린다. 이 문자열은 결과 줄·SUMMARY 에 싣지 않는다(닉네임·표식 값이 들어 있다).
+ */
+export function domShape(page, rootSelector) {
+  return page.evaluate((sel) => document.querySelector(sel)?.outerHTML ?? "", rootSelector);
+}
+
 /** 진행 글자가 n/3 이 될 때까지(최대 ms) 기다린다. 돼 있으면 true */
 export async function waitErrandDone(page, n, ms = 16_000) {
   try {
