@@ -28,6 +28,7 @@ import { emptyGameCloseAt, nextContinuityAt } from "./continuity";
 import { enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
 import { enterErrand } from "./errand";
+import { clearSkip } from "./skip";
 import { enterExecution } from "./execution";
 import { enterNomination, enterVote, stepNomination, resolveNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
@@ -80,12 +81,12 @@ export function hooksOf(rules: Ruleset): PhaseHooks {
     enter: {
       assigning: clearTutorial, // 17페이즈(결정 0080-11): tutorial 을 떠나며 서버 전용 tutorialPassed 를 지운다(tutorial 을 거치지 않았으면 같은 객체)
       dayAnnounce: enterDayAnnounce,
-      errand: (s, r, at) => enterErrand(enterDayAnnounce(s), r, at), // 21페이즈 D-02: 저녁 진입이 일차를 올린다(확장판엔 낮 시작 발표가 없다). 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts). 21페이즈 D-05: 모든 역할이 같은 목록·같은 처리 규칙이다(16페이즈 가짜 장소는 걷어 냈다)
+      errand: (s, r, at) => clearSkip(enterErrand(enterDayAnnounce(s), r, at)), // 21페이즈 D-02: 저녁 진입이 일차를 올린다(확장판엔 낮 시작 발표가 없다). 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts). 21페이즈 D-05: 모든 역할이 같은 목록·같은 처리 규칙이다(16페이즈 가짜 장소는 걷어 냈다)
       discussion: enterDiscussion,
       nomination: rules.pickTurn ? enterNomination : enterVote,
       execution: enterExecution,
       night: enterNight,
-      morning: (s, r) => enterMorning(s, r, rules), // 세 번째 인자 at(진입 시각)이 enterMorning 의 규칙 자리로 들어가지 않게 감싸고, 이 표의 규칙을 넘긴다
+      morning: (s, r) => clearSkip(enterMorning(s, r, rules)), // 21페이즈 D-23: 저녁·아침 진입은 전 단계의 건너뛰기 눌림을 지운다. // 세 번째 인자 at(진입 시각)이 enterMorning 의 규칙 자리로 들어가지 않게 감싸고, 이 표의 규칙을 넘긴다
       ended: enterEnded,
     },
     deadline: {

@@ -36,6 +36,7 @@ const CLIENT_MESSAGE_KINDS = [
   "point",
   "ready",
   "rematch",
+  "skipPhase", // 21페이즈(D-23): 소리와 무관한 새 메시지 — 저녁·아침 건너뛰기. 이 목록은 소리가 만든 메시지가 없다는 것을 고정하는 것이라 21페이즈의 한 줄만 더했다
   "start",
   "testBotVote",
   "testBots",
