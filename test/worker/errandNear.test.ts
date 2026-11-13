@@ -26,8 +26,6 @@ import {
   worldFramesOf,
   writeRoomEdit,
   flushWorld,
-  eveningRowsOf,
-  regraftEvening,
 } from "./helpers";
 import type { Actor, Game } from "./helpers";
 
@@ -186,10 +184,7 @@ describe("목격 기록 (D-04)", () => {
     // errand 의 view 에는 아직 record 가 없다
     expect("record" in lastViewOf(actorOf(g, 0).sock).me).toBe(false);
     const marks = g.actors.map((x) => mark(x.sock));
-    const evening = await eveningRowsOf(g.code);
-    await advanceTo(g.code, g.socks, "discussion");
-    // 21페이즈: 밤 진입이 저녁 값을 지운다(21-04 가 토론까지 남기도록 바꾼다) — 저녁에 쌓인 값을 토론 상태에 옮겨 심고 새 state 를 받는다(규칙 다).
-    await regraftEvening(g.code, evening, g.socks, actorOf(g, 2).sock);
+    await advanceTo(g.code, g.socks, "discussion"); // 21페이즈 D-09: 저녁 값은 밤을 지나 토론까지 남는다(현장 없는 밤은 아침 없이 토론으로)
     for (const x of g.actors) await settle(x.sock, 0);
     const meOf = (seatNo: number) => lastViewOf(actorOf(g, seatNo).sock).me;
     expect(JSON.stringify(meOf(0).record)).toBe(JSON.stringify([{ seat: 1, place: "glass" }, { seat: 1, place: "glass" }]));

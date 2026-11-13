@@ -17,7 +17,6 @@ import {
   alarmAndCollect,
   connect,
   doorCount,
-  eveningRowsOf,
   flushWorld,
   hello,
   idOfSeat,
@@ -26,7 +25,6 @@ import {
   memWorld,
   pickAs,
   placeSeats,
-  regraftEvening,
   settle,
   snapLine,
   storedRoom,
@@ -142,10 +140,7 @@ describe("목격 기록·마지막 목격은 같은 구역 사람만 적는다 (
       ...room,
       players: (room.players as StoredPlayer[]).map((p) => (p.seat <= 1 ? { ...p, errandPlaces: done, errandDone: done } : p)),
     }));
-    const evening = await eveningRowsOf(g.code);
-    await advanceTo(g.code, g.socks, "discussion");
-    // 21페이즈: 밤 진입이 저녁 값을 지운다(21-04 가 토론까지 남기도록 바꾼다) — 저녁에 쌓인 값을 토론 상태에 옮겨 심고 새 state 를 받는다(규칙 다).
-    await regraftEvening(g.code, evening, g.socks, actorOf(g, 3).sock);
+    await advanceTo(g.code, g.socks, "discussion"); // 21페이즈 D-09: 저녁 값은 밤을 지나 토론까지 남는다
     for (const x of g.actors) await settle(x.sock, 0);
     const record = (seatNo: number): string => JSON.stringify(lastViewOf(actorOf(g, seatNo).sock).me.record);
     expect(`${record(0)} ${record(1)}`).toBe('[{"seat":2,"place":"lamp1"}] []');

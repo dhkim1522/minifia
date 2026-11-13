@@ -473,36 +473,6 @@ export async function editRoom(code: string, edit: (room: Record<string, unknown
 }
 
 /**
- * 21페이즈: 저녁(errand)의 목록·진행·목격 줄(errandPlaces·errandDone·errandSeen)을 좌석별로 읽어 둔다.
- * 확장판은 저녁 → 밤 → 토론이고 밤 진입이 이 값을 지운다(21-04 가 밤·아침을 지나 토론까지 남기도록 바꾼다) — 토론 view 의 me.record 를 보는 시험은
- * 이 값을 읽어 두었다가 토론 상태에 regraftEvening 으로 옮겨 심는다. 21-04 가 끝나면 옮겨 심기는 필요 없다.
- */
-export async function eveningRowsOf(code: string): Promise<Map<number, Record<string, unknown>>> {
-  const players = ((await storedRoom(code)) as unknown as { players: Array<{ seat: number; errandPlaces?: unknown; errandDone?: unknown; errandSeen?: unknown }> }).players;
-  return new Map(
-    players.map((p) => [
-      p.seat,
-      { errandPlaces: p.errandPlaces, errandDone: p.errandDone, ...(p.errandSeen === undefined ? {} : { errandSeen: p.errandSeen }) },
-    ]),
-  );
-}
-
-/**
- * eveningRowsOf 로 읽어 둔 저녁 값을 지금(토론) 저장된 방에 좌석별로 다시 심고, 모든 소켓이 새 state 를 받게 한다 —
- * 산 사람 소켓 talker 가 토론 끝내기를 한 번 켰다 끈다(저장된 값은 그대로 돌아온다). socks 는 살아 있는(연결된) 소켓 전부.
- */
-export async function regraftEvening(code: string, evening: Map<number, Record<string, unknown>>, socks: TestSocket[], talker: TestSocket): Promise<void> {
-  await writeRoomEdit(env.ROOM.getByName(code), (room) => ({
-    ...room,
-    players: (room.players as Array<{ seat: number }>).map((p) => ({ ...p, ...(evening.get(p.seat) ?? {}) })),
-  }));
-  for (const on of [true, false]) {
-    send(talker, { t: "endDiscussion", on });
-    for (const s of socks) await settle(s, mark(s));
-  }
-}
-
-/**
  * editRoom 의 쓰기 절반(evict 없음): 저장소와 살아 있는 인스턴스의 메모리 사본(private room)을 같은 값으로 고친다.
  * 12-03: 저장소만 고치면 evict 가 끝나기 전에 봇 알람(runDueBots 는 때가 된 단계마다 메모리 방을 통째로 저장한다)이 낡은 메모리 방으로
  * 방금 고친 값을 덮어써, 손으로 정한 표가 사라지고 판이 끝나지 않는 간헐 실패가 났다. 메모리도 함께 고쳐 두면 그 저장이 고친 값을 그대로 쓴다.

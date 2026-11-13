@@ -19,7 +19,6 @@ import {
   actorsOf,
   advanceTo,
   connect,
-  eveningRowsOf,
   flushWorld,
   ghostsOf,
   lastViewOf,
@@ -29,7 +28,6 @@ import {
   observe,
   pause,
   pickAs,
-  regraftEvening,
   seat,
   send,
   settle,
@@ -370,7 +368,6 @@ describe("③ 목격 기록 — 3곳을 마친 산 본인에게만 (D-04, T-15-2
         p.seat === a.seat ? { ...p, errandPlaces: ["glass", "piano", "sax"], errandDone: ["glass", "piano", "sax"] } : p.seat === b.seat ? { ...p, errandPlaces: ["glass", "piano", "sax"], errandDone: ["glass", "piano"] } : p,
       ),
     }));
-    const evening = await eveningRowsOf(g.code);
     // errand 단계 view 에는 아직 record 가 없다.
     expect(`${a.role}:${"record" in lastViewOf(a.sock).me}`).toBe(`${a.role}:false`);
     await ghostsOf(g, [ghost.seat]);
@@ -379,9 +376,6 @@ describe("③ 목격 기록 — 3곳을 마친 산 본인에게만 (D-04, T-15-2
     // 같은 토큰으로 다시 연결하면 옛 소켓은 닫힌다 — 이후 단계 전환은 살아 있는 소켓(유령은 새 소켓)으로만 기다린다.
     const live = [...g.actors.filter((x) => x !== ghost).map((x) => x.sock), ghostSock];
     await advanceTo(g.code, live, "discussion");
-    // 21페이즈: 밤 진입이 저녁의 목록·진행·목격 줄을 지운다(21-04 가 토론까지 남기도록 바꾼다). 그때까지 저녁에 쌓인 값을 토론 상태에 옮겨 심고 모든 소켓이 새 state 를 받게 한다 —
-    // 이 시험이 보는 것은 토론 view 의 me.record 구조·비공개 경계이고 그 규칙은 그대로다(규칙 다).
-    await regraftEvening(g.code, evening, live, g.actors.find((x) => x !== ghost && x !== a)!.sock);
     return { g, a, b, ghost, ghostSock, marks, live };
   }
 

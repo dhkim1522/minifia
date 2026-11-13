@@ -47,16 +47,17 @@ function stateOf(phase: PhaseId, n: number, seed: number): RoomState {
     return patch(s, (p) => ({ ...p, errandDone: (p.errandPlaces ?? []).slice(0, p.seat % 3) }));
   }
   if (phase === "discussion") {
-    // 짝수 좌석은 3곳을 마쳤고 줄이 있다 · 홀수 좌석은 못 마쳤다. 시험이 서버 상태에 직접 쓴다.
-    // 21페이즈: 확장판은 저녁(errand) → 밤 → 토론이라 밤 진입이 저녁 목록을 지운다 — 저녁에 배정된 목록을 토론 상태에 직접 옮겨 심는다(규칙 다).
-    const s = startedAt(n, seed, "discussion");
-    const dealt = new Map(startedAt(n, seed, "errand").players.map((q) => [q.id, q.errandPlaces ?? []] as const));
-    return patch(s, (p) => {
-      const places = dealt.get(p.id) ?? [];
+    // 짝수 좌석은 3곳을 마쳤고 줄이 있다 · 홀수 좌석은 못 마쳤다. 시험이 저녁(errand) 상태에 직접 쓰고 실제 흐름(밤 → 토론)으로 넘긴다.
+    // 21페이즈 D-09: 확장판은 저녁 → 밤 → 토론이고 저녁 목록·진행·목격 줄이 토론까지 남는다 — 선택이 없는 밤은 아침 없이 토론으로 간다.
+    let s = patch(startedAt(n, seed, "errand"), (p) => {
+      const places = p.errandPlaces ?? [];
       return p.seat % 2 === 0
-        ? { ...p, errandPlaces: [...places], errandDone: [...places], errandSeen: [{ seat: (p.seat + 1) % n, place: FIVE_PLACES[p.seat % 3]! }] }
-        : { ...p, errandPlaces: [...places], errandDone: places.slice(0, 2) };
+        ? { ...p, errandDone: [...places], errandSeen: [{ seat: (p.seat + 1) % n, place: FIVE_PLACES[p.seat % 3]! }] }
+        : { ...p, errandDone: places.slice(0, 2) };
     });
+    for (let i = 0; i < 4 && s.phase !== "discussion"; i += 1) s = tick(s, s.phaseEndsAt!, seededRandInt(seed));
+    if (s.phase !== "discussion") throw new Error(`discussion 에 닿지 못했다: ${s.phase}`);
+    return s;
   }
   let s = startedAt(n, seed, "night");
   const living = s.players.filter(isAlive).sort((a, b) => a.seat - b.seat);
