@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: 8
+current_plan: 9
 status: executing
-stopped_at: Completed 20-06-PLAN.md
-last_updated: "2026-11-13T01:50:21.813Z"
+stopped_at: Completed 20-08-PLAN.md
+last_updated: "2026-11-13T02:20:48.037Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: 5146f33a30a6620f0635887ebbe0d1e465b880e5
+state_head: cb13d9ff638e15760d941a5cc22f5a34e917f3ca
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 97
-  completed_plans: 94
+  completed_plans: 95
   percent: 50
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 20 (map-expansion) — EXECUTING
-Current Plan: 8
+Current Plan: 9
 Total Plans in Phase: 10
 Status: Ready to execute
-Last activity: 2026-11-13 — 20-06 완료 (문 사라짐·나타남 0.2초 불투명도 연출·벽 뒤 남의 이름표 숨김·지붕/집/열린 방 뒷벽 누르기 목적지(문 앞에서 다시 누르면 방 안), __mfTown.door·veiled. 전체 unit+client 7937 통과 · 실패 0, 로컬 화면 확인). 20 페이즈 7/10 (다음 20-08)
+Last activity: 2026-11-13 — 20-08 완료 (마을 E2E 흐름 다섯 town-walk 폰 6종·town-room·town-sight·town-ghost·town-reduced 와 판정 townChecks TM1~TM10, 영향 흐름 아홉 390x844 회귀 모두 통과, 앱 수정 없음). 20 페이즈 8/10 (다음 20-09)
 
 ## Performance Metrics
 
@@ -290,6 +290,7 @@ Last activity: 2026-11-13 — 20-06 완료 (문 사라짐·나타남 0.2초 불�
 | Phase 20 P04 | 20min | 2 tasks | 7 files |
 | Phase 20 P07 | 17min | 2 tasks | 12 files |
 | Phase 20 P05 | 20min | 2 tasks | 14 files |
+| Phase 20 P08 | 1.5h | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -646,6 +647,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 20]: 20-04: 남은 것 — 렌더러 연결·언제 걷을지·카메라 한계 확정(panBoxOf·plateFarOf 는 시작값)·화면에서 간판 읽힘 확인은 20-05. 매 프레임 scene.update 를 불러야 걷힌다. 장면을 새로 만든 뒤에는 setCutaway(…, true)·setOwners 를 다시 부른다
 - [Phase 20]: 20-07: 방장 줄의 [맵] 단추와 꾸미기 시트의 맵 탭은 기본 마피아 판에만 있다(mapsOn = 허용 맵 둘 이상 && modeOf(view) === "basic") — 확장판은 늘 마을이라 고를 것이 없다. view.mapChoice 는 남아 기본 마피아로 되돌리면 그대로 다시 나타난다. E2E 는 hostRailChecks 의 mapsOn 을 railMapsOn(허용 맵 둘 이상, 서버 view.mode)으로 넘기고, 맵을 고르기 전에 pickModeViaUi(…, "basic") 을 부른다(perf-run --map bar|plaza 는 20-09)
 - [Phase 20]: 20-05: 마을 카메라 값(PAN ±9.6·연장 판 22)은 20-04 시작값이 가시성·빈 배경 검사의 가장 작은 값과 같아 그대로 확정. 컷어웨이는 내 그려진 위치의 zoneOf 로 바뀔 때만 보내고(처음·recreate 뒤·모션 줄이기 instant), 몸이 그려지기 전에는 보내지 않는다. 남은 것 — veiled·door 훅과 문 연출·벽 뒤 이름표·지붕 누르기는 20-06
+- [Phase 20]: 20-08: TM5(문 연출)는 seats() 가 서버 프레임으로 빠지므로 「같은 프레임 안 연출 시작 + 길이 0.2초쯤」으로 판정한다. 마을 E2E 는 지붕 두 번 누르기(문 앞 링 → 방 안)로 방에 들어간다
 
 ### Pending Todos
 
@@ -717,8 +719,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T01:50:21.013Z
-Stopped at: Completed 20-06-PLAN.md
+Last session: 2026-11-13T02:20:47.143Z
+Stopped at: Completed 20-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
