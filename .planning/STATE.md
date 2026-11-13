@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: "8 완료 → 다음 21-09 (마을 3D: 가로등·켜진 등불 빛·집 창·현장 decal·조명)"
+current_plan: "9 완료 → 다음 21-10 (단계 조명·시간대·카메라: 저녁 노을·확장판 밤 같은 조명·고정 시점)"
 status: executing
-stopped_at: Completed 21-08-PLAN.md
-last_updated: "2026-11-13T08:32:23.097Z"
+stopped_at: Completed 21-09-PLAN.md
+last_updated: "2026-11-13T08:48:30.213Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 21 plan 08 완료 (아이콘 넷·확장판 자막 띠 키와 문장·헤더 제목·확장판 마피아 카드 한 줄·화면 계산 모듈 causalView)
-state_head: 46ddfe0c3505e0486a3d4915a06054df2cdf5b1c
+state_head: bf4c3feb56003ffc808c362346c3939889bab55b
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 115
-  completed_plans: 105
+  completed_plans: 106
   percent: 60
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 21 (cause-effect-missions) — IN PROGRESS
-Current Plan: 8 완료 → 다음 21-09 (마을 3D: 가로등·켜진 등불 빛·집 창·현장 decal·조명)
+Current Plan: 9 완료 → 다음 21-10 (단계 조명·시간대·카메라: 저녁 노을·확장판 밤 같은 조명·고정 시점)
 Total Plans in Phase: 18
 Status: Executing Phase 21
 Last activity: 2026-11-13 — 21-08 완료 (V2Icon flame·footprint·cloth·window, 자막 띠 night.house·scene.*·discussion.clue 와 심부름 문장 갱신, 헤더 제목 등불 켜기·현장 조사, roleHintOf 카드·시트 한 줄, causalView 계산 모듈. npm test 8779 통과·실패 0, typecheck 초록). 이전: 21-07 완료 (확장판 아침이 공개 흔적 morning.trace·seen·day.evidence 를 싣지 않고 옷 조각은 현장 ② 를 살핀 본인 me.clues 로만, 현장 난수가 첫 호출. 마을 한 판 누설 전수 causalLeak 판정 여섯·변이 확인, 화면 코드 정적 검사 srcClean, 봇 판 완주. npm test 8729 통과·실패 0, typecheck 초록). 이전: 21-06 완료
@@ -295,6 +295,7 @@ Last activity: 2026-11-13 — 21-08 완료 (V2Icon flame·footprint·cloth·wind
 | Phase 21 P04 | 약 1시간 | 2 tasks | 17 files |
 | Phase 21 P05 | 80min | 2 tasks | 19 files |
 | Phase 21 P07 | 90min | 3 tasks | 15 files |
+| Phase 21 P09 | 70분 | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -656,6 +657,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 20]: 마을 맵(광장 + 실내 방 넷 + 집 여덟)은 확장판 전용으로 배포, 결정 0087 에 D-01~D-23·위임 기본값·한계 기록
 - [Phase 21]: 21-05: 건너뛰기는 확장판(심부름 있는 판)에서만 받는다 — 기본 마피아 아침은 WRONG_PHASE
 - [Phase 21]: 21-05: 마피아 봇은 첫 장소 처리 한 번만 hold 로 심지를 자른다(사람과 같은 메시지·본체)
+- [Phase 21]: 21-09: 빛 웅덩이·decal 은 자갈 윗면(0.08) 위(0.12·0.1)에 둔다 — UI-SPEC 0.03·0.02 는 자갈에 가려진다
+- [Phase 21]: 21-09: 등불·현장 값은 SceneLook.town(마을+확장판에서만)으로 런타임에 건넨다 — townLampsOf·townClueOf 는 presence.ts
 
 ### Pending Todos
 
@@ -727,8 +730,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T08:32:22.129Z
-Stopped at: Completed 21-08-PLAN.md
+Last session: 2026-11-13T08:48:29.221Z
+Stopped at: Completed 21-09-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
