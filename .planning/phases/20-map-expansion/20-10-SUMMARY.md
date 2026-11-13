@@ -3,6 +3,7 @@
 ## 진행
 
 - [x] 단계 1 로컬 검증: npm test 8,569개 통과(건너뜀 262, 실패 0)·node --test 689 통과·E2E 전 흐름 폰 6종 회귀 통과(알려진 perfbudget B2·M1 3건 제외, 간헐 2건은 단독 재실행 통과)·위생 통과
+- [x] 단계 2 배포: `2026-11-12T16:47:00Z+71a10fc8` → `2026-11-13T03:30:33Z+07d6afee` · 범위 diff 28개 · 개인 계정 확인 · smoke full 통과
 
 ## 로컬 검증 숫자 (단계 1)
 
@@ -38,5 +39,17 @@
 - 알려진 기존 한계(360x560 방장 대기실 접힌 줄과 위 알림 겹침)는 판정이 참고 줄로만 남겨 실패로 세지 않았다.
 - 앱 결함으로 확인된 것은 없어 `fix(20-10)` 커밋은 없다. 20-01~20-09 가 넘긴 '앱 결함'도 없었다.
 - 내가 띄운 개발 서버는 없다(이미 떠 있던 것을 그대로 썼고 끄지 않았다).
+
+## 배포 (단계 2)
+
+- **개인 계정 확인**(`node scripts/check-account.mjs` 종료 0, 계정 식별자는 적지 않는다). `npm run deploy`(계정 가드·배포 대상 가드 우회 없음, 대상 minifia-v3)가 종료 0 으로 끝났다.
+- **배포 전 health version**: minifia-v3 `2026-11-12T16:47:00Z+71a10fc8` · minifia `2026-10-29T14:52:03Z+cb6979c` · minifia-v2 `2026-11-06T13:49:18Z+e51942c6`
+- **배포 뒤 health version**: minifia-v3 `2026-11-13T03:30:33Z+07d6afee`(배포 전과 다름, 배포 때 HEAD 커밋 `07d6afee` = 이 계획의 단계 1 커밋). minifia·minifia-v2 는 위 값 그대로다.
+- **배포 범위 diff**(`git diff --name-only 71a10fc8..HEAD -- src shared worker public index.html wrangler.jsonc package.json package-lock.json`, 28개 — 서버(worker·shared) 포함이 이 페이즈의 의도다):
+  - worker(1): `worker/room.ts`
+  - shared(8): `shared/game/errand.ts`·`map.ts`·`mapTown.ts`·`maps.ts`·`room.ts`·`world.ts`·`zones.ts`, `shared/protocol.ts`
+  - src(19): `src/components/WorldStage.tsx`·`v2/DressSheet.tsx`, `src/debug/perf/perfScene.ts`·`scenario.ts`, `src/game/tutorialScript.ts`, `src/screens/Lobby.tsx`·`ResultScreen.tsx`, `src/world/camera.ts`·`cutaway.ts`·`maps/plaza.ts`·`maps/town.ts`·`maps/types.ts`·`palette.ts`·`presence.ts`·`renderer.ts`·`runtime.ts`·`store.ts`·`testHooks.ts`·`threeRenderer.ts`
+  - 패키지·설정·public·index.html 은 바뀌지 않았다. 저장된 진행 중 방은 `state.map` 이 정해져 있어 그 판은 그 맵으로 끝나고, 구역 기억이 없는 저장 world 는 알림 없이 지금 위치로 맞춰진다(20-02). 새로 시작하는 확장판부터 마을이다.
+- **smoke full 1회**(`SMOKE_STACK=1 node scripts/smoke.mjs --prod --stage full --players 5 --previous-version <배포 전 version>`, 출력은 작업 트리 밖 임시 파일): **통과**(`SMOKE OK full players=5`, 서버 시각 편차 0ms/0ms, 도착 편차 600ms/775ms). 확장판 낮 심부름 단계(산 5명이 같은 마감 40초·장소 3곳)·처형·밤·재접속 복원·승패(시민 승, 2일차)까지 한 판을 돌았다. 한도 초과(500/1101)는 없었다. 배포본 대상 E2E 는 돌리지 않았다(결정 0076).
 
 <!-- gsd:write-continue -->
