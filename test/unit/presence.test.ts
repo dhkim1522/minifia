@@ -23,6 +23,8 @@ import {
   STAGE_TOP_R,
   stageLiftY,
   tensionOf,
+  townClueOf,
+  townLampsOf,
   visibleSeats,
 } from "../../src/world/presence";
 import type { SeatLook } from "../../src/world/presence";
@@ -730,5 +732,45 @@ describe("기본판 투표 선두·과반 (U-4)", () => {
   it("cameraModeOf: day.turn 이 있으면 과반이어도 확대 1", () => {
     const v = viewOf("nomination", { day: { turn: { order: [0, 1, 2, 3, 4], i: 3, endsAt: 9000 }, points: points([0, 2], [1, 2], [3, 2]) } });
     same(cameraModeOf(v, 600), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
+  });
+});
+
+describe("마을 등불·현장 값 townLampsOf·townClueOf (21-09, D-06·D-13·D-26)", () => {
+  const town = (phase: PhaseId, day: Partial<DayView> = {}, over: Partial<RoomView> = {}): RoomView => ({ ...viewOf(phase, { day }), map: "town", mode: "extended", ...over });
+
+  it("저녁·밤·아침은 서버가 준 day.lamps 그대로다(오름차순, 모두에게 같은 값). 키가 없으면 빈 배열", () => {
+    same(townLampsOf(town("errand", { lamps: [1, 3] })), [1, 3]);
+    same(townLampsOf(town("night", { lamps: [1] })), [1]);
+    same(townLampsOf(town("morning", { lamps: [0, 2, 7] })), [0, 2, 7]);
+    same(townLampsOf(town("errand")), []);
+  });
+
+  it("그 밖의 단계(토론·지목·변론·처형·로비)는 키가 있어도 빈 배열이다 — 낮 화면은 등불을 끈다", () => {
+    for (const phase of ["discussion", "nomination", "defense", "execution", "dayAnnounce", "lobby"] as const) same(townLampsOf(town(phase, { lamps: [1, 2] })), []);
+  });
+
+  it("기본 마피아(basic)는 키가 와도 빈 배열이고 현장도 없다", () => {
+    same(townLampsOf(town("errand", { lamps: [1] }, { mode: "basic" })), []);
+    expect(townClueOf(town("morning", { scene: { house: 2 } }, { mode: "basic" }))).toBeNull();
+  });
+
+  it("현장은 아침에 day.scene 이 있을 때만 그 집 좌석이고 아니면 null 이다(구출된 밤도 같다 — 집만 싣는다)", () => {
+    expect(townClueOf(town("morning", { scene: { house: 2 } }))).toBe(2);
+    expect(townClueOf(town("morning", { scene: { house: 0 } }))).toBe(0);
+    expect(townClueOf(town("morning"))).toBeNull();
+    expect(townClueOf(town("discussion", { scene: { house: 2 } }))).toBeNull();
+    expect(townClueOf(town("night", { scene: { house: 2 } }))).toBeNull();
+  });
+
+  it("sceneLook.town 은 마을 + 확장판일 때만 있고, 마피아와 시민이 같은 값을 받는다(역할을 읽지 않는다)", () => {
+    const mafia = { ...town("morning", { lamps: [1, 4], scene: { house: 4 } }), me: { seat: 0, isHost: false, role: "mafia" as RoleId } };
+    const citizen = { ...town("morning", { lamps: [1, 4], scene: { house: 4 } }), me: { seat: 1, isHost: false, role: "citizen" as RoleId } };
+    const a = sceneLook(mafia, { stageH: 400 }).town;
+    const b = sceneLook(citizen, { stageH: 400 }).town;
+    same(a, { lamps: [1, 4], clue: 4 });
+    same(b, a);
+    expect("town" in sceneLook({ ...mafia, map: "bar" }, { stageH: 400 })).toBe(false);
+    expect("town" in sceneLook({ ...mafia, mode: "basic" }, { stageH: 400 })).toBe(false);
+    expect("town" in sceneLook(viewOf("morning"), { stageH: 400 })).toBe(false);
   });
 });

@@ -45,6 +45,9 @@ export interface FakeRenderer extends WorldRenderer {
   /** 마을 컷어웨이·집 주인(20-05): 부른 인자를 기록한다. 재즈 바·광장에서는 한 번도 불리지 않아야 한다 */
   setCutaway: Mock<(open: ReadonlySet<RoomId>, instant: boolean) => void>;
   setOwners: Mock<(seats: readonly number[]) => void>;
+  /** 켜진 당번 가로등·아침 현장 decal(21-09): 부른 인자를 기록한다. 마을 확장판 장면에서만 불려야 한다 */
+  setLamps: Mock<(lit: readonly number[], instant: boolean) => void>;
+  setClue: Mock<(house: number | null, instant: boolean) => void>;
   roofs: Mock<() => Record<RoomId, number>>;
   /** 화면 점의 카메라 광선(마을 건물 누르기, 20-06). 기본은 그 점 바로 위에서 수직으로 내리는 광선 — 시험이 mockReturnValue 로 바꾼다 */
   rayAt: Mock<(sx: number, sy: number) => { origin: { x: number; y: number; z: number }; dir: { x: number; y: number; z: number } }>;
@@ -80,6 +83,8 @@ export function makeFakeRenderer(): FakeRenderer {
     setSelfLight: vi.fn(),
     setCutaway: vi.fn(),
     setOwners: vi.fn(),
+    setLamps: vi.fn(),
+    setClue: vi.fn(),
     roofs: vi.fn(() => ({ post: 1, pub: 1, clinic: 1, police: 1 })),
     rayAt: vi.fn((sx: number, sy: number) => {
       const g = r.groundAt(sx, sy);
@@ -2137,7 +2142,7 @@ describe("마을 컷어웨이·집 주인·__mfTown (20-05, D-07·D-10·D-11)", 
     const r = s.world.renderers[0]!;
     r.roofs.mockReturnValue({ post: 0.3333333, pub: 1, clinic: 1, police: 1 });
     frames(50);
-    expect(window.__mfTown).toEqual({ zone: "post", open: ["post"], roofs: { post: 0.33, pub: 1, clinic: 1, police: 1 }, owners: [0, 1], veiled: [], door: [] });
+    expect(window.__mfTown).toEqual({ zone: "post", open: ["post"], roofs: { post: 0.33, pub: 1, clinic: 1, police: 1 }, owners: [0, 1], veiled: [], door: [], lamps: [], windows: [0, 1], clue: false });
     s.utils.unmount();
     expect(window.__mfTown).toBeUndefined();
   });
@@ -2149,6 +2154,107 @@ describe("마을 컷어웨이·집 주인·__mfTown (20-05, D-07·D-10·D-11)", 
     vi.stubEnv("DEV", false);
     await open({ view: townView() }, { ents: IN_POST() });
     expect(window.__mfTown).toBeUndefined();
+  });
+});
+
+// ---------- 마을 등불·현장 (21-09) ----------
+
+describe("마을 등불·현장 런타임 연결 (21-09, D-24·D-26, LH14)", () => {
+  const townView = (players: PublicPlayer[] = TWO): RoomView => ({ ...makeView(players, 0), map: "town" });
+  const ENTS = (): WorldSeg[] => [seg(0, [0, 0]), seg(1, [-300, 50])];
+  const town = (lamps: number[], clue: number | null = null, lighting: LightingPhase = "talk"): SceneLook => sceneOf({ 0: {}, 1: {} }, { lighting, town: { lamps, clue } });
+
+  it("첫 그리기는 instant true 로 한 번 보낸다. 같은 값의 다음 프레임·view 는 부르지 않고, 값이 바뀌면 instant false 로 보낸다", async () => {
+    const s = await open({ view: townView(), scene: town([1]) }, { ents: ENTS() });
+    const r = s.world.renderers[0]!;
+    expect(r.setLamps).toHaveBeenCalledTimes(1);
+    expect(r.setLamps).toHaveBeenLastCalledWith([1], true);
+    frames(100);
+    s.rerender({ scene: town([1]) });
+    frame();
+    expect(r.setLamps).toHaveBeenCalledTimes(1);
+    s.rerender({ scene: town([]) });
+    frame();
+    expect(r.setLamps).toHaveBeenCalledTimes(2);
+    expect(r.setLamps).toHaveBeenLastCalledWith([], false);
+    s.rerender({ scene: town([2, 5]) });
+    frame();
+    expect(r.setLamps).toHaveBeenLastCalledWith([2, 5], false);
+  });
+
+  it("현장은 바뀔 때만 보낸다: 처음 null(instant) → 아침 집 2 → 다음 단계 null, 모두 instant false 로", async () => {
+    const s = await open({ view: townView(), scene: town([]) }, { ents: ENTS() });
+    const r = s.world.renderers[0]!;
+    expect(r.setClue).toHaveBeenCalledTimes(1);
+    expect(r.setClue).toHaveBeenLastCalledWith(null, true);
+    s.rerender({ scene: town([1], 2) });
+    frame();
+    expect(r.setClue).toHaveBeenCalledTimes(2);
+    expect(r.setClue).toHaveBeenLastCalledWith(2, false);
+    frames(60);
+    expect(r.setClue).toHaveBeenCalledTimes(2);
+    s.rerender({ scene: town([], null) });
+    frame();
+    expect(r.setClue).toHaveBeenCalledTimes(3);
+    expect(r.setClue).toHaveBeenLastCalledWith(null, false);
+  });
+
+  it("모션 줄이기면 바뀔 때도 instant true 다", async () => {
+    stubReducedMotion(true);
+    const s = await open({ view: townView(), scene: town([1]) }, { ents: ENTS() });
+    const r = s.world.renderers[0]!;
+    s.rerender({ scene: town([], 2) });
+    frame();
+    expect(r.setLamps).toHaveBeenLastCalledWith([], true);
+    expect(r.setClue).toHaveBeenLastCalledWith(2, true);
+  });
+
+  it("컨텍스트 복구(recreated) 뒤 첫 프레임은 지금 값을 instant true 로 한 번 더 보낸다", async () => {
+    const s = await open({ view: townView(), scene: town([3], 1) }, { ents: ENTS() });
+    const r = s.world.renderers[0]!;
+    r.emit({ t: "recreated" });
+    frame();
+    expect(r.setLamps).toHaveBeenCalledTimes(2);
+    expect(r.setLamps).toHaveBeenLastCalledWith([3], true);
+    expect(r.setClue).toHaveBeenCalledTimes(2);
+    expect(r.setClue).toHaveBeenLastCalledWith(1, true);
+  });
+
+  it("scene.town 이 없는 마을 판(기본 마피아·로비)·scene 이 없는 마을·재즈 바·광장에서는 한 번도 부르지 않는다", async () => {
+    const basic = await open({ view: townView(), scene: sceneOf({ 0: {}, 1: {} }) }, { ents: ENTS() });
+    frames(60);
+    expect(basic.world.renderers[0]!.setLamps).not.toHaveBeenCalled();
+    expect(basic.world.renderers[0]!.setClue).not.toHaveBeenCalled();
+    cleanup();
+    const lobby = await open({ view: townView() }, { ents: ENTS() });
+    expect(lobby.world.renderers[0]!.setLamps).not.toHaveBeenCalled();
+    cleanup();
+    for (const map of ["bar", "plaza"] as const) {
+      const other = await open({ view: { ...makeView(TWO, 0), map }, scene: town([1], 2) }, { ents: ENTS() });
+      frames(60);
+      expect(other.world.renderers[0]!.setLamps, map).not.toHaveBeenCalled();
+      expect(other.world.renderers[0]!.setClue, map).not.toHaveBeenCalled();
+      cleanup();
+    }
+  });
+
+  it("window.__mfTown: lamps = 지금 장면에 넘긴 등불, windows = 주인 ∩ lamps, clue = decal 보임. 확장판이 아니면 lamps [] · windows = 주인 · clue false", async () => {
+    const players = [player(0, "민지"), player(1, "철수"), player(3, "바다")];
+    const s = await open({ view: townView(players), scene: town([1, 2, 3]) }, { players, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(3, [400, -200])] });
+    frames(5);
+    expect(window.__mfTown).toMatchObject({ lamps: [1, 2, 3], windows: [1, 3], clue: false, owners: [0, 1, 3] });
+    s.rerender({ scene: town([0], 3) });
+    frames(5);
+    expect(window.__mfTown).toMatchObject({ lamps: [0], windows: [0], clue: true });
+    s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 3: {} }) });
+    frames(5);
+    // 확장판 값이 사라져도 마지막으로 보낸 값이 남는다(장면은 값을 바꾸지 않았다)
+    expect(window.__mfTown).toMatchObject({ lamps: [0], windows: [0], clue: true });
+    cleanup();
+    const basic = await open({ view: townView(players), scene: sceneOf({ 0: {}, 1: {}, 3: {} }) }, { players, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(3, [400, -200])] });
+    frames(5);
+    expect(window.__mfTown).toMatchObject({ lamps: [], windows: [0, 1, 3], clue: false });
+    void basic;
   });
 });
 
