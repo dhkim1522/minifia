@@ -9,7 +9,7 @@ import type { PlaceId, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
-// 15-05·16-07·16-08: errand 단계의 맵 화면(진행 점·시작 카드·장소 타일·장소 위 [처리] 알약 전송·빛남·유령·역할 무관). WorldStage 는 받은 props 만 쥐는 가짜(gameMap.test 와 같은 틀) —
+// 15-05·16-07·16-08·21-11: errand 단계의 맵 화면(독의 [켜기]·[건너뛰기]·진행 점·시작 카드·장소 타일·빛남·유령·역할 무관). 판 종류가 없는 view 는 확장판이라 저녁은 독이 있고 장소 위 [처리] 알약은 없다(21-11). WorldStage 는 받은 props 만 쥐는 가짜(gameMap.test 와 같은 틀) —
 // 표지·링·투영은 worldStage.test 가 진짜 런타임으로 본다. 나머지(GameMap·GamePanel 분기·ErrandDots·ErrandStartCard)는 진짜.
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("../../src/net/useRoomConnection", () => ({
@@ -42,6 +42,10 @@ interface Opts {
   role?: RoleId;
   dead?: boolean;
   noList?: boolean;
+  /** 서버가 센 건너뛰기 누른 수(day.skipCount) */
+  skipCount?: number;
+  /** 내가 건너뛰기를 눌렀다(me.skipPhase) */
+  skipMine?: boolean;
 }
 
 function makeView(o: Opts = {}): RoomView {
@@ -68,8 +72,9 @@ function makeView(o: Opts = {}): RoomView {
       chat: o.dead === true ? "ghost" : "all",
       ...(o.role !== undefined ? { role: o.role } : {}),
       ...(o.dead === true || o.noList === true ? {} : { errand: { places: [...LIST], done: [...(o.done ?? [])] } }),
+      ...(o.skipMine === true ? { skipPhase: true as const } : {}),
     },
-    day: { n: 1, roles: [] },
+    day: { n: 1, roles: [], ...(o.skipCount !== undefined ? { skipCount: o.skipCount } : {}) },
   };
 }
 
@@ -111,38 +116,55 @@ function standAt(x: number, z: number): void {
 }
 const FAR = { x: 5.2, z: 5.0 }; // 어느 장소와도 1.2 보다 멀다(door 근처, 내 목록 밖)
 
-/** 장소 위 [처리] 알약은 WorldStage 층이 그린다(여기 WorldStage 는 가짜) — GameMap 은 actId·onAct 만 넘긴다 */
+/** 독의 [켜기](21-11): 장소 위 [처리] 알약 대신 독 안 단추 하나가 data-errand-act 를 가진다(WorldStage 는 가짜 — 알약은 어차피 그리지 않는다) */
 const act$ = (c: ParentNode) => c.querySelector<HTMLElement>("[data-errand-act]");
+const dock$ = (c: ParentNode) => c.querySelector<HTMLElement>("[data-scene-dock]");
+const skip$ = (c: ParentNode) => c.querySelector<HTMLElement>("[data-skip-phase]");
 const actId = (): string | null => stage.props!.errand!.actId;
-/** [처리] 알약을 누른다 */
+/** [켜기] 를 짧게 누른다(손가락 뗌) */
 const pressAct = (): void => {
-  act(() => stage.props!.errand!.onAct?.());
+  const b = act$(document)!;
+  fireEvent.pointerDown(b);
+  fireEvent.pointerUp(b);
 };
 const taps = (): { off: () => void; count: () => number } => {
   const got: LocalSignal[] = [];
   const off = bindSignals((sig) => got.push(sig));
   return { off, count: () => got.filter((g) => g.kind === "tap").length };
 };
+const advance = (ms: number): void => {
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+};
 const dots = (c: ParentNode) => c.querySelector<HTMLElement>("[data-errand-dots]");
 const card = (c: ParentNode) => c.querySelector<HTMLElement>("[data-errand-start-card]");
 
-describe("errand 화면: 아래 패널 없음·진행 점 (D-06, V-23, ERRAND-07)", () => {
-  it("산 사람(역할 무관): 아래 패널 section 이 없고 독·칩도 없다, 진행 점 줄 하나·점 3·진행 0/3, 채팅 입력·[토론 끝내기]·유언·[처리] 는 없다", () => {
+describe("errand 화면: 저녁 독·진행 점 (D-05·D-24, P21-1·P21-5·P21-7)", () => {
+  it("산 사람(역할 무관): 독 하나(기록 두 줄·입력줄 없음)·진행 점 줄 하나·점 3·'등불 0/3', [켜기] 단추(data-errand-act)는 독 안에 하나, [처리] 알약·토론 끝내기·유언은 없다", () => {
     for (const role of ["mafia", "citizen"] as const) {
       const { container, unmount } = mount(makeView({ role }));
-      expect(container.querySelector("section[data-world-panel]")).toBeNull();
-      expect(container.querySelector(".mf-game__panel")).toBeNull();
+      expect(container.querySelectorAll("[data-scene-dock]")).toHaveLength(1);
+      expect(dock$(container)!.classList.contains("mf-game__panel")).toBe(true);
+      expect(dock$(container)!.querySelector("[data-chat-log]")).not.toBeNull();
       expect(container.querySelectorAll("[data-errand-dock], [data-errand-chip]")).toHaveLength(0);
       expect(container.querySelectorAll("[data-errand-dots]")).toHaveLength(1);
       expect(container.querySelectorAll("[data-errand-dot]")).toHaveLength(3);
       expect(dots(container)!.getAttribute("data-errand-progress")).toBe("0/3");
-      expect(dots(container)!.getAttribute("aria-label")).toBe("진행 0/3");
-      expect(container.querySelectorAll("[data-errand-act]")).toHaveLength(0);
+      expect(dots(container)!.getAttribute("aria-label")).toBe("등불 0/3");
+      expect(container.querySelectorAll("[data-errand-act]")).toHaveLength(1);
+      expect(dock$(container)!.contains(act$(container))).toBe(true);
+      expect(container.querySelector(".mv-errand-act")).toBeNull();
       expect(container.querySelector("[data-chat-input]")).toBeNull();
       expect(container.querySelector("[data-end-discussion]")).toBeNull();
       expect(container.querySelector("[data-will-button]")).toBeNull();
       unmount();
     }
+  });
+
+  it("독이 있으니 WorldStage 에 dock 플래그가 간다(장소 위 알약을 그리지 않는다). 독이 없는 유령은 errand prop 이 없다", () => {
+    mount(makeView());
+    expect(stage.props!.errand!.dock).toBe(true);
   });
 
   it("유령(내가 탈락)·목록 없음: 진행 점·시작 카드·패널 모두 없다(채팅 패널도 없다)", () => {
@@ -151,6 +173,9 @@ describe("errand 화면: 아래 패널 없음·진행 점 (D-06, V-23, ERRAND-07
       expect(dots(container)).toBeNull();
       expect(card(container)).toBeNull();
       expect(container.querySelector("section[data-world-panel]")).toBeNull();
+      expect(dock$(container)).toBeNull();
+      expect(skip$(container)).toBeNull();
+      expect(act$(container)).toBeNull();
       expect(container.querySelector("[data-chat-input]")).toBeNull();
       unmount();
     }
@@ -168,17 +193,13 @@ describe("errand 화면: 시작 카드 2초 (D-06, V-19, ERRAND-06)", () => {
   const at = (ms: number): void => {
     vi.useFakeTimers({ now: NOW + ms });
   };
-  const advance = (ms: number): void => {
-    act(() => {
-      vi.advanceTimersByTime(ms);
-    });
-  };
 
   it("단계 시작 1초 뒤 들어오면 카드가 있고(내 장소 3 타일), 2초가 지나면 사라진다 — 진행 점·타일은 그대로", () => {
     at(1_000);
     const { container } = mount(makeView());
     expect(card(container)).not.toBeNull();
     expect(card(container)!.querySelectorAll("[role='img']")).toHaveLength(3);
+    expect(card(container)!.querySelector("h2")!.textContent).toBe("오늘 켤 등불");
     advance(500);
     expect(card(container)).not.toBeNull();
     advance(600);
@@ -250,12 +271,14 @@ describe("errand 화면: 시작 카드 2초 (D-06, V-19, ERRAND-06)", () => {
   });
 });
 
-describe("errand 화면: [처리] 알약 전송 (D-01·D-06, ERRAND-02·03)", () => {
-  it("처리 반경 안 미완료 장소가 있으면 actId 가 그 장소이고 알약을 누르면 { t: 'errand' } 가 한 번, ui.tap 신호가 한 번 간다", () => {
-    const { send } = mount(makeView());
+describe("errand 화면: [켜기] 전송 (D-01·D-06·D-24, P21-5·P21-8)", () => {
+  it("반경 안 미완료 장소가 있으면 [켜기] 가 활성(data-call, aria-disabled 없음)이고 짧게 누르면 { t: 'errand' } 가 한 번, ui.tap 신호가 한 번 간다", () => {
+    const { container, send } = mount(makeView());
     const t = taps();
     standAt(-3.9, -2.2);
     expect(actId()).toBe("glass");
+    expect(act$(container)!.hasAttribute("data-call")).toBe(true);
+    expect(act$(container)!.hasAttribute("aria-disabled")).toBe(false);
     pressAct();
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith({ t: "errand" });
@@ -263,12 +286,28 @@ describe("errand 화면: [처리] 알약 전송 (D-01·D-06, ERRAND-02·03)", ()
     t.off();
   });
 
-  it("반경 밖에서는 actId 가 없고(알약이 DOM 에 없다) 눌러도 보내지 않으며 알림도 소리도 없다", () => {
+  it("0.6초 이상 누르고 떼면 hold 를 실은 { t: 'errand', hold: true } 가 한 번 간다(소리도 한 번)", () => {
+    vi.useFakeTimers({ now: NOW + 5_000 });
+    const { container, send } = mount(makeView());
+    const t = taps();
+    standAt(-3.9, -2.2);
+    const b = act$(container)!;
+    fireEvent.pointerDown(b);
+    advance(700);
+    fireEvent.pointerUp(b);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({ t: "errand", hold: true });
+    expect(t.count()).toBe(1);
+    t.off();
+  });
+
+  it("반경 밖에서는 [켜기] 가 aria-disabled=true·data-call 없음이고 눌러도 보내지 않으며 알림도 소리도 없다(안내 글 없음)", () => {
     const { container, send } = mount(makeView());
     const t = taps();
     standAt(FAR.x, FAR.z);
     expect(actId()).toBeNull();
-    expect(act$(container)).toBeNull();
+    expect(act$(container)!.getAttribute("aria-disabled")).toBe("true");
+    expect(act$(container)!.hasAttribute("data-call")).toBe(false);
     pressAct();
     expect(send).not.toHaveBeenCalled();
     expect(t.count()).toBe(0);
@@ -276,10 +315,11 @@ describe("errand 화면: [처리] 알약 전송 (D-01·D-06, ERRAND-02·03)", ()
     t.off();
   });
 
-  it("이미 처리한 장소 위에서는 알약이 없다", () => {
-    const { send } = mount(makeView({ done: ["glass"] }));
+  it("이미 켠 장소 위에서는 [켜기] 가 비활성이다", () => {
+    const { container, send } = mount(makeView({ done: ["glass"] }));
     standAt(-3.9, -2.2);
     expect(actId()).toBeNull();
+    expect(act$(container)!.getAttribute("aria-disabled")).toBe("true");
     pressAct();
     expect(send).not.toHaveBeenCalled();
   });
@@ -294,7 +334,7 @@ describe("errand 화면: [처리] 알약 전송 (D-01·D-06, ERRAND-02·03)", ()
     t.off();
   });
 
-  it("send 가 false(소켓 닫힘)를 돌려줘도 화면은 그대로다", () => {
+  it("send 가 false(소켓 닫힘)를 돌려줘도 화면은 그대로다(이유 글 없음)", () => {
     const send = vi.fn(() => false);
     const { container } = mount(makeView(), send);
     standAt(-3.9, -2.2);
@@ -305,8 +345,43 @@ describe("errand 화면: [처리] 알약 전송 (D-01·D-06, ERRAND-02·03)", ()
   });
 });
 
+describe("errand 화면: [건너뛰기] (D-23, P21-6)", () => {
+  it("표식 data-skip-phase·data-skip-count 는 서버 값(day.skipCount), 접근성 이름 '건너뛰기 n/m'(m = 산 사람 수)", () => {
+    const { container } = mount(makeView({ skipCount: 2 }));
+    const b = skip$(container)!;
+    expect(b.getAttribute("data-skip-count")).toBe("2");
+    expect(b.getAttribute("aria-label")).toBe("건너뛰기 2/4");
+    expect(b.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("누르면 { t: 'skipPhase', on: true } 를 보내고 눌림이 바로 보이며, 다시 누르면 on:false(해제)", () => {
+    const { container, send } = mount(makeView());
+    fireEvent.click(skip$(container)!);
+    expect(send).toHaveBeenLastCalledWith({ t: "skipPhase", on: true });
+    expect(skip$(container)!.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(skip$(container)!);
+    expect(send).toHaveBeenLastCalledWith({ t: "skipPhase", on: false });
+    expect(skip$(container)!.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("서버가 준 내 눌림(me.skipPhase)이 눌림 모양이고, 새 view 가 오면 서버 값이 이긴다(거절 때 되돌림)", () => {
+    const m = mount(makeView({ skipMine: true, skipCount: 1 }));
+    expect(skip$(m.container)!.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(skip$(m.container)!);
+    expect(skip$(m.container)!.getAttribute("aria-pressed")).toBe("false");
+    m.show(makeView({ skipMine: true, skipCount: 1 }));
+    expect(skip$(m.container)!.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("canSend 가 거짓이면 눌러도 보내지 않는다", () => {
+    const { container, send } = mount(makeView(), vi.fn(() => true), false);
+    fireEvent.click(skip$(container)!);
+    expect(send).not.toHaveBeenCalled();
+  });
+});
+
 describe("errand 화면: 진행 (U-6)", () => {
-  it("view.me.errand.done 이 늘면 점이 채워지고 표지(errand prop)가 done 이 되며 진행 n/3 이 갱신된다, 3/3 이면 알약 없음·점 3 모두 채움", () => {
+  it("view.me.errand.done 이 늘면 점이 채워지고 표지(errand prop)가 done 이 되며 진행 n/3 이 갱신된다, 3/3 이면 [켜기] 는 완료·점 3 모두 채움", () => {
     const m = mount(makeView());
     standAt(FAR.x, FAR.z);
     expect(stage.props!.errand!.places.map((p) => p.done)).toEqual([false, false, false]);
@@ -316,7 +391,10 @@ describe("errand 화면: 진행 (U-6)", () => {
     expect(stage.props!.errand!.places.find((p) => p.id === "glass")!.done).toBe(true);
     m.show(makeView({ done: ["glass", "piano", "sax"] }));
     expect(actId()).toBeNull();
-    expect(act$(m.container)).toBeNull();
+    // 3곳을 다 켜면 [켜기] 자리가 '완료' 비활성이다(21-11)
+    expect(act$(m.container)!.textContent).toBe("완료");
+    expect(act$(m.container)!.getAttribute("aria-disabled")).toBe("true");
+    expect(dots(m.container)!.getAttribute("aria-label")).toBe("등불 3/3");
     expect(dots(m.container)!.getAttribute("data-errand-progress")).toBe("3/3");
     expect(m.container.querySelectorAll("[data-errand-dot][data-done]")).toHaveLength(3);
   });
@@ -356,10 +434,10 @@ describe("errand 화면: WorldStage errand prop (D-02, U-3·U-5)", () => {
 });
 
 describe("errand 화면: 빛남은 한 화면 한 종류 (UI-SPEC 빛남 우선순위)", () => {
-  // 알약(actId)과 가장 가까운 타일(callPlace) 중 하나만 빛난다. 알약·타일의 실제 빛은 WorldStage 층이 쓴다(worldStage.test)
-  const glowCount = (c: ParentNode): number => c.querySelectorAll("[data-call]").length + (stage.props?.errand?.callPlace === true ? 1 : 0) + (stage.props?.errand?.actId != null ? 1 : 0);
+  // 독의 [켜기](반경 안, data-call)와 가장 가까운 타일(callPlace) 중 하나만 빛난다. 타일의 실제 빛은 WorldStage 층이 쓴다(worldStage.test)
+  const glowCount = (c: ParentNode): number => c.querySelectorAll("[data-call]").length + (stage.props?.errand?.callPlace === true ? 1 : 0);
 
-  it("반경 밖: 다음 장소 타일(callPlace)만 빛나고 알약은 없다", () => {
+  it("반경 밖: 다음 장소 타일(callPlace)만 빛나고 [켜기] 는 비활성이다", () => {
     const { container } = mount(makeView());
     standAt(FAR.x, FAR.z);
     expect(stage.props!.errand!.callPlace).toBe(true);
@@ -367,7 +445,7 @@ describe("errand 화면: 빛남은 한 화면 한 종류 (UI-SPEC 빛남 우선�
     expect(glowCount(container)).toBe(1);
   });
 
-  it("반경 안: 알약만 빛나고 타일 빛(callPlace)은 꺼진다", () => {
+  it("반경 안: [켜기] 만 빛나고 타일 빛(callPlace)은 꺼진다", () => {
     const { container } = mount(makeView());
     standAt(-3.9, -2.2);
     expect(stage.props!.errand!.callPlace).toBe(false);
@@ -384,11 +462,12 @@ describe("errand 화면: 빛남은 한 화면 한 종류 (UI-SPEC 빛남 우선�
     expect(glowCount(ghost.container)).toBe(0);
   });
 
-  it("빛은 14페이즈의 '이미 썼는가' 와 무관하다: [처리] 를 눌러도 위치·진행이 그대로면 알약이 남는다", () => {
+  it("빛은 14페이즈의 '이미 썼는가' 와 무관하다: [켜기] 를 눌러도 위치·진행이 그대로면 빛이 남는다", () => {
     mount(makeView());
     standAt(-3.9, -2.2);
     pressAct();
     expect(actId()).toBe("glass");
+    expect(act$(document)!.hasAttribute("data-call")).toBe(true);
   });
 });
 
@@ -428,6 +507,26 @@ describe("errand 화면: 마피아와 시민은 같은 DOM (D-03, ERRAND-04, T-1
       expect(o.prop).toBe(outs[0]!.prop);
     }
     expect(outs[0]!.prop).toContain('"actId":"glass"');
+  });
+
+  it("21-11: 역할만 바꾼 네 렌더의 독(기록·[켜기]·[건너뛰기])·진행 점 마크업이 반경 밖·안·길게 누르는 동안 모두 같다(T-21-27)", () => {
+    const stages: Array<{ name: string; run: () => void }> = [
+      { name: "밖", run: () => standAt(FAR.x, FAR.z) },
+      { name: "안", run: () => standAt(-3.9, -2.2) },
+      { name: "누름", run: () => fireEvent.pointerDown(act$(document)!) },
+    ];
+    const byStage: Record<string, string[]> = { 밖: [], 안: [], 누름: [] };
+    for (const role of ["mafia", "citizen", "police", "doctor"] as const) {
+      const { container, unmount } = mount(makeView({ role, done: ["piano"], skipCount: 1 }));
+      for (const st of stages) {
+        st.run();
+        byStage[st.name]!.push(dock$(container)!.outerHTML + "|" + dots(container)!.outerHTML);
+      }
+      unmount();
+    }
+    for (const name of Object.keys(byStage)) {
+      for (const html of byStage[name]!.slice(1)) expect(html, name).toBe(byStage[name]![0]);
+    }
   });
 
   it("errand 분기 코드가 역할(me.role)·동료(allies)를 읽지 않는다", () => {

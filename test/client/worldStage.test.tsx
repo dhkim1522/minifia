@@ -4629,6 +4629,16 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, 16페이즈 D-06·D-07
     expect(s.send).not.toHaveBeenCalled(); // 처리 메시지는 GameMap 몫(onAct) — 층은 보내지 않는다
   });
 
+  it("21-11: dock 플래그(확장판 저녁)면 actId 가 있어도 장소 위 [처리] 알약을 그리지 않는다 — 타일·화살표·빛은 그대로", async () => {
+    const s = await open({ stageInsets: INS, errand: errandProp({ actId: "glass", dock: true, callPlace: false }) });
+    frame();
+    expect(s.utils.container.querySelectorAll("[data-errand-act]")).toHaveLength(0);
+    expect(s.utils.container.querySelector(".mv-errand-act")).toBeNull();
+    expect(s.utils.container.querySelectorAll("button[data-errand-place]")).toHaveLength(3);
+    expect(pin(s, "glass").hidden).toBe(false);
+    expect(s.utils.container.querySelectorAll("[data-errand-arrow]")).toHaveLength(1);
+  });
+
   it("알약 위가 막히면(스테이지 위 안쪽 8) 타일 아래 8 로 뒤집는다", async () => {
     const s = await open({ stageInsets: { top: 250, bottom: 84 }, errand: errandProp({ actId: "glass" }) });
     frame();

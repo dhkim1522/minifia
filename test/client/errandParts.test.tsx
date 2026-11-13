@@ -7,6 +7,7 @@ import { ErrandAct } from "../../src/components/v2/ErrandAct";
 import { ErrandDots } from "../../src/components/v2/ErrandDots";
 import { ErrandStartCard } from "../../src/components/v2/ErrandStartCard";
 import { ErrandArrow, ErrandMarker } from "../../src/components/v2/ErrandMarker";
+import { placeLabel } from "../../src/game/placeText";
 import { PLACE_IDS } from "../../shared/protocol";
 import type { PlaceId } from "../../shared/protocol";
 
@@ -74,6 +75,27 @@ describe("ErrandMarker (64 타일)", () => {
     expect(badge.querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
     expect(b.querySelectorAll("svg")).toHaveLength(2);
     expect(b.querySelector("svg")!.innerHTML).toBe(before);
+  });
+
+  it("21-11: 가로등 장소를 켰으면 배지 아이콘이 불꽃(flame)이고 이름이 '가로등 장소, 켠 곳' 이다(안 켠 곳은 '가로등 장소')", () => {
+    const todo = render(<ErrandMarker id="lamp0" done={false} call={false} onWalk={() => {}} />);
+    expect(todo.container.querySelector("button")!.getAttribute("aria-label")).toBe("가로등 장소");
+    expect(todo.container.querySelector(".mv-errand-pin__badge")).toBeNull();
+    todo.unmount();
+    const { container } = render(<ErrandMarker id="lamp3" done call={false} onWalk={() => {}} />);
+    const b = container.querySelector("button")!;
+    expect(b.getAttribute("aria-label")).toBe("가로등 장소, 켠 곳");
+    const badge = b.querySelector(".mv-errand-pin__badge")!;
+    expect(badge.querySelector("svg")!.innerHTML).toContain("M12 3c3 4 5 6 5 10"); // flame 의 경로
+    expect(badge.querySelector("svg")!.innerHTML).not.toContain("M5 12.5l4.5 4.5L19 7.5");
+    expect(badge.querySelector("svg")!.getAttribute("width")).toBe("16");
+  });
+
+  it("21-11: 재즈 바 장소의 완료 이름·배지는 지금 그대로다(처리함·체크)", () => {
+    expect(placeLabel("glass", true)).toBe("술잔 장소, 처리함");
+    expect(placeLabel("glass", false)).toBe("술잔 장소");
+    expect(placeLabel("lamp5", true)).toBe("가로등 장소, 켠 곳");
+    expect(placeLabel("lamp5", false)).toBe("가로등 장소");
   });
 
   it("눌러 onWalk 한 번", () => {
@@ -186,6 +208,14 @@ describe("ErrandStartCard (2초 '오늘 갈 곳' 카드, 16-08 V-19)", () => {
     expect(container.querySelectorAll("button")).toHaveLength(0);
     for (const n of ["술잔", "피아노", "색소폰"]) expect(container.textContent).not.toContain(n);
   });
+  it("21-11: 제목을 prop 으로 받는다 — 주지 않으면 '오늘 갈 곳', 확장판 저녁은 '오늘 켤 등불'", () => {
+    const a = render(<ErrandStartCard places={PLACES} />);
+    expect(a.container.querySelector("h2")!.textContent).toBe("오늘 갈 곳");
+    a.unmount();
+    const b = render(<ErrandStartCard places={PLACES} title="오늘 켤 등불" />);
+    expect(b.container.querySelector("h2")!.textContent).toBe("오늘 켤 등불");
+    expect(b.container.textContent).not.toContain("오늘 갈 곳");
+  });
   it("places 가 0개면 아무것도 그리지 않는다", () => {
     const { container } = render(<ErrandStartCard places={[]} />);
     expect(container.innerHTML).toBe("");
@@ -216,6 +246,13 @@ describe("ErrandDots (진행 점 3, 16-08 V-23)", () => {
     expect(container.querySelectorAll("button")).toHaveLength(0);
     expect(container.querySelectorAll("[tabindex]")).toHaveLength(0);
   });
+  it("21-11: 접근성 이름을 label prop 으로 받는다('등불 1/3'), 속성 값은 그대로 진행 수다", () => {
+    const { container } = render(<ErrandDots total={3} done={1} label="등불 1/3" />);
+    const root = container.querySelector("[data-errand-dots]")!;
+    expect(root.getAttribute("aria-label")).toBe("등불 1/3");
+    expect(root.getAttribute("data-errand-progress")).toBe("1/3");
+    expect(container.textContent).toBe("");
+  });
   it("done 3 → 모두 채움 3/3, done 이 total 을 넘어도 total 로 자른다", () => {
     const { container } = render(<ErrandDots total={3} done={5} />);
     expect([...container.querySelectorAll("[data-errand-dot]")].every((d) => d.hasAttribute("data-done"))).toBe(true);
@@ -241,6 +278,9 @@ describe("시작 카드·진행 점 스타일 (16-08)", () => {
     expect(css).toMatch(/\.mv-errand-dot\s*\{[^}]*width: 20px[^}]*height: 20px[^}]*border: 3px solid var\(--brass-400\)/);
     expect(css).toMatch(/\.mv-errand-dot\[data-done\]\s*\{[^}]*background: var\(--brass-400\)/);
     expect(css).toMatch(/\.mv-errand-dots\s*\{[^}]*gap: 12px/);
+  });
+  it("21-11: 진행 점 줄은 독 높이(--mf-panel-h) 위 16 에 선다", () => {
+    expect(errandBlock()).toMatch(/\.mv-errand-dots\s*\{[^}]*bottom: calc\(var\(--mf-panel-h, [^)]*\) \+ 16px\)/);
   });
   it("모션 줄이기에서 시작 카드 등장이 즉시다", () => {
     const css = errandBlock();
