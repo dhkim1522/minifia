@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
-import type { EvidenceView, GameMode, MorningView, PhaseId, PlaceId, RecordLine, RoomView } from "../../shared/protocol";
+import type { ClueLine, EvidenceView, GameMode, MorningView, PhaseId, PlaceId, RecordLine, RoomView } from "../../shared/protocol";
 import { HOST_FALLBACK, HOST_HIDDEN_PHASES, HOST_LINES, callTargetsOf, hostBandModeOf, hostChimeOf, hostKeyOf, hostLineOf, hostTimeOf, type HostKey, type HostLocal } from "../../src/game/hostLine";
 
 // 14-01: 사회자 문구 표(UI-SPEC "사회자 문구 표")와 파생 판정. 표가 단일 출처다 — 시험과 표가 어긋나면 표를 따른다.
@@ -39,8 +39,10 @@ interface Spec {
   record?: RecordLine[];
   /** 16-09: 낮의 증거(day.evidence). 없으면 키 자체가 없다 */
   evidence?: EvidenceView;
-  /** 19페이즈: 판 종류(view.mode). 없으면 키 자체가 없다 */
+  /** 판 종류(view.mode). 21-08: 기본값은 basic(옛 시험이 보는 기본 마피아 갈래) — 확장판은 "extended" 를 적는다 */
   mode?: GameMode;
+  /** 21-08: 내가 살핀 단서(me.clues, 확장판 아침~). 없으면 키 자체가 없다 */
+  clues?: ClueLine[];
 }
 
 function makeView(o: Spec): RoomView {
@@ -68,6 +70,7 @@ function makeView(o: Spec): RoomView {
   const day: Record<string, unknown> = { n: 1 };
   if (o.candidate !== undefined) day.candidate = o.candidate;
   if (o.record !== undefined) me.record = o.record.map((r) => ({ ...r }));
+  if (o.clues !== undefined) me.clues = o.clues.map((c) => ({ ...c }));
   if (o.errand !== undefined) me.errand = { places: [...o.errand.places], done: [...o.errand.done] };
   if (o.passed !== undefined) day.verdict = { yes: 3, no: 1, passed: o.passed };
   if (o.morning !== undefined) day.morning = o.morning;
@@ -87,11 +90,16 @@ function makeView(o: Spec): RoomView {
     day,
   };
   if (o.map !== undefined) view.map = o.map;
-  if (o.mode !== undefined) view.mode = o.mode;
+  view.mode = o.mode ?? "basic";
   if (o.noise) view.spectate = { seats: [{ seat: 1, job: "mafia" }], picks: { mafia: [1], police: [], doctor: [] } };
   return view as unknown as RoomView;
 }
 
+const THREE_CLUES: ClueLine[] = [
+  { spot: 1, kind: "footprint", n: 2 },
+  { spot: 2, kind: "cloth", piece: "redCloth" },
+  { spot: 3, kind: "dark" },
+];
 const REC_SOME: RecordLine[] = [
   { seat: 1, place: "glass" },
   { seat: 2, place: "piano" },
@@ -109,12 +117,12 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     ["역할 확인, 카드 봄", { phase: "roleReveal" }, "그대로 기다려 주세요", "roleReveal.wait", { cardSeen: true }],
     ["낮 시작 산 사람", { phase: "dayAnnounce" }, "모두 모여 주세요", "dayAnnounce.wait"],
     ["낮 시작 유령", { phase: "dayAnnounce", ghost: true }, "지켜봐 주세요", "dayAnnounce.ghost"],
-    ["심부름 산 사람(시민)", { phase: "errand", role: "citizen", map: "bar", errand: ERR_PART }, "빛나는 곳을 찾아 처리해 주세요", "errand.act"],
-    ["심부름 산 사람(마피아, 같은 문장)", { phase: "errand", role: "mafia", map: "bar", errand: ERR_PART }, "빛나는 곳을 찾아 처리해 주세요", "errand.act"],
-    ["심부름 3곳 완료(경찰)", { phase: "errand", role: "police", map: "bar", errand: ERR_DONE }, "곧 토론이 시작됩니다", "errand.done"],
-    ["심부름 3곳 완료(마피아, 같은 문장)", { phase: "errand", role: "mafia", map: "bar", errand: ERR_DONE }, "곧 토론이 시작됩니다", "errand.done"],
+    ["심부름 산 사람(시민)", { phase: "errand", role: "citizen", map: "bar", errand: ERR_PART }, "등불 세 곳을 켜 주세요", "errand.act"],
+    ["심부름 산 사람(마피아, 같은 문장)", { phase: "errand", role: "mafia", map: "bar", errand: ERR_PART }, "등불 세 곳을 켜 주세요", "errand.act"],
+    ["심부름 3곳 완료(경찰)", { phase: "errand", role: "police", map: "bar", errand: ERR_DONE }, "곧 밤이 됩니다", "errand.done"],
+    ["심부름 3곳 완료(마피아, 같은 문장)", { phase: "errand", role: "mafia", map: "bar", errand: ERR_DONE }, "곧 밤이 됩니다", "errand.done"],
     ["심부름 유령", { phase: "errand", ghost: true }, "지켜봐 주세요", "errand.ghost"],
-    ["심부름 목록 없는 산 사람", { phase: "errand", map: "bar" }, "빛나는 곳을 찾아 처리해 주세요", "errand.act"],
+    ["심부름 목록 없는 산 사람", { phase: "errand", map: "bar" }, "등불 세 곳을 켜 주세요", "errand.act"],
     ["토론 산 사람", { phase: "discussion" }, "의심 가는 사람을 이야기해 주세요", "discussion.act"],
     ["토론 흔적이 있는 날, 기록 없음", { phase: "discussion", evidence: { trace: "pin" } }, "같은 옷과 엇갈린 목격을 살펴보세요", "discussion.evidence"],
     ["토론 흔적이 있는 날, 기록 있고 안 열었음 — witness 가 먼저", { phase: "discussion", evidence: { trace: "pin" }, record: REC_SOME }, "기록 단추로 본 것을 확인해 주세요", "witness"],
@@ -296,9 +304,9 @@ describe("18.1-12 심부름 시작 카드 startCard (0083-8)", () => {
     expect(hostLineOf(makeView({ ...ERR, errand: ERR_DONE }), { startCard: true })).toBe("");
   });
 
-  it("카드가 걷히면 '빛나는 곳을 찾아 처리해 주세요', startCard 가 없어도 같다", () => {
-    expect(hostLineOf(makeView(ERR), { startCard: false })).toBe("빛나는 곳을 찾아 처리해 주세요");
-    expect(hostLineOf(makeView(ERR))).toBe("빛나는 곳을 찾아 처리해 주세요");
+  it("카드가 걷히면 '등불 세 곳을 켜 주세요', startCard 가 없어도 같다", () => {
+    expect(hostLineOf(makeView(ERR), { startCard: false })).toBe("등불 세 곳을 켜 주세요");
+    expect(hostLineOf(makeView(ERR))).toBe("등불 세 곳을 켜 주세요");
   });
 
   it("키·빛남 대상은 startCard 와 무관하다", () => {
@@ -520,6 +528,9 @@ const ALLOWED_EXACT: ReadonlySet<string> = new Set([
   // 16-09: 흔적이 있는 날 토론 문구 — day.evidence.trace 의 유무(모두에게 같은 공개 값)만 본다. seen·조각 값은 읽지 않는다(아래 시험)
   "day.evidence",
   "day.evidence.trace",
+  // 21-08: 확장판 갈래는 판 규칙 값(view.mode → rulesetOf(modeOf(view)).errand)과 내 단서·목격 기록의 유무만 본다 — 역할(me.role)은 읽지 않는다
+  "mode",
+  "me.clues",
 ]);
 /** 18.1-12: 하위 값 허용 접두사는 없다 — 닉네임·아침 결과 문장은 더는 읽지 않는다 */
 const ALLOWED_PREFIX: readonly string[] = [];
@@ -561,6 +572,12 @@ function matrixSpecs(): Spec[] {
     out.push({ ...base, seat: 1, candidate: 1 }); // 변론자 본인
     if (phase === "errand") out.push({ ...base, role: "mafia", errand: ERR_DONE }, { ...base, role: "citizen", errand: ERR_DONE }, { ...base, ghost: true, errand: undefined });
   }
+  // 21-08: 확장판 갈래(밤 집 고르기·아침 현장·토론 단서) — 단서가 있는 쪽과 없는 쪽
+  for (const phase of ["night", "morning", "discussion"] as const) {
+    const ext: Spec = { phase, mode: "extended", morning: { eliminated: 2 }, map: "bar", errand: ERR_DONE };
+    for (const role of ["mafia", "police", "doctor", "citizen"] as RoleId[]) out.push({ ...ext, role }, { ...ext, role, clues: [{ spot: 1, kind: "footprint", n: 2 }] }, { ...ext, role, record: REC_SOME });
+    out.push({ ...ext, ghost: true }, { ...ext, clues: THREE_CLUES });
+  }
   return out;
 }
 
@@ -573,7 +590,7 @@ function allLines(): string[] {
 }
 
 /** 15-07: 클라이언트 상태 recordOpened·traceOn 의 모든 조합 */
-const FLAGS: ReadonlyArray<Pick<HostLocal, "recordOpened" | "traceOn">> = [{}, { recordOpened: false, traceOn: false }, { recordOpened: true }, { traceOn: true }, { recordOpened: true, traceOn: true }];
+const FLAGS: ReadonlyArray<Pick<HostLocal, "recordOpened" | "traceOn" | "sceneOn">> = [{}, { recordOpened: false, traceOn: false }, { recordOpened: true }, { traceOn: true }, { recordOpened: true, traceOn: true }, { sceneOn: true }, { sceneOn: false }];
 
 /** 내 월드 좌표(클라이언트 상태)의 시점: 모름·장소 위·장소 밖 */
 const POSES: ReadonlyArray<HostLocal["pos"]> = [undefined, null, { x: -3.9, z: -2.2 }, { x: 5, z: 5 }];
@@ -830,7 +847,7 @@ describe("기본 마피아 판의 사회자 줄 (19-02, E-3)", () => {
     const shared = new Set((Object.keys(HOST_LINES) as HostKey[]).filter((k) => !OFF_KEYS.includes(k)).map((k) => HOST_LINES[k] as string));
     const offLines = OFF_KEYS.map((k) => HOST_LINES[k] as string).filter((line) => !shared.has(line));
     const hits = BASIC_PHASES.flatMap((phase) => [false, true].map((ghost) => hostLineOf(basicView(phase, { ghost })))).filter((line) => offLines.includes(line));
-    expect(offLines.join(" | ")).toBe("빛나는 곳을 찾아 처리해 주세요 | 곧 토론이 시작됩니다 | 기록 단추로 본 것을 확인해 주세요 | 같은 옷과 엇갈린 목격을 살펴보세요");
+    expect(offLines.join(" | ")).toBe("등불 세 곳을 켜 주세요 | 곧 밤이 됩니다 | 기록 단추로 본 것을 확인해 주세요 | 같은 옷과 엇갈린 목격을 살펴보세요");
     expect(hits.join(" | ")).toBe("");
   });
 
@@ -838,13 +855,129 @@ describe("기본 마피아 판의 사회자 줄 (19-02, E-3)", () => {
     expect(hostKeyOf(basicView("morning"))).toBe("morning");
   });
 
-  it("대조: 같은 토론이 extended 이고 me.record·day.evidence 가 있으면 witness → discussion.evidence 다 (판이 아니라 키가 정한다)", () => {
-    const ext = makeView({ phase: "discussion", mode: "extended", record: REC_SOME, evidence: { trace: "pin" } });
-    expect(`${hostKeyOf(ext)}/${hostKeyOf(ext, { recordOpened: true })}`).toBe("witness/discussion.evidence");
+  it("대조: 같은 토론이 basic 이고 me.record·day.evidence 가 있으면 witness → discussion.evidence 다 (판이 아니라 키가 정한다)", () => {
+    const old = makeView({ phase: "discussion", mode: "basic", record: REC_SOME, evidence: { trace: "pin" } });
+    expect(`${hostKeyOf(old)}/${hostKeyOf(old, { recordOpened: true })}`).toBe("witness/discussion.evidence");
   });
 
-  it("hostLine.ts 는 판 종류를 읽지 않는다 — 새 분기를 만들지 않았다 (P19-17)", () => {
-    const src = readFileSync(fileURLToPath(new URL("../../src/game/hostLine.ts", import.meta.url)), "utf8");
-    expect(/\bview\.mode\b|\bmodeOf\b|\brulesetOf\b/.test(src)).toBe(false);
+  it("21-08: hostLine.ts 가 판 종류를 읽는 곳은 규칙 값 하나(rulesetOf(modeOf(view)).errand)뿐이다 — 판 이름(basic·extended)을 직접 가르지 않는다", () => {
+    const src = readFileSync(fileURLToPath(new URL("../../src/game/hostLine.ts", import.meta.url)), "utf8").replace(/\/\/.*$/gm, "");
+    expect(src.match(/\bmodeOf\(/g)?.length).toBe(1);
+    expect(/["']basic["']|["']extended["']|\.mode\b/.test(src)).toBe(false);
+  });
+});
+
+// 21-08(UI-SPEC 자막 띠 표, D-24·D-25·D-26·D-18, T-21-21): 확장판의 밤·아침·토론 줄. 확장판 밤은 역할을 읽기 전에 판 규칙으로 갈린다.
+describe("21-08 확장판 사회자 줄 (밤 집 하나·아침 현장·토론 단서)", () => {
+  const ROLES: readonly RoleId[] = ["mafia", "police", "doctor", "citizen"];
+  const ext = (spec: Spec): RoomView => makeView({ mode: "extended", ...spec });
+  const NEW_LINES: Readonly<Record<string, string>> = {
+    "night.house": "집 하나를 눌러 주세요",
+    "scene.act": "빛나는 곳을 살펴보세요",
+    "scene.done": "곧 토론이 시작됩니다",
+    "scene.ghost": "지켜봐 주세요",
+    "discussion.clue": "단서를 말로 나눠 보세요",
+    "errand.act": "등불 세 곳을 켜 주세요",
+    "errand.done": "곧 밤이 됩니다",
+  };
+
+  it("새 줄 문장이 UI-SPEC 표 그대로다", () => {
+    const got = Object.keys(NEW_LINES).map((k) => `${k}=${HOST_LINES[k as HostKey]}`);
+    expect(got.join(" | ")).toBe(Object.entries(NEW_LINES).map(([k, v]) => `${k}=${v}`).join(" | "));
+  });
+
+  it("밤: 확장판은 네 역할 모두 같은 키 night.house·같은 문장 '집 하나를 눌러 주세요'", () => {
+    const keys = ROLES.map((role) => hostKeyOf(ext({ phase: "night", role })));
+    expect(keys.join(",")).toBe("night.house,night.house,night.house,night.house");
+    expect(new Set(ROLES.map((role) => hostLineOf(ext({ phase: "night", role })))).size).toBe(1);
+    expect(hostLineOf(ext({ phase: "night", role: "mafia" }))).toBe("집 하나를 눌러 주세요");
+  });
+
+  it("밤: 기본 마피아는 지금 역할별 키 그대로, 유령은 night.ghost", () => {
+    const keys = ROLES.map((role) => hostKeyOf(makeView({ phase: "night", mode: "basic", role })));
+    expect(keys.join(",")).toBe("night.mafia,night.police,night.doctor,night.citizen");
+    expect(hostKeyOf(ext({ phase: "night", ghost: true }))).toBe("night.ghost");
+  });
+
+  it("밤: 확장판 갈래는 me.role 을 읽지 않고(경로 기록), 역할을 지운 view 와 같다 (T-21-21)", () => {
+    for (const role of ROLES) {
+      const log = new Set<string>();
+      const view = recorder(ext({ phase: "night", role, noise: true }), log) as RoomView;
+      hostKeyOf(view);
+      hostLineOf(view);
+      callTargetsOf(view);
+      expect([...log].filter((p) => !isAllowed(p))).toEqual([]);
+      expect(log.has("me.role")).toBe(false);
+      expect(log.has("mode")).toBe(true);
+    }
+    const noRole = ext({ phase: "night", role: null });
+    for (const role of ROLES) {
+      const v = ext({ phase: "night", role });
+      expect(`${hostKeyOf(v)}/${hostLineOf(v)}/${JSON.stringify(callTargetsOf(v))}`).toBe(`${hostKeyOf(noRole)}/${hostLineOf(noRole)}/${JSON.stringify(callTargetsOf(noRole))}`);
+    }
+  });
+
+  it("밤 빛남: 확장판은 { kind: 'house', seats: 산 사람 전원(나 포함) }, 죽은 사람은 뺀다", () => {
+    expect(JSON.stringify(callTargetsOf(ext({ phase: "night", role: "mafia" })))).toBe('{"kind":"house","seats":[0,1,2,3]}');
+    expect(JSON.stringify(callTargetsOf(ext({ phase: "night", role: "citizen", dead: [2] })))).toBe('{"kind":"house","seats":[0,1,3]}');
+    expect(JSON.stringify(callTargetsOf(makeView({ phase: "night", mode: "basic", role: "mafia" })))).toBe('{"kind":"tag","seats":[0,1,2,3]}');
+  });
+
+  it("아침: 결과 알림이 끝나기 전(sceneOn 거짓)에는 빈 줄 morning, 끝나면 scene.act → 단서 셋이면 scene.done, 유령은 scene.ghost", () => {
+    const m = { eliminated: 2 };
+    expect(hostKeyOf(ext({ phase: "morning", morning: m }))).toBe("morning");
+    expect(hostLineOf(ext({ phase: "morning", morning: m }), { sceneOn: false })).toBe("");
+    expect(hostKeyOf(ext({ phase: "morning", morning: m }), { sceneOn: true })).toBe("scene.act");
+    expect(hostLineOf(ext({ phase: "morning", morning: m }), { sceneOn: true })).toBe("빛나는 곳을 살펴보세요");
+    expect(hostKeyOf(ext({ phase: "morning", morning: m, clues: THREE_CLUES.slice(0, 2) }), { sceneOn: true })).toBe("scene.act");
+    expect(hostKeyOf(ext({ phase: "morning", morning: m, clues: THREE_CLUES }), { sceneOn: true })).toBe("scene.done");
+    expect(hostKeyOf(ext({ phase: "morning", morning: m, ghost: true }), { sceneOn: true })).toBe("scene.ghost");
+    expect(hostKeyOf(ext({ phase: "morning", morning: m, ghost: true }))).toBe("morning");
+  });
+
+  it("아침: scene.act 는 [살펴보기] 도구를 부르고, 역할이 달라도 키·문장이 같다", () => {
+    const keys = ROLES.map((role) => `${hostKeyOf(ext({ phase: "morning", morning: { eliminated: 2 }, role }), { sceneOn: true })}/${JSON.stringify(callTargetsOf(ext({ phase: "morning", morning: { eliminated: 2 }, role }), { sceneOn: true }))}`);
+    expect(new Set(keys).size).toBe(1);
+    expect(keys[0]).toBe('scene.act/{"kind":"tool","tool":"scene"}');
+  });
+
+  it("아침: 기본 마피아의 아침은 지금 그대로(morning·trace)", () => {
+    expect(hostKeyOf(makeView({ phase: "morning", mode: "basic", morning: { eliminated: 2 } }), { sceneOn: true })).toBe("morning");
+    expect(hostKeyOf(makeView({ phase: "morning", mode: "basic", morning: { eliminated: 2, trace: "pin" } }), { traceOn: true })).toBe("trace");
+  });
+
+  it("토론: 확장판은 단서나 목격이 하나라도 있으면 discussion.clue, 없으면 discussion.act — witness·discussion.evidence 는 쓰지 않는다", () => {
+    expect(hostKeyOf(ext({ phase: "discussion" }))).toBe("discussion.act");
+    expect(hostKeyOf(ext({ phase: "discussion", clues: THREE_CLUES.slice(0, 1) }))).toBe("discussion.clue");
+    expect(hostKeyOf(ext({ phase: "discussion", record: REC_SOME }))).toBe("discussion.clue");
+    expect(hostKeyOf(ext({ phase: "discussion", record: [] }))).toBe("discussion.act");
+    expect(hostKeyOf(ext({ phase: "discussion", record: REC_SOME, evidence: { trace: "pin" } }), { recordOpened: true })).toBe("discussion.clue");
+    expect(hostLineOf(ext({ phase: "discussion", clues: THREE_CLUES }))).toBe("단서를 말로 나눠 보세요");
+    expect(hostKeyOf(ext({ phase: "discussion", ghost: true, clues: THREE_CLUES }))).toBe("discussion.ghost");
+    expect(JSON.stringify(callTargetsOf(ext({ phase: "discussion", clues: THREE_CLUES })))).toBe('{"kind":"tool","tool":"chat"}');
+  });
+
+  it("확장판 단계 어디서도 witness·discussion.evidence·trace 키가 나오지 않는다", () => {
+    const hits: string[] = [];
+    for (const spec of matrixSpecs().filter((s) => s.mode === "extended")) {
+      for (const local of [{}, { recordOpened: true }, { traceOn: true }, { sceneOn: true }]) {
+        const key = hostKeyOf(makeView(spec), local);
+        if (key === "witness" || key === "discussion.evidence" || key === "trace") hits.push(`${spec.phase}:${key}`);
+      }
+    }
+    expect(hits.join(" ")).toBe("");
+  });
+
+  it("새 문장: 공백 포함 19자 이하·마침표 없음, 역할 연상어·'범인'·'증거'·'확정' 이 없다", () => {
+    for (const [key, text] of Object.entries(NEW_LINES)) {
+      expect([...text].length, key).toBeLessThanOrEqual(19);
+      expect(text.endsWith("."), key).toBe(false);
+      for (const word of ["마피아", "경찰", "의사", "시민", "범인", "증거", "확정", "손님"]) expect(text, key).not.toContain(word);
+    }
+  });
+
+  it("기본 마피아 키는 하나도 지우지 않았다", () => {
+    const keys = Object.keys(HOST_LINES);
+    for (const k of ["night.mafia", "night.police", "night.doctor", "night.citizen", "witness", "discussion.evidence", "trace", "morning", "discussion.act", "errand.ghost"]) expect(keys).toContain(k);
   });
 });

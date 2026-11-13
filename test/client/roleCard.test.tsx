@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Icon } from "../../src/components/Icon";
 import { RoleCard } from "../../src/components/RoleCard";
-import { ROLE_TEXT, alliesText } from "../../src/game/roleText";
+import { ROLE_TEXT, alliesText, roleHintOf } from "../../src/game/roleText";
 
 afterEach(cleanup);
 
@@ -340,4 +340,38 @@ describe("Icon", () => {
       expect(container.querySelectorAll("path, rect, circle").length).toBeGreaterThan(0);
     },
   );
+});
+
+// 21-08(D-06, P21-8, T-21-22): 확장판 마피아 본인의 카드에만 심지 자르기 방법 한 줄이 더 있다. 다른 역할·기본 마피아 카드에는 그 줄의 마크업이 없다.
+describe("RoleCard 확장판 마피아 한 줄 (21-08)", () => {
+  const HINT = "켜기를 길게 누르면 심지를 잘라요";
+
+  it("hint 가 있으면 desc 아래에 한 줄(.mf-card__hint)이 있고 글이 그대로다", () => {
+    const { container } = render(<RoleCard role="mafia" face="front" allies={["서준"]} hint={HINT} onFlip={vi.fn()} />);
+    const front = container.querySelector(".mf-card__front") as HTMLElement;
+    const order = Array.from(front.children).map((el) => el.tagName.toLowerCase() + "." + el.className.split(" ")[0]);
+    expect(order.join(" ")).toBe("img.mf-card__art p.mf-t-display p.mf-card__desc p.mf-card__hint div.mf-card__divider p.mf-card__mates");
+    expect(container.querySelector(".mf-card__hint")?.textContent).toBe(HINT);
+  });
+
+  it("hint 가 없으면(시민·경찰·의사·기본 마피아 마피아) 그 줄의 마크업이 없다", () => {
+    for (const role of ["citizen", "police", "doctor", "mafia"] as const) {
+      const { container } = render(<RoleCard role={role} face="front" allies={role === "mafia" ? [] : null} onFlip={vi.fn()} />);
+      expect(container.querySelector(".mf-card__hint")).toBeNull();
+      expect(container.textContent).not.toContain("심지");
+      cleanup();
+    }
+  });
+
+  it("뒷면에는 hint 를 줘도 DOM 에 없다", () => {
+    const { container } = render(<RoleCard role="mafia" face="back" allies={[]} hint={HINT} onFlip={vi.fn()} />);
+    expect(container.textContent).toBe("");
+  });
+
+  it("roleHintOf: mafia + extended 에만 한 줄, 그 밖은 null", () => {
+    expect(roleHintOf("mafia", "extended")).toBe(HINT);
+    const others = (["mafia", "police", "doctor", "citizen"] as const).flatMap((r) => (["basic", "extended"] as const).map((m) => [r, m] as const)).filter(([r, m]) => !(r === "mafia" && m === "extended"));
+    expect(others.map(([r, m]) => roleHintOf(r, m)).join(",")).toBe(",,,,,,");
+    expect([...HINT].length).toBe(16);
+  });
 });

@@ -274,3 +274,23 @@ describe("옷장 자물쇠 CSS 자리 (18-05, v2.css)", () => {
     expect(body).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
   });
 });
+
+// 21-08(UI-SPEC P21-4): 저녁 등불·아침 현장 단서 아이콘 넷. 경로는 시안(design/v3.0/lamp-house)과 UI-SPEC 아이콘 표 그대로다(새로 그리지 않는다).
+const LAMP_HOUSE_PATHS: Readonly<Record<"flame" | "footprint" | "cloth" | "window", readonly string[]>> = {
+  flame: ["M12 3c3 4 5 6 5 10a5 5 0 0 1-10 0c0-4 2-6 5-10z"],
+  footprint: ["M8 4c2 0 3 2 3 4s-1 3-2 3-3-1-3-3 0-4 2-4z", "M16 11c2 0 3 2 3 4s-1 3-2 3-3-1-3-3 0-4 2-4z"],
+  cloth: ["M5 8l4-3 3 2 3-2 4 3-2 3v8H7v-8z"],
+  window: ["M6 5h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z", "M12 5v14", "M5 12h14"],
+};
+
+describe("V2Icon 등불·현장 아이콘 넷 (21-08, P21-4)", () => {
+  it.each(Object.keys(LAMP_HOUSE_PATHS) as Array<keyof typeof LAMP_HOUSE_PATHS>)("%s 는 24 격자 선 2·둥근 끝이고 경로가 시안과 같다", (name) => {
+    const { container } = render(<V2Icon name={name} />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.getAttribute("stroke-width")).toBe("2");
+    expect(svg?.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect([...container.querySelectorAll("path")].map((p) => p.getAttribute("d")).join(" | ")).toBe(LAMP_HOUSE_PATHS[name].join(" | "));
+  });
+});

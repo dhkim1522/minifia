@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { ROLE_IDS } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
-import type { RoleRecord, RoomView } from "../../shared/protocol";
+import type { GameMode, RoleRecord, RoomView } from "../../shared/protocol";
 import { RoleCardSheet } from "../../src/components/RoleCardSheet";
 import type { RoleCardTab } from "../../src/components/RoleCardSheet";
 import { ROLE_TEXT } from "../../src/game/roleText";
@@ -28,7 +28,7 @@ const RECORDS: Record<string, RoleRecord[]> = {
   doctor: [{ n: 1, target: 2 }],
 };
 
-function makeView(role: RoleId | null, o: { allies?: number[]; records?: RoleRecord[] } = {}): RoomView {
+function makeView(role: RoleId | null, o: { allies?: number[]; records?: RoleRecord[]; mode?: GameMode } = {}): RoomView {
   const me: RoomView["me"] = { seat: 0, isHost: false };
   if (role !== null) me.role = role;
   if (o.allies !== undefined) me.allies = o.allies;
@@ -43,6 +43,7 @@ function makeView(role: RoleId | null, o: { allies?: number[]; records?: RoleRec
     maxPlayers: 8,
     players: ["지우", "하윤", "민지", "도현"].map((nickname, seat) => ({ seat, nickname, connected: true, isHost: seat === 0 })),
     me,
+    ...(o.mode !== undefined ? { mode: o.mode } : {}),
   };
 }
 
@@ -420,5 +421,24 @@ describe("RoleCardSheet 역할 문구 한 덩어리 (P181-0, HOST-05)", () => {
   it("역할 없음에는 문구 줄이 없다", () => {
     renderSheet({ role: null });
     expect(document.querySelector("[data-role-line]")).toBeNull();
+  });
+});
+
+// 21-08(D-06, P21-8): 확장판 마피아의 시트에만 심지 자르기 방법 한 줄. 다른 역할·기본 마피아에는 마크업이 없다(본인 me.role 로만 정한다).
+describe("RoleCardSheet 확장판 마피아 한 줄 (21-08)", () => {
+  const sheet = (role: RoleId, mode: GameMode) =>
+    render(<RoleCardSheet view={makeView(role, { mode, allies: role === "mafia" ? [1] : undefined })} showBack={false} tab="role" onTab={vi.fn()} unread={0} newCount={0} onClose={vi.fn()} />);
+
+  it("확장판 마피아: 설명 아래 한 줄 '켜기를 길게 누르면 심지를 잘라요'", () => {
+    sheet("mafia", "extended");
+    const hint = document.querySelector(".mf-rolecard__hint");
+    expect(hint?.textContent).toBe("켜기를 길게 누르면 심지를 잘라요");
+    expect(hint?.previousElementSibling?.className).toContain("mf-rolecard__desc");
+  });
+
+  it.each([["citizen", "extended"], ["police", "extended"], ["doctor", "extended"], ["mafia", "basic"], ["citizen", "basic"]] as const)("%s·%s 에는 그 줄이 없다", (role, mode) => {
+    sheet(role, mode);
+    expect(document.querySelector(".mf-rolecard__hint")).toBeNull();
+    expect(document.body.textContent).not.toContain("심지");
   });
 });

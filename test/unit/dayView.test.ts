@@ -473,8 +473,17 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
 
   it("처형·아침은 제목만, 역할이 없는 산 사람의 밤은 시민 안내", () => {
     same(hdr(executionView(5, 2, true)), { title: "처형" });
-    same(hdr(viewOf("morning")), { title: "아침" });
+    same(hdr({ ...viewOf("morning"), mode: "basic" }), { title: "아침" });
     same(hdr(viewOf("night")), { title: "밤", hint: "날이 밝길 기다려요" });
+  });
+
+  // 21-08(UI-SPEC P21-0): 확장판 제목 — 저녁 '등불 켜기'·아침 '현장 조사'(시간대 낱말은 헤더가 따로 말한다). 기본 마피아의 아침은 '아침' 그대로
+  it("21-08: 확장판 errand 는 '등불 켜기', morning 은 '현장 조사'이고 기본 마피아 morning 은 '아침'이다", () => {
+    same(hdr({ ...viewOf("errand"), mode: "extended" }).title, "등불 켜기");
+    same(hdr({ ...viewOf("morning"), mode: "extended" }).title, "현장 조사");
+    same(hdr({ ...viewOf("morning"), mode: "basic" }).title, "아침");
+    same(hdr({ ...viewOf("night"), mode: "extended" }).title, "밤");
+    same(hdr({ ...viewOf("discussion"), mode: "extended" }).title, "토론");
   });
 
   it("유령은 같은 제목에 '모두의 직업이 보여요'(밤은 '모두의 직업과 밤 행동이 보여요')", () => {
