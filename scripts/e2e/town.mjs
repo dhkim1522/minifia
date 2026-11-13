@@ -218,7 +218,6 @@ async function enterRoom(page, seat, room, { limitMs = ENTER_LIMIT_MS } = {}) {
     const atInside = near(after.ring, def.inside, 0.1);
     if (!atFront && !atInside) {
       retry += 1; // 시선이 다른 것(시계탑 등)에 막혔다 — 다른 지붕 점을 눌러 본다
-      if (first !== null && !first.measured) first.measured = false;
       continue;
     }
     if (atInside) {
