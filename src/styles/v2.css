@@ -493,6 +493,28 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-scene-dock__skip[aria-pressed="true"] { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
 .mv-scene-dock__skip[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 
+/* 밤 독(21-12, P21-1): 위 안내 한 줄 24(범례 또는 한 문장) + 아래 행동 줄 52. 높이 122 = 14 + 24 + 10 + 52 + 22 — 역할마다 같다. */
+.mv-scene-dock__guide { display: flex; align-items: center; justify-content: center; gap: 12px; height: 24px; color: var(--gray-300); font-family: var(--font-ui); font-size: 14px; font-weight: 400; line-height: 1; white-space: nowrap; }
+.mv-scene-dock__legend { display: inline-flex; align-items: center; gap: 6px; }
+.mv-scene-dock__dot { flex: none; width: 10px; height: 10px; border-radius: 2px; }
+.mv-scene-dock__dot--lit { background: var(--light-lamp); }
+.mv-scene-dock__dot--dark { background: var(--night-700); }
+.mv-scene-dock__actions { display: block; min-height: 52px; }
+
+/* 밤 집 판(21-12, P21-9): 판 층은 스테이지 전체이고 눌림은 층이 받아 가장 가까운 판 하나를 고른다. 판 40×40(시안 64 → 40), 판 중심 = 집 지붕 꼭대기 투영점. 역할마다 같은 모양이다 */
+.mv-house-pick { position: absolute; inset: 0; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.mv-house-pick__plate { position: absolute; left: 0; top: 0; display: grid; place-items: center; box-sizing: border-box; width: 40px; height: 40px; margin: 0; padding: 0; transform: translate(-50%, -50%); border: 2px solid var(--gray-500); border-radius: var(--radius-sm); background: var(--gray-800); color: var(--gray-50); cursor: pointer; font: inherit; -webkit-tap-highlight-color: transparent; }
+.mv-house-pick__plate.is-on { border: 3px solid var(--light-lamp); box-shadow: 0 0 14px 2px color-mix(in srgb, var(--light-lamp) 60%, transparent); }
+.mv-house-pick__plate[data-house-off] { opacity: 0; pointer-events: none; }
+.mv-house-pick__plate[aria-disabled="true"] { opacity: 0.35; cursor: default; }
+.mv-house-pick__plate:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mv-house-pick__img { display: block; width: 26px; height: 26px; object-fit: contain; filter: brightness(0.85) saturate(0.85); }
+.mv-house-pick__plate.is-on .mv-house-pick__img { filter: none; }
+.mv-house-pick__fallback { display: grid; place-items: center; width: 26px; height: 26px; }
+.mv-house-pick__fallback i { width: 22px; height: 22px; border-radius: var(--radius-pill); }
+.mv-house-pick__me { position: absolute; right: 1px; bottom: 1px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); pointer-events: none; }
+.mv-house-pick__plate .mv-face__count { right: -8px; bottom: -8px; }
+
 /* 심부름 부품(15-04·16-07, UI-SPEC "심부름 화면 계약"·V-20~V-22). 새 토큰·hex 없음 — 빛남은 14 의 .is-call 을 그대로 쓰고 타일 빛만 테두리 3·번짐 26 으로 키운다.
  * 위치는 층이 inline transform 으로 쓰므로 위치를 쓰는 요소(타일·화살표·알약)에는 transform 애니메이션·:active 변형을 걸지 않는다(그림·배지 같은 자식에만).
  * 이 블록은 파일 끝에 둔다(시험이 첫 .mv-errand 부터 끝까지를 본다). */

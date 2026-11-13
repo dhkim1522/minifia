@@ -29,6 +29,9 @@
 /* 저녁·아침 독(21-11): 아래 패널 틀(.mf-game__panel)을 그대로 쓰는 읽기 전용 기록 두 줄 + 행동 줄. 높이 = 14 + 68 + 10 + 56 + 22 = 170(SceneDock 의 DOCK_H). 입력줄·키보드가 없어 늘 이 높이다. 진행 점은 이 높이(루트의 --mf-dock-h, GameMap 이 잰다) 위 16 에 선다 */
 .mf-game__dock { min-height: 170px; }
 
+/* 밤 독(21-12): 위 안내 한 줄 24 + 행동 줄 52. 높이 = 14 + 24 + 10 + 52 + 22 = 122(SceneDock 의 NIGHT_DOCK_H). 네 역할이 같은 높이다 */
+.mf-game__dock--night { min-height: 122px; }
+
 /* 키보드(7페이즈 규칙 그대로): 패널은 키보드 바로 위로 --mf-kb-lift 만큼 올라가고 아래 여백이 22 → 8 로 줄어든다. 행동 줄은 그리지 않는다. */
 .mf-game__panel--kb { bottom: var(--mf-kb-lift, 0px); padding-bottom: 8px; }
 

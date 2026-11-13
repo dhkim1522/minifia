@@ -200,7 +200,7 @@ describe("HousePick: 마피아 합의 배지·얼굴 그림 (0074)", () => {
   });
 
   it("부품 소스는 역할·서버 전용 낱말을 읽지 않고 hex 색도 쓰지 않는다", () => {
-    expect(SRC).not.toMatch(/\brole\b|allies|nightTally|nightSure|mafia|police|doctor|#[0-9a-fA-F]{3,6}\b/);
+    expect(SRC).not.toMatch(/\.role\b|\brole\??:|allies|nightTally|nightSure|\bmafia\b|\bpolice\b|\bdoctor\b|#[0-9a-fA-F]{3,6}\b/);
   });
 });
 

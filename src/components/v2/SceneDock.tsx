@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import type { CSSProperties, KeyboardEvent, PointerEvent, Ref } from "react";
+import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode, Ref } from "react";
 import "../../styles/v2.css";
 import { LOG_H } from "../../game/chatUi";
 import { ERRAND_TEXT } from "../../game/errandView";
@@ -12,7 +12,9 @@ import { V2Icon } from "./V2Icon";
 // 21페이즈 저녁·아침 독(P21-1·P21-5·P21-6·P21-8, D-06·D-23·D-24): 읽기 전용 기록 두 줄 + 행동 줄(주 단추 + [건너뛰기]).
 // 모든 역할이 같은 마크업이다: 이 부품에는 역할·좌석 prop 이 없고 같은 입력이면 같은 DOM 을 낸다. 길게 누르기(0.6초)는 단추 안 채움 막대를 누구에게나 똑같이
 // 채울 뿐이고, 길게 눌렀는지는 떼는 순간 onPress(hold) 의 인자 하나로만 나간다 — 그 값으로 무엇이 일어나는지는 서버가 정한다(눈으로 구별되지 않는다, P21-8).
-// 21-12·21-13 이 밤·아침 변형을 같은 부품에 더한다(primary.kind "scene" 은 아침 [살펴보기] 자리).
+// 21-12 밤 변형(variant "night", D-25): 기록 칸 없이 위 안내 한 줄 24(안 골랐으면 범례 '불 켜진 창'·'꺼진 창', 골랐으면 '고른 집은 바꿀 수 있어요') + 아래 행동 줄 52.
+// 행동 줄은 쓰는 쪽이 넘긴 단추 그대로다([쪽지]/[유언] 은 지금 GamePanel 의 줄) — 이 부품은 역할을 모르고 같은 입력이면 같은 DOM 이다. 높이 122.
+// 21-13 이 아침 변형을 같은 부품에 더한다(primary.kind "scene" 은 아침 [살펴보기] 자리).
 
 /** 길게 누르기로 보는 시간(ms). 채움 막대의 길이와 같다 */
 export const HOLD_MS = 600;
@@ -20,6 +22,11 @@ export const HOLD_MS = 600;
 export const DOCK_ROW_H = 56;
 /** 독 높이 = 위 14 + 기록 칸 LOG_H + 간격 10 + 행동 줄 56 + 아래 22(기존 .mf-game__panel 의 패딩 14·22·간격 10 그대로) */
 export const DOCK_H = 14 + LOG_H + 10 + DOCK_ROW_H + 22;
+
+/** 밤 독 높이 = 위 14 + 안내 한 줄 24 + 간격 10 + 행동 줄 52 + 아래 22 (기존 패널 패딩 14·22·간격 10 그대로) */
+export const NIGHT_GUIDE_H = 24;
+export const NIGHT_ROW_H = 52;
+export const NIGHT_DOCK_H = 14 + NIGHT_GUIDE_H + 10 + NIGHT_ROW_H + 22;
 
 /** 손가락 뒤에 따라오는 click 을 가려내는 시간(ms) — 눌림 하나가 두 번 나가지 않게 */
 const CLICK_ECHO_MS = 700;
@@ -55,6 +62,20 @@ export interface SceneDockProps {
   /** 유령·탈락자는 null(단추 없음) */
   skip: SceneDockSkip | null;
   /** 아래 패널 자리 측정(useMapInsets)이 쓰는 ref */
+  panelRef?: Ref<HTMLElement>;
+}
+
+/** 밤 변형 입력: 안내 줄이 범례냐 한 문장이냐(picked)와 아래 행동 줄에 그대로 놓을 단추들(actions) */
+export interface SceneDockNightProps {
+  variant: "night";
+  /** 내가 집을 골랐다: 범례 대신 '고른 집은 바꿀 수 있어요' */
+  picked: boolean;
+  /** 행동 줄 자리(52) — 지금 GamePanel 의 [쪽지]/[유언] 줄 */
+  actions: ReactNode;
+  /** 키보드(시트 입력)가 열려 패널이 그 위로 올라간다 — 지금 패널과 같은 규칙 */
+  lifted?: boolean;
+  /** 유언·쪽지 시트가 패널을 가린다 — 지금 패널과 같은 표식 */
+  veiled?: boolean;
   panelRef?: Ref<HTMLElement>;
 }
 
@@ -147,7 +168,43 @@ function PrimaryButton({ primary }: { primary: SceneDockPrimary }) {
   );
 }
 
-export function SceneDock({ log, primary, skip, panelRef }: SceneDockProps) {
+function NightDock({ picked, actions, lifted = false, veiled = false, panelRef }: SceneDockNightProps) {
+  return (
+    <section
+      ref={panelRef}
+      className={lifted ? "mf-game__panel mf-game__dock--night mf-game__panel--kb" : "mf-game__panel mf-game__dock--night"}
+      data-world-panel=""
+      data-scene-dock=""
+      data-dock-night=""
+      {...(veiled ? { "data-will-hide-panel": "true" } : {})}
+    >
+      <div className="mv-scene-dock__guide" data-dock-guide="">
+        {picked ? (
+          <span>고른 집은 바꿀 수 있어요</span>
+        ) : (
+          <>
+            <span className="mv-scene-dock__legend" data-dock-legend="lit">
+              <i className="mv-scene-dock__dot mv-scene-dock__dot--lit" aria-hidden="true" />불 켜진 창
+            </span>
+            <span className="mv-scene-dock__legend" data-dock-legend="dark">
+              <i className="mv-scene-dock__dot mv-scene-dock__dot--dark" aria-hidden="true" />꺼진 창
+            </span>
+          </>
+        )}
+      </div>
+      <div className="mv-scene-dock__actions" data-dock-actions="">
+        {actions}
+      </div>
+    </section>
+  );
+}
+
+export function SceneDock(props: SceneDockProps | SceneDockNightProps) {
+  if ("variant" in props && props.variant === "night") return <NightDock {...props} />;
+  return <DaySceneDock {...(props as SceneDockProps)} />;
+}
+
+function DaySceneDock({ log, primary, skip, panelRef }: SceneDockProps) {
   return (
     <section ref={panelRef} className="mf-game__panel mf-game__dock" data-world-panel="" data-scene-dock="">
       <ChatPanel messages={log.messages} {...(log.channel !== undefined ? { channel: log.channel } : {})} value="" onChange={NOOP} logHeight={LOG_H} />
