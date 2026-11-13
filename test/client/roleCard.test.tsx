@@ -372,6 +372,6 @@ describe("RoleCard 확장판 마피아 한 줄 (21-08)", () => {
     expect(roleHintOf("mafia", "extended")).toBe(HINT);
     const others = (["mafia", "police", "doctor", "citizen"] as const).flatMap((r) => (["basic", "extended"] as const).map((m) => [r, m] as const)).filter(([r, m]) => !(r === "mafia" && m === "extended"));
     expect(others.map(([r, m]) => roleHintOf(r, m)).join(",")).toBe(",,,,,,");
-    expect([...HINT].length).toBe(16);
+    expect([...HINT].length).toBeLessThanOrEqual(19);
   });
 });

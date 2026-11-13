@@ -8,8 +8,9 @@ import "../../styles/v2.css";
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
 // 18페이즈: eyeOff(목격자 없음, eye 에 사선)·lock(옷장 잠금).
 // 19페이즈: deck·book·modeBasic·modeExtended(방장 줄·판 종류 시트, 시안 A 경로).
+// 21페이즈: flame·footprint·cloth·window(저녁 등불·아침 현장 단서, 시안 design/v3.0/lamp-house 경로 그대로 — 창 사각형만 rect 를 같은 모양의 경로로 옮겼다).
 // arrow(위쪽을 가리킴, 회전해 쓴다)·thread(끝이 풀린 사각 천)는 15페이즈가 더한 선 그림이다. 장소·조각 그림은 컬러 에셋 파일이 맡는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "arrow" | "thread" | "bot" | "hand" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff" | "lock" | "deck" | "book" | "modeBasic" | "modeExtended";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "arrow" | "thread" | "bot" | "hand" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff" | "lock" | "deck" | "book" | "modeBasic" | "modeExtended" | "flame" | "footprint" | "cloth" | "window";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -180,6 +181,18 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
   "lens": [
     ["p", "M10.5 4.5a6 6 0 110 12 6 6 0 010-12z"],
     ["p", "M15 15l5.5 5.5"],
+  ],
+  // 21페이즈(UI-SPEC P21-4): 저녁 등불·아침 현장 단서 아이콘
+  flame: [["p", "M12 3c3 4 5 6 5 10a5 5 0 0 1-10 0c0-4 2-6 5-10z"]],
+  footprint: [
+    ["p", "M8 4c2 0 3 2 3 4s-1 3-2 3-3-1-3-3 0-4 2-4z"],
+    ["p", "M16 11c2 0 3 2 3 4s-1 3-2 3-3-1-3-3 0-4 2-4z"],
+  ],
+  cloth: [["p", "M5 8l4-3 3 2 3-2 4 3-2 3v8H7v-8z"]],
+  window: [
+    ["p", "M6 5h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"],
+    ["p", "M12 5v14"],
+    ["p", "M5 12h14"],
   ],
   // 15페이즈(심부름): 임시 선 그림. 같은 이름의 경로만 나중에 바꾼다.
   arrow: [

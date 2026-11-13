@@ -3727,7 +3727,7 @@ test("hostBandChecks HB7: 비는 단계(처형·아침)는 빈 글, 그 밖 보�
   assert.equal(hb7("  ", "night").ok, false);
   assert.equal(hb7("모두 모여 주세요", "dayAnnounce").ok, true);
   assert.equal(hb7("", "errand").ok, true);
-  assert.equal(hb7("빛나는 곳을 찾아 처리해 주세요", "errand").ok, true);
+  assert.equal(hb7("등불 세 곳을 켜 주세요", "errand").ok, true);
   // 숨는 단계의 숨은 문장은 이 판정이 보지 않는다
   assert.equal(hostBandChecks(bandOk({ text: "대기실입니다. 친구들이 모일 때까지 기다려 주세요.", timeText: "", barShown: false, faceHidden: true }), { phase: "lobby", timed: false }).find((r) => r.id === "HB7").ok, true);
 });
@@ -4886,7 +4886,7 @@ test("기본 마피아 사본 상수: 없어야 할 선택자 다섯·속성 앞
   assert.equal(BASIC_ABSENT_SELECTORS.join(","), "[data-trace-mark],[data-seen-mark],[data-lastseen-row],[data-trace-card],[data-record-button]");
   assert.ok(Object.isFrozen(BASIC_ABSENT_SELECTORS));
   assert.equal(BASIC_ABSENT_ATTR_PREFIX, "data-errand-");
-  assert.equal(BASIC_FORBIDDEN_LINES.join("|"), "빛나는 곳을 찾아 처리해 주세요|곧 토론이 시작됩니다|기록 단추로 본 것을 확인해 주세요|같은 옷과 엇갈린 목격을 살펴보세요");
+  assert.equal(BASIC_FORBIDDEN_LINES.join("|"), "등불 세 곳을 켜 주세요|곧 밤이 됩니다|기록 단추로 본 것을 확인해 주세요|같은 옷과 엇갈린 목격을 살펴보세요");
   assert.ok(Object.isFrozen(BASIC_FORBIDDEN_LINES));
 });
 
@@ -4936,7 +4936,7 @@ test("BM2: errand 가 나오거나 낮 발표 다음이 토론이 아니거나 e
 });
 
 test("BM3: 띠 글에 금지 문구가 들어 있으면 실패하고, 본 글이 없으면 측정값 없음", () => {
-  for (const line of ["빛나는 곳을 찾아 처리해 주세요", "곧 토론이 시작됩니다", "기록 단추로 본 것을 확인해 주세요", "같은 옷과 엇갈린 목격을 살펴보세요"]) {
+  for (const line of ["등불 세 곳을 켜 주세요", "곧 밤이 됩니다", "기록 단추로 본 것을 확인해 주세요", "같은 옷과 엇갈린 목격을 살펴보세요"]) {
     const hit = bmIn({ lines: [...BM_LINES, line] });
     assert.equal(bmFails(hit), "BM3", line);
     assert.ok(bmDetail(hit, "BM3").includes(line), line);

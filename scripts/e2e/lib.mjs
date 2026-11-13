@@ -2790,7 +2790,7 @@ export const BASIC_ABSENT_ATTR_PREFIX = "data-errand-";
  * 기본 마피아에서 자막 띠([data-host-line])에 나오면 안 되는 사회자 줄(UI-SPEC E-3) — src/game/hostLine.ts HOST_LINES 의 errand.act·errand.done·witness·discussion.evidence 사본.
  * errand.ghost("지켜봐 주세요")는 낮 발표·투표·찬반의 유령 줄과 같은 문장이라 넣지 않는다(기본 마피아의 유령 화면에 그대로 나온다). e2eContract 가 같음을 고정한다.
  */
-export const BASIC_FORBIDDEN_LINES = Object.freeze(["빛나는 곳을 찾아 처리해 주세요", "곧 토론이 시작됩니다", "기록 단추로 본 것을 확인해 주세요", "같은 옷과 엇갈린 목격을 살펴보세요"]);
+export const BASIC_FORBIDDEN_LINES = Object.freeze(["등불 세 곳을 켜 주세요", "곧 밤이 됩니다", "기록 단추로 본 것을 확인해 주세요", "같은 옷과 엇갈린 목격을 살펴보세요"]);
 
 /** BM1 의 감시 횟수 하한 — 이보다 적게 돈 감시는 한 판을 덮지 못했다(공허 통과 금지, T-19-22) */
 const BASIC_SCAN_MIN = 20;
@@ -3607,8 +3607,8 @@ export const ERRAND_CARD_LINE = "가는 길에 본 사람이 기록돼요";
 export const ERRAND_STATE_ATTRS = ["data-done", "data-call", "data-rest", "data-errand-act"];
 /** 사회자 띠 문장 사본(src/game/hostLine.ts HOST_LINES 의 errand·witness·trace·discussion 줄 — e2eContract 가 같음을 고정). */
 export const ERRAND_LINES = {
-  act: "빛나는 곳을 찾아 처리해 주세요",
-  done: "곧 토론이 시작됩니다",
+  act: "등불 세 곳을 켜 주세요",
+  done: "곧 밤이 됩니다",
   witness: "기록 단추로 본 것을 확인해 주세요",
   discussionAct: "의심 가는 사람을 이야기해 주세요",
   trace: "", // 18.1-12: 흔적 구간은 증거 카드가 말한다 — 띠 문장은 빈 글

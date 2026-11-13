@@ -12,9 +12,12 @@
 // 18.1-12(결정 0083-8): 띠 문장은 "할 일 한 구절"(앞말·마침표·닉네임 없음, 공백 포함 19자 이하)이라 닉네임·아침 결과 문장은 읽지 않는다.
 // 빈 문자열 = 큰 글·시작 카드가 같은 말을 하는 동안(처형·아침·흔적 구간·심부름 시작 카드) — 대체 문장으로 바꾸지 않는다(대체 문장은 키가 fallback 일 때만).
 // local.startCard(클라이언트 상태)는 심부름 단계 문장만 비운다 — 키·빛남 대상은 바꾸지 않는다.
+// (21-08) 확장판 갈래: view.mode 는 규칙 값(rulesetOf(modeOf(view)).errand) 하나로만 읽고, me.clues·me.record 는 있는지(유무·개수)만 본다, local.sceneOn(클라이언트 상태).
+// 확장판 밤은 역할(me.role)을 읽기 전에 판 규칙으로 갈린다 — 네 역할이 같은 키 night.house·같은 문장·같은 빛남 대상(T-21-21). 줄 내용(단서 종류·목격 좌석)은 읽지 않는다.
 import type { PhaseId, PlaceId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import { connectedCount } from "../../shared/game/room";
+import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import { actablePlaceOf, errandProgress, nextPlaceOf, placeCentersOf } from "./errandView";
 import { TIMELESS_PHASES } from "./scenes";
 
@@ -24,15 +27,16 @@ export type HostKey =
   | "assigning"
   | "roleReveal.act" | "roleReveal.wait"
   | "dayAnnounce.wait" | "dayAnnounce.ghost"
-  | "discussion.act" | "discussion.evidence" | "discussion.ghost"
+  | "discussion.act" | "discussion.evidence" | "discussion.clue" | "discussion.ghost"
   | "nomination.act" | "nomination.ghost"
   | "defense.act" | "defense.wait" | "defense.ghost"
   | "verdict.act" | "verdict.wait" | "verdict.ghost"
   | "execution.passed" | "execution.failed"
-  | "night.mafia" | "night.police" | "night.doctor" | "night.citizen" | "night.ghost"
+  | "night.mafia" | "night.police" | "night.doctor" | "night.citizen" | "night.ghost" | "night.house"
   | "morning" | "ended"
   | "errand.act" | "errand.done" | "errand.ghost"
   | "witness" | "trace"
+  | "scene.act" | "scene.done" | "scene.ghost"
   | "fallback";
 
 /** 키를 찾지 못했을 때의 한 줄(마침표 없음) */
@@ -49,6 +53,8 @@ export interface HostLocal {
   traceOn?: boolean;
   /** 심부름 시작 카드("오늘 갈 곳")가 내 화면에 떠 있는가(18.1-12, 클라이언트 상태). 떠 있는 동안 카드가 같은 말을 하므로 띠 문장은 비어 있다 */
   startCard?: boolean;
+  /** 확장판 아침의 결과 알림이 끝나 현장 조사가 시작됐는가(21-08, 클라이언트 상태 — 21-12 가 채운다). 거짓이면 아침 띠는 빈 줄이다 */
+  sceneOn?: boolean;
 }
 
 /**
@@ -66,6 +72,8 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   "dayAnnounce.ghost": "지켜봐 주세요",
   "discussion.act": "의심 가는 사람을 이야기해 주세요",
   "discussion.evidence": "같은 옷과 엇갈린 목격을 살펴보세요",
+  // 21페이즈(UI-SPEC 자막 띠 표): 확장판 토론에서 단서·목격이 하나라도 있을 때
+  "discussion.clue": "단서를 말로 나눠 보세요",
   "discussion.ghost": "유령끼리 이야기할 수 있습니다",
   "nomination.act": "처형할 사람의 이름표를 눌러 주세요",
   "nomination.ghost": "지켜봐 주세요",
@@ -83,17 +91,24 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   "night.doctor": "지킬 사람의 얼굴을 눌러 주세요",
   "night.citizen": "한 명의 얼굴을 눌러 주세요",
   "night.ghost": "모두의 밤 행동을 지켜봐 주세요",
+  // 21페이즈: 확장판 밤 — 네 역할이 같은 문장(문장으로도 역할이 갈리지 않는다)
+  "night.house": "집 하나를 눌러 주세요",
   // 큰 글(아침 결과)·증거 카드(흔적 구간)가 말한다
   morning: "",
   ended: "게임이 끝났습니다. 다음 판을 준비해 주세요.",
   // 15페이즈(UI-SPEC 표 원문, 합쇼체·역할 단어 없음). 마피아도 같은 문장이다. 심부름 시작 카드가 떠 있는 동안은 hostLineOf 가 빈 줄을 돌려준다(18.1-12).
-  "errand.act": "빛나는 곳을 찾아 처리해 주세요",
-  "errand.done": "곧 토론이 시작됩니다",
+  // 21페이즈(UI-SPEC 자막 띠 표): 심부름 단계는 확장판에만 있다 — 저녁 등불 켜기 문장
+  "errand.act": "등불 세 곳을 켜 주세요",
+  "errand.done": "곧 밤이 됩니다",
   "errand.ghost": "지켜봐 주세요",
   // 15페이즈(UI-SPEC 표 원문): 목격 기록이 있는 토론. 마피아도 같은 문장이다. 16페이즈(D-11): 흔적이 있는 날 토론은 discussion.evidence 다 —
   // '범인'·'증거'·'확정' 없이 공개된 두 근거(같은 옷·목격)만 말한다.
   witness: "기록 단추로 본 것을 확인해 주세요",
   trace: "",
+  // 21페이즈: 확장판 아침 현장 조사
+  "scene.act": "빛나는 곳을 살펴보세요",
+  "scene.done": "곧 토론이 시작됩니다",
+  "scene.ghost": "지켜봐 주세요",
   fallback: HOST_FALLBACK,
 };
 
@@ -101,6 +116,11 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
 function isGhost(view: RoomView): boolean {
   const mine = view.players.find((p) => p.seat === view.me.seat);
   return mine !== undefined && !isAlive(mine);
+}
+
+/** 확장판 판인가 — 판 규칙 값 하나만 읽는다(판 이름을 직접 가르지 않는다) */
+function extendedOf(view: RoomView): boolean {
+  return rulesetOf(modeOf(view)).errand;
 }
 
 /** 단계 × 상태(act|wait|ghost) × 역할(밤만) → 키. 꺼진 장치 단계(결선·마지막 3인)와 모르는 단계는 fallback */
@@ -125,6 +145,8 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
     }
     case "discussion":
       if (ghost) return "discussion.ghost";
+      // 21-08: 확장판 갈래를 먼저 — 단서(me.clues)나 목격 기록(me.record)이 하나라도 있으면 discussion.clue, 아니면 discussion.act. witness·discussion.evidence 는 쓰지 않는다
+      if (extendedOf(view)) return (view.me.clues?.length ?? 0) > 0 || (view.me.record?.length ?? 0) > 0 ? "discussion.clue" : "discussion.act";
       // 역할을 읽지 않는다. 우선순위: 기록을 아직 안 연 사람 → witness, 흔적이 있는 날 → discussion.evidence, 그 밖 → discussion.act.
       // 기록이 있다는 사실(불리언)과 day.evidence.trace 의 유무만 본다 — 줄 내용·조각 값·목격자는 읽지 않는다
       if (view.me.record !== undefined && local.recordOpened !== true) return "witness";
@@ -144,6 +166,8 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
     }
     case "night": {
       if (ghost) return "night.ghost";
+      // 21-08: 확장판 밤은 역할을 읽기 전에 갈린다(T-21-21) — 네 역할 모두 같은 키
+      if (extendedOf(view)) return "night.house";
       const role = view.me.role;
       if (role === "mafia") return "night.mafia";
       if (role === "police") return "night.police";
@@ -153,6 +177,12 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
     case "morning": {
       const morning = view.day?.morning;
       if (morning === undefined) return "fallback";
+      // 21-08: 확장판 아침 — 결과 알림이 끝나기 전(sceneOn 거짓)은 빈 줄, 그 뒤 유령 scene.ghost · 단서 셋을 다 살폈으면 scene.done · 그 밖 scene.act. 역할을 읽지 않는다
+      if (extendedOf(view)) {
+        if (local.sceneOn !== true) return "morning";
+        if (ghost) return "scene.ghost";
+        return (view.me.clues?.length ?? 0) >= 3 ? "scene.done" : "scene.act";
+      }
       return local.traceOn === true && morning.trace !== undefined ? "trace" : "morning";
     }
     case "ended":
@@ -187,9 +217,9 @@ export function hostBandModeOf(view: RoomView, line: string): HostBandMode {
   return "show";
 }
 
-export type CallTool = "start" | "card" | "chat" | "will" | "verdict" | "errand" | "record";
-/** 15페이즈: place = 다음 장소 표지(화면 밖이면 화살표 칩) */
-export type CallTarget = { kind: "tool"; tool: CallTool } | { kind: "tag"; seats: readonly number[] } | { kind: "place"; id: PlaceId };
+export type CallTool = "start" | "card" | "chat" | "will" | "verdict" | "errand" | "record" | "scene";
+/** 15페이즈: place = 다음 장소 표지(화면 밖이면 화살표 칩). 21페이즈: house = 확장판 밤의 집 판(산 사람 좌석 전원) */
+export type CallTarget = { kind: "tool"; tool: CallTool } | { kind: "tag"; seats: readonly number[] } | { kind: "place"; id: PlaceId } | { kind: "house"; seats: readonly number[] };
 
 function aliveSeats(view: RoomView, includeMe: boolean): number[] {
   return view.players
@@ -212,8 +242,16 @@ export function callTargetsOf(view: RoomView, local: HostLocal = {}): CallTarget
     case "witness":
       return { kind: "tool", tool: "record" };
     case "discussion.act":
+    case "discussion.clue":
     case "discussion.evidence":
       return { kind: "tool", tool: "chat" };
+    case "scene.act":
+      return { kind: "tool", tool: "scene" };
+    case "night.house": {
+      // 확장판 밤 집 판(21-11): 산 사람 전원(나 포함)이 같이 빛난다 — 역할과 무관하다
+      const seats = aliveSeats(view, true);
+      return seats.length === 0 ? null : { kind: "house", seats };
+    }
     case "nomination.act": {
       const seats = aliveSeats(view, false);
       return seats.length === 0 ? null : { kind: "tag", seats };

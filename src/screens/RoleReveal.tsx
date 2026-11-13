@@ -4,7 +4,8 @@ import type { RoomView } from "../../shared/protocol";
 import { RoleCard } from "../components/RoleCard";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { callTargetsOf } from "../game/hostLine";
-import { allyNicknames } from "../game/roleText";
+import { modeOf } from "../../shared/game/ruleset";
+import { allyNicknames, roleHintOf } from "../game/roleText";
 import { autoFlipDelayMs, initialCardState, onAutoTimer, onTap, sinceStartMs } from "../net/cardFace";
 import type { CardState } from "../net/cardFace";
 import "../styles/phase.css";
@@ -74,7 +75,7 @@ export function RoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleReve
         <PhaseHeader title="역할 확인" extra={myRoleButton} />
       </header>
       <section className="mf-reveal__stage">
-        <RoleCard role={role} face={card.face} allies={allies} call={callCard} onFlip={() => setCard((s) => onTap(s, hasRole))} />
+        <RoleCard role={role} face={card.face} allies={allies} call={callCard} hint={roleHintOf(role, modeOf(view))} onFlip={() => setCard((s) => onTap(s, hasRole))} />
       </section>
       <div className="mf-reveal__hints" />
     </main>

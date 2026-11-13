@@ -493,7 +493,8 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     same(hdr(defenseView(g)), { title: "최후 변론", hint: "모두의 직업이 보여요" });
     same(hdr(verdictView(g)), { title: "찬반", hint: "모두의 직업이 보여요" });
     same(hdr(executionView(5, 2, true, g)), { title: "처형", hint: "모두의 직업이 보여요" });
-    same(hdr(viewOf("morning", g)), { title: "아침", hint: "모두의 직업이 보여요" });
+    same(hdr({ ...viewOf("morning", g), mode: "basic" }), { title: "아침", hint: "모두의 직업이 보여요" });
+    same(hdr({ ...viewOf("morning", g), mode: "extended" }), { title: "현장 조사", hint: "모두의 직업이 보여요" });
     same(hdr(viewOf("night", g)), { title: "밤", hint: "모두의 직업과 밤 행동이 보여요" });
   });
 

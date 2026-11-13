@@ -56,12 +56,14 @@ interface SheetOpts {
   allies?: number[];
   records?: RoleRecord[];
   onTab?: (t: RoleCardTab) => void;
+  /** 21-08: 판 종류. 기본은 기본 마피아(옛 시험이 보는 갈래) */
+  mode?: GameMode;
 }
 
 function renderSheet(o: SheetOpts = {}) {
   const role = o.role === undefined ? "police" : o.role;
   const onTab = o.onTab ?? vi.fn();
-  const view = makeView(role, { allies: o.allies, records: o.records ?? (role !== null ? RECORDS[role] : undefined) });
+  const view = makeView(role, { allies: o.allies, records: o.records ?? (role !== null ? RECORDS[role] : undefined), mode: o.mode ?? "basic" });
   const result = render(
     <RoleCardSheet
       view={view}

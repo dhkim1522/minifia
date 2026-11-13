@@ -61,6 +61,7 @@ function makeView(o: ViewOpts): RoomView {
     phaseEndsAt: endsIn === null ? null : NOW + endsIn,
     phaseDurationMs: endsIn === null ? null : 15_000,
     serverNow: NOW,
+    mode: "basic", // 21-08: 확장판 갈래는 별도 시험이 본다 — 이 시험은 기본 마피아 갈래(옛 키)를 본다
     minPlayers: 4,
     maxPlayers: 8,
     players: [

@@ -83,6 +83,7 @@ function makeView(o: ViewOpts = {}): RoomView {
     phaseEndsAt: o.noClock ? null : NOW + 90_000,
     phaseDurationMs: o.noClock ? null : 90_000,
     serverNow: NOW,
+    mode: "basic", // 21-08: 확장판 갈래는 별도 시험이 본다 — 이 시험은 기본 마피아 갈래(옛 키)를 본다
     minPlayers: 4,
     maxPlayers: 8,
     players,
@@ -576,7 +577,7 @@ describe("GameMap — 헤더 시간대 글자 (0083-1)", () => {
   it("단계마다 todOf 대응: 낱말·제목", () => {
     const cells: Array<[PhaseId, string, string | null, string]> = [
       ["dayAnnounce", "day", "낮", "토론"],
-      ["errand", "day", "낮", "심부름"],
+      ["errand", "day", "낮", "등불 켜기"],
       ["nomination", "dusk", "저녁", "투표"],
       ["defense", "dusk", "저녁", "최후 변론"],
       ["verdict", "dusk", "저녁", "찬반"],
