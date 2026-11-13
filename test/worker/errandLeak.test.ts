@@ -594,6 +594,7 @@ describe("⑧ 마피아도 같은 처리 규칙 — 가짜 장소가 없어 목�
     const g = await startedGame("errand");
     const map = mapOf(((await storedRoom(g.code)) as unknown as { map?: MapId }).map ?? "bar");
     const far = farPoint(map);
+    await writeRoomEdit(env.ROOM.getByName(g.code), (room) => ({ ...room, errandTickAt: Date.now() + 3_600_000 })); // 실제 시간 표본이 누름과 겹쳐 프레임 수가 달라지지 않게 미룬다(20-03)
     const mafias = withRole(g, "mafia");
     expect(mafias.length).toBeGreaterThan(0);
 

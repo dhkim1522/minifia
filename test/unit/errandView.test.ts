@@ -141,8 +141,7 @@ describe("진행·다음 장소·처리 가능", () => {
     const day = { ...startedAt(6, 11, "roleReveal"), map: "bar" as const };
     const dealt: RoomState = tick(day, day.phaseEndsAt!, seededRandInt(12));
     expect(dealt.phase).toBe("errand");
-    // 화면은 서버 전용 가짜 장소(errandFake, 16페이즈 D-08)를 모른다 — 거울은 기본 처리 규칙만 견준다. 가짜 제외는 errand.test 가 본다.
-    const state: RoomState = { ...dealt, players: dealt.players.map(({ errandFake: _fake, ...rest }) => rest) };
+    const state: RoomState = dealt;
     const player = state.players.find((p): p is Player => p.errandPlaces !== undefined)!;
     const places = player.errandPlaces!;
     const view = viewOf("bar", { places: [...places], done: [] });
