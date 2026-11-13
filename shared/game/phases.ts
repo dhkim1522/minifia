@@ -68,6 +68,7 @@ export const ERRAND_TICK_MS = 1_000; // 결정 0074 — 근처·목격 표본 �
 export const ERRAND_VIEW_HORIZON_MS = 1_500; // 결정 0074 — 근처 사람 이동 구간을 자르는 길이
 export const ERRAND_MIN_GAP_MS = 250; // 결정 0074 — 같은 사람의 처리 요청 최소 간격(연타 방어)
 export const RECORD_MAX = 6; // 결정 0074 — 목격 기록 줄 상한
+export const MORNING_SCENE_MS = 0; // 자리 값(21-01 RED)
 export const MORNING_TRACE_MS = 5_000; // 결정 0079(A3) · 흔적 카드가 두 줄이 되어 3→5초, 상한 15→16초 — 시간은 참고 목표(결정 0074 의 흔적 공개 구간)
 
 export const TUTORIAL_MS = 150_000; // 결정 0078·0080 — 함께 진행 튜토리얼 상한(T-6). 이 줄만 고친다

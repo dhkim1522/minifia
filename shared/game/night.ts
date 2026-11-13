@@ -10,7 +10,7 @@ import type { Player, RoomState } from "./room";
 import { modeOf, rulesetOf } from "./ruleset";
 import type { Ruleset } from "./ruleset";
 import { pickTracePiece } from "./trace";
-import type { RandInt } from "./tick";
+import type { DeadlineResult, RandInt } from "./tick";
 
 export type NightError = "WRONG_PHASE" | "BAD_MESSAGE";
 
@@ -193,6 +193,11 @@ export function enterMorning(state: RoomState, randInt: RandInt = () => 0, rules
       },
     ],
   };
+}
+
+/** 자리 함수(21-01 RED) — 입력을 그대로 돌려준다. */
+export function routeAfterNight(state: RoomState, _at: number): DeadlineResult {
+  return { state, stay: false };
 }
 
 const bySeat = (a: Player, b: Player): number => a.seat - b.seat;
