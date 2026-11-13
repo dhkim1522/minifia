@@ -8,6 +8,7 @@
 import { isAlive } from "./alive";
 import { STAGE_SPOT } from "./map";
 import type { RoomState } from "./room";
+import { modeOf, rulesetOf } from "./ruleset";
 import { positionAtFx } from "./world";
 import type { LayoutMemo, WorldState } from "./world";
 
@@ -136,10 +137,13 @@ export function assignSlots(people: readonly { id: string; x: number; z: number 
   return out;
 }
 
-/** 지금 단계가 요구하는 배치의 키: 지목 '{일차}:ring' · 결선 '{일차}:runoff' · 마지막 3인 '{일차}:showdown' · 변론·찬반 '{일차}:stage' · 처형 '{일차}:exec' · 그 밖은 null(아무것도 안 한다). */
+/** 지금 단계가 요구하는 배치의 키: 확장판 토론 '{일차}:talk'(21페이즈 D-18) · 지목 '{일차}:ring' · 결선 '{일차}:runoff' · 마지막 3인 '{일차}:showdown' · 변론·찬반 '{일차}:stage' · 처형 '{일차}:exec' · 그 밖은 null(아무것도 안 한다). */
 export function layoutKey(state: RoomState): string | null {
   const day = state.day ?? 0;
   switch (state.phase) {
+    case "discussion":
+      // 확장판은 아침 조사가 끝나면 광장 가운데로 모여 토론을 시작한다(21페이즈 D-18) — 지금 모이기 장치를 그대로 쓴다. 기본 마피아의 토론은 배치가 없다.
+      return rulesetOf(modeOf(state)).errand ? `${day}:talk` : null;
     case "nomination":
       return `${day}:ring`;
     case "runoff":
@@ -188,7 +192,8 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
   const key = layoutKey(state);
   if (key === null) return null;
   const day = state.day ?? 0;
-  const trial = state.phase !== "nomination";
+  // 지목(ring)·토론(talk)은 모두 산 사람의 둘레 자리뿐이다(변론자·무대 기억이 없다) — 재판 단계(변론·찬반·처형·결선·결전)만 그날 기억을 이어 쓴다.
+  const trial = state.phase !== "nomination" && state.phase !== "discussion";
   const defender = trial && state.phase !== "runoff" && state.phase !== "showdown" ? state.verdict?.candidate : undefined;
   const runoffCand = state.phase === "runoff" ? state.runoff?.cand : undefined;
 

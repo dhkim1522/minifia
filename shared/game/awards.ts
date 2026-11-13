@@ -6,6 +6,7 @@
 import type { AwardId, AwardLine } from "../protocol";
 import { isAlive } from "./alive";
 import type { RoomState } from "./room";
+import { modeOf, rulesetOf } from "./ruleset";
 
 /** 탈락 시점: 처형이면 {n, at:"day"}, 밤 사망이면 {n, at:"night"}. */
 export interface Elimination {
@@ -73,6 +74,8 @@ interface PointLine {
 /** 판 전체 기록의 읽기 전용 요약. 칭호 규칙은 이것만 본다. */
 interface Ctx {
   lastDay: number;
+  /** 확장판(심부름이 켜진 판)은 같은 일차에서 밤이 낮보다 먼저다(21페이즈 D-01). */
+  nightFirst: boolean;
   who: ReadonlyMap<number, Who>;
   points: readonly PointLine[];
   nights: ReadonlyArray<{ n: number; target: number | undefined; died: boolean }>;
@@ -117,7 +120,7 @@ function buildCtx(state: RoomState): Ctx {
   for (const e of nights) {
     if (e.died && e.target !== undefined && (firstVictim === undefined || e.n < firstVictim.n)) firstVictim = { seat: e.target, n: e.n };
   }
-  return { lastDay, who, points, nights, whispersFrom, firstVictim };
+  return { lastDay, nightFirst: rulesetOf(modeOf(state)).errand, who, points, nights, whispersFrom, firstVictim };
 }
 
 const roleOf = (ctx: Ctx, seat: number): string | undefined => ctx.who.get(seat)?.role;
@@ -184,11 +187,15 @@ const SPECS: readonly AwardSpec[] = [
   { id: "mood", tier: 1, eligible: () => true, score: (_c, w) => w.emote },
 ];
 
-/** 후보 정렬 ②③ 의 키: 생존자가 가장 크고, 탈락자는 더 늦게 탈락할수록 크다(같은 일차면 밤이 낮보다 늦다). 기록 없는 탈락은 마지막 날 낮으로 본다. */
+/**
+ * 후보 정렬 ②③ 의 키: 생존자가 가장 크고, 탈락자는 더 늦게 탈락할수록 크다. 기록 없는 탈락은 마지막 날 낮으로 본다.
+ * 같은 일차의 순서는 판마다 다르다 — 기본 마피아는 처형 뒤에 밤이라 밤이 낮보다 늦고(밤 n → n·2 + 1), 확장판은 밤 뒤에 처형이라 낮이 밤보다 늦다(처형 n → n·2 + 1, 21페이즈 D-01).
+ */
 function survivalKey(ctx: Ctx, w: Who): number {
   if (w.alive) return Number.MAX_SAFE_INTEGER;
   const out = w.elimination;
-  return out === undefined ? ctx.lastDay * 2 : out.n * 2 + (out.at === "night" ? 1 : 0);
+  if (out === undefined) return ctx.lastDay * 2 + (ctx.nightFirst ? 1 : 0);
+  return out.n * 2 + (out.at === (ctx.nightFirst ? "day" : "night") ? 1 : 0);
 }
 
 /** 후보 정렬 비교 하나가 ①점수 큰 쪽 ②생존자 우선·더 늦은 탈락 ③낮은 좌석을 모두 맡는다. */

@@ -52,9 +52,10 @@ import { ERRAND_MIN_GAP_MS, ERRAND_TICK_MS } from "../shared/game/phases";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
 import type { MapDef } from "../shared/game/map";
+import { TOWN_HOUSES } from "../shared/game/mapTown";
 import { mapOf, pickMap, roomMapId } from "../shared/game/maps";
 import { pickMode } from "../shared/game/mode";
-import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
+import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome, teleportTo } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
 import { clipToZone, nextCrossingAt, reconcileZones, settleZones, zoneAt } from "../shared/game/zones";
@@ -1407,24 +1408,27 @@ export class Room extends DurableObject<Env> {
     this.syncLayout(now);
   }
 
-  // 밤·아침 위치(결정 0061-3·4): 키 '{일차}:night'·'{일차}:morning' 이 world.lay.key 와 다르면 home 으로 순간이동하고 보는 사람 한 명씩 snap 을 보낸다.
-  // 밤은 산 사람 전원, 아침은 산 사람 + 그 밤의 피해자(마피아가 걸은 구간을 버린다, UI-SPEC A1). home 이 없는 사람은 teleportHome 이 건드리지 않는다(fail-safe).
-  // 전송은 새 길을 만들지 않는다: 소켓마다 worldVisibleTo 로 거른 snapFrame 을 deliver 한 명씩(연구 Don't Hand-Roll).
-  // 밤의 시민 편은 본인 한 칸, 아침은 산 사람 소켓 모두가 같은 좌석·같은 좌표다. 방금 탈락한 피해자는 이 snap 으로 ghostSnapped 에 올라 같은 snap 을 두 번 받지 않는다(A3).
+  // 밤·아침 위치(결정 0061-3·4): 키 '{일차}:night'·'{일차}:morning' 이 world.lay.key 와 다르면 위치를 맞추고 보는 사람 한 명씩 snap 을 보낸다.
+  // 재즈 바·광장: 밤은 산 사람 전원, 아침은 산 사람 + 그 밤의 피해자가 home 으로 순간이동한다(마피아가 걸은 구간을 버린다, UI-SPEC A1). home 이 없는 사람은 teleportHome 이 건드리지 않는다(fail-safe).
+  // 마을(21페이즈 D-11): 밤이 시작되면 산 사람은 모두 자기 좌석 집의 문 앞(TOWN_HOUSES[seat].front)으로 순간이동해 한 점으로 서 있고(밤에는 걷기가 거절된다), 아침에는 순간이동 없이 그 자리에서
+  // 걷는다(키만 맞추고 snap 을 한 번 — 밤에 본인만 보던 시야가 돌아온다). 0087 알려진 한계대로 이 순간이동에는 문 연출이 없다(방 안에서 밤을 맞은 사람도 그냥 집 앞으로 옮긴다).
+  // 전송은 새 길을 만들지 않는다: 소켓마다 worldVisibleTo 로 거른 snapFrame 을 deliver 한 명씩(연구 Don't Hand-Roll). 밤의 시민 편은 본인 한 칸(T-21-01), 아침은 산 사람 소켓 모두가 같은 좌석을 받는다.
+  // 방금 탈락한 피해자는 이 snap 으로 ghostSnapped 에 올라 같은 snap 을 두 번 받지 않는다(A3).
   // 방이 있는 맵(20페이즈 D-14): 순간이동은 문을 지나지 않으므로 구역 기억을 알림 없이 새 자리로 맞추고(settleZones) snap 이 화면을 통째로 바꾼다 —
   // 맞추지 않으면 다음 syncZones 가 이 순간이동을 문 통과로 알린다(사라짐·나타남·zone snap). 아침 snap 은 snapFrameFor 가 구역으로 걸러 같은 구역 사람만 싣는다.
   private async syncHome(now: number): Promise<void> {
     const room = this.room;
     if (!room || room.day === undefined) return;
-    // 알람 따라잡기로 아침을 건너뛴 경우(WR-01): 밤 키가 남은 채 지도 단계에 들어왔다. 정상 아침 경로와 같이 되돌리고 snap 을 한 번 보낸다.
-    // 키를 ':morning' 으로 바꿔 두므로 같은 단계에서 다시 불려도 멱등이다. 이어서 syncLayout 이 지금 단계 배치를 맞춘다.
+    const town = roomMapId(room) === "town";
+    // 알람 따라잡기·현장 없는 밤(확장판은 아침 없이 토론으로 간다, D-17)으로 아침을 건너뛴 경우(WR-01): 밤 키가 남은 채 지도 단계에 들어왔다. 정상 아침 경로와 같이 되돌리고 snap 을 한 번 보낸다.
+    // 키를 ':morning' 으로 바꿔 두므로 같은 단계에서 다시 불려도 멱등이다. 이어서 syncLayout 이 지금 단계 배치를 맞춘다. 마을은 순간이동 없이 키와 snap 만 맞춘다(집 앞에 선 채 토론 모이기로 걷는다).
     const staleNight = room.phase !== "night" && room.phase !== "morning" && MAP_PHASES.has(room.phase) && this.world.lay?.key.endsWith(":night") === true;
     if (staleNight) {
       const staleKey = this.world.lay!.key.replace(/:night$/, ":morning");
       const victimNow = room.morning?.eliminated;
       const movedNow = room.players.filter((p) => isAlive(p) || (victimNow !== undefined && p.seat === victimNow)).map((p) => p.id);
-      this.world = { ...teleportHome(this.world, movedNow, now), lay: { key: staleKey, slots: this.world.lay?.slots ?? {} } };
-      this.world = settleZones(this.mapDef(), this.world, movedNow, now);
+      this.world = { ...(town ? this.world : teleportHome(this.world, movedNow, now)), lay: { key: staleKey, slots: this.world.lay?.slots ?? {} } };
+      if (!town) this.world = settleZones(this.mapDef(), this.world, movedNow, now);
       await this.flushWorld();
       this.snapEachViewer(now);
       return;
@@ -1432,6 +1436,24 @@ export class Room extends DurableObject<Env> {
     if (room.phase !== "night" && room.phase !== "morning") return;
     const key = `${room.day}:${room.phase}`;
     if (key === this.world.lay?.key) return;
+    if (town) {
+      const lay = { key, slots: this.world.lay?.slots ?? {} };
+      if (room.phase === "night") {
+        const spots: Record<string, { x: number; z: number }> = {};
+        for (const p of room.players) {
+          const house = isAlive(p) ? TOWN_HOUSES.find((h) => h.seat === p.seat) : undefined;
+          if (house !== undefined) spots[p.id] = house.front;
+        }
+        const ids = Object.keys(spots);
+        this.world = { ...teleportTo(this.world, spots, now), lay };
+        this.world = settleZones(this.mapDef(), this.world, ids, now);
+      } else {
+        this.world = { ...this.world, lay };
+      }
+      await this.flushWorld();
+      this.snapEachViewer(now);
+      return;
+    }
     const victimSeat = room.phase === "morning" ? room.morning?.eliminated : undefined;
     const moved = room.players.filter((p) => isAlive(p) || (victimSeat !== undefined && p.seat === victimSeat)).map((p) => p.id);
     this.world = { ...teleportHome(this.world, moved, now), lay: { key, slots: this.world.lay?.slots ?? {} } };

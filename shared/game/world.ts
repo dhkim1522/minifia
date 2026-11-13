@@ -104,9 +104,17 @@ export function forceSegment(w: WorldState, playerId: string, seg: Segment): Wor
   return { ...w, segs: { ...w.segs, [playerId]: seg } };
 }
 
-/** 자리 함수(21-01 RED) — 입력을 그대로 돌려준다. */
-export function teleportTo(w: WorldState, _spots: Readonly<Record<string, { x: number; z: number }>>, _now: number): WorldState {
-  return w;
+/**
+ * 정해진 자리로 한 점 순간이동(서버 주도, 21페이즈 D-11 — 마을의 밤 집 앞): spots 의 id 마다 구간이 있으면 서 있는 한 점(restSegment, 출발 시각 now)으로 바꾼다.
+ * forceSegment 와 같이 lastMoveAt 은 건드리지 않고, 구간이 없는 id(방에 없는 사람)는 건너뛴다. 좌표는 고정소수점이다. 시각은 인자고 입력은 바꾸지 않는다.
+ */
+export function teleportTo(w: WorldState, spots: Readonly<Record<string, { x: number; z: number }>>, now: number): WorldState {
+  let out = w;
+  for (const id of Object.keys(spots)) {
+    const pt = spots[id]!;
+    out = forceSegment(out, id, restSegment(pt.x, pt.z, now));
+  }
+  return out;
 }
 
 /** 고정소수점 실수 좌표(반올림 전)의 구간 위치. 누적 길이 선형 보간, 길이 0 선분은 건너뛴다. */
