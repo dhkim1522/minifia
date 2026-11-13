@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: 7 완료 → 다음 21-08 (화면 바탕: 아이콘·제목·자막 띠 키·화면 계산 모듈)
+current_plan: "8 완료 → 다음 21-09 (마을 3D: 가로등·켜진 등불 빛·집 창·현장 decal·조명)"
 status: executing
-stopped_at: Completed 21-07-PLAN.md
-last_updated: "2026-11-13T08:20:34.651Z"
+stopped_at: Completed 21-08-PLAN.md
+last_updated: "2026-11-13T08:32:23.097Z"
 last_activity: 2026-11-13
-last_activity_desc: Phase 21 plan 07 완료 (확장판 공개 흔적 걷기·한 판 누설 전수 causalLeak·화면 코드 정적 검사 srcClean·봇 판 완주)
-state_head: b6833fc4fe44c9f2ad0b24dde6f7bc3c57c14887
+last_activity_desc: Phase 21 plan 08 완료 (아이콘 넷·확장판 자막 띠 키와 문장·헤더 제목·확장판 마피아 카드 한 줄·화면 계산 모듈 causalView)
+state_head: 46ddfe0c3505e0486a3d4915a06054df2cdf5b1c
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 115
-  completed_plans: 104
+  completed_plans: 105
   percent: 60
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 21 (cause-effect-missions) — IN PROGRESS
-Current Plan: 7 완료 → 다음 21-08 (화면 바탕: 아이콘·제목·자막 띠 키·화면 계산 모듈)
+Current Plan: 8 완료 → 다음 21-09 (마을 3D: 가로등·켜진 등불 빛·집 창·현장 decal·조명)
 Total Plans in Phase: 18
 Status: Executing Phase 21
-Last activity: 2026-11-13 — 21-07 완료 (확장판 아침이 공개 흔적 morning.trace·seen·day.evidence 를 싣지 않고 옷 조각은 현장 ② 를 살핀 본인 me.clues 로만, 현장 난수가 첫 호출. 마을 한 판 누설 전수 causalLeak 판정 여섯·변이 확인, 화면 코드 정적 검사 srcClean, 봇 판 완주. npm test 8729 통과·실패 0, typecheck 초록). 이전: 21-06 완료
+Last activity: 2026-11-13 — 21-08 완료 (V2Icon flame·footprint·cloth·window, 자막 띠 night.house·scene.*·discussion.clue 와 심부름 문장 갱신, 헤더 제목 등불 켜기·현장 조사, roleHintOf 카드·시트 한 줄, causalView 계산 모듈. npm test 8779 통과·실패 0, typecheck 초록). 이전: 21-07 완료 (확장판 아침이 공개 흔적 morning.trace·seen·day.evidence 를 싣지 않고 옷 조각은 현장 ② 를 살핀 본인 me.clues 로만, 현장 난수가 첫 호출. 마을 한 판 누설 전수 causalLeak 판정 여섯·변이 확인, 화면 코드 정적 검사 srcClean, 봇 판 완주. npm test 8729 통과·실패 0, typecheck 초록). 이전: 21-06 완료
 
 ## Performance Metrics
 
@@ -727,8 +727,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T08:20:33.668Z
-Stopped at: Completed 21-07-PLAN.md
+Last session: 2026-11-13T08:32:22.129Z
+Stopped at: Completed 21-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
