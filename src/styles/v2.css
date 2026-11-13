@@ -477,6 +477,22 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mf-modechip { position: absolute; top: calc(var(--mf-host-bottom, 62px) + 20px); left: var(--space-md); z-index: var(--z-overlay); display: inline-flex; align-items: center; gap: var(--space-sm); box-sizing: border-box; height: 32px; padding: 0 12px; border: 1px solid var(--night-600); border-radius: var(--radius-pill); background: var(--night-900); color: var(--gray-100); font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 400; white-space: nowrap; pointer-events: none; }
 .mf-modechip[data-test-shift] { top: calc(var(--mf-host-bottom, 62px) + 20px + 48px); }
 
+/* 저녁·아침 독(21-11, UI-SPEC P21-1·P21-5·P21-6·P21-8). 새 토큰·hex 없음 — 독 틀(패딩 14·22·간격 10)은 .mf-game__panel 을 그대로 쓰고 높이는 놓인 것이 정한다(14 + 68 + 10 + 56 + 22 = 170).
+ * 행동 줄 = 주 단추(flex 1) + [건너뛰기](너비 112). 주 단추의 채움 막대는 모든 역할에게 같다(길게 누르기를 겉보기에서 구별하지 않는다). 이 블록은 심부름 블록 앞에 둔다(시험이 첫 .mv-errand 부터 끝까지를 본다). */
+.mv-scene-dock__row { display: flex; align-items: stretch; gap: 8px; height: 56px; }
+.mv-scene-dock__main { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box; height: 56px; margin: 0; padding: 0 16px; border: 0; border-radius: var(--radius-pill); background: var(--light-lamp); color: var(--night-900); font-family: var(--font-ui); font-size: 16px; font-weight: 700; white-space: nowrap; cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.mv-scene-dock__main--scene { background: var(--gray-100); }
+.mv-scene-dock__main[aria-disabled="true"] { background: var(--night-700); color: var(--gray-100); opacity: 0.45; cursor: default; }
+.mv-scene-dock__main:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mv-scene-dock__main.is-call::after { border-width: 3px; }
+.mv-scene-dock__main > svg, .mv-scene-dock__label { position: relative; }
+.mv-scene-dock__clip { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
+.mv-scene-dock__fill { position: absolute; inset: 0; background: color-mix(in srgb, var(--gray-100) 35%, transparent); transform-origin: left center; transform: scaleX(0); }
+.mv-scene-dock__skip { flex: none; flex-direction: column; gap: 0; width: 112px; height: 56px; padding: 0 8px; background: var(--night-700); border-color: var(--night-600); color: var(--gray-100); }
+.mv-scene-dock__skip-top { display: inline-flex; align-items: center; gap: 6px; }
+.mv-scene-dock__skip[aria-pressed="true"] { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
+.mv-scene-dock__skip[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+
 /* 심부름 부품(15-04·16-07, UI-SPEC "심부름 화면 계약"·V-20~V-22). 새 토큰·hex 없음 — 빛남은 14 의 .is-call 을 그대로 쓰고 타일 빛만 테두리 3·번짐 26 으로 키운다.
  * 위치는 층이 inline transform 으로 쓰므로 위치를 쓰는 요소(타일·화살표·알약)에는 transform 애니메이션·:active 변형을 걸지 않는다(그림·배지 같은 자식에만).
  * 이 블록은 파일 끝에 둔다(시험이 첫 .mv-errand 부터 끝까지를 본다). */
