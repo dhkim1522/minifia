@@ -772,6 +772,17 @@ describe("밤 시민 편 — 어둠 표식과 긴장 비네트 (NIGHT-10, E3 #20
     }
   });
 
+  it("21-10 확장판 밤: 산 네 역할 모두 data-night-dark 도 긴장 비네트도 없다(어둠은 판 규칙이 먼저 — 역할을 읽지 않는다). 기본 마피아 시민 밤에는 있다", () => {
+    for (const seat of [0, 1, 2, 3]) {
+      const { container } = mount({ ...makeView({ mySeat: seat }), mode: "extended" } as RoomView);
+      expect(darkOf(container), `seat ${seat}`).toBeNull();
+      expect(vignettes(container), `seat ${seat}`).toHaveLength(0);
+      cleanup();
+    }
+    const basic = mount(makeView({ mySeat: 3 }));
+    expect(darkOf(basic.container)).toBe("true");
+  });
+
   it("비네트는 이름표 층 아래에 있다(맵 상자 안, 이름표 층보다 앞) — 이름표가 비네트 위에 그려진다", () => {
     const { container } = mount(makeView({ mySeat: 3 }));
     const v = vignettes(container)[0]!;

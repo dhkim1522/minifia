@@ -577,7 +577,7 @@ describe("GameMap — 헤더 시간대 글자 (0083-1)", () => {
   it("단계마다 todOf 대응: 낱말·제목", () => {
     const cells: Array<[PhaseId, string, string | null, string]> = [
       ["dayAnnounce", "day", "낮", "토론"],
-      ["errand", "day", "낮", "등불 켜기"],
+      ["errand", "dusk", "저녁", "등불 켜기"],
       ["nomination", "dusk", "저녁", "투표"],
       ["defense", "dusk", "저녁", "최후 변론"],
       ["verdict", "dusk", "저녁", "찬반"],

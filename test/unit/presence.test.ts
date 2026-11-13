@@ -774,3 +774,34 @@ describe("마을 등불·현장 값 townLampsOf·townClueOf (21-09, D-06·D-13·
     expect("town" in sceneLook(viewOf("morning"), { stageH: 400 })).toBe(false);
   });
 });
+
+describe("21-10 저녁 노을·확장판 밤 같은 조명 (D-04, P21-0·P21-10, T-21-25)", () => {
+  const town = (phase: PhaseId, over: Partial<RoomView> = {}, opts: ViewOpts = {}): RoomView => ({ ...viewOf(phase, opts), map: "town", mode: "extended", ...over });
+  const ROLES = ["mafia", "citizen", "police", "doctor"] as const;
+
+  it("lightingOf(errand) 는 vote(노을)이고 낮 시작·토론은 talk 그대로다", () => {
+    expect(lightingOf("errand")).toBe("vote");
+    expect(lightingOf("dayAnnounce")).toBe("talk");
+    expect(lightingOf("discussion")).toBe("talk");
+  });
+
+  it("확장판 밤: 산 사람 네 역할이 모두 night 이다(role 만 바꾼 결과 동일)", () => {
+    const results = ROLES.map((role) => lightingFor(asRole(town("night", {}, { mySeat: 1 }), role)));
+    expect(results.join(",")).toBe("night,night,night,night");
+  });
+
+  it("확장판 밤 유령은 nightGhost 그대로다", () => {
+    expect(lightingFor(asRole(town("night", {}, { mySeat: 1, dead: [1] }), "citizen"))).toBe("nightGhost");
+    expect(lightingFor(asRole(town("night", {}, { mySeat: 1, dead: [1], spectate: true }), "mafia"))).toBe("nightGhost");
+  });
+
+  it("기본 마피아 밤은 지금 그대로다(마피아 night·시민 nightCitizen) — 마을 맵이어도 기본판이면 같다", () => {
+    expect(lightingFor(asRole(town("night", { mode: "basic" }, { mySeat: 1 }), "mafia"))).toBe("night");
+    expect(lightingFor(asRole(town("night", { mode: "basic" }, { mySeat: 1 }), "citizen"))).toBe("nightCitizen");
+  });
+
+  it("확장판 밤 sceneLook.lighting 도 night 이고 저녁(errand)은 vote 다", () => {
+    expect(sceneLook(asRole(town("night", {}, { mySeat: 1 }), "citizen"), { stageH: 400 }).lighting).toBe("night");
+    expect(sceneLook(town("errand"), { stageH: 400 }).lighting).toBe("vote");
+  });
+});

@@ -11,7 +11,7 @@ const EXPECT: Record<PhaseId, TimeOfDay> = {
   assigning: "day",
   roleReveal: "day",
   dayAnnounce: "day",
-  errand: "day",
+  errand: "dusk",
   discussion: "day",
   nomination: "dusk",
   runoff: "dusk",
@@ -48,7 +48,7 @@ describe("헤더 시간대 낱말 (todWordOf, 결정 0083-1)", () => {
   it("낮·저녁은 낱말이 있다", () => {
     expect(todWordOf("discussion", "토론")).toBe("낮");
     expect(todWordOf("dayAnnounce", "토론")).toBe("낮");
-    expect(todWordOf("errand", "심부름")).toBe("낮");
+    expect(todWordOf("errand", "심부름")).toBe("저녁");
     expect(todWordOf("nomination", "투표")).toBe("저녁");
     expect(todWordOf("runoff", "결선")).toBe("저녁");
     expect(todWordOf("defense", "최후 변론")).toBe("저녁");
