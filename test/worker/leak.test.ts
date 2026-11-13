@@ -113,7 +113,7 @@ const ROLE_PATHS_ALIVE = [
  * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. stats 는 판 통계 카운터(11-01, 결정 D-6, L35)다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)·순차 지목 차례(pickTurn, 결정 0063-1)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
  */
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick", "stats", "badgeLog", "whispers", "disconnectedAt", "left", "errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick", "errandFake", "tutorialPassed"]; // tutorialPassed(17-12, T-17-28): 튜토리얼 끝냄 서버 전용 이름 — view 는 view.tutorial(done·total·endsAt 숫자)과 본인 me.tutorialDone 이라는 다른 이름으로만 싣는다. errandPlaces·errandDone·errandNear·errandSeen·errandTickAt·nightPick(15-06, T-15-25): 심부름·밤 선택의 서버 전용 이름 — view 는 me.errand·me.record·me.pick 이라는 다른 이름으로만 본인에게 싣는다. disconnectedAt·left(11-04): 방 연속성 서버 전용 기록 (L43). badgeLog·whispers(11-03): 결과 공개 줄은 v·to 같은 다른 이름을 쓴다 — 서버 전용 이름은 어떤 프레임에도 키로 없다 (L35)
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick", "stats", "badgeLog", "whispers", "disconnectedAt", "left", "errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick", "errandFake", "tutorialPassed", "lampCut", "skipVote", "smudged", "steps", "eyes"]; // lampCut·skipVote·smudged·steps·eyes(21-07, D-21): 21페이즈 서버 전용 이름 — 자른 가로등·건너뛰기 표·흐려진 지점·발자국 수·창문 눈 좌석은 어떤 프레임에도 키로 없다(공개는 day.lamps·day.skipCount·day.scene.house·me.clues 같은 다른 이름뿐). tutorialPassed(17-12, T-17-28): 튜토리얼 끝냄 서버 전용 이름 — view 는 view.tutorial(done·total·endsAt 숫자)과 본인 me.tutorialDone 이라는 다른 이름으로만 싣는다. errandPlaces·errandDone·errandNear·errandSeen·errandTickAt·nightPick(15-06, T-15-25): 심부름·밤 선택의 서버 전용 이름 — view 는 me.errand·me.record·me.pick 이라는 다른 이름으로만 본인에게 싣는다. disconnectedAt·left(11-04): 방 연속성 서버 전용 기록 (L43). badgeLog·whispers(11-03): 결과 공개 줄은 v·to 같은 다른 이름을 쓴다 — 서버 전용 이름은 어떤 프레임에도 키로 없다 (L35)
 /**
  * 서버 전용 이름과 같은 공개 와이어 필드의 경로(08-11, 결정 0060-3·4) — 이 두 경로만 SERVER_ONLY_KEYS 검사에서 빼고 이유를 단다. 목록은 줄이지 않고, 새 경로는 받을 권리 조건이 있을 때만 더한다.
  *  - .view.day.verdict: 처형 단계에서 모두에게 같은 {yes,no,passed} 집계(서버 전용 RoomState.verdict 와 이름만 같다).
@@ -680,28 +680,24 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
     expect([...saw.pick].sort()).toEqual([mafiaA.seat, mafiaB.seat, police.seat, doctor.seat].sort());
     expect([...saw.tally].sort()).toEqual([mafiaA.seat, mafiaB.seat].sort()); // 집계는 산 마피아 둘만 받았고, 둘 다 같은 대상을 골라 확정도 받았다
     expect([...saw.sure].sort()).toEqual([mafiaA.seat, mafiaB.seat].sort());
-    // 15페이즈(15-06): 첫 낮의 errand 단계에서 산 여섯 모두가 me.errand 를 받았고(역할과 무관), 아무도 심부름을 하지 않은 판이라 me.record 는 누구에게도 가지 않았다. 흔적은 아침에 나왔다.
+    // 15페이즈(15-06): 첫 낮의 errand 단계에서 산 여섯 모두가 me.errand 를 받았고(역할과 무관), 아무도 심부름을 하지 않은 판이라 me.record 는 누구에게도 가지 않았다. 21-07(D-14·D-18): 확장판은 아침에 공개 흔적(day.morning.trace)을 싣지 않는다.
     expect([...saw.errand].sort()).toEqual(actors.map((a) => a.seat).sort());
     expect([...saw.record]).toEqual([]);
-    expect(saw.trace).toBe(true);
+    expect(saw.trace).toBe(false);
 
     // (5) 두 아침 각각 모든 소켓이 같은 day.morning 이고 각각 {eliminated} 하나뿐이다(문구 번호 없음, 결정 0061-17).
     for (const day of [1, 2]) {
       expect(morningsByDay.get(day)!.size).toBe(1);
       expect(morningSeen.get(day)!.size).toBe(6);
     }
-    // 16페이즈: 두 아침 모두 증거가 있고, 각 아침의 증거는 그 뒤 낮 끝까지 모든 소켓에서 같은 JSON 하나다. 심부름을 하지 않은 판이라 seen 은 없고 trace 만 있다.
-    expect([...evidenceByMorning.keys()].sort()).toEqual([1, 2]);
-    for (const n of [1, 2]) {
-      expect(evidenceByMorning.get(n)!.size).toBe(1);
-      expect(Object.keys(JSON.parse([...evidenceByMorning.get(n)!][0]!) as object)).toEqual(["trace"]);
-    }
+    // 21-07(D-14·D-18): 확장판은 공개 증거(day.evidence)를 싣지 않는다 — 두 아침 어느 소켓·단계에도 키가 없다(옷 조각은 현장을 살핀 본인 me.clues 로만).
+    expect([...evidenceByMorning.keys()]).toEqual([]);
     const morning1 = JSON.parse([...morningsByDay.get(1)!][0]!) as { eliminated?: number };
     const morning2 = JSON.parse([...morningsByDay.get(2)!][0]!) as { eliminated?: number };
-    // 피해자가 나온 아침의 키는 eliminated·trace 둘뿐이다(조각 id 하나, 15페이즈 D-06).
-    expect(Object.keys(morning1)).toEqual(["eliminated", "trace"]);
+    // 피해자가 나온 아침의 키는 eliminated 하나뿐이다(공개 흔적 없음, 21-07 D-14·D-18).
+    expect(Object.keys(morning1)).toEqual(["eliminated"]);
     expect(morning1.eliminated).toBe(victimX.seat);
-    expect(Object.keys(morning2)).toEqual(["eliminated", "trace"]);
+    expect(Object.keys(morning2)).toEqual(["eliminated"]);
     expect(morning2.eliminated).toBe(victimY.seat);
 
     // 일지는 본인 역할의 것만: 마피아 둘은 같은 암살일지(두 밤 모두 died true), 의사는 자기 치료일지, 시민은 키 없음.
@@ -1412,8 +1408,8 @@ describe("신분 여섯 × 유언·쪽지 canary 행렬 (WILL-01, NIGHT-12, L7·
     // 아침 state 의 day.chalk 와 day.morning 은 모든 소켓에서 같다.
     const morningViews = g.socks.map((sock) => lastViewOf(sock));
     expect(new Set(morningViews.map((x) => JSON.stringify([x.day?.chalk, x.day?.morning]))).size).toBe(1);
-    expect(JSON.stringify(morningViews[0]!.day?.morning)).toBe(JSON.stringify({ eliminated: v.seat, trace: morningViews[0]!.day?.morning?.trace }));
-    expect(typeof morningViews[0]!.day?.morning?.trace).toBe("string");
+    expect(JSON.stringify(morningViews[0]!.day?.morning)).toBe(JSON.stringify({ eliminated: v.seat })); // 21-07: 공개 흔적 없음
+    expect(morningViews[0]!.day?.morning?.trace).toBeUndefined();
   }, 120_000);
 });
 

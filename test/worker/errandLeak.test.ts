@@ -457,7 +457,7 @@ async function killSeatOf(g: Game, seatNo: number): Promise<void> {
 }
 
 describe("⑤ 아침 흔적 — 역할·의상·좌석·풀 없이 모든 시점에 같은 값 (D-06, T-15-23)", () => {
-  it("마피아 전원과 시민 하나가 같은 X 를 골라 탈락한 아침: 마피아·경찰·의사·시민·유령 소켓의 day.morning 키는 eliminated·trace, trace 값이 같고 조각 id 이며 의상·역할 단어가 아니다", async () => {
+  it("마피아 전원과 시민 하나가 같은 X 를 골라 탈락한 아침: 마피아·경찰·의사·시민·유령 소켓의 day.morning 키는 eliminated 하나뿐이고(21-07 D-14·D-18 — 공개 흔적 없음) 값이 같으며 어떤 프레임에도 trace 키가 없다", async () => {
     const g = await startedGame("night");
     const mafias = withRole(g, "mafia");
     const [x, other] = withRole(g, "citizen") as [Actor, Actor];
@@ -469,17 +469,13 @@ describe("⑤ 아침 흔적 — 역할·의상·좌석·풀 없이 모든 시점
     for (const [i, a] of g.actors.entries()) await settle(a.sock, marks[i]!);
     const mornings = g.actors.map((a) => lastViewOf(a.sock).day?.morning);
     for (const [i, a] of g.actors.entries()) {
-      expect(`${a.role}${a.seat}:${Object.keys(mornings[i] ?? {}).sort().join(",")}`).toBe(`${a.role}${a.seat}:eliminated,trace`);
+      expect(`${a.role}${a.seat}:${Object.keys(mornings[i] ?? {}).sort().join(",")}`).toBe(`${a.role}${a.seat}:eliminated`);
     }
     expect(new Set(mornings.map((m) => JSON.stringify(m))).size).toBe(1);
-    const trace = mornings[0]!.trace!;
-    expect((TRACE_PIECE_IDS as readonly string[]).includes(trace)).toBe(true);
-    expect(OUTFITS.has(trace) || ROLE_WORDS.has(trace)).toBe(false);
-    // 아침 state 프레임에서 trace 값은 그 경로에만 있다 — 좌석·의상 id 가 붙은 다른 경로는 없다.
+    // 아침 이후 어느 소켓의 어느 프레임에도 trace 키가 없다 — 옷 조각은 현장 ② 를 살핀 본인 me.clues 로만 간다.
     const morningFrames = g.actors.flatMap((a) => a.sock.frames.slice(marks[g.actors.indexOf(a)]!)).filter((raw) => raw.includes(`"trace"`));
-    expect(morningFrames.length).toBeGreaterThan(0);
-    for (const raw of morningFrames) expect(JSON.stringify((JSON.parse(raw) as { view: { day: { morning: unknown } } }).view.day.morning)).toBe(JSON.stringify(mornings[0]));
-    // 탈락자 X 는 이제 유령이다 — 흔적을 낸 시민(other)의 좌석은 어느 프레임에도 trace 곁에 없다.
+    expect(morningFrames.length).toBe(0);
+    // 탈락자 X 는 이제 유령이다.
     for (const s of g.socks) expect(violationsOfSock(s).join(" | ")).toBe("");
   }, 60_000);
 
@@ -506,7 +502,7 @@ describe("⑤ 아침 흔적 — 역할·의상·좌석·풀 없이 모든 시점
 });
 
 describe("⑦ 마지막 목격 증거 — 서버 전용 errandLast 는 어떤 프레임에도 없고 역할 다섯 시점의 값이 같다 (D-10·R-4, T-16-01·02·03)", () => {
-  it("심부름에서 V 곁에 O 가 있었던 판: 아침~처형 프레임 전부에서 day.evidence 는 {trace, seen:{seat:O, place}} 하나이고, 마피아·경찰·의사·시민·유령이 같은 값이며, errandLast 는 키로도 문자열로도 없다", async () => {
+  it("심부름에서 V 곁에 O 가 있었던 판: 확장판은 어느 프레임에도 day.evidence·morning.seen 이 없고(21-07 D-14·D-18 — 마지막 목격 공개를 걷었다), errandLast 는 키로도 문자열로도 없다", async () => {
     const g = await startedGame("errand");
     const v = withRole(g, "citizen")[0]!;
     const o = withRole(g, "citizen")[1]!;
@@ -532,31 +528,19 @@ describe("⑦ 마지막 목격 증거 — 서버 전용 errandLast 는 어떤 �
     const evidenceValues = new Set<string>();
     const phasesWithEvidence = new Set<string>();
     for (const frames of framesBy) {
-      let afterMorning = false; // 이 소켓이 아침을 받은 뒤인가 — 그 전의 낮·밤 프레임에는 증거가 없어야 한다
       for (const raw of frames) {
         const m = JSON.parse(raw) as ServerMessage;
         if (m.t !== "state") continue;
-        if (m.view.phase === "morning") afterMorning = true;
         const ev = m.view.day?.evidence;
         if (ev !== undefined) {
-          expect(afterMorning).toBe(true);
-          evidenceValues.add(JSON.stringify(ev));
+          evidenceValues.add(JSON.stringify(ev)); // 21-07: 공개 증거는 어느 단계에도 없어야 한다 — 값이 하나라도 모이면 아래에서 실패한다
           phasesWithEvidence.add(m.view.phase);
-        } else if (afterMorning) {
-          expect(EVIDENCE_PHASE_SET.has(m.view.phase)).toBe(false); // 아침 뒤 증거 구간 프레임에는 반드시 있다
         }
       }
     }
-    expect(evidenceValues.size).toBe(1);
-    const ev = JSON.parse([...evidenceValues][0]!) as { trace: string; seen: { seat: number; place: string } };
-    expect(Object.keys(ev).sort().join(",")).toBe("seen,trace");
-    expect(Object.keys(ev.seen).sort().join(",")).toBe("place,seat");
-    expect(ev.seen.seat).toBe(o.seat);
-    expect((PLACE_IDS as readonly string[]).includes(ev.seen.place)).toBe(true);
-    expect(OUTFITS.has(ev.trace) || ROLE_WORDS.has(ev.trace) || ROLE_WORDS.has(ev.seen.place)).toBe(false);
-    expect([...phasesWithEvidence].sort().join(",")).toBe(["morning", "discussion", "nomination", "errand"].sort().join(","));
-    // 다섯 시점(마피아·경찰·의사·시민·유령)의 마지막 view 가 같은 증거를 쥔다
-    for (const a of g.actors) expect(`${a.role}${a.seat}:${JSON.stringify(lastViewOf(a.sock).day?.evidence)}`).toBe(`${a.role}${a.seat}:${JSON.stringify(ev)}`);
+    expect(`${evidenceValues.size}/${[...phasesWithEvidence].join(",")}`).toBe("0/");
+    // 다섯 시점(마피아·경찰·의사·시민·유령)의 마지막 view 에도 증거 키가 없다
+    for (const a of g.actors) expect(`${a.role}${a.seat}:${"evidence" in (lastViewOf(a.sock).day ?? {})}`).toBe(`${a.role}${a.seat}:false`);
     // errandLast: 이름 키도 문자열도 어떤 프레임에도 없고, 허용 밖 경로 위반이 없다
     for (const s of g.socks) {
       expect(s.frames.some((raw) => raw.includes("errandLast"))).toBe(false);

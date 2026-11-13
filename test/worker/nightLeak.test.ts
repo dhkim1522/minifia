@@ -376,8 +376,8 @@ describe("메타모픽 (ii) 암살 밤 (L2·L5)", () => {
       const i = g.actors.indexOf(x);
       expect(`${x.role}:${foldTrace(busy[i]!)}`).toBe(`${x.role}:${foldTrace(quiet[i]!)}`);
       const col = quiet[i]!;
-      // 피해자가 나온 아침에는 흔적 조각 id 하나가 함께 실린다(D-06).
-      expect(new RegExp(`"morning":\\{"eliminated":${v.seat},"trace":"[A-Za-z]+"\\}`).test(col)).toBe(true);
+      // 피해자가 나온 아침의 공개 값은 eliminated 하나뿐이다(21-07 D-14·D-18 — 공개 흔적 없음).
+      expect(new RegExp(`"morning":\\{"eliminated":${v.seat}\\}`).test(col)).toBe(true);
       expect(col.includes('"k":"will"') && col.includes("VWILL") && col.includes('"k":"note"') && col.includes("조용히")).toBe(true);
       expect(col.includes('"chalk"')).toBe(true);
     }

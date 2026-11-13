@@ -158,7 +158,7 @@ describe("밤 행동 한 줄 (NIGHT-02)", () => {
 });
 
 describe("마피아 전원 일치 (NIGHT-08, 결정 0061-6)", () => {
-  it("6명 판: 마피아 둘이 같은 시민을 고르고 마감하면 모든 소켓이 같은 day.morning { eliminated, trace } 를 받는다", async () => {
+  it("6명 판: 마피아 둘이 같은 시민을 고르고 마감하면 모든 소켓이 같은 day.morning { eliminated } 를 받는다(공개 흔적 없음, 21-07)", async () => {
     const r = await startedAtNight(6, "extended"); // 흔적 조각은 확장판 규칙이다(21페이즈, 규칙 가)
     const actors = actorsOf(r);
     const [a, b] = withRole(actors, "mafia") as [Actor, Actor];
@@ -169,10 +169,8 @@ describe("마피아 전원 일치 (NIGHT-08, 결정 0061-6)", () => {
     await advanceTo(r.code, allSockets(r), "morning");
 
     const mornings = actors.map((x) => viewsIn(x.sock, "morning").at(-1)!);
-    // 흔적 조각(D-06)도 모든 소켓에 같은 값이다.
-    const trace = mornings[0]!.day?.morning?.trace;
-    expect(typeof trace).toBe("string");
-    for (const v of mornings) expect(JSON.stringify(v.day?.morning)).toBe(JSON.stringify({ eliminated: victim.seat, trace }));
+    // 확장판은 공개 흔적 조각을 싣지 않는다(21-07 D-14·D-18) — 모든 소켓이 eliminated 하나뿐인 같은 값이다.
+    for (const v of mornings) expect(JSON.stringify(v.day?.morning)).toBe(JSON.stringify({ eliminated: victim.seat }));
   });
 
   it("6명 판: 마피아 둘이 갈라 고르고 마감하면 모든 소켓의 day.morning 이 {} 이고 아무도 탈락하지 않는다", async () => {
