@@ -156,6 +156,8 @@ export function resolveNight(state: RoomState): ResolvedNight {
  * 흔적(morning.trace): 탈락자가 있을 때만, 그 밤 피해자를 고른 산 사람(피해자 본인 제외) 풀에서 한 명의 의상 조각 하나. 풀은 nightPick 을 지우기 전의 players 로 만든다.
  * 구출·무효 밤은 trace 키가 없다.
  * 마지막 목격(16페이즈 D-10): 탈락자가 있고 errandLast 에 그 seat 줄이 있으면 morning.seen = { seat: 관찰자, place }. 어느 분기든 반환 상태에서 errandLast 를 지운다(서버 전용, 피해자 아닌 사람의 줄은 공개되지 않는다).
+ * 공개 흔적 걷기(21페이즈 D-14·D-18): 심부름이 켜진(rules.errand) 확장판은 위 흔적·마지막 목격을 아침에 싣지 않는다 — 옷 조각은 현장 ② 를 살핀 본인 me.clues 로만 간다. 흔적 난수도 부르지 않아 현장 난수가 첫 호출이다.
+ * 그 결과 지금 판 종류로는 morning.trace·seen·day.evidence 를 만드는 판이 없다(view.ts 의 복사 경로는 결정 0088 알려진 한계 "쓰이지 않는 공개 흔적 경로 — 정리 후보"로 남긴다).
  * 판 규칙(19페이즈 D-08): 흔적은 rules.trace, 마지막 목격은 rules.witness 가 켜진 판에서만 만든다. 흔적은 심부름과 무관하게 nightPick·look 으로 만들어지므로 basic 에서 여기서 막는다 —
  * basic 판은 흔적 난수도 부르지 않는다. errandLast 를 지우는 처리는 판과 무관하게 그대로다. rules 를 안 받으면 방 상태의 판 종류에서 얻는다(전역 값이 아니다).
  */
@@ -174,8 +176,10 @@ export function enterMorning(state: RoomState, randInt: RandInt = () => 0, rules
     };
     return result.eliminated === p.seat ? { ...withRecords, alive: false } : withRecords;
   });
-  const piece = result.eliminated === undefined || !rules.trace ? undefined : pickTracePiece(state, result.eliminated, randInt);
-  const seenRow = result.eliminated === undefined || !rules.witness ? undefined : state.errandLast?.find((row) => row.seat === result.eliminated);
+  // 공개 흔적 걷기(21페이즈 D-14·D-18): 확장판(rules.errand)은 아침에 모두에게 같은 옷 조각·마지막 목격을 싣지 않는다 — 단서는 현장을 살핀 본인에게만 간다(me.clues).
+  // 그래서 흔적 난수도 부르지 않고 현장 난수가 첫 호출이 된다. 규칙 표의 trace·witness 는 심부름이 꺼진 판에서만 뜻이 있다(지금 그런 판은 없다).
+  const piece = result.eliminated === undefined || !rules.trace || rules.errand ? undefined : pickTracePiece(state, result.eliminated, randInt);
+  const seenRow = result.eliminated === undefined || !rules.witness || rules.errand ? undefined : state.errandLast?.find((row) => row.seat === result.eliminated);
   const morning: MorningView =
     result.eliminated !== undefined
       ? {
@@ -187,8 +191,8 @@ export function enterMorning(state: RoomState, randInt: RandInt = () => 0, rules
         ? { saved: true }
         : {};
   // 아침 현장(21페이즈 D-13·D-16·D-17): 확장판에서 피해자가 나왔거나 의사가 막았으면(미수) 그 집 앞에 현장을 세운다 — 미수 현장은 마피아 확정 대상의 집이다.
-  // 0087 분필 한계(닫힌 방 안 분필)는 암살이 집 앞(바깥)에서 일어나므로 생기지 않는다. 풀은 nightPick 을 지우기 전의 state 로 만들고, 난수는 위 흔적 난수 다음에 부른다(호출 순서: 흔적 → 현장 i → j).
-  // 가로등은 진입 상태의 켜진 것(lampsLitOf), 눈은 판정 뒤 산 사람이다. 공개 흔적(morning.trace·seen)은 21-07 이 걷을 때까지 그대로 둔다.
+  // 0087 분필 한계(닫힌 방 안 분필)는 암살이 집 앞(바깥)에서 일어나므로 생기지 않는다. 풀은 nightPick 을 지우기 전의 state 로 만들고, 난수는 현장 난수가 첫 호출이다(호출 순서: 현장 i → j, 21-07 이 흔적 난수를 걷었다).
+  // 가로등은 진입 상태의 켜진 것(lampsLitOf), 눈은 판정 뒤 산 사람이다. 공개 흔적(morning.trace·seen)은 21-07 이 걷었다(D-14·D-18).
   const house = result.eliminated ?? (result.saved ? result.target : undefined);
   const scene =
     rules.errand && house !== undefined
