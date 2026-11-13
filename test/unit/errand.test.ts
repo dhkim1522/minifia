@@ -337,56 +337,52 @@ describe("actErrand", () => {
   });
 });
 
-describe("actErrand — 마피아 가짜 장소 (16페이즈 D-08, A1)", () => {
-  /** id 의 목록을 주어진 장소들로 두고 errandFake 키를 fake 로 둔 방(fake 가 없으면 키 없음). */
-  const withFake = (s: RoomState, id: string, places: string[], fake?: string): RoomState => ({
-    ...s,
-    players: s.players.map((p) => {
-      if (p.id !== id) return p;
-      const { errandFake: _old, ...rest } = p as Player & { errandFake?: string };
-      return { ...rest, errandPlaces: places as never[], errandDone: [], ...(fake === undefined ? {} : { errandFake: fake }) } as Player;
-    }),
-  });
-  const base = (): { s: RoomState; id: string } => {
-    const s = barRoom(5, "errand");
-    return { s, id: s.players[0]!.id };
-  };
+describe("actErrand — 모든 역할이 같은 처리 규칙 (21페이즈 D-05, 16페이즈 가짜 장소를 대체)", () => {
+  const base = (): RoomState => barRoom(5, "errand");
 
-  it("가짜 장소 중앙에서 처리하면 { ok: false }, 같은 사람이 진짜 장소 중앙에서는 ok 다", () => {
-    const { s, id } = base();
-    const r = withFake(s, id, ["glass", "stool", "door"], "stool");
-    expect(JSON.stringify(actErrand(r, id, placeCenterFx(BAR_MAP, "stool")!))).toBe('{"ok":false}');
-    const real = actErrand(r, id, placeCenterFx(BAR_MAP, "glass")!);
-    expect(JSON.stringify(real.ok && byId(real.state, id).errandDone)).toBe(JSON.stringify(["glass"]));
+  it("산 마피아가 있고, 진입 직후 어떤 플레이어에도 가짜 장소 키가 없다", () => {
+    const s = base();
+    expect(s.players.some((p) => p.role === "mafia" && isAlive(p))).toBe(true);
+    expect(JSON.stringify(s.players.filter((p) => "errandFake" in p).map((p) => p.seat))).toBe("[]");
   });
 
-  it("가짜와 진짜가 둘 다 반경 안이면 진짜가 처리된다(가짜가 목록 앞이어도). 가짜 키가 없는 사람은 15 와 같이 목록 앞이 처리된다", () => {
-    const { s, id } = base();
-    const a = placeCenterFx(BAR_MAP, "stool")!;
-    const b = placeCenterFx(BAR_MAP, "glass")!;
-    const mid = { x: Math.round((a.x + b.x) / 2), z: Math.round((a.z + b.z) / 2) }; // 둘 다 정확히 반경 경계(1.2) 위
-    const fake = actErrand(withFake(s, id, ["stool", "glass", "door"], "stool"), id, mid);
-    expect(JSON.stringify(fake.ok && byId(fake.state, id).errandDone)).toBe(JSON.stringify(["glass"]));
-    const plain = actErrand(withFake(s, id, ["stool", "glass", "door"]), id, mid);
-    expect(JSON.stringify(plain.ok && byId(plain.state, id).errandDone)).toBe(JSON.stringify(["stool"]));
-  });
-
-  it("진짜 두 곳을 모두 처리한 뒤 가짜만 남으면 어디서도 { ok: false } 다(2/3 에서 멈춘다)", () => {
-    const { s, id } = base();
-    let cur = withFake(s, id, ["glass", "stool", "door"], "stool");
-    for (const place of ["glass", "door"]) {
-      const res = actErrand(cur, id, placeCenterFx(BAR_MAP, place)!);
-      expect(res.ok).toBe(true);
+  it("산 마피아도 자기 3곳 각각의 중심에서 처리되고 3곳을 끝낸다(처리 규칙에 역할 예외가 없다)", () => {
+    const s = base();
+    const mafia = s.players.find((p) => p.role === "mafia" && isAlive(p))!;
+    let cur = s;
+    for (const place of mafia.errandPlaces!) {
+      const res = actErrand(cur, mafia.id, placeCenterFx(BAR_MAP, place)!);
+      expect(JSON.stringify({ place, ok: res.ok })).toBe(JSON.stringify({ place, ok: true }));
       if (res.ok) cur = res.state;
     }
-    expect(JSON.stringify(byId(cur, id).errandDone)).toBe('["glass","door"]');
-    expect(JSON.stringify(actErrand(cur, id, placeCenterFx(BAR_MAP, "stool")!))).toBe('{"ok":false}');
+    expect(JSON.stringify(byId(cur, mafia.id).errandDone)).toBe(JSON.stringify(mafia.errandPlaces));
   });
 
-  it("enterErrand 는 이전 errandFake 를 지운다", () => {
-    const { s, id } = base();
-    const stale = withFake(s, id, ["glass", "stool", "door"], "stool");
-    expect(enterErrand(stale, seededRandInt(3), 0).players.some((p) => "errandFake" in p)).toBe(false);
+  it("역할만 뒤집은 두 방은 같은 위치에서 같은 처리 결과를 낸다(마피아·시민 구분 없음)", () => {
+    const s = base();
+    const flipped: RoomState = { ...s, players: s.players.map((p) => ({ ...p, role: p.role === "mafia" ? "citizen" : "mafia" })) };
+    for (const p of s.players) {
+      for (const place of p.errandPlaces!) {
+        const at = placeCenterFx(BAR_MAP, place)!;
+        const a = actErrand(s, p.id, at);
+        const b = actErrand(flipped, p.id, at);
+        expect(JSON.stringify({ id: p.id, place, a: a.ok && byId(a.state, p.id).errandDone, b: b.ok && byId(b.state, p.id).errandDone })).toBe(
+          JSON.stringify({ id: p.id, place, a: [place], b: [place] }),
+        );
+      }
+    }
+  });
+
+  it("enterErrand 는 이전 저녁의 목록·진행·근처·목격 줄을 모두 지우고 새로 배정한다", () => {
+    const s = base();
+    const stale: RoomState = {
+      ...s,
+      players: s.players.map((p) => ({ ...p, errandDone: [...p.errandPlaces!], errandNear: [1], errandSeen: [{ seat: 1, place: "glass" as const }] })),
+    };
+    const next = enterErrand(stale, seededRandInt(3), 0);
+    expect(JSON.stringify(next.players.map((p) => [p.errandDone, p.errandNear ?? null, p.errandSeen ?? null]))).toBe(
+      JSON.stringify(next.players.map(() => [[], null, null])),
+    );
   });
 });
 

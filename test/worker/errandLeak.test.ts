@@ -44,7 +44,7 @@ import {
 import type { Actor, Game, TestSocket } from "./helpers";
 
 type SnapFrame = Extract<ServerMessage, { t: "world"; k: "snap" }>;
-interface StoredPlayer { id: string; seat: number; errandPlaces?: string[]; errandDone?: string[]; errandFake?: string }
+interface StoredPlayer { id: string; seat: number; errandPlaces?: string[]; errandDone?: string[] }
 
 // ---- 허용 목록 검사 도우미(제품 코드가 아니라 이 시험의 것이다) ----
 
@@ -573,7 +573,7 @@ describe("⑦ 마지막 목격 증거 — 서버 전용 errandLast 는 어떤 �
   }, 120_000);
 });
 
-describe("⑧ 마피아 가짜 장소 — 서버 전용 errandFake 는 어떤 프레임에도 없고 응답·목록 모양이 시민과 같다 (D-08·A1, T-16-07·08)", () => {
+describe("⑧ 마피아도 같은 처리 규칙 — 가짜 장소가 없어 목록 모양·응답이 시민과 같고 3곳을 모두 처리한다 (21페이즈 D-05, 16페이즈 A1 대체)", () => {
   /** 모든 장소 중앙에서 가장 먼 입장 지점(서 있어도 처리 반경 밖). */
   function farPoint(map: MapDef): Pos {
     let best: Pos = { x: 0, z: 0 };
@@ -590,7 +590,7 @@ describe("⑧ 마피아 가짜 장소 — 서버 전용 errandFake 는 어떤 �
     return best;
   }
 
-  it("마피아·시민의 me.errand 는 키 집합 done,places · places 길이 3 · done 빈 배열로 같고, 가짜 장소 곁의 처리 응답은 반경 밖의 응답과 한 글자도 같으며(보낸 소켓 state 한 프레임, 다른 소켓 0), errandFake 는 어떤 프레임에도 키로도 문자열로도 없다", async () => {
+  it("마피아·시민의 me.errand 는 키 집합 done,places · places 길이 3 · done 빈 배열로 같고, 마피아의 반경 밖 응답은 보낸 소켓 state 한 프레임·다른 소켓 0 이며 자기 3곳을 모두 처리하고, errandFake 는 서버 상태에도 어떤 프레임에도 없다", async () => {
     const g = await startedGame("errand");
     const map = mapOf(((await storedRoom(g.code)) as unknown as { map?: MapId }).map ?? "bar");
     const far = farPoint(map);
@@ -607,8 +607,7 @@ describe("⑧ 마피아 가짜 장소 — 서버 전용 errandFake 는 어떤 �
 
     for (const m of mafias) {
       const stored = (await playersOf(g.code)).find((p) => p.seat === m.seat)!;
-      expect(stored.errandPlaces).toContain(stored.errandFake);
-      // errandFake 값(장소 id)은 그 마피아 자신의 목록 안에 있을 뿐이다 — view 의 places 도 같은 목록이다
+      expect(JSON.stringify(Object.keys(stored).filter((k) => k === "errandFake"))).toBe("[]");
       expect([...lastViewOf(m.sock).me.errand!.places].sort().join(",")).toBe([...stored.errandPlaces!].sort().join(","));
       const press = async (pos: Pos): Promise<{ mine: string; others: number }> => {
         await placeSeats(g.code, { [m.seat]: pos });
@@ -618,10 +617,14 @@ describe("⑧ 마피아 가짜 장소 — 서버 전용 errandFake 는 어떤 �
         return { mine: stable(frames[self]!), others: frames.filter((_, i) => i !== self).reduce((n, f) => n + f.length, 0) };
       };
       const outside = await press(far);
-      const atFake = await press(placeCenterFx(map, stored.errandFake!)!);
-      expect(atFake.mine).toBe(outside.mine);
-      expect(`${atFake.others}:${outside.others}`).toBe("0:0");
+      expect(`${outside.mine.length > 0}:${outside.others}`).toBe("true:0");
       expect(JSON.stringify((await playersOf(g.code)).find((p) => p.seat === m.seat)!.errandDone)).toBe("[]");
+      // 마피아도 자기 3곳을 모두 처리한다(역할 예외 없음)
+      for (const place of stored.errandPlaces!) {
+        const done = await press(placeCenterFx(map, place)!);
+        expect(`${done.mine.length > 0}:${done.others}`).toBe("true:0");
+      }
+      expect(JSON.stringify((await playersOf(g.code)).find((p) => p.seat === m.seat)!.errandDone)).toBe(JSON.stringify(stored.errandPlaces));
     }
 
     // 어떤 소켓의 어떤 프레임에도 서버 전용 이름이 없고 허용 목록 밖 경로·금지 키도 없다
