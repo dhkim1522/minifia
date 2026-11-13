@@ -67,8 +67,8 @@ describe("밤 → 아침 한 줄 (NIGHT-01, NIGHT-06, D-08)", () => {
     const morning = tick(picked, picked.phaseEndsAt ?? 0, seededRandInt(1));
     expect(morning.phase).toBe("morning");
     expect(morning.players.find((p) => p.id === victim.id)?.alive).toBe(false);
-    // 피해자가 나온 아침에는 흔적 조각이 함께 실린다(15페이즈 D-06) — 키는 eliminated·trace 둘뿐이다.
-    expect(Object.keys(morning.morning ?? {}).sort().join(",")).toBe("eliminated,trace");
+    // 확장판은 피해자가 나온 아침에도 공개 흔적 조각을 싣지 않는다(21페이즈 D-14·D-18) — 키는 eliminated 하나뿐이고 옷 조각은 현장 ② 를 살핀 본인 me.clues 로만 간다.
+    expect(Object.keys(morning.morning ?? {}).sort().join(",")).toBe("eliminated");
     expect(morning.morning?.eliminated).toBe(victim.seat);
     expect(morning.players.some((p) => "nightPick" in p)).toBe(false);
   });
@@ -573,7 +573,7 @@ describe("buildView 아침 day.morning (MORN-03, T-09-13)", () => {
     JSON.stringify(buildView(s, viewerId, START_AT).day?.morning);
   const toMorning = (s: RoomState): RoomState => tick(s, s.phaseEndsAt ?? 0, seededRandInt(1)); // 흔적 조각을 정하는 난수 한 번(D-06)
 
-  it("구출은 { saved: true }, 탈락은 { eliminated, trace } 만, 미선택·불일치는 {} — 모든 viewer 가 같다", () => {
+  it("구출은 { saved: true }, 탈락은 { eliminated } 만, 미선택·불일치는 {} — 모든 viewer 가 같다", () => {
     const { night, m1, m2, doctor, c1, c2 } = cast6();
     const saved = toMorning(picks(night, [m1, c1], [m2, c1], [doctor, c1]));
     const killed = toMorning(picks(night, [m1, c1], [m2, c1]));
@@ -581,8 +581,8 @@ describe("buildView 아침 day.morning (MORN-03, T-09-13)", () => {
     const split = toMorning(picks(night, [m1, c1], [m2, c2]));
     for (const p of night.players) {
       expect(dayMorning(saved, p.id)).toBe(JSON.stringify({ saved: true }));
-      // 흔적 조각(D-06)은 모든 viewer 에게 같은 값이다 — 구출·무효 밤에는 키가 없다.
-      expect(dayMorning(killed, p.id)).toBe(JSON.stringify({ eliminated: c1.seat, trace: killed.morning?.trace }));
+      // 공개 흔적은 없다(21-07 D-14·D-18) — 탈락은 eliminated 하나, 구출·무효 밤도 키가 없다.
+      expect(dayMorning(killed, p.id)).toBe(JSON.stringify({ eliminated: c1.seat }));
       expect(dayMorning(none, p.id)).toBe("{}");
       expect(dayMorning(split, p.id)).toBe("{}");
     }
@@ -629,15 +629,15 @@ describe("난수 없음 계약 (결정 0061-6·17)", () => {
     });
     expect(morning.phase).toBe("morning");
     expect(morning.morning?.eliminated).toBe(c1.seat);
-    expect(calls).toBe(3); // 21-06: 흔적 난수 한 번 + 현장 난수(풀 둘: 옷 조각 i, 창문 j 두 번). 21-07 이 공개 흔적을 걷으면 이 수는 2 가 된다
+    expect(calls).toBe(2); // 21-07: 공개 흔적을 걷어 흔적 난수가 없다 — 현장 난수(풀 둘: 옷 조각 i, 창문 j 두 번)만
   });
 });
 
 describe("아침 결과 morning (MORN-03, 결정 0061-12·17)", () => {
-  it("탈락이면 키는 eliminated·trace 둘뿐이다(문구 번호·역할 없음, D-06)", () => {
-    const { night, m1, m2, c1 } = cast6("extended"); // 흔적 조각은 확장판 규칙이다(21페이즈, 규칙 가)
+  it("탈락이면 키는 eliminated 하나뿐이다(문구 번호·역할·공개 흔적 없음, D-06·D-14·D-18)", () => {
+    const { night, m1, m2, c1 } = cast6("extended"); // 공개 흔적을 걷은 것은 확장판 규칙이다(21페이즈 21-07)
     const out = enterMorning(picks(night, [m1, c1], [m2, c1]));
-    expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated,trace");
+    expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated");
     expect(out.morning?.eliminated).toBe(c1.seat);
     expect(JSON.stringify(out.morning).includes("citizen")).toBe(false);
   });
@@ -659,7 +659,7 @@ describe("아침 결과 morning (MORN-03, 결정 0061-12·17)", () => {
   it("의사가 확정이 아닌 다른 사람을 지키면 탈락이다(saved 키 없음)", () => {
     const { night, m1, m2, doctor, c1, c2 } = cast6("extended");
     const out = enterMorning(picks(night, [m1, c1], [m2, c1], [doctor, c2]));
-    expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated,trace");
+    expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated");
     expect(out.morning?.eliminated).toBe(c1.seat);
   });
 

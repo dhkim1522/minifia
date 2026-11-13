@@ -171,7 +171,7 @@ describe("me.errand·me.record 의 구조는 viewer 가 달라도 같다 (D-03·
     expect([...shapes]).toEqual(["{place:string,seat:number}"]);
   });
 
-  it("morning: 탈락자가 있는 아침의 day.morning 키 집합은 eliminated·trace, 구출 아침은 saved 뿐(trace 없음)이고 모든 viewer 에게 같은 값이다", () => {
+  it("morning: 탈락자가 있는 아침의 day.morning 키 집합은 eliminated 뿐(공개 흔적 trace 없음, 21-07), 구출 아침은 saved 뿐이고 모든 viewer 에게 같은 값이다", () => {
     const seen = new Set<string>();
     for (const n of SIZES) {
       for (const seed of SEEDS) {
@@ -181,8 +181,8 @@ describe("me.errand·me.record 의 구조는 viewer 가 달라도 같다 (D-03·
         seen.add(keysOf(viewsOf(s)[0]!.v.day?.morning));
       }
     }
-    // 시드에 따라 의사가 구하는 아침도 있다 — 그 아침에는 trace 키가 없다.
-    expect([...seen].sort()).toEqual(["eliminated,trace", "saved"]);
+    // 시드에 따라 의사가 구하는 아침도 있다.
+    expect([...seen].sort()).toEqual(["eliminated", "saved"]);
   });
 });
 

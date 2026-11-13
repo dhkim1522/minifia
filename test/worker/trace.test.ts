@@ -1,14 +1,16 @@
 // 15페이즈 D-05·D-06 워커 통합(결정 0074): 밤 고르기는 모든 역할이 같은 입력에 같은 응답을 받고, 밤에는 아무도 걷지 않으며,
 // 피해자가 나온 아침에만 모든 소켓에 같은 흔적 조각 id 가 실린다(T-15-10·11·12).
+// 21-07(D-14·D-18): 확장판은 공개 흔적을 걷었다 — 아침 공개 값(day.morning·day.evidence)에 옷 조각·마지막 목격이 없고, 같은 조각은 현장 ② 를 살핀 본인 me.clues 에만 있다.
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { MORNING_SCENE_MS } from "../../shared/game/phases";
 import { restSegment } from "../../shared/game/world";
 import type { Segment, WorldState } from "../../shared/game/world";
-import { PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
+import { TOWN_CLUE_SPOTS } from "../../shared/game/mapTown";
+import { PLACE_IDS } from "../../shared/protocol";
 import type { RoleId } from "../../shared/protocol";
-import { advanceTo, editRoom, writeRoomEdit, flushWorld, killSeats, lastViewOf, mapPlayers, mark, moveAs, pickAs, settle, storedRoom, summary, startedGame, withRole, worldFramesOf, worldOf } from "./helpers";
+import { advanceTo, editRoom, writeRoomEdit, flushWorld, killSeats, lastViewOf, mapPlayers, mark, moveAs, pickAs, placeSeats as placeAt, send, settle, storedRoom, summary, startedGame, townGame, withRole, worldFramesOf, worldOf } from "./helpers";
 import type { Game } from "./helpers";
 
 type Actor = Game["actors"][number];
@@ -143,28 +145,37 @@ describe("아침 흔적 (D-06, T-15-12)", () => {
     return x;
   }
 
-  it("암살 성공: 모든 소켓(마피아·시민·유령)의 day.morning 이 같은 {eliminated, trace} 이고 trace 는 닫힌 집합 안의 조각 id 하나다", async () => {
+  it("암살 성공: 모든 소켓(마피아·시민·유령)의 day.morning 이 같은 {eliminated} 하나이고 trace·seen·day.evidence 키가 없다 (확장판, 21-07 D-14·D-18)", async () => {
     const g = await startedGame("night");
     const x = await assassinate(g, [withRole(g, "citizen")[1]!]);
     const mornings = g.socks.map((s) => lastViewOf(s).day?.morning);
     expect(new Set(mornings.map((m) => JSON.stringify(m))).size).toBe(1);
     const m = mornings[0]!;
-    expect(Object.keys(m).sort().join(",")).toBe("eliminated,trace");
+    expect(Object.keys(m).sort().join(",")).toBe("eliminated");
     expect(m.eliminated).toBe(x.seat);
-    expect((TRACE_PIECE_IDS as readonly string[]).includes(String(m.trace))).toBe(true);
-    // 아무 프레임에도 풀(누가 골랐는지)·look 이 없다
+    expect(g.socks.map((s) => "evidence" in (lastViewOf(s).day ?? {})).join(",")).toBe(g.socks.map(() => "false").join(","));
+    // 아무 프레임에도 풀(누가 골랐는지)·look·옛 흔적 키가 없다
     for (const s of g.socks) {
       const text = s.frames.slice(-3).join("");
-      expect(/"pool"|"traceBy"/.test(text)).toBe(false);
+      expect(/"pool"|"traceBy"|"trace"|"evidence"/.test(text)).toBe(false);
     }
   }, 40_000);
 
-  it("풀이 마피아뿐이면 그 마피아 의상의 조각이다 — 의상은 꾸미기 값이고 조각은 의상의 함수다", async () => {
-    const g = await startedGame("night");
+  it("풀이 마피아뿐이면 그 마피아 의상의 조각이다 — 현장 ② 를 살핀 시민 본인의 me.clues 에만 있고 아침 공개 값에는 없다 (마을 판, 21-07)", async () => {
+    const g = await townGame("night");
     await editRoom(g.code, (room) => mapPlayers(room, (p) => ((g.actors.find((a) => a.seat === p.seat)?.role === "mafia") ? { ...p, look: "noir" } : p)));
     for (const sock of g.socks) await settle(sock, mark(sock));
-    await assassinate(g);
-    expect(lastViewOf(g.socks[0]!).day?.morning?.trace).toBe("redCloth");
+    const x = await assassinate(g);
+    for (const sock of g.socks) await settle(sock, mark(sock));
+    const c = g.actors.find((a) => a.seat !== x.seat && a.role === "citizen")!;
+    await placeAt(g.code, { [c.seat]: TOWN_CLUE_SPOTS[x.seat]![1]! });
+    send(c.sock, { t: "inspect" });
+    await settle(c.sock, mark(c.sock));
+    expect(JSON.stringify(lastViewOf(c.sock).me.clues)).toBe(JSON.stringify([{ spot: 2, kind: "cloth", piece: "redCloth" }]));
+    for (const s of g.socks) {
+      const day = lastViewOf(s).day;
+      expect(`${JSON.stringify(day?.morning)}/${"evidence" in (day ?? {})}`).toBe(`${JSON.stringify({ eliminated: x.seat })}/false`);
+    }
   }, 40_000);
 
   it("확장판의 아침 길이는 탈락·흔적과 무관하게 현장 장면 길이 하나다(phaseDurationMs, 21페이즈 D-03, 규칙 가)", async () => {
@@ -246,7 +257,7 @@ describe("마지막 목격 (D-10, A2)", () => {
     return out;
   }
 
-  it("표본이 V 줄 {seat, by, place} 를 errandLast 에 저장하고, 아침에 모든 소켓의 day.evidence 가 같은 {trace, seen} 이며 errandLast 는 지워진다", async () => {
+  it("표본이 V 줄 {seat, by, place} 를 errandLast 에 저장하고, 아침에는 어느 소켓에도 day.evidence·morning.seen 이 없으며 errandLast 는 지워진다 (21-07)", async () => {
     const g = await startedGame("errand");
     const v = withRole(g, "citizen")[0]!;
     const o = withRole(g, "citizen")[1]!;
@@ -267,24 +278,18 @@ describe("마지막 목격 (D-10, A2)", () => {
     for (const a of g.actors) await settle(a.sock, mark(a.sock));
     await advanceTo(g.code, g.socks, "morning");
 
-    const evidences = g.socks.map((s) => JSON.stringify(lastViewOf(s).day?.evidence));
-    expect(new Set(evidences).size).toBe(1);
-    const ev = lastViewOf(g.socks[0]!).day?.evidence;
-    expect(ev?.seen).toEqual({ seat: o.seat, place: row!.place });
-    expect(TRACE_PIECE_IDS.includes(ev!.trace!)).toBe(true);
-    for (const s of g.socks) expect(JSON.stringify(lastViewOf(s).day?.morning?.seen)).toBe(JSON.stringify(ev?.seen));
+    // 21-07(D-14·D-18): 확장판은 마지막 목격을 공개하지 않는다 — 어느 소켓에도 day.evidence·morning.seen 이 없고 표본 줄은 아침이 지운다.
+    for (const s of g.socks) expect(`${"evidence" in (lastViewOf(s).day ?? {})}/${"seen" in (lastViewOf(s).day?.morning ?? {})}`).toBe("false/false");
     expect("errandLast" in ((await storedRoom(g.code)) as unknown as Record<string, unknown>)).toBe(false);
     for (const s of g.socks) expect(s.frames.slice(-3).join("")).not.toContain("errandLast");
   }, 60_000);
 
-  it("목격자 없는 아침: V 곁에 아무도 없었으면 day.evidence 에 seen 키가 없고 trace 는 있다", async () => {
+  it("목격자 없는 아침: V 곁에 아무도 없었어도 확장판은 day.evidence 가 없다 (21-07 — 공개 흔적을 걷었다)", async () => {
     const g = await startedGame("errand");
     const v = withRole(g, "citizen")[0]!;
     await lastSeenMorning(g, v, spreadWith(g, v, null));
     for (const s of g.socks) {
-      const ev = lastViewOf(s).day?.evidence;
-      expect(`${ev !== undefined && "seen" in ev}:${ev?.trace !== undefined}`).toBe("false:true");
-      expect("seen" in (lastViewOf(s).day?.morning ?? {})).toBe(false);
+      expect(`${"evidence" in (lastViewOf(s).day ?? {})}:${"seen" in (lastViewOf(s).day?.morning ?? {})}`).toBe("false:false");
     }
   }, 60_000);
 });

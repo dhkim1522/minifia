@@ -89,11 +89,11 @@ describe("밤 사슬 불변식 — 마피아 전원 일치 (NIGHT-08, MORN-03)",
           if (!r.ok) throw new Error("doctor pick rejected");
           s = r.state;
         }
-        const m = tick(s, s.phaseEndsAt!, seededRandInt(seed)); // 탈락자가 있으면 흔적 조각을 정하는 난수 한 번(D-06)
+        const m = tick(s, s.phaseEndsAt!, seededRandInt(seed)); // 탈락자가 있으면 현장 난수(21-06) — 공개 흔적 난수는 없다(21-07)
         const views = m.players.map((p) => buildView(m, p.id, 99_000));
-        // 탈락 아침에는 흔적 조각 id 하나가 함께 실린다 — 마피아 전원이 피해자를 골랐으니 풀은 비지 않는다.
-        const want = doctorSaves ? '{"saved":true}' : JSON.stringify({ eliminated: target.seat, trace: m.morning?.trace });
-        if (!doctorSaves) expect(typeof m.morning?.trace).toBe("string");
+        // 탈락 아침에는 eliminated 하나뿐이다 — 확장판은 공개 흔적 조각을 싣지 않는다(21-07 D-14·D-18, 옷 조각은 현장을 살핀 본인 me.clues 로만).
+        const want = doctorSaves ? '{"saved":true}' : JSON.stringify({ eliminated: target.seat });
+        expect(m.morning?.trace).toBeUndefined();
         for (const v of views) expect(JSON.stringify(v.day?.morning)).toBe(want);
         expect(m.players.filter((p) => !isAlive(p)).length).toBe(doctorSaves ? 0 : 1);
       }

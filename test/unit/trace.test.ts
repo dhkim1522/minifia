@@ -6,6 +6,7 @@ import { DEFAULT_LOOK } from "../../shared/game/look";
 import { enterMorning, enterNight, pickTarget, resolveNight } from "../../shared/game/night";
 import { MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_TRACE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS } from "../../shared/game/phases";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
+import { rulesetOf } from "../../shared/game/ruleset";
 import type { Player, RoomState } from "../../shared/game/room";
 import type { RoleId } from "../../shared/game/roles";
 import { tick } from "../../shared/game/tick";
@@ -16,6 +17,12 @@ import type { OutfitId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 
 const START_AT = 10_000;
+
+/**
+ * 공개 흔적(morning.trace·seen)을 만드는 옛 갈래의 규칙표(21-07 이후 지금 판 종류로는 닿지 않는다): 확장판에서 심부름만 꺼 enterMorning 의 아래쪽 갈래를 연다.
+ * 확장판(errand 켜짐)은 D-14·D-18 로 공개 흔적을 만들지 않는다 — 이 표는 남아 있는 흔적 고르기·길이 가산·view 복사 코드가 그대로 맞는지 지키는 시험 전용이다.
+ */
+const LEGACY = { ...rulesetOf("extended"), errand: false };
 
 function lobbyOf(n: number): RoomState {
   const created = createRoomState({
@@ -146,7 +153,7 @@ describe("enterMorning 의 흔적 (D-06)", () => {
   it("피해자가 있으면 morning.trace 가 풀에서 뽑은 조각이고 키는 eliminated·trace 둘이다", () => {
     const { night, m1, m2, c1 } = cast();
     const s = withLook(withLook(picks(night, [m1, c1], [m2, c1]), m1, "mafia"), m2, "mafia");
-    const out = enterMorning(s, () => 1);
+    const out = enterMorning(s, () => 1, LEGACY);
     expect(out.morning?.eliminated).toBe(c1.seat);
     expect(out.morning?.trace).toBe("blackCloth");
     expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated,trace");
@@ -159,41 +166,56 @@ describe("enterMorning 의 흔적 (D-06)", () => {
     s = withLook(withLook(withLook(s, m1, "mafia"), m2, "mafia"), c2, "elder");
     const seats = traceCandidates(s, c1.seat).map((p) => p.id);
     const idx = seats.indexOf(c2.id);
-    expect(enterMorning(s, () => idx).morning?.trace).toBe("grayThread");
+    expect(enterMorning(s, () => idx, LEGACY).morning?.trace).toBe("grayThread");
   });
 
   it("구출(saved)·무효 밤·아무도 안 고름은 trace 키가 없다", () => {
     const { night, m1, m2, c1, c2, doctor } = cast();
-    const saved = enterMorning(picks(night, [m1, c1], [m2, c1], [doctor, c1]), () => 0);
+    const saved = enterMorning(picks(night, [m1, c1], [m2, c1], [doctor, c1]), () => 0, LEGACY);
     expect(JSON.stringify(saved.morning)).toBe('{"saved":true}');
-    const split = enterMorning(picks(night, [m1, c1], [m2, c2]), () => 0);
+    const split = enterMorning(picks(night, [m1, c1], [m2, c2]), () => 0, LEGACY);
     expect(JSON.stringify(split.morning)).toBe("{}");
-    expect(JSON.stringify(enterMorning(night, () => 0).morning)).toBe("{}");
+    expect(JSON.stringify(enterMorning(night, () => 0, LEGACY).morning)).toBe("{}");
   });
 
-  it("난수는 피해자·미수가 있을 때만 부르고(흔적 한 번 + 현장), 없으면 0번이며, randInt 를 안 주면 첫 후보로 결정적이다", () => {
+  it("난수는 피해자가 있을 때만 부르고(옛 갈래: 흔적 한 번), 없으면 0번이며, randInt 를 안 주면 첫 후보로 결정적이다", () => {
     const { night, m1, m2, c1, c2, doctor } = cast();
     let calls = 0;
     const counter = (n: number): number => {
       calls += 1;
       return n - 1;
     };
-    enterMorning(picks(night, [m1, c1], [m2, c1]), counter);
-    expect(calls).toBe(3); // 21-06: 흔적 난수 1 + 현장 난수 2(풀 둘 — 옷 조각 i, 창문 j). 21-07 이 공개 흔적을 걷으면 2 가 된다
+    enterMorning(picks(night, [m1, c1], [m2, c1]), counter, LEGACY);
+    expect(calls).toBe(1); // 옛 갈래(현장 없음): 흔적 난수 한 번
     calls = 0;
-    enterMorning(picks(night, [m1, c1], [m2, c1], [doctor, c1]), counter);
-    expect(calls).toBe(2); // 21-06: 미수(의사가 막은 밤)는 흔적이 없고 현장(미수 현장)만 난수를 부른다
+    enterMorning(picks(night, [m1, c1], [m2, c1], [doctor, c1]), counter, LEGACY);
+    expect(calls).toBe(0); // 구출은 흔적이 없다
     calls = 0;
-    enterMorning(picks(night, [m1, c1], [m2, c2]), counter);
-    enterMorning(night, counter);
+    enterMorning(picks(night, [m1, c1], [m2, c2]), counter, LEGACY);
+    enterMorning(night, counter, LEGACY);
     expect(calls).toBe(0);
     const killed = picks(night, [m1, c1], [m2, c1]);
-    expect(enterMorning(killed).morning?.trace).toBe(enterMorning(killed, () => 0).morning?.trace);
+    expect(enterMorning(killed, undefined, LEGACY).morning?.trace).toBe(enterMorning(killed, () => 0, LEGACY).morning?.trace);
+  });
+
+  it("확장판은 아침에 공개 흔적을 만들지 않는다: morning 키는 eliminated 하나, 난수는 현장 둘(탈락)·둘(미수)뿐이다 (D-14·D-18, 21-07)", () => {
+    const { night, m1, m2, c1, c2, doctor } = cast();
+    let calls = 0;
+    const counter = (n: number): number => {
+      calls += 1;
+      return n - 1;
+    };
+    const killed = enterMorning(picks({ ...night, errandLast: [{ seat: c1.seat, by: c2.seat, place: "glass" as const }] }, [m1, c1], [m2, c1]), counter);
+    expect(`${Object.keys(killed.morning ?? {}).join(",")}:${calls}`).toBe("eliminated:2"); // 흔적 난수 없음 — 현장 난수가 첫 호출(풀 둘 → 2번)
+    calls = 0;
+    const saved = enterMorning(picks(night, [m1, c1], [m2, c1], [doctor, c1]), counter);
+    expect(`${JSON.stringify(saved.morning)}:${calls}`).toBe('{"saved":true}:2');
+    expect("errandLast" in killed).toBe(false); // 마지막 목격 줄은 쓰이지 않아도 아침이 지운다
   });
 
   it("nightPick 은 아침 상태에서 지워지고 흔적의 풀(누가 골랐는지)은 상태 어디에도 남지 않는다", () => {
     const { night, m1, m2, c1 } = cast();
-    const out = enterMorning(picks(night, [m1, c1], [m2, c1]), () => 0);
+    const out = enterMorning(picks(night, [m1, c1], [m2, c1]), () => 0, LEGACY);
     expect(out.players.some((p) => "nightPick" in p)).toBe(false);
     expect(JSON.stringify(out.morning).includes("pool")).toBe(false);
   });
@@ -202,7 +224,7 @@ describe("enterMorning 의 흔적 (D-06)", () => {
     const { night, m1, m2, c1 } = cast();
     const s = picks(night, [m1, c1], [m2, c1]);
     const before = JSON.stringify(s);
-    enterMorning(s, () => 0);
+    enterMorning(s, () => 0, LEGACY);
     expect(JSON.stringify(s) === before).toBe(true);
   });
 });
@@ -237,7 +259,7 @@ describe("판정 불변 (T-15-14)", () => {
 
 describe("morningMsOf 의 흔적 가산 (D-06)", () => {
   const morningWith = (night: RoomState, ...pairs: Array<[Player, Player]>): RoomState => ({
-    ...enterMorning(picks(night, ...pairs), () => 0),
+    ...enterMorning(picks(night, ...pairs), () => 0, LEGACY),
     phase: "morning",
   });
 
@@ -268,7 +290,8 @@ describe("morningMsOf 의 흔적 가산 (D-06)", () => {
 });
 
 describe("view 의 흔적 (T-15-12)", () => {
-  const toMorning = (s: RoomState): RoomState => tick(s, s.phaseEndsAt!, seededRandInt(3));
+  // 옛 갈래(LEGACY)로 아침에 들어간다 — 확장판의 tick 은 공개 흔적을 만들지 않으므로(D-14), view 가 흔적 값을 그대로 복사하는지는 이 상태로 본다.
+  const toMorning = (s: RoomState): RoomState => ({ ...enterMorning(s, seededRandInt(3), LEGACY), phase: "morning", phaseEndsAt: s.phaseEndsAt! });
 
   it("아침 모든 view(유령 포함)의 day.morning.trace 가 같은 조각 id 이고 키가 eliminated·trace 뿐이다", () => {
     const { night, m1, m2, c1 } = cast();
@@ -339,7 +362,7 @@ describe("errandLast 수명과 morning.seen (16페이즈 D-10, A2)", () => {
   it("enterMorning 은 피해자 줄만 morning.seen = {seat: by, place} 로 옮기고 errandLast 를 지운다", () => {
     const { night, m1, m2, c1, c2 } = cast();
     const picked = picks({ ...night, errandLast: ROWS(c1, c2, m1) }, [m1, c1], [m2, c1]);
-    const m = enterMorning(picked, () => 0);
+    const m = enterMorning(picked, () => 0, LEGACY);
     expect(m.morning?.eliminated).toBe(c1.seat);
     expect(JSON.stringify(m.morning?.seen)).toBe(JSON.stringify({ seat: c2.seat, place: "glass" }));
     expect("errandLast" in m).toBe(false);
@@ -350,7 +373,7 @@ describe("errandLast 수명과 morning.seen (16페이즈 D-10, A2)", () => {
   it("피해자 줄이 없으면 seen 키가 없고 errandLast 는 지워진다", () => {
     const { night, m1, m2, c1, c2 } = cast();
     const rows = [{ seat: c2.seat, by: c1.seat, place: "piano" as const }];
-    const m = enterMorning(picks({ ...night, errandLast: rows }, [m1, c1], [m2, c1]), () => 0);
+    const m = enterMorning(picks({ ...night, errandLast: rows }, [m1, c1], [m2, c1]), () => 0, LEGACY);
     expect(m.morning?.eliminated).toBe(c1.seat);
     expect("seen" in (m.morning ?? {})).toBe(false);
     expect("errandLast" in m).toBe(false);
@@ -359,10 +382,10 @@ describe("errandLast 수명과 morning.seen (16페이즈 D-10, A2)", () => {
   it("구출·무효 밤에도 errandLast 는 지워지고 seen 이 없다", () => {
     const { night, m1, m2, c1, c2, doctor } = cast();
     const base: RoomState = { ...night, errandLast: ROWS(c1, c2, m1) };
-    const saved = enterMorning(picks(base, [m1, c1], [m2, c1], [doctor, c1]), () => 0);
+    const saved = enterMorning(picks(base, [m1, c1], [m2, c1], [doctor, c1]), () => 0, LEGACY);
     expect(JSON.stringify(saved.morning)).toBe('{"saved":true}');
     expect("errandLast" in saved).toBe(false);
-    const invalid = enterMorning(picks(base, [m1, c1], [m2, c2]), () => 0);
+    const invalid = enterMorning(picks(base, [m1, c1], [m2, c2]), () => 0, LEGACY);
     expect(JSON.stringify(invalid.morning)).toBe("{}");
     expect("errandLast" in invalid).toBe(false);
   });

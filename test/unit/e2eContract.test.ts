@@ -49,6 +49,7 @@ import * as mapSelectE2e from "../../scripts/e2e/mapselect.mjs";
 import * as polishE2e from "../../scripts/e2e/polish.mjs";
 import { TOD_LABEL, TOD_ORDER, todOf } from "../../src/game/timeOfDay";
 import { enterMorning, pickTarget } from "../../shared/game/night";
+import { rulesetOf } from "../../shared/game/ruleset";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
@@ -963,7 +964,8 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
     // 옷 look: 직업 이름과 같은 단어 셋(서버는 look 을 역할의 함수로 만들지 않는다 — 서버 쪽 증명은 dress.test.ts L25)
     const looks: OutfitId[] = ["police", "doctor", "mafia"];
     const dressed: RoomState = { ...night, players: night.players.map((p, i) => (i < 3 ? { ...p, look: looks[i]! } : p)) };
-    const base = enterMorning(pickAs(pickAs(dressed, m1, victim), m2, victim), () => 0);
+    // 확장판은 21-07 부터 공개 흔적을 만들지 않는다 — smoke 판정이 옛 모양(eliminated·trace·seen)도 통과시키는지는 심부름이 꺼진 옛 갈래 규칙표로 만든 아침으로 본다.
+    const base = enterMorning(pickAs(pickAs(dressed, m1, victim), m2, victim), () => 0, { ...rulesetOf("extended"), errand: false });
     const morningState: RoomState = {
       ...base,
       phase: "morning",

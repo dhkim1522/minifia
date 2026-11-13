@@ -214,20 +214,20 @@ describe("enterMorning — basic 판은 흔적·마지막 목격을 만들지 �
     const { night } = killNight("basic");
     expect("errandLast" in enterMorning(night, seededRandInt(3))).toBe(false);
   });
-  it("extended(mode 없음 포함): 지금처럼 trace 와 seen 이 있고 난수를 부른다(흔적 한 번 + 21-06 현장 둘)", () => {
+  it("extended(mode 없음 포함): 공개 흔적 trace·seen 이 없고 난수는 현장 둘뿐이다 (21-07, D-14·D-18 — errandLast 가 있어도)", () => {
     for (const mode of [undefined, "extended"] as const) {
       const { night } = killNight(mode);
       const rng = counting();
       const morning = enterMorning(night, rng.fn).morning;
-      expect(`${String(mode)}:${keysOf(morning)}:${rng.calls()}`).toBe(`${String(mode)}:eliminated,seen,trace:3`); // 21-06: 흔적 난수 1 + 현장 난수 2(풀 둘). 21-07 이 공개 흔적을 걷으면 2 가 된다
+      expect(`${String(mode)}:${keysOf(morning)}:${rng.calls()}`).toBe(`${String(mode)}:eliminated:2`); // 21-07: 공개 흔적을 걷어 흔적 난수가 없다 — 현장 난수 2(풀 둘)가 첫 호출
     }
   });
-  it("tick 으로 아침에 들어가도 같다 — basic 은 trace·seen 없음, extended 는 있음 (ON_ENTER 의 세 번째 인자가 규칙으로 새지 않는다)", () => {
+  it("tick 으로 아침에 들어가도 같다 — basic·extended 모두 trace·seen 없음 (ON_ENTER 의 세 번째 인자가 규칙으로 새지 않는다)", () => {
     const viaTick = (mode?: GameMode): string => {
       const { night } = killNight(mode);
       return keysOf(tick(night, night.phaseEndsAt!, seededRandInt(3)).morning);
     };
-    expect(`${viaTick("basic")} / ${viaTick("extended")} / ${viaTick()}`).toBe("eliminated / eliminated,seen,trace / eliminated,seen,trace");
+    expect(`${viaTick("basic")} / ${viaTick("extended")} / ${viaTick()}`).toBe("eliminated / eliminated / eliminated");
   });
 });
 

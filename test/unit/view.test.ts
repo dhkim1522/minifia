@@ -290,6 +290,12 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "badgeLog", // 직업 주장 이력(결정 0066-1, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
   "errandFake", // 마피아의 가짜 심부름 장소(16페이즈 D-08): 서버 전용 — 어떤 view 에도 없다. me.errand.places 는 시민과 같은 목록 그대로
   "errandLast", // 심부름 중 피해자 후보별 마지막 관찰자 줄(16페이즈 D-10): 서버 전용 — 공개는 아침의 피해자 한 줄(day.evidence.seen)뿐
+  // 21페이즈 서버 전용 이름(21-07, D-21) — 어떤 view 의 어떤 경로에도 없다. 본인에게 가는 값은 me.clues·day.scene.house 같은 다른 이름으로만 나간다.
+  "lampCut", // 저녁에 마피아가 자른 가로등 서버 전용 기록(21-05) — 공개는 day.lamps 의 켜진 목록뿐
+  "skipVote", // 건너뛰기 누름 서버 전용 표(21-05) — 공개는 day.skipCount 숫자뿐
+  "smudged", // 마피아가 먼저 손댄 현장 지점(21-06) — 뒤 사람의 touched 한 줄로만 간다
+  "steps", // 현장 발자국 수 원본(21-06) — me.clues 의 footprint 줄 n 으로만 간다
+  "eyes", // 창문으로 볼 수 있는 좌석(21-06) — me.clues 의 window 줄로만 간다
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
@@ -500,10 +506,14 @@ function mafiaSeatsOtherThan(state: RoomState, p: Player): number[] {
 
 describe("day.evidence 수명 (16페이즈 D-10·R-4)", () => {
   const SEEN = { seat: 1, place: "glass" } as const;
-  /** 1일차 밤 뒤 피해자가 나온 아침. 서버 상태 morning 에 trace 가 있고, 필요하면 seen 도 얹는다. */
+  /**
+   * 1일차 밤 뒤 피해자가 나온 아침. 서버 상태 morning 에 trace 를 얹고, 필요하면 seen 도 얹는다.
+   * 21-07 이후 확장판의 enterMorning 은 공개 흔적을 만들지 않으므로(D-14·D-18) 값은 상태에 직접 넣는다 — 이 시험은 view 가 상태에 있는 흔적을 필드별로만 복사하는지(남아 있는 복사 코드)를 지킨다.
+   */
   const victimMorning = (withSeen: boolean): RoomState => {
-    const { s } = morningWithVictim(5, 1, "extended"); // 흔적·목격은 확장판 규칙이다(21페이즈, 규칙 가)
-    return withSeen ? { ...s, morning: { ...s.morning!, seen: { ...SEEN } } } : s;
+    const { s } = morningWithVictim(5, 1, "extended");
+    const withTrace: RoomState = { ...s, morning: { ...s.morning!, trace: "button" } };
+    return withSeen ? { ...withTrace, morning: { ...withTrace.morning!, seen: { ...SEEN } } } : withTrace;
   };
   const evidenceOf = (s: RoomState, viewer: Player): unknown => buildView(s, viewer.id, START_AT).day?.evidence;
   const EVIDENCE_PHASE_LIST: readonly PhaseId[] = ["morning", "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution"];
@@ -888,10 +898,10 @@ describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 
     expect(got.join(" ")).toBe("dayAnnounce:n,roles,voteLog discussion:endCount,n,roles,voteLog night:n,noExecution,roles,voteLog morning:morning,n,roles,voteLog");
   });
 
-  it("확장판의 피해자가 나온 아침의 day 키는 evidence·lamps·morning·n·roles·scene·skipCount·voteLog 이고 turn 키가 없다 (21페이즈, 규칙 가)", () => {
+  it("확장판의 피해자가 나온 아침의 day 키는 lamps·morning·n·roles·scene·skipCount·voteLog 이고 evidence·turn 키가 없다 (21페이즈, 규칙 가 · 21-07 D-14·D-18)", () => {
     const { s } = morningWithVictim(5, 1, "extended");
     const keys = new Set(s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(",")));
-    expect(`${s.phase}:${[...keys].join("|")}`).toBe("morning:evidence,lamps,morning,n,roles,scene,skipCount,voteLog");
+    expect(`${s.phase}:${[...keys].join("|")}`).toBe("morning:lamps,morning,n,roles,scene,skipCount,voteLog");
   });
 
   it("dayAnnounce 뷰의 day 는 {n, roles, voteLog []} 뿐이다", () => {
@@ -1222,14 +1232,14 @@ describe("buildView 아침 결과 (NIGHT-06·D-13)", () => {
   const morningsOf = (s: RoomState): string[] => s.players.map((p) => flat(buildView(s, p.id, START_AT).day?.morning));
   const toMorning = (s: RoomState): RoomState => tick(s, s.phaseEndsAt!, seededRandInt(1));
 
-  it("마피아 전원이 시민 X 지목 → 모든 viewer 의 day.morning 이 같은 {eliminated: X, trace} 하나(문구 번호 없음)", () => {
-    const s0 = stateAt("night", 5, 1, "extended"); // 흔적 조각은 확장판 규칙이다(21페이즈, 규칙 가)
+  it("마피아 전원이 시민 X 지목 → 모든 viewer 의 day.morning 이 같은 {eliminated: X} 하나(문구 번호·공개 흔적 없음, 21-07 D-14·D-18)", () => {
+    const s0 = stateAt("night", 5, 1, "extended");
     const x = seatOfRole(s0, "citizen");
     const s = toMorning(s0.players.filter((p) => p.role === "mafia").reduce((acc, p) => actAt(acc, p.seat, x), s0));
     const got = morningsOf(s);
     expect(new Set(got).size).toBe(1);
     const m = buildView(s, s.hostId, START_AT).day?.morning ?? {};
-    expect(`${Object.keys(m).sort().join(",")} ${m.eliminated}`).toBe(`eliminated,trace ${x}`); // 흔적 조각(D-06)
+    expect(`${Object.keys(m).sort().join(",")} ${m.eliminated}`).toBe(`eliminated ${x}`); // 확장판은 공개 흔적 조각이 없다(21-07)
   });
 
   it("의사가 X 를 지킴 → { saved: true }, 아무도 안 고름 → {}", () => {

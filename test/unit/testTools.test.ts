@@ -201,7 +201,7 @@ describe("skipPhase 동작", () => {
     if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
     expect(r.state.phase).toBe("morning");
     expect(String(r.state.morning?.eliminated)).toBe(String(citizen.seat));
-    expect(Object.keys(r.state.morning ?? {}).join(",")).toBe("eliminated,trace"); // 흔적 조각(15페이즈 D-06)
+    expect(Object.keys(r.state.morning ?? {}).join(",")).toBe("eliminated"); // 확장판은 공개 흔적 조각이 없다(21-07 D-14·D-18)
     expect(String(r.state.players.find((p) => p.id === citizen.id)!.alive)).toBe("false");
   });
 
