@@ -16,7 +16,7 @@ import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { UnsupportedRendererError } from "../../src/world/renderer";
 import type { CharacterHandle, LightingPhase, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
-import { gatherView, PAN_BOX, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
+import { gatherView, PAN_BOX, panBoxOf, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
 import { predictSegment, SEG_BLEND_MS, YAW_TURN_RATE } from "../../src/world/motion";
 import { GHOST_FADE_END_MS } from "../../src/game/dayView";
 import { createWorldRuntime, ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, RING_COLORS, WALK_CUE_KEY } from "../../src/world/runtime";
@@ -2005,6 +2005,25 @@ describe("카메라: 날아가지 않고 붙는다, 크기 변화는 다시 맞�
     frames(500);
     const pos = s.store.positionOf(0, Date.now())!;
     expect(r.views.at(-1)!.target.x).toBeCloseTo(pos.x, 6);
+  });
+});
+
+describe("마을 카메라 (20-05, D-12·P20-15)", () => {
+  it("마을 판의 따라가기는 panBoxOf(town) 로 잘린다: 걷는 영역 모서리(10, 10)에서 카메라 목표는 ±9.6 이고 재즈 바의 ±5.4 가 아니다", async () => {
+    const s = await open({ view: { ...makeView(TWO, 0), map: "town" } }, { ents: [seg(0, [1000, 1000]), seg(1, [-300, 50])] });
+    const r = s.world.renderers[0]!;
+    frames(600);
+    const t = r.views.at(-1)!.target;
+    expect(t.x).toBeCloseTo(panBoxOf("town").maxX, 6);
+    expect(t.z).toBeCloseTo(panBoxOf("town").maxZ, 6);
+    expect(t.x).toBeGreaterThan(PAN_BOX.maxX + 1);
+  });
+
+  it("재즈 바는 그대로 PAN_BOX 로 잘린다", async () => {
+    const s = await open({}, { ents: [seg(0, [580, 580]), seg(1, [-300, 50])] });
+    const r = s.world.renderers[0]!;
+    frames(600);
+    expect(r.views.at(-1)!.target.x).toBeCloseTo(PAN_BOX.maxX, 6);
   });
 });
 

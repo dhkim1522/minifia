@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildPlazaScene } from "../../src/world/maps/plaza";
 import { LADDER } from "../../src/world/renderer";
 import { HEAD_TOP_Y, WALK_HALF } from "../../shared/game/map";
+import { TOWN_MAP, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
 import {
   CAM_DIST,
   CAM_HEIGHT,
@@ -23,8 +24,10 @@ import {
   NAMETAG_H,
   NAMETAG_MAX_W,
   PAN_BOX,
+  panBoxOf,
   PANEL_HEIGHT,
   PLATE_FAR,
+  plateFarOf,
   PX_PER_UNIT,
   RESIZE_SETTLE_MS,
   screenRay,
@@ -295,11 +298,11 @@ const symBox = (p: number): Box => ({ minX: -p, maxX: p, minZ: -p, maxZ: p });
 /** 7페이즈 로비 스테이지 사각형: 패널 높이 = LOG_H(68 한 값) + 154 = 222 (18.1 UI-SPEC B 계약 4). 키보드가 열린 상태(스테이지 < 128)는 이 검사 대상이 아니다(A2) */
 const lobbyStage = (size: Size) => stageRect(size, lobbyPanelHeight(LOG_H));
 
-/** 걷는 영역 [−5.8, 5.8]² 의 0.25 간격 모든 점(끝점 5.8 포함) */
-function walkPoints(): { x: number; z: number }[] {
+/** 걷는 영역 [−half, half]² 의 0.25 간격 모든 점(끝점 포함). 기본은 재즈 바·광장의 5.8, 마을은 ±10 */
+function walkPoints(half: number = WALK_HALF): { x: number; z: number }[] {
   const axis: number[] = [];
-  for (let k = 0; -WALK_HALF + 0.25 * k < WALK_HALF - 1e-9; k++) axis.push(-WALK_HALF + 0.25 * k);
-  axis.push(WALK_HALF);
+  for (let k = 0; -half + 0.25 * k < half - 1e-9; k++) axis.push(-half + 0.25 * k);
+  axis.push(half);
   const out: { x: number; z: number }[] = [];
   for (const x of axis) for (const z of axis) out.push({ x, z });
   return out;
@@ -313,11 +316,11 @@ interface Failure {
 }
 
 /** 크기 하나에서 상자 box 로 카메라를 자를 때 발·이름표 상자(입력 중 칸 22 포함 = HEAD_STACK_H)가 스테이지 사각형을 넘는 점들 (A1: 늘 입력 중 칸이 있다고 보는 최악) */
-function visibilityFailures(size: Size, box: Box): Failure[] {
+function visibilityFailures(size: Size, box: Box, half: number = WALK_HALF): Failure[] {
   const r = lobbyStage(size);
   const offsetY = stageOffsetY(size.h, r.top, r.bottom);
   const fails: Failure[] = [];
-  for (const p of walkPoints()) {
+  for (const p of walkPoints(half)) {
     const target = clampTarget(p, box);
     const foot = groundToScreen({ x: p.x, y: 0, z: p.z }, target, size, offsetY);
     const head = groundToScreen({ x: p.x, y: HEAD_TOP_Y, z: p.z }, target, size, offsetY);
@@ -376,8 +379,8 @@ function farthestGround(size: Size, box: Box): { far: number; at: string } {
 }
 
 /** 가시성을 통과하는 가장 좁은 대칭 상자 반폭(0.1 단위) */
-function minPanFor(size: Size): number {
-  for (let k = 0; k <= 58; k++) if (visibilityFailures(size, symBox(k / 10)).length === 0) return k / 10;
+function minPanFor(size: Size, half: number = WALK_HALF): number {
+  for (let k = 0; k <= Math.round(half * 10); k++) if (visibilityFailures(size, symBox(k / 10), half).length === 0) return k / 10;
   return Number.POSITIVE_INFINITY;
 }
 
@@ -430,7 +433,7 @@ describe("가시성: 걷는 영역 전 격자점 × 6개 폰 크기 (UI-SPEC E1 
   });
 
   it("PAN_BOX 는 가시성을 통과하는 가장 좁은 0.1 단위 값이다 (0.1 더 좁히면 어느 한 크기가 넘친다)", () => {
-    const needed = Math.max(...STAGE_SIZES.map(minPanFor));
+    const needed = Math.max(...STAGE_SIZES.map((s) => minPanFor(s)));
     expect(PAN_BOX.maxX).toBeCloseTo(needed, 9);
     const narrower = symBox(Math.round((PAN_BOX.maxX - 0.1) * 10) / 10);
     expect(STAGE_SIZES.some((s) => visibilityFailures(s, narrower).length > 0)).toBe(true);
@@ -514,10 +517,87 @@ describe("광장 빈 배경 없음 (MAP-06, D-22): 바닥 판 40×40 + 연장 �
   });
 });
 
+// ───────────────────────── 20페이즈: 마을 카메라 한계 확정 (D-12·D-21·P20-15) ─────────────────────────
+
+describe("마을 카메라 (20-05): 걷는 영역 ±10 격자점 × 6개 폰 크기 · 빈 배경 · 방 윤곽 폭", () => {
+  const townHalf = (TOWN_MAP.walkHalf ?? WALK_HALF) as number;
+  const townBox = panBoxOf("town");
+  const townFloorHalf = 12; // 바닥 판 24×24(town.ts buildPlaza floorHalf)
+
+  it("마을 격자점은 0.25 간격 [−10, 10]² 이다 (축마다 81개)", () => {
+    const pts = walkPoints(townHalf);
+    expect(townHalf).toBe(10);
+    expect(pts.length).toBe(81 * 81);
+    expect(pts[0]).toEqual({ x: -10, z: -10 });
+    expect(pts[pts.length - 1]).toEqual({ x: 10, z: 10 });
+  });
+
+  for (const size of STAGE_SIZES) {
+    it(`town visible ${size.label}: 모든 격자점에서 발과 이름표(180×24)와 입력 중 칸(+22)이 스테이지 사각형 안에 있다 (panBoxOf("town") 로 자른 카메라)`, () => {
+      const fails = visibilityFailures(size, townBox, townHalf);
+      const worst = fails.sort((a, b) => b.overflow - a.overflow)[0];
+      expect(fails.length, worst ? `${fails.length}점 실패, 최악: ${describeFailure(size, worst)}` : "").toBe(0);
+    });
+  }
+
+  it("town PAN 은 축마다 대칭이고 걷는 영역(±10)을 넘지 않는다", () => {
+    expect(townBox.minX).toBe(-townBox.maxX);
+    expect(townBox.minZ).toBe(-townBox.maxZ);
+    expect(townBox.maxX).toBe(townBox.maxZ);
+    expect(townBox.maxX).toBeLessThanOrEqual(townHalf);
+    expect(townBox.maxX).toBeGreaterThan(0);
+  });
+
+  it("town PAN 은 가시성을 통과하는 가장 좁은 0.1 단위 값이다 (0.1 더 좁히면 어느 한 크기가 넘친다)", () => {
+    const needed = Math.max(...STAGE_SIZES.map((s) => minPanFor(s, townHalf)));
+    expect(townBox.maxX).toBeCloseTo(needed, 9);
+    const narrower = symBox(Math.round((townBox.maxX - 0.1) * 10) / 10);
+    expect(STAGE_SIZES.some((s) => visibilityFailures(s, narrower, townHalf).length > 0)).toBe(true);
+  });
+
+  for (const size of STAGE_SIZES) {
+    it(`town blank ${size.label}: 모든 표본 광선이 연장 판(|x|,|z| ≤ plateFarOf("town")) 위 바닥에 닿는다`, () => {
+      const { far, at } = farthestGround(size, townBox);
+      expect(far, `${at} (연장 판 ${plateFarOf("town")})`).toBeLessThanOrEqual(plateFarOf("town"));
+    });
+  }
+
+  it("plateFarOf(\"town\") 은 빈 배경 검사가 통과하는 가장 작은 0.5 단위 값에 여유 2 를 더한 값이고, 바닥 판(±12)보다 바깥이다", () => {
+    const needed = Math.max(...STAGE_SIZES.map((s) => farthestGround(s, townBox).far));
+    const minimal = Math.ceil(needed * 2) / 2;
+    expect(plateFarOf("town")).toBe(minimal + 2);
+    expect(needed).toBeLessThanOrEqual(plateFarOf("town") - 2);
+    expect(plateFarOf("town")).toBeGreaterThan(townFloorHalf);
+  });
+
+  it("방 하나의 바깥 윤곽(네 꼭짓점)은 화면 가로 폭이 가장 좁은 폰 폭 360 안에 다 들어오고 양옆에 숨 쉴 여유가 있다 (TM9)", () => {
+    const narrowest = Math.min(...STAGE_SIZES.map((s) => s.w));
+    expect(narrowest).toBe(360);
+    for (const [id, o] of Object.entries(TOWN_ROOM_OUTER)) {
+      const xs = [o.x0, o.x1].flatMap((fx) => [o.z0, o.z1].map((fz) => groundToScreen({ x: fx / 100, y: 0, z: fz / 100 }, { x: 0, z: 0 }, { w: narrowest, h: 560 }, 0).sx));
+      const width = Math.max(...xs) - Math.min(...xs);
+      expect(width, `${id} 윤곽 폭`).toBeLessThanOrEqual(narrowest - 16);
+      expect(width, `${id} 윤곽 폭`).toBeGreaterThan(300);
+    }
+  });
+
+  it("재즈 바·광장은 PAN_BOX·PLATE_FAR 그대로다 (마을 값이 번지지 않는다)", () => {
+    expect(panBoxOf("bar")).toBe(PAN_BOX);
+    expect(panBoxOf("plaza")).toBe(PAN_BOX);
+    expect(plateFarOf("bar")).toBe(PLATE_FAR);
+    expect(plateFarOf("plaza")).toBe(PLATE_FAR);
+  });
+});
+
 // CAMERA_PRINT=1 일 때만 크기별 근거 표를 출력한다(SUMMARY 용).
 describe.runIf(process.env.CAMERA_PRINT === "1")("근거 표 출력", () => {
   it("크기별 필요 pan·가장 먼 바닥 점", () => {
     const rows = STAGE_SIZES.map((s) => `${s.label}\t최소 pan ${minPanFor(s)}\t가장 먼 바닥 ${farthestGround(s, PAN_BOX).at}`);
+    process.stdout.write(`${rows.join("\n")}\n`);
+  });
+
+  it("마을: 크기별 필요 pan·가장 먼 바닥 점", () => {
+    const rows = STAGE_SIZES.map((s) => `town ${s.label}\t최소 pan ${minPanFor(s, 10)}\t가장 먼 바닥 ${farthestGround(s, panBoxOf("town")).at}`);
     process.stdout.write(`${rows.join("\n")}\n`);
   });
 });
