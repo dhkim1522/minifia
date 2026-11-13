@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: 10
-status: verifying
-stopped_at: Completed 20-10-PLAN.md
-last_updated: "2026-11-13T03:37:10.495Z"
+current_plan: 3
+status: executing
+stopped_at: Completed 21-03-PLAN.md
+last_updated: "2026-11-13T07:02:46.440Z"
 last_activity: 2026-11-13
-last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: 3d651e46bc6b1c7cf4d0df2943d10125978950af
+last_activity_desc: Phase 21 plan 03 완료 (가로등 8곳 장소·그림 별칭·사본)
+state_head: 12577e370af30a54eaeb67302a67f03662d5cf48
 progress:
   total_phases: 10
   completed_phases: 6
-  total_plans: 97
-  completed_plans: 97
+  total_plans: 115
+  completed_plans: 100
   percent: 60
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 21 (cause-effect-missions) — IN PROGRESS
-Current Plan: 2 완료 → 다음 21-03 (가로등 8곳)
+Current Plan: 3 완료 → 다음 21-04 (가짜 심부름 장소 걷어 내기·저녁 목격 기록이 토론까지)
 Total Plans in Phase: 18
 Status: Executing Phase 21
-Last activity: 2026-11-13 — 21-02 완료 (확장판 하루 순서로 깨진 단위 177·워커 313개를 갈래 가·나·다로 정리, npm test 8614 통과·실패 0. 시험 삭제·skip·약화 0, 제품 코드 변경 없음). 임시 옮겨 심기(저녁 값 → 토론 me.record)는 21-04 가 지운다
+Last activity: 2026-11-13 — 21-03 완료 (마을 심부름 장소를 가로등 lamp0~lamp7 8곳으로, 등불 n = 좌석 n 집, 기둥 자리 TOWN_LAMPS[n].pole. PLACE_IDS 24곳·그림 별칭 placeArtOf·낱말·E2E·smoke 사본. npm test 8645 통과·실패 0, typecheck 초록). 임시 옮겨 심기(저녁 값 → 토론 me.record)는 21-04 가 지운다
 
 ## Performance Metrics
 
@@ -722,8 +722,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T03:37:09.789Z
-Stopped at: Completed 21-02-PLAN.md
+Last session: 2026-11-13T07:02:45.428Z
+Stopped at: Completed 21-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
