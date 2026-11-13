@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: 5 완료 → 다음 21-06 (아침 현장 판정·단서 흐리기·inspect)
+current_plan: 6 완료 → 다음 21-07 (공개 흔적 걷기·한 판 누설 전수)
 status: executing
-stopped_at: Completed 21-05-PLAN.md
-last_updated: "2026-11-13T07:36:00.101Z"
+stopped_at: Completed 21-06-PLAN.md
+last_updated: "2026-11-13T07:52:07.856Z"
 last_activity: 2026-11-13
-last_activity_desc: Phase 21 plan 05 완료 (같은 단추로 심지 자르기·가로등 공개 값·저녁/아침 건너뛰기)
-state_head: 85451ffb4c5c9a3e4c24dae192e79ed9c2472e37
+last_activity_desc: Phase 21 plan 06 완료 (아침 현장·inspect·나만 보는 단서·마피아가 만진 지점 흐림, 건너뛰기 분모를 접속 중인 사람으로)
+state_head: 4ca58ffd67959f108a759ec31563ec70929075f9
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 115
-  completed_plans: 102
+  completed_plans: 103
   percent: 60
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 21 (cause-effect-missions) — IN PROGRESS
-Current Plan: 5 완료 → 다음 21-06 (아침 현장 판정·단서 흐리기·inspect)
+Current Plan: 6 완료 → 다음 21-07 (공개 흔적 걷기·한 판 누설 전수)
 Total Plans in Phase: 18
 Status: Executing Phase 21
-Last activity: 2026-11-13 — 21-05 완료 (errand hold 로 산 마피아가 서버 전용 lampCut 에 심지 자르기·켜기와 같은 응답·방송, day.lamps 저녁=처리된 것/밤·아침=켜진 것, skipPhase 모두 누르면 단계 끝. npm test 8680 통과·실패 0, typecheck 초록). 이전: 21-04 완료 (마피아 가짜 심부름 장소 errandFake 제거·모든 역할 같은 처리 규칙, enterNight 가 저녁 목록·진행·목격 줄을 토론까지 남김. npm test 8646 통과·실패 0, typecheck 초록). 이전: 21-03 완료 (마을 심부름 장소를 가로등 lamp0~lamp7 8곳으로, 등불 n = 좌석 n 집, 기둥 자리 TOWN_LAMPS[n].pole. PLACE_IDS 24곳·그림 별칭 placeArtOf·낱말·E2E·smoke 사본. npm test 8645 통과·실패 0, typecheck 초록). 임시 옮겨 심기(저녁 값 → 토론 me.record)는 21-04 가 지운다
+Last activity: 2026-11-13 — 21-06 완료 (아침 현장: 피해자·미수 집 앞 단서 지점 셋, inspect 로 본인만 me.clues(발자국 수·옷 조각·창문 목격·먼저 손댄 흔적), 마피아가 만진 지점은 서버 전용 흐림·응답 동일, 새 저녁이 지움. 건너뛰기 분모 = 접속 중인 사람(봇 제외). npm test 8711 통과·간헐 1(재실행 통과), typecheck 초록). 이전: 21-05 완료 (errand hold 로 산 마피아가 서버 전용 lampCut 에 심지 자르기·켜기와 같은 응답·방송, day.lamps 저녁=처리된 것/밤·아침=켜진 것, skipPhase 모두 누르면 단계 끝. npm test 8680 통과·실패 0, typecheck 초록). 이전: 21-04 완료 (마피아 가짜 심부름 장소 errandFake 제거·모든 역할 같은 처리 규칙, enterNight 가 저녁 목록·진행·목격 줄을 토론까지 남김. npm test 8646 통과·실패 0, typecheck 초록). 이전: 21-03 완료 (마을 심부름 장소를 가로등 lamp0~lamp7 8곳으로, 등불 n = 좌석 n 집, 기둥 자리 TOWN_LAMPS[n].pole. PLACE_IDS 24곳·그림 별칭 placeArtOf·낱말·E2E·smoke 사본. npm test 8645 통과·실패 0, typecheck 초록). 임시 옮겨 심기(저녁 값 → 토론 me.record)는 21-04 가 지운다
 
 ## Performance Metrics
 
@@ -726,8 +726,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T07:35:59.195Z
-Stopped at: Completed 21-05-PLAN.md
+Last session: 2026-11-13T07:52:06.830Z
+Stopped at: Completed 21-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
