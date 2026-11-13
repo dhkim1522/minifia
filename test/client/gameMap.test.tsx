@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { rulesetOf } from "../../shared/game/ruleset";
-import type { ClientMessage, EvidenceView, GameMode, MorningView, PhaseId, PublicPlayer, RecordLine, RoleRecord, RoomView } from "../../shared/protocol";
+import type { ClientMessage, ClueLine, EvidenceView, GameMode, MorningView, OutfitId, PhaseId, PublicPlayer, RecordLine, RoleRecord, RoomView } from "../../shared/protocol";
+import type { RoleId } from "../../shared/game/roles";
 import { LineSheet } from "../../src/components/v2/LineSheet";
 import { floatVisible } from "../../src/game/badgeView";
 import { RESULT_PANEL_TEXT } from "../../src/game/resultText";
@@ -1253,11 +1254,12 @@ describe("GameMap — 기본 마피아 판 화면 (19-02, D-09)", () => {
     expect(container.querySelectorAll("[data-end-discussion]").length).toBe(1);
   });
 
-  it("같은 토론 view 가 extended + me.record + day.evidence 면 [기록] 이 하나이고 이름표 표시가 붙는다 (지금 그대로)", () => {
+  it("같은 토론 view 가 extended + me.record 면 헤더 단추는 [의심 보드] 하나이고 옛 [기록] 단추·증거 이름표 표시는 없다 (21-14: 보드가 맡는다)", () => {
     const { container } = mount(modeView("extended", { phase: "discussion" }, { record: REC, evidence: EVIDENCE }));
-    expect(container.querySelectorAll("button[aria-label='기록']").length).toBe(1);
+    expect(container.querySelectorAll("button[aria-label='기록']").length).toBe(0);
+    expect(container.querySelectorAll("button[aria-label='의심 보드']").length).toBe(1);
     expect(container.querySelectorAll("[data-record-button]").length).toBe(1);
-    expect(stage.props?.tagProps?.(3)).toMatchObject({ seenMark: true });
+    expect(stage.props?.tagProps?.(3)).not.toMatchObject({ seenMark: true });
   });
 
   it("basic 아침(morning.eliminated 뿐): 흔적 구간이 지나도 증거 카드·이름표 표시가 없고 탈락 발표는 그대로 있다", () => {
@@ -1268,11 +1270,11 @@ describe("GameMap — 기본 마피아 판 화면 (19-02, D-09)", () => {
     expect(container.textContent).toContain("서준 님이 당했습니다");
   });
 
-  it("같은 아침이 extended + 흔적이면 구간 뒤 증거 카드가 하나다 (지금 그대로)", () => {
+  it("같은 아침이 extended + 흔적이어도 증거 카드는 없다 (21-14: 확장판은 현장 단서·의심 보드가 맡는다. 서버도 확장판에는 day.evidence 를 싣지 않는다)", () => {
     const morning: MorningView = { eliminated: 2, trace: "pin", seen: { seat: 3, place: "glass" } };
     const { container } = mount(modeView("extended", { phase: "morning", dead: [2] }, { morning, evidence: EVIDENCE, endsInMs: 7000 }));
     advance(2500);
-    expect(container.querySelectorAll("[data-trace-card]").length).toBe(1);
+    expect(container.querySelectorAll("[data-trace-card]").length).toBe(0);
   });
 
   it("basic 의 낮 단계(투표·변론·찬반·처형) 어디에도 기록·흔적·증거 요소가 없다", () => {
@@ -1316,5 +1318,127 @@ describe("공개 예고 문구 — 규칙은 인자다 (19-02, D-03)", () => {
 
   it("LineSheet: whisper 속성이 없거나 false 면 밤 대화만, true 면 귓속말을 함께 말한다", () => {
     expect([noticeOf(), noticeOf(false), noticeOf(true)].join(" | ")).toBe("끝나면 밤 대화가 공개돼요 | 끝나면 밤 대화가 공개돼요 | 끝나면 밤 대화와 귓속말이 공개돼요");
+  });
+});
+
+// 21-14 Task 2 (D-09·D-17·D-18·D-19·D-27, P21-14): 확장판 토론 · 의심 보드 배선.
+// WorldStage 는 위 가짜다 — 이름표 표시는 tagProps 로 읽고, 보드·헤더 단추·알림은 RoomScreen → GameMap 의 DOM 을 본다.
+describe("GameMap — 확장판 토론 의심 보드 (21-14)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const CLUES: ClueLine[] = [
+    { spot: 1, kind: "footprint", n: 2 },
+    { spot: 2, kind: "cloth", piece: "redCloth" },
+  ];
+  const REC: RecordLine[] = [{ seat: 1, place: "glass" }];
+
+  interface BoardOpts extends ViewOpts {
+    mode?: GameMode;
+    role?: RoleId;
+    clues?: ClueLine[];
+    record?: RecordLine[];
+    looks?: Record<number, OutfitId>;
+    evidence?: EvidenceView;
+  }
+  /** 서버가 싣는 모양: 확장판 토론의 산 본인에게 me.clues·me.record, day.evidence 는 없다 */
+  const boardView = (o: BoardOpts = {}): RoomView => {
+    const v = makeView({ phase: "discussion", count: 6, ...o });
+    return {
+      ...v,
+      mode: o.mode ?? "extended",
+      players: v.players.map((p) => (o.looks?.[p.seat] !== undefined ? { ...p, look: o.looks[p.seat]! } : p)),
+      me: { ...v.me, ...(o.role !== undefined ? { role: o.role } : {}), ...(o.clues !== undefined ? { clues: o.clues } : {}), ...(o.record !== undefined ? { record: o.record } : {}) },
+      day: { ...v.day!, ...(o.evidence !== undefined ? { evidence: o.evidence } : {}) },
+    };
+  };
+  const boardOf = (c: ParentNode): HTMLElement | null => c.querySelector("[data-suspect-board]");
+  const headBtn = (c: ParentNode): HTMLButtonElement | null => c.querySelector("button[aria-label='의심 보드']");
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+
+  it("확장판 토론 첫 렌더에 보드가 열려 있고, 닫으면 없어지며, 헤더 단추(이름 '의심 보드')로 다시 열린다. 같은 일차 다시 그리기로는 자동으로 다시 열리지 않는다", () => {
+    const v = boardView({ clues: CLUES, record: REC });
+    const m = mount(v);
+    expect(boardOf(m.container)).not.toBeNull();
+    expect(headBtn(m.container)!.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(boardOf(m.container)!.querySelector("button[aria-label='닫기']")!);
+    expect(boardOf(m.container)).toBeNull();
+    m.show(boardView({ clues: CLUES, record: REC }));
+    expect(boardOf(m.container)).toBeNull();
+    expect(headBtn(m.container)!.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(headBtn(m.container)!);
+    expect(boardOf(m.container)).not.toBeNull();
+    // 다음 일차 토론은 다시 한 번 자동으로 열린다
+    m.show(boardView({ clues: CLUES, record: REC, n: 2 }));
+    expect(boardOf(m.container)).not.toBeNull();
+  });
+
+  it("옛 목격 기록 카드·증거 카드·[기록] 단추가 없고, 이름표 같은 옷 표시는 받은 옷 조각의 같은 옷 좌석(산 사람)에만 켜진다 — day.evidence 가 남아 있어도 쓰지 않는다", () => {
+    const { container } = mount(boardView({ clues: CLUES, record: REC, looks: { 4: "noir", 5: "noir", 2: "police" }, dead: [5], evidence: { trace: "pin", seen: { seat: 3, place: "glass" } } }));
+    expect([container.querySelectorAll("[data-record-card]").length, container.querySelectorAll("[data-trace-card]").length, container.querySelectorAll("button[aria-label='기록']").length]).toEqual([0, 0, 0]);
+    const mark = (seat: number): unknown => (stage.props?.tagProps?.(seat) as { traceMark?: unknown; seenMark?: unknown } | undefined)?.traceMark;
+    expect([mark(4), mark(2), mark(1)]).toEqual(["#d23c4e", undefined, undefined]);
+    expect((stage.props?.tagProps?.(3) as { seenMark?: unknown } | undefined)?.seenMark).toBeUndefined();
+  });
+
+  it("보드: 칩 줄(발자국·옷 조각·목격)과 산 사람 얼굴 줄(탈락자 제외), 같은 옷 칸에 배지. 탈락한 좌석 이름의 목격 줄은 얼굴만 회색", () => {
+    const { container } = mount(boardView({ clues: CLUES, record: [{ seat: 5, place: "glass" }], looks: { 4: "noir", 5: "noir" }, dead: [5] }));
+    const b = boardOf(container)!;
+    expect([...b.querySelectorAll("[data-clue-chip]")].map((e) => e.getAttribute("data-clue-chip"))).toEqual(["footprint", "cloth", "witness"]);
+    expect([...b.querySelectorAll("[data-board-face]")].map((e) => e.getAttribute("data-board-face"))).toEqual(["0", "1", "2", "3", "4"]);
+    expect([...b.querySelectorAll("[data-board-mark]")].map((e) => e.getAttribute("data-board-face"))).toEqual(["4"]);
+    fireEvent.click(b.querySelector("button[aria-expanded]")!);
+    expect(b.querySelector(".mv-record__name")!.textContent).toBe("하은");
+    expect(b.querySelector(".mv-record__face")!.classList.contains("is-ghost")).toBe(true);
+  });
+
+  it("단서·목격이 없는 확장판 토론: 보드는 '단서 없음' 칩 하나, 사회자 띠는 discussion.act, 헤더 단추는 늘 있다", () => {
+    const { container } = mount(boardView());
+    expect([...boardOf(container)!.querySelectorAll("[data-clue-chip]")].map((e) => e.getAttribute("data-clue-chip"))).toEqual(["none"]);
+    expect(container.querySelector("[data-host-line]")?.textContent).toBe("의심 가는 사람을 이야기해 주세요");
+    expect(headBtn(container)).not.toBeNull();
+    expect(container.querySelectorAll("[data-record-button]").length).toBe(1);
+  });
+
+  it("기본 마피아 토론에는 보드도 헤더 의심 보드 단추도 없다", () => {
+    const { container } = mount(boardView({ mode: "basic" }));
+    expect([boardOf(container), headBtn(container)]).toEqual([null, null]);
+  });
+
+  it("유령(탈락)에게는 보드가 없다", () => {
+    const { container } = mount(boardView({ dead: [0], clues: CLUES }));
+    expect([boardOf(container), headBtn(container)]).toEqual([null, null]);
+  });
+
+  it("마피아·시민·경찰·의사 렌더의 보드 구조가 같다(같은 단서·같은 얼굴이면 outerHTML 이 같다)", () => {
+    const html = (role: RoleId): string => {
+      const { container, unmount } = mount(boardView({ role, clues: CLUES, record: REC, looks: { 4: "noir" } }));
+      const out = boardOf(container)!.outerHTML + (headBtn(container)?.outerHTML ?? "");
+      unmount();
+      return out;
+    };
+    const mafia = html("mafia");
+    expect([html("citizen"), html("police"), html("doctor")]).toEqual([mafia, mafia, mafia]);
+  });
+
+  it("건너뛴 아침(밤 → 확장판 토론): 조용한 밤 결과 알림 글이 한 번 뜨고 끝나면 사라진다. 기본 마피아 토론 진입에는 없다", () => {
+    const night = makeView({ phase: "night", count: 6 });
+    const m = mount({ ...night, mode: "extended" });
+    m.show(boardView());
+    advance(500);
+    expect(m.container.querySelector("[data-announce]")?.textContent).toContain("아무 일도 없었습니다");
+    advance(3000);
+    expect(m.container.querySelector("[data-announce]")?.textContent ?? "").not.toContain("아무 일도 없었습니다");
+    cleanup();
+    const b = mount({ ...night, mode: "basic" });
+    b.show(boardView({ mode: "basic" }));
+    advance(500);
+    expect(b.container.textContent).not.toContain("아무 일도 없었습니다");
   });
 });
