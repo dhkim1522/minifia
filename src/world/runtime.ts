@@ -13,7 +13,7 @@ import type { MapId } from "../../shared/protocol";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
-import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
+import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, panBoxOf, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { FIGS } from "./characterData";
 import type { OutfitId } from "./characterData";
 import { admitEmote, EMOTE_RENDER_MAX, emoteDurationMs } from "./emoteCap";
@@ -369,6 +369,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   // 방의 맵(D-22): 런타임 수명 동안 하나. 이동 예측·입장 방향·무대 높이가 같은 표(shared MapDef)를 읽는다
   const mapId: MapId = deps.mapId?.() ?? "bar";
   const map = mapOf(mapId);
+  // 따라가기 카메라 한계(P20-15): 재즈 바·광장은 PAN_BOX, 마을은 걷는 영역 ±10 에 맞춘 값(camera.test 가 가시성으로 확정)
+  const panBox = panBoxOf(mapId);
 
   let disposed = false;
   let bootGen = 0;
@@ -1241,7 +1243,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         zoomBackStart = now;
       }
       const mine = actors.get(deps.mySeat());
-      const goal = clampTarget(mine ? mine.pos : DEFAULT_TARGET);
+      const goal = clampTarget(mine ? mine.pos : DEFAULT_TARGET, panBox);
       cam = cam === null || resync ? goal : followStep(cam, goal, dt * 1000, reduced);
       if (zoomCur !== 1) zoomCur = mix(zoomBackFrom, 1, reduced || resync ? 1 : easeOut(Math.min(1, (now - zoomBackStart) / CAM_SLOW_MS)));
     }

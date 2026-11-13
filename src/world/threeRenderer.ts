@@ -1,10 +1,11 @@
 // three 구현(WebGLRenderer). 이 파일은 three 를 값으로 import 하는 몇 안 되는 모듈이다 — 정적 import 경로(메인 번들)에
 // 두지 않는다. 06-13 런타임이 `import()` 로만 열어 별도 청크로 나눈다. 렌더러 인터페이스는 renderer.ts(three 값 import 없음).
 import { ACESFilmicToneMapping, Group, MeshBasicMaterial, PCFShadowMap, Plane, PointLight, Raycaster, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from "three";
-import type { MapId } from "../../shared/protocol";
+import type { MapId, RoomId } from "../../shared/protocol";
 import { DEFAULT_TARGET } from "./camera";
 import { buildBarScene } from "./maps/bar";
 import { buildPlazaScene } from "./maps/plaza";
+import { buildTownScene } from "./maps/town";
 import type { MapScene } from "./maps/types";
 import { DEFAULT_BUDGET_STEP, LADDER, pixelRatioFor, UnsupportedRendererError } from "./renderer";
 import type { CharacterHandle, LightingPhase, MarkerKind, RendererStatusEvent, RendererStats, WorldRenderer } from "./renderer";
@@ -78,7 +79,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
 
   // 씬 그래프(맵·캐릭터)는 렌더러보다 오래 산다: recreate 가 새 렌더러에 같은 씬·카메라를 다시 물린다(가정 A2)
   // 맵 id 별 장면 빌더(결정 0050-2: 맵은 목록에 등록하면 늘어난다). 이름 bar 는 두 맵 공통의 "맵 장면"이다
-  const bar: MapScene = opts.mapId === "plaza" ? buildPlazaScene(budget) : buildBarScene(budget);
+  const bar: MapScene = opts.mapId === "town" ? buildTownScene(budget) : opts.mapId === "plaza" ? buildPlazaScene(budget) : buildBarScene(budget);
   const scene = bar.root;
   const characters = new Group();
   scene.add(characters);
@@ -151,6 +152,15 @@ async function build(opts: Opts): Promise<WorldRenderer> {
     setZoom(z: number): void {
       zoom = Number.isFinite(z) && z > 0 ? z : 1;
       configureCamera(camera, target, size, offsetY, zoom);
+    },
+    setCutaway(open: ReadonlySet<RoomId>, instant: boolean): void {
+      bar.setCutaway?.(open, instant);
+    },
+    setOwners(seats: readonly number[]): void {
+      bar.setOwners?.(seats);
+    },
+    roofs(): Readonly<Record<RoomId, number>> {
+      return bar.roofs?.() ?? { post: 1, pub: 1, clinic: 1, police: 1 };
     },
     setSelfLight(at: { x: number; z: number } | null): void {
       bar.setSelfLight(at);

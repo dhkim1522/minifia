@@ -68,14 +68,19 @@ export const PAN_BOX: Readonly<{ minX: number; maxX: number; minZ: number; maxZ:
 export const PLATE_FAR = 17.5;
 
 /**
- * 맵별 카메라 목표 이동 한계. 재즈 바·광장은 PAN_BOX 그대로다. 마을은 걷기 한계 ±10 에서 광장과 같은 여유 0.4 를 뺀 ±9.6 이 시작값이다(UI-SPEC P20-15).
- * 마을 값은 20-05 가 기존 가시성 검사(6종 폰 × 0.25 간격 격자점)를 마을 격자로 다시 돌려 통과하는 가장 작은 값으로 확정한다.
+ * 맵별 카메라 목표 이동 한계. 재즈 바·광장은 PAN_BOX 그대로다. 마을은 걷기 한계 ±10 에서 광장과 같은 여유 0.4 를 뺀 ±9.6 이다(UI-SPEC P20-15).
+ * 20-05 가 가시성 검사(6종 폰 × 0.25 간격 81×81 격자점)를 마을 격자로 돌려 확정했다: 크기별 최소 pan 360x640 9.0 · 390x664 8.8 · 430x932 8.5 · 360x560 9.6 · 390x844 8.8 · 402x874 8.7.
+ * 한계를 정한 것은 이번에도 스테이지가 가장 낮은 360x560 이고, 가장 좁은 0.1 단위 값이 시작값 ±9.6 과 같다(걷는 영역 ±10 안쪽).
  */
 const TOWN_PAN_BOX: typeof PAN_BOX = { minX: -9.6, maxX: 9.6, minZ: -9.6, maxZ: 9.6 };
 export function panBoxOf(mapId: MapId): typeof PAN_BOX {
   return mapId === "town" ? TOWN_PAN_BOX : PAN_BOX;
 }
-/** 맵별 연장 바닥 판 반폭. 재즈 바·광장은 PLATE_FAR 그대로, 마을은 22 가 시작값이다(P20-15 — 한계가 넓어지면 위쪽 광선이 더 먼 바닥에 닿는다. 확정은 20-05 의 빈 배경 검사) */
+/**
+ * 맵별 연장 바닥 판 반폭. 재즈 바·광장은 PLATE_FAR 그대로. 마을은 한계 ±9.6 의 9개 목표 × 스테이지 7×7 표본 광선이 닿는 가장 먼 바닥 19.68(430x932, 목표 (−9.6,−9.6))
+ * → 0.5 단위로 올림 20 + 여유 2 = 22 로 확정했다(P20-15, 20-05 빈 배경 검사).
+ * 크기별 가장 먼 바닥: 360x640 16.2 · 390x664 16.6 · 430x932 19.7 · 360x560 15.3 · 390x844 18.5 · 402x874 18.9.
+ */
 const TOWN_PLATE_FAR = 22;
 export function plateFarOf(mapId: MapId): number {
   return mapId === "town" ? TOWN_PLATE_FAR : PLATE_FAR;

@@ -1,6 +1,7 @@
 // 렌더러 인터페이스·예산·강등 사다리. three 는 `import type` 만 쓴다 — 이 파일은 정적 import 경로(메인 번들)에 있어도
 // three 본체를 끌고 오지 않는다. three 를 값으로 쓰는 모듈은 threeRenderer.ts·threeCamera.ts·maps/ 이고 06-13 이 import() 로만 연다.
 import type { Object3D } from "three";
+import type { RoomId } from "../../shared/protocol";
 
 /** nightCitizen = 밤·산 시민 편(거의 깜깜 + 내 캐릭터 빛), nightGhost = 밤·유령(달빛 + 약한 무대 기운). 마피아의 밤은 night (09-10) */
 export type LightingPhase = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
@@ -80,6 +81,12 @@ export interface WorldRenderer {
   setSelfLight?(at: { x: number; z: number } | null): void;
   /** 암살 현장 분필 윤곽: 자리(월드 단위)와 불투명도, null 이면 숨김. 시험 가짜 렌더러 호환을 위해 optional (08-10 선례) */
   setChalk?(at: { x: number; z: number } | null, opacity: number): void;
+  /** 방 컷어웨이(마을만, D-10): open 에 든 방은 지붕·앞벽·간판이 걷히고 나머지는 덮인다. instant 가 아니면 0.25초에 따라간다. 시험 가짜 렌더러 호환을 위해 optional */
+  setCutaway?(open: ReadonlySet<RoomId>, instant: boolean): void;
+  /** 집 주인(마을만, D-07): 이번 판에 앉은 좌석 번호들. 시험 가짜 렌더러 호환을 위해 optional */
+  setOwners?(seats: readonly number[]): void;
+  /** 방마다 지금 지붕 불투명도(마을만, 1 = 덮임 · 0 = 걷힘). 시험 훅이 읽는다. 시험 가짜 렌더러 호환을 위해 optional */
+  roofs?(): Readonly<Record<RoomId, number>>;
   /** 카메라 확대(과반 연출 1.08, 기본 1). camera.ts 투영의 zoom 인자와 같은 배율 */
   setZoom?(zoom: number): void;
   addCharacter(seat: number, c: CharacterHandle): void;
