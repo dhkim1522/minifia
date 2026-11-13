@@ -49,7 +49,8 @@ import { allTutorialDone, markTutorialDone } from "../shared/game/tutorial";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { actErrand, nearSnapFrame, placeCenterFx, sampleErrand } from "../shared/game/errand";
 import { lampsShownOf } from "../shared/game/lamps";
-import { markCut } from "../shared/game/mafiaTouch";
+import { markCut, markSmudge } from "../shared/game/mafiaTouch";
+import { actInspect } from "../shared/game/scene";
 import { skipReached, toggleSkip } from "../shared/game/skip";
 import { ERRAND_MIN_GAP_MS, ERRAND_TICK_MS } from "../shared/game/phases";
 import { layoutFor, layoutKey } from "../shared/game/gather";
@@ -330,6 +331,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "errand":
         await this.handleErrand(ws, msg.hold === true);
+        return;
+      case "inspect":
+        await this.handleInspect(ws);
         return;
       case "move":
         this.handleMove(ws, msg.x, msg.z);
@@ -770,6 +774,36 @@ export class Room extends DurableObject<Env> {
       }
     }
     if (!shownChanged) this.sendViewTo([playerId]);
+  }
+
+  // 아침 현장 살피기(21페이즈 D-13): 신원은 소켓 첨부의 playerId 뿐이고 메시지에 위치·지점이 없다 — 위치는 서버 world 구간, 지점은 서버의 현장·단서 지점 표가 정한다(T-21-16).
+  private async handleInspect(ws: WebSocket): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    await this.applyInspect(att.playerId, Date.now());
+  }
+
+  // applyErrand 와 같은 모양(D-21, T-21-15·T-21-17): 간격(ERRAND_MIN_GAP_MS) 안의 요청과 규칙 거절(단계·생존·반경·중복·현장 없음·위치 없음)은 역할·이유와 무관하게 같은 응답이다 —
+  // 상태 변화 없이 보낸 사람에게만 자기 state 한 프레임(오류 프레임·방송 없음). 받아들여도 응답은 똑같이 본인 한 프레임뿐이다: 마피아의 흐리기(markSmudge)는 서버 전용 scene.smudged 만 바꾸고
+  // 공개 값(day.scene.house)은 그대로라 방송할 이유가 없다. 마피아와 시민의 응답은 받는 사람·프레임 수가 같다.
+  private async applyInspect(playerId: string, now: number): Promise<void> {
+    const room = this.room;
+    if (!room) return;
+    const key = `inspect:${playerId}`;
+    const last = this.writeAt.get(key);
+    if (last === undefined || now - last >= ERRAND_MIN_GAP_MS) {
+      this.writeAt.set(key, now);
+      const seg = Object.prototype.hasOwnProperty.call(this.world.segs, playerId) ? this.world.segs[playerId] : undefined;
+      const result = seg === undefined ? null : actInspect(room, playerId, positionAtFx(seg, now));
+      if (result !== null && result.ok) {
+        this.room = markSmudge(result.state, playerId, result.spot);
+        await this.ctx.storage.put("room", this.room);
+      }
+    }
+    this.sendViewTo([playerId]);
   }
 
   // 유언(9페이즈, WILL-01, 결정 0061-10): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-09-28).

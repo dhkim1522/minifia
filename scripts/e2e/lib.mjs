@@ -3332,10 +3332,11 @@ export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time
  * 17-07: view.tutorial(모두에게 같은 진행 수)·me.tutorialDone(끝났음을 보낸 본인만) 은 tutorial 단계에서만 받는 키다(받을 권리, 결정 0080-11) — view.test.ts 의 TOP_KEYS·ME_KEYS 에도 같이 있다.
  * 19-01: view.mode 는 판 종류 공개 값이다(19페이즈 D-05) — 모든 소켓에 같고 view.test.ts 의 TOP_KEYS 에도 같이 있다.
  * 21-05: day.lamps(가로등 공개 값, 모두에게 같은 번호 배열)·day.skipCount(건너뛰기를 누른 수)·me.skipPhase(누른 본인만)는 확장판 저녁·밤·아침에 받는 키다 — view.test.ts 의 DAY_KEYS·ME_KEYS 에도 같이 있다.
+ * 21-06: day.scene(아침 현장 집 좌석, 모두에게 같은 값)·me.clues(본인이 살핀 단서, 본인만)는 확장판 아침~처형에 받는 키다 — view.test.ts 의 DAY_KEYS·ME_KEYS 에도 같이 있다.
  */
 export const VIEW_TOP_KEYS = new Set(["code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map", "mode", "tutorial"]);
-export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "errand", "record", "nightTally", "nightSure", "will", "note", "tutorialDone", "skipPhase"]);
-export const VIEW_DAY_KEYS = new Set(["n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown", "chalk", "evidence", "lamps", "skipCount"]);
+export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "errand", "record", "nightTally", "nightSure", "will", "note", "tutorialDone", "skipPhase", "clues"]);
+export const VIEW_DAY_KEYS = new Set(["n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown", "chalk", "evidence", "lamps", "skipCount", "scene"]);
 /** 밤 역할별 사회자 줄(src/game/hostLine.ts HOST_LINES 의 night.mafia·police·doctor 사본) — 다른 역할 화면에 있으면 누설이다. e2eContract 가 같음을 고정한다. */
 export const HOST_ACT_LINES = {
   mafia: "없앨 사람의 얼굴을 눌러 주세요",

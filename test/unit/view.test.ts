@@ -303,11 +303,13 @@ const ME_KEYS: ReadonlySet<string> = new Set([
   "record", // 목격 기록(15-02, D-04) — 토론 단계에서 심부름 3곳을 모두 처리한 산 본인에게만, errandNear.test.ts 의 "me.record" describe 가 조건을 단언한다
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
   "tutorialDone", // 끝났음을 보낸 본인에게만, 값은 true 뿐(17페이즈, 결정 0080-11) — 아래 "tutorial 단계 view 키" 가 조건을 단언한다
+  "clues", // 아침 현장에서 본인이 살핀 단서(21페이즈 D-13) — 확장판 아침~처형의 산 본인에게만, 필드별 복사, test/worker/scene.test.ts 가 조건을 단언한다
   "skipPhase", // 건너뛰기를 누른 본인에게만, 값은 true 뿐(21페이즈 D-23) — 확장판 errand·morning 의 산 본인, test/unit/skip.test.ts 가 조건을 단언한다
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
   "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown",
   "evidence", // 아침~처형의 공개 증거(16페이즈 D-10·R-4) — 모두에게 같은 값, 아래 "day.evidence 수명" describe 가 조건을 단언한다
+  "scene", // 아침 현장의 집 좌석(21페이즈 D-13·D-16) — 확장판 아침에 현장이 있을 때만 모든 view 에 같은 값, test/worker/scene.test.ts 가 조건을 단언한다
   "skipCount", // 건너뛰기를 누른 산 사람 수(21페이즈 D-23) — 확장판 errand·morning 의 모든 view 에 같은 값, test/unit/skip.test.ts 가 단계를 단언한다
   "lamps", // 확장판 저녁·밤·아침의 가로등 공개 값(21페이즈 D-06·D-08) — 모두에게 같은 번호 배열, test/unit/lamps.test.ts 가 단계·값을 단언한다
 ]);
@@ -886,10 +888,10 @@ describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 
     expect(got.join(" ")).toBe("dayAnnounce:n,roles,voteLog discussion:endCount,n,roles,voteLog night:n,noExecution,roles,voteLog morning:morning,n,roles,voteLog");
   });
 
-  it("확장판의 피해자가 나온 아침의 day 키는 evidence·lamps·morning·n·roles·skipCount·voteLog 이고 turn 키가 없다 (21페이즈, 규칙 가)", () => {
+  it("확장판의 피해자가 나온 아침의 day 키는 evidence·lamps·morning·n·roles·scene·skipCount·voteLog 이고 turn 키가 없다 (21페이즈, 규칙 가)", () => {
     const { s } = morningWithVictim(5, 1, "extended");
     const keys = new Set(s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(",")));
-    expect(`${s.phase}:${[...keys].join("|")}`).toBe("morning:evidence,lamps,morning,n,roles,skipCount,voteLog");
+    expect(`${s.phase}:${[...keys].join("|")}`).toBe("morning:evidence,lamps,morning,n,roles,scene,skipCount,voteLog");
   });
 
   it("dayAnnounce 뷰의 day 는 {n, roles, voteLog []} 뿐이다", () => {

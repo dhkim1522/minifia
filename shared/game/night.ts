@@ -9,9 +9,11 @@
 // 현장 없는 밤(21페이즈 D-17, 확장판): 확정 대상이 없으면 routeAfterNight 가 아침 없이 판정을 적용하고 토론으로 보낸다.
 import type { AssassinationRecord, InvestigationRecord, MorningView, TreatmentRecord } from "../protocol";
 import { isAlive } from "./alive";
+import { lampsLitOf } from "./lamps";
 import type { Player, RoomState } from "./room";
 import { modeOf, rulesetOf } from "./ruleset";
 import type { Ruleset } from "./ruleset";
+import { buildScene } from "./scene";
 import { pickTracePiece } from "./trace";
 import type { DeadlineResult, RandInt } from "./tick";
 
@@ -184,10 +186,19 @@ export function enterMorning(state: RoomState, randInt: RandInt = () => 0, rules
       : result.saved
         ? { saved: true }
         : {};
+  // 아침 현장(21페이즈 D-13·D-16·D-17): 확장판에서 피해자가 나왔거나 의사가 막았으면(미수) 그 집 앞에 현장을 세운다 — 미수 현장은 마피아 확정 대상의 집이다.
+  // 0087 분필 한계(닫힌 방 안 분필)는 암살이 집 앞(바깥)에서 일어나므로 생기지 않는다. 풀은 nightPick 을 지우기 전의 state 로 만들고, 난수는 위 흔적 난수 다음에 부른다(호출 순서: 흔적 → 현장 i → j).
+  // 가로등은 진입 상태의 켜진 것(lampsLitOf), 눈은 판정 뒤 산 사람이다. 공개 흔적(morning.trace·seen)은 21-07 이 걷을 때까지 그대로 둔다.
+  const house = result.eliminated ?? (result.saved ? result.target : undefined);
+  const scene =
+    rules.errand && house !== undefined
+      ? buildScene(state, house, randInt, lampsLitOf(state), players.filter(isAlive).map((p) => p.seat))
+      : undefined;
   const { nightNote: _nightNote, errandLast: _errandLast, ...rest } = state;
   const { errandLast: _kept, ...stateNoLast } = state;
   return {
     ...(result.eliminated === undefined ? rest : stateNoLast),
+    ...(scene === undefined ? {} : { scene }),
     players,
     morning,
     nightLog: [

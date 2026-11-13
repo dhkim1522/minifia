@@ -29,6 +29,7 @@ import { channelOf } from "./audience";
 import { botCount } from "./bots";
 import { endCountOf, phaseDurationOf } from "./discussion";
 import { lampsLitOf, lampsShownOf } from "./lamps";
+import { CLUE_PHASES } from "./scene";
 import { SKIP_PHASES, skipCountOf } from "./skip";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
@@ -99,6 +100,8 @@ function buildDay(state: RoomState, rules: Ruleset): DayView {
   // 서버 전용 lampCut 은 어디에도 싣지 않는다. 다른 단계와 기본 마피아에는 키가 없다.
   if (rules.errand && state.phase === "errand") day.lamps = lampsShownOf(state);
   else if (rules.errand && (state.phase === "night" || state.phase === "morning")) day.lamps = lampsLitOf(state);
+  // 아침 현장(21페이즈 D-13·D-16): 확장판 아침에 현장이 있을 때만 집 좌석 하나를 모두에게 같은 값으로 싣는다(어느 집인지는 문패로 보이는 것이 의도다). 발자국 수·옷 조각·눈·흐려진 지점은 서버 전용이다.
+  if (rules.errand && state.phase === "morning" && state.scene !== undefined) day.scene = { house: state.scene.house };
   // 건너뛰기(21페이즈 D-23)는 누른 산 사람 수만 공개한다 — 누가 눌렀는지는 서버 전용(Player.skipVote)이고 본인 값만 me.skipPhase 로 간다.
   if (rules.errand && SKIP_PHASES.includes(state.phase)) day.skipCount = skipCountOf(state);
   // 찬반은 던진 유권자 좌석만 공개한다(값 없음 — 익명, 결정 0053). 개인 값은 me.verdictVote 로 본인에게만 간다.
@@ -339,6 +342,16 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 귓속말 사용함 표시는 본인에게만(결정 0066-2) — discussion 의 산 본인이 오늘 이미 보냈을 때만 키를 만든다. 본문·상대는 어떤 view 에도 없다(whispers 는 서버 전용).
   if (rules.whisper && state.phase === "discussion" && isAlive(me) && whisperUsedToday(state, me.seat) >= WHISPER_PER_DAY) {
     myInfo.whisperUsed = true;
+  }
+
+  // 내 단서(21페이즈 D-13)는 아침~처형에 살핀 산 본인에게만 — 필드별 복사(없는 키는 싣지 않는다)라 서버 상태를 펼치지 않고 남의 단서·지점 상태는 어디에도 없다.
+  if (rules.errand && CLUE_PHASES.includes(state.phase) && isAlive(me) && me.clues !== undefined && me.clues.length > 0) {
+    myInfo.clues = me.clues.map((c) => ({
+      spot: c.spot,
+      kind: c.kind,
+      ...(c.n === undefined ? {} : { n: c.n }),
+      ...(c.piece === undefined ? {} : { piece: c.piece }),
+    }));
   }
 
   // 건너뛰기 누름은 본인에게만(21페이즈 D-23) — 확장판 errand·morning 의 산 본인이 눌렀을 때만 키를 만든다. 누른 사람이 누구인지는 어떤 키로도 싣지 않는다.

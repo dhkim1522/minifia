@@ -616,7 +616,7 @@ describe("난수 없음 계약 (결정 0061-6·17)", () => {
     expect([none.target, none.eliminated, none.saved]).toEqual([undefined, undefined, false]);
   });
 
-  it("판정(resolveNight)에는 난수가 없다 — tick 에 난수를 주지 않아도 탈락자 없는 밤 → 아침은 넘어가고, 탈락자가 있는 아침의 흔적에만 난수 한 번이 든다 (D-06)", () => {
+  it("판정(resolveNight)에는 난수가 없다 — tick 에 난수를 주지 않아도 탈락자 없는 밤 → 아침은 넘어가고, 탈락자가 있는 아침의 흔적·현장에만 난수가 든다 (D-06·21-06)", () => {
     const basic = cast6();
     const none = picks(basic.night, [basic.m1, basic.c1], [basic.m2, basic.c2]);
     expect(tick(none, none.phaseEndsAt ?? 0).phase).toBe("morning"); // 기본 마피아(규칙 나): 확정이 없어도 아침이 온다 — 확장판은 현장 없는 밤이 토론으로 간다
@@ -629,7 +629,7 @@ describe("난수 없음 계약 (결정 0061-6·17)", () => {
     });
     expect(morning.phase).toBe("morning");
     expect(morning.morning?.eliminated).toBe(c1.seat);
-    expect(calls).toBe(1);
+    expect(calls).toBe(3); // 21-06: 흔적 난수 한 번 + 현장 난수(풀 둘: 옷 조각 i, 창문 j 두 번). 21-07 이 공개 흔적을 걷으면 이 수는 2 가 된다
   });
 });
 

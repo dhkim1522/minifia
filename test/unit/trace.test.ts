@@ -171,7 +171,7 @@ describe("enterMorning 의 흔적 (D-06)", () => {
     expect(JSON.stringify(enterMorning(night, () => 0).morning)).toBe("{}");
   });
 
-  it("난수는 탈락자가 있을 때만 한 번 부르고, 없으면 0번이며, randInt 를 안 주면 첫 후보로 결정적이다", () => {
+  it("난수는 피해자·미수가 있을 때만 부르고(흔적 한 번 + 현장), 없으면 0번이며, randInt 를 안 주면 첫 후보로 결정적이다", () => {
     const { night, m1, m2, c1, c2, doctor } = cast();
     let calls = 0;
     const counter = (n: number): number => {
@@ -179,9 +179,11 @@ describe("enterMorning 의 흔적 (D-06)", () => {
       return n - 1;
     };
     enterMorning(picks(night, [m1, c1], [m2, c1]), counter);
-    expect(calls).toBe(1);
+    expect(calls).toBe(3); // 21-06: 흔적 난수 1 + 현장 난수 2(풀 둘 — 옷 조각 i, 창문 j). 21-07 이 공개 흔적을 걷으면 2 가 된다
     calls = 0;
     enterMorning(picks(night, [m1, c1], [m2, c1], [doctor, c1]), counter);
+    expect(calls).toBe(2); // 21-06: 미수(의사가 막은 밤)는 흔적이 없고 현장(미수 현장)만 난수를 부른다
+    calls = 0;
     enterMorning(picks(night, [m1, c1], [m2, c2]), counter);
     enterMorning(night, counter);
     expect(calls).toBe(0);
