@@ -58,144 +58,41 @@ export interface GamePanelProps {
 }
 
 /**
- * 게임 맵 화면의 아래 패널(UI-SPEC "아래 패널 종류와 높이"). 단계마다 행동 줄이 다르다.
- * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + HeadCount, 08-16)을 얹는다 — 변론·처형·유령은 채팅만이다(처형은 찬반 줄을 접는다, 18.1-13 결정 0083-9).
- * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
+ * 마피아의 합의 배지 입력(결정 0074): 서버가 산 마피아 본인에게만 보낸 선택 수 집계(1 이상)와 전원 일치 확정 좌석. 다른 역할 view 에 값이 섞여 와도 읽지 않는다 — 배지 칸이 DOM 에 없다.
+ * 기본 마피아 밤의 얼굴 목록과 확장판 밤의 집 판(21-12)이 같은 규칙을 쓴다
  */
-export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef }: GamePanelProps) {
-  const serverPressed = view.me.endDiscussion === true;
-  const [pressed, choose] = useViewChoice<boolean>(view, serverPressed);
-  // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
-  // 찬반도 같다: 내 선택은 누른 즉시 보이되 서버 view(me.verdictVote)가 오면 서버 값이 이긴다(DAY-06).
-  const serverVerdict: Verdict | null = view.me.verdictVote === undefined ? null : view.me.verdictVote ? "yes" : "no";
-  const [verdict, chooseVerdict] = useViewChoice<Verdict | null>(view, serverVerdict);
-  // 밤 경찰·의사의 선택(NIGHT-09): 내가 누른 얼굴은 즉시 눌린 모양이 되고 서버 view(me.pick)가 오면 서버 값이 이긴다.
-  const [nightPick, chooseNightPick] = useViewChoice<number | undefined>(view, view.me.pick);
-  const seenRejects = useRef(rejected);
-  useEffect(() => {
-    if (seenRejects.current === rejected) return;
-    seenRejects.current = rejected;
-    choose(serverPressed);
-    chooseVerdict(serverVerdict);
-    chooseNightPick(view.me.pick);
-    // choose 는 렌더마다 새 함수지만 setState 만 부른다
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rejected]);
-
-  const me = view.players.find((p) => p.seat === view.me.seat);
-  const meAlive = me === undefined || isAlive(me);
-  const showEnd = view.phase === "discussion" && meAlive && !kbOpen;
-  const total = majorityOf(view.players.filter(isAlive).length);
-  const count = view.day?.endCount ?? 0;
-
-  // 찬반 줄: 변론자가 아닌 산 사람만 던진다(변론자 본인·유령은 8페이즈 결정 0053 대로 줄 없음)
-  const aliveCount = view.players.filter(isAlive).length;
-  const isDefender = view.day?.candidate !== undefined && view.day.candidate === view.me.seat;
-  const inVerdict = view.phase === "verdict" && !kbOpen;
-  const showVerdict = inVerdict && meAlive && !isDefender; // 찬반 버튼 + 숫자
-  const showVerdictDots = inVerdict && !showVerdict; // 변론자 본인·유령: 숫자만(보기 패널)
-  const voted = view.day?.voted?.length ?? 0;
-  const pressVerdict = (v: Verdict): void => {
-    if (!canSend) return;
-    if (send({ t: "verdict", agree: v === "yes" }) === false) return;
-    chooseVerdict(v);
-    onCallUsed?.();
-  };
-
-  // 밤(UI-SPEC "밤 고르기 계약", D-05): 산 사람은 역할과 무관하게 같은 얼굴 목록(나 포함 산 사람 전원)으로 고른다 — 유령은 유령 채널 채팅.
-  // 채팅 패널은 서버가 보낸 view.me.chat 이 그 채널일 때만 그린다(서버 값이 기준, T-08-47). 산 마피아의 밤 채팅은 그리지 않는다.
-  const night = view.phase === "night";
-  const myRole = view.me.role;
-  const nightFaces = night && meAlive;
-  const chatChannelOk = !night || view.me.chat === "ghost";
-  // 후보: 산 사람 전원(나 포함). 좌석 오름차순. 후보가 없으면 목록을 그리지 않는다(E1 #1).
-  const faces = !nightFaces ? [] : view.players
-    .filter((p) => isAlive(p))
-    .sort((a, b) => a.seat - b.seat)
-    .map((p) => ({ seat: p.seat, name: p.nickname, img: faceSrc(p.seat), color: seatColorVar(p.seat) }));
-  // 마피아의 합의 수단(결정 0074): 서버가 산 마피아 본인에게만 보낸 집계를 칸 안 작은 배지로 그린다. 다른 역할 view 에는 값이 없고 읽지도 않는다.
+export function nightBadgesOf(view: RoomView): { tally?: ReadonlyMap<number, number>; sure?: number } {
+  if (view.me.role !== "mafia") return {};
   const tally = new Map<number, number>();
-  if (nightFaces && myRole === "mafia") for (const t of view.me.nightTally ?? []) if (t.n >= 1) tally.set(t.seat, t.n);
-  const pickFace = (seat: number): void => {
-    if (!canSend) return;
-    if (send({ t: "pick", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 눌림도 바꾸지 않는다
-    onNightPickSent?.(seat);
-    chooseNightPick(seat);
-    onCallUsed?.();
-  };
+  for (const t of view.me.nightTally ?? []) if (t.n >= 1) tally.set(t.seat, t.n);
+  return { ...(tally.size > 0 ? { tally } : {}), ...(view.me.nightSure !== undefined ? { sure: view.me.nightSure } : {}) };
+}
 
-  // 밤 산 사람은 입력줄이 없어 아래 행동 줄의 [쪽지]·[유언] 이 대신한다(UI-SPEC 237행). 마피아 [쪽지], 그 밖 [유언] — 역할을 읽는 곳은 이 줄뿐이다.
-  // 채팅 입력줄이 있는 화면(낮·아침)은 깃펜, 산 사람 + 지도 단계에만(유령·로비·역할 확인에는 없다, UI-SPEC 281·286행)
-  const penOn = meAlive && MAP_PHASES.has(view.phase) && onOpenWill !== undefined;
-  const showNoteRow = nightFaces && myRole === "mafia" && onOpenNote !== undefined;
+export interface NightActionRowProps {
+  view: RoomView;
+  canSend: boolean;
+  /** 쪽지·유언 시트가 열려 있는가 — 단추의 눌림 */
+  noteOpen?: boolean;
+  willOpen?: boolean;
+  /** 쪽지를 쓸 수 있는가(서버가 확정을 알렸다, me.nightSure) */
+  noteReady?: boolean;
+  /** 저장된 유언이 있는가 — 깃펜 점(본인에게만) */
+  willSaved?: boolean;
+  onOpenNote?: (opener: HTMLElement | null) => void;
+  onOpenWill?: (opener: HTMLElement | null) => void;
+}
+
+/**
+ * 밤 산 사람의 행동 줄(UI-SPEC 237행): 입력줄이 없어 [쪽지](마피아)·[유언](그 밖)이 대신한다 — 같은 자리·같은 크기. 역할을 읽는 곳은 이 줄뿐이다.
+ * 기본 마피아 밤의 얼굴 목록 패널(GamePanel)과 확장판 밤의 독(21-12 SceneDock night)이 같은 줄을 쓴다. 산 사람인지는 부르는 쪽이 본다.
+ */
+export function NightActionRow({ view, canSend, noteOpen = false, willOpen = false, noteReady = false, willSaved = false, onOpenNote, onOpenWill }: NightActionRowProps) {
+  const myRole = view.me.role;
+  const showNoteRow = myRole === "mafia" && onOpenNote !== undefined;
+  const showWillRow = myRole !== "mafia" && onOpenWill !== undefined;
   const noteHintId = useId();
-  const showWillRow = nightFaces && myRole !== "mafia" && onOpenWill !== undefined;
-
-  const pressEnd = (): void => {
-    if (!canSend) return;
-    const on = pressed !== true;
-    if (send({ t: "endDiscussion", on }) === false) return;
-    choose(on);
-  };
-
   return (
-    <section
-      ref={panelRef}
-      className={lifted ?? kbOpen ? "mf-game__panel mf-game__panel--kb" : "mf-game__panel"}
-      data-world-panel=""
-      {...(veiled ? { "data-will-hide-panel": "true" } : {})}
-    >
-      {showVerdict || showVerdictDots ? (
-        <div className="mf-game__verdict" data-verdict-row="">
-          {showVerdict ? (
-            <VerdictPicker {...(verdict ? { value: verdict } : {})} onChange={pressVerdict} {...(canSend ? {} : { disabled: true })} {...(call?.verdict ? { call: true } : {})} />
-          ) : null}
-          <HeadCount count={voted} total={Math.max(0, aliveCount - 1)} label="투표한 사람" />
-        </div>
-      ) : null}
-      {nightFaces ? (
-        faces.length > 0 ? (
-          <FaceList
-            faces={faces}
-            {...(nightPick !== undefined ? { value: nightPick } : {})}
-            onPick={pickFace}
-            label="밤 대상"
-            ariaLabel={(name) => `${name} 고르기`}
-            {...(canSend ? {} : { disabled: true })}
-            {...(call?.faces !== undefined ? { callSeats: call.faces } : {})}
-            {...(tally.size > 0 ? { tally } : {})}
-            {...(myRole === "mafia" && view.me.nightSure !== undefined ? { sure: view.me.nightSure } : {})}
-          />
-        ) : null
-      ) : chatChannelOk ? (
-        <ChatPanel
-          {...binding}
-          logHeight={logHeight}
-          compact={kbOpen}
-          {...(inputRef ? { inputRef } : {})}
-          onInputFocus={() => onCallUsed?.()}
-          {...(binding.onSend
-            ? {
-                onSend: (text: string) => {
-                  binding.onSend?.(text);
-                  onCallUsed?.();
-                },
-              }
-            : {})}
-          {...(call?.chat ? { callInput: true } : {})}
-          {...(penOn
-            ? {
-                onWill: () => {
-                  if (canSend) onOpenWill?.(panelRef?.current?.querySelector<HTMLElement>("[data-will-button]") ?? null);
-                  onCallUsed?.();
-                },
-                willOpen,
-                willSaved,
-                ...(call?.will ? { callWill: true } : {}),
-              }
-            : {})}
-        />
-      ) : null}
+    <>
       {showNoteRow ? (
         <ActionRow>
           <button
@@ -244,6 +141,147 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
             <span className="mf-act__label">유언</span>
           </button>
         </ActionRow>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * 게임 맵 화면의 아래 패널(UI-SPEC "아래 패널 종류와 높이"). 단계마다 행동 줄이 다르다.
+ * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + HeadCount, 08-16)을 얹는다 — 변론·처형·유령은 채팅만이다(처형은 찬반 줄을 접는다, 18.1-13 결정 0083-9).
+ * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
+ */
+export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef }: GamePanelProps) {
+  const serverPressed = view.me.endDiscussion === true;
+  const [pressed, choose] = useViewChoice<boolean>(view, serverPressed);
+  // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
+  // 찬반도 같다: 내 선택은 누른 즉시 보이되 서버 view(me.verdictVote)가 오면 서버 값이 이긴다(DAY-06).
+  const serverVerdict: Verdict | null = view.me.verdictVote === undefined ? null : view.me.verdictVote ? "yes" : "no";
+  const [verdict, chooseVerdict] = useViewChoice<Verdict | null>(view, serverVerdict);
+  // 밤 경찰·의사의 선택(NIGHT-09): 내가 누른 얼굴은 즉시 눌린 모양이 되고 서버 view(me.pick)가 오면 서버 값이 이긴다.
+  const [nightPick, chooseNightPick] = useViewChoice<number | undefined>(view, view.me.pick);
+  const seenRejects = useRef(rejected);
+  useEffect(() => {
+    if (seenRejects.current === rejected) return;
+    seenRejects.current = rejected;
+    choose(serverPressed);
+    chooseVerdict(serverVerdict);
+    chooseNightPick(view.me.pick);
+    // choose 는 렌더마다 새 함수지만 setState 만 부른다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rejected]);
+
+  const me = view.players.find((p) => p.seat === view.me.seat);
+  const meAlive = me === undefined || isAlive(me);
+  const showEnd = view.phase === "discussion" && meAlive && !kbOpen;
+  const total = majorityOf(view.players.filter(isAlive).length);
+  const count = view.day?.endCount ?? 0;
+
+  // 찬반 줄: 변론자가 아닌 산 사람만 던진다(변론자 본인·유령은 8페이즈 결정 0053 대로 줄 없음)
+  const aliveCount = view.players.filter(isAlive).length;
+  const isDefender = view.day?.candidate !== undefined && view.day.candidate === view.me.seat;
+  const inVerdict = view.phase === "verdict" && !kbOpen;
+  const showVerdict = inVerdict && meAlive && !isDefender; // 찬반 버튼 + 숫자
+  const showVerdictDots = inVerdict && !showVerdict; // 변론자 본인·유령: 숫자만(보기 패널)
+  const voted = view.day?.voted?.length ?? 0;
+  const pressVerdict = (v: Verdict): void => {
+    if (!canSend) return;
+    if (send({ t: "verdict", agree: v === "yes" }) === false) return;
+    chooseVerdict(v);
+    onCallUsed?.();
+  };
+
+  // 밤(UI-SPEC "밤 고르기 계약", D-05): 산 사람은 역할과 무관하게 같은 얼굴 목록(나 포함 산 사람 전원)으로 고른다 — 유령은 유령 채널 채팅.
+  // 채팅 패널은 서버가 보낸 view.me.chat 이 그 채널일 때만 그린다(서버 값이 기준, T-08-47). 산 마피아의 밤 채팅은 그리지 않는다.
+  const night = view.phase === "night";
+  const nightFaces = night && meAlive;
+  const chatChannelOk = !night || view.me.chat === "ghost";
+  // 후보: 산 사람 전원(나 포함). 좌석 오름차순. 후보가 없으면 목록을 그리지 않는다(E1 #1).
+  const faces = !nightFaces ? [] : view.players
+    .filter((p) => isAlive(p))
+    .sort((a, b) => a.seat - b.seat)
+    .map((p) => ({ seat: p.seat, name: p.nickname, img: faceSrc(p.seat), color: seatColorVar(p.seat) }));
+  // 마피아의 합의 수단(결정 0074): 서버가 산 마피아 본인에게만 보낸 집계를 칸 안 작은 배지로 그린다. 다른 역할 view 에는 값이 없고 읽지도 않는다.
+  const badges = nightFaces ? nightBadgesOf(view) : {};
+  const pickFace = (seat: number): void => {
+    if (!canSend) return;
+    if (send({ t: "pick", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 눌림도 바꾸지 않는다
+    onNightPickSent?.(seat);
+    chooseNightPick(seat);
+    onCallUsed?.();
+  };
+
+  // 밤 산 사람은 입력줄이 없어 아래 행동 줄의 [쪽지]·[유언] 이 대신한다(UI-SPEC 237행). 마피아 [쪽지], 그 밖 [유언] — 역할을 읽는 곳은 이 줄뿐이다.
+  // 채팅 입력줄이 있는 화면(낮·아침)은 깃펜, 산 사람 + 지도 단계에만(유령·로비·역할 확인에는 없다, UI-SPEC 281·286행)
+  const penOn = meAlive && MAP_PHASES.has(view.phase) && onOpenWill !== undefined;
+
+  const pressEnd = (): void => {
+    if (!canSend) return;
+    const on = pressed !== true;
+    if (send({ t: "endDiscussion", on }) === false) return;
+    choose(on);
+  };
+
+  return (
+    <section
+      ref={panelRef}
+      className={lifted ?? kbOpen ? "mf-game__panel mf-game__panel--kb" : "mf-game__panel"}
+      data-world-panel=""
+      {...(veiled ? { "data-will-hide-panel": "true" } : {})}
+    >
+      {showVerdict || showVerdictDots ? (
+        <div className="mf-game__verdict" data-verdict-row="">
+          {showVerdict ? (
+            <VerdictPicker {...(verdict ? { value: verdict } : {})} onChange={pressVerdict} {...(canSend ? {} : { disabled: true })} {...(call?.verdict ? { call: true } : {})} />
+          ) : null}
+          <HeadCount count={voted} total={Math.max(0, aliveCount - 1)} label="투표한 사람" />
+        </div>
+      ) : null}
+      {nightFaces ? (
+        faces.length > 0 ? (
+          <FaceList
+            faces={faces}
+            {...(nightPick !== undefined ? { value: nightPick } : {})}
+            onPick={pickFace}
+            label="밤 대상"
+            ariaLabel={(name) => `${name} 고르기`}
+            {...(canSend ? {} : { disabled: true })}
+            {...(call?.faces !== undefined ? { callSeats: call.faces } : {})}
+            {...(badges.tally !== undefined ? { tally: badges.tally } : {})}
+            {...(badges.sure !== undefined ? { sure: badges.sure } : {})}
+          />
+        ) : null
+      ) : chatChannelOk ? (
+        <ChatPanel
+          {...binding}
+          logHeight={logHeight}
+          compact={kbOpen}
+          {...(inputRef ? { inputRef } : {})}
+          onInputFocus={() => onCallUsed?.()}
+          {...(binding.onSend
+            ? {
+                onSend: (text: string) => {
+                  binding.onSend?.(text);
+                  onCallUsed?.();
+                },
+              }
+            : {})}
+          {...(call?.chat ? { callInput: true } : {})}
+          {...(penOn
+            ? {
+                onWill: () => {
+                  if (canSend) onOpenWill?.(panelRef?.current?.querySelector<HTMLElement>("[data-will-button]") ?? null);
+                  onCallUsed?.();
+                },
+                willOpen,
+                willSaved,
+                ...(call?.will ? { callWill: true } : {}),
+              }
+            : {})}
+        />
+      ) : null}
+      {nightFaces ? (
+        <NightActionRow view={view} canSend={canSend} noteOpen={noteOpen} noteReady={noteReady} willOpen={willOpen} willSaved={willSaved} {...(onOpenNote ? { onOpenNote } : {})} {...(onOpenWill ? { onOpenWill } : {})} />
       ) : null}
       {showEnd ? (
         <ActionRow>

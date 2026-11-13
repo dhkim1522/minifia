@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { phaseKey } from "../../shared/game/audience";
 import type { ClientMessage, EmoteId, MapId, PlaceId, PublicPlayer, RoomView } from "../../shared/protocol";
+import { HOUSE_ROOF_TOP_Y, TOWN_HOUSES } from "../../shared/game/mapTown";
 import { MOVE_COORD_LIMIT } from "../../shared/protocol";
 import { placeMarkerPlan } from "../game/errandView";
 import type { Rect } from "../game/errandView";
@@ -18,6 +19,8 @@ import { installEmotesHook, installGhostsHook, installLooksHook, installMapHook,
 import { MapStatusCard } from "./MapStatusCard";
 import { ErrandAct } from "./v2/ErrandAct";
 import { ErrandArrow, ErrandMarker } from "./v2/ErrandMarker";
+import { HousePick } from "./v2/HousePick";
+import type { HousePickProps, HousePlateView } from "./v2/HousePick";
 import { HeadStack } from "./v2/HeadStack";
 import type { HeadStackProps } from "./v2/HeadStack";
 import "../styles/world.css";
@@ -99,6 +102,20 @@ export interface ErrandLayerProps {
   /** 확장판 저녁(21-11, P21-5): 켜기는 아래 독의 [켜기] 단추가 한다 — 장소 위 [처리] 알약을 그리지 않는다. 타일·화살표·링·빛은 그대로 */
   dock?: boolean;
 }
+
+/**
+ * 밤 집 판 층 입력(21-12, P21-9): 판 목록(좌석·이름·그림·색·내 집)과 고른 집·빛남·합의 배지·누르기. 위치는 이 층이 쓴다 —
+ * 고정 카메라의 투영으로 TOWN_HOUSES 지붕 꼭대기(y 1.96)를 화면 좌표로 바꾼다(심부름 층과 같은 방식). 좌석·역할은 판 목록 밖에서 들어오지 않는다
+ */
+export interface HouseLayerProps extends Omit<HousePickProps, "plates"> {
+  plates: ReadonlyArray<Omit<HousePlateView, "x" | "y">>;
+}
+
+/** 판 좌표가 이 거리(px)보다 덜 움직였으면 같은 자리로 본다 */
+const HOUSE_SAME_PX = 0.5;
+type HousePts = Readonly<Record<number, { x: number; y: number }>>;
+const round1 = (v: number): number => Math.round(v * 10) / 10;
+const housesApart = (a: HousePts, b: HousePts): boolean => TOWN_HOUSES.some((h) => Math.abs((a[h.seat]?.x ?? 0) - (b[h.seat]?.x ?? 0)) > HOUSE_SAME_PX || Math.abs((a[h.seat]?.y ?? 0) - (b[h.seat]?.y ?? 0)) > HOUSE_SAME_PX);
 
 const NEAR_RING_POINTS = 24;
 /** 링 svg 의 처음 마운트 스타일(위치를 아직 모른다). 값이 늘 같아 React 가 다시 쓰지 않는다 */
@@ -291,6 +308,10 @@ export interface WorldStageProps {
    * 위치는 런타임 프레임 콜백에서 투영해 DOM 에 직접 쓴다(React 상태를 프레임마다 바꾸지 않는다). 좌석·역할은 이 층에 들어오지 않는다
    */
   errand?: ErrandLayerProps;
+  /** 밤 집 판 층(21-12, 확장판 마을 밤의 산 사람). 있으면 이름표 층 위에 집 8채 지붕의 판을 그린다 */
+  houses?: HouseLayerProps;
+  /** 이름표를 그리지 않는다(21-12, D-11 — 확장판 마을 밤은 몸만 작게 보이고 이름표가 없다. 유령도 같다). 판 위 이름은 접근성 이름으로만 있다 */
+  tagsOff?: boolean;
   onNotice(text: string): void;
   /** 있을 때만 연결이 끊긴 사람의 이름표가 [내보내기] 버튼이 된다(대기실 전용 — 게임 중 서버는 CANNOT_KICK) */
   onKick?(seat: number, nickname: string): void;
@@ -329,6 +350,12 @@ export function WorldStage(props: WorldStageProps) {
   const runtimeRef = useRef<WorldRuntime | null>(null);
   const [tracker] = useState(createTapTracker);
   const [errandCache] = useState<{ current: ErrandWriteCache | null }>(() => ({ current: null }));
+  // 밤 집 판 좌표(21-12): 프레임 콜백이 지붕 꼭대기를 투영해 두 프레임 연속 같은 자리면(카메라가 멎었다) 그때부터 판이 선다. 그 뒤 자리가 바뀌면 따라간다
+  const [housePts, setHousePts] = useState<HousePts | null>(null);
+  const housePtsRef = useRef<HousePts | null>(null);
+  const houseSeen = useRef<HousePts | null>(null);
+  const houseStable = useRef(0);
+  const housesOn = props.houses !== undefined;
   // 손가락을 대는 순간 입력칸에 포커스가 있었던 포인터(D4). 떼는 순간에 정하지 않는 이유: 마우스는 누르는 동안 브라우저가 포커스를 옮긴다.
   const downWhileTyping = useRef(new Set<number>());
   const [mapStatus, setMapStatus] = useState<MapStatusState>(initialMapStatus);
@@ -349,6 +376,17 @@ export function WorldStage(props: WorldStageProps) {
     const timer = setTimeout(() => setLeaving((l) => l.filter((x) => !snapshot.includes(x))), EXIT_MS + 30);
     return () => clearTimeout(timer);
   }, [leaving]);
+
+  // 판 층이 없어지면 좌표를 비운다 — 다음 밤에는 카메라가 멎을 때까지 처음부터 숨는다
+  useLayoutEffect(() => {
+    if (housesOn) return;
+    houseSeen.current = null;
+    houseStable.current = 0;
+    if (housePtsRef.current !== null) {
+      housePtsRef.current = null;
+      setHousePts(null);
+    }
+  }, [housesOn]);
 
   // 런타임은 마운트 한 번에 하나다(맵 id 가 바뀔 때만 새로 만든다). 바뀌는 prop 은 live ref 로 읽는다(재시작 없이 최신 값).
   useEffect(() => {
@@ -397,8 +435,31 @@ export function WorldStage(props: WorldStageProps) {
       onCostumes: (costumes, dimmed) => live.current.props.onCostumes?.(costumes, dimmed),
       onZoom: pinHook?.setZoom,
       onTown: townHook === null ? undefined : (state) => townHook.patch(state),
-      onProject: (project, now) => {
+      onProject: (project, now, at) => {
         const { props: p } = live.current;
+        // 밤 집 판(21-12): 8채 지붕 꼭대기를 투영해 두 프레임 같으면 판을 세운다
+        if (p.houses !== undefined) {
+          const next: Record<number, { x: number; y: number }> = {};
+          let ok = true;
+          for (const h of TOWN_HOUSES) {
+            const q = at(h.x, HOUSE_ROOF_TOP_Y, h.z);
+            if (q === null) {
+              ok = false;
+              break;
+            }
+            next[h.seat] = { x: round1(q.sx), y: round1(q.sy) };
+          }
+          if (ok) {
+            const prev = houseSeen.current;
+            houseSeen.current = next;
+            houseStable.current = prev !== null && !housesApart(prev, next) ? houseStable.current + 1 : 0;
+            const shown = housePtsRef.current;
+            if ((shown === null && houseStable.current >= 1) || (shown !== null && housesApart(shown, next))) {
+              housePtsRef.current = next;
+              setHousePts(next);
+            }
+          }
+        }
         const layer = errandRef.current;
         if (layer === null || p.errand === undefined) return;
         const mine = p.store.positionOf(p.view.me.seat, now + p.offset);
@@ -533,7 +594,7 @@ export function WorldStage(props: WorldStageProps) {
   const scene = props.scene;
   const shown = (seat: number): boolean => scene === undefined || scene.seats[seat]?.show === true;
   // 보이지 않는 좌석은 이름표도 만들지 않는다(T-08-30)
-  const roster = [...view.players, ...leaving.filter((p) => !here.has(p.seat))].filter((p) => shown(p.seat));
+  const roster = props.tagsOff === true ? [] : [...view.players, ...leaving.filter((p) => !here.has(p.seat))].filter((p) => shown(p.seat));
   const canKick = view.me.isHost && props.canSend && props.onKick !== undefined;
   const pick = props.pick;
 
@@ -588,6 +649,15 @@ export function WorldStage(props: WorldStageProps) {
           {props.errand.actId !== null && props.errand.dock !== true ? <ErrandAct id={props.errand.actId} call={false} hidden onPress={() => live.current.props.errand?.onAct?.()} /> : null}
         </div>
       ) : null}
+      {props.houses ? (
+        <HousePick
+          {...props.houses}
+          plates={props.houses.plates.map((pl) => {
+            const pt = housePts?.[pl.seat];
+            return pt === undefined ? pl : { ...pl, x: pt.x, y: pt.y };
+          })}
+        />
+      ) : null}
       <div
         ref={tagRef}
         className="mf-world__tags"
@@ -596,7 +666,7 @@ export function WorldStage(props: WorldStageProps) {
         aria-label={pick?.group}
       >
         {/* 지목 단계에는 이름표 버튼이 같은 사람들을 읽으므로 목록은 읽히지 않게 한다(한 벌만 둔다) */}
-        <ul className="mf-world__sr mf-sr-only" aria-label={`방에 있는 사람 ${view.players.length}명`} aria-hidden={pick ? true : undefined}>
+        <ul className="mf-world__sr mf-sr-only" aria-label={`방에 있는 사람 ${view.players.length}명`} aria-hidden={pick || props.houses ? true : undefined}>
           {view.players.map((p) => (
             <li key={p.seat}>{listLabel(p, mySeat)}</li>
           ))}

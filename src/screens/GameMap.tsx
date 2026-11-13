@@ -14,6 +14,7 @@ import { BallotReveal } from "../components/v2/BallotReveal";
 import { ResultAnnounce } from "../components/ResultAnnounce";
 import { ErrandDots } from "../components/v2/ErrandDots";
 import { SceneDock } from "../components/v2/SceneDock";
+import { houseNightOf, housePlatesOf } from "../game/causalView";
 import { ErrandStartCard } from "../components/v2/ErrandStartCard";
 import { WillLetter } from "../components/v2/WillLetter";
 import type { WillLetter as WillLetterState } from "../net/useWillLetter";
@@ -34,7 +35,7 @@ import { SpeakSheet } from "../components/v2/SpeakSheet";
 import { WillSheet } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { WorldStage } from "../components/WorldStage";
-import type { ErrandLayerProps, WorldPick } from "../components/WorldStage";
+import type { ErrandLayerProps, HouseLayerProps, WorldPick } from "../components/WorldStage";
 import { ERRAND_NEAR_R, PICK_TURN_MS } from "../../shared/game/phases";
 import { LOG_H } from "../game/chatUi";
 import { todOf, todWordOf } from "../game/timeOfDay";
@@ -73,7 +74,7 @@ import type { CameraMode } from "../world/presence";
 import { worldTestHooksEnabled } from "../world/testHooks";
 import type { RingKind } from "../world/runtime";
 import type { WorldStore } from "../world/store";
-import { GamePanel } from "./GamePanel";
+import { GamePanel, NightActionRow, nightBadgesOf } from "./GamePanel";
 import "../styles/game.css";
 import "../styles/sheet.css";
 import "../styles/testtools.css";
@@ -229,8 +230,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 심부름 단계와 튜토리얼 지도 장면(panelless prop, 18-03)은 아래 패널이 없다: 스테이지가 띠 아래부터 화면 아래까지 넓어진다
   // 21페이즈 확장판 저녁(P21-1): 목록이 있는 산 사람(me.errand 는 산 본인에게만 온다)은 아래 패널 자리에 독(SceneDock)을 받는다. 유령·목록 없음·튜토리얼 지도 장면은 지금 그대로(패널 없음).
   const dockOn = view.phase === "errand" && rules.errand && view.me.errand !== undefined && panelless !== true;
+  // 21페이즈 확장판 마을 밤(D-25): 집이 있는 맵의 밤이다. 산 사람은 아래 패널 대신 밤 독(SceneDock night)과 집 판을 받고, 유령은 판 없이 지금 그대로(유령 채팅 패널). 이름표는 모두 그리지 않는다(D-11).
+  const houseNight = houseNightOf(view);
+  const myPlayer = view.players.find((p) => p.seat === view.me.seat);
+  const houseDockOn = houseNight && (myPlayer === undefined || isAlive(myPlayer));
   const noPanel = (view.phase === "errand" && !dockOn) || panelless === true;
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets } = useMapInsets(blockModeOf(view) !== null, noPanel, dockOn ? "dock" : "");
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets } = useMapInsets(blockModeOf(view) !== null, noPanel, dockOn ? "dock" : houseDockOn ? "night" : "");
   // 키보드가 시트의 textarea 때문에 열린 것이면 채팅 패널을 줄이거나 행동 줄을 숨기지 않는다(시트를 연 버튼이 남아야 닫을 때 초점이 돌아온다). 패널은 키보드 위로 올라간다(lifted).
   const kbOpen = kbLifted && !kbInSheet;
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
@@ -410,6 +415,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     ? view.me.ballot
     : undefined;
   const [mine, chooseMine] = useViewChoice<number | undefined>(view, serverMine);
+  // 밤 집 판(21-12): 내가 누른 집은 즉시 고른 표시가 되고 서버 view(me.pick)가 오면 서버 값이 이긴다 — 지금 얼굴 목록(GamePanel)과 같은 규칙. 거절은 아래 rejects 효과가 서버 값으로 되돌린다
+  const [housePick, chooseHouse] = useViewChoice<number | undefined>(view, view.me.pick);
   // 순차 지목(결정 0063-1): 이름표는 내 차례에만 버튼이다. 누르면 그 차례는 끝난다 — 깜빡임·버튼이 사라지고 취소·바꾸기는 없다.
   // pickedTurn = 내가 이미 누른 차례 번호. 서버가 거절하면 비워 다시 고를 수 있게 한다.
   const [pickedTurn, setPickedTurn] = useState<number | undefined>(undefined);
@@ -524,6 +531,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     if (seenRejects.current === rejects) return;
     seenRejects.current = rejects;
     chooseMine(serverMine);
+    chooseHouse(view.me.pick);
     setPickedTurn(undefined);
     // chooseMine 은 렌더마다 새 함수지만 setState 만 부른다
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -826,6 +834,39 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     () => (callOn && callTarget.kind === "tag" && nighting && view.me.pick === undefined ? new Set(callTarget.seats) : undefined),
     [callOn, callTarget, nighting, view.me.pick],
   );
+  // 집 판의 빛남: 고르기 전에는 판 전체가 같이 빛나고 고르면 멎는다(callTargetsOf 가 산 사람 전원을 같이 준다 — 네 역할이 같다)
+  const callHouse = callOn && callTarget.kind === "house" && housePick === undefined;
+  const pickHouse = useCallback(
+    (seat: number): void => {
+      if (!canSend) return;
+      if (send({ t: "pick", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 고른 표시도 바꾸지 않는다
+      pointSent.current = { target: seat, at: Date.now() };
+      chooseHouse(seat);
+      markCallUsed();
+    },
+    // chooseHouse 는 렌더마다 새 함수지만 setState 만 부른다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canSend, send, markCallUsed],
+  );
+  const houseLayer = useMemo<HouseLayerProps | undefined>(() => {
+    if (!houseDockOn) return undefined;
+    const badges = nightBadgesOf(view);
+    return {
+      plates: housePlatesOf(view).map((pl) => ({
+        seat: pl.seat,
+        name: view.players.find((p) => p.seat === pl.seat)?.nickname ?? "",
+        img: faceSrc(pl.seat),
+        color: seatColorVar(pl.seat),
+        me: pl.me,
+      })),
+      ...(housePick !== undefined ? { value: housePick } : {}),
+      call: callHouse,
+      ...(badges.tally !== undefined ? { tally: badges.tally } : {}),
+      ...(badges.sure !== undefined ? { sure: badges.sure } : {}),
+      ...(canSend ? {} : { disabled: true }),
+      onPick: pickHouse,
+    };
+  }, [houseDockOn, view, housePick, callHouse, canSend, pickHouse]);
   const stageTagProps = useMemo<WorldTagProps | undefined>(() => {
     if (!whisper.mode && callTagSeats === null) return claimTagProps;
     return (seat) => ({
@@ -940,6 +981,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         {...(pick ? { pick } : {})}
         {...(stageTagProps ? { tagProps: stageTagProps } : {})}
         {...(errandLayer ? { errand: errandLayer } : {})}
+        {...(houseLayer ? { houses: houseLayer } : {})}
+        {...(houseNight ? { tagsOff: true } : {})}
         onNotice={(text) => show(text)}
         onLeave={() => onLeave?.()}
       />
@@ -983,6 +1026,37 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
             />
           ) : null}
         </>
+      ) : houseDockOn ? (
+        // 확장판 마을 밤(21-12): 위 안내 한 줄 + 지금의 [쪽지]/[유언] 줄. 집을 누르는 것은 맵 층의 집 판이 한다(같은 pick 메시지)
+        <SceneDock
+          variant="night"
+          picked={housePick !== undefined}
+          lifted={kbLifted}
+          veiled={veiled || (speakOpen && !speakWriting)}
+          panelRef={panelRef}
+          actions={
+            <NightActionRow
+              view={view}
+              canSend={canSend}
+              noteOpen={will.open === "note"}
+              noteReady={will.noteReady}
+              willOpen={will.open === "will"}
+              willSaved={will.hasWill}
+              onOpenNote={(opener) => {
+                badge.setOpen(false);
+                whisper.off();
+                whisper.close();
+                will.openSheet("note", opener);
+              }}
+              onOpenWill={(opener) => {
+                badge.setOpen(false);
+                whisper.off();
+                whisper.close();
+                will.openSheet("will", opener);
+              }}
+            />
+          }
+        />
       ) : noPanel ? null : (
         <GamePanel
           view={view}

@@ -8,6 +8,7 @@
 
 import { ringSlots } from "../../shared/game/gather";
 import { HEAD_TOP_Y, STAGE_SPOT, UNIT } from "../../shared/game/map";
+import { HOUSE_ROOF_TOP_Y, TOWN_HOUSES } from "../../shared/game/mapTown";
 import type { MapId } from "../../shared/protocol";
 import { lobbyPanelHeight, LOG_H, TYPING_PILL_H } from "../game/chatUi";
 
@@ -106,6 +107,24 @@ const NIGHT_MARGIN_PX = 32;
  */
 export function nightZoomOf(stageW: number): number {
   return (stageW - NIGHT_MARGIN_PX) / NIGHT_SPAN_PX;
+}
+
+/**
+ * 확장판 밤 고정 시점(21-12, D-25): 목표는 원점, 세로 오프셋은 집 8채 지붕 꼭대기(판 중심) 투영점의 세로 가운데가 스테이지 사각형의 세로 가운데에 놓이게 정한다.
+ * 모이는 자리 구도(gatherView)의 오프셋은 사람 8명 위 이름표 상자를 가운데에 두는 값이라 집 8채에는 약 50px 아래로 치우친다(21-10 이월 메모) — 밤에는 이 값을 쓴다.
+ * 입력은 스테이지 사각형·캔버스 크기·배율뿐이다(역할·좌석을 읽지 않는다)
+ */
+export function nightViewOf(stage: { top: number; bottom: number }, c: Canvas, zoom: number): { target: { x: number; z: number }; offsetY: number } {
+  const target = { x: NIGHT_TARGET.x, z: NIGHT_TARGET.z };
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const h of TOWN_HOUSES) {
+    const sy = groundToScreen({ x: h.x, y: HOUSE_ROOF_TOP_Y, z: h.z }, target, c, 0, zoom).sy;
+    top = Math.min(top, sy);
+    bottom = Math.max(bottom, sy);
+  }
+  // groundToScreen 의 sy = c.h / 2 − u·scale − offsetY 이므로, 오프셋 0 에서의 가운데에서 스테이지 가운데를 빼면 맞춤 값이다
+  return { target, offsetY: (top + bottom) / 2 - (stage.top + stage.bottom) / 2 };
 }
 
 /** UI-SPEC 의 폰 크기(폰 폭×높이). 스테이지 사각형은 stageRect 로 구한다 */

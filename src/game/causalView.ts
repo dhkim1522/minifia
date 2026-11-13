@@ -3,6 +3,7 @@
 // 서버 전용 값은 이 파일에 없다. 시각·난수·DOM 을 읽지 않는다. 글은 TRACE_TEXT 와 UI-SPEC Copywriting 닫힌 표(발자국 하나~여덟·먼저 손댄 흔적·
 // 어두워서 못 봤어요·목격 n·단서 없음)에서만 온다 — 역할 연상어·'범인'·'증거'·'확정' 이 없다. 사람은 '참가자' 로 부른다.
 import { isAlive } from "../../shared/game/alive";
+import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import type { ClueLine, ClueSpotId, PublicPlayer, RecordLine, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
 import { sameOutfitSeats } from "./traceMark";
@@ -95,6 +96,14 @@ export function housePlatesOf(view: Pick<RoomView, "players" | "me">): HousePlat
     .filter((p) => isAlive(p))
     .map((p) => ({ seat: p.seat, me: p.seat === view.me.seat }))
     .sort((a, b) => a.seat - b.seat);
+}
+
+/**
+ * 밤 집 판 화면인가(21-12, D-25): 확장판의 마을 맵 밤. 집이 있는 맵에서만 판을 그린다 — 카메라(cameraModeOf)와 같은 조건이다.
+ * 산 사람인지(유령은 판이 없다)는 부르는 쪽이 본다. 역할을 읽지 않는다
+ */
+export function houseNightOf(view: Pick<RoomView, "phase" | "map" | "mode">): boolean {
+  return view.phase === "night" && view.map === "town" && rulesetOf(modeOf(view)).errand;
 }
 
 /** 집 판 누르기 반경 — 판 중심에서 이 거리(px) 안에서 가장 가까운 판 하나를 고른다(UI-SPEC P21-9) */

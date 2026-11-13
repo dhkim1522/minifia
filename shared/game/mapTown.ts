@@ -36,6 +36,8 @@ const HOUSE_HALF_FX = 120;
 const HOUSE_ROOF_HALF_FX = 130;
 const HOUSE_H = 1.8;
 const HOUSE_ROOF_Y1 = 1.96;
+/** 집 지붕판 꼭대기 높이 — 밤 집 판(21-12)이 이 높이의 점을 화면에 투영해 판 중심으로 쓴다 */
+export const HOUSE_ROOF_TOP_Y = HOUSE_ROOF_Y1;
 
 /** 고정소수점 사각형을 회전 없는 장애물로. */
 function box(r: RectFx, y0: number, y1: number, floor: boolean, tag: { room?: RoomId; cut?: true } = {}): Obstacle {

@@ -11,6 +11,9 @@
 /* 이름표 층: 캔버스와 같은 크기, 입력을 가로채지 않는다. 안쪽 이름표의 z-index 는 순위(0~7)다: 내 이름표가 맨 위, 나머지는 발 y 가 큰 쪽이 위. */
 .mf-world__tags { z-index: var(--z-tags); pointer-events: none; }
 
+/* 밤 집 판 층(21-12): 이름표 층과 같은 높이에서 입력 면 위에 얹혀 눌림을 받는다(밤에는 걷지 않는다). 판 40 은 v2.css */
+.mf-world > .mv-house-pick { z-index: var(--z-tags); }
+
 /* 이름표 한 개: 런타임이 transform(translate + translate(-50%, -100%))·opacity·z-index(순위)·data-front 를 매 프레임 쓴다. */
 .mf-world__tag { position: absolute; left: 0; top: 0; will-change: transform; }
 

@@ -17,7 +17,7 @@ import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { windowsLitOf } from "../game/causalView";
 import { NETWORK_TEXT } from "../net/copy";
-import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, panBoxOf, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
+import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, nightViewOf, panBoxOf, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { FIGS } from "./characterData";
 import type { OutfitId } from "./characterData";
 import { admitEmote, EMOTE_RENDER_MAX, emoteDurationMs } from "./emoteCap";
@@ -26,7 +26,7 @@ import { createTapGate } from "./input";
 import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment, stepYaw, travelYaw } from "./motion";
 import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
-import { EXEC_END_OPACITY, executionFade, GHOST_OPACITY, GHOST_SPRITE, ghostFloatY, ghostTintOf, nightHookOf, stageLiftY } from "./presence";
+import { EXEC_END_OPACITY, executionFade, GHOST_OPACITY, GHOST_SPRITE, ghostFloatY, ghostTintOf, isNightFixed, nightHookOf, stageLiftY } from "./presence";
 import { easeInOut, pinAt, pinLevel, pinLights } from "./pinPlan";
 import type { SceneLook } from "./presence";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
@@ -246,9 +246,10 @@ export interface WorldRuntimeDeps {
   onZoom?: (zoom: number) => void;
   /**
    * 프레임마다 이름표 쓰기 다음에 한 번 불린다(15-05). project(x, z) 는 월드 바닥점(발끝)의 화면 좌표(host 기준 px)를 돌려준다 —
-   * 심부름 표지·화살표·근처 링이 이 콜백 안에서 DOM 에 직접 쓴다(React 상태를 프레임마다 바꾸지 않는다). 투영할 수 없으면 null
+   * 심부름 표지·화살표·근처 링이 이 콜백 안에서 DOM 에 직접 쓴다(React 상태를 프레임마다 바꾸지 않는다). 투영할 수 없으면 null.
+   * 셋째 인자 at(x, y, z) 는 높이를 가진 월드 점의 투영이다(21-12: 밤 집 판이 지붕 꼭대기 y 1.96 을 쓴다)
    */
-  onProject?: (project: (x: number, z: number) => { sx: number; sy: number } | null, now: number) => void;
+  onProject?: (project: (x: number, z: number) => { sx: number; sy: number } | null, now: number, at: (x: number, y: number, z: number) => { sx: number; sy: number } | null) => void;
 }
 
 export interface WorldRuntime {
@@ -1443,7 +1444,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const slow = camLook.zoomMs !== undefined;
       const goalZoom = slow && reduced ? 1 : camLook.zoom;
       // 마을 확장판 밤 고정 시점(21페이즈 D-25)도 같은 길이다: 목표는 모이는 자리 = 월드 원점(STAGE_SPOT)이고 배율만 밤 배율이다
-      const g = gatherView(rect, { w: s.w, h: s.h }, { ghost: look?.seats[deps.mySeat()]?.ghost === true, zoom: goalZoom });
+      // 밤 고정 시점은 집 8채 지붕이 스테이지 세로 가운데에 오는 값(nightViewOf)을 쓴다 — 모이는 자리 구도 값은 집이 아래로 치우친다(21-12)
+      const g = isNightFixed(camLook)
+        ? nightViewOf(rect, { w: s.w, h: s.h }, goalZoom)
+        : gatherView(rect, { w: s.w, h: s.h }, { ghost: look?.seats[deps.mySeat()]?.ghost === true, zoom: goalZoom });
       offsetGoal = g.offsetY;
       if (fixed === null || fixed.zoom !== goalZoom) {
         const here = cam ?? DEFAULT_TARGET;
@@ -1565,7 +1569,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const b = timed ? performance.now() : 0;
     writeTags(r);
     if (timed) tagsMs = performance.now() - b;
-    if (deps.onProject !== undefined) deps.onProject(projectGround(r), now);
+    if (deps.onProject !== undefined) deps.onProject(projectGround(r), now, projectAt(r));
     for (const a of gone) {
       removeActor(a);
       if (a.tag !== null) {
@@ -1587,8 +1591,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
   /** 바닥점 투영 함수 — renderer.project 를 감싼다(y = 0). 유한하지 않은 값은 null */
   function projectGround(r: WorldRenderer): (x: number, z: number) => { sx: number; sy: number } | null {
-    return (x, z) => {
-      const p = r.project({ x, y: 0, z });
+    const at = projectAt(r);
+    return (x, z) => at(x, 0, z);
+  }
+
+  /** 높이를 가진 점의 투영 함수(21-12 집 판 — 지붕 꼭대기). 유한하지 않은 값은 null */
+  function projectAt(r: WorldRenderer): (x: number, y: number, z: number) => { sx: number; sy: number } | null {
+    return (x, y, z) => {
+      const p = r.project({ x, y, z });
       return Number.isFinite(p.sx) && Number.isFinite(p.sy) ? { sx: p.sx, sy: p.sy } : null;
     };
   }
