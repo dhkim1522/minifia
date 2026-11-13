@@ -5,18 +5,18 @@ milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
 current_plan: 10
-status: executing
-stopped_at: Completed 20-09-PLAN.md
-last_updated: "2026-11-13T02:51:36.480Z"
+status: verifying
+stopped_at: Completed 20-10-PLAN.md
+last_updated: "2026-11-13T03:37:10.495Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: d0b69681ec9ed47641e133a809c2aeed7b6adc84
+state_head: 3d651e46bc6b1c7cf4d0df2943d10125978950af
 progress:
   total_phases: 10
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 97
-  completed_plans: 96
-  percent: 50
+  completed_plans: 97
+  percent: 60
 ---
 
 # Project State
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 
 ## Current Position
 
-Phase: 20 (map-expansion) — EXECUTING
+Phase: 20 (map-expansion) — COMPLETE (배포 07d6afee, 검증은 v3.0 끝 실테스트로 미룸)
 Current Plan: 10
 Total Plans in Phase: 10
-Status: Ready to execute
-Last activity: 2026-11-13 — 20-09 완료 (perf-run --map town|bar|plaza, 마을 nightload 평균 59.8fps·끊김 1·calls 최대 82·점광원 3 게이트 통과, 광장 대조 59.7fps, 장면 수정 없음). 20 페이즈 9/10 (다음 20-10)
+Status: Phase complete — ready for verification
+Last activity: 2026-11-13 — 20-10 완료 (로컬 전 흐름 폰 6종 회귀 통과, minifia-v3 배포 `2026-11-13T03:30:33Z+07d6afee`, smoke full 통과, 결정 0087). 20 페이즈 10/10. 다음 21
 
 ## Performance Metrics
 
@@ -291,6 +291,7 @@ Last activity: 2026-11-13 — 20-09 완료 (perf-run --map town|bar|plaza, 마�
 | Phase 20 P07 | 17min | 2 tasks | 12 files |
 | Phase 20 P05 | 20min | 2 tasks | 14 files |
 | Phase 20 P08 | 1.5h | 3 tasks | 5 files |
+| Phase 20 P10 | 50min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -649,6 +650,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 20]: 20-05: 마을 카메라 값(PAN ±9.6·연장 판 22)은 20-04 시작값이 가시성·빈 배경 검사의 가장 작은 값과 같아 그대로 확정. 컷어웨이는 내 그려진 위치의 zoneOf 로 바뀔 때만 보내고(처음·recreate 뒤·모션 줄이기 instant), 몸이 그려지기 전에는 보내지 않는다. 남은 것 — veiled·door 훅과 문 연출·벽 뒤 이름표·지붕 누르기는 20-06
 - [Phase 20]: 20-08: TM5(문 연출)는 seats() 가 서버 프레임으로 빠지므로 「같은 프레임 안 연출 시작 + 길이 0.2초쯤」으로 판정한다. 마을 E2E 는 지붕 두 번 누르기(문 앞 링 → 방 안)로 방에 들어간다
 - [Phase 20]: 20-09: 마을 nightload(390x844·CPU 4배·5분) 평균 59.8fps·끊김 1·그리기 호출 최대 82·점광원 3 으로 게이트 통과, 광장 대조 59.7fps. 장면 수정 없음. 그리기 통계는 로비가 아니라 장면 중 값(renderer.duringMax)으로 읽는다
+- [Phase 20]: 마을 맵(광장 + 실내 방 넷 + 집 여덟)은 확장판 전용으로 배포, 결정 0087 에 D-01~D-23·위임 기본값·한계 기록
 
 ### Pending Todos
 
@@ -720,8 +722,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T02:51:35.702Z
-Stopped at: Completed 20-09-PLAN.md
+Last session: 2026-11-13T03:37:09.789Z
+Stopped at: Completed 20-10-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
@@ -734,5 +736,6 @@ Resume file: None
 |-------|-------|--------|
 | 18.1 | verification_deferred_human | /gsd-verify-work 18.1 |
 | 19 | verification_deferred_human | /gsd-verify-work 19 |
+| 20 | verification_deferred_human | /gsd-verify-work 20 |
 
 > 사용자 방침(2026-11-12): 실기기 확인은 v3.0 끝 실테스트에서 한 번에 한다. 자동 진행은 멈추지 않고 20·21로 이어 간다.

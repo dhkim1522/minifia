@@ -4,6 +4,7 @@
 
 - [x] 단계 1 로컬 검증: npm test 8,569개 통과(건너뜀 262, 실패 0)·node --test 689 통과·E2E 전 흐름 폰 6종 회귀 통과(알려진 perfbudget B2·M1 3건 제외, 간헐 2건은 단독 재실행 통과)·위생 통과
 - [x] 단계 2 배포: `2026-11-12T16:47:00Z+71a10fc8` → `2026-11-13T03:30:33Z+07d6afee` · 범위 diff 28개 · 개인 계정 확인 · smoke full 통과
+- [x] 단계 3 문서: 0087·screen-map·architecture·ROADMAP·HANDOFF (HANDOFF 5,875바이트·시험 통과)
 
 ## 로컬 검증 숫자 (단계 1)
 
