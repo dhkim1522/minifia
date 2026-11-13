@@ -3,6 +3,7 @@ import { createScenario, MIX_OUTFITS, mulberry32, parsePerfParams } from "../../
 import type { ScenarioEvent } from "../../src/debug/perf/scenario";
 import { BAR_MAP, BAR_SPAWNS, UNIT, isWalkable, lineWalkable } from "../../shared/game/map";
 import { PLAZA_MAP, PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
+import { TOWN_MAP, TOWN_SPAWNS } from "../../shared/game/mapTown";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as perfRun from "../../scripts/perf-run.mjs";
 import { MOVE_V, positionAtFx, segmentEndsAt } from "../../shared/game/world";
@@ -277,6 +278,39 @@ describe("광장 성능 측정 입구 (MAP-06, 11-10 Task 3)", () => {
       const z = m.p[m.p.length - 1]!;
       expect(isWalkable(PLAZA_MAP, Math.floor((x / UNIT + 7) / 0.5), Math.floor((z / UNIT + 7) / 0.5))).toBe(true);
     }
+  });
+
+  it("parsePerfParams: map=town 을 읽는다(20-09)", () => {
+    expect(parsePerfParams(new URLSearchParams("map=town")).map).toBe("town");
+  });
+
+  it("마을 마스크로 만든 시나리오: 입장 지점에 서 있고 모든 이동 선분·도착 칸이 마을 마스크에서 걸을 수 있다(20-09)", () => {
+    const s = createScenario({ seed: 1, chars: 8, map: TOWN_MAP });
+    s.initial().forEach((e) => {
+      const sp = TOWN_SPAWNS[e.s]!;
+      expect(e.p).toEqual([Math.round(sp.x * UNIT), Math.round(sp.z * UNIT)]);
+    });
+    const moves = s.advance(60000).filter((e): e is Extract<ScenarioEvent, { kind: "move" }> => e.kind === "move");
+    expect(moves.length).toBeGreaterThan(16);
+    for (const m of moves) {
+      for (let i = 0; i + 3 < m.p.length; i += 2) {
+        expect(lineWalkable(TOWN_MAP, { x: m.p[i]!, z: m.p[i + 1]! }, { x: m.p[i + 2]!, z: m.p[i + 3]! })).toBe(true);
+      }
+      const x = m.p[m.p.length - 2]!;
+      const z = m.p[m.p.length - 1]!;
+      expect(isWalkable(TOWN_MAP, Math.floor((x / UNIT - TOWN_MAP.origin) / 0.5), Math.floor((z / UNIT - TOWN_MAP.origin) / 0.5))).toBe(true);
+    }
+  });
+
+  it("perf-run --map: town 을 받고 판 종류는 mapGiven 으로 구분, 저장 이름 끝은 -town·-bar·-plaza, 없으면 그대로(20-09)", () => {
+    const t = perfRun.parseArgs(["--mode", "nightload", "--map", "town"]);
+    expect(t.map).toBe("town");
+    expect(perfRun.outputBase(t)).toBe("nightload-390x844-x4-town");
+    expect(perfRun.outputBase(perfRun.parseArgs(["--mode", "nightload", "--map", "bar"]))).toBe("nightload-390x844-x4-bar");
+    expect(perfRun.outputBase(perfRun.parseArgs(["--mode", "nightload", "--map", "plaza"]))).toBe("nightload-390x844-x4-plaza");
+    expect(perfRun.outputBase(perfRun.parseArgs(["--mode", "nightload"]))).toBe("nightload-390x844-x4");
+    expect(() => perfRun.parseArgs(["--map", "space"])).toThrow(/town/);
+    expect(new URL(perfRun.targetUrl(t, "http://localhost:1")).searchParams.get("map")).toBe("town");
   });
 
   it("perf-run --map: 기본 bar, plaza 를 받고 잘못된 값은 UsageError, ?perf=1 주소에 map 이 실린다", () => {
