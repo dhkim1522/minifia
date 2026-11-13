@@ -1,13 +1,12 @@
-// 17-05: 첫 사건 장면 4·5·6 연출 — 장면 6 투표(도장·위 알림·득표 배지 → 정체 공개, 오답 도움), (Task 2) 장면 4 목격·장면 5 증거 (TUT-03, TUT-04, 결정 0078-1, T-8·T-11·T-18).
-// WorldStage 는 props 를 쥐는 가짜(test/helpers/fakeTutorialStage), GameMap·RecordCard·EvidenceCard·TopToast 는 진짜다.
+// 17-05 → 21-15: 첫 사건 장면 4·5·6 연출 — 장면 6 투표(도장·위 알림·득표 배지 → 처형 결과, 오답 도움), 장면 4 집 찾기·장면 5 현장 + 의심 보드 (TUT-03, TUT-04, 결정 0078-1, D-20·D-28, T-8·T-21-35).
+// WorldStage 는 props 를 쥐는 가짜(test/helpers/fakeTutorialStage), GameMap·SceneDock·HousePick·ClueSpot·SuspectBoard·TopToast 는 진짜다.
 // 이름표 사각형은 getBoundingClientRect 를 모킹해 FocusRing 이 상자를 그리게 한다(jsdom 은 늘 0×0).
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { setEngineForTest } from "../../src/audio/unlock";
-import { SUSPECT_WALK, TUTORIAL_LINES, TUTORIAL_PICK, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
-import { TRACE_MARK } from "../../src/game/traceMark";
+import { TUTORIAL_LINES, TUTORIAL_PICK, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
 import { tutorialStage as stage } from "../helpers/fakeTutorialStage";
 import { makeRig } from "../helpers/soundRig";
 
@@ -24,6 +23,8 @@ const ROOT = `${process.cwd()}/`;
 const NOW = 1_700_000_000_000;
 
 let rig: ReturnType<typeof makeRig>;
+let fetchCalls = vi.fn();
+const fetchSpy$ = (): number => fetchCalls.mock.calls.length;
 let zeroRects = false;
 let farTag = false;
 
@@ -31,11 +32,13 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
   connection.calls = 0;
+  fetchCalls = vi.fn(() => Promise.reject(new Error("튜토리얼은 fetch 를 부르지 않는다")));
+  vi.stubGlobal("fetch", fetchCalls);
   rig = makeRig();
   vi.spyOn(rig.engine, "play").mockImplementation(() => {});
   vi.spyOn(rig.engine, "runScript").mockImplementation(() => {});
   setEngineForTest(rig.engine);
-  // 사각형: 이름표는 좌석마다 다른 자리의 96×40, 증거 카드의 조각 타일·목격 행 도윤 이름은 고정 사각형. 그 밖의 요소는 0×0 (zeroRects 면 전부 0×0)
+  // 사각형: 이름표는 좌석마다 다른 자리의 96×40, 그 밖에 아래 줄에 적은 요소만 고정 사각형이고 나머지는 0×0 (zeroRects 면 전부 0×0)
   zeroRects = false;
   farTag = false;
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
@@ -44,13 +47,13 @@ beforeEach(() => {
     if (!zeroRects) {
       if (farTag && this.classList.contains("mf-world__tag") && this.getAttribute("data-seat") === "1") r = { left: 380, top: -30, width: 80, height: 40 };
       else if (this.classList.contains("mf-world__tag")) r = { left: 40 + Number(this.getAttribute("data-seat")) * 100, top: 200, width: 96, height: 40 };
-      else if (this.classList.contains("mv-trace__disc")) r = { left: 30, top: 100, width: 44, height: 44 };
-      else if (this.classList.contains("mv-evidence__witness")) r = { left: 150, top: 170, width: 40, height: 24 };
-      // 스포트라이트(18-06): 사회자 띠·[처리]·목격 기록 카드·눈 표시도 잰다
+      // 스포트라이트(18-06): 사회자 띠·[켜기]·집 판·[살펴보기]·보드 얼굴도 잰다
       else if (this.classList.contains("mv-host__band")) r = { left: 16, top: 60, width: 358, height: 64 };
-      else if (this.hasAttribute("data-errand-act")) r = { left: 150, top: 500, width: 90, height: 44 };
-      else if (this.classList.contains("mv-record")) r = { left: 16, top: 140, width: 358, height: 80 };
-      else if (this.classList.contains("tut-eye")) r = { left: 170, top: 160, width: 36, height: 36 };
+      else if (this.hasAttribute("data-errand-act") || this.hasAttribute("data-scene-act")) r = { left: 150, top: 500, width: 90, height: 44 };
+      else if (this.hasAttribute("data-errand-place")) r = { left: 60, top: 300, width: 64, height: 64 };
+      else if (this.hasAttribute("data-house-pick")) r = { left: 20 + Number(this.getAttribute("data-house-pick")) * 60, top: 320, width: 52, height: 52 };
+      else if (this.hasAttribute("data-clue-spot")) r = { left: 200, top: 340, width: 52, height: 52 };
+      else if (this.hasAttribute("data-board-face")) r = { left: 16 + Number(this.getAttribute("data-board-face")) * 80, top: 200, width: 77, height: 64 };
     }
     return { ...r, right: r.left + r.width, bottom: r.top + r.height, x: r.left, y: r.top, toJSON: () => ({}) } as DOMRect;
   });
@@ -154,25 +157,28 @@ describe("장면 6: 정답(도윤)", () => {
     expect(reveal$(container)).toHaveLength(1);
     expect(plays(TUTORIAL_PICK.reveal.sfx)).toBe(1);
     expect(next$(container)).not.toBeNull();
+    // 처형 결과: 도윤의 이름과 '처형' 뿐 — 정체(마피아)·정답 도장·찾아냈다는 글은 없다(D-20)
     const text = reveal$(container)[0]!.textContent ?? "";
-    for (const part of ["도윤 님은", "마피아", "정답", "로 찾아냈어요"]) expect(text, part).toContain(part);
+    for (const part of ["도윤", "처형"]) expect(text, part).toContain(part);
+    for (const part of ["마피아", "정답", "찾아냈어요"]) expect(text, part).not.toContain(part);
     // 다음은 막 바깥(눌림이 막에 막히지 않게)에서 눌린다
     fireEvent.click(next$(container)!);
     expect(sceneOf(container)).toBe("7");
     expect(reveal$(container)).toHaveLength(0);
   });
 
-  it("공개 카드: 마피아 그림은 장식(alt 빈 값), 불꽃 점 14개·도장·선 아이콘 줄은 aria-hidden", async () => {
+  it("처형 결과 카드: 도윤 얼굴은 장식(alt 빈 값), 잠금 아이콘은 aria-hidden, 직업 그림·불꽃·도장은 없다", async () => {
     const { container } = await mount({ initialScene: 6 });
     pick(1);
     advance(1100);
     const root = reveal$(container)[0]!;
     const img = root.querySelector("img");
     expect(img?.getAttribute("alt")).toBe("");
-    expect(img?.getAttribute("src") ?? "").toContain("mafia");
-    expect(root.querySelectorAll(".tut-reveal__spark")).toHaveLength(14);
-    expect(root.querySelector(".tut-reveal__sparks")?.getAttribute("aria-hidden")).toBe("true");
-    expect(root.querySelector(".tut-reveal__stamp")?.getAttribute("aria-hidden")).toBe("true");
+    expect(img?.getAttribute("src") ?? "").toContain("faces");
+    expect(img?.getAttribute("src") ?? "").not.toContain("roles");
+    expect(root.querySelector(".tut-reveal__lock")?.getAttribute("aria-hidden")).toBe("true");
+    expect(root.querySelectorAll(".tut-reveal__spark")).toHaveLength(0);
+    expect(root.querySelector(".tut-reveal__stamp")).toBeNull();
   });
 
   it("정답 뒤 다시 이름표를 눌러도 아무 일 없다(stamp·buzz 추가 0)", async () => {
@@ -200,7 +206,7 @@ describe("장면 6: 정답(도윤)", () => {
 });
 
 describe("장면 6: 모션 줄이기", () => {
-  it("공개 카드에 뒤집기·불꽃·도장 애니메이션이 없고 도장은 제자리", async () => {
+  it("처형 결과 카드에 애니메이션 클래스(뒤집기·도장)가 없다", async () => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
     const { container } = await mount({ initialScene: 6 });
     pick(1);
@@ -208,8 +214,7 @@ describe("장면 6: 모션 줄이기", () => {
     const root = reveal$(container)[0]!;
     expect(root.querySelector(".is-flip")).toBeNull();
     expect(root.querySelector(".is-pop")).toBeNull();
-    expect(root.querySelectorAll(".tut-reveal__spark")).toHaveLength(0);
-    expect(root.querySelector(".tut-reveal__stamp")).not.toBeNull();
+    expect(root.querySelector(".tut-reveal__card")).not.toBeNull();
   });
 });
 
@@ -226,157 +231,198 @@ describe("진홍 예약 (T-18)", () => {
   });
 });
 
-// ---- Task 2: 장면 4 목격 · 장면 5 증거 ----
+// ---- 21-15: 장면 4 집 찾기 · 장면 5 현장 + 의심 보드 ----
 
-const eye$ = (c: ParentNode) => c.querySelectorAll<HTMLElement>("[data-tutorial-eye]");
-const links$ = (c: ParentNode) => c.querySelector<SVGElement>("[data-tutorial-links]");
-const formula$ = (c: ParentNode) => c.querySelector<HTMLElement>("[data-tutorial-formula]");
 const REDUCED = (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+const dockLamp$ = (c: ParentNode) => c.querySelector<HTMLElement>("[data-scene-dock] [data-errand-act]");
+const houses$ = (c: ParentNode) => [...c.querySelectorAll<HTMLElement>("button[data-house-pick]")];
+const house$ = (c: ParentNode, seat: number) => c.querySelector<HTMLElement>(`button[data-house-pick="${seat}"]`);
+const inspect$ = (c: ParentNode) => c.querySelector<HTMLElement>("[data-scene-dock] [data-scene-act]");
+const spot$ = (c: ParentNode, spot: number) => c.querySelector<HTMLElement>(`[data-clue-spot="${spot}"]`);
+const board$ = (c: ParentNode) => c.querySelector<HTMLElement>("[data-suspect-board]");
+const faces$ = (c: ParentNode) => [...c.querySelectorAll<HTMLElement>("[data-board-face]")];
 
-describe("장면 4: 목격 — 도윤이 걸어 들어오고 1.9초에 눈 표시와 실제 기록 카드", () => {
-  it("시작 때 도윤(1)의 걷기 구간이 로컬 store 에 든다: 처음은 오른쪽 밖 시작점, 2초 뒤는 끝점 근처", async () => {
-    await mount({ initialScene: 4 });
-    const store = stage.props!.store;
-    const t0 = store.positionOf(1, NOW)!;
-    const t1 = store.positionOf(1, NOW + 2000)!;
-    expect(Math.hypot(t0.x - SUSPECT_WALK.from.x, t0.z - SUSPECT_WALK.from.z)).toBeLessThan(0.3);
-    expect(Math.hypot(t1.x - SUSPECT_WALK.to.x, t1.z - SUSPECT_WALK.to.z)).toBeLessThan(0.3);
+describe("장면 3: 저녁 등불 — 실제 독과 가로등", () => {
+  it("가로등 셋(lamp5·lamp6·lamp4) 타일과 독 [켜기](불꽃 아이콘·'켜기')가 있고 서연 집 가로등은 없다", async () => {
+    const { container } = await mount({ initialScene: 3 });
+    const ids = [...container.querySelectorAll("button[data-errand-place]")].map((b) => b.getAttribute("data-errand-place")).sort();
+    expect(ids).toEqual(["lamp4", "lamp5", "lamp6"]);
+    expect(dockLamp$(container)!.textContent).toContain("켜기");
+    expect(dockLamp$(container)!.closest("[inert]")).toBeNull();
   });
 
-  it("1900ms 전 눈 표시·기록 카드 없음, 뒤에 눈 하나 + tut.eye 한 번 + 도윤·가로등 한 줄(실제 RecordCard)", async () => {
-    const { container } = await mount({ initialScene: 4 });
-    advance(1899);
-    expect(eye$(container)).toHaveLength(0);
-    expect(container.querySelector("[data-record-card]")).toBeNull();
-    expect(plays("tut.eye")).toBe(0);
-    advance(1);
-    expect(eye$(container)).toHaveLength(1);
-    expect(plays("tut.eye")).toBe(1);
-    const card = container.querySelector("[data-record-card]");
-    expect(card).not.toBeNull();
-    expect(card!.getAttribute("data-record-rows")).toBe("1");
-    const row = card!.querySelector("[data-record-row]")!;
-    expect(row.querySelector(".mv-record__name")?.textContent).toBe("도윤");
-    expect(row.querySelector(".mv-record__face")).not.toBeNull();
-    expect(row.querySelector("svg[aria-label], svg")).not.toBeNull();
+  it("[켜기] 를 누르면 lamp5 타일에 불꽃 배지(data-done)가 서고 서버 연결·fetch 는 0번", async () => {
+    const { container } = await mount({ initialScene: 3 });
+    expect(container.querySelector('button[data-errand-place="lamp5"]')?.hasAttribute("data-done")).toBe(false);
+    fireEvent.click(dockLamp$(container)!);
+    expect(container.querySelector('button[data-errand-place="lamp5"]')?.hasAttribute("data-done")).toBe(true);
+    expect(container.querySelector('button[data-errand-place="lamp5"] .mv-errand-pin__badge')).not.toBeNull();
+    expect(connection.calls).toBe(0);
   });
 
-  it("눈 표시는 도윤 이름표 위 36 원(중심 정렬)이고 읽히지 않는다", async () => {
+  it("독의 [건너뛰기](단계 건너뛰기)는 inert 이고 눌러도 아무 일 없다", async () => {
+    const { container } = await mount({ initialScene: 3 });
+    const skipPhase = container.querySelector<HTMLElement>("[data-skip-phase]")!;
+    expect(skipPhase.closest("[inert]")).not.toBeNull();
+    fireEvent.click(skipPhase);
+    advance(3000);
+    expect(sceneOf(container)).toBe("3");
+  });
+});
+
+describe("장면 4: 밤 집 찾기 — 집 판 6 에서 아무 집이나", () => {
+  it("집 판 여섯, 아무것도 안 눌린 상태, 안내 줄은 범례('불 켜진 창'·'꺼진 창'), inert 아래가 아니다", async () => {
     const { container } = await mount({ initialScene: 4 });
-    advance(1900);
+    const plates = houses$(container);
+    expect(plates).toHaveLength(6);
+    for (const p of plates) {
+      expect(p.getAttribute("aria-pressed")).toBe("false");
+      expect(p.closest("[inert]")).toBeNull();
+    }
+    expect(plates.map((p) => p.getAttribute("data-house-pick"))).toEqual(["0", "1", "2", "3", "4", "5"]);
+    expect(container.querySelector('[data-house-pick="5"]')?.getAttribute("data-me")).toBe("true");
+    expect(container.querySelector("[data-dock-guide]")?.textContent).toContain("불 켜진 창");
+    expect(container.textContent).not.toContain("고른 집은 바꿀 수 있어요");
+    expect(next$(container)).toBeNull();
+  });
+
+  it("집 하나를 누르면 그 집만 눌림(aria-pressed)이고 '고른 집은 바꿀 수 있어요' 한 줄이 나오며 서버로는 아무것도 안 나간다", async () => {
+    const { container } = await mount({ initialScene: 4 });
+    fireEvent.click(house$(container, 3)!);
+    expect(house$(container, 3)!.getAttribute("aria-pressed")).toBe("true");
+    expect(houses$(container).filter((p) => p.getAttribute("aria-pressed") === "true")).toHaveLength(1);
+    expect(container.querySelector("[data-dock-guide]")?.textContent).toBe("고른 집은 바꿀 수 있어요");
+    expect(stage.props!.view.me.pick).toBe(3);
+    expect(connection.calls).toBe(0);
+    expect(fetchSpy$()).toBe(0);
+  });
+
+  it("다른 집을 누르면 바뀐다(바꿀 수 있어요)", async () => {
+    const { container } = await mount({ initialScene: 4 });
+    fireEvent.click(house$(container, 3)!);
+    fireEvent.click(house$(container, 1)!);
+    expect(house$(container, 1)!.getAttribute("aria-pressed")).toBe("true");
+    expect(house$(container, 3)!.getAttribute("aria-pressed")).toBe("false");
+    expect(stage.props!.view.me.pick).toBe(1);
+  });
+
+  it("포커스 상자는 집 판 여섯 곳에 서고 하나 누르면 꺼진다, [다음] 은 누른 뒤 0.7초에", async () => {
+    const { container } = await mount({ initialScene: 4 });
+    advance(100);
+    expect(boxes(container)).toHaveLength(6);
+    fireEvent.click(house$(container, 2)!);
     advance(50);
-    const eye = eye$(container)[0]!;
-    // 도윤 이름표 {140,200,96,40}: 가운데 188 → left 188 - 18 = 170, 이름표 위 4 띄워 top 200 - 36 - 4 = 160
-    expect(eye.style.left).toBe("170px");
-    expect(eye.style.top).toBe("160px");
-    expect(eye.getAttribute("aria-hidden")).toBe("true");
-    expect(eye.querySelector("svg")).not.toBeNull();
-  });
-
-  it("기록 카드의 닫기 단추는 inert 아래라 눌리지 않는다", async () => {
-    const { container } = await mount({ initialScene: 4 });
-    advance(1900);
-    const close = container.querySelector<HTMLElement>("[data-record-card] button[aria-label='닫기']")!;
-    expect(close.closest("[inert]")).not.toBeNull();
-  });
-
-  it("[다음] 은 3400ms 에 그대로 나온다", async () => {
-    const { container } = await mount({ initialScene: 4 });
-    advance(3399);
+    expect(boxes(container)).toHaveLength(0);
+    advance(649);
     expect(next$(container)).toBeNull();
     advance(1);
     expect(next$(container)).not.toBeNull();
   });
 
-  it("모션 줄이기면 도윤이 처음부터 끝점에 서 있다(걷기 구간 없음)", async () => {
-    vi.stubGlobal("matchMedia", REDUCED);
-    await mount({ initialScene: 4 });
-    const store = stage.props!.store;
-    const t0 = store.positionOf(1, NOW)!;
-    expect(Math.hypot(t0.x - SUSPECT_WALK.to.x, t0.z - SUSPECT_WALK.to.z)).toBeLessThan(0.1);
+  it("[다음] 을 누르면 장면 5", async () => {
+    const { container } = await mount({ initialScene: 4 });
+    fireEvent.click(house$(container, 0)!);
+    advance(700);
+    fireEvent.click(next$(container)!);
+    expect(sceneOf(container)).toBe("5");
+  });
+
+  it("밤 독의 [쪽지]/[유언] 줄은 inert 라 눌리지 않는다", async () => {
+    const { container } = await mount({ initialScene: 4 });
+    const actions = container.querySelector("[data-dock-actions]")!;
+    expect(actions.closest("[inert]")).not.toBeNull();
   });
 });
 
-describe("장면 5: 증거 — 실제 증거 카드 + 선 두 개 + 수식 줄", () => {
-  it("GameMap 이 받은 view 로 실제 증거 카드가 보인다", async () => {
+describe("장면 5: 현장 + 의심 보드 — 지점 ② 에서 붉은 천 조각 → 도윤 칸 같은 옷 표시", () => {
+  it("현장 지점 셋, 지점 ② 만 눌러 볼 수 있는 처음 모양, [살펴보기] 활성, 카드·보드 없음", async () => {
     const { container } = await mount({ initialScene: 5 });
-    advance(100);
-    expect(container.querySelector("[data-trace-card]")).not.toBeNull();
-    expect(container.querySelector("[data-lastseen-row] .mv-evidence__witness")?.textContent).toBe("도윤");
+    expect(spot$(container, 1)).not.toBeNull();
+    expect(spot$(container, 2)!.getAttribute("data-state")).toBe("fresh");
+    expect(spot$(container, 2)!.getAttribute("aria-label")).toBe("옷 조각 살펴보기");
+    expect(inspect$(container)!.getAttribute("aria-disabled")).toBeNull();
+    expect(container.querySelector("[data-clue-row]")).toBeNull();
+    expect(board$(container)).toBeNull();
+    expect(next$(container)).toBeNull();
+    expect(stage.props!.clues?.house).toBe(2);
   });
 
-  it("선 두 개: 조각 타일 중심 → 도윤 이름표(redCloth 2.5, 0.4초), 목격 행 도윤 → 도윤 이름표(brass-200 2, 0.9초), aria-hidden", async () => {
+  it("[살펴보기] → 지점 ② done, 카드 '붉은 천 조각'(옷 조각 칩), 서버로는 아무것도 안 나간다", async () => {
     const { container } = await mount({ initialScene: 5 });
-    advance(100);
-    const svg = links$(container)!;
-    expect(svg).not.toBeNull();
-    expect(svg.getAttribute("aria-hidden")).toBe("true");
-    expect(svg.style.getPropertyValue("--trace-mark")).toBe(TRACE_MARK.redCloth);
-    const paths = svg.querySelectorAll("path");
-    expect(paths).toHaveLength(2);
-    // 조각 타일 {30,100,44,44} 중심 (52,122) → 도윤 이름표 {140,200,96,40} 위 가장자리 30% 지점
-    expect(paths[0]!.getAttribute("data-from")).toBe("52,122");
-    expect(paths[0]!.getAttribute("data-to")).toBe("168.8,198");
-    expect(paths[0]!.classList.contains("is-trace")).toBe(true);
-    expect(paths[0]!.getAttribute("stroke-width")).toBe("2.5");
-    expect(paths[0]!.style.getPropertyValue("--tut-delay")).toBe("400ms");
-    // 목격 행 도윤 이름 {150,170,40,24} 중심 (170,182) → 같은 이름표 70% 지점
-    expect(paths[1]!.getAttribute("data-from")).toBe("170,182");
-    expect(paths[1]!.getAttribute("data-to")).toBe("207.2,198");
-    expect(paths[1]!.classList.contains("is-seen")).toBe(true);
-    expect(paths[1]!.getAttribute("stroke-width")).toBe("2");
-    expect(paths[1]!.style.getPropertyValue("--tut-delay")).toBe("900ms");
-    for (const path of paths) expect(path.getAttribute("pathLength")).toBe("1");
+    fireEvent.click(inspect$(container)!);
+    expect(spot$(container, 2)!.getAttribute("data-state")).toBe("done");
+    const card = container.querySelector('[data-clue-row] [data-clue-chip="cloth"]');
+    expect(card).not.toBeNull();
+    expect(card!.textContent).toContain("붉은 천 조각");
+    expect(stage.props!.view.me.clues).toEqual([{ spot: 2, kind: "cloth", piece: "redCloth" }]);
+    expect(connection.calls).toBe(0);
+    expect(fetchSpy$()).toBe(0);
   });
 
-  it("끝점을 못 쟀으면(0×0) 선을 그리지 않는다", async () => {
-    zeroRects = true;
+  it("살핀 0.9초 뒤 의심 보드가 열리고 도윤(1) 칸에만 같은 옷 표시(cloth)가 있다", async () => {
     const { container } = await mount({ initialScene: 5 });
-    advance(100);
-    expect(links$(container)).not.toBeNull();
-    expect(links$(container)!.querySelectorAll("path")).toHaveLength(0);
+    fireEvent.click(inspect$(container)!);
+    advance(900);
+    const board = board$(container)!;
+    expect(board).not.toBeNull();
+    expect(faces$(container).map((f) => f.getAttribute("data-board-face"))).toEqual(["0", "1", "3", "4", "5"]);
+    expect(faces$(container).filter((f) => f.hasAttribute("data-board-mark")).map((f) => [f.getAttribute("data-board-face"), f.getAttribute("data-board-mark")])).toEqual([["1", "cloth"]]);
+    expect(board.querySelector('[data-clue-chip="cloth"]')?.textContent).toContain("붉은 천 조각");
+    expect(stage.props!.view.phase).toBe("discussion");
+    // 보드의 닫기는 inert 라 눌리지 않는다
+    expect(board.querySelector<HTMLElement>("button[aria-label='닫기']")?.closest("[inert]")).not.toBeNull();
   });
 
-  it("tut.link 가 400·900ms 에 한 번씩", async () => {
-    await mount({ initialScene: 5 });
-    advance(399);
-    expect(plays("tut.link")).toBe(0);
+  it("[다음] 은 보드가 열린 1.2초 뒤", async () => {
+    const { container } = await mount({ initialScene: 5 });
+    fireEvent.click(inspect$(container)!);
+    advance(900 + 1199);
+    expect(next$(container)).toBeNull();
     advance(1);
-    expect(plays("tut.link")).toBe(1);
-    advance(499);
-    expect(plays("tut.link")).toBe(1);
-    advance(1);
-    expect(plays("tut.link")).toBe(2);
+    expect(next$(container)).not.toBeNull();
+    fireEvent.click(next$(container)!);
+    expect(sceneOf(container)).toBe("6");
   });
 
-  it("수식 줄: 눈·흔적 원 둘 + '+' + '=' + 손 아이콘의 '의심' 알약, 1.6초 지연", async () => {
+  it("두 번 살펴봐도 카드·보드는 한 번이다", async () => {
     const { container } = await mount({ initialScene: 5 });
-    const f = formula$(container)!;
-    expect(f).not.toBeNull();
-    expect(f.querySelectorAll(".tut-formula__disc")).toHaveLength(2);
-    expect(f.querySelector(".tut-formula__disc svg")).not.toBeNull();
-    expect(f.textContent).toContain("+");
-    expect(f.textContent).toContain("=");
-    const pill = f.querySelector(".tut-formula__pill")!;
-    expect(pill.textContent).toBe("의심");
-    expect(pill.querySelector("svg")).not.toBeNull();
-    expect(f.style.getPropertyValue("--tut-delay")).toBe("1600ms");
+    const btn = inspect$(container)!;
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    advance(900);
+    expect(stage.props!.view.me.clues).toHaveLength(1);
+    expect(container.querySelectorAll("[data-suspect-board]")).toHaveLength(1);
   });
 
-  it("수식 줄 아랫변이 [다음] 윗변 - 12 위에 있다(tutorial.css 값으로 계산)", () => {
-    const css = readFileSync(`${ROOT}src/styles/tutorial.css`, "utf8");
-    const rule = (sel: string): string => css.match(new RegExp(`${sel.replace(".", "\\.")}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
-    const px = (body: string, prop: string): number => Number(body.match(new RegExp(`(?:^|[;\\s])${prop}:\\s*(\\d+)px`))?.[1]);
-    const next = rule(".tut-next");
-    const formula = rule(".tut-formula");
-    const nextTop = px(next, "bottom") + px(next, "height");
-    expect(px(formula, "bottom")).toBeGreaterThanOrEqual(nextTop + 12);
+  it("포커스 상자: 처음엔 [살펴보기] 와 지점 ②, 보드가 열리면 도윤 칸 하나", async () => {
+    const { container } = await mount({ initialScene: 5 });
+    advance(100);
+    expect(boxes(container)).toHaveLength(1);
+    fireEvent.click(inspect$(container)!);
+    advance(100);
+    expect(boxes(container)).toHaveLength(0);
+    advance(800);
+    advance(100);
+    expect(boxes(container)).toHaveLength(1);
+    // 도윤 칸 {96,200,77,64} 둘레 8
+    expect(boxes(container)[0]!.style.left).toBe("88px");
   });
 
-  it("장면 5 밖에는 선·수식이 없다", async () => {
-    const { container } = await mount({ initialScene: 6 });
-    expect(links$(container)).toBeNull();
-    expect(formula$(container)).toBeNull();
+  it("장면 6 으로 넘어가면 보드·카드는 없고, 이름표 표시용 옷 조각(me.clues)은 이어진다", async () => {
+    const { container } = await mount({ initialScene: 5 });
+    fireEvent.click(inspect$(container)!);
+    advance(900 + 1200);
+    fireEvent.click(next$(container)!);
+    expect(board$(container)).toBeNull();
+    expect(stage.props!.view.me.clues).toEqual([{ spot: 2, kind: "cloth", piece: "redCloth" }]);
+  });
+
+  it("모션 줄이기도 같은 순서다(살핌 → 보드 → [다음])", async () => {
+    vi.stubGlobal("matchMedia", REDUCED);
+    const { container } = await mount({ initialScene: 5 });
+    fireEvent.click(inspect$(container)!);
+    advance(900);
+    expect(board$(container)).not.toBeNull();
   });
 });
 
@@ -384,45 +430,53 @@ describe("스포트라이트 구간 (P18-5, D-04)", () => {
   const dim$ = (c: ParentNode) => c.querySelectorAll("[data-tutorial-dim]").length;
   const hole$ = (c: ParentNode) => c.querySelectorAll("[data-tutorial-hole]").length;
 
-  it("장면 2: 띠 창(0~2.6초)에만 1개, [다음] 뒤 0개", async () => {
+  it("장면 2: 띠 창(0~2.6초)에만 1개, 그 뒤 0개, [다음] 은 4초에", async () => {
     const { container } = await mount({ initialScene: 2 });
     advance(100);
     expect(dim$(container)).toBe(1);
     advance(2500);
     advance(50);
+    expect(dim$(container)).toBe(0);
+    expect(next$(container)).toBeNull();
+    advance(1400);
     expect(next$(container)).not.toBeNull();
     expect(dim$(container)).toBe(0);
   });
 
-  it("장면 3: 우체통 + [처리] 구간에 1개", async () => {
+  it("장면 3: 가로등 5 타일 + [켜기] 구간에 1개(구멍 2개)", async () => {
     const { container } = await mount({ initialScene: 3 });
     advance(100);
     expect(dim$(container)).toBe(1);
+    expect(hole$(container)).toBe(1);
   });
 
-  it("장면 4: 1.9~3.4초에 1개(도윤 상자 + 기록 카드 + 눈 표시 = 구멍 3개), 3.4초 뒤 0개", async () => {
+  it("장면 4: 집 판 여섯 구멍에 1개, 집을 고르면 0개", async () => {
     const { container } = await mount({ initialScene: 4 });
-    advance(1000);
+    advance(100);
+    expect(dim$(container)).toBe(1);
+    expect(hole$(container)).toBe(6);
+    fireEvent.click(house$(container, 4)!);
+    advance(50);
+    expect(dim$(container)).toBe(0);
+  });
+
+  it("장면 5: [살펴보기] 구간 1개 → 살피면 0개 → 보드가 열리면 도윤 칸 구멍 1개, 장면 7 은 시종 0개", async () => {
+    const { container } = await mount({ initialScene: 5 });
+    advance(100);
+    expect(dim$(container)).toBe(1);
+    fireEvent.click(inspect$(container)!);
+    advance(50);
     expect(dim$(container)).toBe(0);
     advance(900);
     advance(100);
     expect(dim$(container)).toBe(1);
-    expect(hole$(container)).toBe(3);
-    advance(1400);
-    advance(50);
-    expect(next$(container)).not.toBeNull();
-    expect(dim$(container)).toBe(0);
-  });
-
-  it("장면 5·7 은 시종 0개", async () => {
-    for (const n of [5, 7] as const) {
-      const { container, unmount } = await mount({ initialScene: n });
-      advance(100);
-      expect(dim$(container)).toBe(0);
-      advance(5000);
-      expect(dim$(container)).toBe(0);
-      unmount();
-    }
+    expect(hole$(container)).toBe(1);
+    const seven = await mount({ initialScene: 7 });
+    advance(100);
+    expect(dim$(seven.container)).toBe(0);
+    advance(5000);
+    expect(dim$(seven.container)).toBe(0);
+    seven.unmount();
   });
 
   it("장면 6: 처음 구멍 4개(막 1개), 정답을 누른 뒤 0개", async () => {
@@ -446,7 +500,7 @@ describe("[다음] 알약 (P18-6, D-05)", () => {
 
   it("버튼: data-tutorial-next·aria-label 다음·라벨 글 다음·chevronRight svg 하나(20)", async () => {
     const { container } = await mount({ initialScene: 2 });
-    advance(2600);
+    advance(4000);
     advance(50);
     const btn = next$(container)!;
     expect(btn === null).toBe(false);
@@ -473,46 +527,5 @@ describe("[다음] 알약 (P18-6, D-05)", () => {
     const reduce = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(has(reduce, /\.tut-next\s*\{\s*animation:\s*none/)).toBe(true);
     expect(css.includes("[data-tutorial-screen]:has([data-tutorial-next]) .mv-errand-dots { display: none; }")).toBe(true);
-  });
-});
-
-describe("장면 5 선이 화면 안에서 끝난다 (D-07)", () => {
-  const link = async (): Promise<{ clampPoint: (p: readonly [number, number], w: number, h: number, inset?: number) => [number, number] }> =>
-    (await import("../../src/components/v2/TutorialEvidence")) as never;
-
-  it("clampPoint: 안쪽 8 로 고정, 안이면 그대로", async () => {
-    const { clampPoint } = await link();
-    expect(clampPoint([-20, 5], 390, 844).join(",") === "8,8").toBe(true);
-    expect(clampPoint([400, 900], 390, 844).join(",") === "382,836").toBe(true);
-    expect(clampPoint([100, 200], 390, 844).join(",") === "100,200").toBe(true);
-  });
-
-  it("도윤 이름표가 화면 오른쪽 위 밖이어도 선 두 개의 좌표가 [8, 폭-8]×[8, 높이-8] 안이다", async () => {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 390 });
-    Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 844 });
-    try {
-      farTag = true;
-      const { container } = await mount({ initialScene: 5 });
-      advance(100);
-      const paths = [...links$(container)!.querySelectorAll("path")];
-      expect(paths.length).toBe(2);
-      for (const path of paths) {
-        for (const attr of ["data-from", "data-to"]) {
-          const [x, y] = path.getAttribute(attr)!.split(",").map(Number) as [number, number];
-          expect(x >= 8 && x <= 382 && y >= 8 && y <= 836).toBe(true);
-        }
-      }
-    } finally {
-      Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: w });
-      Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: h });
-    }
-  });
-
-  it(".tut-links 규칙에 overflow hidden", () => {
-    const css = readFileSync(`${ROOT}src/styles/tutorial.css`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-    const start = css.indexOf(".tut-links {");
-    expect(/overflow:\s*hidden/.test(css.slice(start, css.indexOf("}", start)))).toBe(true);
   });
 });

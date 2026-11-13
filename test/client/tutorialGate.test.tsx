@@ -58,7 +58,17 @@ describe("장면 3: 허용 목록 밖은 inert", () => {
       expect(el, `${sel} 가 있어야 한다`).not.toBeNull();
       expect(el!.hasAttribute("inert"), `${sel} 는 inert`).toBe(true);
     }
-    for (const el of container.querySelectorAll("[data-side-column], .mv-float, [data-world-panel]")) expect(el.hasAttribute("inert")).toBe(true);
+    for (const el of container.querySelectorAll("[data-side-column], .mv-float")) expect(el.hasAttribute("inert")).toBe(true);
+  });
+
+  it("21-15: 실제 독(SceneDock)은 막지 않고 [켜기] 만 열려 있다 — 독 안 [건너뛰기]·기록 칸은 inert", async () => {
+    const { container } = await mount(3);
+    const dock = q(container, "[data-scene-dock]");
+    expect(dock, "독이 있어야 한다").not.toBeNull();
+    expect(inertAbove(dock)).toBe(false);
+    expect(inertAbove(q(container, "[data-scene-dock] [data-errand-act]"))).toBe(false);
+    expect(inertAbove(q(container, "[data-skip-phase]"))).toBe(true);
+    expect(inertAbove(q(container, "[data-clue-layer]"))).toBe(false);
   });
 
   it("[처리] 층과 그 단추에는 inert 조상이 없다", async () => {
@@ -76,10 +86,32 @@ describe("장면 3: 허용 목록 밖은 inert", () => {
 
   it("[처리] 뒤 장면 4 에서도 같은 층이 차단돼 있다(장면이 바뀌어도 다시 건다)", async () => {
     const { container } = await mount(3);
-    act(() => tutorialStage.props!.errand!.onAct?.());
-    advance(700);
+    fireEvent.click(q(container, "[data-scene-dock] [data-errand-act]")!);
+    advance(1600);
     expect(container.querySelector("[data-tutorial-screen]")?.getAttribute("data-tutorial-scene")).toBe("4");
     for (const sel of [".mf-game__header", ".mf-world__input", "[data-errand-layer]", ".mf-world__tags"]) expect(q(container, sel)?.hasAttribute("inert"), sel).toBe(true);
+  });
+});
+
+describe("장면 4·5: 집 판·[살펴보기] 만 열린다 (21-15)", () => {
+  it("장면 4: 집 판 단추에 inert 조상이 없고 밤 독의 행동 줄·머리·입력면은 inert", async () => {
+    const { container } = await mount(4);
+    const plate = q(container, "button[data-house-pick]");
+    expect(plate).not.toBeNull();
+    expect(inertAbove(plate)).toBe(false);
+    for (const sel of [".mf-game__header", ".mf-world__input", "[data-errand-layer]", ".mf-world__tags", "[data-dock-actions]"]) {
+      const el = q(container, sel);
+      if (el === null) continue;
+      expect(inertAbove(el), `${sel} 는 inert`).toBe(true);
+    }
+    expect(inertAbove(q(container, "[data-errand-act-layer]"))).toBe(true);
+  });
+
+  it("장면 5: 독 [살펴보기] 에 inert 조상이 없고 독 [건너뛰기]·현장 지점 층은 inert", async () => {
+    const { container } = await mount(5);
+    expect(inertAbove(q(container, "[data-scene-dock] [data-scene-act]"))).toBe(false);
+    expect(inertAbove(q(container, "[data-skip-phase]"))).toBe(true);
+    expect(inertAbove(q(container, "[data-clue-layer]"))).toBe(true);
   });
 });
 
@@ -99,7 +131,8 @@ describe("장면 6: 이름표만 열린다", () => {
 
   it("장면 5 에서 6 으로 갈 때 이름표 층의 inert 가 풀린다", async () => {
     const { container } = await mount(5);
-    advance(0);
+    fireEvent.click(q(container, "[data-scene-dock] [data-scene-act]")!);
+    advance(2100);
     expect(q(container, ".mf-world__tags")!.hasAttribute("inert")).toBe(true);
     fireEvent.click(q(container, "[data-tutorial-next]")!);
     expect(q(container, ".mf-world__tags")!.hasAttribute("inert")).toBe(false);
@@ -126,13 +159,20 @@ describe("포커스 이동", () => {
 
   it("[다음] 이 나타나는 장면에서는 [다음] 으로 간다", async () => {
     const { container } = await mount(2);
-    advance(2600);
+    advance(4000);
     expect(document.activeElement).toBe(q(container, "[data-tutorial-next]"));
   });
 
-  it("장면 5(처음부터 [다음])는 [다음] 으로", async () => {
+  it("장면 4: 포커스가 첫 집 판 단추로 간다", async () => {
+    const { container } = await mount(4);
+    expect(document.activeElement).toBe(q(container, "button[data-house-pick]"));
+  });
+
+  it("장면 5: 처음엔 [살펴보기], 보드가 열리고 [다음] 이 나오면 [다음] 으로", async () => {
     const { container } = await mount(5);
-    advance(0);
+    expect(document.activeElement).toBe(q(container, "[data-scene-act]"));
+    fireEvent.click(q(container, "[data-scene-act]")!);
+    advance(2100);
     expect(document.activeElement).toBe(q(container, "[data-tutorial-next]"));
   });
 
@@ -145,7 +185,7 @@ describe("포커스 이동", () => {
 
   it("[다음] 을 눌러 장면이 바뀌면 포커스가 새 장면의 허용된 첫 단추로 간다", async () => {
     const { container } = await mount(2);
-    advance(2600);
+    advance(4000);
     fireEvent.click(q(container, "[data-tutorial-next]")!);
     expect(container.querySelector("[data-tutorial-screen]")?.getAttribute("data-tutorial-scene")).toBe("3");
     expect(document.activeElement).toBe(q(container, "[data-errand-act]"));
