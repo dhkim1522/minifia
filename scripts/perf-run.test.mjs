@@ -3,7 +3,7 @@
 // nightload 실행 자체는 이 시험이 하지 않는다(실행과 성능 합격선은 12-12).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LIGHT_MORNING_RATIO, LIGHT_TALK_RATIO, NIGHTLOAD_DWELL, USAGE, colorStats, lightRankVerdict, outputBase, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
+import { LIGHT_MORNING_RATIO, LIGHT_TALK_RATIO, NIGHTLOAD_DWELL, USAGE, nightloadDwell, colorStats, lightRankVerdict, outputBase, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
 
 test("parseArgs --map (20-09): town·bar·plaza 를 받고 저장 이름 끝이 -town·-bar·-plaza, 없으면 그대로", () => {
   const o = parseArgs(["--mode", "nightload", "--map", "town"]);
@@ -14,6 +14,12 @@ test("parseArgs --map (20-09): town·bar·plaza 를 받고 저장 이름 끝이 
   assert.equal(outputBase(parseArgs(["--mode", "nightload"])), "nightload-390x844-x4");
   assert.throws(() => parseArgs(["--map", "space"]), /town/);
   assert.match(USAGE, /town/);
+});
+
+test("nightloadDwell (20-09): 마을은 전부, 광장·재즈 바는 errand 만 뺀다", () => {
+  assert.equal(nightloadDwell("town"), NIGHTLOAD_DWELL);
+  assert.deepEqual(nightloadDwell("plaza").map(([p]) => p), ["discussion", "nomination", "defense", "verdict", "execution", "night", "morning"]);
+  assert.deepEqual(nightloadDwell("bar"), nightloadDwell("plaza"));
 });
 
 test("parseArgs --sound: 기본 on, on·off 를 받는다", () => {

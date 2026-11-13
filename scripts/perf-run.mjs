@@ -808,7 +808,10 @@ async function nightloadOnce(browser, o, origin, chrome) {
     const cycles = {};
     // 옵션이 없거나 town 이면 확장판 = 마을, bar·plaza 는 기본 마피아로 바꿔 고른 맵
     const expectedMap = o.mapGiven && o.map !== "town" ? o.map : "town";
+    const dwell = nightloadDwell(expectedMap);
     let mapChecked = false;
+    /** 장면별 그리기 통계(마지막 한 번씩) */
+    const renderDuring = {};
 
     for (const role of NIGHTLOAD_PASSES) {
       await openTestSheet(page);
@@ -824,7 +827,7 @@ async function nightloadOnce(browser, o, origin, chrome) {
           if (got !== expectedMap) throw new Error(`측정 맵이 기대와 다름: view.map ${got} (기대 ${expectedMap})`);
           mapChecked = true;
         }
-        for (const [phase, ms] of NIGHTLOAD_DWELL) { // 첫 장면이 errand 라 낮 시작에서 바로 넘긴다(15페이즈)
+        for (const [phase, ms] of dwell) { // 확장판(마을)은 첫 장면이 errand 라 낮 시작에서 바로 넘긴다(15페이즈), 기본 마피아에는 errand 가 없다(20-09)
           await mark(`${role}:setup`, true);
           await skipTo(page, tracker, phase);
           // 마피아 판의 밤: 대상 이름표를 눌러 내 캐릭터가 걷게 한다(이동·고리). 실패해도 측정은 이어 간다
@@ -834,7 +837,12 @@ async function nightloadOnce(browser, o, origin, chrome) {
             if (seat !== undefined) await tapPick(page, seat).catch(() => {});
           }
           await mark(`${role}:${phase}`, false);
-          await sleep(ms);
+          // 장면 도중(끝나기 직전)에 그리기 통계를 한 번 읽는다(20-09) — 로비에서 읽은 값은 게임 장면과 다르다. 읽는 시간은 아래 sleep 에서 뺀다
+          const sampleAt = Math.max(0, ms - 300);
+          await sleep(sampleAt);
+          const info = await page.evaluate(() => window.__mfWorld?.debug?.info?.() ?? null).catch(() => null);
+          if (info) renderDuring[`${role}:${phase}`] = info;
+          await sleep(ms - sampleAt);
           measured += ms;
         }
         await mark(`${role}:setup`, true);
@@ -885,13 +893,13 @@ async function nightloadOnce(browser, o, origin, chrome) {
       schema: "nightload-1",
       startedAt,
       endedAt,
-      params: { map: expectedMap, minutes: o.minutes, bots: o.bots, passes: NIGHTLOAD_PASSES, dwellMs: Object.fromEntries(NIGHTLOAD_DWELL), note: "넘기기·시트 조작 구간은 기록하지 않는다. 시민 판 아침은 봇 마피아가 방장을 노려 피해자 연출이 함께 잡힌다" },
+      params: { map: expectedMap, minutes: o.minutes, bots: o.bots, passes: NIGHTLOAD_PASSES, dwellMs: Object.fromEntries(dwell), note: "넘기기·시트 조작 구간은 기록하지 않는다. 시민 판 아침은 봇 마피아가 방장을 노려 피해자 연출이 함께 잡힌다" },
       frames: { ...stats, jankPer5min: (stats.jank * 300) / stats.seconds },
       passes,
       scenes,
       sound: { mode: o.sound, state: soundState?.state ?? null, on: soundState?.on ?? null, requests: soundState?.requests ?? null, note: "소리 켠/끈 측정 구분(12-06). 판정 없음 — 합격선은 12-12" },
       baseline: CHATLOAD_BASELINE,
-      renderer: { before: renderBefore, after: renderAfter, note: "제품 런타임의 자동 강등(10초 평균 45fps 미만) 단계는 테스트 훅이 주지 않는다. calls·triangles 가 처음보다 크게 줄었으면 강등 의심" },
+      renderer: { before: renderBefore, after: renderAfter, during: renderDuring, duringMax: maxRender(renderDuring), note: "제품 런타임의 자동 강등(10초 평균 45fps 미만) 단계는 테스트 훅이 주지 않는다. calls·triangles 가 처음보다 크게 줄었으면 강등 의심" },
       screenshot: png,
       issues: [...new Set(issues)].slice(0, 8),
     };
@@ -900,12 +908,27 @@ async function nightloadOnce(browser, o, origin, chrome) {
   }
 }
 
+/** 맵에 따른 장면 머무름 표: 마을(확장판)은 전부, 재즈 바·광장(기본 마피아)은 낮 심부름(errand) 단계가 없어 뺀다(20-09) */
+export function nightloadDwell(map) {
+  return map === "town" ? NIGHTLOAD_DWELL : NIGHTLOAD_DWELL.filter(([phase]) => phase !== "errand");
+}
+
+/** 장면별 그리기 통계 중 칸마다 가장 큰 값(20-09 게이트: calls·pointLights 는 가장 무거운 장면 기준) */
+export function maxRender(byScene) {
+  const out = {};
+  for (const info of Object.values(byScene)) {
+    for (const [k, v] of Object.entries(info)) if (typeof v === "number" && (out[k] === undefined || v > out[k])) out[k] = v;
+  }
+  return out;
+}
+
 async function runNightload(browser, o, origin, chrome) {
   let result;
   try {
     result = await nightloadOnce(browser, o, origin, chrome);
   } catch (e) {
     console.error(`측정 실패: ${e instanceof Error ? e.message.split("\n")[0] : String(e)}`);
+    if (process.env.PERF_DEBUG && e instanceof Error) console.error(e.stack);
     return 1;
   }
   const json = join(o.out, `${outputBase(o)}.json`);
