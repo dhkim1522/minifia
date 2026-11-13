@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>아침 현장 조사</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0a0e1c}
+a{color:#a9aebb}a:hover{color:#e6e8ee}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #2a2d45; color: #e6e8ee; font-family: 'Gowun Dodum', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; word-break: keep-all">
+
+<header style="position: absolute; left: 0; top: 0; width: 390px; height: 56px; display: flex; align-items: center; justify-content: center; gap: 8px"><span style="font-size: 14px; color: #a9aebb">아침</span><h1 style="margin: 0; font-size: 18px; font-weight: 700; color: #f1f2f5">현장 조사</h1></header>
+<div style="position: absolute; left: 16px; right: 16px; top: 60px; height: 28px; display: flex; align-items: center; font-size: 14px; color: #a9aebb"><span>빛나는 곳을 살펴보세요</span><span style="margin-left: auto">0:21</span></div>
+<div style="position: absolute; left: 16px; right: 16px; top: 90px; height: 3px; border-radius: 2px; background: #2a3760"><div style="width: 70%; height: 3px; border-radius: 2px; background: #ffcf8a"></div></div>
+
+<!-- 피해자 집 앞 확대 -->
+<div style="position: absolute; left: 20px; top: 120px; width: 350px; height: 360px; border-radius: 12px; background: #34374f">
+<div style="position: absolute; left: 105px; top: 30px; width: 140px; height: 100px; border-radius: 8px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: end center; padding-bottom: 8px; box-sizing: border-box"><span style="width: 30px; height: 30px; border-radius: 50%; background: #8fa3d9"></span></div>
+<!-- 이웃 집(창 켜짐) -->
+<div style="position: absolute; left: 255px; top: 50px; width: 70px; height: 70px; border-radius: 8px; background: #2b2f38; border: 2px solid #6b7180"><span style="position: absolute; left: 12px; top: 12px; width: 10px; height: 10px; background: #ffcf8a; border-radius: 2px"></span></div>
+
+<!-- 단서 지점 ① 발자국 -->
+<div style="position: absolute; left: 120px; top: 170px; width: 52px; height: 52px; border-radius: 50%; border: 2px solid #ffcf8a; box-shadow: 0 0 14px 3px rgba(255,207,138,0.5); display: grid; place-items: center" aria-label="발자국 살펴보기"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#ffcf8a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4c2 0 3 2 3 4s-1 3-2 3-3-1-3-3 0-4 2-4z"/><path d="M16 11c2 0 3 2 3 4s-1 3-2 3-3-1-3-3 0-4 2-4z"/></svg></div>
+<!-- ② 옷 조각 (다 살핀 지점: 어두워짐) -->
+<div style="position: absolute; left: 200px; top: 230px; width: 52px; height: 52px; border-radius: 50%; border: 2px solid #6b7180; display: grid; place-items: center; background: #2b2f38" aria-label="옷 조각 살핌"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#a9aebb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l4-3 3 2 3-2 4 3-2 3v8H7v-8z"/></svg><span style="position: absolute; right: -4px; top: -4px; width: 20px; height: 20px; border-radius: 50%; background: #e6e8ee; color: #0e1326; display: grid; place-items: center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></div>
+<!-- ③ 창문 (먼저 손댄 흔적: 흐려짐) -->
+<div style="position: absolute; left: 268px; top: 140px; width: 52px; height: 52px; border-radius: 50%; border: 2px dashed #6b7180; display: grid; place-items: center; background: #2b2f38; opacity: 0.6" aria-label="먼저 손댄 흔적"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#a9aebb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M12 5v14M5 12h14"/></svg></div>
+<!-- 나 -->
+<span style="position: absolute; left: 150px; top: 250px; width: 24px; height: 24px; border-radius: 50%; background: #e6e8ee; border: 2px solid #0e1326" aria-label="나"></span>
+</div>
+
+<!-- 내가 받은 단서 카드 -->
+<div style="position: absolute; left: 20px; top: 496px; width: 350px; display: flex; gap: 10px">
+<div style="flex: 1; box-sizing: border-box; padding: 12px; border-radius: 14px; background: #151c36; border: 1px solid #2a3760; display: flex; align-items: center; gap: 10px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffcf8a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l4-3 3 2 3-2 4 3-2 3v8H7v-8z"/></svg><span style="font-size: 15px; font-weight: 700; color: #f1f2f5">검은 천 조각</span></div>
+<div style="flex: 1; box-sizing: border-box; padding: 12px; border-radius: 14px; background: #151c36; border: 1px dashed #6b7180; display: flex; align-items: center; gap: 10px; opacity: 0.75"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a9aebb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M12 5v14M5 12h14"/></svg><span style="font-size: 15px; color: #a9aebb">먼저 손댄 흔적</span></div>
+</div>
+
+<section style="position: absolute; left: 0; bottom: 0; width: 390px; box-sizing: border-box; padding: 12px 16px 20px; background: #0e1326; border-top: 1px solid #2a3760; display: flex; flex-direction: column; gap: 10px">
+<div style="height: 68px; box-sizing: border-box; padding: 10px 12px; border-radius: 14px; background: #151c36; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.4"><span style="color: #a9aebb">누군가 쓰러졌어요</span><span style="color: #e6e8ee">하늘 · 발자국 봤어요</span></div>
+<button type="button" style="height: 56px; border-radius: 999px; border: 0; background: #e6e8ee; color: #0e1326; font-family: inherit; font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M14.500 14.500L21 21"/></svg>살펴보기</button>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

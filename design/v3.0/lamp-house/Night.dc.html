@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>밤 집 고르기</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0a0e1c}
+a{color:#a9aebb}a:hover{color:#e6e8ee}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #0a0e1c; color: #e6e8ee; font-family: 'Gowun Dodum', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; word-break: keep-all">
+
+<header style="position: absolute; left: 0; top: 0; width: 390px; height: 56px; display: flex; align-items: center; justify-content: center"><h1 style="margin: 0; font-size: 18px; font-weight: 700; color: #f1f2f5">밤</h1></header>
+<div style="position: absolute; left: 16px; right: 16px; top: 60px; height: 28px; display: flex; align-items: center; font-size: 14px; color: #a9aebb"><span>집 하나를 눌러 주세요</span><span style="margin-left: auto">0:18</span></div>
+<div style="position: absolute; left: 16px; right: 16px; top: 90px; height: 3px; border-radius: 2px; background: #2a3760"><div style="width: 55%; height: 3px; border-radius: 2px; background: #ffcf8a"></div></div>
+
+<!-- 고정 시점: 집 여덟이 광장을 둘러 보인다. 불 켜진 창은 노란 점, 꺼진 창은 어두운 점 -->
+<div style="position: absolute; left: 20px; top: 120px; width: 350px; height: 480px; border-radius: 12px; background: #10142b">
+<div style="position: absolute; left: 105px; top: 170px; width: 140px; height: 140px; border-radius: 8px; background: #181d3c"></div>
+<div style="position: absolute; left: 160px; top: 225px; width: 30px; height: 30px; border-radius: 50%; background: #3a3f4b"></div>
+
+<!-- 집: 이름 대신 얼굴 문패(원) -->
+<div style="position: absolute; left: 70px; top: 30px; width: 64px; height: 64px; border-radius: 8px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: end center; padding-bottom: 5px; box-sizing: border-box"><span style="width: 22px; height: 22px; border-radius: 50%; background: #e0a458"></span><span style="position: absolute; left: 10px; top: 10px; width: 8px; height: 8px; background: #ffcf8a; border-radius: 2px"></span></div>
+<div style="position: absolute; left: 216px; top: 30px; width: 64px; height: 64px; border-radius: 8px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: end center; padding-bottom: 5px; box-sizing: border-box"><span style="width: 22px; height: 22px; border-radius: 50%; background: #8fa3d9"></span><span style="position: absolute; left: 10px; top: 10px; width: 8px; height: 8px; background: #3a3f4b; border-radius: 2px"></span></div>
+<div style="position: absolute; left: 278px; top: 120px; width: 64px; height: 64px; border-radius: 8px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: end center; padding-bottom: 5px; box-sizing: border-box"><span style="width: 22px; height: 22px; border-radius: 50%; background: #d98a9e"></span><span style="position: absolute; left: 10px; top: 10px; width: 8px; height: 8px; background: #ffcf8a; border-radius: 2px"></span></div>
+<!-- 내가 고른 집: 금빛 테두리 -->
+<div style="position: absolute; left: 278px; top: 300px; width: 64px; height: 64px; border-radius: 8px; background: #2b2f38; border: 3px solid #ffcf8a; box-shadow: 0 0 14px 2px rgba(255,207,138,0.5); display: grid; place-items: end center; padding-bottom: 5px; box-sizing: border-box"><span style="width: 22px; height: 22px; border-radius: 50%; background: #d9b25f"></span><span style="position: absolute; left: 10px; top: 10px; width: 8px; height: 8px; background: #3a3f4b; border-radius: 2px"></span></div>
+<div style="position: absolute; left: 216px; top: 390px; width: 64px; height: 64px; border-radius: 8px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: end center; padding-bottom: 5px; box-sizing: border-box"><span style="width: 22px; height: 22px; border-radius: 50%; background: #9ec27a"></span><span style="position: absolute; left: 10px; top: 10px; width: 8px; height: 8px; background: #ffcf8a; border-radius: 2px"></span></div>
+<div style="position: absolute; left: 70px; top: 390px; width: 64px; height: 64px; border-radius: 8px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: end center; padding-bottom: 5px; box-sizing: border-box"><span style="width: 22px; height: 22px; border-radius: 50%; background: #b79bd6"></span><span style="position: absolute; left: 10px; top: 10px; width: 8px; height: 8px; background: #3a3f4b; border-radius: 2px"></span></div>
+<div style="position: absolute; left: 8px; top: 300px; width: 64px; height: 64px; border-radius: 8px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: end center; padding-bottom: 5px; box-sizing: border-box"><span style="width: 22px; height: 22px; border-radius: 50%; background: #c9c3b8"></span><span style="position: absolute; left: 10px; top: 10px; width: 8px; height: 8px; background: #ffcf8a; border-radius: 2px"></span></div>
+<div style="position: absolute; left: 8px; top: 120px; width: 64px; height: 64px; border-radius: 8px; background: #2b2f38; border: 2px solid #6b7180; display: grid; place-items: end center; padding-bottom: 5px; box-sizing: border-box"><span style="width: 22px; height: 22px; border-radius: 50%; background: #7fb3a3"></span><span style="position: absolute; left: 10px; top: 10px; width: 8px; height: 8px; background: #3a3f4b; border-radius: 2px"></span></div>
+</div>
+
+<section style="position: absolute; left: 0; bottom: 0; width: 390px; box-sizing: border-box; padding: 16px 16px 24px; background: #0e1326; border-top: 1px solid #2a3760; display: flex; flex-direction: column; gap: 10px; align-items: center">
+<span style="font-size: 15px; color: #a9aebb">고른 집은 바꿀 수 있어요</span>
+<div style="display: flex; gap: 12px; font-size: 14px; color: #a9aebb"><span style="display: flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; background: #ffcf8a; border-radius: 2px"></span>불 켜진 창</span><span style="display: flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; background: #3a3f4b; border-radius: 2px"></span>꺼진 창</span></div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

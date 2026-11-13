@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>토론 의심 보드</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0a0e1c}
+a{color:#a9aebb}a:hover{color:#e6e8ee}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #2a2d45; color: #e6e8ee; font-family: 'Gowun Dodum', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; word-break: keep-all">
+
+<header style="position: absolute; left: 0; top: 0; width: 390px; height: 56px; display: flex; align-items: center; justify-content: center; gap: 8px"><span style="font-size: 14px; color: #a9aebb">낮</span><h1 style="margin: 0; font-size: 18px; font-weight: 700; color: #f1f2f5">토론</h1></header>
+<div style="position: absolute; left: 16px; right: 16px; top: 60px; height: 28px; display: flex; align-items: center; font-size: 14px; color: #a9aebb"><span>단서를 말로 나눠 보세요</span><span style="margin-left: auto">2:10</span></div>
+<div style="position: absolute; left: 16px; right: 16px; top: 90px; height: 3px; border-radius: 2px; background: #2a3760"><div style="width: 85%; height: 3px; border-radius: 2px; background: #ffcf8a"></div></div>
+
+<!-- 광장 가운데 모인 장면(약식) -->
+<div style="position: absolute; left: 20px; top: 110px; width: 350px; height: 180px; border-radius: 12px; background: #34374f; display: flex; align-items: center; justify-content: center; gap: 10px">
+<span style="width: 26px; height: 26px; border-radius: 50%; background: #e0a458"></span><span style="width: 26px; height: 26px; border-radius: 50%; background: #7fb3a3"></span><span style="width: 26px; height: 26px; border-radius: 50%; background: #8fa3d9"></span><span style="width: 26px; height: 26px; border-radius: 50%; background: #d98a9e"></span><span style="width: 26px; height: 26px; border-radius: 50%; background: #e6e8ee; border: 2px solid #0e1326"></span><span style="width: 26px; height: 26px; border-radius: 50%; background: #b79bd6"></span>
+</div>
+
+<!-- 의심 보드: 얼굴 줄 + 내 단서 표시 -->
+<div style="position: absolute; left: 20px; top: 304px; width: 350px; box-sizing: border-box; padding: 12px; border-radius: 14px; background: #151c36; border: 1px solid #2a3760; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffcf8a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="12" rx="2"/><path d="M9 20h6"/></svg><span style="font-size: 15px; font-weight: 700; color: #f1f2f5">내가 아는 것</span>
+</div>
+<!-- 단서 칩 줄 -->
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #ffcf8a; background: #1e2847; color: #ffcf8a; font-size: 14px; display: flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4c2 0 3 2 3 4s-1 3-2 3-3-1-3-3 0-4 2-4z"/><path d="M16 11c2 0 3 2 3 4s-1 3-2 3-3-1-3-3 0-4 2-4z"/></svg>발자국 둘</span>
+<span style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #ffcf8a; background: #1e2847; color: #ffcf8a; font-size: 14px; display: flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l4-3 3 2 3-2 4 3-2 3v8H7v-8z"/></svg>검은 천 조각</span>
+<span style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px dashed #6b7180; background: #151c36; color: #a9aebb; font-size: 14px; display: flex; align-items: center; gap: 6px">먼저 손댄 흔적</span>
+</div>
+<!-- 얼굴 줄: 검은 천 조각과 닮은 옷을 입은 얼굴에 표시 -->
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<div style="position: relative; height: 64px; border-radius: 10px; background: #1e2847; display: grid; place-items: center"><span style="width: 30px; height: 30px; border-radius: 50%; background: #e0a458"></span></div>
+<div style="position: relative; height: 64px; border-radius: 10px; background: #1e2847; border: 2px solid #ffcf8a; display: grid; place-items: center"><span style="width: 30px; height: 30px; border-radius: 50%; background: #8fa3d9"></span><span style="position: absolute; right: 4px; top: 4px; width: 18px; height: 18px; border-radius: 50%; background: #ffcf8a; color: #0e1326; display: grid; place-items: center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l4-3 3 2 3-2 4 3-2 3v8H7v-8z"/></svg></span></div>
+<div style="position: relative; height: 64px; border-radius: 10px; background: #1e2847; display: grid; place-items: center"><span style="width: 30px; height: 30px; border-radius: 50%; background: #d98a9e"></span></div>
+<div style="position: relative; height: 64px; border-radius: 10px; background: #1e2847; display: grid; place-items: center"><span style="width: 30px; height: 30px; border-radius: 50%; background: #b79bd6"></span></div>
+</div>
+<p style="margin: 0; font-size: 13px; line-height: 1.5; color: #a9aebb">내 단서는 나만 봐요. 말로 나눠 보세요</p>
+</div>
+
+<section style="position: absolute; left: 0; bottom: 0; width: 390px; box-sizing: border-box; padding: 12px 16px 20px; background: #0e1326; border-top: 1px solid #2a3760; display: flex; flex-direction: column; gap: 10px">
+<div style="height: 68px; box-sizing: border-box; padding: 10px 12px; border-radius: 14px; background: #151c36; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.4"><span style="color: #a9aebb">하늘 · 발자국이 둘이었어요</span><span style="color: #e6e8ee">도윤 · 검은 천 조각을 봤어요</span></div>
+<div style="height: 48px; box-sizing: border-box; padding: 0 16px; border-radius: 999px; border: 1px solid #2a3760; background: #151c36; display: flex; align-items: center; font-size: 16px; color: #a9aebb">메시지 보내기</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
