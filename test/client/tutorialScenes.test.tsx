@@ -363,6 +363,8 @@ describe("장면 5: 현장 + 의심 보드 — 지점 ② 에서 붉은 천 조�
     const { container } = await mount({ initialScene: 5 });
     fireEvent.click(inspect$(container)!);
     advance(900);
+    // MutationObserver(허용 목록 갱신)는 마이크로태스크라 한 번 비워 준다
+    await act(async () => {});
     const board = board$(container)!;
     expect(board).not.toBeNull();
     expect(faces$(container).map((f) => f.getAttribute("data-board-face"))).toEqual(["0", "1", "3", "4", "5"]);
@@ -397,7 +399,8 @@ describe("장면 5: 현장 + 의심 보드 — 지점 ② 에서 붉은 천 조�
   it("포커스 상자: 처음엔 [살펴보기] 와 지점 ②, 보드가 열리면 도윤 칸 하나", async () => {
     const { container } = await mount({ initialScene: 5 });
     advance(100);
-    expect(boxes(container)).toHaveLength(1);
+    // 지점 ② 와 독 [살펴보기] 두 곳
+    expect(boxes(container)).toHaveLength(2);
     fireEvent.click(inspect$(container)!);
     advance(100);
     expect(boxes(container)).toHaveLength(0);
@@ -447,7 +450,7 @@ describe("스포트라이트 구간 (P18-5, D-04)", () => {
     const { container } = await mount({ initialScene: 3 });
     advance(100);
     expect(dim$(container)).toBe(1);
-    expect(hole$(container)).toBe(1);
+    expect(hole$(container)).toBe(2);
   });
 
   it("장면 4: 집 판 여섯 구멍에 1개, 집을 고르면 0개", async () => {

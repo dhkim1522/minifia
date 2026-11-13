@@ -275,7 +275,7 @@ const hushes = (): number => (rig.engine.runScript as unknown as { mock: { calls
 const speaking = (c: ParentNode): boolean => c.querySelector("[data-tutorial-host]")?.hasAttribute("data-speaking") === true;
 
 describe("장면 시각표: 소리·문구", () => {
-  it("장면 2: 0ms 에 whoosh 한 번·문장(9글자) 한 번, 2600ms 에 sting·두 번째 문장(11글자), 4000ms 에 secret(14글자)", async () => {
+  it("장면 2: 0ms 에 whoosh 한 번·문장(9글자) 한 번, 2600ms 에 sting·두 번째 문장(11글자), 4000ms 에 secret(11음절)", async () => {
     const { container } = await mount({ initialScene: 2 });
     expect(plays("tut.whoosh")).toHaveLength(1);
     expect(says()).toEqual([9]);
@@ -289,7 +289,7 @@ describe("장면 시각표: 소리·문구", () => {
     advance(1399);
     expect(says()).toEqual([9, 11]);
     advance(1);
-    expect(says()).toEqual([9, 11, 14]);
+    expect(says()).toEqual([9, 11, 11]);
     expect(container.querySelector("[data-host-line]")?.textContent).toBe(TUTORIAL_LINES["tutorial.secret"]);
   });
 

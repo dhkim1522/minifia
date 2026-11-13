@@ -89,7 +89,8 @@ describe("장면 3: 허용 목록 밖은 inert", () => {
     fireEvent.click(q(container, "[data-scene-dock] [data-errand-act]")!);
     advance(1600);
     expect(container.querySelector("[data-tutorial-screen]")?.getAttribute("data-tutorial-scene")).toBe("4");
-    for (const sel of [".mf-game__header", ".mf-world__input", "[data-errand-layer]", ".mf-world__tags"]) expect(q(container, sel)?.hasAttribute("inert"), sel).toBe(true);
+    // 장면 4 는 밤이라 심부름 타일 층이 없다
+    for (const sel of [".mf-game__header", ".mf-world__input", ".mf-world__tags"]) expect(q(container, sel)?.hasAttribute("inert"), sel).toBe(true);
   });
 });
 
@@ -99,12 +100,11 @@ describe("장면 4·5: 집 판·[살펴보기] 만 열린다 (21-15)", () => {
     const plate = q(container, "button[data-house-pick]");
     expect(plate).not.toBeNull();
     expect(inertAbove(plate)).toBe(false);
-    for (const sel of [".mf-game__header", ".mf-world__input", "[data-errand-layer]", ".mf-world__tags", "[data-dock-actions]"]) {
+    for (const sel of [".mf-game__header", ".mf-world__input", ".mf-world__tags", "[data-dock-actions]"]) {
       const el = q(container, sel);
-      if (el === null) continue;
+      expect(el, `${sel} 가 있어야 한다`).not.toBeNull();
       expect(inertAbove(el), `${sel} 는 inert`).toBe(true);
     }
-    expect(inertAbove(q(container, "[data-errand-act-layer]"))).toBe(true);
   });
 
   it("장면 5: 독 [살펴보기] 에 inert 조상이 없고 독 [건너뛰기]·현장 지점 층은 inert", async () => {

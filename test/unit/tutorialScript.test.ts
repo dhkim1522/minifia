@@ -147,7 +147,8 @@ describe("tutorialView(3) — 저녁 등불 장면의 가짜 view", () => {
     const { TUTORIAL_START } = await loadScript();
     const lamp5 = TOWN_LAMPS[5]!;
     expect(Math.hypot(lamp5.x - TUTORIAL_START.x, lamp5.z - TUTORIAL_START.z)).toBeLessThanOrEqual(ERRAND_ACT_R);
-    expect(lineWalkable(mapOf("town"), TUTORIAL_START, TUTORIAL_START)).toBe(true);
+    const fx = { x: Math.round(TUTORIAL_START.x * 100), z: Math.round(TUTORIAL_START.z * 100) };
+    expect(lineWalkable(mapOf("town"), fx, fx)).toBe(true);
   });
 
   it("[켜기] 뒤(lit)에는 done [lamp5] 이고 켜진 가로등 5 가 공개 값에 든다", async () => {
