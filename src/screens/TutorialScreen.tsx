@@ -326,7 +326,7 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   const line = said !== null && said.n === cur.n ? said : null;
   const focusTargets = focus.n === cur.n ? focus.targets : [];
   // 장면 6: 정답을 누르면 이름표 상자는 모두 꺼지고, 오답이 쌓이면 도윤 하나만 남는다(T-8)
-  const focusGroups = cur.n === 6 && vote.picked ? [] : cur.n === 6 && vote.wrong >= WRONG_HINT_AFTER ? hintGroups() : groupsOf(focusTargets, { houseChosen: flow.house !== undefined, clue: flow.clue, board: flow.board });
+  const focusGroups = (cur.n === 5 && nextShown) || (cur.n === 6 && vote.picked) ? [] : cur.n === 6 && vote.wrong >= WRONG_HINT_AFTER ? hintGroups() : groupsOf(focusTargets, { houseChosen: flow.house !== undefined, clue: flow.clue, board: flow.board });
 
   useTutorialDirector({
     scene: cur.n,

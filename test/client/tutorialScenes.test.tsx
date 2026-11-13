@@ -409,6 +409,11 @@ describe("장면 5: 현장 + 의심 보드 — 지점 ② 에서 붉은 천 조�
     expect(boxes(container)).toHaveLength(1);
     // 도윤 칸 {96,200,77,64} 둘레 8
     expect(boxes(container)[0]!.style.left).toBe("88px");
+    // [다음] 이 나오면 상자도 막도 걷힌다
+    advance(1200);
+    expect(next$(container)).not.toBeNull();
+    advance(100);
+    expect(boxes(container)).toHaveLength(0);
   });
 
   it("장면 6 으로 넘어가면 보드·카드는 없고, 이름표 표시용 옷 조각(me.clues)은 이어진다", async () => {
