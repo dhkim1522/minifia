@@ -256,13 +256,16 @@ describe("tick·진입·이탈 청소", () => {
     expect(out.players.some((p) => "errandNear" in p || "errandSeen" in p)).toBe(false);
   });
 
-  it("enterDiscussion 은 errandTickAt 을 지우고 errandSeen 은 남긴다, enterNight 은 둘 다 지운다", () => {
+  it("enterDiscussion 은 errandTickAt 을 지우고 errandSeen 은 남긴다, enterNight 은 errandNear 만 지우고 errandSeen·진행은 남긴다(21페이즈 D-09), 다음 enterErrand 가 지운다", () => {
     const s = withPlayers(barErrand(), (p) => ({ ...p, errandNear: [1], errandSeen: [{ seat: 1, place: "glass" as PlaceId }] }));
     const d = enterDiscussion(s);
     expect("errandTickAt" in d).toBe(false);
     expect(d.players.every((p) => p.errandSeen?.length === 1)).toBe(true);
     const n = enterNight(d);
-    expect(n.players.some((p) => "errandNear" in p || "errandSeen" in p)).toBe(false);
+    expect(n.players.some((p) => "errandNear" in p)).toBe(false);
+    expect(n.players.every((p) => p.errandSeen?.length === 1 && p.errandPlaces !== undefined && p.errandDone !== undefined)).toBe(true);
+    const next = enterErrand(n, seededRandInt(2), 0);
+    expect(next.players.some((p) => "errandNear" in p || "errandSeen" in p)).toBe(false);
   });
 });
 

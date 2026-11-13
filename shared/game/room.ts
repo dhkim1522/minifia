@@ -76,13 +76,13 @@ export interface Player {
   will?: string;
   /** 공개 직업 주장(결정 0066-1). setBadge 만 쓴다. 실제 역할과 무관한 값이고 view 에는 산 사람 것만 players[].badge 로 실린다. */
   badge?: BadgeId;
-  /** 서버 전용(15페이즈 결정 0074). errand 진입 때 enterErrand 가 뽑은 장소 id 목록 — 모든 역할이 같은 모양이다(D-03). enterNight 가 키째 지운다. 뷰에는 me.errand 로만 간다. */
+  /** 서버 전용(15페이즈 결정 0074). errand 진입 때 enterErrand 가 뽑은 장소 id 목록 — 모든 역할이 같은 모양이다(D-03). 21페이즈 D-09: 밤·아침을 지나 토론까지 남고 다음 저녁의 enterErrand 가 지운다. 뷰에는 me.errand 로만 간다. */
   errandPlaces?: PlaceId[];
-  /** 서버 전용(결정 0074). 처리한 장소 id 를 처리한 순서로. enterErrand 가 빈 배열로 시작하고 enterNight 가 키째 지운다. */
+  /** 서버 전용(결정 0074). 처리한 장소 id 를 처리한 순서로. enterErrand 가 빈 배열로 시작한다. 21페이즈 D-09: 토론까지 남고 다음 저녁의 enterErrand 가 지운다. */
   errandDone?: PlaceId[];
   /** 서버 전용(결정 0074). errand 표본마다 갱신하는 내 근처 산 사람의 좌석 집합(오름차순). 어떤 view 에도 싣지 않는다 — me.record 로 필드별 복사만. enterNight 가 키째 지운다. */
   errandNear?: number[];
-  /** 서버 전용(결정 0074). 목격 줄({seat, place}, 시간순, 상한 RECORD_MAX). 어떤 view 에도 싣지 않는다 — me.record 로 필드별 복사만. enterNight 가 키째 지운다(토론 때 쓴다). */
+  /** 서버 전용(결정 0074). 목격 줄({seat, place}, 시간순, 상한 RECORD_MAX). 어떤 view 에도 싣지 않는다 — me.record 로 필드별 복사만. 21페이즈 D-09: 밤·아침을 지나 토론까지 남고(me.record 재료) 다음 저녁의 enterErrand 가 지운다. */
   errandSeen?: RecordLine[];
   /** 로비 의상(결정 D-6). setLook 만 쓴다. 사람이 고른 공개 값이고 역할과 무관하다. 없으면 기본 coat 로 읽고, 게임 시작·테스트 방 되돌리기 뒤에도 남는다. */
   look?: OutfitId;

@@ -4,6 +4,8 @@
 // 이 파일이 플레이어의 role 을 읽는 이유는 행동 종류(지목·조사·보호)·마피아 표·조사 결과가 서버 판정이기 때문이다(pickTarget 은 읽지 않는다 — 15페이즈 D-05).
 // 밤 고르기는 산 사람 누구나 같은 입력·같은 응답이고, 효과는 판정이 역할로 가른다. 피해자가 나온 아침에는 enterMorning 이 그 밤 피해자를 고른 사람 중 한 명의 의상으로 흔적 조각을 정한다(D-06, trace.ts).
 // 읽은 역할 값은 어디에도 내보내지 않는다(결정 0002): 반환값에는 isMafia 불리언 하나와 seat 뿐이다.
+// 21페이즈 D-09: 확장판은 토론이 밤 뒤라(저녁 → 밤 → 아침 → 토론) 저녁의 목록·진행·목격 줄(errandPlaces·errandDone·errandSeen)이 밤 진입 뒤에도 토론까지 남아야 한다 — enterNight 는 지우지 않고 다음 저녁의 enterErrand 가 지운다.
+// 남은 키가 다른 단계에서 새지 않게 막는 것은 view.ts 의 단계 문이다(me.errand 는 errand 단계에서만, me.record 는 discussion 단계에서만).
 // 현장 없는 밤(21페이즈 D-17, 확장판): 확정 대상이 없으면 routeAfterNight 가 아침 없이 판정을 적용하고 토론으로 보낸다.
 import type { AssassinationRecord, InvestigationRecord, MorningView, TreatmentRecord } from "../protocol";
 import { isAlive } from "./alive";
@@ -39,15 +41,18 @@ export function pickTarget(
   };
 }
 
-/** 밤 진입 훅: 남은 선택(nightPick)·지난 아침 결과(morning)·쪽지(nightNote)·분필(chalk)을 키째 지운다(결정 0061-9·14). */
+/**
+ * 밤 진입 훅: 남은 선택(nightPick)·지난 아침 결과(morning)·쪽지(nightNote)·분필(chalk)을 키째 지운다(결정 0061-9·14).
+ * 저녁 근처 집합(errandNear)도 지운다. 21페이즈 D-09 — 저녁 목록·진행·목격 줄(errandPlaces·errandDone·errandSeen)은 남긴다(토론 me.record 의 재료, 다음 저녁 enterErrand 가 지운다).
+ */
 export function enterNight(state: RoomState): RoomState {
   // errandLast(마지막 목격 줄, 16페이즈 D-10)는 일부러 지우지 않는다 — 낮 심부름에서 쌓은 줄을 다음 아침의 enterMorning 이 피해자 한 줄만 꺼내 쓴다.
   const { morning: _morning, nightNote: _nightNote, chalk: _chalk, ...rest } = state;
   return {
     ...rest,
     players: state.players.map((p) => {
-      // 심부름 목록·진행(15페이즈)도 키째 지운다 — 다음 낮에 새로 배정되므로 남은 값이 어떤 view 에도 새지 않는다.
-      const { nightPick: _nightPick, errandPlaces: _errandPlaces, errandDone: _errandDone, errandNear: _errandNear, errandSeen: _errandSeen, ...kept } = p;
+      // 21페이즈 D-09: 목록·진행·목격 줄은 남긴다 — 밤·아침 view 에는 view.ts 의 단계 문이 싣지 않는다. 근처 집합은 어떤 view 에도 없고 밤 진입이 지운다.
+      const { nightPick: _nightPick, errandNear: _errandNear, ...kept } = p;
       return kept;
     }),
   };
