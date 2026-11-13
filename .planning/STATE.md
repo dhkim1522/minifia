@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: 4 완료 → 다음 21-05 (같은 단추로 심지 자르기·가로등 공개 값)
+current_plan: 5 완료 → 다음 21-06 (아침 현장 판정·단서 흐리기·inspect)
 status: executing
-stopped_at: Completed 21-04-PLAN.md
-last_updated: "2026-11-13T07:21:32.053Z"
+stopped_at: Completed 21-05-PLAN.md
+last_updated: "2026-11-13T07:36:00.101Z"
 last_activity: 2026-11-13
-last_activity_desc: Phase 21 plan 04 완료 (가짜 심부름 장소 제거·저녁 목격 기록이 토론까지)
-state_head: c1c001034fde74ef16d37b873410b71949f6797a
+last_activity_desc: Phase 21 plan 05 완료 (같은 단추로 심지 자르기·가로등 공개 값·저녁/아침 건너뛰기)
+state_head: 85451ffb4c5c9a3e4c24dae192e79ed9c2472e37
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 115
-  completed_plans: 101
+  completed_plans: 102
   percent: 60
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 21 (cause-effect-missions) — IN PROGRESS
-Current Plan: 4 완료 → 다음 21-05 (같은 단추로 심지 자르기·가로등 공개 값)
+Current Plan: 5 완료 → 다음 21-06 (아침 현장 판정·단서 흐리기·inspect)
 Total Plans in Phase: 18
 Status: Executing Phase 21
-Last activity: 2026-11-13 — 21-04 완료 (마피아 가짜 심부름 장소 errandFake 제거·모든 역할 같은 처리 규칙, enterNight 가 저녁 목록·진행·목격 줄을 토론까지 남김. npm test 8646 통과·실패 0, typecheck 초록). 이전: 21-03 완료 (마을 심부름 장소를 가로등 lamp0~lamp7 8곳으로, 등불 n = 좌석 n 집, 기둥 자리 TOWN_LAMPS[n].pole. PLACE_IDS 24곳·그림 별칭 placeArtOf·낱말·E2E·smoke 사본. npm test 8645 통과·실패 0, typecheck 초록). 임시 옮겨 심기(저녁 값 → 토론 me.record)는 21-04 가 지운다
+Last activity: 2026-11-13 — 21-05 완료 (errand hold 로 산 마피아가 서버 전용 lampCut 에 심지 자르기·켜기와 같은 응답·방송, day.lamps 저녁=처리된 것/밤·아침=켜진 것, skipPhase 모두 누르면 단계 끝. npm test 8680 통과·실패 0, typecheck 초록). 이전: 21-04 완료 (마피아 가짜 심부름 장소 errandFake 제거·모든 역할 같은 처리 규칙, enterNight 가 저녁 목록·진행·목격 줄을 토론까지 남김. npm test 8646 통과·실패 0, typecheck 초록). 이전: 21-03 완료 (마을 심부름 장소를 가로등 lamp0~lamp7 8곳으로, 등불 n = 좌석 n 집, 기둥 자리 TOWN_LAMPS[n].pole. PLACE_IDS 24곳·그림 별칭 placeArtOf·낱말·E2E·smoke 사본. npm test 8645 통과·실패 0, typecheck 초록). 임시 옮겨 심기(저녁 값 → 토론 me.record)는 21-04 가 지운다
 
 ## Performance Metrics
 
@@ -293,6 +293,7 @@ Last activity: 2026-11-13 — 21-04 완료 (마피아 가짜 심부름 장소 er
 | Phase 20 P08 | 1.5h | 3 tasks | 5 files |
 | Phase 20 P10 | 50min | 3 tasks | 7 files |
 | Phase 21 P04 | 약 1시간 | 2 tasks | 17 files |
+| Phase 21 P05 | 80min | 2 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -652,6 +653,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 20]: 20-08: TM5(문 연출)는 seats() 가 서버 프레임으로 빠지므로 「같은 프레임 안 연출 시작 + 길이 0.2초쯤」으로 판정한다. 마을 E2E 는 지붕 두 번 누르기(문 앞 링 → 방 안)로 방에 들어간다
 - [Phase 20]: 20-09: 마을 nightload(390x844·CPU 4배·5분) 평균 59.8fps·끊김 1·그리기 호출 최대 82·점광원 3 으로 게이트 통과, 광장 대조 59.7fps. 장면 수정 없음. 그리기 통계는 로비가 아니라 장면 중 값(renderer.duringMax)으로 읽는다
 - [Phase 20]: 마을 맵(광장 + 실내 방 넷 + 집 여덟)은 확장판 전용으로 배포, 결정 0087 에 D-01~D-23·위임 기본값·한계 기록
+- [Phase 21]: 21-05: 건너뛰기는 확장판(심부름 있는 판)에서만 받는다 — 기본 마피아 아침은 WRONG_PHASE
+- [Phase 21]: 21-05: 마피아 봇은 첫 장소 처리 한 번만 hold 로 심지를 자른다(사람과 같은 메시지·본체)
 
 ### Pending Todos
 
@@ -723,8 +726,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T07:21:31.059Z
-Stopped at: Completed 21-04-PLAN.md
+Last session: 2026-11-13T07:35:59.195Z
+Stopped at: Completed 21-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
