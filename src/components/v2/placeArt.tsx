@@ -3,7 +3,7 @@
 // 48×48 격자, 윤곽선 2, 둥근 끝, 사물 고유색. 에셋 안의 hex 는 캐릭터 에셋과 같은 지위로 허용한다(화면 CSS 에는 hex 를 더하지 않는다).
 // 정적 JSX 다 — HTML 문자열 주입이나 런타임 파싱이 없다.
 import type { ReactElement, SVGProps } from "react";
-import type { PlaceId, TracePiece } from "../../../shared/protocol";
+import type { LampPlaceId, PlaceId, TracePiece } from "../../../shared/protocol";
 
 export interface ArtProps {
   /** 표시 크기(px). 맵 타일 44, 시작 카드 60, 증거 카드 장소 32·조각 36, 기록 카드 24 */
@@ -18,7 +18,7 @@ interface ArtEntry {
   body: ReactElement;
 }
 
-export const PLACE_ART: Readonly<Record<PlaceId, ArtEntry>> = {
+export const PLACE_ART: Readonly<Record<Exclude<PlaceId, LampPlaceId>, ArtEntry>> = {
   glass: {
     root: { stroke: "#1a1420", strokeWidth: "2", strokeLinejoin: "round", strokeLinecap: "round" },
     body: (
@@ -211,6 +211,22 @@ export const PLACE_ART: Readonly<Record<PlaceId, ArtEntry>> = {
   },
 };
 
+/** 가로등 8곳(lamp0~lamp7, 21페이즈 D-05)은 기존 lamp 그림을 함께 쓴다 — 새 컬러 에셋 없음(P21-17). */
+export const PLACE_ART_ALIAS: Readonly<Record<LampPlaceId, Exclude<PlaceId, LampPlaceId>>> = {
+  lamp0: "lamp",
+  lamp1: "lamp",
+  lamp2: "lamp",
+  lamp3: "lamp",
+  lamp4: "lamp",
+  lamp5: "lamp",
+  lamp6: "lamp",
+  lamp7: "lamp",
+};
+
+export function placeArtOf(id: PlaceId): ArtEntry {
+  return id in PLACE_ART_ALIAS ? PLACE_ART[PLACE_ART_ALIAS[id as LampPlaceId]] : PLACE_ART[id as Exclude<PlaceId, LampPlaceId>];
+}
+
 export const TRACE_ART: Readonly<Record<TracePiece, ArtEntry>> = {
   button: {
     root: { stroke: "#1a1420", strokeWidth: "2" },
@@ -311,7 +327,7 @@ function ArtSvg({ entry, size, label, className }: ArtProps & { entry: ArtEntry 
 }
 
 export function PlaceArt({ id, ...props }: ArtProps & { id: PlaceId }): ReactElement {
-  return <ArtSvg entry={PLACE_ART[id]} {...props} />;
+  return <ArtSvg entry={placeArtOf(id)} {...props} />;
 }
 
 export function TraceArt({ piece, ...props }: ArtProps & { piece: TracePiece }): ReactElement {

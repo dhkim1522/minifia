@@ -3,6 +3,7 @@
 // 그림은 다시 그리지 않는다 — 원본 본문 도형을 그대로 옮기고 하이픈 속성만 React 이름으로 바꾼다.
 // 허용 태그·속성 밖이 나오면 멈춘다(T-16-05: on* 이벤트·script·foreignObject 차단). Node 내장만 쓴다(npm 설치 없음, .ts import 없음).
 // placeArt.tsx 는 생성물이다. 직접 고치지 않는다.
+// 21페이즈: 가로등 8곳(lamp0~lamp7)은 기존 lamp 그림을 함께 쓴다 — 새 컬러 에셋 없음(P21-17). 생성물이 PLACE_ART_ALIAS·placeArtOf 를 낸다.
 //
 // 그림 교체 절차: 나중에 다듬은 그림이 오면 원본(Main.dc.html)의 같은 svg 를 바꾸고 이 스크립트를 다시 돌린다(원본 → 사본 → JSX 한 방향).
 //
@@ -38,6 +39,9 @@ const ALLOWED_BODY_ATTRS = new Set([
 const ROOT_DROPPED = new Set(["width", "height", "viewBox", "role", "aria-label"]);
 const ALLOWED_ROOT_KEEP = new Set(["stroke", "stroke-width", "stroke-linejoin", "stroke-linecap", "fill"]);
 const SAFE_VALUE = /^[#\w .,+-]*$/;
+
+/** 기존 lamp 그림을 함께 쓰는 가로등 id(shared/protocol.ts LAMP_PLACE_IDS 사본 — test/unit/placeArt.test.ts 가 생성물과 맞춘다). */
+const LAMP_ALIAS = ["lamp0", "lamp1", "lamp2", "lamp3", "lamp4", "lamp5", "lamp6", "lamp7"];
 
 const camel = (name) => name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
@@ -121,7 +125,7 @@ function renderJsx(items) {
 // 48×48 격자, 윤곽선 2, 둥근 끝, 사물 고유색. 에셋 안의 hex 는 캐릭터 에셋과 같은 지위로 허용한다(화면 CSS 에는 hex 를 더하지 않는다).
 // 정적 JSX 다 — HTML 문자열 주입이나 런타임 파싱이 없다.
 import type { ReactElement, SVGProps } from "react";
-import type { PlaceId, TracePiece } from "../../../shared/protocol";
+import type { LampPlaceId, PlaceId, TracePiece } from "../../../shared/protocol";
 
 export interface ArtProps {
   /** 표시 크기(px). 맵 타일 44, 시작 카드 60, 증거 카드 장소 32·조각 36, 기록 카드 24 */
@@ -136,8 +140,16 @@ interface ArtEntry {
   body: ReactElement;
 }
 
-export const PLACE_ART: Readonly<Record<PlaceId, ArtEntry>> = {
+export const PLACE_ART: Readonly<Record<Exclude<PlaceId, LampPlaceId>, ArtEntry>> = {
 ${section("place")}};
+
+/** 가로등 8곳(lamp0~lamp7, 21페이즈 D-05)은 기존 lamp 그림을 함께 쓴다 — 새 컬러 에셋 없음(P21-17). */
+export const PLACE_ART_ALIAS: Readonly<Record<LampPlaceId, Exclude<PlaceId, LampPlaceId>>> = {
+${LAMP_ALIAS.map((id) => `  ${id}: "lamp",\n`).join("")}};
+
+export function placeArtOf(id: PlaceId): ArtEntry {
+  return id in PLACE_ART_ALIAS ? PLACE_ART[PLACE_ART_ALIAS[id as LampPlaceId]] : PLACE_ART[id as Exclude<PlaceId, LampPlaceId>];
+}
 
 export const TRACE_ART: Readonly<Record<TracePiece, ArtEntry>> = {
 ${section("trace")}};
@@ -152,7 +164,7 @@ function ArtSvg({ entry, size, label, className }: ArtProps & { entry: ArtEntry 
 }
 
 export function PlaceArt({ id, ...props }: ArtProps & { id: PlaceId }): ReactElement {
-  return <ArtSvg entry={PLACE_ART[id]} {...props} />;
+  return <ArtSvg entry={placeArtOf(id)} {...props} />;
 }
 
 export function TraceArt({ piece, ...props }: ArtProps & { piece: TracePiece }): ReactElement {
