@@ -6,10 +6,10 @@ current_phase: 20
 current_phase_name: map-expansion
 current_plan: 5
 status: executing
-stopped_at: Completed 20-07-PLAN.md
+stopped_at: Completed 20-03-PLAN.md
 last_updated: "2026-11-12T22:45:02.071Z"
 last_activity: 2026-11-13
-last_activity_desc: Phase 20 plan 07 완료 (확장판 [맵] 단추·맵 탭 숨김)
+last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
 state_head: 3cac6ea9e6d52d01c3f3e65d670b2a65ccb6959d
 progress:
   total_phases: 10
@@ -34,7 +34,7 @@ Phase: 20 (map-expansion) — EXECUTING
 Current Plan: 5
 Total Plans in Phase: 10
 Status: Ready to execute
-Last activity: 2026-11-13 — 20-07 완료 (확장판에서 방장 줄 [맵] 단추·꾸미기 시트 맵 탭 숨김, map-select E2E 를 기본 마피아 판으로·TM11 판정. 로컬 E2E map-select 폰 6종 82/82 · mode-rail 폰 6종 통과, unit+client 7848 통과). 20-03(심부름·목격·아침 snap 구역 거르기)은 아직 남았다
+Last activity: 2026-11-13 — 20-03 완료 (심부름 근처 snap·목격 기록·마지막 목격·아침 snap 을 같은 구역으로 거르고, 마을 한 판 world 프레임 전수 시험 추가. 서버 쪽 구역 규칙 완료 — 화면 연출 20-05·06 과 E2E 20-08 이 남았다. 전체 npm test 8751 통과 · 실패 0. 간헐 실패 네 가지는 시험 쪽 원인으로 확정해 고쳤다). 20 페이즈 5/10
 
 ## Performance Metrics
 
