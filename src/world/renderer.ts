@@ -94,6 +94,8 @@ export interface WorldRenderer {
   setMarker(kind: MarkerKind, at: { x: number; z: number } | null, scale: number, opacity: number): void;
   project(p: { x: number; y: number; z: number }): { sx: number; sy: number };
   groundAt(sx: number, sy: number): { x: number; z: number };
+  /** 화면 점의 카메라 광선(월드 단위, 정사영) — 마을의 지붕·집 누르기가 건물 상자와 만나는지 시험한다(20-06, D-19). groundAt 과 같은 카메라 입력을 쓴다. 시험 가짜 렌더러 호환을 위해 optional */
+  rayAt?(sx: number, sy: number): { origin: { x: number; y: number; z: number }; dir: { x: number; y: number; z: number } };
   render(): void;
   setBudget(step: number): void;
   onStatus(cb: (e: RendererStatusEvent) => void): () => void;

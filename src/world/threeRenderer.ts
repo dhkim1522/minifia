@@ -213,6 +213,12 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       const hit = ray.ray.intersectPlane(floor, new Vector3());
       return hit ? { x: hit.x, z: hit.z } : { x: target.x, z: target.z };
     },
+    rayAt(sx: number, sy: number): { origin: { x: number; y: number; z: number }; dir: { x: number; y: number; z: number } } {
+      // groundAt 과 같은 카메라·같은 광선이다 — 바닥과 만나기 전에 건물 상자와 만나는지는 호출한 쪽(cutaway.tapTarget)이 본다
+      ray.setFromCamera(new Vector2((sx / size.w) * 2 - 1, -((sy / size.h) * 2 - 1)), camera);
+      const { origin, direction } = ray.ray;
+      return { origin: { x: origin.x, y: origin.y, z: origin.z }, dir: { x: direction.x, y: direction.y, z: direction.z } };
+    },
     render(): void {
       if (disposed) return;
       if (bar.update) {

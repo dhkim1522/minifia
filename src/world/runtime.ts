@@ -12,7 +12,7 @@ import { mapOf } from "../../shared/game/maps";
 import { ROOM_IDS } from "../../shared/protocol";
 import type { MapId, RoomId, ZoneId } from "../../shared/protocol";
 import { zoneOf } from "../../shared/game/zones";
-import { cutawayOf, sameRooms } from "./cutaway";
+import { cutawayOf, headVeiled, sameRooms, tapTarget } from "./cutaway";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
@@ -363,8 +363,14 @@ interface Actor {
   door: DoorFade | null;
   /** 지금 래퍼에 data-door 로 붙어 있는 종류(없으면 null) */
   tagDoor: "vanish" | "appear" | null;
-  /** 문 연출 불투명도(1 = 연출 없음). 핀 조명이 이 값이 0.5 미만이면 비추지 않는다 */
+  /** 문 연출·벽 뒤 숨김을 합친 보임 정도(1 = 그대로). 핀 조명이 이 값이 0.5 미만이면 비추지 않는다 */
   vis: number;
+  /** 벽 뒤 이름표 숨김(P20-12)의 보임 정도 0~1. null = 아직 정하지 않음(처음 정하는 프레임은 연출 없이 목표로 바로) */
+  veil: number | null;
+  /** 이번 프레임의 숨김 목표 — 닫힌 방에 머리가 가려지는 칸에 선 남의 이름표 */
+  veiled: boolean;
+  /** 지금 래퍼에 data-veiled 가 붙어 있나 */
+  tagVeiled: boolean;
 }
 
 interface DoorFade {
@@ -438,6 +444,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let ownerSeats: number[] = [];
   let ownersKey: string | null = null;
   let townKey: string | null = null;
+  /** 지금 열려 있는 방(updateTown 이 정한 목표 집합) — 벽 뒤 이름표 숨김·건물 누르기가 읽는다. 이 프레임의 구역은 다음 프레임 숨김에 반영된다 */
+  let townOpen: ReadonlySet<RoomId> = new Set<RoomId>();
   /** 지금 그리는 확대와, 고정 카메라로 옮기는 중인 전환(고정이 아니면 null) */
   let zoomCur = 1;
   let fixed: { zoom: number; start: number; from: { x: number; z: number; off: number; zoom: number } } | null = null;
@@ -463,6 +471,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   const pendingAppear = new Set<number>();
   /** 이번 프레임에 문 연출이 진행 중인 좌석(오름차순) — __mfTown.door 용 */
   let doorNow: { seat: number; kind: "vanish" | "appear" }[] = [];
+  /** 이번 프레임에 벽 뒤 규칙으로 이름표가 숨는 좌석 — __mfTown.veiled 용 */
+  let veiledNow: number[] = [];
   // 서버 동작 프레임(10-03, D-9): 눌렀을 때 미리 재생하는 경로는 없다 — 보낸 사람도 이 프레임으로만 재생한다
   let lastEmote: { seat: number; id: EmoteId; n: number } | null = null;
   /** 지금 재생 중인 사람 동작(도착 순서). 상한 EMOTE_RENDER_MAX 를 지킨다 — 시스템 반응 deny 는 넣지 않는다 */
@@ -841,6 +851,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const mine = actors.get(deps.mySeat());
     const zone: ZoneId | null = mine === undefined ? null : zoneOf(map, Math.round(mine.pos.x * UNIT), Math.round(mine.pos.z * UNIT));
     const open = cutawayOf(zone, all);
+    townOpen = open;
     let sent = cutSent;
     if (all || mine !== undefined) {
       if (sent === null || !sameRooms(sent, open)) {
@@ -857,7 +868,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       open: ROOM_IDS.filter((id) => (sent ?? open).has(id)),
       roofs: { post: round2(roofs.post), pub: round2(roofs.pub), clinic: round2(roofs.clinic), police: round2(roofs.police) },
       owners: [...ownerSeats],
-      veiled: [],
+      veiled: [...veiledNow].sort((x, y) => x - y),
       door: [...doorNow].sort((x, y) => x.seat - y.seat),
     };
     const key = JSON.stringify(state);
@@ -929,6 +940,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       door: null,
       tagDoor: null,
       vis: 1,
+      veil: null,
+      veiled: false,
+      tagVeiled: false,
     };
     // 첫 snap 에 있던 사람은 바로 서 있고, 뒤에 move 로 들어온 사람만 내려앉는다
     if (pendingEntered.delete(seat) && !deps.reducedMotion()) a.enter = now;
@@ -1204,6 +1218,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
     pendingAppear.clear(); // 몸을 못 만든 나타남(장면이 그리지 않는 좌석)은 버린다
     doorNow = [];
+    veiledNow = [];
 
     const gone: Actor[] = [];
     const walkingSeats = new Set<number>(); // 이번 프레임 걸은 좌석 — 동작이 끊긴 것으로 보아 재생 목록에서 뺀다
@@ -1329,7 +1344,13 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
           doorNow.push({ seat: a.seat, kind: a.door.kind });
         }
       }
-      a.vis = doorOp;
+      // 벽 뒤 이름표(P20-12): 닫힌 방의 벽·이마·지붕에 머리가 가려지는 칸에 선 남은 이름표·입력 중 칸·핀 조명을 0.2초에 옅게 숨긴다(내 것은 늘 보인다).
+      // 유령·결과 화면(roomsOpen)은 네 방이 열려 있어 숨김이 없다(D-11). 처음 정하는 프레임·모션 줄이기·재접속 첫 프레임은 연출 없이 바로
+      a.veiled = hasRooms && a.seat !== mySeat && look?.roomsOpen !== true && headVeiled(at.x, at.z, townOpen);
+      if (a.veiled) veiledNow.push(a.seat);
+      const veilGoal = a.veiled ? 0 : 1;
+      a.veil = a.veil === null || reduced || resync ? veilGoal : veilGoal > a.veil ? Math.min(veilGoal, a.veil + (dt * 1000) / DOOR_FADE_MS) : Math.max(veilGoal, a.veil - (dt * 1000) / DOOR_FADE_MS);
+      a.vis = doorOp * a.veil;
       // 처형 연출(fadeAt): 떠오르며 흐려져 끝점(0.26·높이 0.35)에 선다. 연출이 끝나 좌석이 ghost 가 되면 같은 자리에 유령 그림이 나타난다. ghost 좌석은 연출 없이 유령으로 선다
       let rise = 0;
       let fade = 1;
@@ -1349,7 +1370,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         a.fadeOpacity = bodyFade;
         a.handle.setOpacity?.(bodyFade);
       }
-      alpha = Math.min(alpha, tagFade) * doorOp;
+      alpha = Math.min(alpha, tagFade) * doorOp * a.veil;
       // 높이: 등장 낙하 + (장면이 있을 때) 무대 위 0.29 + 유령 떠다님 + 처형 떠오름
       const y = lift + (look === null ? 0 : stageLiftY(at, mapId)) + (a.ghost ? ghostFloatY(now / 1000, reduced) : 0) + rise;
       a.handle.root.scale.setScalar(a.base * scale);
@@ -1496,6 +1517,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (a.tag !== null) {
         a.tag.style.opacity = "0";
         a.tag.removeAttribute("data-door");
+        a.tag.removeAttribute("data-veiled");
       }
     }
     emitGhosts();
@@ -1546,6 +1568,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         tag.style.transform = style;
       }
       if (tag.style.opacity !== a.tagAlpha) tag.style.opacity = a.tagAlpha;
+      if (a.veiled !== a.tagVeiled) {
+        a.tagVeiled = a.veiled;
+        if (a.veiled) tag.setAttribute("data-veiled", "true");
+        else tag.removeAttribute("data-veiled");
+      }
       const doorKind = a.door?.kind ?? null;
       if (doorKind !== a.tagDoor) {
         a.tagDoor = doorKind;
@@ -1584,7 +1611,15 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (disposed || renderer === null || inputBlocked(status)) return null;
     if (!gate.accept(Date.now())) return null;
     const rect = host.getBoundingClientRect();
-    const at = renderer.groundAt(clientX - rect.left, clientY - rect.top);
+    const sx = clientX - rect.left;
+    const sy = clientY - rect.top;
+    // 마을: 지붕·벽·집을 누르면 문 앞·방 안·집 문 앞·벽 안쪽 바닥이 목적지다(D-19, P20-11). 건물에 닿지 않으면 지금처럼 바닥 교점
+    let at: { x: number; z: number } | null = null;
+    if (hasRooms && renderer.rayAt !== undefined) {
+      const me = actors.get(deps.mySeat())?.pos ?? null;
+      at = tapTarget(renderer.rayAt(sx, sy), me, townOpen);
+    }
+    at ??= renderer.groundAt(sx, sy);
     return startWalk(renderer, at.x, at.z);
   }
 
