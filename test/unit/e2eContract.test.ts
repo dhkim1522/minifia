@@ -28,7 +28,10 @@ import {
   openLogHeight,
 } from "../../src/game/chatUi";
 import { RESTORED_MS } from "../../src/net/linkReducer";
-import { STAGE_SIZES } from "../../src/world/camera";
+import { STAGE_SIZES, panBoxOf } from "../../src/world/camera";
+import { TOWN_ROOMS, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
+import { CUTAWAY_MS } from "../../src/world/maps/town";
+import { DOOR_FADE_MS } from "../../src/world/runtime";
 import { DRAW_CALL_BUDGET } from "../../src/world/renderer";
 import { FAIL_AFTER_MS, MAP_STATUS_COPY, RECREATE_AFTER_MS } from "../../src/world/status";
 // 타입 선언이 없는 .mjs 다(allowJs 없음).
@@ -242,6 +245,34 @@ describe("E2E 의 걷는 속도 상수와 앱 MOVE_SPEED (결정 0059, G-07-9)",
     const lib = e2eLib as { WORLD_MOVE_SPEED: number; WORLD_JUMP_SPEED_MAX: number };
     expect(lib.WORLD_MOVE_SPEED).toBe(MOVE_SPEED);
     expect(lib.WORLD_JUMP_SPEED_MAX).toBeCloseTo(3 * MOVE_SPEED, 9);
+  });
+});
+
+describe("마을 E2E 사본 상수 TOWN_E2E 와 앱 값 (20-08, 사본 일치 규약)", () => {
+  type Rect = { x0: number; z0: number; x1: number; z1: number };
+  const town = (e2eLib as unknown as { TOWN_E2E: { ROOMS: Record<string, { outer: Rect & { door: string }; inner: Rect; front: { x: number; z: number }; inside: { x: number; z: number } }>; PAN: { minX: number; maxX: number; minZ: number; maxZ: number }; CUTAWAY_MS: number; DOOR_FADE_MS: number } }).TOWN_E2E;
+
+  it("방 넷의 안쪽 사각형·문 앞·방 안 자리는 TOWN_ROOMS(고정소수점 / 100)와 같다", () => {
+    expect(Object.keys(town.ROOMS)).toEqual(TOWN_ROOMS.map((r) => r.id));
+    for (const room of TOWN_ROOMS) {
+      const copy = town.ROOMS[room.id];
+      expect(copy.inner, `${room.id} inner`).toEqual({ x0: room.inner.x0 / 100, z0: room.inner.z0 / 100, x1: room.inner.x1 / 100, z1: room.inner.z1 / 100 });
+      expect(copy.front, `${room.id} front`).toEqual({ x: room.front.x / 100, z: room.front.z / 100 });
+      expect(copy.inside, `${room.id} inside`).toEqual({ x: room.inside.x / 100, z: room.inside.z / 100 });
+    }
+  });
+
+  it("방 윤곽(바깥 벽)과 문 있는 면은 TOWN_ROOM_OUTER 와 같다", () => {
+    for (const room of TOWN_ROOMS) {
+      const o = TOWN_ROOM_OUTER[room.id];
+      expect(town.ROOMS[room.id].outer, `${room.id} outer`).toEqual({ x0: o.x0 / 100, z0: o.z0 / 100, x1: o.x1 / 100, z1: o.z1 / 100, door: o.door });
+    }
+  });
+
+  it("마을 PAN 은 panBoxOf(\"town\") 과, CUTAWAY_MS·DOOR_FADE_MS 는 앱 상수와 같다", () => {
+    expect(town.PAN).toEqual(panBoxOf("town"));
+    expect(town.CUTAWAY_MS).toBe(CUTAWAY_MS);
+    expect(town.DOOR_FADE_MS).toBe(DOOR_FADE_MS);
   });
 });
 

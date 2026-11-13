@@ -2,6 +2,7 @@
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
+import { TOWN_E2E, townChecks } from "./lib.mjs";
 import {
   APPROVED_RELAXATIONS,
   TAG_BASE_ALPHA_MAX,
@@ -5434,4 +5435,160 @@ test("outfitUniqueChecks OU1·OU2: 한 판 옷이 모두 다르고 같은 옷 �
     assert.equal(l.length, 2);
     assert.ok(l.every((x) => !x.ok && /측정값 없음/.test(x.detail)));
   }
+});
+
+// ---- 마을 E2E 판정 (20-08, TM1~TM10) ----
+
+const ALL_ROOFS_CLOSED = { post: 1, pub: 1, clinic: 1, police: 1 };
+const lineOf = (lines, id) => lines.find((l) => l.id === id);
+
+test("townChecks TM1: 확장판을 시작하면 두 페이지의 __mfMap 이 town 이고 대기실은 bar", () => {
+  const ok = townChecks("map", { lobby: ["bar", "bar"], game: ["town", "town"] });
+  assert.deepEqual(ok.map((l) => l.id), ["TM1"]);
+  assert.equal(ok[0].ok, true);
+  const plaza = townChecks("map", { lobby: ["bar", "bar"], game: ["town", "plaza"] })[0];
+  assert.equal(plaza.ok, false);
+  assert.match(plaza.detail, /plaza/);
+  const lobbyTown = townChecks("map", { lobby: ["town", "bar"], game: ["town", "town"] })[0];
+  assert.equal(lobbyTown.ok, false);
+  assert.equal(townChecks("map", null)[0].ok, false);
+  assert.match(townChecks("map", {})[0].detail, /측정값 없음/);
+});
+
+test("townChecks TM2: 방에 들어가면 zone·open 이 그 방이고 0.3초 안에 그 방 roofs 0 · 나머지 1", () => {
+  const ok = townChecks("room", { room: "post", zone: "post", open: ["post"], roofsAt300: { post: 0, pub: 1, clinic: 1, police: 1 } });
+  assert.deepEqual(ok.map((l) => l.id), ["TM2"]);
+  assert.equal(ok[0].ok, true);
+  // room 을 안 주면 zone 이 방이어야 한다
+  assert.equal(townChecks("room", { zone: "post", open: ["post"], roofsAt300: { post: 0, pub: 1, clinic: 1, police: 1 } })[0].ok, true);
+  const two = townChecks("room", { room: "post", zone: "post", open: ["post", "pub"], roofsAt300: { post: 0, pub: 0, clinic: 1, police: 1 } })[0];
+  assert.equal(two.ok, false);
+  assert.match(two.detail, /open/);
+  const slow = townChecks("room", { room: "post", zone: "post", open: ["post"], roofsAt300: { post: 0.3, pub: 1, clinic: 1, police: 1 } })[0];
+  assert.equal(slow.ok, false);
+  assert.match(slow.detail, /0\.3/);
+  const wrongZone = townChecks("room", { room: "pub", zone: "plaza", open: [], roofsAt300: ALL_ROOFS_CLOSED })[0];
+  assert.equal(wrongZone.ok, false);
+  assert.match(wrongZone.detail, /plaza/);
+  const otherOpen = townChecks("room", { room: "post", zone: "post", open: ["post"], roofsAt300: { post: 0, pub: 0.5, clinic: 1, police: 1 } })[0];
+  assert.equal(otherOpen.ok, false);
+  assert.match(otherOpen.detail, /pub/);
+});
+
+test("townChecks TM3: 나오면 zone plaza · open 비어 있음 · 0.3초 안에 roofs 전부 1", () => {
+  const ok = townChecks("exit", { zone: "plaza", open: [], roofsAt300: ALL_ROOFS_CLOSED });
+  assert.deepEqual(ok.map((l) => l.id), ["TM3"]);
+  assert.equal(ok[0].ok, true);
+  assert.equal(townChecks("exit", { zone: "post", open: ["post"], roofsAt300: ALL_ROOFS_CLOSED })[0].ok, false);
+  const slow = townChecks("exit", { zone: "plaza", open: [], roofsAt300: { post: 0.4, pub: 1, clinic: 1, police: 1 } })[0];
+  assert.equal(slow.ok, false);
+  assert.match(slow.detail, /post/);
+  assert.equal(townChecks("exit", { zone: "plaza", open: ["post"], roofsAt300: ALL_ROOFS_CLOSED })[0].ok, false);
+  assert.equal(townChecks("exit", undefined)[0].ok, false);
+});
+
+test("townChecks TM4·TM5: 밖 탭에서 안 탭 좌석이 보이지 않고, vanish 가 좌석이 빠지기 전에 보이며, 나올 때 appear", () => {
+  const good = { inSeat: 2, outSeats: [0, 1, 3], outTagVisible: false, sameRoom: { aSeesB: true, bSeesA: true }, vanishAt: 100, goneAt: 330, appearAt: 900 };
+  const lines = townChecks("sight", good);
+  assert.deepEqual(lines.map((l) => l.id), ["TM4", "TM4s", "TM5", "TM5a"]);
+  assert.ok(lines.every((l) => l.ok), JSON.stringify(lines));
+  // 안 탭 좌석이 밖 탭 seats 에 남음 → TM4 실패
+  const leak = townChecks("sight", { ...good, outSeats: [0, 2] });
+  assert.equal(lineOf(leak, "TM4").ok, false);
+  assert.match(lineOf(leak, "TM4").detail, /2/);
+  // 이름표가 보임
+  assert.equal(lineOf(townChecks("sight", { ...good, outTagVisible: true }), "TM4").ok, false);
+  // 같은 방 두 탭이 서로 못 봄
+  const blind = lineOf(townChecks("sight", { ...good, sameRoom: { aSeesB: true, bSeesA: false } }), "TM4s");
+  assert.equal(blind.ok, false);
+  // vanish 를 못 보았거나 좌석이 먼저 빠짐 → TM5 실패
+  assert.equal(lineOf(townChecks("sight", { ...good, vanishAt: null }), "TM5").ok, false);
+  const early = lineOf(townChecks("sight", { ...good, vanishAt: 400, goneAt: 330 }), "TM5");
+  assert.equal(early.ok, false);
+  assert.match(early.detail, /330/);
+  assert.equal(lineOf(townChecks("sight", { ...good, goneAt: null }), "TM5").ok, false);
+  // appear 를 못 봄
+  assert.equal(lineOf(townChecks("sight", { ...good, appearAt: null }), "TM5a").ok, false);
+  assert.ok(townChecks("sight", null).every((l) => !l.ok));
+});
+
+test("townChecks TM6: 닫힌 방 지붕을 한 번 누르면 링이 그 방 문 앞 칸이고 zone 은 plaza", () => {
+  const f = TOWN_E2E.ROOMS.pub.front;
+  const ok = townChecks("roof", { room: "pub", ring: { x: f.x, z: f.z }, zone: "plaza" });
+  assert.deepEqual(ok.map((l) => l.id), ["TM6"]);
+  assert.equal(ok[0].ok, true);
+  const inside = TOWN_E2E.ROOMS.pub.inside;
+  assert.equal(townChecks("roof", { room: "pub", ring: { x: inside.x, z: inside.z }, zone: "plaza" })[0].ok, false);
+  assert.equal(townChecks("roof", { room: "pub", ring: { x: f.x, z: f.z }, zone: "pub" })[0].ok, false);
+  assert.equal(townChecks("roof", { room: "pub", ring: null, zone: "plaza" })[0].ok, false);
+});
+
+test("townChecks TM7: owners 길이 = 좌석 수, 모자란 좌석의 집은 owners 에 없다", () => {
+  assert.equal(townChecks("owners", { seats: [0, 1, 2, 3, 4], owners: [0, 1, 2, 3, 4] })[0].ok, true);
+  assert.deepEqual(townChecks("owners", { seats: [0, 1, 2, 3, 4], owners: [0, 1, 2, 3, 4] }).map((l) => l.id), ["TM7"]);
+  const six = townChecks("owners", { seats: [0, 1, 2, 3, 4], owners: [0, 1, 2, 3, 4, 5] })[0];
+  assert.equal(six.ok, false);
+  assert.match(six.detail, /6/);
+  assert.equal(townChecks("owners", { seats: [0, 1, 2], owners: [0, 1, 7] })[0].ok, false);
+  assert.equal(townChecks("owners", { seats: [0, 1, 2], owners: [] })[0].ok, false);
+  assert.equal(townChecks("owners", { seats: [], owners: [] })[0].ok, false); // 좌석 없는 판은 측정이 아니다
+});
+
+test("townChecks TM8: 유령·결과 화면은 네 방이 모두 열려 있다", () => {
+  const ok = townChecks("ghost", { open: ["clinic", "police", "post", "pub"] });
+  assert.deepEqual(ok.map((l) => l.id), ["TM8"]);
+  assert.equal(ok[0].ok, true);
+  const three = townChecks("ghost", { open: ["post", "pub", "clinic"] })[0];
+  assert.equal(three.ok, false);
+  assert.match(three.detail, /3/);
+  assert.equal(townChecks("ghost", { open: ["post", "post", "pub", "clinic"] })[0].ok, false);
+  assert.equal(townChecks("ghost", {})[0].ok, false);
+});
+
+test("townChecks TM9: 문 앞에 시간 안에 도착하고 내 이름표가 스테이지 안, 겹침은 참고 줄", () => {
+  const tag = { x: 100, y: 300, w: 80, h: 28 };
+  const stage = { top: 100, bottom: 600, left: 0, right: 390 };
+  const ok = townChecks("walk", { arriveMs: 6200, limitMs: 10000, tag, stage, overlaps: 0 });
+  assert.deepEqual(ok.map((l) => l.id), ["TM9", "TM9s", "TM9i"]);
+  assert.equal(lineOf(ok, "TM9").ok, true);
+  assert.equal(lineOf(ok, "TM9s").ok, true);
+  assert.equal(lineOf(ok, "TM9i").info, true);
+  assert.equal(lineOf(ok, "TM9i").ok, true);
+  const late = lineOf(townChecks("walk", { arriveMs: 10500, limitMs: 10000, tag, stage, overlaps: 0 }), "TM9");
+  assert.equal(late.ok, false);
+  assert.match(late.detail, /10500/);
+  assert.equal(lineOf(townChecks("walk", { arriveMs: null, limitMs: 10000, tag, stage, overlaps: 0 }), "TM9").ok, false);
+  assert.equal(lineOf(townChecks("walk", { arriveMs: 3000, limitMs: 10000, tag: { ...tag, y: 90 }, stage, overlaps: 0 }), "TM9s").ok, false);
+  // 이름표 겹침은 판정이 아니다 — 겹쳐도 통과하고 개수만 말한다
+  const overlap = townChecks("walk", { arriveMs: 3000, limitMs: 10000, tag, stage, overlaps: 2 });
+  assert.ok(overlap.every((l) => l.ok));
+  assert.match(lineOf(overlap, "TM9i").detail, /2/);
+});
+
+test("townChecks TM10: 모션 줄이기에서 방에 들어가면 같은 틱에 roofs 0 이고 door 연출이 없다", () => {
+  const ok = townChecks("reduced", { room: "clinic", zone: "clinic", roofsWhenZone: 0, doorSeen: 0 });
+  assert.deepEqual(ok.map((l) => l.id), ["TM10", "TM10d"]);
+  assert.ok(ok.every((l) => l.ok));
+  const slow = townChecks("reduced", { room: "clinic", zone: "clinic", roofsWhenZone: 0.52, doorSeen: 0 });
+  assert.equal(lineOf(slow, "TM10").ok, false);
+  assert.match(lineOf(slow, "TM10").detail, /0\.52/);
+  const fade = townChecks("reduced", { room: "clinic", zone: "clinic", roofsWhenZone: 0, doorSeen: 3 });
+  assert.equal(lineOf(fade, "TM10d").ok, false);
+  assert.equal(lineOf(townChecks("reduced", { room: "clinic", zone: "plaza", roofsWhenZone: null, doorSeen: 0 }), "TM10").ok, false);
+});
+
+test("townChecks: 모르는 종류는 던진다", () => {
+  assert.throws(() => townChecks("nope", {}), /nope/);
+});
+
+test("TOWN_E2E: 방 넷의 안쪽·문 앞·방 안 자리와 상수가 모양을 갖는다(앱 값과의 대조는 e2eContract)", () => {
+  assert.deepEqual(Object.keys(TOWN_E2E.ROOMS), ["post", "pub", "clinic", "police"]);
+  for (const r of Object.values(TOWN_E2E.ROOMS)) {
+    assert.ok(r.inner.x0 < r.inner.x1 && r.inner.z0 < r.inner.z1);
+    assert.ok(r.outer.x0 < r.inner.x0 && r.outer.x1 > r.inner.x1);
+    assert.ok(Number.isFinite(r.front.x) && Number.isFinite(r.inside.z));
+  }
+  assert.equal(TOWN_E2E.CUTAWAY_MS, 250);
+  assert.equal(TOWN_E2E.DOOR_FADE_MS, 200);
+  assert.equal(TOWN_E2E.PAN.maxX, 9.6);
 });
