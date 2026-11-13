@@ -48,6 +48,8 @@ import { endReached, toggleEnd } from "../shared/game/discussion";
 import { allTutorialDone, markTutorialDone } from "../shared/game/tutorial";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { actErrand, nearSnapFrame, placeCenterFx, sampleErrand } from "../shared/game/errand";
+import { lampsShownOf } from "../shared/game/lamps";
+import { markCut } from "../shared/game/mafiaTouch";
 import { ERRAND_MIN_GAP_MS, ERRAND_TICK_MS } from "../shared/game/phases";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
@@ -323,7 +325,7 @@ export class Room extends DurableObject<Env> {
         await this.handleTestBotVote(ws, msg.exec, msg.pick);
         return;
       case "errand":
-        await this.handleErrand(ws);
+        await this.handleErrand(ws, msg.hold === true);
         return;
       case "move":
         this.handleMove(ws, msg.x, msg.z);
@@ -729,34 +731,41 @@ export class Room extends DurableObject<Env> {
     return null;
   }
 
-  // 심부름 처리(15페이즈, 결정 0074): 메시지에 필드가 없다 — 신원은 소켓 첨부의 playerId 뿐이고 위치는 서버 world 구간, 장소는 서버 목록이 정한다(D-08).
-  private async handleErrand(ws: WebSocket): Promise<void> {
+  // 심부름 처리(15페이즈, 결정 0074): 신원은 소켓 첨부의 playerId 뿐이고 위치는 서버 world 구간, 장소는 서버 목록이 정한다(D-08). 선택 필드 hold(21페이즈 D-06·P21-8)는 모든 역할이 보낼 수 있다 — 서버만 역할로 가른다.
+  private async handleErrand(ws: WebSocket, hold: boolean): Promise<void> {
     const att = this.attachmentOf(ws);
     if (!att || !this.room) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    await this.applyErrand(att.playerId, Date.now());
+    await this.applyErrand(att.playerId, Date.now(), hold);
   }
 
   // 사람의 errand 메시지와 봇 errandAct 가 같은 본체를 지난다(특권 없음). 간격(ERRAND_MIN_GAP_MS) 안의 요청과 규칙 거절(단계·생존·반경·중복·위치 없음)은
   // 사람·역할·이유와 무관하게 같은 응답이다: 상태 변화 없이 보낸 사람에게만 자기 state 한 프레임(오류 프레임·방송 없음, D-08·T-15-02·T-15-04).
-  // 받아들이면 저장한 뒤 역시 본인에게만 state 를 보낸다 — 진행은 본인 view 에만 있어 다른 폰에 방송할 것이 없다.
-  private async applyErrand(playerId: string, now: number): Promise<void> {
+  // 받아들이면(markCut 이 hold 와 역할로 서버 전용 lampCut 을 적는다) 저장한 뒤, 저녁의 공개 가로등 값(lampsShownOf — 자른 것도 켜진 것으로 센다)이 바뀌었을 때만 모든 소켓이 각자 view 를 받고
+  // 바뀌지 않으면(이미 켜진 가로등) 보낸 사람만 받는다. 방송 여부가 역할을 모르는 값으로만 정해지므로 켜기와 자르기는 같은 받는 사람·같은 프레임 수다(D-21, T-21-10).
+  private async applyErrand(playerId: string, now: number, hold = false): Promise<void> {
     const room = this.room;
     if (!room) return;
     const key = `errand:${playerId}`;
     const last = this.writeAt.get(key);
+    let shownChanged = false;
     if (last === undefined || now - last >= ERRAND_MIN_GAP_MS) {
       this.writeAt.set(key, now);
       const seg = Object.prototype.hasOwnProperty.call(this.world.segs, playerId) ? this.world.segs[playerId] : undefined;
       const result = seg === undefined ? null : actErrand(room, playerId, positionAtFx(seg, now));
       if (result !== null && result.ok) {
-        this.room = result.state;
-        await this.ctx.storage.put("room", this.room);
+        this.room = markCut(result.state, playerId, result.place, hold);
+        shownChanged = lampsShownOf(this.room).join(",") !== lampsShownOf(room).join(",");
+        if (shownChanged) {
+          await this.persistAndBroadcast();
+        } else {
+          await this.ctx.storage.put("room", this.room);
+        }
       }
     }
-    this.sendViewTo([playerId]);
+    if (!shownChanged) this.sendViewTo([playerId]);
   }
 
   // 유언(9페이즈, WILL-01, 결정 0061-10): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-09-28).
@@ -1058,7 +1067,7 @@ export class Room extends DurableObject<Env> {
         return;
       }
       case "errandAct":
-        await this.applyErrand(step.botId, Date.now());
+        await this.applyErrand(step.botId, Date.now(), act.hold === true);
         return;
       default: {
         // 새 봇 행동을 BotAct 에 더하고 여기를 빠뜨리면 컴파일이 실패한다(Pitfall 15).

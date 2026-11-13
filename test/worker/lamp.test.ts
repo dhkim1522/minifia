@@ -25,7 +25,13 @@ function keyPaths(value: unknown, path = ""): string[] {
   }
   return [];
 }
-const shapeOf = (m: ServerMessage | undefined): string => [...new Set(keyPaths(m))].sort().join(",");
+const pathSet = (m: unknown): Set<string> => new Set(keyPaths(m));
+/** 누르기 전 마지막 view 와 누른 뒤 받은 마지막 프레임의 키 구조 차이(+더해진 경로, -사라진 경로) — 역할마다 view 의 기본 키가 달라도 누름이 바꾼 구조는 같아야 한다. */
+function shapeChange(before: unknown, after: ServerMessage | undefined): string {
+  const a = pathSet(before);
+  const b = pathSet(after === undefined || after.t !== "state" ? after : after.view);
+  return [...[...b].filter((k) => !a.has(k)).map((k) => `+${k}`), ...[...a].filter((k) => !b.has(k)).map((k) => `-${k}`)].sort().join(",");
+}
 
 /** 저녁 판에서 actor 를 place 의 가로등 앞에 세우고 errand(hold 선택)를 보낸다 — 응답을 소켓마다 모아 돌려준다(g.actors 순서). */
 async function press(g: Game, actor: Actor, place: string, hold: boolean): Promise<ServerMessage[][]> {
@@ -47,14 +53,16 @@ async function lampGame(): Promise<{ g: Game; c: Actor; m: Actor; x: string; y: 
 describe("켜기와 자르기는 같은 응답이다 (D-21, T-21-10)", () => {
   it("시민 C 와 마피아 M 이 hold 로 처리하면 모든 소켓이 view 한 프레임씩 받고, 본인 view 의 키 구조·me.errand.done 길이가 같다", async () => {
     const { g, c, m, x, y } = await lampGame();
+    const cBefore = lastViewOf(c.sock);
     const byC = await press(g, c, x, true);
     const cOwn = g.actors.indexOf(c);
-    const cShape = shapeOf(byC[cOwn]!.at(-1));
+    const cShape = shapeChange(cBefore, byC[cOwn]!.at(-1));
     const cDone = lastViewOf(c.sock).me.errand?.done.length;
+    const mBefore = lastViewOf(m.sock);
     const byM = await press(g, m, y, true);
     const mOwn = g.actors.indexOf(m);
     expect(`${counts(byC)} ${counts(byM)}`).toBe(`${g.actors.map(() => 1).join(",")} ${g.actors.map(() => 1).join(",")}`);
-    expect(`${shapeOf(byM[mOwn]!.at(-1)) === cShape} ${cDone}:${lastViewOf(m.sock).me.errand?.done.length} ${Array.isArray(lastViewOf(c.sock).day?.lamps)}:${Array.isArray(lastViewOf(m.sock).day?.lamps)}`).toBe("true 1:1 true:true");
+    expect(`${shapeChange(mBefore, byM[mOwn]!.at(-1)) === cShape} ${cDone}:${lastViewOf(m.sock).me.errand?.done.length} ${Array.isArray(lastViewOf(c.sock).day?.lamps)}:${Array.isArray(lastViewOf(m.sock).day?.lamps)}`).toBe("true 1:1 true:true");
     expect(json(lastViewOf(g.actors.find((a) => a !== c && a !== m)!.sock).day?.lamps)).toBe(json([numOf(x), numOf(y)].sort((a, b) => a - b)));
   }, 60_000);
 

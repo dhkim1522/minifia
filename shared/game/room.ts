@@ -183,6 +183,11 @@ export interface RoomState {
    * 가장 가까운 사람(by)과 곁 장소(place)" 한 줄(seat 오름차순). enterErrand 가 비우고 enterNight 는 남기며 enterMorning 이 피해자 줄을 morning.seen 으로 옮긴 뒤 지운다.
    */
   errandLast?: Array<{ seat: number; by: number; place: PlaceId }>;
+  /**
+   * 서버 전용(21페이즈 D-06·D-21). 이번 저녁에 산 마피아가 hold 로 처리한 장소 id(심지를 자른 가로등, 처리한 순서). markCut(mafiaTouch.ts)만 쓰고 enterErrand 가 키째 지운다.
+   * 어떤 view·프레임에도 이 키로 실리지 않는다 — 공개 값은 lampsShownOf·lampsLitOf(lamps.ts)가 만든 day.lamps 뿐이다(21-07 정적 시험이 화면 코드에 이 이름이 없음을 지킨다).
+   */
+  lampCut?: PlaceId[];
   /** 서버 전용(결정 0061-9). 이번 밤 마피아가 남긴 쪽지 — saveNote(09-12)가 쓰고 enterMorning(탈락 없는 밤)·enterNight 가 키째 지운다. 구출·무효 밤의 쪽지는 폐기된다. */
   nightNote?: string;
   /** 서버 전용(결정 0061-14). 암살 현장 분필 자국(고정소수점) — 방 DO 가 채우고 enterNight 가 지운다(09-14). */

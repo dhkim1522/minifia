@@ -468,6 +468,20 @@ describe("봇 계획", () => {
     }
   });
 
+  it("마피아 봇은 첫 장소의 처리 한 번만 hold 로 보내고(21페이즈 D-06, 사람 마피아와 같은 메시지) 시민 봇·재시도·다른 장소는 hold 가 없다", () => {
+    const s = botRoom();
+    const lobbyRoles: RoomState = { ...s, players: s.players.map((p) => (p.seat === 3 ? { ...p, role: "mafia" as const } : p.seat === 4 ? { ...p, role: "citizen" as const } : p)) };
+    const now = s.phaseEndsAt! - ERRAND_MS;
+    const steps = planBotSteps(lobbyRoles, now, () => {
+      throw new Error("errand 계획은 난수를 부르지 않는다");
+    });
+    const holdsOf = (seatNo: number): string => {
+      const id = lobbyRoles.players.find((p) => p.seat === seatNo)!.id;
+      return steps.filter((x) => x.botId === id && x.act.t === "errandAct").map((x) => (x.act.t === "errandAct" && x.act.hold === true ? "H" : "-")).join("");
+    };
+    expect(`${holdsOf(3)} ${holdsOf(4)}`).toBe("H----- ------");
+  });
+
   it("마감 여유 안으로 밀리는 항목은 기존 규칙대로 버려지고 난수는 앞뒤로 같다", () => {
     const s = botRoom();
     const late = s.phaseEndsAt! - 20_000;

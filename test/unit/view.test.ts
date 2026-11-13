@@ -307,6 +307,7 @@ const ME_KEYS: ReadonlySet<string> = new Set([
 const DAY_KEYS: ReadonlySet<string> = new Set([
   "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown",
   "evidence", // 아침~처형의 공개 증거(16페이즈 D-10·R-4) — 모두에게 같은 값, 아래 "day.evidence 수명" describe 가 조건을 단언한다
+  "lamps", // 확장판 저녁·밤·아침의 가로등 공개 값(21페이즈 D-06·D-08) — 모두에게 같은 번호 배열, test/unit/lamps.test.ts 가 단계·값을 단언한다
 ]);
 const keysOf = (value: unknown): string => Object.keys((value ?? {}) as object).sort().join(",");
 
@@ -883,10 +884,10 @@ describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 
     expect(got.join(" ")).toBe("dayAnnounce:n,roles,voteLog discussion:endCount,n,roles,voteLog night:n,noExecution,roles,voteLog morning:morning,n,roles,voteLog");
   });
 
-  it("확장판의 피해자가 나온 아침의 day 키는 evidence·morning·n·roles·voteLog 이고 turn 키가 없다 (21페이즈, 규칙 가)", () => {
+  it("확장판의 피해자가 나온 아침의 day 키는 evidence·lamps·morning·n·roles·voteLog 이고 turn 키가 없다 (21페이즈, 규칙 가)", () => {
     const { s } = morningWithVictim(5, 1, "extended");
     const keys = new Set(s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(",")));
-    expect(`${s.phase}:${[...keys].join("|")}`).toBe("morning:evidence,morning,n,roles,voteLog");
+    expect(`${s.phase}:${[...keys].join("|")}`).toBe("morning:evidence,lamps,morning,n,roles,voteLog");
   });
 
   it("dayAnnounce 뷰의 day 는 {n, roles, voteLog []} 뿐이다", () => {

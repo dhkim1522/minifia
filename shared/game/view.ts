@@ -28,6 +28,7 @@ import { computeAwards } from "./awards";
 import { channelOf } from "./audience";
 import { botCount } from "./bots";
 import { endCountOf, phaseDurationOf } from "./discussion";
+import { lampsLitOf, lampsShownOf } from "./lamps";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
 import { MAP_PHASES } from "./movement";
@@ -93,6 +94,10 @@ function buildDay(state: RoomState, rules: Ruleset): DayView {
   };
   // 토론 끝내기는 누른 산 사람 수만 공개한다 — 누가 눌렀는지는 서버 전용(Player.endVote)이고 본인 값만 me.endDiscussion 으로 간다(결정 0060-2).
   if (state.phase === "discussion") day.endCount = endCountOf(state);
+  // 가로등 공개 값(21페이즈 D-06·D-07·D-08): 확장판 저녁에는 누군가 처리한 가로등(자른 것 포함), 밤·아침에는 처리됐고 잘리지 않은 가로등 — 번호 오름차순, 모두에게 같은 새 배열이다.
+  // 서버 전용 lampCut 은 어디에도 싣지 않는다. 다른 단계와 기본 마피아에는 키가 없다.
+  if (rules.errand && state.phase === "errand") day.lamps = lampsShownOf(state);
+  else if (rules.errand && (state.phase === "night" || state.phase === "morning")) day.lamps = lampsLitOf(state);
   // 찬반은 던진 유권자 좌석만 공개한다(값 없음 — 익명, 결정 0053). 개인 값은 me.verdictVote 로 본인에게만 간다.
   if (state.phase === "verdict") day.voted = votedSeatsOf(state);
   // 지목 줄은 지목 단계 동안 모두에게 같은 공개 목록이다(결정 0060-3) — 필드별 복사 함수(pointLinesOf)로 만든다.

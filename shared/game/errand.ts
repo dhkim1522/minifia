@@ -1,7 +1,8 @@
 // 심부름 규칙(15페이즈, 결정 0074 예정) — 순수 모듈: 시각·난수는 인자로만 받고 입력 상태를 바꾸지 않는다.
 // 심부름 목록은 모든 역할이 같다(D-03): 이 파일은 역할·연결 상태를 읽지 않는다. 마피아도 같은 모양·같은 개수의 목록을 받고
 // 같은 처리 규칙을 지난다(방해 행동 없음). 역할만 다른 두 방이 같은 시드로 같은 목록을 얻는 것이 그 증거다.
-// 21페이즈: 16페이즈 가짜 장소는 심지 자르기(21-05, D-06)로 대체됐다 — 처리 규칙에 역할 예외가 없다(D-05).
+// 21페이즈: 16페이즈 가짜 장소는 심지 자르기(21-05, D-06)로 대체됐다 — 처리 규칙에 역할 예외가 없다(D-05). 심지를 자르는 역할 판정은 mafiaTouch.ts 한 곳이고,
+// 이 파일은 처리한 장소 id 를 돌려줄 뿐 그것으로 무엇을 하는지 모른다.
 // 처리 거절은 사유를 가르지 않고 { ok: false } 하나다(D-08) — 응답이 오라클이 되지 않는다.
 import { PLACE_IDS } from "../protocol";
 import type { PlaceId, RecordLine, WorldFrame } from "../protocol";
@@ -73,7 +74,7 @@ export function enterErrand(state: RoomState, randInt: RandInt, at: number): Roo
     }
     picks.set(p.id, pool.slice(0, count));
   }
-  const { errandLast: _last, ...rest } = state;
+  const { errandLast: _last, lampCut: _cut, ...rest } = state; // 새 저녁: 지난 저녁의 마지막 목격과 심지 자른 가로등(서버 전용, 21-05 D-06)을 키째 지운다
   return {
     ...rest,
     errandTickAt: at + ERRAND_TICK_MS,
@@ -87,13 +88,13 @@ export function enterErrand(state: RoomState, randInt: RandInt, at: number): Roo
 
 /**
  * 심부름 처리. errand 단계 · 행위자가 방에 있는 산 사람 · errandPlaces 가 있을 때, 미완료 장소 중 중앙까지 거리가
- * ERRAND_ACT_R × UNIT 이하인 것 가운데 가장 가까운 하나(같으면 목록 앞)를 errandDone 끝에 더한다. 그 밖은 사유를 가르지 않고 { ok: false }.
+ * ERRAND_ACT_R × UNIT 이하인 것 가운데 가장 가까운 하나(같으면 목록 앞)를 errandDone 끝에 더하고 그 장소 id 를 place 로 돌려준다. 그 밖은 사유를 가르지 않고 { ok: false }.
  */
 export function actErrand(
   state: RoomState,
   actorId: string,
   posFx: { x: number; z: number },
-): { ok: true; state: RoomState } | { ok: false } {
+): { ok: true; state: RoomState; place: PlaceId } | { ok: false } {
   if (state.phase !== "errand") return { ok: false };
   const actor = state.players.find((p) => p.id === actorId);
   if (actor === undefined || !isAlive(actor) || actor.errandPlaces === undefined) return { ok: false };
@@ -116,6 +117,7 @@ export function actErrand(
   const finished = best;
   return {
     ok: true,
+    place: finished,
     state: {
       ...state,
       players: state.players.map((p) => (p.id === actorId ? { ...p, errandDone: [...done, finished] } : p)),

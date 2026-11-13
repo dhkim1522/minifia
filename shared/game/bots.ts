@@ -128,7 +128,7 @@ export type BotAct =
   | { t: "typing" }
   // 15페이즈(결정 0074): 심부름. errandGo = 봇의 미완료 장소 중 가장 가까운 곳 중앙으로 걷기(applyMove 본체), errandAct = 처리 요청(applyErrand 본체). 둘 다 난수 없음, 특권 없음.
   | { t: "errandGo" }
-  | { t: "errandAct" };
+  | { t: "errandAct"; hold?: true }; // hold: 21페이즈 D-06 — 마피아 봇이 첫 장소에서 사람과 같은 hold 처리로 심지를 자른다(서버만 역할로 가른다)
 export interface BotStep {
   at: number;
   botId: string;
@@ -304,7 +304,8 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt, r
       for (let k = 0; k < ERRAND_COUNT; k++) {
         const goAt = now + ERRAND_BOT_FIRST_MS + k * ERRAND_BOT_STEP_MS;
         add(goAt, { t: "errandGo" });
-        add(goAt + ERRAND_BOT_ACT_MS, { t: "errandAct" });
+        // 21페이즈 D-06: 마피아 봇은 첫 장소를 hold 로 처리해 심지를 자른다(사람 마피아와 같은 메시지·같은 본체, 난수 없음). 재시도 줄은 hold 없이 — 이미 처리했으면 무해하다.
+        add(goAt + ERRAND_BOT_ACT_MS, k === 0 && bot.role === "mafia" ? { t: "errandAct", hold: true } : { t: "errandAct" });
         add(goAt + ERRAND_BOT_RETRY_MS, { t: "errandAct" });
       }
     }
