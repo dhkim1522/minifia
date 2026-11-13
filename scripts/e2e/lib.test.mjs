@@ -5720,7 +5720,7 @@ test("nightPlateChecks LH4·LH11: 판 8 개수·스테이지 안쪽 8·중심 �
   assert.equal(lineOf(outside, "LH11a").ok, false);
   assert.match(lineOf(outside, "LH11a").detail, /7/);
   assert.equal(outside.filter((l) => !l.ok).length, 1);
-  const close = nightPlateChecks({ ...m, plates: m.plates.map((p, i) => (i === 1 ? { seat: 1, rect: plateRect(150 + 90 - 60, 140 + 5) } : p)) });
+  const close = nightPlateChecks({ ...m, plates: m.plates.map((p, i) => (i === 1 ? { seat: 1, rect: plateRect(240, 150) } : p)) });
   assert.equal(lineOf(close, "LH11b").ok, false);
   assert.equal(lineOf(nightPlateChecks({ ...m, alive: 7 }), "LH4p").ok, false);
   assert.equal(lineOf(nightPlateChecks({ ...m, zoom: 0.3 }), "LH11c").ok, false);

@@ -4649,3 +4649,360 @@ export function townChecks(kind, m) {
       throw new Error(`townChecks: 모르는 종류 ${kind}`);
   }
 }
+
+// ---- 21페이즈 원인→결과 하루 E2E (21-16, UI-SPEC "E2E 표식과 판정" LH1~LH14) ----
+// 흐름(scripts/e2e/causal.mjs)은 화면·훅 값을 읽어 아래 순수 함수에 넘기기만 하고, 문턱은 여기에만 있다(낮추지 않는다).
+//   LH1  causalDayChecks(m)           m = { phases, victim } — 확장판 단계 순서·dayAnnounce 없음
+//   LH2  causalEveningChecks(kind, m) kind = start|near|lit|done|size — 저녁 등불(LH2*)과 폰 크기별 겹침(LH11e)
+//   LH4  nightPlateChecks(m)          m = { w, stage, alive, zoom, plates } — 밤 집 판 수·스테이지 안쪽 8·중심 거리 ≥ 40·배율 식(LH11a~c)
+//   LH5  causalWindowChecks(m)        m = { eveningLamps, nightLamps, cut, owners, windows } — 창 연동
+//   LH6  sceneSpotChecks(m)           m = { w, h, spots, dock, cardRow, expectStates } — 아침 표식 3·겹침(360×560 카드 줄 덮임은 참고 줄)
+//   LH7  boardChecks(m)               m = { opens, faces, alive, sameOutfit, marked } 와/또는 { closeRect, boardRect, panelTop }
+//   LH3·LH9 domShapeDiff(a, b, opt)   두 탭의 DOM 문자열 구조(태그·속성 이름·클래스, 값·글 제외) 차이 줄
+//   LH14 causalReducedChecks(m)       m = { items: [{ name, ms }] } — 모션 줄이기 전환 시간 0
+
+/** 새 하루 표식(src 에 있어야 한다 — e2eContract 가 확인). 값에는 역할·서버 전용 값·남의 단서가 없다(UI-SPEC) */
+export const CAUSAL_MARKERS = Object.freeze([
+  "data-house-pick",
+  "data-house-layer",
+  "data-house-off",
+  "data-lamp-off",
+  "data-clue-spot",
+  "data-clue-layer",
+  "data-clue-row",
+  "data-clue-chip",
+  "data-scene-act",
+  "data-suspect-board",
+  "data-board-face",
+  "data-board-mark",
+  "data-skip-phase",
+  "data-skip-count",
+  "data-dock-night",
+  "data-dock-guide",
+  "data-dock-legend",
+  "data-dock-actions",
+  "data-hold-fill",
+]);
+/** 저녁·아침 독 높이와 밤 독 높이(SceneDock DOCK_H·NIGHT_DOCK_H 사본 — e2eContract 가 같음을 고정) */
+export const CAUSAL_SCENE_DOCK_H = 170;
+export const CAUSAL_NIGHT_DOCK_H = 122;
+/** 밤 고정 시점 배율 식(src/world/camera.ts nightZoomOf 사본): (스테이지 폭 − 32) / 1315 */
+export const causalNightZoom = (w) => (w - 32) / 1315;
+/** 가로등 8곳(shared/game/mapTown.ts TOWN_LAMPS 사본, 월드 단위) — 가로등 n ↔ 좌석 n 의 집 */
+export const CAUSAL_TOWN_LAMPS = Object.freeze([
+  { seat: 0, id: "lamp0", x: -2.25, z: -5.25 },
+  { seat: 1, id: "lamp1", x: 3.25, z: -5.25 },
+  { seat: 2, id: "lamp2", x: 5.25, z: -4.25 },
+  { seat: 3, id: "lamp3", x: 5.25, z: 3.75 },
+  { seat: 4, id: "lamp4", x: 3.75, z: 5.25 },
+  { seat: 5, id: "lamp5", x: -4.25, z: 5.25 },
+  { seat: 6, id: "lamp6", x: -5.25, z: 3.25 },
+  { seat: 7, id: "lamp7", x: -5.25, z: -2.25 },
+].map((l) => Object.freeze(l)));
+/** 아침 단서 지점 ①②③ (TOWN_CLUE_SPOTS ÷ 100 사본, 월드 단위) — 키 = 피해자 집 좌석 */
+export const CAUSAL_CLUE_SPOTS = Object.freeze({
+  0: [{ x: -3.75, z: -6.75 }, { x: -2.25, z: -6.25 }, { x: -2.25, z: -4.75 }],
+  1: [{ x: 4.75, z: -6.25 }, { x: 6.25, z: -6.25 }, { x: 3.25, z: -6.25 }],
+  2: [{ x: 6.25, z: -5.25 }, { x: 6.25, z: -3.75 }, { x: 6.25, z: -6.75 }],
+  3: [{ x: 6.25, z: 4.75 }, { x: 6.25, z: 6.25 }, { x: 6.25, z: 3.25 }],
+  4: [{ x: 4.75, z: 6.25 }, { x: 6.25, z: 6.25 }, { x: 3.25, z: 6.25 }],
+  5: [{ x: -5.25, z: 6.25 }, { x: -3.75, z: 6.25 }, { x: -6.75, z: 6.25 }],
+  6: [{ x: -6.25, z: 4.75 }, { x: -6.25, z: 6.25 }, { x: -6.25, z: 3.25 }],
+  7: [{ x: -6.75, z: -3.75 }, { x: -6.25, z: -2.25 }, { x: -4.75, z: -2.25 }],
+});
+/** 밤 판이 스테이지 안쪽에 있어야 하는 여백(px)·판 중심끼리의 최소 거리(px, UI-SPEC 폰 6종 표) */
+export const CAUSAL_PLATE_INSET = 8;
+export const CAUSAL_PLATE_MIN_DIST = 40;
+/** 아침 카드 줄 최대 높이(카드 44 × 2 + 간격 8) */
+export const CAUSAL_CARD_ROW_MAX_H = 96;
+/** 저녁 [켜기]·[건너뛰기] 누르기 하한(높이 × 폭) — 진행 점은 독 위 16 */
+export const CAUSAL_ACT_MIN_H = 56;
+export const CAUSAL_ACT_MIN_W = 112;
+export const CAUSAL_DOTS_ABOVE_DOCK = 16;
+/** 닫기 단추 누르기 하한 */
+export const CAUSAL_CLOSE_MIN = 44;
+/** 확장판 단계 전이표(허용 다음 단계) — 여기 없는 단계의 전이는 이 판정이 보지 않는다 */
+const CAUSAL_NEXT = {
+  roleReveal: ["errand"],
+  errand: ["night"],
+  night: ["morning", "discussion"],
+  morning: ["discussion"],
+  execution: ["errand", "ended"],
+};
+const CAUSAL_SPOT_STATES = ["fresh", "done", "blurred"];
+const sortedNums = (a) => [...a].sort((x, y) => x - y);
+const sameNums = (a, b) => a.length === b.length && sortedNums(a).every((v, i) => v === sortedNums(b)[i]);
+const seatList = (a) => `[${sortedNums(a).join(",")}]`;
+
+/**
+ * LH1 확장판 단계 순서. m = { phases: 받은 단계 열(연속 중복은 접는다), victim: 첫 밤에 피해자·미수가 있었는가(true/false), 모르면 null }.
+ * 첫날 roleReveal → errand → night → (morning →) discussion, 처형 다음 execution → errand. dayAnnounce 는 확장판에 나오지 않는다(LH1d).
+ */
+export function causalDayChecks(m) {
+  const L = { LH1: "확장판 단계 순서: roleReveal>errand>night>(morning>)discussion, 처형 다음 errand", LH1d: "확장판에 dayAnnounce 가 나오지 않는다" };
+  if (!m || !Array.isArray(m.phases) || m.phases.length === 0) return Object.keys(L).map((id) => noMeasure(id, L[id], "받은 단계 열"));
+  const chain = m.phases.filter((p, i) => i === 0 || p !== m.phases[i - 1]);
+  const bad = [];
+  for (let i = 0; i + 1 < chain.length; i++) {
+    const allowed = CAUSAL_NEXT[chain[i]];
+    if (allowed && !allowed.includes(chain[i + 1])) bad.push(`${chain[i]}>${chain[i + 1]} (허용 ${allowed.join("|")})`);
+  }
+  const night = chain.indexOf("night");
+  if (night >= 0 && night + 1 < chain.length && (m.victim === true || m.victim === false)) {
+    const next = chain[night + 1];
+    if (m.victim === true && next !== "morning") bad.push(`피해자가 있는 밤 다음이 ${next} (기대 morning)`);
+    if (m.victim === false && next === "morning") bad.push("피해자·미수가 없는 밤 다음에 morning 이 나옴");
+  }
+  if (chain.includes("roleReveal") && !chain.includes("errand")) bad.push("roleReveal 다음 errand 가 없음");
+  const announce = chain.filter((p) => p === "dayAnnounce").length;
+  return [result("LH1", L.LH1, bad), result("LH1d", L.LH1d, announce > 0 ? [`dayAnnounce ${announce}번`] : [])];
+}
+
+/**
+ * 저녁 등불 판정(LH2)과 폰 크기별 겹침(LH11e). kind:
+ *  - "start" m = { places, actDisabled, actCall, dots, doneBadges }: 타일 3·처음 [켜기] aria-disabled·빛남 없음·점 0·불꽃 배지 0 (LH2s)
+ *  - "near"  m = { actDisabled, actCall }: 반경 안이면 [켜기] 활성 + data-call (LH2n)
+ *  - "lit"   m = { dots, expectDots, lamps, place, doneBadges }: 켠 뒤 점·훅 lamps 에 번호·타일 불꽃 배지 (LH2l)
+ *  - "done"  m = { dots, actText, actDisabled }: 세 곳이면 '완료' 비활성 (LH2d)
+ *  - "size"  m = { dock, dots, act, skip, tiles, stage? }: 독 170·점 줄 = 독 위 16·[켜기]/[건너뛰기] 56×112·타일 겹침 0 (LH11e)
+ */
+export function causalEveningChecks(kind, m) {
+  switch (kind) {
+    case "start": {
+      const label = "저녁 처음: 타일 3·[켜기] 비활성·빛남 없음·점 0·불꽃 배지 0";
+      if (!m || !isNum(m.places) || typeof m.actDisabled !== "boolean" || !isNum(m.dots)) return [noMeasure("LH2s", label, "타일·[켜기]·점")];
+      const bad = [];
+      if (m.places !== 3) bad.push(`타일 ${m.places}개 ≠ 3`);
+      if (m.actDisabled !== true) bad.push("처음부터 [켜기] 가 활성");
+      if (m.actCall === true) bad.push("처음부터 [켜기] 가 빛남(data-call)");
+      if (m.dots !== 0) bad.push(`채운 점 ${m.dots}개 ≠ 0`);
+      if (isNum(m.doneBadges) && m.doneBadges !== 0) bad.push(`불꽃 배지 ${m.doneBadges}개 ≠ 0`);
+      return [result("LH2s", label, bad)];
+    }
+    case "near": {
+      const label = "가로등 반경 안: [켜기] 활성(aria-disabled 없음) + 빛남(data-call)";
+      if (!m || typeof m.actDisabled !== "boolean" || typeof m.actCall !== "boolean") return [noMeasure("LH2n", label, "[켜기] 상태")];
+      const bad = [];
+      if (m.actDisabled) bad.push("반경 안인데 [켜기] 가 비활성");
+      if (!m.actCall) bad.push("반경 안인데 data-call 이 없음");
+      return [result("LH2n", label, bad)];
+    }
+    case "lit": {
+      const label = "[켜기] 뒤: 점이 채워지고 __mfTown.lamps 에 그 번호가 있고 타일에 불꽃 배지";
+      if (!m || !isNum(m.dots) || !isNum(m.expectDots) || !Array.isArray(m.lamps) || !isStr(m.place)) return [noMeasure("LH2l", label, "점·lamps·장소")];
+      const bad = [];
+      if (m.dots !== m.expectDots) bad.push(`채운 점 ${m.dots}개 ≠ ${m.expectDots}`);
+      const n = Number(/^lamp(\d)$/.exec(m.place)?.[1]);
+      if (!Number.isInteger(n)) bad.push(`장소 ${m.place} 가 가로등이 아님`);
+      else if (!m.lamps.includes(n)) bad.push(`lamps ${seatList(m.lamps)} 에 ${n} 이 없음`);
+      if (isNum(m.doneBadges) && m.doneBadges !== m.expectDots) bad.push(`불꽃 배지 ${m.doneBadges}개 ≠ ${m.expectDots}`);
+      return [result("LH2l", label, bad)];
+    }
+    case "done": {
+      const label = "세 곳을 켜면 점 3·[켜기] 자리가 '완료' 비활성";
+      if (!m || !isNum(m.dots) || !isStr(m.actText) || typeof m.actDisabled !== "boolean") return [noMeasure("LH2d", label, "점·단추 글")];
+      const bad = [];
+      if (m.dots !== 3) bad.push(`채운 점 ${m.dots}개 ≠ 3`);
+      if (!m.actText.includes("완료")) bad.push(`단추 글 "${m.actText}" 에 '완료' 가 없음`);
+      if (!m.actDisabled) bad.push("완료인데 단추가 활성");
+      return [result("LH2d", label, bad)];
+    }
+    case "size": {
+      const label = `저녁: 독 ${CAUSAL_SCENE_DOCK_H}·점 줄이 독 위 ${CAUSAL_DOTS_ABOVE_DOCK}·[켜기]·[건너뛰기] ${CAUSAL_ACT_MIN_H}×${CAUSAL_ACT_MIN_W} 이상·타일 겹침 0`;
+      if (!m || !isRectLike(m.dock) || !isRectLike(m.dots) || !isRectLike(m.act) || !isRectLike(m.skip) || !Array.isArray(m.tiles) || !m.tiles.every(isRectLike)) return [noMeasure("LH11e", label, "독·점 줄·단추·타일 사각형")];
+      const bad = [];
+      if (Math.abs(m.dock.height - CAUSAL_SCENE_DOCK_H) > 1) bad.push(`독 높이 ${rd(m.dock.height)} ≠ ${CAUSAL_SCENE_DOCK_H}`);
+      const gap = m.dock.top - bottom(m.dots);
+      if (Math.abs(gap - CAUSAL_DOTS_ABOVE_DOCK) > 2) bad.push(`점 줄 아랫변이 독 윗변에서 ${rd(gap)} 위(기대 ${CAUSAL_DOTS_ABOVE_DOCK}±2)`);
+      for (const [name, r] of [["[켜기]", m.act], ["[건너뛰기]", m.skip]]) {
+        if (r.height < CAUSAL_ACT_MIN_H - 0.5 || r.width < CAUSAL_ACT_MIN_W - 0.5) bad.push(`${name} ${rd(r.width)}x${rd(r.height)} < ${CAUSAL_ACT_MIN_W}x${CAUSAL_ACT_MIN_H}`);
+      }
+      const solids = [["점 줄", m.dots], ["독", m.dock]];
+      m.tiles.forEach((t, i) => {
+        solids.forEach(([name, r]) => rectsOverlap(t, r) && bad.push(`타일 ${i + 1} 이 ${name}와 겹침(${overlapText(t, r)})`));
+        for (let j = i + 1; j < m.tiles.length; j++) if (rectsOverlap(t, m.tiles[j])) bad.push(`타일 ${i + 1}·${j + 1} 겹침(${overlapText(t, m.tiles[j])})`);
+        if (isRectLike(m.stage)) {
+          const inner = { left: m.stage.left + ERRAND_STAGE_INSET, top: m.stage.top + ERRAND_STAGE_INSET, right: right(m.stage) - ERRAND_STAGE_INSET, bottom: bottom(m.stage) - ERRAND_STAGE_INSET };
+          if (!rectInside(t, inner)) bad.push(`타일 ${i + 1} 이 스테이지 안쪽 ${ERRAND_STAGE_INSET} 밖 ${rectText(t)}`);
+        }
+      });
+      return [result("LH11e", label, bad)];
+    }
+    default:
+      throw new Error(`causalEveningChecks: 모르는 종류 ${kind}`);
+  }
+}
+
+/**
+ * LH4 밤 집 판 수와 LH11 폰 크기 판정. m = { w: 스테이지 폭, stage: 스테이지 사각형, alive: 산 사람 수, zoom: __mfTown.night.zoom, plates: [{ seat, rect }] }.
+ * LH4p 판 수 = 산 사람 수 · LH11a 판 사각형이 스테이지 안쪽 8 · LH11b 판 중심끼리 ≥ 40(닿기만 해도 통과, 0.5 오차) · LH11c 배율 = (폭 − 32) / 1315(±0.001).
+ */
+export function nightPlateChecks(m) {
+  const L = {
+    LH4p: "집 판 수 = 산 사람 수",
+    LH11a: `판이 모두 스테이지 안쪽 ${CAUSAL_PLATE_INSET} 안`,
+    LH11b: `판 중심끼리 거리 ≥ ${CAUSAL_PLATE_MIN_DIST}`,
+    LH11c: "밤 배율이 (폭 − 32) / 1315 식과 같다",
+  };
+  const ids = Object.keys(L);
+  if (!m || !Array.isArray(m.plates) || !m.plates.every((p) => p && isNum(p.seat) && isRectLike(p.rect)) || !isRectLike(m.stage) || !isNum(m.alive) || !isNum(m.w)) return ids.map((id) => noMeasure(id, L[id], "판·스테이지·산 사람 수"));
+  const bad1 = m.plates.length === m.alive ? [] : [`판 ${m.plates.length}개 ≠ 산 사람 ${m.alive}명`];
+  const inner = { left: m.stage.left + CAUSAL_PLATE_INSET, top: m.stage.top + CAUSAL_PLATE_INSET, right: right(m.stage) - CAUSAL_PLATE_INSET, bottom: bottom(m.stage) - CAUSAL_PLATE_INSET };
+  const bad2 = m.plates.filter((p) => !rectInside(p.rect, inner)).map((p) => `판 ${p.seat} ${rectText(p.rect)} 이 스테이지 안쪽 ${CAUSAL_PLATE_INSET} 밖`);
+  const bad3 = [];
+  const ctr = (r) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+  for (let i = 0; i < m.plates.length; i++)
+    for (let j = i + 1; j < m.plates.length; j++) {
+      const a = ctr(m.plates[i].rect);
+      const b = ctr(m.plates[j].rect);
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < CAUSAL_PLATE_MIN_DIST - OVERLAP_EPS) bad3.push(`판 ${m.plates[i].seat}·${m.plates[j].seat} 중심 거리 ${rd(d)} < ${CAUSAL_PLATE_MIN_DIST}`);
+    }
+  const want = causalNightZoom(m.w);
+  const bad4 = isNum(m.zoom) && Math.abs(m.zoom - want) <= 0.001 ? [] : [`배율 ${isNum(m.zoom) ? m.zoom : "없음"} ≠ 식 ${Math.round(want * 1000) / 1000}`];
+  return [result("LH4p", L.LH4p, bad1), result("LH11a", L.LH11a, bad2), result("LH11b", L.LH11b, bad3), result("LH11c", L.LH11c, bad4)];
+}
+
+/**
+ * LH5 창 연동. m = { eveningLamps: 저녁 끝 공개 lamps, nightLamps: 밤 view 의 day.lamps, cut: 내가 길게 눌러 자른 가로등 번호, owners: __mfTown.owners, windows: __mfTown.windows }.
+ * LH5a windows = nightLamps ∩ owners · LH5b 자른 등불의 집은 창에도 밤 lamps 에도 없다 · LH5c 밤 lamps ⊂ 저녁 lamps(자른 것이 빠질 뿐 새로 켜지지 않는다).
+ */
+export function causalWindowChecks(m) {
+  const L = { LH5a: "창 = 밤에 켜진 등불의 집 ∩ 주인 있는 집", LH5b: "자른 등불의 집은 창이 꺼져 있다(밤 lamps 에도 없다)", LH5c: "밤 lamps 는 저녁 lamps 의 부분집합이다" };
+  const ids = Object.keys(L);
+  const arr = (k) => Array.isArray(m?.[k]) && m[k].every(isNum);
+  if (!m || !["eveningLamps", "nightLamps", "cut", "owners", "windows"].every(arr)) return ids.map((id) => noMeasure(id, L[id], "저녁·밤 lamps·자른 번호·owners·windows"));
+  const want = m.nightLamps.filter((n) => m.owners.includes(n));
+  const bad1 = sameNums(want, m.windows) ? [] : [`windows ${seatList(m.windows)} ≠ 밤 lamps ∩ owners ${seatList(want)}`];
+  const bad2 = [...m.cut.filter((n) => m.windows.includes(n)).map((n) => `자른 등불 ${n} 의 집이 창에 켜져 있음`), ...m.cut.filter((n) => m.nightLamps.includes(n)).map((n) => `자른 등불 ${n} 이 밤 lamps 에 있음`)];
+  const bad3 = m.nightLamps.filter((n) => !m.eveningLamps.includes(n)).map((n) => `밤 lamps ${n} 이 저녁에 없었음`);
+  return [result("LH5a", L.LH5a, bad1), result("LH5b", L.LH5b, bad2), result("LH5c", L.LH5c, bad3)];
+}
+
+/**
+ * LH6 아침 현장 표식. m = { w, h, spots: [{ n, state, rect }], dock, cardRow(없으면 null), expectStates?: 번호 순 기대 상태 }.
+ * LH6a 표식 3·상태가 fresh|done|blurred(기대가 있으면 같음) · LH6b 표식끼리·독·카드 줄과 겹침 0 · LH6c 카드 줄이 독 위에 얹히고 높이 ≤ 96.
+ * 360×560 은 스테이지 328 중 아래 96 을 카드 줄이 덮을 수 있다(UI-SPEC, 진행에 지장 없음) — 그 폰은 카드 줄과의 겹침을 판정 대신 참고 줄(LH6i)로 남긴다.
+ */
+export function sceneSpotChecks(m) {
+  const L = { LH6a: "표식 3·상태 fresh|done|blurred", LH6b: "표식끼리·독·카드 줄과 겹침 0", LH6c: `카드 줄이 독 위에 얹히고 높이 ≤ ${CAUSAL_CARD_ROW_MAX_H}` };
+  const ids = Object.keys(L);
+  if (!m || !Array.isArray(m.spots) || !m.spots.every((s) => s && isRectLike(s.rect)) || !isRectLike(m.dock) || !isNum(m.w) || !isNum(m.h)) return ids.map((id) => noMeasure(id, L[id], "표식·독 사각형"));
+  const row = isRectLike(m.cardRow) ? m.cardRow : null;
+  const bad1 = [];
+  if (m.spots.length !== 3) bad1.push(`표식 ${m.spots.length}개 ≠ 3`);
+  m.spots.forEach((s, i) => {
+    if (!CAUSAL_SPOT_STATES.includes(s.state)) bad1.push(`표식 ${s.n ?? i + 1} 상태 "${s.state}"`);
+    if (Array.isArray(m.expectStates) && m.expectStates[(s.n ?? i + 1) - 1] !== undefined && m.expectStates[(s.n ?? i + 1) - 1] !== s.state) bad1.push(`표식 ${s.n ?? i + 1} 상태 ${s.state} ≠ 기대 ${m.expectStates[(s.n ?? i + 1) - 1]}`);
+  });
+  const small = m.w <= 360 && m.h <= 560;
+  const bad2 = [];
+  const coveredBy = [];
+  m.spots.forEach((s, i) => {
+    const name = `표식 ${s.n ?? i + 1}`;
+    for (let j = i + 1; j < m.spots.length; j++) if (rectsOverlap(s.rect, m.spots[j].rect)) bad2.push(`${name}·표식 ${m.spots[j].n ?? j + 1} 겹침(${overlapText(s.rect, m.spots[j].rect)})`);
+    if (rectsOverlap(s.rect, m.dock)) bad2.push(`${name} 이 독과 겹침(${overlapText(s.rect, m.dock)})`);
+    if (row && rectsOverlap(s.rect, row)) {
+      if (small) coveredBy.push(name);
+      else bad2.push(`${name} 이 카드 줄과 겹침(${overlapText(s.rect, row)})`);
+    }
+  });
+  const bad3 = [];
+  if (row) {
+    if (bottom(row) > m.dock.top + OVERLAP_EPS) bad3.push(`카드 줄 아랫변 ${rd(bottom(row))} 이 독 윗변 ${rd(m.dock.top)} 보다 아래`);
+    if (row.height > CAUSAL_CARD_ROW_MAX_H + 1) bad3.push(`카드 줄 높이 ${rd(row.height)} > ${CAUSAL_CARD_ROW_MAX_H}`);
+  }
+  const lines = [result("LH6a", L.LH6a, bad1), result("LH6b", L.LH6b, bad2), result("LH6c", L.LH6c, bad3)];
+  if (small) lines.push({ id: "LH6i", label: "알려진 한계(UI-SPEC, 판정 아님): 360×560 에서 카드 줄이 스테이지 아래쪽을 덮을 수 있다", ok: true, info: true, detail: coveredBy.length > 0 ? `카드 줄이 ${coveredBy.join("·")} 을 덮음` : "카드 줄이 표식을 덮지 않음" });
+  return lines;
+}
+
+/**
+ * LH7 의심 보드. 내용 m = { opens: 자동 열림 횟수, faces: 얼굴 칸 좌석, alive: 산 사람 좌석, sameOutfit: 같은 옷 기대 좌석, marked: data-board-mark 가 있는 좌석 } → LH7a·LH7b·LH7c.
+ * 기하 m = { closeRect, boardRect, panelTop } → LH11b(닫기 ≥ 44×44 · 보드 카드 아랫변이 아래 패널 윗변 − 8 이내). 입력에 있는 묶음만 판정하고 둘 다 없으면 던진다.
+ */
+export function boardChecks(m) {
+  const lines = [];
+  const hasContent = m && "opens" in m;
+  const hasGeo = m && "closeRect" in m;
+  if (!hasContent && !hasGeo) throw new Error("boardChecks: 내용(opens·faces…)이나 기하(closeRect·boardRect·panelTop)가 필요하다");
+  if (hasContent) {
+    const L = { LH7a: "토론이 시작되면 의심 보드가 한 번 열린다", LH7b: "얼굴 칸 = 산 사람", LH7c: "같은 옷 칸(data-board-mark) = 받은 조각의 같은 옷 좌석" };
+    if (!isNum(m.opens) || !Array.isArray(m.faces) || !Array.isArray(m.alive) || !Array.isArray(m.sameOutfit) || !Array.isArray(m.marked)) return Object.keys(L).map((id) => noMeasure(id, L[id], "열림·얼굴·같은 옷"));
+    lines.push(result("LH7a", L.LH7a, m.opens === 1 ? [] : [`열림 ${m.opens}번 ≠ 1`]));
+    lines.push(result("LH7b", L.LH7b, sameNums(m.faces, m.alive) ? [] : [`얼굴 ${seatList(m.faces)} ≠ 산 사람 ${seatList(m.alive)}`]));
+    lines.push(result("LH7c", L.LH7c, sameNums(m.marked, m.sameOutfit) ? [] : [`표시 ${seatList(m.marked)} ≠ 같은 옷 ${seatList(m.sameOutfit)}`]));
+  }
+  if (hasGeo) {
+    const label = `보드: 닫기 ≥ ${CAUSAL_CLOSE_MIN}×${CAUSAL_CLOSE_MIN}·카드 아랫변이 아래 패널 윗변 − 8 이내`;
+    if (!isRectLike(m.closeRect) || !isRectLike(m.boardRect) || !isNum(m.panelTop)) lines.push(noMeasure("LH11b", label, "닫기·보드·패널 사각형"));
+    else {
+      const bad = [];
+      if (m.closeRect.width < CAUSAL_CLOSE_MIN - 0.5 || m.closeRect.height < CAUSAL_CLOSE_MIN - 0.5) bad.push(`닫기 ${rd(m.closeRect.width)}x${rd(m.closeRect.height)} < ${CAUSAL_CLOSE_MIN}`);
+      if (bottom(m.boardRect) > m.panelTop - 8 + OVERLAP_EPS) bad.push(`보드 아랫변 ${rd(bottom(m.boardRect))} > 패널 윗변 ${rd(m.panelTop)} − 8`);
+      lines.push(result("LH11b", label, bad));
+    }
+  }
+  return lines;
+}
+
+/** 이 HTML 조각을 노드 줄(경로 — 태그.클래스[속성 이름])의 목록으로 바꾼다. 값·글·주석은 버린다(style 속성은 위치라 뺀다) */
+function domShapeLines(html) {
+  const lines = [];
+  const stack = [];
+  const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
+  const tagRe = /<(\/?)([A-Za-z][A-Za-z0-9-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/g;
+  const src = String(html).replace(/<!--[\s\S]*?-->/g, "");
+  for (const m of src.matchAll(tagRe)) {
+    const [, closing, rawTag, rest] = m;
+    const tag = rawTag.toLowerCase();
+    if (closing) {
+      const at = stack.map((x) => x.tag).lastIndexOf(tag);
+      if (at >= 0) stack.length = at;
+      continue;
+    }
+    const names = [];
+    let classes = [];
+    for (const a of rest.replace(/\/\s*$/, "").matchAll(/([^\s=/>"']+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g)) {
+      const name = a[1].toLowerCase();
+      if (name === "class") classes = (a[2] ?? a[3] ?? a[4] ?? "").split(/\s+/).filter(Boolean).sort();
+      else if (name !== "style") names.push(name);
+    }
+    const here = `${tag}${classes.length > 0 ? `.${classes.join(".")}` : ""}[${names.sort().join(",")}]`;
+    const path = stack.length > 0 ? `${stack.map((s) => s.line).join(" > ")} > ${here}` : here;
+    lines.push(path);
+    if (!VOID.has(tag) && !/\/\s*$/.test(rest)) stack.push({ tag, line: here });
+  }
+  return lines;
+}
+
+/**
+ * LH3·LH9 두 DOM 문자열(outerHTML)의 구조 차이. 태그·속성 이름·클래스(정렬)만 견주고 속성 값·글·style 은 보지 않는다.
+ * 같은 경로 줄의 개수가 다르면 그 경로를 한 줄로 돌려준다(글·값은 줄에 싣지 않는다). opt.allow = 무시할 경로 정규식 목록(허용 목록 — 밤 행동 줄·산 마피아 합의 배지),
+ * opt.names = [A 이름, B 이름]. 차이가 없으면 빈 배열.
+ */
+export function domShapeDiff(a, b, { allow = [], names = ["A", "B"] } = {}) {
+  const count = (html) => {
+    const map = new Map();
+    for (const l of domShapeLines(html)) map.set(l, (map.get(l) ?? 0) + 1);
+    return map;
+  };
+  const ca = count(a);
+  const cb = count(b);
+  const out = [];
+  for (const key of new Set([...ca.keys(), ...cb.keys()])) {
+    if (allow.some((re) => re.test(key))) continue;
+    const na = ca.get(key) ?? 0;
+    const nb = cb.get(key) ?? 0;
+    if (na === nb) continue;
+    out.push(`${na > nb ? names[0] : names[1]}에 ${Math.abs(na - nb)}개 더: ${key}`);
+  }
+  return out;
+}
+
+/** LH14 모션 줄이기: 켜짐·꺼짐·카드 올라옴·decal 의 전환(transition) 시간이 모두 0. m = { items: [{ name, ms }] } */
+export function causalReducedChecks(m) {
+  const label = "모션 줄이기: 켜짐·꺼짐·카드 올라옴 전환 시간이 모두 0";
+  if (!m || !Array.isArray(m.items) || m.items.length === 0 || !m.items.every((i) => i && isStr(i.name) && isNum(i.ms))) return [noMeasure("LH14", label, "전환 시간")];
+  return [result("LH14", label, m.items.filter((i) => i.ms !== 0).map((i) => `${i.name} 전환 ${i.ms}ms ≠ 0`))];
+}
