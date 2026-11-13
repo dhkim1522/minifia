@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: 5
+current_plan: 6
 status: executing
-stopped_at: Completed 20-03-PLAN.md
-last_updated: "2026-11-12T22:45:02.071Z"
+stopped_at: Completed 20-05-PLAN.md
+last_updated: "2026-11-13T01:35:34.954Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: 3cac6ea9e6d52d01c3f3e65d670b2a65ccb6959d
+state_head: 3f97fe4f39a93eed344f5f6376f8d09e958fb93b
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 97
-  completed_plans: 91
+  completed_plans: 93
   percent: 50
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 20 (map-expansion) — EXECUTING
-Current Plan: 5
+Current Plan: 6
 Total Plans in Phase: 10
 Status: Ready to execute
-Last activity: 2026-11-13 — 20-03 완료 (심부름 근처 snap·목격 기록·마지막 목격·아침 snap 을 같은 구역으로 거르고, 마을 한 판 world 프레임 전수 시험 추가. 서버 쪽 구역 규칙 완료 — 화면 연출 20-05·06 과 E2E 20-08 이 남았다. 전체 npm test 8751 통과 · 실패 0. 간헐 실패 네 가지는 시험 쪽 원인으로 확정해 고쳤다). 20 페이즈 5/10
+Last activity: 2026-11-13 — 20-05 완료 (마을 장면 렌더러 연결·카메라 한계 확정(±9.6·22 그대로)·내 구역 컷어웨이·유령/결과 전체 걷힘·집 주인·__mfTown 훅. 전체 unit+client 7903 통과 · 실패 0, 로컬 화면 확인). 20 페이즈 6/10
 
 ## Performance Metrics
 
@@ -289,6 +289,7 @@ Last activity: 2026-11-13 — 20-03 완료 (심부름 근처 snap·목격 기록
 | Phase 20 P02 | 48min | 2 tasks | 10 files |
 | Phase 20 P04 | 20min | 2 tasks | 7 files |
 | Phase 20 P07 | 17min | 2 tasks | 12 files |
+| Phase 20 P05 | 20min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -644,6 +645,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 20]: 20-04: 마을 장면은 광장 빌더를 선택 인자로 다시 부른다(buildPlaza + PlazaPiece 조각) — 방·집의 벽·문·소품은 mapTown 의 장애물 원문을 그대로 세우고, 걷힘은 방마다 재질 불투명도 하나(setCutaway·roofs, CUTAWAY_MS 250), 집 주인은 setOwners 가 창 묶음과 문패·표식 UV 를 바꾼다. 간판·문패는 발광이 아니라 조명을 받는 재질이다
 - [Phase 20]: 20-04: 남은 것 — 렌더러 연결·언제 걷을지·카메라 한계 확정(panBoxOf·plateFarOf 는 시작값)·화면에서 간판 읽힘 확인은 20-05. 매 프레임 scene.update 를 불러야 걷힌다. 장면을 새로 만든 뒤에는 setCutaway(…, true)·setOwners 를 다시 부른다
 - [Phase 20]: 20-07: 방장 줄의 [맵] 단추와 꾸미기 시트의 맵 탭은 기본 마피아 판에만 있다(mapsOn = 허용 맵 둘 이상 && modeOf(view) === "basic") — 확장판은 늘 마을이라 고를 것이 없다. view.mapChoice 는 남아 기본 마피아로 되돌리면 그대로 다시 나타난다. E2E 는 hostRailChecks 의 mapsOn 을 railMapsOn(허용 맵 둘 이상, 서버 view.mode)으로 넘기고, 맵을 고르기 전에 pickModeViaUi(…, "basic") 을 부른다(perf-run --map bar|plaza 는 20-09)
+- [Phase 20]: 20-05: 마을 카메라 값(PAN ±9.6·연장 판 22)은 20-04 시작값이 가시성·빈 배경 검사의 가장 작은 값과 같아 그대로 확정. 컷어웨이는 내 그려진 위치의 zoneOf 로 바뀔 때만 보내고(처음·recreate 뒤·모션 줄이기 instant), 몸이 그려지기 전에는 보내지 않는다. 남은 것 — veiled·door 훅과 문 연출·벽 뒤 이름표·지붕 누르기는 20-06
 
 ### Pending Todos
 
@@ -715,8 +717,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-12T22:45:01.247Z
-Stopped at: Completed 20-07-PLAN.md
+Last session: 2026-11-13T01:35:34.179Z
+Stopped at: Completed 20-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
