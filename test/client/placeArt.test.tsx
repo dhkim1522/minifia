@@ -2,14 +2,14 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
-import { PlaceArt, TraceArt } from "../../src/components/v2/placeArt";
+import { PlaceArt, TraceArt, placeArtOf, PLACE_ART } from "../../src/components/v2/placeArt";
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
 
-// 16-02: 컬러 에셋 25개 렌더 시험. 하이픈 속성이 남으면 React 가 콘솔 경고를 낸다 — 경고 0 을 고정한다(V-26).
+// 16-02: 컬러 에셋 렌더 시험(21페이즈: 장소 id 24 = 그림 16 + 가로등 8 별칭, 조각 9). 하이픈 속성이 남으면 React 가 콘솔 경고를 낸다 — 경고 0 을 고정한다(V-26).
 // 이름(label)을 주면 이미지로 읽히고 안 주면 장식으로 숨는다.
 
 const CASES: { name: string; draw: (label?: string) => ReturnType<typeof render> }[] = [
@@ -46,7 +46,7 @@ describe("PlaceArt·TraceArt", () => {
     expect(svg.hasAttribute("aria-label")).toBe(false);
   });
 
-  it("25개를 그리는 동안 console.error·console.warn 호출이 0 이다", () => {
+  it("33개를 그리는 동안 console.error·console.warn 호출이 0 이다", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     for (const c of CASES) {
@@ -56,11 +56,19 @@ describe("PlaceArt·TraceArt", () => {
     }
     expect(err.mock.calls.length).toBe(0);
     expect(warn.mock.calls.length).toBe(0);
-    expect(CASES.length).toBe(25);
+    expect(CASES.length).toBe(33); // 장소 24(재즈 바 8 + 광장 8 + 가로등 8) + 조각 9
   });
 
   it("className 은 svg 루트에 붙는다", () => {
     const { container } = render(<PlaceArt id="glass" size={32} className="x-art" />);
     expect(container.querySelector("svg")?.getAttribute("class")).toBe("x-art");
+  });
+});
+
+describe("placeArtOf — 가로등 id 의 그림 별칭 (21페이즈 P21-17)", () => {
+  it("모든 장소 id 에 그림이 있고 lamp0~lamp7 은 lamp 와 같은 항목이다", () => {
+    const missing = PLACE_IDS.filter((id) => placeArtOf(id) === undefined);
+    const same = PLACE_IDS.filter((id) => /^lamp\d$/.test(id)).map((id) => placeArtOf(id) === PLACE_ART.lamp);
+    expect(`${missing.length} ${same.length} ${same.every(Boolean)}`).toBe("0 8 true");
   });
 });

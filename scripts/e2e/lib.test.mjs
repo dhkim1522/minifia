@@ -3981,7 +3981,7 @@ test("emoteTrayChecks(16-05): 동작 단추는 48x48, 판 아랫변은 입력줄
 const fails = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
 const noMeasureAll = (lines) => lines.every((l) => !l.ok && /측정값 없음/.test(l.detail));
 
-test("ERRAND_MARKERS: 열여덟 개(16-07: data-rest 추가, 16-08: 독·칩 대신 시작 카드·진행 점 셋, 16-09: 증거 카드 2행·이름표 표시 넷)이고 서로 다르며 ERRAND_PLACE_IDS 는 16곳, 3곳씩", () => {
+test("ERRAND_MARKERS: 열여덟 개(16-07: data-rest 추가, 16-08: 독·칩 대신 시작 카드·진행 점 셋, 16-09: 증거 카드 2행·이름표 표시 넷)이고 서로 다르며 ERRAND_PLACE_IDS 는 24곳(21페이즈: 가로등 8곳 추가), 3곳씩", () => {
   assert.equal(ERRAND_MARKERS.length, 18);
   assert.equal(new Set(ERRAND_MARKERS).size, 18);
   assert.ok(ERRAND_MARKERS.includes("data-rest"));
@@ -3989,7 +3989,9 @@ test("ERRAND_MARKERS: 열여덟 개(16-07: data-rest 추가, 16-08: 독·칩 대
   for (const added of ["data-errand-start-card", "data-errand-dots", "data-errand-dot"]) assert.ok(ERRAND_MARKERS.includes(added), added);
   for (const added of ["data-lastseen-row", "data-lastseen-count", "data-trace-mark", "data-seen-mark"]) assert.ok(ERRAND_MARKERS.includes(added), added);
   assert.ok(ERRAND_MARKERS.every((m) => /^data-(errand-|near-|record-|trace-|lastseen-|seen-|rest$)/.test(m)));
-  assert.equal(ERRAND_PLACE_IDS.length, 16);
+  assert.equal(ERRAND_PLACE_IDS.length, 24);
+  assert.equal(new Set(ERRAND_PLACE_IDS).size, 24);
+  assert.deepEqual(ERRAND_PLACE_IDS.slice(16), ["lamp0", "lamp1", "lamp2", "lamp3", "lamp4", "lamp5", "lamp6", "lamp7"]);
   assert.equal(ERRAND_PER_PERSON, 3);
   assert.equal(ERRAND_LINES.trace, ""); // 18.1-12: 흔적 구간은 증거 카드가 말한다 — 띠 문장은 빈 글
   assert.equal(ERRAND_LINES.discussionEvidence, "같은 옷과 엇갈린 목격을 살펴보세요");
