@@ -561,6 +561,14 @@ describe("dayEvents — 아침 알림 (MORN-03)", () => {
     same(events.lines, [{ kind: "hot", text: "아무 일도 없었습니다", at: 400 }]);
   });
 
+  it("밤 → 확장판 토론(현장이 없어 아침을 건너뜀, 21-14 D-17): 아침과 같은 시각·길이의 '아무 일도 없었습니다' 알림과 같은 hot 줄. 기본 마피아·밤이 아닌 prev 는 없다", () => {
+    const talk = (mode: "basic" | "extended", prev: RoomView = nightView()): ReturnType<typeof dayEvents> => dayEvents(prev, { ...viewOf("discussion", { mySeat: 1 }), mode });
+    const events = talk("extended");
+    same(events.announces, [{ text: "아무 일도 없었습니다", at: 400, ms: 2400 }]);
+    same(events.lines, [{ kind: "hot", text: "아무 일도 없었습니다", at: 400 }]);
+    same([talk("basic").announces, talk("extended", viewOf("errand")).announces], [[], []]);
+  });
+
   it("첫 스냅샷(prev 없음)·reset 은 알림도 줄도 없다 (MORN-03 재접속)", () => {
     const cur = morningView({ eliminated: 3 });
     same([dayEvents(null, cur).announces, dayEvents(null, cur).lines], [[], []]);

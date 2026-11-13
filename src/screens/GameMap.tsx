@@ -15,7 +15,7 @@ import { ResultAnnounce } from "../components/ResultAnnounce";
 import { ErrandDots } from "../components/v2/ErrandDots";
 import { ClueChip } from "../components/v2/ClueChip";
 import { SceneDock } from "../components/v2/SceneDock";
-import { clueChipsOf, clueSpotStates, houseNightOf, housePlatesOf, lampsOffOf, sceneDelayMs, sceneMorningOf } from "../game/causalView";
+import { boardMarksOf, clueChipsOf, clueSpotStates, houseNightOf, housePlatesOf, lampsOffOf, sceneDelayMs, sceneMorningOf } from "../game/causalView";
 import { ErrandStartCard } from "../components/v2/ErrandStartCard";
 import { WillLetter } from "../components/v2/WillLetter";
 import type { WillLetter as WillLetterState } from "../net/useWillLetter";
@@ -24,6 +24,7 @@ import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { ToolButton } from "../components/ToolButton";
 import { RecordCard } from "../components/v2/RecordCard";
+import { SuspectBoard } from "../components/v2/SuspectBoard";
 import { EvidenceCard } from "../components/v2/EvidenceCard";
 import { V2Icon } from "../components/v2/V2Icon";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
@@ -227,6 +228,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const { show } = toast;
   // 판 규칙은 서버가 준 공개 값 view.mode 에서 얻는다(19페이즈 D-03) — 전역 값이 아니다. 같은 판은 같은 얼린 객체라 훅 의존성에 넣지 않아도 된다.
   const rules = rulesetOf(modeOf(view));
+  // 21페이즈 원인 → 결과 화면(의심 보드·현장 단서 기준 같은 옷 표시): 확장판 규칙이 켜진 판이다. 서버 view 는 판 종류(view.mode)를 늘 싣는다 — mode 가 없는 view 는 튜토리얼의 가짜 view 라
+  // 옛 증거 경로(증거 카드·day.evidence 이름표 표시) 그대로다(튜토리얼을 새 장면으로 바꾸는 일은 21-18).
+  const causalBoard = rules.errand && view.mode !== undefined;
   // 측정(스테이지 사각형)·키보드는 대기실과 같은 훅이다. 기록 칸은 LOG_H(68) 한 값 — 키보드가 열리면 행동 줄만 숨긴다(07-19, 18.1 P181-3).
   // 지목이면 스테이지 윗변을 차례 알약 아랫변 + 4 로 내리고(UI-SPEC A-1) 작은 폰은 압축형 알약을 받는다(turnCompact). 알약 요소는 훅이 루트에서 `[data-turn-block]` 으로 찾는다.
   // 심부름 단계와 튜토리얼 지도 장면(panelless prop, 18-03)은 아래 패널이 없다: 스테이지가 띠 아래부터 화면 아래까지 넓어진다
@@ -428,7 +432,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const canPick = voting ? meAlive : nominating && meAlive && myTurnNo !== undefined && pickedTurn !== myTurnNo && mine === undefined;
   // 목격 기록(15-07, ERRAND-05·D-04): 있는지는 서버가 준 view.me.record 의 유무 하나다(역할을 읽지 않는다). 토론에서만 [기록]·카드가 있고 단계가 바뀌면 사라진다.
   // 한 번 열면 [기록] 의 빛은 그 토론 안에서 되살아나지 않는다(열림 래치 — 단계·일차 키가 바뀌면 자동으로 풀린다).
-  const witnessRows = useMemo(() => (view.phase === "discussion" && meAlive ? recordRowsOf(view) : null), [view, meAlive]);
+  // 21-14(D-19): 확장판 토론은 이 카드 대신 의심 보드가 목격 줄을 맡는다 — 옛 카드(witnessRows)는 확장판이 아닌 판에서만 그린다
+  const boardRows = useMemo(() => (view.phase === "discussion" && meAlive ? recordRowsOf(view) : null), [view, meAlive]);
+  const witnessRows = causalBoard ? null : boardRows;
   const recordKey = `${view.phase}:${view.day?.n ?? 0}`;
   const [recordOpenKey, setRecordOpenKey] = useState<string | null>(null);
   const [recordSeenKey, setRecordSeenKey] = useState<string | null>(null);
@@ -442,29 +448,57 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     setRecordOpenKey(recordKey);
     setRecordSeenKey(recordKey);
   };
+  // 의심 보드(21-14, D-18·D-27, P21-14): 확장판 토론의 산 사람에게 그날 한 번 자동으로 열린다(단계 진입 때 — 모이는 동안에도 위에 겹친다).
+  // 래치 = `{일차}:board` 키. boardSeenKey 가 그날 자동 열림을 이미 했다는 표시이고 boardOpenKey 가 지금 열려 있는지다. 닫으면 열림 키만 지운다(래치는 남아 다시 자동으로 열리지 않는다).
+  // 헤더 단추로 다시 열 수 있고 다음 일차(키가 바뀜)는 다시 한 번 자동으로 열린다. 이 분기는 역할을 읽지 않는다 — 판 규칙·단계·내 생존뿐이다.
+  const boardOn = causalBoard && view.phase === "discussion" && meAlive && panelless !== true;
+  const boardKey = `${view.day?.n ?? 0}:board`;
+  const [boardSeenKey, setBoardSeenKey] = useState<string | null>(() => (boardOn ? boardKey : null));
+  const [boardOpenKey, setBoardOpenKey] = useState<string | null>(() => (boardOn ? boardKey : null));
+  useEffect(() => {
+    if (!boardOn || boardSeenKey === boardKey) return;
+    setBoardSeenKey(boardKey);
+    setBoardOpenKey(boardKey);
+  }, [boardOn, boardKey, boardSeenKey]);
+  const boardOpen = boardOn && boardOpenKey === boardKey;
+  const toggleBoard = (): void => {
+    setBoardSeenKey(boardKey);
+    setBoardOpenKey(boardOpen ? null : boardKey);
+  };
+  const boardChips = useMemo(() => (boardOn ? clueChipsOf(view.me.clues, view.me.record) : []), [boardOn, view.me.clues, view.me.record]);
+  const boardMarks = useMemo(() => (boardOn ? boardMarksOf(view.players, view.me.clues) : {}), [boardOn, view.players, view.me.clues]);
+  const boardFaces = useMemo(
+    () => view.players.filter((p) => isAlive(p)).map((p) => ({ seat: p.seat, name: p.nickname })).sort((a, b) => a.seat - b.seat),
+    [view.players],
+  );
+  const deadSeats = useMemo<ReadonlySet<number>>(() => new Set(view.players.filter((p) => !isAlive(p)).map((p) => p.seat)), [view.players]);
   // 채팅 입력칸에 포커스가 가면 카드가 접힌다(카드는 기록 칸을 덮을 뿐 입력줄을 가리지 않지만, 쓰는 동안은 기록 칸이 보여야 한다)
   useEffect(() => {
-    if (!recordOpen) return;
+    if (!recordOpen && !boardOpen) return;
     const root = rootRef.current;
     if (root === null) return;
     const onFocusIn = (e: FocusEvent): void => {
-      if (e.target !== null && e.target === inputRef.current) setRecordOpenKey(null);
+      if (e.target !== null && e.target === inputRef.current) {
+        setRecordOpenKey(null);
+        setBoardOpenKey(null);
+      }
     };
     root.addEventListener("focusin", onFocusIn);
     return () => root.removeEventListener("focusin", onFocusIn);
-  }, [recordOpen, rootRef, inputRef]);
+  }, [recordOpen, boardOpen, rootRef, inputRef]);
   // 카드 아래 끝 = 입력줄 윗변 − 8 (CSS 변수 --mf-record-bottom = 루트 아랫변에서 카드 아랫변까지). 열려 있는 동안 다시 그릴 때마다 잰다(키보드·패널 높이)
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (root === null) return;
-    if (!recordOpen) {
+    if (!recordOpen && !boardOpen) {
       root.style.removeProperty("--mf-record-bottom");
       return;
     }
-    const form = root.querySelector<HTMLElement>(".mv-chat__form");
-    if (form === null) return;
+    // 의심 보드는 아래 패널 전체 위 − 8 까지(UI-SPEC P21-14), 옛 카드는 입력줄 윗변 − 8 까지
+    const edge = boardOpen ? panelRef.current : root.querySelector<HTMLElement>(".mv-chat__form");
+    if (edge === null) return;
     const rr = root.getBoundingClientRect();
-    const fr = form.getBoundingClientRect();
+    const fr = edge.getBoundingClientRect();
     root.style.setProperty("--mf-record-bottom", `${Math.max(0, Math.round(rr.height - (fr.top - rr.top) + 8))}px`);
   });
 
@@ -537,11 +571,22 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 이름표 표시(16-09, D-09·D-10, V-29): 아침은 증거 카드가 뜬 뒤(흔적 구간)부터, 낮 단계는 day.evidence 가 있으면 항상. 밤에는 서버가 싣지 않아 사라진다.
   // 같은 옷 판정은 서버가 새로 계산하지 않는다 — 공개된 players[].look 과 조각의 함수다(R-3). 모든 viewer(마피아·시민·유령)가 같은 좌석 집합을 본다.
   const evidence = view.day?.evidence;
+  // 21-14(D-19): 확장판은 공개 흔적(day.evidence)이 아니라 내가 받은 옷 조각(me.clues 의 ② 옷 조각·③ 창문)의 같은 옷 좌석에 켠다(둘 다면 둘 다, 좌석의 색은 먼저 받은 조각의 색). me.clues 는 서버가 아침~처형(CLUE_PHASES)에만 싣는다 — 화면이 단계를 다시 세지 않는다.
+  // 마지막 목격자 표시(seenMark)는 확장판에 없다. 기본 마피아는 지금 그대로 day.evidence 기준이다.
   const marksOn = evidence?.trace !== undefined && (view.phase === "morning" ? traceShown : true);
-  const evidenceMarks = useMemo(() => {
+  const evidenceMarks = useMemo<{ same: ReadonlyMap<number, string>; seen: number | undefined } | null>(() => {
+    if (causalBoard) {
+      const same = new Map<number, string>();
+      for (const c of view.me.clues ?? []) {
+        if ((c.kind !== "cloth" && c.kind !== "window") || c.piece === undefined) continue;
+        for (const seat of sameOutfitSeats(view.players, c.piece)) if (!same.has(seat)) same.set(seat, TRACE_MARK[c.piece]);
+      }
+      return same.size === 0 ? null : { same, seen: undefined };
+    }
     if (!marksOn || evidence?.trace === undefined) return null;
-    return { same: new Set(sameOutfitSeats(view.players, evidence.trace)), color: TRACE_MARK[evidence.trace], seen: evidence.seen?.seat };
-  }, [marksOn, evidence, view.players]);
+    const color = TRACE_MARK[evidence.trace];
+    return { same: new Map(sameOutfitSeats(view.players, evidence.trace).map((seat) => [seat, color] as const)), seen: evidence.seen?.seat };
+  }, [causalBoard, view.me.clues, marksOn, evidence, view.players]);
 
   // 빛남(14-04, HOST-03·04, U-7): 13 의 투표 처음 3초 깜빡임을 대체한다. 대상은 callTargetsOf(view)(공개 정보·내 역할만) 하나가 정하고,
   // 같은 단계 안에서 내가 그 도구를 쓰면 즉시 꺼져 되살아나지 않는다(서버가 거절해도 다시 켜지 않는다). "썼음" 은 단계 키(단계·일차·변론자) 하나로 쥐어 키가 바뀌면 자동으로 풀린다.
@@ -710,10 +755,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     if (evidenceMarks === null) return roleTagProps;
     return (seat) => {
       const base = roleTagProps?.(seat) ?? {};
-      const same = evidenceMarks.same.has(seat);
+      const sameColor = evidenceMarks.same.get(seat);
       const seen = evidenceMarks.seen === seat;
-      if (!same && !seen) return base;
-      return { ...(same ? { traceMark: evidenceMarks.color } : {}), ...(seen ? { seenMark: true } : {}), ...base };
+      if (sameColor === undefined && !seen) return base;
+      return { ...(sameColor !== undefined ? { traceMark: sameColor } : {}), ...(seen ? { seenMark: true } : {}), ...base };
     };
   }, [roleTagProps, evidenceMarks]);
 
@@ -996,11 +1041,15 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           {...(whisper.mode ? { hintOverride: WHISPER_TEXT.modeHint } : {})}
           tod={tod}
           extra={
-            witnessRows !== null || roleCard ? (
+            witnessRows !== null || boardOn || roleCard ? (
               <>
                 {witnessRows !== null ? (
                   <span className="mf-game__record-slot" data-record-button="">
                     <ToolButton name="기록" icon={<V2Icon name="timeline" size={22} />} call={recordCall} expanded={recordOpen} onClick={toggleRecord} />
+                  </span>
+                ) : boardOn ? (
+                  <span className="mf-game__record-slot" data-record-button="">
+                    <ToolButton name="의심 보드" icon={<V2Icon name="timeline" size={22} />} expanded={boardOpen} onClick={toggleBoard} />
                   </span>
                 ) : null}
                 {roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null}
@@ -1172,7 +1221,22 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           <RecordCard rows={witnessRows} faceOf={faceSrc} colorOf={seatColorVar} onClose={() => setRecordOpenKey(null)} />
         </div>
       ) : null}
-      {traceShown && tracePiece !== undefined ? (
+      {boardOpen ? (
+        <div className="mf-game__record">
+          <SuspectBoard
+            chips={boardChips}
+            rows={boardRows}
+            faces={boardFaces}
+            marks={boardMarks}
+            faceOf={faceSrc}
+            colorOf={seatColorVar}
+            ghostSeats={deadSeats}
+            compact={stageH <= 640}
+            onClose={() => setBoardOpenKey(null)}
+          />
+        </div>
+      ) : null}
+      {traceShown && tracePiece !== undefined && !causalBoard ? (
         <div className="mf-game__trace">
           <EvidenceCard piece={tracePiece} victim={nameOfSeat(evidenceVictim)} witness={witnessOfEvidence} />
         </div>

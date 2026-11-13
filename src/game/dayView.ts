@@ -359,6 +359,14 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       }
       return;
     }
+    case "discussion": {
+      // 21페이즈 D-17: 현장이 없어 아침을 건너뛴 날(확장판 밤 → 토론)은 토론 첫 화면에서 지금 아침과 같은 큰 글 알림(같은 부품·같은 시간)으로 조용한 밤을 알린다.
+      // 건너뛴 아침은 피해자도 미수도 없는 밤이라 문구는 quiet 뿐이다(새 문구 없음). 기본 마피아는 밤 다음이 늘 아침이라 이 길이 없다
+      if (prev.phase !== "night" || !rulesetOf(modeOf(cur)).errand) return;
+      out.announces.push({ text: MORNING_TEXT.quiet, at: ANNOUNCE_MORNING_AT, ms: ANNOUNCE_MORNING_MS });
+      out.lines.push({ kind: "hot", text: MORNING_TEXT.quiet, at: ANNOUNCE_MORNING_AT });
+      return;
+    }
     default:
       return;
   }
