@@ -29,7 +29,9 @@ import {
 } from "../../src/game/chatUi";
 import { RESTORED_MS } from "../../src/net/linkReducer";
 import { STAGE_SIZES, panBoxOf } from "../../src/world/camera";
-import { TOWN_ROOMS, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
+import { TOWN_CLUE_SPOTS, TOWN_LAMPS, TOWN_ROOMS, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
+import { DOCK_H, NIGHT_DOCK_H } from "../../src/components/v2/SceneDock";
+import { nightZoomOf } from "../../src/world/camera";
 import { CUTAWAY_MS } from "../../src/world/maps/town";
 import { DOOR_FADE_MS } from "../../src/world/runtime";
 import { DRAW_CALL_BUDGET } from "../../src/world/renderer";
@@ -1238,5 +1240,63 @@ describe("19페이즈 기본 마피아 판 E2E 사본 계약 (19-07, T-19-22)", 
     const host = readFileSync(new URL("scripts/e2e/host.mjs", root), "utf8");
     expect(host).toContain('const emceeLeakFlow = (ctx) => leakFlow(ctx, "emcee-leak");');
     expect(host).toContain('const modeLeakFlow = (ctx) => leakFlow(ctx, "mode-leak", "basic");');
+  });
+});
+
+describe("원인→결과 하루 E2E 사본 상수·표식 CAUSAL_* (21-16, 사본 일치 규약)", () => {
+  type Pt = { x: number; z: number };
+  const lib = e2eLib as unknown as {
+    CAUSAL_MARKERS: readonly string[];
+    CAUSAL_SCENE_DOCK_H: number;
+    CAUSAL_NIGHT_DOCK_H: number;
+    CAUSAL_TOWN_LAMPS: readonly { seat: number; id: string; x: number; z: number }[];
+    CAUSAL_CLUE_SPOTS: Record<number, readonly Pt[]>;
+    causalNightZoom: (w: number) => number;
+  };
+  const root = new URL("../../", import.meta.url);
+  const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter((f) => /\.(tsx?|css)$/.test(f));
+  const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
+
+  it("CAUSAL_MARKERS 의 각 표식은 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
+    expect(lib.CAUSAL_MARKERS.length).toBeGreaterThanOrEqual(10);
+    expect(new Set(lib.CAUSAL_MARKERS).size).toBe(lib.CAUSAL_MARKERS.length);
+    const missing = lib.CAUSAL_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
+    expect(missing).toEqual([]);
+  });
+
+  it("표식 값에 역할·서버 전용 값이 실리지 않는다: 새 표식 속성에 role·mafia·cut·smudge 낱말이 값으로 들어가는 곳이 src 에 없다", () => {
+    const bad: string[] = [];
+    for (const marker of lib.CAUSAL_MARKERS) {
+      for (const s of sources) {
+        if (!s.f.endsWith(".tsx")) continue;
+        for (const m of s.text.matchAll(new RegExp(`${marker}=\\{([^}]*)\\}`, "g"))) {
+          if (/role|mafia|\bcut\b|smudge|lampCut|allies/i.test(m[1] ?? "")) bad.push(`${s.f}: ${marker}`);
+        }
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("독 높이 사본(저녁·아침 170, 밤 122)은 SceneDock 의 DOCK_H·NIGHT_DOCK_H 와 같다", () => {
+    expect(lib.CAUSAL_SCENE_DOCK_H).toBe(DOCK_H);
+    expect(lib.CAUSAL_NIGHT_DOCK_H).toBe(NIGHT_DOCK_H);
+  });
+
+  it("밤 배율 식 사본은 nightZoomOf 와 같다(폰 6종 폭)", () => {
+    for (const w of [360, 390, 402, 430]) expect(lib.causalNightZoom(w), `폭 ${w}`).toBeCloseTo(nightZoomOf(w), 12);
+  });
+
+  it("가로등 8곳 사본은 TOWN_LAMPS 의 좌석·id·좌표와 같다", () => {
+    expect(lib.CAUSAL_TOWN_LAMPS.length).toBe(TOWN_LAMPS.length);
+    TOWN_LAMPS.forEach((l, i) => expect(lib.CAUSAL_TOWN_LAMPS[i], `lamp ${i}`).toEqual({ seat: l.seat, id: l.id, x: l.x, z: l.z }));
+  });
+
+  it("단서 지점 사본은 TOWN_CLUE_SPOTS(고정소수점 ÷ 100)와 같다", () => {
+    expect(Object.keys(lib.CAUSAL_CLUE_SPOTS).map(Number)).toEqual(Object.keys(TOWN_CLUE_SPOTS).map(Number));
+    for (const [seat, spots] of Object.entries(TOWN_CLUE_SPOTS)) {
+      expect(lib.CAUSAL_CLUE_SPOTS[Number(seat)], `seat ${seat}`).toEqual(spots.map((p) => ({ x: p.x / 100, z: p.z / 100 })));
+    }
   });
 });

@@ -4,6 +4,22 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { TOWN_E2E, townChecks } from "./lib.mjs";
 import {
+  CAUSAL_MARKERS,
+  CAUSAL_SCENE_DOCK_H,
+  CAUSAL_NIGHT_DOCK_H,
+  CAUSAL_TOWN_LAMPS,
+  CAUSAL_CLUE_SPOTS,
+  boardChecks,
+  causalDayChecks,
+  causalEveningChecks,
+  causalNightZoom,
+  causalReducedChecks,
+  causalWindowChecks,
+  domShapeDiff,
+  nightPlateChecks,
+  sceneSpotChecks,
+} from "./lib.mjs";
+import {
   APPROVED_RELAXATIONS,
   TAG_BASE_ALPHA_MAX,
   TAG_FRONT_ALPHA_MIN,
@@ -5627,4 +5643,177 @@ test("TOWN_E2E: 방 넷의 안쪽·문 앞·방 안 자리와 상수가 모양�
   assert.equal(TOWN_E2E.CUTAWAY_MS, 250);
   assert.equal(TOWN_E2E.DOOR_FADE_MS, 200);
   assert.equal(TOWN_E2E.PAN.maxX, 9.6);
+});
+
+// ---- 21-16 원인→결과 하루 E2E 판정(UI-SPEC LH1~LH14) ----
+const okAll = (lines) => lines.every((l) => l.ok);
+const plateRect = (cx, cy) => ({ left: cx - 20, top: cy - 20, right: cx + 20, bottom: cy + 20, width: 40, height: 40 });
+
+test("causalDayChecks LH1: 확장판 단계 순서 — dayAnnounce 없이 roleReveal>errand>night>morning>discussion", () => {
+  const ok = causalDayChecks({ phases: ["lobby", "assigning", "roleReveal", "errand", "night", "morning", "discussion"], victim: true });
+  assert.deepEqual(ok.map((l) => l.id), ["LH1", "LH1d"]);
+  assert.ok(okAll(ok));
+  const withAnnounce = causalDayChecks({ phases: ["roleReveal", "dayAnnounce", "errand", "night", "morning", "discussion"], victim: true });
+  assert.equal(lineOf(withAnnounce, "LH1d").ok, false);
+  assert.equal(lineOf(withAnnounce, "LH1").ok, false);
+  assert.match(lineOf(withAnnounce, "LH1").detail, /roleReveal>dayAnnounce/);
+});
+
+test("causalDayChecks LH1: 피해자 없는 밤은 night>discussion 이 통과, 피해자가 있는데 morning 이 없으면 실패", () => {
+  assert.ok(okAll(causalDayChecks({ phases: ["roleReveal", "errand", "night", "discussion"], victim: false })));
+  const missing = causalDayChecks({ phases: ["roleReveal", "errand", "night", "discussion"], victim: true });
+  assert.equal(lineOf(missing, "LH1").ok, false);
+  assert.match(lineOf(missing, "LH1").detail, /morning/);
+  const extra = causalDayChecks({ phases: ["roleReveal", "errand", "night", "morning", "discussion"], victim: false });
+  assert.equal(lineOf(extra, "LH1").ok, false);
+});
+
+test("causalDayChecks LH1: 처형 다음 저녁(execution>errand)은 통과, execution>night 는 실패", () => {
+  assert.ok(okAll(causalDayChecks({ phases: ["roleReveal", "errand", "night", "morning", "discussion", "nomination", "defense", "verdict", "execution", "errand"], victim: true })));
+  const bad = causalDayChecks({ phases: ["roleReveal", "errand", "night", "morning", "discussion", "execution", "night"], victim: true });
+  assert.equal(lineOf(bad, "LH1").ok, false);
+  assert.match(lineOf(bad, "LH1").detail, /execution>night/);
+  assert.equal(lineOf(causalDayChecks({ phases: [], victim: true }), "LH1").ok, false);
+});
+
+test("causalEveningChecks LH2: 타일 3·처음 [켜기] 비활성·반경 안 data-call·점·훅·배지·완료", () => {
+  const start = { places: 3, actDisabled: true, actCall: false, dots: 0, lamps: [], doneBadges: 0 };
+  assert.ok(okAll(causalEveningChecks("start", start)));
+  assert.equal(lineOf(causalEveningChecks("start", { ...start, places: 2 }), "LH2s").ok, false);
+  assert.equal(lineOf(causalEveningChecks("start", { ...start, actDisabled: false }), "LH2s").ok, false);
+  const near = causalEveningChecks("near", { actDisabled: false, actCall: true });
+  assert.ok(okAll(near));
+  assert.equal(lineOf(causalEveningChecks("near", { actDisabled: true, actCall: true }), "LH2n").ok, false);
+  const lit = causalEveningChecks("lit", { dots: 1, lamps: [3], place: "lamp3", doneBadges: 1, expectDots: 1 });
+  assert.ok(okAll(lit));
+  assert.equal(lineOf(causalEveningChecks("lit", { dots: 0, lamps: [3], place: "lamp3", doneBadges: 1, expectDots: 1 }), "LH2l").ok, false);
+  assert.equal(lineOf(causalEveningChecks("lit", { dots: 1, lamps: [], place: "lamp3", doneBadges: 1, expectDots: 1 }), "LH2l").ok, false);
+  const done = causalEveningChecks("done", { dots: 3, actText: "완료", actDisabled: true });
+  assert.ok(okAll(done));
+  assert.equal(lineOf(causalEveningChecks("done", { dots: 3, actText: "켜기", actDisabled: true }), "LH2d").ok, false);
+});
+
+test("causalEveningChecks LH11e: 점 줄이 독 위 16·[켜기]/[건너뛰기] 56×112·타일 겹침 없음", () => {
+  const dock = { left: 0, top: 674, right: 390, bottom: 844, width: 390, height: 170 };
+  const m = {
+    dock,
+    dots: { left: 165, top: 650, right: 225, bottom: 658, width: 60, height: 8 },
+    act: { left: 16, top: 740, right: 254, bottom: 796, width: 238, height: 56 },
+    skip: { left: 262, top: 740, right: 374, bottom: 796, width: 112, height: 56 },
+    tiles: [{ left: 40, top: 200, right: 104, bottom: 264, width: 64, height: 64 }, { left: 200, top: 300, right: 264, bottom: 364, width: 64, height: 64 }],
+    stage: { left: 0, top: 62, right: 390, bottom: 674, width: 390, height: 612 },
+  };
+  assert.ok(okAll(causalEveningChecks("size", m)));
+  assert.equal(lineOf(causalEveningChecks("size", { ...m, act: { ...m.act, height: 50, bottom: 790 } }), "LH11e").ok, false);
+  assert.equal(lineOf(causalEveningChecks("size", { ...m, dots: { ...m.dots, top: 600, bottom: 608 } }), "LH11e").ok, false);
+  assert.equal(lineOf(causalEveningChecks("size", { ...m, tiles: [m.tiles[0], { ...m.tiles[0], left: 70, right: 134 }] }), "LH11e").ok, false);
+});
+
+test("nightPlateChecks LH4·LH11: 판 8 개수·스테이지 안쪽 8·중심 거리 ≥ 40·배율 식", () => {
+  const stage = { left: 0, top: 62, right: 390, bottom: 722, width: 390, height: 660 };
+  const centers = [[60, 300], [150, 140], [260, 140], [340, 300], [340, 460], [260, 600], [150, 600], [60, 460]];
+  const m = { w: 390, stage, alive: 8, zoom: (390 - 32) / 1315, plates: centers.map(([x, y], i) => ({ seat: i, rect: plateRect(x, y) })) };
+  const ok = nightPlateChecks(m);
+  assert.deepEqual(ok.map((l) => l.id), ["LH4p", "LH11a", "LH11b", "LH11c"]);
+  assert.ok(okAll(ok));
+  const outside = nightPlateChecks({ ...m, plates: m.plates.map((p, i) => (i === 7 ? { seat: 7, rect: plateRect(20, 460) } : p)) });
+  assert.equal(lineOf(outside, "LH11a").ok, false);
+  assert.match(lineOf(outside, "LH11a").detail, /7/);
+  assert.equal(outside.filter((l) => !l.ok).length, 1);
+  const close = nightPlateChecks({ ...m, plates: m.plates.map((p, i) => (i === 1 ? { seat: 1, rect: plateRect(150 + 90 - 60, 140 + 5) } : p)) });
+  assert.equal(lineOf(close, "LH11b").ok, false);
+  assert.equal(lineOf(nightPlateChecks({ ...m, alive: 7 }), "LH4p").ok, false);
+  assert.equal(lineOf(nightPlateChecks({ ...m, zoom: 0.3 }), "LH11c").ok, false);
+  assert.equal(lineOf(nightPlateChecks({ ...m, plates: null }), "LH4p").ok, false);
+});
+
+test("causalNightZoom·사본 상수: (폭 − 32) / 1315, 독 170·122", () => {
+  assert.ok(Math.abs(causalNightZoom(390) - 0.272) < 0.0005);
+  assert.ok(Math.abs(causalNightZoom(360) - 0.249) < 0.0005);
+  assert.equal(CAUSAL_SCENE_DOCK_H, 170);
+  assert.equal(CAUSAL_NIGHT_DOCK_H, 122);
+  assert.equal(CAUSAL_TOWN_LAMPS.length, 8);
+  assert.deepEqual(Object.keys(CAUSAL_CLUE_SPOTS).length, 8);
+  assert.ok(CAUSAL_MARKERS.includes("data-house-pick") && CAUSAL_MARKERS.includes("data-suspect-board"));
+});
+
+test("causalWindowChecks LH5: 창 = 밤에 켜진 등불의 집 ∩ 주인, 자른 등불의 집은 빠진다", () => {
+  const m = { eveningLamps: [0, 2, 3, 5], nightLamps: [0, 3, 5], cut: [2], owners: [0, 1, 2, 3, 4, 5], windows: [0, 3, 5] };
+  assert.ok(okAll(causalWindowChecks(m)));
+  assert.equal(lineOf(causalWindowChecks({ ...m, windows: [0, 2, 3, 5] }), "LH5a").ok, false);
+  assert.equal(lineOf(causalWindowChecks({ ...m, windows: [0, 2, 3, 5] }), "LH5b").ok, false);
+  assert.equal(lineOf(causalWindowChecks({ ...m, nightLamps: [0, 2, 3, 5], windows: [0, 2, 3, 5] }), "LH5b").ok, false);
+  assert.equal(lineOf(causalWindowChecks({ ...m, owners: [0, 1, 2, 3], windows: [0, 3] }), "LH5a").ok, true);
+});
+
+test("sceneSpotChecks LH6·LH11: 표식 3·상태·겹침 없음, 360×560 카드 줄 덮임은 참고 줄", () => {
+  const r = (l, t, w, h) => ({ left: l, top: t, right: l + w, bottom: t + h, width: w, height: h });
+  const base = {
+    w: 390,
+    h: 844,
+    spots: [{ n: 1, state: "fresh", rect: r(60, 300, 52, 52) }, { n: 2, state: "fresh", rect: r(170, 340, 52, 52) }, { n: 3, state: "fresh", rect: r(280, 300, 52, 52) }],
+    dock: r(0, 674, 390, 170),
+    cardRow: null,
+    expectStates: ["fresh", "fresh", "fresh"],
+  };
+  const ok = sceneSpotChecks(base);
+  assert.deepEqual(ok.map((l) => l.id), ["LH6a", "LH6b", "LH6c"]);
+  assert.ok(okAll(ok));
+  assert.equal(lineOf(sceneSpotChecks({ ...base, expectStates: ["fresh", "done", "fresh"] }), "LH6a").ok, false);
+  assert.equal(lineOf(sceneSpotChecks({ ...base, spots: base.spots.slice(0, 2) }), "LH6a").ok, false);
+  const touch = sceneSpotChecks({ ...base, spots: [base.spots[0], { n: 2, state: "fresh", rect: r(100, 320, 52, 52) }, base.spots[2]] });
+  assert.equal(lineOf(touch, "LH6b").ok, false);
+  const row = r(8, 578, 374, 96);
+  const covered = { ...base, cardRow: row, spots: [base.spots[0], { n: 2, state: "fresh", rect: r(170, 560, 52, 52) }, base.spots[2]] };
+  assert.equal(lineOf(sceneSpotChecks(covered), "LH6b").ok, false);
+  const small = sceneSpotChecks({ ...covered, w: 360, h: 560 });
+  assert.equal(lineOf(small, "LH6b").ok, true);
+  assert.equal(lineOf(small, "LH6i").ok, true);
+  assert.match(lineOf(small, "LH6i").detail, /덮/);
+  assert.equal(lineOf(sceneSpotChecks({ ...base, cardRow: r(8, 700, 374, 96) }), "LH6c").ok, false);
+  assert.equal(lineOf(sceneSpotChecks({ ...base, spots: [{ n: 1, state: "bogus", rect: r(60, 300, 52, 52) }, base.spots[1], base.spots[2]] }), "LH6a").ok, false);
+});
+
+test("boardChecks LH7·LH11: 열림 1·얼굴 = 산 사람·같은 옷 칸 = 사본·닫기 44·카드가 패널 위 8", () => {
+  const r = (l, t, w, h) => ({ left: l, top: t, right: l + w, bottom: t + h, width: w, height: h });
+  const content = { opens: 1, faces: [0, 1, 2, 3, 4, 5], alive: [0, 1, 2, 3, 4, 5], sameOutfit: [2, 4], marked: [2, 4] };
+  const ok = boardChecks(content);
+  assert.deepEqual(ok.map((l) => l.id), ["LH7a", "LH7b", "LH7c"]);
+  assert.ok(okAll(ok));
+  assert.equal(lineOf(boardChecks({ ...content, opens: 2 }), "LH7a").ok, false);
+  assert.equal(lineOf(boardChecks({ ...content, faces: [0, 1, 2, 3, 4] }), "LH7b").ok, false);
+  assert.equal(lineOf(boardChecks({ ...content, marked: [2] }), "LH7c").ok, false);
+  const geo = { closeRect: r(330, 80, 44, 44), boardRect: r(8, 70, 374, 400), panelTop: 600 };
+  const g = boardChecks(geo);
+  assert.deepEqual(g.map((l) => l.id), ["LH11b"]);
+  assert.ok(okAll(g));
+  assert.equal(lineOf(boardChecks({ ...geo, closeRect: r(330, 80, 40, 40) }), "LH11b").ok, false);
+  assert.equal(lineOf(boardChecks({ ...geo, boardRect: r(8, 70, 374, 530) }), "LH11b").ok, false);
+  assert.throws(() => boardChecks({}), /boardChecks/);
+});
+
+test("domShapeDiff LH3·LH9: 값·글은 무시하고 태그·속성 이름·클래스만, 허용 경로는 건너뛴다", () => {
+  const a = '<section class="p x" data-world-panel="" aria-label="가나"><button class="b is-call" data-call="" style="left:3px">켜기</button><span data-n="1">4</span></section>';
+  const b = '<section class="x p" data-world-panel="" aria-label="다라"><button class="b is-call" style="left:9px" data-call="">눌러</button><span data-n="9">9</span></section>';
+  assert.deepEqual(domShapeDiff(a, b), []);
+  const c = '<section class="p x" data-world-panel="" aria-label="가나"><button class="b is-call" data-call="" data-extra="1">켜기</button><span data-n="1">4</span></section>';
+  const d1 = domShapeDiff(a, c);
+  assert.equal(d1.length, 2);
+  assert.ok(d1.every((l) => /button/.test(l)));
+  assert.ok(d1.every((l) => !/켜기|가나/.test(l)));
+  const d2 = domShapeDiff(a, c, { allow: [/button\.b/] });
+  assert.deepEqual(d2, []);
+  const e = '<section class="p x" data-world-panel=""><button class="b" data-call="">k</button></section>';
+  assert.ok(domShapeDiff(a, e).length >= 1);
+  const img = '<div><img src="a.png" alt=""><br><svg><path d="M0"></path></svg><!-- c --></div>';
+  assert.deepEqual(domShapeDiff(img, img.replace("a.png", "b.png")), []);
+  assert.ok(domShapeDiff(img, img.replace("<br>", "")).length >= 1);
+});
+
+test("causalReducedChecks LH14: 모션 줄이기에서 전환 시간이 모두 0", () => {
+  assert.ok(okAll(causalReducedChecks({ items: [{ name: "카드", ms: 0 }, { name: "채움", ms: 0 }] })));
+  const bad = causalReducedChecks({ items: [{ name: "카드", ms: 0 }, { name: "채움", ms: 600 }] });
+  assert.equal(lineOf(bad, "LH14").ok, false);
+  assert.match(lineOf(bad, "LH14").detail, /채움/);
+  assert.equal(lineOf(causalReducedChecks({ items: [] }), "LH14").ok, false);
 });
