@@ -5,7 +5,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Plane, Raycaster, Vector2, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
-import { groundToScreen, PX_PER_UNIT, screenToGround, STAGE_SIZES, stageOffsetY, stageRect } from "../../src/world/camera";
+import { HOUSE_ROOF_TOP_Y, TOWN_HOUSES } from "../../shared/game/mapTown";
+import { groundToScreen, HEADER_BOTTOM, nightViewOf, nightZoomOf, PX_PER_UNIT, screenToGround, STAGE_SIZES, stageOffsetY, stageRect } from "../../src/world/camera";
 import { nextLadderStep, UnsupportedRendererError } from "../../src/world/renderer";
 import { configureCamera, createCamera } from "../../src/world/threeCamera";
 import { createThreeRenderer } from "../../src/world/threeRenderer";
@@ -166,6 +167,36 @@ describe("카메라 zoom = camera.ts zoom (08-10, 가정 A1: 과반 연출 확�
       return ((1 - ndc.y) / 2) * size.h;
     };
     expect(at(0) - at(70)).toBeCloseTo(70, 6);
+  });
+});
+
+describe("밤 고정 시점의 집 판 자리 = three 카메라 투영 (21-12, D-25)", () => {
+  // 폰 6종의 스테이지: 위 = 헤더 아래 62, 아래 = 폰 높이 − 밤 독 122. 실제 렌더러와 같은 three 정사영 카메라로 지붕 꼭대기 8점을 투영해 본다
+  const PHONES: Array<[number, number]> = [[360, 560], [360, 640], [390, 664], [390, 844], [402, 874], [430, 932]];
+
+  it("지붕 꼭대기(y 1.96) 8점이 스테이지 세로 가운데에 놓이고(±0.5px) 판 40 이 가장자리 8 안쪽·서로 ≥ 40 이다", () => {
+    const cam = createCamera();
+    for (const [w, h] of PHONES) {
+      const rect = { top: HEADER_BOTTOM, bottom: h - 122 };
+      const zoom = nightZoomOf(w);
+      const v = nightViewOf(rect, { w, h }, zoom);
+      configureCamera(cam, v.target, { w, h }, v.offsetY, zoom);
+      const pts = TOWN_HOUSES.map((hs) => {
+        const ndc = new Vector3(hs.x, HOUSE_ROOF_TOP_Y, hs.z).project(cam);
+        return { sx: ((ndc.x + 1) / 2) * w, sy: ((1 - ndc.y) / 2) * h };
+      });
+      const ys = pts.map((p) => p.sy);
+      expect(Math.abs((Math.min(...ys) + Math.max(...ys)) / 2 - (rect.top + rect.bottom) / 2), `${w}x${h} 세로 가운데`).toBeLessThan(0.5);
+      for (const p of pts) {
+        expect(p.sx - 20, `${w}x${h} 왼쪽`).toBeGreaterThanOrEqual(8);
+        expect(p.sx + 20, `${w}x${h} 오른쪽`).toBeLessThanOrEqual(w - 8);
+        expect(p.sy - 20, `${w}x${h} 위`).toBeGreaterThanOrEqual(rect.top + 8);
+        expect(p.sy + 20, `${w}x${h} 아래`).toBeLessThanOrEqual(rect.bottom - 8);
+      }
+      let min = Infinity;
+      for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) min = Math.min(min, Math.hypot(pts[i]!.sx - pts[j]!.sx, pts[i]!.sy - pts[j]!.sy));
+      expect(min, `${w}x${h} 최소 중심 거리`).toBeGreaterThanOrEqual(39.9);
+    }
   });
 });
 
