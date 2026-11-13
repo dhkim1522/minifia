@@ -4390,7 +4390,7 @@ describe("결과 장면: opacity 0.5 좌석 (11-12)", () => {
 // ---------- 15-05 Task 1: 근처 snap 등장·퇴장, onProject, walkTo ----------
 
 describe("런타임 직접: 근처 snap·onProject·walkTo (15페이즈 D-02, UI-SPEC U-17)", () => {
-  async function bootRuntime(over: { reduced?: boolean; onProject?: (p: (x: number, z: number) => { sx: number; sy: number } | null, now: number) => void } = {}) {
+  async function bootRuntime(over: { reduced?: boolean; onProject?: (p: (x: number, z: number) => { sx: number; sy: number } | null, now: number, at: (x: number, y: number, z: number) => { sx: number; sy: number } | null) => void } = {}) {
     const world = makeWorld();
     const store = new WorldStore();
     const host = document.createElement("div");
@@ -4445,6 +4445,19 @@ describe("런타임 직접: 근처 snap·onProject·walkTo (15페이즈 D-02, UI
     frame();
     expect(n).toBe(before + 1);
     expect(calls.at(-1)).toEqual({ sx: 200 + 30, sy: 300 + 20 });
+    runtime.dispose();
+  });
+
+  it("onProject 의 셋째 인자 at(x, y, z) 는 높이를 가진 점의 투영이다(21-12 집 판 — 지붕 꼭대기 y 1.96)", async () => {
+    const calls: { sx: number; sy: number }[] = [];
+    const { runtime } = await bootRuntime({
+      onProject: (_project, _now, at) => {
+        const p = at(3, 1.96, 2);
+        if (p) calls.push(p);
+      },
+    });
+    frame();
+    expect(calls.at(-1)).toEqual({ sx: 200 + 30, sy: 300 + 20 - 19.6 });
     runtime.dispose();
   });
 

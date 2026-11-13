@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildPlazaScene } from "../../src/world/maps/plaza";
 import { LADDER } from "../../src/world/renderer";
 import { HEAD_TOP_Y, WALK_HALF } from "../../shared/game/map";
-import { TOWN_MAP, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
+import { TOWN_HOUSES, TOWN_MAP, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
 import {
   CAM_DIST,
   CAM_HEIGHT,
@@ -19,11 +19,13 @@ import {
   gatherView,
   groundToScreen,
   HEAD_STACK_H,
+  HEADER_BOTTOM,
   LOOK_Y,
   NAMETAG_GAP,
   NAMETAG_H,
   NAMETAG_MAX_W,
   PAN_BOX,
+  nightViewOf,
   nightZoomOf,
   panBoxOf,
   PANEL_HEIGHT,
@@ -754,5 +756,54 @@ describe("nightZoomOf — 확장판 밤 고정 시점 배율 (21-10, D-25, UI-SP
   it("식은 (폭 − 32) / 1315 이다(반올림 없음)", () => {
     expect(nightZoomOf(1315 + 32)).toBe(1);
     expect(nightZoomOf(390)).toBeCloseTo(358 / 1315, 10);
+  });
+});
+
+describe("nightViewOf — 확장판 밤 고정 시점의 세로 맞춤 (21-12, D-25, 21-10 이월 메모)", () => {
+  const PHONES: Array<[number, number]> = [[360, 560], [360, 640], [390, 664], [390, 844], [402, 874], [430, 932]];
+  const NIGHT_DOCK = 122;
+  const roofs = (w: number, h: number) => {
+    const zoom = nightZoomOf(w);
+    const rect = { top: HEADER_BOTTOM, bottom: h - NIGHT_DOCK };
+    const v = nightViewOf(rect, { w, h }, zoom);
+    const pts = TOWN_HOUSES.map((hs) => groundToScreen({ x: hs.x, y: 1.96, z: hs.z }, v.target, { w, h }, v.offsetY, zoom));
+    return { v, rect, pts };
+  };
+
+  it("목표는 월드 원점이다(모이는 자리 구도와 같은 점)", () => {
+    expect(nightViewOf({ top: 62, bottom: 400 }, { w: 390, h: 844 }, 0.272).target).toEqual({ x: 0, z: 0 });
+  });
+
+  it("폰 6종: 집 8채 지붕 꼭대기 투영점의 세로 가운데가 스테이지 세로 가운데에 놓인다(±0.5px)", () => {
+    for (const [w, h] of PHONES) {
+      const { rect, pts } = roofs(w, h);
+      const ys = pts.map((p) => p.sy);
+      const mid = (Math.min(...ys) + Math.max(...ys)) / 2;
+      expect(Math.abs(mid - (rect.top + rect.bottom) / 2), `${w}x${h}`).toBeLessThan(0.5);
+    }
+  });
+
+  it("폰 6종: 판 40 이 스테이지 안(가장자리 8 이상)에 있고 서로 중심 거리 ≥ 40 이다", () => {
+    for (const [w, h] of PHONES) {
+      const { rect, pts } = roofs(w, h);
+      for (const p of pts) {
+        expect(p.sx - 20, `${w}x${h} 왼쪽`).toBeGreaterThanOrEqual(8);
+        expect(p.sx + 20, `${w}x${h} 오른쪽`).toBeLessThanOrEqual(w - 8);
+        expect(p.sy - 20, `${w}x${h} 위`).toBeGreaterThanOrEqual(rect.top + 8);
+        expect(p.sy + 20, `${w}x${h} 아래`).toBeLessThanOrEqual(rect.bottom - 8);
+      }
+      let min = Infinity;
+      for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) min = Math.min(min, Math.hypot(pts[i]!.sx - pts[j]!.sx, pts[i]!.sy - pts[j]!.sy));
+      expect(min, `${w}x${h}`).toBeGreaterThanOrEqual(39.9);
+    }
+  });
+
+  it("모이는 자리 구도(gatherView)를 그대로 쓰면 집이 아래로 치우친다 — 그래서 밤 전용 값이 따로 있다", () => {
+    const [w, h] = [390, 844] as const;
+    const zoom = nightZoomOf(w);
+    const rect = { top: HEADER_BOTTOM, bottom: h - NIGHT_DOCK };
+    const g = gatherView(rect, { w, h }, { zoom });
+    const n = nightViewOf(rect, { w, h }, zoom);
+    expect(Math.abs(g.offsetY - n.offsetY)).toBeGreaterThan(20);
   });
 });

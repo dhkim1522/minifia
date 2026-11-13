@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ClueLine, PublicPlayer, RecordLine, RoomView } from "../../shared/protocol";
-import { KOREAN_COUNT, boardMarksOf, clueChipsOf, clueSpotStates, housePlatesOf, lampsOffOf, nearestPlate, windowsLitOf } from "../../src/game/causalView";
+import { KOREAN_COUNT, boardMarksOf, clueChipsOf, clueSpotStates, houseNightOf, housePlatesOf, lampsOffOf, nearestPlate, windowsLitOf } from "../../src/game/causalView";
 
 // 21-08(D-10·D-14·D-18·D-25·D-26): 화면 계산 모듈 — 받은 view 값만 읽는 순수 함수. 단언은 문자열 한 줄로 둔다(한 줄 보고서).
 
@@ -127,6 +127,21 @@ describe("housePlatesOf — 밤 집 판 목록", () => {
   it("산 사람 좌석만, 내 좌석에 me 표시", () => {
     const view = { players: PLAYERS, me: { seat: 2, isHost: false } } as unknown as RoomView;
     expect(housePlatesOf(view).map((p) => `${p.seat}${p.me ? "*" : ""}`).join(",")).toBe("0,2*,3");
+  });
+});
+
+describe("houseNightOf — 밤 집 판 화면인가 (21-12)", () => {
+  const v = (over: Record<string, unknown>) => ({ phase: "night", map: "town", mode: "extended", ...over }) as unknown as RoomView;
+  it("확장판 + 마을 + 밤이면 참이다(판 종류가 없는 view 도 확장판이다)", () => {
+    expect(houseNightOf(v({}))).toBe(true);
+    expect(houseNightOf(v({ mode: undefined }))).toBe(true);
+  });
+  it("기본 마피아 판·다른 맵·밤이 아닌 단계는 거짓이다", () => {
+    expect(houseNightOf(v({ mode: "basic" }))).toBe(false);
+    expect(houseNightOf(v({ map: "bar" }))).toBe(false);
+    expect(houseNightOf(v({ map: undefined }))).toBe(false);
+    expect(houseNightOf(v({ phase: "morning" }))).toBe(false);
+    expect(houseNightOf(v({ phase: "errand" }))).toBe(false);
   });
 });
 

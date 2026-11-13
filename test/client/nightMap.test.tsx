@@ -5,6 +5,7 @@ import { installMemoryStorage } from "../helpers/memoryStorage";
 import type { RoleId } from "../../shared/game/roles";
 import { setEngineForTest } from "../../src/audio/unlock";
 import { faceSrc } from "../../src/net/assets";
+import { TOWN_HOUSES } from "../../shared/game/mapTown";
 import { makeRig } from "../helpers/soundRig";
 import type { ClientMessage, InvestigationRecord, PhaseId, PublicPlayer, RoomView, SpectatePicks } from "../../shared/protocol";
 import type { SceneLook } from "../../src/world/presence";
@@ -17,12 +18,13 @@ vi.mock("../../src/net/useRoomConnection", () => ({
   useRoomConnection: () => connectionMock.current,
 }));
 
-const rt = vi.hoisted(() => ({ scenes: [] as unknown[], created: 0, taps: 0 }));
+const rt = vi.hoisted(() => ({ scenes: [] as unknown[], created: 0, taps: 0, deps: null as null | Record<string, unknown> }));
 vi.mock("../../src/world/runtime", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../src/world/runtime")>();
   return {
     ...real,
-    createWorldRuntime: () => {
+    createWorldRuntime: (deps: Record<string, unknown>) => {
+      rt.deps = deps; // 21-12: 집 판 투영 시험이 프레임 콜백(onProject)을 직접 부른다
       rt.created += 1;
       return {
         start: () => Promise.resolve(),
@@ -83,6 +85,10 @@ interface ViewOpts {
   /** 경찰 본인에게 싣는 조사 기록 */
   records?: InvestigationRecord[];
   noExecution?: "tie" | "noVotes";
+  /** 21-12: 확장판 밤(마을 맵) — 기본은 옛 기본 마피아 갈래 */
+  mode?: "extended";
+  /** 21-12: 좌석은 그대로 두고 역할만 바꾼다(같은 view 의 네 역할 비교) */
+  role?: RoleId;
 }
 
 function makeView(o: ViewOpts = {}): RoomView {
@@ -91,7 +97,7 @@ function makeView(o: ViewOpts = {}): RoomView {
   const phase = o.phase ?? "night";
   const dead = o.dead ?? [];
   const meDead = dead.includes(mySeat);
-  const role = JOBS[mySeat] ?? "citizen";
+  const role = o.role ?? JOBS[mySeat] ?? "citizen";
   const players = Array.from({ length: count }, (_, seat) => player(seat, dead.includes(seat) ? { alive: false } : {}));
   const allies = JOBS.flatMap((j, s) => (j === "mafia" && s !== mySeat && s < count ? [s] : []));
   const chat = meDead ? "ghost" : phase === "night" ? (role === "mafia" ? "mafia" : undefined) : "all";
@@ -101,7 +107,8 @@ function makeView(o: ViewOpts = {}): RoomView {
     phaseEndsAt: NOW + 30_000,
     phaseDurationMs: 30_000,
     serverNow: NOW,
-    mode: "basic", // 21-08: 확장판 갈래는 별도 시험이 본다 — 이 시험은 기본 마피아 갈래(옛 키)를 본다
+    mode: o.mode ?? "basic", // 21-08: 확장판 갈래는 별도 시험이 본다 — 이 시험은 기본 마피아 갈래(옛 키)를 본다
+    ...(o.mode === "extended" ? { map: "town" as const } : {}),
     minPlayers: 4,
     maxPlayers: 8,
     players,
@@ -891,5 +898,228 @@ describe("밤 소리: 시각 큐 갈래와 소리 전용 갈래는 같은 소리
       expect(l.filter((id) => id.startsWith("ui.") && id !== "ui.host")).toEqual([]);
       expect(l.filter((id) => id === "ui.host")).toHaveLength(1);
     }
+  });
+});
+
+// 21-12 Task 2 (D-10·D-11·D-25·D-27, P21-9): 확장판(마을) 밤 · 집 하나 고르기. 얼굴 목록 대신 고정 시점 지도 위 집 판과 밤 독(122).
+// 네 역할이 같은 판·같은 안내·같은 높이이고, 다른 것은 행동 줄 단추([쪽지]/[유언])와 산 마피아의 합의 배지뿐이다(T-21-29).
+describe("확장판 밤 — 집 판 (21-12, D-10·D-25)", () => {
+  const ext = (o: ViewOpts = {}): RoomView => makeView({ mode: "extended", ...o });
+  const plateSeats = (c: ParentNode): number[] => [...c.querySelectorAll<HTMLElement>("[data-house-pick]")].map((b) => Number(b.dataset.housePick));
+  const plateOf = (c: ParentNode, seat: number): HTMLElement | null => c.querySelector<HTMLElement>(`[data-house-pick="${seat}"]`);
+  const plateOn = (c: ParentNode, seat: number): string | null => plateOf(c, seat)?.getAttribute("aria-pressed") ?? null;
+  const layerHtml = (c: ParentNode): string => (c.querySelector("[data-house-layer]")?.outerHTML ?? "").replace(/<span class="mv-face__count"[^>]*>[\s\S]*?<\/span>/g, "");
+  const guideHtml = (c: ParentNode): string => c.querySelector("[data-dock-guide]")?.outerHTML ?? "";
+  const actionsOf = (c: ParentNode): HTMLElement | null => c.querySelector<HTMLElement>("[data-dock-actions]");
+
+  it("산 시민(좌석 3, 산 사람 6): 판 6·얼굴 목록 없음·밤 독 하나·행동 줄 [유언]·이름표 없음·어둠 표식 없음", () => {
+    const { container } = mount(ext({ mySeat: 3 }));
+    expect(plateSeats(container)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(container.querySelector("[data-face-list]")).toBeNull();
+    expect(container.querySelectorAll(".mv-face")).toHaveLength(0);
+    expect(container.querySelectorAll("[data-dock-night]")).toHaveLength(1);
+    expect(container.querySelectorAll(".mf-game__panel")).toHaveLength(1);
+    expect(actionsOf(container)!.querySelectorAll("[data-will-button]")).toHaveLength(1);
+    expect(actionsOf(container)!.querySelectorAll("[data-note-button]")).toHaveLength(0);
+    expect(container.querySelectorAll(".mf-world__tag")).toHaveLength(0);
+    expect(container.querySelector("[data-night-dark]")).toBeNull();
+    expect(titleText(container)).toBe("밤");
+  });
+
+  it("산 마피아: 같은 판 수·같은 밤 독, 행동 줄은 [쪽지], 합의 배지는 그 판에만", () => {
+    const { container } = mount(ext({ mySeat: 0, nightTally: [{ seat: 2, n: 2 }], nightSure: 4 }));
+    expect(plateSeats(container)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(container.querySelectorAll("[data-dock-night]")).toHaveLength(1);
+    expect(actionsOf(container)!.querySelectorAll("[data-note-button]")).toHaveLength(1);
+    expect(actionsOf(container)!.querySelectorAll("[data-will-button]")).toHaveLength(0);
+    expect(plateOf(container, 2)!.querySelector(".mv-face__count")!.textContent).toBe("2");
+    expect(plateOf(container, 4)!.querySelector(".mv-face__count")!.getAttribute("aria-label")).toBe("확정");
+    expect(container.querySelectorAll(".mv-face__count")).toHaveLength(2);
+  });
+
+  it("다른 역할(경찰·의사·시민)에는 합의 배지 칸이 DOM 에 없다(집계가 섞여 와도 읽지 않는다)", () => {
+    for (const mySeat of [1, 2, 3]) {
+      const stray: RoomView = ext({ mySeat });
+      stray.me = { ...stray.me, nightTally: [{ seat: 2, n: 2 }], nightSure: 4 };
+      const { container } = mount(stray);
+      expect(container.querySelectorAll(".mv-face__count"), `seat ${mySeat}`).toHaveLength(0);
+      cleanup();
+    }
+  });
+
+  it("T-21-29: 같은 view 에서 역할만 바꾼 네 렌더의 판 층·안내 줄은 합의 배지를 빼면 outerHTML 이 같다", () => {
+    const htmls: string[] = [];
+    const guides: string[] = [];
+    for (const role of ["mafia", "police", "doctor", "citizen"] as RoleId[]) {
+      const { container } = mount(ext({ mySeat: 3, role, ...(role === "mafia" ? { nightTally: [{ seat: 1, n: 1 }] } : {}) }));
+      htmls.push(layerHtml(container));
+      guides.push(guideHtml(container));
+      expect(container.querySelectorAll("[data-dock-night]"), role).toHaveLength(1);
+      cleanup();
+    }
+    expect(htmls[0]).toContain("data-house-pick");
+    expect(new Set(htmls).size).toBe(1);
+    expect(new Set(guides).size).toBe(1);
+    expect(guides[0]).toContain("불 켜진 창");
+  });
+
+  it("안 골랐으면 판 전체가 같이 is-call, 안내 줄은 범례 — 네 역할이 같다", () => {
+    for (const mySeat of [0, 1, 2, 3]) {
+      const { container } = mount(ext({ mySeat }));
+      expect(container.querySelectorAll("[data-house-pick][data-call]"), `seat ${mySeat}`).toHaveLength(6);
+      expect(guideHtml(container), `seat ${mySeat}`).toContain("꺼진 창");
+      cleanup();
+    }
+  });
+
+  it("내 판 하나만 data-me 와 이름 '나의 집 고르기', 남의 판은 '{닉네임} 님의 집 고르기', 탈락한 집은 판이 없다", () => {
+    const { container } = mount(ext({ mySeat: 3, dead: [4] }));
+    expect(plateSeats(container)).toEqual([0, 1, 2, 3, 5]);
+    expect([...container.querySelectorAll("[data-house-pick][data-me]")].map((b) => b.getAttribute("data-house-pick"))).toEqual(["3"]);
+    expect(plateOf(container, 3)!.getAttribute("aria-label")).toBe("나의 집 고르기");
+    expect(plateOf(container, 2)!.getAttribute("aria-label")).toBe("서준 님의 집 고르기");
+  });
+
+  it("판을 누르면 pick 한 번(JSON 모양 그대로)과 즉시 고른 표시, 같은 집을 다시 누르면 보내지 않고, 다른 집은 옮겨 간다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(ext({ mySeat: 3 }), { send });
+    fireEvent.click(plateOf(m.container, 2)!);
+    expect(pickMsgs(send).map((x) => JSON.stringify(x))).toEqual(['{"t":"pick","target":2}']);
+    expect(plateOn(m.container, 2)).toBe("true");
+    expect(guideHtml(m.container)).toContain("고른 집은 바꿀 수 있어요");
+    expect(m.container.querySelectorAll("[data-house-pick][data-call]")).toHaveLength(0);
+    fireEvent.click(plateOf(m.container, 2)!);
+    expect(pickMsgs(send)).toHaveLength(1);
+    fireEvent.click(plateOf(m.container, 5)!);
+    expect(pickMsgs(send).map((x) => JSON.stringify(x))).toEqual(['{"t":"pick","target":2}', '{"t":"pick","target":5}']);
+    expect(plateOn(m.container, 5)).toBe("true");
+    expect(plateOn(m.container, 2)).toBe("false");
+  });
+
+  it("자기 집도 누를 수 있다(같은 메시지, 막지 않는다)", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(ext({ mySeat: 3 }), { send });
+    fireEvent.click(plateOf(m.container, 3)!);
+    expect(pickMsgs(send)).toEqual([{ t: "pick", target: 3 }]);
+  });
+
+  it("서버 view(me.pick)가 오면 서버 값이 이긴다", () => {
+    const m = mount(ext({ mySeat: 3 }));
+    fireEvent.click(plateOf(m.container, 2)!);
+    m.show(ext({ mySeat: 3, pick: 4 }));
+    expect(plateOn(m.container, 4)).toBe("true");
+    expect(plateOn(m.container, 2)).toBe("false");
+  });
+
+  it("소켓이 닫혀 못 보냈으면(send false) 고른 표시도 바뀌지 않는다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => false);
+    const m = mount(ext({ mySeat: 3 }), { send });
+    fireEvent.click(plateOf(m.container, 2)!);
+    expect(plateOn(m.container, 2)).toBe("false");
+  });
+
+  it("거절되면 알림 뒤 고른 표시가 서버 값으로 돌아간다(이유 글은 지금 알림 그대로)", () => {
+    const { handlers, onEvent } = withHandlers();
+    const m = mount(ext({ mySeat: 3, pick: 4 }), { onEvent });
+    expect(plateOn(m.container, 4)).toBe("true");
+    fireEvent.click(plateOf(m.container, 2)!);
+    expect(plateOn(m.container, 2)).toBe("true");
+    act(() => handlers.forEach((h) => h({ t: "error", code: "BAD_MESSAGE" } as never, { epoch: 1 })));
+    expect(m.container.querySelector(".mv-toast__text")?.textContent).toBe("보내지 못했어요. 다시 해 보세요");
+    expect(plateOn(m.container, 2)).toBe("false");
+    expect(plateOn(m.container, 4)).toBe("true");
+  });
+
+  it("연결이 끊긴 동안(canSend 거짓) 모든 판이 aria-disabled 이고 눌러도 보내지 않는다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const { container } = mount(ext({ mySeat: 3 }), { send, canSend: false });
+    expect([...container.querySelectorAll("[data-house-pick]")].every((b) => b.getAttribute("aria-disabled") === "true")).toBe(true);
+    fireEvent.click(plateOf(container, 2)!);
+    expect(pickMsgs(send)).toEqual([]);
+  });
+
+  it("밤에는 3D 탭 걷기가 없다 — 판 층 밖 바닥을 눌러도 move 가 없다", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const { container } = mount(ext({ mySeat: 3 }), { send });
+    tapFloor(container);
+    expect(moves(send)).toHaveLength(0);
+  });
+
+  it("유령(탈락한 본인)은 같은 밤 장면에 판이 없고 유령 채팅 패널 그대로이며 밤 독도 없다", () => {
+    const { container } = mount(ext({ mySeat: 5, dead: [5], picks: { mafia: [], police: [], doctor: [] } }));
+    expect(container.querySelectorAll("[data-house-pick]")).toHaveLength(0);
+    expect(container.querySelector("[data-dock-night]")).toBeNull();
+    expect(container.querySelector("[data-chat-panel]")!.getAttribute("data-chat-channel")).toBe("ghost");
+    expect(container.querySelectorAll(".mf-world__tag")).toHaveLength(0);
+  });
+
+  it("기본 마피아 밤은 지금 그대로다 — 얼굴 목록·판 층 없음·밤 독 없음, 이름표 층은 그대로", () => {
+    const { container } = mount(makeView({ mySeat: 3 }));
+    expect(container.querySelector("[data-house-layer]")).toBeNull();
+    expect(container.querySelector("[data-dock-night]")).toBeNull();
+    expect(container.querySelectorAll("[data-face-list]")).toHaveLength(1);
+    expect(container.querySelectorAll(".mf-world__tag").length).toBeGreaterThan(0);
+    expect(container.querySelector('[data-night-dark="true"]')).not.toBeNull();
+  });
+
+  it("확장판이라도 마을 맵이 아니면(집이 없다) 지금의 얼굴 목록 그대로다", () => {
+    const view: RoomView = { ...ext({ mySeat: 3 }), map: "bar" };
+    const { container } = mount(view);
+    expect(container.querySelector("[data-house-layer]")).toBeNull();
+    expect(container.querySelectorAll("[data-face-list]")).toHaveLength(1);
+  });
+
+  describe("고정 시점 투영 (P21-9)", () => {
+    const projectAt = (x: number, y: number, z: number) => ({ sx: 200 + x * 10, sy: 300 + z * 10 - y * 10 });
+    const frame = (n = 1): void => {
+      const deps = rt.deps as { onProject: (g: (x: number, z: number) => unknown, now: number, at: typeof projectAt) => void };
+      for (let i = 0; i < n; i++) act(() => deps.onProject((x, z) => projectAt(x, 0, z), Date.now(), projectAt));
+    };
+    const r1 = (v: number): number => Math.round(v * 10) / 10;
+
+    it("처음에는 판이 보이지도 눌리지도 않다가(카메라가 움직이는 동안) 위치가 두 프레임 같으면 지붕 꼭대기(y 1.96) 투영점에 선다", () => {
+      const { container } = mount(ext({ mySeat: 3 }));
+      expect(plateOf(container, 0)!.hasAttribute("data-house-off")).toBe(true);
+      frame(1);
+      expect(plateOf(container, 0)!.hasAttribute("data-house-off")).toBe(true);
+      frame(1);
+      for (const hs of TOWN_HOUSES.filter((h) => h.seat <= 5)) {
+        const b = plateOf(container, hs.seat)!;
+        expect(b.hasAttribute("data-house-off"), `seat ${hs.seat}`).toBe(false);
+        expect(b.style.left, `seat ${hs.seat}`).toBe(`${r1(projectAt(hs.x, 1.96, hs.z).sx)}px`);
+        expect(b.style.top, `seat ${hs.seat}`).toBe(`${r1(projectAt(hs.x, 1.96, hs.z).sy)}px`);
+      }
+    });
+
+    it("움직이는 동안(프레임마다 위치가 다르면) 판은 계속 숨어 있다", () => {
+      const deps = rt.deps as { onProject: (g: (x: number, z: number) => unknown, now: number, at: (x: number, y: number, z: number) => unknown) => void };
+      const { container } = mount(ext({ mySeat: 3 }));
+      for (let i = 0; i < 5; i++) act(() => deps.onProject(() => null, Date.now(), (x, y, z) => ({ sx: 200 + x * 10 + i * 9, sy: 300 + z * 10 - y * 10 })));
+      expect(plateOf(container, 0)!.hasAttribute("data-house-off")).toBe(true);
+    });
+
+    it("판 층을 누르면 가장 가까운 판 하나로 pick 을 보낸다(28 밖이면 아무것도 없다)", () => {
+      const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+      const { container } = mount(ext({ mySeat: 3 }), { send });
+      frame(2);
+      const layer = container.querySelector<HTMLElement>("[data-house-layer]")!;
+      const hs = TOWN_HOUSES[1]!;
+      const c = projectAt(hs.x, 1.96, hs.z);
+      fireEvent.pointerUp(layer, { clientX: c.sx + 9, clientY: c.sy + 9, pointerType: "touch" });
+      expect(pickMsgs(send)).toEqual([{ t: "pick", target: 1 }]);
+      fireEvent.pointerUp(layer, { clientX: 1, clientY: 1, pointerType: "touch" });
+      expect(pickMsgs(send)).toHaveLength(1);
+    });
+
+    it("밤이 끝나(아침) 판 층이 사라졌다가 다음 밤에 다시 오면 처음부터 다시 숨는다", () => {
+      const m = mount(ext({ mySeat: 3 }));
+      frame(2);
+      expect(plateOf(m.container, 0)!.hasAttribute("data-house-off")).toBe(false);
+      m.show(ext({ mySeat: 3, phase: "morning" }));
+      frame(1);
+      expect(m.container.querySelector("[data-house-layer]")).toBeNull();
+      m.show(ext({ mySeat: 3 }));
+      expect(plateOf(m.container, 0)!.hasAttribute("data-house-off")).toBe(true);
+    });
   });
 });
