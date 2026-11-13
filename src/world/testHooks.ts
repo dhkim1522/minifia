@@ -72,6 +72,8 @@ export interface TownHookState {
   windows: number[];
   /** 아침 현장 단서 decal 이 보이는가 */
   clue: boolean;
+  /** 밤 고정 시점(21페이즈 D-25): 장면이 준 확장판 밤 고정 카메라의 배율과 고정 여부. 밤이 아니면 { zoom: 1, fixed: false }. 공개 장면 값이다 */
+  night: { zoom: number; fixed: boolean };
 }
 
 /** window.__mfResult 의 모양(11-05) */
@@ -244,7 +246,7 @@ export function installMapHook(mapId: MapId): { off(): void } {
  * 해제는 다른 설치가 덮어썼으면 지우지 않는다. 값은 DOM 속성이 아니다.
  */
 export function installTownHook(): { patch(next: Partial<TownHookState>): void; off(): void } {
-  let mine: TownHookState = { zone: "plaza", open: [], roofs: { post: 1, pub: 1, clinic: 1, police: 1 }, owners: [], veiled: [], door: [], lamps: [], windows: [], clue: false };
+  let mine: TownHookState = { zone: "plaza", open: [], roofs: { post: 1, pub: 1, clinic: 1, police: 1 }, owners: [], veiled: [], door: [], lamps: [], windows: [], clue: false, night: { zoom: 1, fixed: false } };
   window.__mfTown = mine;
   return {
     patch(next) {

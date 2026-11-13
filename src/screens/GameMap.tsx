@@ -353,14 +353,15 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 이동 권한: 산 사람은 낮 시작·토론에서만, 유령은 언제나(MAP-04). 권위는 서버 canMove 이고 화면은 같은 표로 맵 탭만 막는다.
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);
-  // 밤에는 산 사람 누구도 걷지 않는다(15페이즈 D-05) — 서버와 같은 이동 권한 표(canMoveIn)다.
-  const canWalk = canMoveIn(view.phase, meAlive);
+  // 밤에는 산 사람 누구도 걷지 않는다(15페이즈 D-05), 확장판 아침은 걷는다(21페이즈 D-26) — 서버와 같은 이동 권한 표(canMoveIn, 판 규칙 인자)다.
+  const canWalk = canMoveIn(view.phase, meAlive, rulesetOf(modeOf(view)));
   // 유령 화면(GHOST-02, 결정 0021): 내가 탈락했고 서버가 관전 정보(spectate)를 보냈을 때만 그린다. 서버가 안 보낸 view 에서는 이 분기가 아예 없다 — 받아서 감추는 방식이 아니다.
   const spectate = !meAlive ? view.spectate : undefined;
   const ghost = spectate !== undefined;
 
   // 장면 표(보임·유령·카메라·조명·긴장): 서버 공개 정보로만 만든다. view 가 바뀔 때만 새로 만든다(타이머 틱으로 WorldStage 를 흔들지 않는다).
   const stageH = Math.max(0, window.innerHeight - (stageInsets?.top ?? DEFAULT_INSET_TOP) - (stageInsets?.bottom ?? DEFAULT_INSET_BOTTOM));
+  const stageW = window.innerWidth; // 스테이지 사각형은 폭 전체다 — 확장판 밤 고정 시점 배율(nightZoomOf)에 쓴다
 
   // 지목 단계(DAY-04): 산 사람은 나를 뺀 산 사람의 이름표를 눌러 가리킨다. 내 선택만 서버 응답 전에 보이고(낙관적), 서버 view 가 오면 서버 값(day.points 의 내 줄, 가정 A1)이 이긴다.
   // 남의 지목·득표·선두·과반은 서버가 보낸 day.points 로만 그린다(T-08-38).
@@ -845,10 +846,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
 
   const scene = useMemo(
     () => ({
-      ...sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) }),
+      ...sceneLook(view, { stageH, stageW, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) }),
       ...(camera ? { camera } : {}),
     }),
-    [view, stageH, fading, mine, verdictZoom, camera],
+    [view, stageH, stageW, fading, mine, verdictZoom, camera],
   );
 
   return (

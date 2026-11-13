@@ -26,7 +26,7 @@ import { createTapGate } from "./input";
 import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment, stepYaw, travelYaw } from "./motion";
 import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
-import { EXEC_END_OPACITY, executionFade, GHOST_OPACITY, GHOST_SPRITE, ghostFloatY, ghostTintOf, stageLiftY } from "./presence";
+import { EXEC_END_OPACITY, executionFade, GHOST_OPACITY, GHOST_SPRITE, ghostFloatY, ghostTintOf, nightHookOf, stageLiftY } from "./presence";
 import { easeInOut, pinAt, pinLevel, pinLights } from "./pinPlan";
 import type { SceneLook } from "./presence";
 import { initialMapStatus, inputBlocked, mapStatusReducer, shouldRecreate } from "./status";
@@ -239,6 +239,8 @@ export interface WorldRuntimeDeps {
     lamps: number[];
     windows: number[];
     clue: boolean;
+    /** 밤 고정 시점(21페이즈 D-25): 장면이 준 고정 카메라가 밤 고정 시점(원점·배율 1 미만)이면 그 배율, 아니면 { zoom: 1, fixed: false } */
+    night: { zoom: number; fixed: boolean };
   }) => void;
   /** 카메라 줌이 렌더러에 새로 보내질 때 소수 셋째 자리로 불린다 — E2E 훅 window.__mfPin.zoom 용(09.1.1-13). 제품은 넘기지 않는다 */
   onZoom?: (zoom: number) => void;
@@ -919,6 +921,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       // 확장판(등불을 한 번이라도 보냈다)은 주인 ∩ 켜진 등불, 그 밖의 마을 판은 20페이즈 그대로 주인 전부
       windows: lampsKey === null ? [...ownerSeats] : windowsLitOf(ownerSeats, lampsNow),
       clue: clueNow !== null,
+      night: nightHookOf(look?.camera),
     };
     const key = JSON.stringify(state);
     if (key === townKey) return;
@@ -1439,6 +1442,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       // zoomMs 가 있는 구도(판결 순간 느린 확대, 09.1.1-13): 위치·세로 오프셋·줌이 모두 그 시간에 ease-in-out 으로 같이 간다. 모션 줄이기는 줌 없이 1 을 지킨다
       const slow = camLook.zoomMs !== undefined;
       const goalZoom = slow && reduced ? 1 : camLook.zoom;
+      // 마을 확장판 밤 고정 시점(21페이즈 D-25)도 같은 길이다: 목표는 모이는 자리 = 월드 원점(STAGE_SPOT)이고 배율만 밤 배율이다
       const g = gatherView(rect, { w: s.w, h: s.h }, { ghost: look?.seats[deps.mySeat()]?.ghost === true, zoom: goalZoom });
       offsetGoal = g.offsetY;
       if (fixed === null || fixed.zoom !== goalZoom) {

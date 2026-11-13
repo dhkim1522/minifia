@@ -10,7 +10,7 @@ import type { MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
 import { pointSeatsOf, revealPoints, showdownStageOf } from "../game/showdownView";
 import { ZOOM_IN_MS } from "../game/verdictMoment";
-import { GATHER_CENTER, ZOOM_MAJORITY, ZOOM_MIN_STAGE_H } from "./camera";
+import { GATHER_CENTER, NIGHT_TARGET, nightZoomOf, ZOOM_MAJORITY, ZOOM_MIN_STAGE_H } from "./camera";
 import type { OutfitId } from "./characterData";
 import { pinOf, type PinDesc } from "./pinPlan";
 
@@ -113,14 +113,32 @@ const FIXED_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["nomination", "runo
  * 카메라 구도(UI-SPEC 카메라 표): 지목·변론·찬반·처형은 모이는 자리 가운데 고정, 그 밖(낮 시작·토론·밤·아침·로비)은 따라가기.
  * 09.1(M-4): 순차 지목(day.turn 있음)은 배지 숫자만이다 — 과반이어도 확대하지 않는다.
  * 기본판(결정 0072) 동시 투표(day.turn 없음)는 과반이고 스테이지 높이가 ZOOM_MIN_STAGE_H 이상일 때만 ZOOM_MAJORITY 로 확대한다.
+ * 마을 확장판 밤(21페이즈 D-11·D-25): 목표 (0,0)·배율 nightZoomOf(stageW) 의 고정 — 집 8채가 한 화면에 들어온다. 역할·유령과 무관하다(stageW 가 없으면 따라가기).
+ * 확장판 아침은 따라가기다(D-26, 걸어서 현장으로).
  */
-export function cameraModeOf(view: RoomView, stageH: number, opts: { verdictZoom?: number } = {}): CameraMode {
+export function cameraModeOf(view: RoomView, stageH: number, opts: { verdictZoom?: number; stageW?: number } = {}): CameraMode {
+  if (view.phase === "night" && opts.stageW !== undefined && view.map === "town" && rulesetOf(modeOf(view)).errand) {
+    return { mode: "fixed", target: { x: NIGHT_TARGET.x, z: NIGHT_TARGET.z }, zoom: nightZoomOf(opts.stageW) };
+  }
   if (!FIXED_PHASES.has(view.phase)) return { mode: "follow" };
   const target = { x: GATHER_CENTER.x, z: GATHER_CENTER.z };
   // 판결 순간(09.1.1-13, O-15): 처형 단계에서 호출 쪽이 배율을 주면 0.6초 ease-in-out 으로 다가갔다 돌아온다. 스테이지가 낮으면(360 미만) 줌 없이 핀 조명과 막만 한다. 역할은 보지 않는다
   if (view.phase === "execution" && opts.verdictZoom !== undefined && stageH >= ZOOM_MIN_STAGE_H) return { mode: "fixed", target, zoom: opts.verdictZoom, zoomMs: ZOOM_IN_MS };
   const majority = view.phase === "nomination" && view.day?.turn === undefined && pointsTally(view).sure !== undefined;
   return { mode: "fixed", target, zoom: majority && stageH >= ZOOM_MIN_STAGE_H ? ZOOM_MAJORITY : 1 };
+}
+
+/**
+ * 이 카메라가 확장판 밤 고정 시점인가 — E2E 훅 __mfTown.night 가 읽는다(21페이즈 D-25).
+ * 밤 목표(월드 원점)는 모이는 자리(STAGE_SPOT)와 같은 점이라 목표로는 가를 수 없다 — 모이는 자리 구도의 배율은 1 이상(1·과반 1.08·판결 확대)이고 밤 배율은 1 미만이라 배율로 가른다
+ */
+export function isNightFixed(camera: CameraMode | undefined): camera is Extract<CameraMode, { mode: "fixed" }> {
+  return camera !== undefined && camera.mode === "fixed" && camera.target.x === NIGHT_TARGET.x && camera.target.z === NIGHT_TARGET.z && camera.zoom < 1;
+}
+
+/** E2E 훅 __mfTown.night 값: 밤 고정 시점이면 그 배율(소수 셋째 자리), 아니면 { zoom: 1, fixed: false } — 공개 장면 값뿐이다 */
+export function nightHookOf(camera: CameraMode | undefined): { zoom: number; fixed: boolean } {
+  return isNightFixed(camera) ? { zoom: Math.round(camera.zoom * 1000) / 1000, fixed: true } : { zoom: 1, fixed: false };
 }
 
 /**
@@ -190,8 +208,8 @@ export function townClueOf(view: RoomView): number | null {
   return view.day?.scene?.house ?? null;
 }
 
-/** 위 계산을 한 장면으로 묶는다. stageH = 이 단계의 스테이지 사각형 높이(px), mine = 내 낙관적 지목 대상(서버 응답 전) */
-export function sceneLook(view: RoomView, opts: { stageH: number; fading?: ReadonlyMap<number, number>; now?: number; mine?: number; verdictZoom?: number }): SceneLook {
+/** 위 계산을 한 장면으로 묶는다. stageH·stageW = 이 단계의 스테이지 사각형 높이·폭(px, 폭은 확장판 밤 고정 시점 배율에 쓴다), mine = 내 낙관적 지목 대상(서버 응답 전) */
+export function sceneLook(view: RoomView, opts: { stageH: number; stageW?: number; fading?: ReadonlyMap<number, number>; now?: number; mine?: number; verdictZoom?: number }): SceneLook {
   const tension = tensionOf(view);
   const seats = visibleSeats(view, opts.fading, opts.now);
   const pointing = pointingOf(view, opts.mine);
@@ -201,7 +219,7 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
     if (look && !look.ghost) look.pointAt = target; // 탈락한 좌석(유령)은 가리키지 않는다
   }
   return {
-    camera: cameraModeOf(view, opts.stageH, opts.verdictZoom !== undefined ? { verdictZoom: opts.verdictZoom } : {}),
+    camera: cameraModeOf(view, opts.stageH, { ...(opts.verdictZoom !== undefined ? { verdictZoom: opts.verdictZoom } : {}), ...(opts.stageW !== undefined ? { stageW: opts.stageW } : {}) }),
     lighting: lightingFor(view),
     tension: tension.level,
     ...(tension.focus !== undefined ? { focusSeat: tension.focus } : {}),

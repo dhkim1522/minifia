@@ -93,6 +93,21 @@ export const ZOOM_MAJORITY = 1.08;
 /** 과반 확대는 스테이지 높이(px)가 이 값 이상일 때만 한다. 모자라면 확대 없이 실내등과 도장만(UI-SPEC 카메라 표) */
 export const ZOOM_MIN_STAGE_H = 360;
 
+/** 확장판 밤 고정 시점의 목표(월드 원점 = 마을 한가운데, 21페이즈 D-25). 밤에는 나를 따라가지 않고 집 8채가 한 화면에 들어온다 */
+export const NIGHT_TARGET: Readonly<{ x: number; z: number }> = { x: 0, z: 0 };
+/** 마을 집 8채가 가로로 들어오는 월드 폭에 해당하는 화면 px(UI-SPEC 밤 고정 시점 식의 분모) */
+const NIGHT_SPAN_PX = 1315;
+/** 좌우 여백 합(px) */
+const NIGHT_MARGIN_PX = 32;
+
+/**
+ * 확장판 밤 고정 시점 배율 = (스테이지 폭 − 32) / 1315 (21페이즈 D-25, UI-SPEC 폰 6종 표: 360 → 0.249 · 390 → 0.272 · 402 → 0.281 · 430 → 0.303).
+ * 반올림하지 않는다. 입력은 화면 폭뿐이다 — 역할·좌석을 읽지 않는다
+ */
+export function nightZoomOf(stageW: number): number {
+  return (stageW - NIGHT_MARGIN_PX) / NIGHT_SPAN_PX;
+}
+
 /** UI-SPEC 의 폰 크기(폰 폭×높이). 스테이지 사각형은 stageRect 로 구한다 */
 export const STAGE_SIZES: readonly { w: number; h: number; label: string }[] = [
   { w: 360, h: 640, label: "360x640" },
