@@ -7,6 +7,7 @@ import { BOT_CHAT_LINES, BOT_WILL_LINES } from "../../shared/game/bots";
 import { LAST_WORD_CHIPS } from "../../shared/game/showdown";
 import { PHASE_DEFS, PICK_TURN_MS } from "../../shared/game/phases";
 import { rulesetOf } from "../../shared/game/ruleset";
+import { WORLD_FLUSH_MS } from "../../shared/game/world";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
   advanceTo,
@@ -171,9 +172,20 @@ async function waitForPlanKey(code: string): Promise<{ key: string; steps: Array
   throw new Error("waitForPlanKey: 봇 계획 키가 저장되지 않았다");
 }
 
+/** 저장된 봇 계획에 아직 남아 있는, 때가 된(at ≤ 지금) 행동 수. */
+const dueBotSteps = async (code: string): Promise<number> => {
+  const plan = (await stored(code)).botPlan as { steps: Array<{ at: number }> } | undefined;
+  return (plan?.steps ?? []).filter((st) => st.at <= Date.now()).length;
+};
+
 /**
  * 시각 당기기 도우미: 저장된 botPlan.steps 의 at 을 모두 과거로 바꾸고 DO 를 evict 한 뒤 알람을 부른다
  * (forceDue 와 같은 방식 — 생성자가 저장소에서 복구하고 소켓은 하이버네이션으로 남는다).
+ * 20-03: 제때 깨어난 알람과 겹쳐도 같은 결과가 나오게 두 가지를 한다.
+ *  - evict 앞에서 위치 저장 타이머를 푼다(flushWorld). 타이머(2초)가 걸려 있으면 evict 가 그 타이머를 기다리는데, 투표 단계는 모이기 배치가 타이머를 걸고
+ *    봇 표가 진입 + 2000ms + [0, 6000) 에 서 있어 기다림이 끝나는 바로 그때 알람이 제때 깨어날 수 있었다.
+ *  - 그래도 제때 깨어난 알람이 돌고 있으면 runDurableObjectAlarm 은 false(도는 중인 알람의 getAlarm 은 null)를 돌려준다. 당긴 행동은 그 알람이 실행하므로
+ *    실패로 보지 않고, 때가 된 행동이 계획에서 모두 빠질 때까지 기다린다(빠지지 않으면 until 이 던진다).
  */
 async function forceBotsDue(code: string): Promise<void> {
   await waitForPlan(code);
@@ -185,8 +197,9 @@ async function forceBotsDue(code: string): Promise<void> {
     const steps = plan.steps.map((s) => ({ ...s, at: Date.now() - 1000 }));
     return { ...room, botPlan: { ...plan, steps } };
   });
+  await flushWorld(code);
   await evictDurableObject(stub);
-  expect(await runDurableObjectAlarm(stub)).toBe(true);
+  if (!(await runDurableObjectAlarm(stub))) await until("제때 깨어난 알람이 때가 된 봇 행동을 모두 실행함", async () => (await dueBotSteps(code)) === 0);
 }
 
 describe("testBots 거부", () => {
@@ -543,6 +556,27 @@ describe.skipIf(!GAME_RULES.runoff)("봇 결선 투표 (09.1.1-05, 결정 0066-4
   }, 60_000);
 });
 
+// ---- 20-03: 시각 당기기 도우미가 제때 깨어난 알람과 겹쳐도 같은 결과를 낸다 ----
+// 투표 단계에 들어오면 모이기 배치가 위치 저장 타이머(WORLD_FLUSH_MS)를 걸고, 봇 표는 진입 + 2000ms + [0, 6000) 에 선다. 타이머가 걸린 DO 를 evict 하면
+// 타이머가 끝날 때까지 기다리므로, 가장 이른 봇 표가 그 직후(몇 ms)에 서 있으면 기다림이 끝나는 순간 제때 깨어난 알람이 돌고 있다 — 그때 runDurableObjectAlarm 은
+// "걸린 알람 없음"(false)을 돌려준다(도는 중인 알람의 getAlarm 은 null). 예전 도우미는 여기서 실패했다(전체 실행에서 간헐적으로 "기본판 봇 방 자동 완주" 등).
+describe("시각 당기기 도우미와 제때 깨어난 알람 (20-03)", () => {
+  it("위치 저장 타이머가 끝난 직후에 알람이 걸려 있어도 forceBotsDue 가 봇 표 셋을 모두 실행시킨다", async () => {
+    const got: string[] = [];
+    for (const offset of [4, 5, 6, 8, 10]) {
+      const r = await botRoomAt("nomination");
+      await runInDurableObject(env.ROOM.getByName(r.code), async (instance, state) => {
+        const entered = (instance as unknown as { room: { phaseEndsAt: number } }).room.phaseEndsAt - PHASE_DEFS.nomination.durationMs!;
+        await state.storage.setAlarm(entered + WORLD_FLUSH_MS + offset);
+      });
+      await forceBotsDue(r.code);
+      await until(`봇 표 3개(+${offset}ms)`, async () => (await countWith(r.code, "nominate")) === 3);
+      got.push(`+${offset}:${await countWith(r.code, "nominate")}`);
+    }
+    expect(got.join(" ")).toBe("+4:3 +5:3 +6:3 +8:3 +10:3");
+  }, 60_000);
+});
+
 describe("누출 없음: 투표·변론·처형·종료", () => {
   it("봇이 던지는 투표와 종료까지 방장·손님 프레임 어디에도 isBot·botPlan·봇 id·token 이 없다", async () => {
     const r = await seatQuiet(1, { testMode: true });
@@ -671,7 +705,9 @@ describe("봇 지목·찬반·토론 끝내기", () => {
 
   it("discussion: 봇 셋이 모두 토론 끝내기를 누르면 산 넷의 과반(3)이라 다음 단계로 넘어가고 마감이 now + 다음 단계 길이다", async () => {
     const r = await botRoomAt("discussion");
-    await toPhase(r.code, "discussion");
+    // 마감을 제품의 토론 길이로 둔다(20-03): toPhase 기본값(60초 뒤)이면 끝내기 시각(계획 시각 + 30~60초)이 마감 여유(마감 − 500ms)에 걸려
+    // 봇 하나의 끝내기가 계획에서 빠질 수 있다 — 난수가 29500 − (toPhase 와 계획 사이 걸린 ms) 이상일 때. 시험이 난수와 실행 속도에 기대지 않게 한다.
+    await toPhase(r.code, "discussion", (room) => ({ ...room, phaseEndsAt: Date.now() + PHASE_DEFS.discussion.durationMs! }));
     await armBots(r.code);
     expect((await planKinds(r.code)).split(",").filter((k) => k === "endDiscussion").length).toBe(3);
     const nextId = PHASE_DEFS.discussion.next!;

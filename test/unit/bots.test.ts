@@ -1036,6 +1036,23 @@ describe("봇 계획: 토론 끝내기 (DAY-03)", () => {
     }
   });
 
+  // 20-03 조사: 워커 시험이 토론 마감을 60초 뒤로 두면(toPhase 기본값) 끝내기 시각(now + 30~60초)이 마감 여유(마감 − 500ms)에 걸려
+  // 봇 하나의 끝내기가 계획에서 빠질 수 있었다(시험이 간헐적으로 "끝내기 2 ≠ 3"). 제품의 토론 길이(DISCUSSION_MS)에서는 난수가 최댓값이어도 빠지지 않는다.
+  it("마감 여유: 끝내기 시각이 마감 − 500ms 이상이면 그 봇의 끝내기는 계획에서 빠지고, 제품의 토론 길이에서는 난수가 최댓값이어도 모두 남는다", () => {
+    const base = stateAt(1, 4, 5, "discussion");
+    const now = nowOf(base);
+    const max = (n: number): number => n - 1; // 모든 난수가 최댓값 — 끝내기는 now + 59999
+    const ends = (phaseEndsAt: number, randInt: (n: number) => number): number =>
+      planBotSteps({ ...base, phaseEndsAt }, now, randInt).filter((st) => st.act.t === "endDiscussion").length;
+    const got = [
+      ends(now + 60_000, max), // 마감 60초: 여유는 now + 59500 — 끝내기 now + 59999 는 빠진다
+      ends(now + 60_000, () => 0), // 마감 60초라도 난수가 작으면(끝내기 now + 30000) 남는다
+      ends(now + 60_500, max), // 경계: 여유 now + 60000 > 끝내기 now + 59999 — 남는다
+      ends(now + PHASE_DEFS.discussion.durationMs!, max), // 제품의 토론 길이
+    ];
+    expect(`${got.join(",")} 봇=${botsOf(base).length} 제품 길이=${PHASE_DEFS.discussion.durationMs! - 500 > 59_999}`).toBe("0,4,4,4 봇=4 제품 길이=true");
+  });
+
   it("난수 호출 순서는 봇마다 [10000, 8, 18000, 8, 30000](채팅 → 채팅 → 끝내기 간격)이다", () => {
     const { state, now } = wideDiscussion(5);
     const rec = recording(7);

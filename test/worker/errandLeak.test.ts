@@ -259,11 +259,20 @@ describe("② 위치 비공개 — 산 사람은 본인 + 근처만, 유령은 �
     const id1 = await idOfSeat(g.code, 1);
     await placeSeats(g.code, L1);
     // seat 1 은 반경 밖 먼 곳으로 길게 걷는 중이다(지금 위치는 seat 0 의 근처).
-    await runInDurableObject(env.ROOM.getByName(g.code), (instance) => {
-      const holder = instance as unknown as { world: WorldState };
-      holder.world = { ...holder.world, segs: { ...holder.world.segs, [id1]: { p: [L1[1]!.x, L1[1]!.z, 520, 500], t0: Date.now(), v: MOVE_V } as Segment } };
+    // 20-03: 예전에는 seat 0 과 정확히 R(경계)인 자리에서 지금 출발한 구간을 쓰고 따로 표본을 돌려, 그 사이 실제 시간이 8ms 쯤만 지나도 seat 1 이 반경을 벗어나
+    // 근처 snap 에서 빠졌다(전체 실행에서 간헐 실패). 반경 안쪽 0.2 자리에서 0.1초 전에 출발한 구간을 쓰고 같은 호출 안에서 표본 알람 본문을 돌린다 —
+    // 구간을 쓴 시각과 표본 시각 사이에 실제 시간이 끼지 않는다.
+    const marks = g.actors.map((a) => mark(a.sock));
+    await runInDurableObject(env.ROOM.getByName(g.code), async (instance, state) => {
+      const holder = instance as unknown as { world: WorldState; room: Record<string, unknown>; alarm: () => Promise<void> };
+      const now = Date.now();
+      holder.world = { ...holder.world, segs: { ...holder.world.segs, [id1]: { p: [GLASS.x + 20, GLASS.z, 520, 500], t0: now - 100, v: MOVE_V } as Segment } };
+      holder.room = { ...holder.room, errandTickAt: now - 1 };
+      await state.storage.put("room", holder.room);
+      await holder.alarm();
     });
-    const got = await sample(g);
+    const got: ServerMessage[][] = [];
+    for (const [i, a] of g.actors.entries()) got[i] = await settle(a.sock, marks[i]!);
     const snap = snapsOf(got[g.actors.indexOf(actorOf(g, 0))]!).at(-1)!;
     const seg = snap.ents.find((e) => e.s === 1)!;
     expect(seg).toBeDefined();
