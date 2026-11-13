@@ -51,7 +51,7 @@ import { actErrand, nearSnapFrame, placeCenterFx, sampleErrand } from "../shared
 import { lampsShownOf } from "../shared/game/lamps";
 import { markCut, markSmudge } from "../shared/game/mafiaTouch";
 import { actInspect } from "../shared/game/scene";
-import { skipReached, toggleSkip } from "../shared/game/skip";
+import { SKIP_PHASES, skipReached, toggleSkip } from "../shared/game/skip";
 import { ERRAND_MIN_GAP_MS, ERRAND_TICK_MS } from "../shared/game/phases";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
@@ -1821,6 +1821,11 @@ export class Room extends DurableObject<Env> {
     // 튜토리얼 중 끊김은 끝낸 것으로 센다(결정 0080-10): 남은 사람의 연결이 끊긴 순간에도 서버가 전원 완료를 다시 보고,
     // applyTutorialDone 과 같은 경로(마감을 지금으로 당긴 tick + afterTransition)로 assigning 에 넘긴다.
     if (this.room.phase === "tutorial" && allTutorialDone(this.room)) {
+      this.room = tick({ ...this.room, phaseEndsAt: now }, now, cryptoRandInt);
+      await this.afterTransition(prev, now);
+    } else if (SKIP_PHASES.includes(this.room.phase) && rulesetOf(modeOf(this.room)).errand && skipReached(this.room)) {
+      // 건너뛰기(21-10, D-23): 아직 안 누른 마지막 접속자가 끊기면 막는 사람이 사라져 눌린 쪽이 모두가 된다 — 서버가 다시 보고
+      // applySkipPhase 와 같은 경로(마감을 지금으로 당긴 tick + afterTransition)로 넘긴다. 누른 사람이 더 누를 일이 없어 단계가 멈추지 않게 한다.
       this.room = tick({ ...this.room, phaseEndsAt: now }, now, cryptoRandInt);
       await this.afterTransition(prev, now);
     } else {
