@@ -6,7 +6,7 @@ import type { Player, RoomState } from "../../shared/game/room";
 import type { RoleId } from "../../shared/game/roles";
 import { tick } from "../../shared/game/tick";
 import { ERRAND_MS, NIGHT_MS } from "../../shared/game/phases";
-import type { PhaseId } from "../../shared/protocol";
+import type { GameMode, PhaseId } from "../../shared/protocol";
 import { buildView } from "../../shared/game/view";
 import { seededRandInt } from "../helpers/seededRandom";
 import { nominationSpanMs } from "../helpers/voteState";
@@ -14,7 +14,8 @@ import { nominationSpanMs } from "../helpers/voteState";
 const START_AT = 10_000;
 
 /** n 명이 모두 연결된 대기실. */
-function lobbyOf(n: number): RoomState {
+/** 21페이즈 규칙 나: 이 파일의 낮·밤·아침·단계 건너뛰기 시험은 기본 마피아 흐름(낮 시작 발표·아침이 늘 있다)을 본다 — mode 기본값을 basic 으로 둔다. 확장판은 mode 로 고른다. */
+function lobbyOf(n: number, mode: GameMode = "basic"): RoomState {
   const created = createRoomState({
     code: "0420",
     hostId: "player-id-0000-aaaa",
@@ -30,16 +31,17 @@ function lobbyOf(n: number): RoomState {
     if (!joined.ok) throw new Error(`joinRoom failed: ${joined.error}`);
     state = attachConnection(joined.state, id, `conn-${i}`);
   }
-  return state;
+  return { ...state, mode };
 }
 
 /** 실제 전이(startGame, tick)로 1일차 밤 상태를 만든다. */
-function nightOf(n: number, seed: number): RoomState {
-  const lobby = lobbyOf(n);
+function nightOf(n: number, seed: number, mode?: GameMode): RoomState {
+  const lobby = lobbyOf(n, mode);
   const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed));
   if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
   let state = started.state;
-  while (state.phase !== "night") {
+  for (let guard = 0; state.phase !== "night"; guard += 1) {
+    if (guard > 80) throw new Error("밤에 닿지 못한다");
     if (state.phaseEndsAt === null) throw new Error("phase has no deadline");
     state = tick(state, state.phaseEndsAt, seededRandInt(seed)); // errand 진입(15페이즈)이 난수를 쓴다
   }
@@ -59,7 +61,7 @@ function pickAs(state: RoomState, actor: Player, target: Player): RoomState {
 
 describe("밤 → 아침 한 줄 (NIGHT-01, NIGHT-06, D-08)", () => {
   it("5명 판: 마피아 전원이 같은 시민을 지목하면 마감에 아침으로 넘어가 그 사람이 탈락하고 결과가 남는다", () => {
-    const night = nightOf(5, 7);
+    const night = nightOf(5, 7, "extended"); // 흔적 조각은 확장판 규칙이다(21페이즈, 규칙 가)
     const victim = withRole(night, "citizen")[0]!;
     const picked = picks(night, ...withRole(night, "mafia").map((m): [Player, Player] => [m, victim]));
     const morning = tick(picked, picked.phaseEndsAt ?? 0, seededRandInt(1));
@@ -117,7 +119,8 @@ function stateAtPhase(phase: PhaseId, n: number, seed: number): RoomState {
   const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed));
   if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
   let state = started.state;
-  while (state.phase !== phase) {
+  for (let guard = 0; state.phase !== phase; guard += 1) {
+    if (guard > 80) throw new Error(`${phase} 에 닿지 못한다(판 종류의 순서에 없는 단계)`);
     if (state.phaseEndsAt === null) throw new Error("phase has no deadline");
     state = tick(state, state.phaseEndsAt, seededRandInt(seed));
   }
@@ -361,8 +364,8 @@ interface Cast {
 }
 
 /** 6명 판 1일차 밤과 역할별 사람(마피아·시민은 seat 오름차순). */
-function cast6(): Cast {
-  const night = nightOf(6, 11);
+function cast6(mode?: GameMode): Cast {
+  const night = nightOf(6, 11, mode);
   const [m1, m2] = withRole(night, "mafia").sort((a, b) => a.seat - b.seat) as [Player, Player];
   const [c1, c2] = withRole(night, "citizen").sort((a, b) => a.seat - b.seat) as [Player, Player];
   return { night, m1, m2, police: withRole(night, "police")[0]!, doctor: withRole(night, "doctor")[0]!, c1, c2 };
@@ -614,9 +617,10 @@ describe("난수 없음 계약 (결정 0061-6·17)", () => {
   });
 
   it("판정(resolveNight)에는 난수가 없다 — tick 에 난수를 주지 않아도 탈락자 없는 밤 → 아침은 넘어가고, 탈락자가 있는 아침의 흔적에만 난수 한 번이 든다 (D-06)", () => {
-    const { night, m1, m2, c1, c2 } = cast6();
-    const none = picks(night, [m1, c1], [m2, c2]);
-    expect(tick(none, none.phaseEndsAt ?? 0).phase).toBe("morning");
+    const basic = cast6();
+    const none = picks(basic.night, [basic.m1, basic.c1], [basic.m2, basic.c2]);
+    expect(tick(none, none.phaseEndsAt ?? 0).phase).toBe("morning"); // 기본 마피아(규칙 나): 확정이 없어도 아침이 온다 — 확장판은 현장 없는 밤이 토론으로 간다
+    const { night, m1, m2, c1 } = cast6("extended"); // 흔적 난수는 확장판 규칙이다(규칙 가)
     const killed = picks(night, [m1, c1], [m2, c1]);
     let calls = 0;
     const morning = tick(killed, killed.phaseEndsAt ?? 0, (n) => {
@@ -631,7 +635,7 @@ describe("난수 없음 계약 (결정 0061-6·17)", () => {
 
 describe("아침 결과 morning (MORN-03, 결정 0061-12·17)", () => {
   it("탈락이면 키는 eliminated·trace 둘뿐이다(문구 번호·역할 없음, D-06)", () => {
-    const { night, m1, m2, c1 } = cast6();
+    const { night, m1, m2, c1 } = cast6("extended"); // 흔적 조각은 확장판 규칙이다(21페이즈, 규칙 가)
     const out = enterMorning(picks(night, [m1, c1], [m2, c1]));
     expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated,trace");
     expect(out.morning?.eliminated).toBe(c1.seat);
@@ -653,7 +657,7 @@ describe("아침 결과 morning (MORN-03, 결정 0061-12·17)", () => {
   });
 
   it("의사가 확정이 아닌 다른 사람을 지키면 탈락이다(saved 키 없음)", () => {
-    const { night, m1, m2, doctor, c1, c2 } = cast6();
+    const { night, m1, m2, doctor, c1, c2 } = cast6("extended");
     const out = enterMorning(picks(night, [m1, c1], [m2, c1], [doctor, c2]));
     expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated,trace");
     expect(out.morning?.eliminated).toBe(c1.seat);
@@ -779,7 +783,10 @@ describe("역할별 일지 쌓기 (D-09·D-10)", () => {
     const first = cast6();
     const m1Morning = tick(picks(first.night, [first.m1, first.c1], [first.m2, first.c1], [first.doctor, first.c2]), first.night.phaseEndsAt ?? 0, rng);
     let s = m1Morning;
-    while (s.phase !== "night") s = tick(s, s.phaseEndsAt ?? 0, rng);
+    for (let guard = 0; s.phase !== "night"; guard += 1) {
+      if (guard > 80) throw new Error("밤에 닿지 못한다");
+      s = tick(s, s.phaseEndsAt ?? 0, rng);
+    }
     expect(s.day).toBe(2);
     const alive = (p: Player): boolean => s.players.find((q) => q.id === p.id)?.alive !== false;
     const victim = alive(first.c2) ? first.c2 : first.police;

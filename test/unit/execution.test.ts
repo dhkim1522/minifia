@@ -185,7 +185,8 @@ describe("noExecutionOf · day.noExecution (D-34)", () => {
   it("지목 0표로 온 밤은 noVotes, 최다 동률로 온 밤은 tie 이고 모든 viewer 가 같은 값을 본다 (DAY-05, 결정 0060)", () => {
     const rows: string[] = [];
     for (const [name, picks] of [["none", {}], ["tie", { 0: 1, 1: 0 }]] as const) {
-      const nomination = castPoints(startedAt(6, 1, "nomination"), picks);
+      // 처형 없는 이유를 밤이 보여 주는 것은 기본 마피아 흐름이다(규칙 나) — 확장판은 저녁이 보여 주고 causalDay 가 본다.
+      const nomination = castPoints(startedAt(6, 1, "nomination", "basic"), picks);
       const night = nightWith(nomination, 1);
       expect(night.players.every((p) => p.alive !== false)).toBe(true);
       rows.push(`${name}:${reasonsOf(night)}`);

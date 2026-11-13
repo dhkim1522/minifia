@@ -36,11 +36,11 @@ const walkable = (p: Pt): boolean => {
 };
 
 function townErrand(seed = 3, n = 6): RoomState {
-  const day = { ...startedAt(n, seed, "dayAnnounce"), map: "town" as const };
+  const day = { ...startedAt(n, seed, "roleReveal"), map: "town" as const };
   return tick(day, day.phaseEndsAt!, seededRandInt(seed + 1));
 }
 function barErrand(seed = 3, n = 6): RoomState {
-  const day = { ...startedAt(n, seed, "dayAnnounce"), map: "bar" as const };
+  const day = { ...startedAt(n, seed, "roleReveal"), map: "bar" as const };
   return tick(day, day.phaseEndsAt!, seededRandInt(seed + 1));
 }
 const idOfSeat = (s: RoomState, seat: number): string => s.players.find((p) => p.seat === seat)!.id;

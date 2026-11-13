@@ -11,7 +11,7 @@ import { rulesetOf } from "../../shared/game/ruleset";
 import { tick } from "../../shared/game/tick";
 import { markTutorialDone } from "../../shared/game/tutorial";
 import { buildPreview, buildView } from "../../shared/game/view";
-import type { PhaseId, RoomView } from "../../shared/protocol";
+import type { GameMode, PhaseId, RoomView } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castRunoffVote } from "../../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../../shared/game/showdown";
@@ -55,7 +55,7 @@ const REVEALING_PHASES = [
 const START_AT = 10_000;
 
 /** n 명이 모두 연결된 대기실. id·token 은 서로 부분 문자열이 아니도록 길고 고유하게 만든다. */
-function lobbyOf(n: number): RoomState {
+function lobbyOf(n: number, mode: GameMode = "basic"): RoomState {
   const created = createRoomState({
     code: "0420",
     hostId: "player-id-0000-aaaa",
@@ -71,7 +71,7 @@ function lobbyOf(n: number): RoomState {
     if (!joined.ok) throw new Error(`joinRoom failed: ${joined.error}`);
     state = attachConnection(joined.state, id, `conn-${i}`);
   }
-  return state;
+  return { ...state, mode };
 }
 
 /**
@@ -79,12 +79,13 @@ function lobbyOf(n: number): RoomState {
  * 표 없이 마감만 따라가면 변론·처형과 ended 에 닿지 못한다(Pitfall 12) — 그 단계들은 실제 투표를 넣는 도우미로 만든다.
  * 닿지 못하는 단계를 마감만으로 기다리면 끝없이 도는 루프가 되므로 횟수 상한을 둔다.
  */
-function stateAt(phase: PhaseId, n: number, seed: number): RoomState {
+function stateAt(phase: PhaseId, n: number, seed: number, mode?: GameMode): RoomState {
   if (phase === "defense" || phase === "verdict" || phase === "execution") {
-    return stateWithVerdict(n, seed, phase);
+    return stateWithVerdict(n, seed, phase, { mode: "basic" });
   }
   if (phase === "ended") return endedState(n, seed, "citizen");
-  const lobby = lobbyOf(n);
+  // 21페이즈: 단계는 그것이 있는 판 종류로 만든다 — 저녁(errand)은 확장판에만, 낮 시작 발표·아침은 기본 마피아에서 늘 닿는다(확장판 아침은 현장이 있을 때만).
+  const lobby = lobbyOf(n, mode ?? (phase === "errand" ? "extended" : "basic"));
   if (phase === "lobby") return lobby;
   const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed));
   if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
@@ -104,7 +105,7 @@ const aliveSeats = (state: RoomState): number[] => state.players.filter(isAlive)
  * 승패가 나는 날까지 반복하고(마피아 수 또는 시민 쪽 수만큼) 상한을 넘으면 던진다 — 승패가 안 나는 판에서 끝없이 돌지 않는다.
  */
 function endedState(n: number, seed: number, team: "citizen" | "mafia"): RoomState {
-  let s = startedAt(n, seed, "nomination");
+  let s = startedAt(n, seed, "nomination", "basic");
   for (let day = 1; day <= 10; day += 1) {
     if (s.phase !== "nomination" && s.phase !== "showdown") throw new Error(`endedState: expected nomination or showdown, got ${s.phase}`);
     const living = s.players.filter(isAlive).sort((a, b) => a.seat - b.seat);
@@ -461,7 +462,7 @@ function nightActions(state: RoomState): RoomState {
 function richStateAt(phase: PhaseId, n: number, seed: number): RoomState {
   // 변론·처형: 후보가 시민/마피아로 갈린다.
   if (phase === "defense" || phase === "verdict" || phase === "execution") {
-    return stateWithVerdict(n, seed, phase, { candidate: seed % 2 === 0 ? "mafia" : "citizen" });
+    return stateWithVerdict(n, seed, phase, { mode: "basic", candidate: seed % 2 === 0 ? "mafia" : "citizen" });
   }
   if (phase === "ended") return endedState(n, seed, seed % 2 === 0 ? "mafia" : "citizen");
   if (phase === "night" || phase === "morning") {
@@ -475,8 +476,8 @@ function richStateAt(phase: PhaseId, n: number, seed: number): RoomState {
 }
 
 /** n명 판 1일차 밤: 마피아가 첫 비마피아 X 를 지목해 아침이 된 상태(의사는 보호하지 않는다 — 4명 판은 의사가 없다). */
-function morningWithVictim(n: number, seed: number) {
-  const s0 = stateAt("night", n, seed);
+function morningWithVictim(n: number, seed: number, mode?: GameMode) {
+  const s0 = stateAt("night", n, seed, mode);
   const x = nonMafiaSeats(s0)[0]!;
   // 마피아 전원이 같은 대상을 골라야 확정이다(NIGHT-08, 결정 0061-6).
   const picked = s0.players
@@ -496,7 +497,7 @@ describe("day.evidence 수명 (16페이즈 D-10·R-4)", () => {
   const SEEN = { seat: 1, place: "glass" } as const;
   /** 1일차 밤 뒤 피해자가 나온 아침. 서버 상태 morning 에 trace 가 있고, 필요하면 seen 도 얹는다. */
   const victimMorning = (withSeen: boolean): RoomState => {
-    const { s } = morningWithVictim(5, 1);
+    const { s } = morningWithVictim(5, 1, "extended"); // 흔적·목격은 확장판 규칙이다(21페이즈, 규칙 가)
     return withSeen ? { ...s, morning: { ...s.morning!, seen: { ...SEEN } } } : s;
   };
   const evidenceOf = (s: RoomState, viewer: Player): unknown => buildView(s, viewer.id, START_AT).day?.evidence;
@@ -513,9 +514,9 @@ describe("day.evidence 수명 (16페이즈 D-10·R-4)", () => {
     }
   });
 
-  it("실제로 마감을 넘겨도 dayAnnounce·errand·discussion 까지 이어지고 밤에는 키가 없다", () => {
+  it("실제로 마감을 넘겨도 토론까지 이어진다 — 확장판은 아침 다음이 곧 토론이다 (21페이즈, 규칙 가)", () => {
     let s = victimMorning(true);
-    for (const phase of ["dayAnnounce", "errand", "discussion"] as const) {
+    for (const phase of ["discussion"] as const) {
       s = advanceTo(s, phase, 1);
       expect(`${phase}:${Object.keys((evidenceOf(s, s.players[0]!) ?? {}) as object).sort().join(",")}`).toBe(`${phase}:seen,trace`);
     }
@@ -553,7 +554,7 @@ describe("day.evidence 수명 (16페이즈 D-10·R-4)", () => {
 
 describe("공개 직업 주장 경로 (결정 0066-1)", () => {
   it("주장 값(직업과 같은 단어)은 players[].badge 에서만 허용되고 다른 경로에 나오면 누출로 잡힌다", () => {
-    let s = startedAt(6, 1, "discussion");
+    let s = startedAt(6, 1, "discussion", "basic");
     const [a, b] = s.players;
     s = { ...s, players: s.players.map((p) => (p.id === a!.id ? { ...p, badge: "mafia" as const } : p.id === b!.id ? { ...p, badge: "doctor" as const, badgeSwapped: true as const, badgeLog: [{ n: 1, v: "police" as const }] } : p)) };
     const leaks: string[] = [];
@@ -585,19 +586,18 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
   it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, errand +40000(15페이즈), discussion +90000, nomination +15000(기본판 동시 투표 15초), night +30000(전원 기권), morning +5000", () => {
     const a = stateAt("assigning", 4, 1);
     const r = stateAt("roleReveal", 4, 1);
-    const ends = ["assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "night", "morning"].map(
+    const ends = ["assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "night", "morning"].map(
       (phase) => stateAt(phase as PhaseId, 4, 1).phaseEndsAt,
     );
-    // errand 는 낮 시작 발표 마감(20000) 바로 뒤에 이어지고(20000 + ERRAND_MS), discussion 은 그 마감 뒤에 이어진다(+ DISCUSSION_MS)
-    const errandEnd = START_AT + 20000 + ERRAND_MS;
-    const discussionEnd = errandEnd + DISCUSSION_MS;
+    // 21페이즈(규칙 나·가): 기본 마피아는 낮 시작 발표 마감(20000) 바로 뒤에 discussion 이 이어지고(+ DISCUSSION_MS), 확장판은 역할 확인 마감(18000) 바로 뒤에 errand 가 이어진다(+ ERRAND_MS)
+    const discussionEnd = START_AT + 20000 + DISCUSSION_MS;
+    expect(stateAt("errand", 4, 1).phaseEndsAt).toBe(START_AT + 18000 + ERRAND_MS);
     expect(DISCUSSION_MS).toBe(90000);
     expect(ends.join("/")).toBe(
       [
         START_AT + 3000,
         START_AT + 18000,
         START_AT + 20000,
-        errandEnd,
         discussionEnd,
         discussionEnd + NOMINATION_MS,
         discussionEnd + NOMINATION_MS + NIGHT_MS,
@@ -815,7 +815,7 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
 describe("buildView tutorial 단계 view 키 (17-07, 결정 0080-11, 허용 키 사본 TOP_KEYS·ME_KEYS)", () => {
   /** 켜고 시작한 tutorial 단계 방에서 seat 0 만 끝났음을 보낸 상태 */
   const tutorialState = (n: number, seed: number): RoomState => {
-    const lobby = lobbyOf(n);
+    const lobby = lobbyOf(n, "extended"); // 함께 진행 튜토리얼은 확장판에만 있다(room.ts)
     const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed), { tutorial: true });
     if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
     const first = started.state.players.find((p) => p.seat === 0)!;
@@ -879,7 +879,14 @@ describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 
       const keys = new Set(s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(",")));
       got.push(`${phase}:${[...keys].join("|")}`);
     }
-    expect(got.join(" ")).toBe("dayAnnounce:n,roles,voteLog discussion:endCount,n,roles,voteLog night:n,noExecution,roles,voteLog morning:evidence,morning,n,roles,voteLog");
+    // 기본 마피아(규칙 나): 흔적·목격(evidence)은 확장판 규칙이라 기본 마피아의 아침에는 키가 없다 — 확장판 아침은 아래 시험이 본다(규칙 가).
+    expect(got.join(" ")).toBe("dayAnnounce:n,roles,voteLog discussion:endCount,n,roles,voteLog night:n,noExecution,roles,voteLog morning:morning,n,roles,voteLog");
+  });
+
+  it("확장판의 피해자가 나온 아침의 day 키는 evidence·morning·n·roles·voteLog 이고 turn 키가 없다 (21페이즈, 규칙 가)", () => {
+    const { s } = morningWithVictim(5, 1, "extended");
+    const keys = new Set(s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(",")));
+    expect(`${s.phase}:${[...keys].join("|")}`).toBe("morning:evidence,morning,n,roles,voteLog");
   });
 
   it("dayAnnounce 뷰의 day 는 {n, roles, voteLog []} 뿐이다", () => {
@@ -1211,7 +1218,7 @@ describe("buildView 아침 결과 (NIGHT-06·D-13)", () => {
   const toMorning = (s: RoomState): RoomState => tick(s, s.phaseEndsAt!, seededRandInt(1));
 
   it("마피아 전원이 시민 X 지목 → 모든 viewer 의 day.morning 이 같은 {eliminated: X, trace} 하나(문구 번호 없음)", () => {
-    const s0 = stateAt("night", 5, 1);
+    const s0 = stateAt("night", 5, 1, "extended"); // 흔적 조각은 확장판 규칙이다(21페이즈, 규칙 가)
     const x = seatOfRole(s0, "citizen");
     const s = toMorning(s0.players.filter((p) => p.role === "mafia").reduce((acc, p) => actAt(acc, p.seat, x), s0));
     const got = morningsOf(s);
@@ -1419,7 +1426,7 @@ describe("buildView 허용 키 전수 (결정 0036-12, D-17, D-34)", () => {
     for (const n of [4, 5] as const) {
       for (const seed of SEEDS) {
         // 마피아가 한 명인 판에서 마피아가 후보 → 처형 발표 단계에서 이미 승패가 났지만 결과는 ended 로 가야 실린다.
-        const s = stateWithVerdict(n, seed, "execution", { candidate: "mafia" });
+        const s = stateWithVerdict(n, seed, "execution", { mode: "basic", candidate: "mafia" });
         for (const p of s.players) {
           const view = buildView(s, p.id, START_AT);
           if ("result" in view) bad.push(`${n}/${seed}/seat${p.seat}: result in execution`);
@@ -1436,7 +1443,7 @@ describe("buildView 처형 무효 이유 (D-34)", () => {
     const bad: string[] = [];
     for (const n of PLAYER_COUNTS) {
       for (const seed of SEEDS) {
-        const afterExec = advanceTo(stateWithVerdict(n, seed, "execution", { candidate: "citizen" }), "night", seed);
+        const afterExec = advanceTo(stateWithVerdict(n, seed, "execution", { mode: "basic", candidate: "citizen" }), "night", seed);
         for (const [tag, night, wantKey] of [["executed", afterExec, false]] as const) {
           for (const p of night.players) if (("noExecution" in (buildView(night, p.id, START_AT).day ?? {})) !== wantKey) bad.push(`${n}/${seed}/${tag}/night/seat${p.seat}`);
           const morning = advanceTo(night, "morning", seed);
@@ -1454,7 +1461,7 @@ describe("buildView 마감 뒤 서버 전용 투표 키 (VOTE-01, D-02, T-04-30)
     for (const n of PLAYER_COUNTS) {
       for (const seed of SEEDS) {
         for (const phase of ["defense", "execution"] as const) {
-          const s = stateWithVerdict(n, seed, phase);
+          const s = stateWithVerdict(n, seed, phase, { mode: "basic" });
           for (const p of s.players) if ("execVote" in p) bad.push(`${n}/${seed}/${phase}/seat${p.seat}: execVote key kept`);
           const line = buildView(s, s.hostId, START_AT).day!.voteLog![0]!;
           if (keysOf(line.exec) !== "no,passed,yes") bad.push(`${n}/${seed}/${phase}: exec keys ${keysOf(line.exec)}`);
@@ -1472,7 +1479,7 @@ describe("buildView 후보 공개 기록 (VOTE-02, D-19, T-04-32)", () => {
     for (const n of PLAYER_COUNTS) {
       for (const seed of SEEDS) {
         for (const phase of ["defense", "execution"] as const) {
-          const s = stateWithVerdict(n, seed, phase);
+          const s = stateWithVerdict(n, seed, phase, { mode: "basic" });
           const votes = new Set(s.players.map((p) => flat(buildView(s, p.id, START_AT).day!.voteLog![0]!.cand)));
           if (votes.size !== 1 || [...votes][0] === "undefined") bad.push(`${n}/${seed}/${phase}: cand differs or missing`);
           for (const p of s.players) if ("candidateVote" in p) bad.push(`${n}/${seed}/${phase}/seat${p.seat}: candidateVote key kept`);
@@ -1490,7 +1497,7 @@ describe("buildView 처형자 직업 비공개 (D-09, T-04-31)", () => {
     for (const n of PLAYER_COUNTS) {
       for (const seed of SEEDS) {
         for (const candidate of ["citizen", "mafia"] as const) {
-          const exec = stateWithVerdict(n, seed, "execution", { candidate });
+          const exec = stateWithVerdict(n, seed, "execution", { mode: "basic", candidate });
           const stages: Array<[string, RoomState]> = [["execution", exec]];
           // 마지막 마피아를 처형하면 아침·밤 없이 끝난다(4·5명 판) — 이어지는 판만 밤·아침을 본다
           if (n >= 6 || candidate === "citizen") {
@@ -1630,7 +1637,7 @@ describe("buildView me.chat — 서버가 정한 내 채널 (07-10, CHAT-02·03)
 // ---- 8페이즈 낮 처형 필드 (08-07, DAY-03~06, 결정 0053·0060) ----
 // 흐름 전환(08-11) 전이라 지목·찬반 단계는 실제 전이로 닿지 못한다 — 상태를 손으로 세우되 규칙 함수 모양(키 이름·값)은 그대로 쓴다.
 describe("buildView 낮 처형 필드 (08-07, DAY-03~06)", () => {
-  const base = (): RoomState => startedAt(5, 1, "discussion");
+  const base = (): RoomState => startedAt(5, 1, "discussion", "basic");
   const withPlayer = (s: RoomState, seat: number, patch: Partial<Player>): RoomState => ({
     ...s,
     players: s.players.map((p) => (p.seat === seat ? { ...p, ...patch } : p)),
@@ -1838,7 +1845,7 @@ describe("buildView 분필 day.chalk (MORN-01, 결정 0061-14)", () => {
 describe("day.turn (결정 0063-1, L14)", () => {
   const T = 400_000;
   const roomOf = (swapRoles: boolean): RoomState => {
-    let s = startedAt(6, 1, "nomination");
+    let s = startedAt(6, 1, "nomination", "basic");
     // 시작 전부터 탈락해 있던 유령 한 명(seat 5) — 산 사람과 유령 viewer 가 모두 있다.
     s = { ...s, players: s.players.map((p) => (p.seat === 5 ? { ...p, alive: false } : p)) };
     if (swapRoles) {
@@ -2142,7 +2149,7 @@ describe.skipIf(!GAME_RULES.showdown)("마지막 3인 day.showdown·me.ballot·d
 
   it("showdown 이 아닌 단계(토론·지목)의 view 에는 day.showdown 키가 없다", () => {
     for (const phase of ["discussion", "nomination"] as const) {
-      const s = startedAt(6, 3, phase);
+      const s = startedAt(6, 3, phase, "basic");
       for (const v of viewsOfAll(s)) expect(Object.hasOwn(v.day!, "showdown")).toBe(false);
     }
   });
@@ -2159,7 +2166,7 @@ describe("players[].look (10-02, 결정 D-6)", () => {
   const bare = (state: RoomState): RoomState => ({ ...state, players: state.players.map(({ look: _look, ...rest }) => rest) });
 
   it("look 은 값이 있는 좌석에만 키가 있고 undefined 로 남지 않으며 모든 viewer 에게 같다", () => {
-    const base = bare(startedAt(6, 3, "discussion"));
+    const base = bare(startedAt(6, 3, "discussion", "basic"));
     const s = withLooks(base);
     const rows = s.players.map((viewer) => buildView(s, viewer.id, 0).players.map((r) => `${r.seat}:${"look" in r ? String(r.look) : "-"}`).join(","));
     expect(new Set(rows).size).toBe(1);
@@ -2168,21 +2175,21 @@ describe("players[].look (10-02, 결정 D-6)", () => {
   });
 
   it("게임 중(밤)에도 같은 look 이 실리고 서버 전용 키 목록에는 새 항목이 없다", () => {
-    const s = withLooks(bare(startedAt(6, 3, "night")));
+    const s = withLooks(bare(startedAt(6, 3, "night", "basic")));
     const v = buildView(s, s.players[0]!.id, 0);
     expect(v.players.find((r) => r.seat === 1)!.look).toBe("mafia");
     expect(SERVER_ONLY_KEYS.includes("look")).toBe(false);
   });
 
   it("look 이 하나도 없는 옛 방의 players[] 에는 look 키가 없다", () => {
-    const s = bare(startedAt(6, 3, "discussion"));
+    const s = bare(startedAt(6, 3, "discussion", "basic"));
     for (const r of buildView(s, s.players[0]!.id, 0).players) expect("look" in r).toBe(false);
   });
 });
 
 describe("의상 값(직업과 같은 단어)은 players[].look 에서만 허용된다 (10-02, L34)", () => {
   it("look 값 mafia 는 players[].look 에서는 누출이 아니고 다른 경로(예: nickname)에 있으면 누출로 잡힌다", () => {
-    const s = startedAt(6, 3, "discussion");
+    const s = startedAt(6, 3, "discussion", "basic");
     const dressed: RoomState = { ...s, players: s.players.map((p) => (p.seat === 1 ? { ...p, look: "mafia" as const } : p)) };
     const view = buildView(dressed, dressed.players[0]!.id, 0);
     expect(view.players.find((r) => r.seat === 1)!.look).toBe("mafia");
@@ -2194,7 +2201,7 @@ describe("의상 값(직업과 같은 단어)은 players[].look 에서만 허용
 
 describe("판 번호 view.round (11-01, D-5·D-26)", () => {
   it("모든 단계의 모든 view 에 숫자로 실리고 첫 판은 1 이다 — 역할과 무관하다", () => {
-    const states: RoomState[] = [lobbyOf(6), ...(["roleReveal", "dayAnnounce", "discussion", "night", "morning"] as const).map((phase) => startedAt(6, 3, phase))];
+    const states: RoomState[] = [lobbyOf(6), ...(["roleReveal", "dayAnnounce", "discussion", "night", "morning"] as const).map((phase) => startedAt(6, 3, phase, "basic"))];
     for (const s of states) {
       const rounds = new Set(s.players.map((p) => buildView(s, p.id, 0).round));
       expect(`${s.phase}:${[...rounds].join(",")}`).toBe(`${s.phase}:1`);
@@ -2202,7 +2209,7 @@ describe("판 번호 view.round (11-01, D-5·D-26)", () => {
   });
 
   it("RoomState.round 가 2 면 view.round 도 2 이고, 옛 저장 방(round 없음)은 1 로 읽는다", () => {
-    const s = startedAt(6, 3, "discussion");
+    const s = startedAt(6, 3, "discussion", "basic");
     expect(roundOf(s)).toBe(1);
     const second: RoomState = { ...s, round: 2 };
     expect(roundOf(second)).toBe(2);
@@ -2212,7 +2219,7 @@ describe("판 번호 view.round (11-01, D-5·D-26)", () => {
 
 describe("맵 view.mapChoice·view.map (11-06, D-20·D-21, L42)", () => {
   it("mapChoice 는 모든 단계의 모든 view 에 실리고 기본은 random 이다 — 역할과 무관하다", () => {
-    const states: RoomState[] = [lobbyOf(6), ...(["roleReveal", "discussion", "night", "morning"] as const).map((phase) => startedAt(6, 3, phase))];
+    const states: RoomState[] = [lobbyOf(6), ...(["roleReveal", "discussion", "night", "morning"] as const).map((phase) => startedAt(6, 3, phase, "basic"))];
     for (const s of states) {
       const set = new Set(s.players.map((p) => buildView(s, p.id, 0).mapChoice));
       expect(`${s.phase}:${[...set].join(",")}`).toBe(`${s.phase}:random`);
@@ -2228,7 +2235,7 @@ describe("맵 view.mapChoice·view.map (11-06, D-20·D-21, L42)", () => {
 
   it("시작 뒤에는 모든 참가자의 view.map 이 같다 (역할·생사와 무관)", () => {
     for (const phase of ["roleReveal", "discussion", "night", "morning"] as const) {
-      const s = startedAt(6, 3, phase);
+      const s = startedAt(6, 3, phase, "basic");
       const withMap: RoomState = { ...s, map: "plaza" };
       const set = new Set(withMap.players.map((p) => buildView(withMap, p.id, 0).map));
       expect(`${phase}:${[...set].join(",")}`).toBe(`${phase}:plaza`);
@@ -2269,7 +2276,7 @@ describe("준비 players[].ready · players[].sat (11-08, D-12·D-13)", () => {
   });
 
   it("ended 가 아닌 단계에는 ready 키가 없다 — 상태에 남아 있어도", () => {
-    const s = startedAt(5, 2, "discussion");
+    const s = startedAt(5, 2, "discussion", "basic");
     const dirty: RoomState = { ...s, players: s.players.map((p) => ({ ...p, ready: true as const })) };
     for (const viewer of dirty.players) for (const row of buildView(dirty, viewer.id, 0).players) expect("ready" in row).toBe(false);
   });
@@ -2368,7 +2375,7 @@ describe("기본판 view 게이트 (D-05, 결정 0072, T-13-11)", () => {
   };
 
   it("서버 상태에 주장 값(badge·badgeSwapped·badgeLog)이 있어도 어떤 view 에도 players[].badge·badgeSwapped 키가 없다", () => {
-    let s = startedAt(6, 1, "discussion");
+    let s = startedAt(6, 1, "discussion", "basic");
     const [a, b] = s.players;
     s = { ...s, players: s.players.map((p) => (p.id === a!.id ? { ...p, badge: "mafia" as const } : p.id === b!.id ? { ...p, badge: "doctor" as const, badgeSwapped: true as const, badgeLog: [{ n: 1, v: "police" as const }] } : p)) };
     expect(hits(s)).toBe("");
@@ -2376,14 +2383,14 @@ describe("기본판 view 게이트 (D-05, 결정 0072, T-13-11)", () => {
   });
 
   it("nomination 상태에 pickTurn 이 있어도 day.turn 키가 없다(day.points 는 그대로)", () => {
-    const base = startedAt(6, 1, "nomination");
+    const base = startedAt(6, 1, "nomination", "basic");
     const s: RoomState = { ...base, pickTurn: { order: [0, 1, 2, 3, 4, 5], i: 1, endsAt: base.phaseEndsAt! } };
     expect(hits(s)).toBe("");
     for (const v of viewsOfAll(s)) expect(Object.hasOwn(v.day!, "points")).toBe(true);
   });
 
   it("phase 가 runoff·showdown 인 저장 상태여도 day.runoff·day.showdown·me.ballot 키가 없다", () => {
-    const base = startedAt(6, 1, "nomination");
+    const base = startedAt(6, 1, "nomination", "basic");
     const runoff: RoomState = {
       ...base,
       phase: "runoff",
@@ -2401,7 +2408,7 @@ describe("기본판 view 게이트 (D-05, 결정 0072, T-13-11)", () => {
   });
 
   it("오늘 귓속말 기록이 있어도 me.whisperUsed 키가 없다", () => {
-    const base = startedAt(6, 1, "discussion");
+    const base = startedAt(6, 1, "discussion", "basic");
     const s: RoomState = { ...base, whispers: [{ n: base.day ?? 1, from: 0, to: 1, text: "비밀-CANARY", at: START_AT }] };
     expect(hits(s)).toBe("");
     expect(JSON.stringify(viewsOfAll(s)).includes("비밀-CANARY")).toBe(false);

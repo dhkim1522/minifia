@@ -127,14 +127,20 @@ describe("nextPhaseOf (D-08)", () => {
   it("basic 판은 낮 시작 발표 다음이 토론이다", () => {
     expect(nextPhaseOf("dayAnnounce", rulesetOf("basic"))).toBe("discussion");
   });
-  it("extended 판은 낮 시작 발표 다음이 심부름이다", () => {
-    expect(nextPhaseOf("dayAnnounce", rulesetOf("extended"))).toBe("errand");
+  it("extended 판은 역할 확인·처형 다음이 저녁(심부름), 아침·낮 시작 발표(저장된 옛 방) 다음이 토론이다 (21페이즈 D-01, 규칙 가)", () => {
+    const rules = rulesetOf("extended");
+    expect(["roleReveal", "execution", "morning", "dayAnnounce"].map((p) => `${p}>${nextPhaseOf(p as PhaseId, rules)}`).join(" ")).toBe(
+      "roleReveal>errand execution>errand morning>discussion dayAnnounce>discussion",
+    );
   });
-  it("그 밖의 단계는 두 판 모두 단계 표의 next 와 같다", () => {
+  it("그 밖의 단계는 basic 판이면 단계 표의 next 와, extended 판이면 확장판이 따로 정한 네 단계를 뺀 나머지가 표의 next 와 같다", () => {
     const others = (Object.keys(PHASE_DEFS) as PhaseId[]).filter((p) => p !== "dayAnnounce");
     const want = others.map((p) => `${p}>${PHASE_DEFS[p].next}`).join(" ");
     expect(others.map((p) => `${p}>${nextPhaseOf(p, rulesetOf("basic"))}`).join(" ")).toBe(want);
-    expect(others.map((p) => `${p}>${nextPhaseOf(p, rulesetOf("extended"))}`).join(" ")).toBe(want);
+    const FORKED: PhaseId[] = ["roleReveal", "execution", "morning", "dayAnnounce"]; // 확장판 갈래 네 곳(phases.ts nextPhaseOf)
+    const rest = (Object.keys(PHASE_DEFS) as PhaseId[]).filter((p) => !FORKED.includes(p));
+    const wantRest = rest.map((p) => `${p}>${PHASE_DEFS[p].next}`).join(" ");
+    expect(rest.map((p) => `${p}>${nextPhaseOf(p, rulesetOf("extended"))}`).join(" ")).toBe(wantRest);
   });
 });
 
@@ -143,11 +149,12 @@ describe("tick — 판 종류에 따른 낮 흐름 (D-04·D-08)", () => {
   it("mode basic 인 낮 시작 발표는 마감 뒤 토론으로 간다", () => {
     expect(tick(atDayAnnounce({ mode: "basic" }), 5000, seededRandInt(1)).phase).toBe("discussion");
   });
-  it("mode 없는 방(옛 저장 방 포함)은 마감 뒤 심부름으로 간다", () => {
-    expect(tick(atDayAnnounce({}), 5000, seededRandInt(1)).phase).toBe("errand");
+  it("mode 없는 방(옛 저장 방 포함)은 확장판이라 낮 시작 발표에 있던 저장 방도 마감 뒤 토론으로 이어진다 (21페이즈, 규칙 가)", () => {
+    expect(tick(atDayAnnounce({}), 5000, seededRandInt(1)).phase).toBe("discussion");
   });
-  it("mode extended 는 마감 뒤 심부름으로 간다", () => {
-    expect(tick(atDayAnnounce({ mode: "extended" }), 5000, seededRandInt(1)).phase).toBe("errand");
+  it("mode extended 는 역할 확인 마감 뒤 심부름(저녁)으로 간다 (21페이즈, 규칙 가)", () => {
+    expect(tick({ ...atDayAnnounce({ mode: "extended" }), phase: "roleReveal" }, 5000, seededRandInt(1)).phase).toBe("errand");
+    expect(tick({ ...atDayAnnounce({}), phase: "roleReveal" }, 5000, seededRandInt(1)).phase).toBe("errand");
   });
   it("basic 판의 토론은 심부름 배정 없이 시작한다 — errandPlaces 를 가진 사람이 없다", () => {
     const s = tick(atDayAnnounce({ mode: "basic" }), 5000, seededRandInt(1));
@@ -411,10 +418,11 @@ describe("hooksOf — 판마다 진입·마감 훅 표 (D-03)", () => {
     const close = hooksOf(rulesWith({ runoff: true })).deadline.nomination!;
     expect(String(close(atVote("extended", TIE_OF_TWO), 9000).next)).toBe("runoff");
   });
-  it("같은 투표 상태를 지목 마감까지 tick 하면 basic·extended·mode 없는 방의 결과 단계가 같다 (최다 한 명 → defense, 동점 → night)", () => {
+  it("같은 투표 상태를 지목 마감까지 tick 하면 basic·extended·mode 없는 방의 결과 단계가 같다 (최다 한 명 → defense) · 동점은 기본 마피아 night, 확장판 errand", () => {
     const after = (mode: GameMode | undefined, votes: Record<number, number>): PhaseId => tick(atVote(mode, votes), 9000, seededRandInt(1)).phase;
     expect([after("basic", ONE_LEADER), after("extended", ONE_LEADER), after(undefined, ONE_LEADER)].join(",")).toBe("defense,defense,defense");
-    expect([after("basic", TIE_OF_TWO), after("extended", TIE_OF_TWO), after(undefined, TIE_OF_TWO)].join(",")).toBe("night,night,night");
+    // 처형 없는 날(동점)의 다음 단계는 판 종류가 가른다(21페이즈 D-01, 규칙 가): 기본 마피아는 밤, 확장판은 곧바로 저녁이다.
+    expect([after("basic", TIE_OF_TWO), after("extended", TIE_OF_TWO), after(undefined, TIE_OF_TWO)].join(",")).toBe("night,errand,errand");
   });
 });
 

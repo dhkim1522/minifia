@@ -710,7 +710,7 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
   });
 
   it("lobby·roleReveal·discussion 상태는 messages 키가 없으면 같은 객체를 돌려준다", () => {
-    const lobby = fullRoom([0, 1, 2, 3]);
+    const lobby: RoomState = { ...fullRoom([0, 1, 2, 3]), mode: "basic" }; // 낮 시작 발표 → 심부름 → 토론 순서는 이 시험이 따라가는 흐름이다(21페이즈 규칙 나)
     const started = startGame(lobby, "p0", 0, seededRandInt(1));
     if (!started.ok) throw new Error(started.error);
     const roleReveal = tick(started.state, ASSIGNING_MS);
@@ -842,31 +842,39 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
   });
 
   it("새 optional 필드가 없는 1페이즈 모양 상태를 tick 으로 낮 단계까지 넘겨도 buildView 가 기본값으로 뷰를 만든다", () => {
-    const lobby = fullRoom([0, 1, 2, 3, 4]);
-    const started = startGame(lobby, "p0", 0, seededRandInt(7));
-    if (!started.ok) throw new Error(started.error);
-    // 1페이즈에서 저장된 방에는 차례 상태·day 가 없다
-    const legacy: RoomState = {
-      ...started.state,
-      players: started.state.players.map((p) => {
-        const { alive: _a, ...rest } = p;
-        return rest;
-      }),
-    };
-    const line = [ASSIGNING_MS, ROLE_REVEAL_MS, DAY_ANNOUNCE_MS, ERRAND_MS];
-    let at = 0;
-    const seen: string[] = [];
-    let state = legacy;
-    for (const ms of line) {
-      at += ms;
-      state = tick(state, at, seededRandInt(3));
-      const view = buildView(state, "p1", at);
-      seen.push(`${state.phase}:${view.day === undefined ? "-" : view.day.n}`);
+    // 판 종류마다 단계가 다르다(21페이즈): 기본 마피아 roleReveal → dayAnnounce → discussion, 확장판 roleReveal → errand → night.
+    const expectedByMode = [
+      ["basic", "roleReveal:- dayAnnounce:1 discussion:1 discussion:1"],
+      ["extended", "roleReveal:- errand:1 errand:1 night:1"],
+    ] as const;
+    for (const [mode, expected] of expectedByMode) {
+      const lobby: RoomState = { ...fullRoom([0, 1, 2, 3, 4]), mode };
+      const started = startGame(lobby, "p0", 0, seededRandInt(7));
+      if (!started.ok) throw new Error(started.error);
+      // 1페이즈에서 저장된 방에는 차례 상태·day 가 없다
+      const legacy: RoomState = {
+        ...started.state,
+        players: started.state.players.map((p) => {
+          const { alive: _a, ...rest } = p;
+          return rest;
+        }),
+      };
+      const line = [ASSIGNING_MS, ROLE_REVEAL_MS, DAY_ANNOUNCE_MS, ERRAND_MS];
+      let at = 0;
+      const seen: string[] = [];
+      let state = legacy;
+      for (const ms of line) {
+        at += ms;
+        state = tick(state, at, seededRandInt(3));
+        const view = buildView(state, "p1", at);
+        seen.push(`${state.phase}:${view.day === undefined ? "-" : view.day.n}`);
+      }
+      expect(`${mode}/${seen.join(" ")}`).toBe(`${mode}/${expected}`);
+      const day = buildView(state, "p1", at).day;
+      expect(Object.keys(day ?? {}).includes("messages")).toBe(false);
     }
-    expect(seen.join(" ")).toBe("roleReveal:- dayAnnounce:1 errand:1 discussion:1");
-    const day = buildView(state, "p1", at).day;
-    expect(Object.keys(day ?? {}).includes("messages")).toBe(false);
   });
+
 
   it("day 가 아예 없는 discussion 상태도 뷰가 예외 없이 기본값(day 1)을 쥐고 messages 키는 없다", () => {
     const base = fullRoom([0, 1, 2, 3]);

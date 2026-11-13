@@ -13,13 +13,16 @@ import { PICK_TURN_MS, SHOWDOWN_POINT_MS, SHOWDOWN_TURN_MS } from "../../shared/
 import { castRunoffVote, runoffStepMs, stepRunoff } from "../../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint, showdownStepMs, stepShowdown } from "../../shared/game/showdown";
 import { castVerdict } from "../../shared/game/verdict";
-import type { PhaseId } from "../../shared/protocol";
+import type { GameMode, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "./seededRandom";
 
 export const START_AT = 10_000;
 
-/** n 명이 모두 연결된 대기실. id·token 은 서로의 부분 문자열이 아니다(누출 검사가 부분 문자열로 훑는다). */
-export function lobbyOf(n: number): RoomState {
+/**
+ * n 명이 모두 연결된 대기실. id·token 은 서로의 부분 문자열이 아니다(누출 검사가 부분 문자열로 훑는다).
+ * mode 를 주면 방장이 고른 판 종류가 그대로 박힌다(21페이즈: 낮 시작 발표·기본 마피아 하루를 보는 시험은 "basic" 을 준다). 없으면 확장판(modeOf 의 기본값)이다.
+ */
+export function lobbyOf(n: number, mode?: GameMode): RoomState {
   const created = createRoomState({
     code: "0420",
     hostId: "player-id-0000-aaaa",
@@ -35,12 +38,12 @@ export function lobbyOf(n: number): RoomState {
     if (!joined.ok) throw new Error(`joinRoom failed: ${joined.error}`);
     state = attachConnection(joined.state, id, `conn-${i}`);
   }
-  return state;
+  return mode === undefined ? state : { ...state, mode };
 }
 
 /** 표 없이 다음 단계 표만 따라 목표 단계의 첫 순간까지. 분기 단계(지목 결과에 따라 갈리는 night 등)에는 닿지 못한다 — 그쪽은 stateWithVerdict. */
-export function startedAt(n: number, seed: number, phase: PhaseId): RoomState {
-  return startedFrom(lobbyOf(n), seed, phase);
+export function startedAt(n: number, seed: number, phase: PhaseId, mode?: GameMode): RoomState {
+  return startedFrom(lobbyOf(n, mode), seed, phase);
 }
 
 /** startedAt 과 같되 대기실을 직접 준다(봇이 낀 테스트 방처럼 lobbyOf 와 다른 방). */
@@ -157,10 +160,10 @@ export function stateWithVerdict(
   n: number,
   seed: number,
   phase: "defense" | "verdict" | "execution",
-  opts: { candidate?: CandidateSpec; lobby?: RoomState } = {},
+  opts: { candidate?: CandidateSpec; lobby?: RoomState; mode?: GameMode } = {},
 ): RoomState {
   const spec = opts.candidate ?? "citizen";
-  let state = opts.lobby === undefined ? startedAt(n, seed, "nomination") : startedFrom(opts.lobby, seed, "nomination");
+  let state = opts.lobby === undefined ? startedAt(n, seed, "nomination", opts.mode) : startedFrom(opts.lobby, seed, "nomination");
   const alive = state.players.filter(isAlive).sort((a, b) => a.seat - b.seat);
   const targetBySeat: Record<number, number> = {};
   if (spec === "tie") {
@@ -281,7 +284,7 @@ export function castShowdown(
 
 /** n 명 판에서 좌석 deadSeat 들이 죽은 마지막 3인 낮 시작 발표(산 사람이 정확히 셋이어야 한다). 실제 전이로 만든다. */
 export function threeAliveAt(n: number, seed: number, deadSeats: number[]): RoomState {
-  const s = startedAt(n, seed, "dayAnnounce");
+  const s = startedAt(n, seed, "dayAnnounce", "basic"); // 낮 시작 발표는 기본 마피아에만 있다(21페이즈)
   const dead: RoomState = { ...s, players: s.players.map((p) => (deadSeats.includes(p.seat) ? { ...p, alive: false } : p)) };
   if (dead.players.filter((p) => p.alive !== false).length !== 3) throw new Error("threeAliveAt: 산 사람이 셋이 아니다");
   return dead;

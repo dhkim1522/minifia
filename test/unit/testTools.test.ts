@@ -1,7 +1,7 @@
 // 테스트 방 방장 도구 규칙(quick 261025-f09, 결정 0022): testSkip·testReset·testRole 의 순수 규칙을 확인한다.
 // 실패 출력은 한 줄이어야 해서(TAP) 상태 비교는 키 순서를 맞춘 문자열로, 목록 비교는 요약 문자열로 한다.
 import { describe, expect, it } from "vitest";
-import { EXECUTION_MS, PHASE_DEFS } from "../../shared/game/phases";
+import { EXECUTION_MS, PHASE_DEFS, nextPhaseOf } from "../../shared/game/phases";
 import { ROLE_IDS, ROLE_TABLE, assignRoles, giveRoleTo, rolesInPlay, testRoleOptions } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
@@ -12,11 +12,11 @@ import { castPoint, castTurnPoint, enterNomination, nominationStepMs, stepNomina
 import { castVerdict } from "../../shared/game/verdict";
 import { finishNomination, finishRunoff, finishShowdown, resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import { runoffStepMs, stepRunoff } from "../../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint, showdownStepMs, stepShowdown } from "../../shared/game/showdown";
 import { buildPreview, buildView } from "../../shared/game/view";
-import type { PhaseId } from "../../shared/protocol";
+import type { GameMode, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, castVerdicts, startedFrom, stateWithVerdict } from "../helpers/voteState";
 const GAME_RULES = rulesetOf("extended");
@@ -25,7 +25,8 @@ const START_AT = 10_000;
 const HOST_ID = "player-id-0000-aaaa";
 
 /** n 명이 모두 연결된 대기실. testMode 가 true 면 테스트 방이다. */
-function lobbyOf(n: number, testMode = true): RoomState {
+/** 21페이즈 규칙 나: 이 파일의 낮·밤·아침·단계 건너뛰기 시험은 기본 마피아 흐름(낮 시작 발표·아침이 늘 있다)을 본다 — mode 기본값을 basic 으로 둔다. 확장판은 mode 로 고른다. */
+function lobbyOf(n: number, testMode = true, mode: GameMode = "basic"): RoomState {
   const created = createRoomState({
     code: "0420",
     hostId: HOST_ID,
@@ -42,16 +43,17 @@ function lobbyOf(n: number, testMode = true): RoomState {
     if (!joined.ok) throw new Error(`joinRoom failed: ${joined.error}`);
     state = attachConnection(joined.state, id, `conn-${i}`);
   }
-  return state;
+  return { ...state, mode };
 }
 
 /** 실제 전이(startGame, tick)로 phase 에 닿은 상태. */
-function stateAt(n: number, seed: number, phase: PhaseId, testMode = true): RoomState {
-  const lobby = lobbyOf(n, testMode);
+function stateAt(n: number, seed: number, phase: PhaseId, testMode = true, mode: GameMode = "basic"): RoomState {
+  const lobby = lobbyOf(n, testMode, mode);
   const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed));
   if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
   let state = started.state;
-  while (state.phase !== phase) {
+  for (let guard = 0; state.phase !== phase; guard += 1) {
+    if (guard > 80) throw new Error(`${phase} 에 닿지 못한다(판 종류의 순서에 없는 단계)`);
     if (state.phaseEndsAt === null) throw new Error("phase has no deadline");
     state = tick(state, state.phaseEndsAt, seededRandInt(seed + 1));
   }
@@ -165,7 +167,7 @@ describe("skipPhase 동작", () => {
       const now = state.phaseEndsAt! - 500;
       const r = skipPhase(state, state.hostId, now, seededRandInt(9));
       if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
-      const next = PHASE_DEFS[phase].next!;
+      const next = nextPhaseOf(phase, rulesetOf(modeOf(state)))!; // 판 종류의 다음 단계(기본 마피아는 낮 시작 발표 다음이 토론, 19페이즈 D-08)
       expect(r.state.phase).toBe(next);
       expect(String(r.state.phaseEndsAt)).toBe(String(now + PHASE_DEFS[next].durationMs!));
     });
@@ -187,7 +189,7 @@ describe("skipPhase 동작", () => {
   }
 
   it("밤에 마피아 전원이 같은 시민을 고른 뒤 넘기면 아침에 그 시민이 탈락한다(문구 번호 없음)", () => {
-    const night = stateAt(6, 4, "night");
+    const night = stateAt(6, 4, "night", true, "extended"); // 흔적 조각은 확장판 규칙이다(21페이즈, 규칙 가)
     const citizen = night.players.find((p) => p.role === "citizen")!;
     let picked: RoomState = night;
     for (const mafia of night.players.filter((p) => p.role === "mafia")) {
@@ -227,7 +229,8 @@ describe("resetToLobby", () => {
       if (!picked.ok) throw new Error(`pickTarget failed: ${picked.error}`);
       state = picked.state;
     }
-    while (!(state.phase === "night" && state.day === 2)) {
+    for (let guard = 0; !(state.phase === "night" && state.day === 2); guard += 1) {
+      if (guard > 80) throw new Error("2일차 밤에 닿지 못한다");
       const r = skipPhase(state, state.hostId, state.phaseEndsAt! - 100, seededRandInt(2));
       if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
       state = r.state;
@@ -286,7 +289,7 @@ describe("resetToLobby", () => {
     const r = resetToLobby(before, before.hostId);
     if (!r.ok) throw new Error(`resetToLobby failed: ${r.error}`);
     expect(sortedKeys(r.state)).toBe(
-      "code,createdAt,everConnected,expiresAt,hostId,nextJoinSeq,phase,phaseEndsAt,players,testMode,testRole",
+      "code,createdAt,everConnected,expiresAt,hostId,mode,nextJoinSeq,phase,phaseEndsAt,players,testMode,testRole" // mode: 방장이 고른 판 종류는 대기실 복귀 뒤에도 남는다(19페이즈 D-06) — 이 방은 기본 마피아로 열었다(21페이즈 규칙 나),
     );
     expect(r.state.phase).toBe("lobby");
     expect(String(r.state.phaseEndsAt)).toBe("null");
@@ -681,7 +684,7 @@ describe("resetToLobby: 투표·처형·종료 필드를 모두 지운다 (END-0
       for (const key of PLAYER_GONE) expect(`${label}:${p.seat}:${key}:${Object.hasOwn(p, key)}`).toBe(`${label}:${p.seat}:${key}:false`);
       expect(sortedKeys(p).replace("look,", "")).toBe(p.isBot === true ? "connId,connected,id,isBot,joinSeq,nickname,nicknameKey,seat,token" : "connId,connected,id,joinSeq,nickname,nicknameKey,seat,token"); // look 은 시작 때 풀린 공개 의상(D-01)
     }
-    expect(sortedKeys(r.state)).toBe("code,createdAt,everConnected,expiresAt,hostId,nextJoinSeq,phase,phaseEndsAt,players,testMode");
+    expect(sortedKeys(r.state)).toBe("code,createdAt,everConnected,expiresAt,hostId,mode,nextJoinSeq,phase,phaseEndsAt,players,testMode"); // mode: 판 종류는 대기실 복귀 뒤에도 남는다(19페이즈 D-06)
   }
   const rich = (state: RoomState): RoomState => ({
     ...state,

@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import { pickTarget } from "../../shared/game/night";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
+import type { GameMode } from "../../shared/protocol";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
 import { isAlive } from "../../shared/game/alive";
 import { seededRandInt } from "../helpers/seededRandom";
 
 // Nyquist 03: 밤 → 아침 전체 사슬을 시드 여러 개로 돌려 viewer 간 불변식을 확인한다.
-function lobbyOf(n: number): RoomState {
+function lobbyOf(n: number, mode?: GameMode): RoomState {
   const c = createRoomState({ code: "0420", hostId: "player-id-0000-aaaa", hostToken: "token-secret-0000-aaaa-0123456789", hostNickname: "이름0", now: 0 });
   if (!c.ok) throw new Error("create");
   let s = attachConnection(c.state, "player-id-0000-aaaa", "conn-0");
@@ -18,11 +19,12 @@ function lobbyOf(n: number): RoomState {
     if (!j.ok) throw new Error("join");
     s = attachConnection(j.state, id, `conn-${i}`);
   }
-  return s;
+  return mode === undefined ? s : { ...s, mode };
 }
 
-function nightOf(n: number, seed: number): RoomState {
-  const lobby = lobbyOf(n);
+/** mode 를 안 주면 확장판이다. 21페이즈: 확장판은 마피아 선택이 갈리면 아침 없이 토론으로 가므로, 무작위 선택에서도 늘 아침이 있는 쪽을 보려면 "basic" 을 준다. */
+function nightOf(n: number, seed: number, mode?: GameMode): RoomState {
+  const lobby = lobbyOf(n, mode);
   const st = startGame(lobby, lobby.hostId, 10_000, seededRandInt(seed));
   if (!st.ok) throw new Error("start");
   let s = st.state;
@@ -34,7 +36,7 @@ describe("밤 사슬 불변식 (NIGHT-01·06, ELIM-01)", () => {
   for (const n of [4, 5, 6, 7, 8]) {
     it(`${n}명 판 시드 1..40: 모두 무작위로 골라도 마감은 그대로, 아침 day.morning 은 모든 viewer 가 같고 탈락자만 spectate 를 받는다`, () => {
       for (let seed = 1; seed <= 40; seed += 1) {
-        let s = nightOf(n, seed);
+        let s = nightOf(n, seed, "basic"); // 규칙 나: 모두 무작위로 골라도 아침이 오는 기본 마피아 흐름
         const deadline = s.phaseEndsAt;
         const rnd = seededRandInt(seed * 7 + 1);
         for (const actor of s.players.filter((p) => p.role !== "citizen")) {

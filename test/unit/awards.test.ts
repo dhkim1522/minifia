@@ -64,10 +64,17 @@ describe("buildView — result.awards (D-4, L35)", () => {
     const s = endedState({ roles: ROLES5, dead: [3], voteLog: [execDay(1, [[0, 3]], 3)] });
     const view = buildView(s, s.players[0]!.id, 1_000);
     expect(JSON.stringify(view.result?.awards)).toBe(JSON.stringify(computeAwards(s)));
-    for (const phase of ["roleReveal", "dayAnnounce", "discussion", "nomination"] as const) {
-      const mid = startedAt(5, 3, phase);
-      const text = JSON.stringify(buildView(mid, mid.players[0]!.id, 1_000));
-      expect(`${phase}:${text.includes("awards")}:${text.includes("\"result\"")}`).toBe(`${phase}:false:false`);
+    // 판 종류마다 거치는 단계가 다르다(21페이즈) — 낮 시작 발표는 기본 마피아에만, 저녁·밤은 확장판에만 있다(규칙 가·나).
+    const phasesOf = [
+      ["basic", ["roleReveal", "dayAnnounce", "discussion", "nomination"]],
+      ["extended", ["roleReveal", "errand", "night", "discussion", "nomination"]],
+    ] as const;
+    for (const [mode, phases] of phasesOf) {
+      for (const phase of phases) {
+        const mid = startedAt(5, 3, phase, mode);
+        const text = JSON.stringify(buildView(mid, mid.players[0]!.id, 1_000));
+        expect(`${mode}/${phase}:${text.includes("awards")}:${text.includes("\"result\"")}`).toBe(`${mode}/${phase}:false:false`);
+      }
     }
   });
 });
@@ -261,14 +268,24 @@ describe("동점 정렬 — 점수 → 생존자 → 늦은 탈락 → 낮은 �
     const s = endedState({ roles: ROLES6, dead: [3], voteLog: [execDay(1, [[0, 3]], 3)], stats: talk(6, 6) });
     expect(holders(computeAwards(s), "talker")[0]!.seat).toBe(4);
   });
-  it("③ 둘 다 탈락이면 더 늦게 탈락한 쪽, 같은 일차면 밤 탈락이 낮 탈락보다 늦다", () => {
+  it("③ 둘 다 탈락이면 더 늦게 탈락한 쪽, 같은 일차면 밤 탈락이 낮 탈락보다 늦다(기본 마피아, 규칙 나)", () => {
     // seat 2 가 1일차 밤에 먼저 죽어 firstVictim 을 가져가므로 talker 경쟁은 3 과 4 둘이다.
-    const base = { roles: ROLES6, dead: [2, 3, 4], stats: talk(6, 6) };
+    const base = { roles: ROLES6, dead: [2, 3, 4], stats: talk(6, 6), mode: "basic" as const };
     const night = (n: number, target: number): NightLogEntry => ({ n, target, died: true });
     const later = endedState({ ...base, voteLog: [execDay(1, [[0, 3]], 3)], nightLog: [night(1, 2), night(2, 4)] });
     expect(holders(computeAwards(later), "talker")[0]!.seat).toBe(4);
     const sameDay = endedState({ ...base, voteLog: [execDay(2, [[0, 3]], 3)], nightLog: [night(1, 2), night(2, 4)] });
     expect(holders(computeAwards(sameDay), "talker")[0]!.seat).toBe(4);
+    const earlier = endedState({ ...base, voteLog: [execDay(3, [[0, 3]], 3)], nightLog: [night(1, 2), night(2, 4)] });
+    expect(holders(computeAwards(earlier), "talker")[0]!.seat).toBe(3);
+  });
+  it("③' 확장판은 같은 일차에서 밤이 낮보다 먼저라 낮 탈락(처형)이 밤 탈락보다 늦다 (21페이즈 D-01, 규칙 가)", () => {
+    const base = { roles: ROLES6, dead: [2, 3, 4], stats: talk(6, 6), mode: "extended" as const };
+    const night = (n: number, target: number): NightLogEntry => ({ n, target, died: true });
+    const later = endedState({ ...base, voteLog: [execDay(1, [[0, 3]], 3)], nightLog: [night(1, 2), night(2, 4)] });
+    expect(holders(computeAwards(later), "talker")[0]!.seat).toBe(4);
+    const sameDay = endedState({ ...base, voteLog: [execDay(2, [[0, 3]], 3)], nightLog: [night(1, 2), night(2, 4)] });
+    expect(holders(computeAwards(sameDay), "talker")[0]!.seat).toBe(3);
     const earlier = endedState({ ...base, voteLog: [execDay(3, [[0, 3]], 3)], nightLog: [night(1, 2), night(2, 4)] });
     expect(holders(computeAwards(earlier), "talker")[0]!.seat).toBe(3);
   });
@@ -315,6 +332,7 @@ const ALLOWED_READS: ReadonlySet<string> = new Set([
   "nightLog", "nightLog[].n", "nightLog[].target", "nightLog[].died",
   "whispers", "whispers[].from", "whispers[].n",
   "winner",
+  "mode", // 판 종류는 공개 값이다(view.mode) — 같은 일차 탈락 순서를 가른다(21페이즈)
 ]);
 
 /** 읽기·열거·in 검사를 모두 기록하는 깊은 프록시. 배열 안쪽(length·메서드)은 기록하지 않고 칸 접근만 `[]` 경로로 이어 간다. */

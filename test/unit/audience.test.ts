@@ -6,13 +6,13 @@ import type { Player, RoomState } from "../../shared/game/room";
 import type { RoleId } from "../../shared/game/roles";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
-import type { ChatChannel, PhaseId } from "../../shared/protocol";
+import type { ChatChannel, GameMode, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 
 const START_AT = 10_000;
 
 /** n 명이 모두 연결된 대기실(seat 0~n-1, id 는 player-id-000i-aaaa). */
-function lobbyOf(n: number): RoomState {
+function lobbyOf(n: number, mode?: GameMode): RoomState {
   const created = createRoomState({
     code: "0420",
     hostId: "player-id-0000-aaaa",
@@ -28,7 +28,7 @@ function lobbyOf(n: number): RoomState {
     if (!joined.ok) throw new Error(`joinRoom failed: ${joined.error}`);
     state = attachConnection(joined.state, id, `conn-${i}`);
   }
-  return state;
+  return mode === undefined ? state : { ...state, mode };
 }
 
 const idOf = (seat: number): string => `player-id-000${seat}-aaaa`;
@@ -264,27 +264,34 @@ describe("phaseKey — 단계 한 번(instance)마다 유일한 키", () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("서버 상태 키와 buildView(day.n) 로 만든 클라이언트 키가 같다 — 로비·dayAnnounce·discussion·night·morning", () => {
-    const lobby = lobbyOf(6);
-    const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(7));
-    if (!started.ok) throw new Error("startGame failed");
-    let state = started.state;
-    const seen = new Set<PhaseId>();
-    const check = (s: RoomState): void => {
-      const view = buildView(s, s.players[0]!.id, 0);
-      const client = phaseKey({ phase: view.phase, day: view.day?.n, round: view.round });
-      expect(client).toBe(phaseKey({ phase: s.phase, day: s.day, round: roundOf(s) }));
-      seen.add(s.phase);
-    };
-    check(lobby);
-    // 실제 전이로 1일차 밤·아침과 2일차 낮 시작까지 따라간다.
-    for (let guard = 0; guard < 60 && !(state.day === 2 && state.phase === "discussion"); guard += 1) {
-      if (state.phaseEndsAt === null) break;
-      state = tick(state, state.phaseEndsAt, seededRandInt(8)); // errand 진입(15페이즈)이 난수를 쓴다
-      if (state.phase === "ended") break;
-      check(state);
+  it("서버 상태 키와 buildView(day.n) 로 만든 클라이언트 키가 같다 — 로비·dayAnnounce·discussion·night·morning (기본 마피아) · 저녁·밤·토론 (확장판)", () => {
+    // 판 종류마다 거치는 단계가 다르다(21페이즈): 낮 시작 발표·아침은 기본 마피아, 저녁은 확장판(규칙 가·나).
+    const modes = [
+      ["basic", ["dayAnnounce", "discussion", "night", "morning"]],
+      ["extended", ["errand", "night", "discussion"]],
+    ] as const;
+    for (const [mode, expected] of modes) {
+      const lobby = lobbyOf(6, mode);
+      const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(7));
+      if (!started.ok) throw new Error("startGame failed");
+      let state = started.state;
+      const seen = new Set<PhaseId>();
+      const check = (s: RoomState): void => {
+        const view = buildView(s, s.players[0]!.id, 0);
+        const client = phaseKey({ phase: view.phase, day: view.day?.n, round: view.round });
+        expect(client).toBe(phaseKey({ phase: s.phase, day: s.day, round: roundOf(s) }));
+        seen.add(s.phase);
+      };
+      check(lobby);
+      // 실제 전이로 1일차 밤·아침과 2일차 낮 시작까지 따라간다.
+      for (let guard = 0; guard < 60 && !(state.day === 2 && state.phase === "discussion"); guard += 1) {
+        if (state.phaseEndsAt === null) break;
+        state = tick(state, state.phaseEndsAt, seededRandInt(8)); // errand 진입(15페이즈)이 난수를 쓴다
+        if (state.phase === "ended") break;
+        check(state);
+      }
+      for (const phase of expected) expect(`${mode}/${phase}:${seen.has(phase)}`).toBe(`${mode}/${phase}:true`);
     }
-    for (const phase of ["dayAnnounce", "discussion", "night", "morning"] as PhaseId[]) expect(seen.has(phase)).toBe(true);
   });
 });
 

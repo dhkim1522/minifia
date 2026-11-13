@@ -10,7 +10,8 @@ import { BAR_MAP, BAR_PLACES, UNIT, cellOfFx, isWalkable, routeFx, snapToWalkabl
 import { PLAZA_MAP, PLAZA_PLACES } from "../../shared/game/mapPlaza";
 import { mapOf } from "../../shared/game/maps";
 import { canMoveIn } from "../../shared/game/movement";
-import { ERRAND_ACT_R, ERRAND_COUNT, ERRAND_MS, PHASE_DEFS } from "../../shared/game/phases";
+import { ERRAND_ACT_R, ERRAND_COUNT, ERRAND_MS, PHASE_DEFS, nextPhaseOf } from "../../shared/game/phases";
+import { rulesetOf } from "../../shared/game/ruleset";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
@@ -19,28 +20,31 @@ import { ClientMessageSchema } from "../../shared/schemas";
 import { seededRandInt } from "../helpers/seededRandom";
 import { lobbyOf, startedAt, startedFrom } from "../helpers/voteState";
 
-/** 재즈 바로 고정한 심부름 방(시작 때 맵은 시드로 정해지므로 시험이 맵을 고정한다). */
-function barRoom(seed: number, phase: "dayAnnounce" | "errand", n = 6): RoomState {
-  const day = { ...startedAt(n, seed, "dayAnnounce"), map: "bar" as const };
-  return phase === "dayAnnounce" ? day : tick(day, day.phaseEndsAt!, seededRandInt(seed + 1));
+/**
+ * 재즈 바로 고정한 심부름 방(시작 때 맵은 시드로 정해지므로 시험이 맵을 고정한다).
+ * 21페이즈: 확장판은 역할 확인 다음이 곧 저녁(errand)이다 — "roleReveal" 은 저녁 진입 직전(enterErrand 에 넣을 상태), "errand" 는 진입 뒤.
+ */
+function barRoom(seed: number, phase: "roleReveal" | "errand", n = 6): RoomState {
+  const before = { ...startedAt(n, seed, "roleReveal"), map: "bar" as const };
+  return phase === "roleReveal" ? before : tick(before, before.phaseEndsAt!, seededRandInt(seed + 1));
 }
 const byId = (state: RoomState, id: string): Player => state.players.find((p) => p.id === id)!;
 
 describe("단계 표", () => {
-  it("낮 시작 다음이 errand 이고 길이 40초 · errand 다음이 토론", () => {
-    expect(PHASE_DEFS.dayAnnounce.next).toBe("errand");
+  it("역할 확인 다음이 errand(저녁)이고 길이 40초 · errand 다음이 밤 (21페이즈 D-01, 규칙 가)", () => {
+    expect(nextPhaseOf("roleReveal", rulesetOf("extended"))).toBe("errand");
     expect(PHASE_DEFS.errand.durationMs).toBe(ERRAND_MS);
     expect(ERRAND_MS).toBe(40_000);
-    expect(PHASE_DEFS.errand.next).toBe("discussion");
+    expect(PHASE_DEFS.errand.next).toBe("night");
   });
 
-  it("tick 이 dayAnnounce 마감에서 errand, errand 마감에서 discussion 으로 간다", () => {
-    const day = barRoom(3, "dayAnnounce");
-    const errand = tick(day, day.phaseEndsAt!, seededRandInt(9));
+  it("tick 이 roleReveal 마감에서 errand, errand 마감에서 night 으로 간다 (규칙 가)", () => {
+    const reveal = barRoom(3, "roleReveal");
+    const errand = tick(reveal, reveal.phaseEndsAt!, seededRandInt(9));
     expect(errand.phase).toBe("errand");
-    expect(errand.phaseEndsAt).toBe(day.phaseEndsAt! + ERRAND_MS);
-    const talk = tick(errand, errand.phaseEndsAt!, seededRandInt(9));
-    expect(talk.phase).toBe("discussion");
+    expect(errand.phaseEndsAt).toBe(reveal.phaseEndsAt! + ERRAND_MS);
+    const night = tick(errand, errand.phaseEndsAt!, seededRandInt(9));
+    expect(night.phase).toBe("night");
   });
 
   it("상수는 phases.ts 한 곳에만 정의된다", () => {
@@ -127,7 +131,7 @@ describe("enterErrand", () => {
   });
 
   it("같은 시드·같은 입력이면 같은 결과, 입력 상태는 바뀌지 않는다", () => {
-    const base = barRoom(5, "dayAnnounce");
+    const base = barRoom(5, "roleReveal");
     const frozen = JSON.stringify(base);
     const a = enterErrand(base, seededRandInt(7), 0);
     const b = enterErrand(base, seededRandInt(7), 0);
@@ -136,7 +140,7 @@ describe("enterErrand", () => {
   });
 
   it("역할만 다른 두 방이 같은 시드로 같은 장소 목록을 얻는다(역할을 읽지 않는다)", () => {
-    const base = barRoom(5, "dayAnnounce");
+    const base = barRoom(5, "roleReveal");
     const flipped: RoomState = {
       ...base,
       players: base.players.map((p) => ({ ...p, role: p.role === "mafia" ? "citizen" : "mafia" })),
@@ -150,7 +154,7 @@ describe("enterErrand", () => {
   });
 
   it("난수 호출 순서: seat 오름차순 산 사람, 사람마다 k = 0..2 에 randInt(n - k)", () => {
-    const base = barRoom(5, "dayAnnounce");
+    const base = barRoom(5, "roleReveal");
     const calls: number[] = [];
     enterErrand(
       base,
@@ -164,7 +168,7 @@ describe("enterErrand", () => {
   });
 
   it("죽은 사람은 두 키가 없고 난수도 쓰지 않는다", () => {
-    const base = barRoom(5, "dayAnnounce");
+    const base = barRoom(5, "roleReveal");
     const dead = base.players[2]!.id;
     const withDead: RoomState = { ...base, players: base.players.map((p) => (p.id === dead ? { ...p, alive: false, errandPlaces: ["glass"], errandDone: [] } : p)) };
     let calls = 0;
@@ -182,14 +186,14 @@ describe("enterErrand", () => {
   });
 
   it("광장 방은 광장 후보에서 뽑는다", () => {
-    const base = { ...barRoom(5, "dayAnnounce"), map: "plaza" as const };
+    const base = { ...barRoom(5, "roleReveal"), map: "plaza" as const };
     const out = enterErrand(base, seededRandInt(3), 0);
     const candidates = new Set(PLAZA_PLACES.map((p) => p.id));
     for (const p of out.players) for (const id of p.errandPlaces!) expect(candidates.has(id)).toBe(true);
   });
 
   it("places 가 없는 맵은 빈 목록", () => {
-    const base = barRoom(5, "dayAnnounce");
+    const base = barRoom(5, "roleReveal");
     const real = mapOf("bar");
     const saved = real.places;
     try {
@@ -244,8 +248,10 @@ describe("errandLast — 마지막 목격 표본 (16페이즈 D-10, A2)", () => 
   });
 
   it("errand 단계가 아니면 입력 그대로다", () => {
-    const talk = tick(base(), base().phaseEndsAt!, seededRandInt(3));
-    expect(talk.phase).toBe("discussion");
+    const night = tick(base(), base().phaseEndsAt!, seededRandInt(3));
+    expect(night.phase).toBe("night"); // 21페이즈: errand 다음은 밤
+    expect(sampleErrand(night, () => ({ x: 0, z: 0 }), 1)).toBe(night);
+    const talk: RoomState = { ...night, phase: "discussion" };
     expect(sampleErrand(talk, () => ({ x: 0, z: 0 }), 1)).toBe(talk);
   });
 
@@ -262,7 +268,7 @@ describe("errandLast — 마지막 목격 표본 (16페이즈 D-10, A2)", () => 
   });
 
   it("enterErrand 가 errandLast 를 키째 지운다(새 낮의 시작)", () => {
-    const day = { ...barRoom(5, "dayAnnounce"), errandLast: [{ seat: 0, by: 1, place: "glass" as const }] };
+    const day = { ...barRoom(5, "roleReveal"), errandLast: [{ seat: 0, by: 1, place: "glass" as const }] };
     const errand = enterErrand(day, seededRandInt(7), 0);
     expect("errandLast" in errand).toBe(false);
     expect(day.errandLast).toHaveLength(1);
@@ -413,11 +419,11 @@ describe("view", () => {
   it("토론·밤 단계·유령 view 에는 me.errand 키가 없다", () => {
     const s = errandRoom();
     const id = s.players[0]!.id;
-    const talk = tick(s, s.phaseEndsAt!, seededRandInt(2));
-    expect(talk.phase).toBe("discussion");
-    expect("errand" in buildView(talk, id, talk.phaseEndsAt! - 1000).me).toBe(false);
-    const night: RoomState = { ...s, phase: "night" };
-    expect("errand" in buildView(night, id, 0).me).toBe(false);
+    const night = tick(s, s.phaseEndsAt!, seededRandInt(2));
+    expect(night.phase).toBe("night"); // 21페이즈: errand 다음은 밤, 토론은 밤·아침 뒤
+    expect("errand" in buildView(night, id, night.phaseEndsAt! - 1000).me).toBe(false);
+    const talk: RoomState = { ...night, phase: "discussion" };
+    expect("errand" in buildView(talk, id, 0).me).toBe(false);
     const ghost: RoomState = { ...s, players: s.players.map((p) => (p.id === id ? { ...p, alive: false } : p)) };
     expect("errand" in buildView(ghost, id, 0).me).toBe(false);
   });

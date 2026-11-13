@@ -302,9 +302,9 @@ describe("view 의 흔적 (T-15-12)", () => {
     expect("trace" in (buildView(saved, m1.id, START_AT).day?.morning ?? {})).toBe(false);
     expect("trace" in (buildView(split, m1.id, START_AT).day?.morning ?? {})).toBe(false);
     const killed = toMorning(picks(night, [m1, c1], [m2, c1]));
-    const dayAnnounce = tick(killed, killed.phaseEndsAt!, seededRandInt(3));
-    expect(dayAnnounce.phase).toBe("dayAnnounce");
-    const announced = buildView(dayAnnounce, m1.id, START_AT).day;
+    const afterMorning = tick(killed, killed.phaseEndsAt!, seededRandInt(3));
+    expect(afterMorning.phase).toBe("discussion"); // 21페이즈: 확장판은 아침 다음이 곧 토론(낮 시작 발표 없음)
+    const announced = buildView(afterMorning, m1.id, START_AT).day;
     expect("morning" in (announced ?? {})).toBe(false);
     expect(Object.keys(announced?.evidence ?? {}).join(",")).toBe("trace"); // 목격자가 없으면 trace 만
     expect(JSON.stringify(buildView(night, m1.id, START_AT).day).includes("trace")).toBe(false);

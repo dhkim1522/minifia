@@ -26,7 +26,7 @@ const idOf = (s: RoomState, seat: number): string => s.players.find((p) => p.sea
 
 /** 4명 판에서 좌석 3 을 죽인 낮 시작 발표 — 산 사람 정확히 셋(좌석 0·1·2). */
 function threeAlive(seed = 3): RoomState {
-  const s = startedAt(4, seed, "dayAnnounce");
+  const s = startedAt(4, seed, "dayAnnounce", "basic");
   return { ...s, players: s.players.map((p) => (p.seat === 3 ? { ...p, alive: false } : p)) };
 }
 
@@ -55,7 +55,7 @@ describe.skipIf(!GAME_RULES.showdown)("진입 — 산 사람 수만의 함수 (�
   });
 
   it("산 사람이 셋이 아니면(4명·2명) 지금처럼 토론으로 간다", () => {
-    const four = startedAt(4, 3, "dayAnnounce");
+    const four = startedAt(4, 3, "dayAnnounce", "basic");
     expect(tick(four, four.phaseEndsAt!, rand).phase).toBe("discussion");
     const two = { ...four, players: four.players.map((p) => (p.seat >= 2 ? { ...p, alive: false } : p)) };
     expect(tick(two, two.phaseEndsAt!, rand).phase).toBe("discussion");

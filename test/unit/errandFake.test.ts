@@ -16,7 +16,7 @@ const loadAssign = async (): Promise<typeof assignErrandFake> => assignErrandFak
 
 /** 재즈 바로 고정한 낮 시작 방(맵은 시드로 정해지므로 시험이 고정한다). */
 function barDay(seed: number, n = 6): RoomState {
-  return { ...startedAt(n, seed, "dayAnnounce"), map: "bar" as const };
+  return { ...startedAt(n, seed, "roleReveal"), map: "bar" as const };
 }
 const fakeOf = (p: Player): unknown => (p as unknown as { errandFake?: unknown }).errandFake;
 const hasFake = (p: Player): boolean => "errandFake" in p;

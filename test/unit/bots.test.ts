@@ -48,7 +48,7 @@ import { resetToLobby, setBotCount } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
 import { buildPreview, buildView } from "../../shared/game/view";
 import { MAX_PLAYERS, MAX_TEST_BOTS } from "../../shared/protocol";
-import type { PhaseId } from "../../shared/protocol";
+import type { GameMode, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, startedFrom, stateWithVerdict } from "../helpers/voteState";
 import { toggleEnd } from "../../shared/game/discussion";
@@ -64,7 +64,8 @@ const START_AT = 10_000;
 const HOST_ID = "player-id-0000-aaaa";
 
 /** n 명이 모두 연결된 대기실. testMode 가 true 면 테스트 방이다. */
-function lobbyOf(n: number, testMode = true): RoomState {
+/** 21페이즈 규칙 나: 이 파일의 낮·밤·아침·단계 건너뛰기 시험은 기본 마피아 흐름(낮 시작 발표·아침이 늘 있다)을 본다 — mode 기본값을 basic 으로 둔다. 확장판은 mode 로 고른다. */
+function lobbyOf(n: number, testMode = true, mode: GameMode = "basic"): RoomState {
   const created = createRoomState({
     code: "0420",
     hostId: HOST_ID,
@@ -81,7 +82,7 @@ function lobbyOf(n: number, testMode = true): RoomState {
     if (!joined.ok) throw new Error(`joinRoom failed: ${joined.error}`);
     state = attachConnection(joined.state, id, `conn-${i}`);
   }
-  return state;
+  return { ...state, mode };
 }
 
 /** 봇 id 를 차례로 만드는 makeId. */
@@ -105,7 +106,8 @@ function stateAt(humans: number, bots: number, seed: number, phase: PhaseId): Ro
   const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed));
   if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
   let state = started.state;
-  while (state.phase !== phase) {
+  for (let guard = 0; state.phase !== phase; guard += 1) {
+    if (guard > 80) throw new Error(`${phase} 에 닿지 못한다(판 종류의 순서에 없는 단계)`);
     if (state.phaseEndsAt === null) throw new Error("phase has no deadline");
     state = tick(state, state.phaseEndsAt, seededRandInt(seed + 1));
   }
@@ -917,10 +919,8 @@ describe("봇 투표·변론 계획: 회귀", () => {
     const got = (["discussion", "night"] as const).map((phase) => {
       const state = stateAt(1, 5, 8, phase);
       // 09-12: will(09-24: typing 도)는 난수 없는 덧붙임 행동이다 — 걸러내면 기존 시드 고정 값이 그대로여야 한다(난수 호출 순서 불변 증명).
-      const steps = planBotSteps(state, nowOf(state), seededRandInt(42)).filter((st) => st.act.t !== "will" && st.act.t !== "typing")
-        // 15-01(결정 0074): 낮 시작과 토론 사이에 심부름 40초가 끼어 모든 시각(at)이 ERRAND_MS 만큼 뒤로 밀린다. 난수 호출 순서는 그대로이므로(errand 계획은 난수 없음)
-        // 시각만 되돌려 옛 고정 값을 그대로 지킨다 — 값이 어긋나면 난수 순서가 바뀐 것이다.
-        .map((st) => ({ ...st, at: st.at - ERRAND_MS }));
+      // 21페이즈(규칙 나): 기본 마피아는 낮 시작 발표 다음이 곧 토론이라 심부름 40초가 끼지 않는다 — 15-01 이 시각에서 빼 주던 ERRAND_MS 보정이 필요 없고 고정 값은 그대로다.
+      const steps = planBotSteps(state, nowOf(state), seededRandInt(42)).filter((st) => st.act.t !== "will" && st.act.t !== "typing");
       return digest(canon(steps));
     });
     // 08-11: 토론이 90초가 되고 밤이 지목 마감 뒤에 닿아 두 계획의 시각(at)이 모두 달라졌다 — 새 흐름 값으로 다시 고정한다.

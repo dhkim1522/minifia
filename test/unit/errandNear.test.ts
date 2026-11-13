@@ -18,7 +18,7 @@ import { seededRandInt } from "../helpers/seededRandom";
 import { startedAt } from "../helpers/voteState";
 
 function barErrand(seed = 3, n = 6): RoomState {
-  const day = { ...startedAt(n, seed, "dayAnnounce"), map: "bar" as const };
+  const day = { ...startedAt(n, seed, "roleReveal"), map: "bar" as const };
   return tick(day, day.phaseEndsAt!, seededRandInt(seed + 1));
 }
 const R_FX = ERRAND_NEAR_R * UNIT; // 300

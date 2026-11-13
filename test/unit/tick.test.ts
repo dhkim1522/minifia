@@ -7,7 +7,7 @@ import {
   ERRAND_MS,
   EXECUTION_MS,
   MORNING_MS,
-  MORNING_TRACE_MS,
+  MORNING_SCENE_MS,
   NIGHT_MS,
   NOMINATION_GATHER_MS,
   NOMINATION_MS,
@@ -23,7 +23,7 @@ import type { Player, RoomState } from "../../shared/game/room";
 import { enterDayAnnounce, nextWakeAt, tick } from "../../shared/game/tick";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, castVerdicts, stateWithVerdict } from "../helpers/voteState";
-import type { PhaseId } from "../../shared/protocol";
+import type { GameMode, PhaseId } from "../../shared/protocol";
 const GAME_RULES = rulesetOf("extended");
 
 function player(i: number, connected: boolean): Player {
@@ -43,10 +43,12 @@ function player(i: number, connected: boolean): Player {
 function stateIn(
   phase: PhaseId,
   phaseEndsAt: number | null,
-  opts: { connected?: boolean; expiresAt?: number } = {},
+  opts: { connected?: boolean; expiresAt?: number; mode?: GameMode } = {},
 ): RoomState {
   const connected = opts.connected ?? true;
+  // 21페이즈: 이 파일은 낮·밤 시간 규칙을 기본 마피아 흐름(낮 시작 발표 → 토론, 밤 → 아침 → 낮 시작 발표)으로 본다(규칙 나) — 확장판 순서는 mode 로 고른다.
   return {
+    mode: opts.mode ?? "basic",
     code: "0420",
     createdAt: 0,
     expiresAt: opts.expiresAt ?? ROOM_TTL_MS,
@@ -63,8 +65,8 @@ const NOM_SPAN_MS = GAME_RULES.pickTurn ? nominationMaxMs(4) : NOMINATION_MS;
 const NOM_ENTER_MS = GAME_RULES.pickTurn ? NOMINATION_GATHER_MS : NOMINATION_MS;
 /** errand 진입(15페이즈, 결정 0074)이 난수를 쓴다 — 낮 시작을 지나는 tick 은 같은 시드의 난수 함수를 새로 받는다. */
 const rnd = (): ((n: number) => number) => seededRandInt(7);
-/** 낮 시작 발표 마감부터 토론 마감까지의 앞부분: 낮 시작 발표 + 심부름(15페이즈). */
-const DAY_TO_TALK_MS = DAY_ANNOUNCE_MS + ERRAND_MS;
+/** 낮 시작 발표 마감부터 토론 마감까지의 앞부분. 기본 마피아는 낮 시작 발표 다음이 곧 토론이다(19페이즈 D-08) — 확장판의 심부름은 저녁으로 옮겨 갔다(21페이즈). */
+const DAY_TO_TALK_MS = DAY_ANNOUNCE_MS;
 
 describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", () => {
   it("단계는 열여섯 개다 — lobby·tutorial·assigning·roleReveal, 낮 세 단계(낮 시작·심부름·토론, 순차 주장·공개 연출 단계 없음, D-07, CHAT-06), 지목·동점 결선·마지막 3인 결전·변론·찬반·처형(결정 0060·0066-4·0066-5, 옛 처형 여부 투표·후보 선택·공개 단계 없음), 밤·아침, 판 종료", () => {
@@ -88,7 +90,7 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(row("assigning")).toBe("3000/roleReveal/false");
     expect(row("roleReveal")).toBe("15000/dayAnnounce/true");
     expect(row("dayAnnounce")).toBe("2000/errand/true"); // 낮 시작 발표 다음이 심부름(15페이즈 결정 0074, 순차 주장 단계 없음 CHAT-06)
-    expect(row("errand")).toBe("40000/discussion/true"); // 심부름 40초 다음이 토론
+    expect(row("errand")).toBe("40000/night/true"); // 저녁 심부름 40초 다음이 밤(21페이즈 D-01, 규칙 가)
     expect(row("discussion")).toBe("90000/nomination/true"); // 토론 다음은 지목(DAY-07, 결정 0060-1)
     expect(row("defense")).toBe("20000/verdict/true"); // 변론 다음은 찬반(결정 0060-1)
     expect(row("nomination")).toBe(`${NOM_ENTER_MS}/defense/true`); // 지목 진입 길이 = 모이기(결정 0063-1). 동률·0표면 마감 훅이 night 로 보낸다
@@ -277,11 +279,11 @@ describe("tick (순수 단계 진행)", () => {
 
   it("늦은 알람이 여러 낮 단계를 따라잡아도 중간 단계의 진입 훅이 루프 안에서 돈다 (RESEARCH Pattern 1)", () => {
     const s = stateIn("roleReveal", 19000);
-    // 마감: dayAnnounce 21000 → errand 61000 → discussion 151000. 77000 이면 토론이 한창이다.
-    const next = tick(s, 21000 + ERRAND_MS + 16000, rnd());
+    // 마감(기본 마피아): dayAnnounce 21000 → discussion 111000. 토론이 한창일 때 불린다.
+    const next = tick(s, 19000 + DAY_TO_TALK_MS + 16000, rnd());
     expect(next.phase).toBe("discussion");
     expect(next.day).toBe(1); // dayAnnounce 훅이 한 번 돌았다
-    expect(next.phaseEndsAt).toBe(21000 + ERRAND_MS + DISCUSSION_MS);
+    expect(next.phaseEndsAt).toBe(19000 + DAY_TO_TALK_MS + DISCUSSION_MS);
   });
 
   it("한 바퀴를 한 번에 따라잡아도 일차가 정확히 한 번만 늘어난다 (밤·아침은 일차를 올리지 않는다)", () => {
@@ -307,9 +309,9 @@ describe("tick (순수 단계 진행)", () => {
 
   it("아주 늦게 불리면 여러 단계를 한 번에 따라잡는다", () => {
     const s = stateIn("assigning", 4000);
-    const next = tick(s, 21000 + ERRAND_MS + 30000, rnd());
-    expect(next.phase).toBe("discussion"); // roleReveal 19000 → dayAnnounce 21000 → errand 61000 → discussion 151000
-    expect(next.phaseEndsAt).toBe(21000 + ERRAND_MS + DISCUSSION_MS);
+    const next = tick(s, 19000 + DAY_TO_TALK_MS + 30000, rnd());
+    expect(next.phase).toBe("discussion"); // roleReveal 19000 → dayAnnounce 21000 → discussion 111000
+    expect(next.phaseEndsAt).toBe(19000 + DAY_TO_TALK_MS + DISCUSSION_MS);
     expect(next.day).toBe(1);
   });
 
@@ -349,8 +351,8 @@ describe("tick (순수 단계 진행)", () => {
       args.push(n);
       return n - 1;
     };
-    tick({ ...stateIn("discussion", T), day: 1 }, T + 200_000, randInt);
-    tick(stateIn("assigning", 4000), 30_000, randInt);
+    tick({ ...stateIn("discussion", T, { mode: "extended" }), day: 1 }, T + 200_000, randInt); // 심부름은 확장판의 저녁이다(21페이즈, 규칙 가)
+    tick(stateIn("assigning", 4000, { mode: "extended" }), 30_000, randInt);
     expect(args.length > 0 && args.length % (4 * 3) === 0).toBe(true);
     expect(args.every((n) => n === 8 || n === 7 || n === 6)).toBe(true);
     // 심부름을 지나지 않는 구간(밤 → 아침)은 난수를 쓰지 않는다.
@@ -360,8 +362,8 @@ describe("tick (순수 단계 진행)", () => {
   });
 
   it("연결 여부를 보지 않는다 — 전원 끊겨도 같은 결과다 (D-05, D-18)", () => {
-    const online = tick(stateIn("assigning", 4000), 30000, rnd());
-    const offline = tick(stateIn("assigning", 4000, { connected: false }), 30000, rnd());
+    const online = tick(stateIn("assigning", 4000, { mode: "extended" }), 30000, rnd());
+    const offline = tick(stateIn("assigning", 4000, { connected: false, mode: "extended" }), 30000, rnd());
     expect(offline.phase).toBe("errand");
     expect(offline.phase).toBe(online.phase);
     expect(offline.phaseEndsAt).toBe(online.phaseEndsAt);
@@ -442,10 +444,13 @@ describe("낮 처형 구간 길이 (결정 0060-1, 0063-1)", () => {
 describe("tick - 낮 흐름에 순차 주장 단계가 없다 (07-08, CHAT-06)", () => {
   it("07-08 dayAnnounce 마감 다음이 심부름(15페이즈)이고 그 마감 다음이 discussion 이며 마감은 이전 마감 + DISCUSSION_MS 다", () => {
     const T = 50_000;
-    const errand = tick({ ...stateIn("dayAnnounce", T), day: 1 }, T, rnd());
+    // 21페이즈(규칙 가): 확장판은 낮 시작 발표가 없다 — 역할 확인 마감이 저녁(errand), 저녁 마감이 밤이고, 기본 마피아는 낮 시작 발표 마감이 곧 토론이다.
+    const errand = tick({ ...stateIn("roleReveal", T, { mode: "extended" }), day: 1 }, T, rnd());
     expect(`${errand.phase}/${errand.phaseEndsAt}`).toBe(`errand/${T + ERRAND_MS}`);
-    const out = tick(errand, T + ERRAND_MS, rnd());
-    expect(`${out.phase}/${out.phaseEndsAt}`).toBe(`discussion/${T + ERRAND_MS + DISCUSSION_MS}`);
+    const night = tick(errand, T + ERRAND_MS, rnd());
+    expect(`${night.phase}/${night.phaseEndsAt}`).toBe(`night/${T + ERRAND_MS + NIGHT_MS}`);
+    const out = tick({ ...stateIn("dayAnnounce", T), day: 1 }, T, rnd());
+    expect(`${out.phase}/${out.phaseEndsAt}`).toBe(`discussion/${T + DISCUSSION_MS}`);
   });
 
   it("07-08 늦은 알람으로 roleReveal 에서 한 번에 따라잡아도 roleReveal → dayAnnounce → discussion 순서이고 일차는 1이다", () => {
@@ -470,14 +475,19 @@ describe("tick: 아침 마감 = 진입 + morningMsOf (MORN-04, 결정 0061-13)",
   }
 
   it("확정·탈락(피해자 유언 있음)이면 마감이 진입 + 9000 이다", () => {
-    // 피해자(p1)를 고른 사람은 마피아 p0 뿐이라 흔적이 실려(D-06) 아침이 MORNING_TRACE_MS 길다.
+    // 기본 마피아(규칙 나)에는 흔적이 없다(rules.trace 꺼짐) — 아침 길이는 탈락 2초 + 유언 2초 가산뿐이다. 흔적 구간(MORNING_TRACE_MS)은 discussion.test 의 morningMsOf 시험이 상태로 직접 본다.
     const morning = tick(nightWith(), T + NIGHT_MS, seededRandInt(1));
-    expect(`${morning.phase}/${morning.morning?.eliminated}/${morning.phaseEndsAt}`).toBe(`morning/1/${T + NIGHT_MS + 9000 + MORNING_TRACE_MS}`);
+    expect(`${morning.phase}/${morning.morning?.eliminated}/${morning.phaseEndsAt}`).toBe(`morning/1/${T + NIGHT_MS + 9000}`);
+  });
+
+  it("확장판의 아침은 탈락 여부와 상관없이 현장 장면 길이 하나다 (21페이즈 D-03, 규칙 가)", () => {
+    const morning = tick({ ...nightWith(), mode: "extended" }, T + NIGHT_MS, seededRandInt(1));
+    expect(`${morning.phase}/${morning.morning?.eliminated}/${morning.phaseEndsAt}`).toBe(`morning/1/${T + NIGHT_MS + MORNING_SCENE_MS}`);
   });
 
   it("쪽지까지 있으면 진입 + 11000, 구출이면 쪽지가 지워져 진입 + 5000 이다", () => {
     const withNote = tick(nightWith({ nightNote: "쪽지" }), T + NIGHT_MS, seededRandInt(1));
-    expect(withNote.phaseEndsAt).toBe(T + NIGHT_MS + 11000 + MORNING_TRACE_MS); // 흔적 구간(D-06, 16페이즈 A3 로 5초)
+    expect(withNote.phaseEndsAt).toBe(T + NIGHT_MS + 11000); // 기본 마피아: 흔적 구간 없음(규칙 나)
     const saved = tick(nightWith({ nightNote: "쪽지" }, true), T + NIGHT_MS);
     expect(JSON.stringify(saved.morning)).toBe('{"saved":true}');
     expect("nightNote" in saved).toBe(false);
@@ -498,8 +508,8 @@ describe("tick: 아침 마감 = 진입 + morningMsOf (MORN-04, 결정 0061-13)",
   });
 
   it("따라잡기: 늦게 불려도 아침 마감은 밤 마감 + 아침 길이에서 이어진다", () => {
-    const caught = tick(nightWith(), T + NIGHT_MS + 9000 + MORNING_TRACE_MS + 1, seededRandInt(1)); // 흔적 구간이 아침 길이에 든다(D-06)
-    expect(`${caught.phase}/${caught.phaseEndsAt}`).toBe(`dayAnnounce/${T + NIGHT_MS + 9000 + MORNING_TRACE_MS + DAY_ANNOUNCE_MS}`);
+    const caught = tick(nightWith(), T + NIGHT_MS + 9000 + 1, seededRandInt(1));
+    expect(`${caught.phase}/${caught.phaseEndsAt}`).toBe(`dayAnnounce/${T + NIGHT_MS + 9000 + DAY_ANNOUNCE_MS}`);
   });
 });
 
@@ -530,12 +540,15 @@ describe("기본판 낮 분기 (결정 0072)", () => {
     expect(`${out.phase}/${out.runoff === undefined}`).toBe("night/true");
   });
 
-  it("산 사람이 정확히 셋인 낮 시작 발표 마감 → 심부름 → 토론(showdown 아님, showdown 키 없음)", () => {
+  it("산 사람이 정확히 셋인 낮 시작 발표 마감 → 토론(showdown 아님, showdown 키 없음) — 기본 마피아는 심부름 단계가 없다 (19페이즈 D-08, 21페이즈 규칙 나)", () => {
     const base = stateIn("dayAnnounce", T);
     const three: RoomState = { ...base, day: 1, players: base.players.map((p) => (p.seat === 3 ? { ...p, alive: false } : p)) };
-    const errand = tick(three, T, seededRandInt(1));
-    expect(`${errand.phase}/${errand.phaseEndsAt}/${Object.hasOwn(errand, "showdown")}`).toBe(`errand/${T + ERRAND_MS}/false`);
-    const out = tick(errand, T + ERRAND_MS, seededRandInt(1));
-    expect(`${out.phase}/${out.phaseEndsAt}/${Object.hasOwn(out, "showdown")}`).toBe(`discussion/${T + ERRAND_MS + DISCUSSION_MS}/false`);
+    const out = tick(three, T, seededRandInt(1));
+    expect(`${out.phase}/${out.phaseEndsAt}/${Object.hasOwn(out, "showdown")}`).toBe(`discussion/${T + DISCUSSION_MS}/false`);
+    // 확장판은 낮 시작 발표가 없어 산 사람이 셋이어도 저녁 → 밤 순서 그대로다(규칙 가).
+    const ext: RoomState = { ...three, phase: "roleReveal", mode: "extended" };
+    const evening = tick(ext, T, seededRandInt(1));
+    expect(`${evening.phase}/${evening.phaseEndsAt}/${Object.hasOwn(evening, "showdown")}`).toBe(`errand/${T + ERRAND_MS}/false`);
   });
+
 });

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as discussionModule from "../../shared/game/discussion";
 import { endCountOf, endReached, enterDiscussion, morningMsOf, phaseDurationOf, toggleEnd } from "../../shared/game/discussion";
 import * as phasesModule from "../../shared/game/phases";
-import { DISCUSSION_MS, MORNING_MAX_MS, MORNING_MS } from "../../shared/game/phases";
+import { DISCUSSION_MS, MORNING_MAX_MS, MORNING_MS, MORNING_SCENE_MS, MORNING_TRACE_MS, MORNING_VICTIM_MS } from "../../shared/game/phases";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import type { PhaseId } from "../../shared/protocol";
@@ -202,9 +202,18 @@ describe("morningMsOf - 아침 길이는 공개 내용만의 함수 (MORN-04, �
   });
 
   it("phaseDurationOf: morning 이면 morningMsOf, 다른 단계는 표 값이다", () => {
-    const m = room("morning", 1, { morning: { eliminated: 1 }, nightNote: "쪽지" });
+    const m = room("morning", 1, { morning: { eliminated: 1 }, nightNote: "쪽지", mode: "basic" }); // 기본 마피아의 아침(규칙 나)
     expect(phaseDurationOf(m)).toBe(morningMsOf(m));
     expect(phaseDurationOf(m)).toBe(9000);
     expect(phaseDurationOf(room("night", 1))).toBe(30_000);
+    // 확장판의 아침은 현장 장면 길이 하나다(21페이즈 D-03) — 탈락 가산이 붙지 않는다(규칙 가).
+    expect(phaseDurationOf({ ...m, mode: "extended" })).toBe(MORNING_SCENE_MS);
+  });
+
+  it("morningMsOf: 흔적이 있으면 흔적 공개 구간(MORNING_TRACE_MS)이 더해진다 — 기본 마피아 tick 은 흔적을 만들지 않으므로 상태로 직접 본다 (규칙 다)", () => {
+    const plain = room("morning", 1, { morning: { eliminated: 1 }, mode: "basic" });
+    const traced = room("morning", 1, { morning: { eliminated: 1, trace: "button" }, mode: "basic" });
+    expect(morningMsOf(traced) - morningMsOf(plain)).toBe(MORNING_TRACE_MS);
+    expect(morningMsOf(plain)).toBe(MORNING_MS + MORNING_VICTIM_MS);
   });
 });

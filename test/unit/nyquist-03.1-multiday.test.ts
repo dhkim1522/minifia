@@ -2,7 +2,8 @@
 // 개별 규칙 단위 테스트가 놓치기 쉬운 '낮이 거듭될 때의 누적' 을 본다: 낮 시작 발표 다음이 바로 토론인지·일지 누적·누출 키 부재.
 import { describe, expect, it } from "vitest";
 import { pickTarget } from "../../shared/game/night";
-import { DISCUSSION_MS, ERRAND_MS, SHOWDOWN_GATHER_MS } from "../../shared/game/phases";
+import { DISCUSSION_MS, NIGHT_MS, SHOWDOWN_GATHER_MS } from "../../shared/game/phases";
+import type { GameMode } from "../../shared/protocol";
 import { rulesetOf } from "../../shared/game/ruleset";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
@@ -11,7 +12,7 @@ import { buildView } from "../../shared/game/view";
 import { seededRandInt } from "../helpers/seededRandom";
 const GAME_RULES = rulesetOf("extended");
 
-function lobbyOf(n: number): RoomState {
+function lobbyOf(n: number, mode?: GameMode): RoomState {
   const created = createRoomState({ code: "0420", hostId: "pid-0000-aaaa", hostToken: "tok-secret-0000-aaaa-0123456789", hostNickname: "이름0", now: 0 });
   if (!created.ok) throw new Error("create");
   let s = attachConnection(created.state, "pid-0000-aaaa", "c0");
@@ -21,7 +22,7 @@ function lobbyOf(n: number): RoomState {
     if (!j.ok) throw new Error("join");
     s = attachConnection(j.state, id, `c${i}`);
   }
-  return s;
+  return mode === undefined ? s : { ...s, mode };
 }
 
 const living = (s: RoomState): Player[] => s.players.filter((p) => p.alive !== false);
@@ -43,12 +44,15 @@ function actNight(s: RoomState): RoomState {
   return st;
 }
 
+// 21페이즈: 판 종류마다 하루의 앞머리가 다르다 — 기본 마피아는 낮 시작 발표 → 토론(규칙 나), 확장판은 저녁(errand) → 밤(규칙 가). 일지 누적은 두 판 모두 같은 독립 모델과 견준다.
 describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", () => {
+  for (const mode of ["basic", "extended"] as const) {
+  const dayStart = mode === "basic" ? "dayAnnounce" : "errand";
   for (const n of [5, 6, 7, 8]) {
     for (const seed of [1, 2, 3]) {
-      it(`${n}명 seed ${seed}: 날마다 낮 시작 발표 다음이 바로 토론(산 사람이 셋이면 마지막 3인 결전)이고 일지가 독립 모델과 같다`, () => {
+      it(`${mode} ${n}명 seed ${seed}: 날마다 ${mode === "basic" ? "낮 시작 발표 다음이 바로 토론(산 사람이 셋이면 마지막 3인 결전)" : "저녁 다음이 밤"}이고 일지가 독립 모델과 같다`, () => {
         const rand = seededRandInt(seed);
-        const lobby = lobbyOf(n);
+        const lobby = lobbyOf(n, mode);
         const started = startGame(lobby, lobby.hostId, 10_000, rand);
         if (!started.ok) throw new Error("start");
         let s = started.state;
@@ -56,26 +60,26 @@ describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", (
         const dayRecords: Array<{ day: number; died: number | undefined }> = [];
         for (let guard = 0; guard < 400 && s.phase !== "ended" && days < 4; guard += 1) {
           if (s.phaseEndsAt === null) break;
-          if (s.phase === "dayAnnounce") {
+          if (s.phase === dayStart) {
             days += 1;
             // 뷰에는 서버 전용 주장 키가 없고 day 에 turn 이 없다(07-08: 순차 주장 단계 제거)
             for (const p of s.players) {
               const v = JSON.stringify(buildView(s, p.id, s.phaseEndsAt! - 1));
               for (const k of ["claimPick", "claimOrder", "claimIdx", "claimStart", "turn"]) expect(v).not.toContain(`"${k}"`);
             }
-            // 낮 시작 발표 마감 다음이 심부름(15페이즈, 마감 = 이전 마감 + ERRAND_MS)이고 그 마감 다음이 토론(+ DISCUSSION_MS)이다.
-            // 단 산 사람이 정확히 셋이고 결전이 켜져 있으면 낮 시작 다음이 마지막 3인 결전(모이기 SHOWDOWN_GATHER_MS)이다(결정 0066-5).
+            // 기본 마피아: 낮 시작 발표 마감 다음이 곧 토론(+ DISCUSSION_MS)이다(19페이즈 D-08). 단 산 사람이 정확히 셋이고 결전이 켜져 있으면 마지막 3인 결전(모이기 SHOWDOWN_GATHER_MS)이다(결정 0066-5).
+            // 확장판: 저녁(errand) 마감 다음이 밤이고 마감 = 이전 마감 + NIGHT_MS 다(21페이즈 D-01).
             const last3 = GAME_RULES.showdown && living(s).length === 3; // 기본판(결정 0072)은 산 셋도 토론이다
             const after = tick(s, s.phaseEndsAt!, rand);
-            if (last3) {
+            if (mode === "extended") {
+              expect(after.phase).toBe("night");
+              expect(after.phaseEndsAt).toBe(s.phaseEndsAt! + NIGHT_MS);
+            } else if (last3) {
               expect(after.phase).toBe("showdown");
               expect(after.phaseEndsAt).toBe(s.phaseEndsAt! + SHOWDOWN_GATHER_MS);
             } else {
-              expect(after.phase).toBe("errand");
-              expect(after.phaseEndsAt).toBe(s.phaseEndsAt! + ERRAND_MS);
-              const talk = tick(after, after.phaseEndsAt!, rand);
-              expect(talk.phase).toBe("discussion");
-              expect(talk.phaseEndsAt).toBe(after.phaseEndsAt! + DISCUSSION_MS);
+              expect(after.phase).toBe("discussion");
+              expect(after.phaseEndsAt).toBe(s.phaseEndsAt! + DISCUSSION_MS);
             }
             for (const k of ["claimPick", "claimOrder", "claimIdx", "claimStart", "claimLog"]) expect(Object.hasOwn(after, k)).toBe(false);
           }
@@ -109,5 +113,6 @@ describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", (
         }
       });
     }
+  }
   }
 });

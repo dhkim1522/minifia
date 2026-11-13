@@ -26,7 +26,7 @@ import {
   restSegment,
   spawnPlayer,
 } from "../../shared/game/world";
-import type { PhaseId } from "../../shared/protocol";
+import type { GameMode, PhaseId } from "../../shared/protocol";
 
 type Slot = readonly [number, number];
 const S = { x: STAGE_SPOT.x, z: STAGE_SPOT.z };
@@ -60,12 +60,15 @@ interface Opts {
   passed?: boolean;
   /** 결선 후보 좌석 둘(낮은 좌석 먼저). 주면 runoff 상태 step 0 을 싣는다. */
   runoff?: [number, number];
+  /** 판 종류(21페이즈). 없으면 확장판(modeOf 의 기본값) — 토론 모이기 키는 확장판에만 있다. */
+  mode?: GameMode;
 }
 
 /** n 명 판의 단계 상태. dead 좌석은 유령, candidate 는 변론자 seat, passed 는 그날 찬반 결과(voteLog 와 verdict 에 같이 싣는다). */
 function stateAt(phase: PhaseId, n: number, o: Opts = {}): RoomState {
   const base = lobbyOf(n);
   const dead = new Set(o.dead ?? []);
+  const mode = o.mode;
   const day = o.day ?? 2;
   const withVerdict: Partial<RoomState> =
     o.candidate === undefined
@@ -76,6 +79,7 @@ function stateAt(phase: PhaseId, n: number, o: Opts = {}): RoomState {
         };
   return {
     ...base,
+    ...(mode === undefined ? {} : { mode }),
     phase,
     day,
     players: base.players.map((p): Player => ({ ...p, alive: dead.has(p.seat) ? false : undefined })),
@@ -241,10 +245,19 @@ describe("assignSlots — 현재 위치 각도 순 sweep (A2)", () => {
 describe("layoutKey", () => {
   it("지목 {일차}:ring · 변론·찬반 {일차}:stage · 처형 {일차}:exec · 그 밖은 null", () => {
     const keys = (["nomination", "defense", "verdict", "execution", "discussion", "night", "dayAnnounce", "morning", "lobby", "assigning", "roleReveal", "ended"] as PhaseId[])
-      .map((ph) => `${ph}:${layoutKey(stateAt(ph, 5, { day: 3 }))}`)
+      .map((ph) => `${ph}:${layoutKey(stateAt(ph, 5, { day: 3, mode: "basic" }))}`)
       .join(" ");
     expect(keys).toBe(
       "nomination:3:ring defense:3:stage verdict:3:stage execution:3:exec discussion:null night:null dayAnnounce:null morning:null lobby:null assigning:null roleReveal:null ended:null",
+    );
+  });
+
+  it("확장판은 토론도 {일차}:talk 로 모인다 — 나머지 키는 같다 (21페이즈 D-17, 규칙 가)", () => {
+    const keys = (["nomination", "defense", "verdict", "execution", "discussion", "night", "morning", "lobby", "assigning", "roleReveal", "ended"] as PhaseId[])
+      .map((ph) => `${ph}:${layoutKey(stateAt(ph, 5, { day: 3, mode: "extended" }))}`)
+      .join(" ");
+    expect(keys).toBe(
+      "nomination:3:ring defense:3:stage verdict:3:stage execution:3:exec discussion:3:talk night:null morning:null lobby:null assigning:null roleReveal:null ended:null",
     );
   });
 });
@@ -557,7 +570,7 @@ describe("layoutFor — 처형: 통과면 무대 유지, 부결이면 자기 자
 describe("layoutFor — 그 밖 단계와 순수성", () => {
   it("discussion·dayAnnounce·night·morning·lobby·assigning·roleReveal·ended 는 null", () => {
     const out = (["discussion", "dayAnnounce", "night", "morning", "lobby", "assigning", "roleReveal", "ended"] as PhaseId[])
-      .map((ph) => `${ph}:${layoutFor(stateAt(ph, 5), worldOf(5), 1000)}`)
+      .map((ph) => `${ph}:${layoutFor(stateAt(ph, 5, { mode: "basic" }), worldOf(5), 1000)}`)
       .join(" ");
     expect(out).toBe("discussion:null dayAnnounce:null night:null morning:null lobby:null assigning:null roleReveal:null ended:null");
   });

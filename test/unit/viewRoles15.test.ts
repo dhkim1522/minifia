@@ -48,12 +48,15 @@ function stateOf(phase: PhaseId, n: number, seed: number): RoomState {
   }
   if (phase === "discussion") {
     // 짝수 좌석은 3곳을 마쳤고 줄이 있다 · 홀수 좌석은 못 마쳤다. 시험이 서버 상태에 직접 쓴다.
+    // 21페이즈: 확장판은 저녁(errand) → 밤 → 토론이라 밤 진입이 저녁 목록을 지운다 — 저녁에 배정된 목록을 토론 상태에 직접 옮겨 심는다(규칙 다).
     const s = startedAt(n, seed, "discussion");
-    return patch(s, (p) =>
-      p.seat % 2 === 0
-        ? { ...p, errandDone: [...(p.errandPlaces ?? [])], errandSeen: [{ seat: (p.seat + 1) % n, place: FIVE_PLACES[p.seat % 3]! }] }
-        : { ...p, errandDone: (p.errandPlaces ?? []).slice(0, 2) },
-    );
+    const dealt = new Map(startedAt(n, seed, "errand").players.map((q) => [q.id, q.errandPlaces ?? []] as const));
+    return patch(s, (p) => {
+      const places = dealt.get(p.id) ?? [];
+      return p.seat % 2 === 0
+        ? { ...p, errandPlaces: [...places], errandDone: [...places], errandSeen: [{ seat: (p.seat + 1) % n, place: FIVE_PLACES[p.seat % 3]! }] }
+        : { ...p, errandPlaces: [...places], errandDone: places.slice(0, 2) };
+    });
   }
   let s = startedAt(n, seed, "night");
   const living = s.players.filter(isAlive).sort((a, b) => a.seat - b.seat);

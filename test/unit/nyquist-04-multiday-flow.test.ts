@@ -35,7 +35,7 @@ const noPersonalKeys = (s: RoomState): boolean => !s.players.some((p) => "nomina
 describe("여러 날에 걸친 처형 흐름 (6명, 마피아 2)", () => {
   for (const seed of [1, 2, 3]) {
     it(`시드 ${seed}: 1일차 지목 동률 무효 → 2일차 마피아 처형(미종료) → 3일차 마피아 처형 → ended citizenWin, 기록이 날짜별로 쌓인다`, () => {
-      let s = startedAt(6, seed, "nomination");
+      let s = startedAt(6, seed, "nomination", "basic"); // 21페이즈 규칙 나: 기본 마피아의 여러 날 흐름
       expect(s.day).toBe(1);
 
       // 1일차: 지목이 서로 1:1 동률 → 변론 없이 밤

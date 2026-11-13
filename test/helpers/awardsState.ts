@@ -1,6 +1,6 @@
 // 칭호(11-02) 시험 도우미: 서버 기록만 가진 ended 상태를 손으로 짠다. 테스트에서만 import 한다.
 import type { NightLogEntry, RoomState, WhisperRecord } from "../../shared/game/room";
-import type { BadgeId, GameWinner, PhaseId, RoleId, VoteLogEntry } from "../../shared/protocol";
+import type { BadgeId, GameMode, GameWinner, PhaseId, RoleId, VoteLogEntry } from "../../shared/protocol";
 import { lobbyOf } from "./voteState";
 
 /** 시험용 ended 상태. roles[i] 는 seat i 의 직업(undefined 면 참가자 아님), alive 에 든 seat 는 탈락. */
@@ -13,10 +13,12 @@ export interface EndedSpec {
   stats?: Record<number, { say: number; emote: number }>;
   badgeLogs?: Record<number, Array<{ n: number; v: BadgeId }>>;
   winner?: GameWinner;
+  /** 판 종류(21페이즈) — 탈락 순서가 판 종류마다 다르다(확장판은 밤이 낮보다 먼저). 없으면 확장판(modeOf 의 기본값). */
+  mode?: GameMode;
 }
 
 export function endedState(spec: EndedSpec): RoomState {
-  const base = lobbyOf(spec.roles.length);
+  const base = lobbyOf(spec.roles.length, spec.mode);
   const players = [...base.players]
     .sort((a, b) => a.seat - b.seat)
     .map((p) => {

@@ -17,9 +17,9 @@ const THROWING_RAND = (): number => {
   throw new Error("randInt must not be called");
 };
 
-/** 후보가 처형된 execution 단계(첫 순간). */
+/** 후보가 처형된 execution 단계(첫 순간). 이 파일은 승패·밤→아침 끝·결과 view 를 기본 마피아 흐름(처형 → 밤 → 아침 → 낮 시작 발표)으로 본다(21페이즈 규칙 나) — 확장판 순서는 causalDay 가 본다. */
 const executionOf = (n: number, seed: number, candidate: "citizen" | "mafia"): RoomState =>
-  stateWithVerdict(n, seed, "execution", { candidate });
+  stateWithVerdict(n, seed, "execution", { candidate, mode: "basic" });
 
 /** 처형 마감을 넘겨 밤에 닿은 상태. */
 function nightAfterExecution(n: number, seed: number): RoomState {
@@ -286,11 +286,11 @@ describe("ended 전에는 결과·밤 기록이 어떤 view 에도 없다 (T-04-
   function preEndedStates(seed: number): Array<[string, RoomState]> {
     const out: Array<[string, RoomState]> = [];
     const phases: PhaseId[] = ["roleReveal", "dayAnnounce", "discussion", "nomination"];
-    for (const ph of phases) out.push([ph, startedAt(6, seed, ph)]);
+    for (const ph of phases) out.push([ph, startedAt(6, seed, ph, "basic")]);
     for (const ph of ["defense", "verdict", "execution"] as const) {
-      out.push([ph, stateWithVerdict(6, seed, ph)]);
+      out.push([ph, stateWithVerdict(6, seed, ph, { mode: "basic" })]);
     }
-    const exec = stateWithVerdict(6, seed, "execution");
+    const exec = stateWithVerdict(6, seed, "execution", { mode: "basic" });
     const night = tick(exec, exec.phaseEndsAt!, seededRandInt(seed + 4));
     out.push(["night", night]);
     const mafia = night.players.find((p) => p.role === "mafia" && isAlive(p))!;

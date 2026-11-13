@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { MAP_PHASES, canMove, canMoveIn } from "../../shared/game/movement";
 import { createRoomState } from "../../shared/game/room";
+import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import type { Player, RoomState } from "../../shared/game/room";
 import type { PhaseId } from "../../shared/protocol";
 
@@ -15,8 +16,9 @@ const BASE: RoomState = (() => {
     now: 0,
   });
   if (!created.ok) throw new Error("createRoomState failed");
-  return created.state;
+  return { ...created.state, mode: "basic" as const }; // 이 표는 기본 마피아 규칙이다(21페이즈 규칙 나) — 확장판 표는 아래 따로
 })();
+const EXTENDED: RoomState = { ...BASE, mode: "extended" };
 
 const withPhase = (phase: PhaseId): RoomState => ({ ...BASE, phase });
 const living: Player = BASE.players[0]!;
@@ -56,8 +58,26 @@ describe("canMove — 단계 × 신분 표 (MAP-04)", () => {
 
   it("canMove 는 canMoveIn(단계, 생존) 과 같은 표다 — 화면은 view 의 단계와 내 alive 로 같은 표를 쓴다", () => {
     for (const [phase] of TABLE) {
-      expect(canMove(withPhase(phase), living)).toBe(canMoveIn(phase, true));
-      expect(canMove(withPhase(phase), ghost)).toBe(canMoveIn(phase, false));
+      const rules = rulesetOf(modeOf(withPhase(phase)));
+      expect(canMove(withPhase(phase), living)).toBe(canMoveIn(phase, true, rules));
+      expect(canMove(withPhase(phase), ghost)).toBe(canMoveIn(phase, false, rules));
+    }
+    for (const [phase] of TABLE) {
+      const state: RoomState = { ...EXTENDED, phase };
+      const rules = rulesetOf(modeOf(state));
+      expect(canMove(state, living)).toBe(canMoveIn(phase, true, rules));
+      expect(canMove(state, ghost)).toBe(canMoveIn(phase, false, rules));
+    }
+  });
+
+  it("확장판은 아침에도 산 사람이 걷고(현장으로 간다), 밤에는 걷지 못하며, 나머지 단계는 기본 마피아 표와 같다 (21페이즈 D-17, 규칙 가)", () => {
+    expect(`morning:${canMove({ ...EXTENDED, phase: "morning" }, living)}`).toBe("morning:true");
+    expect(`night:${canMove({ ...EXTENDED, phase: "night" }, living)}`).toBe("night:false");
+    expect(`errand:${canMove({ ...EXTENDED, phase: "errand" }, living)}`).toBe("errand:true");
+    for (const [phase, aliveCan, ghostCan] of TABLE) {
+      if (phase === "morning") continue;
+      expect(`${phase}:alive:${canMove({ ...EXTENDED, phase }, living)}`).toBe(`${phase}:alive:${aliveCan}`);
+      expect(`${phase}:ghost:${canMove({ ...EXTENDED, phase }, ghost)}`).toBe(`${phase}:ghost:${ghostCan}`);
     }
   });
 
@@ -70,8 +90,9 @@ describe("canMove — 단계 × 신분 표 (MAP-04)", () => {
 });
 
 describe("canMoveIn — 밤에는 산 사람 누구도 걷지 못한다 (15페이즈 D-05)", () => {
-  it("밤: 산 사람 false · 유령 true (인자는 단계·생존 둘뿐)", () => {
-    expect(canMoveIn.length).toBe(2);
+  it("밤: 산 사람 false · 유령 true (인자는 단계·생존, 그리고 선택 규칙 하나)", () => {
+    expect(canMoveIn.length).toBe(3); // 21페이즈: 세 번째 인자 rules 가 생겼다(확장판 아침 걷기) — 밤 표는 규칙과 무관하다(규칙 가)
+    expect(`night:${canMoveIn("night", true, rulesetOf("extended"))}`).toBe("night:false");
     expect(`night:${canMoveIn("night", true)}`).toBe("night:false");
     expect(`night:${canMoveIn("night", false)}`).toBe("night:true");
   });
