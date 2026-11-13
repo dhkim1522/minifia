@@ -266,7 +266,7 @@ Plans:
 | 17. 튜토리얼 "첫 사건" | v3.0 | 12/12 | In Progress | - |
 | 18. 바로 고칠 것 | v3.0 | 14/14 | In Progress | - |
 | 19. 기본 마피아·확장판 | v3.0 | 8/8 | Complete (배포 `71a10fc8`, 결정 0086, 실기기 확인은 v3.0 끝) | 2026-11-13 |
-| 20. 맵 단계 확장 | v3.0 | 8/10 | In Progress | - |
+| 20. 맵 단계 확장 | v3.0 | 9/10 | In Progress | - |
 | 21. 원인→결과 하루와 할 일 | v3.0 | 0/? | Not started | - |
 
 ## Backlog
@@ -456,7 +456,7 @@ Plans:
 **Goal:** 지금 광장에 가장자리 실내 방 4곳과 좌석마다 집 1채(최대 8)를 더해, 벽으로 시야가 나뉘는 맵을 만든다(결정 0081-4, 조사 3장 2안). 21페이즈의 등불·집 찾기·현장 조사가 이 맵 위에서 돈다.
 **Requirements**: TBD
 **Depends on:** Phase 19
-**Plans:** 8/10 plans executed
+**Plans:** 9/10 plans executed
 
 **Success Criteria:**
 1. 광장 가장자리 문 4개로 실내 방 4곳(우체국·술집·진료소·경찰서 성격)에 들어가고, 들어가면 지붕과 앞벽이 걷히는 방식으로 보인다(장면 전환 없음, 좌표 하나)
@@ -474,7 +474,7 @@ Plans:
 - [x] 20-06-PLAN.md — 문 0.2초 연출·벽 뒤 이름표 숨김·지붕/집 누르기 목적지 (wave 4)
 - [x] 20-07-PLAN.md — 확장판 [맵] 단추·맵 탭 숨김, map-select 를 기본 마피아로·TM11 (wave 2)
 - [x] 20-08-PLAN.md — 마을 E2E 흐름 다섯(TM1~TM10)과 영향 흐름 390×844 회귀 (wave 5)
-- [ ] 20-09-PLAN.md — perf-run 마을 맵·nightload 마을 측정(TM12) (wave 6)
+- [x] 20-09-PLAN.md — perf-run 마을 맵·nightload 마을 측정(TM12) (wave 6)
 - [ ] 20-10-PLAN.md — 로컬 전체 검증·폰 6종 전 흐름 회귀·minifia-v3 배포·결정 0087·문서·push (wave 7)
 
 ### Phase 21: 원인→결과 하루 흐름과 등불·집 찾기·현장 조사
