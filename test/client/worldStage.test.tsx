@@ -46,6 +46,8 @@ export interface FakeRenderer extends WorldRenderer {
   setCutaway: Mock<(open: ReadonlySet<RoomId>, instant: boolean) => void>;
   setOwners: Mock<(seats: readonly number[]) => void>;
   roofs: Mock<() => Record<RoomId, number>>;
+  /** 화면 점의 카메라 광선(마을 건물 누르기, 20-06). 기본은 그 점 바로 위에서 수직으로 내리는 광선 — 시험이 mockReturnValue 로 바꾼다 */
+  rayAt: Mock<(sx: number, sy: number) => { origin: { x: number; y: number; z: number }; dir: { x: number; y: number; z: number } }>;
   emit(e: RendererStatusEvent): void;
   lost: boolean;
   renders: number;
@@ -79,6 +81,10 @@ export function makeFakeRenderer(): FakeRenderer {
     setCutaway: vi.fn(),
     setOwners: vi.fn(),
     roofs: vi.fn(() => ({ post: 1, pub: 1, clinic: 1, police: 1 })),
+    rayAt: vi.fn((sx: number, sy: number) => {
+      const g = r.groundAt(sx, sy);
+      return { origin: { x: g.x, y: 40, z: g.z }, dir: { x: 0, y: -1, z: 0 } };
+    }),
     addCharacter(seat: number, c: CharacterHandle) {
       r.chars.set(seat, c);
     },
@@ -2308,6 +2314,131 @@ describe("마을 문 연출 (20-06, D-15·P20-9)", () => {
     expect(dimming === null || dimming.strength < 0.85).toBe(true);
     frames(700); // 끄는 시간(420ms)이 지나면 완전히 꺼진다
     expect(r.setPin.mock.calls.at(-1)![0]).toBeNull();
+  });
+});
+
+// ---------- 마을 벽 뒤 이름표·건물 누르기 (20-06) ----------
+
+describe("마을 벽 뒤 이름표 숨김·건물 누르기 (20-06, D-11·D-19, P20-11·P20-12)", () => {
+  const PLAYERS3 = [player(0, "민지"), player(1, "철수"), player(2, "영희")];
+  const townView = (players: PublicPlayer[] = PLAYERS3): RoomView => ({ ...makeView(players, 0), map: "town" });
+  /** 월드 점을 지나는 카메라 광선(정사영) */
+  const rayThrough = (p: { x: number; y: number; z: number }) => ({
+    origin: { x: p.x + 12.0208153 * 3, y: p.y + 11.9 * 3, z: p.z + 12.0208153 * 3 },
+    dir: { x: -12.0208153, y: -11.9, z: -12.0208153 },
+  });
+  const PUB_DOOR = (): number[] => [675, -25]; // 술집 문 칸(서벽 줄) — 술집이 닫혀 있으면 이마·지붕에 머리가 가려진다
+  const alphaOf = (s: Setup, seat: number): number => Number(tagOf(s.utils, seat)!.style.opacity);
+
+  it("지붕을 지나는 광선을 주는 탭: 우체국 front(-0.25, -5.75)로 걷고 링이 거기에 뜬다. 서버로 보내는 목적지도 그 점", async () => {
+    const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(2, [-100, 400])] });
+    const r = s.world.renderers[0]!;
+    r.rayAt.mockReturnValue(rayThrough({ x: 0, y: 2.3, z: -8.3 }));
+    tapAt(surface(s.utils), 250, 340);
+    expect(s.send).toHaveBeenCalledTimes(1);
+    expect(s.send).toHaveBeenCalledWith({ t: "move", x: -25, z: -575 });
+    frame(16);
+    expect(r.markers.filter((m) => m.kind === "ring" && m.at !== null).at(-1)?.at).toEqual({ x: -0.25, z: -5.75 });
+  });
+
+  it("문 앞(front 에서 1.0 안)에 선 채 그 방을 다시 누르면 방 안 자리(-0.25, -8.25)로 들어간다", async () => {
+    const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [-25, -575]), seg(1, [-300, 50]), seg(2, [-100, 400])] });
+    const r = s.world.renderers[0]!;
+    r.rayAt.mockReturnValue(rayThrough({ x: 0, y: 2.3, z: -8.3 }));
+    tapAt(surface(s.utils), 250, 340);
+    expect(s.send).toHaveBeenCalledWith({ t: "move", x: -25, z: -825 });
+  });
+
+  it("열린 방(내가 우체국 안)의 뒷벽을 누르면 그 벽 바로 안쪽 바닥(z -9.3)으로 간다", async () => {
+    const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [0, -825]), seg(1, [-300, 50]), seg(2, [-100, 400])] });
+    const r = s.world.renderers[0]!;
+    r.rayAt.mockReturnValue(rayThrough({ x: 0, y: 1.5, z: -9.85 }));
+    tapAt(surface(s.utils), 250, 340);
+    const sent = s.send.mock.calls.at(-1)![0] as { t: string; x: number; z: number };
+    expect(sent.t).toBe("move");
+    expect(sent.z).toBe(-930);
+    expect(Math.abs(sent.x)).toBeLessThanOrEqual(160);
+  });
+
+  it("광장 바닥만 지나는 광선은 지금처럼 바닥 교점(groundAt)으로 걷는다", async () => {
+    const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(2, [-100, 400])] });
+    tapAt(surface(s.utils), 250, 340);
+    expect(s.send).toHaveBeenCalledWith({ t: "move", x: 500, z: 400 });
+  });
+
+  it("rayAt 이 없는 렌더러(재즈 바·가짜)에서는 지금처럼 groundAt 으로 걷는다", async () => {
+    const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(2, [-100, 400])] });
+    const r = s.world.renderers[0]!;
+    r.rayAt.mockReturnValue(rayThrough({ x: 0, y: 2.3, z: -8.3 }));
+    (r as unknown as { rayAt?: unknown }).rayAt = undefined;
+    tapAt(surface(s.utils), 250, 340);
+    expect(s.send).toHaveBeenCalledWith({ t: "move", x: 500, z: 400 });
+  });
+
+  it("방이 없는 맵(재즈 바)은 rayAt 이 있어도 부르지 않는다", async () => {
+    const s = await open({}, {});
+    const r = s.world.renderers[0]!;
+    tapAt(surface(s.utils), 250, 340);
+    expect(r.rayAt).not.toHaveBeenCalled();
+  });
+
+  it("닫힌 술집 문 칸에 선 남의 이름표는 0.2초에 옅어져 숨고(data-veiled), 입력 중 칸도 같이 숨으며, 같은 칸의 내 이름표는 숨지 않는다. __mfTown.veiled 는 좌석 오름차순", async () => {
+    const s = await open({ view: townView(), typingSeats: new Set([2]) }, { players: PLAYERS3, ents: [seg(0, PUB_DOOR()), seg(1, [-300, 50]), seg(2, [675, 25])] });
+    frames(250);
+    expect(tagOf(s.utils, 2)!.getAttribute("data-veiled")).toBe("true");
+    expect(alphaOf(s, 2)).toBe(0);
+    expect(tagOf(s.utils, 2)!.querySelector(".mv-typing")).not.toBeNull(); // 입력 중 칸은 이름표 안에 있어 같이 숨는다
+    expect(tagOf(s.utils, 0)!.hasAttribute("data-veiled")).toBe(false);
+    expect(alphaOf(s, 0)).toBe(1);
+    expect(tagOf(s.utils, 1)!.hasAttribute("data-veiled")).toBe(false);
+    expect(window.__mfTown!.veiled).toEqual([2]);
+  });
+
+  it("걸어서 닫힌 술집 문 칸에 닿으면 알파가 1 에서 0 으로 0.2초 안에 이어서 내려간다(모션 줄이기는 중간 값 없이 바로)", async () => {
+    const run = async (): Promise<number[]> => {
+      const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(2, [500, -25])] });
+      move(s.store, seg(2, [500, -25, 675, -25], Date.now(), 180));
+      const seen: number[] = [];
+      for (let i = 0; i < 140; i++) {
+        frame(16);
+        seen.push(alphaOf(s, 2));
+      }
+      return seen;
+    };
+    const seen = await run();
+    expect(seen[0]).toBe(1);
+    expect(seen.at(-1)).toBe(0);
+    expect(seen.some((a) => a > 0.05 && a < 0.95)).toBe(true);
+    for (let i = 1; i < seen.length; i++) expect(seen[i]!).toBeLessThanOrEqual(seen[i - 1]!);
+    cleanup();
+    stubReducedMotion(true);
+    const reduced = await run();
+    expect(reduced.at(-1)).toBe(0);
+    expect(reduced.some((a) => a > 0.05 && a < 0.95)).toBe(false);
+  });
+
+  it("내가 술집 안이면 술집 지붕·앞벽은 걷혀 같은 방 사람의 이름표는 숨지 않는다", async () => {
+    const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [825, -25]), seg(1, [800, 100]), seg(2, [850, -100])] });
+    frames(300);
+    expect(window.__mfTown!.zone).toBe("pub");
+    for (const seat of [0, 1, 2]) expect(tagOf(s.utils, seat)!.hasAttribute("data-veiled")).toBe(false);
+    expect(window.__mfTown!.veiled).toEqual([]);
+  });
+
+  it("scene.roomsOpen(유령·결과)이면 같은 칸에서도 아무 이름표도 숨지 않고 문 연출도 생기지 않는다", async () => {
+    const s = await open({ view: townView(), scene: sceneOf({ 0: {}, 1: {}, 2: {} }, { roomsOpen: true }) }, { players: PLAYERS3, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(2, PUB_DOOR())] });
+    frames(300);
+    expect(tagOf(s.utils, 2)!.hasAttribute("data-veiled")).toBe(false);
+    expect(alphaOf(s, 2)).toBe(1);
+    expect(window.__mfTown!.veiled).toEqual([]);
+    expect(window.__mfTown!.door).toEqual([]);
+  });
+
+  it("숨은 좌석은 핀 조명도 비추지 않는다", async () => {
+    const s = await open({ view: townView(), scene: sceneOf({ 0: {}, 1: {}, 2: {} }, { pin: { mode: "turn", seat: 2 } }) }, { players: PLAYERS3, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(2, PUB_DOOR())] });
+    const r = s.world.renderers[0]!;
+    frames(1200);
+    expect(r.setPin.mock.calls.every((c) => c[0] === null)).toBe(true); // 한 번도 비추지 않는다
   });
 });
 
