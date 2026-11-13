@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: 6
+current_plan: 8
 status: executing
-stopped_at: Completed 20-05-PLAN.md
-last_updated: "2026-11-13T01:35:34.954Z"
+stopped_at: Completed 20-06-PLAN.md
+last_updated: "2026-11-13T01:50:21.813Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: 3f97fe4f39a93eed344f5f6376f8d09e958fb93b
+state_head: 5146f33a30a6620f0635887ebbe0d1e465b880e5
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 97
-  completed_plans: 93
+  completed_plans: 94
   percent: 50
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 20 (map-expansion) — EXECUTING
-Current Plan: 6
+Current Plan: 8
 Total Plans in Phase: 10
 Status: Ready to execute
-Last activity: 2026-11-13 — 20-05 완료 (마을 장면 렌더러 연결·카메라 한계 확정(±9.6·22 그대로)·내 구역 컷어웨이·유령/결과 전체 걷힘·집 주인·__mfTown 훅. 전체 unit+client 7903 통과 · 실패 0, 로컬 화면 확인). 20 페이즈 6/10
+Last activity: 2026-11-13 — 20-06 완료 (문 사라짐·나타남 0.2초 불투명도 연출·벽 뒤 남의 이름표 숨김·지붕/집/열린 방 뒷벽 누르기 목적지(문 앞에서 다시 누르면 방 안), __mfTown.door·veiled. 전체 unit+client 7937 통과 · 실패 0, 로컬 화면 확인). 20 페이즈 7/10 (다음 20-08)
 
 ## Performance Metrics
 
@@ -717,8 +717,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T01:35:34.179Z
-Stopped at: Completed 20-05-PLAN.md
+Last session: 2026-11-13T01:50:21.013Z
+Stopped at: Completed 20-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
