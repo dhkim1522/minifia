@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: 6 완료 → 다음 21-07 (공개 흔적 걷기·한 판 누설 전수)
+current_plan: 7 완료 → 다음 21-08 (화면 바탕: 아이콘·제목·자막 띠 키·화면 계산 모듈)
 status: executing
-stopped_at: Completed 21-06-PLAN.md
-last_updated: "2026-11-13T07:52:07.856Z"
+stopped_at: Completed 21-07-PLAN.md
+last_updated: "2026-11-13T08:20:34.651Z"
 last_activity: 2026-11-13
-last_activity_desc: Phase 21 plan 06 완료 (아침 현장·inspect·나만 보는 단서·마피아가 만진 지점 흐림, 건너뛰기 분모를 접속 중인 사람으로)
-state_head: 4ca58ffd67959f108a759ec31563ec70929075f9
+last_activity_desc: Phase 21 plan 07 완료 (확장판 공개 흔적 걷기·한 판 누설 전수 causalLeak·화면 코드 정적 검사 srcClean·봇 판 완주)
+state_head: b6833fc4fe44c9f2ad0b24dde6f7bc3c57c14887
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 115
-  completed_plans: 103
+  completed_plans: 104
   percent: 60
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 21 (cause-effect-missions) — IN PROGRESS
-Current Plan: 6 완료 → 다음 21-07 (공개 흔적 걷기·한 판 누설 전수)
+Current Plan: 7 완료 → 다음 21-08 (화면 바탕: 아이콘·제목·자막 띠 키·화면 계산 모듈)
 Total Plans in Phase: 18
 Status: Executing Phase 21
-Last activity: 2026-11-13 — 21-06 완료 (아침 현장: 피해자·미수 집 앞 단서 지점 셋, inspect 로 본인만 me.clues(발자국 수·옷 조각·창문 목격·먼저 손댄 흔적), 마피아가 만진 지점은 서버 전용 흐림·응답 동일, 새 저녁이 지움. 건너뛰기 분모 = 접속 중인 사람(봇 제외). npm test 8711 통과·간헐 1(재실행 통과), typecheck 초록). 이전: 21-05 완료 (errand hold 로 산 마피아가 서버 전용 lampCut 에 심지 자르기·켜기와 같은 응답·방송, day.lamps 저녁=처리된 것/밤·아침=켜진 것, skipPhase 모두 누르면 단계 끝. npm test 8680 통과·실패 0, typecheck 초록). 이전: 21-04 완료 (마피아 가짜 심부름 장소 errandFake 제거·모든 역할 같은 처리 규칙, enterNight 가 저녁 목록·진행·목격 줄을 토론까지 남김. npm test 8646 통과·실패 0, typecheck 초록). 이전: 21-03 완료 (마을 심부름 장소를 가로등 lamp0~lamp7 8곳으로, 등불 n = 좌석 n 집, 기둥 자리 TOWN_LAMPS[n].pole. PLACE_IDS 24곳·그림 별칭 placeArtOf·낱말·E2E·smoke 사본. npm test 8645 통과·실패 0, typecheck 초록). 임시 옮겨 심기(저녁 값 → 토론 me.record)는 21-04 가 지운다
+Last activity: 2026-11-13 — 21-07 완료 (확장판 아침이 공개 흔적 morning.trace·seen·day.evidence 를 싣지 않고 옷 조각은 현장 ② 를 살핀 본인 me.clues 로만, 현장 난수가 첫 호출. 마을 한 판 누설 전수 causalLeak 판정 여섯·변이 확인, 화면 코드 정적 검사 srcClean, 봇 판 완주. npm test 8729 통과·실패 0, typecheck 초록). 이전: 21-06 완료
 
 ## Performance Metrics
 
@@ -294,6 +294,7 @@ Last activity: 2026-11-13 — 21-06 완료 (아침 현장: 피해자·미수 집
 | Phase 20 P10 | 50min | 3 tasks | 7 files |
 | Phase 21 P04 | 약 1시간 | 2 tasks | 17 files |
 | Phase 21 P05 | 80min | 2 tasks | 19 files |
+| Phase 21 P07 | 90min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -726,8 +727,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T07:52:06.830Z
-Stopped at: Completed 21-06-PLAN.md
+Last session: 2026-11-13T08:20:33.668Z
+Stopped at: Completed 21-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
