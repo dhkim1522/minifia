@@ -104,6 +104,11 @@ export function forceSegment(w: WorldState, playerId: string, seg: Segment): Wor
   return { ...w, segs: { ...w.segs, [playerId]: seg } };
 }
 
+/** 자리 함수(21-01 RED) — 입력을 그대로 돌려준다. */
+export function teleportTo(w: WorldState, _spots: Readonly<Record<string, { x: number; z: number }>>, _now: number): WorldState {
+  return w;
+}
+
 /** 고정소수점 실수 좌표(반올림 전)의 구간 위치. 누적 길이 선형 보간, 길이 0 선분은 건너뛴다. */
 function interpFx(seg: Segment, t: number): { x: number; z: number } {
   const p = seg.p;

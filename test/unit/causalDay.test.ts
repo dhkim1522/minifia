@@ -4,6 +4,10 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 단계 사슬은 '>' 로 이은 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
 import { isAlive } from "../../shared/game/alive";
+import { computeAwards } from "../../shared/game/awards";
+import { assignSlots, layoutFor, layoutKey, ringSlots } from "../../shared/game/gather";
+import { BAR_MAP } from "../../shared/game/map";
+import { canMove, canMoveIn } from "../../shared/game/movement";
 import { phaseDurationOf, morningMsOf } from "../../shared/game/discussion";
 import { noExecutionOf } from "../../shared/game/execution";
 import { pickTarget } from "../../shared/game/night";
@@ -11,7 +15,9 @@ import { ERRAND_MS, MORNING_SCENE_MS, nextPhaseOf } from "../../shared/game/phas
 import type { RoomState } from "../../shared/game/room";
 import { rulesetOf } from "../../shared/game/ruleset";
 import { tick } from "../../shared/game/tick";
+import { emptyWorld, restSegment, spawnPlayer, teleportTo } from "../../shared/game/world";
 import type { PhaseId } from "../../shared/protocol";
+import { endedState, execDay } from "../helpers/awardsState";
 import { castPoints, castVerdicts, startedAt, stateWithVerdict } from "../helpers/voteState";
 import { seededRandInt } from "../helpers/seededRandom";
 
@@ -193,5 +199,82 @@ describe("두 판의 하루 사슬", () => {
     const morning = step(night);
     expect(`${morning.phase}/${phaseDurationOf(morning)}/${morningMsOf(morning)}`).toBe("morning/5000/5000");
     expect(state.phase).toBe("discussion");
+  });
+});
+
+describe("이동 권한 (D-11, UI-SPEC P21-12)", () => {
+  const row = (phase: PhaseId, alive: boolean, rules?: typeof EXT): string => `${phase}/${alive}/${rules === undefined ? "-" : rules === EXT ? "ext" : "basic"}:${canMoveIn(phase, alive, rules)}`;
+
+  it("확장판 아침은 산 사람도 걷는다 — 기본 마피아·규칙 인자 없음은 못 걷고, 밤은 두 판 모두 산 사람 못 걷고 유령은 걷는다", () => {
+    expect([
+      row("morning", true, EXT),
+      row("morning", true, BASIC),
+      row("morning", true),
+      row("night", true, EXT),
+      row("night", true, BASIC),
+      row("night", false, EXT),
+      row("night", false, BASIC),
+    ].join(" ")).toBe("morning/true/ext:true morning/true/basic:false morning/true/-:false night/true/ext:false night/true/basic:false night/false/ext:true night/false/basic:true");
+  });
+
+  it("canMove 는 방 상태의 판 종류로 규칙을 고른다", () => {
+    const night = walkTo(atRoleReveal("extended"), (s) => s.phase === "night").state;
+    const alive = night.players.find((p) => p.seat === 4)!;
+    const asMorning = (mode: "basic" | "extended"): boolean => canMove({ ...night, mode, phase: "morning" }, alive);
+    expect(`${asMorning("extended")}/${asMorning("basic")}/${canMove(night, alive)}`).toBe("true/false/false");
+  });
+});
+
+describe("토론 모이기 (D-18)", () => {
+  const discussionOf = (mode: "basic" | "extended"): RoomState => ({ ...atRoleReveal(mode), phase: "discussion", day: 1 });
+  /** 입장 지점에 선 월드. */
+  const worldOf = (s: RoomState) => s.players.reduce((w, p) => spawnPlayer(w, p.id, p.seat, 0, BAR_MAP), emptyWorld());
+
+  it("layoutKey: 확장판 discussion 은 '{일차}:talk', 기본 마피아는 null", () => {
+    expect(`${layoutKey(discussionOf("extended"))}/${layoutKey(discussionOf("basic"))}`).toBe("1:talk/null");
+  });
+
+  it("layoutFor: 산 사람만 ringSlots(산 사람 수) 자리를 받는다(지목과 같은 자리표), 유령은 없다", () => {
+    const s = discussionOf("extended");
+    const dead: RoomState = { ...s, players: s.players.map((p) => (p.seat === 5 ? { ...p, alive: false } : p)) };
+    const lay = layoutFor(dead, worldOf(dead), 1000)!;
+    const dests = lay.moves.map((m) => `${m.dest.x},${m.dest.z}`).sort().join(" ");
+    const table = ringSlots(5).map((p) => `${p[0]},${p[1]}`).sort().join(" ");
+    expect(`${lay.key}/${dests === table}/${lay.moves.some((m) => m.playerId === idOf(dead, 5))}`).toBe("1:talk/true/false");
+  });
+
+  it("layoutFor: 기본 마피아 discussion 은 배치가 없다(null)", () => {
+    const s = discussionOf("basic");
+    expect(layoutFor(s, worldOf(s), 1000)).toBeNull();
+    // assignSlots 는 그대로 쓴다 — 자리표와 사람 수가 같으면 모두 받는다.
+    expect(Object.keys(assignSlots(s.players.map((p) => ({ id: p.id, x: 0, z: 0 })), ringSlots(6))).length).toBe(6);
+  });
+});
+
+describe("teleportTo (D-11)", () => {
+  it("spots 에 있는 id 의 구간만 한 점(t0 = now)으로 바꾸고, 다른 사람·구간 없는 id·입력 객체·lastMoveAt 은 그대로다", () => {
+    const base = ["a", "b", "c"].reduce((w, id, i) => spawnPlayer(w, id, i, 5, BAR_MAP), emptyWorld());
+    const w = { ...base, lastMoveAt: { a: 9 } };
+    const before = JSON.stringify(w);
+    const out = teleportTo(w, { a: { x: -375, z: -675 }, ghost: { x: 1, z: 2 } }, 777);
+    expect(JSON.stringify(out.segs.a)).toBe(JSON.stringify(restSegment(-375, -675, 777)));
+    expect(`${out.segs.b === w.segs.b}/${out.segs.c === w.segs.c}/${Object.keys(out.segs).join(",")}/${JSON.stringify(out.lastMoveAt)}/${JSON.stringify(w) === before}`).toBe("true/true/a,b,c/{\"a\":9}/true");
+  });
+});
+
+describe("탈락 순서 (awards survivalKey)", () => {
+  /** 1일차에 처형된 0번과 밤 피해자 1번이 모두 3표를 받은 판의 '지목받은 사람' 칭호 주인. */
+  const targetWinner = (mode: "basic" | "extended"): number | undefined => {
+    const base = endedState({
+      roles: ["citizen", "citizen", "mafia", "mafia", "citizen", "citizen", "police", "doctor"],
+      dead: [0, 1],
+      voteLog: [execDay(1, [[2, 0], [3, 0], [4, 0], [5, 1], [6, 1], [7, 1]], 0)],
+      nightLog: [{ n: 1, target: 1, died: true }],
+    });
+    return computeAwards({ ...base, mode }).find((l) => l.award === "target")?.seat;
+  };
+
+  it("같은 일차에서 기본 마피아는 처형이 먼저(밤 피해자가 늦게 탈락), 확장판은 밤이 먼저(처형자가 늦게 탈락) — 점수 같은 둘 중 늦게 탈락한 쪽이 칭호를 받는다", () => {
+    expect(`${targetWinner("basic")}/${targetWinner("extended")}`).toBe("1/0");
   });
 });

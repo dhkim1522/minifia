@@ -5,6 +5,7 @@
 import type { PhaseId } from "../protocol";
 import { isAlive } from "./alive";
 import type { Player, RoomState } from "./room";
+import type { Ruleset } from "./ruleset";
 
 /**
  * 지도 위에서 보이는 단계 8개. 오디언스(위치 프레임 받는 사람)와 이동 권한이 이 한 곳으로 지도 단계를 판정한다.
@@ -29,7 +30,7 @@ export const MAP_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
  * 밤에는 산 사람 누구도 움직이지 않는다(D-05, 역할 무관) — 모두 어둠 속에 서 있다.
  * 화면이 view 의 단계와 내 alive 로 같은 표를 쓰게 따로 내보낸다 — 권위는 서버다.
  */
-export function canMoveIn(phase: PhaseId, alive: boolean): boolean {
+export function canMoveIn(phase: PhaseId, alive: boolean, _rules?: Ruleset): boolean {
   if (phase === "lobby") return true;
   if (!MAP_PHASES.has(phase)) return false; // assigning·roleReveal·ended 와 옛 투표 단계
   if (!alive) return true; // 유령은 모든 지도 단계에서 자유(A4)
