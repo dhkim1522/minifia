@@ -1,4 +1,40 @@
-# Phase 20 Plan 10: 로컬 전체 검증·폰 6종 회귀·배포·결정 0087 Summary (작성 중)
+---
+phase: 20-map-expansion
+plan: "10"
+subsystem: verification-deploy-docs
+tags: [e2e-regression, deploy, town-map, decision-0087, docs]
+requires:
+  - phase: 20-map-expansion
+    provides: 20-01~20-09 마을 맵(서버 구역·문 프레임·3D 장면·컷어웨이·E2E·성능 측정)
+provides:
+  - 로컬 전체 검증(typecheck·build·node --test·npm test)과 폰 6종 E2E 전 흐름 회귀 결과
+  - minifia-v3 배포 `2026-11-13T03:30:33Z+07d6afee`(smoke full 통과)
+  - 결정 기록 0087(마을 맵), 화면 지도 마을 맵 절, 구조 문서 구역·문 프레임 절
+affects: [21]
+tech-stack:
+  added: []
+  patterns: [폰 6종 흐름은 묶음을 나눠 돌리고 부하 간헐은 단독 재실행으로 가른다]
+key-files:
+  created: [docs/decisions/0087-v3-town-map.md]
+  modified: [docs/decisions/0081-v3-missions-flow-and-modes.md, docs/screen-map.md, docs/architecture.md, HANDOFF.md, .planning/ROADMAP.md, .planning/STATE.md]
+key-decisions:
+  - "마을 맵은 확장판 전용으로 배포, 결정 0087 에 D-01~D-23·위임 기본값(P20-0~P20-20)·알려진 한계 기록"
+metrics:
+  duration: 50분
+  completed: 2026-11-13
+status: complete
+actuals:
+  tokens: 14500
+  tasks: 3
+  commits: 3
+plan_head_before: e59963a571aabd62af69600ae8c661310d7e64c9
+plan_head_after: 01c6fc3e90aba57f2fdbbc8cacdddfe49dae5731
+commits: 3
+---
+
+# Phase 20 Plan 10: 로컬 전체 검증·폰 6종 회귀·배포·결정 0087 Summary
+
+**한 줄 요약:** 폰 6종 E2E 전 흐름 회귀와 전체 시험을 로컬에서 통과시키고 마을 맵을 minifia-v3 에 배포(smoke full 통과)한 뒤 결정 0087·화면 지도·구조 문서·HANDOFF·ROADMAP 을 마무리했다.
 
 ## 진행
 
@@ -53,4 +89,41 @@
   - 패키지·설정·public·index.html 은 바뀌지 않았다. 저장된 진행 중 방은 `state.map` 이 정해져 있어 그 판은 그 맵으로 끝나고, 구역 기억이 없는 저장 world 는 알림 없이 지금 위치로 맞춰진다(20-02). 새로 시작하는 확장판부터 마을이다.
 - **smoke full 1회**(`SMOKE_STACK=1 node scripts/smoke.mjs --prod --stage full --players 5 --previous-version <배포 전 version>`, 출력은 작업 트리 밖 임시 파일): **통과**(`SMOKE OK full players=5`, 서버 시각 편차 0ms/0ms, 도착 편차 600ms/775ms). 확장판 낮 심부름 단계(산 5명이 같은 마감 40초·장소 3곳)·처형·밤·재접속 복원·승패(시민 승, 2일차)까지 한 판을 돌았다. 한도 초과(500/1101)는 없었다. 배포본 대상 E2E 는 돌리지 않았다(결정 0076).
 
-<!-- gsd:write-continue -->
+## 문서 (단계 3)
+
+- `docs/decisions/0087-v3-town-map.md`(새): D-01~D-23 을 0087-1~17 로, 위임 기본값 P20-0~P20-20, 계획 단계에서 고른 것(MODE_MAPS·와이어 문 프레임·구역 기억·장소 id 다시 쓰기·문 앞 다시 누르기·문턱 옅어짐), 실행 중 달라진 곳(20-01~20-09), 성능 측정, 폰 6종 실측, 알려진 한계, 정하지 않은 것. 상태는 "채택(구현·배포됨)"이고 근거에 시안 사본 `design/v3.0/town-map/`.
+- `docs/decisions/0081-v3-missions-flow-and-modes.md` 0081-4 에 "(구현: 결정 0087 …)" 한 줄(본문은 그대로).
+- `docs/screen-map.md`: 방장 줄 설명(확장판은 [맵] 없음)·실측 표(확장판 단추 3 으로 맞춤)·새 "마을 맵" 절(방 넷·집 여덟·컷어웨이 0.25초·문 연출 0.2초·지붕 두 번 누르기·벽 뒤 이름표·카메라 한계·표식 `__mfMap`·`__mfTown`·`data-door`·`data-veiled`·알려진 한계)·자동 검사 절에 town-* 다섯 흐름과 TM1~TM12(TM11 은 map-select, TM12 는 perf-run).
+- `docs/architecture.md`: "마을 맵: 구역·문 프레임" 절(MODE_MAPS·맵별 격자·`zoneOf`·이동 프레임 구역 거르기·문 프레임·구역 기억·심부름 구역·화면 파일).
+- `HANDOFF.md` 5,875바이트(≤ 6,144, 시험 통과): 20 완료·배포 version·결정 0087, 20 눈 확인 줄, 다음 할 일 21(`/gsd-autonomous --from 21`).
+- `.planning/ROADMAP.md`: Phase 20 체크 줄·Plans·진행 표를 완료(배포 `07d6afee`·결정 0087·실기기 확인은 v3.0 끝)로. `.planning/STATE.md`: 위치·결정·세션, Deferred Verification 표에 20 줄.
+- 위생: 저장소 전체 git grep 이 기준선과 같다(새 결과 0). `.planning/milestone.lock`·`.planning/state.json`·`Claude outputs/`·`18-VERIFICATION.md` 는 커밋에 넣지 않았다.
+- push: `git push origin v3`(아래 확인).
+
+## 계획과 달라진 점
+
+계획대로 실행했다. 다른 점만 적는다.
+
+- **폰 6종 회귀 범위**: 이미 폰 6종으로 돈 흐름(town-walk·mode-rail·map-select·lobby·chat-lobby)도 묶음 마지막에 다시 한 번 돌렸다(160초). 건너뛰어도 되는 것을 넣었으므로 계획의 "전 흐름 한 번"보다 한 번 더다.
+- **재실행으로 가른 간헐 둘**(town-walk TM9·politics-verdict VT1)은 판정을 고치지 않았다. 앱·흐름 코드를 바꾸지 않아 `fix(20-10)` 커밋이 없다.
+- **묶음 구성**: 계획의 묶음 일곱(A~G)에 H(town)를 더하는 대신 시간(10분 이하)을 기준으로 영향 흐름 먼저(errand·witness·trace → world·day·ghost·night → …)로 다시 짰다. 같은 흐름을 모두 한 번씩 돌았다.
+- **actuals.tokens** 는 이 계획이 바꾼 파일(문서·HANDOFF·ROADMAP 의 diff 약 5.5만 글자)을 chars/4 로 센 값이다.
+- **커밋 수**: 이 SUMMARY 를 담은 마지막 커밋은 `plan_head_after`(문서 커밋 `01c6fc3e`) 뒤에 한 번 더 있다 — `commits: 3` 은 그 앞까지 잰 값이다.
+
+## 알려진 한계 (남은 것)
+
+결정 0087 "알려진 한계" 와 같다: 좌석 0·7 집 문 앞 자리(문에서 약 1.3)·북서 모서리 마당 걷기 불가 / 닫힌 방 안 분필(21) / 헤드리스 근거의 한계(폰 GPU·발열·셰이더 컴파일 끊김·밤 조명의 간판·문패·간판 뒤 사람 가림 — v3.0 끝 실기기) / 밤·아침 순간이동 문 연출 없음 / 말·채팅·감정표현은 구역과 무관 / 이름표가 지붕 판 위에 겹칠 수 있음 / 360×560 방 전체가 안 들어옴 / `perfbudget` B2·M1(13페이즈부터).
+
+## Threat Flags
+
+없음. 새 끝점·인증 경로·저장 스키마가 없다(이 계획은 시험·배포·문서). T-20-32(계정 확인 종료 0 뒤 가드를 거친 배포만, 식별자 미기록)·T-20-33(위생 git grep 기준선과 같음, smoke 출력은 작업 트리 밖)·T-20-34(저장된 방 호환은 20-02 시험, smoke full 통과)·T-20-35(배포본 대상 E2E 없이 health·smoke 1회, 한도 초과 없음)를 지켰다. 패키지를 설치하지 않았다(T-20-SC).
+
+## Known Stubs
+
+없음.
+
+## Self-Check: PASSED
+
+- 파일: `docs/decisions/0087-v3-town-map.md`·`docs/screen-map.md`·`docs/architecture.md`·`HANDOFF.md`·이 SUMMARY 가 있다.
+- 커밋 `07d6afee`·`3d651e46`·`01c6fc3e` 가 HEAD 의 조상이다.
+- 배포본 health 의 version 이 `2026-11-13T03:30:33Z+07d6afee` 이고 smoke full 이 통과했다.
