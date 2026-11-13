@@ -2,6 +2,8 @@
 // 이후 페이즈는 이 표에 행을 더하는 방식으로만 단계를 늘린다(D-01).
 // 역할 확인(roleReveal) 뒤에는 낮 단계(dayAnnounce → errand → discussion)가 돈다(errand 는 15페이즈 결정 0074). 순차 주장 단계는 7페이즈에서 없어졌다(CHAT-06).
 // basic 판은 dayAnnounce → discussion 이다(19페이즈 D-08) — 표의 next 는 그대로 두고 nextPhaseOf 가 판 규칙으로 고른다.
+// 확장판 하루는 원인 → 결과 순서다(21페이즈 D-01): roleReveal → errand(저녁) → night → morning(현장이 있을 때만) → discussion → nomination → defense → verdict → execution → errand …
+// 확장판에는 dayAnnounce 가 없다(D-02) — 저녁 진입이 일차를 올린다. 처형이 없는 날(동률·0표)도 execution 없이 곧장 저녁이다. 이것도 nextPhaseOf 가 판 규칙으로 고른다.
 // 기본판 낮 흐름(결정 0072, 8페이즈 결정 0060-1·DAY-07): discussion → nomination(투표, 동시 15초) → defense → verdict → execution → night → morning → dayAnnounce.
 // 승패가 나면 execution·morning 의 마감에서 ended(마감 없음)로 간다. 투표 동점·0표는 결선 없이 night 다. 순차 지목(0063-1)·동점 결선 runoff(0066-4)·마지막 3인 결전 showdown(0066-5)은
 // 판 규칙(ruleset.ts 의 rulesetOf)이 켜졌을 때만 돈다(두 판 모두 꺼짐). 분기(투표 동률·0표 → night 등)는 tick.ts 의 ON_DEADLINE 이
@@ -68,7 +70,7 @@ export const ERRAND_TICK_MS = 1_000; // 결정 0074 — 근처·목격 표본 �
 export const ERRAND_VIEW_HORIZON_MS = 1_500; // 결정 0074 — 근처 사람 이동 구간을 자르는 길이
 export const ERRAND_MIN_GAP_MS = 250; // 결정 0074 — 같은 사람의 처리 요청 최소 간격(연타 방어)
 export const RECORD_MAX = 6; // 결정 0074 — 목격 기록 줄 상한
-export const MORNING_SCENE_MS = 0; // 자리 값(21-01 RED)
+export const MORNING_SCENE_MS = 30_000; // 21페이즈 D-03 — 확장판 아침 현장 조사 길이(피해자·미수가 있는 밤 뒤에만). 플레이테스트 뒤 이 줄만 고친다
 export const MORNING_TRACE_MS = 5_000; // 결정 0079(A3) · 흔적 카드가 두 줄이 되어 3→5초, 상한 15→16초 — 시간은 참고 목표(결정 0074 의 흔적 공개 구간)
 
 export const TUTORIAL_MS = 150_000; // 결정 0078·0080 — 함께 진행 튜토리얼 상한(T-6). 이 줄만 고친다
@@ -81,7 +83,7 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   assigning: Object.freeze({ durationMs: ASSIGNING_MS, next: "roleReveal", revealsOwnRole: false }),
   roleReveal: Object.freeze({ durationMs: ROLE_REVEAL_MS, next: "dayAnnounce", revealsOwnRole: true }),
   dayAnnounce: Object.freeze({ durationMs: DAY_ANNOUNCE_MS, next: "errand", revealsOwnRole: true }),
-  errand: Object.freeze({ durationMs: ERRAND_MS, next: "discussion", revealsOwnRole: true }), // 15페이즈(결정 0074) — 낮 시작 다음 40초 심부름, 끝나면 토론
+  errand: Object.freeze({ durationMs: ERRAND_MS, next: "night", revealsOwnRole: true }), // 15페이즈(결정 0074) 40초 심부름 — 21페이즈 D-01: 확장판 저녁 다음은 밤이다(errand 는 확장판에만 있다)
   discussion: Object.freeze({ durationMs: DISCUSSION_MS, next: "nomination", revealsOwnRole: true }),
   defense: Object.freeze({ durationMs: DEFENSE_MS, next: "verdict", revealsOwnRole: true }),
   execution: Object.freeze({ durationMs: EXECUTION_MS, next: "night", revealsOwnRole: true }),
@@ -97,10 +99,24 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
 });
 
 /**
- * 기본 다음 단계(19페이즈 D-08). 단계 표(PHASE_DEFS)는 데이터 그대로 두고, 판 규칙에 따라 갈리는 한 곳만 여기서 고른다:
- * 낮 시작 발표 다음은 심부름이 켜진 판(extended)이면 errand, 꺼진 판(basic)이면 바로 discussion 이다. 마감 훅이 돌려준 분기(next)가 이 값보다 먼저다(tick.ts).
+ * 기본 다음 단계(19페이즈 D-08, 21페이즈 D-01). 단계 표(PHASE_DEFS)는 데이터 그대로 두고, 판 규칙에 따라 갈리는 곳만 여기서 고른다.
+ * 심부름이 켜진 판(extended)은 원인 → 결과 하루다: 역할 확인 → 저녁, 처형 → 저녁, 아침 → 토론(낮 시작 발표는 없다. 배포 순간 낮 시작 발표에 있던 저장 방은 토론으로 이어 준다).
+ * 꺼진 판(basic)은 지금과 같다 — 낮 시작 발표 다음이 바로 discussion, 나머지는 표 값이다.
+ * 마감 훅이 돌려준 분기(next)가 이 값보다 먼저다(tick.ts) — 확장판의 night 분기(처형 없는 날)는 tick 이 errand 로 바꾼다.
  */
 export function nextPhaseOf(phase: PhaseId, rules: Ruleset): PhaseId | null {
-  if (phase === "dayAnnounce") return rules.errand ? "errand" : "discussion";
+  if (rules.errand) {
+    switch (phase) {
+      case "roleReveal":
+      case "execution":
+        return "errand";
+      case "morning":
+      case "dayAnnounce":
+        return "discussion";
+      default:
+        return PHASE_DEFS[phase].next;
+    }
+  }
+  if (phase === "dayAnnounce") return "discussion";
   return PHASE_DEFS[phase].next;
 }

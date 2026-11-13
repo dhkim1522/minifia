@@ -18,6 +18,9 @@
 // 분기(4페이즈): 마감 훅이 next 를 돌려주면 그 단계로, 없으면 단계 표(PHASE_DEFS)의 기본 next 로 간다. 표는 데이터만 두고 분기는 훅이 정한다.
 // 판 종류(19페이즈 D-03·D-08): 규칙은 전역 값이 아니라 방 상태의 판 종류에서 얻는다 — 한 걸음마다 그 판의 훅 표(HOOKS[modeOf(상태)])와 규칙(rulesetOf)을 고른다.
 // 기본 다음 단계는 nextPhaseOf(단계, 규칙) 가 고른다 — basic 판은 낮 시작 발표 다음이 errand 가 아니라 discussion 이다.
+// 확장판 하루(21페이즈 D-01·D-02·D-17): 저녁(errand) 진입이 일차를 올린다(낮 시작 발표가 없다) — 일차 N 은 저녁 N → 밤 N → 아침 N → 토론 N … 처형 N 이다.
+// 처형이 없는 날(지목 동률·0표·결선·결전 마감 훅의 next "night")은 확장판에서 "처형 없이 저녁" 이라 tick 한 곳에서 errand 로 바꾼다(nomination·runoff·showdown 모듈은 그대로다).
+// 밤 마감 훅(routeAfterNight)은 확장판에만 있다 — 현장이 없는 밤(확정 대상 없음)은 아침 없이 판정을 적용하고 토론으로 간다.
 // 진입 훅의 세 번째 인자 at 은 진입 시각(= 이전 마감)이다 — 시각을 스스로 읽지 않는 순수 규칙이 "진입 + 30분" 같은 계산을 할 때 쓴다.
 import { GAME_MODES } from "../protocol";
 import type { GameMode, PhaseId } from "../protocol";
@@ -30,7 +33,7 @@ import { enterExecution } from "./execution";
 import { enterNomination, enterVote, stepNomination, resolveNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
 import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
-import { enterMorning, enterNight } from "./night";
+import { enterMorning, enterNight, routeAfterNight } from "./night";
 import { PHASE_DEFS, nextPhaseOf } from "./phases";
 import { modeOf, rulesetOf } from "./ruleset";
 import type { Ruleset } from "./ruleset";
@@ -70,6 +73,7 @@ export interface PhaseHooks {
  * 판 규칙으로 진입·마감 훅 표를 만든다(19페이즈 D-03). 규칙에 따라 갈리는 줄은 넷이다:
  * 투표 진입(순차 지목이면 enterNomination, 아니면 동시 투표 enterVote) · 투표 마감(순차 지목이면 stepNomination, 아니면 집계 한 번) ·
  * 낮 시작 발표 마감(마지막 3인 결전이 켜졌을 때만) · 아침 진입(흔적·마지막 목격을 그 판의 규칙으로).
+ * 위 넷 말고 두 줄이 더 판 규칙을 따른다(21페이즈): 저녁(errand) 진입은 일차를 올리고(확장판엔 낮 시작 발표가 없다, D-02), 밤 마감 훅은 rules.errand 일 때만 있다(현장 없는 밤은 토론으로, D-17).
  * tick 은 매 걸음 이 함수를 부르지 않고 아래 HOOKS 에서 고른다.
  */
 export function hooksOf(rules: Ruleset): PhaseHooks {
@@ -77,7 +81,7 @@ export function hooksOf(rules: Ruleset): PhaseHooks {
     enter: {
       assigning: clearTutorial, // 17페이즈(결정 0080-11): tutorial 을 떠나며 서버 전용 tutorialPassed 를 지운다(tutorial 을 거치지 않았으면 같은 객체)
       dayAnnounce: enterDayAnnounce,
-      errand: (s, r, at) => assignErrandFake(enterErrand(s, r, at)), // 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts). 16페이즈(결정 0079): 산 마피아의 가짜 한 곳은 난수 없이 뒤에서 정한다
+      errand: (s, r, at) => assignErrandFake(enterErrand(enterDayAnnounce(s), r, at)), // 21페이즈 D-02: 저녁 진입이 일차를 올린다(확장판엔 낮 시작 발표가 없다). 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts). 16페이즈(결정 0079): 산 마피아의 가짜 한 곳은 난수 없이 뒤에서 정한다
       discussion: enterDiscussion,
       nomination: rules.pickTurn ? enterNomination : enterVote,
       execution: enterExecution,
@@ -88,6 +92,8 @@ export function hooksOf(rules: Ruleset): PhaseHooks {
     deadline: {
       // 마지막 3인 결전은 판 규칙의 showdown 일 때만(결정 0072) — 꺼지면 키를 만들지 않아 표의 기본 next 로 간다.
       ...(rules.showdown ? { dayAnnounce: routeAfterDayAnnounce } : {}),
+      // 현장 없는 밤은 아침 없이 토론으로(21페이즈 D-17) — 확장판에만 키를 만든다. 기본 마피아는 표의 기본 next(morning)로 간다.
+      ...(rules.errand ? { night: routeAfterNight } : {}),
       showdown: stepShowdown,
       nomination: rules.pickTurn ? stepNomination : (s) => resolveNomination(s, rules), // 두 번째 인자 at(마감 시각)이 규칙 자리로 들어가지 않게 감싼다
       runoff: stepRunoff,
@@ -125,7 +131,8 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
         continue;
       }
       closing = resolved.state;
-      branch = resolved.next;
+      // 처형이 없는 날의 분기(마감 훅의 next "night")는 확장판에서 저녁이다(21페이즈 D-01) — 밤은 저녁 다음에 온다.
+      branch = rules.errand && resolved.next === "night" ? "errand" : resolved.next;
     }
     // 마감 훅의 분기가 먼저고, 없으면 규칙이 고른 기본 다음 단계다.
     const next = branch ?? nextPhaseOf(closing.phase, rules);

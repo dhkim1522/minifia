@@ -4,6 +4,7 @@
 // 이 파일이 플레이어의 role 을 읽는 이유는 행동 종류(지목·조사·보호)·마피아 표·조사 결과가 서버 판정이기 때문이다(pickTarget 은 읽지 않는다 — 15페이즈 D-05).
 // 밤 고르기는 산 사람 누구나 같은 입력·같은 응답이고, 효과는 판정이 역할로 가른다. 피해자가 나온 아침에는 enterMorning 이 그 밤 피해자를 고른 사람 중 한 명의 의상으로 흔적 조각을 정한다(D-06, trace.ts).
 // 읽은 역할 값은 어디에도 내보내지 않는다(결정 0002): 반환값에는 isMafia 불리언 하나와 seat 뿐이다.
+// 현장 없는 밤(21페이즈 D-17, 확장판): 확정 대상이 없으면 routeAfterNight 가 아침 없이 판정을 적용하고 토론으로 보낸다.
 import type { AssassinationRecord, InvestigationRecord, MorningView, TreatmentRecord } from "../protocol";
 import { isAlive } from "./alive";
 import type { Player, RoomState } from "./room";
@@ -195,9 +196,15 @@ export function enterMorning(state: RoomState, randInt: RandInt = () => 0, rules
   };
 }
 
-/** 자리 함수(21-01 RED) — 입력을 그대로 돌려준다. */
+/**
+ * 확장판 밤 마감 훅(21페이즈 D-17). 마피아 팀의 확정 대상이 없으면(의견 갈림·아무도 안 고름 — 피해자도 미수도 없다) 현장이 없으니 아침 없이 토론으로 간다:
+ * 판정(경찰 수사·의사 치료 일지·밤 일지 한 줄)은 지금 적용한다(enterMorning — 난수는 피해자가 있을 때만 쓰이므로 부르지 않는다).
+ * 확정 대상이 있으면(죽음이든 구출이든 현장이 생긴다) 상태를 그대로 두고 표의 기본 다음 단계 morning 으로 보낸다 — 진입 훅 enterMorning 이 판정한다.
+ * 기본 마피아에는 이 훅이 없다(tick.ts 가 rules.errand 일 때만 건다).
+ */
 export function routeAfterNight(state: RoomState, _at: number): DeadlineResult {
-  return { state, stay: false };
+  if (confirmedTarget(state) !== undefined) return { state, stay: false };
+  return { state: enterMorning(state, () => 0, rulesetOf(modeOf(state))), stay: false, next: "discussion" };
 }
 
 const bySeat = (a: Player, b: Player): number => a.seat - b.seat;

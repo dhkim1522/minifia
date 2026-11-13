@@ -7,8 +7,9 @@ import { isAlive } from "./alive";
 import { majorityOf, nominationStepMs } from "./nomination";
 import { runoffStepMs } from "./runoff";
 import { showdownStepMs } from "./showdown";
-import { MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_TRACE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, PHASE_DEFS } from "./phases";
+import { MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_SCENE_MS, MORNING_TRACE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
+import { modeOf, rulesetOf } from "./ruleset";
 
 /** 낮 투표류 규칙 함수(토론 끝내기·지목·찬반)의 거부 코드. 단계가 아니면 WRONG_PHASE, 그 밖의 잘못된 입력은 BAD_MESSAGE. */
 export type VoteError = "WRONG_PHASE" | "BAD_MESSAGE";
@@ -32,10 +33,10 @@ export function morningMsOf(state: RoomState): number {
 }
 
 /**
- * 지금 단계의 전체 길이(ms). 단계 표 길이 그대로이고(아침은 morningMsOf), 길이가 없는 단계는 null. buildView 가 이 함수로 phaseDurationMs 를 만든다.
+ * 지금 단계의 전체 길이(ms). 단계 표 길이 그대로이고(아침은 확장판이면 현장 조사 MORNING_SCENE_MS(21페이즈 D-03), 기본 마피아면 morningMsOf), 길이가 없는 단계는 null. buildView 가 이 함수로 phaseDurationMs 를 만든다.
  */
 export function phaseDurationOf(state: RoomState): number | null {
-  if (state.phase === "morning") return morningMsOf(state);
+  if (state.phase === "morning") return rulesetOf(modeOf(state)).errand ? MORNING_SCENE_MS : morningMsOf(state);
   if (state.phase === "nomination" && state.pickTurn !== undefined) return nominationStepMs(state);
   if (state.phase === "runoff" && state.runoff !== undefined) return runoffStepMs(state);
   if (state.phase === "showdown" && state.showdown !== undefined) return showdownStepMs(state);
