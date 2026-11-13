@@ -579,6 +579,8 @@ describe("장식 가로등 옵션 decorLamps (21-09)", () => {
 
   it("마을 장식 가로등 구는 paneDark 색이다(furniture 정점 색에 lampBulb 가 없다)", () => {
     const t = buildTownScene(LADDER[0]!);
+    // 재질 보정(albedo)이 없는 밤 조명에서 원래 정점 색을 읽는다
+    t.setLighting("night");
     const color = t.meshes.furniture!.geometry.getAttribute("color");
     const bulb = new Color(PLAZA_PALETTE.lampBulb);
     const dark = new Color(PLAZA_PALETTE.paneDark);

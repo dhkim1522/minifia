@@ -18,4 +18,11 @@ export type MapScene = Omit<BarScene, "lights"> & {
   setOwners?(seats: readonly number[]): void;
   /** 방마다 지금 지붕 불투명도(선택, 마을만). 1 = 덮임, 0 = 걷힘. 시험 훅이 읽는다 */
   roofs?(): Readonly<Record<RoomId, number>>;
+  /**
+   * 켜진 당번 가로등(선택, 마을만 — 21페이즈 D-06·D-24). lit = 지금 켜진 모양으로 그릴 가로등 번호(좌석 번호와 같다). 켜짐은 0.4초, 꺼짐은 0.8초에 따라가고(update 틱),
+   * instant 면 바로 놓는다. 부른 적이 없으면 창은 20페이즈 그대로 주인만 따른다. 창은 주인 ∧ lit 인 집만 켜진다
+   */
+  setLamps?(lit: readonly number[], instant: boolean): void;
+  /** 아침 현장 단서 decal(선택, 마을만 — D-13·D-26). house = 현장 집의 좌석 번호, null 이면 없음. 0.3초에 나타나고 instant 면 바로 */
+  setClue?(house: number | null, instant: boolean): void;
 };

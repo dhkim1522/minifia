@@ -6,7 +6,7 @@ import { TOWN_CLUE_SPOTS, TOWN_HOUSES, TOWN_LAMPS, TOWN_ROOM_OUTER } from "../..
 import { ROOM_IDS } from "../../shared/protocol";
 import { plateFarOf } from "../../src/world/camera";
 import { createCharacter, figForSeat } from "../../src/world/character";
-import { atlasCellAt, buildTownScene, CUTAWAY_MS, drawSeatCell, drawSignCell, TOWN_ATLAS } from "../../src/world/maps/town";
+import { atlasCellAt, buildTownScene, CUTAWAY_MS, DECAL_Y, drawSeatCell, drawSignCell, POOL_Y, TOWN_ATLAS } from "../../src/world/maps/town";
 import type { AtlasCtx } from "../../src/world/maps/town";
 import type { MapScene } from "../../src/world/maps/types";
 import { SEAT_COLORS, TOWN_LIT, TOWN_PALETTE } from "../../src/world/palette";
@@ -702,7 +702,7 @@ describe("당번 가로등 8과 켜진 등불 setLamps (D-04·D-06·D-24)", () =
     t.dispose();
   });
 
-  it("setLamps([1,2,5], true): 켜진 구 셋(발광 재질)·빛 무리 셋 + 바닥 빛 웅덩이 셋(y 0.03, 2.6×2.6) 이 TOWN_LAMPS 기둥 자리에 선다", () => {
+  it("setLamps([1,2,5], true): 켜진 구 셋(발광 재질)·빛 무리 셋 + 바닥 빛 웅덩이 셋(자갈 위 POOL_Y, 2.6×2.6) 이 TOWN_LAMPS 기둥 자리에 선다", () => {
     const t = buildTownScene(LADDER[0]!);
     t.setLighting("night");
     t.setLamps!([1, 2, 5], true);
@@ -714,7 +714,7 @@ describe("당번 가로등 8과 켜진 등불 setLamps (D-04·D-06·D-24)", () =
     expect(quads(t.meshes.dutyGlow!)).toBe(6);
     expect(t.meshes.dutyGlow!.visible).toBe(true);
     // 바닥 빛 웅덩이: y 0.03 평면 쿼드가 기둥 둘레 ±1.3
-    const pool = worldVertices(t.meshes.dutyGlow!).filter((v) => Math.abs(v.y - 0.03) < 1e-4);
+    const pool = worldVertices(t.meshes.dutyGlow!).filter((v) => Math.abs(v.y - POOL_Y) < 1e-4);
     expect(pool).toHaveLength(3 * 4);
     const l1 = TOWN_LAMPS[1]!.pole;
     expect(Math.max(...pool.map((v) => v.x))).toBeGreaterThan(l1.x + 1.29);
@@ -812,7 +812,7 @@ describe("당번 가로등 8과 켜진 등불 setLamps (D-04·D-06·D-24)", () =
     expect(quads(t.meshes.dutyGlow!)).toBe(6);
     t.applyBudget(LADDER[4]!);
     expect(quads(t.meshes.dutyGlow!)).toBe(3);
-    expect(worldVertices(t.meshes.dutyGlow!).filter((v) => Math.abs(v.y - 0.03) < 1e-4)).toHaveLength(0);
+    expect(worldVertices(t.meshes.dutyGlow!).filter((v) => Math.abs(v.y - POOL_Y) < 1e-4)).toHaveLength(0);
     expect(t.meshes.dutyBulb!.visible).toBe(true);
     expect(bulbs(t.meshes.dutyBulb!)).toBe(3);
     // 강등 중에 바뀐 등불도 웅덩이 없이 만든다
@@ -864,26 +864,27 @@ describe("창 켜짐 연동 (D-07, P21-15)", () => {
     t.dispose();
   });
 
-  it("창 연동은 그리기 호출을 늘리지 않는다: 켜진·꺼진 창 두 메시 그대로", () => {
+  it("창 연동은 창 메시를 늘리지 않는다: 켜진·꺼진 창 두 메시 그대로(이름에 houseWin 이 든 메시는 둘뿐)이고 보이는 메시는 39 이하", () => {
     const t = buildTownScene(LADDER[0]!);
     t.setOwners!([0, 1, 2, 3, 4, 5, 6, 7]);
-    const before = visibleMeshes(t.root).length;
     t.setLamps!([0, 1], true);
-    // 켜진 구·빛 무리 메시(night 조명 아님 talk 이라 lampLit 0 → 꺼짐)만 늘 수 있다
     t.setLighting("night");
-    expect(visibleMeshes(t.root).length).toBeLessThanOrEqual(before + 2);
+    const now = visibleMeshes(t.root);
+    expect(now.filter((m) => m.name.startsWith("houseWin")).map((m) => m.name).sort()).toEqual(["houseWinDark", "houseWinLit"]);
+    expect(allMeshes(t.root).filter((m) => m.name.startsWith("houseWin"))).toHaveLength(2);
+    expect(now.length).toBeLessThanOrEqual(39);
     t.dispose();
   });
 });
 
 describe("아침 현장 단서 decal setClue (D-13·D-26)", () => {
-  it("setClue(2, true): 그 집의 단서 지점 셋 자리에 decal 셋(y 0.02)이 한 메시로 보이고, 다른 집 지점에는 없다", () => {
+  it("setClue(2, true): 그 집의 단서 지점 셋 자리에 decal 셋(자갈 위 DECAL_Y)이 한 메시로 보이고, 다른 집 지점에는 없다", () => {
     const t = buildTownScene(LADDER[0]!);
     t.setClue!(2, true);
     const m = t.meshes.clueDecals!;
     expect(m.visible).toBe(true);
     const verts = worldVertices(m);
-    expect(verts.every((v) => Math.abs(v.y - 0.02) < 1e-6)).toBe(true);
+    expect(verts.every((v) => Math.abs(v.y - DECAL_Y) < 1e-6)).toBe(true);
     for (const [i, p] of TOWN_CLUE_SPOTS[2]!.entries()) {
       const near = verts.filter((v) => Math.hypot(v.x - p.x / 100, v.z - p.z / 100) <= 0.45);
       expect(near.length, `지점 ${i + 1}`).toBeGreaterThan(0);
@@ -906,6 +907,15 @@ describe("아침 현장 단서 decal setClue (D-13·D-26)", () => {
     const w = Math.max(...near.map((v) => v.x)) - Math.min(...near.map((v) => v.x));
     expect(w).toBeCloseTo(0.6, 5);
     expect(m.material).toBeInstanceOf(MeshBasicMaterial);
+    t.dispose();
+  });
+
+  it("decal 과 빛 웅덩이는 자갈 칸 윗면(0.08) 위에 놓인다 — 아래에 놓으면 자갈에 가려진다(UI-SPEC 0.02·0.03 을 자갈 위로 올림)", () => {
+    const t = buildTownScene(LADDER[0]!);
+    const cobbleTop = Math.max(...worldVertices(t.meshes.shell!).filter((v) => Math.abs(v.x) < 6 && Math.abs(v.z) < 6).map((v) => v.y));
+    expect(cobbleTop).toBeCloseTo(0.08, 5);
+    expect(DECAL_Y).toBeGreaterThan(cobbleTop);
+    expect(POOL_Y).toBeGreaterThan(DECAL_Y);
     t.dispose();
   });
 

@@ -4,8 +4,8 @@
 // 핀 조명·긴장 연출·유령 안개·단계 조명은 재즈 바와 같은 규칙으로 돈다 — 새 연출 코드를 만들지 않고, 같은 인터페이스(MapScene)를 같은 의미로 구현한다.
 //
 // 그리기 단위(보이는 메시, 모두 병합):  1 shell(바닥 판·자갈 칸, 그림자 받기만)  2 furniture(연단·시계탑 몸·가로등 기둥·갓·건물 앞면·벤치 몸·나무 몸)
-//   2b furnitureFar(벤치 다리·나무 가지)  3 brass(서는 자리 표시 8)  4 emissiveRoom(가로등 구)  4b emissiveRoomFar(건물 불 켜진 창)
-//   5 emissiveTower(시계판 두 면·시계탑 조명 구, PhaseTune.emissive.vote 칸을 쓴다)  6 glowRoom(가로등 빛 무리)·glowTower(시계탑 조명 빛 무리, glow.vote 칸)
+//   2b furnitureFar(벤치 다리·나무 가지)  3 brass(서는 자리 표시 8)  4 emissiveRoom(가로등 구, 마을은 decorLamps dark 라 없음)  4b emissiveRoomFar(건물 불 켜진 창)
+//   5 emissiveTower(시계판 두 면·시계탑 조명 구, PhaseTune.emissive.vote 칸을 쓴다)  6 glowRoom(가로등 빛 무리, 마을은 없음)·glowTower(시계탑 조명 빛 무리, glow.vote 칸)
 //   7 plate(연장 판)  8 hands(시계 바늘 4, 시침·분침 × 두 면).  강등 사다리 4단계(props reduced)는 2b·4b 를 끈다.
 // 마을(maps/town.ts, 20-04)은 이 본문을 buildPlaza 의 선택 인자(건물 앞면 없음·바닥 판 24×24·덧붙일 조각)로 다시 부른다. buildPlazaScene 의 결과는 그대로다.
 // 칸 이름 대응(PhaseTune 구조를 그대로 쓰기 위해): emissive.room/glow.room = 가로등, emissive.vote/glow.vote = 시계탑 조명(blockout 의 trial 그룹), stage = 무대 점광원, pendant = 가로등 점광원.
@@ -216,7 +216,7 @@ export interface PlazaPiece {
   /** 메시 밖의 자원(텍스처 등)을 푼다 */
   dispose?(): void;
   /** 장면에 그대로 얹는 선택 훅(MapScene 의 마을 훅) */
-  hooks?: Pick<MapScene, "setCutaway" | "setOwners" | "roofs">;
+  hooks?: Pick<MapScene, "setCutaway" | "setOwners" | "roofs" | "setLamps" | "setClue">;
 }
 
 /**
@@ -231,6 +231,13 @@ export interface PlazaOpts {
   plateFar: number;
   /** 덧붙일 장면 조각(방·집 등) */
   piece?: (ctx: PlazaPieceCtx) => PlazaPiece;
+  /**
+   * 광장 중앙 장식 가로등 넷(LAMPS)의 구(21페이즈 P21-3·P21-11). lit(기본 — 광장 맵 그대로) = 발광 구 + 빛 무리, dark = 구를 paneDark 로 정적 묶음에 병합하고 빛 무리를 그리지 않는다
+   * (마을에서는 켜진 빛이 당번 가로등 8 뿐이라 "켜진 등불 = 일한 등불" 이 읽힌다). 기둥·갓·장애물은 같고 그리기 호출은 늘지 않는다(발광·빛 무리 메시가 없어질 뿐이다)
+   */
+  decorLamps?: "lit" | "dark";
+  /** 덧붙일 당번 가로등(21페이즈 D-24)의 기둥 자리 [x, z]. 기둥·갓·꺼진 구(paneDark)를 정적 묶음에 병합한다 — 켜진 구·빛 무리는 장면 조각이 상태에 따라 따로 만든다 */
+  dutyLamps?: readonly (readonly [number, number])[];
 }
 const PLAZA_OPTS: PlazaOpts = { facades: true, floorHalf: 20, plateFar: PLATE_FAR };
 
@@ -327,12 +334,21 @@ export function buildPlaza(budget: Budget, opts: PlazaOpts): MapScene {
     minuteHands.push(minute);
   });
 
-  // 가로등 4개: 기둥 높이 2.6, 갓 0.3, 발광 구 반지름 0.13 y 2.6
+  // 가로등 4개: 기둥 높이 2.6, 갓 0.3, 발광 구 반지름 0.13 y 2.6. 마을(decorLamps dark)은 구를 paneDark 로 정적 병합하고 빛 무리를 그리지 않는다
+  const decorLit = (opts.decorLamps ?? "lit") === "lit";
   for (const [x, z] of LAMPS) {
     furniture.cyl(0.06, 0.08, 2.6, 8, P.lampPost, tf(x, 1.3, z));
     furniture.cyl(0.16, 0.12, 0.3, 8, P.lampPost, tf(x, 2.7, z));
-    emRoom.sph(0.13, P.lampBulb, tf(x, 2.6, z), 1.5);
-    glow(glowRoom, P.lampBulb, 1.4, x, 2.6, z, 0.7);
+    if (decorLit) {
+      emRoom.sph(0.13, P.lampBulb, tf(x, 2.6, z), 1.5);
+      glow(glowRoom, P.lampBulb, 1.4, x, 2.6, z, 0.7);
+    } else furniture.sph(0.13, P.paneDark, tf(x, 2.6, z));
+  }
+  // 당번 가로등(21페이즈): 같은 모델의 기둥·갓·꺼진 구. 켜진 구·빛 무리는 마을 조각의 dutyBulb·dutyGlow 가 맡는다
+  for (const [x, z] of opts.dutyLamps ?? []) {
+    furniture.cyl(0.06, 0.08, 2.6, 8, P.lampPost, tf(x, 1.3, z));
+    furniture.cyl(0.16, 0.12, 0.3, 8, P.lampPost, tf(x, 2.7, z));
+    furniture.sph(0.13, P.paneDark, tf(x, 2.6, z));
   }
 
   // 건물 앞면 4(뒤 두 가장자리): 몸 + 지붕띠 + 창 칸(일부만 발광)
@@ -387,11 +403,12 @@ export function buildPlaza(budget: Budget, opts: PlazaOpts): MapScene {
     furniture: furniture.build(matProp, "furniture"),
     furnitureFar: furnitureFar.build(matProp, "furnitureFar"),
     brass: brass.build(matBrass, "brass"),
-    emissiveRoom: emRoom.build(matEmRoom, "emissiveRoom"),
+    // 장식 가로등의 구를 끈 마을에서는 발광 구·빛 무리 묶음이 비어 메시가 없다(빈 묶음은 병합할 수 없다)
+    ...(emRoom.size > 0 ? { emissiveRoom: emRoom.build(matEmRoom, "emissiveRoom") } : {}),
     // 불 켜진 건물 창은 건물 앞면이 있을 때만 있다(빈 묶음은 병합할 수 없다)
     ...(emRoomFar.size > 0 ? { emissiveRoomFar: emRoomFar.build(matEmRoom, "emissiveRoomFar") } : {}),
     emissiveTower: emTower.build(matEmTower, "emissiveTower"),
-    glowRoom: glowRoom.build(matGlowRoom, "glowRoom"),
+    ...(glowRoom.size > 0 ? { glowRoom: glowRoom.build(matGlowRoom, "glowRoom") } : {}),
     glowTower: glowTower.build(matGlowTower, "glowTower"),
   };
   meshes.shell!.receiveShadow = true;
@@ -402,7 +419,7 @@ export function buildPlaza(budget: Budget, opts: PlazaOpts): MapScene {
   meshes.brass!.castShadow = true;
   meshes.brass!.receiveShadow = true;
   // 빛 무리는 투명 합성이라 불투명 메시 뒤에 그린다
-  meshes.glowRoom!.renderOrder = 2;
+  if (meshes.glowRoom) meshes.glowRoom.renderOrder = 2;
   meshes.glowTower!.renderOrder = 2;
   // 덧붙일 장면 조각(마을의 방·집): 같은 재질·기저로 자기 메시를 만들어 돌려준다. 그림자·보이기는 조각이 정한다
   const piece = opts.piece?.({ root, matProp, glowMat, facing, up: new Vector3(basis.up.x, basis.up.y, basis.up.z), glow }) ?? null;
@@ -564,7 +581,7 @@ export function buildPlaza(budget: Budget, opts: PlazaOpts): MapScene {
     applyPin();
     matGlowRoom.opacity = t.glow.room;
     matGlowTower.opacity = t.glow.vote;
-    meshes.glowRoom!.visible = b.glows && t.glow.room > 0;
+    if (meshes.glowRoom) meshes.glowRoom.visible = b.glows && t.glow.room > 0;
     meshes.glowTower!.visible = b.glows && t.glow.vote > 0;
     root.fog = b.fog ? fog : null;
     exposure = t.exposure;

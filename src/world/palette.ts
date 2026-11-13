@@ -116,6 +116,8 @@ export const TOWN_PALETTE = {
   houseRoof: PLAZA_PALETTE.facades[3],
   /** 주인 있는 집의 켜진 창 — 가로등과 같은 "장면 안 빛"이다(강조색 아님) */
   paneLit: PLAZA_PALETTE.lampBulb,
+  /** 아침 현장 단서 decal 의 발자국(UI-SPEC 단서 decal 표) */
+  footprint: "#0a0e1c",
   /** 꺼진 창·집 문 칸 */
   paneDark: PLAZA_PALETTE.paneDark,
   /** 간판 판·빈 문패의 바탕 */
@@ -125,16 +127,17 @@ export const TOWN_PALETTE = {
 } as const;
 
 /**
- * 마을이 광장의 단계 조명 7칸에 더하는 두 열(UI-SPEC 조명 표, P20-13). 0~1 배율이고 재질 색에 곱한다 — 점광원은 늘리지 않는다.
- * indoor = 방 벽등·문턱 띠·빛 무리, houseOwned = 주인 있는 집의 창. 주인 없는 집의 창은 어느 단계에서도 0 이라 열이 없다.
- * 시민 편 밤은 둘 다 0 이다 — 역할마다 겉보기가 달라지지 않게(결정 0074-4).
+ * 마을이 광장의 단계 조명 7칸에 더하는 세 열(UI-SPEC 조명 표, P20-13·P21-10). 0~1 배율이고 재질 색에 곱한다 — 점광원은 늘리지 않는다.
+ * indoor = 방 벽등·문턱 띠·빛 무리, houseOwned = 주인 있는 집의 창, lampLit(21페이즈) = 켜진 당번 가로등의 구·빛 무리·바닥 빛 웅덩이(켜진 등불에만 곱한다).
+ * 주인 없는 집의 창은 어느 단계에서도 0 이라 열이 없다. 시민 편 밤은 indoor·houseOwned·lampLit 모두 0 이다 — 역할마다 겉보기가 달라지지 않게(결정 0074-4).
+ * 아침 houseOwned 는 0.6 이다(이웃의 켜진 창이 아침 현장 조사의 단서라 보여야 한다, P21-0).
  */
-export const TOWN_LIT: Readonly<Record<LightingPhase, { indoor: number; houseOwned: number }>> = {
-  talk: { indoor: 0.5, houseOwned: 0.3 },
-  vote: { indoor: 0.8, houseOwned: 1 },
-  trial: { indoor: 0.35, houseOwned: 0.06 },
-  night: { indoor: 0.7, houseOwned: 0.7 },
-  nightCitizen: { indoor: 0, houseOwned: 0 },
-  nightGhost: { indoor: 0.7, houseOwned: 0.7 },
-  morning: { indoor: 0.5, houseOwned: 0.3 },
+export const TOWN_LIT: Readonly<Record<LightingPhase, { indoor: number; houseOwned: number; lampLit: number }>> = {
+  talk: { indoor: 0.5, houseOwned: 0.3, lampLit: 0 },
+  vote: { indoor: 0.8, houseOwned: 1, lampLit: 1 },
+  trial: { indoor: 0.35, houseOwned: 0.06, lampLit: 0.3 },
+  night: { indoor: 0.7, houseOwned: 0.7, lampLit: 1 },
+  nightCitizen: { indoor: 0, houseOwned: 0, lampLit: 0 },
+  nightGhost: { indoor: 0.7, houseOwned: 0.7, lampLit: 1 },
+  morning: { indoor: 0.5, houseOwned: 0.6, lampLit: 0.7 },
 };

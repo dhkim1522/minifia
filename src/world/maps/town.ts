@@ -12,11 +12,14 @@
 //   5 emissiveIndoor(벽등 구 넷·문턱 띠 넷, TOWN_LIT.indoor)  6 glowIndoor(벽등 빛 무리 넷, 같은 열)
 //   7 houseBody(집 여덟의 몸·지붕판·문 칸, 광장 소품 재질)  8 houseWinLit(주인 있는 집의 창, TOWN_LIT.houseOwned)·houseWinDark(주인 없는 집의 창)
 //   9 housePlate(문 위 문패 여덟)·houseMark(지붕 위 표식 여덟 + 기둥) — 아틀라스 재질 하나.
-// 강등 사다리 4단계(props reduced)는 2·4·houseMark 를 끈다(몸통·문패·창은 남는다). 그 밖의 사다리는 광장 그대로다.
-import { BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, DataTexture, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, RGBAFormat, SRGBColorSpace } from "three";
+//   10 dutyBulb(켜진 당번 가로등 구, 21페이즈)  11 dutyGlow(켜진 등불의 빛 무리 + 바닥 빛 웅덩이)  12 clueDecals(아침 현장 단서 decal 셋) — 이 셋은 상태가 바뀔 때만 지오메트리를 다시 만든다.
+// 당번 가로등 8(기둥·갓·꺼진 구)과 광장 중앙 장식 가로등 4의 꺼진 구는 광장 빌더의 정적 묶음(furniture)에 병합된다(+0). 장식 가로등은 마을에서 구·빛 무리가 없어
+// 광장 것 emissiveRoom·glowRoom 두 메시가 빠지므로 정적 그리기 호출 합계는 20페이즈 합격선 36 에서 +3(≤ 39) 이다. 점광원은 3 그대로.
+// 강등 사다리 4단계(props reduced)는 2·4·houseMark·clueDecals 를 끄고 dutyGlow 를 웅덩이 없는 지오메트리로 다시 만든다(몸통·문패·창·켜진 구·빛 무리는 남는다). 그 밖의 사다리는 광장 그대로다.
+import { BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color, DataTexture, DoubleSide, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, RGBAFormat, Shape, ShapeGeometry, SRGBColorSpace, Vector2 } from "three";
 import type { Texture } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { TOWN_HOUSES, TOWN_OBSTACLES, TOWN_PROPS, TOWN_ROOM_OUTER, TOWN_ROOMS } from "../../../shared/game/mapTown";
+import { TOWN_CLUE_SPOTS, TOWN_HOUSES, TOWN_LAMPS, TOWN_OBSTACLES, TOWN_PROPS, TOWN_ROOM_OUTER, TOWN_ROOMS } from "../../../shared/game/mapTown";
 import { ROOM_IDS } from "../../../shared/protocol";
 import type { RoomId } from "../../../shared/protocol";
 import { faceSrc } from "../../net/assets";
@@ -64,6 +67,31 @@ const PLAQUE_Y = 1.5;
 /** 집 지붕 표식(P20-6): 기둥 0.25 위에 서는 0.9×0.9 판 */
 const MARK = 0.9;
 const MARK_POST = 0.25;
+
+/**
+ * 당번 가로등(21페이즈 D-24, UI-SPEC 가로등 8): 광장 가로등과 같은 모델(기둥·갓·구 0.13 @ 2.6). 켜진 구의 발광 배율 1.5, 빛 무리 쿼드 1.4(불투명도 0.7),
+ * 바닥 빛 웅덩이 2.6×2.6(불투명도 = 빛 무리 × 0.5). 켜짐 0.4초(--dur-med), 꺼짐 0.8초(--dur-slow).
+ */
+const DUTY_R = 0.13;
+const DUTY_Y = 2.6;
+const DUTY_EMISSIVE = 1.5;
+const DUTY_HALO = 1.4;
+const DUTY_HALO_A = 0.7;
+const DUTY_POOL = 2.6;
+const DUTY_POOL_A = DUTY_HALO_A * 0.5;
+export const LAMP_ON_MS = 400;
+export const LAMP_OFF_MS = 800;
+/**
+ * 바닥 위 얹는 판의 높이. UI-SPEC 치수표는 웅덩이 0.03·decal 0.02 로 적었지만 가운데 자갈 칸(윗면 0.08)이 그 아래를 덮어 가려지므로(자갈은 ±6.98 까지)
+ * 자갈 위로 올렸다: decal 0.1 → 웅덩이 0.12(빛이 decal 위에 더해진다). 위에서 내려다보는 카메라라 0.1 의 차이는 보이지 않는다
+ */
+export const DECAL_Y = 0.1;
+export const POOL_Y = 0.12;
+/** 아침 현장 단서 decal(D-13·D-26, UI-SPEC 단서 decal 표)이 나타나는 시간(ms) */
+export const CLUE_MS = 300;
+const CLUE_FOOT_A = 0.55;
+const CLUE_CLOTH_A = 0.9;
+const CLUE_LIGHT_A = 0.35;
 
 type Side = "n" | "s" | "e" | "w";
 /** 면의 바깥 법선(x, z)과 그 면을 보는 판의 rotation.y */
@@ -291,6 +319,34 @@ interface CutState {
   mats: readonly MeshStandardMaterial[];
 }
 
+/**
+ * 현장 단서 decal 한 벌(UI-SPEC 단서 decal 표): 피해자 집 house 의 단서 지점 ①②③ 에 놓는 정점 색·알파 지오메트리 하나. 집마다 정점 수·알파 구성이 같다(개수·종류를 담지 않는다).
+ * ① 발자국 = 타원 둘(앞뒤 0.22 간격으로 엇갈림, 각 0.18×0.34, 길이는 광장 쪽을 향한다) ② 옷 조각 = 다섯 꼭짓점 찢긴 천(약 0.30×0.24) ③ 창 빛 조각 = 0.6×0.6 정사각형
+ */
+function buildClue(house: number, mat: MeshBasicMaterial): BufferGeometry {
+  const spots = TOWN_CLUE_SPOTS[house]!;
+  const b = new Bundle(true);
+  const at = (i: number): { x: number; z: number } => ({ x: spots[i]!.x / 100, z: spots[i]!.z / 100 });
+  // 광장 가운데 쪽 단위벡터(발자국 길이 방향)
+  const p1 = at(0);
+  const len = Math.hypot(p1.x, p1.z) || 1;
+  const dx = -p1.x / len;
+  const dz = -p1.z / len;
+  const ry = Math.atan2(-dx, -dz);
+  for (const [f, s] of [[-1, 1], [1, -1]] as const) {
+    const foot = new CircleGeometry(0.5, 12).scale(0.18, 0.34, 1).rotateX(-Math.PI / 2);
+    b.add(foot, C.footprint, tf(p1.x + dx * 0.11 * f - dz * 0.07 * s, DECAL_Y, p1.z + dz * 0.11 * f + dx * 0.07 * s, 0, ry, 0), 1, CLUE_FOOT_A);
+  }
+  const p2 = at(1);
+  const cloth = new ShapeGeometry(
+    new Shape([new Vector2(-0.15, -0.02), new Vector2(-0.05, 0.12), new Vector2(0.1, 0.09), new Vector2(0.15, -0.06), new Vector2(0.02, -0.12)]),
+  ).rotateX(-Math.PI / 2);
+  b.add(cloth, C.roomEdge, tf(p2.x, DECAL_Y, p2.z), 1, CLUE_CLOTH_A);
+  const p3 = at(2);
+  b.add(new PlaneGeometry(0.6, 0.6).rotateX(-Math.PI / 2), C.paneLit, tf(p3.x, DECAL_Y, p3.z), 1, CLUE_LIGHT_A);
+  return b.build(mat, "clueDecals").geometry;
+}
+
 /** 방 넷·집 여덟을 광장 빌더에 덧붙이는 장면 조각 */
 function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
   const { matProp, facing, up, glow } = ctx;
@@ -428,34 +484,153 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
   Object.assign(meshes, { housePlate, houseMark, houseWinLit: winLit, houseWinDark: winDark });
   const graded = [meshes.roomStatic, meshes.roomProps, meshes.houseBody, ...ROOM_IDS.map((id) => cuts[id].mesh)];
 
-  // ----- 집 주인: 창 두 묶음을 다시 만들고 문패·표식의 UV 를 좌석 칸이나 빈 판 칸으로 돌린다(판 시작 때 한 번) -----
+  // ----- 집 주인·등불: 창 두 묶음을 다시 만들고 문패·표식의 UV 를 좌석 칸이나 빈 판 칸으로 돌린다(판 시작 때 한 번) -----
   const setWindows = (mesh: Mesh, b: Bundle, mat: MeshBasicMaterial | MeshStandardMaterial, hex: string, list: readonly Matrix4[]): void => {
     for (const m of list) b.add(new PlaneGeometry(0.4, 0.5), hex, m);
     mesh.geometry.dispose();
     mesh.geometry = list.length > 0 ? b.build(mat, mesh.name).geometry : new BufferGeometry();
     mesh.visible = list.length > 0;
   };
-  const setOwners = (seats: readonly number[]): void => {
-    const owned = new Set(seats.filter((s) => Number.isInteger(s) && s >= 0 && s < 8));
+  let owned: ReadonlySet<number> = new Set();
+  /** setLamps 가 마지막으로 받은 켜진 등불 번호. null = 부른 적 없음(20페이즈 그대로 — 주인 있는 집 창은 모두 켜진다) */
+  let litNow: ReadonlySet<number> | null = null;
+  /** 창 켜짐 = 주인 있음 ∧ 그 번호 등불 켜짐(D-07, P21-15). 두 묶음을 다시 만든다 — 주인·등불이 바뀔 때만 부르며 그리기 호출 수는 그대로다 */
+  const refreshWindows = (): void => {
     const lit: Matrix4[] = [];
     const dark: Matrix4[] = [];
+    TOWN_HOUSES.forEach((h, i) => {
+      const on = owned.has(h.seat) && (litNow === null || litNow.has(h.seat));
+      (on ? lit : dark).push(...windows[i]!);
+    });
+    setWindows(winLit, new Bundle(), matEmHouse, C.paneLit, lit);
+    setWindows(winDark, new Bundle(), matProp, C.paneDark, dark);
+  };
+  const setOwners = (seats: readonly number[]): void => {
+    owned = new Set(seats.filter((s) => Number.isInteger(s) && s >= 0 && s < 8));
     const plateUv = housePlate.geometry.getAttribute("uv") as BufferAttribute;
     const markUv = houseMark.geometry.getAttribute("uv") as BufferAttribute;
     TOWN_HOUSES.forEach((h, i) => {
       const has = owned.has(h.seat);
-      (has ? lit : dark).push(...windows[i]!);
       const cell = has ? TOWN_ATLAS.seat0 + h.seat : TOWN_ATLAS.blank;
       setCellUv(plateUv, i, cell);
       setCellUv(markUv, i, cell);
       if (has) atlas.face(h.seat);
     });
-    setWindows(winLit, new Bundle(), matEmHouse, C.paneLit, lit);
-    setWindows(winDark, new Bundle(), matProp, C.paneDark, dark);
+    refreshWindows();
   };
   setOwners([]);
 
-  // ----- 컷어웨이: 방마다 지붕·앞벽·간판의 불투명도 하나 -----
+  // ----- 켜진 당번 가로등(D-06·D-08·D-24): 등불마다 켜짐 정도(0~1)를 따로 두고 update 틱이 따라간다. 지오메트리는 "켜지는·켜진·꺼지는 중인 등불 집합" 이 바뀔 때만 다시 만든다 -----
+  // 구는 정점 색(빛 배율 × 켜짐 정도), 빛 무리·웅덩이는 정점 알파(× 켜짐 정도)로 그려 꺼지는 등불은 사라지기 전 그 불투명도로 내려간다.
   let propsFull = true;
+  const matBulb = new MeshBasicMaterial({ vertexColors: true });
+  const matDutyGlow = ctx.glowMat();
+  const dutyBulb = new Mesh(new BufferGeometry(), matBulb);
+  dutyBulb.name = "dutyBulb";
+  dutyBulb.visible = false;
+  const dutyGlow = new Mesh(new BufferGeometry(), matDutyGlow);
+  dutyGlow.name = "dutyGlow";
+  dutyGlow.renderOrder = 2;
+  dutyGlow.visible = false;
+  const amt: number[] = Array.from({ length: 8 }, () => 0);
+  const want: number[] = Array.from({ length: 8 }, () => 0);
+  /** 지금 지오메트리에 든 등불 번호(오름차순)와 웅덩이 포함 여부 */
+  let dutyOrder: number[] = [];
+  let dutyPool = true;
+  let lampLitNow = 0;
+  let glowsNow = true;
+  const bulbBase = new Color(PLAZA_PALETTE.lampBulb).multiplyScalar(DUTY_EMISSIVE);
+  const dutyShown = (): void => {
+    const any = dutyOrder.length > 0 && lampLitNow > 0;
+    dutyBulb.visible = any;
+    dutyGlow.visible = any && glowsNow;
+  };
+  const paintDuty = (): void => {
+    const sv = (dutyBulb.geometry.getAttribute("position")?.count ?? 0) / Math.max(1, dutyOrder.length);
+    const bc = dutyBulb.geometry.getAttribute("color");
+    const gc = dutyGlow.geometry.getAttribute("color");
+    const per = dutyPool ? 8 : 4;
+    dutyOrder.forEach((n, i) => {
+      const k = amt[n]!;
+      for (let v = 0; v < sv; v++) bc!.setXYZ(i * sv + v, bulbBase.r * k, bulbBase.g * k, bulbBase.b * k);
+      for (let v = 0; v < 4; v++) gc!.setW(i * per + v, DUTY_HALO_A * k);
+      if (dutyPool) for (let v = 4; v < 8; v++) gc!.setW(i * per + v, DUTY_POOL_A * k);
+    });
+    if (bc) bc.needsUpdate = true;
+    if (gc) gc.needsUpdate = true;
+  };
+  const rebuildDuty = (): void => {
+    const order = amt.flatMap((a, n) => (a > 0 || want[n]! > 0 ? [n] : []));
+    const same = order.length === dutyOrder.length && order.every((n, i) => n === dutyOrder[i]) && dutyPool === propsFull;
+    if (!same) {
+      dutyOrder = order;
+      dutyPool = propsFull;
+      dutyBulb.geometry.dispose();
+      dutyGlow.geometry.dispose();
+      if (order.length === 0) {
+        dutyBulb.geometry = new BufferGeometry();
+        dutyGlow.geometry = new BufferGeometry();
+      } else {
+        const b = new Bundle();
+        const g = new Bundle(true);
+        for (const n of order) {
+          const { x, z } = TOWN_LAMPS[n]!.pole;
+          b.sph(DUTY_R, PLAZA_PALETTE.lampBulb, tf(x, DUTY_Y, z), DUTY_EMISSIVE);
+          glow(g, PLAZA_PALETTE.lampBulb, DUTY_HALO, x, DUTY_Y, z, DUTY_HALO_A);
+          if (propsFull) g.add(new PlaneGeometry(DUTY_POOL, DUTY_POOL), PLAZA_PALETTE.lampBulb, tf(x, POOL_Y, z, -Math.PI / 2, 0, 0), 1, DUTY_POOL_A);
+        }
+        dutyBulb.geometry = b.build(matBulb, "dutyBulb").geometry;
+        dutyGlow.geometry = g.build(matDutyGlow, "dutyGlow").geometry;
+      }
+    }
+    paintDuty();
+    dutyShown();
+  };
+  const setLamps = (lit: readonly number[], instant: boolean): void => {
+    litNow = new Set(lit.filter((n) => Number.isInteger(n) && n >= 0 && n < 8));
+    for (let n = 0; n < 8; n++) {
+      want[n] = litNow.has(n) ? 1 : 0;
+      if (instant) amt[n] = want[n]!;
+    }
+    rebuildDuty();
+    refreshWindows();
+  };
+  const stepLamps = (dt: number): void => {
+    let moved = false;
+    for (let n = 0; n < 8; n++) {
+      if (amt[n] === want[n]) continue;
+      const step = (dt * 1000) / (want[n]! > amt[n]! ? LAMP_ON_MS : LAMP_OFF_MS);
+      amt[n] = want[n]! > amt[n]! ? Math.min(want[n]!, amt[n]! + step) : Math.max(want[n]!, amt[n]! - step);
+      moved = true;
+    }
+    if (moved) rebuildDuty();
+  };
+
+  // ----- 아침 현장 단서 decal(D-13·D-26): 피해자 집의 단서 지점 ①②③ 자리에 모두에게 같은 모양 셋 -----
+  const matClue = new MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: DoubleSide });
+  const clueDecals = new Mesh(new BufferGeometry(), matClue);
+  clueDecals.name = "clueDecals";
+  clueDecals.renderOrder = 1;
+  clueDecals.visible = false;
+  let clueHouse: number | null = null;
+  let clueAmt = 0;
+  const clueShown = (): void => {
+    clueDecals.visible = clueHouse !== null && propsFull;
+  };
+  const setClue = (house: number | null, instant: boolean): void => {
+    const next = house !== null && Number.isInteger(house) && house >= 0 && house < 8 ? house : null;
+    if (next !== clueHouse) {
+      clueHouse = next;
+      clueDecals.geometry.dispose();
+      clueDecals.geometry = next === null ? new BufferGeometry() : buildClue(next, matClue);
+      clueAmt = next === null || !instant ? 0 : 1;
+    } else if (next !== null && instant) clueAmt = 1;
+    matClue.opacity = clueAmt;
+    clueShown();
+  };
+  Object.assign(meshes, { dutyBulb, dutyGlow, clueDecals });
+
+  // ----- 컷어웨이: 방마다 지붕·앞벽·간판의 불투명도 하나 -----
   const applyCut = (c: CutState): void => {
     // 덮임(1) = 불투명 재질·깊이 쓰기 켬, 도중 = 투명·깊이 쓰기 끔, 걷힘(0) = 메시를 끈다(그리기 호출 절약)
     const solid = c.alpha >= 1;
@@ -482,7 +657,15 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
     }
   };
   const update = (dt: number): void => {
-    const step = (Math.max(0, dt) * 1000) / CUTAWAY_MS;
+    const d = Math.max(0, dt);
+    if (d > 0) {
+      stepLamps(d);
+      if (clueHouse !== null && clueAmt < 1) {
+        clueAmt = Math.min(1, clueAmt + (d * 1000) / CLUE_MS);
+        matClue.opacity = clueAmt;
+      }
+    }
+    const step = (d * 1000) / CUTAWAY_MS;
     for (const id of ROOM_IDS) {
       const c = cuts[id];
       if (c.alpha === c.want || step === 0) continue;
@@ -501,6 +684,12 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
       matEmHouse.color.setScalar(lit.houseOwned * dim);
       matGlowIndoor.opacity = lit.indoor;
       meshes.glowIndoor!.visible = budget.glows && lit.indoor > 0;
+      // 켜진 당번 가로등: 구 배율 = lampLit(핀 조명의 어둡게 하기도 따른다), 빛 무리·웅덩이 불투명도 = lampLit. 0 이면 메시를 끈다
+      matBulb.color.setScalar(lit.lampLit * dim);
+      matDutyGlow.opacity = lit.lampLit;
+      lampLitNow = lit.lampLit;
+      glowsNow = budget.glows;
+      dutyShown();
     },
     applyBudget(b: Budget): void {
       // 소품 reduced: 간판·지붕 표식·방 소품을 끈다(몸통·문패 벽 부착·창은 남는다)
@@ -508,12 +697,17 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
       meshes.roomProps!.visible = propsFull;
       houseMark.visible = propsFull;
       for (const id of ROOM_IDS) applyCut(cuts[id]);
+      // 4단계: 빛 웅덩이(dutyGlow 의 바닥 쿼드)와 현장 decal 을 끈다 — 웅덩이 없는 지오메트리로 다시 만든다
+      rebuildDuty();
+      clueShown();
     },
     update,
     dispose: () => atlas.dispose(),
     hooks: {
       setCutaway,
       setOwners,
+      setLamps,
+      setClue,
       roofs: () => ({ post: cuts.post.alpha, pub: cuts.pub.alpha, clinic: cuts.clinic.alpha, police: cuts.police.alpha }),
     },
   };
@@ -521,5 +715,13 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
 
 /** 마을 장면: 가운데 광장(건물 앞면 없음) + 바닥 판 24×24 + 방 넷·집 여덟 */
 export function buildTownScene(budget: Budget): MapScene {
-  return buildPlaza(budget, { facades: false, floorHalf: 12, plateFar: plateFarOf("town"), piece: townPiece });
+  return buildPlaza(budget, {
+    facades: false,
+    floorHalf: 12,
+    plateFar: plateFarOf("town"),
+    piece: townPiece,
+    // 광장 중앙 장식 가로등은 구·빛 무리 없이 정적으로만 서 있고, 켜지는 것은 당번 가로등 8 뿐이다(P21-3·P21-11)
+    decorLamps: "dark",
+    dutyLamps: TOWN_LAMPS.map((l) => [l.pole.x, l.pole.z] as const),
+  });
 }
