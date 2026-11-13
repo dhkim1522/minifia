@@ -4072,9 +4072,9 @@ export function sentFrameChecks(frames, allowed, { once = [] } = {}) {
 
 /**
  * 튜토리얼 출연 사본(17-09): 앱 src/game/tutorialScript.ts 의 TUTORIAL_CAST 와 같아야 한다 — test/unit/e2eContract.test.ts 가 대조한다.
- * me·victim·suspect 는 좌석 번호, errandTarget 은 심부름 장소 id, names 는 가짜 인물 이름 다섯(나 제외 — 누설 검사 낱말).
+ * me·victim·suspect 는 좌석 번호, errandTarget 은 등불 장소 id(21-15: 내 집 가로등 lamp5), names 는 가짜 인물 이름 다섯(나 제외 — 누설 검사 낱말).
  */
-export const TUTORIAL_CAST_E2E = Object.freeze({ me: 5, victim: 2, suspect: 1, errandTarget: "mail", names: Object.freeze(["서연", "도윤", "민준", "지호", "하린"]) });
+export const TUTORIAL_CAST_E2E = Object.freeze({ me: 5, victim: 2, suspect: 1, errandTarget: "lamp5", names: Object.freeze(["서연", "도윤", "민준", "지호", "하린"]) });
 
 // ---- 장면 판정 (17-09 Task 2) ----
 // 모든 판정은 { id, label, ok, detail } 줄(들)을 돌려주고, 값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다. 메시지에는 키·개수·사각형만 싣는다(T-17-21).
@@ -4082,8 +4082,8 @@ export const TUTORIAL_CAST_E2E = Object.freeze({ me: 5, victim: 2, suspect: 1, e
 /** 오프닝 자동 넘김(ms)과 허용 오차 — 앱 장면 표 장면 1 advance.afterMs 사본(e2eContract 가 대조). 실제 브라우저의 시간 판정은 여유를 둔다 */
 export const TUTORIAL_OPENING_MS = 4600;
 export const TUTORIAL_OPENING_TOL_MS = 1000;
-/** [처리] 를 누른 뒤 다음 장면까지(ms)와 허용 오차 — 앱 장면 표 장면 3 advance.afterMs 사본 */
-export const TUTORIAL_ERRAND_MS = 700;
+/** [켜기] 를 누른 뒤 다음 장면까지(ms)와 허용 오차 — 앱 장면 표 장면 3 advance.afterMs 사본(21-15: 켜진 빛과 창이 보일 만큼 1.6초) */
+export const TUTORIAL_ERRAND_MS = 1600;
 export const TUTORIAL_ERRAND_TOL_MS = 500;
 /** 포커스 상자 여백(대상 둘레 8)과 화면 가장자리 안쪽 거리(8)·허용 오차 2 — 앱 FocusRing 의 PAD */
 export const TUTORIAL_FOCUS_PAD = 8;
@@ -4184,18 +4184,18 @@ export function tutorialLeakChecks({ dom, frames, roleInTutorial } = {}) {
 }
 
 /**
- * 장면 6 정체 공개(TUT-03): reveal = { card, stamp, line }, next = [다음]. TR1 모두 화면 안 · TR2 카드·줄·[다음]·도장이 서로 교차 0(도장은 카드 위에 놓이므로 카드와는 비교하지 않는다).
+ * 장면 6 처형 결과(TUT-03, 21-15: 정체 카드는 뒤집지 않는다 — D-20): reveal = { card, lock, roleText }, next = [다음].
+ * TR1 카드·잠금·[다음] 이 화면 안 · TR2 카드와 [다음] 교차 0(잠금은 카드 위에 놓이므로 카드와는 비교하지 않는다) · TR3 카드 글에 정체(마피아)·정답 도장·찾아냈다는 글이 없다(roleText = 그런 글이 있는가).
  */
 export function tutorialRevealChecks({ reveal, next, viewport } = {}) {
-  const L = { TR1: "정체 공개의 카드·도장·줄·[다음] 이 화면 안", TR2: "카드·줄·[다음]·도장이 서로 교차 0(도장은 카드 위)" };
-  const ok = !!reveal && isRectLike(reveal.card) && isRectLike(reveal.stamp) && isRectLike(reveal.line) && isRectLike(next) && isViewport(viewport);
-  if (!ok) return [noMeasure("TR1", L.TR1, "정체 공개 사각형"), noMeasure("TR2", L.TR2, "정체 공개 사각형")];
+  const L = { TR1: "처형 결과의 카드·잠금·[다음] 이 화면 안", TR2: "카드와 [다음] 교차 0(잠금은 카드 위)", TR3: "처형 결과 카드에 정체·정답 글이 없다(D-20)" };
+  const ok = !!reveal && isRectLike(reveal.card) && isRectLike(reveal.lock) && isRectLike(next) && isViewport(viewport) && typeof reveal.roleText === "boolean";
+  if (!ok) return Object.keys(L).map((id) => noMeasure(id, L[id], "처형 결과 사각형·글"));
   const screen = { left: 0, top: 0, width: viewport.w, height: viewport.h };
-  const parts = { 카드: reveal.card, 도장: reveal.stamp, 줄: reveal.line, "[다음]": next };
+  const parts = { 카드: reveal.card, 잠금: reveal.lock, "[다음]": next };
   const out = Object.entries(parts).filter(([, r]) => !rectInside(r, screen)).map(([n, r]) => `${n} ${rectText(r)} 가 ${viewport.w}x${viewport.h} 밖`);
-  const bad = [];
-  for (const [a, b] of [["카드", "줄"], ["카드", "[다음]"], ["줄", "[다음]"], ["도장", "줄"], ["도장", "[다음]"]]) if (rectsOverlap(parts[a], parts[b])) bad.push(`${a} ${rectText(parts[a])} 와 ${b} ${rectText(parts[b])} 겹침`);
-  return [result("TR1", L.TR1, out), result("TR2", L.TR2, bad)];
+  const bad = rectsOverlap(reveal.card, next) ? [`카드 ${rectText(reveal.card)} 와 [다음] ${rectText(next)} 겹침`] : [];
+  return [result("TR1", L.TR1, out), result("TR2", L.TR2, bad), result("TR3", L.TR3, reveal.roleText ? ["정체·정답 글이 보임"] : [])];
 }
 
 /**
@@ -4237,14 +4237,14 @@ export function tutorialOpeningChecks(opening, { reduced = false } = {}) {
 }
 
 /**
- * 장면 시각(TUT-03): openingMs = 오프닝 연출 시작 → 장면 2, errandMs = [처리] 누름 → 장면 4(ms). 주어진 키만 판정한다(키가 있고 값이 없으면 측정값 없음).
- * TM1 4.6초 ± 1.0초 · TM2 0.7초 ± 0.5초(실제 브라우저의 시간 판정은 여유를 둔다).
+ * 장면 시각(TUT-03): openingMs = 오프닝 연출 시작 → 장면 2, errandMs = [켜기] 누름 → 장면 4(ms). 주어진 키만 판정한다(키가 있고 값이 없으면 측정값 없음).
+ * TM1 4.6초 ± 1.0초 · TM2 1.6초 ± 0.5초(실제 브라우저의 시간 판정은 여유를 둔다).
  */
 export function tutorialTimingChecks(t) {
   const out = [];
   const one = (id, label, got, want, tol) => out.push(isNum(got) ? result(id, label, Math.abs(got - want) <= tol ? [] : [`${Math.round(got)}ms (기대 ${want}±${tol})`]) : noMeasure(id, label, "장면 전환 시각"));
   if (t && "openingMs" in t) one("TM1", `오프닝 약 ${TUTORIAL_OPENING_MS / 1000}초 뒤 자동으로 장면 2`, t.openingMs, TUTORIAL_OPENING_MS, TUTORIAL_OPENING_TOL_MS);
-  if (t && "errandMs" in t) one("TM2", `[처리] ${TUTORIAL_ERRAND_MS / 1000}초 뒤 장면 4`, t.errandMs, TUTORIAL_ERRAND_MS, TUTORIAL_ERRAND_TOL_MS);
+  if (t && "errandMs" in t) one("TM2", `[켜기] ${TUTORIAL_ERRAND_MS / 1000}초 뒤 장면 4`, t.errandMs, TUTORIAL_ERRAND_MS, TUTORIAL_ERRAND_TOL_MS);
   return out;
 }
 
@@ -4269,56 +4269,81 @@ export function tutorialSkipChecks({ skip, viewport } = {}) {
   return [result("TK1", L.TK1, small ? [`누르는 영역 ${rd(skip.hit.width)}x${rd(skip.hit.height)}`] : []), result("TK2", L.TK2, rectInside(skip.rect, screen) ? [] : [`${rectText(skip.rect)} 가 ${viewport.w}x${viewport.h} 밖`])];
 }
 
+/** 장면 4 에서 누른 뒤 보이는 한 줄(UI-SPEC 닫힌 표) — 앱 SceneDock 밤 변형 안내와 같다 */
+export const TUTORIAL_HOUSE_PICKED_LINE = "고른 집은 바꿀 수 있어요";
+/** 장면 4 집 판 수(출연 좌석 6 — 밤에는 모두 살아 있다) */
+export const TUTORIAL_HOUSE_COUNT = 6;
+
 /**
- * 증거 층(TUT-03): ev = { eye, recordRows, traceCard, links, formula }. 장면 4 = EV1 눈 표시 1개 · EV2 기록 카드 한 줄, 장면 5 = EV3 증거 카드 · EV4 연결 선 2개 · EV5 수식 줄이 [다음] 과 교차 0.
+ * 장면 4 집 판(21-15, D-28): h = { plates: [{ seat, rect, pressed }], guide }, opts.picked = 집을 누른 뒤인가.
+ * HS1 집 판 6개·좌석 0~5 한 채씩 · HS2 모두 화면 안 · HS3 누르기 전에는 눌린 집 0·안내가 한 줄 문장이 아니다 / 누른 뒤에는 눌린 집 정확히 1·안내가 '고른 집은 바꿀 수 있어요'.
+ * 정체·역할은 읽지 않는다 — 좌석 번호와 눌림만이다(T-17-21).
  */
-export function tutorialEvidenceChecks(ev, { scene, next } = {}) {
-  const none = (id, label) => noMeasure(id, label, "증거 층 읽기");
-  if (scene === 4) {
-    const L = { EV1: "목격 눈 표시 1개", EV2: "목격 기록 카드 한 줄" };
-    if (!ev || !isNum(ev.eye) || !isNum(ev.recordRows)) return [none("EV1", L.EV1), none("EV2", L.EV2)];
-    return [result("EV1", L.EV1, ev.eye === 1 ? [] : [`눈 표시 ${ev.eye}개`]), result("EV2", L.EV2, ev.recordRows === 1 ? [] : [`기록 ${ev.recordRows}줄`])];
-  }
-  if (scene === 5) {
-    const L = { EV3: "증거 카드", EV4: "연결 선 2개", EV5: "수식 줄이 [다음] 과 교차 0" };
-    if (!ev || !isNum(ev.links)) return [none("EV3", L.EV3), none("EV4", L.EV4), none("EV5", L.EV5)];
-    return [
-      ev.traceCard === null ? result("EV3", L.EV3, ["증거 카드 없음"]) : isRectLike(ev.traceCard) ? result("EV3", L.EV3, []) : none("EV3", L.EV3),
-      result("EV4", L.EV4, ev.links === 2 ? [] : [`선 ${ev.links}개`]),
-      isRectLike(ev.formula) && isRectLike(next) ? result("EV5", L.EV5, rectsOverlap(ev.formula, next) ? [`수식 ${rectText(ev.formula)} 가 [다음] ${rectText(next)} 와 겹침`] : []) : none("EV5", L.EV5),
-    ];
-  }
-  throw new Error(`tutorialEvidenceChecks: 장면 ${scene} 은 증거 층이 없다`);
+export function tutorialHouseChecks(h, { picked = false, viewport } = {}) {
+  const L = { HS1: `집 판 ${TUTORIAL_HOUSE_COUNT}개(좌석 0~${TUTORIAL_HOUSE_COUNT - 1} 한 채씩)`, HS2: "집 판이 모두 화면 안", HS3: picked ? "집을 누르면 그 집 하나만 눌림 + '고른 집은 바꿀 수 있어요'" : "누르기 전에는 눌린 집 0개" };
+  const ok = !!h && Array.isArray(h.plates) && h.plates.every((p) => p && isNum(p.seat) && isRectLike(p.rect) && typeof p.pressed === "boolean") && typeof h.guide === "string" && isViewport(viewport);
+  if (!ok) return Object.keys(L).map((id) => noMeasure(id, L[id], "집 판 읽기"));
+  const seats = h.plates.map((p) => p.seat).sort((a, b) => a - b);
+  const want = Array.from({ length: TUTORIAL_HOUSE_COUNT }, (_, i) => i);
+  const hs1 = result("HS1", L.HS1, seats.length === want.length && seats.every((x, i) => x === want[i]) ? [] : [`집 판 [${seats.join(",")}]`]);
+  const screen = { left: 0, top: 0, width: viewport.w, height: viewport.h };
+  const hs2 = result("HS2", L.HS2, h.plates.filter((p) => !rectInside(p.rect, screen)).map((p) => `좌석 ${p.seat} ${rectText(p.rect)} 가 ${viewport.w}x${viewport.h} 밖`));
+  const pressed = h.plates.filter((p) => p.pressed).length;
+  const bad3 = picked ? [...(pressed === 1 ? [] : [`눌린 집 ${pressed}개`]), ...(h.guide === TUTORIAL_HOUSE_PICKED_LINE ? [] : [`안내 "${h.guide}"`])] : [...(pressed === 0 ? [] : [`눌린 집 ${pressed}개`]), ...(h.guide === TUTORIAL_HOUSE_PICKED_LINE ? ["누르기 전인데 고른 뒤 안내가 보임"] : [])];
+  return [hs1, hs2, result("HS3", L.HS3, bad3)];
 }
 
-/** 장면 5 선·도윤 이름표가 들어와야 하는 화면 안쪽 여백(px, UI-SPEC 장면 5 계약 — 앱 clampPoint 의 inset 8 과 같다) */
-export const TUTORIAL_LINE_INSET = 8;
+/** 의심 보드에서 같은 옷 표시가 켜져야 하는 좌석(도윤)과 받는 옷 조각 칩 글(앱 TRACE_TEXT.redCloth) — e2eContract 가 대조 */
+export const TUTORIAL_CLOTH_TEXT = "붉은 천 조각";
 
 /**
- * 장면 5 선·도윤 이름표(18-08, UI-SPEC 장면 5 계약 1·2·3): ev = { lines: [{ from: [x, y], to: [x, y] }] ×2, suspectTag, traceCard, formula }, band = { rect }, next = [다음] 사각형.
- * EV6 선 두 개의 시작·끝이 [8, w−8]×[8, h−8] 안 · EV7 도윤 이름표 사각형이 같은 안쪽 상자 안 · EV8 이름표가 증거 카드·사회자 띠·수식 줄·[다음] 과 교차 0.
- * 선이 2개가 아니거나 이름표 사각형·화면 크기를 못 읽으면 세 줄 모두 측정 못 함이다. detail 에는 숫자·사각형만 싣는다(닉네임·역할 없음).
+ * 장면 5 현장·의심 보드(21-15, D-28): c = { spot, act, cards, board, faces }, opts.stage = "spot"(살피기 전) | "card"(살핀 뒤 카드만) | "board"(보드가 열린 뒤), viewport.
+ * spot = { state, rect }(지점 ②) · act = { rect, disabled }([살펴보기]) · cards = 카드 칩 종류 배열(독 위 줄) · board = 보드 사각형 또는 null · faces = [{ seat, mark }]·boardChips = 보드 칩 종류 배열.
+ * CS1(spot) 지점 ② 가 안 살핀 상태로 화면 안에 있고 [살펴보기] 가 켜져 있다 · CS2(card) 지점 ② 가 살핌(done)이고 카드 칩이 옷 조각 하나·글이 TUTORIAL_CLOTH_TEXT ·
+ * CS3(board) 보드가 화면 안 · CS4(board) 얼굴 칸이 산 사람 다섯(좌석 0·1·3·4·5)이고 같은 옷 표시는 도윤(suspect) 한 칸에만 cloth · CS5(board) 보드 칩에 옷 조각 하나.
  */
-export function tutorialLineChecks(ev, { viewport, band, next } = {}) {
+export function tutorialClueChecks(c, { stage, viewport } = {}) {
+  const ids = { spot: ["CS1"], card: ["CS2"], board: ["CS3", "CS4", "CS5"] }[stage];
+  if (!ids) throw new Error(`tutorialClueChecks: 알 수 없는 단계 ${stage}`);
   const L = {
-    EV6: `장면 5 선 두 개의 시작·끝이 화면 안쪽 ${TUTORIAL_LINE_INSET} 안`,
-    EV7: `도윤 이름표가 화면 안쪽 ${TUTORIAL_LINE_INSET} 안`,
-    EV8: "도윤 이름표가 증거 카드·사회자 띠·수식 줄·[다음] 과 교차 0",
+    CS1: "현장 지점 ② 가 안 살핀 모양으로 화면 안, [살펴보기] 활성",
+    CS2: `지점 ② 살핌 + 카드 '${TUTORIAL_CLOTH_TEXT}' 하나`,
+    CS3: "의심 보드가 화면 안",
+    CS4: "보드 얼굴 칸 다섯(0·1·3·4·5), 같은 옷 표시는 도윤 한 칸에만 cloth",
+    CS5: "보드 칩에 옷 조각 하나",
   };
-  const isPt = (p) => Array.isArray(p) && p.length === 2 && isNum(p[0]) && isNum(p[1]);
-  const ok = !!ev && Array.isArray(ev.lines) && ev.lines.length === 2 && ev.lines.every((l) => l && isPt(l.from) && isPt(l.to)) && isRectLike(ev.suspectTag) && isViewport(viewport);
-  if (!ok) return Object.keys(L).map((id) => noMeasure(id, L[id], "장면 5 선 좌표·도윤 이름표 사각형"));
-  const inner = { left: TUTORIAL_LINE_INSET, top: TUTORIAL_LINE_INSET, width: viewport.w - 2 * TUTORIAL_LINE_INSET, height: viewport.h - 2 * TUTORIAL_LINE_INSET };
-  const ptOut = (p) => p[0] < inner.left - OVERLAP_EPS || p[0] > inner.left + inner.width + OVERLAP_EPS || p[1] < inner.top - OVERLAP_EPS || p[1] > inner.top + inner.height + OVERLAP_EPS;
-  const bad6 = [];
-  ev.lines.forEach((l, i) => {
-    for (const [name, p] of [["시작", l.from], ["끝", l.to]]) if (ptOut(p)) bad6.push(`선 ${i + 1} ${name} (${rd(p[0])},${rd(p[1])}) 가 ${viewport.w}x${viewport.h} 안쪽 ${TUTORIAL_LINE_INSET} 밖`);
-  });
-  const bad7 = rectInside(ev.suspectTag, inner) ? [] : [`이름표 ${rectText(ev.suspectTag)} 가 ${viewport.w}x${viewport.h} 안쪽 ${TUTORIAL_LINE_INSET} 밖`];
-  const others = [["증거 카드", ev.traceCard], ["사회자 띠", band && band.rect], ["수식 줄", ev.formula], ["[다음]", next]];
-  if (others.some(([, r]) => !isRectLike(r))) return [result("EV6", L.EV6, bad6), result("EV7", L.EV7, bad7), noMeasure("EV8", L.EV8, `${others.filter(([, r]) => !isRectLike(r)).map(([n]) => n).join("·")} 사각형`)];
-  const bad8 = others.filter(([, r]) => rectsOverlap(ev.suspectTag, r)).map(([n, r]) => `이름표 ${rectText(ev.suspectTag)} 가 ${n} ${rectText(r)} 와 겹침`);
-  return [result("EV6", L.EV6, bad6), result("EV7", L.EV7, bad7), result("EV8", L.EV8, bad8)];
+  const none = (id) => noMeasure(id, L[id], "현장·보드 읽기");
+  if (!c || !isViewport(viewport)) return ids.map(none);
+  const screen = { left: 0, top: 0, width: viewport.w, height: viewport.h };
+  if (stage === "spot") {
+    if (!c.spot || !isRectLike(c.spot.rect) || !c.act || !isRectLike(c.act.rect) || typeof c.act.disabled !== "boolean") return ids.map(none);
+    const bad = [...(c.spot.state === "fresh" ? [] : [`지점 ② 상태 ${c.spot.state}`]), ...(rectInside(c.spot.rect, screen) ? [] : [`지점 ② ${rectText(c.spot.rect)} 가 ${viewport.w}x${viewport.h} 밖`]), ...(c.act.disabled ? ["[살펴보기] 가 꺼져 있다"] : [])];
+    return [result("CS1", L.CS1, bad)];
+  }
+  if (stage === "card") {
+    if (!c.spot || typeof c.spot.state !== "string" || !Array.isArray(c.cards)) return ids.map(none);
+    const bad = [...(c.spot.state === "done" ? [] : [`지점 ② 상태 ${c.spot.state}`]), ...(c.cards.length === 1 && c.cards[0].kind === "cloth" && c.cards[0].text === TUTORIAL_CLOTH_TEXT ? [] : [`카드 ${c.cards.length}장 [${c.cards.map((x) => x.kind).join(",")}]`])];
+    return [result("CS2", L.CS2, bad)];
+  }
+  if (!isRectLike(c.board) || !Array.isArray(c.faces) || !Array.isArray(c.boardChips)) return ids.map(none);
+  const seats = c.faces.map((f) => f.seat).sort((a, b) => a - b);
+  const marked = c.faces.filter((f) => f.mark !== null);
+  const bad4 = [...(seats.join(",") === "0,1,3,4,5" ? [] : [`얼굴 칸 [${seats.join(",")}]`]), ...(marked.length === 1 && marked[0].seat === TUTORIAL_CAST_E2E.suspect && marked[0].mark === "cloth" ? [] : [`같은 옷 표시 [${marked.map((f) => `${f.seat}:${f.mark}`).join(",")}]`])];
+  return [
+    result("CS3", L.CS3, rectInside(c.board, screen) ? [] : [`보드 ${rectText(c.board)} 가 ${viewport.w}x${viewport.h} 밖`]),
+    result("CS4", L.CS4, bad4),
+    result("CS5", L.CS5, c.boardChips.length === 1 && c.boardChips[0] === "cloth" ? [] : [`보드 칩 [${c.boardChips.join(",")}]`]),
+  ];
+}
+
+/**
+ * 장면 1~7 외 한 줄 판정 — 장면 2 끝·장면 6 처형 결과에서 사회자 띠가 '정체는 판이 끝나야 알아요' 를 말한다(D-20). 앱 TUTORIAL_LINES["tutorial.secret"] 사본 — e2eContract 가 대조.
+ */
+export const TUTORIAL_SECRET_LINE = "정체는 판이 끝나야 알아요";
+export function tutorialSecretChecks(band, { id = "TS5" } = {}) {
+  const label = `사회자 띠가 '${TUTORIAL_SECRET_LINE}' 를 말한다`;
+  if (!band || typeof band.text !== "string") return [noMeasure(id, label, "사회자 띠 글")];
+  return [result(id, label, band.text === TUTORIAL_SECRET_LINE ? [] : [`띠 글 "${band.text}"`])];
 }
 
 /**
@@ -4380,12 +4405,15 @@ export function tutorialNextChecks(next, { viewport, errandDots, label } = {}) {
   return [result("TN3", L.TN3, bad3), result("TN4", L.TN4, bad4)];
 }
 
-/** 튜토리얼 지도 장면 2~6(18-08, D-06): hidden = { worldPanel, gamePanel, roleBtn, chatInputs } 개수. TH1 아래 패널·[내 역할]·채팅 입력칸이 모두 0 */
-export function tutorialHiddenChecks(hidden) {
-  const L = { TH1: "아래 패널·[내 역할]·채팅 입력칸 0개" };
-  const keys = [["worldPanel", "[data-world-panel]"], ["gamePanel", ".mf-game__panel"], ["roleBtn", "[내 역할] 단추"], ["chatInputs", "채팅 입력칸"]];
+/**
+ * 튜토리얼 지도 장면의 숨김(18-08, D-06 → 21-15): hidden = { worldPanel, gamePanel, roleBtn, chatInputs } 개수, opts.dock = 실제 독(SceneDock) 개수(장면 2·6 은 0, 3~5 는 1).
+ * TH1 아래 패널은 독뿐(worldPanel·gamePanel = dock)이고 [내 역할]·채팅 입력칸은 0
+ */
+export function tutorialHiddenChecks(hidden, { dock = 0 } = {}) {
+  const L = { TH1: dock === 0 ? "아래 패널·[내 역할]·채팅 입력칸 0개" : `아래 패널은 실제 독 ${dock}개뿐, [내 역할]·채팅 입력칸 0개` };
+  const keys = [["worldPanel", "[data-world-panel]", dock], ["gamePanel", ".mf-game__panel", dock], ["roleBtn", "[내 역할] 단추", 0], ["chatInputs", "채팅 입력칸", 0]];
   if (!hidden || keys.some(([k]) => !isNum(hidden[k]))) return [noMeasure("TH1", L.TH1, "숨김 대상 개수")];
-  return [result("TH1", L.TH1, keys.filter(([k]) => hidden[k] !== 0).map(([k, n]) => `${n} ${hidden[k]}개`))];
+  return [result("TH1", L.TH1, keys.filter(([k, , want]) => hidden[k] !== want).map(([k, n, want]) => `${n} ${hidden[k]}개(기대 ${want})`))];
 }
 
 /** 장면 7 직업 카드 한 줄 글(18-08, D-08): roles = 카드 순서대로 한 줄 글 배열. TC5 TUTORIAL_ROLE_LINES_E2E 와 글자 그대로 같다 */

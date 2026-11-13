@@ -2596,16 +2596,13 @@ export async function openSoloPage(browser, { origin, size, dpr = 1, reducedMoti
   }
 }
 
-/** 튜토리얼 읽기가 쓰는 출연 좌석·심부름 장소·도윤 상자 아래 늘림 — 앱 TUTORIAL_CAST·TutorialScreen SUSPECT_BODY_PX 사본(lib.TUTORIAL_CAST_E2E 를 e2eContract 가 대조) */
-const SUSPECT_EXTEND_DOWN = 90;
-
 /**
  * 첫 사건 화면·첫 화면 진입·기다림 화면의 사각형과 표식을 한 번에 읽는다. 모든 사각형은 { left, top, width, height, right, bottom } 이고 없으면 null.
  * 읽지 않는 것: 닉네임·토큰·view 값. 읽는 글: 사회자 띠 한 줄(고정 대본)·기다림 숫자(n/N).
  */
 export async function readTutorial(page) {
   return page.evaluate(
-    ({ me, victim, suspect, errandTarget, extendDown }) => {
+    ({ me, victim, suspect, errandTarget }) => {
       const toRect = (r) => ({ left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom });
       const shown = (el) => {
         const r = el.getBoundingClientRect();
@@ -2616,18 +2613,8 @@ export async function readTutorial(page) {
       const rectOf = (el) => (el && shown(el) ? toRect(el.getBoundingClientRect()) : null);
       const q = (sel, root = document) => root.querySelector(sel);
       const qa = (sel, root = document) => [...root.querySelectorAll(sel)];
-      const unionOf = (rects) => {
-        const rs = rects.filter(Boolean);
-        if (rs.length === 0) return null;
-        const left = Math.min(...rs.map((r) => r.left));
-        const top = Math.min(...rs.map((r) => r.top));
-        const rightE = Math.max(...rs.map((r) => r.right));
-        const bottomE = Math.max(...rs.map((r) => r.bottom));
-        return { left, top, width: rightE - left, height: bottomE - top, right: rightE, bottom: bottomE };
-      };
       const root = q("[data-tutorial-screen]");
       const scope = root ?? document;
-      const tagOf = (seat) => q(`.mf-world__tag[data-seat="${seat}"]`, scope);
 
       const hostEl = root ? q("[data-tutorial-host]", root) : null;
       const bandEl = hostEl ? q(".mv-host__band", hostEl) : null;
@@ -2663,10 +2650,22 @@ export async function readTutorial(page) {
       const targets = [];
       const bandTarget = hostEl ? rectOf(q(".mv-host__band", hostEl)) : null;
       if (bandTarget) targets.push({ key: "band", rect: bandTarget });
-      const errandRect = unionOf([rectOf(q(`button[data-errand-place="${errandTarget}"]`, scope)), rectOf(q("[data-errand-act]", scope))]);
-      if (errandRect) targets.push({ key: "errand", rect: errandRect });
-      const sus = rectOf(tagOf(suspect));
-      if (sus) targets.push({ key: "suspect", rect: { ...sus, height: sus.height + extendDown, bottom: sus.bottom + extendDown } });
+      // 장면 3: 등불 타일과 독 [켜기] 는 따로 떨어져 있어 상자가 둘이다(21-15)
+      const lampTile = rectOf(q(`button[data-errand-place="${errandTarget}"]`, scope));
+      if (lampTile) targets.push({ key: "errand-tile", rect: lampTile });
+      const lampAct = rectOf(q("[data-errand-act]", scope));
+      if (lampAct) targets.push({ key: "errand-act", rect: lampAct });
+      // 장면 4: 집 판 여섯 곳, 장면 5: 현장 지점 ② + 독 [살펴보기](살피기 전) · 의심 보드의 도윤 칸(보드가 열린 뒤)
+      for (const el of qa("button[data-house-pick]", scope)) {
+        const r = rectOf(el);
+        if (r) targets.push({ key: `house-${el.getAttribute("data-house-pick")}`, rect: r });
+      }
+      const spotTwo = rectOf(q('button[data-clue-spot="2"]', scope));
+      if (spotTwo) targets.push({ key: "inspect-spot", rect: spotTwo });
+      const sceneAct = rectOf(q("[data-scene-act]", scope));
+      if (sceneAct) targets.push({ key: "inspect-act", rect: sceneAct });
+      const susFace = rectOf(q(`[data-board-face="${suspect}"]`, scope));
+      if (susFace) targets.push({ key: "suspect", rect: susFace });
       for (const el of qa(".mf-world__tag[data-seat]", scope)) {
         const seat = Number(el.getAttribute("data-seat"));
         if (seat === me || seat === victim) continue;
@@ -2684,7 +2683,9 @@ export async function readTutorial(page) {
       const dots = root ? qa("[data-tutorial-progress] .tut-dot", root) : [];
       const nowIdx = dots.findIndex((d) => d.getAttribute("data-state") === "now");
       const darkEl = q("[data-opening-dark]");
-      const recordCard = root ? q(".mf-game__record [data-record-card]", root) : null;
+      const boardEl = root ? q("[data-suspect-board]", root) : null;
+      const actEl = root ? q("[data-scene-dock] [data-scene-act]", root) : null;
+      const spotEl = root ? q('button[data-clue-spot="2"]', root) : null;
       return {
         vw: window.innerWidth,
         vh: window.innerHeight,
@@ -2726,18 +2727,20 @@ export async function readTutorial(page) {
           rings: qa("[data-opening-ring]").length,
           still: darkEl ? darkEl.classList.contains("is-still") : null,
         },
-        evidence: {
-          eye: qa("[data-tutorial-eye]").length,
-          recordRows: recordCard ? Number(recordCard.getAttribute("data-record-rows")) : 0,
-          traceCard: root ? rectOf(q("[data-trace-card]", root)) : null,
-          links: qa("path.tut-links__path").length,
-          lines: qa("path.tut-links__path").map((p) => ({ from: (p.dataset.from ?? "").split(",").map(Number), to: (p.dataset.to ?? "").split(",").map(Number) })),
-          suspectTag: rectOf(tagOf(suspect)),
-          formula: rectOf(q("[data-tutorial-formula]")),
+        // 장면 4 집 판(눌림·안내 줄)·장면 5 현장·보드(21-15). 읽는 것은 좌석 번호·눌림·표식 종류·고정 대본 글뿐이다
+        house: {
+          plates: qa("button[data-house-pick]", scope).map((el) => ({ seat: Number(el.getAttribute("data-house-pick")), rect: rectOf(el), pressed: el.getAttribute("aria-pressed") === "true" })),
+          guide: (q("[data-dock-guide]", scope)?.textContent ?? "").replace(/\s+/g, " ").trim(),
         },
-        reveal: reveal
-          ? { card: rectOf(q(".tut-reveal__card", reveal)), stamp: rectOf(q(".tut-reveal__stamp", reveal)), line: rectOf(q(".tut-reveal__line", reveal)) }
-          : null,
+        clue: {
+          spot: spotEl ? { state: spotEl.getAttribute("data-state"), rect: rectOf(spotEl) } : null,
+          act: actEl ? { rect: rectOf(actEl), disabled: actEl.getAttribute("aria-disabled") === "true" } : null,
+          cards: qa("[data-clue-row] [data-clue-chip]", scope).map((el) => ({ kind: el.getAttribute("data-clue-chip"), text: (el.textContent ?? "").replace(/\s+/g, " ").trim() })),
+          board: boardEl ? rectOf(boardEl) : null,
+          boardChips: boardEl ? qa("[data-clue-chip]", boardEl).map((el) => el.getAttribute("data-clue-chip")) : [],
+          faces: boardEl ? qa("[data-board-face]", boardEl).map((el) => ({ seat: Number(el.getAttribute("data-board-face")), mark: el.getAttribute("data-board-mark") })) : [],
+        },
+        reveal: reveal ? { card: rectOf(q(".tut-reveal__card", reveal)), lock: rectOf(q(".tut-reveal__lock", reveal)), roleText: /마피아|정답|찾아냈/.test(reveal.textContent ?? "") } : null,
         roles: qa("[data-tutorial-role-card]").map((el) => ({ kind: el.getAttribute("data-tutorial-role-card"), rect: rectOf(el) })),
         entry: { cards: entryCard.length, buttons: entryBtn.length, ends: endEl ? 1 : 0, rect: rectOf(entryEl) ?? rectOf(endEl) },
         end: endEl ? { rect: rectOf(endEl), replay: rectOf(q("[data-tutorial-replay]", endEl)) } : null,
@@ -2754,7 +2757,7 @@ export async function readTutorial(page) {
           : null,
       };
     },
-    { me: 5, victim: 2, suspect: 1, errandTarget: "mail", extendDown: SUSPECT_EXTEND_DOWN },
+    { me: 5, victim: 2, suspect: 1, errandTarget: "lamp5" },
   );
 }
 

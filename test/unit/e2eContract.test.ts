@@ -59,6 +59,7 @@ import type { OutfitId, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { HOST_HIDDEN_PHASES, HOST_LINES, type HostKey } from "../../src/game/hostLine";
 import { OPENING_LAMPS, TUTORIAL_CAST, TUTORIAL_DOT_COUNT, TUTORIAL_LINES, TUTORIAL_SCENES, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
+import { TRACE_TEXT } from "../../src/game/traceText";
 import { ROLE_TEXT } from "../../src/game/roleText";
 import { RESULT_TEXT } from "../../src/game/verdict";
 import { JOB_OUTFIT } from "../../src/world/jobOutfit";
@@ -1001,6 +1002,10 @@ describe("E2E 의 튜토리얼 사본 상수와 앱 대본 (17-09)", () => {
     TUTORIAL_OPENING_MS: number;
     TUTORIAL_ERRAND_MS: number;
     TUTORIAL_CAST_E2E: { me: number; victim: number; suspect: number; errandTarget: string; names: readonly string[] };
+    TUTORIAL_SECRET_LINE: string;
+    TUTORIAL_HOUSE_PICKED_LINE: string;
+    TUTORIAL_HOUSE_COUNT: number;
+    TUTORIAL_CLOTH_TEXT: string;
   };
 
   it("TUTORIAL_DOT_COUNT·OPENING_LAMPS·WRONG_HINT_AFTER 가 앱 상수와 같다", () => {
@@ -1009,14 +1014,14 @@ describe("E2E 의 튜토리얼 사본 상수와 앱 대본 (17-09)", () => {
     expect(lib.WRONG_HINT_AFTER).toBe(WRONG_HINT_AFTER);
   });
 
-  it("오프닝 자동 넘김(4600ms)과 [처리] 뒤 지연(700ms)이 장면 표의 시각과 같다", () => {
+  it("오프닝 자동 넘김(4600ms)과 [켜기] 뒤 지연(1600ms)이 장면 표의 시각과 같다", () => {
     const opening = TUTORIAL_SCENES.find((s) => s.n === 1)?.advance;
     const errand = TUTORIAL_SCENES.find((s) => s.n === 3)?.advance;
     expect(opening).toEqual({ kind: "auto", afterMs: lib.TUTORIAL_OPENING_MS });
     expect(errand).toEqual({ kind: "act", afterMs: lib.TUTORIAL_ERRAND_MS });
   });
 
-  it("출연 사본(내 좌석·탈락자·도윤·심부름 장소·가짜 이름 다섯)이 TUTORIAL_CAST 와 같다", () => {
+  it("출연 사본(내 좌석·탈락자·도윤·등불 장소·가짜 이름 다섯)이 TUTORIAL_CAST 와 같다", () => {
     expect(lib.TUTORIAL_CAST_E2E.me).toBe(TUTORIAL_CAST.me);
     expect(lib.TUTORIAL_CAST_E2E.victim).toBe(TUTORIAL_CAST.victim);
     expect(lib.TUTORIAL_CAST_E2E.suspect).toBe(TUTORIAL_CAST.suspect);
@@ -1025,9 +1030,17 @@ describe("E2E 의 튜토리얼 사본 상수와 앱 대본 (17-09)", () => {
     expect([...lib.TUTORIAL_CAST_E2E.names].sort()).toEqual([...castNames].sort());
   });
 
-  it("browser.mjs 의 readTutorial 이 쓰는 출연 좌석 상수(5·2·1·mail)가 TUTORIAL_CAST 와 같다", () => {
+  it("browser.mjs 의 readTutorial 이 쓰는 출연 좌석 상수(5·2·1·lamp5)가 TUTORIAL_CAST 와 같다", () => {
     const text = readFileSync(new URL("../../scripts/e2e/browser.mjs", import.meta.url), "utf8");
-    expect(text).toContain(`{ me: ${TUTORIAL_CAST.me}, victim: ${TUTORIAL_CAST.victim}, suspect: ${TUTORIAL_CAST.suspect}, errandTarget: "${TUTORIAL_CAST.errand.target}", extendDown: SUSPECT_EXTEND_DOWN }`);
+    expect(text).toContain(`{ me: ${TUTORIAL_CAST.me}, victim: ${TUTORIAL_CAST.victim}, suspect: ${TUTORIAL_CAST.suspect}, errandTarget: "${TUTORIAL_CAST.errand.target}" }`);
+  });
+
+  it("21-15: 정체 비공개 자막·집 판 수·안내 줄·옷 조각 글 사본이 앱과 같다", () => {
+    expect(lib.TUTORIAL_SECRET_LINE).toBe(TUTORIAL_LINES["tutorial.secret"]);
+    expect(lib.TUTORIAL_HOUSE_COUNT).toBe(TUTORIAL_CAST.seats.length);
+    expect(lib.TUTORIAL_CLOTH_TEXT).toBe(TRACE_TEXT[TUTORIAL_CAST.trace]);
+    const dock = readFileSync(new URL("../../src/components/v2/SceneDock.tsx", import.meta.url), "utf8");
+    expect(dock).toContain(`<span>${lib.TUTORIAL_HOUSE_PICKED_LINE}</span>`);
   });
 
   it("TUTORIAL_ROLE_LINES_E2E 가 ROLE_TEXT 의 시민·마피아·의사·경찰 desc 와 같다 (18-08)", () => {

@@ -2,30 +2,33 @@
 // 이름 앞머리 tutorial — 다른 흐름 id 와 부분 일치가 겹치지 않는다(`--only tutorial` 하나로 둘 다 돈다). 흐름은 화면을 읽기만 하고 판정은 lib.mjs 의 순수 함수에 맡긴다:
 // 판정 문턱은 여기서 낮추지 않는다(T-17-21 — 결과 줄에는 크기·장면 번호·판정 id·사각형만, 닉네임·토큰·view 값은 싣지 않는다).
 // 앱에는 E2E 전용 단축(URL 장면 번호 등)이 없다 — 실제 사용자 경로(클릭)로만 간다. 150초 시간 초과 경로는 기다리지 않는다(워커 시험 17-12 가 맡는다, 0080-19).
-// 실제 브라우저의 시간 판정은 여유를 둔다: 오프닝 자동 넘김 4.6초 ± 1.0초, [처리] 뒤 0.7초 ± 0.5초(lib.tutorialTimingChecks).
+// 실제 브라우저의 시간 판정은 여유를 둔다: 오프닝 자동 넘김 4.6초 ± 1.0초, [켜기] 뒤 1.6초 ± 0.5초(lib.tutorialTimingChecks).
+// 21-15: 장면 3~5 는 새 하루 흐름(저녁 등불 → 밤 집 찾기 → 아침 현장 → 의심 보드)이고 장면 2 끝·장면 6 처형 결과에서 사회자 띠가 '정체는 판이 끝나야 알아요' 를 말한다.
 // helpers 는 flows.mjs 가 넘긴다(errand.mjs·host.mjs 와 같은 모양 — 서로 import 하지 않는다): { recorder, attempt, startHost, openGuest }
 // together 는 방장·손님 두 페이지(+ 서버 봇 둘)로: 스위치 → 시작 → 두 페이지 첫 사건 → 방장 건너뛰기 → 기다림 n/N → 손님 재접속 → 손님이 끝냄 → 역할 확인, 보낸 프레임은 tutorialDone 한 번뿐.
 import { SetupError, backToLobby, closeSheet, collectSnapshot, fpsStart, fpsStop, openSoloPage, openTestSheet, readHeaderContrast, readHostRail, readTutorial, readTutorialStable, setBots, settle, sleep, startGame, watchSockets } from "./browser.mjs";
 import {
   TUTORIAL_CAST_E2E,
+  TUTORIAL_SECRET_LINE,
   WRONG_HINT_AFTER,
   genericIssues,
   headerContrastChecks,
   sentFrameChecks,
   tutorialBandChecks,
   tutorialDimChecks,
+  tutorialClueChecks,
   tutorialDotChecks,
   tutorialEntryChecks,
-  tutorialEvidenceChecks,
   tutorialFocusChecks,
   tutorialHiddenChecks,
+  tutorialHouseChecks,
   tutorialLeakChecks,
-  tutorialLineChecks,
   tutorialNextChecks,
   tutorialOpeningChecks,
   tutorialRevealChecks,
   tutorialRoleCardChecks,
   tutorialRoleLineChecks,
+  tutorialSecretChecks,
   tutorialSkipChecks,
   hostRailChecks,
   railMapsOn,
@@ -46,6 +49,9 @@ const recAll = (rec, sc, lines, { relax = [], note = "" } = {}) => {
 const KNOWN_LIMIT_MAX_H = 640;
 /** 장면 6 오답 문구(src/game/tutorialScript.ts 의 tutorial.vote.wrong — e2eContract 가 대조) */
 export const TUTORIAL_WRONG_LINE = "흔적을 떠올려 보세요";
+/** 장면 4 에서 누르는 집(좌석 3 — 아무 집이나 된다) */
+const HOUSE_SEAT = 3;
+const HOUSE_SEATS = [0, 1, 2, 3, 4, 5];
 /** 장면 6 이름표(좌석): 민준 0·지호 3 이 오답, 도윤 1 이 정답 */
 const WRONG_SEATS = [0, 3];
 const RIGHT_SEAT = TUTORIAL_CAST_E2E.suspect;
@@ -103,9 +109,9 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
   function nextLines(rec, sc, t) {
     recAll(rec, sc, tutorialNextChecks(t.next, { viewport: vpOf(t), errandDots: t.errandDots, label: t.nextLabel }));
   }
-  /** 장면 2~6 에는 아래 패널·[내 역할]·채팅 입력칸이 없다(D-06) */
-  function hiddenLines(rec, sc, t) {
-    recAll(rec, sc, tutorialHiddenChecks(t.hidden));
+  /** 장면 2~6 에는 [내 역할]·채팅 입력칸이 없고 아래 패널도 없다(D-06) — 장면 3~5 는 실제 독 하나만 있다(dock = 1, 21-15) */
+  function hiddenLines(rec, sc, t, dock = 0) {
+    recAll(rec, sc, tutorialHiddenChecks(t.hidden, { dock }));
   }
 
   /**
@@ -127,9 +133,17 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
     snap.interactive = snap.interactive.filter((e) => !e.desc.startsWith("button.tut-skip"));
     const w = ctx.size.w;
     const tagOut = snap.elements.filter((e) => e.inTag && (e.rect.left < -0.5 || (e.rect.right ?? e.rect.left + e.rect.width) > w + 0.5));
+    // 21-15: 집 판(HousePick, 21-12 승인 40×40)은 판 층 전체가 눌림을 받아 가장 가까운 판 하나(중심 거리 ≤ 28)를 고른다 — 실제 눌림 영역은 56 이상이다.
+    // 요소 크기 기준 G3 는 40 으로 보므로 판정에서 빼고 참고 줄(G3k)로 남긴다(승인된 부품 크기를 튜토리얼에서 바꾸지 않는다).
+    const plates = snap.interactive.filter((e) => e.desc.startsWith("button.mv-house-pick__plate"));
+    snap.interactive = snap.interactive.filter((e) => !plates.includes(e));
     const judged = { ...snap, elements: snap.elements.filter((e) => !tagOut.includes(e)) };
     const bad = genericIssues(judged, ctx.size).filter((x) => !x.ok);
     rec(sc, "G", "G 공통 검사(탭 44·글자 14·가로 넘침·콘솔·요청)", bad.length === 0, bad.map((x) => `${x.id} ${x.detail}`).join(" / "));
+    if (plates.length > 0) {
+      const sz = [...new Set(plates.map((e) => `${Math.round(e.rect.width)}x${Math.round(e.rect.height)}`))].join(", ");
+      rec(sc, "G3k", "알려진 한계(21-12 승인 부품, 판정 아님): 집 판 요소 40×40 — 판 층이 가장 가까운 판을 ≤ 28 안에서 골라 실제 눌림은 더 넓다", true, `집 판 ${plates.length}개 ${sz}`, true);
+    }
     if (tagOut.length > 0) {
       const xs = tagOut.map((e) => `${Math.round(e.rect.left)}~${Math.round(e.rect.right ?? e.rect.left + e.rect.width)}`);
       rec(sc, "G2k", "알려진 한계(E8 #29, 판정 아님): 이름표 안 요소가 화면 가장자리에서 잘림", true, `이름표 안 요소 ${tagOut.length}개 화면 가로(${w}) 밖: ${[...new Set(xs)].slice(0, 4).join(", ")}`, true);
@@ -158,16 +172,6 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       const s = w?.shown(seat) ?? null;
       return { x: s?.x ?? null, z: s?.z ?? null, ring: w ? w.ring() : undefined };
     }, TUTORIAL_CAST_E2E.me);
-
-  /** 도윤의 화면 가로 위치(무대 → 화면 px) — 오른쪽 밖에서 들어오는지 */
-  const readSuspectScreenX = (page) =>
-    page.evaluate((seat) => {
-      const w = window.__mfWorld;
-      const s = w?.shown(seat);
-      if (!w || !s) return null;
-      const p = w.screenOf(s.x, s.z);
-      return p ? { sx: p.sx, vw: window.innerWidth } : null;
-    }, TUTORIAL_CAST_E2E.suspect);
 
   /**
    * tutorial-solo: 방 없이 첫 화면("/", 테스트 방 아님)에서 큰 카드 1개(방 코드 칸·[방 만들기] 와 교차 0) → 장면 1~7 을 끝까지 → 마무리 카드·[다시 보기] → 장면 1 → [건너뛰기] → 첫 화면 작은 단추 → 다시 열면 작은 단추.
@@ -221,22 +225,23 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       measured.openingMs = Math.round(openingMs);
       recAll(rec, sc1, tutorialTimingChecks({ openingMs }));
 
-      // ④ 장면 2: 띠 포커스 1개, 말하는 동안 막대·data-speaking, 2.6초 뒤 [다음]
+      // ④ 장면 2: 띠 포커스 1개, 말하는 동안 막대·data-speaking, 4초에 '정체는 판이 끝나야 알아요' 와 함께 [다음]
       const sc2 = "tutorial-solo/scene2";
       if (wide) await fpsStart(page).catch(() => {});
       await waitSpeaking(page).catch(() => {});
       t = await readTutorialStable(page);
       recAll(rec, sc2, tutorialDotChecks(t.dots, 2));
-      rec(sc2, "TN1", "[다음] 은 2.6초 전에는 없다", t.next === null, "");
+      rec(sc2, "TN1", "[다음] 은 4초 전에는 없다", t.next === null, "");
       focusLines(rec, sc2, t, ["band"]);
       dimOn(rec, sc2, t);
       hiddenLines(rec, sc2, t);
       bandLines(rec, sc2, t, [], { speaking: true });
       const next2 = await tryDo(() => page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS }));
-      rec(sc2, "TN2", "2.6초 뒤 [다음] 이 나타난다", next2.ok, next2.detail);
+      rec(sc2, "TN2", "4초 뒤 [다음] 이 나타난다", next2.ok, next2.detail);
       if (!next2.ok) return;
       await waitSpeaking(page, 1500).catch(() => {});
       t = await readTutorialStable(page);
+      recAll(rec, sc2, tutorialSecretChecks(t.band));
       focusLines(rec, sc2, t, []);
       dimOff(rec, sc2, t);
       nextLines(rec, sc2, t);
@@ -250,17 +255,17 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       await hLine(rec, page, sc2);
       await page.locator("[data-tutorial-next]").click();
 
-      // ⑤ 장면 3: 포커스 한 묶음(우체통 타일 + [처리]), 허용 밖 터치 무반응, [처리] 0.7초 뒤 장면 4
+      // ⑤ 장면 3: 포커스 두 상자(가로등 타일 + 독 [켜기]), 허용 밖 터치 무반응, [켜기] 1.6초 뒤 장면 4
       const sc3 = "tutorial-solo/scene3";
       await waitScene(page, 3);
-      await page.waitForSelector('[data-tutorial-focus="errand"]', { timeout: SCENE_WAIT_MS });
+      await page.waitForSelector('[data-tutorial-focus="errand-act"]', { timeout: SCENE_WAIT_MS });
       await waitSpeaking(page).catch(() => {});
       t = await readTutorialStable(page);
       recAll(rec, sc3, tutorialDotChecks(t.dots, 3));
-      focusLines(rec, sc3, t, ["errand"]);
+      focusLines(rec, sc3, t, ["errand-tile", "errand-act"]);
       dimOn(rec, sc3, t);
-      hiddenLines(rec, sc3, t);
-      bandLines(rec, sc3, t, ["errand"], { speaking: true });
+      hiddenLines(rec, sc3, t, 1);
+      bandLines(rec, sc3, t, ["errand-tile", "errand-act"], { speaking: true });
       await gLine(rec, ctx, solo, sc3);
       await hLine(rec, page, sc3);
       const before = await readMe(page);
@@ -289,64 +294,92 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       const samePos = before.x !== null && after.x !== null && Math.abs(before.x - after.x) < 0.05 && Math.abs(before.z - after.z) < 0.05 && before.ring === after.ring;
       rec(sc3, "TT1", "허용 목록 밖 터치(맵 빈 곳·머리 영역)에 반응이 없다: 장면 3 그대로", stillScene3 && taps.empty !== null && taps.header !== null, `장면 3 ${stillScene3}, 빈 곳 ${taps.empty !== null}, 머리 영역 ${taps.header !== null}`);
       rec(sc3, "TT2", "허용 목록 밖 터치 뒤 내 위치·목적지 링이 그대로다", samePos, `전 ${before.x === null ? "읽지 못함" : `(${before.x.toFixed(2)},${before.z.toFixed(2)})`} 후 ${after.x === null ? "읽지 못함" : `(${after.x.toFixed(2)},${after.z.toFixed(2)})`}`);
-      await page.locator("[data-errand-act]").click();
+      await page.locator("[data-scene-dock] [data-errand-act]").click();
       const pressedAt = performance.now();
+      // 켜면 가로등 타일에 켠 표식(불꽃 배지)이 선다 — 가로등 빛과 창은 3D 캔버스라 DOM 으로는 타일 표식과 진행 점으로 본다
+      const lit = await tryDo(() => page.waitForSelector(`button[data-errand-place="${TUTORIAL_CAST_E2E.errandTarget}"][data-done]`, { timeout: 2000 }));
+      rec(sc3, "LP1", "[켜기] 를 누르면 가로등 타일에 켠 표식이 선다", lit.ok, lit.detail);
       const toScene4 = await tryDo(() => waitScene(page, 4));
       const errandMs = performance.now() - pressedAt;
-      rec(sc3, "TM0", "[처리] 뒤 장면 4 로 넘어간다", toScene4.ok, toScene4.detail);
+      rec(sc3, "TM0", "[켜기] 뒤 장면 4 로 넘어간다", toScene4.ok, toScene4.detail);
       if (!toScene4.ok) return;
       measured.errandMs = Math.round(errandMs);
       recAll(rec, sc3, tutorialTimingChecks({ errandMs }));
 
-      // ⑥ 장면 4: 도윤이 오른쪽 밖에서 들어옴, 눈 표시·기록 한 줄, 도윤 포커스 상자, 3.4초 뒤 [다음]
+      // ⑥ 장면 4: 집 판 여섯(고정 시점), 아무 집이나 누르면 '고른 집은 바꿀 수 있어요', 누른 0.7초 뒤 [다음]
       const sc4 = "tutorial-solo/scene4";
-      const startX = await readSuspectScreenX(page);
-      rec(sc4, "TW1", "도윤이 화면 오른쪽 밖에서 들어온다(처음 화면 x 가 화면 폭 밖)", startX !== null && startX.sx > startX.vw, startX === null ? "측정값 없음(도윤 위치)" : `처음 x ${Math.round(startX.sx)} / 화면 ${startX.vw}`);
-      await page.waitForSelector('[data-tutorial-focus="suspect"]', { timeout: SCENE_WAIT_MS });
-      const endX = await readSuspectScreenX(page);
-      rec(sc4, "TW2", "도윤이 걸어 들어와 화면 안에 선다", endX !== null && endX.sx > 0 && endX.sx < endX.vw, endX === null ? "측정값 없음(도윤 위치)" : `x ${Math.round(endX.sx)} / 화면 ${endX.vw}`);
-      await waitBandText(page, "본 사람은").catch(() => {});
+      await page.waitForFunction(() => document.querySelectorAll("button[data-house-pick]:not([data-house-off])").length === 6, null, { timeout: SCENE_WAIT_MS });
+      await page.waitForSelector('[data-tutorial-focus="house-0"]', { timeout: SCENE_WAIT_MS });
+      await waitBandText(page, "집 하나를").catch(() => {});
       t = await readTutorialStable(page);
       recAll(rec, sc4, tutorialDotChecks(t.dots, 4));
-      focusLines(rec, sc4, t, ["suspect"]);
+      focusLines(rec, sc4, t, HOUSE_SEATS.map((n) => `house-${n}`));
       dimOn(rec, sc4, t);
-      hiddenLines(rec, sc4, t);
-      recAll(rec, sc4, tutorialEvidenceChecks(t.evidence, { scene: 4 }));
-      bandLines(rec, sc4, t, ["suspect"], {});
+      hiddenLines(rec, sc4, t, 1);
+      recAll(rec, sc4, tutorialHouseChecks(t.house, { picked: false, viewport: vpOf(t) }));
+      bandLines(rec, sc4, t, HOUSE_SEATS.map((n) => `house-${n}`), {});
+      await gLine(rec, ctx, solo, sc4);
+      await hLine(rec, page, sc4);
+      rec(sc4, "TN1", "집을 누르기 전에는 [다음] 이 없다", t.next === null, "");
+      await page.locator(`button[data-house-pick="${HOUSE_SEAT}"]`).click();
+      await waitSpeaking(page, 500).catch(() => {});
+      const pickedLine = await tryDo(() => page.waitForFunction(() => (document.querySelector("[data-dock-guide]")?.textContent ?? "").includes("바꿀 수"), null, { timeout: 2000 }));
+      rec(sc4, "HS0", "집을 누르면 안내 줄이 '고른 집은 바꿀 수 있어요' 로 바뀐다", pickedLine.ok, pickedLine.detail);
       const next4 = await tryDo(() => page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS }));
-      rec(sc4, "TN2", "3.4초 뒤 [다음] 이 나타난다", next4.ok, next4.detail);
+      rec(sc4, "TN2", "집을 누른 뒤 [다음] 이 나타난다", next4.ok, next4.detail);
       if (!next4.ok) return;
       t = await readTutorialStable(page);
+      recAll(rec, sc4, tutorialHouseChecks(t.house, { picked: true, viewport: vpOf(t) }));
+      focusLines(rec, sc4, t, []);
       dimOff(rec, sc4, t);
       nextLines(rec, sc4, t);
       bandLines(rec, sc4, t, [], {});
-      await gLine(rec, ctx, solo, sc4);
+      await gLine(rec, ctx, solo, `${sc4}/picked`);
       await page.locator("[data-tutorial-next]").click();
 
-      // ⑦ 장면 5: 증거 카드·선 2·수식 줄, [다음] 은 바로
+      // ⑦ 장면 5: 서연 집 앞 지점 ②, [살펴보기] → 붉은 천 조각 카드 → 의심 보드(도윤 칸 같은 옷 표시) → [다음]
       const sc5 = "tutorial-solo/scene5";
       await waitScene(page, 5);
-      await page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS });
-      await sleep(2300);
+      await page.waitForSelector('button[data-clue-spot="2"]', { timeout: SCENE_WAIT_MS });
+      await page.waitForSelector("[data-scene-dock] [data-scene-act]:not([aria-disabled])", { timeout: SCENE_WAIT_MS });
+      await page.waitForSelector('[data-tutorial-focus="inspect-act"]', { timeout: SCENE_WAIT_MS });
       t = await readTutorialStable(page);
       recAll(rec, sc5, tutorialDotChecks(t.dots, 5));
-      focusLines(rec, sc5, t, []);
-      dimOff(rec, sc5, t);
-      hiddenLines(rec, sc5, t);
-      nextLines(rec, sc5, t);
-      recAll(rec, sc5, tutorialEvidenceChecks(t.evidence, { scene: 5, next: t.next }));
-      recAll(rec, sc5, tutorialLineChecks(t.evidence, { viewport: vpOf(t), band: t.band, next: t.next }), { relax: ctx.size.h <= 560 ? ["EV6", "EV7", "EV8"] : [], note: "360x560 참고 행(UI-SPEC 장면 5)" });
-      {
-        const tag = t.evidence.suspectTag;
-        const pt = (p) => `(${Math.round(p[0])},${Math.round(p[1])})`;
-        rec(sc5, "EVm", "참고 측정(판정 아님): 도윤 이름표 사각형·선 끝 좌표", true, `이름표 ${tag ? `(${Math.round(tag.left)},${Math.round(tag.top)} ${Math.round(tag.width)}x${Math.round(tag.height)})` : "읽지 못함"} · 선 ${t.evidence.lines.map((l) => `${pt(l.from)}→${pt(l.to)}`).join(" / ")}`, true);
-      }
-      bandLines(rec, sc5, t, [], {});
+      focusLines(rec, sc5, t, ["inspect-spot", "inspect-act"]);
+      dimOn(rec, sc5, t);
+      hiddenLines(rec, sc5, t, 1);
+      recAll(rec, sc5, tutorialClueChecks(t.clue, { stage: "spot", viewport: vpOf(t) }));
+      // 장면 5 처음에는 사회자 띠에 말이 없다(자막은 보드가 열릴 때 '단서와 같은 옷을 찾아 보세요') — 띠 판정은 보드가 열린 뒤에 한다
+      rec(sc5, "TN1", "살피기 전에는 [다음] 이 없다", t.next === null, "");
       await gLine(rec, ctx, solo, sc5);
       await hLine(rec, page, sc5);
+      await page.locator("[data-scene-dock] [data-scene-act]").click();
+      const card = await tryDo(() => page.waitForSelector('[data-clue-row] [data-clue-chip="cloth"]', { timeout: 2000 }));
+      rec(sc5, "CS0", "[살펴보기] 를 누르면 옷 조각 카드가 올라온다", card.ok, card.detail);
+      if (!card.ok) return;
+      t = await readTutorialStable(page);
+      recAll(rec, sc5, tutorialClueChecks(t.clue, { stage: "card", viewport: vpOf(t) }));
+      const board = await tryDo(() => page.waitForSelector("[data-suspect-board]", { timeout: SCENE_WAIT_MS }));
+      rec(sc5, "CS6", "카드를 받은 뒤 의심 보드가 열린다", board.ok, board.detail);
+      if (!board.ok) return;
+      await waitBandText(page, "같은 옷").catch(() => {});
+      await page.waitForSelector('[data-tutorial-focus="suspect"]', { timeout: SCENE_WAIT_MS }).catch(() => {});
+      t = await readTutorialStable(page);
+      recAll(rec, sc5, tutorialClueChecks(t.clue, { stage: "board", viewport: vpOf(t) }));
+      focusLines(rec, sc5, t, ["suspect"]);
+      dimOn(rec, sc5, t);
+      bandLines(rec, sc5, t, ["suspect"], {});
+      const next5 = await tryDo(() => page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS }));
+      rec(sc5, "TN2", "보드가 열린 뒤 [다음] 이 나타난다", next5.ok, next5.detail);
+      if (!next5.ok) return;
+      t = await readTutorialStable(page);
+      focusLines(rec, sc5, t, []);
+      dimOff(rec, sc5, t);
+      nextLines(rec, sc5, t);
+      await gLine(rec, ctx, solo, `${sc5}/board`);
       await page.locator("[data-tutorial-next]").click();
 
-      // ⑧ 장면 6: 이름표 넷 포커스, 오답 두 번 → 띠 글·상자 1개, 정답 → 정체 공개 → [다음]
+      // ⑧ 장면 6: 이름표 넷 포커스, 오답 두 번 → 띠 글·상자 1개, 정답 → 처형 결과(정체 카드는 뒤집지 않고 '정체는 판이 끝나야 알아요') → [다음]
       const sc6 = "tutorial-solo/scene6";
       await waitScene(page, 6);
       await page.waitForFunction(() => document.querySelectorAll("[data-tutorial-focus]").length === 4, null, { timeout: SCENE_WAIT_MS });
@@ -377,7 +410,7 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
         await page.waitForSelector("[data-tutorial-reveal]", { timeout: SCENE_WAIT_MS });
         await page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS });
       });
-      rec(sc6, "TV5", "정답 → 정체 공개 → [다음]", reveal.ok, reveal.detail);
+      rec(sc6, "TV5", "정답 → 처형 결과 → [다음]", reveal.ok, reveal.detail);
       if (!reveal.ok) return;
       await sleep(1900);
       t = await readTutorialStable(page);
@@ -385,6 +418,7 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       dimOff(rec, `${sc6}/reveal`, t);
       nextLines(rec, `${sc6}/reveal`, t);
       recAll(rec, sc6, tutorialRevealChecks({ reveal: t.reveal, next: t.next, viewport: vpOf(t) }));
+      recAll(rec, sc6, tutorialSecretChecks(t.band, { id: "TS6" }));
       await gLine(rec, ctx, solo, `${sc6}/reveal`);
       if (wide) {
         const fps = await fpsStop(page).catch(() => null);
@@ -463,7 +497,7 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       await page.locator("[data-tutorial-skip]").click();
       await page.waitForSelector('[data-tutorial-entry="button"]', { timeout: SCENE_WAIT_MS });
 
-      rec("tutorial-solo/time", "TTIME", "참고 측정(판정 아님): 흐름 소요 시간", true, `흐름 ${Math.round((performance.now() - t0) / 1000)}초 · 오프닝→장면 2 ${measured.openingMs}ms · [처리]→장면 4 ${measured.errandMs}ms · 모션 줄이기 오프닝→장면 2 ${measured.reducedOpeningMs}ms`, true);
+      rec("tutorial-solo/time", "TTIME", "참고 측정(판정 아님): 흐름 소요 시간", true, `흐름 ${Math.round((performance.now() - t0) / 1000)}초 · 오프닝→장면 2 ${measured.openingMs}ms · [켜기]→장면 4 ${measured.errandMs}ms · 모션 줄이기 오프닝→장면 2 ${measured.reducedOpeningMs}ms`, true);
     } finally {
       await solo?.context.close().catch(() => {});
     }
@@ -491,6 +525,61 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
     tryDo(async () => {
       await tracker.waitFor((v) => v.phase === phase, ms, `${phase} 도착`);
     });
+
+  /**
+   * 함께 진행의 손님이 첫 사건을 끝까지 직접 한다(21-15, LH10): 장면 1 → 2(끝에 '정체는 판이 끝나야 알아요') → 3 [켜기] → 4 집 누르기 → 5 [살펴보기] → 의심 보드의 도윤 칸 같은 옷 표시 →
+   * 6 도윤 이름표 → 처형 결과(정체 글 없음 + 같은 자막) → 7 [다음]. 장면마다 판정은 핵심 한 줄씩만 남긴다(자세한 치수 판정은 tutorial-solo 가 맡는다).
+   * 마지막 [다음] 이 onEnd(done) 이라 tutorialDone 한 번을 보낸다(건너뛰기와 같은 프레임).
+   */
+  async function guestPlayThrough(rec, sc, page) {
+    const nextBtn = () => page.locator("[data-tutorial-next]");
+    const step = async (id, label, fn) => {
+      const r = await tryDo(fn);
+      rec(sc, id, label, r.ok, r.detail);
+      return r.ok;
+    };
+    if (!(await step("PL1", "장면 2 가 오프닝 뒤 자동으로 열린다", () => waitScene(page, 2)))) return false;
+    if (!(await step("PL2", "장면 2 끝에 사회자 띠가 '정체는 판이 끝나야 알아요' 를 말한다", () => waitBandText(page, TUTORIAL_SECRET_LINE, 6000)))) return false;
+    await page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS });
+    await nextBtn().click();
+    if (!(await step("PL3", "장면 3: 독 [켜기] 로 가로등을 켜면 장면 4", async () => {
+      await waitScene(page, 3);
+      await page.locator("[data-scene-dock] [data-errand-act]").click();
+      await waitScene(page, 4);
+    }))) return false;
+    if (!(await step("PL4", "장면 4: 집 판 여섯 중 하나를 누르면 [다음]", async () => {
+      await page.waitForFunction(() => document.querySelectorAll("button[data-house-pick]:not([data-house-off])").length === 6, null, { timeout: SCENE_WAIT_MS });
+      await page.locator(`button[data-house-pick="${HOUSE_SEAT}"]`).click();
+      await page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS });
+      await nextBtn().click();
+    }))) return false;
+    if (!(await step("PL5", "장면 5: [살펴보기] → 의심 보드의 도윤 칸에만 같은 옷 표시 → [다음]", async () => {
+      await waitScene(page, 5);
+      await page.waitForSelector("[data-scene-dock] [data-scene-act]:not([aria-disabled])", { timeout: SCENE_WAIT_MS });
+      await page.locator("[data-scene-dock] [data-scene-act]").click();
+      await page.waitForSelector("[data-suspect-board]", { timeout: SCENE_WAIT_MS });
+      const marked = await page.evaluate(() => [...document.querySelectorAll("[data-suspect-board] [data-board-face][data-board-mark]")].map((el) => Number(el.getAttribute("data-board-face"))));
+      if (marked.length !== 1 || marked[0] !== TUTORIAL_CAST_E2E.suspect) throw new Error(`같은 옷 표시 좌석 [${marked.join(",")}]`);
+      await page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS });
+      await nextBtn().click();
+    }))) return false;
+    if (!(await step("PL6", "장면 6: 도윤 이름표 → 처형 결과(정체 글 없음)·같은 자막 → [다음]", async () => {
+      await waitScene(page, 6);
+      await page.locator(`[data-pick="${RIGHT_SEAT}"]`).click();
+      await page.waitForSelector("[data-tutorial-reveal]", { timeout: SCENE_WAIT_MS });
+      const roleText = await page.evaluate(() => /마피아|정답|찾아냈/.test(document.querySelector("[data-tutorial-reveal]")?.textContent ?? ""));
+      if (roleText) throw new Error("처형 결과에 정체·정답 글이 보임");
+      await waitBandText(page, TUTORIAL_SECRET_LINE, 3000);
+      await page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS });
+      await nextBtn().click();
+    }))) return false;
+    return step("PL7", "장면 7: 직업 카드 뒤 [다음] 으로 끝낸다(tutorialDone)", async () => {
+      await waitScene(page, 7);
+      await page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS });
+      await sleep(2300);
+      await nextBtn().click();
+    });
+  }
 
   /**
    * tutorial-together(TUT-02·TUT-05, DEPLOY-05): 테스트 방 방장 + 손님 + 서버 봇 둘.
@@ -610,8 +699,9 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       });
       rec(`${sc}/reconnect`, "TR3", "끝낸 방장이 새로 고치면 곧바로 기다림 화면(me.tutorialDone 참)", hostBack.ok && ht.last()?.me?.tutorialDone === true && (await hp.locator("[data-tutorial-screen]").count()) === 0, hostBack.detail);
 
-      // ⑤ 손님이 끝내면 두 페이지 모두 역할 확인(전원 완료)
-      await gp.locator("[data-tutorial-skip]").click();
+      // ⑤ 손님이 첫 사건을 끝까지 직접 하고 끝내면 두 페이지 모두 역할 확인(전원 완료). 장면 3~5·정체 비공개 자막·마무리까지 닿는다(LH10)
+      const played = await guestPlayThrough(rec, `${sc}/play`, gp);
+      if (!played) return;
       const [hRole, gRole] = await Promise.all([reaches(ht, "roleReveal"), reaches(gt, "roleReveal")]);
       rec(`${sc}/done`, "TD1", "손님이 끝내면 방장·손님 모두 역할 확인", hRole.ok && gRole.ok, `${hRole.detail} ${gRole.detail}`.trim());
       if (!hRole.ok || !gRole.ok) return;

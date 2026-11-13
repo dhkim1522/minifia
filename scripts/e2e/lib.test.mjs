@@ -219,11 +219,12 @@ import {
   tutorialDimChecks,
   tutorialDotChecks,
   tutorialEntryChecks,
-  tutorialEvidenceChecks,
+  tutorialClueChecks,
+  tutorialHouseChecks,
+  tutorialSecretChecks,
   tutorialFocusChecks,
   tutorialHiddenChecks,
   tutorialLeakChecks,
-  tutorialLineChecks,
   tutorialNextChecks,
   tutorialOpeningChecks,
   tutorialRevealChecks,
@@ -231,6 +232,9 @@ import {
   tutorialRoleLineChecks,
   tutorialSkipChecks,
   TUTORIAL_ROLE_LINES_E2E,
+  TUTORIAL_HOUSE_PICKED_LINE,
+  TUTORIAL_CLOTH_TEXT,
+  TUTORIAL_SECRET_LINE,
   tutorialTimingChecks,
   errandCardChecks,
   errandCardWalkChecks,
@@ -5154,29 +5158,27 @@ test("tutorialLeakChecks: 화면 DOM 이나 받은 프레임에 가짜 이름이
 });
 
 const tutRevealIn = (over = {}) => ({
-  reveal: { card: RR(123, 170, 144, 280), stamp: RR(150, 300, 90, 40), line: RR(60, 470, 270, 36) },
+  reveal: { card: RR(75, 170, 240, 280), lock: RR(210, 290, 44, 44), roleText: false },
   next: RR(314, 760, 56, 56),
   viewport: TV,
   ...over,
 });
 const tutTrFails = (a) => tutorialRevealChecks(a).filter((l) => !l.ok).map((l) => l.id);
 
-test("tutorialRevealChecks: 카드·도장·줄·[다음] 이 화면 안에 있고 서로 교차하지 않으면 통과한다(도장은 카드 안에 놓인다)", () => {
+test("tutorialRevealChecks: 처형 결과 카드·잠금·[다음] 이 화면 안이고 카드와 [다음] 이 겹치지 않으며 정체 글이 없으면 통과한다(잠금은 카드 위에 놓인다)", () => {
   assert.deepEqual(tutTrFails(tutRevealIn()), []);
-  assert.ok(tutorialRevealChecks(tutRevealIn()).length >= 2);
+  assert.deepEqual(tutorialRevealChecks(tutRevealIn()).map((l) => l.id), ["TR1", "TR2", "TR3"]);
 });
 
-test("tutorialRevealChecks: [다음] 이 카드·줄·도장과 겹치거나 화면 밖이면 실패한다", () => {
-  assert.ok(tutTrFails(tutRevealIn({ next: RR(200, 440, 56, 56) })).length > 0); // 카드와 겹침
-  assert.ok(tutTrFails(tutRevealIn({ next: RR(300, 480, 56, 56) })).length > 0); // 줄과 겹침
-  assert.ok(tutTrFails(tutRevealIn({ reveal: { card: RR(123, 170, 144, 280), stamp: RR(150, 300, 90, 40), line: RR(60, 440, 270, 36) } })).length > 0); // 줄이 카드와 겹침
-  assert.ok(tutTrFails(tutRevealIn({ reveal: { card: RR(123, 170, 144, 280), stamp: RR(150, 440, 90, 60), line: RR(60, 470, 270, 36) } })).length > 0); // 도장이 줄과 겹침
-  assert.ok(tutTrFails(tutRevealIn({ reveal: { card: RR(123, 170, 144, 280), stamp: RR(150, 300, 90, 40), line: RR(-10, 470, 270, 36) } })).length > 0); // 줄이 화면 밖
-  assert.ok(tutTrFails(tutRevealIn({ viewport: { w: 390, h: 480 } })).length > 0); // 줄이 화면 아래 밖
+test("tutorialRevealChecks: [다음] 이 카드와 겹치거나 화면 밖이면, 카드에 정체·정답 글이 보이면 실패한다", () => {
+  assert.deepEqual(tutTrFails(tutRevealIn({ next: RR(200, 440, 56, 56) })), ["TR2"]); // 카드와 겹침
+  assert.deepEqual(tutTrFails(tutRevealIn({ reveal: { card: RR(75, 170, 240, 280), lock: RR(380, 290, 44, 44), roleText: false } })), ["TR1"]); // 잠금이 화면 밖
+  assert.deepEqual(tutTrFails(tutRevealIn({ viewport: { w: 390, h: 480 } })), ["TR1"]); // [다음] 이 화면 아래 밖
+  assert.deepEqual(tutTrFails(tutRevealIn({ reveal: { card: RR(75, 170, 240, 280), lock: RR(210, 290, 44, 44), roleText: true } })), ["TR3"]); // 정체 글이 보임
 });
 
 test("tutorialRevealChecks: 측정값이 없으면 공허 통과하지 않는다", () => {
-  for (const a of [tutRevealIn({ reveal: null }), tutRevealIn({ next: null }), tutRevealIn({ viewport: null }), tutRevealIn({ reveal: { card: null, stamp: RR(1, 1, 1, 1), line: RR(1, 1, 1, 1) } })]) {
+  for (const a of [tutRevealIn({ reveal: null }), tutRevealIn({ next: null }), tutRevealIn({ viewport: null }), tutRevealIn({ reveal: { card: null, lock: RR(1, 1, 1, 1), roleText: false } }), tutRevealIn({ reveal: { card: RR(1, 1, 1, 1), lock: RR(1, 1, 1, 1), roleText: null } })]) {
     assert.ok(tutorialRevealChecks(a).some((l) => !l.ok && /측정값 없음/.test(l.detail)), JSON.stringify(a));
   }
 });
@@ -5213,17 +5215,17 @@ test("tutorialOpeningChecks: 램프 번짐 2·번쩍임 1·소리 링 3 이고 �
   assert.ok(tutorialOpeningChecks(null).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
 });
 
-test("tutorialTimingChecks: 오프닝 4.6초 ± 1.0초, [처리] 뒤 0.7초 ± 0.5초 이고 경계는 통과한다", () => {
+test("tutorialTimingChecks: 오프닝 4.6초 ± 1.0초, [켜기] 뒤 1.6초 ± 0.5초 이고 경계는 통과한다", () => {
   assert.equal(TUTORIAL_OPENING_MS, 4600);
-  assert.equal(TUTORIAL_ERRAND_MS, 700);
+  assert.equal(TUTORIAL_ERRAND_MS, 1600);
   const ok = (o, e) => tutorialTimingChecks({ openingMs: o, errandMs: e }).every((l) => l.ok);
-  assert.ok(ok(4600, 700));
-  assert.ok(ok(3600, 200));
-  assert.ok(ok(5600, 1200));
-  assert.ok(!ok(3599, 700));
-  assert.ok(!ok(5601, 700));
-  assert.ok(!ok(4600, 199));
-  assert.ok(!ok(4600, 1201));
+  assert.ok(ok(4600, 1600));
+  assert.ok(ok(3600, 1100));
+  assert.ok(ok(5600, 2100));
+  assert.ok(!ok(3599, 1600));
+  assert.ok(!ok(5601, 1600));
+  assert.ok(!ok(4600, 1099));
+  assert.ok(!ok(4600, 2101));
   assert.ok(tutorialTimingChecks({ openingMs: 4600, errandMs: null }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
   assert.ok(tutorialTimingChecks({ openingMs: 4600 }).filter((l) => l.id === "TM1").every((l) => l.ok)); // 한쪽만 줘도 그쪽만 판정한다
   assert.equal(tutorialTimingChecks({ openingMs: 4600 }).length, 1);
@@ -5245,17 +5247,78 @@ test("tutorialSkipChecks: [건너뛰기] 의 누르는 영역이 44×44 이상�
   assert.ok(tutorialSkipChecks({ skip: null, viewport: TV }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
 });
 
-test("tutorialEvidenceChecks: 장면 4 는 눈 1·기록 한 줄, 장면 5 는 증거 카드·선 2·수식 줄이고 수식 줄이 [다음] 과 겹치지 않는다", () => {
-  const s4 = { eye: 1, recordRows: 1, traceCard: null, links: 0, formula: null };
-  assert.ok(tutorialEvidenceChecks(s4, { scene: 4 }).every((l) => l.ok));
-  assert.ok(tutorialEvidenceChecks({ ...s4, eye: 0 }, { scene: 4 }).some((l) => !l.ok));
-  assert.ok(tutorialEvidenceChecks({ ...s4, recordRows: 2 }, { scene: 4 }).some((l) => !l.ok));
-  const s5 = { eye: 0, recordRows: 0, traceCard: RR(16, 130, 358, 120), links: 2, formula: RR(60, 700, 260, 48) };
-  assert.ok(tutorialEvidenceChecks(s5, { scene: 5, next: RR(314, 760, 56, 56) }).every((l) => l.ok));
-  assert.ok(tutorialEvidenceChecks({ ...s5, links: 1 }, { scene: 5, next: RR(314, 760, 56, 56) }).some((l) => !l.ok));
-  assert.ok(tutorialEvidenceChecks({ ...s5, traceCard: null }, { scene: 5, next: RR(314, 760, 56, 56) }).some((l) => !l.ok));
-  assert.ok(tutorialEvidenceChecks({ ...s5, formula: RR(280, 740, 100, 48) }, { scene: 5, next: RR(314, 760, 56, 56) }).some((l) => !l.ok));
-  assert.ok(tutorialEvidenceChecks(null, { scene: 5, next: null }).some((l) => !l.ok && /측정값 없음/.test(l.detail)));
+const plates = (over = {}) => [0, 1, 2, 3, 4, 5].map((seat) => ({ seat, rect: RR(20 + seat * 60, 400, 52, 52), pressed: false, ...(over[seat] ?? {}) }));
+
+test("tutorialHouseChecks: 집 판 6개(좌석 0~5)·화면 안, 누르기 전 눌림 0, 누른 뒤 눌림 1 + '고른 집은 바꿀 수 있어요'", () => {
+  const before = { plates: plates(), guide: "불 켜진 창 꺼진 창" };
+  const lines = tutorialHouseChecks(before, { picked: false, viewport: TV });
+  assert.deepEqual(lines.map((l) => l.id), ["HS1", "HS2", "HS3"]);
+  assert.ok(lines.every((l) => l.ok));
+  const after = { plates: plates({ 3: { pressed: true } }), guide: TUTORIAL_HOUSE_PICKED_LINE };
+  assert.ok(tutorialHouseChecks(after, { picked: true, viewport: TV }).every((l) => l.ok));
+  assert.equal(TUTORIAL_HOUSE_PICKED_LINE, "고른 집은 바꿀 수 있어요");
+  const fails = (h, o) => tutorialHouseChecks(h, { viewport: TV, ...o }).filter((l) => !l.ok).map((l) => l.id);
+  assert.deepEqual(fails({ plates: plates().slice(1), guide: "" }, { picked: false }), ["HS1"]); // 집 판 5개
+  assert.deepEqual(fails({ plates: plates({ 5: { rect: RR(360, 400, 52, 52) } }), guide: "" }, { picked: false }), ["HS2"]); // 화면 밖
+  assert.deepEqual(fails({ plates: plates({ 2: { pressed: true } }), guide: "" }, { picked: false }), ["HS3"]); // 누르기 전에 눌림
+  assert.deepEqual(fails({ plates: plates(), guide: TUTORIAL_HOUSE_PICKED_LINE }, { picked: false }), ["HS3"]); // 누르기 전에 고른 뒤 안내
+  assert.deepEqual(fails({ plates: plates(), guide: TUTORIAL_HOUSE_PICKED_LINE }, { picked: true }), ["HS3"]); // 눌린 집 0
+  assert.deepEqual(fails({ plates: plates({ 3: { pressed: true } }), guide: "불 켜진 창" }, { picked: true }), ["HS3"]); // 안내가 그대로
+  assert.deepEqual(fails({ plates: plates({ 3: { pressed: true }, 4: { pressed: true } }), guide: TUTORIAL_HOUSE_PICKED_LINE }, { picked: true }), ["HS3"]); // 눌린 집 2
+  assert.ok(tutorialHouseChecks(null, { viewport: TV }).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(tutorialHouseChecks(before, { viewport: null }).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+const clueIn = (over = {}) => ({
+  spot: { state: "fresh", rect: RR(250, 340, 52, 52) },
+  act: { rect: RR(16, 760, 238, 56), disabled: false },
+  cards: [],
+  board: null,
+  boardChips: [],
+  faces: [],
+  ...over,
+});
+const cloth = { kind: "cloth", text: TUTORIAL_CLOTH_TEXT };
+const faces = (marks = {}) => [0, 1, 3, 4, 5].map((seat) => ({ seat, mark: marks[seat] ?? null }));
+const clueFails = (c, stage) => tutorialClueChecks(c, { stage, viewport: TV }).filter((l) => !l.ok).map((l) => l.id);
+
+test("tutorialClueChecks: 살피기 전(CS1) 지점 ② 안 살핌·화면 안·[살펴보기] 활성, 살핀 뒤(CS2) 지점 done·카드 옷 조각 하나", () => {
+  assert.deepEqual(clueFails(clueIn(), "spot"), []);
+  assert.deepEqual(clueFails(clueIn({ spot: { state: "done", rect: RR(250, 340, 52, 52) } }), "spot"), ["CS1"]);
+  assert.deepEqual(clueFails(clueIn({ spot: { state: "fresh", rect: RR(380, 340, 52, 52) } }), "spot"), ["CS1"]);
+  assert.deepEqual(clueFails(clueIn({ act: { rect: RR(16, 760, 238, 56), disabled: true } }), "spot"), ["CS1"]);
+  assert.deepEqual(clueFails(clueIn({ spot: { state: "done", rect: RR(250, 340, 52, 52) }, cards: [cloth] }), "card"), []);
+  assert.deepEqual(clueFails(clueIn({ spot: { state: "fresh", rect: RR(250, 340, 52, 52) }, cards: [cloth] }), "card"), ["CS2"]);
+  assert.deepEqual(clueFails(clueIn({ spot: { state: "done", rect: RR(250, 340, 52, 52) }, cards: [] }), "card"), ["CS2"]);
+  assert.deepEqual(clueFails(clueIn({ spot: { state: "done", rect: RR(250, 340, 52, 52) }, cards: [{ kind: "cloth", text: "다른 글" }] }), "card"), ["CS2"]);
+});
+
+test("tutorialClueChecks: 보드가 열리면(CS3~CS5) 화면 안·얼굴 칸 다섯·같은 옷 표시는 도윤(1) 한 칸에만 cloth·칩 옷 조각 하나", () => {
+  const good = clueIn({ board: RR(16, 80, 358, 330), faces: faces({ 1: "cloth" }), boardChips: ["cloth"] });
+  assert.deepEqual(tutorialClueChecks(good, { stage: "board", viewport: TV }).map((l) => l.id), ["CS3", "CS4", "CS5"]);
+  assert.deepEqual(clueFails(good, "board"), []);
+  assert.deepEqual(clueFails({ ...good, board: RR(16, 80, 358, 900) }, "board"), ["CS3"]);
+  assert.deepEqual(clueFails({ ...good, faces: faces({ 3: "cloth" }) }, "board"), ["CS4"]); // 엉뚱한 칸에 표시
+  assert.deepEqual(clueFails({ ...good, faces: faces({ 1: "cloth", 4: "cloth" }) }, "board"), ["CS4"]); // 두 칸에 표시
+  assert.deepEqual(clueFails({ ...good, faces: faces({}) }, "board"), ["CS4"]); // 표시 없음
+  assert.deepEqual(clueFails({ ...good, faces: faces({ 1: "window" }) }, "board"), ["CS4"]); // 종류가 다름
+  assert.deepEqual(clueFails({ ...good, faces: faces({ 1: "cloth" }).slice(1) }, "board"), ["CS4"]); // 얼굴 칸 넷
+  assert.deepEqual(clueFails({ ...good, boardChips: ["cloth", "window"] }, "board"), ["CS5"]);
+  for (const stage of ["spot", "card", "board"]) {
+    assert.ok(tutorialClueChecks(null, { stage, viewport: TV }).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+    assert.ok(tutorialClueChecks(clueIn(), { stage, viewport: null }).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  }
+  assert.ok(tutorialClueChecks(clueIn({ board: null }), { stage: "board", viewport: TV }).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.throws(() => tutorialClueChecks(good, { stage: "x", viewport: TV }), /알 수 없는 단계/);
+});
+
+test("tutorialSecretChecks: 사회자 띠 글이 '정체는 판이 끝나야 알아요' 와 같으면 통과한다(id 는 고를 수 있다)", () => {
+  assert.equal(TUTORIAL_SECRET_LINE, "정체는 판이 끝나야 알아요");
+  assert.deepEqual(tutorialSecretChecks({ text: TUTORIAL_SECRET_LINE }).map((l) => [l.id, l.ok]), [["TS5", true]]);
+  assert.deepEqual(tutorialSecretChecks({ text: TUTORIAL_SECRET_LINE }, { id: "TS6" }).map((l) => l.id), ["TS6"]);
+  const bad = tutorialSecretChecks({ text: "이 중에 마피아가 있습니다" });
+  assert.equal(bad[0].ok, false);
+  assert.ok(tutorialSecretChecks(null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
 });
 
 test("tutorialEntryChecks kind end: 마무리 카드 1개·진입 카드·단추 0개이고 방 코드 칸·[방 만들기] 와 교차 0", () => {
@@ -5266,49 +5329,6 @@ test("tutorialEntryChecks kind end: 마무리 카드 1개·진입 카드·단추
   assert.ok(teFails(entryIn(end), { kind: "card" }).length > 0); // 카드 기대에 카드가 없음
   assert.ok(teFails(entryIn({ entry: { cards: 1, buttons: 0, ends: 1, rect: RR(20, 300, 350, 84) } }), { kind: "card" }).length > 0); // 카드와 마무리 카드가 함께 있으면 실패
   assert.ok(teFails(entryIn({ ...end, create: RR(20, 370, 350, 52), field: RR(20, 450, 350, 56) }), { kind: "end" }).length > 0);
-});
-
-test("tutorialLineChecks EV6~EV8: 장면 5 선 두 개의 끝과 도윤 이름표가 화면 안쪽 8 안이고 증거 카드·띠·수식 줄·[다음] 과 교차 0", () => {
-  const vp = { w: 390, h: 844 };
-  const ev = {
-    traceCard: RR(16, 130, 358, 120),
-    formula: RR(95, 700, 200, 44),
-    lines: [
-      { from: [60, 300], to: [200, 420] },
-      { from: [80, 320], to: [230, 420] },
-    ],
-    suspectTag: RR(170, 424, 90, 40),
-  };
-  const opts = { viewport: vp, band: { rect: RR(16, 70, 358, 52) }, next: RR(75, 760, 240, 56) };
-  const run = (e, o = opts) => tutorialLineChecks(e, o);
-  const by = (lines, id) => lines.find((l) => l.id === id);
-  const good = run(ev);
-  assert.deepEqual(good.map((l) => l.id), ["EV6", "EV7", "EV8"]);
-  assert.ok(good.every((l) => l.ok));
-  // 선 하나의 끝이 화면 밖
-  const out = run({ ...ev, lines: [ev.lines[0], { from: [80, 320], to: [395, 40] }] });
-  assert.equal(by(out, "EV6").ok, false);
-  assert.ok(/395/.test(by(out, "EV6").detail));
-  assert.equal(by(out, "EV7").ok, true);
-  // 안쪽 8 안이 아닌 곳(왼쪽 5)
-  assert.equal(by(run({ ...ev, lines: [{ from: [5, 300], to: [200, 420] }, ev.lines[1]] }), "EV6").ok, false);
-  // 이름표가 오른쪽 밖
-  const wide = run({ ...ev, suspectTag: RR(350, 424, 90, 40) });
-  assert.equal(by(wide, "EV7").ok, false);
-  assert.equal(by(wide, "EV6").ok, true);
-  // 이름표가 증거 카드·띠·수식 줄·[다음] 과 겹침
-  const onCard = run({ ...ev, suspectTag: RR(170, 200, 90, 40) });
-  assert.equal(by(onCard, "EV8").ok, false);
-  assert.ok(/증거 카드/.test(by(onCard, "EV8").detail));
-  assert.ok(/사회자 띠/.test(by(run({ ...ev, suspectTag: RR(170, 90, 90, 40) }), "EV8").detail));
-  assert.ok(/수식 줄/.test(by(run({ ...ev, suspectTag: RR(170, 690, 90, 40) }), "EV8").detail));
-  assert.ok(/\[다음\]/.test(by(run({ ...ev, suspectTag: RR(170, 770, 90, 40) }), "EV8").detail));
-  // 선이 1개이거나 이름표 사각형이 null 이면 세 줄 모두 측정 못 함
-  for (const bad of [{ ...ev, lines: [ev.lines[0]] }, { ...ev, suspectTag: null }, null]) {
-    const r = run(bad);
-    assert.equal(r.length, 3);
-    assert.ok(r.every((l) => !l.ok && /측정값 없음/.test(l.detail)));
-  }
 });
 
 test("tutorialDimChecks TD1~TD3: 막 개수·구멍이 포커스 상자를 덮음(2px)·흐림 없음", () => {
@@ -5346,6 +5366,13 @@ test("tutorialNextChecks TN3·TN4: [다음] 알약 폭·높이·가운데·글, 
   assert.equal(by(tutorialNextChecks(at390, { viewport: { w: 390, h: 844 }, errandDots: RR(150, 780, 90, 12), label: "다음" }), "TN4").ok, false);
   assert.equal(by(tutorialNextChecks(at390, { viewport: { w: 390, h: 844 }, errandDots: RR(150, 700, 90, 12), label: "다음" }), "TN4").ok, true);
   assert.ok(tutorialNextChecks(null, { viewport: { w: 390, h: 844 }, errandDots: null, label: "다음" }).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+});
+
+test("tutorialHiddenChecks TH1(dock 1): 장면 3~5 는 아래 패널이 실제 독 하나뿐이고 [내 역할]·입력칸은 0", () => {
+  assert.ok(tutorialHiddenChecks({ worldPanel: 1, gamePanel: 1, roleBtn: 0, chatInputs: 0 }, { dock: 1 }).every((l) => l.ok));
+  assert.equal(tutorialHiddenChecks({ worldPanel: 0, gamePanel: 0, roleBtn: 0, chatInputs: 0 }, { dock: 1 })[0].ok, false); // 독이 없음
+  assert.equal(tutorialHiddenChecks({ worldPanel: 2, gamePanel: 1, roleBtn: 0, chatInputs: 0 }, { dock: 1 })[0].ok, false);
+  assert.equal(tutorialHiddenChecks({ worldPanel: 1, gamePanel: 1, roleBtn: 0, chatInputs: 1 }, { dock: 1 })[0].ok, false);
 });
 
 test("tutorialHiddenChecks TH1: 아래 패널·[내 역할]·채팅 입력칸이 모두 0", () => {
