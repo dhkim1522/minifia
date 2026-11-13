@@ -351,3 +351,63 @@ describe("SceneDock 밤 변형 (D-25)", () => {
     expect(V2_CSS.match(/\.mv-scene-dock__dot--dark\s*\{([^}]*)\}/)?.[1]).toMatch(/var\(--night-700\)/);
   });
 });
+
+// 21-13 Task 1 (D-13, P21-13): 아침 변형 — primary.kind "scene". 흰 알약 [살펴보기](돋보기 22 + 글), 표식 data-scene-act, 길게 누르기 없음.
+describe("SceneDock: 아침 [살펴보기] (D-13, P21-13)", () => {
+  const sceneProps = (over: Partial<SceneDockProps["primary"]> = {}): SceneDockProps =>
+    props({ primary: { kind: "scene", disabled: false, call: false, done: false, onPress: vi.fn(), ...over } });
+  const sceneBtn = (c: ParentNode): HTMLElement => c.querySelector<HTMLElement>("[data-scene-act]")!;
+
+  it("data-scene-act 표식(저녁 표식 data-errand-act 는 없다)·보이는 글 '살펴보기'·돋보기 22", () => {
+    const { container } = render(<SceneDock {...sceneProps()} />);
+    const b = sceneBtn(container);
+    expect(b).not.toBeNull();
+    expect(container.querySelector("[data-errand-act]")).toBeNull();
+    expect(b.textContent).toBe("살펴보기");
+    expect(b.getAttribute("aria-label")).toBe("살펴보기");
+    expect(b.className).toMatch(/mv-scene-dock__main--scene/);
+    const svg = b.querySelector("svg")!;
+    expect(svg.getAttribute("width")).toBe("22");
+    expect(svg.querySelector("path")!.getAttribute("d")).toContain("M10.5 4.5a6 6 0 110 12 6 6 0 010-12z"); // lens
+  });
+
+  it("길게 눌러도 onPress(false) 만 나가고 채움 막대는 차지 않는다", () => {
+    vi.useFakeTimers({ now: 1_700_000_000_000 });
+    const onPress = vi.fn();
+    const { container } = render(<SceneDock {...sceneProps({ onPress })} />);
+    const b = sceneBtn(container);
+    fireEvent.pointerDown(b);
+    expect(container.querySelector<HTMLElement>("[data-hold-fill]")!.style.transform).toBe("scaleX(0)");
+    act(() => {
+      vi.advanceTimersByTime(HOLD_MS + 200);
+    });
+    fireEvent.pointerUp(b);
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(onPress).toHaveBeenCalledWith(false);
+  });
+
+  it("call 이면 data-call·is-call, disabled 이면 aria-disabled 이고 눌러도 아무 일 없다, done 은 '완료'", () => {
+    const onPress = vi.fn();
+    const call = render(<SceneDock {...sceneProps({ call: true, onPress })} />).container;
+    expect(sceneBtn(call).hasAttribute("data-call")).toBe(true);
+    expect(sceneBtn(call).className).toMatch(/is-call/);
+    cleanup();
+    const off = render(<SceneDock {...sceneProps({ disabled: true, onPress })} />).container;
+    expect(sceneBtn(off).getAttribute("aria-disabled")).toBe("true");
+    fireEvent.pointerDown(sceneBtn(off));
+    fireEvent.pointerUp(sceneBtn(off));
+    expect(onPress).not.toHaveBeenCalled();
+    cleanup();
+    const done = render(<SceneDock {...sceneProps({ done: true, onPress })} />).container;
+    expect(sceneBtn(done).textContent).toBe("완료");
+    expect(sceneBtn(done).getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("키보드 Enter 는 onPress(false) 한 번, 흰 알약은 --gray-100 바탕이다", () => {
+    const onPress = vi.fn();
+    const { container } = render(<SceneDock {...sceneProps({ onPress })} />);
+    fireEvent.keyDown(sceneBtn(container), { key: "Enter" });
+    expect(onPress).toHaveBeenCalledWith(false);
+    expect(V2_CSS.match(/\.mv-scene-dock__main--scene\s*\{([^}]*)\}/)?.[1]).toMatch(/background: var\(--gray-100\)/);
+  });
+});
