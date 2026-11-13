@@ -13,6 +13,7 @@ import { PoliceResultCard } from "../components/PoliceResultCard";
 import { BallotReveal } from "../components/v2/BallotReveal";
 import { ResultAnnounce } from "../components/ResultAnnounce";
 import { ErrandDots } from "../components/v2/ErrandDots";
+import { SceneDock } from "../components/v2/SceneDock";
 import { ErrandStartCard } from "../components/v2/ErrandStartCard";
 import { WillLetter } from "../components/v2/WillLetter";
 import type { WillLetter as WillLetterState } from "../net/useWillLetter";
@@ -41,7 +42,7 @@ import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
 import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../game/dayView";
-import { errandProgress, placeCentersOf } from "../game/errandView";
+import { errandProgress, LAMP_TEXT, placeCentersOf } from "../game/errandView";
 import { callTargetsOf, type HostLocal } from "../game/hostLine";
 import { recordRowsOf, traceWindowOf } from "../game/recordView";
 import { TRACE_MARK, sameOutfitSeats } from "../game/traceMark";
@@ -226,8 +227,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 측정(스테이지 사각형)·키보드는 대기실과 같은 훅이다. 기록 칸은 LOG_H(68) 한 값 — 키보드가 열리면 행동 줄만 숨긴다(07-19, 18.1 P181-3).
   // 지목이면 스테이지 윗변을 차례 알약 아랫변 + 4 로 내리고(UI-SPEC A-1) 작은 폰은 압축형 알약을 받는다(turnCompact). 알약 요소는 훅이 루트에서 `[data-turn-block]` 으로 찾는다.
   // 심부름 단계와 튜토리얼 지도 장면(panelless prop, 18-03)은 아래 패널이 없다: 스테이지가 띠 아래부터 화면 아래까지 넓어진다
-  const noPanel = view.phase === "errand" || panelless === true;
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets } = useMapInsets(blockModeOf(view) !== null, noPanel);
+  // 21페이즈 확장판 저녁(P21-1): 목록이 있는 산 사람(me.errand 는 산 본인에게만 온다)은 아래 패널 자리에 독(SceneDock)을 받는다. 유령·목록 없음·튜토리얼 지도 장면은 지금 그대로(패널 없음).
+  const dockOn = view.phase === "errand" && rules.errand && view.me.errand !== undefined && panelless !== true;
+  const noPanel = (view.phase === "errand" && !dockOn) || panelless === true;
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets } = useMapInsets(blockModeOf(view) !== null, noPanel, dockOn ? "dock" : "");
   // 키보드가 시트의 textarea 때문에 열린 것이면 채팅 패널을 줄이거나 행동 줄을 숨기지 않는다(시트를 연 버튼이 남아야 닫을 때 초점이 돌아온다). 패널은 키보드 위로 올라간다(lifted).
   const kbOpen = kbLifted && !kbInSheet;
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
@@ -303,10 +306,17 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const sendGuard = useSendGuard();
   const willBusy = useRef(false); // 유언·쪽지 저장 확인을 기다리는 중(useWill 이 쓴다)
   const pointSent = useRef<{ target: number; at: number } | null>(null);
+  // 건너뛰기(21-11 D-23)를 보낸 시각. 곧바로 온 거절은 눌림을 서버 값으로 되돌릴 뿐 이유 글도 소리도 없다
+  const skipSent = useRef<number | null>(null);
   useEffect(() => {
     if (!onEvent) return;
     return onEvent((e) => {
       if (e.t !== "error") return;
+      if (skipSent.current !== null && Date.now() - skipSent.current < PICK_REPLY_MS && (e.code === "WRONG_PHASE" || e.code === "BAD_MESSAGE")) {
+        skipSent.current = null;
+        setRejects((n) => n + 1);
+        return;
+      }
       // 귓속말: 최근 3초 안에 보냈으면 어떤 오류 코드든 그 거절이다. 단계 어긋남은 "지금은 보낼 수 없어요", 그 밖은 "보내지 못했어요". 시트·입력은 그대로 둔다(고쳐 다시 보낼 수 있다)
       if (sendGuard.peek() === "whisper") {
         sendGuard.take();
@@ -758,11 +768,37 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // [처리] 알약(장소 위, 16-07): 처리 반경 안 미완료 장소가 있을 때만 보낸다(서버가 다시 정한다). 못 보내면(소켓 닫힘) 아무 변화 없다.
   // 알약은 반경 안에서만 DOM 에 있어 헛누름이 없고, 누를 때 주요 버튼 소리(ui.tap)가 한 번 난다(V-31). 거절·실패 알림은 없다
   const errandActId = errandPos.actableId;
-  const onErrandAct = useCallback((): void => {
-    if (!canSend || errandActId === null) return;
-    emitSignal({ kind: "tap" });
-    send({ t: "errand" });
-  }, [canSend, errandActId, send]);
+  // 확장판 저녁의 [켜기](독, P21-5·P21-8): 길게 누르고 뗐으면 hold 를 싣는다. 시민이 보내도 같은 모양이고 서버만 역할로 가른다 — 이 분기는 역할을 읽지 않는다.
+  const pressErrand = useCallback(
+    (hold: boolean): void => {
+      if (!canSend || errandActId === null) return;
+      emitSignal({ kind: "tap" });
+      send(hold ? { t: "errand", hold: true } : { t: "errand" });
+    },
+    [canSend, errandActId, send],
+  );
+  const onErrandAct = useCallback((): void => pressErrand(false), [pressErrand]);
+  // 건너뛰기(D-23): 눌림 토글. 누른 즉시 눌린 모양이 되고 새 서버 view 가 오면 서버 값(me.skipPhase)이 이긴다. 수는 서버가 센 값(day.skipCount)이다
+  const [skipPressed, chooseSkip] = useViewChoice<boolean>(view, view.me.skipPhase === true);
+  const seenSkipRejects = useRef(rejects);
+  useEffect(() => {
+    if (seenSkipRejects.current === rejects) return;
+    seenSkipRejects.current = rejects;
+    chooseSkip(view.me.skipPhase === true);
+    // chooseSkip 은 렌더마다 새 함수지만 setState 만 부른다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rejects]);
+  const toggleSkip = useCallback(
+    (on: boolean): void => {
+      if (!canSend) return;
+      if (send({ t: "skipPhase", on }) === false) return;
+      skipSent.current = Date.now();
+      chooseSkip(on);
+    },
+    // chooseSkip 은 렌더마다 새 함수지만 setState 만 부른다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canSend, send],
+  );
   const errandLayer = useMemo<ErrandLayerProps | undefined>(
     () =>
       errandMine === null
@@ -774,8 +810,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
             callPlace: errandCallPlace,
             nearR: ERRAND_NEAR_R,
             onAct: onErrandAct,
+            ...(dockOn ? { dock: true } : {}),
           },
-    [errandMine, errandCenters, errandPos.nextId, errandPos.actableId, errandCallPlace, onErrandAct],
+    [errandMine, errandCenters, errandPos.nextId, errandPos.actableId, errandCallPlace, onErrandAct, dockOn],
   );
   const callOn = callTarget !== null && !callUsed && layerKind === null && !kbOpen && !whisper.mode;
   const callTool = callOn && callTarget.kind === "tool" ? callTarget.tool : null;
@@ -803,6 +840,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const floatRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     rootRef.current?.style.setProperty("--mf-panel-h", `${panelRef.current?.offsetHeight ?? 0}px`);
+    // 저녁 독 높이(21-11): 진행 점 줄이 독 위 16 에 선다. 독이 없으면 변수를 지워 점 줄이 지금 자리(아래 40)에 남는다
+    if (dockOn && panelRef.current !== null) rootRef.current?.style.setProperty("--mf-dock-h", `${panelRef.current.offsetHeight}px`);
+    else rootRef.current?.style.removeProperty("--mf-dock-h");
   });
 
   // 위 한 줄: 처음 마운트한 view(재접속·새로 고침)의 (단계, 차례) 와 같은 동안은 만들지 않는다(A-6). 결선은 (결선, step)
@@ -932,8 +972,16 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         // 심부름 단계에는 아래 패널이 없다(16-08, V-23): 진행 점 3 이 화면 아래 가운데에 떠 있다. 유령·목록 없음은 점도 없다(지켜본다).
         // 시작 2초 카드는 막 + 카드이고 눌림을 통과한다 — 닫는 누름은 useErrandStartCard 가 루트에서 받는다.
         <>
-          {startCard && errandMine !== null ? <ErrandStartCard places={errandMine.places} /> : null}
-          {errandMine !== null ? <ErrandDots total={errandMine.total} done={errandMine.n} /> : null}
+          {startCard && errandMine !== null ? <ErrandStartCard places={errandMine.places} {...(dockOn ? { title: LAMP_TEXT.startTitle } : {})} /> : null}
+          {errandMine !== null ? <ErrandDots total={errandMine.total} done={errandMine.n} {...(dockOn ? { label: LAMP_TEXT.progress(errandMine.n, errandMine.total) } : {})} /> : null}
+          {dockOn && errandMine !== null ? (
+            <SceneDock
+              log={{ messages: binding.messages, ...(binding.channel !== undefined ? { channel: binding.channel } : {}) }}
+              primary={{ kind: "lamp", disabled: errandActId === null, call: errandActId !== null, done: errandMine.complete, onPress: pressErrand }}
+              skip={{ count: view.day?.skipCount ?? 0, total: view.players.filter(isAlive).length, pressed: skipPressed === true, onToggle: toggleSkip, ...(canSend ? {} : { disabled: true }) }}
+              panelRef={panelRef}
+            />
+          ) : null}
         </>
       ) : noPanel ? null : (
         <GamePanel

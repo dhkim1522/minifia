@@ -279,8 +279,8 @@ describe("시작 카드·진행 점 스타일 (16-08)", () => {
     expect(css).toMatch(/\.mv-errand-dot\[data-done\]\s*\{[^}]*background: var\(--brass-400\)/);
     expect(css).toMatch(/\.mv-errand-dots\s*\{[^}]*gap: 12px/);
   });
-  it("21-11: 진행 점 줄은 독 높이(--mf-panel-h) 위 16 에 선다", () => {
-    expect(errandBlock()).toMatch(/\.mv-errand-dots\s*\{[^}]*bottom: calc\(var\(--mf-panel-h, [^)]*\) \+ 16px\)/);
+  it("21-11: 진행 점 줄은 독 높이(--mf-dock-h) 위 16 에 선다", () => {
+    expect(errandBlock()).toMatch(/\.mv-errand-dots\s*\{[^}]*bottom: calc\(var\(--mf-dock-h, [^)]*\) \+ 16px\)/);
   });
   it("모션 줄이기에서 시작 카드 등장이 즉시다", () => {
     const css = errandBlock();

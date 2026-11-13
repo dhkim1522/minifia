@@ -10,6 +10,9 @@ import type { PlaceId, RoomView } from "../../shared/protocol";
 /** 화면에 쓰는 글자: 단추(처리 → 3곳 완료 뒤 완료) */
 export const ERRAND_TEXT = { act: "처리", done: "완료" } as const;
 
+/** 21페이즈 확장판 저녁(등불 켜기) 문구: 시작 카드 제목·진행 점 접근성 이름. 단추 글은 SceneDock 이 갖는다 */
+export const LAMP_TEXT = { startTitle: "오늘 켤 등불", progress: (n: number, total: number): string => `등불 ${n}/${total}` } as const;
+
 /** 시작 카드가 떠 있는 시간(16-08, V-19). 화면 연출이라 클라이언트 상수이고 서버 40초 시계와 무관하다 */
 export const ERRAND_CARD_MS = 2_000;
 

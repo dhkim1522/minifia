@@ -61,9 +61,10 @@ function writeVar(el: HTMLElement | null, name: string, px: number | null): void
 /**
  * turnActive: 지금 지목 또는 결선 단계이고 알약 부품(`[data-turn-block]`)이 그려진다(blockModeOf !== null)
  * panelless: 아래 패널이 없는 단계(심부름, 16-08)다. 패널 없이도 위 끝은 지금처럼 재고 아래 끝은 0 으로 알린다. 재는 효과가 패널 요소를 시작 때 한 번 쥐므로
+ * panelKey: 아래 패널 요소가 다른 부품으로 바뀔 때(저녁 독 ↔ 채팅 패널, 21-11) 바뀌는 값 — 효과가 패널 요소를 시작 때 한 번 쥐므로 같은 방식으로 다시 쥐게 한다.
  *   단계가 바뀌어 패널이 생기거나 사라지면 이 값이 바뀌어 다시 쥔다(안 그러면 떼어진 옛 패널을 재다가 위·아래 안전선이 옛 값에 멈춘다, 16-07).
  */
-export function useMapInsets(turnActive = false, panelless = false): MapInsets {
+export function useMapInsets(turnActive = false, panelless = false, panelKey = ""): MapInsets {
   const rootRef = useRef<HTMLElement>(null);
   const roomRef = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -128,7 +129,7 @@ export function useMapInsets(turnActive = false, panelless = false): MapInsets {
       window.removeEventListener("resize", measure);
       ro.disconnect();
     };
-  }, [turnActive, compact, panelless]);
+  }, [turnActive, compact, panelless, panelKey]);
 
   // 키보드 높이는 프레임마다 바뀌어도 다시 그리지 않는다: 아래 끝을 getter 로 넘겨 WorldStage 가 프레임마다 읽는 순간의 lift 를 더하게 한다(열림·닫힘만 다시 그린다).
   const stageInsets = useMemo(

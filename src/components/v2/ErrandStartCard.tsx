@@ -10,15 +10,17 @@ import { PlaceArt } from "./placeArt";
 export interface ErrandStartCardProps {
   /** 내 목록 장소(순서에 뜻 없음). 비면 아무것도 그리지 않는다 */
   places: readonly PlaceId[];
+  /** 제목. 주지 않으면 "오늘 갈 곳", 확장판 저녁은 "오늘 켤 등불"(21-11) */
+  title?: string;
 }
 
-export function ErrandStartCard({ places }: ErrandStartCardProps) {
+export function ErrandStartCard({ places, title = "오늘 갈 곳" }: ErrandStartCardProps) {
   if (places.length === 0) return null;
   return (
     <div className="mv-errand-start" data-errand-start-card="">
       <div className="mv-errand-start__scrim" aria-hidden="true" />
       <div className="mv-errand-start__card">
-        <h2 className="mv-errand-start__title">오늘 갈 곳</h2>
+        <h2 className="mv-errand-start__title">{title}</h2>
         <div className="mv-errand-start__tiles">
           {places.map((id) => (
             <span key={id} className="mv-errand-start__tile" role="img" aria-label={`${PLACE_NAME[id]} 장소`}>

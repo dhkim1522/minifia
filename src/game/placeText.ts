@@ -1,5 +1,6 @@
 // 심부름 장소의 낱말(15페이즈, UI-SPEC "장소 아이콘 규격"). 그림은 컬러 에셋 PlaceArt 가 그린다. 화면에는 장소 이름 글자가 없다 —
 // 이 낱말은 접근성 이름(aria-label)과 시험에서만 쓴다. 장소 id 는 닫힌 집합(PlaceId) 24개: 재즈 바 8 + 광장 8 + 마을 가로등 8.
+import { LAMP_PLACE_IDS } from "../../shared/protocol";
 import type { PlaceId } from "../../shared/protocol";
 
 /** 장소 id → 낱말. 재즈 바(glass·piano·sax·stool·door·poster·record·candle) · 광장(clock·fountain·bench·lamp·mail·tree·flower·stand) */
@@ -31,7 +32,13 @@ export const PLACE_NAME: Readonly<Record<PlaceId, string>> = {
   lamp7: "가로등",
 };
 
-/** 접근성 이름: "{낱말} 장소" / "{낱말} 장소, 처리함" */
+/** 마을 가로등 장소(lamp0~lamp7)인가 — 켠 곳의 낱말·배지 그림이 달라진다(21-11) */
+export function isLampPlace(id: PlaceId): boolean {
+  return (LAMP_PLACE_IDS as readonly string[]).includes(id);
+}
+
+/** 접근성 이름: "{낱말} 장소" / "{낱말} 장소, 처리함" — 가로등은 완료가 "{낱말} 장소, 켠 곳"(21페이즈 저녁 등불) */
 export function placeLabel(id: PlaceId, done: boolean): string {
-  return done ? `${PLACE_NAME[id]} 장소, 처리함` : `${PLACE_NAME[id]} 장소`;
+  if (!done) return `${PLACE_NAME[id]} 장소`;
+  return isLampPlace(id) ? `${PLACE_NAME[id]} 장소, 켠 곳` : `${PLACE_NAME[id]} 장소, 처리함`;
 }

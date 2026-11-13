@@ -440,12 +440,14 @@ describe("맵 화면 빛남 (HOST-03·04·05)", () => {
 
     it("빛남은 소리를 내지 않는다 — 신호 관련 새 코드 없음(소스 검사)", () => {
       const src = readFileSync("src/screens/GameMap.tsx", "utf8");
-      // 16-07: 장소 위 [처리] 알약을 누를 때의 ui.tap 은 빛남이 아니라 눌림 소리(V-31)라 그 핸들러(onErrandAct)만 검사에서 뺀다
+      // 16-07: 장소 위 [처리] 알약을 누를 때의 ui.tap 은 빛남이 아니라 눌림 소리(V-31)라 그 핸들러(onErrandAct)만 검사에서 뺀다.
+      // 21-11: 독의 [켜기] 눌림 핸들러(pressErrand)도 같은 눌림 소리라 뺀다(onErrandAct 는 그 핸들러를 부르는 한 줄이 됐다)
       const block = src
         .slice(src.indexOf("callTargetsOf(view)"), src.indexOf("const stageTagProps"))
-        .replace(/const onErrandAct = useCallback\([\s\S]*?\n  \}, \[[^\]]*\]\);/, "");
+        .replace(/const pressErrand = useCallback\([\s\S]*?\n  \);/, "")
+        .replace(/const onErrandAct = useCallback\([^\n]*\n/, "");
       expect(block).not.toMatch(/emitSignal/);
-      expect(block).not.toMatch(/const onErrandAct/);
+      expect(block).not.toMatch(/const onErrandAct|const pressErrand/);
     });
   });
 });

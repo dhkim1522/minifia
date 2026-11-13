@@ -26,7 +26,7 @@
 /* 아래 패널: night-800 97%, 위 모서리 radius-lg, 안쪽 14 16 22. 위에서부터 채팅 기록 칸 + 입력줄(48) + 단계별 행동 줄. 높이는 DOM 에서 재서 스테이지 사각형에 넘긴다. */
 .mf-game__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: color-mix(in srgb, var(--night-800) 97%, transparent); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
 
-/* 저녁·아침 독(21-11): 아래 패널 틀(.mf-game__panel)을 그대로 쓰는 읽기 전용 기록 두 줄 + 행동 줄. 높이 = 14 + 68 + 10 + 56 + 22 = 170(SceneDock 의 DOCK_H). 입력줄·키보드가 없어 늘 이 높이다. 진행 점은 이 높이(--mf-panel-h) 위 16 에 선다 */
+/* 저녁·아침 독(21-11): 아래 패널 틀(.mf-game__panel)을 그대로 쓰는 읽기 전용 기록 두 줄 + 행동 줄. 높이 = 14 + 68 + 10 + 56 + 22 = 170(SceneDock 의 DOCK_H). 입력줄·키보드가 없어 늘 이 높이다. 진행 점은 이 높이(루트의 --mf-dock-h, GameMap 이 잰다) 위 16 에 선다 */
 .mf-game__dock { min-height: 170px; }
 
 /* 키보드(7페이즈 규칙 그대로): 패널은 키보드 바로 위로 --mf-kb-lift 만큼 올라가고 아래 여백이 22 → 8 로 줄어든다. 행동 줄은 그리지 않는다. */

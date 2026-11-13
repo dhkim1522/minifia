@@ -96,6 +96,8 @@ export interface ErrandLayerProps {
   onWalk?(id: PlaceId): void;
   /** [처리] 알약을 눌렀다는 알림(처리 메시지는 쓰는 쪽이 보낸다) */
   onAct?(): void;
+  /** 확장판 저녁(21-11, P21-5): 켜기는 아래 독의 [켜기] 단추가 한다 — 장소 위 [처리] 알약을 그리지 않는다. 타일·화살표·링·빛은 그대로 */
+  dock?: boolean;
 }
 
 const NEAR_RING_POINTS = 24;
@@ -583,7 +585,7 @@ export function WorldStage(props: WorldStageProps) {
       {/* [처리] 알약은 타일·화살표 층보다 위(z-tags + 1)라 층을 따로 둔다. 처리 반경 안 미처리 장소가 있을 때만 DOM 에 있다 */}
       {props.errand ? (
         <div ref={errandActRef} className="mf-world__errand-act" data-errand-act-layer="">
-          {props.errand.actId !== null ? <ErrandAct id={props.errand.actId} call={false} hidden onPress={() => live.current.props.errand?.onAct?.()} /> : null}
+          {props.errand.actId !== null && props.errand.dock !== true ? <ErrandAct id={props.errand.actId} call={false} hidden onPress={() => live.current.props.errand?.onAct?.()} /> : null}
         </div>
       ) : null}
       <div

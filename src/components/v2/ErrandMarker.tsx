@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import "../../styles/v2.css";
 import type { PlaceId } from "../../../shared/protocol";
-import { placeLabel } from "../../game/placeText";
+import { isLampPlace, placeLabel } from "../../game/placeText";
 import { PlaceArt } from "./placeArt";
 import { V2Icon } from "./V2Icon";
 
@@ -12,7 +12,7 @@ import { V2Icon } from "./V2Icon";
 
 export interface ErrandMarkerProps {
   id: PlaceId;
-  /** 처리한 곳: 불투명도 .55 + 오른쪽 아래 체크 배지 + 놋쇠 테두리 */
+  /** 처리한 곳: 불투명도 .55 + 오른쪽 아래 배지(가로등은 불꽃 — 켠 곳, 그 밖은 체크) + 놋쇠 테두리 */
   done: boolean;
   /** 빛남(14 의 is-call): 가장 가까운 미처리 타일 하나만 */
   call: boolean;
@@ -43,7 +43,7 @@ export function ErrandMarker({ id, done, call, rest, onWalk, style, hidden }: Er
       <PlaceArt id={id} size={44} />
       {done ? (
         <span className="mv-errand-pin__badge" aria-hidden="true">
-          <V2Icon name="check" size={16} />
+          <V2Icon name={isLampPlace(id) ? "flame" : "check"} size={16} />
         </span>
       ) : null}
     </button>
