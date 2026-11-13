@@ -166,6 +166,14 @@ function farPoint(map: MapDef): { x: number; z: number } {
   return best;
 }
 
+/**
+ * 심부름 표본 알람(1초 간격, 실제 시간)을 이 시험 동안 멀리 미룬다(20-03). 표본은 산 사람 모두에게 근처 snap 을 보내므로, 여러 번 누르며 몇 초 걸리는 시험에서
+ * 누름과 표본이 겹치면 응답 프레임 모양이 달라져 간헐 실패했다(전체 실행에서 "응답 동일성" — 단독 20번 가운데 1~2번). 표본은 이 시험이 보는 것이 아니다.
+ */
+async function deferErrandTicks(code: string): Promise<void> {
+  await writeRoomEdit(env.ROOM.getByName(code), (room) => ({ ...room, errandTickAt: Date.now() + 3_600_000 }));
+}
+
 describe("응답 동일성 · 스키마", () => {
   const idOf = async (code: string, seatNo: number): Promise<string> => (await playersOf(code)).find((p) => p.seat === seatNo)!.id;
   const placesOf = async (code: string, id: string): Promise<string[]> => (await playersOf(code)).find((p) => p.id === id)!.errandPlaces!;
@@ -183,6 +191,7 @@ describe("응답 동일성 · 스키마", () => {
 
   it("거절 이유가 여섯 가지여도, 마피아든 시민이든 응답은 같다(보낸 소켓에 state 한 프레임, 다른 소켓 0, 오류 없음)", async () => {
     const g = await startedGame("errand");
+    await deferErrandTicks(g.code);
     const map = await mapOfRoom(g.code);
     const far = farPoint(map);
     const mafia = g.actors.find((a) => a.role === "mafia")!;
@@ -235,6 +244,7 @@ describe("응답 동일성 · 스키마", () => {
 
   it("죽은 사람·errand 가 아닌 단계도 같은 응답이다", async () => {
     const g = await startedGame("errand");
+    await deferErrandTicks(g.code);
     const map = await mapOfRoom(g.code);
     const dead = g.actors.find((a) => a.role === "citizen")!;
     const deadId = await idOf(g.code, dead.seat);
