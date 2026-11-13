@@ -183,7 +183,7 @@ describe("소스 규약 — 시각·난수·DOM·역할을 읽지 않는다", ()
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/.*$/gm, "");
   it("Date·Math.random·document·window·역할을 읽지 않는다", () => {
-    const hits = [/\bDate\b/, /Math\.random/, /\bdocument\b/, /\bwindow\b/, /\brole\b/i, /\.job\b/].filter((re) => re.test(src)).map(String);
+    const hits = [/\bDate\b/, /Math\.random/, /\bdocument\b/, /\bwindow\./, /typeof window/, /globalThis/, /\brole\b/i, /\.job\b/].filter((re) => re.test(src)).map(String);
     expect(hits.join(" ") || "없음").toBe("없음");
   });
   it("같은 옷 좌석은 sameOutfitSeats 로 구한다", () => {
