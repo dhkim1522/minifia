@@ -4,6 +4,7 @@ import { BufferGeometry, Color, DirectionalLight, HemisphereLight, Material, Mes
 import { describe, expect, it } from "vitest";
 import { createCharacter, figForSeat } from "../../src/world/character";
 import { buildPlazaScene, PLAZA_CLOCK_HOURS, PLAZA_LIGHT_TUNE } from "../../src/world/maps/plaza";
+import { buildTownScene } from "../../src/world/maps/town";
 import { PLAZA_PALETTE } from "../../src/world/palette";
 import { DRAW_CALL_BUDGET, LADDER } from "../../src/world/renderer";
 import { ALBEDO_NONE, buildBarScene, LIGHT_TUNE } from "../../src/world/maps/bar";
@@ -545,5 +546,52 @@ describe("광장 재질 보정 albedo (18-12, G-18-1)", () => {
 
   it("밤 쪽 네 행 albedo 는 ALBEDO_NONE 이다", () => {
     for (const ph of ["trial", "night", "nightCitizen", "nightGhost"] as const) expect(PLAZA_LIGHT_TUNE[ph].albedo, ph).toEqual(ALBEDO_NONE);
+  });
+});
+
+// ---------- 21-09: 광장 중앙 장식 가로등 4 는 마을에서 구·빛 무리를 그리지 않는다 (P21-3·P21-11, D-04) ----------
+describe("장식 가로등 옵션 decorLamps (21-09)", () => {
+  const DECOR: readonly (readonly [number, number])[] = [
+    [3.8, -2.4],
+    [-2.4, 3.8],
+    [-3.6, 1.0],
+    [1.0, -3.6],
+  ];
+  const SPHERE_VERTS = 11 * 9;
+
+  it("광장 맵은 지금 그대로다: 발광 구 넷(lampBulb)과 빛 무리 쿼드 넷이 있다", () => {
+    const p = buildPlazaScene(LADDER[0]!);
+    expect(p.meshes.emissiveRoom!.geometry.getAttribute("position").count).toBe(4 * SPHERE_VERTS);
+    expect(p.meshes.glowRoom!.geometry.getAttribute("position").count).toBe(4 * 4);
+    p.dispose();
+  });
+
+  it("마을의 광장 조각은 장식 가로등의 기둥·갓·구가 정적 묶음(furniture)에 있고 발광 구·빛 무리 메시가 없다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    expect(t.meshes.emissiveRoom).toBeUndefined();
+    expect(t.meshes.glowRoom).toBeUndefined();
+    for (const [x, z] of DECOR) {
+      expect(hasVertex(t.meshes.furniture!, [x, 2.6, z]), `기둥 ${x},${z}`).toBe(true);
+      expect(hasVertex(t.meshes.furniture!, [x, 2.73, z]), `구 ${x},${z}`).toBe(true);
+    }
+    t.dispose();
+  });
+
+  it("마을 장식 가로등 구는 paneDark 색이다(furniture 정점 색에 lampBulb 가 없다)", () => {
+    const t = buildTownScene(LADDER[0]!);
+    const color = t.meshes.furniture!.geometry.getAttribute("color");
+    const bulb = new Color(PLAZA_PALETTE.lampBulb);
+    const dark = new Color(PLAZA_PALETTE.paneDark);
+    let nBulb = 0;
+    let nDark = 0;
+    for (let i = 0; i < color.count; i++) {
+      const c = new Color(color.getX(i), color.getY(i), color.getZ(i));
+      if (Math.abs(c.r - bulb.r) < 1e-4 && Math.abs(c.g - bulb.g) < 1e-4 && Math.abs(c.b - bulb.b) < 1e-4) nBulb++;
+      if (Math.abs(c.r - dark.r) < 1e-4 && Math.abs(c.g - dark.g) < 1e-4 && Math.abs(c.b - dark.b) < 1e-4) nDark++;
+    }
+    expect(nBulb).toBe(0);
+    // 장식 4 + 당번 8 의 꺼진 구가 모두 paneDark 다
+    expect(nDark).toBeGreaterThanOrEqual(12 * SPHERE_VERTS);
+    t.dispose();
   });
 });

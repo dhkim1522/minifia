@@ -2,7 +2,7 @@
 // 모범은 plazaScene.test.ts. 좌표 원문은 shared/game/mapTown.ts(서버와 같은 표), 생김새의 기준은 design/v3.0/town-map/ 의 A 안.
 import { Box3, BufferGeometry, DataTexture, DirectionalLight, HemisphereLight, Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry, PointLight, Scene, Vector3 } from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TOWN_HOUSES, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
+import { TOWN_CLUE_SPOTS, TOWN_HOUSES, TOWN_LAMPS, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
 import { ROOM_IDS } from "../../shared/protocol";
 import { plateFarOf } from "../../src/world/camera";
 import { createCharacter, figForSeat } from "../../src/world/character";
@@ -84,7 +84,7 @@ describe("마을 장면 구조 (D-05·D-06·D-07·D-21)", () => {
       [1.0, -3.6],
     ] as const)
       expect(hasVertex(furniture, [x, 2.6, z]), `${x},${z}`).toBe(true);
-    for (const n of ["brass", "emissiveRoom", "emissiveTower", "handHour0", "handMinute1"]) expect(t.meshes[n], n).toBeInstanceOf(Mesh);
+    for (const n of ["brass", "emissiveTower", "handHour0", "handMinute1"]) expect(t.meshes[n], n).toBeInstanceOf(Mesh);
     t.dispose();
   });
 
@@ -161,13 +161,17 @@ describe("마을 장면 구조 (D-05·D-06·D-07·D-21)", () => {
 });
 
 describe("마을 그리기 예산 (D-21, P20-17, T-20-15)", () => {
-  it("캐릭터 없이 보이는 메시 수(정적 그리기 호출 추정)는 36 이하다 — 집 주인이 없을 때도, 여덟일 때도", () => {
+  it("캐릭터 없이 보이는 메시 수(정적 그리기 호출 추정)는 39 이하다(20페이즈 36 + 21페이즈 3) — 집 주인이 없을 때도, 여덟일 때도, 등불을 다 켜고 현장이 있을 때도", () => {
     const t = buildTownScene(LADDER[0]!);
     for (const owners of [[], [0, 2, 5], [0, 1, 2, 3, 4, 5, 6, 7]]) {
       t.setOwners!(owners);
-      for (const ph of PHASES) {
-        t.setLighting(ph);
-        expect(visibleMeshes(t.root).length, `${owners.length}/${ph}`).toBeLessThanOrEqual(36);
+      for (const lamps of [[], [1, 2, 5], [0, 1, 2, 3, 4, 5, 6, 7]]) {
+        t.setLamps!(lamps, true);
+        t.setClue!(lamps.length > 0 ? 2 : null, true);
+        for (const ph of PHASES) {
+          t.setLighting(ph);
+          expect(visibleMeshes(t.root).length, `${owners.length}/${lamps.length}/${ph}`).toBeLessThanOrEqual(39);
+        }
       }
     }
     // 새로 느는 것은 광장 것 밖의 병합 묶음뿐이다: 방 넷이 메시 넷이 아니라 묶음 하나씩이다
@@ -665,5 +669,321 @@ describe("아틀라스 그리기 함수 (UI Considerations partial, D-20)", () =
     t.dispose();
     images[1]!.onload!();
     expect(c.calls.drawImage).toHaveLength(1);
+  });
+});
+
+// ---------- 21-09: 당번 가로등 8·켜진 등불·창 연동·현장 decal (D-04·D-06·D-07·D-08·D-13·D-24·D-26) ----------
+
+const SPHERE_VERTS = 11 * 9;
+/** 첫 정점 색의 빨강 성분(정점 색에 곱한 켜짐 정도를 읽는다). 정점이 없으면 0 */
+const firstColorR = (m: Mesh): number => ((m.geometry.getAttribute("color")?.count ?? 0) > 0 ? m.geometry.getAttribute("color").getX(0) : 0);
+/** 빛 무리 메시의 정점 알파(4번째 성분) 최댓값 */
+const maxAlpha = (m: Mesh): number => {
+  const c = m.geometry.getAttribute("color");
+  let out = 0;
+  for (let i = 0; i < (c?.count ?? 0); i++) out = Math.max(out, c.getW(i));
+  return out;
+};
+const bulbs = (m: Mesh): number => (m.geometry.getAttribute("position")?.count ?? 0) / SPHERE_VERTS;
+
+describe("당번 가로등 8과 켜진 등불 setLamps (D-04·D-06·D-24)", () => {
+  it("TOWN_LAMPS 기둥 자리에 기둥(높이 2.6)·갓(@2.7)·꺼진 구(@2.6)가 정적 묶음에 서 있다 — 처음에는 켜진 구 메시가 비어 있다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    for (const l of TOWN_LAMPS) {
+      expect(hasVertex(t.meshes.furniture!, [l.pole.x, 2.6, l.pole.z]), `기둥 ${l.id}`).toBe(true);
+      expect(hasVertex(t.meshes.furniture!, [l.pole.x, 2.73, l.pole.z]), `꺼진 구 ${l.id}`).toBe(true);
+      expect(hasVertex(t.meshes.furniture!, [l.pole.x, 2.85, l.pole.z]), `갓 ${l.id}`).toBe(true);
+    }
+    for (const n of ["dutyBulb", "dutyGlow", "clueDecals"]) {
+      expect(t.meshes[n], n).toBeInstanceOf(Mesh);
+      expect(t.meshes[n]!.visible, n).toBe(false);
+      expect(t.meshes[n]!.castShadow, n).toBe(false);
+    }
+    t.dispose();
+  });
+
+  it("setLamps([1,2,5], true): 켜진 구 셋(발광 재질)·빛 무리 셋 + 바닥 빛 웅덩이 셋(y 0.03, 2.6×2.6) 이 TOWN_LAMPS 기둥 자리에 선다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setLighting("night");
+    t.setLamps!([1, 2, 5], true);
+    expect(bulbs(t.meshes.dutyBulb!)).toBe(3);
+    expect(t.meshes.dutyBulb!.visible).toBe(true);
+    for (const n of [1, 2, 5]) expect(hasVertex(t.meshes.dutyBulb!, [TOWN_LAMPS[n]!.pole.x, 2.73, TOWN_LAMPS[n]!.pole.z]), `구 ${n}`).toBe(true);
+    for (const n of [0, 3, 4, 6, 7]) expect(hasVertex(t.meshes.dutyBulb!, [TOWN_LAMPS[n]!.pole.x, 2.73, TOWN_LAMPS[n]!.pole.z]), `구 ${n}`).toBe(false);
+    expect(t.meshes.dutyBulb!.material).toBeInstanceOf(MeshBasicMaterial);
+    expect(quads(t.meshes.dutyGlow!)).toBe(6);
+    expect(t.meshes.dutyGlow!.visible).toBe(true);
+    // 바닥 빛 웅덩이: y 0.03 평면 쿼드가 기둥 둘레 ±1.3
+    const pool = worldVertices(t.meshes.dutyGlow!).filter((v) => Math.abs(v.y - 0.03) < 1e-4);
+    expect(pool).toHaveLength(3 * 4);
+    const l1 = TOWN_LAMPS[1]!.pole;
+    expect(Math.max(...pool.map((v) => v.x))).toBeGreaterThan(l1.x + 1.29);
+    // 점광원은 늘지 않는다
+    expect(lightsOf(t.root, PointLight)).toHaveLength(3);
+    t.dispose();
+  });
+
+  it("setLamps([], true) 는 켜진 구·빛 무리를 지우고 메시를 끈다. 범위 밖·중복 번호는 무시한다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setLighting("night");
+    t.setLamps!([0, 3], true);
+    t.setLamps!([], true);
+    expect(t.meshes.dutyBulb!.visible).toBe(false);
+    expect(t.meshes.dutyGlow!.visible).toBe(false);
+    expect(() => t.setLamps!([-1, 8, 2, 2, 1.5], true)).not.toThrow();
+    expect(bulbs(t.meshes.dutyBulb!)).toBe(1);
+    t.dispose();
+  });
+
+  it("켜짐은 0.4초에 켜지고(덜 켜진 동안 정점 색이 중간), 꺼짐은 0.8초에 꺼진다. 끝나면 꺼진 구·빛 무리 메시가 꺼진다 (D-06·D-08)", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setLighting("night");
+    t.setLamps!([3], true);
+    const full = firstColorR(t.meshes.dutyBulb!);
+    const fullA = maxAlpha(t.meshes.dutyGlow!);
+    expect(full).toBeGreaterThan(0.5);
+    t.setLamps!([], false);
+    t.update!(0.4, 1);
+    // 꺼지는 등불은 사라지기 전 그 불투명도로 내려간다: 0.4/0.8 = 절반
+    expect(t.meshes.dutyBulb!.visible).toBe(true);
+    expect(firstColorR(t.meshes.dutyBulb!)).toBeCloseTo(full * 0.5, 4);
+    expect(maxAlpha(t.meshes.dutyGlow!)).toBeCloseTo(fullA * 0.5, 4);
+    t.update!(0.45, 2);
+    expect(t.meshes.dutyBulb!.visible).toBe(false);
+    expect(t.meshes.dutyGlow!.visible).toBe(false);
+    // 켜짐 0.4초
+    t.setLamps!([5], false);
+    expect(t.meshes.dutyBulb!.visible).toBe(true);
+    expect(firstColorR(t.meshes.dutyBulb!)).toBeCloseTo(0, 6);
+    t.update!(0.2, 3);
+    expect(firstColorR(t.meshes.dutyBulb!)).toBeCloseTo(full * 0.5, 4);
+    t.update!(0.3, 4);
+    expect(firstColorR(t.meshes.dutyBulb!)).toBeCloseTo(full, 4);
+    t.dispose();
+  });
+
+  it("한 번에 켜지고 꺼지는 등불이 섞여도 각자 따라간다(밤이 시작될 때 자른 등불만 꺼진다): [1,2]→[1] 이면 2번만 내려가고 1번은 그대로", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setLighting("night");
+    t.setLamps!([1, 2], true);
+    const full = firstColorR(t.meshes.dutyBulb!);
+    t.setLamps!([1], false);
+    t.update!(0.4, 1);
+    expect(bulbs(t.meshes.dutyBulb!)).toBe(2);
+    const c = t.meshes.dutyBulb!.geometry.getAttribute("color");
+    // 오름차순 병합: 첫 구(1번)는 그대로, 둘째 구(2번)는 절반
+    expect(c.getX(0)).toBeCloseTo(full, 4);
+    expect(c.getX(SPHERE_VERTS)).toBeCloseTo(full * 0.5, 4);
+    t.update!(0.5, 2);
+    expect(bulbs(t.meshes.dutyBulb!)).toBe(1);
+    t.dispose();
+  });
+
+  it("조명 열 lampLit: 켜진 구 재질 배율과 빛 무리 불투명도는 TOWN_LIT[단계].lampLit 이고 0 이면 메시가 꺼진다. 핀 조명의 어둡게 하기도 따른다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setLamps!([0, 4], true);
+    for (const ph of PHASES) {
+      t.setLighting(ph);
+      expect(scalar(t.meshes.dutyBulb!), ph).toBeCloseTo(TOWN_LIT[ph].lampLit, 6);
+      expect((t.meshes.dutyGlow!.material as MeshBasicMaterial).opacity, ph).toBeCloseTo(TOWN_LIT[ph].lampLit, 6);
+      expect(t.meshes.dutyBulb!.visible, ph).toBe(TOWN_LIT[ph].lampLit > 0);
+      expect(t.meshes.dutyGlow!.visible, ph).toBe(TOWN_LIT[ph].lampLit > 0);
+    }
+    t.setLighting("vote");
+    t.setPin({ x: 0, z: 0, strength: 1 }, 0.4);
+    expect(scalar(t.meshes.dutyBulb!)).toBeCloseTo(0.4, 6);
+    t.dispose();
+  });
+
+  it("빛 무리가 꺼진 예산(glows false)이면 빛 무리·웅덩이 메시는 꺼지고 켜진 구는 남는다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setLamps!([0], true);
+    t.setLighting("night");
+    t.applyBudget({ ...LADDER[0]!, glows: false });
+    expect(t.meshes.dutyBulb!.visible).toBe(true);
+    expect(t.meshes.dutyGlow!.visible).toBe(false);
+    t.dispose();
+  });
+
+  it("강등 4단계(props reduced): 빛 웅덩이를 뺀 지오메트리로 다시 만든다(빛 무리 쿼드만, 구·빛 무리는 유지). 0 으로 돌아오면 웅덩이가 돌아온다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setLighting("night");
+    t.setLamps!([1, 2, 5], true);
+    expect(quads(t.meshes.dutyGlow!)).toBe(6);
+    t.applyBudget(LADDER[4]!);
+    expect(quads(t.meshes.dutyGlow!)).toBe(3);
+    expect(worldVertices(t.meshes.dutyGlow!).filter((v) => Math.abs(v.y - 0.03) < 1e-4)).toHaveLength(0);
+    expect(t.meshes.dutyBulb!.visible).toBe(true);
+    expect(bulbs(t.meshes.dutyBulb!)).toBe(3);
+    // 강등 중에 바뀐 등불도 웅덩이 없이 만든다
+    t.setLamps!([1], true);
+    expect(quads(t.meshes.dutyGlow!)).toBe(1);
+    t.applyBudget(LADDER[0]!);
+    expect(quads(t.meshes.dutyGlow!)).toBe(2);
+    t.dispose();
+  });
+
+  it("setLamps 를 부르지 않으면 20페이즈 그대로다: 주인 있는 집 창이 모두 켜져 있고 켜진 구는 없다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setOwners!([0, 2, 5]);
+    expect(quads(t.meshes.houseWinLit!)).toBe(3 * PANES);
+    expect(t.meshes.dutyBulb!.visible).toBe(false);
+    t.dispose();
+  });
+});
+
+describe("창 켜짐 연동 (D-07, P21-15)", () => {
+  it("창 켜짐 = 주인 있음 ∧ 그 번호 등불 켜짐: 주인 [0,1,2] 에 등불 [1,2,5] 면 집 1·2 의 창 16칸만 켜진다(5 는 주인 없음, 0 은 등불 꺼짐)", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setOwners!([0, 1, 2]);
+    t.setLamps!([1, 2, 5], true);
+    expect(quads(t.meshes.houseWinLit!)).toBe(2 * PANES);
+    expect(quads(t.meshes.houseWinDark!)).toBe(6 * PANES);
+    const lit = boxOf(t.meshes.houseWinLit!);
+    // 켜진 창은 집 1(5.0, −8.4)·집 2(8.4, −5.0) 둘레에만 있다
+    expect(lit.min.x).toBeGreaterThan(3.5);
+    expect(lit.max.z).toBeLessThan(-3.5);
+    t.dispose();
+  });
+
+  it("등불이 모두 꺼지면 켜진 창 묶음이 비고 메시가 꺼진다. 다시 켜면 돌아온다. 주인이 바뀌어도 같은 규칙이다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setOwners!([0, 1, 2]);
+    t.setLamps!([], true);
+    expect(quads(t.meshes.houseWinLit!)).toBe(0);
+    expect(t.meshes.houseWinLit!.visible).toBe(false);
+    expect(quads(t.meshes.houseWinDark!)).toBe(8 * PANES);
+    t.setLamps!([0], true);
+    expect(quads(t.meshes.houseWinLit!)).toBe(PANES);
+    t.setOwners!([0, 3]);
+    expect(quads(t.meshes.houseWinLit!)).toBe(PANES);
+    t.setOwners!([1, 3]);
+    expect(quads(t.meshes.houseWinLit!)).toBe(0);
+    // 문패·표식은 주인만 따른다(등불과 무관)
+    expect(cellOfQuad(t.meshes.housePlate!, 3)).toBe(TOWN_ATLAS.seat0 + 3);
+    t.dispose();
+  });
+
+  it("창 연동은 그리기 호출을 늘리지 않는다: 켜진·꺼진 창 두 메시 그대로", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setOwners!([0, 1, 2, 3, 4, 5, 6, 7]);
+    const before = visibleMeshes(t.root).length;
+    t.setLamps!([0, 1], true);
+    // 켜진 구·빛 무리 메시(night 조명 아님 talk 이라 lampLit 0 → 꺼짐)만 늘 수 있다
+    t.setLighting("night");
+    expect(visibleMeshes(t.root).length).toBeLessThanOrEqual(before + 2);
+    t.dispose();
+  });
+});
+
+describe("아침 현장 단서 decal setClue (D-13·D-26)", () => {
+  it("setClue(2, true): 그 집의 단서 지점 셋 자리에 decal 셋(y 0.02)이 한 메시로 보이고, 다른 집 지점에는 없다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setClue!(2, true);
+    const m = t.meshes.clueDecals!;
+    expect(m.visible).toBe(true);
+    const verts = worldVertices(m);
+    expect(verts.every((v) => Math.abs(v.y - 0.02) < 1e-6)).toBe(true);
+    for (const [i, p] of TOWN_CLUE_SPOTS[2]!.entries()) {
+      const near = verts.filter((v) => Math.hypot(v.x - p.x / 100, v.z - p.z / 100) <= 0.45);
+      expect(near.length, `지점 ${i + 1}`).toBeGreaterThan(0);
+    }
+    for (const p of TOWN_CLUE_SPOTS[6]!) expect(verts.some((v) => Math.hypot(v.x - p.x / 100, v.z - p.z / 100) <= 0.45)).toBe(false);
+    t.dispose();
+  });
+
+  it("decal 은 표 크기·색이다: 창 빛 조각 0.6×0.6 = paneLit 알파 0.35, 옷 조각 = roomEdge 알파 0.9, 발자국 = #0a0e1c 알파 0.55", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setClue!(0, true);
+    const m = t.meshes.clueDecals!;
+    const c = m.geometry.getAttribute("color");
+    const alphas = new Set<number>();
+    for (let i = 0; i < c.count; i++) alphas.add(Math.round(c.getW(i) * 100) / 100);
+    expect([...alphas].sort()).toEqual([0.35, 0.55, 0.9]);
+    // 창 빛 조각(지점 ③): 정사각형 0.6 — 지점 ③ 둘레 정점의 폭
+    const p3 = TOWN_CLUE_SPOTS[0]![2]!;
+    const near = worldVertices(m).filter((v) => Math.hypot(v.x - p3.x / 100, v.z - p3.z / 100) <= 0.45);
+    const w = Math.max(...near.map((v) => v.x)) - Math.min(...near.map((v) => v.x));
+    expect(w).toBeCloseTo(0.6, 5);
+    expect(m.material).toBeInstanceOf(MeshBasicMaterial);
+    t.dispose();
+  });
+
+  it("모든 집의 decal 은 개수·종류가 같다(정점 수·알파 구성) — 모양이 누구에게나 같다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    const sig: string[] = [];
+    for (let h = 0; h < 8; h++) {
+      t.setClue!(h, true);
+      const c = t.meshes.clueDecals!.geometry.getAttribute("color");
+      sig.push(`${c.count}/${[...new Set(Array.from({ length: c.count }, (_, i) => c.getW(i)))].sort().join(",")}`);
+    }
+    expect(new Set(sig).size).toBe(1);
+    t.dispose();
+  });
+
+  it("setClue(null) 은 메시를 끈다. 범위 밖 집은 끈다. 0.3초에 나타난다(instant 면 바로)", () => {
+    const t = buildTownScene(LADDER[0]!);
+    const mat = t.meshes.clueDecals!.material as MeshBasicMaterial;
+    t.setClue!(4, false);
+    expect(t.meshes.clueDecals!.visible).toBe(true);
+    expect(mat.opacity).toBe(0);
+    t.update!(0.15, 1);
+    expect(mat.opacity).toBeCloseTo(0.5, 6);
+    t.update!(0.2, 2);
+    expect(mat.opacity).toBe(1);
+    t.setClue!(null, false);
+    expect(t.meshes.clueDecals!.visible).toBe(false);
+    t.setClue!(3, true);
+    expect(mat.opacity).toBe(1);
+    t.setClue!(9, true);
+    expect(t.meshes.clueDecals!.visible).toBe(false);
+    t.dispose();
+  });
+
+  it("강등 4단계(props reduced)에서 decal 이 꺼지고 0 으로 돌아오면 켜진다. 강등 중에 setClue 를 불러도 꺼진 채다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setClue!(2, true);
+    t.applyBudget(LADDER[4]!);
+    expect(t.meshes.clueDecals!.visible).toBe(false);
+    t.setClue!(5, true);
+    expect(t.meshes.clueDecals!.visible).toBe(false);
+    t.applyBudget(LADDER[0]!);
+    expect(t.meshes.clueDecals!.visible).toBe(true);
+    t.dispose();
+  });
+});
+
+describe("그리기 예산 +3 (UI-SPEC 그리기 예산)", () => {
+  it("모두 켠 가장 무거운 상태(주인 8·등불 8·현장 1·밤 조명)도 20페이즈 36 에서 +3 이하이고, 새 메시 셋이 그 +3 이다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setOwners!([0, 1, 2, 3, 4, 5, 6, 7]);
+    t.setLighting("night");
+    const base = visibleMeshes(t.root).length;
+    t.setLamps!([0, 1, 2, 3, 4, 5, 6, 7], true);
+    t.setClue!(1, true);
+    const now = visibleMeshes(t.root);
+    expect(now.length).toBeLessThanOrEqual(39);
+    expect(now.length - base).toBe(3);
+    expect(now.filter((m) => ["dutyBulb", "dutyGlow", "clueDecals"].includes(m.name))).toHaveLength(3);
+    t.dispose();
+  });
+
+  it("고유 재질은 26 이하(켜진 구·빛 무리·decal 재질 셋이 더해져도)", () => {
+    const t = buildTownScene(LADDER[0]!);
+    const set = new Set<Material>();
+    for (const m of allMeshes(t.root)) for (const x of mats(m)) set.add(x);
+    expect(set.size).toBeLessThanOrEqual(26);
+    t.dispose();
+  });
+
+  it("dispose 가 새 메시의 지오메트리도 해제한다(두 번 불러도 안전)", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setLamps!([1], true);
+    t.setClue!(1, true);
+    let n = 0;
+    for (const name of ["dutyBulb", "dutyGlow", "clueDecals"]) t.meshes[name]!.geometry.addEventListener("dispose", () => n++);
+    t.dispose();
+    expect(() => t.dispose()).not.toThrow();
+    expect(n).toBe(3);
   });
 });

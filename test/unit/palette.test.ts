@@ -85,17 +85,17 @@ describe("마을 3D 팔레트 SEAT_COLORS · TOWN_PALETTE · TOWN_LIT", () => {
     expect(TOWN_PALETTE.ground).toBe(PLAZA_PALETTE.floor);
   });
 
-  it("TOWN_LIT 은 일곱 단계 행(indoor·houseOwned 두 열뿐)이고 UI-SPEC 조명 표 값이다. 시민 편 밤은 둘 다 0 (P20-13)", () => {
+  it("TOWN_LIT 은 일곱 단계 행(indoor·houseOwned·lampLit 세 열뿐)이고 UI-SPEC 조명 표 값이다. 시민 편 밤은 indoor·houseOwned 0, 아침 houseOwned 는 0.6 (P20-13·P21-10)", () => {
     expect(TOWN_LIT).toEqual({
-      talk: { indoor: 0.5, houseOwned: 0.3 },
-      vote: { indoor: 0.8, houseOwned: 1 },
-      trial: { indoor: 0.35, houseOwned: 0.06 },
-      night: { indoor: 0.7, houseOwned: 0.7 },
-      nightCitizen: { indoor: 0, houseOwned: 0 },
-      nightGhost: { indoor: 0.7, houseOwned: 0.7 },
-      morning: { indoor: 0.5, houseOwned: 0.3 },
+      talk: { indoor: 0.5, houseOwned: 0.3, lampLit: 0 },
+      vote: { indoor: 0.8, houseOwned: 1, lampLit: 1 },
+      trial: { indoor: 0.35, houseOwned: 0.06, lampLit: 0.3 },
+      night: { indoor: 0.7, houseOwned: 0.7, lampLit: 1 },
+      nightCitizen: { indoor: 0, houseOwned: 0, lampLit: 0 },
+      nightGhost: { indoor: 0.7, houseOwned: 0.7, lampLit: 1 },
+      morning: { indoor: 0.5, houseOwned: 0.6, lampLit: 0.7 },
     });
     // 주인 없는 집 창의 배율 열은 없다(늘 0 — 어두운 칸)
-    for (const row of Object.values(TOWN_LIT)) expect(Object.keys(row).sort()).toEqual(["houseOwned", "indoor"]);
+    for (const row of Object.values(TOWN_LIT)) expect(Object.keys(row).sort()).toEqual(["houseOwned", "indoor", "lampLit"]);
   });
 });
