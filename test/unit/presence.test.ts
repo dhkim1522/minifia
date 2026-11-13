@@ -490,15 +490,17 @@ describe("sceneLook 의 roomsOpen (20-05, D-11·P20-8)", () => {
 
 // ---- 09-10 Task 2: 밤 조명·좌석 표 (NIGHT-07, NIGHT-10, E3 #20) ----
 const asRole = (view: RoomView, role: RoleId): RoomView => ({ ...view, me: { ...view.me, role } });
+// 21-10: 판 종류가 없으면 기본값은 확장판이다(결정 0071) — 기본 마피아 갈래(옛 밤 조명)를 보는 시험은 mode: "basic" 을 싣는다
+const basicNight = (opts: ViewOpts): RoomView => ({ ...viewOf("night", opts), mode: "basic" });
 
 describe("lightingFor (UI-SPEC 단계 조명: 밤은 보는 사람마다 다르다)", () => {
   it("밤·산 시민·경찰·의사 → nightCitizen", () => {
-    for (const role of ["citizen", "police", "doctor"] as const) expect(lightingFor(asRole(viewOf("night", { mySeat: 1 }), role)), role).toBe("nightCitizen");
+    for (const role of ["citizen", "police", "doctor"] as const) expect(lightingFor(asRole(basicNight({ mySeat: 1 }), role)), role).toBe("nightCitizen");
   });
   it("밤·산 마피아 → night, 밤·유령 → nightGhost", () => {
-    expect(lightingFor(asRole(viewOf("night", { mySeat: 1 }), "mafia"))).toBe("night");
-    expect(lightingFor(asRole(viewOf("night", { mySeat: 1, dead: [1] }), "citizen"))).toBe("nightGhost");
-    expect(lightingFor(asRole(viewOf("night", { mySeat: 1, dead: [1], spectate: true }), "mafia"))).toBe("nightGhost");
+    expect(lightingFor(asRole(basicNight({ mySeat: 1 }), "mafia"))).toBe("night");
+    expect(lightingFor(asRole(basicNight({ mySeat: 1, dead: [1] }), "citizen"))).toBe("nightGhost");
+    expect(lightingFor(asRole(basicNight({ mySeat: 1, dead: [1], spectate: true }), "mafia"))).toBe("nightGhost");
   });
   it("아침은 누구나 morning, 낮 단계는 lightingOf 와 같다", () => {
     for (const role of ["citizen", "mafia"] as const) expect(lightingFor(asRole(viewOf("morning"), role))).toBe("morning");
@@ -533,7 +535,7 @@ describe("visibleSeats — 밤 시민 편 좌석 표 (T-09-21, 결정 0002·0021
 
 describe("sceneLook — 시민·경찰·의사의 밤 장면 값이 같다 (NIGHT-07, NIGHT-10, E3 #20)", () => {
   it("seats·lighting·camera·tension 이 역할과 무관하게 같고 lighting 은 nightCitizen 이다", () => {
-    const looks = (["citizen", "police", "doctor"] as const).map((role) => sceneLook(asRole(viewOf("night", { mySeat: 3 }), role), { stageH: 400 }));
+    const looks = (["citizen", "police", "doctor"] as const).map((role) => sceneLook(asRole(basicNight({ mySeat: 3 }), role), { stageH: 400 }));
     expect(flat(looks[1])).toBe(flat(looks[0]));
     expect(flat(looks[2])).toBe(flat(looks[0]));
     expect(looks[0]!.lighting).toBe("nightCitizen");

@@ -38,7 +38,7 @@ const ONE_WORD_TODS = Object.freeze(["morning", "night"]);
 /** 게임 맵 단계 → 시간대 (src/game/timeOfDay.ts todOf 의 사본 — test/unit/e2eContract.test.ts 가 모든 키에서 같음을 고정한다) */
 export const TOD_BY_PHASE = Object.freeze({
   dayAnnounce: "day",
-  errand: "day",
+  errand: "dusk", // 21페이즈(D-04): 저녁
   discussion: "day",
   nomination: "dusk",
   runoff: "dusk",

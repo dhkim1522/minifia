@@ -72,6 +72,7 @@ function makeView(o: ViewOpts = {}): RoomView {
     phaseEndsAt: NOW + (phase === "morning" ? 5_000 : 30_000),
     phaseDurationMs: phase === "morning" ? 5_000 : 30_000,
     serverNow: NOW,
+    mode: "basic", // 21-10: 확장판 밤은 모두 같은 조명이다 — 이 시험은 기본 마피아의 역할별 밤 조명을 본다
     minPlayers: 4,
     maxPlayers: 8,
     players: NAMES.map((nickname, seat) => ({ seat, nickname, connected: true, isHost: seat === 0, alive: !dead.includes(seat) })),

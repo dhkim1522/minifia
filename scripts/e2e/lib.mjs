@@ -1116,7 +1116,7 @@ export const EXPECTED_SCENE = {
   assigning: "lobby",
   roleReveal: "lobby",
   dayAnnounce: "day",
-  errand: "day",
+  errand: "dusk", // 21페이즈(D-04): 저녁은 노을 장면
   discussion: "day",
   night: "night",
   morning: "morning",

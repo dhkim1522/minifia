@@ -78,6 +78,7 @@ describe("nightDarkOf: 시민 편 밤 어둠 판정 (GameMap 의 nightDark 와 �
       phaseEndsAt: null,
       phaseDurationMs: null,
       serverNow: 0,
+      mode: "basic", // 21-10: 확장판 밤은 어둠 표식이 없다(아래 별도 시험) — 이 표는 기본 마피아 갈래
       minPlayers: 4,
       maxPlayers: 8,
       players: players(deadSeat),
@@ -86,6 +87,10 @@ describe("nightDarkOf: 시민 편 밤 어둠 판정 (GameMap 의 nightDark 와 �
 
   it("밤 + 산 사람 + 마피아가 아니면 참 (시민·경찰·의사)", () => {
     for (const role of ["citizen", "police", "doctor"] as const) expect(nightDarkOf(view("night", role)), role).toBe(true);
+  });
+
+  it("확장판(21-10)은 밤이어도 네 역할 모두 거짓이다 — 판 규칙이 역할보다 먼저다", () => {
+    for (const role of ["mafia", "citizen", "police", "doctor"] as const) expect(nightDarkOf({ ...view("night", role), mode: "extended" }), role).toBe(false);
   });
 
   it("마피아·유령·낮·아침은 거짓", () => {

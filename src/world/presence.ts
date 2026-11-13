@@ -124,11 +124,12 @@ export function cameraModeOf(view: RoomView, stageH: number, opts: { verdictZoom
 }
 
 /**
- * 단계 조명(UI-SPEC): 낮 시작·토론 talk, 지목·결선·찬반 vote, 변론·처형 trial, 밤 night, 아침 morning.
- * 로비·종료는 talk.
+ * 단계 조명(UI-SPEC): 낮 시작·토론 talk, 저녁(errand)·지목·결선·찬반 vote, 변론·처형 trial, 밤 night, 아침 morning.
+ * 로비·종료는 talk. 저녁(errand)은 처형 연출 뒤 노을로 이어진다(21페이즈 D-04·P21-0) — 기본 마피아는 errand 를 거치지 않아 바뀌는 것이 없다.
  */
 export function lightingOf(phase: PhaseId): LightingStage {
   switch (phase) {
+    case "errand":
     case "nomination":
     case "runoff":
     case "showdown":
@@ -149,10 +150,12 @@ export function lightingOf(phase: PhaseId): LightingStage {
 /**
  * 보는 사람의 단계 조명(NIGHT-07·10): 밤에는 유령 nightGhost, 산 마피아 night, 산 비마피아 nightCitizen.
  * 밤이 아니면 lightingOf(phase) — 아침 이후는 역할과 무관하다.
+ * 마을 확장판(21페이즈 P21-10, T-21-25): 산 사람은 역할을 읽지 않고 모두 night — 시민 깜깜·마피아 밝음 갈래가 없다(밝기로 역할이 새지 않게). 유령은 nightGhost 그대로.
  */
 export function lightingFor(view: RoomView): LightingStage {
   if (view.phase !== "night") return lightingOf(view.phase);
   if (isGhostViewer(view)) return "nightGhost";
+  if (rulesetOf(modeOf(view)).errand) return "night";
   return view.me.role === "mafia" ? "night" : "nightCitizen";
 }
 
