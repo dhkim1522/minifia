@@ -24,7 +24,7 @@ import {
   snapToWalkable,
 } from "../../shared/game/map";
 import type { MapDef, Obstacle, RoomDef, Spawn } from "../../shared/game/map";
-import { PLAZA_MAP, PLAZA_MASK, PLAZA_OBSTACLES, PLAZA_PLACES, PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
+import { PLAZA_MAP, PLAZA_MASK, PLAZA_OBSTACLES, PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
 import { TOWN_DOOR_EXEMPT, TOWN_HOUSES, TOWN_LAMPS, TOWN_MAP, TOWN_MASK, TOWN_OBSTACLES, TOWN_PLACES, TOWN_PROPS, TOWN_ROOMS, TOWN_SPAWNS } from "../../shared/game/mapTown";
 import { MAPS, MODE_MAPS, PLAYABLE_MAPS, mapOf, roomMapId, startMapOf } from "../../shared/game/maps";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";

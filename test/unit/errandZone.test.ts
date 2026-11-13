@@ -112,18 +112,18 @@ describe("목격 표본 sampleErrand 는 같은 구역 사람만 적는다 (D-18
   it("벽 너머 사람은 근처 집합(errandNear)·목격 줄(errandSeen)에 오르지 않고 같은 방 사람은 오른다", () => {
     const row = (seat: number): string => `${seat}:near=[${(playerOf(seat).errandNear ?? []).join(",")}] seen=${JSON.stringify(playerOf(seat).errandSeen ?? [])}`;
     expect([0, 1, 2].map(row).join(" | ")).toBe(
-      '0:near=[2] seen=[{"seat":2,"place":"mail"}] | 1:near=[] seen=[] | 2:near=[0] seen=[{"seat":0,"place":"mail"}]',
+      '0:near=[2] seen=[{"seat":2,"place":"lamp1"}] | 1:near=[] seen=[] | 2:near=[0] seen=[{"seat":0,"place":"lamp0"}]',
     );
   });
 
   it("마지막 목격(errandLast)의 관찰자도 같은 구역에서만 고른다 — 더 가까운 벽 너머 사람은 관찰자가 되지 않는다", () => {
-    expect(JSON.stringify(next.errandLast)).toBe('[{"seat":0,"by":2,"place":"mail"},{"seat":2,"by":0,"place":"mail"}]');
+    expect(JSON.stringify(next.errandLast)).toBe('[{"seat":0,"by":2,"place":"lamp0"},{"seat":2,"by":0,"place":"lamp1"}]');
   });
 
   it("문을 지나 같은 방에 들어오면 그때 목격 줄이 생긴다(구역이 같아진 표본)", () => {
     const after = sampleErrand(next, posTable(next, { ...SPREAD, 1: POST.inside }), 6000);
     const seen = (seat: number): string => JSON.stringify(after.players.find((p) => p.seat === seat)!.errandSeen ?? []);
-    expect(`${seen(0)} ${seen(1)}`).toBe('[{"seat":2,"place":"mail"},{"seat":1,"place":"mail"}] [{"seat":0,"place":"mail"},{"seat":2,"place":"mail"}]');
+    expect(`${seen(0)} ${seen(1)}`).toBe('[{"seat":2,"place":"lamp1"},{"seat":1,"place":"lamp0"}] [{"seat":0,"place":"lamp0"},{"seat":2,"place":"lamp1"}]');
   });
 
   it("재즈 바 판의 표본은 거리만 본다(같은 좌표, 맵만 다르다)", () => {

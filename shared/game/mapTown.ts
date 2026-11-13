@@ -1,8 +1,9 @@
-// 마을 맵 이동 데이터(20페이즈 D-05~D-08): 방 넷 · 집 여덟 · 장애물 원문 · 48×48 이동 마스크 · 입장 지점 · 장소 8곳 · TOWN_MAP.
+// 마을 맵 이동 데이터(20페이즈 D-05~D-08): 방 넷 · 집 여덟 · 장애물 원문 · 48×48 이동 마스크 · 입장 지점 · 가로등 8곳(21페이즈 D-05·D-07·P21-15) · TOWN_MAP.
 // 배치는 승인 시안 사본 design/v3.0/town-map/README.md 의 A 안이다: 가운데는 지금 광장 그대로, 방은 네 변 가운데, 집은 모서리에 둘씩.
 // 재즈 바·광장과 같은 규칙으로 만든다 — 시각·난수 없는 순수 모듈이고(삼각함수 없이 사칙연산만), 마스크는 장애물 원문과 시험(test/unit/mapTown.test.ts)으로 묶인다.
 // 마스크를 다시 만드는 명령: `MAP_PRINT=1 npx vitest run test/unit/mapTown.test.ts -t 래스터화`
-import type { RoomId } from "../protocol";
+// 가로등 좌표를 다시 만드는 명령: `MAP_PRINT=1 npx vitest run test/unit/mapTown.test.ts -t 가로등`
+import type { LampPlaceId, RoomId } from "../protocol";
 import { STAGE_SPOT, parseMask } from "./map";
 import type { MapDef, Obstacle, PlaceDef, RoomDef, Spawn } from "./map";
 import { PLAZA_OBSTACLES, PLAZA_SPAWNS } from "./mapPlaza";
@@ -172,30 +173,38 @@ export const TOWN_DOOR_EXEMPT: Readonly<Record<RoomId, { x0: number; z0: number;
 export const TOWN_SPAWNS: readonly Spawn[] = PLAZA_SPAWNS;
 
 /**
- * 마을 심부름 장소 8곳(D-08): 방 안 넷 + 광장 넷. 새 장소 id·그림을 만들지 않고 기존 PLACE_IDS 를 다시 쓴다(UI-SPEC P20-20).
- * 방 안 넷은 우체국 mail · 술집 glass · 진료소 flower · 경찰서 poster — 그 방의 걷는 칸 중심이고 소품에서 한 칸(0.5) 이상 떨어져 있다.
- * 광장 넷(clock·bench·tree·fountain)은 PLAZA_PLACES 좌표 그대로다. 서로 2.0 이상(시험이 지킨다).
+ * 가로등 한 곳(21페이즈 D-05·D-07, UI-SPEC P21-15): 좌석 seat 의 집 앞 등불 당번 자리. x·z 는 장소 중심(월드 단위, 걷는 칸 중심), pole 은 기둥 자리 —
+ * 장소 중심에서 집 중심 쪽으로 0.5 다(걷기와 무관해 장애물에 넣지 않는다).
  */
 export interface LampDef {
   seat: number;
-  id: string;
+  id: LampPlaceId;
   x: number;
   z: number;
   pole: { x: number; z: number };
 }
-/** 가로등 8곳(RED 자리 값 — 다음 커밋에서 채운다). */
-export const TOWN_LAMPS: readonly LampDef[] = [];
 
-export const TOWN_PLACES: readonly PlaceDef[] = [
-  { id: "mail", x: 0.75, z: -8.75 },
-  { id: "glass", x: 8.75, z: -0.75 },
-  { id: "flower", x: 0.75, z: 8.75 },
-  { id: "poster", x: -7.75, z: -1.25 },
-  { id: "clock", x: -2.4, z: -2.6 },
-  { id: "bench", x: 4.6, z: -2.2 },
-  { id: "tree", x: -4.6, z: 2.8 },
-  { id: "fountain", x: 1.6, z: 1.6 },
+/**
+ * 가로등 8곳: 가로등 n ↔ 좌석 n 의 집(고정 표). 장소 중심 = 집 n 의 문 앞(front)에서 광장 가운데(0, 0) 쪽 단위 방향으로 1.5 간 점에서 가장 가까운 걷는 칸 중심.
+ * 가로등끼리 2.0 이상, 자기 집 문 앞과 1.3 이상, 가장 가까운 문 앞이 자기 집이다(시험이 지킨다). 여덟 곳 모두 정의식 점 그대로였다(옮긴 곳 없음).
+ * 좌표는 리터럴이다 — 다시 만드는 명령: `MAP_PRINT=1 npx vitest run test/unit/mapTown.test.ts -t 가로등`
+ */
+export const TOWN_LAMPS: readonly LampDef[] = [
+  { seat: 0, id: "lamp0", x: -2.25, z: -5.25, pole: { x: -2.579, z: -5.627 } },
+  { seat: 1, id: "lamp1", x: 3.25, z: -5.25, pole: { x: 3.493, z: -5.687 } },
+  { seat: 2, id: "lamp2", x: 5.25, z: -4.25, pole: { x: 5.736, z: -4.366 } },
+  { seat: 3, id: "lamp3", x: 5.25, z: 3.75, pole: { x: 5.715, z: 3.934 } },
+  { seat: 4, id: "lamp4", x: 3.75, z: 5.25, pole: { x: 3.934, z: 5.715 } },
+  { seat: 5, id: "lamp5", x: -4.25, z: 5.25, pole: { x: -4.366, z: 5.736 } },
+  { seat: 6, id: "lamp6", x: -5.25, z: 3.25, pole: { x: -5.687, z: 3.493 } },
+  { seat: 7, id: "lamp7", x: -5.25, z: -2.25, pole: { x: -5.627, z: -2.579 } },
 ];
+
+/**
+ * 마을 심부름 장소 8곳(21페이즈 D-05): 가로등 lamp0~lamp7. 20페이즈의 방 안 넷·광장 넷(mail·glass·flower·poster·clock·bench·tree·fountain)은 이 가로등 8곳으로 대체됐다.
+ * 장소 그림은 기존 lamp 그림을 함께 쓴다(P21-17).
+ */
+export const TOWN_PLACES: readonly PlaceDef[] = TOWN_LAMPS.map(({ id, x, z }) => ({ id, x, z }));
 
 /**
  * 마을 이동 마스크 48×48: '.' 걷기 · '#' 막힘. 줄 = z −11.75 → 11.75, 글자 = x −11.75 → 11.75 (칸 0.5, 원점 −12, 바깥 판 ±12).

@@ -133,11 +133,11 @@ describe("목격 기록·마지막 목격은 같은 구역 사람만 적는다 (
     const seen = (seatNo: number): string => JSON.stringify(players.find((p) => p.seat === seatNo)!.errandSeen ?? []);
     const last = JSON.stringify(((await storedRoom(g.code)) as unknown as { errandLast?: unknown }).errandLast ?? []);
     expect(`${seen(0)} ${seen(1)} ${seen(2)} last=${last}`).toBe(
-      '[{"seat":2,"place":"mail"}] [] [{"seat":0,"place":"mail"}] last=[{"seat":0,"by":2,"place":"mail"},{"seat":2,"by":0,"place":"mail"}]',
+      '[{"seat":2,"place":"lamp1"}] [] [{"seat":0,"place":"lamp0"}] last=[{"seat":0,"by":2,"place":"lamp0"},{"seat":2,"by":0,"place":"lamp1"}]',
     );
 
     // 좌석 0(방 안)·1(문 밖)이 심부름 3곳을 마친 것으로 두고 토론으로 넘긴다 — 둘 다 me.record 를 받는다.
-    const done = ["mail", "clock", "bench"];
+    const done = ["lamp0", "lamp1", "lamp2"];
     await writeRoomEdit(env.ROOM.getByName(g.code), (room) => ({
       ...room,
       players: (room.players as StoredPlayer[]).map((p) => (p.seat <= 1 ? { ...p, errandPlaces: done, errandDone: done } : p)),
@@ -148,7 +148,7 @@ describe("목격 기록·마지막 목격은 같은 구역 사람만 적는다 (
     await regraftEvening(g.code, evening, g.socks, actorOf(g, 3).sock);
     for (const x of g.actors) await settle(x.sock, 0);
     const record = (seatNo: number): string => JSON.stringify(lastViewOf(actorOf(g, seatNo).sock).me.record);
-    expect(`${record(0)} ${record(1)}`).toBe('[{"seat":2,"place":"mail"}] []');
+    expect(`${record(0)} ${record(1)}`).toBe('[{"seat":2,"place":"lamp1"}] []');
   });
 });
 

@@ -340,7 +340,7 @@ describe("마을 한 판: 산 사람이 받은 모든 world 프레임의 남의 
 
   it("목격: 첫 표본에서 문 앞 사람은 광장의 V 에게만 적히고 벽 너머 W 에게는 적히지 않는다", T, async () => {
     const r = await play();
-    expect(r.seenAfterFirst).toBe(`V=[{"seat":${r.x.seat},"place":"mail"}] W=[]`);
+    expect(r.seenAfterFirst).toBe(`V=[{"seat":${r.x.seat},"place":"lamp0"}] W=[]`);
   });
 });
 
