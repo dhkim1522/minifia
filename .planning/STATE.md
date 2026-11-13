@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: "13 완료 → 다음 21-14 (토론 · 의심 보드)"
+current_plan: "14 완료 → 다음 21-15 (튜토리얼 첫 사건 새 흐름)"
 status: executing
-stopped_at: Completed 21-13-PLAN.md
-last_updated: "2026-11-13T09:40:23.040Z"
+stopped_at: Completed 21-14-PLAN.md
+last_updated: "2026-11-13T09:53:12.549Z"
 last_activity: 2026-11-13
-last_activity_desc: Phase 21 plan 13 완료 (아침 현장 조사: 결과 알림 뒤 지점 52 셋·살핀 결과 done/blurred·카드 줄·독 [살펴보기] 반경 판정·꺼진 등불 36, 유령은 채팅 패널 + 꺼진 등불만)
-state_head: 072ec6ef786d04eb4f41a40d192105d854fbf790
+last_activity_desc: "Phase 21 plan 14 완료 (토론 의심 보드: 확장판 토론 시작 때 {일차}:board 래치로 한 번 자동 열림, 칩 줄·목격 펼치기·산 사람 얼굴 줄 같은 옷 배지, 헤더 [의심 보드] 단추, 옛 기록 카드·증거 카드 숨김, 이름표 같은 옷 표시는 받은 옷 조각 기준, 건너뛴 아침의 조용한 밤 알림)"
+state_head: 7d2f870a95710ee265016fe41592a836d989036d
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 115
-  completed_plans: 110
+  completed_plans: 111
   percent: 60
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 21 (cause-effect-missions) — IN PROGRESS
-Current Plan: 13 완료 → 다음 21-14 (토론 · 의심 보드)
+Current Plan: 14 완료 → 다음 21-15 (튜토리얼 첫 사건 새 흐름)
 Total Plans in Phase: 18
 Status: Executing Phase 21
-Last activity: 2026-11-13 — 21-13 완료 (확장판 아침 현장 조사: 결과 알림이 끝나면(sceneOn) 현장 집 앞 지점 52 셋(① 발자국 ② 옷 조각 ③ 창문)이 같은 fresh 모양으로 뜨고, 눌러 걸어가 독의 흰 알약 [살펴보기]로 {t:inspect} 전송, 살핀 결과대로 done·blurred 와 카드 줄(최대 3), 꺼진 등불 36 점선 표식. 유령은 채팅 패널 + 꺼진 등불만. 마피아·시민 DOM 동일.)
+Last activity: 2026-11-13 — 21-14 완료 (확장판 토론 의심 보드: 토론 시작 때 그날 한 번 자동으로 열리고 닫아도 헤더 [의심 보드] 단추로 다시 열린다. 칩 줄(발자국·옷 조각·창문 금빛, 먼저 손댄 흔적 점선, 목격 n 펼치기)과 산 사람 4열 얼굴 줄 같은 옷 배지. 보드는 나만 보고 정체 표시 없음. 확장판은 옛 목격 기록 카드·증거 카드를 그리지 않는다. 건너뛴 아침은 조용한 밤 결과 알림.)
 
 ## Performance Metrics
 
@@ -299,6 +299,7 @@ Last activity: 2026-11-13 — 21-13 완료 (확장판 아침 현장 조사: 결�
 | Phase 21 P10 | 55min | 2 tasks | 20 files |
 | Phase 21 P11 | 50min | 2 tasks | 16 files |
 | Phase 21 P13 | 60min | 2 tasks | 16 files |
+| Phase 21 P14 | 55min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -733,8 +734,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T09:40:22.078Z
-Stopped at: Completed 21-13-PLAN.md
+Last session: 2026-11-13T09:53:11.478Z
+Stopped at: Completed 21-14-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
