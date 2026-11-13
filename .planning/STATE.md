@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: "11 완료 → 다음 21-12 (밤 · 집 하나 고르기 화면)"
+current_plan: "12 완료 → 다음 21-13 (아침 · 현장 조사 화면)"
 status: executing
-stopped_at: Completed 21-11-PLAN.md
-last_updated: "2026-11-13T09:11:23.321Z"
+stopped_at: Completed 21-12-PLAN.md
+last_updated: "2026-11-13T09:27:00.361Z"
 last_activity: 2026-11-13
-last_activity_desc: Phase 21 plan 11 완료 (저녁 독 SceneDock·[켜기] 길게 누르기 hold·[건너뛰기] 토글·진행 점 등불 n/3·시작 카드 오늘 켤 등불·켠 타일 불꽃 배지)
-state_head: dddfef3af7db878b17b22b817f04eed10361a651
+last_activity_desc: Phase 21 plan 12 완료 (밤 집 판 HousePick 40×40·최근접 누르기·밤 독 SceneDock night 122·밤 고정 시점 세로 맞춤 nightViewOf·이름표 없음)
+state_head: cd5477eae95c8b63f4628029f128504d6a7096ef
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 115
-  completed_plans: 108
+  completed_plans: 109
   percent: 60
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 21 (cause-effect-missions) — IN PROGRESS
-Current Plan: 11 완료 → 다음 21-12 (밤 · 집 하나 고르기 화면)
+Current Plan: 12 완료 → 다음 21-13 (아침 · 현장 조사 화면)
 Total Plans in Phase: 18
 Status: Executing Phase 21
-Last activity: 2026-11-13 — 21-11 완료 (확장판 저녁 독 SceneDock: 읽기 전용 기록 두 줄 + 금빛 [켜기](0.6초 hold 판정, 모든 역할 같은 채움 막대) + 눌림 토글 [건너뛰기]. 진행 점 독 위 16 '등불 n/3', 시작 카드 '오늘 켤 등불', 켠 가로등 타일 불꽃 배지, 장소 위 [처리] 알약은 확장판에서 없음, 튜토리얼 지도 장면은 그대로. 독 높이 170. npm test 8870 통과·실패 0, typecheck 초록). 이전: 21-10 완료 (저녁 노을 조명·시간대·장면 dusk, 확장판 밤 모두 같은 조명·어둠 표식 없음, 밤 고정 시점 nightZoomOf(폭) 표 0.249~0.303, 확장판 아침 걷기, __mfTown.night, 접속 끊김 때 건너뛰기 재확인. npm test 8833 통과·실패 0, typecheck 초록). 이전: 21-08 완료 (V2Icon flame·footprint·cloth·window, 자막 띠 night.house·scene.*·discussion.clue 와 심부름 문장 갱신, 헤더 제목 등불 켜기·현장 조사, roleHintOf 카드·시트 한 줄, causalView 계산 모듈. npm test 8779 통과·실패 0, typecheck 초록). 이전: 21-07 완료 (확장판 아침이 공개 흔적 morning.trace·seen·day.evidence 를 싣지 않고 옷 조각은 현장 ② 를 살핀 본인 me.clues 로만, 현장 난수가 첫 호출. 마을 한 판 누설 전수 causalLeak 판정 여섯·변이 확인, 화면 코드 정적 검사 srcClean, 봇 판 완주. npm test 8729 통과·실패 0, typecheck 초록). 이전: 21-06 완료
+Last activity: 2026-11-13 — 21-12 완료 (확장판 마을 밤: 얼굴 목록 대신 고정 시점 지도 집 지붕 위 40×40 집 판 8, 가장 가까운 판 하나(≤ 28)를 눌러 지금 그대로 pick 전송, 고른 판 3px 금빛·빛·aria-pressed, 안 골랐으면 전체 is-call, 내 판은 8px 점 하나만 다름. 밤 독 122(안내 한 줄 범례/'고른 집은 바꿀 수 있어요' + [쪽지]/[유언]). 네 역할 같은 DOM, 이름표 없음, 유령은 판 없이 유령 채팅 패널, 기본 마피아 밤 그대로. 밤 카메라 세로 맞춤 nightViewOf(gatherView 는 집이 약 50px 아래로 치우쳤음). npm test 8929 통과·실패 0, typecheck 초록). 이전: 21-11 완료 (확장판 저녁 독 SceneDock: 읽기 전용 기록 두 줄 + 금빛 [켜기](0.6초 hold 판정, 모든 역할 같은 채움 막대) + 눌림 토글 [건너뛰기]. 진행 점 독 위 16 '등불 n/3', 시작 카드 '오늘 켤 등불', 켠 가로등 타일 불꽃 배지, 장소 위 [처리] 알약은 확장판에서 없음, 튜토리얼 지도 장면은 그대로. 독 높이 170. npm test 8870 통과·실패 0, typecheck 초록). 이전: 21-10 완료 (저녁 노을 조명·시간대·장면 dusk, 확장판 밤 모두 같은 조명·어둠 표식 없음, 밤 고정 시점 nightZoomOf(폭) 표 0.249~0.303, 확장판 아침 걷기, __mfTown.night, 접속 끊김 때 건너뛰기 재확인. npm test 8833 통과·실패 0, typecheck 초록). 이전: 21-08 완료 (V2Icon flame·footprint·cloth·window, 자막 띠 night.house·scene.*·discussion.clue 와 심부름 문장 갱신, 헤더 제목 등불 켜기·현장 조사, roleHintOf 카드·시트 한 줄, causalView 계산 모듈. npm test 8779 통과·실패 0, typecheck 초록). 이전: 21-07 완료 (확장판 아침이 공개 흔적 morning.trace·seen·day.evidence 를 싣지 않고 옷 조각은 현장 ② 를 살핀 본인 me.clues 로만, 현장 난수가 첫 호출. 마을 한 판 누설 전수 causalLeak 판정 여섯·변이 확인, 화면 코드 정적 검사 srcClean, 봇 판 완주. npm test 8729 통과·실패 0, typecheck 초록). 이전: 21-06 완료
 
 ## Performance Metrics
 
@@ -732,8 +732,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T09:11:22.333Z
-Stopped at: Completed 21-11-PLAN.md
+Last session: 2026-11-13T09:26:59.325Z
+Stopped at: Completed 21-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
