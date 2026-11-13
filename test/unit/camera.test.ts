@@ -24,6 +24,7 @@ import {
   NAMETAG_H,
   NAMETAG_MAX_W,
   PAN_BOX,
+  nightZoomOf,
   panBoxOf,
   PANEL_HEIGHT,
   PLATE_FAR,
@@ -740,5 +741,18 @@ describe("gatherView (UI-SPEC 카메라: 이름표가 몸보다 우선, E8 #31 b
     const y = ringY(size, v, 1);
     expect(y.headBottom).toBeCloseTo(rect.bottom, 6);
     process.stdout.write(`gatherView 360x560 찬반 투표자 199: offsetY ${v.offsetY.toFixed(2)}, 위쪽 이름표 위 끝 ${(y.headTop - GATHER_STACK_H).toFixed(1)} (스테이지 위 ${rect.top})\n`);
+  });
+});
+
+describe("nightZoomOf — 확장판 밤 고정 시점 배율 (21-10, D-25, UI-SPEC 밤 고정 시점)", () => {
+  it("폰 6종 스테이지 폭 360·360·390·390·402·430 에서 0.249·0.249·0.272·0.272·0.281·0.303(0.001 안)", () => {
+    const table: Array<[number, number]> = [[360, 0.249], [360, 0.249], [390, 0.272], [390, 0.272], [402, 0.281], [430, 0.303]];
+    for (const [w, want] of table) expect(Math.abs(nightZoomOf(w) - want) < 0.001, `${w}`).toBe(true);
+    // STAGE_SIZES 의 폰 폭이 모두 표 안에 있다
+    for (const s of STAGE_SIZES) expect(table.some(([w]) => w === s.w), `${s.label}`).toBe(true);
+  });
+  it("식은 (폭 − 32) / 1315 이다(반올림 없음)", () => {
+    expect(nightZoomOf(1315 + 32)).toBe(1);
+    expect(nightZoomOf(390)).toBeCloseTo(358 / 1315, 10);
   });
 });

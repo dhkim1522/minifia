@@ -649,6 +649,20 @@ describe("GameMap — 이동 차단 canWalk (MAP-04)", () => {
     }
   });
 
+  it("21-10 확장판: 산 사람은 아침에도 걷고(D-26) 밤에는 막힌다(D-11). 기본 마피아 아침은 막힌다", () => {
+    const extended = (phase: PhaseId): RoomView => ({ ...makeView({ phase }), mode: "extended" });
+    const got: string[] = [];
+    for (const phase of ["morning", "night", "errand", "discussion"] as const) {
+      const { unmount } = mount(extended(phase));
+      got.push(`${phase}:${stage.props?.canWalk}`);
+      unmount();
+    }
+    expect(got.join(",")).toBe("morning:true,night:false,errand:true,discussion:true");
+    const basic = mount(makeView({ phase: "morning" }));
+    expect(`morning:${stage.props?.canWalk}`).toBe("morning:false");
+    basic.unmount();
+  });
+
   it("유령은 모든 단계에서 걷는다", () => {
     for (const phase of ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution"] as const) {
       const { unmount } = mount(makeView({ phase, dead: [0] }));

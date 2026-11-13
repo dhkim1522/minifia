@@ -807,3 +807,46 @@ describe("21-10 저녁 노을·확장판 밤 같은 조명 (D-04, P21-0·P21-10,
     expect(sceneLook(town("errand"), { stageH: 400 }).lighting).toBe("vote");
   });
 });
+
+describe("21-10 확장판 밤 고정 시점·아침 따라가기 (D-11·D-25, P21-10·P21-12)", () => {
+  const town = (phase: PhaseId, over: Partial<RoomView> = {}, opts: ViewOpts = {}): RoomView => ({ ...viewOf(phase, opts), map: "town", mode: "extended", ...over });
+  const ROLES = ["mafia", "citizen", "police", "doctor"] as const;
+
+  it("확장판 밤 cameraModeOf 는 목표 (0,0)·배율 (폭−32)/1315 의 고정이다", () => {
+    const cam = cameraModeOf(town("night", {}, { mySeat: 1 }), 400, { stageW: 390 });
+    expect(cam.mode).toBe("fixed");
+    if (cam.mode !== "fixed") return;
+    expect(`${cam.target.x},${cam.target.z}`).toBe("0,0");
+    expect(Math.round(cam.zoom * 1000) / 1000).toBe(0.272);
+    expect(cam.zoomMs).toBeUndefined();
+  });
+
+  it("밤 카메라 배율은 폰 폭마다 표 값이다(360 0.249 · 402 0.281 · 430 0.303)", () => {
+    const zoomAt = (w: number): number => {
+      const cam = cameraModeOf(town("night"), 400, { stageW: w });
+      return cam.mode === "fixed" ? Math.round(cam.zoom * 1000) / 1000 : -1;
+    };
+    expect([360, 402, 430].map(zoomAt).join(",")).toBe("0.249,0.281,0.303");
+  });
+
+  it("밤 카메라는 역할과 무관하고 유령도 같다(role 만 바꾼 결과 동일)", () => {
+    const results = ROLES.map((role) => flat(cameraModeOf(asRole(town("night", {}, { mySeat: 1 }), role), 400, { stageW: 390 })));
+    expect(new Set(results).size).toBe(1);
+    expect(flat(cameraModeOf(town("night", {}, { mySeat: 1, dead: [1] }), 400, { stageW: 390 }))).toBe(results[0]);
+  });
+
+  it("확장판 아침·저녁·토론은 따라가기, 기본 마피아 밤은 지금 그대로(follow)", () => {
+    for (const phase of ["morning", "errand", "discussion", "dayAnnounce"] as const) expect(flat(cameraModeOf(town(phase), 400, { stageW: 390 })), phase).toBe(flat({ mode: "follow" }));
+    expect(flat(cameraModeOf(town("night", { mode: "basic" }), 400, { stageW: 390 }))).toBe(flat({ mode: "follow" }));
+    expect(flat(cameraModeOf({ ...viewOf("night"), mode: "basic" }, 400, { stageW: 390 }))).toBe(flat({ mode: "follow" }));
+  });
+
+  it("마을이 아닌 맵의 확장판 밤은 고정하지 않는다(집 8채가 없다)", () => {
+    expect(flat(cameraModeOf(town("night", { map: "bar" }), 400, { stageW: 390 }))).toBe(flat({ mode: "follow" }));
+  });
+
+  it("sceneLook 이 opts.stageW 로 밤 카메라를 만든다", () => {
+    const cam = sceneLook(asRole(town("night", {}, { mySeat: 1 }), "citizen"), { stageH: 400, stageW: 402 }).camera;
+    expect(cam.mode === "fixed" ? Math.round(cam.zoom * 1000) / 1000 : -1).toBe(0.281);
+  });
+});

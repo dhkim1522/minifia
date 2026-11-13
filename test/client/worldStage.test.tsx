@@ -2142,7 +2142,7 @@ describe("마을 컷어웨이·집 주인·__mfTown (20-05, D-07·D-10·D-11)", 
     const r = s.world.renderers[0]!;
     r.roofs.mockReturnValue({ post: 0.3333333, pub: 1, clinic: 1, police: 1 });
     frames(50);
-    expect(window.__mfTown).toEqual({ zone: "post", open: ["post"], roofs: { post: 0.33, pub: 1, clinic: 1, police: 1 }, owners: [0, 1], veiled: [], door: [], lamps: [], windows: [0, 1], clue: false });
+    expect(window.__mfTown).toEqual({ zone: "post", open: ["post"], roofs: { post: 0.33, pub: 1, clinic: 1, police: 1 }, owners: [0, 1], veiled: [], door: [], lamps: [], windows: [0, 1], clue: false, night: { zoom: 1, fixed: false } });
     s.utils.unmount();
     expect(window.__mfTown).toBeUndefined();
   });
@@ -4737,5 +4737,30 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, 16페이즈 D-06·D-07
     expect(ring.getAttribute("style") ?? "").not.toContain("animation");
     const css = readFileSync("src/styles/game.css", "utf8");
     expect(css).not.toMatch(/\.mf-world__ring[^{]*\{[^}]*animation/);
+  });
+});
+
+describe("마을 밤 고정 시점 런타임·__mfTown.night (21-10, D-25)", () => {
+  const townView = (players: PublicPlayer[] = TWO): RoomView => ({ ...makeView(players, 0), map: "town" });
+  const ENTS = (): WorldSeg[] => [seg(0, [0, 0]), seg(1, [-300, 50])];
+  const nightScene = (zoom: number): SceneLook => sceneOf({ 0: {}, 1: {} }, { lighting: "night", camera: { mode: "fixed", target: { x: 0, z: 0 }, zoom }, town: { lamps: [1], clue: null } });
+  const followScene = (): SceneLook => sceneOf({ 0: {}, 1: {} }, { lighting: "morning", camera: { mode: "follow" }, town: { lamps: [1], clue: null } });
+
+  it("밤 고정 장면이면 __mfTown.night = { zoom, fixed: true }, 아침 따라가기로 돌아오면 { zoom: 1, fixed: false }", async () => {
+    const s = await open({ view: townView(), scene: nightScene(0.272) }, { ents: ENTS() });
+    frames(5);
+    expect(JSON.stringify(window.__mfTown?.night)).toBe(JSON.stringify({ zoom: 0.272, fixed: true }));
+    s.rerender({ scene: followScene() });
+    frames(5);
+    expect(JSON.stringify(window.__mfTown?.night)).toBe(JSON.stringify({ zoom: 1, fixed: false }));
+  });
+
+  it("밤 고정 카메라는 목표 (0,0) 그대로 옮긴다(모이는 자리 구도로 덮어쓰지 않는다)", async () => {
+    const s = await open({ view: townView(), scene: nightScene(0.272) }, { ents: ENTS() });
+    frames(200);
+    const r = s.world.renderers[0]!;
+    const last = r.views.at(-1)!.target;
+    expect(`${last.x},${last.z}`).toBe("0,0");
+    expect(r.setZoom).toHaveBeenLastCalledWith(0.272);
   });
 });
