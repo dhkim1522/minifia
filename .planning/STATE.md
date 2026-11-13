@@ -4,18 +4,18 @@ milestone: v3.0
 milestone_name: 사회자와 증거
 current_phase: 20
 current_phase_name: map-expansion
-current_plan: "15 완료 → 다음 21-16"
+current_plan: "16 완료 → 다음 21-17"
 status: executing
-stopped_at: Completed 21-15-PLAN.md
-last_updated: "2026-11-13T12:42:19.720Z"
+stopped_at: Completed 21-16-PLAN.md
+last_updated: "2026-11-13T13:29:41.748Z"
 last_activity: 2026-11-13
-last_activity_desc: "Phase 21 plan 14 완료 (토론 의심 보드: 확장판 토론 시작 때 {일차}:board 래치로 한 번 자동 열림, 칩 줄·목격 펼치기·산 사람 얼굴 줄 같은 옷 배지, 헤더 [의심 보드] 단추, 옛 기록 카드·증거 카드 숨김, 이름표 같은 옷 표시는 받은 옷 조각 기준, 건너뛴 아침의 조용한 밤 알림)"
-state_head: edfab7b0aba0fbe9eef99319e3005a9ec795ec82
+last_activity_desc: "Phase 21 plan 16 완료 (원인→결과 하루 화면 E2E causal-day·causal-leak·causal-sizes, 의심 보드 눌림·목격 칩 누르기 높이 결함 수정). 직전 plan 14 완료 (토론 의심 보드: 확장판 토론 시작 때 {일차}:board 래치로 한 번 자동 열림, 칩 줄·목격 펼치기·산 사람 얼굴 줄 같은 옷 배지, 헤더 [의심 보드] 단추, 옛 기록 카드·증거 카드 숨김, 이름표 같은 옷 표시는 받은 옷 조각 기준, 건너뛴 아침의 조용한 밤 알림)"
+state_head: b497a4932c45cb694f2abe75b6e854d6f8e24cf8
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 115
-  completed_plans: 112
+  completed_plans: 113
   percent: 60
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 21 (cause-effect-missions) — IN PROGRESS
-Current Plan: 15 완료 → 다음 21-16
+Current Plan: 16 완료 → 다음 21-17
 Total Plans in Phase: 18
 Status: Executing Phase 21
-Last activity: 2026-11-13 — 21-14 완료 (확장판 토론 의심 보드: 토론 시작 때 그날 한 번 자동으로 열리고 닫아도 헤더 [의심 보드] 단추로 다시 열린다. 칩 줄(발자국·옷 조각·창문 금빛, 먼저 손댄 흔적 점선, 목격 n 펼치기)과 산 사람 4열 얼굴 줄 같은 옷 배지. 보드는 나만 보고 정체 표시 없음. 확장판은 옛 목격 기록 카드·증거 카드를 그리지 않는다. 건너뛴 아침은 조용한 밤 결과 알림.)
+Last activity: 2026-11-13 — 21-16 완료 (원인→결과 하루 화면 E2E: causal-day 한 판 완주 54/54·causal-leak 참가자 탭 둘 DOM 비교 11/11·causal-sizes 폰 6종 전부 통과, 기본 마피아 회귀 mode-basic·basic-vote 통과. 실브라우저가 찾은 의심 보드 닫기·목격 칩 누르기 결함 수정.) 직전: 21-14 완료 (확장판 토론 의심 보드: 토론 시작 때 그날 한 번 자동으로 열리고 닫아도 헤더 [의심 보드] 단추로 다시 열린다. 칩 줄(발자국·옷 조각·창문 금빛, 먼저 손댄 흔적 점선, 목격 n 펼치기)과 산 사람 4열 얼굴 줄 같은 옷 배지. 보드는 나만 보고 정체 표시 없음. 확장판은 옛 목격 기록 카드·증거 카드를 그리지 않는다. 건너뛴 아침은 조용한 밤 결과 알림.)
 
 ## Performance Metrics
 
@@ -301,6 +301,7 @@ Last activity: 2026-11-13 — 21-14 완료 (확장판 토론 의심 보드: 토�
 | Phase 21 P13 | 60min | 2 tasks | 16 files |
 | Phase 21 P14 | 55min | 2 tasks | 8 files |
 | Phase 21 P15 | 3h | 2 tasks | 15 files |
+| Phase 21 P16 | 약 3시간 | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -735,8 +736,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T12:42:18.618Z
-Stopped at: Completed 21-15-PLAN.md
+Last session: 2026-11-13T13:29:40.643Z
+Stopped at: Completed 21-16-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
