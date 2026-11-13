@@ -266,3 +266,6 @@ export const TOWN_MASK: readonly string[] = [
 
 /** 마을 이동 맵(UI-SPEC P20-0): 48×48 · 칸 0.5 · 원점 −12 · 걷기 한계 ±10. 무대 자리는 광장 연단 그대로다. */
 export const TOWN_MAP: MapDef = { id: "town", size: 48, origin: -12, walkHalf: 10, mask: parseMask(TOWN_MASK), spawns: TOWN_SPAWNS, stage: STAGE_SPOT, places: TOWN_PLACES, rooms: TOWN_ROOMS };
+
+/** 자리 값(RED 단계) — 지점 표는 GREEN 에서 MAP_PRINT 출력으로 채운다. */
+export const TOWN_CLUE_SPOTS: Readonly<Record<number, readonly [{ x: number; z: number }, { x: number; z: number }, { x: number; z: number }]>> = {};

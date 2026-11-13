@@ -73,6 +73,7 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   // 토론 끝내기 on / 지목 target(0..7, 취소 없음 — null 거부) / 찬반 agree. 단계·산 사람·자기 자신·변론자 검사는 서버 규칙(shared/game/{discussion,nomination,verdict}.ts)이 한다.
   z.strictObject({ t: z.literal("endDiscussion"), on: z.boolean() }),
   // 저녁·아침 건너뛰기(21페이즈 D-23): on 만 — 단계·산 사람·판 종류는 서버 규칙(shared/game/skip.ts)이 본다.
+  z.strictObject({ t: z.literal("inspect") }),
   z.strictObject({ t: z.literal("skipPhase"), on: z.boolean() }),
   z.strictObject({ t: z.literal("point"), target: z.number().int().min(0).max(7) }),
   z.strictObject({ t: z.literal("verdict"), agree: z.boolean() }),

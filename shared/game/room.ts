@@ -2,7 +2,7 @@
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
 import { GAME_MODES, MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
-import type { GameMode, MapChoice, MapId, PlaceId, RecordLine } from "../protocol";
+import type { ClueLine, ClueSpotId, GameMode, MapChoice, MapId, PlaceId, RecordLine, TracePiece } from "../protocol";
 import type {
   AssassinationRecord,
   BadgeId,
@@ -74,6 +74,8 @@ export interface Player {
   endVote?: true;
   /** 서버 전용(21페이즈 D-23). 저녁·아침 건너뛰기를 누른 표시. toggleSkip(skip.ts)만 쓰고 errand·morning 진입 훅(clearSkip)이 키째 지운다. 공개 값은 누른 수(day.skipCount)와 본인 me.skipPhase 뿐이다(21-07 정적 시험이 화면 코드에 이 이름이 없음을 지킨다). */
   skipVote?: true;
+  /** 서버 전용(21페이즈 D-13). 아침 현장에서 이 사람이 살핀 단서(살핀 차례 순). 본인 view 의 me.clues 로만 필드별 복사된다. clearScene 이 키째 지운다. */
+  clues?: ClueLine[];
   /** 서버 전용(결정 0061-10). 본인이 남긴 유언 — saveWill(09-12)만 쓰고, 사후에도 바꿀 수 없다. 아침에 서버가 채팅 카드로 만들어 보내며 view 의 me.will 로 산 본인에게만 간다. */
   will?: string;
   /** 공개 직업 주장(결정 0066-1). setBadge 만 쓴다. 실제 역할과 무관한 값이고 view 에는 산 사람 것만 players[].badge 로 실린다. */
@@ -190,6 +192,11 @@ export interface RoomState {
    * 어떤 view·프레임에도 이 키로 실리지 않는다 — 공개 값은 lampsShownOf·lampsLitOf(lamps.ts)가 만든 day.lamps 뿐이다(21-07 정적 시험이 화면 코드에 이 이름이 없음을 지킨다).
    */
   lampCut?: PlaceId[];
+  /**
+   * 아침 현장(21페이즈 D-12~D-16·D-21). enterMorning(확장판)이 피해자 집(미수면 마피아가 노린 집)으로 세우고 다음 저녁 진입(clearScene)이 지운다.
+   * house 만 view(day.scene)에 나가고 나머지는 서버 전용이다: steps 발자국 수, cloth·window 옷 조각 둘, eyes 창에서 본 좌석(이웃이면서 가로등이 켜진 산 사람), smudged 마피아가 먼저 만져 흐려진 지점.
+   */
+  scene?: { house: number; steps: number; cloth: TracePiece; window: TracePiece; eyes: number[]; smudged: ClueSpotId[] };
   /** 서버 전용(결정 0061-9). 이번 밤 마피아가 남긴 쪽지 — saveNote(09-12)가 쓰고 enterMorning(탈락 없는 밤)·enterNight 가 키째 지운다. 구출·무효 밤의 쪽지는 폐기된다. */
   nightNote?: string;
   /** 서버 전용(결정 0061-14). 암살 현장 분필 자국(고정소수점) — 방 DO 가 채우고 enterNight 가 지운다(09-14). */

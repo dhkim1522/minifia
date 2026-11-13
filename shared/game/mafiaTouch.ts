@@ -1,7 +1,7 @@
 // 저녁·아침에서 역할을 읽는 유일한 모듈(21페이즈 D-06·D-22). 다른 저녁·아침 모듈(errand.ts·lamps.ts·skip.ts 등)은 역할을 읽지 않는다 —
 // 역할 판정이 필요한 새 규칙은 이 파일에 둔다(21-06 이 단서 흐리기를 더한다). 반환에 역할 값을 싣지 않는다: 돌려주는 것은 새 방 상태뿐이다.
 
-import type { PlaceId } from "../protocol";
+import type { ClueSpotId, PlaceId } from "../protocol";
 import { isAlive } from "./alive";
 import type { RoomState } from "./room";
 
@@ -17,4 +17,9 @@ export function markCut(state: RoomState, actorId: string, place: PlaceId, hold:
   const cut = state.lampCut ?? [];
   if (cut.includes(place)) return state;
   return { ...state, lampCut: [...cut, place] };
+}
+
+/** 자리 값(RED 단계) — 실제 규칙은 GREEN 에서. */
+export function markSmudge(state: RoomState, _actorId: string, _spot: ClueSpotId): RoomState {
+  return state;
 }

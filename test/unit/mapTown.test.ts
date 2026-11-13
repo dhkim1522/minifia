@@ -25,7 +25,7 @@ import {
 } from "../../shared/game/map";
 import type { MapDef, Obstacle, RoomDef, Spawn } from "../../shared/game/map";
 import { PLAZA_MAP, PLAZA_MASK, PLAZA_OBSTACLES, PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
-import { TOWN_DOOR_EXEMPT, TOWN_HOUSES, TOWN_LAMPS, TOWN_MAP, TOWN_MASK, TOWN_OBSTACLES, TOWN_PLACES, TOWN_PROPS, TOWN_ROOMS, TOWN_SPAWNS } from "../../shared/game/mapTown";
+import { TOWN_CLUE_SPOTS, TOWN_DOOR_EXEMPT, TOWN_HOUSES, TOWN_LAMPS, TOWN_MAP, TOWN_MASK, TOWN_OBSTACLES, TOWN_PLACES, TOWN_PROPS, TOWN_ROOMS, TOWN_SPAWNS } from "../../shared/game/mapTown";
 import { MAPS, MODE_MAPS, PLAYABLE_MAPS, mapOf, roomMapId, startMapOf } from "../../shared/game/maps";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
@@ -539,6 +539,65 @@ describe("마을 가로등 8곳 (D-05·D-07·P21-15)", () => {
   it("PLACE_IDS 는 기존 16곳 뒤에 lamp0~lamp7 이 붙은 24곳이고 서로 다르다", () => {
     const tail = (PLACE_IDS as readonly string[]).slice(16).join(",");
     expect(`${PLACE_IDS.length}/${new Set(PLACE_IDS).size}/${tail}`).toBe("24/24/lamp0,lamp1,lamp2,lamp3,lamp4,lamp5,lamp6,lamp7");
+  });
+});
+
+// 21페이즈 D-13·P21-16: 아침 현장의 단서 지점 셋 — 집 n 의 문 앞(front)이 ①, 문 면을 따라 ±1.6 이 ②·③.
+/** 단서 지점 정의식(×100 고정소수점): ① = front, ②·③ = front 에서 문 면에 나란한 방향(문이 남·북이면 x, 동·서면 z)으로 +1.6·−1.6 → 가장 가까운 걷는 칸 중심.
+ * 조건(셋 모두 걷는 칸 · 서로 ≥ 1.3 · zone plaza)을 어기면 그 지점을 문에서 멀어지는 쪽 걷는 칸으로 0.5 씩 옮긴다(최대 4칸). */
+function clueDefOf(seat: number): { spots: { x: number; z: number }[]; shifted: number[] } {
+  const house = TOWN_HOUSES[seat]!;
+  const alongX = house.face === "n" || house.face === "s";
+  const outward = { x: house.face === "w" ? 1 : house.face === "e" ? -1 : 0, z: house.face === "n" ? -1 : house.face === "s" ? 1 : 0 };
+  const side = (d: number): { x: number; z: number } => (alongX ? { x: house.front.x + d, z: house.front.z } : { x: house.front.x, z: house.front.z + d });
+  const spots = [house.front, nearestWalkCenter(TOWN_MAP, side(160)), nearestWalkCenter(TOWN_MAP, side(-160))];
+  const shifted = [0, 0, 0];
+  for (let i = 1; i <= 2; i++) {
+    for (let k = 1; k <= 4 && Math.min(...spots.filter((_, j) => j !== i).map((o) => Math.hypot(spots[i]!.x - o.x, spots[i]!.z - o.z))) < 130; k++) {
+      const moved = { x: spots[i]!.x + outward.x * 50 * k, z: spots[i]!.z + outward.z * 50 * k };
+      spots[i] = nearestWalkCenter(TOWN_MAP, moved);
+      shifted[i] = k;
+    }
+  }
+  return { spots, shifted };
+}
+
+if (process.env.MAP_PRINT === "1") {
+  describe("단서 지점 출력(MAP_PRINT=1 일 때만)", () => {
+    it("단서 지점 8집 정의식 결과를 줄로 출력", () => {
+      const lines = TOWN_HOUSES.map((h) => {
+        const d = clueDefOf(h.seat);
+        return `  ${h.seat}: [${d.spots.map((p) => `{ x: ${p.x}, z: ${p.z} }`).join(", ")}], // 옮김 ${d.shifted.join("/")}`;
+      });
+      process.stdout.write(`\nCLUES\n${lines.join("\n")}\n`);
+    });
+  });
+}
+
+describe("마을 단서 지점 (D-13·P21-16)", () => {
+  const seats = Array.from({ length: 8 }, (_, i) => i);
+  const spotsOf = (seat: number): readonly { x: number; z: number }[] => TOWN_CLUE_SPOTS[seat] ?? [];
+
+  it("좌석 0~7 마다 셋이고 ① 은 그 집 front, 셋 모두 걷는 칸 중심·plaza·서로 1.3 이상·입장 지점에서 길이 닿는다", () => {
+    const from = { x: fx(TOWN_SPAWNS[0]!.x), z: fx(TOWN_SPAWNS[0]!.z) };
+    const three = seats.filter((i) => spotsOf(i).length === 3).length;
+    const first = seats.every((i) => spotsOf(i)[0]?.x === TOWN_HOUSES[i]!.front.x && spotsOf(i)[0]?.z === TOWN_HOUSES[i]!.front.z);
+    const all = seats.flatMap((i) => [...spotsOf(i)]);
+    const walk = all.every((p) => isCenterOfWalkCell(p));
+    const plaza = all.every((p) => zoneOf(TOWN_MAP, p.x, p.z) === "plaza");
+    const apart = seats.every((i) => {
+      const t = spotsOf(i);
+      return t.length === 3 && [[0, 1], [0, 2], [1, 2]].every(([a, b]) => Math.hypot(t[a!]!.x - t[b!]!.x, t[a!]!.z - t[b!]!.z) >= 130);
+    });
+    const reach = all.every((p) => {
+      const r = routeFx(TOWN_MAP, from, p);
+      return Math.hypot(r[r.length - 2]! - p.x, r[r.length - 1]! - p.z) <= 30;
+    });
+    expect(`${three}/${first}/${walk}/${plaza}/${apart}/${reach}`).toBe("8/true/true/true/true/true");
+  });
+
+  it("지점은 정의식 결과(필요하면 문에서 멀어지는 쪽으로 옮긴 칸)와 같다", () => {
+    expect(seats.map((i) => spotsOf(i).map(xz).join("|")).join(" ")).toBe(seats.map((i) => clueDefOf(i).spots.map(xz).join("|")).join(" "));
   });
 });
 

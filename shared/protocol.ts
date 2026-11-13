@@ -82,6 +82,19 @@ export interface LastSeen {
   seat: number;
   place: PlaceId;
 }
+/** 아침 현장의 단서 지점 번호(21페이즈 D-13, UI-SPEC P21-16): ① 발자국 ② 옷 조각 ③ 창문. 집 문 앞에서 문 면을 따라 놓인다. */
+export const CLUE_SPOT_IDS = [1, 2, 3] as const;
+export type ClueSpotId = (typeof CLUE_SPOT_IDS)[number];
+/** 단서 종류(D-14·D-15): footprint 발자국 수 · cloth 옷 조각 · window 창문 목격 · touched 먼저 손댄 흔적 · dark 어두워서 못 봤다. 모두 확률적 단서이고 확정 증거가 아니다. */
+export const CLUE_KINDS = ["footprint", "cloth", "window", "touched", "dark"] as const;
+export type ClueKind = (typeof CLUE_KINDS)[number];
+/** 본인이 살핀 단서 한 줄(me.clues, 살핀 차례 순). n 은 footprint 만, piece 는 cloth·window 만 싣는다 — 없는 값은 키를 싣지 않는다. 좌석·의상 id·역할은 없다. */
+export interface ClueLine {
+  spot: ClueSpotId;
+  kind: ClueKind;
+  n?: number;
+  piece?: TracePiece;
+}
 /** 아침 결과. 키 없는 객체는 지난밤 무사. 결정 0061-12·17: eliminated·saved 둘뿐이고 문장은 화면이 만든다(문구 번호 없음). */
 export interface MorningView {
   eliminated?: number; // 탈락한 seat
@@ -187,6 +200,7 @@ export interface DayView {
   endCount?: number; // discussion 단계에서, 토론 끝내기를 누른 산 사람 수(누가 눌렀는지는 싣지 않는다)
   skipCount?: number; // errand·morning 단계(확장판)에서, 건너뛰기를 누른 산 사람 수(누가 눌렀는지는 싣지 않는다, 21페이즈 D-23)
   lamps?: number[]; // 확장판 가로등 공개 값(21페이즈 D-06·D-07·D-08), 가로등 번호 오름차순·모두에게 같은 값. errand 는 누군가 처리한 가로등(자른 것 포함 — 저녁 동안 켜진 것처럼 보인다), night·morning 은 처리됐고 잘리지 않은 가로등(자른 등불은 밤에 꺼진다). 다른 단계·기본 마피아에는 키가 없다
+  scene?: { house: number }; // 확장판 아침(morning)에 현장이 있을 때만(21페이즈 D-13·D-16): 피해자 집 — 미수(의사가 막은 밤)면 마피아가 노린 집 — 의 좌석. 모두에게 같은 값이고 정체(직업)는 싣지 않는다. 단서 자체는 me.clues
   voted?: number[]; // verdict 단계에서, 찬반을 던진 좌석(오름차순, 값은 싣지 않는다 — 익명)
   verdict?: { yes: number; no: number; passed: boolean; last?: true }; // execution 단계에서, 찬반 결과 수(개인 값 없음). last 는 마지막 3인 결전으로 온 처형(찬반 없음, 결정 0066-5)
   ballots?: { yes: number[]; no: number[] }; // execution 단계에서만, 찬성·반대한 좌석(오름차순, 변론자·미투표자 제외 — 결정 0066-3). 찬반 진행 중에는 없다
@@ -285,6 +299,7 @@ export type ClientMessage =
   | { t: "pick"; target: number } // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
   // 8페이즈 낮 처형(결정 0060). 옛 투표 메시지(처형 여부·후보 선택)는 08-21 에 지웠다 — 옛 번들이 보내면 스키마가 거부해 BAD_MESSAGE 다. 행위자는 모두 소켓 첨부 playerId 뿐이다.
   | { t: "endDiscussion"; on: boolean } // 토론 끝내기 — 누름(true)/취소(false), 산 사람만. 공개 값은 누른 수뿐이다(DAY-03)
+  | { t: "inspect" } // 아침 현장 살피기(21페이즈 D-13) — 필드 없음: 위치·지점·결과는 서버가 정하고, 못 받는 모든 이유에 응답이 같다(D-21)
   | { t: "skipPhase"; on: boolean } // 저녁·아침 건너뛰기(21페이즈 D-23) — 누름(true)/취소(false), errand·morning 단계의 산 사람만. 공개 값은 누른 수(day.skipCount)와 본인 me.skipPhase 뿐이고 산 사람 모두가 누르면 단계가 바로 끝난다
   | { t: "point"; target: number } // 지목 — 대상 seat 하나, 취소 없음, 마감까지 바꿀 수 있다(DAY-04)
   | { t: "whisper"; to: number; text: string } // 귓속말(결정 0066-2) — 낮 토론, 하루 1번, 산 다른 사람 한 명에게 30자소 이하. 본문은 보낸·받은 사람 소켓에만 간다
@@ -350,6 +365,7 @@ export interface MyInfo {
   chat?: ChatChannel; // 서버가 정한 내 채널(channelOf), 본인에게만. 말할 수 없으면 키가 없다
   whisperUsed?: true; // 오늘 귓속말을 이미 보냈다(결정 0066-2) — discussion 단계의 산 본인에게만, 다른 소켓·다른 단계·다음 일차에는 키가 없다
   endDiscussion?: true; // discussion 단계에서 본인이 토론 끝내기를 누른 상태(본인에게만, 8페이즈 결정 0060)
+  clues?: ClueLine[]; // 확장판 아침~처형(CLUE_PHASES)에 산 본인이 살핀 단서(살핀 차례 순, 21페이즈 D-13). 본인에게만 — 남의 단서·지점 상태는 어떤 키로도 싣지 않는다
   skipPhase?: true; // errand·morning 단계(확장판)에서 산 본인이 건너뛰기를 누른 상태(본인에게만, 21페이즈 D-23). 거짓은 키가 없다
   nightTally?: Array<{ seat: number; n: number }>; // 밤, 산 마피아 본인에게만: 대상 seat 별 산 마피아 선택 수(seat 오름차순, 본인 포함, 누가 골랐는지는 없다, 결정 0061-7)
   nightSure?: number; // 밤, 산 마피아 본인에게만: 전원 일치로 확정된 대상 seat(결정 0061-7). 채우는 일은 09-07 view
