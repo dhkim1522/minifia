@@ -96,4 +96,16 @@ describe("저녁 [건너뛰기] — 모두 누르면 일찍 넘어간다 (D-23)"
     await quiet(g);
     expect(`${waiting} ${json(g.actors.slice(0, 3).map((a) => lastViewOf(a.sock).phase))}`).toBe(`${json(Array(3).fill("errand"))} ${json(Array(3).fill("night"))}`);
   }, 60_000);
+
+  it("21-10: 아직 안 누른 마지막 사람의 연결이 끊기면 서버가 다시 보고 바로 넘어간다 — 누른 사람이 더 누를 일이 없어도 멈추지 않는다", async () => {
+    const g = await startedGame("errand", 3);
+    for (const a of g.actors.slice(0, 3)) {
+      skipAs(a, true);
+      await quiet(g);
+    }
+    const waiting = json(g.actors.slice(0, 3).map((a) => lastViewOf(a.sock).phase));
+    g.actors[3]!.sock.ws.close(1000, "bye");
+    for (const s of g.socks.slice(0, 3)) await settle(s, mark(s));
+    expect(`${waiting} ${json(g.actors.slice(0, 3).map((a) => lastViewOf(a.sock).phase))}`).toBe(`${json(Array(3).fill("errand"))} ${json(Array(3).fill("night"))}`);
+  }, 60_000);
 });
