@@ -1,5 +1,5 @@
 // 저녁·아침 [건너뛰기](21페이즈 D-23) — 순수 모듈. 이 파일은 역할을 읽지 않는다(D-22): 누른 사람이 누구인지(Player.skipVote)는 서버 전용이고
-// 공개되는 것은 누른 산 사람 수뿐이다. 토론 끝내기(discussion.ts toggleEnd·endReached)와 같은 모양이되 마감 조건이 과반이 아니라 산 사람 모두다.
+// 공개되는 것은 누른 산 사람 수뿐이다. 토론 끝내기(discussion.ts toggleEnd·endReached)와 같은 모양이되 마감 조건이 과반이 아니라 산 사람 중 접속 중인 사람(봇 제외) 모두다.
 import type { PhaseId } from "../protocol";
 import { isAlive } from "./alive";
 import type { VoteError } from "./discussion";
@@ -43,10 +43,13 @@ export function skipCountOf(state: RoomState): number {
   return state.players.filter((p) => isAlive(p) && p.skipVote === true).length;
 }
 
-/** 산 사람 모두가 눌렀는가. 산 사람이 0이면 false. */
+/**
+ * 막는 사람 = 산 사람 중 봇이 아니고 접속 중인 사람(21-06 이탈 1). 봇은 누르지 않고 접속이 끊긴 사람은 누를 수 없어, 분모에 두면 단계가 끝나지 않는다.
+ * 이 사람들이 모두 눌렀을 때(한 명 이상이어야) true. 누른 수 공개 값(skipCountOf)은 그대로 산 사람 전체의 눌림이다.
+ */
 export function skipReached(state: RoomState): boolean {
-  const alive = state.players.filter((p) => isAlive(p)).length;
-  return alive > 0 && skipCountOf(state) >= alive;
+  const blockers = state.players.filter((p) => isAlive(p) && p.isBot !== true && p.connected);
+  return blockers.length > 0 && blockers.every((p) => p.skipVote === true);
 }
 
 /** 모든 skipVote 키를 지운다(새 저녁·새 아침). 지울 것이 없으면 같은 객체. */
