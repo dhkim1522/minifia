@@ -145,6 +145,7 @@ import { makeHostFlows } from "./host.mjs";
 import { makeErrandFlows } from "./errand.mjs";
 import { makeTutorialFlows } from "./tutorial.mjs";
 import { makeModeFlows } from "./modes.mjs";
+import { makeTownFlows } from "./town.mjs";
 import { CHAT_KB_PANEL_REST, CHAT_OPEN_STAGE_MIN, chatOpenChecks, chatOpenHeight, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureBallotsBackstop, measureChatOpen, readChatWindow, readLiveGhost } from "./polish.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
@@ -1416,8 +1417,9 @@ async function untilGame(page, pred, ms = 6000, label = "게임 화면") {
 /**
  * 방장 + 손님(사람 페이지) + 봇 → 시작 → to 단계까지. 돌려주는 값: { host, hp, ht, hostSeat, guests: [{ context, page, tracker, takeIssues, seat }] }
  * mode("basic"|"extended", 19-06)를 주면 봇·직업을 정한 뒤 시작 전에 방장 줄의 [판 종류] 로 그 판 종류를 고른다(안 주면 서버 기본값 그대로).
+ * beforeStart({ hp, ht, guests })를 주면(20-08) 시작 단추를 누르기 직전에 한 번 부른다.
  */
-async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], guestSize = undefined, minBotNameChars = 0, hostInitScripts = [], guestNames = GAME_GUESTS, mode = undefined } = {}) {
+async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], guestSize = undefined, minBotNameChars = 0, hostInitScripts = [], guestNames = GAME_GUESTS, mode = undefined, beforeStart = undefined } = {}) {
   const host = await startHost(ctx, flowId, { ...(hostNick ? { nickname: hostNick } : {}), ...(hostInitScripts.length > 0 ? { initScripts: hostInitScripts } : {}) });
   const { page: hp, tracker: ht } = host;
   const pages = [];
@@ -1438,6 +1440,7 @@ async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", v
   if (bots > 0) await setBotVote(hp, ht, vote);
   await chooseRole(hp, ht, role);
   if (mode) await pickModeViaRail(hp, ht, mode); // 테스트 도구 시트를 닫고 [판 종류] 시트에서 고른다
+  if (beforeStart) await beforeStart({ hp, ht, guests: pages }); // 20-08: 시작 전 대기실 화면을 읽는 흐름(town-room 의 대기실 __mfMap = bar)
   await startGame(hp, ht);
   if (to) await skipTo(hp, ht, to);
   return { host, hp, ht, hostSeat: ht.last().me.seat, guests: pages };
@@ -3780,6 +3783,9 @@ const { tutorialSoloFlow, tutorialTogetherFlow } = makeTutorialFlows({ recorder,
 // 방장 줄·판 종류(19페이즈 19-06): mode-rail(폰 6종)·mode-pick. 19-07: modeBasicFlow(기본 마피아 완주). 흐름 본문은 modes.mjs, 도우미만 넘긴다
 const { modeRailFlow, modePickFlow, modeBasicFlow } = makeModeFlows({ recorder, attempt, startHost, openGuest, openGame, closeGame, settledResult });
 
+// 마을 맵(20페이즈 20-08): town-walk(폰 6종)·town-room·town-sight·town-ghost·town-reduced. 흐름 본문은 town.mjs, 도우미만 넘긴다
+const { townWalkFlow, townRoomFlow, townSightFlow, townGhostFlow, townReducedFlow } = makeTownFlows({ recorder, openGame, closeGame, executeHost, untilGame, settledResult });
+
 // 18.1 화면 다듬기(18.1-08): polish-reveal(역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종). 흐름 본문은 polish.mjs, 도우미만 넘긴다
 const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, closeGame });
 
@@ -3862,6 +3868,12 @@ export const FLOWS = [
   // 19-07: 19페이즈 판 종류 — 기본 마피아 봇 판 완주(BM0~BM3)와 역할 다섯 시점 누설(LK·HL·VK, 본문은 host.mjs). 이름 앞머리 mode
   { id: "mode-basic", run: modeBasicFlow, size: GAME_SIZE },
   { id: "mode-leak", run: modeLeakFlow, size: GAME_SIZE },
+  // 20-08: 마을 맵 TM1~TM10. town-walk(문 앞 걷기·이름표 스테이지 안)만 폰 6종, 나머지는 390x844 한 크기. 이름 앞머리 town — --only town 하나로 다섯이 모두 돈다
+  { id: "town-walk", run: townWalkFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  { id: "town-room", run: townRoomFlow, size: GAME_SIZE },
+  { id: "town-sight", run: townSightFlow, size: GAME_SIZE },
+  { id: "town-ghost", run: townGhostFlow, size: GAME_SIZE },
+  { id: "town-reduced", run: townReducedFlow, size: GAME_SIZE },
   // 18.1-08: 역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종
   { id: "polish-reveal", run: polishRevealFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다

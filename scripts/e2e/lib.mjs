@@ -4482,6 +4482,8 @@ export const TOWN_E2E = {
 };
 
 const TOWN_ROOM_IDS = Object.keys(TOWN_E2E.ROOMS);
+/** 좌석이 seats() 에서 빠진 시각과 data-door=vanish 가 처음 보인 시각의 허용 차(ms) — 프레임 한 번(60fps 약 17ms)에 헤드리스 소프트웨어 렌더의 지연 여유 */
+const TOWN_VANISH_SLACK_MS = 100;
 /** 컷어웨이 판정을 읽는 시각(ms): 0.25초 연출 + 여유 0.05초 — 흐름이 방에 든 순간부터 이 시간 뒤의 roofs 를 roofsAt300 에 넣는다 */
 const TOWN_ROOF_READ_MS = 300;
 const townRoofsOk = (r) => !!r && typeof r === "object" && TOWN_ROOM_IDS.every((id) => isNum(r[id]));
@@ -4493,7 +4495,7 @@ const townNum = (n) => String(Math.round(n * 100) / 100);
  *  - "map"     TM1  m = { lobby: 대기실 __mfMap[], game: 시작 뒤 __mfMap[] }
  *  - "room"    TM2  m = { room, zone, open, roofsAt300 } — 방에 들어간 뒤 0.3초에 읽은 __mfTown
  *  - "exit"    TM3  m = { zone, open, roofsAt300 } — 나온 뒤 0.3초
- *  - "sight"   TM4·TM4s·TM5·TM5a  m = { inSeat, outSeats, outTagVisible, sameRoom: { aSeesB, bSeesA }, vanishAt, goneAt, appearAt }
+ *  - "sight"   TM4·TM4s·TM5·TM5a  m = { inSeat, outSeats, outTagVisible, sameRoom: { aSeesB, bSeesA }, vanishAt, vanishEndAt, goneAt, appearAt }
  *  - "roof"    TM6  m = { room, ring, zone } — 닫힌 방 지붕을 한 번 누른 뒤
  *  - "owners"  TM7  m = { seats, owners }
  *  - "ghost"   TM8  m = { open } — 유령 화면 또는 결과 화면
@@ -4537,7 +4539,7 @@ export function townChecks(kind, m) {
       const L = {
         TM4: "밖 탭의 seats 에 안 탭 좌석이 없고 이름표도 보이지 않는다",
         TM4s: "같은 방 두 탭은 서로 보인다",
-        TM5: "들어갈 때 밖 탭에서 data-door=vanish 가 좌석이 빠지기 전에 보인다",
+        TM5: "들어갈 때 밖 탭에서 data-door=vanish 가 좌석이 빠지는 프레임에 시작해 0.2초쯤 간다",
         TM5a: "나올 때 밖 탭에서 data-door=appear 가 보인다",
       };
       if (!m || !Number.isInteger(m.inSeat) || !Array.isArray(m.outSeats)) return Object.keys(L).map((id) => noMeasure(id, L[id], "좌석·시각"));
@@ -4551,10 +4553,18 @@ export function townChecks(kind, m) {
         if (!same.aSeesB) bad4s.push("첫 탭이 둘째 탭을 못 봄");
         if (!same.bSeesA) bad4s.push("둘째 탭이 첫 탭을 못 봄");
       }
+      // seats() 는 서버 프레임으로 정해지는 저장소 값이라, 좌석이 빠지는 프레임에 연출이 시작된다 — 「빠지기 전」은 같은 프레임 안(한 프레임 여유)에서 연출이 시작되는 것으로 본다
       const bad5 = [];
       if (!isNum(m.vanishAt)) bad5.push("vanish 를 못 봄");
       else if (!isNum(m.goneAt)) bad5.push("좌석이 seats 에서 빠지지 않음");
-      else if (m.vanishAt > m.goneAt) bad5.push(`좌석이 먼저 빠짐(빠진 ${townNum(m.goneAt)}ms < vanish ${townNum(m.vanishAt)}ms)`);
+      else {
+        if (m.vanishAt - m.goneAt > TOWN_VANISH_SLACK_MS) bad5.push(`vanish 가 좌석이 빠진 뒤 ${Math.round(m.vanishAt - m.goneAt)}ms 늦게 시작(허용 ${TOWN_VANISH_SLACK_MS}ms)`);
+        if (!isNum(m.vanishEndAt)) bad5.push("vanish 가 끝나지 않음");
+        else {
+          const fade = m.vanishEndAt - m.vanishAt;
+          if (fade < TOWN_E2E.DOOR_FADE_MS * 0.75 || fade > TOWN_E2E.DOOR_FADE_MS * 2) bad5.push(`vanish 길이 ${Math.round(fade)}ms ∉ [${TOWN_E2E.DOOR_FADE_MS * 0.75}, ${TOWN_E2E.DOOR_FADE_MS * 2}]`);
+        }
+      }
       const bad5a = isNum(m.appearAt) ? [] : ["appear 를 못 봄"];
       return [result("TM4", L.TM4, bad4), result("TM4s", L.TM4s, bad4s), result("TM5", L.TM5, bad5), result("TM5a", L.TM5a, bad5a)];
     }

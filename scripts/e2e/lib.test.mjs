@@ -1436,14 +1436,14 @@ test("LOBBY_SIZES: DEFAULT_SIZES 4개 + 390x844 + 402x874 여섯 개이고 LOBBY
   assert.deepEqual(DEFAULT_SIZES.map((x) => x.label), ["360x640", "390x664", "430x932", "360x560"]);
 });
 
-test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand·witness·trace(15-09 심부름·목격 기록·밤 통일/아침 흔적 폰 6종)·tutorial-solo(17-09 혼자 하기 첫 사건 폰 6종)·mode-rail(19-06 방장 줄 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
+test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand·witness·trace(15-09 심부름·목격 기록·밤 통일/아침 흔적 폰 6종)·tutorial-solo(17-09 혼자 하기 첫 사건 폰 6종)·mode-rail(19-06 방장 줄 폰 6종)·town-walk(20-08 마을 문 앞 걷기 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
   const run = readFileSync(new URL("./run.mjs", import.meta.url), "utf8");
   assert.match(run, /extraSizes/);
   assert.match(run, /!args\.sizesGiven/);
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)?(?:, skipByDefault: true)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
-  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "errand", "witness", "trace", "tutorial-solo", "mode-rail", "polish-reveal"]);
+  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "errand", "witness", "trace", "tutorial-solo", "mode-rail", "town-walk", "polish-reveal"]);
 });
 
 test("기본판(결정 0072)에서 꺼진 장치 흐름 7개는 skipByDefault 이고 politics-verdict 는 기본 실행에 남는다 (13-05)", () => {
@@ -5487,11 +5487,13 @@ test("townChecks TM3: 나오면 zone plaza · open 비어 있음 · 0.3초 안�
   assert.equal(townChecks("exit", undefined)[0].ok, false);
 });
 
-test("townChecks TM4·TM5: 밖 탭에서 안 탭 좌석이 보이지 않고, vanish 가 좌석이 빠지기 전에 보이며, 나올 때 appear", () => {
-  const good = { inSeat: 2, outSeats: [0, 1, 3], outTagVisible: false, sameRoom: { aSeesB: true, bSeesA: true }, vanishAt: 100, goneAt: 330, appearAt: 900 };
+test("townChecks TM4·TM5: 밖 탭에서 안 탭 좌석이 보이지 않고, vanish 가 좌석이 빠지는 프레임에 시작해 0.2초쯤 가며, 나올 때 appear", () => {
+  const good = { inSeat: 2, outSeats: [0, 1, 3], outTagVisible: false, sameRoom: { aSeesB: true, bSeesA: true }, vanishAt: 100, vanishEndAt: 320, goneAt: 98, appearAt: 900 };
   const lines = townChecks("sight", good);
   assert.deepEqual(lines.map((l) => l.id), ["TM4", "TM4s", "TM5", "TM5a"]);
   assert.ok(lines.every((l) => l.ok), JSON.stringify(lines));
+  // 연출이 좌석이 빠지기 전에 시작해도 통과
+  assert.equal(lineOf(townChecks("sight", { ...good, vanishAt: 90, vanishEndAt: 300, goneAt: 100 }), "TM5").ok, true);
   // 안 탭 좌석이 밖 탭 seats 에 남음 → TM4 실패
   const leak = townChecks("sight", { ...good, outSeats: [0, 2] });
   assert.equal(lineOf(leak, "TM4").ok, false);
@@ -5501,12 +5503,17 @@ test("townChecks TM4·TM5: 밖 탭에서 안 탭 좌석이 보이지 않고, van
   // 같은 방 두 탭이 서로 못 봄
   const blind = lineOf(townChecks("sight", { ...good, sameRoom: { aSeesB: true, bSeesA: false } }), "TM4s");
   assert.equal(blind.ok, false);
-  // vanish 를 못 보았거나 좌석이 먼저 빠짐 → TM5 실패
+  // vanish 를 못 보았거나 좌석이 안 빠짐 → TM5 실패
   assert.equal(lineOf(townChecks("sight", { ...good, vanishAt: null }), "TM5").ok, false);
-  const early = lineOf(townChecks("sight", { ...good, vanishAt: 400, goneAt: 330 }), "TM5");
-  assert.equal(early.ok, false);
-  assert.match(early.detail, /330/);
   assert.equal(lineOf(townChecks("sight", { ...good, goneAt: null }), "TM5").ok, false);
+  // 좌석이 빠지고 한참 뒤에야 연출이 시작되면 실패(팝 아웃)
+  const late = lineOf(townChecks("sight", { ...good, vanishAt: 500, vanishEndAt: 720, goneAt: 100 }), "TM5");
+  assert.equal(late.ok, false);
+  assert.match(late.detail, /400ms 늦게/);
+  // 연출 길이가 0.2초에서 크게 벗어남(0.15 미만 또는 0.4 초과) 또는 끝나지 않음
+  assert.equal(lineOf(townChecks("sight", { ...good, vanishEndAt: 130 }), "TM5").ok, false);
+  assert.match(lineOf(townChecks("sight", { ...good, vanishEndAt: 700 }), "TM5").detail, /길이 600ms/);
+  assert.equal(lineOf(townChecks("sight", { ...good, vanishEndAt: null }), "TM5").ok, false);
   // appear 를 못 봄
   assert.equal(lineOf(townChecks("sight", { ...good, appearAt: null }), "TM5a").ok, false);
   assert.ok(townChecks("sight", null).every((l) => !l.ok));
