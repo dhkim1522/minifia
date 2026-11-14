@@ -1,6 +1,7 @@
 // 손글씨 글꼴 자체 호스팅 시험 (09.1-10, 결정 M-10). 생성: node scripts/fetch-pen-font.mjs
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const ROOT = new URL("../../", import.meta.url);
@@ -77,7 +78,7 @@ describe("라이선스·외부 요청", () => {
   it("src 에 Nanum 글꼴을 외부 주소로 부르는 줄이 없다", () => {
     const walk = (d: URL): string[] =>
       readdirSync(d, { withFileTypes: true }).flatMap((e) =>
-        e.isDirectory() ? walk(new URL(`${e.name}/`, d)) : [new URL(e.name, d).pathname],
+        e.isDirectory() ? walk(new URL(`${e.name}/`, d)) : [fileURLToPath(new URL(e.name, d))],
       );
     for (const f of walk(new URL("src/", ROOT))) {
       if (!/\.(css|ts|tsx|html)$/.test(f)) continue;

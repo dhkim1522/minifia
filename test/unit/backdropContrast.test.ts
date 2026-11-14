@@ -6,6 +6,7 @@
 // 구역 좌표(CSS px, 위쪽 기준 cover): 제목 x16~120·y16~45, 타이머 숫자 x(W−69)~(W−16)·y78~100, 대기실 코드 가운데(36px 글씨, y35.6~78.8).
 // 그림은 width = W 로 키운다(폰 세로 비율 ≥ 1.78 이라 cover 가 폭 기준이다). 높이는 round(W·2340/1080).
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { HEADER_SCRIM_STOPS, SCENES } from "../../src/game/scenes";
@@ -74,7 +75,7 @@ function topRows(scene: SceneId, w: number) {
   const key = `${scene}@${w}`;
   let hit = rawCache.get(key);
   if (!hit) {
-    const file = new URL(`../../public/backgrounds/bg_game_${SCENES[scene].file}.webp`, import.meta.url).pathname;
+    const file = fileURLToPath(new URL(`../../public/backgrounds/bg_game_${SCENES[scene].file}.webp`, import.meta.url));
     const h = Math.round((w * 2340) / 1080);
     hit = sharp(file)
       .resize(w, h, { fit: "cover", position: "top" })
