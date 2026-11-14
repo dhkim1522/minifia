@@ -3575,8 +3575,8 @@ export const ERRAND_MARKERS = [
   "data-trace-mark",
   "data-seen-mark",
 ];
-/** 심부름 장소 id 16개(shared/protocol.ts PLACE_IDS 사본 — e2eContract 가 같음을 고정). 표식 값은 이 집합·숫자·"n/N"·빈 값뿐이어야 한다(좌석·역할 값 금지, D-08). */
-export const ERRAND_PLACE_IDS = ["glass", "piano", "sax", "stool", "door", "poster", "record", "candle", "clock", "fountain", "bench", "lamp", "mail", "tree", "flower", "stand"];
+/** 심부름 장소 id 24개(shared/protocol.ts PLACE_IDS 사본 — e2eContract 가 같음을 고정). 표식 값은 이 집합·숫자·"n/N"·빈 값뿐이어야 한다(좌석·역할 값 금지, D-08). */
+export const ERRAND_PLACE_IDS = ["glass", "piano", "sax", "stool", "door", "poster", "record", "candle", "clock", "fountain", "bench", "lamp", "mail", "tree", "flower", "stand", "lamp0", "lamp1", "lamp2", "lamp3", "lamp4", "lamp5", "lamp6", "lamp7"];
 /** 산 사람마다 받는 장소 수(shared/game/phases.ts ERRAND_COUNT 사본 — e2eContract 가 고정). */
 export const ERRAND_PER_PERSON = 3;
 /** 심부름 단계 길이 ms(ERRAND_MS 사본). 흔적 구간 길이 ms(MORNING_TRACE_MS 사본). */

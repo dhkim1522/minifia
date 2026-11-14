@@ -30,6 +30,9 @@ export const WORD_TO_ID = [
   ["trace", "회색 실밥", "grayThread"], ["trace", "남색 실밥", "navyThread"], ["trace", "붉은 천 조각", "redCloth"],
 ];
 
+/** 21페이즈 D-05·D-07: 마을 가로등 id 여덟(lamp0~lamp7)은 기존 lamp 그림의 별칭이다 — 새 그림·사본 svg 가 없다(결정 0088). PLACE_ART 에서 같은 항목을 가리킨다. */
+export const LAMP_ALIASES = ["lamp0", "lamp1", "lamp2", "lamp3", "lamp4", "lamp5", "lamp6", "lamp7"];
+
 const ALLOWED_TAGS = new Set(["circle", "ellipse", "path", "rect"]);
 const ALLOWED_BODY_ATTRS = new Set([
   "cx", "cy", "d", "fill", "height", "opacity", "r", "rx", "ry", "stroke", "stroke-width", "stroke-linejoin", "stroke-linecap", "width", "x", "y",
@@ -117,7 +120,7 @@ function renderEntry(it) {
 function renderJsx(items) {
   const section = (group) => items.filter((i) => i.group === group).map(renderEntry).join("");
   return `// 생성물 — scripts/make-placeart.mjs 로 다시 만든다. 직접 고치지 않는다.
-// 승인 컬러 에셋 A(design/v3.0/tutorial/Main.dc.html) 25개: 장소 16(PlaceId) + 흔적 조각 9(TracePiece). 사본은 design/v3.0/assets/{id}.svg.
+// 승인 컬러 에셋 A(design/v3.0/tutorial/Main.dc.html) 25개: 장소 16(PlaceId) + 흔적 조각 9(TracePiece). 사본은 design/v3.0/assets/{id}.svg. 마을 가로등 lamp0~lamp7 은 lamp 의 별칭(21페이즈 D-05).
 // 48×48 격자, 윤곽선 2, 둥근 끝, 사물 고유색. 에셋 안의 hex 는 캐릭터 에셋과 같은 지위로 허용한다(화면 CSS 에는 hex 를 더하지 않는다).
 // 정적 JSX 다 — HTML 문자열 주입이나 런타임 파싱이 없다.
 import type { ReactElement, SVGProps } from "react";
@@ -136,8 +139,14 @@ interface ArtEntry {
   body: ReactElement;
 }
 
-export const PLACE_ART: Readonly<Record<PlaceId, ArtEntry>> = {
+/** 그려진 장소 16(재즈 바 8 + 광장 8). 마을 가로등 id 여덟은 아래에서 lamp 의 별칭으로 더한다(21페이즈 D-05, 새 그림 없음). */
+const PLACE_BASE_ART: Readonly<Record<Exclude<PlaceId, \`lamp\${number}\`>, ArtEntry>> = {
 ${section("place")}};
+
+export const PLACE_ART: Readonly<Record<PlaceId, ArtEntry>> = {
+  ...PLACE_BASE_ART,
+${LAMP_ALIASES.map((id) => `  ${id}: PLACE_BASE_ART.lamp,
+`).join("")}};
 
 export const TRACE_ART: Readonly<Record<TracePiece, ArtEntry>> = {
 ${section("trace")}};

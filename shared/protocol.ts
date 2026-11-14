@@ -33,10 +33,12 @@ export type PhaseId =
   | "night" | "morning" | "ended"; // 8페이즈(결정 0060): 지목 15초 → 변론 20초 → 찬반 10초 → 처형 5.6초(결정 0066-7). 옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 지웠다
 
 // ---- 심부름 계약(15페이즈, 결정 0074) ----
-/** 심부름 장소 id 닫힌 집합 — 재즈 바 8곳 + 시계탑 광장 8곳. 좌표는 프로토콜에 싣지 않는다(클라이언트가 같은 MapDef 에서 읽는다). */
+/** 심부름 장소 id 닫힌 집합 — 재즈 바 8곳 + 시계탑 광장 8곳 + 마을 가로등 8곳(21페이즈 D-05·D-07, 결정 0088). 좌표는 프로토콜에 싣지 않는다(클라이언트가 같은 MapDef 에서 읽는다). */
 export const PLACE_IDS = [
   "glass", "piano", "sax", "stool", "door", "poster", "record", "candle",
   "clock", "fountain", "bench", "lamp", "mail", "tree", "flower", "stand",
+  // 21페이즈 D-05·D-07 — 마을 가로등 8곳(번호 = 집 좌석, 등불 i ↔ 집 i, 결정 0088). 이름·그림은 기존 lamp 와 같다
+  "lamp0", "lamp1", "lamp2", "lamp3", "lamp4", "lamp5", "lamp6", "lamp7",
 ] as const;
 export type PlaceId = (typeof PLACE_IDS)[number];
 /** 내 심부름(errand 단계, MyInfo.errand): 서버가 뽑은 장소 목록(순서에 뜻 없음)과 처리한 순서. 모든 역할이 같은 모양이다(D-03). */

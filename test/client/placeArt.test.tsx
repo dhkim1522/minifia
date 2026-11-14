@@ -56,7 +56,7 @@ describe("PlaceArt·TraceArt", () => {
     }
     expect(err.mock.calls.length).toBe(0);
     expect(warn.mock.calls.length).toBe(0);
-    expect(CASES.length).toBe(25);
+    expect(CASES.length).toBe(33); // 장소 24(16 + 마을 가로등 별칭 8, 21-02) + 조각 9
   });
 
   it("className 은 svg 루트에 붙는다", () => {
