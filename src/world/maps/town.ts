@@ -12,16 +12,18 @@
 //   5 emissiveIndoor(벽등 구 넷·문턱 띠 넷, TOWN_LIT.indoor)  6 glowIndoor(벽등 빛 무리 넷, 같은 열)
 //   7 houseBody(집 여덟의 몸·지붕판·문 칸, 광장 소품 재질)  8 houseWinLit(주인 있는 집의 창, TOWN_LIT.houseOwned)·houseWinDark(주인 없는 집의 창)
 //   9 housePlate(문 위 문패 여덟)·houseMark(지붕 위 표식 여덟 + 기둥) — 아틀라스 재질 하나.
+//   10 lampPosts(가로등 8개의 기둥 — 광장 소품 재질)  11 lampBulbs(전구 구 8, 정점 색으로 켜짐 LAMP_LIT·꺼짐 LAMP_OFF)  12 lampGlow(켜진 전구의 빛 무리 쿼드 8, 정점 알파로 보임·안 보임)
+//   (21페이즈 D-04·D-24·D-25: 가로등 번호 = 집 좌석, setLamps 가 전구·무리와 집 창 두 묶음을 view 의 공개 값 하나로 맞춘다. 새 점광원 없음)
 // 강등 사다리 4단계(props reduced)는 2·4·houseMark 를 끈다(몸통·문패·창은 남는다). 그 밖의 사다리는 광장 그대로다.
-import { BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, DataTexture, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, RGBAFormat, SRGBColorSpace } from "three";
+import { BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, Color, DataTexture, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, RGBAFormat, SRGBColorSpace } from "three";
 import type { Texture } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { TOWN_HOUSES, TOWN_OBSTACLES, TOWN_PROPS, TOWN_ROOM_OUTER, TOWN_ROOMS } from "../../../shared/game/mapTown";
+import { TOWN_HOUSES, TOWN_LAMPS, TOWN_OBSTACLES, TOWN_PROPS, TOWN_ROOM_OUTER, TOWN_ROOMS } from "../../../shared/game/mapTown";
 import { ROOM_IDS } from "../../../shared/protocol";
 import type { RoomId } from "../../../shared/protocol";
 import { faceSrc } from "../../net/assets";
 import { plateFarOf } from "../camera";
-import { PLAZA_PALETTE, SEAT_COLORS, TOWN_LIT, TOWN_PALETTE as C } from "../palette";
+import { LAMP_LIT, LAMP_OFF, PLAZA_PALETTE, SEAT_COLORS, TOWN_LIT, TOWN_PALETTE as C } from "../palette";
 import type { Budget, LightingPhase } from "../renderer";
 import { Bundle, tf } from "./bar";
 import { buildPlaza } from "./plaza";
@@ -64,6 +66,21 @@ const PLAQUE_Y = 1.5;
 /** 집 지붕 표식(P20-6): 기둥 0.25 위에 서는 0.9×0.9 판 */
 const MARK = 0.9;
 const MARK_POST = 0.25;
+
+/**
+ * 마을 가로등 8개(21페이즈 D-24·P21-8): TOWN_LAMPS 좌표에 서는 얇은 기둥 + 전구 구 + 빛 무리 쿼드 한 장(광장 가로등과 같은 빛 무리 재질).
+ * 기둥은 장애물이 아니라 장식이다(서버 마스크 그대로). 켜짐은 정점 색(전구 LAMP_LIT/LAMP_OFF)·정점 알파(무리)로만 바꾼다 — 묶음이 늘 뿐 새 점광원은 없다.
+ */
+const POST_H = 2.2;
+const BULB_Y = 2.25;
+const BULB_R = 0.13;
+const LAMP_GLOW_SIZE = 2.0;
+/** 켜진 빛 무리의 알파(광장 가로등 무리와 같은 0.7) */
+const LAMP_GLOW_A = 0.7;
+/** 켜짐 → 꺼짐 때 무리가 줄어드는 시간(--dur-med) */
+const LAMP_FADE_MS = 420;
+/** 전구 구 하나의 정점 수(Bundle.sph 의 SphereGeometry(r, 10, 8)) — 묶음 안 번호 = TOWN_LAMPS 순서 */
+const BULB_VERTS = 11 * 9;
 
 type Side = "n" | "s" | "e" | "w";
 /** 면의 바깥 법선(x, z)과 그 면을 보는 판의 rotation.y */
@@ -306,6 +323,11 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
   const emIndoor = new Bundle();
   const glowIndoor = new Bundle(true);
   const houseBody = new Bundle();
+  const lampPosts = new Bundle();
+  const lampBulbs = new Bundle();
+  const lampGlow = new Bundle(true);
+  const matLampBulb = new MeshBasicMaterial({ vertexColors: true });
+  const matLampGlow = ctx.glowMat();
   const meshes: Record<string, Mesh> = {};
   const cuts = {} as Record<RoomId, CutState>;
 
@@ -407,11 +429,23 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
     windows.push(panes);
   }
 
+  // ----- 가로등 8: 기둥 + 전구(처음엔 꺼짐) + 빛 무리(처음엔 알파 0) — 묶음 안 번호 = TOWN_LAMPS 순서 -----
+  for (const l of TOWN_LAMPS) {
+    lampPosts.cyl(0.05, 0.07, POST_H, 8, PLAZA_PALETTE.lampPost, tf(l.x, POST_H / 2, l.z));
+    lampBulbs.sph(BULB_R, LAMP_OFF, tf(l.x, BULB_Y, l.z));
+    glow(lampGlow, LAMP_LIT, LAMP_GLOW_SIZE, l.x, BULB_Y, l.z, 0);
+  }
+
   // ----- 메시 만들기 -----
   meshes.roomStatic = roomStatic.build(matProp, "roomStatic");
   meshes.roomProps = roomProps.build(matProp, "roomProps");
   meshes.houseBody = houseBody.build(matProp, "houseBody");
-  for (const n of ["roomStatic", "roomProps", "houseBody"] as const) meshes[n]!.receiveShadow = true;
+  meshes.lampPosts = lampPosts.build(matProp, "lampPosts");
+  for (const n of ["roomStatic", "roomProps", "houseBody", "lampPosts"] as const) meshes[n]!.receiveShadow = true;
+  meshes.lampBulbs = lampBulbs.build(matLampBulb, "lampBulbs");
+  meshes.lampGlow = lampGlow.build(matLampGlow, "lampGlow");
+  meshes.lampGlow.renderOrder = 2;
+  meshes.lampGlow.visible = false;
   meshes.emissiveIndoor = emIndoor.build(matEmIndoor, "emissiveIndoor");
   meshes.glowIndoor = glowIndoor.build(matGlowIndoor, "glowIndoor");
   meshes.glowIndoor.renderOrder = 2;
@@ -426,7 +460,7 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
   winDark.name = "houseWinDark";
   winDark.receiveShadow = true;
   Object.assign(meshes, { housePlate, houseMark, houseWinLit: winLit, houseWinDark: winDark });
-  const graded = [meshes.roomStatic, meshes.roomProps, meshes.houseBody, ...ROOM_IDS.map((id) => cuts[id].mesh)];
+  const graded = [meshes.roomStatic, meshes.roomProps, meshes.houseBody, meshes.lampPosts, ...ROOM_IDS.map((id) => cuts[id].mesh)];
 
   // ----- 집 주인: 창 두 묶음을 다시 만들고 문패·표식의 UV 를 좌석 칸이나 빈 판 칸으로 돌린다(판 시작 때 한 번) -----
   const setWindows = (mesh: Mesh, b: Bundle, mat: MeshBasicMaterial | MeshStandardMaterial, hex: string, list: readonly Matrix4[]): void => {
@@ -435,24 +469,73 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
     mesh.geometry = list.length > 0 ? b.build(mat, mesh.name).geometry : new BufferGeometry();
     mesh.visible = list.length > 0;
   };
-  const setOwners = (seats: readonly number[]): void => {
-    const owned = new Set(seats.filter((s) => Number.isInteger(s) && s >= 0 && s < 8));
+  /** 지금 집 주인 좌석(옛 규칙)과 원인 흐름의 집 창 켜짐(null = 주인 규칙). 창 두 묶음은 houseLit 이 있으면 그것을, 없으면 주인을 따른다(21-07 D-25) */
+  let owned = new Set<number>();
+  let houseLit: readonly boolean[] | null = null;
+  const applyWindows = (): void => {
     const lit: Matrix4[] = [];
     const dark: Matrix4[] = [];
+    TOWN_HOUSES.forEach((h, i) => {
+      const on = houseLit === null ? owned.has(h.seat) : houseLit[i] === true;
+      (on ? lit : dark).push(...windows[i]!);
+    });
+    setWindows(winLit, new Bundle(), matEmHouse, C.paneLit, lit);
+    setWindows(winDark, new Bundle(), matProp, C.paneDark, dark);
+  };
+  const setOwners = (seats: readonly number[]): void => {
+    owned = new Set(seats.filter((s) => Number.isInteger(s) && s >= 0 && s < 8));
     const plateUv = housePlate.geometry.getAttribute("uv") as BufferAttribute;
     const markUv = houseMark.geometry.getAttribute("uv") as BufferAttribute;
     TOWN_HOUSES.forEach((h, i) => {
       const has = owned.has(h.seat);
-      (has ? lit : dark).push(...windows[i]!);
       const cell = has ? TOWN_ATLAS.seat0 + h.seat : TOWN_ATLAS.blank;
       setCellUv(plateUv, i, cell);
       setCellUv(markUv, i, cell);
       if (has) atlas.face(h.seat);
     });
-    setWindows(winLit, new Bundle(), matEmHouse, C.paneLit, lit);
-    setWindows(winDark, new Bundle(), matProp, C.paneDark, dark);
+    applyWindows();
   };
   setOwners([]);
+
+  // ----- 가로등·집 창(21-07): view 의 공개 값 하나로 전구 색·빛 무리 알파·집 창 두 묶음을 맞춘다 -----
+  const glowColor = meshes.lampGlow.geometry.getAttribute("color") as BufferAttribute;
+  const litRgb = new Color(LAMP_LIT);
+  const offRgb = new Color(LAMP_OFF);
+  /** 빛 무리 알파: 지금 값과 목표. 목표가 오르면 바로 오르고, 내리면 update 가 LAMP_FADE_MS 에 걸쳐 따라 내린다(모션 줄이기면 instant 로 바로) */
+  const glowNow = new Float32Array(TOWN_LAMPS.length);
+  const glowGoal = new Float32Array(TOWN_LAMPS.length);
+  const writeGlow = (): void => {
+    let any = false;
+    for (let i = 0; i < glowNow.length; i++) {
+      for (let k = 0; k < 4; k++) glowColor.setW(i * 4 + k, glowNow[i]!);
+      if (glowNow[i]! > 0) any = true;
+    }
+    glowColor.needsUpdate = true;
+    meshes.lampGlow!.visible = any;
+  };
+  const bulbAttr = meshes.lampBulbs.geometry.getAttribute("color") as BufferAttribute;
+  const setLamps = (lampLit: readonly boolean[] | null, nextHouseLit: readonly boolean[] | null, instant = false): void => {
+    TOWN_LAMPS.forEach((_, i) => {
+      const on = lampLit?.[i] === true;
+      const c = on ? litRgb : offRgb;
+      for (let v = 0; v < BULB_VERTS; v++) bulbAttr.setXYZ(i * BULB_VERTS + v, c.r, c.g, c.b);
+      glowGoal[i] = on ? LAMP_GLOW_A : 0;
+      if (glowGoal[i]! > glowNow[i]! || instant) glowNow[i] = glowGoal[i]!;
+    });
+    bulbAttr.needsUpdate = true;
+    writeGlow();
+    houseLit = nextHouseLit === null ? null : [...nextHouseLit];
+    applyWindows();
+    applyHouseScalar();
+  };
+
+  /** 지금 단계 조명과 어둡게 하기(setLook 이 준 값) — 창 발광 배율은 houseLit 유무에 따라 다른 열이라 setLamps 가 다시 맞춘다 */
+  let look: { phase: LightingPhase; dim: number } | null = null;
+  const applyHouseScalar = (): void => {
+    if (look === null) return;
+    const lit = TOWN_LIT[look.phase];
+    matEmHouse.color.setScalar((houseLit === null ? lit.houseOwned : lit.houseLit) * look.dim);
+  };
 
   // ----- 컷어웨이: 방마다 지붕·앞벽·간판의 불투명도 하나 -----
   let propsFull = true;
@@ -482,6 +565,14 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
     }
   };
   const update = (dt: number): void => {
+    // 꺼지는 빛 무리: 목표 아래로 LAMP_FADE_MS 에 걸쳐 줄인다
+    let fading = false;
+    for (let i = 0; i < glowNow.length; i++) {
+      if (glowNow[i]! <= glowGoal[i]!) continue;
+      glowNow[i] = Math.max(glowGoal[i]!, glowNow[i]! - (LAMP_GLOW_A * Math.max(0, dt) * 1000) / LAMP_FADE_MS);
+      fading = true;
+    }
+    if (fading) writeGlow();
     const step = (Math.max(0, dt) * 1000) / CUTAWAY_MS;
     for (const id of ROOM_IDS) {
       const c = cuts[id];
@@ -497,8 +588,9 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
     graded,
     setLook(phase: LightingPhase, budget: Budget, dim: number): void {
       const lit = TOWN_LIT[phase];
+      look = { phase, dim };
       matEmIndoor.color.setScalar(lit.indoor * dim);
-      matEmHouse.color.setScalar(lit.houseOwned * dim);
+      applyHouseScalar();
       matGlowIndoor.opacity = lit.indoor;
       meshes.glowIndoor!.visible = budget.glows && lit.indoor > 0;
     },
@@ -514,7 +606,7 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
     hooks: {
       setCutaway,
       setOwners,
-      setLamps: () => {},
+      setLamps,
       roofs: () => ({ post: cuts.post.alpha, pub: cuts.pub.alpha, clinic: cuts.clinic.alpha, police: cuts.police.alpha }),
     },
   };

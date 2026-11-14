@@ -91,9 +91,12 @@ export const PLAZA_PALETTE = {
   treeDark: "#0b1024",
 } as const;
 
-/** 마을 가로등 전구색(자리 값 — GREEN 에서 채운다) */
-export const LAMP_LIT = "#000000";
-export const LAMP_OFF = "#000000";
+/**
+ * 마을 가로등 8개 전구색(21페이즈 P21-8·P21-21, 결정 0088). 켜짐 = 가로등 전구색(lampBulb) 그대로, 꺼짐 = 장면 안 회색(--gray-700 과 같은 값 — 새 색이 아니다).
+ * 3D 재질에만 쓴다. 값이 갈라지지 않게 palette.test.ts 가 tokens.css 와 대조한다.
+ */
+export const LAMP_LIT = PLAZA_PALETTE.lampBulb;
+export const LAMP_OFF = "#3a3f4b";
 
 // ---------- 마을(maps/town.ts, 20페이즈) ----------
 
@@ -129,16 +132,17 @@ export const TOWN_PALETTE = {
 } as const;
 
 /**
- * 마을이 광장의 단계 조명 7칸에 더하는 두 열(UI-SPEC 조명 표, P20-13). 0~1 배율이고 재질 색에 곱한다 — 점광원은 늘리지 않는다.
- * indoor = 방 벽등·문턱 띠·빛 무리, houseOwned = 주인 있는 집의 창. 주인 없는 집의 창은 어느 단계에서도 0 이라 열이 없다.
- * 시민 편 밤은 둘 다 0 이다 — 역할마다 겉보기가 달라지지 않게(결정 0074-4).
+ * 마을이 광장의 단계 조명 7칸에 더하는 세 열(UI-SPEC 조명 표, P20-13·21페이즈 P21-4). 0~1 배율이고 재질 색에 곱한다 — 점광원은 늘리지 않는다.
+ * indoor = 방 벽등·문턱 띠·빛 무리, houseOwned = 주인 있는 집의 창(옛 규칙), houseLit = 원인 흐름 마을에서 day.lamps 로 켜진 집의 창(21페이즈 D-25 — 밤 0.9·아침·토론 0.3·투표 1·재판 0.06).
+ * 주인 없는 집의 창·꺼진 집의 창은 어느 단계에서도 0 이라 열이 없다. 기본 마피아의 시민 편 밤(nightCitizen)은 모두 0 이다 — 역할마다 겉보기가 달라지지 않게(결정 0074-4).
+ * 원인 흐름 밤은 모든 산 사람이 night 행을 쓴다(21-07 D-10).
  */
-export const TOWN_LIT: Readonly<Record<LightingPhase, { indoor: number; houseOwned: number }>> = {
-  talk: { indoor: 0.5, houseOwned: 0.3 },
-  vote: { indoor: 0.8, houseOwned: 1 },
-  trial: { indoor: 0.35, houseOwned: 0.06 },
-  night: { indoor: 0.7, houseOwned: 0.7 },
-  nightCitizen: { indoor: 0, houseOwned: 0 },
-  nightGhost: { indoor: 0.7, houseOwned: 0.7 },
-  morning: { indoor: 0.5, houseOwned: 0.3 },
+export const TOWN_LIT: Readonly<Record<LightingPhase, { indoor: number; houseOwned: number; houseLit: number }>> = {
+  talk: { indoor: 0.5, houseOwned: 0.3, houseLit: 0.3 },
+  vote: { indoor: 0.8, houseOwned: 1, houseLit: 1 },
+  trial: { indoor: 0.35, houseOwned: 0.06, houseLit: 0.06 },
+  night: { indoor: 0.7, houseOwned: 0.7, houseLit: 0.9 },
+  nightCitizen: { indoor: 0, houseOwned: 0, houseLit: 0 },
+  nightGhost: { indoor: 0.7, houseOwned: 0.7, houseLit: 0.9 },
+  morning: { indoor: 0.5, houseOwned: 0.3, houseLit: 0.3 },
 };
