@@ -32,7 +32,8 @@ import { stepRunoff } from "./runoff";
 import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
 import { clearSkip } from "./skip";
 import { enterMorning, enterNight } from "./night";
-import { PHASE_DEFS, nextPhaseOf } from "./phases";
+import { nearPhaseOf } from "./movement";
+import { ERRAND_TICK_MS, PHASE_DEFS, nextPhaseOf } from "./phases";
 import { modeOf, rulesetOf } from "./ruleset";
 import type { Ruleset } from "./ruleset";
 import type { RoomState } from "./room";
@@ -87,7 +88,8 @@ export function hooksOf(rules: Ruleset): PhaseHooks {
       execution: enterExecution,
       night: (s) => enterNight(s, rules), // 세 번째 자리 인자가 규칙 자리로 들어가지 않게 감싸고, 이 표의 규칙을 넘긴다(원인 흐름이면 심부름 키를 토론까지 남긴다)
       // 세 번째 인자 at(진입 시각)이 enterMorning 의 규칙 자리로 들어가지 않게 감싸고, 이 표의 규칙을 넘긴다. 원인 흐름이면 저녁 건너뛰기 표를 먼저 지운다(D-23 — 저녁 표가 아침으로 새지 않는다).
-      morning: rules.cause ? (s, r) => enterMorning(clearSkip(s), r, rules) : (s, r) => enterMorning(s, r, rules),
+      // 원인 흐름 아침은 근처 snap 표본(A5)이 돌므로 진입 마감 + 한 간격을 첫 표본 시각으로 정한다(errandTickAt — 아침에는 목격 기록을 쌓지 않고 시각만 옮긴다). 토론 진입(enterDiscussion)이 키째 지운다.
+      morning: rules.cause ? (s, r, at) => ({ ...enterMorning(clearSkip(s), r, rules), errandTickAt: at + ERRAND_TICK_MS }) : (s, r) => enterMorning(s, r, rules),
       ended: enterEnded,
     },
     deadline: {
@@ -159,8 +161,8 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
 
 /** DO 알람 하나로 단계 마감과 방 만료, 방장 이양·로비 정리 마감(continuity)을 함께 다룬다. */
 export function nextWakeAt(state: RoomState): number {
-  // errand 단계의 근처·목격 표본 시각(15페이즈). 다른 단계에서는 errandTickAt 이 있어도 무시한다.
-  const errandTick = state.phase === "errand" && state.errandTickAt !== undefined ? state.errandTickAt : Number.POSITIVE_INFINITY;
+  // 근처 단계(저녁과 원인 흐름 아침, nearPhaseOf)의 근처 표본 시각(15페이즈). 다른 단계에서는 errandTickAt 이 있어도 무시한다.
+  const errandTick = nearPhaseOf(state) && state.errandTickAt !== undefined ? state.errandTickAt : Number.POSITIVE_INFINITY;
   // 버려진 게임 방 닫기(결정 0076)도 같은 알람에 합친다.
   return Math.min(state.phaseEndsAt ?? Number.POSITIVE_INFINITY, state.expiresAt, nextContinuityAt(state), errandTick, emptyGameCloseAt(state));
 }

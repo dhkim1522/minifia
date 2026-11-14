@@ -47,7 +47,7 @@ import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
 import { skipReached, toggleSkip } from "../shared/game/skip";
 import { allTutorialDone, markTutorialDone } from "../shared/game/tutorial";
-import { MAP_PHASES, canMove } from "../shared/game/movement";
+import { MAP_PHASES, canMove, nearPhaseOf } from "../shared/game/movement";
 import { actErrand, nearSnapFrame, placeCenterFx, sampleErrand } from "../shared/game/errand";
 import { inspectSpot } from "../shared/game/scene";
 import { ERRAND_MIN_GAP_MS, ERRAND_TICK_MS } from "../shared/game/phases";
@@ -56,7 +56,7 @@ import { STAGE_SPOT } from "../shared/game/map";
 import type { MapDef } from "../shared/game/map";
 import { mapOf, pickMap, roomMapId } from "../shared/game/maps";
 import { pickMode } from "../shared/game/mode";
-import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
+import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, houseHome, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
 import { clipToZone, nextCrossingAt, reconcileZones, settleZones, zoneAt } from "../shared/game/zones";
@@ -1351,20 +1351,17 @@ export class Room extends DurableObject<Env> {
 
   // 단계 전환 뒤처리 한 곳(결정 0061-19): 단계 마감(advance)·토론 끝내기(applyEndDiscussion)·테스트 넘기기(handleTestSkip)가 모두 여기를 지난다.
   // 순서가 계약이다: home 기억(지목 배치보다 먼저, 즉시 저장) → 분필 좌표(저장·방송 전에 채워 모든 view 가 같은 값을 싣는다) → 저장·방송
-  // → 위치 동기화(밤·아침 home → 새 유령 snap → 지목 배치) → 사망 카드(유언·쪽지, 결정 0061-11) → 알람.
+  // → 위치 동기화(밤·아침 home → 새 유령 snap → 근처 단계 들고남 snap → 지목·토론 배치) → 사망 카드(유언·쪽지, 결정 0061-11) → 알람.
   // prev 는 전환 전 상태다 — 사망은 전후 alive 비교로 찾는다(처형·암살 한 길, 알람 따라잡기로 여러 단계를 지나도 사망마다 한 번).
   private async afterTransition(prev: RoomState, now: number): Promise<void> {
     if (this.captureHomeNow()) await this.flushWorld();
     this.fillChalk(prev);
     // 알람 따라잡기로 늦게 errand 에 닿으면 첫 표본 시각(진입 마감 + 1초)이 이미 지났다 — 지금부터 한 간격 뒤로 옮겨 들어오자마자 snap 이 두 번 가지 않게 한다(저장은 아래 한 번).
-    if (this.room?.phase === "errand" && prev.phase !== "errand" && this.room.errandTickAt !== undefined && this.room.errandTickAt <= now) {
+    if (this.room !== null && nearPhaseOf(this.room) && !nearPhaseOf(prev) && this.room.errandTickAt !== undefined && this.room.errandTickAt <= now) {
       this.room = { ...this.room, errandTickAt: now + ERRAND_TICK_MS };
     }
     await this.persistAndBroadcast();
-    // syncHome 이 이미 모두에게 snap 을 보냈으면(snapEachViewer 는 지금 단계 규칙을 따른다) 진입·이탈 snap 은 건너뛴다 — 한 전환에 snap 이 한 번이다.
-    const eachBefore = this.snapEachCount;
-    await this.syncPositions(now);
-    if (this.snapEachCount === eachBefore) this.syncErrandTransition(prev, now);
+    await this.syncPositions(now, prev);
     await this.emitDeathCards(prev, now);
     await this.emitBallotsCard(prev, now);
     this.emitResultLog(prev);
@@ -1459,20 +1456,31 @@ export class Room extends DurableObject<Env> {
     const room = this.room;
     if (!room || room.day === undefined) return false;
     if (!MAP_PHASES.has(room.phase) || room.phase === "dayAnnounce" || room.phase === "errand" || room.phase === "discussion") return false;
-    const next = captureHome(
-      this.world,
-      room.players.map((p) => p.id),
-      room.day,
-    );
+    // 원인 흐름(21페이즈 D-11, 결정 0088): 집이 있는 맵(MapDef.houseFronts — 마을)이면 토론이 끝난 자리가 아니라 좌석의 집 앞을 기억한다 — 밤에 산 사람 모두가 집 앞으로 순간이동하고(syncHome 의 teleportHome),
+    // 피해자의 분필(fillChalk 가 이 기억을 읽는다)이 집 앞에 놓인다(D-13). 집이 없는 맵의 시험 전용 원인 흐름은 지금처럼 토론이 끝난 자리다.
+    const fronts = this.mapDef().houseFronts;
+    const next =
+      fronts !== undefined && rulesetOf(modeOf(room)).cause
+        ? houseHome(this.world, room.players, fronts, room.day)
+        : captureHome(
+            this.world,
+            room.players.map((p) => p.id),
+            room.day,
+          );
     if (next === this.world) return false;
     this.world = next;
     return true;
   }
 
   // 위치 동기화 한 번: 밤·아침 home → 방금 탈락한 사람 snap → 지목 배치. 모두 지금 단계 키와 world.lay.key 비교로 멱등이다.
-  private async syncPositions(now: number): Promise<void> {
+  // 근처 단계(저녁·원인 흐름 아침)를 들고 나는 snap 은 배치(move 프레임)보다 먼저 보낸다 — 아침 → 토론에서 전체 snap 이 지금 자리를 알린 뒤 둘레로 걷는 move 가 이어진다(D-18).
+  // prev 가 없으면(전환 없이 맞추기만 하는 호출) 들고남 snap 은 건너뛴다.
+  private async syncPositions(now: number, prev?: RoomState): Promise<void> {
+    // syncHome 이 이미 모두에게 snap 을 보냈으면(snapEachViewer 는 지금 단계 규칙을 따른다) 진입·이탈 snap 은 건너뛴다 — 한 전환에 snap 이 한 번이다.
+    const eachBefore = this.snapEachCount;
     await this.syncHome(now);
     this.snapNewGhosts(now);
+    if (prev !== undefined && this.snapEachCount === eachBefore) this.syncErrandTransition(prev, now);
     this.syncLayout(now);
   }
 
@@ -1533,7 +1541,7 @@ export class Room extends DurableObject<Env> {
     if (!room) return null;
     const visible = worldVisibleTo(room, viewer.id);
     if (visible.size === 0) return null;
-    if (room.phase === "errand" && isAlive(viewer)) return nearSnapFrame(this.world, room.players, viewer.id, now, this.mapDef());
+    if (nearPhaseOf(room) && isAlive(viewer)) return nearSnapFrame(this.world, room.players, viewer.id, now, this.mapDef());
     const shown = room.players.filter((q) => visible.has(q.id));
     const base = snapFrame(this.world, shown, now);
     const map = this.mapDef();
@@ -1557,7 +1565,7 @@ export class Room extends DurableObject<Env> {
   // errand 의 근처 snap 을 산 사람마다 한 명씩 보낸다(D-02) — 새 무차별 방송 길을 만들지 않고 deliver 한 명씩(결정 0002·0021).
   private syncErrandView(now: number): void {
     const room = this.room;
-    if (!room || room.phase !== "errand") return;
+    if (!room || !nearPhaseOf(room)) return;
     for (const viewer of room.players) {
       if (!isAlive(viewer)) continue;
       this.deliver(new Set([viewer.id]), nearSnapFrame(this.world, room.players, viewer.id, now, this.mapDef()));
@@ -1568,15 +1576,21 @@ export class Room extends DurableObject<Env> {
   private syncErrandTransition(prev: RoomState, now: number): void {
     const room = this.room;
     if (!room) return;
-    if (room.phase === "errand" && prev.phase !== "errand") this.syncErrandView(now);
-    else if (room.phase !== "errand" && prev.phase === "errand") this.snapEachViewer(now);
+    if (nearPhaseOf(room) && !nearPhaseOf(prev)) this.syncErrandView(now);
+    else if (!nearPhaseOf(room) && nearPhaseOf(prev)) this.snapEachViewer(now);
   }
 
   // errand 표본 한 번(D-04, 알람 하나에 합친다): 위치는 world.segs 의 positionAtFx. 상태(errandNear·errandSeen·errandTickAt)는 방 상태에 저장돼 하이버네이션에도 이어진다.
   // 방 상태가 바뀌어도 view 에는 실리는 값이 없어 state 를 다시 방송하지 않는다 — 저장만 한다(표본당 쓰기 한 번). 이어서 근처 snap 을 보낸다.
   private async runErrandTick(now: number): Promise<void> {
     const room = this.room;
-    if (!room || room.phase !== "errand" || room.errandTickAt === undefined || room.errandTickAt > now) return;
+    if (!room || !nearPhaseOf(room) || room.errandTickAt === undefined || room.errandTickAt > now) return;
+    // 원인 흐름 아침(21페이즈 A5, 결정 0088): 목격 기록을 쌓지 않는다 — 표본 시각만 옮기고(메모리, 저장 없음 — 결정 0076) 근처 snap 만 보낸다.
+    if (room.phase !== "errand") {
+      this.room = { ...room, errandTickAt: now + ERRAND_TICK_MS };
+      this.syncErrandView(now);
+      return;
+    }
     const has = (id: string): boolean => Object.prototype.hasOwnProperty.call(this.world.segs, id);
     const next = sampleErrand(room, (id) => (has(id) ? positionAtFx(this.world.segs[id]!, now) : undefined), now);
     this.room = next;

@@ -57,6 +57,11 @@ export interface MapDef {
    * scene.ts 는 이 표를 맵에서 읽는다 — 맵 데이터 파일을 직접 import 하지 않는다.
    */
   clueSpots?: readonly (readonly { x: number; z: number }[])[];
+  /**
+   * 집 앞 목적지(21페이즈 D-11, 결정 0088): 집 좌석 i 의 문 앞 칸(고정소수점, 걷는 칸 중심) — 좌석 번호가 색인이다. 원인 흐름의 밤에 산 사람이 이 자리로 순간이동한다. 마을만 둔다(집이 없는 맵은 없다).
+   * 방 DO 는 이 표를 맵에서 읽는다 — 맵 데이터 파일(mapTown.ts)을 직접 읽지 않는다.
+   */
+  houseFronts?: readonly { x: number; z: number }[];
   /** 실내 방(20페이즈 D-06·D-13). 없는 맵(재즈 바·광장)은 구역이 광장 하나다. */
   rooms?: readonly RoomDef[];
 }

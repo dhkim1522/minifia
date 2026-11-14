@@ -298,4 +298,17 @@ export const TOWN_CLUE_SPOTS: readonly (readonly { x: number; z: number }[])[] =
 ];
 
 /** 마을 이동 맵(UI-SPEC P20-0): 48×48 · 칸 0.5 · 원점 −12 · 걷기 한계 ±10. 무대 자리는 광장 연단 그대로다. */
-export const TOWN_MAP: MapDef = { id: "town", size: 48, origin: -12, walkHalf: 10, mask: parseMask(TOWN_MASK), spawns: TOWN_SPAWNS, stage: STAGE_SPOT, places: TOWN_PLACES, lamps: TOWN_LAMPS, clueSpots: TOWN_CLUE_SPOTS, rooms: TOWN_ROOMS };
+export const TOWN_MAP: MapDef = {
+  id: "town",
+  size: 48,
+  origin: -12,
+  walkHalf: 10,
+  mask: parseMask(TOWN_MASK),
+  spawns: TOWN_SPAWNS,
+  stage: STAGE_SPOT,
+  places: TOWN_PLACES,
+  lamps: TOWN_LAMPS,
+  clueSpots: TOWN_CLUE_SPOTS,
+  houseFronts: TOWN_HOUSES.map((h) => ({ x: h.front.x, z: h.front.z })), // 집 앞 순간이동(21-05 D-11) — 좌석 번호가 색인이다
+  rooms: TOWN_ROOMS,
+};

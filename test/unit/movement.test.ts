@@ -70,8 +70,8 @@ describe("canMove — 단계 × 신분 표 (MAP-04)", () => {
 });
 
 describe("canMoveIn — 밤에는 산 사람 누구도 걷지 못한다 (15페이즈 D-05)", () => {
-  it("밤: 산 사람 false · 유령 true (인자는 단계·생존 둘뿐)", () => {
-    expect(canMoveIn.length).toBe(2);
+  it("밤: 산 사람 false · 유령 true (인자는 단계·생존 + 선택 판 규칙 — 21페이즈가 세 번째 선택 인자를 더했다)", () => {
+    expect(canMoveIn.length).toBe(3);
     expect(`night:${canMoveIn("night", true)}`).toBe("night:false");
     expect(`night:${canMoveIn("night", false)}`).toBe("night:true");
   });

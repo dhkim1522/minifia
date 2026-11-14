@@ -79,9 +79,26 @@ export function captureHome(w: WorldState, ids: readonly string[], day: number):
   return { ...w, home: { day, pos } };
 }
 
-/** RED 단계의 자리 함수(21-05): 구현은 GREEN 커밋에서 채운다. */
-export function houseHome(w: WorldState, _players: readonly { id: string; seat: number }[], _fronts: readonly { x: number; z: number }[], _day: number): WorldState {
-  return w;
+/**
+ * 밤의 집 앞 자리를 기록한다(21페이즈 D-11, 결정 0088): captureHome 의 짝이다. 사람마다 fronts[seat](집 앞 목적지, 고정소수점)를 HomeMemo 로 적는다 —
+ * 토론이 끝난 자리가 아니라 좌석 번호가 정하는 자리라 시각·위치를 읽지 않는다. 같은 일차가 이미 기록돼 있으면 입력 객체를 그대로 돌려준다(멱등 — captureHome 과 같다).
+ * 구간이 있는 사람만 적는다(teleportHome 이 구간 없는 사람을 건드리지 않는 것과 같은 방침). fronts 에 그 좌석이 없으면 그 사람은 적지 않는다(fail-safe).
+ */
+export function houseHome(
+  w: WorldState,
+  players: readonly { id: string; seat: number }[],
+  fronts: readonly { x: number; z: number }[],
+  day: number,
+): WorldState {
+  if (w.home !== undefined && w.home.day === day) return w;
+  const pos: Record<string, readonly [number, number]> = {};
+  for (const p of players) {
+    if (!Object.prototype.hasOwnProperty.call(w.segs, p.id)) continue;
+    const at = fronts[p.seat];
+    if (at === undefined) continue;
+    pos[p.id] = [at.x, at.z];
+  }
+  return { ...w, home: { day, pos } };
 }
 
 /**

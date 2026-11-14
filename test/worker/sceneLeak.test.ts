@@ -72,6 +72,8 @@ async function morningGame(): Promise<Morning> {
   for (const sock of g.socks) await settle(sock, mark(sock));
   await advanceTo(g.code, g.socks, "morning");
   for (const sock of g.socks) await settle(sock, mark(sock));
+  // 21-05: 원인 흐름 아침에는 1초마다 근처 snap 표본 알람이 돈다(A5). 이 시험은 inspect 가 다른 소켓에 아무것도 보내지 않음을 재므로 표본 시각을 멀리 밀어 알람이 시험 창에 끼어들지 않게 한다(저장·메모리 모두).
+  await writeRoomEdit(env.ROOM.getByName(g.code), (r) => ({ ...r, errandTickAt: Date.now() + 3_600_000 }));
   return { g, house: victim.seat, m1, m2, victim, c2, police, doctor };
 }
 
