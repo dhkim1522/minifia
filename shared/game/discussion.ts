@@ -7,7 +7,7 @@ import { isAlive } from "./alive";
 import { majorityOf, nominationStepMs } from "./nomination";
 import { runoffStepMs } from "./runoff";
 import { showdownStepMs } from "./showdown";
-import { MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_TRACE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, PHASE_DEFS } from "./phases";
+import { MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_SCENE_MS, MORNING_TRACE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
 import { modeOf, rulesetOf } from "./ruleset";
 
@@ -21,17 +21,20 @@ export type VoteError = "WRONG_PHASE" | "BAD_MESSAGE";
  */
 export function morningMsOf(state: RoomState): number {
   const seat = state.morning?.eliminated;
-  // 원인 흐름(21페이즈 D-17): 피해자도 미수도 없는 밤은 현장이 없다 — 아침 길이 0 이라 tick 이 같은 호출 안에서 곧바로 토론까지 간다.
-  if (rulesetOf(modeOf(state)).cause && seat === undefined && state.morning?.saved !== true) return 0;
-  if (seat === undefined) return MORNING_MS;
+  const cause = rulesetOf(modeOf(state)).cause;
+  // 원인 흐름(21페이즈 D-02·D-03·D-17): 현장은 피해자나 미수(의사 구출)가 있는 밤에만 있다. 없으면 아침 길이 0 이라 tick 이 같은 호출 안에서 곧바로 토론까지 간다.
+  // 있으면 발표 길이 뒤에 현장 시간(MORNING_SCENE_MS)이 붙는다 — 공개 흔적이 없으니 흔적 구간(MORNING_TRACE_MS)은 더하지 않는다.
+  if (cause && seat === undefined && state.morning?.saved !== true) return 0;
+  const scene = cause ? MORNING_SCENE_MS : 0;
+  if (seat === undefined) return MORNING_MS + scene;
   const will = state.players.find((p) => p.seat === seat)?.will;
   const ms =
     MORNING_MS +
     MORNING_VICTIM_MS +
     (will !== undefined && will !== "" ? MORNING_WILL_MS : 0) +
     (state.nightNote !== undefined && state.nightNote !== "" ? MORNING_NOTE_MS : 0) +
-    (state.morning?.trace !== undefined ? MORNING_TRACE_MS : 0); // 흔적 공개 구간(15페이즈 D-06) — 흔적은 탈락자가 있는 아침에만 있다
-  return Math.min(MORNING_MAX_MS, ms);
+    (state.morning?.trace !== undefined ? MORNING_TRACE_MS : 0); // 흔적 공개 구간(15페이즈 D-06) — 흔적은 탈락자가 있는 아침에만 있다(원인 흐름 판에는 흔적이 없다)
+  return Math.min(MORNING_MAX_MS, ms) + scene;
 }
 
 /**

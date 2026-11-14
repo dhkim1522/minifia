@@ -9,6 +9,7 @@ import { isAlive } from "./alive";
 import { UNIT } from "./map";
 import type { MapDef } from "./map";
 import { mapOf, roomMapId } from "./maps";
+import { modeOf, rulesetOf } from "./ruleset";
 import { ERRAND_ACT_R, ERRAND_COUNT, ERRAND_NEAR_R, ERRAND_TICK_MS, ERRAND_VIEW_HORIZON_MS, RECORD_MAX } from "./phases";
 import type { RoomState } from "./room";
 import { positionAtFx, snapFrame, truncateSegment } from "./world";
@@ -191,8 +192,10 @@ export function sampleErrand(state: RoomState, posOf: (id: string) => Pos | unde
     return { ...a, errandNear: nearSeats, errandSeen: seen };
   });
   const last = new Map((state.errandLast ?? []).map((row) => [row.seat, row] as const));
+  // 원인 흐름(21페이즈 P21-15·함정 2): 마지막 목격 줄은 쌓지 않는다 — 아침에 공개되지 않으니 저장만 늘기 때문이다. 표본(근처·목격 기록)은 그대로다.
+  const keepLast = !rulesetOf(modeOf(state)).cause;
   for (const b of state.players) {
-    if (!isAlive(b)) continue;
+    if (!keepLast || !isAlive(b)) continue;
     const here = posOf(b.id);
     if (here === undefined) continue;
     let by: number | undefined;

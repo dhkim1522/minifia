@@ -83,7 +83,7 @@ export function hooksOf(rules: Ruleset): PhaseHooks {
       discussion: enterDiscussion,
       nomination: rules.pickTurn ? enterNomination : enterVote,
       execution: enterExecution,
-      night: enterNight,
+      night: (s) => enterNight(s, rules), // 세 번째 자리 인자가 규칙 자리로 들어가지 않게 감싸고, 이 표의 규칙을 넘긴다(원인 흐름이면 심부름 키를 토론까지 남긴다)
       morning: (s, r) => enterMorning(s, r, rules), // 세 번째 인자 at(진입 시각)이 enterMorning 의 규칙 자리로 들어가지 않게 감싸고, 이 표의 규칙을 넘긴다
       ended: enterEnded,
     },

@@ -7,7 +7,8 @@ import type { ShowdownView, PointLine } from "../protocol";
 import { isAlive } from "./alive";
 import type { VoteError } from "./discussion";
 import { enterDiscussion } from "./discussion";
-import { PICK_GAP_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS } from "./phases";
+import { afterDayOf, PICK_GAP_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS } from "./phases";
+import { modeOf, rulesetOf } from "./ruleset";
 import type { RoomState, ShowdownState } from "./room";
 import type { DeadlineResult } from "./tick";
 
@@ -68,7 +69,7 @@ function pointLinesOfShowdown(state: RoomState): PointLine[] {
  */
 export function stepShowdown(state: RoomState, at: number): DeadlineResult {
   const sd = state.showdown;
-  if (sd === undefined) return { state, stay: false, next: "night" };
+  if (sd === undefined) return { state, stay: false, next: afterDayOf(rulesetOf(modeOf(state))) };
   if (sd.i >= 4) return resolveShowdown(state);
   const withShowdown = (next: ShowdownState): DeadlineResult => ({ state: { ...state, showdown: next }, stay: true });
   const turn = (i: number): DeadlineResult =>
@@ -131,7 +132,7 @@ export function acceptLastWord(
 /**
  * 집계(결정 0066-5): 2표 이상 받은 사람이 있으면 최후 변론·찬반 없이 처형 단계로 — 그날 voteLog 줄 {exec 0·0 passed, cand {votes, candidate}, last} ·
  * verdict {passed:true, candidate} · next "execution"(기존 enterExecution 이 후보를 탈락시킨다). 없으면 처형 없음 — voteLog 줄(passed false, candidate 없음, last) ·
- * verdict {passed:false} · next "night"(votes 가 비면 noVotes, 아니면 tie 이유가 기존 noExecutionOf 로 파생된다).
+ * verdict {passed:false} · next afterDayOf(규칙)(기본 night, 원인 흐름 errand. votes 가 비면 noVotes, 아니면 tie 이유가 기존 noExecutionOf 로 파생된다).
  * showdown·showdownPick 은 키째 지운다.
  */
 export function resolveShowdown(state: RoomState): DeadlineResult {
@@ -150,7 +151,8 @@ export function resolveShowdown(state: RoomState): DeadlineResult {
   const n = state.day ?? 1;
   if (candidate === undefined) {
     const line = { n, exec: { yes: 0, no: 0, passed: false }, cand: { votes }, last: true as const };
-    return { state: { ...rest, players, voteLog: [...(state.voteLog ?? []), line], verdict: { passed: false } }, stay: false, next: "night" };
+    // 처형 없는 낮의 다음 단계는 규칙이 정한다(21페이즈 D-01) — 기본 밤, 원인 흐름 다음 날 저녁.
+    return { state: { ...rest, players, voteLog: [...(state.voteLog ?? []), line], verdict: { passed: false } }, stay: false, next: afterDayOf(rulesetOf(modeOf(state))) };
   }
   const line = { n, exec: { yes: 0, no: 0, passed: true }, cand: { votes, candidate }, last: true as const };
   return {

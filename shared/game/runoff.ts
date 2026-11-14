@@ -5,7 +5,8 @@
 // 이 파일은 역할·연결 여부를 읽지 않는다 — 결선 규칙에 역할 분기가 없다(L20·L21 성격).
 import { isAlive } from "./alive";
 import type { VoteError } from "./discussion";
-import { PHASE_DEFS, RUNOFF_END_MS, RUNOFF_INTRO_MS, RUNOFF_VOTE_MS } from "./phases";
+import { afterDayOf, PHASE_DEFS, RUNOFF_END_MS, RUNOFF_INTRO_MS, RUNOFF_VOTE_MS } from "./phases";
+import { modeOf, rulesetOf } from "./ruleset";
 import type { Player, RoomState, RunoffState } from "./room";
 import type { DeadlineResult } from "./tick";
 import type { RunoffView } from "../protocol";
@@ -53,7 +54,7 @@ function tallyOf(state: RoomState, runoff: RunoffState): [number, number] {
  */
 export function stepRunoff(state: RoomState, _at: number): DeadlineResult {
   const runoff = state.runoff;
-  if (runoff === undefined) return { state, stay: false, next: "night" };
+  if (runoff === undefined) return { state, stay: false, next: afterDayOf(rulesetOf(modeOf(state))) };
   if (runoff.step === 0) return { state: { ...state, runoff: { cand: runoff.cand, step: 1 } }, stay: true };
   if (runoff.step === 1) return { state: { ...state, runoff: { cand: runoff.cand, step: 2, tally: tallyOf(state, runoff) } }, stay: true };
   return resolveRunoff(state);
@@ -87,7 +88,7 @@ export function castRunoffVote(
 
 /**
  * 결선 집계(결정 0066-4). 득표가 다르면 많이 받은 후보가 승자 — 그날 voteLog 줄의 cand.candidate 를 채우고(줄이 없으면 voteLog 는 그대로)
- * verdict {passed:false, candidate} 로 표의 기본 다음 단계(defense)로 간다. 같으면(0-0 포함) 처형 없음 — next "night" 이고
+ * verdict {passed:false, candidate} 로 표의 기본 다음 단계(defense)로 간다. 같으면(0-0 포함) 처형 없음 — next afterDayOf(규칙)(기본 night, 원인 흐름 errand)이고
  * 그날 voteLog 줄에 candidate 가 없으니 기존 noExecutionOf 가 이유 tie 를 파생한다. runoff·runoffVote 는 키째 지운다.
  */
 export function resolveRunoff(state: RoomState): DeadlineResult {
@@ -97,9 +98,11 @@ export function resolveRunoff(state: RoomState): DeadlineResult {
     const { runoffVote: _runoffVote, ...kept } = p;
     return kept;
   });
-  if (runoff === undefined) return { state: { ...rest, players }, stay: false, next: "night" };
+  // 처형 없는 낮의 다음 단계는 규칙이 정한다(21페이즈 D-01) — 기본 밤, 원인 흐름 다음 날 저녁.
+  const noExecution = afterDayOf(rulesetOf(modeOf(state)));
+  if (runoff === undefined) return { state: { ...rest, players }, stay: false, next: noExecution };
   const tally = runoff.tally ?? tallyOf(state, runoff);
-  if (tally[0] === tally[1]) return { state: { ...rest, players }, stay: false, next: "night" };
+  if (tally[0] === tally[1]) return { state: { ...rest, players }, stay: false, next: noExecution };
   const winner = tally[0] > tally[1] ? runoff.cand[0] : runoff.cand[1];
   const today = state.day ?? 1;
   const log = state.voteLog ?? [];

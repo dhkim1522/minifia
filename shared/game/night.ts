@@ -39,14 +39,17 @@ export function pickTarget(
 }
 
 /** 밤 진입 훅: 남은 선택(nightPick)·지난 아침 결과(morning)·쪽지(nightNote)·분필(chalk)을 키째 지운다(결정 0061-9·14). */
-export function enterNight(state: RoomState): RoomState {
+export function enterNight(state: RoomState, rules: Ruleset = rulesetOf(modeOf(state))): RoomState {
+  // 원인 흐름(21페이즈 D-09·D-19·함정 2): 목록·진행·목격 표본(errandPlaces·errandDone·errandSeen)은 밤을 지나 토론까지 남는다 — 다음 저녁 진입(enterErrand)이 키째 지운다. view 는 단계 게이트로만 내보낸다(me.record 는 토론의 산 본인).
   // errandLast(마지막 목격 줄, 16페이즈 D-10)는 일부러 지우지 않는다 — 낮 심부름에서 쌓은 줄을 다음 아침의 enterMorning 이 피해자 한 줄만 꺼내 쓴다.
   const { morning: _morning, nightNote: _nightNote, chalk: _chalk, ...rest } = state;
   return {
     ...rest,
     players: state.players.map((p) => {
       // 심부름 목록·진행(15페이즈)도 키째 지운다 — 다음 낮에 새로 배정되므로 남은 값이 어떤 view 에도 새지 않는다.
-      const { nightPick: _nightPick, errandPlaces: _errandPlaces, errandDone: _errandDone, errandNear: _errandNear, errandSeen: _errandSeen, errandFake: _errandFake, ...kept } = p;
+      const { nightPick: _nightPick, errandNear: _errandNear, errandFake: _errandFake, ...cleared } = p;
+      if (rules.cause) return cleared;
+      const { errandPlaces: _errandPlaces, errandDone: _errandDone, errandSeen: _errandSeen, ...kept } = cleared;
       return kept;
     }),
   };
@@ -166,8 +169,9 @@ export function enterMorning(state: RoomState, randInt: RandInt = () => 0, rules
     };
     return result.eliminated === p.seat ? { ...withRecords, alive: false } : withRecords;
   });
-  const piece = result.eliminated === undefined || !rules.trace ? undefined : pickTracePiece(state, result.eliminated, randInt);
-  const seenRow = result.eliminated === undefined || !rules.witness ? undefined : state.errandLast?.find((row) => row.seat === result.eliminated);
+  // 원인 흐름(21페이즈 P21-15): 공개 흔적 조각·마지막 목격 줄을 만들지 않는다 — 현장에서 사람이 직접 찾는다. rules.trace·rules.witness 의 뜻은 그대로다(witness 는 me.record 로 계속 쓰인다).
+  const piece = result.eliminated === undefined || !rules.trace || rules.cause ? undefined : pickTracePiece(state, result.eliminated, randInt);
+  const seenRow = result.eliminated === undefined || !rules.witness || rules.cause ? undefined : state.errandLast?.find((row) => row.seat === result.eliminated);
   const morning: MorningView =
     result.eliminated !== undefined
       ? {
