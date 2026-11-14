@@ -1,8 +1,12 @@
 import type { GameMode, MapId } from "../../shared/protocol";
 import { MODE_MAPS, PLAYABLE_MAPS } from "../../shared/game/maps";
+import { CAUSE_MODES } from "../../shared/game/ruleset";
 
 /** 제품의 판 종류별 고정 맵 표 사본 — 이 모듈을 처음 읽을 때(시험 잠금보다 먼저) 떠 둔다. 잠긴 뒤에도 제품 값을 시험이 확인할 수 있다. */
 export const SHIPPED_MODE_MAPS: Readonly<Partial<Record<GameMode, MapId>>> = { ...MODE_MAPS };
+
+/** 제품의 원인 흐름 판 종류 표 사본(21-01) — 이 모듈을 처음 읽을 때(시험 잠금보다 먼저) 떠 둔다. 잠긴 뒤에도 제품 값을 시험이 확인할 수 있다. */
+export const SHIPPED_CAUSE_MODES: readonly GameMode[] = [...CAUSE_MODES];
 
 /**
  * 시험 동안 허용 맵에 광장이 들어 있게 한다(11-13). 이미 열려 있으면 아무것도 하지 않는다.
@@ -57,5 +61,30 @@ export function openTown(): () => void {
   return () => {
     if (had && saved !== undefined) table.extended = saved;
     else delete table.extended;
+  };
+}
+
+/**
+ * 원인 흐름(저녁 → 밤 → 아침 → 토론, 21페이즈 D-01)을 끈다: CAUSE_MODES 에서 확장판을 빼 확장판 판도 옛 순서(낮 시작 발표 → 심부름 → 토론)로 돌게 한다.
+ * 단위·워커·화면 시험 대부분이 옛 확장판 순서를 전제하므로 setup 파일(test/unit·worker·client 의 setup.ts)이 모듈을 읽을 때 부른다 — 잠금을 걷고 옛 순서 시험을 옮기는 일은 21-13·21-14 가 한다.
+ * 돌려준 함수를 부르면 부르기 전 표로 되돌린다.
+ */
+export function lockCause(): () => void {
+  const saved = [...CAUSE_MODES];
+  CAUSE_MODES.splice(0, CAUSE_MODES.length, ...saved.filter((mode) => mode !== "extended"));
+  return () => {
+    CAUSE_MODES.splice(0, CAUSE_MODES.length, ...saved);
+  };
+}
+
+/**
+ * 시험 동안 확장판에 원인 흐름을 켠다(21페이즈) — 잠금(lockCause) 아래에서 새 흐름이 필요한 시험만 쓴다.
+ * 돌려준 함수를 부르면 부르기 전 상태(잠겨 있었으면 잠긴 채)로 되돌린다.
+ */
+export function openCause(): () => void {
+  const saved = [...CAUSE_MODES];
+  if (!CAUSE_MODES.includes("extended")) CAUSE_MODES.push("extended");
+  return () => {
+    CAUSE_MODES.splice(0, CAUSE_MODES.length, ...saved);
   };
 }

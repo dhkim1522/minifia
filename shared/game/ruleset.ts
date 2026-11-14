@@ -23,15 +23,20 @@ export interface Ruleset {
   readonly witness: boolean;
   /** 아침 밤 흔적(결정 0074·0079, D-02). 꺼지면 흔적 조각을 만들지도 싣지도 않는다. */
   readonly trace: boolean;
+  /** 원인→결과 하루(결정 0081-2·3, 21페이즈 D-01): 저녁 등불 → 밤 집 찾기 → 아침 현장 → 토론. 꺼지면 옛 순서(낮 시작 발표 → …)다. */
+  readonly cause: boolean;
 }
+
+/** 시험 잠금 표(자리 값) — 원인 흐름을 켠 판 종류. */
+export const CAUSE_MODES: GameMode[] = ["extended"];
 
 /** 정치 장치 다섯은 두 판 모두 꺼짐이다(D-02). */
 const POLITICS_OFF = { badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false } as const;
 
 /** 판마다 얼린 규칙 객체 하나(D-02). Record 라 판 종류를 늘리면 여기서 컴파일이 실패한다. */
 const RULES_BY_MODE: Readonly<Record<GameMode, Ruleset>> = Object.freeze({
-  basic: Object.freeze({ ...POLITICS_OFF, errand: false, witness: false, trace: false }),
-  extended: Object.freeze({ ...POLITICS_OFF, errand: true, witness: true, trace: true }),
+  basic: Object.freeze({ ...POLITICS_OFF, errand: false, witness: false, trace: false, cause: false }),
+  extended: Object.freeze({ ...POLITICS_OFF, errand: true, witness: true, trace: true, cause: false }),
 });
 
 /** 판 종류의 규칙. 같은 판은 늘 같은 얼린 객체다. */
