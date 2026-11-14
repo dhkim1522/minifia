@@ -1,7 +1,14 @@
 // 낮·밤 조명 표의 허용 범위 시험 (18-02, D-03, UI-SPEC 조명 계약 1~3). 두 맵(광장·재즈 바)의 표를 같은 잣대로 잰다.
 // 렌더로 재는 허용 범위 4(휘도 순서)·5(가독)는 18-07 의 몫이다.
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { Color } from "three";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { PhaseId, RoomView } from "../../shared/protocol";
+import { nightDarkOf } from "../../src/game/nightDark";
+import { lightingFor, lightingOf, visibleSeats } from "../../src/world/presence";
+import { rulesetOf } from "../../shared/game/ruleset";
+import { openCause } from "../helpers/playable";
 import { ALBEDO_NONE, LIGHT_TUNE, type PhaseTune } from "../../src/world/maps/bar";
 import { PLAZA_LIGHT_TUNE } from "../../src/world/maps/plaza";
 import { TOKEN_COLORS } from "../../src/world/palette";
@@ -117,5 +124,109 @@ describe.each(MAPS)("조명 표 허용 범위 — $name (D-03)", ({ name, tune, 
       expect(albedo, ph).toEqual(ALBEDO_NONE);
       expect(rest, ph).toEqual(NIGHT_ROWS[name]![ph]);
     }
+  });
+});
+
+// ---------- 21-07 원인 흐름 조명 분기(D-04·D-10, 결정 0088·0074-4 의 연장) ----------
+// 확장판(원인 흐름) 밤은 역할로 갈라지지 않는다: 모든 산 사람이 같은 night 조명·같은 장면 표(몸 없음)·같은 어둠 표식 값. 저녁(errand)은 해 질 녘(vote) 조명.
+// 기본 마피아(mode basic)와 잠금 아래 옛 확장판은 지금 그대로다.
+function viewOf(phase: PhaseId, o: { role?: "mafia" | "police" | "doctor" | "citizen"; mode?: "basic" | "extended"; dead?: number[]; mySeat?: number } = {}): RoomView {
+  const dead = new Set(o.dead ?? []);
+  const players = Array.from({ length: 5 }, (_, seat) => ({ seat, nickname: "p" + seat, connected: true, isHost: seat === 0, ...(dead.has(seat) ? { alive: false } : {}) }));
+  const mySeat = o.mySeat ?? 0;
+  const ghost = dead.has(mySeat);
+  return {
+    code: "0042",
+    phase,
+    phaseEndsAt: null,
+    phaseDurationMs: null,
+    serverNow: 0,
+    minPlayers: 4,
+    maxPlayers: 8,
+    players,
+    me: { seat: mySeat, isHost: false, ...(o.role === undefined ? {} : { role: o.role }) },
+    day: { n: 1, roles: [] },
+    ...(o.mode === undefined ? {} : { mode: o.mode }),
+    ...(ghost ? { spectate: { seats: [] } } : {}),
+  } as unknown as RoomView;
+}
+const ROLES = ["mafia", "police", "doctor", "citizen"] as const;
+
+describe("원인 흐름 밤·저녁 조명 (21-07, D-04·D-10)", () => {
+  let restore: () => void = () => {};
+  beforeAll(() => {
+    restore = openCause();
+  });
+  afterAll(() => restore());
+
+  it("밤: 마피아·경찰·의사·시민 모두 lightingFor = night, visibleSeats 는 빈 표, nightDarkOf false", () => {
+    for (const role of ROLES) {
+      const v = viewOf("night", { role });
+      expect(lightingFor(v), role).toBe("night");
+      expect(Object.keys(visibleSeats(v)).length, role).toBe(0);
+      expect(nightDarkOf(v), role).toBe(false);
+    }
+  });
+
+  it("밤: 유령은 nightGhost 그대로이고 몸을 그리지 않으며 어둠 표식은 없다", () => {
+    const v = viewOf("night", { role: "citizen", dead: [0] });
+    expect(lightingFor(v)).toBe("nightGhost");
+    expect(Object.keys(visibleSeats(v)).length).toBe(0);
+    expect(nightDarkOf(v)).toBe(false);
+  });
+
+  it("저녁(errand): lightingOf(errand, 원인 규칙) = vote, 규칙이 없으면 talk 그대로. lightingFor 도 vote", () => {
+    expect(lightingOf("errand", rulesetOf("extended"))).toBe("vote");
+    expect(lightingOf("errand")).toBe("talk");
+    expect(lightingOf("errand", rulesetOf("basic"))).toBe("talk");
+    expect(lightingFor(viewOf("errand", { role: "citizen" }))).toBe("vote");
+    expect(lightingFor(viewOf("errand", { role: "mafia" }))).toBe("vote");
+  });
+
+  it("아침·토론은 그대로(morning·talk)", () => {
+    expect(lightingFor(viewOf("morning", { role: "mafia" }))).toBe("morning");
+    expect(lightingFor(viewOf("discussion", { role: "citizen" }))).toBe("talk");
+  });
+
+  it("기본판 밤은 지금 그대로: 마피아 night, 시민 nightCitizen, 시민은 본인만 그리고 어둠 표식 true", () => {
+    const mafia = viewOf("night", { role: "mafia", mode: "basic" });
+    const citizen = viewOf("night", { role: "citizen", mode: "basic" });
+    expect(lightingFor(mafia)).toBe("night");
+    expect(lightingFor(citizen)).toBe("nightCitizen");
+    expect(Object.keys(visibleSeats(citizen)).join(",")).toBe("0");
+    expect(Object.keys(visibleSeats(mafia)).length).toBe(5);
+    expect(nightDarkOf(citizen)).toBe(true);
+    expect(nightDarkOf(mafia)).toBe(false);
+    expect(lightingFor(viewOf("errand", { role: "citizen", mode: "basic" }))).toBe("talk");
+  });
+
+  it("소스 규약: lightingFor·visibleSeats·nightDarkOf 에서 원인 흐름 분기가 역할 읽기보다 먼저다", () => {
+    const code = (f: string): string =>
+      readFileSync(resolve(process.cwd(), f), "utf8")
+        .split("\n")
+        .filter((l) => !/^\s*\/\//.test(l))
+        .join("\n");
+    const presence = code("src/world/presence.ts");
+    const fnBody = (src: string, name: string): string => {
+      const at = src.indexOf("export function " + name);
+      return src.slice(at, src.indexOf("\n}\n", at));
+    };
+    for (const name of ["lightingFor", "visibleSeats"]) {
+      const body = fnBody(presence, name);
+      expect(body.indexOf("cause"), name).toBeGreaterThan(-1);
+      expect(body.indexOf("cause"), name).toBeLessThan(body.indexOf(".role") === -1 ? Infinity : body.indexOf(".role"));
+    }
+    const dark = fnBody(code("src/game/nightDark.ts"), "nightDarkOf");
+    expect(dark.indexOf("cause")).toBeGreaterThan(-1);
+    expect(dark.indexOf("cause")).toBeLessThan(dark.indexOf(".role"));
+  });
+});
+
+describe("원인 흐름이 잠긴(기본 setup) 확장판은 옛 조명 그대로", () => {
+  it("밤 시민 nightCitizen·마피아 night, errand 는 talk", () => {
+    expect(lightingFor(viewOf("night", { role: "citizen" }))).toBe("nightCitizen");
+    expect(lightingFor(viewOf("night", { role: "mafia" }))).toBe("night");
+    expect(lightingFor(viewOf("errand", { role: "citizen" }))).toBe("talk");
+    expect(nightDarkOf(viewOf("night", { role: "citizen" }))).toBe(true);
   });
 });

@@ -81,6 +81,13 @@ describe("단계 → 장면 규칙표(PHASE_SCENE)", () => {
     for (const phase of PHASES) expect(sceneOfPhase(phase)).toBe(PHASE_SCENE[phase]);
   });
 
+  it("원인 흐름 규칙의 errand 는 dusk(저녁 장면)이고 규칙이 없거나 꺼져 있으면 day 그대로다 (21-07 D-04)", () => {
+    expect(sceneOfPhase("errand", { cause: true })).toBe("dusk");
+    expect(sceneOfPhase("errand", { cause: false })).toBe("day");
+    expect(sceneOfPhase("errand")).toBe("day");
+    for (const phase of PHASES) if (phase !== "errand") expect(sceneOfPhase(phase, { cause: true }), phase).toBe(PHASE_SCENE[phase]);
+  });
+
   it("dusk 는 지목·동점 결선·마지막 3인 결전·변론·찬반·처형 여섯 단계를 가리키고 verdictDusk 는 등록만 남아 어떤 단계도 가리키지 않는다 (P-1·P-2, D-14·D-29)", () => {
     const used = new Set(Object.values(PHASE_SCENE));
     expect(used.has("verdictDusk")).toBe(false);
