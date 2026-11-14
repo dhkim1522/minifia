@@ -6,6 +6,7 @@ import type { GameMode, MapChoice, MapId, PlaceId, RecordLine } from "../protoco
 import type {
   AssassinationRecord,
   BadgeId,
+  ClueLine,
   ExecutionView,
   GameWinner,
   InvestigationRecord,
@@ -13,6 +14,8 @@ import type {
   OutfitId,
   PhaseId,
   PointLine,
+  SpotId,
+  TracePiece,
   TreatmentRecord,
   VoteLogEntry,
 } from "../protocol";
@@ -88,6 +91,8 @@ export interface Player {
   errandFake?: PlaceId;
   /** 서버 전용(21페이즈 결정 0088, D-06·D-21). 산 마피아가 길게 눌러 자른 등불 id(처리 순서). lamps.ts 의 withCut 만 쓰고 enterErrand 가 키째 지운다. 어떤 view 에도 싣지 않는다 — 밤에는 켜짐 boolean(RoomState.lamps)으로만 드러나 자른 사실·사람은 구별되지 않는다. */
   errandCut?: PlaceId[];
+  /** 서버 전용(21페이즈 결정 0088, D-14·D-15·D-21). 아침 현장에서 본인이 살핀 지점 줄(살핀 순서). scene.ts 의 inspectSpot 만 쓰고 enterMorning 이 새 현장을 만들 때·enterErrand 가 키째 지운다. 본인 view(me.scene)에만 간다. */
+  sceneSeen?: ClueLine[];
   /** 로비 의상(결정 D-6). setLook 만 쓴다. 사람이 고른 공개 값이고 역할과 무관하다. 없으면 기본 coat 로 읽고, 게임 시작·테스트 방 되돌리기 뒤에도 남는다. */
   look?: OutfitId;
   /** 직업을 건 뒤 다른 값으로 바꾼 적이 있음(결정 0066-1, O-1). 한 번 켜지면 판이 끝날 때까지 끄지 않는다. 이전 값은 어디에도 없다. */
@@ -161,6 +166,16 @@ export interface WhisperRecord {
   at: number;
 }
 
+/** 아침 현장의 서버 전용 값(21페이즈 D-12~D-17, 결정 0088). 필드 설명은 RoomState.scene. */
+export interface SceneState {
+  house: number;
+  footprints: number;
+  cloth?: TracePiece;
+  window?: TracePiece;
+  windowLit: boolean;
+  touched: Partial<Record<SpotId, true>>;
+}
+
 export interface RoomState {
   code: string;
   createdAt: number;
@@ -192,6 +207,12 @@ export interface RoomState {
    * 저녁 동안에는 없고(남의 켜짐은 방송하지 않는다) enterErrand 가 키째 지운다. 공개 값이라 view.day.lamps 로 모두에게 같은 boolean 배열로 간다 — 꺼진 이유·자른 사람은 어디에도 없다.
    */
   lamps?: boolean[];
+  /**
+   * 서버 전용(21페이즈 결정 0088, D-12~D-17·D-21). 아침 현장: house = 현장 집 좌석(피해자, 없으면 의사가 막은 확정 대상), footprints = 그 밤 그 집을 고른 산 사람 수(집 주인 제외),
+   * cloth·window = 지점 ②·③ 이 줄 조각(window 는 창이 켜졌을 때만 읽힌다), windowLit = 짝집 창 불, touched = 산 마피아가 살핀 지점(그 뒤 사람은 흔적을 받는다).
+   * enterMorning 이 원인 흐름에서 만들고 scene.ts 의 inspectSpot 이 touched 를 더하며 enterErrand 가 키째 지운다. 공개되는 것은 day.scene = { house } 하나뿐이다 — 나머지는 어떤 view 에도 없다.
+   */
+  scene?: SceneState;
   /** 서버 전용(결정 0061-9). 이번 밤 마피아가 남긴 쪽지 — saveNote(09-12)가 쓰고 enterMorning(탈락 없는 밤)·enterNight 가 키째 지운다. 구출·무효 밤의 쪽지는 폐기된다. */
   nightNote?: string;
   /** 서버 전용(결정 0061-14). 암살 현장 분필 자국(고정소수점) — 방 DO 가 채우고 enterNight 가 지운다(09-14). */

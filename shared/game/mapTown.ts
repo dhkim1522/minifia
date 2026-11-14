@@ -279,5 +279,8 @@ export function neighborOf(seat: number): number | undefined {
   return undefined;
 }
 
+/** 집별 단서 지점(21페이즈 D-13, P21-9): 좌석 i → [발자국, 옷 조각, 창문] 세 점(고정소수점). RED 자리 — 구현은 GREEN 에서 채운다. */
+export const TOWN_CLUE_SPOTS: readonly (readonly { x: number; z: number }[])[] = [];
+
 /** 마을 이동 맵(UI-SPEC P20-0): 48×48 · 칸 0.5 · 원점 −12 · 걷기 한계 ±10. 무대 자리는 광장 연단 그대로다. */
 export const TOWN_MAP: MapDef = { id: "town", size: 48, origin: -12, walkHalf: 10, mask: parseMask(TOWN_MASK), spawns: TOWN_SPAWNS, stage: STAGE_SPOT, places: TOWN_PLACES, lamps: TOWN_LAMPS, rooms: TOWN_ROOMS };

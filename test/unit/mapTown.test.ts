@@ -25,7 +25,7 @@ import {
 } from "../../shared/game/map";
 import type { MapDef, Obstacle, RoomDef, Spawn } from "../../shared/game/map";
 import { PLAZA_MAP, PLAZA_MASK, PLAZA_OBSTACLES, PLAZA_PLACES, PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
-import { TOWN_DOOR_EXEMPT, TOWN_HOUSES, TOWN_LAMPS, TOWN_MAP, TOWN_MASK, TOWN_NEIGHBORS, TOWN_OBSTACLES, TOWN_PLACES, TOWN_PROPS, TOWN_ROOMS, TOWN_SPAWNS, neighborOf } from "../../shared/game/mapTown";
+import { TOWN_CLUE_SPOTS, TOWN_DOOR_EXEMPT, TOWN_HOUSES, TOWN_LAMPS, TOWN_MAP, TOWN_MASK, TOWN_NEIGHBORS, TOWN_OBSTACLES, TOWN_PLACES, TOWN_PROPS, TOWN_ROOMS, TOWN_SPAWNS, neighborOf } from "../../shared/game/mapTown";
 import { MAPS, MODE_MAPS, PLAYABLE_MAPS, mapOf, roomMapId, startMapOf } from "../../shared/game/maps";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
@@ -464,6 +464,54 @@ describe("마을 장소 8곳 (D-08·P20-20)", () => {
     const indoor = TOWN_PLACES.filter((p) => zoneOf(TOWN_MAP, fx(p.x), fx(p.z)) !== "plaza");
     const indoorOk = indoor.length === 4 && indoor.every((p) => isCenterOfWalkCell({ x: fx(p.x), z: fx(p.z) }) && TOWN_PROPS.every((o) => rectGap(o, p.x, p.z) >= 0.5 - 1e-9));
     expect(`${TOWN_PLACES.length}/${walk}/${minGap >= 2}/${plazaSame}/${indoorOk}`).toBe("8/true/true/true/true");
+  });
+});
+
+describe("마을 집별 단서 지점 (21-04, P21-9·D-13, 결정 0088)", () => {
+  /**
+   * 정의식. 좌석 1~6: 문 중심(집 중심에서 문 있는 면으로 1.2)에서 바깥으로 1.3, 옆으로 −1.0 / 0 / +1.0 의 점에서 가장 가까운 걷는 칸 중심(옆 = n·s 면은 +x, e·w 면은 +z).
+   * 좌석 0·7: 문 앞 칸이 시계탑 뒤 모서리 쪽이라 같은 식이 한 칸으로 뭉치므로, 문 앞 칸(front) 과 front 에서 집 쪽(바깥의 반대)으로 1.0·2.0 간 점에서 가장 가까운 걷는 칸이다 — 집 옆 걷는 줄 안이다.
+   */
+  const defOf = (h: (typeof TOWN_HOUSES)[number]): string => {
+    const out = OUT[h.face];
+    if (h.seat === 0 || h.seat === 7) {
+      const spots = [h.front, ...[100, 200].map((d) => nearestWalkCenter(TOWN_MAP, { x: h.front.x - out.x * d, z: h.front.z - out.z * d }))];
+      return spots.map(xz).join(" ");
+    }
+    const side = h.face === "n" || h.face === "s" ? { x: 1, z: 0 } : { x: 0, z: 1 };
+    const door = { x: fx(h.x) + out.x * 120, z: fx(h.z) + out.z * 120 };
+    return [-100, 0, 100].map((s) => xz(nearestWalkCenter(TOWN_MAP, { x: door.x + out.x * 130 + side.x * s, z: door.z + out.z * 130 + side.z * s }))).join(" ");
+  };
+
+  it("TOWN_MAP.clueSpots 는 TOWN_CLUE_SPOTS 이고 좌석 8개 × 지점 3개이며 좌표는 정의식 출력과 같다(리터럴)", () => {
+    expect(TOWN_MAP.clueSpots).toBe(TOWN_CLUE_SPOTS);
+    expect(TOWN_CLUE_SPOTS.map((set) => set.length).join(",")).toBe("3,3,3,3,3,3,3,3");
+    expect(TOWN_CLUE_SPOTS.map((set) => set.map(xz).join(" ")).join(" / ")).toBe(TOWN_HOUSES.map(defOf).join(" / "));
+  });
+
+  it("스물네 점 모두 걷는 칸 중심이고 plaza 구역이며 같은 집의 세 점은 서로 1.0 이상이다", () => {
+    const flat = TOWN_CLUE_SPOTS.flat();
+    const walk = flat.every((p) => isCenterOfWalkCell(p) && zoneOf(TOWN_MAP, p.x, p.z) === "plaza");
+    let minGap = Infinity;
+    for (const set of TOWN_CLUE_SPOTS) for (let i = 0; i < set.length; i++) for (let j = i + 1; j < set.length; j++) minGap = Math.min(minGap, Math.hypot(set[i]!.x - set[j]!.x, set[i]!.z - set[j]!.z));
+    expect(`${flat.length}/${walk}/${minGap >= 100 - 1e-9}`).toBe("24/true/true");
+  });
+
+  it("스물네 점 모두 입장 지점 0 에서 길이 닿는다(끝점 0.3 안) — 좌석 0·7 포함", () => {
+    const from = { x: fx(TOWN_SPAWNS[0]!.x), z: fx(TOWN_SPAWNS[0]!.z) };
+    const bad = TOWN_CLUE_SPOTS.flatMap((set, seat) =>
+      set.flatMap((p, k) => {
+        const route = routeFx(TOWN_MAP, from, p);
+        const ex = route[route.length - 2]!;
+        const ez = route[route.length - 1]!;
+        return route.length >= 4 && (ex - p.x) ** 2 + (ez - p.z) ** 2 <= 30 * 30 ? [] : [`${seat}.${k}`];
+      }),
+    );
+    expect(bad.join(",")).toBe("");
+  });
+
+  it("재즈 바·광장에는 clueSpots 가 없다 — 집이 없어 현장이 생기지 않는다", () => {
+    expect(`${BAR_MAP.clueSpots === undefined}/${PLAZA_MAP.clueSpots === undefined}`).toBe("true/true");
   });
 });
 

@@ -75,6 +75,19 @@ export type RoleRecord = InvestigationRecord | AssassinationRecord | TreatmentRe
 /** 아침 흔적 조각(15페이즈 D-06): 닫힌 집합 9개. 의상의 함수이지 역할의 함수가 아니고 확정 증거가 아니다. 의상 id 와 이름이 다르다(의상 id 를 싣지 않는다). 이름·그림은 클라이언트 표가 정한다. */
 export const TRACE_PIECE_IDS = ["button", "pin", "whiteCloth", "blackCloth", "brownCloth", "pencil", "grayThread", "navyThread", "redCloth"] as const;
 export type TracePiece = (typeof TRACE_PIECE_IDS)[number];
+/** 아침 현장의 단서 지점 셋(21페이즈 D-13·D-14, 결정 0088): 발자국·옷 조각·창문. 지점 순서가 곧 좌표 표(TOWN_CLUE_SPOTS)의 순서다. */
+export const SPOT_IDS = ["footprint", "cloth", "window"] as const;
+export type SpotId = (typeof SPOT_IDS)[number];
+/**
+ * 본인이 살핀 지점 한 줄(21페이즈 D-14·D-15). r: clue = 단서를 받음(발자국은 n, 옷 조각·창문은 piece) · touched = 먼저 손댄 흔적 · dark = 창문이 어두워서 못 봄 · none = 아무것도 없음.
+ * 누가 손댔는지·발자국의 주인·창문 조각의 사람은 어디에도 없다. 본인 view(me.scene)에만 실린다.
+ */
+export interface ClueLine {
+  spot: SpotId;
+  r: "clue" | "touched" | "dark" | "none";
+  n?: number;
+  piece?: TracePiece;
+}
 /** 마지막 목격(16페이즈 D-10): 심부름 동안 피해자 곁에 마지막으로 있던 사람의 좌석과 그 순간 피해자 곁 장소 id(닫힌 집합, 좌표 없음). */
 export interface LastSeen {
   seat: number;
