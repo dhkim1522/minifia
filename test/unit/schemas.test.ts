@@ -333,6 +333,25 @@ describe("ClientMessageSchema endDiscussion (08-07, DAY-03: on 은 불리언)", 
   });
 });
 
+describe("ClientMessageSchema skip (21-05, D-23: on 은 불리언, strictObject)", () => {
+  it.each([
+    ["켜기", { t: "skip", on: true }],
+    ["끄기", { t: "skip", on: false }],
+  ])("받는다: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(true);
+  });
+
+  it.each([
+    ["on 빠짐", { t: "skip" }],
+    ["숫자 1", { t: "skip", on: 1 }],
+    ['문자열 "true"', { t: "skip", on: "true" }],
+    ["덧붙은 seat", { t: "skip", on: true, seat: 1 }],
+    ["덧붙은 count", { t: "skip", on: true, count: 99 }],
+  ])("거부한다: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
+
 describe("ClientMessageSchema will·note (09-12, 결정 0061-9·10: 본문 text 하나뿐)", () => {
   it.each(["will", "note"])("받는다: %s", (t) => {
     expect(ClientMessageSchema.safeParse({ t, text: "a" }).success).toBe(true);

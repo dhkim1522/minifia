@@ -75,6 +75,8 @@ export interface Player {
   showdownPick?: number;
   /** 토론 끝내기를 누른 표시. 누르면 true, 취소하면 키째 지운다. 누가 눌렀는지는 서버 전용이고 enterDiscussion 이 다음 낮 시작에 지운다. */
   endVote?: true;
+  /** 서버 전용(21페이즈 D-23·D-21, 결정 0088). 원인 흐름 저녁·아침에 [건너뛰기]를 누른 표시. 누르면 true, 취소하면 키째 지운다. 누가 눌렀는지는 view 에 싣지 않고(공개 값은 day.skipCount 수뿐) 저녁·아침 진입(clearSkip)이 모든 사람에게서 키째 지운다. */
+  skipVote?: true;
   /** 서버 전용(결정 0061-10). 본인이 남긴 유언 — saveWill(09-12)만 쓰고, 사후에도 바꿀 수 없다. 아침에 서버가 채팅 카드로 만들어 보내며 view 의 me.will 로 산 본인에게만 간다. */
   will?: string;
   /** 공개 직업 주장(결정 0066-1). setBadge 만 쓴다. 실제 역할과 무관한 값이고 view 에는 산 사람 것만 players[].badge 로 실린다. */
