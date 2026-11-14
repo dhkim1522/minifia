@@ -480,9 +480,9 @@ Plans:
 ### Phase 21: 원인→결과 하루 흐름과 등불·집 찾기·현장 조사
 
 **Goal:** 확장판의 하루를 원인→결과 순서로 바꾼다(결정 0081-2·3): 처형 → 저녁 등불 당번 → 밤 집 찾기 → 아침 증거와 현장 조사 → 모여서 의심 보드로 토론 → 투표. 할 일마다 왜 하는지가 장면으로 설명되고, 결과가 다음 단계의 근거가 되며, 마피아에게도 할 일과 들킬 위험이 생긴다.
-**Requirements**: TBD
+**Requirements**: DAYFLOW-01, LAMP-01, LAMP-02, HOUSE-01, HOUSE-02, SCENE-01, SCENE-02, BOARD-01, SKIP-01, TUT-06, LEAK-02, DEPLOY-06
 **Depends on:** Phase 19, Phase 20
-**Plans:** 0 plans
+**Plans:** 16 plans
 
 **Success Criteria:**
 1. 첫날은 역할 확인 → 저녁 할 일 → 첫 밤 → 첫 아침부터 토론이고, 이후 날은 처형 → 저녁 할 일 → 밤 → 아침 → 토론이다
@@ -493,4 +493,19 @@ Plans:
 6. 튜토리얼이 새 흐름을 따른다(정체는 판이 끝나야 안다는 안내 포함). 남의 역할은 어떤 응답 모양으로도 새지 않으며(누설 검사), 배포된다
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 21 to break down)
+- [ ] 21-01-PLAN.md — 트레이서: cause 플래그·시험 잠금·확장판 하루 순서·아침 길이·공개 증거 끄기·헤더 제목·결정 0088 (wave 1)
+- [ ] 21-02-PLAN.md — 가로등 id 여덟·사본, 마을 가로등 8곳·짝집 표, 원인 흐름 저녁 배정이 가로등 (wave 2)
+- [ ] 21-03-PLAN.md — 심지 자르기(cut, 서버 전용)·밤 등불 켜짐(cut 이 이김)·errand.hold·day.lamps·응답 동일 누설 시험 (wave 3)
+- [ ] 21-04-PLAN.md — 아침 현장 서버: 집별 단서 지점·scene.ts(발자국·옷·창문·흐려짐)·inspect·me.scene/day.scene (wave 4)
+- [ ] 21-05-PLAN.md — 건너뛰기(과반)·밤 집 앞 순간이동·아침 근처만 보임·토론 모이기·분필 집 앞 (wave 5)
+- [ ] 21-06-PLAN.md — 원인 흐름 한 판 누설 전수(역할 다섯)·봇 새 흐름 완주 (wave 6)
+- [ ] 21-07-PLAN.md — 3D 가로등 8·집 창 houseLit·저녁 노을·밤 조명 역할 무관 (wave 4)
+- [ ] 21-08-PLAN.md — 저녁 화면: 아이콘 넷·[켜기] 길게 누르기·시작 카드·마피아 카드 줄·사회자 문구·빛남 (wave 5)
+- [ ] 21-09-PLAN.md — 밤 화면: 개관 카메라(폰 6종 계산)·HouseTag 문패·pick 연결·네 역할 같은 화면 (wave 6)
+- [ ] 21-10-PLAN.md — 아침 화면: ClueSpot·ClueCard·[살펴보기]·[건너뛰기]·아침 걷기·현장 없는 밤 발표 (wave 7)
+- [ ] 21-11-PLAN.md — 의심 보드: boardOf·SuspectBoard·[보드]가 [기록]을 대신·열린 채 시작 (wave 8)
+- [ ] 21-12-PLAN.md — 튜토리얼 첫 사건 새 흐름·"정체는 판이 끝나야 알아요" 카드 (wave 9)
+- [ ] 21-13-PLAN.md — 시험 이전(단위·워커·smoke·UAT·봇): 원인 흐름 잠금 걷기·A/B/C 이전 (wave 10)
+- [ ] 21-14-PLAN.md — 시험 이전(화면): 잠금 걷기·A/B/C 이전 (wave 10)
+- [ ] 21-15-PLAN.md — E2E: causeChecks·cause-* 흐름·기본판 불변·튜토리얼 두 진입로·폰 6종 겹침 (wave 11)
+- [ ] 21-16-PLAN.md — 로컬 전체 검증·폰 6종 회귀·perf·minifia-v3 배포·결정 0088 마감·문서·push (wave 12)

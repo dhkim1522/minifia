@@ -75,6 +75,23 @@
 - [x] **DEPLOY-04**: 16페이즈가 누설 검사를 새 view 필드(day.evidence 등)·서버 전용 값(errandFake·errandLast)까지 넓힌 채 `minifia-v3` 에 배포된다(DEPLOY-03 과 같은 방식)
 - [x] **DEPLOY-05**: 17페이즈가 누설 검사를 새 view 필드(view.tutorial·me.tutorialDone)·새 단계·새 메시지·서버 전용 이름(tutorialPassed)까지 넓힌 채 minifia-v3 에 배포된다(DEPLOY-04 와 같은 방식)
 
+### 원인→결과 하루 흐름 (DAYFLOW·LAMP·HOUSE·SCENE·BOARD·SKIP·TUT·LEAK·DEPLOY) — 21페이즈, 결정 0081-2·3·0088
+
+> 21-RESEARCH 가 제안하고 21페이즈 계획에서 확정(자동 진행 추천안, 사용자가 돌아와 바꿀 수 있음). 모두 확장판(`extended`)에만 닿고 기본 마피아는 그대로다.
+
+- [ ] **DAYFLOW-01**: 확장판 하루가 역할 확인(첫날) → 저녁(errand) → 밤 → 아침 → 토론 → 투표 → 처형 → 다음 날 저녁으로 돈다. 처형이 없으면 곧바로 저녁, 피해자도 미수도 없는 밤 뒤에는 아침을 건너뛴다. 기본 마피아 순서는 그대로다
+- [ ] **LAMP-01**: 저녁 등불 당번 — 산 사람마다 마을 가로등 8곳 중 3곳을 받아 가까이 가서 켠다. 모든 역할이 같은 목록 모양·같은 개수·같은 응답이다
+- [ ] **LAMP-02**: 마피아는 같은 단추(길게 누르기)로 심지를 자른다(서버 전용 기록, 겉보기 같음). 자른 등불은 밤에 꺼지고, 꺼진 등불은 모두에게 공개되지만 꺼진 이유·자른 사람은 드러나지 않는다
+- [ ] **HOUSE-01**: 밤 집 찾기 — 모두 자기 집 앞으로 순간이동하고 걷지 않으며, 모든 역할이 같은 고정 개관 화면에서 같은 `pick` 메시지로 집 문패를 눌러 고른다(바꿀 수 있음, 고름 표시는 내 화면에만)
+- [ ] **HOUSE-02**: 집 창의 불은 등불 ↔ 집 고정 표(등불 i = 집 i)를 따르고 3D 창과 문패 창 점이 같은 공개 값에서 나온다. 확장판 밤 장면·조명은 역할로 갈라지지 않는다
+- [ ] **SCENE-01**: 아침 현장 — 피해자(구출이면 미수) 집 앞에 단서 지점 셋(발자국 수·옷 조각·창문)이 생기고, 산 사람이 걸어가 한 지점을 한 번씩 살펴 나만 보는 단서를 받는다. 창문은 짝집 창에 불이 켜졌을 때만 목격 조각, 꺼졌으면 "어두워서 못 봄"
+- [ ] **SCENE-02**: 마피아가 살핀 지점은 그 뒤에 살피는 사람에게 "먼저 손댄 흔적"만 남긴다(마피아 본인은 단서). 응답 모양은 역할과 무관하게 같고, 미수 현장은 집은 보이되 직업은 공개되지 않는다
+- [ ] **BOARD-01**: 토론이 시작되면 모두 광장 가운데로 모이고, 내가 받은 단서·꺼진 등불·목격 기록이 의심 보드(얼굴 줄 + 표시) 한 곳에 보인다. 남의 단서는 보이지 않고 처형된 사람의 정체는 판이 끝날 때까지 비공개다
+- [ ] **SKIP-01**: 저녁·아침에 [건너뛰기]가 있고 공개 값은 누른 수뿐이며, 산 사람 과반이 누르면 그 단계가 일찍 끝난다
+- [ ] **TUT-06**: 튜토리얼 "첫 사건"이 새 흐름(저녁 등불 → 아침 현장 → 의심 보드 → 투표)과 "정체는 판이 끝나야 알아요" 안내를 혼자 하기·방장 스위치 두 진입로 모두에서 보여 준다
+- [ ] **LEAK-02**: 누설 전수 시험이 새 단계·새 view 키·새 메시지(errand.hold·inspect·skip)·서버 전용 이름(errandCut·sceneSeen·touched·footprints·skipVote)까지 넓어진 채 통과한다
+- [ ] **DEPLOY-06**: 21페이즈가 로컬 전체 시험·폰 6종 E2E 회귀·성능 게이트를 통과한 뒤 minifia-v3 에 배포되고 배포본 smoke 가 통과한다(실기기 확인은 v3.0 끝 실테스트)
+
 ## Future Requirements
 
 - 정통 판(귓속말·결선·결전·직업 주장) 고르기 — v3.0 은 기본판 하나(세부 결정 5·7)
@@ -135,12 +152,24 @@
 | TUT-04 | Phase 17 | Complete |
 | TUT-05 | Phase 17 | Complete |
 | DEPLOY-05 | Phase 17 | Complete |
+| DAYFLOW-01 | Phase 21 | Pending |
+| LAMP-01 | Phase 21 | Pending |
+| LAMP-02 | Phase 21 | Pending |
+| HOUSE-01 | Phase 21 | Pending |
+| HOUSE-02 | Phase 21 | Pending |
+| SCENE-01 | Phase 21 | Pending |
+| SCENE-02 | Phase 21 | Pending |
+| BOARD-01 | Phase 21 | Pending |
+| SKIP-01 | Phase 21 | Pending |
+| TUT-06 | Phase 21 | Pending |
+| LEAK-02 | Phase 21 | Pending |
+| DEPLOY-06 | Phase 21 | Pending |
 
 **Coverage:**
-- v3.0 requirements: 39 total
-- Mapped to phases: 39
+- v3.0 requirements: 51 total
+- Mapped to phases: 51
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-11-07*
-*Last updated: 2026-11-09 — 17페이즈 요구사항 6개 완료(17-10 배포, 결정 0078·0080)*
+*Last updated: 2026-11-14 — 21페이즈 요구사항 12개 추가(DAYFLOW·LAMP·HOUSE·SCENE·BOARD·SKIP·TUT-06·LEAK-02·DEPLOY-06, 21페이즈 계획)*
