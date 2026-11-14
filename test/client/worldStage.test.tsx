@@ -24,6 +24,7 @@ import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
 import { WorldStore } from "../../src/world/store";
 import { cameraModeOf } from "../../src/world/presence";
+import { openCause } from "../helpers/playable";
 import type { SceneLook, SeatLook } from "../../src/world/presence";
 
 // 06-13: 로비 맵 화면(WorldStage + 런타임). happy-dom 에는 WebGL 이 없어 loadModules 로 가짜 렌더러·가짜 캐릭터를 주입한다(가정 A1).
@@ -45,6 +46,8 @@ export interface FakeRenderer extends WorldRenderer {
   /** 마을 컷어웨이·집 주인(20-05): 부른 인자를 기록한다. 재즈 바·광장에서는 한 번도 불리지 않아야 한다 */
   setCutaway: Mock<(open: ReadonlySet<RoomId>, instant: boolean) => void>;
   setOwners: Mock<(seats: readonly number[]) => void>;
+  /** 마을 가로등·집 창(21-07): 부른 인자를 기록한다. 재즈 바·광장·원인 흐름이 아닌 마을에서는 한 번도 불리지 않아야 한다 */
+  setLamps: Mock<(lampLit: readonly boolean[] | null, houseLit: readonly boolean[] | null, instant?: boolean) => void>;
   roofs: Mock<() => Record<RoomId, number>>;
   /** 화면 점의 카메라 광선(마을 건물 누르기, 20-06). 기본은 그 점 바로 위에서 수직으로 내리는 광선 — 시험이 mockReturnValue 로 바꾼다 */
   rayAt: Mock<(sx: number, sy: number) => { origin: { x: number; y: number; z: number }; dir: { x: number; y: number; z: number } }>;
@@ -80,6 +83,7 @@ export function makeFakeRenderer(): FakeRenderer {
     setSelfLight: vi.fn(),
     setCutaway: vi.fn(),
     setOwners: vi.fn(),
+    setLamps: vi.fn(),
     roofs: vi.fn(() => ({ post: 1, pub: 1, clinic: 1, police: 1 })),
     rayAt: vi.fn((sx: number, sy: number) => {
       const g = r.groundAt(sx, sy);
@@ -2137,7 +2141,7 @@ describe("마을 컷어웨이·집 주인·__mfTown (20-05, D-07·D-10·D-11)", 
     const r = s.world.renderers[0]!;
     r.roofs.mockReturnValue({ post: 0.3333333, pub: 1, clinic: 1, police: 1 });
     frames(50);
-    expect(window.__mfTown).toEqual({ zone: "post", open: ["post"], roofs: { post: 0.33, pub: 1, clinic: 1, police: 1 }, owners: [0, 1], veiled: [], door: [] });
+    expect(window.__mfTown).toEqual({ zone: "post", open: ["post"], roofs: { post: 0.33, pub: 1, clinic: 1, police: 1 }, owners: [0, 1], veiled: [], door: [], houseLit: null, lampLit: null });
     s.utils.unmount();
     expect(window.__mfTown).toBeUndefined();
   });
@@ -2149,6 +2153,87 @@ describe("마을 컷어웨이·집 주인·__mfTown (20-05, D-07·D-10·D-11)", 
     vi.stubEnv("DEV", false);
     await open({ view: townView() }, { ents: IN_POST() });
     expect(window.__mfTown).toBeUndefined();
+  });
+});
+
+// ---------- 마을 가로등·집 창 (21-07) ----------
+
+describe("마을 가로등·집 창 setLamps·__mfTown (21-07, D-04·D-25)", () => {
+  let restoreCause: () => void = () => {};
+  const LAMPS = [true, false, true, true, false, false, true, false];
+  const str = (v: readonly boolean[] | null | undefined): string => (v === null || v === undefined ? "null" : v.map((b) => (b ? "1" : "0")).join(""));
+  const errandView = (done: string[]): RoomView =>
+    ({ ...makeView(TWO, 0), map: "town", phase: "errand", me: { seat: 0, isHost: true, errand: { places: ["lamp0", "lamp1", "lamp2"], done } }, day: { n: 1, roles: [] } }) as unknown as RoomView;
+  const nightView = (lamps: boolean[] = LAMPS): RoomView => ({ ...makeView(TWO, 0), map: "town", phase: "night", day: { n: 1, roles: [], lamps } }) as unknown as RoomView;
+  const calls = (r: FakeRenderer): string[] => r.setLamps.mock.calls.map(([l, h]) => str(l) + "/" + str(h));
+
+  describe("원인 흐름 켜짐", () => {
+    beforeEach(() => {
+      restoreCause = openCause();
+    });
+    afterEach(() => restoreCause());
+
+    it("시작 때 내 진행(errand.done)으로 한 번 보내고, 같은 값의 새 view 에는 다시 보내지 않으며, 값이 바뀌면 다시 보낸다", async () => {
+      const s = await open({ view: errandView(["lamp1"]) });
+      const r = s.world.renderers[0]!;
+      expect(calls(r)).toEqual(["01000000/null"]);
+      s.rerender({ view: errandView(["lamp1"]) });
+      frame();
+      expect(calls(r)).toEqual(["01000000/null"]);
+      s.rerender({ view: nightView() });
+      frame();
+      expect(calls(r)).toEqual(["01000000/null", "10110010/10110010"]);
+      expect(r.setLamps.mock.calls.at(-1)![2]).toBe(false);
+    });
+
+    it("recreated 이벤트 뒤에는 같은 값이라도 force 로 다시 보낸다", async () => {
+      const s = await open({ view: nightView() });
+      const r = s.world.renderers[0]!;
+      expect(calls(r)).toEqual(["10110010/10110010"]);
+      r.emit({ t: "recreated" });
+      frame();
+      expect(calls(r)).toEqual(["10110010/10110010", "10110010/10110010"]);
+    });
+
+    it("모션 줄이기면 instant true 로 보낸다", async () => {
+      stubReducedMotion(true);
+      const s = await open({ view: errandView(["lamp1"]) });
+      s.rerender({ view: nightView() });
+      frame();
+      expect(s.world.renderers[0]!.setLamps.mock.calls.at(-1)![2]).toBe(true);
+    });
+
+    it("재즈 바·광장에서는 setLamps 를 한 번도 부르지 않는다", async () => {
+      const bar = await open({ view: { ...nightView(), map: "bar" } });
+      frame();
+      expect(bar.world.renderers[0]!.setLamps).not.toHaveBeenCalled();
+      cleanup();
+      const plaza = await open({ view: { ...nightView(), map: "plaza" } });
+      frame();
+      expect(plaza.world.renderers[0]!.setLamps).not.toHaveBeenCalled();
+    });
+
+    it("window.__mfTown 에 houseLit·lampLit 이 view 의 공개 값(밤) / 내 진행(저녁) 그대로 실린다. 기존 필드는 그대로다", async () => {
+      const s = await open({ view: errandView(["lamp2"]) });
+      frames(50);
+      expect(str(window.__mfTown?.lampLit)).toBe("00100000");
+      expect(window.__mfTown?.houseLit).toBeNull();
+      s.rerender({ view: nightView() });
+      frames(50);
+      expect(str(window.__mfTown?.lampLit)).toBe("10110010");
+      expect(str(window.__mfTown?.houseLit)).toBe("10110010");
+      expect(Object.keys(window.__mfTown ?? {}).sort()).toEqual(["door", "houseLit", "lampLit", "open", "owners", "roofs", "veiled", "zone"]);
+    });
+  });
+
+  describe("원인 흐름이 잠긴(기본 setup) 마을", () => {
+    it("setLamps 를 부르지 않고 __mfTown 의 houseLit·lampLit 은 null 이다", async () => {
+      const s = await open({ view: nightView() });
+      frames(50);
+      expect(s.world.renderers[0]!.setLamps).not.toHaveBeenCalled();
+      expect(window.__mfTown?.houseLit).toBeNull();
+      expect(window.__mfTown?.lampLit).toBeNull();
+    });
   });
 });
 
