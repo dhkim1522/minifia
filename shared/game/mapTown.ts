@@ -1,4 +1,4 @@
-// 마을 맵 이동 데이터(20페이즈 D-05~D-08): 방 넷 · 집 여덟 · 장애물 원문 · 48×48 이동 마스크 · 입장 지점 · 장소 8곳 · TOWN_MAP.
+// 마을 맵 이동 데이터(20페이즈 D-05~D-08): 방 넷 · 집 여덟 · 장애물 원문 · 48×48 이동 마스크 · 입장 지점 · 장소 8곳 · 가로등 8곳(21페이즈) · TOWN_MAP.
 // 배치는 승인 시안 사본 design/v3.0/town-map/README.md 의 A 안이다: 가운데는 지금 광장 그대로, 방은 네 변 가운데, 집은 모서리에 둘씩.
 // 재즈 바·광장과 같은 규칙으로 만든다 — 시각·난수 없는 순수 모듈이고(삼각함수 없이 사칙연산만), 마스크는 장애물 원문과 시험(test/unit/mapTown.test.ts)으로 묶인다.
 // 마스크를 다시 만드는 명령: `MAP_PRINT=1 npx vitest run test/unit/mapTown.test.ts -t 래스터화`
@@ -245,12 +245,39 @@ export const TOWN_MASK: readonly string[] = [
   "################################################",
 ];
 
-/** 자리 값(RED) */
-export const TOWN_LAMPS: readonly PlaceDef[] = [];
-export const TOWN_NEIGHBORS: readonly (readonly [number, number])[] = [];
-export function neighborOf(_seat: number): number | undefined {
+/**
+ * 마을 가로등 8곳(21페이즈 D-05·D-07, 결정 0088): 원인 흐름 저녁의 등불 당번 자리다. 번호 = 집 좌석 — 등불 i 는 집 i 쪽 광장 둘레에 선다(집 i 에 가장 가까운 등불이 lamp i, 전단사).
+ * 정의식: 집 i 중심 방향으로 광장 가운데(0, 0)에서 반경 4.6 인 점에 가장 가까운 걷는 칸 중심(정수 제곱거리 → 행 → 열 순 결정적 동률 처리, TOWN_HOUSES 의 front 와 같은 방식).
+ * 리터럴로 적고 test/unit/mapTown.test.ts 가 정의식과 대조한다. 모두 걷는 칸이고 서로 2.0 이상(최소 2.12)이며 입장 지점 0 에서 길이 닿는다.
+ * 3D 가로등 기둥은 장식이라 장애물·마스크에 넣지 않는다 — TOWN_MASK·걷는 칸 943 은 그대로다. 기존 광장 장소 "lamp"(TOWN_PLACES 에는 없음)와 id 가 다르다.
+ */
+export const TOWN_LAMPS: readonly PlaceDef[] = [
+  { id: "lamp0", x: -2.25, z: -3.75 },
+  { id: "lamp1", x: 2.25, z: -3.75 },
+  { id: "lamp2", x: 4.25, z: -2.25 },
+  { id: "lamp3", x: 3.75, z: 2.25 },
+  { id: "lamp4", x: 2.25, z: 3.75 },
+  { id: "lamp5", x: -2.25, z: 4.25 },
+  { id: "lamp6", x: -3.75, z: 2.25 },
+  { id: "lamp7", x: -3.75, z: -2.25 },
+];
+
+/** 짝집 표(21페이즈 D-14, 창문 단서가 쓴다): 모서리에 붙은 두 집 (0,7)·(1,2)·(3,4)·(5,6) — 집 중심 간격 약 4.8. */
+export const TOWN_NEIGHBORS: readonly (readonly [number, number])[] = [
+  [0, 7],
+  [1, 2],
+  [3, 4],
+  [5, 6],
+];
+
+/** 짝집의 좌석(대칭). 집 좌석이 아니면 undefined. */
+export function neighborOf(seat: number): number | undefined {
+  for (const [a, b] of TOWN_NEIGHBORS) {
+    if (a === seat) return b;
+    if (b === seat) return a;
+  }
   return undefined;
 }
 
 /** 마을 이동 맵(UI-SPEC P20-0): 48×48 · 칸 0.5 · 원점 −12 · 걷기 한계 ±10. 무대 자리는 광장 연단 그대로다. */
-export const TOWN_MAP: MapDef = { id: "town", size: 48, origin: -12, walkHalf: 10, mask: parseMask(TOWN_MASK), spawns: TOWN_SPAWNS, stage: STAGE_SPOT, places: TOWN_PLACES, rooms: TOWN_ROOMS };
+export const TOWN_MAP: MapDef = { id: "town", size: 48, origin: -12, walkHalf: 10, mask: parseMask(TOWN_MASK), spawns: TOWN_SPAWNS, stage: STAGE_SPOT, places: TOWN_PLACES, lamps: TOWN_LAMPS, rooms: TOWN_ROOMS };

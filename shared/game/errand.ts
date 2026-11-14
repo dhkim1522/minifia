@@ -26,14 +26,20 @@ function isPlaceId(id: string): id is PlaceId {
   return PLACE_SET.has(id);
 }
 
-/** 자리 값(RED): 항상 places */
-export function errandSpotsOf(map: MapDef, _rules: Ruleset): readonly PlaceDef[] {
-  return map.places ?? [];
+/**
+ * 이 판의 심부름 자리 후보(21페이즈 D-05, 결정 0088): 원인 흐름 규칙이고 맵에 가로등(lamps)이 있으면 가로등, 아니면 장소(places).
+ * 집·가로등이 없는 맵의 원인 흐름은 장소를 그대로 쓴다. 배정(enterErrand)·처리(actErrand)·목격 장소(sampleErrand)가 모두 이 함수 하나로 후보를 정한다.
+ */
+export function errandSpotsOf(map: MapDef, rules: Ruleset): readonly PlaceDef[] {
+  return rules.cause && map.lamps !== undefined ? map.lamps : (map.places ?? []);
 }
 
-/** 장소 중앙(고정소수점). 맵에 없는 id 는 undefined. */
+/** 후보 자리 한 곳의 중앙(고정소수점). */
+const centerOfSpot = (spot: PlaceDef): { x: number; z: number } => ({ x: Math.round(spot.x * UNIT), z: Math.round(spot.z * UNIT) });
+
+/** 장소·가로등 중앙(고정소수점). 맵의 places 와 lamps 둘 다에서 id 를 찾는다(봇이 가로등으로 걷는다). 맵에 없는 id 는 undefined. */
 export function placeCenterFx(map: MapDef, id: string): { x: number; z: number } | undefined {
-  const place = map.places?.find((p) => p.id === id);
+  const place = map.places?.find((p) => p.id === id) ?? map.lamps?.find((p) => p.id === id);
   if (place === undefined) return undefined;
   return { x: Math.round(place.x * UNIT), z: Math.round(place.z * UNIT) };
 }
@@ -44,14 +50,12 @@ function distSq(a: { x: number; z: number }, b: { x: number; z: number }): numbe
   return dx * dx + dz * dz;
 }
 
-/** 맵 후보 전체 중 posFx 에서 가장 가까운 장소 id(같으면 목록 앞). 후보가 없으면 undefined. */
-export function nearestPlaceId(map: MapDef, posFx: { x: number; z: number }, _spots?: readonly PlaceDef[]): string | undefined {
+/** 후보 목록(기본은 맵의 장소) 중 posFx 에서 가장 가까운 자리 id(같으면 목록 앞). 후보가 없으면 undefined. */
+export function nearestPlaceId(map: MapDef, posFx: { x: number; z: number }, spots: readonly PlaceDef[] = map.places ?? []): string | undefined {
   let best: string | undefined;
   let bestD = Infinity;
-  for (const place of map.places ?? []) {
-    const c = placeCenterFx(map, place.id);
-    if (c === undefined) continue;
-    const d = distSq(c, posFx);
+  for (const place of spots) {
+    const d = distSq(centerOfSpot(place), posFx);
     if (d < bestD) {
       bestD = d;
       best = place.id;
@@ -66,7 +70,7 @@ export function nearestPlaceId(map: MapDef, posFx: { x: number; z: number }, _sp
  * at(진입 시각 = 이전 마감)을 받아 첫 근처·목격 표본 시각 errandTickAt = at + ERRAND_TICK_MS 를 정하고, 모든 사람의 errandNear·errandSeen 을 지운다(15-02).
  */
 export function enterErrand(state: RoomState, randInt: RandInt, at: number): RoomState {
-  const candidates = (mapOf(roomMapId(state)).places ?? []).map((p) => p.id).filter(isPlaceId);
+  const candidates = errandSpotsOf(mapOf(roomMapId(state)), rulesetOf(modeOf(state))).map((p) => p.id).filter(isPlaceId);
   const picks = new Map<string, PlaceId[]>();
   const alive = state.players.filter((p) => isAlive(p)).sort((a, b) => a.seat - b.seat);
   for (const p of alive) {
@@ -105,14 +109,15 @@ export function actErrand(
   const actor = state.players.find((p) => p.id === actorId);
   if (actor === undefined || !isAlive(actor) || actor.errandPlaces === undefined) return { ok: false };
   const done = actor.errandDone ?? [];
-  const map = mapOf(roomMapId(state));
+  const spots = errandSpotsOf(mapOf(roomMapId(state)), rulesetOf(modeOf(state)));
   const reach = ERRAND_ACT_R * UNIT;
   let best: PlaceId | undefined;
   let bestD = Infinity;
   for (const id of actor.errandPlaces) {
     if (done.includes(id) || id === actor.errandFake) continue; // 가짜 장소는 후보에서 뺀다 — 후보가 없으면 반경 밖과 같은 { ok: false } 다(D-08)
-    const c = placeCenterFx(map, id);
-    if (c === undefined) continue;
+    const spot = spots.find((s) => s.id === id);
+    if (spot === undefined) continue;
+    const c = centerOfSpot(spot);
     const d = distSq(c, posFx);
     if (d <= reach * reach && d < bestD) {
       bestD = d;
@@ -180,6 +185,7 @@ export function nearIdsOf(
 export function sampleErrand(state: RoomState, posOf: (id: string) => Pos | undefined, at: number): RoomState {
   if (state.phase !== "errand") return state;
   const map = mapOf(roomMapId(state));
+  const spots = errandSpotsOf(map, rulesetOf(modeOf(state)));
   const radiusFx = ERRAND_NEAR_R * UNIT;
   const seatOf = new Map(state.players.map((p) => [p.id, p.seat] as const));
   const players = state.players.map((a) => {
@@ -191,7 +197,7 @@ export function sampleErrand(state: RoomState, posOf: (id: string) => Pos | unde
       if (before.has(seat) || seen.length >= RECORD_MAX) continue;
       const other = state.players.find((p) => p.seat === seat);
       const there = other === undefined ? undefined : posOf(other.id);
-      const place = there === undefined ? undefined : nearestPlaceId(map, there);
+      const place = there === undefined ? undefined : nearestPlaceId(map, there, spots);
       if (place === undefined || !isPlaceId(place)) continue;
       seen.push({ seat, place });
     }
@@ -218,7 +224,7 @@ export function sampleErrand(state: RoomState, posOf: (id: string) => Pos | unde
       }
     }
     if (by === undefined) continue;
-    const place = nearestPlaceId(map, here);
+    const place = nearestPlaceId(map, here, spots);
     if (place === undefined || !isPlaceId(place)) continue;
     last.set(b.seat, { seat: b.seat, by, place });
   }

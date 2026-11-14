@@ -17,7 +17,7 @@ import { openCause, openTown } from "../helpers/playable";
 import { seededRandInt } from "../helpers/seededRandom";
 import { START_AT, lobbyOf } from "../helpers/voteState";
 
-const LAMP_IDS = TOWN_LAMPS.length === 8 ? TOWN_LAMPS.map((l) => l.id) : ["lamp0", "lamp1", "lamp2", "lamp3", "lamp4", "lamp5", "lamp6", "lamp7"];
+const LAMP_IDS: readonly string[] = ["lamp0", "lamp1", "lamp2", "lamp3", "lamp4", "lamp5", "lamp6", "lamp7"];
 const TOWN_PLACE_IDS = TOWN_PLACES.map((p) => p.id);
 
 /** 대기실에서 시작해 errand 단계의 첫 순간까지 실제 전이로 걷는다. */
@@ -80,7 +80,7 @@ describe("원인 흐름 마을 저녁 — 가로등 배정 (openCause + openTown
     const results: string[] = [];
     for (const role of ["mafia", "citizen"]) {
       const actor = byRole(s, role);
-      const mine = actor.errandPlaces!;
+      const mine: readonly string[] = actor.errandPlaces!;
       const first = mine[0]!;
       const at = centerOf(s, first);
       const near = { x: at.x + 130, z: at.z };

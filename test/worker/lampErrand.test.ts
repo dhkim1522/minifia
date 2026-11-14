@@ -72,7 +72,7 @@ describe("마을 확장판 저녁 — 가로등 배정·처리 (openCause + open
   it("반경 밖(가로등에서 1.3)·배정 안 된 가로등 위의 errand 는 처리되지 않는다 — done 은 비어 있다", { timeout: 60_000 }, async () => {
     const { code, people } = await errandTable();
     const who = people[2]!;
-    const mine = lastViewOf(who.sock).me.errand!.places;
+    const mine: readonly string[] = lastViewOf(who.sock).me.errand!.places;
     const first = mine[0]!;
     const unassigned = LAMP_IDS.find((id) => !mine.includes(id))!;
     const near = lampCenterFx(first);
