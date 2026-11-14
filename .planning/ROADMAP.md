@@ -267,7 +267,7 @@ Plans:
 | 18. 바로 고칠 것 | v3.0 | 14/14 | In Progress | - |
 | 19. 기본 마피아·확장판 | v3.0 | 8/8 | Complete (배포 `71a10fc8`, 결정 0086, 실기기 확인은 v3.0 끝) | 2026-11-13 |
 | 20. 맵 단계 확장 | v3.0 | 10/10 | Complete (배포 `07d6afee`, 결정 0087, 실기기 확인은 v3.0 끝) | 2026-11-13 |
-| 21. 원인→결과 하루와 할 일 | v3.0 | 2/16 | In Progress | - |
+| 21. 원인→결과 하루와 할 일 | v3.0 | 3/16 | In Progress | - |
 
 ## Backlog
 
@@ -482,7 +482,7 @@ Plans:
 **Goal:** 확장판의 하루를 원인→결과 순서로 바꾼다(결정 0081-2·3): 처형 → 저녁 등불 당번 → 밤 집 찾기 → 아침 증거와 현장 조사 → 모여서 의심 보드로 토론 → 투표. 할 일마다 왜 하는지가 장면으로 설명되고, 결과가 다음 단계의 근거가 되며, 마피아에게도 할 일과 들킬 위험이 생긴다.
 **Requirements**: DAYFLOW-01, LAMP-01, LAMP-02, HOUSE-01, HOUSE-02, SCENE-01, SCENE-02, BOARD-01, SKIP-01, TUT-06, LEAK-02, DEPLOY-06
 **Depends on:** Phase 19, Phase 20
-**Plans:** 2/16 plans executed
+**Plans:** 3/16 plans executed
 
 **Success Criteria:**
 1. 첫날은 역할 확인 → 저녁 할 일 → 첫 밤 → 첫 아침부터 토론이고, 이후 날은 처형 → 저녁 할 일 → 밤 → 아침 → 토론이다
@@ -495,7 +495,7 @@ Plans:
 Plans:
 - [x] 21-01-PLAN.md — 트레이서: cause 플래그·시험 잠금·확장판 하루 순서·아침 길이·공개 증거 끄기·헤더 제목·결정 0088 (wave 1)
 - [x] 21-02-PLAN.md — 가로등 id 여덟·사본, 마을 가로등 8곳·짝집 표, 원인 흐름 저녁 배정이 가로등 (wave 2)
-- [ ] 21-03-PLAN.md — 심지 자르기(cut, 서버 전용)·밤 등불 켜짐(cut 이 이김)·errand.hold·day.lamps·응답 동일 누설 시험 (wave 3)
+- [x] 21-03-PLAN.md — 심지 자르기(cut, 서버 전용)·밤 등불 켜짐(cut 이 이김)·errand.hold·day.lamps·응답 동일 누설 시험 (wave 3)
 - [ ] 21-04-PLAN.md — 아침 현장 서버: 집별 단서 지점·scene.ts(발자국·옷·창문·흐려짐)·inspect·me.scene/day.scene (wave 4)
 - [ ] 21-05-PLAN.md — 건너뛰기(과반)·밤 집 앞 순간이동·아침 근처만 보임·토론 모이기·분필 집 앞 (wave 5)
 - [ ] 21-06-PLAN.md — 원인 흐름 한 판 누설 전수(역할 다섯)·봇 새 흐름 완주 (wave 6)
