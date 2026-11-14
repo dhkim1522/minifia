@@ -78,6 +78,8 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.strictObject({ t: z.literal("whisper"), to: z.number().int().min(0).max(7), text: z.string().min(1).max(200) }),
   // 직업 주장(결정 0066-1): 값은 enum 뿐 — 이번 판 구성에 있는 직업인지·단계·산 사람은 서버 규칙(shared/game/badge.ts)이 본다. 참·거짓은 판정하지 않는다.
   z.strictObject({ t: z.literal("badge"), role: z.enum(["mafia", "police", "doctor", "citizen", "none"]) }),
+  // 현장 단서 살피기(21페이즈 D-13, 결정 0088): 필드가 없다 — 위치는 서버 world 에서, 지점은 서버가 고른다. 덧붙은 키(spot·x·z)는 그대로 거부한다.
+  z.strictObject({ t: z.literal("inspect") }),
   // 심부름 처리(15페이즈, 결정 0074): 위치·장소·시각은 서버가 정한다(D-08). hold(길게 누르기, 21페이즈 D-06)는 boolean 하나뿐 — 모든 역할이 보낼 수 있고 뜻은 서버가 정한다. 덧붙은 키는 그대로 거부한다.
   z.strictObject({ t: z.literal("errand"), hold: z.boolean().optional() }),
   // 로비 의상(결정 D-6): 값은 의상 id enum 뿐 — 단계(대기실)·간격은 서버 규칙(shared/game/look.ts)이 본다. 역할과는 비교하지 않는다.

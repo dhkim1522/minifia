@@ -168,6 +168,8 @@ function buildDay(state: RoomState, rules: Ruleset): DayView {
   // 밤 집 창 불(21페이즈 D-06·D-07·D-08, 결정 0088): 원인 흐름이고 enterNight 가 켜짐을 정한 뒤(저녁에는 없다) 모두에게 같은 boolean 여덟을 필드 복사로 싣는다.
   // 꺼진 이유·자른 사람(Player.errandCut)은 이 파일이 읽지 않는다 — 안 켠 등불과 자른 등불은 똑같이 false 다.
   if (rules.cause && state.lamps !== undefined) day.lamps = state.lamps.map((lit) => lit === true);
+  // 아침 현장(21-04, D-16, 결정 0088): 현장 집 좌석 하나만 morning 단계에서 모두에게 같은 값으로 싣는다. 현장의 서버 값(수·조각·손댄 표시·창 불)은 이 파일이 읽지 않는다.
+  if (rules.cause && state.phase === "morning" && state.scene !== undefined) day.scene = { house: state.scene.house };
   return day;
 }
 
@@ -287,6 +289,11 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 내 심부름(15페이즈, 결정 0074)은 errand 단계의 산 본인에게만 — 목록·진행뿐이고 좌표·역할은 없다. 필드별 복사라 서버 상태 객체를 펼치지 않는다.
   if (rules.errand && state.phase === "errand" && isAlive(me) && me.errandPlaces !== undefined) {
     myInfo.errand = { places: [...me.errandPlaces], done: [...(me.errandDone ?? [])] };
+  }
+
+  // 내 현장 단서(21-04, D-14·D-15): 원인 흐름에서 본인이 살핀 줄만 본인에게 — 줄마다 r·n·piece 필드 복사라 서버 상태를 펼치지 않는다. errand 단계(새 저녁)에는 싣지 않고 누가 먼저 손댔는지는 어디에도 없다.
+  if (rules.cause && state.phase !== "errand" && me.sceneSeen !== undefined && me.sceneSeen.length > 0) {
+    myInfo.scene = me.sceneSeen.map((l) => ({ spot: l.spot, r: l.r, ...(l.n === undefined ? {} : { n: l.n }), ...(l.piece === undefined ? {} : { piece: l.piece }) }));
   }
 
   // 내 목격 기록(D-04)은 토론 단계에서 심부름 3곳을 모두 처리한 산 본인에게만 — 줄이 0개여도 빈 배열. 필드별 복사({seat, place})라 서버 상태를 펼치지 않고, 역할을 읽지 않는다.

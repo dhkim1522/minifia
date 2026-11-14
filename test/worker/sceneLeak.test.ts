@@ -19,11 +19,14 @@ function keyPaths(value: unknown, path = ""): string[] {
   return [];
 }
 
-/** 응답 모양: 프레임 종류 + view.me·view.day 아래 키 경로 집합. 단서 줄 안쪽(me.scene 의 원소 필드)은 뺀다 — 단서 내용(수·조각·흔적)은 본인이 받는 값이라 모양 비교의 대상이 아니다. */
+/**
+ * 응답 모양: 프레임 종류 + view.day 아래 키 경로 집합. view.me 는 역할·유령 여부로 원래 키가 다르므로(me.role·me.allies 등) 모양 비교에서 뺀다 —
+ * 단서 줄(me.scene)은 본인이 받는 값이라 길이·내용을 시험이 따로 본다. 응답 횟수·종류와 공개 day 모양이 마피아·시민·거절에서 같음을 증명한다.
+ */
 function shapeOf(msgs: ServerMessage[]): string {
   return msgs
     .map((m) => {
-      const paths = keyPaths(m).filter((p) => (p.startsWith(".view.me") || p.startsWith(".view.day")) && !p.startsWith(".view.me.scene"));
+      const paths = keyPaths(m).filter((p) => p.startsWith(".view.day"));
       return `${m.t}:${[...new Set(paths)].sort().join(",")}`;
     })
     .join("|");

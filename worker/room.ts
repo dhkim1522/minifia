@@ -48,6 +48,7 @@ import { endReached, toggleEnd } from "../shared/game/discussion";
 import { allTutorialDone, markTutorialDone } from "../shared/game/tutorial";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { actErrand, nearSnapFrame, placeCenterFx, sampleErrand } from "../shared/game/errand";
+import { inspectSpot } from "../shared/game/scene";
 import { ERRAND_MIN_GAP_MS, ERRAND_TICK_MS } from "../shared/game/phases";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
@@ -323,6 +324,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "errand":
         await this.handleErrand(ws, msg.hold === true);
+        return;
+      case "inspect":
+        await this.handleInspect(ws);
         return;
       case "move":
         this.handleMove(ws, msg.x, msg.z);
@@ -751,6 +755,36 @@ export class Room extends DurableObject<Env> {
       this.writeAt.set(key, now);
       const seg = Object.prototype.hasOwnProperty.call(this.world.segs, playerId) ? this.world.segs[playerId] : undefined;
       const result = seg === undefined ? null : actErrand(room, playerId, positionAtFx(seg, now), hold);
+      if (result !== null && result.ok) {
+        this.room = result.state;
+        await this.ctx.storage.put("room", this.room);
+      }
+    }
+    this.sendViewTo([playerId]);
+  }
+
+  // 현장 단서 살피기(21페이즈 D-13, 결정 0088): 메시지에 필드가 없다 — 신원은 소켓 첨부의 playerId 뿐이고 위치는 서버 world 구간, 지점은 서버가 고른다(T-21-14).
+  private async handleInspect(ws: WebSocket): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    await this.applyInspect(att.playerId, Date.now());
+  }
+
+  // applyErrand 와 같은 응답 규칙(T-21-12, D-15·D-21): 간격(ERRAND_MIN_GAP_MS) 안의 요청과 규칙 거절(단계·생존·반경·이미 살핌·현장 없음·위치 없음)은 사람·역할·이유와 무관하게
+  // 같은 응답이다 — 상태 변화 없이 보낸 사람에게만 자기 state 한 프레임(오류 프레임·방송 없음). 받아들이면 저장 한 번 + 본인 state 한 프레임이다. 산 마피아가 살폈다는 표시(touched)는
+  // 같은 상태 쓰기에 실리므로 마피아·시민의 응답 횟수와 모양이 같고, 받은 단서는 본인 view(me.scene)에만 있다.
+  private async applyInspect(playerId: string, now: number): Promise<void> {
+    const room = this.room;
+    if (!room) return;
+    const key = `inspect:${playerId}`;
+    const last = this.writeAt.get(key);
+    if (last === undefined || now - last >= ERRAND_MIN_GAP_MS) {
+      this.writeAt.set(key, now);
+      const seg = Object.prototype.hasOwnProperty.call(this.world.segs, playerId) ? this.world.segs[playerId] : undefined;
+      const result = seg === undefined ? null : inspectSpot(room, playerId, positionAtFx(seg, now));
       if (result !== null && result.ok) {
         this.room = result.state;
         await this.ctx.storage.put("room", this.room);
