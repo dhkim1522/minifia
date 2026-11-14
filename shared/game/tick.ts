@@ -16,11 +16,11 @@
 // runoff: 동점 결선(결정 0066-4, 판 규칙의 runoff 가 켜졌을 때만) — 지목 집계가 최다 정확히 둘 동점이면 next "runoff". stepRunoff 가 앞머리 → 투표 → 결과를 stay 사슬로 걷고 마지막에 집계(많이 받은 후보면 defense, 동점이면 night).
 // 난수는 세 번째 인자로만 받는다 — 방 DO 는 cryptoRandInt, 테스트는 seededRandInt.
 // 분기(4페이즈): 마감 훅이 next 를 돌려주면 그 단계로, 없으면 단계 표(PHASE_DEFS)의 기본 next 로 간다. 표는 데이터만 두고 분기는 훅이 정한다.
-// 판 종류(19페이즈 D-03·D-08): 규칙은 전역 값이 아니라 방 상태의 판 종류에서 얻는다 — 한 걸음마다 그 판의 훅 표(HOOKS[modeOf(상태)])와 규칙(rulesetOf)을 고른다.
+// 판 종류(19페이즈 D-03·D-08): 규칙은 전역 값이 아니라 방 상태의 판 종류에서 얻는다 — 한 걸음마다 그 판의 규칙(rulesetOf(modeOf(상태)))과 그 규칙의 훅 표(hooksFor)를 고른다.
 // 기본 다음 단계는 nextPhaseOf(단계, 규칙) 가 고른다 — basic 판은 낮 시작 발표 다음이 errand 가 아니라 discussion 이다.
+// 원인 흐름(21페이즈 D-01, 규칙의 cause): 확장판은 roleReveal → errand(저녁, 일차 +1) → night → morning(현장 없으면 길이 0) → discussion … execution → errand 다. dayAnnounce 를 지나지 않는다.
 // 진입 훅의 세 번째 인자 at 은 진입 시각(= 이전 마감)이다 — 시각을 스스로 읽지 않는 순수 규칙이 "진입 + 30분" 같은 계산을 할 때 쓴다.
-import { GAME_MODES } from "../protocol";
-import type { GameMode, PhaseId } from "../protocol";
+import type { PhaseId } from "../protocol";
 import { emptyGameCloseAt, nextContinuityAt } from "./continuity";
 import { enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
@@ -77,7 +77,9 @@ export function hooksOf(rules: Ruleset): PhaseHooks {
     enter: {
       assigning: clearTutorial, // 17페이즈(결정 0080-11): tutorial 을 떠나며 서버 전용 tutorialPassed 를 지운다(tutorial 을 거치지 않았으면 같은 객체)
       dayAnnounce: enterDayAnnounce,
-      errand: (s, r, at) => assignErrandFake(enterErrand(s, r, at)), // 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts). 16페이즈(결정 0079): 산 마피아의 가짜 한 곳은 난수 없이 뒤에서 정한다
+      // 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts). 16페이즈(결정 0079): 산 마피아의 가짜 한 곳은 난수 없이 뒤에서 정한다.
+      // 원인 흐름(21페이즈 D-01·A4·A6): 일차 +1 이 낮 시작 발표 대신 저녁 진입이다(enterErrand 앞 — errandFake·nightLog·voteLog 가 day 를 읽는다). 마피아의 비밀 행동은 심지 자르기라 가짜 장소를 정하지 않는다.
+      errand: rules.cause ? (s, r, at) => enterErrand(enterDayAnnounce(s), r, at) : (s, r, at) => assignErrandFake(enterErrand(s, r, at)),
       discussion: enterDiscussion,
       nomination: rules.pickTurn ? enterNomination : enterVote,
       execution: enterExecution,
@@ -98,8 +100,16 @@ export function hooksOf(rules: Ruleset): PhaseHooks {
   };
 }
 
-/** 판 종류마다 훅 표 하나 — 모듈을 읽을 때 한 번씩 만들어 두고 tick 이 방 상태의 판 종류로 고른다(매 걸음 새 객체를 만들지 않는다). */
-const HOOKS = Object.fromEntries(GAME_MODES.map((mode) => [mode, hooksOf(rulesetOf(mode))])) as Readonly<Record<GameMode, PhaseHooks>>;
+/** 규칙 객체마다 훅 표 하나 — 처음 쓸 때 만들어 두고 같은 객체면 다시 쓴다(매 걸음 새 객체를 만들지 않는다). 시험 잠금(CAUSE_MODES)이 규칙 객체를 바꿔도 맞다(21-01). */
+const HOOKS = new WeakMap<Ruleset, PhaseHooks>();
+function hooksFor(rules: Ruleset): PhaseHooks {
+  let hooks = HOOKS.get(rules);
+  if (hooks === undefined) {
+    hooks = hooksOf(rules);
+    HOOKS.set(rules, hooks);
+  }
+  return hooks;
+}
 
 /**
  * 마감이 지난 단계를 다음 단계로 넘긴다. 새 마감은 now 가 아니라 "이전 마감 + 다음 단계 길이" 로 연쇄 계산해,
@@ -111,9 +121,8 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
   while (current.phaseEndsAt !== null && now >= current.phaseEndsAt) {
     const deadline = current.phaseEndsAt;
     // 판 규칙과 훅 표는 한 걸음마다 방 상태에서 얻는다(19페이즈 D-03·D-08) — 전역 값이 아니다. 판 종류는 훅이 바꾸지 않는다(대기실·결과에서만 바뀐다).
-    const mode = modeOf(current);
-    const hooks = HOOKS[mode];
-    const rules = rulesetOf(mode);
+    const rules = rulesetOf(modeOf(current));
+    const hooks = hooksFor(rules);
     const onDeadline = hooks.deadline[current.phase];
     let closing = current;
     let branch: PhaseId | undefined;

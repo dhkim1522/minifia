@@ -9,6 +9,7 @@
 import { isAlive } from "../../shared/game/alive";
 import { majorityOf } from "../../shared/game/nomination";
 import { EXECUTION_MS, VERDICT_LEAD_MS } from "../../shared/game/phases";
+import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
 import { MORNING_TEXT, morningText } from "./eliminationText";
@@ -55,6 +56,11 @@ export const DAY_COPY = {
     execution: "처형",
     night: "밤",
     morning: "아침",
+  } as Partial<Record<PhaseId, string>>,
+  /** 원인 흐름 확장판의 제목(21페이즈 P21-19): 저녁 '등불 켜기', 아침 '현장 조사'. 시간대 낱말(저녁·아침)과 조명은 헤더가 따로 말한다(21-07). */
+  causeTitles: {
+    errand: "등불 켜기",
+    morning: "현장 조사",
   } as Partial<Record<PhaseId, string>>,
   // ---- 단계 안내 한 줄 ----
   discussionHint: "이야기하며 마피아를 찾아요",
@@ -424,7 +430,8 @@ export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: 
  * 밤은 산 사람마다 역할별 한 줄(마피아 '대상에게 다가가요', 경찰 '조사할 사람을 골라요', 의사 '지킬 사람을 골라요', 시민 '날이 밝길 기다려요'). 아침은 제목만. 낮 틀이 아닌 단계는 빈 제목.
  */
 export function headerFor(view: RoomView): { title: string; hint?: string } {
-  const title = DAY_COPY.titles[view.phase];
+  // 원인 흐름 판(규칙의 cause)이면 저녁·아침 제목이 갈린다(P21-19) — 규칙은 view.mode 에서 얻는다.
+  const title = (rulesetOf(modeOf(view)).cause ? DAY_COPY.causeTitles[view.phase] : undefined) ?? DAY_COPY.titles[view.phase];
   if (title === undefined) return { title: "" };
   const me = view.players.find((p) => p.seat === view.me.seat);
   if (me !== undefined && !isAlive(me)) {

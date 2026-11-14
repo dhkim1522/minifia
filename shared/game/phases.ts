@@ -30,6 +30,7 @@ export const MORNING_MS = 5_000;
 export const MORNING_VICTIM_MS = 2_000; // 탈락 발표(MORN-04)
 export const MORNING_WILL_MS = 2_000; // 피해자 유언이 비어 있지 않을 때
 export const MORNING_NOTE_MS = 2_000; // 마피아 쪽지가 비어 있지 않을 때(탈락한 밤에만 남는다)
+export const MORNING_SCENE_MS = 30_000; // 결정 0081-3 · D-03 · 플레이테스트 뒤 이 줄만 고친다 — 원인 흐름 아침(현장 조사) 걷기·살피기 시간. 현장이 있는 아침에만 발표 길이에 더한다(morningMsOf)
 export const MORNING_MAX_MS = 16_000; // 아침 길이 상한 — 결정 0079(A3) · 흔적 카드가 두 줄이 되어 3→5초, 상한 15→16초 (시간은 참고 목표)
 export const DEFENSE_MS = 20_000; // 최후 변론(DAY-07, 결정 0060-1) — 변론자가 무대에서 말하는 20초
 /** 판결 앞머리(결정 0066-7) — 처형 단계 맨 앞 0.6초는 화면의 느린 확대·핀 조명이 알림보다 앞선다. */
@@ -96,10 +97,24 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
 });
 
 /**
- * 기본 다음 단계(19페이즈 D-08). 단계 표(PHASE_DEFS)는 데이터 그대로 두고, 판 규칙에 따라 갈리는 한 곳만 여기서 고른다:
- * 낮 시작 발표 다음은 심부름이 켜진 판(extended)이면 errand, 꺼진 판(basic)이면 바로 discussion 이다. 마감 훅이 돌려준 분기(next)가 이 값보다 먼저다(tick.ts).
+ * 기본 다음 단계(19페이즈 D-08, 21페이즈 D-01). 단계 표(PHASE_DEFS)는 데이터 그대로 두고, 판 규칙에 따라 갈리는 곳만 여기서 고른다:
+ *   낮 시작 발표 → 심부름이 켜진 판(extended)이면 errand, 꺼진 판(basic)이면 바로 discussion
+ *   원인 흐름(rules.cause)일 때만: roleReveal → errand · errand → night · morning → discussion · execution → errand (확장판은 dayAnnounce 를 지나지 않는다)
+ *   그 밖은 표 그대로 — 기본판은 roleReveal → dayAnnounce … execution → night → morning → dayAnnounce 다.
+ * 마감 훅이 돌려준 분기(next)가 이 값보다 먼저다(tick.ts). 처형이 없는 낮의 다음 단계는 훅이 afterDayOf 로 정한다.
  */
 export function nextPhaseOf(phase: PhaseId, rules: Ruleset): PhaseId | null {
+  if (rules.cause) {
+    if (phase === "roleReveal") return "errand";
+    if (phase === "errand") return "night";
+    if (phase === "morning") return "discussion";
+    if (phase === "execution") return "errand";
+  }
   if (phase === "dayAnnounce") return rules.errand ? "errand" : "discussion";
   return PHASE_DEFS[phase].next;
+}
+
+/** 처형 없이 끝난 낮(투표 동률·0표·결선·결전 무승부)의 다음 단계: 원인 흐름이면 다음 날 저녁(errand), 아니면 밤. 낮 마감 분기의 리터럴을 이 함수 하나로 모은다(D-01). */
+export function afterDayOf(rules: Ruleset): PhaseId {
+  return rules.cause ? "errand" : "night";
 }

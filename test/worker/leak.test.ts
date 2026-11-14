@@ -1655,7 +1655,7 @@ describe("허용 경로 고정 (L24, 결정 0072·T-13-14)", () => {
   it("POLITICS_ALLOWED_PATHS 는 설정이 켜진 장치의 경로만이다 — 기본판에서는 찬반 기록 하나뿐이고, 모두 켜면 정확히 이 목록이다. 넓히려면 이유를 적고 이 기대값을 같이 고친다", () => {
     expect([...politicsPathsFor(rulesetOf("basic"))]).toEqual([".view.day.ballots.*"]);
     expect([...POLITICS_ALLOWED_PATHS]).toEqual([...politicsPathsFor(GAME_RULES)]);
-    const allOn: Ruleset = { badge: true, whisper: true, pickTurn: true, runoff: true, showdown: true, errand: true, witness: true, trace: true };
+    const allOn: Ruleset = { badge: true, whisper: true, pickTurn: true, runoff: true, showdown: true, errand: true, witness: true, trace: true, cause: true };
     expect([...politicsPathsFor(allOn)]).toEqual([
       ".view.players[].badge",
       ".view.players[].badgeSwapped",

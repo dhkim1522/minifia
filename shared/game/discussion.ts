@@ -9,6 +9,7 @@ import { runoffStepMs } from "./runoff";
 import { showdownStepMs } from "./showdown";
 import { MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_TRACE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
+import { modeOf, rulesetOf } from "./ruleset";
 
 /** 낮 투표류 규칙 함수(토론 끝내기·지목·찬반)의 거부 코드. 단계가 아니면 WRONG_PHASE, 그 밖의 잘못된 입력은 BAD_MESSAGE. */
 export type VoteError = "WRONG_PHASE" | "BAD_MESSAGE";
@@ -20,6 +21,8 @@ export type VoteError = "WRONG_PHASE" | "BAD_MESSAGE";
  */
 export function morningMsOf(state: RoomState): number {
   const seat = state.morning?.eliminated;
+  // 원인 흐름(21페이즈 D-17): 피해자도 미수도 없는 밤은 현장이 없다 — 아침 길이 0 이라 tick 이 같은 호출 안에서 곧바로 토론까지 간다.
+  if (rulesetOf(modeOf(state)).cause && seat === undefined && state.morning?.saved !== true) return 0;
   if (seat === undefined) return MORNING_MS;
   const will = state.players.find((p) => p.seat === seat)?.will;
   const ms =

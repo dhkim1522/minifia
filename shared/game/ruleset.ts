@@ -2,6 +2,7 @@
 // 판 종류(GameMode)는 방장이 고르는 공개 값이다(19페이즈 D-01·D-05): 기본 마피아(basic)는 할 일·증거가 없고, 확장판(extended)은 심부름·목격 기록·밤 흔적이 있다.
 // 직업 주장 배지(0066-1)·귓속말(0066-2)·순차 지목(0063-1)·동점 결선(0066-4)·마지막 3인 결전(0066-5) 코드는 지우지 않고 규칙 값으로 끈다 — 두 판 모두 꺼짐이다(정통 판은 이 선택과 별개의 나중 과제, 0081-6).
 // 전역 규칙 상수는 없다(19페이즈 D-03): 서버 흐름은 방 상태에서 얻은 규칙(rulesetOf(modeOf(state)))을, 화면은 view.mode 에서 얻은 규칙(rulesetOf(modeOf(view)))을 읽는다.
+// 원인 흐름(cause, 21페이즈 D-01)의 시험 잠금: CAUSE_MODES 는 제품에서 확장판 하나이고, 시험은 test/helpers/playable.ts 의 lockCause·openCause 로만 바꾼다(maps.ts 의 MODE_MAPS 와 같은 방식).
 // ../protocol(런타임 import 가 없는 와이어 모듈) 외에는 import 하지 않는다(순환 방지).
 import { DEFAULT_MODE, GAME_MODES } from "../protocol";
 import type { GameMode } from "../protocol";
@@ -27,7 +28,10 @@ export interface Ruleset {
   readonly cause: boolean;
 }
 
-/** 시험 잠금 표(자리 값) — 원인 흐름을 켠 판 종류. */
+/**
+ * 원인 흐름(Ruleset.cause)을 켠 판 종류 — 시험이 잠그는 바꿀 수 있는 표다(maps.ts 의 MODE_MAPS 와 같은 방식).
+ * 제품 값은 확장판 하나이고, 여기서 빠진 판은 같은 판의 cause 만 꺼진 규칙을 받는다. 시험은 test/helpers/playable.ts 의 lockCause·openCause 로만 바꾼다.
+ */
 export const CAUSE_MODES: GameMode[] = ["extended"];
 
 /** 정치 장치 다섯은 두 판 모두 꺼짐이다(D-02). */
@@ -36,12 +40,17 @@ const POLITICS_OFF = { badge: false, whisper: false, pickTurn: false, runoff: fa
 /** 판마다 얼린 규칙 객체 하나(D-02). Record 라 판 종류를 늘리면 여기서 컴파일이 실패한다. */
 const RULES_BY_MODE: Readonly<Record<GameMode, Ruleset>> = Object.freeze({
   basic: Object.freeze({ ...POLITICS_OFF, errand: false, witness: false, trace: false, cause: false }),
-  extended: Object.freeze({ ...POLITICS_OFF, errand: true, witness: true, trace: true, cause: false }),
+  extended: Object.freeze({ ...POLITICS_OFF, errand: true, witness: true, trace: true, cause: true }),
 });
 
-/** 판 종류의 규칙. 같은 판은 늘 같은 얼린 객체다. */
+/** 시험 잠금이 걸린 판의 규칙 — 같은 판의 cause 만 꺼진 얼린 객체(원래 꺼진 판은 같은 객체). 모듈을 읽을 때 한 번만 만든다. */
+const RULES_NO_CAUSE: Readonly<Record<GameMode, Ruleset>> = Object.fromEntries(
+  GAME_MODES.map((mode) => [mode, RULES_BY_MODE[mode].cause ? Object.freeze({ ...RULES_BY_MODE[mode], cause: false }) : RULES_BY_MODE[mode]]),
+) as Record<GameMode, Ruleset>;
+
+/** 판 종류의 규칙. 같은 판은 같은 잠금 상태에서 늘 같은 얼린 객체다(CAUSE_MODES 가 바뀌면 다른 객체 하나로 갈린다). */
 export function rulesetOf(mode: GameMode): Ruleset {
-  return RULES_BY_MODE[mode];
+  return CAUSE_MODES.includes(mode) ? RULES_BY_MODE[mode] : RULES_NO_CAUSE[mode];
 }
 
 /**

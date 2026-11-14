@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { phaseKey } from "../../shared/game/audience";
+import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import type { PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { useSound } from "../audio/useSound";
@@ -61,7 +62,7 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   assigning: () => "직업을 배정하고 있습니다",
   roleReveal: () => "역할 확인",
   dayAnnounce: (view) => `${view.day?.n ?? 1}일차 낮이 되었습니다`,
-  errand: () => "심부름", // 15페이즈(결정 0074)
+  errand: (view) => (rulesetOf(modeOf(view)).cause ? "등불 켜기" : "심부름"), // 15페이즈(결정 0074) · 원인 흐름 확장판은 '등불 켜기'(21페이즈 P21-19)
   discussion: () => "낮 토론",
   night: nightAnnounce,
   morning: morningAnnounce,
