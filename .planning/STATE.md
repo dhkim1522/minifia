@@ -6,16 +6,16 @@ current_phase: 20
 current_phase_name: map-expansion
 current_plan: 10
 status: verifying
-stopped_at: Completed 20-10-PLAN.md
-last_updated: "2026-11-13T03:37:10.495Z"
+stopped_at: Completed 21-01-PLAN.md
+last_updated: "2026-11-14T06:57:34.138Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: 3d651e46bc6b1c7cf4d0df2943d10125978950af
+state_head: 9a4b1d3a97009a73cf93a7d5721147d39d445aaa
 progress:
   total_phases: 10
   completed_phases: 6
-  total_plans: 97
-  completed_plans: 97
+  total_plans: 113
+  completed_plans: 98
   percent: 60
 ---
 
@@ -292,6 +292,7 @@ Last activity: 2026-11-13 — 20-10 완료 (로컬 전 흐름 폰 6종 회귀 �
 | Phase 20 P05 | 20min | 2 tasks | 14 files |
 | Phase 20 P08 | 1.5h | 3 tasks | 5 files |
 | Phase 20 P10 | 50min | 3 tasks | 7 files |
+| Phase 21 P01 | 30min | 2 tasks | 24 files |
 
 ## Accumulated Context
 
@@ -651,6 +652,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 20]: 20-08: TM5(문 연출)는 seats() 가 서버 프레임으로 빠지므로 「같은 프레임 안 연출 시작 + 길이 0.2초쯤」으로 판정한다. 마을 E2E 는 지붕 두 번 누르기(문 앞 링 → 방 안)로 방에 들어간다
 - [Phase 20]: 20-09: 마을 nightload(390x844·CPU 4배·5분) 평균 59.8fps·끊김 1·그리기 호출 최대 82·점광원 3 으로 게이트 통과, 광장 대조 59.7fps. 장면 수정 없음. 그리기 통계는 로비가 아니라 장면 중 값(renderer.duringMax)으로 읽는다
 - [Phase 20]: 마을 맵(광장 + 실내 방 넷 + 집 여덟)은 확장판 전용으로 배포, 결정 0087 에 D-01~D-23·위임 기본값·한계 기록
+- [Phase 21]: [21-01] 확장판 하루는 Ruleset.cause 로 roleReveal → errand → night → morning → discussion, 처형(없음) → errand, 일차는 errand 진입 +1. 시험 잠금은 CAUSE_MODES 표 + 규칙 객체별 훅 표(결정 0088)
 
 ### Pending Todos
 
@@ -722,8 +724,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-13T03:37:09.789Z
-Stopped at: Completed 20-10-PLAN.md
+Last session: 2026-11-14T06:57:31.417Z
+Stopped at: Completed 21-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
