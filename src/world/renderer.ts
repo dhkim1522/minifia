@@ -85,6 +85,8 @@ export interface WorldRenderer {
   setCutaway?(open: ReadonlySet<RoomId>, instant: boolean): void;
   /** 집 주인(마을만, D-07): 이번 판에 앉은 좌석 번호들. 시험 가짜 렌더러 호환을 위해 optional */
   setOwners?(seats: readonly number[]): void;
+  /** 가로등 8개·집 창 8개의 켜짐(마을만, 21페이즈 D-04·D-25). null 은 가로등 모두 꺼짐·집 창은 주인 규칙. instant 면 꺼지는 빛 무리도 바로 꺼진다(모션 줄이기). 시험 가짜 렌더러 호환을 위해 optional */
+  setLamps?(lampLit: readonly boolean[] | null, houseLit: readonly boolean[] | null, instant?: boolean): void;
   /** 방마다 지금 지붕 불투명도(마을만, 1 = 덮임 · 0 = 걷힘). 시험 훅이 읽는다. 시험 가짜 렌더러 호환을 위해 optional */
   roofs?(): Readonly<Record<RoomId, number>>;
   /** 카메라 확대(과반 연출 1.08, 기본 1). camera.ts 투영의 zoom 인자와 같은 배율 */

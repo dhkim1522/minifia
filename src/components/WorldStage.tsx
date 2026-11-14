@@ -4,6 +4,7 @@ import { phaseKey } from "../../shared/game/audience";
 import type { ClientMessage, EmoteId, MapId, PlaceId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { MOVE_COORD_LIMIT } from "../../shared/protocol";
 import { placeMarkerPlan } from "../game/errandView";
+import { houseLitOf, lampLitOf } from "../game/lampView";
 import type { Rect } from "../game/errandView";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { HEADER_BOTTOM, PANEL_HEIGHT } from "../world/camera";
@@ -406,6 +407,7 @@ export function WorldStage(props: WorldStageProps) {
       allowSoftware: hooksOn,
       loadModules: live.current.props.loadModules,
       mapId: () => mapId,
+      view: () => live.current.props.view,
     });
     runtimeRef.current = runtime;
     runtime.setScene(live.current.props.scene ?? null);
@@ -443,9 +445,11 @@ export function WorldStage(props: WorldStageProps) {
   }, [exiting]);
 
   // view 가 바뀌면 퇴장·끊김 표시를 런타임에 맞춘다(그리기 전에)
+  // 등불 켜짐(저녁은 내 진행, 밤부터 day.lamps — 21-07)도 같은 시점에 맞춘다: 값이 바뀔 때만 렌더러로 간다
+  const lampsKey = JSON.stringify([lampLitOf(view), houseLitOf(view)]);
   useLayoutEffect(() => {
     runtimeRef.current?.syncPlayers();
-  }, [view.players]);
+  }, [view.players, lampsKey]);
 
   // 장면 상태가 바뀌면 런타임에 건넨다(그리기 전에)
   useLayoutEffect(() => {

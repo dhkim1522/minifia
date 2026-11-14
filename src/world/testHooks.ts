@@ -66,6 +66,10 @@ export interface TownHookState {
   owners: number[];
   veiled: number[];
   door: { seat: number; kind: "vanish" | "appear" }[];
+  /** 집 창 8개 켜짐(원인 흐름 마을 밤 이후 = 서버의 공개 day.lamps, 그 밖은 null — 21-07 D-25). view 의 공개 값에서 나온 것뿐이다 */
+  houseLit: boolean[] | null;
+  /** 가로등 8개 켜짐(저녁 = 내 진행만, 밤부터 = 공개 day.lamps, 원인 흐름 마을이 아니면 null — 21-07 D-24). 역할 없음 */
+  lampLit: boolean[] | null;
 }
 
 /** window.__mfResult 의 모양(11-05) */
@@ -238,7 +242,7 @@ export function installMapHook(mapId: MapId): { off(): void } {
  * 해제는 다른 설치가 덮어썼으면 지우지 않는다. 값은 DOM 속성이 아니다.
  */
 export function installTownHook(): { patch(next: Partial<TownHookState>): void; off(): void } {
-  let mine: TownHookState = { zone: "plaza", open: [], roofs: { post: 1, pub: 1, clinic: 1, police: 1 }, owners: [], veiled: [], door: [] };
+  let mine: TownHookState = { zone: "plaza", open: [], roofs: { post: 1, pub: 1, clinic: 1, police: 1 }, owners: [], veiled: [], door: [], houseLit: null, lampLit: null };
   window.__mfTown = mine;
   return {
     patch(next) {

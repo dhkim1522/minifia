@@ -10,7 +10,8 @@ import { snapToWalkable, UNIT } from "../../shared/game/map";
 import type { Spawn } from "../../shared/game/map";
 import { mapOf } from "../../shared/game/maps";
 import { ROOM_IDS } from "../../shared/protocol";
-import type { MapId, RoomId, ZoneId } from "../../shared/protocol";
+import type { MapId, RoomId, RoomView, ZoneId } from "../../shared/protocol";
+import { houseLitOf, lampLitOf } from "../game/lampView";
 import { zoneOf } from "../../shared/game/zones";
 import { cutawayOf, headVeiled, sameRooms, tapTarget } from "./cutaway";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
@@ -202,6 +203,11 @@ export interface WorldRuntimeDeps {
    * 런타임을 만들 때 한 번 읽는다 — 맵이 바뀌는 화면 전환은 새 런타임(새 렌더러)을 만든다. 서버는 같은 shared MapDef 를 쓴다
    */
   mapId?(): MapId;
+  /**
+   * 지금 받은 view(선택). 마을 가로등·집 창 켜짐(21페이즈 D-04·D-25)을 lampLitOf·houseLitOf 로 읽는 데만 쓴다 — 역할은 읽지 않는다.
+   * 없으면 가로등·집 창은 보내지 않는다(주인 규칙 그대로). 값이 바뀔 때마다 syncPlayers 가 렌더러에 맞춘다
+   */
+  view?(): RoomView;
   raf?: (cb: FrameRequestCallback) => number;
   caf?: (id: number) => void;
   storage?: Storage | null;
@@ -227,7 +233,7 @@ export interface WorldRuntimeDeps {
    * 마을 판에서 내 구역·열린 방 목표·지붕 불투명도(소수 둘째)·집 주인 좌석이 바뀔 때만 불린다 — E2E 훅 window.__mfTown 용(20-05, L33). 이미 받은 값에서 계산한 것뿐이다.
    * 방이 없는 맵(재즈 바·광장)에서는 한 번도 불리지 않는다. 제품은 넘기지 않는다
    */
-  onTown?: (state: { zone: ZoneId; open: RoomId[]; roofs: Record<RoomId, number>; owners: number[]; veiled: number[]; door: { seat: number; kind: "vanish" | "appear" }[] }) => void;
+  onTown?: (state: { zone: ZoneId; open: RoomId[]; roofs: Record<RoomId, number>; owners: number[]; veiled: number[]; door: { seat: number; kind: "vanish" | "appear" }[]; houseLit: boolean[] | null; lampLit: boolean[] | null }) => void;
   /** 카메라 줌이 렌더러에 새로 보내질 때 소수 셋째 자리로 불린다 — E2E 훅 window.__mfPin.zoom 용(09.1.1-13). 제품은 넘기지 않는다 */
   onZoom?: (zoom: number) => void;
   /**
@@ -444,6 +450,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let ownerSeats: number[] = [];
   let ownersKey: string | null = null;
   let townKey: string | null = null;
+  /** 가로등·집 창(21-07): 렌더러에 마지막으로 보낸 값의 키("-" = 둘 다 null, 아직 안 보냄과 같다)와 그 값(onTown·__mfTown 이 읽는다) */
+  let lampsKey = "-";
+  let lampsSent: { lamp: boolean[] | null; house: boolean[] | null } = { lamp: null, house: null };
   /** 지금 열려 있는 방(updateTown 이 정한 목표 집합) — 벽 뒤 이름표 숨김·건물 누르기가 읽는다. 이 프레임의 구역은 다음 프레임 숨김에 반영된다 */
   let townOpen: ReadonlySet<RoomId> = new Set<RoomId>();
   /** 지금 그리는 확대와, 고정 카메라로 옮기는 중인 전환(고정이 아니면 null) */
@@ -616,6 +625,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       cutSent = null;
       townKey = null;
       sendOwners(true);
+      sendLamps(true);
     }
     dispatch({ t: e.t });
   }
@@ -841,6 +851,23 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   }
 
   /**
+   * 가로등·집 창(21-07, D-04·D-25): view 의 공개 값(저녁은 내 진행, 밤부터 day.lamps)에서 lampLitOf·houseLitOf 를 읽어 바뀔 때만 렌더러에 보낸다.
+   * 값이 둘 다 null 이면(원인 흐름이 아니거나 마을이 아님) 보낼 것이 없다 — 이미 켜져 있던 것을 끄는 전환(키가 "-" 로 돌아옴)만 보낸다. force 면(recreate 뒤) 같아도 다시 보낸다.
+   * 모션 줄이기면 꺼지는 빛 무리도 바로 꺼진다(instant)
+   */
+  function sendLamps(force: boolean): void {
+    if (!hasRooms || renderer === null || deps.view === undefined) return;
+    const view = deps.view();
+    const lamp = lampLitOf(view);
+    const house = houseLitOf(view);
+    const key = lamp === null && house === null ? "-" : JSON.stringify([lamp, house]);
+    if (key === lampsKey && (key === "-" || !force)) return;
+    lampsKey = key;
+    lampsSent = { lamp, house };
+    renderer.setLamps?.(lamp, house, deps.reducedMotion());
+  }
+
+  /**
    * 컷어웨이(D-10·D-11, P20-8): 내 그려진 위치의 구역(서버와 같은 zoneOf)으로 열 방을 정하고 바뀔 때만 렌더러에 보낸다.
    * 유령·결과 화면(roomsOpen)은 네 방 모두. 내 몸이 아직 없으면(첫 프레임 전) 보내지 않는다 — 장면은 덮인 채로 시작하므로 처음 걷힘이 연출로 보이지 않게 기다린다.
    * 이 렌더러에 처음 보내거나 recreate 뒤거나 모션 줄이기면 instant
@@ -870,6 +897,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       owners: [...ownerSeats],
       veiled: [...veiledNow].sort((x, y) => x - y),
       door: [...doorNow].sort((x, y) => x.seat - y.seat),
+      houseLit: lampsSent.house,
+      lampLit: lampsSent.lamp,
     };
     const key = JSON.stringify(state);
     if (key === townKey) return;
@@ -896,6 +925,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
     emitLooks();
     sendOwners(false);
+    sendLamps(false);
     // 닉네임·표시가 바뀔 수 있어 이름표 폭을 다음 프레임에 다시 잰다
     for (const a of actors.values()) a.tagW = null;
   }
