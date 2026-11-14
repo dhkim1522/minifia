@@ -47,6 +47,11 @@ export interface MapDef {
   stage?: { x: number; z: number };
   /** 심부름 장소 후보(결정 0074, 맵당 8곳). 없는 맵(시험용)은 심부름 목록이 빈 배열이다. */
   places?: readonly PlaceDef[];
+  /**
+   * 가로등 처리 자리(21페이즈 D-05·D-07, 결정 0088): 있으면 원인 흐름 저녁의 배정·처리·목격 장소가 places 대신 이 목록이다. 마을만 8곳을 둔다(재즈 바·광장은 없다).
+   * 3D 가로등 기둥은 장식이라 장애물·마스크에 들어가지 않는다 — 걷는 칸 수는 그대로다.
+   */
+  lamps?: readonly PlaceDef[];
   /** 실내 방(20페이즈 D-06·D-13). 없는 맵(재즈 바·광장)은 구역이 광장 하나다. */
   rooms?: readonly RoomDef[];
 }

@@ -25,7 +25,7 @@ import {
 } from "../../shared/game/map";
 import type { MapDef, Obstacle, RoomDef, Spawn } from "../../shared/game/map";
 import { PLAZA_MAP, PLAZA_MASK, PLAZA_OBSTACLES, PLAZA_PLACES, PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
-import { TOWN_DOOR_EXEMPT, TOWN_HOUSES, TOWN_MAP, TOWN_MASK, TOWN_OBSTACLES, TOWN_PLACES, TOWN_PROPS, TOWN_ROOMS, TOWN_SPAWNS } from "../../shared/game/mapTown";
+import { TOWN_DOOR_EXEMPT, TOWN_HOUSES, TOWN_LAMPS, TOWN_MAP, TOWN_MASK, TOWN_NEIGHBORS, TOWN_OBSTACLES, TOWN_PLACES, TOWN_PROPS, TOWN_ROOMS, TOWN_SPAWNS, neighborOf } from "../../shared/game/mapTown";
 import { MAPS, MODE_MAPS, PLAYABLE_MAPS, mapOf, roomMapId, startMapOf } from "../../shared/game/maps";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
@@ -464,6 +464,68 @@ describe("마을 장소 8곳 (D-08·P20-20)", () => {
     const indoor = TOWN_PLACES.filter((p) => zoneOf(TOWN_MAP, fx(p.x), fx(p.z)) !== "plaza");
     const indoorOk = indoor.length === 4 && indoor.every((p) => isCenterOfWalkCell({ x: fx(p.x), z: fx(p.z) }) && TOWN_PROPS.every((o) => rectGap(o, p.x, p.z) >= 0.5 - 1e-9));
     expect(`${TOWN_PLACES.length}/${walk}/${minGap >= 2}/${plazaSame}/${indoorOk}`).toBe("8/true/true/true/true");
+  });
+});
+
+describe("마을 가로등 8곳 (21페이즈 D-05·D-07, 결정 0088)", () => {
+  /** 정의식: 집 i 방향으로 광장 가운데에서 반경 4.6 인 점에 가장 가까운 걷는 칸 중심. */
+  const defOf = (h: (typeof TOWN_HOUSES)[number]): string => {
+    const len = Math.hypot(h.x, h.z);
+    const c = nearestWalkCenter(TOWN_MAP, { x: Math.round((h.x / len) * 4.6 * 100), z: Math.round((h.z / len) * 4.6 * 100) });
+    return `lamp${h.seat}:${c.x / 100},${c.z / 100}`;
+  };
+
+  it("TOWN_MAP.lamps 는 lamp0~lamp7 순서 8곳이고 좌표는 정의식 출력과 같다(리터럴)", () => {
+    expect(TOWN_MAP.lamps).toBe(TOWN_LAMPS);
+    expect(TOWN_LAMPS.map((l) => `${l.id}:${l.x},${l.z}`).join(" ")).toBe(TOWN_HOUSES.map(defOf).join(" "));
+    expect(TOWN_LAMPS.every((l) => (PLACE_IDS as readonly string[]).includes(l.id))).toBe(true);
+  });
+
+  it("모두 걷는 칸 중심이고 서로 2.0 이상이며 입장 지점 0 에서 길이 닿는다(끝점 0.3 안). 재즈 바·광장에는 lamps 가 없다", () => {
+    const walk = TOWN_LAMPS.every((l) => isCenterOfWalkCell({ x: fx(l.x), z: fx(l.z) }));
+    let minGap = Infinity;
+    for (let i = 0; i < TOWN_LAMPS.length; i++) for (let j = i + 1; j < TOWN_LAMPS.length; j++) minGap = Math.min(minGap, Math.hypot(TOWN_LAMPS[i]!.x - TOWN_LAMPS[j]!.x, TOWN_LAMPS[i]!.z - TOWN_LAMPS[j]!.z));
+    const from = { x: fx(TOWN_SPAWNS[0]!.x), z: fx(TOWN_SPAWNS[0]!.z) };
+    const reach = TOWN_LAMPS.every((l) => {
+      const p = routeFx(TOWN_MAP, from, { x: fx(l.x), z: fx(l.z) });
+      const ex = p[p.length - 2]!;
+      const ez = p[p.length - 1]!;
+      return p.length >= 4 && (ex - fx(l.x)) ** 2 + (ez - fx(l.z)) ** 2 <= 30 * 30;
+    });
+    expect(`${TOWN_LAMPS.length}/${walk}/${minGap >= 2}/${reach}/${BAR_MAP.lamps === undefined}/${PLAZA_MAP.lamps === undefined}`).toBe("8/true/true/true/true/true");
+  });
+
+  it("집 i 중심에서 가장 가까운 등불이 lamp i 다 — 등불 8 ↔ 집 8 전단사(여덟 모두)", () => {
+    const got = TOWN_HOUSES.map((h) => {
+      let best = "";
+      let bestD = Infinity;
+      for (const l of TOWN_LAMPS) {
+        const d = Math.hypot(l.x - h.x, l.z - h.z);
+        if (d < bestD) {
+          bestD = d;
+          best = l.id;
+        }
+      }
+      return `${h.seat}:${best}`;
+    });
+    expect(got.join(" ")).toBe(TOWN_HOUSES.map((h) => `${h.seat}:lamp${h.seat}`).join(" "));
+  });
+
+  it("가로등 기둥은 마스크에 없다 — 장애물 수·걷는 칸 943 그대로", () => {
+    expect(`${walkCount(TOWN_MASK)}/${TOWN_MAP.mask.length}`).toBe("943/2304");
+  });
+});
+
+describe("짝집 표 (21페이즈 D-14 창문 단서용)", () => {
+  it("TOWN_NEIGHBORS 는 (0,7)·(1,2)·(3,4)·(5,6) 이고 neighborOf 는 대칭이다", () => {
+    expect(JSON.stringify(TOWN_NEIGHBORS)).toBe("[[0,7],[1,2],[3,4],[5,6]]");
+    const got = TOWN_HOUSES.map((h) => `${h.seat}>${neighborOf(h.seat)}>${neighborOf(neighborOf(h.seat) as number)}`);
+    expect(got.join(" ")).toBe("0>7>0 1>2>1 2>1>2 3>4>3 4>3>4 5>6>5 6>5>6 7>0>7");
+  });
+
+  it("짝집의 중심 간격은 4.8 ± 0.05 이다", () => {
+    const gaps = TOWN_NEIGHBORS.map(([a, b]) => Math.hypot(TOWN_HOUSES[a]!.x - TOWN_HOUSES[b]!.x, TOWN_HOUSES[a]!.z - TOWN_HOUSES[b]!.z));
+    expect(gaps.every((g) => Math.abs(g - 4.8) <= 0.05) && gaps.length === 4).toBe(true);
   });
 });
 

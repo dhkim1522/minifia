@@ -7,9 +7,10 @@ import { PLACE_IDS } from "../protocol";
 import type { PlaceId, RecordLine, WorldFrame } from "../protocol";
 import { isAlive } from "./alive";
 import { UNIT } from "./map";
-import type { MapDef } from "./map";
+import type { MapDef, PlaceDef } from "./map";
 import { mapOf, roomMapId } from "./maps";
 import { modeOf, rulesetOf } from "./ruleset";
+import type { Ruleset } from "./ruleset";
 import { ERRAND_ACT_R, ERRAND_COUNT, ERRAND_NEAR_R, ERRAND_TICK_MS, ERRAND_VIEW_HORIZON_MS, RECORD_MAX } from "./phases";
 import type { RoomState } from "./room";
 import { positionAtFx, snapFrame, truncateSegment } from "./world";
@@ -23,6 +24,11 @@ const PLACE_SET: ReadonlySet<string> = new Set(PLACE_IDS);
 
 function isPlaceId(id: string): id is PlaceId {
   return PLACE_SET.has(id);
+}
+
+/** 자리 값(RED): 항상 places */
+export function errandSpotsOf(map: MapDef, _rules: Ruleset): readonly PlaceDef[] {
+  return map.places ?? [];
 }
 
 /** 장소 중앙(고정소수점). 맵에 없는 id 는 undefined. */
@@ -39,7 +45,7 @@ function distSq(a: { x: number; z: number }, b: { x: number; z: number }): numbe
 }
 
 /** 맵 후보 전체 중 posFx 에서 가장 가까운 장소 id(같으면 목록 앞). 후보가 없으면 undefined. */
-export function nearestPlaceId(map: MapDef, posFx: { x: number; z: number }): string | undefined {
+export function nearestPlaceId(map: MapDef, posFx: { x: number; z: number }, _spots?: readonly PlaceDef[]): string | undefined {
   let best: string | undefined;
   let bestD = Infinity;
   for (const place of map.places ?? []) {
