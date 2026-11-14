@@ -16,6 +16,8 @@ export type MapScene = Omit<BarScene, "lights"> & {
   setCutaway?(open: ReadonlySet<RoomId>, instant: boolean): void;
   /** 집 주인(선택, 마을만 — D-07). 이번 판에 앉은 좌석 번호들. 주인 있는 집만 창이 켜지고 문패·지붕 표식에 좌석 색 원 + 얼굴이 뜬다 */
   setOwners?(seats: readonly number[]): void;
+  /** 가로등·집 창(선택, 마을만 — 21페이즈 D-04·D-25). 자리 값 */
+  setLamps?(lampLit: readonly boolean[] | null, houseLit: readonly boolean[] | null, instant?: boolean): void;
   /** 방마다 지금 지붕 불투명도(선택, 마을만). 1 = 덮임, 0 = 걷힘. 시험 훅이 읽는다 */
   roofs?(): Readonly<Record<RoomId, number>>;
 };

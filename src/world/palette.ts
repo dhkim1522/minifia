@@ -91,6 +91,10 @@ export const PLAZA_PALETTE = {
   treeDark: "#0b1024",
 } as const;
 
+/** 마을 가로등 전구색(자리 값 — GREEN 에서 채운다) */
+export const LAMP_LIT = "#000000";
+export const LAMP_OFF = "#000000";
+
 // ---------- 마을(maps/town.ts, 20페이즈) ----------
 
 /**

@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { PALETTE, PLAZA_PALETTE, SEAT_COLORS, TOKEN_COLORS, TOWN_LIT, TOWN_PALETTE } from "../../src/world/palette";
+import { LAMP_LIT, LAMP_OFF, PALETTE, PLAZA_PALETTE, SEAT_COLORS, TOKEN_COLORS, TOWN_LIT, TOWN_PALETTE } from "../../src/world/palette";
 
 type Token = { name: string; value: string };
 const doc = JSON.parse(readFileSync(resolve(process.cwd(), "design/tokens.json"), "utf8")) as { color: { tokens: Token[] } };
@@ -85,17 +85,30 @@ describe("마을 3D 팔레트 SEAT_COLORS · TOWN_PALETTE · TOWN_LIT", () => {
     expect(TOWN_PALETTE.ground).toBe(PLAZA_PALETTE.floor);
   });
 
-  it("TOWN_LIT 은 일곱 단계 행(indoor·houseOwned 두 열뿐)이고 UI-SPEC 조명 표 값이다. 시민 편 밤은 둘 다 0 (P20-13)", () => {
+  it("TOWN_LIT 은 일곱 단계 행(indoor·houseOwned·houseLit 세 열뿐)이고 UI-SPEC 조명 표 값이다. 시민 편 밤은 모두 0 (P20-13, 21-07)", () => {
     expect(TOWN_LIT).toEqual({
-      talk: { indoor: 0.5, houseOwned: 0.3 },
-      vote: { indoor: 0.8, houseOwned: 1 },
-      trial: { indoor: 0.35, houseOwned: 0.06 },
-      night: { indoor: 0.7, houseOwned: 0.7 },
-      nightCitizen: { indoor: 0, houseOwned: 0 },
-      nightGhost: { indoor: 0.7, houseOwned: 0.7 },
-      morning: { indoor: 0.5, houseOwned: 0.3 },
+      talk: { indoor: 0.5, houseOwned: 0.3, houseLit: 0.3 },
+      vote: { indoor: 0.8, houseOwned: 1, houseLit: 1 },
+      trial: { indoor: 0.35, houseOwned: 0.06, houseLit: 0.06 },
+      night: { indoor: 0.7, houseOwned: 0.7, houseLit: 0.9 },
+      nightCitizen: { indoor: 0, houseOwned: 0, houseLit: 0 },
+      nightGhost: { indoor: 0.7, houseOwned: 0.7, houseLit: 0.9 },
+      morning: { indoor: 0.5, houseOwned: 0.3, houseLit: 0.3 },
     });
-    // 주인 없는 집 창의 배율 열은 없다(늘 0 — 어두운 칸)
-    for (const row of Object.values(TOWN_LIT)) expect(Object.keys(row).sort()).toEqual(["houseOwned", "indoor"]);
+    // 주인 없는 집 창의 배율 열은 없다(늘 0 — 어두운 칸). houseLit 은 원인 흐름 마을에서 day.lamps 로 켜진 창의 배율이다
+    for (const row of Object.values(TOWN_LIT)) {
+      expect(Object.keys(row).sort()).toEqual(["houseLit", "houseOwned", "indoor"]);
+      expect(row.houseLit).toBeGreaterThanOrEqual(0);
+      expect(row.houseLit).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("LAMP_LIT 은 가로등 전구색 #ffd59a(lampBulb 와 같음), LAMP_OFF 는 tokens.css 의 --gray-700 과 같은 값이다 (P21-21)", () => {
+    expect(LAMP_LIT).toBe("#ffd59a");
+    expect(LAMP_LIT).toBe(PLAZA_PALETTE.lampBulb);
+    const m = /--gray-700:\s*(#[0-9a-fA-F]{6});/.exec(css);
+    if (!m) throw new Error("토큰 없음: --gray-700");
+    expect(LAMP_OFF).toBe("#3a3f4b");
+    expect(LAMP_OFF).toBe(m[1]!.toLowerCase());
   });
 });

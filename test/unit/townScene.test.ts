@@ -1,15 +1,15 @@
 // 마을 장면(maps/town.ts)을 WebGL 없이 node 에서 검사한다: 광장 가운데 재사용·방 넷·집 여덟·그리기 예산·조명 열·강등 (20페이즈 D-05~D-10·D-20·D-21).
 // 모범은 plazaScene.test.ts. 좌표 원문은 shared/game/mapTown.ts(서버와 같은 표), 생김새의 기준은 design/v3.0/town-map/ 의 A 안.
-import { Box3, BufferGeometry, DataTexture, DirectionalLight, HemisphereLight, Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry, PointLight, Scene, Vector3 } from "three";
+import { Box3, BufferGeometry, Color, DataTexture, DirectionalLight, HemisphereLight, Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry, PointLight, Scene, Vector3 } from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TOWN_HOUSES, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
+import { TOWN_HOUSES, TOWN_LAMPS, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
 import { ROOM_IDS } from "../../shared/protocol";
 import { plateFarOf } from "../../src/world/camera";
 import { createCharacter, figForSeat } from "../../src/world/character";
 import { atlasCellAt, buildTownScene, CUTAWAY_MS, drawSeatCell, drawSignCell, TOWN_ATLAS } from "../../src/world/maps/town";
 import type { AtlasCtx } from "../../src/world/maps/town";
 import type { MapScene } from "../../src/world/maps/types";
-import { SEAT_COLORS, TOWN_LIT, TOWN_PALETTE } from "../../src/world/palette";
+import { LAMP_LIT, LAMP_OFF, SEAT_COLORS, TOWN_LIT, TOWN_PALETTE } from "../../src/world/palette";
 import { DRAW_CALL_BUDGET, LADDER } from "../../src/world/renderer";
 import type { LightingPhase } from "../../src/world/renderer";
 import type { RoomId } from "../../shared/protocol";
@@ -191,11 +191,11 @@ describe("마을 그리기 예산 (D-21, P20-17, T-20-15)", () => {
     t.dispose();
   });
 
-  it("재질을 방·집마다 새로 만들지 않는다: 고유 재질 26 이하(광장 13 + 컷 4 + 간판 4 + 방 발광·집 창·빛 무리·아틀라스 4)", () => {
+  it("재질을 방·집마다 새로 만들지 않는다: 고유 재질 28 이하(광장 13 + 컷 4 + 간판 4 + 방 발광·집 창·빛 무리·아틀라스 4 + 가로등 전구·빛 무리 2, 21-07)", () => {
     const t = buildTownScene(LADDER[0]!);
     const set = new Set<Material>();
     for (const m of allMeshes(t.root)) for (const x of mats(m)) set.add(x);
-    expect(set.size).toBeLessThanOrEqual(26);
+    expect(set.size).toBeLessThanOrEqual(28);
     t.dispose();
   });
 });
@@ -665,5 +665,165 @@ describe("아틀라스 그리기 함수 (UI Considerations partial, D-20)", () =
     t.dispose();
     images[1]!.onload!();
     expect(c.calls.drawImage).toHaveLength(1);
+  });
+});
+
+// ---------- 21-07 마을 가로등 8개·집 창 houseLit (D-04·D-07·D-24·D-25, 결정 0088 A2) ----------
+describe("마을 가로등 8개 setLamps (21-07, D-24·P21-8·P21-21)", () => {
+  const colorsOf = (m: Mesh): number[] => Array.from((m.geometry.getAttribute("color") as { array: ArrayLike<number> }).array);
+  /** 가로등 i 의 전구 구 정점 수(SphereGeometry(…, 10, 8)) — 묶음은 TOWN_LAMPS 순서다 */
+  const SPHERE_V = 11 * 9;
+  const bulbRgb = (t: MapScene, i: number): [number, number, number] => {
+    const c = colorsOf(t.meshes.lampBulbs!);
+    const k = i * SPHERE_V * 3;
+    return [c[k]!, c[k + 1]!, c[k + 2]!];
+  };
+  const glowAlpha = (t: MapScene, i: number): number => (t.meshes.lampGlow!.geometry.getAttribute("color") as { getW(i: number): number }).getW(i * 4);
+  const rgbOf = (hex: string): [number, number, number] => {
+    const c = new Color(hex);
+    return [c.r, c.g, c.b];
+  };
+  const close = (a: readonly number[], b: readonly number[]): boolean => a.every((v, i) => Math.abs(v - b[i]!) < 1e-4);
+  const LIT8 = [true, false, true, true, false, false, true, false];
+  const ALL_OFF = Array.from({ length: 8 }, () => false);
+
+  it("기둥 묶음·전구 묶음·빛 무리 묶음이 있고 가로등 8개가 TOWN_LAMPS 좌표에 선다. 점광원은 3 그대로", () => {
+    const t = buildTownScene(LADDER[0]!);
+    for (const n of ["lampPosts", "lampBulbs", "lampGlow"]) expect(t.meshes[n], n).toBeInstanceOf(Mesh);
+    const posts = worldVertices(t.meshes.lampPosts!);
+    const bulbs = worldVertices(t.meshes.lampBulbs!);
+    for (const l of TOWN_LAMPS) {
+      expect(posts.some((v) => Math.hypot(v.x - l.x, v.z - l.z) < 0.01 && v.y < 0.05), `post ${l.id}`).toBe(true);
+      expect(bulbs.filter((v) => Math.hypot(v.x - l.x, v.z - l.z) < 0.2 && v.y > 1.5 && v.y < 2.6).length, `bulb ${l.id}`).toBe(SPHERE_V);
+    }
+    expect(lightsOf(t.root, PointLight)).toHaveLength(3);
+    t.dispose();
+  });
+
+  it("가로등은 장애물이 아니라 서버 마스크와 무관한 장식이다: 그림자를 드리우지 않고 기둥은 받는다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    for (const n of ["lampPosts", "lampBulbs", "lampGlow"]) expect(t.meshes[n]!.castShadow, n).toBe(false);
+    t.dispose();
+  });
+
+  it("setLamps 훅이 있고 처음에는 전구가 모두 꺼짐(LAMP_OFF)·빛 무리 없음이다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    expect(typeof t.setLamps).toBe("function");
+    for (let i = 0; i < 8; i++) {
+      expect(close(bulbRgb(t, i), rgbOf(LAMP_OFF)), `bulb ${i}`).toBe(true);
+      expect(glowAlpha(t, i), `glow ${i}`).toBe(0);
+    }
+    expect(t.meshes.lampGlow!.visible).toBe(false);
+    t.dispose();
+  });
+
+  it("setLamps(켜짐 목록): 켜진 전구는 LAMP_LIT 와 빛 무리가 보이고 꺼진 것은 LAMP_OFF 와 무리 없음", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setLamps!(LIT8, null);
+    LIT8.forEach((on, i) => {
+      expect(close(bulbRgb(t, i), rgbOf(on ? LAMP_LIT : LAMP_OFF)), `bulb ${i}`).toBe(true);
+      expect(glowAlpha(t, i) > 0, `glow ${i}`).toBe(on);
+    });
+    expect(t.meshes.lampGlow!.visible).toBe(true);
+    t.dispose();
+  });
+
+  it("켜짐 → 꺼짐은 --dur-med(420ms)에 따라 줄고, instant 면 바로 꺼진다. 전구 색은 바로 바뀐다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setLamps!(LIT8, null);
+    const full = glowAlpha(t, 0);
+    t.setLamps!(ALL_OFF, null);
+    expect(close(bulbRgb(t, 0), rgbOf(LAMP_OFF))).toBe(true);
+    expect(glowAlpha(t, 0)).toBeCloseTo(full, 6);
+    t.update!(0.21, 0.21);
+    expect(glowAlpha(t, 0)).toBeGreaterThan(0.1 * full);
+    expect(glowAlpha(t, 0)).toBeLessThan(0.9 * full);
+    t.update!(0.3, 0.51);
+    expect(glowAlpha(t, 0)).toBe(0);
+    expect(t.meshes.lampGlow!.visible).toBe(false);
+    t.setLamps!(LIT8, null);
+    t.setLamps!(ALL_OFF, null, true);
+    expect(glowAlpha(t, 0)).toBe(0);
+    t.dispose();
+  });
+
+  it("setLamps(null, null) 은 가로등을 모두 끈다(원인 흐름이 아닌 판)", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setLamps!(LIT8, null);
+    t.setLamps!(null, null, true);
+    for (let i = 0; i < 8; i++) {
+      expect(close(bulbRgb(t, i), rgbOf(LAMP_OFF)), `bulb ${i}`).toBe(true);
+      expect(glowAlpha(t, i), `glow ${i}`).toBe(0);
+    }
+    t.dispose();
+  });
+
+  it("강등 사다리에서도 가로등 묶음 셋이 남고 그리기 예산 안이다(8명, 켜짐 8)", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setOwners!([0, 1, 2, 3, 4, 5, 6, 7]);
+    t.setLamps!(LIT8, LIT8);
+    for (const ph of PHASES) {
+      t.setLighting(ph);
+      expect(visibleMeshes(t.root).length, ph).toBeLessThanOrEqual(36);
+    }
+    t.applyBudget(LADDER[4]!);
+    for (const n of ["lampPosts", "lampBulbs", "lampGlow"]) expect(t.meshes[n]!.visible, n).toBe(true);
+    t.dispose();
+  });
+});
+
+describe("집 창 houseLit (21-07, D-07·D-25·P21-4)", () => {
+  const LIT = [true, false, true, true, false, false, true, false];
+  const litHouses = (m: Mesh): number => quads(m) / PANES;
+
+  it("setLamps(null, houseLit): 켜진 창 = houseLit true 인 집 × 8, 꺼진 창 = 나머지. 주인 여부와 무관하다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setOwners!([]);
+    t.setLamps!(null, LIT);
+    expect(litHouses(t.meshes.houseWinLit!)).toBe(4);
+    expect(litHouses(t.meshes.houseWinDark!)).toBe(4);
+    // 켜진 창의 바운딩은 켜진 집(좌석 0·2·3·6) 쪽에만 걸친다
+    TOWN_HOUSES.forEach((h, i) => {
+      const near = (m: Mesh): boolean => worldVertices(m).some((v) => Math.hypot(v.x - h.x, v.z - h.z) < 1.5);
+      expect(near(t.meshes.houseWinLit!), `lit ${i}`).toBe(LIT[i]);
+      expect(near(t.meshes.houseWinDark!), `dark ${i}`).toBe(!LIT[i]);
+    });
+    t.dispose();
+  });
+
+  it("setLamps(null, null) 은 지금 주인 규칙 결과와 같다(setOwners 가 정한 창)", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setOwners!([1, 4]);
+    const before = [quads(t.meshes.houseWinLit!), quads(t.meshes.houseWinDark!)];
+    t.setLamps!(null, LIT);
+    expect(quads(t.meshes.houseWinLit!)).toBe(4 * PANES);
+    t.setLamps!(null, null);
+    expect([quads(t.meshes.houseWinLit!), quads(t.meshes.houseWinDark!)]).toEqual(before);
+    t.dispose();
+  });
+
+  it("houseLit 이 있으면 setOwners 가 다시 와도 창은 houseLit 을 따르고, 문패 UV 는 주인 규칙대로 간다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setLamps!(null, LIT);
+    t.setOwners!([0, 1]);
+    expect(litHouses(t.meshes.houseWinLit!)).toBe(4);
+    TOWN_HOUSES.forEach((h, i) => {
+      const want = [0, 1].includes(h.seat) ? TOWN_ATLAS.seat0 + h.seat : TOWN_ATLAS.blank;
+      expect(cellOfQuad(t.meshes.housePlate!, i), `plate ${h.seat}`).toBe(want);
+    });
+    t.dispose();
+  });
+
+  it("houseLit 창의 발광 배율은 TOWN_LIT[단계].houseLit 이고 houseLit 이 없으면 houseOwned 다", () => {
+    const t = buildTownScene(LADDER[0]!);
+    t.setOwners!([0]);
+    for (const ph of PHASES) {
+      t.setLamps!(null, null);
+      t.setLighting(ph);
+      expect(scalar(t.meshes.houseWinLit!), `owned ${ph}`).toBeCloseTo(TOWN_LIT[ph].houseOwned, 6);
+      t.setLamps!(null, LIT);
+      expect(scalar(t.meshes.houseWinLit!), `lit ${ph}`).toBeCloseTo(TOWN_LIT[ph].houseLit, 6);
+    }
+    t.dispose();
   });
 });

@@ -514,6 +514,7 @@ function townPiece(ctx: PlazaPieceCtx): PlazaPiece {
     hooks: {
       setCutaway,
       setOwners,
+      setLamps: () => {},
       roofs: () => ({ post: cuts.post.alpha, pub: cuts.pub.alpha, clinic: cuts.clinic.alpha, police: cuts.police.alpha }),
     },
   };

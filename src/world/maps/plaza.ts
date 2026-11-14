@@ -216,7 +216,7 @@ export interface PlazaPiece {
   /** 메시 밖의 자원(텍스처 등)을 푼다 */
   dispose?(): void;
   /** 장면에 그대로 얹는 선택 훅(MapScene 의 마을 훅) */
-  hooks?: Pick<MapScene, "setCutaway" | "setOwners" | "roofs">;
+  hooks?: Pick<MapScene, "setCutaway" | "setOwners" | "setLamps" | "roofs">;
 }
 
 /**
