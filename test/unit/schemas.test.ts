@@ -397,3 +397,23 @@ describe("ClientMessageSchema ready · rematch (11-08, D-12)", () => {
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
 });
+
+// 21-03 errand 의 hold(길게 누르기, 결정 0088 D-06): 모든 역할이 보낼 수 있고 뜻은 서버가 정한다 — boolean optional, 덧붙은 키는 그대로 거부.
+describe("ClientMessageSchema errand hold (21-03, D-06)", () => {
+  it.each([
+    ["hold 없음", { t: "errand" }],
+    ["hold true", { t: "errand", hold: true }],
+    ["hold false", { t: "errand", hold: false }],
+  ])("errand 는 받는다: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(true);
+  });
+
+  it.each([
+    ["숫자 hold", { t: "errand", hold: 1 }],
+    ["문자열 hold", { t: "errand", hold: "true" }],
+    ["null hold", { t: "errand", hold: null }],
+    ["덧붙은 키", { t: "errand", hold: true, x: 1 }],
+  ])("errand 는 거부한다: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
