@@ -417,3 +417,19 @@ describe("ClientMessageSchema errand hold (21-03, D-06)", () => {
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
 });
+
+// 21-04 inspect(현장 단서 살피기, 결정 0088 D-13): 필드가 없다 — 위치·지점은 서버가 정한다(T-21-14). 덧붙은 키는 그대로 거부.
+describe("ClientMessageSchema inspect (21-04, D-13)", () => {
+  it("{ t: \"inspect\" } 는 받는다", () => {
+    expect(ClientMessageSchema.safeParse({ t: "inspect" }).success).toBe(true);
+  });
+
+  it.each([
+    ["지점 지정", { t: "inspect", spot: "cloth" }],
+    ["위치 지정", { t: "inspect", x: 1 }],
+    ["좌표 둘", { t: "inspect", x: 1, z: 2 }],
+    ["빈 문자열 지점", { t: "inspect", spot: "" }],
+  ])("inspect 는 거부한다: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
