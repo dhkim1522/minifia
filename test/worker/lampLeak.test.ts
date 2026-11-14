@@ -131,7 +131,8 @@ describe("마을 확장판 심부름 — 마피아의 길게 누르기는 응답
     const ghost = withRole(g, "citizen")[1]!;
     const mPlaces: readonly string[] = lastViewOf(m.sock).me.errand!.places;
     const cPlaces: readonly string[] = lastViewOf(c.sock).me.errand!.places;
-    const cLit = cPlaces.find((id) => id !== mPlaces[0])!;
+    // 마피아가 hold 로 자르는 두 등불(mPlaces[0]·[1])과 겹치지 않는 등불을 시민이 켠다 — 겹치면 자르기가 이겨 꺼진다(unit 시험이 따로 본다).
+    const cLit = cPlaces.find((id) => id !== mPlaces[0] && id !== mPlaces[1])!;
     await press(g, m, mPlaces[0]!, true); // 자른다
     await press(g, m, mPlaces[1]!, true); // 이 등불도 자르면서 켠다
     await press(g, c, cLit, true); // 시민의 hold 는 그냥 켜기

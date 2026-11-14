@@ -165,6 +165,9 @@ function buildDay(state: RoomState, rules: Ruleset): DayView {
   // 암살 현장 분필(MORN-01, 결정 0061-14): 방 DO 가 채운 좌표를 그날 낮 동안 모두에게 같은 값으로 싣는다. 필드별 복사이고, 없으면 키 자체가 없다.
   // 구출·무효 밤에는 DO 가 채우지 않으므로 어디에도 드러나지 않는다(결정 0044-22). 다음 밤 진입 훅이 지운다.
   if (state.chalk !== undefined) day.chalk = { x: state.chalk.x, z: state.chalk.z };
+  // 밤 집 창 불(21페이즈 D-06·D-07·D-08, 결정 0088): 원인 흐름이고 enterNight 가 켜짐을 정한 뒤(저녁에는 없다) 모두에게 같은 boolean 여덟을 필드 복사로 싣는다.
+  // 꺼진 이유·자른 사람(Player.errandCut)은 이 파일이 읽지 않는다 — 안 켠 등불과 자른 등불은 똑같이 false 다.
+  if (rules.cause && state.lamps !== undefined) day.lamps = state.lamps.map((lit) => lit === true);
   return day;
 }
 

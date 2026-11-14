@@ -322,7 +322,7 @@ export class Room extends DurableObject<Env> {
         await this.handleTestBotVote(ws, msg.exec, msg.pick);
         return;
       case "errand":
-        await this.handleErrand(ws);
+        await this.handleErrand(ws, msg.hold === true);
         return;
       case "move":
         this.handleMove(ws, msg.x, msg.z);
@@ -729,19 +729,20 @@ export class Room extends DurableObject<Env> {
   }
 
   // 심부름 처리(15페이즈, 결정 0074): 메시지에 필드가 없다 — 신원은 소켓 첨부의 playerId 뿐이고 위치는 서버 world 구간, 장소는 서버 목록이 정한다(D-08).
-  private async handleErrand(ws: WebSocket): Promise<void> {
+  private async handleErrand(ws: WebSocket, hold: boolean): Promise<void> {
     const att = this.attachmentOf(ws);
     if (!att || !this.room) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    await this.applyErrand(att.playerId, Date.now());
+    await this.applyErrand(att.playerId, Date.now(), hold);
   }
 
   // 사람의 errand 메시지와 봇 errandAct 가 같은 본체를 지난다(특권 없음). 간격(ERRAND_MIN_GAP_MS) 안의 요청과 규칙 거절(단계·생존·반경·중복·위치 없음)은
   // 사람·역할·이유와 무관하게 같은 응답이다: 상태 변화 없이 보낸 사람에게만 자기 state 한 프레임(오류 프레임·방송 없음, D-08·T-15-02·T-15-04).
   // 받아들이면 저장한 뒤 역시 본인에게만 state 를 보낸다 — 진행은 본인 view 에만 있어 다른 폰에 방송할 것이 없다.
-  private async applyErrand(playerId: string, now: number): Promise<void> {
+  // hold(길게 누르기, 21페이즈 D-06)도 역할도 이 모양을 바꾸지 않는다: 마피아의 자르기(errandCut)는 같은 상태 쓰기에 실려 저장 한 번 + 본인 state 한 프레임, 시민의 hold 와 구별되지 않는다(L40).
+  private async applyErrand(playerId: string, now: number, hold = false): Promise<void> {
     const room = this.room;
     if (!room) return;
     const key = `errand:${playerId}`;
@@ -749,7 +750,7 @@ export class Room extends DurableObject<Env> {
     if (last === undefined || now - last >= ERRAND_MIN_GAP_MS) {
       this.writeAt.set(key, now);
       const seg = Object.prototype.hasOwnProperty.call(this.world.segs, playerId) ? this.world.segs[playerId] : undefined;
-      const result = seg === undefined ? null : actErrand(room, playerId, positionAtFx(seg, now));
+      const result = seg === undefined ? null : actErrand(room, playerId, positionAtFx(seg, now), hold);
       if (result !== null && result.ok) {
         this.room = result.state;
         await this.ctx.storage.put("room", this.room);
