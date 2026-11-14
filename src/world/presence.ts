@@ -5,6 +5,8 @@
 // 읽는 것은 공개 정보(players·alive·day.points·day.candidate)와 본인 유령 여부(spectate·내 alive)뿐이다.
 import { isAlive } from "../../shared/game/alive";
 import { STAGE_SPOT, UNIT } from "../../shared/game/map";
+import { modeOf, rulesetOf } from "../../shared/game/ruleset";
+import type { Ruleset } from "../../shared/game/ruleset";
 import type { MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
 import { pointSeatsOf, revealPoints, showdownStageOf } from "../game/showdownView";
@@ -78,8 +80,10 @@ function isGhostViewer(view: RoomView): boolean {
  * 유령 viewer 는 모든 좌석이고 탈락 좌석은 ghost 다. 어느 쪽이든 의상 키가 없다 — 탈락자의 모습은 직업과 무관하다(0083-2).
  * 밤·심부름은 서버가 산 사람에게 본인(+근처)만 보내는 단계라(결정 0074 D-02·D-05) 산 viewer 의 탈락 좌석을 넣지 않는다 — 역할마다 겉보기가 달라지지 않게(0074-4).
  * fading = 좌석 → 처형 연출 시작 시각(화면이 처형 이벤트를 본 시각). now 를 생략하면 표에 있는 연출은 아직 진행 중으로 본다.
+ * 원인 흐름(21페이즈 D-10, 결정 0074-4 의 연장)의 밤은 산 사람·유령 모두 아무도 그리지 않는다 — 개관 시점이라 밤에는 아무도 걷지 않고, 역할로 갈라지지 않는다(이 분기가 역할 읽기보다 먼저다).
  */
 export function visibleSeats(view: RoomView, fading?: ReadonlyMap<number, number>, now?: number): Record<number, SeatLook> {
+  if (view.phase === "night" && rulesetOf(modeOf(view)).cause) return {};
   const ghostViewer = isGhostViewer(view);
   const seats: Record<number, SeatLook> = {};
   // 밤·산 시민 편(시민·경찰·의사): 내 좌석 하나뿐이다. 서버가 이 밤에 남의 위치를 한 번도 보내지 않으므로(09-03·09-09, 결정 0061-3)
@@ -119,9 +123,10 @@ export function cameraModeOf(view: RoomView, stageH: number, opts: { verdictZoom
 
 /**
  * 단계 조명(UI-SPEC): 낮 시작·토론 talk, 지목·결선·찬반 vote, 변론·처형 trial, 밤 night, 아침 morning.
- * 로비·종료는 talk.
+ * 로비·종료는 talk. 원인 흐름 규칙(rules.cause)의 저녁(errand)은 해 질 녘 vote 조명이다(21페이즈 D-04, 결정 0083-1) — 규칙이 없거나 꺼져 있으면 지금 그대로 talk.
  */
-export function lightingOf(phase: PhaseId): LightingStage {
+export function lightingOf(phase: PhaseId, rules?: Pick<Ruleset, "cause">): LightingStage {
+  if (rules?.cause === true && phase === "errand") return "vote";
   switch (phase) {
     case "nomination":
     case "runoff":
@@ -143,10 +148,13 @@ export function lightingOf(phase: PhaseId): LightingStage {
 /**
  * 보는 사람의 단계 조명(NIGHT-07·10): 밤에는 유령 nightGhost, 산 마피아 night, 산 비마피아 nightCitizen.
  * 밤이 아니면 lightingOf(phase) — 아침 이후는 역할과 무관하다.
+ * 원인 흐름(D-10)의 밤은 산 사람 모두 night 다(유령 nightGhost 그대로) — 이 분기가 역할 읽기보다 먼저다. 저녁(errand)은 vote.
  */
 export function lightingFor(view: RoomView): LightingStage {
-  if (view.phase !== "night") return lightingOf(view.phase);
+  const rules = rulesetOf(modeOf(view));
+  if (view.phase !== "night") return lightingOf(view.phase, rules);
   if (isGhostViewer(view)) return "nightGhost";
+  if (rules.cause) return "night";
   return view.me.role === "mafia" ? "night" : "nightCitizen";
 }
 

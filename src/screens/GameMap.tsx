@@ -180,7 +180,8 @@ function MapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { view: R
   const legacy = blockModeOf(view) !== null || hintOverride !== undefined;
   if (!legacy) {
     const title = headerFor(view).title;
-    return <PhaseHeader title={title} {...(tod ? { tod: { id: todOf(view.phase), word: todWordOf(view.phase, title) } } : {})} extra={extra} />;
+    const rules = rulesetOf(modeOf(view)); // 원인 흐름 저녁(errand)은 "저녁" 낱말(21-07 D-04)
+    return <PhaseHeader title={title} {...(tod ? { tod: { id: todOf(view.phase, rules), word: todWordOf(view.phase, title, rules) } } : {})} extra={extra} />;
   }
   return <LegacyMapHeader view={view} offset={offset} hintOn={hintOn} {...(hintOverride !== undefined ? { hintOverride } : {})} extra={extra} tod={tod} />;
 }
@@ -188,6 +189,7 @@ function MapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { view: R
 /** 꺼진 장치 화면의 헤더: 제목 + 접히는 안내 + (서버 마감 기준 시간·차례 링) + 링 왼쪽 [역할 카드] (13페이즈 계약 그대로) */
 function LegacyMapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode; tod: boolean }) {
   const head = headerFor(view);
+  const rules = rulesetOf(modeOf(view));
   // 순차 지목·결선은 단계 마감이 아니라 알약·막대와 같은 값(blockLook)으로 링을 그린다(UI-SPEC A-3·D-3). 지목의 세부 단계 길이 3000/8000/900/2000 이나 결선 앞머리 1000 은 링 비율에 쓰지 않는다.
   const blocked = blockModeOf(view) !== null;
   const look = useTurnLook(view, offset);
@@ -199,7 +201,7 @@ function LegacyMapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { v
   return (
     <PhaseHeader
       title={head.title}
-      {...(tod ? { tod: { id: todOf(view.phase), word: todWordOf(view.phase, head.title) } } : {})}
+      {...(tod ? { tod: { id: todOf(view.phase, rules), word: todWordOf(view.phase, head.title, rules) } } : {})}
       {...(hintOverride !== undefined ? { hint: hintOverride } : head.hint !== undefined ? { hint: head.hint } : {})}
       showHint={hintOverride !== undefined || hintOn}
       {...(timing ? { time, total } : {})}

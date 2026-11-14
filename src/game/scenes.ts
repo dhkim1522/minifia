@@ -51,7 +51,9 @@ export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
   ended: "night",
 });
 
-export function sceneOfPhase(phase: PhaseId): SceneId {
+/** 단계의 장면. 원인 흐름 규칙(rules.cause, 21페이즈 D-04)의 저녁(errand)은 해 질 녘이라 dusk 다 — 규칙이 없거나 꺼져 있으면 표 그대로(day) */
+export function sceneOfPhase(phase: PhaseId, rules?: { readonly cause: boolean }): SceneId {
+  if (rules?.cause === true && phase === "errand") return "dusk";
   return PHASE_SCENE[phase];
 }
 

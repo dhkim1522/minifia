@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { rulesetOf } from "../../shared/game/ruleset";
+import { openCause } from "../helpers/playable";
 import type { ClientMessage, EvidenceView, GameMode, MorningView, PhaseId, PublicPlayer, RecordLine, RoleRecord, RoomView } from "../../shared/protocol";
 import { LineSheet } from "../../src/components/v2/LineSheet";
 import { floatVisible } from "../../src/game/badgeView";
@@ -602,6 +603,21 @@ describe("GameMap — 헤더 시간대 글자 (0083-1)", () => {
       expect(header(container).querySelector(".mv-phase__title")?.textContent, phase).toBe(title);
       unmount();
     }
+  });
+
+  it("원인 흐름 확장판의 심부름(저녁)은 '저녁 · 심부름' 이고 data-tod 는 dusk 다 — 원인 흐름이 잠기면 '낮' 그대로 (21-07, D-04)", () => {
+    const restore = openCause();
+    try {
+      const { container, unmount } = mount(makeView({ phase: "errand" }));
+      expect(header(container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("dusk");
+      expect(word(container)?.textContent).toBe("저녁");
+      unmount();
+    } finally {
+      restore();
+    }
+    const { container } = mount(makeView({ phase: "errand" }));
+    expect(header(container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("day");
+    expect(word(container)?.textContent).toBe("낮");
   });
 
   it("tod={false} 로 그리면 [data-tod] 가 없다", () => {
