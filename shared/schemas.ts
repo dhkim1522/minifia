@@ -72,6 +72,8 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   // 8페이즈 낮 처형(결정 0060, 08-07): 모두 strictObject — 행위자는 소켓 첨부 playerId 로만 정해지므로 seat·id·ch 가 덧붙으면 거부한다(T-08-04, T-08-24).
   // 토론 끝내기 on / 지목 target(0..7, 취소 없음 — null 거부) / 찬반 agree. 단계·산 사람·자기 자신·변론자 검사는 서버 규칙(shared/game/{discussion,nomination,verdict}.ts)이 한다.
   z.strictObject({ t: z.literal("endDiscussion"), on: z.boolean() }),
+  // 건너뛰기(21페이즈 D-23, 결정 0088): 원인 흐름 저녁·아침의 누름/취소 불리언 하나뿐 — 행위자는 소켓 첨부 playerId 로만 정해진다(T-21-19). 단계·산 사람 검사는 shared/game/skip.ts 가 한다.
+  z.strictObject({ t: z.literal("skip"), on: z.boolean() }),
   z.strictObject({ t: z.literal("point"), target: z.number().int().min(0).max(7) }),
   z.strictObject({ t: z.literal("verdict"), agree: z.boolean() }),
   // 귓속말(결정 0066-2): 대상 좌석과 본문뿐 — 행위자는 소켓 첨부 playerId 로만 정해진다. UTF-16 상한 200 은 프레임 크기 방어이고 정확한 판정(30자소·산 사람·하루 1번)은 shared/game/whisper.ts 가 한다.

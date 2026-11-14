@@ -28,6 +28,7 @@ import { computeAwards } from "./awards";
 import { channelOf } from "./audience";
 import { botCount } from "./bots";
 import { endCountOf, phaseDurationOf } from "./discussion";
+import { skipCountOf } from "./skip";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
 import { MAP_PHASES } from "./movement";
@@ -93,6 +94,8 @@ function buildDay(state: RoomState, rules: Ruleset): DayView {
   };
   // 토론 끝내기는 누른 산 사람 수만 공개한다 — 누가 눌렀는지는 서버 전용(Player.endVote)이고 본인 값만 me.endDiscussion 으로 간다(결정 0060-2).
   if (state.phase === "discussion") day.endCount = endCountOf(state);
+  // 건너뛰기(21페이즈 D-23, 결정 0088)도 누른 산 사람 수만 공개한다 — 원인 흐름 저녁·아침에서만, 누가 눌렀는지는 서버 전용(Player.skipVote)이고 본인 값만 me.skip 으로 간다(D-21).
+  if (rules.cause && (state.phase === "errand" || state.phase === "morning")) day.skipCount = skipCountOf(state);
   // 찬반은 던진 유권자 좌석만 공개한다(값 없음 — 익명, 결정 0053). 개인 값은 me.verdictVote 로 본인에게만 간다.
   if (state.phase === "verdict") day.voted = votedSeatsOf(state);
   // 지목 줄은 지목 단계 동안 모두에게 같은 공개 목록이다(결정 0060-3) — 필드별 복사 함수(pointLinesOf)로 만든다.
@@ -346,6 +349,11 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 토론 끝내기 누름은 본인에게만(결정 0060-2) — 산 본인이 discussion 에서 눌렀을 때만 키를 만든다. 누른 사람이 누구인지는 어떤 키로도 싣지 않는다.
   if (state.phase === "discussion" && isAlive(me) && me.endVote === true) {
     myInfo.endDiscussion = true;
+  }
+
+  // 건너뛰기 누름은 본인에게만(21페이즈 D-23·D-21) — 원인 흐름 저녁·아침의 산 본인이 눌렀을 때만 키를 만든다.
+  if (rules.cause && (state.phase === "errand" || state.phase === "morning") && isAlive(me) && me.skipVote === true) {
+    myInfo.skip = true;
   }
 
   // 튜토리얼 끝났음은 본인에게만(결정 0080-11) — tutorial 단계에서 본인이 tutorialDone 을 보냈을 때만 키를 만든다(거짓은 키 없음). 남의 값·id 목록은 어떤 키로도 싣지 않는다.

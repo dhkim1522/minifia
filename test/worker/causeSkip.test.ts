@@ -98,12 +98,17 @@ describe("건너뛰기 — 마을 확장판 저녁·아침 (openCause + openTown
     expect(`${countsOf(g)}|${minesOf(g)}`).toBe("-,-,-,-,-,-|-,-,-,-,-,-");
   });
 
-  it("아침: 같은 규칙으로 과반이 누르면 곧바로 토론으로 넘어간다", { timeout: 120_000 }, async () => {
+  it("아침: 같은 규칙으로 산 사람 과반(피해자를 뺀 다섯 중 셋)이 누르면 곧바로 토론으로 넘어간다 — 죽은 피해자의 skip 은 받지 않는다", { timeout: 120_000 }, async () => {
     const g = await morningGame();
     expect(`${lastViewOf(g.socks[0]!).phase}|${countsOf(g)}`).toBe("morning|0,0,0,0,0,0");
-    for (const who of g.actors.slice(0, 3)) await press(g, who, true);
-    expect(countsOf(g)).toBe("3,3,3,3,3,3");
-    send(g.actors[3]!.sock, { t: "skip", on: true });
+    const victimSeat = (lastViewOf(g.socks[0]!).day as { morning?: { eliminated?: number } } | undefined)?.morning?.eliminated;
+    const living = g.actors.filter((a) => a.seat !== victimSeat);
+    expect(living.length).toBe(5);
+    await press(g, g.actors.find((a) => a.seat === victimSeat)!, true);
+    expect(countsOf(g)).toBe("0,0,0,0,0,0");
+    for (const who of living.slice(0, 2)) await press(g, who, true);
+    expect(countsOf(g)).toBe("2,2,2,2,2,2");
+    send(living[2]!.sock, { t: "skip", on: true });
     const phases: string[] = [];
     for (const s of g.socks) {
       const next = await nextFrame(s, (m) => m.t === "state" && m.view.phase !== "morning");

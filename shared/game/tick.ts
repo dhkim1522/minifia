@@ -30,6 +30,7 @@ import { enterExecution } from "./execution";
 import { enterNomination, enterVote, stepNomination, resolveNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
 import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
+import { clearSkip } from "./skip";
 import { enterMorning, enterNight } from "./night";
 import { PHASE_DEFS, nextPhaseOf } from "./phases";
 import { modeOf, rulesetOf } from "./ruleset";
@@ -79,12 +80,14 @@ export function hooksOf(rules: Ruleset): PhaseHooks {
       dayAnnounce: enterDayAnnounce,
       // 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts). 16페이즈(결정 0079): 산 마피아의 가짜 한 곳은 난수 없이 뒤에서 정한다.
       // 원인 흐름(21페이즈 D-01·A4·A6): 일차 +1 이 낮 시작 발표 대신 저녁 진입이다(enterErrand 앞 — errandFake·nightLog·voteLog 가 day 를 읽는다). 마피아의 비밀 행동은 심지 자르기라 가짜 장소를 정하지 않는다.
-      errand: rules.cause ? (s, r, at) => enterErrand(enterDayAnnounce(s), r, at) : (s, r, at) => assignErrandFake(enterErrand(s, r, at)),
+      // 건너뛰기 표(D-23)는 저녁 진입에서 먼저 키째 지운다 — 지난 아침·토론 표가 새 저녁으로 새지 않는다.
+      errand: rules.cause ? (s, r, at) => enterErrand(enterDayAnnounce(clearSkip(s)), r, at) : (s, r, at) => assignErrandFake(enterErrand(s, r, at)),
       discussion: enterDiscussion,
       nomination: rules.pickTurn ? enterNomination : enterVote,
       execution: enterExecution,
       night: (s) => enterNight(s, rules), // 세 번째 자리 인자가 규칙 자리로 들어가지 않게 감싸고, 이 표의 규칙을 넘긴다(원인 흐름이면 심부름 키를 토론까지 남긴다)
-      morning: (s, r) => enterMorning(s, r, rules), // 세 번째 인자 at(진입 시각)이 enterMorning 의 규칙 자리로 들어가지 않게 감싸고, 이 표의 규칙을 넘긴다
+      // 세 번째 인자 at(진입 시각)이 enterMorning 의 규칙 자리로 들어가지 않게 감싸고, 이 표의 규칙을 넘긴다. 원인 흐름이면 저녁 건너뛰기 표를 먼저 지운다(D-23 — 저녁 표가 아침으로 새지 않는다).
+      morning: rules.cause ? (s, r) => enterMorning(clearSkip(s), r, rules) : (s, r) => enterMorning(s, r, rules),
       ended: enterEnded,
     },
     deadline: {

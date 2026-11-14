@@ -45,6 +45,7 @@ import { castRunoffVote } from "../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
+import { skipReached, toggleSkip } from "../shared/game/skip";
 import { allTutorialDone, markTutorialDone } from "../shared/game/tutorial";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { actErrand, nearSnapFrame, placeCenterFx, sampleErrand } from "../shared/game/errand";
@@ -300,6 +301,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "endDiscussion":
         await this.handleEndDiscussion(ws, msg.on);
+        return;
+      case "skip":
+        await this.handleSkip(ws, msg.on);
         return;
       case "point":
         await this.handlePoint(ws, msg.target);
@@ -981,6 +985,36 @@ export class Room extends DurableObject<Env> {
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     if (endReached(result.state)) {
+      const prev = this.room;
+      this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
+      await this.afterTransition(prev, now);
+      return null;
+    }
+    this.room = result.state;
+    await this.persistAndBroadcast();
+    return null;
+  }
+
+  // 건너뛰기(21페이즈 D-23, 결정 0088): 신원은 소켓 첨부의 playerId 뿐이다(T-21-19) — 남의 표를 누를 수 없다.
+  private async handleSkip(ws: WebSocket, on: boolean): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applySkip(att.playerId, on, Date.now());
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // applyEndDiscussion 과 같은 길이다. 누른 수(day.skipCount)는 모두에게 공개되는 실시간 정보라 바뀔 때마다 모든 소켓이 각자 view 를 받는다(누른 본인 값은 me.skip 으로만 간다).
+  // 같은 값이면 같은 객체라 저장·전송이 없다(T-21-20 연타). 과반(skipReached)에 닿는 순간 서버가 마감을 지금으로 당겨 tick 으로 정상 마감과 같은 경로를 탄다 —
+  // 새 마감은 now + 다음 단계 길이이고 알람이 따라 옮겨진다. 저녁·아침이 아니거나 유령이면 규칙 함수가 WRONG_PHASE·BAD_MESSAGE 로 거절한다.
+  private async applySkip(playerId: string, on: boolean, now: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = toggleSkip(this.room, playerId, on);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    if (skipReached(result.state)) {
       const prev = this.room;
       this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
       await this.afterTransition(prev, now);
