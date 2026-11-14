@@ -6,16 +6,16 @@ current_phase: 20
 current_phase_name: map-expansion
 current_plan: 10
 status: verifying
-stopped_at: Completed 21-04-PLAN.md
-last_updated: "2026-11-14T07:59:16.218Z"
+stopped_at: Completed 21-07-PLAN.md
+last_updated: "2026-11-14T08:15:48.552Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: f017fbf469e8a047775ac463319ef41f54f0077d
+state_head: 8be553e0075bb0a8b60bdadaa4835acdf8504e68
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 113
-  completed_plans: 101
+  completed_plans: 102
   percent: 60
 ---
 
@@ -296,6 +296,7 @@ Last activity: 2026-11-13 — 20-10 완료 (로컬 전 흐름 폰 6종 회귀 �
 | Phase 21 P02 | 40min | 2 tasks | 17 files |
 | Phase 21 P03 | 45min | 2 tasks | 11 files |
 | Phase 21 P04 | 70min | 2 tasks | 15 files |
+| Phase 21 P07 | 60 min | 3 tasks | 23 files |
 
 ## Accumulated Context
 
@@ -660,6 +661,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 21]: 21-03: 켜짐은 cut 이 이긴다(houseLitOf), 밤 진입에 lamps 확정·저녁 동안 방송 없음, 역할을 읽는 등불 파일은 lamps.ts 하나
 - [Phase 21]: 21-04: 단서 지점 좌표는 좌석 1~6 정의식(문 중심 바깥 1.3·옆 ±1.0), 좌석 0·7 은 front 에서 집 옆 걷는 줄로 당김(결정 0088)
 - [Phase 21]: 21-04: me.scene 은 errand 단계를 뺀 모든 단계의 본인에게만, day.scene 은 morning 의 { house } 하나 — 발자국 수는 지점 ①을 살핀 사람의 줄에만(P21-16)
+- [Phase 21]: 21-07: 집 창 houseLitOf 는 night 이후·day.lamps 있을 때만, 가로등 3D 는 기둥·전구·무리 묶음 셋, setLamps 에 선택 instant, 런타임은 deps.view?() 로 view 를 받는다
 
 ### Pending Todos
 
@@ -731,8 +733,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-14T07:59:13.409Z
-Stopped at: Completed 21-04-PLAN.md
+Last session: 2026-11-14T08:15:46.159Z
+Stopped at: Completed 21-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
