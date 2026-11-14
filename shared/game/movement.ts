@@ -29,11 +29,17 @@ export const MAP_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
  * 밤에는 산 사람 누구도 움직이지 않는다(D-05, 역할 무관) — 모두 어둠 속에 서 있다.
  * 화면이 view 의 단계와 내 alive 로 같은 표를 쓰게 따로 내보낸다 — 권위는 서버다.
  */
-export function canMoveIn(phase: PhaseId, alive: boolean): boolean {
+// RED 단계의 자리: 세 번째 인자를 아직 읽지 않는다.
+export function canMoveIn(phase: PhaseId, alive: boolean, _rules?: { readonly cause: boolean }): boolean {
   if (phase === "lobby") return true;
   if (!MAP_PHASES.has(phase)) return false; // assigning·roleReveal·ended 와 옛 투표 단계
   if (!alive) return true; // 유령은 모든 지도 단계에서 자유(A4)
   return phase === "dayAnnounce" || phase === "errand" || phase === "discussion";
+}
+
+/** RED 단계의 자리 함수(21-05): 구현은 GREEN 커밋에서 채운다. */
+export function nearPhaseOf(state: RoomState): boolean {
+  return state.phase === "errand";
 }
 
 /** 이 사람이 지금 이동 요청을 낼 수 있는지(서버가 받을지). 방에 있는지는 보지 않는다 — 단계와 생존만 본다. */

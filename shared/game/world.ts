@@ -79,6 +79,11 @@ export function captureHome(w: WorldState, ids: readonly string[], day: number):
   return { ...w, home: { day, pos } };
 }
 
+/** RED 단계의 자리 함수(21-05): 구현은 GREEN 커밋에서 채운다. */
+export function houseHome(w: WorldState, _players: readonly { id: string; seat: number }[], _fronts: readonly { x: number; z: number }[], _day: number): WorldState {
+  return w;
+}
+
 /**
  * 기록한 자리로 되돌린다: ids 중 home 점과 구간이 모두 있는 사람만 서 있는 한 점(restSegment)으로 바꾼다(forceSegment — lastMoveAt 은 건드리지 않는다).
  * home 이 없으면 입력 객체 그대로(fail-safe).
