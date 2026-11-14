@@ -12,6 +12,7 @@ import { mapOf, roomMapId } from "./maps";
 import type { Player, RoomState } from "./room";
 import { modeOf, rulesetOf } from "./ruleset";
 import type { Ruleset } from "./ruleset";
+import { buildScene } from "./scene";
 import { pickTracePiece } from "./trace";
 import type { RandInt } from "./tick";
 
@@ -192,9 +193,15 @@ export function enterMorning(state: RoomState, randInt: RandInt = () => 0, rules
         : {};
   const { nightNote: _nightNote, errandLast: _errandLast, ...rest } = state;
   const { errandLast: _kept, ...stateNoLast } = state;
+  // 아침 현장(21-04, D-12~D-17, 결정 0088): 원인 흐름이면 피해자 집(없고 의사가 막았으면 그 밤의 확정 대상 집) 앞 현장을 만든다 — 둘 다 아니면 scene 키가 없다(D-17).
+  // 풀은 nightPick 을 지우기 전의 state 로 만들고(위 players 는 이미 지웠다), 역할은 읽지 않는다(scene.ts). 새 현장이 지난 sceneSeen 을 대신하므로 모든 사람의 sceneSeen 을 지운다.
+  const sceneHouse = result.eliminated ?? (result.saved ? result.target : undefined);
+  const scene = rules.cause ? buildScene(state, sceneHouse, randInt) : undefined;
+  const { scene: _prevScene, ...base } = result.eliminated === undefined ? rest : stateNoLast;
   return {
-    ...(result.eliminated === undefined ? rest : stateNoLast),
-    players,
+    ...base,
+    ...(scene === undefined ? {} : { scene }),
+    players: rules.cause ? players.map(({ sceneSeen: _seen, ...p }) => p) : players,
     morning,
     nightLog: [
       ...(state.nightLog ?? []),

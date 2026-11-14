@@ -85,12 +85,12 @@ export function enterErrand(state: RoomState, randInt: RandInt, at: number): Roo
     }
     picks.set(p.id, pool.slice(0, count));
   }
-  const { errandLast: _last, lamps: _lamps, ...rest } = state; // 새 저녁이므로 지난 밤의 등불 켜짐(lamps, 21-03)도 키째 지운다
+  const { errandLast: _last, lamps: _lamps, scene: _scene, ...rest } = state; // 새 저녁이므로 지난 밤의 등불 켜짐(lamps, 21-03)과 아침 현장(scene, 21-04)도 키째 지운다
   return {
     ...rest,
     errandTickAt: at + ERRAND_TICK_MS,
     players: state.players.map((p) => {
-      const { errandPlaces: _places, errandDone: _done, errandNear: _near, errandSeen: _seen, errandFake: _fake, errandCut: _cut, ...kept } = p;
+      const { errandPlaces: _places, errandDone: _done, errandNear: _near, errandSeen: _seen, errandFake: _fake, errandCut: _cut, sceneSeen: _sceneSeen, ...kept } = p;
       const mine = picks.get(p.id);
       return mine === undefined ? kept : { ...kept, errandPlaces: mine, errandDone: [] };
     }),
