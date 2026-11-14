@@ -6,6 +6,7 @@
 import { PLACE_IDS } from "../protocol";
 import type { PlaceId, RecordLine, WorldFrame } from "../protocol";
 import { isAlive } from "./alive";
+import { withCut } from "./lamps";
 import { UNIT } from "./map";
 import type { MapDef, PlaceDef } from "./map";
 import { mapOf, roomMapId } from "./maps";
@@ -84,12 +85,12 @@ export function enterErrand(state: RoomState, randInt: RandInt, at: number): Roo
     }
     picks.set(p.id, pool.slice(0, count));
   }
-  const { errandLast: _last, ...rest } = state;
+  const { errandLast: _last, lamps: _lamps, ...rest } = state; // 새 저녁이므로 지난 밤의 등불 켜짐(lamps, 21-03)도 키째 지운다
   return {
     ...rest,
     errandTickAt: at + ERRAND_TICK_MS,
     players: state.players.map((p) => {
-      const { errandPlaces: _places, errandDone: _done, errandNear: _near, errandSeen: _seen, errandFake: _fake, ...kept } = p;
+      const { errandPlaces: _places, errandDone: _done, errandNear: _near, errandSeen: _seen, errandFake: _fake, errandCut: _cut, ...kept } = p;
       const mine = picks.get(p.id);
       return mine === undefined ? kept : { ...kept, errandPlaces: mine, errandDone: [] };
     }),
@@ -99,11 +100,13 @@ export function enterErrand(state: RoomState, randInt: RandInt, at: number): Roo
 /**
  * 심부름 처리. errand 단계 · 행위자가 방에 있는 산 사람 · errandPlaces 가 있을 때, 미완료 장소 중 중앙까지 거리가
  * ERRAND_ACT_R × UNIT 이하인 것 가운데 가장 가까운 하나(같으면 목록 앞)를 errandDone 끝에 더한다. 그 밖은 사유를 가르지 않고 { ok: false }.
+ * hold(길게 누르기, 21페이즈 D-06)는 모든 역할이 보낼 수 있다 — 받아들인 처리 뒤에 lamps.ts 의 withCut 을 부를 뿐이고 이 파일은 역할을 읽지 않는다(마피아만 서버 전용 cut 이 된다). 응답 모양은 hold·역할과 무관하다.
  */
 export function actErrand(
   state: RoomState,
   actorId: string,
   posFx: { x: number; z: number },
+  hold = false,
 ): { ok: true; state: RoomState } | { ok: false } {
   if (state.phase !== "errand") return { ok: false };
   const actor = state.players.find((p) => p.id === actorId);
@@ -126,13 +129,11 @@ export function actErrand(
   }
   if (best === undefined) return { ok: false };
   const finished = best;
-  return {
-    ok: true,
-    state: {
-      ...state,
-      players: state.players.map((p) => (p.id === actorId ? { ...p, errandDone: [...done, finished] } : p)),
-    },
+  const accepted: RoomState = {
+    ...state,
+    players: state.players.map((p) => (p.id === actorId ? { ...p, errandDone: [...done, finished] } : p)),
   };
+  return { ok: true, state: withCut(accepted, actorId, finished, hold) };
 }
 
 // ---- 근처 판정·목격 표본·근처 snap(15-02, D-02·D-04) — 역할을 읽지 않는다 ----

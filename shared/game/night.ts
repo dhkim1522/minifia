@@ -6,6 +6,9 @@
 // 읽은 역할 값은 어디에도 내보내지 않는다(결정 0002): 반환값에는 isMafia 불리언 하나와 seat 뿐이다.
 import type { AssassinationRecord, InvestigationRecord, MorningView, TreatmentRecord } from "../protocol";
 import { isAlive } from "./alive";
+import { errandSpotsOf } from "./errand";
+import { houseLitOf } from "./lamps";
+import { mapOf, roomMapId } from "./maps";
 import type { Player, RoomState } from "./room";
 import { modeOf, rulesetOf } from "./ruleset";
 import type { Ruleset } from "./ruleset";
@@ -43,8 +46,13 @@ export function enterNight(state: RoomState, rules: Ruleset = rulesetOf(modeOf(s
   // 원인 흐름(21페이즈 D-09·D-19·함정 2): 목록·진행·목격 표본(errandPlaces·errandDone·errandSeen)은 밤을 지나 토론까지 남는다 — 다음 저녁 진입(enterErrand)이 키째 지운다. view 는 단계 게이트로만 내보낸다(me.record 는 토론의 산 본인).
   // errandLast(마지막 목격 줄, 16페이즈 D-10)는 일부러 지우지 않는다 — 낮 심부름에서 쌓은 줄을 다음 아침의 enterMorning 이 피해자 한 줄만 꺼내 쓴다.
   const { morning: _morning, nightNote: _nightNote, chalk: _chalk, ...rest } = state;
+  // 밤의 집 창 불(21-03, D-06·D-07·D-08, 결정 0088): 원인 흐름이고 맵에 가로등이 있으면 저녁에 쌓인 처리(errandDone)와 자르기(errandCut)로 등불 8개의 켜짐을 한 번 정한다 — 등불 i = 집 i.
+  // 켜짐 계산은 lamps.ts 의 houseLitOf 가 하고 이 함수는 역할을 읽지 않는다. 다음 저녁 진입(enterErrand)이 lamps 를 키째 지운다.
+  const map = mapOf(roomMapId(state));
+  const lamps = rules.cause && map.lamps !== undefined ? houseLitOf(state.players, errandSpotsOf(map, rules).map((spot) => spot.id)) : undefined;
   return {
     ...rest,
+    ...(lamps === undefined ? {} : { lamps }),
     players: state.players.map((p) => {
       // 심부름 목록·진행(15페이즈)도 키째 지운다 — 다음 낮에 새로 배정되므로 남은 값이 어떤 view 에도 새지 않는다.
       const { nightPick: _nightPick, errandNear: _errandNear, errandFake: _errandFake, ...cleared } = p;

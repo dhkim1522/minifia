@@ -86,6 +86,8 @@ export interface Player {
   errandSeen?: RecordLine[];
   /** 서버 전용(16페이즈 결정 0079 예정, D-08). 산 마피아의 가짜 심부름 장소 한 곳 — errandPlaces 안의 값이고 actErrand 가 이 장소를 처리 후보에서 뺀다. errandFake.ts 가 errand 진입 직후 쓰고 enterErrand·enterNight 가 키째 지운다. 어떤 view 에도 싣지 않는다(me.errand.places 는 시민과 같은 목록 그대로). */
   errandFake?: PlaceId;
+  /** 서버 전용(21페이즈 결정 0088, D-06·D-21). 산 마피아가 길게 눌러 자른 등불 id(처리 순서). lamps.ts 의 withCut 만 쓰고 enterErrand 가 키째 지운다. 어떤 view 에도 싣지 않는다 — 밤에는 켜짐 boolean(RoomState.lamps)으로만 드러나 자른 사실·사람은 구별되지 않는다. */
+  errandCut?: PlaceId[];
   /** 로비 의상(결정 D-6). setLook 만 쓴다. 사람이 고른 공개 값이고 역할과 무관하다. 없으면 기본 coat 로 읽고, 게임 시작·테스트 방 되돌리기 뒤에도 남는다. */
   look?: OutfitId;
   /** 직업을 건 뒤 다른 값으로 바꾼 적이 있음(결정 0066-1, O-1). 한 번 켜지면 판이 끝날 때까지 끄지 않는다. 이전 값은 어디에도 없다. */
@@ -185,6 +187,11 @@ export interface RoomState {
    * 가장 가까운 사람(by)과 곁 장소(place)" 한 줄(seat 오름차순). enterErrand 가 비우고 enterNight 는 남기며 enterMorning 이 피해자 줄을 morning.seen 으로 옮긴 뒤 지운다.
    */
   errandLast?: Array<{ seat: number; by: number; place: PlaceId }>;
+  /**
+   * 밤 집 창 불 켜짐(21페이즈 결정 0088, D-06·D-07·D-08). 원인 흐름 + 맵에 가로등이 있을 때 enterNight 가 한 번 정한다 — 등불 i = 집 i, houseLitOf(켠 사람 있음 + 자른 사람 없음).
+   * 저녁 동안에는 없고(남의 켜짐은 방송하지 않는다) enterErrand 가 키째 지운다. 공개 값이라 view.day.lamps 로 모두에게 같은 boolean 배열로 간다 — 꺼진 이유·자른 사람은 어디에도 없다.
+   */
+  lamps?: boolean[];
   /** 서버 전용(결정 0061-9). 이번 밤 마피아가 남긴 쪽지 — saveNote(09-12)가 쓰고 enterMorning(탈락 없는 밤)·enterNight 가 키째 지운다. 구출·무효 밤의 쪽지는 폐기된다. */
   nightNote?: string;
   /** 서버 전용(결정 0061-14). 암살 현장 분필 자국(고정소수점) — 방 DO 가 채우고 enterNight 가 지운다(09-14). */
