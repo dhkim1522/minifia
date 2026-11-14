@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
+import { PLACE_ART } from "../../src/components/v2/placeArt";
 import { PLACE_NAME } from "../../src/game/placeText";
 import { TRACE_TEXT } from "../../src/game/traceText";
 // 타입 선언이 없는 .mjs 다(allowJs 없음). 모양은 아래 ArtScript 로 직접 적는다.
@@ -26,7 +27,10 @@ const art = script as unknown as ArtScript;
 const ASSET_DIR = "design/v3.0/assets";
 const JSX_PATH = "src/components/v2/placeArt.tsx";
 const BAR_PLACES = PLACE_IDS.slice(0, 8);
-const PLAZA_PLACES = PLACE_IDS.slice(8);
+const PLAZA_PLACES = PLACE_IDS.slice(8, 16);
+/** 21-02: 마을 가로등 lamp0~lamp7 은 기존 lamp 그림의 별칭이다 — 새 그림·사본 svg 가 없다. */
+const LAMP_ALIASES = PLACE_IDS.slice(16);
+const DRAWN_PLACES = PLACE_IDS.slice(0, 16);
 
 describe("컬러 에셋 이식 스크립트 --check", () => {
   it("실제 --check 가 0 으로 끝난다(사본·JSX 가 원본과 일치)", () => {
@@ -54,12 +58,12 @@ describe("컬러 에셋 이식 스크립트 --check", () => {
 describe("사본(design/v3.0/assets)", () => {
   const names = readdirSync(ASSET_DIR).filter((f) => f.endsWith(".svg"));
 
-  it("svg 정확히 25개, 파일 이름 집합 = PLACE_IDS ∪ TRACE_PIECE_IDS", () => {
+  it("svg 정확히 25개, 파일 이름 집합 = 그려진 장소 16 ∪ TRACE_PIECE_IDS (가로등 별칭 여덟은 사본이 없다)", () => {
     expect(names.length).toBe(25);
-    expect(JSON.stringify([...names].sort())).toBe(JSON.stringify([...PLACE_IDS, ...TRACE_PIECE_IDS].map((id) => `${id}.svg`).sort()));
+    expect(JSON.stringify([...names].sort())).toBe(JSON.stringify([...DRAWN_PLACES, ...TRACE_PIECE_IDS].map((id) => `${id}.svg`).sort()));
   });
 
-  it.each([...PLACE_IDS])("장소 %s: aria-label 이 PLACE_NAME 과 같고 48 격자다", (id) => {
+  it.each([...DRAWN_PLACES])("장소 %s: aria-label 이 PLACE_NAME 과 같고 48 격자다", (id) => {
     const svg = readFileSync(`${ASSET_DIR}/${id}.svg`, "utf8");
     expect(svg).toContain(`aria-label="${PLACE_NAME[id]}"`);
     expect(svg).toContain('viewBox="0 0 48 48"');
@@ -98,9 +102,10 @@ describe("생성 JSX(placeArt.tsx)", () => {
     const { items } = art.buildArt();
     const places = items.filter((i) => i.group === "place");
     const traces = items.filter((i) => i.group === "trace");
-    expect(JSON.stringify(places.map((i) => i.id))).toBe(JSON.stringify([...PLACE_IDS]));
+    expect(JSON.stringify(places.map((i) => i.id))).toBe(JSON.stringify([...DRAWN_PLACES]));
     expect(JSON.stringify(traces.map((i) => i.id))).toBe(JSON.stringify([...TRACE_PIECE_IDS]));
     for (const p of places) expect(p.label).toBe(PLACE_NAME[p.id as keyof typeof PLACE_NAME]);
+    for (const id of LAMP_ALIASES) expect(PLACE_NAME[id as keyof typeof PLACE_NAME]).toBe(PLACE_NAME.lamp);
     for (const t of traces) expect(t.label).toBe(TRACE_TEXT[t.id as keyof typeof TRACE_TEXT]);
     for (const id of [...PLACE_IDS, ...TRACE_PIECE_IDS]) expect(src).toContain(`${id}:`);
   });
@@ -111,6 +116,14 @@ describe("생성 JSX(placeArt.tsx)", () => {
     for (const ids of [BAR_PLACES, PLAZA_PLACES, TRACE_PIECE_IDS] as readonly (readonly string[])[]) {
       const bodies = bodyOf(ids);
       expect(new Set(bodies).size).toBe(ids.length);
+    }
+  });
+
+  it("가로등 별칭 lamp0~lamp7 은 lamp 와 같은 그림 항목을 가리킨다(같은 경로·같은 크기, 새 그림 없음)", () => {
+    expect(LAMP_ALIASES).toHaveLength(8);
+    for (const id of LAMP_ALIASES) {
+      expect(PLACE_ART[id as keyof typeof PLACE_ART]).toBe(PLACE_ART.lamp);
+      expect(src).toContain(`${id}: PLACE_BASE_ART.lamp`);
     }
   });
 

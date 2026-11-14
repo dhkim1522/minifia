@@ -828,8 +828,10 @@ describe("15페이즈 E2E 사본과 제품 값 (15-09, 사본 일치 규약)", (
     expect(lib.ERRAND_MARKERS.filter((m) => !all.includes(m))).toEqual([]);
   });
 
-  it("장소 id 16개·산 사람마다 3곳·심부름 40초·흔적 5초·처리·근처 반경 사본이 제품 값과 같다", () => {
+  it("장소 id 24개(끝 여덟이 마을 가로등 lamp0~lamp7, 21-02 D-05)·산 사람마다 3곳·심부름 40초·흔적 5초·처리·근처 반경 사본이 제품 값과 같다", () => {
     expect([...lib.ERRAND_PLACE_IDS]).toEqual([...PLACE_IDS]);
+    expect(lib.ERRAND_PLACE_IDS).toHaveLength(24);
+    expect(lib.ERRAND_PLACE_IDS.slice(16)).toEqual(["lamp0", "lamp1", "lamp2", "lamp3", "lamp4", "lamp5", "lamp6", "lamp7"]);
     expect(lib.ERRAND_PER_PERSON).toBe(ERRAND_COUNT);
     expect(lib.ERRAND_E2E_MS).toBe(ERRAND_MS);
     expect(lib.TRACE_WINDOW_MS).toBe(MORNING_TRACE_MS);
@@ -948,6 +950,8 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
   it("사본 상수 OUTFIT_IDS·PLACE_IDS·TRACE_PIECES 가 shared/protocol.ts 와 같고 MORNING_KEYS 는 eliminated·seen·trace 다", () => {
     expect([...s.OUTFIT_IDS]).toEqual([...OUTFIT_IDS]);
     expect([...s.PLACE_IDS]).toEqual([...PLACE_IDS]);
+    expect(s.PLACE_IDS).toHaveLength(24);
+    expect(s.PLACE_IDS.slice(16)).toEqual(["lamp0", "lamp1", "lamp2", "lamp3", "lamp4", "lamp5", "lamp6", "lamp7"]);
     expect([...s.TRACE_PIECES]).toEqual([...TRACE_PIECE_IDS]);
     expect([...s.MORNING_KEYS]).toEqual(["eliminated", "seen", "trace"]);
     expect(s.LOOK_PATH).toBe("view.players[].look");
