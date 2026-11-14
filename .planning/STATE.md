@@ -6,16 +6,16 @@ current_phase: 20
 current_phase_name: map-expansion
 current_plan: 10
 status: verifying
-stopped_at: Completed 21-01-PLAN.md
-last_updated: "2026-11-14T06:57:34.138Z"
+stopped_at: Completed 21-02-PLAN.md
+last_updated: "2026-11-14T07:11:35.640Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: 9a4b1d3a97009a73cf93a7d5721147d39d445aaa
+state_head: dc70f08bc2f40da8e0abbb62e81a8cac85710c4a
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 113
-  completed_plans: 98
+  completed_plans: 99
   percent: 60
 ---
 
@@ -293,6 +293,7 @@ Last activity: 2026-11-13 — 20-10 완료 (로컬 전 흐름 폰 6종 회귀 �
 | Phase 20 P08 | 1.5h | 3 tasks | 5 files |
 | Phase 20 P10 | 50min | 3 tasks | 7 files |
 | Phase 21 P01 | 30min | 2 tasks | 24 files |
+| Phase 21 P02 | 40min | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -653,6 +654,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 20]: 20-09: 마을 nightload(390x844·CPU 4배·5분) 평균 59.8fps·끊김 1·그리기 호출 최대 82·점광원 3 으로 게이트 통과, 광장 대조 59.7fps. 장면 수정 없음. 그리기 통계는 로비가 아니라 장면 중 값(renderer.duringMax)으로 읽는다
 - [Phase 20]: 마을 맵(광장 + 실내 방 넷 + 집 여덟)은 확장판 전용으로 배포, 결정 0087 에 D-01~D-23·위임 기본값·한계 기록
 - [Phase 21]: [21-01] 확장판 하루는 Ruleset.cause 로 roleReveal → errand → night → morning → discussion, 처형(없음) → errand, 일차는 errand 진입 +1. 시험 잠금은 CAUSE_MODES 표 + 규칙 객체별 훅 표(결정 0088)
+- [Phase 21]: [21-02] 가로등 id lamp0~lamp7 은 PLACE_IDS 끝에 두고 그림은 lamp 별칭(사본 svg 25개 그대로), 후보 자리는 errandSpotsOf 한 함수가 정한다
 
 ### Pending Todos
 
@@ -724,8 +726,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-14T06:57:31.417Z
-Stopped at: Completed 21-01-PLAN.md
+Last session: 2026-11-14T07:11:31.205Z
+Stopped at: Completed 21-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
