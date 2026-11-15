@@ -10,15 +10,17 @@ import { PlaceArt } from "./placeArt";
 export interface ErrandStartCardProps {
   /** 내 목록 장소(순서에 뜻 없음). 비면 아무것도 그리지 않는다 */
   places: readonly PlaceId[];
+  /** 원인 흐름(21페이즈 P21-17): 제목이 "오늘 켤 등불"이다. 타일 그림·접근성 "가로등 장소"는 가로등 id 가 가져온다(placeArt 별칭) */
+  cause?: boolean;
 }
 
-export function ErrandStartCard({ places }: ErrandStartCardProps) {
+export function ErrandStartCard({ places, cause = false }: ErrandStartCardProps) {
   if (places.length === 0) return null;
   return (
     <div className="mv-errand-start" data-errand-start-card="">
       <div className="mv-errand-start__scrim" aria-hidden="true" />
       <div className="mv-errand-start__card">
-        <h2 className="mv-errand-start__title">오늘 갈 곳</h2>
+        <h2 className="mv-errand-start__title">{cause ? "오늘 켤 등불" : "오늘 갈 곳"}</h2>
         <div className="mv-errand-start__tiles">
           {places.map((id) => (
             <span key={id} className="mv-errand-start__tile" role="img" aria-label={`${PLACE_NAME[id]} 장소`}>

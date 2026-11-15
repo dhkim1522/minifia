@@ -933,7 +933,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         // 심부름 단계에는 아래 패널이 없다(16-08, V-23): 진행 점 3 이 화면 아래 가운데에 떠 있다. 유령·목록 없음은 점도 없다(지켜본다).
         // 시작 2초 카드는 막 + 카드이고 눌림을 통과한다 — 닫는 누름은 useErrandStartCard 가 루트에서 받는다.
         <>
-          {startCard && errandMine !== null ? <ErrandStartCard places={errandMine.places} /> : null}
+          {startCard && errandMine !== null ? <ErrandStartCard places={errandMine.places} cause={rulesetOf(modeOf(view)).cause} /> : null}
           {errandMine !== null ? <ErrandDots total={errandMine.total} done={errandMine.n} /> : null}
         </>
       ) : noPanel ? null : (
