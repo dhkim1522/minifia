@@ -267,7 +267,7 @@ Plans:
 | 18. 바로 고칠 것 | v3.0 | 14/14 | In Progress | - |
 | 19. 기본 마피아·확장판 | v3.0 | 8/8 | Complete (배포 `71a10fc8`, 결정 0086, 실기기 확인은 v3.0 끝) | 2026-11-13 |
 | 20. 맵 단계 확장 | v3.0 | 10/10 | Complete (배포 `07d6afee`, 결정 0087, 실기기 확인은 v3.0 끝) | 2026-11-13 |
-| 21. 원인→결과 하루와 할 일 | v3.0 | 10/16 | In Progress | - |
+| 21. 원인→결과 하루와 할 일 | v3.0 | 11/16 | In Progress | - |
 
 ## Backlog
 
@@ -482,7 +482,7 @@ Plans:
 **Goal:** 확장판의 하루를 원인→결과 순서로 바꾼다(결정 0081-2·3): 처형 → 저녁 등불 당번 → 밤 집 찾기 → 아침 증거와 현장 조사 → 모여서 의심 보드로 토론 → 투표. 할 일마다 왜 하는지가 장면으로 설명되고, 결과가 다음 단계의 근거가 되며, 마피아에게도 할 일과 들킬 위험이 생긴다.
 **Requirements**: DAYFLOW-01, LAMP-01, LAMP-02, HOUSE-01, HOUSE-02, SCENE-01, SCENE-02, BOARD-01, SKIP-01, TUT-06, LEAK-02, DEPLOY-06
 **Depends on:** Phase 19, Phase 20
-**Plans:** 10/16 plans executed
+**Plans:** 11/16 plans executed
 
 **Success Criteria:**
 1. 첫날은 역할 확인 → 저녁 할 일 → 첫 밤 → 첫 아침부터 토론이고, 이후 날은 처형 → 저녁 할 일 → 밤 → 아침 → 토론이다
@@ -503,7 +503,7 @@ Plans:
 - [x] 21-08-PLAN.md — 저녁 화면: 아이콘 넷·[켜기] 길게 누르기·시작 카드·마피아 카드 줄·사회자 문구·빛남 (wave 5)
 - [x] 21-09-PLAN.md — 밤 화면: 개관 카메라(폰 6종 계산)·HouseTag 문패·pick 연결·네 역할 같은 화면 (wave 6)
 - [x] 21-10-PLAN.md — 아침 화면: ClueSpot·ClueCard·[살펴보기]·[건너뛰기]·아침 걷기·현장 없는 밤 발표 (wave 7)
-- [ ] 21-11-PLAN.md — 의심 보드: boardOf·SuspectBoard·[보드]가 [기록]을 대신·열린 채 시작 (wave 8)
+- [x] 21-11-PLAN.md — 의심 보드: boardOf·SuspectBoard·[보드]가 [기록]을 대신·열린 채 시작 (wave 8)
 - [ ] 21-12-PLAN.md — 튜토리얼 첫 사건 새 흐름·"정체는 판이 끝나야 알아요" 카드 (wave 9)
 - [ ] 21-13-PLAN.md — 시험 이전(단위·워커·smoke·UAT·봇): 원인 흐름 잠금 걷기·A/B/C 이전 (wave 10)
 - [ ] 21-14-PLAN.md — 시험 이전(화면): 잠금 걷기·A/B/C 이전 (wave 10)
