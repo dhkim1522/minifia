@@ -43,6 +43,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 const check = (test, label, ok, detail = "") => results.push({ test, label, ok, detail });
 const ROLE_WORDS = /mafia|police|doctor|citizen/;
+// 옷 look 은 직업 이름과 같은 단어 셋(police·doctor·mafia)을 값으로 쓰지만 직업과 무관하다(18-13, 20페이즈 옷) — 서버가 look 을 역할의 함수로 만들지 않으므로 검사 전에 look 값을 뺀다(21-13).
+const withoutLook = (raw) => raw.replace(/"look":"[a-zA-Z]+"/g, "");
 
 async function waitUntil(pred, ms, label) {
   const start = performance.now();
@@ -291,7 +293,7 @@ async function main() {
   check("f", "view 에 day·spectate·me.role 이 없음", views.every((v) => !("day" in v) && !("spectate" in v) && !("role" in v.me)), "");
   check("f", "방장 me.testRole 이 여전히 mafia", views[0].me.testRole === "mafia", String(views[0].me.testRole));
   check("f", "되돌린 뒤 손님 프레임 원문에 직업 이름이 없음",
-    guests.every((g) => !g.frames.slice(resetFrom[clients.indexOf(g)]).some((f) => ROLE_WORDS.test(f.raw))), "");
+    guests.every((g) => !g.frames.slice(resetFrom[clients.indexOf(g)]).some((f) => ROLE_WORDS.test(withoutLook(f.raw)))), "");
   send(host, { t: "start" });
   await waitAllPhase(clients, "assigning", 5000, "두 번째 배정");
   send(host, { t: "testSkip" });
