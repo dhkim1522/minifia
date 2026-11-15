@@ -6,16 +6,16 @@ current_phase: 20
 current_phase_name: map-expansion
 current_plan: 10
 status: verifying
-stopped_at: Completed 21-13-PLAN.md
-last_updated: "2026-11-15T04:54:38.324Z"
+stopped_at: Completed 21-14-PLAN.md
+last_updated: "2026-11-15T05:00:53.503Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: 097ebf990afcd7f6b263c9ad705b3ad95aa21828
+state_head: ef40de766011bf97f35597a3792b1e3b22970cfc
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 113
-  completed_plans: 110
+  completed_plans: 111
   percent: 60
 ---
 
@@ -305,6 +305,7 @@ Last activity: 2026-11-13 — 20-10 완료 (로컬 전 흐름 폰 6종 회귀 �
 | Phase 21 P11 | 35min | 3 tasks | 7 files |
 | Phase 21 P12 | 100min | 2 tasks | 23 files |
 | Phase 21 P13 | 1 session | 2 tasks | 91 files |
+| Phase 21 P14 | 1 session | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -679,6 +680,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 21]: 21-12: 튜토리얼 장면 5 보드는 GameMap 토론 경로가 가짜 view 의 boardOf 로 실제 SuspectBoard 를 그리고, TutorialEvidence 는 선 하나만 남긴다; 장면 4 [다음] 은 행동이 연다(advance inspect)
 - [Phase 21]: 21-12: 정체 카드는 뒤집히지 않는다(뒷면+lock+tutorial.hidden 줄+도장 처형, 진홍·fanfare 없음, D-20)
 - [Phase 21]: 21-13: 단위·워커 setup 은 원인 흐름을 잠그지 않는다 — 옛 경로 시험은 파일 머리 lockCauseInFile(갈래 B), 기본판 장치는 mode basic(A), 제품 흐름은 새 순서(C). smoke 는 --mode 로 확장판 첫날 사슬/기본판 한 판
+- [Phase 21]: 21-14: 화면 시험 client setup 잠금 제거 — view 에 mode 를 싣지 않은 시험은 mode basic 을 명시(A), 옛 확장판 화면은 underCauseLock/lockCauseInFile(B), 원인 흐름 화면은 mode extended 새 순서(C)
 
 ### Pending Todos
 
@@ -750,8 +752,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-15T04:54:36.288Z
-Stopped at: Completed 21-13-PLAN.md
+Last session: 2026-11-15T05:00:51.578Z
+Stopped at: Completed 21-14-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
