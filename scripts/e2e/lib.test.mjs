@@ -5878,7 +5878,7 @@ test("causeChecks.phones(LH11): 스테이지 밖·띠/열/패널/이름표 겹�
   assert.deepEqual(failIds(f(withItem({ kind: "house-tag", rect: Rc(120, 210, 44, 44) }))), ["LH11c", "LH11d"]);
   assert.deepEqual(failIds(f(withItem({ kind: "house-tag", rect: Rc(300, 300, 40, 40) }))), ["LH11d"]);
   assert.ok(failIds(f({ ...phoneOk(), blockers: { ...phoneOk().blockers, tagButtons: [Rc(60, 220, 60, 30)] } })).includes("LH11b"), "이름표 버튼과 겹치면 실패");
-  const boardOnTag = { ...phoneOk(), boardOpen: true, blockers: { ...phoneOk().blockers, tagButtons: [Rc(60, 520, 60, 30)] }, items: [...phoneOk().items, { kind: "board", rect: Rc(31, 500, 328, 150) }] };
+  const boardOnTag = { ...phoneOk(), boardOpen: true, blockers: { ...phoneOk().blockers, tagButtons: [Rc(60, 520, 60, 30)] }, items: [{ kind: "board", rect: Rc(31, 500, 328, 150) }] };
   assert.ok(allOk(f(boardOnTag)), "보드가 열린 동안 이름표를 덮는 것은 예외");
   assert.ok(failIds(f({ ...boardOnTag, boardOpen: false })).includes("LH11b"), "보드가 닫혔는데 덮으면 실패");
   assert.ok(f({}).every((l) => !l.ok));
