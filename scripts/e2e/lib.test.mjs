@@ -5599,3 +5599,319 @@ test("TOWN_E2E: 방 넷의 안쪽·문 앞·방 안 자리와 상수가 모양�
   assert.equal(TOWN_E2E.DOOR_FADE_MS, 200);
   assert.equal(TOWN_E2E.PAN.maxX, 9.6);
 });
+
+// ---- 21-15 원인 흐름 E2E 판정(LH1~LH11, D-29) ----
+// causeChecks 는 LH 별 함수 묶음이다. 가짜 화면 요약 객체로 통과·실패를 시험한다 — 흐름은 화면을 읽어 이 모양의 값을 만들 뿐 문턱은 lib.mjs 한 곳에 있다.
+import * as libAll from "./lib.mjs";
+
+const lh = (name) => {
+  const c = libAll.causeChecks;
+  assert.ok(c && typeof c[name] === "function", `causeChecks.${name} 가 있어야 한다`);
+  return c[name];
+};
+const allOk = (lines) => lines.every((l) => l.ok);
+const failIds = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
+
+const eveningOk = () => ({
+  cardEarly: { cards: 1, tiles: 3, buttons: 0 },
+  cardLate: { cards: 0 },
+  arrive: { markers: 3, calls: 3, progress: "0/3", skipPills: 1 },
+  presses: ["1/3", "2/3", "3/3"],
+  bandActing: "등불 세 곳을 켜 주세요",
+  bandDone: "곧 밤이 됩니다",
+  lampsMine: [1, 4, 6],
+  litStart: [false, false, false, false, false, false, false, false],
+  litEnd: [false, true, false, false, true, false, true, true],
+});
+
+test("causeChecks.evening(LH1): 시작 카드·표지 3 깜빡임·[켜기] 셋·띠 문장·3D 켜짐이 맞으면 통과한다", () => {
+  const lines = lh("evening")(eveningOk());
+  assert.deepEqual(lines.map((l) => l.id), ["LH1a", "LH1b", "LH1c", "LH1d", "LH1e", "LH1f"]);
+  assert.ok(allOk(lines), JSON.stringify(lines.filter((l) => !l.ok)));
+});
+
+test("causeChecks.evening(LH1): 시작 카드 수·표지 수·진행 수열·띠 문장·꺼진 등불·건너뛰기 알약 중 틀린 것만 그 줄이 실패한다", () => {
+  const f = lh("evening");
+  const bad = (patch) => failIds(f({ ...eveningOk(), ...patch }));
+  assert.deepEqual(bad({ cardEarly: { cards: 0, tiles: 3, buttons: 0 } }), ["LH1a"]);
+  assert.deepEqual(bad({ cardLate: { cards: 1 } }), ["LH1a"]);
+  assert.deepEqual(bad({ arrive: { markers: 3, calls: 2, progress: "0/3", skipPills: 1 } }), ["LH1b"]);
+  assert.deepEqual(bad({ presses: ["1/3", "3/3"] }), ["LH1c"]);
+  assert.deepEqual(bad({ bandDone: "곧 토론이 시작됩니다" }), ["LH1d"]);
+  assert.deepEqual(bad({ litEnd: [false, true, false, false, true, false, false, true] }), ["LH1e"]);
+  assert.deepEqual(bad({ litEnd: [false, true, false, false, true, false, true, false], litStart: [false, false, false, false, false, false, false, true] }), ["LH1e"]);
+  assert.deepEqual(bad({ arrive: { markers: 3, calls: 3, progress: "0/3", skipPills: 0 } }), ["LH1f"]);
+  assert.ok(f({}).every((l) => !l.ok && /측정값 없음/.test(l.detail)), "빈 입력은 조용히 통과하지 않는다");
+});
+
+const sigOf = (extra = []) => ({
+  names: ["data-errand-layer", "data-errand-dots", "data-errand-dot", "data-errand-progress", "data-errand-place", "data-errand-arrow", "data-near-ring", "data-skip", "data-call", ...extra],
+  counts: { "data-errand-start-card": 0, "data-errand-dots": 1, "data-errand-dot": 3, "data-errand-progress": 1, "data-errand-place": 3, "data-errand-arrow": 1, "data-near-ring": 1, "data-skip": 1 },
+});
+const partyOk = (held) => ({ held, arrive: sigOf(), afterAct: { ...sigOf(), progress: "1/3" } });
+
+test("causeChecks.eveningParity(LH2): 마피아 길게 누르기와 시민 짧게 누르기의 data-* 이름·개수·진행이 같으면 통과한다", () => {
+  const lines = lh("eveningParity")(partyOk(true), partyOk(false));
+  assert.deepEqual(lines.map((l) => l.id), ["LH2a", "LH2b", "LH2c", "LH2d"]);
+  assert.ok(allOk(lines), JSON.stringify(lines.filter((l) => !l.ok)));
+});
+
+test("causeChecks.eveningParity(LH2): 이름 집합·개수·누른 뒤 진행이 다르거나 실제로 길게 누르지 않았거나 역할류 이름이 있으면 실패한다", () => {
+  const f = lh("eveningParity");
+  assert.deepEqual(failIds(f({ ...partyOk(true), arrive: sigOf(["data-extra"]) }, partyOk(false))), ["LH2a"]);
+  const cnt = { ...sigOf(), counts: { ...sigOf().counts, "data-errand-place": 2 } };
+  assert.deepEqual(failIds(f({ ...partyOk(true), arrive: cnt }, partyOk(false))), ["LH2a"]);
+  assert.deepEqual(failIds(f({ ...partyOk(true), afterAct: { ...sigOf(), progress: "2/3" } }, partyOk(false))), ["LH2b"]);
+  assert.deepEqual(failIds(f(partyOk(false), partyOk(false))), ["LH2c"]);
+  assert.deepEqual(failIds(f(partyOk(true), { ...partyOk(false), arrive: sigOf(["data-mafia-hint"]) })), ["LH2a", "LH2d"]);
+  assert.ok(f(null, null).every((l) => !l.ok));
+});
+
+const tagsOf = (alive, { picked = null, lit = [true, true, false, true, true, true, false, true] } = {}) =>
+  Array.from({ length: 8 }, (_, seat) => ({ seat, button: seat < alive, lit: lit[seat], picked: picked === seat, call: seat < alive && picked === null }));
+const nightOk = () => ({
+  aliveCount: 5,
+  tags: tagsOf(5),
+  houseLit: [true, true, false, true, true, true, false, true],
+  camera: { mode: "overview" },
+  afterPick: { seat: 2, tags: tagsOf(5, { picked: 2 }) },
+  afterSwap: { seat: 3, tags: tagsOf(5, { picked: 3 }) },
+});
+
+test("causeChecks.night(LH3): 문패 8·산 사람 수만큼 단추·창 불 = houseLit·개관·고름·바꿈이 맞으면 통과한다", () => {
+  const lines = lh("night")(nightOk());
+  assert.deepEqual(lines.map((l) => l.id), ["LH3a", "LH3b", "LH3c", "LH3d", "LH3e"]);
+  assert.ok(allOk(lines), JSON.stringify(lines.filter((l) => !l.ok)));
+});
+
+test("causeChecks.night(LH3): 단추 수·창 불·개관·깜빡임·고른 집이 틀리면 그 줄이 실패한다", () => {
+  const f = lh("night");
+  const bad = (patch) => failIds(f({ ...nightOk(), ...patch }));
+  assert.deepEqual(bad({ aliveCount: 4 }), ["LH3a"]);
+  assert.deepEqual(bad({ houseLit: [true, true, true, true, true, true, false, true] }), ["LH3b"]);
+  assert.deepEqual(bad({ camera: { mode: "iso" } }), ["LH3b"]);
+  assert.deepEqual(bad({ tags: tagsOf(5).map((t) => ({ ...t, call: false })) }), ["LH3c"]);
+  assert.deepEqual(bad({ afterPick: { seat: 2, tags: tagsOf(5, { picked: 2 }).map((t) => ({ ...t, call: true })) } }), ["LH3d"]);
+  assert.deepEqual(bad({ afterPick: { seat: 2, tags: tagsOf(5, { picked: 1 }) } }), ["LH3d"]);
+  assert.deepEqual(bad({ afterSwap: { seat: 2, tags: tagsOf(5, { picked: 2 }) } }), ["LH3e"]);
+  assert.ok(f({}).every((l) => !l.ok));
+});
+
+const roleView = (role, patch = {}) => ({ role, buttons: 5, tags: 8, panelH: 88, ringMafia: 0, eyeHeal: 0, names: ["data-house-tag", "data-lit", "data-call"], toastsAfterTap: 0, ...patch });
+const rolesOk = () => ["mafia", "police", "doctor", "citizen"].map((r) => roleView(r));
+
+test("causeChecks.nightParity(LH4): 네 역할의 문패 단추 수·패널 높이·이름 집합이 같고 mafia 고리·eye/heal 0·알림 0 이면 통과한다", () => {
+  const lines = lh("nightParity")(rolesOk());
+  assert.deepEqual(lines.map((l) => l.id), ["LH4a", "LH4b", "LH4c", "LH4d"]);
+  assert.ok(allOk(lines), JSON.stringify(lines.filter((l) => !l.ok)));
+});
+
+test("causeChecks.nightParity(LH4): 역할이 빠졌거나 높이·단추 수가 다르거나 고리·알림이 있으면 그 줄이 실패한다", () => {
+  const f = lh("nightParity");
+  assert.deepEqual(failIds(f(rolesOk().slice(0, 3))), ["LH4a"]);
+  assert.deepEqual(failIds(f([roleView("mafia", { panelH: 120 }), ...rolesOk().slice(1)])), ["LH4b"]);
+  assert.deepEqual(failIds(f([roleView("mafia", { buttons: 4 }), ...rolesOk().slice(1)])), ["LH4b"]);
+  assert.deepEqual(failIds(f([roleView("mafia", { names: ["data-house-tag", "data-mafia"] }), ...rolesOk().slice(1)])), ["LH4b"]);
+  assert.deepEqual(failIds(f([roleView("mafia", { ringMafia: 1 }), ...rolesOk().slice(1)])), ["LH4c"]);
+  assert.deepEqual(failIds(f([roleView("mafia", { eyeHeal: 1 }), ...rolesOk().slice(1)])), ["LH4c"]);
+  assert.deepEqual(failIds(f([roleView("mafia", { toastsAfterTap: 1 }), ...rolesOk().slice(1)])), ["LH4d"]);
+  assert.ok(f([]).every((l) => !l.ok));
+});
+
+test("causeChecks.morning(LH5): 지점 셋이 새 상태, [살펴보기]는 반경 안에서만, 피해자 없는 밤은 아침 단계가 없으면 통과한다", () => {
+  const ok = { spots: [{ id: "footprint", state: "new" }, { id: "cloth", state: "new" }, { id: "window", state: "new" }], far: { acts: 0 }, near: { acts: 1 }, noVictim: { phases: ["errand", "night", "discussion"] } };
+  const f = lh("morning");
+  const lines = f(ok);
+  assert.deepEqual(lines.map((l) => l.id), ["LH5a", "LH5b", "LH5c"]);
+  assert.ok(allOk(lines), JSON.stringify(lines.filter((l) => !l.ok)));
+  assert.deepEqual(failIds(f({ ...ok, spots: ok.spots.slice(0, 2) })), ["LH5a"]);
+  assert.deepEqual(failIds(f({ ...ok, spots: ok.spots.map((s) => ({ ...s, state: "done" })) })), ["LH5a"]);
+  assert.deepEqual(failIds(f({ ...ok, far: { acts: 1 } })), ["LH5b"]);
+  assert.deepEqual(failIds(f({ ...ok, near: { acts: 0 } })), ["LH5b"]);
+  assert.deepEqual(failIds(f({ ...ok, noVictim: { phases: ["errand", "night", "morning", "discussion"] } })), ["LH5c"]);
+  assert.deepEqual(failIds(f({ ...ok, noVictim: null })), ["LH5c"]);
+});
+
+const step = (spot, before, state, card) => ({ spot, cardsBefore: before, cardsAfter: before + 1, state, card });
+const cluesOk = () => ({
+  host: { steps: [step("cloth", 0, "done", { dim: false, text: "붉은 천 조각", count: null }), step("footprint", 1, "done", { dim: false, text: "1", count: 1 })] },
+  guest: {
+    steps: [
+      step("cloth", 0, "dim", { dim: true, text: "먼저 손댄 흔적", count: null }),
+      step("footprint", 1, "done", { dim: false, text: "1", count: 1 }),
+      step("window", 2, "dim", { dim: true, text: "어두워서 못 봤어요", count: null }),
+    ],
+  },
+  windowDark: true,
+  repeat: { acts: 0, cardsBefore: 3, cardsAfter: 3 },
+});
+
+test("causeChecks.clues(LH6): 새로 살핌은 카드 한 장 추가, 마피아가 먼저 손댄 곳은 dim, 어두운 창은 못 봄, 발자국 수 같음, 다시 살피기 무변화면 통과한다", () => {
+  const lines = lh("clues")(cluesOk());
+  assert.deepEqual(lines.map((l) => l.id), ["LH6a", "LH6b", "LH6c", "LH6d", "LH6e", "LH6f"]);
+  assert.ok(allOk(lines), JSON.stringify(lines.filter((l) => !l.ok)));
+  const lit = cluesOk();
+  lit.windowDark = false;
+  lit.guest.steps[2] = step("window", 2, "done", { dim: false, text: "회색 실 조각", count: null });
+  assert.ok(allOk(lh("clues")(lit)), "불 켜진 이웃이면 창문도 단서 카드다");
+});
+
+test("causeChecks.clues(LH6): 카드가 안 늘거나 손댄 흔적이 dim 이 아니거나 어두운 창이 단서로 보이거나 발자국 수가 다르거나 다시 살피면 그 줄이 실패한다", () => {
+  const f = lh("clues");
+  const c1 = cluesOk();
+  c1.host.steps[0].cardsAfter = 0;
+  assert.deepEqual(failIds(f(c1)), ["LH6a"]);
+  const c2 = cluesOk();
+  c2.guest.steps[0] = step("cloth", 0, "done", { dim: false, text: "붉은 천 조각", count: null });
+  assert.deepEqual(failIds(f(c2)), ["LH6c"]);
+  const c3 = cluesOk();
+  c3.host.steps[0] = step("cloth", 0, "dim", { dim: true, text: "먼저 손댄 흔적", count: null });
+  assert.deepEqual(failIds(f(c3)), ["LH6b"]);
+  const c4 = cluesOk();
+  c4.guest.steps[2] = step("window", 2, "done", { dim: false, text: "회색 실 조각", count: null });
+  assert.deepEqual(failIds(f(c4)), ["LH6d"]);
+  const c5 = cluesOk();
+  c5.guest.steps[1] = step("footprint", 1, "done", { dim: false, text: "2", count: 2 });
+  assert.deepEqual(failIds(f(c5)), ["LH6e"]);
+  const c6 = cluesOk();
+  c6.repeat = { acts: 1, cardsBefore: 3, cardsAfter: 4 };
+  assert.deepEqual(failIds(f(c6)), ["LH6f"]);
+  assert.ok(f({}).every((l) => !l.ok));
+});
+
+const boardOk = () => ({
+  open: true,
+  chipSpots: ["cloth", "footprint"],
+  inspected: ["footprint", "cloth"],
+  faceSeats: [0, 1, 2, 3, 4],
+  aliveSeats: [4, 3, 2, 1, 0],
+  lampsAttr: 2,
+  lampDots: 8,
+  unlit: 2,
+  recordButtons: 0,
+  witnessCell: false,
+  expectWitness: false,
+  markFaces: [1],
+  expectMarks: [1],
+  collapsedOnFocus: true,
+});
+
+test("causeChecks.board(LH7): 열림·내 단서 칩만·산 사람 얼굴 전원·등불 점 8과 꺼진 수·[기록] 0건·목격 칸·닮은 옷 표시·포커스 접힘이 맞으면 통과한다", () => {
+  const lines = lh("board")(boardOk());
+  assert.deepEqual(lines.map((l) => l.id), ["LH7a", "LH7b", "LH7c", "LH7d", "LH7e", "LH7f", "LH7g", "LH7h"]);
+  assert.ok(allOk(lines), JSON.stringify(lines.filter((l) => !l.ok)));
+});
+
+test("causeChecks.board(LH7): 틀린 항목만 그 줄이 실패한다(남의 단서 칩·얼굴 누락·등불 점 수·[기록] 단추·목격 칸·표시·접힘)", () => {
+  const f = lh("board");
+  const bad = (patch) => failIds(f({ ...boardOk(), ...patch }));
+  assert.deepEqual(bad({ open: false }), ["LH7a"]);
+  assert.deepEqual(bad({ chipSpots: ["cloth", "footprint", "window"] }), ["LH7b"]);
+  assert.deepEqual(bad({ chipSpots: [] }), ["LH7b"]);
+  assert.deepEqual(bad({ faceSeats: [0, 1, 2, 3] }), ["LH7c"]);
+  assert.deepEqual(bad({ lampDots: 7 }), ["LH7d"]);
+  assert.deepEqual(bad({ lampsAttr: 3 }), ["LH7d"]);
+  assert.deepEqual(bad({ recordButtons: 1 }), ["LH7e"]);
+  assert.deepEqual(bad({ witnessCell: true }), ["LH7f"]);
+  assert.deepEqual(bad({ markFaces: [1, 2] }), ["LH7g"]);
+  assert.deepEqual(bad({ collapsedOnFocus: false }), ["LH7h"]);
+  assert.ok(f({}).every((l) => !l.ok));
+});
+
+test("causeChecks.skip(LH8): 누르기 전 0/N·누른 뒤 1/N·aria-pressed, 과반이면 마감 전에 단계가 넘어가야 통과한다", () => {
+  const ok = { count0: "0/3", count1: "1/3", pressed0: false, pressed1: true, early: { phaseBefore: "errand", phaseAfter: "night", remainMs: 20_000 } };
+  const f = lh("skip");
+  const lines = f(ok);
+  assert.deepEqual(lines.map((l) => l.id), ["LH8a", "LH8b"]);
+  assert.ok(allOk(lines), JSON.stringify(lines.filter((l) => !l.ok)));
+  assert.deepEqual(failIds(f({ ...ok, count1: "0/3" })), ["LH8a"]);
+  assert.deepEqual(failIds(f({ ...ok, count1: "1/4" })), ["LH8a"]);
+  assert.deepEqual(failIds(f({ ...ok, pressed1: false })), ["LH8a"]);
+  assert.deepEqual(failIds(f({ ...ok, early: { phaseBefore: "errand", phaseAfter: "errand", remainMs: 20_000 } })), ["LH8b"]);
+  assert.deepEqual(failIds(f({ ...ok, early: { phaseBefore: "errand", phaseAfter: "night", remainMs: 500 } })), ["LH8b"]);
+  assert.ok(f({}).every((l) => !l.ok));
+});
+
+const BASIC_PHASES = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
+
+test("causeChecks.basic(LH9): 기본 마피아 한 판은 확장판 요소 0건(감시 20회 넘게)이고 단계 순서가 옛 순서 그대로여야 통과한다", () => {
+  const f = lh("basic");
+  const ok = { phases: BASIC_PHASES, scan: { scans: 200, seen: {} } };
+  const lines = f(ok);
+  assert.deepEqual(lines.map((l) => l.id), ["LH9a", "LH9b"]);
+  assert.ok(allOk(lines), JSON.stringify(lines.filter((l) => !l.ok)));
+  assert.deepEqual(failIds(f({ ...ok, scan: { scans: 200, seen: { "[data-house-tag]": { n: 8, phase: "night" } } } })), ["LH9a"]);
+  assert.deepEqual(failIds(f({ ...ok, scan: { scans: 3, seen: {} } })), ["LH9a"]);
+  assert.deepEqual(failIds(f({ ...ok, phases: ["lobby", "assigning", "roleReveal", "errand", "night"] })), ["LH9b"]);
+  assert.deepEqual(failIds(f({ ...ok, phases: ["lobby", "assigning", "roleReveal", "dayAnnounce", "night"] })), ["LH9b"]);
+  assert.ok(f({}).every((l) => !l.ok));
+});
+
+const Rc = (left, top, width, height) => ({ left, top, width, height });
+const phoneOk = () => ({
+  viewport: { w: 390, h: 844 },
+  stage: Rc(0, 100, 390, 560),
+  blockers: { band: Rc(8, 56, 374, 44), side: [Rc(322, 112, 52, 52)], panel: Rc(0, 700, 390, 144), tagButtons: [] },
+  boardOpen: false,
+  items: [
+    { kind: "house-tag", rect: Rc(40, 200, 44, 44) },
+    { kind: "house-tag", rect: Rc(100, 200, 44, 44) },
+    { kind: "clue-spot", rect: Rc(200, 400, 52, 52) },
+    { kind: "clue-card", rect: Rc(20, 600, 100, 56) },
+    { kind: "skip", rect: Rc(250, 600, 104, 48) },
+  ],
+});
+
+test("causeChecks.phones(LH11): 새 요소가 서로·띠·오른쪽 열·아래 패널·이름표 버튼과 겹치지 않고 안쪽 8 안이며 누르기 영역이 44 이상이면 통과한다", () => {
+  const lines = lh("phones")(phoneOk());
+  assert.deepEqual(lines.map((l) => l.id), ["LH11a", "LH11b", "LH11c", "LH11d"]);
+  assert.ok(allOk(lines), JSON.stringify(lines.filter((l) => !l.ok)));
+});
+
+test("causeChecks.phones(LH11): 스테이지 밖·띠/열/패널/이름표 겹침·서로 겹침·문패 간격·작은 누르기 영역은 그 줄이 실패하고 보드가 열린 동안 이름표를 덮는 것만 예외다", () => {
+  const f = lh("phones");
+  const withItem = (item) => ({ ...phoneOk(), items: [...phoneOk().items, item] });
+  assert.deepEqual(failIds(f(withItem({ kind: "house-tag", rect: Rc(2, 300, 44, 44) }))), ["LH11a"]);
+  assert.deepEqual(failIds(f(withItem({ kind: "clue-spot", rect: Rc(320, 120, 52, 52) }))), ["LH11b"]);
+  assert.deepEqual(failIds(f(withItem({ kind: "clue-card", rect: Rc(20, 680, 100, 56) }))), ["LH11b"]);
+  assert.deepEqual(failIds(f(withItem({ kind: "clue-spot", rect: Rc(210, 410, 52, 52) }))), ["LH11c"]);
+  assert.deepEqual(failIds(f(withItem({ kind: "house-tag", rect: Rc(120, 210, 44, 44) }))), ["LH11c", "LH11d"]);
+  assert.deepEqual(failIds(f(withItem({ kind: "house-tag", rect: Rc(300, 300, 40, 40) }))), ["LH11d"]);
+  assert.ok(failIds(f({ ...phoneOk(), blockers: { ...phoneOk().blockers, tagButtons: [Rc(60, 220, 60, 30)] } })).includes("LH11b"), "이름표 버튼과 겹치면 실패");
+  const boardOnTag = { ...phoneOk(), boardOpen: true, blockers: { ...phoneOk().blockers, tagButtons: [Rc(60, 520, 60, 30)] }, items: [...phoneOk().items, { kind: "board", rect: Rc(31, 500, 328, 150) }] };
+  assert.ok(allOk(f(boardOnTag)), "보드가 열린 동안 이름표를 덮는 것은 예외");
+  assert.ok(failIds(f({ ...boardOnTag, boardOpen: false })).includes("LH11b"), "보드가 닫혔는데 덮으면 실패");
+  assert.ok(f({}).every((l) => !l.ok));
+});
+
+test("causeChecks.boardNames(LH11): 8자 닉네임 이름이 얼굴 칸 안 한 줄이고 넘치지 않아야 통과한다", () => {
+  const f = lh("boardNames");
+  const face = (over = {}) => ({ nameRect: Rc(10, 20, 60, 17), faceRect: Rc(4, 8, 68, 56), scrollW: 60, clientW: 60, lineH: 16.8, ...over });
+  const lines = f({ faces: [face(), face()] });
+  assert.deepEqual(lines.map((l) => l.id), ["LH11e"]);
+  assert.ok(allOk(lines));
+  assert.deepEqual(failIds(f({ faces: [face({ scrollW: 80 })] })), ["LH11e"]);
+  assert.deepEqual(failIds(f({ faces: [face({ nameRect: Rc(10, 20, 60, 34) })] })), ["LH11e"]);
+  assert.deepEqual(failIds(f({ faces: [face({ nameRect: Rc(2, 20, 80, 17) })] })), ["LH11e"]);
+  assert.deepEqual(failIds(f({ faces: [] })), ["LH11e"]);
+});
+
+test("판 종류별 단계 그래프 사본: basic 은 낮 시작 발표 → 토론, extended 는 roleReveal → errand → night 이고 서로 다른 표다", () => {
+  const g = libAll.CAUSE_PHASE_GRAPHS;
+  assert.ok(g && g.basic && g.extended, "두 판 종류 표가 있어야 한다");
+  assert.deepEqual(g.basic.roleReveal, ["dayAnnounce"]);
+  assert.deepEqual(g.basic.dayAnnounce, ["discussion"]);
+  assert.deepEqual(g.extended.roleReveal, ["errand"]);
+  assert.deepEqual(g.extended.errand, ["night"]);
+  assert.deepEqual([...g.extended.night].sort(), ["discussion", "morning"]);
+  assert.equal(g.extended.dayAnnounce, undefined, "확장판은 낮 시작 발표를 지나지 않는다");
+  assert.equal(g.basic.errand, undefined, "기본 마피아에는 저녁이 없다");
+});
+
+test("basicOrderChecks(phases, mode): mode 를 주면 그 판 종류의 단계 그래프로 판정한다(확장판 한 판은 errand 를 지난다)", () => {
+  const ext = ["lobby", "assigning", "roleReveal", "errand", "night", "morning", "discussion", "nomination", "defense", "verdict", "execution", "errand", "night"];
+  assert.ok(basicOrderChecks(ext, "extended").every((x) => x.ok), JSON.stringify(basicOrderChecks(ext, "extended")));
+  assert.ok(basicOrderChecks(ext, "basic").some((x) => !x.ok), "기본 마피아에는 errand 가 없다");
+  assert.ok(basicOrderChecks(["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night"], "basic").every((x) => x.ok));
+  assert.ok(basicOrderChecks(["roleReveal", "dayAnnounce", "errand"], "extended").some((x) => !x.ok), "확장판은 낮 시작 발표를 지나지 않는다");
+});

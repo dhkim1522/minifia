@@ -29,7 +29,9 @@ import {
 } from "../../src/game/chatUi";
 import { RESTORED_MS } from "../../src/net/linkReducer";
 import { STAGE_SIZES, panBoxOf } from "../../src/world/camera";
-import { TOWN_ROOMS, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
+import { TOWN_CLUE_SPOTS, TOWN_LAMPS, TOWN_NEIGHBORS, TOWN_ROOMS, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
+import { CARD_TEXT } from "../../src/game/sceneText";
+import { ERRAND_HOLD_MS } from "../../src/components/v2/ErrandAct";
 import { CUTAWAY_MS } from "../../src/world/maps/town";
 import { DOOR_FADE_MS } from "../../src/world/runtime";
 import { DRAW_CALL_BUDGET } from "../../src/world/renderer";
@@ -53,7 +55,7 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
-import { OUTFIT_IDS, PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
+import { OUTFIT_IDS, PLACE_IDS, SPOT_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
 import type { GameMode, OutfitId, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { HOST_HIDDEN_PHASES, HOST_LINES, type HostKey } from "../../src/game/hostLine";
@@ -1273,5 +1275,66 @@ describe("19페이즈 기본 마피아 판 E2E 사본 계약 (19-07, T-19-22)", 
     const host = readFileSync(new URL("scripts/e2e/host.mjs", root), "utf8");
     expect(host).toContain('const emceeLeakFlow = (ctx) => leakFlow(ctx, "emcee-leak");');
     expect(host).toContain('const modeLeakFlow = (ctx) => leakFlow(ctx, "mode-leak", "basic");');
+  });
+});
+
+describe("21페이즈 원인 흐름 E2E 사본 계약 (21-15, D-29, T-21-47·T-21-48)", () => {
+  const lib = e2eLib as unknown as {
+    CAUSE_LAMPS_E2E: readonly { id: string; x: number; z: number }[];
+    CAUSE_CLUE_SPOTS_E2E: readonly (readonly { x: number; z: number }[])[];
+    CAUSE_NEIGHBORS_E2E: readonly (readonly [number, number])[];
+    CAUSE_PHASE_GRAPHS: Record<GameMode, Record<string, string[]>>;
+    CAUSE_LINES: Record<string, string>;
+    CAUSE_CARD_TEXT: Record<string, string>;
+    CAUSE_ABSENT_SELECTORS: readonly string[];
+    CAUSE_HOLD_MS_E2E: number;
+    CAUSE_SPOT_IDS_E2E: readonly string[];
+  };
+  const root = new URL("../../", import.meta.url);
+  const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter((f) => f.endsWith(".tsx"));
+  const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
+
+  it("가로등 8곳 사본은 TOWN_LAMPS 와, 집별 단서 지점 사본은 TOWN_CLUE_SPOTS(고정소수점 / 100)와, 짝집 표는 TOWN_NEIGHBORS 와 같다", () => {
+    expect(lib.CAUSE_LAMPS_E2E.map((l) => ({ ...l }))).toEqual(TOWN_LAMPS.map((l) => ({ id: l.id, x: l.x, z: l.z })));
+    expect(lib.CAUSE_CLUE_SPOTS_E2E.map((spots) => spots.map((p) => ({ ...p })))).toEqual(TOWN_CLUE_SPOTS.map((spots) => spots.map((p) => ({ x: p.x / 100, z: p.z / 100 }))));
+    expect(lib.CAUSE_NEIGHBORS_E2E.map((p) => [...p])).toEqual(TOWN_NEIGHBORS.map((p) => [...p]));
+    expect([...lib.CAUSE_SPOT_IDS_E2E]).toEqual([...SPOT_IDS]);
+  });
+
+  it("판 종류별 단계 그래프 사본은 nextPhaseOf·afterDayOf 와 같다 — 표가 가리키는 모든 단계가 들어 있고 낮 시작 발표는 기본 마피아에만·저녁은 확장판에만 있다", () => {
+    for (const mode of GAME_MODES) {
+      const rules = rulesetOf(mode);
+      const graph = lib.CAUSE_PHASE_GRAPHS[mode];
+      for (const [from, nexts] of Object.entries(graph)) {
+        if (from === "ended" || from === "lobby") continue;
+        const want = nextPhaseOf(from as PhaseId, rules);
+        if (from === "nomination") {
+          expect([...nexts].sort(), `${mode} nomination`).toEqual([afterDayOf(rules), "defense"].sort());
+          continue;
+        }
+        expect(nexts, `${mode} ${from} → ${want}`).toContain(want);
+      }
+      expect(Object.hasOwn(graph, "errand"), `${mode} errand`).toBe(rules.errand);
+      expect(Object.hasOwn(graph, "dayAnnounce"), `${mode} dayAnnounce`).toBe(!rules.cause);
+    }
+    expect([...lib.CAUSE_PHASE_GRAPHS.extended.night!].sort()).toEqual(["discussion", "morning"]);
+  });
+
+  it("사회자 띠 문장 사본(CAUSE_LINES)은 HOST_LINES 와, 단서 카드 고정 문장은 CARD_TEXT 와, 길게 누르기 시간은 ERRAND_HOLD_MS 와 같다", () => {
+    expect(lib.CAUSE_LINES.lampAct).toBe(HOST_LINES["errand.lamp.act"]);
+    expect(lib.CAUSE_LINES.lampDone).toBe(HOST_LINES["errand.lamp.done"]);
+    expect(lib.CAUSE_LINES.sceneAct).toBe(HOST_LINES["scene.act"]);
+    expect(lib.CAUSE_LINES.sceneDone).toBe(HOST_LINES["scene.done"]);
+    expect(lib.CAUSE_LINES.board).toBe(HOST_LINES["discussion.board"]);
+    expect(lib.CAUSE_CARD_TEXT).toEqual({ touched: CARD_TEXT.touched, dark: CARD_TEXT.dark, none: CARD_TEXT.none });
+    expect(lib.CAUSE_HOLD_MS_E2E).toBeGreaterThan(ERRAND_HOLD_MS);
+  });
+
+  it("CAUSE_ABSENT_SELECTORS(기본 마피아에서 0건이어야 하는 확장판 요소)의 속성이 git 이 추적하는 src 의 .tsx 에 있다(빈 선택자 금지)", () => {
+    expect(lib.CAUSE_ABSENT_SELECTORS.length).toBeGreaterThanOrEqual(6);
+    const attrs = lib.CAUSE_ABSENT_SELECTORS.map((sel) => /^\[(data-[a-z-]+)\]$/.exec(sel)?.[1] ?? `모양이 다름:${sel}`);
+    expect(attrs.filter((a) => !sources.some((s) => s.text.includes(`${a}=`))).join(",")).toBe("");
   });
 });
