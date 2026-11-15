@@ -4,7 +4,8 @@ import { planBotSteps } from "../../shared/game/bots";
 import { pickMode } from "../../shared/game/mode";
 import { enterMorning, pickTarget } from "../../shared/game/night";
 import { enterNomination, enterVote, resolveNomination, stepNomination } from "../../shared/game/nomination";
-import { PHASE_DEFS, nextPhaseOf } from "../../shared/game/phases";
+import { nearPhaseOf } from "../../shared/game/movement";
+import { ERRAND_TICK_MS, PHASE_DEFS, nextPhaseOf } from "../../shared/game/phases";
 import { rematch } from "../../shared/game/rematch";
 import { attachConnection, createRoomState, joinRoom, normalizeStoredRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
@@ -12,7 +13,7 @@ import { modeOf, politicsOn, rulesetOf } from "../../shared/game/ruleset";
 import type { Ruleset } from "../../shared/game/ruleset";
 import { routeAfterDayAnnounce } from "../../shared/game/showdown";
 import { resetToLobby } from "../../shared/game/testTools";
-import { hooksOf, tick } from "../../shared/game/tick";
+import { hooksOf, nextWakeAt, tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
 import { DEFAULT_MODE, GAME_MODES, PLACE_IDS } from "../../shared/protocol";
 import type { GameMode, PhaseId } from "../../shared/protocol";
@@ -386,6 +387,40 @@ describe("normalizeStoredRoom — 저장 방의 mode (D-04, T-19-05)", () => {
     const base = lobby(4);
     const once = normalizeStoredRoom({ ...base, mode: "turbo" } as unknown as RoomState, 1000);
     expect(JSON.stringify(once)).toBe(JSON.stringify(base));
+  });
+});
+
+describe("normalizeStoredRoom — 배포 때 아침 중이던 확장판 방 (21 WR-03)", () => {
+  const morning = (extra: Partial<RoomState> = {}): RoomState => ({ ...lobby(4), phase: "morning", phaseEndsAt: 50_000, ...extra });
+
+  it("원인 흐름 아침인데 errandTickAt 이 없으면(mode 없음 = extended) now + 한 표본 간격으로 채운 새 객체다 — 나머지 키는 그대로", () => {
+    const stored = morning();
+    const out = normalizeStoredRoom(stored, 1000);
+    const { errandTickAt, ...rest } = out;
+    expect(`${out !== stored}/${errandTickAt}/${JSON.stringify(rest)}`).toBe(`true/${1000 + ERRAND_TICK_MS}/${JSON.stringify(stored)}`);
+  });
+
+  it("명시한 extended 도 허용 밖 mode(turbo → 기본 extended)도 채우고, 두 번째 정규화는 같은 객체다", () => {
+    const explicit = normalizeStoredRoom(morning({ mode: "extended" }), 1000);
+    const bad = normalizeStoredRoom({ ...morning(), mode: "turbo" } as unknown as RoomState, 1000);
+    expect(`${explicit.errandTickAt}/${bad.errandTickAt}/${"mode" in bad}/${normalizeStoredRoom(explicit, 5000) === explicit}/${normalizeStoredRoom(bad, 5000) === bad}`).toBe(`${1000 + ERRAND_TICK_MS}/${1000 + ERRAND_TICK_MS}/false/true/true`);
+  });
+
+  it("이미 errandTickAt 이 있는 아침·기본판 아침·다른 단계(밤·저녁·토론)는 같은 객체다 — 기본판 불변", () => {
+    const has = morning({ errandTickAt: 777 });
+    const basic = morning({ mode: "basic" });
+    const others = (["night", "errand", "discussion", "dayAnnounce"] as const).map((phase) => ({ ...lobby(4), phase, phaseEndsAt: 50_000 }) as RoomState);
+    expect([has, basic, ...others].map((r) => normalizeStoredRoom(r, 1000) === r).join(",")).toBe("true,true,true,true,true,true");
+  });
+
+  it("원인 흐름 잠금 아래에서는 확장판 아침도 같은 객체다(규칙이 꺼진 판은 표본 시각이 필요 없다)", underCauseLock(() => {
+    const stored = morning();
+    expect(normalizeStoredRoom(stored, 1000) === stored).toBe(true);
+  }));
+
+  it("채워진 방은 아침 표본이 돈다 — nextWakeAt 이 errandTickAt 이고 근처 단계다", () => {
+    const out = normalizeStoredRoom(morning(), 1000);
+    expect(`${nextWakeAt(out) === Math.min(out.errandTickAt!, 50_000, out.expiresAt)}/${nearPhaseOf(out)}`).toBe("true/true");
   });
 });
 

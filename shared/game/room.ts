@@ -24,7 +24,7 @@ import { hostSuccessor } from "./continuity";
 import { resolveLookConflicts } from "./look";
 import { decideMap, startMapOf } from "./maps";
 import { enterNomination } from "./nomination";
-import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS, TUTORIAL_MS } from "./phases";
+import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, ERRAND_TICK_MS, NOMINATION_GATHER_MS, TUTORIAL_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
 import { modeOf, rulesetOf } from "./ruleset";
 import type { RoleId } from "./roles";
@@ -526,6 +526,8 @@ const LEGACY_CHAT_ROOM_KEYS = ["nextMessageSeq", "nextNightSeq"] as const;
  * 채팅은 서버에 저장하지 않는다(결정 0017-7) — 배포 전 저장된 messages 는 깨어날 때 지운다.
  * 채팅 옛 번호·쿨다운 필드(결정 0058 로 대체): 방 키 nextMessageSeq·nextNightSeq 와 Player 키 lastSendAt 도 키째 뺀다.
  * - 판 종류(19페이즈 D-04, T-19-05): 허용 밖 값이 저장된 mode 는 키째 뺀다 — 읽는 쪽 기본값(modeOf → extended)이 받는다. mode 가 없거나 올바른 값인 방은 그대로다(같은 객체).
+ * - 원인 흐름 아침(21페이즈 WR-03, 결정 0088): 원인 흐름 규칙(cause)이 켜진 판의 morning 인데 첫 근처 표본 시각(errandTickAt)이 없는 방(배포 전에 시작돼 아침 중이던 확장판 방)은
+ *   errandTickAt 을 now + ERRAND_TICK_MS 로 채운다 — 안 그러면 아침 걸음이 근처로만 가는데(nearPhaseOf) 근처 snap 표본이 영영 돌지 않아 산 사람이 서로 안 보인다. 호출하는 쪽은 errandTickAt 이 바뀌면 알람을 다시 건다.
  * 아무것도 해당하지 않으면 같은 객체를 돌려준다(DO 생성자의 "바뀌었을 때만 저장·알람" 규칙이 이 동일성에 기댄다).
  * 새 optional 필드가 없는 옛 상태는 읽는 쪽 기본값이 받는다(RESEARCH Pattern 6).
  */
@@ -545,7 +547,9 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   const hasOldChatRoomKeys = LEGACY_CHAT_ROOM_KEYS.some((key) => Object.hasOwn(stored, key));
   const hasBadMode = Object.hasOwn(stored, "mode") && !(GAME_MODES as readonly unknown[]).includes(stored.mode);
   const hasOldPlayerFields = stored.players.some((p) => LEGACY_CLAIM_KEYS.some((key) => Object.hasOwn(p, key)) || Object.hasOwn(p, "lastSendAt"));
-  if (!isLegacyDay && !isLegacyReveal && !isLegacyClaim && !isLegacyVote && !isLegacyNomination && !hasOldVoteRoomKey && !hasOldVotePlayerKeys && !hasOldClaimState && !hasOldMessages && !hasOldChatRoomKeys && !hasOldPlayerFields && !hasBadMode) return stored;
+  // 배포 전에 시작돼 아침 중이던 확장판 방: 규칙은 저장된 mode(없으면 extended)로 읽어 cause 가 켜지는데 아침 표본 시각이 없다(WR-03). 허용 밖 mode 는 modeOf 가 기본값(extended)으로 읽는다.
+  const needsMorningTick = stored.phase === "morning" && stored.errandTickAt === undefined && rulesetOf(modeOf(stored)).cause;
+  if (!needsMorningTick && !isLegacyDay && !isLegacyReveal && !isLegacyClaim && !isLegacyVote && !isLegacyNomination && !hasOldVoteRoomKey && !hasOldVotePlayerKeys && !hasOldClaimState && !hasOldMessages && !hasOldChatRoomKeys && !hasOldPlayerFields && !hasBadMode) return stored;
   // 옛 키는 구조 분해로만 뺀다. 필드 선언이 RoomState 에서 사라져도 컴파일되게 지역 교차 타입으로 받는다.
   const {
     messages: _dropped,
@@ -611,6 +615,7 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   if (isLegacyDay) return { ...next, phase: "dayAnnounce", phaseEndsAt: now + DAY_ANNOUNCE_MS, day: 1 };
   if (isLegacyReveal || isLegacyClaim) return { ...next, phase: "discussion", phaseEndsAt: now + DISCUSSION_MS };
   if (isLegacyNomination) return { ...enterNomination(next), phaseEndsAt: now + NOMINATION_GATHER_MS };
+  if (needsMorningTick) return { ...next, errandTickAt: now + ERRAND_TICK_MS };
   return next;
 }
 

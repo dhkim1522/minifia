@@ -168,7 +168,8 @@ export class Room extends DurableObject<Env> {
           await ctx.storage.put("room", this.room);
           // 정규화로 생긴 이른 마감(now + 2초)이 기존 만료 알람(90초 뒤 등)보다 먼저 깨어나야 하므로 마감이 바뀐 경우에만 여기서 알람을 건다.
           // 옛 messages 키만 지운 경우(결정 0017-7)는 마감이 그대로라 대기 중인 알람을 건드리지 않는다.
-          if (normalized.phaseEndsAt !== stored.phaseEndsAt) await ctx.storage.setAlarm(nextWakeAt(this.room));
+          // 아침 근처 표본 시각(errandTickAt)을 채운 경우(WR-03)도 알람이 그 시각에 깨어나야 하므로 함께 다시 건다.
+          if (normalized.phaseEndsAt !== stored.phaseEndsAt || normalized.errandTickAt !== stored.errandTickAt) await ctx.storage.setAlarm(nextWakeAt(this.room));
         }
         // 보관 줄을 되살린다(MAP-05 와 같은 복원 규칙, 결정 0058-1). 손상 레코드는 restoreChatLog 가 버린다. 방이 없으면 줄도 없다.
         const lines = await ctx.storage.list({ prefix: CHAT_KEY_PREFIX });
