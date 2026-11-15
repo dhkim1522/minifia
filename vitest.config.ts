@@ -9,7 +9,7 @@ export default defineConfig({
       { test: { name: "unit", environment: "node", include: ["test/unit/**/*.test.ts"], setupFiles: ["test/unit/setup.ts"] } },
       {
         plugins: [react()],
-        test: { name: "client", environment: "happy-dom", include: ["test/client/**/*.test.{ts,tsx}"], setupFiles: ["test/client/setup.ts"] },
+        test: { name: "client", environment: "happy-dom", include: ["test/client/**/*.test.{ts,tsx}"] },
       },
       {
         plugins: [cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } })],
