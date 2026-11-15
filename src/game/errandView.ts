@@ -2,10 +2,13 @@
 // 읽는 view 값은 내 심부름 목록(me.errand)과 이번 판의 맵 id(view.map)뿐이고 역할은 읽지 않는다(D-08).
 // 처리 가능 판정(actablePlaceOf)은 서버 규칙(shared/game/errand.ts actErrand)의 화면 거울이다 — 단추의 켜짐·빛에만 쓰고 권위는 서버다.
 // 같은 입력이면 서버와 같은 판정이 되도록 거리는 서버처럼 고정소수점(월드 × UNIT 반올림)의 정수 제곱거리로 잰다.
+import { errandSpotsOf } from "../../shared/game/errand";
 import { UNIT } from "../../shared/game/map";
 import { mapOf } from "../../shared/game/maps";
 import { ERRAND_ACT_R, ERRAND_MS } from "../../shared/game/phases";
-import type { PlaceId, RoomView } from "../../shared/protocol";
+import { modeOf, rulesetOf } from "../../shared/game/ruleset";
+import { SPOT_IDS } from "../../shared/protocol";
+import type { PlaceId, RoomView, SpotId } from "../../shared/protocol";
 
 /** 화면에 쓰는 글자: 단추(처리 → 3곳 완료 뒤 완료) */
 export const ERRAND_TEXT = { act: "처리", done: "완료" } as const;
@@ -55,12 +58,15 @@ export interface PlaceCenter {
   z: number;
 }
 
-/** 내 목록 장소마다 맵 데이터의 좌표(월드 단위). view.map 이 없거나 맵에서 못 찾는 장소는 뺀다 */
+/**
+ * 내 목록 장소마다 맵 데이터의 좌표(월드 단위). view.map 이 없거나 맵에서 못 찾는 장소는 뺀다.
+ * 21페이즈(P21-6): 심부름 자리 후보는 errandSpotsOf(맵, 규칙) — 서버가 배정·처리에 쓰는 같은 함수다. 원인 흐름 마을이면 가로등, 그 밖은 지금처럼 장소.
+ */
 export function placeCentersOf(view: RoomView): PlaceCenter[] {
   const mapId = view.map;
   const mine = view.me.errand;
   if (mapId === undefined || mine === undefined) return [];
-  const defs = mapOf(mapId).places ?? [];
+  const defs = errandSpotsOf(mapOf(mapId), rulesetOf(modeOf(view)));
   const out: PlaceCenter[] = [];
   for (const id of mine.places) {
     const def = defs.find((p) => p.id === id);
@@ -98,15 +104,15 @@ export function nextPlaceOf(pos: Pos | null | undefined, centers: ReadonlyArray<
 }
 
 /** 처리 반경 안(경계 포함)의 미완료 장소 중 가장 가까운 것(같으면 목록 앞). 위치를 모르면 null */
-export function actablePlaceOf(
+export function actablePlaceOf<Id extends string = PlaceId>(
   pos: Pos | null | undefined,
-  centers: ReadonlyArray<PlaceCenter>,
-  done: readonly PlaceId[],
+  centers: ReadonlyArray<{ id: Id; x: number; z: number }>,
+  done: readonly Id[],
   radius: number = ERRAND_ACT_R,
-): PlaceId | null {
+): Id | null {
   if (pos === null || pos === undefined) return null;
   const reach = Math.round(radius * UNIT);
-  let best: PlaceId | null = null;
+  let best: Id | null = null;
   let bestD = Infinity;
   for (const c of centers) {
     if (done.includes(c.id)) continue;
@@ -117,6 +123,30 @@ export function actablePlaceOf(
     }
   }
   return best;
+}
+
+export interface SpotCenter {
+  id: SpotId;
+  x: number;
+  z: number;
+}
+
+/**
+ * 아침 현장의 단서 지점 셋의 좌표(월드 단위, 21페이즈 P21-9). 공개 값(view.map·day.scene.house)과 맵 표(clueSpots)만 읽는다.
+ * 지점 순서는 SPOT_IDS 와 같다. 맵·현장 집·표를 모르면 빈 배열이다.
+ */
+export function spotCentersOf(view: RoomView): SpotCenter[] {
+  const mapId = view.map;
+  const house = view.day?.scene?.house;
+  if (mapId === undefined || house === undefined) return [];
+  const at = mapOf(mapId).clueSpots?.[house];
+  if (at === undefined) return [];
+  const out: SpotCenter[] = [];
+  SPOT_IDS.forEach((id, k) => {
+    const c = at[k];
+    if (c !== undefined) out.push({ id, x: c.x / UNIT, z: c.z / UNIT });
+  });
+  return out;
 }
 
 /** 사각형(px) */

@@ -1198,7 +1198,9 @@ describe("19페이즈 기본 마피아 판 E2E 사본 계약 (19-07, T-19-22)", 
   const OFF_KEYS: readonly HostKey[] = ["errand.act", "errand.done", "errand.ghost", "witness", "discussion.evidence"];
 
   it("BASIC_FORBIDDEN_LINES 는 HOST_LINES 의 심부름·목격 기록·증거 줄 값이다 — 기본 마피아에서도 쓰는 다른 키와 글이 같은 줄(errand.ghost)만 빠진다", () => {
-    const others = (Object.keys(HOST_LINES) as HostKey[]).filter((k) => !OFF_KEYS.includes(k)).map((k) => HOST_LINES[k]);
+    // 21-08: 원인 흐름 전용 키(저녁 등불·밤 집·아침 현장·토론 보드)도 기본 마피아에서 닿지 않는다 — 같은 문장("곧 토론이 시작됩니다")을 쓰는 scene.done 이 "다른 키" 계산에 끼지 않게 뺀다
+    const CAUSE_KEYS: readonly HostKey[] = ["errand.lamp.act", "errand.lamp.done", "night.mafia.house", "night.police.house", "night.doctor.house", "night.citizen.house", "scene.act", "scene.done", "scene.ghost", "discussion.board"];
+    const others = (Object.keys(HOST_LINES) as HostKey[]).filter((k) => !OFF_KEYS.includes(k) && !CAUSE_KEYS.includes(k)).map((k) => HOST_LINES[k]);
     const want = OFF_KEYS.map((k) => HOST_LINES[k]).filter((v) => v !== "" && !others.includes(v));
     expect(lib.BASIC_FORBIDDEN_LINES.join("|")).toBe(want.join("|"));
     // 글이 겹쳐 금지 문구로 쓸 수 없는 키는 errand.ghost 하나다(dayAnnounce.ghost 등과 같은 문장) — 늘거나 줄면 사본과 이 설명을 같이 고친다

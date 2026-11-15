@@ -12,10 +12,16 @@
 // 18.1-12(결정 0083-8): 띠 문장은 "할 일 한 구절"(앞말·마침표·닉네임 없음, 공백 포함 19자 이하)이라 닉네임·아침 결과 문장은 읽지 않는다.
 // 빈 문자열 = 큰 글·시작 카드가 같은 말을 하는 동안(처형·아침·흔적 구간·심부름 시작 카드) — 대체 문장으로 바꾸지 않는다(대체 문장은 키가 fallback 일 때만).
 // local.startCard(클라이언트 상태)는 심부름 단계 문장만 비운다 — 키·빛남 대상은 바꾸지 않는다.
+// (21-08) 원인 흐름(저녁 등불 → 밤 집 고르기 → 아침 현장 → 토론 보드, UI-SPEC "사회자 문구 표")의 새 키는 이 파일 한 곳에 있다. 분기는 rulesetOf(modeOf(view)).cause 한 곳(causeOf)이고
+// 기본판·옛 확장판(원인 흐름 꺼짐)의 키·문장은 그대로다. 새로 읽는 값: 판 종류(causeOf 만) · me.scene[].spot(내가 살핀 지점 id — 단서 값 r·n·piece 는 읽지 않는다) · day.scene.house(공개 현장 집).
+// 역할을 읽는 곳은 지금처럼 밤 역할별 줄 분기뿐이다(저녁·아침·토론 키와 빛남 대상은 역할을 읽지 않는다 — 마피아도 시민과 같다).
 import type { PhaseId, PlaceId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import { connectedCount } from "../../shared/game/room";
-import { actablePlaceOf, errandProgress, nextPlaceOf, placeCentersOf } from "./errandView";
+import { modeOf, rulesetOf } from "../../shared/game/ruleset";
+import { SPOT_IDS } from "../../shared/protocol";
+import type { SpotId } from "../../shared/protocol";
+import { actablePlaceOf, errandProgress, nextPlaceOf, placeCentersOf, spotCentersOf } from "./errandView";
 import { TIMELESS_PHASES } from "./scenes";
 
 /** 문구 표의 키 하나 = 한 줄. 15페이즈는 errand.*·witness·trace 를 채웠고, 16페이즈는 trace 문장을 고치고 discussion.evidence 를 더했다. */
@@ -32,6 +38,10 @@ export type HostKey =
   | "night.mafia" | "night.police" | "night.doctor" | "night.citizen" | "night.ghost"
   | "morning" | "ended"
   | "errand.act" | "errand.done" | "errand.ghost"
+  | "errand.lamp.act" | "errand.lamp.done"
+  | "night.mafia.house" | "night.police.house" | "night.doctor.house" | "night.citizen.house"
+  | "scene.act" | "scene.done" | "scene.ghost"
+  | "discussion.board"
   | "witness" | "trace"
   | "fallback";
 
@@ -49,6 +59,8 @@ export interface HostLocal {
   traceOn?: boolean;
   /** 심부름 시작 카드("오늘 갈 곳")가 내 화면에 떠 있는가(18.1-12, 클라이언트 상태). 떠 있는 동안 카드가 같은 말을 하므로 띠 문장은 비어 있다 */
   startCard?: boolean;
+  /** 아침 큰 글 발표가 말하는 동안인가(21-08, 클라이언트 상태 — 21-10 이 켠다). 원인 흐름 아침 줄만 비운다. 키·빛남 대상은 바꾸지 않는다 */
+  announcing?: boolean;
 }
 
 /**
@@ -94,8 +106,29 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   // '범인'·'증거'·'확정' 없이 공개된 두 근거(같은 옷·목격)만 말한다.
   witness: "기록 단추로 본 것을 확인해 주세요",
   trace: "",
+  // 21페이즈 원인 흐름(UI-SPEC 사회자 문구 표 원문, 합쇼체·마침표 없음·19자 이하). 저녁 act 는 시작 카드가 떠 있는 동안, 아침 act 는 큰 글이 말하는 동안 빈 줄이다.
+  "errand.lamp.act": "등불 세 곳을 켜 주세요",
+  "errand.lamp.done": "곧 밤이 됩니다",
+  "night.mafia.house": "없앨 사람의 집을 눌러 주세요",
+  "night.police.house": "조사할 사람의 집을 눌러 주세요",
+  "night.doctor.house": "지킬 사람의 집을 눌러 주세요",
+  "night.citizen.house": "집 하나를 눌러 주세요",
+  "scene.act": "빛나는 곳을 살펴보세요",
+  "scene.done": "곧 토론이 시작됩니다",
+  "scene.ghost": "지켜봐 주세요",
+  "discussion.board": "단서를 말로 나눠 보세요",
   fallback: HOST_FALLBACK,
 };
+
+/** 이 판이 원인 흐름(저녁 → 밤 → 아침 → 토론)인가 — 문구·빛남 분기의 유일한 판 규칙 읽기 */
+function causeOf(view: RoomView): boolean {
+  return rulesetOf(modeOf(view)).cause;
+}
+
+/** 내가 살핀 지점 id 들(me.scene[].spot — 단서 값은 읽지 않는다) */
+function seenSpotsOf(view: RoomView): SpotId[] {
+  return (view.me.scene ?? []).map((line) => line.spot);
+}
 
 /** 내가 탈락했는가: players 에서 내 좌석의 생존 값만 본다 */
 function isGhost(view: RoomView): boolean {
@@ -119,12 +152,15 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
     case "dayAnnounce":
       return ghost ? "dayAnnounce.ghost" : "dayAnnounce.wait";
     case "errand": {
-      // 역할을 읽지 않는다: 유령 → ghost, 3곳을 마친 산 사람 → done, 그 밖 → act
+      // 역할을 읽지 않는다: 유령 → ghost, 3곳을 마친 산 사람 → done, 그 밖 → act. 원인 흐름은 등불 문장(21-08)
       if (ghost) return "errand.ghost";
-      return errandProgress(view)?.complete === true ? "errand.done" : "errand.act";
+      const done = errandProgress(view)?.complete === true;
+      if (causeOf(view)) return done ? "errand.lamp.done" : "errand.lamp.act";
+      return done ? "errand.done" : "errand.act";
     }
     case "discussion":
       if (ghost) return "discussion.ghost";
+      if (causeOf(view)) return "discussion.board"; // 원인 흐름: 의심 보드가 기록·증거를 대신한다(21-08, D-19)
       // 역할을 읽지 않는다. 우선순위: 기록을 아직 안 연 사람 → witness, 흔적이 있는 날 → discussion.evidence, 그 밖 → discussion.act.
       // 기록이 있다는 사실(불리언)과 day.evidence.trace 의 유무만 본다 — 줄 내용·조각 값·목격자는 읽지 않는다
       if (view.me.record !== undefined && local.recordOpened !== true) return "witness";
@@ -145,12 +181,20 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
     case "night": {
       if (ghost) return "night.ghost";
       const role = view.me.role;
-      if (role === "mafia") return "night.mafia";
-      if (role === "police") return "night.police";
-      if (role === "doctor") return "night.doctor";
-      return "night.citizen";
+      // 역할을 읽는 곳은 이 밤 줄 분기뿐이다. 원인 흐름은 얼굴이 아니라 집을 누른다(키만 다르고 분기는 같다)
+      const house = causeOf(view);
+      if (role === "mafia") return house ? "night.mafia.house" : "night.mafia";
+      if (role === "police") return house ? "night.police.house" : "night.police";
+      if (role === "doctor") return house ? "night.doctor.house" : "night.doctor";
+      return house ? "night.citizen.house" : "night.citizen";
     }
     case "morning": {
+      if (causeOf(view)) {
+        // 현장 조사(역할을 읽지 않는다): 유령 → ghost, 현장 없음 → 큰 글(빈 줄), 3곳을 다 살핀 산 사람 → done, 그 밖 → act
+        if (ghost) return "scene.ghost";
+        if (view.day?.scene === undefined) return "morning";
+        return seenSpotsOf(view).length >= SPOT_IDS.length ? "scene.done" : "scene.act";
+      }
       const morning = view.day?.morning;
       if (morning === undefined) return "fallback";
       return local.traceOn === true && morning.trace !== undefined ? "trace" : "morning";
@@ -168,6 +212,7 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
  */
 export function hostLineOf(view: RoomView, local: HostLocal = {}): string {
   if (view.phase === "errand" && local.startCard === true) return "";
+  if (view.phase === "morning" && local.announcing === true && causeOf(view)) return "";
   return HOST_LINES[hostKeyOf(view, local)];
 }
 
@@ -187,9 +232,18 @@ export function hostBandModeOf(view: RoomView, line: string): HostBandMode {
   return "show";
 }
 
-export type CallTool = "start" | "card" | "chat" | "will" | "verdict" | "errand" | "record";
-/** 15페이즈: place = 다음 장소 표지(화면 밖이면 화살표 칩) */
-export type CallTarget = { kind: "tool"; tool: CallTool } | { kind: "tag"; seats: readonly number[] } | { kind: "place"; id: PlaceId };
+export type CallTool = "start" | "card" | "chat" | "will" | "verdict" | "errand" | "record" | "inspect";
+/**
+ * 15페이즈: place = 다음 장소 표지(화면 밖이면 화살표 칩).
+ * 21-08: places = 안 켠 배정 등불 표지 전부(저녁) · houses = 밤에 고를 수 있는 집(산 사람 좌석 전부, 나 포함 — 소비는 21-09) · spots = 안 살핀 단서 지점 전부(아침, 소비는 21-10).
+ */
+export type CallTarget =
+  | { kind: "tool"; tool: CallTool }
+  | { kind: "tag"; seats: readonly number[] }
+  | { kind: "place"; id: PlaceId }
+  | { kind: "places"; ids: readonly PlaceId[] }
+  | { kind: "houses"; seats: readonly number[] }
+  | { kind: "spots"; ids: readonly SpotId[] };
 
 function aliveSeats(view: RoomView, includeMe: boolean): number[] {
   return view.players
@@ -231,6 +285,32 @@ export function callTargetsOf(view: RoomView, local: HostLocal = {}): CallTarget
       const next = nextPlaceOf(local.pos, centers, progress.done);
       return next === null ? null : { kind: "place", id: next };
     }
+    case "errand.lamp.act": {
+      // 반경 안 안 켠 배정 등불이 있으면 [켜기] 하나(표지 깜빡임은 꺼진다), 아니면 안 켠 배정 등불 전부(한 화면 한 종류, P21-6). 역할을 읽지 않는다
+      const progress = errandProgress(view);
+      if (progress === null) return null;
+      if (actablePlaceOf(local.pos, placeCentersOf(view), progress.done) !== null) return { kind: "tool", tool: "errand" };
+      const ids = progress.places.filter((id) => !progress.done.includes(id));
+      return ids.length === 0 ? null : { kind: "places", ids };
+    }
+    case "night.mafia.house":
+    case "night.police.house":
+    case "night.doctor.house":
+    case "night.citizen.house": {
+      // 네 역할이 같은 집들이 빛난다(고를 수 있는 집 = 산 사람 좌석 전부, 나 포함)
+      const seats = aliveSeats(view, true);
+      return seats.length === 0 ? null : { kind: "houses", seats };
+    }
+    case "scene.act": {
+      // 반경 안 안 살핀 지점이 있으면 [살펴보기] 하나, 아니면 안 살핀 지점 전부. 역할을 읽지 않는다
+      const seen = seenSpotsOf(view);
+      const ids = SPOT_IDS.filter((id) => !seen.includes(id));
+      if (ids.length === 0) return null;
+      if (actablePlaceOf(local.pos, spotCentersOf(view), seen) !== null) return { kind: "tool", tool: "inspect" };
+      return { kind: "spots", ids };
+    }
+    case "discussion.board":
+      return { kind: "tool", tool: "chat" };
     case "night.mafia":
     case "night.citizen":
     case "night.police":
@@ -261,5 +341,7 @@ export function hostChimeOf(prev: PhaseId | null, cur: PhaseId, fresh: boolean):
   // 17-07(결정 0080-14): 함께 진행 튜토리얼은 자기 띠·소리를 가진다 — 대기실 → tutorial, tutorial → 배정에는 실제 사회자 알림음이 없다(띠·알림음이 겹치지 않게)
   if (prev === "tutorial" || cur === "tutorial") return false;
   if (prev === "dayAnnounce" && (cur === "discussion" || cur === "errand")) return false;
+  // 21-08(UI-SPEC 알림음): 처형 → 저녁은 울리지 않는다(저녁 시작 카드가 신호). 저녁 → 밤·밤 → 아침·아침 → 토론·역할 확인 → 저녁은 다른 단계 바뀜과 같이 한 번 울린다
+  if (prev === "execution" && cur === "errand") return false;
   return true;
 }
