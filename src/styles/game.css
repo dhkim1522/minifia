@@ -118,3 +118,10 @@
 /* 근처 반경 링: 굵기 2·gray-50 35% 점선, 정지 모양(모션 줄이기와 무관). 처리 반경은 그리지 않는다 */
 .mf-world__ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; fill: none; stroke: var(--gray-50); stroke-opacity: 0.35; stroke-width: 2; stroke-dasharray: 6 6; stroke-linejoin: round; }
 
+/* 아침 현장 층·카드 줄(21-10, UI-SPEC P21-10·P21-12): 지점 표지 층은 심부름 층(.mf-world__errand)과 같은 높이·같은 규칙이고 큰 글 발표가 사라진 뒤 --dur-med 로 나타난다(모션 줄이기면 즉시).
+ * 카드 줄은 아래 패널 윗변 위 8(좌우 16, 가로 최대 3장) — 패널 높이(--mf-panel-h)와 키보드 올림(--mf-kb-lift)을 따라간다. 줄 자체는 눌림을 통과하고 카드는 읽기 전용이다. */
+.mf-world__clues > .mv-clue-spot { left: 0; top: 0; pointer-events: auto; }
+.mf-world__clues { animation: mf-clues-in var(--dur-med) ease-out both; }
+@keyframes mf-clues-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .mf-world__clues { animation: none; } }
+.mf-game__clues { position: absolute; left: var(--space-md); right: var(--space-md); bottom: calc(var(--mf-kb-lift, 0px) + var(--mf-panel-h, 0px) + 8px); z-index: var(--z-overlay); display: flex; align-items: stretch; gap: 8px; pointer-events: none; }

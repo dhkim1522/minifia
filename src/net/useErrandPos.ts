@@ -4,7 +4,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlaceId } from "../../shared/protocol";
 import { actablePlaceOf, nextPlaceOf } from "../game/errandView";
-import type { PlaceCenter } from "../game/errandView";
 
 /** 표본 간격(ms) */
 export const ERRAND_POS_SAMPLE_MS = 200;
@@ -15,27 +14,27 @@ export interface PosStore {
   subscribe(cb: () => void): () => void;
 }
 
-export interface ErrandPos {
+export interface ErrandPos<Id extends string = PlaceId> {
   /** 처리 반경 안 미완료 장소(없으면 null) */
-  actableId: PlaceId | null;
+  actableId: Id | null;
   /** 내 위치에서 가장 가까운 미완료 장소(위치를 모르면 첫 미완료, 없으면 null) */
-  nextId: PlaceId | null;
+  nextId: Id | null;
   /** 마지막 표본의 내 월드 위치(상태 아님 — 읽을 때만 쓴다) */
   pos(): { x: number; z: number } | null;
 }
 
-export function useErrandPos(
+export function useErrandPos<Id extends string = PlaceId>(
   store: PosStore,
   mySeat: number,
   serverNow: () => number,
-  centers: ReadonlyArray<PlaceCenter>,
-  done: readonly PlaceId[],
+  centers: ReadonlyArray<{ id: Id; x: number; z: number }>,
+  done: readonly Id[],
   enabled: boolean,
-): ErrandPos {
+): ErrandPos<Id> {
   const posRef = useRef<{ x: number; z: number } | null>(null);
   const nowRef = useRef(serverNow);
   nowRef.current = serverNow;
-  const [ids, setIds] = useState<{ actableId: PlaceId | null; nextId: PlaceId | null }>({ actableId: null, nextId: null });
+  const [ids, setIds] = useState<{ actableId: Id | null; nextId: Id | null }>({ actableId: null, nextId: null });
   // 같은 내용이면 같은 참조를 쓰는 키(목록·진행 배열이 렌더마다 새로 만들어져도 표본 효과를 다시 걸지 않는다)
   const centersKey = centers.map((c) => `${c.id}:${c.x}:${c.z}`).join("|");
   const doneKey = done.join("|");

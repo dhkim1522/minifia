@@ -442,9 +442,12 @@ describe("맵 화면 빛남 (HOST-03·04·05)", () => {
       // 16-07: 장소 위 [처리] 알약을 누를 때의 ui.tap 은 빛남이 아니라 눌림 소리(V-31)라 그 핸들러(onErrandAct)만 검사에서 뺀다
       const block = src
         .slice(src.indexOf("callTargetsOf(view)"), src.indexOf("const stageTagProps"))
-        .replace(/const onErrandAct = useCallback\([\s\S]*?\n  \}, \[[^\]]*\]\);/, "");
+        .replace(/const onErrandAct = useCallback\([\s\S]*?\n  \}, \[[^\]]*\]\);/, "")
+        // 21-10: 아침 지점 위 [살펴보기] 알약도 같은 눌림 소리라 그 핸들러(onInspect)만 같은 이유로 뺀다 — 빛남 코드(callTarget·callSpots)는 그대로 검사한다
+        .replace(/const onInspect = useCallback\([\s\S]*?\n  \}, \[[^\]]*\]\);/, "");
       expect(block).not.toMatch(/emitSignal/);
       expect(block).not.toMatch(/const onErrandAct/);
+      expect(block).not.toMatch(/const onInspect/);
     });
   });
 });

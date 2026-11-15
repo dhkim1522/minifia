@@ -4847,3 +4847,130 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, 16페이즈 D-06·D-07
     expect(css).not.toMatch(/\.mf-world__ring[^{]*\{[^}]*animation/);
   });
 });
+
+// ---------- 21-10: 아침 현장 층(단서 지점 표지·화살표 칩·[살펴보기] 알약·근처 링) — 심부름 층과 같은 투영·안쪽 8 inset·피할 사각형 규칙 ----------
+
+describe("WorldStage: 아침 현장 층 (21페이즈 D-13·D-26, UI-SPEC P21-10·P21-11, 21-10)", () => {
+  const INS = { top: 60, bottom: 84 };
+  // 가짜 렌더러: 발끝 (x, z) → sx = 200 + 10x, sy = 300 + 10z. 내 위치(기본 ents)는 (2, 1) → (220, 310)
+  const A = { id: "footprint" as const, x: 0, z: 0, state: "new" as const }; // (200, 300) 안
+  const B = { id: "cloth" as const, x: -100, z: 0, state: "new" as const }; // (-800, 300) 밖
+  const C = { id: "window" as const, x: 5, z: 5, state: "done" as const }; // (250, 350) 안
+  const cluesProp = (over: Partial<NonNullable<WorldStageProps["clues"]>> = {}): NonNullable<WorldStageProps["clues"]> => ({ spots: [A, B, C], nextId: "footprint", actId: null, nearR: 3, onAct: vi.fn(), ...over });
+  const layer = (s: Setup) => s.utils.container.querySelector<HTMLElement>("[data-clue-layer]");
+  const spot = (s: Setup, id: string) => s.utils.container.querySelector<HTMLElement>(`button[data-clue-spot="${id}"]`)!;
+  const arrow = (s: Setup) => s.utils.container.querySelector<HTMLElement>("[data-errand-arrow]")!;
+  const act = (s: Setup) => s.utils.container.querySelector<HTMLElement>("button[data-errand-act]");
+
+  it("clues prop 이 없으면 층이 DOM 에 없다(회귀)", async () => {
+    const s = await open({ stageInsets: INS });
+    expect(layer(s)).toBeNull();
+    expect(s.utils.container.querySelector("[data-clue-spot]")).toBeNull();
+  });
+
+  it("clues prop 이 있으면 지점마다 표지 버튼(data-state), 화살표 하나, 링 svg(data-near-ring=nearR)가 마운트되고 [살펴보기] 는 actId 가 있을 때만 하나다", async () => {
+    const s = await open({ stageInsets: INS, clues: cluesProp() });
+    expect(layer(s)).not.toBeNull();
+    expect(s.utils.container.querySelectorAll("button[data-clue-spot]")).toHaveLength(3);
+    expect(s.utils.container.querySelectorAll("[data-errand-arrow]")).toHaveLength(1);
+    expect(s.utils.container.querySelector("svg[data-near-ring]")!.getAttribute("data-near-ring")).toBe("3");
+    expect(spot(s, "window").getAttribute("data-state")).toBe("done");
+    expect(act(s)).toBeNull();
+    s.rerender({ clues: cluesProp({ actId: "footprint" }) });
+    expect(act(s)).not.toBeNull();
+    expect(act(s)!.textContent).toBe("살펴보기");
+    expect(act(s)!.getAttribute("aria-label")).toBe("발자국 살펴보기");
+  });
+
+  it("표지를 누르면 그 지점으로 걷는 move 가 한 번 간다(살피는 메시지 없음). canWalk 가 거짓이면 걷지 않는다", async () => {
+    const s = await open({ stageInsets: INS, clues: cluesProp() });
+    frame();
+    fireEvent.click(spot(s, "window"));
+    expect(s.send).toHaveBeenCalledTimes(1);
+    expect(s.send).toHaveBeenCalledWith({ t: "move", x: 500, z: 500 });
+    const t = await open({ stageInsets: INS, canWalk: false, clues: cluesProp() });
+    frame();
+    fireEvent.click(spot(t, "window"));
+    expect(t.send).not.toHaveBeenCalled();
+  });
+
+  it("프레임마다 스테이지 안(안쪽 8)의 표지는 52 상자 중심이 투영 좌표로 놓이고 화면 밖 표지는 hidden 이다", async () => {
+    const s = await open({ stageInsets: INS, clues: cluesProp() });
+    frame();
+    expect(spot(s, "footprint").hidden).toBe(false);
+    expect(spot(s, "footprint").style.transform).toBe("translate(174px, 274px)");
+    expect(spot(s, "window").hidden).toBe(false);
+    expect(spot(s, "window").style.transform).toBe("translate(224px, 324px)");
+    expect(spot(s, "cloth").hidden).toBe(true);
+  });
+
+  it("화살표 칩: 알약이 없으면 내 발밑에서 안 살핀 가장 가까운 지점 방향 하나(화면 밖 지점도), 알약이 서면 없다", async () => {
+    const s = await open({ stageInsets: INS, clues: cluesProp({ nextId: "cloth" }) });
+    frame();
+    expect(arrow(s).hidden).toBe(false);
+    const deg = Number(/rotate\((-?[\d.]+)deg\)/.exec(arrow(s).querySelector<HTMLElement>(".mv-errand-arrow__turn")!.style.transform)![1]);
+    expect(deg).toBeLessThan(-80);
+    expect(deg).toBeGreaterThan(-100);
+    const u = await open({ stageInsets: INS, clues: cluesProp({ nextId: "footprint", actId: "footprint" }) });
+    frame();
+    expect(arrow(u).hidden).toBe(true);
+  });
+
+  it("[살펴보기]: actId 지점 표지 위 8 에 서고(중심 y = 300 - 26 - 8 - 22) 누르면 onAct 가 한 번 불린다(inspect 전송은 GameMap 몫)", async () => {
+    const onAct = vi.fn();
+    const s = await open({ stageInsets: INS, clues: cluesProp({ actId: "footprint", onAct }) });
+    frame();
+    expect(act(s)!.hidden).toBe(false);
+    expect(act(s)!.style.transform).toBe("translate(152px, 222px)");
+    fireEvent.click(act(s)!);
+    expect(onAct).toHaveBeenCalledTimes(1);
+    expect(s.send).not.toHaveBeenCalled();
+  });
+
+  it("빛남: callSpots 의 보이는 표지는 data-call(is-call), 보이지 않는 표지·callSpots 밖은 빛나지 않고, 알약이 서면 알약만 빛난다", async () => {
+    const s = await open({ stageInsets: INS, clues: cluesProp({ callSpots: ["footprint", "cloth"] }) });
+    frame();
+    expect(spot(s, "footprint").hasAttribute("data-call")).toBe(true);
+    expect(spot(s, "footprint").classList.contains("is-call")).toBe(true);
+    expect(spot(s, "cloth").hasAttribute("data-call")).toBe(false); // 안 보이는 표지
+    expect(spot(s, "window").hasAttribute("data-call")).toBe(false); // 살핀 표지
+    expect(arrow(s).hasAttribute("data-call")).toBe(false);
+    s.rerender({ clues: cluesProp({ callSpots: ["footprint"], actId: "footprint" }) });
+    frame();
+    expect(s.utils.container.querySelectorAll("[data-call]")).toHaveLength(1);
+    expect(act(s)!.hasAttribute("data-call")).toBe(true);
+    expect(spot(s, "footprint").hasAttribute("data-call")).toBe(false);
+  });
+
+  it("단서 카드([data-clue-card])와 소리 단추([data-side-button])·[건너뛰기]([data-skip])에 가려지는 표지는 그리지 않는다", async () => {
+    const card = document.createElement("div");
+    card.setAttribute("data-clue-card", "cloth");
+    card.getBoundingClientRect = () => ({ left: 150, top: 280, right: 250, bottom: 336, width: 100, height: 56, x: 150, y: 280, toJSON() {} }) as DOMRect;
+    document.body.append(card);
+    const s = await open({ stageInsets: INS, clues: cluesProp({ nextId: "footprint" }) });
+    frame(600);
+    expect(spot(s, "footprint").hidden).toBe(true); // (174..226 × 274..326) 이 카드와 겹친다
+    expect(spot(s, "window").hidden).toBe(true); // (224..276 × 324..376) 도 겹친다
+    expect(arrow(s).hidden).toBe(false); // 가려진 지점은 화살표 칩이 가리킨다
+    card.remove();
+    const skip = document.createElement("button");
+    skip.setAttribute("data-skip", "");
+    skip.getBoundingClientRect = () => ({ left: 160, top: 260, right: 264, bottom: 308, width: 104, height: 48, x: 160, y: 260, toJSON() {} }) as DOMRect;
+    document.body.append(skip);
+    const t = await open({ stageInsets: INS, clues: cluesProp({ nextId: "footprint" }) });
+    frame(600);
+    expect(spot(t, "footprint").hidden).toBe(true);
+    skip.remove();
+  });
+
+  it("근처 링: 내 위치 둘레에 24점 다각형이 쓰이고 위치를 모르면 숨긴다", async () => {
+    const s = await open({ stageInsets: INS, clues: cluesProp() });
+    frame();
+    const ring = s.utils.container.querySelector<SVGElement>("svg[data-near-ring]")!;
+    expect(ring.style.display).not.toBe("none");
+    expect(ring.querySelector("polygon")!.getAttribute("points")!.split(" ")).toHaveLength(24);
+    const t = await open({ stageInsets: INS, clues: cluesProp() }, { ents: [seg(1, [-300, 50])] });
+    frame();
+    expect(t.utils.container.querySelector<SVGElement>("svg[data-near-ring]")!.style.display).toBe("none");
+  });
+});

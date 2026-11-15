@@ -269,6 +269,11 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       // U-5: "낮이 되었습니다" 36px 알림은 없다(띠가 말한다). 채팅 줄 "{N}일차" 는 그대로
       out.lines.push({ kind: "system", text: DAY_COPY.dayLine(day.n) });
       return;
+    case "discussion":
+      // 원인 흐름의 현장 없는 밤(21페이즈 D-17·P21-20): 피해자도 미수도 없으면 아침 단계 없이 밤 → 토론으로 온다. 토론 첫머리에 아침 큰 글과 같은 문장(결정 0083 문구 그대로)만 한 번 띄운다 — 새 문장·채팅 줄 없음.
+      // 현장이 있었던 밤은 아침 단계를 지나 와서(prev 가 morning) 이 분기가 아니다. 기본판·옛 확장판은 밤 다음이 아침이라 여기에 오지 않는다.
+      if (prev.phase === "night" && rulesetOf(modeOf(cur)).cause) out.announces.push({ text: MORNING_TEXT.quiet, at: ANNOUNCE_MORNING_AT, ms: ANNOUNCE_MORNING_MS });
+      return;
     case "nomination":
       out.lines.push({ kind: "system", text: DAY_COPY.nominationStart });
       return;

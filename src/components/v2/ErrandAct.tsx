@@ -21,8 +21,8 @@ export const ERRAND_HOLD_MS = 600;
 const CLICK_FOLLOW_MS = 400;
 
 export interface ErrandActProps {
-  /** 처리할 장소(접근성 이름에만 쓴다) */
-  id: PlaceId;
+  /** 처리할 장소(접근성 이름에만 쓴다). 아침 [살펴보기]는 장소가 아니라 지점이라 주지 않고 aria 를 직접 준다 */
+  id?: PlaceId;
   /** 빛남(14 의 is-call): 처리 반경 안에 미처리가 있을 때의 그 한 개 */
   call: boolean;
   /** hold: 0.6초 넘게 눌렀다 뗐는가. 뗀 순간 한 번만 불린다 */
@@ -48,7 +48,7 @@ export function ErrandAct({ id, call, onPress, label = ERRAND_TEXT.act, icon = "
       className={call ? "mv-errand-act is-call" : "mv-errand-act"}
       data-errand-act=""
       data-call={call ? "" : undefined}
-      aria-label={aria ?? `${PLACE_NAME[id]}에서 처리`}
+      aria-label={aria ?? (id === undefined ? label : `${PLACE_NAME[id]}에서 처리`)}
       style={style}
       hidden={hidden}
       onMouseDown={(e) => e.preventDefault()}
