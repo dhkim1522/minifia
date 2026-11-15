@@ -4675,6 +4675,52 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, 16페이즈 D-06·D-07
     expect(s.utils.container.querySelectorAll("[data-call]")).toHaveLength(0);
   });
 
+  it("21-08 P21-6: callPlaces 의 보이는 표지는 전부 data-call(is-call)로 빛나고(안 켠 배정 등불 전부), 안 보이는 표지·처리한 표지·callPlaces 밖은 빛나지 않는다. 알약이 있으면 알약만 빛난다", async () => {
+    const E = { id: "sax" as const, x: 6, z: 0, done: false }; // (260, 300) 안
+    const s = await open({ stageInsets: INS, errand: errandProp({ places: [A, B, E], callPlaces: ["glass", "piano", "sax"], nextId: "glass" }) });
+    frame();
+    expect(pin(s, "glass").hasAttribute("data-call")).toBe(true);
+    expect(pin(s, "sax").hasAttribute("data-call")).toBe(true);
+    expect(pin(s, "sax").classList.contains("is-call")).toBe(true);
+    expect(pin(s, "piano").hasAttribute("data-call")).toBe(false); // 안 보이는 표지 — 화살표가 방향을 알린다
+    expect(s.utils.container.querySelectorAll("button[data-errand-place][data-call]")).toHaveLength(2);
+    expect(arrow(s).hasAttribute("data-call")).toBe(false);
+    // 하나를 켜면(done) 그 표지의 깜빡임이 멎는다
+    s.rerender({ errand: errandProp({ places: [{ ...A, done: true }, B, E], callPlaces: ["piano", "sax"], nextId: "sax" }) });
+    frame();
+    expect(pin(s, "glass").hasAttribute("data-call")).toBe(false);
+    expect(pin(s, "sax").hasAttribute("data-call")).toBe(true);
+    // 알약이 서면 표지 깜빡임은 꺼지고 알약만 빛난다(한 화면 한 종류)
+    s.rerender({ errand: errandProp({ places: [A, B, E], callPlaces: ["glass", "sax"], nextId: "glass", actId: "glass" }) });
+    frame();
+    expect(s.utils.container.querySelectorAll("[data-call]")).toHaveLength(1);
+    expect(act(s)!.hasAttribute("data-call")).toBe(true);
+  });
+
+  it("21-08 P21-7: actLook 이 있으면 [켜기] 글·불꽃 아이콘·접근성 이름 '가로등에서 켜기'이고, 알약을 짧게 누르면 onAct(false)·0.6초 길게 누르면 onAct(true)", async () => {
+    const onAct = vi.fn();
+    const L = { id: "lamp0" as const, x: 0, z: 0, done: false };
+    const s = await open({ stageInsets: INS, errand: errandProp({ places: [L], nextId: "lamp0", actId: "lamp0", actLook: { label: "켜기", icon: "flame", verb: "켜기" }, onAct }) });
+    frame();
+    const b = act(s)!;
+    expect(b.textContent).toBe("켜기");
+    expect(b.getAttribute("aria-label")).toBe("가로등에서 켜기");
+    expect(b.querySelector("svg")!.innerHTML).toContain("M12 3c3 4 5 6 5 10a5 5 0 0 1-10 0c0-4 2-6 5-10z");
+    fireEvent.click(b);
+    expect(onAct).toHaveBeenLastCalledWith(false);
+    const now = Date.now();
+    const spy = vi.spyOn(Date, "now");
+    spy.mockReturnValue(now);
+    fireEvent.pointerDown(b);
+    spy.mockReturnValue(now + 700);
+    fireEvent.pointerUp(b);
+    spy.mockRestore();
+    expect(onAct).toHaveBeenLastCalledWith(true);
+    // 켠 표지의 접근성 이름: 가로등 장소, 처리함
+    s.rerender({ errand: errandProp({ places: [{ ...L, done: true }], nextId: null, actId: null }) });
+    expect(pin(s, "lamp0").getAttribute("aria-label")).toBe("가로등 장소, 처리함");
+  });
+
   it("링: 내 위치를 중심으로 반경 nearR 월드 단위의 24점 다각형이 투영되어 points 가 갱신되고 내 위치가 없으면 hidden", async () => {
     const s = await open({ stageInsets: INS, errand: errandProp() }, { ents: [seg(0, [200, 100]), seg(1, [-300, 50])] });
     frame();
