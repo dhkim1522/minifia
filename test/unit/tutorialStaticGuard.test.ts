@@ -189,3 +189,22 @@ describe("튜토리얼 CSS 의 진홍은 T-18 연출 선택자에서만 쓴다 (
     expect(crimsonViolations(readFileSync(full, "utf8"))).toEqual([]);
   });
 });
+
+describe("21-12: 새 흐름 대본은 서버가 아니라 공유 상수에서 읽는다 (D-28, T-21-42)", () => {
+  const script = stripComments(readFileSync(`${ROOT}src/game/tutorialScript.ts`, "utf8"));
+
+  it("마을 가로등·집 앞 지점 표를 shared/game/mapTown 에서 가져온다(출연 좌표가 두 곳에 없다)", () => {
+    expect(script).toMatch(/from\s+"\.\.\/\.\.\/shared\/game\/mapTown"/);
+    expect(script).toMatch(/\bTOWN_LAMPS\b/);
+    expect(script).toMatch(/\bTOWN_CLUE_SPOTS\b/);
+  });
+
+  it("서버 모듈(worker)·연결 계층(net/useRoomConnection)을 가져오지 않는다", () => {
+    expect(script).not.toMatch(/from\s+"[^"]*\/worker\//);
+    expect(script).not.toMatch(/from\s+"[^"]*useRoomConnection"/);
+  });
+
+  it("가짜 view 는 원인 흐름 판을 명시한다(mode extended)", () => {
+    expect(script).toMatch(/mode:\s*"extended"/);
+  });
+});

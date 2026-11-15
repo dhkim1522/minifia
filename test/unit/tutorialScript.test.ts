@@ -1,15 +1,18 @@
-// 17-03: 첫 사건 대본 — 장면 표·가짜 view·로컬 어댑터 (TUT-03, TUT-05, 결정 0078-1·7, 0080-9·16·17).
-// 대본은 순수 데이터다. 실제 판정 함수(errandView·traceMark·recordView)가 읽는 필드를 갖췄는지 그 함수로 확인한다.
-import { describe, expect, it } from "vitest";
+// 17-03·21-12: 첫 사건 대본 — 장면 표·가짜 view·로컬 어댑터 (TUT-03, TUT-05, TUT-06, 결정 0078-1·7, 0080-9·16·17, 21페이즈 D-20·D-28).
+// 대본은 순수 데이터다. 실제 판정 함수(errandView·sceneView·boardView·traceMark)가 읽는 필드를 갖췄는지 그 함수로 확인한다.
+// 새 흐름(등불 → 현장 → 보드)의 가짜 view 는 원인 흐름 판이라 이 시험은 openCause() 아래에서 돈다(단위 시험 setup 이 잠가 둔다).
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { actablePlaceOf, errandProgress, placeCentersOf, startCardOn } from "../../src/game/errandView";
-import { traceWindowOf } from "../../src/game/recordView";
+import { boardOf } from "../../src/game/boardView";
+import { actableSpotOf, clueCardsOf, spotsOf } from "../../src/game/sceneView";
 import { sameOutfitSeats } from "../../src/game/traceMark";
 import { lineWalkable } from "../../shared/game/map";
-import { GATHER_CENTER } from "../../src/world/camera";
 import { mapOf } from "../../shared/game/maps";
+import { TOWN_CLUE_SPOTS, TOWN_LAMPS } from "../../shared/game/mapTown";
 import { ERRAND_ACT_R } from "../../shared/game/phases";
-import { segmentEndsAt } from "../../shared/game/world";
+import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import type { ClientMessage } from "../../shared/protocol";
+import { openCause } from "../helpers/playable";
 
 type ScriptModule = typeof import("../../src/game/tutorialScript");
 
@@ -22,8 +25,14 @@ async function loadScript(): Promise<ScriptModule> {
 
 const NOW = 1_700_000_000_000;
 
+let restoreCause: () => void = () => {};
+beforeAll(() => {
+  restoreCause = openCause();
+});
+afterAll(() => restoreCause());
+
 describe("장면 표 8행 — 순서·그리는 방식·점·넘어가는 방식", () => {
-  it("n 은 1~8 오름차순이고 id·render 가 계약 그대로다", async () => {
+  it("n 은 1~8 오름차순이고 id·render 가 계약 그대로다 (장면 수 8 그대로, D-28)", async () => {
     const { TUTORIAL_SCENES } = await loadScript();
     expect(TUTORIAL_SCENES.map((s) => s.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(TUTORIAL_SCENES.map((s) => s.id)).toEqual(["opening", "morning", "errand", "witness", "evidence", "vote", "roles", "end"]);
@@ -37,13 +46,13 @@ describe("장면 표 8행 — 순서·그리는 방식·점·넘어가는 방식
     expect(TUTORIAL_SCENES.filter((s) => s.dot)).toHaveLength(TUTORIAL_DOT_COUNT);
   });
 
-  it("넘어가는 방식: 1 auto 4600 · 2 next 2600 · 3 act 700 · 4 next 3400 · 5 next 0 · 6 pick 1100 · 7 next 0 · 8 end", async () => {
+  it("넘어가는 방식: 1 auto 4600 · 2 next 2600 · 3 act 700 · 4 inspect([살펴보기] 뒤 [다음]) · 5 next 0 · 6 pick 1100 · 7 next 0 · 8 end", async () => {
     const { TUTORIAL_SCENES } = await loadScript();
     expect(TUTORIAL_SCENES.map((s) => s.advance)).toEqual([
       { kind: "auto", afterMs: 4600 },
       { kind: "next", showAtMs: 2600 },
       { kind: "act", afterMs: 700 },
-      { kind: "next", showAtMs: 3400 },
+      { kind: "inspect" },
       { kind: "next", showAtMs: 0 },
       { kind: "pick", revealAfterMs: 1100 },
       { kind: "next", showAtMs: 0 },
@@ -51,7 +60,7 @@ describe("장면 표 8행 — 순서·그리는 방식·점·넘어가는 방식
     ]);
   });
 
-  it("장면 3 의 소리·말·포커스는 시안 시각 그대로다: whoosh 0, 심부름 문구 500, 포커스 errand 0~", async () => {
+  it("장면 3 의 소리·말·포커스: whoosh 0, 등불 문구 500, 포커스 errand 0~", async () => {
     const { TUTORIAL_SCENES } = await loadScript();
     const s3 = TUTORIAL_SCENES[2]!;
     expect(s3.beats).toEqual([
@@ -69,7 +78,7 @@ describe("장면 표 8행 — 순서·그리는 방식·점·넘어가는 방식
   });
 });
 
-describe("출연 상수 (T-9)", () => {
+describe("출연 상수 (T-9, D-28)", () => {
   it("여섯 좌석: 0 민준 detective · 1 도윤 noir · 2 서연 elder · 3 지호 reporter · 4 하린 hood · 5 나 coat", async () => {
     const { TUTORIAL_CAST } = await loadScript();
     expect(TUTORIAL_CAST.seats.map((s) => [s.seat, s.name, s.look])).toEqual([
@@ -83,26 +92,38 @@ describe("출연 상수 (T-9)", () => {
     expect(TUTORIAL_CAST.me).toBe(5);
     expect(TUTORIAL_CAST.victim).toBe(2);
     expect(TUTORIAL_CAST.suspect).toBe(1);
-    expect(TUTORIAL_CAST.map).toBe("plaza");
-    expect(TUTORIAL_CAST.errand).toEqual({ places: ["mail", "fountain", "lamp"], target: "mail" });
-    expect(TUTORIAL_CAST.witness).toEqual({ seat: 1, place: "lamp" });
-    expect(TUTORIAL_CAST.trace).toBe("redCloth");
+  });
+
+  it("출연 맵은 마을(town)이고 등불 셋은 마을 가로등 표의 id 다 (장면 3 의 목표가 첫째)", async () => {
+    const { TUTORIAL_CAST } = await loadScript();
+    expect(TUTORIAL_CAST.map).toBe("town");
+    expect(TUTORIAL_CAST.errand.places).toHaveLength(3);
+    for (const id of TUTORIAL_CAST.errand.places) expect(TOWN_LAMPS.map((l) => l.id)).toContain(id);
+    expect(TUTORIAL_CAST.errand.target).toBe(TUTORIAL_CAST.errand.places[0]);
+  });
+
+  it("현장은 서연(좌석 2) 집이고 옷 조각 지점에서 붉은 천 조각을 받는다 (피해자 집 = 현장)", async () => {
+    const { TUTORIAL_CAST } = await loadScript();
+    expect(TUTORIAL_CAST.clue).toEqual({ house: 2, spot: "cloth", piece: "redCloth" });
+    expect(TUTORIAL_CAST.clue.house).toBe(TUTORIAL_CAST.victim);
   });
 });
 
-describe("tutorialView(3) — 심부름 장면의 가짜 view", () => {
-  it("errand 단계·마감 없음·광장·내 심부름 목록이 실제 판정 함수가 읽는 모양이다", async () => {
-    const { tutorialView } = await loadScript();
+describe("tutorialView(3) — 등불 켜기 장면의 가짜 view", () => {
+  it("errand 단계·마감 없음·마을·원인 흐름 판·내 등불 목록이 실제 판정 함수가 읽는 모양이다", async () => {
+    const { tutorialView, TUTORIAL_CAST } = await loadScript();
     const v = tutorialView(3, { now: NOW });
     expect(v.phase).toBe("errand");
     expect(v.phaseEndsAt).toBeNull();
-    expect(v.map).toBe("plaza");
+    expect(v.map).toBe("town");
+    expect(v.mode).toBe("extended");
+    expect(rulesetOf(modeOf(v)).cause).toBe(true);
     expect(v.code).toBe("");
     expect(v.round).toBe(1);
     expect(v.serverNow).toBe(NOW);
     expect(v.me.seat).toBe(5);
     expect(v.me.isHost).toBe(false);
-    expect(v.me.errand).toEqual({ places: ["mail", "fountain", "lamp"], done: [] });
+    expect(v.me.errand).toEqual({ places: [...TUTORIAL_CAST.errand.places], done: [] });
     expect(errandProgress(v)).toMatchObject({ n: 0, total: 3, complete: false });
     // phaseEndsAt 이 없으면 2초 시작 카드가 뜨지 않는다 (Pitfall 3a)
     expect(startCardOn(v, NOW)).toBe(false);
@@ -122,17 +143,39 @@ describe("tutorialView(3) — 심부름 장면의 가짜 view", () => {
     }
   });
 
-  it("시작 위치에서 우체통까지 거리가 처리 반경보다 작아 [처리] 가 바로 켜진다 (T-14)", async () => {
-    const { tutorialView, tutorialSnap } = await loadScript();
+  it("가로등 중심은 마을 맵의 가로등 표에서 온다(원인 흐름이라 장소 표가 아니다)", async () => {
+    const { tutorialView, TUTORIAL_CAST } = await loadScript();
+    const centers = placeCentersOf(tutorialView(3, { now: NOW }));
+    expect(centers.map((c) => c.id).sort()).toEqual([...TUTORIAL_CAST.errand.places].sort());
+    for (const c of centers) {
+      const lamp = TOWN_LAMPS.find((l) => l.id === c.id)!;
+      expect([c.x, c.z]).toEqual([lamp.x, lamp.z]);
+    }
+  });
+
+  it("시작 자리는 걸을 수 있는 칸이고 목표 가로등이 처리 반경 안에 있어 [켜기] 가 바로 켜진다, 다른 가로등은 반경 밖이다 (T-14)", async () => {
+    const { tutorialView, tutorialSnap, TUTORIAL_CAST } = await loadScript();
     const v = tutorialView(3, { now: NOW });
     const centers = placeCentersOf(v);
-    expect(centers.map((c) => c.id).sort()).toEqual(["fountain", "lamp", "mail"]);
     const snap = tutorialSnap(3, NOW);
     const me = snap.ents[0]!;
+    expect(lineWalkable(mapOf("town"), { x: me.p[0]!, z: me.p[1]! }, { x: me.p[0]!, z: me.p[1]! })).toBe(true);
     const pos = { x: me.p[0]! / 100, z: me.p[1]! / 100 };
-    const mail = centers.find((c) => c.id === "mail")!;
-    expect(Math.hypot(mail.x - pos.x, mail.z - pos.z)).toBeLessThan(ERRAND_ACT_R);
-    expect(actablePlaceOf(pos, centers, [])).toBe("mail");
+    const target = centers.find((c) => c.id === TUTORIAL_CAST.errand.target)!;
+    expect(Math.hypot(target.x - pos.x, target.z - pos.z)).toBeLessThan(ERRAND_ACT_R);
+    expect(actablePlaceOf(pos, centers, [])).toBe(TUTORIAL_CAST.errand.target);
+    for (const c of centers) {
+      if (c.id === target.id) continue;
+      expect(Math.hypot(c.x - pos.x, c.z - pos.z), c.id).toBeGreaterThan(ERRAND_ACT_R);
+    }
+  });
+
+  it("lit 이면 목표 등불이 켜진 뒤(done [목표], 진행 1/3)다", async () => {
+    const { tutorialView, TUTORIAL_CAST } = await loadScript();
+    const v = tutorialView(3, { now: NOW, lit: true });
+    expect(v.phase).toBe("errand");
+    expect(v.me.errand).toEqual({ places: [...TUTORIAL_CAST.errand.places], done: [TUTORIAL_CAST.errand.target] });
+    expect(errandProgress(v)).toMatchObject({ n: 1, total: 3 });
   });
 
   it("매번 새 객체다 (호출 사이에 값이 새지 않는다)", async () => {
@@ -140,36 +183,89 @@ describe("tutorialView(3) — 심부름 장면의 가짜 view", () => {
     const a = tutorialView(3, { now: NOW });
     const b = tutorialView(3, { now: NOW });
     expect(a).not.toBe(b);
-    a.me.errand!.done.push("mail");
+    a.me.errand!.done.push("lamp2");
     expect(b.me.errand!.done).toEqual([]);
   });
 });
 
-describe("tutorialView(4) · tutorialSnap(3) ", () => {
-  it("장면 4 는 우체통을 처리한 뒤(done [mail])다", async () => {
+describe("tutorialView(4) — 현장 조사 장면: 서연 집 앞 지점 셋 (D-28)", () => {
+  it("morning 단계·현장 집 = 서연 좌석(2)·아직 살피지 않음(me.scene 없음)", async () => {
     const { tutorialView } = await loadScript();
     const v = tutorialView(4, { now: NOW });
-    expect(v.phase).toBe("errand");
-    expect(v.me.errand).toEqual({ places: ["mail", "fountain", "lamp"], done: ["mail"] });
-    expect(errandProgress(v)).toMatchObject({ n: 1, total: 3 });
+    expect(v.phase).toBe("morning");
+    expect(v.map).toBe("town");
+    expect(v.mode).toBe("extended");
+    expect(v.day?.scene).toEqual({ house: 2 });
+    expect(v.me.scene).toBeUndefined();
+    expect(v.me.errand).toBeUndefined();
+    expect(clueCardsOf(v)).toEqual([]);
   });
 
-  it("장면 3 의 snap 은 나(5) 하나이고 서버와 같은 구간 모양(snap·t0·v)이다", async () => {
-    const { tutorialSnap } = await loadScript();
-    const f = tutorialSnap(3, NOW);
-    expect(f.t).toBe("world");
-    expect(f.k).toBe("snap");
-    expect(f.ents.map((e) => e.s)).toEqual([5]);
-    expect(f.ents[0]!.p).toHaveLength(2);
+  it("지점 셋은 서연 집 앞 TOWN_CLUE_SPOTS[2] 이고 모두 새 지점이다", async () => {
+    const { tutorialView } = await loadScript();
+    const spots = spotsOf(tutorialView(4, { now: NOW }));
+    expect(spots.map((s) => s.id)).toEqual(["footprint", "cloth", "window"]);
+    expect(spots.map((s) => [s.x * 100, s.z * 100])).toEqual(TOWN_CLUE_SPOTS[2]!.map((p) => [p.x, p.z]));
+    expect(spots.every((s) => s.state === "new")).toBe(true);
+  });
+
+  it("시작 자리는 걸을 수 있는 칸이고 처리 반경 안에서 옷 조각 지점이 가장 가깝다([살펴보기] 가 옷 조각에 선다)", async () => {
+    const { tutorialView, tutorialSnap } = await loadScript();
+    const spots = spotsOf(tutorialView(4, { now: NOW }));
+    const me = tutorialSnap(4, NOW).ents[0]!;
+    expect(lineWalkable(mapOf("town"), { x: me.p[0]!, z: me.p[1]! }, { x: me.p[0]!, z: me.p[1]! })).toBe(true);
+    const pos = { x: me.p[0]! / 100, z: me.p[1]! / 100 };
+    expect(actableSpotOf(pos, spots)).toBe("cloth");
+    const cloth = spots.find((s) => s.id === "cloth")!;
+    expect(Math.hypot(cloth.x - pos.x, cloth.z - pos.z)).toBeLessThan(ERRAND_ACT_R);
+  });
+
+  it("inspected 면 옷 조각 clue(붉은 천 조각) 한 줄이 me.scene 에 있고 단서 카드 한 장·옷 조각 지점이 done 이다", async () => {
+    const { tutorialView } = await loadScript();
+    const v = tutorialView(4, { now: NOW, inspected: true });
+    expect(v.me.scene).toEqual([{ spot: "cloth", r: "clue", piece: "redCloth" }]);
+    expect(clueCardsOf(v)).toEqual([{ spot: "cloth", kind: "clue", piece: "redCloth" }]);
+    expect(spotsOf(v).find((s) => s.id === "cloth")?.state).toBe("done");
   });
 });
 
-describe("makeTutorialSend — 로컬 어댑터는 errand·point 만 알아듣는다 (TUT-05)", () => {
-  async function harness(): Promise<{ send: (m: ClientMessage) => boolean; errands: number; points: number[] }> {
+describe("tutorialView(5) — 의심 보드 장면: boardOf 가 읽는 가짜 view (D-20)", () => {
+  it("토론 단계이고 boardOf 가 칩 하나(붉은 천 조각)·산 사람 다섯 얼굴·등불 8점을 돌려준다", async () => {
+    const { tutorialView } = await loadScript();
+    const v = tutorialView(5, { now: NOW });
+    expect(v.phase).toBe("discussion");
+    expect(v.mode).toBe("extended");
+    const board = boardOf(v);
+    expect(board.chips).toEqual([{ spot: "cloth", kind: "clue", piece: "redCloth" }]);
+    expect(board.faces.map((f) => f.seat)).toEqual([0, 1, 3, 4, 5]);
+    expect(board.lamps).toHaveLength(8);
+    expect(board.witness).toBeNull();
+  });
+
+  it("같은 옷 표시는 도윤(좌석 1) 하나뿐이고 옷 조각 표시(cloth)다", async () => {
+    const { tutorialView } = await loadScript();
+    const v = tutorialView(5, { now: NOW });
+    expect(sameOutfitSeats(v.players, "redCloth")).toEqual([1]);
+    const marked = boardOf(v).faces.filter((f) => f.marks.length > 0);
+    expect(marked.map((f) => f.seat)).toEqual([1]);
+    expect(marked[0]!.marks).toEqual([{ kind: "cloth", piece: "redCloth" }]);
+  });
+
+  it("공개 증거 카드(day.evidence·morning.trace)가 없다 — 원인 흐름은 단서를 내가 직접 받는다", async () => {
+    const { tutorialView } = await loadScript();
+    const v = tutorialView(5, { now: NOW });
+    expect(v.day?.evidence).toBeUndefined();
+    expect(v.day?.morning).toBeUndefined();
+  });
+});
+
+describe("makeTutorialSend — 로컬 어댑터는 errand·inspect·point 만 알아듣는다 (TUT-05)", () => {
+  async function harness(): Promise<{ send: (m: ClientMessage) => boolean; errands: number; inspects: number; points: number[] }> {
     const { makeTutorialSend } = await loadScript();
-    const log = { errands: 0, points: [] as number[] };
+    const log = { errands: 0, inspects: 0, points: [] as number[] };
     const send = makeTutorialSend({
       onErrand: () => void (log.errands += 1),
+      onInspect: () => void (log.inspects += 1),
       onPoint: (seat) => void log.points.push(seat),
     });
     return {
@@ -177,17 +273,29 @@ describe("makeTutorialSend — 로컬 어댑터는 errand·point 만 알아듣�
       get errands() {
         return log.errands;
       },
+      get inspects() {
+        return log.inspects;
+      },
       get points() {
         return log.points;
       },
     };
   }
 
-  it("errand → onErrand 한 번, true", async () => {
+  it("errand → onErrand 한 번, true (길게 누르기 hold 도 같다)", async () => {
     const h = await harness();
     expect(h.send({ t: "errand" })).toBe(true);
-    expect(h.errands).toBe(1);
+    expect(h.send({ t: "errand", hold: true })).toBe(true);
+    expect(h.errands).toBe(2);
+    expect(h.inspects).toBe(0);
     expect(h.points).toEqual([]);
+  });
+
+  it("inspect → onInspect 한 번, true", async () => {
+    const h = await harness();
+    expect(h.send({ t: "inspect" })).toBe(true);
+    expect(h.inspects).toBe(1);
+    expect(h.errands).toBe(0);
   });
 
   it("point(target 1) → onPoint(1) 한 번, true", async () => {
@@ -195,6 +303,7 @@ describe("makeTutorialSend — 로컬 어댑터는 errand·point 만 알아듣�
     expect(h.send({ t: "point", target: 1 })).toBe(true);
     expect(h.points).toEqual([1]);
     expect(h.errands).toBe(0);
+    expect(h.inspects).toBe(0);
   });
 
   it("move·chat·typing·emote 는 아무 일 없이 true 이다", async () => {
@@ -206,17 +315,18 @@ describe("makeTutorialSend — 로컬 어댑터는 errand·point 만 알아듣�
     ];
     for (const m of others) expect(h.send(m)).toBe(true);
     expect(h.errands).toBe(0);
+    expect(h.inspects).toBe(0);
     expect(h.points).toEqual([]);
   });
 });
 
-// ---- 17-03 Task 2: 장면 1·2·4~8 ----
+// ---- 장면 1·2·4~8 ----
 
 /** 소리 큐 13개(tut.* 12 + ui.tap) — 소리 모듈의 SFX_IDS 와의 대조는 17-04 시험 */
 const CUES = ["tut.lampOff", "tut.scream", "tut.whoosh", "tut.sting", "tut.step", "tut.eye", "tut.link", "tut.buzz", "tut.stamp", "tut.fanfare", "tut.flip", "tut.warm", "ui.tap"];
 
-describe("장면 시각·소리·말·포커스 (시안 Main.dc.html enter 그대로)", () => {
-  it("1 오프닝: lampOff 800·1300, scream 2600, 포커스 없음", async () => {
+describe("장면 시각·소리·말·포커스", () => {
+  it("1 오프닝: lampOff 800·1300, scream 2600, 포커스 없음 (큐 그대로, D-28)", async () => {
     const { TUTORIAL_SCENES } = await loadScript();
     const s = TUTORIAL_SCENES[0]!;
     expect(s.beats).toEqual([
@@ -237,28 +347,23 @@ describe("장면 시각·소리·말·포커스 (시안 Main.dc.html enter 그�
     expect(s.focus).toEqual([{ target: "band", from: 0, to: 2600 }]);
   });
 
-  it("4 목격: step 0·320·640·960·1280, eye 1900, 문구 2250, 포커스 suspect 1900~3400", async () => {
+  it("4 현장 조사: whoosh 0, 문구 500, 포커스 clue 0~ — 도윤 걷는 소리·눈 큐가 없다(목격 연출 뺌)", async () => {
     const { TUTORIAL_SCENES } = await loadScript();
     const s = TUTORIAL_SCENES[3]!;
     expect(s.beats).toEqual([
-      { at: 0, sfx: "tut.step" },
-      { at: 320, sfx: "tut.step" },
-      { at: 640, sfx: "tut.step" },
-      { at: 960, sfx: "tut.step" },
-      { at: 1280, sfx: "tut.step" },
-      { at: 1900, sfx: "tut.eye" },
-      { at: 2250, say: "tutorial.witness" },
+      { at: 0, sfx: "tut.whoosh" },
+      { at: 500, say: "tutorial.witness" },
     ]);
-    expect(s.focus).toEqual([{ target: "suspect", from: 1900, to: 3400 }]);
+    expect(s.focus).toEqual([{ target: "clue", from: 0 }]);
+    expect(s.beats.some((b) => b.sfx === "tut.step" || b.sfx === "tut.eye")).toBe(false);
   });
 
-  it("5 증거: link 400·900, 문구 1300, 포커스 없음", async () => {
+  it("5 의심 보드: 선 하나라 link 400 한 번, 문구 900, 포커스 없음", async () => {
     const { TUTORIAL_SCENES } = await loadScript();
     const s = TUTORIAL_SCENES[4]!;
     expect(s.beats).toEqual([
       { at: 400, sfx: "tut.link" },
-      { at: 900, sfx: "tut.link" },
-      { at: 1300, say: "tutorial.link" },
+      { at: 900, say: "tutorial.link" },
     ]);
     expect(s.focus).toEqual([]);
   });
@@ -313,76 +418,67 @@ describe("장면 시각·소리·말·포커스 (시안 Main.dc.html enter 그�
   });
 });
 
-describe("사회자 문구 8개 — UI-SPEC 문구 표와 한 글자도 다르지 않다 (T-7)", () => {
+describe("사회자 문구 9개 — UI-SPEC 튜토리얼 표와 한 글자도 다르지 않다 (T-7, D-20·D-28)", () => {
   it.each([
     ["tutorial.morning.victim", "서연 님이 당했습니다"],
     ["tutorial.morning.mafia", "이 중에 마피아가 있습니다"],
-    ["tutorial.errand", "우체통에서 처리하세요"],
-    ["tutorial.witness", "가는 길에 본 사람은 기록돼요"],
-    ["tutorial.link", "본 것과 흔적을 이어 보세요"],
+    ["tutorial.errand", "등불을 켜 보세요"],
+    ["tutorial.witness", "빛나는 곳을 살펴보세요"],
+    ["tutorial.link", "단서와 같은 옷을 이어 보세요"],
     ["tutorial.vote", "의심되는 사람을 누르세요"],
-    ["tutorial.vote.wrong", "흔적을 떠올려 보세요"],
+    ["tutorial.vote.wrong", "단서를 떠올려 보세요"],
+    ["tutorial.hidden", "정체는 판이 끝나야 알아요"],
     ["tutorial.roles", "밤에는 저마다 할 일이 있어요"],
   ] as const)("%s", async (key, text) => {
     const { TUTORIAL_LINES } = await loadScript();
     expect(TUTORIAL_LINES[key]).toBe(text);
   });
 
-  it("키는 정확히 8개다", async () => {
+  it("키는 정확히 9개다", async () => {
     const { TUTORIAL_LINES } = await loadScript();
-    expect(Object.keys(TUTORIAL_LINES)).toHaveLength(8);
+    expect(Object.keys(TUTORIAL_LINES)).toHaveLength(9);
   });
 
-  it("TUTORIAL_PICK: 정답 stamp, 오답 buzz+오답 문구, 공개 fanfare", async () => {
-    const { TUTORIAL_PICK } = await loadScript();
+  it("TUTORIAL_PICK: 정답 stamp 하나, 오답 buzz+오답 문구, 정체 공개는 소리 없이 tutorial.hidden 줄 (fanfare 없음)", async () => {
+    const { TUTORIAL_PICK, TUTORIAL_SCENES } = await loadScript();
     expect(TUTORIAL_PICK).toEqual({
       right: { sfx: "tut.stamp" },
       wrong: { sfx: "tut.buzz", say: "tutorial.vote.wrong" },
-      reveal: { sfx: "tut.fanfare" },
+      reveal: { line: "tutorial.hidden" },
     });
+    expect(JSON.stringify(TUTORIAL_PICK)).not.toContain("tut.fanfare");
+    for (const s of TUTORIAL_SCENES) expect(s.beats.some((b) => b.sfx === "tut.fanfare"), `장면 ${s.n}`).toBe(false);
   });
 });
 
-describe("tutorialView(2·5·6) — 실제 판정 함수가 읽는 필드 (T-9·T-14, 0080-16)", () => {
-  it("장면 2: 아침·마감 없음·서연 탈락, 흔적이 없어 증거 카드가 뜨지 않는다", async () => {
+describe("tutorialView(2·6) — 아침·투표 장면", () => {
+  it("장면 2: 아침·마감 없음·서연 탈락, 현장(day.scene)이 없어 지점이 뜨지 않는다", async () => {
     const { tutorialView } = await loadScript();
     const v = tutorialView(2, { now: NOW });
     expect(v.phase).toBe("morning");
     expect(v.phaseEndsAt).toBeNull();
     expect(v.day?.morning).toEqual({ eliminated: 2 });
-    expect(v.day?.evidence).toBeUndefined();
-    expect(traceWindowOf(v, NOW)).toBeNull();
+    expect(v.day?.scene).toBeUndefined();
+    expect(spotsOf(v)).toEqual([]);
   });
 
-  it("장면 5: 마감 now+4000, 흔적·마지막 목격이 morning·evidence 양쪽에 있고 같은 옷은 도윤 하나, 흔적 구간이 즉시 켜진다", async () => {
-    const { tutorialView } = await loadScript();
-    const v = tutorialView(5, { now: NOW });
-    expect(v.phase).toBe("morning");
-    expect(v.phaseEndsAt).toBe(NOW + 4000);
-    const seen = { seat: 1, place: "lamp" };
-    expect(v.day?.morning).toEqual({ eliminated: 2, trace: "redCloth", seen });
-    expect(v.day?.evidence).toEqual({ trace: "redCloth", seen });
-    expect(sameOutfitSeats(v.players, "redCloth")).toEqual([1]);
-    expect(traceWindowOf(v, NOW)?.on).toBe(true);
-  });
-
-  it("장면 6: 지목 단계·지목 줄 비어 있음·증거 유지·차례 없음, picked 면 나(5) → 도윤(1) 한 줄", async () => {
+  it("장면 6: 지목 단계·지목 줄 비어 있음·공개 증거 없음·차례 없음, picked 면 나(5) → 도윤(1) 한 줄", async () => {
     const { tutorialView } = await loadScript();
     const v = tutorialView(6, { now: NOW });
     expect(v.phase).toBe("nomination");
     expect(v.day?.points).toEqual([]);
     expect(v.day?.turn).toBeUndefined();
-    expect(v.day?.evidence).toEqual({ trace: "redCloth", seen: { seat: 1, place: "lamp" } });
+    expect(v.day?.evidence).toBeUndefined();
     const picked = tutorialView(6, { now: NOW, picked: true });
     expect(picked.day?.points).toEqual([{ seat: 5, target: 1 }]);
-    expect(picked.day?.evidence).toEqual(v.day?.evidence);
   });
 
-  it("지도 장면(2~6) 모두 광장·여섯 명·서연 탈락이고 닉네임은 출연 상수뿐이다", async () => {
+  it("지도 장면(2~6) 모두 마을·원인 흐름 판·여섯 명·서연 탈락이고 닉네임은 출연 상수뿐이다", async () => {
     const { tutorialView } = await loadScript();
     for (const n of [2, 3, 4, 5, 6] as const) {
       const v = tutorialView(n, { now: NOW });
-      expect(v.map).toBe("plaza");
+      expect(v.map, `장면 ${n}`).toBe("town");
+      expect(v.mode, `장면 ${n}`).toBe("extended");
       expect(v.players.map((p) => p.nickname).sort()).toEqual(["나", "도윤", "민준", "서연", "지호", "하린"].sort());
       expect(v.players.find((p) => p.seat === 2)?.alive).toBe(false);
     }
@@ -398,11 +494,13 @@ function keyPaths(value: unknown, prefix = ""): string[] {
   return [];
 }
 
-describe("역할이 새지 않는다 (TUT-05, T-17-08)", () => {
-  it("가짜 view 어디에도 .me.role·.me.allies·.players[].role 키가 없다 (지도 2~6 + 무대 1·7)", async () => {
+describe("역할이 새지 않는다 (TUT-05, T-17-08, T-21-42)", () => {
+  it("가짜 view 어디에도 .me.role·.me.allies·.players[].role 키가 없다 (지도 2~6 의 모든 상태 + 무대 1·7)", async () => {
     const { tutorialView, tutorialStageView } = await loadScript();
     const views = [
-      ...([2, 3, 4, 5, 6] as const).map((n) => tutorialView(n, { now: NOW, picked: true })),
+      ...([2, 3, 4, 5, 6] as const).map((n) => tutorialView(n, { now: NOW, picked: true, lit: true, inspected: true })),
+      tutorialView(3, { now: NOW }),
+      tutorialView(4, { now: NOW }),
       tutorialStageView(1, NOW),
       tutorialStageView(7, NOW),
     ];
@@ -417,24 +515,37 @@ describe("역할이 새지 않는다 (TUT-05, T-17-08)", () => {
 });
 
 describe("무대 장면(1·7) — tutorialStageView·tutorialStageLook", () => {
-  it("무대 view 는 night 단계·광장·여섯 명이고 7 에서는 서연이 탈락이다", async () => {
+  it("무대 view 는 night 단계·마을·원인 흐름 판·여섯 명이고 7 에서는 서연이 탈락이다", async () => {
     const { tutorialStageView } = await loadScript();
     const v1 = tutorialStageView(1, NOW);
     expect(v1.phase).toBe("night");
-    expect(v1.map).toBe("plaza");
+    expect(v1.map).toBe("town");
+    expect(v1.mode).toBe("extended");
     expect(v1.players).toHaveLength(6);
     expect(v1.players.find((p) => p.seat === 2)?.alive).not.toBe(false);
     const v7 = tutorialStageView(7, NOW);
     expect(v7.players.find((p) => p.seat === 2)?.alive).toBe(false);
   });
 
-  it("장면 1 낮 쪽: 서연 좌석이 보이고 조명은 night 가 아니다", async () => {
+  it("장면 1 의 집 창: 처음엔 여덟 모두 켜져 있고 lampsOff 만큼 하나씩 꺼진다 (D-28 개관 시점)", async () => {
+    const { tutorialStageView, OPENING_LAMPS, OPENING_DARK_HOUSES } = await loadScript();
+    expect(OPENING_DARK_HOUSES).toHaveLength(OPENING_LAMPS);
+    const lamps = (k: number) => tutorialStageView(1, NOW, { lampsOff: k }).day?.lamps;
+    expect(lamps(0)).toEqual(Array.from({ length: 8 }, () => true));
+    for (let k = 1; k <= OPENING_LAMPS; k += 1) {
+      const l = lamps(k)!;
+      expect(l.filter((on) => !on), `꺼진 창 ${k}`).toHaveLength(k);
+      for (const house of OPENING_DARK_HOUSES.slice(0, k)) expect(l[house]).toBe(false);
+    }
+  });
+
+  it("장면 1 의 카메라는 개관(overview), 낮 쪽엔 서연 좌석이 보이고 조명은 night 가 아니다", async () => {
     const { tutorialStageLook } = await loadScript();
     const look = tutorialStageLook(1, { night: false, victimGone: false });
     expect(look.seats[2]?.show).toBe(true);
     expect(look.seats[2]?.opacity ?? 1).toBeGreaterThan(0);
     expect(look.lighting).not.toBe("night");
-    expect(look.camera.mode).toBe("fixed");
+    expect(look.camera).toEqual({ mode: "overview" });
   });
 
   it("night·victimGone 이면 조명 night, 서연 좌석은 없거나 불투명도 0", async () => {
@@ -449,14 +560,14 @@ describe("무대 장면(1·7) — tutorialStageView·tutorialStageLook", () => {
     }
   });
 
-  it("카메라는 광장 가운데에 고정이다", async () => {
+  it("장면 7 의 카메라는 광장 가운데에 고정이다", async () => {
     const { tutorialStageLook } = await loadScript();
     const cam = tutorialStageLook(7, { night: true, victimGone: true }).camera;
     expect(cam).toMatchObject({ mode: "fixed", target: { x: 0, z: 0 } });
   });
 });
 
-describe("tutorialSnap·tutorialSuspectWalk — 서버와 같은 구간 단위", () => {
+describe("tutorialSnap — 서버와 같은 구간 단위", () => {
   it("1 = 여섯, 2·5·6·7 = 산 사람 다섯(서연 없음), 3·4 = 나 하나", async () => {
     const { tutorialSnap } = await loadScript();
     expect(tutorialSnap(1, NOW).ents.map((e) => e.s)).toEqual([0, 1, 2, 3, 4, 5]);
@@ -464,9 +575,9 @@ describe("tutorialSnap·tutorialSuspectWalk — 서버와 같은 구간 단위",
     for (const n of [3, 4] as const) expect(tutorialSnap(n, NOW).ents.map((e) => e.s), `장면 ${n}`).toEqual([5]);
   });
 
-  it("모든 snap 자리는 광장 맵에서 걸을 수 있는 곳이다", async () => {
+  it("모든 snap 자리는 마을 맵에서 걸을 수 있는 곳이다", async () => {
     const { tutorialSnap } = await loadScript();
-    const map = mapOf("plaza");
+    const map = mapOf("town");
     for (const n of [1, 2, 3, 4, 5, 6, 7] as const) {
       for (const e of tutorialSnap(n, NOW).ents) {
         const p = { x: e.p[0]!, z: e.p[1]! };
@@ -484,36 +595,17 @@ describe("tutorialSnap·tutorialSuspectWalk — 서버와 같은 구간 단위",
     }
   });
 
-  it("도윤 걷기: move 한 프레임(s 1), 1.6~2.0초 걸리고 선분이 걸을 수 있다", async () => {
-    const { tutorialSuspectWalk } = await loadScript();
-    const f = tutorialSuspectWalk(NOW);
-    expect(f.t).toBe("world");
-    expect(f.k).toBe("move");
-    if (f.k !== "move") throw new Error("move 프레임이어야 한다");
-    expect(f.s).toBe(1);
-    expect(f.t0).toBe(NOW);
-    const ms = segmentEndsAt({ p: f.p, t0: f.t0, v: f.v }) - f.t0;
-    expect(ms).toBeGreaterThanOrEqual(1600);
-    expect(ms).toBeLessThanOrEqual(2000);
-    const map = mapOf("plaza");
-    expect(lineWalkable(map, { x: f.p[0]!, z: f.p[1]! }, { x: f.p[2]!, z: f.p[3]! })).toBe(true);
-  });
-
-  it("도윤 걷기 끝점은 내 시작 자리 근처(3 안)이지만 겹치지 않는다", async () => {
-    const { tutorialSuspectWalk, TUTORIAL_START } = await loadScript();
-    const f = tutorialSuspectWalk(NOW);
-    if (f.k !== "move") throw new Error("move 프레임이어야 한다");
-    const end = { x: f.p[2]! / 100, z: f.p[3]! / 100 };
-    const d = Math.hypot(end.x - TUTORIAL_START.x, end.z - TUTORIAL_START.z);
-    expect(d).toBeLessThan(3);
-    expect(d).toBeGreaterThan(1);
+  it("장면 4 의 내 자리는 서연 집 앞 지점 가까이(3 안)다 — 같은 상수에서 읽는다", async () => {
+    const { TUTORIAL_CLUE_START, TUTORIAL_CAST } = await loadScript();
+    const cloth = TOWN_CLUE_SPOTS[TUTORIAL_CAST.clue.house]![1]!;
+    expect(Math.hypot(cloth.x / 100 - TUTORIAL_CLUE_START.x, cloth.z / 100 - TUTORIAL_CLUE_START.z)).toBeLessThan(ERRAND_ACT_R);
   });
 });
 
 describe("튜토리얼 카메라 (P18-8, D-07)", () => {
-  it("TUTORIAL_FIXED_CAMERA 는 광장 가운데(GATHER_CENTER) 고정·줌 1 이다", async () => {
+  it("TUTORIAL_FIXED_CAMERA 는 광장 가운데 고정·줌 1 이다", async () => {
     const { TUTORIAL_FIXED_CAMERA } = await loadScript();
-    expect(TUTORIAL_FIXED_CAMERA).toEqual({ mode: "fixed", target: { x: GATHER_CENTER.x, z: GATHER_CENTER.z }, zoom: 1 });
+    expect(TUTORIAL_FIXED_CAMERA).toEqual({ mode: "fixed", target: { x: 0, z: 0 }, zoom: 1 });
   });
 
   it.each([2, 5, 6])("장면 %i 은 고정 카메라", async (n) => {
