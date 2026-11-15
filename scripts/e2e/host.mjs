@@ -40,7 +40,8 @@ const MAX_STEPS = 90;
 /** 시간이 있는 단계의 최소 길이(ms) — src/game/hostLine.ts hostTimeOf 와 같은 값 */
 const HOST_TIME_MIN_MS = 3000;
 /** 띠 검사가 반드시 지나야 하는 단계(없으면 EB0 실패 — 공허 통과 금지). 배정은 3초 창이라 잡히면 더하고 못 잡아도 실패가 아니다 */
-const BAND_REQUIRED = ["lobby", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
+// 21-16: 이 흐름은 기본 마피아 판으로 돈다(저녁 errand 가 없다) — errand(원인 흐름 저녁) 띠는 cause-evening 이 문장·한 줄·겹침까지 본다. 그래서 필수 단계에서 errand 를 뺀다.
+const BAND_REQUIRED = ["lobby", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
 /** 이 높이(px) 미만의 폰은 방 틀 높이 575 미만의 짧은 폰이다(DEFAULT_SIZES 의 360x560 probe) — UI#14 알려진 한계 적용 대상 */
 const SHORT_PHONE_H = 575;
 /** 이름표·얼굴 칸이 눌려야 하는 단계(띠·이름표 겹침 검사) */
@@ -123,8 +124,8 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
     if (!r.ok) rec(sc, "D0", `시간대 글자를 읽는다(${phase})`, false, r.detail);
   }
 
-  /** 방장 한 명 + 봇 n 으로 시작 직전(로비)까지 만든다. 시트는 닫아 둔다. mode("basic"|"extended", 19-07)를 주면 직업을 정한 뒤 방장 줄의 [판 종류] 로 그 판 종류를 고른다(안 주면 서버 기본값 그대로) */
-  async function lobbyWith(ctx, flowId, { bots, role, vote, guests = 0, mode = undefined }) {
+  /** 방장 한 명 + 봇 n 으로 시작 직전(로비)까지 만든다. 시트는 닫아 둔다. mode("basic"|"extended", 19-07)를 주면 직업을 정한 뒤 방장 줄의 [판 종류] 로 그 판 종류를 고른다(21-16: 기본값은 기본 마피아 판("basic") 이다 — 제품 기본 확장판이 원인 흐름이 되어, 낮 시작·밤 얼굴 목록 순서를 전제한 띠·도구·누설 흐름은 기본 마피아 판으로 돈다(원인 흐름은 cause-* 가 본다)) */
+  async function lobbyWith(ctx, flowId, { bots, role, vote, guests = 0, mode = "basic" }) {
     const host = await startHost(ctx, flowId, { nickname: BAND_NICK });
     const { page: hp, tracker: ht } = host;
     host.guestPages = [];
@@ -522,6 +523,8 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       await setBots(hp, ht, 4);
       await setBotVote(hp, ht, { exec: "no", pick: "other" });
       await chooseRole(hp, ht, "citizen");
+      // 21-16: 낮 시작 발표(dayAnnounce)가 있는 판은 기본 마피아뿐이다(확장판 원인 흐름은 역할 확인 → 저녁) — 이 흐름은 낮 시작 구간을 재므로 기본 마피아 판으로 돈다
+      await pickModeViaRail(hp, ht, "basic");
       await startGame(hp, ht);
       await settleBand(hp, ht, "roleReveal").catch(() => {});
 
@@ -540,10 +543,12 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         // 낮 시작은 2초 단계라 넘기기를 누르면 심부름까지 건너뛰거나(14-09: 배포본은 지연이 커서 이미 토론으로 넘어간 뒤 넘기기가 토론 → 투표를 건드려 1번이 잡혔다)
         // 자동으로 넘어가는 것을 기다려 그 구간의 ui.host 를 센다. 0번이어야 한다는 문턱은 그대로다.
         await clearLog(hp);
-        await ht.waitFor((v) => v.phase === "errand", 8000, "낮 시작 → 심부름 자동 전환").catch(() => {});
+        await ht.waitFor((v) => v.phase === "errand" || v.phase === "discussion", 8000, "낮 시작 → 다음 단계 자동 전환").catch(() => {});
         await sleep(CHIME_SETTLE_MS);
         const log = await hostLog(hp);
-        segs.push({ kind: "dayToErrand", name: "낮 시작 → 심부름", count: log?.length ?? -1, played: log?.filter((e) => e.played).length ?? -1 });
+        // 기본 마피아는 낮 시작 다음이 토론이다(심부름 없음), 꺼진 옛 확장판 경로만 심부름이다 — 두 구간 모두 ui.host 0번이어야 한다(HS3)
+        const toErrand = ht.last().phase === "errand";
+        segs.push({ kind: toErrand ? "dayToErrand" : "dayToDiscussion", name: toErrand ? "낮 시작 → 심부름" : "낮 시작 → 토론", count: log?.length ?? -1, played: log?.filter((e) => e.played).length ?? -1 });
       }
       for (let i = 0; i < 6 && ht.last().phase !== "ended"; i++) {
         const from = ht.last().phase;

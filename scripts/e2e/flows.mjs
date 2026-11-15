@@ -1,6 +1,7 @@
 // 화면 E2E 흐름(결정 0025): 흐름마다 새 테스트 방 하나와 방장 페이지 하나. 검사 ID 는 계획 261025-h1j 의 "검사 목록" 과 같다.
 // 결과는 { scenario: "흐름/상태", size, id, label, ok, detail } 로 ctx.results 에 쌓인다.
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { mkdirSync, readFileSync, utimesSync } from "node:fs";
 import {
   SetupError,
@@ -149,7 +150,8 @@ import { makeTownFlows } from "./town.mjs";
 import { makeCauseFlows } from "./cause.mjs";
 import { CHAT_KB_PANEL_REST, CHAT_OPEN_STAGE_MIN, chatOpenChecks, chatOpenHeight, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureBallotsBackstop, measureChatOpen, readChatWindow, readLiveGhost } from "./polish.mjs";
 
-export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
+// Windows 에서 URL.pathname 은 "/C:/..." 라 mkdir 이 "C:\C:\..." 로 깨진다 — fileURLToPath 로 바꾼다(21-16).
+export const OUT_DIR = fileURLToPath(new URL("./out/", import.meta.url));
 const HOST_NICK = "화면검사기";
 /** lobby·world 흐름의 방장 닉네임: 전각 8자(결정 0052-2) — 내 이름표 "… (나)" 가 가장 넓은 한글 경우다. */
 const LOBBY_HOST_NICK = "방장이름여덟글자";
@@ -1417,10 +1419,11 @@ async function untilGame(page, pred, ms = 6000, label = "게임 화면") {
 
 /**
  * 방장 + 손님(사람 페이지) + 봇 → 시작 → to 단계까지. 돌려주는 값: { host, hp, ht, hostSeat, guests: [{ context, page, tracker, takeIssues, seat }] }
+ * 21-16: 기본값은 기본 마피아 판("basic") 이다 — 제품 기본(확장판)이 원인 흐름(저녁·밤·아침)이 되어, 옛 낮 순서(밤 → 아침 → 토론, 얼굴 목록 밤)를 전제한 흐름은 21-13·21-14 의 갈래 A 와 같이 기본 마피아 판으로 돈다. 원인 흐름·마을·심부름 흐름은 openExtended 로 연다.
  * mode("basic"|"extended", 19-06)를 주면 봇·직업을 정한 뒤 시작 전에 방장 줄의 [판 종류] 로 그 판 종류를 고른다(안 주면 서버 기본값 그대로).
  * beforeStart({ hp, ht, guests })를 주면(20-08) 시작 단추를 누르기 직전에 한 번 부른다.
  */
-async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], guestSize = undefined, minBotNameChars = 0, hostInitScripts = [], guestNames = GAME_GUESTS, mode = undefined, beforeStart = undefined } = {}) {
+async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], guestSize = undefined, minBotNameChars = 0, hostInitScripts = [], guestNames = GAME_GUESTS, mode = "basic", beforeStart = undefined } = {}) {
   const host = await startHost(ctx, flowId, { ...(hostNick ? { nickname: hostNick } : {}), ...(hostInitScripts.length > 0 ? { initScripts: hostInitScripts } : {}) });
   const { page: hp, tracker: ht } = host;
   const pages = [];
@@ -1446,6 +1449,9 @@ async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", v
   if (to) await skipTo(hp, ht, to);
   return { host, hp, ht, hostSeat: ht.last().me.seat, guests: pages };
 }
+
+/** 원인 흐름(제품 확장판)을 여는 openGame — cause·errand·town 흐름이 쓴다(21-16). */
+const openExtended = (ctx, flowId, opts = {}) => openGame(ctx, flowId, { mode: "extended", ...opts });
 
 async function closeGame(game) {
   for (const g of game.guests) await g.context.close().catch(() => {});
@@ -2187,7 +2193,7 @@ async function basicOffFlow(ctx) {
     // OFF2 프레임: 받은 모든 state·chat 프레임의 꺼진 장치 키
     rec(`${id}/frames`, "OFF2", "받은 프레임에 players[].badge·badgeSwapped·day.turn·day.runoff·day.showdown·me.whisperUsed·me.ballot·귓속말 줄이 0건이다", ht.offKeys.length === 0, ht.offKeys.length === 0 ? `phase 열 ${ht.phases.length}개` : `처음 걸린 경로 ${ht.offKeys[0]} (전체 ${ht.offKeys.join(", ")})`);
     // OFF3 단계 순서
-    recMany(rec, `${id}/order`, basicOrderChecks(ht.phases));
+    recMany(rec, `${id}/order`, basicOrderChecks(ht.phases, "basic"));
     rec(`${id}/order`, "OFF3b", "투표(nomination)·변론(defense)·찬반(verdict)·처형(execution)을 한 번 이상 지났다", ["nomination", "defense", "verdict", "execution", "night", "morning"].every((p) => ht.phases.includes(p)), `지난 단계 ${[...new Set(ht.phases)].join(",")}`);
     // OFF4 결과 화면: 탭이 없다(전체 대화만, 18.1 P181-7) — 귓속말 탭도 당연히 없다
     const tabs = await hp.evaluate(() => ({ all: document.querySelectorAll("[data-result-tab]").length, whisper: document.querySelectorAll('[data-result-tab="whisper"]').length }));
@@ -3776,7 +3782,7 @@ const { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow,
 const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow, modeLeakFlow } = makeHostFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH, settledResult });
 
 // 심부름·목격 기록·밤 통일·아침 흔적(15페이즈 15-09): errand·witness·trace(폰 6종). 흐름 본문은 errand.mjs, 도우미만 넘긴다
-const { errandFlow } = makeErrandFlows({ recorder, openGame, closeGame, gameGH });
+const { errandFlow } = makeErrandFlows({ recorder, openGame: openExtended, closeGame, gameGH });
 
 // 첫 사건(튜토리얼, 17페이즈 17-09): tutorial-solo(혼자 하기, 폰 6종)·tutorial-together(함께 진행). 흐름 본문은 tutorial.mjs, 도우미만 넘긴다
 const { tutorialSoloFlow, tutorialTogetherFlow } = makeTutorialFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH });
@@ -3785,10 +3791,10 @@ const { tutorialSoloFlow, tutorialTogetherFlow } = makeTutorialFlows({ recorder,
 const { modeRailFlow, modePickFlow, modeBasicFlow } = makeModeFlows({ recorder, attempt, startHost, openGuest, openGame, closeGame, settledResult });
 
 // 마을 맵(20페이즈 20-08): town-walk(폰 6종)·town-room·town-sight·town-ghost·town-reduced. 흐름 본문은 town.mjs, 도우미만 넘긴다
-const { townWalkFlow, townRoomFlow, townSightFlow, townGhostFlow, townReducedFlow } = makeTownFlows({ recorder, openGame, closeGame, executeHost, untilGame, settledResult });
+const { townWalkFlow, townRoomFlow, townSightFlow, townGhostFlow, townReducedFlow } = makeTownFlows({ recorder, openGame: openExtended, closeGame, executeHost, untilGame, settledResult });
 
 // 21페이즈 원인 흐름(21-15): cause-evening·cause-night·cause-morning·cause-skip·cause-basic(390x844)·cause-phones(폰 6종). 흐름 본문은 cause.mjs, 도우미만 넘긴다
-const { eveningFlow: causeEveningFlow, nightFlow: causeNightFlow, morningFlow: causeMorningFlow, skipFlow: causeSkipFlow, basicFlow: causeBasicFlow, phonesFlow: causePhonesFlow } = makeCauseFlows({ recorder, openGame, closeGame, gameGH });
+const { eveningFlow: causeEveningFlow, nightFlow: causeNightFlow, morningFlow: causeMorningFlow, skipFlow: causeSkipFlow, basicFlow: causeBasicFlow, phonesFlow: causePhonesFlow } = makeCauseFlows({ recorder, openGame: openExtended, closeGame, gameGH });
 
 // 18.1 화면 다듬기(18.1-08): polish-reveal(역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종). 흐름 본문은 polish.mjs, 도우미만 넘긴다
 const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, closeGame });
