@@ -3672,13 +3672,18 @@ const ROLE_WORD_RE = /마피아|경찰|의사|시민|범인|증거|확정|mafia|
 const okRect = (r) => !!r && typeof r === "object" && isNum(r.left) && isNum(r.top) && isNum(r.width) && isNum(r.height);
 const asRectList = (x) => (x === null || x === undefined ? [] : Array.isArray(x) ? x : [x]);
 
-/** EA1~EA11 심부름 화면 판정(ERRAND-01~04·07, 16-07 D-06·D-07, 16-08 진행 점). s = 위 계약. */
+/**
+ * EA1~EA11 심부름 화면 판정(ERRAND-01~04·07, 16-07 D-06·D-07, 16-08 진행 점). s = 위 계약.
+ * s.profile === "lamp"(21-15): 원인 흐름 저녁 — 띠 문장이 errand.lamp.act/done 이고 빛남이 한 종류다: 반경 안이면 [켜기] 하나, 밖이면 안 켠 보이는 표지 전부(한 화면 한 종류, P21-6).
+ */
 export function errandChecks(s) {
+  const lamp = s?.profile === "lamp";
+  const lines = lamp ? { act: CAUSE_LINES.lampAct, done: CAUSE_LINES.lampDone } : { act: ERRAND_LINES.act, done: ERRAND_LINES.done };
   const L = {
     EA1: `진행 점이 ${ERRAND_PER_PERSON}개이고 장소 타일 수와 같다`,
     EA2: "진행 표식 n/N = data-done 점 수 = 처리한 타일 수",
     EA3: "띠 문장(errand.act/done)이 맞고 아래 패널·독·칩이 0건([처리] 는 장소 위 알약뿐)",
-    EA4: "[data-call] 이 한 화면 1개 이하이고 화살표에는 없다(알약 또는 가장 가까운 타일)",
+    EA4: lamp ? "[data-call] 은 알약 또는 타일에만 있고(화살표에는 없다) 알약이 있으면 알약 하나뿐이다" : "[data-call] 이 한 화면 1개 이하이고 화살표에는 없다(알약 또는 가장 가까운 타일)",
     EA5: "월드·이름표에 근처 밖 좌석 0",
     EA6: "표식 속성 값에 좌석·역할 없음(장소 id·숫자·진행 수뿐)",
     EA7: `보이는 타일 상자가 ${ERRAND_TILE_PX}×${ERRAND_TILE_PX} ± ${ERRAND_TILE_EPS}`,
@@ -3711,17 +3716,18 @@ export function errandChecks(s) {
     const bad = [];
     const complete = s.doneAttr >= s.total;
     if (complete) {
-      if (s.bandLine.trim() !== ERRAND_LINES.done) bad.push("3/3 인데 띠 문장이 errand.done 이 아님");
+      if (s.bandLine.trim() !== lines.done) bad.push("3/3 인데 띠 문장이 errand.done 이 아님");
     } else if (s.bandLine.trim() === "" && isNum(s.cards) && s.cards > 0) {
       // 18.1-12: 시작 카드("오늘 갈 곳")가 떠 있는 동안은 카드가 같은 말을 해 띠 문장이 비어 있다
-    } else if (s.bandLine.trim() !== ERRAND_LINES.act) bad.push("미완인데 띠 문장이 errand.act 가 아님(시작 카드 중이면 빈 글)");
+    } else if (s.bandLine.trim() !== lines.act) bad.push("미완인데 띠 문장이 errand.act 가 아님(시작 카드 중이면 빈 글)");
     if (s.panelCount !== 0) bad.push(`아래 패널·독·칩 ${s.panelCount}개 ≠ 0`);
     out.push(result("EA3", L.EA3, bad));
   } else out.push(noMeasure("EA3", L.EA3, "띠 문장·아래 패널·독·칩 수"));
   // EA4
   if (isNum(s.callCount) && Array.isArray(s.callKinds) && s.callKinds.every(isStr)) {
     const bad = [];
-    if (s.callCount > 1) bad.push(`[data-call] ${s.callCount}개 > 1`);
+    if (!lamp && s.callCount > 1) bad.push(`[data-call] ${s.callCount}개 > 1`);
+    if (lamp && s.callKinds.includes("act") && s.callCount > 1) bad.push(`[켜기] 가 빛나는데 다른 빛남이 함께 있음(${s.callKinds.join(",")})`);
     if (s.callKinds.length !== s.callCount) bad.push(`[data-call] ${s.callCount}개인데 종류 목록 ${s.callKinds.length}개`);
     if (s.callKinds.some((k) => k !== "act" && k !== "tile")) bad.push(`알약·타일이 아닌 곳에 빛: ${s.callKinds.filter((k) => k !== "act" && k !== "tile").join(",")}`);
     out.push(result("EA4", L.EA4, bad));
@@ -3764,6 +3770,10 @@ export function errandChecks(s) {
     const bad = [];
     if (s.reach === "in" && !(s.callKinds.length === 1 && s.callKinds[0] === "act")) bad.push(`반경 안인데 빛이 알약 하나가 아님(${s.callKinds.join(",") || "없음"})`);
     if (s.reach === "out" && s.callKinds.some((k) => k !== "tile")) bad.push(`반경 밖인데 타일 말고 빛남(${s.callKinds.join(",")})`);
+    if (lamp && s.reach === "out" && Array.isArray(s.places)) {
+      const shown = s.places.filter((p) => p.hidden === false && !p.done).length;
+      if (s.callKinds.length !== shown) bad.push(`반경 밖인데 깜빡이는 표지 ${s.callKinds.length}개 ≠ 보이는 안 켠 표지 ${shown}개`);
+    }
     if (s.reach === "done" && s.callKinds.length !== 0) bad.push(`3곳 완료인데 빛이 ${s.callKinds.length}개`);
     out.push(result("EA9", L.EA9, bad));
   } else out.push(noMeasure("EA9", L.EA9, "반경 상태(reach)·빛 종류"));
@@ -3795,6 +3805,7 @@ export function errandChecks(s) {
  * early = { cards, tiles, buttons, text }, late = { cards }. 장소 이름 글자는 타일에 없다(접근성 이름뿐) — 글자는 제목·한 줄 둘뿐이다.
  */
 export function errandCardChecks(c) {
+  const title = c?.profile === "lamp" ? CAUSE_CARD_TITLE : ERRAND_CARD_TITLE;
   const label = `시작 카드: 2초 안 1개(타일 ${ERRAND_PER_PERSON}·단추 0·제목·한 줄), 2.5초 뒤 0개`;
   const e = c?.early;
   const l = c?.late;
@@ -3803,7 +3814,7 @@ export function errandCardChecks(c) {
   if (e.cards !== 1) bad.push(`2초 안 카드 ${e.cards}개 ≠ 1`);
   if (e.tiles !== ERRAND_PER_PERSON) bad.push(`카드 타일 ${e.tiles}개 ≠ ${ERRAND_PER_PERSON}`);
   if (e.buttons !== 0) bad.push(`카드에 단추 ${e.buttons}개`);
-  if (e.text.replace(/\s+/g, "") !== `${ERRAND_CARD_TITLE}${ERRAND_CARD_LINE}`.replace(/\s+/g, "")) bad.push("카드 글자가 제목·한 줄과 다름");
+  if (e.text.replace(/\s+/g, "") !== `${title}${ERRAND_CARD_LINE}`.replace(/\s+/g, "")) bad.push("카드 글자가 제목·한 줄과 다름");
   if (l.cards !== 0) bad.push(`2.5초 뒤 카드 ${l.cards}개 ≠ 0`);
   return [result("EC1", label, bad)];
 }
@@ -4698,6 +4709,8 @@ export const CAUSE_CARD_TEXT = Object.freeze({ touched: "먼저 손댄 흔적", 
 export const CAUSE_HOLD_MS_E2E = 700;
 /** 기본 마피아 한 판 전체에서 한 번도 DOM 에 있으면 안 되는 확장판 요소(LH9): 밤 문패·지점 표지·단서 카드·의심 보드·[보드] 단추·[건너뛰기]. 심부름 표식(data-errand-*)은 BASIC_ABSENT_ATTR_PREFIX 가 따로 본다 */
 export const CAUSE_ABSENT_SELECTORS = Object.freeze(["[data-house-tag]", "[data-clue-spot]", "[data-clue-card]", "[data-board]", "[data-board-button]", "[data-skip]"]);
+/** 원인 흐름 저녁 시작 카드 제목 사본(src/components/v2/ErrandStartCard.tsx) — 아래 줄은 15 의 문구 그대로다(P21-17) */
+export const CAUSE_CARD_TITLE = "오늘 켤 등불";
 /** 저녁 영역 마크업 동일 판정(LH2)이 개수까지 견주는 구조 표식 */
 export const CAUSE_PARITY_COUNTED = Object.freeze(["data-errand-start-card", "data-errand-dots", "data-errand-dot", "data-errand-progress", "data-errand-place", "data-errand-arrow", "data-near-ring", "data-skip"]);
 /** 상태에 따라 있고 없는 표식 — 마크업 동일 판정은 이 이름을 빼고 견준다 */
@@ -4707,6 +4720,9 @@ const CAUSE_TAP_KINDS = ["house-tag", "lamp-marker", "lamp-act", "clue-spot", "c
 /** 스테이지 안쪽 8 inset 안에 있어야 하는 종류(맵 위에 놓이는 표지·단추) */
 const CAUSE_INSET_KINDS = ["house-tag", "lamp-marker", "lamp-act", "clue-spot", "clue-act", "arrow"];
 const CAUSE_TAP_MIN = 44;
+/** 밤 문패의 보이는 원 지름(src/world/camera.ts HOUSE_TAG_CIRCLE 사본) — 누르기 영역은 44(HOUSE_TAG_BOX). 스테이지 안쪽 8 inset 은 보이는 원 기준이다(UI-SPEC P21-3, 앱 자체 계산 시험과 같다) */
+export const CAUSE_HOUSE_CIRCLE_E2E = 40;
+export const CAUSE_HOUSE_BOX_E2E = 44;
 const CAUSE_HOUSE_CENTER_MIN = 44;
 const CAUSE_SKIP_EARLY_MIN_MS = 3000;
 const CAUSE_ROLE_NAME_RE = /fake|mafia|role|decoy|bluff|police|doctor/i;
@@ -4730,23 +4746,23 @@ function causeSigDiff(a, b) {
 
 /**
  * 원인 흐름 E2E 판정 묶음(LH1~LH11). 함수마다 { id, label, ok, detail } 줄 배열을 돌려주고 측정값이 빠지거나 모양이 틀린 입력은 조용히 통과하지 않는다(noMeasure).
- *  - evening(s)        LH1a~f  저녁 등불: s = { cardEarly:{cards,tiles,buttons}, cardLate:{cards}, arrive:{markers,calls,progress,skipPills}, presses:["1/3",…], bandActing, bandDone, lampsMine:[좌석…], litStart:boolean[8], litEnd:boolean[8] }
+ *  - evening(s)        LH1a~f  저녁 등불: s = { cardEarly:{cards,tiles,buttons}, cardLate:{cards}, arrive:{markers,shownMarkers,calls,acts,actCalls,progress,skipPills}, presses:["1/3",…], bandActing, bandDone, lampsMine:[좌석…], litStart:boolean[8], litEnd:boolean[8] }
  *  - eveningParity(m, c) LH2a~d 마피아(길게 누름)·시민(짧게 누름)의 저녁 영역: 각 { held, arrive:{names,counts}, afterAct:{names,counts,progress} }
  *  - night(s)          LH3a~e  밤 문패: s = { aliveCount, tags:[{seat,button,lit,picked,call}], houseLit, camera:{mode}, afterPick:{seat,tags}, afterSwap:{seat,tags} }
  *  - nightParity(list) LH4a~d  네 역할의 밤 화면: [{ role, buttons, tags, panelH, ringMafia, eyeHeal, names, toastsAfterTap }]
- *  - morning(s)        LH5a~c  아침 현장: s = { spots:[{id,state}], far:{acts}, near:{acts}, noVictim:{phases}|null }
- *  - clues(s)          LH6a~f  단서 카드: s = { host:{steps}, guest:{steps}, windowDark, repeat:{acts,cardsBefore,cardsAfter} }, step = { spot, cardsBefore, cardsAfter, state, card:{dim,text,count} }
+ *  - morning(s)        LH5a~c  아침 현장: s = { spots:[{id,state}], far:{acts,shownSpots,arrows}, near:{acts}, noVictim:{phases}|null }
+ *  - clues(s)          LH6a~f  단서 카드: s = { host:{steps}, guest:{steps}, guest2:{steps}, windowDark, repeat:{acts,cardsBefore,cardsAfter} }, step = { spot, cardsBefore, cardsAfter, state, card:{dim,text,count} }
  *  - board(s)          LH7a~h  의심 보드 한 화면
  *  - skip(s)           LH8a~b  건너뛰기
  *  - basic(s)          LH9a~b  기본 마피아 부재·옛 순서: s = { phases, scan:{scans,seen} }
- *  - phones(s)         LH11a~d 폰 6종 겹침·보임: s = { stage, blockers:{band,side,panel,tagButtons}, boardOpen, items:[{kind,rect}] }
- *  - boardNames(s)     LH11e   보드 얼굴 칸의 8자 닉네임: s = { faces:[{nameRect,faceRect,scrollW,clientW,lineH}] }
+ *  - phones(s)         LH11a~d 폰 6종 겹침·보임: s = { stage, blockers:{band,side,panel,tagButtons,chatParts}, boardOpen, items:[{kind,rect}] } (kind "panel-skip" = 아침 입력줄 오른쪽 끝 [건너뛰기], "board" = 패널의 기록 칸을 덮되 입력줄 부품은 가리지 않는다), 같은 집 지점 표지 둘 이상이 보이면 LH11s 참고 행
+ *  - boardNames(s)     LH11e   보드 얼굴 칸의 8자 닉네임: s = { faces:[{nameRect,faceRect,scrollW,clientW,lineH,overflowX}] } + 잘린 이름 수 참고 행 LH11t
  */
 export const causeChecks = {
   evening(s) {
     const L = {
       LH1a: "시작 카드: 2초 안 1개(타일 3·단추 0), 2.5초 뒤 0개",
-      LH1b: "도착 직후: 등불 표지 3·모두 깜빡임·진행 0/3",
+      LH1b: "도착 직후: 등불 표지 3·빛남은 한 종류(반경 안이면 [켜기] 하나, 밖이면 보이는 표지 전부)·진행 0/3",
       LH1c: "[켜기] 세 번에 진행 1/3 → 2/3 → 3/3",
       LH1d: `띠 문장: 켜는 동안 "${CAUSE_LINES.lampAct}", 3/3 이면 "${CAUSE_LINES.lampDone}"`,
       LH1e: "3D 켜짐(lampLit): 내 등불 셋이 모두 켜지고 켜짐이 3개 이상이며 켜진 등불이 꺼지지 않았다",
@@ -4765,10 +4781,18 @@ export const causeChecks = {
       out.push(result("LH1a", L.LH1a, bad));
     } else out.push(noMeasure("LH1a", L.LH1a, "시작 카드 읽기(2초 안·2.5초 뒤)"));
     const a = s.arrive;
-    if (a && isNum(a.markers) && isNum(a.calls) && isStr(a.progress)) {
+    if (a && isNum(a.markers) && isNum(a.shownMarkers) && isNum(a.calls) && isNum(a.acts) && isNum(a.actCalls) && isStr(a.progress)) {
       const bad = [];
       if (a.markers !== 3) bad.push(`등불 표지 ${a.markers}개 ≠ 3`);
-      if (a.calls !== 3) bad.push(`깜빡이는 표지 ${a.calls}개 ≠ 3`);
+      if (a.acts > 0) {
+        // 처리 반경 안: [켜기] 하나만 빛나고 표지 깜빡임은 꺼진다(빛남 우선, P21-6)
+        if (a.acts !== 1) bad.push(`[켜기] ${a.acts}개 ≠ 1`);
+        if (a.actCalls !== 1) bad.push(`반경 안인데 [켜기] 빛남 ${a.actCalls}개 ≠ 1`);
+        if (a.calls !== 0) bad.push(`반경 안인데 표지 깜빡임 ${a.calls}개 ≠ 0`);
+      } else {
+        if (a.shownMarkers < 1) bad.push("보이는 등불 표지가 없음");
+        if (a.calls !== a.shownMarkers) bad.push(`반경 밖인데 깜빡이는 표지 ${a.calls}개 ≠ 보이는 표지 ${a.shownMarkers}개`);
+      }
       if (a.progress.trim() !== "0/3") bad.push(`진행 '${a.progress}' ≠ 0/3`);
       out.push(result("LH1b", L.LH1b, bad));
     } else out.push(noMeasure("LH1b", L.LH1b, "도착 직후 표지·깜빡임·진행"));
@@ -4891,7 +4915,7 @@ export const causeChecks = {
   morning(s) {
     const L = {
       LH5a: "피해자 집 앞 지점 셋(발자국·옷 조각·창문)이 모두 새 상태다",
-      LH5b: "[살펴보기]는 지점 반경 밖에서 0개, 안에서 1개다",
+      LH5b: "반경 밖: [살펴보기] 0개이고 보이는 지점 표지나 화살표 칩이 있다 / 반경 안: [살펴보기] 1개",
       LH5c: "피해자도 미수도 없는 밤은 아침 단계 없이 곧장 토론이다",
     };
     if (!s || typeof s !== "object") return Object.keys(L).map((id) => noMeasure(id, L[id], "아침 읽기 값"));
@@ -4903,9 +4927,10 @@ export const causeChecks = {
       if (notNew > 0) bad.push(`새 상태가 아닌 지점 ${notNew}개`);
       out.push(result("LH5a", L.LH5a, bad));
     } else out.push(noMeasure("LH5a", L.LH5a, "지점 목록"));
-    if (s.far && isNum(s.far.acts) && s.near && isNum(s.near.acts)) {
+    if (s.far && isNum(s.far.acts) && isNum(s.far.shownSpots) && isNum(s.far.arrows) && s.near && isNum(s.near.acts)) {
       const bad = [];
       if (s.far.acts !== 0) bad.push(`반경 밖 [살펴보기] ${s.far.acts}개 ≠ 0`);
+      if (s.far.shownSpots === 0 && s.far.arrows !== 1) bad.push(`보이는 지점 표지가 없는데 화살표 칩 ${s.far.arrows}개 ≠ 1`);
       if (s.near.acts !== 1) bad.push(`반경 안 [살펴보기] ${s.near.acts}개 ≠ 1`);
       out.push(result("LH5b", L.LH5b, bad));
     } else out.push(noMeasure("LH5b", L.LH5b, "반경 밖·안 [살펴보기] 수"));
@@ -4926,16 +4951,16 @@ export const causeChecks = {
       LH6b: "마피아가 먼저 살핀 옷 조각은 평소 단서 카드(done)다",
       LH6c: '마피아가 먼저 손댄 지점을 뒤에 살피면 dim + "먼저 손댄 흔적" 이다',
       LH6d: '이웃 창이 꺼진 밤의 창문은 dim + "어두워서 못 봤어요", 켜진 밤은 단서 카드다',
-      LH6e: "발자국 카드의 수는 숫자이고 마피아·시민이 같다",
+      LH6e: "발자국 카드의 수는 1 이상의 숫자이고 발자국을 살핀 두 시민이 같다(발자국 수는 지점을 살핀 사람의 me.scene 에만 있다)",
       LH6f: "같은 지점은 다시 살필 수 없다(알약 0·카드 수 그대로)",
     };
     const stepOk = (p) => !!p && isStr(p.spot) && isNum(p.cardsBefore) && isNum(p.cardsAfter) && isStr(p.state) && !!p.card && typeof p.card.dim === "boolean" && isStr(p.card.text);
     const stepsOk = (w) => !!w && Array.isArray(w.steps) && w.steps.every(stepOk);
-    if (!s || !stepsOk(s.host) || !stepsOk(s.guest) || typeof s.windowDark !== "boolean") return Object.keys(L).map((id) => noMeasure(id, L[id], "단서 읽기 값(마피아·시민 걸음·창 불)"));
+    if (!s || !stepsOk(s.host) || !stepsOk(s.guest) || !stepsOk(s.guest2) || typeof s.windowDark !== "boolean") return Object.keys(L).map((id) => noMeasure(id, L[id], "단서 읽기 값(마피아·시민 둘의 걸음·창 불)"));
     const find = (w, spot) => w.steps.find((p) => p.spot === spot);
     const out = [];
     const bad1 = [];
-    for (const [who, w] of [["마피아", s.host], ["시민", s.guest]]) for (const p of w.steps) {
+    for (const [who, w] of [["마피아", s.host], ["시민", s.guest], ["시민2", s.guest2]]) for (const p of w.steps) {
       if (p.cardsAfter !== p.cardsBefore + 1) bad1.push(`${who} ${p.spot}: 카드 ${p.cardsBefore} → ${p.cardsAfter}`);
       if (p.state !== "done" && p.state !== "dim") bad1.push(`${who} ${p.spot}: 지점 상태 ${p.state}`);
     }
@@ -4948,14 +4973,14 @@ export const causeChecks = {
     if (!gw) out.push(noMeasure("LH6d", L.LH6d, "시민이 살핀 창문"));
     else if (s.windowDark) out.push(result("LH6d", L.LH6d, gw.state === "dim" && gw.card.dim && gw.card.text.includes(CAUSE_CARD_TEXT.dark) ? [] : [`창이 꺼진 밤인데 상태 ${gw.state}·dim ${gw.card.dim}·문장 ${gw.card.text.includes(CAUSE_CARD_TEXT.dark) ? "어두워서" : "다른 문장"}`]));
     else out.push(result("LH6d", L.LH6d, gw.state === "done" && !gw.card.dim ? [] : [`창이 켜진 밤인데 상태 ${gw.state}·dim ${gw.card.dim}`]));
-    const hf = find(s.host, "footprint");
     const gf = find(s.guest, "footprint");
-    if (hf && gf) {
+    const g2f = find(s.guest2, "footprint");
+    if (gf && g2f) {
       const bad = [];
-      for (const [who, p] of [["마피아", hf], ["시민", gf]]) if (!(Number.isInteger(p.card.count) && p.card.count >= 1)) bad.push(`${who} 발자국 수 ${p.card.count}`);
-      if (hf.card.count !== gf.card.count) bad.push(`발자국 수 마피아 ${hf.card.count} ≠ 시민 ${gf.card.count}`);
+      for (const [who, p] of [["시민", gf], ["시민2", g2f]]) if (!(Number.isInteger(p.card.count) && p.card.count >= 1)) bad.push(`${who} 발자국 수 ${p.card.count}`);
+      if (gf.card.count !== g2f.card.count) bad.push(`발자국 수 시민 ${gf.card.count} ≠ 시민2 ${g2f.card.count}`);
       out.push(result("LH6e", L.LH6e, bad));
-    } else out.push(noMeasure("LH6e", L.LH6e, "마피아·시민이 살핀 발자국"));
+    } else out.push(noMeasure("LH6e", L.LH6e, "두 시민이 살핀 발자국"));
     const r = s.repeat;
     if (r && isNum(r.acts) && isNum(r.cardsBefore) && isNum(r.cardsAfter)) {
       const bad = [];
@@ -5059,9 +5084,9 @@ export const causeChecks = {
 
   phones(s) {
     const L = {
-      LH11a: `맵 위 표지·문패·단추·화살표가 스테이지 안쪽 ${ERRAND_STAGE_INSET} 안이다`,
-      LH11b: "새 요소가 띠·오른쪽 열 단추·아래 패널·이름표 버튼을 가리지 않는다(보드가 열린 동안 이름표를 덮는 것만 예외)",
-      LH11c: "새 요소끼리 서로 겹치지 않는다(화살표는 방향 표지라 제외)",
+      LH11a: `맵 위 표지·문패(보이는 원 ${CAUSE_HOUSE_CIRCLE_E2E})·단추·화살표가 스테이지 안쪽 ${ERRAND_STAGE_INSET} 안이다`,
+      LH11b: "새 요소가 띠·오른쪽 열 단추·아래 패널·이름표 버튼을 가리지 않는다(보드가 열린 동안 이름표를 덮는 것만 예외, 아침 [건너뛰기]는 패널 안 입력줄 오른쪽 끝에 서고 입력칸·보내기를 가리지 않는다)",
+      LH11c: "새 요소끼리 서로 겹치지 않는다(화살표는 방향 표지라, 같은 집 지점 표지끼리는 P21-9 가 월드 1.0 간격만 약속해 제외하고 참고 행으로 잰다)",
       LH11d: `누르는 요소의 짧은 변 ≥ ${CAUSE_TAP_MIN}이고 밤 문패 중심 사이 ≥ ${CAUSE_HOUSE_CENTER_MIN}이다`,
     };
     const ok = !!s && rectOk(s.stage) && Array.isArray(s.items) && s.items.every((it) => it && isStr(it.kind) && rectOk(it.rect)) && s.blockers && typeof s.blockers === "object";
@@ -5074,25 +5099,45 @@ export const causeChecks = {
     const name = (it, i) => `${it.kind}#${i + 1}`;
     const bad1 = [];
     s.items.forEach((it, i) => {
-      if (CAUSE_INSET_KINDS.includes(it.kind) && !rectInside(it.rect, inner)) bad1.push(`${name(it, i)} 이 스테이지 안쪽 ${ERRAND_STAGE_INSET} 밖(${rectAt(it.rect)})`);
+      if (!CAUSE_INSET_KINDS.includes(it.kind)) return;
+      // 문패는 누르기 영역(44)이 아니라 보이는 원(40)이 안쪽 8 안이면 된다 — 영역과 겹침은 LH11b·LH11c 가 44 상자로 따로 본다
+      const trim = it.kind === "house-tag" ? Math.max(0, (Math.min(it.rect.width, it.rect.height) - CAUSE_HOUSE_CIRCLE_E2E) / 2) : 0;
+      const seen = { left: it.rect.left + trim, top: it.rect.top + trim, width: it.rect.width - 2 * trim, height: it.rect.height - 2 * trim };
+      if (!rectInside(seen, inner)) bad1.push(`${name(it, i)} 이 스테이지 안쪽 ${ERRAND_STAGE_INSET} 밖(${rectAt(seen)})`);
     });
     const bad2 = [];
+    const chat = rectList(b.chatParts);
+    if (!chat.every(rectOk)) return Object.keys(L).map((id) => noMeasure(id, L[id], "입력줄 부품 사각형"));
     s.items.forEach((it, i) => {
       const targets = [];
       if (b.band) targets.push(["띠", b.band]);
       side.forEach((r, k) => targets.push([`오른쪽 열 단추 ${k + 1}`, r]));
-      if (b.panel) targets.push(["아래 패널", b.panel]);
+      if (it.kind === "board") {
+        // 의심 보드는 기록 카드와 같은 껍데기라 아래 패널의 채팅 기록 칸을 덮는 것이 설계다 — 입력줄 부품(입력칸·보내기·유언·토론 끝내기)은 가리지 않는다
+        chat.forEach((r, k) => targets.push([`입력줄 부품 ${k + 1}`, r]));
+      } else if (it.kind === "panel-skip") {
+        // 아침 [건너뛰기] 는 채팅 입력줄의 오른쪽 끝 슬롯이라 패널 안에 서야 하고 입력칸·보내기·유언 단추를 가리지 않는다
+        if (b.panel && !rectInside(it.rect, b.panel)) bad2.push(`${name(it, i)} 이 아래 패널 밖(${rectAt(it.rect)})`);
+        chat.forEach((r, k) => targets.push([`입력줄 부품 ${k + 1}`, r]));
+      } else if (b.panel) targets.push(["아래 패널", b.panel]);
       if (!(it.kind === "board" && s.boardOpen === true)) tags.forEach((r, k) => targets.push([`이름표 버튼 ${k + 1}`, r]));
       for (const [what, r] of targets) if (rectsOverlap(it.rect, r)) bad2.push(`${name(it, i)} 이 ${what}를 가림(${overlapText(it.rect, r)})`);
     });
     const bad3 = [];
     const solid = s.items.map((it, i) => ({ it, i })).filter((x) => x.it.kind !== "arrow");
+    const spotGaps = [];
     for (let x = 0; x < solid.length; x++) for (let y = x + 1; y < solid.length; y++) {
-      if (rectsOverlap(solid[x].it.rect, solid[y].it.rect)) bad3.push(`${name(solid[x].it, solid[x].i)}·${name(solid[y].it, solid[y].i)} 겹침(${overlapText(solid[x].it.rect, solid[y].it.rect)})`);
+      const a = solid[x];
+      const c = solid[y];
+      if (a.it.kind === "clue-spot" && c.it.kind === "clue-spot") {
+        spotGaps.push(Math.hypot(a.it.rect.left + a.it.rect.width / 2 - (c.it.rect.left + c.it.rect.width / 2), a.it.rect.top + a.it.rect.height / 2 - (c.it.rect.top + c.it.rect.height / 2)));
+        continue;
+      }
+      if (rectsOverlap(a.it.rect, c.it.rect)) bad3.push(`${name(a.it, a.i)}·${name(c.it, c.i)} 겹침(${overlapText(a.it.rect, c.it.rect)})`);
     }
     const bad4 = [];
     s.items.forEach((it, i) => {
-      if (CAUSE_TAP_KINDS.includes(it.kind) && Math.min(it.rect.width, it.rect.height) < CAUSE_TAP_MIN - OVERLAP_EPS) bad4.push(`${name(it, i)} 짧은 변 ${rd(Math.min(it.rect.width, it.rect.height))} < ${CAUSE_TAP_MIN}`);
+      if ((CAUSE_TAP_KINDS.includes(it.kind) || it.kind === "panel-skip") && Math.min(it.rect.width, it.rect.height) < CAUSE_TAP_MIN - OVERLAP_EPS) bad4.push(`${name(it, i)} 짧은 변 ${rd(Math.min(it.rect.width, it.rect.height))} < ${CAUSE_TAP_MIN}`);
     });
     const houses = s.items.filter((it) => it.kind === "house-tag");
     for (let x = 0; x < houses.length; x++) for (let y = x + 1; y < houses.length; y++) {
@@ -5101,19 +5146,29 @@ export const causeChecks = {
       const d = Math.hypot(a.left + a.width / 2 - (c.left + c.width / 2), a.top + a.height / 2 - (c.top + c.height / 2));
       if (d < CAUSE_HOUSE_CENTER_MIN - OVERLAP_EPS) bad4.push(`문패 ${x + 1}·${y + 1} 중심 사이 ${rd(d)} < ${CAUSE_HOUSE_CENTER_MIN}`);
     }
-    return [result("LH11a", L.LH11a, bad1), result("LH11b", L.LH11b, bad2), result("LH11c", L.LH11c, bad3), result("LH11d", L.LH11d, bad4)];
+    const out = [result("LH11a", L.LH11a, bad1), result("LH11b", L.LH11b, bad2), result("LH11c", L.LH11c, bad3), result("LH11d", L.LH11d, bad4)];
+    if (spotGaps.length > 0) {
+      out.push({ id: "LH11s", label: "참고(판정 아님): 같은 집 지점 표지 중심 사이 최소 거리(표지 지름 52 — 약속은 월드 1.0 간격, P21-9)", ok: true, info: true, detail: `최소 ${rd(Math.min(...spotGaps))}px` });
+    }
+    return out;
   },
 
   boardNames(s) {
-    const label = "보드 얼굴 칸의 8자 닉네임이 칸 안 한 줄이고 넘치지 않는다";
+    const label = "보드 얼굴 칸의 8자 닉네임이 칸 안 한 줄이고 칸 밖으로 넘치지 않는다(글자가 칸보다 넓으면 칸 안에서 잘려야 하고 칸 밖으로 번지면 안 된다)";
     const faces = s?.faces;
-    if (!Array.isArray(faces) || faces.length === 0 || !faces.every((f) => f && rectOk(f.nameRect) && rectOk(f.faceRect) && isNum(f.scrollW) && isNum(f.clientW) && isNum(f.lineH) && f.lineH > 0)) return [noMeasure("LH11e", label, "보드 얼굴 칸·이름 사각형")];
+    if (!Array.isArray(faces) || faces.length === 0 || !faces.every((f) => f && rectOk(f.nameRect) && rectOk(f.faceRect) && isNum(f.scrollW) && isNum(f.clientW) && isNum(f.lineH) && f.lineH > 0 && isStr(f.overflowX))) return [noMeasure("LH11e", label, "보드 얼굴 칸·이름 사각형·overflow")];
     const bad = [];
     faces.forEach((f, i) => {
-      if (f.scrollW > f.clientW + 1) bad.push(`얼굴 ${i + 1}: 이름이 칸 밖으로 넘침(scroll ${rd(f.scrollW)} > client ${rd(f.clientW)})`);
+      // 글자가 칸보다 넓으면(scroll > client) 이름 상자가 칸 안에서 잘라 내야 한다(overflow hidden·clip) — 잘라 내지 않으면 글자가 이웃 칸으로 번진다
+      if (f.scrollW > f.clientW + 1 && f.overflowX !== "hidden" && f.overflowX !== "clip") bad.push(`얼굴 ${i + 1}: 이름 글자가 칸 밖으로 번짐(scroll ${rd(f.scrollW)} > client ${rd(f.clientW)}, overflow-x ${f.overflowX})`);
       if (!isOneLine(f.nameRect.height, f.lineH)) bad.push(`얼굴 ${i + 1}: 이름이 한 줄이 아님(높이 ${rd(f.nameRect.height)}·줄 ${rd(f.lineH)})`);
       if (!rectInside(f.nameRect, f.faceRect)) bad.push(`얼굴 ${i + 1}: 이름이 얼굴 칸 밖(${rectAt(f.nameRect)} ⊄ ${rectAt(f.faceRect)})`);
     });
-    return [result("LH11e", label, bad)];
+    const clipped = faces.filter((f) => f.scrollW > f.clientW + 1).length;
+    const longest = faces.reduce((m, f) => (f.scrollW > m.scrollW ? f : m), faces[0]);
+    return [
+      result("LH11e", label, bad),
+      { id: "LH11t", label: "참고(판정 아님): 글자가 칸보다 넓어 칸 안에서 잘린 이름 수", ok: true, info: true, detail: `잘린 이름 ${clipped}/${faces.length}칸${clipped > 0 ? ` · 가장 긴 글자 폭 ${rd(longest.scrollW)} > 그 칸 안 폭 ${rd(longest.clientW)}` : ""}` },
+    ];
   },
 };

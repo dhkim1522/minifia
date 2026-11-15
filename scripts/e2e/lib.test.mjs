@@ -1436,14 +1436,14 @@ test("LOBBY_SIZES: DEFAULT_SIZES 4개 + 390x844 + 402x874 여섯 개이고 LOBBY
   assert.deepEqual(DEFAULT_SIZES.map((x) => x.label), ["360x640", "390x664", "430x932", "360x560"]);
 });
 
-test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand·witness·trace(15-09 심부름·목격 기록·밤 통일/아침 흔적 폰 6종)·tutorial-solo(17-09 혼자 하기 첫 사건 폰 6종)·mode-rail(19-06 방장 줄 폰 6종)·town-walk(20-08 마을 문 앞 걷기 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
+test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand(15-09 심부름 폰 6종, 21-15 에서 저녁 등불 기준으로 다시 씀 — 목격 기록·아침 흔적 흐름은 기능이 사라져 뺌)·tutorial-solo(17-09 혼자 하기 첫 사건 폰 6종)·mode-rail(19-06 방장 줄 폰 6종)·town-walk(20-08 마을 문 앞 걷기 폰 6종)·cause-phones(21-15 원인 흐름 새 요소 겹침 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
   const run = readFileSync(new URL("./run.mjs", import.meta.url), "utf8");
   assert.match(run, /extraSizes/);
   assert.match(run, /!args\.sizesGiven/);
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)?(?:, skipByDefault: true)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
-  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "errand", "witness", "trace", "tutorial-solo", "mode-rail", "town-walk", "polish-reveal"]);
+  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "errand", "tutorial-solo", "mode-rail", "town-walk", "cause-phones", "polish-reveal"]);
 });
 
 test("기본판(결정 0072)에서 꺼진 장치 흐름 7개는 skipByDefault 이고 politics-verdict 는 기본 실행에 남는다 (13-05)", () => {
@@ -5615,7 +5615,7 @@ const failIds = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
 const eveningOk = () => ({
   cardEarly: { cards: 1, tiles: 3, buttons: 0 },
   cardLate: { cards: 0 },
-  arrive: { markers: 3, calls: 3, progress: "0/3", skipPills: 1 },
+  arrive: { markers: 3, shownMarkers: 3, calls: 3, acts: 0, actCalls: 0, progress: "0/3", skipPills: 1 },
   presses: ["1/3", "2/3", "3/3"],
   bandActing: "등불 세 곳을 켜 주세요",
   bandDone: "곧 밤이 됩니다",
@@ -5635,12 +5635,19 @@ test("causeChecks.evening(LH1): 시작 카드 수·표지 수·진행 수열·�
   const bad = (patch) => failIds(f({ ...eveningOk(), ...patch }));
   assert.deepEqual(bad({ cardEarly: { cards: 0, tiles: 3, buttons: 0 } }), ["LH1a"]);
   assert.deepEqual(bad({ cardLate: { cards: 1 } }), ["LH1a"]);
-  assert.deepEqual(bad({ arrive: { markers: 3, calls: 2, progress: "0/3", skipPills: 1 } }), ["LH1b"]);
+  const arr = { markers: 3, shownMarkers: 3, calls: 3, acts: 0, actCalls: 0, progress: "0/3", skipPills: 1 };
+  assert.deepEqual(bad({ arrive: { ...arr, calls: 2 } }), ["LH1b"]);
+  assert.deepEqual(bad({ arrive: { ...arr, markers: 2 } }), ["LH1b"]);
+  assert.deepEqual(bad({ arrive: { ...arr, shownMarkers: 2, calls: 2 } }), []);
+  assert.deepEqual(bad({ arrive: { ...arr, shownMarkers: 2, calls: 0, acts: 1, actCalls: 1 } }), [], "반경 안: [켜기] 하나만 빛나고 표지 깜빡임은 꺼진다");
+  assert.deepEqual(bad({ arrive: { ...arr, calls: 1, acts: 1, actCalls: 1 } }), ["LH1b"], "반경 안인데 표지도 깜빡이면 실패");
+  assert.deepEqual(bad({ arrive: { ...arr, calls: 0, acts: 1, actCalls: 0 } }), ["LH1b"], "반경 안인데 [켜기] 가 안 빛나면 실패");
+  assert.deepEqual(bad({ arrive: { ...arr, progress: "1/3" } }), ["LH1b"]);
   assert.deepEqual(bad({ presses: ["1/3", "3/3"] }), ["LH1c"]);
   assert.deepEqual(bad({ bandDone: "곧 토론이 시작됩니다" }), ["LH1d"]);
   assert.deepEqual(bad({ litEnd: [false, true, false, false, true, false, false, true] }), ["LH1e"]);
   assert.deepEqual(bad({ litEnd: [false, true, false, false, true, false, true, false], litStart: [false, false, false, false, false, false, false, true] }), ["LH1e"]);
-  assert.deepEqual(bad({ arrive: { markers: 3, calls: 3, progress: "0/3", skipPills: 0 } }), ["LH1f"]);
+  assert.deepEqual(bad({ arrive: { ...arr, skipPills: 0 } }), ["LH1f"]);
   assert.ok(f({}).every((l) => !l.ok && /측정값 없음/.test(l.detail)), "빈 입력은 조용히 통과하지 않는다");
 });
 
@@ -5719,14 +5726,16 @@ test("causeChecks.nightParity(LH4): 역할이 빠졌거나 높이·단추 수가
 });
 
 test("causeChecks.morning(LH5): 지점 셋이 새 상태, [살펴보기]는 반경 안에서만, 피해자 없는 밤은 아침 단계가 없으면 통과한다", () => {
-  const ok = { spots: [{ id: "footprint", state: "new" }, { id: "cloth", state: "new" }, { id: "window", state: "new" }], far: { acts: 0 }, near: { acts: 1 }, noVictim: { phases: ["errand", "night", "discussion"] } };
+  const ok = { spots: [{ id: "footprint", state: "new" }, { id: "cloth", state: "new" }, { id: "window", state: "new" }], far: { acts: 0, shownSpots: 3, arrows: 0 }, near: { acts: 1 }, noVictim: { phases: ["errand", "night", "discussion"] } };
   const f = lh("morning");
   const lines = f(ok);
   assert.deepEqual(lines.map((l) => l.id), ["LH5a", "LH5b", "LH5c"]);
   assert.ok(allOk(lines), JSON.stringify(lines.filter((l) => !l.ok)));
   assert.deepEqual(failIds(f({ ...ok, spots: ok.spots.slice(0, 2) })), ["LH5a"]);
   assert.deepEqual(failIds(f({ ...ok, spots: ok.spots.map((s) => ({ ...s, state: "done" })) })), ["LH5a"]);
-  assert.deepEqual(failIds(f({ ...ok, far: { acts: 1 } })), ["LH5b"]);
+  assert.deepEqual(failIds(f({ ...ok, far: { acts: 1, shownSpots: 3, arrows: 0 } })), ["LH5b"]);
+  assert.deepEqual(failIds(f({ ...ok, far: { acts: 0, shownSpots: 0, arrows: 1 } })), [], "지점 표지가 화면 밖이면 화살표 칩이 안내한다");
+  assert.deepEqual(failIds(f({ ...ok, far: { acts: 0, shownSpots: 0, arrows: 0 } })), ["LH5b"]);
   assert.deepEqual(failIds(f({ ...ok, near: { acts: 0 } })), ["LH5b"]);
   assert.deepEqual(failIds(f({ ...ok, noVictim: { phases: ["errand", "night", "morning", "discussion"] } })), ["LH5c"]);
   assert.deepEqual(failIds(f({ ...ok, noVictim: null })), ["LH5c"]);
@@ -5734,7 +5743,8 @@ test("causeChecks.morning(LH5): 지점 셋이 새 상태, [살펴보기]는 반�
 
 const step = (spot, before, state, card) => ({ spot, cardsBefore: before, cardsAfter: before + 1, state, card });
 const cluesOk = () => ({
-  host: { steps: [step("cloth", 0, "done", { dim: false, text: "붉은 천 조각", count: null }), step("footprint", 1, "done", { dim: false, text: "1", count: 1 })] },
+  host: { steps: [step("cloth", 0, "done", { dim: false, text: "붉은 천 조각", count: null })] },
+  guest2: { steps: [step("footprint", 0, "done", { dim: false, text: "1", count: 1 })] },
   guest: {
     steps: [
       step("cloth", 0, "dim", { dim: true, text: "먼저 손댄 흔적", count: null }),
@@ -5773,6 +5783,9 @@ test("causeChecks.clues(LH6): 카드가 안 늘거나 손댄 흔적이 dim 이 �
   const c5 = cluesOk();
   c5.guest.steps[1] = step("footprint", 1, "done", { dim: false, text: "2", count: 2 });
   assert.deepEqual(failIds(f(c5)), ["LH6e"]);
+  const c5b = cluesOk();
+  c5b.guest2.steps[0] = step("footprint", 0, "dim", { dim: true, text: "먼저 손댄 흔적", count: null });
+  assert.deepEqual(failIds(f(c5b)), ["LH6e"].concat([]), "손댄 흔적이면 발자국 수가 없다");
   const c6 = cluesOk();
   c6.repeat = { acts: 1, cardsBefore: 3, cardsAfter: 4 };
   assert.deepEqual(failIds(f(c6)), ["LH6f"]);
@@ -5872,25 +5885,50 @@ test("causeChecks.phones(LH11): 스테이지 밖·띠/열/패널/이름표 겹�
   const f = lh("phones");
   const withItem = (item) => ({ ...phoneOk(), items: [...phoneOk().items, item] });
   assert.deepEqual(failIds(f(withItem({ kind: "house-tag", rect: Rc(2, 300, 44, 44) }))), ["LH11a"]);
+  // 문패는 보이는 원(40)이 안쪽 8 안이면 된다: 누르기 영역(44)의 왼쪽이 7 이어도 원은 9 부터라 통과, 5 면 원이 7 이라 실패
+  assert.deepEqual(failIds(f(withItem({ kind: "house-tag", rect: Rc(7, 300, 44, 44) }))), []);
+  assert.deepEqual(failIds(f(withItem({ kind: "house-tag", rect: Rc(5, 300, 44, 44) }))), ["LH11a"]);
   assert.deepEqual(failIds(f(withItem({ kind: "clue-spot", rect: Rc(320, 120, 52, 52) }))), ["LH11b"]);
   assert.deepEqual(failIds(f(withItem({ kind: "clue-card", rect: Rc(20, 680, 100, 56) }))), ["LH11b"]);
-  assert.deepEqual(failIds(f(withItem({ kind: "clue-spot", rect: Rc(210, 410, 52, 52) }))), ["LH11c"]);
+  assert.deepEqual(failIds(f(withItem({ kind: "clue-card", rect: Rc(60, 190, 100, 56) }))), ["LH11c"]);
+  // 같은 집 지점 표지끼리는 월드 1.0 간격만 약속(P21-9)이라 판정에서 빼고 참고 행(LH11s)으로 잰다
+  const spots = f(withItem({ kind: "clue-spot", rect: Rc(210, 410, 52, 52) }));
+  assert.deepEqual(failIds(spots), []);
+  const info = spots.find((l) => l.id === "LH11s");
+  assert.ok(info && info.info === true && info.ok === true && /최소/.test(info.detail), JSON.stringify(spots));
   assert.deepEqual(failIds(f(withItem({ kind: "house-tag", rect: Rc(120, 210, 44, 44) }))), ["LH11c", "LH11d"]);
   assert.deepEqual(failIds(f(withItem({ kind: "house-tag", rect: Rc(300, 300, 40, 40) }))), ["LH11d"]);
   assert.ok(failIds(f({ ...phoneOk(), blockers: { ...phoneOk().blockers, tagButtons: [Rc(60, 220, 60, 30)] } })).includes("LH11b"), "이름표 버튼과 겹치면 실패");
   const boardOnTag = { ...phoneOk(), boardOpen: true, blockers: { ...phoneOk().blockers, tagButtons: [Rc(60, 520, 60, 30)] }, items: [{ kind: "board", rect: Rc(31, 500, 328, 150) }] };
   assert.ok(allOk(f(boardOnTag)), "보드가 열린 동안 이름표를 덮는 것은 예외");
   assert.ok(failIds(f({ ...boardOnTag, boardOpen: false })).includes("LH11b"), "보드가 닫혔는데 덮으면 실패");
+  // 보드는 패널의 기록 칸을 덮어도 되지만(설계) 입력줄 부품을 가리면 실패한다
+  const boardOverPanel = (chatParts) => ({ ...phoneOk(), blockers: { ...phoneOk().blockers, chatParts }, boardOpen: true, items: [{ kind: "board", rect: Rc(16, 580, 328, 180) }] });
+  assert.ok(allOk(f(boardOverPanel([Rc(16, 780, 220, 48)]))), "패널 기록 칸 위에 걸쳐도 입력줄을 안 가리면 통과");
+  assert.ok(failIds(f(boardOverPanel([Rc(16, 700, 220, 48)]))).includes("LH11b"), "입력줄 부품을 가리면 실패");
+  // 아침 [건너뛰기]: 아래 패널 안 입력줄 오른쪽 끝에 서고 입력칸·보내기를 가리지 않는다(panel-skip)
+  const morning = (skip, chatParts) => ({ ...phoneOk(), blockers: { ...phoneOk().blockers, chatParts }, items: [{ kind: "panel-skip", rect: skip }] });
+  const chat = [Rc(16, 740, 220, 48), Rc(244, 740, 48, 48)];
+  assert.ok(allOk(f(morning(Rc(278, 780, 104, 48), []))), "패널 안·입력줄 부품 없음 → 통과");
+  assert.ok(allOk(f(morning(Rc(296, 740, 88, 48), chat))), "입력줄 부품 오른쪽 빈 곳 → 통과");
+  assert.ok(failIds(f(morning(Rc(250, 600, 104, 48), chat))).includes("LH11b"), "패널 밖이면 실패");
+  assert.ok(failIds(f(morning(Rc(230, 740, 104, 48), chat))).includes("LH11b"), "입력칸·보내기를 가리면 실패");
+  assert.deepEqual(failIds(f(morning(Rc(296, 740, 88, 40), chat))), ["LH11d"], "짧은 변 40 < 44");
   assert.ok(f({}).every((l) => !l.ok));
 });
 
 test("causeChecks.boardNames(LH11): 8자 닉네임 이름이 얼굴 칸 안 한 줄이고 넘치지 않아야 통과한다", () => {
   const f = lh("boardNames");
-  const face = (over = {}) => ({ nameRect: Rc(10, 20, 60, 17), faceRect: Rc(4, 8, 68, 56), scrollW: 60, clientW: 60, lineH: 16.8, ...over });
+  const face = (over = {}) => ({ nameRect: Rc(10, 20, 60, 17), faceRect: Rc(4, 8, 68, 56), scrollW: 60, clientW: 60, overflowX: "hidden", lineH: 16.8, ...over });
   const lines = f({ faces: [face(), face()] });
-  assert.deepEqual(lines.map((l) => l.id), ["LH11e"]);
+  assert.deepEqual(lines.map((l) => l.id), ["LH11e", "LH11t"]);
   assert.ok(allOk(lines));
-  assert.deepEqual(failIds(f({ faces: [face({ scrollW: 80 })] })), ["LH11e"]);
+  assert.match(lines[1].detail, /잘린 이름 0\/2/);
+  // 글자가 칸보다 넓어도 칸 안에서 잘리면(overflow hidden) 판정은 통과하고 참고 행(LH11t)이 잘린 수를 적는다 — 잘라 내지 않고 번지면 실패한다
+  const clipped = f({ faces: [face({ scrollW: 100, clientW: 63 })] });
+  assert.deepEqual(failIds(clipped), []);
+  assert.match(clipped.find((l) => l.id === "LH11t").detail, /잘린 이름 1\/1/);
+  assert.deepEqual(failIds(f({ faces: [face({ scrollW: 100, clientW: 63, overflowX: "visible" })] })), ["LH11e"]);
   assert.deepEqual(failIds(f({ faces: [face({ nameRect: Rc(10, 20, 60, 34) })] })), ["LH11e"]);
   assert.deepEqual(failIds(f({ faces: [face({ nameRect: Rc(2, 20, 80, 17) })] })), ["LH11e"]);
   assert.deepEqual(failIds(f({ faces: [] })), ["LH11e"]);
@@ -5914,4 +5952,33 @@ test("basicOrderChecks(phases, mode): mode 를 주면 그 판 종류의 단계 �
   assert.ok(basicOrderChecks(ext, "basic").some((x) => !x.ok), "기본 마피아에는 errand 가 없다");
   assert.ok(basicOrderChecks(["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night"], "basic").every((x) => x.ok));
   assert.ok(basicOrderChecks(["roleReveal", "dayAnnounce", "errand"], "extended").some((x) => !x.ok), "확장판은 낮 시작 발표를 지나지 않는다");
+});
+
+// ---- 21-15: 심부름 판정의 저녁 등불 프로필(profile "lamp") ----
+test("errandChecks(profile lamp): 띠 문장은 errand.lamp.act·done 이고 반경 밖에서는 보이는 안 켠 표지가 모두 빛나도 통과한다(옛 프로필은 그대로 실패)", () => {
+  const out = errandOk({
+    profile: "lamp",
+    bandLine: "등불 세 곳을 켜 주세요",
+    places: [{ id: "lamp0", done: false, hidden: false, call: true, rest: false }, { id: "lamp3", done: false, hidden: false, call: true, rest: false }, { id: "lamp4", done: false, hidden: true, call: false, rest: false }],
+    callCount: 2,
+    callKinds: ["tile", "tile"],
+  });
+  assert.deepEqual(fails(errandChecks(out)), []);
+  // 옛 프로필에서는 같은 입력이 띠 문장·빛남 개수 때문에 실패한다
+  assert.deepEqual(fails(errandChecks({ ...out, profile: undefined })), ["EA3", "EA4"]);
+  assert.deepEqual(fails(errandChecks({ ...out, callCount: 1, callKinds: ["tile"] })), ["EA9"], "보이는 안 켠 표지 둘인데 하나만 빛나면 실패");
+  assert.deepEqual(fails(errandChecks({ ...out, bandLine: "빛나는 곳을 찾아 처리해 주세요" })), ["EA3"]);
+  const inRange = errandIn({ profile: "lamp", bandLine: "등불 세 곳을 켜 주세요" });
+  assert.deepEqual(fails(errandChecks(inRange)), []);
+  assert.deepEqual(fails(errandChecks({ ...inRange, callCount: 2, callKinds: ["act", "tile"] })), ["EA4", "EA9"], "[켜기] 가 빛나는데 표지도 빛나면 실패");
+  const done = errandDone({ profile: "lamp", bandLine: "곧 밤이 됩니다" });
+  assert.deepEqual(fails(errandChecks(done)), []);
+  assert.deepEqual(fails(errandChecks({ ...done, bandLine: "곧 토론이 시작됩니다" })), ["EA3"]);
+});
+
+test("errandCardChecks(profile lamp): 시작 카드 제목이 '오늘 켤 등불' 이고 아래 줄은 15 의 문구 그대로다", () => {
+  const early = { cards: 1, tiles: 3, buttons: 0, text: "오늘 켤 등불 가는 길에 본 사람이 기록돼요" };
+  assert.deepEqual(fails(errandCardChecks({ profile: "lamp", early, late: { cards: 0 } })), []);
+  assert.deepEqual(fails(errandCardChecks({ early, late: { cards: 0 } })), ["EC1"], "옛 프로필은 '오늘 갈 곳' 제목을 기대한다");
+  assert.deepEqual(fails(errandCardChecks({ profile: "lamp", early: { ...early, text: "오늘 갈 곳 가는 길에 본 사람이 기록돼요" }, late: { cards: 0 } })), ["EC1"]);
 });

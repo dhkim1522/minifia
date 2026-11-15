@@ -28,7 +28,7 @@ import {
   openLogHeight,
 } from "../../src/game/chatUi";
 import { RESTORED_MS } from "../../src/net/linkReducer";
-import { STAGE_SIZES, panBoxOf } from "../../src/world/camera";
+import { HOUSE_TAG_BOX, HOUSE_TAG_CIRCLE, STAGE_SIZES, panBoxOf } from "../../src/world/camera";
 import { TOWN_CLUE_SPOTS, TOWN_LAMPS, TOWN_NEIGHBORS, TOWN_ROOMS, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
 import { CARD_TEXT } from "../../src/game/sceneText";
 import { ERRAND_HOLD_MS } from "../../src/components/v2/ErrandAct";
@@ -1289,6 +1289,9 @@ describe("21페이즈 원인 흐름 E2E 사본 계약 (21-15, D-29, T-21-47·T-2
     CAUSE_ABSENT_SELECTORS: readonly string[];
     CAUSE_HOLD_MS_E2E: number;
     CAUSE_SPOT_IDS_E2E: readonly string[];
+    CAUSE_HOUSE_CIRCLE_E2E: number;
+    CAUSE_HOUSE_BOX_E2E: number;
+    CAUSE_CARD_TITLE: string;
   };
   const root = new URL("../../", import.meta.url);
   const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
@@ -1330,6 +1333,24 @@ describe("21페이즈 원인 흐름 E2E 사본 계약 (21-15, D-29, T-21-47·T-2
     expect(lib.CAUSE_LINES.board).toBe(HOST_LINES["discussion.board"]);
     expect(lib.CAUSE_CARD_TEXT).toEqual({ touched: CARD_TEXT.touched, dark: CARD_TEXT.dark, none: CARD_TEXT.none });
     expect(lib.CAUSE_HOLD_MS_E2E).toBeGreaterThan(ERRAND_HOLD_MS);
+  });
+
+  it("밤 문패의 보이는 원·누르기 영역 사본은 HOUSE_TAG_CIRCLE·HOUSE_TAG_BOX 와, 저녁 시작 카드 제목은 ErrandStartCard 의 글과 같다", () => {
+    expect(lib.CAUSE_HOUSE_CIRCLE_E2E).toBe(HOUSE_TAG_CIRCLE);
+    expect(lib.CAUSE_HOUSE_BOX_E2E).toBe(HOUSE_TAG_BOX);
+    const card = sources.find((s) => s.f.endsWith("components/v2/ErrandStartCard.tsx"))?.text ?? "";
+    expect(card).toContain(`"${lib.CAUSE_CARD_TITLE}"`);
+  });
+
+  it("원인 흐름 E2E 흐름 파일 cause.mjs 는 결과 줄에 닉네임·토큰을 싣지 않고 흐름 이름이 모두 cause- 로 시작해 errand·town·mode 와 --only 부분 일치가 겹치지 않는다 (T-21-48)", () => {
+    const text = readFileSync(new URL("scripts/e2e/cause.mjs", root), "utf8");
+    const recCalls = text.split("\n").filter((l) => /\brec\(/.test(l));
+    expect(recCalls.length).toBeGreaterThan(5);
+    expect(recCalls.filter((l) => /nickname|token/i.test(l))).toEqual([]);
+    const flows = readFileSync(new URL("scripts/e2e/flows.mjs", root), "utf8");
+    const ids = [...flows.matchAll(/\{ id: "(cause-[a-z]+)", run: /g)].map((m) => m[1]);
+    expect(ids).toEqual(["cause-evening", "cause-night", "cause-morning", "cause-skip", "cause-basic", "cause-phones"]);
+    for (const other of ["errand", "town", "mode-"]) expect(ids.filter((id) => id.includes(other))).toEqual([]);
   });
 
   it("CAUSE_ABSENT_SELECTORS(기본 마피아에서 0건이어야 하는 확장판 요소)의 속성이 git 이 추적하는 src 의 .tsx 에 있다(빈 선택자 금지)", () => {
