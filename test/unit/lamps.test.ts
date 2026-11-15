@@ -10,7 +10,7 @@ import { enterNight } from "../../shared/game/night";
 import { startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
-import { openCause, openTown } from "../helpers/playable";
+import { lockCause, openCause, openTown } from "../helpers/playable";
 import { seededRandInt } from "../helpers/seededRandom";
 import { START_AT, lobbyOf } from "../helpers/voteState";
 
@@ -159,11 +159,17 @@ describe("원인 흐름 마을 저녁 — 마피아 hold 는 cut, 시민 hold �
 });
 
 describe("잠금(옛 확장판 순서) 아래 — 밤 진입 상태에는 lamps 키가 없다", () => {
+  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: setup 이 더는 잠그지 않으므로 이 구역이 직접 잠근다(갈래 B).
   let restoreTown: () => void = () => {};
+  let restoreLock: () => void = () => {};
   beforeAll(() => {
+    restoreLock = lockCause();
     restoreTown = openTown();
   });
-  afterAll(() => restoreTown());
+  afterAll(() => {
+    restoreTown();
+    restoreLock();
+  });
 
   it("원인 흐름이 아니면 enterNight 가 lamps 를 만들지 않는다", () => {
     const s = errandOf(6, 5);

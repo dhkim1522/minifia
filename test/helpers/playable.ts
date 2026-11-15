@@ -1,3 +1,4 @@
+import { afterAll } from "vitest";
 import type { GameMode, MapId } from "../../shared/protocol";
 import { MODE_MAPS, PLAYABLE_MAPS } from "../../shared/game/maps";
 import { CAUSE_MODES } from "../../shared/game/ruleset";
@@ -86,5 +87,30 @@ export function openCause(): () => void {
   if (!CAUSE_MODES.includes("extended")) CAUSE_MODES.push("extended");
   return () => {
     CAUSE_MODES.splice(0, CAUSE_MODES.length, ...saved);
+  };
+}
+
+/**
+ * 파일 머리용 원인 흐름 잠금(21-13) — 꺼진 옛 확장판 경로(낮 시작 발표 → 심부름 → 토론, 공개 흔적·마지막 목격·가짜 장소)를 단언하는 시험 파일이 쓴다.
+ * 제품 CAUSE_MODES 는 확장판이라 setup 은 더는 잠그지 않으므로, 이 파일들은 모듈을 읽을 때 잠가 두고 파일이 끝나면 되돌린다(afterAll).
+ * 파일 안에서 openCause() 로 새 흐름을 잠깐 켜는 시험은 그대로 쓸 수 있다.
+ */
+export function lockCauseInFile(): void {
+  const restore = lockCause();
+  afterAll(restore);
+}
+
+/**
+ * 시험 한 개를 원인 흐름 잠금 아래에서 돌린다(21-13) — `it(이름, underCauseLock(() => { … }))`. 끝나면(실패해도) 되돌린다.
+ * 꺼진 옛 확장판 경로를 단언하는 시험이 한두 개뿐인 파일이 쓴다(파일 전체가 그렇다면 lockCauseInFile).
+ */
+export function underCauseLock<T>(body: () => T): () => T {
+  return () => {
+    const restore = lockCause();
+    try {
+      return body();
+    } finally {
+      restore();
+    }
   };
 }

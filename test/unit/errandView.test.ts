@@ -15,7 +15,7 @@ import type { V2IconName } from "../../src/components/v2/V2Icon";
 import { ERRAND_CARD_MS, ERRAND_TEXT, actablePlaceOf, errandProgress, nextPlaceOf, placeCentersOf, placeMarkerPlan, progressLabel, startCardOn } from "../../src/game/errandView";
 import type { Rect } from "../../src/game/errandView";
 import { PLACE_NAME, placeLabel } from "../../src/game/placeText";
-import { openCause } from "../helpers/playable";
+import { openCause, underCauseLock } from "../helpers/playable";
 import { seededRandInt } from "../helpers/seededRandom";
 import { startedAt } from "../helpers/voteState";
 import { tick } from "../../shared/game/tick";
@@ -146,7 +146,8 @@ describe("진행·다음 장소·처리 가능", () => {
     expect(actablePlaceOf({ x: 0, z: 0 }, C, [], 0.1)).toBe("glass"); // 반경 인자
   });
 
-  it("actablePlaceOf 는 서버 actErrand 와 같은 표본 20개에서 같은 판정이다(화면 거울, T-15-18)", () => {
+  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: 낮 시작 발표 → 심부름 순서를 전제하므로 이 시험만 잠근다(갈래 B).
+  it("actablePlaceOf 는 서버 actErrand 와 같은 표본 20개에서 같은 판정이다(화면 거울, T-15-18)", underCauseLock(() => {
     const day = { ...startedAt(6, 11, "dayAnnounce"), map: "bar" as const };
     const dealt: RoomState = tick(day, day.phaseEndsAt!, seededRandInt(12));
     expect(dealt.phase).toBe("errand");
@@ -178,7 +179,7 @@ describe("진행·다음 장소·처리 가능", () => {
     }
     expect(hits).toBeGreaterThan(0);
     expect(hits).toBeLessThan(20);
-  });
+  }));
 });
 
 // ---- 타일·화살표·[처리] 알약 배치 계획 (16-07, D-06·V-20~V-22) ----
@@ -377,11 +378,12 @@ describe("placeCentersOf: 원인 흐름 마을은 가로등 중심 (21-08)", () 
     }
   });
 
-  it("원인 흐름이 꺼진 판(옛 확장판 잠금)에서는 마을 맵의 장소 목록을 읽어 가로등 id 를 찾지 못한다 — 재즈 바 좌표는 그대로", () => {
+  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: 이 시험만 잠근다(갈래 B).
+  it("원인 흐름이 꺼진 판(옛 확장판 잠금)에서는 마을 맵의 장소 목록을 읽어 가로등 id 를 찾지 못한다 — 재즈 바 좌표는 그대로", underCauseLock(() => {
     expect(JSON.stringify(placeCentersOf(townView()))).toBe("[]");
     const bar = placeCentersOf(viewOf("bar", { places: ["glass"], done: [] }));
     expect(JSON.stringify(bar)).toBe(JSON.stringify([{ id: "glass", x: BAR_PLACES.find((p) => p.id === "glass")!.x, z: BAR_PLACES.find((p) => p.id === "glass")!.z }]));
-  });
+  }));
 
   it("원인 흐름이어도 가로등이 없는 맵(재즈 바)은 장소 중심이다", () => {
     const restore = openCause();

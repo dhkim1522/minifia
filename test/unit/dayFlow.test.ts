@@ -15,7 +15,7 @@ import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
 import type { PhaseId } from "../../shared/protocol";
-import { openCause } from "../helpers/playable";
+import { lockCause, openCause, openTown } from "../helpers/playable";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, lobbyOf, START_AT, startedAt, stateWithVerdict } from "../helpers/voteState";
 
@@ -136,7 +136,9 @@ describe("확장판 원인 흐름 — 하루 사슬 (openCause)", () => {
     expect(JSON.stringify(next.morning)).toBe("{}");
   });
 
-  it("피해자가 있는 밤 뒤의 morning 은 발표 길이 + 현장 30초, 의사가 막은 밤 뒤는 기본 길이 + 현장 30초다", () => {
+  it("피해자가 있는 밤 뒤의 morning 은 발표 길이 + 현장 30초, 의사가 막은 밤 뒤는 기본 길이 + 현장 30초다 (집이 있는 마을 판 — 집 없는 맵은 현장이 없어 30초도 없다, 21-13)", () => {
+    const closeTown = openTown();
+    try {
     const killed = victimMorning();
     expect(phaseDurationOf(killed)).toBe(MORNING_MS + MORNING_VICTIM_MS + MORNING_SCENE_MS);
     // 의사가 마피아 대상과 같은 사람을 지킨다.
@@ -151,6 +153,15 @@ describe("확장판 원인 흐름 — 하루 사슬 (openCause)", () => {
     }).state;
     expect(JSON.stringify(saved.morning)).toBe(JSON.stringify({ saved: true }));
     expect(phaseDurationOf(saved)).toBe(MORNING_MS + MORNING_SCENE_MS);
+    } finally {
+      closeTown();
+    }
+  });
+
+  it("집이 없는 맵(재즈 바)의 원인 흐름 morning 에는 현장이 없어 현장 30초가 붙지 않는다 — 피해자가 있어도 발표 길이뿐이다 (21-13)", () => {
+    const killed = victimMorning();
+    expect(killed.scene).toBeUndefined();
+    expect(phaseDurationOf(killed)).toBe(MORNING_MS + MORNING_VICTIM_MS);
   });
 
   it("morning 은 공개 흔적·마지막 목격을 만들지 않는다: morning.trace·morning.seen 키가 없고 view.day.evidence 키가 없다 (P21-15)", () => {
@@ -207,6 +218,13 @@ describe("확장판 원인 흐름 — 하루 사슬 (openCause)", () => {
 });
 
 describe("원인 흐름 잠금 아래 — 옛 확장판 순서 보호 (21-01)", () => {
+  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: setup 이 더는 잠그지 않으므로 이 구역이 직접 잠근다(갈래 B).
+  let restoreLock: () => void = () => {};
+  beforeAll(() => {
+    restoreLock = lockCause();
+  });
+  afterAll(() => restoreLock());
+
   it("역할 확인 → 낮 시작 발표 → 심부름 → 토론 → 지목이고 0표면 night 다", () => {
     const { phases } = walk(started(6, SEED), SEED, (s) => s.phase === "night");
     expect(phases.join(",")).toBe("assigning,roleReveal,dayAnnounce,errand,discussion,nomination,night");

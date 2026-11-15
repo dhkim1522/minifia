@@ -63,7 +63,8 @@ describe("여러 날에 걸친 처형 흐름 (6명, 마피아 2)", () => {
       expect(s.execution?.seat).toBe(first);
       expect(s.players.find((p) => p.seat === first)?.alive).toBe(false);
       s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 600)); // 마피아 1 vs 시민 4: 끝나지 않는다
-      expect(s.phase).toBe("night");
+      // 21-13(갈래 C): 확장판은 원인 흐름이라 처형 뒤가 저녁(errand, 일차 +1)이다 — 밤은 그다음이다.
+      expect(s.phase).toBe("errand");
       expect(s.winner).toBeUndefined();
 
       // 3일차: 남은 마피아 처형 → 종료

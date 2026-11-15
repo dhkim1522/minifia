@@ -26,6 +26,10 @@ import {
   visibleSeats,
 } from "../../src/world/presence";
 import type { SeatLook } from "../../src/world/presence";
+import { lockCauseInFile } from "../helpers/playable";
+
+// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B).
+lockCauseInFile();
 
 const flat = (value: unknown): string => JSON.stringify(value).replaceAll('"', "");
 const same = (actual: unknown, expected: unknown) => expect(flat(actual)).toBe(flat(expected));

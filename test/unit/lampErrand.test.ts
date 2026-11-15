@@ -13,7 +13,7 @@ import { rulesetOf } from "../../shared/game/ruleset";
 import { startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
-import { openCause, openTown } from "../helpers/playable";
+import { lockCause, openCause, openTown } from "../helpers/playable";
 import { seededRandInt } from "../helpers/seededRandom";
 import { START_AT, lobbyOf } from "../helpers/voteState";
 
@@ -120,11 +120,17 @@ describe("원인 흐름 마을 저녁 — 가로등 배정 (openCause + openTown
 });
 
 describe("잠금(옛 확장판 순서) 아래 — 마을 심부름은 지금 장소(TOWN_PLACES) 그대로다", () => {
+  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: setup 이 더는 잠그지 않으므로 이 구역이 직접 잠근다(갈래 B).
   let restoreTown: () => void = () => {};
+  let restoreLock: () => void = () => {};
   beforeAll(() => {
+    restoreLock = lockCause();
     restoreTown = openTown();
   });
-  afterAll(() => restoreTown());
+  afterAll(() => {
+    restoreTown();
+    restoreLock();
+  });
 
   it("같은 시드의 저녁 아닌 심부름 단계는 마을 장소 3곳이고 가로등 id 가 없다", () => {
     const s = errandOf(6, 5);

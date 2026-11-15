@@ -10,6 +10,10 @@ import { enterNight } from "../../shared/game/night";
 import { tick } from "../../shared/game/tick";
 import { seededRandInt } from "../helpers/seededRandom";
 import { startedAt } from "../helpers/voteState";
+import { lockCauseInFile } from "../helpers/playable";
+
+// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B).
+lockCauseInFile();
 
 /** RED 때는 모듈이 없어도 시험이 단언으로 실패하도록 동적으로 불렀다. 지금은 정적 import 와 같은 값을 돌려준다. */
 const loadAssign = async (): Promise<typeof assignErrandFake> => assignErrandFake;

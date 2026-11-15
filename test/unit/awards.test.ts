@@ -7,6 +7,10 @@ import type { AwardLine, RoleId, VoteLogEntry } from "../../shared/protocol";
 import type { NightLogEntry } from "../../shared/game/room";
 import { ROLES5, endedState, execDay } from "../helpers/awardsState";
 import { startedAt } from "../helpers/voteState";
+import { lockCauseInFile } from "../helpers/playable";
+
+// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B).
+lockCauseInFile();
 
 describe("칭호 — 대체 칭호 경로 (D-4)", () => {
   it("산 사람은 survivor(k 없음), 처형된 사람은 spectator(k=일차, at=day), 첫 밤 사망자 뒤에 밤에 죽은 사람은 spectator(at=night)", () => {

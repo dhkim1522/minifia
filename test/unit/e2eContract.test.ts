@@ -66,6 +66,7 @@ import { hostRailLayout } from "../../src/components/v2/HostRail";
 import { SIDE_CELL, SIDE_GAP } from "../../src/components/v2/SideColumn";
 import { MODE_TEXT } from "../../src/game/modeText";
 import { GAME_MODES } from "../../shared/protocol";
+import { underCauseLock } from "../helpers/playable";
 
 describe("E2E 의 TIMELESS_PHASES 와 앱 상수", () => {
   it("scripts/e2e/lib.mjs 의 TIMELESS_PHASES 가 src/game/scenes.ts 의 같은 이름 상수와 같은 목록이다", () => {
@@ -957,7 +958,10 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
     expect(s.LOOK_PATH).toBe("view.players[].look");
   });
 
-  it("실제 전이로 만든 아침 view(eliminated·trace·seen, 직업 이름과 같은 옷 look)를 smoke 판정이 통과시키고 누설 검사는 look 한 경로만 허용한다", () => {
+  // 21-13: 같은 시험을 두 흐름으로 돈다 — 꺼진 옛 확장판 경로(원인 흐름 잠금, 갈래 B: 서버가 trace 를 만든다)와 제품 확장판 흐름(갈래 C: 서버는 eliminated 뿐이고 seen 은 시험이 얹는다).
+  // smoke 의 morningProblems 는 eliminated 필수 + trace·seen 선택이라 두 모양을 모두 통과시켜야 한다.
+  for (const cause of [false, true]) {
+  it(`실제 전이로 만든 아침 view(${cause ? "원인 흐름: eliminated·seen" : "꺼진 옛 경로: eliminated·trace·seen"}, 직업 이름과 같은 옷 look)를 smoke 판정이 통과시키고 누설 검사는 look 한 경로만 허용한다`, (cause ? (body: () => void) => body : underCauseLock)(() => {
     const night = nightOf6();
     const mafia = night.players.filter((p) => p.role === "mafia").sort((a, b) => a.seat - b.seat);
     const citizens = night.players.filter((p) => p.role === "citizen").sort((a, b) => a.seat - b.seat);
@@ -978,7 +982,7 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
     for (const p of morningState.players) {
       const view = buildView(morningState, p.id, START_AT);
       const morning = view.day?.morning as Record<string, unknown>;
-      expect(Object.keys(morning).sort(), `${p.nickname} 의 아침 키`).toEqual([...s.MORNING_KEYS]);
+      expect(Object.keys(morning).sort(), `${p.nickname} 의 아침 키`).toEqual(cause ? ["eliminated", "seen"] : [...s.MORNING_KEYS]);
       expect(s.morningProblems(morning, seats)).toEqual([]);
       const spectator = morningState.players.find((q) => q.id === p.id)?.alive === false;
       const leaves: Array<{ path: string; value: string }> = [];
@@ -991,7 +995,8 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
       for (const pp of view.players) for (const k of Object.keys(pp)) expect(allowed.has(k), `players 키 ${k}`).toBe(true);
     }
     expect(lookLeaves).toBeGreaterThan(0);
-  });
+  }));
+  }
 });
 
 // 17-09: 첫 사건(튜토리얼) E2E 판정의 사본 상수가 앱 대본(src/game/tutorialScript.ts)과 같다 — 어긋나면 점 수·램프 수·오답 도움·시각 판정이 거짓 통과·거짓 실패한다.

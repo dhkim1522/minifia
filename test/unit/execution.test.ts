@@ -9,6 +9,10 @@ import { buildView } from "../../shared/game/view";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, castVerdicts, startedAt, stateWithVerdict } from "../helpers/voteState";
+import { lockCauseInFile } from "../helpers/playable";
+
+// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B).
+lockCauseInFile();
 
 const NOW = 20_000;
 const SEEDS = [1, 2, 3] as const;

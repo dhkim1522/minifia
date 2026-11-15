@@ -18,6 +18,10 @@ import { PLACE_IDS } from "../../shared/protocol";
 import { ClientMessageSchema } from "../../shared/schemas";
 import { seededRandInt } from "../helpers/seededRandom";
 import { lobbyOf, startedAt, startedFrom } from "../helpers/voteState";
+import { lockCauseInFile } from "../helpers/playable";
+
+// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B).
+lockCauseInFile();
 
 /** 재즈 바로 고정한 심부름 방(시작 때 맵은 시드로 정해지므로 시험이 맵을 고정한다). */
 function barRoom(seed: number, phase: "dayAnnounce" | "errand", n = 6): RoomState {

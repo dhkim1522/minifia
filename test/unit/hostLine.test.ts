@@ -4,8 +4,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
 import { CAUSE_MODES } from "../../shared/game/ruleset";
 import type { ClueLine, EvidenceView, GameMode, MorningView, PhaseId, PlaceId, RecordLine, RoomView } from "../../shared/protocol";
-import { openCause } from "../helpers/playable";
+import { lockCauseInFile, openCause } from "../helpers/playable";
 import { HOST_FALLBACK, HOST_HIDDEN_PHASES, HOST_LINES, callTargetsOf, hostBandModeOf, hostChimeOf, hostKeyOf, hostLineOf, hostTimeOf, type HostKey, type HostLocal } from "../../src/game/hostLine";
+
+// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 사회자 문구 표의 옛 확장판 줄(낮 시작 발표·심부름·흔적·마지막 목격)을 단언하므로 원인 흐름을 잠근다(21-13, 갈래 B). 원인 흐름 줄은 아래 21-08 구역이 openCause 로 단언한다.
+lockCauseInFile();
 
 // 14-01: 사회자 문구 표(UI-SPEC "사회자 문구 표")와 파생 판정. 표가 단일 출처다 — 시험과 표가 어긋나면 표를 따른다.
 // 마지막 describe 는 HOST-05(T-14-01): 문장·빛남 대상은 내 view 의 허용 목록 값만 읽는다.

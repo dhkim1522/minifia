@@ -25,7 +25,8 @@ export function morningMsOf(state: RoomState): number {
   // 원인 흐름(21페이즈 D-02·D-03·D-17): 현장은 피해자나 미수(의사 구출)가 있는 밤에만 있다. 없으면 아침 길이 0 이라 tick 이 같은 호출 안에서 곧바로 토론까지 간다.
   // 있으면 발표 길이 뒤에 현장 시간(MORNING_SCENE_MS)이 붙는다 — 공개 흔적이 없으니 흔적 구간(MORNING_TRACE_MS)은 더하지 않는다.
   if (cause && seat === undefined && state.morning?.saved !== true) return 0;
-  const scene = cause ? MORNING_SCENE_MS : 0;
+  // 집이 없는 맵(재즈 바·광장)은 현장이 만들어지지 않는다(enterMorning 의 buildScene) — 현장 시간도 더하지 않는다(21-13, 21-04·21-05 가 알린 항목).
+  const scene = cause && state.scene !== undefined ? MORNING_SCENE_MS : 0;
   if (seat === undefined) return MORNING_MS + scene;
   const will = state.players.find((p) => p.seat === seat)?.will;
   const ms =

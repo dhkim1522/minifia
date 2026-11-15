@@ -2,12 +2,13 @@
 // 개별 규칙 단위 테스트가 놓치기 쉬운 '낮이 거듭될 때의 누적' 을 본다: 낮 시작 발표 다음이 바로 토론인지·일지 누적·누출 키 부재.
 import { describe, expect, it } from "vitest";
 import { pickTarget } from "../../shared/game/night";
-import { DISCUSSION_MS, ERRAND_MS, SHOWDOWN_GATHER_MS } from "../../shared/game/phases";
+import { DISCUSSION_MS, ERRAND_MS, NIGHT_MS, SHOWDOWN_GATHER_MS } from "../../shared/game/phases";
 import { rulesetOf } from "../../shared/game/ruleset";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
+import { underCauseLock } from "../helpers/playable";
 import { seededRandInt } from "../helpers/seededRandom";
 const GAME_RULES = rulesetOf("extended");
 
@@ -43,10 +44,15 @@ function actNight(s: RoomState): RoomState {
   return st;
 }
 
+// 21-13: 같은 일지 누적 시험을 두 흐름으로 돈다. 옛 확장판 순서(낮 시작 발표 → 심부름 → 토론)는 꺼진 경로라 원인 흐름을 잠가 단언 그대로 보존하고(갈래 B, "REQUIREMENTS Out of Scope '기능 코드 삭제'"),
+// 제품 확장판 흐름(저녁 errand → 밤 → 아침 → 토론, 갈래 C)은 저녁 진입을 하루의 시작으로 삼아 같은 일지 불변식을 본다.
 describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", () => {
+  for (const flow of ["old", "cause"] as const) {
+    const cause = flow === "cause";
+    const guarded = (body: () => void): (() => void) => (cause ? body : underCauseLock(body));
   for (const n of [5, 6, 7, 8]) {
     for (const seed of [1, 2, 3]) {
-      it(`${n}명 seed ${seed}: 날마다 낮 시작 발표 다음이 바로 토론(산 사람이 셋이면 마지막 3인 결전)이고 일지가 독립 모델과 같다`, () => {
+      it(`${n}명 seed ${seed}: ${cause ? "[원인 흐름] 날마다 저녁 다음이 바로 밤이고(저녁 마감 + NIGHT_MS)" : "[꺼진 옛 경로] 날마다 낮 시작 발표 다음이 바로 토론(산 사람이 셋이면 마지막 3인 결전)이고"} 일지가 독립 모델과 같다`, guarded(() => {
         const rand = seededRandInt(seed);
         const lobby = lobbyOf(n);
         const started = startGame(lobby, lobby.hostId, 10_000, rand);
@@ -56,7 +62,7 @@ describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", (
         const dayRecords: Array<{ day: number; died: number | undefined }> = [];
         for (let guard = 0; guard < 400 && s.phase !== "ended" && days < 4; guard += 1) {
           if (s.phaseEndsAt === null) break;
-          if (s.phase === "dayAnnounce") {
+          if (s.phase === (cause ? "errand" : "dayAnnounce")) {
             days += 1;
             // 뷰에는 서버 전용 주장 키가 없고 day 에 turn 이 없다(07-08: 순차 주장 단계 제거)
             for (const p of s.players) {
@@ -65,9 +71,13 @@ describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", (
             }
             // 낮 시작 발표 마감 다음이 심부름(15페이즈, 마감 = 이전 마감 + ERRAND_MS)이고 그 마감 다음이 토론(+ DISCUSSION_MS)이다.
             // 단 산 사람이 정확히 셋이고 결전이 켜져 있으면 낮 시작 다음이 마지막 3인 결전(모이기 SHOWDOWN_GATHER_MS)이다(결정 0066-5).
-            const last3 = GAME_RULES.showdown && living(s).length === 3; // 기본판(결정 0072)은 산 셋도 토론이다
+            const last3 = !cause && GAME_RULES.showdown && living(s).length === 3; // 기본판(결정 0072)은 산 셋도 토론이다
             const after = tick(s, s.phaseEndsAt!, rand);
-            if (last3) {
+            if (cause) {
+              // 원인 흐름: 저녁 마감 다음이 밤이다(심부름·낮 시작 발표를 지나지 않는다).
+              expect(after.phase).toBe("night");
+              expect(after.phaseEndsAt).toBe(s.phaseEndsAt! + NIGHT_MS);
+            } else if (last3) {
               expect(after.phase).toBe("showdown");
               expect(after.phaseEndsAt).toBe(s.phaseEndsAt! + SHOWDOWN_GATHER_MS);
             } else {
@@ -107,7 +117,8 @@ describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", (
         for (const c of s.players.filter((p) => p.role === "citizen")) {
           expect("records" in buildView(s, c.id, s.phaseEndsAt ?? 0).me).toBe(false);
         }
-      });
+      }));
     }
+  }
   }
 });

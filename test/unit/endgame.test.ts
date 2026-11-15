@@ -12,6 +12,9 @@ import { buildView } from "../../shared/game/view";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { startedAt, stateWithVerdict } from "../helpers/voteState";
 
+// 21-13(갈래 A): 이 파일은 처형·아침 마감의 종료 분기를 시험한다 — 단계 순서와 무관한 장치라 기본 마피아 판(처형 → 밤 → 아침 → 낮 시작)으로 돌린다.
+// 확장판은 원인 흐름이라 처형 뒤가 errand 다(그 쪽 종료 분기는 dayFlow 시험이 단언한다).
+const MODE = "basic" as const;
 const SEEDS = [1, 2, 3] as const;
 const THROWING_RAND = (): number => {
   throw new Error("randInt must not be called");
@@ -19,7 +22,7 @@ const THROWING_RAND = (): number => {
 
 /** 후보가 처형된 execution 단계(첫 순간). */
 const executionOf = (n: number, seed: number, candidate: "citizen" | "mafia"): RoomState =>
-  stateWithVerdict(n, seed, "execution", { candidate });
+  stateWithVerdict(n, seed, "execution", { candidate, mode: MODE });
 
 /** 처형 마감을 넘겨 밤에 닿은 상태. */
 function nightAfterExecution(n: number, seed: number): RoomState {
@@ -286,11 +289,11 @@ describe("ended 전에는 결과·밤 기록이 어떤 view 에도 없다 (T-04-
   function preEndedStates(seed: number): Array<[string, RoomState]> {
     const out: Array<[string, RoomState]> = [];
     const phases: PhaseId[] = ["roleReveal", "dayAnnounce", "discussion", "nomination"];
-    for (const ph of phases) out.push([ph, startedAt(6, seed, ph)]);
+    for (const ph of phases) out.push([ph, startedAt(6, seed, ph, MODE)]);
     for (const ph of ["defense", "verdict", "execution"] as const) {
-      out.push([ph, stateWithVerdict(6, seed, ph)]);
+      out.push([ph, stateWithVerdict(6, seed, ph, { mode: MODE })]);
     }
-    const exec = stateWithVerdict(6, seed, "execution");
+    const exec = stateWithVerdict(6, seed, "execution", { mode: MODE });
     const night = tick(exec, exec.phaseEndsAt!, seededRandInt(seed + 4));
     out.push(["night", night]);
     const mafia = night.players.find((p) => p.role === "mafia" && isAlive(p))!;
@@ -326,7 +329,7 @@ describe("ended 전에는 결과·밤 기록이 어떤 view 에도 없다 (T-04-
   }
 
   it("로비 view 에도 result 키가 없다", () => {
-    const lobby = startedAt(4, 1, "roleReveal");
+    const lobby = startedAt(4, 1, "roleReveal", MODE);
     expect("result" in viewOf({ ...lobby, phase: "lobby", phaseEndsAt: null }, lobby.hostId)).toBe(false);
   });
 });

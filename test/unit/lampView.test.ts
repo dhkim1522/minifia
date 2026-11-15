@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TOWN_LAMPS } from "../../shared/game/mapTown";
 import type { MapId, PhaseId, PlaceId, RoomView } from "../../shared/protocol";
 import { houseLitOf, lampLitOf } from "../../src/game/lampView";
-import { openCause } from "../helpers/playable";
+import { lockCause, openCause } from "../helpers/playable";
 
 const LAMP_IDS = TOWN_LAMPS.map((l) => l.id as PlaceId);
 const str = (v: readonly boolean[] | null): string => (v === null ? "null" : v.map((b) => (b ? "1" : "0")).join(""));
@@ -80,7 +80,14 @@ describe("lampLitOf · houseLitOf (원인 흐름 마을)", () => {
   });
 });
 
-describe("lampLitOf · houseLitOf — 원인 흐름이 잠긴(기본 setup) 판", () => {
+describe("lampLitOf · houseLitOf — 원인 흐름이 잠긴 판", () => {
+  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: 기본 세계가 원인 흐름이므로 이 구역이 직접 잠근다(갈래 B).
+  let restoreLock: () => void = () => {};
+  beforeAll(() => {
+    restoreLock = lockCause();
+  });
+  afterAll(() => restoreLock());
+
   it("확장판이어도 원인 흐름이 꺼져 있으면 둘 다 null", () => {
     expect(lampLitOf(viewOf("night", { lamps: LAMPS_NIGHT }))).toBeNull();
     expect(houseLitOf(viewOf("night", { lamps: LAMPS_NIGHT }))).toBeNull();

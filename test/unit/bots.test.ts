@@ -58,6 +58,10 @@ import { castVerdict } from "../../shared/game/verdict";
 import { castRunoffVote, runoffStepMs, stepRunoff } from "../../shared/game/runoff";
 import { RUNOFF_VOTE_MS, SHOWDOWN_POINT_MS, SHOWDOWN_TURN_MS } from "../../shared/game/phases";
 import { LAST_WORD_CHIPS, acceptLastWord, castShowdownPoint, showdownStepMs, stepShowdown } from "../../shared/game/showdown";
+import { lockCauseInFile } from "../helpers/playable";
+
+// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표(dayAnnounce)·심부름을 지나 단계를 따라가므로 원인 흐름을 잠근다(21-13, 갈래 B).
+lockCauseInFile();
 const GAME_RULES = rulesetOf("extended");
 
 const START_AT = 10_000;
@@ -105,8 +109,9 @@ function stateAt(humans: number, bots: number, seed: number, phase: PhaseId): Ro
   const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed));
   if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
   let state = started.state;
-  while (state.phase !== phase) {
-    if (state.phaseEndsAt === null) throw new Error("phase has no deadline");
+  for (let guard = 0; state.phase !== phase; guard += 1) {
+    // 21-13: 닿을 수 없는 단계(예: 원인 흐름의 dayAnnounce)를 청하면 상태가 끝없이 자라지 않고 바로 실패한다.
+    if (state.phaseEndsAt === null || guard > 60) throw new Error(`cannot reach ${phase}`);
     state = tick(state, state.phaseEndsAt, seededRandInt(seed + 1));
   }
   return state;

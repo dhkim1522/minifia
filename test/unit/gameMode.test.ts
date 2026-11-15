@@ -17,6 +17,7 @@ import { buildView } from "../../shared/game/view";
 import { DEFAULT_MODE, GAME_MODES, PLACE_IDS } from "../../shared/protocol";
 import type { GameMode, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
+import { underCauseLock } from "../helpers/playable";
 
 const HOST = "player-id-0000-aaaa";
 const GUEST = "player-id-0001-aaaa";
@@ -130,12 +131,22 @@ describe("nextPhaseOf (D-08)", () => {
   it("extended 판은 낮 시작 발표 다음이 심부름이다", () => {
     expect(nextPhaseOf("dayAnnounce", rulesetOf("extended"))).toBe("errand");
   });
-  it("그 밖의 단계는 두 판 모두 단계 표의 next 와 같다", () => {
+  it("그 밖의 단계는 기본판이 단계 표의 next 와 같다", () => {
     const others = (Object.keys(PHASE_DEFS) as PhaseId[]).filter((p) => p !== "dayAnnounce");
     const want = others.map((p) => `${p}>${PHASE_DEFS[p].next}`).join(" ");
     expect(others.map((p) => `${p}>${nextPhaseOf(p, rulesetOf("basic"))}`).join(" ")).toBe(want);
+  });
+  it("그 밖의 단계는 확장판(원인 흐름)이 역할 확인 → 심부름 → 밤 → 아침 → 토론이고 처형 뒤는 심부름이다, 나머지는 단계 표와 같다 (21-13, 갈래 C)", () => {
+    const others = (Object.keys(PHASE_DEFS) as PhaseId[]).filter((p) => p !== "dayAnnounce");
+    const cause: Partial<Record<PhaseId, PhaseId>> = { roleReveal: "errand", errand: "night", execution: "errand", morning: "discussion" };
+    const want = others.map((p) => `${p}>${cause[p] ?? PHASE_DEFS[p].next}`).join(" ");
     expect(others.map((p) => `${p}>${nextPhaseOf(p, rulesetOf("extended"))}`).join(" ")).toBe(want);
   });
+  it("꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'): 원인 흐름을 잠그면 확장판도 단계 표의 next 와 같다 (21-13, 갈래 B)", underCauseLock(() => {
+    const others = (Object.keys(PHASE_DEFS) as PhaseId[]).filter((p) => p !== "dayAnnounce");
+    const want = others.map((p) => `${p}>${PHASE_DEFS[p].next}`).join(" ");
+    expect(others.map((p) => `${p}>${nextPhaseOf(p, rulesetOf("extended"))}`).join(" ")).toBe(want);
+  }));
 });
 
 describe("tick — 판 종류에 따른 낮 흐름 (D-04·D-08)", () => {
@@ -207,20 +218,37 @@ describe("enterMorning — basic 판은 흔적·마지막 목격을 만들지 �
     const { night } = killNight("basic");
     expect("errandLast" in enterMorning(night, seededRandInt(3))).toBe(false);
   });
-  it("extended(mode 없음 포함): 지금처럼 trace 와 seen 이 있고 흔적 난수를 한 번 부른다", () => {
+  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: 원인 흐름 판은 공개 흔적·마지막 목격을 만들지 않으므로(아래 갈래 C 시험) 옛 단언은 잠금 아래에서 그대로 둔다(갈래 B).
+  it("extended(mode 없음 포함), 원인 흐름 잠금 아래: 지금처럼 trace 와 seen 이 있고 흔적 난수를 한 번 부른다", underCauseLock(() => {
     for (const mode of [undefined, "extended"] as const) {
       const { night } = killNight(mode);
       const rng = counting();
       const morning = enterMorning(night, rng.fn).morning;
       expect(`${String(mode)}:${keysOf(morning)}:${rng.calls()}`).toBe(`${String(mode)}:eliminated,seen,trace:1`);
     }
+  }));
+  it("extended(mode 없음 포함), 원인 흐름: 공개 흔적·마지막 목격이 없다 — eliminated 뿐이고 난수를 부르지 않는다 (21-13, 갈래 C)", () => {
+    for (const mode of [undefined, "extended"] as const) {
+      const { night } = killNight(mode);
+      const rng = counting();
+      const morning = enterMorning(night, rng.fn).morning;
+      expect(`${String(mode)}:${keysOf(morning)}:${rng.calls()}`).toBe(`${String(mode)}:eliminated:0`);
+    }
   });
-  it("tick 으로 아침에 들어가도 같다 — basic 은 trace·seen 없음, extended 는 있음 (ON_ENTER 의 세 번째 인자가 규칙으로 새지 않는다)", () => {
+  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제')(갈래 B).
+  it("tick 으로 아침에 들어가도 같다, 원인 흐름 잠금 아래 — basic 은 trace·seen 없음, extended 는 있음 (ON_ENTER 의 세 번째 인자가 규칙으로 새지 않는다)", underCauseLock(() => {
     const viaTick = (mode?: GameMode): string => {
       const { night } = killNight(mode);
       return keysOf(tick(night, night.phaseEndsAt!, seededRandInt(3)).morning);
     };
     expect(`${viaTick("basic")} / ${viaTick("extended")} / ${viaTick()}`).toBe("eliminated / eliminated,seen,trace / eliminated,seen,trace");
+  }));
+  it("tick 으로 아침에 들어가도 같다, 원인 흐름 — 세 방 모두 eliminated 뿐이다 (21-13, 갈래 C)", () => {
+    const viaTick = (mode?: GameMode): string => {
+      const { night } = killNight(mode);
+      return keysOf(tick(night, night.phaseEndsAt!, seededRandInt(3)).morning);
+    };
+    expect(`${viaTick("basic")} / ${viaTick("extended")} / ${viaTick()}`).toBe("eliminated / eliminated / eliminated");
   });
 });
 
@@ -398,23 +426,23 @@ describe("hooksOf — 판마다 진입·마감 훅 표 (D-03)", () => {
     const duel = hooksOf(rulesWith({ showdown: true }));
     expect(`${turn.enter.nomination === enterNomination}/${turn.deadline.nomination === stepNomination}/${duel.deadline.dayAnnounce === routeAfterDayAnnounce}`).toBe("true/true/true");
   });
-  it("두 판 모두 투표 마감 훅은 동시 투표 집계다 — 동점 둘이어도 결선 없이 night, 최다 한 명이면 표의 기본 다음 단계(defense)", () => {
+  it("두 판 모두 투표 마감 훅은 동시 투표 집계다 — 동점 둘이어도 결선 없이 기본판은 night·확장판(원인 흐름)은 errand, 최다 한 명이면 표의 기본 다음 단계(defense)", () => {
     const seen = GAME_MODES.map((mode) => {
       const close = hooksOf(rulesetOf(mode)).deadline.nomination!;
       const tie = close(atVote(mode, TIE_OF_TWO), 9000);
       const one = close(atVote(mode, ONE_LEADER), 9000);
       return `${mode}:${tie.stay}/${String(tie.next)}/${tie.state.runoff === undefined}|${one.stay}/${String(one.next)}`;
     });
-    expect(seen.join(" ")).toBe("basic:false/night/true|false/undefined extended:false/night/true|false/undefined");
+    expect(seen.join(" ")).toBe("basic:false/night/true|false/undefined extended:false/errand/true|false/undefined");
   });
   it("결선을 켠 규칙의 표는 같은 동점을 결선(runoff)으로 보낸다", () => {
     const close = hooksOf(rulesWith({ runoff: true })).deadline.nomination!;
     expect(String(close(atVote("extended", TIE_OF_TWO), 9000).next)).toBe("runoff");
   });
-  it("같은 투표 상태를 지목 마감까지 tick 하면 basic·extended·mode 없는 방의 결과 단계가 같다 (최다 한 명 → defense, 동점 → night)", () => {
+  it("같은 투표 상태를 지목 마감까지 tick 하면 최다 한 명은 세 방 모두 defense, 동점은 basic 이 night 이고 extended·mode 없는 방(원인 흐름)은 errand 다", () => {
     const after = (mode: GameMode | undefined, votes: Record<number, number>): PhaseId => tick(atVote(mode, votes), 9000, seededRandInt(1)).phase;
     expect([after("basic", ONE_LEADER), after("extended", ONE_LEADER), after(undefined, ONE_LEADER)].join(",")).toBe("defense,defense,defense");
-    expect([after("basic", TIE_OF_TWO), after("extended", TIE_OF_TWO), after(undefined, TIE_OF_TWO)].join(",")).toBe("night,night,night");
+    expect([after("basic", TIE_OF_TWO), after("extended", TIE_OF_TWO), after(undefined, TIE_OF_TWO)].join(",")).toBe("night,errand,errand");
   });
 });
 
@@ -423,9 +451,9 @@ describe("resolveNomination — 규칙은 두 번째 인자다 (D-03)", () => {
     const r = resolveNomination(atVote("basic", TIE_OF_TWO), rulesWith({ runoff: true }));
     expect(`${String(r.next)}/${r.state.runoff?.cand.length ?? 0}`).toBe("runoff/2");
   });
-  it("인자를 안 주면 방 mode 의 규칙(결선 꺼짐)이라 두 판 모두 night 다", () => {
+  it("인자를 안 주면 방 mode 의 규칙(결선 꺼짐)이라 동점은 basic 이 night, extended(원인 흐름)가 errand 다", () => {
     const seen = GAME_MODES.map((mode) => String(resolveNomination(atVote(mode, TIE_OF_TWO)).next));
-    expect(seen.join(",")).toBe("night,night");
+    expect(seen.join(",")).toBe("night,errand");
   });
   it("결선을 켠 규칙이어도 최다 한 명이면 결선 없이 기본 다음 단계다", () => {
     const r = resolveNomination(atVote("extended", ONE_LEADER), rulesWith({ runoff: true }));

@@ -23,9 +23,9 @@ function sourceFiles(): string[] {
 }
 
 describe("판 규칙 표 (결정 0072, 19페이즈 D-02)", () => {
-  it("두 판의 아홉 값(원인 흐름 잠금 아래): 정치 장치 다섯은 두 판 모두 꺼짐, 심부름·목격 기록·흔적은 extended 만 켜짐, cause 는 둘 다 꺼짐(setup 이 잠근다)", () => {
+  it("두 판의 아홉 값(제품 상태, 21-13: setup 이 원인 흐름을 잠그지 않는다): 정치 장치 다섯은 두 판 모두 꺼짐, 심부름·목격 기록·흔적·cause 는 extended 만 켜짐", () => {
     expect(JSON.stringify(rulesetOf("basic"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false, errand: false, witness: false, trace: false, cause: false }));
-    expect(JSON.stringify(rulesetOf("extended"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false, errand: true, witness: true, trace: true, cause: false }));
+    expect(JSON.stringify(rulesetOf("extended"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false, errand: true, witness: true, trace: true, cause: true }));
   });
 
   it("판 종류는 둘뿐이고 어느 판도 정치 장치가 켜져 있지 않다 (T-19-07)", () => {
@@ -49,9 +49,23 @@ describe("원인 흐름 플래그 (21-01, D-01·결정 0081-2·3)", () => {
     expect(SHIPPED_CAUSE_MODES.join(",")).toBe("extended");
   });
 
-  it("setup 이 잠근 상태: 표가 비어 있고 두 판 모두 cause 가 꺼져 있다", () => {
-    expect(CAUSE_MODES.length).toBe(0);
-    expect(GAME_MODES.map((mode) => `${mode}:${rulesetOf(mode).cause}`).join(" ")).toBe("basic:false extended:false");
+  it("setup 이 잠그지 않은 상태(21-13): 표가 제품 값 확장판 하나이고 확장판만 cause 가 켜져 있다", () => {
+    expect(CAUSE_MODES.join(",")).toBe("extended");
+    expect(GAME_MODES.map((mode) => `${mode}:${rulesetOf(mode).cause}`).join(" ")).toBe("basic:false extended:true");
+  });
+
+  describe("lockCause 아래(꺼진 옛 확장판 경로를 단언하는 시험이 쓰는 잠금)", () => {
+    let restore: () => void = () => {};
+    beforeAll(() => {
+      restore = lockCause();
+    });
+    afterAll(() => restore());
+
+    it("표가 비고 두 판 모두 cause 가 꺼져 있으며 나머지 여덟 값은 그대로다", () => {
+      expect(CAUSE_MODES.length).toBe(0);
+      expect(GAME_MODES.map((mode) => `${mode}:${rulesetOf(mode).cause}`).join(" ")).toBe("basic:false extended:false");
+      expect(JSON.stringify(rulesetOf("extended"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false, errand: true, witness: true, trace: true, cause: false }));
+    });
   });
 
   describe("openCause 아래", () => {
@@ -74,13 +88,14 @@ describe("원인 흐름 플래그 (21-01, D-01·결정 0081-2·3)", () => {
     });
   });
 
-  it("openCause 를 되돌리면 다시 잠긴 상태다", () => {
+  it("openCause·lockCause 는 되돌리면 부르기 전 상태다(제품 상태에서 시작한다)", () => {
     const close = openCause();
     close();
-    expect(`${CAUSE_MODES.length}/${rulesetOf("extended").cause}`).toBe("0/false");
+    expect(`${CAUSE_MODES.join(",")}/${rulesetOf("extended").cause}`).toBe("extended/true");
     const unlock = lockCause();
+    expect(`${CAUSE_MODES.length}/${rulesetOf("extended").cause}`).toBe("0/false");
     unlock();
-    expect(CAUSE_MODES.length).toBe(0);
+    expect(`${CAUSE_MODES.join(",")}/${rulesetOf("extended").cause}`).toBe("extended/true");
   });
 });
 

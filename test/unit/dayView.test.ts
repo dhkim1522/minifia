@@ -26,7 +26,7 @@ import {
   policeResultOf,
 } from "../../src/game/dayView";
 import type { DayEvents } from "../../src/game/dayView";
-import { openCause } from "../helpers/playable";
+import { openCause, underCauseLock } from "../helpers/playable";
 
 // TAP 의 YAML 진단이 깨지지 않도록 따옴표 없는 한 줄 문자열로 만들어 비교한다.
 const flat = (value: unknown): string => JSON.stringify(value).replaceAll('"', "");
@@ -472,13 +472,15 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     same(hdr(verdictView({ mySeat: 3 })), { title: "찬반", hint: "결과를 기다려요" });
   });
 
-  it("처형·아침은 제목만, 역할이 없는 산 사람의 밤은 시민 안내", () => {
+  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: 옛 확장판 제목·안내를 단언하므로 이 시험만 잠근다(갈래 B).
+  it("처형·아침은 제목만, 역할이 없는 산 사람의 밤은 시민 안내", underCauseLock(() => {
     same(hdr(executionView(5, 2, true)), { title: "처형" });
     same(hdr(viewOf("morning")), { title: "아침" });
     same(hdr(viewOf("night")), { title: "밤", hint: "날이 밝길 기다려요" });
-  });
+  }));
 
-  it("유령은 같은 제목에 '모두의 직업이 보여요'(밤은 '모두의 직업과 밤 행동이 보여요')", () => {
+  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: 옛 확장판 제목·안내를 단언하므로 이 시험만 잠근다(갈래 B).
+  it("유령은 같은 제목에 '모두의 직업이 보여요'(밤은 '모두의 직업과 밤 행동이 보여요')", underCauseLock(() => {
     const g = { players: ghostPlayers, mySeat: 0 };
     same(hdr(viewOf("discussion", g)), { title: "토론", hint: "모두의 직업이 보여요" });
     same(hdr(nominationOf([], g)), { title: "투표", hint: "모두의 직업이 보여요" });
@@ -487,9 +489,10 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     same(hdr(executionView(5, 2, true, g)), { title: "처형", hint: "모두의 직업이 보여요" });
     same(hdr(viewOf("morning", g)), { title: "아침", hint: "모두의 직업이 보여요" });
     same(hdr(viewOf("night", g)), { title: "밤", hint: "모두의 직업과 밤 행동이 보여요" });
-  });
+  }));
 
-  it("밤 안내는 역할마다 한 줄: 마피아 '대상에게 다가가요', 경찰 '조사할 사람을 골라요', 의사 '지킬 사람을 골라요', 시민 '날이 밝길 기다려요'", () => {
+  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: 옛 확장판 제목·안내를 단언하므로 이 시험만 잠근다(갈래 B).
+  it("밤 안내는 역할마다 한 줄: 마피아 '대상에게 다가가요', 경찰 '조사할 사람을 골라요', 의사 '지킬 사람을 골라요', 시민 '날이 밝길 기다려요'", underCauseLock(() => {
     const night = (role: "mafia" | "police" | "doctor" | "citizen"): RoomView => ({ ...viewOf("night"), me: { seat: 0, isHost: false, role } });
     same(hdr(night("mafia")), { title: "밤", hint: "대상에게 다가가요" });
     same(hdr(night("police")), { title: "밤", hint: "조사할 사람을 골라요" });
@@ -497,7 +500,7 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     same(hdr(night("citizen")), { title: "밤", hint: "날이 밝길 기다려요" });
     const ghost = { ...viewOf("night", { players: ghostPlayers, mySeat: 0 }), me: { seat: 0, isHost: false, role: "mafia" as const } };
     same(hdr(ghost), { title: "밤", hint: "모두의 직업과 밤 행동이 보여요" });
-  });
+  }));
 
   it("변론자 정보가 없으면 안내를 만들지 않는다", () => {
     same(hdr(viewOf("defense")), { title: "최후 변론" });
@@ -865,10 +868,11 @@ describe("headerFor — 확장판 원인 흐름 제목 (21-01, P21-19)", () => {
   const modeView = (phase: PhaseId, mode: "basic" | "extended"): RoomView => ({ ...viewOf(phase), mode });
 
   describe("잠금 아래(옛 확장판 순서)", () => {
-    it("확장판 view 도 옛 제목이다: 심부름·아침", () => {
+    // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: 옛 확장판 제목·안내를 단언하므로 이 시험만 잠근다(갈래 B).
+    it("확장판 view 도 옛 제목이다: 심부름·아침", underCauseLock(() => {
       same(headerFor(modeView("errand", "extended")), { title: "심부름" });
       same(headerFor(modeView("morning", "extended")), { title: "아침" });
-    });
+    }));
   });
 
   describe("openCause 아래", () => {
