@@ -2665,6 +2665,8 @@ export async function readTutorial(page) {
       if (bandTarget) targets.push({ key: "band", rect: bandTarget });
       const errandRect = unionOf([rectOf(q(`button[data-errand-place="${errandTarget}"]`, scope)), rectOf(q("[data-errand-act]", scope))]);
       if (errandRect) targets.push({ key: "errand", rect: errandRect });
+      const clueRect = unionOf([rectOf(q('button[data-clue-spot="cloth"]', scope)), rectOf(q("[data-errand-act]", scope))]);
+      if (clueRect) targets.push({ key: "clue", rect: clueRect });
       const sus = rectOf(tagOf(suspect));
       if (sus) targets.push({ key: "suspect", rect: { ...sus, height: sus.height + extendDown, bottom: sus.bottom + extendDown } });
       for (const el of qa(".mf-world__tag[data-seat]", scope)) {
@@ -3128,4 +3130,29 @@ export async function pressAct(page) {
   if (!ok) return false;
   await page.locator("button[data-errand-act]").first().click({ timeout: 3000 });
   return true;
+}
+
+/** 튜토리얼 새 첫 사건 흐름(21-12) 화면 읽기: { progress, next, spots:["id:state"], cards:[spot], board, chips, faces, marks, links, eye, trace, formula, record, text(정체 공개 글), card(뒷면 카드 있음) } — 닉네임은 싣지 않는다 */
+export function readTutorialCase(page) {
+  return page.evaluate(() => {
+    const qa = (s) => [...document.querySelectorAll(s)];
+    const reveal = document.querySelector("[data-tutorial-reveal]");
+    return {
+      progress: document.querySelector("[data-errand-progress]")?.getAttribute("data-errand-progress") ?? "",
+      next: document.querySelector("[data-tutorial-next]") !== null,
+      spots: qa("[data-clue-spot]").map((e) => (e.getAttribute("data-clue-spot") ?? "") + ":" + (e.getAttribute("data-state") ?? "")),
+      cards: qa("[data-clue-card]").map((e) => e.getAttribute("data-clue-card") ?? ""),
+      board: qa("[data-board]").length,
+      chips: qa("[data-board-chip]").map((e) => e.getAttribute("data-board-chip") ?? ""),
+      faces: qa("[data-board-face]").map((e) => Number(e.getAttribute("data-board-face"))),
+      marks: qa("[data-board-face][data-mark]").map((e) => Number(e.getAttribute("data-board-face"))),
+      links: qa("path.tut-links__path").length,
+      eye: qa("[data-tutorial-eye]").length,
+      trace: qa("[data-trace-card]").length,
+      formula: qa("[data-tutorial-formula]").length,
+      record: qa("[data-record-card], [data-record-button]").length,
+      text: reveal ? (reveal.textContent ?? "").replace(/\s+/g, " ").trim() : "",
+      card: reveal ? reveal.querySelector(".tut-reveal__back") !== null : false,
+    };
+  });
 }

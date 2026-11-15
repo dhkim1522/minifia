@@ -264,6 +264,8 @@
 - `witness` — 3곳을 마친 사람의 [기록] 단추·접힌 카드·줄 수 일치·"0" 한 칸·못 마친 사람 0건·카드 겹침 규칙(검사 WF1~·RC1~RC4·`recordChecks`)
 - `trace` — 피해자 있는 아침 흔적 구간의 증거 카드(조각 이름·띠 줄·카드 자리·2행 마지막 목격)와 피해자 없는 아침의 흔적 없음(검사 TC1~TC6·`traceChecks`, 16페이즈에서 두 행으로 늘고 구간 5초). 이름표 표시는 TC7·TC8
 
+21페이즈(21-15) 갱신: `errand` 는 원인 흐름 저녁(등불 켜기) 기준으로 다시 썼고(`errandChecks` profile `lamp`), `witness`·`trace` 흐름은 [기록] 단추·흔적 카드 기능이 사라져 뺐다. 새 흐름은 `scripts/e2e/cause.mjs`: `cause-evening`·`cause-night`·`cause-morning`·`cause-skip`·`cause-basic`(390x844)와 `cause-phones`(폰 6종, 판정 `causeChecks` LH1~LH11). 튜토리얼 두 진입로는 새 첫 사건(`tutorialCaseChecks` LH10).
+
 바뀐 옛 흐름: `night`·`night-sizes`·`sound-night-parity`·`avatar-phases-night`(밤 얼굴 목록 하나·마피아 동작 칸 없음, NF1~NF6 `nightFaceChecks`), `result-reveal`(마피아 탭에 밤 채팅 줄 없음·입력칸 없음, RT-M·RT7·RT14), `day`·`ghost`·`noexec`·`basic-*`·`emcee-*`(낮 시작 → errand → 토론의 단계 표). 마지막 계획(15-10)에서 폰 6종 전 흐름 회귀를 한 번 돌렸다.
 
 알려진 한계: 기록 카드가 열려 있는 동안 스테이지 이름표가 가려질 수 있다(사용자가 연 것). 360×560 의 위쪽 비좁음은 14페이즈 한계 그대로다.

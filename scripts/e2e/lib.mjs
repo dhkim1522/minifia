@@ -4329,6 +4329,51 @@ export function tutorialEvidenceChecks(ev, { scene, next } = {}) {
   throw new Error(`tutorialEvidenceChecks: 장면 ${scene} 은 증거 층이 없다`);
 }
 
+/**
+ * 새 첫 사건 흐름(21-12, UI-SPEC 튜토리얼 "첫 사건" 변경, LH10) 판정. kind 로 장면을 고른다 — 값은 browser.mjs readTutorialCase 가 읽는다.
+ *  - "lamp"   장면 3 [켜기] 를 누른 뒤: c = { progress, next }  → LH10a 진행 1/3
+ *  - "clue"   장면 4 [살펴보기] 를 누른 뒤: c = { spots:[id:state…], cards:[spot…], next } → LH10b 지점 셋·옷 조각 done·카드 한 장·[다음]
+ *  - "board"  장면 5: c = { board, chips, faces:[seat…], marks:[seat…], links, eye, trace, formula, record } → LH10c 실제 의심 보드(칩 옷 조각·얼굴 5·닮은 옷 도윤 하나·선 1)와 옛 증거 부품 0
+ *  - "hidden" 장면 6 정답 뒤: c = { text, card } → LH10d 정체 카드는 뒤집히지 않고 "정체는 판이 끝나야 알아요" 이며 직업 이름이 없다
+ */
+export function tutorialCaseChecks(kind, c) {
+  const roleWord = /마피아|경찰|의사|시민|mafia|police|doctor|citizen/i;
+  const L = {
+    lamp: ["LH10a", "[켜기] 를 누르면 진행 1/3 이다"],
+    clue: ["LH10b", "지점 셋 중 옷 조각만 done 이고 단서 카드가 옷 조각 한 장이며 [다음] 이 나온다"],
+    board: ["LH10c", "의심 보드(칩 옷 조각·산 사람 얼굴 5·닮은 옷 표시 하나·선 1)이고 눈 표시·증거 카드·수식 줄·[기록] 이 0 이다"],
+    hidden: ["LH10d", '정체 공개 카드는 "정체는 판이 끝나야 알아요" 이고 직업 이름이 없다'],
+  };
+  const [id, label] = L[kind] ?? [];
+  if (id === undefined) throw new Error(`tutorialCaseChecks: 모르는 종류 ${kind}`);
+  if (!c || typeof c !== "object") return [noMeasure(id, label, "튜토리얼 새 흐름 읽기")];
+  const bad = [];
+  if (kind === "lamp") {
+    if (!isStr(c.progress)) return [noMeasure(id, label, "진행")];
+    if (c.progress.trim() !== "1/3") bad.push(`진행 '${c.progress}' ≠ 1/3`);
+  } else if (kind === "clue") {
+    if (!Array.isArray(c.spots) || !Array.isArray(c.cards) || typeof c.next !== "boolean") return [noMeasure(id, label, "지점·카드·[다음]")];
+    const want = ["cloth:done", "footprint:new", "window:new"];
+    if (!sameList([...c.spots].sort(), want)) bad.push(`지점 [${c.spots.join(",")}] ≠ [${want.join(",")}]`);
+    if (!sameList(c.cards, ["cloth"])) bad.push(`카드 [${c.cards.join(",")}] ≠ [cloth]`);
+    if (!c.next) bad.push("[다음] 이 없음");
+  } else if (kind === "board") {
+    if (!isNum(c.board) || !Array.isArray(c.chips) || !Array.isArray(c.faces) || !Array.isArray(c.marks) || !isNum(c.links) || !isNum(c.eye) || !isNum(c.trace) || !isNum(c.formula) || !isNum(c.record)) return [noMeasure(id, label, "보드 읽기")];
+    if (c.board !== 1) bad.push(`의심 보드 ${c.board}개 ≠ 1`);
+    if (!sameList(c.chips, ["cloth"])) bad.push(`칩 [${c.chips.join(",")}] ≠ [cloth]`);
+    if (c.faces.length !== 5) bad.push(`얼굴 ${c.faces.length}칸 ≠ 5`);
+    if (!sameList(c.marks, [TUTORIAL_CAST_E2E.suspect])) bad.push(`닮은 옷 표시 [${c.marks.join(",")}] ≠ [${TUTORIAL_CAST_E2E.suspect}]`);
+    if (c.links !== 1) bad.push(`선 ${c.links}개 ≠ 1`);
+    for (const [n, v] of [["눈 표시", c.eye], ["증거 카드", c.trace], ["수식 줄", c.formula], ["[기록]", c.record]]) if (v !== 0) bad.push(`${n} ${v}개 ≠ 0`);
+  } else {
+    if (!isStr(c.text) || typeof c.card !== "boolean") return [noMeasure(id, label, "정체 공개 글·카드")];
+    if (!c.text.includes("정체는 판이 끝나야 알아요")) bad.push("줄 '정체는 판이 끝나야 알아요' 가 없음");
+    if (roleWord.test(c.text)) bad.push("정체 공개 글에 직업 이름이 있음");
+    if (!c.card) bad.push("뒷면 카드가 없음");
+  }
+  return [result(id, label, bad)];
+}
+
 /** 장면 5 선·도윤 이름표가 들어와야 하는 화면 안쪽 여백(px, UI-SPEC 장면 5 계약 — 앱 clampPoint 의 inset 8 과 같다) */
 export const TUTORIAL_LINE_INSET = 8;
 

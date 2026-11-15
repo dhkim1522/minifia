@@ -5,7 +5,7 @@
 // 실제 브라우저의 시간 판정은 여유를 둔다: 오프닝 자동 넘김 4.6초 ± 1.0초, [처리] 뒤 0.7초 ± 0.5초(lib.tutorialTimingChecks).
 // helpers 는 flows.mjs 가 넘긴다(errand.mjs·host.mjs 와 같은 모양 — 서로 import 하지 않는다): { recorder, attempt, startHost, openGuest }
 // together 는 방장·손님 두 페이지(+ 서버 봇 둘)로: 스위치 → 시작 → 두 페이지 첫 사건 → 방장 건너뛰기 → 기다림 n/N → 손님 재접속 → 손님이 끝냄 → 역할 확인, 보낸 프레임은 tutorialDone 한 번뿐.
-import { SetupError, backToLobby, closeSheet, collectSnapshot, fpsStart, fpsStop, openSoloPage, openTestSheet, readHeaderContrast, readHostRail, readTutorial, readTutorialStable, setBots, settle, sleep, startGame, watchSockets } from "./browser.mjs";
+import { SetupError, backToLobby, closeSheet, collectSnapshot, fpsStart, fpsStop, openSoloPage, openTestSheet, readHeaderContrast, readHostRail, readTutorial, readTutorialCase, readTutorialStable, setBots, settle, sleep, startGame, watchSockets } from "./browser.mjs";
 import {
   TUTORIAL_CAST_E2E,
   WRONG_HINT_AFTER,
@@ -16,11 +16,10 @@ import {
   tutorialDimChecks,
   tutorialDotChecks,
   tutorialEntryChecks,
-  tutorialEvidenceChecks,
+  tutorialCaseChecks,
   tutorialFocusChecks,
   tutorialHiddenChecks,
   tutorialLeakChecks,
-  tutorialLineChecks,
   tutorialNextChecks,
   tutorialOpeningChecks,
   tutorialRevealChecks,
@@ -44,6 +43,8 @@ const recAll = (rec, sc, lines, { relax = [], note = "" } = {}) => {
 
 /** 장면 7 직업 카드가 [다음] 과 겹칠 수 있는 낮은 폰(360x560·360x640)의 높이 상한 — 17-08 이 알려진 한계로 남겼다(UI Considerations #14) */
 const KNOWN_LIMIT_MAX_H = 640;
+/** 장면 6 정답 뒤 정체 카드의 줄(src/game/tutorialScript.ts tutorial.hidden — e2eContract 가 대조) */
+export const TUTORIAL_HIDDEN_LINE = "정체는 판이 끝나야 알아요";
 /** 장면 6 오답 문구(src/game/tutorialScript.ts 의 tutorial.vote.wrong — e2eContract 가 대조) */
 export const TUTORIAL_WRONG_LINE = "단서를 떠올려 보세요";
 /** 장면 6 이름표(좌석): 민준 0·지호 3 이 오답, 도윤 1 이 정답 */
@@ -291,6 +292,7 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       rec(sc3, "TT2", "허용 목록 밖 터치 뒤 내 위치·목적지 링이 그대로다", samePos, `전 ${before.x === null ? "읽지 못함" : `(${before.x.toFixed(2)},${before.z.toFixed(2)})`} 후 ${after.x === null ? "읽지 못함" : `(${after.x.toFixed(2)},${after.z.toFixed(2)})`}`);
       await page.locator("[data-errand-act]").click();
       const pressedAt = performance.now();
+      recAll(rec, sc3, tutorialCaseChecks("lamp", await readTutorialCase(page)));
       const toScene4 = await tryDo(() => waitScene(page, 4));
       const errandMs = performance.now() - pressedAt;
       rec(sc3, "TM0", "[처리] 뒤 장면 4 로 넘어간다", toScene4.ok, toScene4.detail);
@@ -298,24 +300,24 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       measured.errandMs = Math.round(errandMs);
       recAll(rec, sc3, tutorialTimingChecks({ errandMs }));
 
-      // ⑥ 장면 4: 도윤이 오른쪽 밖에서 들어옴, 눈 표시·기록 한 줄, 도윤 포커스 상자, 3.4초 뒤 [다음]
+      // ⑥ 장면 4(현장 조사): 서연 집 앞 지점 셋(옷 조각 깜빡임)·[살펴보기] → 단서 카드 '붉은 천 조각' 한 장 → [다음]. 도윤이 걸어 들어오는 목격 연출은 없다
       const sc4 = "tutorial-solo/scene4";
-      const startX = await readSuspectScreenX(page);
-      rec(sc4, "TW1", "도윤이 화면 오른쪽 밖에서 들어온다(처음 화면 x 가 화면 폭 밖)", startX !== null && startX.sx > startX.vw, startX === null ? "측정값 없음(도윤 위치)" : `처음 x ${Math.round(startX.sx)} / 화면 ${startX.vw}`);
-      await page.waitForSelector('[data-tutorial-focus="suspect"]', { timeout: SCENE_WAIT_MS });
-      const endX = await readSuspectScreenX(page);
-      rec(sc4, "TW2", "도윤이 걸어 들어와 화면 안에 선다", endX !== null && endX.sx > 0 && endX.sx < endX.vw, endX === null ? "측정값 없음(도윤 위치)" : `x ${Math.round(endX.sx)} / 화면 ${endX.vw}`);
-      await waitBandText(page, "본 사람은").catch(() => {});
+      await page.waitForSelector('[data-tutorial-focus="clue"]', { timeout: SCENE_WAIT_MS });
+      await waitSpeaking(page).catch(() => {});
       t = await readTutorialStable(page);
       recAll(rec, sc4, tutorialDotChecks(t.dots, 4));
-      focusLines(rec, sc4, t, ["suspect"]);
+      focusLines(rec, sc4, t, ["clue"]);
       dimOn(rec, sc4, t);
       hiddenLines(rec, sc4, t);
-      recAll(rec, sc4, tutorialEvidenceChecks(t.evidence, { scene: 4 }));
-      bandLines(rec, sc4, t, ["suspect"], {});
+      bandLines(rec, sc4, t, ["clue"], {});
+      const before4 = await readTutorialCase(page);
+      rec(sc4, "TW1", "장면 4 에는 도윤이 걸어 들어오는 연출·눈 표시·기록 카드가 없다(지점 표지 셋만)", before4.spots.length === 3 && before4.eye === 0 && before4.record === 0, `지점 ${before4.spots.length}개·눈 ${before4.eye}·기록 ${before4.record}`);
+      await page.locator("[data-errand-act]").click();
       const next4 = await tryDo(() => page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS }));
-      rec(sc4, "TN2", "3.4초 뒤 [다음] 이 나타난다", next4.ok, next4.detail);
+      rec(sc4, "TN2", "[살펴보기] 뒤 [다음] 이 나타난다", next4.ok, next4.detail);
       if (!next4.ok) return;
+      await sleep(400);
+      recAll(rec, sc4, tutorialCaseChecks("clue", await readTutorialCase(page)));
       t = await readTutorialStable(page);
       dimOff(rec, sc4, t);
       nextLines(rec, sc4, t);
@@ -323,24 +325,19 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       await gLine(rec, ctx, solo, sc4);
       await page.locator("[data-tutorial-next]").click();
 
-      // ⑦ 장면 5: 증거 카드·선 2·수식 줄, [다음] 은 바로
+      // ⑦ 장면 5(의심 보드): 실제 SuspectBoard(칩 '붉은 천 조각'·얼굴 줄·도윤에 닮은 옷 표시)·선 하나, [다음] 은 바로
       const sc5 = "tutorial-solo/scene5";
       await waitScene(page, 5);
+      await page.waitForSelector("[data-board]", { timeout: SCENE_WAIT_MS });
       await page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS });
-      await sleep(2300);
+      await sleep(1500);
       t = await readTutorialStable(page);
       recAll(rec, sc5, tutorialDotChecks(t.dots, 5));
+      recAll(rec, sc5, tutorialCaseChecks("board", await readTutorialCase(page)));
       focusLines(rec, sc5, t, []);
       dimOff(rec, sc5, t);
       hiddenLines(rec, sc5, t);
       nextLines(rec, sc5, t);
-      recAll(rec, sc5, tutorialEvidenceChecks(t.evidence, { scene: 5, next: t.next }));
-      recAll(rec, sc5, tutorialLineChecks(t.evidence, { viewport: vpOf(t), band: t.band, next: t.next }), { relax: ctx.size.h <= 560 ? ["EV6", "EV7", "EV8"] : [], note: "360x560 참고 행(UI-SPEC 장면 5)" });
-      {
-        const tag = t.evidence.suspectTag;
-        const pt = (p) => `(${Math.round(p[0])},${Math.round(p[1])})`;
-        rec(sc5, "EVm", "참고 측정(판정 아님): 도윤 이름표 사각형·선 끝 좌표", true, `이름표 ${tag ? `(${Math.round(tag.left)},${Math.round(tag.top)} ${Math.round(tag.width)}x${Math.round(tag.height)})` : "읽지 못함"} · 선 ${t.evidence.lines.map((l) => `${pt(l.from)}→${pt(l.to)}`).join(" / ")}`, true);
-      }
       bandLines(rec, sc5, t, [], {});
       await gLine(rec, ctx, solo, sc5);
       await hLine(rec, page, sc5);
@@ -385,6 +382,8 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       dimOff(rec, `${sc6}/reveal`, t);
       nextLines(rec, `${sc6}/reveal`, t);
       recAll(rec, sc6, tutorialRevealChecks({ reveal: t.reveal, next: t.next, viewport: vpOf(t) }));
+      recAll(rec, sc6, tutorialCaseChecks("hidden", await readTutorialCase(page)));
+      rec(sc6, "TV6", `정체 공개 줄이 '${TUTORIAL_HIDDEN_LINE}' 이다`, (await readTutorialCase(page)).text.includes(TUTORIAL_HIDDEN_LINE), "");
       await gLine(rec, ctx, solo, `${sc6}/reveal`);
       if (wide) {
         const fps = await fpsStop(page).catch(() => null);
@@ -467,6 +466,42 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
     } finally {
       await solo?.context.close().catch(() => {});
     }
+  }
+
+  /** 함께 진행 방장이 실제 사용자 경로(클릭)로 새 첫 사건을 끝까지 한다 — 장면마다 새 흐름의 표식(LH10)만 판정한다 */
+  async function playNewCase(page, rec, sc) {
+    await waitScene(page, 2, 12_000);
+    await page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS });
+    await page.locator("[data-tutorial-next]").click();
+    await waitScene(page, 3);
+    await page.waitForSelector("[data-errand-act]", { timeout: SCENE_WAIT_MS });
+    await page.locator("[data-errand-act]").click();
+    recAll(rec, sc, tutorialCaseChecks("lamp", await readTutorialCase(page)));
+    await waitScene(page, 4);
+    await page.waitForSelector('[data-tutorial-focus="clue"]', { timeout: SCENE_WAIT_MS });
+    await page.locator("[data-errand-act]").click();
+    await page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS });
+    await sleep(400);
+    recAll(rec, sc, tutorialCaseChecks("clue", await readTutorialCase(page)));
+    await page.locator("[data-tutorial-next]").click();
+    await waitScene(page, 5);
+    await page.waitForSelector("[data-board]", { timeout: SCENE_WAIT_MS });
+    await page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS });
+    await sleep(1200);
+    recAll(rec, sc, tutorialCaseChecks("board", await readTutorialCase(page)));
+    await page.locator("[data-tutorial-next]").click();
+    await waitScene(page, 6);
+    await page.waitForSelector(`[data-pick="${RIGHT_SEAT}"]`, { timeout: SCENE_WAIT_MS });
+    await page.locator(`[data-pick="${RIGHT_SEAT}"]`).click();
+    await page.waitForSelector("[data-tutorial-reveal]", { timeout: SCENE_WAIT_MS });
+    await page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS });
+    await sleep(1500);
+    recAll(rec, sc, tutorialCaseChecks("hidden", await readTutorialCase(page)));
+    await page.locator("[data-tutorial-next]").click();
+    await waitScene(page, 7);
+    await page.waitForSelector("[data-tutorial-next]", { timeout: SCENE_WAIT_MS });
+    await sleep(800);
+    await page.locator("[data-tutorial-next]").click();
   }
 
   /** 페이지를 다시 열고 새 연결의 첫 state 프레임이 올 때까지 기다린다(추적 값은 이전 연결의 것이 남아 있으므로 순번으로 센다) */
@@ -584,8 +619,8 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       rec(`${sc}/reconnect`, "TR1", "손님이 새로 고치면 다시 장면 1(me.tutorialDone 없음)", back.ok && gt.last()?.me?.tutorialDone !== true && gt.last()?.phase === "tutorial", back.detail);
       rec(`${sc}/reconnect`, "TR2", "방장은 아직 첫 사건 화면(손님 재접속이 단계를 넘기지 않음)", ht.last()?.phase === "tutorial" && (await hp.locator(sceneSel(1)).count()) === 1, `방장 단계 ${ht.last()?.phase}`);
 
-      // ④ 방장이 건너뛰면 기다림 화면: 1 / 2·사람 원 2·시간 막대
-      await hp.locator("[data-tutorial-skip]").click();
+      // ④ 방장이 새 첫 사건(등불 켜기 → 현장 조사 → 의심 보드 → 투표 → 정체는 판이 끝나야 알아요 → 직업 카드)을 끝까지 하면 기다림 화면: 1 / 2·사람 원 2·시간 막대
+      await playNewCase(hp, rec, `${sc}/case`);
       const waiting = await tryDo(async () => {
         await hp.waitForSelector('[data-tutorial-wait] [data-tutorial-count="1/2"]', { timeout: SCENE_WAIT_MS });
       });
@@ -601,7 +636,8 @@ export function makeTutorialFlows({ recorder, attempt, startHost, openGuest }) {
       const hBad = genericIssues(hSnap, ctx.size).filter((x) => !x.ok);
       rec(`${sc}/wait`, "G", "G 공통 검사(기다림 화면: 가로 넘침·탭 44·글자 14·콘솔·요청)", hBad.length === 0, hBad.map((x) => `${x.id} ${x.detail}`).join(" / "));
       dom.push(await readLeakDom(hp, "기다림(방장)"));
-      rec(`${sc}/wait`, "TW3", "손님은 아직 첫 사건 화면(장면 1)이다", (await gp.locator(sceneSel(1)).count()) === 1, "");
+      // 방장이 새 첫 사건을 끝까지 하는 동안 손님 화면은 오프닝이 자동으로 지나 장면 2 이후일 수 있다 — 장면 번호가 아니라 아직 끝내지 않았음(첫 사건 화면이 있고 기다림 화면이 없음)을 본다
+      rec(`${sc}/wait`, "TW3", "손님은 아직 첫 사건 화면이다(기다림 화면 아님)", (await gp.locator("[data-tutorial-screen]").count()) === 1 && (await gp.locator("[data-tutorial-wait]").count()) === 0, "");
 
       // 방장 새로 고침: 이미 끝냈으므로(me.tutorialDone) 장면 1 이 아니라 곧바로 기다림 화면
       await reconnect(hp, ht, "방장 재접속");

@@ -5982,3 +5982,27 @@ test("errandCardChecks(profile lamp): 시작 카드 제목이 '오늘 켤 등불
   assert.deepEqual(fails(errandCardChecks({ early, late: { cards: 0 } })), ["EC1"], "옛 프로필은 '오늘 갈 곳' 제목을 기대한다");
   assert.deepEqual(fails(errandCardChecks({ profile: "lamp", early: { ...early, text: "오늘 갈 곳 가는 길에 본 사람이 기록돼요" }, late: { cards: 0 } })), ["EC1"]);
 });
+
+// ---- 21-15: 튜토리얼 새 첫 사건 흐름 판정(LH10) ----
+test("tutorialCaseChecks(LH10): 장면 3~6 새 흐름 표식이 맞으면 통과하고 어긋난 항목만 실패한다", () => {
+  const f = libAll.tutorialCaseChecks;
+  assert.deepEqual(failIds(f("lamp", { progress: "1/3" })), []);
+  assert.deepEqual(failIds(f("lamp", { progress: "0/3" })), ["LH10a"]);
+  const clue = { spots: ["footprint:new", "cloth:done", "window:new"], cards: ["cloth"], next: true };
+  assert.deepEqual(failIds(f("clue", clue)), []);
+  assert.deepEqual(failIds(f("clue", { ...clue, cards: [] })), ["LH10b"]);
+  assert.deepEqual(failIds(f("clue", { ...clue, next: false })), ["LH10b"]);
+  assert.deepEqual(failIds(f("clue", { ...clue, spots: ["footprint:new", "cloth:new", "window:new"] })), ["LH10b"]);
+  const board = { board: 1, chips: ["cloth"], faces: [0, 1, 3, 4, 5], marks: [1], links: 1, eye: 0, trace: 0, formula: 0, record: 0 };
+  assert.deepEqual(failIds(f("board", board)), []);
+  assert.deepEqual(failIds(f("board", { ...board, links: 2 })), ["LH10c"]);
+  assert.deepEqual(failIds(f("board", { ...board, eye: 1 })), ["LH10c"]);
+  assert.deepEqual(failIds(f("board", { ...board, marks: [3] })), ["LH10c"]);
+  assert.deepEqual(failIds(f("board", { ...board, faces: [0, 1, 3, 4] })), ["LH10c"]);
+  const hidden = { text: "처형 정체는 판이 끝나야 알아요", card: true };
+  assert.deepEqual(failIds(f("hidden", hidden)), []);
+  assert.deepEqual(failIds(f("hidden", { ...hidden, text: "처형 마피아" })), ["LH10d"]);
+  assert.deepEqual(failIds(f("hidden", { ...hidden, card: false })), ["LH10d"]);
+  assert.ok(f("hidden", null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.throws(() => f("nope", {}), /nope/);
+});

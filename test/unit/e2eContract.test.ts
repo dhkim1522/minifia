@@ -1353,6 +1353,11 @@ describe("21페이즈 원인 흐름 E2E 사본 계약 (21-15, D-29, T-21-47·T-2
     for (const other of ["errand", "town", "mode-"]) expect(ids.filter((id) => id.includes(other))).toEqual([]);
   });
 
+  it("튜토리얼 E2E 의 정체 공개 줄 사본은 TUTORIAL_LINES['tutorial.hidden'] 과 같다 (LH10)", () => {
+    const text = readFileSync(new URL("scripts/e2e/tutorial.mjs", root), "utf8");
+    expect(text).toContain(`TUTORIAL_HIDDEN_LINE = "${TUTORIAL_LINES["tutorial.hidden"]}"`);
+  });
+
   it("CAUSE_ABSENT_SELECTORS(기본 마피아에서 0건이어야 하는 확장판 요소)의 속성이 git 이 추적하는 src 의 .tsx 에 있다(빈 선택자 금지)", () => {
     expect(lib.CAUSE_ABSENT_SELECTORS.length).toBeGreaterThanOrEqual(6);
     const attrs = lib.CAUSE_ABSENT_SELECTORS.map((sel) => /^\[(data-[a-z-]+)\]$/.exec(sel)?.[1] ?? `모양이 다름:${sel}`);
