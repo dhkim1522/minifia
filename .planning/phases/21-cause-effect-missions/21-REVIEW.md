@@ -77,7 +77,7 @@ status: issues_found
 
 ## 경고
 
-### WR-01: 한 자리에서 단서 지점 셋이 모두 닿는다 — 마피아 한 명이 현장 단서를 1초 안에 전부 지울 수 있다
+### WR-01 [수정됨]: 한 자리에서 단서 지점 셋이 모두 닿는다 — 마피아 한 명이 현장 단서를 1초 안에 전부 지울 수 있다
 
 **파일:** `shared/game/mapTown.ts:TOWN_CLUE_SPOTS`(약 285~294행), `shared/game/scene.ts:inspectSpot`(반경 판정), `shared/game/phases.ts:66`(`ERRAND_ACT_R = 1.2`)
 **문제:** 처리 반경은 1.2(고정소수점 120)인데 같은 집의 세 지점 간격은 100~112 다. 모든 집(예: 집 0 의 중간점 (-325,-775) 에서 앞뒤 점까지 112·100)에서 가운데 지점에 서면 세 지점이 모두 반경 안이다. 그래서
@@ -85,17 +85,23 @@ status: issues_found
 2. 산 마피아 한 명이 가운데에 서서 `inspect` 를 3번(간격 `ERRAND_MIN_GAP_MS` 250ms) 누르면 세 지점이 모두 `touched` 가 된다. 이후 시민이 살피면 발자국·옷 조각·창문 전부 "먼저 손댄 흔적"만 받는다. 마피아 자신은 평소 단서를 받는다(D-15). 마피아의 첫 클릭은 현장 도착 직후 1초면 끝나므로, 아침 30초 현장 시간 동안 시민이 받을 수 있는 증거가 사실상 도착 순서 경쟁 하나로 줄어든다. 서버는 아침 발표(큰 글)가 끝나기를 기다리지 않아 `inspect` 가 morning 첫 ms 부터 받아들여진다(클라이언트가 지점을 숨기는 것은 화면 연출일 뿐이다).
 **수정:** 지점 간격을 반경보다 크게 벌리거나(≥ 2.5, 반경 1.2 의 두 배 이상), `inspectSpot` 이 "반경 안의 가장 가까운 한 지점"이 아니라 "지점 중심 반경 0.6 같은 더 작은 값"을 쓰게 하거나, 한 사람이 같은 위치에서 연속으로 살피지 못하게 사람당 살핌 사이에 이동 조건/쿨다운(예: 다음 살핌까지 3초)을 둔다. 마피아 독점 방지가 의도라면 결정 0088 에 "먼저 손댄 흔적" 이 지점별 1회 한정임을 밸런스 근거와 함께 적는다. (밸런스 문제이며 누설은 아니다.)
 
-### WR-02: `skip` 메시지에 속도 제한이 없다 — 켰다 껐다 반복이 매번 저장 + 전원 방송
+**처리 결과(수정됨, 647aa54b):** 처리 반경·지점 좌표는 그대로 두고 소유 지점 규칙으로 고쳤다. `inspectSpot` 은 반경 안에서 가장 가까운 지점(같으면 발자국 → 옷 조각 → 창문)을 그 자리의 소유 지점으로 고르고, 그 지점을 이미 살폈으면 `{ ok: false }` 로 거절한다 — 한 자리에서 지점 둘 이상을 살필 수 없어 걸어서 옮겨야 한다(마피아가 한 자리에서 세 지점을 흐릴 수 없다). 응답은 기존과 같은 사유 없는 `{ ok: false }` 하나이고 역할을 읽는 곳은 늘지 않았다. 클라이언트 `actableSpotOf` 도 같은 규칙으로 맞췄다. 회귀 시험: scene.test(여덟 집 가운데 연타, 마피아 연타 흔적 범위), sceneView.test(소유 규칙). 기존 sceneView 시험 한 건은 "살핀 지점 위에서 다른 new 를 고른다" 는 옛 전제 때문에 서 있는 자리를 대상 지점 쪽으로 옮겨 같은 의도(done·touched·dim 은 후보가 아님)를 유지했다.
+
+### WR-02 [수정됨]: `skip` 메시지에 속도 제한이 없다 — 켰다 껐다 반복이 매번 저장 + 전원 방송
 
 **파일:** `worker/room.ts:applySkip`(약 1010~1025행), `shared/game/skip.ts:toggleSkip`
 **문제:** `errand`·`inspect` 는 `ERRAND_MIN_GAP_MS` 로 연타를 막지만 `applySkip` 은 막지 않는다. "같은 값이면 같은 객체라 저장·전송 없음"(T-21-20)만 연타 방어로 쓰는데, on/off 를 번갈아 보내면 매 메시지가 `persistAndBroadcast` — `ctx.storage.put` 1회 + 모든 소켓 view 재전송 — 이 된다. 한 클라이언트가 초당 수십 번 토글하면 방 전원에게 증폭된 프레임이 간다. 토론 끝내기(`applyEndDiscussion`)와 같은 구멍을 새 메시지가 그대로 복제했다.
 **수정:** `applyErrand` 처럼 `writeAt.get(\`skip:${playerId}\`)` 로 최소 간격(예: 250ms)을 두고, 간격 안의 요청은 상태 변화 없이 본인 view 한 프레임만 보낸다.
 
-### WR-03: 진행 중이던 확장판 방이 배포 순간 원인 흐름 규칙을 받는다 — 아침 근처 표본이 영영 돌지 않을 수 있다
+**처리 결과(수정됨, 9634bc51):** `phases.ts` 에 `SKIP_MIN_GAP_MS = 250` 을 두고 `applySkip` 이 규칙을 통과해 값이 바뀌는 요청만 사람별로 간격을 센다. 간격 안의 요청은 저장·방송 없이 본인 state 한 프레임만 보낸다(오류 프레임 없음, `applyErrand` 와 같은 모양). 같은 값 재전송은 기존대로 프레임 0이다. 회귀 시험: causeSkip.test(연타 시 첫 켜기만 방송·본인만 프레임, 간격 뒤 재수락, 사람별 분리). 같은 사람이 곧바로 켰다 끄던 기존 시험은 간격만큼 `pause` 를 넣었다(단언은 그대로).
+
+### WR-03 [수정됨]: 진행 중이던 확장판 방이 배포 순간 원인 흐름 규칙을 받는다 — 아침 근처 표본이 영영 돌지 않을 수 있다
 
 **파일:** `shared/game/ruleset.ts:rulesetOf`, `shared/game/movement.ts:nearPhaseOf`, `shared/game/tick.ts`(morning 진입 훅), `shared/game/room.ts:normalizeStoredRoom`
 **문제:** `rulesetOf(modeOf(state))` 는 저장된 `mode`(없으면 기본 extended)로 `cause: true` 를 돌려준다. 배포 전에 시작돼 morning 에 있던 확장판 방은 `errandTickAt` 이 없는데 `nearPhaseOf` 가 참이 되어, 아침 중 걸음이 본인·유령에게만 가고 `runErrandTick` 은 `errandTickAt === undefined` 라 영영 근처 snap 을 보내지 않는다(산 사람이 서로 안 보인다). 정규화(`normalizeStoredRoom`)에는 이 경우를 다루는 줄이 없다. `lamps`·`scene` 없이 night 를 지난 방은 기능이 조용히 빠질 뿐이지만, morning·dayAnnounce 중이던 방은 판이 끝날 때까지 어긋난다. 이전 페이즈들은 "배포 순간 한 번뿐인 수용 가능한 이전"으로 처리해 왔으나(room.ts 주석) 이번에는 규칙을 바꾸는 것이라 크기가 다르다.
 **수정:** (a) `normalizeStoredRoom` 에서 저장된 방이 `cause` 이고 `phase` 가 morning·night·dayAnnounce 인데 원인 흐름 상태가 없으면 그 단계의 `errandTickAt` 을 `now + ERRAND_TICK_MS` 로 채우거나 `mode` 를 basic 으로 고정하고, 또는 (b) 배포 전 진행 방은 `ruleset` 을 저장 시점 값으로 읽도록 스냅샷한다. 최소한 HANDOFF 의 알려진 한계에 "배포 시 진행 중 방은 비운 뒤 배포" 를 적는다.
+
+**처리 결과(수정됨, 038f612b):** 안 (a) 로 고쳤다. `normalizeStoredRoom` 이 원인 흐름(cause) 규칙이 켜진 morning 인데 `errandTickAt` 이 없는 방에 `now + ERRAND_TICK_MS` 를 채우고, DO 생성자는 `errandTickAt` 이 바뀐 경우에도 알람을 다시 건다(`nextWakeAt` 에 포함). 이미 값이 있는 방·기본판·다른 단계(밤·저녁·토론·낮 시작 발표)는 같은 객체라 기본판은 불변이다. night 를 지났는데 `lamps`·`scene` 이 없는 방은 기능이 조용히 빠질 뿐이라 건드리지 않았다(리뷰 설명대로). 회귀 시험: gameMode.test(채움·멱등·같은 객체 경로·잠금 아래 무변화·nextWakeAt).
 
 ## 정보
 
