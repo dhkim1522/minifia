@@ -41,7 +41,7 @@ import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
 import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../game/dayView";
-import { errandProgress, placeCentersOf } from "../game/errandView";
+import { LAMP_ACT_LOOK, errandProgress, placeCentersOf } from "../game/errandView";
 import { callTargetsOf, type HostLocal } from "../game/hostLine";
 import { recordRowsOf, traceWindowOf } from "../game/recordView";
 import { TRACE_MARK, sameOutfitSeats } from "../game/traceMark";
@@ -756,14 +756,18 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   );
   // 심부름의 빛은 위치·진행으로만 정해진다 — 14페이즈의 "이미 썼는가"·열린 시트와 무관하다(UI-SPEC 빛남 계약 추가)
   const errandCallPlace = errandMine !== null && callTarget?.kind === "place";
+  // 원인 흐름 저녁(21-08): 안 켠 배정 등불 표지 전부 빛남(P21-6)과 [켜기] 단추 모양. 이 분기도 역할을 읽지 않는다
+  const lampCause = rulesetOf(modeOf(view)).cause;
+  const errandCallPlaces = useMemo(() => (errandMine !== null && callTarget?.kind === "places" ? callTarget.ids : undefined), [errandMine !== null, callTarget]);
   // [처리] 알약(장소 위, 16-07): 처리 반경 안 미완료 장소가 있을 때만 보낸다(서버가 다시 정한다). 못 보내면(소켓 닫힘) 아무 변화 없다.
   // 알약은 반경 안에서만 DOM 에 있어 헛누름이 없고, 누를 때 주요 버튼 소리(ui.tap)가 한 번 난다(V-31). 거절·실패 알림은 없다
   const errandActId = errandPos.actableId;
-  const onErrandAct = useCallback((): void => {
+  // 원인 흐름은 길게 누르기(hold)를 그대로 보낸다 — 짧게·길게 모두 모든 역할이 같은 제스처이고 뜻은 서버만 정한다(P21-7). 그 밖은 지금 메시지뿐이다
+  const onErrandAct = useCallback((hold: boolean = false): void => {
     if (!canSend || errandActId === null) return;
     emitSignal({ kind: "tap" });
-    send({ t: "errand" });
-  }, [canSend, errandActId, send]);
+    send(hold && lampCause ? { t: "errand", hold: true } : { t: "errand" });
+  }, [canSend, errandActId, send, lampCause]);
   const errandLayer = useMemo<ErrandLayerProps | undefined>(
     () =>
       errandMine === null
@@ -773,10 +777,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
             nextId: errandPos.nextId,
             actId: errandPos.actableId,
             callPlace: errandCallPlace,
+            ...(errandCallPlaces === undefined ? {} : { callPlaces: errandCallPlaces }),
+            ...(lampCause ? { actLook: LAMP_ACT_LOOK } : {}),
             nearR: ERRAND_NEAR_R,
             onAct: onErrandAct,
           },
-    [errandMine, errandCenters, errandPos.nextId, errandPos.actableId, errandCallPlace, onErrandAct],
+    [errandMine, errandCenters, errandPos.nextId, errandPos.actableId, errandCallPlace, errandCallPlaces, lampCause, onErrandAct],
   );
   const callOn = callTarget !== null && !callUsed && layerKind === null && !kbOpen && !whisper.mode;
   const callTool = callOn && callTarget.kind === "tool" ? callTarget.tool : null;

@@ -4,6 +4,7 @@ import { phaseKey } from "../../shared/game/audience";
 import type { ClientMessage, EmoteId, MapId, PlaceId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { MOVE_COORD_LIMIT } from "../../shared/protocol";
 import { placeMarkerPlan } from "../game/errandView";
+import { PLACE_NAME } from "../game/placeText";
 import { houseLitOf, lampLitOf } from "../game/lampView";
 import type { Rect } from "../game/errandView";
 import { useReducedMotion } from "../net/useReducedMotion";
@@ -21,6 +22,7 @@ import { ErrandAct } from "./v2/ErrandAct";
 import { ErrandArrow, ErrandMarker } from "./v2/ErrandMarker";
 import { HeadStack } from "./v2/HeadStack";
 import type { HeadStackProps } from "./v2/HeadStack";
+import type { V2IconName } from "./v2/V2Icon";
 import "../styles/world.css";
 
 // 로비 맵 화면: 캔버스 한 장 + 입력 면 + 이름표 층. three 는 world/runtime 의 import() 로만 열린다(이 파일은 three 를 모른다).
@@ -92,11 +94,15 @@ export interface ErrandLayerProps {
   actId: PlaceId | null;
   /** 가장 가까운 미처리 타일을 빛나게 할지 — 처리 반경 안에 미완료가 있거나 3곳 완료·유령이면 거짓. 화살표는 빛나지 않는다 */
   callPlace: boolean;
+  /** 21페이즈 P21-6(원인 흐름 저녁): 빛나는 표지 전부 — 안 켠 배정 등불 전부. 알약이 서면 비운다(한 화면 한 종류). 없으면 callPlace 규칙만 */
+  callPlaces?: readonly PlaceId[];
+  /** [처리] 알약의 글·아이콘·접근성 동사(원인 흐름 저녁의 [켜기]). 없으면 지금 "처리"·손 */
+  actLook?: { label: string; icon: V2IconName; verb: string };
   nearR: number;
   /** 타일을 눌렀다는 알림(걷기는 이 층이 바닥 탭과 같은 경로로 한다) */
   onWalk?(id: PlaceId): void;
-  /** [처리] 알약을 눌렀다는 알림(처리 메시지는 쓰는 쪽이 보낸다) */
-  onAct?(): void;
+  /** [처리] 알약을 눌렀다는 알림(처리 메시지는 쓰는 쪽이 보낸다). hold: 0.6초 넘게 눌렀다 뗐는가(21페이즈 P21-7 — 모든 역할이 같은 제스처) */
+  onAct?(hold?: boolean): void;
 }
 
 const NEAR_RING_POINTS = 24;
@@ -198,7 +204,7 @@ function writeErrandLayer(
     }
     place(el, pin.x, pin.y, TILE_HALF, TILE_HALF);
     // 빛남 우선: 알약이 있으면 알약만 빛나고(타일은 꺼짐), 아니면 가장 가까운 미처리 타일. 남은 곳 정지 후광(data-rest)은 빛남과 무관하게 유지
-    const on = cfg.actId === null && cfg.callPlace && cfg.nextId === id;
+    const on = cfg.actId === null && ((cfg.callPlace && cfg.nextId === id) || (cfg.callPlaces?.includes(id) ?? false));
     lit(on, el);
     toggle(el, "data-rest", !doneIds.has(id) && !on);
   }
@@ -587,7 +593,17 @@ export function WorldStage(props: WorldStageProps) {
       {/* [처리] 알약은 타일·화살표 층보다 위(z-tags + 1)라 층을 따로 둔다. 처리 반경 안 미처리 장소가 있을 때만 DOM 에 있다 */}
       {props.errand ? (
         <div ref={errandActRef} className="mf-world__errand-act" data-errand-act-layer="">
-          {props.errand.actId !== null ? <ErrandAct id={props.errand.actId} call={false} hidden onPress={() => live.current.props.errand?.onAct?.()} /> : null}
+          {props.errand.actId !== null ? (
+            <ErrandAct
+              id={props.errand.actId}
+              call={false}
+              hidden
+              onPress={(hold) => live.current.props.errand?.onAct?.(hold)}
+              {...(props.errand.actLook === undefined
+                ? {}
+                : { label: props.errand.actLook.label, icon: props.errand.actLook.icon, aria: `${PLACE_NAME[props.errand.actId]}에서 ${props.errand.actLook.verb}` })}
+            />
+          ) : null}
         </div>
       ) : null}
       <div
