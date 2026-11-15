@@ -144,7 +144,7 @@ function curve(from: [number, number], to: [number, number]): string {
 /** 화면 전체 선 층. 선 색 ① 은 증거 카드가 쓰는 같은 사용자 변수 --trace-mark(닫힌 표의 값, hex 없음) */
 export function TutorialLinks() {
   const lines = useMeasured<LineGeom[]>(measureLines, sameLines) ?? [];
-  const style = { "--trace-mark": TRACE_MARK[TUTORIAL_CAST.trace] } as CSSProperties;
+  const style = { "--trace-mark": TRACE_MARK[TUTORIAL_CAST.clue.piece] } as CSSProperties;
   return (
     <svg className="tut-links" data-tutorial-links="" aria-hidden="true" focusable="false" style={style}>
       {lines.map((l) => (
@@ -176,7 +176,7 @@ export function TutorialFormula() {
       </span>
       <span className="tut-formula__op">+</span>
       <span className="tut-formula__disc">
-        <TraceArt piece={TUTORIAL_CAST.trace} size={32} />
+        <TraceArt piece={TUTORIAL_CAST.clue.piece} size={32} />
       </span>
       <span className="tut-formula__op">=</span>
       <span className="tut-formula__pill">

@@ -12,7 +12,7 @@ import { RecordCard } from "../components/v2/RecordCard";
 import { TutorialReveal } from "../components/v2/TutorialReveal";
 import { TutorialRoleCards } from "../components/v2/TutorialRoleCards";
 import { WorldStage } from "../components/WorldStage";
-import { TUTORIAL_CAST, TUTORIAL_LINES, TUTORIAL_PICK, TUTORIAL_SCENES, WRONG_HINT_AFTER, makeTutorialSend, tutorialSnap, tutorialStageLook, tutorialStageView, tutorialSuspectStand, tutorialSuspectWalk, tutorialView, tutorialCameraOf } from "../game/tutorialScript";
+import { TUTORIAL_CAST, TUTORIAL_LINES, TUTORIAL_PICK, TUTORIAL_SCENES, WRONG_HINT_AFTER, makeTutorialSend, tutorialSnap, tutorialStageLook, tutorialStageView, tutorialView, tutorialCameraOf } from "../game/tutorialScript";
 import type { TutorialFocusWindow, TutorialLineKey, TutorialSceneNo } from "../game/tutorialScript";
 import type { RecordRow } from "../game/recordView";
 import { faceSrc, preloadRoleAssets, seatColorVar } from "../net/assets";
@@ -71,7 +71,7 @@ interface SceneLayerCtx {
 }
 
 /** 장면 4 에서 실제 RecordCard 에 먹이는 한 줄: 도윤이 가로등 곁(가는 길)에서 목격됐다 */
-const WITNESS_ROWS: readonly RecordRow[] = [{ n: 1, seat: TUTORIAL_CAST.witness.seat, place: TUTORIAL_CAST.witness.place, name: "도윤" }];
+const WITNESS_ROWS: readonly RecordRow[] = [{ n: 1, seat: TUTORIAL_CAST.suspect, place: "lamp", name: "도윤" }];
 const noopClose = (): void => {};
 
 /** 장면 번호로 갈리는 겹침 층: 1 = 오프닝 연출(17-08), 4 = 눈 표시 + 실제 목격 기록 카드, 5 = 연결 선 + 수식, 6 = 정체 공개(정답 뒤 1.1초), 7 = 직업 카드 4장(17-08) */
@@ -81,7 +81,7 @@ function renderSceneLayer(scene: TutorialSceneNo, ctx: SceneLayerCtx): ReactNode
     // 기록 카드는 실제 게임의 기록 카드 자리(.mf-game__record, 띠 독 아래 8)에 둔다. 그 자리 클래스는 허용 목록 밖이라 inert 가 붙는다 — 닫기 단추는 눌리지 않는다
     return (
       <>
-        <TutorialEyeMark seat={TUTORIAL_CAST.witness.seat} />
+        <TutorialEyeMark seat={TUTORIAL_CAST.suspect} />
         <div className="mf-game__record">
           <RecordCard rows={WITNESS_ROWS} faceOf={faceSrc} colorOf={seatColorVar} onClose={noopClose} />
         </div>
@@ -155,7 +155,7 @@ function groupsOf(targets: readonly TutorialFocusWindow["target"][]): FocusGroup
   for (const target of targets) {
     if (target === "band") out.push({ key: "band", selectors: ["[data-tutorial-host] .mv-host__band"] });
     else if (target === "errand") out.push({ key: "errand", selectors: [`button[data-errand-place="${TUTORIAL_CAST.errand.target}"]`, "[data-errand-act]"] });
-    else if (target === "suspect") {
+    else if (target === "clue") {
       // 도윤 상자 + 같이 밝아야 하는 목격 기록 카드·눈 표시(스포트라이트 구멍만, 18-06)
       out.push({ key: "suspect", selectors: [`.mf-world__tag[data-seat="${TUTORIAL_CAST.suspect}"]`], extendDown: SUSPECT_BODY_PX, lit: [".mf-game__record > .mv-record", "[data-tutorial-eye]"] });
     }
@@ -172,12 +172,8 @@ function groupsOf(targets: readonly TutorialFocusWindow["target"][]): FocusGroup
 
 /** 장면에 들어갈 때의 위치: 그 장면의 snap 을 epoch 0 으로 넣고, 장면 4 는 도윤이 걸어 들어오는 프레임을 더한다(모션 줄이기면 걷지 않고 끝점에 서 있다) */
 function enterWorld(store: WorldStore, n: PlayableScene, at: number, reduced: boolean): void {
-  if (n === 4 && reduced) {
-    store.applyFrame(tutorialSuspectStand(at), 0);
-    return;
-  }
+  void reduced;
   store.applyFrame(tutorialSnap(n, at), 0);
-  if (n === 4) store.applyFrame(tutorialSuspectWalk(at), 0);
 }
 
 /** 위 알림 한 건(GameMap 의 toast prop 모양 — 실제 판의 알림 경로와 같다. 연결 훅을 가져오지 않으려고 모양만 둔다) */
@@ -355,7 +351,6 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
         revealTimer.current = setTimeout(() => {
           revealTimer.current = undefined;
           if (curRef.current.at !== at) return;
-          playTutorialCue(TUTORIAL_PICK.reveal.sfx);
           writeVote({ ...voteRef.current, revealed: true });
           setNextFor(6);
         }, REVEAL_AFTER_MS);
@@ -368,7 +363,7 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
     },
     [speak, writeVote],
   );
-  const send = useMemo(() => makeTutorialSend({ onErrand, onPoint }), [onErrand, onPoint]);
+  const send = useMemo(() => makeTutorialSend({ onErrand, onInspect: () => {}, onPoint }), [onErrand, onPoint]);
 
   // 가짜 view 는 장면 시작 때 한 번만 만든다(매 렌더 새로 만들면 마감 시각이 흘러 흔적 구간이 흔들린다)
   // 장면 6 은 정답 뒤(picked)에 득표 한 줄이 든 view 로 바뀐다 — 실제 득표 배지·이름표 테두리가 서는 경로다. 오답마다도 새 view 를 줘서 GameMap 의 임시 "내 선택" 표시를 비운다(표가 없으니 테두리도 없다)
