@@ -350,6 +350,27 @@ E2E 판정(`scripts/e2e/lib.mjs`, 흐름 `tutorial-solo`(폰 6종 + 390×844·40
 
 알려진 한계(고치지 않는다, 결정 0087): 360×560 세로로는 방 전체가 안 들어온다(따라가기 카메라라 진행에 지장 없음). 닫힌 방 안 분필은 밖에서 안 보인다(21 이 정한다). 이름표(DOM 층)가 지붕 판 위에 겹칠 수 있다. 좌석 0·7 집의 문 앞 자리는 문에서 약 1.3 떨어진 모서리 쪽 칸이다. 폰 GPU·발열·셰이더 컴파일 끊김·밤 조명에서 간판·문패가 읽히는지는 헤드리스로 못 본다 — v3.0 끝 실기기 확인.
 
+## 확장판 하루 흐름 (21페이즈, 결정 0088)
+
+확장판 하루는 **저녁 등불 → 밤 집 찾기 → 아침 현장 → 토론**이다(`roleReveal → errand → night → morning → discussion`, 처형 다음도 errand). 기본 마피아는 그대로다(`dayAnnounce` 경유). 새 2D 화면은 없고 마을 3D 장면 위의 DOM 표지·카드가 전부다. 숫자의 원천은 `.planning/phases/21-cause-effect-missions/21-UI-SPEC.md`(P21-1~21)와 코드(`shared/game/lamps.ts`·`scene.ts`·`skip.ts`, `src/world/camera.ts`)다.
+
+| 단계 | 화면 영역 | 표식(E2E·시험이 읽는 것) |
+|---|---|---|
+| 저녁(errand, 40초) | 따라가는 카메라로 걷는다. 가로등 8곳(광장 둘레) 중 내 3곳이 금빛 테두리로 깜빡이고, 반경 안에서 [켜기]를 누르면 켜진다. 마피아의 길게 누르기 0.6초 = 심지 자르기(겉모습은 켜기와 같다). 시작 카드 "오늘 켤 등불" 2초, 아래 패널 오른쪽 끝 [건너뛰기] | `data-errand-act`·`data-errand-act-layer`·`data-skip`·`data-skip-count`, `window.__mfTown.lampLit` |
+| 밤(night) | **고정 개관 카메라**(`window.__mfCamera = { mode: "overview", scale }`): 마을 한계 ±9.6 정사각을 스테이지 안에 8 inset 으로 채운다. 집마다 DOM 문패 단추(누르기 44·보이는 원 40·창 점 8×8 — 불 켜짐 채움 / 꺼짐 속 빔)를 눌러 집을 고른다. 모든 역할이 같은 조작이라 마크업이 같다 | `button[data-house-tag="좌석"]`(주인 없는 집은 단추 아님), `window.__mfTown.houseLit`·`lampLit` |
+| 아침(morning) | 큰 글 발표 뒤 피해자(또는 미수) 집 문 앞에 현장 지점 3곳(① 발자국 ② 옷 조각 ③ 창문, 표지 지름 52). 반경 안에서 [살펴보기]를 누르면 내가 받은 단서 카드가 스테이지 아래에 쌓인다(최대 3, 나만 본다). 피해자·미수가 없는 밤은 아침이 없이 바로 토론 | `data-clue-spot`·`data-clue-layer`·`data-clue-card`·`data-clue-cards` |
+| 토론(discussion) | 시작 때 광장 둘레로 모이고, 헤더 오른쪽 [보드]가 접히는 의심 보드(얼굴 줄 + 표시 칩 + 가로등 8개 점 + 목격·기록 줄)를 연다. 보드는 입력줄 부품만 가리지 않으면 패널 기록 칸을 덮어도 된다 | `data-board`·`data-board-button`·`data-board-faces`·`data-board-face`·`data-board-chips`·`data-board-chip`·`data-board-lamps`·`data-board-witness`·`data-board-record-rows` |
+
+건너뛰기는 저녁·아침의 산 사람 과반(`majorityOf`)이 누르면 그 단계를 끝낸다(공개 값은 누른 수뿐). 공개 증거 카드(흔적 조각·마지막 목격)는 확장판에서 나오지 않는다.
+
+알려진 한계(고치지 않는다, 결정 0088):
+
+- 보드 얼굴 칸의 8자 닉네임은 한 줄에 다 안 들어가고 칸 안에서 잘린다(실측 글자 폭 약 103~104px, 칸 안 폭 56~73px, `nowrap + overflow hidden`, 말줄임 없음). 줄바꿈·번짐은 없다. 말줄임·두 줄·글자 축소는 디자인 결정이 필요하다.
+- 같은 집 현장 지점 표지끼리 중심 거리가 약 47px 로 표지 지름 52 보다 좁아 가장자리가 겹친다(P21-9 의 58px 이상 주장과 어긋남). 누르기 대상(띠·독·패널·이름표 버튼)과는 겹치지 않는다.
+- 문패 안쪽 8 inset 은 보이는 원 40 기준으로 통과하고, 누르기 영역 44 상자 기준이면 360×640 에서 1px 밖(7~353)이다.
+- 저녁 시작 카드 아래 줄 "가는 길에 본 사람이 기록돼요"는 기록이 사라진 지금 어색한 문장이다(P21-17 이 그대로 두기로 함).
+- 360×560 보드 카드 스크롤·문패와 3D 표식 겹침·모션 줄이기의 실기기 체감, 켜진 등불의 번짐·창 밝기, 한 판 길이는 v3.0 끝 실테스트에서 본다.
+
 ## 자동 검사 (배포본 E2E, 결정 0025)
 
 `npm run e2e` 가 시스템 Chrome 으로 배포본을 열어 네 크기(360×640, 390×664, 430×932, 360×560)와 고정 흐름(pc 1280×800, wakelock 360×640 등)을 돈다. 결과는 흐름 × 크기 표다. 8페이즈에서 v1.0 테이블 흐름 열한 개(police5 · citizen4 · mafia8 · doctor5 · spec4 · vote5 · noexec · result-c · result-m · chat-table · chat-ghost)를 지우고 맵 게임 흐름 여섯 개를 더했다: `day`(토론 끝내기 · 지목 · 변론 · 찬반 · 처형 알림 · 밤, 폰 6종) · `ghost`(유령 화면 · 누설 없음, 폰 6종) · `noexec`(지목 동률 · 처형 없음) · `night`(밤 임시 틀 역할별 흐름을 9페이즈에서 다시 씀) · `result`(결과 화면, `RS-FIT`: 폰 6종에서 [처음으로] 가 스크롤 없이 화면 안, 0062-6) · `chat-game`(게임 중 채팅 채널). 09.1(결정 0063·0064)에서 `day` 는 순차 지목(NT: 모이기 · 차례 알약 · 내 차례 · 끝 알림), `ghost` 는 직업 의상 안개와 불투명 이름표(GH · L13), `night` 은 유언 편지(LT: 등장 · 인장 · 알림 위 72 · 접힘 뒤 카드), `night-sizes` 는 폰 6종 편지 맞춤(유언 50자, `WILL50`)을 더 본다. 9페이즈(09-22)의 night 흐름은 암살(다가가기 · 확정 · 쪽지 → 아침 분필 · 알림 · 유언 · 쪽지 카드) · 구출 · 불일치 · 처형 유언 · 경찰 결과 · 피해자 이펙트(막 · 번쩍임 · 유령 화면) 여섯 시나리오와 시민 편 DOM 누설 검사 · 묶음 G · H 를 승인 보드 폭(390×844)에서 돌고, `night-sizes` 가 폰 6종에서 내 이름표가 스테이지 안에 완전히 들어오는지(`tagInStage`) · 마피아 이름표 버튼 44×44 · 얼굴 칸 이름 · 패널 높이를 잰다. 줄바꿈된 얼굴 목록 + 가장 짧은 폰(360×560)에서 이름표가 스테이지 위로 올라가는 것은 UI-SPEC 알려진 한계라 참고 줄(`SZ4k`)로만 남긴다. 낮 · 밤 · 아침 렌더 부하는 `node scripts/perf-run.mjs --mode nightload`(CPU 4× 감속, 결과 `.planning/phases/09-night-morning/perf/`)로 재고 판정은 실기기 확인이 한다. 배포본 전체가 900초를 넘으면 `--only` 로 나눠 돌린다. 기준값은 낮추지 않고, 승인된 예외만 `APPROVED_RELAXATIONS` 에 이유와 함께 둔다.
@@ -401,6 +422,8 @@ E2E 판정(`scripts/e2e/lib.mjs`, 흐름 `tutorial-solo`(폰 6종 + 390×844·40
 - `town-sight` — 두 탭의 시야(390×844). TM4 밖 탭의 seats 에 안 탭 좌석이 없고 이름표도 안 보임 · TM4s 같은 방 두 탭은 서로 보임 · TM5 들어갈 때 밖 탭에서 `data-door=vanish` 가 좌석이 빠진 뒤 100ms 안에 시작해 0.2초쯤(길이 0.75~2배) · TM5a 나올 때 `appear`
 - `town-ghost` — 유령 화면·결과 화면은 네 방 모두 열림(TM8m·TM8, 390×844)
 - `town-reduced` — 모션 줄이기: 방에 들어가면 같은 틱에 그 방 roofs 0 · 문 연출 없음(TM10·TM10d·TM10x, 390×844)
+
+21페이즈(원인 흐름, 결정 0088)가 더한 흐름(`scripts/e2e/cause.mjs`, `--only cause-`, 개발 서버 로컬용 — 배포본에서는 돌리지 않는다): `cause-evening`(LH1 빛남 규칙·LH2 마피아/시민 마크업 동일, 390×844) · `cause-night`(LH3 문패 8·LH4 네 역할 동일) · `cause-morning`(LH5~LH7 현장·단서·보드 세 시점) · `cause-skip`(LH8 과반으로 건너뜀) · `cause-basic`(LH9 기본 마피아에 확장판 요소 0) · `cause-phones`(LH11 겹침·문패 inset·8자 이름, **폰 6종**). `errand` 는 저녁 등불 기준(폰 6종), `tutorial-solo`·`tutorial-together` 는 새 첫 사건(LH10). **21페이즈 이후 `openGame`·`lobbyWith` 의 기본 판 종류는 기본 마피아(basic)이다** — 제품 기본(확장판)이 원인 흐름이라 옛 낮 순서(밤 → 아침 → 토론, 얼굴 목록 밤)를 전제한 흐름(world·day·ghost·night·noexec·result·politics·avatar·sound·emcee 등)은 기본 마피아 판으로 돌고, 원인 흐름·심부름·마을 흐름만 `openExtended` 로 연다. 확장판 저녁 띠는 emcee-band 가 아니라 cause-evening 이 본다. E2E 로 못 본 것: 미수(의사가 막은 밤) 현장, 불 켜진 이웃 창 카드, 목격 칸이 있는 경우, 확장판 하루 이후(다음 저녁·투표·처형) 완주, 실기기, 성능(LH12)은 perf-run.
 
 TM11 은 `map-select`(폰 6종)가 맡는다: 확장판에는 방장 줄·꾸미기 시트에 [맵] 이 없고, 기본 마피아로 바꾸면 줄에 [맵] 이 생기며, 결과 화면도 같다(TM11a~TM11c, 흐름 줄 TM11p·TM11q·TM11r). `map-select` 는 이제 **기본 마피아로 전환한 뒤** 맵 고르기를 본다(확장판은 맵을 고르지 않는다). `mode-rail`·`tutorial` 도 같은 조건(`railMapsOn`)으로 [맵] 유무를 기대한다. TM12 는 성능이라 E2E 가 아니라 `perf-run --mode nightload --map town`(평균 ≥ 55fps·끊김 ≤ 5·호출 ≤ 120·점광원 3)이 맡는다. 성능은 헤드리스 소프트웨어 GL 근거라 폰 GPU 와 다르다.
 
