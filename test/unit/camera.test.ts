@@ -742,3 +742,151 @@ describe("gatherView (UI-SPEC 카메라: 이름표가 몸보다 우선, E8 #31 b
     process.stdout.write(`gatherView 360x560 찬반 투표자 199: offsetY ${v.offsetY.toFixed(2)}, 위쪽 이름표 위 끝 ${(y.headTop - GATHER_STACK_H).toFixed(1)} (스테이지 위 ${rect.top})\n`);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 21-09 밤 개관 카메라(D-11, UI-SPEC P21-2, 함정 9): 구현 전에 값을 계산으로 고정한다.
+// 스테이지 사각형 = 위 B(띠 아랫변: 한 줄 123 / 두 줄 144) ~ 아래 패널 윗변(화면 높이 − 밤 고정 패널 88). 배율 = min(폭 − 16, 스테이지 높이 − 16) / 19.2.
+// ---------------------------------------------------------------------------------------------------------------------
+import { houseTagCenters, HOUSE_TAG_BOX, HOUSE_TAG_CIRCLE, NIGHT_PANEL_HEIGHT, overviewFraming } from "../../src/world/camera";
+import { cameraModeOf, visibleSeats as visibleSeatsOf } from "../../src/world/presence";
+import type { PhaseId, RoomView } from "../../shared/protocol";
+import { openCause as openCauseNight } from "../helpers/playable";
+
+const BANDS = [123, 144] as const;
+const INSET = 8;
+/** 독 줄: 띠 아래 + 52 — 오른쪽 끝 소리 단추(지름 52, 오른쪽 16)가 놓이는 자리. 스테이지 위 끝이 띠 아랫변이라 세로로는 비킬 수 없고 가로로 비킨다 */
+const DOCK = { h: 52, w: 52, right: 16 };
+const nightStage = (size: { w: number; h: number }, band: number): { top: number; bottom: number } => ({ top: band, bottom: size.h - NIGHT_PANEL_HEIGHT });
+const PAIRS: ReadonlyArray<readonly [number, number]> = [
+  [0, 7],
+  [1, 2],
+  [3, 4],
+  [5, 6],
+];
+
+describe("개관(overview) 카메라 — 배율 식과 문패 계산 (D-11, P21-2·P21-3, 함정 9)", () => {
+  it("밤 고정 패널은 14 + 52(행) + 22 = 88 이다", () => {
+    expect(NIGHT_PANEL_HEIGHT).toBe(88);
+  });
+
+  it("360×560·띠 한 줄 배율은 약 17.3 px/단위, 인접 집 문패 중심 거리는 약 83 이다(UI-SPEC)", () => {
+    const size = { w: 360, h: 560 };
+    const st = nightStage(size, 123);
+    const f = overviewFraming(st, size);
+    expect(f.scale).toBeCloseTo((st.bottom - st.top - 16) / 19.2, 6);
+    expect(f.scale).toBeGreaterThan(17.2);
+    expect(f.scale).toBeLessThan(17.5);
+    expect(f.zoom * PX_PER_UNIT).toBeCloseTo(f.scale, 6);
+    const c = houseTagCenters(st, size);
+    const d = Math.hypot(c[0]!.sx - c[7]!.sx, c[0]!.sy - c[7]!.sy);
+    expect(d).toBeGreaterThan(80);
+    expect(d).toBeLessThan(86);
+  });
+
+  for (const size of PHONES) {
+    for (const band of BANDS) {
+      const label = `${size.w}x${size.h} 띠 ${band === 123 ? "한" : "두"} 줄`;
+      it(`${label}: 배율 = min(폭 − 16, 스테이지 높이 − 16) / 19.2`, () => {
+        const st = nightStage(size, band);
+        const f = overviewFraming(st, size);
+        expect(f.scale).toBeCloseTo(Math.min(size.w - 16, st.bottom - st.top - 16) / 19.2, 6);
+      });
+
+      it(`${label}: 문패 8개 모두 스테이지 안쪽 8 inset 안(보이는 원 40)이고 독 줄 단추와 겹치지 않는다`, () => {
+        const st = nightStage(size, band);
+        const centers = houseTagCenters(st, size);
+        expect(centers.length).toBe(8);
+        const r = HOUSE_TAG_CIRCLE / 2;
+        const h = HOUSE_TAG_BOX / 2;
+        const dock = { x0: size.w - DOCK.right - DOCK.w, x1: size.w - DOCK.right, y0: band, y1: band + DOCK.h };
+        const out: string[] = [];
+        for (const c of centers) {
+          if (c.sx - r < INSET || c.sx + r > size.w - INSET || c.sy - r < st.top + INSET || c.sy + r > st.bottom - INSET) out.push(`${c.seat}:밖`);
+          const hit = c.sx + h > dock.x0 && c.sx - h < dock.x1 && c.sy + h > dock.y0 && c.sy - h < dock.y1;
+          if (hit) out.push(`${c.seat}:독`);
+        }
+        expect(out.join(",")).toBe("");
+      });
+
+      it(`${label}: 인접 집(0·7, 1·2, 3·4, 5·6) 문패 중심 거리는 모두 44 이상, 모든 쌍도 44 이상`, () => {
+        const st = nightStage(size, band);
+        const c = houseTagCenters(st, size);
+        const near = PAIRS.map(([a, b]) => Math.hypot(c[a]!.sx - c[b]!.sx, c[a]!.sy - c[b]!.sy));
+        expect(Math.min(...near)).toBeGreaterThanOrEqual(44);
+        let min = Infinity;
+        for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) min = Math.min(min, Math.hypot(c[i]!.sx - c[j]!.sx, c[i]!.sy - c[j]!.sy));
+        process.stdout.write(`개관 ${label}: 배율 ${overviewFraming(st, size).scale.toFixed(2)} px/단위 · 최소 문패 간격 ${min.toFixed(1)} (인접쌍 최소 ${Math.min(...near).toFixed(1)})\n`);
+        expect(min).toBeGreaterThanOrEqual(44);
+      });
+    }
+  }
+
+  it("개관 시점의 groundToScreen ↔ screenToGround 가 왕복한다(±0.5px) — 경사 시점 값은 그대로", () => {
+    const rand = rng(2109);
+    for (const size of PHONES) {
+      const st = nightStage(size, 123);
+      const f = overviewFraming(st, size);
+      for (let i = 0; i < 20; i++) {
+        const p = { x: (rand() - 0.5) * 19, y: 0, z: (rand() - 0.5) * 19 };
+        const s = groundToScreen(p, f.target, size, f.offsetY, f.zoom, "overview");
+        const back = screenToGround(s.sx, s.sy, f.target, size, f.offsetY, f.zoom, "overview");
+        const s2 = groundToScreen({ x: back.x, y: 0, z: back.z }, f.target, size, f.offsetY, f.zoom, "overview");
+        expect(Math.abs(s.sx - s2.sx)).toBeLessThanOrEqual(0.5);
+        expect(Math.abs(s.sy - s2.sy)).toBeLessThanOrEqual(0.5);
+      }
+    }
+    // 경사 시점(기본)은 그대로: 인자를 생략한 값과 "iso" 를 준 값이 같다
+    const a = groundToScreen({ x: 1, y: 0.3, z: -2 }, { x: 0, z: 0 }, { w: 390, h: 664 }, 5);
+    const b = groundToScreen({ x: 1, y: 0.3, z: -2 }, { x: 0, z: 0 }, { w: 390, h: 664 }, 5, 1, "iso");
+    expect(b).toEqual(a);
+  });
+
+  it("개관 기저는 방위가 고정이고 거의 정사다: 카메라 쪽 벡터의 높이 성분이 0.95 이상, 위쪽 벡터는 북(−z)을 향한다", () => {
+    const b = cameraBasis("overview");
+    expect(b.back.y).toBeGreaterThan(0.95);
+    expect(b.up.z).toBeLessThan(-0.9);
+    expect(Math.abs(b.right.x)).toBeCloseTo(1, 6);
+  });
+});
+
+describe("cameraModeOf — 원인 흐름 마을 밤은 개관 (21-09, D-11)", () => {
+  const viewOf = (phase: PhaseId, o: { mode?: "basic" | "extended"; ghost?: boolean; role?: "mafia" | "citizen" } = {}): RoomView =>
+    ({
+      code: "0042",
+      phase,
+      phaseEndsAt: null,
+      phaseDurationMs: null,
+      serverNow: 0,
+      minPlayers: 4,
+      maxPlayers: 8,
+      players: [
+        { seat: 0, nickname: "a", isHost: false, connected: true, alive: !o.ghost },
+        { seat: 1, nickname: "b", isHost: false, connected: true, alive: true },
+      ],
+      me: { seat: 0, isHost: false, role: o.role ?? "citizen" },
+      map: "town",
+      ...(o.mode === undefined ? {} : { mode: o.mode }),
+      ...(o.ghost === true ? { spectate: {} } : {}),
+    }) as unknown as RoomView;
+
+  it("원인 흐름 마을 밤은 산 사람·유령·역할 모두 { mode: overview }", () => {
+    const restore = openCauseNight();
+    try {
+      for (const role of ["mafia", "citizen"] as const) for (const ghost of [false, true]) expect(cameraModeOf(viewOf("night", { mode: "extended", role, ghost }), 349), `${role}/${ghost}`).toEqual({ mode: "overview" });
+      expect(visibleSeatsOf(viewOf("night", { mode: "extended" }))).toEqual({});
+    } finally {
+      restore();
+    }
+  });
+
+  it("기본판 밤·원인 흐름의 낮 단계는 따라가기 그대로", () => {
+    const restore = openCauseNight();
+    try {
+      expect(cameraModeOf(viewOf("night", { mode: "basic" }), 349)).toEqual({ mode: "follow" });
+      expect(cameraModeOf(viewOf("errand", { mode: "extended" }), 349)).toEqual({ mode: "follow" });
+      expect(cameraModeOf(viewOf("morning", { mode: "extended" }), 349)).toEqual({ mode: "follow" });
+    } finally {
+      restore();
+    }
+  });
+});
