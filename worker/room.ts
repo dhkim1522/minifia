@@ -50,7 +50,7 @@ import { allTutorialDone, markTutorialDone } from "../shared/game/tutorial";
 import { MAP_PHASES, canMove, nearPhaseOf } from "../shared/game/movement";
 import { actErrand, nearSnapFrame, placeCenterFx, sampleErrand } from "../shared/game/errand";
 import { inspectSpot } from "../shared/game/scene";
-import { ERRAND_MIN_GAP_MS, ERRAND_TICK_MS } from "../shared/game/phases";
+import { ERRAND_MIN_GAP_MS, ERRAND_TICK_MS, SKIP_MIN_GAP_MS } from "../shared/game/phases";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
 import type { MapDef } from "../shared/game/map";
@@ -1007,13 +1007,21 @@ export class Room extends DurableObject<Env> {
   }
 
   // applyEndDiscussion 과 같은 길이다. 누른 수(day.skipCount)는 모두에게 공개되는 실시간 정보라 바뀔 때마다 모든 소켓이 각자 view 를 받는다(누른 본인 값은 me.skip 으로만 간다).
-  // 같은 값이면 같은 객체라 저장·전송이 없다(T-21-20 연타). 과반(skipReached)에 닿는 순간 서버가 마감을 지금으로 당겨 tick 으로 정상 마감과 같은 경로를 탄다 —
+  // 같은 값이면 같은 객체라 저장·전송이 없고, 값이 바뀌는 켜기·끄기도 같은 사람은 SKIP_MIN_GAP_MS 안에 거듭 받지 않는다(T-21-20 연타, WR-02). 과반(skipReached)에 닿는 순간 서버가 마감을 지금으로 당겨 tick 으로 정상 마감과 같은 경로를 탄다 —
   // 새 마감은 now + 다음 단계 길이이고 알람이 따라 옮겨진다. 저녁·아침이 아니거나 유령이면 규칙 함수가 WRONG_PHASE·BAD_MESSAGE 로 거절한다.
   private async applySkip(playerId: string, on: boolean, now: number): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
     const result = toggleSkip(this.room, playerId, on);
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
+    // 속도 제한(WR-02): 규칙을 통과해 값이 바뀌는 요청만 간격(SKIP_MIN_GAP_MS)을 센다. 간격 안의 요청은 상태 변화·저장·방송 없이 보낸 사람에게만 자기 state 한 프레임이다(오류 프레임 없음).
+    const key = `skip:${playerId}`;
+    const last = this.writeAt.get(key);
+    if (last !== undefined && now - last < SKIP_MIN_GAP_MS) {
+      this.sendViewTo([playerId]);
+      return null;
+    }
+    this.writeAt.set(key, now);
     if (skipReached(result.state)) {
       const prev = this.room;
       this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);

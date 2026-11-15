@@ -68,6 +68,7 @@ export const ERRAND_NEAR_R = 3.0; // 결정 0074 — 근처 반경(월드 단위
 export const ERRAND_TICK_MS = 1_000; // 결정 0074 — 근처·목격 표본 간격
 export const ERRAND_VIEW_HORIZON_MS = 1_500; // 결정 0074 — 근처 사람 이동 구간을 자르는 길이
 export const ERRAND_MIN_GAP_MS = 250; // 결정 0074 — 같은 사람의 처리 요청 최소 간격(연타 방어)
+export const SKIP_MIN_GAP_MS = 250; // 결정 0088(WR-02) — 같은 사람의 건너뛰기(skip) 켜고 끄기 최소 간격(켰다 껐다 반복이 매번 저장·전원 방송이 되지 않게)
 export const RECORD_MAX = 6; // 결정 0074 — 목격 기록 줄 상한
 export const MORNING_TRACE_MS = 5_000; // 결정 0079(A3) · 흔적 카드가 두 줄이 되어 3→5초, 상한 15→16초 — 시간은 참고 목표(결정 0074 의 흔적 공개 구간)
 

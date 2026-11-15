@@ -4,9 +4,10 @@
 // 다른 시험 파일을 import 하지 않는다. 실패 출력은 한 줄이어야 해서(TAP) 목록은 문자열로 비교한다.
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { SKIP_MIN_GAP_MS } from "../../shared/game/phases";
 import type { RoomView } from "../../shared/protocol";
 import { openCause, openTown } from "../helpers/playable";
-import { actorsOf, advanceTo, lastViewOf, mark, nextFrame, pickAs, seat, send, settle, withRole, writeRoomEdit } from "./helpers";
+import { actorsOf, advanceTo, lastViewOf, mark, nextFrame, pause, pickAs, seat, send, settle, withRole, writeRoomEdit } from "./helpers";
 import type { Actor, Game } from "./helpers";
 
 const skipOf = (view: RoomView): number | undefined => (view.day as { skipCount?: number } | undefined)?.skipCount;
@@ -72,6 +73,7 @@ describe("건너뛰기 — 마을 확장판 저녁·아침 (openCause + openTown
     expect(countsOf(g)).toBe("2,2,2,2,2,2");
     await press(g, c, true);
     expect(countsOf(g)).toBe("3,3,3,3,3,3");
+    await pause(SKIP_MIN_GAP_MS + 50); // 같은 사람의 켜기·끄기는 간격(SKIP_MIN_GAP_MS)을 둔다(WR-02)
     await press(g, c, false);
     expect(`${countsOf(g)}|${minesOf(g)}`).toBe(`2,2,2,2,2,2|${a.seat},${b.seat},-,-,-,-`);
     // 같은 값을 다시 보내도 수는 그대로다(연타 — 저장·방송 없음).
@@ -80,6 +82,24 @@ describe("건너뛰기 — 마을 확장판 저녁·아침 (openCause + openTown
     const frames: number[] = [];
     for (const [i, s] of g.socks.entries()) frames.push((await settle(s, marks[i]!)).filter((m) => m.t === "state").length);
     expect(`${frames.join(",")}|${countsOf(g)}`).toBe("0,0,0,0,0,0|2,2,2,2,2,2");
+  });
+
+  it("WR-02: 같은 사람이 간격(SKIP_MIN_GAP_MS) 안에 켰다 껐다 반복해도 첫 켜기만 저장·방송된다 — 나머지는 본인 state 한 프레임뿐이고 다른 소켓은 프레임이 없다", { timeout: 120_000 }, async () => {
+    const g = await eveningGame();
+    const [a, b] = g.actors as [Actor, Actor];
+    await press(g, a, true);
+    expect(`${countsOf(g)}|${minesOf(g)}`).toBe(`1,1,1,1,1,1|${a.seat},-,-,-,-,-`);
+    const marks = g.socks.map((x) => mark(x));
+    for (let i = 0; i < 6; i += 1) send(a.sock, { t: "skip", on: i % 2 === 1 }); // 끄기·켜기·끄기·… 연타
+    const frames: number[] = [];
+    for (const [i, x] of g.socks.entries()) frames.push((await settle(x, marks[i]!)).filter((m) => m.t === "state").length);
+    // 방금 켠 직후(간격 안)의 끄기 셋은 모두 버려지고 보낸 사람만 끄기마다 자기 state 한 프레임을 받는다(켜기 셋은 이미 켜진 값이라 무변화). 다른 소켓은 프레임 0, 수는 그대로다
+    expect(`${frames.join(",")}|${countsOf(g)}|${minesOf(g)}`).toBe(`3,0,0,0,0,0|1,1,1,1,1,1|${a.seat},-,-,-,-,-`);
+    await pause(SKIP_MIN_GAP_MS + 50);
+    await press(g, a, false); // 간격이 지나면 다시 받는다
+    expect(countsOf(g)).toBe("0,0,0,0,0,0");
+    await press(g, b, true); // 다른 사람의 간격과 섞이지 않는다
+    expect(countsOf(g)).toBe("1,1,1,1,1,1");
   });
 
   it("저녁: 산 사람 과반(여섯 중 넷)이 누르는 순간 모든 소켓의 다음 상태 프레임이 밤이고, 새 밤의 view 에는 skipCount 가 없다", { timeout: 120_000 }, async () => {
