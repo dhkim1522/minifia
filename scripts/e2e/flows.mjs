@@ -146,6 +146,7 @@ import { makeErrandFlows } from "./errand.mjs";
 import { makeTutorialFlows } from "./tutorial.mjs";
 import { makeModeFlows } from "./modes.mjs";
 import { makeTownFlows } from "./town.mjs";
+import { makeCauseFlows } from "./cause.mjs";
 import { CHAT_KB_PANEL_REST, CHAT_OPEN_STAGE_MIN, chatOpenChecks, chatOpenHeight, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureBallotsBackstop, measureChatOpen, readChatWindow, readLiveGhost } from "./polish.mjs";
 
 export const OUT_DIR = new URL("./out/", import.meta.url).pathname;
@@ -3775,7 +3776,7 @@ const { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow,
 const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow, modeLeakFlow } = makeHostFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH, settledResult });
 
 // 심부름·목격 기록·밤 통일·아침 흔적(15페이즈 15-09): errand·witness·trace(폰 6종). 흐름 본문은 errand.mjs, 도우미만 넘긴다
-const { errandFlow, witnessFlow, traceFlow } = makeErrandFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH });
+const { errandFlow } = makeErrandFlows({ recorder, openGame, closeGame, gameGH });
 
 // 첫 사건(튜토리얼, 17페이즈 17-09): tutorial-solo(혼자 하기, 폰 6종)·tutorial-together(함께 진행). 흐름 본문은 tutorial.mjs, 도우미만 넘긴다
 const { tutorialSoloFlow, tutorialTogetherFlow } = makeTutorialFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH });
@@ -3785,6 +3786,9 @@ const { modeRailFlow, modePickFlow, modeBasicFlow } = makeModeFlows({ recorder, 
 
 // 마을 맵(20페이즈 20-08): town-walk(폰 6종)·town-room·town-sight·town-ghost·town-reduced. 흐름 본문은 town.mjs, 도우미만 넘긴다
 const { townWalkFlow, townRoomFlow, townSightFlow, townGhostFlow, townReducedFlow } = makeTownFlows({ recorder, openGame, closeGame, executeHost, untilGame, settledResult });
+
+// 21페이즈 원인 흐름(21-15): cause-evening·cause-night·cause-morning·cause-skip·cause-basic(390x844)·cause-phones(폰 6종). 흐름 본문은 cause.mjs, 도우미만 넘긴다
+const { eveningFlow: causeEveningFlow, nightFlow: causeNightFlow, morningFlow: causeMorningFlow, skipFlow: causeSkipFlow, basicFlow: causeBasicFlow, phonesFlow: causePhonesFlow } = makeCauseFlows({ recorder, openGame, closeGame, gameGH });
 
 // 18.1 화면 다듬기(18.1-08): polish-reveal(역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종). 흐름 본문은 polish.mjs, 도우미만 넘긴다
 const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, closeGame });
@@ -3857,8 +3861,6 @@ export const FLOWS = [
   { id: "emcee-sound", run: emceeSoundFlow, size: GAME_SIZE },
   // 15-09: 심부름(ERRAND-01~04)·목격 기록(ERRAND-05)·밤 얼굴 목록 통일 + 아침 흔적(TRACE-01~03). 이름 앞머리 errand·witness·trace — 다른 흐름과 --only 부분 일치가 겹치지 않는다. 폰 6종(영역 검사 필수)
   { id: "errand", run: errandFlow, extraSizes: LOBBY_EXTRA_SIZES },
-  { id: "witness", run: witnessFlow, extraSizes: LOBBY_EXTRA_SIZES },
-  { id: "trace", run: traceFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 17-09: 첫 사건 TUT-01~05. 이름 앞머리 tutorial — --only tutorial 하나로 둘 다 돈다. 혼자 하기는 폰 6종(기하·포커스·띠 판정), 함께 진행은 기다림 화면 기하까지 390x844 한 크기
   { id: "tutorial-solo", run: tutorialSoloFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "tutorial-together", run: tutorialTogetherFlow, size: GAME_SIZE },
@@ -3875,6 +3877,13 @@ export const FLOWS = [
   { id: "town-ghost", run: townGhostFlow, size: GAME_SIZE },
   { id: "town-reduced", run: townReducedFlow, size: GAME_SIZE },
   // 18.1-08: 역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종
+  { id: "cause-evening", run: causeEveningFlow, size: GAME_SIZE },
+  { id: "cause-night", run: causeNightFlow, size: GAME_SIZE },
+  { id: "cause-morning", run: causeMorningFlow, size: GAME_SIZE },
+  { id: "cause-skip", run: causeSkipFlow, size: GAME_SIZE },
+  { id: "cause-basic", run: causeBasicFlow, size: GAME_SIZE },
+  { id: "cause-phones", run: causePhonesFlow, extraSizes: LOBBY_EXTRA_SIZES },
+
   { id: "polish-reveal", run: polishRevealFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },

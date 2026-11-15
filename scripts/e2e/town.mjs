@@ -34,6 +34,25 @@ const NEAR = 0.3;
 const WALK_ROOM = "post";
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+/**
+ * 21-15: 확장판 낮은 '저녁 → 밤 → 아침 → 토론' 이라 낮 토론에 닿기 전에 밤이 한 번 지나간다. 방장이 시민이면 봇 마피아가 첫 밤에 방장을 없애(봇 밤 고르기는 지목 고정과 따로다) 유령 화면이 되어 네 방이 모두 열린다.
+ * 걷고 방에 드는 흐름은 산 사람이어야 하므로 방장을 마피아로 두고(5명판은 마피아 1명 — 방장이 아무 집도 고르지 않으면 아무도 안 죽는다) 시험에 쓰는 좌석이 살아 있는지 확인한다 —
+ * 그래도 탈락했으면 SetupError 로 던져 새 판으로 다시 돈다(판정을 낮추지 않는다).
+ */
+/**
+ * 21-15: 원인 흐름 토론은 의심 보드가 열린 채 시작해 스테이지 아래쪽을 덮는다(사용자가 [닫기] 로 접는다). 지붕·바닥을 눌러 걷는 흐름은 그 점이 맵 입력 면 위여야 하므로 보드를 먼저 닫는다.
+ * 보드가 없으면(이미 접힘·기본 마피아) 아무것도 하지 않는다.
+ */
+async function closeBoard(page) {
+  if ((await page.locator("[data-board]").count()) === 0) return;
+  await page.locator("[data-board] .mv-board__close").click({ timeout: 3000 });
+  await page.waitForFunction(() => document.querySelector("[data-board]") === null, null, { timeout: 3000 });
+  await sleep(200);
+}
+const aliveOrRetry = (tracker, seats) => {
+  const dead = seats.filter((s) => tracker.last()?.players?.find((p) => p.seat === s)?.alive === false);
+  if (dead.length > 0) throw new SetupError("시험에 쓰는 좌석이 첫 밤에 탈락함");
+};
 const near = (a, b, tol = NEAR) => !!a && !!b && dist(a, b) <= tol;
 const lines = (rec, sc, ls, { tag = "", who = "" } = {}) => {
   for (const l of ls) rec(sc, `${l.id}${tag}`, `${who}${l.label}`, l.ok, l.detail, l.info === true);
@@ -352,10 +371,12 @@ export function makeTownFlows({ recorder, openGame, closeGame, executeHost, unti
   async function townWalkFlow(ctx) {
     const id = "town-walk";
     const rec = recorder(ctx);
-    const game = await openGame(ctx, id, { guests: 0, bots: 4, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion" });
+    const game = await openGame(ctx, id, { guests: 0, bots: 4, role: "mafia", vote: { exec: "yes", pick: "other" }, to: "discussion" });
     try {
-      const { hp, hostSeat } = game;
+      const { hp, ht, hostSeat } = game;
+      aliveOrRetry(ht, [hostSeat]);
       await waitWorldReady(hp, 5);
+      await closeBoard(hp);
       await settle(hp);
       const sc = `${id}/walk`;
       const front = TOWN_E2E.ROOMS[WALK_ROOM].front;
@@ -382,8 +403,8 @@ export function makeTownFlows({ recorder, openGame, closeGame, executeHost, unti
     const game = await openGame(ctx, id, {
       guests: 1,
       bots: 3,
-      role: "citizen",
-      vote: { exec: "yes", pick: "host" },
+      role: "mafia",
+      vote: { exec: "yes", pick: "other" },
       to: "discussion",
       beforeStart: async ({ hp, guests }) => {
         const pages = [hp, guests[0].page];
@@ -393,8 +414,10 @@ export function makeTownFlows({ recorder, openGame, closeGame, executeHost, unti
     });
     try {
       const { hp, ht, hostSeat } = game;
+      aliveOrRetry(ht, [hostSeat, ...game.guests.map((g) => g.seat)]);
       const gp = game.guests[0].page;
       await Promise.all([waitWorldReady(hp, 5), waitWorldReady(gp, 5)]);
+      await Promise.all([closeBoard(hp), closeBoard(gp)]);
       await Promise.all([settle(hp), settle(gp)]);
       const sc1 = `${id}/map`;
       const pages = [hp, gp];
@@ -439,13 +462,15 @@ export function makeTownFlows({ recorder, openGame, closeGame, executeHost, unti
     const id = "town-sight";
     const rec = recorder(ctx);
     const sc = `${id}/sight`;
-    const game = await openGame(ctx, id, { guests: 1, bots: 3, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion" });
+    const game = await openGame(ctx, id, { guests: 1, bots: 3, role: "mafia", vote: { exec: "yes", pick: "other" }, to: "discussion" });
     try {
-      const { hp, hostSeat } = game;
+      const { hp, ht, hostSeat } = game;
       const guest = game.guests[0];
+      aliveOrRetry(ht, [hostSeat, guest.seat]);
       const gp = guest.page;
       const guestSeat = guest.seat;
       await Promise.all([waitWorldReady(hp, 5), waitWorldReady(gp, 5)]);
+      await Promise.all([closeBoard(hp), closeBoard(gp)]);
       await Promise.all([settle(hp), settle(gp)]);
       const seenAtStart = await until(async () => (await readTown(gp)).seats.includes(hostSeat) && (await readTown(hp)).seats.includes(guestSeat), 6000);
       if (seenAtStart === null) throw new SetupError("광장에서 두 탭이 서로를 보지 못함");
@@ -545,10 +570,12 @@ export function makeTownFlows({ recorder, openGame, closeGame, executeHost, unti
   async function townReducedFlow(ctx) {
     const id = "town-reduced";
     const rec = recorder(ctx);
-    const game = await openGame(ctx, id, { guests: 0, bots: 4, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion" });
+    const game = await openGame(ctx, id, { guests: 0, bots: 4, role: "mafia", vote: { exec: "yes", pick: "other" }, to: "discussion" });
     try {
-      const { hp, hostSeat } = game;
+      const { hp, ht, hostSeat } = game;
+      aliveOrRetry(ht, [hostSeat]);
       await waitWorldReady(hp, 5);
+      await closeBoard(hp);
       await settle(hp);
       await hp.emulateMedia({ reducedMotion: "reduce" });
       await sleep(300);
