@@ -477,6 +477,26 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mf-modechip { position: absolute; top: calc(var(--mf-host-bottom, 62px) + 20px); left: var(--space-md); z-index: var(--z-overlay); display: inline-flex; align-items: center; gap: var(--space-sm); box-sizing: border-box; height: 32px; padding: 0 12px; border: 1px solid var(--night-600); border-radius: var(--radius-pill); background: var(--night-900); color: var(--gray-100); font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 400; white-space: nowrap; pointer-events: none; }
 .mf-modechip[data-test-shift] { top: calc(var(--mf-host-bottom, 62px) + 20px + 48px); }
 
+/* 밤 집 문패(21-09, UI-SPEC P21-3~P21-5, 시안 design/v3.0/lamp-house/Night.dc.html). 새 토큰·hex 없음 — 빛남은 14 의 .is-call 을 그대로 쓴다(1초 주기 맥박, 모션 줄이기면 정지 테두리).
+ * 위치는 층(.mf-world__houses)이 inline transform 으로 쓰므로 위치를 쓰는 요소(문패)에는 transform 애니메이션·:active 변형을 걸지 않는다. 애니메이션은 box-shadow·opacity 뿐(is-call 이 한다).
+ * 모양: 누르기 44 안에 보이는 원 40(안쪽 여백 2 → 얼굴 32, 테두리 2 = 자리색 --house-seat). 왼쪽 위 창 점 8x8(켜짐 = light-lamp 채움 + 번짐 6, 꺼짐 = 1px gray-500 속 빔), 고른 집 = 정지 3px light-lamp 테두리 + glow-ring + 우하단 check 배지 16. */
+.mv-housetag { position: absolute; display: grid; place-items: center; box-sizing: border-box; width: 44px; height: 44px; margin: 0; padding: 0; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--gray-100); font-family: var(--font-ui); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
+.mv-housetag__face { position: relative; display: grid; place-items: center; box-sizing: border-box; width: 40px; height: 40px; padding: 2px; border: 2px solid var(--house-seat, var(--night-600)); border-radius: var(--radius-pill); background: var(--night-800); overflow: hidden; }
+.mv-housetag__img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: var(--radius-pill); }
+.mv-housetag__fallback { display: block; width: 100%; height: 100%; border-radius: var(--radius-pill); }
+.mv-housetag__win { position: absolute; left: 0; top: 0; box-sizing: border-box; width: 8px; height: 8px; border: 1px solid var(--gray-500); border-radius: 2px; background: transparent; pointer-events: none; }
+.mv-housetag__win.is-lit { border-color: var(--light-lamp); background: var(--light-lamp); box-shadow: 0 0 6px 0 var(--light-lamp); }
+.mv-housetag__check { position: absolute; right: 0; bottom: 0; display: grid; place-items: center; width: 16px; height: 16px; border-radius: var(--radius-pill); background: var(--light-lamp); color: var(--night-950); pointer-events: none; }
+.mv-housetag.is-picked::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius-pill); border: 3px solid var(--light-lamp); box-shadow: var(--glow-ring); pointer-events: none; }
+.mv-housetag.is-static { cursor: default; pointer-events: none; }
+.mv-housetag.is-dim { opacity: 0.4; }
+.mv-housetag[aria-disabled="true"] { cursor: default; }
+.mv-housetag:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  /* 깜빡임 대신 정지 테두리 + 중간 번짐(테두리는 항상 보인다) — .is-call 이 이미 정지 빛(::after)만 남긴다 */
+  .mv-housetag.is-call::before { animation: none; }
+}
+
 /* 심부름 부품(15-04·16-07, UI-SPEC "심부름 화면 계약"·V-20~V-22). 새 토큰·hex 없음 — 빛남은 14 의 .is-call 을 그대로 쓰고 타일 빛만 테두리 3·번짐 26 으로 키운다.
  * 위치는 층이 inline transform 으로 쓰므로 위치를 쓰는 요소(타일·화살표·알약)에는 transform 애니메이션·:active 변형을 걸지 않는다(그림·배지 같은 자식에만).
  * 이 블록은 파일 끝에 둔다(시험이 첫 .mv-errand 부터 끝까지를 본다). */
