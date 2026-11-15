@@ -6,16 +6,16 @@ current_phase: 20
 current_phase_name: map-expansion
 current_plan: 10
 status: verifying
-stopped_at: Completed 21-15-PLAN.md
-last_updated: "2026-11-15T06:45:27.046Z"
+stopped_at: Completed 21-16-PLAN.md
+last_updated: "2026-11-15T13:07:40.946Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: 2e4c04ebc49e939386a05759eb8eee264c07b14c
+state_head: 1df4591013a909d04829c161539d909eca74ae8f
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 113
-  completed_plans: 112
+  completed_plans: 113
   percent: 60
 ---
 
@@ -307,6 +307,7 @@ Last activity: 2026-11-13 — 20-10 완료 (로컬 전 흐름 폰 6종 회귀 �
 | Phase 21 P13 | 1 session | 2 tasks | 91 files |
 | Phase 21 P14 | 1 session | 2 tasks | 15 files |
 | Phase 21 P15 | long | 3 tasks | 10 files |
+| Phase 21 P16 | 약 9시간(한도 대기 포함) | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -682,6 +683,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 21]: 21-12: 정체 카드는 뒤집히지 않는다(뒷면+lock+tutorial.hidden 줄+도장 처형, 진홍·fanfare 없음, D-20)
 - [Phase 21]: 21-13: 단위·워커 setup 은 원인 흐름을 잠그지 않는다 — 옛 경로 시험은 파일 머리 lockCauseInFile(갈래 B), 기본판 장치는 mode basic(A), 제품 흐름은 새 순서(C). smoke 는 --mode 로 확장판 첫날 사슬/기본판 한 판
 - [Phase 21]: 21-14: 화면 시험 client setup 잠금 제거 — view 에 mode 를 싣지 않은 시험은 mode basic 을 명시(A), 옛 확장판 화면은 underCauseLock/lockCauseInFile(B), 원인 흐름 화면은 mode extended 새 순서(C)
+- [Phase 21]: 옛 낮 순서 E2E 흐름은 기본 마피아 판으로 이전(openGame 기본 basic, 원인 흐름은 openExtended) — 판정 문턱 그대로
+- [Phase 21]: 성능 끊김 게이트는 Windows PC 측정으로 판정하지 않고 Mac 재측정으로 남김
 
 ### Pending Todos
 
@@ -753,8 +756,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-15T06:45:25.134Z
-Stopped at: Completed 21-15-PLAN.md
+Last session: 2026-11-15T13:07:38.676Z
+Stopped at: Completed 21-16-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
