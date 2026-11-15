@@ -37,6 +37,7 @@ function makeView(o: ViewOpts = {}): RoomView {
   const dead = o.dead ?? [];
   const view: RoomView = {
     code: "0042",
+    mode: "basic", // 21-14 (A): 낮 시작·심부름 순서와 무관한 화면 시험 — 기본 마피아 판으로 돈다
     phase: o.phase ?? "night",
     phaseEndsAt: T0 + 30_000,
     phaseDurationMs: 30_000,
