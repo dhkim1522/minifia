@@ -6,16 +6,16 @@ current_phase: 20
 current_phase_name: map-expansion
 current_plan: 10
 status: verifying
-stopped_at: Completed 21-08-PLAN.md
-last_updated: "2026-11-15T01:55:03.964Z"
+stopped_at: Completed 21-06-PLAN.md
+last_updated: "2026-11-15T02:13:00.631Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: 56212d140223f057decf09e11aee642293fe9223
+state_head: ad7105fecad1d5c504c2cc881d1fcc18ef2aa504
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 113
-  completed_plans: 104
+  completed_plans: 105
   percent: 60
 ---
 
@@ -299,6 +299,7 @@ Last activity: 2026-11-13 — 20-10 완료 (로컬 전 흐름 폰 6종 회귀 �
 | Phase 21 P07 | 60 min | 3 tasks | 23 files |
 | Phase 21 P05 | 35min | 2 tasks | 23 files |
 | Phase 21 P08 | 70min | 3 tasks | 17 files |
+| Phase 21 P06 | 40min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -666,6 +667,7 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 21]: 21-07: 집 창 houseLitOf 는 night 이후·day.lamps 있을 때만, 가로등 3D 는 기둥·전구·무리 묶음 셋, setLamps 에 선택 instant, 런타임은 deps.view?() 로 view 를 받는다
 - [Phase 21]: 21-05: 건너뛰기 과반은 토론 끝내기와 같은 majorityOf, 근처 단계는 nearPhaseOf 한 곳(저녁 + 원인 흐름 아침), 집 앞은 MapDef.houseFronts 를 좌석 번호로 읽는 houseHome
 - [Phase 21]: 21-08: 길게 누르기(hold)는 ErrandAct 가 pointerup 에서 판정해 원인 흐름에서만 errand+hold 로 보낸다. 원인 흐름 문구는 errand.lamp.* 등 새 키(옛 확장판 문장 보존)
+- [Phase 21]: 21-06: 누설 전수·봇 완주 시험은 서버 수정 없이 통과 — 현장 없는 밤 뒤의 아침은 길이 0 이라 단계 사슬에 나타나지 않는다(시험 기대를 맞춤)
 
 ### Pending Todos
 
@@ -737,8 +739,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-15T01:55:02.149Z
-Stopped at: Completed 21-08-PLAN.md
+Last session: 2026-11-15T02:12:58.816Z
+Stopped at: Completed 21-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
