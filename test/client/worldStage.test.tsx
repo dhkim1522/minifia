@@ -24,7 +24,7 @@ import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
 import { WorldStore } from "../../src/world/store";
 import { cameraModeOf } from "../../src/world/presence";
-import { openCause } from "../helpers/playable";
+import { openCause, underCauseLock } from "../helpers/playable";
 import type { SceneLook, SeatLook } from "../../src/world/presence";
 
 // 06-13: 로비 맵 화면(WorldStage + 런타임). happy-dom 에는 WebGL 이 없어 loadModules 로 가짜 렌더러·가짜 캐릭터를 주입한다(가정 A1).
@@ -2140,7 +2140,8 @@ describe("마을 컷어웨이·집 주인·__mfTown (20-05, D-07·D-10·D-11)", 
   });
 
   it("window.__mfTown: 내가 우체국 안이면 zone post·open [post]·owners 는 view 좌석·veiled·door 는 빈 배열이고, 렌더러의 지붕 불투명도를 소수 둘째 자리로 싣는다", async () => {
-    const s = await open({ view: townView() }, { ents: IN_POST() });
+    // 21-14 (A): 우체국·집 주인·지붕이 보는 것이라 가로등(원인 흐름) 필드는 null 인 기본 마피아 판으로 돈다 — 원인 흐름 마을의 lampLit·houseLit 은 21-07 구역이 본다.
+    const s = await open({ view: { ...townView(), mode: "basic" } }, { ents: IN_POST() });
     const r = s.world.renderers[0]!;
     r.roofs.mockReturnValue({ post: 0.3333333, pub: 1, clinic: 1, police: 1 });
     frames(50);
@@ -2229,14 +2230,15 @@ describe("마을 가로등·집 창 setLamps·__mfTown (21-07, D-04·D-25)", () 
     });
   });
 
-  describe("원인 흐름이 잠긴(기본 setup) 마을", () => {
-    it("setLamps 를 부르지 않고 __mfTown 의 houseLit·lampLit 은 null 이다", async () => {
+  // 꺼진 옛 확장판 경로 — 원인 흐름을 잠근 마을은 가로등·집 창을 건드리지 않는다. setup 은 더는 잠그지 않으므로 이 시험이 스스로 잠근다(21-14 B).
+  describe("원인 흐름이 잠긴 마을", () => {
+    it("setLamps 를 부르지 않고 __mfTown 의 houseLit·lampLit 은 null 이다", underCauseLock(async () => {
       const s = await open({ view: nightView() });
       frames(50);
       expect(s.world.renderers[0]!.setLamps).not.toHaveBeenCalled();
       expect(window.__mfTown?.houseLit).toBeNull();
       expect(window.__mfTown?.lampLit).toBeNull();
-    });
+    }));
   });
 });
 

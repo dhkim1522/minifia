@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { rulesetOf } from "../../shared/game/ruleset";
-import { openCause } from "../helpers/playable";
+import { lockCause, openCause, underCauseLock } from "../helpers/playable";
 import type { ClientMessage, EvidenceView, GameMode, MorningView, PhaseId, PublicPlayer, RecordLine, RoleRecord, RoomView } from "../../shared/protocol";
 import { LineSheet } from "../../src/components/v2/LineSheet";
 import { floatVisible } from "../../src/game/badgeView";
@@ -70,6 +70,8 @@ interface ViewOpts {
   mySeat?: number;
   endCount?: number;
   pressed?: boolean;
+  /** 판 종류. 기본은 기본 마피아 판(21-14) */
+  mode?: GameMode;
 }
 
 function makeView(o: ViewOpts = {}): RoomView {
@@ -80,6 +82,7 @@ function makeView(o: ViewOpts = {}): RoomView {
   );
   return {
     code: "0042",
+    mode: o.mode ?? "basic", // 21-14 (A): 이 파일의 기본 view 는 기본 마피아 판(제목 토론·[내 역할] 하나) — 원인 흐름 확장판 화면은 modeView·openCause 구역이 따로 본다
     phase: o.phase ?? "discussion",
     phaseEndsAt: o.noClock ? null : NOW + 90_000,
     phaseDurationMs: o.noClock ? null : 90_000,
@@ -608,16 +611,22 @@ describe("GameMap — 헤더 시간대 글자 (0083-1)", () => {
   it("원인 흐름 확장판의 심부름(저녁)은 '저녁 · 심부름' 이고 data-tod 는 dusk 다 — 원인 흐름이 잠기면 '낮' 그대로 (21-07, D-04)", () => {
     const restore = openCause();
     try {
-      const { container, unmount } = mount(makeView({ phase: "errand" }));
+      const { container, unmount } = mount(makeView({ phase: "errand", mode: "extended" }));
       expect(header(container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("dusk");
       expect(word(container)?.textContent).toBe("저녁");
       unmount();
     } finally {
       restore();
     }
-    const { container } = mount(makeView({ phase: "errand" }));
-    expect(header(container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("day");
-    expect(word(container)?.textContent).toBe("낮");
+    // 꺼진 옛 확장판 경로 — 원인 흐름이 잠긴 확장판은 '낮 · 심부름' 그대로다(21-14 B).
+    const restoreLock = lockCause();
+    try {
+      const { container } = mount(makeView({ phase: "errand", mode: "extended" }));
+      expect(header(container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("day");
+      expect(word(container)?.textContent).toBe("낮");
+    } finally {
+      restoreLock();
+    }
   });
 
   it("tod={false} 로 그리면 [data-tod] 가 없다", () => {
@@ -1254,12 +1263,12 @@ describe("GameMap — 기본 마피아 판 화면 (19-02, D-09)", () => {
     expect(container.querySelectorAll("[data-end-discussion]").length).toBe(1);
   });
 
-  it("같은 토론 view 가 extended + me.record + day.evidence 면 [기록] 이 하나이고 이름표 표시가 붙는다 (지금 그대로)", () => {
+  it("같은 토론 view 가 extended + me.record + day.evidence 면 [기록] 이 하나이고 이름표 표시가 붙는다 (지금 그대로)", underCauseLock(() => {
     const { container } = mount(modeView("extended", { phase: "discussion" }, { record: REC, evidence: EVIDENCE }));
     expect(container.querySelectorAll("button[aria-label='기록']").length).toBe(1);
     expect(container.querySelectorAll("[data-record-button]").length).toBe(1);
     expect(stage.props?.tagProps?.(3)).toMatchObject({ seenMark: true });
-  });
+  }));
 
   it("basic 아침(morning.eliminated 뿐): 흔적 구간이 지나도 증거 카드·이름표 표시가 없고 탈락 발표는 그대로 있다", () => {
     const { container } = mount(modeView("basic", { phase: "morning", dead: [2] }, { morning: { eliminated: 2 }, endsInMs: 7000 }));
@@ -1269,12 +1278,12 @@ describe("GameMap — 기본 마피아 판 화면 (19-02, D-09)", () => {
     expect(container.textContent).toContain("서준 님이 당했습니다");
   });
 
-  it("같은 아침이 extended + 흔적이면 구간 뒤 증거 카드가 하나다 (지금 그대로)", () => {
+  it("같은 아침이 extended + 흔적이면 구간 뒤 증거 카드가 하나다 (지금 그대로)", underCauseLock(() => {
     const morning: MorningView = { eliminated: 2, trace: "pin", seen: { seat: 3, place: "glass" } };
     const { container } = mount(modeView("extended", { phase: "morning", dead: [2] }, { morning, evidence: EVIDENCE, endsInMs: 7000 }));
     advance(2500);
     expect(container.querySelectorAll("[data-trace-card]").length).toBe(1);
-  });
+  }));
 
   it("basic 의 낮 단계(투표·변론·찬반·처형) 어디에도 기록·흔적·증거 요소가 없다", () => {
     const phases: PhaseId[] = ["nomination", "defense", "verdict", "execution"];

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
+import { lockCauseInFile } from "../helpers/playable";
 import { RecordCard } from "../../src/components/v2/RecordCard";
 import { ToolButton } from "../../src/components/ToolButton";
 import { V2Icon } from "../../src/components/v2/V2Icon";
@@ -12,6 +13,9 @@ import type { RoleId } from "../../shared/game/roles";
 import { MORNING_TRACE_MS } from "../../shared/game/phases";
 import type { RecordRow } from "../../src/game/recordView";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
+
+// 꺼진 옛 확장판 경로(낮 토론의 [기록] 단추·아침 공개 흔적 카드·이름표 표시) — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 단언은 그대로, 파일이 끝나면 원인 흐름을 되돌린다(21-14 B).
+lockCauseInFile();
 
 // 방 화면(RoomScreen) 통합용 가짜: 연결 훅·3D 무대·소리 신호(callGlow.test 와 같은 틀).
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));

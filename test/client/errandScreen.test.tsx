@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
+// 꺼진 옛 확장판 경로(낮 시작 → 심부름 목록 화면) — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'): 아래 underCauseLock 시험 셋만 잠근다(21-14 B).
+import { underCauseLock } from "../helpers/playable";
 import { bindSignals } from "../../src/audio/signals";
 import type { LocalSignal } from "../../src/audio/signals";
 import type { RoleId } from "../../shared/game/roles";
@@ -217,7 +219,7 @@ describe("errand 화면: 시작 카드 2초 (D-06, V-19, ERRAND-06)", () => {
     expect(card(m.container)).toBeNull();
   });
 
-  it("18.1-12: 시작 카드가 떠 있는 동안 띠 문장은 빈 글이고(초·막대는 있다), 걷히면 '빛나는 곳을 찾아 처리해 주세요' 가 나온다", () => {
+  it("18.1-12: 시작 카드가 떠 있는 동안 띠 문장은 빈 글이고(초·막대는 있다), 걷히면 '빛나는 곳을 찾아 처리해 주세요' 가 나온다", underCauseLock(() => {
     const bandLine = (c: ParentNode) => c.querySelector("[data-host-line]")?.textContent;
     at(500);
     const { container } = mount(makeView());
@@ -228,15 +230,15 @@ describe("errand 화면: 시작 카드 2초 (D-06, V-19, ERRAND-06)", () => {
     advance(2_000);
     expect(card(container)).toBeNull();
     expect(bandLine(container)).toBe("빛나는 곳을 찾아 처리해 주세요");
-  });
+  }));
 
-  it("18.1-12: 카드를 눌러 닫으면 띠 문장이 바로 나온다", () => {
+  it("18.1-12: 카드를 눌러 닫으면 띠 문장이 바로 나온다", underCauseLock(() => {
     at(500);
     const { container } = mount(makeView());
     expect(container.querySelector("[data-host-line]")?.textContent).toBe("");
     fireEvent.pointerDown(container.querySelector("[data-world-stage-fake]")!);
     expect(container.querySelector("[data-host-line]")?.textContent).toBe("빛나는 곳을 찾아 처리해 주세요");
-  });
+  }));
 
   it("카드·막은 눌림을 통과한다(CSS)·마피아와 시민의 카드 마크업이 같다", () => {
     at(500);
@@ -359,13 +361,13 @@ describe("errand 화면: 빛남은 한 화면 한 종류 (UI-SPEC 빛남 우선�
   // 알약(actId)과 가장 가까운 타일(callPlace) 중 하나만 빛난다. 알약·타일의 실제 빛은 WorldStage 층이 쓴다(worldStage.test)
   const glowCount = (c: ParentNode): number => c.querySelectorAll("[data-call]").length + (stage.props?.errand?.callPlace === true ? 1 : 0) + (stage.props?.errand?.actId != null ? 1 : 0);
 
-  it("반경 밖: 다음 장소 타일(callPlace)만 빛나고 알약은 없다", () => {
+  it("반경 밖: 다음 장소 타일(callPlace)만 빛나고 알약은 없다", underCauseLock(() => {
     const { container } = mount(makeView());
     standAt(FAR.x, FAR.z);
     expect(stage.props!.errand!.callPlace).toBe(true);
     expect(actId()).toBeNull();
     expect(glowCount(container)).toBe(1);
-  });
+  }));
 
   it("반경 안: 알약만 빛나고 타일 빛(callPlace)은 꺼진다", () => {
     const { container } = mount(makeView());

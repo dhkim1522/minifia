@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
-import { openCause } from "../helpers/playable";
+import { lockCause, openCause } from "../helpers/playable";
 import type { RoleId } from "../../shared/game/roles";
 import type { ClueLine, MorningView, OutfitId, PhaseId, PublicPlayer, RecordLine, RoomView } from "../../shared/protocol";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
@@ -202,14 +202,15 @@ describe("기본판·옛 확장판 토론은 지금 그대로", () => {
   });
 
   it("옛 확장판(원인 흐름이 닫힌 판)도 [기록] 이고 보드가 없다", () => {
-    restore();
+    // 꺼진 옛 확장판 경로 — 원인 흐름을 잠근 확장판(21-14 B): 이 시험 동안만 잠근다.
+    const restoreLock = lockCause();
     try {
       const { container } = mount(makeView({ mode: "extended" }));
       expect(recordButton(container)).not.toBeNull();
       expect(boardButton(container)).toBeNull();
       expect(board(container)).toBeNull();
     } finally {
-      restore = openCause();
+      restoreLock();
     }
   });
 });
