@@ -56,6 +56,7 @@ import {
   screensOfWorld,
   setBotVote,
   setBots,
+  skipOnce,
   skipTo,
   sleep,
   startGame,
@@ -81,6 +82,20 @@ export const NIGHTLOAD_DWELL = [
   ["execution", 4_000],
   ["night", 14_000],
   ["morning", 4_000],
+];
+/**
+ * nightload(마을, 21-16): 원인 흐름(확장판) 하루 순서 — 저녁 → 밤 → 아침 → 토론 → 투표 → 변론 → 찬반 → 처형. 처형 다음은 다음 날 저녁이라 한 바퀴는 처형에서 끝난다.
+ * 셋째 칸 true 는 있을 때만 재는 장면이다: 피해자도 구출도 없는 밤은 아침 없이 곧바로 토론이라(결정 0088-3) 아침이 안 오면 건너뛴다.
+ */
+export const NIGHTLOAD_DWELL_CAUSE = [
+  ["errand", 20_000],
+  ["night", 14_000],
+  ["morning", 4_000, true],
+  ["discussion", 10_000],
+  ["nomination", 6_000],
+  ["defense", 6_000],
+  ["verdict", 6_000],
+  ["execution", 4_000],
 ];
 /** nightload: 판 순서 — 마피아 판(맵·고리·이동) 다음 시민 판(어둠·맥박 비네트) */
 const NIGHTLOAD_PASSES = ["mafia", "citizen"];
@@ -812,9 +827,15 @@ async function nightloadOnce(browser, o, origin, chrome) {
     let mapChecked = false;
     /** 장면별 그리기 통계(마지막 한 번씩) */
     const renderDuring = {};
+    /** 있을 때만 재는 장면이 안 온 판(21-16, 예: 피해자 없는 밤의 아침) */
+    const skippedScenes = new Set();
 
     for (const role of NIGHTLOAD_PASSES) {
-      await openTestSheet(page);
+      // 대기실로 되돌린 직후에는 열려 있던 시트가 뒤늦게 닫혀 첫 시도가 어긋날 수 있다(21-16 관찰) — 한 번 쉬고 다시 연다
+      await openTestSheet(page).catch(async () => {
+        await sleep(1500);
+        await openTestSheet(page);
+      });
       await chooseRole(page, tracker, role);
       let measured = 0;
       cycles[role] = 0;
@@ -827,14 +848,26 @@ async function nightloadOnce(browser, o, origin, chrome) {
           if (got !== expectedMap) throw new Error(`측정 맵이 기대와 다름: view.map ${got} (기대 ${expectedMap})`);
           mapChecked = true;
         }
-        for (const [phase, ms] of dwell) { // 확장판(마을)은 첫 장면이 errand 라 낮 시작에서 바로 넘긴다(15페이즈), 기본 마피아에는 errand 가 없다(20-09)
+        for (const [phase, ms, optional] of dwell) { // 확장판(마을)은 첫 장면이 errand 라 낮 시작에서 바로 넘긴다(15페이즈), 기본 마피아에는 errand 가 없다(20-09)
           await mark(`${role}:setup`, true);
-          await skipTo(page, tracker, phase);
-          // 마피아 판의 밤: 대상 이름표를 눌러 내 캐릭터가 걷게 한다(이동·고리). 실패해도 측정은 이어 간다
+          if (optional === true) {
+            // 있을 때만 재는 장면(21-16 아침): 밤에서 한 칸만 넘겨 그 단계가 맞으면 재고, 아니면(곧바로 토론) 건너뛴다
+            const got = await skipOnce(page, tracker);
+            if (got !== phase) {
+              skippedScenes.add(`${role}:${phase}`);
+              continue;
+            }
+          } else await skipTo(page, tracker, phase);
+          // 마피아 판의 밤: 대상을 눌러 내 캐릭터가 걷게 한다(이동·고리). 마을(원인 흐름)은 집 문패, 그 밖(기본 마피아)은 이름표. 실패해도 측정은 이어 간다
           if (role === "mafia" && phase === "night") {
-            const g = await readGame(page).catch(() => null);
-            const seat = g?.picks?.map((b) => b.seat).sort((a, b) => a - b)[0];
-            if (seat !== undefined) await tapPick(page, seat).catch(() => {});
+            if (expectedMap === "town") {
+              const seats = await page.$eval("button[data-house-tag]", (els) => els.map((e) => Number(e.getAttribute("data-house-tag"))).filter((n) => Number.isFinite(n))).catch(() => []);
+              for (const seat of seats.slice(0, 3)) if (await page.locator(`button[data-house-tag="${seat}"]`).first().click({ timeout: 3000 }).then(() => true, () => false)) break;
+            } else {
+              const g = await readGame(page).catch(() => null);
+              const seat = g?.picks?.map((b) => b.seat).sort((a, b) => a - b)[0];
+              if (seat !== undefined) await tapPick(page, seat).catch(() => {});
+            }
           }
           await mark(`${role}:${phase}`, false);
           // 장면 도중(끝나기 직전)에 그리기 통계를 한 번 읽는다(20-09) — 로비에서 읽은 값은 게임 장면과 다르다. 읽는 시간은 아래 sleep 에서 뺀다
@@ -893,7 +926,7 @@ async function nightloadOnce(browser, o, origin, chrome) {
       schema: "nightload-1",
       startedAt,
       endedAt,
-      params: { map: expectedMap, minutes: o.minutes, bots: o.bots, passes: NIGHTLOAD_PASSES, dwellMs: Object.fromEntries(dwell), note: "넘기기·시트 조작 구간은 기록하지 않는다. 시민 판 아침은 봇 마피아가 방장을 노려 피해자 연출이 함께 잡힌다" },
+      params: { map: expectedMap, skippedScenes: [...skippedScenes], minutes: o.minutes, bots: o.bots, passes: NIGHTLOAD_PASSES, dwellMs: Object.fromEntries(dwell), note: "넘기기·시트 조작 구간은 기록하지 않는다. 시민 판 아침은 봇 마피아가 방장을 노려 피해자 연출이 함께 잡힌다" },
       frames: { ...stats, jankPer5min: (stats.jank * 300) / stats.seconds },
       passes,
       scenes,
@@ -908,9 +941,9 @@ async function nightloadOnce(browser, o, origin, chrome) {
   }
 }
 
-/** 맵에 따른 장면 머무름 표: 마을(확장판)은 전부, 재즈 바·광장(기본 마피아)은 낮 심부름(errand) 단계가 없어 뺀다(20-09) */
+/** 맵에 따른 장면 머무름 표: 마을(확장판)은 원인 흐름 순서 전부(21-16), 재즈 바·광장(기본 마피아)은 낮 심부름(errand) 단계가 없어 뺀다(20-09) */
 export function nightloadDwell(map) {
-  return map === "town" ? NIGHTLOAD_DWELL : NIGHTLOAD_DWELL.filter(([phase]) => phase !== "errand");
+  return map === "town" ? NIGHTLOAD_DWELL_CAUSE : NIGHTLOAD_DWELL.filter(([phase]) => phase !== "errand");
 }
 
 /** 장면별 그리기 통계 중 칸마다 가장 큰 값(20-09 게이트: calls·pointLights 는 가장 무거운 장면 기준) */
