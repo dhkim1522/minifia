@@ -28,6 +28,10 @@ import {
   verdictAll,
 } from "./helpers";
 import type { Actor, Seated, TestSocket } from "./helpers";
+import { lockCauseInFile } from "../helpers/playable";
+
+// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B). 원인 흐름은 cause*·lamp*·scene* 시험이 단언한다.
+lockCauseInFile();
 
 // 08-11: 낮이 지목 → 변론 → 찬반 → 처형으로 길어져(단계 넘김 4번 더) 한 판을 끝까지 돌리는 시험이 기본 5초를 넘는다 — 이 파일만 20초로 둔다(긴 대기 없이 forceDue 로 넘기는 것은 그대로).
 vi.setConfig({ testTimeout: 20_000 });

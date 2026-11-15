@@ -4,6 +4,10 @@ import type { ServerMessage } from "../../shared/protocol";
 import { env, runInDurableObject } from "cloudflare:test";
 import { connect, emoteRateKeys, emoteSend, emotesOf as emotes, hello, mark, nextFrame, observe, pause, resetEmoteRates, seat, send, settle, startedGame, summary, withRole } from "./helpers";
 import type { Actor } from "./helpers";
+import { lockCauseInFile } from "../helpers/playable";
+
+// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B). 원인 흐름은 cause*·lamp*·scene* 시험이 단언한다.
+lockCauseInFile();
 
 describe("동작 — 트레이서 (D-12, L27)", () => {
   it("로비에서 한 사람이 보내면 세 소켓(보낸 사람 포함) 모두 정확히 한 프레임 {t,seat,id,n} 을 받는다", async () => {

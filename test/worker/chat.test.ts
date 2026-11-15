@@ -6,6 +6,10 @@ import { describe, expect, it } from "vitest";
 import type { PhaseId, ServerMessage } from "../../shared/protocol";
 import { actorsOf, advanceTo, chatSend, chatsOf, connect, createRoom, editRoom, hello, joinOk, mapPlayers, mark, nextFrame, resetChatRates, seat, send, settle, skipThrough, storedRoom, summary, typingSend, pointAll, verdictAll } from "./helpers";
 import type { Actor, TestSocket } from "./helpers";
+import { lockCauseInFile } from "../helpers/playable";
+
+// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B). 원인 흐름은 cause*·lamp*·scene* 시험이 단언한다.
+lockCauseInFile();
 
 /** settle 이 돌려준 프레임 가운데 typing 만 한 줄 문자열로(실패 보고가 한 줄이어야 한다). */
 const typings = (msgs: ServerMessage[]): string => msgs.filter((m) => m.t === "typing").map((m) => JSON.stringify(m)).join("|");

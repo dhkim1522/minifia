@@ -4,7 +4,7 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 단계 수열은 " → " 로 이은 문자열로 비교한다.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
-import { openCause, openTown } from "../helpers/playable";
+import { openCause, openTown, underCauseLock } from "../helpers/playable";
 import { advanceTo, closePhase, framesOf, mark, nextFrame, seat, send, settle } from "./helpers";
 import type { Seated } from "./helpers";
 
@@ -74,10 +74,11 @@ describe("원인 흐름 — 확장판 한 판의 단계 사슬 (openCause, 21-01
 });
 
 describe("원인 흐름 잠금 아래 — 옛 확장판 순서 보호 (21-01)", () => {
-  it("openCause 없이 같은 구성은 역할 확인 다음이 낮 시작 발표다", async () => {
+  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: setup 이 더는 잠그지 않으므로 이 시험이 직접 잠근다(갈래 B).
+  it("openCause 없이 같은 구성은 역할 확인 다음이 낮 시작 발표다", underCauseLock(async () => {
     const { room, socks, from } = await startedTable();
     await advanceTo(room.code, socks, "dayAnnounce");
     await settle(room.host, mark(room.host));
     expect(chainOf(room.host, from)).toBe("assigning → roleReveal → dayAnnounce");
-  });
+  }));
 });

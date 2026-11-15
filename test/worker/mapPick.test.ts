@@ -6,9 +6,12 @@ import { PLAZA_MAP } from "../../shared/game/mapPlaza";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import { PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
 import type { MapId } from "../../shared/protocol";
-import { openPlaza } from "../helpers/playable";
+import { lockCauseInFile, openPlaza } from "../helpers/playable";
 import { editRoom, endedGame4, lastViewOf, mark, moveAs, pause, seat, send, settle, startedGame, storedRoom, summary, worldFramesOf } from "./helpers";
 import type { Seated } from "./helpers";
+
+// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B). 원인 흐름은 cause*·lamp*·scene* 시험이 단언한다.
+lockCauseInFile();
 
 type State = Extract<ServerMessage, { t: "state" }>;
 type Sock = Seated["host"];

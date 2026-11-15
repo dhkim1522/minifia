@@ -2,11 +2,10 @@
 // 이 폴더의 시험 대부분은 재즈 바 좌표·입장 지점을 전제로 한 판을 돌린다. 시험 파일마다 같은 맵이 나오게 허용 맵을 bar 하나로 잠그고,
 // 광장이 필요한 시험은 test/helpers/playable.ts 의 openPlaza() 로 그 시험 동안만 연다.
 // 판 종류의 고정 맵도 같은 이유로 잠근다(20-01): 확장판(기본값) 판이 마을이 아니라 재즈 바에서 시작하게 MODE_MAPS 의 extended 칸을 지우고, 마을 시험은 openTown() 으로 연다.
+// 21-13: 원인 흐름은 잠그지 않는다 — 옛 경로 시험은 파일마다 lockCause.
 import type { MapId } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
-import { lockCause, lockModeMaps } from "../helpers/playable";
+import { lockModeMaps } from "../helpers/playable";
 
 (PLAYABLE_MAPS as MapId[]).splice(0, PLAYABLE_MAPS.length, "bar");
 lockModeMaps();
-// 원인 흐름(21페이즈 D-01)도 잠근다 — 옛 순서(낮 시작 발표 → 심부름 → 토론) 시험이 그대로 돌게 하고, 새 흐름 시험은 openCause() 로 그 시험 동안만 켠다. 잠금을 걷는 일은 21-13 이 한다.
-lockCause();

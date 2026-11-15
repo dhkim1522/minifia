@@ -101,16 +101,22 @@ export function lockCauseInFile(): void {
 }
 
 /**
- * 시험 한 개를 원인 흐름 잠금 아래에서 돌린다(21-13) — `it(이름, underCauseLock(() => { … }))`. 끝나면(실패해도) 되돌린다.
+ * 시험 한 개를 원인 흐름 잠금 아래에서 돌린다(21-13) — `it(이름, underCauseLock(() => { … }))`(async 도 된다). 끝나면(실패해도) 되돌린다.
  * 꺼진 옛 확장판 경로를 단언하는 시험이 한두 개뿐인 파일이 쓴다(파일 전체가 그렇다면 lockCauseInFile).
  */
 export function underCauseLock<T>(body: () => T): () => T {
   return () => {
     const restore = lockCause();
+    let result: T;
     try {
-      return body();
-    } finally {
+      result = body();
+    } catch (error) {
       restore();
+      throw error;
     }
+    // 비동기 시험은 끝난 뒤에 되돌린다(바로 되돌리면 시험 본문이 잠금 없이 돈다).
+    if (result instanceof Promise) return result.finally(restore) as T;
+    restore();
+    return result;
   };
 }

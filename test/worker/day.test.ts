@@ -5,6 +5,10 @@ import { env } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { advanceTo, alarmOf, chatMsg, collect, connect, flat, forceDue, hello, nextFrame, nextState, seat, send, storedRoom } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
+import { lockCauseInFile } from "../helpers/playable";
+
+// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B). 원인 흐름은 cause*·lamp*·scene* 시험이 단언한다.
+lockCauseInFile();
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
 
