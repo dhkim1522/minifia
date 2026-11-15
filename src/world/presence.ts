@@ -18,8 +18,11 @@ import { pinOf, type PinDesc } from "./pinPlan";
 /** 렌더러가 읽는 조명 단계(UI-SPEC 단계 조명). 렌더러의 LightingPhase 확장은 08-10 이 한다 */
 export type LightingStage = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
 
-/** 따라가기 = 내 캐릭터(6페이즈 규칙), 고정 = 모이는 자리 가운데에서 움직이지 않음(zoom 은 과반 연출) */
-export type CameraMode = { mode: "follow" } | { mode: "fixed"; target: { x: number; z: number }; zoom: number; zoomMs?: number };
+/**
+ * 따라가기 = 내 캐릭터(6페이즈 규칙), 고정 = 모이는 자리 가운데에서 움직이지 않음(zoom 은 과반 연출),
+ * 개관 = 확장판(원인 흐름) 밤 전용 고정 시점(21-09 D-11): 방위 고정·거의 정사로 마을 전체를 스테이지에 꽉 채운다. 걷기·끌어 둘러보기 없음, 배율은 폰마다 camera.ts 의 overviewFraming 이 정한다
+ */
+export type CameraMode = { mode: "follow" } | { mode: "fixed"; target: { x: number; z: number }; zoom: number; zoomMs?: number } | { mode: "overview" };
 
 /** 긴장 단계: 0 평상시, 1 선두·찬반(초점에 점광), 2 과반(실내등 절반) */
 export interface Tension {
@@ -109,10 +112,12 @@ const FIXED_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["nomination", "runo
 
 /**
  * 카메라 구도(UI-SPEC 카메라 표): 지목·변론·찬반·처형은 모이는 자리 가운데 고정, 그 밖(낮 시작·토론·밤·아침·로비)은 따라가기.
+ * 원인 흐름(21페이즈)의 밤은 산 사람·유령 모두 개관(overview)이다 — 역할은 보지 않는다(D-11, 이 분기가 다른 단계 판정보다 먼저다).
  * 09.1(M-4): 순차 지목(day.turn 있음)은 배지 숫자만이다 — 과반이어도 확대하지 않는다.
  * 기본판(결정 0072) 동시 투표(day.turn 없음)는 과반이고 스테이지 높이가 ZOOM_MIN_STAGE_H 이상일 때만 ZOOM_MAJORITY 로 확대한다.
  */
 export function cameraModeOf(view: RoomView, stageH: number, opts: { verdictZoom?: number } = {}): CameraMode {
+  if (view.phase === "night" && rulesetOf(modeOf(view)).cause) return { mode: "overview" };
   if (!FIXED_PHASES.has(view.phase)) return { mode: "follow" };
   const target = { x: GATHER_CENTER.x, z: GATHER_CENTER.z };
   // 판결 순간(09.1.1-13, O-15): 처형 단계에서 호출 쪽이 배율을 주면 0.6초 ease-in-out 으로 다가갔다 돌아온다. 스테이지가 낮으면(360 미만) 줌 없이 핀 조명과 막만 한다. 역할은 보지 않는다

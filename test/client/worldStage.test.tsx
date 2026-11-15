@@ -16,7 +16,7 @@ import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { UnsupportedRendererError } from "../../src/world/renderer";
 import type { CharacterHandle, LightingPhase, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
-import { gatherView, PAN_BOX, panBoxOf, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
+import { gatherView, overviewFraming, PAN_BOX, panBoxOf, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
 import { predictSegment, SEG_BLEND_MS, YAW_TURN_RATE } from "../../src/world/motion";
 import { GHOST_FADE_END_MS } from "../../src/game/dayView";
 import { createWorldRuntime, ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, RING_COLORS, WALK_CUE_KEY } from "../../src/world/runtime";
@@ -39,6 +39,8 @@ export interface FakeRenderer extends WorldRenderer {
   markers: { kind: string; at: { x: number; z: number } | null; scale: number; opacity: number }[];
   setLighting: Mock<(phase: LightingPhase) => void>;
   setZoom: Mock<(zoom: number) => void>;
+  /** 카메라 시점(21-09 개관): 부른 인자를 기록한다. 개관이 아닌 단계에서는 한 번도 불리지 않아야 한다 */
+  setCameraView: Mock<(view: "iso" | "overview") => void>;
   setTension: Mock<(level: 0 | 1 | 2, focus?: { x: number; z: number }) => void>;
   setPin: Mock<(pin: { x: number; z: number; strength: number } | null, dim: number) => void>;
   setChalk: Mock<(at: { x: number; z: number } | null, opacity: number) => void>;
@@ -77,6 +79,7 @@ export function makeFakeRenderer(): FakeRenderer {
     },
     setLighting: vi.fn(),
     setZoom: vi.fn(),
+    setCameraView: vi.fn(),
     setTension: vi.fn(),
     setPin: vi.fn(),
     setChalk: vi.fn(),
@@ -3014,6 +3017,44 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       expect(r.setZoom.mock.calls.length).toBe(calls); // 값이 같으면 다시 부르지 않는다
       const goal = gatherGoal(ZOOM_MAJORITY);
       expect(r.views.at(-1)!.offsetY).toBeCloseTo(goal.offsetY, 1);
+    });
+
+    // 21-09 D-11: 개관 시점 — 어둠 가림(dur-med 420)이 가장 어두운 때(210ms)에 기저가 바뀌고, 모션 줄이기·재접속은 즉시, 걷지도 따라가지도 않는다
+    const OVERVIEW: SceneLook["camera"] = { mode: "overview" };
+    const ovGoal = () => overviewFraming({ top: INSETS.top, bottom: window.innerHeight - INSETS.bottom }, { w: window.innerWidth, h: window.innerHeight });
+    it("overview: 어둠 가림 한가운데(210ms)에 setCameraView(overview), 마을 가운데·개관 배율·__mfCamera, 내 캐릭터가 걸어도 그대로, 돌아오면 iso 와 따라가기", async () => {
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      expect(window.__mfCamera).toMatchObject({ mode: "follow" });
+      s.rerender({ scene: sceneOf(ALL, { camera: OVERVIEW }) });
+      frames(100);
+      expect(r.setCameraView).not.toHaveBeenCalled();
+      frames(200);
+      expect(r.setCameraView).toHaveBeenCalledTimes(1);
+      expect(r.setCameraView.mock.calls[0]![0]).toBe("overview");
+      const goal = ovGoal();
+      expect(r.views.at(-1)!.target).toEqual({ x: 0, z: 0 });
+      expect(r.views.at(-1)!.offsetY).toBeCloseTo(goal.offsetY, 6);
+      expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(goal.zoom, 6);
+      expect(window.__mfCamera).toEqual({ mode: "overview", scale: Math.round(goal.scale * 100) / 100 });
+      move(s.store, seg(0, [200, 100, 600, 100], Date.now(), 180));
+      frames(600);
+      expect(r.views.at(-1)!.target).toEqual({ x: 0, z: 0 });
+      s.rerender({ scene: sceneOf(ALL) });
+      frames(400);
+      expect(r.setCameraView.mock.calls.at(-1)![0]).toBe("iso");
+      expect(r.setZoom.mock.calls.at(-1)![0]).toBe(1);
+      expect(r.views.at(-1)!.target.x).not.toBe(0);
+      expect(window.__mfCamera).toMatchObject({ mode: "follow", scale: 58.2 });
+    });
+
+    it("overview + 모션 줄이기: 기다리지 않고 첫 프레임에 바뀐다", async () => {
+      stubReducedMotion(true);
+      const s = await openGame({ scene: sceneOf(ALL, { camera: OVERVIEW }) });
+      const r = s.world.renderers[0]!;
+      frames(32);
+      expect(r.setCameraView.mock.calls[0]![0]).toBe("overview");
+      expect(r.views.at(-1)!.target).toEqual({ x: 0, z: 0 });
     });
 
     // 09.1.1-13(O-15): zoomMs 가 있는 고정 구도는 그 시간에 ease-in-out 으로 줌한다(위치·세로 오프셋도 같은 진행)

@@ -3,6 +3,7 @@
 import { ACESFilmicToneMapping, Group, MeshBasicMaterial, PCFShadowMap, Plane, PointLight, Raycaster, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from "three";
 import type { MapId, RoomId } from "../../shared/protocol";
 import { DEFAULT_TARGET } from "./camera";
+import type { CameraView } from "./camera";
 import { buildBarScene } from "./maps/bar";
 import { buildPlazaScene } from "./maps/plaza";
 import { buildTownScene } from "./maps/town";
@@ -90,6 +91,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
   let target = { x: DEFAULT_TARGET.x, z: DEFAULT_TARGET.z };
   let offsetY = 0;
   let zoom = 1;
+  let view: CameraView = "iso";
   let disposed = false;
   let lastTick = performance.now() / 1000;
   const listeners = new Set<(e: RendererStatusEvent) => void>();
@@ -100,7 +102,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
   const applySize = (): void => {
     gl.setPixelRatio(pixelRatioFor(budget, globalThis.devicePixelRatio || 1));
     gl.setSize(size.w, size.h, false);
-    configureCamera(camera, target, size, offsetY, zoom);
+    configureCamera(camera, target, size, offsetY, zoom, view);
   };
   /** 새 렌더러를 현재 상태(크기·시점·노출)에 맞추고 그림자를 다시 굽게 한다 */
   const configureGl = (): void => {
@@ -147,11 +149,16 @@ async function build(opts: Opts): Promise<WorldRenderer> {
     setView(t: { x: number; z: number }, off: number): void {
       target = { x: t.x, z: t.z };
       offsetY = off;
-      configureCamera(camera, target, size, offsetY, zoom);
+      configureCamera(camera, target, size, offsetY, zoom, view);
     },
     setZoom(z: number): void {
       zoom = Number.isFinite(z) && z > 0 ? z : 1;
-      configureCamera(camera, target, size, offsetY, zoom);
+      configureCamera(camera, target, size, offsetY, zoom, view);
+    },
+    setCameraView(next: CameraView): void {
+      if (next === view) return;
+      view = next;
+      configureCamera(camera, target, size, offsetY, zoom, view);
     },
     setCutaway(open: ReadonlySet<RoomId>, instant: boolean): void {
       bar.setCutaway?.(open, instant);

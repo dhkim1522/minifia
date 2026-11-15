@@ -2,6 +2,7 @@
 // three 본체를 끌고 오지 않는다. three 를 값으로 쓰는 모듈은 threeRenderer.ts·threeCamera.ts·maps/ 이고 06-13 이 import() 로만 연다.
 import type { Object3D } from "three";
 import type { RoomId } from "../../shared/protocol";
+import type { CameraView } from "./camera";
 
 /** nightCitizen = 밤·산 시민 편(거의 깜깜 + 내 캐릭터 빛), nightGhost = 밤·유령(달빛 + 약한 무대 기운). 마피아의 밤은 night (09-10) */
 export type LightingPhase = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
@@ -91,6 +92,8 @@ export interface WorldRenderer {
   roofs?(): Readonly<Record<RoomId, number>>;
   /** 카메라 확대(과반 연출 1.08, 기본 1). camera.ts 투영의 zoom 인자와 같은 배율 */
   setZoom?(zoom: number): void;
+  /** 카메라 시점(21-09 D-11): "iso" 는 경사 시점(기본), "overview" 는 확장판 밤 고정 개관(방위 고정·거의 정사). 기저만 바꾸고 배율은 setZoom 이 정한다. 시험 가짜 렌더러 호환을 위해 optional */
+  setCameraView?(view: CameraView): void;
   addCharacter(seat: number, c: CharacterHandle): void;
   removeCharacter(seat: number): void;
   setMarker(kind: MarkerKind, at: { x: number; z: number } | null, scale: number, opacity: number): void;

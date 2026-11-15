@@ -16,7 +16,7 @@ import type { SceneLook } from "../world/presence";
 import { initialMapStatus } from "../world/status";
 import type { MapStatusState } from "../world/status";
 import type { WorldStore } from "../world/store";
-import { installEmotesHook, installGhostsHook, installLooksHook, installMapHook, installPinHook, installTownHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
+import { installCameraHook, installEmotesHook, installGhostsHook, installLooksHook, installMapHook, installPinHook, installTownHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
 import { MapStatusCard } from "./MapStatusCard";
 import { ErrandAct } from "./v2/ErrandAct";
 import { ErrandArrow, ErrandMarker } from "./v2/ErrandMarker";
@@ -366,6 +366,8 @@ export function WorldStage(props: WorldStageProps) {
     const ghostsHook = hooksOn ? installGhostsHook() : null;
     // window.__mfPin(핀 조명 대상·이동 중 여부, 09.1.1-11): 같은 훅 문맥에서만. DOM 이 아니다
     const pinHook = hooksOn ? installPinHook() : null;
+    // window.__mfCamera(카메라 시점·배율, 21-09): 같은 훅 문맥에서만. DOM 이 아니다
+    const cameraHook = hooksOn ? installCameraHook() : null;
     // window.__mfEmotes(받은 동작 프레임·재생 중 좌석, 10-03, L33): 같은 훅 문맥에서만. DOM 이 아니다
     const emotesHook = hooksOn ? installEmotesHook() : null;
     // window.__mfLooks(좌석별 고른 의상, 10-04, L33): 같은 훅 문맥에서만. DOM 이 아니다
@@ -401,6 +403,7 @@ export function WorldStage(props: WorldStageProps) {
       onLooks: looksHook?.set,
       onCostumes: (costumes, dimmed) => live.current.props.onCostumes?.(costumes, dimmed),
       onZoom: pinHook?.setZoom,
+      onCamera: cameraHook?.set,
       onTown: townHook === null ? undefined : (state) => townHook.patch(state),
       onProject: (project, now) => {
         const { props: p } = live.current;
@@ -423,6 +426,7 @@ export function WorldStage(props: WorldStageProps) {
       offHooks?.();
       ghostsHook?.off();
       pinHook?.off();
+      cameraHook?.off();
       emotesHook?.off();
       looksHook?.off();
       mapHook?.off();

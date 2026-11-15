@@ -8,6 +8,7 @@
 
 import { ringSlots } from "../../shared/game/gather";
 import { HEAD_TOP_Y, STAGE_SPOT, UNIT } from "../../shared/game/map";
+import { TOWN_HOUSES } from "../../shared/game/mapTown";
 import type { MapId } from "../../shared/protocol";
 import { lobbyPanelHeight, LOG_H, TYPING_PILL_H } from "../game/chatUi";
 
@@ -103,23 +104,70 @@ export const STAGE_SIZES: readonly { w: number; h: number; label: string }[] = [
   { w: 402, h: 874, label: "402x874" },
 ];
 
-// 카메라 위치 − 주시점 = (sin yaw·17, 12.5 − 0.6, cos yaw·17). 기저는 한 번만 계산한다.
-const OFFSET: V3 = { x: Math.sin(CAM_YAW) * CAM_DIST, y: CAM_HEIGHT - LOOK_Y, z: Math.cos(CAM_YAW) * CAM_DIST };
-const OFFSET_LEN = Math.sqrt(OFFSET.x * OFFSET.x + OFFSET.y * OFFSET.y + OFFSET.z * OFFSET.z);
-const BACK: V3 = { x: OFFSET.x / OFFSET_LEN, y: OFFSET.y / OFFSET_LEN, z: OFFSET.z / OFFSET_LEN };
-// right = normalize(worldUp × back) = normalize((back.z, 0, −back.x))
-const RIGHT_LEN = Math.sqrt(BACK.z * BACK.z + BACK.x * BACK.x);
-const RIGHT: V3 = { x: BACK.z / RIGHT_LEN, y: 0, z: -BACK.x / RIGHT_LEN };
-// up = back × right
-const UP: V3 = {
-  x: BACK.y * RIGHT.z - BACK.z * RIGHT.y,
-  y: BACK.z * RIGHT.x - BACK.x * RIGHT.z,
-  z: BACK.x * RIGHT.y - BACK.y * RIGHT.x,
+// 시점(CameraView): "iso" 는 지금까지의 경사 시점, "overview" 는 확장판 밤 전용 개관 시점(21-09, D-11·UI-SPEC P21-2).
+// 개관은 방위 고정(yaw 0 = 카메라가 남쪽 +z 쪽에서 북쪽을 봄, 위쪽 = 북 −z, 오른쪽 = 동 +x)·거의 정사(위에서 내려 봄)이고, 마을 한계 ±9.6 정사각이 화면 축에 정렬돼 스테이지를 꽉 채운다.
+// 시점(기저)은 맵·단계 상수이고 배율만 폰마다 다르다 — 개관 배율은 overviewFraming 이 정하고 zoom(= 배율 ÷ PX_PER_UNIT)으로 건넨다.
+export type CameraView = "iso" | "overview";
+
+/** 개관 방위(라디안): 0 = 정남쪽에서 북쪽을 본다(마을 정사각이 화면 축에 정렬) */
+export const OVERVIEW_YAW = 0;
+/**
+ * 개관 카메라가 목표에서 수평으로 떨어진 거리. 높이 20.6 과 함께 기울기를 정한다 — 위에서 거의 곧게(약 80°) 내려 봐 세로 압축(sin 80° ≈ 0.98)과
+ * 지붕 높이만큼의 위로 뜸(문패 위치)이 작다. 21-09 계산 시험(폰 6종 × 띠 두 가지)이 이 값에서 문패 간격·안쪽 inset 을 고정한다.
+ */
+export const OVERVIEW_DIST = 3.5;
+/** 개관 카메라 높이(고정 시점: 높이 − 주시점 = 20) */
+export const OVERVIEW_HEIGHT = 20.6;
+/** 개관이 스테이지에 채우는 마을 한 변(월드 단위) = 이동 한계 ±9.6 */
+export const OVERVIEW_SPAN = 19.2;
+/** 스테이지 안쪽 여백(px). 배율 = min(스테이지 폭 − 2·inset, 스테이지 높이 − 2·inset) ÷ OVERVIEW_SPAN */
+export const OVERVIEW_INSET = 8;
+/** 밤 고정 아래 패널 높이(px, 안전 영역 제외) = 위 14 + 행 52 + 아래 22. 모든 역할이 같다(GamePanel 의 원인 흐름 밤, UI-SPEC C 표) */
+export const NIGHT_PANEL_HEIGHT = 88;
+/** 집 문패 단추: 보이는 원 40(얼굴 32 + 자리색 테두리 2), 누르기 영역 44 */
+export const HOUSE_TAG_CIRCLE = 40;
+export const HOUSE_TAG_BOX = 44;
+/** 문패가 걸리는 높이: 집 지붕 윗면(몸통 1.8 + 지붕판 0.16, 맵 town.ts 의 HOUSE_TOP) */
+export const HOUSE_TAG_Y = 1.96;
+/** 개관의 카메라 목표 = 마을 가운데 */
+const OVERVIEW_TARGET: Readonly<{ x: number; z: number }> = { x: 0, z: 0 };
+
+/** 시점별 카메라 리그(방위·수평 거리·높이). threeCamera 도 이 표로 카메라를 세운다 */
+export const CAMERA_RIGS: Readonly<Record<CameraView, { yaw: number; dist: number; height: number }>> = {
+  iso: { yaw: CAM_YAW, dist: CAM_DIST, height: CAM_HEIGHT },
+  overview: { yaw: OVERVIEW_YAW, dist: OVERVIEW_DIST, height: OVERVIEW_HEIGHT },
 };
 
-/** 화면 오른쪽·위쪽·카메라 쪽 단위벡터(서로 수직). 호출마다 새 객체를 돌려준다 */
-export function cameraBasis(): { right: V3; up: V3; back: V3 } {
-  return { right: { ...RIGHT }, up: { ...UP }, back: { ...BACK } };
+interface Basis {
+  right: V3;
+  up: V3;
+  back: V3;
+  /** 주시점에서 카메라까지의 거리 */
+  len: number;
+}
+
+// 카메라 위치 − 주시점 = (sin yaw·거리, 높이 − 0.6, cos yaw·거리). 기저는 시점마다 한 번만 계산한다.
+function basisOf(rig: { yaw: number; dist: number; height: number }): Basis {
+  const offset: V3 = { x: Math.sin(rig.yaw) * rig.dist, y: rig.height - LOOK_Y, z: Math.cos(rig.yaw) * rig.dist };
+  const len = Math.sqrt(offset.x * offset.x + offset.y * offset.y + offset.z * offset.z);
+  const back: V3 = { x: offset.x / len, y: offset.y / len, z: offset.z / len };
+  // right = normalize(worldUp × back) = normalize((back.z, 0, −back.x))
+  const rl = Math.sqrt(back.z * back.z + back.x * back.x);
+  const right: V3 = { x: back.z / rl, y: 0, z: -back.x / rl };
+  // up = back × right
+  const up: V3 = {
+    x: back.y * right.z - back.z * right.y,
+    y: back.z * right.x - back.x * right.z,
+    z: back.x * right.y - back.y * right.x,
+  };
+  return { right, up, back, len };
+}
+const BASES: Readonly<Record<CameraView, Basis>> = { iso: basisOf(CAMERA_RIGS.iso), overview: basisOf(CAMERA_RIGS.overview) };
+
+/** 화면 오른쪽·위쪽·카메라 쪽 단위벡터(서로 수직). 호출마다 새 객체를 돌려준다. 시점을 생략하면 경사 시점 */
+export function cameraBasis(view: CameraView = "iso"): { right: V3; up: V3; back: V3 } {
+  const b = BASES[view];
+  return { right: { ...b.right }, up: { ...b.up }, back: { ...b.back } };
 }
 
 /** 스테이지 사각형(px): 위 62 ~ 아래 패널 위 끝, 폭 전체. 안전 영역은 뺀 값이다 */
@@ -132,33 +180,35 @@ export function stageOffsetY(canvasH: number, stageTop: number, stageBottom: num
   return canvasH / 2 - (stageTop + (stageBottom - stageTop) / 2);
 }
 
-/** 월드 점 → 화면 좌표(px). 목표가 주시점이고, 오프셋만큼 장면이 위로 올라간다. zoom 은 화면 가운데 기준 확대(기본 1) */
-export function groundToScreen(p: V3, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1): { sx: number; sy: number } {
+/** 월드 점 → 화면 좌표(px). 목표가 주시점이고, 오프셋만큼 장면이 위로 올라간다. zoom 은 화면 가운데 기준 확대(기본 1), view 는 시점(기본 경사) */
+export function groundToScreen(p: V3, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1, view: CameraView = "iso"): { sx: number; sy: number } {
+  const { right, up } = BASES[view];
   const scale = PX_PER_UNIT * zoom;
   const d: V3 = { x: p.x - target.x, y: p.y - LOOK_Y, z: p.z - target.z };
-  const r = d.x * RIGHT.x + d.y * RIGHT.y + d.z * RIGHT.z;
-  const u = d.x * UP.x + d.y * UP.y + d.z * UP.z;
+  const r = d.x * right.x + d.y * right.y + d.z * right.z;
+  const u = d.x * up.x + d.y * up.y + d.z * up.z;
   return { sx: c.w / 2 + r * scale, sy: c.h / 2 - u * scale - offsetY };
 }
 
-/** 화면 점의 정사영 광선: 원점은 카메라 평면 위(주시점에서 카메라 쪽으로 OFFSET_LEN), 방향은 −back */
-export function screenRay(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1): { origin: V3; dir: V3 } {
+/** 화면 점의 정사영 광선: 원점은 카메라 평면 위(주시점에서 카메라 쪽으로 기저의 거리), 방향은 −back */
+export function screenRay(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1, view: CameraView = "iso"): { origin: V3; dir: V3 } {
+  const { right, up, back, len } = BASES[view];
   const scale = PX_PER_UNIT * zoom;
   const dx = (sx - c.w / 2) / scale;
   const dy = (c.h / 2 - sy - offsetY) / scale;
   return {
     origin: {
-      x: target.x + RIGHT.x * dx + UP.x * dy + BACK.x * OFFSET_LEN,
-      y: LOOK_Y + RIGHT.y * dx + UP.y * dy + BACK.y * OFFSET_LEN,
-      z: target.z + RIGHT.z * dx + UP.z * dy + BACK.z * OFFSET_LEN,
+      x: target.x + right.x * dx + up.x * dy + back.x * len,
+      y: LOOK_Y + right.y * dx + up.y * dy + back.y * len,
+      z: target.z + right.z * dx + up.z * dy + back.z * len,
     },
-    dir: { x: -BACK.x, y: -BACK.y, z: -BACK.z },
+    dir: { x: -back.x, y: -back.y, z: -back.z },
   };
 }
 
 /** 화면 점 → 바닥(y = 0) 점. groundToScreen 의 역 */
-export function screenToGround(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1): { x: number; z: number } {
-  const { origin, dir } = screenRay(sx, sy, target, c, offsetY, zoom);
+export function screenToGround(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1, view: CameraView = "iso"): { x: number; z: number } {
+  const { origin, dir } = screenRay(sx, sy, target, c, offsetY, zoom, view);
   const t = origin.y / -dir.y;
   return { x: origin.x + dir.x * t, z: origin.z + dir.z * t };
 }
@@ -218,4 +268,28 @@ export function gatherView(stage: { top: number; bottom: number }, c: Canvas, op
   if (stageH >= footBottom - boxTop) return { target, offsetY: centered(footBottom) };
   if (stageH >= headBottom - boxTop) return { target, offsetY: centered(headBottom) };
   return { target, offsetY: headBottom - stage.bottom };
+}
+
+/**
+ * 개관 구도(21-09, D-11·P21-2): 마을 한 변 ±9.6(OVERVIEW_SPAN)을 스테이지 사각형 안쪽 inset 8 에 꽉 채운다.
+ * 배율(px/단위) = min(캔버스 폭 − 16, 스테이지 높이 − 16) ÷ 19.2, 목표 = 마을 가운데. zoom 은 PX_PER_UNIT 에 대한 비 — 기존 setZoom 길로 건넨다.
+ * 세로 위치는 집 문패가 걸리는 지붕 높이 면(HOUSE_TAG_Y)의 가운데를 스테이지 사각형 세로 가운데에 둔다 — 문패가 바닥 점보다 지붕 높이만큼 위로 떠 보이므로
+ * 바닥 가운데를 기준으로 하면 윗줄 문패만 위쪽 안쪽 여백(8)에 먼저 닿는다(21-09 계산 시험, 360×560 띠 한 줄). 역할·단계 값을 읽지 않는 순수 식이다.
+ */
+export function overviewFraming(stage: { top: number; bottom: number }, c: Canvas): { target: { x: number; z: number }; offsetY: number; zoom: number; scale: number } {
+  const room = Math.min(c.w - 2 * OVERVIEW_INSET, stage.bottom - stage.top - 2 * OVERVIEW_INSET);
+  const scale = Math.max(1, room) / OVERVIEW_SPAN;
+  const zoom = scale / PX_PER_UNIT;
+  const base = stageOffsetY(c.h, stage.top, stage.bottom);
+  const lift = groundToScreen({ ...OVERVIEW_TARGET, y: HOUSE_TAG_Y }, OVERVIEW_TARGET, c, base, zoom, "overview").sy - (stage.top + stage.bottom) / 2;
+  return { target: { ...OVERVIEW_TARGET }, offsetY: base + lift, zoom, scale };
+}
+
+/** 개관 시점에서 집 문패(좌석 0~7)의 화면 가운데(px, 지붕 윗면 투영). 문패 DOM 위치와 겹침·안쪽 검사가 같은 식을 쓴다 */
+export function houseTagCenters(stage: { top: number; bottom: number }, c: Canvas): { seat: number; sx: number; sy: number }[] {
+  const f = overviewFraming(stage, c);
+  return TOWN_HOUSES.map((h) => {
+    const p = groundToScreen({ x: h.x, y: HOUSE_TAG_Y, z: h.z }, f.target, c, f.offsetY, f.zoom, "overview");
+    return { seat: h.seat, sx: p.sx, sy: p.sy };
+  });
 }

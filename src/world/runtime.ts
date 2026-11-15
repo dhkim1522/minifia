@@ -17,7 +17,7 @@ import { cutawayOf, headVeiled, sameRooms, tapTarget } from "./cutaway";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
-import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, panBoxOf, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
+import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, overviewFraming, panBoxOf, PX_PER_UNIT, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { FIGS } from "./characterData";
 import type { OutfitId } from "./characterData";
 import { admitEmote, EMOTE_RENDER_MAX, emoteDurationMs } from "./emoteCap";
@@ -150,6 +150,8 @@ const ENTER_SCALE = 0.6;
 const ENTER_LIFT = 0.4;
 /** 고정 카메라로 옮기는 시간·확대 전환 시간(ms) = dur-slow */
 const CAM_SLOW_MS = 800;
+/** 개관 시점으로(에서) 바뀌는 순간까지의 시간(ms) = 어둠 가림 --dur-med 420 의 절반(가장 어두운 때). WorldStage 의 가림 애니메이션과 같은 길이를 쓴다 */
+const OVERVIEW_CUT_MS = 210;
 /** 분필 윤곽이 다 그려진 불투명도(블록아웃 값, bar.ts CHALK_OPACITY 와 같다) */
 const CHALK_FULL = 0.85;
 /** 분필이 그려지는 시간(ms) = dur-slow */
@@ -236,6 +238,8 @@ export interface WorldRuntimeDeps {
   onTown?: (state: { zone: ZoneId; open: RoomId[]; roofs: Record<RoomId, number>; owners: number[]; veiled: number[]; door: { seat: number; kind: "vanish" | "appear" }[]; houseLit: boolean[] | null; lampLit: boolean[] | null }) => void;
   /** 카메라 줌이 렌더러에 새로 보내질 때 소수 셋째 자리로 불린다 — E2E 훅 window.__mfPin.zoom 용(09.1.1-13). 제품은 넘기지 않는다 */
   onZoom?: (zoom: number) => void;
+  /** 카메라 시점이 바뀌었거나 개관 배율이 바뀔 때 불린다(window.__mfCamera, 21-09 L33). mode 는 지금 실제로 그리는 시점, scale 은 px/단위(소수 둘째) */
+  onCamera?: (state: { mode: "follow" | "fixed" | "overview"; scale: number }) => void;
   /**
    * 프레임마다 이름표 쓰기 다음에 한 번 불린다(15-05). project(x, z) 는 월드 바닥점(발끝)의 화면 좌표(host 기준 px)를 돌려준다 —
    * 심부름 표지·화살표·근처 링이 이 콜백 안에서 DOM 에 직접 쓴다(React 상태를 프레임마다 바꾸지 않는다). 투영할 수 없으면 null
@@ -460,6 +464,13 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let fixed: { zoom: number; start: number; from: { x: number; z: number; off: number; zoom: number } } | null = null;
   let zoomBackFrom = 1;
   let zoomBackStart = 0;
+  /**
+   * 개관 시점(21-09 D-11): 지금 그리는 기저가 개관인가와, 바뀔 시점(어둠 가림이 가장 어두운 때 = dur-med 의 절반)에 대한 예약.
+   * 모션 줄이기·재접속 첫 프레임은 예약 없이 바로 바뀐다. 개관 동안 카메라는 걷지도 따라가지도 않고 매 프레임 스테이지 사각형에서 배율을 다시 정한다
+   */
+  let viewOverview = false;
+  let viewCutAt: number | null = null;
+  let cameraSent = "";
   /** 이 좌석을 그리나: 장면이 없으면 view 의 모든 좌석, 있으면 표에서 show 인 좌석만 */
   const isShown = (seat: number): boolean => look === null || look.seats[seat]?.show === true;
   /**
@@ -1416,7 +1427,30 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const camLook = look?.camera;
     let offsetGoal = stageOff;
     let blending = false;
-    if (camLook !== undefined && camLook.mode === "fixed") {
+    // 개관(21-09 D-11): 시점이 바뀌는 순간은 DOM 어둠 가림(WorldStage)이 가장 어두운 때로 맞춘다. 가림 없는 경우(모션 줄이기·재접속)는 바로
+    const wantOverview = camLook !== undefined && camLook.mode === "overview";
+    if (wantOverview === viewOverview) {
+      viewCutAt = null;
+    } else {
+      viewCutAt ??= reduced || resync ? now : now + OVERVIEW_CUT_MS;
+      if (now >= viewCutAt) {
+        viewOverview = wantOverview;
+        viewCutAt = null;
+        r.setCameraView?.(wantOverview ? "overview" : "iso");
+        fixed = null;
+        cam = null; // 개관에서 돌아오면 내 캐릭터 자리로 바로(미끄러지지 않는다), 개관은 아래에서 가운데로 놓는다
+        zoomCur = 1;
+        offsetCur = null;
+      }
+    }
+    if (viewOverview) {
+      const ov = overviewFraming(rect, { w: s.w, h: s.h });
+      cam = { x: ov.target.x, z: ov.target.z };
+      zoomCur = ov.zoom;
+      offsetCur = ov.offsetY;
+      offsetTarget = ov.offsetY;
+      blending = true; // 아래 세로 이동 완화 블록을 건너뛴다 — 개관은 배율과 같은 프레임에 바로 놓인다
+    } else if (camLook !== undefined && camLook.mode === "fixed") {
       // zoomMs 가 있는 구도(판결 순간 느린 확대, 09.1.1-13): 위치·세로 오프셋·줌이 모두 그 시간에 ease-in-out 으로 같이 간다. 모션 줄이기는 줌 없이 1 을 지킨다
       const slow = camLook.zoomMs !== undefined;
       const goalZoom = slow && reduced ? 1 : camLook.zoom;
@@ -1472,6 +1506,15 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       zoomSent = zoomCur;
       r.setZoom?.(zoomCur);
       deps.onZoom?.(Math.round(zoomCur * 1000) / 1000);
+    }
+    if (deps.onCamera !== undefined) {
+      const mode = viewOverview ? "overview" : fixed !== null ? "fixed" : "follow";
+      const scale = Math.round(zoomCur * PX_PER_UNIT * 100) / 100;
+      const key = `${mode}|${scale}`;
+      if (key !== cameraSent) {
+        cameraSent = key;
+        deps.onCamera({ mode, scale });
+      }
     }
 
     // 단계 조명·긴장: 바뀐 때만 렌더러에 보낸다. 장면이 없으면 부팅 때 정한 조명(로비·성능 스파이크)

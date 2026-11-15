@@ -38,6 +38,8 @@ declare global {
     __mfGhosts?: { seats: number[]; ready: boolean };
     /** 핀 조명(09.1.1-11): 지금 비추는 좌석(없으면 null)·이동 중 여부·켜짐 수준(0~1)·카메라 줌(09.1.1-13, 소수 셋째 자리). 런타임이 이미 정한 값뿐이다 */
     __mfPin?: { seat: number | null; moving: boolean; strength: number; zoom: number };
+    /** 카메라 시점(21-09, L33): 지금 그리는 시점(follow·fixed·overview)과 배율(px/단위, 소수 둘째). 런타임이 이미 정한 값뿐이다. 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다 */
+    __mfCamera?: { mode: "follow" | "fixed" | "overview"; scale: number };
     /** 좌석별 고른 의상 표(좌석 → 의상 id, 10-04, L33). 이 화면이 받은 view 의 look 사본이다(결과 화면 직업 의상과 별개). 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다 */
     __mfLooks?: Readonly<Record<number, string>>;
     /** 지금 렌더러에 올린 맵 id(11-13, L33): 로비·시작 전은 "bar". 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다 */
@@ -184,6 +186,24 @@ export function installPinHook(): { set(pin: { seat: number | null; moving: bool
     },
     off() {
       if (window.__mfPin === mine) delete window.__mfPin;
+    },
+  };
+}
+
+/**
+ * window.__mfCamera 를 설치하고(처음엔 따라가기 · 배율 58.2) 갱신·해제 함수를 돌려준다. 테스트 훅이 켜진 문맥에서만 부른다(21-09, L33).
+ * 해제는 다른 설치가 덮어썼으면 지우지 않는다.
+ */
+export function installCameraHook(): { set(state: { mode: "follow" | "fixed" | "overview"; scale: number }): void; off(): void } {
+  let mine: NonNullable<Window["__mfCamera"]> = { mode: "follow", scale: 58.2 };
+  window.__mfCamera = mine;
+  return {
+    set(state) {
+      mine = { mode: state.mode, scale: state.scale };
+      window.__mfCamera = mine;
+    },
+    off() {
+      if (window.__mfCamera === mine) delete window.__mfCamera;
     },
   };
 }
