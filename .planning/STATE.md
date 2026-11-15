@@ -6,16 +6,16 @@ current_phase: 20
 current_phase_name: map-expansion
 current_plan: 10
 status: verifying
-stopped_at: Completed 21-14-PLAN.md
-last_updated: "2026-11-15T05:00:53.503Z"
+stopped_at: Completed 21-15-PLAN.md
+last_updated: "2026-11-15T06:45:27.046Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: ef40de766011bf97f35597a3792b1e3b22970cfc
+state_head: 2e4c04ebc49e939386a05759eb8eee264c07b14c
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 113
-  completed_plans: 111
+  completed_plans: 112
   percent: 60
 ---
 
@@ -306,6 +306,7 @@ Last activity: 2026-11-13 — 20-10 완료 (로컬 전 흐름 폰 6종 회귀 �
 | Phase 21 P12 | 100min | 2 tasks | 23 files |
 | Phase 21 P13 | 1 session | 2 tasks | 91 files |
 | Phase 21 P14 | 1 session | 2 tasks | 15 files |
+| Phase 21 P15 | long | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -752,8 +753,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-15T05:00:51.578Z
-Stopped at: Completed 21-14-PLAN.md
+Last session: 2026-11-15T06:45:25.134Z
+Stopped at: Completed 21-15-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

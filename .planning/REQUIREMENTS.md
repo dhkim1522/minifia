@@ -90,7 +90,7 @@
 - [x] **SKIP-01**: 저녁·아침에 [건너뛰기]가 있고 공개 값은 누른 수뿐이며, 산 사람 과반이 누르면 그 단계가 일찍 끝난다
 - [x] **TUT-06**: 튜토리얼 "첫 사건"이 새 흐름(저녁 등불 → 아침 현장 → 의심 보드 → 투표)과 "정체는 판이 끝나야 알아요" 안내를 혼자 하기·방장 스위치 두 진입로 모두에서 보여 준다
 - [x] **LEAK-02**: 누설 전수 시험이 새 단계·새 view 키·새 메시지(errand.hold·inspect·skip)·서버 전용 이름(errandCut·sceneSeen·touched·footprints·skipVote)까지 넓어진 채 통과한다
-- [ ] **DEPLOY-06**: 21페이즈가 로컬 전체 시험·폰 6종 E2E 회귀·성능 게이트를 통과한 뒤 minifia-v3 에 배포되고 배포본 smoke 가 통과한다(실기기 확인은 v3.0 끝 실테스트)
+- [x] **DEPLOY-06**: 21페이즈가 로컬 전체 시험·폰 6종 E2E 회귀·성능 게이트를 통과한 뒤 minifia-v3 에 배포되고 배포본 smoke 가 통과한다(실기기 확인은 v3.0 끝 실테스트)
 
 ## Future Requirements
 
@@ -163,7 +163,7 @@
 | SKIP-01 | Phase 21 | Complete |
 | TUT-06 | Phase 21 | Complete |
 | LEAK-02 | Phase 21 | Complete |
-| DEPLOY-06 | Phase 21 | Pending |
+| DEPLOY-06 | Phase 21 | Complete |
 
 **Coverage:**
 - v3.0 requirements: 51 total
