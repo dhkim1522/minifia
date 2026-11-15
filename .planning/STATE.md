@@ -6,16 +6,16 @@ current_phase: 20
 current_phase_name: map-expansion
 current_plan: 10
 status: verifying
-stopped_at: Completed 21-11-PLAN.md
-last_updated: "2026-11-15T03:00:18.351Z"
+stopped_at: Completed 21-12-PLAN.md
+last_updated: "2026-11-15T03:20:10.703Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: 79833191a0912bf31bbb35f31105f008a2819685
+state_head: d225a56d02658dd6f32653b809a1916bb5c90bba
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 113
-  completed_plans: 108
+  completed_plans: 109
   percent: 60
 ---
 
@@ -303,6 +303,7 @@ Last activity: 2026-11-13 — 20-10 완료 (로컬 전 흐름 폰 6종 회귀 �
 | Phase 21 P09 | 25 min | 3 tasks | 22 files |
 | Phase 21 P10 | 55min | 3 tasks | 22 files |
 | Phase 21 P11 | 35min | 3 tasks | 7 files |
+| Phase 21 P12 | 100min | 2 tasks | 23 files |
 
 ## Accumulated Context
 
@@ -674,6 +675,8 @@ v1.0 의 결정 로그는 `docs/decisions/0001~0043` 과 `.planning/milestones/v
 - [Phase 21]: 21-09: 개관 카메라 리그(방위 0·거리 3.5·높이 20.6), 문패 세로 기준은 지붕 높이 면 가운데, 독 줄 밖은 가로로 검사(스테이지 위 끝이 띠 아랫변)
 - [Phase 21]: 21-10: 아침 [건너뛰기]는 채팅 입력줄 trailing·저녁은 진행 점 옆(SkipSlot), [살펴보기]는 ErrandAct 재사용(id 선택 prop), 현장 없는 밤의 큰 글은 dayView.phaseEntry discussion 분기
 - [Phase 21]: 21-11: 의심 보드는 BoardFace.marks 배열(옷 조각·창문 각각)로 닮은 옷을 담고, 보드 CSS 는 심부름 블록 앞에 둔다(errandParts·v2parts 색 약속 시험 보존)
+- [Phase 21]: 21-12: 튜토리얼 장면 5 보드는 GameMap 토론 경로가 가짜 view 의 boardOf 로 실제 SuspectBoard 를 그리고, TutorialEvidence 는 선 하나만 남긴다; 장면 4 [다음] 은 행동이 연다(advance inspect)
+- [Phase 21]: 21-12: 정체 카드는 뒤집히지 않는다(뒷면+lock+tutorial.hidden 줄+도장 처형, 진홍·fanfare 없음, D-20)
 
 ### Pending Todos
 
@@ -745,8 +748,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-15T03:00:16.517Z
-Stopped at: Completed 21-11-PLAN.md
+Last session: 2026-11-15T03:20:08.851Z
+Stopped at: Completed 21-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
