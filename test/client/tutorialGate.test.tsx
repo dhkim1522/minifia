@@ -1,13 +1,14 @@
-// 17-04: 허용 목록 밖 차단(inert)·장면별 포커스 이동 (T-10, 결정 0080-6, TUT-03, Pitfall 7).
+// 17-04·21-12: 허용 목록 밖 차단(inert)·장면별 포커스 이동 (T-10, 결정 0080-6, TUT-03, Pitfall 7). 가짜 view 가 원인 흐름 판이라 openCause() 아래에서 돈다.
 // 튜토리얼은 정해진 한 길로만 눌린다: 장면마다 머리·맵 입력면·심부름 타일 층·아래 패널·(장면 6 밖) 이름표 층이 inert 이고,
-// [처리](장면 3)·이름표(장면 6)·[다음]·[건너뛰기]·소리 단추만 눌린다. inert 는 자손이 풀 수 없으므로 허용 대상은 차단 컨테이너 밖에 있어야 한다.
+// [켜기](장면 3)·[살펴보기](장면 4)·이름표(장면 6)·[다음]·[건너뛰기]·소리 단추만 눌린다. inert 는 자손이 풀 수 없으므로 허용 대상은 차단 컨테이너 밖에 있어야 한다.
 import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { setEngineForTest } from "../../src/audio/unlock";
 import { makeRig } from "../helpers/soundRig";
 import { tutorialStage } from "../helpers/fakeTutorialStage";
+import { openCause } from "../helpers/playable";
 
 vi.mock("../../src/components/WorldStage", async () => ({ WorldStage: (await import("../helpers/fakeTutorialStage")).FakeTutorialStage }));
 
@@ -21,6 +22,12 @@ async function loadScreen(): Promise<ScreenModule> {
 }
 
 const NOW = 1_700_000_000_000;
+
+let restoreCause: () => void = () => {};
+beforeAll(() => {
+  restoreCause = openCause();
+});
+afterAll(() => restoreCause());
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -80,6 +87,39 @@ describe("장면 3: 허용 목록 밖은 inert", () => {
     advance(700);
     expect(container.querySelector("[data-tutorial-screen]")?.getAttribute("data-tutorial-scene")).toBe("4");
     for (const sel of [".mf-game__header", ".mf-world__input", "[data-errand-layer]", ".mf-world__tags"]) expect(q(container, sel)?.hasAttribute("inert"), sel).toBe(true);
+  });
+});
+
+describe("장면 4: 현장 지점 층도 막고 [살펴보기] 만 연다", () => {
+  it("지점 표지 층·머리·입력면·이름표 층이 inert 이고 [살펴보기] 층과 단추에는 inert 조상이 없다", async () => {
+    const { container } = await mount(4);
+    for (const sel of [".mf-game__header", ".mf-world__input", "[data-errand-layer]", "[data-clue-layer]", ".mf-world__tags"]) {
+      const el = q(container, sel);
+      if (sel === "[data-errand-layer]") {
+        expect(el, `${sel} 는 장면 4 에 없다`).toBeNull();
+        continue;
+      }
+      expect(el, `${sel} 가 있어야 한다`).not.toBeNull();
+      expect(el!.hasAttribute("inert"), `${sel} 는 inert`).toBe(true);
+    }
+    expect(inertAbove(q(container, "[data-errand-act-layer]"))).toBe(false);
+    expect(inertAbove(q(container, "[data-errand-act]"))).toBe(false);
+    expect(q(container, "[data-errand-act]")?.textContent).toBe("살펴보기");
+  });
+
+  it("장면 4: 포커스가 [살펴보기] 로 간다", async () => {
+    const { container } = await mount(4);
+    expect(document.activeElement).toBe(q(container, "[data-errand-act]"));
+  });
+});
+
+describe("장면 5: 의심 보드 카드는 막혀 있다(닫기·열기 없음)", () => {
+  it("보드를 품은 자리(.mf-game__record)가 inert 이고 머리·입력면·이름표 층도 inert", async () => {
+    const { container } = await mount(5);
+    advance(0);
+    expect(q(container, "[data-board]")).not.toBeNull();
+    expect(inertAbove(q(container, "[data-board]"))).toBe(true);
+    for (const sel of [".mf-game__header", ".mf-world__input", ".mf-world__tags"]) expect(q(container, sel)?.hasAttribute("inert"), sel).toBe(true);
   });
 });
 

@@ -208,3 +208,21 @@ describe("21-12: 새 흐름 대본은 서버가 아니라 공유 상수에서 �
     expect(script).toMatch(/mode:\s*"extended"/);
   });
 });
+
+describe("21-12: 정체 카드는 직업을 보이지 않는다 (D-20)", () => {
+  const reveal = stripComments(readFileSync(`${ROOT}src/components/v2/TutorialReveal.tsx`, "utf8"));
+
+  it("TutorialReveal 코드에 직업 이름·직업 그림·역할 호출이 없다", () => {
+    for (const word of ["마피아", "시민", "의사", "경찰", "roleArtSrc", "ROLE_TEXT"]) expect(reveal, word).not.toContain(word);
+  });
+
+  it("정체 카드의 줄은 대본의 tutorial.hidden 문구를 읽는다(문구 두 곳 금지)", () => {
+    expect(reveal).toMatch(/TUTORIAL_LINES\[\s*"tutorial\.hidden"\s*\]|TUTORIAL_PICK\.reveal/);
+    expect(reveal).not.toContain("정체는 판이 끝나야 알아요");
+  });
+
+  it("장면 5 선 부품(TutorialEvidence)은 증거 카드·눈 표시·수식 줄을 더 그리지 않는다", () => {
+    const evidence = stripComments(readFileSync(`${ROOT}src/components/v2/TutorialEvidence.tsx`, "utf8"));
+    for (const gone of ["TutorialFormula", "TutorialEyeMark", "data-trace-card", "data-lastseen-row"]) expect(evidence, gone).not.toContain(gone);
+  });
+});

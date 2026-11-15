@@ -104,15 +104,15 @@ describe("TutorialWait — 기다림 화면 (17-07, TUT-02)", () => {
       const { container } = render(<TutorialWait view={makeView(1, 4)} offset={0} />);
       const tips = container.querySelectorAll("[data-tutorial-tip]");
       expect(tips).toHaveLength(2);
-      expect(container.textContent).toContain("심부름 때 누구를 봤는지 기억해요");
-      expect(container.textContent).toContain("아침 흔적은 옷과 이어져요");
+      expect(container.textContent).toContain("등불 곁에서 본 사람을 기억해요");
+      expect(container.textContent).toContain("아침 단서는 옷과 이어져요");
     });
 
     it("작게 모킹하면 팁 묶음이 통째로 없다(한 장만 남지 않는다)", () => {
       stubLayout(480, 100, 300);
       const { container } = render(<TutorialWait view={makeView(1, 4)} offset={0} />);
       expect(container.querySelectorAll("[data-tutorial-tip]")).toHaveLength(0);
-      expect(container.textContent).not.toContain("아침 흔적은 옷과 이어져요");
+      expect(container.textContent).not.toContain("아침 단서는 옷과 이어져요");
     });
 
     it("경계: 남는 높이가 정확히 96 + 24 + 아래 여백 24 면 보이고 1 모자라면 숨는다", () => {

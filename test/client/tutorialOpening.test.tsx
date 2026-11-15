@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { setEngineForTest } from "../../src/audio/unlock";
-import { OPENING_LAMPS, TUTORIAL_CAST } from "../../src/game/tutorialScript";
+import { OPENING_DARK_HOUSES, OPENING_LAMPS, TUTORIAL_CAST } from "../../src/game/tutorialScript";
 import { ROLE_TEXT } from "../../src/game/roleText";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { tutorialStage as stage } from "../helpers/fakeTutorialStage";
@@ -169,6 +169,33 @@ describe("장면 1 오프닝: 연출 층", () => {
   });
 });
 
+describe("장면 1 오프닝: 마을 개관 시점에서 집 창이 하나씩 꺼진다 (D-28)", () => {
+  const lamps = (): readonly boolean[] | undefined => stage.props!.view.day?.lamps;
+  it("무대는 마을·원인 흐름 판이고 카메라는 개관(overview)이다", async () => {
+    await mount({ initialScene: 1 });
+    expect(stage.props!.view.map).toBe("town");
+    expect(stage.props!.view.mode).toBe("extended");
+    expect(stage.props!.scene!.camera).toEqual({ mode: "overview" });
+    advance(4000);
+    expect(stage.props!.scene!.camera).toEqual({ mode: "overview" });
+  });
+
+  it("처음엔 집 창 여덟이 모두 켜져 있고, 0.8초에 하나, 1.3초에 둘째가 꺼진다(lampOff 소리 시각과 같다)", async () => {
+    await mount({ initialScene: 1 });
+    expect(lamps()).toEqual(Array.from({ length: 8 }, () => true));
+    advance(799);
+    expect(lamps()!.filter((on) => !on)).toHaveLength(0);
+    advance(1);
+    expect(lamps()!.filter((on) => !on)).toHaveLength(1);
+    expect(lamps()![OPENING_DARK_HOUSES[0]!]).toBe(false);
+    advance(499);
+    expect(lamps()!.filter((on) => !on)).toHaveLength(1);
+    advance(1);
+    expect(lamps()!.filter((on) => !on)).toHaveLength(OPENING_LAMPS);
+    expect(lamps()![OPENING_DARK_HOUSES[1]!]).toBe(false);
+  });
+});
+
 describe("장면 1 오프닝: 실제 무대의 모양 시각", () => {
   it("시작은 서연 좌석 보임·조명 night 아님 → 2600ms 서연 불투명도 0 → 3300ms 조명 night", async () => {
     await mount({ initialScene: 1 });
@@ -259,8 +286,8 @@ describe("진홍 (T-18)", () => {
 const cards$ = (c: ParentNode) => [...c.querySelectorAll<HTMLElement>("[data-tutorial-role-card]")];
 const ROLE_KINDS = ["citizen", "mafia", "doctor", "police"] as const;
 const NAMES = ["시민", "마피아", "의사", "경찰"] as const;
-// 직업 카드 한 줄은 실제 역할 카드와 같은 출처(ROLE_TEXT, 18-06 D-08)
-const LINES = [ROLE_TEXT.citizen.desc, ROLE_TEXT.mafia.desc, ROLE_TEXT.doctor.desc, ROLE_TEXT.police.desc] as const;
+// 직업 카드 한 줄(21페이즈 D-28): 시민·마피아·의사는 새 흐름 문장의 고정 상수, 경찰은 그대로(실제 역할 카드와 같은 출처 ROLE_TEXT, 18-06 D-08)
+const LINES = ["단서로 마피아를 찾아요", "밤에 집 하나를 골라요", "밤에 한 집을 지켜요", ROLE_TEXT.police.desc] as const;
 const BADGE_ANIM = ["a-eye", "a-mask", "a-shield", "a-lens"] as const;
 const setHeight = (h: number): void => {
   Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: h });

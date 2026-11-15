@@ -192,7 +192,7 @@ describe("마무리 카드 (Task 2, T-1)", () => {
     const ends = container.querySelectorAll("[data-tutorial-end]");
     expect(ends.length).toBe(1);
     expect(ends[0]!.textContent).toContain("이제 진짜 사건으로");
-    expect(ends[0]!.textContent).toContain("목격과 흔적으로 거짓말을 잡아요");
+    expect(ends[0]!.textContent).toContain("단서로 거짓말을 잡아요");
     expect(screen.getByRole("button", { name: "다시 보기" }).hasAttribute("data-tutorial-replay")).toBe(true);
     expect(play.mock.calls.filter(([id]) => id === "tut.warm").length).toBe(1);
     // 큰 카드 자리에 대신 놓인다(진입 카드·작은 단추는 같은 때에 없다)

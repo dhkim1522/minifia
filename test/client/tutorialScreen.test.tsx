@@ -1,18 +1,20 @@
-// 17-04: 첫 사건 화면(TutorialScreen) — 장면 1~7 을 끝까지 재생하고, 서버·소켓에는 아무것도 보내지 않는다 (TUT-03, TUT-05, 결정 0080-12).
-// WorldStage 는 props 를 쥐는 가짜(errandScreen 시험과 같은 틀): 마운트 때 onReady 를 부르고, 허용 목록 시험이 보는 층(입력면·심부름 층·[처리] 층·이름표 층)의 DOM 만 그린다.
+// 17-04·21-12: 첫 사건 화면(TutorialScreen) — 장면 1~7 을 새 흐름(등불 → 현장 → 보드 → 투표)으로 끝까지 재생하고, 서버·소켓에는 아무것도 보내지 않는다 (TUT-03, TUT-05, TUT-06, 결정 0080-12, D-28).
+// WorldStage 는 props 를 쥐는 가짜(test/helpers/fakeTutorialStage): 마운트 때 onReady 를 부르고, 허용 목록 시험이 보는 층(입력면·등불 층·현장 지점 층·[켜기]/[살펴보기] 층·이름표 층)의 DOM 만 그린다.
+// 가짜 view 는 원인 흐름 판이라 이 파일은 openCause() 아래에서 돈다.
 // GameMap·GamePanel·헤더·진행 점 부품은 진짜다. 실제 연결 훅은 호출 횟수만 센다(0 이어야 한다).
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { bindSignals } from "../../src/audio/signals";
 import type { LocalSignal } from "../../src/audio/signals";
 import { SFX_IDS } from "../../src/audio/recipes";
 import { setEngineForTest } from "../../src/audio/unlock";
-import type { WorldStageProps } from "../../src/components/WorldStage";
 import { sayItems } from "../../src/audio/voice";
 import { TUTORIAL_LINES, TUTORIAL_PICK, TUTORIAL_SCENES, tutorialView } from "../../src/game/tutorialScript";
 import { ChatStore } from "../../src/net/chatStore";
 import { WorldStore } from "../../src/world/store";
+import { tutorialStage as stage } from "../helpers/fakeTutorialStage";
+import { openCause } from "../helpers/playable";
 import { makeRig } from "../helpers/soundRig";
 
 const connection = vi.hoisted(() => ({ calls: 0 }));
@@ -22,45 +24,13 @@ vi.mock("../../src/net/useRoomConnection", () => ({
     return null;
   },
 }));
-const stage = vi.hoisted(() => ({ props: null as null | WorldStageProps }));
-vi.mock("../../src/components/WorldStage", async () => {
-  const { createElement, useEffect } = await import("react");
-  return {
-    WorldStage: (props: WorldStageProps) => {
-      stage.props = props;
-      useEffect(() => {
-        props.onReady?.();
-        // 마운트 때 한 번만 알린다(실제 WorldStage 도 런타임이 준비된 한 번)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, []);
-      const act$ = props.errand?.actId ?? null;
-      return createElement(
-        "div",
-        { "data-world-stage-fake": "" },
-        createElement("div", { className: "mf-world__input" }),
-        props.errand ? createElement("div", { "data-errand-layer": "" }, createElement("button", { "data-errand-place": "mail", type: "button" }, "mail")) : null,
-        props.errand
-          ? createElement(
-              "div",
-              { "data-errand-act-layer": "" },
-              act$ !== null ? createElement("button", { "data-errand-act": "", type: "button", onClick: () => props.errand?.onAct?.() }, "처리") : null,
-            )
-          : null,
-        createElement(
-          "div",
-          { className: "mf-world__tags" },
-          ...props.view.players.map((p) =>
-            createElement(
-              "div",
-              { key: p.seat, className: "mf-world__tag", "data-seat": p.seat },
-              props.pick?.seats.has(p.seat) ? createElement("button", { type: "button", "data-pick": p.seat, onClick: () => props.pick?.onPick(p.seat) }, p.nickname) : null,
-            ),
-          ),
-        ),
-      );
-    },
-  };
+vi.mock("../../src/components/WorldStage", async () => ({ WorldStage: (await import("../helpers/fakeTutorialStage")).FakeTutorialStage }));
+
+let restoreCause: () => void = () => {};
+beforeAll(() => {
+  restoreCause = openCause();
 });
+afterAll(() => restoreCause());
 
 type ScreenModule = typeof import("../../src/screens/TutorialScreen");
 /** 정적 분석이 모듈 없음으로 파일 전체를 죽이지 않도록 경로를 변수로 둔다 */
@@ -117,14 +87,14 @@ const sceneOf = (c: ParentNode): string | null => c.querySelector("[data-tutoria
 const next$ = (c: ParentNode) => c.querySelector<HTMLElement>("[data-tutorial-next]");
 const skip$ = (c: ParentNode) => c.querySelector<HTMLElement>("[data-tutorial-skip]");
 
-describe("장면 3: [처리] 가 로컬 어댑터를 거쳐 장면 4 로 (트레이서)", () => {
-  it("루트 표식, 시작 위치가 반경 안이라 [처리] 가 우체통에 서고, send 는 실제 연결이 아니다", async () => {
+describe("장면 3: [켜기] 가 로컬 어댑터를 거쳐 장면 4 로 (트레이서)", () => {
+  it("루트 표식, 시작 위치가 반경 안이라 [켜기] 가 가로등(lamp2)에 서고, send 는 실제 연결이 아니다", async () => {
     const { container } = await mount({ initialScene: 3 });
     const root = container.querySelector("[data-tutorial-screen]");
     expect(root).not.toBeNull();
     expect(root?.getAttribute("data-tutorial-scene")).toBe("3");
     expect(root?.classList.contains("mf-root") && root.classList.contains("mf-room") && root.classList.contains("mf-tut")).toBe(true);
-    expect(stage.props!.errand!.actId).toBe("mail");
+    expect(stage.props!.errand!.actId).toBe("lamp2");
     expect(connection.calls).toBe(0);
     // 로컬 어댑터: 이동 메시지를 보내도 아무 일 없이 true, 연결로는 나가지 않는다
     expect(stage.props!.send({ t: "move", x: 1, z: 1, seq: 1 } as never)).toBe(true);
@@ -132,7 +102,7 @@ describe("장면 3: [처리] 가 로컬 어댑터를 거쳐 장면 4 로 (트레
     expect(socketSpy).not.toHaveBeenCalled();
   });
 
-  it("[처리] 를 누르면 0.7초 전에는 3, 뒤에는 4", async () => {
+  it("[켜기] 를 누르면 0.7초 전에는 3, 뒤에는 4", async () => {
     const { container } = await mount({ initialScene: 3 });
     act(() => stage.props!.errand!.onAct?.());
     advance(699);
@@ -143,7 +113,7 @@ describe("장면 3: [처리] 가 로컬 어댑터를 거쳐 장면 4 로 (트레
 });
 
 describe("장면 1~7 끝까지 (가짜 타이머)", () => {
-  it("1 은 4600ms 뒤 2 · 2 는 2600ms 뒤 [다음] · 3 [처리] · 4 는 3400ms 뒤 [다음] · 5 [다음] · 6 은 도윤 이름표 · 7 [다음] → onEnd(done) 한 번", async () => {
+  it("1 은 4600ms 뒤 2 · 2 는 2600ms 뒤 [다음] · 3 [켜기] · 4 [살펴보기] 뒤 [다음] · 5 [다음] · 6 은 도윤 이름표 · 7 [다음] → onEnd(done) 한 번", async () => {
     const { container, onEnd } = await mount();
     expect(sceneOf(container)).toBe("1");
     advance(4599);
@@ -162,9 +132,9 @@ describe("장면 1~7 끝까지 (가짜 타이머)", () => {
     act(() => stage.props!.errand!.onAct?.());
     advance(700);
     expect(sceneOf(container)).toBe("4");
-    advance(3399);
+    advance(5000);
     expect(next$(container)).toBeNull();
-    advance(1);
+    act(() => stage.props!.clues!.onAct?.());
     fireEvent.click(next$(container)!);
     expect(sceneOf(container)).toBe("5");
 
@@ -175,7 +145,7 @@ describe("장면 1~7 끝까지 (가짜 타이머)", () => {
 
     expect(stage.props!.pick).toBeDefined();
     act(() => stage.props!.pick!.onPick(1));
-    // 17-05: 정답은 도장·정체 공개(1100ms 뒤)를 거쳐 [다음] 으로 장면 7 이 된다
+    // 정답은 도장·정체 비공개 카드(1100ms 뒤)를 거쳐 [다음] 으로 장면 7 이 된다(D-20)
     expect(sceneOf(container)).toBe("6");
     advance(1100);
     fireEvent.click(next$(container)!);
@@ -239,7 +209,6 @@ describe("소리 큐", () => {
       ...TUTORIAL_SCENES.flatMap((s) => s.beats.flatMap((b) => (b.sfx === undefined ? [] : [b.sfx]))),
       TUTORIAL_PICK.right.sfx,
       TUTORIAL_PICK.wrong.sfx,
-      TUTORIAL_PICK.reveal.sfx,
     ];
     for (const cue of cues) expect(ids.has(cue), `${cue} 가 SFX_IDS 에 있어야 한다`).toBe(true);
   });
@@ -298,23 +267,17 @@ describe("장면 시각표: 소리·문구", () => {
     expect(says()).toHaveLength(1);
   });
 
-  it("장면 4: step 다섯 번(0·320·640·960·1280), eye 1900, 문장 2250", async () => {
+  it("장면 4: 0ms 에 whoosh, 500ms 에 문장 — 걷는 소리·눈 큐가 없다", async () => {
     await mount({ initialScene: 4 });
-    expect(plays("tut.step")).toHaveLength(1);
-    advance(319);
-    expect(plays("tut.step")).toHaveLength(1);
-    advance(1);
-    expect(plays("tut.step")).toHaveLength(2);
-    advance(960);
-    expect(plays("tut.step")).toHaveLength(5);
-    advance(619);
-    expect(plays("tut.eye")).toHaveLength(0);
-    advance(1);
-    expect(plays("tut.eye")).toHaveLength(1);
-    advance(349);
+    expect(plays("tut.whoosh")).toHaveLength(1);
+    expect(says()).toEqual([]);
+    advance(499);
     expect(says()).toEqual([]);
     advance(1);
     expect(says()).toHaveLength(1);
+    advance(4000);
+    expect(plays("tut.step")).toHaveLength(0);
+    expect(plays("tut.eye")).toHaveLength(0);
   });
 
   it("장면 1: lampOff 두 번(800·1300)·scream 2600, 문장 없음(막대 정지)", async () => {
