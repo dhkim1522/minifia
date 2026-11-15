@@ -91,10 +91,16 @@ describe("actableSpotOf (살펴볼 수 있는 지점)", () => {
     expect(actableSpotOf({ x: 5.25, z: -5.75 }, spotsOf(v1()))).toBe("cloth");
   });
 
-  it("이미 살핀 지점(done)·손댄 흔적·어두워서 못 본 지점(dim)은 후보가 아니다 — 그 밖의 가장 가까운 new 가 이긴다", () => {
-    expect(actableSpotOf({ x: 4.75, z: -5.75 }, spotsOf(v1([{ spot: "cloth", r: "clue", piece: "pin" }])))).toBe("footprint");
-    expect(actableSpotOf({ x: 4.75, z: -5.75 }, spotsOf(v1([{ spot: "cloth", r: "touched" }, { spot: "footprint", r: "none" }])))).toBe("window");
+  it("이미 살핀 지점(done)·손댄 흔적·어두워서 못 본 지점(dim)은 후보가 아니다 — 그 지점 쪽으로 걸어가 가장 가까워진 new 가 이긴다", () => {
+    expect(actableSpotOf({ x: 4.2, z: -5.75 }, spotsOf(v1([{ spot: "cloth", r: "clue", piece: "pin" }])))).toBe("footprint");
+    expect(actableSpotOf({ x: 5.3, z: -5.75 }, spotsOf(v1([{ spot: "cloth", r: "touched" }, { spot: "footprint", r: "none" }])))).toBe("window");
     expect(actableSpotOf({ x: 4.75, z: -5.75 }, spotsOf(v1([{ spot: "cloth", r: "none" }, { spot: "footprint", r: "none" }, { spot: "window", r: "dark" }])))).toBeNull();
+  });
+
+  it("WR-01: 한 자리는 가장 가까운 지점 하나만 소유한다 — 살핀 지점 위에 서 있으면 반경 안의 다른 new 도 닿지 않는다(걸어서 옮겨야 한다)", () => {
+    const mid = { x: 4.75, z: -5.75 };
+    const inReach = spotsOf(v1()).filter((s) => Math.hypot(s.x - mid.x, s.z - mid.z) <= 1.2).length;
+    expect([inReach, actableSpotOf(mid, spotsOf(v1())), actableSpotOf(mid, spotsOf(v1([{ spot: "cloth", r: "clue", piece: "pin" }])))].join("/")).toBe("3/cloth/");
   });
 });
 

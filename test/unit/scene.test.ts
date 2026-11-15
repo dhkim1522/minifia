@@ -227,6 +227,37 @@ describe("살피기 — 1회·반경·거절 (D-13·D-21)", () => {
     const near = inspectSpot(s, c.c2.id, { x: spot.x, z: spot.z - 110 });
     expect(`${far.ok}/${near.ok}`).toBe("false/true");
   });
+
+  it("WR-01: 가운데 지점에서 세 지점이 모두 반경 안이어도 한 자리에서는 하나만 살필 수 있다 — 가운데에서 거듭 눌러도 나머지 지점은 닿지 않는다", () => {
+    const { c, morning } = victimMorning(11);
+    for (let house = 0; house < 8; house += 1) {
+      const spots = TOWN_CLUE_SPOTS[house]!;
+      const mid = spots[1]!;
+      const reachable = spots.filter((p) => Math.hypot(p.x - mid.x, p.z - mid.z) <= 120).length;
+      expect(`${house}:${reachable}`).toBe(`${house}:3`); // 문제 전제: 모든 집에서 가운데 지점에 서면 세 지점이 다 반경 안이다
+      let s: RoomState = { ...morning, scene: { ...morning.scene!, house } };
+      const results: string[] = [];
+      for (let i = 0; i < 4; i += 1) {
+        const r = inspectSpot(s, c.c2.id, mid);
+        results.push(r.ok ? "ok" : "no");
+        if (r.ok) s = r.state;
+      }
+      expect(`${house}/${results.join(",")}/${(rowOf(s, c.c2.id).sceneSeen ?? []).map((l) => l.spot).join(",")}`).toBe(`${house}/ok,no,no,no/cloth`);
+    }
+  });
+
+  it("WR-01: 가운데에 선 산 마피아가 거듭 살펴도 가운데 지점 하나만 흐려진다 — 나머지 지점(발자국)은 시민이 평소 단서를, 가운데 지점은 흔적을 받는다", () => {
+    const { c, morning } = victimMorning(11);
+    const mid = TOWN_CLUE_SPOTS[morning.scene!.house]![1]!;
+    let s = morning;
+    for (let i = 0; i < 3; i += 1) {
+      const r = inspectSpot(s, c.m1.id, mid);
+      if (r.ok) s = r.state;
+    }
+    s = look(s, c.c2, 0);
+    s = look(s, c.police, 1);
+    expect(`${Object.keys(s.scene!.touched).join(",")}|${seenOf(s, c.c2.id).split("/")[1]}|${seenOf(s, c.police.id).split("/")[1]}`).toBe("cloth|clue|touched");
+  });
 });
 
 describe("흐려짐 — 산 마피아가 먼저 살핀 지점 (D-15, 결정 0088-11)", () => {

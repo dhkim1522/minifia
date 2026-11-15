@@ -38,12 +38,13 @@ export function spotsOf(view: RoomView): SpotModel[] {
 }
 
 /**
- * 처리 반경(ERRAND_ACT_R) 안의 안 살핀(new) 지점 중 가장 가까운 것. 같은 거리면 앞(발자국 → 옷 조각 → 창문). 위치를 모르면 null.
- * 서버 inspectSpot 과 같은 판정이다(같은 반경·같은 순서).
+ * 처리 반경(ERRAND_ACT_R) 안에서 가장 가까운 지점이 아직 안 살핀(new) 것이면 그 지점. 같은 거리면 앞(발자국 → 옷 조각 → 창문). 위치를 모르면 null.
+ * 가장 가까운 지점을 이미 살폈다면 null 이다(한 자리는 가장 가까운 지점 하나만 소유한다, WR-01). 서버 inspectSpot 과 같은 판정이다(같은 반경·같은 순서·같은 소유 규칙).
  */
 export function actableSpotOf(pos: { x: number; z: number } | null | undefined, spots: ReadonlyArray<SpotModel>): SpotId | null {
-  const taken = spots.filter((s) => s.state !== "new").map((s) => s.id);
-  return actablePlaceOf<SpotId>(pos, spots, taken, ERRAND_ACT_R);
+  const owner = actablePlaceOf<SpotId>(pos, spots, [], ERRAND_ACT_R);
+  if (owner === null) return null;
+  return spots.find((s) => s.id === owner)?.state === "new" ? owner : null;
 }
 
 /** 단서 카드 한 장: 어느 지점·결과 종류 + (발자국 수 | 조각). 단서 값은 내가 살핀 줄에서 그대로 온다 */

@@ -54,8 +54,8 @@ function lineOf(scene: SceneState, spot: SpotId): ClueLine {
 }
 
 /**
- * 지점 살피기(D-13). 원인 흐름 morning 에서 scene 이 있고 행위자가 방에 있는 산 사람일 때, 반경 ERRAND_ACT_R 안의 아직 안 살핀 지점 중 가장 가까운 하나(같으면 발자국 → 옷 조각 → 창문 순)를
- * 살핀다 — 결과 줄을 본인 sceneSeen 끝에 더한다. 그 밖은 사유를 가르지 않고 { ok: false } 하나다(D-21, 응답이 오라클이 되지 않는다).
+ * 지점 살피기(D-13). 원인 흐름 morning 에서 scene 이 있고 행위자가 방에 있는 산 사람일 때, 반경 ERRAND_ACT_R 안에서 가장 가까운 지점(같으면 발자국 → 옷 조각 → 창문 순)이 아직 안 살핀 것이면 그 하나를
+ * 살핀다(가장 가까운 지점이 이미 살핀 것이면 거절 — 한 자리에서 세 지점을 다 살필 수 없다, WR-01) — 결과 줄을 본인 sceneSeen 끝에 더한다. 그 밖은 사유를 가르지 않고 { ok: false } 하나다(D-21, 응답이 오라클이 되지 않는다).
  * 결과를 계산한 **뒤** 행위자가 산 마피아면 그 지점을 touched 로 표시한다(D-15 — 마피아 자신은 평소 단서, 그 뒤에 살피는 사람은 흔적). 응답은 역할과 무관하게 같은 모양이다(상태 한 번 쓰기).
  */
 export function inspectSpot(state: RoomState, actorId: string, posFx: { x: number; z: number }): { ok: true; state: RoomState } | { ok: false } {
@@ -66,11 +66,13 @@ export function inspectSpot(state: RoomState, actorId: string, posFx: { x: numbe
   if (actor === undefined || !isAlive(actor) || spots === undefined) return { ok: false };
   const seen = actor.sceneSeen ?? [];
   const reach = ERRAND_ACT_R * UNIT;
+  // 소유 지점(WR-01): 한 자리는 가장 가까운 지점 하나만 소유한다(같으면 앞). 같은 집 세 지점 간격(1.0~1.12)이 반경(1.2)보다 좁아 한 자리에서 셋이 다 닿던 것을 막는다.
+  // 가장 가까운 지점을 이미 살폈다면 그 자리에서는 다른 지점을 살필 수 없다 — 걸어서 옮겨야 한다. 어느 쪽이든 응답은 { ok: false } 하나다(사유를 가르지 않는다).
   let best: SpotId | undefined;
   let bestD = Infinity;
   SPOT_IDS.forEach((id, k) => {
     const at = spots[k];
-    if (at === undefined || seen.some((l) => l.spot === id)) return;
+    if (at === undefined) return;
     const d = (at.x - posFx.x) ** 2 + (at.z - posFx.z) ** 2;
     if (d <= reach * reach && d < bestD) {
       bestD = d;
@@ -79,6 +81,7 @@ export function inspectSpot(state: RoomState, actorId: string, posFx: { x: numbe
   });
   if (best === undefined) return { ok: false };
   const spot: SpotId = best;
+  if (seen.some((l) => l.spot === spot)) return { ok: false };
   const line = lineOf(scene, spot);
   const nextScene: SceneState = actor.role === "mafia" ? { ...scene, touched: { ...scene.touched, [spot]: true } } : scene;
   return {
