@@ -22,6 +22,7 @@ import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { ToolButton } from "../components/ToolButton";
 import { RecordCard } from "../components/v2/RecordCard";
+import { SuspectBoard } from "../components/v2/SuspectBoard";
 import { EvidenceCard } from "../components/v2/EvidenceCard";
 import { V2Icon } from "../components/v2/V2Icon";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
@@ -47,6 +48,7 @@ import { houseTagsOf } from "../game/houseView";
 import { clueCardsOf, skipOf, spotsOf } from "../game/sceneView";
 import { callTargetsOf, type HostLocal } from "../game/hostLine";
 import { recordRowsOf, traceWindowOf } from "../game/recordView";
+import { boardOf } from "../game/boardView";
 import { TRACE_MARK, sameOutfitSeats } from "../game/traceMark";
 import { faceSrc, seatColorVar } from "../net/assets";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
@@ -414,9 +416,20 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const canPick = voting ? meAlive : nominating && meAlive && myTurnNo !== undefined && pickedTurn !== myTurnNo && mine === undefined;
   // 목격 기록(15-07, ERRAND-05·D-04): 있는지는 서버가 준 view.me.record 의 유무 하나다(역할을 읽지 않는다). 토론에서만 [기록]·카드가 있고 단계가 바뀌면 사라진다.
   // 한 번 열면 [기록] 의 빛은 그 토론 안에서 되살아나지 않는다(열림 래치 — 단계·일차 키가 바뀌면 자동으로 풀린다).
-  const witnessRows = useMemo(() => (view.phase === "discussion" && meAlive ? recordRowsOf(view) : null), [view, meAlive]);
+  // 원인 흐름(확장판) 토론은 [기록]·RecordCard 단독 대신 의심 보드(21-11, D-18·D-19·P21-14)가 목격 기록을 한 칸으로 품는다: [보드] 가 [기록] 자리를 이어받고 **열린 채로 시작**한다.
+  const causeFlow = rulesetOf(modeOf(view)).cause;
+  const boardModel = useMemo(() => (view.phase === "discussion" && meAlive && causeFlow ? boardOf(view) : null), [view, meAlive, causeFlow]);
+  const witnessRows = useMemo(() => (view.phase === "discussion" && meAlive && !causeFlow ? recordRowsOf(view) : null), [view, meAlive, causeFlow]);
   const recordKey = `${view.phase}:${view.day?.n ?? 0}`;
   const [recordOpenKey, setRecordOpenKey] = useState<string | null>(null);
+  // 보드는 반대로 "접은 키"를 쥔다 — 단계·일차 키가 바뀌면 자동으로 다시 열린 상태로 시작한다
+  const [boardClosedKey, setBoardClosedKey] = useState<string | null>(null);
+  const boardOpen = boardModel !== null && boardClosedKey !== recordKey;
+  const boardShown = boardModel !== null;
+  // 토론을 벗어나면 접은 기록을 지운다 — 다음에 토론으로 돌아오면 다시 열린 채 시작한다
+  useEffect(() => {
+    if (!boardShown) setBoardClosedKey(null);
+  }, [boardShown]);
   const [recordSeenKey, setRecordSeenKey] = useState<string | null>(null);
   const recordOpened = recordSeenKey === recordKey;
   const recordOpen = witnessRows !== null && recordOpenKey === recordKey;
@@ -428,22 +441,26 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     setRecordOpenKey(recordKey);
     setRecordSeenKey(recordKey);
   };
-  // 채팅 입력칸에 포커스가 가면 카드가 접힌다(카드는 기록 칸을 덮을 뿐 입력줄을 가리지 않지만, 쓰는 동안은 기록 칸이 보여야 한다)
+  const toggleBoard = (): void => setBoardClosedKey(boardOpen ? recordKey : null);
+  // 채팅 입력칸에 포커스가 가면 카드가 접힌다(카드는 기록 칸을 덮을 뿐 입력줄을 가리지 않지만, 쓰는 동안은 기록 칸이 보여야 한다). 기록 카드·의심 보드 같은 규칙
+  const panelOpen = recordOpen || boardOpen;
   useEffect(() => {
-    if (!recordOpen) return;
+    if (!panelOpen) return;
     const root = rootRef.current;
     if (root === null) return;
     const onFocusIn = (e: FocusEvent): void => {
-      if (e.target !== null && e.target === inputRef.current) setRecordOpenKey(null);
+      if (e.target === null || e.target !== inputRef.current) return;
+      setRecordOpenKey(null);
+      setBoardClosedKey(recordKey);
     };
     root.addEventListener("focusin", onFocusIn);
     return () => root.removeEventListener("focusin", onFocusIn);
-  }, [recordOpen, rootRef, inputRef]);
+  }, [panelOpen, recordKey, rootRef, inputRef]);
   // 카드 아래 끝 = 입력줄 윗변 − 8 (CSS 변수 --mf-record-bottom = 루트 아랫변에서 카드 아랫변까지). 열려 있는 동안 다시 그릴 때마다 잰다(키보드·패널 높이)
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (root === null) return;
-    if (!recordOpen) {
+    if (!panelOpen) {
       root.style.removeProperty("--mf-record-bottom");
       return;
     }
@@ -456,7 +473,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
 
   // 아침 흔적(15-07, TRACE-02·03, D-06): 흔적이 있는 아침의 마지막 MORNING_TRACE_MS 동안 모두에게 같은 카드. 서버 시계 기준.
   // 구간 시작 전에 마운트하면 시작 시각까지 남은 ms 를 담은 소리 신호를 한 번 보낸다. 이미 구간 안에서 마운트(재접속·새로 고침)하면 신호는 없다.
-  const traceKey = view.phase === "morning" && view.day?.morning?.trace !== undefined ? `${view.day.n}:${view.phaseEndsAt ?? ""}` : null;
+  const traceKey = view.phase === "morning" && !causeFlow && view.day?.morning?.trace !== undefined ? `${view.day.n}:${view.phaseEndsAt ?? ""}` : null;
   const [traceOn, setTraceOn] = useState<boolean>(() => traceWindowOf(view, Date.now() + offset)?.on === true);
   const traceSignalKey = useRef<string | null>(null);
   useEffect(() => {
@@ -485,7 +502,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [traceKey]);
   // 증거 카드(16-01, D-10): 1행 흔적 + 2행 마지막 목격. 구간·소리는 15 흔적 구간 그대로이고 값은 모두에게 같은 day.evidence 에서만 읽는다(P-1).
-  const tracePiece = view.phase === "morning" ? view.day?.evidence?.trace : undefined;
+  const tracePiece = view.phase === "morning" && !causeFlow ? view.day?.evidence?.trace : undefined; // 원인 흐름은 공개 흔적 카드가 없다(P21-15 — 단서는 내가 직접 받는다)
   const evidenceVictim = view.day?.morning?.eliminated;
   const evidenceSeen = view.day?.evidence?.seen;
   const nameOfSeat = (seat: number | undefined): { name: string; color: string } | null => {
@@ -930,8 +947,13 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           {...(whisper.mode ? { hintOverride: WHISPER_TEXT.modeHint } : {})}
           tod={tod}
           extra={
-            witnessRows !== null || roleCard ? (
+            witnessRows !== null || boardModel !== null || roleCard ? (
               <>
+                {boardModel !== null ? (
+                  <span className="mf-game__record-slot" data-board-button="">
+                    <ToolButton name="보드" icon={<V2Icon name="lens" size={22} />} expanded={boardOpen} onClick={toggleBoard} />
+                  </span>
+                ) : null}
                 {witnessRows !== null ? (
                   <span className="mf-game__record-slot" data-record-button="">
                     <ToolButton name="기록" icon={<V2Icon name="timeline" size={22} />} call={recordCall} expanded={recordOpen} onClick={toggleRecord} />
@@ -1055,6 +1077,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           {clueCards.map((c) => (
             <ClueCard key={c.spot} card={c} />
           ))}
+        </div>
+      ) : null}
+      {boardModel !== null && boardOpen ? (
+        <div className="mf-game__record">
+          <SuspectBoard model={boardModel} faceOf={faceSrc} colorOf={seatColorVar} onClose={() => setBoardClosedKey(recordKey)} />
         </div>
       ) : null}
       {witnessRows !== null && recordOpen ? (

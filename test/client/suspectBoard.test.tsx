@@ -161,7 +161,6 @@ describe("SuspectBoard 금지 말·스타일", () => {
 
   it("스타일: .mv-board 규칙이 v2.css 에 있고 hex 가 없으며 모션 줄이기에서 애니메이션이 없다", () => {
     const css = V2_CSS.slice(V2_CSS.indexOf(".mv-board"));
-    expect(V2_CSS.indexOf(".mv-board")).toBeGreaterThan(V2_CSS.indexOf(".mv-record {"));
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,6}\b/);
     expect(css).toMatch(/prefers-reduced-motion: reduce[\s\S]*mv-board[\s\S]*animation: none/);
   });

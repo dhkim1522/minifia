@@ -528,6 +528,36 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-skip[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 .mv-skip:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 
+/* 의심 보드 카드(21-11, UI-SPEC P21-14·P21-18 · E. 토론). 껍데기는 .mv-record(아래, 같은 한 클래스라 겹치는 속성이 없다) 를 그대로 쓰고 안쪽만 더한다. 이 블록은 심부름 블록(파일 끝에 두는 시험 규칙) 앞에 둔다. 새 토큰·hex·진홍 없음.
+ * 낮은 화면(360×560)에서는 카드 안 세로 스크롤을 허용한다(알려진 한계). 등장은 mv-record-in(opacity 뿐), 모션 줄이기에서 즉시. */
+.mv-board { gap: var(--space-sm); overflow-y: auto; overscroll-behavior: contain; }
+.mv-board > * { flex: none; }
+.mv-board__head { display: flex; align-items: center; gap: var(--space-sm); height: var(--tap-min); color: var(--gray-100); }
+.mv-board__title { flex: 1; min-width: 0; font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
+.mv-board__chips { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.mv-board__chip { display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; height: 32px; padding: 0 12px; border: 1px solid var(--light-lamp); border-radius: var(--radius-pill); color: var(--light-lamp); font-size: 14px; line-height: 1.4; white-space: nowrap; }
+.mv-board__chip.is-dim { border: 1px dashed var(--gray-500); color: var(--gray-300); }
+.mv-board__chip-text { font-variant-numeric: tabular-nums; word-break: keep-all; }
+.mv-board__lamps { display: flex; align-items: center; gap: var(--space-sm); height: 20px; }
+.mv-board__lamp { box-sizing: border-box; width: 14px; height: 14px; border-radius: var(--radius-pill); border: 1px solid var(--gray-500); background: transparent; }
+.mv-board__lamp.is-on { border-color: var(--light-lamp); background: var(--light-lamp); }
+.mv-board__faces { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.mv-board__face { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; box-sizing: border-box; height: 56px; min-width: 0; padding: 0 4px; border: 2px solid transparent; border-radius: 10px; background: var(--night-700); color: var(--gray-50); }
+.mv-board__face[data-mark] { border-color: var(--light-lamp); }
+.mv-board__img { flex: none; box-sizing: border-box; width: 30px; height: 30px; border-radius: var(--radius-pill); border: 2px solid var(--night-600); object-fit: cover; background: var(--night-800); }
+.mv-board__name { max-width: 100%; font-size: 14px; line-height: 1.2; font-weight: 400; color: var(--gray-50); word-break: keep-all; white-space: nowrap; overflow: hidden; }
+.mv-board__badge { position: absolute; top: -6px; right: -6px; display: grid; place-items: center; box-sizing: border-box; width: 18px; height: 18px; border-radius: var(--radius-pill); border: 1px solid var(--trace-mark, var(--light-lamp)); background: var(--night-900); color: var(--trace-mark, var(--light-lamp)); }
+.mv-board__witness { display: flex; align-items: center; gap: var(--space-sm); box-sizing: border-box; width: 100%; height: var(--tap-min); padding: 0; border: 0; border-top: 1px solid var(--night-600); background: transparent; color: var(--gray-100); font-family: var(--font-ui); text-align: left; cursor: pointer; }
+.mv-board__witness:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mv-board__witness-n { flex: 1; font-size: 16px; line-height: 1.5; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gray-50); }
+.mv-board__chev { display: inline-flex; color: var(--gray-300); transition: transform var(--dur-fast); }
+.mv-board__chev.is-open { transform: rotate(90deg); }
+.mv-board .mv-board__rows { flex: none; overflow: visible; }
+@media (prefers-reduced-motion: reduce) {
+  .mv-board { animation: none; }
+  .mv-board__chev { transition: none; }
+}
+
 /* 심부름 부품(15-04·16-07, UI-SPEC "심부름 화면 계약"·V-20~V-22). 새 토큰·hex 없음 — 빛남은 14 의 .is-call 을 그대로 쓰고 타일 빛만 테두리 3·번짐 26 으로 키운다.
  * 위치는 층이 inline transform 으로 쓰므로 위치를 쓰는 요소(타일·화살표·알약)에는 transform 애니메이션·:active 변형을 걸지 않는다(그림·배지 같은 자식에만).
  * 이 블록은 파일 끝에 둔다(시험이 첫 .mv-errand 부터 끝까지를 본다). */
@@ -583,34 +613,4 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .mv-record { animation: none; }
   .mv-trace { animation: none; }
-}
-
-/* 의심 보드 카드(21-11, UI-SPEC P21-14·P21-18 · E. 토론). 껍데기는 .mv-record(위) 를 그대로 쓰고 안쪽만 더한다. 새 토큰·hex·진홍 없음.
- * 낮은 화면(360×560)에서는 카드 안 세로 스크롤을 허용한다(알려진 한계). 등장은 mv-record-in(opacity 뿐), 모션 줄이기에서 즉시. */
-.mv-board { gap: var(--space-sm); overflow-y: auto; overscroll-behavior: contain; }
-.mv-board > * { flex: none; }
-.mv-board__head { display: flex; align-items: center; gap: var(--space-sm); height: var(--tap-min); color: var(--gray-100); }
-.mv-board__title { flex: 1; min-width: 0; font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
-.mv-board__chips { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
-.mv-board__chip { display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; height: 32px; padding: 0 12px; border: 1px solid var(--light-lamp); border-radius: var(--radius-pill); color: var(--light-lamp); font-size: 14px; line-height: 1.4; white-space: nowrap; }
-.mv-board__chip.is-dim { border: 1px dashed var(--gray-500); color: var(--gray-300); }
-.mv-board__chip-text { font-variant-numeric: tabular-nums; word-break: keep-all; }
-.mv-board__lamps { display: flex; align-items: center; gap: var(--space-sm); height: 20px; }
-.mv-board__lamp { box-sizing: border-box; width: 14px; height: 14px; border-radius: var(--radius-pill); border: 1px solid var(--gray-500); background: transparent; }
-.mv-board__lamp.is-on { border-color: var(--light-lamp); background: var(--light-lamp); }
-.mv-board__faces { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
-.mv-board__face { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; box-sizing: border-box; height: 56px; min-width: 0; padding: 0 4px; border: 2px solid transparent; border-radius: 10px; background: var(--night-700); color: var(--gray-50); }
-.mv-board__face[data-mark] { border-color: var(--brass-400); }
-.mv-board__img { flex: none; box-sizing: border-box; width: 30px; height: 30px; border-radius: var(--radius-pill); border: 2px solid var(--night-600); object-fit: cover; background: var(--night-800); }
-.mv-board__name { max-width: 100%; font-size: 14px; line-height: 1.2; font-weight: 400; color: var(--gray-50); word-break: keep-all; white-space: nowrap; overflow: hidden; }
-.mv-board__badge { position: absolute; top: -6px; right: -6px; display: grid; place-items: center; box-sizing: border-box; width: 18px; height: 18px; border-radius: var(--radius-pill); border: 1px solid var(--trace-mark, var(--brass-400)); background: var(--night-900); color: var(--trace-mark, var(--brass-400)); }
-.mv-board__witness { display: flex; align-items: center; gap: var(--space-sm); box-sizing: border-box; width: 100%; height: var(--tap-min); padding: 0; border: 0; border-top: 1px solid var(--night-600); background: transparent; color: var(--gray-100); font-family: var(--font-ui); text-align: left; cursor: pointer; }
-.mv-board__witness:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
-.mv-board__witness-n { flex: 1; font-size: 16px; line-height: 1.5; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gray-50); }
-.mv-board__chev { display: inline-flex; color: var(--gray-300); transition: transform var(--dur-fast); }
-.mv-board__chev.is-open { transform: rotate(90deg); }
-.mv-board__rows { flex: none; overflow: visible; }
-@media (prefers-reduced-motion: reduce) {
-  .mv-board { animation: none; }
-  .mv-board__chev { transition: none; }
 }
