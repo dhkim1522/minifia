@@ -43,6 +43,7 @@ import { WHISPER_TEXT } from "../game/whisperView";
 import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../game/dayView";
 import { LAMP_ACT_LOOK, errandProgress, placeCentersOf } from "../game/errandView";
 import { houseTagsOf } from "../game/houseView";
+import { skipOf } from "../game/sceneView";
 import { callTargetsOf, type HostLocal } from "../game/hostLine";
 import { recordRowsOf, traceWindowOf } from "../game/recordView";
 import { TRACE_MARK, sameOutfitSeats } from "../game/traceMark";
@@ -73,7 +74,7 @@ import type { CameraMode } from "../world/presence";
 import { worldTestHooksEnabled } from "../world/testHooks";
 import type { RingKind } from "../world/runtime";
 import type { WorldStore } from "../world/store";
-import { GamePanel } from "./GamePanel";
+import { GamePanel, SkipSlot } from "./GamePanel";
 import "../styles/game.css";
 import "../styles/sheet.css";
 import "../styles/testtools.css";
@@ -964,6 +965,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         <>
           {startCard && errandMine !== null ? <ErrandStartCard places={errandMine.places} cause={rulesetOf(modeOf(view)).cause} /> : null}
           {errandMine !== null ? <ErrandDots total={errandMine.total} done={errandMine.n} /> : null}
+          {/* 원인 흐름 저녁의 [건너뛰기](21-10 D-23): 아래 패널이 없어 진행 점 줄 오른쪽 끝에 같은 부품을 놓는다. 유령·기본판은 skipOf 가 null 이라 없다 */}
+          {skipOf(view) !== null ? (
+            <div className="mf-game__skip">
+              <SkipSlot view={view} send={send} canSend={canSend} />
+            </div>
+          ) : null}
         </>
       ) : noPanel ? null : (
         <GamePanel

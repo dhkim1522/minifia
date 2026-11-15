@@ -3,6 +3,7 @@
 // 지점 상태는 me.scene 에 그 지점 줄이 없으면 new, r 가 clue·none 이면 done("내가 살핌" — none 은 카드가 "아무것도 없어요"로 알린다), touched·dark 면 dim.
 // 두 dim 상태는 같은 모양이고 사유(why)는 접근성 이름에만 쓴다(D-15 — 먼저 손댄 흔적과 어두운 창은 같은 겉모양). 발자국 수는 내가 살핀 줄(r clue n)에만 있다(P21-16).
 // 살필 수 있는 지점(actableSpotOf)은 서버 inspectSpot(shared/game/scene.ts)의 화면 거울이다 — 단추의 유무에만 쓰고 권위는 서버다(같은 고정소수점 거리·같은 반경·같은 순서).
+import { isAlive } from "../../shared/game/alive";
 import { ERRAND_ACT_R } from "../../shared/game/phases";
 import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import type { ClueLine, RoomView, SpotId, TracePiece } from "../../shared/protocol";
@@ -62,4 +63,22 @@ export function clueCardsOf(view: RoomView): ClueCardModel[] {
     ...(l.r === "clue" && l.n !== undefined ? { n: l.n } : {}),
     ...(l.r === "clue" && l.piece !== undefined ? { piece: l.piece } : {}),
   }));
+}
+
+/** [건너뛰기] 알약의 재료(21-10 D-23, P21-13): 누른 수·산 사람 수·내가 눌러 둔 상태 */
+export interface SkipModel {
+  count: number;
+  total: number;
+  pressed: boolean;
+}
+
+/**
+ * 원인 흐름 저녁(errand)·아침(morning)의 산 사람에게만 [건너뛰기] 재료를 준다 — 유령·토론·그 밖의 단계·기본판은 null.
+ * count 는 서버가 모두에게 같게 준 day.skipCount(누가 눌렀는지는 없다), pressed 는 서버가 본인에게만 준 me.skip. 역할을 읽지 않는다.
+ */
+export function skipOf(view: RoomView): SkipModel | null {
+  if ((view.phase !== "errand" && view.phase !== "morning") || !rulesetOf(modeOf(view)).cause) return null;
+  const me = view.players.find((p) => p.seat === view.me.seat);
+  if (me !== undefined && !isAlive(me)) return null;
+  return { count: view.day?.skipCount ?? 0, total: view.players.filter(isAlive).length, pressed: view.me.skip === true };
 }

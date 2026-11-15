@@ -172,7 +172,8 @@ function writeErrandLayer(
       const d = el.getBoundingClientRect();
       return { left: d.left - base.left, top: d.top - base.top, right: d.right - base.left, bottom: d.bottom - base.top };
     };
-    const avoid = [...host.ownerDocument.querySelectorAll("[data-side-button]")].map(rel);
+    // 소리·오른쪽 열 단추와 저녁 [건너뛰기](21-10 P21-13, 진행 점 줄 오른쪽 끝)를 표지·알약·화살표가 피한다
+    const avoid = [...host.ownerDocument.querySelectorAll("[data-side-button], [data-skip]")].map(rel);
     // 진행 점 줄(16-08, V-23): 아래 패널이 없는 심부름 스테이지는 화면 아래까지 넓어서 타일·알약은 점 줄 윗변 − 8 위에만 놓는다.
     // 스테이지 아래 끝을 점 줄 윗변으로 올리고(안쪽 여백 8 이 윗변 − 8 이 된다) 줄 자체도 피할 사각형에 더한다.
     let stageBottom = h - insets.bottom;

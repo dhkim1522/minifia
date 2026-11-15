@@ -22,6 +22,8 @@
 
 /* [테스트] 버튼 자리: 헤더 아래 8, 왼쪽 16 (6페이즈 그대로) */
 .mf-game__test { position: absolute; top: calc(var(--mf-host-bottom, 62px) + 8px); left: var(--space-md); z-index: var(--z-overlay); }
+/* 저녁(아래 패널 없음)의 [건너뛰기] 자리(21-10 P21-13): 진행 점 줄(아래 40)과 같은 높이 중심, 오른쪽 16. 아침은 채팅 입력줄 오른쪽 끝(trailing)이라 이 자리를 쓰지 않는다 */
+.mf-game__skip { position: absolute; right: var(--space-md); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); z-index: var(--z-tags); }
 
 /* 아래 패널: night-800 97%, 위 모서리 radius-lg, 안쪽 14 16 22. 위에서부터 채팅 기록 칸 + 입력줄(48) + 단계별 행동 줄. 높이는 DOM 에서 재서 스테이지 사각형에 넘긴다. */
 .mf-game__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: color-mix(in srgb, var(--night-800) 97%, transparent); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
