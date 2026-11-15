@@ -4,7 +4,8 @@
 // 일반 방(본문 nickname 만)에서는 세 요청이 모두 거부되는지도 본다.
 // 스크립트는 전지적이다: 각 클라이언트의 view 로 확인한다. 토큰은 어떤 출력에도 찍지 않는다. Node 22 내장 fetch·WebSocket 만 쓴다.
 //
-// 사용법: node scripts/uat-test-room.mjs [--prod | <기준 주소>] [--previous-version V]
+// 사용법: node scripts/uat-test-room.mjs [--prod | <기준 주소>] [--previous-version V] [--mode extended|basic]
+//   --mode: 판 종류(기본 extended = 제품의 원인 흐름 저녁 → 밤 → 아침 → 토론, basic = 기본 마피아 옛 순서) — 21-13
 //   --previous-version V: /api/health 의 version 이 V 와 달라질 때까지 2초 간격 최대 60초 기다리고, 그래도 같으면 실패한다
 //                         (배포 직후 옛 버전이 잠시 응답하는 문제).
 // 종료 코드: 0 = UAT TEST-ROOM OK, 1 = UAT TEST-ROOM FAIL, 2 = 중단(제한 시간·연결 오류).
@@ -12,14 +13,15 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { exitIfV1 } from "./deploy-target.mjs";
 
-const args = { base: null, prod: false, previousVersion: null };
+const args = { base: null, prod: false, previousVersion: null, mode: "extended" };
 for (let i = 2; i < process.argv.length; i++) {
   const a = process.argv[i];
   if (a === "--prod") args.prod = true;
   else if (a === "--previous-version") args.previousVersion = process.argv[++i] ?? "";
+  else if (a === "--mode") args.mode = process.argv[++i] ?? "";
   else if (!a.startsWith("--") && args.base === null) args.base = a;
   else {
-    console.log("사용법: node scripts/uat-test-room.mjs [--prod | <기준 주소>] [--previous-version V]");
+    console.log("사용법: node scripts/uat-test-room.mjs [--prod | <기준 주소>] [--previous-version V] [--mode extended|basic]");
     process.exit(2);
   }
 }
@@ -99,6 +101,24 @@ async function act(c, msg) {
   return settle(c, from);
 }
 
+// 판 종류별 허용 전이 표(21-13, 결정 0088): 방의 판 종류가 표를 고른다 — scripts/smoke.mjs 의 PHASE_NEXT_BY_MODE 와 같은 두 갈래(대조는 test/unit/e2eContract.test.ts).
+// 기본 마피아 판은 옛 순서(낮 시작 발표 → 토론 …, 처형·0표 뒤 밤), 확장판은 원인 흐름(저녁 errand → 밤 → 아침|토론 …, 처형 없음·처형 뒤 다음 저녁)이다. 값이 배열인 이유: 분기가 있는 단계가 있다(결정 0022·0060).
+const PHASE_NEXT_BY_MODE = {
+  basic: {
+    roleReveal: ["dayAnnounce"], dayAnnounce: ["discussion"], discussion: ["nomination"],
+    nomination: ["night", "defense"], night: ["morning"], morning: ["dayAnnounce"],
+  },
+  extended: {
+    roleReveal: ["errand"], errand: ["night"], night: ["morning", "discussion"], morning: ["discussion"], discussion: ["nomination"],
+    nomination: ["errand", "defense"],
+  },
+};
+const MODE = args.mode;
+if (!Object.hasOwn(PHASE_NEXT_BY_MODE, MODE)) {
+  console.log(`사용법 오류: --mode 는 extended 또는 basic 이어야 함: ${MODE}`);
+  process.exit(2);
+}
+
 const newClient = (nickname) => ({ nickname, token: "", seat: -1, frames: [], ws: null, leaving: false, closedCode: null });
 
 async function createRoomWith(nicknames, body0) {
@@ -166,6 +186,11 @@ async function main() {
   check("c", "손님 소켓에는 프레임이 없음", seen.every((s) => s === "[]"), seen.join(" "));
 
   // ---- d. 시작 → 배정에서 넘기기 ----
+  // 판 종류(21-13): 기본은 확장판(원인 흐름)이다. --mode basic 이면 방장이 먼저 기본 마피아 판을 고른다(modePick, 대기실에서만).
+  if (MODE === "basic") {
+    send(host, { t: "modePick", mode: "basic" });
+    await waitUntil(() => clients.every((c) => lastView(c)?.mode === "basic"), 5000, "판 종류(basic) 고르기");
+  }
   send(host, { t: "start" });
   await waitAllPhase(clients, "assigning", 5000, "배정 시작");
   send(host, { t: "testSkip" });
@@ -178,12 +203,9 @@ async function main() {
   check("d", "역할 확인에서 방장 testRole → WRONG_PHASE", revealRole === "[error:WRONG_PHASE,state:roleReveal]", revealRole);
 
   // ---- e. 단계를 거듭 넘기기 ----
-  // 값이 배열인 이유: 분기가 있는 단계가 있다(결정 0022·0060). 이 방은 사람만 있어 지목이 없으므로 nomination 은 변론 없이 night 으로 가지만,
-  // 지목이 있으면 defense 쪽으로 갈 수 있다 — 순서 확인은 "허용된 다음 단계 중 하나" 로 본다.
-  const PHASE_NEXT = {
-    roleReveal: ["dayAnnounce"], dayAnnounce: ["errand"], errand: ["discussion"], discussion: ["nomination"], // 15페이즈(결정 0074): 낮 시작 다음에 심부름(errand) 40초
-    nomination: ["night", "defense"], night: ["morning"], morning: ["dayAnnounce"],
-  };
+  // 값이 배열인 이유: 분기가 있는 단계가 있다(결정 0022·0060). 이 방은 사람만 있어 지목이 없으므로 nomination 은 변론 없이 처형 없는 다음 단계로 가지만,
+  // 지목이 있으면 defense 쪽으로 갈 수 있다 — 순서 확인은 "허용된 다음 단계 중 하나" 로 본다. 표는 판 종류별 두 갈래다(위 PHASE_NEXT_BY_MODE).
+  const PHASE_NEXT = PHASE_NEXT_BY_MODE[MODE];
   const order = [];
   let current = "roleReveal";
   let orderOk = true;
@@ -196,38 +218,67 @@ async function main() {
     order.push(next);
     current = next;
   };
-  await skipTo("dayAnnounce");
-  await skipTo("errand");
-  check("e", "dayAnnounce 다음은 errand (심부름 단계, 산 네 소켓 모두 me.errand 장소 3곳·처리 0곳)",
-    clients.every((c) => lastView(c).phase === "errand" && lastView(c).me.errand?.places?.length === 3 && lastView(c).me.errand?.done?.length === 0),
-    JSON.stringify(lastView(host).me.errand ?? null));
-  await skipTo("discussion");
-  await skipTo("nomination");
-  // 사람만 있는 방이라 아무도 지목하지 않았다: 지목 0표는 변론 없이 곧장 night 이다(day.points 도 빈 목록).
-  check("e", "discussion 다음은 nomination (지목 단계, 공개 목록 day.points 가 모든 소켓에서 빈 목록)",
-    clients.every((c) => lastView(c).phase === "nomination" && Array.isArray(lastView(c).day?.points) && lastView(c).day.points.length === 0),
-    JSON.stringify(lastView(host).day?.points ?? null));
-  await skipTo("night");
-  check("e", "roleReveal → dayAnnounce → errand → discussion → nomination → night 를 넘기기 한 번에 하나씩 네 소켓 모두 3초 안에 받음",
-    orderOk, `${order.join(" → ")} (${Math.round(performance.now() - t0)}ms, 심부름 40초·토론 90초·밤 30초를 기다리지 않음)`);
-  check("e", "지목 0표로 온 밤: 모든 소켓의 day.noExecution 이 {reason:noVotes}",
-    clients.every((c) => same(lastView(c).day?.noExecution, { reason: "noVotes" })), JSON.stringify(lastView(host).day?.noExecution ?? null));
+  const errandOk = () =>
+    clients.every((c) => lastView(c).phase === "errand" && lastView(c).me.errand?.places?.length === 3 && lastView(c).me.errand?.done?.length === 0);
   const victim = guests[0];
-  await act(host, { t: "pick", target: victim.seat });
-  check("e", "밤에 마피아(방장)의 pick 이 me.pick 으로 돌아옴", lastView(host).me.pick === victim.seat, String(lastView(host).me.pick));
-  await sleep(RATE_PAUSE_MS);
-  send(host, { t: "testSkip" });
-  await waitAllPhase(clients, "morning", SKIP_WAIT_MS, "밤 넘기기(morning)");
-  const mornings = clients.map((c) => lastView(c).day?.morning);
-  check("e", "넘긴 밤도 정상 판정: 모든 소켓의 day.morning 이 같고 지목한 사람이 탈락",
-    mornings.every((m) => same(m, mornings[0])) && mornings[0]?.eliminated === victim.seat && typeof mornings[0]?.trace === "string", JSON.stringify(mornings[0]));
-  await sleep(RATE_PAUSE_MS);
-  send(host, { t: "testSkip" });
-  await waitAllPhase(clients, "dayAnnounce", SKIP_WAIT_MS, "아침 넘기기(dayAnnounce)");
-  check("e", "아침에서 넘기면 dayAnnounce 이고 day.n 이 2", clients.every((c) => lastView(c).day?.n === 2), clients.map((c) => lastView(c).day?.n).join(","));
+  let afterMorning; // 아침을 넘긴 뒤의 단계
+  if (MODE === "basic") {
+    await skipTo("dayAnnounce");
+    await skipTo("discussion");
+    await skipTo("nomination");
+    // 사람만 있는 방이라 아무도 지목하지 않았다: 지목 0표는 변론 없이 곧장 night 이다(day.points 도 빈 목록).
+    check("e", "discussion 다음은 nomination (지목 단계, 공개 목록 day.points 가 모든 소켓에서 빈 목록)",
+      clients.every((c) => lastView(c).phase === "nomination" && Array.isArray(lastView(c).day?.points) && lastView(c).day.points.length === 0),
+      JSON.stringify(lastView(host).day?.points ?? null));
+    await skipTo("night");
+    check("e", "roleReveal → dayAnnounce → discussion → nomination → night 를 넘기기 한 번에 하나씩 네 소켓 모두 3초 안에 받음",
+      orderOk, `${order.join(" → ")} (${Math.round(performance.now() - t0)}ms, 토론 90초·밤 30초를 기다리지 않음)`);
+    check("e", "지목 0표로 온 밤: 모든 소켓의 day.noExecution 이 {reason:noVotes}",
+      clients.every((c) => same(lastView(c).day?.noExecution, { reason: "noVotes" })), JSON.stringify(lastView(host).day?.noExecution ?? null));
+    await act(host, { t: "pick", target: victim.seat });
+    check("e", "밤에 마피아(방장)의 pick 이 me.pick 으로 돌아옴", lastView(host).me.pick === victim.seat, String(lastView(host).me.pick));
+    await sleep(RATE_PAUSE_MS);
+    send(host, { t: "testSkip" });
+    await waitAllPhase(clients, "morning", SKIP_WAIT_MS, "밤 넘기기(morning)");
+    const mornings = clients.map((c) => lastView(c).day?.morning);
+    check("e", "넘긴 밤도 정상 판정: 모든 소켓의 day.morning 이 같고 지목한 사람이 탈락",
+      mornings.every((m) => same(m, mornings[0])) && mornings[0]?.eliminated === victim.seat, JSON.stringify(mornings[0]));
+    await sleep(RATE_PAUSE_MS);
+    send(host, { t: "testSkip" });
+    await waitAllPhase(clients, "dayAnnounce", SKIP_WAIT_MS, "아침 넘기기(dayAnnounce)");
+    check("e", "아침에서 넘기면 dayAnnounce 이고 day.n 이 2", clients.every((c) => lastView(c).day?.n === 2), clients.map((c) => lastView(c).day?.n).join(","));
+    afterMorning = "dayAnnounce";
+  } else {
+    // 확장판(원인 흐름): 역할 확인 → 저녁(errand, 일차 1) → 밤 → 아침(피해자가 있으니 현장이 있다) → 토론 → 지목(0표) → 다음 날 저녁(일차 2).
+    await skipTo("errand");
+    check("e", "roleReveal 다음은 errand(저녁)이고 첫 저녁의 day.n 이 1 (산 네 소켓 모두 me.errand 장소 3곳·처리 0곳)",
+      errandOk() && clients.every((c) => lastView(c).day?.n === 1), JSON.stringify(lastView(host).me.errand ?? null));
+    await skipTo("night");
+    check("e", "저녁 다음은 night 이고 첫 밤에는 처형 무효 이유가 없다(day.noExecution 키 없음)",
+      clients.every((c) => lastView(c).phase === "night" && lastView(c).day?.noExecution === undefined), JSON.stringify(lastView(host).day?.noExecution ?? null));
+    await act(host, { t: "pick", target: victim.seat });
+    check("e", "밤에 마피아(방장)의 pick(집 고르기)이 me.pick 으로 돌아옴", lastView(host).me.pick === victim.seat, String(lastView(host).me.pick));
+    await skipTo("morning");
+    const mornings = clients.map((c) => lastView(c).day?.morning);
+    check("e", "넘긴 밤도 정상 판정: 모든 소켓의 day.morning 이 같고 지목한 사람이 탈락(공개 흔적 trace 는 없다)",
+      mornings.every((m) => same(m, mornings[0])) && mornings[0]?.eliminated === victim.seat && mornings[0]?.trace === undefined, JSON.stringify(mornings[0]));
+    await skipTo("discussion");
+    await skipTo("nomination");
+    // 사람만 있는 방이라 아무도 지목하지 않았다: 지목 0표는 변론 없이 곧장 다음 날 저녁이다(day.points 도 빈 목록).
+    check("e", "discussion 다음은 nomination (지목 단계, 공개 목록 day.points 가 모든 소켓에서 빈 목록)",
+      clients.every((c) => lastView(c).phase === "nomination" && Array.isArray(lastView(c).day?.points) && lastView(c).day.points.length === 0),
+      JSON.stringify(lastView(host).day?.points ?? null));
+    await skipTo("errand");
+    check("e", "roleReveal → errand → night → morning → discussion → nomination → errand 를 넘기기 한 번에 하나씩 네 소켓 모두 3초 안에 받음",
+      orderOk, `${order.join(" → ")} (${Math.round(performance.now() - t0)}ms, 저녁 40초·밤 30초·토론 90초를 기다리지 않음)`);
+    check("e", "지목 0표로 온 저녁: day.n 이 2 이고 모든 소켓의 day.noExecution 이 {reason:noVotes}",
+      clients.every((c) => lastView(c).day?.n === 2 && same(lastView(c).day?.noExecution, { reason: "noVotes" })), JSON.stringify(lastView(host).day?.noExecution ?? null));
+    afterMorning = "errand";
+  }
   const guestMid = summary(await act(guests[1], { t: "testSkip" }));
   await sleep(300);
-  check("e", "게임 중 손님 testSkip → NOT_HOST 이고 단계 그대로", guestMid === "[error:NOT_HOST,state:dayAnnounce]" && lastView(host).phase === "dayAnnounce", guestMid);
+  check("e", `게임 중 손님 testSkip → NOT_HOST 이고 단계 그대로(${afterMorning})`,
+    guestMid === `[error:NOT_HOST,state:${afterMorning}]` && lastView(host).phase === afterMorning, guestMid);
 
   // ---- f. 대기실로 되돌리기 ----
   const resetFrom = clients.map((c) => c.frames.length);

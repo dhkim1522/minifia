@@ -54,7 +54,7 @@ import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
 import { OUTFIT_IDS, PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
-import type { OutfitId, PhaseId } from "../../shared/protocol";
+import type { GameMode, OutfitId, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { HOST_HIDDEN_PHASES, HOST_LINES, type HostKey } from "../../src/game/hostLine";
 import { OPENING_LAMPS, TUTORIAL_CAST, TUTORIAL_DOT_COUNT, TUTORIAL_LINES, TUTORIAL_SCENES, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
@@ -67,6 +67,8 @@ import { SIDE_CELL, SIDE_GAP } from "../../src/components/v2/SideColumn";
 import { MODE_TEXT } from "../../src/game/modeText";
 import { GAME_MODES } from "../../shared/protocol";
 import { underCauseLock } from "../helpers/playable";
+import { nextPhaseOf, afterDayOf } from "../../shared/game/phases";
+import { rulesetOf } from "../../shared/game/ruleset";
 
 describe("E2E 의 TIMELESS_PHASES 와 앱 상수", () => {
   it("scripts/e2e/lib.mjs 의 TIMELESS_PHASES 가 src/game/scenes.ts 의 같은 이름 상수와 같은 목록이다", () => {
@@ -881,20 +883,54 @@ describe("서버 계약 소비자 스크립트의 새 단계 흐름 (15-06, DEPL
     expect(text).toMatch(/morningWant = 9_000 \+ \(morning\.trace !== undefined \? MORNING_TRACE_MS : 0\)/);
   });
 
-  it("smoke.mjs 의 전이 표가 dayAnnounce → errand → discussion 이고 낮 단계 목록에 errand 가 있으며 errand 40초 대기를 쓴다", () => {
+  // 21-13(갈래 C): 전이 표는 판 종류별 두 갈래다 — 기본판은 옛 순서, 확장판은 원인 흐름(저녁 → 밤 → 아침 → 토론).
+  const smokeGraphs = (smoke as unknown as { PHASE_NEXT_BY_MODE: Record<GameMode, Record<string, string[]>> }).PHASE_NEXT_BY_MODE;
+
+  it("smoke.mjs 의 전이 표가 판 종류별 두 갈래이고(기본판 dayAnnounce → discussion, 확장판 roleReveal → errand → night) 낮 단계 목록에 errand 가 있으며 errand 40초 대기를 쓴다", () => {
     const text = scriptText("smoke.mjs");
-    expect(text).toMatch(/dayAnnounce: \["errand"\]/);
-    expect(text).toMatch(/errand: \["discussion"\]/);
+    expect(text).toMatch(/roleReveal: \["errand"\]/);
+    expect(text).toMatch(/errand: \["night"\]/);
+    expect(text).toMatch(/dayAnnounce: \["discussion"\]/);
     expect(text).toMatch(/const DAY_PHASES = \[[^\]]*"errand"/);
     expect(text).toMatch(/ERRAND_WAIT_MS = ERRAND_MS \+ STATE_LIMIT_MS/);
-    expect(text).not.toMatch(/dayAnnounce: \["discussion"\]/);
+    expect(text).toMatch(/FIRST_DAY_PHASE = \{ basic: "dayAnnounce", extended: "errand" \}/);
+    expect(text).not.toMatch(/dayAnnounce: \["errand"\]/);
   });
 
-  it("uat-test-room.mjs 의 전이 표도 dayAnnounce → errand → discussion 이고 errand 로 한 번 넘긴다", () => {
+  it("smoke.mjs 의 두 전이 표가 서버의 nextPhaseOf·afterDayOf 와 같다: 표가 가리키는 모든 단계(기본 다음 단계·처형 없는 낮 분기)가 들어 있고, 낮 시작 발표는 기본판에만·저녁은 확장판에만 있다 (T-21-45)", () => {
+    for (const mode of GAME_MODES) {
+      const rules = rulesetOf(mode);
+      const graph = smokeGraphs[mode];
+      expect(Object.keys(graph).sort(), `${mode} 표의 단계 목록`).toEqual(
+        (mode === "basic"
+          ? ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"]
+          : ["lobby", "assigning", "roleReveal", "errand", "night", "morning", "discussion", "nomination", "defense", "verdict", "execution", "ended"]
+        ).sort(),
+      );
+      for (const [from, nexts] of Object.entries(graph)) {
+        if (from === "ended" || from === "lobby") continue; // 방장의 start 가 넘기는 단계라 표의 next 가 없다
+        const want = nextPhaseOf(from as PhaseId, rules);
+        if (from === "nomination") {
+          // 지목 마감: 최다 한 명이면 변론, 처형 없이 끝나면 afterDayOf(기본판 night · 원인 흐름 errand)
+          expect([...nexts].sort(), `${mode} nomination`).toEqual([afterDayOf(rules), "defense"].sort());
+          continue;
+        }
+        expect(nexts, `${mode} ${from} → ${want}`).toContain(want);
+      }
+    }
+    // 원인 흐름 확장판의 갈림: 밤 다음은 아침이거나(현장이 있을 때) 현장 없는 아침(길이 0)을 건너뛴 토론이다.
+    expect([...smokeGraphs.extended.night!].sort()).toEqual(["discussion", "morning"]);
+    expect(nextPhaseOf("morning", rulesetOf("extended"))).toBe("discussion");
+    expect(nextPhaseOf("night", rulesetOf("extended"))).toBe("morning");
+  });
+
+  it("uat-test-room.mjs 의 전이 표도 판 종류별 두 갈래이고 확장판은 errand 로 두 번 넘긴다(저녁 · 다음 날 저녁)", () => {
     const text = scriptText("uat-test-room.mjs");
-    expect(text).toMatch(/dayAnnounce: \["errand"\], errand: \["discussion"\]/);
+    expect(text).toMatch(/roleReveal: \["dayAnnounce"\], dayAnnounce: \["discussion"\]/);
+    expect(text).toMatch(/roleReveal: \["errand"\], errand: \["night"\]/);
     expect(text).toContain('await skipTo("errand")');
-    expect(text).not.toMatch(/dayAnnounce: \["discussion"\]/);
+    expect(text).toContain('{ t: "modePick", mode: "basic" }');
+    expect(text).not.toMatch(/dayAnnounce: \["errand"\]/);
   });
 
   it("bots.mjs 는 errand 단계를 알고(행동 없이 지나간다) 밤에는 시민 봇도 고른다", () => {
