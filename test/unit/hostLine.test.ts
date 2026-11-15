@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
-import type { EvidenceView, GameMode, MorningView, PhaseId, PlaceId, RecordLine, RoomView } from "../../shared/protocol";
+import { CAUSE_MODES } from "../../shared/game/ruleset";
+import type { ClueLine, EvidenceView, GameMode, MorningView, PhaseId, PlaceId, RecordLine, RoomView } from "../../shared/protocol";
+import { openCause } from "../helpers/playable";
 import { HOST_FALLBACK, HOST_HIDDEN_PHASES, HOST_LINES, callTargetsOf, hostBandModeOf, hostChimeOf, hostKeyOf, hostLineOf, hostTimeOf, type HostKey, type HostLocal } from "../../src/game/hostLine";
 
 // 14-01: 사회자 문구 표(UI-SPEC "사회자 문구 표")와 파생 판정. 표가 단일 출처다 — 시험과 표가 어긋나면 표를 따른다.
@@ -520,6 +522,13 @@ const ALLOWED_EXACT: ReadonlySet<string> = new Set([
   // 16-09: 흔적이 있는 날 토론 문구 — day.evidence.trace 의 유무(모두에게 같은 공개 값)만 본다. seen·조각 값은 읽지 않는다(아래 시험)
   "day.evidence",
   "day.evidence.trace",
+  // 21-08: 판 종류(원인 흐름 분기 — rulesetOf(modeOf(view)) 한 곳), 내가 살핀 지점 id 와 현장 집 좌석(공개). 단서 값(r·n·piece)은 읽지 않는다 — 아래 시험이 고정한다
+  "mode",
+  "me.scene",
+  "me.scene[]",
+  "me.scene[].spot",
+  "day.scene",
+  "day.scene.house",
 ]);
 /** 18.1-12: 하위 값 허용 접두사는 없다 — 닉네임·아침 결과 문장은 더는 읽지 않는다 */
 const ALLOWED_PREFIX: readonly string[] = [];
@@ -795,6 +804,8 @@ describe("16-09 discussion.evidence (D-11, EVID-03, T-16-21)", () => {
 // 심부름·목격 기록·증거 문구에 닿는 길이 없다. hostKeyOf 는 판 종류를 읽지 않는다 — 키가 없어서 닿지 않는 것이다(새 분기 없음).
 describe("기본 마피아 판의 사회자 줄 (19-02, E-3)", () => {
   const OFF_KEYS: readonly HostKey[] = ["errand.act", "errand.done", "errand.ghost", "witness", "discussion.evidence"];
+  /** 21-08 원인 흐름 전용 키 — 기본판은 이 키에도 닿지 않는다(옛 확장판 문장 시험의 "공유 문장" 계산에서는 뺀다) */
+  const CAUSE_KEYS: readonly HostKey[] = ["errand.lamp.act", "errand.lamp.done", "night.mafia.house", "night.police.house", "night.doctor.house", "night.citizen.house", "scene.act", "scene.done", "scene.ghost", "discussion.board"];
   const BASIC_PHASES: readonly PhaseId[] = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"];
   const ROLES: readonly RoleId[] = ["citizen", "mafia", "police", "doctor"];
   /** basic 판의 단계 view — 서버가 싣는 모양 그대로 me.errand·me.record·day.evidence 가 없고 아침은 eliminated 뿐이다 */
@@ -818,6 +829,7 @@ describe("기본 마피아 판의 사회자 줄 (19-02, E-3)", () => {
     }
     expect(hits.join(" ")).toBe("");
     expect(seen).toBe(8 * 4 * 2 * 4);
+    for (const phase of BASIC_PHASES) for (const ghost of [false, true]) expect(CAUSE_KEYS).not.toContain(hostKeyOf(basicView(phase, { ghost })));
   });
 
   it("낮 시작 발표는 dayAnnounce.wait, 토론은 discussion.act 다 (문구 그대로)", () => {
@@ -827,7 +839,7 @@ describe("기본 마피아 판의 사회자 줄 (19-02, E-3)", () => {
 
   it("문장으로 봐도 같다 — 어느 단계의 사회자 줄도 심부름·기록·증거 문구가 아니다", () => {
     // errand.ghost 의 문장("지켜봐 주세요")은 다른 단계의 유령 줄과 같은 문장이라 문장으로는 가를 수 없다 — 그 키는 위의 키 단언이 본다. 여기서는 꺼진 키에만 있는 문장 넷을 본다.
-    const shared = new Set((Object.keys(HOST_LINES) as HostKey[]).filter((k) => !OFF_KEYS.includes(k)).map((k) => HOST_LINES[k] as string));
+    const shared = new Set((Object.keys(HOST_LINES) as HostKey[]).filter((k) => !OFF_KEYS.includes(k) && !CAUSE_KEYS.includes(k)).map((k) => HOST_LINES[k] as string));
     const offLines = OFF_KEYS.map((k) => HOST_LINES[k] as string).filter((line) => !shared.has(line));
     const hits = BASIC_PHASES.flatMap((phase) => [false, true].map((ghost) => hostLineOf(basicView(phase, { ghost })))).filter((line) => offLines.includes(line));
     expect(offLines.join(" | ")).toBe("빛나는 곳을 찾아 처리해 주세요 | 곧 토론이 시작됩니다 | 기록 단추로 본 것을 확인해 주세요 | 같은 옷과 엇갈린 목격을 살펴보세요");
@@ -843,8 +855,177 @@ describe("기본 마피아 판의 사회자 줄 (19-02, E-3)", () => {
     expect(`${hostKeyOf(ext)}/${hostKeyOf(ext, { recordOpened: true })}`).toBe("witness/discussion.evidence");
   });
 
-  it("hostLine.ts 는 판 종류를 읽지 않는다 — 새 분기를 만들지 않았다 (P19-17)", () => {
+  it("hostLine.ts 의 판 종류 읽기는 rulesetOf(modeOf(view)) 한 곳뿐이다 — view.mode 를 직접 읽지 않는다 (P19-17 → 21-08: 원인 흐름 분기)", () => {
     const src = readFileSync(fileURLToPath(new URL("../../src/game/hostLine.ts", import.meta.url)), "utf8");
-    expect(/\bview\.mode\b|\bmodeOf\b|\brulesetOf\b/.test(src)).toBe(false);
+    const code = src.split("\n").filter((line) => !line.trimStart().startsWith("//")).join("\n");
+    expect(/\bview\.mode\b/.test(code)).toBe(false);
+    expect(code.match(/rulesetOf\(modeOf\(/g)?.length).toBe(1);
   });
 });
+
+// ---- 21-08: 원인 흐름(저녁 등불·밤 집·아침 현장·토론 보드)의 사회자 문구·빛남·알림음 (UI-SPEC 사회자 문구 표·빛남 계약 추가) ----
+describe("원인 흐름 사회자 줄 (21-08)", () => {
+  let restore: () => void = () => {};
+  beforeAll(() => {
+    restore = openCause();
+  });
+  afterAll(() => restore());
+
+  const LAMPS: PlaceId[] = ["lamp0", "lamp3", "lamp6"];
+  const ROLES: readonly RoleId[] = ["mafia", "police", "doctor", "citizen"];
+  const SPOT_LINES: ClueLine[] = [{ spot: "footprint", r: "clue", n: 2 }];
+
+  /** 원인 흐름 마을 view — 단계 필드를 patch 로 얹는다 */
+  function cv(spec: Spec, patch: { scene?: ClueLine[]; house?: number } = {}): RoomView {
+    const v = makeView({ ...spec, mode: "extended" }) as unknown as { map: string; me: Record<string, unknown>; day: Record<string, unknown> };
+    v.map = "town";
+    if (patch.scene !== undefined) v.me.scene = patch.scene.map((l) => ({ ...l }));
+    if (patch.house !== undefined) v.day.scene = { house: patch.house };
+    return v as unknown as RoomView;
+  }
+  const errandSpec = (done: PlaceId[] = [], o: Partial<Spec> = {}): Spec => ({ phase: "errand", errand: { places: [...LAMPS], done }, ...o });
+
+  it("저녁: 산 사람(역할 무관) '등불 세 곳을 켜 주세요', 3/3 '곧 밤이 됩니다', 유령 '지켜봐 주세요', 시작 카드 중에는 빈 줄(키·빛남은 그대로)", () => {
+    for (const role of ROLES) {
+      expect(hostLineOf(cv(errandSpec([], { role }))), role).toBe("등불 세 곳을 켜 주세요");
+      expect(hostLineOf(cv(errandSpec([...LAMPS], { role }))), role).toBe("곧 밤이 됩니다");
+    }
+    expect(hostLineOf(cv(errandSpec([], { ghost: true })))).toBe("지켜봐 주세요");
+    expect(hostLineOf(cv(errandSpec()), { startCard: true })).toBe("");
+    expect(hostKeyOf(cv(errandSpec()), { startCard: true })).toBe("errand.lamp.act");
+  });
+
+  it("옛 확장판(원인 흐름 꺼짐)의 저녁 줄은 그대로 '빛나는 곳을 찾아 처리해 주세요'·'곧 토론이 시작됩니다'", () => {
+    const off = causeOff();
+    try {
+      expect(hostLineOf(cv(errandSpec([])))).toBe("빛나는 곳을 찾아 처리해 주세요");
+      expect(hostLineOf(cv(errandSpec([...LAMPS])))).toBe("곧 토론이 시작됩니다");
+    } finally {
+      off();
+    }
+  });
+
+  it("밤: 네 역할이 각자 '…집을 눌러 주세요' 문장이고 한 view 의 줄은 그 역할 문장 하나뿐이다, 유령은 지금 그대로", () => {
+    const want: Record<RoleId, string> = { mafia: "없앨 사람의 집을 눌러 주세요", police: "조사할 사람의 집을 눌러 주세요", doctor: "지킬 사람의 집을 눌러 주세요", citizen: "집 하나를 눌러 주세요" };
+    for (const role of ROLES) {
+      const line = hostLineOf(cv({ phase: "night", role }));
+      expect(line, role).toBe(want[role]);
+      for (const other of ROLES.filter((r) => r !== role)) expect(line, `${role}/${other}`).not.toBe(want[other]);
+    }
+    expect(hostLineOf(cv({ phase: "night", role: "mafia", ghost: true }))).toBe("모두의 밤 행동을 지켜봐 주세요");
+  });
+
+  it("아침: 산 사람 '빛나는 곳을 살펴보세요', 3곳 살핌 '곧 토론이 시작됩니다', 유령 '지켜봐 주세요', 큰 글이 말하는 동안(announcing) 빈 줄", () => {
+    const three: ClueLine[] = [{ spot: "footprint", r: "clue", n: 1 }, { spot: "cloth", r: "none" }, { spot: "window", r: "dark" }];
+    const morning: Spec = { phase: "morning", morning: { eliminated: 2 } };
+    for (const role of ROLES) {
+      expect(hostLineOf(cv({ ...morning, role }, { house: 2, scene: SPOT_LINES })), role).toBe("빛나는 곳을 살펴보세요");
+      expect(hostLineOf(cv({ ...morning, role }, { house: 2, scene: three })), role).toBe("곧 토론이 시작됩니다");
+    }
+    expect(hostLineOf(cv({ ...morning, ghost: true }, { house: 2 }))).toBe("지켜봐 주세요");
+    expect(hostLineOf(cv(morning, { house: 2 }), { announcing: true })).toBe("");
+    expect(hostKeyOf(cv(morning, { house: 2 }), { announcing: true })).toBe("scene.act");
+  });
+
+  it("토론: 산 사람 '단서를 말로 나눠 보세요'(기록·증거가 있어도), 유령은 그대로", () => {
+    expect(hostLineOf(cv({ phase: "discussion", evidence: { trace: "pin" }, record: REC_SOME }))).toBe("단서를 말로 나눠 보세요");
+    expect(hostKeyOf(cv({ phase: "discussion" }))).toBe("discussion.board");
+    expect(hostLineOf(cv({ phase: "discussion", ghost: true }))).toBe("유령끼리 이야기할 수 있습니다");
+  });
+
+  it("새 문장은 모두 19자 이하·마침표 없음·역할 이름 없음", () => {
+    const keys: HostKey[] = ["errand.lamp.act", "errand.lamp.done", "night.mafia.house", "night.police.house", "night.doctor.house", "night.citizen.house", "scene.act", "scene.done", "scene.ghost", "discussion.board"];
+    for (const k of keys) {
+      const t = HOST_LINES[k];
+      expect(t.length, k).toBeGreaterThan(0);
+      expect([...t].length, t).toBeLessThanOrEqual(19);
+      expect(t.endsWith("."), t).toBe(false);
+      for (const word of ["마피아", "경찰", "의사", "시민"]) expect(t, t).not.toContain(word);
+    }
+  });
+
+  it("빛남 — 저녁: 반경 밖이면 안 켠 배정 등불 전부(places), 반경 안이면 tool errand, 3/3 이면 null, 유령 null", () => {
+    expect(callTargetsOf(cv(errandSpec(["lamp3"])), { pos: { x: 0, z: 0 } })).toEqual({ kind: "places", ids: ["lamp0", "lamp6"] });
+    expect(callTargetsOf(cv(errandSpec()), { pos: null })).toEqual({ kind: "places", ids: ["lamp0", "lamp3", "lamp6"] });
+    expect(callTargetsOf(cv(errandSpec()), { pos: { x: -2.25, z: -3.75 } })).toEqual({ kind: "tool", tool: "errand" });
+    expect(callTargetsOf(cv(errandSpec(["lamp0"])), { pos: { x: -2.25, z: -3.75 } })).toEqual({ kind: "places", ids: ["lamp3", "lamp6"] });
+    expect(callTargetsOf(cv(errandSpec([...LAMPS])), { pos: { x: 0, z: 0 } })).toBeNull();
+    expect(callTargetsOf(cv(errandSpec([], { ghost: true })), { pos: { x: 0, z: 0 } })).toBeNull();
+  });
+
+  it("빛남 — 밤: 산 사람(나 포함) 좌석 전부가 houses, 마피아와 시민의 결과가 같고 죽은 사람은 뺀다, 유령 null", () => {
+    const a = callTargetsOf(cv({ phase: "night", role: "mafia", dead: [3] }));
+    const b = callTargetsOf(cv({ phase: "night", role: "citizen", dead: [3] }));
+    expect(a).toEqual({ kind: "houses", seats: [0, 1, 2] });
+    expect(b).toEqual(a);
+    expect(callTargetsOf(cv({ phase: "night", role: "police", ghost: true }))).toBeNull();
+  });
+
+  it("빛남 — 아침: 반경 밖이면 안 살핀 지점 전부(spots), 반경 안이면 tool inspect, 다 살폈으면 null, 마피아와 시민이 같다", () => {
+    const morning: Spec = { phase: "morning", morning: { eliminated: 2 } };
+    // 집 2 의 지점: 발자국 (5.75, -6.25) · 옷 조각 (5.75, -5.25) · 창문 (5.75, -4.25)
+    for (const role of ["mafia", "citizen"] as const) {
+      expect(callTargetsOf(cv({ ...morning, role }, { house: 2 }), { pos: { x: 0, z: 0 } }), role).toEqual({ kind: "spots", ids: ["footprint", "cloth", "window"] });
+      expect(callTargetsOf(cv({ ...morning, role }, { house: 2, scene: SPOT_LINES }), { pos: { x: 0, z: 0 } }), role).toEqual({ kind: "spots", ids: ["cloth", "window"] });
+      expect(callTargetsOf(cv({ ...morning, role }, { house: 2 }), { pos: { x: 5.75, z: -6.25 } }), role).toEqual({ kind: "tool", tool: "inspect" });
+    }
+    const three: ClueLine[] = [{ spot: "footprint", r: "none" }, { spot: "cloth", r: "none" }, { spot: "window", r: "dark" }];
+    expect(callTargetsOf(cv(morning, { house: 2, scene: three }), { pos: { x: 5.75, z: -6.25 } })).toBeNull();
+    expect(callTargetsOf(cv({ ...morning, ghost: true }, { house: 2 }), { pos: { x: 0, z: 0 } })).toBeNull();
+    // 발자국을 살폈고 옷 조각 가까이에 있으면 안 살핀 옷 조각이 반경 안이라 inspect
+    expect(callTargetsOf(cv(morning, { house: 2, scene: SPOT_LINES }), { pos: { x: 5.75, z: -5.25 } })).toEqual({ kind: "tool", tool: "inspect" });
+  });
+
+  it("빛남 — 토론: 산 사람은 지금까지처럼 chat 입력칸 빛, 유령 null", () => {
+    expect(callTargetsOf(cv({ phase: "discussion" }))).toEqual({ kind: "tool", tool: "chat" });
+    expect(callTargetsOf(cv({ phase: "discussion", ghost: true }))).toBeNull();
+  });
+
+  it("알림음 쌍: 처형 → 저녁은 울리지 않고, 역할 확인 → 저녁·저녁 → 밤·밤 → 아침·아침 → 토론·밤 → 토론은 울린다", () => {
+    expect(hostChimeOf("execution", "errand", false)).toBe(false);
+    expect(hostChimeOf("roleReveal", "errand", false)).toBe(true);
+    expect(hostChimeOf("errand", "night", false)).toBe(true);
+    expect(hostChimeOf("night", "morning", false)).toBe(true);
+    expect(hostChimeOf("morning", "discussion", false)).toBe(true);
+    expect(hostChimeOf("night", "discussion", false)).toBe(true);
+  });
+
+  it("HOST-05: 원인 흐름 단계(저녁·밤·아침·토론)가 읽은 경로는 허용 목록 안이고 me.scene 의 단서 값(r·n·piece)·다른 역할 값은 읽지 않는다", () => {
+    const outside = new Set<string>();
+    const all = new Set<string>();
+    const clueful: ClueLine[] = [{ spot: "footprint", r: "clue", n: 3 }, { spot: "cloth", r: "clue", piece: "pin" }, { spot: "window", r: "touched" }];
+    for (const phase of ["errand", "night", "morning", "discussion"] as const) {
+      for (const role of ROLES) {
+        for (const ghost of [false, true]) {
+          for (const pos of POSES) {
+            for (const scene of [undefined, SPOT_LINES, clueful]) {
+              const spec: Spec = { phase, role, ghost, morning: { eliminated: 2, trace: "pin" }, errand: { places: [...LAMPS], done: ["lamp3"] }, noise: true };
+              const log = new Set<string>();
+              const view = recorder(cv(spec, { house: 2, ...(scene === undefined ? {} : { scene }) }), log) as RoomView;
+              for (const local of [{ pos }, { pos, announcing: true }, { pos, startCard: true }]) {
+                hostLineOf(view, local);
+                hostKeyOf(view, local);
+                callTargetsOf(view, local);
+              }
+              for (const path of log) {
+                all.add(path);
+                if (!isAllowed(path)) outside.add(path);
+              }
+            }
+          }
+        }
+      }
+    }
+    expect([...outside]).toEqual([]);
+    for (const banned of ["me.scene[].r", "me.scene[].n", "me.scene[].piece", "me.allies", "players[].job"]) expect(all.has(banned), banned).toBe(false);
+    expect(all.has("mode")).toBe(true);
+  });
+});
+
+/** 시험 동안 원인 흐름을 다시 끈다(openCause 위에서 옛 확장판 줄을 대조) */
+function causeOff(): () => void {
+  const list = CAUSE_MODES as GameMode[];
+  const saved = [...list];
+  list.splice(0, list.length, ...saved.filter((m) => m !== "extended"));
+  return () => list.splice(0, list.length, ...saved);
+}
