@@ -7,16 +7,13 @@ import type { FocusGroup } from "../components/v2/FocusRing";
 import { TutorialHostBand } from "../components/v2/TutorialHostBand";
 import { TutorialNext } from "../components/v2/TutorialNext";
 import { TutorialProgress } from "../components/v2/TutorialProgress";
-import { TutorialEyeMark, TutorialFormula, TutorialLinks } from "../components/v2/TutorialEvidence";
-import { RecordCard } from "../components/v2/RecordCard";
+import { TutorialLinks } from "../components/v2/TutorialEvidence";
 import { TutorialReveal } from "../components/v2/TutorialReveal";
 import { TutorialRoleCards } from "../components/v2/TutorialRoleCards";
 import { WorldStage } from "../components/WorldStage";
 import { TUTORIAL_CAST, TUTORIAL_LINES, TUTORIAL_PICK, TUTORIAL_SCENES, WRONG_HINT_AFTER, makeTutorialSend, tutorialSnap, tutorialStageLook, tutorialStageView, tutorialView, tutorialCameraOf } from "../game/tutorialScript";
 import type { TutorialFocusWindow, TutorialLineKey, TutorialSceneNo } from "../game/tutorialScript";
-import type { RecordRow } from "../game/recordView";
-import { faceSrc, preloadRoleAssets, seatColorVar } from "../net/assets";
-import { useReducedMotion } from "../net/useReducedMotion";
+import { preloadRoleAssets } from "../net/assets";
 import { ChatStore } from "../net/chatStore";
 import { useFixedRoomHeight } from "../net/useFixedRoomHeight";
 import { playTutorialCue, sayTutorialLine, useTutorialDirector } from "../net/useTutorialDirector";
@@ -26,11 +23,14 @@ import "../styles/phase.css";
 import "../styles/room.css";
 import "../styles/tutorial.css";
 
-// 첫 사건 화면(17-04, TUT-03·05, 결정 0078-7·0080-12): 혼자·함께 공통. 대본(tutorialScript, 17-03)을 읽어 실제 게임 화면 위에서 장면 1~7 을 차례로 재생한다.
-// 지도 장면(2~6)은 실제 GameMap 에 가짜 view·로컬 WorldStore·ChatStore·로컬 send 어댑터를 주고, 무대 장면(1·7)은 실제 WorldStage 를 직접 쓴다.
+// 첫 사건 화면(17-04, TUT-03·05, 결정 0078-7·0080-12; 21-12 가 새 흐름으로 고침, TUT-06·D-28): 혼자·함께 공통. 대본(tutorialScript, 17-03)을 읽어 실제 게임 화면 위에서 장면 1~7 을 차례로 재생한다.
+// 지도 장면(2~6)은 실제 GameMap 에 가짜 view(원인 흐름 판)·로컬 WorldStore·ChatStore·로컬 send 어댑터를 주고, 무대 장면(1·7)은 실제 WorldStage 를 직접 쓴다.
+// 새 흐름의 실제 부품: 3 등불 켜기(가로등 표지·진행 점·[켜기] = ErrandMarker·ErrandDots·ErrandAct) · 4 현장 조사(ClueSpot·[살펴보기]·ClueCard) · 5 의심 보드(GameMap 토론 경로가 가짜 view 의 boardOf 결과로 실제 SuspectBoard 를 그린다).
+// 모두 props·가짜 view 만 읽는 부품이라 서버 훅·내 역할이 필요 없다.
 // 서버·소켓에는 아무것도 보내지 않는다: GameMap·WorldStage 에는 makeTutorialSend 결과만 주고, 실제 연결 훅·fetch·WebSocket 을 가져오지 않는다(T-17-10, 정적 가드).
 // 화면 위에 튜토리얼에만 더하는 층(포커스 상자·진행 점·[건너뛰기]·[다음])을 얹는다. 장면별 연출은 renderSceneLayer·onPoint 자리에 얹는다:
-// 17-05 가 장면 6 의 지목·정체 공개·오답 도움(이 파일)과 장면 4·5 의 눈 표시·기록 카드·연결 선·수식을, 17-08 이 장면 1 오프닝(OpeningFx, 2.6·3.3초 무대 모양 전환)과 장면 7 직업 카드를 채운다.
+// 17-05 가 장면 6 의 지목·오답 도움(이 파일)과 장면 5 의 연결 선(21-12: 칩 → 도윤 얼굴 선 하나)을, 17-08 이 장면 1 오프닝(OpeningFx, 2.6·3.3초 무대 모양 전환)과 장면 7 직업 카드를 채운다.
+// 21-12 의 장면 6 정체 카드는 뒤집히지 않는다(뒷면 + 자물쇠 + "정체는 판이 끝나야 알아요" + 도장 "처형", D-20).
 
 /** 이 화면이 재생하는 장면(1~7). 8(마무리 카드)은 이 화면 밖이다 */
 type PlayableScene = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -54,48 +54,24 @@ const REVEAL_AFTER_MS = (() => {
   return adv?.kind === "pick" ? adv.revealAfterMs : 1100;
 })();
 
-/** 도윤 포커스 상자가 이름표 아래 몸까지 덮도록 더 늘리는 높이(0080-9, 시안 상자 96×132) */
-const SUSPECT_BODY_PX = 90;
 /** 장면 1 무대 모양이 바뀌는 시각(ms, 장면 시계 기준): 2.6초에 서연이 사라지고 3.3초에 밤 조명이 dur-slow 로 켜진다(UI-SPEC 첫 사건 장면 계약 1행) */
 const OPENING_GONE_MS = 2600;
 const OPENING_NIGHT_MS = 3300;
+/** 장면 1 에서 집 창이 하나씩 꺼지는 시각(ms): 장면 표의 tut.lampOff 큐 시각과 같은 값을 읽는다(소리와 창이 같이 꺼진다, D-28) */
+const OPENING_LAMP_MS: readonly number[] = (TUTORIAL_SCENES[0]?.beats ?? []).filter((b) => b.sfx === "tut.lampOff").map((b) => b.at);
 
 /** 장면 층이 읽는 화면 상태 */
 interface SceneLayerCtx {
-  /** 장면 6 정체 공개 중 */
+  /** 장면 6 정체 카드(뒤집히지 않는다) 중 */
   revealed: boolean;
-  /** 장면 4 목격 표시(눈·기록 카드)가 떴다 */
-  witnessShown: boolean;
   /** 장면 1 오프닝 연출 층을 그린다(무대가 준비돼 장면 시계가 선 뒤) */
   openingOn: boolean;
 }
 
-/** 장면 4 에서 실제 RecordCard 에 먹이는 한 줄: 도윤이 가로등 곁(가는 길)에서 목격됐다 */
-const WITNESS_ROWS: readonly RecordRow[] = [{ n: 1, seat: TUTORIAL_CAST.suspect, place: "lamp", name: "도윤" }];
-const noopClose = (): void => {};
-
-/** 장면 번호로 갈리는 겹침 층: 1 = 오프닝 연출(17-08), 4 = 눈 표시 + 실제 목격 기록 카드, 5 = 연결 선 + 수식, 6 = 정체 공개(정답 뒤 1.1초), 7 = 직업 카드 4장(17-08) */
+/** 장면 번호로 갈리는 겹침 층: 1 = 오프닝 연출(17-08), 5 = 의심 보드 위의 연결 선 하나, 6 = 정체 카드(정답 뒤 1.1초), 7 = 직업 카드 4장(17-08). 3·4·5 의 본체(표지·단서 카드·보드)는 GameMap 이 그린다 */
 function renderSceneLayer(scene: TutorialSceneNo, ctx: SceneLayerCtx): ReactNode {
   if (scene === 1 && ctx.openingOn) return <MeasuredOpeningFx />;
-  if (scene === 4 && ctx.witnessShown) {
-    // 기록 카드는 실제 게임의 기록 카드 자리(.mf-game__record, 띠 독 아래 8)에 둔다. 그 자리 클래스는 허용 목록 밖이라 inert 가 붙는다 — 닫기 단추는 눌리지 않는다
-    return (
-      <>
-        <TutorialEyeMark seat={TUTORIAL_CAST.suspect} />
-        <div className="mf-game__record">
-          <RecordCard rows={WITNESS_ROWS} faceOf={faceSrc} colorOf={seatColorVar} onClose={noopClose} />
-        </div>
-      </>
-    );
-  }
-  if (scene === 5) {
-    return (
-      <>
-        <TutorialLinks />
-        <TutorialFormula />
-      </>
-    );
-  }
+  if (scene === 5) return <TutorialLinks />;
   if (scene === 6 && ctx.revealed) return <TutorialReveal name={CAST_NAME[TUTORIAL_CAST.suspect]} />;
   if (scene === 7) return <TutorialRoleCards />;
   return null;
@@ -106,7 +82,7 @@ function renderSceneLayer(scene: TutorialSceneNo, ctx: SceneLayerCtx): ReactNode
 // inert 는 자손이 풀 수 없으므로 허용 대상([처리] 층·이름표 층(장면 6)·[다음]·[건너뛰기]·소리 단추)은 차단 컨테이너 밖에 있어야 한다 —
 // WorldStage 의 [처리] 층(data-errand-act-layer)은 입력면·타일 층·이름표 층의 형제이고, [다음]·[건너뛰기]·소리 단추는 GameMap 밖에 있다.
 // 로컬 어댑터가 이동 메시지를 버리는 것이 세 번째 방어선이다.
-const ALWAYS_BLOCKED = [".mf-game__header", ".mf-world__input", "[data-errand-layer]", "[data-world-panel]", ".mf-game__panel", "[data-side-column]", ".mv-float", ".mf-game__record", "[data-sheet-layer]", ".mf-game__test"] as const;
+const ALWAYS_BLOCKED = [".mf-game__header", ".mf-world__input", "[data-errand-layer]", "[data-clue-layer]", "[data-world-panel]", ".mf-game__panel", "[data-side-column]", ".mv-float", ".mf-game__record", "[data-sheet-layer]", ".mf-game__test"] as const;
 /** 어떤 차단 컨테이너도 이 안을 가려선 안 된다(허용 대상 보호막) */
 const ALLOWED = "[data-tutorial-skip], [data-tutorial-next], [data-sound-button], [data-tutorial-host]";
 
@@ -114,7 +90,7 @@ const ALLOWED = "[data-tutorial-skip], [data-tutorial-next], [data-sound-button]
 function blockedSelectors(n: PlayableScene): string[] {
   const out: string[] = [...ALWAYS_BLOCKED];
   if (n !== 6) out.push(".mf-world__tags");
-  if (n !== 3) out.push("[data-errand-act-layer]");
+  if (n !== 3 && n !== 4) out.push("[data-errand-act-layer]");
   return out;
 }
 
@@ -136,10 +112,10 @@ function applyInert(root: HTMLElement, n: PlayableScene, marked: Set<Element>): 
   }
 }
 
-/** 장면에서 키보드 포커스가 가야 할 첫 허용 단추: [다음] 이 있으면 그것, 아니면 장면 3 은 [처리], 장면 6 은 첫 이름표 */
+/** 장면에서 키보드 포커스가 가야 할 첫 허용 단추: [다음] 이 있으면 그것, 아니면 장면 3 은 [켜기], 장면 4 는 [살펴보기](둘 다 [data-errand-act]), 장면 6 은 첫 이름표 */
 function firstAllowed(root: HTMLElement, n: PlayableScene, nextShown: boolean): HTMLElement | null {
   if (nextShown) return root.querySelector<HTMLElement>("[data-tutorial-next]");
-  if (n === 3) return root.querySelector<HTMLElement>("[data-errand-act]");
+  if (n === 3 || n === 4) return root.querySelector<HTMLElement>("[data-errand-act]");
   if (n === 6) return root.querySelector<HTMLElement>('button[data-pick]:not([aria-disabled="true"])');
   return null;
 }
@@ -155,10 +131,7 @@ function groupsOf(targets: readonly TutorialFocusWindow["target"][]): FocusGroup
   for (const target of targets) {
     if (target === "band") out.push({ key: "band", selectors: ["[data-tutorial-host] .mv-host__band"] });
     else if (target === "errand") out.push({ key: "errand", selectors: [`button[data-errand-place="${TUTORIAL_CAST.errand.target}"]`, "[data-errand-act]"] });
-    else if (target === "clue") {
-      // 도윤 상자 + 같이 밝아야 하는 목격 기록 카드·눈 표시(스포트라이트 구멍만, 18-06)
-      out.push({ key: "suspect", selectors: [`.mf-world__tag[data-seat="${TUTORIAL_CAST.suspect}"]`], extendDown: SUSPECT_BODY_PX, lit: [".mf-game__record > .mv-record", "[data-tutorial-eye]"] });
-    }
+    else if (target === "clue") out.push({ key: "clue", selectors: [`button[data-clue-spot="${TUTORIAL_CAST.clue.spot}"]`, "[data-errand-act]"] });
     else {
       // 지목할 수 있는 이름표 전부(나·탈락자 제외) — 각각 상자 하나, 알약 모서리
       for (const c of TUTORIAL_CAST.seats) {
@@ -170,9 +143,8 @@ function groupsOf(targets: readonly TutorialFocusWindow["target"][]): FocusGroup
   return out;
 }
 
-/** 장면에 들어갈 때의 위치: 그 장면의 snap 을 epoch 0 으로 넣고, 장면 4 는 도윤이 걸어 들어오는 프레임을 더한다(모션 줄이기면 걷지 않고 끝점에 서 있다) */
-function enterWorld(store: WorldStore, n: PlayableScene, at: number, reduced: boolean): void {
-  void reduced;
+/** 장면에 들어갈 때의 위치: 그 장면의 snap 을 epoch 0 으로 넣는다(3·4 는 나 하나가 등불·지점 곁에 서 있다) */
+function enterWorld(store: WorldStore, n: PlayableScene, at: number): void {
   store.applyFrame(tutorialSnap(n, at), 0);
 }
 
@@ -192,6 +164,14 @@ interface VoteState {
 }
 const freshVote = (at: number): VoteState => ({ at, picked: false, wrong: 0, revealed: false });
 
+/** 장면 3·4 행동 상태(at 은 그 상태가 속한 장면 시작 시각): lit = 등불을 켰다(진행 1/3), inspected = 옷 조각 지점을 살폈다(단서 카드) */
+interface ActState {
+  at: number;
+  lit: boolean;
+  inspected: boolean;
+}
+const freshAct = (at: number): ActState => ({ at, lit: false, inspected: false });
+
 interface SceneState {
   n: PlayableScene;
   /** 장면에 들어간 로컬 시각 — 가짜 view 의 시각 기준이다(장면 시작 때 한 번 고정, Pitfall 3) */
@@ -202,16 +182,11 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   const first = Math.min(Math.max(initialScene, 1), 7) as PlayableScene;
   const rootRef = useRef<HTMLDivElement>(null);
   useFixedRoomHeight(rootRef);
-  // 모션 줄이기: 장면 4 의 도윤이 걷지 않고 제자리에 나타난다(부품들은 각자 이 설정을 따른다)
-  const reduced = useReducedMotion();
-  const reducedRef = useRef(reduced);
-  reducedRef.current = reduced;
-
   // 로컬 위치·채팅 저장소: 방 화면의 것과 분리된 이 화면만의 것이다. 처음 장면의 위치를 처음 그리기 전에 넣는다
   const [boot] = useState(() => Date.now());
   const [store] = useState(() => {
     const s = new WorldStore();
-    enterWorld(s, first, boot, reduced);
+    enterWorld(s, first, boot);
     return s;
   });
   const [chat] = useState(() => new ChatStore());
@@ -238,13 +213,15 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   // 위 알림(실제 TopToast 경로)과 띠 흔들림 번호
   const [toast, setToast] = useState<PointToast | null>(null);
   const [bandShake, setBandShake] = useState(0);
-  // 장면 4 목격 표시가 뜬 장면(at). tut.eye 큐가 불리는 1.9초에 켜진다
-  const [eyeAt, setEyeAt] = useState<number | null>(null);
+  // 장면 3·4 행동 상태: 등불을 켰다(lit)·옷 조각 지점을 살폈다(inspected). 장면 시작 시각(at)을 같이 들고 있어 장면이 바뀌면 저절로 깨끗해진다
+  const [actState, setActState] = useState<ActState>(() => freshAct(boot));
+  const act = actState.at === cur.at ? actState : freshAct(cur.at);
+  const inspectedAt = useRef<number | null>(null);
 
   const goto = useCallback(
     (n: PlayableScene): void => {
       const at = Date.now();
-      enterWorld(store, n, at, reducedRef.current);
+      enterWorld(store, n, at);
       setCur({ n, at });
     },
     [store],
@@ -263,18 +240,28 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   const [ready, setReady] = useState<{ n: number; at: number } | null>(null);
   const onStageReady = useCallback((): void => setReady({ n: curRef.current.n, at: Date.now() }), []);
   const startAt = kind === "map" ? cur.at : ready !== null && ready.n === cur.n ? ready.at : null;
-  // 장면 1: 무대 모양 단계(1 = 서연이 사라짐, 2 = 밤 조명). 장면 시계 시작(at)을 같이 들고 있어 다시 들어오면 저절로 0 으로 돌아간다
-  const [opening, setOpening] = useState<{ at: number; step: 1 | 2 } | null>(null);
-  const openingStep = cur.n === 1 && opening !== null && startAt !== null && opening.at === startAt ? opening.step : 0;
+  // 장면 1: 무대 모양 단계(step 1 = 서연이 사라짐, 2 = 밤 조명)와 꺼진 집 창 수(lamps, 0.8·1.3초에 하나씩). 장면 시계 시작(at)을 같이 들고 있어 다시 들어오면 저절로 0 으로 돌아간다
+  const [opening, setOpening] = useState<{ at: number; step: 0 | 1 | 2; lamps: number } | null>(null);
+  const openingNow = cur.n === 1 && opening !== null && startAt !== null && opening.at === startAt ? opening : null;
+  const openingStep = openingNow?.step ?? 0;
+  const openingLamps = openingNow?.lamps ?? 0;
   useEffect(() => {
     if (cur.n !== 1 || startAt === null) return;
-    const timers = ([[OPENING_GONE_MS, 1], [OPENING_NIGHT_MS, 2]] as const).map(([ms, step]) => {
+    type Patch = Partial<{ step: 1 | 2; lamps: number }>;
+    const patches: ReadonlyArray<readonly [number, Patch]> = [
+      ...OPENING_LAMP_MS.map((ms, i): readonly [number, Patch] => [ms, { lamps: i + 1 }]),
+      [OPENING_GONE_MS, { step: 1 }],
+      [OPENING_NIGHT_MS, { step: 2 }],
+    ];
+    const apply = (patch: Patch): void =>
+      setOpening((prev) => ({ ...(prev !== null && prev.at === startAt ? prev : { at: startAt, step: 0 as const, lamps: 0 }), ...patch }));
+    const timers = patches.map(([ms, patch]) => {
       const wait = ms - (Date.now() - startAt);
       if (wait <= 0) {
-        setOpening({ at: startAt, step });
+        apply(patch);
         return undefined;
       }
-      return setTimeout(() => setOpening({ at: startAt, step }), wait);
+      return setTimeout(() => apply(patch), wait);
     });
     return () => {
       for (const t of timers) if (t !== undefined) clearTimeout(t);
@@ -290,15 +277,13 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   const line = said !== null && said.n === cur.n ? said : null;
   const focusTargets = focus.n === cur.n ? focus.targets : [];
   // 장면 6: 정답을 누르면 이름표 상자는 모두 꺼지고, 오답이 쌓이면 도윤 하나만 남는다(T-8)
-  const focusGroups = cur.n === 6 && vote.picked ? [] : cur.n === 6 && vote.wrong >= WRONG_HINT_AFTER ? hintGroups() : groupsOf(focusTargets);
+  // 장면 4: 옷 조각 지점을 살핀 뒤에는 포커스를 거둔다(단서 카드와 [다음] 이 나온다)
+  const focusGroups = cur.n === 6 && vote.picked ? [] : cur.n === 6 && vote.wrong >= WRONG_HINT_AFTER ? hintGroups() : cur.n === 4 && act.inspected ? [] : groupsOf(focusTargets);
 
   useTutorialDirector({
     scene: cur.n,
     startAt,
     onSay: (key, totalMs) => setSaid((prev) => ({ n: curRef.current.n, text: TUTORIAL_LINES[key], speakMs: totalMs, nonce: (prev?.nonce ?? 0) + 1 })),
-    onCue: (id) => {
-      if (id === "tut.eye" && curRef.current.n === 4) setEyeAt(curRef.current.at);
-    },
     onShowNext: () => setNextFor(curRef.current.n),
     onAuto: () => advanceFrom(curRef.current.n),
     onFocus: (target, on) =>
@@ -317,7 +302,7 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
     setSaid((prev) => ({ n: curRef.current.n, text: TUTORIAL_LINES[key], speakMs: totalMs, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
 
-  // [처리] 로컬 어댑터: 장면 3 에서만 0.7초 뒤 다음 장면. 장면이 바뀌거나 언마운트되면 예약을 푼다
+  // [켜기] 로컬 어댑터: 장면 3 에서만 한 번 — 진행 1/3 이 되고 0.7초 뒤 다음 장면. 장면이 바뀌거나 언마운트되면 예약을 푼다
   const errandTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const revealTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
@@ -330,13 +315,23 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
   }, [cur.n]);
   const onErrand = useCallback((): void => {
     if (curRef.current.n !== 3 || errandTimer.current !== undefined) return;
+    setActState({ at: curRef.current.at, lit: true, inspected: false });
     errandTimer.current = setTimeout(() => {
       errandTimer.current = undefined;
       advanceFrom(3);
     }, ERRAND_NEXT_MS);
   }, [advanceFrom]);
-  // 장면 6 처리기. 정답(도윤): 도장 소리 → 실제 득표 경로(picked 가짜 view)·위 알림 "나 → 도윤" → 1.1초 뒤 정체 공개·fanfare·[다음].
-  // 오답: 버저·"흔적을 떠올려 보세요"·띠 흔들림, 오답이 WRONG_HINT_AFTER 번 쌓이면 포커스는 도윤 하나만. 정답 뒤 눌림은 무시한다.
+  // [살펴보기] 로컬 어댑터: 장면 4 에서만 한 번 — 옷 조각 지점을 살펴 단서 카드("붉은 천 조각")가 뜨고 그때 [다음] 이 나온다. 단서 값은 출연 상수(붉은 천 조각)이고 서버로 아무것도 나가지 않는다.
+  const onInspect = useCallback((): void => {
+    const { n, at } = curRef.current;
+    if (n !== 4 || inspectedAt.current === at) return;
+    inspectedAt.current = at;
+    setActState({ at, lit: false, inspected: true });
+    playTutorialCue("tut.eye");
+    setNextFor(4);
+  }, []);
+  // 장면 6 처리기. 정답(도윤): 도장 소리 → 실제 득표 경로(picked 가짜 view)·위 알림 "나 → 도윤" → 1.1초 뒤 정체 카드(뒤집히지 않음, 소리 없음)·[다음].
+  // 오답: 버저·"단서를 떠올려 보세요"·띠 흔들림, 오답이 WRONG_HINT_AFTER 번 쌓이면 포커스는 도윤 하나만. 정답 뒤 눌림은 무시한다.
   const onPoint = useCallback(
     (seat: number): void => {
       const { n, at } = curRef.current;
@@ -363,15 +358,18 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
     },
     [speak, writeVote],
   );
-  const send = useMemo(() => makeTutorialSend({ onErrand, onInspect: () => {}, onPoint }), [onErrand, onPoint]);
+  const send = useMemo(() => makeTutorialSend({ onErrand, onInspect, onPoint }), [onErrand, onInspect, onPoint]);
 
-  // 가짜 view 는 장면 시작 때 한 번만 만든다(매 렌더 새로 만들면 마감 시각이 흘러 흔적 구간이 흔들린다)
+  // 가짜 view 는 장면 시작 때 한 번만 만든다(매 렌더 새로 만들면 시각 기준이 흘러 흔들린다). 장면 3 은 켠 뒤(lit)·장면 4 는 살핀 뒤(inspected) 새 view 로 바뀐다
   // 장면 6 은 정답 뒤(picked)에 득표 한 줄이 든 view 로 바뀐다 — 실제 득표 배지·이름표 테두리가 서는 경로다. 오답마다도 새 view 를 줘서 GameMap 의 임시 "내 선택" 표시를 비운다(표가 없으니 테두리도 없다)
   const picked = cur.n === 6 && vote.picked;
   const wrongs = cur.n === 6 ? vote.wrong : 0;
+  const lit = cur.n === 3 && act.lit;
+  const inspected = cur.n === 4 && act.inspected;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- wrongs 는 값이 아니라 "새 객체를 만들 때" 신호다
-  const mapView = useMemo(() => (cur.n >= 2 && cur.n <= 6 ? tutorialView(cur.n as 2 | 3 | 4 | 5 | 6, { now: cur.at, ...(picked ? { picked: true } : {}) }) : null), [cur.n, cur.at, picked, wrongs]);
-  const stageView = useMemo(() => (cur.n === 1 || cur.n === 7 ? tutorialStageView(cur.n, cur.at) : null), [cur.n, cur.at]);
+  const mapView = useMemo(() => (cur.n >= 2 && cur.n <= 6 ? tutorialView(cur.n as 2 | 3 | 4 | 5 | 6, { now: cur.at, ...(picked ? { picked: true } : {}), ...(lit ? { lit: true } : {}), ...(inspected ? { inspected: true } : {}) }) : null), [cur.n, cur.at, picked, wrongs, lit, inspected]);
+  // 장면 1 은 집 창이 하나씩 꺼지고(openingLamps) 7 은 오프닝이 끝난 모습이다
+  const stageView = useMemo(() => (cur.n === 1 ? tutorialStageView(1, cur.at, { lampsOff: openingLamps }) : cur.n === 7 ? tutorialStageView(7, cur.at) : null), [cur.n, cur.at, openingLamps]);
   const stageLook = useMemo(() => {
     if (cur.n === 1) return tutorialStageLook(1, { night: openingStep >= 2, victimGone: openingStep >= 1 });
     return cur.n === 7 ? tutorialStageLook(7, { night: true, victimGone: false }) : undefined;
@@ -427,7 +425,7 @@ export function TutorialScreen({ mode, onEnd, initialScene = 1 }: TutorialScreen
           ) : null}
         </div>
       </div>
-      {renderSceneLayer(cur.n, { revealed: vote.revealed, witnessShown: cur.n === 4 && eyeAt === cur.at, openingOn: cur.n === 1 && startAt !== null })}
+      {renderSceneLayer(cur.n, { revealed: vote.revealed, openingOn: cur.n === 1 && startAt !== null })}
       <FocusRing groups={focusGroups} />
       {nextShown ? <TutorialNext onNext={() => advanceFrom(cur.n)} /> : null}
       {/* Tab 순서: [건너뛰기] → 지금 허용된 단추 → [다음] → 소리 단추(띠 독). 띠는 읽기만이라 본문 뒤에 둬도 z 로 위에 뜬다 */}

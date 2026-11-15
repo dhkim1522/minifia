@@ -68,7 +68,7 @@ describe("장면 3: 허용 목록 밖은 inert", () => {
     for (const el of container.querySelectorAll("[data-side-column], .mv-float, [data-world-panel]")) expect(el.hasAttribute("inert")).toBe(true);
   });
 
-  it("[처리] 층과 그 단추에는 inert 조상이 없다", async () => {
+  it("[켜기] 층과 그 단추에는 inert 조상이 없다", async () => {
     const { container } = await mount(3);
     expect(q(container, "[data-errand-act-layer]")).not.toBeNull();
     expect(q(container, "[data-errand-act]")).not.toBeNull();
@@ -81,12 +81,12 @@ describe("장면 3: 허용 목록 밖은 inert", () => {
     expect(css).toMatch(/\[data-tutorial-screen\] \[inert\][^{]*\{[^}]*pointer-events:\s*none/);
   });
 
-  it("[처리] 뒤 장면 4 에서도 같은 층이 차단돼 있다(장면이 바뀌어도 다시 건다)", async () => {
+  it("[켜기] 뒤 장면 4 에서도 같은 층이 차단돼 있다(장면이 바뀌어도 다시 건다)", async () => {
     const { container } = await mount(3);
     act(() => tutorialStage.props!.errand!.onAct?.());
     advance(700);
     expect(container.querySelector("[data-tutorial-screen]")?.getAttribute("data-tutorial-scene")).toBe("4");
-    for (const sel of [".mf-game__header", ".mf-world__input", "[data-errand-layer]", ".mf-world__tags"]) expect(q(container, sel)?.hasAttribute("inert"), sel).toBe(true);
+    for (const sel of [".mf-game__header", ".mf-world__input", "[data-clue-layer]", ".mf-world__tags"]) expect(q(container, sel)?.hasAttribute("inert"), sel).toBe(true);
   });
 });
 
@@ -159,7 +159,7 @@ describe("항상 열린 것: [건너뛰기]·[다음]·소리 단추", () => {
 });
 
 describe("포커스 이동", () => {
-  it("장면 3: 포커스가 [처리] 로 간다", async () => {
+  it("장면 3: 포커스가 [켜기] 로 간다", async () => {
     const { container } = await mount(3);
     expect(document.activeElement).toBe(q(container, "[data-errand-act]"));
   });

@@ -134,54 +134,18 @@
 .tut-band.is-shake { animation: tut-shake .4s ease-in-out; }
 @keyframes tut-shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
 
-/* ---- 장면 4 눈 표시(TutorialEyeMark) · 장면 5 연결 선(TutorialLinks)·수식 줄(TutorialFormula), 17-05 ----
-   카드·이름표·같은 옷 표시는 실제 부품이 그린다. 여기는 그 위에 얹는 연출만이다. 값은 tokens.css 변수만 쓴다(hex 없음). */
-/* 눈 표시: 이름표 위 36 원, 위치는 대상 이름표를 재서 정한다(left·top 인라인). pop 은 scale 만 */
-.tut-eye {
-  position: fixed;
-  z-index: var(--z-overlay);
-  box-sizing: border-box;
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border: 2px solid var(--brass-400);
-  border-radius: 50%;
-  background: var(--night-700);
-  color: var(--brass-200);
-  pointer-events: none;
-  animation: tut-pop .3s var(--ease-out) both;
-}
-@keyframes tut-pop { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
-
+/* ---- 장면 5 연결 선(TutorialLinks, 17-05 → 21-12 가 선 하나로 줄임) ----
+   보드·얼굴·칩은 실제 부품이 그린다. 여기는 그 위에 얹는 선 하나뿐이다(17 의 눈 표시·두 번째 선·수식 줄은 없다). 값은 tokens.css 변수만 쓴다(hex 없음). */
 /* 선 층: 화면 전체(화면 좌표 그대로 그린다). 선은 pathLength 1 로 맞춰 dash 한 칸으로 1초에 그려진다(지연은 --tut-delay) */
 .tut-links { position: fixed; inset: 0; width: 100%; height: 100%; z-index: var(--z-overlay); overflow: hidden; pointer-events: none; }
 .tut-links__path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: tut-draw 1s ease-out var(--tut-delay, 0ms) both; }
 .tut-links__path.is-trace { stroke: var(--trace-mark); }
-.tut-links__path.is-seen { stroke: var(--brass-200); }
 @keyframes tut-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-
-/* 수식 줄: 아래 가운데. 아랫변은 [다음](아래 28 + 높이 56 = 윗변 84) 위 12 = 96. 눈 원 48 + "+" + 흔적 원 48 + "=" + 알약 "의심" */
-.tut-formula {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 96px;
-  z-index: var(--z-overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-md);
-  pointer-events: none;
-  animation: tut-fadeup .5s var(--ease-out) var(--tut-delay, 0ms) both;
-}
-.tut-formula__disc { box-sizing: border-box; width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; background: var(--night-700); color: var(--brass-200); }
-.tut-formula__op { font-size: 24px; font-weight: 700; line-height: 1.2; color: var(--gray-300); }
-.tut-formula__pill { box-sizing: border-box; height: 48px; display: inline-flex; align-items: center; gap: var(--space-xs); padding: 0 var(--space-md); border: 1px solid var(--brass-400); border-radius: var(--radius-pill); background: var(--night-700); color: var(--brass-200); font-size: 16px; font-weight: 400; line-height: 1.5; }
+/* [다음] 알약·직업 카드 아래 줄이 쓰는 떠오르기(opacity·transform) */
 @keyframes tut-fadeup { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
-/* ---- 정체 공개(장면 6 뒤, TutorialReveal, 17-05) ----
-   --scrim 막 위 카드 뒤집기 + 도장 + 놋쇠 불꽃 + "눈 + 흔적 로 찾아냈어요". 진홍은 .tut-reveal 선택자 안의 "마피아" 이름·그림 후광뿐이다(T-18).
+/* ---- 정체 카드(장면 6 뒤, TutorialReveal, 17-05 → 21-12) ----
+   --scrim 막 위 뒤집히지 않는 카드(뒷면 마름모 + 자물쇠) + 도장 "처형" + "정체는 판이 끝나야 알아요" 줄(D-20). 진홍은 쓰지 않는다 — 마피아 이름·그림을 보이지 않는다.
    [다음]·진행 점은 막보다 위(z-overlay + 3)라 막 위에서도 눌린다. 모든 애니메이션은 transform·opacity 만 쓴다. */
 .tut-reveal {
   position: fixed;
@@ -209,11 +173,11 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
 }
-.tut-reveal__card.is-flip { transform-origin: 50% 0; animation: tut-reveal-flip .6s ease-out both; }
-.tut-reveal__art { display: block; width: 144px; height: 192px; object-fit: contain; filter: drop-shadow(0 0 16px color-mix(in srgb, var(--crimson-500) 45%, transparent)); }
-.tut-reveal__who { margin: 0; font-size: 14px; font-weight: 400; line-height: 1.4; color: var(--gray-300); }
-.tut-reveal__title { margin: 0; font-size: 36px; font-weight: 700; line-height: 1.2; color: var(--crimson-300); word-break: keep-all; }
-/* 도장 "정답": 카드 오른쪽 위에 찍힌다(0.6초 지연, 배율 2.4 → 1, 기울기 -16° → -8°) */
+/* 뒷면 마름모(실제 역할 카드 뒷면과 같은 Diamond)와 그 위 자물쇠 */
+.tut-reveal__back { width: 144px; height: 192px; display: grid; place-items: center; }
+.tut-reveal__back .mf-card__diamond { width: 70%; }
+.tut-reveal__lock { position: absolute; left: 50%; top: 50%; display: grid; place-items: center; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: var(--night-700); color: var(--brass-200); }
+/* 도장 "처형": 카드 오른쪽 위에 찍힌다(0.6초 지연, 배율 2.4 → 1, 기울기 -16° → -8°) */
 .tut-reveal__stamp {
   position: absolute;
   top: -20px;
@@ -233,18 +197,11 @@
   white-space: nowrap;
 }
 .tut-reveal__stamp.is-pop { animation: tut-reveal-stamp .42s cubic-bezier(.2, .9, .3, 1) .6s both; }
-/* 놋쇠 불꽃 점 14개: 카드 중심에서 방향마다 반지름 120/150/180 으로 0.55초 지연 뒤 퍼지며 사라진다 */
-.tut-reveal__sparks { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
-.tut-reveal__spark { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: var(--brass-400); opacity: 0; animation: tut-reveal-spark .8s ease-out .55s both; }
-.tut-reveal__spark.is-lamp { background: var(--light-lamp); }
-.tut-reveal__line { display: flex; align-items: center; gap: var(--space-sm); margin: 0; font-size: 16px; font-weight: 700; line-height: 1.5; color: var(--gray-300); }
+/* "정체는 판이 끝나야 알아요": Body 16/700 brass-200 */
+.tut-reveal__line { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.5; color: var(--brass-200); text-align: center; word-break: keep-all; }
 .tut-reveal__line.is-rise { animation: tut-reveal-rise .5s ease-out .9s both; }
-.tut-reveal__icons { display: inline-flex; align-items: center; gap: var(--space-xs); color: var(--brass-200); }
-.tut-reveal__icons b { font-size: 24px; font-weight: 700; line-height: 1; }
 @keyframes tut-reveal-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes tut-reveal-flip { from { opacity: 0; transform: perspective(700px) rotateX(-90deg); } to { opacity: 1; transform: perspective(700px) rotateX(0); } }
 @keyframes tut-reveal-stamp { from { opacity: 0; transform: scale(2.4) rotate(-16deg); } to { opacity: 1; transform: scale(1) rotate(-8deg); } }
-@keyframes tut-reveal-spark { from { opacity: 1; transform: translate(0, 0) scale(.5); } to { opacity: 0; transform: translate(var(--tut-spark-x), var(--tut-spark-y)) scale(1); } }
 @keyframes tut-reveal-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ---- 오프닝(장면 1, OpeningFx, 17-08) ----
@@ -418,10 +375,9 @@
   /* 말하는 동안 막대는 중간 높이(12)로 고정, 글은 바로 보인다 */
   [data-tutorial-host][data-speaking] .tut-wave__bar { animation: none; transform: scaleY(.6); }
   .tut-band__line[data-say], .tut-band.is-shake { animation: none; }
-  /* 정체 공개: 뒤집기·불꽃·도장 흔들림 없이 완성된 모습이 바로 보인다 */
-  .tut-reveal, .tut-reveal__card.is-flip, .tut-reveal__stamp.is-pop, .tut-reveal__spark, .tut-reveal__line.is-rise { animation: none; }
-  /* 눈 표시·수식은 즉시 보이고 선은 완성된 모습이다 */
-  .tut-eye, .tut-formula { animation: none; }
+  /* 정체 카드: 도장 흔들림 없이 완성된 모습이 바로 보인다 */
+  .tut-reveal, .tut-reveal__stamp.is-pop, .tut-reveal__line.is-rise { animation: none; }
+  /* 선은 완성된 모습이다 */
   .tut-links__path { animation: none; stroke-dashoffset: 0; }
   /* 오프닝: 번쩍임·소리 링·램프 번짐은 그리지 않고(부품이 안 만듦), 제목은 바로 보이며 어둠은 .9 로 정지했다가 바로 걷힌다 */
   .tut-opening__lamp, .tut-opening__flash, .tut-opening__rings { display: none; }

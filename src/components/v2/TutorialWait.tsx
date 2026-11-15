@@ -16,8 +16,8 @@ const GAP = 24;
 const ROOT_PAD_BOTTOM = 24;
 
 const TIPS = [
-  { icon: "eye", text: "심부름 때 누구를 봤는지 기억해요" },
-  { icon: "thread", text: "아침 흔적은 옷과 이어져요" },
+  { icon: "eye", text: "등불 곁에서 본 사람을 기억해요" },
+  { icon: "thread", text: "아침 단서는 옷과 이어져요" },
 ] as const;
 
 export interface TutorialWaitProps {

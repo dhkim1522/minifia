@@ -1032,9 +1032,12 @@ describe("E2E 의 튜토리얼 사본 상수와 앱 대본 (17-09)", () => {
     expect(text).toContain(`{ me: ${TUTORIAL_CAST.me}, victim: ${TUTORIAL_CAST.victim}, suspect: ${TUTORIAL_CAST.suspect}, errandTarget: "${TUTORIAL_CAST.errand.target}", extendDown: SUSPECT_EXTEND_DOWN }`);
   });
 
-  it("TUTORIAL_ROLE_LINES_E2E 가 ROLE_TEXT 의 시민·마피아·의사·경찰 desc 와 같다 (18-08)", () => {
+  it("TUTORIAL_ROLE_LINES_E2E 가 직업 카드 줄과 같다: 시민·마피아·의사는 TutorialRoleCards 의 새 흐름 고정 상수, 경찰은 ROLE_TEXT desc 그대로 (18-08, 21-12 D-28)", () => {
     const lines = (e2eLib as { TUTORIAL_ROLE_LINES_E2E: readonly string[] }).TUTORIAL_ROLE_LINES_E2E;
-    expect(lines.join("|")).toBe([ROLE_TEXT.citizen.desc, ROLE_TEXT.mafia.desc, ROLE_TEXT.doctor.desc, ROLE_TEXT.police.desc].join("|"));
+    expect(lines.join("|")).toBe(["단서로 마피아를 찾아요", "밤에 집 하나를 골라요", "밤에 한 집을 지켜요", ROLE_TEXT.police.desc].join("|"));
+    const cards = readFileSync(new URL("../../src/components/v2/TutorialRoleCards.tsx", import.meta.url), "utf8");
+    for (const line of lines.slice(0, 3)) expect(cards).toContain(`line: "${line}"`);
+    expect(cards).toContain("line: ROLE_TEXT.police.desc");
   });
 
   it("tutorial.mjs 의 오답 문구 사본이 대본 tutorial.vote.wrong 문구와 같다", () => {

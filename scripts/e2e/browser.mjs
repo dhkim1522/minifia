@@ -2754,7 +2754,7 @@ export async function readTutorial(page) {
           : null,
       };
     },
-    { me: 5, victim: 2, suspect: 1, errandTarget: "mail", extendDown: SUSPECT_EXTEND_DOWN },
+    { me: 5, victim: 2, suspect: 1, errandTarget: "lamp2", extendDown: SUSPECT_EXTEND_DOWN },
   );
 }
 

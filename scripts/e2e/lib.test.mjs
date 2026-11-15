@@ -5355,7 +5355,7 @@ test("tutorialHiddenChecks TH1: 아래 패널·[내 역할]·채팅 입력칸이
 });
 
 test("tutorialRoleLineChecks TC5: 직업 카드 한 줄 넷이 사본과 글자 그대로 같다", () => {
-  const lines = ["추리로 마피아를 찾아내세요.", "몰래 암살하여 승리하세요.", "시민 팀을 마피아에게서 지키세요.", "의심되는 사람을 조사하세요."];
+  const lines = ["단서로 마피아를 찾아요", "밤에 집 하나를 골라요", "밤에 한 집을 지켜요", "의심되는 사람을 조사하세요."];
   assert.equal([...TUTORIAL_ROLE_LINES_E2E].join("|"), lines.join("|"));
   const ok = tutorialRoleLineChecks(lines);
   assert.equal(ok.map((l) => l.id).join(","), "TC5");

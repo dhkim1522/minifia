@@ -45,7 +45,7 @@ const recAll = (rec, sc, lines, { relax = [], note = "" } = {}) => {
 /** 장면 7 직업 카드가 [다음] 과 겹칠 수 있는 낮은 폰(360x560·360x640)의 높이 상한 — 17-08 이 알려진 한계로 남겼다(UI Considerations #14) */
 const KNOWN_LIMIT_MAX_H = 640;
 /** 장면 6 오답 문구(src/game/tutorialScript.ts 의 tutorial.vote.wrong — e2eContract 가 대조) */
-export const TUTORIAL_WRONG_LINE = "흔적을 떠올려 보세요";
+export const TUTORIAL_WRONG_LINE = "단서를 떠올려 보세요";
 /** 장면 6 이름표(좌석): 민준 0·지호 3 이 오답, 도윤 1 이 정답 */
 const WRONG_SEATS = [0, 3];
 const RIGHT_SEAT = TUTORIAL_CAST_E2E.suspect;

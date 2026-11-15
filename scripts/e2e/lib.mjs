@@ -4072,7 +4072,7 @@ export function sentFrameChecks(frames, allowed, { once = [] } = {}) {
  * 튜토리얼 출연 사본(17-09): 앱 src/game/tutorialScript.ts 의 TUTORIAL_CAST 와 같아야 한다 — test/unit/e2eContract.test.ts 가 대조한다.
  * me·victim·suspect 는 좌석 번호, errandTarget 은 심부름 장소 id, names 는 가짜 인물 이름 다섯(나 제외 — 누설 검사 낱말).
  */
-export const TUTORIAL_CAST_E2E = Object.freeze({ me: 5, victim: 2, suspect: 1, errandTarget: "mail", names: Object.freeze(["서연", "도윤", "민준", "지호", "하린"]) });
+export const TUTORIAL_CAST_E2E = Object.freeze({ me: 5, victim: 2, suspect: 1, errandTarget: "lamp2", names: Object.freeze(["서연", "도윤", "민준", "지호", "하린"]) });
 
 // ---- 장면 판정 (17-09 Task 2) ----
 // 모든 판정은 { id, label, ok, detail } 줄(들)을 돌려주고, 값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다. 메시지에는 키·개수·사각형만 싣는다(T-17-21).
@@ -4320,13 +4320,13 @@ export function tutorialLineChecks(ev, { viewport, band, next } = {}) {
 }
 
 /**
- * 장면 7 직업 카드 한 줄 글 사본(18-08): 시민·마피아·의사·경찰 순서. src/game/roleText.ts ROLE_TEXT 의 desc 와 같아야 한다 —
+ * 장면 7 직업 카드 한 줄 글 사본(18-08, 21-12 가 새 흐름 문장으로 바꿈): 시민·마피아·의사·경찰 순서. 앞의 셋은 TutorialRoleCards 의 고정 상수(D-28)이고 경찰은 src/game/roleText.ts ROLE_TEXT 의 desc 그대로다 —
  * test/unit/e2eContract.test.ts 가 대조한다(.mjs 가 TS 를 직접 import 하지 않는다).
  */
 export const TUTORIAL_ROLE_LINES_E2E = Object.freeze([
-  "추리로 마피아를 찾아내세요.",
-  "몰래 암살하여 승리하세요.",
-  "시민 팀을 마피아에게서 지키세요.",
+  "단서로 마피아를 찾아요",
+  "밤에 집 하나를 골라요",
+  "밤에 한 집을 지켜요",
   "의심되는 사람을 조사하세요.",
 ]);
 

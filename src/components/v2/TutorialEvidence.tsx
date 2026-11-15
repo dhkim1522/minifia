@@ -3,21 +3,18 @@ import type { CSSProperties } from "react";
 import "../../styles/tutorial.css";
 import { TUTORIAL_CAST } from "../../game/tutorialScript";
 import { TRACE_MARK } from "../../game/traceMark";
-import { TraceArt } from "./placeArt";
-import { V2Icon } from "./V2Icon";
 
-// 첫 사건의 "재미 포인트" 연출 부품(17-05, 결정 0078-1.2·1.3, UI-SPEC 첫 사건 장면 계약 4·5행): 장면 4 의 눈 표시, 장면 5 의 연결 선 두 개와 "눈 + 흔적 = 의심" 수식 줄.
-// 카드·이름표·같은 옷 표시는 실제 부품(RecordCard·EvidenceCard·HeadStack)이 그리고, 여기는 그 위에 얹는 연출만이다. 실제 view·역할·닉네임을 읽지 않는다(출연 상수와 DOM 사각형뿐).
-// 위치는 대상의 DOM 사각형을 rAF 로 재서 쓴다(폰 6종·3D 투영 이동에 맞춘다). 직전과 같으면 상태를 바꾸지 않고, 못 쟀으면(0×0·없음) 그리지 않는다(Pitfall 11).
-// 눈 표시와 선은 읽히지 않는다(aria-hidden). 애니메이션은 transform·opacity(눈·수식), 선 그리기는 stroke-dashoffset(UI-SPEC 의 draw)이고 모션 줄이기면 모두 즉시 완성된 모습이다(tutorial.css).
-
-/** 눈 표시 원 지름(시안 값)과 이름표와의 간격 */
-const EYE_SIZE = 36;
-const EYE_GAP = 4;
-/** 화면 위 가장자리에서 띄우는 최소 거리 */
-const EDGE = 8;
+// 첫 사건 장면 5(의심 보드)의 연결 선(17-05 의 선 부품을 21-12 가 줄였다, 결정 D-28, UI-SPEC 튜토리얼 표 5행): 실제 의심 보드(SuspectBoard, GameMap 이 가짜 view 의 boardOf 결과로 그린다)의
+// 단서 칩 → 같은 옷 표시가 붙은 도윤 얼굴 사이에 선 하나가 1초 동안 그려진다. 17 의 눈 표시·두 번째 선·"눈 + 흔적 = 의심" 수식 줄·증거 카드 위의 선은 쓰지 않는다(P21-15).
+// 카드·얼굴·칩·같은 옷 표시는 실제 부품이 그린다. 여기는 그 위에 얹는 연출뿐이고 실제 view·역할·닉네임을 읽지 않는다(출연 상수와 DOM 사각형뿐).
+// 위치는 대상의 DOM 사각형을 rAF 로 재서 쓴다(폰 6종·보드 안쪽 스크롤에 맞춘다). 직전과 같으면 상태를 바꾸지 않고, 못 쟀으면(0×0·없음) 그리지 않는다(Pitfall 11).
+// 선은 읽히지 않는다(aria-hidden). 그리기는 stroke-dashoffset(UI-SPEC 의 draw)이고 모션 줄이기면 완성된 모습이 바로 보인다(tutorial.css).
 
 const SCREEN = "[data-tutorial-screen]";
+
+/** 선 굵기와 시작 지연(ms) — 지연은 장면 표의 tut.link 큐(400ms)와 같은 시각이다 */
+const LINE_WIDTH = 2.5;
+const LINE_DELAY_MS = 400;
 
 /** 화면 루트 안에서 측정한다(루트가 없으면 문서 전체) */
 function scopeOf(): ParentNode {
@@ -61,75 +58,6 @@ function rectOf(scope: ParentNode, selector: string): DOMRect | null {
 
 const round1 = (n: number): number => Math.round(n * 10) / 10;
 
-// ---- 장면 4: 이름표 위 눈 표시 ----
-
-interface EyePos {
-  left: number;
-  top: number;
-}
-
-const sameEye = (a: EyePos, b: EyePos): boolean => a.left === b.left && a.top === b.top;
-
-/** 목격한 사람(seat)의 이름표 위에 뜨는 36 원 눈 표시. 이름표가 측정될 때까지는 그리지 않는다 */
-export function TutorialEyeMark({ seat }: { seat: number }) {
-  const pos = useMeasured<EyePos>((scope) => {
-    const r = rectOf(scope, `.mf-world__tag[data-seat="${seat}"]`);
-    return r === null ? null : { left: Math.round(r.left + r.width / 2 - EYE_SIZE / 2), top: Math.max(EDGE, Math.round(r.top - EYE_SIZE - EYE_GAP)) };
-  }, sameEye);
-  if (pos === null) return null;
-  return (
-    <span className="tut-eye" data-tutorial-eye="" aria-hidden="true" style={{ left: pos.left, top: pos.top }}>
-      <V2Icon name="eye" size={20} />
-    </span>
-  );
-}
-
-// ---- 장면 5: 연결 선 두 개 ----
-
-interface LineSpec {
-  key: "trace" | "seen";
-  /** 시작 대상(증거 카드 안) */
-  from: string;
-  /** 도윤 이름표 위 가장자리에서 선이 닿는 가로 위치(0~1) */
-  at: number;
-  width: number;
-  delayMs: number;
-}
-
-/** ① 증거 카드의 조각 타일 → 도윤(redCloth 2.5, 0.4초부터) ② 목격 행의 도윤 이름 → 도윤(brass-200 2, 0.9초부터). 끝은 이름표 위 가장자리의 30%·70% 지점이라 서로 겹치지 않는다 */
-const LINES: readonly LineSpec[] = [
-  { key: "trace", from: "[data-trace-card] .mv-trace__disc", at: 0.3, width: 2.5, delayMs: 400 },
-  { key: "seen", from: "[data-trace-card] [data-lastseen-row] .mv-evidence__witness", at: 0.7, width: 2, delayMs: 900 },
-];
-
-interface LineGeom {
-  key: LineSpec["key"];
-  from: [number, number];
-  to: [number, number];
-  width: number;
-  delayMs: number;
-}
-
-function measureLines(scope: ParentNode): LineGeom[] {
-  const tag = rectOf(scope, `.mf-world__tag[data-seat="${TUTORIAL_CAST.suspect}"]`);
-  if (tag === null) return [];
-  const out: LineGeom[] = [];
-  for (const spec of LINES) {
-    const src = rectOf(scope, spec.from);
-    if (src === null) continue;
-    out.push({
-      key: spec.key,
-      from: clampPoint([src.left + src.width / 2, src.top + src.height / 2], window.innerWidth, window.innerHeight),
-      to: clampPoint([tag.left + tag.width * spec.at, tag.top - 2], window.innerWidth, window.innerHeight),
-      width: spec.width,
-      delayMs: spec.delayMs,
-    });
-  }
-  return out;
-}
-
-const sameLines = (a: LineGeom[], b: LineGeom[]): boolean => a.length === b.length && a.every((l, i) => l.key === b[i]!.key && l.from[0] === b[i]!.from[0] && l.from[1] === b[i]!.from[1] && l.to[0] === b[i]!.to[0] && l.to[1] === b[i]!.to[1]);
-
 /** 점을 화면 안쪽 inset([inset, 폭−inset]×[inset, 높이−inset])으로 고정한다(18-06, D-07). 곡선 제어점은 두 끝점의 x 와 그 사이 y 라서 끝점이 안이면 곡선도 안이다 */
 export function clampPoint(p: readonly [number, number], w: number, h: number, inset = 8): [number, number] {
   return [round1(Math.min(Math.max(p[0], inset), w - inset)), round1(Math.min(Math.max(p[1], inset), h - inset))];
@@ -141,48 +69,43 @@ function curve(from: [number, number], to: [number, number]): string {
   return `M${from[0]} ${from[1]} C${from[0]} ${round1(from[1] + dy)} ${to[0]} ${round1(to[1] - dy)} ${to[0]} ${to[1]}`;
 }
 
-/** 화면 전체 선 층. 선 색 ① 은 증거 카드가 쓰는 같은 사용자 변수 --trace-mark(닫힌 표의 값, hex 없음) */
+interface LineGeom {
+  from: [number, number];
+  to: [number, number];
+}
+
+/** 보드의 옷 조각 칩 아래 가운데 → 같은 옷 표시가 붙은 도윤 얼굴 위 가운데(2 위). 둘 중 하나라도 못 쟀으면 null */
+function measureLine(scope: ParentNode): LineGeom | null {
+  const chip = rectOf(scope, `[data-board-chip="${TUTORIAL_CAST.clue.spot}"]`);
+  const face = rectOf(scope, `[data-board-face="${TUTORIAL_CAST.suspect}"]`);
+  if (chip === null || face === null) return null;
+  return {
+    from: clampPoint([chip.left + chip.width / 2, chip.bottom], window.innerWidth, window.innerHeight),
+    to: clampPoint([face.left + face.width / 2, face.top - 2], window.innerWidth, window.innerHeight),
+  };
+}
+
+const sameLine = (a: LineGeom, b: LineGeom): boolean => a.from[0] === b.from[0] && a.from[1] === b.from[1] && a.to[0] === b.to[0] && a.to[1] === b.to[1];
+
+/** 화면 전체 선 층. 선 색은 증거 표식이 쓰는 같은 사용자 변수 --trace-mark(닫힌 표의 값, hex 없음) */
 export function TutorialLinks() {
-  const lines = useMeasured<LineGeom[]>(measureLines, sameLines) ?? [];
+  const line = useMeasured<LineGeom>(measureLine, sameLine);
   const style = { "--trace-mark": TRACE_MARK[TUTORIAL_CAST.clue.piece] } as CSSProperties;
   return (
     <svg className="tut-links" data-tutorial-links="" aria-hidden="true" focusable="false" style={style}>
-      {lines.map((l) => (
+      {line === null ? null : (
         <path
-          key={l.key}
-          className={l.key === "trace" ? "tut-links__path is-trace" : "tut-links__path is-seen"}
-          d={curve(l.from, l.to)}
-          data-from={`${l.from[0]},${l.from[1]}`}
-          data-to={`${l.to[0]},${l.to[1]}`}
+          className="tut-links__path is-trace"
+          d={curve(line.from, line.to)}
+          data-from={`${line.from[0]},${line.from[1]}`}
+          data-to={`${line.to[0]},${line.to[1]}`}
           fill="none"
           strokeLinecap="round"
-          strokeWidth={l.width}
+          strokeWidth={LINE_WIDTH}
           pathLength={1}
-          style={{ "--tut-delay": `${l.delayMs}ms` } as CSSProperties}
+          style={{ "--tut-delay": `${LINE_DELAY_MS}ms` } as CSSProperties}
         />
-      ))}
+      )}
     </svg>
-  );
-}
-
-// ---- 장면 5: 수식 줄 ----
-
-/** "눈 + 흔적 = 의심" — 아래 가운데, [다음] 윗변보다 12 위. 1.6초 지연으로 떠오른다 */
-export function TutorialFormula() {
-  return (
-    <div className="tut-formula" data-tutorial-formula="" aria-hidden="true" style={{ "--tut-delay": "1600ms" } as CSSProperties}>
-      <span className="tut-formula__disc">
-        <V2Icon name="eye" size={24} />
-      </span>
-      <span className="tut-formula__op">+</span>
-      <span className="tut-formula__disc">
-        <TraceArt piece={TUTORIAL_CAST.clue.piece} size={32} />
-      </span>
-      <span className="tut-formula__op">=</span>
-      <span className="tut-formula__pill">
-        <V2Icon name="hand" size={16} />
-        의심
-      </span>
-    </div>
   );
 }

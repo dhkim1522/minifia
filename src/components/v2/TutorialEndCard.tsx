@@ -12,7 +12,7 @@ export function TutorialEndCard({ onReplay }: { onReplay(): void }) {
     <div className="tut-end" data-tutorial-end="">
       <div className="tut-end__text">
         <p className="tut-end__title">이제 진짜 사건으로</p>
-        <p className="tut-end__sub mf-t-label">목격과 흔적으로 거짓말을 잡아요</p>
+        <p className="tut-end__sub mf-t-label">단서로 거짓말을 잡아요</p>
       </div>
       <button
         type="button"
