@@ -471,6 +471,8 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
       if (isSelf) return { title, hint: DAY_COPY.verdictHintSelf };
       return defender === undefined ? { title } : { title, hint: DAY_COPY.verdictHint(defender) };
     case "night":
+      // 원인 흐름(21-09 D-10)의 밤은 네 역할이 같은 화면이고 같은 말은 사회자 띠가 한다(글 중복 금지, 결정 0051) — 역할별 한 줄을 그리지 않는다. 이 분기가 역할 읽기보다 먼저다
+      if (rulesetOf(modeOf(view)).cause) return { title };
       switch (view.me.role) {
         case "mafia":
           return { title, hint: DAY_COPY.nightHintMafia };

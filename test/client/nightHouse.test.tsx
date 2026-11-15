@@ -196,13 +196,13 @@ describe("밤 집 문패 화면 (D-10·D-11·D-25)", () => {
 });
 
 describe("네 역할의 밤 화면이 같다 (D-10, LH4, T-21-31)", () => {
-  /** 한 화면의 구조 서명: 문패 단추 수·모든 문패의 data-* 이름·아래 패널 모양(클래스·인라인 높이·자식 구조) */
+  /** 한 화면의 구조 서명: 문패 단추 수·모든 문패의 data-* 이름·아래 패널 모양(클래스·인라인 높이·자식 구조). 읽어 주기 전용 글(mf-sr-only, 마피아 [쪽지] 안내)은 화면 자리가 없어 높이와 무관해 뺀다 */
   const sig = (c: ParentNode): string => {
     const panel = c.querySelector<HTMLElement>("[data-world-panel]");
     return JSON.stringify({
       buttons: buttons(c).length,
       tags: tags(c).map((t) => [t.dataset.houseTag, t.tagName, t.className, t.getAttributeNames().filter((n) => n.startsWith("data-")).sort()]),
-      panel: panel === null ? null : [panel.className, panel.style.height, [...panel.children].map((el) => el.className.replace(/\s+/g, " "))],
+      panel: panel === null ? null : [panel.className, panel.style.height, [...panel.children].filter((el) => !el.classList.contains("mf-sr-only")).map((el) => el.className.replace(/\s+/g, " "))],
     });
   };
 

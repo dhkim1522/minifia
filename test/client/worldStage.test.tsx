@@ -16,7 +16,7 @@ import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { UnsupportedRendererError } from "../../src/world/renderer";
 import type { CharacterHandle, LightingPhase, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
-import { gatherView, overviewFraming, PAN_BOX, panBoxOf, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
+import { gatherView, houseTagCenters, overviewFraming, PAN_BOX, panBoxOf, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
 import { predictSegment, SEG_BLEND_MS, YAW_TURN_RATE } from "../../src/world/motion";
 import { GHOST_FADE_END_MS } from "../../src/game/dayView";
 import { createWorldRuntime, ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, RING_COLORS, WALK_CUE_KEY } from "../../src/world/runtime";
@@ -3046,6 +3046,48 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       expect(r.setZoom.mock.calls.at(-1)![0]).toBe(1);
       expect(r.views.at(-1)!.target.x).not.toBe(0);
       expect(window.__mfCamera).toMatchObject({ mode: "follow", scale: 58.2 });
+    });
+
+    // 21-09 D-10: 밤 집 문패 층 — 개관 기저가 선 뒤에야 보이고(data-ready), 위치는 개관 투영(houseTagCenters)과 같다
+    const HOUSE_TAGS = Array.from({ length: 8 }, (_, seat) => ({ seat, nickname: seat < 5 ? `닉${seat}` : null, owner: seat < 5, alive: seat < 5, button: seat < 5, lit: seat % 2 === 0, picked: false, call: seat < 5 }));
+    const houseOf = (s: Setup) => s.utils.container.querySelector<HTMLElement>("[data-house-layer]")!;
+    it("houses: 개관으로 바뀌기 전에는 문패 층이 준비 전(data-ready 없음)이고, 바뀐 뒤 문패마다 개관 투영 위치(transform)와 눌림이 선다", async () => {
+      const onPick = vi.fn();
+      const s = await openGame({ houses: { tags: HOUSE_TAGS, onPick } });
+      frames(100);
+      expect(houseOf(s).hasAttribute("data-ready")).toBe(false);
+      s.rerender({ scene: sceneOf(ALL, { camera: OVERVIEW }), houses: { tags: HOUSE_TAGS, onPick } });
+      frames(100);
+      expect(houseOf(s).hasAttribute("data-ready")).toBe(false); // 어둠 가림 가장 어두운 때(210ms) 전
+      frames(300);
+      expect(houseOf(s).hasAttribute("data-ready")).toBe(true);
+      const centers = houseTagCenters({ top: INSETS.top, bottom: window.innerHeight - INSETS.bottom }, { w: window.innerWidth, h: window.innerHeight });
+      for (const c of centers) {
+        const el = houseOf(s).querySelector<HTMLElement>(`[data-house-tag="${c.seat}"]`)!;
+        expect(el.style.transform, `seat ${c.seat}`).toBe(`translate(${Math.round(c.sx - 22)}px, ${Math.round(c.sy - 22)}px)`);
+      }
+      fireEvent.click(houseOf(s).querySelector('button[data-house-tag="2"]')!);
+      expect(onPick).toHaveBeenCalledWith(2);
+      // 개관에서 돌아오면 다시 준비 전
+      s.rerender({ scene: sceneOf(ALL), houses: { tags: HOUSE_TAGS, onPick } });
+      frames(400);
+      expect(houseOf(s).hasAttribute("data-ready")).toBe(false);
+    });
+
+    it("어둠 가림(data-night-dim): 개관으로(에서) 바뀔 때 한 번 생기고, 처음 마운트·모션 줄이기에는 없다", async () => {
+      const first = await openGame({ scene: sceneOf(ALL, { camera: OVERVIEW }) });
+      frames(100);
+      expect(first.utils.container.querySelector("[data-night-dim]")).toBeNull();
+      first.utils.unmount();
+      const s = await openGame();
+      expect(s.utils.container.querySelector("[data-night-dim]")).toBeNull();
+      s.rerender({ scene: sceneOf(ALL, { camera: OVERVIEW }) });
+      expect(s.utils.container.querySelectorAll("[data-night-dim]")).toHaveLength(1);
+      s.utils.unmount();
+      stubReducedMotion(true);
+      const r = await openGame();
+      r.rerender({ scene: sceneOf(ALL, { camera: OVERVIEW }) });
+      expect(r.utils.container.querySelector("[data-night-dim]")).toBeNull();
     });
 
     it("overview + 모션 줄이기: 기다리지 않고 첫 프레임에 바뀐다", async () => {

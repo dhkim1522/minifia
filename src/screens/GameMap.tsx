@@ -33,7 +33,7 @@ import { SpeakSheet } from "../components/v2/SpeakSheet";
 import { WillSheet } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { WorldStage } from "../components/WorldStage";
-import type { ErrandLayerProps, WorldPick } from "../components/WorldStage";
+import type { ErrandLayerProps, HouseLayerProps, WorldPick } from "../components/WorldStage";
 import { ERRAND_NEAR_R, PICK_TURN_MS } from "../../shared/game/phases";
 import { LOG_H } from "../game/chatUi";
 import { todOf, todWordOf } from "../game/timeOfDay";
@@ -42,6 +42,7 @@ import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
 import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../game/dayView";
 import { LAMP_ACT_LOOK, errandProgress, placeCentersOf } from "../game/errandView";
+import { houseTagsOf } from "../game/houseView";
 import { callTargetsOf, type HostLocal } from "../game/hostLine";
 import { recordRowsOf, traceWindowOf } from "../game/recordView";
 import { TRACE_MARK, sameOutfitSeats } from "../game/traceMark";
@@ -796,6 +797,27 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     () => (callOn && callTarget.kind === "tag" && nighting && view.me.pick === undefined ? new Set(callTarget.seats) : undefined),
     [callOn, callTarget, nighting, view.me.pick],
   );
+  // 밤 집 문패(21-09 D-10): 원인 흐름 밤에는 모든 역할이 같은 개관 화면에서 집 문패를 눌러 pick { target } 을 보낸다 — 서버 메시지·판정은 그대로, 화면만 다르다.
+  // 문패 목록은 houseTagsOf 가 정한다(역할을 읽지 않는다). 내 선택은 누른 즉시 보이고(mine) 서버 view(me.pick)가 오면 서버 값이 이긴다. 빛남은 열린 시트·키보드·귓속말 모드가 끈다.
+  // 알림·토스트·소리는 없다(자기 화면의 표시만 바뀐다)
+  const houseNight = nighting && rules.cause;
+  const houseTags = useMemo(
+    () => (houseNight ? houseTagsOf(view, mine !== undefined ? { pick: mine } : {}).map((t) => (callOn ? t : { ...t, call: false })) : null),
+    [houseNight, view, mine, callOn],
+  );
+  const onHousePick = useCallback(
+    (seat: number): void => {
+      if (!canSend || seat === mine) return; // 이미 고른 집을 다시 눌러도 보내지 않는다. 다른 집을 누르면 마감까지 바꿀 수 있다(서버는 마지막 선택이 이긴다)
+      if (send({ t: "pick", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
+      pointSent.current = { target: seat, at: Date.now() };
+      chooseMine(seat);
+      markCallUsed();
+    },
+    // chooseMine 은 렌더마다 새 함수지만 setState 만 부른다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canSend, mine, send, markCallUsed],
+  );
+  const houseLayer = useMemo<HouseLayerProps | undefined>(() => (houseTags === null ? undefined : { tags: houseTags, onPick: onHousePick }), [houseTags, onHousePick]);
   const stageTagProps = useMemo<WorldTagProps | undefined>(() => {
     if (!whisper.mode && callTagSeats === null) return claimTagProps;
     return (seat) => ({
@@ -907,6 +929,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         {...(pick ? { pick } : {})}
         {...(stageTagProps ? { tagProps: stageTagProps } : {})}
         {...(errandLayer ? { errand: errandLayer } : {})}
+        {...(houseLayer ? { houses: houseLayer } : {})}
         onNotice={(text) => show(text)}
         onLeave={() => onLeave?.()}
       />

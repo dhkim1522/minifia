@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { MAP_PHASES } from "../../shared/game/movement";
 import { majorityOf } from "../../shared/game/nomination";
+import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { ActionRow } from "../components/ActionButton";
 import { ChatPanel } from "../components/v2/ChatPanel";
@@ -107,6 +108,8 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   const night = view.phase === "night";
   const myRole = view.me.role;
   const nightFaces = night && meAlive;
+  // 원인 흐름(21-09 D-10)의 밤 고르기는 지도의 집 문패(HouseTag)가 한다 — 얼굴 목록은 그리지 않고 아래 패널은 행 하나(쪽지·유언)라 모든 역할의 높이가 같다
+  const houseNight = nightFaces && rulesetOf(modeOf(view)).cause;
   const chatChannelOk = !night || view.me.chat === "ghost";
   // 후보: 산 사람 전원(나 포함). 좌석 오름차순. 후보가 없으면 목록을 그리지 않는다(E1 #1).
   const faces = !nightFaces ? [] : view.players
@@ -154,7 +157,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
         </div>
       ) : null}
       {nightFaces ? (
-        faces.length > 0 ? (
+        houseNight ? null : faces.length > 0 ? (
           <FaceList
             faces={faces}
             {...(nightPick !== undefined ? { value: nightPick } : {})}

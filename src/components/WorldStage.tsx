@@ -8,7 +8,8 @@ import { PLACE_NAME } from "../game/placeText";
 import { houseLitOf, lampLitOf } from "../game/lampView";
 import type { Rect } from "../game/errandView";
 import { useReducedMotion } from "../net/useReducedMotion";
-import { HEADER_BOTTOM, PANEL_HEIGHT } from "../world/camera";
+import type { HouseTagModel } from "../game/houseView";
+import { HEADER_BOTTOM, HOUSE_TAG_BOX, houseTagCenters, PANEL_HEIGHT } from "../world/camera";
 import { createTapTracker } from "../world/input";
 import { createWorldRuntime, EXIT_CURTAIN_MS, EXIT_MS, ringKindAttr } from "../world/runtime";
 import type { RingKind, WorldModules, WorldRuntime } from "../world/runtime";
@@ -21,6 +22,7 @@ import { MapStatusCard } from "./MapStatusCard";
 import { ErrandAct } from "./v2/ErrandAct";
 import { ErrandArrow, ErrandMarker } from "./v2/ErrandMarker";
 import { HeadStack } from "./v2/HeadStack";
+import { HouseTag } from "./v2/HouseTag";
 import type { HeadStackProps } from "./v2/HeadStack";
 import type { V2IconName } from "./v2/V2Icon";
 import "../styles/world.css";
@@ -103,6 +105,33 @@ export interface ErrandLayerProps {
   onWalk?(id: PlaceId): void;
   /** [처리] 알약을 눌렀다는 알림(처리 메시지는 쓰는 쪽이 보낸다). hold: 0.6초 넘게 눌렀다 뗐는가(21페이즈 P21-7 — 모든 역할이 같은 제스처) */
   onAct?(hold?: boolean): void;
+}
+
+/**
+ * 밤 집 문패 층(21페이즈 D-10, 원인 흐름 밤만). tags 는 houseTagsOf 의 8개, onPick 은 문패 단추를 눌렀을 때(pick 전송은 쓰는 쪽이 한다).
+ * 위치는 개관 시점의 투영(houseTagCenters)으로 런타임 프레임 콜백에서 DOM 에 직접 쓴다 — 개관으로 바뀐 뒤에야 보인다. 좌석·역할 값은 이 층에 들어오지 않는다(역할을 모른다)
+ */
+export interface HouseLayerProps {
+  tags: readonly HouseTagModel[];
+  onPick(seat: number): void;
+}
+
+/** 문패 층 프레임 쓰기: 개관 상태(data-ready)와 각 문패의 위치(transform)만 쓴다. 값이 같으면 쓰지 않는다 */
+function writeHouseLayer(layer: HTMLElement, host: HTMLElement, insets: { top: number; bottom: number }, ready: boolean): void {
+  if (ready !== layer.hasAttribute("data-ready")) {
+    if (ready) layer.setAttribute("data-ready", "");
+    else layer.removeAttribute("data-ready");
+  }
+  if (!ready) return;
+  const w = host.clientWidth || window.innerWidth;
+  const h = host.clientHeight || window.innerHeight;
+  const centers = houseTagCenters({ top: insets.top, bottom: h - insets.bottom }, { w, h });
+  for (const el of layer.querySelectorAll<HTMLElement>("[data-house-tag]")) {
+    const c = centers[Number(el.getAttribute("data-house-tag"))];
+    if (c === undefined) continue;
+    const t = `translate(${Math.round(c.sx - HOUSE_TAG_BOX / 2)}px, ${Math.round(c.sy - HOUSE_TAG_BOX / 2)}px)`;
+    if (el.style.transform !== t) el.style.transform = t;
+  }
 }
 
 const NEAR_RING_POINTS = 24;
@@ -296,6 +325,8 @@ export interface WorldStageProps {
    * 위치는 런타임 프레임 콜백에서 투영해 DOM 에 직접 쓴다(React 상태를 프레임마다 바꾸지 않는다). 좌석·역할은 이 층에 들어오지 않는다
    */
   errand?: ErrandLayerProps;
+  /** 밤 집 문패 층(21페이즈, 원인 흐름 밤만). 있으면 개관 시점에서 집 지붕 위에 문패 단추 8개를 그린다. 위치는 런타임 프레임 콜백이 쓴다 */
+  houses?: HouseLayerProps;
   onNotice(text: string): void;
   /** 있을 때만 연결이 끊긴 사람의 이름표가 [내보내기] 버튼이 된다(대기실 전용 — 게임 중 서버는 CANNOT_KICK) */
   onKick?(seat: number, nickname: string): void;
@@ -331,6 +362,9 @@ export function WorldStage(props: WorldStageProps) {
   const tagRef = useRef<HTMLDivElement>(null);
   const errandRef = useRef<HTMLDivElement>(null);
   const errandActRef = useRef<HTMLDivElement>(null);
+  const houseRef = useRef<HTMLDivElement>(null);
+  /** 런타임이 지금 개관 기저로 그리는가(onCamera) — 문패 층은 이 값이 참일 때만 보이고 눌린다 */
+  const overviewRef = useRef(false);
   const runtimeRef = useRef<WorldRuntime | null>(null);
   const [tracker] = useState(createTapTracker);
   const [errandCache] = useState<{ current: ErrandWriteCache | null }>(() => ({ current: null }));
@@ -403,14 +437,19 @@ export function WorldStage(props: WorldStageProps) {
       onLooks: looksHook?.set,
       onCostumes: (costumes, dimmed) => live.current.props.onCostumes?.(costumes, dimmed),
       onZoom: pinHook?.setZoom,
-      onCamera: cameraHook?.set,
+      onCamera: (state) => {
+        overviewRef.current = state.mode === "overview";
+        cameraHook?.set(state);
+      },
       onTown: townHook === null ? undefined : (state) => townHook.patch(state),
       onProject: (project, now) => {
         const { props: p } = live.current;
+        const ins = p.stageInsets;
+        const houseLayer = houseRef.current;
+        if (houseLayer !== null && p.houses !== undefined) writeHouseLayer(houseLayer, host, { top: ins?.top ?? HEADER_BOTTOM, bottom: ins?.bottom ?? PANEL_HEIGHT }, overviewRef.current);
         const layer = errandRef.current;
         if (layer === null || p.errand === undefined) return;
         const mine = p.store.positionOf(p.view.me.seat, now + p.offset);
-        const ins = p.stageInsets;
         writeErrandLayer(layer, errandActRef.current, host, p.errand, project, mine, { top: ins?.top ?? HEADER_BOTTOM, bottom: ins?.bottom ?? PANEL_HEIGHT }, errandCache, now);
       },
       allowSoftware: hooksOn,
@@ -444,6 +483,17 @@ export function WorldStage(props: WorldStageProps) {
   }, [mapStatus.status]);
 
   // 나가기: night-900 으로 420ms 덮은 뒤 렌더러·캐릭터 자원을 해제하고 알린다. 걷던 캐릭터는 그 자리에서 멈춘다.
+  // 개관 시점으로(에서) 바뀔 때 어둠 가림이 한 번 지나간다(21-09 D-11, --scrim 0 → 1 → 0, --dur-med). 카메라 기저는 가림이 가장 어두운 때(런타임 OVERVIEW_CUT_MS)에 바뀐다.
+  // 모션 줄이기·처음 마운트(재접속)는 가림 없이 즉시 목표 상태다
+  const overviewWanted = props.scene?.camera.mode === "overview";
+  const overviewSeen = useRef(overviewWanted);
+  const [dimKey, setDimKey] = useState(0);
+  useLayoutEffect(() => {
+    if (overviewSeen.current === overviewWanted) return;
+    overviewSeen.current = overviewWanted;
+    if (!live.current.reduced) setDimKey((k) => k + 1);
+  }, [overviewWanted]);
+
   const exiting = props.exiting === true;
   useEffect(() => {
     if (!exiting) return;
@@ -610,6 +660,13 @@ export function WorldStage(props: WorldStageProps) {
           ) : null}
         </div>
       ) : null}
+      {props.houses ? (
+        <div ref={houseRef} className="mf-world__houses" data-house-layer="">
+          {props.houses.tags.map((t) => (
+            <HouseTag key={t.seat} {...t} disabled={!props.canSend} onPick={(seat) => live.current.props.houses?.onPick(seat)} />
+          ))}
+        </div>
+      ) : null}
       <div
         ref={tagRef}
         className="mf-world__tags"
@@ -691,6 +748,7 @@ export function WorldStage(props: WorldStageProps) {
           );
         })}
       </div>
+      {dimKey > 0 ? <div key={dimKey} className="mf-world__dim" data-night-dim="" aria-hidden="true" /> : null}
       <div className="mf-world__veil">
         <MapStatusCard
           status={mapStatus.status}
