@@ -1,8 +1,8 @@
 ---
 phase: "23"
 slug: "keyword-day-one"
-status: planned
-nyquist_compliant: true
+status: draft
+nyquist_compliant: false
 wave_0_complete: false
 created: "2026-11-16"
 ---
