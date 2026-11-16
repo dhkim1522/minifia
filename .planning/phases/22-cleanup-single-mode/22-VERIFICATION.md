@@ -1,6 +1,6 @@
 ---
 phase: 22-cleanup-single-mode
-verified: 2026-11-16T23:40:00Z
+verified: 2026-11-16T23:50:00Z
 status: human_needed
 score: 6/6 must-haves verified
 covered_files:
@@ -39,12 +39,23 @@ covered_files:
   - "shared/game/verdict.ts"
   - "shared/game/view.ts"
   - "shared/game/will.ts"
+  - "shared/protocol.ts"
+  - "src/game/dayView.ts"
+  - "src/net/useWill.ts"
   - "src/screens/Lobby.tsx"
   - "src/world/character.ts"
+  - "test/client/willFlow.test.tsx"
+  - "test/worker/legacyRoom.test.ts"
   - "worker/room.ts"
-covered_digest: "v4:sha256:1948a458f1c1eae4e860fdc2cecfc7f9d48a0cfd570fc7b0b30e4d7f16117c96"
+covered_digest: "v4:sha256:0429da0f781861738b048ba17460cda13c4664cd926445f9bdadddb48849dbf2"
 behavior_unverified: 0
 overrides_applied: 0
+re_verification:
+  previous_status: human_needed
+  previous_score: 6/6
+  gaps_closed: []
+  gaps_remaining: []
+  regressions: []
 human_verification:
   - test: "실기기(폰)에서 새 낮 흐름 한 판: 토론 → 찬반 → 차례 지목 → 유언 → 처형 → 밤"
     expected: "찬반에서 집계 수만 보이고, 지목은 내 차례에 이름표를 눌러 고르며, 처형자만 10초 유언 시트가 뜨고 [남기기]로 일찍 끝나며, 다른 사람은 채팅·동작이 잠긴 채 지켜본다. 유언 카드 3초 뒤 처형 큰 글이 나온다"
@@ -63,9 +74,9 @@ human_verification:
 # Phase 22: 정리 — 판 하나로, 확장판·시상식 제거, 투표·유언 개편, 유령 수정 검증 보고서
 
 **Phase Goal:** 판 종류를 하나로 고정하고 확장판·시상식을 걷어 내며, 낮 투표를 찬반 → 차례 지목 → 처형으로 바꾸고 최후 변론을 유언 하나로 합친다. 유령은 작게, 걷는 방향으로 돈다(결정 0089-12·13·14·17·18·19·20).
-**Verified:** 2026-11-16
+**Verified:** 2026-11-16 (재검증)
 **Status:** human_needed (자동 검증 가능한 항목은 모두 통과, 실기기 시각·감각 확인만 남음)
-**Re-verification:** No — 최초 검증
+**Re-verification:** Yes — 코드 리뷰 수정 6커밋(74f14513·d397c047·0d740d46·1df5d86e·a4afcd70 + 보고 bea6c2d5) 뒤 다시 검증. 이전 보고는 stale 이었다
 
 SUMMARY 의 주장이 아니라 코드를 직접 읽고 grep·시험 실행으로 확인했다.
 
@@ -94,18 +105,28 @@ SUMMARY 의 주장이 아니라 코드를 직접 읽고 grep·시험 실행으�
 | 위생 `git grep -nIiE "torder\|티오더\|조직\|회사\|~/project"` | ✓ | 소스·문서: `docs/portfolio-request.md:21` "회사 관련 표현을 넣지 않는다" 규칙 문장 1건(일반 규칙 서술, 이 페이즈 이전부터). `.planning/` 중 22 범위 밖 `phases/20-map-expansion` 의 위생 규칙 서술 2건뿐. 22 산출물에는 없음 |
 | 옛 튜토리얼 진입점 숨김(D-08) | ✓ | 첫 화면 [혼자 하기]·방장 줄 [튜토리얼 먼저] 없음. `src` 에 "튜토리얼" 은 주석·사회자 음절 소리(`voice.syl`, 24 용)·`HeadStack` 주석에만 남음 |
 
+### 리뷰 수정 6커밋 재검증 (이 검증에서 코드를 직접 읽음)
+
+| 커밋 | 확인한 코드 | 판정 |
+|------|-------------|------|
+| 74f14513 WR-01 | `src/net/useWill.ts`: `finalWaiting`·`setFinalBoth`, 거절(`rejected` 증가) 시 `finalWaiting` 이면 '남김' 을 풀고 `onFail` 한 번. 단계가 넘어가 낡으면 대기 해제. 서버 `final` 조건(처형자·defense)은 건드리지 않음 | ✓ SC4 유지. 시험 `willFlow.test.tsx` 통과 |
+| d397c047 WR-02 | `WILL_QUIET_MS = 1500`, 자동 저장 후 `quiet` 이 busyRef 를 켜 늦은 거절 토스트를 막음. 자동 저장은 pending 이 아니라 시트·글은 그대로 | ✓ SC4 유지. 클라이언트 표시만 바뀜, 누설·판정 영향 없음 |
+| 0d740d46 WR-04 | `worker/room.ts` 생성자: `isLegacyV3Room(stored)`(shared/game/room.ts:575 에 존재)였던 방만 `chat:` 키 삭제 + `respawnAll` + 월드 저장. 표시 없는 방은 그대로. `test/worker/legacyRoom.test.ts` 새 파일 | ✓ SC1·SC6 보강(옛 방 정규화 D-03). 시험 통과 |
+| 1df5d86e IN-01 | `shared/protocol.ts` `DayView.voted` 한 줄 삭제. shared·worker·src·test 에서 `day.voted` 읽는 곳 없음, typecheck exit 0 | ✓ SC3 "집계 수만" 유지(타입에서도 던진 좌석 필드가 사라짐) |
+| a4afcd70 IN-02 | `nomination.ts`·`phases.ts`·`view.ts`·`dayView.ts` 주석만 변경(diff 로 코드 줄 변화 없음 확인) | ✓ 동작 변화 없음 |
+
+회귀 스폿 체크(수정 대상 아닌 기준): SC1 의 판 종류 식별자(`GameMode`·`DEFAULT_MODE`·`ModeSheet`·`RULES_BY_MODE`·`openTown`·`SHIPPED_`·`openExtended`)를 shared·worker·src·scripts·test 에서 `git grep` 하면 0건(직전 검증에서 있던 `roomDiff.test.ts` 부재 단언 한 줄도 이제 패턴에 안 걸림). SC2 의 `errand|lamps|mapTown|houseView|SuspectBoard|boardView|traceMark|EvidenceCard|SkipPill|ClueSpot|PLACE_IDS|placeArt|AWARD_IDS|plateCues|BallotReveal` 는 shared/room.ts:560~564 의 옛 방 정규화 키 표에만 남음(의도). `shared/game/awards.ts`·`stats.ts`·`mode.ts` 없음. SC5 `src/world/characterData.ts:183 GHOST_SCALE = 0.75`, `character.ts:1009` `root.scale.setScalar(GHOST_SCALE)`, headY 도 `* GHOST_SCALE`. SC3 `verdict.ts:63 passed = yes * 2 > yes + no`. SC4 `phases.ts:34 DEFENSE_MS = 10_000`, `defense → execution`. 결정 문서 `docs/decisions/0090-v3-single-flow-day-vote-will.md` 존재. 부채 표식(TBD·FIXME·XXX)은 수정 파일에서 0건. 위생 `git grep -nIiE "torder|티오더|조직|회사|~/project"` 결과는 22 범위 밖 옛 마일스톤 문서의 "넣지 않는다" 규칙 문장과 공식 조직 패키지 서술뿐이고 22 산출물에는 없음.
+
 ### 시험·검사 실제 출력 (이 검증에서 직접 실행)
 
-- `npm run typecheck` → exit 0, `error TS` 0건
-- `npx vitest run test/worker/leak.test.ts test/worker/basicDay.test.ts test/worker/will.test.ts test/unit/verdictRule.test.ts test/unit/legacyRoom.test.ts` → `Test Files 5 passed (5)`, `Tests 98 passed | 2 skipped (100)`, 48.8초. 건너뜀 2는 `leak.test.ts` 의 `describe.skipIf(!GAME_RULES.runoff)`·`describe.skipIf(!GAME_RULES.showdown)`(꺼진 장치라 의도된 skip). `pickTurn` 구역·"꺼진 장치 키 0건" 구역은 skip 되지 않고 돈다
-- 추가: `npx vitest run test/unit/character.test.ts test/unit/hostLine.test.ts test/unit/roomDiff.test.ts test/worker/pickTurn.test.ts test/unit/chatLog.test.ts` → `5 passed`, `256 tests passed`
-- 전체 `npm test`·`node --test scripts` 와 로컬 E2E(11흐름, `E2E OK`, 재시도 0)는 22-13·22-14 SUMMARY 의 보고(238 files 통과, 7190 tests, 622/622)이며 이 검증에서 다시 돌리지 않았다
+- `npm run typecheck` → `exit 0` (tokens:check·wrangler types·tsc app·tsc worker 모두 통과, `error TS` 0건)
+- `npx vitest run test/worker/legacyRoom.test.ts test/worker/will.test.ts test/worker/leak.test.ts test/client/willFlow.test.tsx test/unit/verdictRule.test.ts` → `Test Files  5 passed (5)`, `Tests  114 passed | 2 skipped (116)`, 48.9초, `exit 0`. 건너뜀 2는 `leak.test.ts` 의 `describe.skipIf(!GAME_RULES.runoff)`·`skipIf(!GAME_RULES.showdown)`(꺼진 장치, 의도된 skip)
+- 전체 `npm test`·`node --test scripts`·로컬 E2E(11흐름)는 22-13·22-14 SUMMARY 와 22-REVIEW-FIX 의 보고(client·unit 195 파일 6684 시험 통과, chatReplay·day·world 72 통과)이며 이 검증에서 다시 돌리지 않았다. 수정 6커밋은 클라이언트 훅·워커 생성자·타입 한 줄·주석이라 위 시험이 수정 대상 경로를 직접 덮는다
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `shared/protocol.ts` | 134 | `DayView.voted` 선택 필드가 타입에 남음("22-10 이 지운 뒤 이 필드도 지운다"는 주석, 서버는 싣지 않음) | ℹ️ Info | 죽은 타입 필드. 누설 없음. 23 이후 정리 |
 | `src/components/v2/HeadStack.tsx`·`src/screens/GameMap.tsx`·`src/game/chatUi.ts`·`src/styles/phase.css` | 여럿 | 지운 튜토리얼을 말하는 주석 | ℹ️ Info | 코드 동작 영향 없음(24 새 튜토리얼 때 정리) |
 | `shared/game/room.ts` | 562~564 | 옛 키 표(`lamps`·`errandPlaces` 등)·`town` 비교 | ℹ️ Info | 의도된 옛 방 정규화(D-03·D-30, 결정 0090-1) |
 
@@ -113,9 +134,9 @@ TBD·FIXME·XXX 부채 표식은 점검 대상 핵심 파일에서 발견하지 
 
 ### Gaps Summary
 
-코드상 갭 없음. 6개 성공 기준이 모두 코드와 실행한 시험으로 확인됐다. 알려진 한계(옛 기본 규칙 방이 표식 없이 새 단계 순서로 읽힐 수 있는 틈, 결정 0090-1)는 출시 전이라 수용으로 문서화되어 있다. 폰 6종 전체 회귀·배포본 E2E·실기기 확인은 0089-25 에 따라 24 끝으로 미뤘고, 이 때문에 상태는 `human_needed` 다.
+코드상 갭 없음. 리뷰 수정 범위 밖으로 남긴 항목(WR-03 옛 표시가 전혀 없는 배포 전 방·결정 0090-1 수용, IN-03 찬반 과반 설계 확인, IN-04 `toLobbyFromLegacy` 가 나간 사람 복원, IN-05 `RULES.pickTurn` 단일 값 분기)은 22-REVIEW.md 에 기록돼 있고 성공 기준을 깨지 않는다. 다만 WR-01 의 '응답이 아예 없는 유실' 은 3초 타임아웃을 넣지 않아 다루지 않았다(성공 시 단계가 곧 넘어가 시트가 닫힘). 리뷰 수정 로직(WR-01·WR-02 타이밍)은 실기기에서 한 번 보길 권한다. 6개 성공 기준이 모두 코드와 실행한 시험으로 확인됐다. 알려진 한계(옛 기본 규칙 방이 표식 없이 새 단계 순서로 읽힐 수 있는 틈, 결정 0090-1)는 출시 전이라 수용으로 문서화되어 있다. 폰 6종 전체 회귀·배포본 E2E·실기기 확인은 0089-25 에 따라 24 끝으로 미뤘고, 이 때문에 상태는 `human_needed` 다.
 
 ---
 
-_Verified: 2026-11-16_
+_Verified: 2026-11-16 (재검증)_
 _Verifier: Claude (gsd-verifier)_
