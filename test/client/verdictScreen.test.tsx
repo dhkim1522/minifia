@@ -81,8 +81,8 @@ interface ViewOpts {
   /** 변론자(후보) 좌석 */
   candidate?: number;
   dead?: number[];
-  /** 찬반을 던진 좌석 */
-  voted?: number[];
+  /** 찬반 단계의 집계 수(day.verdictCount, 모두에게 같다) */
+  verdictCount?: { yes: number; no: number };
   /** 내 찬반(본인에게만 오는 값) */
   verdictVote?: boolean;
   /** 처형 단계의 찬반 결과 */
@@ -121,7 +121,7 @@ function makeView(o: ViewOpts = {}): RoomView {
     day: {
       n: 1,
       roles: [],
-      ...(o.candidate !== undefined ? { candidate: o.candidate } : {}),
+      ...(o.candidate !== undefined && phase !== "verdict" ? { candidate: o.candidate } : {}),
       ...(o.candVotes !== undefined
         ? {
             voteLog: [
@@ -133,7 +133,7 @@ function makeView(o: ViewOpts = {}): RoomView {
             ],
           }
         : {}),
-      ...(phase === "verdict" ? { voted: o.voted ?? [] } : {}),
+      ...(phase === "verdict" && o.verdictCount !== undefined ? { verdictCount: o.verdictCount } : {}),
       ...(phase === "execution" && o.verdict !== undefined ? { verdict: o.verdict, execution: { seat: o.candidate ?? 3 } } : {}),
       ...(phase === "execution" && o.ballots !== undefined ? { ballots: o.ballots } : {}),
     },
@@ -174,13 +174,12 @@ const mount = (view: RoomView, over: Partial<RoomConnection> = {}) => {
 const verdictBtns = (c: ParentNode): HTMLButtonElement[] => [...c.querySelectorAll<HTMLButtonElement>("[data-verdict]")];
 const verdictBtn = (c: ParentNode, v: "yes" | "no"): HTMLButtonElement | null => c.querySelector(`[data-verdict="${v}"]`);
 const headOf = (c: ParentNode, seat: number): HTMLElement | null => c.querySelector(`[data-seat="${seat}"] .mv-head`);
-const countParts = (c: ParentNode): [number, number] => {
-  const m = /^(\d+) \/ (\d+)$/.exec(c.querySelector(".mv-count")?.textContent ?? "");
-  return m ? [Number(m[1]), Number(m[2])] : [-1, -1];
-};
+const countRow = (c: ParentNode): HTMLElement | null => c.querySelector("[data-verdict-count-row]");
+const yesNo = (c: ParentNode): [string | undefined, string | undefined] => [
+  c.querySelector('[data-verdict-count="yes"]')?.textContent?.trim(),
+  c.querySelector('[data-verdict-count="no"]')?.textContent?.trim(),
+];
 const countOf = (c: ParentNode): HTMLElement | null => c.querySelector(".mv-count");
-const countNow = (c: ParentNode): number => countParts(c)[0];
-const countMax = (c: ParentNode): number => countParts(c)[1];
 const lastScene = (): SceneLook => rt.scenes[rt.scenes.length - 1] as SceneLook;
 
 beforeEach(() => {
@@ -194,18 +193,45 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("찬반 화면 — 한 표 (DAY-06, 트레이서)", () => {
-  it("산 5명 · 변론자 3 의 찬반: 나(변론자 아님)의 패널에 찬성·반대 버튼 둘과 '투표한 사람' 숫자 0 / 4(산 사람 − 1)", () => {
-    const { container } = mount(makeView({ candidate: 3 }));
+describe("찬반 화면 — 숫자 줄과 두 단추 (22-10, D-11·D-26)", () => {
+  it("산 5명의 찬반: 산 사람 누구에게나 찬성·반대 단추 둘, 숫자 줄은 0 · 0 이다 (처형 후보 개념 없음)", () => {
+    const { container } = mount(makeView());
     expect(verdictBtns(container).map((b) => b.getAttribute("data-verdict"))).toEqual(["yes", "no"]);
-    expect(countOf(container)?.getAttribute("aria-label")).toBe("투표한 사람");
-    expect(countMax(container)).toBe(4);
-    expect(countNow(container)).toBe(0);
+    expect(yesNo(container)).toEqual(["0", "0"]);
+  });
+
+  it("day.verdictCount {yes:2,no:1}: 찬성 2 · 반대 1 이 두 덩이로 보이고 줄은 role=status '찬성 2표, 반대 1표'", () => {
+    const { container } = mount(makeView({ verdictCount: { yes: 2, no: 1 } }));
+    expect(yesNo(container)).toEqual(["2", "1"]);
+    const line = container.querySelector("[data-verdict-count-row]")!;
+    expect(line.getAttribute("role")).toBe("status");
+    expect(line.getAttribute("aria-label")).toBe("찬성 2표, 반대 1표");
+    expect(container.querySelector('[data-verdict-count="yes"] svg')).not.toBeNull();
+    expect(container.querySelector('[data-verdict-count="no"] svg')).not.toBeNull();
+    expect(verdictBtns(container).length).toBe(2);
+  });
+
+  it("1명 판·8명 판에도 같은 두 덩이다 (0 · 0 부터 8 · 0 까지)", () => {
+    for (const [count, vc] of [[1, { yes: 0, no: 0 }], [8, { yes: 5, no: 3 }], [8, { yes: 8, no: 0 }]] as const) {
+      const { container } = mount(makeView({ count, verdictCount: vc }));
+      expect(yesNo(container)).toEqual([String(vc.yes), String(vc.no)]);
+      expect(container.querySelectorAll("[data-verdict-count]").length).toBe(2);
+      cleanup();
+    }
+  });
+
+  it("처형 후보가 없어 이름이 들어간 글이 없다 — 산 사람 모두가 같은 화면이다 (나 = 누구든 단추 둘)", () => {
+    for (const mySeat of [0, 3, 4]) {
+      const { container } = mount(makeView({ mySeat, verdictCount: { yes: 1, no: 0 } }));
+      expect(verdictBtns(container).length, `seat ${mySeat}`).toBe(2);
+      expect(container.querySelector("[data-world-panel]")?.textContent).not.toMatch(/님/);
+      cleanup();
+    }
   });
 
   it("찬성을 누르면 verdict {agree: true} 를 보내고 찬성만 즉시 눌린 상태, 반대로 바꾸면 agree false 와 반대만 눌림", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
-    const { container } = mount(makeView({ candidate: 3 }), { send });
+    const { container } = mount(makeView(), { send });
     fireEvent.click(verdictBtn(container, "yes")!);
     expect(send).toHaveBeenCalledWith({ t: "verdict", agree: true });
     expect(verdictBtn(container, "yes")?.getAttribute("aria-pressed")).toBe("true");
@@ -217,38 +243,48 @@ describe("찬반 화면 — 한 표 (DAY-06, 트레이서)", () => {
   });
 
   it("서버 view 가 오면 서버 값이 이긴다: 내가 찬성을 눌렀어도 서버가 me.verdictVote=false 를 주면 반대가 눌린 상태", () => {
-    const m = mount(makeView({ candidate: 3 }));
+    const m = mount(makeView());
     fireEvent.click(verdictBtn(m.container, "yes")!);
     expect(verdictBtn(m.container, "yes")?.getAttribute("aria-pressed")).toBe("true");
-    m.show(makeView({ candidate: 3, voted: [0], verdictVote: false }));
+    m.show(makeView({ verdictVote: false, verdictCount: { yes: 0, no: 1 } }));
     expect(verdictBtn(m.container, "no")?.getAttribute("aria-pressed")).toBe("true");
     expect(verdictBtn(m.container, "yes")?.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("소켓이 닫혀 못 보냈으면(send false) 눌린 표시를 바꾸지 않는다", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => false);
-    const { container } = mount(makeView({ candidate: 3 }), { send });
+    const { container } = mount(makeView(), { send });
     fireEvent.click(verdictBtn(container, "yes")!);
     expect(verdictBtn(container, "yes")?.getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("서버 view 의 voted 에 내가 들면 내 이름표에 체크(data-done)와 숫자 1 — 아직 아무도 안 던진 좌석에는 체크가 없다", () => {
-    const m = mount(makeView({ candidate: 3 }));
-    expect(m.container.querySelectorAll("[data-done]").length).toBe(0);
-    m.show(makeView({ candidate: 3, voted: [0], verdictVote: true }));
-    expect(headOf(m.container, 0)?.getAttribute("data-done")).toBe("true");
-    expect(headOf(m.container, 1)?.hasAttribute("data-done")).toBe(false);
-    expect(countNow(m.container)).toBe(1);
+  it("같은 단추를 다시 눌러도 눌림은 그대로이고 반대쪽을 누르면 바뀐다(마감 전 번복)", () => {
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const { container } = mount(makeView(), { send });
+    fireEvent.click(verdictBtn(container, "yes")!);
+    fireEvent.click(verdictBtn(container, "yes")!);
+    expect(verdictBtn(container, "yes")?.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(verdictBtn(container, "no")!);
+    expect(verdictBtn(container, "no")?.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("다른 좌석이 voted 에 들면 그 이름표에 체크만 붙고 무엇을 골랐는지는 어디에도 없다", () => {
-    const m = mount(makeView({ candidate: 3 }));
-    m.show(makeView({ candidate: 3, voted: [1, 2] }));
-    expect(headOf(m.container, 1)?.getAttribute("data-done")).toBe("true");
-    expect(headOf(m.container, 2)?.getAttribute("data-done")).toBe("true");
-    expect(countNow(m.container)).toBe(2);
-    // 내 버튼은 눌리지 않았고(내가 안 던짐), 남의 이름표 어디에도 찬성·반대 글자나 속성이 없다
-    expect(verdictBtn(m.container, "yes")?.getAttribute("aria-pressed")).toBe("false");
+  it("숫자가 바뀌어도 숫자 줄에는 애니메이션·transition 이 없다(모션 줄이기와 같다)", () => {
+    const m = mount(makeView({ verdictCount: { yes: 0, no: 0 } }));
+    m.show(makeView({ verdictCount: { yes: 3, no: 1 } }));
+    expect(yesNo(m.container)).toEqual(["3", "1"]);
+    const row = m.container.querySelector("[data-verdict-count-row]")!;
+    expect(row.querySelector("[class*='anim'],[class*='transition'],[style*='transition'],[style*='animation']")).toBeNull();
+    const css = readFileSync("src/styles/game.css", "utf8");
+    const rule = css.split("\n").filter((l) => l.includes(".mf-game__vcount"));
+    expect(rule.length).toBeGreaterThan(0);
+    expect(rule.join("\n")).not.toMatch(/transition|animation/);
+  });
+
+  it("누가 던졌는지는 어디에도 없다: 이름표 체크(data-done) 0개, 찬성·반대 글자나 속성이 이름표에 없다 (T-22-19)", () => {
+    const m = mount(makeView({ verdictCount: { yes: 2, no: 1 } }));
+    expect(m.container.querySelectorAll("[data-done]").length).toBe(0);
+    m.show(makeView({ verdictVote: true, verdictCount: { yes: 3, no: 1 } }));
+    expect(m.container.querySelectorAll("[data-done]").length).toBe(0);
     const tags = m.container.querySelector(".mf-world__tags")!;
     expect(tags.textContent).not.toMatch(/찬성|반대/);
     expect(tags.innerHTML).not.toMatch(/data-agree|data-verdict|data-yes|data-no/);
@@ -325,71 +361,57 @@ describe("최후 변론 화면 — 채팅 단계 키 (VOTE-03, COMM-03, 08-27 �
   });
 });
 
-describe("찬반 화면 — 신분별 패널·안내·조명 (DAY-06)", () => {
-  it("다른 산 사람: 헤더 안내 줄 없음 + 찬반 줄(버튼·점), 제목 '찬반'", () => {
-    const { container } = mount(makeView({ candidate: 4 }));
+describe("찬반 화면 — 유령·헤더·조명 (22-10)", () => {
+  it("제목 '찬반', 헤더 안내 줄 없음, 산 사람은 숫자 줄 + 단추 둘", () => {
+    const { container } = mount(makeView());
     expect(titleOf(container)).toBe("찬반");
     expect(hintOf(container)).toBe("");
     expect(verdictBtns(container).length).toBe(2);
-    expect(countOf(container)).not.toBeNull();
+    expect(countRow(container)).not.toBeNull();
   });
 
-  it("변론자 본인: 헤더 안내 줄 없음, 패널은 숫자 + 채팅뿐(찬반 버튼 없음)", () => {
-    const { container } = mount(makeView({ candidate: 0, voted: [1, 2] }));
-    expect(hintOf(container)).toBe("");
+  it("유령(탈락한 나): 같은 숫자 줄과 채팅, 단추는 0개(보기 패널)", () => {
+    const { container } = mount(makeView({ dead: [0], verdictCount: { yes: 2, no: 1 } }));
     expect(verdictBtns(container).length).toBe(0);
-    expect(countNow(container)).toBe(2);
-    expect(countMax(container)).toBe(4);
+    expect(container.querySelectorAll("[data-verdict]").length).toBe(0);
+    expect(yesNo(container)).toEqual(["2", "1"]);
+    expect(hintOf(container)).toBe("");
     expect(container.querySelector(".mv-chat")).not.toBeNull();
   });
 
-  it("유령(탈락한 나): 찬반 버튼 없이 점 + 채팅, 헤더 안내 줄 없음, 점 수는 산 사람(나 빼고 4명) − 1", () => {
-    const { container } = mount(makeView({ candidate: 3, dead: [0], voted: [1] }));
-    expect(verdictBtns(container).length).toBe(0);
-    expect(countOf(container)).not.toBeNull();
-    expect(hintOf(container)).toBe("");
-    expect(countMax(container)).toBe(3);
-  });
-
-  it("변론자 이름표에는 배지·도장이 없다(찬반에서는 사라진다) — 던진 사람에게는 체크", () => {
-    const { container } = mount(makeView({ candidate: 3, voted: [1], candVotes: [[0, 3], [1, 3]] }));
+  it("이름표에는 배지·도장·체크가 없다(찬반에서는 모두 사라진다)", () => {
+    const { container } = mount(makeView({ verdictCount: { yes: 1, no: 0 }, candVotes: [[0, 3], [1, 3]] }));
     expect(container.querySelectorAll(".mv-head[data-count]").length).toBe(0);
     expect(container.querySelectorAll(".mv-head[data-sure]").length).toBe(0);
-    expect(headOf(container, 1)?.getAttribute("data-done")).toBe("true");
+    expect(container.querySelectorAll("[data-done]").length).toBe(0);
   });
 
-  it("조명 vote, 긴장 0·초점 없음 — 찬반에는 후보가 없어 옛 변론자 초점 분기를 지웠다 (22-09 D-11, RESEARCH A5; 화면 전체 개편은 22-10)", () => {
-    mount(makeView({ candidate: 3 }));
+  it("조명 vote, 긴장 0·초점 없음 — 찬반에는 후보가 없다", () => {
+    mount(makeView());
     expect(lastScene().lighting).toBe("vote");
     expect(lastScene().tension).toBe(0);
     expect(lastScene().focusSeat).toBeUndefined();
   });
 
   it("찬반에는 지목 이름표 버튼이 없다(이름표를 누르지 않는다)", () => {
-    const { container } = mount(makeView({ candidate: 3 }));
+    const { container } = mount(makeView());
     expect(container.querySelector("[data-pick]")).toBeNull();
   });
 });
 
 describe("찬반 줄 — 키보드가 열리면 숨고 닫으면 돌아온다 (E4 #14·#15)", () => {
-  it("키보드 열림: 찬반 버튼과 점이 없고 채팅은 그대로, 닫히면 다시 나온다 (변론자 아닌 사람)", () => {
-    const m = mount(makeView({ candidate: 3 }));
+  it("키보드 열림: 찬반 단추와 숫자 줄이 없고 채팅은 그대로, 닫히면 다시 나온다", () => {
+    const m = mount(makeView());
     expect(verdictBtns(m.container).length).toBe(2);
     kb.open = true;
-    m.show(makeView({ candidate: 3 }));
+    m.show(makeView());
     expect(m.container.querySelector(".mv-verdict")).toBeNull();
-    expect(countOf(m.container)).toBeNull();
+    expect(countRow(m.container)).toBeNull();
     expect(m.container.querySelector(".mv-chat")).not.toBeNull();
     kb.open = false;
-    m.show(makeView({ candidate: 3 }));
+    m.show(makeView());
     expect(verdictBtns(m.container).length).toBe(2);
-    expect(countOf(m.container)).not.toBeNull();
-  });
-
-  it("변론자 본인의 점도 키보드가 열리면 숨는다", () => {
-    kb.open = true;
-    const { container } = mount(makeView({ candidate: 0 }));
-    expect(countOf(container)).toBeNull();
+    expect(countRow(m.container)).not.toBeNull();
   });
 });
 
