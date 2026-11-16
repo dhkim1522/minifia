@@ -801,3 +801,11 @@ describe("처형 없음 알림 한 가지 — 찬반 부결·지목 동점·0표
     same(dayEvents(verdictView(), viewOf("night")).announces, []);
   });
 });
+
+describe("지목 기록 없음 (22-12 D-14)", () => {
+  it("지목 중 표가 늘어도 채팅 줄·알림이 만들어지지 않는다 — 'A → B' 줄이 없다", () => {
+    const events = dayEvents(nominationOf([[1, 2]]), nominationOf([[1, 2], [3, 2], [4, 2]]));
+    same([events.lines, events.announces, events.fx], [[], [], []]);
+    same(dayEvents(nominationOf([]), nominationOf([[1, 2]])).lines, []);
+  });
+});

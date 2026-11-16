@@ -580,3 +580,25 @@ describe("지목 마감 — 통과한 찬반을 보존하고 동점·0표는 밤
     expect(`${Object.hasOwn(mod, "enterVote")} ${Object.hasOwn(mod, "castPoint")}`).toBe("false false");
   });
 });
+
+// 22-12 D-25: 서버 voteLog 는 누가 누구를 골랐는지(cand.votes)를 저장하지 않는다 — 그날 처형자(candidate)와 처형 없음 이유(reason)만 남긴다.
+describe("voteLog 저장 — 개인 선택 없음 (22-12 D-25)", () => {
+  it("최다 한 명이면 줄의 cand 는 candidate 키 하나뿐이다(votes 없음)", () => {
+    const r = resolveNomination(withPoints(nominationOf(), { 4: 0, 3: 2, 1: 2, 0: 2, 2: 1 }));
+    const line = r.state.voteLog?.at(-1);
+    expect(keysOf(line?.cand ?? {})).toBe(JSON.stringify(["candidate"]));
+    expect(line?.cand).toEqual({ candidate: 2 });
+    expect(JSON.stringify(r.state.voteLog)).not.toContain("votes");
+    expect(JSON.stringify(r.state.voteLog)).not.toContain("target");
+  });
+
+  it("동률·0표면 cand 는 빈 객체이고 이유(reason)가 남는다 — 판정에 필요한 최소뿐", () => {
+    const tie = resolveNomination(withPoints(nominationOf(), { 0: 1, 1: 2, 2: 0 }));
+    expect(tie.state.voteLog?.at(-1)?.cand).toEqual({});
+    expect(tie.state.voteLog?.at(-1)?.reason).toBe("tie");
+    const none = resolveNomination(nominationOf());
+    expect(none.state.voteLog?.at(-1)?.cand).toEqual({});
+    expect(none.state.voteLog?.at(-1)?.reason).toBe("noVotes");
+    expect(JSON.stringify(tie.state.voteLog) + JSON.stringify(none.state.voteLog)).not.toContain("votes");
+  });
+});

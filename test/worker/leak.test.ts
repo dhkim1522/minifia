@@ -115,11 +115,12 @@ const ROLE_PATHS_ALIVE = [
  */
 const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick", "stats", "badgeLog", "whispers", "disconnectedAt", "left", "errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick", "errandFake"]; // (22-04: 원인 흐름의 서버 전용 이름 errandCut·skipVote·sceneSeen·touched·footprints·windowLit 은 키째 지웠다.) errandPlaces·errandDone·errandNear·errandSeen·errandTickAt·nightPick(15-06, T-15-25): 심부름·밤 선택의 서버 전용 이름 — view 는 me.errand·me.record·me.pick 이라는 다른 이름으로만 본인에게 싣는다. disconnectedAt·left(11-04): 방 연속성 서버 전용 기록 (L43). badgeLog·whispers(11-03): 결과 공개 줄은 v·to 같은 다른 이름을 쓴다 — 서버 전용 이름은 어떤 프레임에도 키로 없다 (L35)
 /**
- * 서버 전용 이름과 같은 공개 와이어 필드의 경로(08-11, 결정 0060-3·4) — 이 두 경로만 SERVER_ONLY_KEYS 검사에서 빼고 이유를 단다. 목록은 줄이지 않고, 새 경로는 받을 권리 조건이 있을 때만 더한다.
- *  - .view.day.verdict: 처형 단계에서 모두에게 같은 {yes,no,passed} 집계(서버 전용 RoomState.verdict 와 이름만 같다).
+ * 서버 전용 이름과 같은 공개 와이어 필드의 경로(08-11, 결정 0060-3·4) — 이 경로만 SERVER_ONLY_KEYS 검사에서 빼고 이유를 단다. 목록은 줄이지 않고, 새 경로는 받을 권리 조건이 있을 때만 더한다.
  *  - .view.me.verdictVote: 그 소켓 본인이 던진 찬반 값(변론자·유령·던지지 않은 사람에게는 키 자체가 없다). 남의 값은 어떤 경로로도 가지 않는다.
+ *  - .view.day.execution.will(22-12, Pattern 6): 처형 순간 모두에게 공개되는 처형자의 유언 글. 처형 단계에서만, 비어 있지 않을 때만, 모든 소켓에 같은 값이고 역할과 무관하다(유언 공개 카드). 서버 전용 이름 목록에는 없지만 새 공개 경로라 이유와 함께 둔다.
+ * 22-12 에서 .view.day.verdict({yes,no,passed}) 예외가 사라졌다 — 찬반 결과 수는 처형 단계에 싣지 않는다(D-14).
  */
-const ALLOWED_WIRE_PATHS: ReadonlySet<string> = new Set([".view.day.verdict", ".view.me.verdictVote"]);
+const ALLOWED_WIRE_PATHS: ReadonlySet<string> = new Set([".view.me.verdictVote", ".view.day.execution.will"]);
 /**
  * 동점 결선(결정 0066-4)의 공개 경로 — SERVER_ONLY_KEYS 의 runoffVote 와 이름이 겹치지 않아 위 허용 목록은 넓히지 않았다. 새로 생기는 경로는 이 둘뿐이고 받을 권리가 단계별로 갈린다:
  *  - .view.day.runoff(.cand/.step/.voted/.tally): runoff 단계에서 모든 소켓에 같다. 마감 전(step 0·1)에는 cand·step·voted(던진 좌석)뿐, 마감 뒤(step 2)에는 cand·step·tally(득표 수)뿐이다.
@@ -133,7 +134,7 @@ const RUNOFF_WIRE_PATHS: ReadonlySet<string> = new Set([".view.day.runoff", ".vi
  *  - .to · .lines[].to: 귓속말 줄의 상대 좌석(공개 사실, 0066-2). .view.me.whisperUsed: 오늘 귓속말을 보냈는지(본인만).
  *  - .view.me.ballot: 본인이 고른 좌석(결선 0066-4·마지막 3인 0066-5, 본인만). .view.day.runoff.*: 결선 공개 값(cand·step·voted·tally).
  *  - .view.day.showdown.*: 마지막 3인 결전 공개 값(order·i·endsAt·doneAt·skip·word·voted·points, 0066-5 — 모두에게 같다, 개인 선택은 없다).
- *  - .view.day.verdict.last: 마지막 3인 결전으로 온 처형 표시(0066-5). .view.day.ballots.*: 찬반 기록 좌석 목록(0066-3, 처형 단계만).
+ * (22-12: .view.day.verdict.last·.view.day.ballots.* 는 지웠다 — 찬반 기록·결과 수가 와이어에 없다, D-14.)
  */
 const POLITICS_PATHS_FULL: readonly string[] = [
   ".view.players[].badge",
@@ -144,12 +145,10 @@ const POLITICS_PATHS_FULL: readonly string[] = [
   ".view.me.whisperUsed",
   ".view.day.runoff.*",
   ".view.day.showdown.*",
-  ".view.day.verdict.last",
-  ".view.day.ballots.*",
 ];
 /**
  * 기본판(결정 0072, 13-04, T-13-14): 허용 경로는 그 장치의 설정이 켜졌을 때만 목록에 든다. 꺼진 장치의 경로가 프레임에 나오면 실패한다 — 넓히지 않고 좁힌다.
- * 찬반 기록(day.ballots, 0066-3)은 다섯 장치에 속하지 않아 늘 허용한다. me.ballot 은 결선·마지막 3인 중 하나라도 켜졌을 때, verdict.last 는 마지막 3인 결전이 켜졌을 때만이다.
+ * me.ballot 은 결선·마지막 3인 중 하나라도 켜졌을 때만이다. 기본판은 허용 경로가 하나도 없다(22-12: 찬반 기록 day.ballots 삭제).
  */
 function politicsPathsFor(r: Ruleset): readonly string[] {
   const on: Record<string, boolean> = {
@@ -161,8 +160,6 @@ function politicsPathsFor(r: Ruleset): readonly string[] {
     ".view.me.whisperUsed": r.whisper,
     ".view.day.runoff.*": r.runoff,
     ".view.day.showdown.*": r.showdown,
-    ".view.day.verdict.last": r.showdown,
-    ".view.day.ballots.*": true,
   };
   return POLITICS_PATHS_FULL.filter((p) => on[p] === true);
 }
@@ -192,7 +189,6 @@ const RESULT_LOG_LINE_KEYS: Readonly<Record<string, string>> = {
   ghost: "at,n,seat,text",
   whisper: "at,n,seat,text,to",
   claim: "n,seat,v",
-  ballots: "n,no,yes",
 };
 // .part 는 부분 이름 mafia 가 직업 단어와 겹쳐서 허용한다(부분 이름이지 누구의 직업도 아니다). 이 허용도 ended 전용이다.
 const RESULT_LOG_ROLE_PATHS = new Set([".lines[].v", ".part"]);
@@ -210,7 +206,7 @@ const TYPING_KEY_PATHS = new Set([".t", ".seat", ".on"]);
 // 결정 0066-2: ".to" 는 귓속말 줄(k whisper·whispered)의 상대 좌석이다 — 누가 누구에게 귓속말을 보냈는지는 공개 사실이고(본문만 비공개) 줄 종류 값은 아래 CHAT_KIND_VALUES 뿐이다.
 const CHAT_KEY_PATHS = new Set([".t", ".ch", ".seat", ".seq", ".text", ".at", ".k", ".to"]);
 /** chat 줄 종류(.k)의 허용 값 집합: 카드(결정 0061-11)와 귓속말(결정 0066-2). 새 종류는 이 집합에 근거와 함께 더한다. */
-const CHAT_KIND_VALUES: ReadonlySet<string> = new Set(["will", "note", "whisper", "whispered", "ballots"]);
+const CHAT_KIND_VALUES: ReadonlySet<string> = new Set(["will", "note", "whisper", "whispered"]);
 // ---- chatLog 프레임(07-14, 누설 검사 (d)): hello 직후 한 번. 키는 t·lines[]·ch·seat·seq·text·at 뿐이고 수신자 마스크(r)·쓰기 순번(g)·일차(n)는 없다 ----
 // 결정 0061-11: ".lines[].k" 는 서버가 사망 전환에서 만든 카드 표시, 공개 정보. 다른 경로는 넓히지 않는다.
 const CHATLOG_KEY_PATHS = new Set([".t", ".lines", ".lines[].ch", ".lines[].seat", ".lines[].seq", ".lines[].text", ".lines[].at", ".lines[].k", ".lines[].to"]); // ".lines[].to": 귓속말 상대 좌석(결정 0066-2, 공개 사실)
@@ -415,8 +411,9 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
           if (key === "role" || key === "allies") expect(path).toBe(`.view.me.${key}`);
         }
         // 서버 전용 차례 키는 어떤 프레임의 어떤 경로에도 없다(T-03.1-06).
-        // 8페이즈(08-07): 처형 단계의 .view.day.verdict({yes,no,passed})는 공개 와이어 필드다(서버 전용 verdict 와 이름만 같다). 전체 누설 스캔 개편은 08-09.
-        for (const path of paths) expect(path !== ".view.day.verdict" && SERVER_ONLY_KEYS.includes(path.slice(path.lastIndexOf(".") + 1))).toBe(false);
+        // 22-12: .view.day.verdict 예외가 없다 — 서버 전용 이름은 어떤 경로에도 없다. 찬반 기록(ballots)·개인 선택(votes) 문자열도 어느 프레임에도 없다(D-14·D-25).
+        for (const path of paths) expect(SERVER_ONLY_KEYS.includes(path.slice(path.lastIndexOf(".") + 1))).toBe(false);
+        expect(raw.includes('"ballots"') || raw.includes('"votes"')).toBe(false);
         if (msg.t !== "state") continue;
         // day.turn 은 순차 지목이 켜졌을 때(판 규칙의 pickTurn)만 지목 단계에 있다. 기본판(결정 0072)에서는 어느 단계에도 키가 없다(07-08, 09.1 — 결정 0063-1).
         expect(`${msg.view.phase}:${Object.hasOwn(msg.view.day ?? {}, "turn")}`).toBe(`${msg.view.phase}:${GAME_RULES.pickTurn && msg.view.phase === "nomination"}`);
@@ -1068,17 +1065,15 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
           // 찬반 집계 수(D-11·D-26): 찬반 단계에만, 모두에게 같은 값(위 라이브 검사)이고 키는 yes·no 둘뿐이다. 서버 전용 이름과 겹치지 않아 별도 허용 경로가 필요 없다(공개 수일 뿐 개인 표가 아니다).
           expect(has(".view.day.verdictCount")).toBe(v.phase === "verdict");
           if (v.phase === "verdict") expect(Object.keys(v.day!.verdictCount!).sort()).toEqual(["no", "yes"]);
-          expect(has(".view.day.verdict")).toBe(v.phase === "execution"); // 처형 단계의 결과 수(결정 0053)
+          expect(has(".view.day.verdict")).toBe(false); // 찬반 결과 수는 와이어에 없다(22-12 D-14) — 진행 중 집계는 day.verdictCount 뿐
           expect(has(".view.day.candidate")).toBe(["defense", "execution"].includes(v.phase)); // 찬반에는 후보가 없다(D-11)
           expect(has(".view.day.execution")).toBe(v.phase === "execution");
-          // 찬반 기록(결정 0066-3, L19): day.ballots 는 처형 단계에서만 — 찬반 진행 중 프레임에는 키 자체가 없다(던진 좌석 day.voted 뿐). 목록은 그날 최종 값과 같고 값은 좌석 정수뿐이다.
-          expect(has(".view.day.ballots")).toBe(v.phase === "execution");
-          if (v.phase === "execution") {
-            const fin = [...(verdictFinal.get(day) ?? new Map<number, boolean>())].sort((x, y) => x[0] - y[0]);
-            expect(Object.keys(v.day!.ballots!).sort()).toEqual(["no", "yes"]);
-            expect(JSON.stringify(v.day!.ballots)).toBe(JSON.stringify({ yes: fin.filter(([, x]) => x).map(([sn]) => sn), no: fin.filter(([, x]) => !x).map(([sn]) => sn) }));
-            for (const sn of [...v.day!.ballots!.yes, ...v.day!.ballots!.no]) expect(Number.isInteger(sn)).toBe(true);
-          }
+          // 찬반 기록(day.ballots)은 어느 단계에도 없다(22-12 D-14). 유언 공개 값 day.execution.will 은 처형 단계에서만 있고 모든 소켓에 같다(T-22-26).
+          expect(has(".view.day.ballots")).toBe(false);
+          expect(has(".view.day.execution.will")).toBe(v.phase === "execution" && v.day!.execution!.will !== undefined);
+          if (v.phase === "execution") expect(Object.keys(v.day!.execution!).every((k) => k === "seat" || k === "will")).toBe(true);
+          // 지목 기록(day.voteLog)도 어느 단계에도 없다(22-12 D-14·D-25). day.points 는 지목 단계 동안만 있다.
+          expect(has(".view.day.voteLog")).toBe(false);
           if (v.phase === "nomination" && (v.day?.points?.length ?? 0) > 0) seen.points.add(a.seat);
           if (v.phase === "verdict" && v.day!.verdictCount!.yes + v.day!.verdictCount!.no > 0) seen.counted.add(a.seat);
           if (v.phase === "execution") {
@@ -1091,14 +1086,6 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
           if (wantNoExecution) {
             expect(Object.keys(v.day!.noExecution!)).toEqual(["reason"]);
             seen.noExec.add(a.seat);
-          }
-          // 줄 키: exec 는 no·passed·yes, cand 는 votes(+candidate)
-          for (const line of v.day?.voteLog ?? []) {
-            expect(Object.keys(line.exec).sort()).toEqual(["no", "passed", "yes"]);
-            if (line.cand !== undefined) {
-              expect(Object.keys(line.cand).sort()).toEqual(line.cand.candidate === undefined ? ["votes"] : ["candidate", "votes"]);
-              for (const vote of line.cand.votes) expect(Object.keys(vote).sort()).toEqual(["seat", "target"]);
-            }
           }
           // 본인 값: 본인이 던진 값만, 그 단계에서만, 생존 중에만 — 남의 값은 어떤 키로도 없다
           if (v.me.verdictVote !== undefined) {
@@ -1118,7 +1105,7 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
         }
         expect(`${a.seat}:${errorFrames}`).toBe(`${a.seat}:${rejectedBy.get(a.seat) ?? 0}`);
         // 시민·경찰·의사·마피아·유령 누구든 ended 뒤 다섯 부분을 이 순서로 받았다(L36). 판 중에는 위 검사가 0건을 본다(L35).
-        expect([...logCounts.keys()].join(",")).toBe("mafia,ghost,whisper,claim,ballots");
+        expect([...logCounts.keys()].join(",")).toBe("mafia,ghost,whisper,claim");
       }
 
       // 받을 사람은 실제로 받았다 — 아무도 못 받는 검사가 되지 않게.
@@ -1603,9 +1590,9 @@ describe.skipIf(!GAME_RULES.runoff)("동점 결선 프레임 전수 (결정 0066
 });
 
 describe("허용 경로 고정 (L24, 결정 0072·T-13-14)", () => {
-  it("POLITICS_ALLOWED_PATHS 는 설정이 켜진 장치의 경로만이다 — 기본판에서는 찬반 기록 하나뿐이고, 모두 켜면 정확히 이 목록이다. 넓히려면 이유를 적고 이 기대값을 같이 고친다", () => {
+  it("POLITICS_ALLOWED_PATHS 는 설정이 켜진 장치의 경로만이다 — 기본판에서는 하나도 없고(22-12), 모두 켜면 정확히 이 목록이다. 넓히려면 이유를 적고 이 기대값을 같이 고친다", () => {
     const allOff: Ruleset = { badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false };
-    expect([...politicsPathsFor(allOff)]).toEqual([".view.day.ballots.*"]);
+    expect([...politicsPathsFor(allOff)]).toEqual([]);
     expect([...POLITICS_ALLOWED_PATHS]).toEqual([...politicsPathsFor(GAME_RULES)]);
     const allOn: Ruleset = { badge: true, whisper: true, pickTurn: true, runoff: true, showdown: true };
     expect([...politicsPathsFor(allOn)]).toEqual([
@@ -1617,22 +1604,20 @@ describe("허용 경로 고정 (L24, 결정 0072·T-13-14)", () => {
       ".view.me.whisperUsed",
       ".view.day.runoff.*",
       ".view.day.showdown.*",
-      ".view.day.verdict.last",
-      ".view.day.ballots.*",
     ]);
     const full = politicsPathsFor(allOn);
     expect(politicsAllowed(".view.day.showdown.points[].seat", full)).toBe(true);
     expect(politicsAllowed(".view.day.showdown", full)).toBe(true);
     expect(politicsAllowed(".view.day.showdownX", full)).toBe(false);
     expect(politicsAllowed(".view.day.verdict.passed", full)).toBe(false);
+    expect(politicsAllowed(".view.day.ballots.yes", full)).toBe(false); // 22-12: 찬반 기록 경로는 어떤 규칙에서도 허용하지 않는다
   });
 
   it("장치가 모두 꺼진 규칙의 허용 경로는 꺼진 장치의 경로를 받아들이지 않는다", () => {
     const basic = politicsPathsFor({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false });
-    for (const path of [".view.players[].badge", ".view.players[].badgeSwapped", ".to", ".lines[].to", ".view.me.ballot", ".view.me.whisperUsed", ".view.day.runoff", ".view.day.runoff.step", ".view.day.showdown.i", ".view.day.verdict.last"]) {
+    for (const path of [".view.players[].badge", ".view.players[].badgeSwapped", ".to", ".lines[].to", ".view.me.ballot", ".view.me.whisperUsed", ".view.day.runoff", ".view.day.runoff.step", ".view.day.showdown.i", ".view.day.verdict.last", ".view.day.ballots.yes"]) {
       expect(`${path}:${politicsAllowed(path, basic)}`).toBe(`${path}:false`);
     }
-    expect(politicsAllowed(".view.day.ballots.yes", basic)).toBe(true);
   });
 });
 
@@ -1654,7 +1639,6 @@ describe.skipIf(!GAME_RULES.showdown)("마지막 3인 결전 프레임 전수 (�
           expect(SERVER_ONLY_KEYS.includes(key) && !ALLOWED_WIRE_PATHS.has(path)).toBe(false);
           if (path.startsWith(".view.day.showdown")) expect(`${path}:${politicsAllowed(path)}`).toBe(`${path}:true`);
           if (key === "ballot") expect(path).toBe(".view.me.ballot");
-          if (key === "last") expect(path).toBe(".view.day.verdict.last");
         }
         if (msg.t !== "state") continue;
         const v = msg.view;
@@ -1673,8 +1657,7 @@ describe.skipIf(!GAME_RULES.showdown)("마지막 3인 결전 프레임 전수 (�
           expect(v.phase).toBe("showdown");
           expect(v.me.ballot).toBe(points[a.seat]); // 남의 값이 아니라 본인이 던진 값
         }
-        if (v.phase === "execution") expect(v.day!.verdict!.last).toBe(true);
-        else if (v.day?.verdict !== undefined) expect(Object.hasOwn(v.day.verdict, "last")).toBe(false);
+        expect(Object.hasOwn(v.day ?? {}, "verdict")).toBe(false); // 22-12: day.verdict(last 포함)가 없다 — 처형자 존재(day.execution)가 마지막 3인 처형도 알린다
       }
       expect(sawWindow).toBe(true);
       // 유령(좌석 3)은 어느 프레임에도 me.ballot 이 없다
@@ -1836,7 +1819,7 @@ describe("다시 하기 · 쉬는 사람 프레임 전수 (D-12~D-16, L38·L39·
       expect(`${tag}:round:${v.round}`).toBe(`${tag}:round:${round}`);
       expect(`${tag}:result:${"result" in v}`).toBe(`${tag}:result:false`);
       expect(`${tag}:ready/sat:${v.players.some((p) => "ready" in p || "sat" in p)}`).toBe(`${tag}:ready/sat:false`);
-      expect(`${tag}:voteLog:${v.day?.voteLog?.length ?? 0}`).toBe(`${tag}:voteLog:0`);
+      expect(`${tag}:voteLog:${v.day !== undefined && "voteLog" in v.day}`).toBe(`${tag}:voteLog:false`);
       expect(`${tag}:morning:${v.day !== undefined && "morning" in v.day}`).toBe(`${tag}:morning:false`);
       expect(`${tag}:chalk:${v.day !== undefined && "chalk" in v.day}`).toBe(`${tag}:chalk:false`);
       expect(`${tag}:records:${(v.me.records ?? []).length}`).toBe(`${tag}:records:0`);
