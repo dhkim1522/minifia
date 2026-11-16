@@ -384,13 +384,13 @@ describe("ChatStore: 카드 줄 (MORN-02, 결정 0061-11)", () => {
     expect(store.nextCardReveal(3800)).toBeNull();
   });
 
-  it("처형 단계 키(execution)에서는 보류가 2400ms 다", () => {
+  it("처형 단계 키(execution)에서는 보류가 유언 공개 카드 시간(WILL_REVEAL_MS 3000ms)과 같다 (22-13)", () => {
     const store = new ChatStore();
     store.setContext({ pk: "1:1:execution", channel: "all", epoch: 1 });
     store.apply(card("will", 3, 9, "가", 900), 1, 1000);
-    expect(store.nextCardReveal(1000)).toBe(3400);
-    expect(store.visibleLines("all", 3399).length).toBe(0);
-    expect(store.visibleLines("all", 3400).length).toBe(1);
+    expect(store.nextCardReveal(1000)).toBe(4000);
+    expect(store.visibleLines("all", 3999).length).toBe(0);
+    expect(store.visibleLines("all", 4000).length).toBe(1);
   });
 
   it("재접속 chatLog 로 받은 카드 줄은 보류 없이 바로 보인다", () => {

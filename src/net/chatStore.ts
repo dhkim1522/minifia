@@ -2,13 +2,14 @@
 // 선택이지 보안 경계가 아니다(결정 0002·0021). React 밖이라 프레임마다 리렌더하지 않는다(WorldStore 와 같은 형태).
 import { CHAT_KEEP_LINES, NOTICE_MS, TYPING_EXPIRE_MS } from "../game/chatUi";
 import { MAX_PLAYERS } from "../../shared/protocol";
+import { WILL_REVEAL_MS } from "../../shared/game/phases";
 import type { ChatChannel, ChatLogFrame, ChatLineFrame, ChatRejectFrame, ChatRejectWhy, ChatLineWire, TypingFrame } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
 
 /** 아침에 받은 서버 카드(유언·쪽지)가 채팅창에 나타나기까지의 보류 ms — 화면 몫이고 서버는 진입 즉시 보낸다(UI-SPEC 263행, 결정 0061-11) */
 export const CARD_HOLD_MS = 2800;
-/** 처형 단계에서 받은 카드의 보류 ms(UI-SPEC 276행) */
-export const CARD_HOLD_EXEC_MS = 2400;
+/** 처형 단계에서 받은 카드의 보류 ms. 22-13 결정: 유언 공개 카드(WILL_REVEAL_MS 3.0초)가 화면에 서 있는 동안 같은 글이 채팅 기록에 먼저 보이지 않도록 카드 시간과 맞춘다(옛 값 2.4초 — 처형 알림 2.4초 시절의 값) */
+export const CARD_HOLD_EXEC_MS = WILL_REVEAL_MS;
 
 /** 받음 알림 근거로 기억하는 라이브 귓속말 줄 수(보낸 줄 사이에 낀 받은 줄을 놓치지 않을 만큼) */
 const WHISPER_LIVE_KEEP = 8;
