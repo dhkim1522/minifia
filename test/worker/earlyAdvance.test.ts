@@ -64,6 +64,11 @@ function expectShrunk(got: RoomView[][], storedEndsAt: number, origin: number, d
   expect(storedEndsAt).toBeLessThan(origin);
 }
 
+/** 서버 전용 earlyFrom(원래 마감)은 어느 소켓의 어느 프레임에도 이름이 없다(T-23-31). */
+const noEarlyFrom = (socks: TestSocket[]): void => {
+  for (const s of socks) expect(s.frames.join("\n").includes("earlyFrom")).toBe(false);
+};
+
 const send3 = (socks: TestSocket[], msg: unknown): void => {
   for (const s of socks) send(s, msg);
 };
@@ -90,6 +95,7 @@ describe("키워드 — 사람 전원이 확정하면 일찍 넘어간다 (D-11)
     const after = await storedRoom(room.code);
     expect(after.phase).toBe("keyword");
     expectShrunk(got, after.phaseEndsAt!, origin, 13_000);
+    noEarlyFrom(socks);
     expect(await alarmOf(room.code)).toBe(after.phaseEndsAt);
     expect((after as unknown as { earlyFrom?: unknown }).earlyFrom).toEqual({ phase: "keyword", day: 0, endsAt: origin });
 
@@ -136,6 +142,7 @@ describe("찬반 — 산 사람 전원이 투표하면 일찍 넘어가고 번�
     const got = await actAndSettle(socks, () => send(socks[3]!, { t: "verdict", agree: true }));
     const first = (await storedRoom(room.code)).phaseEndsAt!;
     expectShrunk(got, first, origin, 10_000);
+    noEarlyFrom(socks);
     expect(await alarmOf(room.code)).toBe(first);
 
     // 번복: 마감이 뒤로 밀린다(늘어난다) — 원래 마감을 넘지 않는다.
@@ -194,6 +201,7 @@ describe("밤 — 산 사람 전원이 고르면 일찍 넘어가고 연장은 �
     const got = await actAndSettle(socks, () => send(order[3]!.sock, { t: "pick", target: 0 }));
     const shrunk = (await storedRoom(room.code)).phaseEndsAt!;
     expectShrunk(got, shrunk, origin, 30_000);
+    noEarlyFrom(socks);
     expect(await alarmOf(room.code)).toBe(shrunk);
 
     // 줄어든 뒤의 변경: 받아들여지지만 마감 그대로, 시민 편(마피아가 아닌) 본인에게만 프레임이 간다(연장 방송 없음).

@@ -306,6 +306,7 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "keywordProbed", // 마피아가 금지어로 거절당한 적(D1 떠보기 근거, D-09)
   "answerSubmits", // 확정 제출 목록(낸 순서) — 공개는 마감 뒤 day.keyword.answers 뿐
   "answerDraft", // 쓰던 글 — 본인 값은 me.answer 로만
+  "earlyFrom", // 조기 진행이 마감을 줄이기 전의 원래 마감(23-08, D-11) — 서버 전용, 찬반 번복 연장의 상한. 화면은 줄어든 phaseEndsAt 만 본다
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
@@ -2340,6 +2341,17 @@ describe("키워드 답 view (23-06)", () => {
     expect(viewOf(drafted, 1).me.answer).toEqual({ text: "쓰던 글", final: false });
     const submitted: RoomState = { ...drafted, answerSubmits: [{ seat: 1, text: "낸 글" }] };
     expect(viewOf(submitted, 1).me.answer).toEqual({ text: "낸 글", final: true });
+  });
+
+  it("earlyFrom(조기 진행의 원래 마감, 23-08 D-11)은 어떤 viewer 의 view 에도 없다 — 줄어든 phaseEndsAt 만 보인다", () => {
+    const s = base();
+    const shrunk: RoomState = { ...s, phaseEndsAt: 12_345, earlyFrom: { phase: s.phase, day: 0, endsAt: 987_654_321 } };
+    for (const p of s.players) {
+      const v = viewOf(shrunk, p.seat);
+      expect(JSON.stringify(v).includes("earlyFrom")).toBe(false);
+      expect(JSON.stringify(v).includes("987654321")).toBe(false);
+      expect(v.phaseEndsAt).toBe(12_345);
+    }
   });
 
   it("남의 초안·확정은 어떤 view 에도 없다 — 본인 외 view 에 글이 없고 me.answer 키도 없다", () => {
