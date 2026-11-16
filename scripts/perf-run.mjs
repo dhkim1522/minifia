@@ -858,16 +858,11 @@ async function nightloadOnce(browser, o, origin, chrome) {
               continue;
             }
           } else await skipTo(page, tracker, phase);
-          // 마피아 판의 밤: 대상을 눌러 내 캐릭터가 걷게 한다(이동·고리). 마을(원인 흐름)은 집 문패, 그 밖(기본 마피아)은 이름표. 실패해도 측정은 이어 간다
+          // 마피아 판의 밤: 대상을 눌러 내 캐릭터가 걷게 한다(이동·고리). 이름표를 누른다. 실패해도 측정은 이어 간다
           if (role === "mafia" && phase === "night") {
-            if (expectedMap === "town") {
-              const seats = await page.$eval("button[data-house-tag]", (els) => els.map((e) => Number(e.getAttribute("data-house-tag"))).filter((n) => Number.isFinite(n))).catch(() => []);
-              for (const seat of seats.slice(0, 3)) if (await page.locator(`button[data-house-tag="${seat}"]`).first().click({ timeout: 3000 }).then(() => true, () => false)) break;
-            } else {
-              const g = await readGame(page).catch(() => null);
-              const seat = g?.picks?.map((b) => b.seat).sort((a, b) => a - b)[0];
-              if (seat !== undefined) await tapPick(page, seat).catch(() => {});
-            }
+            const g = await readGame(page).catch(() => null);
+            const seat = g?.picks?.map((b) => b.seat).sort((a, b) => a - b)[0];
+            if (seat !== undefined) await tapPick(page, seat).catch(() => {});
           }
           await mark(`${role}:${phase}`, false);
           // 장면 도중(끝나기 직전)에 그리기 통계를 한 번 읽는다(20-09) — 로비에서 읽은 값은 게임 장면과 다르다. 읽는 시간은 아래 sleep 에서 뺀다

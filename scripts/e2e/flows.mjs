@@ -146,7 +146,6 @@ import { makeHostFlows } from "./host.mjs";
 import { makeErrandFlows } from "./errand.mjs";
 import { makeModeFlows } from "./modes.mjs";
 import { makeTownFlows } from "./town.mjs";
-import { makeCauseFlows } from "./cause.mjs";
 import { CHAT_KB_PANEL_REST, CHAT_OPEN_STAGE_MIN, chatOpenChecks, chatOpenHeight, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureBallotsBackstop, measureChatOpen, readChatWindow, readLiveGhost } from "./polish.mjs";
 
 // Windows 에서 URL.pathname 은 "/C:/..." 라 mkdir 이 "C:\C:\..." 로 깨진다 — fileURLToPath 로 바꾼다(21-16).
@@ -1449,7 +1448,7 @@ async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", v
   return { host, hp, ht, hostSeat: ht.last().me.seat, guests: pages };
 }
 
-/** 원인 흐름(제품 확장판)을 여는 openGame — cause·errand·town 흐름이 쓴다(21-16). */
+/** 확장판을 여는 openGame — errand·town 흐름이 쓴다(22-06·22-05 가 각 흐름과 함께 지운다). */
 const openExtended = (ctx, flowId, opts = {}) => openGame(ctx, flowId, { mode: "extended", ...opts });
 
 async function closeGame(game) {
@@ -3824,9 +3823,6 @@ const { modeRailFlow, modePickFlow, modeBasicFlow } = makeModeFlows({ recorder, 
 // 마을 맵(20페이즈 20-08): town-walk(폰 6종)·town-room·town-sight·town-ghost·town-reduced. 흐름 본문은 town.mjs, 도우미만 넘긴다
 const { townWalkFlow, townRoomFlow, townSightFlow, townGhostFlow, townReducedFlow } = makeTownFlows({ recorder, openGame: openExtended, closeGame, executeHost, untilGame, settledResult });
 
-// 21페이즈 원인 흐름(21-15): cause-evening·cause-night·cause-morning·cause-skip·cause-basic(390x844)·cause-phones(폰 6종). 흐름 본문은 cause.mjs, 도우미만 넘긴다
-const { eveningFlow: causeEveningFlow, nightFlow: causeNightFlow, morningFlow: causeMorningFlow, skipFlow: causeSkipFlow, basicFlow: causeBasicFlow, phonesFlow: causePhonesFlow } = makeCauseFlows({ recorder, openGame: openExtended, closeGame, gameGH });
-
 // 18.1 화면 다듬기(18.1-08): polish-reveal(역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종). 흐름 본문은 polish.mjs, 도우미만 넘긴다
 const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, closeGame });
 
@@ -3911,12 +3907,6 @@ export const FLOWS = [
   { id: "town-ghost", run: townGhostFlow, size: GAME_SIZE },
   { id: "town-reduced", run: townReducedFlow, size: GAME_SIZE },
   // 18.1-08: 역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종
-  { id: "cause-evening", run: causeEveningFlow, size: GAME_SIZE },
-  { id: "cause-night", run: causeNightFlow, size: GAME_SIZE },
-  { id: "cause-morning", run: causeMorningFlow, size: GAME_SIZE },
-  { id: "cause-skip", run: causeSkipFlow, size: GAME_SIZE },
-  { id: "cause-basic", run: causeBasicFlow, size: GAME_SIZE },
-  { id: "cause-phones", run: causePhonesFlow, extraSizes: LOBBY_EXTRA_SIZES },
 
   { id: "polish-reveal", run: polishRevealFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다

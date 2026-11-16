@@ -115,7 +115,7 @@ test("linkReport: 프레임이 없으면 없다고 쓰고, 토큰·채팅 본문
   assert.ok(!out.includes('"t"'), out);
 });
 
-// ---- 21-13: 판 종류별 단계 전이 표 (기본판 옛 순서 · 확장판 원인 흐름) ----
+// ---- 판 종류별 단계 전이 표 (기본판 · 확장판은 낮 시작 발표 뒤 심부름이 낀다) ----
 // 앱의 nextPhaseOf 와의 대조(두 표가 서버 분기와 같다)는 test/unit/e2eContract.test.ts 가 한다 — 이 시험은 표의 모양만 본다.
 import { FIRST_DAY_PHASE, PHASE_NEXT_BY_MODE } from "./smoke.mjs";
 
@@ -138,18 +138,17 @@ test("기본판 표: 역할 확인 → 낮 시작 발표 → 토론, 처형 뒤�
   assert.equal(Object.hasOwn(g, "errand"), false);
 });
 
-test("확장판 표: 역할 확인 → 저녁(errand) → 밤 → 아침|토론, 처형 없음·처형 뒤는 다음 저녁이고 낮 시작 발표가 없다", () => {
+test("확장판 표: 기본판과 같고 낮 시작 발표 다음에 심부름(errand) 이 낀다, 처형 뒤·지목 0표는 밤이다", () => {
   const g = PHASE_NEXT_BY_MODE.extended;
-  assert.deepEqual(g.roleReveal, ["errand"]);
-  assert.deepEqual(g.errand, ["night"]);
-  assert.deepEqual(g.night.slice().sort(), ["discussion", "morning"]);
-  assert.deepEqual(g.morning.slice().sort(), ["discussion", "ended"]);
-  assert.deepEqual(g.nomination.slice().sort(), ["defense", "errand"]);
-  assert.deepEqual(g.execution.slice().sort(), ["ended", "errand"]);
-  assert.equal(Object.hasOwn(g, "dayAnnounce"), false);
+  assert.deepEqual(g.roleReveal, ["dayAnnounce"]);
+  assert.deepEqual(g.dayAnnounce, ["errand"]);
+  assert.deepEqual(g.errand, ["discussion"]);
+  assert.deepEqual(g.nomination.slice().sort(), ["defense", "night"]);
+  assert.deepEqual(g.execution.slice().sort(), ["ended", "night"]);
+  assert.deepEqual(g.morning.slice().sort(), ["dayAnnounce", "ended"]);
 });
 
-test("FIRST_DAY_PHASE: 기본판은 낮 시작 발표, 확장판은 저녁(errand) — 첫날 단언이 day.n = 1 을 보는 단계", () => {
-  assert.deepEqual(FIRST_DAY_PHASE, { basic: "dayAnnounce", extended: "errand" });
+test("FIRST_DAY_PHASE: 두 판 모두 낮 시작 발표 — 첫날 단언이 day.n = 1 을 보는 단계", () => {
+  assert.deepEqual(FIRST_DAY_PHASE, { basic: "dayAnnounce", extended: "dayAnnounce" });
   for (const mode of ["basic", "extended"]) assert.ok(PHASE_NEXT_BY_MODE[mode].roleReveal.includes(FIRST_DAY_PHASE[mode]));
 });

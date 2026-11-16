@@ -22,8 +22,8 @@
 //   node scripts/smoke.mjs --prod                 같은 폴더의 prod-url.txt 주소
 //   옵션: --stage create (기본값) | full | --print-version
 //         --players N (full 단계 인원, 4~8, 기본 5)
-//         --mode extended | basic (full 단계 판 종류, 기본 extended = 제품의 원인 흐름. extended 는 첫날 사슬(역할 확인 → 저녁 → 밤 → 토론)까지 돌고,
-//                                    basic 은 옛 순서 한 판을 끝까지 돈다 — 21-13)
+//         --mode extended | basic (full 단계 판 종류, 기본 extended. extended 는 첫날 사슬(역할 확인 → 낮 시작 발표 → 심부름 → 토론)까지 돌고,
+//                                    basic 은 한 판을 끝까지 돈다 — 22-07·22-08 이 판 종류째 지운다)
 //         --previous-version V (full 단계: /api/health 의 version 이 V 와 같으면 실패 — 재배포 확인)
 // 토큰 값은 어떤 출력에도 찍지 않는다. 채팅 본문도 출력하지 않는다.
 // 가져오면 main 이 돌지 않는다(test/unit/e2eContract.test.ts·scripts/smoke.test.mjs 가 판정 함수를 가져간다).
@@ -115,25 +115,26 @@ const PHASE_NEXT_BASIC = {
   morning: ["dayAnnounce", "ended"],
   ended: [],
 };
-// 확장판(원인 흐름, 결정 0088): roleReveal → errand(저녁, 일차 1) → night → morning(피해자·미수가 있을 때만; 현장이 없는 밤은 길이 0 이라 곧장 discussion) → discussion → nomination
-// → (최다 한 명) defense → verdict → execution → errand(다음 날 저녁) | ended, 지목 0표·동률은 곧장 errand. 낮 시작 발표(dayAnnounce)를 지나지 않는다.
+// 확장판: 기본판과 같고 낮 시작 발표 다음에 심부름(errand, 40초)이 낀다 — roleReveal → dayAnnounce → errand → discussion → nomination → (최다 한 명) defense → verdict → execution → night | ended,
+// 지목 0표·동률은 곧장 night, night → morning → dayAnnounce(다음 낮) | ended. (22-04: 원인 흐름 순서를 지웠다)
 const PHASE_NEXT_EXTENDED = {
   lobby: ["assigning"],
   assigning: ["roleReveal"],
-  roleReveal: ["errand"],
-  errand: ["night"],
-  night: ["morning", "discussion"],
-  morning: ["discussion", "ended"],
+  roleReveal: ["dayAnnounce"],
+  dayAnnounce: ["errand"],
+  errand: ["discussion"],
   discussion: ["nomination"],
-  nomination: ["defense", "errand"],
+  nomination: ["defense", "night"],
   defense: ["verdict"],
   verdict: ["execution"],
-  execution: ["errand", "ended"],
+  execution: ["night", "ended"],
+  night: ["morning"],
+  morning: ["dayAnnounce", "ended"],
   ended: [],
 };
 export const PHASE_NEXT_BY_MODE = { basic: PHASE_NEXT_BASIC, extended: PHASE_NEXT_EXTENDED };
-// 판 종류별 첫날의 시작 단계: 기본판은 낮 시작 발표, 확장판은 저녁(errand)이다. 첫날 단언은 이 단계에서 day.n = 1 을 본다.
-export const FIRST_DAY_PHASE = { basic: "dayAnnounce", extended: "errand" };
+// 판 종류별 첫날의 시작 단계: 두 판 모두 낮 시작 발표다. 첫날 단언은 이 단계에서 day.n = 1 을 본다.
+export const FIRST_DAY_PHASE = { basic: "dayAnnounce", extended: "dayAnnounce" };
 const DAY_PHASES = ["dayAnnounce", "errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
 const ROLE_IDS = ["mafia", "police", "doctor", "citizen"];
 // 직업 이름 문자열이 나와도 되는 경로(배열 칸은 [] 로 줄여 비교한다). 채널 이름 mafia 가 든 ch·me.chat 은 채널 검사가 따로 본다.
@@ -686,18 +687,18 @@ async function stageFull(url, args) {
   if (afterFirst.me.seat !== before.seat) fail(`재접속 뒤 seat 가 다름: ${before.seat} → ${afterFirst.me.seat}`);
   if (afterFirst.me.role !== before.role) fail("재접속 뒤 역할이 끊기 전과 다름");
 
-  // (9·확장판) 원인 흐름 첫날(21페이즈, 결정 0088): 역할 확인 → 저녁(errand, 일차 1) → 밤 → (아침) → 토론. 첫날 단언은 첫 errand 에서 day.n = 1 을 본다.
-  //            낮 시작 발표(dayAnnounce)를 지나지 않는다. 이 방은 아무도 행동하지 않으므로 밤에 피해자가 없어 현장 없는 아침(길이 0)이 건너뛰어지고 곧장 토론이다.
-  //            하루의 나머지(토론 채팅·지목·변론·찬반·처형·다음 저녁)는 기본판 한 판(--mode basic)과 워커 시험·폰 E2E 가 돈다 — 이 단계는 배포본이 원인 흐름 첫날 사슬을 지키는지만 본다.
+  // (9·확장판) 첫날: 역할 확인 → 낮 시작 발표(일차 1) → 심부름(errand) → 토론. 첫날 단언은 낮 시작 발표에서 day.n = 1 을 본다.
+  //            하루의 나머지(토론 채팅·지목·변론·찬반·처형·밤)는 기본판 한 판(--mode basic)과 워커 시험·폰 E2E 가 돈다 — 이 단계는 배포본이 첫날 사슬을 지키는지만 본다.
   if (MODE === "extended") {
-    await waitUntil(() => clients.every((c) => firstState(c, FIRST_DAY_PHASE.extended)), 30_000, "모든 클라이언트가 roleReveal 다음에 errand(저녁)를 받지 못함");
+    await waitUntil(() => clients.every((c) => firstState(c, FIRST_DAY_PHASE.extended)), 30_000, "모든 클라이언트가 roleReveal 다음에 dayAnnounce 를 받지 못함");
     for (const c of clients) {
       const ev = firstState(c, FIRST_DAY_PHASE.extended).msg.view;
-      if (ev.day?.n !== 1) fail(`${c.nickname} 의 첫 errand 의 day.n 이 1 이 아님: ${ev.day?.n}`);
-      if (ev.mode !== "extended") fail(`${c.nickname} 의 첫 errand view.mode 가 extended 가 아님: ${ev.mode}`);
+      if (ev.day?.n !== 1) fail(`${c.nickname} 의 첫 dayAnnounce 의 day.n 이 1 이 아님: ${ev.day?.n}`);
+      if (ev.mode !== "extended") fail(`${c.nickname} 의 첫 dayAnnounce view.mode 가 extended 가 아님: ${ev.mode}`);
       if (c.unexpectedClose !== null) fail(`${c.nickname} 소켓이 예상 밖으로 닫힘 (code ${c.unexpectedClose})`);
     }
-    // 저녁: 마감·길이는 모든 클라이언트에 같고, 산 사람 모두가 같은 모양의 me.errand(장소 3곳·처리 0곳)를 받는다. 값(장소 id)은 클라이언트마다 다를 수 있어 구조로 견준다.
+    await waitUntil(() => clients.every((c) => firstState(c, "errand")), 30_000, "모든 클라이언트가 dayAnnounce 다음에 errand 를 받지 못함");
+    // 심부름: 마감·길이는 모든 클라이언트에 같고, 산 사람 모두가 같은 모양의 me.errand(장소 3곳·처리 0곳)를 받는다. 값(장소 id)은 클라이언트마다 다를 수 있어 구조로 견준다.
     const errandEnds = new Set(clients.map((c) => firstState(c, "errand").msg.view.phaseEndsAt));
     if (errandEnds.size !== 1) fail(`errand 의 phaseEndsAt 이 클라이언트마다 다름 (${errandEnds.size}종)`);
     for (const c of clients) {
@@ -708,10 +709,9 @@ async function stageFull(url, args) {
       if (!Array.isArray(errand.places) || errand.places.length !== 3 || new Set(errand.places).size !== 3) fail(`${c.nickname} 의 me.errand.places 가 서로 다른 3곳이 아님`);
       if (!Array.isArray(errand.done) || errand.done.length !== 0) fail(`${c.nickname} 의 me.errand.done 이 빈 배열이 아님`);
     }
-    info(`저녁(1일차): 산 ${clients.length}명 모두 day.n 1, 같은 마감(${ERRAND_MS / 1000}초)과 같은 모양의 me.errand(장소 3곳)를 받음`);
-    // 저녁 마감 다음은 밤이다(서버 타이머, 넘기기 없음). 밤 → 토론 사이 아침은 현장이 없으면 건너뛴다.
-    await waitUntil(() => clients.every((c) => firstState(c, "night", inDayN(1))), ERRAND_WAIT_MS + 5000, "저녁 마감 뒤 night 가 모든 클라이언트에 오지 않음");
-    await waitUntil(() => clients.every((c) => firstState(c, "discussion", inDayN(1))), NIGHT_WAIT_MS + 5000, "밤 마감 뒤 1일차 discussion 이 모든 클라이언트에 오지 않음");
+    info(`심부름(1일차): 산 ${clients.length}명 모두 day.n 1, 같은 마감(${ERRAND_MS / 1000}초)과 같은 모양의 me.errand(장소 3곳)를 받음`);
+    // 심부름 마감 다음은 토론이다(서버 타이머, 넘기기 없음).
+    await waitUntil(() => clients.every((c) => firstState(c, "discussion", inDayN(1))), ERRAND_WAIT_MS + 5000, "심부름 마감 뒤 1일차 discussion 이 모든 클라이언트에 오지 않음");
     for (const c of clients) {
       const dv = firstState(c, "discussion", inDayN(1)).msg.view;
       if (dv.phaseDurationMs !== DISCUSSION_MS) fail(`${c.nickname} 의 1일차 discussion phaseDurationMs 가 ${DISCUSSION_MS} 이 아님: ${dv.phaseDurationMs}`);
@@ -725,7 +725,6 @@ async function stageFull(url, args) {
       for (let k = 1; k < seq.length; k++) {
         if (!(PHASE_NEXT[seq[k - 1]] ?? []).includes(seq[k])) fail(`${c.nickname} 의 단계 순서가 이상함: ${seq.join(" → ")}`);
       }
-      if (seq.includes("dayAnnounce")) fail(`${c.nickname} 가 원인 흐름 판에서 dayAnnounce 를 받음: ${seq.join(" → ")}`);
       for (const f of c.frames) {
         for (const o of clients.filter((_, k) => k !== i)) if (f.raw.includes(o.token)) fail(`${c.nickname} 의 프레임에 ${o.nickname} 의 토큰이 들어 있음`);
         if (!f.msg) continue;

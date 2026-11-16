@@ -108,9 +108,9 @@ describe("트레이서 — basic 으로 고른 판은 심부름을 건너뛴다 
     }
   });
 
-  it("고르지 않은 판(= extended)은 역할 확인 다음이 저녁(errand)이다 (원인 흐름, 21-13 갈래 C — 낮 시작 발표를 지나지 않는다)", async () => {
+  it("고르지 않은 판(= extended)은 낮 시작 발표 다음이 심부름(errand)이다", async () => {
     const { phases } = await walk();
-    expect(phases.join(">")).toBe("assigning>roleReveal>errand");
+    expect(phases.join(">")).toBe("assigning>roleReveal>dayAnnounce>errand");
   });
 
   it("판이 진행 중이면 방장의 modePick 은 거절 모양이다 — 보낸 소켓 state 한 프레임, 다른 소켓 0프레임, 저장 그대로 (D-06)", async () => {

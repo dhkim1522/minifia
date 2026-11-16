@@ -13,7 +13,6 @@ import type {
   OutfitId,
   PhaseId,
   PointLine,
-  TracePiece,
   TreatmentRecord,
   VoteLogEntry,
 } from "../protocol";
