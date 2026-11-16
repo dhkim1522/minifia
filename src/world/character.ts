@@ -27,7 +27,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { MOVE_SPEED } from "../../shared/game/world";
 import { buildGhost3d, type Ghost3d } from "./ghost3d";
 import { emoteCycles, REDUCED_Y_SCALE } from "./emoteCap";
-import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
+import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, GHOST_SCALE, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
 
 /** 맵 위 크기 — 원래 키 약 2.1 단위를 약 1.7 로 줄여 쓴다 */
 export const CHAR_SCALE = 0.83;
@@ -720,7 +720,7 @@ export interface WorldCharacter {
   /** 표정 바꾸기(원문 setFace) — 머리만 다시 병합(캐시). 모르는 이름은 기본 표정 */
   setFace(id: FaceId): void;
   /**
-   * 유령(탈락한 사람, 0083-2): 켜면 관절 메시·투명 조각·발밑 원판을 숨기고 유령 그림 스프라이트(늘 카메라를 향한다) 하나를 캐릭터 뿌리에 세운다.
+   * 유령(탈락한 사람, 0083-2): 켜면 관절 메시·투명 조각·발밑 원판을 숨기고 유령 그림 3D 묶음(산 캐릭터의 75%, 이동 방향을 본다) 하나를 캐릭터 뿌리에 세운다.
    * 로컬 높이 2.45(머리 꼭대기 = 화면에서 캐릭터만큼의 키)·폭 높이 × 0.75·아래 가운데가 발밑. opts.opacity 는 불투명도(기본 0.88), opts.tint 는 밝기 배율(회색, 기본 1)이다.
    * 켠 채 다시 부르면 준 값만 바꾼다. 끄면 스프라이트를 숨기고 몸·원판이 돌아온다.
    * 그림(setGhostArt)이 아직 없거나 불러오지 못했으면 스프라이트 없이 예전 반투명 몸(불투명도 0.6, 발광 없음)으로 대신하고, 그림이 오면 다음 update 부터 그림으로 바뀐다.
@@ -780,8 +780,6 @@ export function setGhostArt(art: unknown): void {
 const GHOST_ART_OPACITY = 1;
 /** 유령 그림의 로컬 높이(머리 꼭대기 값, update 의 headY 와 같다)와 폭 비(3:4) */
 const GHOST_ART_H = 2.45;
-/** 유령 묶음의 배율: 산 캐릭터의 75%(D-20, 결정 0089-17). GHOST_ART_H(이름표 높이 기준)는 그대로다 */
-export const GHOST_SCALE = 0.75;
 /** 동작을 받은 유령이 한 번 튀는 높이(로컬)와 시간(ms) */
 const GHOST_HOP_H = 0.18;
 const GHOST_HOP_MS = 420;

@@ -2896,7 +2896,7 @@ describe("E2E 훅 window.__mfGhosts (0083-2, T-18.1-41)", () => {
 
   it("다른 설치가 덮어썼으면 언마운트가 지우지 않는다", async () => {
     const s = await open({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
-    const other = { seats: [9], ready: false };
+    const other = { seats: [9], ready: false, scale: 0, facing: [] };
     window.__mfGhosts = other;
     s.utils.unmount();
     expect(window.__mfGhosts).toBe(other);

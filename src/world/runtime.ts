@@ -18,7 +18,7 @@ import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
 import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, overviewFraming, panBoxOf, PX_PER_UNIT, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
-import { FIGS } from "./characterData";
+import { FIGS, GHOST_SCALE } from "./characterData";
 import type { OutfitId } from "./characterData";
 import { admitEmote, EMOTE_RENDER_MAX, emoteDurationMs } from "./emoteCap";
 import type { PlayingEmote } from "./emoteCap";
@@ -216,10 +216,10 @@ export interface WorldRuntimeDeps {
   /** 목적지 링이 생기거나(탭)·보정되거나(구간 끝점)·없어질 때 한 번씩 불린다 — 루트의 data-ring 용 */
   onRing?: (at: { x: number; z: number } | null) => void;
   /**
-   * 유령 그림으로 그리고 있는 좌석(오름차순)과 그림 준비 여부가 바뀔 때만 한 번 불린다 — E2E 훅 window.__mfGhosts 용(0083-2, T-18.1-41).
-   * 좌석 번호와 준비 여부뿐이다(직업·의상 없음)
+   * 유령 그림으로 그리고 있는 좌석(오름차순)·그림 준비 여부·배율·좌석별 몸 방향(root.rotation.y, 라디안 소수 둘째)이 바뀔 때만 한 번 불린다 — E2E 훅 window.__mfGhosts 용(0083-2, T-18.1-41, 22-02).
+   * 좌석 번호·준비 여부·배율·방향뿐이다(직업·의상 없음)
    */
-  onGhosts?: (state: { seats: number[]; ready: boolean }) => void;
+  onGhosts?: (state: { seats: number[]; ready: boolean; scale: number; facing: number[] }) => void;
   /**
    * 결과 화면(11-05)이 장면 표의 costume 으로 실제로 입힌 직업 의상 표(좌석 → 의상 id)와 scene dim 으로 어두워진 좌석(오름차순)이 바뀔 때만 한 번 불린다.
    * 화면이 정한 값이 아니라 런타임이 적용한 값이다(E2E 훅 window.__mfResult). 제품 화면은 넘기지 않아도 된다. 결과 장면이 아니면 한 번도 불리지 않는다
@@ -742,18 +742,20 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     deps.onCostumes(map, dimmed);
   }
 
-  /** 유령 그림으로 그리는 좌석 목록과 그림 준비 여부가 바뀌었으면 프레임 끝에서 한 번 알린다 */
+  /** 유령 그림으로 그리는 좌석 목록·그림 준비 여부·몸 방향이 바뀌었으면 프레임 끝에서 한 번 알린다 */
   let ghostsSent = "";
   function emitGhosts(): void {
     if (deps.onGhosts === undefined) return;
-    const seats: number[] = [];
-    for (const a of actors.values()) if (a.ghost) seats.push(a.seat);
-    seats.sort((x, y) => x - y);
+    const ghosts: Actor[] = [];
+    for (const a of actors.values()) if (a.ghost) ghosts.push(a);
+    ghosts.sort((x, y) => x.seat - y.seat);
+    const seats = ghosts.map((a) => a.seat);
+    const facing = ghosts.map((a) => Math.round(a.yaw * 100) / 100);
     const ready = kit?.ghostReady?.() === true;
-    const sig = JSON.stringify([seats, ready]);
+    const sig = JSON.stringify([seats, ready, facing]);
     if (sig === ghostsSent) return;
     ghostsSent = sig;
-    deps.onGhosts({ seats, ready });
+    deps.onGhosts({ seats, ready, scale: GHOST_SCALE, facing });
   }
 
   /** 동작이 쓰는 표정의 머리 병합을 표정마다 따로 유휴 시간에 미리 만든다(O-10). requestIdleCallback 이 없으면 첫 사용 때 병합한다 */

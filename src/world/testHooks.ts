@@ -34,8 +34,8 @@ export interface WorldTestHooks {
 declare global {
   interface Window {
     __mfWorld?: WorldTestHooks;
-    /** 유령 그림으로 그리고 있는 좌석(오름차순)과 그림 준비 여부(0083-2). 좌석 번호뿐이고 직업·의상은 싣지 않는다(L13, T-18.1-41) */
-    __mfGhosts?: { seats: number[]; ready: boolean };
+    /** 유령 그림으로 그리고 있는 좌석(오름차순)·그림 준비 여부(0083-2)·유령 배율(0.75)·좌석별 몸 방향 facing(라디안 소수 둘째, seats 와 같은 순서). 직업·의상은 싣지 않는다(L13, T-18.1-41, 22-02) */
+    __mfGhosts?: { seats: number[]; ready: boolean; scale: number; facing: number[] };
     /** 핀 조명(09.1.1-11): 지금 비추는 좌석(없으면 null)·이동 중 여부·켜짐 수준(0~1)·카메라 줌(09.1.1-13, 소수 셋째 자리). 런타임이 이미 정한 값뿐이다 */
     __mfPin?: { seat: number | null; moving: boolean; strength: number; zoom: number };
     /** 카메라 시점(21-09, L33): 지금 그리는 시점(follow·fixed·overview)과 배율(px/단위, 소수 둘째). 런타임이 이미 정한 값뿐이다. 훅이 켜진 문맥에서만 생기고 DOM 속성으로 싣지 않는다 */
@@ -152,14 +152,14 @@ export function installWorldTestHooks(runtime: HookRuntime, store: WorldStore): 
 
 /**
  * window.__mfGhosts 를 설치하고(처음엔 좌석 없음·준비 안 됨) 갱신·해제 함수를 돌려준다. 테스트 훅이 켜진 문맥에서만 부른다(T-18.1-41).
- * 해제는 다른 설치가 덮어썼으면 지우지 않는다(__mfWorld 와 같은 규칙). 좌석 번호와 준비 여부뿐이다(L13).
+ * 해제는 다른 설치가 덮어썼으면 지우지 않는다(__mfWorld 와 같은 규칙). 좌석 번호·준비 여부·배율·몸 방향뿐이다(L13).
  */
-export function installGhostsHook(): { set(state: { seats: number[]; ready: boolean }): void; off(): void } {
-  let mine: { seats: number[]; ready: boolean } = { seats: [], ready: false };
+export function installGhostsHook(): { set(state: { seats: number[]; ready: boolean; scale: number; facing: number[] }): void; off(): void } {
+  let mine: { seats: number[]; ready: boolean; scale: number; facing: number[] } = { seats: [], ready: false, scale: 0, facing: [] };
   window.__mfGhosts = mine;
   return {
     set(state) {
-      mine = { seats: [...state.seats], ready: state.ready };
+      mine = { seats: [...state.seats], ready: state.ready, scale: state.scale, facing: [...state.facing] };
       window.__mfGhosts = mine;
     },
     off() {

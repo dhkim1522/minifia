@@ -1887,6 +1887,9 @@ async function ghostFlow(ctx) {
       const sc = `${id}/outfit`;
       const got = await ghostHookMatch(hp, ht.last());
       rec(sc, "GH14", "유령 페이지의 유령 그림 훅(__mfGhosts)이 탈락 좌석 전부와 같고 그림이 준비됐다(직업과 무관)", got.ok, got.ok ? got.label : got.detail, true);
+      // D-20: 유령은 산 캐릭터의 75% 크기다. 훅이 배율을 알린다(facing 은 좌석마다 하나)
+      const sizeHook = (await readGhosts(hp)).ghosts;
+      rec(sc, "GH16", "유령 훅이 배율 0.75 와 좌석마다 하나의 몸 방향(facing)을 알린다(D-20)", sizeHook !== null && sizeHook.scale === 0.75 && sizeHook.facing.length === sizeHook.seats.length && sizeHook.facing.every(Number.isFinite), `훅 ${JSON.stringify(sizeHook)}`, true);
       const first = await ghostViewSettled(hp, ht.last(), 4000);
       for (const r of first.rows) rec(sc, r.id, `${r.label} (처형 직후 ${ht.last().phase})`, r.ok, r.detail, r.ok);
       const dom = await readGhosts(hp);
@@ -1896,8 +1899,8 @@ async function ghostFlow(ctx) {
         if (!aliveOf(g.tracker.last()).includes(g.seat)) continue;
         const r = await readGhosts(g.page);
         const deadNow = g.tracker.last().players.filter((p) => p.alive === false).map((p) => p.seat);
-        const shape = r.ghosts !== null && JSON.stringify(r.ghosts.keys) === JSON.stringify(["ready", "seats"]) && r.ghosts.seats.every((seat) => deadNow.includes(seat));
-        rec(sc, "GH15", `산 사람 페이지의 유령 훅에는 좌석 번호·준비 여부뿐이고(탈락 좌석만) [data-ghost-outfit] 이 0개다 — L13 (손님${i + 1})`, shape && r.domCount === 0, `훅 ${JSON.stringify(r.ghosts)}, 탈락 ${deadNow}, DOM ${r.domCount}개`);
+        const shape = r.ghosts !== null && JSON.stringify(r.ghosts.keys) === JSON.stringify(["facing", "ready", "scale", "seats"]) && r.ghosts.seats.every((seat) => deadNow.includes(seat));
+        rec(sc, "GH15", `산 사람 페이지의 유령 훅에는 좌석 번호·준비 여부·배율·몸 방향뿐이고(탈락 좌석만) [data-ghost-outfit] 이 0개다 — L13 (손님${i + 1})`, shape && r.domCount === 0, `훅 ${JSON.stringify(r.ghosts)}, 탈락 ${deadNow}, DOM ${r.domCount}개`);
       }
     }
 
@@ -1928,6 +1931,38 @@ async function ghostFlow(ctx) {
       else {
         const tap = await tapWorld(hp, ht, hostSeat, target.x, target.z);
         rec(sc, "GH10", "유령이 다음 날 지목에서도 맵을 걷는다(구간을 받음)", !!tap.move, "3초 안에 내 구간이 오지 않음");
+        // D-21: 유령도 산 캐릭터처럼 걷는 방향으로 몸을 돌리고, 멈추면 마지막 방향을 유지한다. 기대 방향 = 마지막 걸음 선분의 atan2(dx, dz)(runtime 의 travelYaw 와 같은 규칙)
+        {
+          const p = tap.move?.p ?? [];
+          const facingOf = async () => {
+            const g = (await readGhosts(hp)).ghosts;
+            const i = g === null ? -1 : g.seats.indexOf(hostSeat);
+            return i < 0 ? null : g.facing[i];
+          };
+          // 멈출 때까지(화면 위치가 0.6초 안 바뀜) 기다린다
+          let last = null;
+          let stillSince = performance.now();
+          const t0 = performance.now();
+          while (performance.now() - t0 < 12000) {
+            const sh = await hp.evaluate((s0) => window.__mfWorld?.shown(s0) ?? null, hostSeat);
+            if (sh && last && Math.abs(sh.x - last.x) < 1e-3 && Math.abs(sh.z - last.z) < 1e-3) {
+              if (performance.now() - stillSince > 600) break;
+            } else stillSince = performance.now();
+            last = sh;
+            await sleep(100);
+          }
+          const f1 = await facingOf();
+          await sleep(1000);
+          const f2 = await facingOf();
+          const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+          if (p.length >= 4 && f1 !== null && f2 !== null) {
+            const n = p.length;
+            const want = Math.atan2(p[n - 2] - p[n - 4], p[n - 1] - p[n - 3]);
+            const hold = Math.abs(wrap(f2 - f1)) < 0.011;
+            const near = Math.abs(wrap(f1 - want)) <= 0.35;
+            rec(sc, "GH17", "유령이 걸으면 몸 방향(facing)이 걸은 방향과 0.35 라디안 안이고, 멈춘 뒤 1초 동안 바뀌지 않는다(D-21)", near && hold, `기대 ${want.toFixed(2)}, 걸은 뒤 ${f1}, 1초 뒤 ${f2}`, true);
+          } else infoRow(ctx, sc, "GH17", "유령 방향 판정을 건너뜀(걸음 선분 점 부족 또는 훅 없음)", `p ${JSON.stringify(p)}, facing ${f1}/${f2}`);
+        }
         rec(sc, "GH10b", "유령 화면에는 지목 버튼이 없다", (await readGame(hp)).picks.length === 0, "유령에게 이름표 버튼이 있음");
       }
       await sleep(1200);

@@ -178,3 +178,6 @@ export const EMOTES: Readonly<Record<EmoteId, EmoteDef>> = {
 /** 자세 키(동작 프레임이 숫자로 덮어쓰는 값들) */
 export const EMOTE_KEYS = ["aAx", "aAz", "aBx", "aBz", "fA", "fB", "lA", "lB", "hx", "hy", "hz", "y", "s", "ry"] as const;
 export type PoseKey = (typeof EMOTE_KEYS)[number];
+
+/** 유령 묶음의 배율: 산 캐릭터의 75%(D-20, 결정 0089-17). 이름표 높이 기준(character.ts GHOST_ART_H)은 그대로다. three 를 부르지 않는 런타임도 E2E 훅용으로 읽으므로 이 파일에 둔다 */
+export const GHOST_SCALE = 0.75;

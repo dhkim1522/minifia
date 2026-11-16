@@ -1808,12 +1808,12 @@ export function readLetter(page) {
 }
 
 /**
- * 유령 그림 훅(0083-2, L13): e2e 전용 window.__mfGhosts(유령 그림으로 그리는 좌석·그림 준비 여부)와 DOM 의 [data-ghost-outfit] 개수.
+ * 유령 그림 훅(0083-2, L13, 22-02): e2e 전용 window.__mfGhosts(유령 그림으로 그리는 좌석·그림 준비 여부·배율 scale·좌석별 몸 방향 facing)와 DOM 의 [data-ghost-outfit] 개수.
  * 훅이 없는 페이지는 ghosts 가 null 이다. 직업·의상은 이 표에도 DOM 에도 없다 — domCount 는 0 이어야 한다.
  */
 export async function readGhosts(page) {
   return page.evaluate(() => ({
-    ghosts: window.__mfGhosts === undefined ? null : { seats: [...window.__mfGhosts.seats], ready: window.__mfGhosts.ready, keys: Object.keys(window.__mfGhosts).sort() },
+    ghosts: window.__mfGhosts === undefined ? null : { seats: [...window.__mfGhosts.seats], ready: window.__mfGhosts.ready, scale: window.__mfGhosts.scale, facing: [...window.__mfGhosts.facing], keys: Object.keys(window.__mfGhosts).sort() },
     domCount: document.querySelectorAll("[data-ghost-outfit]").length,
   }));
 }
