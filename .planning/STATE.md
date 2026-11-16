@@ -6,11 +6,11 @@ current_phase: 20
 current_phase_name: map-expansion
 current_plan: 10
 status: verifying
-stopped_at: Completed 21-16-PLAN.md
-last_updated: "2026-11-16T07:13:49.267Z"
+stopped_at: Phase 22 UI-SPEC approved
+last_updated: "2026-11-16T07:32:36.036Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: d5feb6ed0c352e003d3f84760144c8bbf2cee9e4
+state_head: afd4f79f65ebc3d844f1819e1ff6699fd351445d
 progress:
   total_phases: 13
   completed_phases: 6
@@ -759,9 +759,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-15T13:07:38.676Z
-Stopped at: Completed 21-16-PLAN.md
-Resume file: None
+Last session: 2026-11-16T07:32:34.949Z
+Stopped at: Phase 22 UI-SPEC approved
+Resume file: .planning/phases/22-cleanup-single-mode/22-UI-SPEC.md
 
 ## Operator Next Steps
 
@@ -771,6 +771,7 @@ Resume file: None
 
 | Phase | State | Resume |
 |-------|-------|--------|
+| 22 | verification_deferred_human | v3.0 전체 실테스트 때 /gsd-verify-work 22 (실기기: 새 낮 흐름 한 판, 유령 크기·방향, 알려진 한계 셋, 유언 중 몸동작 결정 0090-8) |
 | 18.1 | verification_deferred_human | /gsd-verify-work 18.1 |
 | 19 | verification_deferred_human | /gsd-verify-work 19 |
 | 20 | verification_deferred_human | /gsd-verify-work 20 |
