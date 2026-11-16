@@ -811,12 +811,12 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
       const want = nextPhaseOf(from as PhaseId);
       if (from === "verdict") {
         // 찬반 마감: 통과면 지목, 부결이면 처형 없이 afterDayOf() = night
-        expect([...nexts].sort(), "verdict").toEqual([afterDayOf(), "nomination"].sort());
+        expect([...nexts].sort(), "verdict").toEqual([afterDayOf({ day: 2 }), "nomination"].sort());
         continue;
       }
       if (from === "nomination") {
         // 지목 마감: 최다 한 명이면 변론(유언), 처형 없이 끝나면 afterDayOf() = night
-        expect([...nexts].sort(), "nomination").toEqual([afterDayOf(), "defense"].sort());
+        expect([...nexts].sort(), "nomination").toEqual([afterDayOf({ day: 2 }), "defense"].sort());
         continue;
       }
       expect(nexts, `${from} → ${want}`).toContain(want);

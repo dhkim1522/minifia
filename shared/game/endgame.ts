@@ -6,6 +6,7 @@
 // 승리 값 변환은 enterEnded 한 곳: 내부 checkWinner 의 "citizen"·"mafia" → 상태·와이어의 GameWinner "citizenWin"·"mafiaWin"(역할 단어와 겹치지 않는다, Pitfall 10).
 import type { GameWinner, SummaryRow } from "../protocol";
 import { seatBench } from "./rematch";
+import { firstDayAnswerPending } from "./phases";
 import type { RoomState } from "./room";
 import type { DeadlineResult, RandInt } from "./tick";
 import { checkWinner } from "./win";
@@ -22,9 +23,14 @@ function routeByWinner(state: RoomState): DeadlineResult {
   return checkWinner(state) === null ? { state, stay: false } : { state, stay: false, next: "ended" };
 }
 
-/** execution 마감 훅: 승패가 났으면 ended, 아니면 기본 다음 단계(night). 상태는 바꾸지 않는다. */
+/**
+ * execution 마감 훅: 승패가 났으면 ended(첫날도 정답 공개 단계를 건너뛰고 결과 화면이 정답을 보여 준다 — D-02),
+ * 아니면 첫날 키워드 판(firstDayAnswerPending)이면 answerReveal, 그 밖은 기본 다음 단계(night)다. 상태는 바꾸지 않는다.
+ */
 export function routeAfterExecution(state: RoomState): DeadlineResult {
-  return routeByWinner(state);
+  const routed = routeByWinner(state);
+  if (routed.next === "ended") return routed;
+  return firstDayAnswerPending(state) ? { state, stay: false, next: "answerReveal" } : routed;
 }
 
 /** morning 마감 훅: 승패가 났으면 ended(아침 5초를 다 보여 준 뒤), 아니면 기본 다음 단계(dayAnnounce). 상태는 바꾸지 않는다. */

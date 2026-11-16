@@ -4,10 +4,11 @@
 // tick 표의 ON_ENTER.discussion 이 enterDiscussion 을 건다(08-11).
 // 순수 모듈이다 — 입력 상태는 바꾸지 않는다.
 import { isAlive } from "./alive";
+import { noExecutionOf } from "./execution";
 import { majorityOf, nominationStepMs } from "./nomination";
 import { runoffStepMs } from "./runoff";
 import { showdownStepMs } from "./showdown";
-import { MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, PHASE_DEFS } from "./phases";
+import { ANSWER_REVEAL_MS, MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, NO_EXECUTION_MS, PHASE_DEFS } from "./phases";
 import type { RoomState } from "./room";
 
 /** 낮 투표류 규칙 함수(토론 끝내기·지목·찬반)의 거부 코드. 단계가 아니면 WRONG_PHASE, 그 밖의 잘못된 입력은 BAD_MESSAGE. */
@@ -35,6 +36,8 @@ export function morningMsOf(state: RoomState): number {
  */
 export function phaseDurationOf(state: RoomState): number | null {
   if (state.phase === "morning") return morningMsOf(state);
+  // 첫날 정답 공개(D-22): 처형이 있었으면 3초, 처형 없는 첫날이면 "처형 없음" 큰 글 1.4초가 앞에 붙어 4.4초다. 처형 없음 여부는 이미 공개된 값(day.noExecution)이라 길이로 새는 정보가 없다.
+  if (state.phase === "answerReveal") return ANSWER_REVEAL_MS + (noExecutionOf(state) === undefined ? 0 : NO_EXECUTION_MS);
   if (state.phase === "nomination" && state.pickTurn !== undefined) return nominationStepMs(state);
   if (state.phase === "runoff" && state.runoff !== undefined) return runoffStepMs(state);
   if (state.phase === "showdown" && state.showdown !== undefined) return showdownStepMs(state);

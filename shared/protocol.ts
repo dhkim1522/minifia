@@ -27,11 +27,12 @@ export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 // discussion 다음에 지목(nomination) → 최후 변론(defense) → 찬반(verdict) → 처형(execution)이 이어지고(결정 0060),
 // 지목이 동률·0표면 바로 night 로 가고, 최다가 정확히 둘 동점이면 동점 결선 runoff 를 거친다(결정 0066-4, 분기는 shared/game/tick.ts). 종료 단계 ended 는 마감이 없다.
 // 키워드(keyword, 결정 0089-9·D-01)는 첫날 역할 확인(roleReveal)과 낮 시작 발표(dayAnnounce) 사이에 끼는 13초 단계다 — 키워드 기능이 켜진 판(방 상태에 keyword 가 있을 때)에서만 거친다(D-29).
+// 정답 공개(answerReveal, D-02)는 첫날 처형 뒤(또는 처형 없는 첫날 뒤) 밤 직전에 끼는 3초(처형 없음이면 4.4초) 단계다 — 키워드가 있는 판의 첫날에만 거치고, 승패가 나면 건너뛴다.
 // 순차 직업 주장 단계(claim)는 7페이즈에서 없어졌다 — 낮 시작 발표 다음이 바로 자유 채팅 토론이다(CHAT-06). 옛 공개 연출 단계도 없다(결정 0027).
 export type PhaseId =
   | "lobby" | "assigning" | "roleReveal" | "keyword" | "dayAnnounce" | "discussion"
   | "nomination" | "runoff" | "showdown" | "defense" | "verdict" | "execution"
-  | "night" | "morning" | "ended"; // 8페이즈(결정 0060): 지목 15초 → 변론 20초 → 찬반 10초 → 처형 5.6초(결정 0066-7). 옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 지웠다
+  | "answerReveal" | "night" | "morning" | "ended"; // 8페이즈(결정 0060): 지목 15초 → 변론 20초 → 찬반 10초 → 처형 5.6초(결정 0066-7). 옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 지웠다
 
 // ---- 밤·아침 계약(3페이즈) ----
 /** 경찰 본인에게만 보이는 수사 기록 한 줄: 그 밤의 일차·대상 seat·마피아인지 불리언 하나. 직업 이름은 싣지 않는다. */

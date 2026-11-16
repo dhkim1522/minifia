@@ -55,7 +55,7 @@ export function verdictTallyOf(state: RoomState): { yes: number; no: number } {
  * 이 마감이 그날 voteLog 줄 {n, exec:{yes, no, passed}} 을 만든다(같은 날 줄이 이미 있으면 exec 만 채운다). 부결이면 줄에 reason "rejected" 를 남긴다 —
  * 밤에 도착했을 때 noExecutionOf 가 이 줄에서 이유를 읽는다. 지목 마감(resolveNomination)이 같은 줄에 cand 를 더한다.
  * verdict 상태는 {passed} 다 — 후보는 지목 마감이 더한다. 집계 직후 모든 플레이어의 verdictVote 키를 구조 분해로 지운다.
- * 다음 단계: 통과는 표의 기본(nomination), 부결은 처형 없는 낮이라 afterDayOf()(night).
+ * 다음 단계: 통과는 표의 기본(nomination), 부결은 처형 없는 낮이라 afterDayOf(state)(night, 첫날 키워드 판은 answerReveal).
  */
 export function resolveVerdict(state: RoomState): DeadlineResult {
   const { yes, no } = verdictTallyOf(state);
@@ -78,5 +78,5 @@ export function resolveVerdict(state: RoomState): DeadlineResult {
     voteLog,
     verdict: { passed },
   };
-  return passed ? { state: next, stay: false } : { state: next, stay: false, next: afterDayOf() };
+  return passed ? { state: next, stay: false } : { state: next, stay: false, next: afterDayOf(state) };
 }

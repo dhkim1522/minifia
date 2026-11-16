@@ -53,7 +53,7 @@ function tallyOf(state: RoomState, runoff: RunoffState): [number, number] {
  */
 export function stepRunoff(state: RoomState, _at: number): DeadlineResult {
   const runoff = state.runoff;
-  if (runoff === undefined) return { state, stay: false, next: afterDayOf() };
+  if (runoff === undefined) return { state, stay: false, next: afterDayOf(state) };
   if (runoff.step === 0) return { state: { ...state, runoff: { cand: runoff.cand, step: 1 } }, stay: true };
   if (runoff.step === 1) return { state: { ...state, runoff: { cand: runoff.cand, step: 2, tally: tallyOf(state, runoff) } }, stay: true };
   return resolveRunoff(state);
@@ -87,7 +87,7 @@ export function castRunoffVote(
 
 /**
  * 결선 집계(결정 0066-4). 득표가 다르면 많이 받은 후보가 승자 — 그날 voteLog 줄의 cand.candidate 를 채우고(줄이 없으면 voteLog 는 그대로)
- * verdict {passed:false, candidate} 로 표의 기본 다음 단계(defense)로 간다. 같으면(0-0 포함) 처형 없음 — next afterDayOf()(night)이고
+ * verdict {passed:false, candidate} 로 표의 기본 다음 단계(defense)로 간다. 같으면(0-0 포함) 처형 없음 — next afterDayOf(state)(night, 첫날 키워드 판은 answerReveal)이고
  * 그날 voteLog 줄에 candidate 가 없으니 기존 noExecutionOf 가 이유 tie 를 파생한다. runoff·runoffVote 는 키째 지운다.
  */
 export function resolveRunoff(state: RoomState): DeadlineResult {
@@ -97,8 +97,8 @@ export function resolveRunoff(state: RoomState): DeadlineResult {
     const { runoffVote: _runoffVote, ...kept } = p;
     return kept;
   });
-  // 처형 없는 낮의 다음 단계는 afterDayOf 한 곳이다(밤).
-  const noExecution = afterDayOf();
+  // 처형 없는 낮의 다음 단계는 afterDayOf(state) 한 곳이다(밤, 첫날 키워드 판은 정답 공개).
+  const noExecution = afterDayOf(state);
   if (runoff === undefined) return { state: { ...rest, players }, stay: false, next: noExecution };
   const tally = runoff.tally ?? tallyOf(state, runoff);
   if (tally[0] === tally[1]) return { state: { ...rest, players }, stay: false, next: noExecution };

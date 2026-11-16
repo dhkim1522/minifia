@@ -21,7 +21,7 @@ import { recipeDurationMs, type BedId, type SfxId } from "./recipes";
 import { EMOTE_OTHERS_DB, emoteSoundGate, flipCue, lightCues, MORNING_SLASH_AT, morningScript, nightCues, pickTickSchedule, tickSchedule, verdictScript, willScript, type DuckSpan, type EmoteGateState, type Rng, type ScriptItem } from "./script";
 import type { EmoteSignal, LocalSignal, ResultSignal } from "./signals";
 
-/** 단계 → 침대 표: 15개 단계 전수(keyword 포함). null 은 침대 없음(assigning: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
+/** 단계 → 침대 표: 16개 단계 전수(keyword·answerReveal 포함). null 은 침대 없음(assigning: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
 export const BED_OF: Readonly<Record<PhaseId, BedId | null>> = {
   lobby: "bed.lobby",
   assigning: null,
@@ -35,6 +35,7 @@ export const BED_OF: Readonly<Record<PhaseId, BedId | null>> = {
   defense: "bed.vote",
   verdict: "bed.vote",
   execution: "bed.vote",
+  answerReveal: "bed.vote", // 첫날 정답 공개(P23-21): 처형 뒤 저녁빛 그대로 — 침대가 끊기지 않고 밤 직전까지 이어진다
   night: "bed.night",
   morning: "bed.dawn",
   ended: "bed.result",
@@ -45,6 +46,7 @@ const ENTER_SOUND: Partial<Record<PhaseId, SfxId>> = {
   assigning: "game.start",
   roleReveal: "role.flip",
   keyword: "ui.card", // 키워드 카드가 나타나는 한 번
+  answerReveal: "ui.card", // 정답 카드가 나타나는 한 번(P23-21)
   dayAnnounce: "day.start",
   nomination: "phase.vote",
   runoff: "runoff.intro",

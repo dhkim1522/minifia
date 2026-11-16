@@ -68,7 +68,7 @@ function pointLinesOfShowdown(state: RoomState): PointLine[] {
  */
 export function stepShowdown(state: RoomState, at: number): DeadlineResult {
   const sd = state.showdown;
-  if (sd === undefined) return { state, stay: false, next: afterDayOf() };
+  if (sd === undefined) return { state, stay: false, next: afterDayOf(state) };
   if (sd.i >= 4) return resolveShowdown(state);
   const withShowdown = (next: ShowdownState): DeadlineResult => ({ state: { ...state, showdown: next }, stay: true });
   const turn = (i: number): DeadlineResult =>
@@ -131,7 +131,7 @@ export function acceptLastWord(
 /**
  * 집계(결정 0066-5): 2표 이상 받은 사람이 있으면 최후 변론·찬반 없이 처형 단계로 — 그날 voteLog 줄 {exec 0·0 passed, cand {candidate}} ·
  * verdict {passed:true, candidate} · next "execution"(기존 enterExecution 이 후보를 탈락시킨다). 없으면 처형 없음 — voteLog 줄(passed false, cand {}, reason noVotes|tie) ·
- * verdict {passed:false} · next afterDayOf()(night. 아무도 안 던졌으면 noVotes, 던졌으나 갈렸으면 tie — 누가 누구를 골랐는지는 저장하지 않는다, 22-12 D-25).
+ * verdict {passed:false} · next afterDayOf(state)(night, 첫날 키워드 판은 answerReveal. 아무도 안 던졌으면 noVotes, 던졌으나 갈렸으면 tie — 누가 누구를 골랐는지는 저장하지 않는다, 22-12 D-25).
  * showdown·showdownPick 은 키째 지운다.
  */
 export function resolveShowdown(state: RoomState): DeadlineResult {
@@ -150,8 +150,8 @@ export function resolveShowdown(state: RoomState): DeadlineResult {
   const n = state.day ?? 1;
   if (candidate === undefined) {
     const line = { n, exec: { yes: 0, no: 0, passed: false }, cand: {}, reason: (votes.length === 0 ? "noVotes" : "tie") as "noVotes" | "tie" };
-    // 처형 없는 낮의 다음 단계는 afterDayOf 한 곳이다(밤).
-    return { state: { ...rest, players, voteLog: [...(state.voteLog ?? []), line], verdict: { passed: false } }, stay: false, next: afterDayOf() };
+    // 처형 없는 낮의 다음 단계는 afterDayOf(state) 한 곳이다(밤, 첫날 키워드 판은 정답 공개).
+    return { state: { ...rest, players, voteLog: [...(state.voteLog ?? []), line], verdict: { passed: false } }, stay: false, next: afterDayOf(state) };
   }
   const line = { n, exec: { yes: 0, no: 0, passed: true }, cand: { candidate } };
   return {

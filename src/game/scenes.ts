@@ -45,6 +45,7 @@ export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
   showdown: "dusk", // 09.1.1-06: 마지막 3인 결전 — 변론·지목과 같은 해질녘
   defense: "dusk",
   execution: "dusk",
+  answerReveal: "dusk", // 첫날 정답 공개(P23-21): 처형과 같은 해질녘이 이어진다
   nomination: "dusk", // 8페이즈: defense 와 같은 값
   verdict: "day", // 22-13(P22-3): 찬반은 토론 장면 그대로 — 모이기·해질녘은 지목부터
   ended: "night",

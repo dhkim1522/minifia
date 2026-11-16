@@ -93,8 +93,8 @@ export function resolveNomination(state: RoomState): DeadlineResult {
     ...(leader === undefined ? {} : { verdict: { ...kept, passed: true, candidate: leader } }),
   };
   if (RULES.runoff && leaders.length === 2) return { state: startRunoff(next, [leaders[0]!, leaders[1]!]), stay: false, next: "runoff" };
-  // 처형 없는 낮의 다음 단계는 afterDayOf 한 곳이다(밤).
-  return leader === undefined ? { state: next, stay: false, next: afterDayOf() } : { state: next, stay: false };
+  // 처형 없는 낮의 다음 단계는 afterDayOf(state) 한 곳이다(밤, 첫날 키워드 판은 정답 공개).
+  return leader === undefined ? { state: next, stay: false, next: afterDayOf(state) } : { state: next, stay: false };
 }
 
 // ---- 순차 지목(09.1-01, 결정 0063-1·0063-4, M-5) ----

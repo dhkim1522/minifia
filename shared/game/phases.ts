@@ -4,7 +4,7 @@
 // 낮 시작 발표 다음은 곧바로 토론이다(22페이즈 D-04 — 심부름 단계가 없어졌다). 기본 다음 단계는 nextPhaseOf 가 표에서 읽는다.
 // 낮 흐름(결정 0089-18, D-10): discussion → verdict(찬반, 후보 없음) → nomination(순차 지목) → defense(유언 자리) → execution → night → morning → dayAnnounce.
 // 단계 id 는 새로 만들지 않고 순서와 의미만 바꿨다(21페이즈와 같은 방식). 승패가 나면 execution·morning 의 마감에서 ended(마감 없음)로 간다.
-// 찬반 부결·지목 동점·0표는 결선 없이 night 다. 동점 결선 runoff(0066-4)·마지막 3인 결전 showdown(0066-5)은
+// 찬반 부결·지목 동점·0표는 결선 없이 night 다(첫날 키워드가 있는 판은 night 앞에 정답 공개 answerReveal 이 끼고, 승패가 나면 건너뛴다 — D-02). 동점 결선 runoff(0066-4)·마지막 3인 결전 showdown(0066-5)은
 // 판 규칙(ruleset.ts 의 RULES)이 켜졌을 때만 돈다(둘 다 꺼짐). 분기(찬반 부결·지목 동률·0표 → night 등)는 tick.ts 의 ON_DEADLINE 이
 // next 로 정한다 — 이 표의 next 는 "기본 다음 단계" 데이터일 뿐이다.
 // 단계 길이는 이 파일 한 곳에서만 정한다(6페이즈 플레이테스트가 여기만 고친다).
@@ -26,6 +26,9 @@ export const ROLE_REVEAL_MS = 15_000;
 export const KEYWORD_READ_MS = 3_000; // 결정 0089-3 — 카드를 읽는 시간(답 시간에서 뺀다, 입력줄은 이 동안 잠긴다)
 export const KEYWORD_WRITE_MS = 10_000; // 결정 0089-4 — 떠오르는 말을 적는 시간
 export const KEYWORD_MS = KEYWORD_READ_MS + KEYWORD_WRITE_MS;
+// 첫날 정답 공개 단계(D-02, P23-20): 처형 뒤(또는 처형 없는 첫날 뒤) 밤 직전 3초. 처형이 없으면 "처형 없음" 큰 글 1.4초가 앞에 붙는다(D-22). 시간은 참고 목표라 연출을 줄이는 근거로 쓰지 않는다.
+export const ANSWER_REVEAL_MS = 3_000;
+export const NO_EXECUTION_MS = 1_400; // 처형 없음 큰 글 시간 — src/game/dayView.ts 의 ANNOUNCE_NOEXEC_MS 가 같은 값을 쓴다(23-07)
 export const DAY_ANNOUNCE_MS = 2_000; // D-20
 export const DISCUSSION_MS = 90_000; // DAY-07 — 낮 토론 90초(결정 0060-1). 과반이 토론 끝내기를 누르면 일찍 끝난다(DAY-03)
 export const NIGHT_MS = 30_000; // NIGHT-05
@@ -80,6 +83,8 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   discussion: Object.freeze({ durationMs: DISCUSSION_MS, next: "verdict", revealsOwnRole: true }),
   defense: Object.freeze({ durationMs: DEFENSE_MS, next: "execution", revealsOwnRole: true }),
   execution: Object.freeze({ durationMs: EXECUTION_MS, next: "night", revealsOwnRole: true }),
+  // 첫날만(D-02) — 마감 훅 routeAfterExecution·afterDayOf 가 keyword 가 있는 첫날에만 이 단계로 보낸다. execution.next 는 둘째 날 이후가 쓰는 night 그대로다.
+  answerReveal: Object.freeze({ durationMs: ANSWER_REVEAL_MS, next: "night", revealsOwnRole: true }),
   night: Object.freeze({ durationMs: NIGHT_MS, next: "morning", revealsOwnRole: true }),
   morning: Object.freeze({ durationMs: MORNING_MS, next: "dayAnnounce", revealsOwnRole: true }),
   ended: Object.freeze({ durationMs: null, next: null, revealsOwnRole: true }), // 마감이 없다 — 방 만료가 끝낸다
@@ -92,14 +97,25 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
 });
 
 /**
- * 기본 다음 단계. 단계 표(PHASE_DEFS)의 next 그대로다 — roleReveal → dayAnnounce → discussion … execution → night → morning → dayAnnounce.
+ * 기본 다음 단계. 단계 표(PHASE_DEFS)의 next 그대로다 — roleReveal → dayAnnounce → discussion … execution → night → morning → dayAnnounce(첫날 키워드 판의 execution·처형 없는 낮 뒤에는 훅이 answerReveal 을 끼운다).
  * 마감 훅이 돌려준 분기(next)가 이 값보다 먼저다(tick.ts). 처형이 없는 낮의 다음 단계는 훅이 afterDayOf 로 정한다.
  */
 export function nextPhaseOf(phase: PhaseId): PhaseId | null {
   return PHASE_DEFS[phase].next;
 }
 
-/** 처형 없이 끝난 낮(투표 동률·0표·결선·결전 무승부)의 다음 단계 한 곳 — 늘 밤이다(D-10). 낮 마감 분기의 리터럴을 이 함수 하나로 모은다. */
-export function afterDayOf(): PhaseId {
-  return "night";
+/**
+ * 첫날 정답 공개가 남았는지(D-02·D-29): 방 상태에 keyword 가 있고 첫날((day ?? 1) === 1)일 때만 참이다.
+ * 키의 존재만 본다 — 이 파일은 클라이언트가 import 하므로 키워드 모듈을 끌어오지 않는다(Pitfall 8).
+ */
+export function firstDayAnswerPending(state: { day?: number; keyword?: unknown }): boolean {
+  return state.keyword !== undefined && (state.day ?? 1) === 1;
+}
+
+/**
+ * 처형 없이 끝난 낮(투표 동률·0표·결선·결전 무승부)의 다음 단계 한 곳 — 첫날(키워드가 있는 판)이면 answerReveal, 아니면 밤이다(D-02·D-10).
+ * 낮 마감 분기의 리터럴을 이 함수 하나로 모은다. 처형이 있었던 날은 마감 훅 routeAfterExecution 이 같은 규칙(firstDayAnswerPending)으로 가른다.
+ */
+export function afterDayOf(state: { day?: number; keyword?: unknown }): PhaseId {
+  return firstDayAnswerPending(state) ? "answerReveal" : "night";
 }

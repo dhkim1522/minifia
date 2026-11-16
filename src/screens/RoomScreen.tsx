@@ -65,6 +65,7 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   morning: morningAnnounce,
   defense: () => "유언", // 22-11 P22-1: 처형자의 10초 유언 단계(이름을 읽지 않는다)
   execution: executionAnnounceOf,
+  answerReveal: () => "정답 공개", // 23-05: 첫날 처형 뒤 밤 직전 정답 공개(큰 글 화면은 23-07)
   nomination: () => "지목",
   runoff: () => "결선", // 09.1.1-14: 동점 결선 화면(GameMap)
   showdown: () => "마지막 셋", // 09.1.1-15: 마지막 3인 결전 화면(GameMap)
@@ -125,6 +126,7 @@ function sceneKey(phase: PhaseId): string {
     case "defense":
     case "verdict":
     case "execution":
+    case "answerReveal": // 첫날 정답 공개도 같은 맵 — 처형 → 정답 공개 → 밤 사이에 맵을 다시 만들지 않는다(P23-21)
     case "night":
     case "morning":
       return "gameMap";
@@ -520,6 +522,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       case "defense":
       case "verdict":
       case "execution":
+      case "answerReveal":
       case "night":
       case "morning":
         return (
