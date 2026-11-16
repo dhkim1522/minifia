@@ -1,11 +1,26 @@
 // 24-04: "의심" 포스트잇 3D 에셋 — 종이 키트(공유 지오메트리·주입식 텍스처 굽기·좌석별 재질 캐시)와 가리지 않음 대조 (결정 0089-11, 24 D-11·D-28).
 // WebGL·canvas 없이 node 에서 three 객체와 가짜 2D 기록기로 시험한다(픽셀 시험 아님).
-import { Mesh, type MeshStandardMaterial, Object3D, type Texture, Vector3 } from "three";
+import { Group, Mesh, type MeshStandardMaterial, Object3D, Raycaster, type Texture, Vector3 } from "three";
 import { describe, expect, it, vi } from "vitest";
 import { CHAR_SCALE } from "../../src/world/character";
 import { PX_PER_UNIT } from "../../src/world/camera";
 import { NOTE_COLORS, SEAT_COLORS } from "../../src/world/palette";
-import { coatRadius, createNoteKit, NOTE_CENTER, NOTE_LIFT, NOTE_QUAD, NOTE_ROLL_DEG, NOTE_SIZE, NOTE_STACK_STEP, type Note2D, type NoteBakeEnv, noteBoxes, noteTint } from "../../src/world/postit";
+import {
+  coatRadius,
+  createNoteKit,
+  createNoteRig,
+  NOTE_CENTER,
+  NOTE_LIFT,
+  NOTE_QUAD,
+  NOTE_ROLL_DEG,
+  NOTE_SIZE,
+  NOTE_STACK_STEP,
+  type Note2D,
+  type NoteBakeEnv,
+  noteBoxes,
+  notePlacement,
+  noteTint,
+} from "../../src/world/postit";
 
 // ---------- 가짜 2D 기록기 ----------
 
@@ -387,6 +402,189 @@ describe("가리지 않음 (SC2, P24-8)", () => {
   });
 });
 
-// vi 는 리그 시험(Task 2)에서 쓴다
-void vi;
-void Mesh;
+// ---------- 리그 (Task 2, P24-14·P24-15·P24-17·P24-18) ----------
+
+const FLOOR_Y = 0.02 / 0.83;
+function rigSetup(): { kit: ReturnType<typeof createNoteKit>; parent: Group; rig: ReturnType<typeof createNoteRig> } {
+  const kit = createNoteKit(env().env);
+  const parent = new Group();
+  const rig = createNoteRig(kit, parent, { floorY: FLOOR_Y });
+  return { kit, parent, rig };
+}
+const notesOf = (parent: Group): Mesh[] => parent.children.filter((c) => (c as Mesh).isMesh) as Mesh[];
+
+describe("종이 리그: 쌓기 (P24-14)", () => {
+  it("한 장은 parent 의 자식 메시 하나이고 raycast 가 아무것도 맞히지 않는다", () => {
+    const { parent, rig } = rigSetup();
+    rig.set([2], { animate: false });
+    const ms = notesOf(parent);
+    expect(ms).toHaveLength(1);
+    parent.updateMatrixWorld(true);
+    const rc = new Raycaster(new Vector3(-0.2, 0.5, 2), new Vector3(0, 0, -1));
+    expect(rc.intersectObject(parent, true)).toHaveLength(0);
+    expect(rig.counts()).toEqual({ total: 1, visible: 1 });
+  });
+
+  it("4장째부터 보이는 종이를 늘리지 않는다: [2,5,1,6] → 보이는 셋은 마지막 5·1·6", () => {
+    const { kit, parent, rig } = rigSetup();
+    rig.set([2, 5, 1, 6], { animate: false });
+    const ms = notesOf(parent);
+    expect(ms).toHaveLength(3);
+    expect(rig.counts()).toEqual({ total: 4, visible: 3 });
+    [5, 1, 6].forEach((seat, layer) => {
+      expect(ms[layer].material).toBe(kit.materialFor(seat));
+      const pl = notePlacement(layer, seat);
+      expect(ms[layer].position.x).toBeCloseTo(pl.position.x, 9);
+      expect(ms[layer].position.y).toBeCloseTo(pl.position.y, 9);
+      expect(ms[layer].position.z).toBeCloseTo(pl.position.z, 9);
+      expect(ms[layer].rotation.y).toBeCloseTo(pl.yaw, 9);
+      expect(ms[layer].rotation.z).toBeCloseTo(pl.roll, 9);
+      expect(ms[layer].scale.x).toBe(1);
+    });
+    // 층 오프셋: 아래로 NOTE_STACK_STEP.y 씩
+    expect(ms[1].position.y - ms[0].position.y).toBeCloseTo(NOTE_STACK_STEP.y, 9);
+    expect(ms[2].position.y - ms[1].position.y).toBeCloseTo(NOTE_STACK_STEP.y, 9);
+  });
+
+  it("메시는 공유 지오메트리를 쓰고 그림자를 드리우지 않는다", () => {
+    const { kit, parent, rig } = rigSetup();
+    rig.set([0, 1, 2], { animate: false });
+    for (const m of notesOf(parent)) {
+      expect(m.geometry).toBe(kit.geometry);
+      expect(m.castShadow).toBe(false);
+    }
+  });
+});
+
+describe("종이 리그: 붙음·떨어짐 모션 (P24-15)", () => {
+  it("animate 로 새 장이 들어오면 0ms 에 위 0.25·크기 1.4, 280ms 에 제자리·크기 1", () => {
+    const { parent, rig } = rigSetup();
+    rig.set([2], { animate: true });
+    const m = notesOf(parent)[0];
+    const rest = notePlacement(0, 2).position.y;
+    expect(m.position.y).toBeCloseTo(rest + 0.25, 9);
+    expect(m.scale.x).toBeCloseTo(1.4, 9);
+    rig.update(140);
+    expect(m.position.y).toBeGreaterThan(rest);
+    expect(m.position.y).toBeLessThan(rest + 0.25);
+    expect(m.scale.x).toBeGreaterThan(1);
+    expect(m.scale.x).toBeLessThan(1.4);
+    // ease-out: 중간에 이미 절반보다 많이 왔다
+    expect(m.position.y - rest).toBeLessThan(0.125);
+    rig.update(140);
+    expect(m.position.y).toBeCloseTo(rest, 9);
+    expect(m.scale.x).toBeCloseTo(1, 9);
+    rig.update(1000);
+    expect(m.position.y).toBeCloseTo(rest, 9);
+  });
+
+  it("빈 목록이 오면 600ms ease-in 으로 바닥에 눕고 마지막 150ms 에 크기 0 → 메시 제거, 여러 장은 80ms 간격", () => {
+    const { parent, rig } = rigSetup();
+    rig.set([2, 5], { animate: false });
+    const [a, b] = notesOf(parent);
+    const restA = a.position.y;
+    rig.set([], { animate: true });
+    expect(rig.counts().total).toBe(0);
+    expect(notesOf(parent)).toHaveLength(2); // 아직 떨어지는 중
+    // 80ms: 첫 장은 떨어지기 시작, 둘째는 이제 막 시작
+    rig.update(80);
+    expect(a.position.y).toBeLessThan(restA);
+    expect(b.position.y).toBeCloseTo(notePlacement(1, 5).position.y, 9);
+    // ease-in: 절반 시각에 절반보다 덜 내려왔다
+    rig.update(220); // 첫 장 t = 300
+    expect(restA - a.position.y).toBeLessThan((restA - FLOOR_Y) * 0.5);
+    expect(a.scale.x).toBe(1); // 450ms 전까지 크기 1
+    rig.update(200); // 첫 장 t = 500: 크기가 줄기 시작
+    expect(a.scale.x).toBeLessThan(1);
+    expect(a.scale.x).toBeGreaterThan(0);
+    // 바닥에 누움: 위를 보도록 눕는다
+    expect(a.rotation.x).toBeLessThan(-0.5);
+    rig.update(100); // 첫 장 t = 600 → 제거. 둘째 t = 420 → 남음
+    expect(notesOf(parent)).toEqual([b]);
+    rig.update(180); // 둘째 t = 600 → 제거
+    expect(notesOf(parent)).toHaveLength(0);
+    expect(rig.counts()).toEqual({ total: 0, visible: 0 });
+  });
+
+  it("떨어짐이 끝나는 쪽의 높이는 바닥(월드 y 0.02 를 몸 좌표로 환산)이다", () => {
+    const { parent, rig } = rigSetup();
+    rig.set([2], { animate: false });
+    const m = notesOf(parent)[0];
+    rig.set([], { animate: true });
+    rig.update(599);
+    expect(m.position.y).toBeCloseTo(FLOOR_Y, 2);
+  });
+
+  it("animate 거짓(처음 프레임·모션 줄이기)은 붙음도 떨어짐도 즉시 최종 상태다", () => {
+    const { parent, rig } = rigSetup();
+    rig.set([2], { animate: false });
+    const m = notesOf(parent)[0];
+    expect(m.position.y).toBeCloseTo(notePlacement(0, 2).position.y, 9);
+    expect(m.scale.x).toBe(1);
+    rig.set([], { animate: false });
+    expect(notesOf(parent)).toHaveLength(0);
+  });
+
+  it("옮김([2] → [3] 같은 프레임): 옛 종이는 즉시 없어지고 새 종이가 붙음 모션을 한다", () => {
+    const { kit, parent, rig } = rigSetup();
+    rig.set([2], { animate: false });
+    rig.set([3], { animate: true });
+    const ms = notesOf(parent);
+    expect(ms).toHaveLength(1);
+    expect(ms[0].material).toBe(kit.materialFor(3));
+    expect(ms[0].scale.x).toBeCloseTo(1.4, 9);
+  });
+
+  it("같은 목록을 다시 받으면 아무것도 바뀌지 않는다(모션도 다시 시작하지 않는다)", () => {
+    const { parent, rig } = rigSetup();
+    rig.set([2], { animate: true });
+    rig.update(300);
+    const m = notesOf(parent)[0];
+    rig.set([2], { animate: true });
+    expect(notesOf(parent)).toEqual([m]);
+    expect(m.scale.x).toBeCloseTo(1, 9);
+  });
+
+  it("보이는 셋이 가득 찬 채 새 장이 오면 가장 오래된 장만 즉시 사라지고 새 장이 붙는다", () => {
+    const { kit, parent, rig } = rigSetup();
+    rig.set([1, 2, 3], { animate: false });
+    const [old, mid, top] = notesOf(parent);
+    rig.set([1, 2, 3, 4], { animate: true });
+    const ms = notesOf(parent);
+    expect(ms).toHaveLength(3);
+    expect(ms.includes(old)).toBe(false);
+    expect(ms[0]).toBe(mid);
+    expect(ms[1]).toBe(top);
+    expect(ms[2].material).toBe(kit.materialFor(4));
+    // 남은 장은 한 층 아래로 내려앉은 자리에 즉시 있다
+    expect(mid.position.y).toBeCloseTo(notePlacement(0, 2).position.y, 9);
+  });
+});
+
+describe("종이 리그: 떼기와 공유 객체 (P24-17·P24-18)", () => {
+  it("clear() 는 모션 없이 메시를 모두 없앤다(떨어지는 중인 것도)", () => {
+    const { parent, rig } = rigSetup();
+    rig.set([2, 5], { animate: false });
+    rig.set([], { animate: true });
+    rig.clear();
+    expect(notesOf(parent)).toHaveLength(0);
+    expect(rig.counts()).toEqual({ total: 0, visible: 0 });
+    rig.update(1000); // 남은 모션이 없다
+    expect(notesOf(parent)).toHaveLength(0);
+  });
+
+  it("detach() 뒤에도 공유 지오메트리·텍스처·재질의 dispose 는 불리지 않았다", () => {
+    const { kit, parent, rig } = rigSetup();
+    const spies = [vi.spyOn(kit.geometry, "dispose"), vi.spyOn(kit.texture, "dispose")];
+    for (let s = 0; s < 8; s++) spies.push(vi.spyOn(kit.materialFor(s), "dispose"));
+    rig.set([0, 1, 2], { animate: false });
+    rig.clear();
+    rig.set([3, 4], { animate: false });
+    rig.detach();
+    expect(notesOf(parent)).toHaveLength(0);
+    for (const sp of spies) expect(sp).not.toHaveBeenCalled();
+    // detach 뒤 set 은 무시된다
+    rig.set([1], { animate: false });
+    expect(notesOf(parent)).toHaveLength(0);
+  });
+});
