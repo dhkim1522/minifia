@@ -38,6 +38,8 @@ interface Spec {
   turn?: { i: number; order?: number[]; doneAt?: number };
   /** 키워드 단계에서 본인이 쓰던 글(me.answer, 23-09) */
   answer?: { text: string; final: boolean };
+  /** 공개된 정답(day.keyword.answer, 23-11) */
+  keywordAnswer?: string;
 }
 
 function makeView(o: Spec): RoomView {
@@ -65,6 +67,7 @@ function makeView(o: Spec): RoomView {
   if (o.answer !== undefined) me.answer = o.answer;
   const day: Record<string, unknown> = { n: 1 };
   if (o.candidate !== undefined) day.candidate = o.candidate;
+  if (o.keywordAnswer !== undefined) day.keyword = { genre: "영화", answer: o.keywordAnswer };
   if (o.passed === true) day.execution = { seat: o.candidate ?? 1 };
   if (o.morning !== undefined) day.morning = o.morning;
   if (o.turn !== undefined) {
@@ -634,5 +637,38 @@ describe("찬반·지목 띠 문장 (22-10, P22-1·D-23)", () => {
       expect(hostKeyOf(makeView({ phase: "verdict", seat, candidate: 0 }))).toBe("verdict.act");
       expect(hostKeyOf(makeView({ phase: "verdict", seat }))).toBe("verdict.act");
     }
+  });
+});
+
+describe("결과 정답 줄 ended.answer (23-11, P23-22, D-02)", () => {
+  const ended = (o: Partial<Spec> = {}) => makeView({ phase: "ended", endsAt: null, ...o });
+
+  it("정답이 있으면 키 ended.answer, 줄 `정답 · 해리포터`, 띠는 show, 시간 행 없음", () => {
+    const v = ended({ keywordAnswer: "해리포터" });
+    expect(hostKeyOf(v)).toBe("ended.answer");
+    expect(hostLineOf(v)).toBe("정답 · 해리포터");
+    expect(hostBandModeOf(v, hostLineOf(v))).toBe("show");
+    expect(hostTimeOf(v)).toBe(false);
+  });
+
+  it("정답이 없으면 지금 그대로 — 키 ended, 띠 off", () => {
+    const v = ended();
+    expect(hostKeyOf(v)).toBe("ended");
+    expect(hostBandModeOf(v, hostLineOf(v))).toBe("off");
+  });
+
+  it("12자소 키워드에서도 줄이 19자 이하이고 마침표가 없다", () => {
+    const v = ended({ keywordAnswer: "가나다라마바사아자차카타" });
+    expect([...hostLineOf(v)].length).toBeLessThanOrEqual(19);
+    expect(hostLineOf(v)).not.toMatch(/[.。]/);
+  });
+
+  it("역할·생존에 관계없이 같은 줄이고, 결과 밖 단계는 정답이 있어도 바뀌지 않는다", () => {
+    const lines = new Set<string>();
+    for (const role of ["mafia", "citizen", "police", "doctor"] as RoleId[]) lines.add(hostLineOf(ended({ keywordAnswer: "해리포터", role })));
+    lines.add(hostLineOf(ended({ keywordAnswer: "해리포터", ghost: true })));
+    expect([...lines]).toEqual(["정답 · 해리포터"]);
+    expect(hostLineOf(makeView({ phase: "discussion", keywordAnswer: "해리포터" }))).toBe("의심 가는 사람을 이야기해 주세요");
+    expect(hostBandModeOf(makeView({ phase: "lobby", host: true, endsAt: null, keywordAnswer: "해리포터" }), HOST_LINES["lobby.ready"])).toBe("off");
   });
 });

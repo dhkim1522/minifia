@@ -763,3 +763,131 @@ describe("RoomScreen: 쉬는 사람 화면 (11-12)", () => {
     expect(onExit).toHaveBeenCalledWith("left");
   });
 });
+
+// ---------- 23-11: 토론 시작 모두의 답 자동 열림(P23-17, D-03) · 결과 정답 줄(P23-22, D-02) ----------
+
+describe("RoomScreen: 모두의 답 자동 열림·결과 정답 줄 (23-11)", () => {
+  const mount = () => render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+  const again = (rerender: (ui: React.ReactElement) => void) => rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+  const four: RoomView["players"] = ["민수", "하윤", "민지", "도현"].map((nickname, seat) => ({ seat, nickname, connected: true, isHost: seat === 0 }));
+  const rows = [{ order: 1, seat: 1, text: "안경" }, { order: 2, seat: 0, text: null }, { order: 3, seat: 2, text: null }, { order: 4, seat: 3, text: null }];
+  const play = (phase: RoomView["phase"], o: { n?: number; round?: number; answers?: boolean; answer?: string } = {}): RoomView => ({
+    ...view,
+    phase,
+    phaseEndsAt: phase === "lobby" ? null : 1000 + 90_000,
+    phaseDurationMs: phase === "lobby" ? null : 90_000,
+    players: four,
+    me: { seat: 0, isHost: true, role: "citizen" },
+    day: {
+      n: o.n ?? 1,
+      roles: ["mafia", "police", "citizen"],
+      keyword: { genre: "영화", ...(o.answers === false ? {} : { answers: rows }), ...(o.answer !== undefined ? { answer: o.answer } : {}) },
+    },
+    ...(o.round !== undefined ? { round: o.round } : {}),
+  });
+  const setView = (v: RoomView, epoch?: number) => {
+    connectionMock.current = { ...(connectionMock.current as RoomConnection), view: v, ...(epoch !== undefined ? { epoch } : {}) };
+  };
+  const sheet = (): HTMLElement | null => document.querySelector<HTMLElement>("dialog");
+  const answersTab = (): HTMLElement | null => document.querySelector<HTMLElement>('[data-rolecard-tab="answers"]');
+
+  // 시트 닫기는 닫히는 애니메이션(260ms) 뒤에 onClose 를 부른다
+  const closeSheet = () => {
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    stage.props = null;
+  });
+
+  it("같은 연결에서 dayAnnounce 1일차 → discussion 이면 시트가 `첫날 답` 탭으로 열린다", () => {
+    connectionMock.current = conn({ view: play("dayAnnounce") });
+    const { rerender } = mount();
+    expect(sheet()).toBeNull();
+    setView(play("discussion"));
+    again(rerender);
+    expect(sheet()).not.toBeNull();
+    expect(answersTab()?.getAttribute("aria-selected")).toBe("true");
+    expect(sheet()?.getAttribute("aria-label")).toBe("모두의 답");
+  });
+
+  it("닫은 뒤에는 토론 갱신·찬반으로 가도 다시 열리지 않는다", () => {
+    connectionMock.current = conn({ view: play("dayAnnounce") });
+    const { rerender } = mount();
+    setView(play("discussion"));
+    again(rerender);
+    closeSheet();
+    setView({ ...play("discussion"), serverNow: 2000 });
+    again(rerender);
+    setView(play("verdict"));
+    again(rerender);
+    expect(answersTab()).toBeNull();
+  });
+
+  it("재접속·새로고침 첫 프레임이 discussion 이면 열리지 않는다", () => {
+    connectionMock.current = conn({ view: play("discussion") });
+    mount();
+    expect(sheet()).toBeNull();
+  });
+
+  it("같은 연결에서 epoch 가 바뀌며(재접속) 도착한 discussion 도 열리지 않는다", () => {
+    connectionMock.current = conn({ view: play("dayAnnounce") });
+    const { rerender } = mount();
+    setView(play("discussion"), 2);
+    again(rerender);
+    expect(sheet()).toBeNull();
+  });
+
+  it("2일차 dayAnnounce → discussion 은 열지 않는다", () => {
+    connectionMock.current = conn({ view: play("dayAnnounce", { n: 2 }) });
+    const { rerender } = mount();
+    setView(play("discussion", { n: 2 }));
+    again(rerender);
+    expect(sheet()).toBeNull();
+  });
+
+  it("답 목록이 없는 view(키워드 없는 판)는 열지 않는다", () => {
+    connectionMock.current = conn({ view: play("dayAnnounce", { answers: false }) });
+    const { rerender } = mount();
+    setView(play("discussion", { answers: false }));
+    again(rerender);
+    expect(sheet()).toBeNull();
+  });
+
+  it("새 판(lobby)을 거치면 다시 한 번 열린다", () => {
+    connectionMock.current = conn({ view: play("dayAnnounce") });
+    const { rerender } = mount();
+    setView(play("discussion"));
+    again(rerender);
+    expect(answersTab()).not.toBeNull();
+    closeSheet();
+    setView(play("lobby", { round: 2 }));
+    again(rerender);
+    setView(play("dayAnnounce", { round: 2 }));
+    again(rerender);
+    setView(play("discussion", { round: 2 }));
+    again(rerender);
+    expect(answersTab()?.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("결과(ended): 정답이 있으면 띠 줄이 `정답 · 해리포터`, 시간 행은 없다", () => {
+    connectionMock.current = conn({ view: { ...play("ended", { answer: "해리포터" }), phaseEndsAt: null, phaseDurationMs: null } });
+    const { container } = mount();
+    expect(container.querySelector("[data-host-band] [data-host-line]")?.textContent).toBe("정답 · 해리포터");
+    expect(container.querySelector("[data-host-band] [data-host-time]")).toBeNull();
+    expect(container.querySelector(".mv-host__band")?.classList.contains("is-off")).toBe(false);
+  });
+
+  it("결과(ended): 정답이 없으면 띠 면은 지금처럼 숨는다", () => {
+    connectionMock.current = conn({ view: { ...play("ended"), phaseEndsAt: null, phaseDurationMs: null } });
+    const { container } = mount();
+    expect(container.querySelector(".mv-host__band")?.classList.contains("is-off")).toBe(true);
+  });
+});
