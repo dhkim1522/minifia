@@ -699,3 +699,45 @@ describe("동시 투표 선두·과반 장치 삭제 (22-10, D-12)", () => {
   });
 });
 
+
+describe("sceneLook.notes — 의심 포스트잇 (24-05, D-06·D-11)", () => {
+  const suspects = [
+    { to: 2, from: 0 },
+    { to: 2, from: 1 },
+    { to: 3, from: 0 },
+  ];
+
+  it("둘째 날 토론 view 의 day.suspects 가 받은 좌석 → 붙인 좌석 배열(아래→위)로 실린다", () => {
+    const look = sceneLook(viewOf("discussion", { day: { n: 2, suspects } }), { stageH: 400 });
+    same(look.notes, { 2: [0, 1], 3: [0] });
+  });
+
+  it("받은 좌석이 죽었으면 그 좌석 키가 없다", () => {
+    const look = sceneLook(viewOf("discussion", { dead: [2], day: { n: 2, suspects } }), { stageH: 400 });
+    same(look.notes, { 3: [0] });
+    expect(look.notes !== undefined && 2 in look.notes).toBe(false);
+  });
+
+  it("day.suspects 가 없으면 notes 키가 없다", () => {
+    const look = sceneLook(viewOf("discussion", { day: { n: 2 } }), { stageH: 400 });
+    expect("notes" in look).toBe(false);
+  });
+
+  it("그리지 않는 좌석(밤 산 시민 viewer 의 남의 좌석)의 notes 는 싣지 않는다", () => {
+    const night = asRole(viewOf("night", { mySeat: 2, day: { n: 2, suspects } }), "citizen");
+    const look = sceneLook(night, { stageH: 400 });
+    same(Object.keys(look.seats).map(Number), [2]);
+    same(look.notes, { 2: [0, 1] });
+  });
+
+  it("유령 viewer 도 산 사람의 종이를 똑같이 본다(P24-17)", () => {
+    const ghostView = viewOf("discussion", { dead: [4], mySeat: 4, day: { n: 2, suspects } });
+    same(sceneLook(ghostView, { stageH: 400 }).notes, { 2: [0, 1], 3: [0] });
+  });
+
+  it("처형 연출 중인 좌석(ghost 아님)이라도 죽었으면 종이를 싣지 않는다", () => {
+    const view = viewOf("execution", { dead: [2], day: { n: 2, suspects } });
+    const look = sceneLook(view, { stageH: 400, fading: new Map([[2, 1000]]), now: 1100 });
+    same(look.notes, { 3: [0] });
+  });
+});
