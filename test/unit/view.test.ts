@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isAlive } from "../../shared/game/alive";
 import { channelOf } from "../../shared/game/audience";
 import { pickTarget } from "../../shared/game/night";
@@ -11,6 +11,7 @@ import { RULES } from "../../shared/game/ruleset";
 import { tick } from "../../shared/game/tick";
 import { buildPreview, buildView } from "../../shared/game/view";
 import type { PhaseId, RoomView } from "../../shared/protocol";
+import { openKeyword } from "../helpers/keyword";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castRunoffVote } from "../../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../../shared/game/showdown";
@@ -19,6 +20,13 @@ import { castPoints, castRunoff, castShowdown, castVerdicts, runoffStateOf, star
 const GAME_RULES = RULES;
 
 const PLAYER_COUNTS = [4, 5, 6, 7, 8] as const;
+
+// 23-01: 이 파일은 모든 단계의 view 허용 목록을 전수로 본다 — 첫날 키워드 단계(keyword)도 한 줄 더 지나도록 스위치를 파일 동안 켠다(D-29, 시험 setup 이 기본으로 끈다).
+let restoreKeyword: () => void = () => {};
+beforeAll(() => {
+  restoreKeyword = openKeyword();
+});
+afterAll(() => restoreKeyword());
 const SEEDS = [1, 42, 20260101] as const;
 /**
  * 옛 처형 여부·후보 선택·후보 공개 세 단계를 뺀 열두 단계(게임 진행 순서). 옛 흐름 전용 단계의 view 시험은 08-28 이 지웠고(DAY-07),
@@ -28,6 +36,7 @@ const PHASES: readonly PhaseId[] = [
   "lobby",
   "assigning",
   "roleReveal",
+  "keyword",
   "dayAnnounce",
   "discussion",
   "nomination",
@@ -41,6 +50,7 @@ const PHASES: readonly PhaseId[] = [
 /** 역할 확인 이후 단계들(본인 역할이 실리는 단계). */
 const REVEALING_PHASES = [
   "roleReveal",
+  "keyword",
   "dayAnnounce",
   "discussion",
   "nomination",
@@ -291,16 +301,18 @@ const SERVER_ONLY_KEYS: readonly string[] = [
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
-  "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended",
+  "keyword", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended",
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
   "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote",
   "whisperUsed", // 오늘 귓속말을 이미 보냈다(결정 0066-2) — 토론 단계의 산 본인에게만, 값은 true 뿐
   "ballot", // 동점 결선(결정 0066-4)·마지막 3인 동시 지목(결정 0066-5)에서 본인이 고른 좌석 — 투표 창·결과/지목 창·공개의 산 본인에게만, 값은 좌석 하나
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
+  "keyword", // 첫날 키워드(23-01, D-06) — keyword 단계의 산 시민 편 본인에게만. 조건은 phaseKeyViolations 가 단언한다
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
   "n", "roles", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdictCount", "turn", "runoff", "showdown",
+  "keyword", // 첫날 키워드(23-01, D-06) — keyword 단계에서 모두에게 같은 { genre } 한 키
 ]);
 const keysOf = (value: unknown): string => Object.keys((value ?? {}) as object).sort().join(",");
 
@@ -341,6 +353,13 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   if (("verdictCount" in day) !== (phase === "verdict")) out.push(`${tag}: day.verdictCount presence ${"verdictCount" in day}`);
   else if (phase === "verdict" && keysOf(day.verdictCount) !== "no,yes") out.push(`${tag}: day.verdictCount keys ${keysOf(day.verdictCount)}`);
   if ("voted" in day) out.push(`${tag}: day.voted present`);
+  // 첫날 키워드(23-01, D-06): day.keyword 는 keyword 단계에만, genre 한 키뿐(단어 없음). me.keyword 는 그 단계의 산 시민 편 본인에게만 서버 값 그대로 — 마피아·유령에게는 키 자체가 없다.
+  const wantDayKeyword = phase === "keyword";
+  if (("keyword" in day) !== wantDayKeyword) out.push(`${tag}: day.keyword presence ${"keyword" in day}`);
+  else if (wantDayKeyword && keysOf(day.keyword) !== "genre") out.push(`${tag}: day.keyword keys ${keysOf(day.keyword)}`);
+  const wantMeKeyword = phase === "keyword" && isAlive(viewer) && viewer.role !== undefined && viewer.role !== "mafia";
+  if (("keyword" in view.me) !== wantMeKeyword) out.push(`${tag}: me.keyword presence ${"keyword" in view.me}`);
+  else if (wantMeKeyword && view.me.keyword !== s.keyword?.word) out.push(`${tag}: me.keyword value`);
   const wantExecution = phase === "execution";
   if (("execution" in day) !== wantExecution) out.push(`${tag}: day.execution presence ${"execution" in day}`);
   else if (wantExecution) {
@@ -496,24 +515,25 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
     expect(got.join(" ")).toBe(
-      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:10000:true:77777 verdict:10000:true:77777 execution:6600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
+      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 keyword:13000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:10000:true:77777 verdict:10000:true:77777 execution:6600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
     );
   });
 
-  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, discussion +90000, verdict +10000 뒤 nomination +3000(순차 지목 모이기), night +30000(찬반 0표 부결), morning +5000", () => {
+  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, keyword +13000(23-01), dayAnnounce +2000, discussion +90000, verdict +10000 뒤 nomination +3000(순차 지목 모이기), night +30000(찬반 0표 부결), morning +5000", () => {
     const a = stateAt("assigning", 4, 1);
     const r = stateAt("roleReveal", 4, 1);
-    const ends = ["assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "night", "morning"].map(
+    const ends = ["assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "night", "morning"].map(
       (phase) => stateAt(phase as PhaseId, 4, 1).phaseEndsAt,
     );
-    // discussion 은 낮 시작 발표 마감(20000) 바로 뒤에 이어진다(+ DISCUSSION_MS)
-    const discussionEnd = START_AT + 20000 + DISCUSSION_MS;
+    // discussion 은 낮 시작 발표 마감(역할 확인 18000 + 키워드 13000 + 발표 2000 = 33000) 바로 뒤에 이어진다(+ DISCUSSION_MS)
+    const discussionEnd = START_AT + 33000 + DISCUSSION_MS;
     expect(DISCUSSION_MS).toBe(90000);
     expect(ends.join("/")).toBe(
       [
         START_AT + 3000,
         START_AT + 18000,
-        START_AT + 20000,
+        START_AT + 31000,
+        START_AT + 33000,
         discussionEnd,
         discussionEnd + VERDICT_MS + NOMINATION_GATHER_MS,
         discussionEnd + VERDICT_MS + NIGHT_MS,

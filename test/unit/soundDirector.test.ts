@@ -11,7 +11,7 @@ import { bindSignals, emitSignal, SIGNAL_KINDS } from "../../src/audio/signals";
 import { pinOf } from "../../src/world/pinPlan";
 
 const PHASES: readonly PhaseId[] = [
-  "lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "runoff",
+  "lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "runoff",
   "showdown", "defense", "verdict", "execution", "night", "morning", "ended",
 ];
 
@@ -46,12 +46,13 @@ const quiet = (out: DirectOutput): boolean => out.cancel.length === 0 && !("bed"
 // ───────────────────────── 단계 → 침대 표 ─────────────────────────
 
 describe("단계 → 침대 표 (D-17, O-7)", () => {
-  it("14개 단계 전수", () => {
+  it("15개 단계 전수(keyword 포함, 23-01)", () => {
     expect(Object.keys(BED_OF).sort()).toEqual([...PHASES].sort());
     expect(BED_OF).toEqual({
       lobby: "bed.lobby",
       assigning: null,
       roleReveal: "bed.reveal",
+      keyword: "bed.reveal", // 23-01: 역할 확인과 같은 침대가 이어진다
       dayAnnounce: "bed.day",
       discussion: "bed.day",
       nomination: "bed.vote",

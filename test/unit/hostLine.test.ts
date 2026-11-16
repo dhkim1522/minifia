@@ -427,9 +427,9 @@ function recorder(root: object, log: Set<string>): object {
 
 const isAllowed = (path: string): boolean => ALLOWED_EXACT.has(path) || ALLOWED_PREFIX.some((p) => path.startsWith(p));
 
-const MATRIX_PHASES: readonly PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
+const MATRIX_PHASES: readonly PhaseId[] = ["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
 
-/** 단계 14개 × 시점(마피아·경찰·의사·시민 산 사람, 유령, 방장/손님, 변론자 본인) */
+/** 단계 15개 × 시점(마피아·경찰·의사·시민 산 사람, 유령, 방장/손님, 변론자 본인) */
 function matrixSpecs(): Spec[] {
   const out: Spec[] = [];
   for (const phase of MATRIX_PHASES) {

@@ -804,7 +804,7 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
   it("smoke.mjs 의 전이 표가 서버의 nextPhaseOf·afterDayOf 와 같다: 표가 가리키는 모든 단계(기본 다음 단계·처형 없는 낮 분기)가 들어 있고, 낮 시작 발표 다음은 토론이다 (T-21-45)", () => {
     const graph = smokeGraph;
     expect(Object.keys(graph).sort(), "표의 단계 목록").toEqual(
-      ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"].sort(),
+      ["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"].sort(),
     );
     for (const [from, nexts] of Object.entries(graph)) {
       if (from === "ended" || from === "lobby") continue; // 방장의 start 가 넘기는 단계라 표의 next 가 없다
@@ -821,6 +821,11 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
       }
       expect(nexts, `${from} → ${want}`).toContain(want);
     }
+    // 첫날 키워드(23-01, D-01): 역할 확인 다음은 keyword, keyword 다음은 낮 시작 발표다 — 서버 표와 같다.
+    expect([...smokeGraph.roleReveal!]).toEqual([nextPhaseOf("roleReveal")]);
+    expect([...smokeGraph.roleReveal!]).toEqual(["keyword"]);
+    expect([...smokeGraph.keyword!]).toEqual(["dayAnnounce"]);
+    expect(nextPhaseOf("keyword")).toBe("dayAnnounce");
     expect([...smokeGraph.night!]).toEqual(["morning"]);
     expect(nextPhaseOf("morning")).toBe("dayAnnounce");
     expect(nextPhaseOf("night")).toBe("morning");
@@ -924,7 +929,7 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
 
 describe("E2E 의 시간대 사본과 앱 todOf·TOD_LABEL (18.1-11, 0083-1)", () => {
   const e = polishE2e as { TOD_BY_PHASE: Record<string, string>; TOD_ABSENT_PHASES: readonly string[]; TOD_IDS: readonly string[]; TOD_WORD: Record<string, string> };
-  const ALL_PHASES: PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
+  const ALL_PHASES: PhaseId[] = ["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
 
   it("TOD_BY_PHASE 의 모든 키에서 값이 todOf(키)와 같다", () => {
     for (const [phase, tod] of Object.entries(e.TOD_BY_PHASE)) expect(tod, phase).toBe(todOf(phase as PhaseId));

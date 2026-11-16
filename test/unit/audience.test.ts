@@ -62,7 +62,7 @@ const DAY_CHAT_PHASES: PhaseId[] = [
   "execution",
   "morning",
 ];
-const SILENT_PHASES: PhaseId[] = ["assigning", "roleReveal", "ended"];
+const SILENT_PHASES: PhaseId[] = ["assigning", "roleReveal", "keyword", "ended"]; // keyword: 조용히 쓰는 시간 — 채팅·동작 없음(23-01, D-01)
 
 describe("channelOf — 보낸 사람의 서버 상태로만 채널을 정한다", () => {
   it("밤: 산 마피아 = mafia, 산 시민·경찰·의사 = null, 탈락자 = ghost", () => {
@@ -331,7 +331,7 @@ describe("world mover(GHOST-01)", () => {
     expect(audience(sixAt(phase, { day: 1 }), world("nobody-in-this-room")).size).toBe(0);
   });
 
-  it.each(["assigning", "roleReveal", "ended", "execVote", "candidateVote", "candidateVoteReveal"] as PhaseId[])(
+  it.each(["assigning", "roleReveal", "keyword", "ended", "execVote", "candidateVote", "candidateVoteReveal"] as PhaseId[])(
     "%s: 지도 단계가 아니면 mover 가 있어도 빈 집합",
     (phase) => {
       expect(audience(sixAt(phase, { day: 1 }), world(idOf(0))).size).toBe(0);
@@ -345,7 +345,7 @@ describe("world mover(GHOST-01)", () => {
 });
 
 describe("worldVisibleTo — 접속 스냅샷에 실릴 좌석 (GHOST-01)", () => {
-  it.each(["lobby", "assigning", "roleReveal"] as PhaseId[])("%s: 방 전원", (phase) => {
+  it.each(["lobby", "assigning", "roleReveal", "keyword"] as PhaseId[])("%s: 방 전원", (phase) => {
     const s = phase === "lobby" ? lobbyOf(6) : sixAt(phase, { day: 1 });
     expect(sorted(worldVisibleTo(s, idOf(0)))).toEqual(ids(0, 1, 2, 3, 4, 5));
     expect(sorted(worldVisibleTo(s, idOf(2)))).toEqual(ids(0, 1, 2, 3, 4, 5));

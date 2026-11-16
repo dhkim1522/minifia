@@ -192,8 +192,8 @@ describe("RoomScreen: 배정 → 확인 사이에 무대가 다시 만들어지�
     expect(container.querySelectorAll("[data-role-chip]").length).toBe(0);
   });
 
-  it("장면 키 preGame 하나를 assigning·roleReveal 이 쓴다", () => {
+  it("장면 키 preGame 하나를 assigning·roleReveal·keyword 가 쓴다(23-01 — 첫날 키워드 카드도 같은 무대)", () => {
     const src = readFileSync("src/screens/RoomScreen.tsx", "utf8");
-    expect(src).toMatch(/case "assigning":\s*case "roleReveal":\s*return "preGame"/);
+    expect(src).toMatch(/case "assigning":\s*case "roleReveal":\s*case "keyword":[^\n]*\n\s*return "preGame"/);
   });
 });

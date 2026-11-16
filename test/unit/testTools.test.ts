@@ -166,7 +166,8 @@ describe("skipPhase 동작", () => {
       const now = state.phaseEndsAt! - 500;
       const r = skipPhase(state, state.hostId, now, seededRandInt(9));
       if (!r.ok) throw new Error(`skipPhase failed: ${r.error}`);
-      const next = PHASE_DEFS[phase].next!;
+      // 역할 확인 다음은 표상 keyword 지만 방 상태에 keyword 가 없으면(시험 setup 이 스위치를 끈다, 23-01 D-29) 마감 훅이 곧장 dayAnnounce 로 보낸다.
+      const next = phase === "roleReveal" && state.keyword === undefined ? "dayAnnounce" : PHASE_DEFS[phase].next!;
       expect(r.state.phase).toBe(next);
       expect(String(r.state.phaseEndsAt)).toBe(String(now + PHASE_DEFS[next].durationMs!));
     });

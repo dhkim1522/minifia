@@ -56,9 +56,9 @@ test("상수: UI-SPEC 값 그대로", () => {
   assert.deepEqual([...TOD_IDS], ["morning", "day", "dusk", "night"]);
 });
 
-test("TOD_BY_PHASE 키 10개·TOD_ABSENT_PHASES 4개, 값은 네 시간대 안", () => {
+test("TOD_BY_PHASE 키 10개·TOD_ABSENT_PHASES 5개(키워드 카드 포함, 23-01), 값은 네 시간대 안", () => {
   assert.equal(Object.keys(TOD_BY_PHASE).length, 10);
-  assert.deepEqual([...TOD_ABSENT_PHASES].sort(), ["assigning", "ended", "lobby", "roleReveal"]);
+  assert.deepEqual([...TOD_ABSENT_PHASES].sort(), ["assigning", "ended", "keyword", "lobby", "roleReveal"]);
   for (const v of Object.values(TOD_BY_PHASE)) assert.ok(TOD_IDS.includes(v));
   assert.equal(TOD_BY_PHASE.night, "night");
   assert.equal(TOD_BY_PHASE.morning, "morning");

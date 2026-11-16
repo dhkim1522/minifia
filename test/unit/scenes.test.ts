@@ -64,6 +64,7 @@ describe("단계 → 장면 규칙표(PHASE_SCENE)", () => {
       lobby: "lobby",
       assigning: "lobby",
       roleReveal: "lobby",
+      keyword: "lobby", // 23-01: 첫날 키워드 카드는 역할 확인과 같은 PreGame 무대
       dayAnnounce: "day",
       discussion: "day",
       night: "night",
