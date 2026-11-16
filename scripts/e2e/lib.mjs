@@ -3114,8 +3114,8 @@ export function soundResultSkipChecks(input) {
 export const HOST_LINE_MAX = 2;
 /** 띠 면이 보이지 않는 단계(src/game/hostLine.ts HOST_HIDDEN_PHASES 사본 — e2eContract 가 같음을 고정). 면의 한 줄 자리는 그대로라 visibility hidden 이다. */
 export const HOST_OFF_PHASES = ["lobby", "ended"];
-/** 띠 문장이 비는 단계(큰 글이 말한다): 처형·아침. e2eContract 가 이 단계 키들의 줄이 모두 빈 문자열임을 고정한다. */
-export const HOST_BLANK_PHASES = ["execution", "morning"];
+/** 띠 문장이 비는 단계(큰 글이 말한다): 처형·정답 공개(23-07)·아침. e2eContract 가 이 단계 키들의 줄이 모두 빈 문자열임을 고정한다. */
+export const HOST_BLANK_PHASES = ["execution", "answerReveal", "morning"];
 /** E2E 가 읽는 14페이즈 표식(src 에 있어야 한다 — e2eContract 가 확인). */
 export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time", "data-call", "data-role-line", "data-guide"];
 /**

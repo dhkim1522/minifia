@@ -704,7 +704,7 @@ describe("14페이즈 사회자·이름표 E2E 사본과 제품 값 (14-08, 사�
   });
 
   it("18.1-12: HOST_BLANK_PHASES 의 단계마다 그 단계 키들의 줄이 모두 빈 문자열이고, 빈 줄인 키는 모두 그 단계들 안에 있다", () => {
-    const keysOf: Record<string, HostKey[]> = { execution: ["execution.passed"], morning: ["morning"] };
+    const keysOf: Record<string, HostKey[]> = { execution: ["execution.passed"], answerReveal: ["answerReveal"], morning: ["morning"] };
     expect([...lib.HOST_BLANK_PHASES].sort()).toEqual(Object.keys(keysOf).sort());
     for (const phase of lib.HOST_BLANK_PHASES) for (const key of keysOf[phase]!) expect(HOST_LINES[key], `${phase}/${key}`).toBe("");
     const blankKeys = (Object.keys(HOST_LINES) as HostKey[]).filter((k) => HOST_LINES[k] === "").sort();

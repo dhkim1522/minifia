@@ -3649,7 +3649,7 @@ test("hostBandChecks HB6: 종 0개 + 띠 면 보임/숨김이 단계 기대와 �
 });
 
 test("hostBandChecks HB7: 비는 단계(처형·아침)는 빈 글, 그 밖 보이는 단계는 글 있음, 심부름은 둘 다 허용", () => {
-  assert.deepEqual([...HOST_BLANK_PHASES], ["execution", "morning"]);
+  assert.deepEqual([...HOST_BLANK_PHASES], ["execution", "answerReveal", "morning"]);
   const hb7 = (text, phase) => hostBandChecks(bandOk({ text }), { phase, timed: true }).find((r) => r.id === "HB7");
   for (const phase of HOST_BLANK_PHASES) {
     assert.equal(hb7("", phase).ok, true, phase);
