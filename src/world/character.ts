@@ -26,6 +26,7 @@ import {
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { buildGhost3d, type Ghost3d } from "./ghost3d";
+import { createNoteRig, type NoteRig, noteKit } from "./postit";
 import { emoteCycles, REDUCED_Y_SCALE } from "./emoteCap";
 import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, GHOST_SCALE, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
 
@@ -742,13 +743,22 @@ export interface WorldCharacter {
    */
   setPickMark(on: boolean, opts?: { color: string; animate: boolean }): void;
   /**
+   * "의심" 포스트잇(결정 0089-11, 24 D-11): 이 사람이 받은 종이의 붙인 좌석 목록(오래된 것부터)을 몸통(body 그룹)의 자식 평면 메시로 맞춘다. 보이는 것은 마지막 3장(postit.ts).
+   * animate 거짓 = 처음 받은 프레임·모션 줄이기(즉시). 종이는 병합 지오메트리 경로 밖이라 옷·표정 바꾸기가 건드리지 않는다.
+   * 유령이 되는 순간 종이는 모션 없이 떨어지고(관절 메시만 숨기는 setGhost 때문에 따로 뗀다) 유령인 동안 받은 종이는 붙지 않는다. dispose 뒤는 무시.
+   * 공유 지오메트리·텍스처·재질(postit.ts noteKit)은 모든 캐릭터가 함께 쓰므로 해제하지 않는다
+   */
+  setNotes(fromSeats: readonly number[], opts: { animate: boolean }): void;
+  /** 받은 종이 수(total)와 몸에 붙어 있는(떨어지는 중 포함) 종이 메시 수(visible) */
+  noteCounts(): { total: number; visible: number };
+  /**
    * 동작이 쓰는 표정(angry·sus·surprise·happy·cry)의 머리 병합을 현재 의상으로 미리 만들어 캐시에 둔다(10-03, O-10). 보이는 표정은 바꾸지 않는다.
    * face 를 주면 그 표정 하나만 한다(동작이 쓰지 않는 이름은 무시). 이미 있으면 다시 만들지 않는다
    */
   prewarm(face?: FaceId): void;
   /** 이 캐릭터가 만든 병합 지오메트리 수(관절 6 + 머리 표정 변형 + 돋보기 유리). dispose 뒤 0 */
   ownedGeometryCount(): number;
-  /** 지금 보이는 메시 수(관절 6 + 발밑 원판 + 투명 조각) */
+  /** 지금 보이는 메시 수(관절 6 + 발밑 원판 + 투명 조각 + 붙은 종이) */
   meshCount(): number;
   /** 이 캐릭터가 만든 지오메트리를 해제한다. 공유 재질·발밑 원판은 건드리지 않는다 */
   dispose(): void;
@@ -859,6 +869,8 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   const body = new Group();
   body.name = "body";
   root.add(body);
+  /** "의심" 종이 리그 — 처음 종이를 받을 때 만든다(종이가 없는 캐릭터는 키트도 만들지 않는다). body 의 자식이라 병합 지오메트리 경로와 별개다 */
+  let noteRig: NoteRig | null = null;
   const disc = new Mesh(shadowGeometry, shadowMaterial);
   disc.rotation.x = -Math.PI / 2;
   disc.position.y = 0.012;
@@ -1059,6 +1071,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
   return {
     root,
     update(dt, t, moving) {
+      noteRig?.update(dt * 1000); // 종이 붙음·떨어짐 모션(유령이 되면 비어 있어 아무 일도 없다)
       if (ghostOn && spriteShown() !== appliedSprite) applyGhost(); // 그림이 나중에 왔다(또는 사라졌다)
       if (ghostOn && appliedSprite && sprite) {
         // 유령 그림: 몸 자세는 재생하지 않는다. 동작을 받았으면 한 번 통통 튄다
@@ -1167,6 +1180,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
         ghostOn = true;
         ghostAlpha = GHOST_ART_OPACITY;
         ghostTint = 1;
+        noteRig?.clear(); // 관절 메시만 숨기므로 body 자식 종이를 따로 뗀다 — 모션 없이(P24-17)
       }
       if (opts?.opacity !== undefined) ghostAlpha = clamp01(opts.opacity);
       if (opts?.tint !== undefined) ghostTint = clamp01(opts.tint);
@@ -1233,6 +1247,17 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       ghostAlpha = clamp01(alpha);
       applyGhost();
     },
+    setNotes(fromSeats, opts) {
+      if (disposed || ghostOn) return;
+      if (!noteRig) {
+        if (fromSeats.length === 0) return;
+        noteRig = createNoteRig(noteKit(), body, { floorY: 0.02 / CHAR_SCALE });
+      }
+      noteRig.set(fromSeats, opts);
+    },
+    noteCounts() {
+      return noteRig ? noteRig.counts() : { total: 0, visible: 0 };
+    },
     meshCount() {
       let n = 0;
       root.traverse((x) => {
@@ -1243,6 +1268,8 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
     dispose() {
       if (disposed) return;
       disposed = true;
+      noteRig?.detach(); // 메시만 뗀다 — 공유 키트는 해제하지 않는다
+      noteRig = null;
       if (ghostMat) {
         ghostMat.dispose();
         ghostMat = null;

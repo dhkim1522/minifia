@@ -2,7 +2,8 @@
 // 캐릭터 몸(body 그룹)의 자식인 평면 메시 한 장 — 가슴 옆에 몸통 원통을 따라 휘어 붙고, 붙인 사람 좌석별 고정 각도로 살짝 기울며 우하단 모서리가 들려 있다.
 // 이 파일은 three 를 값으로 쓰므로 동적으로 불러오는 캐릭터 모듈(character.ts)만 import 한다 — runtime.ts 는 three 를 값으로 부르지 않는다(결정 0090-14).
 // 상수(크기·자리)는 이 파일 한 곳에만 둔다. 24-10 이 390×844 스크린샷으로 NOTE_SIZE 0.34~0.36·NOTE_CENTER.y 0.52~0.56 중 최종값을 정한다(D-28).
-import { BufferGeometry, CanvasTexture, Color, DataTexture, Float32BufferAttribute, MeshStandardMaterial, RGBAFormat, SRGBColorSpace, type Texture, UnsignedByteType } from "three";
+import { BufferGeometry, CanvasTexture, Color, DataTexture, Float32BufferAttribute, Mesh, MeshStandardMaterial, type Object3D, RGBAFormat, SRGBColorSpace, type Texture, UnsignedByteType } from "three";
+import { NOTE_MAX_VISIBLE } from "../../shared/game/postit";
 import { NOTE_COLORS, SEAT_COLORS } from "./palette";
 
 // ---------- 상수 ----------
@@ -29,6 +30,16 @@ export const NOTE_INNER_PX = 100;
 export const NOTE_QUAD = (NOTE_SIZE * NOTE_TEX) / NOTE_INNER_PX;
 /** 접힌 모서리 크기(텍스처 px, 안쪽 종이의 18%) */
 const FOLD_PX = 18;
+/** 붙음: 위 0.25·크기 1.4배에서 280ms ease-out. 떨어짐: 600ms ease-in, 마지막 150ms 에 크기 0, 여러 장은 80ms 간격(P24-15) */
+export const NOTE_STICK_MS = 280;
+export const NOTE_STICK_FROM = { rise: 0.25, scale: 1.4 } as const;
+export const NOTE_FALL_MS = 600;
+export const NOTE_FALL_SHRINK_MS = 150;
+export const NOTE_FALL_GAP_MS = 80;
+/** 떨어지는 동안 종이가 몸통 밖으로 밀려나는 거리(바닥에서 발치에 눕는다) */
+const NOTE_FALL_OUT = 0.25;
+/** 바닥 높이 기본값 — 월드 y 0.02 를 CHAR_SCALE 0.83 으로 나눈 몸 좌표. 캐릭터가 CHAR_SCALE 로 환산해 넘긴다 */
+const DEFAULT_FLOOR_Y = 0.02 / 0.83;
 
 /**
  * 몸통 코트 원통의 반지름 — character.ts 의 `CylinderGeometry(0.29, 0.39, 0.6)` 가 y 0.36~0.96 에 있다.
@@ -424,4 +435,153 @@ export function noteKit(): NoteKit {
 export function disposeNoteKit(): void {
   shared?.dispose();
   shared = null;
+}
+
+// ---------- 리그: 쌓기·붙음·떨어짐 ----------
+
+export interface NoteRig {
+  /**
+   * 이 사람이 받은 종이(붙인 좌석 목록, 오래된 것부터)를 맞춘다. 맨 위 NOTE_MAX_VISIBLE 장만 메시로 보인다(P24-14).
+   * animate 가 참이면 새 장은 붙음 모션, 목록이 비면 떨어짐(80ms 간격)이고 한 장씩 사라지거나 옮겨 가는 것은 옛 종이가 즉시 사라진다.
+   * animate 거짓(처음 받은 프레임·모션 줄이기)이면 모션 없이 최종 상태다.
+   */
+  set(fromSeats: readonly number[], opts: { animate: boolean }): void;
+  /** 모션을 dtMs 만큼 진행한다 — 시각을 직접 읽지 않고 받은 값으로만 */
+  update(dtMs: number): void;
+  /** 모션 없이 종이를 모두 뗀다(유령이 되는 순간, P24-17) */
+  clear(): void;
+  /** 메시만 뗀다. 공유 지오메트리·텍스처·재질은 모든 캐릭터가 함께 쓰므로 해제하지 않는다. 이후 set 은 무시된다 */
+  detach(): void;
+  /** total = 받은 종이 수, visible = 지금 붙어 있는(떨어지는 중 포함) 메시 수 */
+  counts(): { total: number; visible: number };
+}
+
+interface NoteEntry {
+  seat: number;
+  layer: number;
+  mesh: Mesh;
+  phase: "in" | "rest" | "out";
+  /** 모션 경과(ms). 음수 = 떨어짐 시작 전 대기 */
+  t: number;
+}
+
+const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
+
+export function createNoteRig(kit: NoteKit, parent: Object3D, opts?: { floorY?: number }): NoteRig {
+  const floorY = opts?.floorY ?? DEFAULT_FLOOR_Y;
+  let stack: NoteEntry[] = [];
+  let falling: NoteEntry[] = [];
+  let total = 0;
+  let detached = false;
+
+  /** 지금 단계·경과에 맞는 자세를 메시에 쓴다 */
+  function place(e: NoteEntry): void {
+    const pl = notePlacement(e.layer, e.seat);
+    const m = e.mesh;
+    m.rotation.order = "YXZ";
+    let y = pl.position.y;
+    let radius = pl.radius;
+    let tilt = 0;
+    let scale = 1;
+    if (e.phase === "in") {
+      const k = 1 - (1 - clamp01(e.t / NOTE_STICK_MS)) ** 3; // ease-out
+      y += NOTE_STICK_FROM.rise * (1 - k);
+      scale = 1 + (NOTE_STICK_FROM.scale - 1) * (1 - k);
+    } else if (e.phase === "out" && e.t > 0) {
+      const u = clamp01(e.t / NOTE_FALL_MS);
+      const k = u * u; // ease-in
+      y = pl.position.y + (floorY - pl.position.y) * k;
+      radius += NOTE_FALL_OUT * k;
+      tilt = -(Math.PI / 2) * k; // 위를 보고 눕는다
+      const shrinkFrom = NOTE_FALL_MS - NOTE_FALL_SHRINK_MS;
+      if (e.t > shrinkFrom) scale = Math.max(0, 1 - (e.t - shrinkFrom) / NOTE_FALL_SHRINK_MS);
+    }
+    m.position.set(radius * Math.sin(pl.yaw), y, radius * Math.cos(pl.yaw));
+    m.rotation.set(tilt, pl.yaw, pl.roll);
+    m.scale.setScalar(scale);
+  }
+  function spawn(seat: number, layer: number, phase: NoteEntry["phase"]): NoteEntry {
+    const mesh = new Mesh(kit.geometry, kit.materialFor(seat));
+    mesh.name = "note";
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.raycast = () => {}; // 종이는 눌리지 않는다(이름표·땅 탭이 이긴다)
+    parent.add(mesh);
+    const e: NoteEntry = { seat, layer, mesh, phase, t: 0 };
+    place(e);
+    return e;
+  }
+  function drop(list: NoteEntry[]): void {
+    for (const e of list) parent.remove(e.mesh);
+    list.length = 0;
+  }
+
+  return {
+    set(fromSeats, opts2) {
+      if (detached) return;
+      total = fromSeats.length;
+      const vis = fromSeats.slice(-NOTE_MAX_VISIBLE);
+      if (!opts2.animate) {
+        drop(stack);
+        drop(falling);
+        stack = vis.map((seat, layer) => spawn(seat, layer, "rest"));
+        return;
+      }
+      // 같은 좌석의 종이는 그대로 두고(층만 다시 맞춘다), 새 좌석은 붙음, 사라진 좌석은 즉시 없어지거나(떨어짐은 목록이 빌 때만)
+      const pool = new Map<number, NoteEntry[]>();
+      for (const e of stack) pool.set(e.seat, [...(pool.get(e.seat) ?? []), e]);
+      const next: NoteEntry[] = [];
+      vis.forEach((seat, layer) => {
+        const e = pool.get(seat)?.shift();
+        if (e) {
+          e.layer = layer;
+          place(e);
+          next.push(e);
+        } else next.push(spawn(seat, layer, "in"));
+      });
+      const gone = stack.filter((e) => !next.includes(e));
+      if (vis.length === 0 && gone.length > 0) {
+        gone.forEach((e, i) => {
+          e.phase = "out";
+          e.t = -NOTE_FALL_GAP_MS * i;
+          place(e);
+          falling.push(e);
+        });
+      } else drop(gone);
+      stack = next;
+    },
+    update(dtMs) {
+      if (stack.length === 0 && falling.length === 0) return;
+      for (const e of stack) {
+        if (e.phase !== "in") continue;
+        e.t += dtMs;
+        if (e.t >= NOTE_STICK_MS) e.phase = "rest";
+        place(e);
+      }
+      const done: NoteEntry[] = [];
+      for (const e of falling) {
+        e.t += dtMs;
+        if (e.t >= NOTE_FALL_MS) done.push(e);
+        else place(e);
+      }
+      if (done.length > 0) {
+        for (const e of done) parent.remove(e.mesh);
+        falling = falling.filter((e) => !done.includes(e));
+      }
+    },
+    clear() {
+      drop(stack);
+      drop(falling);
+      total = 0;
+    },
+    detach() {
+      drop(stack);
+      drop(falling);
+      total = 0;
+      detached = true;
+    },
+    counts() {
+      return { total, visible: stack.length + falling.length };
+    },
+  };
 }

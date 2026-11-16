@@ -47,6 +47,13 @@ export interface CharacterHandle {
   setRing?(color: string | null): void;
   /** 마피아 밤 선택 표시(결정 0065) — 몸 윤곽 껍질과 발밑 고리 조임. optional(시험 가짜 호환) */
   setPickMark?(on: boolean, opts?: { color: string; animate: boolean }): void;
+  /**
+   * "의심" 포스트잇(결정 0089-11): 이 사람이 받은 종이의 붙인 좌석 목록(오래된 것부터)을 몸통에 맞춘다. 보이는 것은 마지막 3장.
+   * animate 거짓 = 처음 받은 프레임·모션 줄이기(즉시). 유령에게는 붙지 않는다. optional(시험 가짜 호환 — runtime.ts 는 three 를 값으로 부르지 않아 동적으로 불러온 캐릭터 모듈이 구현한다)
+   */
+  setNotes?(fromSeats: readonly number[], opts: { animate: boolean }): void;
+  /** 받은 종이 수(total)와 지금 붙어 있는 종이 메시 수(visible). optional(시험 가짜 호환) */
+  noteCounts?(): { total: number; visible: number };
   dispose(): void;
 }
 /** 06-11 의 characterKit 이 구조적으로 맞춘다 */
