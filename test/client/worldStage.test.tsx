@@ -2843,32 +2843,45 @@ describe("E2E 훅 window.__mfGhosts (0083-2, T-18.1-41)", () => {
 
   it("유령 그림으로 그리는 좌석(오름차순)과 그림 준비 여부만 싣는다 — 직업·의상은 없다", async () => {
     const s = await open({ scene: sceneOf({ ...ALIVE, 1: { ghost: true }, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
-    expect(window.__mfGhosts).toEqual({ seats: [1, 3], ready: true });
-    expect(Object.keys(window.__mfGhosts!).sort()).toEqual(["ready", "seats"]);
+    expect(window.__mfGhosts).toMatchObject({ seats: [1, 3], ready: true, scale: 0.75 });
+    expect(window.__mfGhosts!.facing).toHaveLength(2);
+    expect(Object.keys(window.__mfGhosts!).sort()).toEqual(["facing", "ready", "scale", "seats"]);
     s.utils.unmount();
     expect(window.__mfGhosts).toBeUndefined();
   });
 
+  it("유령이 걸으면 facing 이 걷는 방향이 되고, 멈춘 뒤에는 바뀌지 않고 다시 알리지도 않는다(D-21)", async () => {
+    const s = await open({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
+    expect(window.__mfGhosts!.facing).toHaveLength(1);
+    move(s.store, seg(3, [400, -200, 800, -200], Date.now(), 180));
+    frames(1500);
+    // x 가 늘어나는 걸음: yaw = atan2(dx, dz) = π/2 (소수 둘째 자리 반올림)
+    expect(window.__mfGhosts!.facing[0]).toBeCloseTo(Math.round((Math.PI / 2) * 100) / 100, 2);
+    const settled = window.__mfGhosts;
+    frames(1000);
+    expect(window.__mfGhosts).toBe(settled); // 같은 방향이면 onGhosts 를 다시 부르지 않는다
+  });
+
   it("좌석이 살아나면 목록에서 빠지고 actor 가 없어져도 빠진다", async () => {
     const s = await open({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
-    expect(window.__mfGhosts).toEqual({ seats: [3], ready: true });
+    expect(window.__mfGhosts).toMatchObject({ seats: [3], ready: true });
     s.rerender({ scene: sceneOf(ALIVE) });
     frame();
-    expect(window.__mfGhosts).toEqual({ seats: [], ready: true });
+    expect(window.__mfGhosts).toMatchObject({ seats: [], ready: true });
     s.rerender({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) });
     frame();
     s.rerender({ scene: sceneOf({ 0: {}, 1: {}, 2: {} }) });
     frames(EXIT_MS * 2);
-    expect(window.__mfGhosts).toEqual({ seats: [], ready: true });
+    expect(window.__mfGhosts).toMatchObject({ seats: [], ready: true });
   });
 
   it("그림을 아직 못 불렀으면 ready 거짓이고, 불러오면 바뀐다", async () => {
     fakeArt.ready = false;
     await open({ scene: sceneOf({ ...ALIVE, 3: { ghost: true } }) }, { players: FOUR, ents: FOUR_ENTS() });
-    expect(window.__mfGhosts).toEqual({ seats: [3], ready: false });
+    expect(window.__mfGhosts).toMatchObject({ seats: [3], ready: false });
     fakeArt.ready = true;
     frame();
-    expect(window.__mfGhosts).toEqual({ seats: [3], ready: true });
+    expect(window.__mfGhosts).toMatchObject({ seats: [3], ready: true });
   });
 
   it("훅이 꺼진 문맥에는 전역이 없고, 옛 의상 훅 전역은 어느 문맥에도 없다", async () => {
