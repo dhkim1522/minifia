@@ -1,0 +1,110 @@
+<title>키워드 카드 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* layout: 시안 3개를 폰 틀 안에 나란히, 각 안은 시민/마피아 + 답 공개 순서로 보여 준다 */
+:root{
+  --bg:#0a0e1c; --panel:#0e1326; --raise:#151c36; --press:#1e2847; --line:#2a3760;
+  --fg:#f1f2f5; --sub:#a9aebb; --edge:#6b7180; --warn:#f2556a; --paper:#f2ecdc; --ink:#2b2f38;
+  --font:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#e9ebf2;--panel:#0e1326}}
+:root[data-theme="light"]{--bg:#e9ebf2}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);padding-block:24px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-size:20px;margin:0 0 4px}
+.note{color:var(--sub);font-size:14px;margin:0 0 20px;max-width:60ch}
+.rows{display:flex;flex-wrap:wrap;gap:28px}
+.opt{flex:1 1 300px;min-width:0;max-width:340px}
+.opt h2{font-size:15px;margin:0 0 4px}
+.opt p{font-size:13px;color:var(--sub);margin:0 0 10px}
+.tag{display:inline-block;font-size:12px;border:1px solid var(--edge);padding:1px 8px;border-radius:99px;margin-left:6px;color:var(--sub)}
+.tag.rec{border-color:#8fd19e;color:#8fd19e}
+.phone{width:100%;max-width:320px;aspect-ratio:9/16;background:var(--panel);border:1px solid var(--line);border-radius:22px;position:relative;overflow:hidden;
+  background-image:radial-gradient(120% 60% at 50% 0%,#1b2650 0%,transparent 60%)}
+.phone+.phone{margin-top:12px}
+.band{position:absolute;top:0;left:0;right:0;height:56px;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(10,14,28,.6);color:var(--fg)}
+.band small{position:absolute;right:12px;color:var(--sub);font-size:13px}
+.body{position:absolute;inset:56px 0 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px}
+.genre{font-size:15px;color:var(--sub);letter-spacing:.04em}
+.word{font-size:36px;font-weight:700;color:var(--fg);text-align:center;line-height:1.2}
+.word.q{letter-spacing:.2em}
+.foot{font-size:12px;color:var(--sub);text-align:center}
+.input{position:absolute;left:12px;right:12px;bottom:12px;display:flex;gap:8px}
+.input div{flex:1;background:var(--raise);border:1px solid var(--edge);border-radius:12px;padding:12px;font-size:14px;color:var(--sub)}
+.input b{background:var(--press);border-radius:12px;padding:12px 14px;font-size:14px;color:var(--fg);font-weight:400}
+/* A: 중앙 큰 글 카드 */
+.cardA{background:var(--raise);border:1px solid var(--line);border-radius:16px;padding:22px 18px;width:86%;display:flex;flex-direction:column;align-items:center;gap:12px}
+/* B: 종이 질문지 */
+.cardB{background:var(--paper);color:var(--ink);border-radius:6px;padding:22px 18px;width:84%;transform:rotate(-1.2deg);box-shadow:0 8px 20px rgba(0,0,0,.5);display:flex;flex-direction:column;align-items:center;gap:12px}
+.cardB .genre{color:#6b7180}.cardB .word{color:var(--ink)}.cardB .foot{color:#6b7180}
+/* C: 장면 위 띠 + 큰 글 (카드 없음) */
+.plainC{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%}
+.timer{position:absolute;left:12px;right:12px;top:56px;height:4px;background:var(--line);border-radius:3px}
+.timer i{display:block;height:100%;width:62%;background:var(--fg);border-radius:3px}
+.list{width:88%;display:flex;flex-direction:column;gap:8px}
+.list div{display:flex;gap:10px;align-items:center;background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px}
+.list em{font-style:normal;color:var(--sub);width:18px}
+.list .none{color:var(--sub)}
+.dot{width:12px;height:12px;border-radius:50%;flex:none}
+</style>
+
+<h1>첫날 키워드 카드 시안</h1>
+<p class="note">시민 화면(위)과 마피아 화면(아래), 답 공개(맨 아래) 순서입니다. 세 안 모두 글은 장르·키워드·각주 한 줄뿐이고, 입력은 10초·20자입니다. 추천은 A 입니다.</p>
+
+<div class="rows">
+
+<section class="opt">
+  <h2>A. 중앙 카드 <span class="tag rec">추천</span></h2>
+  <p>기존 인용 카드 부품을 그대로 쓰고 키워드만 크게. 구현이 가장 작습니다.</p>
+  <div class="phone"><div class="band">키워드<small>10</small></div><div class="timer"><i></i></div>
+    <div class="body"><div class="cardA"><div class="genre">장르 : 영화</div><div class="word">해리포터</div><div class="foot">* 직접적인 키워드는 언급하면 안 됩니다.</div></div></div>
+    <div class="input"><div>떠오르는 말을 한 줄로</div><b>보내기</b></div></div>
+  <div class="phone"><div class="band">키워드<small>10</small></div><div class="timer"><i></i></div>
+    <div class="body"><div class="cardA"><div class="genre">장르 : 영화</div><div class="word q">???</div><div class="foot">* 직접적인 키워드는 언급하면 안 됩니다.</div></div></div>
+    <div class="input"><div>떠오르는 말을 한 줄로</div><b>보내기</b></div></div>
+  <div class="phone"><div class="band">모두의 답</div>
+    <div class="body"><div class="list">
+      <div><em>①</em><span class="dot" style="background:#e0344b"></span>안경 쓴 아이</div>
+      <div><em>②</em><span class="dot" style="background:#5aa9e6"></span>기차 타고 학교</div>
+      <div><em>③</em><span class="dot" style="background:#f2c14e"></span>부엉이</div>
+      <div><em>④</em><span class="dot" style="background:#8fd19e"></span>마법 영화</div>
+      <div class="none"><em>⑤</em><span class="dot" style="background:#9a7fd1"></span>답 없음</div></div></div></div>
+</section>
+
+<section class="opt">
+  <h2>B. 종이 질문지 <span class="tag">대안</span></h2>
+  <p>살짝 기운 종이 카드. 분위기는 좋지만 캐릭터 장면과 톤이 달라 시안 확인이 더 필요합니다.</p>
+  <div class="phone"><div class="band">키워드<small>10</small></div><div class="timer"><i></i></div>
+    <div class="body"><div class="cardB"><div class="genre">장르 : 영화</div><div class="word">해리포터</div><div class="foot">* 직접적인 키워드는 언급하면 안 됩니다.</div></div></div>
+    <div class="input"><div>떠오르는 말을 한 줄로</div><b>보내기</b></div></div>
+  <div class="phone"><div class="band">키워드<small>10</small></div><div class="timer"><i></i></div>
+    <div class="body"><div class="cardB"><div class="genre">장르 : 영화</div><div class="word q">???</div><div class="foot">* 직접적인 키워드는 언급하면 안 됩니다.</div></div></div>
+    <div class="input"><div>떠오르는 말을 한 줄로</div><b>보내기</b></div></div>
+  <div class="phone"><div class="band">모두의 답</div>
+    <div class="body"><div class="list">
+      <div><em>①</em><span class="dot" style="background:#e0344b"></span>안경 쓴 아이</div>
+      <div><em>②</em><span class="dot" style="background:#5aa9e6"></span>기차 타고 학교</div>
+      <div><em>③</em><span class="dot" style="background:#f2c14e"></span>부엉이</div>
+      <div><em>④</em><span class="dot" style="background:#8fd19e"></span>마법 영화</div>
+      <div class="none"><em>⑤</em><span class="dot" style="background:#9a7fd1"></span>답 없음</div></div></div></div>
+</section>
+
+<section class="opt">
+  <h2>C. 카드 없이 큰 글 <span class="tag">대안</span></h2>
+  <p>장면(바·광장 위 캐릭터)을 그대로 두고 글만 얹습니다. 가장 담백하지만 장면과 글이 겹쳐 읽기 어려울 수 있습니다.</p>
+  <div class="phone"><div class="band">키워드<small>10</small></div><div class="timer"><i></i></div>
+    <div class="body"><div class="plainC"><div class="genre">장르 : 영화</div><div class="word">해리포터</div><div class="foot">* 직접적인 키워드는 언급하면 안 됩니다.</div></div></div>
+    <div class="input"><div>떠오르는 말을 한 줄로</div><b>보내기</b></div></div>
+  <div class="phone"><div class="band">키워드<small>10</small></div><div class="timer"><i></i></div>
+    <div class="body"><div class="plainC"><div class="genre">장르 : 영화</div><div class="word q">???</div><div class="foot">* 직접적인 키워드는 언급하면 안 됩니다.</div></div></div>
+    <div class="input"><div>떠오르는 말을 한 줄로</div><b>보내기</b></div></div>
+  <div class="phone"><div class="band">모두의 답</div>
+    <div class="body"><div class="list">
+      <div><em>①</em><span class="dot" style="background:#e0344b"></span>안경 쓴 아이</div>
+      <div><em>②</em><span class="dot" style="background:#5aa9e6"></span>기차 타고 학교</div>
+      <div><em>③</em><span class="dot" style="background:#f2c14e"></span>부엉이</div>
+      <div><em>④</em><span class="dot" style="background:#8fd19e"></span>마법 영화</div>
+      <div class="none"><em>⑤</em><span class="dot" style="background:#9a7fd1"></span>답 없음</div></div></div></div>
+</section>
+
+</div>
