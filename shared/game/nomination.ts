@@ -2,9 +2,9 @@
 // v1.0 vote.ts 의 후보 선택(castCandidateVote·tallyCandidateVote)과 같은 계약이다: 검사 순서 = 계약, 같은 값이면 같은 객체.
 // 다른 점: 취소(null)가 없고, 득표 순서를 섞지 않는다(지목 줄은 지목 중에도 공개라 좌석 오름차순 그대로다).
 // 마감(phaseEndsAt)은 읽거나 쓰지 않는다 — 과반이어도 15초를 다 채운다(결정 0060-3).
-// 기본판(결정 0072)은 동시 투표(castPoint·enterVote)다 — 산 사람 모두가 마감 전까지 한 명을 고르고 바꾼다. 순차 지목(아래 enterNomination·castTurnPoint)은 판 규칙의 pickTurn 일 때만 돈다.
-// 순차 지목(결정 0063-1·0063-4): 시각은 인자로만 받고 연결·역할·난수를 읽지 않는다(M-3).
-// 모이기 → 산 사람 좌석 순서로 한 명씩 차례 → 확정 뒤 사이 → 끝 알림 → 기존 집계(resolveNomination). 과반이어도 끝까지 돈다.
+// 지목은 순차 지목(결정 0063-1·0063-4, 22-09 D-12)이 유일하다 — 동시 투표(castPoint·enterVote)는 지웠다. 낮 순서는 토론 → 찬반 → 지목 → 유언 → 처형이다(결정 0089-18).
+// 시각은 인자로만 받고 연결·역할·난수를 읽지 않는다(M-3).
+// 모이기 → 산 사람 좌석 순서로 한 명씩 차례 → 확정 뒤 사이 → 끝 알림 → 집계(resolveNomination). 과반이어도 끝까지 돈다.
 import type { PickTurnView, PointLine } from "../protocol";
 import { isAlive } from "./alive";
 import { afterDayOf, NOMINATION_END_MS, NOMINATION_GATHER_MS, PHASE_DEFS, PICK_GAP_MS, PICK_TURN_MS } from "./phases";
@@ -62,9 +62,12 @@ export function tallyPoints(state: RoomState): {
 }
 
 /**
- * nomination 마감 훅(결정 0060-3, DAY-05). 그날 voteLog 줄 {n, exec:{0,0,false}, cand:{votes, candidate?}} 을 항상 쌓는다 —
- * 찬반 마감(resolveVerdict)이 같은 줄의 exec 를 채운다. 최다 한 명이면 verdict {passed:false, candidate} 로 표의 기본 다음 단계(defense),
- * 동률·0표면 next night 다. 단 판 규칙(RULES)의 runoff 가 켜져 있고 최다 득표자가 정확히 둘이면 동점 결선 runoff 로 간다(결정 0066-4, 그날 줄은 candidate 없이 쌓고 결선이 채운다) — 꺼져 있어(결정 0072) 동점도 night 다. 집계 직후 모든 플레이어의 nominate 키를 구조 분해로 지운다.
+ * nomination 마감 훅(결정 0060-3·0089-18, DAY-05, D-13). 찬반(resolveVerdict)이 이미 통과를 정하고 그날 voteLog 줄을 만들었다 — 이 마감은 그 줄에 cand 를 더한다.
+ * 최다 한 명이면 기존 verdict(passed:true 와 ballots)를 보존한 채 candidate 만 더해 표의 기본 다음 단계(defense = 유언)로 간다 —
+ * passed 를 다시 false 로 덮으면 enterExecution 이 아무도 탈락시키지 않는다(Pitfall 1).
+ * 동률·0표면 처형 없이 night 이고(결선 없음) verdict 키를 지우며 줄에 reason(tie | noVotes)을 남긴다(Pitfall 7). 단 판 규칙(RULES)의 runoff 가 켜져 있고 최다 득표자가
+ * 정확히 둘이면 동점 결선 runoff 로 간다(결정 0066-4, 그날 줄은 candidate 없이 쌓고 결선이 채운다) — 꺼져 있어(결정 0072) 동점도 night 다.
+ * 그날 줄이 없으면(찬반을 거치지 않은 단위 시험 등) 새로 만든다. 집계 직후 모든 플레이어의 nominate 키를 구조 분해로 지운다.
  */
 export function resolveNomination(state: RoomState): DeadlineResult {
   const { votes, leader, leaders } = tallyPoints(state);
@@ -72,61 +75,29 @@ export function resolveNomination(state: RoomState): DeadlineResult {
     const { nominate: _nominate, ...kept } = p;
     return kept;
   });
-  const { pickTurn: _pickTurn, ...rest } = state;
-  const line = {
-    n: state.day ?? 1,
-    exec: { yes: 0, no: 0, passed: false },
-    cand: leader === undefined ? { votes } : { votes, candidate: leader },
-  };
+  const { pickTurn: _pickTurn, verdict: kept, ...rest } = state;
+  const day = state.day ?? 1;
+  const cand = leader === undefined ? { votes } : { votes, candidate: leader };
+  const reason = leader !== undefined || (RULES.runoff && leaders.length === 2) ? {} : { reason: (votes.length === 0 ? "noVotes" : "tie") as "noVotes" | "tie" };
+  const log = state.voteLog ?? [];
+  const at = log.map((entry) => entry.n).lastIndexOf(day);
+  const voteLog =
+    at < 0
+      ? [...log, { n: day, exec: { yes: 0, no: 0, passed: kept?.passed === true }, cand, ...reason }]
+      : log.map((entry, i) => (i === at ? { ...entry, cand, ...reason } : entry));
   const next: RoomState = {
     ...rest,
     players,
-    voteLog: [...(state.voteLog ?? []), line],
-    verdict: leader === undefined ? { passed: false } : { passed: false, candidate: leader },
+    voteLog,
+    ...(leader === undefined ? {} : { verdict: { ...kept, passed: true, candidate: leader } }),
   };
   if (RULES.runoff && leaders.length === 2) return { state: startRunoff(next, [leaders[0]!, leaders[1]!]), stay: false, next: "runoff" };
   // 처형 없는 낮의 다음 단계는 afterDayOf 한 곳이다(밤).
   return leader === undefined ? { state: next, stay: false, next: afterDayOf() } : { state: next, stay: false };
 }
 
-/**
- * 동시 투표 한 표(기본판, 결정 0072 · 8페이즈 결정 0060-3). 마감까지 바꿀 수 있고 취소는 없다.
- * 검사 순서가 계약이다: 단계(nomination 아니면 WRONG_PHASE) → 행위자(방에 있고 산 사람, 아니면 BAD_MESSAGE)
- * → 대상(정수·앉은 산 사람, 아니면 BAD_MESSAGE) → 자기 자신이면 BAD_MESSAGE → 같은 값이면 입력 상태 그대로 ok → 그 사람의 nominate 만 바뀐 새 상태.
- * 마감(phaseEndsAt)은 읽거나 쓰지 않는다 — 과반이어도 15초를 다 채운다.
- */
-export function castPoint(
-  state: RoomState,
-  actorId: string,
-  target: number,
-): { ok: true; state: RoomState } | { ok: false; error: VoteError } {
-  if (state.phase !== "nomination") return { ok: false, error: "WRONG_PHASE" };
-  const actor = state.players.find((p) => p.id === actorId);
-  if (!actor || !isAlive(actor)) return { ok: false, error: "BAD_MESSAGE" };
-  const chosen = Number.isInteger(target) ? state.players.find((p) => p.seat === target) : undefined;
-  if (!chosen || !isAlive(chosen)) return { ok: false, error: "BAD_MESSAGE" };
-  if (chosen.seat === actor.seat) return { ok: false, error: "BAD_MESSAGE" };
-  if (actor.nominate === target) return { ok: true, state };
-  return {
-    ok: true,
-    state: { ...state, players: state.players.map((p) => (p.id === actorId ? { ...p, nominate: target } : p)) },
-  };
-}
-
-/** 투표 진입 훅(기본판 동시 투표): 모든 플레이어의 nominate 키와 방의 pickTurn 키를 구조 분해로 지운다. 마감은 단계 표(NOMINATION_MS)가 정한다. */
-export function enterVote(state: RoomState): RoomState {
-  const { pickTurn: _pickTurn, ...rest } = state;
-  return {
-    ...rest,
-    players: state.players.map((p) => {
-      const { nominate: _nominate, ...kept } = p;
-      return kept;
-    }),
-  };
-}
-
 // ---- 순차 지목(09.1-01, 결정 0063-1·0063-4, M-5) ----
-// tick 표에 걸려 있다: ON_ENTER.nomination = enterNomination, ON_DEADLINE.nomination = stepNomination(09.1-04). 차례 없는 옛 지목(누구나·마감까지 바꾸기)은 09.1-05 가 지웠다 — 지목 규칙은 이 순차 지목 하나뿐이다.
+// tick 표에 걸려 있다: HOOKS.enter.nomination = enterNomination, HOOKS.deadline.nomination = stepNomination. 동시 투표(누구나·마감까지 바꾸기)는 22-09 가 지웠다 — 지목 규칙은 이 순차 지목 하나뿐이다.
 
 /** 지목 진입: 산 사람 좌석 오름차순을 차례 순서로 고정하고(i -1 = 모이는 중) 남은 지목 값을 모두 지운다. 마감은 호출한 쪽이 건다(nominationStepMs). */
 export function enterNomination(state: RoomState): RoomState {

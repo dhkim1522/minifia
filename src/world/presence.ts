@@ -145,17 +145,16 @@ export function lightingFor(view: RoomView): LightingStage {
   return view.me.role === "mafia" ? "night" : "nightCitizen";
 }
 
-/** 긴장(UI-SPEC 단계 조명): 찬반 1(초점 변론자), 그 밖 0. 09.1(M-4): 순차 지목은 배지 숫자만이라 선두·과반이어도 0 이다. 기본판 동시 투표(day.turn 없음, 결정 0072)는 과반 2·선두 1(초점 그 좌석) */
+/**
+ * 긴장(UI-SPEC 단계 조명): 찬반·그 밖 0. 09.1(M-4): 순차 지목은 배지 숫자만이라 선두·과반이어도 0 이다. 동시 투표(day.turn 없음, 결정 0072)는 과반 2·선두 1(초점 그 좌석) — 순차 지목이 기본 규칙이 된 뒤(22-09)
+ * 서버는 늘 day.turn 을 보내 이 분기는 죽은 코드다(화면 정리는 22-10). 22-09: 찬반의 후보 초점 분기는 지웠다 — 찬반에는 후보가 없다(D-11, RESEARCH A5).
+ */
 export function tensionOf(view: RoomView): Tension {
   if (view.phase === "nomination" && view.day?.turn === undefined) {
     const tally = pointsTally(view);
     if (tally.sure !== undefined) return { level: 2, focus: tally.sure };
     if (tally.leader !== undefined) return { level: 1, focus: tally.leader };
     return { level: 0 };
-  }
-  if (view.phase === "verdict") {
-    const candidate = view.day?.candidate;
-    return candidate !== undefined ? { level: 1, focus: candidate } : { level: 0 };
   }
   return { level: 0 };
 }

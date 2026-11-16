@@ -136,7 +136,7 @@ export function assignSlots(people: readonly { id: string; x: number; z: number 
   return out;
 }
 
-/** 지금 단계가 요구하는 배치의 키: 지목 '{일차}:ring' · 결선 '{일차}:runoff' · 마지막 3인 '{일차}:showdown' · 변론·찬반 '{일차}:stage' · 처형 '{일차}:exec' · 그 밖은 null(아무것도 안 한다). */
+/** 지금 단계가 요구하는 배치의 키: 지목 '{일차}:ring' · 결선 '{일차}:runoff' · 마지막 3인 '{일차}:showdown' · 변론(유언) '{일차}:stage' · 처형 '{일차}:exec' · 그 밖은 null(아무것도 안 한다). 찬반(verdict)은 null 이다 — 토론 자리 그대로이고 모이기는 지목부터다(22-09, P22-3). */
 export function layoutKey(state: RoomState): string | null {
   const day = state.day ?? 0;
   switch (state.phase) {
@@ -147,21 +147,12 @@ export function layoutKey(state: RoomState): string | null {
     case "showdown":
       return `${day}:showdown`;
     case "defense":
-    case "verdict":
       return `${day}:stage`;
     case "execution":
       return `${day}:exec`;
     default:
       return null;
   }
-}
-
-/** 그날 찬반 결과: voteLog 의 그날 줄(exec.passed)을 먼저 보고, 줄이 없으면 verdict.passed 를 따른다. */
-function verdictPassed(state: RoomState): boolean {
-  const day = state.day ?? 0;
-  const log = state.voteLog ?? [];
-  const at = log.map((entry) => entry.n).lastIndexOf(day);
-  return at >= 0 ? log[at]!.exec.passed : state.verdict?.passed === true;
 }
 
 export interface GatherLayout {
@@ -178,8 +169,8 @@ export interface GatherLayout {
  *   nomination      산 사람 → 둘레 자리
  *   showdown        산 세 사람 → ringSlots(3) 삼각형 자리(변론자 없음; 처형 단계가 같은 일차 기억을 이어 쓴다, 결정 0066-5)
  *   runoff          후보 둘 → RUNOFF_SPOTS(낮은 좌석이 [0]), 나머지 산 사람 → 둘레 자리(후보의 둘레 자리는 변론에서 진 쪽이 돌아올 자리로 기억에 남는다)
- *   defense·verdict 변론자 → 무대(STAGE_SPOT), 나머지 산 사람 → 자기 둘레 자리
- *   execution       통과면 변론자 목적지 없음(무대 유지, 유령이 되어 떠오른다), 부결이면 변론자 → 자기 둘레 자리
+ *   defense         변론(유언)자 → 무대(STAGE_SPOT), 나머지 산 사람 → 자기 둘레 자리
+ *   execution       처형자 목적지 없음(무대 유지, 유령이 되어 떠오른다) — 처형 단계는 찬반이 통과한 날에만 온다
  * 자리 배정은 w.lay 를 우선한다 — 지목은 같은 키(같은 날 지목)일 때, 변론·처형은 같은 날 기억일 때. 그래야 걷는 도중에 다시 불러도 자리가 뒤섞이지 않는다.
  * 기억에 없는 사람(재접속 등)만 남은 자리를 현재 위치로 배정받는다. 위치는 positionAtFx(구간, now), 도착은 구간 끝점 = 목적지 로 본다.
  * 월드에 구간이 없는 사람은 건너뛴다. 입력은 바꾸지 않는다.
@@ -188,7 +179,7 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
   const key = layoutKey(state);
   if (key === null) return null;
   const day = state.day ?? 0;
-  const trial = state.phase !== "nomination" && state.phase !== "discussion";
+  const trial = state.phase !== "nomination"; // layoutKey 가 null 이 아닌 단계 중 지목 밖(결선·결전·변론·처형)은 같은 날 기억을 이어 쓴다
   const defender = trial && state.phase !== "runoff" && state.phase !== "showdown" ? state.verdict?.candidate : undefined;
   const runoffCand = state.phase === "runoff" ? state.runoff?.cand : undefined;
 
@@ -218,15 +209,14 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
   }
   Object.assign(slots, assignSlots(unplaced, free));
 
-  const passed = state.phase === "execution" ? verdictPassed(state) : false;
   const moves: GatherLayout["moves"] = [];
   for (const p of participants) {
     const isDefender = p.seat === defender;
     let dest: { x: number; z: number } | null;
     const runoffAt = runoffCand === undefined ? -1 : runoffCand.indexOf(p.seat);
     if (runoffAt === 0 || runoffAt === 1) dest = { x: RUNOFF_SPOTS[runoffAt][0], z: RUNOFF_SPOTS[runoffAt][1] };
-    else if (isDefender && (state.phase === "defense" || state.phase === "verdict")) dest = { x: STAGE_SPOT.x, z: STAGE_SPOT.z };
-    else if (isDefender && passed) dest = null; // 통과: 무대에 남는다
+    else if (isDefender && state.phase === "defense") dest = { x: STAGE_SPOT.x, z: STAGE_SPOT.z };
+    else if (isDefender && state.phase === "execution") dest = null; // 처형: 무대에 남는다
     else {
       const s = slots[p.id];
       dest = s === undefined ? null : { x: s[0], z: s[1] };

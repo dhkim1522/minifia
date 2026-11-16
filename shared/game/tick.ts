@@ -8,11 +8,11 @@
 // night: 선택·지난 아침 비움, morning: 판정(난수 사용),
 // discussion: 낮 시작 청소(지난 낮의 verdict·execution 과 개인 키), execution: 변론자 탈락(찬반 통과일 때만), ended: winner 기록·방 만료를 진입 + 30분으로 앞당김(endgame.ts).
 // 마감 훅(ON_DEADLINE = HOOKS.deadline): 단계 마감 때의 집계·분기 처리. 진입 훅과 같이 tick 루프 안에서만 부른다(결정 0016-2).
-// 마감 훅 행: nomination(지목 집계 → 최다 한 명이면 defense, 동률·0표면 night), verdict(찬반 집계 → 항상 execution). execution·morning(승패면 next ended, 아니면 기본 단계 — 판정은 마감 훅에서만, D-10). ended 는 마감이 없는 종단 단계다.
+// 마감 훅 행: verdict(찬반 집계 → 통과면 nomination, 부결이면 night), nomination(지목 집계 → 최다 한 명이면 defense, 동률·0표면 night). execution·morning(승패면 next ended, 아니면 기본 단계 — 판정은 마감 훅에서만, D-10). ended 는 마감이 없는 종단 단계다.
 // 새 마감 = 이전 마감 + phaseDurationOf(진입 훅 뒤 상태) — 단계 표(PHASE_DEFS) 길이 그대로다.
 // 훅이 stay 를 돌려주면 다음 단계로 가지 않고 같은 단계에서 마감만 "이전 마감 + 그 상태의 단계 길이(phaseDurationOf)" 로 옮긴다.
 // dayAnnounce: 판 규칙의 showdown 이 켜졌을 때만 — 낮 시작 발표 마감에 산 사람이 정확히 셋이면 next "showdown"(마지막 3인 결전, 결정 0066-5 — 낮 시작 청소 enterDiscussion 은 startShowdown 이 한다). showdown: stepShowdown 이 모이기 → 한마디 셋 → 동시 지목 → 공개를 stay 사슬로 걷고 집계(2표면 execution, 아니면 night).
-// nomination: 기본판(결정 0072)은 동시 투표 — 진입 enterVote, 마감 resolveNomination 한 번(투표 집계). 아래는 판 규칙의 pickTurn 이 켜졌을 때만: 순차 지목(결정 0063-1) — 진입 enterNomination, 마감마다 stepNomination 이 같은 단계에 머물며(stay) 다음 마감은 이전 마감 + 그 단계 길이(모이기·차례·사이·끝 알림)다.
+// nomination: 순차 지목(결정 0063-1, 22-09 D-12) — 진입 enterNomination, 마감마다 stepNomination 이 같은 단계에 머물며(stay) 다음 마감은 이전 마감 + 그 단계 길이(모이기·차례·사이·끝 알림)다.
 // runoff: 동점 결선(결정 0066-4, 판 규칙의 runoff 가 켜졌을 때만) — 지목 집계가 최다 정확히 둘 동점이면 next "runoff". stepRunoff 가 앞머리 → 투표 → 결과를 stay 사슬로 걷고 마지막에 집계(많이 받은 후보면 defense, 동점이면 night).
 // 난수는 세 번째 인자로만 받는다 — 방 DO 는 cryptoRandInt, 테스트는 seededRandInt.
 // 분기(4페이즈): 마감 훅이 next 를 돌려주면 그 단계로, 없으면 단계 표(PHASE_DEFS)의 기본 next 로 간다. 표는 데이터만 두고 분기는 훅이 정한다.
@@ -24,7 +24,7 @@ import { emptyGameCloseAt, nextContinuityAt } from "./continuity";
 import { enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
 import { enterExecution } from "./execution";
-import { enterNomination, enterVote, stepNomination, resolveNomination } from "./nomination";
+import { enterNomination, stepNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
 import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
 import { enterMorning, enterNight } from "./night";
@@ -62,16 +62,16 @@ export interface PhaseHooks {
 }
 
 /**
- * 진입·마감 훅 표(상수 RULES 한 벌, 22-07). 규칙에 따라 갈리는 줄은 셋이다:
- * 투표 진입(순차 지목이면 enterNomination, 아니면 동시 투표 enterVote) · 투표 마감(순차 지목이면 stepNomination, 아니면 집계 한 번) ·
- * 낮 시작 발표 마감(마지막 3인 결전이 켜졌을 때만).
- * 규칙이 하나뿐이라 모듈을 읽을 때 한 번 만든다 — RULES 의 값은 소스에서 바뀐다(22-09 가 pickTurn 을 켠다).
+ * 진입·마감 훅 표(상수 RULES 한 벌, 22-07). 규칙에 따라 갈리는 줄은 하나다: 낮 시작 발표 마감(마지막 3인 결전이 켜졌을 때만).
+ * 낮 순서(결정 0089-18): 토론 마감은 표의 기본(verdict) · 찬반 마감 resolveVerdict(통과면 nomination, 부결이면 night) · 지목 진입 enterNomination(순차 지목 차례 만들기) ·
+ * 지목 마감 stepNomination(stay 사슬, 끝 알림 뒤 집계 resolveNomination — 최다 한 명이면 defense, 동률·0표면 night) · 변론(유언) 마감은 표의 기본(execution).
+ * 규칙이 하나뿐이라 모듈을 읽을 때 한 번 만든다.
  */
 const HOOKS: PhaseHooks = {
   enter: {
     dayAnnounce: enterDayAnnounce,
     discussion: enterDiscussion,
-    nomination: RULES.pickTurn ? enterNomination : enterVote,
+    nomination: enterNomination,
     execution: enterExecution,
     night: enterNight,
     // 진입 훅의 둘째·셋째 인자(난수·진입 시각)가 enterMorning 에 들어가지 않게 감싼다.
@@ -82,7 +82,7 @@ const HOOKS: PhaseHooks = {
     // 마지막 3인 결전은 판 규칙의 showdown 일 때만(결정 0072) — 꺼지면 키를 만들지 않아 표의 기본 next 로 간다.
     ...(RULES.showdown ? { dayAnnounce: routeAfterDayAnnounce } : {}),
     showdown: stepShowdown,
-    nomination: RULES.pickTurn ? stepNomination : (s) => resolveNomination(s), // 두 번째 인자 at(마감 시각)이 넘어가지 않게 감싼다
+    nomination: stepNomination,
     runoff: stepRunoff,
     verdict: resolveVerdict,
     execution: routeAfterExecution,
