@@ -32,7 +32,7 @@ const WINNER_COLUMN: Readonly<Record<GameWinner, "mafia" | "citizen">> = {
 
 /**
  * 끝난 판의 D1 행. 판 id·승패·키워드·시작 시각 중 하나라도 없으면 null(옛 판·키워드 없는 판은 기록하지 않는다, D-29).
- * 봇이 있거나 테스트 방이면 has_bots 1 이라 기본 통계에서 빠진다(D-27·D-28). 포스트잇 수·튜토리얼은 24 가 채울 자리라 0 이다.
+ * 봇이 있거나 테스트 방이면 has_bots 1 이라 기본 통계에서 빠진다(D-27·D-28). 포스트잇 수(note_count)는 그 판에 붙은 장 수다(24-02, D-09). 튜토리얼 열은 0 그대로다.
  */
 export function buildGameRow(state: RoomState, now: number): GameRow | null {
   const { gameId, winner, keyword, startedAt } = state;
@@ -64,8 +64,10 @@ export function buildGameRow(state: RoomState, now: number): GameRow | null {
     has_bots: bots.length > 0 || state.testMode === true ? 1 : 0,
     duration_s: Math.round((now - startedAt) / 1000),
     left_count: seated.filter((p) => p.isBot !== true && !p.connected).length,
-    note_count: 0,
+    // 옮긴 것은 stickNote 가 줄을 바꿔 끼워 한 장으로 센다(줄 수 그대로, D-09). 누가 누구에게는 저장하지 않고 숫자 하나뿐이다(T-24-08).
+    note_count: state.notes?.length ?? 0,
     no_answer_count: (state.keywordAnswers ?? []).filter((a) => a.text === null && !botSeats.has(a.seat)).length,
+    // 혼자 하기 튜토리얼은 서버를 거치지 않아 이 행에 오지 않는다(D-18) — 늘 0.
     tutorial: 0,
   };
 }
