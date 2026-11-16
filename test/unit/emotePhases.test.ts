@@ -131,10 +131,10 @@ describe("동작 수신자 표 — 단계 × 신분 (UI-SPEC A-6, D-12·D-14)", 
 
 describe("동작은 이동 차단과 무관하다 (AVTR-05, movement.ts 머리 주석)", () => {
   const blockedDay = [...MAP_PHASES].filter((p) => p !== "night" && !canMoveIn(p, true));
-  const blockedTalking = blockedDay.filter((p) => p !== "defense"); // 유언 단계는 조용하다(22-11 D-16)
+  const blockedTalking = blockedDay.filter((p) => p !== "defense" && p !== "answerReveal"); // 유언 단계(22-11 D-16)·첫날 정답 공개(23-05)는 조용하다
 
-  it("이동이 막힌 낮 지도 단계가 지목·결선·마지막 3인·변론·찬반·처형·아침을 포함한다", () => {
-    expect(blockedDay.sort().join(",")).toBe(["defense", "execution", "morning", "nomination", "runoff", "showdown", "verdict"].join(","));
+  it("이동이 막힌 낮 지도 단계가 지목·결선·마지막 3인·변론·찬반·처형·첫날 정답 공개·아침을 포함한다", () => {
+    expect(blockedDay.sort().join(",")).toBe(["answerReveal", "defense", "execution", "morning", "nomination", "runoff", "showdown", "verdict"].join(","));
   });
 
   it.each([...new Set(blockedTalking)])("%s: canMoveIn 이 산 사람에게 거짓이어도 산 사람의 동작 수신자는 비어 있지 않고 보낸 사람 자신이 든다", (phase) => {

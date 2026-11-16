@@ -804,23 +804,34 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
   it("smoke.mjs 의 전이 표가 서버의 nextPhaseOf·afterDayOf 와 같다: 표가 가리키는 모든 단계(기본 다음 단계·처형 없는 낮 분기)가 들어 있고, 낮 시작 발표 다음은 토론이다 (T-21-45)", () => {
     const graph = smokeGraph;
     expect(Object.keys(graph).sort(), "표의 단계 목록").toEqual(
-      ["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"].sort(),
+      ["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "answerReveal", "night", "morning", "ended"].sort(),
     );
     for (const [from, nexts] of Object.entries(graph)) {
       if (from === "ended" || from === "lobby") continue; // 방장의 start 가 넘기는 단계라 표의 next 가 없다
       const want = nextPhaseOf(from as PhaseId);
       if (from === "verdict") {
-        // 찬반 마감: 통과면 지목, 부결이면 처형 없이 afterDayOf() = night
-        expect([...nexts].sort(), "verdict").toEqual([afterDayOf({ day: 2 }), "nomination"].sort());
+        // 찬반 마감: 통과면 지목, 부결이면 처형 없이 afterDayOf(state) — 둘째 날부터는 night, 첫날 키워드 판은 answerReveal(Pitfall 7)
+        expect([...nexts].sort(), "verdict").toEqual([afterDayOf({ day: 2 }), afterDayOf({ day: 1, keyword: {} }), "nomination"].sort());
         continue;
       }
       if (from === "nomination") {
-        // 지목 마감: 최다 한 명이면 변론(유언), 처형 없이 끝나면 afterDayOf() = night
-        expect([...nexts].sort(), "nomination").toEqual([afterDayOf({ day: 2 }), "defense"].sort());
+        // 지목 마감: 최다 한 명이면 변론(유언), 처형 없이 끝나면 afterDayOf(state) — 둘째 날부터는 night, 첫날 키워드 판은 answerReveal
+        expect([...nexts].sort(), "nomination").toEqual([afterDayOf({ day: 2 }), afterDayOf({ day: 1, keyword: {} }), "defense"].sort());
+        continue;
+      }
+      if (from === "execution") {
+        // 처형 마감: 승패가 나면 ended, 첫날 키워드 판이면 answerReveal, 아니면 표의 기본(night) — 마감 훅 routeAfterExecution(23-05)
+        expect([...nexts].sort(), "execution").toEqual([want, "answerReveal", "ended"].sort());
         continue;
       }
       expect(nexts, `${from} → ${want}`).toContain(want);
     }
+    // 첫날 정답 공개(23-05, D-02): answerReveal 다음은 night 하나, afterDayOf(state) 는 상태 인자 두 경우로 갈린다.
+    expect([...smokeGraph.answerReveal!]).toEqual([nextPhaseOf("answerReveal")]);
+    expect([...smokeGraph.answerReveal!]).toEqual(["night"]);
+    expect(afterDayOf({ day: 2 })).toBe("night");
+    expect(afterDayOf({ day: 1, keyword: {} })).toBe("answerReveal");
+    expect(afterDayOf({ day: 1 })).toBe("night");
     // 첫날 키워드(23-01, D-01): 역할 확인 다음은 keyword, keyword 다음은 낮 시작 발표다 — 서버 표와 같다.
     expect([...smokeGraph.roleReveal!]).toEqual([nextPhaseOf("roleReveal")]);
     expect([...smokeGraph.roleReveal!]).toEqual(["keyword"]);
@@ -929,7 +940,7 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
 
 describe("E2E 의 시간대 사본과 앱 todOf·TOD_LABEL (18.1-11, 0083-1)", () => {
   const e = polishE2e as { TOD_BY_PHASE: Record<string, string>; TOD_ABSENT_PHASES: readonly string[]; TOD_IDS: readonly string[]; TOD_WORD: Record<string, string> };
-  const ALL_PHASES: PhaseId[] = ["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
+  const ALL_PHASES: PhaseId[] = ["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "answerReveal", "night", "morning", "ended"];
 
   it("TOD_BY_PHASE 의 모든 키에서 값이 todOf(키)와 같다", () => {
     for (const [phase, tod] of Object.entries(e.TOD_BY_PHASE)) expect(tod, phase).toBe(todOf(phase as PhaseId));

@@ -12,7 +12,7 @@ import { pinOf } from "../../src/world/pinPlan";
 
 const PHASES: readonly PhaseId[] = [
   "lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "runoff",
-  "showdown", "defense", "verdict", "execution", "night", "morning", "ended",
+  "showdown", "defense", "verdict", "execution", "answerReveal", "night", "morning", "ended",
 ];
 
 const NOW = 1_000_000;
@@ -46,7 +46,7 @@ const quiet = (out: DirectOutput): boolean => out.cancel.length === 0 && !("bed"
 // ───────────────────────── 단계 → 침대 표 ─────────────────────────
 
 describe("단계 → 침대 표 (D-17, O-7)", () => {
-  it("15개 단계 전수(keyword 포함, 23-01)", () => {
+  it("16개 단계 전수(keyword 23-01·answerReveal 23-05 포함)", () => {
     expect(Object.keys(BED_OF).sort()).toEqual([...PHASES].sort());
     expect(BED_OF).toEqual({
       lobby: "bed.lobby",
@@ -61,6 +61,7 @@ describe("단계 → 침대 표 (D-17, O-7)", () => {
       defense: "bed.vote",
       verdict: "bed.vote",
       execution: "bed.vote",
+      answerReveal: "bed.vote", // 23-05: 처형 뒤 저녁빛 그대로
       night: "bed.night",
       morning: "bed.dawn",
       ended: "bed.result",

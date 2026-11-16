@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isAlive } from "../../shared/game/alive";
 import { channelOf } from "../../shared/game/audience";
+import { answerOpenOf } from "../../shared/game/keywordAnswer";
 import { pickTarget } from "../../shared/game/night";
 import { castTurnPoint, enterNomination, nominationStepMs, stepNomination, turnViewOf } from "../../shared/game/nomination";
-import { DISCUSSION_MS, MORNING_MS, NIGHT_MS, NOMINATION_GATHER_MS, PHASE_DEFS, VERDICT_MS, nominationMaxMs } from "../../shared/game/phases";
+import { ANSWER_REVEAL_MS, DISCUSSION_MS, MORNING_MS, NIGHT_MS, NO_EXECUTION_MS, NOMINATION_GATHER_MS, PHASE_DEFS, VERDICT_MS, nominationMaxMs } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, roundOf, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
@@ -43,6 +44,7 @@ const PHASES: readonly PhaseId[] = [
   "defense",
   "verdict",
   "execution",
+  "answerReveal", // 23-05: 첫날 처형 없는 낮 뒤(찬반 0표 부결)로 닿는다 — 길이 4400(처형 없음 1400 + 정답 3000)
   "night",
   "morning",
   "ended",
@@ -57,6 +59,7 @@ const REVEALING_PHASES = [
   "defense",
   "verdict",
   "execution",
+  "answerReveal",
   "night",
   "morning",
   "ended",
@@ -139,8 +142,9 @@ function endedState(n: number, seed: number, team: "citizen" | "mafia"): RoomSta
         if (s.phase !== step) throw new Error(`endedState: expected ${step}, got ${s.phase}`);
       }
     }
-    s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 4)); // ended 또는 night
+    s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 4)); // ended 또는 (첫날 처형 승패 없음이면 answerReveal →) night
     if (s.phase === "ended") return s;
+    if (s.phase === "answerReveal") s = tick(s, s.phaseEndsAt!, seededRandInt(seed + 4)); // 23-05: 첫날 정답 공개 뒤 밤
     s = advanceToVote(s, seed); // 밤 → 아침 → 다음 날 낮 두 단계 → 찬반(산 사람이 셋이면 마지막 3인 결전). 밤에 행동이 없으니 승패는 이 사이에 나지 않는다
   }
   throw new Error(`endedState: no winner for ${n}/${seed}/${team}`);
@@ -301,7 +305,7 @@ const SERVER_ONLY_KEYS: readonly string[] = [
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
-  "keyword", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended",
+  "keyword", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "answerReveal", "night", "morning", "ended",
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
   "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote",
@@ -353,10 +357,12 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   if (("verdictCount" in day) !== (phase === "verdict")) out.push(`${tag}: day.verdictCount presence ${"verdictCount" in day}`);
   else if (phase === "verdict" && keysOf(day.verdictCount) !== "no,yes") out.push(`${tag}: day.verdictCount keys ${keysOf(day.verdictCount)}`);
   if ("voted" in day) out.push(`${tag}: day.voted present`);
-  // 첫날 키워드(23-01, D-06): day.keyword 는 keyword 단계에만, genre 한 키뿐(단어 없음). me.keyword 는 그 단계의 산 시민 편 본인에게만 서버 값 그대로 — 마피아·유령에게는 키 자체가 없다.
-  const wantDayKeyword = phase === "keyword";
+  // 첫날 키워드(23-01, D-06): day.keyword 는 keyword 단계에만, genre 한 키뿐(단어 없음). 정답이 열린 뒤(answerOpenOf, 23-05)에는 genre·answer 두 키 — 모두에게 같은 값. me.keyword 는 그 단계의 산 시민 편 본인에게만 서버 값 그대로 — 마피아·유령에게는 키 자체가 없다.
+  const answerOpen = s.keyword !== undefined && answerOpenOf(s);
+  const wantDayKeyword = phase === "keyword" || answerOpen;
   if (("keyword" in day) !== wantDayKeyword) out.push(`${tag}: day.keyword presence ${"keyword" in day}`);
-  else if (wantDayKeyword && keysOf(day.keyword) !== "genre") out.push(`${tag}: day.keyword keys ${keysOf(day.keyword)}`);
+  else if (wantDayKeyword && keysOf(day.keyword) !== (answerOpen ? "answer,genre" : "genre")) out.push(`${tag}: day.keyword keys ${keysOf(day.keyword)}`);
+  else if (answerOpen && (day.keyword as { answer?: string }).answer !== s.keyword?.word) out.push(`${tag}: day.keyword.answer value`);
   const wantMeKeyword = phase === "keyword" && isAlive(viewer) && viewer.role !== undefined && viewer.role !== "mafia";
   if (("keyword" in view.me) !== wantMeKeyword) out.push(`${tag}: me.keyword presence ${"keyword" in view.me}`);
   else if (wantMeKeyword && view.me.keyword !== s.keyword?.word) out.push(`${tag}: me.keyword value`);
@@ -368,7 +374,7 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
     if (day.execution?.seat !== s.verdict?.candidate) out.push(`${tag}: day.execution.seat`);
   }
   // 표 없이 지나온 밤(richStateAt 의 night — 찬반 0표 부결)에만, 이유 코드 하나
-  const wantNoExecution = phase === "night";
+  const wantNoExecution = phase === "night" || phase === "answerReveal"; // 23-05: 첫날은 night 앞의 answerReveal 도 같은 이유를 준다(D-22)
   if (("noExecution" in day) !== wantNoExecution) out.push(`${tag}: day.noExecution presence ${"noExecution" in day}`);
   else if (wantNoExecution && flat(day.noExecution) !== flat({ reason: "rejected" })) out.push(`${tag}: day.noExecution ${flat(day.noExecution)}`);
 
@@ -515,14 +521,14 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
     expect(got.join(" ")).toBe(
-      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 keyword:13000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:10000:true:77777 verdict:10000:true:77777 execution:6600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
+      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 keyword:13000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:10000:true:77777 verdict:10000:true:77777 execution:6600:true:77777 answerReveal:4400:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
     );
   });
 
-  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, keyword +13000(23-01), dayAnnounce +2000, discussion +90000, verdict +10000 뒤 nomination +3000(순차 지목 모이기), night +30000(찬반 0표 부결), morning +5000", () => {
+  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, keyword +13000(23-01), dayAnnounce +2000, discussion +90000, verdict +10000 뒤 nomination +3000(순차 지목 모이기), answerReveal +4400(찬반 0표 부결, 처형 없음 1400 + 정답 3000, 23-05), night +30000, morning +5000", () => {
     const a = stateAt("assigning", 4, 1);
     const r = stateAt("roleReveal", 4, 1);
-    const ends = ["assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "night", "morning"].map(
+    const ends = ["assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "answerReveal", "night", "morning"].map(
       (phase) => stateAt(phase as PhaseId, 4, 1).phaseEndsAt,
     );
     // discussion 은 낮 시작 발표 마감(역할 확인 18000 + 키워드 13000 + 발표 2000 = 33000) 바로 뒤에 이어진다(+ DISCUSSION_MS)
@@ -536,8 +542,9 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
         START_AT + 33000,
         discussionEnd,
         discussionEnd + VERDICT_MS + NOMINATION_GATHER_MS,
-        discussionEnd + VERDICT_MS + NIGHT_MS,
-        discussionEnd + VERDICT_MS + NIGHT_MS + MORNING_MS,
+        discussionEnd + VERDICT_MS + ANSWER_REVEAL_MS + NO_EXECUTION_MS,
+        discussionEnd + VERDICT_MS + ANSWER_REVEAL_MS + NO_EXECUTION_MS + NIGHT_MS,
+        discussionEnd + VERDICT_MS + ANSWER_REVEAL_MS + NO_EXECUTION_MS + NIGHT_MS + MORNING_MS,
       ].join("/"),
     );
     expect(r.phaseEndsAt).toBe(START_AT + 18000);
@@ -757,14 +764,14 @@ describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 
     expect(bad.join(",")).toBe("");
   });
 
-  it("dayAnnounce·discussion·night·morning 의 day 키는 n,roles(discussion 은 + endCount, night 는 + noExecution: 표 없이 지나온 밤, morning 은 + morning)이고 turn 키가 없다", () => {
+  it("dayAnnounce·discussion·night·morning 의 day 키는 n,roles(discussion 은 + endCount, night 는 + noExecution: 표 없이 지나온 밤, morning 은 + morning)이고 turn 키가 없다(night·morning 은 정답이 열려 + keyword, 23-05)", () => {
     const got: string[] = [];
     for (const phase of ["dayAnnounce", "discussion", "night", "morning"] as const) {
       const s = richStateAt(phase, 5, 1);
       const keys = new Set(s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(",")));
       got.push(`${phase}:${[...keys].join("|")}`);
     }
-    expect(got.join(" ")).toBe("dayAnnounce:n,roles discussion:endCount,n,roles night:n,noExecution,roles morning:morning,n,roles");
+    expect(got.join(" ")).toBe("dayAnnounce:n,roles discussion:endCount,n,roles night:keyword,n,noExecution,roles morning:keyword,morning,n,roles"); // 23-05: 정답이 열린 뒤(첫날 night·morning)에는 day.keyword { genre, answer }
   });
 
   it("dayAnnounce 뷰의 day 는 {n, roles} 뿐이다", () => {
@@ -813,10 +820,10 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
 });
 
 describe("buildView 밤 — 생존·본인 선택 (ELIM-01, D-06)", () => {
-  it("night view: day 의 키는 n,noExecution,roles(표 없이 지나온 밤이라 처형 무효 이유가 실린다, D-34) 이고 players[] 키는 alive,connected,isHost,nickname,seat, 모두 alive true", () => {
+  it("night view: day 의 키는 keyword,n,noExecution,roles(표 없이 지나온 밤이라 처형 무효 이유가 실린다, D-34) 이고 players[] 키는 alive,connected,isHost,nickname,seat, 모두 alive true", () => {
     const s = stateAt("night", 5, 1);
     const dayKeys = s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(","));
-    expect(`[${dayKeys.join(" ")}]`).toBe(`[${Array(5).fill("n,noExecution,roles").join(" ")}]`);
+    expect(`[${dayKeys.join(" ")}]`).toBe(`[${Array(5).fill("keyword,n,noExecution,roles").join(" ")}]`); // 23-05: 첫날 밤은 정답이 열려 day.keyword 가 더해진다
     const got = s.players.map((p) => {
       const v = buildView(s, p.id, START_AT);
       return v.players.map((e) => `${Object.keys(e).filter((k) => k !== "look").sort().join(",")}:${String(e.alive)}`).join("|"); // look 은 시작 때 풀린 공개 의상(D-01)

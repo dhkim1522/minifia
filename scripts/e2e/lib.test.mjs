@@ -634,12 +634,12 @@ test("headerContrastChecks H1: 제목 항목이 없어도 실패한다(대기실
   assert.match(r.detail, /제목/);
 });
 
-test("EXPECTED_SCENE: 단계 열다섯 개(23-01 에서 keyword 가 더해졌고 22-03 에서 tutorial, 22-06 에서 errand 가 없어졌다)가 모두 장면 id 로 정해져 있다 (옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 PhaseId 와 함께 없어졌고, 결선 runoff·마지막 3인 showdown 은 09.1.1-04·06 이 더했다)", () => {
+test("EXPECTED_SCENE: 단계 열여섯 개(23-05 에서 answerReveal, 23-01 에서 keyword 가 더해졌고 22-03 에서 tutorial, 22-06 에서 errand 가 없어졌다)가 모두 장면 id 로 정해져 있다 (옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 PhaseId 와 함께 없어졌고, 결선 runoff·마지막 3인 showdown 은 09.1.1-04·06 이 더했다)", () => {
   assert.deepEqual(Object.keys(EXPECTED_SCENE).sort(), [
-    "assigning", "dayAnnounce", "defense", "discussion", "ended", "execution", "keyword", "lobby", "morning", "night", "nomination", "roleReveal", "runoff", "showdown", "verdict",
+    "answerReveal", "assigning", "dayAnnounce", "defense", "discussion", "ended", "execution", "keyword", "lobby", "morning", "night", "nomination", "roleReveal", "runoff", "showdown", "verdict",
   ]);
   assert.equal(EXPECTED_SCENE.keyword, "lobby", "키워드 카드는 역할 확인과 같은 PreGame 무대(23-01)");
-  for (const p of ["nomination", "defense", "execution", "runoff", "showdown"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
+  for (const p of ["nomination", "defense", "execution", "runoff", "showdown", "answerReveal"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
   assert.equal(EXPECTED_SCENE.verdict, "day", "찬반은 토론 장면 그대로(22-13 P22-3)");
   assert.equal(EXPECTED_SCENE.ended, "night");
   assert.equal(EXPECTED_SCENE.night, "night");
@@ -4405,6 +4405,11 @@ test("단계 그래프 사본: 낮 시작 발표 다음은 토론이고 심부�
   assert.deepEqual(g.roleReveal, ["keyword"], "역할 확인 다음은 첫날 키워드 카드(23-01)");
   assert.deepEqual(g.keyword, ["dayAnnounce"]);
   assert.deepEqual(g.dayAnnounce, ["discussion"]);
+  // 첫날 정답 공개(23-05, D-02): 처형 뒤·처형 없는 첫날 뒤 밤 직전에 끼고, 둘째 날부터는 곧장 밤이다
+  assert.deepEqual(g.answerReveal, ["night"]);
+  assert.deepEqual(g.verdict.slice().sort(), ["answerReveal", "night", "nomination"]);
+  assert.deepEqual(g.nomination.slice().sort(), ["answerReveal", "defense", "night"]);
+  assert.deepEqual(g.execution.slice().sort(), ["answerReveal", "ended", "night"]);
   assert.equal(g.errand, undefined, "심부름 단계는 없다");
   assert.equal(libAll.PHASE_GRAPHS, undefined, "판 종류별 표는 없다");
 });
@@ -4414,6 +4419,9 @@ test("basicOrderChecks(phases): 단계 그래프로 판정한다(errand 를 지�
   assert.ok(basicOrderChecks(ok).every((x) => x.ok), JSON.stringify(basicOrderChecks(ok)));
   assert.ok(basicOrderChecks(["roleReveal", "keyword", "dayAnnounce", "errand", "discussion"]).some((x) => !x.ok), "errand 가 없다"); // errand 0건
   assert.ok(basicOrderChecks(["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "night"]).every((x) => x.ok));
+  assert.ok(basicOrderChecks(["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "answerReveal", "night", "morning", "dayAnnounce"]).every((x) => x.ok), "첫날 …execution → answerReveal → night(23-05)");
+  assert.ok(basicOrderChecks(["discussion", "verdict", "answerReveal", "night"]).every((x) => x.ok), "첫날 찬반 부결 → answerReveal → night");
+  assert.ok(basicOrderChecks(["answerReveal", "morning"]).some((x) => !x.ok), "정답 공개 다음은 밤이다(23-05)");
   assert.ok(basicOrderChecks(["roleReveal", "discussion"]).some((x) => !x.ok), "역할 확인 다음은 키워드 카드다");
   assert.ok(basicOrderChecks(["roleReveal", "dayAnnounce"]).some((x) => !x.ok), "키워드 카드를 건너뛰면 어긋난다(23-01)");
 });

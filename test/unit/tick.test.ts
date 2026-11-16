@@ -72,10 +72,10 @@ const rnd = (): ((n: number) => number) => seededRandInt(7);
 const DAY_TO_TALK_MS = DAY_ANNOUNCE_MS;
 
 describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", () => {
-  it("단계는 열다섯 개다 — lobby·assigning·roleReveal·keyword(23-01, 첫날 키워드 카드), 낮 두 단계(낮 시작·토론, 순차 주장·공개 연출 단계 없음, D-07, CHAT-06), 지목·동점 결선·마지막 3인 결전·변론·찬반·처형(결정 0060·0066-4·0066-5, 옛 처형 여부 투표·후보 선택·공개 단계 없음), 밤·아침, 판 종료", () => {
+  it("단계는 열여섯 개다 — lobby·assigning·roleReveal·keyword(23-01, 첫날 키워드 카드), 낮 두 단계(낮 시작·토론, 순차 주장·공개 연출 단계 없음, D-07, CHAT-06), 지목·동점 결선·마지막 3인 결전·변론·찬반·처형(결정 0060·0066-4·0066-5, 옛 처형 여부 투표·후보 선택·공개 단계 없음), 첫날 정답 공개(23-05), 밤·아침, 판 종료", () => {
     const keys = Object.keys(PHASE_DEFS).sort();
     expect(`${keys.length}:${keys.join(",")}`).toBe(
-      "15:assigning,dayAnnounce,defense,discussion,ended,execution,keyword,lobby,morning,night,nomination,roleReveal,runoff,showdown,verdict",
+      "16:answerReveal,assigning,dayAnnounce,defense,discussion,ended,execution,keyword,lobby,morning,night,nomination,roleReveal,runoff,showdown,verdict",
     );
   });
 
@@ -97,7 +97,8 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(row("verdict")).toBe("10000/nomination/true"); // 찬반 다음은 지목 — 부결이면 마감 훅이 night 로 보낸다
     expect(row("nomination")).toBe(`${NOMINATION_MS}/defense/true`); // 단계 표 값은 자리 값 — 진입 훅 뒤 phaseDurationOf 가 모이기(3000)로 다시 구한다. 동률·0표면 마감 훅이 night 로 보낸다
     expect(row("defense")).toBe("10000/execution/true"); // 변론(유언 자리) 다음은 처형
-    expect(row("execution")).toBe("6600/night/true");
+    expect(row("execution")).toBe("6600/night/true"); // 표는 night 그대로 — 첫날 키워드 판은 마감 훅이 answerReveal 로 보낸다(23-05)
+    expect(row("answerReveal")).toBe("3000/night/true"); // 23-05: 첫날 정답 공개 3초
     expect(row("night")).toBe("30000/morning/true");
     expect(row("morning")).toBe("5000/dayAnnounce/true");
     expect(row("ended")).toBe("null/null/true"); // 종단 행: 마감 없음

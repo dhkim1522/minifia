@@ -123,8 +123,10 @@ test("전이 표: 역할 확인 → 키워드 → 낮 시작 발표 → 토론, 
   assert.deepEqual(g.roleReveal, ["keyword"]); // 첫날 키워드 카드(23-01, D-01)
   assert.deepEqual(g.keyword, ["dayAnnounce"]);
   assert.deepEqual(g.dayAnnounce, ["discussion"]);
-  assert.deepEqual(g.nomination.slice().sort(), ["defense", "night"]);
-  assert.deepEqual(g.execution.slice().sort(), ["ended", "night"]);
+  assert.deepEqual(g.nomination.slice().sort(), ["answerReveal", "defense", "night"]); // 첫날 처형 없는 낮은 정답 공개(23-05, D-02)
+  assert.deepEqual(g.verdict.slice().sort(), ["answerReveal", "night", "nomination"]);
+  assert.deepEqual(g.execution.slice().sort(), ["answerReveal", "ended", "night"]);
+  assert.deepEqual(g.answerReveal, ["night"]);
   assert.deepEqual(g.morning.slice().sort(), ["dayAnnounce", "ended"]);
   assert.equal(Object.hasOwn(g, "errand"), false); // errand 0건
 });

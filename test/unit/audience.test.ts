@@ -62,7 +62,7 @@ const DAY_CHAT_PHASES: PhaseId[] = [
   "execution",
   "morning",
 ];
-const SILENT_PHASES: PhaseId[] = ["assigning", "roleReveal", "keyword", "ended"]; // keyword: 조용히 쓰는 시간 — 채팅·동작 없음(23-01, D-01)
+const SILENT_PHASES: PhaseId[] = ["assigning", "roleReveal", "keyword", "answerReveal", "ended"]; // keyword: 조용히 쓰는 시간 — 채팅·동작 없음(23-01, D-01). answerReveal(23-05): 지도 단계지만 서버가 채팅·동작을 받지 않는다(CHAT_PHASES 미가입)
 
 describe("channelOf — 보낸 사람의 서버 상태로만 채널을 정한다", () => {
   it("밤: 산 마피아 = mafia, 산 시민·경찰·의사 = null, 탈락자 = ghost", () => {
@@ -296,7 +296,7 @@ describe("phaseKey — 단계 한 번(instance)마다 유일한 키", () => {
 
 // ---- 08-04: world 위치 프레임의 받는 사람 (GHOST-01, 결정 0060-8) ----
 // sixAt: 6명, seat 2 가 유령. 지도 단계에서 mover 기준으로 받는 사람이 정해진다.
-const MAP_PHASE_LIST: PhaseId[] = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"];
+const MAP_PHASE_LIST: PhaseId[] = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "answerReveal", "night", "morning"];
 const world = (mover?: string): AudienceEvent => (mover === undefined ? { k: "world" } : { k: "world", mover });
 
 describe("world mover(GHOST-01)", () => {
@@ -378,8 +378,8 @@ describe("worldVisibleTo — 접속 스냅샷에 실릴 좌석 (GHOST-01)", () =
       expect(sorted(worldVisibleTo(s, idOf(0)))).toEqual(ids(0));
     });
 
-    it("아침·토론·지목의 결과는 바뀌지 않는다(산 viewer 는 산 사람, 유령은 전원)", () => {
-      for (const phase of ["morning", "discussion", "nomination"] as PhaseId[]) {
+    it("아침·토론·지목·첫날 정답 공개의 결과는 바뀌지 않는다(산 viewer 는 산 사람, 유령은 전원)", () => {
+      for (const phase of ["morning", "discussion", "nomination", "answerReveal"] as PhaseId[]) {
         const s = sixAt(phase, { day: 1 });
         expect(sorted(worldVisibleTo(s, idOf(0)))).toEqual(ids(0, 1, 3, 4, 5));
         expect(sorted(worldVisibleTo(s, idOf(2)))).toEqual(ids(0, 1, 2, 3, 4, 5));
