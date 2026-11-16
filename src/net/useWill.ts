@@ -11,7 +11,7 @@
 //
 // 유언 단계(defense, 22-11 D-15·D-16·D-28): 처형자(공개 값 day.candidate === 나)만 쓸 수 있다(서버 saveWill 과 같은 조건).
 // - 단계가 시작되면 미리 써 둔 유언이 채워진 채 시트가 자동으로 열린다(한 단계에 한 번 — [닫기]로 접은 뒤 다시 열리지 않는다).
-// - [남기기]: {t:"will", text, final:true} 를 보내고 곧바로 '남김'이다(서버 응답을 기다리는 표시 없음 — 단계가 곧 넘어간다). [닫기]는 글을 저장하고 시트만 접는다(Pitfall 8).
+// - [남기기]: {t:"will", text, final:true} 를 보내고 곧바로 '남김'이다(서버 응답을 기다리는 표시 없음 — 단계가 곧 넘어간다). 거절이 오면 '남김' 을 풀고 알림 한 번(다시 누를 수 있다). [닫기]는 글을 저장하고 시트만 접는다(Pitfall 8).
 // - 자동 저장: 입력이 바뀌고 600ms 뒤 한 번(서버 간격 500ms 위), 마감 700ms 전에 한 번 더. 시간이 끝나면 서버가 마지막 저장본을 낸다(마지막 약 0.5초 입력 손실 허용).
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
@@ -104,14 +104,28 @@ export function useWill({ view, send, canSend = true, offset = 0, rejected = 0, 
   const [finalFor, setFinalFor] = useState<number | null>(null);
   const finalSent = condemned && finalFor !== null && finalFor === view.phaseEndsAt;
   const lastSent = useRef<string | null>(null);
+  // 화면 틀이 거절 프레임에 "지금은 고를 수 없어요" 를 띄울지 가르는 busyRef 는 두 가지가 켠다: 저장 확인 대기 / [남기기] 확인 대기
+  const finalWaiting = useRef(false);
+  const syncBusy = useCallback(() => {
+    if (busyRef) busyRef.current = pendingRef.current !== null || finalWaiting.current;
+  }, [busyRef]);
 
   const setPendingBoth = useCallback(
     (next: { kind: WillKind; text: string } | null) => {
       pendingRef.current = next;
-      if (busyRef) busyRef.current = next !== null;
+      syncBusy();
       setPending(next);
     },
-    [busyRef],
+    [syncBusy],
+  );
+
+  const setFinalBoth = useCallback(
+    (next: number | null) => {
+      finalWaiting.current = next !== null;
+      syncBusy();
+      setFinalFor(next);
+    },
+    [syncBusy],
   );
 
   // 저장 확인: 서버 값이 보낸 글의 정리한 값과 같아지면 끝
@@ -136,15 +150,25 @@ export function useWill({ view, send, canSend = true, offset = 0, rejected = 0, 
     return () => clearTimeout(timer);
   }, [pending, setPendingBoth]);
 
-  // 거절 = 실패 (기다리는 중이 아니면 이 훅의 일이 아니다)
+  // 거절 = 실패 (기다리는 중이 아니면 이 훅의 일이 아니다). [남기기]도 기다리는 중이다: 거절되면 '남김' 을 풀어 다시 보낼 수 있게 하고 한 번 알린다(22 WR-01).
   const seenRejected = useRef(rejected);
   useEffect(() => {
     if (seenRejected.current === rejected) return;
     seenRejected.current = rejected;
+    if (finalWaiting.current) {
+      setFinalBoth(null);
+      live.current.onFail();
+      return;
+    }
     if (pendingRef.current === null) return;
     setPendingBoth(null);
     live.current.onFail();
-  }, [rejected, setPendingBoth]);
+  }, [rejected, setPendingBoth, setFinalBoth]);
+
+  // 단계가 넘어가 '남김' 이 낡았으면(마감·처형 단계 진입) 확인 대기를 푼다 — 뒤의 거절 알림을 막지 않게
+  useEffect(() => {
+    if (finalFor !== null && !finalSent) setFinalBoth(null);
+  }, [finalFor, finalSent, setFinalBoth]);
 
   const finish = useCallback(
     (focus: boolean) => {
@@ -264,7 +288,7 @@ export function useWill({ view, send, canSend = true, offset = 0, rejected = 0, 
           return;
         }
         lastSent.current = normalized(text);
-        setFinalFor(view.phaseEndsAt);
+        setFinalBoth(view.phaseEndsAt);
         return;
       }
       if (open === "will") {
@@ -275,7 +299,7 @@ export function useWill({ view, send, canSend = true, offset = 0, rejected = 0, 
       if (waiting !== null && waiting.kind === open && waiting.text === text) return; // 같은 글을 보내고 기다리는 중이면 다시 보내지 않는다
       if (submit(open, text) === "failed") live.current.onFail();
     },
-    [open, submit, close, condemned, finalSent, canSend, send, view.phaseEndsAt],
+    [open, submit, close, condemned, finalSent, canSend, send, view.phaseEndsAt, setFinalBoth],
   );
 
   const openSheet = useCallback(

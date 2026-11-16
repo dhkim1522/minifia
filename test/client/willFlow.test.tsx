@@ -742,6 +742,27 @@ describe("유언 단계 — 처형자 화면 (22-11 P22-6~8)", () => {
     expect(willMsgs(send).filter((x) => x.final === true)).toHaveLength(1);
   });
 
+  it("[남기기]가 거절되면(WR-01) '남김' 이 풀려 [남기기] 가 다시 켜지고, 알림은 '보내지 못했어요' 한 번이며, 다시 보낼 수 있다", () => {
+    clock();
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const { handlers, onEvent } = withHandlers();
+    const m = mount(defenseOf(), { send, onEvent });
+    fireEvent.change(area(m.container), { target: { value: "잘 있어" } });
+    fireEvent.click(saveBtn(m.container));
+    expect(saveBtn(m.container).disabled).toBe(true);
+    emitError(handlers, "BAD_MESSAGE");
+    expect(toastText(m.container)).toBe(FAIL);
+    expect(saveBtn(m.container).textContent).toBe("남기기");
+    expect(saveBtn(m.container).disabled).toBe(false);
+    expect(sheet(m.container)).not.toBeNull();
+    fireEvent.click(saveBtn(m.container));
+    expect(willMsgs(send).filter((x) => x.final === true)).toEqual([
+      { t: "will", text: "잘 있어", final: true },
+      { t: "will", text: "잘 있어", final: true },
+    ]);
+    expect(saveBtn(m.container).disabled).toBe(true);
+  });
+
   it("빈 글이어도 [남기기]를 누를 수 있다", () => {
     clock();
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
