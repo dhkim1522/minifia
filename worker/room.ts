@@ -1146,14 +1146,15 @@ export class Room extends DurableObject<Env> {
     for (const frame of buildResultLog(room, this.chatLog)) this.deliver(ids, frame);
   }
 
-  // 찬반 기록 카드(결정 0066-3, O-8): 찬반 마감이 verdict.ballots 를 남긴 전환에서 all 채널에 한 장, 보낸 사람 자리는 변론자다(작성자가 아니다).
-  // 알람 따라잡기로 여러 단계를 지나도 afterTransition 은 한 번이므로 "전 상태엔 없고 지금은 있다" 로 잡아 한 번만 낸다. 변론자가 없는 경로는 내지 않는다.
+  // 찬반 기록 카드(결정 0066-3, O-8): 처형자가 정해져 처형 발표(execution)가 생긴 전환에서 all 채널에 한 장, 보낸 사람 자리는 처형자다(작성자가 아니다).
+  // 22-09: 낮 순서가 찬반 → 지목이라 찬반 마감 때는 후보가 아직 없다 — 찬반 마감이 남긴 ballots 를 지목 마감 뒤 처형 진입에 낸다(22-12 가 이 카드와 함께 지운다, D-14).
+  // 알람 따라잡기로 여러 단계를 지나도 afterTransition 은 한 번이므로 "전 상태엔 처형 발표가 없고 지금은 있다" 로 잡아 한 번만 낸다. 처형이 없는 경로(부결·동점·0표)는 내지 않는다.
   private async emitBallotsCard(prev: RoomState, now: number): Promise<void> {
     const room = this.room;
     const ballots = room?.verdict?.ballots;
-    const defender = room?.verdict?.candidate;
-    if (!room || ballots === undefined || defender === undefined || prev.verdict?.ballots !== undefined) return;
-    await this.appendCard(defender, ballotsCardText(ballots), "ballots", now);
+    const executed = room?.execution?.seat;
+    if (!room || ballots === undefined || executed === undefined || prev.execution !== undefined) return;
+    await this.appendCard(executed, ballotsCardText(ballots), "ballots", now);
   }
 
   // 이번 전환에서 산 사람 → 탈락이 된 사람의 seat 들(seat 오름차순).

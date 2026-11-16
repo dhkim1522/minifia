@@ -2,13 +2,11 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 프레임 목록은 summary() 한 줄 문자열로 비교한다.
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { NOMINATION_GATHER_MS, NOMINATION_MS } from "../../shared/game/phases";
-import { RULES } from "../../shared/game/ruleset";
+import { VERDICT_MS } from "../../shared/game/phases";
 import type { PhaseId, RoomView, ServerMessage } from "../../shared/protocol";
 import { alarmOf, advanceTo, collect, createRoom, driveToEnded, editRoom, mapPlayers, nextFrame, seat, send, skipOnce, skipThrough, storedRoom, wanderTimes } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
 
-const GAME_RULES = RULES;
 
 const allSockets = (r: Seated): TestSocket[] => [r.host, ...r.guests.map((g) => g.sock)];
 const parse = (raw: string): ServerMessage => JSON.parse(raw) as ServerMessage;
@@ -276,15 +274,15 @@ describe("testSkip", () => {
     expect(summary(await sendAndSettle(r.host, { t: "testRole", role: "police" }))).toBe("[error:WRONG_PHASE,state:roleReveal]");
   }, 30_000);
 
-  it("discussion 에서 넘기면 모든 소켓이 투표(동시 15초 phaseDurationMs)를 받고, 표가 없이 다시 넘기면 밤이다 (DAY-07, 결정 0072)", async () => {
+  it("discussion 에서 넘기면 모든 소켓이 찬반(10초 phaseDurationMs)을 받고, 표가 없이 다시 넘기면 부결이라 밤이다 (DAY-07, 22-09 D-11)", async () => {
     const r = await seatQuiet(3, { testMode: true });
     await start(r);
     await skipUntil(r, "discussion");
     for (const s of allSockets(r)) s.cursor = s.frames.length;
     send(r.host, { t: "testSkip" });
     for (const sock of allSockets(r)) {
-      const msg = (await nextFrame(sock, isPhase("nomination"))) as Extract<ServerMessage, { t: "state" }>;
-      expect(`${msg.view.phase}/${msg.view.phaseDurationMs}`).toBe(`nomination/${GAME_RULES.pickTurn ? NOMINATION_GATHER_MS : NOMINATION_MS}`); // 기본판(결정 0072)은 15000, 순차 지목을 켜면 모이기 3000
+      const msg = (await nextFrame(sock, isPhase("verdict"))) as Extract<ServerMessage, { t: "state" }>;
+      expect(`${msg.view.phase}/${msg.view.phaseDurationMs}`).toBe(`verdict/${VERDICT_MS}`);
     }
     expect(String(await alarmOf(r.code))).toBe(String((await stored(r.code)).phaseEndsAt));
     for (const s of allSockets(r)) s.cursor = s.frames.length;
@@ -365,8 +363,8 @@ describe("testReset", () => {
     await resetFrom("discussion");
   }, 30_000);
 
-  it("nomination 에서 되돌려도 같다", async () => {
-    await resetFrom("nomination");
+  it("verdict 에서 되돌려도 같다", async () => {
+    await resetFrom("verdict");
   }, 30_000);
 
   it("night 에서 되돌리면 같은 방이 대기실이 되고 다음 판에 같은 직업 지정이 다시 쓰인다", async () => {
@@ -394,13 +392,18 @@ async function endedRoom(): Promise<Seated> {
 }
 
 describe("투표 단계 넘기기와 종료 중 도구", () => {
-  it("nomination 중 testSkip: 방장이 던진 표와 아직 안 던진 봇의 표가 함께 세어진 뒤 넘어가고 저장된 voteLog 마지막 줄 지목 수는 살아 있는 봇 수 + 방장 표다 (결정 0072)", async () => {
+  it("nomination 중 testSkip: 방장이 던진 표와 아직 안 던진 봇의 표가 함께 세어진 뒤 넘어가고 저장된 voteLog 마지막 줄 지목 수는 살아 있는 봇 수 + 방장 표다 (순차 지목, 22-09)", async () => {
     const r = await seatQuiet(0, { testMode: true });
     send(r.host, { t: "testBots", count: 3 });
     await nextFrame(r.host, lobbyOf(4));
+    await sendAndSettle(r.host, { t: "testBotVote", exec: "yes", pick: "random" }); // 찬반을 봇 찬성으로 통과시킨다
     await start(r);
-    await skipThrough(r, "nomination"); // 기본판: 산 사람 모두 동시에 15초 투표
-    await sendAndSettle(r.host, { t: "point", target: 1 });
+    await skipThrough(r, "verdict");
+    send(r.host, { t: "testSkip" }); // 안 던진 봇이 찬성을 던진 뒤 마감 → 지목(순차)
+    await nextFrame(r.host, (m) => m.t === "state" && m.view.phase === "nomination");
+    expect((await storedRoom(r.code)).phase).toBe("nomination");
+    // 방장은 사람이라 testSkip 이 대신 던지지 않는다 — 방장 지목 한 표를 저장 상태에 직접 넣는다(사람의 표는 그대로 센다).
+    await editRoom(r.code, (room) => mapPlayers(room, (p) => (p.seat === 0 ? { ...p, nominate: 1 } : p)));
     send(r.host, { t: "testSkip" });
     await nextFrame(r.host, (m) => m.t === "state" && m.view.phase !== "nomination");
     const cand = (await storedRoom(r.code)).voteLog!.at(-1)!.cand!;
@@ -446,7 +449,7 @@ describe("투표 단계 넘기기와 종료 중 도구", () => {
 /** 소켓당 메시지 창(처리 한도)을 비운다: 방 DO 를 내려 메모리 창을 없앤다. 저장된 방은 그대로다. */
 const resetRateWindow = (code: string): Promise<void> => editRoom(code, (room) => room);
 
-/** 방장(마피아) + 연결 손님 1 + 봇 3 테스트 방에서 봇 투표 설정을 정하고 시작해 nomination 에 닿는다. 설정은 대기실에서만 바뀐다. */
+/** 방장(마피아) + 연결 손님 1 + 봇 3 테스트 방에서 봇 투표 설정을 정하고 시작해 찬반(verdict)에 닿는다. 설정은 대기실에서만 바뀐다. */
 async function votingRoom(exec: string, pick: string): Promise<Seated> {
   const r = await seatQuiet(1, { testMode: true });
   send(r.host, { t: "testBots", count: 3 });
@@ -454,7 +457,7 @@ async function votingRoom(exec: string, pick: string): Promise<Seated> {
   await sendAndSettle(r.host, { t: "testRole", role: "mafia" });
   expect(summary(await sendAndSettle(r.host, { t: "testBotVote", exec, pick }))).toBe("[state:lobby]");
   await start(r);
-  await skipThrough(r, "nomination");
+  await skipThrough(r, "verdict");
   for (const sock of allSockets(r)) await settle(sock, mark(sock));
   await resetRateWindow(r.code);
   return r;
@@ -466,9 +469,10 @@ describe("testSkip: 동점 결선을 한 번에 끝낸다 (09.1.1-05, 결정 006
       const r = await seatQuiet(0, { testMode: true });
       send(r.host, { t: "testBots", count: 3 });
       await nextFrame(r.host, lobbyOf(4));
-      await sendAndSettle(r.host, { t: "testBotVote", exec: "random", pick: "host" }); // 봇 표는 방장 후보에게 — 결과를 고정한다
+      await sendAndSettle(r.host, { t: "testBotVote", exec: "yes", pick: "host" }); // 봇 찬반은 찬성, 봇 지목은 방장 후보에게 — 결과를 고정한다
       await start(r);
-      await skipThrough(r, "nomination");
+      await skipThrough(r, "verdict");
+      await skipOnce(r); // 찬반 → 지목(봇 찬성으로 통과)
       // 방장(0)과 봇 1 이 후보인 결선 상태를 세운다(지목 집계가 만드는 모양 그대로, 방장이 후보여도 도구는 막히지 않는다).
       await editRoom(r.code, (room) => {
         const { pickTurn: _pickTurn, botPlan: _botPlan, ...rest } = room as Record<string, unknown>;
@@ -489,37 +493,28 @@ describe("testSkip: 동점 결선을 한 번에 끝낸다 (09.1.1-05, 결정 006
 });
 
 describe("testBotVote: 넘기기가 설정을 따른다", () => {
-  it("exec no + pick host: 봇이 모두 방장을 지목해 방장이 변론자가 되고, 찬반에서 봇이 모두 반대라 부결 — 처형에서 탈락 없이 밤이 되고 밤 view 에 noExecution 키가 없다", async () => {
+  it("exec no + pick host: 찬반에서 봇이 모두 반대라 부결 — 지목 없이 처형 없는 밤이 되고 아무도 탈락하지 않으며 밤 view 의 noExecution 이유는 rejected 다", async () => {
     const r = await votingRoom("no", "host");
-    await skipOnce(r); // 지목 마감 → 변론(봇 셋이 방장을 가리켜 최다 한 명)
-    expect(lastView(r.host).phase).toBe("defense");
-    await resetRateWindow(r.code);
-    await skipOnce(r); // 변론 → 찬반
     expect(lastView(r.host).phase).toBe("verdict");
-    await resetRateWindow(r.code);
-    await skipOnce(r); // 안 던진 봇이 설정대로 반대를 던지고 찬반 마감 → 처형
-    const execution = lastView(r.host);
-    expect(`${execution.phase}/${JSON.stringify(execution.day?.verdict)}`).toBe('execution/{"yes":0,"no":3,"passed":false}');
+    await skipOnce(r); // 안 던진 봇이 설정대로 반대를 던지고 찬반 마감 → 부결 → 밤
+    const night = lastView(r.host);
+    expect(`${night.phase}/${JSON.stringify(night.day?.noExecution)}`).toBe('night/{"reason":"rejected"}');
     expect(JSON.stringify((await storedRoom(r.code)).voteLog!.at(-1)!.exec)).toBe('{"yes":0,"no":3,"passed":false}');
     expect((await storedRoom(r.code)).players.every((p) => p.alive !== false)).toBe(true);
-    await resetRateWindow(r.code);
-    await skipOnce(r);
-    const night = lastView(r.host);
-    expect(`${night.phase}/${Object.hasOwn(night.day ?? {}, "noExecution")}`).toBe("night/false");
   }, 30_000);
 
-  it("exec yes + pick host: 봇 표가 모두 방장에게 가서 방장이 변론자가 되고, 찬반이 통과해 방장이 처형된다", async () => {
+  it("exec yes + pick host: 찬반을 봇 셋의 찬성으로 통과해 지목으로, 봇 표가 모두 방장에게 가서 방장이 처형자(변론)가 되고 방장이 처형된다", async () => {
     const r = await votingRoom("yes", "host");
-    await skipOnce(r);
+    await skipOnce(r); // 찬반: 봇 셋 찬성 / 던진 표 3 → 통과 → 지목
+    expect(lastView(r.host).phase).toBe("nomination");
+    await resetRateWindow(r.code);
+    await skipOnce(r); // 지목: 봇 셋이 방장을 가리켜 최다 한 명 → 변론
     const defense = lastView(r.host);
     expect(`${defense.phase}/${defense.day?.candidate}`).toBe("defense/0");
     const votes = (await storedRoom(r.code)).voteLog!.at(-1)!.cand!.votes.map((v) => `${v.seat}>${v.target}`).sort();
     expect(votes.join(",")).toBe("2>0,3>0,4>0"); // 손님(seat 1)은 안 던졌고 봇 셋(seat 2~4)이 모두 방장
     await resetRateWindow(r.code);
-    await skipOnce(r);
-    expect(lastView(r.host).phase).toBe("verdict");
-    await resetRateWindow(r.code);
-    await skipOnce(r); // 봇 셋 찬성 / 유권자 4(방장은 변론자) → 3 × 2 > 4 통과
+    await skipOnce(r); // 변론 → 처형
     const execution = lastView(r.host);
     expect(`${execution.phase}/${JSON.stringify(execution.day?.verdict)}/${execution.day?.execution?.seat}`).toBe('execution/{"yes":3,"no":0,"passed":true}/0');
   }, 30_000);
@@ -543,9 +538,9 @@ describe("testSkip: 마지막 3인 결전을 한 번에 끝낸다 (09.1.1-07, �
       const r = await seatQuiet(0, { testMode: true });
       send(r.host, { t: "testBots", count: 3 });
       await nextFrame(r.host, lobbyOf(4));
-      await sendAndSettle(r.host, { t: "testBotVote", exec: "random", pick: "host" }); // 봇 표는 방장에게 — 결과를 고정한다
+      await sendAndSettle(r.host, { t: "testBotVote", exec: "yes", pick: "host" }); // 봇 표는 방장에게, 찬반은 찬성 — 결과를 고정한다
       await start(r);
-      await skipThrough(r, "nomination");
+      await skipThrough(r, "verdict");
       // 봇 3 이 죽은 마지막 3인(방장 0 · 봇 1·2)을 세운다 — 한마디 차례는 사람 한 명이 끼어 있다.
       await editRoom(r.code, (room) => {
         const { pickTurn: _pickTurn, botPlan: _botPlan, ...rest } = room as Record<string, unknown>;

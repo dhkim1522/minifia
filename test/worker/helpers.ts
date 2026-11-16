@@ -187,7 +187,7 @@ export interface StoredRoom {
   phaseEndsAt: number | null;
   day?: number;
   /** 4페이즈 서버 전용 투표 상태: 개인 표는 마감·공개 구간 진입 훅이 키째 지운다(결정 0034). */
-  voteLog?: Array<{ n: number; last?: boolean; exec: { yes: number; no: number; passed: boolean }; cand?: { votes: Array<{ seat: number; target: number }>; candidate?: number } }>;
+  voteLog?: Array<{ n: number; last?: boolean; reason?: string; exec: { yes: number; no: number; passed: boolean }; cand?: { votes: Array<{ seat: number; target: number }>; candidate?: number } }>;
   winner?: string;
   verdict?: { passed: boolean; candidate?: number };
   /** 09.1 순차 지목 서버 전용 차례 상태(결정 0063-1): 있으면 지목이 차례 방식이다. */
@@ -197,7 +197,7 @@ export interface StoredRoom {
   /** 09.1.1-06 서버 전용 마지막 3인 결전 상태(결정 0066-5): i -1 모이기 · 0..2 한마디 차례 · 3 동시 지목 · 4 공개. */
   showdown?: { order: number[]; i: number; endsAt?: number; doneAt?: number; skip?: boolean; word?: string; points?: Array<{ seat: number; target: number }> };
   /** 8페이즈 서버 전용 개인 값: 지목·찬반·토론 끝내기. 마감 훅이 키째 지우고 토론 진입 훅이 끝내기를 지운다(결정 0060). */
-  players: Array<{ role?: string; showdownPick?: number; runoffVote?: number; execVote?: boolean; candidateVote?: number; nominate?: number; verdictVote?: boolean; endVote?: boolean; alive?: boolean }>;
+  players: Array<{ seat?: number; role?: string; showdownPick?: number; runoffVote?: number; execVote?: boolean; candidateVote?: number; nominate?: number; verdictVote?: boolean; endVote?: boolean; alive?: boolean }>;
 }
 
 export async function storedRoom(code: string): Promise<StoredRoom> {
@@ -219,6 +219,19 @@ export async function alarmOf(code: string): Promise<number | null> {
 const isPhase = (phase: PhaseId) => (m: ServerMessage): boolean => m.t === "state" && m.view.phase === phase;
 
 /**
+ * 22-09: 낮 순서가 토론 → 찬반 → 지목이라 찬반이 부결(0표)이면 지목에 닿지 못하고 밤으로 간다. 지금 찬반 단계이고 목표가 찬반 자체가 아니면
+ * 산 사람 전원의 찬성 표를 저장소와 메모리 방에 넣어 통과시킨다 — 시험이 "낮 한가운데" 단계로 가는 지름길이다. 찬반 자체를 시험하는 곳은 목표를 verdict 로 둔다.
+ * 목표가 밤(night)·아침 같은 낮 밖 단계면 부결로 가는 편이 짧아서 그대로 둔다.
+ */
+async function passVerdictIfBeyond(code: string, target: PhaseId): Promise<void> {
+  if (target === "verdict" || !["nomination", "defense", "execution", "runoff", "showdown"].includes(target)) return;
+  if ((await storedRoom(code)).phase !== "verdict") return;
+  await writeRoomEdit(env.ROOM.getByName(code), (room) =>
+    mapPlayers(room, (p) => (p.alive === false ? p : { ...p, verdictVote: true })),
+  );
+}
+
+/**
  * 낮 단계로 한 단계씩 넘긴다: 저장된 단계가 목표가 될 때까지 forceDue + runDurableObjectAlarm 을 반복하고(전이 한 번마다
  * 마감이 다시 미래가 되므로 매번 필요하다), 모든 소켓이 그 단계 state 를 받을 때까지 기다린다(지나간 단계의 프레임은 nextFrame 이 건너뛴다).
  * 호출 전에 방이 시작되어(assigning 이상) 있어야 한다.
@@ -226,6 +239,7 @@ const isPhase = (phase: PhaseId) => (m: ServerMessage): boolean => m.t === "stat
 export async function advanceTo(code: string, sockets: TestSocket[], phase: PhaseId): Promise<void> {
   const stub = env.ROOM.getByName(code);
   for (let i = 0; i < 40 && (await storedRoom(code)).phase !== phase; i += 1) {
+    await passVerdictIfBeyond(code, phase);
     await forceDue(code, "phaseEndsAt");
     expect(await runDurableObjectAlarm(stub)).toBe(true);
   }
@@ -241,6 +255,7 @@ export async function advanceTo(code: string, sockets: TestSocket[], phase: Phas
 export async function advanceToKeep(code: string, sockets: TestSocket[], phase: PhaseId): Promise<void> {
   const stub = env.ROOM.getByName(code);
   for (let i = 0; i < 40 && (await storedRoom(code)).phase !== phase; i += 1) {
+    await passVerdictIfBeyond(code, phase);
     await runInDurableObject(stub, async (instance, state) => {
       const room = await state.storage.get<Record<string, unknown>>("room");
       if (!room) throw new Error("advanceToKeep: 방이 없다");
@@ -561,21 +576,22 @@ export async function skipThrough(seated: Seated, phase: PhaseId): Promise<void>
 }
 
 /**
- * 시작된 테스트 방(방장 + 봇, 방장 직업은 마피아로 지정해 두어야 한다)을 지목부터 종료까지 끌고 간다(08-11).
- * 지목은 봇 전원이 방장(seat 0)을, 방장이 seat 1 을 골라 방장이 변론자가 된다. 찬반은 봇 전원 찬성(방장은 변론자라 던지지 않는다) → 통과 → 마피아 처형 → 시민 승리.
+ * 시작된 테스트 방(방장 + 봇, 방장 직업은 마피아로 지정해 두어야 한다)을 찬반부터 종료까지 끌고 간다(08-11, 22-09 새 낮 순서).
+ * 찬반은 봇 전원 찬성(방장은 사람이라 던지지 않는다)으로 통과 → 지목은 봇 전원이 방장(seat 0)을, 방장이 seat 1 을 골라 방장이 변론자(처형자)가 된다 → 변론 → 마피아 처형 → 시민 승리.
  * hook 은 두 단계에서 표를 손으로 정하기 전에 불린다(봇이 실제로 던지게 하는 데 쓴다).
  */
-export async function driveToEnded(seated: Seated, hook?: (stage: "nomination" | "verdict") => Promise<void>): Promise<void> {
-  await skipThrough(seated, "nomination");
+export async function driveToEnded(seated: Seated, hook?: (stage: "verdict" | "nomination") => Promise<void>): Promise<void> {
+  await skipThrough(seated, "verdict");
+  await hook?.("verdict");
+  await editRoom(seated.code, (room) => mapPlayers(clearBotSteps(room), (p) => (p.isBot === true ? { ...p, verdictVote: true } : p)));
+  await skipOnce(seated);
+  expect((await storedRoom(seated.code)).phase).toBe("nomination");
   await hook?.("nomination");
   await editRoom(seated.code, (room) =>
     mapPlayers(clearBotSteps(room), (p) => (p.isBot === true ? { ...p, nominate: 0 } : p.seat === 0 ? { ...p, nominate: 1 } : p)),
   );
   await skipOnce(seated);
   expect((await storedRoom(seated.code)).phase).toBe("defense");
-  await skipThrough(seated, "verdict");
-  await hook?.("verdict");
-  await editRoom(seated.code, (room) => mapPlayers(clearBotSteps(room), (p) => (p.isBot === true ? { ...p, verdictVote: true } : p)));
   await skipThrough(seated, "ended");
 }
 
@@ -941,8 +957,7 @@ export async function endedGame4(): Promise<{ code: string; socks: TestSocket[];
   const police = withRole(g, "police")[0]!;
   const [c0, c1] = withRole(g, "citizen") as [Actor, Actor];
   await pointAll(g.code, g.actors, { [police.seat]: mafia.seat, [c0.seat]: mafia.seat, [c1.seat]: mafia.seat, [mafia.seat]: police.seat });
-  await advanceTo(g.code, g.socks, "verdict");
-  await verdictAll(g.code, g.actors, Object.fromEntries(g.actors.filter((a) => a !== mafia).map((a) => [a.seat, true])));
+  await advanceTo(g.code, g.socks, "execution"); // 찬반은 startedGame 이 통과시켰고, 지목 → 변론 → 처형(마피아 탈락)
   await closePhase(g.code);
   for (const s of g.socks) await nextFrame(s, isPhaseFrame("ended"));
   return { code: g.code, socks: g.socks, actors: g.actors, dead: mafia, living: g.actors.filter((a) => a !== mafia) };
@@ -977,7 +992,7 @@ export interface RichGame6 {
 
 /**
  * 6명 판을 마피아 밤 채팅·유령 채팅·귓속말·직업 주장·찬반 기록이 모두 생기도록 ended 까지 돌린다(11-03).
- * 1일차 토론에서 경찰이 police 를, 시민 X 가 doctor 를 걸고 X 가 경찰에게 귓속말 → 지목으로 마피아 A 처형(찬반: A 뺀 전원 찬성) →
+ * 1일차 토론에서 경찰이 police 를, 시민 X 가 doctor 를 걸고 X 가 경찰에게 귓속말 → 찬반 전원 찬성 → 지목으로 마피아 A 처형 →
  * 밤에 의사·경찰을 탈락시켜 마피아 B 와 시민 둘만 남기고 B 가 마피아 채널에 두 줄, 탈락한 A·경찰이 유령 채널에 한 줄씩 → B 가 X 를 죽여 1 대 1 로 아침 마감에 ended.
  */
 export async function richEndedGame6(opts: { extras?: boolean } = {}): Promise<RichGame6> {
@@ -1013,8 +1028,7 @@ export async function richEndedGame6(opts: { extras?: boolean } = {}): Promise<R
   const cast: Record<number, number> = Object.fromEntries(g.actors.map((a) => [a.seat, mafiaA.seat]));
   cast[mafiaA.seat] = police.seat;
   await pointAll(g.code, g.actors, cast);
-  await advanceTo(g.code, g.socks, "verdict");
-  await verdictAll(g.code, g.actors, Object.fromEntries(g.actors.filter((a) => a !== mafiaA).map((a) => [a.seat, true])));
+  await advanceTo(g.code, g.socks, "execution"); // 찬반은 advanceTo 가 통과시켰고, 지목 → 변론 → 처형
   await advanceTo(g.code, g.socks, "night");
   await flushAll();
 

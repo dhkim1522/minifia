@@ -229,11 +229,9 @@ describe("tensionOf (UI-SPEC 단계 조명: 선두·과반·찬반)", () => {
     same(tensionOf(viewOf("nomination", { day: { points: points([0, 2], [1, 3]) } })), { level: 0 });
     same(tensionOf(viewOf("nomination", { day: { points: [] } })), { level: 0 });
   });
-  it("찬반 → 긴장 1·초점은 변론자", () => {
-    same(tensionOf(viewOf("verdict", { day: { candidate: 4 } })), { level: 1, focus: 4 });
-  });
-  it("찬반인데 변론자가 없으면 긴장 0", () => {
+  it("찬반 → 긴장 0 (후보가 없어 초점이 없다 — 22-09 D-11, 옛 변론자 초점 분기는 지웠다)", () => {
     same(tensionOf(viewOf("verdict")), { level: 0 });
+    same(tensionOf(viewOf("verdict", { day: { candidate: 4 } })), { level: 0 });
   });
   for (const phase of ["discussion", "defense", "execution", "night", "morning", "dayAnnounce"] as const) {
     it(`${phase} → 긴장 0`, () => {

@@ -382,17 +382,16 @@ describe("채팅 — 채널 (CHAT-02·03)", () => {
   });
 });
 
-/** 지목으로 첫 시민을 변론자로 몰고(그는 둘째 시민을 가리킨다) 변론 → 찬반 → 처형까지 끌고 간다(08-11 새 흐름). 찬반은 변론자를 뺀 전원 찬성이다. */
+/**
+ * 찬반 → 지목 → 변론 → 처형(22-09 새 낮 순서). 찬반은 산 사람 전원 찬성으로 통과시키고(advanceTo 가 한다), 지목으로 첫 시민을 처형자로 몰고(그는 둘째 시민을 가리킨다) 변론·처형까지 끌고 간다.
+ * verdict 단계는 아무도 던지지 않은 찬반 첫 순간이다.
+ */
 async function startedAtVerdictStage(phase: "defense" | "verdict" | "execution"): Promise<Game> {
+  if (phase === "verdict") return startedAt("verdict");
   const g = await startedAt("nomination");
   const [candidate, other] = withRole(g, "citizen") as [Actor, Actor];
   await pointAll(g.code, g.actors, Object.fromEntries(g.actors.map((a) => [a.seat, a === candidate ? other.seat : candidate.seat])));
-  if (phase !== "defense") {
-    await advanceTo(g.code, g.socks, "verdict");
-    if (phase === "execution") {
-      await verdictAll(g.code, g.actors, Object.fromEntries(g.actors.filter((a) => a !== candidate).map((a) => [a.seat, true])));
-    }
-  }
+  if (phase === "execution") await advanceTo(g.code, g.socks, "execution");
   for (const sock of g.socks) await settle(sock, mark(sock));
   return g;
 }

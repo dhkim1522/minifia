@@ -92,17 +92,18 @@ const EXPECTED_ROLES = {
 };
 // 허용 전이 표(shared/game/phases.ts 의 nextPhaseOf + tick 분기와 같다). 판 종류가 없어 표는 하나다(22-08). 분기형이라 값이 배열이다(결정 0060-1).
 // test/unit/e2eContract.test.ts 가 이 표를 nextPhaseOf(단계) 와 대조한다 — 어긋나면 거짓 통과·거짓 실패가 난다.
-// 마피아 판(옛 순서): dayAnnounce → discussion → nomination → (최다 한 명) defense → verdict → execution → night | ended,
-// 지목 0표·동률은 곧장 night, night → morning → dayAnnounce(다음 낮) | ended. 승패가 나지 않는 한 낮 루프라 끝이 없다.
+// 낮 순서(22-09, 결정 0089-18): dayAnnounce → discussion → verdict(찬반, 후보 없음) → (통과) nomination(순차 지목) → (최다 한 명) defense(유언 자리) → execution → night | ended,
+// 찬반 부결·지목 0표·동률은 곧장 night, night → morning → dayAnnounce(다음 낮) | ended. 승패가 나지 않는 한 낮 루프라 끝이 없다.
+// 주의: 이 파일의 낮 흐름 걸음(토론 끝내기 → 지목 → 변론 → 찬반 단언)은 아직 옛 순서 그대로다 — 전이 표만 새 순서로 맞췄다(22-09). 걸음 개편은 이월(SUMMARY).
 export const PHASE_NEXT = {
   lobby: ["assigning"],
   assigning: ["roleReveal"],
   roleReveal: ["dayAnnounce"],
   dayAnnounce: ["discussion"], // 낮 시작 발표 다음이 바로 토론이다
-  discussion: ["nomination"],
-  nomination: ["defense", "night"], // 기본판(결정 0072): 동점·0표는 runoff 가 아니라 처형 없는 밤
-  defense: ["verdict"],
-  verdict: ["execution"],
+  discussion: ["verdict"],
+  verdict: ["nomination", "night"], // 찬반: 던진 표의 과반 찬성이면 지목, 부결(0표·동수 포함)이면 처형 없는 밤
+  nomination: ["defense", "night"], // 동점·0표는 runoff 가 아니라 처형 없는 밤
+  defense: ["execution"],
   execution: ["night", "ended"],
   night: ["morning"],
   morning: ["dayAnnounce", "ended"],
@@ -1268,9 +1269,9 @@ async function stageFull(url, args) {
     for (let k = 1; k < seq.length; k++) {
       if (!(PHASE_NEXT[seq[k - 1]] ?? []).includes(seq[k])) fail(`${c.nickname} 의 단계 순서가 이상함: ${seq.join(" → ")}`);
     }
-    // 첫 낮은 토론 → 지목 → 변론 → 찬반 → 처형 → 밤 → 아침 순서로 돈다(옛 처형 여부·후보 선택 단계는 어떤 경로로도 없다). 마지막 단계는 ended.
+    // 첫 낮은 토론 → 찬반 → 지목 → 변론(유언) → 처형 → 밤 → 아침 순서로 돈다(옛 처형 여부·후보 선택 단계는 어떤 경로로도 없다). 마지막 단계는 ended.
     const iDisc = seq.indexOf("discussion");
-    const firstDay = ["discussion", "nomination", "defense", "verdict", "execution", "night", "morning"];
+    const firstDay = ["discussion", "verdict", "nomination", "defense", "execution", "night", "morning"];
     if (iDisc < 0 || seq.slice(iDisc, iDisc + firstDay.length).join(",") !== firstDay.join(",")) fail(`${c.nickname} 의 첫 낮 단계 순서가 ${firstDay.join(" → ")} 가 아님: ${seq.join(" → ")}`);
     if (seq.at(-1) !== "ended") fail(`${c.nickname} 의 마지막 단계가 ended 가 아님: ${seq.join(" → ")}`);
   }

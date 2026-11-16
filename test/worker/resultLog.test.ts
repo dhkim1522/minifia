@@ -51,7 +51,7 @@ describe("resultLog 전송 (D-10, L36)", () => {
     const claims = ownLines(frames, "claim") as Array<{ seat: number; n: number; v: string }>;
     expect(claims.map((c) => `${c.seat}/${c.n}/${c.v}`).sort()).toEqual(GAME_RULES.badge ? [`${g.police.seat}/1/police`, `${g.citizenX.seat}/1/doctor`].sort() : []);
     const ballots = ownLines(frames, "ballots") as Array<{ n: number; yes: number[]; no: number[] }>;
-    expect(ballots).toEqual([{ n: 1, yes: g.actors.filter((a) => a !== g.mafiaA).map((a) => a.seat).sort((a, b) => a - b), no: [] }]);
+    expect(ballots).toEqual([{ n: 1, yes: g.actors.map((a) => a.seat).sort((a, b) => a - b), no: [] }]); // 후보 없는 찬반(22-09 D-11) — 산 사람 전원이 찬성(처형자 포함)
   });
 
   it("ended 진입 뒤 새 프레임이 더 오지 않는다 — 같은 열이 한 번만 간다", { timeout: 90_000 }, async () => {

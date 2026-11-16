@@ -4,7 +4,6 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 문자열 하나로 한다.
 import { describe, expect, it } from "vitest";
 import {
-  castPoint,
   castTurnPoint,
   enterNomination,
   majorityOf,
@@ -103,7 +102,8 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
     const base = withPoints(nominationOf(), { 4: 0, 3: 2, 1: 2, 0: 2, 2: 1 });
     const r = resolveNomination(base);
     const line = r.state.voteLog?.at(-1);
-    expect(`${r.stay} ${String(r.next)} ${JSON.stringify(r.state.verdict)}`).toBe(`false undefined ${JSON.stringify({ passed: false, candidate: 2 })}`);
+    // 찬반이 먼저 통과했으므로(22-09) 지목 마감은 passed 를 true 로 두고 candidate 만 더한다 (Pitfall 1)
+    expect(`${r.stay} ${String(r.next)} ${JSON.stringify(r.state.verdict)}`).toBe(`false undefined ${JSON.stringify({ passed: true, candidate: 2 })}`);
     expect(JSON.stringify(line)).toBe(
       JSON.stringify({
         n: base.day ?? 1,
@@ -127,7 +127,7 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
     // 0→1, 1→2, 2→0: 세 명이 한 표씩 최다 동점
     const r = resolveNomination(withPoints(nominationOf(), { 0: 1, 1: 2, 2: 0 }));
     const cand = r.state.voteLog?.at(-1)?.cand;
-    expect(`${String(r.next)} ${keysOf(cand ?? {})} ${JSON.stringify(r.state.verdict)}`).toBe(`night ${keysOf({ votes: 1 })} ${JSON.stringify({ passed: false })}`);
+    expect(`${String(r.next)} ${keysOf(cand ?? {})} ${String(r.state.verdict)} ${r.state.voteLog?.at(-1)?.reason}`).toBe(`night ${keysOf({ votes: 1 })} undefined tie`);
     expect(r.state.runoff).toBeUndefined();
     expect(hasNominateKey(r.state)).toBe(false);
   });
@@ -147,7 +147,7 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
   it("0표여도 그날 줄은 항상 쌓이고 next 가 night 이다", () => {
     const r = resolveNomination(nominationOf());
     const line = r.state.voteLog?.at(-1);
-    expect(`${String(r.next)} ${JSON.stringify(line?.cand?.votes)} ${line?.n}`).toBe("night [] 1");
+    expect(`${String(r.next)} ${JSON.stringify(line?.cand?.votes)} ${line?.n} ${line?.reason}`).toBe("night [] 1 noVotes");
   });
 
   it("이전 날 기록은 그대로 두고 줄만 더한다", () => {
@@ -167,9 +167,9 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
 });
 
 describe("vote.test 에서 옮긴 뜻 (08-28, DAY-06·07)", () => {
-  it("단계 표: 지목 진입 길이는 기본판 15000ms(순차 지목이 켜지면 모이기 3000ms)이고 기본 다음 단계는 defense, 역할 노출은 true 다 (옛 단계 표 시험의 새 흐름 행)", () => {
+  it("단계 표: 지목 행의 길이는 진입 훅 전의 자리 값 15000ms 이고(순차 지목이라 진입 뒤 phaseDurationOf 가 모이기 3000ms 로 다시 구한다) 기본 다음 단계는 defense, 역할 노출은 true 다", () => {
     const d = PHASE_DEFS.nomination;
-    expect(`${d.durationMs}/${d.next}/${d.revealsOwnRole}`).toBe(`${GAME_RULES.pickTurn ? 3000 : 15000}/defense/true`);
+    expect(`${d.durationMs}/${d.next}/${d.revealsOwnRole}`).toBe("15000/defense/true");
   });
 
   it("던진 뒤 연결이 끊긴 사람의 표도 센다 (옛 CONN-02)", () => {
@@ -337,7 +337,7 @@ describe("순차 지목 엔진 (결정 0063-1·0063-4)", () => {
       ].join("\n"),
     );
     expect(`${String(last.stay)} ${String(last.next)} ${verdict} ${cand} ${String("pickTurn" in last.state)}`).toBe(
-      `false undefined {"passed":false,"candidate":1} {"votes":[{"seat":0,"target":1},{"seat":2,"target":1},{"seat":3,"target":1}],"candidate":1} false`,
+      `false undefined {"passed":true,"ballots":{"yes":[0,1,2,3],"no":[]},"candidate":1} {"votes":[{"seat":0,"target":1},{"seat":2,"target":1},{"seat":3,"target":1}],"candidate":1} false`, // 찬반이 남긴 ballots 를 지목 마감이 보존한다
     );
   });
 
@@ -484,13 +484,12 @@ describe("시험 도우미: 지목 방식과 무관 (09.1-03)", () => {
     expect(`${String(s.pickTurn?.i)} ${nominates}`).toBe("4 0>1,1>-,2>1,3>1");
   });
 
-  // 기본판(결정 0072)에서 꺼짐 — 차례 없는 지목이 동시 투표이므로 castPoints 가 던지지 않는다. 판 규칙의 pickTurn 을 켜면 다시 돈다
-  it.skipIf(!GAME_RULES.pickTurn)("castPoints 는 pickTurn 이 없는 지목 상태를 받으면 Error (차례 없는 옛 동시 지목은 없다, 09.1-05)", () => {
+  it("castPoints 는 pickTurn 이 없는 지목 상태를 받으면 Error (차례 없는 옛 동시 지목은 없다, 09.1-05)", () => {
     expect(() => castPoints(nominationOf(4), { 0: 1, 1: 0 })).toThrow();
   });
 
-  it("nominationSpanMs: 전환 뒤 startedAt 의 지목 길이는 기본판 투표 15000ms, 순차 지목이면 차례 사슬 전체 길이 nominationMaxMs(4) 다 (전원 기권)", () => {
-    expect(nominationSpanMs(startedAt(4, 1, "nomination"), 2)).toBe(GAME_RULES.pickTurn ? nominationMaxMs(4) : 15_000);
+  it("nominationSpanMs: 전환 뒤 startedAt 의 지목 길이는 차례 사슬 전체 길이 nominationMaxMs(4) 다 (전원 기권)", () => {
+    expect(nominationSpanMs(startedAt(4, 1, "nomination"), 2)).toBe(nominationMaxMs(4));
   });
 
   it("nominationSpanMs 는 지목이 아닌 상태를 받으면 Error", () => {
@@ -498,43 +497,12 @@ describe("시험 도우미: 지목 방식과 무관 (09.1-03)", () => {
   });
 });
 
-describe("기본판 투표 castPoint·집계 (결정 0072, D-03)", () => {
-  const vote = (state: RoomState, actorSeat: number, target: number) => castPoint(state, idOf(state, actorSeat), target);
-
-  it("castPoint 거부 코드: 단계가 아니면 WRONG_PHASE, 죽은·없는 행위자, 정수 아님·죽은·없는 대상, 자기 자신은 BAD_MESSAGE", () => {
-    const base = withDead(nominationOf(), [4]);
-    const rows = [
-      err(castPoint({ ...base, phase: "discussion" }, idOf(base, 0), 1)),
-      err(vote(base, 4, 1)),
-      err(castPoint(base, "nobody", 1)),
-      err(vote(base, 0, 1.5)),
-      err(vote(base, 0, 4)),
-      err(vote(base, 0, 9)),
-      err(vote(base, 0, 0)),
-      err(vote(base, 0, 1)),
-    ];
-    expect(rows.join(" ")).toBe("WRONG_PHASE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE BAD_MESSAGE ok");
-  });
-
-  it("같은 값을 다시 던지면 입력과 같은 객체이고, 다른 값이면 그 사람의 nominate 만 바뀐다 (취소 없음)", () => {
-    const base = nominationOf();
-    const first = vote(base, 0, 1);
-    if (!first.ok) throw new Error("rejected");
-    const again = castPoint(first.state, idOf(base, 0), 1);
-    expect(again.ok && again.state === first.state).toBe(true);
-    const changed = vote(first.state, 0, 2);
-    if (!changed.ok) throw new Error("rejected");
-    expect(changed.state.players.map((p) => `${p.seat}:${p.nominate ?? "-"}`).join(" ")).toBe("0:2 1:- 2:- 3:- 4:-");
-    expect(first.state.players[0]!.nominate).toBe(1); // 입력은 바꾸지 않는다
-  });
-
-  it("2:2 동점이면 next night 이고 결과 상태에 runoff 키가 없고 candidate 없는 줄에 표 4줄이 쌓인다", () => {
+describe("지목 집계 — 결과 분기 (결정 0072, D-03, 22-09 D-13)", () => {
+  it("2:2 동점이면 next night 이고 결과 상태에 runoff·verdict 키가 없고 candidate 없는 줄에 표 4줄이 쌓인다", () => {
     const base = withPoints(nominationOf(), { 0: 2, 1: 2, 2: 0, 3: 0 });
     const r = resolveNomination(base);
     const line = r.state.voteLog?.at(-1);
-    expect(`${String(r.next)} ${r.state.runoff === undefined} ${JSON.stringify(r.state.verdict)} ${line?.cand?.votes.length} ${line?.cand?.candidate}`).toBe(
-      `night true ${JSON.stringify({ passed: false })} 4 undefined`,
-    );
+    expect(`${String(r.next)} ${r.state.runoff === undefined} ${String(r.state.verdict)} ${line?.cand?.votes.length} ${line?.cand?.candidate}`).toBe("night true undefined 4 undefined");
   });
 
   it("3:1:1 이 아니라 최다가 셋 동점이어도 0표여도 night 이다", () => {
@@ -543,9 +511,9 @@ describe("기본판 투표 castPoint·집계 (결정 0072, D-03)", () => {
     expect(`${String(tie3.next)} ${String(none.next)}`).toBe("night night");
   });
 
-  it("최다 한 명이면 next 없이(defense) verdict.candidate 가 그 좌석이다", () => {
+  it("최다 한 명이면 next 없이(defense) verdict.candidate 가 그 좌석이고 passed 는 true 다", () => {
     const r = resolveNomination(withPoints(nominationOf(), { 0: 3, 1: 3, 2: 3, 4: 1 }));
-    expect(`${String(r.next)} ${JSON.stringify(r.state.verdict)}`).toBe(`undefined ${JSON.stringify({ passed: false, candidate: 3 })}`);
+    expect(`${String(r.next)} ${JSON.stringify(r.state.verdict)}`).toBe(`undefined ${JSON.stringify({ passed: true, candidate: 3 })}`);
   });
 });
 
@@ -598,12 +566,12 @@ describe("지목 마감 — 통과한 찬반을 보존하고 동점·0표는 밤
     expect(`${night.phase} ${night.voteLog!.find((e) => e.n === 1)!.reason}`).toBe("night noVotes");
   });
 
-  it("밤에 도착한 noExecutionOf 가 줄의 reason 을 돌려준다(tie·noVotes), 찬반 통과 후 처형 낮에는 값이 없다", () => {
+  it("밤에 도착한 noExecutionOf 가 줄의 reason 을 돌려준다(tie·noVotes), 처형이 있는 낮의 처형 단계에서는 값이 없다", () => {
     const tie = closeOf(pointedAfterVerdict({ 0: 2, 1: 2, 2: 0, 3: 0 }));
     const none = closeOf(pointedAfterVerdict({}));
-    const executed = closeOf(closeOf(closeOf(pointedAfterVerdict({ 0: 2, 1: 2, 2: 3 }))));
-    expect(`${JSON.stringify(noExecutionOf(tie))} ${JSON.stringify(noExecutionOf(none))} ${executed.phase} ${String(noExecutionOf(executed))}`).toBe(
-      '{"reason":"tie"} {"reason":"noVotes"} night undefined',
+    const execution = closeOf(closeOf(pointedAfterVerdict({ 0: 2, 1: 2, 2: 3 })));
+    expect(`${JSON.stringify(noExecutionOf(tie))} ${JSON.stringify(noExecutionOf(none))} ${execution.phase} ${String(noExecutionOf(execution))}`).toBe(
+      '{"reason":"tie"} {"reason":"noVotes"} execution undefined',
     );
   });
 

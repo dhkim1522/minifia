@@ -2,9 +2,9 @@ import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { DISCUSSION_MS } from "../../shared/game/phases";
+import { DISCUSSION_MS, VERDICT_MS } from "../../shared/game/phases";
 import { ROOM_TTL_MS, UNCONNECTED_ROOM_TTL_MS } from "../../shared/game/room";
-import { alarmOf, closed, connect, createRoom, editRoom, forceDue, hello, nextFrame, seat, send, storedRoom } from "./helpers";
+import { alarmOf, closed, connect, createRoom, editRoom, forceDue, hello, mapPlayers, nextFrame, seat, send, storedRoom, writeRoomEdit } from "./helpers";
 import type { Seated } from "./helpers";
 
 const phaseIs = (phase: string) => (m: ServerMessage) => m.t === "state" && m.view.phase === phase;
@@ -61,7 +61,7 @@ describe("알람", () => {
     expect(await alarmOf(r.code)).toBe(forced + 2000);
   });
 
-  it("낮 한 바퀴와 밤·아침(dayAnnounce → discussion → nomination → night → morning → dayAnnounce)을 알람이 차례로 넘기고 저장된 일차는 2 가 된다", async () => {
+  it("낮 한 바퀴와 밤·아침(dayAnnounce → discussion → verdict → nomination → night → morning → dayAnnounce)을 알람이 차례로 넘기고 저장된 일차는 2 가 된다", async () => {
     const r = await startedRoom();
     const stub = env.ROOM.getByName(r.code);
     const advance = async (): Promise<number> => {
@@ -86,7 +86,11 @@ describe("알람", () => {
     // 07-08: 순차 주장 단계가 없다 — 22페이즈(D-04): 낮 시작 발표 마감 다음이 곧바로 토론이다
     await stepInto("discussion", DISCUSSION_MS);
 
-    // 지목(지목이 0표이므로 다음은 night): 지목 방식과 무관하게(09.1-03) 알람을 거듭하며 매번 마감 = 당긴 마감 + 그 view 의 단계 길이, 저장된 알람 = 그 마감이다.
+    // 찬반(22-09 D-10): 10초, 표를 던져 통과시킨 뒤 알람이 지목으로 넘긴다.
+    await stepInto("verdict", VERDICT_MS);
+    await writeRoomEdit(stub, (room) => mapPlayers(room, (p) => ({ ...p, verdictVote: true })));
+
+    // 지목(지목이 0표이므로 다음은 night): 알람을 거듭하며 매번 마감 = 당긴 마감 + 그 view 의 단계 길이, 저장된 알람 = 그 마감이다.
     let phase = "";
     let nominationSteps = 0;
     for (let guard = 0; phase !== "night"; guard += 1) {

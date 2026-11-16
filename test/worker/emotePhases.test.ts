@@ -65,36 +65,36 @@ const row = (m: Map<number, number>): string => [...m.entries()].sort((a, b) => 
 const want = (g: Game, seats: number[]): string => g.actors.map((a) => a.seat).sort((a, b) => a - b).map((s) => `${s}:${seats.includes(s) ? 1 : 0}`).join(",");
 
 describe("동작 — 이동이 막힌 단계에서도 도착한다 (10-08, AVTR-05)", () => {
-  it("지목 → 변론 → 찬반 → 처형 → 밤 → 아침: 산 사람의 동작은 산 사람 모두와 탈락자에게, 탈락자의 동작은 탈락자에게만 간다", async () => {
-    const g = await startedGame("nomination");
+  it("찬반 → 지목 → 변론 → 처형 → 밤 → 아침: 산 사람의 동작은 산 사람 모두와 탈락자에게, 탈락자의 동작은 탈락자에게만 간다", async () => {
+    const g = await startedGame("verdict");
     const citizens = withRole(g, "citizen");
     const target = citizens[0]!; // 처형될 시민
     const lively = g.actors.filter((a) => a !== target);
     const allSeats = g.actors.map((a) => a.seat);
     const sender = lively.find((a) => a.role === "police")!;
 
-    // 지목(이동 막힘): 산 사람(탈락자 없음) 보냄 → 여섯 모두
-    await at(g, "nomination");
+    // 찬반(이동 막힘): 산 사람(탈락자 없음) 보냄 → 여섯 모두
+    await at(g, "verdict");
     expect(row(await sendAndCount(g, sender, "clap"))).toBe(want(g, allSeats));
+    const agree: Record<number, boolean> = {};
+    for (const a of g.actors) agree[a.seat] = true;
+    await verdictAll(g.code, g.actors, agree);
+
+    // 지목(이동 막힘)
+    await at(g, "nomination");
+    expect(row(await sendAndCount(g, lively[1]!, "clap"))).toBe(want(g, allSeats));
 
     // 지목으로 target 을 몰아 변론으로
     const points: Record<number, number> = {};
     for (const a of lively) points[a.seat] = target.seat;
     await pointAll(g.code, g.actors, points);
     await at(g, "defense");
-    expect(row(await sendAndCount(g, lively[0]!, "dance"))).toBe(want(g, allSeats)); // 변론(변론자 포함 모두 동작 가능)
-    expect(row(await sendAndCount(g, target, "cry"))).toBe(want(g, allSeats)); // 변론자도 동작 가능
+    expect(row(await sendAndCount(g, lively[0]!, "dance"))).toBe(want(g, allSeats)); // 변론(처형자 포함 모두 동작 가능)
+    expect(row(await sendAndCount(g, target, "cry"))).toBe(want(g, allSeats)); // 처형자도 동작 가능
 
-    // 찬반
+    // 처형
     await closePhase(g.code);
     for (const a of g.actors) await settle(a.sock, mark(a.sock));
-    await at(g, "verdict");
-    expect(row(await sendAndCount(g, lively[1]!, "clap"))).toBe(want(g, allSeats));
-
-    // 처형: 모두 찬성(변론자는 던질 수 없다)
-    const agree: Record<number, boolean> = {};
-    for (const a of lively) agree[a.seat] = true;
-    await verdictAll(g.code, g.actors, agree);
     await at(g, "execution");
     expect(row(await sendAndCount(g, lively[2]!, "dance"))).toBe(want(g, allSeats)); // 처형 단계(target 은 아직 탈락 직전/직후 상관없이 산 사람 채널)
   }, 120_000);

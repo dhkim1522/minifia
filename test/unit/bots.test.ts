@@ -52,7 +52,7 @@ import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, startedFrom, stateWithVerdict } from "../helpers/voteState";
 import { toggleEnd } from "../../shared/game/discussion";
-import { castPoint, castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
+import { castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { RULES } from "../../shared/game/ruleset";
 import { castVerdict } from "../../shared/game/verdict";
 import { castRunoffVote, runoffStepMs, stepRunoff } from "../../shared/game/runoff";
@@ -109,7 +109,11 @@ function stateAt(humans: number, bots: number, seed: number, phase: PhaseId): Ro
   for (let guard = 0; state.phase !== phase; guard += 1) {
     // 21-13: 닿을 수 없는 단계(예: 원인 흐름의 dayAnnounce)를 청하면 상태가 끝없이 자라지 않고 바로 실패한다.
     if (state.phaseEndsAt === null || guard > 60) throw new Error(`cannot reach ${phase}`);
-    state = tick(state, state.phaseEndsAt, seededRandInt(seed + 1));
+    // 낮 순서가 토론 → 찬반 → 지목이라 찬반이 부결(0표)이면 지목에 닿지 못한다 — 목표가 지목이면 산 사람 전원 찬성으로 통과시킨다(22-09).
+    if (state.phase === "verdict" && phase === "nomination") {
+      state = { ...state, players: state.players.map((p) => (p.alive === false ? p : { ...p, verdictVote: true })) };
+    }
+    state = tick(state, state.phaseEndsAt!, seededRandInt(seed + 1));
   }
   return state;
 }
@@ -750,12 +754,12 @@ describe("botPlanKey·syncBotPlan·planBotSteps", () => {
     const discussion = syncBotPlan(discussion0, nowOf(discussion0), seededRandInt(1));
     expect(Object.hasOwn(discussion, "botPlan")).toBe(true);
     expect(syncBotPlan(discussion, nowOf(discussion) + 5, THROWING) === discussion).toBe(true);
-    const nomination = tick(discussion, discussion.phaseEndsAt!, seededRandInt(2));
-    expect(nomination.phase).toBe("nomination");
-    const next = syncBotPlan(nomination, nowOf(nomination), seededRandInt(5));
-    expect(String(next.botPlan?.key)).toBe(`nomination:${nomination.phaseEndsAt}`);
-    // 기본판(결정 0072) 투표는 동시라 진입 직후 산 봇(4명)마다 point 한 행이 선다 — 순차 차례 계획은 "봇 차례 지목" describe 가 본다(판 규칙의 pickTurn).
-    expect(stepsOf(next).map((s) => s.act.t).join(",")).toBe("point,point,point,point");
+    const verdict = tick(discussion, discussion.phaseEndsAt!, seededRandInt(2));
+    expect(verdict.phase).toBe("verdict");
+    const next = syncBotPlan(verdict, nowOf(verdict), seededRandInt(5));
+    expect(String(next.botPlan?.key)).toBe(`verdict:${verdict.phaseEndsAt}`);
+    // 찬반(22-09 D-11)은 후보가 없어 진입 직후 산 봇(4명) 모두에게 verdict 한 행이 선다 — 순차 차례 계획은 "봇 차례 지목" describe 가 본다.
+    expect(stepsOf(next).map((s) => s.act.t).join(",")).toBe("verdict,verdict,verdict,verdict");
   });
 
   it("행동은 at 오름차순이다", () => {
@@ -926,7 +930,7 @@ describe("봇 투표·변론 계획: 회귀", () => {
     // 09.1-04: 지목이 순차(전원 기권 기준 모이기 + 인원 × 8.9초 + 끝 알림)가 되어 밤 시작 시각이 달라졌다 — night 값만 다시 고정한다(discussion 은 그대로).
     // 13-02(결정 0072): 기본판 투표는 15초 동시 투표(순차 아님)라 밤 시작 시각이 되돌아가 night 값을 다시 고정한다(125073089 → 554531902, discussion 은 그대로).
     // 15-03(D-05): 시민 봇도 밤에 randInt(후보 수) → randInt(pick 지연 폭) 을 부르고 마피아 접근 걷기(난수 없음)가 없어져 night 값을 다시 고정한다(554531902 → 553784266, discussion 은 그대로).
-    expect(got.join(",")).toBe("34804349,553784266");
+    expect(got.join(",")).toBe("34804349,715181244"); // 22-09 재고정: 낮 순서가 토론 → 찬반(부결) → 밤이라 밤 시작 시각이 바뀌었다 — night 553784266 → 715181244, discussion 은 그대로(난수 호출 수·순서 불변 증명)
   });
 
   it("discussion 계획의 난수 호출 수는 claim 제거 뒤에도 그대로다 (07-08, 리서치 Pitfall 13)", () => {
@@ -1151,24 +1155,21 @@ describe("봇 차례 지목 (결정 0063-1)", () => {
 });
 
 describe("봇 계획: 찬반 (DAY-06, 결정 0060-13)", () => {
-  /** 사람 1 + 봇 4 의 찬반 단계. candidate 좌석이 변론자다. */
-  const verdictState = (seed: number, candidate: number): RoomState => {
-    const base = startedFrom(withBots(lobbyOf(1), 4), seed, "discussion");
-    return { ...base, phase: "verdict", phaseEndsAt: 100_000 + PHASE_DEFS.verdict.durationMs!, verdict: { passed: false, candidate } };
-  };
+  /** 사람 1 + 봇 4 의 찬반 단계(후보가 없다, 22-09 D-11). 두 번째 인자는 옛 변론자 자리라 쓰지 않는다. */
+  const verdictState = (seed: number, _legacyCandidate = 0): RoomState => startedFrom(withBots(lobbyOf(1), 4), seed, "verdict");
 
   it("계획 키는 `${phase}:${phaseEndsAt}` 이다", () => {
     const state = verdictState(3, 0);
     expect(String(botPlanKey(state))).toBe(`verdict:${state.phaseEndsAt}`);
   });
 
-  it("변론자가 아닌 산 봇마다 verdict 한 번이 now + 1000 이상 now + 6000 미만에 서고 castVerdict 에 통과한다; 변론자 봇은 없다", () => {
+  it("산 봇 모두에게 verdict 한 번이 now + 1000 이상 now + 6000 미만에 서고 castVerdict 에 통과한다 (후보 제외 없음, D-11)", () => {
     for (let seed = 1; seed <= 20; seed += 1) {
       const state = verdictState(seed, 2);
       const steps = planBotSteps(state, nowOf(state), seededRandInt(seed));
       for (const bot of botsOf(state)) {
         const mine = rowsOf(steps, bot.id);
-        expect(`${seed}:${bot.seat}:${mine.length}`).toBe(`${seed}:${bot.seat}:${bot.seat === 2 ? 0 : 1}`);
+        expect(`${seed}:${bot.seat}:${mine.length}`).toBe(`${seed}:${bot.seat}:1`);
         for (const s of mine) {
           expect(`${seed}:${s.at >= nowOf(state) + 1000 && s.at < nowOf(state) + 6000}`).toBe(`${seed}:true`);
           const r = s.act.t === "verdict" ? castVerdict(state, s.botId, s.act.agree) : null;
@@ -1548,85 +1549,25 @@ describe.skipIf(!GAME_RULES.showdown)("봇 마지막 3인 계획 (09.1.1-07)", (
   });
 });
 
-// ---- 13-02: 기본판 동시 투표 봇 계획 (결정 0072, D-03, FLOW-05) ----
-describe("기본판 투표 봇 계획 (결정 0072)", () => {
-  /** 사람 1(방장) + 봇 3 이 tick 으로 투표(nomination)에 닿은 상태 — 기본판이라 pickTurn 이 없다. */
+// ---- 22-09: 동시 투표 봇 계획은 지웠다 — 지목은 순차 지목뿐이다(D-12). 지목 진입(모이기 중)에는 봇 계획이 없다. ----
+describe("지목 진입 봇 계획 (22-09, 순차 지목)", () => {
+  /** 사람 1(방장) + 봇 3 이 tick 으로 지목(nomination)에 닿은 상태 — 순차 지목이라 pickTurn 이 있고 모이는 중(i -1)이다. */
   const voteAt = (seed: number): RoomState => stateAt(1, 3, seed, "nomination");
-  const pointsOf = (steps: BotStep[]): BotStep[] => steps.filter((x) => x.act.t === "point");
 
-  it("투표 진입에는 pickTurn 이 없고, 산 봇마다 point 한 행이 2000~8000ms 안에 선다", () => {
+  it("지목 진입에는 pickTurn(i -1)이 있고 모이는 중에는 봇의 계획·난수가 없다 (동시 point 행 없음)", () => {
     for (let seed = 1; seed <= 10; seed += 1) {
       const state = voteAt(seed);
-      expect(String(state.pickTurn)).toBe("undefined");
-      const now = nowOf(state);
-      const steps = planBotSteps(state, now, seededRandInt(seed));
-      const points = pointsOf(steps);
-      expect(botsOf(state).map((b) => `${b.seat}:${rowsOf(points, b.id).length}`).join(",")).toBe("1:1,2:1,3:1");
-      for (const row of points) {
-        expect(row.at >= now + 2_000 && row.at < now + 8_000).toBe(true);
-        expect(row.at <= state.phaseEndsAt! - 500).toBe(true);
-      }
+      expect(`${state.pickTurn?.i}`).toBe("-1");
+      expect(planBotSteps(state, nowOf(state), THROWING).length).toBe(0);
     }
   });
 
-  it("대상은 자기를 뺀 산 사람이고 사람과 같은 castPoint 를 통과한다", () => {
-    const state = voteAt(4);
-    const points = pointsOf(planBotSteps(state, nowOf(state), seededRandInt(9)));
-    let next = state;
-    for (const row of points) {
-      const bot = state.players.find((p) => p.id === row.botId)!;
-      const target = (row.act as { t: "point"; target: number }).target;
-      expect(target === bot.seat).toBe(false);
-      const cast = castPoint(next, bot.id, target);
-      expect(cast.ok).toBe(true);
-      if (cast.ok) next = cast.state;
-    }
-    expect(botsOf(next).every((b) => b.nominate !== undefined)).toBe(true);
-  });
-
-  it("난수 순서는 봇마다 [후보 수 3, 6000] 이고 좌석 오름차순이다; 같은 시드면 같은 계획이다", () => {
-    const state = voteAt(5);
-    const rec = recording(11);
-    const a = planBotSteps(state, nowOf(state), rec.randInt);
-    const pointCalls = rec.calls;
-    expect(pointCalls.join(",")).toBe("3,6000,3,6000,3,6000");
-    const b = planBotSteps(state, nowOf(state), seededRandInt(11));
-    expect(canon(a)).toBe(canon(b));
-  });
-
-  it("탈락한 봇에는 계획이 없고, 사람이 모두 끊기면 계획이 비어 있다", () => {
-    const state = voteAt(6);
-    const dead = markDead(state, 2);
-    const points = pointsOf(planBotSteps(dead, nowOf(dead), seededRandInt(3)));
-    expect(points.map((r) => r.botId === botsOf(dead)[1]!.id).includes(true)).toBe(false);
-    expect(points.length).toBe(2);
-    const gone: RoomState = { ...state, players: state.players.map((p) => (isBot(p) ? p : { ...p, connected: false })) };
-    expect(planBotSteps(gone, nowOf(gone), THROWING).length).toBe(0);
-  });
-
-  it("고정 pick: host 는 모든 봇이 방장에게, other 는 방장이 아닌 고정 좌석에게 던지고 결정 난수는 건너뛴다", () => {
-    const state = voteAt(7);
-    const hostSeat = state.players.find((p) => p.id === state.hostId)!.seat;
-    const host = recording(5);
-    const hostPoints = pointsOf(planBotSteps({ ...state, testBotVote: { pick: "host" } }, nowOf(state), host.randInt));
-    expect(hostPoints.map((r) => (r.act as { target: number }).target).join(",")).toBe(`${hostSeat},${hostSeat},${hostSeat}`);
-    expect(host.calls.join(",")).toBe("6000,6000,6000");
-    const other = pointsOf(planBotSteps({ ...state, testBotVote: { pick: "other" } }, nowOf(state), seededRandInt(5)));
-    expect(other.length).toBe(3);
-    expect(other.every((r) => (r.act as { target: number }).target !== hostSeat)).toBe(true);
-  });
-
-  it("계획 키는 'nomination:{마감}' 이다", () => {
+  it("계획 키는 'nomination:{마감}' 이고 모이는 중 계획의 행은 없다", () => {
     const state = voteAt(8);
     expect(String(botPlanKey(state))).toBe(`nomination:${state.phaseEndsAt}`);
     const synced = syncBotPlan(state, nowOf(state), seededRandInt(2));
     expect(synced.botPlan?.key).toBe(`nomination:${state.phaseEndsAt}`);
-    expect(synced.botPlan?.steps.length).toBe(3);
-  });
-
-  it.skipIf(GAME_RULES.pickTurn)("판 규칙의 pickTurn 이 꺼져 있으면 turnPointSteps 의 순차 계획은 쓰이지 않는다", () => {
-    const state = voteAt(9);
-    const steps = planBotSteps(state, nowOf(state), seededRandInt(1));
-    expect(steps.every((x) => x.act.t === "point")).toBe(true);
+    expect(synced.botPlan?.steps.length).toBe(0);
   });
 });
+

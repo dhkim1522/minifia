@@ -25,11 +25,10 @@ import {
   storedRoom,
   summary,
   pointAll,
-  verdictAll,
 } from "./helpers";
 import type { Actor, Seated, TestSocket } from "./helpers";
 
-// 08-11: 낮이 지목 → 변론 → 찬반 → 처형으로 길어져(단계 넘김 4번 더) 한 판을 끝까지 돌리는 시험이 기본 5초를 넘는다 — 이 파일만 20초로 둔다(긴 대기 없이 forceDue 로 넘기는 것은 그대로).
+// 08-11: 낮이 토론 → 찬반 → 지목 → 변론 → 처형으로 길어져(단계 넘김 4번 더) 한 판을 끝까지 돌리는 시험이 기본 5초를 넘는다 — 이 파일만 20초로 둔다(긴 대기 없이 forceDue 로 넘기는 것은 그대로).
 vi.setConfig({ testTimeout: 20_000 });
 
 /** 종료 진입 + 30분(결정 0034, D-28). 순수 규칙의 ENDED_ROOM_TTL_MS 를 읽지 않고 값을 따로 적어 상수가 바뀌면 이 테스트가 잡는다. */
@@ -49,7 +48,7 @@ interface Game4 {
   c1: Actor;
 }
 
-/** 4명 방(마피아 1·경찰 1·시민 2, 방장 + 연결 손님 3)을 시작해 지목까지 넘긴다. */
+/** 4명 방(마피아 1·경찰 1·시민 2, 방장 + 연결 손님 3)을 시작해 지목까지 넘긴다(찬반은 advanceTo 가 산 사람 전원 찬성으로 통과시킨다 — 22-09). */
 async function atNomination4(): Promise<Game4> {
   const r = await seat(3, 0);
   send(r.host, { t: "start" });
@@ -60,15 +59,10 @@ async function atNomination4(): Promise<Game4> {
   return { r, actors, mafia: actors.find((a) => a.role === "mafia")!, police: actors.find((a) => a.role === "police")!, c0, c1 };
 }
 
-/** 변론자를 뺀 전원 찬성. */
-const allAgreeExcept = (actors: Actor[], defender: Actor): Record<number, boolean> =>
-  Object.fromEntries(actors.filter((a) => a !== defender).map((a) => [a.seat, true]));
-
-/** 지목(cast) → 변론 → 찬반(변론자 뺀 전원 찬성) → 처형 발표까지. 처형 마감은 닫지 않는다. */
-async function toExecution(g: Game4, socks: TestSocket[], actors: Actor[], cast: Record<number, number>, defender: Actor): Promise<void> {
+/** 지목(cast) → 변론 → 처형 발표까지(찬반은 이미 통과했다). 처형 마감은 닫지 않는다. defender 는 읽는 사람을 위한 표시다. */
+async function toExecution(g: Game4, socks: TestSocket[], actors: Actor[], cast: Record<number, number>, _defender: Actor): Promise<void> {
   await pointAll(g.r.code, actors, cast);
-  await advanceTo(g.r.code, socks, "verdict");
-  await verdictAll(g.r.code, actors, allAgreeExcept(actors, defender));
+  await advanceTo(g.r.code, socks, "execution");
 }
 
 /** 마피아가 변론자가 되는 지목: 마피아 외 모두가 마피아를, 마피아는 경찰을 가리킨다. */
@@ -130,7 +124,7 @@ describe("처형으로 끝나는 판 (END-01, END-02, D-10, D-28)", () => {
     expect(result.seats.length).toBe(4);
     for (const s of result.seats) expect(Object.keys(s).sort().join(",")).toBe("job,seat");
     expect(JSON.stringify(result.summary)).toBe(
-      JSON.stringify([{ n: 1, exec: { yes: 3, no: 0, passed: true, candidate: g.mafia.seat } }]),
+      JSON.stringify([{ n: 1, exec: { yes: 4, no: 0, passed: true, candidate: g.mafia.seat } }]), // 산 사람 4명이 모두 찬성(22-09 D-11 후보 없는 찬반)
     );
     const stored = await storedRoom(g.r.code);
     expect(`${stored.phase} ${stored.winner} ${stored.phaseEndsAt}`).toBe("ended citizenWin null");
@@ -151,7 +145,7 @@ describe("아침으로 끝나는 판 (END-01, D-10)", () => {
     expect(views[0]!.result!.seats.length).toBe(4);
     expect(JSON.stringify(views[0]!.result!.summary)).toBe(
       JSON.stringify([
-        { n: 1, exec: { yes: 3, no: 0, passed: true, candidate: g.c0.seat }, night: { target: g.c1.seat, died: true } },
+        { n: 1, exec: { yes: 4, no: 0, passed: true, candidate: g.c0.seat }, night: { target: g.c1.seat, died: true } },
       ]),
     );
     expect(`${(await storedRoom(g.r.code)).expiresAt} ${await alarmOf(g.r.code)}`).toBe(`${E + ENDED_TTL_MS} ${E + ENDED_TTL_MS}`);

@@ -6,9 +6,6 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
 import { PHASE_DEFS } from "../../shared/game/phases";
-import type { RoomState } from "../../shared/game/room";
-import { tick } from "../../shared/game/tick";
-import { nominationSpanMs } from "../helpers/voteState";
 import { advanceTo, chatSend, chatKeysOf, connect, editRoom, mapPlayers, endAs, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, restoreStorage, segEndsBySeat, settle, snapSeatsOf, snapshotStorage, stable, startedGame, storedRoom, summary, typingSend, withRole, worldFramesOf, worldOf } from "./helpers";
 import type { Game } from "./helpers";
 
@@ -124,17 +121,15 @@ describe("아침 진입 — 모두 home (결정 0061-4, UI-SPEC A1·L5)", () => 
     expect(snapPoints(got[g.actors.indexOf(victim)]!)).toBe(homeRows(home, [0, 1, 2, 3, 4, 5]));
   }, 40_000);
 
-  it("알람이 늦어 토론에서 지목·밤을 지나 아침으로 한 번에 따라잡아도 아침 위치가 토론이 끝난 자리(home)다", async () => {
+  it("알람이 늦어 토론에서 찬반(부결)·밤을 지나 아침으로 한 번에 따라잡아도 아침 위치가 토론이 끝난 자리(home)다", async () => {
     const g = await startedGame("discussion");
     moveAs(withRole(g, "citizen")[0]!, -120, 60);
     moveAs(withRole(g, "mafia")[0]!, 160, -80);
     for (const sock of g.socks) await settle(sock, mark(sock));
     await flushWorld(g.code);
     const before = await segEndsBySeat(g.code, 1);
-    // 지목 길이는 저장된 토론 상태에서 지목 첫 순간을 만들고 마감 사슬을 따라 계산한다(지목 방식과 무관, 09.1-03).
-    const stored = (await storedRoom(g.code)) as unknown as RoomState;
-    const nominationFirst = tick(stored, stored.phaseEndsAt!);
-    const late = nominationSpanMs(nominationFirst, 1) + PHASE_DEFS.night.durationMs! + 1000;
+    // 아무도 안 던진 찬반은 부결이라 토론 마감 → 찬반 길이 → 밤 길이를 지나 아침이다(22-09, 지목 없음).
+    const late = PHASE_DEFS.verdict.durationMs! + PHASE_DEFS.night.durationMs! + 1000;
     await editRoom(g.code, (room) => ({ ...room, phaseEndsAt: Date.now() - late }));
     const marks = g.socks.map((s) => mark(s));
 
@@ -194,7 +189,7 @@ const kinds = (msgs: ServerMessage[]): string =>
     .join(",");
 
 describe("세 경로 동일성 — 테스트 넘기기·토론 끝내기도 단계 마감과 같은 밤·home (결정 0061-19, T-09-20)", () => {
-  it("테스트 방에서 testSkip 으로 토론 → 지목 → 밤에 가도 home 이 기록되고 시민 편 소켓의 밤 snap 이 본인 한 칸(home)이다", async () => {
+  it("테스트 방에서 testSkip 으로 토론 → 찬반 → 밤에 가도 home 이 기록되고 시민 편 소켓의 밤 snap 이 본인 한 칸(home)이다", async () => {
     const r = await seat(3, 0, { testMode: true });
     const socks = [r.host, ...r.guests.map((g) => g.sock)];
     for (const sock of socks) await settle(sock, mark(sock));
@@ -202,7 +197,7 @@ describe("세 경로 동일성 — 테스트 넘기기·토론 끝내기도 단�
     await settle(r.host, mark(r.host));
     send(r.host, { t: "start" });
     for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
-    await skipThrough(r, "nomination");
+    await skipThrough(r, "verdict");
     const home = await homeBySeat(r.code);
     expect(home.split("|")[0]).toBe("1");
     for (const sock of socks) await settle(sock, mark(sock));
@@ -216,7 +211,7 @@ describe("세 경로 동일성 — 테스트 넘기기·토론 끝내기도 단�
     for (let i = 0; i < socks.length; i += 1) expect(snapPoints(got[i]!)).toBe(homeRows(home, [mine(i)]));
   }, 40_000);
 
-  it("산 사람 전원이 토론 끝내기를 눌러 과반으로 지목에 들어가도 토론 마지막 자리가 home 으로 기록된다", async () => {
+  it("산 사람 전원이 토론 끝내기를 눌러 과반으로 찬반에 들어가도 토론 마지막 자리가 home 으로 기록된다", async () => {
     const g = await startedGame("discussion");
     moveAs(withRole(g, "citizen")[0]!, -120, 60);
     for (const sock of g.socks) await settle(sock, mark(sock));
@@ -224,7 +219,7 @@ describe("세 경로 동일성 — 테스트 넘기기·토론 끝내기도 단�
     const before = await segEndsBySeat(g.code, 1);
 
     for (const a of g.actors) endAs(a.sock, true);
-    for (const sock of g.socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "nomination");
+    for (const sock of g.socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "verdict");
 
     expect(await homeBySeat(g.code)).toBe(before);
   }, 40_000);

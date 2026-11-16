@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
-import { advanceTo, chatRecordsOf, chatsOf, closePhase, connect, editRoom, homeBySeat, lastViewOf, mapPlayers, mark, nextFrame, pickAs, pointAll, send, settle, startedGame, storedRoom, verdictAll, withRole } from "./helpers";
+import { advanceTo, chatRecordsOf, chatsOf, closePhase, connect, editRoom, homeBySeat, lastViewOf, mapPlayers, mark, nextFrame, pickAs, pointAll, send, settle, startedGame, storedRoom, withRole } from "./helpers";
 import type { Game } from "./helpers";
 
 type Card = Extract<ServerMessage, { t: "chat" }>;
@@ -18,7 +18,7 @@ async function chatsSince(g: Game, marks: number[]): Promise<Card[][]> {
 
 const cardText = (c: Card): string => `${c.ch}/${c.k ?? "-"}/${c.seat}/${c.text}`;
 
-/** 처형으로 끝나는 낮: defender 에게 will(있으면)을 저장해 두고 지목 → 변론 → 찬반 통과 → 처형 진입까지 끌고 간다. 처형 진입 전 mark 를 돌려준다. */
+/** 처형으로 끝나는 낮: defender 에게 will(있으면)을 저장해 두고 (찬반은 advanceTo 가 통과시킨다) 지목 → 변론 → 처형 진입까지 끌고 간다. 처형 진입 전 mark 를 돌려준다. */
 async function execute(will: string | undefined): Promise<{ g: Game; defender: Game["actors"][number]; marks: number[] }> {
   const g = await startedGame("nomination");
   const defender = withRole(g, "citizen")[0]!;
@@ -28,11 +28,11 @@ async function execute(will: string | undefined): Promise<{ g: Game; defender: G
   const others = g.actors.filter((a) => a.seat !== defender.seat);
   const bySeat: Record<number, number> = { [defender.seat]: others[0]!.seat };
   for (const o of others) bySeat[o.seat] = defender.seat;
-  await pointAll(g.code, g.actors, bySeat);
-  await closePhase(g.code);
-  for (const sock of g.socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "verdict");
+  await pointAll(g.code, g.actors, bySeat); // → 변론
+  for (const sock of g.socks) await settle(sock, mark(sock));
   const marks = g.socks.map((s) => mark(s));
-  await verdictAll(g.code, g.actors, Object.fromEntries(others.map((o) => [o.seat, true])));
+  await closePhase(g.code); // 변론 → 처형(유언 카드)
+  for (const sock of g.socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "execution");
   return { g, defender, marks };
 }
 

@@ -358,11 +358,11 @@ describe("찬반 화면 — 신분별 패널·안내·조명 (DAY-06)", () => {
     expect(headOf(container, 1)?.getAttribute("data-done")).toBe("true");
   });
 
-  it("조명 vote, 긴장 1 에 초점은 변론자 3", () => {
+  it("조명 vote, 긴장 0·초점 없음 — 찬반에는 후보가 없어 옛 변론자 초점 분기를 지웠다 (22-09 D-11, RESEARCH A5; 화면 전체 개편은 22-10)", () => {
     mount(makeView({ candidate: 3 }));
     expect(lastScene().lighting).toBe("vote");
-    expect(lastScene().tension).toBe(1);
-    expect(lastScene().focusSeat).toBe(3);
+    expect(lastScene().tension).toBe(0);
+    expect(lastScene().focusSeat).toBeUndefined();
   });
 
   it("찬반에는 지목 이름표 버튼이 없다(이름표를 누르지 않는다)", () => {

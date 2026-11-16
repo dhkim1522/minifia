@@ -1,14 +1,14 @@
 // 테스트 방 방장 도구 규칙(quick 261025-f09, 결정 0022): testSkip·testReset·testRole 의 순수 규칙을 확인한다.
 // 실패 출력은 한 줄이어야 해서(TAP) 상태 비교는 키 순서를 맞춘 문자열로, 목록 비교는 요약 문자열로 한다.
 import { describe, expect, it } from "vitest";
-import { EXECUTION_MS, PHASE_DEFS } from "../../shared/game/phases";
+import { EXECUTION_MS, NOMINATION_GATHER_MS, PHASE_DEFS } from "../../shared/game/phases";
 import { ROLE_IDS, ROLE_TABLE, assignRoles, giveRoleTo, rolesInPlay, testRoleOptions } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
 import { pickTarget } from "../../shared/game/night";
 import { isAlive } from "../../shared/game/alive";
-import { castPoint, castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
+import { castTurnPoint, enterNomination, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { castVerdict } from "../../shared/game/verdict";
 import { finishNomination, finishRunoff, finishShowdown, resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
@@ -625,42 +625,40 @@ const setting = (lobby: RoomState, exec: "random" | "yes" | "no", pick: "random"
 };
 const botsIn = (state: RoomState) => state.players.filter((p) => p.isBot === true).sort((a, b) => a.seat - b.seat);
 
-/** 변론자를 뺀 산 사람 전원이 찬성한 찬반 상태로 만든다(skipPhase 가 봇 찬반을 무작위로 던지지 않게 — 통과를 고정). */
+/** 산 사람 전원이 찬성한 찬반 상태로 만든다(skipPhase 가 봇 찬반을 무작위로 던지지 않게 — 통과를 고정). 후보가 없다(22-09 D-11). */
 const verdictAllAgree = (state: RoomState): RoomState => {
-  const defender = state.verdict?.candidate;
-  const agree = Object.fromEntries(state.players.filter((p) => isAlive(p) && p.seat !== defender).map((p) => [p.seat, true]));
+  const agree = Object.fromEntries(state.players.filter(isAlive).map((p) => [p.seat, true]));
   return castVerdicts(state, agree);
 };
 /** 봇 4명 방의 처형 단계(통과, 변론자 탈락). 새 흐름의 변론 → 찬반 → 처형을 걸어 만든다. */
 const executionOf = (candidate: "citizen" | "mafia"): RoomState => stateWithVerdict(5, 6, "execution", { lobby: botLobby(), candidate });
 
 describe("skipPhase: 분기 단계를 따라 끝까지 넘어간다", () => {
-  it("defense → verdict(now + 10000) → execution(now + EXECUTION_MS), execution → 승패가 안 났으면 밤, 났으면 ended(마감 없음)", () => {
+  it("defense → execution(now + EXECUTION_MS, 처형자 탈락), execution → 승패가 안 났으면 밤, 났으면 ended(마감 없음)", () => {
     const defense = stateWithVerdict(5, 6, "defense", { lobby: botLobby(), candidate: "citizen" });
     const now = defense.phaseEndsAt! - 500;
-    const verdict = skipOk(defense, now, seededRandInt(9));
-    expect(`${verdict.phase}/${verdict.phaseEndsAt}`).toBe(`verdict/${now + 10_000}`);
-    const execution = skipOk(verdictAllAgree(verdict), now, seededRandInt(9));
+    const execution = skipOk(defense, now, seededRandInt(9));
     expect(`${execution.phase}/${execution.phaseEndsAt}`).toBe(`execution/${now + EXECUTION_MS}`);
     expect(execution.players.filter((p) => p.alive === false).length).toBe(1);
     const night = skipOk(execution, now, seededRandInt(9));
     expect(night.phase).toBe("night");
 
     const mafiaDefense = stateWithVerdict(5, 6, "defense", { lobby: botLobby(), candidate: "mafia" });
-    const mafiaVerdict = skipOk(mafiaDefense, now, seededRandInt(9));
-    const mafiaExecution = skipOk(verdictAllAgree(mafiaVerdict), now, seededRandInt(9));
+    const mafiaExecution = skipOk(mafiaDefense, now, seededRandInt(9));
     const ended = skipOk(mafiaExecution, now, seededRandInt(9));
     expect(`${ended.phase}/${ended.winner}/${ended.phaseEndsAt}`).toBe("ended/citizenWin/null");
   });
 
-  it("찬반이 부결이면 처형 단계로 가도 아무도 탈락하지 않고 밤으로 간다", () => {
-    const verdict = skipOk(stateWithVerdict(5, 6, "defense", { lobby: botLobby(), candidate: "citizen" }), 20_000, seededRandInt(9));
-    const defender = verdict.verdict!.candidate!;
-    const against = Object.fromEntries(verdict.players.filter((p) => p.seat !== defender).map((p) => [p.seat, false]));
-    const execution = skipOk(castVerdicts(verdict, against), 20_000, seededRandInt(9));
-    expect(execution.phase).toBe("execution");
-    expect(execution.players.every((p) => p.alive !== false)).toBe(true);
-    expect(skipOk(execution, 20_000, seededRandInt(9)).phase).toBe("night");
+  it("verdict(봇 찬성) → nomination(now + 모이기 3000), 부결(봇 반대)이면 처형·지목 없이 night 이고 아무도 탈락하지 않는다 (D-10·D-11)", () => {
+    const yes = stateWithVerdict(5, 6, "verdict", { lobby: setting(botLobby(), "yes", "random") });
+    const now = yes.phaseEndsAt! - 500;
+    const nomination = skipOk(yes, now, seededRandInt(9));
+    expect(`${nomination.phase}/${nomination.phaseEndsAt}/${nomination.pickTurn?.i}`).toBe(`nomination/${now + NOMINATION_GATHER_MS}/-1`);
+    const no = stateWithVerdict(5, 6, "verdict", { lobby: setting(botLobby(), "no", "random") });
+    const night = skipOk(no, now, seededRandInt(9));
+    expect(night.phase).toBe("night");
+    expect(night.players.every((p) => p.alive !== false)).toBe(true);
+    expect(night.voteLog?.[0]?.reason).toBe("rejected");
   });
 
   it("ended 에서 skipPhase 는 WRONG_PHASE 다", () => {
@@ -878,9 +876,8 @@ describe("넘기기 지목 마무리 (결정 0063-1)", () => {
 describe("skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다", () => {
   const trial = (phase: "nomination" | "verdict", over: Partial<RoomState> = {}, lobby: RoomState = botLobby()): RoomState => {
     const base = startedFrom(lobby, 3, "discussion");
-    // 찬반은 지목 마감이 만든 그날 voteLog 줄을 채운다 — 줄이 없으면 기록하지 않으므로 줄을 함께 세운다.
-    const line = phase === "verdict" ? { voteLog: [{ n: base.day ?? 1, exec: { yes: 0, no: 0, passed: false }, cand: { votes: [] } }] } : {};
-    return { ...base, phase, phaseEndsAt: 100_000 + PHASE_DEFS[phase].durationMs!, ...line, ...over };
+    // 찬반이 그날 voteLog 줄을 만든다(22-09) — 줄을 따로 세우지 않는다.
+    return { ...base, phase, phaseEndsAt: 100_000 + PHASE_DEFS[phase].durationMs!, ...over };
   };
   const THROWING = (): number => {
     throw new Error("randInt must not be called");
@@ -890,15 +887,9 @@ describe("skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다", (
   /** 그날 voteLog 줄의 찬반 집계. */
   const tally = (s: RoomState): string => JSON.stringify(s.voteLog?.[0]?.exec);
 
-  // 기본판(결정 0072): 차례 없는 투표는 동시 투표 — 넘기기가 안 던진 산 봇의 표를 먼저 채운다. 아래 "넘기기: 기본판 투표 봇 표" 가 자세히 본다.
-  it("nomination: 차례 없는 투표는 안 던진 봇의 표를 먼저 채우고 마감을 당긴다 — 봇 넷이 방장을 고르면 변론이다 (결정 0072)", () => {
-    const after = skipOk(trial("nomination", {}, setting(botLobby(), "random", "host")), 100_000, seededRandInt(1));
-    expect(after.phase).toBe("defense");
-    expect(nominates(after)).toBe("1>0,2>0,3>0,4>0");
-  });
-
-  it("verdict: 변론자가 아닌 안 던진 봇이 먼저 던지고(봇마다 randInt(100) 한 번) 변론자 봇은 던지지 않으며, 이미 던진 봇은 그대로다", () => {
-    const state = trial("verdict", { verdict: { passed: false, candidate: 2 } });
+  // 22-09: 동시 투표(차례 없는 지목)는 지웠다 — 지목을 넘기는 시험은 위 "skipPhase: 순차 지목" 이 본다. 이 describe 는 찬반만 본다.
+  it("verdict: 안 던진 산 봇 모두가 먼저 던지고(봇마다 randInt(100) 한 번, 후보 제외 없음) 이미 던진 봇은 그대로다", () => {
+    const state = trial("verdict");
     const first = botsIn(state)[0]!; // seat 1
     const cast = castVerdict(state, first.id, false);
     if (!cast.ok) throw new Error(cast.error);
@@ -907,21 +898,21 @@ describe("skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다", (
       calls.push(n);
       return 0; // randInt(100) = 0 < 70 → 찬성
     });
-    // 봇 1 은 먼저 반대, 변론자 봇 2 는 못 던지고, 봇 3·4 는 찬성(70% 미만). 방장은 사람이라 던지지 않는다 → 찬성 2 · 반대 1, 유권자 4 라 부결.
-    expect(tally(after)).toBe('{"yes":2,"no":1,"passed":false}');
+    // 봇 1 은 먼저 반대, 봇 2·3·4 는 찬성(70% 미만). 방장은 사람이라 던지지 않는다 → 찬성 3 · 반대 1 — 던진 표의 과반이 찬성이라 통과.
+    expect(tally(after)).toBe('{"yes":3,"no":1,"passed":true}');
     expect(after.players.every((p) => p.verdictVote === undefined)).toBe(true);
-    expect(calls.filter((n) => n === 100).join(",")).toBe("100,100"); // 봇 찬반 결정 난수만 센다(그 뒤 tick 이 단계 진입에서 부르는 난수는 제외)
+    expect(calls.filter((n) => n === 100).join(",")).toBe("100,100,100"); // 봇 찬반 결정 난수만 센다(그 뒤 tick 이 단계 진입에서 부르는 난수는 제외)
   });
 
   it("verdict: 고정 yes·no 면 봇이 모두 그 값으로 던지고 찬반 결정 난수를 부르지 않는다", () => {
     for (const exec of ["yes", "no"] as const) {
-      const state = trial("verdict", { verdict: { passed: false, candidate: 0 } }, setting(botLobby(), exec, "random"));
+      const state = trial("verdict", {}, setting(botLobby(), exec, "random"));
       const calls: number[] = [];
       const after = skipOk(state, 100_000, (n) => {
         calls.push(n);
         return 0;
       });
-      // 변론자는 방장(사람)이다 — 봇 4명이 모두 같은 값으로 던졌다. 유권자 4, 찬성 4 면 통과·반대 4 면 부결.
+      // 봇 4명이 모두 같은 값으로 던졌다(방장은 사람이라 안 던진다). 찬성 4 면 통과·반대 4 면 부결.
       expect(`${exec}:${tally(after)}`).toBe(`${exec}:${exec === "yes" ? '{"yes":4,"no":0,"passed":true}' : '{"yes":0,"no":4,"passed":false}'}`);
       expect(`${exec}:${calls.includes(100)}`).toBe(`${exec}:false`); // 봇 찬반 결정 난수(randInt(100))는 부르지 않는다(처형 단계 문구 추첨은 tick 이 부른다)
     }
@@ -1163,50 +1154,13 @@ describe("resetToLobby — 의상 유지 (10-02, 결정 D-6)", () => {
   });
 });
 
-// ---- 13-02: 기본판 투표 봇 표 (결정 0072, FLOW-05) ----
-describe("넘기기: 기본판 투표 봇 표 (결정 0072)", () => {
-  const vote = (lobby: RoomState = botLobby()): RoomState => {
-    const base = startedFrom(lobby, 3, "discussion");
-    return { ...base, phase: "nomination", phaseEndsAt: 100_000 + PHASE_DEFS.nomination.durationMs! };
-  };
-  const THROWING = (): number => {
-    throw new Error("randInt must not be called");
-  };
-  const log = (s: RoomState): string => (s.voteLog?.[0]?.cand?.votes ?? []).map((v) => `${v.seat}>${v.target}`).join(",");
-
-  it("안 던진 산 봇만 좌석 순으로 던진다 — 봇이 사람 한 명을 고르면 그 사람이 변론에 선다", () => {
-    const after = skipOk(vote(setting(botLobby(), "random", "host")), 100_000, THROWING);
-    expect(after.phase).toBe("defense");
-    expect(after.verdict?.candidate).toBe(0);
-    expect(log(after)).toBe("1>0,2>0,3>0,4>0");
-  });
-
-  it("이미 던진 봇과 사람의 표는 그대로고 그 봇의 난수는 부르지 않는다", () => {
-    const base = vote(setting(botLobby(), "random", "other"));
-    const [b1] = botsIn(base);
-    const humanVote = castPoint(base, base.hostId, 2);
-    if (!humanVote.ok) throw new Error(humanVote.error);
-    const botVote = castPoint(humanVote.state, b1!.id, 3);
-    if (!botVote.ok) throw new Error(botVote.error);
-    const calls: number[] = [];
-    const after = skipOk(botVote.state, 100_000, (n) => {
-      calls.push(n);
-      return 0;
-    });
-    // 방장 0>2, 봇 1>3 은 그대로. 나머지 봇 2·3·4 는 고정 other(방장 아닌 가장 낮은 좌석 — 자기면 그다음)로 던진다.
-    expect(log(after)).toBe("0>2,1>3,2>1,3>1,4>1");
-    expect(calls.includes(3) || calls.includes(4)).toBe(false);
-  });
-
-  it("사람 표는 건드리지 않는다 — 사람이 안 던졌으면 줄에 없다", () => {
-    const after = skipOk(vote(setting(botLobby(), "random", "other")), 100_000, seededRandInt(2));
-    expect((after.voteLog?.[0]?.cand?.votes ?? []).some((v) => v.seat === 0)).toBe(false);
-  });
-
-  it("탈락한 봇은 던지지 않는다", () => {
-    const base = vote(setting(botLobby(), "random", "host"));
-    const dead = { ...base, players: base.players.map((p) => (p.seat === 2 ? { ...p, alive: false } : p)) };
-    const after = skipOk(dead, 100_000, THROWING);
-    expect(log(after)).toBe("1>0,3>0,4>0");
+// ---- 22-09: 동시 투표 봇 표(13-02)는 지웠다 — 찬반 단계의 봇 표 채우기는 위 "skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다" 가 본다. ----
+describe("넘기기: 찬반 사람 표 (22-09)", () => {
+  it("사람이 던진 찬반 표는 그대로 센다 — 사람 반대 + 봇 4 찬성 = 통과(던진 표의 과반)", () => {
+    const base = stateWithVerdict(5, 3, "verdict", { lobby: setting(botLobby(), "yes", "random") });
+    const cast = castVerdict(base, base.hostId, false);
+    if (!cast.ok) throw new Error(cast.error);
+    const after = skipOk(cast.state, base.phaseEndsAt! - 500, seededRandInt(2));
+    expect(JSON.stringify(after.voteLog?.[0]?.exec)).toBe('{"yes":4,"no":1,"passed":true}');
   });
 });

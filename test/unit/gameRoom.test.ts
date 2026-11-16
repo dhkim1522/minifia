@@ -696,7 +696,7 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
     expect(String(stored.phase)).toBe("day"); // 입력은 바꾸지 않는다
   });
 
-  it("기본판: 투표(nomination) 방은 차례 정보가 없고 표가 있어도 입력과 같은 객체다 — DO 를 다시 깨워도 마감·표가 그대로다 (결정 0072)", () => {
+  it("순차 지목이 기본 규칙이라(22-09): 차례 정보 없이 저장된 옛 투표(nomination) 방은 지금 시각부터 모이기로 다시 시작하고 옛 지목 표는 지워진다 — 차례가 있는 방은 그대로다 (결정 0063-1)", () => {
     const base = fullRoom([0, 1, 2, 3]);
     const stored: RoomState = {
       ...base,
@@ -706,8 +706,10 @@ describe("normalizeStoredRoom — 저장된 옛 방 (RESEARCH Pattern 6, T-02-14
       players: base.players.map((p, i) => ({ ...p, role: ROLE_IDS[i % ROLE_IDS.length], ...(i < 2 ? { nominate: 3 } : {}) })),
     };
     const got = normalizeStoredRoom(stored, 5_000);
-    expect(got === stored).toBe(true);
-    expect(`${got.phaseEndsAt}/${got.pickTurn === undefined}/${got.players.filter((p) => p.nominate === 3).length}`).toBe("77000/true/2");
+    expect(got === stored).toBe(false);
+    expect(`${got.phaseEndsAt}/${JSON.stringify(got.pickTurn)}/${got.players.filter((p) => p.nominate === 3).length}`).toBe(`${5_000 + NOMINATION_GATHER_MS}/${JSON.stringify({ order: base.players.map((p) => p.seat).sort((a, b) => a - b), i: -1 })}/0`);
+    const withTurn: RoomState = { ...stored, pickTurn: { order: base.players.map((p) => p.seat), i: 1, endsAt: 80_000 } };
+    expect(normalizeStoredRoom(withTurn, 5_000) === withTurn).toBe(true);
   });
 
   it("lobby·roleReveal·discussion 상태는 messages 키가 없으면 같은 객체를 돌려준다", () => {
