@@ -1,7 +1,7 @@
 // 다시 하기 순수 규칙 (11-08, D-12·D-15, REMATCH-01, 누설 L39). 방장이 rematch 하면 허용 목록 리터럴로 새 판이 만들어지고 이전 판의 필드는 하나도 남지 않는다.
 import { describe, expect, it } from "vitest";
 import { assignRoles } from "../../shared/game/roles";
-import { ROOM_TTL_MS, roundOf } from "../../shared/game/room";
+import { ROOM_TTL_MS, beginGame, roundOf } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import {
   REMATCH_MAX_AGE_MS,
@@ -72,6 +72,7 @@ function endedRoom(players: Player[], over: Record<string, unknown> = {}): RoomS
     nightLog: [{ n: 1, died: true }],
     winner: "citizenWin",
     whispers: [{ n: 1, from: 1, to: 2, text: "귓속말 CANARY", at: 1 }],
+    notes: [{ n: 2, from: 1, to: 31337 }],
     botPlan: { key: "x", steps: [] },
     pickTurn: { order: [0], i: 0 },
     runoff: { cand: [0, 1], step: 0 },
@@ -193,10 +194,10 @@ describe("rematch 허용 목록 리터럴 (D-15, 누설 L39)", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const text = JSON.stringify(r.state);
-    for (const canary of ["CANARY", "citizenWin", "nightLog", "voteLog", "whispers", "badgeLog", "stats", "nightPick", "investigations", "assassinations", "treatments"]) {
+    for (const canary of ["CANARY", "citizenWin", "nightLog", "voteLog", "whispers", "31337", "badgeLog", "stats", "nightPick", "investigations", "assassinations", "treatments"]) {
       expect(text).not.toContain(canary);
     }
-    for (const key of ["winner", "day", "morning", "nightNote", "chalk", "verdict", "voteLog", "execution", "nightLog", "whispers", "botPlan", "pickTurn", "runoff", "showdown"]) {
+    for (const key of ["winner", "day", "morning", "nightNote", "chalk", "verdict", "voteLog", "execution", "nightLog", "whispers", "notes", "botPlan", "pickTurn", "runoff", "showdown"]) {
       expect(Object.hasOwn(r.state, key)).toBe(false);
     }
     for (const p of r.state.players) {
@@ -204,6 +205,12 @@ describe("rematch 허용 목록 리터럴 (D-15, 누설 L39)", () => {
         expect(Object.hasOwn(p, key)).toBe(false);
       }
     }
+  });
+
+  it("beginGame 은 들어온 상태의 의심 notes 를 새 판에 가져가지 않는다(24-01 D-08 벨트)", () => {
+    const started = beginGame(endedRoom(four(), { phase: "lobby" }), NOW, seededRandInt(3));
+    expect(Object.hasOwn(started, "notes")).toBe(false);
+    expect(JSON.stringify(started)).not.toContain("31337");
   });
 
   it("같은 시드는 같은 역할 배정(좌석 오름차순 id → assignRoles), 입력 상태는 바뀌지 않는다", () => {

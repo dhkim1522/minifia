@@ -253,6 +253,15 @@ describe("resetToLobby", () => {
     expect(Object.keys(joined).sort().join(",")).toBe("connId,connected,id,joinSeq,look,nickname,nicknameKey,seat,token");
   });
 
+  it("의심 포스트잇 notes 는 대기실로 되돌리면 키째 없다(24-01 D-08)", () => {
+    const base = stateAt(5, 1, "discussion");
+    const withNotes = { ...base, notes: [{ n: 2, from: 1, to: 31337 }] } as RoomState;
+    const r = resetToLobby(withNotes, withNotes.hostId);
+    if (!r.ok) throw new Error(r.error);
+    expect(Object.hasOwn(r.state, "notes")).toBe(false);
+    expect(JSON.stringify(r.state)).not.toContain("31337");
+  });
+
   it("일반 방은 BAD_MESSAGE, 손님은 NOT_HOST, 대기실은 WRONG_PHASE 다", () => {
     const normal = stateAt(5, 1, "discussion", false);
     const a = resetToLobby(normal, normal.hostId);
