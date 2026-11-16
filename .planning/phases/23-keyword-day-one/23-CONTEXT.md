@@ -65,6 +65,11 @@
 - D-28 (Q7): `left_count` 는 `ended` 진입 시점에 끊겨 있는 사람 수.
 - D-29: 기능 스위치 — `RoomState.keyword === undefined` 이면 `keyword`·`answerReveal` 단계를 건너뛴다(배포 순간 진행 중이던 옛 방·옛 시험 보호). 키워드는 `beginGame` 에서 `decideMap` 뒤 `randInt` 두 번으로 고른다(진입 훅에서 고르지 않음).
 
+### 계획 점검 경고 처리 (자동 채택)
+- D-30: 23-02 는 D1 바인딩을 넣은 직후 `npm run build`(vite)가 database_id 없이 통과하는지 확인한다(마지막 웨이브에서야 깨지는 것을 막음).
+- D-31: 23-01·23-05 는 PhaseId 가입 때문에 GREEN 커밋이 하나로 묶이지만, 시험·스크립트 사본 정리는 GREEN 뒤 별도 커밋으로 나눠도 된다(실행기 컨텍스트를 가볍게).
+- D-32: 23 은 D1 database_id 가 비어 있어 `npm run deploy` 가 막힌다(D-19 의도). HANDOFF·결정 0091 에 적는다.
+
 ### Claude's Discretion
 - 계획 나누기와 순서(조사 권장: 콘텐츠·판정 순수 모듈 / D1 기반 병렬 → 서버 첫날 흐름 / 답 메시지 → 조기 진행 / view·누설 → 클라이언트 → 기록 카드·회귀), 키워드 초안의 구체 단어와 별칭, `ANSWER_MIN_GAP_MS`·`EARLY_GRACE_MS` 의 정확한 값은 계획자·실행자가 정한다.
 
