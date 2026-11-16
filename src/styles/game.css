@@ -48,9 +48,12 @@
 .mf-announce__text { display: block; max-width: 100%; text-align: center; font-family: var(--font-ui); font-size: 36px; line-height: 1.2; font-weight: 700; color: var(--gray-50); text-shadow: var(--shadow-text); word-break: keep-all; overflow-wrap: anywhere; animation: mf-announce-in 600ms var(--ease-out) both; }
 /* 처형과 유언 편지가 있는 아침(0083-10): 위 240 대신 띠 아래에서 시작 — 위 끝 = 띠 면 아랫변(--mf-host-bottom, 값이 없으면 126) + 16, 좌우는 소리 단추 폭(52) + 8 만큼 양쪽 같게 더 비워 단추와 겹치지 않는다(가운데 맞춤 유지). 36px·뒤 어둡게 62% 는 그대로, 좁아진 폭에서 keep-all 로 감긴다 */
 .mf-announce.is-top { padding-top: calc(var(--mf-host-bottom, 126px) + var(--space-md)); padding-left: calc(var(--space-md) + 52px + var(--space-sm)); padding-right: calc(var(--space-md) + 52px + var(--space-sm)); }
+/* 정답 공개 위 줄(23-07, P23-20): "정답" Body 16/700 gray-300, 키워드 36px 위. 간격은 body 의 gap(8)이 만든다. 재접속 첫 화면(is-still)은 모션 없이 서 있다 */
+.mf-announce__label { display: block; text-align: center; font-family: var(--font-ui); font-size: 16px; line-height: 1.4; font-weight: 700; color: var(--gray-300); text-shadow: var(--shadow-text); animation: mf-announce-in 600ms var(--ease-out) both; }
+.mf-announce.is-still, .mf-announce.is-still .mf-announce__text, .mf-announce.is-still .mf-announce__label { animation: none; }
 @keyframes mf-announce-dim { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mf-announce-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .mf-announce, .mf-announce__text { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .mf-announce, .mf-announce__text, .mf-announce__label { animation: none; } }
 
 /* 유령이 되는 순간(08-17, UI-SPEC "유령이 되는 순간"): 이름표 위 직업 칩이 dur-med 동안 나타난다. 재접속 첫 화면에는 data-ghost-enter 가 없어 연출이 없다 */
 .mf-game[data-ghost-enter] .mv-rolechip { animation: mf-chip-in var(--dur-med) var(--ease-out) both; }

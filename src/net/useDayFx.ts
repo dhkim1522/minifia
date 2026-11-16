@@ -19,7 +19,7 @@ import { useEffect, useRef, useState } from "react";
 import { isAlive } from "../../shared/game/alive";
 import type { RoomView } from "../../shared/protocol";
 import { CHAT_TEXT } from "../game/chatText";
-import { DAY_COPY, dayEvents, GHOST_FADE_END_MS, POLICE_CARD_AT, policeResultOf } from "../game/dayView";
+import { answerStillOf, DAY_COPY, dayEvents, GHOST_FADE_END_MS, POLICE_CARD_AT, policeResultOf } from "../game/dayView";
 import type { AnnounceIcon } from "../game/dayView";
 import { leaderShift } from "../world/presence";
 import type { ChatStore } from "./chatStore";
@@ -28,6 +28,10 @@ import type { ChatStore } from "./chatStore";
 export interface AnnounceShow {
   text: string;
   icon?: AnnounceIcon;
+  /** 정답 공개의 위 줄 라벨(23-07) */
+  label?: string;
+  /** 재접속 첫 화면의 정답 큰 글: 등장 모션 없이 남은 시간만(23-07) */
+  still?: boolean;
 }
 
 export interface DayFx {
@@ -131,6 +135,18 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     if (prev === view) return; // 같은 view 로 다시 실행됨(개발 모드 이중 실행)
     const ev = dayEvents(prev, view, reset ? { reset: true } : {});
 
+    // 재접속·새로고침으로 정답 공개 중간에 들어온 첫 화면(prev 없음·epoch 직후): 정답 큰 글을 남은 시간만 모션 없이 보인다(23-07). 다른 단계는 첫 스냅샷에 알림이 없다.
+    if (prev === null || reset) {
+      const still = answerStillOf(view);
+      if (still !== null) {
+        setAnnounce({ text: still.text, label: still.label, still: true });
+        hideTimer.current = setTimeout(() => {
+          hideTimer.current = undefined;
+          setAnnounce(null);
+        }, still.ms);
+      }
+    }
+
     // 손사래: 선두가 새 사람으로 바뀔 때마다 한 번(첫 스냅샷·재접속은 leaderShift 가 null)
     const shifted = reset ? null : leaderShift(prev, view);
     if (shifted !== null) setDeny((d) => ({ seat: shifted, nonce: (d?.nonce ?? 0) + 1 }));
@@ -180,7 +196,7 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     }
     for (const a of announces) {
       later(a.at, () => {
-        setAnnounce({ text: a.text, ...(a.icon !== undefined ? { icon: a.icon } : {}) });
+        setAnnounce({ text: a.text, ...(a.icon !== undefined ? { icon: a.icon } : {}), ...(a.label !== undefined ? { label: a.label } : {}) });
         if (hideTimer.current !== undefined) clearTimeout(hideTimer.current);
         hideTimer.current = setTimeout(() => {
           hideTimer.current = undefined;

@@ -261,7 +261,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     const input = inputRef.current;
     return root !== null && input !== null ? input.getBoundingClientRect().top - root.getBoundingClientRect().top : null;
   };
-  const shownAnnounce = letter !== null ? (letterLive ? letter.announce : null) : announce;
+  const shownAnnounce: DayFx["announce"] = letter !== null ? (letterLive ? letter.announce : null) : announce;
   const killNonce = killFx?.nonce ?? 0;
   const seenKill = useRef(killNonce);
   const killTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -686,7 +686,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       {/* 장면 전환 막(09-20): 결과 알림보다 앞(DOM 순서)에 두어 막을 붙잡는 동안 알림이 막 위로 올라올 수 있게 한다. 덮기는 공개 마감만의 함수다 */}
       <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} />
       <KillFx nonce={killNonce} reducedMotion={reducedMotion} />
-      <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(letter !== null || moment.active ? { placement: "top" as const } : {})} />
+      <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(shownAnnounce?.label !== undefined ? { label: shownAnnounce.label } : {})} {...(shownAnnounce?.still === true ? { still: true } : {})} {...(letter !== null || moment.active ? { placement: "top" as const } : {})} />
       {/* 유언 공개 카드(P22-11): 처형 단계 0~3.0초 모두의 화면. 독 아랫변 + 8, 폭 = 화면 − 32, 누를 수 없다. 사라질 때는 dur-med 페이드 */}
       {moment.will !== null ? (
         <div className="mv-will-reveal">

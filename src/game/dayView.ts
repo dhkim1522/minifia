@@ -8,7 +8,7 @@
 // 형식은 src/net/roomDiff.ts 선례: 이전 view 가 없으면(첫 스냅샷·재접속) 이벤트 없이 정상 상태만 준다.
 import { isAlive } from "../../shared/game/alive";
 import { majorityOf } from "../../shared/game/nomination";
-import { EXEC_ANNOUNCE_MS, EXECUTION_MS, WILL_REVEAL_MS } from "../../shared/game/phases";
+import { ANSWER_REVEAL_MS, EXEC_ANNOUNCE_MS, EXECUTION_MS, NO_EXECUTION_MS, WILL_REVEAL_MS } from "../../shared/game/phases";
 import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
 import { MORNING_TEXT, morningText } from "./eliminationText";
@@ -25,6 +25,8 @@ export const DAY_COPY = {
   noExecution: "처형 없음",
   /** 유언 공개 카드(22-12 P22-12): 처형자가 유언을 남기지 않았을 때 같은 카드·같은 3.0초에 쓰는 한 줄 */
   willEmpty: "말없이 떠났어요",
+  /** 첫날 정답 공개 큰 글의 위 줄(23-07, P23-20) — 아래 줄이 키워드다 */
+  answerLabel: "정답",
   // ---- 결과 알림(36px) ----
   // 14페이즈 U-5: 아래 두 문구는 결과 알림(36px)으로 쓰지 않는다(자막 띠가 같은 말을 한다). 상수는 지우지 않는다.
   announceDay: "낮이 되었습니다",
@@ -64,8 +66,8 @@ export const DAY_COPY = {
 // 찬반 득표 알림("찬성 n · 반대 m")은 없다(D-14) — 부결은 처형 단계가 없어 night 진입 알림 '처형 없음' 한 가지다(P22-4).
 /** 처형 큰 글 "{이름} 님 처형"이 선 채 머무는 시간 — 유언 카드(WILL_REVEAL_MS) 뒤 3.0초 */
 export const ANNOUNCE_EXEC_MS = EXEC_ANNOUNCE_MS;
-/** 찬반 부결·지목 동률/0표(밤 시작): "처형 없음" 1.4초 */
-export const ANNOUNCE_NOEXEC_MS = 1400;
+/** 찬반 부결·지목 동률/0표: "처형 없음" 1.4초. 서버 상수와 한 값이다(23-07 D-22) — 첫날은 answerReveal 단계가 이 시간 만큼 길어진다(phaseDurationOf) */
+export const ANNOUNCE_NOEXEC_MS = NO_EXECUTION_MS;
 /** 낮 시작 단계(DAY_ANNOUNCE_MS) 2초. 14 U-5 로 36px 알림은 없어졌고 상수만 남는다 */
 export const ANNOUNCE_DAY_MS = 2000;
 /** 처형된 사람이 반투명으로 떠오르는 시간 → 2.4초까지 사라진다(알림 시작 기준) */
@@ -99,6 +101,8 @@ export interface DayLine {
 /** 결과 알림(36px) 한 건 — 한 번에 하나, 새 알림이 이전 것을 바꾼다. at·ms 는 단계 진입 기준 ms. */
 export interface DayAnnounce {
   text: string;
+  /** 글자 위 한 줄 라벨(정답 공개 "정답"). 없으면 글자만 */
+  label?: string;
   /** 알림 앞 아이콘(56). 없으면 글자만 */
   icon?: AnnounceIcon;
   at: number;
@@ -204,6 +208,26 @@ export function policeResultOf(prev: RoomView | null, cur: RoomView): { seat: nu
   return line === undefined ? null : { seat: line.target, isMafia: line.isMafia };
 }
 
+/** 처형 없음 판정이 나는 낮 단계(찬반·지목·결선·마지막 3인)에서 막 나왔는가 — 밤·정답 공개 진입 알림의 공통 조건 */
+const isDayBefore = (prev: RoomView): boolean => prev.phase === "verdict" || prev.phase === "nomination" || prev.phase === "runoff" || prev.phase === "showdown";
+/** day.noExecution 의 이유 셋(찬반 부결·지목 동점·0표)은 큰 글 '처형 없음' 한 가지(P22-4) */
+const isNoExecution = (day: NonNullable<RoomView["day"]>): boolean => {
+  const reason = day.noExecution?.reason;
+  return reason === "tie" || reason === "noVotes" || reason === "rejected";
+};
+
+/**
+ * 재접속·새로고침으로 answerReveal 중간에 들어온 첫 화면(23-07, UI-SPEC partial 재접속): 정답 큰 글을 남은 시간만 모션 없이 보인다.
+ * 남은 시간은 서버 시계끼리의 차(phaseEndsAt - serverNow)라 기기 시계와 무관하고, 정답 길이(3초)를 넘지 않는다 — 처형 없는 첫날의 앞 1.4초(처형 없음)는 되살리지 않는다.
+ * 단계가 아니거나 정답·마감이 없거나 이미 끝났으면 null. 순수: 시각을 읽지 않는다.
+ */
+export function answerStillOf(view: RoomView): { text: string; label: string; ms: number } | null {
+  const answer = view.day?.keyword?.answer;
+  if (view.phase !== "answerReveal" || answer === undefined || view.phaseEndsAt === null) return null;
+  const ms = Math.min(ANSWER_REVEAL_MS, view.phaseEndsAt - view.serverNow);
+  return ms > 0 ? { text: answer, label: DAY_COPY.answerLabel, ms } : null;
+}
+
 /** 단계에 들어온 순간의 줄·알림·연출. 지연 이벤트는 at(단계 진입 기준 ms)으로 표시해 화면이 시계로 실행한다. */
 function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["day"]>, out: DayEvents): void {
   switch (cur.phase) {
@@ -232,13 +256,28 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       out.fx.push({ kind: "ghostRise", seat, at: WILL_REVEAL_MS });
       return;
     }
+    case "answerReveal": {
+      // 첫날 정답 공개(23-07, D-22·P23-20): 처형이 있었으면 처형 단계가 이미 알렸으므로 정답 큰 글만 0초부터 3초. 처형 없는 첫날(부결·동점·0표)은
+      // 단계가 4.4초로 길어져(서버 phaseDurationOf) "처형 없음" 0~1.4초 다음 1.4초부터 정답 3초 — 두 큰 글이 겹치지 않는다. 역할 분기 없음(T-23-27).
+      // 글자는 서버가 answerReveal 진입 프레임부터 싣는 day.keyword.answer 하나뿐이다(T-23-25) — 없으면 알림도 없다.
+      const answer = day.keyword?.answer;
+      if (answer === undefined) return;
+      let at = 0;
+      if (isDayBefore(prev) && isNoExecution(day)) {
+        out.lines.push({ kind: "system", text: DAY_COPY.noExecution });
+        out.announces.push({ text: DAY_COPY.noExecution, at: 0, ms: ANNOUNCE_NOEXEC_MS });
+        at = ANNOUNCE_NOEXEC_MS;
+      }
+      out.announces.push({ text: answer, label: DAY_COPY.answerLabel, at, ms: ANSWER_REVEAL_MS });
+      return;
+    }
     case "night": {
       // 지목 동률·0표로 처형 없이 온 밤은 "처형 없음"(0~1.4초) 알림만 남는다. 찬반 뒤의 밤은 처형 단계가 이미 알렸다.
       // 마지막 3인(showdown)의 1-1-1·무표도 같다: 처형 단계 없이 밤으로 와서 이 알림이 처형 없음을 알린다(09.1.1-16, UI-SPEC E-1).
       // U-5: "밤이 되었습니다" 36px 알림은 이어지지 않는다(띠가 말한다).
       // 22-10(P22-4): 찬반 부결(rejected)·지목 동점(tie)·0표(noVotes)는 같은 큰 글 '처형 없음' 1.4초 한 가지 — 이유를 구별해 보이지 않는다.
-      const reason = day.noExecution?.reason;
-      if ((prev.phase === "verdict" || prev.phase === "nomination" || prev.phase === "runoff" || prev.phase === "showdown") && (reason === "tie" || reason === "noVotes" || reason === "rejected")) {
+      // 첫날 정답 공개 뒤의 밤(prev.phase === "answerReveal")은 이 목록에 없어 알림이 다시 나오지 않는다(23-07 D-22, day.noExecution 이 밤 view 에 남아 있어도).
+      if (isDayBefore(prev) && isNoExecution(day)) {
         out.lines.push({ kind: "system", text: DAY_COPY.noExecution });
         out.announces.push({ text: DAY_COPY.noExecution, at: 0, ms: ANNOUNCE_NOEXEC_MS });
       }

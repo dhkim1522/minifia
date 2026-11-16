@@ -9,6 +9,10 @@ export interface ResultAnnounceProps {
   icon?: AnnounceIcon;
   /** top = 유언 편지가 있는 아침: 헤더 아래 위 72 로 올라가 편지 묶음 머리에 선다(09.1-11, UI-SPEC C-2). 기본은 위 240 */
   placement?: "top";
+  /** 글자 위 한 줄 라벨(Body 16/700 gray-300, 23-07 정답 공개의 "정답"). 없으면 글자만 — 있으면 key 가 label+text 라 바뀔 때 등장 모션이 다시 돈다 */
+  label?: string;
+  /** 재접속 첫 화면: 등장 모션 없이 남은 시간만 보인다(is-still) */
+  still?: boolean;
 }
 
 // 결과 알림(8페이즈, UI-SPEC "결과 알림"): 가운데 위 240 에 36px. 뒤 맵을 night-950 62% 로 어둡게 한다. 모든 단계 공용 틀이다.
@@ -16,12 +20,21 @@ export interface ResultAnnounceProps {
 // 한 번에 하나다 — 새 알림은 이전 것을 바꾼다(부르는 쪽 useDayFx 가 하나의 알림만 넘기고, key 가 글자라 바뀔 때 등장 모션이 다시 돈다).
 // 결과가 없으면 요소 자체를 만들지 않는다. 글자는 React 텍스트 노드로만 그린다(닉네임이 들어가므로 HTML 로 읽히지 않는다, T-08-33).
 // 아이콘은 장식(aria-hidden)이라 읽는 글자는 그대로 하나다. 알림은 입력을 가로채지 않는다(맵 탭·이름표 버튼이 그대로 눌린다).
-export function ResultAnnounce({ text, icon, placement }: ResultAnnounceProps) {
+// 23-07: label 이 있으면 글자 위에 한 줄 라벨을 둔다(정답 공개 "정답"). 읽는 글은 role=status 안에서 "정답 {키워드}" 하나다 — 둘 사이 공백 텍스트가 읽기 이음새다.
+export function ResultAnnounce({ text, icon, placement, label, still }: ResultAnnounceProps) {
   if (text === null) return null;
+  const cls = ["mf-announce", placement === "top" ? "is-top" : "", still === true ? "is-still" : ""].filter(Boolean).join(" ");
   return (
-    <div className={placement === "top" ? "mf-announce is-top" : "mf-announce"} data-announce="" role="status">
-      <div key={text} className="mf-announce__body">
+    <div className={cls} data-announce="" role="status">
+      <div key={label === undefined ? text : `${label}\n${text}`} className="mf-announce__body">
         {icon !== undefined && <V2Icon name={icon} size={56} className={icon === "target" ? "mf-announce__icon is-death" : "mf-announce__icon"} />}
+        {label !== undefined && (
+          <>
+            <span className="mf-announce__label" data-announce-label="">
+              {label}
+            </span>{" "}
+          </>
+        )}
         <span className="mf-announce__text">{text}</span>
       </div>
     </div>
