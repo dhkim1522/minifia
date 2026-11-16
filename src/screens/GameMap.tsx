@@ -25,10 +25,11 @@ import { FloatAction, FloatActions } from "../components/v2/FloatAction";
 import { LineSheet } from "../components/v2/LineSheet";
 import { SpeakSheet } from "../components/v2/SpeakSheet";
 import { WillSheet } from "../components/v2/WillSheet";
+import type { WillSheetProps } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { WorldStage } from "../components/WorldStage";
 import type { WorldPick } from "../components/WorldStage";
-import { PICK_TURN_MS } from "../../shared/game/phases";
+import { DEFENSE_MS, PICK_TURN_MS } from "../../shared/game/phases";
 import { LOG_H } from "../game/chatUi";
 import { todOf, todWordOf } from "../game/timeOfDay";
 import { nightDarkOf } from "../game/nightDark";
@@ -187,6 +188,16 @@ function LegacyMapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { v
       extra={extra}
     />
   );
+}
+
+/**
+ * 유언 시트. 유언 단계의 처형자(defenseEndsAt 가 있다)에게는 [남기기]·남은 초(P22-7·8)를 붙인다 — 남은 초 시계(useCountdown, 250ms)는 이 부품 안에 가둔다(화면 틀 전체가 다시 그려지지 않게).
+ * 그 밖(밤 유언·낮 깃펜·쪽지)은 WillSheet 그대로다.
+ */
+function DefenseAwareWillSheet({ defenseEndsAt, offset, ...sheet }: WillSheetProps & { defenseEndsAt: number | null; offset: number }) {
+  const { seconds } = useCountdown(defenseEndsAt ?? 0, DEFENSE_MS, offset);
+  if (defenseEndsAt === null) return <WillSheet {...sheet} />;
+  return <WillSheet {...sheet} saveLabel="남기기" savedLabel="남김" secondsLeft={seconds} />;
 }
 
 /** 차례 알약·막대·위 한 줄. 초 경계마다 다시 그리는 시계(useTurnLook)를 이 부품 안에 가둔다 */
@@ -513,7 +524,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     };
   }, [spectate, baseTagProps, view.players]);
   // 유언·쪽지 시트(WILL-01·NIGHT-12): 상태와 저장 흐름은 useWill 이 쥔다. 실패 알림은 위 알림 한 문구다.
-  const will = useWill({ view, send, canSend, rejected: rejects, onFail: () => show(SEND_FAIL_TEXT), busyRef: willBusy });
+  const will = useWill({ view, send, canSend, offset, rejected: rejects, onFail: () => show(SEND_FAIL_TEXT), busyRef: willBusy });
+  // 유언 단계의 처형자 시트는 아래 패널을 대신한다(22-11 P22-6): 패널이 가려지고 시트가 패널 자리(키보드 위 또는 화면 아래)에 앉는다.
+  const sheetReplacesPanel = will.open === "will" && will.condemned;
 
   // 마지막 3인 한마디(09.1.1-15, UI-SPEC E-2): 내 미확정 차례에 채팅 패널 자리를 칩 시트가 덮는다. 칩·직접 쓰기 모두 기존 채팅 전송(binding.onSend)이고 서버가 차례 주인의 글을 한마디로 확정한다.
   // 한 차례에 한 번뿐이다: 보낸 차례 번호(spokenTurn)를 기억해 서버가 확정하기 전에도 시트를 다시 열지 않는다. 보낸 뒤 서버가 채팅을 거절하면(새 chatReject) 다시 연다.
@@ -556,7 +569,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const layerKind: "will" | "claim" | "line" | "speak" | null =
     will.open !== null ? "will" : badge.open && badge.allowed ? "claim" : whisper.target !== null && whisper.allowed ? "line" : speakOpen && speakWriting ? "speak" : null;
   // 시트 층의 아래 끝 = 아래 패널 위 끝 + 8 (키보드 위). 패널을 가릴지 판정하는 논리는 useSheetLayer 로 옮겼다(논리 변경 없음).
-  const { layerRef, veiled, vvHeight } = useSheetLayer({ open: layerKind !== null, panelRef, stageTop: stageInsets?.top ?? DEFAULT_INSET_TOP });
+  const sheetLayer = useSheetLayer({ open: layerKind !== null, panelRef, stageTop: stageInsets?.top ?? DEFAULT_INSET_TOP });
+  const { layerRef, vvHeight } = sheetLayer;
+  const veiled = sheetLayer.veiled || sheetReplacesPanel;
 
   // 이름표 모서리 배지: 서버 view.players 에서만 만든다(내 좌석만 낙관 값을 겹친다). 기존 키는 덮어쓰지 않는다. 주장이 하나도 없고 낙관 값도 없으면 기존 함수 그대로(이름표에 넘기는 속성이 없다)
   const badgeFx = useBadgeFx(view, epoch, reducedMotion);
@@ -791,8 +806,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       {layerKind !== null ? (
         <div ref={layerRef} className="mf-will-layer" data-sheet-layer={layerKind} {...(veiled ? { "data-panel-hidden": "true" } : {})}>
           {layerKind === "will" && will.open !== null ? (
-            <WillSheet
+            <DefenseAwareWillSheet
               key={will.open}
+              defenseEndsAt={sheetReplacesPanel ? (view.phaseEndsAt ?? 0) : null}
+              offset={offset}
               {...(will.open === "note" ? { title: "쪽지", icon: "note" as const, tone: "mafia" as const, placeholder: NOTE_PLACEHOLDER, max: CHAT_MAX_GRAPHEMES } : { max: WILL_MAX_GRAPHEMES })}
               value={will.draft}
               onChange={will.setDraft}

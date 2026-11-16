@@ -50,6 +50,15 @@ function executionPin(view: RoomView): PinDesc | null {
   return { mode: "fixed", seat, startAt, endAt: startAt + (verdict.passed ? PIN_OFF_EXEC_AT : PIN_OFF_NO_EXEC_AT) };
 }
 
+/**
+ * 유언 단계(22-11 P22-10, D-15): 처형자 한 명에게 단계 시작부터 켠다. [남기기]로 마감이 당겨지니 fixed 창이 아니라 turn(단계 안에서 계속)이다.
+ * 처형 단계 핀(fixed)이 이어받는 것은 22-12 몫이다. 줌은 없다(카메라는 처형 단계에서만 확대, presence.ts).
+ */
+function defensePin(view: RoomView): PinDesc | null {
+  const seat = view.day?.candidate;
+  return typeof seat === "number" && Number.isInteger(seat) && seat >= 0 ? { mode: "turn", seat } : null;
+}
+
 /** 마지막 3인 한마디(09.1.1-15, UI-SPEC E-1·F): 말하는 사람(차례 중·확정/시간 초과 뒤 사이)에게 켜 둔다. 모이는 중·동시 지목·공개에는 꺼진다(차례 사이의 교차는 렌더러 몫) */
 function showdownPin(view: RoomView): PinDesc | null {
   const sd = view.day?.showdown;
@@ -58,9 +67,10 @@ function showdownPin(view: RoomView): PinDesc | null {
   return typeof seat === "number" ? { mode: "turn", seat } : null;
 }
 
-/** 단계별 핀. 순차 지목(차례·이동)·결선(후보 가운데 한 점)·마지막 3인 한마디(말하는 사람)·판결 순간(변론자 고정). 다른 단계의 핀은 각 계획이 이 함수를 확장한다 */
+/** 단계별 핀. 순차 지목(차례·이동)·결선(후보 가운데 한 점)·마지막 3인 한마디(말하는 사람)·유언 단계(처형자 turn)·판결 순간(처형자 고정). 다른 단계의 핀은 각 계획이 이 함수를 확장한다 */
 export function pinOf(view: RoomView): PinDesc | null {
   if (view.phase === "execution") return executionPin(view);
+  if (view.phase === "defense") return defensePin(view);
   if (view.phase === "runoff") return RUNOFF_PIN;
   if (view.phase === "showdown") return showdownPin(view);
   if (view.phase !== "nomination") return null;

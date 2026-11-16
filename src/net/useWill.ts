@@ -8,6 +8,11 @@
 // 저장 뒤: 유언은 [저장]을 누르면 보내고 곧바로 창이 닫힌다(0083-6, close 와 같은 길) — 서버 확인은 기다리지 않고, 저장됨은 깃펜·[유언] 단추의 표시(hasWill)로 안다.
 // 쪽지는 열린 채 '저장됨' 으로 남고 [닫기]로 닫는다. 실패(거절·3초 확인 없음)는 위 알림 한 번이고, 다시 열면 쓰던 글이 남아 있다.
 // 초안: 서버 값이 기준이고, 저장하지 못한 글만 이 훅이 종류별로 기억해 다시 열면 이어 쓴다(쪽지는 확정이 풀려도 남는다, E2 #19).
+//
+// 유언 단계(defense, 22-11 D-15·D-16·D-28): 처형자(공개 값 day.candidate === 나)만 쓸 수 있다(서버 saveWill 과 같은 조건).
+// - 단계가 시작되면 미리 써 둔 유언이 채워진 채 시트가 자동으로 열린다(한 단계에 한 번 — [닫기]로 접은 뒤 다시 열리지 않는다).
+// - [남기기]: {t:"will", text, final:true} 를 보내고 곧바로 '남김'이다(서버 응답을 기다리는 표시 없음 — 단계가 곧 넘어간다). [닫기]는 글을 저장하고 시트만 접는다(Pitfall 8).
+// - 자동 저장: 입력이 바뀌고 600ms 뒤 한 번(서버 간격 500ms 위), 마감 700ms 전에 한 번 더. 시간이 끝나면 서버가 마지막 저장본을 낸다(마지막 약 0.5초 입력 손실 허용).
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
@@ -26,6 +31,8 @@ export interface UseWillOptions {
   send: (msg: ClientMessage) => boolean | void;
   /** 연결이 열려 서버로 보낼 수 있는가. 기본 true */
   canSend?: boolean;
+  /** 서버 시각 − 로컬 시각(ms). 유언 단계의 마감 직전 전송 시각을 정한다. 기본 0 */
+  offset?: number;
   /** 서버가 행동을 거절한 횟수. 저장을 기다리는 중에 늘어나면 실패다 */
   rejected?: number;
   /** 저장 실패 알림(위 알림 "보내지 못했어요. 다시 해 보세요") */
@@ -42,8 +49,12 @@ export interface WillApi {
   saved: boolean;
   /** 서버가 보낸 내 유언이 비어 있지 않다(깃펜 점, A3) */
   hasWill: boolean;
-  /** 지금 유언을 열 수 있는가: 산 사람 + 지도 단계 */
+  /** 지금 유언을 열 수 있는가: 산 사람 + 지도 단계(유언 단계는 처형자만) */
   willAllowed: boolean;
+  /** 지금이 유언 단계이고 내가 처형자다(시트가 아래 패널을 대신하고 [남기기]·남은 초를 보인다) */
+  condemned: boolean;
+  /** [남기기]를 보냈다('남김') */
+  finalSent: boolean;
   /** 지금 쪽지를 쓸 수 있는가: 밤 산 마피아 + 확정 */
   noteReady: boolean;
   openSheet: (kind: WillKind, opener: HTMLElement | null) => void;
@@ -59,11 +70,17 @@ function normalized(text: string): string {
   return clean.ok ? clean.text : text;
 }
 
-export function useWill({ view, send, canSend = true, rejected = 0, onFail, busyRef }: UseWillOptions): WillApi {
+/** 자동 저장 디바운스(ms) — 서버 간격(WILL_MIN_GAP_MS 500)보다 길다 */
+export const WILL_AUTOSAVE_MS = 600;
+/** 마감 이만큼 전에 쓰던 글을 한 번 더 보낸다(ms) */
+export const WILL_LAST_SEND_LEAD_MS = 700;
+
+export function useWill({ view, send, canSend = true, offset = 0, rejected = 0, onFail, busyRef }: UseWillOptions): WillApi {
   const meSeat = view.me.seat;
   const meRow = view.players.find((p) => p.seat === meSeat);
   const meAlive = meRow === undefined || isAlive(meRow);
-  const willAllowed = meAlive && MAP_PHASES.has(view.phase);
+  const condemned = view.phase === "defense" && meAlive && view.day?.candidate === meSeat;
+  const willAllowed = meAlive && MAP_PHASES.has(view.phase) && (view.phase !== "defense" || condemned);
   const nightMafia = view.phase === "night" && meAlive && view.me.role === "mafia";
   const noteReady = nightMafia && view.me.nightSure !== undefined;
   const serverWill = view.me.will;
@@ -82,6 +99,11 @@ export function useWill({ view, send, canSend = true, rejected = 0, onFail, busy
   useLayoutEffect(() => {
     live.current = { onFail };
   });
+  // 유언 단계: 단계(마감 시각)마다 한 번만 자동으로 연다 / [남기기]를 보낸 단계 / 마지막으로 보낸 정리한 글(같은 글은 다시 보내지 않는다)
+  const autoOpened = useRef<number | null>(null);
+  const [finalFor, setFinalFor] = useState<number | null>(null);
+  const finalSent = condemned && finalFor !== null && finalFor === view.phaseEndsAt;
+  const lastSent = useRef<string | null>(null);
 
   const setPendingBoth = useCallback(
     (next: { kind: WillKind; text: string } | null) => {
@@ -140,6 +162,48 @@ export function useWill({ view, send, canSend = true, rejected = 0, onFail, busy
     if (el !== null && el.isConnected) el.focus({ preventScroll: true });
   }, [open]);
 
+  // 유언 단계 자동 열림(P22-6): 처형자의 단계가 시작되면 미리 써 둔 글로 연다. 단계마다 한 번 — [닫기]로 접은 시트는 다시 열리지 않고 [유언] 단추가 부른다.
+  useEffect(() => {
+    if (!condemned || view.phaseEndsAt === null || autoOpened.current === view.phaseEndsAt) return;
+    autoOpened.current = view.phaseEndsAt;
+    lastSent.current = null;
+    opener.current = null;
+    setDraft(kept.current.will ?? serverWill ?? "");
+    setOpen("will");
+    // serverWill 은 처음 열 때의 값만 쓴다(그 뒤 서버 값 변화로 다시 열지 않는다)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [condemned, view.phaseEndsAt]);
+
+  // 유언 단계 자동 저장(D-28): 열린 시트에서 입력이 바뀌고 600ms 뒤 + 마감 700ms 전. 같은 글(마지막으로 보낸 값·서버 값)은 보내지 않는다. 확인 대기(pending)를 만들지 않는다 — 실패 알림 없는 조용한 저장.
+  const autoOn = open === "will" && condemned && canSend && !finalSent;
+  const draftRef = useRef(draft);
+  useLayoutEffect(() => {
+    draftRef.current = draft;
+  });
+  const autoSave = useCallback(
+    (text: string) => {
+      const n = normalized(text);
+      if (n === (lastSent.current ?? (serverWill ?? ""))) return;
+      if (send({ t: "will", text }) !== false) lastSent.current = n;
+    },
+    [send, serverWill],
+  );
+  const autoSaveRef = useRef(autoSave);
+  useLayoutEffect(() => {
+    autoSaveRef.current = autoSave;
+  });
+  useEffect(() => {
+    if (!autoOn) return;
+    const timer = setTimeout(() => autoSaveRef.current(draftRef.current), WILL_AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [autoOn, draft]);
+  useEffect(() => {
+    if (!autoOn || view.phaseEndsAt === null) return;
+    const wait = Math.max(0, view.phaseEndsAt - (Date.now() + offset) - WILL_LAST_SEND_LEAD_MS);
+    const timer = setTimeout(() => autoSaveRef.current(draftRef.current), wait);
+    return () => clearTimeout(timer);
+  }, [autoOn, view.phaseEndsAt, offset]);
+
   // 죽거나 단계가 지도 밖으로 나가면 유언 시트가 닫힌다. 쪽지는 확정이 풀려도 닫히고, 밤 산 마피아면 쓰던 글을 남긴다.
   useEffect(() => {
     if (open === "will" && !willAllowed) {
@@ -192,6 +256,17 @@ export function useWill({ view, send, canSend = true, rejected = 0, onFail, busy
   const save = useCallback(
     (text: string) => {
       if (open === null) return;
+      // [남기기](22-11 D-15): 글을 보내고 단계를 곧바로 끝낸다. 시트는 '남김' 으로 남고(서버 응답을 기다리지 않는다) 단계가 넘어가면 닫힌다.
+      if (open === "will" && condemned) {
+        if (finalSent || !canSend) return;
+        if (send({ t: "will", text, final: true }) === false) {
+          live.current.onFail();
+          return;
+        }
+        lastSent.current = normalized(text);
+        setFinalFor(view.phaseEndsAt);
+        return;
+      }
       if (open === "will") {
         close(text); // 0083-6: 유언은 저장하면 닫힌다
         return;
@@ -200,7 +275,7 @@ export function useWill({ view, send, canSend = true, rejected = 0, onFail, busy
       if (waiting !== null && waiting.kind === open && waiting.text === text) return; // 같은 글을 보내고 기다리는 중이면 다시 보내지 않는다
       if (submit(open, text) === "failed") live.current.onFail();
     },
-    [open, submit, close],
+    [open, submit, close, condemned, finalSent, canSend, send, view.phaseEndsAt],
   );
 
   const openSheet = useCallback(
@@ -231,9 +306,12 @@ export function useWill({ view, send, canSend = true, rejected = 0, onFail, busy
     open,
     draft,
     setDraft,
-    saved: open !== null && normalized(draft) === serverOf(open),
+    // 유언 단계의 [남기기]는 서버 값과 같아도 눌러야 단계가 끝나니 '남김' 은 보낸 뒤에만 켜진다
+    saved: open === "will" && condemned ? finalSent : open !== null && normalized(draft) === serverOf(open),
     hasWill: serverWill !== undefined && serverWill !== "",
     willAllowed,
+    condemned,
+    finalSent,
     noteReady,
     openSheet,
     save,

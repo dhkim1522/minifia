@@ -334,9 +334,13 @@ describe("맵 화면 빛남 (HOST-03·04·05)", () => {
     });
   });
 
-  describe("최후 변론 — [유언] (HOST-04)", () => {
-    it("변론자 본인: [유언] 단추 하나만 data-call, 누르면 시트가 열리며 0개", () => {
+  describe("유언 단계 — [유언] (HOST-04, 22-11 P22-17)", () => {
+    it("처형자 본인: 시트가 자동으로 열려 있으면 빛남 0개(시트 자체가 호출), [닫기]로 접으면 [유언] 단추 하나만 data-call, 누르면 시트가 열리며 0개", () => {
       const { container } = mount(mapView({ phase: "defense", mySeat: 2, candidate: 2 }));
+      expect(container.querySelector("[data-will-sheet]")).not.toBeNull();
+      expect(calls(container)).toHaveLength(0);
+      fireEvent.click(container.querySelector<HTMLElement>('.mv-will [aria-label="닫기"]')!);
+      expect(container.querySelector("[data-will-sheet]")).toBeNull();
       const lit = calls(container);
       expect(lit).toHaveLength(1);
       expect(lit[0]?.matches("button[data-will-button]")).toBe(true);
@@ -345,7 +349,7 @@ describe("맵 화면 빛남 (HOST-03·04·05)", () => {
       expect(calls(container)).toHaveLength(0);
     });
 
-    it("변론자가 아닌 산 사람·유령은 0개", () => {
+    it("처형자가 아닌 산 사람·유령은 0개", () => {
       const a = mount(mapView({ phase: "defense", mySeat: 0, candidate: 2 }));
       expect(calls(a.container)).toHaveLength(0);
       a.unmount();

@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef } from "react";
 import "../../styles/v2.css";
 import { countGraphemes } from "../../../shared/nickname";
+import { DEFENSE_MS } from "../../../shared/game/phases";
 import { WILL_MAX_GRAPHEMES } from "../../../shared/game/will";
+import { timerTone } from "../../net/countdown";
 import { useComposedText } from "../../net/useComposedText";
 import { V2Icon } from "./V2Icon";
 
@@ -40,6 +42,12 @@ export interface WillSheetProps {
   compact?: boolean;
   /** 연결 끊김: [저장] 이 aria-disabled 이고 눌러도 아무 일 없다 */
   disabled?: boolean;
+  /** 저장 단추 글(22-11 P22-7). 유언 단계의 처형자는 "남기기". 없으면 "저장" */
+  saveLabel?: string;
+  /** saved 일 때 단추 글. 유언 단계는 "남김". 없으면 "저장됨" */
+  savedLabel?: string;
+  /** 남은 초(22-11 P22-8). 있으면 아래줄 글자 수 오른쪽에 "n초" — 5초 이하는 진홍(timerTone). 없으면 그리지 않는다. 막대·헤더 링이 읽어 주니 aria-hidden */
+  secondsLeft?: number;
 }
 
 const WILL_TEXT = { title: "유언", placeholder: "죽으면 모두에게 보여요", close: "닫기", save: "저장", saved: "저장됨" } as const;
@@ -63,7 +71,7 @@ export function clampGraphemes(s: string, max: number): string {
 }
 
 export function WillSheet(props: WillSheetProps) {
-  const { title = WILL_TEXT.title, icon = "quill", tone, value, onChange, onSave, saved, max = DEFAULT_MAX, placeholder = WILL_TEXT.placeholder, onClose, compact, disabled } = props;
+  const { title = WILL_TEXT.title, icon = "quill", tone, value, onChange, onSave, saved, max = DEFAULT_MAX, placeholder = WILL_TEXT.placeholder, onClose, compact, disabled, saveLabel, savedLabel, secondsLeft } = props;
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
   const composed = useComposedText(areaRef);
   const inputId = useId();
@@ -126,16 +134,24 @@ export function WillSheet(props: WillSheetProps) {
       />
       <div className="mv-will__foot">
         <span className="mv-will__count">{`${countGraphemes(shown)}/${max}`}</span>
+        {secondsLeft !== undefined ? (
+          <span className="mv-will__secs" aria-hidden="true" data-tone={timerTone(secondsLeft * 1000, DEFENSE_MS)}>
+            {`${secondsLeft}초`}
+          </span>
+        ) : null}
         <button
           type="button"
           className="mv-will__save"
+          data-will-save=""
           disabled={!!saved}
           aria-disabled={disabled ? "true" : undefined}
+          // 글이 바뀐 단추 이름은 접근성에서도 맞춘다(P22-7: "유언 남기기"). 저장 글을 바꾸지 않은 시트(밤 유언·쪽지)는 보이는 글 그대로다
+          {...(saveLabel !== undefined ? { "aria-label": saved ? "유언 남김" : "유언 남기기" } : {})}
           onMouseDown={(e) => e.preventDefault()}
           onClick={save}
         >
           <V2Icon name="check" size={20} />
-          {saved ? WILL_TEXT.saved : WILL_TEXT.save}
+          {saved ? (savedLabel ?? WILL_TEXT.saved) : (saveLabel ?? WILL_TEXT.save)}
         </button>
       </div>
     </div>

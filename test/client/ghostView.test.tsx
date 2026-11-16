@@ -334,7 +334,7 @@ describe("유령 조작 없음 · 걷기 · 카메라 (GHOST-01, A4)", () => {
   });
 
   it("유령 채팅 입력칸은 어느 채팅 단계에서든 '유령끼리만 보여요' 안내이고 입력 레이블이 유령 채널이다", () => {
-    for (const phase of ["discussion", "defense"] as const) {
+    for (const phase of ["discussion", "verdict"] as const) { // 유언 단계(defense)는 유령도 잠긴다(22-11 D-16) — 아래 willFlow 묶음이 본다
       const { container } = mount(ghostIn(phase));
       expect(input(container)?.getAttribute("placeholder")).toBe("유령끼리만 보여요");
       expect(input(container)?.getAttribute("aria-label")).toBe("유령 채팅 입력");

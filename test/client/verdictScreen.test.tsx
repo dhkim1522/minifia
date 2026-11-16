@@ -345,17 +345,16 @@ describe("최후 변론 화면 (DAY-05)", () => {
   });
 });
 
-// 08-27: 옛 변론 화면 시험(defense.test)에서 옮긴 것이다 — 변론 아래 채팅은 변론 단계 키로 간다.
-describe("최후 변론 화면 — 채팅 단계 키 (VOTE-03, COMM-03, 08-27 옮김)", () => {
-  it("변론 아래 채팅에서 보낸 글은 변론 단계 키(1:defense)와 본문만 서버로 간다 — 변론자 본인도 같다", () => {
+// 22-11 D-16: 유언 단계에서는 처형자도 다른 사람도 채팅하지 못한다 — 입력줄이 잠기고 서버로 chat 이 가지 않는다(서버도 받지 않는다).
+describe("유언 단계 화면 — 채팅 잠금 (22-11 D-16)", () => {
+  it("유언 단계 아래 입력줄은 잠겨 있어 제출해도 chat 이 서버로 가지 않는다 — 처형자 본인도 같다", () => {
     for (const mySeat of [0, 3]) {
       const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
       const { container } = mount(makeView({ phase: "defense", candidate: 3, mySeat, count: 6 }), { send });
       const input = container.querySelector<HTMLInputElement>("[data-chat-input]")!;
-      fireEvent.change(input, { target: { value: "억울해요" } });
+      expect(input.disabled, `seat ${mySeat}`).toBe(true);
       fireEvent.submit(input.closest("form")!);
-      const chats = send.mock.calls.map(([m]) => m).filter((m) => m.t === "chat");
-      expect(chats, `seat ${mySeat}`).toEqual([{ t: "chat", text: "억울해요", pk: "1:1:defense" }]);
+      expect(send.mock.calls.map(([m]) => m).filter((m) => m.t === "chat"), `seat ${mySeat}`).toEqual([]);
       cleanup();
     }
   });

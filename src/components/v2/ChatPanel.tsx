@@ -92,6 +92,8 @@ export interface ChatPanelProps {
   callInput?: boolean;
   /** 빛남(14-04): [유언] 단추가 빛난다(최후 변론의 변론자 본인, HOST-04) */
   callWill?: boolean;
+  /** 유언 단계(22-11 P22-9, D-16): 입력줄만 잠근다 — 기록 칸·높이는 그대로, 입력칸은 disabled·aria-disabled·안내 글자 없음, [보내기]·동작 버튼 없음. 깃펜(onWill)은 부르는 쪽이 줄 때만(처형자) 있다. 서버가 채팅을 받지 않는 것이 본체이고 이것은 표시다 */
+  locked?: boolean;
   /** 입력줄 맨 오른쪽(보내기·깃펜 뒤)에 놓을 요소. 결과 화면의 다시 하기 알약(11-12). 없으면 자리도 없다 */
   trailing?: ReactNode;
 }
@@ -110,7 +112,7 @@ function channelUi(channel: "all" | "mafia" | "ghost"): ChannelUi {
 }
 
 export function ChatPanel(props: ChatPanelProps) {
-  const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef, onWill, willOpen, willSaved, callInput, callWill, trailing } = props;
+  const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef, onWill, willOpen, willSaved, callInput, callWill, trailing, locked } = props;
   const fieldRef = useRef<HTMLInputElement | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
   const composingRef = useRef(false);
@@ -126,7 +128,7 @@ export function ChatPanel(props: ChatPanelProps) {
   const [focused, setFocused] = useState(false);
   const lastKey = messages.length ? (messages[messages.length - 1]?.key ?? null) : null;
   const lastKeyRef = useRef<string | null>(lastKey);
-  const hasEmotes = !!onSend && !!props.emotes && props.emotes.length > 0 && !!props.onEmote;
+  const hasEmotes = !locked && !!onSend && !!props.emotes && props.emotes.length > 0 && !!props.onEmote;
   const emoteBtnRef = useRef<HTMLButtonElement | null>(null);
   const firstCellRef = useRef<HTMLButtonElement | null>(null);
 
@@ -217,6 +219,7 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (locked) return; // 유언 단계(22-11): 서버도 받지 않는다. 표시 한 겹
     if (composingRef.current) {
       if (pendingRef.current === null) {
         pendingRef.current = setTimeout(() => {
@@ -335,12 +338,12 @@ export function ChatPanel(props: ChatPanelProps) {
   const blank = value.trim() === "";
   const sendOff = blank || !!sendDisabled;
   // [보내기] 는 입력 중이거나 쓴 글이 있을 때만 보이고, 보이는 동안 같은 자리의 유언 단추는 없다(0083-5)
-  const showSend = focused || !blank;
-  const rootCls = ["mv-chat", onSend && ui.icon && "has-chan", compact && "is-compact"].filter(Boolean).join(" ");
+  const showSend = !locked && (focused || !blank);
+  const rootCls = ["mv-chat", onSend && ui.icon && !locked && "has-chan", compact && "is-compact"].filter(Boolean).join(" ");
   const sendCls = sendDim ? "mv-tool mv-chat__send is-dim" : "mv-tool mv-chat__send";
 
   return (
-    <section className={rootCls} data-chat-panel="" data-chat-channel={channel}>
+    <section className={rootCls} data-chat-panel="" data-chat-channel={channel} {...(locked ? { "data-chat-locked": "" } : {})}>
       <div
         className={open ? "mv-chat__logbox is-open" : "mv-chat__logbox"}
         // 숫자 한 곳은 chatUi.ts 다 — CSS 가 읽는 변수로 넘긴다(.mv-chat__log.is-open 의 clamp)
@@ -381,7 +384,7 @@ export function ChatPanel(props: ChatPanelProps) {
           </button>
         ) : null}
       </div>
-      {onSend ? (
+      {onSend || locked ? (
         <form className="mv-chat__form" onSubmit={onSubmit}>
           {hasEmotes ? (
             <button
@@ -404,7 +407,7 @@ export function ChatPanel(props: ChatPanelProps) {
           ) : null}
           {hasEmotes && trayOpen ? <EmoteTray ids={props.emotes ?? []} onPick={pickEmote} disabled={!!sendDisabled || !!props.emoteBlocked} playing={props.emotePlaying ?? null} firstRef={firstCellRef} onKeyDown={onTrayKeyDown} /> : null}
           <div className={callInput ? "mv-chat__field is-call" : "mv-chat__field"}>
-            {ui.icon ? (
+            {ui.icon && !locked ? (
               <span className={channel === "mafia" ? "mv-chat__chan is-mafia" : "mv-chat__chan is-ghost"}>
                 <V2Icon name={ui.icon} size={20} />
               </span>
@@ -424,7 +427,8 @@ export function ChatPanel(props: ChatPanelProps) {
               spellCheck={false}
               maxLength={CHAT_MAX_GRAPHEMES}
               aria-label={ui.label}
-              placeholder={ui.hint}
+              placeholder={locked ? undefined : ui.hint}
+              {...(locked ? { disabled: true, "aria-disabled": "true" as const } : {})}
               value={value}
               onChange={(e) => onChange(e.target.value)}
               onCompositionStart={onCompositionStart}

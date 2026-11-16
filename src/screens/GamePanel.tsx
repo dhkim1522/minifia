@@ -126,7 +126,10 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
 
   // 밤 산 사람은 입력줄이 없어 아래 행동 줄의 [쪽지]·[유언] 이 대신한다(UI-SPEC 237행). 마피아 [쪽지], 그 밖 [유언] — 역할을 읽는 곳은 이 줄뿐이다.
   // 채팅 입력줄이 있는 화면(낮·아침)은 깃펜, 산 사람 + 지도 단계에만(유령·로비·역할 확인에는 없다, UI-SPEC 281·286행)
-  const penOn = meAlive && MAP_PHASES.has(view.phase) && onOpenWill !== undefined;
+  // 유언 단계(defense, 22-11 D-16·P22-9): 산 사람·유령 모두 입력줄이 잠기고, 깃펜은 처형자에게만 있다(접은 시트를 다시 여는 [유언] 단추, P22-17). 처형자는 공개 값 day.candidate 로 안다.
+  const defense = view.phase === "defense";
+  const condemned = defense && meAlive && view.day?.candidate === view.me.seat;
+  const penOn = meAlive && MAP_PHASES.has(view.phase) && onOpenWill !== undefined && (!defense || condemned);
   const showNoteRow = nightFaces && myRole === "mafia" && onOpenNote !== undefined;
   const noteHintId = useId();
   const showWillRow = nightFaces && myRole !== "mafia" && onOpenWill !== undefined;
@@ -181,9 +184,10 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
           {...binding}
           logHeight={logHeight}
           compact={kbOpen}
+          {...(defense ? { locked: true } : {})}
           {...(inputRef ? { inputRef } : {})}
           onInputFocus={() => onCallUsed?.()}
-          {...(binding.onSend
+          {...(binding.onSend && !defense
             ? {
                 onSend: (text: string) => {
                   binding.onSend?.(text);

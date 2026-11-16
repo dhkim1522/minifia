@@ -87,6 +87,8 @@
 /* 입력줄(16페이즈, V-6): 동작·보내기·유언은 48 원, 입력칸도 48 이라 가운데 정렬 하나면 된다. 폭 360: 동작 48 + 입력칸 + 보내기 48 + 유언 48, 간격 8 → 입력칸 160 */
 .mv-chat__form { position: relative; display: flex; align-items: center; gap: var(--space-sm); }
 .mv-chat__field { position: relative; display: flex; flex: 1; min-width: 0; }
+/* 유언 단계 잠금(22-11 P22-9): 입력칸 면 night-700 · 불투명도 .45, 안내 글자 없음. 기록 칸·높이는 채팅 패널 그대로 */
+.mv-chat__input:disabled { background: var(--night-700); opacity: 0.45; cursor: default; }
 .mv-chat__input { flex: 1; min-width: 0; height: var(--control-input); box-sizing: border-box; padding: 0 var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--night-600); background: var(--night-900); color: var(--gray-100); font-family: inherit; font-size: 16px; user-select: text; }
 /* 아이콘 단추(16페이즈, V-1·V-6): 단추 상자가 곧 면이다 — 44×44 정사각(radius-badge), 글 없음. 입력줄 단추만 48 원(아래 .mv-chat__* 규칙). 누르기 44 이상 */
 .mv-tool { position: relative; display: flex; align-items: center; justify-content: center; flex: none; box-sizing: border-box; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; border-radius: var(--radius-badge); background: transparent; color: var(--gray-100); font-family: var(--font-ui); cursor: pointer; -webkit-tap-highlight-color: transparent; }
@@ -278,6 +280,9 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-will__text::placeholder { color: var(--gray-300); }
 .mv-will__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
 .mv-will__count { font-size: 14px; color: var(--gray-300); font-variant-numeric: tabular-nums; }
+/* 유언 단계 남은 초(22-11 P22-8): 글자 수 오른쪽·[남기기] 왼쪽. 5초 이하는 timerTone 의 urgent(crimson-400) */
+.mv-will__secs { margin-left: auto; font-size: 14px; color: var(--gray-300); font-variant-numeric: tabular-nums; }
+.mv-will__secs[data-tone="urgent"] { color: var(--crimson-400); }
 .mv-will__save { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-input); padding: 0 var(--space-md); border-radius: var(--radius-md); border: 0; background: var(--gray-100); color: var(--night-900); font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
 .mv-will__save[disabled] { background: var(--night-700); color: var(--gray-300); cursor: default; }
 .mv-will__save[aria-disabled="true"] { opacity: 0.6; cursor: default; }

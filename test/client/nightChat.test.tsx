@@ -189,8 +189,8 @@ describe("시민 편 화면에는 비공개 채널의 흔적이 없다 (T-07-40)
 describe("탈락자 채팅 (CHAT-03, 채널 ghost)", () => {
   const ghostView = (phase: PhaseId, n = 1) => makeView({ phase, n, role: "citizen", dead: [0], chat: "ghost" });
 
-  it("낮 토론·최후 변론·찬반·밤의 탈락자 아래는 ChatPanel(ghost): '유령 채팅 입력'·'유령끼리만 보여요'·입력칸 안 ghost 아이콘, 관전 알약이 아니다", () => {
-    for (const phase of ["discussion", "defense", "verdict", "night"] as const) {
+  it("낮 토론·찬반·밤의 탈락자 아래는 ChatPanel(ghost): '유령 채팅 입력'·'유령끼리만 보여요'·입력칸 안 ghost 아이콘, 관전 알약이 아니다", () => {
+    for (const phase of ["discussion", "verdict", "night"] as const) { // 유언 단계(defense)는 잠긴다(22-11 D-16)
       const { container: c } = scene({ ...ghostView(phase), day: { n: 1, roles: ["citizen"], candidate: 2 } });
       expect(chatPanel(c)?.getAttribute("data-chat-channel"), phase).toBe("ghost");
       expect(input(c)?.getAttribute("aria-label"), phase).toBe("유령 채팅 입력");
