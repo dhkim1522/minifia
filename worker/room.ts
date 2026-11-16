@@ -17,6 +17,7 @@ import {
   createRoomState,
   detachConnection,
   findPlayerByToken,
+  isLegacyV3Room,
   joinRoom,
   kickPlayer,
   leaveRoom,
@@ -124,6 +125,8 @@ export class Room extends DurableObject<Env> {
       if (stored) {
         // 1페이즈 종착 단계로 저장된 방은 낮 시작 발표로 옮긴다(RESEARCH Pattern 6). 바뀌지 않으면 같은 객체다.
         const normalized = normalizeStoredRoom(stored, Date.now());
+        // 옛 표시가 있어 대기실로 되돌려진 방인가(22 WR-04). 방 상태만 되돌리면 옛 판의 채팅 저장분과 월드의 lay·home 이 남는다.
+        const wasLegacy = isLegacyV3Room(stored);
         // 깨어날 때마다 살아 있는 소켓 기준으로 connected 를 다시 계산한다(배포·크래시로 소켓이 사라진 경우 보정).
         const live = new Set<string>();
         for (const ws of ctx.getWebSockets()) {
@@ -149,6 +152,14 @@ export class Room extends DurableObject<Env> {
         };
         // 저장된 위치를 되살린다. world 키가 없거나 손상된 사람은 입장 지점에 선다(MAP-05).
         this.world = restoreWorld(got.get("world"), this.room.players, Date.now(), this.mapDef());
+        if (wasLegacy) {
+          // 다시 하기·대기실로 되돌리기(handleRematch·handleTestReset)와 같은 길: 채팅 저장 키를 모두 지우고(아래 복원이 빈 줄을 읽는다),
+          // 월드는 모두를 입장 지점에 다시 세운다 — 옛 자리 기억(lay·home)을 버려 새 판 1일차가 옛 키를 재사용하지 않게 한다.
+          const resetAt = Date.now();
+          await this.deleteChatKeys([...(await ctx.storage.list({ prefix: CHAT_KEY_PREFIX })).keys()]);
+          this.world = respawnAll(this.world, this.room.players, resetAt, this.mapDef());
+          await ctx.storage.put("world", compactWorld(this.world, resetAt));
+        }
         if (normalized !== stored) {
           await ctx.storage.put("room", this.room);
           // 정규화로 생긴 이른 마감(now + 2초)이 기존 만료 알람(90초 뒤 등)보다 먼저 깨어나야 하므로 마감이 바뀐 경우에만 여기서 알람을 건다.
