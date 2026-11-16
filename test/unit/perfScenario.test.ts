@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createScenario, MIX_OUTFITS, mulberry32, parsePerfParams } from "../../src/debug/perf/scenario";
+import { createScenario, MIX_OUTFITS, mulberry32, noteLayout, parsePerfParams } from "../../src/debug/perf/scenario";
 import type { ScenarioEvent } from "../../src/debug/perf/scenario";
 import { BAR_MAP, BAR_SPAWNS, UNIT, isWalkable, lineWalkable } from "../../shared/game/map";
 import { PLAZA_MAP, PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
@@ -126,11 +126,11 @@ describe("createScenario: 동작", () => {
 
 describe("parsePerfParams", () => {
   it("쿼리가 없으면 기본값", () => {
-    expect(parsePerfParams(new URLSearchParams("perf=1"))).toEqual({ scene: "talk", minutes: 5, dpr: null, budget: 0, seed: 1, chars: 8, shot: false, nav: false, outfits: "coat", burst: 1, map: "bar" });
+    expect(parsePerfParams(new URLSearchParams("perf=1"))).toEqual({ scene: "talk", minutes: 5, dpr: null, budget: 0, seed: 1, chars: 8, shot: false, nav: false, outfits: "coat", burst: 1, map: "bar", notes: 0 });
   });
   it("쿼리를 읽는다", () => {
     const p = parsePerfParams(new URLSearchParams("perf=1&scene=vote&minutes=0.25&dpr=1.5&budget=2&seed=9&chars=5&shot=1&nav=1"));
-    expect(p).toEqual({ scene: "vote", minutes: 0.25, dpr: 1.5, budget: 2, seed: 9, chars: 5, shot: true, nav: true, outfits: "coat", burst: 1, map: "bar" });
+    expect(p).toEqual({ scene: "vote", minutes: 0.25, dpr: 1.5, budget: 2, seed: 9, chars: 5, shot: true, nav: true, outfits: "coat", burst: 1, map: "bar", notes: 0 });
   });
   it("scene 은 talk·morning·vote·night 네 값만 받고 나머지는 talk 다(18-07)", () => {
     for (const sc of ["talk", "morning", "vote", "night"]) {
@@ -303,5 +303,77 @@ describe("광장 성능 측정 입구 (MAP-06, 11-10 Task 3)", () => {
     const r = spawnSync(process.execPath, ["scripts/perf-run.mjs", "--map", "nope"], { encoding: "utf8" });
     expect(r.status).toBe(1);
     expect(r.stderr).toContain("--map");
+  });
+});
+
+describe("종이 최악 장면 옵션 (24-05, D-12·D-28, P24-18)", () => {
+  const notesOf = (q: string) => parsePerfParams(new URLSearchParams(q)).notes;
+
+  it("parsePerfParams: notes 기본 0, 0~8 정수를 읽고 범위 밖은 안쪽으로 자르며 정수가 아니면 0", () => {
+    expect(notesOf("perf=1")).toBe(0);
+    expect(notesOf("notes=8")).toBe(8);
+    expect(notesOf("notes=3")).toBe(3);
+    expect(notesOf("notes=12")).toBe(8);
+    expect(notesOf("notes=-1")).toBe(0);
+    expect(notesOf("notes=2.5")).toBe(0);
+    expect(notesOf("notes=abc")).toBe(0);
+    expect(notesOf("notes=")).toBe(0);
+  });
+
+  const total = (m: Record<number, number[]>): number => Object.values(m).reduce((n, l) => n + l.length, 0);
+
+  it("noteLayout(8, 8): 좌석 0 에 [1,2,3], 좌석 1~5 에 한 장씩, 총 8장, 같은 입력이면 같은 결과", () => {
+    const m = noteLayout(8, 8);
+    expect(m[0]).toEqual([1, 2, 3]);
+    for (const to of [1, 2, 3, 4, 5]) expect(m[to]).toHaveLength(1);
+    expect(Object.keys(m).map(Number)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(total(m)).toBe(8);
+    expect(noteLayout(8, 8)).toEqual(m);
+  });
+
+  it("noteLayout: 붙인 좌석은 받은 좌석 자신이 아니고 좌석 수 미만이며, 0 장이면 빈 표", () => {
+    expect(noteLayout(0, 8)).toEqual({});
+    for (let n = 0; n <= 8; n++) {
+      for (let chars = 1; chars <= 8; chars++) {
+        const m = noteLayout(n, chars);
+        for (const [to, froms] of Object.entries(m)) {
+          expect(Number(to)).toBeLessThan(chars);
+          for (const from of froms) {
+            expect(from).toBeLessThan(chars);
+            expect(from).not.toBe(Number(to));
+          }
+        }
+      }
+    }
+  });
+
+  it("noteLayout: 요청한 장수와 좌석 수 중 작은 쪽을 넘지 않고, 같은 좌석이 같은 좌석의 종이를 두 번 받지 않는다", () => {
+    for (let n = 0; n <= 12; n++) {
+      for (let chars = 1; chars <= 8; chars++) {
+        const m = noteLayout(n, chars);
+        expect(total(m)).toBeLessThanOrEqual(Math.min(n, chars));
+        for (const froms of Object.values(m)) expect(new Set(froms).size).toBe(froms.length);
+      }
+    }
+    expect(total(noteLayout(8, 8))).toBe(8);
+    expect(total(noteLayout(5, 8))).toBe(5);
+    expect(noteLayout(3, 8)).toEqual({ 0: [1, 2, 3] });
+  });
+
+  it("perf-run: --notes N 이 쿼리 notes=N 으로 가고 0 이면 쿼리에 없다", () => {
+    const o = perfRun.parseArgs(["--notes", "8"]);
+    expect(o.notes).toBe(8);
+    expect(new URL(perfRun.targetUrl(o, "http://localhost:1")).searchParams.get("notes")).toBe("8");
+    expect(new URL(perfRun.targetUrl(perfRun.parseArgs([]), "http://localhost:1")).searchParams.has("notes")).toBe(false);
+    expect(perfRun.parseArgs([]).notes).toBe(0);
+    expect(perfRun.parseArgs(["--notes", "0"]).notes).toBe(0);
+    expect(perfRun.outputBase(o)).toContain("notes8");
+    expect(perfRun.outputBase(perfRun.parseArgs([]))).not.toContain("notes");
+    expect(perfRun.USAGE).toContain("--notes");
+  });
+
+  it("perf-run: 잘못된 --notes(9·-1·문자·소수·값 없음)는 UsageError", () => {
+    for (const v of ["9", "-1", "x", "2.5", ""]) expect(() => perfRun.parseArgs(["--notes", v])).toThrow(/--notes 는 0~8 정수/);
+    expect(() => perfRun.parseArgs(["--notes"])).toThrow(/--notes/);
   });
 });
