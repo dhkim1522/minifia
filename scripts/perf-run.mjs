@@ -5,9 +5,10 @@
 // 사용법:
 //   node scripts/perf-run.mjs [--url http://localhost:5173] [--scene talk|vote] [--minutes 5] [--dpr 2]
 //        [--throttle 4] [--size 390x844] [--out .planning/phases/06-world-skeleton/perf/] [--headed]
-//        [--budget 0] [--seed 1] [--shot [--file 이름]]
+//        [--budget 0] [--seed 1] [--notes 0..8] [--shot [--file 이름]]
 //   node scripts/perf-run.mjs --mode nightload [--sound on|off]   (소리 켠/끈 측정 구분, 12-06: on 은 첫 중립 탭으로 오디오를 깨우고 off 는 저장값을 끔으로 준다. 결과 JSON 의 sound 칸에 모드·훅 상태·요청 수)
 //   node scripts/perf-run.mjs --mode interactive [--url ...] [--throttle 4] [--runs 3] [--size 390x844] [--dpr 2] [--out ...] [--headed]
+//   --notes    캐릭터 몸에 붙이는 "의심" 종이 수 0~8(기본 0, 24-05). 8 = 한 사람 3장 + 다섯 사람 한 장씩 최악 장면(UI-SPEC P24-18). 결과 JSON 의 params.notes 에 남고 0 이 아니면 파일 이름에 -notesN 이 붙는다
 //   --url      기본은 v2.0 공개 주소(deploy-target.expectedOrigin). v1.0 주소는 어떤 요청보다 먼저 거부한다(결정 0055-2·0043).
 //   --throttle CPU 감속 배율(기본 4 — DevTools 의 "CPU 4× slowdown" 과 같은 CDP 명령). 1 이면 감속 없음.
 //   --shot     측정 대신 화면만 찍는다: ?shot=1 이 10초에 멈추면 HUD 없이 장면을 PNG 로 저장한다(조명 대조용). 결과 JSON 은 없다.
@@ -117,13 +118,13 @@ const CHATLOAD_LINES = ["저 아니에요", "누가 수상해요?", "조용한 �
 const CHATLOAD_BASELINE = { avgFps: 55, jankMax: 5, perMinutes: 5, jankMs: JANK_MS, source: "06-PERF-RESULTS.md 조건 B · UI-SPEC 합격 기준 — 5분 평균 ≥ 55fps, 끊김(>50ms) ≤ 5회/5분" };
 
 export const USAGE =
-  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload|light] [--url 주소] [--scene talk|morning|vote|night] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--outfits mix|coat] [--burst 1..4] [--map bar|plaza] [--runs 3] [--bots 7] [--sound on|off] [--shot [--file 이름]] (--mode light 는 JSON 에 아래쪽 절반 평균 색 colors 도 남긴다, 18-12)";
+  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload|light] [--url 주소] [--scene talk|morning|vote|night] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--outfits mix|coat] [--burst 1..4] [--notes 0..8] [--map bar|plaza] [--runs 3] [--bots 7] [--sound on|off] [--shot [--file 이름]] (--mode light 는 JSON 에 아래쪽 절반 평균 색 colors 도 남긴다, 18-12)";
 
 class UsageError extends Error {}
 
 /** 인자 해석(순수). 값이 필요한 옵션에 값이 없거나 숫자가 아니면 UsageError */
 export function parseArgs(argv) {
-  const o = { url: null, scene: "talk", minutes: 5, dpr: 2, throttle: 4, size: { w: 390, h: 844 }, out: DEFAULT_OUT, headed: false, budget: 0, seed: 1, shot: false, file: null, mode: "perf", runs: 3, bots: 7, outGiven: false, outfits: "coat", burst: 1, sound: "on", map: "bar", mapGiven: false };
+  const o = { url: null, scene: "talk", minutes: 5, dpr: 2, throttle: 4, size: { w: 390, h: 844 }, out: DEFAULT_OUT, headed: false, budget: 0, seed: 1, shot: false, file: null, mode: "perf", runs: 3, bots: 7, outGiven: false, outfits: "coat", burst: 1, notes: 0, sound: "on", map: "bar", mapGiven: false };
   const need = (name, i) => {
     const v = argv[i + 1];
     if (v === undefined || v.startsWith("--")) throw new UsageError(`${name} 에 값이 필요합니다`);
@@ -181,6 +182,14 @@ export function parseArgs(argv) {
         o.burst = n;
         break;
       }
+      case "--notes": {
+        // 캐릭터 몸에 붙이는 "의심" 종이 수(24-05, D-12·D-28): 0 은 종이 없음, 8 은 최악 장면(한 사람 3장 + 여러 사람 한 장씩). 장면의 ?notes= 로 간다
+        const v = need(a, i++);
+        const n = Number(v);
+        if (v.trim() === "" || !Number.isInteger(n) || n < 0 || n > 8) throw new UsageError(`--notes 는 0~8 정수: ${v}`);
+        o.notes = n;
+        break;
+      }
       case "--sound": {
         // nightload 의 소리 켠/끈 측정 구분(12-06). 다른 모드에서는 무시한다
         const v = need(a, i++);
@@ -209,7 +218,7 @@ export function outputBase(o) {
   if (o.mode === "interactive") return `interactive-dpr${o.dpr}-x${o.throttle}`;
   if (o.mode === "chatload") return `chatload-${o.size.w}x${o.size.h}-x${o.throttle}`;
   if (o.mode === "nightload") return `nightload-${o.size.w}x${o.size.h}-x${o.throttle}${o.mapGiven ? `-${o.map}` : ""}`;
-  const base = `desktop-${o.scene}-dpr${o.dpr}-x${o.throttle}${o.outfits === "mix" ? "-mix" : ""}${o.burst > 1 ? `-burst${o.burst}` : ""}${o.map === "plaza" ? "-plaza" : ""}`;
+  const base = `desktop-${o.scene}-dpr${o.dpr}-x${o.throttle}${o.outfits === "mix" ? "-mix" : ""}${o.burst > 1 ? `-burst${o.burst}` : ""}${o.notes > 0 ? `-notes${o.notes}` : ""}${o.map === "plaza" ? "-plaza" : ""}`;
   return o.shot ? `shot-${base}` : base;
 }
 
@@ -253,6 +262,7 @@ export function targetUrl(o, origin) {
   const q = new URLSearchParams({ perf: "1", scene: o.scene, minutes: String(o.minutes), dpr: String(o.dpr), seed: String(o.seed), budget: String(o.budget) });
   if (o.outfits !== "coat") q.set("outfits", o.outfits);
   if (o.burst > 1) q.set("burst", String(o.burst));
+  if (o.notes > 0) q.set("notes", String(o.notes));
   if (o.map !== "bar") q.set("map", o.map);
   if (o.shot) q.set("shot", "1");
   return `${origin.replace(/\/+$/, "")}/?${q.toString()}`;
@@ -1158,7 +1168,7 @@ async function main() {
       const f = result.frames;
       console.log(`결과 저장: ${json}`);
       console.log(`스크린샷: ${png}`);
-      console.log(`평균 ${f.avgFps.toFixed(1)}fps · 끊김 ${f.jank} · p95 ${f.p95.toFixed(1)}ms · rAF ${f.rafHz}Hz · calls ${result.renderer?.calls ?? "-"} · triangles ${result.renderer?.triangles ?? "-"} · outfits ${result.params?.outfits ?? "-"} · burst ${result.params?.burst ?? "-"} · firstEmoteGapMs ${result.firstEmoteGapMs ?? "-"}`);
+      console.log(`평균 ${f.avgFps.toFixed(1)}fps · 끊김 ${f.jank} · p95 ${f.p95.toFixed(1)}ms · rAF ${f.rafHz}Hz · calls ${result.renderer?.calls ?? "-"} · triangles ${result.renderer?.triangles ?? "-"} · outfits ${result.params?.outfits ?? "-"} · burst ${result.params?.burst ?? "-"} · notes ${result.params?.notes ?? "-"} · firstEmoteGapMs ${result.firstEmoteGapMs ?? "-"}`);
     }
   } catch (e) {
     code = 1;

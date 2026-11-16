@@ -168,6 +168,34 @@ export interface PerfParams {
   burst: number;
   /** 장면과 걷기 시나리오의 맵(MAP-06): bar = 지하 재즈 바(기본), plaza = 시계탑 광장. 맵별 성능 측정용 */
   map: MapId;
+  /** 캐릭터 몸에 붙이는 "의심" 종이 수 0~8(24-05, D-12·D-28). 0 이면 종이 없음. 배치는 noteLayout */
+  notes: number;
+}
+
+/** 종이 최대 수(= 8명이 모두 한 장씩 붙인 판의 상한이 아니라 최악 장면의 총 장수) */
+export const PERF_NOTES_MAX = 8;
+
+/**
+ * 성능 장면의 종이 배치(결정적 순수 함수, UI-SPEC P24-18 "한 사람 3장 + 여러 사람 한 장씩, 총 8장"):
+ * 처음 3장은 받은 좌석 0 에(붙인 좌석 1·2·3), 나머지는 좌석 1 부터 한 장씩 받고 붙인 좌석은 그 다음 좌석이다.
+ * chars(좌석 수)보다 많은 장은 만들지 않고(총 장수 ≤ chars) 좌석 번호는 모두 chars 미만이다. 종이 한 장 = 받은 좌석 → 붙인 좌석 배열의 한 원소
+ */
+export function noteLayout(n: number, chars: number): Record<number, number[]> {
+  const out: Record<number, number[]> = {};
+  const seats = Math.max(0, Math.floor(chars));
+  const total = Math.max(0, Math.min(PERF_NOTES_MAX, Math.floor(n), seats));
+  if (total === 0 || seats < 2) return out;
+  // 좌석 0 이 받는 장(붙인 좌석 1·2·3): 좌석 수가 모자라면 그만큼만
+  const first: number[] = [];
+  for (let from = 1; from <= 3 && from < seats && first.length < total; from++) first.push(from);
+  if (first.length > 0) out[0] = first;
+  let placed = first.length;
+  // 나머지: 받은 좌석 1, 2, … 에 한 장씩, 붙인 좌석은 받은 좌석의 다음 좌석(끝에서 처음으로 돈다, 자기 자신은 아님)
+  for (let to = 1; placed < total && to < seats; to++) {
+    out[to] = [(to + 1) % seats];
+    placed++;
+  }
+  return out;
 }
 
 function num(v: string | null): number | null {
@@ -176,7 +204,7 @@ function num(v: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** ?perf=1 쿼리: scene·minutes·dpr·budget·seed·chars·shot·nav·outfits·burst·map. 잘못된 값은 기본값, 범위 밖은 안쪽으로 자른다 */
+/** ?perf=1 쿼리: scene·minutes·dpr·budget·seed·chars·shot·nav·outfits·burst·map·notes. 잘못된 값은 기본값, 범위 밖은 안쪽으로 자른다 */
 export function parsePerfParams(q: URLSearchParams): PerfParams {
   const minutes = num(q.get("minutes"));
   const dpr = num(q.get("dpr"));
@@ -184,6 +212,7 @@ export function parsePerfParams(q: URLSearchParams): PerfParams {
   const seed = num(q.get("seed"));
   const chars = num(q.get("chars"));
   const burst = num(q.get("burst"));
+  const notes = num(q.get("notes"));
   const sceneQ = q.get("scene");
   return {
     scene: sceneQ === "vote" || sceneQ === "morning" || sceneQ === "night" ? sceneQ : "talk",
@@ -197,5 +226,6 @@ export function parsePerfParams(q: URLSearchParams): PerfParams {
     outfits: q.get("outfits") === "mix" ? "mix" : "coat",
     burst: burst !== null && Number.isInteger(burst) && burst >= 1 && burst <= 4 ? burst : 1,
     map: q.get("map") === "plaza" ? "plaza" : "bar",
+    notes: notes !== null && Number.isInteger(notes) ? Math.max(0, Math.min(PERF_NOTES_MAX, notes)) : 0,
   };
 }

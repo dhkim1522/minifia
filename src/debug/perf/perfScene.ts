@@ -8,12 +8,13 @@ import { REVISION } from "three";
 import { MOVE_V } from "../../../shared/game/world";
 import { HEADER_BOTTOM, PANEL_HEIGHT } from "../../world/camera";
 import { createTapTracker } from "../../world/input";
+import type { SceneLook, SeatLook } from "../../world/presence";
 import { createWorldRuntime, loadWorld } from "../../world/runtime";
 import type { WorldModules, WorldRuntime } from "../../world/runtime";
 import { WorldStore } from "../../world/store";
 import { createHud } from "./hud";
 import { SPIKE_NAMES, makeTag } from "./tags";
-import { parsePerfParams, createScenario, MIX_OUTFITS } from "./scenario";
+import { parsePerfParams, createScenario, noteLayout, MIX_OUTFITS } from "./scenario";
 import type { PerfParams } from "./scenario";
 import type { PerfResult } from "./hud";
 import "../../styles/world.css";
@@ -236,6 +237,17 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
     }
   }
   rafId = requestAnimationFrame(pump);
+  // 종이 최악 장면(24-05, D-12): 장면 표를 항상 올려 notes 0장과 8장이 종이 말고는 같은 조건이 되게 한다(조명은 같은 p.scene, 카메라 따라가기, 모든 좌석 보임).
+  // notes 가 0 이면 look.notes 키가 없다
+  const notes = noteLayout(p.notes, p.chars);
+  const perfLook: SceneLook = {
+    camera: { mode: "follow" },
+    lighting: p.scene,
+    tension: 0,
+    seats: Object.fromEntries(players.map((pl) => [pl.seat, { show: true, ghost: false } satisfies SeatLook])),
+    ...(Object.keys(notes).length > 0 ? { notes } : {}),
+  };
+  runtime.setScene(perfLook);
   void runtime.start();
 
   return {
