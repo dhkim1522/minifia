@@ -17,6 +17,18 @@ export const TOKEN_COLORS = {
   moon: "#c9d4ff",
 } as const;
 
+/**
+ * 좌석 0~7 의 색 = design/tokens.json 의 seat-1..8 복사(24-04, D-28). "의심" 종이의 틴트 원천이다.
+ * 값이 갈라지지 않게 palette.test.ts 가 토큰 파일과 대조한다(gen-tokens --check 는 이 파일을 보지 않는다).
+ */
+export const SEAT_COLORS = ["#7a8fb8", "#8e7ab8", "#6fa59a", "#b89a6f", "#6f8fa8", "#9aa86f", "#b87a5c", "#a9aebb"] as const;
+
+/** "의심" 종이 그림 색: 바탕 = gray-50, 손글씨·밑줄 = night-950 (새 hex 없음 — TOKEN_COLORS 를 가리킨다) */
+export const NOTE_COLORS = {
+  paper: TOKEN_COLORS.ring,
+  ink: TOKEN_COLORS.ringOutline,
+} as const;
+
 export const PALETTE = {
   ring: TOKEN_COLORS.ring,
   ringOutline: TOKEN_COLORS.ringOutline,

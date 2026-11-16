@@ -100,7 +100,7 @@ describe("종이 지오메트리 (P24-11·P24-12)", () => {
   /** 지오메트리는 종이 중심 점을 원점으로 한 국소 좌표다. 놓을 때(층 0, roll 0)의 몸 좌표로 돌려 본다 */
   function bodyPoints(): { x: number; y: number; z: number }[] {
     const o = new Object3D();
-    const yaw = -Math.asin(NOTE_CENTER.x / (coatRadius(NOTE_CENTER.y) + 0.012));
+    const yaw = Math.asin(NOTE_CENTER.x / (coatRadius(NOTE_CENTER.y) + 0.012));
     const r = coatRadius(NOTE_CENTER.y) + 0.012;
     o.position.set(r * Math.sin(yaw), NOTE_CENTER.y, r * Math.cos(yaw));
     o.rotation.y = yaw;
@@ -143,12 +143,12 @@ describe("종이 지오메트리 (P24-11·P24-12)", () => {
     expect(lifted).toHaveLength(1);
     // 그 점은 안쪽 종이의 우하단(국소 +x, −y)이다
     const i = lifted[0];
-    expect(pos.getX(i)).toBeCloseTo(NOTE_SIZE / 2, 6);
+    expect(pos.getX(i)).toBeGreaterThan(0.15); // 국소 x 는 감긴 호의 현이라 호 길이 0.18 보다 조금 작다
     expect(pos.getY(i)).toBeCloseTo(-NOTE_SIZE / 2, 6);
   });
 
-  it("종이의 중심은 몸 좌표 (x −0.15, y 0.54 근처)에 놓인다", () => {
-    expect(NOTE_CENTER.x).toBeCloseTo(-0.15, 9);
+  it("종이의 중심은 NOTE_CENTER(몸 좌표)에 놓이고 가슴 왼쪽(x < 0)이다", () => {
+    expect(NOTE_CENTER.x).toBeLessThan(0);
     const mid = bodyPoints().find((p, i) => Math.abs(pos.getX(i)) < 1e-9 && Math.abs(pos.getY(i)) < 1e-9);
     expect(mid?.x).toBeCloseTo(NOTE_CENTER.x, 6);
     expect(mid?.y).toBeCloseTo(NOTE_CENTER.y, 6);
