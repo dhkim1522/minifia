@@ -187,7 +187,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
         else if (e.t === "chat" || e.t === "typing" || e.t === "chatLog" || e.t === "chatReject") {
           chat.apply(e, meta.epoch, Date.now());
           // 12-09: 방금 받은 라이브 유언·쪽지 카드가 화면에 보일 시각에 ui.card 한 번. 숫자(남은 ms)만 보낸다 — 카드 종류·글은 소리 쪽으로 가지 않는다(LS-5).
-          // ballots 카드·귓속말·재접속 복원 줄은 접근자가 null 이라 신호가 없다(찬반 카드는 12-10 의 판결 대본이 낸다).
+          // 귓속말·재접속 복원 줄은 접근자가 null 이라 신호가 없다.
           if (e.t === "chat" && (e.k === "will" || e.k === "note")) {
             const revealAt = chat.lastLiveCardRevealAt();
             if (revealAt !== null) emitSignal({ kind: "card", delayMs: Math.max(0, revealAt - Date.now()) });

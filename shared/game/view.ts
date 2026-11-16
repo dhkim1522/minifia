@@ -2,8 +2,8 @@
 // 관전(결정 0021): 탈락한 본인에게만 모든 실제 직업과 그 밤의 행동 대상. 살아 있는 사람에게는 어떤 키로도 싣지 않는다 —
 // 결정 0002 를 "살아 있는 사람에게는 보내지 않는다" 로 좁혀 유지. 직업 키 이름은 role 이 아니라 job 이다(누출 검사가 role 키를 me 밖에서 금지).
 // 밤 필드 받는 사람: pick 본인(생존·밤), allyPicks 생존 마피아(밤), records 경찰(수사)·마피아(암살)·의사(치료) 본인 중 본인 역할 일지 하나(역할 공개 단계 전체), morning 모두(아침만).
-// 낮 필드 받는 사람(8페이즈): points 모두(지목 단계만, 공개 지목 줄), endCount 모두(토론 단계만, 누른 수뿐), verdictCount 모두(찬반 단계만, 찬성·반대 수뿐 — 던진 좌석은 싣지 않는다, D-26), verdict 모두(처형 단계만, 찬반 수), turn 모두(지목 단계만, 차례 순서·마감·확정, 역할 무관),
-// me.endDiscussion·me.verdictVote 본인만(각각 토론·찬반 단계), voteLog 모두(낮 단계마다 항상, 집계 수만),
+// 낮 필드 받는 사람(8페이즈): points 모두(지목 단계만, 공개 지목 줄), endCount 모두(토론 단계만, 누른 수뿐), verdictCount 모두(찬반 단계만, 찬성·반대 수뿐 — 던진 좌석은 싣지 않는다, D-26), turn 모두(지목 단계만, 차례 순서·마감·확정, 역할 무관),
+// me.endDiscussion·me.verdictVote 본인만(각각 토론·찬반 단계). 지목·찬반 기록(옛 voteLog·verdict·찬반 좌석 목록)은 어떤 view 에도 없다(22-12 D-14·D-25),
 // candidate 모두(변론·처형, 변론자가 있을 때 — 찬반에는 후보가 없다), execution 모두(처형 단계만, seat·will — will 은 비어 있지 않을 때만), noExecution 모두(처형 무효로 온 밤만, reason 하나).
 // result(승리 팀·모든 직업·판 요약)는 ended 단계에서만, 생존·탈락 구분 없이 모두에게 같게(D-17). 서버 전용 밤 기록(nightLog)은 buildSummary 만 읽고 판 중에는 어떤 view 에도 없다(결정 0020-3).
 // 기본판(결정 0072): 꺼진 장치 키(players[].badge·badgeSwapped, day.turn·runoff·showdown, me.whisperUsed·ballot)는 서버 상태에 값이 있어도(옛 저장 방 포함) 싣지 않는다 — 판 규칙 RULES 가 막는다.
@@ -19,7 +19,6 @@ import type {
   RoomView,
   SpectatePicks,
   SpectateSeat,
-  VoteLogEntry,
 } from "../protocol";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import { isAlive } from "./alive";
@@ -60,16 +59,6 @@ const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
   "ended",
 ]);
 
-/** 투표 기록 한 줄을 필드별로 복사한다(펼쳐 복사 금지): exec 는 yes·no·passed 세 키, cand 는 있을 때만 votes 를 {seat, target} 으로, candidate 는 있을 때만. last(마지막 3인 결전 표시, 결정 0066-5)는 일부러 옮기지 않는다 — 공개 경로는 처형 단계의 day.verdict.last 하나뿐이다(L24). */
-function voteLogLine(entry: VoteLogEntry): VoteLogEntry {
-  const line: VoteLogEntry = { n: entry.n, exec: { yes: entry.exec.yes, no: entry.exec.no, passed: entry.exec.passed } };
-  if (entry.cand !== undefined) {
-    line.cand = { votes: entry.cand.votes.map((v) => ({ seat: v.seat, target: v.target })) };
-    if (entry.cand.candidate !== undefined) line.cand.candidate = entry.cand.candidate;
-  }
-  return line;
-}
-
 /**
  * 낮 정보. 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드는 싣지 않는다.
  * 읽는 쪽이 기본값을 쥔다: 일차 없으면 1(RESEARCH Pattern 6).
@@ -78,7 +67,6 @@ function buildDay(state: RoomState): DayView {
   const day: DayView = {
     n: state.day ?? 1,
     roles: rolesInPlay(state.players.length),
-    voteLog: (state.voteLog ?? []).map(voteLogLine),
   };
   // 토론 끝내기는 누른 산 사람 수만 공개한다 — 누가 눌렀는지는 서버 전용(Player.endVote)이고 본인 값만 me.endDiscussion 으로 간다(결정 0060-2).
   if (state.phase === "discussion") day.endCount = endCountOf(state);
@@ -115,18 +103,6 @@ function buildDay(state: RoomState): DayView {
     // 값은 서버가 저장 때 정리한 글(sanitizeChatText)이다. 처형 단계 밖의 view 에는 어디에도 없다.
     const will = state.players.find((p) => p.seat === state.execution!.seat)?.will;
     if (will !== undefined && will !== "") day.execution.will = will;
-  }
-  // 찬반 결과 수는 처형 단계에서 그날 voteLog 줄의 exec 세 키를 필드별로 복사한다(결정 0060-4). 줄이 없으면 키가 없다. 역할 키는 어디에도 없다(T-08-03).
-  if (state.phase === "execution") {
-    const today = state.day ?? 1;
-    const line = [...(state.voteLog ?? [])].reverse().find((entry) => entry.n === today);
-    if (line !== undefined) {
-      day.verdict = { yes: line.exec.yes, no: line.exec.no, passed: line.exec.passed };
-      if (line.last === true) day.verdict.last = true; // 마지막 3인 결전으로 온 처형(찬반 없음, 결정 0066-5)
-    }
-    // 찬반 기록 공개(결정 0066-3): 마감 뒤인 처형 단계에서만, 모두에게 같은 좌석 목록을 필드별 복사로 싣는다. 진행 중(verdict)에는 목록이 만들어지지도 않는다(L19).
-    const ballots = state.verdict?.ballots;
-    if (ballots !== undefined) day.ballots = { yes: [...ballots.yes], no: [...ballots.no] };
   }
   // 처형이 성립하지 않아 밤으로 온 그 밤에만, 이유 코드 하나(D-34). 공개 투표 기록에서 파생해 새 상태 필드가 없다.
   const noExecution = noExecutionOf(state);

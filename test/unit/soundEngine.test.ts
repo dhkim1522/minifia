@@ -214,7 +214,7 @@ function unlocked(over: Partial<EngineDeps> = {}): ReturnType<typeof makeRig> {
 }
 
 describe("보이스 한도 — 우선순위 낮은 것 → 오래된 것을 끊는다 (D-16)", () => {
-  const MIXED: SfxId[] = ["pin.move", "day.start", "morning.dawn", "chalk.draw", "runoff.intro", "pick.turn", "ballot.yes", "ballot.no"];
+  const MIXED: SfxId[] = ["pin.move", "day.start", "morning.dawn", "chalk.draw", "runoff.intro", "pick.turn", "phase.vote", "morning.saved"];
 
   it("아홉 번째 요청은 우선순위 숫자가 가장 큰 보이스를 끊고 난다", () => {
     const rig = unlocked();
@@ -230,7 +230,7 @@ describe("보이스 한도 — 우선순위 낮은 것 → 오래된 것을 끊�
 
   it("우선순위가 같으면 가장 오래된 것을 끊는다", () => {
     const rig = unlocked();
-    const prio1: SfxId[] = ["day.start", "morning.dawn", "chalk.draw", "runoff.intro", "pick.turn", "ballot.yes", "ballot.no", "game.start"];
+    const prio1: SfxId[] = ["day.start", "morning.dawn", "chalk.draw", "runoff.intro", "pick.turn", "phase.vote", "morning.saved", "game.start"];
     const made = prio1.map((id) => fire(rig, id));
     fire(rig, "verdict.reject");
     expect(made[0]!.every((s) => isCut(rig, s))).toBe(true);
@@ -282,7 +282,7 @@ describe("보이스 한도 — 우선순위 낮은 것 → 오래된 것을 끊�
   it("끊긴 보이스는 20ms 페이드로 멈춘다(클릭 방지)", () => {
     const rig = unlocked();
     const first = fire(rig, "pin.move");
-    ["day.start", "morning.dawn", "chalk.draw", "runoff.intro", "pick.turn", "ballot.yes", "ballot.no"].forEach((id) => fire(rig, id as SfxId));
+    ["day.start", "morning.dawn", "chalk.draw", "runoff.intro", "pick.turn", "phase.vote", "morning.saved"].forEach((id) => fire(rig, id as SfxId));
     fire(rig, "verdict.reject");
     const ctx = rig.fake.ctx();
     const fades = ctx.ofKind("gain").filter((g) => (g as FakeGain).gain.of("linear").some((c) => c.value === 0 && Math.abs(c.time - (ctx.currentTime + 0.02)) < 1e-9));
@@ -789,7 +789,7 @@ describe("숨김·복귀 (D-9)", () => {
     const rig = unlocked();
     const ctx = rig.fake.ctx();
     rig.engine.setBed("bed.day");
-    rig.engine.runScript("verdict", [{ at: 1000, id: "ballot.yes" }]);
+    rig.engine.runScript("verdict", [{ at: 1000, id: "runoff.reveal" }]);
     rig.fake.clock.advance(200);
     rig.engine.hidden();
     rig.fake.clock.advance(2000);
@@ -802,7 +802,7 @@ describe("숨김·복귀 (D-9)", () => {
     expect(lastRamp(graphOf(ctx).master)).toMatchObject({ value: MASTER_GAIN });
     rig.fake.clock.advance(1500);
     expect(ctx.sources().length).toBeGreaterThan(n);
-    expect(rig.engine.log().filter((e) => e.id === "ballot.yes")).toHaveLength(0);
+    expect(rig.engine.log().filter((e) => e.id === "runoff.reveal")).toHaveLength(0);
   });
 
   it("visible() 에서 resume 이 거절되면 locked", async () => {

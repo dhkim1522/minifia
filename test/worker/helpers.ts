@@ -187,7 +187,7 @@ export interface StoredRoom {
   phaseEndsAt: number | null;
   day?: number;
   /** 4페이즈 서버 전용 투표 상태: 개인 표는 마감·공개 구간 진입 훅이 키째 지운다(결정 0034). */
-  voteLog?: Array<{ n: number; last?: boolean; reason?: string; exec: { yes: number; no: number; passed: boolean }; cand?: { votes: Array<{ seat: number; target: number }>; candidate?: number } }>;
+  voteLog?: Array<{ n: number; reason?: string; exec: { yes: number; no: number; passed: boolean }; cand?: { candidate?: number } }>;
   winner?: string;
   verdict?: { passed: boolean; candidate?: number };
   /** 09.1 순차 지목 서버 전용 차례 상태(결정 0063-1): 있으면 지목이 차례 방식이다. */

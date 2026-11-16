@@ -9,10 +9,10 @@ import type { Game } from "./helpers";
 
 type Card = Extract<ServerMessage, { t: "chat" }>;
 
-/** 소켓마다 mark 이후의 chat 프레임을 모은다. 처형 진입 때 나가는 찬반 기록 카드(ballots, 09.1.1-03)는 유언·쪽지 카드가 아니라 뺀다(ballots.test.ts 가 맡는다). */
+/** 소켓마다 mark 이후의 chat 프레임을 모은다. 찬반 기록 카드(ballots)는 22-12 에서 지웠다. */
 async function chatsSince(g: Game, marks: number[]): Promise<Card[][]> {
   const out: Card[][] = [];
-  for (let i = 0; i < g.socks.length; i += 1) out.push(chatsOf(await settle(g.socks[i]!, marks[i]!)).filter((c) => c.k !== "ballots"));
+  for (let i = 0; i < g.socks.length; i += 1) out.push(chatsOf(await settle(g.socks[i]!, marks[i]!)));
   return out;
 }
 

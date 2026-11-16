@@ -429,7 +429,7 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
   const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
 
   it("RESULT_MARKERS 가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
-    expect(r.RESULT_MARKERS).toEqual(["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider", "data-day-card", "data-day-detail", "data-whisper-pair", "data-ready-pill", "data-ready", "data-ready-count", "data-bench-view"]);
+    expect(r.RESULT_MARKERS).toEqual(["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider", "data-ready-pill", "data-ready", "data-ready-count", "data-bench-view"]);
     const missing = r.RESULT_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)));
     expect(missing).toEqual([]);
   });
@@ -465,21 +465,6 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     expect({ ...r.RESULT_WIN_TITLE }).toEqual({ citizenWin: RESULT_TEXT.title.citizenWin, mafiaWin: RESULT_TEXT.title.mafiaWin });
     expect(r.RESULT_PANEL_H).toBe(LOG_H + RESULT_CHAT_EXTRA);
     expect(r.RESULT_PANEL_H).toBe(160);
-  });
-
-  it("기록 탭 카드 기하가 앱과 같다 (11-11): 카드 72×112 · 간격은 --space-sm · 표식은 컴포넌트에 있다", () => {
-    const css = readFileSync(new URL("src/styles/result.css", root), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-    const body = (sel: string): string => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === sel)?.[2] ?? "";
-    const card = body(".mf-tl__card");
-    expect(card).toContain(`width: ${r.TIMELINE_CARD.w}px`);
-    expect(card).toContain(`height: ${r.TIMELINE_CARD.h}px`);
-    const tokens = readFileSync(new URL("src/styles/tokens.css", root), "utf8");
-    expect(body(".mf-tl__strip")).toContain("gap: var(--space-sm)");
-    expect(new RegExp(`--space-sm:\\s*${r.TIMELINE_CARD.gap}px`).test(tokens)).toBe(true);
-    const has = (file: string, marker: string) => sources.some((s) => s.f.endsWith(file) && s.text.includes(marker));
-    expect(has("components/v2/TimelineStrip.tsx", "data-day-card")).toBe(true);
-    expect(has("components/v2/DayDetail.tsx", "data-day-detail")).toBe(true);
-    expect(has("components/v2/DayDetail.tsx", "data-whisper-pair")).toBe(true);
   });
 
   it("11-12: 다시 하기 알약·쉬는 사람 화면 표식과 훅 sat 가 앱에 있고, 알약 치수가 CSS 와 같다", () => {

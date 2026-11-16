@@ -129,9 +129,9 @@ describe("resolveVerdict — 던진 표의 과반이 찬성이면 통과, 아니
     expect(passedOf(verdictOf(8), 2, 1)).toBe(true);
   });
 
-  it("통과면 verdict {passed:true, ballots} 이고 다음 단계는 표의 기본(nomination)이다", () => {
+  it("통과면 verdict {passed:true}(개인 표·좌석 목록은 남지 않는다, 22-12 D-14) 이고 다음 단계는 표의 기본(nomination)이다", () => {
     const r = resolveVerdict(withVotes(verdictOf(), 3, 1));
-    expect(`${JSON.stringify(r.state.verdict)} ${r.stay} ${String(r.next)}`).toBe(`${JSON.stringify({ passed: true, ballots: { yes: [0, 1, 2], no: [3] } })} false undefined`);
+    expect(`${JSON.stringify(r.state.verdict)} ${r.stay} ${String(r.next)}`).toBe(`${JSON.stringify({ passed: true })} false undefined`);
   });
 
   it("부결이면 다음 단계는 night(afterDayOf)이고 그날 voteLog 줄에 reason rejected 가 남는다", () => {
@@ -224,28 +224,3 @@ describe("tick 으로 닿는 흐름 (D-10·D-11)", () => {
   });
 });
 
-describe("resolveVerdict — 찬반 기록 ballots (결정 0066-3, 22-12 가 지운다)", () => {
-  const setVotes = (state: RoomState, votes: Record<number, boolean>): RoomState => ({
-    ...state,
-    players: state.players.map((p) => (Object.hasOwn(votes, p.seat) ? { ...p, verdictVote: votes[p.seat]! } : p)),
-  });
-
-  it("찬성·반대 좌석을 오름차순으로 남기고 미투표 좌석은 어느 목록에도 없다; 개인 verdictVote 키는 모두 지운다", () => {
-    const r = resolveVerdict(setVotes(verdictOf(), { 3: true, 0: true, 2: false }));
-    expect(JSON.stringify(r.state.verdict?.ballots)).toBe(JSON.stringify({ yes: [0, 3], no: [2] }));
-    expect(r.state.players.some((p) => Object.hasOwn(p, "verdictVote"))).toBe(false);
-  });
-
-  it("아무도 안 던졌으면 두 목록이 모두 비어 있고, 입력 상태는 바뀌지 않는다", () => {
-    const base = verdictOf();
-    const before = JSON.stringify(base);
-    const r = resolveVerdict(base);
-    expect(JSON.stringify(r.state.verdict?.ballots)).toBe('{"yes":[],"no":[]}');
-    expect(JSON.stringify(base)).toBe(before);
-  });
-
-  it("탈락한 사람의 남은 값은 세지 않는다", () => {
-    const dead = withDead(setVotes(verdictOf(), { 0: true, 1: false }), [1]);
-    expect(JSON.stringify(resolveVerdict(dead).state.verdict?.ballots)).toBe(JSON.stringify({ yes: [0], no: [] }));
-  });
-});

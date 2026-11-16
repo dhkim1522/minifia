@@ -45,9 +45,7 @@ export interface ChatPanelMessage {
   ch?: "all" | "mafia" | "ghost";
   icon?: V2IconName;
   /** kind card 일 때 종류(data-card 값) */
-  card?: "will" | "note" | "eye" | "ballots";
-  /** card ballots 일 때 찬반 기록: 좌석 + 이름(자리 번호 오름차순, 09.1.1-12) */
-  ballots?: { yes: { seat: number; name: string }[]; no: { seat: number; name: string }[] };
+  card?: "will" | "note" | "eye";
   /** 카드 제목 */
   title?: string;
   /** mafia = 쪽지 카드(진홍 테두리·제목) */

@@ -711,8 +711,8 @@ describe("실제 흐름 (결정 0060-1)", () => {
     const errors = all.map((frames) => frames.filter((m) => m.t === "error").map((m) => (m.t === "error" ? m.code : "")).join(","));
     expect(errors.join("|")).toBe(g.actors.map((x) => (x === late ? "WRONG_PHASE" : "")).join("|"));
     expect(all.map((frames) => viewsOf(frames).at(-1)?.phase).join(",")).toBe(g.actors.map(() => "defense").join(","));
-    const line = ((await storedRoom(g.code)) as unknown as { voteLog?: Array<{ cand?: { votes: Array<{ seat: number; target: number }> } }> }).voteLog?.at(-1)?.cand;
-    expect(JSON.stringify(line?.votes)).toBe(JSON.stringify([a, b].sort((x, y) => x.seat - y.seat).map((x) => ({ seat: x.seat, target: defender.seat }))));
+    const line = ((await storedRoom(g.code)) as unknown as { voteLog?: Array<{ cand?: { candidate?: number } }> }).voteLog?.at(-1)?.cand;
+    expect(JSON.stringify(line)).toBe(JSON.stringify({ candidate: defender.seat })); // 누가 누구를 골랐는지(votes)는 저장하지 않는다(22-12 D-25)
   }, 60_000);
 
   it("죽은 사람의 지목은 BAD_MESSAGE 이고 저장은 그대로다", async () => {

@@ -185,7 +185,7 @@ describe("tick (순수 단계 진행)", () => {
     expect(`${night.phase}/${night.day}/${night.phaseEndsAt}`).toBe(`night/1/${end + NIGHT_MS}`);
     expect(night.pickTurn).toBeUndefined();
     // 찬반 마감이 줄을 만들고(passed true), 지목 마감이 cand 와 reason(noVotes)을 더한다 — 줄은 하나다.
-    expect(night.voteLog).toEqual([{ n: 1, exec: { yes: 4, no: 0, passed: true }, cand: { votes: [] }, reason: "noVotes" }]);
+    expect(night.voteLog).toEqual([{ n: 1, exec: { yes: 4, no: 0, passed: true }, cand: {}, reason: "noVotes" }]);
     // 마지막 마감 직전에는 아직 지목이다(끝 알림 중).
     expect(tick(nomination, end - 1).phase).toBe("nomination");
   });
@@ -209,14 +209,14 @@ describe("tick (순수 단계 진행)", () => {
     const oneEnd = castPoints(nomination, { 0: 2, 1: 2, 2: 3 });
     const one = tick(oneEnd, oneEnd.phaseEndsAt!);
     expect(`${one.phase}/${one.phaseEndsAt}/${JSON.stringify(one.verdict)}`).toBe(
-      `defense/${oneEnd.phaseEndsAt! + DEFENSE_MS}/${JSON.stringify({ passed: true, ballots: { yes: [0, 1, 2, 3], no: [] }, candidate: 2 })}`,
+      `defense/${oneEnd.phaseEndsAt! + DEFENSE_MS}/${JSON.stringify({ passed: true, candidate: 2 })}`,
     );
     // 최다가 셋 이상 동점(0→1, 1→2, 2→0 한 표씩)이면 결선 없이 밤 — 정확히 둘 동점은 아래 결선 시험이 맡는다(결정 0066-4)
     const tieEnd = castPoints(nomination, { 0: 1, 1: 2, 2: 0 });
     const tie = tick(tieEnd, tieEnd.phaseEndsAt!);
     expect(`${tie.phase}/${tie.phaseEndsAt}`).toBe(`night/${tieEnd.phaseEndsAt! + NIGHT_MS}`);
     expect(tie.voteLog?.[0]?.cand?.candidate).toBeUndefined();
-    expect(tie.voteLog?.[0]?.cand?.votes.length).toBe(3);
+    expect(tie.voteLog?.[0]?.cand).toEqual({}); // 개인 선택(votes)은 저장하지 않는다(22-12 D-25)
     expect(tie.voteLog?.[0]?.reason).toBe("tie");
     expect(Object.hasOwn(tie, "verdict")).toBe(false);
   });

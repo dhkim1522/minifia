@@ -4,7 +4,7 @@
 // (옛 규칙은 "변론자를 뺀 유권자 수가 분모, 못 던진 사람도 분모" 였다).
 // 찬반 진행 중에는 집계 수(찬성·반대)만 모두에게 공개하고(day.verdictCount, 번복도 방송) 던진 좌석은 싣지 않는다(D-26). 개인 표(Player.verdictVote)는
 // 서버 전용이고 뷰 허용 목록에 없다(본인 me.verdictVote 만 예외). 마감 훅(resolveVerdict)이 집계 직후 키째 지운다 — 진행 중 비공개를 뷰 코드가 아니라 "데이터가 없다" 는 사실로 지킨다.
-// 마감 뒤에는 누가 찬성·반대했는지 좌석 목록(verdict.ballots)만 남는다 — 처형 연출이 아직 기대는 값이라 22-12 가 지운다.
+// 마감 뒤에는 누가 찬성·반대했는지 어디에도 남지 않는다(22-12 D-14) — 판정 결과(passed)와 집계 수(voteLog exec)뿐이다.
 // 마감 시각은 건드리지 않는다: 모두가 일찍 던져도 10초를 다 채운다(조기 종료 없음, 사용자 확정 2026-11-02).
 import { isAlive } from "./alive";
 import { afterDayOf } from "./phases";
@@ -54,18 +54,13 @@ export function verdictTallyOf(state: RoomState): { yes: number; no: number } {
  * verdict 마감 훅(결정 0089-18, D-11). 판정: 던진 표의 과반이 찬성이면 통과, 아니면 부결(0표·동수 포함).
  * 이 마감이 그날 voteLog 줄 {n, exec:{yes, no, passed}} 을 만든다(같은 날 줄이 이미 있으면 exec 만 채운다). 부결이면 줄에 reason "rejected" 를 남긴다 —
  * 밤에 도착했을 때 noExecutionOf 가 이 줄에서 이유를 읽는다. 지목 마감(resolveNomination)이 같은 줄에 cand 를 더한다.
- * verdict 상태는 {passed, ballots(찬성·반대 좌석)} 다 — 후보는 지목 마감이 더한다. 집계 직후 모든 플레이어의 verdictVote 키를 구조 분해로 지운다.
+ * verdict 상태는 {passed} 다 — 후보는 지목 마감이 더한다. 집계 직후 모든 플레이어의 verdictVote 키를 구조 분해로 지운다.
  * 다음 단계: 통과는 표의 기본(nomination), 부결은 처형 없는 낮이라 afterDayOf()(night).
  */
 export function resolveVerdict(state: RoomState): DeadlineResult {
   const { yes, no } = verdictTallyOf(state);
   // 던진 표의 과반 찬성(= yes > no). 0표·동수는 부결 — D-11
   const passed = yes * 2 > yes + no;
-  // 공개용 좌석 목록은 개인 키를 지우기 전에 한 번만 만든다(결정 0066-3). 산 사람만 센다 — 유령의 남은 값과 미투표(undefined)는 어디에도 없다.
-  const voterRows = verdictVotersOf(state);
-  const seatsOf = (agree: boolean): number[] =>
-    voterRows.filter((p) => p.verdictVote === agree).map((p) => p.seat).sort((a, b) => a - b);
-  const ballots = { yes: seatsOf(true), no: seatsOf(false) };
   const players = state.players.map((p) => {
     const { verdictVote: _verdictVote, ...kept } = p;
     return kept;
@@ -81,7 +76,7 @@ export function resolveVerdict(state: RoomState): DeadlineResult {
     ...state,
     players,
     voteLog,
-    verdict: { passed, ballots },
+    verdict: { passed },
   };
   return passed ? { state: next, stay: false } : { state: next, stay: false, next: afterDayOf() };
 }

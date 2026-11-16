@@ -230,7 +230,7 @@ describe("시트 닫기·결과 탭 (TOOL-04, D-01·V-7)", () => {
     onTab: () => {},
     expanded: false,
     tabsVisible: true,
-    lines: { mafia: { lines: [], complete: true }, ghost: { lines: [], complete: true }, whisper: { lines: [], complete: true }, claim: { lines: [], complete: true }, ballots: { lines: [], complete: true } },
+    lines: { mafia: { lines: [], complete: true }, ghost: { lines: [], complete: true }, whisper: { lines: [], complete: true }, claim: { lines: [], complete: true } },
     contacts: new Map(),
     opened: new Set<ResultTab>(["all"]),
     allSlot: <div />,

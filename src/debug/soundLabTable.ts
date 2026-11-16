@@ -7,8 +7,8 @@ import type { SfxId, SoundId } from "../audio/recipes";
  * E2E 쪽 문턱(scripts/e2e/lib.mjs SOUND_RENDER_LIMITS)과 같아야 하고 e2eContract 시험이 대조한다.
  */
 export const SOUND_LIMITS = {
-  /** 소리 id 수: 침대 7 + 효과음 49 = 56 */
-  count: 56,
+  /** 소리 id 수: 침대 7 + 효과음 47 = 54 */
+  count: 54,
   peakMaxDb: -3,
   rmsMinDb: -60,
   /** 효과음 측정 길이와 선언 길이의 허용 차이(ms) */
@@ -29,7 +29,7 @@ export const LAB_GROUPS: readonly LabGroup[] = [
     title: "낮·지목·변론",
     ids: ["day.start", "timer.tick", "phase.vote", "pin.on", "pin.move", "pick.turn", "pick.tick", "pick.point", "pick.skip", "runoff.intro", "runoff.reveal", "showdown.reveal", "vote.cast"],
   },
-  { key: "verdict", title: "판결·처형", ids: ["verdict.heart", "ballot.yes", "ballot.no", "execution.gavel", "execution.rise", "verdict.reject"] },
+  { key: "verdict", title: "판결·처형", ids: ["verdict.heart", "execution.gavel", "execution.rise", "verdict.reject"] },
   { key: "night", title: "밤·아침", ids: ["night.fall", "night.cue", "kill.slash", "morning.dawn", "morning.calm", "chalk.draw", "morning.saved", "will.quill", "will.seal", "will.fold"] },
   { key: "emote", title: "동작", ids: ["emote.clap", "emote.praise", "emote.handshake", "emote.dance", "emote.surprise", "emote.cry", "emote.deny", "emote.point", "emote.throat"] },
   { key: "result", title: "결과", ids: ["result.win", "result.lose"] },
@@ -71,8 +71,6 @@ export const SOUND_NAMES: Readonly<Record<SoundId, string>> = {
   "showdown.reveal": "마지막 3인 공개",
   "vote.cast": "찬반 선택",
   "verdict.heart": "심장 박동",
-  "ballot.yes": "찬성 묶음 등장",
-  "ballot.no": "반대 묶음 등장",
   "execution.gavel": "처형 확정",
   "execution.rise": "유령 떠오름",
   "verdict.reject": "부결",

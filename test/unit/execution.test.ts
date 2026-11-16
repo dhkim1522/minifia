@@ -125,9 +125,8 @@ describe("view: 서버 전용 키 이름 (D-19, T-04-10)", () => {
       const state = stateWithVerdict(6, 2, phase);
       const text = JSON.stringify(state.players.map((p) => viewOf(state, p.seat)));
       for (const key of ["candidateVote", "verdict", "lastExecPhrase", "execVote"]) {
-        // 8페이즈(08-07): 처형 단계에는 공개 와이어 필드 day.verdict({yes,no,passed})가 있다 — 서버 전용 RoomState.verdict 와 이름만 같다.
-        const want = key === "verdict" && phase === "execution";
-        expect(`${phase}/${key}: ${text.includes(`"${key}":`)}`).toBe(`${phase}/${key}: ${want}`);
+        // 22-12: day.verdict 가 없다 — 어느 단계의 view 에도 이 이름들이 나오지 않는다.
+        expect(`${phase}/${key}: ${text.includes(`"${key}":`)}`).toBe(`${phase}/${key}: false`);
       }
     }
   });
@@ -275,15 +274,15 @@ describe("새 단계 전수 누출 검사 (4~8명 × 변론·처형 두 단계 �
               const key = path.slice(path.lastIndexOf(".") + 1);
               if (key === "role" && path !== ".me.role") violations.push(`${tag}: role at ${path}`);
               if (key === "allies" && path !== ".me.allies") violations.push(`${tag}: allies at ${path}`);
-              // 8페이즈(08-07): 처형 단계의 day.verdict 는 공개 와이어 필드다(서버 전용 verdict 와 이름만 같다).
-              if (serverOnly.includes(key) && path !== ".day.verdict") violations.push(`${tag}: server-only key at ${path}`);
+              // 22-12: day.verdict 예외가 없다 — 서버 전용 이름은 어떤 경로에도 없다.
+              if (serverOnly.includes(key)) violations.push(`${tag}: server-only key at ${path}`);
             }
             for (const entry of view.players) {
               const keys = Object.keys(entry).filter((k) => k !== "look").sort().join(","); // look 은 시작 때 풀린 공개 의상(D-01)
               if (keys !== "alive,connected,isHost,nickname,seat") violations.push(`${tag}: players[] keys ${keys}`);
             }
-            const want = ["n", "roles", "voteLog", "candidate"];
-            if (phase === "execution") want.push("execution", "verdict", "ballots"); // 8페이즈(08-07): 처형 단계의 찬반 결과 수 day.verdict, 09.1.1-03: 찬반 기록 day.ballots
+            const want = ["n", "roles", "candidate"];
+            if (phase === "execution") want.push("execution"); // 22-12: 찬반 결과 수(day.verdict)·찬반 기록(day.ballots)·voteLog 는 없다
             const got = Object.keys(view.day ?? {}).sort().join(",");
             if (got !== want.sort().join(",")) violations.push(`${tag}: day keys ${got}`);
           }

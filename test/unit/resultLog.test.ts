@@ -2,12 +2,11 @@
 import { describe, expect, it } from "vitest";
 import { appendLine, emptyChatLog } from "../../shared/game/chatLog";
 import type { ChatLog } from "../../shared/game/chatLog";
-import { ballotsCardText } from "../../shared/game/ballots";
 import { RESULT_LOG_CHUNK, buildResultLog } from "../../shared/game/resultLog";
 import type { ResultLogInput } from "../../shared/game/resultLog";
 import type { ResultLogFrame } from "../../shared/protocol";
 
-type Line = { ch: "all" | "mafia" | "ghost"; seat: number; text: string; n?: number; k?: "will" | "note" | "ballots"; r?: number };
+type Line = { ch: "all" | "mafia" | "ghost"; seat: number; text: string; n?: number; k?: "will" | "note"; r?: number };
 
 /** appendLine 으로 줄을 쌓는다(마스크 r 는 기본 0 — 마스크는 resultLog 와 무관해야 한다). */
 function logOf(lines: Line[]): ChatLog {
@@ -24,14 +23,13 @@ const partOf = (frames: ResultLogFrame[], part: string): ResultLogFrame[] => fra
 const keys = (o: object): string => Object.keys(o).sort().join(",");
 
 describe("buildResultLog — 부분과 순서", () => {
-  it("아무 기록이 없어도 다섯 부분마다 { i:0, end:true, lines:[] } 한 프레임을 mafia → ghost → whisper → claim → ballots 순으로 낸다", () => {
+  it("아무 기록이 없어도 네 부분마다 { i:0, end:true, lines:[] } 한 프레임을 mafia → ghost → whisper → claim 순으로 낸다(22-12: 찬반 기록 부분 없음)", () => {
     const frames = buildResultLog(input(), emptyChatLog());
     expect(frames.map((f) => `${f.part}:${f.i}:${f.end}:${f.lines.length}`)).toEqual([
       "mafia:0:true:0",
       "ghost:0:true:0",
       "whisper:0:true:0",
       "claim:0:true:0",
-      "ballots:0:true:0",
     ]);
   });
 
@@ -52,8 +50,8 @@ describe("buildResultLog — 청크 40줄", () => {
     const m = partOf(frames, "mafia");
     expect(m.map((f) => `${f.i}:${f.end}:${f.lines.length}`)).toEqual(["0:false:40", "1:false:40", "2:true:5"]);
     expect(m.flatMap((f) => f.lines.map((l) => (l as { text: string }).text))).toEqual(lines.map((l) => l.text));
-    for (const part of ["ghost", "whisper", "claim", "ballots"]) expect(partOf(frames, part)).toHaveLength(1);
-    expect(frames.map((f) => f.part)).toEqual(["mafia", "mafia", "mafia", "ghost", "whisper", "claim", "ballots"]);
+    for (const part of ["ghost", "whisper", "claim"]) expect(partOf(frames, part)).toHaveLength(1);
+    expect(frames.map((f) => f.part)).toEqual(["mafia", "mafia", "mafia", "ghost", "whisper", "claim"]);
   });
 
   it("정확히 40줄이면 한 프레임이고 end 가 true 이다 (빈 프레임을 덧붙이지 않는다)", () => {
@@ -99,12 +97,12 @@ describe("buildResultLog — 줄 모양과 재료", () => {
     for (const line of w.lines) expect(keys(line)).toBe("at,n,seat,text,to");
   });
 
-  it("all 채널 보관 줄(귓속말 본문·사실 줄 포함)은 마피아·유령·찬반 어느 부분에도 섞이지 않는다", () => {
+  it("all 채널 보관 줄(귓속말 본문·사실 줄 포함)은 마피아·유령 어느 부분에도 섞이지 않는다", () => {
     const log = logOf([{ ch: "all", seat: 0, text: "공개", n: 1 }]);
     const frames = buildResultLog(input({ whispers: [{ n: 1, from: 0, to: 1, text: "속삭임", at: 5 }] }), log);
     expect(partOf(frames, "mafia")[0]!.lines).toEqual([]);
     expect(partOf(frames, "ghost")[0]!.lines).toEqual([]);
-    expect(partOf(frames, "ballots")[0]!.lines).toEqual([]);
+    expect(partOf(frames, "ballots")).toEqual([]);
   });
 
   it("직업 주장은 모든 사람의 badgeLog 를 일차 오름차순 → 좌석 오름차순 → 원래 순서로 내고 키는 seat·n·v 뿐이다", () => {
@@ -129,22 +127,6 @@ describe("buildResultLog — 줄 모양과 재료", () => {
     for (const line of c.lines) expect(keys(line)).toBe("n,seat,v");
   });
 
-  it("찬반 기록은 ballots 카드를 풀어 일차별로 { n, yes, no } 를 내고 모양이 틀린 카드는 건너뛴다", () => {
-    const log = logOf([
-      { ch: "all", seat: 2, text: ballotsCardText({ yes: [0, 1, 3], no: [] }), n: 1, k: "ballots" },
-      { ch: "all", seat: 1, text: "깨진|카드|본문", n: 2, k: "ballots" },
-      { ch: "all", seat: 1, text: "9|0", n: 2, k: "ballots" },
-      { ch: "all", seat: 3, text: ballotsCardText({ yes: [0], no: [1, 2] }), n: 3, k: "ballots" },
-      { ch: "all", seat: 0, text: "1|2", n: 3 }, // 카드 표시가 없는 공개 줄은 건너뛴다
-    ]);
-    const b = partOf(buildResultLog(input(), log), "ballots")[0]!;
-    expect(b.lines).toEqual([
-      { n: 1, yes: [0, 1, 3], no: [] },
-      { n: 3, yes: [0], no: [1, 2] },
-    ]);
-    for (const line of b.lines) expect(keys(line)).toBe("n,no,yes");
-  });
-
   it("유언·쪽지 카드(k will·note)는 어느 부분에도 들지 않는다", () => {
     const log = logOf([
       { ch: "all", seat: 1, text: "유언", n: 1, k: "will" },
@@ -158,7 +140,7 @@ describe("buildResultLog — 순수성", () => {
   it("입력을 바꾸지 않고 같은 입력이면 같은 프레임 열을 낸다", () => {
     const log = logOf([
       { ch: "mafia", seat: 1, text: "밤", n: 1 },
-      { ch: "all", seat: 2, text: "1,2|0", n: 1, k: "ballots" },
+      { ch: "all", seat: 2, text: "카드", n: 1, k: "will" },
     ]);
     const inp = input({ whispers: [{ n: 1, from: 0, to: 1, text: "x", at: 1 }], players: players([[{ n: 1, v: "police" }], [], [], []]) });
     const before = JSON.stringify([inp, log]);

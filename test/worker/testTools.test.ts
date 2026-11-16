@@ -407,8 +407,9 @@ describe("투표 단계 넘기기와 종료 중 도구", () => {
     send(r.host, { t: "testSkip" });
     await nextFrame(r.host, (m) => m.t === "state" && m.view.phase !== "nomination");
     const cand = (await storedRoom(r.code)).voteLog!.at(-1)!.cand!;
-    expect(String(cand.votes.length)).toBe("4");
-    expect(String(cand.votes.some((v) => v.seat === 0 && v.target === 1))).toBe("true"); // 방장 지목은 그대로 세어졌다
+    // 누가 누구를 골랐는지(votes)는 저장하지 않는다(22-12 D-25) — 그날 처형자(candidate)만 남는다
+    expect(Object.keys(cand).every((k) => k === "candidate")).toBe(true);
+    expect(JSON.stringify((await storedRoom(r.code)).voteLog)).not.toContain("votes");
   }, 30_000);
 
   it("ended 에서 testReset: 대기실이 되고 저장된 방·플레이어에 투표·종료 필드가 없으며 다시 시작하면 만료가 시작 + 3시간이다", async () => {
@@ -511,12 +512,11 @@ describe("testBotVote: 넘기기가 설정을 따른다", () => {
     await skipOnce(r); // 지목: 봇 셋이 방장을 가리켜 최다 한 명 → 변론
     const defense = lastView(r.host);
     expect(`${defense.phase}/${defense.day?.candidate}`).toBe("defense/0");
-    const votes = (await storedRoom(r.code)).voteLog!.at(-1)!.cand!.votes.map((v) => `${v.seat}>${v.target}`).sort();
-    expect(votes.join(",")).toBe("2>0,3>0,4>0"); // 손님(seat 1)은 안 던졌고 봇 셋(seat 2~4)이 모두 방장
+    expect((await storedRoom(r.code)).voteLog!.at(-1)!.cand).toEqual({ candidate: 0 }); // 봇 셋(seat 2~4)이 모두 방장을 골랐다 — 누가 골랐는지는 저장하지 않는다(22-12 D-25)
     await resetRateWindow(r.code);
     await skipOnce(r); // 변론 → 처형
     const execution = lastView(r.host);
-    expect(`${execution.phase}/${JSON.stringify(execution.day?.verdict)}/${execution.day?.execution?.seat}`).toBe('execution/{"yes":3,"no":0,"passed":true}/0');
+    expect(`${execution.phase}/${execution.day?.execution?.seat}`).toBe("execution/0"); // 찬반 결과 수(day.verdict)는 와이어에 없다(22-12)
   }, 30_000);
 
   it("대기실로 되돌려도 방장 view 의 me.testBotVote 가 남고 손님 프레임에는 키가 한 번도 없다", async () => {

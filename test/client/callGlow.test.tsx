@@ -433,7 +433,7 @@ describe("맵 화면 빛남 (HOST-03·04·05)", () => {
       for (const phase of ["dayAnnounce", "execution", "morning"] as PhaseId[]) {
         const v = mapView({ phase, candidate: 2 });
         const { container, unmount } = mount(
-          phase === "execution" ? { ...v, day: { ...v.day!, verdict: { yes: 3, no: 0, passed: true } } } : phase === "morning" ? { ...v, day: { ...v.day!, morning: {} } } : v,
+          phase === "execution" ? { ...v, day: { ...v.day!, execution: { seat: 2 } } } : phase === "morning" ? { ...v, day: { ...v.day!, morning: {} } } : v,
         );
         expect(calls(container), phase).toHaveLength(0);
         expect(tagCalls(4), phase).toEqual([]);

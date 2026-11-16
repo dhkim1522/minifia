@@ -206,7 +206,7 @@ describe("buildSummary (END-02, D-27, T-04-21)", () => {
       ...base,
       voteLog: [
         { n: 2, exec: { yes: 1, no: 3, passed: false } },
-        { n: 1, exec: { yes: 3, no: 1, passed: true }, cand: { votes: [{ seat: 0, target: 1 }], candidate: 1 } },
+        { n: 1, exec: { yes: 3, no: 1, passed: true }, cand: { candidate: 1 } },
       ],
       nightLog: [{ n: 3, died: false }, { n: 1, target: 2, died: true }, { n: 2, died: false }],
     };

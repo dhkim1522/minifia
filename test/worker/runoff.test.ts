@@ -41,7 +41,7 @@ describe.skipIf(!GAME_RULES.runoff)("동점 결선 — 트레이서 (결정 0066
     const stored = await storedRoom(g.code);
     const today = stored.voteLog!.at(-1)!;
     expect(today.cand?.candidate).toBeUndefined();
-    expect(today.cand?.votes.length).toBe(5);
+    expect(today.cand).toEqual({}); // 개인 선택(votes)은 저장하지 않는다(22-12 D-25)
 
     // 투표 창
     await closePhase(g.code);

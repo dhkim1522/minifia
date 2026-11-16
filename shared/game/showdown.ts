@@ -129,9 +129,9 @@ export function acceptLastWord(
 }
 
 /**
- * 집계(결정 0066-5): 2표 이상 받은 사람이 있으면 최후 변론·찬반 없이 처형 단계로 — 그날 voteLog 줄 {exec 0·0 passed, cand {votes, candidate}, last} ·
- * verdict {passed:true, candidate} · next "execution"(기존 enterExecution 이 후보를 탈락시킨다). 없으면 처형 없음 — voteLog 줄(passed false, candidate 없음, last) ·
- * verdict {passed:false} · next afterDayOf()(night. votes 가 비면 noVotes, 아니면 tie 이유가 기존 noExecutionOf 로 파생된다).
+ * 집계(결정 0066-5): 2표 이상 받은 사람이 있으면 최후 변론·찬반 없이 처형 단계로 — 그날 voteLog 줄 {exec 0·0 passed, cand {candidate}} ·
+ * verdict {passed:true, candidate} · next "execution"(기존 enterExecution 이 후보를 탈락시킨다). 없으면 처형 없음 — voteLog 줄(passed false, cand {}, reason noVotes|tie) ·
+ * verdict {passed:false} · next afterDayOf()(night. 아무도 안 던졌으면 noVotes, 던졌으나 갈렸으면 tie — 누가 누구를 골랐는지는 저장하지 않는다, 22-12 D-25).
  * showdown·showdownPick 은 키째 지운다.
  */
 export function resolveShowdown(state: RoomState): DeadlineResult {
@@ -149,11 +149,11 @@ export function resolveShowdown(state: RoomState): DeadlineResult {
   }
   const n = state.day ?? 1;
   if (candidate === undefined) {
-    const line = { n, exec: { yes: 0, no: 0, passed: false }, cand: { votes }, last: true as const };
+    const line = { n, exec: { yes: 0, no: 0, passed: false }, cand: {}, reason: (votes.length === 0 ? "noVotes" : "tie") as "noVotes" | "tie" };
     // 처형 없는 낮의 다음 단계는 afterDayOf 한 곳이다(밤).
     return { state: { ...rest, players, voteLog: [...(state.voteLog ?? []), line], verdict: { passed: false } }, stay: false, next: afterDayOf() };
   }
-  const line = { n, exec: { yes: 0, no: 0, passed: true }, cand: { votes, candidate }, last: true as const };
+  const line = { n, exec: { yes: 0, no: 0, passed: true }, cand: { candidate } };
   return {
     state: { ...rest, players, voteLog: [...(state.voteLog ?? []), line], verdict: { passed: true, candidate } },
     stay: false,

@@ -6,7 +6,7 @@ import "../helpers/singleLineErrors";
 import { phaseKey } from "../../shared/game/audience";
 import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
-import type { GameWinner, MapId, RoomView, SummaryRow, VoteLogEntry } from "../../shared/protocol";
+import type { GameWinner, MapId, RoomView, SummaryRow } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { ResultPanelProps } from "../../src/components/v2/ResultPanel";
@@ -100,9 +100,8 @@ interface Opts {
   spectate?: boolean;
   chat?: RoomView["me"]["chat"] | null;
   nicknames?: string[];
-  /** 판 요약·공개 투표 기록(11-11 기록 탭). 없으면 빈 배열 */
+  /** 판 요약(11-11 기록 탭). 없으면 빈 배열 */
   summary?: SummaryRow[];
-  voteLog?: VoteLogEntry[];
   /** 다시 하기 준비한 좌석들(11-12, players[].ready) */
   ready?: number[];
   /** 판 번호(11-12, view.round) */
@@ -150,7 +149,7 @@ function makeView(o: Opts = {}): RoomView {
       })),
     ],
     me: { seat: me, isHost: me === (o.hostSeat ?? 0), ...(o.sat?.includes(me) ? {} : { role: jobs[me]! }), ...(chat === null ? {} : { chat }) },
-    day: { n: 2, roles: ["mafia", "police", "citizen"], voteLog: o.voteLog ?? [] },
+    day: { n: 2, roles: ["mafia", "police", "citizen"] },
     ...(o.spectate ? { spectate: { seats } } : {}),
     ...(o.withResult === false ? {} : { result: { winner: o.winner ?? "citizenWin", seats, summary: o.summary ?? [] } }),
   };
@@ -801,7 +800,6 @@ describe("결과 화면 기록 숨김 (18.1 R5, P181-7)", () => {
     emit(chatFrame("ghost", [{ seat: 2, n: 2, text: "억울해" }]));
     emit({ t: "resultLog", part: "whisper", i: 0, end: true, lines: [{ seat: 0, to: 1, n: 1, text: "비밀이야", at: NOW }] });
     emit({ t: "resultLog", part: "claim", i: 0, end: true, lines: [{ seat: 0, n: 1, v: "citizen" }] });
-    emit({ t: "resultLog", part: "ballots", i: 0, end: true, lines: [{ n: 1, yes: [2, 3], no: [1] }] });
   };
   /** 탭·기록 본문·역할별 줄이 하나도 없다 */
   const expectOnlyAllChat = (c: ParentNode) => {

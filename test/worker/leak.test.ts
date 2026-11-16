@@ -923,7 +923,7 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
       for (const a of actors) {
         const view = lastViewOf(a.sock);
         expect(`${view.day?.execution?.seat} ${Object.keys(view.day?.execution ?? {}).sort().join(",")}`).toBe(`${mafiaA.seat} seat`);
-        expect(JSON.stringify(view.day?.verdict)).toBe(JSON.stringify({ yes: 5, no: 1, passed: true }));
+        expect(Object.hasOwn(view.day ?? {}, "verdict")).toBe(false); // 22-12: 찬반 결과 수는 와이어에 없다
         expect(view.players.find((p) => p.seat === mafiaA.seat)?.alive).toBe(false);
         expect(Object.hasOwn(view.me, "verdictVote")).toBe(false); // 처형 단계에서는 개인 값이 없다
       }
@@ -1065,7 +1065,7 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
           // 찬반 집계 수(D-11·D-26): 찬반 단계에만, 모두에게 같은 값(위 라이브 검사)이고 키는 yes·no 둘뿐이다. 서버 전용 이름과 겹치지 않아 별도 허용 경로가 필요 없다(공개 수일 뿐 개인 표가 아니다).
           expect(has(".view.day.verdictCount")).toBe(v.phase === "verdict");
           if (v.phase === "verdict") expect(Object.keys(v.day!.verdictCount!).sort()).toEqual(["no", "yes"]);
-          expect(has(".view.day.verdict")).toBe(false); // 찬반 결과 수는 와이어에 없다(22-12 D-14) — 진행 중 집계는 day.verdictCount 뿐
+          expect(Object.hasOwn(v.day ?? {}, "verdict")).toBe(false); // 찬반 결과 수는 와이어에 없다(22-12 D-14) — 진행 중 집계는 day.verdictCount 뿐
           expect(has(".view.day.candidate")).toBe(["defense", "execution"].includes(v.phase)); // 찬반에는 후보가 없다(D-11)
           expect(has(".view.day.execution")).toBe(v.phase === "execution");
           // 찬반 기록(day.ballots)은 어느 단계에도 없다(22-12 D-14). 유언 공개 값 day.execution.will 은 처형 단계에서만 있고 모든 소켓에 같다(T-22-26).

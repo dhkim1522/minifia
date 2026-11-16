@@ -39,7 +39,7 @@ describe.skipIf(!GAME_RULES.runoff)("지목 집계 분기 (결정 0066-4)", () =
     expect(s.pickTurn).toBeUndefined();
     const line = s.voteLog!.at(-1)!;
     expect(line.cand?.candidate).toBeUndefined();
-    expect(line.cand?.votes.length).toBe(5);
+    expect(line.cand).toEqual({}); // 개인 선택(votes)은 저장하지 않는다(22-12 D-25)
     expect(s.players.some((p) => p.nominate !== undefined)).toBe(false);
   });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { CARD_HOLD_BALLOTS_MS, CARD_HOLD_MS, ChatStore } from "../../src/net/chatStore";
+import { CARD_HOLD_MS, ChatStore } from "../../src/net/chatStore";
 import type { ChatLineFrame, ChatLogFrame } from "../../shared/protocol";
 
 const chat = (ch: ChatLineFrame["ch"], seat: number, seq: number, text: string, at: number): ChatLineFrame => ({
@@ -619,54 +619,8 @@ describe("ChatStore: 귓속말 줄 (09.1.1-09, UI-SPEC B-3)", () => {
   });
 });
 
-// 09.1.1-12 (UI-SPEC C-3): 찬반 기록 카드(k ballots)는 처형 진입 4.6초에 도착한다 — 라이브는 4600ms 보류, 복원은 즉시
-describe("ChatStore: ballots 카드 (09.1.1-12, 결정 0066-3)", () => {
-  const ballots = (seat: number, seq: number, text: string, at: number): ChatLineFrame => ({ ...chat("all", seat, seq, text, at), k: "ballots" });
-
-  it("상수는 4600ms", () => {
-    expect(CARD_HOLD_BALLOTS_MS).toBe(4600);
-  });
-
-  it("라이브 카드는 도착 시각 + 4600ms 전까지 목록에 없고 그 뒤에 kind card·card ballots 로 보인다 (본문 원문 그대로)", () => {
-    const store = ready();
-    store.apply(ballots(3, 9, "0,2|1", 900), 1, 1000);
-    expect(store.visibleLines("all", 5599).length).toBe(0);
-    expect(store.nextCardReveal(1000)).toBe(5600);
-    const [line] = store.visibleLines("all", 5600);
-    expect(`${line?.kind}|${line?.card}|${line?.seat}|${line?.text}`).toBe("card|ballots|3|0,2|1");
-  });
-
-  it("처형 단계 키여도 ballots 는 4600ms 다(유언·쪽지의 2400 이 아니다)", () => {
-    const store = new ChatStore();
-    store.setContext({ pk: "1:1:execution", channel: "all", epoch: 1 });
-    store.apply(ballots(3, 9, "0|1", 900), 1, 1000);
-    expect(store.nextCardReveal(1000)).toBe(5600);
-  });
-
-  it("재접속 chatLog 의 ballots 카드는 보류 없이 즉시 보인다", () => {
-    const store = ready();
-    store.apply({ t: "chatLog", lines: [{ ch: "all", seat: 3, seq: 9, text: "0,2|1", at: 900, k: "ballots" }] }, 1, 1000);
-    expect(store.visibleLines("all", 1000).map((l) => `${l.kind}|${l.card}`).join()).toBe("card|ballots");
-    expect(store.nextCardReveal(1000)).toBeNull();
-  });
-
-  it("같은 카드를 두 번 받아도 한 줄이다(키 중복 제거)", () => {
-    const store = ready();
-    store.apply(ballots(3, 9, "0|1", 900), 1, 1000);
-    store.apply({ t: "chatLog", lines: [{ ch: "all", seat: 3, seq: 9, text: "0|1", at: 900, k: "ballots" }] }, 1, 1100);
-    expect(store.lines().length).toBe(1);
-  });
-
-  it("카드는 그 좌석의 입력 중 표시를 지우지 않는다", () => {
-    const store = ready();
-    store.apply({ t: "typing", seat: 3, on: true }, 1, 1000);
-    store.apply(ballots(3, 9, "0|1", 900), 1, 1100);
-    expect(store.typingSeats(1100).has(3)).toBe(true);
-  });
-});
-
 describe("ChatStore: lastLiveCardRevealAt — 방금 받은 라이브 카드의 공개 시각 (12-09, LS-5)", () => {
-  const card = (k: "will" | "note" | "ballots", seat: number, seq: number, at: number): ChatLineFrame => ({ ...chat("all", seat, seq, "글", at), k });
+  const card = (k: "will" | "note", seat: number, seq: number, at: number): ChatLineFrame => ({ ...chat("all", seat, seq, "글", at), k });
 
   it("유언·쪽지 카드를 방금 받았으면 보류가 끝나는 시각(받은 시각 + CARD_HOLD_MS)", () => {
     for (const k of ["will", "note"] as const) {
@@ -683,12 +637,10 @@ describe("ChatStore: lastLiveCardRevealAt — 방금 받은 라이브 카드의 
     expect(store.lastLiveCardRevealAt()).toBe(6400);
   });
 
-  it("다음 프레임이 카드가 아니면(사람 줄·귓속말·ballots) null — 신호를 다시 보내지 않는다", () => {
+  it("다음 프레임이 카드가 아니면(사람 줄·귓속말) null — 신호를 다시 보내지 않는다", () => {
     const store = ready();
     store.apply(card("will", 2, 1, 900), 1, 1000);
     store.apply(chat("all", 1, 2, "안녕", 1100), 1, 1100);
-    expect(store.lastLiveCardRevealAt()).toBeNull();
-    store.apply(card("ballots", 0, 3, 1200), 1, 1200);
     expect(store.lastLiveCardRevealAt()).toBeNull();
     store.apply({ ...chat("all", 1, 4, "속닥", 1300), k: "whisper", to: 2 }, 1, 1300);
     expect(store.lastLiveCardRevealAt()).toBeNull();

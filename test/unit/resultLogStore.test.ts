@@ -20,16 +20,16 @@ const whisper = (i: number, end: boolean, lines: { seat: number; to: number; n: 
 const empty = (part: ResultLogFrame["part"]): ResultLogFrame => ({ t: "resultLog", part, i: 0, end: true, lines: [] }) as ResultLogFrame;
 
 describe("ResultLogStore (11-07)", () => {
-  it("처음에는 다섯 부분이 모두 비어 있고 끝나지 않았다", () => {
+  it("처음에는 네 부분이 모두 비어 있고 끝나지 않았다", () => {
     const s = new ResultLogStore();
     const snap = s.snapshot();
-    for (const part of ["mafia", "ghost", "whisper", "claim", "ballots"] as const) {
+    for (const part of ["mafia", "ghost", "whisper", "claim"] as const) {
       expect(snap[part].lines).toEqual([]);
       expect(snap[part].complete).toBe(false);
     }
   });
 
-  it("프레임 다섯 부분을 받으면 부분별 줄이 쌓이고 end 를 받은 부분만 complete 다", () => {
+  it("프레임 네 부분을 받으면 부분별 줄이 쌓이고 end 를 받은 부분만 complete 다", () => {
     const s = new ResultLogStore();
     s.apply(chat("mafia", 0, true, [{ seat: 3, n: 1, text: "오늘 밤" }]), 1);
     s.apply(chat("ghost", 0, false, [{ seat: 2, n: 2, text: "아이고" }]), 1);
@@ -43,7 +43,7 @@ describe("ResultLogStore (11-07)", () => {
     expect(snap.whisper.lines[0]).toMatchObject({ seat: 0, to: 1, n: 1, text: "비밀" });
     expect(snap.whisper.complete).toBe(true);
     expect(snap.claim.complete).toBe(true);
-    expect(snap.ballots.complete).toBe(false);
+    expect("ballots" in snap).toBe(false); // 22-12: 찬반 기록 부분이 없다 — 옛 서버의 ballots 프레임은 받아도 버린다
   });
 
   it("같은 부분의 프레임이 i 순서가 아니어도 i 순서로 정렬해 이어 붙인다", () => {

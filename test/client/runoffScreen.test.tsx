@@ -371,15 +371,10 @@ describe("결선 — 던진 사람 done 체크와 득표 배지 (UI-SPEC D-2)", 
     expect(container.querySelectorAll("[data-mine]").length).toBe(0);
   });
 
-  it("마감 전(앞머리·투표)에는 후보 머리 위 배지가 지목 때 받은 득표(voteLog)이고, 후보 아닌 사람에게는 배지가 없다", () => {
-    const view = makeRunoff();
-    const votes = [{ seat: 0, target: 2 }, { seat: 1, target: 3 }, { seat: 2, target: 3 }, { seat: 3, target: 2 }];
-    const withLog: RoomView = { ...view, day: { ...view.day!, voteLog: [{ n: 1, exec: { yes: 0, no: 0, passed: false }, cand: { votes } }] } };
-    const expected2 = 2;
-    const expected3 = 2;
-    const { container } = mount(withLog);
-    expect(headOf(container, 2)?.getAttribute("data-count")).toBe(String(expected2));
-    expect(headOf(container, 3)?.getAttribute("data-count")).toBe(String(expected3));
+  it("마감 전(앞머리·투표)에는 후보 머리 위 배지가 없다 — 지목 때 받은 득표 기록은 없다(22-12 D-25). 결과(step 2)에서만 tally 가 뜬다", () => {
+    const { container } = mount(makeRunoff());
+    expect(headOf(container, 2)?.hasAttribute("data-count")).toBe(false);
+    expect(headOf(container, 3)?.hasAttribute("data-count")).toBe(false);
     expect(headOf(container, 1)?.hasAttribute("data-count")).toBe(false);
   });
 

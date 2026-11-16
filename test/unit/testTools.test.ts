@@ -856,7 +856,9 @@ describe("넘기기 지목 마무리 (결정 0063-1)", () => {
     const after = skipOk(state, state.phaseEndsAt!, () => 0);
     expect(["defense", "night"]).toContain(after.phase);
     expect(after.pickTurn === undefined).toBe(true);
-    expect((after.voteLog?.[0]?.cand?.votes ?? []).map((v) => `${v.seat}>${v.target}`).join(",")).toBe("1>4,2>0,3>0,4>0");
+    // 봇 지목은 1>4, 2>0, 3>0, 4>0 — 누가 누구를 골랐는지는 저장하지 않고(22-12 D-25) 그날 처형자(0)만 남는다
+    expect(after.voteLog?.[0]?.cand).toEqual({ candidate: 0 });
+    expect(JSON.stringify(after.voteLog)).not.toContain("votes");
   });
 
   it("skipPhase: 고정 pick host 면 방장이 변론자이고 지목 결정에 난수를 부르지 않는다", () => {
@@ -872,7 +874,7 @@ describe("넘기기 지목 마무리 (결정 0063-1)", () => {
 
 // ---- 8페이즈: 지목·찬반 단계를 넘길 때 안 던진 봇이 먼저 던진다 (08-07, 결정 0024·0060-13) ----
 // 두 단계의 마감 훅(resolveNomination·resolveVerdict)이 tick 에 걸려 있어 넘긴 뒤 개인 값(nominate·verdictVote)은 키째 지워진다 —
-// 08-11: 단언은 그날 voteLog 줄(지목 cand.votes·찬반 exec)로 옮겼다.
+// 08-11: 단언은 그날 voteLog 줄(찬반 exec)로 옮겼다.
 describe("skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다", () => {
   const trial = (phase: "nomination" | "verdict", over: Partial<RoomState> = {}, lobby: RoomState = botLobby()): RoomState => {
     const base = startedFrom(lobby, 3, "discussion");
@@ -882,8 +884,6 @@ describe("skipPhase: 지목·찬반에서 안 던진 봇이 먼저 던진다", (
   const THROWING = (): number => {
     throw new Error("randInt must not be called");
   };
-  /** 그날 voteLog 줄의 지목 목록: "행위자>대상" 을 좌석 오름차순으로. 마감 훅이 개인 키를 지웠으므로 기록은 이 줄뿐이다. */
-  const nominates = (s: RoomState): string => (s.voteLog?.[0]?.cand?.votes ?? []).map((v) => `${v.seat}>${v.target}`).join(",");
   /** 그날 voteLog 줄의 찬반 집계. */
   const tally = (s: RoomState): string => JSON.stringify(s.voteLog?.[0]?.exec);
 
@@ -1109,7 +1109,7 @@ describe.skipIf(!GAME_RULES.showdown)("넘기기: 마지막 3인 결전 (09.1.1-
       expect(`${from}:${exec.phase}:${exec.verdict?.candidate}`).toBe(`${from}:execution:0`);
       expect(Object.hasOwn(exec, "showdown")).toBe(false);
       expect(exec.players.some((p) => Object.hasOwn(p, "showdownPick"))).toBe(false);
-      expect(exec.voteLog?.at(-1)?.last).toBe(true);
+      expect(exec.voteLog?.at(-1)?.cand).toEqual({ candidate: 0 });
       const night = skipOk(state, state.phaseEndsAt!, () => 1); // 봇 1>2, 봇 2>1 — 한 표씩
       expect(`${from}:${night.phase}`).toBe(`${from}:night`);
       expect(Object.hasOwn(night, "showdown")).toBe(false);

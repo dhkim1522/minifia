@@ -382,9 +382,9 @@ describe("단계 안내 aria-live · 단계 전환 (UI-SPEC 접근성·Motion)",
     return { ...base, day: { ...base.day!, ...day } };
   };
 
-  it("처형 단계: 찬반이 통과하면 '{이름} 님 처형' 을 읽는다", () => {
+  it("처형 단계: 처형자가 있으면 '{이름} 님 처형' 을 읽는다", () => {
     const r = renderRoom(
-      executionView({ n: 1, roles: ["mafia", "police", "citizen"], candidate: 1, execution: { seat: 1 }, verdict: { yes: 3, no: 0, passed: true } }),
+      executionView({ n: 1, roles: ["mafia", "police", "citizen"], candidate: 1, execution: { seat: 1 } }),
     );
     expect(liveRegion(r.container).textContent).toBe("하윤 님 처형");
   });

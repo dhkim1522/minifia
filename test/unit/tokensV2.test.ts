@@ -257,68 +257,6 @@ describe("귓속말 CSS 규칙 (09.1.1-09)", () => {
   });
 });
 
-// 09.1.1-12: 찬반 기록 공개·카드 CSS 정적 검사 (UI-SPEC C-2 "찬성/반대 구별", Typography, "쓰지 않을 것")
-describe("찬반 기록 CSS 규칙 (09.1.1-12)", () => {
-  const V2 = readFileSync(new URL("../../src/styles/v2.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-  const rules = [...V2.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: (m[1] ?? "").trim(), body: m[2] ?? "" }));
-  const NEW = rules.filter((r) => /(mv-ballots|mv-chat__ballots|mv-chat__card--ballots)/.test(r.selector));
-
-  it("새 규칙이 있다(숫자 덩이 줄·덩이·채팅 카드)", () => {
-    for (const sel of [".mv-ballots", ".mv-ballots__body", ".mv-ballots__group", ".mv-chat__ballots-name"]) {
-      expect(NEW.some((r) => r.selector === sel), sel).toBe(true);
-    }
-  });
-
-  it("얼굴 칩·이름 알약 규칙이 없다(18.1-13, 결정 0083-9)", () => {
-    for (const sel of [".mv-ballots__pill", ".mv-ballots__face", ".mv-ballots__name", ".mv-ballots__row", ".mv-ballots__head"]) {
-      expect(NEW.some((r) => r.selector.startsWith(sel)), sel).toBe(false);
-    }
-  });
-
-  it("hex·rgb 색 리터럴이 없다 — tokens.css 변수만", () => {
-    for (const r of NEW) {
-      expect(r.body, r.selector).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-      expect(r.body, r.selector).not.toMatch(/\brgba?\(/);
-    }
-  });
-
-  it("진홍·놋쇠·초록 등 의미 색 변수가 없다 — 색 변수는 night/gray/overlay/seat 계열뿐", () => {
-    for (const r of NEW) {
-      for (const m of r.body.matchAll(/var\(--([a-z0-9-]+)\)/g)) {
-        const name = m[1] ?? "";
-        if (/^(space|radius|tap|control|font|shadow|dur|ease|z|mf)-?/.test(name)) continue;
-        expect(name, `${r.selector}: --${name}`).toMatch(/^(night|gray|overlay-ink|ballot-seat)/);
-      }
-      expect(r.body, r.selector).not.toMatch(/--(crimson|brass|cream|green|amber|felt)-/);
-    }
-  });
-
-  it("글자 크기는 14·16 뿐이다", () => {
-    for (const r of NEW) for (const m of r.body.matchAll(/font-size:\s*([^;]+);/g)) expect(["14px", "16px"], `${r.selector}: ${m[1]}`).toContain((m[1] ?? "").trim());
-    expect(NEW.some((r) => /font-size/.test(r.body))).toBe(true);
-  });
-
-  it("영역은 포인터 이벤트를 받지 않고 기본 윗변 201 에서 가로 16 여백으로 시작한다", () => {
-    const body = (sel: string) => NEW.find((r) => r.selector === sel)?.body ?? "";
-    expect(body(".mv-ballots")).toMatch(/pointer-events:\s*none/);
-    expect(body(".mv-ballots")).toMatch(/top:\s*var\(--mf-ballot-top,\s*201px\)/);
-    expect(body(".mv-ballots")).toMatch(/left:\s*var\(--space-md\)/);
-    expect(body(".mv-ballots")).toMatch(/right:\s*var\(--space-md\)/);
-  });
-
-  it("숫자 덩이 줄은 가로 한 줄 가운데이고 덩이는 아이콘 + 숫자를 가로로 놓는다(16px 굵게)", () => {
-    const body = (sel: string) => NEW.find((r) => r.selector === sel)?.body ?? "";
-    expect(body(".mv-ballots__body")).toMatch(/display:\s*flex/);
-    expect(body(".mv-ballots__body")).toMatch(/flex-direction:\s*row/);
-    expect(body(".mv-ballots__body")).toMatch(/justify-content:\s*center/);
-    expect(body(".mv-ballots__body")).not.toMatch(/flex-wrap:\s*wrap/);
-    expect(body(".mv-ballots__group")).toMatch(/display:\s*(inline-)?flex/);
-    expect(body(".mv-ballots__group")).toMatch(/align-items:\s*center/);
-    expect(body(".mv-ballots__group")).toMatch(/font-size:\s*16px/);
-    expect(body(".mv-ballots__group")).toMatch(/font-weight:\s*700/);
-  });
-});
-
 // 09.1.1-15: 마지막 3인 한마디 칩 시트·인용 카드 CSS 정적 검사 (UI-SPEC E-2·E-4, "Color"·"Typography"·"접근성 · 모션 · 입력")
 describe("마지막 3인 CSS 규칙 (09.1.1-15)", () => {
   const V2 = readFileSync(new URL("../../src/styles/v2.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");

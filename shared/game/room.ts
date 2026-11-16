@@ -174,10 +174,8 @@ export interface RoomState {
   verdict?: {
     passed: boolean;
     candidate?: number;
-    /** 서버 전용 보관(결정 0066-3). 찬반 마감 훅이 남기는 찬성·반대 좌석(오름차순). 처형 단계 view 에서만 공개된다 — 찬반 진행 중에는 만들어지지도 않는다. */
-    ballots?: { yes: number[]; no: number[] };
   };
-  /** 날짜별 공개 투표 기록(D-08). resolveNomination 이 줄을 더하고 resolveVerdict 가 채우며 판 내내 쌓인다. */
+  /** 날짜별 서버 저장 투표 기록(D-08, 22-12 D-25: 개인 선택 없음, view 에도 없다). resolveNomination 이 줄을 더하고 resolveVerdict 가 채우며 판 내내 쌓인다. */
   voteLog?: VoteLogEntry[];
   /** 처형 발표(seat·문구). enterDiscussion 이 지운다. */
   execution?: ExecutionView;

@@ -232,8 +232,8 @@ describe.skipIf(!GAME_RULES.showdown)("집계 (resolveShowdown)", () => {
     expect(exec.players.find((p) => p.seat === 2)!.alive).toBe(false);
     expect(exec.verdict).toMatchObject({ passed: true, candidate: 2 });
     const line = exec.voteLog!.at(-1)!;
-    expect(line).toMatchObject({ n: exec.day, exec: { yes: 0, no: 0, passed: true }, cand: { candidate: 2 }, last: true });
-    expect(line.cand!.votes.length).toBe(3);
+    expect(line).toMatchObject({ n: exec.day, exec: { yes: 0, no: 0, passed: true }, cand: { candidate: 2 } });
+    expect(line.cand).toEqual({ candidate: 2 }); // 개인 선택(votes)은 저장하지 않는다(22-12 D-25)
     expect(exec.showdown).toBeUndefined();
     expect(exec.players.some((p) => p.showdownPick !== undefined)).toBe(false);
   });
@@ -245,14 +245,15 @@ describe.skipIf(!GAME_RULES.showdown)("집계 (resolveShowdown)", () => {
     const line = night.voteLog!.at(-1)!;
     expect(line.cand?.candidate).toBeUndefined();
     expect(line.exec.passed).toBe(false);
-    expect(line.last).toBe(true);
+    expect(line.reason).toBe("tie");
     expect(night.showdown).toBeUndefined();
   });
 
   it("아무도 안 던지면 처형 없는 밤 — 이유는 noVotes", () => {
     const night = step(pointed({}));
     expect(night.phase).toBe("night");
-    expect(night.voteLog!.at(-1)!.cand?.votes).toEqual([]);
+    expect(night.voteLog!.at(-1)!.cand).toEqual({});
+    expect(night.voteLog!.at(-1)!.reason).toBe("noVotes");
   });
 
   it("resolveShowdown 은 showdown 이 없으면 안전하게 밤으로 보낸다", () => {

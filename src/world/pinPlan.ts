@@ -34,7 +34,7 @@ const RUNOFF_PIN: Extract<PinDesc, { mode: "point" }> = {
 };
 
 /**
- * 처형 단계(판결 순간)의 핀(22-12 P22-14, D-27): 처형자 존재(day.execution)가 켠다 — 찬반 기록(day.ballots)은 없다.
+ * 처형 단계(판결 순간)의 핀(22-12 P22-14, D-27): 처형자 존재(day.execution)가 켠다 — 찬반 기록은 없다.
  * 처형자에게 처형 진입 시각(= phaseEndsAt − EXECUTION_MS)부터 PIN_OFF_EXEC_AT(6.0초)까지 고정 핀. 처형 단계 길이는 고정이라 마감 앞당김이 없다.
  * 유언 단계의 turn 핀이 이 fixed 핀으로 이어진다. 처형자가 없거나(부결·동점·0표는 단계가 없다) 마감 시각이 없으면 핀이 없다.
  */

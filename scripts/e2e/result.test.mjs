@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as resultMod from "./result.mjs";
-import { READY_PILL, SHORT_PHONE_H, rematchChecks, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, resultHiddenChecks, resultSkipChecks, resultStageChecks, TIMELINE_CARD } from "./result.mjs";
+import { READY_PILL, SHORT_PHONE_H, rematchChecks, RESULT_JOB_OUTFIT, RESULT_MARKERS, RESULT_PANEL_H, RESULT_WIN_TITLE, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
 
 // 4명판 시민 승: 좌석 0 마피아(진 팀) · 1 시민 · 2 경찰 · 3 의사
 const good = () => ({
@@ -136,7 +136,7 @@ test("resultSkipChecks: 연출 구간에서 탭하면 light 이후 · 전원 칩
 });
 
 test("상수: 표식 목록·승리 한 줄·직업 의상 표", () => {
-  assert.deepEqual([...RESULT_MARKERS], ["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider", "data-day-card", "data-day-detail", "data-whisper-pair", "data-ready-pill", "data-ready", "data-ready-count", "data-bench-view"]);
+  assert.deepEqual([...RESULT_MARKERS], ["data-result-stage", "data-result-panel", "data-result-announce", "__mfResult", "data-result-tab", "data-result-dot", "data-result-divider", "data-ready-pill", "data-ready", "data-ready-count", "data-bench-view"]);
   assert.deepEqual({ ...RESULT_WIN_TITLE }, { citizenWin: "시민 승리", mafiaWin: "마피아 승리" });
   assert.deepEqual({ ...RESULT_JOB_OUTFIT }, { mafia: "mafia", police: "police", doctor: "doctor", citizen: "coat" });
 });
@@ -152,15 +152,6 @@ test("시상식 판정·읽기·기하 상수는 내보내지 않는다 — 단�
   for (const m of ["data-result-stage", "data-result-announce", "__mfResult"]) assert.ok(RESULT_MARKERS.includes(m), m);
   for (const m of RESULT_MARKERS) assert.equal(/award|float-count/.test(m), false, m);
 });
-
-test("TIMELINE_CARD 상수: 카드 72×112, 간격 8", () => {
-  assert.deepEqual({ ...TIMELINE_CARD }, { w: 72, h: 112, gap: 8 });
-});
-
-test("RESULT_MARKERS: 기록 탭 표식 3개가 더해져 있다 (11-11)", () => {
-  for (const m of ["data-day-card", "data-day-detail", "data-whisper-pair"]) assert.equal(RESULT_MARKERS.includes(m), true, m);
-});
-
 
 // ---------- 11-12: 다시 하기 (rematchChecks RM1~RM12) ----------
 // 방장 360×560 + 손님 430×932. 5명판(방장·봇·손님 셋) 중 둘이 준비 → 참가자 4, 쉬는 사람 1.

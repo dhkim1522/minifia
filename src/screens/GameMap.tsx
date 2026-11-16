@@ -35,7 +35,7 @@ import { todOf, todWordOf } from "../game/timeOfDay";
 import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
-import { headerFor, nominationVotesOf } from "../game/dayView";
+import { headerFor } from "../game/dayView";
 import { callTargetsOf } from "../game/hostLine";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
@@ -460,13 +460,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         return ring !== undefined ? { ring } : {};
       };
     }
-    // 동점 결선(09.1.1-14, UI-SPEC D-2): 던진 사람 이름표에 done 체크만(누가 누구를은 서버가 주지 않는다). 후보 머리 위 배지는 마감 전엔 지목 때 받은 득표, 결과(step 2)에는 결선 득표 tally 의 두 값
+    // 동점 결선(09.1.1-14, UI-SPEC D-2): 던진 사람 이름표에 done 체크만(누가 누구를은 서버가 주지 않는다). 후보 머리 위 배지는 결과(step 2)에만 결선 득표 tally 의 두 값 — 지목 때 받은 득표 기록은 없다(22-12 D-25)
     if (runoff !== undefined) {
       const voted = new Set(runoff.voted ?? []);
-      const nomVotes = nominationVotesOf(view);
       return (seat) => {
         const ci = runoff.cand.indexOf(seat);
-        const count = ci < 0 ? 0 : runoff.step === 2 ? (runoff.tally?.[ci] ?? 0) : (nomVotes[seat] ?? 0);
+        const count = ci < 0 || runoff.step !== 2 ? 0 : (runoff.tally?.[ci] ?? 0);
         return {
           ...(runoffVoting && pickSeats?.has(seat) ? { blink: true } : {}),
           ...(mine === seat ? { mine: true } : {}),

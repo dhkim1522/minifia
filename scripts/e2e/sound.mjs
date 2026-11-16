@@ -49,7 +49,7 @@ const EMOTE_OPEN_TRIES = 12;
 
 export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGame, nightScenario }) {
   /**
-   * sound-render: 방 없이 새 컨텍스트(GAME_SIZE)로 시험 페이지를 열고 [전부 계산] → 56개 렌더 결과를 순수 판정 함수로 확인한다.
+   * sound-render: 방 없이 새 컨텍스트(GAME_SIZE)로 시험 페이지를 열고 [전부 계산] → 54개 렌더 결과를 순수 판정 함수로 확인한다.
    * 소리 출력은 없다(OfflineAudioContext). 서버 호출도 없다.
    */
   async function soundRenderFlow(ctx) {

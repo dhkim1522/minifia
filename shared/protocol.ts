@@ -74,23 +74,16 @@ export interface SpectateView {
 }
 
 // ---- 처형·승패 계약(4페이즈) ----
-/** 후보 선택 한 줄: 누가 누구를 골랐는지. 던진 표만 있다(무효표는 줄이 없다). 공개 구간 이후에만 모두에게 실린다(D-07). */
-export interface CandidateVoteLine {
-  seat: number;
-  target: number;
-}
 /**
- * 날짜별 공개 투표 기록 한 줄(D-08). exec 에는 집계 수뿐이다 — 여부 투표는 익명이라 개인 줄이 타입에도 없다.
- * cand 는 여부 투표를 통과한 날에만: votes 배열 순서가 서버가 정한 공개 순서(D-20)이고, candidate 가 없으면 동률·0표다.
+ * 날짜별 서버 저장 투표 기록 한 줄(D-08, 22-12 D-25). exec 에는 집계 수뿐이다 — 개인 선택(누가 누구를 골랐는지·누가 찬성했는지)은 저장도 공개도 하지 않는다.
+ * cand 는 지목을 마친 날에만: candidate 가 처형자이고, 없으면 동률·0표다. view 에는 이 기록이 없다(day.voteLog 삭제) — 판정·종료 요약·처형 없음 이유 파생에만 쓴다.
  */
 export interface VoteLogEntry {
   n: number;
   exec: { yes: number; no: number; passed: boolean };
-  cand?: { votes: CandidateVoteLine[]; candidate?: number };
+  cand?: { candidate?: number };
   /** 서버 저장용 새 선택 필드(22-09): 처형 없이 밤으로 간 날의 이유. 찬반 부결이면 rejected(찬반 마감이), 지목 동점·0표면 tie·noVotes(지목 마감이) 쓴다. noExecutionOf 가 밤 단계에서 읽는다. view 의 voteLog 줄은 이 키를 옮기지 않는다 — 공개 경로는 day.noExecution 하나다. */
   reason?: NoExecutionReason;
-  /** 서버 저장용 표시(결정 0066-5): 마지막 3인 결전으로 끝난 날의 줄이다 — 찬반 없이 지목만으로 처형이 정해졌다(exec 는 0·0). view 는 이 키를 옮기지 않고 처형 단계의 day.verdict.last 로만 알린다. */
-  last?: true;
 }
 /** 지목 한 줄(결정 0060-3): 누가 누구를 가리키는지. 지목 단계 동안 모두에게 공개된다(마감까지 바꿀 수 있다). */
 export interface PointLine {
@@ -131,17 +124,14 @@ export interface DayView {
   chalk?: { x: number; z: number }; // 암살 현장 분필 자국 위치(고정소수점, 결정 0061-14). 채우는 일은 09-14
   // ---- 4페이즈 처형 필드 ----
   // 서버는 낮 단계마다(빈 배열 포함) 항상 싣는다. 타입을 optional 로 둔 이유: 필수로 하면 화면 테스트의 DayView 리터럴이 서버 웨이브에서 한꺼번에 바뀐다(화면 계획이 필요하면 필수로 올린다).
-  voteLog?: VoteLogEntry[];
   candidate?: number; // defense·execution 에서, 변론자(처형자)가 있을 때만 — 찬반(verdict)에는 후보가 없다(D-11)
   execution?: ExecutionView; // execution 단계에서만
   noExecution?: { reason: NoExecutionReason }; // 처형이 성립하지 않아 밤으로 온 그 밤 단계에서만(D-34)
   // ---- 8페이즈 낮 처형 필드(결정 0060). 서버가 채우는 일은 08-07 이후 — 지금은 타입만이다. ----
-  points?: PointLine[]; // nomination 단계에서, 지금 지목 줄(공개)
+  points?: PointLine[]; // nomination 단계 동안만, 지금 지목 줄(공개 차례 연출용). 단계가 끝나면 키가 없다 — 기록으로 남기지 않는다(D-14)
   endCount?: number; // discussion 단계에서, 토론 끝내기를 누른 산 사람 수(누가 눌렀는지는 싣지 않는다)
   verdictCount?: { yes: number; no: number }; // verdict 단계에서만, 모두에게 같은 찬반 집계 수(번복도 바로 반영, D-11). 던진 좌석(옛 voted)은 싣지 않는다(D-26) — 내 표는 me.verdictVote
   voted?: number[]; // 22-09 부터 서버가 싣지 않는다(D-26). 화면이 읽는 자리를 22-10 이 지운 뒤 이 필드도 지운다
-  verdict?: { yes: number; no: number; passed: boolean; last?: true }; // execution 단계에서, 찬반 결과 수(개인 값 없음). last 는 마지막 3인 결전으로 온 처형(찬반 없음, 결정 0066-5)
-  ballots?: { yes: number[]; no: number[] }; // execution 단계에서만, 찬성·반대한 좌석(오름차순, 변론자·미투표자 제외 — 결정 0066-3). 찬반 진행 중에는 없다
   turn?: PickTurnView; // nomination 단계에서만, 모두에게 같은 차례 정보(결정 0063-1, L14)
   runoff?: RunoffView; // runoff 단계에서만, 모두에게 같은 동점 결선 정보(결정 0066-4, L20)
   showdown?: ShowdownView; // showdown 단계에서만, 모두에게 같은 마지막 3인 결전 정보(결정 0066-5, L21)
@@ -373,7 +363,7 @@ export interface ChatLineWire {
   seq: number;
   text: string;
   at: number;
-  k?: "will" | "note" | "whisper" | "whispered" | "ballots"; // 서버가 만든 카드 줄(유언·쪽지, 결정 0061-11)·귓속말 줄(결정 0066-2: whisper = 당사자에게 본문, whispered = 나머지에게 본문 없는 사실). 일반 대화 줄에는 키가 없다. ballots = 찬반 기록 카드(결정 0066-3, 본문은 shared/game/ballots.ts 형식)
+  k?: "will" | "note" | "whisper" | "whispered"; // 서버가 만든 카드 줄(유언·쪽지, 결정 0061-11)·귓속말 줄(결정 0066-2: whisper = 당사자에게 본문, whispered = 나머지에게 본문 없는 사실). 일반 대화 줄에는 키가 없다. (찬반 기록 카드는 22-12 에서 지웠다, D-14)
   to?: number; // 귓속말 상대 좌석(결정 0066-2). 누가 누구에게 보냈는지는 공개 사실이다 — 귓속말 줄(whisper·whispered)에만 있다
 }
 /** 막힌 이유: 도배 간격·같은 문장 반복·길이·단계/채널 불일치·그 밖(보이는 글자 없음). 보낸 사람에게만 알린다. */
@@ -451,10 +441,10 @@ export interface EmoteFrame {
 }
 
 // ---- 11페이즈 결과 공개(결정 D-9·D-10, 미결 O-14) ----
-// 판이 ended 로 들어서는 순간 서버가 모든 소켓에 같은 열로 한 번 보내는 숨은 기록(마피아·유령 채팅, 귓속말 본문, 직업 주장 이력, 찬반 기록).
+// 판이 ended 로 들어서는 순간 서버가 모든 소켓에 같은 열로 한 번 보내는 숨은 기록(마피아·유령 채팅, 귓속말 본문, 직업 주장 이력). 찬반 기록은 22-12 에서 지웠다(D-14).
 // 키 이름은 id·playerId·token 같은 금지 키를 쓰지 않고 서버 전용 이름(badgeLog·whispers)도 쓰지 않는다 — 주장 값은 v, 귓속말 상대는 to 다.
-/** 결과 공개의 부분 다섯. 전송 순서도 이 순서다. */
-export type ResultLogPart = "mafia" | "ghost" | "whisper" | "claim" | "ballots";
+/** 결과 공개의 부분 넷. 전송 순서도 이 순서다. */
+export type ResultLogPart = "mafia" | "ghost" | "whisper" | "claim";
 /** mafia·ghost 줄: n 은 줄이 보내진 때의 일차(마피아 줄은 그 밤을 부르는 일차). */
 export interface ResultLogChatLine {
   seat: number;
@@ -475,18 +465,11 @@ export interface ResultLogClaimLine {
   n: number;
   v: BadgeId;
 }
-/** 그날 찬반 기록(찬성·반대 좌석). */
-export interface ResultLogBallotsLine {
-  n: number;
-  yes: number[];
-  no: number[];
-}
 /** 결과 공개 한 프레임. i = 그 부분의 프레임 번호(0부터), end = 그 부분의 마지막 프레임, lines 는 40줄 이하. 줄이 없어도 부분마다 { i: 0, end: true, lines: [] } 한 프레임은 간다. */
 export type ResultLogFrame =
   | { t: "resultLog"; part: "mafia" | "ghost"; i: number; end: boolean; lines: ResultLogChatLine[] }
   | { t: "resultLog"; part: "whisper"; i: number; end: boolean; lines: ResultLogWhisperLine[] }
-  | { t: "resultLog"; part: "claim"; i: number; end: boolean; lines: ResultLogClaimLine[] }
-  | { t: "resultLog"; part: "ballots"; i: number; end: boolean; lines: ResultLogBallotsLine[] };
+  | { t: "resultLog"; part: "claim"; i: number; end: boolean; lines: ResultLogClaimLine[] };
 
 export type ServerMessage =
   | { t: "state"; view: RoomView }

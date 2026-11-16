@@ -108,16 +108,7 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
       JSON.stringify({
         n: base.day ?? 1,
         exec: { yes: 0, no: 0, passed: false },
-        cand: {
-          votes: [
-            { seat: 0, target: 2 },
-            { seat: 1, target: 2 },
-            { seat: 2, target: 1 },
-            { seat: 3, target: 2 },
-            { seat: 4, target: 0 },
-          ],
-          candidate: 2,
-        },
+        cand: { candidate: 2 }, // 누가 누구를 골랐는지(votes)는 저장하지 않는다(22-12 D-25)
       }),
     );
     expect(hasNominateKey(r.state)).toBe(false);
@@ -127,7 +118,7 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
     // 0→1, 1→2, 2→0: 세 명이 한 표씩 최다 동점
     const r = resolveNomination(withPoints(nominationOf(), { 0: 1, 1: 2, 2: 0 }));
     const cand = r.state.voteLog?.at(-1)?.cand;
-    expect(`${String(r.next)} ${keysOf(cand ?? {})} ${String(r.state.verdict)} ${r.state.voteLog?.at(-1)?.reason}`).toBe(`night ${keysOf({ votes: 1 })} undefined tie`);
+    expect(`${String(r.next)} ${keysOf(cand ?? {})} ${String(r.state.verdict)} ${r.state.voteLog?.at(-1)?.reason}`).toBe(`night ${keysOf({})} undefined tie`);
     expect(r.state.runoff).toBeUndefined();
     expect(hasNominateKey(r.state)).toBe(false);
   });
@@ -137,7 +128,7 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
     const r = resolveNomination(withPoints(nominationOf(), { 0: 2, 1: 2, 2: 0, 3: 0, 4: 1 }));
     const cand = r.state.voteLog?.at(-1)?.cand;
     expect(`${String(r.next)} ${keysOf(cand ?? {})} ${JSON.stringify(r.state.verdict)} ${JSON.stringify(r.state.runoff)}`).toBe(
-      `runoff ${keysOf({ votes: 1 })} ${JSON.stringify({ passed: false })} ${JSON.stringify({ cand: [0, 2], step: 0 })}`,
+      `runoff ${keysOf({})} ${JSON.stringify({ passed: false })} ${JSON.stringify({ cand: [0, 2], step: 0 })}`,
     );
     expect(r.stay).toBe(false);
     expect(hasNominateKey(r.state)).toBe(false);
@@ -147,7 +138,7 @@ describe("resolveNomination — 마감 훅 (DAY-05, 결정 0060-3)", () => {
   it("0표여도 그날 줄은 항상 쌓이고 next 가 night 이다", () => {
     const r = resolveNomination(nominationOf());
     const line = r.state.voteLog?.at(-1);
-    expect(`${String(r.next)} ${JSON.stringify(line?.cand?.votes)} ${line?.n} ${line?.reason}`).toBe("night [] 1 noVotes");
+    expect(`${String(r.next)} ${JSON.stringify(line?.cand)} ${line?.n} ${line?.reason}`).toBe("night {} 1 noVotes");
   });
 
   it("이전 날 기록은 그대로 두고 줄만 더한다", () => {
@@ -337,7 +328,7 @@ describe("순차 지목 엔진 (결정 0063-1·0063-4)", () => {
       ].join("\n"),
     );
     expect(`${String(last.stay)} ${String(last.next)} ${verdict} ${cand} ${String("pickTurn" in last.state)}`).toBe(
-      `false undefined {"passed":true,"ballots":{"yes":[0,1,2,3],"no":[]},"candidate":1} {"votes":[{"seat":0,"target":1},{"seat":2,"target":1},{"seat":3,"target":1}],"candidate":1} false`, // 찬반이 남긴 ballots 를 지목 마감이 보존한다
+      `false undefined {"passed":true,"candidate":1} {"candidate":1} false`, // 찬반이 남긴 통과(passed)를 지목 마감이 보존한다 — 개인 선택(votes)은 저장하지 않는다(22-12 D-25)
     );
   });
 
@@ -502,7 +493,7 @@ describe("지목 집계 — 결과 분기 (결정 0072, D-03, 22-09 D-13)", () =
     const base = withPoints(nominationOf(), { 0: 2, 1: 2, 2: 0, 3: 0 });
     const r = resolveNomination(base);
     const line = r.state.voteLog?.at(-1);
-    expect(`${String(r.next)} ${r.state.runoff === undefined} ${String(r.state.verdict)} ${line?.cand?.votes.length} ${line?.cand?.candidate}`).toBe("night true undefined 4 undefined");
+    expect(`${String(r.next)} ${r.state.runoff === undefined} ${String(r.state.verdict)} ${JSON.stringify(line?.cand)}`).toBe("night true undefined {}");
   });
 
   it("3:1:1 이 아니라 최다가 셋 동점이어도 0표여도 night 이다", () => {

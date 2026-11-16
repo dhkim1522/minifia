@@ -128,7 +128,7 @@ export const SFX_IDS = [
   "ui.tap", "ui.toggle", "ui.deny", "ui.card", "ui.host", "lobby.join", "game.start", "role.flip",
   "day.start", "timer.tick", "phase.vote", "pin.on", "pin.move", "pick.turn", "pick.tick", "pick.point",
   "pick.skip", "runoff.intro", "runoff.reveal", "showdown.reveal", "vote.cast",
-  "verdict.heart", "ballot.yes", "ballot.no", "execution.gavel", "execution.rise", "verdict.reject",
+  "verdict.heart", "execution.gavel", "execution.rise", "verdict.reject",
   "night.fall", "night.cue", "kill.slash", "morning.dawn", "morning.calm", "chalk.draw", "morning.saved",
   "will.quill", "will.seal", "will.fold",
   "emote.clap", "emote.praise", "emote.handshake", "emote.dance", "emote.surprise", "emote.cry", "emote.deny",
@@ -138,7 +138,7 @@ export const SFX_IDS = [
   "voice.syl",
 ] as const;
 export type SfxId = (typeof SFX_IDS)[number];
-/** 소리 id 56개: 침대 7 + 효과음 49 */
+/** 소리 id 54개: 침대 7 + 효과음 47 */
 export const SOUND_IDS = [...BED_IDS, ...SFX_IDS] as const;
 export type SoundId = BedId | SfxId;
 
@@ -342,8 +342,6 @@ export const RECIPES: Readonly<Record<SfxId, Recipe>> = {
     osc("sine", 0, 120, 55, 1, [4, 90, 0, 20], { filter: lp(120) }),
     osc("sine", 160, 120, 55, dbToLin(-3), [4, 90, 0, 20], { filter: lp(120) }),
   ]),
-  "ballot.yes": recipe("ballot.yes", "sfx", 1, -18, [osc("sine", 0, 150, 262, 1, thud(150), { filter: lp(800) })]),
-  "ballot.no": recipe("ballot.no", "sfx", 1, -18, [osc("sine", 0, 150, 196, 1, thud(150), { filter: lp(800) })]),
   "execution.gavel": recipe(
     "execution.gavel",
     "sfx",
@@ -586,8 +584,6 @@ export const SCREEN_COUNTERPART: Readonly<Record<SoundId, string>> = {
   "showdown.reveal": "마지막 3인의 지목 화살표가 동시에 드러나는 모습",
   "vote.cast": "찬반 카드에서 눌린 선택의 강조",
   "verdict.heart": "판결 순간의 줌과 어두워지는 화면",
-  "ballot.yes": "찬성 묶음이 등장하는 모습",
-  "ballot.no": "반대 묶음이 등장하는 모습",
   "execution.gavel": "처형 확정 알림 문구가 뜨는 모습",
   "execution.rise": "처형된 유령이 반투명으로 떠오르는 모습",
   "verdict.reject": "처형 없음 알림 문구",

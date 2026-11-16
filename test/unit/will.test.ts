@@ -141,7 +141,7 @@ describe("saveWill — 유언 단계(defense, 22-11 D-15·D-16)", () => {
   function defenseOf(candidate: number): RoomState {
     const s = stateAt("discussion");
     const ids = s.players.map((p) => p.seat);
-    return { ...s, phase: "defense", verdict: { passed: true, ballots: { yes: ids, no: [] }, candidate } };
+    return { ...s, phase: "defense", verdict: { passed: true, candidate } };
   }
 
   it("처형자는 유언을 저장하고 그 사람의 will 만 바뀐다", () => {

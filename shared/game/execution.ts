@@ -27,7 +27,7 @@ export function enterExecution(state: RoomState): RoomState {
  * 새 정보가 생기지 않고, 단계가 night 일 때만 값을 주므로 아침으로 넘어가면 저절로 사라진다(지울 상태가 없다).
  *   night 가 아니거나 그날(n === day ?? 1) 줄이 없음            → 없음
  *   줄에 reason 이 있음                                          → 그 값(찬반 부결 rejected · 지목 동률 tie · 지목 0표 noVotes)
- *   reason 은 없고 cand 에 candidate 가 없음(마지막 3인 결전)    → votes 가 비면 noVotes, 있으면 tie
+ *   reason 은 없고 cand 에 candidate 가 없음(결선 동점)          → tie (누가 누구를 골랐는지는 저장하지 않는다 — 22-12 D-25. 마지막 3인 결전·지목 마감은 reason 을 남긴다)
  *   그 밖(처형이 있었다)                                         → 없음
  * 반환은 새 객체 리터럴이다(키는 reason 하나).
  */
@@ -37,5 +37,5 @@ export function noExecutionOf(state: RoomState): { reason: NoExecutionReason } |
   if (entry === undefined) return undefined;
   if (entry.reason !== undefined) return { reason: entry.reason };
   if (entry.cand === undefined || entry.cand.candidate !== undefined) return undefined;
-  return { reason: entry.cand.votes.length === 0 ? "noVotes" : "tie" };
+  return { reason: "tie" };
 }

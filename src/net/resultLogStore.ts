@@ -1,8 +1,8 @@
 // 결과 공개 프레임(resultLog)을 모으는 클라이언트 저장소 (11-07, 결정 D-2·D-9, UI-SPEC A-3).
-// 서버는 판이 끝난 ended 에서만, 모든 소켓에 같은 열(mafia → ghost → whisper → claim → ballots)을 40줄 이하 프레임으로 보낸다(11-03).
+// 서버는 판이 끝난 ended 에서만, 모든 소켓에 같은 열(mafia → ghost → whisper → claim)을 40줄 이하 프레임으로 보낸다(11-03).
 // 이 저장소는 받은 값을 부분별로 쌓을 뿐이다 — 받을 권리가 없는 줄은 서버가 보내지 않는다(결정 0002·0021). 시각을 읽지 않는다(ChatStore 선례).
 // epoch 규칙: 낡은 epoch 프레임은 버리고, 더 새 epoch 를 받으면 이전 값을 비우고 그 연결의 프레임으로 새로 쌓는다(재접속은 같은 열을 다시 보낸다).
-import type { ResultLogBallotsLine, ResultLogChatLine, ResultLogClaimLine, ResultLogFrame, ResultLogPart, ResultLogWhisperLine } from "../../shared/protocol";
+import type { ResultLogChatLine, ResultLogClaimLine, ResultLogFrame, ResultLogPart, ResultLogWhisperLine } from "../../shared/protocol";
 
 /** 한 부분: 줄(프레임 i 순서로 이어 붙임)과 끝(end 프레임을 받음) 여부 */
 export interface ResultLogPartView<L> {
@@ -15,12 +15,11 @@ export interface ResultLogSnapshot {
   readonly ghost: ResultLogPartView<ResultLogChatLine>;
   readonly whisper: ResultLogPartView<ResultLogWhisperLine>;
   readonly claim: ResultLogPartView<ResultLogClaimLine>;
-  readonly ballots: ResultLogPartView<ResultLogBallotsLine>;
 }
 
 export type ResultLogListener = () => void;
 
-const PARTS: readonly ResultLogPart[] = ["mafia", "ghost", "whisper", "claim", "ballots"];
+const PARTS: readonly ResultLogPart[] = ["mafia", "ghost", "whisper", "claim"];
 
 interface Acc {
   /** 프레임 번호 i → 그 프레임의 줄 */
@@ -29,7 +28,7 @@ interface Acc {
 }
 
 const emptyPart = <L>(): ResultLogPartView<L> => ({ lines: [], complete: false });
-const EMPTY: ResultLogSnapshot = { mafia: emptyPart(), ghost: emptyPart(), whisper: emptyPart(), claim: emptyPart(), ballots: emptyPart() };
+const EMPTY: ResultLogSnapshot = { mafia: emptyPart(), ghost: emptyPart(), whisper: emptyPart(), claim: emptyPart() };
 
 export class ResultLogStore {
   private epoch = -1;
@@ -39,7 +38,7 @@ export class ResultLogStore {
   private listeners = new Set<ResultLogListener>();
 
   private static blank(): Record<ResultLogPart, Acc> {
-    return { mafia: { frames: new Map(), complete: false }, ghost: { frames: new Map(), complete: false }, whisper: { frames: new Map(), complete: false }, claim: { frames: new Map(), complete: false }, ballots: { frames: new Map(), complete: false } };
+    return { mafia: { frames: new Map(), complete: false }, ghost: { frames: new Map(), complete: false }, whisper: { frames: new Map(), complete: false }, claim: { frames: new Map(), complete: false } };
   }
 
   /** 프레임 하나를 연결 epoch 와 함께 받는다. 같은 (부분, i) 가 다시 오면 바꾼다 */
@@ -98,7 +97,6 @@ export class ResultLogStore {
       ghost: view<ResultLogChatLine>("ghost"),
       whisper: view<ResultLogWhisperLine>("whisper"),
       claim: view<ResultLogClaimLine>("claim"),
-      ballots: view<ResultLogBallotsLine>("ballots"),
     };
     this.bump();
   }

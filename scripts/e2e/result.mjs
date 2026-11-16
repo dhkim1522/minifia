@@ -13,17 +13,11 @@ export const RESULT_MARKERS = Object.freeze([
   "data-result-tab", // 탭 버튼 data-result-tab="{all|mafia|ghost|whisper|log}" (11-07)
   "data-result-dot", // 처음 나타난 마피아·유령·귓속말 탭의 점 표식 (11-07)
   "data-result-divider", // 탭 안 `{n}밤`·`{n}일차` 구분선 (11-07)
-  "data-day-card", // 기록 탭 일차 카드 data-day-card="{n}" (aria-pressed) (11-11)
-  "data-day-detail", // 기록 탭 하루 상세 data-day-detail="{n}" (11-11)
-  "data-whisper-pair", // 하루 상세의 귓속말 쌍 버튼 (11-11)
   "data-ready-pill", // 입력줄 오른쪽 끝 다시 하기 알약 (11-12)
   "data-ready", // 손님 알약 data-ready="true|false" (11-12)
   "data-ready-count", // 방장 알약 data-ready-count="n/m" (11-12)
   "data-bench-view", // 쉬는 사람 전용 화면 (11-12)
 ]);
-
-/** 기록 탭 일차 카드 기하 (src/styles/v2.css .mf-tl__card, 간격은 --space-sm). test/unit/e2eContract.test.ts 가 앱 CSS 와 대조한다 */
-export const TIMELINE_CARD = Object.freeze({ w: 72, h: 112, gap: 8 });
 
 /** 결과 탭 id, 표시 순서 (src/game/resultText.ts RESULT_TABS 의 사본) */
 export const RESULT_TAB_IDS = Object.freeze(["all", "mafia", "ghost", "whisper", "log"]);

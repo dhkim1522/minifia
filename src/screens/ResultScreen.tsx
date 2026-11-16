@@ -472,7 +472,6 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         {...(resultPanelHeight(roomH) !== undefined ? { expandedHeight: resultPanelHeight(roomH)! } : {})}
         tabsVisible={state.tabsVisible}
         lines={logLines}
-        view={view}
         onJumpWhisper={jumpWhisper}
         {...(jumpDay !== null ? { focusDay: jumpDay } : {})}
         contacts={contacts}

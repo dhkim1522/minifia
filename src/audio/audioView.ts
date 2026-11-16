@@ -1,6 +1,6 @@
 // 12-08: 소리 감독의 입력 — 방 화면이 이미 쓰는 공개 view 에서 허용 필드만 고른다 (D-3, LS-6, T-12-27).
 // 이 파일만 RoomView 를 읽는다. 읽는 경로는 test/unit/soundStaticGuard.test.ts 의 허용 목록이 고정한다:
-//   view.phase · view.phaseEndsAt · view.day.{n, turn, points, candidate, morning, verdict, ballots, runoff, showdown} · view.players · view.me.seat
+//   view.phase · view.phaseEndsAt · view.day.{n, turn, points, candidate, morning, execution, runoff, showdown} · view.players · view.me.seat
 // 이후 계획(09·10·11)이 필요한 공개 필드를 여기와 허용 목록에 함께 더한다. 역할·선택·기록·관전·본문 필드는 읽지 않는다.
 import type { PhaseId, PointLine, RoomView } from "../../shared/protocol";
 

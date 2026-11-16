@@ -6,17 +6,13 @@ import { dayDivider, nightDivider, RESULT_PANEL_TEXT, RESULT_TABS_SHOWN } from "
 import type { ResultTabId } from "../../game/resultText";
 import type { ResultLogChatLine, ResultLogWhisperLine } from "../../../shared/protocol";
 import type { ResultLogSnapshot } from "../../net/resultLogStore";
-import { dayLinesOf, timelineOf } from "../../game/timelineView";
-import type { TimelineViewInput } from "../../game/timelineView";
 import { faceSrc, seatColorVar } from "../../net/assets";
-import { DayDetail } from "./DayDetail";
-import { TimelineStrip } from "./TimelineStrip";
 import { V2Icon } from "./V2Icon";
 import type { V2IconName } from "./V2Icon";
 
 // 결과 탭 패널 (11-07, 결정 D-2·D-3·D-9, UI-SPEC A-3). 순수 표시다: 어느 탭이 열렸는지·열린 적이 있는지·연출 시계는 부르는 쪽(ResultScreen)이 쥔다.
 // 탭 행(아이콘만 44×44, 선택된 탭만 라벨 14px) + 몸통. 전체 탭의 몸통은 allSlot(ResultScreen 이 기존 채팅 패널을 넣는다)이고,
-// 마피아·유령·귓속말 탭은 resultLog 프레임으로 받은 값만 읽는다 — 탭을 열기 전에는 본문이 DOM 에 없다(T-11-23). 기록 탭(11-11)은 view 로 일차 카드 띠와 하루 상세를 그린다(logSlot 이 있으면 그것이 우선).
+// 마피아·유령·귓속말 탭은 resultLog 프레임으로 받은 값만 읽는다 — 탭을 열기 전에는 본문이 DOM 에 없다(T-11-23). 기록 탭 몸통은 logSlot 이 채운다(22-12: 일차 카드 띠·하루 상세·지목·찬반 줄은 지웠다, D-14).
 // 확장(expanded)이면 패널이 위로 자라고(높이 expandedHeight) 입력줄(allSlot)은 DOM 에서 빠지며 알약 자리(pill, 11-12)만 폭 전체로 남는다.
 // 18.1(P181-7): 보이는 탭이 하나(전체)뿐이면 탭 행을 그리지 않는다 — 결과 화면은 RESULT_TABS_SHOWN 이 전체 하나라 탭 행·확장·기록 본문이 마운트되지 않는다.
 // 줄 모양은 게임 중 채팅 줄과 같은 클래스(mv-chat__msg·dot·name·text)를 쓴다. 닉네임·본문은 React 텍스트 노드로만 그린다(T-11-22).
@@ -45,34 +41,18 @@ export interface ResultPanelProps {
   opened: ReadonlySet<ResultTab>;
   /** 전체 탭 몸통(채팅 패널) */
   allSlot: ReactNode;
-  /** 기록 탭 몸통을 직접 채운다(있으면 view 보다 우선) */
+  /** 기록 탭 몸통을 직접 채운다 */
   logSlot?: ReactNode;
   /** 기록 탭의 귓속말 쌍을 눌렀다: 귓속말 탭의 그날(n 일차)로 이동한다 */
   onJumpWhisper?(n: number): void;
   /** 귓속말 탭이 열릴 때 보이게 스크롤할 일차 구분선 */
   focusDay?: number;
-  /** 기록 탭이 읽는 공개 값(result·day.voteLog). 있으면 기록 탭이 일차 카드 띠와 하루 상세를 그린다(11-11) */
-  view?: TimelineViewInput;
   /** 알약 자리(11-12). 확장일 때 폭 전체로 남는다 */
   pill?: ReactNode;
   /** 패널 요소 ref(스테이지 사각형 측정) */
   panelRef?: Ref<HTMLElement>;
   /** 키보드가 열려 있다: 탭 행을 숨겨 패널 높이를 키보드 열림 높이로 둔다 */
   kb?: boolean;
-}
-
-/** 기록 탭 몸통(11-11, D-8): 위 일차 카드 띠(고정), 아래 하루 상세(스크롤). 탭을 열 때 처음 그려지고 첫 일차가 선택돼 있다 */
-function LogBody({ view, lines, contacts, onJumpWhisper }: { view: TimelineViewInput; lines: ResultLogSnapshot; contacts: ReadonlyMap<number, string>; onJumpWhisper?: (n: number) => void }) {
-  const cards = timelineOf(view, lines);
-  const [picked, setPicked] = useState<number | null>(null);
-  const selected = picked !== null && cards.some((c) => c.n === picked) ? picked : (cards[0]?.n ?? 1);
-  if (cards.length === 0) return <Empty />;
-  return (
-    <>
-      <TimelineStrip cards={cards} selected={selected} onSelect={setPicked} contacts={contacts} />
-      <DayDetail key={selected} lines={dayLinesOf(view, lines, selected)} contacts={contacts} {...(onJumpWhisper ? { onJumpWhisper } : {})} />
-    </>
-  );
 }
 
 function Arrow() {
@@ -145,7 +125,7 @@ function WhisperRows({ lines, contacts }: { lines: readonly ResultLogWhisperLine
 }
 
 export function ResultPanel(props: ResultPanelProps) {
-  const { tab, onTab, expanded, expandedHeight, tabsVisible, lines, contacts, opened, allSlot, logSlot, view, onJumpWhisper, focusDay, pill, panelRef, kb } = props;
+  const { tab, onTab, expanded, expandedHeight, tabsVisible, lines, contacts, opened, allSlot, logSlot, onJumpWhisper, focusDay, pill, panelRef, kb } = props;
   const shown: readonly ResultTab[] = tabsVisible ? RESULT_TABS_SHOWN : ["all"];
 
   const onKey = (e: KeyboardEvent<HTMLElement>): void => {
@@ -177,7 +157,7 @@ export function ResultPanel(props: ResultPanelProps) {
   else if (tab === "mafia") body = <ChatRows lines={lines.mafia.lines} contacts={contacts} label={nightDivider} ch="mafia" />;
   else if (tab === "ghost") body = <ChatRows lines={lines.ghost.lines} contacts={contacts} label={dayDivider} ch="ghost" />;
   else if (tab === "whisper") body = <WhisperRows lines={lines.whisper.lines} contacts={contacts} />;
-  else body = logSlot ?? (view ? <LogBody view={view} lines={lines} contacts={contacts} {...(onJumpWhisper ? { onJumpWhisper } : {})} /> : null);
+  else body = logSlot ?? null;
 
   return (
     <section ref={panelRef} className={cls} style={style} data-world-panel="" data-result-panel="" data-expanded={String(expanded)} data-tab={tab}>

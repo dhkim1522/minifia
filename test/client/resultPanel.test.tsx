@@ -6,7 +6,6 @@ import { ResultPanel } from "../../src/components/v2/ResultPanel";
 import type { ResultPanelProps, ResultTab } from "../../src/components/v2/ResultPanel";
 import { RESULT_TABS, RESULT_TABS_SHOWN } from "../../src/game/resultText";
 import type { ResultLogSnapshot } from "../../src/net/resultLogStore";
-import { tlLog, TL_NAMES, TL_RESULT, TL_VOTE_LOG } from "../helpers/timelineState";
 
 afterEach(cleanup);
 
@@ -21,7 +20,6 @@ function snap(over: Partial<ResultLogSnapshot> = {}): ResultLogSnapshot {
     ghost: part<ResultLogChatLine>([mline(2, 2, "억울해"), mline(4, 3, "누가 범인")]),
     whisper: part<ResultLogWhisperLine>([wline(0, 1, 1, "비밀이야"), wline(1, 0, 2, "알았어")]),
     claim: part([]),
-    ballots: part([]),
     ...over,
   };
 }
@@ -183,24 +181,13 @@ describe("유령·귓속말·기록 탭 (A-3)", () => {
   });
 });
 
-describe("기록 탭 (11-11)", () => {
-  const view = { result: TL_RESULT, day: { voteLog: TL_VOTE_LOG } };
-  const logSnap = (): ResultLogSnapshot => ({ ...snap(), ...tlLog() });
-
-  it("기록 탭 몸통은 view 가 있을 때 일차 카드 띠와 하루 상세다 — 탭을 열기 전엔 DOM 에 없다", () => {
-    const closed = setup({ tab: "all", view, lines: logSnap(), contacts: TL_NAMES });
-    expect(closed.container.querySelector("[data-day-card]")).toBeNull();
-    closed.unmount();
-    const open = setup({ tab: "log", expanded: true, view, lines: logSnap(), contacts: TL_NAMES });
-    expect(open.container.querySelectorAll("[data-day-card]")).toHaveLength(3);
-    expect(open.container.querySelector("[data-day-detail='1']")).not.toBeNull();
-    expect(open.container.querySelector("[data-result-body='log']")?.classList.contains("mf-result__body--log")).toBe(true);
-  });
-
-  it("logSlot 이 있으면 그것이 우선이다", () => {
-    const { container } = setup({ tab: "log", expanded: true, view, lines: logSnap(), logSlot: <i data-custom="" /> });
+describe("기록 탭 (11-11 → 22-12)", () => {
+  it("기록 탭 몸통은 logSlot 이 채운다 — 일차 카드 띠·하루 상세(지목·찬반 줄)는 지웠다(D-14)", () => {
+    const { container } = setup({ tab: "log", expanded: true, logSlot: <i data-custom="" /> });
     expect(container.querySelector("[data-custom]")).not.toBeNull();
     expect(container.querySelector("[data-day-card]")).toBeNull();
+    expect(container.querySelector("[data-day-detail]")).toBeNull();
+    expect(container.querySelector("[data-result-body='log']")?.classList.contains("mf-result__body--log")).toBe(true);
   });
 
   it("귓속말 탭: focusDay 가 있으면 그날 구분선이 몸통 맨 위에 오도록 몸통만 스크롤한다", () => {
@@ -213,12 +200,5 @@ describe("기록 탭 (11-11)", () => {
     const { container } = setup({ tab: "whisper", expanded: true, focusDay: 2 });
     expect(container.querySelector<HTMLElement>("[data-result-body=whisper]")!.scrollTop).toBe(160);
     spy.mockRestore();
-  });
-
-  it("기록 탭의 귓속말 쌍은 onJumpWhisper(n) 을 부른다", () => {
-    const onJumpWhisper = vi.fn();
-    const { container } = setup({ tab: "log", expanded: true, view, lines: logSnap(), contacts: TL_NAMES, onJumpWhisper });
-    fireEvent.click(container.querySelector("[data-day-detail='1'] [data-whisper-pair]")!);
-    expect(onJumpWhisper).toHaveBeenCalledWith(1);
   });
 });

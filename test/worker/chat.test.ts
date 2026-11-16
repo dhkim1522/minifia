@@ -403,7 +403,7 @@ describe("채팅 — 화면 없는 단계도 받는다 (D1, 결정 0044-23)", ()
     expect((await storedRoom(g.code)).phase).toBe(phase);
     const sender = withRole(g, "police")[0]!;
     const got = await observe(g, sender, () => chatSend(sender.sock, "투표 신중하게 해요"));
-    expect(chatReceivers(g, got)).toBe(wantLine(g.actors.map((a) => a.seat), `all/${sender.seat}/${phase === "execution" ? 2 : 1}/투표 신중하게 해요`)); // 처형 진입 때 찬반 기록 카드(09.1.1-03)가 all 채널 1번을 쓴다
+    expect(chatReceivers(g, got)).toBe(wantLine(g.actors.map((a) => a.seat), `all/${sender.seat}/1/투표 신중하게 해요`)); // 22-12: 처형 진입 때 찬반 기록 카드가 없어 all 채널 1번부터다
   });
 
   it("단계: 유언 단계(defense)에서는 산 사람의 채팅이 거절되고 어느 소켓에도 줄이 가지 않는다(22-11 D-16)", async () => {

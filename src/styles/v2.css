@@ -355,25 +355,6 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-chat__whisper-title { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
 .mv-chat__whisper-text { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
 
-/* 채팅의 찬반 기록 카드(09.1.1-12, UI-SPEC C-3): 제목 줄 없이 머리 "찬성 n"/"반대 m" + 이름들(자리 구분색 점 + 이름 14px 400, 간격 8, 쉼표 없음) */
-.mv-chat__card--ballots { gap: var(--space-sm); }
-.mv-chat__ballots-side { display: flex; flex-direction: column; gap: var(--space-xs); }
-.mv-chat__ballots-head { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
-.mv-chat__ballots-names { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
-.mv-chat__ballots-voter { display: inline-flex; align-items: center; gap: 6px; }
-.mv-chat__ballots-dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--ballot-seat); }
-.mv-chat__ballots-name { font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
-
-/* 찬반 공개(18.1-13, 결정 0083-9): 큰 글 아래 한 줄에 "찬성 N"·"반대 N" 두 덩이(아이콘 24 + 숫자 16px 굵게), 가운데 정렬·간격 넓게. 위 = --mf-ballot-top(기본 142 + 43 + 16 = 201), 좌우 16.
-   얼굴 칩·이름 알약은 없다 — 이름은 채팅 기록 카드가 남긴다. 찬반은 색이 아니라 아이콘·글자로 구별한다. 진홍·놋쇠·초록 없음 */
-.mv-ballots { position: absolute; top: var(--mf-ballot-top, 201px); left: var(--space-md); right: var(--space-md); z-index: calc(var(--z-overlay) + 1); pointer-events: none; font-family: var(--font-ui); }
-.mv-ballots__body { display: flex; flex-direction: row; justify-content: center; align-items: center; gap: var(--space-xl); }
-.mv-ballots__group { display: inline-flex; align-items: center; gap: var(--space-sm); font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); white-space: nowrap; }
-.mv-ballots__group svg { flex: none; color: var(--gray-100); }
-.mv-ballots__group.is-pending { visibility: hidden; }
-.mv-ballots__group.is-enter { animation: mv-ballots-in var(--dur-pop) var(--ease-out) both; }
-@keyframes mv-ballots-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-
 /* 마지막 3인 한마디 칩 시트(09.1.1-15, UI-SPEC E-2): 채팅 패널 자리를 그대로 덮는다 — 높이 = 패널 높이(--mf-panel-h, 188 · 244), 아랫변 = 키보드 올림, 면은 패널과 같은 night-800.
    칩 높이 44, 안쪽 좌우 16, 칩 사이 8, 줄 바꿈. 최대 3줄 = 44×3 + 8×2 = 148, 안쪽 위아래 12 → 172 ≤ 188. 새 색·14 미만 글자·진홍 없음 */
 .mv-speak-sheet { position: absolute; left: 0; right: 0; bottom: var(--mf-kb-lift, 0px); z-index: calc(var(--z-overlay) + 1); height: var(--mf-panel-h, 188px); box-sizing: border-box; display: flex; flex-wrap: wrap; align-content: flex-start; gap: var(--space-sm); padding: 12px var(--space-md); overflow: hidden; background: color-mix(in srgb, var(--night-800) 97%, transparent); border-radius: var(--radius-lg) var(--radius-lg) 0 0; font-family: var(--font-ui); color: var(--gray-100); }
@@ -393,7 +374,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 
 /* 모션 줄이기(O-22): 배지 팝·알약 페이드·시트 등장 애니메이션 없이 즉시. 알약은 즉시 나타나 2.4초 뒤 즉시 사라진다(타이머가 요소를 걷는다) */
 @media (prefers-reduced-motion: reduce) {
-  .mv-claim.is-pop, .mv-claim__notice, .mv-claim-sheet, .mv-ballots__group.is-enter { animation: none; }
+  .mv-claim.is-pop, .mv-claim__notice, .mv-claim-sheet { animation: none; }
 }
 
 /* 로비 꾸미기(10-07, UI-SPEC B-2·D-5): 시트가 아래 패널을 정확히 덮는다 — 높이 = 패널 높이(--mf-panel-h 250 · 306), 아랫변 = 키보드 올림(.mv-speak-sheet 와 같은 방식).

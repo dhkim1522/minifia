@@ -63,7 +63,7 @@ export function tallyPoints(state: RoomState): {
 
 /**
  * nomination 마감 훅(결정 0060-3·0089-18, DAY-05, D-13). 찬반(resolveVerdict)이 이미 통과를 정하고 그날 voteLog 줄을 만들었다 — 이 마감은 그 줄에 cand 를 더한다.
- * 최다 한 명이면 기존 verdict(passed:true 와 ballots)를 보존한 채 candidate 만 더해 표의 기본 다음 단계(defense = 유언)로 간다 —
+ * 최다 한 명이면 기존 verdict(passed:true)를 보존한 채 candidate 만 더해 표의 기본 다음 단계(defense = 유언)로 간다 —
  * passed 를 다시 false 로 덮으면 enterExecution 이 아무도 탈락시키지 않는다(Pitfall 1).
  * 동률·0표면 처형 없이 night 이고(결선 없음) verdict 키를 지우며 줄에 reason(tie | noVotes)을 남긴다(Pitfall 7). 단 판 규칙(RULES)의 runoff 가 켜져 있고 최다 득표자가
  * 정확히 둘이면 동점 결선 runoff 로 간다(결정 0066-4, 그날 줄은 candidate 없이 쌓고 결선이 채운다) — 꺼져 있어(결정 0072) 동점도 night 다.
@@ -77,7 +77,8 @@ export function resolveNomination(state: RoomState): DeadlineResult {
   });
   const { pickTurn: _pickTurn, verdict: kept, ...rest } = state;
   const day = state.day ?? 1;
-  const cand = leader === undefined ? { votes } : { votes, candidate: leader };
+  // 누가 누구를 골랐는지(votes)는 저장하지 않는다(22-12 D-25) — 그날 처형자(candidate)와 처형 없음 이유(reason)만 남긴다.
+  const cand = leader === undefined ? {} : { candidate: leader };
   const reason = leader !== undefined || (RULES.runoff && leaders.length === 2) ? {} : { reason: (votes.length === 0 ? "noVotes" : "tie") as "noVotes" | "tie" };
   const log = state.voteLog ?? [];
   const at = log.map((entry) => entry.n).lastIndexOf(day);

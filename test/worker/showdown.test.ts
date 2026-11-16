@@ -115,10 +115,10 @@ describe.skipIf(!GAME_RULES.showdown)("마지막 3인 — 트레이서 (결정 0
     const exec = await stepViews(g);
     expect(exec.map((v) => v.phase).join(",")).toBe(g.socks.map(() => "execution").join(","));
     expect(same(exec, (v) => v.day?.candidate)).toBe("2");
-    expect(same(exec, (v) => v.day?.verdict)).toBe(JSON.stringify({ yes: 0, no: 0, passed: true, last: true }));
-    expect(exec.every((v) => v.day?.ballots === undefined)).toBe(true);
+    expect(same(exec, (v) => v.day?.execution)).toBe(JSON.stringify({ seat: 2 })); // 22-12: 처형자 존재가 알린다 — day.verdict·day.ballots 는 없다
+    expect(exec.every((v) => !Object.hasOwn(v.day ?? {}, "verdict") && !Object.hasOwn(v.day ?? {}, "ballots"))).toBe(true);
     const stored = await storedRoom(g.code);
-    expect(stored.voteLog!.at(-1)).toMatchObject({ last: true, exec: { passed: true }, cand: { candidate: 2 } });
+    expect(stored.voteLog!.at(-1)).toMatchObject({ exec: { passed: true }, cand: { candidate: 2 } });
     expect(stored.showdown).toBeUndefined();
     expect(stored.players.some((p) => p.showdownPick !== undefined)).toBe(false);
   }, 60_000);
