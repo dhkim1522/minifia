@@ -1,7 +1,7 @@
 // 판 기록 D1 (23-10 Task 2) — 방 DO 가 ended 전환에서 한 번 games 에 한 줄을 남기고, 저장이 실패해도 게임은 멈추지 않는다(D-16, T-23-38).
 // setup 이 실제 마이그레이션을 메모리 D1 에 적용해 두므로 env.DB 로 바로 읽는다. 삽입은 waitUntil 이라 until 로 폴링한다.
 import { env } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildGameRow } from "../../shared/game/gameLog";
 import type { RoomState } from "../../shared/game/room";
 import { insertGame } from "../../worker/gameLog";
@@ -119,11 +119,14 @@ describe("판이 끝나면 D1 에 한 줄 (SC6)", () => {
   it("저장이 실패하는 판도 결과 화면을 모두 받고 다시 하기가 성공한다", { timeout: 90_000 }, async () => {
     const room = await inKeyword();
     const socks = socksOf(room);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     await env.DB.prepare("ALTER TABLE games RENAME TO games_bak").run();
     try {
       await driveHumansToEnded(room);
       for (const s of socks) expect(lastViewOf(s).phase).toBe("ended");
-      await pause(200); // 실패한 삽입이 정리될 때까지
+      await until("실패 로그", async () => logged.mock.calls.some((c) => c[0] === "game log failed"));
+      // 로그는 고정 문구 한 줄뿐이다 — 행·오류 내용을 싣지 않는다(T-23-39).
+      expect(logged.mock.calls.filter((c) => c[0] === "game log failed").every((c) => c.length === 1)).toBe(true);
       const round = (lastViewOf(room.host) as { round?: number }).round ?? 1;
       for (const g of room.guests) send(g.sock, { t: "ready", on: true, round });
       for (const s of socks) await settle(s, mark(s));
@@ -131,6 +134,7 @@ describe("판이 끝나면 D1 에 한 줄 (SC6)", () => {
       for (const s of socks) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
       expect((await storedRoom(room.code)).phase).toBe("assigning");
     } finally {
+      logged.mockRestore();
       await env.DB.prepare("ALTER TABLE games_bak RENAME TO games").run();
     }
   });

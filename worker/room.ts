@@ -31,7 +31,9 @@ import { pickRecipientIds, pickTarget } from "../shared/game/night";
 import { BADGE_MIN_GAP_MS, setBadge } from "../shared/game/badge";
 import { LOOK_MIN_GAP_MS, setLook } from "../shared/game/look";
 import { attachBenchConnection, detachBenchConnection, findAnyByToken, isResting, leaveBench, rematch, setReady } from "../shared/game/rematch";
+import { buildGameRow } from "../shared/game/gameLog";
 import { buildResultLog } from "../shared/game/resultLog";
+import { insertGame } from "./gameLog";
 import { sendWhisper } from "../shared/game/whisper";
 import { ANSWER_MIN_GAP_MS } from "../shared/game/answerRules";
 import { shrinkDeadline } from "../shared/game/early";
@@ -493,7 +495,8 @@ export class Room extends DurableObject<Env> {
       this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, now) });
       return;
     }
-    this.room = result.state;
+    // 판 id(D-16): 순수 beginGame 은 uuid 를 만들지 못해 워커가 붙인다. D1 games 의 id 이고 어떤 view·프레임에도 나가지 않는다.
+    this.room = { ...result.state, gameId: crypto.randomUUID() };
     // 광장이 정해진 시작(D-21)은 모두를 광장 입장 지점으로 옮기고 snap 을 보낸다 — 로비의 bar 위치가 광장 마스크에서 막힌 칸일 수 있다.
     // bar 시작은 지금처럼 로비 위치를 그대로 쓴다. state 다음에 모든 소켓이 snap 을 받는다.
     // emitWorld 는 쓰지 않는다: 시작 직후 assigning 은 지도 단계가 아니라 world 받는 사람 집합이 비어 아무에게도 가지 않는다.
@@ -646,7 +649,7 @@ export class Room extends DurableObject<Env> {
       this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, now) });
       return;
     }
-    this.room = result.state;
+    this.room = { ...result.state, gameId: crypto.randomUUID() }; // 새 판은 새 판 id(D-16)
     await this.deleteChatKeys([...(await this.ctx.storage.list({ prefix: CHAT_KEY_PREFIX })).keys()]);
     this.dropChat();
     this.ghostSnapped.clear();
@@ -1219,6 +1222,7 @@ export class Room extends DurableObject<Env> {
     await this.syncPositions(now);
     await this.emitDeathCards(prev, now);
     this.emitResultLog(prev);
+    this.recordGame(prev);
     await this.reschedule();
   }
 
@@ -1230,6 +1234,18 @@ export class Room extends DurableObject<Env> {
     if (!room || prev.phase === "ended" || room.phase !== "ended") return;
     const ids = new Set(room.players.map((p) => p.id));
     for (const frame of buildResultLog(room, this.chatLog)) this.deliver(ids, frame);
+  }
+
+  // 판 기록(D-16, 결정 0089-16·21): ended 로 들어서는 전환에서만 한 번 D1 games 에 한 줄을 남긴다(emitResultLog 와 같은 조건).
+  // 동기 함수라 전환 사이에 다른 일이 끼어들지 않는다. 삽입은 기다리지 않는다(waitUntil) — 실패해도 결과 화면·다시 하기를 막지 않고, 로그에는 고정 문구 한 줄뿐이다(T-23-38·39).
+  // 바인딩이 없거나(옛 배포) 행을 못 만드는 판(keyword 없는 옛 판)은 아무것도 넣지 않는다. ended 를 거치지 않고 만료된 판은 기록하지 않는다.
+  private recordGame(prev: RoomState): void {
+    const room = this.room;
+    if (!room || prev.phase === "ended" || room.phase !== "ended") return;
+    const db: D1Database | undefined = this.env.DB;
+    const row = buildGameRow(room, Date.now());
+    if (db === undefined || row === null) return;
+    this.ctx.waitUntil(insertGame(db, row).catch(() => console.error("game log failed")));
   }
 
   // 이번 전환에서 산 사람 → 탈락이 된 사람의 seat 들(seat 오름차순).
