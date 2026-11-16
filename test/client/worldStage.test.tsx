@@ -10,13 +10,13 @@ import { BAR_MAP, snapToWalkable } from "../../shared/game/map";
 import { PLAZA_MAP } from "../../shared/game/mapPlaza";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
-import type { OutfitId, PublicPlayer, RoomId, RoomView, WorldSeg } from "../../shared/protocol";
+import type { OutfitId, PublicPlayer, RoomView, WorldSeg } from "../../shared/protocol";
 import { WorldStage } from "../../src/components/WorldStage";
 import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { UnsupportedRendererError } from "../../src/world/renderer";
 import type { CharacterHandle, LightingPhase, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
-import { gatherView, houseTagCenters, overviewFraming, PAN_BOX, panBoxOf, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
+import { gatherView, PAN_BOX, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
 import { predictSegment, SEG_BLEND_MS, YAW_TURN_RATE } from "../../src/world/motion";
 import { GHOST_FADE_END_MS } from "../../src/game/dayView";
 import { createWorldRuntime, ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, RING_COLORS, WALK_CUE_KEY } from "../../src/world/runtime";
@@ -38,20 +38,10 @@ export interface FakeRenderer extends WorldRenderer {
   markers: { kind: string; at: { x: number; z: number } | null; scale: number; opacity: number }[];
   setLighting: Mock<(phase: LightingPhase) => void>;
   setZoom: Mock<(zoom: number) => void>;
-  /** 카메라 시점(21-09 개관): 부른 인자를 기록한다. 개관이 아닌 단계에서는 한 번도 불리지 않아야 한다 */
-  setCameraView: Mock<(view: "iso" | "overview") => void>;
   setTension: Mock<(level: 0 | 1 | 2, focus?: { x: number; z: number }) => void>;
   setPin: Mock<(pin: { x: number; z: number; strength: number } | null, dim: number) => void>;
   setChalk: Mock<(at: { x: number; z: number } | null, opacity: number) => void>;
   setSelfLight: Mock<(at: { x: number; z: number } | null) => void>;
-  /** 마을 컷어웨이·집 주인(20-05): 부른 인자를 기록한다. 재즈 바·광장에서는 한 번도 불리지 않아야 한다 */
-  setCutaway: Mock<(open: ReadonlySet<RoomId>, instant: boolean) => void>;
-  setOwners: Mock<(seats: readonly number[]) => void>;
-  /** 마을 가로등·집 창(21-07): 부른 인자를 기록한다. 재즈 바·광장·원인 흐름이 아닌 마을에서는 한 번도 불리지 않아야 한다 */
-  setLamps: Mock<(lampLit: readonly boolean[] | null, houseLit: readonly boolean[] | null, instant?: boolean) => void>;
-  roofs: Mock<() => Record<RoomId, number>>;
-  /** 화면 점의 카메라 광선(마을 건물 누르기, 20-06). 기본은 그 점 바로 위에서 수직으로 내리는 광선 — 시험이 mockReturnValue 로 바꾼다 */
-  rayAt: Mock<(sx: number, sy: number) => { origin: { x: number; y: number; z: number }; dir: { x: number; y: number; z: number } }>;
   emit(e: RendererStatusEvent): void;
   lost: boolean;
   renders: number;
@@ -78,19 +68,10 @@ export function makeFakeRenderer(): FakeRenderer {
     },
     setLighting: vi.fn(),
     setZoom: vi.fn(),
-    setCameraView: vi.fn(),
     setTension: vi.fn(),
     setPin: vi.fn(),
     setChalk: vi.fn(),
     setSelfLight: vi.fn(),
-    setCutaway: vi.fn(),
-    setOwners: vi.fn(),
-    setLamps: vi.fn(),
-    roofs: vi.fn(() => ({ post: 1, pub: 1, clinic: 1, police: 1 })),
-    rayAt: vi.fn((sx: number, sy: number) => {
-      const g = r.groundAt(sx, sy);
-      return { origin: { x: g.x, y: 40, z: g.z }, dir: { x: 0, y: -1, z: 0 } };
-    }),
     addCharacter(seat: number, c: CharacterHandle) {
       r.chars.set(seat, c);
     },
@@ -2027,422 +2008,12 @@ describe("카메라: 날아가지 않고 붙는다, 크기 변화는 다시 맞�
   });
 });
 
-describe("마을 카메라 (20-05, D-12·P20-15)", () => {
-  it("마을 판의 따라가기는 panBoxOf(town) 로 잘린다: 걷는 영역 모서리(10, 10)에서 카메라 목표는 ±9.6 이고 재즈 바의 ±5.4 가 아니다", async () => {
-    const s = await open({ view: { ...makeView(TWO, 0), map: "town" } }, { ents: [seg(0, [1000, 1000]), seg(1, [-300, 50])] });
-    const r = s.world.renderers[0]!;
-    frames(600);
-    const t = r.views.at(-1)!.target;
-    expect(t.x).toBeCloseTo(panBoxOf("town").maxX, 6);
-    expect(t.z).toBeCloseTo(panBoxOf("town").maxZ, 6);
-    expect(t.x).toBeGreaterThan(PAN_BOX.maxX + 1);
-  });
-
-  it("재즈 바는 그대로 PAN_BOX 로 잘린다", async () => {
+describe("카메라 한계 (D-12)", () => {
+  it("재즈 바는 PAN_BOX 로 잘린다", async () => {
     const s = await open({}, { ents: [seg(0, [580, 580]), seg(1, [-300, 50])] });
     const r = s.world.renderers[0]!;
     frames(600);
     expect(r.views.at(-1)!.target.x).toBeCloseTo(PAN_BOX.maxX, 6);
-  });
-});
-
-describe("마을 컷어웨이·집 주인·__mfTown (20-05, D-07·D-10·D-11)", () => {
-  const townView = (players: PublicPlayer[] = TWO): RoomView => ({ ...makeView(players, 0), map: "town" });
-  const IN_POST = (): WorldSeg[] => [seg(0, [0, -825]), seg(1, [-300, 50])];
-  const names = (s: ReadonlySet<RoomId>): string => [...s].sort().join(",");
-
-  it("내가 우체국 안이면 첫 프레임에 그 방만 instant 로 한 번 보낸다. 같은 자리의 다음 프레임은 다시 보내지 않는다", async () => {
-    const s = await open({ view: townView() }, { ents: IN_POST() });
-    const r = s.world.renderers[0]!;
-    expect(r.setCutaway).toHaveBeenCalledTimes(1);
-    const [open1, instant] = r.setCutaway.mock.calls[0]!;
-    expect(names(open1)).toBe("post");
-    expect(instant).toBe(true);
-    frames(100);
-    expect(r.setCutaway).toHaveBeenCalledTimes(1);
-  });
-
-  it("광장으로 나오면 빈 집합을 instant false 로 보낸다(0.25초 연출은 렌더러 몫)", async () => {
-    const s = await open({ view: townView() }, { ents: IN_POST() });
-    const r = s.world.renderers[0]!;
-    move(s.store, seg(0, [0, -825, 0, -300], Date.now(), 180));
-    frames(3500);
-    expect(r.setCutaway).toHaveBeenCalledTimes(2);
-    const [open2, instant] = r.setCutaway.mock.calls[1]!;
-    expect(names(open2)).toBe("");
-    expect(instant).toBe(false);
-  });
-
-  it("모션 줄이기면 나올 때도 instant true 다", async () => {
-    stubReducedMotion(true);
-    const s = await open({ view: townView() }, { ents: IN_POST() });
-    const r = s.world.renderers[0]!;
-    move(s.store, seg(0, [0, -825, 0, -300], Date.now(), 180));
-    frames(3500);
-    expect(r.setCutaway).toHaveBeenCalledTimes(2);
-    expect(r.setCutaway.mock.calls[1]![1]).toBe(true);
-  });
-
-  it("recreated 이벤트 뒤 첫 프레임은 지금 집합을 instant 로 한 번 더 보낸다", async () => {
-    const s = await open({ view: townView() }, { ents: IN_POST() });
-    const r = s.world.renderers[0]!;
-    r.emit({ t: "recreated" });
-    frame();
-    expect(r.setCutaway).toHaveBeenCalledTimes(2);
-    expect(names(r.setCutaway.mock.calls[1]![0])).toBe("post");
-    expect(r.setCutaway.mock.calls[1]![1]).toBe(true);
-    expect(r.setOwners).toHaveBeenCalledTimes(2);
-  });
-
-  it("scene.roomsOpen(유령·결과)이면 내 위치와 무관하게 네 방 모두 열린 집합이다", async () => {
-    const s = await open({ view: townView(), scene: sceneOf({ 0: {}, 1: {} }, { roomsOpen: true }) }, { ents: [seg(0, [0, 0]), seg(1, [-300, 50])] });
-    const r = s.world.renderers[0]!;
-    expect(r.setCutaway).toHaveBeenCalledTimes(1);
-    expect(names(r.setCutaway.mock.calls[0]![0])).toBe("clinic,police,post,pub");
-  });
-
-  it("내 몸이 그려지기 전에는 모두 덮인 집합(빈 집합)을 보내지 않고, 그려지면 지금 구역을 보낸다", async () => {
-    const s = await open({ view: townView() }, { ents: null });
-    const r = s.world.renderers[0]!;
-    expect(r.setCutaway).not.toHaveBeenCalled();
-    snap(s.store, IN_POST());
-    frame();
-    expect(r.setCutaway).toHaveBeenCalledTimes(1);
-    expect(names(r.setCutaway.mock.calls[0]![0])).toBe("post");
-  });
-
-  it("집 주인: 좌석 [0,1,3] 으로 시작하면 setOwners 한 번, 같은 좌석으로 다시 맞추면 부르지 않고 좌석이 바뀌면 다시 부른다", async () => {
-    const players = [player(0, "민지"), player(1, "철수"), player(3, "바다")];
-    const s = await open({ view: townView(players) }, { players, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(3, [400, -200])] });
-    const r = s.world.renderers[0]!;
-    expect(r.setOwners).toHaveBeenCalledTimes(1);
-    expect(r.setOwners).toHaveBeenLastCalledWith([0, 1, 3]);
-    s.rerender({ view: townView([...players]) });
-    frame();
-    expect(r.setOwners).toHaveBeenCalledTimes(1);
-    const more = [...players, player(5, "하나")];
-    s.rerender({ view: townView(more) });
-    frame();
-    expect(r.setOwners).toHaveBeenCalledTimes(2);
-    expect(r.setOwners).toHaveBeenLastCalledWith([0, 1, 3, 5]);
-  });
-
-  it("재즈 바·광장에서는 setCutaway·setOwners 를 한 번도 부르지 않는다", async () => {
-    const bar = await open({ view: { ...makeView(TWO, 0), map: "bar" } });
-    expect(bar.world.renderers[0]!.setCutaway).not.toHaveBeenCalled();
-    expect(bar.world.renderers[0]!.setOwners).not.toHaveBeenCalled();
-    cleanup();
-    const plaza = await open({ view: { ...makeView(TWO, 0), map: "plaza" } });
-    frames(200);
-    expect(plaza.world.renderers[0]!.setCutaway).not.toHaveBeenCalled();
-    expect(plaza.world.renderers[0]!.setOwners).not.toHaveBeenCalled();
-  });
-
-  it("window.__mfTown: 내가 우체국 안이면 zone post·open [post]·owners 는 view 좌석·veiled·door 는 빈 배열이고, 렌더러의 지붕 불투명도를 소수 둘째 자리로 싣는다", async () => {
-    const s = await open({ view: { ...townView(), mode: "basic" } }, { ents: IN_POST() });
-    const r = s.world.renderers[0]!;
-    r.roofs.mockReturnValue({ post: 0.3333333, pub: 1, clinic: 1, police: 1 });
-    frames(50);
-    expect(window.__mfTown).toEqual({ zone: "post", open: ["post"], roofs: { post: 0.33, pub: 1, clinic: 1, police: 1 }, owners: [0, 1], veiled: [], door: [] });
-    s.utils.unmount();
-    expect(window.__mfTown).toBeUndefined();
-  });
-
-  it("window.__mfTown 은 마을이 아니면 없고, 훅이 꺼진 문맥에도 없다", async () => {
-    await open({ view: { ...makeView(TWO, 0), map: "bar" } });
-    expect(window.__mfTown).toBeUndefined();
-    cleanup();
-    vi.stubEnv("DEV", false);
-    await open({ view: townView() }, { ents: IN_POST() });
-    expect(window.__mfTown).toBeUndefined();
-  });
-});
-
-describe("마을 문 연출 (20-06, D-15·P20-9)", () => {
-  const PLAYERS4 = [player(0, "민지"), player(1, "철수"), player(2, "영희"), player(3, "바다")];
-  const townView = (players: PublicPlayer[] = PLAYERS4): RoomView => ({ ...makeView(players, 0), map: "town" });
-  const ENTS3 = (): WorldSeg[] => [seg(0, [0, 0]), seg(1, [-300, 50]), seg(2, [-100, 400])];
-  const opacityOf = (h: CharacterHandle): number => {
-    const calls = (h.setOpacity as unknown as Mock).mock.calls;
-    return calls.length === 0 ? 1 : (calls.at(-1)![0] as number);
-  };
-  const doorEvent = (store: WorldStore, e: "vanish" | "appear", seat: number, d: RoomId = "post"): void => {
-    if (e === "vanish") store.applyFrame({ t: "world", k: "door", e, s: seat, d }, 1);
-    else store.applyFrame({ t: "world", k: "door", e, s: seat, d, p: [300, 300], t0: Date.now(), v: 180 }, 1);
-  };
-  const tagCount = (s: Setup): number => s.utils.container.querySelectorAll(".mf-world__tags [data-seat]").length;
-
-  it("문 사라짐: 그 사람의 몸·이름표가 제자리에서 0.2초에 옅어졌다 없어진다(크기·높이 변화·퇴장 커튼 없음, data-door=vanish)", async () => {
-    const s = await open({ view: townView() }, { players: PLAYERS4, ents: ENTS3() });
-    const r = s.world.renderers[0]!;
-    const h = r.chars.get(2) as FakeHandle;
-    const at = { x: h.root.position.x, z: h.root.position.z };
-    doorEvent(s.store, "vanish", 2);
-    frame(16);
-    expect(tagOf(s.utils, 2)!.getAttribute("data-door")).toBe("vanish");
-    frames(100);
-    expect(opacityOf(h)).toBeGreaterThan(0.4);
-    expect(opacityOf(h)).toBeLessThan(0.6);
-    expect(Number(tagOf(s.utils, 2)!.style.opacity)).toBeLessThan(0.6);
-    expect(h.root.scale.x).toBeCloseTo(0.83, 6); // EXIT_MS 커튼(크기 줄임)이 아니다
-    expect(h.root.position.y).toBe(0);
-    expect(h.root.position.x).toBeCloseTo(at.x, 6);
-    expect(h.root.position.z).toBeCloseTo(at.z, 6);
-    expect(r.chars.has(2)).toBe(true);
-    frames(110);
-    expect(r.chars.has(2)).toBe(false);
-    expect(h.disposed).toBe(1);
-    expect(tagOf(s.utils, 2)!.style.opacity).toBe("0");
-    expect(tagOf(s.utils, 2)!.hasAttribute("data-door")).toBe(false);
-  });
-
-  it("문 나타남: 새 몸이 불투명도 0 에서 시작해 0.2초에 1 이 되고 등장 연출(크기·높이)이 없다. data-door=appear 는 연출 동안만", async () => {
-    const s = await open({ view: townView() }, { players: PLAYERS4, ents: ENTS3() });
-    const r = s.world.renderers[0]!;
-    doorEvent(s.store, "appear", 3);
-    frame(16);
-    const h = r.chars.get(3) as FakeHandle;
-    expect(h).toBeDefined();
-    expect(opacityOf(h)).toBe(0);
-    expect(tagOf(s.utils, 3)!.getAttribute("data-door")).toBe("appear");
-    expect(h.root.scale.x).toBeCloseTo(0.83, 6);
-    expect(h.root.position.y).toBe(0);
-    frames(100);
-    expect(opacityOf(h)).toBeGreaterThan(0.4);
-    expect(opacityOf(h)).toBeLessThan(0.6);
-    frames(110);
-    expect(opacityOf(h)).toBe(1);
-    expect(Number(tagOf(s.utils, 3)!.style.opacity)).toBe(1);
-    expect(tagOf(s.utils, 3)!.hasAttribute("data-door")).toBe(false);
-  });
-
-  it("옅어지는 도중 같은 좌석의 나타남이 오면 지금 불투명도에서 1 로 이어간다(0 으로 내려갔다 오르지 않는다)", async () => {
-    const s = await open({ view: townView() }, { players: PLAYERS4, ents: ENTS3() });
-    const r = s.world.renderers[0]!;
-    const h = r.chars.get(2) as FakeHandle;
-    doorEvent(s.store, "vanish", 2);
-    frame(16);
-    frames(100);
-    const mid = opacityOf(h);
-    expect(mid).toBeGreaterThan(0.3);
-    expect(mid).toBeLessThan(0.7);
-    doorEvent(s.store, "appear", 2);
-    const seen: number[] = [];
-    for (let i = 0; i < 16; i++) {
-      frame(16);
-      seen.push(opacityOf(r.chars.get(2) as FakeHandle));
-    }
-    expect(r.chars.get(2)).toBe(h); // 같은 몸이다(지워졌다 다시 만들어지지 않는다)
-    expect(Math.min(...seen)).toBeGreaterThan(mid - 0.2);
-    for (let i = 1; i < seen.length; i++) expect(seen[i]!).toBeGreaterThanOrEqual(seen[i - 1]!);
-    expect(seen.at(-1)).toBe(1);
-  });
-
-  it("내가 구역을 넘어 받은 zone snap: 빠진 좌석은 옅어져 사라지고 새 좌석은 옅게 나타난다", async () => {
-    const s = await open({ view: townView() }, { players: PLAYERS4, ents: ENTS3() });
-    const r = s.world.renderers[0]!;
-    const h2 = r.chars.get(2) as FakeHandle;
-    s.store.applyFrame({ t: "world", k: "snap", at: Date.now(), ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(3, [200, 200])], zone: true }, 1);
-    frame(16);
-    expect(tagOf(s.utils, 2)!.getAttribute("data-door")).toBe("vanish");
-    expect(tagOf(s.utils, 3)!.getAttribute("data-door")).toBe("appear");
-    expect(opacityOf(r.chars.get(3) as FakeHandle)).toBe(0);
-    expect(h2.root.scale.x).toBeCloseTo(0.83, 6);
-    frames(220);
-    expect(r.chars.has(2)).toBe(false);
-    expect(opacityOf(r.chars.get(3) as FakeHandle)).toBe(1);
-  });
-
-  it("재접속 snap(zone·near 없음)은 연출 없이 바로: 새 좌석은 불투명 그대로 서고 data-door 가 없다", async () => {
-    const s = await open({ view: townView() }, { players: PLAYERS4, ents: ENTS3() });
-    const r = s.world.renderers[0]!;
-    snap(s.store, [seg(0, [0, 0]), seg(1, [-300, 50]), seg(3, [200, 200])], 2);
-    frame(16);
-    const h3 = r.chars.get(3) as FakeHandle;
-    expect(h3).toBeDefined();
-    expect(opacityOf(h3)).toBe(1);
-    expect(tagOf(s.utils, 3)!.hasAttribute("data-door")).toBe(false);
-    expect(tagOf(s.utils, 2)!.hasAttribute("data-door")).toBe(false);
-  });
-
-  it("모션 줄이기면 사라짐은 같은 프레임에 지워지고 나타남은 바로 1 이다", async () => {
-    stubReducedMotion(true);
-    const s = await open({ view: townView() }, { players: PLAYERS4, ents: ENTS3() });
-    const r = s.world.renderers[0]!;
-    doorEvent(s.store, "vanish", 2);
-    doorEvent(s.store, "appear", 3);
-    frame(16);
-    expect(r.chars.has(2)).toBe(false);
-    const h3 = r.chars.get(3) as FakeHandle;
-    expect(opacityOf(h3)).toBe(1);
-    expect(tagOf(s.utils, 3)!.hasAttribute("data-door")).toBe(false);
-  });
-
-  it("문 연출 중·뒤 어느 때도 방 안 사람 수·좌석을 알리는 새 DOM 이 생기지 않는다(태그 수는 view.players 수 이하, 변화 없음)", async () => {
-    const s = await open({ view: townView() }, { players: PLAYERS4, ents: ENTS3() });
-    const before = s.utils.container.querySelector(".mf-world__tags")!.childElementCount;
-    const count = tagCount(s);
-    expect(count).toBeLessThanOrEqual(PLAYERS4.length);
-    doorEvent(s.store, "vanish", 2);
-    doorEvent(s.store, "appear", 3);
-    for (let i = 0; i < 20; i++) {
-      frame(16);
-      expect(s.utils.container.querySelector(".mf-world__tags")!.childElementCount).toBe(before);
-      expect(tagCount(s)).toBeLessThanOrEqual(PLAYERS4.length);
-    }
-    expect(tagCount(s)).toBe(count);
-  });
-
-  it("window.__mfTown.door: 연출 중에는 [{ seat, kind }](좌석 오름차순), 끝나면 빈 배열", async () => {
-    const s = await open({ view: townView() }, { players: PLAYERS4, ents: ENTS3() });
-    doorEvent(s.store, "vanish", 2);
-    doorEvent(s.store, "appear", 3);
-    frame(16);
-    frames(48);
-    expect(window.__mfTown!.door).toEqual([{ seat: 2, kind: "vanish" }, { seat: 3, kind: "appear" }]);
-    frames(200);
-    expect(window.__mfTown!.door).toEqual([]);
-  });
-
-  it("핀 조명은 불투명도 0.5 미만으로 옅어진 좌석을 비추지 않는다", async () => {
-    const s = await open({ view: townView(), scene: sceneOf({ 0: {}, 1: {}, 2: {} }, { pin: { mode: "turn", seat: 2 } }) }, { players: PLAYERS4, ents: ENTS3() });
-    const r = s.world.renderers[0]!;
-    frames(300);
-    const lit = r.setPin.mock.calls.filter((c) => c[0] !== null).length;
-    expect(lit).toBeGreaterThan(0);
-    doorEvent(s.store, "vanish", 2);
-    frame(16);
-    frames(150); // 불투명도 0.5 아래(몸은 아직 있다): 핀이 꺼지기 시작한다(켜짐 수준이 내려간다)
-    expect(r.chars.has(2)).toBe(true);
-    const dimming = r.setPin.mock.calls.at(-1)![0] as { strength: number } | null;
-    expect(dimming === null || dimming.strength < 0.85).toBe(true);
-    frames(700); // 끄는 시간(420ms)이 지나면 완전히 꺼진다
-    expect(r.setPin.mock.calls.at(-1)![0]).toBeNull();
-  });
-});
-
-// ---------- 마을 벽 뒤 이름표·건물 누르기 (20-06) ----------
-
-describe("마을 벽 뒤 이름표 숨김·건물 누르기 (20-06, D-11·D-19, P20-11·P20-12)", () => {
-  const PLAYERS3 = [player(0, "민지"), player(1, "철수"), player(2, "영희")];
-  const townView = (players: PublicPlayer[] = PLAYERS3): RoomView => ({ ...makeView(players, 0), map: "town" });
-  /** 월드 점을 지나는 카메라 광선(정사영) */
-  const rayThrough = (p: { x: number; y: number; z: number }) => ({
-    origin: { x: p.x + 12.0208153 * 3, y: p.y + 11.9 * 3, z: p.z + 12.0208153 * 3 },
-    dir: { x: -12.0208153, y: -11.9, z: -12.0208153 },
-  });
-  const PUB_DOOR = (): number[] => [675, -25]; // 술집 문 칸(서벽 줄) — 술집이 닫혀 있으면 이마·지붕에 머리가 가려진다
-  const alphaOf = (s: Setup, seat: number): number => Number(tagOf(s.utils, seat)!.style.opacity);
-
-  it("지붕을 지나는 광선을 주는 탭: 우체국 front(-0.25, -5.75)로 걷고 링이 거기에 뜬다. 서버로 보내는 목적지도 그 점", async () => {
-    const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(2, [-100, 400])] });
-    const r = s.world.renderers[0]!;
-    r.rayAt.mockReturnValue(rayThrough({ x: 0, y: 2.3, z: -8.3 }));
-    tapAt(surface(s.utils), 250, 340);
-    expect(s.send).toHaveBeenCalledTimes(1);
-    expect(s.send).toHaveBeenCalledWith({ t: "move", x: -25, z: -575 });
-    frame(16);
-    expect(r.markers.filter((m) => m.kind === "ring" && m.at !== null).at(-1)?.at).toEqual({ x: -0.25, z: -5.75 });
-  });
-
-  it("문 앞(front 에서 1.0 안)에 선 채 그 방을 다시 누르면 방 안 자리(-0.25, -8.25)로 들어간다", async () => {
-    const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [-25, -575]), seg(1, [-300, 50]), seg(2, [-100, 400])] });
-    const r = s.world.renderers[0]!;
-    r.rayAt.mockReturnValue(rayThrough({ x: 0, y: 2.3, z: -8.3 }));
-    tapAt(surface(s.utils), 250, 340);
-    expect(s.send).toHaveBeenCalledWith({ t: "move", x: -25, z: -825 });
-  });
-
-  it("열린 방(내가 우체국 안)의 뒷벽을 누르면 그 벽 바로 안쪽 바닥(z -9.3)으로 간다", async () => {
-    const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [0, -825]), seg(1, [-300, 50]), seg(2, [-100, 400])] });
-    const r = s.world.renderers[0]!;
-    r.rayAt.mockReturnValue(rayThrough({ x: 0, y: 1.5, z: -9.85 }));
-    tapAt(surface(s.utils), 250, 340);
-    const sent = s.send.mock.calls.at(-1)![0] as { t: string; x: number; z: number };
-    expect(sent.t).toBe("move");
-    expect(sent.z).toBe(-930);
-    expect(Math.abs(sent.x)).toBeLessThanOrEqual(160);
-  });
-
-  it("광장 바닥만 지나는 광선은 지금처럼 바닥 교점(groundAt)으로 걷는다", async () => {
-    const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(2, [-100, 400])] });
-    tapAt(surface(s.utils), 250, 340);
-    expect(s.send).toHaveBeenCalledWith({ t: "move", x: 500, z: 400 });
-  });
-
-  it("rayAt 이 없는 렌더러(재즈 바·가짜)에서는 지금처럼 groundAt 으로 걷는다", async () => {
-    const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(2, [-100, 400])] });
-    const r = s.world.renderers[0]!;
-    r.rayAt.mockReturnValue(rayThrough({ x: 0, y: 2.3, z: -8.3 }));
-    (r as unknown as { rayAt?: unknown }).rayAt = undefined;
-    tapAt(surface(s.utils), 250, 340);
-    expect(s.send).toHaveBeenCalledWith({ t: "move", x: 500, z: 400 });
-  });
-
-  it("방이 없는 맵(재즈 바)은 rayAt 이 있어도 부르지 않는다", async () => {
-    const s = await open({}, {});
-    const r = s.world.renderers[0]!;
-    tapAt(surface(s.utils), 250, 340);
-    expect(r.rayAt).not.toHaveBeenCalled();
-  });
-
-  it("닫힌 술집 문 칸에 선 남의 이름표는 0.2초에 옅어져 숨고(data-veiled), 입력 중 칸도 같이 숨으며, 같은 칸의 내 이름표는 숨지 않는다. __mfTown.veiled 는 좌석 오름차순", async () => {
-    const s = await open({ view: townView(), typingSeats: new Set([2]) }, { players: PLAYERS3, ents: [seg(0, PUB_DOOR()), seg(1, [-300, 50]), seg(2, [675, 25])] });
-    frames(250);
-    expect(tagOf(s.utils, 2)!.getAttribute("data-veiled")).toBe("true");
-    expect(alphaOf(s, 2)).toBe(0);
-    expect(tagOf(s.utils, 2)!.querySelector(".mv-typing")).not.toBeNull(); // 입력 중 칸은 이름표 안에 있어 같이 숨는다
-    expect(tagOf(s.utils, 0)!.hasAttribute("data-veiled")).toBe(false);
-    expect(alphaOf(s, 0)).toBe(1);
-    expect(tagOf(s.utils, 1)!.hasAttribute("data-veiled")).toBe(false);
-    expect(window.__mfTown!.veiled).toEqual([2]);
-  });
-
-  it("걸어서 닫힌 술집 문 칸에 닿으면 알파가 1 에서 0 으로 0.2초 안에 이어서 내려간다(모션 줄이기는 중간 값 없이 바로)", async () => {
-    const run = async (): Promise<number[]> => {
-      const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(2, [500, -25])] });
-      move(s.store, seg(2, [500, -25, 675, -25], Date.now(), 180));
-      const seen: number[] = [];
-      for (let i = 0; i < 140; i++) {
-        frame(16);
-        seen.push(alphaOf(s, 2));
-      }
-      return seen;
-    };
-    const seen = await run();
-    expect(seen[0]).toBe(1);
-    expect(seen.at(-1)).toBe(0);
-    expect(seen.some((a) => a > 0.05 && a < 0.95)).toBe(true);
-    for (let i = 1; i < seen.length; i++) expect(seen[i]!).toBeLessThanOrEqual(seen[i - 1]!);
-    cleanup();
-    stubReducedMotion(true);
-    const reduced = await run();
-    expect(reduced.at(-1)).toBe(0);
-    expect(reduced.some((a) => a > 0.05 && a < 0.95)).toBe(false);
-  });
-
-  it("내가 술집 안이면 술집 지붕·앞벽은 걷혀 같은 방 사람의 이름표는 숨지 않는다", async () => {
-    const s = await open({ view: townView() }, { players: PLAYERS3, ents: [seg(0, [825, -25]), seg(1, [800, 100]), seg(2, [850, -100])] });
-    frames(300);
-    expect(window.__mfTown!.zone).toBe("pub");
-    for (const seat of [0, 1, 2]) expect(tagOf(s.utils, seat)!.hasAttribute("data-veiled")).toBe(false);
-    expect(window.__mfTown!.veiled).toEqual([]);
-  });
-
-  it("scene.roomsOpen(유령·결과)이면 같은 칸에서도 아무 이름표도 숨지 않고 문 연출도 생기지 않는다", async () => {
-    const s = await open({ view: townView(), scene: sceneOf({ 0: {}, 1: {}, 2: {} }, { roomsOpen: true }) }, { players: PLAYERS3, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(2, PUB_DOOR())] });
-    frames(300);
-    expect(tagOf(s.utils, 2)!.hasAttribute("data-veiled")).toBe(false);
-    expect(alphaOf(s, 2)).toBe(1);
-    expect(window.__mfTown!.veiled).toEqual([]);
-    expect(window.__mfTown!.door).toEqual([]);
-  });
-
-  it("숨은 좌석은 핀 조명도 비추지 않는다", async () => {
-    const s = await open({ view: townView(), scene: sceneOf({ 0: {}, 1: {}, 2: {} }, { pin: { mode: "turn", seat: 2 } }) }, { players: PLAYERS3, ents: [seg(0, [0, 0]), seg(1, [-300, 50]), seg(2, PUB_DOOR())] });
-    const r = s.world.renderers[0]!;
-    frames(1200);
-    expect(r.setPin.mock.calls.every((c) => c[0] === null)).toBe(true); // 한 번도 비추지 않는다
   });
 });
 
@@ -2946,60 +2517,6 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       expect(r.setZoom.mock.calls.length).toBe(calls); // 값이 같으면 다시 부르지 않는다
       const goal = gatherGoal(ZOOM_MAJORITY);
       expect(r.views.at(-1)!.offsetY).toBeCloseTo(goal.offsetY, 1);
-    });
-
-    // 21-09 D-11: 개관 시점 — 어둠 가림(dur-med 420)이 가장 어두운 때(210ms)에 기저가 바뀌고, 모션 줄이기·재접속은 즉시, 걷지도 따라가지도 않는다
-    const OVERVIEW: SceneLook["camera"] = { mode: "overview" };
-    const ovGoal = () => overviewFraming({ top: INSETS.top, bottom: window.innerHeight - INSETS.bottom }, { w: window.innerWidth, h: window.innerHeight });
-    it("overview: 어둠 가림 한가운데(210ms)에 setCameraView(overview), 마을 가운데·개관 배율·__mfCamera, 내 캐릭터가 걸어도 그대로, 돌아오면 iso 와 따라가기", async () => {
-      const s = await openGame();
-      const r = s.world.renderers[0]!;
-      expect(window.__mfCamera).toMatchObject({ mode: "follow" });
-      s.rerender({ scene: sceneOf(ALL, { camera: OVERVIEW }) });
-      frames(100);
-      expect(r.setCameraView).not.toHaveBeenCalled();
-      frames(200);
-      expect(r.setCameraView).toHaveBeenCalledTimes(1);
-      expect(r.setCameraView.mock.calls[0]![0]).toBe("overview");
-      const goal = ovGoal();
-      expect(r.views.at(-1)!.target).toEqual({ x: 0, z: 0 });
-      expect(r.views.at(-1)!.offsetY).toBeCloseTo(goal.offsetY, 6);
-      expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(goal.zoom, 6);
-      expect(window.__mfCamera).toEqual({ mode: "overview", scale: Math.round(goal.scale * 100) / 100 });
-      move(s.store, seg(0, [200, 100, 600, 100], Date.now(), 180));
-      frames(600);
-      expect(r.views.at(-1)!.target).toEqual({ x: 0, z: 0 });
-      s.rerender({ scene: sceneOf(ALL) });
-      frames(400);
-      expect(r.setCameraView.mock.calls.at(-1)![0]).toBe("iso");
-      expect(r.setZoom.mock.calls.at(-1)![0]).toBe(1);
-      expect(r.views.at(-1)!.target.x).not.toBe(0);
-      expect(window.__mfCamera).toMatchObject({ mode: "follow", scale: 58.2 });
-    });
-
-    it("어둠 가림(data-night-dim): 개관으로(에서) 바뀔 때 한 번 생기고, 처음 마운트·모션 줄이기에는 없다", async () => {
-      const first = await openGame({ scene: sceneOf(ALL, { camera: OVERVIEW }) });
-      frames(100);
-      expect(first.utils.container.querySelector("[data-night-dim]")).toBeNull();
-      first.utils.unmount();
-      const s = await openGame();
-      expect(s.utils.container.querySelector("[data-night-dim]")).toBeNull();
-      s.rerender({ scene: sceneOf(ALL, { camera: OVERVIEW }) });
-      expect(s.utils.container.querySelectorAll("[data-night-dim]")).toHaveLength(1);
-      s.utils.unmount();
-      stubReducedMotion(true);
-      const r = await openGame();
-      r.rerender({ scene: sceneOf(ALL, { camera: OVERVIEW }) });
-      expect(r.utils.container.querySelector("[data-night-dim]")).toBeNull();
-    });
-
-    it("overview + 모션 줄이기: 기다리지 않고 첫 프레임에 바뀐다", async () => {
-      stubReducedMotion(true);
-      const s = await openGame({ scene: sceneOf(ALL, { camera: OVERVIEW }) });
-      const r = s.world.renderers[0]!;
-      frames(32);
-      expect(r.setCameraView.mock.calls[0]![0]).toBe("overview");
-      expect(r.views.at(-1)!.target).toEqual({ x: 0, z: 0 });
     });
 
     // 09.1.1-13(O-15): zoomMs 가 있는 고정 구도는 그 시간에 ease-in-out 으로 줌한다(위치·세로 오프셋도 같은 진행)

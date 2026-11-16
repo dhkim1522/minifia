@@ -162,7 +162,6 @@ export const OUTFIT_IDS = ["coat", "police", "doctor", "mafia", "detective", "re
 export const PLACE_IDS = [
   "glass", "piano", "sax", "stool", "door", "poster", "record", "candle",
   "clock", "fountain", "bench", "lamp", "mail", "tree", "flower", "stand",
-  "lamp0", "lamp1", "lamp2", "lamp3", "lamp4", "lamp5", "lamp6", "lamp7",
 ];
 // 아침 day.morning 이 가질 수 있는 키(MorningView 중 이번 판이 만드는 셋). 이번 판은 eliminated 필수다.
 export const MORNING_KEYS = ["eliminated", "seen", "trace"];

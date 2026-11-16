@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { buildPlazaScene } from "../../src/world/maps/plaza";
 import { LADDER } from "../../src/world/renderer";
 import { HEAD_TOP_Y, WALK_HALF } from "../../shared/game/map";
-import { TOWN_MAP, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
 import {
   CAM_DIST,
   CAM_HEIGHT,
@@ -24,10 +23,8 @@ import {
   NAMETAG_H,
   NAMETAG_MAX_W,
   PAN_BOX,
-  panBoxOf,
   PANEL_HEIGHT,
   PLATE_FAR,
-  plateFarOf,
   PX_PER_UNIT,
   RESIZE_SETTLE_MS,
   screenRay,
@@ -517,87 +514,10 @@ describe("광장 빈 배경 없음 (MAP-06, D-22): 바닥 판 40×40 + 연장 �
   });
 });
 
-// ───────────────────────── 20페이즈: 마을 카메라 한계 확정 (D-12·D-21·P20-15) ─────────────────────────
-
-describe("마을 카메라 (20-05): 걷는 영역 ±10 격자점 × 6개 폰 크기 · 빈 배경 · 방 윤곽 폭", () => {
-  const townHalf = (TOWN_MAP.walkHalf ?? WALK_HALF) as number;
-  const townBox = panBoxOf("town");
-  const townFloorHalf = 12; // 바닥 판 24×24(town.ts buildPlaza floorHalf)
-
-  it("마을 격자점은 0.25 간격 [−10, 10]² 이다 (축마다 81개)", () => {
-    const pts = walkPoints(townHalf);
-    expect(townHalf).toBe(10);
-    expect(pts.length).toBe(81 * 81);
-    expect(pts[0]).toEqual({ x: -10, z: -10 });
-    expect(pts[pts.length - 1]).toEqual({ x: 10, z: 10 });
-  });
-
-  for (const size of STAGE_SIZES) {
-    it(`town visible ${size.label}: 모든 격자점에서 발과 이름표(180×24)와 입력 중 칸(+22)이 스테이지 사각형 안에 있다 (panBoxOf("town") 로 자른 카메라)`, () => {
-      const fails = visibilityFailures(size, townBox, townHalf);
-      const worst = fails.sort((a, b) => b.overflow - a.overflow)[0];
-      expect(fails.length, worst ? `${fails.length}점 실패, 최악: ${describeFailure(size, worst)}` : "").toBe(0);
-    });
-  }
-
-  it("town PAN 은 축마다 대칭이고 걷는 영역(±10)을 넘지 않는다", () => {
-    expect(townBox.minX).toBe(-townBox.maxX);
-    expect(townBox.minZ).toBe(-townBox.maxZ);
-    expect(townBox.maxX).toBe(townBox.maxZ);
-    expect(townBox.maxX).toBeLessThanOrEqual(townHalf);
-    expect(townBox.maxX).toBeGreaterThan(0);
-  });
-
-  it("town PAN 은 가시성을 통과하는 가장 좁은 0.1 단위 값이다 (0.1 더 좁히면 어느 한 크기가 넘친다)", () => {
-    const needed = Math.max(...STAGE_SIZES.map((s) => minPanFor(s, townHalf)));
-    expect(townBox.maxX).toBeCloseTo(needed, 9);
-    const narrower = symBox(Math.round((townBox.maxX - 0.1) * 10) / 10);
-    expect(STAGE_SIZES.some((s) => visibilityFailures(s, narrower, townHalf).length > 0)).toBe(true);
-  });
-
-  for (const size of STAGE_SIZES) {
-    it(`town blank ${size.label}: 모든 표본 광선이 연장 판(|x|,|z| ≤ plateFarOf("town")) 위 바닥에 닿는다`, () => {
-      const { far, at } = farthestGround(size, townBox);
-      expect(far, `${at} (연장 판 ${plateFarOf("town")})`).toBeLessThanOrEqual(plateFarOf("town"));
-    });
-  }
-
-  it("plateFarOf(\"town\") 은 빈 배경 검사가 통과하는 가장 작은 0.5 단위 값에 여유 2 를 더한 값이고, 바닥 판(±12)보다 바깥이다", () => {
-    const needed = Math.max(...STAGE_SIZES.map((s) => farthestGround(s, townBox).far));
-    const minimal = Math.ceil(needed * 2) / 2;
-    expect(plateFarOf("town")).toBe(minimal + 2);
-    expect(needed).toBeLessThanOrEqual(plateFarOf("town") - 2);
-    expect(plateFarOf("town")).toBeGreaterThan(townFloorHalf);
-  });
-
-  it("방 하나의 바깥 윤곽(네 꼭짓점)은 화면 가로 폭이 가장 좁은 폰 폭 360 안에 다 들어오고 양옆에 숨 쉴 여유가 있다 (TM9)", () => {
-    const narrowest = Math.min(...STAGE_SIZES.map((s) => s.w));
-    expect(narrowest).toBe(360);
-    for (const [id, o] of Object.entries(TOWN_ROOM_OUTER)) {
-      const xs = [o.x0, o.x1].flatMap((fx) => [o.z0, o.z1].map((fz) => groundToScreen({ x: fx / 100, y: 0, z: fz / 100 }, { x: 0, z: 0 }, { w: narrowest, h: 560 }, 0).sx));
-      const width = Math.max(...xs) - Math.min(...xs);
-      expect(width, `${id} 윤곽 폭`).toBeLessThanOrEqual(narrowest - 16);
-      expect(width, `${id} 윤곽 폭`).toBeGreaterThan(300);
-    }
-  });
-
-  it("재즈 바·광장은 PAN_BOX·PLATE_FAR 그대로다 (마을 값이 번지지 않는다)", () => {
-    expect(panBoxOf("bar")).toBe(PAN_BOX);
-    expect(panBoxOf("plaza")).toBe(PAN_BOX);
-    expect(plateFarOf("bar")).toBe(PLATE_FAR);
-    expect(plateFarOf("plaza")).toBe(PLATE_FAR);
-  });
-});
-
 // CAMERA_PRINT=1 일 때만 크기별 근거 표를 출력한다(SUMMARY 용).
 describe.runIf(process.env.CAMERA_PRINT === "1")("근거 표 출력", () => {
   it("크기별 필요 pan·가장 먼 바닥 점", () => {
     const rows = STAGE_SIZES.map((s) => `${s.label}\t최소 pan ${minPanFor(s)}\t가장 먼 바닥 ${farthestGround(s, PAN_BOX).at}`);
-    process.stdout.write(`${rows.join("\n")}\n`);
-  });
-
-  it("마을: 크기별 필요 pan·가장 먼 바닥 점", () => {
-    const rows = STAGE_SIZES.map((s) => `town ${s.label}\t최소 pan ${minPanFor(s, 10)}\t가장 먼 바닥 ${farthestGround(s, panBoxOf("town")).at}`);
     process.stdout.write(`${rows.join("\n")}\n`);
   });
 });
@@ -740,110 +660,5 @@ describe("gatherView (UI-SPEC 카메라: 이름표가 몸보다 우선, E8 #31 b
     const y = ringY(size, v, 1);
     expect(y.headBottom).toBeCloseTo(rect.bottom, 6);
     process.stdout.write(`gatherView 360x560 찬반 투표자 199: offsetY ${v.offsetY.toFixed(2)}, 위쪽 이름표 위 끝 ${(y.headTop - GATHER_STACK_H).toFixed(1)} (스테이지 위 ${rect.top})\n`);
-  });
-});
-
-// ---------------------------------------------------------------------------------------------------------------------
-// 21-09 밤 개관 카메라(D-11, UI-SPEC P21-2, 함정 9): 구현 전에 값을 계산으로 고정한다.
-// 스테이지 사각형 = 위 B(띠 아랫변: 한 줄 123 / 두 줄 144) ~ 아래 패널 윗변(화면 높이 − 밤 고정 패널 88). 배율 = min(폭 − 16, 스테이지 높이 − 16) / 19.2.
-// ---------------------------------------------------------------------------------------------------------------------
-import { houseTagCenters, HOUSE_TAG_BOX, HOUSE_TAG_CIRCLE, NIGHT_PANEL_HEIGHT, overviewFraming } from "../../src/world/camera";
-import { cameraModeOf } from "../../src/world/presence";
-import type { PhaseId, RoomView } from "../../shared/protocol";
-
-const BANDS = [123, 144] as const;
-const INSET = 8;
-/** 독 줄: 띠 아래 + 52 — 오른쪽 끝 소리 단추(지름 52, 오른쪽 16)가 놓이는 자리. 스테이지 위 끝이 띠 아랫변이라 세로로는 비킬 수 없고 가로로 비킨다 */
-const DOCK = { h: 52, w: 52, right: 16 };
-const nightStage = (size: { w: number; h: number }, band: number): { top: number; bottom: number } => ({ top: band, bottom: size.h - NIGHT_PANEL_HEIGHT });
-const PAIRS: ReadonlyArray<readonly [number, number]> = [
-  [0, 7],
-  [1, 2],
-  [3, 4],
-  [5, 6],
-];
-
-describe("개관(overview) 카메라 — 배율 식과 문패 계산 (D-11, P21-2·P21-3, 함정 9)", () => {
-  it("밤 고정 패널은 14 + 52(행) + 22 = 88 이다", () => {
-    expect(NIGHT_PANEL_HEIGHT).toBe(88);
-  });
-
-  it("360×560·띠 한 줄 배율은 약 17.3 px/단위, 인접 집 문패 중심 거리는 약 83 이다(UI-SPEC)", () => {
-    const size = { w: 360, h: 560 };
-    const st = nightStage(size, 123);
-    const f = overviewFraming(st, size);
-    expect(f.scale).toBeCloseTo((st.bottom - st.top - 16) / 19.2, 6);
-    expect(f.scale).toBeGreaterThan(17.2);
-    expect(f.scale).toBeLessThan(17.5);
-    expect(f.zoom * PX_PER_UNIT).toBeCloseTo(f.scale, 6);
-    const c = houseTagCenters(st, size);
-    const d = Math.hypot(c[0]!.sx - c[7]!.sx, c[0]!.sy - c[7]!.sy);
-    expect(d).toBeGreaterThan(80);
-    expect(d).toBeLessThan(86);
-  });
-
-  for (const size of PHONES) {
-    for (const band of BANDS) {
-      const label = `${size.w}x${size.h} 띠 ${band === 123 ? "한" : "두"} 줄`;
-      it(`${label}: 배율 = min(폭 − 16, 스테이지 높이 − 16) / 19.2`, () => {
-        const st = nightStage(size, band);
-        const f = overviewFraming(st, size);
-        expect(f.scale).toBeCloseTo(Math.min(size.w - 16, st.bottom - st.top - 16) / 19.2, 6);
-      });
-
-      it(`${label}: 문패 8개 모두 스테이지 안쪽 8 inset 안(보이는 원 40)이고 독 줄 단추와 겹치지 않는다`, () => {
-        const st = nightStage(size, band);
-        const centers = houseTagCenters(st, size);
-        expect(centers.length).toBe(8);
-        const r = HOUSE_TAG_CIRCLE / 2;
-        const h = HOUSE_TAG_BOX / 2;
-        const dock = { x0: size.w - DOCK.right - DOCK.w, x1: size.w - DOCK.right, y0: band, y1: band + DOCK.h };
-        const out: string[] = [];
-        for (const c of centers) {
-          if (c.sx - r < INSET || c.sx + r > size.w - INSET || c.sy - r < st.top + INSET || c.sy + r > st.bottom - INSET) out.push(`${c.seat}:밖`);
-          const hit = c.sx + h > dock.x0 && c.sx - h < dock.x1 && c.sy + h > dock.y0 && c.sy - h < dock.y1;
-          if (hit) out.push(`${c.seat}:독`);
-        }
-        expect(out.join(",")).toBe("");
-      });
-
-      it(`${label}: 인접 집(0·7, 1·2, 3·4, 5·6) 문패 중심 거리는 모두 44 이상, 모든 쌍도 44 이상`, () => {
-        const st = nightStage(size, band);
-        const c = houseTagCenters(st, size);
-        const near = PAIRS.map(([a, b]) => Math.hypot(c[a]!.sx - c[b]!.sx, c[a]!.sy - c[b]!.sy));
-        expect(Math.min(...near)).toBeGreaterThanOrEqual(44);
-        let min = Infinity;
-        for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) min = Math.min(min, Math.hypot(c[i]!.sx - c[j]!.sx, c[i]!.sy - c[j]!.sy));
-        process.stdout.write(`개관 ${label}: 배율 ${overviewFraming(st, size).scale.toFixed(2)} px/단위 · 최소 문패 간격 ${min.toFixed(1)} (인접쌍 최소 ${Math.min(...near).toFixed(1)})\n`);
-        expect(min).toBeGreaterThanOrEqual(44);
-      });
-    }
-  }
-
-  it("개관 시점의 groundToScreen ↔ screenToGround 가 왕복한다(±0.5px) — 경사 시점 값은 그대로", () => {
-    const rand = rng(2109);
-    for (const size of PHONES) {
-      const st = nightStage(size, 123);
-      const f = overviewFraming(st, size);
-      for (let i = 0; i < 20; i++) {
-        const p = { x: (rand() - 0.5) * 19, y: 0, z: (rand() - 0.5) * 19 };
-        const s = groundToScreen(p, f.target, size, f.offsetY, f.zoom, "overview");
-        const back = screenToGround(s.sx, s.sy, f.target, size, f.offsetY, f.zoom, "overview");
-        const s2 = groundToScreen({ x: back.x, y: 0, z: back.z }, f.target, size, f.offsetY, f.zoom, "overview");
-        expect(Math.abs(s.sx - s2.sx)).toBeLessThanOrEqual(0.5);
-        expect(Math.abs(s.sy - s2.sy)).toBeLessThanOrEqual(0.5);
-      }
-    }
-    // 경사 시점(기본)은 그대로: 인자를 생략한 값과 "iso" 를 준 값이 같다
-    const a = groundToScreen({ x: 1, y: 0.3, z: -2 }, { x: 0, z: 0 }, { w: 390, h: 664 }, 5);
-    const b = groundToScreen({ x: 1, y: 0.3, z: -2 }, { x: 0, z: 0 }, { w: 390, h: 664 }, 5, 1, "iso");
-    expect(b).toEqual(a);
-  });
-
-  it("개관 기저는 방위가 고정이고 거의 정사다: 카메라 쪽 벡터의 높이 성분이 0.95 이상, 위쪽 벡터는 북(−z)을 향한다", () => {
-    const b = cameraBasis("overview");
-    expect(b.back.y).toBeGreaterThan(0.95);
-    expect(b.up.z).toBeLessThan(-0.9);
-    expect(Math.abs(b.right.x)).toBeCloseTo(1, 6);
   });
 });

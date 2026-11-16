@@ -16,11 +16,8 @@ import { pinOf, type PinDesc } from "./pinPlan";
 /** 렌더러가 읽는 조명 단계(UI-SPEC 단계 조명). 렌더러의 LightingPhase 확장은 08-10 이 한다 */
 export type LightingStage = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
 
-/**
- * 따라가기 = 내 캐릭터(6페이즈 규칙), 고정 = 모이는 자리 가운데에서 움직이지 않음(zoom 은 과반 연출),
- * 개관 = 확장판(원인 흐름) 밤 전용 고정 시점(21-09 D-11): 방위 고정·거의 정사로 마을 전체를 스테이지에 꽉 채운다. 걷기·끌어 둘러보기 없음, 배율은 폰마다 camera.ts 의 overviewFraming 이 정한다
- */
-export type CameraMode = { mode: "follow" } | { mode: "fixed"; target: { x: number; z: number }; zoom: number; zoomMs?: number } | { mode: "overview" };
+/** 따라가기 = 내 캐릭터(6페이즈 규칙), 고정 = 모이는 자리 가운데에서 움직이지 않음(zoom 은 과반 연출) */
+export type CameraMode = { mode: "follow" } | { mode: "fixed"; target: { x: number; z: number }; zoom: number; zoomMs?: number };
 
 /** 긴장 단계: 0 평상시, 1 선두·찬반(초점에 점광), 2 과반(실내등 절반) */
 export interface Tension {
@@ -62,11 +59,6 @@ export interface SceneLook {
   seats: Record<number, SeatLook>;
   /** 암살 현장 분필 자리(월드 단위). 서버 공개 값 day.chalk 를 UNIT 으로 나눈 것이고 유령·산 사람 viewer 가 같은 자리를 본다(결정 0061-14) */
   chalk?: { x: number; z: number };
-  /**
-   * 네 방 모두 걷힘(마을, D-11·P20-8): 유령·탈락자 관전 화면과 결과 화면만 싣는다. 산 사람 화면에는 키가 없다 — 산 사람은 내가 든 방 하나만 걷힌다.
-   * 서버가 이미 모두를 보내는 viewer 라 지붕을 걷어도 새로 알려지는 것이 없다(결정 0021)
-   */
-  roomsOpen?: true;
 }
 
 /** 이 viewer 가 유령인지: 서버가 탈락한 본인 view 에만 싣는 spectate 가 있거나, 내 좌석이 탈락으로 내려온 경우 */
@@ -186,7 +178,6 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
     pin: pinOf(view),
     seats,
     ...(chalk !== undefined ? { chalk: { x: chalk.x / UNIT, z: chalk.z / UNIT } } : {}),
-    ...(isGhostViewer(view) ? { roomsOpen: true as const } : {}),
   };
 }
 
@@ -258,7 +249,6 @@ export function ghostFloatY(tSec: number, reduced: boolean): number {
 export const STAGE_TOPS: Readonly<Record<MapId, { r: number; y: number }>> = {
   bar: { r: STAGE_TOP_R, y: STAGE_TOP_Y },
   plaza: { r: 1.05, y: 0.46 },
-  town: { r: 1.05, y: 0.46 }, // 마을 가운데는 광장 연단 그대로다(20페이즈 D-05)
 };
 
 /** 단위 좌표 발 위치의 무대 위 높이: 그 맵의 무대 윗면 반경 안(경계 포함)이면 윗면 높이, 아니면 0. 맵 id 를 안 주면 재즈 바(0.29, 반경 1.18) */

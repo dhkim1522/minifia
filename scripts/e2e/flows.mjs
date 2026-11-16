@@ -145,7 +145,6 @@ import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
 import { makeErrandFlows } from "./errand.mjs";
 import { makeModeFlows } from "./modes.mjs";
-import { makeTownFlows } from "./town.mjs";
 import { CHAT_KB_PANEL_REST, CHAT_OPEN_STAGE_MIN, chatOpenChecks, chatOpenHeight, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureBallotsBackstop, measureChatOpen, readChatWindow, readLiveGhost } from "./polish.mjs";
 
 // Windows 에서 URL.pathname 은 "/C:/..." 라 mkdir 이 "C:\C:\..." 로 깨진다 — fileURLToPath 로 바꾼다(21-16).
@@ -1417,11 +1416,10 @@ async function untilGame(page, pred, ms = 6000, label = "게임 화면") {
 
 /**
  * 방장 + 손님(사람 페이지) + 봇 → 시작 → to 단계까지. 돌려주는 값: { host, hp, ht, hostSeat, guests: [{ context, page, tracker, takeIssues, seat }] }
- * 21-16: 기본값은 기본 마피아 판("basic") 이다 — 제품 기본(확장판)이 원인 흐름(저녁·밤·아침)이 되어, 옛 낮 순서(밤 → 아침 → 토론, 얼굴 목록 밤)를 전제한 흐름은 21-13·21-14 의 갈래 A 와 같이 기본 마피아 판으로 돈다. 원인 흐름·마을·심부름 흐름은 openExtended 로 연다.
+ * 21-16: 기본값은 기본 마피아 판("basic") 이다 — 제품 기본(확장판)이 원인 흐름(저녁·밤·아침)이 되어, 옛 낮 순서(밤 → 아침 → 토론, 얼굴 목록 밤)를 전제한 흐름은 21-13·21-14 의 갈래 A 와 같이 기본 마피아 판으로 돈다. 심부름 흐름은 openExtended 로 연다.
  * mode("basic"|"extended", 19-06)를 주면 봇·직업을 정한 뒤 시작 전에 방장 줄의 [판 종류] 로 그 판 종류를 고른다(안 주면 서버 기본값 그대로).
- * beforeStart({ hp, ht, guests })를 주면(20-08) 시작 단추를 누르기 직전에 한 번 부른다.
  */
-async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], guestSize = undefined, minBotNameChars = 0, hostInitScripts = [], guestNames = GAME_GUESTS, mode = "basic", beforeStart = undefined } = {}) {
+async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], guestSize = undefined, minBotNameChars = 0, hostInitScripts = [], guestNames = GAME_GUESTS, mode = "basic" } = {}) {
   const host = await startHost(ctx, flowId, { ...(hostNick ? { nickname: hostNick } : {}), ...(hostInitScripts.length > 0 ? { initScripts: hostInitScripts } : {}) });
   const { page: hp, tracker: ht } = host;
   const pages = [];
@@ -1442,13 +1440,12 @@ async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", v
   if (bots > 0) await setBotVote(hp, ht, vote);
   await chooseRole(hp, ht, role);
   if (mode) await pickModeViaRail(hp, ht, mode); // 테스트 도구 시트를 닫고 [판 종류] 시트에서 고른다
-  if (beforeStart) await beforeStart({ hp, ht, guests: pages }); // 20-08: 시작 전 대기실 화면을 읽는 흐름(town-room 의 대기실 __mfMap = bar)
   await startGame(hp, ht);
   if (to) await skipTo(hp, ht, to);
   return { host, hp, ht, hostSeat: ht.last().me.seat, guests: pages };
 }
 
-/** 확장판을 여는 openGame — errand·town 흐름이 쓴다(22-06·22-05 가 각 흐름과 함께 지운다). */
+/** 확장판을 여는 openGame — errand 흐름이 쓴다(22-06 이 흐름과 함께 지운다). */
 const openExtended = (ctx, flowId, opts = {}) => openGame(ctx, flowId, { mode: "extended", ...opts });
 
 async function closeGame(game) {
@@ -3820,9 +3817,6 @@ const { errandFlow } = makeErrandFlows({ recorder, openGame: openExtended, close
 // 방장 줄·판 종류(19페이즈 19-06): mode-rail(폰 6종)·mode-pick. 19-07: modeBasicFlow(기본 마피아 완주). 흐름 본문은 modes.mjs, 도우미만 넘긴다
 const { modeRailFlow, modePickFlow, modeBasicFlow } = makeModeFlows({ recorder, attempt, startHost, openGuest, openGame, closeGame, settledResult });
 
-// 마을 맵(20페이즈 20-08): town-walk(폰 6종)·town-room·town-sight·town-ghost·town-reduced. 흐름 본문은 town.mjs, 도우미만 넘긴다
-const { townWalkFlow, townRoomFlow, townSightFlow, townGhostFlow, townReducedFlow } = makeTownFlows({ recorder, openGame: openExtended, closeGame, executeHost, untilGame, settledResult });
-
 // 18.1 화면 다듬기(18.1-08): polish-reveal(역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종). 흐름 본문은 polish.mjs, 도우미만 넘긴다
 const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, closeGame });
 
@@ -3900,12 +3894,6 @@ export const FLOWS = [
   // 19-07: 19페이즈 판 종류 — 기본 마피아 봇 판 완주(BM0~BM3)와 역할 다섯 시점 누설(LK·HL·VK, 본문은 host.mjs). 이름 앞머리 mode
   { id: "mode-basic", run: modeBasicFlow, size: GAME_SIZE },
   { id: "mode-leak", run: modeLeakFlow, size: GAME_SIZE },
-  // 20-08: 마을 맵 TM1~TM10. town-walk(문 앞 걷기·이름표 스테이지 안)만 폰 6종, 나머지는 390x844 한 크기. 이름 앞머리 town — --only town 하나로 다섯이 모두 돈다
-  { id: "town-walk", run: townWalkFlow, extraSizes: LOBBY_EXTRA_SIZES },
-  { id: "town-room", run: townRoomFlow, size: GAME_SIZE },
-  { id: "town-sight", run: townSightFlow, size: GAME_SIZE },
-  { id: "town-ghost", run: townGhostFlow, size: GAME_SIZE },
-  { id: "town-reduced", run: townReducedFlow, size: GAME_SIZE },
   // 18.1-08: 역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종
 
   { id: "polish-reveal", run: polishRevealFlow, extraSizes: LOBBY_EXTRA_SIZES },

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Plane, Raycaster, Vector2, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
-import { groundToScreen, overviewFraming, PX_PER_UNIT, screenToGround, STAGE_SIZES, stageOffsetY, stageRect } from "../../src/world/camera";
+import { groundToScreen, PX_PER_UNIT, screenToGround, STAGE_SIZES, stageOffsetY, stageRect } from "../../src/world/camera";
 import { nextLadderStep, UnsupportedRendererError } from "../../src/world/renderer";
 import { configureCamera, createCamera } from "../../src/world/threeCamera";
 import { createThreeRenderer } from "../../src/world/threeRenderer";
@@ -198,48 +198,5 @@ describe("createThreeRenderer 실패 경로", () => {
     await expect(createThreeRenderer({ host, width: 390, height: 664, budgetStep: 0, allowSoftware: false })).rejects.toBeInstanceOf(UnsupportedRendererError);
     expect(host.querySelector("canvas")).toBeNull();
     host.remove();
-  });
-});
-
-describe("개관(overview) 기저 = three 카메라 (21-09, D-11)", () => {
-  it("임의 점 50개 × 폰 6개: 개관 기저에서 Vector3.project 와 groundToScreen 의 차이가 1px 이하", () => {
-    const rand = rng(2109);
-    const cam = createCamera();
-    for (const size of STAGE_SIZES) {
-      const st = { top: 123, bottom: size.h - 88 };
-      const f = overviewFraming(st, size);
-      configureCamera(cam, f.target, size, f.offsetY, f.zoom, "overview");
-      for (let i = 0; i < 50; i++) {
-        const p = { x: (rand() - 0.5) * 20, y: rand() * 3, z: (rand() - 0.5) * 20 };
-        const ndc = new Vector3(p.x, p.y, p.z).project(cam);
-        const sx = ((ndc.x + 1) / 2) * size.w;
-        const sy = ((1 - ndc.y) / 2) * size.h;
-        const ref = groundToScreen(p, f.target, size, f.offsetY, f.zoom, "overview");
-        expect(Math.abs(sx - ref.sx)).toBeLessThanOrEqual(1);
-        expect(Math.abs(sy - ref.sy)).toBeLessThanOrEqual(1);
-      }
-    }
-  });
-
-  it("개관 기저의 Raycaster 바닥 교점이 screenToGround 와 같다(1e-3 단위 이하)", () => {
-    const rand = rng(2110);
-    const cam = createCamera();
-    const floor = new Plane(new Vector3(0, 1, 0), 0);
-    const ray = new Raycaster();
-    for (const size of STAGE_SIZES) {
-      const st = { top: 123, bottom: size.h - 88 };
-      const f = overviewFraming(st, size);
-      configureCamera(cam, f.target, size, f.offsetY, f.zoom, "overview");
-      for (let i = 0; i < 20; i++) {
-        const sx = rand() * size.w;
-        const sy = rand() * size.h;
-        ray.setFromCamera(new Vector2((sx / size.w) * 2 - 1, -((sy / size.h) * 2 - 1)), cam);
-        const hit = ray.ray.intersectPlane(floor, new Vector3());
-        const ref = screenToGround(sx, sy, f.target, size, f.offsetY, f.zoom, "overview");
-        expect(hit).not.toBeNull();
-        expect(Math.abs(hit!.x - ref.x)).toBeLessThan(1e-3);
-        expect(Math.abs(hit!.z - ref.z)).toBeLessThan(1e-3);
-      }
-    }
   });
 });

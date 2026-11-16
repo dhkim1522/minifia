@@ -14,7 +14,7 @@ import type { SceneLook } from "../world/presence";
 import { initialMapStatus } from "../world/status";
 import type { MapStatusState } from "../world/status";
 import type { WorldStore } from "../world/store";
-import { installCameraHook, installEmotesHook, installGhostsHook, installLooksHook, installMapHook, installPinHook, installTownHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
+import { installCameraHook, installEmotesHook, installGhostsHook, installLooksHook, installMapHook, installPinHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
 import { MapStatusCard } from "./MapStatusCard";
 import { ErrandAct } from "./v2/ErrandAct";
 import { ErrandArrow, ErrandMarker } from "./v2/ErrandMarker";
@@ -378,8 +378,6 @@ export function WorldStage(props: WorldStageProps) {
     const looksHook = hooksOn ? installLooksHook() : null;
     // window.__mfMap(이 렌더러에 올린 맵 id, 11-13, L33): 같은 훅 문맥에서만. DOM 이 아니다
     const mapHook = hooksOn ? installMapHook(mapId) : null;
-    // window.__mfTown(내 구역·열린 방·지붕 불투명도·집 주인, 20-05, L33): 마을 판 + 같은 훅 문맥에서만. 이미 받은 값에서 계산한 것뿐이고 DOM 이 아니다
-    const townHook = hooksOn && mapId === "town" ? installTownHook() : null;
     const runtime = createWorldRuntime({
       host,
       tagLayer,
@@ -408,7 +406,6 @@ export function WorldStage(props: WorldStageProps) {
       onCostumes: (costumes, dimmed) => live.current.props.onCostumes?.(costumes, dimmed),
       onZoom: pinHook?.setZoom,
       onCamera: (state) => cameraHook?.set(state),
-      onTown: townHook === null ? undefined : (state) => townHook.patch(state),
       onProject: (project, now) => {
         const { props: p } = live.current;
         const ins = p.stageInsets;
@@ -434,7 +431,6 @@ export function WorldStage(props: WorldStageProps) {
       emotesHook?.off();
       looksHook?.off();
       mapHook?.off();
-      townHook?.off();
       runtime.dispose();
       if (runtimeRef.current === runtime) runtimeRef.current = null;
     };
@@ -448,16 +444,6 @@ export function WorldStage(props: WorldStageProps) {
   }, [mapStatus.status]);
 
   // 나가기: night-900 으로 420ms 덮은 뒤 렌더러·캐릭터 자원을 해제하고 알린다. 걷던 캐릭터는 그 자리에서 멈춘다.
-  // 개관 시점으로(에서) 바뀔 때 어둠 가림이 한 번 지나간다(21-09 D-11, --scrim 0 → 1 → 0, --dur-med). 카메라 기저는 가림이 가장 어두운 때(런타임 OVERVIEW_CUT_MS)에 바뀐다.
-  // 모션 줄이기·처음 마운트(재접속)는 가림 없이 즉시 목표 상태다
-  const overviewWanted = props.scene?.camera.mode === "overview";
-  const overviewSeen = useRef(overviewWanted);
-  const [dimKey, setDimKey] = useState(0);
-  useLayoutEffect(() => {
-    if (overviewSeen.current === overviewWanted) return;
-    overviewSeen.current = overviewWanted;
-    if (!live.current.reduced) setDimKey((k) => k + 1);
-  }, [overviewWanted]);
 
   const exiting = props.exiting === true;
   useEffect(() => {
@@ -701,7 +687,6 @@ export function WorldStage(props: WorldStageProps) {
           );
         })}
       </div>
-      {dimKey > 0 ? <div key={dimKey} className="mf-world__dim" data-night-dim="" aria-hidden="true" /> : null}
       <div className="mf-world__veil">
         <MapStatusCard
           status={mapStatus.status}

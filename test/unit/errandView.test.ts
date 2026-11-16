@@ -22,7 +22,6 @@ import { tick } from "../../shared/game/tick";
 
 const BAR_IDS = BAR_PLACES.map((p) => p.id);
 const PLAZA_IDS = PLAZA_PLACES.map((p) => p.id);
-const LAMP_IDS = ["lamp0", "lamp1", "lamp2", "lamp3", "lamp4", "lamp5", "lamp6", "lamp7"];
 
 /** 심부름 view 하나(필요한 필드만). 시험에서 RoomView 로 단언한다. */
 function viewOf(map: "bar" | "plaza" | undefined, errand: { places: PlaceId[]; done: PlaceId[] } | undefined): RoomView {
@@ -34,21 +33,19 @@ function viewOf(map: "bar" | "plaza" | undefined, errand: { places: PlaceId[]; d
 }
 
 describe("장소 낱말·아이콘", () => {
-  it("장소 id 는 24개다 — PLACE_IDS 24 = 재즈 바 후보 8 + 광장 후보 8 + 마을 가로등 8(21-02 D-05, 번호 = 집 좌석)", () => {
-    expect(PLACE_IDS.length).toBe(24);
+  it("장소 id 는 16개다 — PLACE_IDS 16 = 재즈 바 후보 8 + 광장 후보 8", () => {
+    expect(PLACE_IDS.length).toBe(16);
     expect(BAR_PLACES.length + PLAZA_PLACES.length).toBe(16);
     expect(new Set([...BAR_IDS, ...PLAZA_IDS]).size).toBe(16);
-    expect(JSON.stringify([...BAR_IDS, ...PLAZA_IDS, ...LAMP_IDS].sort())).toBe(JSON.stringify([...PLACE_IDS].sort()));
-    expect(JSON.stringify(PLACE_IDS.slice(16))).toBe(JSON.stringify(LAMP_IDS));
+    expect(JSON.stringify([...BAR_IDS, ...PLAZA_IDS].sort())).toBe(JSON.stringify([...PLACE_IDS].sort()));
   });
 
-  it("마을 가로등 id 여덟은 이름이 모두 '가로등' 이고 기존 16개 이름은 그대로다(21-02)", () => {
-    for (const id of LAMP_IDS) expect(PLACE_NAME[id as PlaceId]).toBe("가로등");
+  it("광장 가로등 이름은 '가로등' 이다", () => {
     expect(PLACE_NAME.lamp).toBe("가로등");
-    expect(placeLabel("lamp3" as PlaceId, false)).toBe("가로등 장소");
+    expect(placeLabel("lamp" as PlaceId, false)).toBe("가로등 장소");
   });
 
-  it("PLACE_NAME 은 24개 id 모두의 키를 가지고 같은 맵 안의 낱말이 서로 다르다", () => {
+  it("PLACE_NAME 은 16개 id 모두의 키를 가지고 같은 맵 안의 낱말이 서로 다르다", () => {
     expect(JSON.stringify(Object.keys(PLACE_NAME).sort())).toBe(JSON.stringify([...PLACE_IDS].sort()));
     for (const ids of [BAR_IDS, PLAZA_IDS]) {
       const words = ids.map((id) => PLACE_NAME[id as PlaceId]);

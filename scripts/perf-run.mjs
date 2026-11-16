@@ -27,9 +27,8 @@
 //              시민 판은 어둠·맥박 화면) CPU 감속 아래 장면마다 머무는 동안(--minutes 를 두 판이 반씩) 페이지 안 rAF 간격을 재 평균 fps·끊김·p95 를 장면별 칸(scenes)과 함께
 //              `nightload-{크기}-x{감속}.json`(기본 폴더 .planning/phases/09-night-morning/perf/)으로 저장한다. 넘기기·시트 조작 동안은 기록을 멈춘다. 6페이즈 기준(5분 평균 55fps, 끊김 5회)은
 //              baseline 칸에 적을 뿐 판정하지 않는다 — 합격 판정은 실기기 확인(사용자 결정 2026-11-02). 방은 끝에 나가서 지운다. v1.0 주소는 어떤 요청보다 먼저 거부한다.
-//   --map bar|plaza|town (nightload, 11-13·20-09): town = 아무것도 고르지 않고 시작한다(확장판 = 마을이 기본) — 시작 뒤 view.map 이 town 이 아니면 오류로 끝낸다.
-//              bar·plaza = 시작 전에 방장이 판 종류를 기본 마피아로 바꾼 뒤(pickModeViaUi) 지도 칩 → 맵 탭 → 그 맵 카드를 고른다(pickMapViaUi). 확장판 방엔 [맵] 칩이 없어서다.
-//              저장 이름 끝 `-town`·`-bar`·`-plaza`, JSON params.map. 옵션이 없으면 아무것도 고르지 않는다 — 그 판은 이제 확장판 = 마을이다(이름은 이전 그대로 끝 표시 없음).
+//   --map bar|plaza (nightload, 11-13·20-09): 시작 전에 방장이 판 종류를 기본 마피아로 바꾼 뒤(pickModeViaUi) 지도 칩 → 맵 탭 → 그 맵 카드를 고른다(pickMapViaUi). 시작 뒤 view.map 이 그 맵이 아니면 오류로 끝낸다.
+//              저장 이름 끝 `-bar`·`-plaza`, JSON params.map. 옵션이 없으면 아무것도 고르지 않는다(이름은 이전 그대로 끝 표시 없음, 맵 확인도 없음).
 //   --mode light (18-07): 광장·재즈 바 × talk·morning·vote·night 정지 화면(?perf=1&shot=1, 시드 1, 사람 6, 코트)을 같은 카메라로 찍어 캔버스 평균 상대 휘도를 재고
 //              순서(talk > morning > vote > night)·배율(talk ≥ 2.0×night, morning ≥ 1.6×night)을 판정한다. 결과 `light-{크기}.json`·`light-{맵}-{단계}.png`. 실패가 있으면 종료 코드 1.
 //   사용 예:   node scripts/perf-run.mjs --mode nightload --url http://localhost:5173 --minutes 5 --throttle 4 --size 390x844
@@ -83,20 +82,6 @@ export const NIGHTLOAD_DWELL = [
   ["night", 14_000],
   ["morning", 4_000],
 ];
-/**
- * nightload(마을, 21-16): 원인 흐름(확장판) 하루 순서 — 저녁 → 밤 → 아침 → 토론 → 투표 → 변론 → 찬반 → 처형. 처형 다음은 다음 날 저녁이라 한 바퀴는 처형에서 끝난다.
- * 셋째 칸 true 는 있을 때만 재는 장면이다: 피해자도 구출도 없는 밤은 아침 없이 곧바로 토론이라(결정 0088-3) 아침이 안 오면 건너뛴다.
- */
-export const NIGHTLOAD_DWELL_CAUSE = [
-  ["errand", 20_000],
-  ["night", 14_000],
-  ["morning", 4_000, true],
-  ["discussion", 10_000],
-  ["nomination", 6_000],
-  ["defense", 6_000],
-  ["verdict", 6_000],
-  ["execution", 4_000],
-];
 /** nightload: 판 순서 — 마피아 판(맵·고리·이동) 다음 시민 판(어둠·맥박 비네트) */
 const NIGHTLOAD_PASSES = ["mafia", "citizen"];
 const NIGHTLOAD_NICK = "측정기";
@@ -134,7 +119,7 @@ const CHATLOAD_LINES = ["저 아니에요", "누가 수상해요?", "조용한 �
 const CHATLOAD_BASELINE = { avgFps: 55, jankMax: 5, perMinutes: 5, jankMs: JANK_MS, source: "06-PERF-RESULTS.md 조건 B · UI-SPEC 합격 기준 — 5분 평균 ≥ 55fps, 끊김(>50ms) ≤ 5회/5분" };
 
 export const USAGE =
-  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload|light] [--url 주소] [--scene talk|morning|vote|night] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--outfits mix|coat] [--burst 1..4] [--map bar|plaza|town] [--runs 3] [--bots 7] [--sound on|off] [--shot [--file 이름]] (--mode light 는 JSON 에 아래쪽 절반 평균 색 colors 도 남긴다, 18-12)";
+  "사용법: node scripts/perf-run.mjs [--mode perf|interactive|chatload|nightload|light] [--url 주소] [--scene talk|morning|vote|night] [--minutes 5] [--dpr 2] [--throttle 4] [--size 390x844] [--out 폴더] [--headed] [--budget 0] [--seed 1] [--outfits mix|coat] [--burst 1..4] [--map bar|plaza] [--runs 3] [--bots 7] [--sound on|off] [--shot [--file 이름]] (--mode light 는 JSON 에 아래쪽 절반 평균 색 colors 도 남긴다, 18-12)";
 
 class UsageError extends Error {}
 
@@ -187,7 +172,7 @@ export function parseArgs(argv) {
       case "--map": {
         // 장면과 걷기 시나리오의 맵(perf 의 ?perf=1&map=, nightload 는 시작 전에 지도 칩으로 고른다) — 광장 성능 측정(MAP-06, 11-10·11-13)
         const v = need(a, i++);
-        if (v !== "bar" && v !== "plaza" && v !== "town") throw new UsageError(`--map 은 bar·plaza·town 중 하나: ${v}`);
+        if (v !== "bar" && v !== "plaza") throw new UsageError(`--map 은 bar·plaza 중 하나: ${v}`);
         o.map = v;
         o.mapGiven = true;
         break;
@@ -226,7 +211,7 @@ export function outputBase(o) {
   if (o.mode === "interactive") return `interactive-dpr${o.dpr}-x${o.throttle}`;
   if (o.mode === "chatload") return `chatload-${o.size.w}x${o.size.h}-x${o.throttle}`;
   if (o.mode === "nightload") return `nightload-${o.size.w}x${o.size.h}-x${o.throttle}${o.mapGiven ? `-${o.map}` : ""}`;
-  const base = `desktop-${o.scene}-dpr${o.dpr}-x${o.throttle}${o.outfits === "mix" ? "-mix" : ""}${o.burst > 1 ? `-burst${o.burst}` : ""}${o.map === "plaza" || o.map === "town" ? `-${o.map}` : ""}`;
+  const base = `desktop-${o.scene}-dpr${o.dpr}-x${o.throttle}${o.outfits === "mix" ? "-mix" : ""}${o.burst > 1 ? `-burst${o.burst}` : ""}${o.map === "plaza" ? "-plaza" : ""}`;
   return o.shot ? `shot-${base}` : base;
 }
 
@@ -778,7 +763,7 @@ async function nightloadOnce(browser, o, origin, chrome) {
     await setBots(page, tracker, o.bots);
     await setBotVote(page, tracker, { exec: "no", pick: "other" });
     // --map bar|plaza: 확장판 방엔 [맵] 칩이 없어 먼저 기본 마피아로 바꾼 뒤 맵 카드를 고른다(20-09). 선택은 방에 남아 두 판 모두 그 맵이다.
-    // --map town: 판 종류를 바꾸지 않는다(확장판 = 마을). 옵션이 없어도 같다. 어느 쪽이든 아래에서 시작 뒤 view.map 을 확인한다
+    // 옵션이 없으면 판 종류도 맵도 바꾸지 않는다. 옵션을 준 경우에만 아래에서 시작 뒤 view.map 을 확인한다
     if (o.map === "bar" || o.map === "plaza") {
       if (o.mapGiven) {
         await pickModeViaUi(page, tracker, "basic");
@@ -821,8 +806,8 @@ async function nightloadOnce(browser, o, origin, chrome) {
     const startedAt = new Date().toISOString();
     const perPassMs = (o.minutes * 60_000) / NIGHTLOAD_PASSES.length;
     const cycles = {};
-    // 옵션이 없거나 town 이면 확장판 = 마을, bar·plaza 는 기본 마피아로 바꿔 고른 맵
-    const expectedMap = o.mapGiven && o.map !== "town" ? o.map : "town";
+    // 옵션을 준 경우에만 기본 마피아로 바꿔 고른 맵을 기대한다(없으면 null — 맵 확인 없음)
+    const expectedMap = o.mapGiven ? o.map : null;
     const dwell = nightloadDwell(expectedMap);
     let mapChecked = false;
     /** 장면별 그리기 통계(마지막 한 번씩) */
@@ -842,13 +827,13 @@ async function nightloadOnce(browser, o, origin, chrome) {
       while (measured < perPassMs) {
         await mark(`${role}:setup`, true);
         await startGame(page, tracker);
-        if (!mapChecked) {
+        if (!mapChecked && expectedMap !== null) {
           // 잘못된 맵을 잰 결과를 남기지 않는다(20-09): 시작한 판의 서버 값(view.map)이 기대한 맵이어야 한다
           const got = tracker.last()?.map ?? null;
           if (got !== expectedMap) throw new Error(`측정 맵이 기대와 다름: view.map ${got} (기대 ${expectedMap})`);
           mapChecked = true;
         }
-        for (const [phase, ms, optional] of dwell) { // 확장판(마을)은 첫 장면이 errand 라 낮 시작에서 바로 넘긴다(15페이즈), 기본 마피아에는 errand 가 없다(20-09)
+        for (const [phase, ms, optional] of dwell) { // 확장판은 첫 장면이 errand 라 낮 시작에서 바로 넘긴다(15페이즈), 맵을 고르려 기본 마피아로 바꾼 판에는 errand 가 없다(20-09)
           await mark(`${role}:setup`, true);
           if (optional === true) {
             // 있을 때만 재는 장면(21-16 아침): 밤에서 한 칸만 넘겨 그 단계가 맞으면 재고, 아니면(곧바로 토론) 건너뛴다
@@ -936,9 +921,9 @@ async function nightloadOnce(browser, o, origin, chrome) {
   }
 }
 
-/** 맵에 따른 장면 머무름 표: 마을(확장판)은 원인 흐름 순서 전부(21-16), 재즈 바·광장(기본 마피아)은 낮 심부름(errand) 단계가 없어 뺀다(20-09) */
+/** 맵에 따른 장면 머무름 표: 맵을 고른 판(기본 마피아로 바꾼 bar·plaza)은 낮 심부름(errand) 단계가 없어 뺀다(20-09), 맵을 안 고른 판(null)은 전부 */
 export function nightloadDwell(map) {
-  return map === "town" ? NIGHTLOAD_DWELL_CAUSE : NIGHTLOAD_DWELL.filter(([phase]) => phase !== "errand");
+  return map === null || map === undefined ? NIGHTLOAD_DWELL : NIGHTLOAD_DWELL.filter(([phase]) => phase !== "errand");
 }
 
 /** 장면별 그리기 통계 중 칸마다 가장 큰 값(20-09 게이트: calls·pointLights 는 가장 무거운 장면 기준) */

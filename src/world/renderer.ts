@@ -1,8 +1,6 @@
 // 렌더러 인터페이스·예산·강등 사다리. three 는 `import type` 만 쓴다 — 이 파일은 정적 import 경로(메인 번들)에 있어도
 // three 본체를 끌고 오지 않는다. three 를 값으로 쓰는 모듈은 threeRenderer.ts·threeCamera.ts·maps/ 이고 06-13 이 import() 로만 연다.
 import type { Object3D } from "three";
-import type { RoomId } from "../../shared/protocol";
-import type { CameraView } from "./camera";
 
 /** nightCitizen = 밤·산 시민 편(거의 깜깜 + 내 캐릭터 빛), nightGhost = 밤·유령(달빛 + 약한 무대 기운). 마피아의 밤은 night (09-10) */
 export type LightingPhase = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
@@ -82,25 +80,13 @@ export interface WorldRenderer {
   setSelfLight?(at: { x: number; z: number } | null): void;
   /** 암살 현장 분필 윤곽: 자리(월드 단위)와 불투명도, null 이면 숨김. 시험 가짜 렌더러 호환을 위해 optional (08-10 선례) */
   setChalk?(at: { x: number; z: number } | null, opacity: number): void;
-  /** 방 컷어웨이(마을만, D-10): open 에 든 방은 지붕·앞벽·간판이 걷히고 나머지는 덮인다. instant 가 아니면 0.25초에 따라간다. 시험 가짜 렌더러 호환을 위해 optional */
-  setCutaway?(open: ReadonlySet<RoomId>, instant: boolean): void;
-  /** 집 주인(마을만, D-07): 이번 판에 앉은 좌석 번호들. 시험 가짜 렌더러 호환을 위해 optional */
-  setOwners?(seats: readonly number[]): void;
-  /** 가로등 8개·집 창 8개의 켜짐(마을만, 21페이즈 D-04·D-25). null 은 가로등 모두 꺼짐·집 창은 주인 규칙. instant 면 꺼지는 빛 무리도 바로 꺼진다(모션 줄이기). 시험 가짜 렌더러 호환을 위해 optional */
-  setLamps?(lampLit: readonly boolean[] | null, houseLit: readonly boolean[] | null, instant?: boolean): void;
-  /** 방마다 지금 지붕 불투명도(마을만, 1 = 덮임 · 0 = 걷힘). 시험 훅이 읽는다. 시험 가짜 렌더러 호환을 위해 optional */
-  roofs?(): Readonly<Record<RoomId, number>>;
   /** 카메라 확대(과반 연출 1.08, 기본 1). camera.ts 투영의 zoom 인자와 같은 배율 */
   setZoom?(zoom: number): void;
-  /** 카메라 시점(21-09 D-11): "iso" 는 경사 시점(기본), "overview" 는 확장판 밤 고정 개관(방위 고정·거의 정사). 기저만 바꾸고 배율은 setZoom 이 정한다. 시험 가짜 렌더러 호환을 위해 optional */
-  setCameraView?(view: CameraView): void;
   addCharacter(seat: number, c: CharacterHandle): void;
   removeCharacter(seat: number): void;
   setMarker(kind: MarkerKind, at: { x: number; z: number } | null, scale: number, opacity: number): void;
   project(p: { x: number; y: number; z: number }): { sx: number; sy: number };
   groundAt(sx: number, sy: number): { x: number; z: number };
-  /** 화면 점의 카메라 광선(월드 단위, 정사영) — 마을의 지붕·집 누르기가 건물 상자와 만나는지 시험한다(20-06, D-19). groundAt 과 같은 카메라 입력을 쓴다. 시험 가짜 렌더러 호환을 위해 optional */
-  rayAt?(sx: number, sy: number): { origin: { x: number; y: number; z: number }; dir: { x: number; y: number; z: number } };
   render(): void;
   setBudget(step: number): void;
   onStatus(cb: (e: RendererStatusEvent) => void): () => void;

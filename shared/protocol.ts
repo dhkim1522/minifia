@@ -33,12 +33,10 @@ export type PhaseId =
   | "night" | "morning" | "ended"; // 8페이즈(결정 0060): 지목 15초 → 변론 20초 → 찬반 10초 → 처형 5.6초(결정 0066-7). 옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 지웠다
 
 // ---- 심부름 계약(15페이즈, 결정 0074) ----
-/** 심부름 장소 id 닫힌 집합 — 재즈 바 8곳 + 시계탑 광장 8곳 + 마을 가로등 8곳(21페이즈 D-05·D-07, 결정 0088). 좌표는 프로토콜에 싣지 않는다(클라이언트가 같은 MapDef 에서 읽는다). */
+/** 심부름 장소 id 닫힌 집합 — 재즈 바 8곳 + 시계탑 광장 8곳. 좌표는 프로토콜에 싣지 않는다(클라이언트가 같은 MapDef 에서 읽는다). */
 export const PLACE_IDS = [
   "glass", "piano", "sax", "stool", "door", "poster", "record", "candle",
   "clock", "fountain", "bench", "lamp", "mail", "tree", "flower", "stand",
-  // 21페이즈 D-05·D-07 — 마을 가로등 8곳(번호 = 집 좌석, 등불 i ↔ 집 i, 결정 0088). 이름·그림은 기존 lamp 와 같다
-  "lamp0", "lamp1", "lamp2", "lamp3", "lamp4", "lamp5", "lamp6", "lamp7",
 ] as const;
 export type PlaceId = (typeof PLACE_IDS)[number];
 /** 내 심부름(errand 단계, MyInfo.errand): 서버가 뽑은 장소 목록(순서에 뜻 없음)과 처리한 순서. 모든 역할이 같은 모양이다(D-03). */
@@ -390,16 +388,11 @@ export interface WorldSeg {
 }
 /**
  * 서버 → 클라이언트 world 프레임(상태가 아니라 이벤트). move = 한 사람의 새 구간, snap = 접속 때 모두의 지금 구간.
- * door = 문 통과(20페이즈 D-14, 방이 있는 맵에서만): 한 사람이 구역을 넘는 순간 한 번 간다. d 는 지나간 문의 방이다.
- * - vanish: 떠나는 구역의 산 사람에게. 좌석과 방 id 뿐이고 좌표가 없다(문 위치까지만 — 넘어간 뒤 어디로 갔는지는 보내지 않는다).
- * - appear: 들어가는 구역의 산 사람에게. 구간은 그 구역 안으로 자른 것이다(넘기 전의 길·다음 구역의 길은 싣지 않는다).
  */
 export type WorldFrame =
   | { t: "world"; k: "move"; s: number; p: number[]; t0: number; v: number }
-  | { t: "world"; k: "door"; e: "vanish"; s: number; d: RoomId }
-  | { t: "world"; k: "door"; e: "appear"; s: number; d: RoomId; p: number[]; t0: number; v: number }
-  // near = errand 의 근처 snap(근처 산 사람만, 15페이즈 D-02). zone = 구역이 바뀐 본인에게만 가는 새 구역 snap(20페이즈 D-14). 둘 다 값은 true 뿐이고 역할·좌석과 무관하다
-  | { t: "world"; k: "snap"; at: number; ents: WorldSeg[]; near?: true; zone?: true };
+  // near = errand 의 근처 snap(근처 산 사람만, 15페이즈 D-02). 값은 true 뿐이고 역할·좌석과 무관하다
+  | { t: "world"; k: "snap"; at: number; ents: WorldSeg[]; near?: true };
 
 // ---- 7페이즈 자유 채팅 계약(결정 0058, 07-02) ----
 // 키 이름은 ch·seat·seq·text·at·on·why·lines·pk 만 쓴다 — test/worker/leak.test.ts 의 FORBIDDEN_KEYS 에 id·playerId 가 있다.
@@ -471,15 +464,9 @@ export type EmoteId = (typeof EMOTE_IDS)[number];
 export const OUTFIT_IDS = ["coat", "police", "doctor", "mafia", "detective", "reporter", "elder", "hood", "noir"] as const;
 export type OutfitId = (typeof OUTFIT_IDS)[number];
 
-/** 맵 id(결정 D-22). 맵은 shared/game/maps.ts 의 MAPS 표에 등록한다. town 은 방 넷이 있는 마을(20페이즈 D-01) — 확장판 판이 늘 여기서 시작한다. */
-export type MapId = "bar" | "plaza" | "town";
-/** 실내 방 id(20페이즈 D-06): 우체국·술집·진료소·경찰서. 방이 있는 맵(shared/game/mapTown.ts)의 RoomDef 와 같은 합집합이다. */
-export const ROOM_IDS = ["post", "pub", "clinic", "police"] as const;
-export type RoomId = (typeof ROOM_IDS)[number];
-/** 구역 id(20페이즈 D-13): 광장(방 밖 전부) 또는 방 하나. 구역은 위치의 순수 함수이고 서버가 판정한다(shared/game/zones.ts) — 클라이언트 메시지에 구역 값은 없다. */
-export const ZONE_IDS = ["plaza", ...ROOM_IDS] as const;
-export type ZoneId = (typeof ZONE_IDS)[number];
-/** 서버 스키마(strictObject enum)와 화면이 같이 읽는 선택 값 목록. town 은 여기에 없다 — 방장이 고르는 맵이 아니라 확장판의 고정 맵이다(20페이즈 D-02). */
+/** 맵 id(결정 D-22). 맵은 shared/game/maps.ts 의 MAPS 표에 등록한다. */
+export type MapId = "bar" | "plaza";
+/** 서버 스키마(strictObject enum)와 화면이 같이 읽는 선택 값 목록. */
 export const MAP_CHOICES = ["bar", "plaza", "random"] as const;
 /** 방장의 선택(결정 D-20): 고를 수 있는 맵 하나 또는 무작위(기본). 무작위의 결과는 시작 때 서버가 정한다. */
 export type MapChoice = (typeof MAP_CHOICES)[number];

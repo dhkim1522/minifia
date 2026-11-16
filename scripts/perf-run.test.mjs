@@ -3,23 +3,21 @@
 // nightload 실행 자체는 이 시험이 하지 않는다(실행과 성능 합격선은 12-12).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LIGHT_MORNING_RATIO, LIGHT_TALK_RATIO, NIGHTLOAD_DWELL, NIGHTLOAD_DWELL_CAUSE, USAGE, nightloadDwell, colorStats, lightRankVerdict, outputBase, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
+import { LIGHT_MORNING_RATIO, LIGHT_TALK_RATIO, NIGHTLOAD_DWELL, USAGE, nightloadDwell, colorStats, lightRankVerdict, outputBase, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
 
-test("parseArgs --map (20-09): town·bar·plaza 를 받고 저장 이름 끝이 -town·-bar·-plaza, 없으면 그대로", () => {
-  const o = parseArgs(["--mode", "nightload", "--map", "town"]);
-  assert.equal(o.map, "town");
-  assert.equal(outputBase(o), "nightload-390x844-x4-town");
+test("parseArgs --map (20-09): bar·plaza 를 받고 저장 이름 끝이 -bar·-plaza, 없으면 그대로", () => {
+  const o = parseArgs(["--mode", "nightload", "--map", "plaza"]);
+  assert.equal(o.map, "plaza");
+  assert.equal(outputBase(o), "nightload-390x844-x4-plaza");
   assert.equal(outputBase(parseArgs(["--mode", "nightload", "--map", "bar"])), "nightload-390x844-x4-bar");
-  assert.equal(outputBase(parseArgs(["--mode", "nightload", "--map", "plaza"])), "nightload-390x844-x4-plaza");
   assert.equal(outputBase(parseArgs(["--mode", "nightload"])), "nightload-390x844-x4");
-  assert.throws(() => parseArgs(["--map", "space"]), /town/);
-  assert.match(USAGE, /town/);
+  assert.throws(() => parseArgs(["--map", "space"]), /--map/);
+  assert.throws(() => parseArgs(["--map", "town"]), /--map/);
+  assert.match(USAGE, /--map bar\|plaza\]/);
 });
 
-test("nightloadDwell (20-09·21-16): 마을은 원인 흐름 순서 전부(아침은 있을 때만), 광장·재즈 바는 옛 순서에서 errand 만 뺀다", () => {
-  assert.equal(nightloadDwell("town"), NIGHTLOAD_DWELL_CAUSE);
-  assert.deepEqual(NIGHTLOAD_DWELL_CAUSE.map(([p]) => p), ["errand", "night", "morning", "discussion", "nomination", "defense", "verdict", "execution"]);
-  assert.deepEqual(NIGHTLOAD_DWELL_CAUSE.filter(([, , optional]) => optional === true).map(([p]) => p), ["morning"]);
+test("nightloadDwell (20-09): 맵을 고른 판(광장·재즈 바)은 표에서 errand 만 빼고, 맵을 안 고른 판(null)은 표 전부다", () => {
+  assert.equal(nightloadDwell(null), NIGHTLOAD_DWELL);
   assert.deepEqual(nightloadDwell("plaza").map(([p]) => p), ["discussion", "nomination", "defense", "verdict", "execution", "night", "morning"]);
   assert.deepEqual(nightloadDwell("bar"), nightloadDwell("plaza"));
 });

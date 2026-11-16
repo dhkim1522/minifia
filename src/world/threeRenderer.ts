@@ -1,12 +1,10 @@
 // three 구현(WebGLRenderer). 이 파일은 three 를 값으로 import 하는 몇 안 되는 모듈이다 — 정적 import 경로(메인 번들)에
 // 두지 않는다. 06-13 런타임이 `import()` 로만 열어 별도 청크로 나눈다. 렌더러 인터페이스는 renderer.ts(three 값 import 없음).
 import { ACESFilmicToneMapping, Group, MeshBasicMaterial, PCFShadowMap, Plane, PointLight, Raycaster, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from "three";
-import type { MapId, RoomId } from "../../shared/protocol";
+import type { MapId } from "../../shared/protocol";
 import { DEFAULT_TARGET } from "./camera";
-import type { CameraView } from "./camera";
 import { buildBarScene } from "./maps/bar";
 import { buildPlazaScene } from "./maps/plaza";
-import { buildTownScene } from "./maps/town";
 import type { MapScene } from "./maps/types";
 import { DEFAULT_BUDGET_STEP, LADDER, pixelRatioFor, UnsupportedRendererError } from "./renderer";
 import type { CharacterHandle, LightingPhase, MarkerKind, RendererStatusEvent, RendererStats, WorldRenderer } from "./renderer";
@@ -80,7 +78,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
 
   // 씬 그래프(맵·캐릭터)는 렌더러보다 오래 산다: recreate 가 새 렌더러에 같은 씬·카메라를 다시 물린다(가정 A2)
   // 맵 id 별 장면 빌더(결정 0050-2: 맵은 목록에 등록하면 늘어난다). 이름 bar 는 두 맵 공통의 "맵 장면"이다
-  const bar: MapScene = opts.mapId === "town" ? buildTownScene(budget) : opts.mapId === "plaza" ? buildPlazaScene(budget) : buildBarScene(budget);
+  const bar: MapScene = opts.mapId === "plaza" ? buildPlazaScene(budget) : buildBarScene(budget);
   const scene = bar.root;
   const characters = new Group();
   scene.add(characters);
@@ -91,7 +89,6 @@ async function build(opts: Opts): Promise<WorldRenderer> {
   let target = { x: DEFAULT_TARGET.x, z: DEFAULT_TARGET.z };
   let offsetY = 0;
   let zoom = 1;
-  let view: CameraView = "iso";
   let disposed = false;
   let lastTick = performance.now() / 1000;
   const listeners = new Set<(e: RendererStatusEvent) => void>();
@@ -102,7 +99,7 @@ async function build(opts: Opts): Promise<WorldRenderer> {
   const applySize = (): void => {
     gl.setPixelRatio(pixelRatioFor(budget, globalThis.devicePixelRatio || 1));
     gl.setSize(size.w, size.h, false);
-    configureCamera(camera, target, size, offsetY, zoom, view);
+    configureCamera(camera, target, size, offsetY, zoom);
   };
   /** 새 렌더러를 현재 상태(크기·시점·노출)에 맞추고 그림자를 다시 굽게 한다 */
   const configureGl = (): void => {
@@ -149,28 +146,11 @@ async function build(opts: Opts): Promise<WorldRenderer> {
     setView(t: { x: number; z: number }, off: number): void {
       target = { x: t.x, z: t.z };
       offsetY = off;
-      configureCamera(camera, target, size, offsetY, zoom, view);
+      configureCamera(camera, target, size, offsetY, zoom);
     },
     setZoom(z: number): void {
       zoom = Number.isFinite(z) && z > 0 ? z : 1;
-      configureCamera(camera, target, size, offsetY, zoom, view);
-    },
-    setCameraView(next: CameraView): void {
-      if (next === view) return;
-      view = next;
-      configureCamera(camera, target, size, offsetY, zoom, view);
-    },
-    setCutaway(open: ReadonlySet<RoomId>, instant: boolean): void {
-      bar.setCutaway?.(open, instant);
-    },
-    setOwners(seats: readonly number[]): void {
-      bar.setOwners?.(seats);
-    },
-    setLamps(lampLit: readonly boolean[] | null, houseLit: readonly boolean[] | null, instant?: boolean): void {
-      bar.setLamps?.(lampLit, houseLit, instant);
-    },
-    roofs(): Readonly<Record<RoomId, number>> {
-      return bar.roofs?.() ?? { post: 1, pub: 1, clinic: 1, police: 1 };
+      configureCamera(camera, target, size, offsetY, zoom);
     },
     setSelfLight(at: { x: number; z: number } | null): void {
       bar.setSelfLight(at);
@@ -222,12 +202,6 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       ray.setFromCamera(new Vector2((sx / size.w) * 2 - 1, -((sy / size.h) * 2 - 1)), camera);
       const hit = ray.ray.intersectPlane(floor, new Vector3());
       return hit ? { x: hit.x, z: hit.z } : { x: target.x, z: target.z };
-    },
-    rayAt(sx: number, sy: number): { origin: { x: number; y: number; z: number }; dir: { x: number; y: number; z: number } } {
-      // groundAt 과 같은 카메라·같은 광선이다 — 바닥과 만나기 전에 건물 상자와 만나는지는 호출한 쪽(cutaway.tapTarget)이 본다
-      ray.setFromCamera(new Vector2((sx / size.w) * 2 - 1, -((sy / size.h) * 2 - 1)), camera);
-      const { origin, direction } = ray.ray;
-      return { origin: { x: origin.x, y: origin.y, z: origin.z }, dir: { x: direction.x, y: direction.y, z: direction.z } };
     },
     render(): void {
       if (disposed) return;

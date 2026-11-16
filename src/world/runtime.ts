@@ -9,14 +9,11 @@
 import { snapToWalkable, UNIT } from "../../shared/game/map";
 import type { Spawn } from "../../shared/game/map";
 import { mapOf } from "../../shared/game/maps";
-import { ROOM_IDS } from "../../shared/protocol";
-import type { MapId, RoomId, ZoneId } from "../../shared/protocol";
-import { zoneOf } from "../../shared/game/zones";
-import { cutawayOf, headVeiled, sameRooms, tapTarget } from "./cutaway";
+import type { MapId } from "../../shared/protocol";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
-import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, overviewFraming, panBoxOf, PX_PER_UNIT, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
+import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, PAN_BOX, PX_PER_UNIT, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { FIGS, GHOST_SCALE } from "./characterData";
 import type { OutfitId } from "./characterData";
 import { admitEmote, EMOTE_RENDER_MAX, emoteDurationMs } from "./emoteCap";
@@ -113,11 +110,6 @@ export const WALK_CUE_KEY = "mf-hint-walk";
 export const ENTER_MS = 420;
 /** 나간 사람 퇴장 연출 길이(ms) = dur-fast */
 export const EXIT_MS = 180;
-/**
- * 문 통과 연출 길이(ms, 20페이즈 D-15·UI-SPEC P20-9): 서버의 문 사라짐·나타남과 내 구역 바뀜에서 사람이 불투명도만 1 → 0(또는 0 → 1)으로 바뀐다.
- * 입·퇴장 연출(ENTER_MS·EXIT_MS)과 다르다 — 크기·높이 변화가 없고, 몸·이름표·입력 중 칸이 같이 옅어진다. 방 안 사람을 알리는 표시는 없다
- */
-export const DOOR_FADE_MS = 200;
 /** 로비를 떠날 때 맵을 night-900 으로 덮는 시간(ms) = dur-med. WorldStage 의 가림막과 RoomScreen 의 단계 전환 지연이 같은 값을 쓴다 */
 export const EXIT_CURTAIN_MS = 420;
 /** 프레임 오류 로그 최소 간격(ms) — 매 프레임 던져도 콘솔을 채우지 않는다 */
@@ -149,8 +141,6 @@ const ENTER_SCALE = 0.6;
 const ENTER_LIFT = 0.4;
 /** 고정 카메라로 옮기는 시간·확대 전환 시간(ms) = dur-slow */
 const CAM_SLOW_MS = 800;
-/** 개관 시점으로(에서) 바뀌는 순간까지의 시간(ms) = 어둠 가림 --dur-med 420 의 절반(가장 어두운 때). WorldStage 의 가림 애니메이션과 같은 길이를 쓴다 */
-const OVERVIEW_CUT_MS = 210;
 /** 분필 윤곽이 다 그려진 불투명도(블록아웃 값, bar.ts CHALK_OPACITY 와 같다) */
 const CHALK_FULL = 0.85;
 /** 분필이 그려지는 시간(ms) = dur-slow */
@@ -225,15 +215,10 @@ export interface WorldRuntimeDeps {
   onPin?: (pin: { seat: number | null; moving: boolean; strength: number }) => void;
   /** 사람 동작이 시작되거나 재생 목록이 바뀔 때 불린다 — E2E 훅 window.__mfEmotes 용(10-03, L33). last 는 마지막으로 받아 그린 프레임의 사본, playing 은 재생 중 좌석(도착 순서). 제품은 넘기지 않는다 */
   onEmotes?: (state: { last: { seat: number; id: EmoteId; n: number } | null; playing: readonly number[] }) => void;
-  /**
-   * 마을 판에서 내 구역·열린 방 목표·지붕 불투명도(소수 둘째)·집 주인 좌석이 바뀔 때만 불린다 — E2E 훅 window.__mfTown 용(20-05, L33). 이미 받은 값에서 계산한 것뿐이다.
-   * 방이 없는 맵(재즈 바·광장)에서는 한 번도 불리지 않는다. 제품은 넘기지 않는다
-   */
-  onTown?: (state: { zone: ZoneId; open: RoomId[]; roofs: Record<RoomId, number>; owners: number[]; veiled: number[]; door: { seat: number; kind: "vanish" | "appear" }[]}) => void;
   /** 카메라 줌이 렌더러에 새로 보내질 때 소수 셋째 자리로 불린다 — E2E 훅 window.__mfPin.zoom 용(09.1.1-13). 제품은 넘기지 않는다 */
   onZoom?: (zoom: number) => void;
-  /** 카메라 시점이 바뀌었거나 개관 배율이 바뀔 때 불린다(window.__mfCamera, 21-09 L33). mode 는 지금 실제로 그리는 시점, scale 은 px/단위(소수 둘째) */
-  onCamera?: (state: { mode: "follow" | "fixed" | "overview"; scale: number }) => void;
+  /** 카메라 시점이 바뀌었거나 배율이 바뀔 때 불린다(window.__mfCamera, 21-09 L33). mode 는 지금 실제로 그리는 시점, scale 은 px/단위(소수 둘째) */
+  onCamera?: (state: { mode: "follow" | "fixed"; scale: number }) => void;
   /**
    * 프레임마다 이름표 쓰기 다음에 한 번 불린다(15-05). project(x, z) 는 월드 바닥점(발끝)의 화면 좌표(host 기준 px)를 돌려준다 —
    * 심부름 표지·화살표·근처 링이 이 콜백 안에서 DOM 에 직접 쓴다(React 상태를 프레임마다 바꾸지 않는다). 투영할 수 없으면 null
@@ -363,24 +348,6 @@ interface Actor {
   tagW: number | null;
   /** 지금 래퍼에 data-front 가 붙어 있나 */
   tagFront: boolean;
-  /** 문 통과 연출(D-15): 시작 때의 불투명도(from)와 시작 시각. 없으면 null. 사라짐이 끝나면 액터를 지운다 */
-  door: DoorFade | null;
-  /** 지금 래퍼에 data-door 로 붙어 있는 종류(없으면 null) */
-  tagDoor: "vanish" | "appear" | null;
-  /** 문 연출·벽 뒤 숨김을 합친 보임 정도(1 = 그대로). 핀 조명이 이 값이 0.5 미만이면 비추지 않는다 */
-  vis: number;
-  /** 벽 뒤 이름표 숨김(P20-12)의 보임 정도 0~1. null = 아직 정하지 않음(처음 정하는 프레임은 연출 없이 목표로 바로) */
-  veil: number | null;
-  /** 이번 프레임의 숨김 목표 — 닫힌 방에 머리가 가려지는 칸에 선 남의 이름표 */
-  veiled: boolean;
-  /** 지금 래퍼에 data-veiled 가 붙어 있나 */
-  tagVeiled: boolean;
-}
-
-interface DoorFade {
-  kind: "vanish" | "appear";
-  from: number;
-  at: number;
 }
 
 interface Ring {
@@ -404,8 +371,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   // 방의 맵(D-22): 런타임 수명 동안 하나. 이동 예측·입장 방향·무대 높이가 같은 표(shared MapDef)를 읽는다
   const mapId: MapId = deps.mapId?.() ?? "bar";
   const map = mapOf(mapId);
-  // 따라가기 카메라 한계(P20-15): 재즈 바·광장은 PAN_BOX, 마을은 걷는 영역 ±10 에 맞춘 값(camera.test 가 가시성으로 확정)
-  const panBox = panBoxOf(mapId);
 
   let disposed = false;
   let bootGen = 0;
@@ -439,28 +404,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   /** 내 캐릭터 빛: 마지막으로 보낸 자리 키(nightCitizen 이 아니면 "-") */
   let selfLightKey: string | null = "-";
   let zoomSent = 1;
-  /**
-   * 마을 컷어웨이·집 주인(20-05): 방이 있는 맵에서만 쓴다. cutSent = 렌더러에 마지막으로 보낸 열린 방 집합(null = 이 렌더러에는 아직 안 보냄 → 다음에 보낼 때 instant),
-   * ownersKey = 마지막으로 보낸 집 주인 좌석 키, townKey = onTown 에 마지막으로 알린 값의 키
-   */
-  const hasRooms = (map.rooms?.length ?? 0) > 0;
-  let cutSent: ReadonlySet<RoomId> | null = null;
-  let ownerSeats: number[] = [];
-  let ownersKey: string | null = null;
-  let townKey: string | null = null;
-  /** 지금 열려 있는 방(updateTown 이 정한 목표 집합) — 벽 뒤 이름표 숨김·건물 누르기가 읽는다. 이 프레임의 구역은 다음 프레임 숨김에 반영된다 */
-  let townOpen: ReadonlySet<RoomId> = new Set<RoomId>();
   /** 지금 그리는 확대와, 고정 카메라로 옮기는 중인 전환(고정이 아니면 null) */
   let zoomCur = 1;
   let fixed: { zoom: number; start: number; from: { x: number; z: number; off: number; zoom: number } } | null = null;
   let zoomBackFrom = 1;
   let zoomBackStart = 0;
-  /**
-   * 개관 시점(21-09 D-11): 지금 그리는 기저가 개관인가와, 바뀔 시점(어둠 가림이 가장 어두운 때 = dur-med 의 절반)에 대한 예약.
-   * 모션 줄이기·재접속 첫 프레임은 예약 없이 바로 바뀐다. 개관 동안 카메라는 걷지도 따라가지도 않고 매 프레임 스테이지 사각형에서 배율을 다시 정한다
-   */
-  let viewOverview = false;
-  let viewCutAt: number | null = null;
   let cameraSent = "";
   /** 이 좌석을 그리나: 장면이 없으면 view 의 모든 좌석, 있으면 표에서 show 인 좌석만 */
   const isShown = (seat: number): boolean => look === null || look.seats[seat]?.show === true;
@@ -478,12 +426,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
   const actors = new Map<number, Actor>();
   const pendingEntered = new Set<number>();
-  /** 문 나타남 목록에 올라 아직 몸이 없는 좌석 — 몸을 만들 때 등장 연출 대신 문 연출(불투명도 0 에서 시작)을 건다 */
-  const pendingAppear = new Set<number>();
-  /** 이번 프레임에 문 연출이 진행 중인 좌석(오름차순) — __mfTown.door 용 */
-  let doorNow: { seat: number; kind: "vanish" | "appear" }[] = [];
-  /** 이번 프레임에 벽 뒤 규칙으로 이름표가 숨는 좌석 — __mfTown.veiled 용 */
-  let veiledNow: number[] = [];
   // 서버 동작 프레임(10-03, D-9): 눌렀을 때 미리 재생하는 경로는 없다 — 보낸 사람도 이 프레임으로만 재생한다
   let lastEmote: { seat: number; id: EmoteId; n: number } | null = null;
   /** 지금 재생 중인 사람 동작(도착 순서). 상한 EMOTE_RENDER_MAX 를 지킨다 — 시스템 반응 deny 는 넣지 않는다 */
@@ -621,12 +563,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         dispatch({ t: "lost", at: Date.now() });
       }
       return;
-    }
-    // 장면 그래프는 recreate 를 넘어 살지만 연출 없이 지금 목표를 다시 놓는다: 다음 프레임이 열린 방을 instant 로 한 번 더 보내고 집 주인도 다시 보낸다(20-05)
-    if (e.t === "recreated") {
-      cutSent = null;
-      townKey = null;
-      sendOwners(true);
     }
     dispatch({ t: e.t });
   }
@@ -804,92 +740,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   function beginExit(seat: number, now: number): void {
     const a = actors.get(seat);
     if (a === undefined || a.exit !== null) return;
-    if (a.door?.kind === "vanish") return; // 문 사라짐이 이미 옅어지는 중이다 — 끝나면 지워진다
     if (deps.reducedMotion()) removeActor(a);
     else a.exit = now;
   }
 
-  /** 문 연출의 지금 불투명도: from 에서 목표(사라짐 0 · 나타남 1)로 선형으로 DOOR_FADE_MS 에 걸쳐 간다 */
-  function doorOpacity(d: DoorFade, now: number): number {
-    const p = Math.min(1, Math.max(0, (now - d.at) / DOOR_FADE_MS));
-    return d.from + ((d.kind === "appear" ? 1 : 0) - d.from) * p;
-  }
-
-  /**
-   * 서버의 문 사라짐·나타남(store.takeDoor)을 읽어 문 연출을 건다 — 구간이 없어진 좌석을 퇴장시키는 판정보다 먼저 부른다.
-   * 사라짐은 지금 그려진 자리(문턱)에서 그대로 옅어지고, 나타남은 그 구간 첫 점에서 옅게 나타난다. 연출 도중 반대 프레임이 오면 지금 불투명도에서 이어간다.
-   * 모션 줄이기면 연출 없이 바로 지우고 바로 세운다
-   */
-  function readDoorEvents(now: number, reduced: boolean): void {
-    for (const ev of store.takeDoor()) {
-      const a = actors.get(ev.seat);
-      if (ev.kind === "vanish") {
-        // 아직 구간이 있으면(탈락자 유령처럼 마지막 구간으로 서는 좌석) 사라지는 것이 아니다
-        if (a === undefined || a.exit !== null || segFor(ev.seat) !== undefined) continue;
-        if (reduced) {
-          removeActor(a);
-          if (a.tag !== null) a.tag.style.opacity = "0";
-        } else if (a.door?.kind !== "vanish") {
-          a.door = { kind: "vanish", from: a.door === null ? 1 : doorOpacity(a.door, now), at: now };
-        }
-      } else if (a === undefined) {
-        if (!reduced) pendingAppear.add(ev.seat);
-      } else if (a.exit === null) {
-        // 옅어지는 중이던 같은 좌석이 돌아왔다: 지금 값에서 1 로 이어간다. 연출 중이 아니었으면 이미 보이고 있으니 할 일이 없다
-        a.door = reduced || a.door === null ? null : { kind: "appear", from: doorOpacity(a.door, now), at: now };
-      }
-    }
-  }
-
   /** view 가 바뀔 때마다: view 에 없는 seat 의 구간을 지우고 퇴장 연출, 끊김 어둡게를 맞춘다 */
-  /** 집 주인(D-07): 이번 판에 앉은 좌석(오름차순)이 바뀔 때만 렌더러에 보낸다. force 면 같아도 다시 보낸다(recreate 뒤). 방이 없는 맵에서는 보내지 않는다 */
-  function sendOwners(force: boolean): void {
-    if (!hasRooms || renderer === null) return;
-    const seats = [...new Set(deps.players().map((p) => p.seat))].sort((a, b) => a - b);
-    const key = seats.join(",");
-    if (!force && key === ownersKey) return;
-    ownersKey = key;
-    ownerSeats = seats;
-    renderer.setOwners?.(seats);
-  }
-
-  /**
-   * 컷어웨이(D-10·D-11, P20-8): 내 그려진 위치의 구역(서버와 같은 zoneOf)으로 열 방을 정하고 바뀔 때만 렌더러에 보낸다.
-   * 유령·결과 화면(roomsOpen)은 네 방 모두. 내 몸이 아직 없으면(첫 프레임 전) 보내지 않는다 — 장면은 덮인 채로 시작하므로 처음 걷힘이 연출로 보이지 않게 기다린다.
-   * 이 렌더러에 처음 보내거나 recreate 뒤거나 모션 줄이기면 instant
-   */
-  function updateTown(r: WorldRenderer, reduced: boolean): void {
-    if (!hasRooms) return;
-    const all = look?.roomsOpen === true;
-    const mine = actors.get(deps.mySeat());
-    const zone: ZoneId | null = mine === undefined ? null : zoneOf(map, Math.round(mine.pos.x * UNIT), Math.round(mine.pos.z * UNIT));
-    const open = cutawayOf(zone, all);
-    townOpen = open;
-    let sent = cutSent;
-    if (all || mine !== undefined) {
-      if (sent === null || !sameRooms(sent, open)) {
-        r.setCutaway?.(open, reduced || sent === null);
-        cutSent = open;
-        sent = open;
-      }
-    }
-    if (deps.onTown === undefined) return;
-    const roofs = r.roofs?.() ?? { post: 1, pub: 1, clinic: 1, police: 1 };
-    const round2 = (v: number): number => Math.round(v * 100) / 100;
-    const state = {
-      zone: zone ?? "plaza",
-      open: ROOM_IDS.filter((id) => (sent ?? open).has(id)),
-      roofs: { post: round2(roofs.post), pub: round2(roofs.pub), clinic: round2(roofs.clinic), police: round2(roofs.police) },
-      owners: [...ownerSeats],
-      veiled: [...veiledNow].sort((x, y) => x - y),
-      door: [...doorNow].sort((x, y) => x.seat - y.seat),
-    };
-    const key = JSON.stringify(state);
-    if (key === townKey) return;
-    townKey = key;
-    deps.onTown(state);
-  }
-
   function syncPlayers(): void {
     if (disposed) return;
     const players = deps.players();
@@ -908,7 +763,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
     }
     emitLooks();
-    sendOwners(false);
     // 닉네임·표시가 바뀔 수 있어 이름표 폭을 다음 프레임에 다시 잰다
     for (const a of actors.values()) a.tagW = null;
   }
@@ -950,17 +804,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       tagZ: "",
       tagW: null,
       tagFront: false,
-      door: null,
-      tagDoor: null,
-      vis: 1,
-      veil: null,
-      veiled: false,
-      tagVeiled: false,
     };
     // 첫 snap 에 있던 사람은 바로 서 있고, 뒤에 move 로 들어온 사람만 내려앉는다
     if (pendingEntered.delete(seat) && !deps.reducedMotion()) a.enter = now;
-    // 문을 지나 나타난 사람은 내려앉지 않고 그 자리에서 옅게 나타난다(D-15)
-    if (pendingAppear.delete(seat) && !deps.reducedMotion()) a.door = { kind: "appear", from: 0, at: now };
     handle.setYaw(a.yaw);
     handle.root.position.set(a.pos.x, 0, a.pos.z);
     renderer.addCharacter(seat, handle);
@@ -1022,10 +868,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
    * 핀 조명(결정 0066-6): look.pin 과 서버 시각으로 비출 자리를 정하고 켜짐 수준을 180ms 켜기·420ms 끄기로 옮겨 렌더러에 보낸다(바뀔 때만).
    * 대상 좌석의 캐릭터가 없으면 핀을 끈다. 다른 좌석으로 건너뛰면(미끄러짐이 아닌 다음 차례) 수준을 0 으로 내려 다시 켠다. 렌더러의 광원·메시는 늘리지 않는다
    */
-  /** 핀 조명이 비출 수 있는 좌석의 자리: 몸이 있고 문 연출·벽 뒤로 절반 넘게 옅어지지 않았을 때만(D-15) */
+  /** 핀 조명이 비출 수 있는 좌석의 자리: 몸이 있을 때만 */
   function litPos(seat: number): { x: number; z: number } | undefined {
-    const a = actors.get(seat);
-    return a === undefined || a.vis < 0.5 ? undefined : a.pos;
+    return actors.get(seat)?.pos;
   }
 
   function updatePin(r: WorldRenderer, dtMs: number, sNow: number, reduced: boolean): void {
@@ -1217,7 +1062,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     own.settle(sNow, store.segOf(deps.mySeat()));
     const ownNow = sNow + own.lead();
 
-    readDoorEvents(now, reduced);
     for (const seat of store.takeEntered()) pendingEntered.add(seat);
     for (const seat of store.seats()) {
       if (!actors.has(seat) && isShown(seat)) createActor(seat, now);
@@ -1229,9 +1073,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         if (l.ghost && !actors.has(seat) && segFor(seat) !== undefined) createActor(seat, now);
       }
     }
-    pendingAppear.clear(); // 몸을 못 만든 나타남(장면이 그리지 않는 좌석)은 버린다
-    doorNow = [];
-    veiledNow = [];
 
     const gone: Actor[] = [];
     const walkingSeats = new Set<number>(); // 이번 프레임 걸은 좌석 — 동작이 끊긴 것으로 보아 재생 목록에서 뺀다
@@ -1239,9 +1080,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const lightNow = look?.lighting ?? deps.lighting ?? "talk";
     for (const a of actors.values()) {
       const server = segFor(a.seat);
-      if (server !== undefined && a.door?.kind === "vanish") a.door = { kind: "appear", from: doorOpacity(a.door, now), at: now }; // 옅어지던 좌석에 구간이 다시 왔다
       if ((server === undefined || !isShown(a.seat)) && a.exit === null) {
-        beginExit(a.seat, now); // 구간이 없어졌다(snap 에서 빠짐) 또는 장면이 이 좌석을 그리지 않는다. 문 사라짐 중이면 beginExit 이 건너뛴다
+        beginExit(a.seat, now); // 구간이 없어졌다(snap 에서 빠짐) 또는 장면이 이 좌석을 그리지 않는다.
         if (!actors.has(a.seat)) continue; // 모션 줄이기면 바로 지워졌다
       }
       const seatLook = look?.seats[a.seat];
@@ -1346,24 +1186,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         alpha = e;
         if (p >= 1) a.enter = null;
       }
-      // 문 통과 연출(D-15·P20-9): 입·퇴장 연출과 다르다 — 크기·높이는 그대로, 불투명도만 몸·이름표·핀 조명에 같이 곱한다
-      let doorOp = 1;
-      if (a.door !== null) {
-        doorOp = doorOpacity(a.door, now);
-        if (now - a.door.at >= DOOR_FADE_MS) {
-          if (a.door.kind === "vanish") gone.push(a);
-          else a.door = null;
-        } else {
-          doorNow.push({ seat: a.seat, kind: a.door.kind });
-        }
-      }
-      // 벽 뒤 이름표(P20-12): 닫힌 방의 벽·이마·지붕에 머리가 가려지는 칸에 선 남은 이름표·입력 중 칸·핀 조명을 0.2초에 옅게 숨긴다(내 것은 늘 보인다).
-      // 유령·결과 화면(roomsOpen)은 네 방이 열려 있어 숨김이 없다(D-11). 처음 정하는 프레임·모션 줄이기·재접속 첫 프레임은 연출 없이 바로
-      a.veiled = hasRooms && a.seat !== mySeat && look?.roomsOpen !== true && headVeiled(at.x, at.z, townOpen);
-      if (a.veiled) veiledNow.push(a.seat);
-      const veilGoal = a.veiled ? 0 : 1;
-      a.veil = a.veil === null || reduced || resync ? veilGoal : veilGoal > a.veil ? Math.min(veilGoal, a.veil + (dt * 1000) / DOOR_FADE_MS) : Math.max(veilGoal, a.veil - (dt * 1000) / DOOR_FADE_MS);
-      a.vis = doorOp * a.veil;
       // 처형 연출(fadeAt): 떠오르며 흐려져 끝점(0.26·높이 0.35)에 선다. 연출이 끝나 좌석이 ghost 가 되면 같은 자리에 유령 그림이 나타난다. ghost 좌석은 연출 없이 유령으로 선다
       let rise = 0;
       let fade = 1;
@@ -1378,12 +1200,12 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       // 결과 화면의 반투명 좌석(쉬었던 사람, 11-12): 장면 표의 opacity 와 처형 연출 불투명도 중 낮은 쪽을 몸에 쓴다. 이름표(alpha)는 연출만 따른다
       // 유령 그림은 등장 올림(0 → GHOST_SPRITE.opacity, 모션 줄이기면 바로)을 몸 불투명도 자리에 쓴다
       const ghostIn = a.ghost ? (reduced ? GHOST_SPRITE.opacity : GHOST_SPRITE.opacity * Math.min(1, (now - a.ghostAt) / GHOST_SPRITE.inMs)) : fade;
-      const bodyFade = Math.min(ghostIn, seatLook?.opacity ?? 1) * doorOp;
+      const bodyFade = Math.min(ghostIn, seatLook?.opacity ?? 1);
       if (bodyFade !== a.fadeOpacity) {
         a.fadeOpacity = bodyFade;
         a.handle.setOpacity?.(bodyFade);
       }
-      alpha = Math.min(alpha, tagFade) * doorOp * a.veil;
+      alpha = Math.min(alpha, tagFade);
       // 높이: 등장 낙하 + (장면이 있을 때) 무대 위 0.29 + 유령 떠다님 + 처형 떠오름
       const y = lift + (look === null ? 0 : stageLiftY(at, mapId)) + (a.ghost ? ghostFloatY(now / 1000, reduced) : 0) + rise;
       a.handle.root.scale.setScalar(a.base * scale);
@@ -1399,30 +1221,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const camLook = look?.camera;
     let offsetGoal = stageOff;
     let blending = false;
-    // 개관(21-09 D-11): 시점이 바뀌는 순간은 DOM 어둠 가림(WorldStage)이 가장 어두운 때로 맞춘다. 가림 없는 경우(모션 줄이기·재접속)는 바로
-    const wantOverview = camLook !== undefined && camLook.mode === "overview";
-    if (wantOverview === viewOverview) {
-      viewCutAt = null;
-    } else {
-      viewCutAt ??= reduced || resync ? now : now + OVERVIEW_CUT_MS;
-      if (now >= viewCutAt) {
-        viewOverview = wantOverview;
-        viewCutAt = null;
-        r.setCameraView?.(wantOverview ? "overview" : "iso");
-        fixed = null;
-        cam = null; // 개관에서 돌아오면 내 캐릭터 자리로 바로(미끄러지지 않는다), 개관은 아래에서 가운데로 놓는다
-        zoomCur = 1;
-        offsetCur = null;
-      }
-    }
-    if (viewOverview) {
-      const ov = overviewFraming(rect, { w: s.w, h: s.h });
-      cam = { x: ov.target.x, z: ov.target.z };
-      zoomCur = ov.zoom;
-      offsetCur = ov.offsetY;
-      offsetTarget = ov.offsetY;
-      blending = true; // 아래 세로 이동 완화 블록을 건너뛴다 — 개관은 배율과 같은 프레임에 바로 놓인다
-    } else if (camLook !== undefined && camLook.mode === "fixed") {
+    if (camLook !== undefined && camLook.mode === "fixed") {
       // zoomMs 가 있는 구도(판결 순간 느린 확대, 09.1.1-13): 위치·세로 오프셋·줌이 모두 그 시간에 ease-in-out 으로 같이 간다. 모션 줄이기는 줌 없이 1 을 지킨다
       const slow = camLook.zoomMs !== undefined;
       const goalZoom = slow && reduced ? 1 : camLook.zoom;
@@ -1452,7 +1251,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         zoomBackStart = now;
       }
       const mine = actors.get(deps.mySeat());
-      const goal = clampTarget(mine ? mine.pos : DEFAULT_TARGET, panBox);
+      const goal = clampTarget(mine ? mine.pos : DEFAULT_TARGET, PAN_BOX);
       cam = cam === null || resync ? goal : followStep(cam, goal, dt * 1000, reduced);
       if (zoomCur !== 1) zoomCur = mix(zoomBackFrom, 1, reduced || resync ? 1 : easeOut(Math.min(1, (now - zoomBackStart) / CAM_SLOW_MS)));
     }
@@ -1480,7 +1279,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       deps.onZoom?.(Math.round(zoomCur * 1000) / 1000);
     }
     if (deps.onCamera !== undefined) {
-      const mode = viewOverview ? "overview" : fixed !== null ? "fixed" : "follow";
+      const mode = fixed !== null ? "fixed" : "follow";
       const scale = Math.round(zoomCur * PX_PER_UNIT * 100) / 100;
       const key = `${mode}|${scale}`;
       if (key !== cameraSent) {
@@ -1504,7 +1303,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
 
     updatePin(r, dt * 1000, sNow, reduced);
-    updateTown(r, reduced);
 
     // 내 캐릭터 빛(NIGHT-07): nightCitizen 조명에서만 내 캐릭터 위로 따라가고, 다른 단계에서는 기본 자리(세기는 조명 단계가 0 으로 만든다).
     // 광원은 렌더러가 처음부터 갖고 있다 — 여기서 만들거나 지우지 않는다(Pitfall 7)
@@ -1561,8 +1359,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       removeActor(a);
       if (a.tag !== null) {
         a.tag.style.opacity = "0";
-        a.tag.removeAttribute("data-door");
-        a.tag.removeAttribute("data-veiled");
       }
     }
     emitGhosts();
@@ -1613,17 +1409,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         tag.style.transform = style;
       }
       if (tag.style.opacity !== a.tagAlpha) tag.style.opacity = a.tagAlpha;
-      if (a.veiled !== a.tagVeiled) {
-        a.tagVeiled = a.veiled;
-        if (a.veiled) tag.setAttribute("data-veiled", "true");
-        else tag.removeAttribute("data-veiled");
-      }
-      const doorKind = a.door?.kind ?? null;
-      if (doorKind !== a.tagDoor) {
-        a.tagDoor = doorKind;
-        if (doorKind === null) tag.removeAttribute("data-door");
-        else tag.setAttribute("data-door", doorKind);
-      }
       const w = a.tagW !== null && a.tagW > 0 ? a.tagW : NAMETAG_MAX_W;
       boxes.push({ seat: a.seat, me: a.seat === mine, ghost: a.ghost, lead: tag.hasAttribute("data-lead"), turn: tag.hasAttribute("data-turn"), foot: r.project({ x: a.pos.x, y: 0, z: a.pos.z }).sy, x, bottom, w });
       // 발밑 고리: 이름표(WorldStage)가 data-ring-kind 로 알린 종류를 캐릭터에 옮긴다(바뀔 때만)
@@ -1658,13 +1443,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const rect = host.getBoundingClientRect();
     const sx = clientX - rect.left;
     const sy = clientY - rect.top;
-    // 마을: 지붕·벽·집을 누르면 문 앞·방 안·집 문 앞·벽 안쪽 바닥이 목적지다(D-19, P20-11). 건물에 닿지 않으면 지금처럼 바닥 교점
-    let at: { x: number; z: number } | null = null;
-    if (hasRooms && renderer.rayAt !== undefined) {
-      const me = actors.get(deps.mySeat())?.pos ?? null;
-      at = tapTarget(renderer.rayAt(sx, sy), me, townOpen);
-    }
-    at ??= renderer.groundAt(sx, sy);
+    const at = renderer.groundAt(sx, sy);
     return startWalk(renderer, at.x, at.z);
   }
 

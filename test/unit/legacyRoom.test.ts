@@ -1,8 +1,9 @@
 // 22-03: 옛 방 정규화(결정 0089, D-03·D-29) — 옛 표시가 있는 방만 대기실로 되돌리고, 표시 없는 판은 DO 가 다시 깨어나도 그대로 둔다.
-// 22-04 가 등불·현장·건너뛰기 키 표시를 더했다. 22-05~22-07 이 town, errand 단계·키, mode 키 표시를 하나씩 더한다.
+// 22-04 가 등불·현장·건너뛰기 키 표시를, 22-05 가 마을(town) 표시를 더했다. 22-06~22-07 이 errand 단계·키, mode 키 표시를 하나씩 더한다.
 import { describe, expect, it } from "vitest";
 import { attachConnection, createRoomState, isLegacyV3Room, joinRoom, normalizeStoredRoom, startGame, toLobbyFromLegacy } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
+import { roomMapId } from "../../shared/game/maps";
 import { seededRandInt } from "../helpers/seededRandom";
 
 const HOST = "player-id-0000-aaaa";
@@ -109,12 +110,46 @@ describe("normalizeStoredRoom — 옛 원인 흐름 방 (22-04, D-03, T-22-06)",
   });
 });
 
+describe("normalizeStoredRoom — 옛 마을 방 (22-05, D-03·D-29, T-22-08)", () => {
+  it("map 이 town 인 판 중 방은 대기실로 되돌아가고 맵 조회(roomMapId)가 bar 를 돌려준다", () => {
+    const stored = { ...started(4), phase: "discussion", day: 1, map: "town" } as unknown as RoomState;
+    const out = normalizeStoredRoom(stored, 5000);
+    expect(`${out.phase}/${Object.hasOwn(out, "map")}/${roomMapId(out)}/${out.code}/${out.hostId}`).toBe("lobby/false/bar/0420/player-id-0000-aaaa");
+  });
+
+  it("map 이 town 인 끝난 방(ended)도 대기실로 되돌아간다", () => {
+    const stored = { ...started(4), phase: "ended", day: 3, winner: "citizens", map: "town" } as unknown as RoomState;
+    expect(normalizeStoredRoom(stored, 5000).phase).toBe("lobby");
+  });
+
+  it("판 중 방의 mapChoice 가 town 이면 대기실로 되돌린 뒤 mapChoice 는 기본값(키 없음)이다", () => {
+    const stored = { ...started(4), phase: "discussion", day: 1, mapChoice: "town" } as unknown as RoomState;
+    const out = normalizeStoredRoom(stored, 5000);
+    expect(`${out.phase}/${Object.hasOwn(out, "mapChoice")}`).toBe("lobby/false");
+  });
+
+  it("대기실 방의 mapChoice 가 town 이면 기본값으로 정규화되고 나머지는 그대로다", () => {
+    const base = lobby(4);
+    const { mapChoice: _kept, ...rest } = base;
+    const stored = { ...base, mapChoice: "town" } as unknown as RoomState;
+    const out = normalizeStoredRoom(stored, 5000);
+    expect(`${out.phase}/${Object.hasOwn(out, "mapChoice")}/${JSON.stringify(out) === JSON.stringify(rest)}`).toBe("lobby/false/true");
+  });
+
+  it("맵이 bar·plaza 인 판 중 방과 plaza 를 고른 대기실 방은 같은 객체다 (DO 재기동 안전)", () => {
+    const playing = { ...started(4), phase: "discussion", day: 1 } as unknown as RoomState;
+    const idle = lobby(4);
+    expect(`${normalizeStoredRoom(playing, 5000) === playing}/${normalizeStoredRoom(idle, 5000) === idle}`).toBe("true/true");
+  });
+});
+
 describe("isLegacyV3Room · toLobbyFromLegacy", () => {
-  it("판정: tutorial 단계·tutorialPassed·tutorialDone 만 참이고 표시 없는 방은 거짓이다", () => {
+  it("판정: tutorial 단계·tutorialPassed·tutorialDone·map town 만 참이고 표시 없는 방은 거짓이다", () => {
     const plain = started(4);
     const withDone = { ...plain, players: plain.players.map((p, i) => (i === 0 ? { ...p, tutorialDone: true } : p)) } as unknown as RoomState;
-    const flags = [oldTutorialRoom(), { ...plain, tutorialPassed: [HOST] } as unknown as RoomState, withDone, plain, lobby(4)].map((s) => isLegacyV3Room(s));
-    expect(flags.join(",")).toBe("true,true,true,false,false");
+    const town = { ...plain, map: "town" } as unknown as RoomState;
+    const flags = [oldTutorialRoom(), { ...plain, tutorialPassed: [HOST] } as unknown as RoomState, withDone, town, plain, lobby(4)].map((s) => isLegacyV3Room(s));
+    expect(flags.join(",")).toBe("true,true,true,true,false,false");
   });
 
   it("toLobbyFromLegacy 는 입력 상태를 바꾸지 않는다", () => {

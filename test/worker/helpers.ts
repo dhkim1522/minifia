@@ -3,12 +3,9 @@ import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { expect } from "vitest";
 import { phaseKey } from "../../shared/game/audience";
-import { TOWN_MAP } from "../../shared/game/mapTown";
 import { MOVE_V, restSegment } from "../../shared/game/world";
 import type { Segment, WorldState } from "../../shared/game/world";
-import { nextCrossingAt, zoneOf } from "../../shared/game/zones";
-import type { ChatLineWire, CreateRoomResponse, GameMode, PhaseId, RoleId, RoomView, ServerMessage, ZoneId } from "../../shared/protocol";
-import { openTown } from "../helpers/playable";
+import type { ChatLineWire, CreateRoomResponse, GameMode, PhaseId, RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 
 export interface TestSocket {
   ws: WebSocket;
@@ -1066,127 +1063,4 @@ export async function toEndedByMafia(code: string, socks: TestSocket[]): Promise
   await closePhase(code);
   for (const s of socks) await nextFrame(s, isPhaseFrame("ended"));
   return victims;
-}
-
-// ---- 20페이즈 마을 판 도우미(20-01 의 town.test.ts 지역 도우미를 옮겼다 — townDoor.test.ts 와 함께 쓴다, 20-02) ----
-
-/** 그 좌석의 사람. */
-export const actorOf = (g: Game, seatNo: number): Actor => g.actors.find((a) => a.seat === seatNo)!;
-
-/** 그 좌석의 player id(저장된 방에서 읽는다 — evict 하지 않는다). */
-export const idOfSeat = async (code: string, seatNo: number): Promise<string> =>
-  ((await storedRoom(code)) as unknown as { players: Array<{ id: string; seat: number }> }).players.find((p) => p.seat === seatNo)!.id;
-
-/** 마을에서 시작한 확장판 판(방장 + 참가자 guests 명)을 phase 까지 넘긴다. 맵은 시작 때 정해져 저장되므로 그 뒤에는 잠금과 무관하다. */
-export async function townGame(phase: PhaseId, guests = 5): Promise<Game> {
-  const close = openTown();
-  try {
-    return await startedGame(phase, guests);
-  } finally {
-    close();
-  }
-}
-
-/**
- * 마을 판 전용: 좌석 → 고정소수점 위치(서 있는 한 점)로 메모리 world 를 정한다. 시험이 사람을 그 자리에 "놓는" 것이라
- * 구역 기억(world.zones)도 그 자리의 구역으로 함께 맞춘다 — 놓은 것이 문 통과로 알려지지 않게(서버의 settleZones 와 같은 뜻).
- * 메모리에만 쓴다: 뒤에 evict 하는 도우미(advanceTo·killSeats)를 부르려면 먼저 flushWorld 로 저장한다.
- */
-export async function placeSeats(code: string, bySeat: Record<number, { x: number; z: number }>): Promise<void> {
-  const segs: Record<string, Segment> = {};
-  const zones: Record<string, ZoneId> = {};
-  for (const [s, pos] of Object.entries(bySeat)) {
-    const id = await idOfSeat(code, Number(s));
-    segs[id] = restSegment(pos.x, pos.z, Date.now());
-    zones[id] = zoneOf(TOWN_MAP, pos.x, pos.z);
-  }
-  await runInDurableObject(env.ROOM.getByName(code), (instance) => {
-    const holder = instance as unknown as { world: WorldState };
-    holder.world = { ...holder.world, segs: { ...holder.world.segs, ...segs }, zones: { ...(holder.world.zones ?? {}), ...zones } };
-  });
-}
-
-/** 메모리 world(private world) 사본. 구간·구역 기억을 읽을 때 쓴다. */
-export async function memWorld(code: string): Promise<WorldState> {
-  let out: WorldState | undefined;
-  await runInDurableObject(env.ROOM.getByName(code), (instance) => {
-    out = (instance as unknown as { world: WorldState }).world;
-  });
-  return out!;
-}
-
-/** 그 좌석의 메모리 구간 출발 시각을 ms 만큼 앞당긴다 — 실제 시간을 기다리지 않고 "걷기 시작한 지 ms 지난" 상태를 만든다(문턱을 이미 지난 상태 등). */
-export async function shiftSeg(code: string, seatNo: number, ms: number): Promise<void> {
-  const id = await idOfSeat(code, seatNo);
-  await runInDurableObject(env.ROOM.getByName(code), (instance) => {
-    const holder = instance as unknown as { world: WorldState };
-    const seg = holder.world.segs[id];
-    if (seg === undefined) throw new Error("shiftSeg: 구간이 없다");
-    holder.world = { ...holder.world, segs: { ...holder.world.segs, [id]: { p: [...seg.p], t0: seg.t0 - ms, v: seg.v } } };
-  });
-}
-
-// ---- 20페이즈 마을 프레임·문 통과 도우미(20-02 의 townDoor.test.ts 지역 도우미를 옮겼다 — townErrand·townLeak 과 함께 쓴다, 20-03) ----
-
-type WorldMsg = Extract<ServerMessage, { t: "world" }>;
-type SnapMsg = Extract<WorldMsg, { k: "snap" }>;
-
-/** 프레임 목록 가운데 world 프레임만. */
-export const worldsIn = (msgs: ServerMessage[]): WorldMsg[] => msgs.filter((m): m is WorldMsg => m.t === "world");
-
-/** 점 목록이 지나는 마을 구역(중복 없이, 처음 나온 순서): "plaza>post". */
-export function zonesOfPts(p: readonly number[]): string {
-  const seen: string[] = [];
-  for (let i = 0; i + 1 < p.length; i += 2) {
-    const zone = zoneOf(TOWN_MAP, p[i]!, p[i + 1]!);
-    if (!seen.includes(zone)) seen.push(zone);
-  }
-  return seen.join(">");
-}
-
-/** 문 프레임 수(좌석 무관). */
-export const doorCount = (msgs: ServerMessage[]): number => worldsIn(msgs).filter((f) => f.k === "door").length;
-
-/** zone 표시가 붙은 snap 들. */
-export const zoneSnaps = (msgs: ServerMessage[]): SnapMsg[] => worldsIn(msgs).filter((f): f is SnapMsg => f.k === "snap" && (f as { zone?: unknown }).zone === true);
-
-/** snap 한 개를 한 줄로: "seats=0,2 others=[post]" — others 는 보는 사람(me) 말고 다른 좌석들의 점이 지나는 구역. */
-export function snapLine(f: SnapMsg | undefined, me: number): string {
-  if (f === undefined) return "none";
-  const others = f.ents.filter((e) => e.s !== me).flatMap((e) => e.p);
-  return `seats=${f.ents.map((e) => e.s).join(",")} others=[${zonesOfPts(others)}]`;
-}
-
-/** 그 좌석이 실린 world 프레임 수(move·door 의 s, snap 의 ents). "그 사람에 대해 아무것도 받지 않았다" 의 증명에 쓴다. */
-export const mentions = (msgs: ServerMessage[], seatNo: number): number =>
-  worldsIn(msgs).filter((f) => (f.k === "snap" ? f.ents.some((e) => e.s === seatNo) : f.s === seatNo)).length;
-
-/** 메모리 구간을 직접 쓴다(걷기 요청 없이 — 알람이 따로 걸리지 않는다). agoMs 전에 출발한 것으로 둔다. 구역 기억은 건드리지 않는다. */
-export async function walkSeat(code: string, seatNo: number, p: number[], agoMs = 0): Promise<Segment> {
-  const id = await idOfSeat(code, seatNo);
-  const seg: Segment = { p, t0: Date.now() - agoMs, v: MOVE_V };
-  await runInDurableObject(env.ROOM.getByName(code), (instance) => {
-    const holder = instance as unknown as { world: WorldState };
-    holder.world = { ...holder.world, segs: { ...holder.world.segs, [id]: seg } };
-  });
-  return seg;
-}
-
-/**
- * 그 좌석의 다음 문 통과가 이미 지난 것으로 만든다(구간 출발을 앞당긴다).
- * 이미 넘었으면(시험이 느리게 돌아 실제 시간이 문턱을 지났다) 아무것도 하지 않는다 — 그 통과는 제때 깨어난 알람이나 다음 알람이 낸다.
- */
-export async function passDoor(code: string, seatNo: number): Promise<void> {
-  const seg = (await memWorld(code)).segs[await idOfSeat(code, seatNo)]!;
-  const now = Date.now();
-  const tc = nextCrossingAt(TOWN_MAP, seg, now);
-  if (tc !== null) await shiftSeg(code, seatNo, tc - now + 40);
-}
-
-/** 알람을 한 번 돌리고 모든 소켓을 flush 해 marks 이후의 프레임을 소켓별로 돌려준다. */
-export async function alarmAndCollect(g: Game, marks: number[]): Promise<ServerMessage[][]> {
-  await runDurableObjectAlarm(env.ROOM.getByName(g.code));
-  const out: ServerMessage[][] = [];
-  for (let i = 0; i < g.socks.length; i++) out.push(await settle(g.socks[i]!, marks[i]!));
-  return out;
 }

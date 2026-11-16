@@ -19,7 +19,7 @@ import type {
 import type { BotPlan } from "./bots";
 import { hostSuccessor } from "./continuity";
 import { resolveLookConflicts } from "./look";
-import { decideMap, startMapOf } from "./maps";
+import { decideMap } from "./maps";
 import { enterNomination } from "./nomination";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
@@ -434,8 +434,7 @@ export function beginGame(
       ? giveRoleTo(shuffled, orderedIds, state.hostId, state.testRole)
       : shuffled;
   // 맵은 역할 배정 난수를 모두 쓴 뒤에 정한다(결정 D-21) — 허용 맵이 하나면 난수를 부르지 않아 기존 시드 시험이 그대로다.
-  // 판 종류의 고정 맵(20페이즈 D-02: 확장판은 늘 마을)은 그 결과를 덮기만 한다 — decideMap 을 먼저 그대로 불러 난수 순서가 바뀌지 않는다.
-  const map = startMapOf(modeOf(state), decideMap(state.mapChoice ?? "random", randInt));
+  const map = decideMap(state.mapChoice ?? "random", randInt);
   return {
     ...state,
     map,
@@ -584,11 +583,16 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
 /**
  * 옛 방 표시 — 이 표 한 곳이 "배포 전에 저장된 방"을 알아보는 기준이다(결정 0089, D-03·D-29). 이후 삭제 계획이 키를 하나씩 더한다.
  * 22-03: 옛 튜토리얼 — 방 키 tutorialPassed, 개인 키 tutorialDone, 단계 "tutorial".
- * 22-04: 원인 흐름 — 방 키 lamps(등불 켜짐)·scene(아침 현장), 개인 키 skipVote(건너뛰기)·errandCut(자른 등불)·sceneSeen(살핀 지점). 22-05~22-07 이 town·errand·mode 표시를 더한다.
+ * 22-04: 원인 흐름 — 방 키 lamps(등불 켜짐)·scene(아침 현장), 개인 키 skipVote(건너뛰기)·errandCut(자른 등불)·sceneSeen(살핀 지점). 22-05: 마을 — 저장된 맵 값 town(옛 값)(방 map 또는 방장 선택 mapChoice, 타입에서 빠졌으므로 문자열로 비교한다). 구역·문 기억은 방이 아니라 world 저장소의 키라 표시에 없다(복원이 모르는 키를 무시한다). 22-06~22-07 이 errand·mode 표시를 더한다.
  */
 const LEGACY_V3_ROOM_KEYS: readonly string[] = ["tutorialPassed", "lamps", "scene"];
 const LEGACY_V3_PLAYER_KEYS: readonly string[] = ["tutorialDone", "skipVote", "errandCut", "sceneSeen"];
 const LEGACY_V3_PHASES: readonly string[] = ["tutorial"];
+
+/** 22-05: 마을 맵으로 저장된 방인가(MapId 에서 빠진 값이라 문자열로 비교한다). 맵 조회(roomMapId)·MAPS 조회보다 먼저 돌아야 한다(T-22-08). */
+function hasLegacyTown(stored: RoomState): boolean {
+  return (stored.map as string | undefined) === "town" || (stored.mapChoice as string | undefined) === "town";
+}
 
 /**
  * 옛 표시가 하나라도 있는 방인가. 표시가 없는 방(지금 판 중인 새 방 포함)은 거짓이다 —
@@ -597,6 +601,7 @@ const LEGACY_V3_PHASES: readonly string[] = ["tutorial"];
 export function isLegacyV3Room(stored: RoomState): boolean {
   return (
     LEGACY_V3_PHASES.includes(stored.phase as string) ||
+    hasLegacyTown(stored) ||
     LEGACY_V3_ROOM_KEYS.some((key) => Object.hasOwn(stored, key)) ||
     stored.players.some((p) => LEGACY_V3_PLAYER_KEYS.some((key) => Object.hasOwn(p, key)))
   );
@@ -619,6 +624,8 @@ export function toLobbyFromLegacy(stored: RoomState): RoomState {
   if (stored.phase === "lobby") {
     const rest: Record<string, unknown> = { ...stored };
     for (const key of LEGACY_V3_ROOM_KEYS) delete rest[key];
+    if ((stored.map as string | undefined) === "town") delete rest.map;
+    if ((stored.mapChoice as string | undefined) === "town") delete rest.mapChoice;
     return {
       ...(rest as unknown as RoomState),
       players: stored.players.map((p) => {
@@ -629,7 +636,7 @@ export function toLobbyFromLegacy(stored: RoomState): RoomState {
       }),
     };
   }
-  return {
+  const lobby: RoomState = {
     ...pickKeys(stored, REMATCH_ROOM_KEYS),
     expiresAt: stored.expiresAt,
     phase: "lobby",
@@ -637,6 +644,12 @@ export function toLobbyFromLegacy(stored: RoomState): RoomState {
     // 쉬는 사람(bench)도 참가자로 합류시켜 아무도 잃지 않는다(resetToLobby 와 같다).
     players: [...stored.players, ...benchAsPlayers(stored)].map((p) => pickKeys(p, REMATCH_PLAYER_KEYS)),
   };
+  // 방장이 고른 값 중 마을은 기본값으로(키를 지워 pickMap 의 기본값 "random" 이 받는다, D-03).
+  if ((lobby.mapChoice as string | undefined) === "town") {
+    const { mapChoice: _dropped, ...rest } = lobby;
+    return rest;
+  }
+  return lobby;
 }
 
 export function findPlayerByToken(state: RoomState, token: string): Player | undefined {
