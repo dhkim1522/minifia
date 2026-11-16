@@ -25,7 +25,6 @@ import {
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { MOVE_SPEED } from "../../shared/game/world";
-import { CAM_YAW } from "./camera";
 import { buildGhost3d, type Ghost3d } from "./ghost3d";
 import { emoteCycles, REDUCED_Y_SCALE } from "./emoteCap";
 import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
@@ -781,6 +780,8 @@ export function setGhostArt(art: unknown): void {
 const GHOST_ART_OPACITY = 1;
 /** 유령 그림의 로컬 높이(머리 꼭대기 값, update 의 headY 와 같다)와 폭 비(3:4) */
 const GHOST_ART_H = 2.45;
+/** 유령 묶음의 배율: 산 캐릭터의 75%(D-20, 결정 0089-17). GHOST_ART_H(이름표 높이 기준)는 그대로다 */
+export const GHOST_SCALE = 0.75;
 /** 동작을 받은 유령이 한 번 튀는 높이(로컬)와 시간(ms) */
 const GHOST_HOP_H = 0.18;
 const GHOST_HOP_MS = 420;
@@ -1007,6 +1008,7 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
       for (const j of JOINTS) meshes[j].visible = false;
       if (!sprite) {
         sprite = buildGhost3d();
+        sprite.root.scale.setScalar(GHOST_SCALE);
         root.add(sprite.root);
       }
       sprite.setOpacity(ghostAlpha);
@@ -1071,8 +1073,8 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
           } else sprite.root.position.y = Math.sin(Math.PI * k) * GHOST_HOP_H;
         }
         sprite.update(t);
-        sprite.root.rotation.y = CAM_YAW - root.rotation.y; // 늘 카메라를 본다
-        return { headY: GHOST_ART_H * CHAR_SCALE };
+        // 산 캐릭터처럼 이동 방향을 본다: 묶음은 root 의 자식이라 root.rotation.y 를 그대로 따른다(결정 0089-17, 0084-3 개정)
+        return { headY: GHOST_ART_H * CHAR_SCALE * GHOST_SCALE };
       }
       if (moving) walkPhase += dt * WALK_PHASE_RATE;
       walkMix = Math.min(1, Math.max(0, walkMix + ((moving ? 1 : -1) * dt * 1000) / POSE_BLEND_MS));
