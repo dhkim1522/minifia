@@ -1,5 +1,5 @@
 // 22-03: 옛 방 정규화(결정 0089, D-03·D-29) — 옛 표시가 있는 방만 대기실로 되돌리고, 표시 없는 판은 DO 가 다시 깨어나도 그대로 둔다.
-// 22-04 가 등불·현장·건너뛰기 키 표시를, 22-05 가 마을(town) 표시를 더했다. 22-06 이 errand 단계·키 표시를 더했고 22-07 이 mode 키 표시를 더한다.
+// 22-04 가 등불·현장·건너뛰기 키 표시를, 22-05 가 마을(town) 표시를 더했다. 22-06 이 errand 단계·키 표시를 더했고 22-07 이 mode(판 종류)·players[].stats 키 표시를 더했다.
 import { describe, expect, it } from "vitest";
 import { attachConnection, createRoomState, isLegacyV3Room, joinRoom, normalizeStoredRoom, startGame, toLobbyFromLegacy } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
@@ -184,15 +184,61 @@ describe("normalizeStoredRoom — 옛 심부름 방 (22-06, D-04·D-03, T-22-10)
   });
 });
 
+describe("normalizeStoredRoom — 옛 판 종류 방 (22-07, D-01·D-03·D-29, T-22-13)", () => {
+  it("mode 가 basic 으로 저장된 토론 방은 대기실로 되돌아가고 mode 키는 남지 않으며 방·사람 식별은 남는다", () => {
+    const stored = { ...started(4), phase: "discussion", day: 1, mode: "basic" } as unknown as RoomState;
+    const out = normalizeStoredRoom(stored, 5000);
+    const people = out.players.map((p) => `${p.id}/${p.seat}`).join(",");
+    const want = stored.players.map((p) => `${p.id}/${p.seat}`).join(",");
+    expect(`${out.phase}/${out.code}/${out.hostId}/${people === want}/${out.phaseEndsAt}/${Object.hasOwn(out, "mode")}`).toBe("lobby/0420/player-id-0000-aaaa/true/null/false");
+  });
+
+  it("mode 가 extended 로 저장된 끝난 방(ended)도 대기실로 되돌아간다", () => {
+    const stored = { ...started(4), phase: "ended", day: 2, winner: "citizens", mode: "extended" } as unknown as RoomState;
+    const out = normalizeStoredRoom(stored, 5000);
+    expect(`${out.phase}/${Object.hasOwn(out, "mode")}/${Object.hasOwn(out, "winner")}`).toBe("lobby/false/false");
+  });
+
+  it("mode 가 extended 로 저장된 대기실 방은 mode 키만 지워지고 나머지는 그대로다", () => {
+    const base = lobby(4);
+    const stored = { ...base, mode: "extended" } as unknown as RoomState;
+    const out = normalizeStoredRoom(stored, 5000);
+    expect(`${Object.hasOwn(out, "mode")}/${JSON.stringify(out) === JSON.stringify(base)}`).toBe("false/true");
+  });
+
+  it("허용 밖 값(turbo)이 저장된 방도 mode 키는 지워진다", () => {
+    const stored = { ...lobby(4), mode: "turbo" } as unknown as RoomState;
+    expect(Object.hasOwn(normalizeStoredRoom(stored, 5000), "mode")).toBe(false);
+  });
+
+  it("players[].stats 키를 가진 판 중 방은 대기실로 되돌아가고 대기실 방은 그 키만 지워진다", () => {
+    const base = started(4);
+    const playing = { ...base, phase: "discussion", day: 1, players: base.players.map((p, i) => (i === 0 ? { ...p, stats: { emotes: 1, says: 2 } } : p)) } as unknown as RoomState;
+    const out = normalizeStoredRoom(playing, 5000);
+    expect(`${out.phase}/${out.players.some((p) => Object.hasOwn(p, "stats"))}`).toBe("lobby/false");
+    const lob = lobby(4);
+    const stored = { ...lob, players: lob.players.map((p, i) => (i === 1 ? { ...p, stats: { emotes: 0, says: 0 } } : p)) } as unknown as RoomState;
+    const outLobby = normalizeStoredRoom(stored, 5000);
+    expect(`${outLobby.players.some((p) => Object.hasOwn(p, "stats"))}/${JSON.stringify(outLobby) === JSON.stringify(lob)}`).toBe("false/true");
+  });
+
+  it("mode 키가 없는 판 중 방은 같은 객체다 (DO 재기동 안전, T-22-04)", () => {
+    const plain = { ...started(4), phase: "discussion", day: 1 } as RoomState;
+    expect(normalizeStoredRoom(plain, 5000)).toBe(plain);
+  });
+});
+
 describe("isLegacyV3Room · toLobbyFromLegacy", () => {
-  it("판정: tutorial·errand 단계, tutorialPassed·tutorialDone·errandPlaces 키, map town 만 참이고 표시 없는 방은 거짓이다", () => {
+  it("판정: tutorial·errand 단계, tutorialPassed·tutorialDone·errandPlaces·mode·stats 키, map town 만 참이고 표시 없는 방은 거짓이다", () => {
     const plain = started(4);
     const withDone = { ...plain, players: plain.players.map((p, i) => (i === 0 ? { ...p, tutorialDone: true } : p)) } as unknown as RoomState;
     const town = { ...plain, map: "town" } as unknown as RoomState;
     const errandPhase = { ...plain, phase: "errand" } as unknown as RoomState;
     const errandKey = { ...plain, players: plain.players.map((p, i) => (i === 0 ? { ...p, errandPlaces: [] } : p)) } as unknown as RoomState;
-    const flags = [oldTutorialRoom(), { ...plain, tutorialPassed: [HOST] } as unknown as RoomState, withDone, town, errandPhase, errandKey, plain, lobby(4)].map((s) => isLegacyV3Room(s));
-    expect(flags.join(",")).toBe("true,true,true,true,true,true,false,false");
+    const modeKey = { ...plain, mode: "basic" } as unknown as RoomState;
+    const statsKey = { ...plain, players: plain.players.map((p, i) => (i === 0 ? { ...p, stats: {} } : p)) } as unknown as RoomState;
+    const flags = [oldTutorialRoom(), { ...plain, tutorialPassed: [HOST] } as unknown as RoomState, withDone, town, errandPhase, errandKey, modeKey, statsKey, plain, lobby(4)].map((s) => isLegacyV3Room(s));
+    expect(flags.join(",")).toBe("true,true,true,true,true,true,true,true,false,false");
   });
 
   it("toLobbyFromLegacy 는 입력 상태를 바꾸지 않는다", () => {
