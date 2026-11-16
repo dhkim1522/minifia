@@ -410,6 +410,9 @@ const ALLOWED_EXACT: ReadonlySet<string> = new Set([
   "day.turn.order",
   "day.turn.order[]",
   "day.turn.doneAt",
+  // 23-11(P23-22): 결과 화면 정답 줄 — 모두에게 같은 공개 값 하나만(day.keyword.answer, keywordAnswerOf 선택기). 답 목록·장르는 읽지 않는다
+  "day.keyword",
+  "day.keyword.answer",
 ]);
 /** 18.1-12: 하위 값 허용 접두사는 없다 — 닉네임·아침 결과 문장은 더는 읽지 않는다 */
 const ALLOWED_PREFIX: readonly string[] = [];

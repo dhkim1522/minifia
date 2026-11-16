@@ -11,6 +11,7 @@
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import { connectedCount } from "../../shared/game/room";
+import { keywordAnswerOf } from "./keywordView";
 import { TIMELESS_PHASES } from "./scenes";
 
 /** 문구 표의 키 하나 = 한 줄. */
@@ -27,7 +28,7 @@ export type HostKey =
   | "execution.passed"
   | "answerReveal"
   | "night.mafia" | "night.police" | "night.doctor" | "night.citizen" | "night.ghost"
-  | "morning" | "ended"
+  | "morning" | "ended" | "ended.answer"
   | "fallback";
 
 /** 키를 찾지 못했을 때의 한 줄(마침표 없음) */
@@ -75,6 +76,8 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   // 큰 글(아침 결과)이 말한다
   morning: "",
   ended: "게임이 끝났습니다. 다음 판을 준비해 주세요.",
+  // 결과 화면의 정답 한 줄(23-11, P23-22): 동적 — 뒤에 키워드(공개 값 day.keyword.answer)를 붙여 쓴다. 키워드 12자소 상한 덕에 "정답 · " 포함 19자 이하
+  "ended.answer": "정답 · ",
   fallback: HOST_FALLBACK,
 };
 
@@ -129,7 +132,7 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
     case "morning":
       return view.day?.morning === undefined ? "fallback" : "morning";
     case "ended":
-      return "ended";
+      return keywordAnswerOf(view) === undefined ? "ended" : "ended.answer"; // 정답은 공개 값 한 선택기로만 읽는다(23-11, T-23-40)
     default:
       return "fallback";
   }
@@ -139,10 +142,16 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
  * 한 줄 — 키의 줄 그대로. 빈 줄은 빈 줄이다(큰 글이 말하는 동안). 대체 문장은 키가 fallback 일 때만(HOST_FALLBACK).
  */
 export function hostLineOf(view: RoomView, local: HostLocal = {}): string {
-  return HOST_LINES[hostKeyOf(view, local)];
+  const key = hostKeyOf(view, local);
+  if (key === "ended.answer") return `${HOST_LINES[key]}${keywordAnswerOf(view) ?? ""}`;
+  return HOST_LINES[key];
 }
 
-/** 띠 면이 보이지 않는 단계: 대기실·결과(초가 없다). 면의 한 줄 자리는 그대로 차지한다(18.1-12) */
+/**
+ * 띠 면이 기본으로 보이지 않는 단계: 대기실·결과(초가 없다). 면의 한 줄 자리는 그대로 차지한다(18.1-12).
+ * 결과(ended)는 예외가 하나 있다 — 첫날 정답 값(day.keyword.answer)이 있으면 띠 자리에 `정답 · {키워드}` 한 줄을 보인다(23-11, P23-22).
+ * 그래서 목록은 그대로 두고 hostBandModeOf 가 ended 만 정답 유무로 가른다(e2e 사본 HOST_OFF_PHASES 와 같은 값을 유지한다).
+ */
 export const HOST_HIDDEN_PHASES: readonly PhaseId[] = Object.freeze(["lobby", "ended"] as const);
 
 /** 띠의 세 상태: show = 문장(+초·막대), blank = 문장 없이 초·막대만, off = 면을 보이지 않게(자리는 남는다) */
@@ -153,7 +162,7 @@ export type HostBandMode = "show" | "blank" | "off";
  * 문장이 비었고 시간 행이 있으면 blank, 그 밖은 show.
  */
 export function hostBandModeOf(view: RoomView, line: string): HostBandMode {
-  if (HOST_HIDDEN_PHASES.includes(view.phase)) return "off";
+  if (view.phase === "ended" ? keywordAnswerOf(view) === undefined : HOST_HIDDEN_PHASES.includes(view.phase)) return "off";
   if (line === "") return hostTimeOf(view) ? "blank" : "off";
   return "show";
 }
