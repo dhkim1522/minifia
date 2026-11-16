@@ -426,26 +426,15 @@ describe("mount — 한 화면 전체 (E)", () => {
     expect(rig.engine.voiceCount()).toBeGreaterThan(0);
   });
 
-  it("판결 대본: 통과를 누르면 심장 박동과 처형 소리가 대본 시각에 난다", () => {
+  it("판결 대본: 처형을 누르면 심장 박동과 처형 소리가 대본 시각에 난다(22-12: 통과·부결 갈래 없음)", () => {
     const { rig, q } = open();
     q('[data-lab-script="verdict:pass"]')!.click();
     expect(rig.engine.currentBed()).toBe("bed.vote");
-    rig.fake.clock.advance(6000);
+    rig.fake.clock.advance(6600);
     const ids = rig.engine.log().map((e) => e.id);
     expect(ids).toContain("verdict.heart");
     expect(ids).toContain("execution.gavel");
     expect(ids).not.toContain("verdict.reject");
-  });
-
-  it("판결 대본: 부결은 verdict.reject, 마지막 3인은 gavel+rise 즉시", () => {
-    const a = open();
-    a.q('[data-lab-script="verdict:reject"]')!.click();
-    a.rig.fake.clock.advance(6000);
-    expect(a.rig.engine.log().map((e) => e.id)).toContain("verdict.reject");
-    const b = open();
-    b.q('[data-lab-script="verdict:last"]')!.click();
-    b.rig.fake.clock.advance(10);
-    expect(b.rig.engine.log().map((e) => e.id)).toEqual(expect.arrayContaining(["execution.gavel", "execution.rise"]));
   });
 
   it("밤 30초: night.fall 과 night.cue 가 시드로 정해지고, 시드를 바꾸면 큐 시각이 달라질 수 있다", () => {

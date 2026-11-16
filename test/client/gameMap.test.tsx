@@ -60,7 +60,8 @@ interface ViewOpts {
   /** 시간 링이 없는 단계처럼 마감이 없는 view */
   noClock?: boolean;
   records?: RoleRecord[];
-  verdict?: { yes: number; no: number; passed: boolean };
+  /** 처형 단계의 처형자(day.execution, 22-12) */
+  execution?: { seat: number; will?: string };
   candidate?: number;
   nicknames?: string[];
   /** 좌석별 생존. 기본 모두 산다 */
@@ -91,7 +92,7 @@ function makeView(o: ViewOpts = {}): RoomView {
       n: o.n ?? 1,
       roles: [],
       ...(o.endCount !== undefined ? { endCount: o.endCount } : {}),
-      ...(o.verdict ? { verdict: o.verdict } : {}),
+      ...(o.execution ? { execution: o.execution } : {}),
       ...(o.candidate !== undefined ? { candidate: o.candidate } : {}),
     },
   };
@@ -709,21 +710,23 @@ describe("GameMap — 낮 시작 결과 알림과 채팅 줄 (E5 #17~#19)", () =
     expect(logText(m.container)).not.toContain("2일차");
   });
 
-  it("알림은 한 번에 하나다: 판결 앞머리 600ms 뒤 찬반 결과 알림, 그 뒤 2000ms 에 '처형 없음' 이 이전 알림을 바꾼다", () => {
+  it("처형 알림은 유언 카드(0~3.0초) 뒤에 선다: 3.0초 전에는 알림이 없고 3.0초에 '{이름} 님 처형' 하나, 큰 글 3.0초 뒤 사라진다(22-12 P22-13)", () => {
     const m = mount(makeView({ phase: "verdict", candidate: 1 }));
-    m.show(makeView({ phase: "execution", candidate: 1, verdict: { yes: 2, no: 3, passed: false } }));
+    m.show(makeView({ phase: "execution", candidate: 1, execution: { seat: 1 } }));
     expect(announces(m.container).length).toBe(0);
-    advance(600);
-    expect(announces(m.container).map((e) => e.textContent)).toEqual(["찬성 2 · 반대 3"]);
-    advance(2000);
-    expect(announces(m.container).map((e) => e.textContent)).toEqual(["처형 없음"]);
+    advance(2999);
+    expect(announces(m.container).length).toBe(0);
+    advance(1);
+    expect(announces(m.container).map((e) => e.textContent)).toEqual(["영희 님 처형"]);
+    advance(3000);
+    expect(announces(m.container).length).toBe(0);
   });
 
   it("알림 문자열은 텍스트 노드다: 닉네임 '<b>영희</b>' 가 HTML 이 아니라 글자로 보인다", () => {
     const names = ["민수", "<b>영희</b>", "서준", "지아"];
     const m = mount(makeView({ phase: "verdict", candidate: 1, nicknames: names }));
-    m.show(makeView({ phase: "execution", candidate: 1, nicknames: names, verdict: { yes: 3, no: 0, passed: true } }));
-    advance(2600);
+    m.show(makeView({ phase: "execution", candidate: 1, nicknames: names, execution: { seat: 1 } }));
+    advance(3000);
     const el = announces(m.container)[0]!;
     expect(el.textContent).toBe("<b>영희</b> 님 처형");
     expect(el.querySelector("b")).toBeNull();
@@ -1211,7 +1214,7 @@ describe("GameMap — 꺼진 장치의 화면 (19-02, D-09, 22-07)", () => {
   it("낮 단계(투표·변론·찬반·처형) 어디에도 기록·흔적·증거 요소가 없다", () => {
     const phases: PhaseId[] = ["nomination", "defense", "verdict", "execution"];
     const seen = phases.map((phase) => {
-      const { container, unmount } = mount(modeView({ phase, candidate: 1, verdict: { yes: 2, no: 1, passed: true } }));
+      const { container, unmount } = mount(modeView({ phase, candidate: 1, ...(phase === "execution" ? { execution: { seat: 1 } } : {}) }));
       const row = `${phase}:${census(container) === NONE}`;
       unmount();
       return row;

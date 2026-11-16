@@ -132,8 +132,7 @@ const ALLOWED_VIEW_PATHS: readonly string[] = [
   "view.day.points",
   "view.day.candidate",
   "view.day.morning",
-  "view.day.verdict",
-  "view.day.ballots",
+  "view.day.execution",
   "view.day.runoff",
   "view.day.showdown",
   "view.players",
@@ -153,7 +152,7 @@ function listSources(dir: string): string[] {
 describe("정적 가드 자기 시험 (LS-6)", () => {
   it("허용 목록 안의 import 는 통과시키고 연결·스토어·프로토콜 값 import 는 잡는다", () => {
     const ok =
-      'import type { EmoteId } from "../../shared/protocol";\nimport { EXECUTION_MS } from "../../shared/game/phases";\nimport {\n  BALLOT_YES_AT,\n} from "../game/verdictMoment";\nimport { a } from "./recipes";\nimport { useEffect } from "react";';
+      'import type { EmoteId } from "../../shared/protocol";\nimport { EXECUTION_MS } from "../../shared/game/phases";\nimport {\n  VERDICT_ZOOM,\n} from "../game/verdictMoment";\nimport { a } from "./recipes";\nimport { useEffect } from "react";';
     expect(disallowedImports(ok)).toEqual([]);
     expect(disallowedImports('import { EMOTE_IDS } from "../../shared/protocol";')).toHaveLength(1);
     expect(disallowedImports('import { useRoomConnection } from "../net/useRoomConnection";')).toHaveLength(1);

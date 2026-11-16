@@ -514,7 +514,7 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
     expect(got.join(" ")).toBe(
-      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:10000:true:77777 verdict:10000:true:77777 execution:5600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
+      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:10000:true:77777 verdict:10000:true:77777 execution:6600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
     );
   });
 

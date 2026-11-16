@@ -447,17 +447,18 @@ describe("마지막 3인 — 공개 (UI-SPEC E-3, O-18)", () => {
   });
 });
 
-describe("마지막 3인 — 처형 단계 (verdict.last, 득표/찬반 알림 없음)", () => {
-  it("day.verdict.last 인 처형 view 에는 찬반 묶음이 없고 핀이 득표자에게 서 있다", () => {
+describe("마지막 3인 — 처형 단계 (22-12: 처형자 존재가 켠다, 찬반 묶음 없음)", () => {
+  it("마지막 3인으로 온 처형 view 도 같은 처형 시간표다: 찬반 묶음이 없고 핀이 득표자에게 서 있으며 유언 카드(빈 유언)가 보인다", () => {
     const v: RoomView = {
       ...makeShowdown({ i: 4, points: [] }),
       phase: "execution",
-      phaseEndsAt: NOW + 3000,
-      day: { n: 2, roles: [], candidate: 2, verdict: { yes: 0, no: 0, passed: true, last: true } },
+      phaseEndsAt: NOW + 6000, // 진입 후 0.6초 — 유언 카드 3.0초 안
+      day: { n: 2, roles: [], candidate: 2, execution: { seat: 2 } },
     };
     const { container } = mount(v);
     expect(container.querySelector("[data-ballots]")).toBeNull();
     expect(lastScene().pin).toMatchObject({ mode: "fixed", seat: 2 });
+    expect(container.querySelector("[data-will-reveal]")?.textContent).toBe("말없이 떠났어요");
   });
 });
 

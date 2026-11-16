@@ -198,7 +198,7 @@ describe("대본 입력 경계 (LS-11)", () => {
       expect(m).not.toBeNull();
       return [...m![1]!.matchAll(/^\s*(\w+)\??:/gm)].map((x) => x[1]!);
     };
-    expect(fields("VerdictInput")).toEqual(["passed", "last", "hasBallots"]);
+    expect(src).not.toContain("VerdictInput"); // 판결 대본은 입력이 없다(22-12: 처형자 존재가 시작 조건)
     expect(fields("ResultInput")).toEqual(["n", "win"]);
     expect(src).not.toContain("AwardInput"); // 시상 입력은 없다(D-19)
     expect(fields("LightInput")).toEqual(["win"]);

@@ -32,7 +32,7 @@ interface ViewOpts {
   endsIn?: number | null;
   durationMs?: number;
   resting?: boolean;
-  /** 18.1-12: 처형 판결(day.verdict) · 아침 결과(day.morning) */
+  /** 18.1-12: 처형자 존재(day.execution) · 아침 결과(day.morning) */
   passed?: boolean;
   morning?: Record<string, unknown>;
 }
@@ -54,7 +54,7 @@ function makeView(o: ViewOpts): RoomView {
       { seat: 3, nickname: "도현", connected: true, isHost: false },
     ],
     me: { seat: 0, isHost: true, role: "citizen" },
-    day: { n: 1, roles: ["mafia", "police", "citizen"], ...(o.passed !== undefined ? { candidate: 1, verdict: { yes: 3, no: 1, passed: o.passed } } : {}), ...(o.morning !== undefined ? { morning: o.morning } : {}) },
+    day: { n: 1, roles: ["mafia", "police", "citizen"], ...(o.passed === true ? { candidate: 1, execution: { seat: 1 } } : {}), ...(o.morning !== undefined ? { morning: o.morning } : {}) },
     ...(o.resting ? { resting: true as const } : {}),
   } as RoomView;
 }

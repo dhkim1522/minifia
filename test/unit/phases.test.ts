@@ -12,13 +12,13 @@ import {
 } from "../../shared/game/phases";
 
 describe("단계 표 (DAY-07, 결정 0060-1)", () => {
-  it("낮 단계 길이: 토론 90000·찬반 10000·지목 자리 값 15000(순차 지목은 진입 훅 뒤 phaseDurationOf 가 모이기 3000 으로 다시 구한다)·유언 10000(결정 0089-19, 22-11)·처형 5600(5000 + 판결 앞머리 600), 밤 30000", () => {
+  it("낮 단계 길이: 토론 90000·찬반 10000·지목 자리 값 15000(순차 지목은 진입 훅 뒤 phaseDurationOf 가 모이기 3000 으로 다시 구한다)·유언 10000(결정 0089-19, 22-11)·처형 6600(유언 카드 3000 + 처형 3000 + 꼬리 600, 22-12), 밤 30000", () => {
     expect(DISCUSSION_MS).toBe(90_000);
     expect(DEFENSE_MS).toBe(10_000);
     const ms = (["discussion", "verdict", "nomination", "defense", "execution", "night"] as const).map(
       (id) => PHASE_DEFS[id].durationMs,
     );
-    expect(ms.join(",")).toBe("90000,10000,15000,10000,5600,30000");
+    expect(ms.join(",")).toBe("90000,10000,15000,10000,6600,30000");
   });
 
   it("기본 다음 단계 사슬: discussion → verdict → nomination → defense → execution → night → morning → dayAnnounce", () => {

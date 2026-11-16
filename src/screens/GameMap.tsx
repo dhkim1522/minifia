@@ -10,8 +10,8 @@ import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { KillFx } from "../components/KillFx";
 import { PoliceResultCard } from "../components/PoliceResultCard";
-import { BallotReveal } from "../components/v2/BallotReveal";
 import { ResultAnnounce } from "../components/ResultAnnounce";
+import { QuoteCard } from "../components/v2/QuoteCard";
 import { WillLetter } from "../components/v2/WillLetter";
 import type { WillLetter as WillLetterState } from "../net/useWillLetter";
 import { SceneCurtain } from "../components/SceneCurtain";
@@ -47,7 +47,6 @@ import { useChat } from "../net/useChat";
 import { useMyMotion } from "../net/useMyMotion";
 import { useTurnLook } from "../net/useTurnLook";
 import { useVerdictMoment } from "../net/useVerdictMoment";
-import { ballotsOf } from "../game/ballotsView";
 import { useSendGuard } from "../net/useSendGuard";
 import { useSheetLayer } from "../net/useSheetLayer";
 import { useViewChoice } from "../net/useViewChoice";
@@ -67,9 +66,6 @@ import "../styles/sheet.css";
 import "../styles/testtools.css";
 
 /** 단계가 시작되고 안내 한 줄이 보이는 시간(결정 0051-5: 안내는 한 번, 그리고 사라진다) */
-/** 찬반 숫자 줄의 기본 윗변(띠 아래 큰 글 한 줄 아래: 142 + 43 + 16)과 큰 글 아랫변 사이 간격 — v2.css .mv-ballots 의 기본값과 같다 */
-const BALLOT_TOP = 201;
-const BALLOT_GAP = 16;
 const HINT_MS = 2500;
 /** 서버가 단계 어긋난 행동을 거절했을 때 위 알림(UI-SPEC Copywriting Contract, 7페이즈 "지금은 보낼 수 없어요" 문구 계열) */
 const REJECT_TEXT = "지금은 고를 수 없어요";
@@ -627,25 +623,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 마지막 3인(09.1.1-15)은 모이기·한마디·동시 지목에 어둡게, 공개에는 걷는다
   const dimOn = turnStage === "gather" || turnStage === "turn" || turnStage === "done" || blockMode === "runoff" || showdownStage === "gather" || showdownStage === "speak" || showdownStage === "point";
 
-  // 판결 순간(09.1.1-13, UI-SPEC C-1): 처형 진입 시각 기준 어둡게 막·찬반 묶음·카메라 줌. 모션 줄이기는 줌 없이 막·핀·묶음만 쓴다
+  // 판결 순간(UI-SPEC C-1, 22-12 P22-13·P22-14): 처형자 존재 기준 처형 진입 시각의 어둡게 막·카메라 줌·유언 공개 카드(0~3.0초). 모션 줄이기는 줌 없이 막·핀·카드만 쓴다
   const moment = useVerdictMoment(view, offset);
   const verdictZoom = moment.active && !reducedMotion ? moment.zoom : undefined;
-  const ballots = moment.active && moment.stage !== "none" && moment.stage !== "gone" ? ballotsOf(view) : null;
-
-  // 찬반 숫자 줄 윗변(--mf-ballot-top): 기본은 큰 글 한 줄 아래(201). 8자 이름 "… 님 처형" 처럼 큰 글이 두 줄로 감기면 큰 글 아랫변 + 16 으로 내려간다 — 숫자 줄은 큰 글과 겹치지 않는다
-  const announceText = shownAnnounce?.text;
-  useLayoutEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    if (ballots === null) {
-      root.style.removeProperty("--mf-ballot-top");
-      return;
-    }
-    const body = root.querySelector<HTMLElement>("[data-announce] .mf-announce__body");
-    const bottom = body ? body.getBoundingClientRect().bottom - root.getBoundingClientRect().top : 0;
-    const top = Math.max(BALLOT_TOP, Math.ceil(bottom + BALLOT_GAP));
-    root.style.setProperty("--mf-ballot-top", `${top}px`);
-  }, [ballots === null, announceText]);
 
   const scene = useMemo(
     () => ({
@@ -708,7 +688,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} />
       <KillFx nonce={killNonce} reducedMotion={reducedMotion} />
       <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(letter !== null || moment.active ? { placement: "top" as const } : {})} />
-      {ballots !== null ? <BallotReveal yes={ballots.yes} no={ballots.no} stage={moment.stage === "yes" ? "yes" : "both"} instant={moment.instant} reducedMotion={reducedMotion} /> : null}
+      {/* 유언 공개 카드(P22-11): 처형 단계 0~3.0초 모두의 화면. 독 아랫변 + 8, 폭 = 화면 − 32, 누를 수 없다. 사라질 때는 dur-med 페이드 */}
+      {moment.will !== null ? (
+        <div className="mv-will-reveal">
+          <QuoteCard text={moment.will.text} visible={moment.will.visible} still={moment.will.still} will />
+        </div>
+      ) : null}
       {letter !== null ? <WillLetter key={`${letter.t0}:${letter.seat}`} letter={letter} reducedMotion={reducedMotion} getInputTop={letterInputTop} onLive={setLetterLive} /> : null}
       {policeResult !== null ? (
         <PoliceResultCard

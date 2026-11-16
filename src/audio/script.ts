@@ -2,8 +2,8 @@
 // 대본의 시각은 상수의 함수이고, 난수는 인자로만 받는다. 시계·서버 프레임·역할·밤 선택·채팅 본문은 입력에 없다.
 // 시각 상수는 화면 모듈에서 읽어 온다(복사하지 않는다). 11페이즈 모듈은 LS-6 때문에 import 하지 못해 RESULT_AT 에 모았다.
 // 시각은 모두 "그 단계 기준 시각 T0 부터 ms" 다. 시계(T0 와 현재 시각)는 부르는 쪽(감독)이 준다.
-import { ANNOUNCE_LEAD_MS, ANNOUNCE_MORNING_AT, ANNOUNCE_TALLY_MS, ANNOUNCE_VICTIM_AT } from "../game/dayView";
-import { BALLOT_END_AT, BALLOT_NO_AT, BALLOT_YES_AT } from "../game/verdictMoment";
+import { PIN_OFF_EXEC_AT, WILL_REVEAL_MS } from "../../shared/game/phases";
+import { ANNOUNCE_MORNING_AT, ANNOUNCE_VICTIM_AT } from "../game/dayView";
 import { LETTER_FOLD_AT_MS, LETTER_SEAL_GAP_MS, LETTER_WRITE_AT_MS } from "../game/willLetter";
 import type { BedId, SfxId } from "./recipes";
 
@@ -32,7 +32,7 @@ export interface Script {
 
 // ───────────────────────── 시각 상수 ─────────────────────────
 
-/** 판결 앞머리 심장 박동(lub) 시각 — 박 간격 800·700·550·350 으로 빨라진다. dub 는 레시피 안(+160ms) */
+/** 유언 카드가 보이는 동안의 심장 박동(lub) 시각 — 박 간격 800·700·550·350 으로 빨라진다. dub 는 레시피 안(+160ms) */
 export const HEART_AT: readonly number[] = [0, 800, 1500, 2050, 2400];
 /** 판결 앞머리 침대 덕킹 */
 export const VERDICT_DUCK_DB = -14;
@@ -72,42 +72,17 @@ export const QUILL_PIECE_MS = 60;
 
 // ───────────────────────── 판결 ─────────────────────────
 
-export interface VerdictInput {
-  passed: boolean;
-  last: boolean;
-  hasBallots: boolean;
-}
-
 /**
- * 처형 진입(T0) 기준 판결 대본. 2600(= ANNOUNCE_LEAD_MS + ANNOUNCE_TALLY_MS) 앞의 목록은 통과/부결에서 같다.
- * 마지막 3인 처형은 0ms 에 gavel + rise 만.
+ * 처형 진입(T0) 기준 판결 대본(22-12 P22-13). 0~3.0초는 유언 카드가 보이는 동안의 심장 박동(결과와 무관한 앞머리)이고,
+ * WILL_REVEAL_MS(3000)에 처형 발표 gavel + rise 가 같이 난다. 찬반 소리(ballot.*)·카드음은 없다(D-14). 덕킹은 막·핀 창 끝(PIN_OFF_EXEC_AT)까지다.
+ * 부결·동점·0표는 처형 단계가 없어 이 대본이 없다.
  */
-export function verdictScript(input: VerdictInput): Script {
-  const { passed, last, hasBallots } = input;
-  if (last) {
-    return {
-      items: [
-        { at: 0, id: "execution.gavel" },
-        { at: 0, id: "execution.rise" },
-      ],
-      duck: null,
-    };
-  }
+export function verdictScript(): Script {
   const items: ScriptItem[] = HEART_AT.map((at) => ({ at, id: "verdict.heart" }));
-  if (hasBallots) {
-    items.push({ at: BALLOT_YES_AT, id: "ballot.yes" });
-    items.push({ at: BALLOT_NO_AT, id: "ballot.no" });
-    items.push({ at: BALLOT_END_AT, id: "ui.card" });
-  }
-  const announceAt = ANNOUNCE_LEAD_MS + ANNOUNCE_TALLY_MS;
-  if (passed) {
-    items.push({ at: announceAt, id: "execution.gavel" });
-    items.push({ at: announceAt, id: "execution.rise" });
-  } else {
-    items.push({ at: announceAt, id: "verdict.reject" });
-  }
+  items.push({ at: WILL_REVEAL_MS, id: "execution.gavel" });
+  items.push({ at: WILL_REVEAL_MS, id: "execution.rise" });
   items.sort((a, b) => a.at - b.at);
-  return { items, duck: { fromMs: 0, toMs: BALLOT_END_AT, db: VERDICT_DUCK_DB, returnMs: VERDICT_DUCK_RETURN_MS } };
+  return { items, duck: { fromMs: 0, toMs: PIN_OFF_EXEC_AT, db: VERDICT_DUCK_DB, returnMs: VERDICT_DUCK_RETURN_MS } };
 }
 
 // ───────────────────────── 밤 ─────────────────────────

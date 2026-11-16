@@ -97,9 +97,13 @@ export interface PointLine {
   seat: number;
   target: number;
 }
-/** 처형 발표: 탈락한 seat 뿐이다(결정 0060-5 — 문구 번호 없음). 직업은 싣지 않는다(D-09). */
+/**
+ * 처형 발표: 탈락한 seat 와 그 사람의 유언 글(will, 22-12 Pattern 6)이다(결정 0060-5 — 문구 번호 없음). 직업은 싣지 않는다(D-09).
+ * will 은 처형 단계에서만, 비어 있지 않을 때만 있고 모두에게 같은 공개 값이다(유언 공개 카드, P22-11). 빈 유언이면 키가 없다 — 화면이 "말없이 떠났어요" 를 그린다.
+ */
 export interface ExecutionView {
   seat: number;
+  will?: string;
 }
 /** 처형이 성립하지 않아 밤으로 온 이유 코드(D-34, 22-09 D-11·D-13): 찬반 부결(던진 표 0 포함) · 지목 동률 · 지목 0표. */
 export type NoExecutionReason = "rejected" | "tie" | "noVotes";

@@ -30,8 +30,7 @@ function av(phase: PhaseId, over: Partial<AudioView> = {}): AudioView {
     points: [],
     candidate: null,
     morning: null,
-    verdict: null,
-    hasBallots: false,
+    hasExecution: false,
     runoff: null,
     showdown: null,
     players: [0, 1, 2, 3].map((seat) => ({ seat, alive: true })),
@@ -432,15 +431,15 @@ describe("pinOfAudio 가 pinOf 의 결선·마지막 3인·처형 분기와 같�
     ["showdown 차례 2", view("showdown", { showdown: { order: O3, i: 2, endsAt: NOW + 14000 } })],
     ["showdown 동시 지목", view("showdown", { showdown: { order: O3, i: 3, endsAt: NOW + 20000, voted: [0] } })],
     ["showdown 공개", view("showdown", { showdown: { order: O3, i: 4, points: [{ seat: 0, target: 1 }] } })],
-    ["처형(마지막 3인)", view("execution", { candidate: 1, verdict: { yes: 0, no: 0, passed: true, last: true } }, EXEC_END)],
+    ["처형(마지막 3인 득표자)", view("execution", { candidate: 1, execution: { seat: 1 } }, EXEC_END)],
     ["밤", view("night", {})],
     ["verdict", view("verdict", { candidate: 2 }, NOW + 20000)],
-    ["처형(찬반 기록)", view("execution", { candidate: 2, verdict: { yes: 2, no: 1, passed: true }, ballots: { yes: [0, 1], no: [3] } }, EXEC_END)],
-    ["처형 되풀이", view("execution", { candidate: 2, verdict: { yes: 2, no: 1, passed: true }, ballots: { yes: [0, 1], no: [3] } }, EXEC_END)],
+    ["처형(처형자 존재)", view("execution", { candidate: 2, execution: { seat: 2 } }, EXEC_END)],
+    ["처형 되풀이", view("execution", { candidate: 2, execution: { seat: 2 } }, EXEC_END)],
     ["verdict2", view("verdict", { candidate: 2 }, NOW + 20000)],
-    ["처형(기록 없음·마지막 아님)", view("execution", { candidate: 2, verdict: { yes: 0, no: 0, passed: false } }, EXEC_END)],
+    ["처형(처형자 없음)", view("execution", { candidate: 2 }, EXEC_END)],
     ["verdict3", view("verdict", { candidate: 2 }, NOW + 20000)],
-    ["처형(변론자 없음)", view("execution", { verdict: { yes: 2, no: 1, passed: false }, ballots: { yes: [0, 1], no: [3] } }, EXEC_END)],
+    ["처형(변론자 없음·처형자 없음)", view("execution", {}, EXEC_END)],
   ];
   const pinIds = (out: DirectOutput): number => out.now.filter((c) => c.id === "pin.on").length + out.scripts.flatMap((s) => s.items).filter((i) => i.id === "pin.on").length;
 
@@ -457,7 +456,7 @@ describe("pinOfAudio 가 pinOf 의 결선·마지막 3인·처형 분기와 같�
       expect(pinIds(out), `${seq[k - 1]![0]} → ${seq[k]![0]}`).toBe(start ? 1 : 0);
       if (start) expectedOn += 1;
     }
-    // runoff 진입 1 + showdown 차례 3 + 처형 3(마지막 3인·찬반 기록·...): 아래 개수로 열이 실제로 핀을 켰음을 고정한다
+    // runoff 진입 1 + showdown 차례 3 + 처형 2(마지막 3인 득표자·처형자 존재): 아래 개수로 열이 실제로 핀을 켰음을 고정한다
     expect(expectedOn).toBe(1 + 3 + 1 + 1);
   });
 });
@@ -659,8 +658,7 @@ describe("audioViewOf: 허용 필드만 (LS-6, T-12-27)", () => {
       points: [{ seat: 0, target: 2 }],
       candidate: 2,
       morning: null,
-      verdict: null,
-      hasBallots: false,
+      hasExecution: false,
       runoff: null,
       showdown: null,
       players: [{ seat: 0, alive: true }, { seat: 1, alive: false }, { seat: 2, alive: true }],
@@ -738,7 +736,7 @@ describe("기본판 낮에 꺼진 장치 소리 없음 (D-05)", () => {
       rv("nomination", { points: [{ seat: 1, target: 2 }, { seat: 3, target: 2 }, { seat: 4, target: 2 }] }),
       rv("defense", { candidate: 2 }),
       rv("verdict", { candidate: 2 }),
-      rv("execution", { candidate: 2, verdict: { yes: 3, no: 1, passed: false } }),
+      rv("execution", { candidate: 2, execution: { seat: 2 } }),
       rv("night"),
     ];
     const emitted: string[] = [];

@@ -534,56 +534,55 @@ describe("useSound: 방 view 의 차이가 감독을 거쳐 엔진 요청이 된
   });
 
   describe("판결 순간 (12-10, D-13, LS-10, LS-11)", () => {
-    const execView = (t0: number, passed: boolean, last = false): RoomView =>
+    const execView = (t0: number): RoomView =>
       roomView("execution", {
         phaseEndsAt: t0 + EXECUTION_MS,
-        day: { n: 1, roles: [], candidate: 2, verdict: { yes: 2, no: 1, passed, ...(last ? { last: true as const } : {}) }, ...(last ? {} : { ballots: { yes: [0, 1], no: [3] } }) },
+        day: { n: 1, roles: [], candidate: 2, execution: { seat: 2 } },
       });
     const verdictView = (t0: number): RoomView => roomView("verdict", { phaseEndsAt: t0, day: { n: 1, roles: [], candidate: 2 } });
     const timeline = (rig: ReturnType<typeof makeRig>, t0: number): [string, number][] =>
       rig.engine.log().filter((e) => e.id !== "bed.vote" && e.id !== "timer.tick").map((e) => [e.id, Math.round(e.at - t0)] as [string, number]);
 
-    it("통과: 처형 진입 즉시 심장 박동·핀, 이후 서버 시각 기준으로 둔탁음·gavel+rise", () => {
+    it("처형: 처형 진입 즉시 심장 박동·핀, 3000 에 gavel+rise (22-12 6.6초 표), 찬반 둔탁음·카드음은 없다", () => {
       const rig = makeRig();
       const t0 = rig.fake.clock.now();
       const { rerender } = mount(rig, { view: verdictView(t0), epoch: 1 });
-      rerender({ view: execView(t0, true), epoch: 1 });
+      rerender({ view: execView(t0), epoch: 1 });
       act(() => rig.fake.clock.advance(EXECUTION_MS));
       const tl = timeline(rig, t0);
       expect(tl.filter(([id]) => id === "verdict.heart").map(([, at]) => at)).toEqual([0, 800, 1500, 2050, 2400]);
       expect(tl).toContainEqual(["pin.on", 0]);
-      expect(tl).toContainEqual(["ballot.yes", 600]);
-      expect(tl).toContainEqual(["ballot.no", 1000]);
-      expect(tl).toContainEqual(["execution.gavel", 2600]);
-      expect(tl).toContainEqual(["execution.rise", 2600]);
-      expect(tl).toContainEqual(["ui.card", 4600]);
+      expect(tl).toContainEqual(["execution.gavel", 3000]);
+      expect(tl).toContainEqual(["execution.rise", 3000]);
+      for (const id of ["ballot.yes", "ballot.no", "ui.card", "verdict.reject"]) expect(tl.some(([x]) => x === id)).toBe(false);
     });
 
-    it("부결: 2600 에 verdict.reject, gavel 은 없다", () => {
+    it("부결(처형 단계 없음): 찬반 → 밤에는 처형 소리·핀이 없다", () => {
       const rig = makeRig();
       const t0 = rig.fake.clock.now();
       const { rerender } = mount(rig, { view: verdictView(t0), epoch: 1 });
-      rerender({ view: execView(t0, false), epoch: 1 });
+      rerender({ view: roomView("night", { phaseEndsAt: t0 + 30_000 }), epoch: 1 });
       act(() => rig.fake.clock.advance(EXECUTION_MS));
-      const tl = timeline(rig, t0);
-      expect(tl).toContainEqual(["verdict.reject", 2600]);
-      expect(tl.some(([id]) => id === "execution.gavel")).toBe(false);
+      const ids = timeline(rig, t0).map(([id]) => id);
+      for (const id of ["execution.gavel", "execution.rise", "pin.on", "verdict.heart", "verdict.reject"]) expect(ids).not.toContain(id);
     });
 
-    it("마지막 3인 처형: 0ms 에 gavel + rise 만", () => {
+    it("마지막 3인 득표자 처형도 같은 시간표다(처형자 존재가 켠다)", () => {
       const rig = makeRig();
       const t0 = rig.fake.clock.now();
       const { rerender } = mount(rig, { view: roomView("showdown", { phaseEndsAt: t0 }), epoch: 1 });
-      rerender({ view: execView(t0, true, true), epoch: 1 });
+      rerender({ view: execView(t0), epoch: 1 });
       act(() => rig.fake.clock.advance(EXECUTION_MS));
-      expect(timeline(rig, t0).map(([id]) => id).sort()).toEqual(["execution.gavel", "execution.rise", "pin.on"]);
+      const tl = timeline(rig, t0);
+      expect(tl).toContainEqual(["execution.gavel", 3000]);
+      expect(tl).toContainEqual(["pin.on", 0]);
     });
 
     it("처형 중간에 처음 받은 view(새로고침)는 침대뿐이고 예약도 없다", () => {
       const rig = makeRig();
       const t0 = rig.fake.clock.now();
       rig.fake.clock.advance(1500);
-      mount(rig, { view: execView(t0, true), epoch: 1 });
+      mount(rig, { view: execView(t0), epoch: 1 });
       act(() => rig.fake.clock.advance(EXECUTION_MS));
       expect(logIds(rig)).toEqual(["bed.vote"]);
     });
@@ -592,9 +591,9 @@ describe("useSound: 방 view 의 차이가 감독을 거쳐 엔진 요청이 된
       const rig = makeRig();
       const t0 = rig.fake.clock.now();
       const { rerender } = mount(rig, { view: verdictView(t0), epoch: 1 });
-      rerender({ view: execView(t0, true), epoch: 1 });
+      rerender({ view: execView(t0), epoch: 1 });
       act(() => rig.fake.clock.advance(1000));
-      rerender({ view: execView(t0, true), epoch: 1 });
+      rerender({ view: execView(t0), epoch: 1 });
       const before = logIds(rig).filter((id) => id === "verdict.heart").length;
       expect(before).toBe(2);
       rerender({ view: roomView("night", { phaseEndsAt: t0 + 60_000 }), epoch: 1 });

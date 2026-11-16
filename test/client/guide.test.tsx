@@ -174,7 +174,7 @@ describe("18.1-12 띠 한 구절 (0083-8)", () => {
     for (const phase of ["execution", "morning"] as const) {
       for (const vp of ALL_VIEWPOINTS) {
         const view = cellView(phase, vp);
-        if (phase === "execution") view.day!.verdict = { yes: 3, no: 1, passed: true };
+        if (phase === "execution") view.day!.execution = { seat: 1 };
         const { container, unmount } = renderRoom(view);
         expect(squish(onlyGuide(container, `${phase}/${vp}`).textContent), `${phase}/${vp}`).toBe("");
         unmount();

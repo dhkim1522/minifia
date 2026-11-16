@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
-import { EXECUTION_MS, VERDICT_LEAD_MS } from "../../shared/game/phases";
+import { EXECUTION_MS } from "../../shared/game/phases";
 import { advanceTo, chatRecordsOf, chatsOf, closePhase, connect, framesOf, helloForLog, lastViewOf, mark, nextFrame, pointAll, settle, startedGame, storedRoom, verdictAll } from "./helpers";
 import type { Game } from "./helpers";
 
@@ -52,7 +52,7 @@ describe("찬반 기록 공개 (결정 0066-3, L19)", () => {
     const defIdx = g.actors.findIndex((a) => a.seat === defender.seat);
     expect(JSON.stringify(views[defIdx]!.day?.ballots)).toBe(want);
     // 처형 단계 길이: 공개 값만의 함수(5000 + 판결 앞머리 600)
-    expect(EXECUTION_MS).toBe(5000 + VERDICT_LEAD_MS);
+    expect(EXECUTION_MS).toBe(6600);
     expect(views.map((v) => v.phaseDurationMs).join(",")).toBe(g.socks.map(() => "5600").join(","));
     expect((await storedRoom(g.code)).phaseEndsAt).toBe(deadline + 5600);
   }, 90_000);

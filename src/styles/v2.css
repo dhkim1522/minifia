@@ -385,6 +385,10 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-quote { margin: 0; width: 100%; box-sizing: border-box; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--night-800) 92%, transparent); border: 1.5px solid var(--gray-100); font-family: var(--font-ui); font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); text-align: center; word-break: keep-all; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; opacity: 0; transition: opacity var(--dur-med) var(--ease-out); pointer-events: none; }
 .mv-quote.is-on { opacity: 1; }
 .mv-quote.is-still { transition: none; }
+/* 유언 공개 카드(22-12 P22-11): 같은 인용 카드에 줄 수만 4 로(50자소 한글 어절 줄바꿈 최악 4줄). 면·테두리·글자·가운데는 그대로, 새 색·토큰 없음 */
+.mv-quote--will { -webkit-line-clamp: 4; line-clamp: 4; }
+/* 카드 자리: 독 아랫변 + 8(위 알림 .mv-toast--top 과 같은 윗변), 폭 = 화면 − 32. 누를 수 없다 */
+.mv-will-reveal { position: absolute; top: calc(var(--mf-host-dock, calc(var(--toast-top) - 8px)) + 8px); left: var(--space-md); right: var(--space-md); z-index: calc(var(--z-overlay) + 1); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .mv-quote { transition: none; } }
 
 /* 모션 줄이기(O-22): 배지 팝·알약 페이드·시트 등장 애니메이션 없이 즉시. 알약은 즉시 나타나 2.4초 뒤 즉시 사라진다(타이머가 요소를 걷는다) */

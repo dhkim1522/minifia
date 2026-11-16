@@ -1,6 +1,6 @@
 // 낮 처형 화면 연출 순수 모듈 — DAY-04·05·06, 결정 0049·0053·0060, 08-UI-SPEC.
-// 순수: 시각·난수·DOM 을 읽지 않는다. 입력은 서버가 모두에게 보내는 공개 정보(day.points·players·phase·day.verdict·
-// day.noExecution·day.voteLog)뿐이고, 연출 이벤트(채팅 줄·위 알림·결과 알림)는 서버 view 두 개의 차이에서만 만든다.
+// 순수: 시각·난수·DOM 을 읽지 않는다. 입력은 서버가 모두에게 보내는 공개 정보(day.points·players·phase·day.execution·
+// day.noExecution)뿐이고, 연출 이벤트(채팅 줄·위 알림·결과 알림)는 서버 view 두 개의 차이에서만 만든다.
 // 09.1(결정 0063-1): 지목은 순차라 위 알림 대기열·선두·과반 줄은 없다 — 득표는 배지 숫자, 진행은 차례 알약·위 한 줄(pickTurn.ts)이 말한다.
 // 기본판(결정 0072): 동시 투표 — 선두·과반 줄·위 알림 재료를 되살림. day.turn 이 없을 때만 낸다(순차 view 는 09.1 그대로). 위 알림은 대기열 없이 새 표가 이전 것을 바꾼다(U-5).
 // 서버 응답 전에 남의 표·배지·선두를 미리 만들지 않는다. me.verdictVote·me.endDiscussion·spectate 는 읽지 않는다(T-08-22).
@@ -8,7 +8,7 @@
 // 형식은 src/net/roomDiff.ts 선례: 이전 view 가 없으면(첫 스냅샷·재접속) 이벤트 없이 정상 상태만 준다.
 import { isAlive } from "../../shared/game/alive";
 import { majorityOf } from "../../shared/game/nomination";
-import { EXECUTION_MS, VERDICT_LEAD_MS } from "../../shared/game/phases";
+import { EXEC_ANNOUNCE_MS, EXECUTION_MS, WILL_REVEAL_MS } from "../../shared/game/phases";
 import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
 import { MORNING_TEXT, morningText } from "./eliminationText";
@@ -21,9 +21,10 @@ export const DAY_COPY = {
   dayLine: (n: number): string => `${n}일차`,
   /** 결선(09.1.1-14) 시작 채팅 시스템 줄 */
   runoffStart: "결선 시작",
-  tallyText: (yes: number, no: number): string => `찬성 ${yes} · 반대 ${no}`,
   executedText: (name: string): string => `${name} 님 처형`,
   noExecution: "처형 없음",
+  /** 유언 공개 카드(22-12 P22-12): 처형자가 유언을 남기지 않았을 때 같은 카드·같은 3.0초에 쓰는 한 줄 */
+  willEmpty: "말없이 떠났어요",
   // ---- 결과 알림(36px) ----
   // 14페이즈 U-5: 아래 두 문구는 결과 알림(36px)으로 쓰지 않는다(자막 띠가 같은 말을 한다). 상수는 지우지 않는다.
   announceDay: "낮이 되었습니다",
@@ -56,19 +57,13 @@ export const DAY_COPY = {
   ghostNightHint: "모두의 직업과 밤 행동이 보여요",
 } as const;
 
-// ---- 결과 알림 시간표 (결정 0060-5, UI-SPEC 남은 위험 8, 가정 A3) ----
-// 표시 시간이며 서버 단계를 넘기지 않는다: ANNOUNCE_TALLY_MS + max(ANNOUNCE_EXEC_MS, ANNOUNCE_NOEXEC_MS) ≤ EXECUTION_MS(처형 5.6초).
-// 알림이 단계 경계에서 잘리면 다음 단계 알림이 그것을 바꾼다(한 번에 하나).
-// 09.1.1-12(결정 0066-7): 처형 단계 앞 0.6초는 판결 앞머리(줌·핀 조명)라 알림은 모두 ANNOUNCE_LEAD_MS 뒤에 시작한다.
-// 아래 ANNOUNCE_TALLY_MS 등의 `at` 은 이 앞머리 이후 기준이고, phaseEntry 가 더해 단계 진입 기준 ms 로 만든다.
-// 마지막 3인 처형(day.verdict.last, 찬반 없음)은 앞머리도 득표 알림도 없다.
-/** 처형 단계 앞 판결 앞머리(서버 VERDICT_LEAD_MS 와 같은 값). 알림 시작 = 이 값 */
-export const ANNOUNCE_LEAD_MS = VERDICT_LEAD_MS;
-/** 앞머리 뒤 0~2.0초: "찬성 n · 반대 m" */
-export const ANNOUNCE_TALLY_MS = 2000;
-/** 통과: 앞머리 뒤 2.0~5.0초 "{이름} 님 처형" */
-export const ANNOUNCE_EXEC_MS = 3000;
-/** 부결(2.0초부터)·지목 동률/0표(밤 시작): "처형 없음" 1.4초 */
+// ---- 결과 알림 시간표 (결정 0060-5, UI-SPEC 남은 위험 8, 22-12 P22-13) ----
+// 처형 단계 6.6초 한 표(phases.ts): 0~3.0초 유언 카드(알림·줄 없음 — willCardOf), 3.0~6.0초 "{이름} 님 처형" 큰 글과 유령, 6.0~6.6초 꼬리(핀·콘 끔).
+// 표시 시간이며 서버 단계를 넘기지 않는다: WILL_REVEAL_MS + ANNOUNCE_EXEC_MS + 꼬리 ≤ EXECUTION_MS. 알림이 단계 경계에서 잘리면 다음 단계 알림이 그것을 바꾼다(한 번에 하나).
+// 찬반 득표 알림("찬성 n · 반대 m")은 없다(D-14) — 부결은 처형 단계가 없어 night 진입 알림 '처형 없음' 한 가지다(P22-4).
+/** 처형 큰 글 "{이름} 님 처형"이 선 채 머무는 시간 — 유언 카드(WILL_REVEAL_MS) 뒤 3.0초 */
+export const ANNOUNCE_EXEC_MS = EXEC_ANNOUNCE_MS;
+/** 찬반 부결·지목 동률/0표(밤 시작): "처형 없음" 1.4초 */
 export const ANNOUNCE_NOEXEC_MS = 1400;
 /** 낮 시작 단계(DAY_ANNOUNCE_MS) 2초. 14 U-5 로 36px 알림은 없어졌고 상수만 남는다 */
 export const ANNOUNCE_DAY_MS = 2000;
@@ -186,6 +181,18 @@ const nameOf = (view: RoomView, seat: number): string | undefined => view.player
 /** 처형 단계 안에서 끝나도록 알림 길이를 자른다(at 은 처형 단계 진입 기준 ms). */
 const fitExecution = (at: number, ms: number): number => Math.min(ms, EXECUTION_MS - at);
 
+/**
+ * 유언 공개 카드 계획(22-12 P22-11·P22-12): 처형 단계에서 처형자(day.execution)가 있으면 카드 글과 보이는 시간. 글은 처형자의 유언이고,
+ * 비어 있으면(키 없음) "말없이 떠났어요" — 같은 카드·같은 3.0초라 길이로 구별되지 않는다. 처형 단계가 아니거나 처형자가 없으면 null.
+ * 순수: view 의 공개 값(day.execution)만 읽는다 — 역할은 읽지 않는다.
+ */
+export function willCardOf(view: RoomView): { text: string; ms: number } | null {
+  const execution = view.day?.execution;
+  if (view.phase !== "execution" || execution === undefined) return null;
+  const will = execution.will;
+  return { text: will === undefined || will === "" ? DAY_COPY.willEmpty : will, ms: WILL_REVEAL_MS };
+}
+
 /** 경찰 결과 카드 본문. 경찰 분기(policeResultOf 가 null 이 아닐 때) 밖에서 쓰지 않는다 */
 const POLICE_TEXT = { mafia: "마피아", clear: "마피아 아님" } as const;
 
@@ -228,28 +235,15 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       // 유언 단계(22-11 D-14·D-23): 득표 줄·알림이 없다 — 지목·찬반 기록을 남기지 않는다. 장면(처형자 스포트라이트)과 띠가 말한다
       return;
     case "execution": {
-      const verdict = day.verdict;
-      if (!verdict) return;
-      // 마지막 3인 처형(결정 0066-5): 찬반이 없었으니 득표 줄·알림 없이 처형 알림이 0초에 시작한다(앞머리 없음)
-      const last = verdict.last === true;
-      const execAt = last ? 0 : ANNOUNCE_LEAD_MS + ANNOUNCE_TALLY_MS;
-      if (!last) {
-        const tally = DAY_COPY.tallyText(verdict.yes, verdict.no);
-        out.lines.push({ kind: "hot", text: tally, at: ANNOUNCE_LEAD_MS });
-        out.announces.push({ text: tally, at: ANNOUNCE_LEAD_MS, ms: fitExecution(ANNOUNCE_LEAD_MS, ANNOUNCE_TALLY_MS) });
-      }
-      if (verdict.passed) {
-        const seat = day.execution?.seat ?? day.candidate;
-        const name = seat === undefined ? undefined : nameOf(cur, seat);
-        if (seat === undefined || name === undefined) return;
-        const text = DAY_COPY.executedText(name);
-        out.lines.push({ kind: "hot", text, at: execAt });
-        out.announces.push({ text, at: execAt, ms: fitExecution(execAt, ANNOUNCE_EXEC_MS) });
-        out.fx.push({ kind: "ghostRise", seat, at: execAt });
-      } else {
-        out.lines.push({ kind: "system", text: DAY_COPY.noExecution, at: execAt });
-        out.announces.push({ text: DAY_COPY.noExecution, at: execAt, ms: fitExecution(execAt, ANNOUNCE_NOEXEC_MS) });
-      }
+      // 처형자(day.execution)가 있을 때만(22-12 P22-14). 0~3.0초는 유언 카드(willCardOf, 화면이 시계로 그린다)라 알림·줄이 없고, 3.0초에 큰 글·줄·유령이 선다.
+      const seat = day.execution?.seat;
+      if (seat === undefined) return;
+      const name = nameOf(cur, seat);
+      if (name === undefined) return;
+      const text = DAY_COPY.executedText(name);
+      out.lines.push({ kind: "hot", text, at: WILL_REVEAL_MS });
+      out.announces.push({ text, at: WILL_REVEAL_MS, ms: fitExecution(WILL_REVEAL_MS, ANNOUNCE_EXEC_MS) });
+      out.fx.push({ kind: "ghostRise", seat, at: WILL_REVEAL_MS });
       return;
     }
     case "night": {

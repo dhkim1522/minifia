@@ -1,7 +1,7 @@
 // 사회자 문구 표와 그 파생 판정(14페이즈, 결정 0073 예정 — HOST-01·03·05, UI-SPEC "사회자 문구 표").
 // 자막 문장은 서버가 만들지 않는다. 클라이언트가 받은 자기 view 만으로 이 파일의 순수 함수가 한 줄을 만든다 — 서버·프로토콜 diff 0.
 // 읽는 값은 허용 목록뿐이다: phase · phaseEndsAt · phaseDurationMs · minPlayers · me.seat · me.role · me.isHost ·
-// players[].{seat, alive, connected} · day.candidate · day.verdict.passed · day.morning(유무) · local.cardSeen ·
+// players[].{seat, alive, connected} · day.candidate · day.execution(유무) · day.morning(유무) · local.cardSeen ·
 // players[].job · spectate · me.allies · me.records · me.pick · me.verdictVote · day.points · day.turn · day.voteLog · day.roles 등 그 밖은 읽지 않는다
 // (유령 줄도 남의 직업을 말하지 않는다). 시각·난수·DOM·window 를 읽지 않는다. 시험(test/unit/hostLine.test.ts "HOST-05")이 읽은 경로를 기록해 고정한다.
 // 역할별 줄(밤 마피아·경찰·의사)은 그 역할 분기 안에서 키가 정해진 뒤에만 꺼낸다(T-09-29 선례) — 여러 역할 줄을 모은 배열은 없다.
@@ -23,7 +23,7 @@ export type HostKey =
   | "nomination.act" | "nomination.ghost"
   | "defense.act" | "defense.wait" | "defense.ghost"
   | "verdict.act" | "verdict.ghost"
-  | "execution.passed" | "execution.failed"
+  | "execution.passed"
   | "night.mafia" | "night.police" | "night.doctor" | "night.citizen" | "night.ghost"
   | "morning" | "ended"
   | "fallback";
@@ -60,7 +60,6 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   "verdict.ghost": "지켜봐 주세요",
   // 큰 글(처형 결과)이 말한다
   "execution.passed": "",
-  "execution.failed": "",
   "night.mafia": "없앨 사람의 얼굴을 눌러 주세요",
   "night.police": "조사할 사람의 얼굴을 눌러 주세요",
   "night.doctor": "지킬 사람의 얼굴을 눌러 주세요",
@@ -104,11 +103,9 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
     case "verdict":
       // 후보가 없다(22-10, D-11): 산 사람 전원이 같은 줄이다
       return ghost ? "verdict.ghost" : "verdict.act";
-    case "execution": {
-      const passed = view.day?.verdict?.passed;
-      if (passed === undefined) return "fallback";
-      return passed ? "execution.passed" : "execution.failed";
-    }
+    case "execution":
+      // 22-12 P22-14: 처형자 존재(day.execution)가 키다 — 부결·동점·0표는 처형 단계가 없어 실패 갈래가 없다. 줄은 비어 있고 유언 카드·큰 글이 말한다
+      return view.day?.execution === undefined ? "fallback" : "execution.passed";
     case "night": {
       if (ghost) return "night.ghost";
       const role = view.me.role;

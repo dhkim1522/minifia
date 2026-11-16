@@ -8,7 +8,7 @@
 //   참이면 TensionVignette 의 큐 신호(tensionCue)가 같은 규칙으로 같은 night.cue 를 낸다. 밤의 모든 닫힌 신호는 무음이다(LS-7).
 // 12-09 아침: 진입 morning.dawn(결과와 무관) + 공개 결과 분기(평화·구출·희생자). 암살음·유언 편지·경찰 카드는 숫자뿐인 개인 사건(directEvent)으로 받는다.
 //   kill.slash 는 view 만으로는 절대 나지 않는다 — killFx 가 선 본인의 입력이 있을 때만(LS-8).
-// 12-10 판결: 처형 진입에서 verdictScript 를 T0 = endsAt − EXECUTION_MS(서버 시각) 기준으로 예약한다. 2600ms 앞 소리는 통과/부결에서 같아 결과가 미리 새지 않는다.
+// 12-10 판결: 처형 진입에서 verdictScript 를 T0 = endsAt − EXECUTION_MS(서버 시각) 기준으로 예약한다. 6.6초 시간표(유언 카드 3.0초 → 3.0초 처형 발표)를 따른다. 켜짐 조건은 처형자 존재(hasExecution)다.
 //   도착이 늦은 view 는 GRACE_MS 안에 든 항목만 지금 내고 지난 항목은 버린다. 처형 중간 합류·epoch 변경은 침대만이다(LS-10, LS-11).
 // 12-10 결선·마지막 3인·핀: runoff.intro·runoff.reveal·showdown.reveal 과 pin.on 은 공개 view 차이(day.runoff.step·day.showdown.i)로만 정한다.
 //   pinOfAudio 는 src/world/pinPlan.ts pinOf 의 지목·결선·마지막 3인·처형 분기를 복제한 것이고 시험이 대표 view 열에서 전이를 대조한다.
@@ -148,10 +148,9 @@ function pinOfAudio(v: AudioView): Pin | null {
     return typeof seat === "number" ? { mode: "turn", seat } : null;
   }
   if (v.phase === "execution") {
-    // 처형 핀(pinPlan executionPin): 변론자가 있고 (마지막 3인 처형이거나 찬반 기록이 있고) 마감이 있을 때
-    if (typeof v.candidate !== "number" || v.verdict === null) return null;
-    if ((!v.verdict.last && !v.hasBallots) || v.endsAt === null) return null;
-    return { mode: "fixed", seat: v.candidate };
+    // 처형 핀(pinPlan executionPin, 22-12 P22-14): 처형자 존재(hasExecution)와 마감이 있을 때 — 찬반 기록은 없다. 좌석은 소리에 필요 없다
+    if (!v.hasExecution || v.endsAt === null) return null;
+    return { mode: "fixed", seat: v.candidate ?? -1 };
   }
   if (v.phase !== "nomination" || v.turn === null) return null;
   const { order, i } = v.turn;
@@ -198,16 +197,15 @@ function emitTimed(key: string, items: ScriptItem[], out: DirectOutput): void {
 }
 
 /**
- * 처형 진입 판결 대본(C-3, D-13). T0 = endsAt − EXECUTION_MS(서버 시각). 항목의 지금 대비 지연 = T0 + at − serverNow.
+ * 처형 진입 판결 대본(C-3, D-13, 22-12 P22-14). T0 = endsAt − EXECUTION_MS(서버 시각, 6.6초). 항목의 지금 대비 지연 = T0 + at − serverNow.
  * 지연이 −GRACE_MS 이상 0 미만이면 지금(0), 그보다 지났으면 버린다. 덕킹은 남은 구간만 건다.
- * 찬반 기록이 있거나 마지막 3인 처형이고 변론자(candidate)가 있으면 처형 진입에 핀 조명(pin.on)이 함께 켜진다 — pinOf 의 처형 핀과 같은 조건이다.
+ * 대본 시작 조건은 처형자 존재(hasExecution)다 — 부결·동점·0표는 처형 단계가 없어 대본이 없다. 처형 진입에 핀 조명(pin.on)이 함께 켜진다 — pinOf 의 처형 핀과 같은 조건이다.
  */
 function verdictRun(cur: AudioView, local: LocalClock, out: DirectOutput): void {
-  const v = cur.verdict;
   const rest = remainingMs(cur.endsAt, local);
-  if (v === null || rest === null) return;
+  if (!cur.hasExecution || rest === null) return;
   const elapsed = EXECUTION_MS - rest; // = serverNow − T0
-  const script = verdictScript({ passed: v.passed, last: v.last, hasBallots: cur.hasBallots });
+  const script = verdictScript();
   const nominal: ScriptItem[] = [...script.items];
   if (pinOfAudio(cur) !== null) nominal.unshift({ at: 0, id: "pin.on" });
   const kept: ScriptItem[] = [];

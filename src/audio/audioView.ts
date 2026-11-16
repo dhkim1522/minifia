@@ -31,12 +31,6 @@ export interface AudioShowdown {
   i: number;
 }
 
-/** 판결(12-10): 처형 단계의 공개 결과 — 통과 여부와 마지막 3인 처형인가. 찬반 수·좌석은 읽지 않는다 */
-export interface AudioVerdict {
-  passed: boolean;
-  last: boolean;
-}
-
 export interface AudioView {
   phase: PhaseId;
   /** 공개 단계 마감 시각(서버 ms). 없으면 null */
@@ -46,9 +40,8 @@ export interface AudioView {
   points: PointLine[];
   candidate: number | null;
   morning: AudioMorning | null;
-  verdict: AudioVerdict | null;
-  /** 찬반 기록(day.ballots)이 있는가 — 불리언 하나. 누가 어느 쪽인지는 읽지 않는다 (12-10) */
-  hasBallots: boolean;
+  /** 처형자(day.execution)가 있는가(22-12 P22-14) — 불리언 하나. 처형자 좌석·유언 글은 읽지 않는다. 부결·동점·0표는 처형 단계가 없어 거짓이다 */
+  hasExecution: boolean;
   runoff: AudioRunoff | null;
   showdown: AudioShowdown | null;
   players: { seat: number; alive: boolean }[];
@@ -56,7 +49,7 @@ export interface AudioView {
 }
 
 /** AudioView 의 키 목록. 시험이 audioViewOf 출력의 키가 이 안에 있음을 단언한다 */
-export const AUDIO_VIEW_FIELDS = ["phase", "endsAt", "dayN", "turn", "points", "candidate", "morning", "verdict", "hasBallots", "runoff", "showdown", "players", "mySeat"] as const;
+export const AUDIO_VIEW_FIELDS = ["phase", "endsAt", "dayN", "turn", "points", "candidate", "morning", "hasExecution", "runoff", "showdown", "players", "mySeat"] as const;
 
 export function audioViewOf(view: RoomView): AudioView {
   const t = view.day?.turn;
@@ -72,7 +65,6 @@ export function audioViewOf(view: RoomView): AudioView {
         };
   const points = view.day?.points;
   const m = view.day?.morning;
-  const v = view.day?.verdict;
   const ro = view.day?.runoff;
   const sd = view.day?.showdown;
   return {
@@ -83,8 +75,7 @@ export function audioViewOf(view: RoomView): AudioView {
     points: points === undefined ? [] : points.map((p) => ({ seat: p.seat, target: p.target })),
     candidate: view.day?.candidate ?? null,
     morning: m === undefined ? null : { eliminated: m.eliminated !== undefined, saved: m.saved === true },
-    verdict: v === undefined ? null : { passed: v.passed === true, last: v.last === true },
-    hasBallots: view.day?.ballots !== undefined,
+    hasExecution: view.day?.execution !== undefined,
     runoff: ro === undefined ? null : { step: ro.step },
     showdown: sd === undefined ? null : { order: [...sd.order], i: sd.i },
     players: view.players.map((p) => ({ seat: p.seat, alive: p.alive !== false })),

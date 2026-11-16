@@ -3,7 +3,7 @@
 // L22: 대상 좌석은 서버가 모두에게 공개한 값(day.turn·day.points)에서만 나온다. 연결·스토어·개인 정보는 읽지 않는다(정적 시험 pinStaticGuard).
 import { RUNOFF_SPOTS } from "../../shared/game/gather";
 import { UNIT } from "../../shared/game/map";
-import { EXECUTION_MS, PICK_GAP_MS } from "../../shared/game/phases";
+import { EXECUTION_MS, PICK_GAP_MS, PIN_OFF_EXEC_AT } from "../../shared/game/phases";
 import type { RoomView } from "../../shared/protocol";
 
 /** 핀이 켜졌을 때 무대 점광 세기의 비율: 단계 값(0)과 선두 세기(1) 사이에서 0.9 (UI-SPEC O-14 — 육안 조정은 이 상수 한 곳) */
@@ -14,10 +14,6 @@ export const PIN_DIM = 0.6;
 export const PIN_ON_MS = 180;
 /** 꺼질 때 dur-med */
 export const PIN_OFF_MS = 420;
-
-/** 판결 순간 핀이 꺼지는 시각(처형 진입 기준 ms): 부결은 "처형 없음" 알림이 끝난 때, 처형은 유령이 사라지는 때 (verdictMoment 가 같은 값을 다시 내보낸다) */
-export const PIN_OFF_NO_EXEC_AT = 4000;
-export const PIN_OFF_EXEC_AT = 5000;
 
 /**
  * 무엇을 비출지. turn = 한 사람 머리 위, slide = from 에서 to 로 미끄러짐(startAt 은 서버 시각),
@@ -38,21 +34,20 @@ const RUNOFF_PIN: Extract<PinDesc, { mode: "point" }> = {
 };
 
 /**
- * 처형 단계(판결 순간)의 핀: 변론자에게 처형 진입 시각부터 부결 4.0초·처형 5.0초까지.
- * 마지막 3인 처형(verdict.last, 09.1.1-15)은 찬반 기록(ballots)이 없고 지목으로 정해진 득표자(day.candidate)를 같은 창으로 비춘다(줌·찬반 묶음은 없다).
+ * 처형 단계(판결 순간)의 핀(22-12 P22-14, D-27): 처형자 존재(day.execution)가 켠다 — 찬반 기록(day.ballots)은 없다.
+ * 처형자에게 처형 진입 시각(= phaseEndsAt − EXECUTION_MS)부터 PIN_OFF_EXEC_AT(6.0초)까지 고정 핀. 처형 단계 길이는 고정이라 마감 앞당김이 없다.
+ * 유언 단계의 turn 핀이 이 fixed 핀으로 이어진다. 처형자가 없거나(부결·동점·0표는 단계가 없다) 마감 시각이 없으면 핀이 없다.
  */
 function executionPin(view: RoomView): PinDesc | null {
-  const seat = view.day?.candidate;
-  const verdict = view.day?.verdict;
-  if (typeof seat !== "number" || verdict === undefined) return null;
-  if ((verdict.last !== true && view.day?.ballots === undefined) || view.phaseEndsAt === null) return null;
+  const seat = view.day?.execution?.seat;
+  if (typeof seat !== "number" || view.phaseEndsAt === null) return null;
   const startAt = view.phaseEndsAt - EXECUTION_MS;
-  return { mode: "fixed", seat, startAt, endAt: startAt + (verdict.passed ? PIN_OFF_EXEC_AT : PIN_OFF_NO_EXEC_AT) };
+  return { mode: "fixed", seat, startAt, endAt: startAt + PIN_OFF_EXEC_AT };
 }
 
 /**
  * 유언 단계(22-11 P22-10, D-15): 처형자 한 명에게 단계 시작부터 켠다. [남기기]로 마감이 당겨지니 fixed 창이 아니라 turn(단계 안에서 계속)이다.
- * 처형 단계 핀(fixed)이 이어받는 것은 22-12 몫이다. 줌은 없다(카메라는 처형 단계에서만 확대, presence.ts).
+ * 처형 단계 핀(fixed, 22-12)이 이어받는다. 줌은 없다(카메라는 처형 단계에서만 확대, presence.ts).
  */
 function defensePin(view: RoomView): PinDesc | null {
   const seat = view.day?.candidate;

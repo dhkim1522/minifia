@@ -389,15 +389,6 @@ describe("단계 안내 aria-live · 단계 전환 (UI-SPEC 접근성·Motion)",
     expect(liveRegion(r.container).textContent).toBe("하윤 님 처형");
   });
 
-  it("처형 단계: 찬반이 부결이면(day.execution 없음, candidate 만 있음) 변론자 이름 대신 '처형 없음' 을 읽는다", () => {
-    const r = renderRoom(
-      executionView({ n: 1, roles: ["mafia", "police", "citizen"], candidate: 1, verdict: { yes: 1, no: 2, passed: false } }),
-    );
-    const text = liveRegion(r.container).textContent;
-    expect(text).toBe("처형 없음");
-    expect(text).not.toContain("하윤");
-  });
-
   it("단계 표 라벨(TEST_PHASE_LABEL)은 PhaseId 와 같은 키 집합이다", () => {
     const phases: Record<PhaseId, true> = {
       lobby: true,

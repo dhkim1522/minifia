@@ -62,7 +62,7 @@ function makeView(o: Spec): RoomView {
   }
   const day: Record<string, unknown> = { n: 1 };
   if (o.candidate !== undefined) day.candidate = o.candidate;
-  if (o.passed !== undefined) day.verdict = { yes: 3, no: 1, passed: o.passed };
+  if (o.passed === true) day.execution = { seat: o.candidate ?? 1 };
   if (o.morning !== undefined) day.morning = o.morning;
   if (o.turn !== undefined) {
     const order = o.turn.order ?? [0, 1, 2, 3];
@@ -110,7 +110,7 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     ["찬반 유령", { phase: "verdict", ghost: true }, "지켜봐 주세요", "verdict.ghost"],
     ["처형 통과", { phase: "execution", candidate: 1, passed: true }, "", "execution.passed"],
     ["처형 통과 유령(같은 문장)", { phase: "execution", candidate: 1, passed: true, ghost: true }, "", "execution.passed"],
-    ["처형 부결", { phase: "execution", candidate: 1, passed: false }, "", "execution.failed"],
+    ["처형자 없음(이상한 값)", { phase: "execution", candidate: 1 }, HOST_FALLBACK, "fallback"],
     ["밤 마피아", { phase: "night", role: "mafia" }, "없앨 사람의 얼굴을 눌러 주세요", "night.mafia"],
     ["밤 경찰", { phase: "night", role: "police" }, "조사할 사람의 얼굴을 눌러 주세요", "night.police"],
     ["밤 의사", { phase: "night", role: "doctor" }, "지킬 사람의 얼굴을 눌러 주세요", "night.doctor"],
@@ -162,7 +162,7 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
 
   it("18.1-12: 표의 문장은 모두 문자열이고, 빈 문자열은 큰 글이 말하는 키(처형·아침)뿐이다 — 빈 줄을 대체 문장으로 바꾸지 않는다", () => {
     const empty = (Object.keys(HOST_LINES) as HostKey[]).filter((key) => HOST_LINES[key] === "").sort();
-    expect(empty).toEqual(["execution.failed", "execution.passed", "morning"]);
+    expect(empty).toEqual(["execution.passed", "morning"]);
     for (const key of Object.keys(HOST_LINES) as HostKey[]) expect(typeof HOST_LINES[key], key).toBe("string");
     expect(HOST_LINES["discussion.act"]).toBe("의심 가는 사람을 이야기해 주세요");
     expect(HOST_FALLBACK).toBe("잠시만 기다려 주세요");
@@ -209,7 +209,7 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
   it("18.1-12: 낮 시작은 산 사람 '모두 모여 주세요'·유령 '지켜봐 주세요', 처형·아침은 빈 문장이고 모르는 단계만 대체 문장이다", () => {
     expect(hostLineOf(makeView({ phase: "dayAnnounce" }))).toBe("모두 모여 주세요");
     expect(hostLineOf(makeView({ phase: "dayAnnounce", ghost: true }))).toBe("지켜봐 주세요");
-    for (const passed of [true, false]) expect(hostLineOf(makeView({ phase: "execution", candidate: 1, passed }))).toBe("");
+    expect(hostLineOf(makeView({ phase: "execution", candidate: 1, passed: true }))).toBe("");
     expect(hostLineOf(makeView({ phase: "morning", morning: { eliminated: 2 } }))).toBe("");
     expect(hostLineOf(makeView({ phase: "viking" as PhaseId }))).toBe("잠시만 기다려 주세요");
   });
@@ -233,7 +233,6 @@ describe("18.1-12 띠 상태 hostBandModeOf (0083-8)", () => {
 
   it("처형·아침 view 는 blank — 빈 줄이고 시간 행이 있다", () => {
     expect(mode({ phase: "execution", candidate: 1, passed: true })).toBe("blank");
-    expect(mode({ phase: "execution", candidate: 1, passed: false })).toBe("blank");
     expect(mode({ phase: "morning", morning: { eliminated: 2 }, durationMs: 5000 })).toBe("blank");
   });
 
@@ -394,8 +393,7 @@ const ALLOWED_EXACT: ReadonlySet<string> = new Set([
   "players[].connected",
   "day",
   "day.candidate",
-  "day.verdict",
-  "day.verdict.passed",
+  "day.execution",
   "day.morning",
   // 22-10(P22-17): 순차 지목에서 내 차례를 가르는 공개 값
   "day.turn",

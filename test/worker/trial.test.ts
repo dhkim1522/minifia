@@ -563,8 +563,6 @@ describe("실제 흐름 (결정 0060-1)", () => {
     const inExecution = await storedFlow(g.code);
     expect(inExecution.phase).toBe("execution");
     expect(inExecution.players.find((p) => p.seat === defender.seat)!.alive).toBe(false);
-    // 찬반 결과 수·좌석 목록(day.verdict·day.ballots)은 어느 소켓에도 없다(D-14)
-    expect(lastViews(g).map((v) => `${Object.hasOwn(v.day ?? {}, "verdict")}${Object.hasOwn(v.day ?? {}, "ballots")}`).join(",")).toBe("falsefalse,falsefalse,falsefalse,falsefalse,falsefalse");
     // 처형 발표: 모든 소켓이 같은 day.execution {seat, will}(문구 번호 없음, 결정 0060-5)를 받고, 관전은 처형된 소켓만 받는다
     for (const [i, v] of lastViews(g).entries()) {
       expect(Object.keys(v.day?.execution ?? {}).sort().join(",")).toBe("seat,will");

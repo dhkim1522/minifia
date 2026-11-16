@@ -55,8 +55,8 @@ const RUNOFF_END_MS = 1_500;
 const RUNOFF_MAX_MS = RUNOFF_INTRO_MS + RUNOFF_VOTE_MS + RUNOFF_END_MS;
 // 마지막 3인 한마디 상한(shared/game/showdown.ts LAST_WORD_MAX_GRAPHEMES)
 const LAST_WORD_MAX_GRAPHEMES = 30;
-// shared/game/phases.ts 의 EXECUTION_MS = 5_000 + VERDICT_LEAD_MS(600) 사본 — 처형 발표 5초 + 판결 앞머리 0.6초(결정 0066-7). 스크립트는 TS 를 import 하지 않아 값을 옮겨 적는다.
-const EXECUTION_MS = 5_600;
+// shared/game/phases.ts 의 EXECUTION_MS = WILL_REVEAL_MS(3_000) + EXEC_ANNOUNCE_MS(3_000) + EXEC_TAIL_MS(600) 사본 — 유언 카드 3초 + 처형 발표 3초 + 꼬리 0.6초(22-12 P22-13). 스크립트는 TS 를 import 하지 않아 값을 옮겨 적는다.
+const EXECUTION_MS = 6_600;
 // 각 단계 + 여유: 서버 타이머가 다음 단계로 넘기는 것을 기다린다(넘기기 없음).
 const DEFENSE_WAIT_MS = DEFENSE_MS + STATE_LIMIT_MS;
 const VERDICT_WAIT_MS = VERDICT_MS + STATE_LIMIT_MS;

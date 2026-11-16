@@ -9,7 +9,9 @@ import {
   NIGHT_MS,
   NOMINATION_GATHER_MS,
   NOMINATION_MS,
-  VERDICT_LEAD_MS,
+  EXEC_ANNOUNCE_MS,
+  EXEC_TAIL_MS,
+  WILL_REVEAL_MS,
   VERDICT_MS,
   PHASE_DEFS,
   ROLE_REVEAL_MS,
@@ -94,7 +96,7 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(row("verdict")).toBe("10000/nomination/true"); // 찬반 다음은 지목 — 부결이면 마감 훅이 night 로 보낸다
     expect(row("nomination")).toBe(`${NOMINATION_MS}/defense/true`); // 단계 표 값은 자리 값 — 진입 훅 뒤 phaseDurationOf 가 모이기(3000)로 다시 구한다. 동률·0표면 마감 훅이 night 로 보낸다
     expect(row("defense")).toBe("10000/execution/true"); // 변론(유언 자리) 다음은 처형
-    expect(row("execution")).toBe("5600/night/true");
+    expect(row("execution")).toBe("6600/night/true");
     expect(row("night")).toBe("30000/morning/true");
     expect(row("morning")).toBe("5000/dayAnnounce/true");
     expect(row("ended")).toBe("null/null/true"); // 종단 행: 마감 없음
@@ -107,8 +109,8 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(DEFENSE_MS).toBe(10000);
     expect(NOMINATION_GATHER_MS).toBe(3000);
     expect(VERDICT_MS).toBe(10000);
-    expect(EXECUTION_MS).toBe(5000 + VERDICT_LEAD_MS); // 처형 발표 5초 + 판결 앞머리 0.6초(결정 0066-7)
-    expect(EXECUTION_MS).toBe(5600);
+    expect(EXECUTION_MS).toBe(WILL_REVEAL_MS + EXEC_ANNOUNCE_MS + EXEC_TAIL_MS); // 유언 카드 3초 + 처형 발표 3초 + 꼬리 0.6초(22-12 P22-13)
+    expect(EXECUTION_MS).toBe(6600);
   });
 });
 
@@ -446,8 +448,8 @@ describe("nextWakeAt (알람 하나로 단계 마감과 방 만료)", () => {
 });
 
 describe("낮 처형 구간 길이 (결정 0060-1, 0063-1)", () => {
-  it("지목 마감부터 처형 마감까지는 인원과 무관하게 고정 25.6초다: 유언 10 + 찬반 10 + 처형 5.6(판결 앞머리 0.6 포함). 지목 구간은 산 사람 수에 따라 최대 모이기 3 + 인원 × 8.9 + 끝 알림 2초다", () => {
-    expect(DEFENSE_MS + VERDICT_MS + EXECUTION_MS).toBe(25_600);
+  it("지목 마감부터 처형 마감까지는 인원과 무관하게 고정 26.6초다: 유언 10 + 찬반 10 + 처형 6.6(유언 카드 3 + 처형 3 + 꼬리 0.6). 지목 구간은 산 사람 수에 따라 최대 모이기 3 + 인원 × 8.9 + 끝 알림 2초다", () => {
+    expect(DEFENSE_MS + VERDICT_MS + EXECUTION_MS).toBe(26_600);
     expect(`${nominationMaxMs(4)}/${nominationMaxMs(8)}`).toBe("40600/76200");
   });
 });

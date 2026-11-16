@@ -310,10 +310,8 @@ export function mount(root: HTMLElement, _params: URLSearchParams, deps: LabDeps
 
   const verdictLine = line();
   verdictLine.append(
-    el("span", {}, "판결 순간 5.6초", "flex:1 0 100%;"),
-    scriptBtn("통과", "verdict:pass", () => play("verdict", verdictScript({ passed: true, last: false, hasBallots: true }), "bed.vote")),
-    scriptBtn("부결", "verdict:reject", () => play("verdict", verdictScript({ passed: false, last: false, hasBallots: true }), "bed.vote")),
-    scriptBtn("마지막 3인", "verdict:last", () => play("verdict", verdictScript({ passed: true, last: true, hasBallots: false }), "bed.vote")),
+    el("span", {}, "처형 6.6초 (유언 카드 3.0초 + 처형 3.0초)", "flex:1 0 100%;"),
+    scriptBtn("처형", "verdict:pass", () => play("verdict", verdictScript(), "bed.vote")),
   );
   let seed = 1;
   const seedEl = el("span", { "data-lab-seed": "1" }, `시드 ${seed}`, `color:${MUTED};`);

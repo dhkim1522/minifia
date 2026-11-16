@@ -150,15 +150,13 @@ describe("순차 지목에는 채팅 시스템 줄이 없다 (0063-1 → 22-10)"
 const ROLE_WORDS = ["마피아", "시민", "경찰", "의사"];
 const text = (e: DayEvents): string => JSON.stringify([e.lines, e.announces, e.fx]);
 
-/** 지목 마감 뒤 voteLog 한 줄 — 누가 누구를 골랐는지는 없다(D-25), 후보 seat 3 만. */
-const VOTE_LOG = [{ n: 1, cand: { candidate: 3 } }];
 const defenseView = (extra: ViewOpts = {}) =>
-  viewOf("defense", { ...extra, day: { candidate: 3, voteLog: VOTE_LOG, ...extra.day } });
+  viewOf("defense", { ...extra, day: { candidate: 3, ...extra.day } });
 const verdictView = (extra: ViewOpts = {}) =>
-  viewOf("verdict", { ...extra, day: { candidate: 3, voteLog: VOTE_LOG, ...extra.day } });
+  viewOf("verdict", { ...extra, day: { candidate: 3, ...extra.day } });
 /** 처형 단계: 처형자 seat 3 이 있을 때만 day.execution. will 이 없으면 빈 유언. */
 const executionView = (will?: string, extra: ViewOpts = {}) =>
-  viewOf("execution", { ...extra, day: { candidate: 3, voteLog: VOTE_LOG, execution: { seat: 3, ...(will !== undefined ? { will } : {}) }, ...extra.day } });
+  viewOf("execution", { ...extra, day: { candidate: 3, execution: { seat: 3, ...(will !== undefined ? { will } : {}) }, ...extra.day } });
 
 describe("dayEvents — 단계 진입 줄 (DAY-05·06)", () => {
   it("낮 토론 → 찬반(22-10): 시작 줄·알림 없음", () => {
@@ -620,7 +618,7 @@ describe("dayEvents — 결선 (09.1.1-14)", () => {
   });
 
   it("결선 → 유언 단계: 결선 득표 줄도 없다(22-11 D-23 — 변론 줄 삭제)", () => {
-    const toDefense = (candidate: number) => viewOf("defense", { day: { candidate, voteLog: VOTE_LOG } });
+    const toDefense = (candidate: number) => viewOf("defense", { day: { candidate } });
     same(dayEvents(runoffOf(2, { tally: [3, 1] }), toDefense(2)).lines, []);
     same(dayEvents(runoffOf(1), toDefense(3)).lines, []);
   });

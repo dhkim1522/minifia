@@ -4,7 +4,7 @@
 // 밤 필드 받는 사람: pick 본인(생존·밤), allyPicks 생존 마피아(밤), records 경찰(수사)·마피아(암살)·의사(치료) 본인 중 본인 역할 일지 하나(역할 공개 단계 전체), morning 모두(아침만).
 // 낮 필드 받는 사람(8페이즈): points 모두(지목 단계만, 공개 지목 줄), endCount 모두(토론 단계만, 누른 수뿐), verdictCount 모두(찬반 단계만, 찬성·반대 수뿐 — 던진 좌석은 싣지 않는다, D-26), verdict 모두(처형 단계만, 찬반 수), turn 모두(지목 단계만, 차례 순서·마감·확정, 역할 무관),
 // me.endDiscussion·me.verdictVote 본인만(각각 토론·찬반 단계), voteLog 모두(낮 단계마다 항상, 집계 수만),
-// candidate 모두(변론·처형, 변론자가 있을 때 — 찬반에는 후보가 없다), execution 모두(처형 단계만, seat·phrase), noExecution 모두(처형 무효로 온 밤만, reason 하나).
+// candidate 모두(변론·처형, 변론자가 있을 때 — 찬반에는 후보가 없다), execution 모두(처형 단계만, seat·will — will 은 비어 있지 않을 때만), noExecution 모두(처형 무효로 온 밤만, reason 하나).
 // result(승리 팀·모든 직업·판 요약)는 ended 단계에서만, 생존·탈락 구분 없이 모두에게 같게(D-17). 서버 전용 밤 기록(nightLog)은 buildSummary 만 읽고 판 중에는 어떤 view 에도 없다(결정 0020-3).
 // 기본판(결정 0072): 꺼진 장치 키(players[].badge·badgeSwapped, day.turn·runoff·showdown, me.whisperUsed·ballot)는 서버 상태에 값이 있어도(옛 저장 방 포함) 싣지 않는다 — 판 규칙 RULES 가 막는다.
 // 남의 지목·찬반 값·토론 끝내기 누름은 어떤 키로도 싣지 않는다 — Player.nominate·verdictVote 는 마감 훅이 키째 지운다(결정 0060·D-02).
@@ -111,6 +111,10 @@ function buildDay(state: RoomState): DayView {
   }
   if (state.phase === "execution" && state.execution !== undefined) {
     day.execution = { seat: state.execution.seat };
+    // 유언 공개(22-12 Pattern 6, P22-11): 처형자의 유언은 이 순간 모두에게 같은 공개 값이고 역할과 무관하다. 비어 있지 않을 때만 키를 만든다 — 빈 유언은 키가 없다(화면이 "말없이 떠났어요").
+    // 값은 서버가 저장 때 정리한 글(sanitizeChatText)이다. 처형 단계 밖의 view 에는 어디에도 없다.
+    const will = state.players.find((p) => p.seat === state.execution!.seat)?.will;
+    if (will !== undefined && will !== "") day.execution.will = will;
   }
   // 찬반 결과 수는 처형 단계에서 그날 voteLog 줄의 exec 세 키를 필드별로 복사한다(결정 0060-4). 줄이 없으면 키가 없다. 역할 키는 어디에도 없다(T-08-03).
   if (state.phase === "execution") {

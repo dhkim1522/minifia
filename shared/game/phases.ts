@@ -32,9 +32,14 @@ export const MORNING_WILL_MS = 2_000; // 피해자 유언이 비어 있지 않�
 export const MORNING_NOTE_MS = 2_000; // 마피아 쪽지가 비어 있지 않을 때(탈락한 밤에만 남는다)
 export const MORNING_MAX_MS = 16_000; // 아침 길이 상한 — 결정 0079(A3) · 흔적 카드가 두 줄이 되어 3→5초, 상한 15→16초 (시간은 참고 목표)
 export const DEFENSE_MS = 10_000; // 유언 단계(결정 0089-19, D-15) — 처형자가 스포트라이트 아래 마지막 한마디를 쓰는 10초. 단계 id 는 defense 그대로다. [남기기]로 일찍 끝날 수 있다
-/** 판결 앞머리(결정 0066-7) — 처형 단계 맨 앞 0.6초는 화면의 느린 확대·핀 조명이 알림보다 앞선다. */
-export const VERDICT_LEAD_MS = 600;
-export const EXECUTION_MS = 5_000 + VERDICT_LEAD_MS; // 처형 발표 5초(D-01, VOTE-04) + 판결 앞머리 0.6초(결정 0066-7)
+// 처형 시간표 한 표(22-12, D-27·P22-13): 단계 시작 0~3.0초 유언 공개 카드 → 3.0초 "{닉네임} 님 처형" 큰 글과 유령 올라옴 → 6.0초 핀·콘 끔 → 6.6초 밤.
+// 핀·판결 순간(어둡게 막·줌)·소리·알림·smoke 사본이 모두 이 표에서 나온다. 한 판 길이는 고정 제한이 아니라 참고 목표다.
+export const WILL_REVEAL_MS = 3_000; // 유언 카드(QuoteCard)가 모두의 화면에 보이는 시간 — 3초 규칙의 읽는 시간 최소
+export const EXEC_ANNOUNCE_MS = 3_000; // 처형 큰 글 + 유령 올라옴
+export const EXEC_TAIL_MS = 600; // 핀·콘이 꺼지고 줌이 1 로 돌아오는 꼬리
+export const EXECUTION_MS = WILL_REVEAL_MS + EXEC_ANNOUNCE_MS + EXEC_TAIL_MS; // 6.6초
+/** 핀·콘·어둡게 막이 꺼지는 시각(처형 진입 기준 ms) — 6.0초 */
+export const PIN_OFF_EXEC_AT = EXECUTION_MS - EXEC_TAIL_MS;
 /** 투표(nomination) 15초 — 기본판 동시 투표(결정 0072, 8페이즈 결정 0060-3). 모이는 걷기도 이 15초 안이다. */
 export const NOMINATION_MS = 15_000;
 // 순차 지목(결정 0063-1·0063-4, 09.1 M-5, 판 규칙의 pickTurn 일 때만). 모이기 → 산 사람 좌석 순서로 한 명씩 차례 → 확정 뒤 사이 → 끝 알림 → 집계. 플레이테스트 뒤 이 네 줄만 고친다.

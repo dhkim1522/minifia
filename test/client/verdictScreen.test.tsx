@@ -85,10 +85,8 @@ interface ViewOpts {
   verdictCount?: { yes: number; no: number };
   /** 내 찬반(본인에게만 오는 값) */
   verdictVote?: boolean;
-  /** 처형 단계의 찬반 결과 */
-  verdict?: { yes: number; no: number; passed: boolean; last?: true };
-  /** 처형 단계의 찬반 기록(day.ballots, 09.1.1-13) */
-  ballots?: { yes: number[]; no: number[] };
+  /** 처형 단계의 처형자(day.execution, 22-12): 있으면 seat = candidate(기본 3), will 은 비어 있지 않을 때만 */
+  execution?: { will?: string };
   /** 단계 마감 시각(기본 NOW + 10초) */
   phaseEndsAt?: number;
   /** 그날 voteLog 의 cand.votes: [지목한 사람, 대상] 쌍 */
@@ -134,8 +132,7 @@ function makeView(o: ViewOpts = {}): RoomView {
           }
         : {}),
       ...(phase === "verdict" && o.verdictCount !== undefined ? { verdictCount: o.verdictCount } : {}),
-      ...(phase === "execution" && o.verdict !== undefined ? { verdict: o.verdict, execution: { seat: o.candidate ?? 3 } } : {}),
-      ...(phase === "execution" && o.ballots !== undefined ? { ballots: o.ballots } : {}),
+      ...(phase === "execution" && o.execution !== undefined ? { execution: { seat: o.candidate ?? 3, ...(o.execution.will !== undefined ? { will: o.execution.will } : {}) } } : {}),
     },
   };
 }
@@ -424,9 +421,9 @@ describe("찬반 줄 배치 CSS (UI-SPEC 패널 높이 표)", () => {
   });
 });
 
-// ---- Task 3: 처형 — 결과 알림 시간표·유령 떠오름·처형 없음·역할 비공개 (DAY-06, 결정 0053·0060-5) ----
+// ---- 처형 — 유언 카드 3.0초 → 처형 알림 3.0초 → 꼬리 0.6초 (DAY-06, 22-12 P22-11~14, 결정 0053·0060-5) ----
 
-describe("처형 화면 (DAY-06)", () => {
+describe("처형 화면 (DAY-06, 22-12)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
@@ -438,29 +435,63 @@ describe("처형 화면 (DAY-06)", () => {
     });
   const announceText = (c: ParentNode): string => c.querySelector("[data-announce]")?.textContent ?? "";
   const hotLines = (c: ParentNode): string[] => [...c.querySelectorAll(".mv-chat__sys.is-hot")].map((el) => el.textContent ?? "");
-  const sysLines = (c: ParentNode): string[] => [...c.querySelectorAll(".mv-chat__sys")].map((el) => el.textContent ?? "");
   const seatTag = (c: ParentNode, seat: number): Element | null => c.querySelector(`[data-seat="${seat}"]`);
+  const willCard = (c: ParentNode): HTMLElement | null => c.querySelector("[data-will-reveal]");
+  const cardBox = (c: ParentNode): HTMLElement | null => c.querySelector(".mv-quote--will");
 
-  // 변론자 4(도윤)가 찬성 5 · 반대 2 로 처형된다. 처형 단계의 view 는 이미 탈락(alive false)으로 온다.
+  // 처형자 4(도윤)가 처형된다. 처형 단계의 view 는 이미 탈락(alive false)으로 온다. 진입 시각 T = phaseEndsAt − 6600 = NOW.
   const verdictView = () => makeView({ phase: "verdict", count: 8, candidate: 4, verdictVote: true });
   const passedView = (extra: Partial<ViewOpts> = {}) =>
-    makeView({ phase: "execution", count: 8, candidate: 4, dead: [4], verdict: { yes: 5, no: 2, passed: true }, ...extra });
-  const failedView = () => makeView({ phase: "execution", count: 8, candidate: 4, verdict: { yes: 2, no: 5, passed: false } });
+    makeView({ phase: "execution", count: 8, candidate: 4, dead: [4], execution: { will: "다들 잘 있어" }, phaseEndsAt: NOW + 6600, ...extra });
   const enter = (to: RoomView = passedView()) => {
     const m = mount(verdictView());
     m.show(to);
     return m;
   };
 
-  it("처형 단계 진입(0ms)은 판결 앞머리 0.6초라 알림·hot 줄이 없고, 0.6초에 결과 알림 '찬성 5 · 반대 2' 와 같은 글자의 hot 줄이 선다 (결정 0066-7)", () => {
+  it("처형 단계 진입(0ms): 유언 카드가 모두에게 보이고(role=status·data-will-reveal·4줄 클래스) 큰 글·hot 줄은 아직 없다 — 3.0초에 카드가 빠지고 '도윤 님 처형' 이 선다", () => {
     const m = enter();
+    const card = willCard(m.container);
+    expect(card?.textContent).toBe("다들 잘 있어");
+    expect(card?.getAttribute("role")).toBe("status");
+    expect(cardBox(m.container)).not.toBeNull();
     expect(announceText(m.container)).toBe("");
     expect(hotLines(m.container)).toEqual([]);
-    advance(599);
+    advance(2999);
+    expect(willCard(m.container)).not.toBeNull();
     expect(announceText(m.container)).toBe("");
     advance(2);
-    expect(announceText(m.container)).toBe("찬성 5 · 반대 2");
-    expect(hotLines(m.container)).toEqual(["찬성 5 · 반대 2"]);
+    expect(willCard(m.container)).toBeNull(); // 페이드 아웃 상태(aria-hidden, 표식 없음)
+    expect(m.container.querySelector(".mv-quote--will")?.getAttribute("aria-hidden")).toBe("true");
+    expect(announceText(m.container)).toBe("도윤 님 처형");
+    expect(hotLines(m.container)).toEqual(["도윤 님 처형"]);
+  });
+
+  it("빈 유언(will 키 없음): 같은 카드·같은 3.0초에 '말없이 떠났어요'", () => {
+    const m = enter(passedView({ execution: {} }));
+    expect(willCard(m.container)?.textContent).toBe("말없이 떠났어요");
+    advance(3001);
+    expect(willCard(m.container)).toBeNull();
+    expect(announceText(m.container)).toBe("도윤 님 처형");
+  });
+
+  it("유언 글은 텍스트 노드다: <b> 가 들어 있어도 HTML 이 되지 않는다(T-22-28)", () => {
+    const m = enter(passedView({ execution: { will: "<b>범인은 나</b>" } }));
+    expect(willCard(m.container)?.textContent).toBe("<b>범인은 나</b>");
+    expect(willCard(m.container)?.querySelector("b")).toBeNull();
+  });
+
+  it("카드 자리: 부모 .mv-will-reveal 이 독 아랫변 + 8, 폭 = 화면 − 32, 누를 수 없고 줄 수는 4 — CSS 규칙으로 고정한다(새 색·토큰 없음)", () => {
+    const css = readFileSync("src/styles/v2.css", "utf8");
+    const will = css.split("\n").find((l) => l.startsWith(".mv-quote--will")) ?? "";
+    expect(will).toMatch(/-webkit-line-clamp:\s*4/);
+    const place = css.split("\n").find((l) => l.startsWith(".mv-will-reveal")) ?? "";
+    expect(place).toMatch(/--mf-host-dock/);
+    expect(place).toMatch(/\+ 8px/);
+    expect(place).toMatch(/left:\s*var\(--space-md\)/);
+    expect(place).toMatch(/right:\s*var\(--space-md\)/);
+    expect(place).toMatch(/pointer-events:\s*none/);
+    expect(will + place).not.toMatch(/#[0-9a-fA-F]{3,6}|crimson|brass/);
   });
 
   it("처형 단계에는 찬반 단추 줄이 없다 — [data-verdict-row] 0개·찬반 단추 0개이고 채팅 패널은 있다(18.1-13, 결정 0083-9)", () => {
@@ -471,51 +502,39 @@ describe("처형 화면 (DAY-06)", () => {
     expect(m.container.querySelector("[data-chat-panel]")).not.toBeNull();
   });
 
-  it("처형 단계는 어느 시점(산 사람·유령·변론자)에서 보아도 찬반 단추 줄이 없다", () => {
+  it("처형 단계는 어느 시점(산 사람·유령·처형자)에서 보아도 찬반 단추 줄이 없고 같은 유언 카드가 보인다", () => {
     for (const mySeat of [0, 3, 4]) {
       cleanup();
       const m = enter(passedView({ mySeat }));
       expect(m.container.querySelectorAll("[data-verdict-row]").length, `seat ${mySeat}`).toBe(0);
+      expect(willCard(m.container)?.textContent, `seat ${mySeat}`).toBe("다들 잘 있어");
     }
   });
 
-  it("2.6초: 알림이 '도윤 님 처형' 으로 바뀌고 hot 줄 '도윤 님 처형' 이 더해진다(찬성·반대 줄은 다시 만들지 않는다)", () => {
-    const m = enter();
-    advance(2599);
-    expect(announceText(m.container)).toBe("찬성 5 · 반대 2");
-    advance(2);
-    expect(announceText(m.container)).toBe("도윤 님 처형");
-    expect(hotLines(m.container)).toEqual(["찬성 5 · 반대 2", "도윤 님 처형"]);
-  });
-
-  it("처형된 도윤은 단계 진입 순간부터 한 번도 사라지지 않고 서 있다가, 알림 시작(2.6초)에 fadeAt 이 걸리고 2.4초 뒤(5.0초)에 fadeAt 없는 ghost 로 남는다(18.1 P181-6)", () => {
+  it("처형된 도윤은 단계 진입 순간부터 한 번도 사라지지 않고 서 있다가, 알림 시작(3.0초)에 fadeAt 이 걸리고 2.4초 뒤(5.4초)에 fadeAt 없는 ghost 로 남는다(18.1 P181-6)", () => {
     const m = mount(verdictView());
     const from = rt.scenes.length;
     m.show(passedView());
-    // 진입 직후: 연출 대기 중이라 표에 있고 fadeAt 은 2.6초 시각
     expect(lastScene().seats[4]?.show).toBe(true);
     expect(lastScene().seats[4]?.ghost).toBe(false);
-    expect(lastScene().seats[4]?.fadeAt).toBe(NOW + 2600);
-    // 진입 렌더부터 도윤 좌석이 빠진 장면은 한 번도 없다(떠오르기 전에 깜빡 사라졌다 돌아오지 않는다)
+    expect(lastScene().seats[4]?.fadeAt).toBe(NOW + 3000);
     expect((rt.scenes.slice(from) as SceneLook[]).every((s) => s.seats[4]?.show === true)).toBe(true);
     expect(seatTag(m.container, 4)).not.toBeNull();
-    advance(2600);
-    expect(lastScene().seats[4]?.fadeAt).toBe(NOW + 2600);
+    advance(3000);
+    expect(lastScene().seats[4]?.fadeAt).toBe(NOW + 3000);
     advance(2399);
     expect(lastScene().seats[4]?.show).toBe(true);
     advance(2);
-    // 연출 뒤: 표에서 빠지지 않고 직업 단서 없는 ghost 로 남는다(위치는 런타임이 마지막 구간에서 세운다)
     expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
     expect(seatTag(m.container, 4)).not.toBeNull();
     expect((rt.scenes.slice(from) as SceneLook[]).every((s) => s.seats[4]?.show === true)).toBe(true);
-    // 다른 산 사람은 그대로
     expect(lastScene().seats[3]?.show).toBe(true);
     expect(lastScene().seats[3]?.fadeAt).toBeUndefined();
   });
 
   it("연출이 끝난 뒤 새 view 가 와도(타이머 이후 같은 단계의 갱신) 산 사람 화면에 도윤은 ghost 로 남는다", () => {
     const m = enter();
-    advance(5100);
+    advance(5500);
     m.show(passedView());
     expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
     expect(seatTag(m.container, 4)).not.toBeNull();
@@ -523,29 +542,20 @@ describe("처형 화면 (DAY-06)", () => {
     expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
   });
 
-  it("부결(passed false): 2.6초에 '처형 없음' 알림이 1.4초 뜨고 사라지며, 연출(fadeAt)은 어떤 좌석에도 없다", () => {
-    const m = enter(failedView());
-    advance(601);
-    expect(announceText(m.container)).toBe("찬성 2 · 반대 5");
-    advance(2001);
-    expect(announceText(m.container)).toBe("처형 없음");
-    expect(sysLines(m.container)).toContain("처형 없음");
-    advance(1396);
-    expect(announceText(m.container)).toBe("처형 없음");
-    advance(3);
-    expect(announceText(m.container)).toBe("");
-    expect(Object.values(lastScene().seats).every((s) => s.fadeAt === undefined)).toBe(true);
-    expect(lastScene().seats[4]?.show).toBe(true);
-  });
-
-  it("재접속 첫 화면이 처형 단계(A1): 알림·채팅 줄·연출이 없고, 처형된 사람은 연출 없이 ghost 로 남는다", () => {
-    const { container } = mount(passedView());
-    advance(5000);
+  it("재접속 첫 화면이 처형 단계(A1): 알림·채팅 줄·연출이 없고 처형된 사람은 ghost 로 남는다. 유언 카드는 등장 모션 없이 바로 보인다(is-still)", () => {
+    const { container } = mount(passedView({ phaseEndsAt: NOW + 6600 - 1000 }));
+    // 진입 후 1.0초에 처음 그림 → 카드는 이미 서 있고(모션 없음) 큰 글·줄은 만들지 않는다(재접속은 이벤트 없음)
+    expect(willCard(container)?.classList.contains("is-still")).toBe(true);
+    advance(6000);
     expect(announceText(container)).toBe("");
     expect(container.querySelectorAll(".mv-chat__sys").length).toBe(0);
-    // 연출은 없지만(fadeAt 없음) 탈락자는 ghost 로 남는다(위치는 이 연결이 받은 적 없으면 런타임이 그리지 않는다)
     expect(rt.scenes.every((s) => (s as SceneLook).seats[4]?.fadeAt === undefined)).toBe(true);
     expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
+  });
+
+  it("보통의 도착(진입 직후)은 등장 모션이 있다: is-still 이 없다", () => {
+    const m = enter();
+    expect(willCard(m.container)?.classList.contains("is-still")).toBe(false);
   });
 
   it("역할 비공개(결정 0053-2): 처형 단계 DOM 전체에 마피아·경찰·의사·시민이 없고 직업 칩·진홍도 없다", () => {
@@ -563,8 +573,8 @@ describe("처형 화면 (DAY-06)", () => {
     const nick = "가나다라마바사아";
     const nicknames = [...NAMES.slice(0, 4), nick, ...NAMES.slice(5)];
     const m = mount(makeView({ phase: "verdict", count: 8, candidate: 4, nicknames }));
-    m.show(makeView({ phase: "execution", count: 8, candidate: 4, dead: [4], nicknames, verdict: { yes: 5, no: 2, passed: true } }));
-    advance(2601);
+    m.show(makeView({ phase: "execution", count: 8, candidate: 4, dead: [4], nicknames, execution: {}, phaseEndsAt: NOW + 6600 }));
+    advance(3001);
     expect(announceText(m.container)).toBe(`${nick} 님 처형`);
     expect(m.container.querySelectorAll(".mf-announce__text").length).toBe(1);
     const css = readFileSync("src/styles/game.css", "utf8");
@@ -589,15 +599,14 @@ describe("처형 화면 (DAY-06)", () => {
     expect(lastScene().seats[4]?.ghost).toBe(false);
     expect(lastScene().seats[4]?.fadeAt).toBeDefined();
     expect(m.container.querySelector("[data-ghost]")).toBeNull();
-    advance(5000);
-    // 연출 뒤에는 장면 표가 ghost 로 남기고(산 사람 화면, 직업 단서 없음) 이름표만 is-ghost 모양이다
+    advance(6000);
     expect(lastScene().seats[4]).toEqual({ show: true, ghost: true });
     expect(m.container.querySelector("[data-role-chip]")).toBeNull();
   });
 });
 
-// 09.1.1-13: 판결 순간 연출(UI-SPEC C-1, 결정 0066-7). 처형 진입 시각 T = phaseEndsAt - 5600 기준으로 막·핀·줌·알림 위치·찬반 묶음이 시간표대로 이어진다.
-describe("판결 순간 연출 — 시간표 (09.1.1-13)", () => {
+// 판결 순간 연출(UI-SPEC C-1, 22-12 P22-13·P22-14, D-27): 처형 진입 시각 T = phaseEndsAt − 6600 기준으로 막·핀·줌이 [0, 6.0초) 창을 따른다. 찬반 묶음은 없다.
+describe("판결 순간 연출 — 시간표 (22-12)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
@@ -607,86 +616,54 @@ describe("판결 순간 연출 — 시간표 (09.1.1-13)", () => {
     act(() => {
       vi.advanceTimersByTime(ms);
     });
-  const BALLOTS = { yes: [0, 1, 2, 5, 6], no: [3, 7] };
-  const ENDS_AT = NOW + 5600; // 진입 시각 T = NOW
+  const ENDS_AT = NOW + 6600; // 진입 시각 T = NOW
   const execView = (extra: Partial<ViewOpts> = {}) =>
-    makeView({ phase: "execution", count: 8, candidate: 4, dead: [4], verdict: { yes: 5, no: 2, passed: true }, ballots: BALLOTS, phaseEndsAt: ENDS_AT, ...extra });
+    makeView({ phase: "execution", count: 8, candidate: 4, dead: [4], execution: { will: "안녕" }, phaseEndsAt: ENDS_AT, ...extra });
   const enter = (to: RoomView = execView(), from: Partial<ViewOpts> = {}) => {
     const m = mount(makeView({ phase: "verdict", count: 8, candidate: 4, ...from }));
     m.show(to);
     return m;
   };
-  const reveal = (c: ParentNode): HTMLElement | null => c.querySelector("[data-ballots]");
   const dimOf = (c: ParentNode): string | null => c.querySelector(".mf-game__dim")?.getAttribute("data-dim") ?? null;
   const announce = (c: ParentNode): Element | null => c.querySelector("[data-announce]");
 
-  it("진입 직후: 어둡게 막이 켜지고(data-dim=verdict) 찬반 묶음은 아직 없다. 줌 1.10(0.6초 ease)과 변론자 고정 핀 창이 장면 표에 선다", () => {
+  it("진입 직후: 어둡게 막이 켜지고(data-dim=verdict) 찬반 묶음은 없다. 줌 1.10(0.6초 ease)과 처형자 고정 핀 창(6.0초)이 장면 표에 선다", () => {
     const m = enter();
     expect(dimOf(m.container)).toBe("verdict");
-    expect(reveal(m.container)).toBeNull();
-    const cam = lastScene().camera;
-    expect(cam).toMatchObject({ mode: "fixed", zoom: 1.1, zoomMs: 600 });
-    expect(lastScene().pin).toEqual({ mode: "fixed", seat: 4, startAt: NOW, endAt: NOW + 5000 });
+    expect(m.container.querySelector("[data-ballots]")).toBeNull();
+    expect(lastScene().camera).toMatchObject({ mode: "fixed", zoom: 1.1, zoomMs: 600 });
+    expect(lastScene().pin).toEqual({ mode: "fixed", seat: 4, startAt: NOW, endAt: NOW + 6000 });
   });
 
-  it("0.6초에 찬성 묶음, 1.0초에 반대 묶음, 4.6초에 묶음이 사라지고 막이 걷히며 줌 목표가 1 로 돌아온다", () => {
+  it("막·줌은 6.0초까지 유지되고 6.0초에 막이 걷히며 줌 목표가 1 로 돌아온다", () => {
     const m = enter();
-    advance(599);
-    expect(reveal(m.container)).toBeNull();
-    advance(1);
-    expect(reveal(m.container)?.getAttribute("data-stage")).toBe("yes");
-    advance(399);
-    expect(reveal(m.container)?.getAttribute("data-stage")).toBe("yes");
-    advance(1);
-    expect(reveal(m.container)?.getAttribute("data-stage")).toBe("both");
+    advance(3000);
     expect(dimOf(m.container)).toBe("verdict");
-    advance(3599);
-    expect(reveal(m.container)).not.toBeNull();
+    expect(lastScene().camera).toMatchObject({ zoom: 1.1 });
+    advance(2999);
+    expect(dimOf(m.container)).toBe("verdict");
     advance(1);
-    expect(reveal(m.container)).toBeNull();
     expect(dimOf(m.container)).not.toBe("verdict");
     expect(lastScene().camera).toMatchObject({ mode: "fixed", zoom: 1, zoomMs: 600 });
   });
 
   it("결과 알림은 띠 아래(is-top) 자리에 뜬다(0083-10)", () => {
     const m = enter();
-    advance(600);
+    advance(3000);
     expect(announce(m.container)?.className).toContain("is-top");
   });
 
-  // 이름은 화면의 숫자 둘이 아니라 기록 줄(서버 찬반 기록 카드)이 남긴다 — 같은 정보를 두 번 쓰지 않는다(18.1-13)
-  it("기록 줄: 서버 찬반 기록 카드가 4.6초에 채팅 기록에 도착하고 찬성·반대한 사람의 이름이 들어 있다", () => {
-    const listeners: Array<(e: never, meta: { epoch: number }) => void> = [];
-    const onEvent = vi.fn((l: (typeof listeners)[number]) => {
-      listeners.push(l);
-      return () => {};
-    }) as unknown as RoomConnection["onEvent"];
-    const m = mount(makeView({ phase: "verdict", count: 8, candidate: 4 }), { onEvent });
-    m.show(execView());
-    act(() => listeners.forEach((l) => l({ t: "chat", ch: "all", seat: 4, seq: 1, text: "0,1,2,5,6|3,7", at: NOW, k: "ballots" } as never, { epoch: 1 })));
-    const card = () => m.container.querySelector<HTMLElement>('[data-card="ballots"]');
-    advance(4599);
-    expect(card()).toBeNull();
-    advance(1);
-    expect(card()).not.toBeNull();
-    const text = card()?.textContent ?? "";
-    for (const name of ["민수", "영희", "서준", "하은", "유진"]) expect(text, name).toContain(name); // 찬성
-    for (const name of ["지아", "태오"]) expect(text, name).toContain(name); // 반대
-    expect(text).toContain("찬성 5");
-    expect(text).toContain("반대 2");
-  });
-
-  it("모든 viewer 가 같은 연출을 본다: 변론자(탈락)·살아 있는 시민·유령 시점 모두 같은 묶음 시간표와 같은 장면 표", () => {
+  it("모든 viewer 가 같은 연출을 본다: 처형자(탈락)·살아 있는 시민·유령 시점 모두 같은 막·카드 시간표와 같은 장면 표", () => {
     const seen: string[] = [];
     for (const mySeat of [4, 0, 3]) {
       cleanup();
       rt.scenes.length = 0;
       vi.setSystemTime(NOW);
       const m = enter(execView({ mySeat }), { mySeat });
-      const timeline: string[] = [dimOf(m.container) ?? "-", reveal(m.container)?.getAttribute("data-stage") ?? "-"];
-      for (const ms of [600, 400, 3600]) {
+      const timeline: string[] = [dimOf(m.container) ?? "-", m.container.querySelector("[data-will-reveal]") ? "card" : "-"];
+      for (const ms of [3000, 3000]) {
         advance(ms);
-        timeline.push(reveal(m.container)?.getAttribute("data-stage") ?? "-");
+        timeline.push(`${dimOf(m.container) ?? "-"}:${m.container.querySelector("[data-will-reveal]") ? "card" : "-"}`);
       }
       timeline.push(JSON.stringify({ cam: lastScene().camera, pin: lastScene().pin }));
       seen.push(timeline.join("|"));
@@ -695,52 +672,42 @@ describe("판결 순간 연출 — 시간표 (09.1.1-13)", () => {
     expect(seen[2]).toBe(seen[0]);
   });
 
-  it("부결(passed false)도 같은 시간표 — 핀 창만 4.0초에 닫힌다", () => {
-    const m = enter(execView({ verdict: { yes: 2, no: 5, passed: false }, dead: [] }));
-    expect(lastScene().pin).toEqual({ mode: "fixed", seat: 4, startAt: NOW, endAt: NOW + 4000 });
-    advance(1000);
-    expect(reveal(m.container)?.getAttribute("data-stage")).toBe("both");
-    advance(3600);
-    expect(reveal(m.container)).toBeNull();
+  it("처형자가 없는 처형 단계(이상한 값)에는 막·줌·카드가 없다", () => {
+    const m = enter(makeView({ phase: "execution", count: 8, candidate: 4, phaseEndsAt: ENDS_AT }));
+    advance(1500);
+    expect(dimOf(m.container)).not.toBe("verdict");
+    expect(m.container.querySelector(".mv-quote--will")).toBeNull();
+    expect(lastScene().camera).toMatchObject({ zoom: 1 });
   });
 
-  it("재접속·새로 고침: 진입 후 2.0초에 처음 그리면 애니메이션 없이 묶음이 바로 보이고 줌 1.10·막이 이미 켜져 있다", () => {
-    const m = mount(execView({ phaseEndsAt: NOW + 5600 - 2000 }));
-    const el = reveal(m.container);
-    expect(el?.getAttribute("data-stage")).toBe("both");
-    expect(el?.querySelector(".is-enter")).toBeNull();
-    expect(el?.querySelector(".is-pending")).toBeNull();
+  it("재접속·새로 고침: 진입 후 2.0초에 처음 그리면 카드가 모션 없이 바로 보이고 줌 1.10·막이 이미 켜져 있다", () => {
+    const m = mount(execView({ phaseEndsAt: ENDS_AT - 2000 }));
+    const card = m.container.querySelector("[data-will-reveal]");
+    expect(card?.classList.contains("is-still")).toBe(true);
     expect(dimOf(m.container)).toBe("verdict");
     expect(lastScene().camera).toMatchObject({ zoom: 1.1 });
-    advance(2600);
-    expect(reveal(m.container)).toBeNull();
+    advance(1001);
+    expect(m.container.querySelector("[data-will-reveal]")).toBeNull(); // 진입 3.0초에 카드가 빠진다
+    advance(3000);
+    expect(dimOf(m.container)).not.toBe("verdict");
   });
 
-  it("재접속이 4.6초를 지났으면 묶음·막이 없고 핀 창도 이미 지난 값이다", () => {
-    const m = mount(execView({ phaseEndsAt: NOW + 5600 - 5200 }));
-    expect(reveal(m.container)).toBeNull();
+  it("재접속이 6.0초를 지났으면 카드·막이 없고 줌은 이미 1 이다", () => {
+    const m = mount(execView({ phaseEndsAt: ENDS_AT - 6200 }));
+    expect(m.container.querySelector("[data-will-reveal]")).toBeNull();
     expect(dimOf(m.container)).not.toBe("verdict");
     expect(lastScene().camera).toMatchObject({ zoom: 1 });
   });
 
-  it("마지막 3인 처형(verdict.last)·찬반 기록이 없는 처형 단계에는 묶음·막이 없다", () => {
-    const a = enter(execView({ verdict: { yes: 0, no: 0, passed: true, last: true } }));
-    advance(1500);
-    expect(reveal(a.container)).toBeNull();
-    expect(dimOf(a.container)).not.toBe("verdict");
-    cleanup();
-    const b = enter(execView({ ballots: undefined }));
-    advance(1500);
-    expect(reveal(b.container)).toBeNull();
-    expect(lastScene().camera).toMatchObject({ zoom: 1 });
-  });
-
-  it("모션 줄이기: 줌 없이 막·묶음만 쓴다", () => {
+  it("모션 줄이기: 줌 없이 막·카드만 쓴다(카드 등장·사라짐은 CSS transition: none 으로 즉시)", () => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }));
     const m = enter();
     expect(lastScene().camera).toMatchObject({ mode: "fixed", zoom: 1 });
     expect((lastScene().camera as { zoomMs?: number }).zoomMs).toBeUndefined();
     expect(dimOf(m.container)).toBe("verdict");
+    expect(m.container.querySelector("[data-will-reveal]")).not.toBeNull();
+    const css = readFileSync("src/styles/v2.css", "utf8");
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.mv-quote \{ transition: none; \} \}/);
   });
 
   it("타이머는 언마운트에서 정리된다(시간표가 끝나기 전에 닫아도 남는 타이머 없음)", () => {
@@ -754,29 +721,6 @@ describe("판결 순간 연출 — 시간표 (09.1.1-13)", () => {
     const m = mount(makeView({ phase: "verdict", count: 8, candidate: 4 }));
     const root = m.container.querySelector("main.mf-game") as HTMLElement;
     expect(root.style.getPropertyValue("--mf-panel-h")).toMatch(/px$/);
-  });
-
-  // 알림이 두 줄로 감기면(8자 이름 "… 님 처형") 숫자 줄 윗변이 알림 아랫변 + 16 으로 내려간다 — 한 줄이면 기본 201(142 + 43 + 16) 그대로(E2E BF2)
-  it("숫자 줄 윗변 변수 --mf-ballot-top: 알림 아랫변이 185 이하(115 포함)면 201, 228.4 면 245(올림), 묶음이 없으면 변수가 없다", () => {
-    const bottomOf = { v: 115 };
-    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-      const isBody = this.classList.contains("mf-announce__body");
-      const b = isBody ? bottomOf.v : 0;
-      return { x: 0, y: 0, left: 0, top: 0, right: 0, bottom: b, width: 0, height: 0, toJSON: () => ({}) } as DOMRect;
-    });
-    try {
-      const m = enter();
-      const root = m.container.querySelector("main.mf-game") as HTMLElement;
-      advance(600);
-      expect(root.style.getPropertyValue("--mf-ballot-top")).toBe("201px");
-      bottomOf.v = 228.4;
-      advance(2000); // 2.6초: 알림이 바뀐다
-      expect(root.style.getPropertyValue("--mf-ballot-top")).toBe("245px");
-      advance(2000); // 4.6초: 묶음이 사라진다
-      expect(root.style.getPropertyValue("--mf-ballot-top")).toBe("");
-    } finally {
-      spy.mockRestore();
-    }
   });
 
   it("어둡게 막 CSS: verdict 상태는 불투명도 1(= night-950 45% 그대로)에 dur-med 로 켜진다", () => {
