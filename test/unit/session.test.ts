@@ -120,3 +120,42 @@ describe("session 마지막 닉네임", () => {
     expect(loadLastNickname(throwingStorage)).toBe("민수");
   });
 });
+
+describe("session 튜토리얼 '봤음' 키 (24-07, P24-22)", () => {
+  it("키 이름은 minifia:tutorialSeen 이고 처음에는 거짓이다", async () => {
+    const { TUTORIAL_SEEN_KEY, readTutorialSeen } = await fresh();
+    expect(TUTORIAL_SEEN_KEY).toBe("minifia:tutorialSeen");
+    expect(readTutorialSeen(mapStorage())).toBe(false);
+  });
+
+  it("markTutorialSeen 뒤에는 참이고 저장소 값은 '1' 하나뿐이다", async () => {
+    const { markTutorialSeen, readTutorialSeen, TUTORIAL_SEEN_KEY } = await fresh();
+    const storage = mapStorage();
+    markTutorialSeen(storage);
+    expect(readTutorialSeen(storage)).toBe(true);
+    expect(storage.raw.get(TUTORIAL_SEEN_KEY)).toBe("1");
+    expect([...storage.raw.keys()]).toEqual([TUTORIAL_SEEN_KEY]);
+  });
+
+  it("'1' 이 아닌 값은 봤음으로 치지 않는다", async () => {
+    const { readTutorialSeen, TUTORIAL_SEEN_KEY } = await fresh();
+    const storage = mapStorage();
+    storage.raw.set(TUTORIAL_SEEN_KEY, "true");
+    expect(readTutorialSeen(storage)).toBe(false);
+  });
+
+  it("저장소가 예외를 던지면 메모리로 대신해 같은 결과를 낸다", async () => {
+    const { markTutorialSeen, readTutorialSeen } = await fresh();
+    expect(readTutorialSeen(throwingStorage)).toBe(false);
+    markTutorialSeen(throwingStorage);
+    expect(readTutorialSeen(throwingStorage)).toBe(true);
+  });
+
+  it("세션·닉네임 키와 섞이지 않는다", async () => {
+    const { markTutorialSeen, loadSession, loadLastNickname } = await fresh();
+    const storage = mapStorage();
+    markTutorialSeen(storage);
+    expect(loadSession(storage)).toBeNull();
+    expect(loadLastNickname(storage)).toBe("");
+  });
+});
