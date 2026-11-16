@@ -198,7 +198,7 @@ describe("morningMsOf - 아침 길이는 공개 내용만의 함수 (MORN-04, �
     try {
       const fresh = await import("../../shared/game/discussion");
       // 모듈을 새로 읽으면 규칙 모듈의 시험 잠금(원인 흐름)도 새로 시작해 제품 값이 된다 — 상한 자체를 보는 시험이라 현장 시간이 붙지 않는 기본 마피아 판으로 확인한다(21-01).
-      const s = room("morning", 1, { morning: { eliminated: 1 }, nightNote: "쪽지", mode: "basic", ...withWill(1, "유언") });
+      const s = room("morning", 1, { morning: { eliminated: 1 }, nightNote: "쪽지", ...withWill(1, "유언") });
       expect(fresh.morningMsOf(s)).toBe(MORNING_MAX_MS);
     } finally {
       vi.doUnmock("../../shared/game/phases");

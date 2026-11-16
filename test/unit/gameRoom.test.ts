@@ -16,7 +16,7 @@ import {
 } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS, ROLE_REVEAL_MS } from "../../shared/game/phases";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import { tick } from "../../shared/game/tick";
 import type { PhaseId } from "../../shared/protocol";
 import { ROLE_IDS, ROLE_TABLE } from "../../shared/game/roles";
@@ -28,7 +28,7 @@ import { nicknameKey, validateNickname } from "../../shared/nickname";
 
 // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B).
 lockCauseInFile();
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 interface Spec {
   id: string;

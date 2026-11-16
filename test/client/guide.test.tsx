@@ -57,7 +57,6 @@ function makeView(o: ViewOpts): RoomView {
   const endsIn = o.endsIn === undefined ? 15_000 : o.endsIn;
   return {
     code: "0042",
-    mode: "basic", // 21-14 (A): 낮 시작·심부름 순서와 무관한 화면 시험 — 기본 마피아 판으로 돈다
     phase: o.phase,
     phaseEndsAt: endsIn === null ? null : NOW + endsIn,
     phaseDurationMs: endsIn === null ? null : 15_000,

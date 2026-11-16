@@ -864,17 +864,13 @@ describe("기본판 투표 (결정 0072, U-1·U-4·U-5)", () => {
   });
 });
 
-describe("headerFor — 판 종류와 무관한 제목 (22-04: 원인 흐름 제목을 지웠다)", () => {
-  const modeView = (phase: PhaseId, mode: "basic" | "extended"): RoomView => ({ ...viewOf(phase), mode });
-
-  it("두 판 종류 모두 morning 은 '아침'이다", () => {
-    for (const mode of ["basic", "extended"] as const) {
-      same(headerFor(modeView("morning", mode)), { title: "아침" });
-    }
+describe("headerFor — 단계 제목 (22-04: 원인 흐름 제목을 지웠다, 22-07: 판 종류가 없다)", () => {
+  it("morning 은 '아침'이다", () => {
+    same(headerFor(viewOf("morning")), { title: "아침" });
   });
 
   it("그 밖의 단계 제목은 그대로다", () => {
-    same(headerFor(modeView("discussion", "extended")), { title: "토론", hint: "이야기하며 마피아를 찾아요" });
-    same(headerFor(modeView("night", "extended")).title, "밤");
+    same(headerFor(viewOf("discussion")), { title: "토론", hint: "이야기하며 마피아를 찾아요" });
+    same(headerFor(viewOf("night")).title, "밤");
   });
 });

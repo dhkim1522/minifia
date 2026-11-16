@@ -6,8 +6,8 @@ import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { castPoints, startedAt } from "../helpers/voteState";
 import { seededRandInt } from "../helpers/seededRandom";
-import { rulesetOf } from "../../shared/game/ruleset";
-const GAME_RULES = rulesetOf("extended");
+import { RULES } from "../../shared/game/ruleset";
+const GAME_RULES = RULES;
 
 const idOf = (s: RoomState, seat: number): string => s.players.find((p) => p.seat === seat)!.id;
 const rand = seededRandInt(9);

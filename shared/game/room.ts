@@ -1,8 +1,8 @@
 // 서버 내부 방 상태와 순수 전이 함수. 이 타입은 클라이언트로 보내지 않는다 — 공개 모양은 view.ts 의 buildView 가 만든다.
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
-import { GAME_MODES, MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
-import type { GameMode, MapChoice, MapId } from "../protocol";
+import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
+import type { MapChoice, MapId } from "../protocol";
 import type {
   AssassinationRecord,
   BadgeId,
@@ -24,7 +24,7 @@ import { enterNomination } from "./nomination";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
 import { REMATCH_PLAYER_KEYS, REMATCH_ROOM_KEYS, benchAsPlayers } from "./rematch";
-import { modeOf, rulesetOf } from "./ruleset";
+import { RULES } from "./ruleset";
 import type { RoleId } from "./roles";
 
 export const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
@@ -197,8 +197,6 @@ export interface RoomState {
   bench?: Player[];
   /** 방장이 고른 맵(결정 D-20). 공개 값이다(view.mapChoice). 없으면 "random" — pickMap 이 쓰고, 대기실 복귀·다시 하기 뒤에도 남는다. */
   mapChoice?: MapChoice;
-  /** 방장이 고른 판 종류(결정 0081-6, 19페이즈 D-05). 공개 값이다(view.mode). 없으면 "extended" — 읽는 곳은 모두 modeOf(state)(D-04). pickMode 가 쓰고, 다시 하기·대기실 복귀 뒤에도 남는다(D-06). */
-  mode?: GameMode;
   /** 서버 전용 결정값(결정 D-21). startGame 이 mapChoice 로 정해 싣는다 — 시작 전에는 어떤 view·프레임에도 싣지 않는다(L42). 대기실 복귀가 버린다. */
   map?: MapId;
   /** 서버 전용(결정 0022). 방을 만들 때만 정해지는 테스트 방 표시 — true 일 때만 키가 있다. 테스트 방 방장 도구의 문이다. */
@@ -471,7 +469,7 @@ const LEGACY_CHAT_ROOM_KEYS = ["nextMessageSeq", "nextNightSeq"] as const;
  * - 모든 플레이어에서 옛 주장 필드 넷을 키째 뺀다.
  * 채팅은 서버에 저장하지 않는다(결정 0017-7) — 배포 전 저장된 messages 는 깨어날 때 지운다.
  * 채팅 옛 번호·쿨다운 필드(결정 0058 로 대체): 방 키 nextMessageSeq·nextNightSeq 와 Player 키 lastSendAt 도 키째 뺀다.
- * - 판 종류(19페이즈 D-04, T-19-05): 허용 밖 값이 저장된 mode 는 키째 뺀다 — 읽는 쪽 기본값(modeOf → extended)이 받는다. mode 가 없거나 올바른 값인 방은 그대로다(같은 객체).
+ * - 판 종류(22-07, D-01·D-03·D-29): mode 키가 저장된 방은 옛 표시다 — 판 중이면 대기실로 되돌리고 대기실이면 mode 키만 지운다(값이 허용 밖이어도 같다). 옛 개인 키 stats 도 같다.
  * 아무것도 해당하지 않으면 같은 객체를 돌려준다(DO 생성자의 "바뀌었을 때만 저장·알람" 규칙이 이 동일성에 기댄다).
  * 새 optional 필드가 없는 옛 상태는 읽는 쪽 기본값이 받는다(RESEARCH Pattern 6).
  */
@@ -486,15 +484,14 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   const isLegacyVote = LEGACY_VOTE_PHASES.includes(phase);
   // 순차 지목이 켜진 판(저장된 방의 판 규칙)일 때만 — 동시 투표 방은 그대로 둔다(DO 재기동마다 투표를 다시 시작하던 결함 방지).
   // 09.1-04(결정 0063-1): 차례 정보 없이 저장된 지목 방(배포 순간 진행 중이던 판)은 지목을 지금 시각부터 다시 시작한다 — 그날 지목 표는 지워진다(공개 정보, 한 번뿐).
-  const isLegacyNomination = rulesetOf(modeOf(stored)).pickTurn && stored.phase === "nomination" && stored.pickTurn === undefined;
+  const isLegacyNomination = RULES.pickTurn && stored.phase === "nomination" && stored.pickTurn === undefined;
   const hasOldVoteRoomKey = Object.hasOwn(stored, "lastExecPhrase");
   const hasOldVotePlayerKeys = stored.players.some((p) => LEGACY_VOTE_PLAYER_KEYS.some((key) => Object.hasOwn(p, key)));
   const hasOldClaimState = LEGACY_CLAIM_STATE_KEYS.some((key) => Object.hasOwn(stored, key));
   const hasOldMessages = Object.hasOwn(stored, "messages");
   const hasOldChatRoomKeys = LEGACY_CHAT_ROOM_KEYS.some((key) => Object.hasOwn(stored, key));
-  const hasBadMode = Object.hasOwn(stored, "mode") && !(GAME_MODES as readonly unknown[]).includes(stored.mode);
   const hasOldPlayerFields = stored.players.some((p) => LEGACY_CLAIM_KEYS.some((key) => Object.hasOwn(p, key)) || Object.hasOwn(p, "lastSendAt"));
-  if (!isLegacyDay && !isLegacyReveal && !isLegacyClaim && !isLegacyVote && !isLegacyNomination && !hasOldVoteRoomKey && !hasOldVotePlayerKeys && !hasOldClaimState && !hasOldMessages && !hasOldChatRoomKeys && !hasOldPlayerFields && !hasBadMode) return stored;
+  if (!isLegacyDay && !isLegacyReveal && !isLegacyClaim && !isLegacyVote && !isLegacyNomination && !hasOldVoteRoomKey && !hasOldVotePlayerKeys && !hasOldClaimState && !hasOldMessages && !hasOldChatRoomKeys && !hasOldPlayerFields) return stored;
   // 옛 키는 구조 분해로만 뺀다. 필드 선언이 RoomState 에서 사라져도 컴파일되게 지역 교차 타입으로 받는다.
   const {
     messages: _dropped,
@@ -519,10 +516,6 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
     nextNightSeq?: unknown;
   };
   let next: RoomState = rest;
-  if (hasBadMode) {
-    const { mode: _mode, ...kept } = next;
-    next = kept;
-  }
   if (hasOldPlayerFields) {
     next = {
       ...next,
@@ -566,10 +559,10 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
 /**
  * 옛 방 표시 — 이 표 한 곳이 "배포 전에 저장된 방"을 알아보는 기준이다(결정 0089, D-03·D-29). 이후 삭제 계획이 키를 하나씩 더한다.
  * 22-03: 옛 튜토리얼 — 방 키 tutorialPassed, 개인 키 tutorialDone, 단계 "tutorial".
- * 22-04: 원인 흐름 — 방 키 lamps(등불 켜짐)·scene(아침 현장), 개인 키 skipVote(건너뛰기)·errandCut(자른 등불)·sceneSeen(살핀 지점). 22-05: 마을 — 저장된 맵 값 town(옛 값)(방 map 또는 방장 선택 mapChoice, 타입에서 빠졌으므로 문자열로 비교한다). 구역·문 기억은 방이 아니라 world 저장소의 키라 표시에 없다(복원이 모르는 키를 무시한다). 22-06: 심부름 — 단계 errand, 방 키 errandTickAt(표본 시각)·errandLast(마지막 목격 줄), 개인 키 errandPlaces·errandDone·errandNear·errandSeen·errandFake(저장에 남은 심부름 상태). 22-07 이 mode 표시를 더한다.
+ * 22-04: 원인 흐름 — 방 키 lamps(등불 켜짐)·scene(아침 현장), 개인 키 skipVote(건너뛰기)·errandCut(자른 등불)·sceneSeen(살핀 지점). 22-05: 마을 — 저장된 맵 값 town(옛 값)(방 map 또는 방장 선택 mapChoice, 타입에서 빠졌으므로 문자열로 비교한다). 구역·문 기억은 방이 아니라 world 저장소의 키라 표시에 없다(복원이 모르는 키를 무시한다). 22-06: 심부름 — 단계 errand, 방 키 errandTickAt(표본 시각)·errandLast(마지막 목격 줄), 개인 키 errandPlaces·errandDone·errandNear·errandSeen·errandFake(저장에 남은 심부름 상태). 22-07: 판 종류 — 방 키 mode(basic·extended, 허용 밖 값 포함), 개인 키 stats(22-01 이 지운 판 통계의 저장 흔적).
  */
-const LEGACY_V3_ROOM_KEYS: readonly string[] = ["tutorialPassed", "lamps", "scene", "errandTickAt", "errandLast"];
-const LEGACY_V3_PLAYER_KEYS: readonly string[] = ["tutorialDone", "skipVote", "errandCut", "sceneSeen", "errandPlaces", "errandDone", "errandNear", "errandSeen", "errandFake"];
+const LEGACY_V3_ROOM_KEYS: readonly string[] = ["tutorialPassed", "lamps", "scene", "errandTickAt", "errandLast", "mode"];
+const LEGACY_V3_PLAYER_KEYS: readonly string[] = ["tutorialDone", "skipVote", "errandCut", "sceneSeen", "errandPlaces", "errandDone", "errandNear", "errandSeen", "errandFake", "stats"];
 const LEGACY_V3_PHASES: readonly string[] = ["tutorial", "errand"];
 
 /** 22-05: 마을 맵으로 저장된 방인가(MapId 에서 빠진 값이라 문자열로 비교한다). 맵 조회(roomMapId)·MAPS 조회보다 먼저 돌아야 한다(T-22-08). */

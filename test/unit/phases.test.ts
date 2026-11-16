@@ -10,8 +10,8 @@ import {
   MORNING_WILL_MS,
   PHASE_DEFS,
 } from "../../shared/game/phases";
-import { rulesetOf } from "../../shared/game/ruleset";
-const GAME_RULES = rulesetOf("extended");
+import { RULES } from "../../shared/game/ruleset";
+const GAME_RULES = RULES;
 
 describe("단계 표 (DAY-07, 결정 0060-1)", () => {
   it("낮 단계 길이: 토론 90000·지목 진입(모이기) 3000·변론 20000·찬반 10000·처형 5600(5000 + 판결 앞머리 600), 밤 30000 (결정 0063-1)", () => {

@@ -1,13 +1,13 @@
 // 귓속말 워커 통합 테스트(09.1.1-02, 결정 0066-2, L17): 본문 줄은 당사자 두 소켓에만, 나머지에는 같은 seq 의 사실 줄만 간다.
 import { describe, expect, it } from "vitest";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import type { RoleId } from "../../shared/game/roles";
 import type { ServerMessage } from "../../shared/protocol";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { advanceTo, chatKeysOf, chatLogOf, chatRecordsOf, chatSend, chatsOf, connect, editRoom, framesOf, helloForLog, killSeats, mapPlayers, mark, pause, resetChatRates, send, settle, startedGame, storedRoom, summary } from "./helpers";
 import type { Actor, Game } from "./helpers";
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 type Chat = Extract<ServerMessage, { t: "chat" }>;
 

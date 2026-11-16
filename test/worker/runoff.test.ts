@@ -8,8 +8,8 @@ import {
   closePhase, connect, editRoom, forceDue, framesOf, hello, killSeats, lastViewOf, layOf, mapPlayers, mark, nextFrame, pointAll, runoffAll, send, settle, startedGame, storedRoom, worldFramesOf,
 } from "./helpers";
 import type { Game } from "./helpers";
-import { rulesetOf } from "../../shared/game/ruleset";
-const GAME_RULES = rulesetOf("extended");
+import { RULES } from "../../shared/game/ruleset";
+const GAME_RULES = RULES;
 
 const bySeat = (g: Game): Game["actors"] => [...g.actors].sort((a, b) => a.seat - b.seat);
 

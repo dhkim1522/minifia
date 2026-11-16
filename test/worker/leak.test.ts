@@ -3,7 +3,7 @@ import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { resolveLookConflicts } from "../../shared/game/look";
-import { politicsOn, rulesetOf } from "../../shared/game/ruleset";
+import { RULES, politicsOn } from "../../shared/game/ruleset";
 import type { Ruleset } from "../../shared/game/ruleset";
 import type { OutfitId, RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
@@ -46,7 +46,7 @@ import { lockCauseInFile } from "../helpers/playable";
 
 // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B). 원인 흐름은 cause*·lamp*·scene* 시험이 단언한다.
 lockCauseInFile();
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 interface Player {
   nickname: string;
@@ -1599,7 +1599,8 @@ describe.skipIf(!GAME_RULES.runoff)("동점 결선 프레임 전수 (결정 0066
 
 describe("허용 경로 고정 (L24, 결정 0072·T-13-14)", () => {
   it("POLITICS_ALLOWED_PATHS 는 설정이 켜진 장치의 경로만이다 — 기본판에서는 찬반 기록 하나뿐이고, 모두 켜면 정확히 이 목록이다. 넓히려면 이유를 적고 이 기대값을 같이 고친다", () => {
-    expect([...politicsPathsFor(rulesetOf("basic"))]).toEqual([".view.day.ballots.*"]);
+    const allOff: Ruleset = { badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false };
+    expect([...politicsPathsFor(allOff)]).toEqual([".view.day.ballots.*"]);
     expect([...POLITICS_ALLOWED_PATHS]).toEqual([...politicsPathsFor(GAME_RULES)]);
     const allOn: Ruleset = { badge: true, whisper: true, pickTurn: true, runoff: true, showdown: true };
     expect([...politicsPathsFor(allOn)]).toEqual([
@@ -1621,8 +1622,8 @@ describe("허용 경로 고정 (L24, 결정 0072·T-13-14)", () => {
     expect(politicsAllowed(".view.day.verdict.passed", full)).toBe(false);
   });
 
-  it("기본판의 허용 경로는 꺼진 장치의 경로를 받아들이지 않는다", () => {
-    const basic = politicsPathsFor(rulesetOf("basic"));
+  it("장치가 모두 꺼진 규칙의 허용 경로는 꺼진 장치의 경로를 받아들이지 않는다", () => {
+    const basic = politicsPathsFor({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false });
     for (const path of [".view.players[].badge", ".view.players[].badgeSwapped", ".to", ".lines[].to", ".view.me.ballot", ".view.me.whisperUsed", ".view.day.runoff", ".view.day.runoff.step", ".view.day.showdown.i", ".view.day.verdict.last"]) {
       expect(`${path}:${politicsAllowed(path, basic)}`).toBe(`${path}:false`);
     }

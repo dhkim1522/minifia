@@ -79,7 +79,6 @@ function simpleView(phase: PhaseId, n: number, role?: RoleId): RoomView {
   if (role === "mafia") me.allies = [1];
   return {
     code: "0042",
-    mode: "basic", // 21-14 (A): 낮 시작·심부름 순서와 무관한 화면 시험 — 기본 마피아 판으로 돈다
     phase,
     phaseEndsAt: phase === "lobby" ? null : NOW + 15_000,
     phaseDurationMs: phase === "lobby" ? null : 15_000,

@@ -1,11 +1,11 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import type { BadgeId, ClientMessage, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 // 09.1.1-08 UI-SPEC A: 오른쪽 아래 떠 있는 버튼 → 칩 시트 → {t:"badge", role}, 그리고 view 의 주장이 이름표 모서리 배지로.
 // RoomScreen → GameMap 을 진짜로 그리고 연결과 WorldStage 만 가짜로 바꾼다(gameMap.test 와 같은 틀).

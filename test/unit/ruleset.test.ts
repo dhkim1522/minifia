@@ -9,6 +9,8 @@ const read = (rel: string): string => readFileSync(`${ROOT}${rel}`, "utf8");
 
 /** 옛 전역 상수의 이름. 이 파일도 아래 검사 대상이라 낱말을 그대로 적지 않고 조각으로 만든다. */
 const OLD_NAME = ["RULE", "SET"].join("");
+/** 옛 판 종류 낱말들 — 이 파일도 검사 대상이라 조각으로 만든다. */
+const OLD_MODE_WORDS = [["ruleset", "Of"], ["mode", "Of"], ["GAME", "_MODES"], ["DEFAULT", "_MODE"], ["mode", "Pick"], ["Game", "Mode"]].map((p) => p.join(""));
 const CODE_DIRS = ["src", "shared", "worker", "test", "scripts"] as const;
 /** 코드 폴더 다섯의 소스 파일(.ts·.tsx·.mjs·.js). E2E 산출물 폴더는 코드가 아니라 뺀다. */
 function sourceFiles(): string[] {
@@ -35,7 +37,7 @@ describe("단일 규칙 RULES (결정 0089-12, 22-07 D-01)", () => {
 });
 
 describe("규칙은 한 곳에서 읽는다 (22-07)", () => {
-  it("ruleset.ts 가 내보내는 이름은 Ruleset·RULES·politicsOn 셋뿐이다 (rulesetOf·modeOf·RULES_BY_MODE 가 없다)", () => {
+  it("ruleset.ts 가 내보내는 이름은 Ruleset·RULES·politicsOn 셋뿐이다 (옛 판 종류 조회 함수·표가 없다)", () => {
     const names = [...read("shared/game/ruleset.ts").matchAll(/^export (?:const|function|interface|type) (\w+)/gm)].map((m) => m[1]);
     expect(names.join(",")).toBe("Ruleset,RULES,politicsOn");
   });
@@ -66,6 +68,6 @@ describe("규칙은 한 곳에서 읽는다 (22-07)", () => {
     expect(["src/game/badgeView.ts", "src/game/whisperView.ts", "src/screens/GameMap.tsx", "src/game/resultText.ts"].map((f) => `${f}:${has(f)}`).join(" ")).toBe(
       "src/game/badgeView.ts:true src/game/whisperView.ts:true src/screens/GameMap.tsx:true src/game/resultText.ts:false",
     );
-    expect(sourceFiles().filter((rel) => /\b(rulesetOf|modeOf|GAME_MODES|DEFAULT_MODE|modePick)\b/.test(read(rel)) && rel !== "test/unit/ruleset.test.ts").join(" ")).toBe("");
+    expect(sourceFiles().filter((rel) => OLD_MODE_WORDS.some((w) => new RegExp(`\\b${w}\\b`).test(read(rel)))).join(" ")).toBe("");
   });
 });

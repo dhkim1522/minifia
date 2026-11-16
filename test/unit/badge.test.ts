@@ -2,12 +2,12 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { BADGE_ORDER, BADGE_PHASES, badgeChoicesOf, setBadge } from "../../shared/game/badge";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { buildView } from "../../shared/game/view";
 import type { BadgeId, PhaseId } from "../../shared/protocol";
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 function player(i: number, extra: Partial<Player> = {}): Player {
   return {

@@ -19,7 +19,7 @@ const pointsLines = (g: Game): string[] => g.socks.map((s) => JSON.stringify(las
 
 describe("기본판 낮 흐름 (FLOW-01·04, 결정 0072)", () => {
   it("토론 끝내기 과반 → 15초 동시 투표(바꾸기 포함) → 변론 → 찬반 → 처형(찬반 기록 카드 한 장) → 밤, day.turn·runoff·showdown 은 한 번도 없다", async () => {
-    const g = await startedGame("discussion", 3, "basic"); // 4명 판: 과반 3 — 21-13(갈래 A): 기본 마피아 판으로 돈다(확장판은 원인 흐름이라 처형 뒤가 저녁이다)
+    const g = await startedGame("discussion", 3); // 4명 판: 과반 3
     const start = g.socks.map(mark);
     const before = Date.now();
     for (const a of g.actors.slice(0, 3)) {
@@ -100,7 +100,7 @@ describe("기본판 낮 분기 (FLOW-02·03, 결정 0072)", () => {
   const seenPhases = (g: Game, from: number[]): string[] => g.socks.flatMap((s, i) => viewsOf(framesOf(s).slice(from[i]!)).map((v) => v.phase));
 
   it("2:2 동점으로 투표가 마감되면 결선 없이 모든 소켓이 night 와 day.noExecution.reason tie 를 받고 runoff 프레임이 0이다", async () => {
-    const g = await startedGame("nomination", 3, "basic");
+    const g = await startedGame("nomination", 3);
     const from = g.socks.map(mark);
     const [s0, s1, s2, s3] = g.actors.map((a) => a.seat);
     await pointAll(g.code, g.actors, { [s0!]: s2!, [s1!]: s2!, [s2!]: s0!, [s3!]: s0! });
@@ -111,7 +111,7 @@ describe("기본판 낮 분기 (FLOW-02·03, 결정 0072)", () => {
   }, 60_000);
 
   it("0표로 투표가 마감되면 night 이고 reason 은 noVotes 다", async () => {
-    const g = await startedGame("nomination", 3, "basic");
+    const g = await startedGame("nomination", 3);
     await pointAll(g.code, g.actors, {});
     await settleAll(g);
     expect((await storedRoom(g.code)).phase).toBe("night");

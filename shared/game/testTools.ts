@@ -39,7 +39,7 @@ function checkTestHost(state: RoomState, actorId: string): TestToolError | null 
  * 정상 마감과 같은 경로(tick 의 ON_ENTER, 결정 0016)라 밤 판정·아침 문구·일차 증가가 그대로 일어난다.
  * 새 마감은 "당긴 마감(now) + 다음 단계 길이" 라 정확히 한 단계만 넘어간다. 대기실·종료(마감 없음)는 WRONG_PHASE.
  * 밤과 찬반 단계(night·verdict)는 넘기기 직전에 아직 안 던진 살아 있는 봇이 먼저 던진다 — 그렇지 않으면 봇 표 없이 마감되어
- * 테스트 방 한 판이 처형에 닿지 못한다. 기본판(결정 0072)의 투표(nomination, 차례 없음)도 같아서 안 던진 산 봇이 먼저 던진다 — 차례가 있는 지목(판 규칙(rulesetOf)의 pickTurn)은 위 분기가 맡는다.
+ * 테스트 방 한 판이 처형에 닿지 못한다. 기본판(결정 0072)의 투표(nomination, 차례 없음)도 같아서 안 던진 산 봇이 먼저 던진다 — 차례가 있는 지목(판 규칙 RULES 의 pickTurn)은 위 분기가 맡는다.
  * 그 뒤 단계는 마감 훅의 분기 결과(통과 여부·후보·승패)를 그대로 따른다(결정 0022, 0060-13).
  */
 export function skipPhase(state: RoomState, actorId: string, now: number, randInt: RandInt): TestToolResult {
@@ -169,7 +169,7 @@ function botsVoteNow(state: RoomState, randInt: RandInt): RoomState {
 /**
  * 같은 방을 대기실로 되돌린다: 허용 목록 리터럴로 방·플레이어를 다시 만든다 — 상태를 펼쳐 복사하지 않아
  * 역할·주장·밤 선택·수사 기록·탈락·일차·아침 결과·투표·처형·종료 필드(voteLog·verdict·execution·nightLog·winner, nominate·verdictVote·endVote)와 앞으로 늘어날 게임 필드도 자동으로 빠진다.
- * 남기는 것: 방 식별·수명·방장·가입 순번·앉은 사람(자리·닉네임·연결)·mapChoice·mode(판 종류, 19페이즈 D-06)·testMode·testRole·testBotVote.
+ * 남기는 것: 방 식별·수명·방장·가입 순번·앉은 사람(자리·닉네임·연결)·mapChoice·testMode·testRole·testBotVote.
  */
 export function resetToLobby(state: RoomState, actorId: string): TestToolResult {
   const denied = checkTestHost(state, actorId);
@@ -203,8 +203,6 @@ export function resetToLobby(state: RoomState, actorId: string): TestToolResult 
     testMode: true,
     // 고른 맵은 대기실로 돌아와도 남고(결정 D-20), 이번 판의 결정값 map 은 버린다 — 다음 시작이 다시 정한다.
     ...(state.mapChoice !== undefined ? { mapChoice: state.mapChoice } : {}),
-    // 판 종류도 대기실 복귀 뒤 남는다(19페이즈 D-06) — 방장이 대기실에서 다시 고를 수 있다.
-    ...(state.mode !== undefined ? { mode: state.mode } : {}),
     ...(state.testRole !== undefined ? { testRole: state.testRole } : {}),
     // 봇 투표 설정도 testRole 처럼 남는다(P-13) — 같은 방의 다음 판에서도 봇이 같은 규칙으로 던진다.
     ...(state.testBotVote !== undefined ? { testBotVote: state.testBotVote } : {}),

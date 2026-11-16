@@ -12,7 +12,7 @@ import { castPoint, castTurnPoint, enterNomination, nominationStepMs, stepNomina
 import { castVerdict } from "../../shared/game/verdict";
 import { finishNomination, finishRunoff, finishShowdown, resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../../shared/game/testTools";
 import { tick } from "../../shared/game/tick";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import { runoffStepMs, stepRunoff } from "../../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint, showdownStepMs, stepShowdown } from "../../shared/game/showdown";
 import { buildPreview, buildView } from "../../shared/game/view";
@@ -23,7 +23,7 @@ import { lockCauseInFile } from "../helpers/playable";
 
 // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B).
 lockCauseInFile();
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 const START_AT = 10_000;
 const HOST_ID = "player-id-0000-aaaa";

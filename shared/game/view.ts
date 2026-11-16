@@ -6,7 +6,7 @@
 // me.endDiscussion·me.verdictVote 본인만(각각 토론·찬반 단계), voteLog 모두(낮 단계마다 항상, 집계 수만),
 // candidate 모두(변론·찬반·처형, 변론자가 있을 때), execution 모두(처형 단계만, seat·phrase), noExecution 모두(처형 무효로 온 밤만, reason 하나).
 // result(승리 팀·모든 직업·판 요약)는 ended 단계에서만, 생존·탈락 구분 없이 모두에게 같게(D-17). 서버 전용 밤 기록(nightLog)은 buildSummary 만 읽고 판 중에는 어떤 view 에도 없다(결정 0020-3).
-// 기본판(결정 0072): 꺼진 장치 키(players[].badge·badgeSwapped, day.turn·runoff·showdown, me.whisperUsed·ballot)는 서버 상태에 값이 있어도(옛 저장 방 포함) 싣지 않는다 — 방 상태의 판 규칙(rulesetOf(modeOf(state)))이 막는다.
+// 기본판(결정 0072): 꺼진 장치 키(players[].badge·badgeSwapped, day.turn·runoff·showdown, me.whisperUsed·ballot)는 서버 상태에 값이 있어도(옛 저장 방 포함) 싣지 않는다 — 판 규칙 RULES 가 막는다.
 // 남의 지목·찬반 값·토론 끝내기 누름은 어떤 키로도 싣지 않는다 — Player.nominate·verdictVote 는 마감 훅이 키째 지운다(결정 0060·D-02).
 import type {
   DayView,
@@ -34,8 +34,7 @@ import { pointLinesOf, turnViewOf } from "./nomination";
 import { runoffVotersOf, runoffViewOf } from "./runoff";
 import { showdownViewOf } from "./showdown";
 import { PHASE_DEFS } from "./phases";
-import { modeOf, rulesetOf } from "./ruleset";
-import type { Ruleset } from "./ruleset";
+import { RULES } from "./ruleset";
 import { isReady } from "./rematch";
 import { rolesInPlay } from "./roles";
 import { hostOf, roundOf } from "./room";
@@ -75,7 +74,7 @@ function voteLogLine(entry: VoteLogEntry): VoteLogEntry {
  * 낮 정보. 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드는 싣지 않는다.
  * 읽는 쪽이 기본값을 쥔다: 일차 없으면 1(RESEARCH Pattern 6).
  */
-function buildDay(state: RoomState, rules: Ruleset): DayView {
+function buildDay(state: RoomState): DayView {
   const day: DayView = {
     n: state.day ?? 1,
     roles: rolesInPlay(state.players.length),
@@ -88,17 +87,17 @@ function buildDay(state: RoomState, rules: Ruleset): DayView {
   // 지목 줄은 지목 단계 동안 모두에게 같은 공개 목록이다(결정 0060-3) — 필드별 복사 함수(pointLinesOf)로 만든다.
   if (state.phase === "nomination") day.points = pointLinesOf(state);
   // 순차 지목의 차례 정보(결정 0063-1)도 모두에게 같다 — 필드별 복사(turnViewOf), 역할·연결을 읽지 않는다(L14).
-  if (rules.pickTurn && state.phase === "nomination") {
+  if (RULES.pickTurn && state.phase === "nomination") {
     const turn = turnViewOf(state);
     if (turn !== undefined) day.turn = turn;
   }
   // 동점 결선(결정 0066-4)의 공개 값은 모두에게 같다 — 마감 전엔 던진 좌석(voted)뿐, 마감 뒤엔 득표 수(tally)뿐이다. 개인 선택은 me.ballot 으로 본인에게만(L20).
-  if (rules.runoff && state.phase === "runoff") {
+  if (RULES.runoff && state.phase === "runoff") {
     const runoff = runoffViewOf(state);
     if (runoff !== undefined) day.runoff = runoff;
   }
   // 마지막 3인 결전(결정 0066-5)의 공개 값은 모두에게 같다 — 진행·확정된 한마디, 지목 중엔 던진 좌석(voted)뿐, 공개 뒤엔 지목 줄(points)이다. 개인 선택은 me.ballot 으로 본인에게만(L21).
-  if (rules.showdown && state.phase === "showdown") {
+  if (RULES.showdown && state.phase === "showdown") {
     const showdown = showdownViewOf(state);
     if (showdown !== undefined) day.showdown = showdown;
   }
@@ -183,8 +182,6 @@ function buildRestingView(state: RoomState, resting: Player, now: number): RoomV
     players: [row],
     me: { seat: resting.seat, isHost: false },
     mapChoice: state.mapChoice ?? "random",
-    // 판 종류는 공개 값이다(19페이즈 D-12) — 쉬는 사람도 같은 값을 받는다.
-    mode: modeOf(state),
     resting: true,
   };
   if (state.phase !== "lobby" && state.map !== undefined) view.map = state.map;
@@ -196,8 +193,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   if (resting !== undefined) return buildRestingView(state, resting, now);
   const me = state.players.find((p) => p.id === playerId);
   if (!me) throw new Error("buildView: player is not in this room");
-  // 판 규칙은 방 상태의 판 종류에서 한 번 얻는다(19페이즈 D-08) — 꺼진 판의 심부름·기록·흔적 키는 서버 상태에 값이 있어도 싣지 않는다(값이 빈 것이 아니라 키가 없다).
-  const rules = rulesetOf(modeOf(state));
+  // 판 규칙은 상수 RULES 하나다 — 꺼진 장치의 키는 서버 상태에 값이 있어도 싣지 않는다(값이 빈 것이 아니라 키가 없다).
 
   const players: PublicPlayer[] = [...state.players]
     .sort((a, b) => a.seat - b.seat)
@@ -216,7 +212,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
       // 쉬었다가 결과에 합류한 사람(결정 D-13): 역할이 없다는 사실만 공개한다.
       if (p.sat === true) row.sat = true;
       // 공개 직업 주장(결정 0066-1): 산 사람이고 값이 있을 때만 키를 만든다. 실제 역할이 아니고 badgeLog(서버 전용)는 어떤 경로로도 싣지 않는다.
-      if (rules.badge && isAlive(p) && p.badge !== undefined && DAY_PHASES.has(state.phase)) {
+      if (RULES.badge && isAlive(p) && p.badge !== undefined && DAY_PHASES.has(state.phase)) {
         row.badge = p.badge;
         if (p.badgeSwapped === true) row.badgeSwapped = true; // 말 바꿈은 사실 하나 — 이전 값은 싣지 않는다
       }
@@ -289,7 +285,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   }
 
   // 귓속말 사용함 표시는 본인에게만(결정 0066-2) — discussion 의 산 본인이 오늘 이미 보냈을 때만 키를 만든다. 본문·상대는 어떤 view 에도 없다(whispers 는 서버 전용).
-  if (rules.whisper && state.phase === "discussion" && isAlive(me) && whisperUsedToday(state, me.seat) >= WHISPER_PER_DAY) {
+  if (RULES.whisper && state.phase === "discussion" && isAlive(me) && whisperUsedToday(state, me.seat) >= WHISPER_PER_DAY) {
     myInfo.whisperUsed = true;
   }
 
@@ -305,7 +301,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
 
   // 결선 선택은 본인에게만(결정 0066-4, L20) — runoff 의 투표 창·결과 단계에서 산 유권자 본인이 던진 값이 있을 때만 키를 만든다. 후보·유령·미투표자에는 키가 없다.
   if (
-    rules.runoff &&
+    RULES.runoff &&
     state.phase === "runoff" &&
     state.runoff !== undefined &&
     state.runoff.step >= 1 &&
@@ -317,7 +313,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
 
   // 마지막 3인 동시 지목 선택은 본인에게만(결정 0066-5, L21) — showdown 의 지목 창·공개 단계에서 산 본인이 던진 값이 있을 때만 키를 만든다. 유령·미투표자에는 키가 없다.
   if (
-    rules.showdown &&
+    RULES.showdown &&
     state.phase === "showdown" &&
     state.showdown !== undefined &&
     state.showdown.i >= 3 &&
@@ -360,11 +356,9 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     me: myInfo,
     // 방장이 고른 맵은 공개 값이다(역할의 함수 아님, L44). 결정된 맵은 시작한 뒤에만 키가 생긴다(L42).
     mapChoice: state.mapChoice ?? "random",
-    // 판 종류는 모든 소켓에 같은 공개 값이다(19페이즈 D-05·D-12) — 역할의 함수가 아니다. mode 없는 방은 extended 다(D-04).
-    mode: modeOf(state),
   };
   if (state.phase !== "lobby" && state.map !== undefined) view.map = state.map;
-  if (DAY_PHASES.has(state.phase)) view.day = buildDay(state, rules);
+  if (DAY_PHASES.has(state.phase)) view.day = buildDay(state);
 
   // 결과는 ended 단계에서만 모두에게 같다(D-17). seats 는 관전자 전용 spectate.seats 와 같은 방식으로 따로 만든다 — spectate 규칙은 그대로 둔다.
   if (state.phase === "ended" && state.winner !== undefined) {

@@ -2,7 +2,7 @@
 // flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다. flows.mjs 의 도우미는 `makeSoundFlows(helpers)` 로 받는다(avatar.mjs·politics.mjs 와 같은 모양 — 서로 import 하지 않는다).
 // helpers: { recorder, attempt, startHost, openGame, closeGame, nightScenario } (sound-script 는 startHost, sound-night-parity·sound-result 는 openGame·closeGame 을 쓴다)
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(soundRenderChecks, SOUND_RENDER_LIMITS)에만 있고 여기서는 낮추지 않는다 (T-12-22).
-import { chooseRole, dropSockets, leaveLobby, openTestSheet, pickModeViaRail, reconnectInit, SetupError, setBotVote, setBots, settle, skipTo, sleep, startGame, tapPick } from "./browser.mjs";
+import { chooseRole, dropSockets, leaveLobby, openTestSheet, reconnectInit, SetupError, setBotVote, setBots, settle, skipTo, sleep, startGame, tapPick } from "./browser.mjs";
 import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundEmoteLeakChecks, soundNightParityChecks, soundRenderChecks, soundResultChecks, soundResultSkipChecks, soundSequenceChecks, soundVerdictTimingChecks } from "./lib.mjs";
 
 /** [전부 계산] 56개 렌더가 끝나기를 기다리는 상한(ms) */
@@ -295,8 +295,6 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       judge("sound-script/lobby", "SC2", await readLog(hp));
       await setBotVote(hp, ht, { exec: "yes", pick: "host" });
       await chooseRole(hp, ht, "citizen");
-      // 이 흐름은 낮 시작 소리를 보므로 기본 마피아 판으로 돈다
-      await pickModeViaRail(hp, ht, "basic");
 
       // ③ 시작 → assigning(침대 정지 요청, game.start) → roleReveal(bed.reveal, role.flip)
       await clearLog(hp);

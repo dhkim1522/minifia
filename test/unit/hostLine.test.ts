@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { RoleId } from "../../shared/game/roles";
-import type { GameMode, MorningView, PhaseId, RoomView } from "../../shared/protocol";
+import type { MorningView, PhaseId, RoomView } from "../../shared/protocol";
 import { HOST_FALLBACK, HOST_HIDDEN_PHASES, HOST_LINES, callTargetsOf, hostBandModeOf, hostChimeOf, hostKeyOf, hostLineOf, hostTimeOf, type HostKey, type HostLocal } from "../../src/game/hostLine";
 
 // 22-06: 심부름·목격 기록·아침 흔적·증거 줄(errand.*·witness·trace·discussion.evidence)과 그 시험을 지웠다.
@@ -34,8 +34,6 @@ interface Spec {
   durationMs?: number | null;
   /** 이번 판의 맵(view.map) */
   map?: "bar" | "plaza";
-  /** 19페이즈: 판 종류(view.mode). 없으면 키 자체가 없다 */
-  mode?: GameMode;
 }
 
 function makeView(o: Spec): RoomView {
@@ -79,7 +77,6 @@ function makeView(o: Spec): RoomView {
     day,
   };
   if (o.map !== undefined) view.map = o.map;
-  if (o.mode !== undefined) view.mode = o.mode;
   if (o.noise) view.spectate = { seats: [{ seat: 1, job: "mafia" }], picks: { mafia: [1], police: [], doctor: [] } };
   return view as unknown as RoomView;
 }
@@ -494,19 +491,17 @@ describe("HOST-05 허용 목록만 읽는다 (T-14-01)", () => {
 });
 
 // 19-02(UI-SPEC E-3·P19-17): 사회자 줄은 판 종류를 읽지 않는다. 22-06: 심부름·기록·증거 키는 표에서 없어졌다.
-describe("사회자 줄은 판 종류를 읽지 않는다 (19-02, E-3)", () => {
-  it("낮 시작 발표는 dayAnnounce.wait, 토론은 discussion.act 다 — 어느 판 종류에서도 같다", () => {
-    for (const mode of [undefined, "basic", "extended"] as const) {
-      const view = (phase: PhaseId): RoomView => makeView({ phase, ...(mode === undefined ? {} : { mode }) });
-      expect(`${hostKeyOf(view("dayAnnounce"))}/${hostKeyOf(view("discussion"))}`).toBe("dayAnnounce.wait/discussion.act");
-      expect(`${hostLineOf(view("dayAnnounce"))}/${hostLineOf(view("discussion"))}`).toBe("모두 모여 주세요/의심 가는 사람을 이야기해 주세요");
-    }
+describe("사회자 줄은 판 종류를 읽지 않는다 (19-02, E-3, 22-07: 판 종류가 없다)", () => {
+  it("낮 시작 발표는 dayAnnounce.wait, 토론은 discussion.act 다", () => {
+    const view = (phase: PhaseId): RoomView => makeView({ phase });
+    expect(`${hostKeyOf(view("dayAnnounce"))}/${hostKeyOf(view("discussion"))}`).toBe("dayAnnounce.wait/discussion.act");
+    expect(`${hostLineOf(view("dayAnnounce"))}/${hostLineOf(view("discussion"))}`).toBe("모두 모여 주세요/의심 가는 사람을 이야기해 주세요");
   });
 
-  it("hostLine.ts 는 판 종류를 읽지 않는다 — view.mode 도 rulesetOf 도 없다 (P19-17, 22-04: 원인 흐름 분기를 지웠다)", () => {
+  it("hostLine.ts 는 판 종류를 읽지 않는다 — view.mode 도 RULES 도 없다 (P19-17, 22-04: 원인 흐름 분기를 지웠다)", () => {
     const src = readFileSync(fileURLToPath(new URL("../../src/game/hostLine.ts", import.meta.url)), "utf8");
     const code = src.split("\n").filter((line) => !line.trimStart().startsWith("//")).join("\n");
     expect(/\bview\.mode\b/.test(code)).toBe(false);
-    expect(code.match(/rulesetOf\(modeOf\(/g)?.length ?? 0).toBe(0);
+    expect(/\bRULES\b/.test(code)).toBe(false);
   });
 });

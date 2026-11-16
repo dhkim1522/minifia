@@ -1,12 +1,12 @@
 // 귓속말 규칙 단위 시험(09.1.1-02, 결정 0066-2). 결과는 한 줄 문자열로 비교한다(TAP 증거 규칙).
 import { describe, expect, it } from "vitest";
 import { WHISPER_MAX_GRAPHEMES, WHISPER_PER_DAY, WHISPER_PHASES, sendWhisper, whisperUsedToday } from "../../shared/game/whisper";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import { ROOM_TTL_MS } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { buildView } from "../../shared/game/view";
 import type { PhaseId } from "../../shared/protocol";
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 function player(i: number, extra: Partial<Player> = {}): Player {
   return {

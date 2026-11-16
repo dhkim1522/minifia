@@ -3,14 +3,14 @@
 import { describe, expect, it } from "vitest";
 import { pickTarget } from "../../shared/game/night";
 import { DISCUSSION_MS, SHOWDOWN_GATHER_MS } from "../../shared/game/phases";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
 import { underCauseLock } from "../helpers/playable";
 import { seededRandInt } from "../helpers/seededRandom";
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 function lobbyOf(n: number): RoomState {
   const created = createRoomState({ code: "0420", hostId: "pid-0000-aaaa", hostToken: "tok-secret-0000-aaaa-0123456789", hostNickname: "이름0", now: 0 });

@@ -422,9 +422,8 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
     restore = openPlaza();
   });
   afterEach(() => restore());
-  // 20-07(D-02): [맵] 단추·맵 탭은 기본 마피아 방에만 있다 — 이 묶음의 방은 기본 마피아다(확장판의 숨김은 lobby.test 가 본다)
-  const hostView = (extra: Partial<RoomView> = {}): RoomView => ({ ...makeView([player(0, "민수"), player(1, "영희"), player(2, "서준")], 0), mode: "basic", ...extra });
-  const guestView = (extra: Partial<RoomView> = {}): RoomView => ({ ...makeView([player(0, "민수"), player(1, "영희"), player(2, "서준")], 2), mode: "basic", ...extra });
+  const hostView = (extra: Partial<RoomView> = {}): RoomView => ({ ...makeView([player(0, "민수"), player(1, "영희"), player(2, "서준")], 0), ...extra });
+  const guestView = (extra: Partial<RoomView> = {}): RoomView => ({ ...makeView([player(0, "민수"), player(1, "영희"), player(2, "서준")], 2), ...extra });
 
   it("칩은 방장에게만 보이고 현재 선택(기본 랜덤)을 따른다 — 손님에게는 없다 (16-06 V-5, T-16-13)", () => {
     for (const [v, name] of [[hostView(), "맵 랜덤"], [hostView({ mapChoice: "plaza" }), "맵 광장"], [hostView({ mapChoice: "bar" }), "맵 재즈 바"]] as const) {
@@ -503,15 +502,13 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
     expect(container.querySelectorAll("[data-side-column] [data-map-chip]")).toHaveLength(0);
   });
 
-  it("방장 대기실(봇 단추 없는 방): 오른쪽 열은 소리 자리 다음 [dress] 하나, 맵 단추는 왼쪽 방장 줄의 [판 종류] 아래다. 확장판 방의 줄은 [판 종류]뿐이다 (19-04 D-13 → 20-07 D-02 → 22-03 에서 [튜토리얼 먼저] 없어짐)", () => {
+  it("방장 대기실(봇 단추 없는 방): 오른쪽 열은 소리 자리 다음 [dress] 하나, 맵 단추는 왼쪽 방장 줄의 첫 칸이다 (19-04 D-13 → 22-07 에서 [판 종류] 없어짐)", () => {
     const { container, unmount } = render(lobby(hostView()));
     const rail = (c: ParentNode) => [...c.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).join(",");
     expect([...container.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button")).join(",")).toBe("dress");
-    expect(rail(container)).toBe("mode,map");
+    expect(rail(container)).toBe("map");
     expect(container.querySelectorAll("[data-side-column]")).toHaveLength(1);
     expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
     unmount();
-    const extended = render(lobby(hostView({ mode: "extended" })));
-    expect(rail(extended.container)).toBe("mode");
   });
 });

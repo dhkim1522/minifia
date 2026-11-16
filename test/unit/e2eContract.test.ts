@@ -50,7 +50,7 @@ import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
 import { OUTFIT_IDS } from "../../shared/protocol";
-import type { GameMode, OutfitId, PhaseId } from "../../shared/protocol";
+import type { OutfitId, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { HOST_HIDDEN_PHASES, HOST_LINES, type HostKey } from "../../src/game/hostLine";
 import { ROLE_TEXT } from "../../src/game/roleText";
@@ -59,10 +59,8 @@ import { JOB_OUTFIT } from "../../src/world/jobOutfit";
 import { CHAT_PANEL_EXTRA as RESULT_CHAT_EXTRA } from "../../src/game/chatUi";
 import { hostRailLayout } from "../../src/components/v2/HostRail";
 import { SIDE_CELL, SIDE_GAP } from "../../src/components/v2/SideColumn";
-import { MODE_TEXT } from "../../src/game/modeText";
-import { GAME_MODES } from "../../shared/protocol";
+import { HOST_RAIL_LABEL } from "../../src/components/v2/HostRail";
 import { nextPhaseOf, afterDayOf } from "../../shared/game/phases";
-import { rulesetOf } from "../../shared/game/ruleset";
 
 describe("E2E 의 TIMELESS_PHASES 와 앱 상수", () => {
   it("scripts/e2e/lib.mjs 의 TIMELESS_PHASES 가 src/game/scenes.ts 의 같은 이름 상수와 같은 목록이다", () => {
@@ -782,8 +780,8 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
     expect(text).toMatch(/const morningWant = 9_000;/);
   });
 
-  // 전이 표는 판 종류별 두 갈래다 — 22-06 부터 두 판 모두 낮 시작 발표 → 토론이다(판 종류째 22-07 이 지운다).
-  const smokeGraphs = (smoke as unknown as { PHASE_NEXT_BY_MODE: Record<GameMode, Record<string, string[]>> }).PHASE_NEXT_BY_MODE;
+  // smoke.mjs 의 전이 표는 아직 판 종류 이름이 붙은 두 갈래(PHASE_NEXT_BY_MODE)다 — 22-08 이 하나로 합친다. 두 표의 값은 같고 서버와 같다.
+  const smokeGraphs = (smoke as unknown as { PHASE_NEXT_BY_MODE: Record<string, Record<string, string[]>> }).PHASE_NEXT_BY_MODE;
 
   it("smoke.mjs 의 전이 표가 판 종류별 두 갈래이고 둘 다 dayAnnounce → discussion 이며 낮 단계 목록에 errand 가 없다", () => {
     const text = scriptText("smoke.mjs");
@@ -793,8 +791,8 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
   });
 
   it("smoke.mjs 의 두 전이 표가 서버의 nextPhaseOf·afterDayOf 와 같다: 표가 가리키는 모든 단계(기본 다음 단계·처형 없는 낮 분기)가 들어 있고, 낮 시작 발표 다음은 두 판 모두 토론이다 (T-21-45)", () => {
-    for (const mode of GAME_MODES) {
-      const graph = smokeGraphs[mode];
+    for (const mode of Object.keys(smokeGraphs)) {
+      const graph = smokeGraphs[mode]!;
       expect(Object.keys(graph).sort(), `${mode} 표의 단계 목록`).toEqual(
         ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"].sort(),
       );
@@ -818,7 +816,8 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
     const text = scriptText("uat-test-room.mjs");
     expect(text).toMatch(/roleReveal: \["dayAnnounce"\], dayAnnounce: \["discussion"\]/);
     expect(text).not.toContain("errand");
-    expect(text).toContain('{ t: "modePick", mode: "basic" }');
+    expect(text).not.toMatch(/mode(?:Pick)/); // 옛 판 종류 고르기 메시지를 더는 보내지 않는다
+    expect(text).not.toContain("view.mode");
   });
 
   it("bots.mjs 는 errand 단계를 모르고 밤에는 시민 봇도 고른다", () => {
@@ -931,15 +930,14 @@ describe("E2E 의 시간대 사본과 앱 todOf·TOD_LABEL (18.1-11, 0083-1)", (
   });
 });
 
-describe("19페이즈 방장 줄·판 종류 E2E 사본 계약 (19-06, T-19-18·T-19-19)", () => {
+describe("방장 줄 E2E 사본 계약 (19-06, T-19-18·T-19-19; 22-07 판 종류 칩·시트 없어짐)", () => {
   type Layout = { crown: boolean; columns: number[] };
   const lib = e2eLib as unknown as {
-    HOST_RAIL_E2E: { cell: number; gap: number; crownH: number; left: number; testShift: number; chipH: number; chipTop: number };
+    HOST_RAIL_E2E: { cell: number; gap: number; crownH: number; left: number; testShift: number };
     HOST_RAIL_MARKERS: readonly string[];
     HOST_RAIL_ORDER: readonly string[];
     LAMP_RGB: string;
     NIGHT600_RGB: string;
-    MODE_NAMES_E2E: Record<string, string>;
     LOG_H: number;
     lobbyPanelHeight(logH: number): number;
     hostRailLayoutE2E(n: number, maxH: number): Layout;
@@ -960,7 +958,7 @@ describe("19페이즈 방장 줄·판 종류 E2E 사본 계약 (19-06, T-19-18·
     return `rgb(${parseInt(hex.slice(0, 2), 16)}, ${parseInt(hex.slice(2, 4), 16)}, ${parseInt(hex.slice(4, 6), 16)})`;
   };
 
-  it("HOST_RAIL_E2E 의 지름·간격이 SideColumn 의 SIDE_CELL·SIDE_GAP 과 같고, 나머지 치수가 v2.css 의 줄·칩 규칙과 같다", () => {
+  it("HOST_RAIL_E2E 의 지름·간격이 SideColumn 의 SIDE_CELL·SIDE_GAP 과 같고, 나머지 치수가 v2.css 의 줄 규칙과 같다", () => {
     expect(lib.HOST_RAIL_E2E.cell).toBe(SIDE_CELL);
     expect(lib.HOST_RAIL_E2E.gap).toBe(SIDE_GAP);
     expect(body(".mf-hostrail")).toContain("left: var(--space-md)");
@@ -973,9 +971,6 @@ describe("19페이즈 방장 줄·판 종류 E2E 사본 계약 (19-06, T-19-18·
     expect(body(".mf-hostrail__col")).toContain(`gap: ${lib.HOST_RAIL_E2E.gap}px`);
     expect(body(".mv-hostrail-btn")).toContain("width: var(--control-button)");
     expect(/--control-button:\s*(\d+)px/.exec(tokens)?.[1]).toBe(String(lib.HOST_RAIL_E2E.cell));
-    expect(body(".mf-modechip")).toContain(`height: ${lib.HOST_RAIL_E2E.chipH}px`);
-    expect(body(".mf-modechip")).toContain(`top: calc(var(--mf-host-bottom, 62px) + ${lib.HOST_RAIL_E2E.chipTop}px)`);
-    expect(body(".mf-modechip[data-test-shift]")).toContain(`+ ${lib.HOST_RAIL_E2E.chipTop}px + ${lib.HOST_RAIL_E2E.testShift}px)`);
   });
 
   it("hostRailLayoutE2E 가 n 0..5 × 최대 높이 100..600(4 간격)과 측정 전(무한)에서 앱 hostRailLayout 과 같다", () => {
@@ -990,11 +985,9 @@ describe("19페이즈 방장 줄·판 종류 E2E 사본 계약 (19-06, T-19-18·
     expect(diff.slice(0, 5).join(" ")).toBe("");
   });
 
-  it("MODE_NAMES_E2E 가 MODE_TEXT.name 과 같고 키가 GAME_MODES 와 같다, 줄의 접근성 이름은 '방장 전용'", () => {
-    const flat = (o: Record<string, string>): string => Object.keys(o).sort().map((k) => `${k}=${o[k]}`).join(",");
-    expect(flat(lib.MODE_NAMES_E2E)).toBe(flat(MODE_TEXT.name));
-    expect(Object.keys(lib.MODE_NAMES_E2E).sort().join(",")).toBe([...GAME_MODES].sort().join(","));
-    expect(MODE_TEXT.rail).toBe("방장 전용");
+  it("줄의 접근성 이름은 '방장 전용' 이고 lib 의 사본과 같다", () => {
+    expect(HOST_RAIL_LABEL).toBe("방장 전용");
+    expect(readFileSync(new URL("scripts/e2e/lib.mjs", root), "utf8")).toContain(`const HOST_RAIL_NAME = "${HOST_RAIL_LABEL}";`);
   });
 
   it("색 사본 둘이 tokens.css 의 --light-lamp·--night-600 과 같고 서로 다르다, 줄 단추·오른쪽 열 단추가 그 토큰을 테두리에 쓴다", () => {
@@ -1007,26 +1000,23 @@ describe("19페이즈 방장 줄·판 종류 E2E 사본 계약 (19-06, T-19-18·
     expect(body(".mv-sound")).toContain("border: 1px solid var(--night-600)");
   });
 
-  it("mode-rail 은 폰 6종(extraSizes), mode-pick 은 390x844(GAME_SIZE)로 flows.mjs 에 등록돼 있고 흐름 본문은 modes.mjs 에, 판정은 lib.mjs 에 있다", () => {
+  it("판 종류 흐름(mode-rail·mode-pick·mode-basic·mode-leak)과 modes.mjs 는 없고 방장 줄 판정(hostRailChecks)은 lib.mjs 에 남아 map-select 가 쓴다", () => {
     const flows = readFileSync(new URL("scripts/e2e/flows.mjs", root), "utf8");
-    expect(flows).toMatch(/\{ id: "mode-rail", run: modeRailFlow, extraSizes: LOBBY_EXTRA_SIZES \}/);
-    expect(flows).toMatch(/\{ id: "mode-pick", run: modePickFlow, size: GAME_SIZE \}/);
-    const modes = readFileSync(new URL("scripts/e2e/modes.mjs", root), "utf8");
-    expect(modes).toMatch(/async function modeRailFlow/);
-    expect(modes).toMatch(/async function modePickFlow/);
+    expect(flows).not.toMatch(/id: "mode-/);
+    expect(flows).not.toContain("modes.mjs");
+    expect(execFileSync("git", ["ls-files", "scripts/e2e/modes.mjs"], { cwd: root, encoding: "utf8" }).trim()).toBe("");
     const libText = readFileSync(new URL("scripts/e2e/lib.mjs", root), "utf8");
-    for (const fn of ["hostRailChecks", "modeChipChecks", "modeSheetChecks"]) {
-      expect(libText, fn).toMatch(new RegExp(`export function ${fn}\\b`));
-      expect(modes, fn).toContain(fn);
-    }
+    expect(libText).toMatch(/export function hostRailChecks\b/);
+    for (const gone of ["modeChipChecks", "modeSheetChecks", "MODE_NAMES_E2E", "basicModeChecks"]) expect(libText, gone).not.toContain(gone);
+    expect(readFileSync(new URL("scripts/e2e/mapselect.mjs", root), "utf8")).toContain("hostRailChecks");
   });
 
   it("대기실 패널 기대 높이(HR8)는 222 = lobbyPanelHeight(LOG_H) 이다", () => {
     expect(lib.lobbyPanelHeight(lib.LOG_H)).toBe(222);
   });
 
-  it("새 DOM 표식 여섯이 git 이 추적하는 src/ 에 있고 값은 enum 낱말뿐이다 — 좌석·역할 값이 실리지 않는다", () => {
-    expect(lib.HOST_RAIL_MARKERS.join(",")).toBe("data-host-rail,data-host-rail-btn,data-host-rail-crown,data-mode-chip,data-mode-sheet,data-mode-card");
+  it("DOM 표식 셋이 git 이 추적하는 src/ 에 있고 값은 enum 낱말뿐이다 — 좌석·역할 값이 실리지 않는다. 판 종류 표식은 src 에 없다", () => {
+    expect(lib.HOST_RAIL_MARKERS.join(",")).toBe("data-host-rail,data-host-rail-btn,data-host-rail-crown");
     expect(lib.HOST_RAIL_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)))).toEqual([]);
     const text = (file: string): string => sources.find((s) => s.f.endsWith(file))!.text.replace(/\/\/.*$/gm, "");
     // 줄 단추 표식 값: HostRailButton 의 id 유니언 + MapChip 줄 변형의 "map" = HOST_RAIL_ORDER
@@ -1035,57 +1025,13 @@ describe("19페이즈 방장 줄·판 종류 E2E 사본 계약 (19-06, T-19-18·
     expect(text("components/v2/HostRailButton.tsx")).toContain("data-host-rail-btn={id}");
     expect(text("components/v2/MapChip.tsx")).toContain('"data-host-rail-btn": "map"');
     expect([...ids, "map"].sort().join(",")).toBe([...lib.HOST_RAIL_ORDER].sort().join(","));
-    expect(lib.HOST_RAIL_ORDER.join(",")).toBe("mode,map,bots");
-    // 칩·시트 칸 표식 값은 GameMode(= GAME_MODES)뿐이다
-    expect(text("components/v2/ModeChip.tsx")).toContain("data-mode-chip={mode}");
-    expect(text("components/v2/ModeChip.tsx")).toMatch(/mode: GameMode;/);
-    expect(text("components/ModeSheet.tsx")).toContain("data-mode-card={m}");
-    expect(text("components/ModeSheet.tsx")).toContain("MODE_ORDER.map((m)");
-    // 값 없는 표식 셋
+    expect(lib.HOST_RAIL_ORDER.join(",")).toBe("map,bots");
+    // 값 없는 표식 둘
     expect(text("components/v2/HostRail.tsx")).toContain('data-host-rail=""');
     expect(text("components/v2/HostRail.tsx")).toContain('data-host-rail-crown=""');
-    expect(text("components/ModeSheet.tsx")).toContain('data-mode-sheet=""');
-    for (const f of ["components/v2/HostRail.tsx", "components/v2/HostRailButton.tsx", "components/v2/ModeChip.tsx", "components/ModeSheet.tsx"]) expect(text(f), f).not.toMatch(/seat|nonce|mafia|police|doctor/i);
+    for (const f of ["components/v2/HostRail.tsx", "components/v2/HostRailButton.tsx"]) expect(text(f), f).not.toMatch(/seat|nonce|mafia|police|doctor/i);
+    // 판 종류 표식·부품은 src 어디에도 없다(22-07)
+    expect(sources.filter((s) => /data-mode-(?:chip|sheet|card)/.test(s.text)).map((s) => s.f)).toEqual([]);
   });
 });
 
-describe("19페이즈 기본 마피아 판 E2E 사본 계약 (19-07, T-19-22)", () => {
-  const lib = e2eLib as unknown as {
-    BASIC_ABSENT_SELECTORS: readonly string[];
-    BASIC_ABSENT_ATTR_PREFIX: string;
-    BASIC_FORBIDDEN_LINES: readonly string[];
-  };
-  const root = new URL("../../", import.meta.url);
-  const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
-    .split("\n")
-    .filter((f) => f.endsWith(".tsx"));
-  const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
-  it("BASIC_FORBIDDEN_LINES 는 지운 심부름·목격 기록·증거 줄의 글이다 — 22-06 에서 HOST_LINES 에서 키째 없어져 어떤 키의 문장과도 같지 않다(다시 생기면 이 시험이 실패한다)", () => {
-    expect(lib.BASIC_FORBIDDEN_LINES.length).toBe(4);
-    const lines = new Set(Object.values(HOST_LINES));
-    expect(lib.BASIC_FORBIDDEN_LINES.filter((line) => lines.has(line))).toEqual([]);
-  });
-
-  it("BASIC_ABSENT_SELECTORS 의 속성과 BASIC_ABSENT_ATTR_PREFIX 로 시작하는 속성은 22-06 부터 src 의 .tsx 어디에도 없다 — 없음 판정(0건)은 남고 부품은 지워졌다", () => {
-    expect(lib.BASIC_ABSENT_SELECTORS.length).toBe(5);
-    const attrs = lib.BASIC_ABSENT_SELECTORS.map((sel) => /^\[(data-[a-z-]+)\]$/.exec(sel)?.[1] ?? `모양이 다름:${sel}`);
-    expect(attrs.filter((a) => sources.some((s) => s.text.includes(`${a}=`))).join(",")).toBe("");
-    expect(lib.BASIC_ABSENT_ATTR_PREFIX).toBe("data-errand-");
-    const named = new Set(sources.flatMap((s) => [...s.text.matchAll(/data-errand-[a-z-]+/g)].map((m) => m[0])));
-    expect([...named]).toEqual([]);
-    // 앞머리가 다른 표식(예: data-errand 단독)을 삼키지 않도록 끝이 "-" 다
-    expect(lib.BASIC_ABSENT_ATTR_PREFIX.endsWith("-")).toBe(true);
-  });
-
-  it("mode-basic·mode-leak 은 390x844(GAME_SIZE)로 flows.mjs 에 등록돼 있고, 누설 흐름은 emcee-leak 과 같은 본문(leakFlow)을 기본 마피아로 돈다", () => {
-    const flows = readFileSync(new URL("scripts/e2e/flows.mjs", root), "utf8");
-    expect(flows).toMatch(/\{ id: "mode-basic", run: modeBasicFlow, size: GAME_SIZE \}/);
-    expect(flows).toMatch(/\{ id: "mode-leak", run: modeLeakFlow, size: GAME_SIZE \}/);
-    const modes = readFileSync(new URL("scripts/e2e/modes.mjs", root), "utf8");
-    expect(modes).toMatch(/async function modeBasicFlow/);
-    expect(modes).toMatch(/offScannerScript\(BASIC_ABSENT_SELECTORS, BASIC_ABSENT_ATTR_PREFIX\)/);
-    const host = readFileSync(new URL("scripts/e2e/host.mjs", root), "utf8");
-    expect(host).toContain('const emceeLeakFlow = (ctx) => leakFlow(ctx, "emcee-leak");');
-    expect(host).toContain('const modeLeakFlow = (ctx) => leakFlow(ctx, "mode-leak", "basic");');
-  });
-});

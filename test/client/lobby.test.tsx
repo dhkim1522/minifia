@@ -197,7 +197,7 @@ describe("Lobby — 오른쪽 한 줄 열: 방장도 둘(소리·옷장) (16-06 
   });
 });
 
-describe("Lobby — 방장 줄과 판 종류 (19-04, D-13·D-05·D-07)", () => {
+describe("Lobby — 방장 줄 [맵]·[봇] (19-04, D-13 → 22-07 에서 [판 종류] 없어짐, P22-15)", () => {
   const four = () => [player(0, "민수"), player(1, "영희"), player(2, "서준"), player(3, "하윤")];
   /** 방장 view: 4명, 봇 도구 켜짐(testBots 2) */
   const hostView = (extra: Partial<RoomView> = {}): RoomView => {
@@ -207,226 +207,101 @@ describe("Lobby — 방장 줄과 판 종류 (19-04, D-13·D-05·D-07)", () => {
   const guestView = (extra: Partial<RoomView> = {}): RoomView => makeView(four(), 2, extra);
   /** 줄 안 단추 표식(위 → 아래) */
   const railIds = (c: ParentNode) => [...c.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).join(",");
-  const mapId = PLAYABLE_MAPS.length > 1 ? ",map" : "";
+  const mapId = PLAYABLE_MAPS.length > 1 ? "map," : "";
   const side = (c: ParentNode) => [...c.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button")).join(",");
-  const modeBtn = (c: ParentNode) => c.querySelector('[data-host-rail-btn="mode"]') as HTMLButtonElement | null;
-  const card = (mode: "basic" | "extended") => document.querySelector(`[data-mode-card="${mode}"]`) as HTMLButtonElement | null;
-  const pressedCards = () => `basic=${card("basic")?.getAttribute("aria-pressed") ?? "없음"},extended=${card("extended")?.getAttribute("aria-pressed") ?? "없음"}`;
-  const chipOf = (c: ParentNode) => c.querySelector("[data-mode-chip]");
-  /** [판 종류] 단추가 하나 있음을 확인하고 누른다 */
-  const pressMode = (c: ParentNode) => {
-    expect(c.querySelectorAll('[data-host-rail-btn="mode"]')).toHaveLength(1);
-    fireEvent.click(modeBtn(c)!);
-  };
+  /** 판 종류 화면의 표식 네 가지 수 — 22-07 이후 늘 0 이다 */
+  const modeMarks = (c: ParentNode) => ['[data-host-rail-btn="mode"]', "[data-mode-sheet]", "[data-mode-card]", "[data-mode-chip]"].map((sel) => c.querySelectorAll(sel).length).join(",");
 
-  it("방장: 왼쪽 줄 하나에 위에서부터 [판 종류]·[봇](확장판 — [맵] 없음, 20-07 D-02), 오른쪽 열은 [옷장] 하나(첫 칸은 소리 자리)다", () => {
+  it("방장: 왼쪽 줄 하나에 위에서부터 [맵]·[봇], 오른쪽 열은 [옷장] 하나(첫 칸은 소리 자리)다", () => {
     const { container } = render(lobby(hostView()));
     expect(container.querySelectorAll("[data-host-rail]")).toHaveLength(1);
-    expect(railIds(container)).toBe("mode,bots");
+    expect(railIds(container)).toBe(`${mapId}bots`);
     expect(side(container)).toBe("dress");
     expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
     expect(container.querySelectorAll("[data-side-column] [data-map-chip], [data-side-column] [data-float='bots']")).toHaveLength(0);
-    expect(modeBtn(container)?.getAttribute("aria-label")).toBe("판 종류: 확장판");
     expect(container.querySelector('[data-host-rail-btn="bots"]')?.getAttribute("aria-label")).toBe("봇");
-    expect(chipOf(container)).toBeNull(); // 방장에게는 칩이 없다
+    expect(modeMarks(container)).toBe("0,0,0,0");
   });
 
-  it("기본 마피아 방장: 위에서부터 [판 종류]·[맵]·[봇]이다 (20-07 D-02 — [맵]은 기본 마피아에서만)", () => {
-    const { container } = render(lobby(hostView({ mode: "basic" })));
-    expect(container.querySelectorAll("[data-host-rail]")).toHaveLength(1);
-    expect(railIds(container)).toBe(`mode${mapId},bots`);
-    expect(modeBtn(container)?.getAttribute("aria-label")).toBe("판 종류: 기본 마피아");
-    expect(container.querySelectorAll("[data-side-column] [data-map-chip], [data-side-column] [data-float='bots']")).toHaveLength(0);
-  });
-
-  it("봇 도구가 없는 방장은 줄에 [봇]이 없다(칸으로 세지 않는다)", () => {
-    const { container, unmount } = render(lobby(makeView(four(), 0)));
-    expect(railIds(container)).toBe("mode");
-    unmount();
-    const basic = render(lobby(makeView(four(), 0, { mode: "basic" })));
-    expect(railIds(basic.container)).toBe(`mode${mapId}`);
-  });
-
-  it("기본 마피아를 고르면 [판 종류] 아래에 [맵]이 생긴다. 확장판으로 되돌리면 반대다 (D-10, UI-SPEC A-2 → 20-07 D-02)", () => {
-    const { container, rerender } = render(lobby(hostView()));
-    rerender(lobby(hostView({ mode: "basic" })));
-    expect(railIds(container)).toBe(`mode${mapId},bots`);
-    rerender(lobby(hostView({ mode: "extended" })));
-    expect(railIds(container)).toBe("mode,bots");
-  });
-
-  it("[판 종류] → 시트가 열리고 확장판이 골라져 있다. [기본 마피아]를 누르면 modePick 이 한 번 가고 표시는 서버 값이 올 때까지 그대로다", () => {
-    const send = vi.fn((_msg: ClientMessage) => true);
-    const { container, rerender } = render(lobby(hostView(), { send }));
-    expect(document.querySelector("[data-mode-sheet]")).toBeNull();
-    pressMode(container);
-    expect(document.querySelectorAll("[data-mode-sheet]")).toHaveLength(1);
-    expect(pressedCards()).toBe("basic=false,extended=true");
-    expect(modeBtn(container)?.getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(card("basic")!);
-    expect(JSON.stringify(send.mock.calls.map((c) => c[0]))).toBe(JSON.stringify([{ t: "modePick", mode: "basic" }]));
-    expect(pressedCards()).toBe("basic=false,extended=true"); // 낙관 갱신 없음(P19-6)
-    expect(modeBtn(container)?.getAttribute("aria-label")).toBe("판 종류: 확장판");
-    rerender(lobby(hostView({ mode: "basic" }), { send }));
-    expect(pressedCards()).toBe("basic=true,extended=false");
-    expect(modeBtn(container)?.getAttribute("aria-label")).toBe("판 종류: 기본 마피아");
-    expect(send).toHaveBeenCalledTimes(1);
-  });
-
-  it("[판 종류]를 누르면 채팅 입력칸의 포커스를 먼저 푼다", () => {
-    const { container } = render(lobby(hostView()));
-    const input = container.querySelector("[data-chat-input]") as HTMLInputElement;
-    const blur = vi.spyOn(input, "blur");
-    pressMode(container);
-    expect(blur).toHaveBeenCalledTimes(1);
-    expect(document.querySelectorAll("[data-mode-sheet]")).toHaveLength(1);
-  });
-
-  it("시트를 [닫기]로 닫으면 초점이 [판 종류] 단추로 돌아온다", () => {
-    vi.useFakeTimers();
-    const { container } = render(lobby(hostView()));
-    pressMode(container);
-    fireEvent.click(within(screen.getByRole("dialog", { name: "판 종류" })).getByRole("button", { name: "닫기" }));
-    advance(260);
-    expect(document.querySelector("[data-mode-sheet]")).toBeNull();
-    expect(document.activeElement?.getAttribute("data-host-rail-btn") ?? "없음").toBe("mode");
-    expect(modeBtn(container)?.getAttribute("aria-pressed")).toBe("false");
+  it("봇 도구가 없는 방장의 줄은 [맵]뿐이고, 허용 맵이 하나뿐이면 줄 자체가 없다(칸으로 세지 않는다)", () => {
+    const { container } = render(lobby(makeView(four(), 0)));
+    expect(railIds(container)).toBe(PLAYABLE_MAPS.length > 1 ? "map" : "");
+    expect(container.querySelectorAll("[data-host-rail]")).toHaveLength(PLAYABLE_MAPS.length > 1 ? 1 : 0);
   });
 
   it("연결이 끊기면(canSend 거짓) 줄 단추가 모두 aria-disabled 이고 눌러도 시트가 열리지 않는다", () => {
     const { container } = render(lobby(hostView(), { canSend: false }));
     const btns = [...container.querySelectorAll("[data-host-rail] [data-host-rail-btn]")];
-    expect(btns.length).toBeGreaterThanOrEqual(2);
+    expect(btns.length).toBeGreaterThanOrEqual(1);
     expect(btns.map((b) => b.getAttribute("aria-disabled")).join(",")).toBe(btns.map(() => "true").join(","));
-    pressMode(container);
-    expect(document.querySelector("[data-mode-sheet]")).toBeNull();
     fireEvent.click(container.querySelector('[data-host-rail-btn="bots"]')!);
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("시트가 열린 채 연결이 끊기면 칸을 눌러도 아무것도 보내지 않는다", () => {
-    const send = vi.fn((_msg: ClientMessage) => true);
-    const { container, rerender } = render(lobby(hostView(), { send }));
-    pressMode(container);
-    rerender(lobby(hostView(), { send, canSend: false }));
-    fireEvent.click(card("basic")!);
-    expect(send).not.toHaveBeenCalled();
-  });
-
-  it("참가자: 방장 줄 마크업이 없고(미렌더) 왼쪽 위에 읽기 전용 칩 하나 '판 종류: 확장판' (T-19-13)", () => {
+  it("참가자: 방장 줄 마크업이 없고 그 자리에 칩도 없다 — 판 종류 표식 네 가지 0건 (T-19-13, P22-15)", () => {
     const { container } = render(lobby(guestView()));
     expect(container.querySelectorAll("[data-host-rail], [data-host-rail-btn]")).toHaveLength(0);
-    expect(container.querySelectorAll("[data-mode-chip]")).toHaveLength(1);
-    expect(chipOf(container)?.getAttribute("data-mode-chip")).toBe("extended");
-    expect(chipOf(container)?.textContent).toBe("판 종류: 확장판");
-    expect(chipOf(container)?.tagName).toBe("DIV"); // 누를 수 없다
+    expect(modeMarks(container)).toBe("0,0,0,0");
   });
 
-  it("참가자: 판 종류가 바뀐 view 가 오면 칩이 바뀌고 알림 한 줄 '판 종류: 기본 마피아' → 다시 바뀌면 '판 종류: 확장판'", () => {
+  it("참가자의 판 바뀜 토스트가 없다 — mode 키가 달라지는 view 를 받아도 알림이 없다", () => {
     const { container, rerender } = render(lobby(guestView()));
     expect(toastText(container)).toBe("");
-    rerender(lobby(guestView({ mode: "basic" })));
-    expect(chipOf(container)?.getAttribute("data-mode-chip")).toBe("basic");
-    expect(chipOf(container)?.textContent).toBe("판 종류: 기본 마피아");
-    expect(toastText(container)).toBe("판 종류: 기본 마피아");
-    expect(toastOn(container)).toBe(true);
-    rerender(lobby(guestView({ mode: "extended" })));
-    expect(toastText(container)).toBe("판 종류: 확장판");
+    rerender(lobby(guestView({ round: 2 })));
+    expect(toastText(container)).toBe("");
   });
 
-  it("알림이 없는 때: 방장 본인 · 처음 그릴 때 · 재연결 직후(epoch) · 재접속 띠가 떠 있는 동안", () => {
-    const host = render(lobby(hostView()));
-    host.rerender(lobby(hostView({ mode: "basic" })));
-    expect(toastText(host.container)).toBe("");
-    host.unmount();
-    const first = render(<StrictMode>{lobby(guestView({ mode: "basic" }))}</StrictMode>);
-    expect(toastText(first.container)).toBe("");
-    first.unmount();
-    const re = render(lobby(guestView(), { epoch: 0 }));
-    re.rerender(lobby(guestView({ mode: "basic" }), { epoch: 1 }));
-    expect(toastText(re.container)).toBe("");
-    re.unmount();
-    const band = render(lobby(guestView(), { bannerVisible: true }));
-    band.rerender(lobby(guestView({ mode: "basic" }), { bannerVisible: true }));
-    expect(toastText(band.container)).toBe("");
-    // 띠가 사라져도 그사이 바뀜은 기준선에 들어가 뒤늦게 알리지 않는다
-    band.rerender(lobby(guestView({ mode: "basic" }), { bannerVisible: false }));
-    expect(toastText(band.container)).toBe("");
-  });
-
-  it("같은 방송에 입장과 판 종류 바뀜이 함께면 입장 알림이 먼저다(방장 변경 > 입장 > 퇴장 > 판 종류)", () => {
+  it("방장이 바뀌어 내가 방장이 되면 줄이 나오고, 방장을 넘겨주면 줄이 사라진다 — 서버 view 의 isHost 로만", () => {
     const { container, rerender } = render(lobby(guestView()));
-    rerender(lobby(makeView([...four(), player(4, "지아")], 2, { mode: "basic" })));
-    expect(toastText(container)).toBe("지아 님 입장");
-    expect(chipOf(container)?.getAttribute("data-mode-chip")).toBe("basic");
-  });
-
-  it("방장이 바뀌어 내가 방장이 되면 칩이 사라지고 줄이 나온다 — 서버 view 의 isHost 로만", () => {
-    const { container, rerender } = render(lobby(guestView()));
-    expect(`${container.querySelectorAll("[data-host-rail]").length}/${container.querySelectorAll("[data-mode-chip]").length}`).toBe("0/1");
+    expect(container.querySelectorAll("[data-host-rail]").length).toBe(0);
     const players = four().map((p) => ({ ...p, isHost: p.seat === 2 }));
     rerender(lobby(makeView(players, 2)));
-    expect(`${container.querySelectorAll("[data-host-rail]").length}/${container.querySelectorAll("[data-mode-chip]").length}`).toBe("1/0");
-    // 거꾸로: 방장을 넘겨주면 줄이 사라지고 칩이 나온다
+    expect(container.querySelectorAll("[data-host-rail]").length).toBe(PLAYABLE_MAPS.length > 1 ? 1 : 0);
     rerender(lobby(guestView()));
-    expect(`${container.querySelectorAll("[data-host-rail]").length}/${container.querySelectorAll("[data-mode-chip]").length}`).toBe("0/1");
+    expect(container.querySelectorAll("[data-host-rail]").length).toBe(0);
   });
 
-  it("꾸미기 시트가 열린 동안에는 줄도 칩도 그리지 않는다 (P19-16)", () => {
+  it("꾸미기 시트가 열린 동안에는 줄을 그리지 않는다 (P19-16)", () => {
     const host = render(lobby(hostView()));
     expect(host.container.querySelectorAll("[data-host-rail]")).toHaveLength(1);
     fireEvent.click(within(host.container).getByRole("button", { name: "옷장" }));
     expect(host.container.querySelectorAll("[data-host-rail]")).toHaveLength(0);
-    host.unmount();
-    const guest = render(lobby(guestView()));
-    expect(guest.container.querySelectorAll("[data-mode-chip]")).toHaveLength(1);
-    fireEvent.click(within(guest.container).getByRole("button", { name: "옷장" }));
-    expect(guest.container.querySelectorAll("[data-mode-chip]")).toHaveLength(0);
   });
 
-  it("키보드가 열린 동안에는 줄도 칩도 그리지 않는다 (P19-16)", () => {
+  it("키보드가 열린 동안에는 줄을 그리지 않는다 (P19-16)", () => {
     const vv = Object.assign(new EventTarget(), { height: 844, offsetTop: 0 });
     Object.defineProperty(window, "visualViewport", { value: vv, configurable: true, writable: true });
     const realInnerH = window.innerHeight;
     Object.defineProperty(window, "innerHeight", { value: 844, configurable: true, writable: true });
     vi.useFakeTimers();
     try {
-      for (const [view, sel] of [[hostView(), "[data-host-rail]"], [guestView(), "[data-mode-chip]"]] as const) {
-        vv.height = 844;
-        const { container, unmount } = render(lobby(view));
-        expect(container.querySelectorAll(sel)).toHaveLength(1);
-        act(() => (container.querySelector("[data-chat-input]") as HTMLInputElement).focus());
-        vv.height = 844 - 336;
-        act(() => void vv.dispatchEvent(new Event("resize")));
-        advance(20);
-        expect(container.querySelector("main.mf-lobby")?.getAttribute("data-kb-open")).toBe("true");
-        expect(container.querySelectorAll(sel)).toHaveLength(0);
-        unmount();
-      }
+      vv.height = 844;
+      const { container } = render(lobby(hostView()));
+      expect(container.querySelectorAll("[data-host-rail]")).toHaveLength(1);
+      act(() => (container.querySelector("[data-chat-input]") as HTMLInputElement).focus());
+      vv.height = 844 - 336;
+      act(() => void vv.dispatchEvent(new Event("resize")));
+      advance(20);
+      expect(container.querySelector("main.mf-lobby")?.getAttribute("data-kb-open")).toBe("true");
+      expect(container.querySelectorAll("[data-host-rail]")).toHaveLength(0);
     } finally {
       Reflect.deleteProperty(window, "visualViewport");
       Object.defineProperty(window, "innerHeight", { value: realInnerH, configurable: true, writable: true });
     }
   });
 
-  it("테스트 방([테스트] 단추가 있음)은 줄·칩이 그 아래에서 시작한다(data-test-shift), 없으면 표식이 없다 (P19-5)", () => {
+  it("테스트 방([테스트] 단추가 있음)은 줄이 그 아래에서 시작한다(data-test-shift), 없으면 표식이 없다 (P19-5)", () => {
     const test = <button type="button">테스트</button>;
     const host = render(lobby(hostView(), { testButton: test }));
     expect(host.container.querySelector("[data-host-rail]")?.hasAttribute("data-test-shift")).toBe(true);
     host.unmount();
     const plain = render(lobby(hostView()));
     expect(plain.container.querySelector("[data-host-rail]")?.hasAttribute("data-test-shift")).toBe(false);
-    plain.unmount();
-    const guest = render(lobby(guestView(), { testButton: test }));
-    expect(guest.container.querySelector("[data-mode-chip]")?.hasAttribute("data-test-shift")).toBe(true);
-    guest.unmount();
-    const plainGuest = render(lobby(guestView()));
-    expect(plainGuest.container.querySelector("[data-mode-chip]")?.hasAttribute("data-test-shift")).toBe(false);
   });
 
   it("테스트 방은 줄 최대 높이도 48 줄어든다 — 왕관 표식까지 들어가던 높이에서 [테스트]가 있으면 표식이 빠진다 (F-1)", () => {
-    // 기본 마피아 방: 줄 단추가 [판 종류]·([맵])·[봇] 으로 고정이다(튜토리얼 토글 없음)
-    const n = PLAYABLE_MAPS.length > 1 ? 3 : 2;
+    // 줄 단추가 ([맵])·[봇] 으로 고정이다
+    const n = PLAYABLE_MAPS.length > 1 ? 2 : 1;
     const withCrown = n * 52 + (n - 1) * 12 + 32;
     const panelH = lobbyPanelHeight(LOG_H);
     // 오른쪽 열 최대 높이 = 방 높이 − 패널 − 8 − (헤더 62 + 12) = 표식까지의 높이 + 40 (48 을 빼면 표식이 안 들어간다)
@@ -441,10 +316,10 @@ describe("Lobby — 방장 줄과 판 종류 (19-04, D-13·D-05·D-07)", () => {
     });
     try {
       const crowns = (c: ParentNode) => `${c.querySelectorAll("[data-host-rail]").length}/${c.querySelectorAll("[data-host-rail-crown]").length}/${c.querySelectorAll(".mf-hostrail__col").length}`;
-      const plain = render(lobby(hostView({ mode: "basic" })));
+      const plain = render(lobby(hostView()));
       expect(crowns(plain.container)).toBe("1/1/1");
       plain.unmount();
-      const test = render(lobby(hostView({ mode: "basic" }), { testButton: <button type="button">테스트</button> }));
+      const test = render(lobby(hostView(), { testButton: <button type="button">테스트</button> }));
       expect(crowns(test.container)).toBe("1/0/1");
     } finally {
       offset.mockRestore();
@@ -462,16 +337,15 @@ describe("Lobby — 방장 줄과 판 종류 (19-04, D-13·D-05·D-07)", () => {
     expect(container.querySelectorAll("[data-host-rail] [data-lobby-start]")).toHaveLength(0);
   });
 
-  it("가상 뷰포트가 밀리면 줄·칩도 헤더 계열과 함께 내려온다 (lobby.css)", () => {
+  it("가상 뷰포트가 밀리면 줄도 헤더 계열과 함께 내려온다 (lobby.css)", () => {
     const css = readFileSync("src/styles/lobby.css", "utf8");
     const rule = (css.split("}").find((r) => r.includes(".mf-lobby .mv-side") && r.includes("translateY(var(--mf-vv-top")) ?? "").replace(/\s+/g, " ");
     expect(rule.includes(".mf-lobby .mf-hostrail")).toBe(true);
-    expect(rule.includes(".mf-lobby .mf-modechip")).toBe(true);
+    expect(rule.includes(".mf-lobby .mf-modechip")).toBe(false);
   });
 });
 
-describe("Lobby — 확장판의 [맵] 숨김 (20-07, D-02·P20-16)", () => {
-  // 확장판은 늘 마을이라 고를 것이 없다: [맵] 단추·맵 탭의 조건 = 허용 맵이 둘 이상 && 판 종류가 기본 마피아
+describe("Lobby — [맵] 단추 (20-07 → 22-07: 판 종류가 없어 허용 맵이 둘 이상이면 늘 있다)", () => {
   let restore = () => {};
   beforeEach(() => {
     restore = openPlaza();
@@ -483,60 +357,33 @@ describe("Lobby — 확장판의 [맵] 숨김 (20-07, D-02·P20-16)", () => {
   const mapBtns = (c: ParentNode) => c.querySelectorAll('[data-host-rail-btn="map"]').length;
   const chipName = (c: ParentNode) => c.querySelector("[data-map-chip]")?.getAttribute("aria-label") ?? "없음";
 
-  it("방장: 확장판(mode 키 없음 = 기본값, extended)이면 [맵] 단추가 없고 기본 마피아면 하나 있다", () => {
-    const cases: [Partial<RoomView>, number][] = [[{}, 0], [{ mode: "extended" }, 0], [{ mode: "basic" }, 1]];
-    for (const [extra, n] of cases) {
-      const { container, unmount } = render(lobby(hostView({ mapChoice: "plaza", ...extra })));
-      expect(`${extra.mode ?? "키 없음"}: [맵] ${mapBtns(container)}`).toBe(`${extra.mode ?? "키 없음"}: [맵] ${n}`);
-      expect(container.querySelectorAll("[data-map-chip]")).toHaveLength(n);
-      unmount();
-    }
-  });
-
-  it("확장판 → 기본 마피아로 view 가 바뀌면 [맵] 단추가 생기고 칩의 고른 맵은 view.mapChoice 그대로다. 확장판으로 되돌리면 다시 사라진다", () => {
-    const { container, rerender } = render(lobby(hostView({ mapChoice: "plaza" })));
-    expect(chipName(container)).toBe("없음");
-    rerender(lobby(hostView({ mapChoice: "plaza", mode: "basic" })));
-    expect(mapBtns(container)).toBe(1);
-    expect(chipName(container)).toBe("맵 광장");
-    rerender(lobby(hostView({ mapChoice: "plaza", mode: "extended" })));
-    expect(chipName(container)).toBe("없음");
-    rerender(lobby(hostView({ mapChoice: "plaza", mode: "basic" })));
-    expect(chipName(container)).toBe("맵 광장");
-  });
-
-  it("참가자 화면은 두 판 모두 [맵] 단추가 없고 꾸미기 시트에 맵 탭도 없다", () => {
-    for (const mode of ["extended", "basic"] as const) {
-      const { container, unmount } = render(lobby(guestView({ mapChoice: "plaza", mode })));
-      expect(container.querySelectorAll('[data-host-rail-btn="map"], [data-map-chip]')).toHaveLength(0);
-      fireEvent.click(screen.getByRole("button", { name: "옷장" }));
-      expect(container.querySelectorAll("[data-map-tab], [data-map-card]")).toHaveLength(0);
-      unmount();
-    }
-  });
-
-  it("확장판 방장이 [옷장]으로 연 시트에는 탭 줄이 없고 의상 카드만 있다", () => {
+  it("방장: [맵] 단추가 하나 있고 칩의 고른 맵은 view.mapChoice 그대로다", () => {
     const { container } = render(lobby(hostView({ mapChoice: "plaza" })));
+    expect(mapBtns(container)).toBe(1);
+    expect(container.querySelectorAll("[data-map-chip]")).toHaveLength(1);
+    expect(chipName(container)).toBe("맵 광장");
+  });
+
+  it("참가자 화면은 [맵] 단추가 없고 꾸미기 시트에 맵 탭도 없다", () => {
+    const { container } = render(lobby(guestView({ mapChoice: "plaza" })));
+    expect(container.querySelectorAll('[data-host-rail-btn="map"], [data-map-chip]')).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     expect(container.querySelectorAll("[data-map-tab], [data-map-card]")).toHaveLength(0);
-    expect(container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
   });
 
-  it("기본 마피아에서 [맵]으로 시트를 맵 탭으로 연 뒤 view 가 확장판으로 바뀌면 탭 줄이 없고 의상 카드가 보인다 (P20-16)", () => {
-    const { container, rerender } = render(lobby(hostView({ mode: "basic" })));
-    fireEvent.click(container.querySelector("[data-map-chip]")!);
-    expect(container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
-    expect(container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
-    rerender(lobby(hostView({ mode: "extended" })));
-    expect(container.querySelectorAll("[data-dress-sheet]")).toHaveLength(1); // 시트는 열린 채다
-    expect(container.querySelectorAll("[data-map-tab]")).toHaveLength(0);
-    expect(container.querySelectorAll("button[data-map-card]")).toHaveLength(0);
-    expect(container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
-    // 기본 마피아로 되돌리면 탭 줄이 돌아오지만 저절로 맵 탭으로 넘어가지 않는다
-    rerender(lobby(hostView({ mode: "basic" })));
+  it("방장이 [옷장]으로 연 시트에는 맵 탭이 있고 처음에는 의상 탭이 골라져 있다", () => {
+    const { container } = render(lobby(hostView({ mapChoice: "plaza" })));
+    fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     expect(container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
     expect(container.querySelector("button[data-map-tab][aria-selected='true']")?.getAttribute("data-map-tab")).toBe("dress");
     expect(container.querySelectorAll("button[data-outfit]")).toHaveLength(9);
+  });
+
+  it("[맵]으로 시트를 맵 탭으로 열면 맵 카드 셋이 보인다", () => {
+    const { container } = render(lobby(hostView()));
+    fireEvent.click(container.querySelector("[data-map-chip]")!);
+    expect(container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
+    expect(container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
   });
 });
 
@@ -1364,7 +1211,7 @@ describe("Lobby — 튜토리얼 진입이 없다 (22-03, D-08, P22-16)", () => 
   const ENTRY = '[data-tutorial-toggle], [data-host-rail-btn="tutorial"], [data-tutorial], [role="switch"]';
 
   it("방장(첫 판·일반 방·확장판·기본 마피아)에게도 [튜토리얼 먼저] 토글이 마운트되지 않는다 — DOM 0건", () => {
-    for (const extra of [{}, { mode: "basic" as const }, { round: 2 }]) {
+    for (const extra of [{}, { round: 2 }]) {
       const { container, unmount } = render(lobby(hostView(extra)));
       expect(container.querySelectorAll(ENTRY)).toHaveLength(0);
       unmount();

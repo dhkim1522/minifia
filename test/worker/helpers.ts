@@ -5,7 +5,7 @@ import { expect } from "vitest";
 import { phaseKey } from "../../shared/game/audience";
 import { MOVE_V, restSegment } from "../../shared/game/world";
 import type { Segment, WorldState } from "../../shared/game/world";
-import type { ChatLineWire, CreateRoomResponse, GameMode, PhaseId, RoleId, RoomView, ServerMessage } from "../../shared/protocol";
+import type { ChatLineWire, CreateRoomResponse, PhaseId, RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 
 export interface TestSocket {
   ws: WebSocket;
@@ -710,15 +710,9 @@ export interface Game {
  * 6명 판(방장 + 손님 5, guests 로 바꿀 수 있다)을 시작해 원하는 단계까지 마감을 당기고, 모든 소켓의 프레임을 ping/pong 으로 flush 해 둔 채 돌려준다.
  * 역할은 무작위라 dayAnnounce 에서 읽는다. 마피아 둘·경찰·의사·시민 둘이다.
  */
-export async function startedGame(phase: PhaseId, guests = 5, mode?: GameMode): Promise<Game> {
+export async function startedGame(phase: PhaseId, guests = 5): Promise<Game> {
   const room = await seat(guests, 0);
   const socks = [room.host, ...room.guests.map((g) => g.sock)];
-  // 21-13: mode 를 주면 방장이 대기실에서 판 종류를 먼저 고른다(modePick) — 단계 순서와 무관한 장치 시험이 기본 마피아 판("basic")으로 돌릴 때 쓴다. 없으면 기본값(확장판)이다.
-  if (mode !== undefined) {
-    const marks = socks.map(mark);
-    send(room.host, { t: "modePick", mode });
-    for (const [i, sock] of socks.entries()) await settle(sock, marks[i]!);
-  }
   send(room.host, { t: "start" });
   for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
   await advanceTo(room.code, socks, "dayAnnounce");

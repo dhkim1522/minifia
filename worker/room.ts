@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, GameMode, MapChoice, OutfitId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
+import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, MapChoice, OutfitId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
 import { botMafiaTarget, botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { isAlive } from "../shared/game/alive";
@@ -36,8 +36,7 @@ import { sendWhisper } from "../shared/game/whisper";
 import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared/game/will";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
-import { modeOf, rulesetOf } from "../shared/game/ruleset";
-import type { Ruleset } from "../shared/game/ruleset";
+import { RULES } from "../shared/game/ruleset";
 import { nextWakeAt, tick } from "../shared/game/tick";
 import { castPoint, castTurnPoint, turnStartOf } from "../shared/game/nomination";
 import { castRunoffVote } from "../shared/game/runoff";
@@ -49,7 +48,6 @@ import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
 import type { MapDef } from "../shared/game/map";
 import { mapOf, pickMap, roomMapId } from "../shared/game/maps";
-import { pickMode } from "../shared/game/mode";
 import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
@@ -325,7 +323,7 @@ export class Room extends DurableObject<Env> {
         return;
       case "badge":
         // 기본판(결정 0072)에서 꺼진 장치 — 지원하지 않는 기능과 같게 보인다: 오류 한 프레임만(state·저장·방송 없음).
-        if (!this.rulesNow().badge) {
+        if (!RULES.badge) {
           this.rejectDisabled(ws);
           return;
         }
@@ -337,9 +335,6 @@ export class Room extends DurableObject<Env> {
       case "mapPick":
         await this.handleMapPick(ws, msg.map);
         return;
-      case "modePick":
-        await this.handleModePick(ws, msg.mode);
-        return;
       case "ready":
         await this.handleReady(ws, msg.on, msg.round);
         return;
@@ -347,7 +342,7 @@ export class Room extends DurableObject<Env> {
         await this.handleRematch(ws, msg.round);
         return;
       case "whisper":
-        if (!this.rulesNow().whisper) {
+        if (!RULES.whisper) {
           this.rejectDisabled(ws);
           return;
         }
@@ -594,24 +589,6 @@ export class Room extends DurableObject<Env> {
       return;
     }
     const result = pickMap(this.room, att.playerId, choice);
-    if (!result.ok) {
-      this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, Date.now()) });
-      return;
-    }
-    if (result.state === this.room) return;
-    this.room = result.state;
-    await this.persistAndBroadcast();
-  }
-
-  // 판 종류 고르기(19-01, 결정 0081-6 D-05): 신원은 소켓 첨부의 playerId 뿐이다. 방장·단계(대기실·결과)·허용 값은 규칙 함수(pickMode)가 서버 상태로 판정한다(T-19-01).
-  // 어떤 거절이든(방장 아님·판 진행 중·허용 밖 값) 사람·사유와 무관하게 같은 응답 — 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임(L40, T-19-02). 같은 값은 무변화(프레임 0).
-  private async handleModePick(ws: WebSocket, mode: GameMode): Promise<void> {
-    const att = this.attachmentOf(ws);
-    if (!att || !this.room) {
-      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
-      return;
-    }
-    const result = pickMode(this.room, att.playerId, mode);
     if (!result.ok) {
       this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, Date.now()) });
       return;
@@ -972,14 +949,9 @@ export class Room extends DurableObject<Env> {
   // 일반 방은 error 프레임만(state·저장·방송 없음): 이 기능이 없는 방에서는 알 수 없는 메시지와 같게 보인다.
   // 그 밖의 거부는 sendRejection(오류 + 그 소켓에만 최신 state).
   // 기본판(결정 0072, D-05)에서 꺼진 메시지(badge·whisper)의 거절: 보낸 소켓에만 오류 한 프레임 — state·저장·방송·채팅 줄 없음.
-  // 처리기 본체(handleBadge·handleWhisper)는 지우지 않는다. 그 방의 판 규칙(rulesNow)에서 값을 켜면 이 문이 열린다.
+  // 처리기 본체(handleBadge·handleWhisper)는 지우지 않는다. 판 규칙 RULES 에서 값을 켜면 이 문이 열린다.
   private rejectDisabled(ws: WebSocket): void {
     this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
-  }
-
-  /** 이 방의 판 규칙(19페이즈 D-03) — 전역 값이 아니라 방 상태의 판 종류에서 얻는다. 방이 아직 없으면 기본 판의 규칙이다(정치 장치는 두 판 모두 꺼짐이라 거절 응답이 같다). */
-  private rulesNow(): Ruleset {
-    return rulesetOf(modeOf(this.room ?? {}));
   }
 
   private rejectTestTool(ws: WebSocket, playerId: string, code: WsErrorCode): void {

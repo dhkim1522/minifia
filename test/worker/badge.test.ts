@@ -1,10 +1,10 @@
 // 직업 주장 배지 워커 통합 테스트(09.1.1-01, 결정 0066-1): 주장은 공개 값이라 바뀌면 모든 소켓이 각자 view 를 받는다.
 import { describe, expect, it } from "vitest";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import type { RoleId, ServerMessage } from "../../shared/protocol";
 import { connect, editRoom, hello, lastViewOf, mapPlayers, mark, pause, send, settle, startedGame, stable, storedRoom, summary, toPhase } from "./helpers";
 import type { Game } from "./helpers";
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 type State = Extract<ServerMessage, { t: "state" }>;
 

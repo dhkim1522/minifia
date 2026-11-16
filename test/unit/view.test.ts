@@ -7,7 +7,7 @@ import { DISCUSSION_MS, MORNING_MS, NIGHT_MS, NOMINATION_GATHER_MS, NOMINATION_M
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, roundOf, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import { tick } from "../../shared/game/tick";
 import { buildPreview, buildView } from "../../shared/game/view";
 import type { PhaseId, RoomView } from "../../shared/protocol";
@@ -19,7 +19,7 @@ import { lockCauseInFile } from "../helpers/playable";
 
 // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B).
 lockCauseInFile();
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 const PLAYER_COUNTS = [4, 5, 6, 7, 8] as const;
 const SEEDS = [1, 42, 20260101] as const;
@@ -201,7 +201,6 @@ function roleValueLeaks(view: RoomView, spectator = false): string[] {
 /** view 최상위에 올 수 있는 키(허용 목록). */
 const TOP_KEYS: ReadonlySet<string> = new Set([
   "code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map",
-  "mode", // 판 종류 공개 값(19페이즈 D-05) — 모든 소켓에 같은 값이고 역할의 함수가 아니다
 ]);
 
 /** 그 밤에 살아 있는 각 역할이 지금 고른 대상 seat(중복 없음·오름차순). */
@@ -2163,9 +2162,8 @@ describe("준비 players[].ready · players[].sat (11-08, D-12·D-13)", () => {
 });
 
 describe("쉬는 사람 view (11-08, D-13, 누설 L38)", () => {
-  // 19-01: mode(판 종류 공개 값, D-12)는 쉬는 사람도 같은 값을 받는다 — 이름만 길어진 이 시험 제목의 목록에 한 키를 더했다.
-  const RESTING_TOP = "code,mapChoice,maxPlayers,me,minPlayers,mode,phase,phaseDurationMs,phaseEndsAt,players,resting,round,serverNow";
-  const RESTING_TOP_MAP = "code,map,mapChoice,maxPlayers,me,minPlayers,mode,phase,phaseDurationMs,phaseEndsAt,players,resting,round,serverNow";
+  const RESTING_TOP = "code,mapChoice,maxPlayers,me,minPlayers,phase,phaseDurationMs,phaseEndsAt,players,resting,round,serverNow";
+  const RESTING_TOP_MAP = "code,map,mapChoice,maxPlayers,me,minPlayers,phase,phaseDurationMs,phaseEndsAt,players,resting,round,serverNow";
   const sitter = {
     id: "sit-id-0001",
     token: "token-sitter-secret-0123456789",

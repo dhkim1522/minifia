@@ -27,7 +27,7 @@
 //              시민 판은 어둠·맥박 화면) CPU 감속 아래 장면마다 머무는 동안(--minutes 를 두 판이 반씩) 페이지 안 rAF 간격을 재 평균 fps·끊김·p95 를 장면별 칸(scenes)과 함께
 //              `nightload-{크기}-x{감속}.json`(기본 폴더 .planning/phases/09-night-morning/perf/)으로 저장한다. 넘기기·시트 조작 동안은 기록을 멈춘다. 6페이즈 기준(5분 평균 55fps, 끊김 5회)은
 //              baseline 칸에 적을 뿐 판정하지 않는다 — 합격 판정은 실기기 확인(사용자 결정 2026-11-02). 방은 끝에 나가서 지운다. v1.0 주소는 어떤 요청보다 먼저 거부한다.
-//   --map bar|plaza (nightload, 11-13·20-09): 시작 전에 방장이 판 종류를 기본 마피아로 바꾼 뒤(pickModeViaUi) 지도 칩 → 맵 탭 → 그 맵 카드를 고른다(pickMapViaUi). 시작 뒤 view.map 이 그 맵이 아니면 오류로 끝낸다.
+//   --map bar|plaza (nightload, 11-13·20-09): 시작 전에 방장이 지도 칩 → 맵 탭 → 그 맵 카드를 고른다(pickMapViaUi). 시작 뒤 view.map 이 그 맵이 아니면 오류로 끝낸다.
 //              저장 이름 끝 `-bar`·`-plaza`, JSON params.map. 옵션이 없으면 아무것도 고르지 않는다(이름은 이전 그대로 끝 표시 없음, 맵 확인도 없음).
 //   --mode light (18-07): 광장·재즈 바 × talk·morning·vote·night 정지 화면(?perf=1&shot=1, 시드 1, 사람 6, 코트)을 같은 카메라로 찍어 캔버스 평균 상대 휘도를 재고
 //              순서(talk > morning > vote > night)·배율(talk ≥ 2.0×night, morning ≥ 1.6×night)을 판정한다. 결과 `light-{크기}.json`·`light-{맵}-{단계}.png`. 실패가 있으면 종료 코드 1.
@@ -61,7 +61,7 @@ import {
   tapPick,
   waitWorldReady,
 } from "./e2e/browser.mjs";
-import { pickMapViaUi, pickModeViaUi } from "./e2e/mapselect.mjs";
+import { pickMapViaUi } from "./e2e/mapselect.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_OUT = join(REPO, ".planning/phases/06-world-skeleton/perf");
@@ -760,11 +760,10 @@ async function nightloadOnce(browser, o, origin, chrome) {
     await openTestSheet(page);
     await setBots(page, tracker, o.bots);
     await setBotVote(page, tracker, { exec: "no", pick: "other" });
-    // --map bar|plaza: 확장판 방엔 [맵] 칩이 없어 먼저 기본 마피아로 바꾼 뒤 맵 카드를 고른다(20-09). 선택은 방에 남아 두 판 모두 그 맵이다.
-    // 옵션이 없으면 판 종류도 맵도 바꾸지 않는다. 옵션을 준 경우에만 아래에서 시작 뒤 view.map 을 확인한다
+    // --map bar|plaza: 방장 줄의 [맵] 으로 맵 카드를 고른다(20-09). 선택은 방에 남는다.
+    // 옵션이 없으면 맵을 바꾸지 않는다. 옵션을 준 경우에만 아래에서 시작 뒤 view.map 을 확인한다
     if (o.map === "bar" || o.map === "plaza") {
       if (o.mapGiven) {
-        await pickModeViaUi(page, tracker, "basic");
         await pickMapViaUi(page, tracker, o.map);
       }
     }

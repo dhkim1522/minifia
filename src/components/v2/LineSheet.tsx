@@ -24,7 +24,7 @@ export interface LineSheetPeer {
 }
 
 export interface LineSheetProps {
-  /** 그 판 규칙의 귓속말 켜짐(19페이즈 D-03) — 공개 예고 문구가 귓속말을 함께 말할지 정한다. 화면이 view.mode 에서 얻어 넘기고, 없으면 꺼짐이다 */
+  /** 판 규칙 RULES 의 귓속말 켜짐 — 공개 예고 문구가 귓속말을 함께 말할지 정한다. 화면이 RULES 에서 읽어 넘기고, 없으면 꺼짐이다 */
   whisper?: boolean;
   /** 상대 칩(얼굴 + 이름 + whisper 아이콘). 없으면 title 을 쓴다 */
   peer?: LineSheetPeer;

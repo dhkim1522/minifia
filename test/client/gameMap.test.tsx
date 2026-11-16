@@ -2,9 +2,9 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import { lockCause, underCauseLock } from "../helpers/playable";
-import type { ClientMessage, GameMode, MorningView, PhaseId, PublicPlayer, RoleRecord, RoomView } from "../../shared/protocol";
+import type { ClientMessage, MorningView, PhaseId, PublicPlayer, RoleRecord, RoomView } from "../../shared/protocol";
 import { LineSheet } from "../../src/components/v2/LineSheet";
 import { floatVisible } from "../../src/game/badgeView";
 import { RESULT_PANEL_TEXT } from "../../src/game/resultText";
@@ -16,7 +16,7 @@ import { LOG_H } from "../../src/game/chatUi";
 const KB_PANEL = 14 + LOG_H + 8 + 48 + 8;
 import { bindSignals, type LocalSignal } from "../../src/audio/signals";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 // 08-13: 낮 시작~처형은 맵(WorldStage) 위 GameMap 한 화면이다. WorldStage 는 받은 props 만 쥐는 가짜로 바꾼다(캔버스·런타임은 worldStage.test 몫).
 // RoomScreen 을 거쳐 그려 장면 키("gameMap")까지 함께 본다 — 연결은 반환값을 시험이 정하는 가짜다.
@@ -70,8 +70,6 @@ interface ViewOpts {
   mySeat?: number;
   endCount?: number;
   pressed?: boolean;
-  /** 판 종류. 기본은 기본 마피아 판(21-14) */
-  mode?: GameMode;
 }
 
 function makeView(o: ViewOpts = {}): RoomView {
@@ -82,7 +80,6 @@ function makeView(o: ViewOpts = {}): RoomView {
   );
   return {
     code: "0042",
-    mode: o.mode ?? "basic", // 21-14 (A): 이 파일의 기본 view 는 기본 마피아 판(제목 토론·[내 역할] 하나) — 원인 흐름 확장판 화면은 modeView·openCause 구역이 따로 본다
     phase: o.phase ?? "discussion",
     phaseEndsAt: o.noClock ? null : NOW + 90_000,
     phaseDurationMs: o.noClock ? null : 90_000,
@@ -1197,20 +1194,19 @@ describe("GameMap — 기본판 투표 (결정 0072)", () => {
 });
 
 // 19-02(D-03·D-09, UI-SPEC E-1): 기본 마피아 판 화면. 서버가 기록·흔적 키를 싣지 않고 화면은 키가 없으면 그리지 않는다 — 숨김이 아니라 DOM 에 없다.
-// 화면의 규칙 판정은 view.mode 에서 얻은 판 규칙이다(전역 값이 아니다).
-describe("GameMap — 기본 마피아 판 화면 (19-02, D-09)", () => {
+// 화면의 규칙 판정은 상수 RULES 다(22-07: 판 종류가 없다).
+describe("GameMap — 꺼진 장치의 화면 (19-02, D-09, 22-07)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
   });
   afterEach(() => vi.useRealTimers());
 
-  /** 서버가 싣는 모양 그대로: basic 판에는 me.record·day.evidence·morning.trace·seen 키가 없다 */
-  const modeView = (mode: GameMode, o: ViewOpts = {}, extra: { morning?: MorningView; endsInMs?: number } = {}): RoomView => {
+  /** 서버가 싣는 모양 그대로: me.record·day.evidence·morning.trace·seen 키가 없다 */
+  const modeView = (o: ViewOpts = {}, extra: { morning?: MorningView; endsInMs?: number } = {}): RoomView => {
     const v = makeView(o);
     return {
       ...v,
-      mode,
       ...(extra.endsInMs !== undefined ? { phaseEndsAt: NOW + extra.endsInMs } : {}),
       day: { ...v.day!, ...(extra.morning !== undefined ? { morning: extra.morning } : {}) },
     };
@@ -1228,25 +1224,25 @@ describe("GameMap — 기본 마피아 판 화면 (19-02, D-09)", () => {
       vi.advanceTimersByTime(ms);
     });
 
-  it("basic 토론: [기록] 머리 단추·목격 기록 카드·증거 카드·이름표 표시가 DOM 에 없고 [내 역할] 과 사회자 줄(토론 문구)은 그대로다", () => {
-    const { container } = mount(modeView("basic", { phase: "discussion" }));
+  it("토론: [기록] 머리 단추·목격 기록 카드·증거 카드·이름표 표시가 DOM 에 없고 [내 역할] 과 사회자 줄(토론 문구)은 그대로다", () => {
+    const { container } = mount(modeView({ phase: "discussion" }));
     expect(census(container)).toBe(NONE);
     expect(container.querySelector("[data-host-line]")?.textContent).toBe("의심 가는 사람을 이야기해 주세요");
     expect(container.querySelectorAll("[data-end-discussion]").length).toBe(1);
   });
 
-  it("basic 아침(morning.eliminated 뿐): 흔적 구간이 지나도 증거 카드·이름표 표시가 없고 탈락 발표는 그대로 있다", () => {
-    const { container } = mount(modeView("basic", { phase: "morning", dead: [2] }, { morning: { eliminated: 2 }, endsInMs: 7000 }));
+  it("아침(morning.eliminated 뿐): 흔적 구간이 지나도 증거 카드·이름표 표시가 없고 탈락 발표는 그대로 있다", () => {
+    const { container } = mount(modeView({ phase: "morning", dead: [2] }, { morning: { eliminated: 2 }, endsInMs: 7000 }));
     expect(census(container)).toBe(NONE);
     advance(2500);
     expect(census(container)).toBe(NONE);
     expect(container.textContent).toContain("서준 님이 당했습니다");
   });
 
-  it("basic 의 낮 단계(투표·변론·찬반·처형) 어디에도 기록·흔적·증거 요소가 없다", () => {
+  it("낮 단계(투표·변론·찬반·처형) 어디에도 기록·흔적·증거 요소가 없다", () => {
     const phases: PhaseId[] = ["nomination", "defense", "verdict", "execution"];
     const seen = phases.map((phase) => {
-      const { container, unmount } = mount(modeView("basic", { phase, candidate: 1, verdict: { yes: 2, no: 1, passed: true } }));
+      const { container, unmount } = mount(modeView({ phase, candidate: 1, verdict: { yes: 2, no: 1, passed: true } }));
       const row = `${phase}:${census(container) === NONE}`;
       unmount();
       return row;
@@ -1254,15 +1250,10 @@ describe("GameMap — 기본 마피아 판 화면 (19-02, D-09)", () => {
     expect(seen.join(" ")).toBe("nomination:true defense:true verdict:true execution:true");
   });
 
-  it("귓속말·배지 진입점은 두 판 모두 없다 (정치 장치는 두 판의 규칙에서 꺼짐)", () => {
-    const seen = (["basic", "extended"] as const).map((mode) => {
-      const v = modeView(mode, { phase: "discussion" });
-      const { container, unmount } = mount(v);
-      const row = `${mode}:${whisperVisible(v)}/${floatVisible(v)}/${container.querySelectorAll("[data-badge-live]").length}`;
-      unmount();
-      return row;
-    });
-    expect(seen.join(" ")).toBe("basic:false/false/0 extended:false/false/0");
+  it("귓속말·배지 진입점이 없다 (정치 장치는 RULES 에서 꺼짐)", () => {
+    const v = modeView({ phase: "discussion" });
+    const { container } = mount(v);
+    expect(`${whisperVisible(v)}/${floatVisible(v)}/${container.querySelectorAll("[data-badge-live]").length}`).toBe("false/false/0");
   });
 });
 

@@ -158,18 +158,15 @@ describe("ClientMessageSchema mapPick (11-06, D-20)", () => {
   });
 });
 
-// 19-01: 판 종류 고르기(결정 0081-6, D-05) — 값은 basic|extended enum 뿐이다. 신원은 소켓 첨부 playerId.
-describe("ClientMessageSchema modePick (19-01, D-05)", () => {
-  it.each(["basic", "extended"])("modePick %s 는 받는다", (mode) => {
-    expect(ClientMessageSchema.safeParse({ t: "modePick", mode }).success).toBe(true);
-  });
+// 22-07: 판 종류 고르기 메시지는 스키마에서 빠졌다 — 옛 이름은 파일 전체 검사에 걸리지 않게 조각으로 만든다 — 어떤 모양이든 BAD_MESSAGE 로 거절된다(T-22-12).
+const OLD_PICK = ["mode", "Pick"].join("");
+describe("ClientMessageSchema 옛 판 종류 고르기 없음 (22-07, T-22-12)", () => {
   it.each([
-    ["덧붙은 키", { t: "modePick", mode: "basic", seat: 1 }],
-    ["알 수 없는 값", { t: "modePick", mode: "fast" }],
-    ["mode 없음", { t: "modePick" }],
-    ["null", { t: "modePick", mode: null }],
-    ["대문자", { t: "modePick", mode: "Basic" }],
-  ])("modePick 거부: %s", (_name, msg) => {
+    ["옛 basic", { t: OLD_PICK, mode: "basic" }],
+    ["옛 extended", { t: OLD_PICK, mode: "extended" }],
+    ["덧붙은 키", { t: OLD_PICK, mode: "basic", seat: 1 }],
+    ["mode 없음", { t: OLD_PICK }],
+  ])("옛 판 종류 고르기 거부: %s", (_name, msg) => {
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
 });

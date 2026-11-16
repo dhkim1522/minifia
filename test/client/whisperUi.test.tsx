@@ -1,11 +1,11 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import type { ChatLineWire, ClientMessage, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 // 09.1.1-09 UI-SPEC B: 오른쪽 아래 둘째 떠 있는 버튼 → 귓속말 모드 → 이름표 → 한 줄 시트 → {t:"whisper", to, text}, 그리고 채팅 줄 세 가지.
 // RoomScreen → GameMap 을 진짜로 그리고 연결과 WorldStage 만 가짜로 바꾼다(badgeUi.test 와 같은 틀).

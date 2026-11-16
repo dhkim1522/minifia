@@ -156,19 +156,10 @@ import {
   HOST_RAIL_ORDER,
   LAMP_RGB,
   NIGHT600_RGB,
-  MODE_NAMES_E2E,
   hostRailChecks,
   hostRailLayoutE2E,
   hostRailMeasure,
   railMapsOn,
-  modeChipChecks,
-  modeSheetChecks,
-  BASIC_ABSENT_SELECTORS,
-  BASIC_ABSENT_ATTR_PREFIX,
-  BASIC_FORBIDDEN_LINES,
-  basicModeChecks,
-  BASIC_OFF_VIEW_KEYS,
-  basicViewKeyChecks,
   soundRenderChecks,
   soundNightParityChecks,
   soundVerdictTimingChecks,
@@ -1396,14 +1387,14 @@ test("LOBBY_SIZES: DEFAULT_SIZES 4개 + 390x844 + 402x874 여섯 개이고 LOBBY
   assert.deepEqual(DEFAULT_SIZES.map((x) => x.label), ["360x640", "390x664", "430x932", "360x560"]);
 });
 
-test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand(15-09 심부름 폰 6종, 21-15 에서 저녁 등불 기준으로 다시 씀 — 목격 기록·아침 흔적 흐름은 기능이 사라져 뺌)·mode-rail(19-06 방장 줄 폰 6종)·cause-phones(21-15 원인 흐름 새 요소 겹침 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
+test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand(15-09 심부름 폰 6종, 21-15 에서 저녁 등불 기준으로 다시 씀 — 목격 기록·아침 흔적 흐름은 기능이 사라져 뺌)·cause-phones(21-15 원인 흐름 새 요소 겹침 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
   const run = readFileSync(new URL("./run.mjs", import.meta.url), "utf8");
   assert.match(run, /extraSizes/);
   assert.match(run, /!args\.sizesGiven/);
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)?(?:, skipByDefault: true)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
-  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "mode-rail", "polish-reveal"]);
+  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "polish-reveal"]);
 });
 
 test("기본판(결정 0072)에서 꺼진 장치 흐름 7개는 skipByDefault 이고 politics-verdict 는 기본 실행에 남는다 (13-05)", () => {
@@ -4082,29 +4073,27 @@ test("sideColumnChecks: 빠진 입력은 전부 측정값 없음으로 실패한
   }
 });
 
-// ---- 19-06: 방장 줄 hostRailChecks(HR1~HR8)·참가자 칩 modeChipChecks(CH1·CH2)·판 종류 시트 modeSheetChecks(MS1·MS1g) ----
+// ---- 19-06: 방장 줄 hostRailChecks(HR1~HR8) — 22-07: 판 종류 칩·시트 판정(CH·MS)과 기본 마피아 판정(BM)은 판 종류와 함께 없어졌다 ----
 
 const LAMP = "rgb(255, 207, 138)";
 const N600 = "rgb(42, 55, 96)";
 const railBtn = (id, top, left = 16, extra = {}) => ({ id, rect: rect(left, top, 52, 52), borderColor: LAMP, color: LAMP, isCall: false, role: null, ariaChecked: null, ...extra });
 /**
- * 20-07 부터 앱의 확장판 줄에는 [맵] 이 없다(실제 줄 모양은 아래 "HR4(20-07)" 시험이 본다). 이 정상값은 단추 셋짜리 줄(22-03 에서 [튜토리얼 먼저]가 없어져 넷 → 셋)의 기하·색·접힘을 재는 판정용 입력이라 mapsOn 을 켠 채 둔다.
- * 390×844 방장 대기실(테스트 방) 정상값: 띠 면 아랫변 123, [테스트] 131~175, 줄 윗변 183(= 123 + 12 + 48), 왕관 표식 20 + 12, 단추 셋 215·279·343(아랫변 395),
+ * 390×844 방장 대기실(테스트 방) 정상값(22-07: 줄 단추는 [맵]·[봇] 둘): 띠 면 아랫변 123, [테스트] 131~175, 줄 윗변 183(= 123 + 12 + 48), 왕관 표식 20 + 12, 단추 둘 215·279(아랫변 331),
  * 패널 222(윗변 622) → 줄 최대 높이 431(= 622 − 8 − 135 − 48). 오른쪽 열은 소리·옷장 둘(left 322).
+ * 접힌 줄(두 열) 시험은 단추가 셋 이상이어야 하므로 아래에서 단추 셋 모양을 따로 만든다(HR4 순서와 무관한 기하 시험이라 geoFails 로 HR4 를 뺀다).
  */
 function railIn(over = {}) {
   return {
     viewport: { w: 390, h: 844 },
     screen: "lobby",
     host: true,
-    mode: "extended",
     kbOpen: false,
     mapsOn: true,
     botsOn: true,
-    rail: { rect: rect(16, 183, 52, 212), ariaLabel: "방장 전용" },
-    buttons: [railBtn("mode", 215), railBtn("map", 279), railBtn("bots", 343)],
+    rail: { rect: rect(16, 183, 52, 148), ariaLabel: "방장 전용" },
+    buttons: [railBtn("map", 215), railBtn("bots", 279)],
     crown: rect(16, 183, 52, 20),
-    chip: null,
     band: rect(16, 70, 358, 53),
     panel: rect(0, 622, 390, 222),
     head: [{ kind: "나가기", rect: rect(16, 8, 44, 44) }, { kind: "공유", rect: rect(330, 8, 44, 44) }],
@@ -4115,16 +4104,19 @@ function railIn(over = {}) {
     ...over,
   };
 }
-/** 왕관 표식이 없는 한 열(단추가 줄 윗변 183 부터). panelTop 으로 줄 최대 높이를 정한다(최대 높이 = panelTop − 191) */
+/** 왕관 표식이 없는 한 열(단추 둘이 줄 윗변 183 부터). panelTop 으로 줄 최대 높이를 정한다(최대 높이 = panelTop − 191) */
 function railNoCrown(panelTop, over = {}) {
-  return railIn({ rail: { rect: rect(16, 183, 52, 180), ariaLabel: "방장 전용" }, crown: null, buttons: [railBtn("mode", 183), railBtn("map", 247), railBtn("bots", 311)], panel: rect(0, panelTop, 390, 222), ...over });
+  return railIn({ rail: { rect: rect(16, 183, 52, 116), ariaLabel: "방장 전용" }, crown: null, buttons: [railBtn("map", 183), railBtn("bots", 247)], panel: rect(0, panelTop, 390, 222), ...over });
 }
-/** 결과 화면 방장 정상값: [테스트] 없음 → 줄 윗변 135, 표식 + 단추 둘(167·231), 머리 단추 하나 */
+/** 접힌 줄(두 열) 모양: 단추 셋, 첫 열 [map, bots] 둘째 열 [bots] — 360×560 테스트 방 실측 모양 [2,1] */
+const foldedButtons = [railBtn("map", 183), railBtn("bots", 247), railBtn("bots", 183, 80)];
+/** 결과 화면 방장 정상값: [테스트] 없음 → 줄 윗변 135, 표식 + 단추 하나([맵] 167), 머리 단추 하나 */
 function railResult(over = {}) {
-  return railIn({ screen: "result", rail: { rect: rect(16, 135, 52, 148), ariaLabel: "방장 전용" }, crown: rect(16, 135, 52, 20), buttons: [railBtn("mode", 167), railBtn("map", 231)], test: null, head: [{ kind: "나가기", rect: rect(16, 8, 44, 44) }], panel: rect(0, 600, 390, 244), ...over });
+  return railIn({ screen: "result", rail: { rect: rect(16, 135, 52, 84), ariaLabel: "방장 전용" }, crown: rect(16, 135, 52, 20), buttons: [railBtn("map", 167)], test: null, head: [{ kind: "나가기", rect: rect(16, 8, 44, 44) }], panel: rect(0, 600, 390, 244), ...over });
 }
-const guestChip = (over = {}) => ({ mode: "extended", name: "확장판", rect: rect(16, 191, 96, 32), tag: "div", tabIndex: -1, ...over });
 const hrFails = (args) => soundFails(hostRailChecks(args));
+/** 접힌 줄처럼 단추 순서(HR4)와 무관한 기하 시험용: HR4 를 뺀 실패 목록 */
+const geoFails = (args) => hrFails(args).filter((id) => id !== "HR4");
 const hrLine = (args, id) => {
   const line = hostRailChecks(args).find((l) => l.id === id);
   assert.ok(line, `${id} 줄이 없음`);
@@ -4133,13 +4125,12 @@ const hrLine = (args, id) => {
 const moveBtn = (s, id, rc) => ({ buttons: s.buttons.map((x) => (x.id === id ? { ...x, rect: rc } : x)) });
 const editBtn = (s, id, extra) => ({ buttons: s.buttons.map((x) => (x.id === id ? { ...x, ...extra } : x)) });
 
-test("hostRail 사본 상수: 지름 52·간격 12·표식 20·왼쪽 16·테스트 방 48·칩 32/20, 순서 mode·map·bots, 색 둘, 판 이름 둘, 표식 여섯", () => {
-  assert.deepEqual({ ...HOST_RAIL_E2E }, { cell: 52, gap: 12, crownH: 20, left: 16, testShift: 48, chipH: 32, chipTop: 20 });
-  assert.deepEqual([...HOST_RAIL_ORDER], ["mode", "map", "bots"]);
+test("hostRail 사본 상수: 지름 52·간격 12·표식 20·왼쪽 16·테스트 방 48, 순서 map·bots, 색 둘, 표식 셋", () => {
+  assert.deepEqual({ ...HOST_RAIL_E2E }, { cell: 52, gap: 12, crownH: 20, left: 16, testShift: 48 });
+  assert.deepEqual([...HOST_RAIL_ORDER], ["map", "bots"]);
   assert.equal(LAMP_RGB, LAMP);
   assert.equal(NIGHT600_RGB, N600);
-  assert.deepEqual({ ...MODE_NAMES_E2E }, { basic: "기본 마피아", extended: "확장판" });
-  assert.deepEqual([...HOST_RAIL_MARKERS], ["data-host-rail", "data-host-rail-btn", "data-host-rail-crown", "data-mode-chip", "data-mode-sheet", "data-mode-card"]);
+  assert.deepEqual([...HOST_RAIL_MARKERS], ["data-host-rail", "data-host-rail-btn", "data-host-rail-crown"]);
 });
 
 test("hostRailLayoutE2E: F-2 세 갈래 — 표식 한 열 · 표식 없는 한 열 · 두 열(한 열 최소 2칸)", () => {
@@ -4161,43 +4152,39 @@ test("hostRailChecks: 정상값(390×844 방장 대기실)은 HR1~HR8 모두 통
   assert.deepEqual(lines.map((l) => l.id), ["HR1", "HR2", "HR3", "HR4", "HR5", "HR6", "HR7", "HR8"]);
   assert.deepEqual(soundFails(lines), []);
   for (const l of lines) assert.deepEqual(Object.keys(l).filter((k) => ["id", "label", "ok", "detail"].includes(k)).sort(), ["detail", "id", "label", "ok"]);
-  assert.deepEqual(hostRailMeasure(railIn()), { bandBottom: 123, shift: 48, maxH: 431, n: 3, crown: true, columns: [3], expect: { crown: true, columns: [3] } });
+  assert.deepEqual(hostRailMeasure(railIn()), { bandBottom: 123, shift: 48, maxH: 431, n: 2, crown: true, columns: [2], expect: { crown: true, columns: [2] } });
 });
 
-test("hostRailChecks: 기본 마피아 대기실(단추 셋)·결과 화면(단추 둘, HR1~HR6)·봇 도구가 꺼진 방도 통과한다", () => {
-  const basic = railIn({ mode: "basic", rail: { rect: rect(16, 183, 52, 212), ariaLabel: "방장 전용" }, buttons: [railBtn("mode", 215), railBtn("map", 279), railBtn("bots", 343)] });
-  assert.deepEqual(hrFails(basic), []);
+test("hostRailChecks: 결과 화면(단추 하나, HR1~HR6)·봇 도구가 꺼진 방(맵 하나)도 통과한다", () => {
   const res = hostRailChecks(railResult());
   assert.deepEqual(res.map((l) => l.id), ["HR1", "HR2", "HR3", "HR4", "HR5", "HR6"]);
   assert.deepEqual(soundFails(res), []);
-  const noBots = railIn({ botsOn: false, rail: { rect: rect(16, 183, 52, 148), ariaLabel: "방장 전용" }, buttons: [railBtn("mode", 215), railBtn("map", 279)] });
+  const noBots = railIn({ botsOn: false, rail: { rect: rect(16, 183, 52, 84), ariaLabel: "방장 전용" }, buttons: [railBtn("map", 215)] });
   assert.deepEqual(hrFails(noBots), []);
 });
 
 test("HR1: 줄은 방장 대기실·결과에만 — 참가자(줄 없음)는 통과, 방장인데 없음·참가자인데 있음·키보드 열림·게임 중에 있으면 실패", () => {
-  const guest = railIn({ host: false, rail: null, buttons: [], crown: null, chip: guestChip() });
+  const guest = railIn({ host: false, rail: null, buttons: [], crown: null });
   assert.deepEqual(hostRailChecks(guest).map((l) => l.id), ["HR1", "HR8"]);
   assert.deepEqual(hrFails(guest), []);
   assert.ok(hrFails(railIn({ rail: null, buttons: [], crown: null })).includes("HR1")); // 방장인데 줄 없음
   assert.ok(hostRailChecks(railIn({ rail: null, buttons: [], crown: null })).every((l) => !l.ok || l.id === "HR7" || l.id === "HR8")); // 줄이 없으면 나머지도 통과로 세지 않는다(HR7 은 토글이 없다는 판정이라 줄 없음이 통과, HR8 은 패널 높이)
   assert.ok(hrFails(railIn({ host: false })).includes("HR1")); // 참가자 화면에 줄
-  assert.ok(hrFails(railIn({ chip: guestChip() })).includes("HR1")); // 방장 화면에 참가자 칩
-  // 키보드 열림: 줄·칩 모두 0 이어야 하고 그때는 HR1 한 줄만 낸다
+  // 키보드 열림: 줄이 0 이어야 하고 그때는 HR1 한 줄만 낸다
   const kb = railIn({ kbOpen: true, rail: null, buttons: [], crown: null });
   assert.deepEqual(hostRailChecks(kb).map((l) => l.id), ["HR1"]);
   assert.deepEqual(hrFails(kb), []);
   assert.deepEqual(hrFails(railIn({ kbOpen: true })), ["HR1"]);
-  assert.deepEqual(hrFails(railIn({ kbOpen: true, host: false, rail: null, buttons: [], crown: null, chip: guestChip() })), ["HR1"]);
-  // 게임 중: 방장도 줄·칩 0
+  // 게임 중: 방장도 줄 0
   assert.deepEqual(hrFails(railIn({ screen: "game", rail: null, buttons: [], crown: null, test: null })), []);
   assert.deepEqual(hrFails(railIn({ screen: "game" })), ["HR1"]);
 });
 
 test("HR2: 지름 52±1·칸 사이 12±1·왼쪽 16±1·줄 윗변 = 띠 아랫변 + 12(+48 테스트 방) ±2", () => {
   const s = railIn();
-  assert.ok(hrFails(railIn(moveBtn(s, "map", rect(16, 279, 50, 50)))).includes("HR2")); // 지름 50
-  assert.ok(!hrFails(railIn(moveBtn(s, "map", rect(16, 279, 51, 51)))).includes("HR2"));
-  assert.ok(hrFails(railIn(moveBtn(s, "bots", rect(16, 347, 52, 52)))).includes("HR2")); // 간격 16
+  assert.ok(hrFails(railIn(moveBtn(s, "map", rect(16, 215, 50, 50)))).includes("HR2")); // 지름 50
+  assert.ok(!hrFails(railIn(moveBtn(s, "map", rect(16, 215, 51, 51)))).includes("HR2"));
+  assert.ok(hrFails(railIn(moveBtn(s, "bots", rect(16, 283, 52, 52)))).includes("HR2")); // 간격 16
   const shifted = (dy, dx = 0) => railIn({ crown: rect(16 + dx, 183 + dy, 52, 20), buttons: s.buttons.map((x) => ({ ...x, rect: rect(x.rect.left + dx, x.rect.top + dy, 52, 52) })) });
   assert.ok(hrFails(shifted(0, 4)).includes("HR2")); // 왼쪽 20
   assert.ok(!hrFails(shifted(0, 1)).includes("HR2"));
@@ -4212,17 +4199,17 @@ test("HR2: 지름 52±1·칸 사이 12±1·왼쪽 16±1·줄 윗변 = 띠 아랫
   assert.ok(!hrFails(plain).includes("HR2"));
   assert.ok(hrFails(railIn({ band: null })).includes("HR2")); // 기준이 없으면 실패
   // 두 열: 열 사이 12±1
-  const two = (gapX) => railNoCrown(365, { buttons: [railBtn("mode", 183), railBtn("map", 247), railBtn("bots", 183, 68 + gapX)] });
+  const two = (gapX) => railNoCrown(365, { buttons: [railBtn("map", 183), railBtn("bots", 247), railBtn("bots", 183, 68 + gapX)] });
   assert.ok(!hrFails(two(12)).includes("HR2"));
   assert.ok(hrFails(two(20)).includes("HR2"));
 });
 
 test("HR3: 줄이 아래 패널(윗변 − 8)·머리 단추·[테스트]·알림·띠·오른쪽 열과 겹치면 실패하고 무엇과 겹쳤는지 적는다", () => {
   const s = railIn();
-  const near = hrLine(railIn({ panel: rect(0, 399, 390, 222) }), "HR3"); // 줄 아랫변 395 = 패널 윗변 − 4
+  const near = hrLine(railIn({ panel: rect(0, 335, 390, 222) }), "HR3"); // 줄 아랫변 331 = 패널 윗변 − 4
   assert.equal(near.ok, false);
   assert.match(near.detail, /패널/);
-  assert.equal(hrLine(railIn({ panel: rect(0, 403, 390, 222) }), "HR3").ok, true); // 395 = 403 − 8
+  assert.equal(hrLine(railIn({ panel: rect(0, 339, 390, 222) }), "HR3").ok, true); // 331 = 339 − 8
   assert.match(hrLine(railIn({ head: [{ kind: "나가기", rect: rect(16, 200, 44, 44) }, s.head[1]] }), "HR3").detail, /머리/);
   assert.match(hrLine(railIn({ test: rect(16, 170, 90, 44) }), "HR3").detail, /테스트/);
   assert.match(hrLine(railIn({ toast: rect(40, 220, 200, 40) }), "HR3").detail, /알림/);
@@ -4234,19 +4221,19 @@ test("HR3: 줄이 아래 패널(윗변 − 8)·머리 단추·[테스트]·알�
 
 test("HR3 알려진 한계: 줄이 두 열로 접힌 화면에서 둘째 열 단추와 위 알림의 겹침만 판정하지 않는다 — 첫 열·다른 요소와 겹치면 그대로 실패", () => {
   assert.ok(HOST_RAIL_KNOWN_LIMITS.length === 1 && HOST_RAIL_KNOWN_LIMITS.every((k) => typeof k.id === "string" && typeof k.reason === "string" && k.reason.length > 20));
-  // 360×560 테스트 방 실측 모양: [2,2] — 첫 열 16, 둘째 열 80, 윗변 183·247. 알림은 가운데(77~283)에 195~235
-  const folded = (over = {}) => railNoCrown(365, { buttons: [railBtn("mode", 183), railBtn("map", 247), railBtn("bots", 183, 80)], ...over });
+  // 360×560 테스트 방 실측 모양(단추 셋 [2,1]) — 첫 열 16, 둘째 열 80, 윗변 183·247. 알림은 가운데(77~283)에 195~235
+  const folded = (over = {}) => railNoCrown(365, { rail: { rect: rect(16, 183, 52, 116), ariaLabel: "방장 전용" }, buttons: foldedButtons, ...over });
   const known = hrLine(folded({ toast: rect(77, 195, 206, 40) }), "HR3");
   assert.equal(known.ok, true);
   assert.equal(known.known, true);
   assert.equal(known.info, true);
   assert.match(known.detail, /알려진 한계/);
   assert.match(known.detail, /bots·위 알림/);
-  assert.deepEqual(hrFails(folded({ toast: rect(77, 195, 206, 40) })), []);
+  assert.deepEqual(geoFails(folded({ toast: rect(77, 195, 206, 40) })), []);
   // 알림이 첫 열(16~68)까지 덮으면 실패
   const first = hrLine(folded({ toast: rect(40, 195, 243, 40) }), "HR3");
   assert.equal(first.ok, false);
-  assert.match(first.detail, /mode·위 알림/);
+  assert.match(first.detail, /map·위 알림/);
   // 접힌 줄이라도 다른 요소와 겹치면 실패하고 둘 다 적는다
   const both = hrLine(folded({ toast: rect(77, 195, 206, 40), head: [{ kind: "나가기", rect: rect(16, 200, 44, 44) }, railIn().head[1]] }), "HR3");
   assert.equal(both.ok, false);
@@ -4256,54 +4243,43 @@ test("HR3 알려진 한계: 줄이 두 열로 접힌 화면에서 둘째 열 단
   assert.equal(hrLine(railIn({ toast: rect(40, 220, 200, 40) }), "HR3").ok, false);
 });
 
-test("HR4: 순서·개수 — 대기실 mode·map·bots(봇 도구가 켜진 방), 결과 앞 둘. 오른쪽 열은 소리·옷장 둘", () => {
+test("HR4: 순서·개수 — 대기실 map·bots(봇 도구가 켜진 방), 결과 map 하나. 오른쪽 열은 소리·옷장 둘", () => {
   const s = railIn();
-  const swapped = railIn({ buttons: [railBtn("mode", 215), railBtn("bots", 279), railBtn("map", 343)] });
+  const swapped = railIn({ buttons: [railBtn("bots", 215), railBtn("map", 279)] });
   assert.ok(hrFails(swapped).includes("HR4"));
-  assert.ok(hrFails(railIn({ buttons: s.buttons.slice(0, 2) })).includes("HR4")); // 봇 도구가 켜졌는데 봇 단추가 없음
-  assert.ok(hrFails(railResult({ buttons: [railBtn("mode", 167), railBtn("map", 231), railBtn("bots", 295)] })).includes("HR4")); // 결과 화면에 봇
+  assert.ok(hrFails(railIn({ buttons: s.buttons.slice(0, 1) })).includes("HR4")); // 봇 도구가 켜졌는데 봇 단추가 없음
+  assert.ok(hrFails(railResult({ buttons: [railBtn("map", 167), railBtn("bots", 231)] })).includes("HR4")); // 결과 화면에 봇
+  assert.ok(hrFails(railIn({ buttons: [railBtn("mode", 215), ...s.buttons.map((b, i) => ({ ...b, rect: rect(16, 279 + i * 64, 52, 52) }))] })).includes("HR4")); // 옛 [판 종류] 표식(mode)이 남은 줄
   assert.ok(hrFails(railIn({ side: [...s.side, { side: "map", rect: rect(322, 263, 52, 52), borderColor: N600 }] })).includes("HR4")); // 오른쪽 열에 맵
   assert.ok(hrFails(railIn({ side: [s.side[0]] })).includes("HR4")); // 옷장 없음
-  // 두 열은 왼쪽 열부터 위에서 아래로 읽는다
-  const two = railNoCrown(365, { buttons: [railBtn("mode", 183), railBtn("map", 247), railBtn("bots", 183, 80)] });
-  assert.ok(!hrFails(two).includes("HR4"));
-  const twoBad = railNoCrown(365, { buttons: [railBtn("bots", 183), railBtn("map", 247), railBtn("mode", 183, 80)] });
+  // 두 열은 왼쪽 열부터 위에서 아래로 읽는다(접힌 줄 모양: 단추 셋 — 아래는 순서 비교 자체만 본다)
+  const twoBad = railNoCrown(365, { buttons: [railBtn("bots", 183), railBtn("map", 247), railBtn("bots", 183, 80)] });
   assert.ok(hrFails(twoBad).includes("HR4"));
 });
 
-test("railMapsOn(20-07, D-02·P20-16): [맵] 칸은 허용 맵이 둘 이상이고 판 종류가 기본 마피아일 때만 있다 — 확장판은 늘 마을이라 고를 것이 없다", () => {
-  assert.equal(railMapsOn(true, "basic"), true);
-  assert.equal(railMapsOn(true, "extended"), false);
-  assert.equal(railMapsOn(false, "basic"), false);
-  assert.equal(railMapsOn(false, "extended"), false);
-  assert.equal(railMapsOn(true, undefined), false); // 판 종류를 모르면 앱의 기본값(확장판)과 같이 없는 쪽
-  assert.equal(railMapsOn(1, "basic"), false); // 참 비슷한 값은 받지 않는다
+test("railMapsOn(22-07): [맵] 칸은 허용 맵이 둘 이상일 때만 있다 — 판 종류 조건은 없어졌다", () => {
+  assert.equal(railMapsOn(true), true);
+  assert.equal(railMapsOn(false), false);
+  assert.equal(railMapsOn(undefined), false);
+  assert.equal(railMapsOn(1), false); // 참 비슷한 값은 받지 않는다
 });
 
-test("HR4(20-07): 흐름이 넘기는 mapsOn = railMapsOn(허용 맵 둘 이상, 판 종류) — 확장판 대기실 mode·bots, 기본 마피아 mode·map·bots, 결과 화면 확장판 mode 하나", () => {
-  const three = { rect: rect(16, 183, 52, 212), ariaLabel: "방장 전용" };
-  // 확장판 대기실: 줄에 [맵] 이 없다(단추 셋). [맵] 이 남아 있으면 HR4 가 잡는다
-  const ext = railIn({ mapsOn: railMapsOn(true, "extended"), rail: { rect: rect(16, 183, 52, 148), ariaLabel: "방장 전용" }, buttons: [railBtn("mode", 215), railBtn("bots", 279)] });
-  assert.deepEqual(hrFails(ext), []);
-  assert.deepEqual(hrFails(railIn({ mapsOn: railMapsOn(true, "extended") })), ["HR4"]); // [맵] 이 남은 줄(mode·map·bots)
-  assert.match(hrLine(railIn({ mapsOn: railMapsOn(true, "extended") }), "HR4").detail, /mode·map·bots \(기대 mode·bots\)/);
-  // 기본 마피아 대기실: [맵] 이 있다. 없으면 HR4 가 잡는다
-  const basic = railIn({ mode: "basic", mapsOn: railMapsOn(true, "basic"), rail: three, buttons: [railBtn("mode", 215), railBtn("map", 279), railBtn("bots", 343)] });
-  assert.deepEqual(hrFails(basic), []);
-  const basicNoMap = railIn({ mode: "basic", mapsOn: railMapsOn(true, "basic"), rail: { rect: rect(16, 183, 52, 148), ariaLabel: "방장 전용" }, buttons: [railBtn("mode", 215), railBtn("bots", 279)] });
-  assert.deepEqual(hrFails(basicNoMap), ["HR4"]);
-  // 결과 화면: 확장판은 [판 종류] 하나(표식 20 + 12 + 단추 52 = 84), 기본 마피아는 [판 종류]·[맵]
-  const resExt = railResult({ mapsOn: railMapsOn(true, "extended"), rail: { rect: rect(16, 135, 52, 84), ariaLabel: "방장 전용" }, buttons: [railBtn("mode", 167)] });
-  assert.deepEqual(hrFails(resExt), []);
-  assert.deepEqual(hrFails(railResult({ mapsOn: railMapsOn(true, "extended") })), ["HR4"]); // 결과 화면 확장판에 [맵] 이 남음
-  assert.deepEqual(hrFails(railResult({ mode: "basic", mapsOn: railMapsOn(true, "basic") })), []);
+test("HR4(22-07): 흐름이 넘기는 mapsOn = railMapsOn(허용 맵 둘 이상) — 맵이 하나뿐이면 대기실 줄은 bots 하나, 둘 이상이면 map·bots", () => {
+  const one = railIn({ mapsOn: railMapsOn(false), rail: { rect: rect(16, 183, 52, 84), ariaLabel: "방장 전용" }, buttons: [railBtn("bots", 215)] });
+  assert.deepEqual(hrFails(one), []);
+  assert.deepEqual(hrFails(railIn({ mapsOn: railMapsOn(false) })), ["HR4"]); // [맵] 이 남은 줄(map·bots)
+  assert.match(hrLine(railIn({ mapsOn: railMapsOn(false) }), "HR4").detail, /map·bots \(기대 bots\)/);
+  assert.deepEqual(hrFails(railIn({ mapsOn: railMapsOn(true) })), []);
+  const noMap = railIn({ mapsOn: railMapsOn(true), rail: { rect: rect(16, 183, 52, 84), ariaLabel: "방장 전용" }, buttons: [railBtn("bots", 215)] });
+  assert.deepEqual(hrFails(noMap), ["HR4"]); // [맵] 이 없는 줄
+  assert.deepEqual(hrFails(railResult({ mapsOn: railMapsOn(true) })), []);
 });
 
 test("HR5: 줄 단추 테두리·아이콘이 금빛(rgb(255, 207, 138)), 오른쪽 열 테두리는 night-600 — 줄 단추가 night-600 이거나 .is-call 이면 실패", () => {
   const s = railIn();
   assert.ok(hrFails(railIn(editBtn(s, "map", { borderColor: N600 }))).includes("HR5"));
   assert.ok(hrFails(railIn(editBtn(s, "bots", { isCall: true }))).includes("HR5"));
-  assert.ok(hrFails(railIn(editBtn(s, "mode", { color: "rgb(230, 232, 240)" }))).includes("HR5"));
+  assert.ok(hrFails(railIn(editBtn(s, "map", { color: "rgb(230, 232, 240)" }))).includes("HR5"));
   // 켜진 토글은 금빛 채움이라 아이콘 색이 어둡다 — 테두리만 본다
   assert.ok(!hrFails(railIn(editBtn(s, "bots", { role: "switch", ariaChecked: "true", color: "rgb(12, 16, 32)" }))).includes("HR5"));
   assert.ok(hrFails(railIn({ side: [s.side[0], { ...s.side[1], borderColor: LAMP }] })).includes("HR5")); // 오른쪽 열이 금빛
@@ -4311,31 +4287,30 @@ test("HR5: 줄 단추 테두리·아이콘이 금빛(rgb(255, 207, 138)), 오른
 });
 
 test("HR6: 왕관 표식·열 수는 F-2 식대로 — 문턱보다 10 큰데 표식 없음은 실패, 문턱 ±2 안은 참고 줄(info), 표식이 없어도 접근성 이름은 있어야 한다", () => {
-  // n = 3 표식 문턱 212. 최대 높이 = panelTop − 191
+  // n = 2 표식 문턱 148. 최대 높이 = panelTop − 191
   assert.equal(hrLine(railNoCrown(412), "HR6").ok, false); // 최대 높이 221, 표식 없음
-  const edge = hrLine(railNoCrown(404), "HR6"); // 최대 높이 213
+  const edge = hrLine(railNoCrown(340), "HR6"); // 최대 높이 149
   assert.equal(edge.ok, true);
   assert.equal(edge.info, true);
-  assert.match(edge.detail, /213/);
-  assert.equal(hrLine(railIn({ panel: rect(0, 402, 390, 222) }), "HR6").info, true); // 최대 높이 211, 표식 있음 — 경계라 판정하지 않는다
-  const plain = hrLine(railNoCrown(395), "HR6"); // 최대 높이 204 → 표식 없는 한 열
+  assert.match(edge.detail, /149/);
+  assert.equal(hrLine(railIn({ panel: rect(0, 338, 390, 222) }), "HR6").info, true); // 최대 높이 147, 표식 있음 — 경계라 판정하지 않는다
+  const plain = hrLine(railNoCrown(331), "HR6"); // 최대 높이 140 → 표식 없는 한 열
   assert.equal(plain.ok, true);
   assert.notEqual(plain.info, true);
-  assert.equal(hrLine(railIn({ panel: rect(0, 395, 390, 222) }), "HR6").ok, false); // 최대 높이 204 인데 표식 있음
-  assert.equal(hrLine(railNoCrown(395, { rail: { rect: rect(16, 183, 52, 180), ariaLabel: "" } }), "HR6").ok, false); // 표식도 이름도 없음
-  assert.equal(hrLine(railIn({ rail: { rect: rect(16, 183, 52, 212), ariaLabel: null } }), "HR6").ok, false);
-  // 두 열: 최대 높이 174 → [2, 1]
-  const twoOne = railNoCrown(365, { buttons: [railBtn("mode", 183), railBtn("map", 247), railBtn("bots", 183, 80)] });
-  assert.deepEqual(hrFails(twoOne), []);
-  assert.equal(hrLine(railNoCrown(365), "HR6").ok, false); // 최대 높이 174 인데 한 열 셋
+  assert.equal(hrLine(railIn({ panel: rect(0, 331, 390, 222) }), "HR6").ok, false); // 최대 높이 140 인데 표식 있음
+  assert.equal(hrLine(railNoCrown(331, { rail: { rect: rect(16, 183, 52, 116), ariaLabel: "" } }), "HR6").ok, false); // 표식도 이름도 없음
+  assert.equal(hrLine(railIn({ rail: { rect: rect(16, 183, 52, 148), ariaLabel: null } }), "HR6").ok, false);
+  // 두 열(단추 셋): 최대 높이 174 → [2, 1]
+  const twoOne = railNoCrown(365, { buttons: foldedButtons });
+  assert.deepEqual(geoFails(twoOne), []);
+  assert.equal(hrLine(railNoCrown(365, { buttons: [railBtn("map", 183), railBtn("bots", 247), railBtn("bots", 311)] }), "HR6").ok, false); // 최대 높이 174 인데 한 열 셋
 });
 
 test("HR7: 튜토리얼 토글은 어느 판에도 없다 — [data-host-rail-btn=tutorial]·role=switch 단추가 있으면 실패하고, 패널 안 옛 스위치 줄도 0", () => {
   const s = railIn();
   assert.deepEqual(hrFails(railIn()), []);
-  assert.ok(hrFails(railIn({ buttons: [...s.buttons, railBtn("tutorial", 407)] })).includes("HR7")); // 옛 토글이 남음
+  assert.ok(hrFails(railIn({ buttons: [...s.buttons, railBtn("tutorial", 343)] })).includes("HR7")); // 옛 토글이 남음
   assert.ok(hrFails(railIn(editBtn(s, "bots", { role: "switch", ariaChecked: "false" }))).includes("HR7")); // 스위치 단추
-  assert.ok(hrFails(railIn({ mode: "basic" })).every((id) => id !== "HR7")); // 기본 마피아도 같다
   assert.ok(hrFails(railIn({ panelToggles: 1 })).includes("HR7"));
   assert.match(hrLine(railIn({ panelToggles: undefined }), "HR7").detail, /측정값 없음/);
 });
@@ -4344,196 +4319,18 @@ test("HR8: 대기실 패널 높이는 방장·참가자 모두 222(±1) — 276 
   assert.ok(hrFails(railIn({ panel: rect(0, 568, 390, 276) })).includes("HR8"));
   assert.ok(!hrFails(railIn({ panel: rect(0, 621, 390, 223) })).includes("HR8"));
   assert.ok(hrFails(railIn({ panel: rect(0, 620.5, 390, 223.5) })).includes("HR8"));
-  const guest = railIn({ host: false, rail: null, buttons: [], crown: null, chip: guestChip(), panel: rect(0, 568, 390, 276) });
+  const guest = railIn({ host: false, rail: null, buttons: [], crown: null, panel: rect(0, 568, 390, 276) });
   assert.deepEqual(hrFails(guest), ["HR8"]);
 });
 
 test("hostRailChecks: 빠진 입력은 전부 측정값 없음으로 실패한다(공허 통과 금지)", () => {
-  for (const args of [{}, railIn({ viewport: null }), railIn({ screen: "map" }), railIn({ host: undefined }), railIn({ mode: "x" }), railIn({ buttons: null }), railIn({ rail: undefined }), railIn({ side: null }), railIn({ head: null }), railIn({ panel: null })]) {
+  for (const args of [{}, railIn({ viewport: null }), railIn({ screen: "map" }), railIn({ host: undefined }), railIn({ buttons: null }), railIn({ rail: undefined }), railIn({ side: null }), railIn({ head: null }), railIn({ panel: null })]) {
     const lines = hostRailChecks(args);
     assert.equal(lines.length, 8);
     assert.ok(lines.every((l) => !l.ok && /측정값 없음/.test(l.detail)));
   }
   assert.equal(hostRailMeasure({}), null);
 });
-
-/** 참가자 대기실(테스트 방) 칩 정상값: 윗변 191(= 123 + 20 + 48), 왼쪽 16, 높이 32 */
-function chipIn(over = {}) {
-  const s = railIn();
-  return { viewport: s.viewport, viewMode: "extended", chip: guestChip(), band: s.band, panel: s.panel, head: s.head, test: s.test, toast: null, side: s.side, ...over };
-}
-const chFails = (args) => soundFails(modeChipChecks(args));
-
-test("modeChipChecks CH1: 칩 표식·이름이 view.mode 와 같고 포커스를 받지 않는다", () => {
-  const lines = modeChipChecks(chipIn());
-  assert.deepEqual(lines.map((l) => l.id), ["CH1", "CH2"]);
-  assert.deepEqual(soundFails(lines), []);
-  assert.deepEqual(chFails(chipIn({ viewMode: "basic", chip: guestChip({ mode: "basic", name: "기본 마피아" }) })), []);
-  assert.ok(chFails(chipIn({ viewMode: "basic" })).includes("CH1")); // 서버 값과 다름
-  assert.ok(chFails(chipIn({ chip: guestChip({ name: "기본 마피아" }) })).includes("CH1")); // 이름이 표식과 다름
-  assert.ok(chFails(chipIn({ chip: guestChip({ tabIndex: 0 }) })).includes("CH1"));
-  assert.ok(chFails(chipIn({ chip: guestChip({ tag: "button" }) })).includes("CH1"));
-  assert.deepEqual(chFails(chipIn({ chip: null })), ["CH1", "CH2"]); // 칩이 없으면 둘 다 실패
-});
-
-test("modeChipChecks CH2: 높이 32·왼쪽 16·윗변 = 띠 아랫변 + 20(+48 테스트 방), 다른 요소와 교차 0", () => {
-  assert.ok(chFails(chipIn({ chip: guestChip({ rect: rect(16, 191, 96, 40) }) })).includes("CH2"));
-  assert.ok(chFails(chipIn({ chip: guestChip({ rect: rect(20, 191, 96, 32) }) })).includes("CH2"));
-  assert.ok(chFails(chipIn({ chip: guestChip({ rect: rect(16, 197, 96, 32) }) })).includes("CH2"));
-  assert.ok(!chFails(chipIn({ chip: guestChip({ rect: rect(16, 193, 96, 32) }) })).includes("CH2"));
-  assert.ok(chFails(chipIn({ test: null })).includes("CH2")); // [테스트] 가 없으면 143 이 기대
-  assert.deepEqual(chFails(chipIn({ test: null, chip: guestChip({ rect: rect(16, 143, 96, 32) }) })), []);
-  assert.ok(chFails(chipIn({ test: rect(16, 160, 90, 44) })).includes("CH2")); // [테스트] 와 겹침
-  assert.ok(chFails(chipIn({ toast: rect(60, 180, 200, 40) })).includes("CH2"));
-  assert.ok(chFails(chipIn({ panel: rect(0, 200, 390, 222) })).includes("CH2"));
-  assert.ok(chFails(chipIn({ band: null })).includes("CH2"));
-  assert.ok(modeChipChecks({}).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
-  assert.equal(modeChipChecks({}).length, 2);
-});
-
-/** 폭 360 판 종류 시트 정상값: 두 칸 158×140, 간격 12, 고른 칸은 서버 값(확장판) */
-function modeSheetIn(over = {}) {
-  return {
-    viewport: { w: 360, h: 640 },
-    viewMode: "extended",
-    sheet: rect(0, 400, 360, 240),
-    cards: [{ mode: "basic", rect: rect(16, 470, 158, 140), pressed: "false" }, { mode: "extended", rect: rect(186, 470, 158, 140), pressed: "true" }],
-    ...over,
-  };
-}
-const msFails = (args) => soundFails(modeSheetChecks(args));
-
-test("modeSheetChecks MS1: 두 칸(기본 마피아·확장판)이 있고 고른 칸의 aria-pressed 가 view.mode 와 같다", () => {
-  const lines = modeSheetChecks(modeSheetIn());
-  assert.deepEqual(lines.map((l) => l.id), ["MS1", "MS1g"]);
-  assert.deepEqual(soundFails(lines), []);
-  const s = modeSheetIn();
-  assert.ok(msFails(modeSheetIn({ viewMode: "basic" })).includes("MS1")); // 고른 칸이 서버 값과 다름
-  assert.ok(msFails(modeSheetIn({ cards: s.cards.map((c) => ({ ...c, pressed: "true" })) })).includes("MS1")); // 둘 다 눌림
-  assert.ok(msFails(modeSheetIn({ cards: s.cards.map((c) => ({ ...c, pressed: "false" })) })).includes("MS1")); // 눌린 칸 없음
-  assert.ok(msFails(modeSheetIn({ cards: [s.cards[1]] })).includes("MS1")); // 한 칸
-  assert.ok(msFails(modeSheetIn({ cards: [s.cards[1], s.cards[0]].map((c, i) => ({ ...c, rect: s.cards[i].rect })) })).includes("MS1")); // 순서가 확장판·기본 마피아
-});
-
-test("modeSheetChecks MS1g: 두 칸 높이가 같고(±1) 시트가 화면 안, 칸이 시트 안", () => {
-  const s = modeSheetIn();
-  const tall = (dh) => modeSheetIn({ cards: [s.cards[0], { ...s.cards[1], rect: rect(186, 470, 158, 140 + dh) }] });
-  assert.ok(!msFails(tall(1)).includes("MS1g"));
-  assert.ok(msFails(tall(2)).includes("MS1g")); // 설명이 두 줄로 접힌 칸만 길어짐
-  assert.ok(msFails(modeSheetIn({ sheet: rect(0, 410, 360, 240) })).includes("MS1g")); // 아랫변 650 > 640
-  assert.ok(msFails(modeSheetIn({ sheet: rect(-4, 400, 368, 240) })).includes("MS1g"));
-  assert.ok(msFails(modeSheetIn({ cards: [s.cards[0], { ...s.cards[1], rect: rect(210, 470, 158, 140) }] })).includes("MS1g")); // 칸이 시트 밖
-  assert.ok(modeSheetChecks({}).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
-  assert.equal(modeSheetChecks({}).length, 2);
-});
-
-// ---- 19-07 기본 마피아 판 E2E 판정 (basicModeChecks BM1~BM3, 없어야 할 표식·금지 문구 사본) ----
-
-/** 기본 마피아 한 판의 단계 열(첫날 처형 → 밤 → 아침 → 둘째 날 처형으로 끝). 심부름이 없다 */
-const BM_PHASES = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "ended"];
-const BM_LINES = ["모두 모여 주세요", "의심 가는 사람을 이야기해 주세요"];
-const bmIn = (over = {}) => ({ phases: BM_PHASES, scan: { scans: 120, seen: {}, phases: ["lobby", "roleReveal", "discussion"] }, lines: BM_LINES, ...over });
-const bmFails = (input) => basicModeChecks(input).filter((l) => !l.ok).map((l) => l.id).join(",");
-const bmDetail = (input, id) => basicModeChecks(input).find((l) => l.id === id)?.detail ?? "(줄 없음)";
-
-test("기본 마피아 사본 상수: 없어야 할 선택자 다섯·속성 앞머리 data-errand-·금지 문구 넷(동결)", () => {
-  assert.equal(BASIC_ABSENT_SELECTORS.join(","), "[data-trace-mark],[data-seen-mark],[data-lastseen-row],[data-trace-card],[data-record-button]");
-  assert.ok(Object.isFrozen(BASIC_ABSENT_SELECTORS));
-  assert.equal(BASIC_ABSENT_ATTR_PREFIX, "data-errand-");
-  assert.equal(BASIC_FORBIDDEN_LINES.join("|"), "빛나는 곳을 찾아 처리해 주세요|곧 토론이 시작됩니다|기록 단추로 본 것을 확인해 주세요|같은 옷과 엇갈린 목격을 살펴보세요");
-  assert.ok(Object.isFrozen(BASIC_FORBIDDEN_LINES));
-});
-
-test("basicModeChecks: 정상 입력(심부름 없는 한 판·감시 120회·띠 글 둘)은 BM1~BM3 모두 통과, 줄 모양은 { id, label, ok, detail }", () => {
-  const lines = basicModeChecks(bmIn());
-  assert.equal(lines.map((l) => l.id).join(","), "BM1,BM2,BM3");
-  assert.equal(bmFails(bmIn()), "");
-  for (const l of lines) assert.equal(Object.keys(l).sort().join(","), "detail,id,label,ok");
-  // 연속 중복(같은 단계의 새 프레임)은 접고, 지목 0표로 처형 없이 밤으로 가는 날·아침에 끝나는 판도 통과한다
-  const noExec = ["roleReveal", "roleReveal", "dayAnnounce", "discussion", "discussion", "nomination", "night", "morning", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
-  assert.equal(bmFails(bmIn({ phases: noExec })), "");
-});
-
-test("BM1: 없어야 할 표식을 한 번이라도 보면 실패하고 선택자·단계를 적는다, 감시 횟수가 20 이하면 측정값 부족", () => {
-  const seenMark = bmIn({ scan: { scans: 120, seen: { "[data-trace-mark]": { n: 1, phase: "morning" } } } });
-  assert.equal(bmFails(seenMark), "BM1");
-  assert.match(bmDetail(seenMark, "BM1"), /\[data-trace-mark\] 1건\(morning\)/);
-  const seenAttr = bmIn({ scan: { scans: 120, seen: { "data-errand-*": { n: 1, phase: "errand", name: "data-errand-layer" } } } }); // errand 0건
-  assert.equal(bmFails(seenAttr), "BM1");
-  assert.match(bmDetail(seenAttr, "BM1"), /data-errand-layer/);
-  const few = bmIn({ scan: { scans: 5, seen: {} } });
-  assert.equal(bmFails(few), "BM1");
-  assert.match(bmDetail(few, "BM1"), /측정값 부족/);
-  assert.equal(bmFails(bmIn({ scan: { scans: 20, seen: {} } })), "BM1"); // 20 은 아직 부족(> 20)
-  assert.equal(bmFails(bmIn({ scan: { scans: 21, seen: {} } })), "");
-  assert.match(bmDetail(bmIn({ scan: null }), "BM1"), /측정값 없음/);
-  assert.match(bmDetail(bmIn({ scan: { seen: {} } }), "BM1"), /측정값 없음/);
-});
-
-test("BM2: errand 가 나오거나 낮 발표 다음이 토론이 아니거나 ended·밤·아침을 지나지 않으면 실패", () => {
-  const withErrand = BM_PHASES.flatMap((p) => (p === "dayAnnounce" ? ["dayAnnounce", "errand"] : [p])); // errand 0건
-  assert.equal(bmFails(bmIn({ phases: withErrand })), "BM2");
-  assert.match(bmDetail(bmIn({ phases: withErrand }), "BM2"), /errand/);
-  const skipTalk = BM_PHASES.filter((p) => p !== "discussion");
-  assert.equal(bmFails(bmIn({ phases: skipTalk })), "BM2");
-  assert.match(bmDetail(bmIn({ phases: skipTalk }), "BM2"), /dayAnnounce → nomination/);
-  const noEnd = BM_PHASES.slice(0, -1);
-  assert.equal(bmFails(bmIn({ phases: noEnd })), "BM2");
-  assert.match(bmDetail(bmIn({ phases: noEnd }), "BM2"), /ended/);
-  // 첫날 처형으로 바로 끝난 판은 밤·아침을 못 봤으므로 한 판 완주 측정이 아니다
-  const dayOnly = ["roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "ended"];
-  assert.match(bmDetail(bmIn({ phases: dayOnly }), "BM2"), /night/);
-  assert.equal(bmFails(bmIn({ phases: ["roleReveal", "dayAnnounce", "discussion", "tutorial"] })), "BM2");
-  assert.match(bmDetail(bmIn({ phases: [] }), "BM2"), /측정값 없음/);
-  assert.match(bmDetail(bmIn({ phases: null }), "BM2"), /측정값 없음/);
-  assert.match(bmDetail(bmIn({ phases: ["discussion", 3] }), "BM2"), /측정값 없음/);
-});
-
-test("BM3: 띠 글에 금지 문구가 들어 있으면 실패하고, 본 글이 없으면 측정값 없음", () => {
-  for (const line of ["빛나는 곳을 찾아 처리해 주세요", "곧 토론이 시작됩니다", "기록 단추로 본 것을 확인해 주세요", "같은 옷과 엇갈린 목격을 살펴보세요"]) {
-    const hit = bmIn({ lines: [...BM_LINES, line] });
-    assert.equal(bmFails(hit), "BM3", line);
-    assert.ok(bmDetail(hit, "BM3").includes(line), line);
-  }
-  // 띠 글이 문구를 품고 있어도(앞뒤에 다른 글) 잡는다
-  assert.equal(bmFails(bmIn({ lines: ["  기록 단추로 본 것을 확인해 주세요 12초"] })), "BM3");
-  // 유령의 "지켜봐 주세요" 는 낮 발표·투표·찬반에서도 쓰는 문장이라 금지 문구가 아니다
-  assert.equal(bmFails(bmIn({ lines: [...BM_LINES, "지켜봐 주세요"] })), "");
-  assert.match(bmDetail(bmIn({ lines: [] }), "BM3"), /측정값 없음/);
-  assert.match(bmDetail(bmIn({ lines: null }), "BM3"), /측정값 없음/);
-  assert.match(bmDetail(bmIn({ lines: ["", "   "] }), "BM3"), /측정값 없음/);
-});
-
-test("basicModeChecks: 빠진 입력은 세 줄 모두 실패한다(공허 통과 금지)", () => {
-  assert.equal(bmFails({}), "BM1,BM2,BM3");
-  assert.equal(bmFails(undefined), "BM1,BM2,BM3");
-});
-
-test("BASIC_OFF_VIEW_KEYS: 기본 마피아에서 서버가 싣지 않는 키는 me.errand·me.record·day.evidence 이고 22-06 부터 허용 목록(VIEW_*_KEYS)에도 없다 — 나타나면 누설 검사도 실패한다", () => {
-  assert.equal(BASIC_OFF_VIEW_KEYS.me.join(","), "errand,record");
-  assert.equal(BASIC_OFF_VIEW_KEYS.day.join(","), "evidence");
-  assert.ok(Object.isFrozen(BASIC_OFF_VIEW_KEYS) && Object.isFrozen(BASIC_OFF_VIEW_KEYS.me) && Object.isFrozen(BASIC_OFF_VIEW_KEYS.day));
-  assert.equal(BASIC_OFF_VIEW_KEYS.me.filter((k) => VIEW_ME_KEYS.has(k)).join(","), "");
-  assert.equal(BASIC_OFF_VIEW_KEYS.day.filter((k) => VIEW_DAY_KEYS.has(k)).join(","), "");
-});
-
-test("basicViewKeyChecks BM1k: 받은 키에 me.errand·me.record·day.evidence 가 있으면 실패하고 경로를 적는다, 받은 me 키가 없으면 측정값 없음", () => {
-  const ok = basicViewKeyChecks({ me: new Set(["seat", "isHost", "role", "pick"]), day: new Set(["n", "roles", "voteLog", "morning", "chalk"]) });
-  assert.equal(`${ok.id}:${ok.ok}:${ok.detail}`, "BM1k:true:");
-  assert.equal(Object.keys(ok).sort().join(","), "detail,id,label,ok");
-  // 배열도 받는다. 첫날만 돌아 day 키가 적어도 통과한다(day 는 비어 있을 수 없지만 판정은 me 키로 측정 여부를 본다)
-  assert.equal(basicViewKeyChecks({ me: ["seat", "role"], day: ["n"] }).ok, true);
-  const bad = basicViewKeyChecks({ me: new Set(["seat", "errand", "record"]), day: new Set(["n", "evidence"]) }); // errand 0건
-  assert.equal(`${bad.ok}:${bad.detail}`, "false:me.errand; me.record; day.evidence");
-  assert.equal(basicViewKeyChecks({ me: new Set(["seat", "record"]), day: new Set(["n"]) }).detail, "me.record");
-  assert.equal(basicViewKeyChecks({ me: new Set(["seat"]), day: new Set(["evidence"]) }).detail, "day.evidence");
-  for (const none of [undefined, null, {}, { me: new Set(), day: new Set(["n"]) }, { me: ["seat"], day: null }, { me: "seat", day: [] }]) {
-    const r = basicViewKeyChecks(none);
-    assert.equal(r.ok, false);
-    assert.match(r.detail, /측정값 없음/);
-  }
-});
-
 
 const DRESS_IDS = ["coat", "police", "doctor", "mafia", "detective", "reporter", "elder", "hood", "noir"];
 /** 옷장 카드 아홉 장: taken·pressed 로 지정한 id 만 켠다 */
@@ -4606,22 +4403,19 @@ test("outfitUniqueChecks OU1·OU2: 한 판 옷이 모두 다르고 같은 옷 �
 
 import * as libAll from "./lib.mjs";
 
-test("판 종류별 단계 그래프 사본: 22-06 부터 두 판 모두 낮 시작 발표 → 토론이다(판 종류째 22-07 이 지운다)", () => {
-  const g = libAll.PHASE_GRAPHS;
-  assert.ok(g && g.basic && g.extended, "두 판 종류 표가 있어야 한다");
-  assert.deepEqual(g.basic.roleReveal, ["dayAnnounce"]);
-  assert.deepEqual(g.basic.dayAnnounce, ["discussion"]);
-  assert.deepEqual(g.extended.roleReveal, ["dayAnnounce"]);
-  assert.deepEqual(g.extended.dayAnnounce, ["discussion"]);
-  assert.equal(g.basic.errand, undefined, "기본 마피아에는 심부름이 없다");
-  assert.equal(g.extended.errand, undefined, "확장판에도 심부름이 없다");
+test("단계 그래프 사본: 낮 시작 발표 다음은 토론이고 심부름 단계가 없다 (22-07: 판 종류 없이 하나)", () => {
+  const g = libAll.PHASE_GRAPH;
+  assert.ok(g, "단계 그래프가 있어야 한다");
+  assert.deepEqual(g.roleReveal, ["dayAnnounce"]);
+  assert.deepEqual(g.dayAnnounce, ["discussion"]);
+  assert.equal(g.errand, undefined, "심부름 단계는 없다");
+  assert.equal(libAll.PHASE_GRAPHS, undefined, "판 종류별 표는 없다");
 });
 
-test("basicOrderChecks(phases, mode): mode 를 주면 그 판 종류의 단계 그래프로 판정한다(두 판 모두 errand 를 지나면 실패)", () => {
-  const ext = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "dayAnnounce", "discussion"];
-  assert.ok(basicOrderChecks(ext, "extended").every((x) => x.ok), JSON.stringify(basicOrderChecks(ext, "extended")));
-  assert.ok(basicOrderChecks(["roleReveal", "dayAnnounce", "errand", "discussion"], "extended").some((x) => !x.ok), "확장판에도 errand 가 없다"); // errand 0건
-  assert.ok(basicOrderChecks(["roleReveal", "dayAnnounce", "errand", "discussion"], "basic").some((x) => !x.ok), "기본 마피아에는 errand 가 없다"); // errand 0건
-  assert.ok(basicOrderChecks(["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night"], "basic").every((x) => x.ok));
-  assert.ok(basicOrderChecks(["roleReveal", "discussion"], "extended").some((x) => !x.ok), "역할 확인 다음은 낮 시작 발표다");
+test("basicOrderChecks(phases): 단계 그래프로 판정한다(errand 를 지나면 실패)", () => {
+  const ok = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "dayAnnounce", "discussion"];
+  assert.ok(basicOrderChecks(ok).every((x) => x.ok), JSON.stringify(basicOrderChecks(ok)));
+  assert.ok(basicOrderChecks(["roleReveal", "dayAnnounce", "errand", "discussion"]).some((x) => !x.ok), "errand 가 없다"); // errand 0건
+  assert.ok(basicOrderChecks(["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night"]).every((x) => x.ok));
+  assert.ok(basicOrderChecks(["roleReveal", "discussion"]).some((x) => !x.ok), "역할 확인 다음은 낮 시작 발표다");
 });

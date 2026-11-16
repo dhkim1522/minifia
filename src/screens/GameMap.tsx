@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { CHAT_MAX_GRAPHEMES } from "../../shared/game/chatRules";
 import { canMoveIn } from "../../shared/game/movement";
-import { modeOf, rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
@@ -204,8 +204,6 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, tod = true, panelless, camera, testButton, announce = null, toast: pointToast = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
-  // 판 규칙은 서버가 준 공개 값 view.mode 에서 얻는다(19페이즈 D-03) — 전역 값이 아니다. 같은 판은 같은 얼린 객체라 훅 의존성에 넣지 않아도 된다.
-  const rules = rulesetOf(modeOf(view));
   // 측정(스테이지 사각형)·키보드는 대기실과 같은 훅이다. 기록 칸은 LOG_H(68) 한 값 — 키보드가 열리면 행동 줄만 숨긴다(07-19, 18.1 P181-3).
   // 지목이면 스테이지 윗변을 차례 알약 아랫변 + 4 로 내리고(UI-SPEC A-1) 작은 폰은 압축형 알약을 받는다(turnCompact). 알약 요소는 훅이 루트에서 `[data-turn-block]` 으로 찾는다.
   // 튜토리얼 지도 장면(panelless prop, 18-03)은 아래 패널이 없다: 스테이지가 띠 아래부터 화면 아래까지 넓어진다
@@ -725,8 +723,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         onLeave={() => onLeave?.()}
       />
       <TopToast {...toast.props} />
-      {/* 누가 배지를 걸거나 바꿨을 때 읽히는 한 줄(화면에는 안 보인다). 판 규칙(view.mode)에서 주장이 꺼져 있으면 줄 자체를 만들지 않는다(결정 0072·U-8, E2E basic-off) */}
-      {rules.badge ? (
+      {/* 누가 배지를 걸거나 바꿨을 때 읽히는 한 줄(화면에는 안 보인다). 판 규칙 RULES 에서 주장이 꺼져 있으면 줄 자체를 만들지 않는다(결정 0072·U-8, E2E basic-off) */}
+      {RULES.badge ? (
         <div className="mf-sr-only" role="status" data-badge-live="">
           {badgeFx.said}
         </div>
@@ -863,7 +861,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
               onChange={whisper.setDraft}
               onSend={whisper.send}
               onClose={whisper.close}
-              whisper={rules.whisper}
+              whisper={RULES.whisper}
               {...(canSend ? {} : { disabled: true })}
             />
           ) : (

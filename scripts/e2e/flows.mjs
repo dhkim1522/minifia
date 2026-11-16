@@ -41,7 +41,6 @@ import {
   openHostPage,
   openPerfPage,
   openTestSheet,
-  pickModeViaRail,
   readLinkState,
   collapseChatLog,
   readChatLines,
@@ -143,7 +142,6 @@ import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readR
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
-import { makeModeFlows } from "./modes.mjs";
 import { CHAT_KB_PANEL_REST, CHAT_OPEN_STAGE_MIN, chatOpenChecks, chatOpenHeight, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureBallotsBackstop, measureChatOpen, readChatWindow, readLiveGhost } from "./polish.mjs";
 
 // Windows 에서 URL.pathname 은 "/C:/..." 라 mkdir 이 "C:\C:\..." 로 깨진다 — fileURLToPath 로 바꾼다(21-16).
@@ -247,7 +245,7 @@ async function lobbyFlow(ctx) {
   const g1 = await readGuide(page);
   recOne(rec, "lobby/lobby", guideChecks(g1, { phase: "lobby" }));
   recOne(rec, "lobby/lobby", docHeightChecks(g1, { h }));
-  // 16-06 오른쪽 한 줄 열: 방장도 소리·옷장 52 원 둘(19페이즈 — 맵·봇은 왼쪽 방장 줄, mode-rail 흐름이 잰다), 머리에는 44 정사각 둘, 교차 없음(예외 조합 없음)
+  // 16-06 오른쪽 한 줄 열: 방장도 소리·옷장 52 원 둘(19페이즈 — 맵·봇은 왼쪽 방장 줄, map-select 흐름이 잰다), 머리에는 44 정사각 둘, 교차 없음(예외 조합 없음)
   const sideHost = await readSideColumn(page);
   for (const r of sideColumnChecks({ viewport: { w, h }, screen: "lobby", host: true, ...sideHost })) recOne(rec, "lobby/lobby", r);
 
@@ -1415,10 +1413,8 @@ async function untilGame(page, pred, ms = 6000, label = "게임 화면") {
 
 /**
  * 방장 + 손님(사람 페이지) + 봇 → 시작 → to 단계까지. 돌려주는 값: { host, hp, ht, hostSeat, guests: [{ context, page, tracker, takeIssues, seat }] }
- * 기본값은 기본 마피아 판("basic") 이다(22-04 가 원인 흐름을 지웠다).
- * mode("basic"|"extended", 19-06)를 주면 봇·직업을 정한 뒤 시작 전에 방장 줄의 [판 종류] 로 그 판 종류를 고른다(안 주면 서버 기본값 그대로).
  */
-async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], guestSize = undefined, minBotNameChars = 0, hostInitScripts = [], guestNames = GAME_GUESTS, mode = "basic" } = {}) {
+async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], guestSize = undefined, minBotNameChars = 0, hostInitScripts = [], guestNames = GAME_GUESTS } = {}) {
   const host = await startHost(ctx, flowId, { ...(hostNick ? { nickname: hostNick } : {}), ...(hostInitScripts.length > 0 ? { initScripts: hostInitScripts } : {}) });
   const { page: hp, tracker: ht } = host;
   const pages = [];
@@ -1438,7 +1434,6 @@ async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", v
   }
   if (bots > 0) await setBotVote(hp, ht, vote);
   await chooseRole(hp, ht, role);
-  if (mode) await pickModeViaRail(hp, ht, mode); // 테스트 도구 시트를 닫고 [판 종류] 시트에서 고른다
   await startGame(hp, ht);
   if (to) await skipTo(hp, ht, to);
   return { host, hp, ht, hostSeat: ht.last().me.seat, guests: pages };
@@ -2219,7 +2214,7 @@ async function basicOffFlow(ctx) {
     // OFF2 프레임: 받은 모든 state·chat 프레임의 꺼진 장치 키
     rec(`${id}/frames`, "OFF2", "받은 프레임에 players[].badge·badgeSwapped·day.turn·day.runoff·day.showdown·me.whisperUsed·me.ballot·귓속말 줄이 0건이다", ht.offKeys.length === 0, ht.offKeys.length === 0 ? `phase 열 ${ht.phases.length}개` : `처음 걸린 경로 ${ht.offKeys[0]} (전체 ${ht.offKeys.join(", ")})`);
     // OFF3 단계 순서
-    recMany(rec, `${id}/order`, basicOrderChecks(ht.phases, "basic"));
+    recMany(rec, `${id}/order`, basicOrderChecks(ht.phases));
     rec(`${id}/order`, "OFF3b", "투표(nomination)·변론(defense)·찬반(verdict)·처형(execution)을 한 번 이상 지났다", ["nomination", "defense", "verdict", "execution", "night", "morning"].every((p) => ht.phases.includes(p)), `지난 단계 ${[...new Set(ht.phases)].join(",")}`);
     // OFF4 결과 화면: 탭이 없다(전체 대화만, 18.1 P181-7) — 귓속말 탭도 당연히 없다
     const tabs = await hp.evaluate(() => ({ all: document.querySelectorAll("[data-result-tab]").length, whisper: document.querySelectorAll('[data-result-tab="whisper"]').length }));
@@ -3804,11 +3799,8 @@ const { mapSelectFlow } = makeMapSelectFlows({ recorder, startHost, openGuest, a
 // 소리(12페이즈): sound-render(12-06) 시험 페이지 오프라인 렌더 70개. 흐름 본문은 sound.mjs, 도우미만 넘긴다
 const { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow, soundResultFlow } = makeSoundFlows({ recorder, attempt, startHost, openGame, closeGame, nightScenario });
 
-// 사회자·이름표(14페이즈 14-08): emcee-band(띠, 폰 6종)·emcee-tools·emcee-leak·emcee-sound. 흐름 본문은 host.mjs, 도우미만 넘긴다. modeLeakFlow(19-07)는 emcee-leak 본문을 기본 마피아 판으로 돈다
-const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow, modeLeakFlow } = makeHostFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH, settledResult });
-
-// 방장 줄·판 종류(19페이즈 19-06): mode-rail(폰 6종)·mode-pick. 19-07: modeBasicFlow(기본 마피아 완주). 흐름 본문은 modes.mjs, 도우미만 넘긴다
-const { modeRailFlow, modePickFlow, modeBasicFlow } = makeModeFlows({ recorder, attempt, startHost, openGuest, openGame, closeGame, settledResult });
+// 사회자·이름표(14페이즈 14-08): emcee-band(띠, 폰 6종)·emcee-tools·emcee-leak·emcee-sound. 흐름 본문은 host.mjs, 도우미만 넘긴다.
+const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow } = makeHostFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH, settledResult });
 
 // 18.1 화면 다듬기(18.1-08): polish-reveal(역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종). 흐름 본문은 polish.mjs, 도우미만 넘긴다
 const { polishRevealFlow } = makePolishFlows({ recorder, attempt, openGame, closeGame });
@@ -3843,7 +3835,7 @@ export const FLOWS = [
   // 13페이즈 기본판(결정 0072): basic-off = 봇 판 한 판 전체(로비 → 낮 → 밤 → 결과)에서 꺼진 장치 DOM·프레임·단계 순서·결과 탭 0건, basic-vote = 8명 투표 화면(이름표 버튼 7개 44×44·무가림, 묶음 G·H). 폰 6종은 basic-vote 만
   { id: "basic-off", run: basicOffFlow, size: GAME_SIZE },
   { id: "basic-vote", run: basicVoteFlow, extraSizes: LOBBY_EXTRA_SIZES },
-  // 기본판(결정 0072, 13페이즈)에서 꺼진 장치의 흐름 7개(politics-badge·whisper·pin·runoff·runoff-tie·showdown·showdown-tie)는 지우지 않고 기본 실행에서 뺀다 — 판 규칙(rulesetOf)에서 그 장치를 켰을 때만 --only 로 돈다. politics-verdict(판결 순간 연출, D-06)는 그대로 돈다.
+  // 기본판(결정 0072, 13페이즈)에서 꺼진 장치의 흐름 7개(politics-badge·whisper·pin·runoff·runoff-tie·showdown·showdown-tie)는 지우지 않고 기본 실행에서 뺀다 — 판 규칙(RULES)에서 그 장치를 켰을 때만 --only 로 돈다. politics-verdict(판결 순간 연출, D-06)는 그대로 돈다.
   // 9.1.1 페이즈 정치 긴장(09.1.1-10): 직업 배지(떠 있는 버튼→칩→이름표 배지→말 바꿈)·귓속말(모드→한 줄 시트→당사자만 본문). 둘 다 폰 6종, 방장·손님 두 화면
   { id: "politics-badge", run: politicsBadgeFlow, extraSizes: LOBBY_EXTRA_SIZES, skipByDefault: true },
   { id: "politics-whisper", run: politicsWhisperFlow, extraSizes: LOBBY_EXTRA_SIZES, skipByDefault: true },
@@ -3879,14 +3871,7 @@ export const FLOWS = [
   { id: "emcee-tools", run: emceeToolsFlow, size: GAME_SIZE },
   { id: "emcee-leak", run: emceeLeakFlow, size: GAME_SIZE },
   { id: "emcee-sound", run: emceeSoundFlow, size: GAME_SIZE },
-  // 19-06: 방장 줄(HR1~HR8)·참가자 칩(CH)·판 종류 시트(MS1) 기하와 색은 폰 6종, 판 종류 선택의 방송·새로고침·재접속·다시 하기 유지(MS2·MS3·D-10)는 390x844 한 크기. 이름 앞머리 mode — --only mode 하나로 모두 돈다
-  { id: "mode-rail", run: modeRailFlow, extraSizes: LOBBY_EXTRA_SIZES },
-  { id: "mode-pick", run: modePickFlow, size: GAME_SIZE },
-  // 19-07: 19페이즈 판 종류 — 기본 마피아 봇 판 완주(BM0~BM3)와 역할 다섯 시점 누설(LK·HL·VK, 본문은 host.mjs). 이름 앞머리 mode
-  { id: "mode-basic", run: modeBasicFlow, size: GAME_SIZE },
-  { id: "mode-leak", run: modeLeakFlow, size: GAME_SIZE },
   // 18.1-08: 역할 확인 카드 문구·무대 겹침, 네 직업 × 폰 6종
-
   { id: "polish-reveal", run: polishRevealFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 재접속·예산(06-18): 폰 크기와 곱하지 않고 자기 크기로 한 번. deployhold 는 배포와 동시에 돌리는 흐름(06-19)이라 --only 없이는 빠진다
   { id: "reconnect", run: reconnectFlow, size: RECONNECT_SIZE },

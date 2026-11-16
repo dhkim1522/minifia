@@ -13,16 +13,15 @@ import { PICK_TURN_MS, SHOWDOWN_POINT_MS, SHOWDOWN_TURN_MS } from "../../shared/
 import { castRunoffVote, runoffStepMs, stepRunoff } from "../../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint, showdownStepMs, stepShowdown } from "../../shared/game/showdown";
 import { castVerdict } from "../../shared/game/verdict";
-import type { GameMode, PhaseId } from "../../shared/protocol";
+import type { PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "./seededRandom";
 
 export const START_AT = 10_000;
 
 /**
  * n 명이 모두 연결된 대기실. id·token 은 서로의 부분 문자열이 아니다(누출 검사가 부분 문자열로 훑는다).
- * mode(21-13)를 주면 그 판 종류로 시작한다 — 없으면 기본값(확장판)이다. 단계 순서와 무관한 장치 시험이 기본 마피아 판("basic")으로 돌릴 때 쓴다.
  */
-export function lobbyOf(n: number, mode?: GameMode): RoomState {
+export function lobbyOf(n: number): RoomState {
   const created = createRoomState({
     code: "0420",
     hostId: "player-id-0000-aaaa",
@@ -38,12 +37,12 @@ export function lobbyOf(n: number, mode?: GameMode): RoomState {
     if (!joined.ok) throw new Error(`joinRoom failed: ${joined.error}`);
     state = attachConnection(joined.state, id, `conn-${i}`);
   }
-  return mode === undefined ? state : { ...state, mode };
+  return state;
 }
 
 /** 표 없이 다음 단계 표만 따라 목표 단계의 첫 순간까지. 분기 단계(지목 결과에 따라 갈리는 night 등)에는 닿지 못한다 — 그쪽은 stateWithVerdict. */
-export function startedAt(n: number, seed: number, phase: PhaseId, mode?: GameMode): RoomState {
-  return startedFrom(lobbyOf(n, mode), seed, phase);
+export function startedAt(n: number, seed: number, phase: PhaseId): RoomState {
+  return startedFrom(lobbyOf(n), seed, phase);
 }
 
 /** startedAt 과 같되 대기실을 직접 준다(봇이 낀 테스트 방처럼 lobbyOf 와 다른 방). */
@@ -160,10 +159,10 @@ export function stateWithVerdict(
   n: number,
   seed: number,
   phase: "defense" | "verdict" | "execution",
-  opts: { candidate?: CandidateSpec; lobby?: RoomState; mode?: GameMode } = {},
+  opts: { candidate?: CandidateSpec; lobby?: RoomState } = {},
 ): RoomState {
   const spec = opts.candidate ?? "citizen";
-  let state = opts.lobby === undefined ? startedAt(n, seed, "nomination", opts.mode) : startedFrom(opts.lobby, seed, "nomination");
+  let state = opts.lobby === undefined ? startedAt(n, seed, "nomination") : startedFrom(opts.lobby, seed, "nomination");
   const alive = state.players.filter(isAlive).sort((a, b) => a.seat - b.seat);
   const targetBySeat: Record<number, number> = {};
   if (spec === "tie") {

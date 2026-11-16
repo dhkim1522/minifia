@@ -10,8 +10,8 @@ import {
 } from "./helpers";
 import type { Game } from "./helpers";
 import { ringSlots } from "../../shared/game/gather";
-import { rulesetOf } from "../../shared/game/ruleset";
-const GAME_RULES = rulesetOf("extended");
+import { RULES } from "../../shared/game/ruleset";
+const GAME_RULES = RULES;
 
 /** 마감을 한 번 넘기고 모든 소켓이 그 state 를 받은 뒤의 마지막 view 들. */
 async function stepViews(g: Game): Promise<RoomView[]> {

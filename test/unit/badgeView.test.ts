@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { BadgeId, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import { BADGE_TEXT, badgeFxOf, chipsOf, claimLabel, claimLook, floatLabel, floatVisible, myClaim, sayLine } from "../../src/game/badgeView";
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 // 09.1.1-08: 직업 주장 배지의 순수 모델(UI-SPEC A). 서버 view.players[].badge 만 읽고 시각·난수가 없다.
 const NAMES = ["민수", "영희", "서준", "지아", "도윤", "하은"];

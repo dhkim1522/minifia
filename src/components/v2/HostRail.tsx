@@ -1,7 +1,6 @@
 import { Children } from "react";
 import type { ReactNode } from "react";
 import "../../styles/v2.css";
-import { MODE_TEXT } from "../../game/modeText";
 import { SIDE_CELL, SIDE_GAP, splitSideColumn } from "./SideColumn";
 import { V2Icon } from "./V2Icon";
 
@@ -14,6 +13,9 @@ import { V2Icon } from "./V2Icon";
 // 색만으로 방장 전용을 알리지 않는다 — 왼쪽 자리·왕관 표식·접근성 이름 "방장 전용" 이 함께 말한다. 표식이 빠져도 줄의 이름은 남는다.
 // 테스트 방은 같은 왼쪽 위 자리의 [테스트] 단추 아래로 내려온다(testShift → data-test-shift, P19-5).
 // 표식 값은 고정 낱말뿐이다(역할·좌석 없음).
+
+/** 방장 줄·왕관 표식의 접근성 이름(22-07: 판 종류 문구 표가 없어져 이 파일이 가진다) */
+export const HOST_RAIL_LABEL = "방장 전용";
 
 /** 왕관 표식 칸 높이 */
 const CROWN_H = 20;
@@ -54,9 +56,9 @@ export function HostRail({ maxHeight, testShift, children }: HostRailProps) {
   const layout = hostRailLayout(items.length, maxHeight);
   let at = 0;
   return (
-    <div className="mf-hostrail" data-host-rail="" role="group" aria-label={MODE_TEXT.rail} {...(testShift ? { "data-test-shift": "" } : {})}>
+    <div className="mf-hostrail" data-host-rail="" role="group" aria-label={HOST_RAIL_LABEL} {...(testShift ? { "data-test-shift": "" } : {})}>
       {layout.crown ? (
-        <span className="mf-hostrail__crown" data-host-rail-crown="" role="img" aria-label={MODE_TEXT.rail}>
+        <span className="mf-hostrail__crown" data-host-rail-crown="" role="img" aria-label={HOST_RAIL_LABEL}>
           <V2Icon name="crown" size={20} />
         </span>
       ) : null}

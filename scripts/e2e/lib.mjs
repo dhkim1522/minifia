@@ -612,45 +612,11 @@ export function offDeviceKeysOf(msg) {
 }
 
 /**
- * 판 종류별 단계 그래프 사본: shared/game/phases.ts 의 nextPhaseOf·afterDayOf 와 tick 분기가 정하는 허용 전이(연속 중복은 접은 뒤). test/unit/e2eContract.test.ts 가 두 표를 앱과 대조한다.
- * 기본 마피아(basic): roleReveal → dayAnnounce → discussion → nomination → (최다 한 명) defense → verdict → execution → night | ended, 지목 0표·동률은 곧장 night, night → morning → dayAnnounce | ended.
- * 확장판(extended): 22-06 에서 심부름 단계가 없어져 기본과 같다. (판 종류째 22-07 이 지운다)
+ * 단계 그래프 사본: shared/game/phases.ts 의 nextPhaseOf·afterDayOf 와 tick 분기가 정하는 허용 전이(연속 중복은 접은 뒤). test/unit/e2eContract.test.ts 가 표를 앱과 대조한다.
+ * roleReveal → dayAnnounce → discussion → nomination → (최다 한 명) defense → verdict → execution → night | ended, 지목 0표·동률은 곧장 night, night → morning → dayAnnounce | ended.
+ * 판 종류가 없어(22-07) 표는 하나다.
  */
-export const PHASE_GRAPHS = Object.freeze({
-  basic: Object.freeze({
-    lobby: ["assigning"],
-    assigning: ["roleReveal"],
-    roleReveal: ["dayAnnounce"],
-    dayAnnounce: ["discussion"],
-    discussion: ["nomination"],
-    nomination: ["defense", "night"],
-    defense: ["verdict"],
-    verdict: ["execution"],
-    execution: ["night", "ended"],
-    night: ["morning"],
-    morning: ["dayAnnounce", "ended"],
-    ended: [],
-  }),
-  extended: Object.freeze({
-    lobby: ["assigning"],
-    assigning: ["roleReveal"],
-    roleReveal: ["dayAnnounce"],
-    dayAnnounce: ["discussion"],
-    discussion: ["nomination"],
-    nomination: ["defense", "night"],
-    defense: ["verdict"],
-    verdict: ["execution"],
-    execution: ["night", "ended"],
-    night: ["morning"],
-    morning: ["dayAnnounce", "ended"],
-    ended: [],
-  }),
-});
-
-/**
- * mode 를 주지 않은 basicOrderChecks 가 쓰는 단계 전이(PHASE_GRAPHS.basic 과 같다).
- */
-const BASIC_TRANSITIONS = Object.freeze({
+export const PHASE_GRAPH = Object.freeze({
   lobby: ["assigning"],
   assigning: ["roleReveal"],
   roleReveal: ["dayAnnounce"],
@@ -667,22 +633,19 @@ const BASIC_TRANSITIONS = Object.freeze({
 
 /**
  * 기본판 단계 순서 판정(OFF3). phases = 받은 state 의 phase 열. 처음 어긋난 전이를 detail 로 실패시킨다. 값이 없으면 측정값 없음.
- * 로비 재시작(ended→lobby)은 한 판을 넘어가는 것이라 허용하지 않는다 — 한 판만 넘긴다.
- * mode("basic" | "extended")를 주면 그 판 종류의 단계 그래프(PHASE_GRAPHS)로 판정한다. 주지 않으면 꺼진 옛 경로의 표(위 BASIC_TRANSITIONS)다.
+ * 로비 재시작(ended→lobby)은 한 판을 넘어가는 것이라 허용하지 않는다 — 한 판만 넘긴다. 판정은 PHASE_GRAPH 로 한다.
  */
-export function basicOrderChecks(phases, mode) {
+export function basicOrderChecks(phases) {
   const label = "단계 순서가 기본판이다(투표 → 변론 → 찬반 → 처형, 결선·결전 없음)";
   if (!Array.isArray(phases) || phases.length === 0 || phases.some((p) => typeof p !== "string")) return [noMeasure("OFF3", label, "phases[]")];
   const seq = phases.filter((p, i) => i === 0 || p !== phases[i - 1]);
   const bad = [];
   if (seq.includes("runoff")) bad.push("runoff 단계가 나왔다");
   if (seq.includes("showdown")) bad.push("showdown 단계가 나왔다");
-  const graph = mode === undefined ? BASIC_TRANSITIONS : PHASE_GRAPHS[mode];
-  if (graph === undefined) return [noMeasure("OFF3", label, "판 종류(basic·extended)")];
   for (let i = 1; i < seq.length && bad.length < 3; i++) {
-    const allowed = graph[seq[i - 1]];
+    const allowed = PHASE_GRAPH[seq[i - 1]];
     if (allowed === undefined || !allowed.includes(seq[i])) {
-      bad.push(`${seq[i - 1]} → ${seq[i]} 는 ${mode === undefined ? "기본판" : mode} 전이가 아님`);
+      bad.push(`${seq[i - 1]} → ${seq[i]} 는 기본판 전이가 아님`);
       break;
     }
   }
@@ -2457,21 +2420,19 @@ export function sideColumnChecks(s = {}) {
 }
 
 // ---- 19페이즈 방장 줄 hostRailChecks (19-06, 결정 D-13·D-14, UI-SPEC F·"검증 표식과 E2E 판정") ----
-// 방장 전용 조작은 왼쪽 세로 줄([data-host-rail])에, 참가자에게는 읽기 전용 판 종류 칩([data-mode-chip])이 있다. 판정 문턱은 이 절 한 곳에만 둔다(T-19-18) —
-// 흐름(modes.mjs·mapselect.mjs)은 화면을 읽어 넘기기만 한다. 앱 값과의 사본 일치는 test/unit/e2eContract.test.ts 가 고정한다.
+// 방장 전용 조작은 왼쪽 세로 줄([data-host-rail])에 있고 참가자 화면에는 이 자리에 아무것도 없다(22-07: 판 종류 칩·시트 없어짐). 판정 문턱은 이 절 한 곳에만 둔다(T-19-18) —
+// 흐름(mapselect.mjs)은 화면을 읽어 넘기기만 한다. 앱 값과의 사본 일치는 test/unit/e2eContract.test.ts 가 고정한다.
 
-/** 줄 치수 사본: 칸 지름·칸 사이·왕관 표식 높이·왼쪽 여백·테스트 방에서 내려오는 높이, 참가자 칩 높이·띠 아래 간격(src/styles/v2.css .mf-hostrail·.mf-modechip) */
-export const HOST_RAIL_E2E = Object.freeze({ cell: 52, gap: 12, crownH: 20, left: 16, testShift: 48, chipH: 32, chipTop: 20 });
+/** 줄 치수 사본: 칸 지름·칸 사이·왕관 표식 높이·왼쪽 여백·테스트 방에서 내려오는 높이(src/styles/v2.css .mf-hostrail) */
+export const HOST_RAIL_E2E = Object.freeze({ cell: 52, gap: 12, crownH: 20, left: 16, testShift: 48 });
 /** 앱이 더한 DOM 표식(19-03~19-05). 값은 enum 낱말뿐이다(역할·좌석 없음, T-19-19) */
-export const HOST_RAIL_MARKERS = Object.freeze(["data-host-rail", "data-host-rail-btn", "data-host-rail-crown", "data-mode-chip", "data-mode-sheet", "data-mode-card"]);
+export const HOST_RAIL_MARKERS = Object.freeze(["data-host-rail", "data-host-rail-btn", "data-host-rail-crown"]);
 /** 줄 단추의 위 → 아래 순서([data-host-rail-btn] 값). 봇은 대기실의 테스트 방에만 있다(22-03 에서 튜토리얼 토글이 없어졌다) */
-export const HOST_RAIL_ORDER = Object.freeze(["mode", "map", "bots"]);
+export const HOST_RAIL_ORDER = Object.freeze(["map", "bots"]);
 /** 줄 단추의 테두리·아이콘 색(--light-lamp 사본) · 오른쪽 열 단추의 테두리 색(--night-600 사본). getComputedStyle 이 주는 글 그대로 */
 export const LAMP_RGB = "rgb(255, 207, 138)";
 export const NIGHT600_RGB = "rgb(42, 55, 96)";
-/** 판 이름(src/game/modeText.ts MODE_TEXT.name 사본) — 참가자 칩 글·시트 칸 이름 */
-export const MODE_NAMES_E2E = Object.freeze({ basic: "기본 마피아", extended: "확장판" });
-/** 줄의 접근성 이름(MODE_TEXT.rail 사본) — 왕관 표식이 빠져도 남는다 */
+/** 줄의 접근성 이름(src/components/v2/HostRail.tsx HOST_RAIL_LABEL 사본) — 왕관 표식이 빠져도 남는다 */
 const HOST_RAIL_NAME = "방장 전용";
 /** 줄의 오른쪽 끝과 오른쪽 열의 왼쪽 끝 사이 최소 간격(UI-SPEC F-1) */
 const HOST_RAIL_SIDE_CLEAR = 16;
@@ -2505,15 +2466,14 @@ export function hostRailLayoutE2E(n, maxH) {
 }
 
 /**
- * 줄에 [맵] 칸이 있어야 하는가(20-07, D-02·P20-16) — 앱 Lobby·ResultScreen 의 mapsOn(허용 맵이 둘 이상 && 판 종류가 기본 마피아) 사본.
- * 확장판은 늘 마을이라 고를 것이 없어 [맵] 단추·맵 탭을 그리지 않는다. hostRailChecks 의 mapsOn 입력은 흐름이 이 함수로 만든다(mode 는 서버 view.mode).
+ * 줄에 [맵] 칸이 있어야 하는가 — 앱 Lobby·ResultScreen 의 mapsOn(허용 맵이 둘 이상, 22-07 부터 판 종류 조건 없음) 사본.
+ * hostRailChecks 의 mapsOn 입력은 흐름이 이 함수로 만든다.
  */
-export function railMapsOn(playableMany, mode) {
-  return playableMany === true && mode === "basic";
+export function railMapsOn(playableMany) {
+  return playableMany === true;
 }
 
 const railRectOk = (r) => !!r && allNum(r.left, r.top, r.width, r.height);
-const railModeOk = (m) => m === "basic" || m === "extended";
 /** 줄 단추를 열로 나눈다: 왼쪽변이 6 넘게 다르면 다른 열. 왼쪽 열부터, 열 안은 위부터 */
 function railColumns(buttons) {
   const cols = [];
@@ -2530,9 +2490,9 @@ const railExpected = (s) => s.host === true && s.screen !== "game" && s.kbOpen !
 /** hostRailChecks 가 판정을 시작할 수 있는 입력인가 */
 function railInputOk(s) {
   const base =
-    !!s && !!s.viewport && allNum(s.viewport.w, s.viewport.h) && ["lobby", "result", "game"].includes(s.screen) && typeof s.host === "boolean" && railModeOk(s.mode) &&
+    !!s && !!s.viewport && allNum(s.viewport.w, s.viewport.h) && ["lobby", "result", "game"].includes(s.screen) && typeof s.host === "boolean" &&
     (s.rail === null || (!!s.rail && railRectOk(s.rail.rect))) && Array.isArray(s.buttons) && s.buttons.every((b) => !!b && typeof b.id === "string" && railRectOk(b.rect)) &&
-    (s.crown === null || railRectOk(s.crown)) && (s.chip === null || (!!s.chip && railRectOk(s.chip.rect)));
+    (s.crown === null || railRectOk(s.crown));
   if (!base) return false;
   if (s.screen === "lobby" && s.kbOpen !== true && !railRectOk(s.panel)) return false;
   if (!railExpected(s)) return true;
@@ -2557,17 +2517,17 @@ export function hostRailMeasure(s) {
 
 /**
  * 방장 줄 판정 (HR1~HR8). 사각형은 { left, top, width, height, right, bottom }.
- * s = { viewport {w,h} · screen "lobby"|"result"|"game" · host 방장 화면인가 · mode 서버 view.mode("basic"|"extended") · kbOpen 키보드 열림(기본 false) ·
- *       mapsOn 줄에 [맵] 칸이 있어야 하는가(railMapsOn(허용 맵 둘 이상, mode) — 20-07 부터 기본 마피아에만 있다) · botsOn 봇 도구가 켜진 방(테스트 방)인가 ·
+ * s = { viewport {w,h} · screen "lobby"|"result"|"game" · host 방장 화면인가 · kbOpen 키보드 열림(기본 false) ·
+ *       mapsOn 줄에 [맵] 칸이 있어야 하는가(railMapsOn(허용 맵 둘 이상)) · botsOn 봇 도구가 켜진 방(테스트 방)인가 ·
  *       rail { rect, ariaLabel }|null([data-host-rail]) · buttons [{ id, rect, borderColor, color, isCall, role, ariaChecked }](보이는 [data-host-rail-btn]) · crown 왕관 표식 사각형|null ·
- *       chip { mode, name, rect, tag, tabIndex }|null([data-mode-chip]) · band 자막 띠 면 사각형|null · panel 아래 패널 사각형 · head [{ kind, rect }] 머리 단추 ·
+ *       band 자막 띠 면 사각형|null · panel 아래 패널 사각형 · head [{ kind, rect }] 머리 단추 ·
  *       test [테스트] 사각형|null(있으면 줄이 48 내려온 테스트 방) · toast 떠 있는 위 알림 사각형|null · side [{ side, rect, borderColor }] 오른쪽 열 단추 · panelToggles 패널 안 옛 스위치 줄 수 }.
  * 줄이 있어야 하는 화면(방장 대기실·결과, 키보드 닫힘)은 HR1~HR6(대기실은 HR7·HR8 도), 그 밖은 HR1(대기실이고 키보드가 닫혀 있으면 HR8 도)만 낸다. 못 잰 입력은 여덟 줄 모두 "측정값 없음" 실패다.
- * HR1 방장 대기실·결과에만 줄이 있고 참가자·게임 중·키보드 열림에는 없다(게임 중·키보드 열림에는 칩도 없다) ·
+ * HR1 방장 대기실·결과에만 줄이 있고 참가자·게임 중·키보드 열림에는 없다 ·
  * HR2 단추 지름 52±1 · 열 안 간격 12±1 · 열 사이 12±1 · 왼쪽 16±1 · 줄 윗변 = 띠 아랫변 + 12(테스트 방 + 48) ±2 · 표식 높이 20±1 과 그 아래 12±1 ·
  * HR3 줄(표식 + 단추)이 아래 패널(윗변 − 8)·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열 단추와 교차 0, 오른쪽 열과는 가로 16 이상 떨어진다
  *     (접힌 줄의 둘째 열과 위 알림의 겹침만 HOST_RAIL_KNOWN_LIMITS 의 알려진 한계 — 잰 값을 남기고 실패로 세지 않는다) ·
- * HR4 순서·개수: 대기실 mode·map(mapsOn)·bots(botsOn), 결과 mode·map(mapsOn). 오른쪽 열은 소리·옷장 둘 ·
+ * HR4 순서·개수: 대기실 map(mapsOn)·bots(botsOn), 결과 map(mapsOn). 오른쪽 열은 소리·옷장 둘 ·
  * HR5 줄 단추 테두리·아이콘 색 = LAMP_RGB(켜진 토글은 금빛 채움이라 테두리만), 오른쪽 열 단추 테두리 = NIGHT600_RGB, 줄 단추에 .is-call 없음 ·
  * HR6 왕관 표식 유무·열별 칸 수가 hostRailLayoutE2E(n, 잰 최대 높이)와 같다(최대 높이 ±2 안에서 배치가 갈리면 판정하지 않고 info), 줄의 접근성 이름은 "방장 전용" ·
  * HR7 튜토리얼 토글(id "tutorial"·role=switch)은 어느 판에도 없고 패널 안 옛 스위치 줄 0 · HR8 대기실 패널 높이 222±1(방장·참가자 같다).
@@ -2579,13 +2539,13 @@ export function hostRailChecks(s = {}) {
     HR1: "방장 줄은 방장 대기실·결과에만(참가자·게임 중·키보드 열림에는 없다)",
     HR2: `줄 단추 지름 ${E.cell}±1 · 칸 사이 ${E.gap}±1 · 왼쪽 ${E.left}±1 · 윗변 = 띠 아랫변 + ${E.gap}(테스트 방 + ${E.testShift}) ±2`,
     HR3: "줄이 아래 패널·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열과 교차 0",
-    HR4: "줄 순서·개수: 판 종류·맵(기본 마피아만)·봇, 결과는 판 종류·맵(기본 마피아만) · 오른쪽 열은 소리·옷장",
+    HR4: "줄 순서·개수: 맵(허용 맵 둘 이상)·봇, 결과는 맵 · 오른쪽 열은 소리·옷장",
     HR5: "줄 단추 테두리·아이콘은 금빛(--light-lamp), 오른쪽 열 테두리는 --night-600 · 줄 단추에 빛남(.is-call) 없음",
     HR6: `왕관 표식·열 수는 F-2 식대로 · 줄의 접근성 이름 "${HOST_RAIL_NAME}"`,
     HR7: "튜토리얼 토글 없음(22-03) · role=switch 단추 0 · 패널 안 옛 스위치 줄 0",
     HR8: `대기실 패널 높이 ${panelH}±1(방장·참가자 같다)`,
   };
-  if (!railInputOk(s)) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "viewport·screen·host·mode·rail·buttons·crown·chip·band·panel·head·test·toast·side"));
+  if (!railInputOk(s)) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "viewport·screen·host·rail·buttons·crown·band·panel·head·test·toast·side"));
   const out = [];
   const expected = railExpected(s);
   const lobby = s.screen === "lobby";
@@ -2597,11 +2557,9 @@ export function hostRailChecks(s = {}) {
   if (expected) {
     if (s.rail === null) bad1.push("방장 화면에 줄이 없음");
     else if (s.buttons.length === 0) bad1.push("줄에 단추가 없음");
-    if (s.chip !== null) bad1.push("방장 화면에 참가자 칩이 있음");
   } else {
     const why = s.kbOpen === true ? "키보드가 열려 있는데" : s.screen === "game" ? "게임 중인데" : "참가자 화면인데";
     if (railShown) bad1.push(`${why} 줄이 있음(단추 ${s.buttons.length}개)`);
-    if ((s.kbOpen === true || s.screen === "game") && s.chip !== null) bad1.push(`${why} 판 종류 칩이 있음`);
   }
   out.push(result("HR1", L.HR1, bad1));
   if (!expected) {
@@ -2674,7 +2632,7 @@ export function hostRailChecks(s = {}) {
 
     // HR4
     const bad4 = [];
-    const want = HOST_RAIL_ORDER.filter((id) => (id === "mode" ? true : id === "map" ? s.mapsOn === true : lobby && s.botsOn === true));
+    const want = HOST_RAIL_ORDER.filter((id) => (id === "map" ? s.mapsOn === true : lobby && s.botsOn === true));
     const got = cols.flat().map((b) => b.id);
     if (got.join(",") !== want.join(",")) bad4.push(`줄 ${got.join("·") || "없음"} (기대 ${want.join("·")})`);
     const sides = s.side.map((b) => b.side).sort();
@@ -2723,171 +2681,6 @@ export function hostRailChecks(s = {}) {
     hr8();
   }
   return out;
-}
-
-/**
- * 참가자의 판 종류 칩 판정 (CH1·CH2).
- * s = { viewport {w,h} · viewMode 서버 view.mode · chip { mode, name, rect, tag, tabIndex }|null · band 자막 띠 면 사각형|null · panel 아래 패널 사각형 ·
- *       head [{ kind, rect }] · test [테스트] 사각형|null · toast 위 알림 사각형|null · side [{ side, rect }] 오른쪽 열 단추 }.
- * CH1 칩 표식(data-mode-chip)이 view.mode 와 같고 글이 그 판 이름이며 포커스를 받지 않는다(tabIndex < 0, 단추·링크·입력이 아님) ·
- * CH2 높이 32±1 · 왼쪽 16±1 · 윗변 = 띠 아랫변 + 20(테스트 방 + 48) ±2 · 아래 패널(윗변 − 8)·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열과 교차 0.
- */
-export function modeChipChecks(s = {}) {
-  const E = HOST_RAIL_E2E;
-  const L = {
-    CH1: "참가자 칩: 표식·이름이 서버 판 종류와 같고 누를 수 없다(포커스 없음)",
-    CH2: `참가자 칩: 높이 ${E.chipH}±1 · 왼쪽 ${E.left}±1 · 윗변 = 띠 아랫변 + ${E.chipTop}(테스트 방 + ${E.testShift}) ±2 · 다른 요소와 교차 0`,
-  };
-  const valid =
-    !!s && !!s.viewport && allNum(s.viewport.w, s.viewport.h) && railModeOk(s.viewMode) &&
-    (s.chip === null || (!!s.chip && railRectOk(s.chip.rect) && typeof s.chip.mode === "string" && typeof s.chip.name === "string" && typeof s.chip.tag === "string" && isNum(s.chip.tabIndex))) &&
-    (s.band === null || railRectOk(s.band)) && railRectOk(s.panel) && Array.isArray(s.head) && s.head.every((h) => !!h && railRectOk(h.rect)) &&
-    (s.test === null || railRectOk(s.test)) && (s.toast === null || railRectOk(s.toast)) && Array.isArray(s.side) && s.side.every((b) => !!b && railRectOk(b.rect));
-  if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "viewport·viewMode·chip·band·panel·head·test·toast·side"));
-  if (s.chip === null) return [result("CH1", L.CH1, ["참가자 화면에 판 종류 칩이 없음"]), noMeasure("CH2", L.CH2, "칩이 없어 잴 수 없음")];
-  const c = s.chip;
-  const bad1 = [];
-  if (c.mode !== s.viewMode) bad1.push(`칩 ${c.mode} (서버 ${s.viewMode})`);
-  if (c.name !== MODE_NAMES_E2E[c.mode]) bad1.push(`칩 글 "${c.name}" (기대 "${MODE_NAMES_E2E[c.mode] ?? "?"}")`);
-  if (c.tabIndex >= 0) bad1.push(`tabIndex ${c.tabIndex}`);
-  if (["button", "a", "input", "select", "textarea"].includes(c.tag.toLowerCase())) bad1.push(`<${c.tag.toLowerCase()}> 라 누를 수 있음`);
-  const bad2 = [];
-  if (Math.abs(c.rect.height - E.chipH) > 1) bad2.push(`높이 ${fmt(c.rect.height)} (기대 ${E.chipH})`);
-  if (Math.abs(c.rect.left - E.left) > 1) bad2.push(`왼쪽 여백 ${fmt(c.rect.left)} (기대 ${E.left})`);
-  if (!s.band) bad2.push("자막 띠 사각형 없음(기준을 알 수 없다)");
-  else {
-    const shift = s.test ? E.testShift : 0;
-    const wantTop = bottom(s.band) + E.chipTop + shift;
-    if (Math.abs(c.rect.top - wantTop) > 2) bad2.push(`윗변 ${fmt(c.rect.top)} (띠 아랫변 ${fmt(bottom(s.band))} + ${E.chipTop}${shift ? ` + ${shift}` : ""} = ${fmt(wantTop)})`);
-  }
-  if (bottom(c.rect) > s.panel.top - 8 + OVERLAP_EPS) bad2.push(`아랫변 ${fmt(bottom(c.rect))} > 패널 윗변 − 8 = ${fmt(s.panel.top - 8)}`);
-  const hit = (what, r) => {
-    if (rectsOverlap(c.rect, r)) bad2.push(`${what} (${overlapText(c.rect, r)})`);
-  };
-  for (const h of s.head) hit(`머리 ${h.kind ?? "?"}`, h.rect);
-  if (s.band) hit("자막 띠", s.band);
-  if (s.test) hit("[테스트]", s.test);
-  if (s.toast) hit("위 알림", s.toast);
-  for (const b of s.side) hit(`오른쪽 열 ${b.side ?? "?"}`, b.rect);
-  return [result("CH1", L.CH1, bad1), result("CH2", L.CH2, bad2)];
-}
-
-/**
- * 판 종류 시트 판정 (MS1·MS1g). s = { viewport {w,h} · viewMode 서버 view.mode · sheet 시트 면 사각형 · cards [{ mode, rect, pressed "true"|"false" }]([data-mode-card]) }.
- * MS1 칸이 기본 마피아·확장판 둘(왼쪽부터)이고 눌림(aria-pressed)은 서버 판 종류의 칸 하나뿐 ·
- * MS1g 두 칸의 윗변·높이가 같다(±1 — 설명이 두 줄로 접혀도) · 칸은 44 이상 · 시트가 화면 안 · 칸이 시트 안.
- */
-export function modeSheetChecks(s = {}) {
-  const L = {
-    MS1: "판 종류 시트: 두 칸(기본 마피아·확장판), 눌린 칸 = 서버 판 종류",
-    MS1g: "판 종류 시트: 두 칸 높이 같음(±1) · 시트가 화면 안 · 칸이 시트 안",
-  };
-  const valid =
-    !!s && !!s.viewport && allNum(s.viewport.w, s.viewport.h) && railModeOk(s.viewMode) && railRectOk(s.sheet) &&
-    Array.isArray(s.cards) && s.cards.length > 0 && s.cards.every((c) => !!c && typeof c.mode === "string" && railRectOk(c.rect) && typeof c.pressed === "string");
-  if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "viewport·viewMode·sheet·cards[{mode, rect, pressed}]"));
-  const cards = [...s.cards].sort((a, b) => a.rect.left - b.rect.left);
-  const bad1 = [];
-  const order = cards.map((c) => c.mode).join(",");
-  if (order !== Object.keys(MODE_NAMES_E2E).join(",")) bad1.push(`칸 ${order} (기대 ${Object.keys(MODE_NAMES_E2E).join(",")})`);
-  const pressed = cards.filter((c) => c.pressed === "true").map((c) => c.mode);
-  if (pressed.join(",") !== s.viewMode) bad1.push(`눌린 칸 ${pressed.join("·") || "없음"} (서버 ${s.viewMode})`);
-  const bad2 = [];
-  if (cards.length === 2) {
-    if (Math.abs(cards[0].rect.height - cards[1].rect.height) > 1) bad2.push(`칸 높이 ${fmt(cards[0].rect.height)} · ${fmt(cards[1].rect.height)}`);
-    if (Math.abs(cards[0].rect.top - cards[1].rect.top) > 1) bad2.push(`칸 윗변 ${fmt(cards[0].rect.top)} · ${fmt(cards[1].rect.top)}`);
-  } else bad2.push(`칸 ${cards.length}개`);
-  for (const c of cards) {
-    if (c.rect.width + OVERLAP_EPS < TAP_MIN || c.rect.height + OVERLAP_EPS < TAP_MIN) bad2.push(`${c.mode} 칸 ${fmt(c.rect.width)}x${fmt(c.rect.height)} < ${TAP_MIN}`);
-    if (!rectInside(c.rect, s.sheet)) bad2.push(`${c.mode} 칸이 시트 밖`);
-  }
-  const screen = { left: 0, top: 0, width: s.viewport.w, height: s.viewport.h, right: s.viewport.w, bottom: s.viewport.h };
-  if (!rectInside(s.sheet, screen)) bad2.push(`시트 (${fmt(s.sheet.left)},${fmt(s.sheet.top)})~(${fmt(right(s.sheet))},${fmt(bottom(s.sheet))}) 가 화면 ${s.viewport.w}x${s.viewport.h} 밖`);
-  return [result("MS1", L.MS1, bad1), result("MS1g", L.MS1g, bad2)];
-}
-
-// ---- 19페이즈 기본 마피아 판 basicModeChecks (19-07, 결정 D-08·D-09, UI-SPEC E-1·E-3·BM1~BM3) ----
-// 기본 마피아(view.mode basic)는 서버가 심부름·목격 기록·흔적 키를 싣지 않아 화면이 그 요소를 그리지 않는다. 숨김이 아니라 DOM 에 없어야 한다.
-// 여기서 "기본 마피아"는 19페이즈의 판 종류다 — 위 13페이즈 "기본판"(꺼진 장치, OFF*)과 다른 축이고 두 판 종류 모두 기본판이다.
-
-/**
- * 기본 마피아 한 판 전체에서 한 번도 DOM 에 있으면 안 되는 선택자(UI-SPEC E-1): 아침 흔적 표시·같은 옷 표시(이름표)·마지막 목격 줄·증거 카드·[기록] 머리 단추.
- * 감시는 browser.mjs offScannerScript 가 100ms 마다 한다. 표식이 실제로 앱에 있는지는 e2eContract 가 본다(빈 선택자 금지, T-19-22).
- */
-export const BASIC_ABSENT_SELECTORS = Object.freeze(["[data-trace-mark]", "[data-seen-mark]", "[data-lastseen-row]", "[data-trace-card]", "[data-record-button]"]);
-/** 심부름 요소의 속성 앞머리(시작 카드·장소 타일·화살표·[처리]·진행 점·층) — 이 앞머리로 시작하는 속성이 하나도 없어야 한다 */
-export const BASIC_ABSENT_ATTR_PREFIX = "data-errand-";
-/**
- * 기본 마피아에서 자막 띠([data-host-line])에 나오면 안 되는 사회자 줄(UI-SPEC E-3) — src/game/hostLine.ts HOST_LINES 의 errand.act·errand.done·witness·discussion.evidence 사본.
- * errand.ghost("지켜봐 주세요")는 낮 발표·투표·찬반의 유령 줄과 같은 문장이라 넣지 않는다(기본 마피아의 유령 화면에 그대로 나온다). e2eContract 가 같음을 고정한다.
- */
-export const BASIC_FORBIDDEN_LINES = Object.freeze(["빛나는 곳을 찾아 처리해 주세요", "곧 토론이 시작됩니다", "기록 단추로 본 것을 확인해 주세요", "같은 옷과 엇갈린 목격을 살펴보세요"]);
-
-/** BM1 의 감시 횟수 하한 — 이보다 적게 돈 감시는 한 판을 덮지 못했다(공허 통과 금지, T-19-22) */
-const BASIC_SCAN_MIN = 20;
-/** 기본 마피아에서 허용되는 단계 전이(연속 중복은 접은 뒤). errand·runoff·showdown 은 어느 쪽에도 없다 — 낮 발표 다음은 토론이다(D-08). */
-const MODE_BASIC_TRANSITIONS = Object.freeze({ ...PHASE_GRAPHS.basic, dayAnnounce: [...PHASE_GRAPHS.basic.dayAnnounce, "ended"] });
-/** 한 판 완주로 치려면 지나야 하는 단계(BM2) — 낮 한 번과 밤·아침 한 번, 그리고 결과 */
-const MODE_BASIC_REQUIRED = Object.freeze(["discussion", "nomination", "night", "morning", "ended"]);
-
-/**
- * 기본 마피아 한 판 판정(BM1~BM3, UI-SPEC "검증 표식과 E2E 판정"). 한 페이지(방장 또는 참가자)가 한 판 동안 모은 값을 받는다.
- * phases = 받은 state 의 phase 열 · scan = readOffScan 결과 { scans, seen: { 선택자: { n, phase, name? } } } · lines = readHostLines 가 모은 띠 글(중복 없는 목록).
- * BM1 감시가 20회 넘게 돌았고 없어야 할 선택자·속성을 한 번도 못 봤다 · BM2 errand 없이 역할 확인 → 낮 발표 → 토론 → 투표(→ 변론 → 찬반 → 처형) → 밤 → 아침 순서로 결과까지 갔다 ·
- * BM3 띠 글에 금지 문구가 없다. 값이 없으면 `측정값 없음` 으로 실패한다(띠 글을 하나도 못 본 판도).
- */
-export function basicModeChecks(input) {
-  const { phases, scan, lines } = input ?? {};
-  const L = {
-    BM1: `심부름(${BASIC_ABSENT_ATTR_PREFIX}*)·흔적·목격 표시·증거 카드·[기록] 단추가 한 판 전체에서 DOM 에 0건이다`,
-    BM2: "단계 순서가 기본 마피아다(낮 발표 → 토론 → 투표 → 변론 → 찬반 → 처형 → 밤 → 아침, 심부름 없음)",
-    BM3: "자막 띠에 심부름·목격 기록·증거 안내 문구가 한 번도 나오지 않는다",
-  };
-  const out = [];
-
-  if (!scan || typeof scan !== "object" || !isNum(scan.scans) || !scan.seen || typeof scan.seen !== "object") out.push(noMeasure("BM1", L.BM1, "감시 결과"));
-  else if (scan.scans <= BASIC_SCAN_MIN) out.push(result("BM1", L.BM1, [`측정값 부족(감시 ${scan.scans}회 ≤ ${BASIC_SCAN_MIN})`]));
-  else out.push(result("BM1", L.BM1, Object.entries(scan.seen).map(([sel, v]) => `${sel} ${v?.n ?? "?"}건(${v?.phase ?? "?"}${v?.name ? `, ${v.name}` : ""})`)));
-
-  if (!Array.isArray(phases) || phases.length === 0 || phases.some((p) => typeof p !== "string")) out.push(noMeasure("BM2", L.BM2, "phases[]"));
-  else {
-    const seq = phases.filter((p, i) => i === 0 || p !== phases[i - 1]);
-    const bad = [];
-    for (let i = 1; i < seq.length; i++) {
-      const allowed = MODE_BASIC_TRANSITIONS[seq[i - 1]];
-      if (allowed === undefined || !allowed.includes(seq[i])) {
-        bad.push(`${seq[i - 1]} → ${seq[i]} 는 기본 마피아 전이가 아님`);
-        break;
-      }
-    }
-    const missing = MODE_BASIC_REQUIRED.filter((p) => !seq.includes(p));
-    if (missing.length > 0) bad.push(`지나지 않은 단계 ${missing.join(",")}`);
-    out.push(result("BM2", L.BM2, bad));
-  }
-
-  const texts = Array.isArray(lines) ? lines.filter((t) => typeof t === "string" && t.trim() !== "") : [];
-  if (texts.length === 0) out.push(noMeasure("BM3", L.BM3, "본 띠 글 0개"));
-  else out.push(result("BM3", L.BM3, BASIC_FORBIDDEN_LINES.filter((f) => texts.some((t) => t.includes(f))).map((f) => `띠에 '${f}'`)));
-  return out;
-}
-
-/**
- * 기본 마피아에서 서버가 싣지 않는 view 키(UI-SPEC E-1 의 판정 근거, D-08): 심부름(me.errand)·목격 기록(me.record)·증거(day.evidence). 값이 빈 것이 아니라 키가 없다.
- * 아침 흔적(day.morning.trace)은 한 단계 안쪽 키라 프레임 키 집합에 잡히지 않는다 — 화면 쪽 BM1([data-trace-mark])과 서버 시험(modeBasic.test)이 맡는다.
- */
-export const BASIC_OFF_VIEW_KEYS = Object.freeze({ me: Object.freeze(["errand", "record"]), day: Object.freeze(["evidence"]) }); // 세 키 0건
-
-/**
- * BM1k 기본 마피아 판에서 받은 state 프레임의 키에 심부름·목격 기록·증거 키가 없다. keys = { me, day } — 배열 또는 Set(tracker.viewKeys 모양, 키 이름뿐).
- * 받은 me 키가 하나도 없으면 프레임을 못 본 것이라 `측정값 없음` 으로 실패한다.
- */
-export function basicViewKeyChecks(keys) {
-  const label = "받은 state 프레임에 me.errand·me.record·day.evidence 키가 0건이다";
-  const asArr = (v) => (v instanceof Set ? [...v] : Array.isArray(v) ? v : null);
-  const me = asArr(keys?.me);
-  const day = asArr(keys?.day);
-  if (me === null || day === null || me.length === 0) return noMeasure("BM1k", label, "받은 state 프레임 키");
-  return result("BM1k", label, [...BASIC_OFF_VIEW_KEYS.me.filter((k) => me.includes(k)).map((k) => `me.${k}`), ...BASIC_OFF_VIEW_KEYS.day.filter((k) => day.includes(k)).map((k) => `day.${k}`)]);
 }
 
 // ---- 12페이즈 sound-script (12-08, 결정 D-21): 단계 구간마다 기대 소리 id 가 순서대로 ----
@@ -3337,9 +3130,8 @@ export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time
  * 서버 view 허용 키(13페이즈 그대로, 서버 diff 0). test/unit/view.test.ts 의 TOP_KEYS·ME_KEYS·DAY_KEYS 에 더해, 그 시험의 풍부한 상태가 만들지 않는 9페이즈 상태 의존 키만 더했다:
  * me.will·me.note(유언·쪽지, 결정 0061-9·10)·day.chalk(암살 분필, 결정 0061-14). 실제 판의 state 프레임에는 이 키들이 나온다(emcee-leak 이 처음 걸렸다) — e2eContract 가 "view.test.ts 집합 + 이 셋" 임과
  * 그 셋이 shared/protocol.ts 의 MyInfo·DayView 에 선언된 키임을 고정한다. 14페이즈가 새 키를 더하면 여전히 VK1 이 잡는다.
- * 19-01: view.mode 는 판 종류 공개 값이다(19페이즈 D-05) — 모든 소켓에 같고 view.test.ts 의 TOP_KEYS 에도 같이 있다.
  */
-export const VIEW_TOP_KEYS = new Set(["code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map", "mode"]);
+export const VIEW_TOP_KEYS = new Set(["code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map"]);
 export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "nightTally", "nightSure", "will", "note"]);
 export const VIEW_DAY_KEYS = new Set(["n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown", "chalk"]);
 /** 밤 역할별 사회자 줄(src/game/hostLine.ts HOST_LINES 의 night.mafia·police·doctor 사본) — 다른 역할 화면에 있으면 누설이다. e2eContract 가 같음을 고정한다. */

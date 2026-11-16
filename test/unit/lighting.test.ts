@@ -7,7 +7,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { nightDarkOf } from "../../src/game/nightDark";
 import { lightingFor, lightingOf, visibleSeats } from "../../src/world/presence";
-import { rulesetOf } from "../../shared/game/ruleset";
 import { lockCause } from "../helpers/playable";
 import { ALBEDO_NONE, LIGHT_TUNE, type PhaseTune } from "../../src/world/maps/bar";
 import { PLAZA_LIGHT_TUNE } from "../../src/world/maps/plaza";
@@ -130,7 +129,7 @@ describe.each(MAPS)("조명 표 허용 범위 — $name (D-03)", ({ name, tune, 
 // ---------- 21-07 원인 흐름 조명 분기(D-04·D-10, 결정 0088·0074-4 의 연장) ----------
 // 확장판(원인 흐름) 밤은 역할로 갈라지지 않는다: 모든 산 사람이 같은 night 조명·같은 장면 표(몸 없음)·같은 어둠 표식 값. 저녁(errand)은 해 질 녘(vote) 조명.
 // 기본 마피아(mode basic)와 잠금 아래 옛 확장판은 지금 그대로다.
-function viewOf(phase: PhaseId, o: { role?: "mafia" | "police" | "doctor" | "citizen"; mode?: "basic" | "extended"; dead?: number[]; mySeat?: number } = {}): RoomView {
+function viewOf(phase: PhaseId, o: { role?: "mafia" | "police" | "doctor" | "citizen"; dead?: number[]; mySeat?: number } = {}): RoomView {
   const dead = new Set(o.dead ?? []);
   const players = Array.from({ length: 5 }, (_, seat) => ({ seat, nickname: "p" + seat, connected: true, isHost: seat === 0, ...(dead.has(seat) ? { alive: false } : {}) }));
   const mySeat = o.mySeat ?? 0;
@@ -146,7 +145,6 @@ function viewOf(phase: PhaseId, o: { role?: "mafia" | "police" | "doctor" | "cit
     players,
     me: { seat: mySeat, isHost: false, ...(o.role === undefined ? {} : { role: o.role }) },
     day: { n: 1, roles: [] },
-    ...(o.mode === undefined ? {} : { mode: o.mode }),
     ...(ghost ? { spectate: { seats: [] } } : {}),
   } as unknown as RoomView;
 }
@@ -159,8 +157,8 @@ describe("아침·토론·기본판 밤 조명 (22-04: 원인 흐름 밤·저녁
   });
 
   it("밤은 마피아 night, 시민 nightCitizen, 시민은 본인만 그리고 어둠 표식 true, 유령은 nightGhost", () => {
-    const mafia = viewOf("night", { role: "mafia", mode: "basic" });
-    const citizen = viewOf("night", { role: "citizen", mode: "basic" });
+    const mafia = viewOf("night", { role: "mafia" });
+    const citizen = viewOf("night", { role: "citizen" });
     expect(lightingFor(mafia)).toBe("night");
     expect(lightingFor(citizen)).toBe("nightCitizen");
     expect(Object.keys(visibleSeats(citizen)).join(",")).toBe("0");

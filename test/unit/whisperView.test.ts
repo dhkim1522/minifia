@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
-import { rulesetOf } from "../../shared/game/ruleset";
+import { RULES } from "../../shared/game/ruleset";
 import { WHISPER_TEXT, whisperLine, whisperTargets, whisperUsed, whisperVisible } from "../../src/game/whisperView";
-const GAME_RULES = rulesetOf("extended");
+const GAME_RULES = RULES;
 
 // 09.1.1-09: 귓속말 화면의 순수 모델(UI-SPEC B). 서버 view 와 채팅 줄만 읽고 시각·난수가 없다.
 const NAMES = ["민수", "영희", "서준", "지아", "도윤", "하은"];

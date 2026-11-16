@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { ROLE_IDS } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
-import type { GameMode, RoleRecord, RoomView } from "../../shared/protocol";
+import type { RoleRecord, RoomView } from "../../shared/protocol";
 import { RoleCardSheet } from "../../src/components/RoleCardSheet";
 import type { RoleCardTab } from "../../src/components/RoleCardSheet";
 import { ROLE_TEXT } from "../../src/game/roleText";
@@ -28,14 +28,13 @@ const RECORDS: Record<string, RoleRecord[]> = {
   doctor: [{ n: 1, target: 2 }],
 };
 
-function makeView(role: RoleId | null, o: { allies?: number[]; records?: RoleRecord[]; mode?: GameMode } = {}): RoomView {
+function makeView(role: RoleId | null, o: { allies?: number[]; records?: RoleRecord[] } = {}): RoomView {
   const me: RoomView["me"] = { seat: 0, isHost: false };
   if (role !== null) me.role = role;
   if (o.allies !== undefined) me.allies = o.allies;
   if (o.records !== undefined) me.records = o.records;
   return {
     code: "0042",
-    mode: o.mode ?? "basic", // 21-14 (A): 기본은 기본 마피아 판 — 원인 흐름 확장판 카드(심지 안내 줄)는 아래 mode extended 시험이 본다
     phase: "night",
     phaseEndsAt: 1_700_000_020_000,
     phaseDurationMs: 30_000,
@@ -55,14 +54,13 @@ interface SheetOpts {
   newCount?: number;
   allies?: number[];
   records?: RoleRecord[];
-  mode?: GameMode;
   onTab?: (t: RoleCardTab) => void;
 }
 
 function renderSheet(o: SheetOpts = {}) {
   const role = o.role === undefined ? "police" : o.role;
   const onTab = o.onTab ?? vi.fn();
-  const view = makeView(role, { allies: o.allies, records: o.records ?? (role !== null ? RECORDS[role] : undefined), ...(o.mode !== undefined ? { mode: o.mode } : {}) });
+  const view = makeView(role, { allies: o.allies, records: o.records ?? (role !== null ? RECORDS[role] : undefined) });
   const result = render(
     <RoleCardSheet
       view={view}
@@ -266,13 +264,6 @@ describe("RoleCardSheet 내 역할 본문", () => {
     cleanup();
     renderSheet({ role: "mafia", allies: [] });
     expect(document.querySelector(".mf-rolecard__t")?.textContent).toContain("혼자예요");
-  });
-
-  it("확장판의 마피아 본문에도 심지 안내가 없다 — 설명과 동료 줄뿐이다 (22-04)", () => {
-    renderSheet({ role: "mafia", allies: [1, 3], mode: "extended" });
-    const lines = Array.from(document.querySelector<HTMLElement>(".mf-rolecard__t")!.children).map((el) => el.textContent);
-    expect(lines).toEqual(["마피아", ROLE_TEXT.mafia.desc, "동료 · 하윤, 도현"]);
-    expect(document.body.textContent).not.toContain("심지");
   });
 
   it.each(["police", "doctor", "citizen"] as const)("%s: 동료 줄이 없다", (role) => {

@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
 import type { Actor } from "./helpers";
 import { alarmOf, closePhase, connect, editRoom, hello, lastViewOf, mark, nextFrame, send, settle, startedGame, storedRoom, summary, until } from "./helpers";
-import { rulesetOf } from "../../shared/game/ruleset";
-const GAME_RULES = rulesetOf("extended");
+import { RULES } from "../../shared/game/ruleset";
+const GAME_RULES = RULES;
 
 const GAP_MS = 900;
 const TURN_MS = 8000;

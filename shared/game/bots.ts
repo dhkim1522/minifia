@@ -28,7 +28,7 @@
 // 08-07 순서 추가: discussion 은 위 두 줄 뒤에 randInt(토론 끝내기 폭 30000) 한 번이 붙는다(봇당 5번: 폭·문구 수·폭·문구 수·끝내기 폭, 시드 고정 값을 다시 고정했다).
 // 09.1: 지목(nomination, 결정 0063-1)은 차례인 봇 하나만 randInt(후보 수) 한 번(지연 난수 없음) — 차례가 아닌 봇·모이는 중·확정 뒤 사이·끝 알림에는 계획과 난수가 없다. 결정 함수(botPointTarget)는 자기를 뺀 산 사람 하나를 고르고 고정 pick(host·other)도 같다(결정 0060-13: pick 은 봇 지목 대상). 09.1-05 가 옛 지연 지목(2000 + [0, 6000) ms)의 난수 계약을 지웠다.
 // 13-02: 기본판(결정 0072)은 순차 차례가 없는 동시 투표다 — 투표(nomination)에서 산 봇마다 좌석 오름차순으로 randInt(후보 수) → randInt(POINT_SPAN_MS 6000) 를 부르고 now + 2000 + [0, 6000) ms 에 point 한 번(고정 pick 이면 앞의 결정 난수는 건너뜀).
-// pickTurn 이 있는 방(판 규칙(rulesetOf)의 pickTurn 을 켠 경우)은 위 09.1 순차 계획(turnPointSteps)을 그대로 쓴다.
+// pickTurn 이 있는 방(판 규칙 RULES 의 pickTurn 을 켠 경우)은 위 09.1 순차 계획(turnPointSteps)을 그대로 쓴다.
 // 09.1.1-05: 동점 결선(runoff, 결정 0066-4)은 투표 창(step 1)에서만, 후보가 아닌 산 봇이 좌석 오름차순으로 randInt(2)(후보 둘 중 하나, 고정 pick 이면 건너뜀) → randInt(RUNOFF_BOT_SPAN_MS) 를 부른다.
 // 앞머리(step 0)·결과(step 2)·후보 봇·탈락한 봇에는 계획과 난수가 없다. 단계가 바뀔 때마다 마감이 달라 계획 키("runoff:{마감}")가 새로 선다. 새 난수는 이 새 분기 안에서만 늘어나 기존 단계의 시드 고정 값은 그대로다.
 // 09.1.1-07: 마지막 3인 결전(showdown, 결정 0066-5)은 두 곳에서만 계획이 선다. ① 한마디 차례(i 0..2) 중 차례 주인이 산 봇이고 아직 확정 전이면 차례 시작 시각(endsAt − SHOWDOWN_TURN_MS)에
@@ -39,8 +39,6 @@
 import { isAlive } from "./alive";
 import { SHOWDOWN_TURN_MS } from "./phases";
 import type { Player, RoomState } from "./room";
-import { modeOf, rulesetOf } from "./ruleset";
-import type { Ruleset } from "./ruleset";
 import { LAST_WORD_CHIPS } from "./showdown";
 import type { RandInt } from "./tick";
 
@@ -278,7 +276,7 @@ function showdownSteps(state: RoomState, bot: Player, now: number, randInt: Rand
   return [];
 }
 
-function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt, rules: Ruleset): BotStep[] {
+function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): BotStep[] {
   const steps: BotStep[] = [];
   const add = (at: number, act: BotAct): void => {
     steps.push({ at, botId: bot.id, act });
@@ -337,15 +335,14 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt, r
 /**
  * 지금 단계에서 살아 있는 봇들의 행동 계획(at 오름차순, 같으면 원래 순서). 사람이 한 명도 연결되어 있지 않으면 빈 배열 —
  * 버려진 테스트 방이 봇 알람으로 계속 깨지 않게 한다. 봇은 seat 오름차순으로, 봇마다 위 순서로 randInt 를 부른다.
- * 판 규칙(19페이즈 D-11)은 마지막 선택 인자로 받고, 안 받으면 방 상태의 판 종류에서 얻는다(전역 값이 아니다).
  */
-export function planBotSteps(state: RoomState, now: number, randInt: RandInt, rules: Ruleset = rulesetOf(modeOf(state))): BotStep[] {
+export function planBotSteps(state: RoomState, now: number, randInt: RandInt): BotStep[] {
   if (!state.players.some((p) => !isBot(p) && p.connected)) return [];
   if (state.phaseEndsAt === null) return [];
   const limit = state.phaseEndsAt - BOT_END_MARGIN_MS;
   const all: BotStep[] = [];
   for (const bot of state.players.filter((p) => isBot(p) && isAlive(p)).sort(bySeat)) {
-    const planned = planFor(state, bot, now, randInt, rules);
+    const planned = planFor(state, bot, now, randInt);
     planned.forEach((step, i) => {
       if (step.at >= limit) return;
       // typing 은 바로 다음 단계(짝 chat)가 마감 여유 안일 때만 남긴다(09-24).

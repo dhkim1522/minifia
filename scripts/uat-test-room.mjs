@@ -188,11 +188,7 @@ async function main() {
   check("c", "손님 소켓에는 프레임이 없음", seen.every((s) => s === "[]"), seen.join(" "));
 
   // ---- d. 시작 → 배정에서 넘기기 ----
-  // 판 종류: 기본은 확장판이다. --mode basic 이면 방장이 먼저 기본 마피아 판을 고른다(modePick, 대기실에서만).
-  if (MODE === "basic") {
-    send(host, { t: "modePick", mode: "basic" });
-    await waitUntil(() => clients.every((c) => lastView(c)?.mode === "basic"), 5000, "판 종류(basic) 고르기");
-  }
+  // 22-07: 판 종류 고르기 메시지가 없어졌다. --mode 인자와 판 종류별 분기는 22-08 이 지운다 — 두 값 모두 같은 규칙의 방이다.
   send(host, { t: "start" });
   await waitAllPhase(clients, "assigning", 5000, "배정 시작");
   send(host, { t: "testSkip" });

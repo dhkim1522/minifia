@@ -236,7 +236,6 @@ export type ClientMessage =
   | { t: "ready"; on: boolean; round: number } // 다시 하기 준비(결정 D-12) — 결과 단계의 손님이 토글한다. round 는 지금 보는 판 번호(1 이상 정수)이고 어긋나면 서버가 버린다. 신원은 소켓 첨부 playerId 뿐
   | { t: "rematch"; round: number } // 다시 하기 시작(결정 D-12) — 방장만, 결과 단계에서, round 가 서버 판 번호와 같고 준비한 연결 참가자(방장·봇 포함)가 4명 이상일 때. 서버가 모든 조건을 판정하고 거절 응답은 사유와 무관하게 같다(L40)
   | { t: "mapPick"; map: MapChoice } // 맵 선택(결정 D-20) — 방장이 대기실·결과 단계에서만. 값은 enum 뿐이고 서버가 방장·단계·허용 값을 판정한다. 거절은 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임(L40)
-  | { t: "modePick"; mode: GameMode } // 판 종류 고르기(결정 0081-6, 19페이즈 D-05) — 방장이 대기실·결과 단계에서만. 값은 enum 뿐이고 서버가 방장·단계·허용 값을 판정한다. 거절은 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임(L40)
   | { t: "verdict"; agree: boolean } // 찬반 — 찬성 true / 반대 false, 변론자·유령은 거부, 마지막 값이 유효(DAY-06)
   // 테스트 방 방장 도구(결정 0022). 일반 방은 BAD_MESSAGE 로 거부한다. role null = 무작위.
   | { t: "testSkip" }
@@ -316,8 +315,6 @@ export interface RoomView {
   result?: GameResult; // ended 단계에서만, 모두에게(D-17)
   /** 방장이 고른 맵(결정 D-20). 서버는 항상 싣는다(기본 "random") — 공개 값이고 역할의 함수가 아니다. 타입을 optional 로 둔 것은 화면 시험의 리터럴을 한꺼번에 바꾸지 않기 위해서다(화면은 `view.mapChoice ?? "random"`). */
   mapChoice?: MapChoice;
-  /** 방장이 고른 판 종류(결정 0081-6, 19페이즈 D-05·D-12). 서버는 늘 싣는다(기본 "extended") — 공개 값이고 역할의 함수가 아니며 모든 소켓에 같다. 타입을 optional 로 둔 것은 화면 시험의 리터럴을 한꺼번에 바꾸지 않기 위해서다(화면은 modeOf(view)). */
-  mode?: GameMode;
   /** 이번 판의 맵(결정 D-21, 누설 L42). 시작한 뒤에만 키가 있고 모든 참가자에게 같다 — 대기실·시작 전 view 에는 키 자체가 없다. */
   map?: MapId;
   /** 쉬는 사람 자신의 view 에만(결정 D-13, L38). 다음 판에 준비하지 않아 게임 밖에 있는 사람 — 이 키가 있으면 players 는 자기 한 줄뿐이고 게임 필드는 없다. */
@@ -432,12 +429,6 @@ export type MapId = "bar" | "plaza";
 export const MAP_CHOICES = ["bar", "plaza", "random"] as const;
 /** 방장의 선택(결정 D-20): 고를 수 있는 맵 하나 또는 무작위(기본). 무작위의 결과는 시작 때 서버가 정한다. */
 export type MapChoice = (typeof MAP_CHOICES)[number];
-
-/** 판 종류(결정 0081-6, 19페이즈 D-01): 기본 마피아(basic) · 확장판(extended). 방 상태의 공개 값이고 서버 스키마(strictObject enum)와 화면이 같이 읽는다. */
-export const GAME_MODES = ["basic", "extended"] as const;
-export type GameMode = (typeof GAME_MODES)[number];
-/** 판 종류 기본값(D-01·D-04): 고르지 않은 방·mode 없이 저장된 옛 방은 확장판이다. */
-export const DEFAULT_MODE: GameMode = "extended";
 
 /**
  * 동작 프레임(결정 D-12). 키는 t·seat·id·n 뿐이다 — 채널·역할·player id·시각이 없다.
