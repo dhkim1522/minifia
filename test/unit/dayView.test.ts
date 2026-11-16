@@ -3,7 +3,7 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 JSON 문자열로 한다.
 import { describe, expect, it } from "vitest";
 import type { DayView, PhaseId, PickTurnView, PublicPlayer, RoomView, ShowdownView } from "../../shared/protocol";
-import { EXEC_ANNOUNCE_MS, EXEC_TAIL_MS, EXECUTION_MS, WILL_REVEAL_MS } from "../../shared/game/phases";
+import { ANSWER_REVEAL_MS, EXEC_ANNOUNCE_MS, EXEC_TAIL_MS, EXECUTION_MS, NO_EXECUTION_MS, WILL_REVEAL_MS } from "../../shared/game/phases";
 import {
   ANNOUNCE_DAY_MS,
   ANNOUNCE_EXEC_MS,
@@ -15,6 +15,7 @@ import {
   ANNOUNCE_POLICE_MS,
   ANNOUNCE_VICTIM_AT,
   ANNOUNCE_VICTIM_MS,
+  answerStillOf,
   DAY_COPY,
   dayEvents,
   GHOST_FADE_END_MS,
@@ -804,5 +805,81 @@ describe("지목 기록 없음 (22-12 D-14)", () => {
     const events = dayEvents(nominationOf([[1, 2]]), nominationOf([[1, 2], [3, 2], [4, 2]]));
     same([events.lines, events.announces, events.fx], [[], [], []]);
     same(dayEvents(nominationOf([]), nominationOf([[1, 2]])).lines, []);
+  });
+});
+
+describe("정답 공개 알림 시간표 (23-07, D-22, P23-20)", () => {
+  const reveal = (day: Partial<DayView> = {}) => viewOf("answerReveal", { day: { keyword: { genre: "영화", answer: "해리포터" }, ...day } });
+  const exec = () => viewOf("execution", { day: { execution: { seat: 1 } } });
+  const ANSWER = { text: "해리포터", label: "정답" };
+
+  it("ANNOUNCE_NOEXEC_MS 는 서버 상수 NO_EXECUTION_MS 와 같은 값이다", () => {
+    expect(ANNOUNCE_NOEXEC_MS).toBe(NO_EXECUTION_MS);
+  });
+
+  it("처형이 있었던 첫날: 처형 → 정답 공개는 정답 큰 글만 0초부터 3초, 처형 없음 줄·알림은 없다", () => {
+    const events = dayEvents(exec(), reveal());
+    same(events.announces, [{ ...ANSWER, at: 0, ms: ANSWER_REVEAL_MS }]);
+    same(events.lines, []);
+    same(events.fx, []);
+  });
+
+  it("처형 없는 첫날(부결·동점·0표): '처형 없음' 0~1.4초, 이어서 1.4초부터 정답 3초 — 두 큰 글이 겹치지 않는다", () => {
+    for (const [prev, reason] of [
+      [verdictView(), "rejected"],
+      [nominationOf([[0, 1], [1, 0]]), "tie"],
+      [nominationOf([]), "noVotes"],
+    ] as const) {
+      const events = dayEvents(prev, reveal({ noExecution: { reason } }));
+      same(events.announces, [
+        { text: "처형 없음", at: 0, ms: NO_EXECUTION_MS },
+        { ...ANSWER, at: NO_EXECUTION_MS, ms: ANSWER_REVEAL_MS },
+      ]);
+      same(events.lines, [{ kind: "system", text: "처형 없음" }]);
+      const [first, second] = events.announces;
+      expect(first!.at + first!.ms).toBeLessThanOrEqual(second!.at);
+    }
+  });
+
+  it("결선·마지막 3인 뒤 처형 없는 첫날도 같다", () => {
+    for (const phase of ["runoff", "showdown"] as const) {
+      const events = dayEvents(viewOf(phase), reveal({ noExecution: { reason: "tie" } }));
+      expect(events.announces.map((a) => a.text)).toEqual(["처형 없음", "해리포터"]);
+    }
+  });
+
+  it("정답 공개 → 밤: 첫날 밤 view 에 noExecution 이 남아 있어도 '처형 없음' 알림·줄이 다시 나오지 않는다(D-22)", () => {
+    const night = viewOf("night", { day: { noExecution: { reason: "rejected" }, keyword: { genre: "영화", answer: "해리포터" } } });
+    const events = dayEvents(reveal({ noExecution: { reason: "rejected" } }), night);
+    same(events.announces, []);
+    same(events.lines, []);
+  });
+
+  it("둘째 날 찬반 → 밤은 지금처럼 '처형 없음' 한 가지", () => {
+    const night = viewOf("night", { day: { n: 2, noExecution: { reason: "rejected" } } });
+    same(dayEvents(verdictView(), night).announces, [{ text: "처형 없음", at: 0, ms: 1400 }]);
+  });
+
+  it("정답 큰 글의 글자는 view.day.keyword.answer 하나뿐이다 — 정답이 없으면 알림이 없다(T-23-25)", () => {
+    const noAnswer = viewOf("answerReveal", { day: { keyword: { genre: "영화" } } });
+    same(dayEvents(exec(), noAnswer).announces, []);
+  });
+
+  it("역할이 달라도 같은 알림이다(T-23-27)", () => {
+    const base = dayEvents(exec(), reveal()).announces;
+    for (const role of ["mafia", "citizen", "police", "doctor"] as const) {
+      const v = { ...reveal(), me: { seat: 0, isHost: false, role } } as RoomView;
+      same(dayEvents(exec(), v).announces, base);
+    }
+  });
+
+  it("answerStillOf: 재접속 첫 화면은 서버 시계(phaseEndsAt - serverNow) 남은 시간만, 정답 길이 이내로 — 마감이 없거나 지났거나 정답 단계가 아니면 null", () => {
+    const left = (ms: number | null) => ({ ...reveal(), serverNow: 5_000, phaseEndsAt: ms === null ? null : 5_000 + ms }) as RoomView;
+    same(answerStillOf(left(1500)), { ...ANSWER, ms: 1500 });
+    same(answerStillOf(left(4400)), { ...ANSWER, ms: ANSWER_REVEAL_MS });
+    expect(answerStillOf(left(0))).toBeNull();
+    expect(answerStillOf(left(null))).toBeNull();
+    expect(answerStillOf(viewOf("night", { day: { keyword: { genre: "영화", answer: "해리포터" } } }))).toBeNull();
+    expect(answerStillOf(viewOf("answerReveal", { day: { keyword: { genre: "영화" } } }))).toBeNull();
   });
 });
