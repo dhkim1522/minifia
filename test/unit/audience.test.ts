@@ -58,7 +58,6 @@ const DAY_CHAT_PHASES: PhaseId[] = [
   "dayAnnounce",
   "discussion",
   "nomination",
-  "defense",
   "verdict",
   "execution",
   "morning",
@@ -90,6 +89,11 @@ describe("channelOf — 보낸 사람의 서버 상태로만 채널을 정한다
     const s = sixAt(phase, { day: 1 });
     for (const seat of [0, 1, 3, 4, 5]) expect(channelOf(s, idOf(seat))).toBe("all");
     expect(channelOf(s, idOf(2))).toBe("ghost");
+  });
+
+  it("defense(유언 단계): 산 사람·유령 모두 null — 서버가 채팅을 받지 않는다(22-11 D-16, P22-9)", () => {
+    const s = sixAt("defense", { day: 1 });
+    for (const p of s.players) expect(channelOf(s, p.id)).toBeNull();
   });
 
   it.each(SILENT_PHASES)("%s: CHAT_PHASES 밖이라 모두 null", (phase) => {
@@ -181,7 +185,7 @@ describe("audience — 받는 사람 집합", () => {
   });
 
   it("channelOf 가 정한 채널의 수신자에 보낸 사람 자신이 들어 있다", () => {
-    for (const phase of ["lobby", "dayAnnounce", "discussion", "defense", "night", "morning"] as PhaseId[]) {
+    for (const phase of ["lobby", "dayAnnounce", "discussion", "night", "morning"] as PhaseId[]) {
       const s = phase === "lobby" ? lobbyOf(6) : sixAt(phase, { day: 1 });
       for (const p of s.players) {
         const ch = channelOf(s, p.id);
@@ -233,11 +237,13 @@ describe("CHAT_PHASES", () => {
     expect([...CHAT_PHASES].sort().join(",")).toBe(
       [
         "lobby", "dayAnnounce", "discussion", "nomination", "runoff", "showdown",
-        "defense", "verdict", "execution", "night", "morning",
+        "verdict", "execution", "night", "morning",
       ].sort().join(","),
     );
     // 지목·찬반 중에도 채팅은 된다(MAP-04 '채팅은 된다').
     expect(CHAT_PHASES.has("nomination") && CHAT_PHASES.has("verdict")).toBe(true);
+    // 유언 단계(22-11 D-16)는 조용히 지켜본다 — 서버가 받지 않는다.
+    expect(CHAT_PHASES.has("defense")).toBe(false);
     for (const phase of SILENT_PHASES) expect(CHAT_PHASES.has(phase)).toBe(false);
   });
 });

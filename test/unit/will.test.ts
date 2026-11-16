@@ -136,6 +136,50 @@ describe("saveWill (WILL-01, 결정 0061-10)", () => {
   });
 });
 
+describe("saveWill — 유언 단계(defense, 22-11 D-15·D-16)", () => {
+  /** 후보가 seat 번인 유언 단계. 실제 전이 대신 저장 모양을 직접 세운다(verdict 모양은 tick.test 와 같다). */
+  function defenseOf(candidate: number): RoomState {
+    const s = stateAt("discussion");
+    const ids = s.players.map((p) => p.seat);
+    return { ...s, phase: "defense", verdict: { passed: true, ballots: { yes: ids, no: [] }, candidate } };
+  }
+
+  it("처형자는 유언을 저장하고 그 사람의 will 만 바뀐다", () => {
+    const s = defenseOf(2);
+    const me = s.players.find((p) => p.seat === 2)!;
+    const r = saveWill(s, me.id, "잘 있어");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.players.find((p) => p.id === me.id)!.will).toBe("잘 있어");
+    expect(r.state.players.filter((p) => p.id !== me.id).every((p) => p.will === undefined)).toBe(true);
+  });
+
+  it("처형자가 아닌 산 사람의 저장은 WRONG_PHASE 이고 상태는 그대로다", () => {
+    const s = defenseOf(2);
+    const other = s.players.find((p) => p.seat === 3)!;
+    expect(saveWill(s, other.id, "내 유언")).toEqual({ ok: false, error: "WRONG_PHASE" });
+  });
+
+  it("유령(탈락자)은 지금처럼 거절된다", () => {
+    const s = defenseOf(2);
+    const ghost = s.players.find((p) => p.seat === 4)!;
+    const dead: RoomState = { ...s, players: s.players.map((p) => (p.id === ghost.id ? { ...p, alive: false } : p)) };
+    expect(saveWill(dead, ghost.id, "a").ok).toBe(false);
+  });
+
+  it("후보가 없는 유언 단계에서는 누구도 쓰지 못한다(fail-closed)", () => {
+    const s = defenseOf(2);
+    const { verdict: _verdict, ...rest } = s;
+    const none = rest as RoomState;
+    for (const p of none.players) expect(saveWill(none, p.id, "a")).toEqual({ ok: false, error: "WRONG_PHASE" });
+  });
+
+  it("다른 지도 단계의 규칙은 그대로다 — 토론에서는 모든 산 사람이 쓴다", () => {
+    const s = stateAt("discussion");
+    for (const p of s.players) expect(saveWill(s, p.id, "a").ok).toBe(true);
+  });
+});
+
 describe("view.me.will (A4, L7)", () => {
   it("저장한 본인 view 에만 me.will 이 있고 다른 view 어디에도 본문이 없다", () => {
     const s = stateAt("discussion");

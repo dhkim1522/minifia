@@ -397,7 +397,7 @@ async function startedAtVerdictStage(phase: "defense" | "verdict" | "execution")
 }
 
 describe("채팅 — 화면 없는 단계도 받는다 (D1, 결정 0044-23)", () => {
-  const stages = ["nomination", "defense", "verdict", "execution", "morning"] as const;
+  const stages = ["nomination", "verdict", "execution", "morning"] as const;
   it.each(stages)("단계: %s 에서 산 사람의 줄이 서버 audience 규칙대로 ch all 로 모두에게 간다", async (phase) => {
     const g = phase === "nomination" || phase === "morning" ? await startedAt(phase) : await startedAtVerdictStage(phase);
     expect((await storedRoom(g.code)).phase).toBe(phase);
@@ -406,13 +406,14 @@ describe("채팅 — 화면 없는 단계도 받는다 (D1, 결정 0044-23)", ()
     expect(chatReceivers(g, got)).toBe(wantLine(g.actors.map((a) => a.seat), `all/${sender.seat}/${phase === "execution" ? 2 : 1}/투표 신중하게 해요`)); // 처형 진입 때 찬반 기록 카드(09.1.1-03)가 all 채널 1번을 쓴다
   });
 
-  it("단계: 최후 변론에서 후보가 아닌 산 사람 누구나 쓸 수 있다", async () => {
+  it("단계: 유언 단계(defense)에서는 산 사람의 채팅이 거절되고 어느 소켓에도 줄이 가지 않는다(22-11 D-16)", async () => {
     const g = await startedAtVerdictStage("defense");
     const room = await storedRoom(g.code);
     const bystanders = g.actors.filter((a) => a.seat !== room.verdict?.candidate);
     const sender = bystanders.find((a) => a.role === "doctor")!;
     const got = await observe(g, sender, () => chatSend(sender.sock, "믿어 주세요"));
-    expect(chatReceivers(g, got)).toBe(wantLine(g.actors.map((a) => a.seat), `all/${sender.seat}/1/믿어 주세요`));
+    expect(chatReceivers(g, got)).toBe("");
+    expect(summary(got[g.actors.indexOf(sender)]!)).toBe("[chatReject,state:defense]");
   });
 
   it("단계: 역할 확인(roleReveal) 중에는 단계 키가 맞아도 chatReject phase 이고 다른 소켓은 한 프레임도 받지 않는다", async () => {

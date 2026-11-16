@@ -3,7 +3,7 @@
 import { env, exports } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { BOT_CHAT_LINES, BOT_WILL_LINES } from "../../shared/game/bots";
+import { BOT_CHAT_LINES, BOT_DEFENSE_LINES, BOT_WILL_LINES } from "../../shared/game/bots";
 import { LAST_WORD_CHIPS } from "../../shared/game/showdown";
 import { PHASE_DEFS, PICK_TURN_MS } from "../../shared/game/phases";
 import { RULES } from "../../shared/game/ruleset";
@@ -488,7 +488,7 @@ const botSeatsOf = async (code: string): Promise<number[]> => (await botsOf(code
 
 describe("봇 투표·변론", () => {
   // 22-09: 동시 투표 봇 표(옛 "nomination: 산 봇 셋이 한꺼번에 던져")는 지웠다 — 지목은 순차 지목뿐이라 봇 차례 시험이 아래 "봇 지목·찬반·토론 끝내기" 에 있다.
-  it("defense: 변론자가 봇이면 그 봇 자리에서 온 chat 을 방장이 받고 오류 프레임은 없다", async () => {
+  it("defense(유언 단계): 처형자가 봇이면 will(final)로 유언을 내 10초보다 일찍 처형 단계가 되고 유언 카드와 오류 없음을 방장이 받는다(22-11 D-18)", async () => {
     const r = await botRoomAt("nomination");
     const [b1, b2, b3] = await botSeatsOf(r.code);
     const picks: Record<number, number> = { 0: b1!, [b1!]: b2!, [b2!]: b1!, [b3!]: b1! };
@@ -497,8 +497,10 @@ describe("봇 투표·변론", () => {
     expect(String((await storedRoom(r.code)).verdict?.candidate)).toBe(String(b1));
     const from = mark(r.host);
     await forceBotsDue(r.code);
-    const chat = await nextFrame(r.host, (m) => m.t === "chat" && m.seat === b1);
-    expect(chat.t).toBe("chat");
+    const card = await nextFrame(r.host, (m) => m.t === "chat" && m.k === "will" && m.seat === b1);
+    expect(card.t).toBe("chat");
+    expect(BOT_DEFENSE_LINES.includes((card as { text: string }).text)).toBe(true);
+    expect(String((await storedRoom(r.code)).phase)).toBe("execution");
     expect(summary((await settle(r.host, from)).filter((m) => m.t === "error"))).toBe("[]");
   }, 30_000);
 });

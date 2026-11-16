@@ -30,6 +30,7 @@ import {
 import type { BotStep } from "../../shared/game/bots";
 import { channelOf, phaseKey } from "../../shared/game/audience";
 import { checkChatSend, sanitizeChatText } from "../../shared/game/chatRules";
+import { saveWill } from "../../shared/game/will";
 import type { ChatSenderRate } from "../../shared/game/chatRules";
 import { pickTarget } from "../../shared/game/night";
 import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
@@ -868,20 +869,20 @@ describe("봇 투표·변론 계획: 지목 대상 고르기 (botPointTarget)", 
 });
 
 describe("봇 투표·변론 계획: defense", () => {
-  it("후보가 봇이면 그 봇만 chat 한 행(BOT_DEFENSE_LINES 안)이고 사람과 같은 규칙을 통과한다", () => {
+  it("처형자가 봇이면 그 봇만 will(final) 한 행(BOT_DEFENSE_LINES 안)이고 유언 단계에서 사람과 같은 저장 규칙을 통과한다(22-11 D-18)", () => {
     for (let seed = 1; seed <= 20; seed += 1) {
       const state = verdictAt(seed, "defense", 3);
       expect(`${seed}:${state.verdict?.candidate}`).toBe(`${seed}:3`);
       const steps = planBotSteps(state, nowOf(state), seededRandInt(seed));
-      expect(`${seed}:${steps.map((s) => s.act.t).join(",")}`).toBe(`${seed}:typing,chat`);
-      const step = steps[1]!;
+      expect(`${seed}:${steps.map((s) => s.act.t).join(",")}`).toBe(`${seed}:will`);
+      const step = steps[0]!;
       const bot = state.players.find((p) => p.seat === 3)!;
       expect(`${seed}:${step.botId === bot.id}`).toBe(`${seed}:true`);
       expect(step.at >= nowOf(state) + 1000 && step.at < state.phaseEndsAt! - 500).toBe(true);
-      if (step.act.t !== "chat") throw new Error(`expected chat, got ${step.act.t}`);
+      if (step.act.t !== "will") throw new Error(`expected will, got ${step.act.t}`);
+      expect(`${seed}:${step.act.final}`).toBe(`${seed}:true`);
       expect(`${seed}:${BOT_DEFENSE_LINES.includes(step.act.text)}`).toBe(`${seed}:true`);
-      const clean = sanitizeChatText(step.act.text);
-      expect(`${seed}:${clean.ok && clean.text === step.act.text}:${channelOf(state, step.botId)}`).toBe(`${seed}:true:all`);
+      expect(`${seed}:${saveWill(state, step.botId, step.act.text).ok}`).toBe(`${seed}:true`);
       expect(phaseKey(state)).toBe(`1:${state.day ?? 0}:defense`);
     }
   });
@@ -893,8 +894,8 @@ describe("봇 투표·변론 계획: defense", () => {
     expect(rec.calls.join(",")).toBe("3,4000");
     for (const [i, name] of BOT_DEFENSE_LINES.entries()) {
       const steps = planBotSteps(state, nowOf(state), (n) => (n === 3 ? i : 0));
-      const chat = steps.find((s) => s.act.t === "chat")!;
-      expect(chat.act.t === "chat" && chat.act.text).toBe(name);
+      const will = steps.find((s) => s.act.t === "will")!;
+      expect(will.act.t === "will" && will.act.text).toBe(name);
     }
   });
 
@@ -1280,15 +1281,14 @@ describe("봇 채팅 앞 입력 중 단계 (09-24)", () => {
     }
   });
 
-  it("night 마피아 채팅·defense 후보 채팅에도 같은 규칙이 선다", () => {
+  it("night 마피아 채팅에도 같은 규칙이 서고, defense(유언 단계)의 will 에는 typing 이 붙지 않는다", () => {
     for (let seed = 1; seed <= 20; seed += 1) {
       const night = stateAt(1, 5, seed, "night");
       const nSteps = planBotSteps(night, nowOf(night), seededRandInt(seed));
       expect(`${seed}:${pairing(nSteps, nowOf(night))}`).toBe(`${seed}:ok:${nSteps.filter((s) => s.act.t === "chat").length}`);
       const defense = verdictAt(seed, "defense", 3);
       const dSteps = planBotSteps(defense, nowOf(defense), seededRandInt(seed));
-      expect(`${seed}:${dSteps.map((s) => s.act.t).join(",")}`).toBe(`${seed}:typing,chat`);
-      expect(`${seed}:${pairing(dSteps, nowOf(defense))}`).toBe(`${seed}:ok:1`);
+      expect(`${seed}:${dSteps.map((s) => s.act.t).join(",")}`).toBe(`${seed}:will`);
     }
   });
 
