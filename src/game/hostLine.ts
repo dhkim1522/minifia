@@ -18,6 +18,7 @@ export type HostKey =
   | "lobby.ready" | "lobby.gather" | "lobby.guest"
   | "assigning"
   | "roleReveal.act" | "roleReveal.wait"
+  | "keyword.act"
   | "dayAnnounce.wait" | "dayAnnounce.ghost"
   | "discussion.act" | "discussion.ghost"
   | "nomination.act" | "nomination.ghost"
@@ -47,6 +48,8 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   assigning: "잠시만 기다려 주세요",
   "roleReveal.act": "내 역할 카드를 확인해 주세요",
   "roleReveal.wait": "그대로 기다려 주세요",
+  // 첫날 키워드(P23-8): 역할과 무관한 한 줄 — 문구가 키워드를 말하지 않아야 마피아 화면과 같은 줄이 된다. 제출 뒤 줄(keyword.wait)은 23-09 가 더한다.
+  "keyword.act": "떠오르는 말을 적어요",
   "dayAnnounce.wait": "모두 모여 주세요",
   "dayAnnounce.ghost": "지켜봐 주세요",
   "discussion.act": "의심 가는 사람을 이야기해 주세요",
@@ -90,6 +93,8 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
     case "roleReveal":
       if (view.me.role === undefined) return "fallback";
       return local.cardSeen === true ? "roleReveal.wait" : "roleReveal.act";
+    case "keyword":
+      return "keyword.act"; // 역할을 읽지 않는다(P23-8)
     case "dayAnnounce":
       return ghost ? "dayAnnounce.ghost" : "dayAnnounce.wait";
     case "discussion":

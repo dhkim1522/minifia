@@ -39,6 +39,7 @@ import { BenchView } from "./BenchView";
 import { GameMap } from "./GameMap";
 import { Lobby } from "./Lobby";
 import { ResultScreen } from "./ResultScreen";
+import { Keyword } from "./Keyword";
 import { RoleReveal } from "./RoleReveal";
 import "../styles/phase.css";
 import "../styles/room.css";
@@ -57,6 +58,7 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   lobby: () => "",
   assigning: () => "직업을 배정하고 있습니다",
   roleReveal: () => "역할 확인",
+  keyword: () => "첫날 키워드 문제", // 23-01: 첫날 역할 확인 뒤 13초 키워드 카드
   dayAnnounce: (view) => `${view.day?.n ?? 1}일차 낮이 되었습니다`,
   discussion: () => "낮 토론",
   night: nightAnnounce,
@@ -129,6 +131,7 @@ function sceneKey(phase: PhaseId): string {
     // 역할 배정·역할 확인은 같은 3D 무대(PreGame)라 같은 키 — 두 단계 사이에 무대를 다시 만들지 않는다(feedback-3).
     case "assigning":
     case "roleReveal":
+    case "keyword": // 첫날 키워드 카드도 같은 무대 — 역할 확인 → 키워드에서 3D 무대를 다시 만들지 않는다(23-01, P23-1)
       return "preGame";
     default:
       return phase;
@@ -497,10 +500,13 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
         );
       case "assigning":
       case "roleReveal":
+      case "keyword":
         return (
           <PreGame view={view} store={store} send={connection.send} canSend={connection.canSend} offset={connection.offset} onLeave={() => onExit("gaveUp")}>
             {view.phase === "assigning" ? (
               <Assigning view={view} />
+            ) : view.phase === "keyword" ? (
+              <Keyword view={view} offset={connection.offset} myRoleButton={withTest(myRoleButton)} />
             ) : (
               <RoleReveal view={view} offset={connection.offset} myRoleButton={withTest(myRoleButton)} onSeenFront={onSeenFront} />
             )}

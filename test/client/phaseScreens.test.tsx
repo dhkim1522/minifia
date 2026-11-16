@@ -394,6 +394,7 @@ describe("단계 안내 aria-live · 단계 전환 (UI-SPEC 접근성·Motion)",
       lobby: true,
       assigning: true,
       roleReveal: true,
+      keyword: true,
       dayAnnounce: true,
       discussion: true,
       night: true,
@@ -407,6 +408,18 @@ describe("단계 안내 aria-live · 단계 전환 (UI-SPEC 접근성·Motion)",
       ended: true,
     };
     expect(Object.keys(TEST_PHASE_LABEL).sort().join(",")).toBe(Object.keys(phases).sort().join(","));
+  });
+
+  it("역할 확인 → 키워드는 같은 3D 무대(preGame)라 같은 요소이고, 키워드 → 낮 시작에서 새 요소로 바뀐다 (23-01, P23-1)", () => {
+    const r = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "citizen" }));
+    const before = r.container.querySelector(".mf-phase-enter");
+    expect(before).not.toBeNull();
+    rerenderRoom(r.rerender, makeView({ phase: "keyword", endsIn: 13_000, durationMs: 13_000, role: "citizen" }));
+    expect(r.container.querySelector("[data-keyword-screen]")).not.toBeNull();
+    expect(r.container.querySelector(".mf-phase-enter") === before).toBe(true);
+    expect(liveRegion(r.container).textContent).toBe("첫날 키워드 문제");
+    rerenderRoom(r.rerender, makeView({ phase: "dayAnnounce", endsIn: 2_000, role: "citizen", day: 1 }));
+    expect(r.container.querySelector(".mf-phase-enter") === before).toBe(false);
   });
 
   it("단계 화면 루트에 mf-phase-enter 가 있고 장면이 바뀌면 새 요소로 바뀐다 (배정 → 확인은 같은 3D 무대라 같은 요소, feedback-3)", () => {

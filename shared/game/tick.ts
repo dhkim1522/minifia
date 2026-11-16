@@ -24,6 +24,7 @@ import { emptyGameCloseAt, nextContinuityAt } from "./continuity";
 import { enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
 import { enterExecution } from "./execution";
+import { routeAfterRoleReveal } from "./keywordAnswer";
 import { enterNomination, stepNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
 import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
@@ -79,6 +80,8 @@ const HOOKS: PhaseHooks = {
     ended: enterEnded,
   },
   deadline: {
+    // 첫날 키워드(D-01·D-29): 방 상태에 keyword 가 없으면 역할 확인 다음이 곧장 낮 시작 발표다. keyword 마감 훅은 23-06 이 더한다(지금은 표의 기본 next).
+    roleReveal: routeAfterRoleReveal,
     // 마지막 3인 결전은 판 규칙의 showdown 일 때만(결정 0072) — 꺼지면 키를 만들지 않아 표의 기본 next 로 간다.
     ...(RULES.showdown ? { dayAnnounce: routeAfterDayAnnounce } : {}),
     showdown: stepShowdown,

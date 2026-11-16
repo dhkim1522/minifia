@@ -27,6 +27,7 @@ import { botCount } from "./bots";
 import { endCountOf, phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
+import { genreLabelOf } from "./keywords";
 import { MAP_PHASES } from "./movement";
 import { confirmedTarget } from "./night";
 import { pointLinesOf, turnViewOf } from "./nomination";
@@ -46,6 +47,7 @@ import { WHISPER_PER_DAY, whisperUsedToday } from "./whisper";
  * ended 도 넣는다: day 에는 공개 정보(일차·구성·투표 기록)만 있어 누출이 없고, 결과 화면이 테이블을 다시 쓸 수 있다.
  */
 const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
+  "keyword", // 첫날 키워드(D-23): view.day 가 있어야 day.keyword(장르 라벨)를 싣는다. 클라이언트 걷기·채팅 집합(MAP_PHASES·CHAT_PHASES)에는 넣지 않는다(D-01).
   "dayAnnounce",
   "discussion",
   "nomination",
@@ -68,6 +70,10 @@ function buildDay(state: RoomState): DayView {
     n: state.day ?? 1,
     roles: rolesInPlay(state.players.length),
   };
+  // 첫날 키워드(D-06): 장르 라벨은 모두에게 같은 공개 값이다 — 필드별 리터럴이라 서버 전용 word 가 새지 않는다. 단어는 me.keyword 로 시민 편 본인에게만 간다.
+  if (state.phase === "keyword" && state.keyword !== undefined) {
+    day.keyword = { genre: genreLabelOf(state.keyword.genre) ?? "" };
+  }
   // 토론 끝내기는 누른 산 사람 수만 공개한다 — 누가 눌렀는지는 서버 전용(Player.endVote)이고 본인 값만 me.endDiscussion 으로 간다(결정 0060-2).
   if (state.phase === "discussion") day.endCount = endCountOf(state);
   // 찬반은 집계 수(찬성·반대)만 모두에게 공개한다(D-11) — 던진 좌석(옛 day.voted)은 싣지 않는다: 좌석과 수가 함께 보이면 첫 투표자의 표가 추론된다(D-26).
@@ -212,6 +218,12 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
         .map((p) => p.seat)
         .sort((a, b) => a - b);
     }
+  }
+
+  // 키워드는 keyword 단계의 산 시민 편(경찰·의사·시민) 본인에게만(D-06, T-23-01) — 역할이 있고 마피아가 아닐 때만 키를 만든다.
+  // 마피아·탈락자·다른 단계의 view 에는 키 자체가 없다(값이 빈 것이 아니라 키가 없다).
+  if (state.phase === "keyword" && state.keyword !== undefined && isAlive(me) && me.role !== undefined && me.role !== "mafia") {
+    myInfo.keyword = state.keyword.word;
   }
 
   // 내 채널은 서버가 보낸 사람 상태로 정한 값(channelOf) 그대로 본인에게만 싣는다(07-10). 말할 수 없으면(밤의 산 비마피아·채팅 단계 밖) 키 자체가 없다.

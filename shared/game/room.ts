@@ -19,6 +19,7 @@ import type {
 import type { BotPlan } from "./bots";
 import { hostSuccessor } from "./continuity";
 import { resolveLookConflicts } from "./look";
+import { KEYWORD_SWITCH, pickKeyword } from "./keywords";
 import { decideMap } from "./maps";
 import { enterNomination } from "./nomination";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS } from "./phases";
@@ -195,6 +196,11 @@ export interface RoomState {
   bench?: Player[];
   /** 방장이 고른 맵(결정 D-20). 공개 값이다(view.mapChoice). 없으면 "random" — pickMap 이 쓰고, 대기실 복귀·다시 하기 뒤에도 남는다. */
   mapChoice?: MapChoice;
+  /**
+   * 서버 전용(결정 0089-2·D-05). 첫날 키워드 — beginGame 이 decideMap 뒤 randInt 두 번(장르·단어)으로 고른다. 없으면 keyword 단계를 건너뛴다(D-29, 옛 저장 방·시험 스위치 끔).
+   * view 키 day.keyword(장르 라벨)·me.keyword(시민 편 본인의 단어)와 이름이 같아 SERVER_ONLY_KEYS 이름 검사에 넣지 않고 값으로 지킨다(RESEARCH P2).
+   */
+  keyword?: { genre: string; word: string };
   /** 서버 전용 결정값(결정 D-21). startGame 이 mapChoice 로 정해 싣는다 — 시작 전에는 어떤 view·프레임에도 싣지 않는다(L42). 대기실 복귀가 버린다. */
   map?: MapId;
   /** 서버 전용(결정 0022). 방을 만들 때만 정해지는 테스트 방 표시 — true 일 때만 키가 있다. 테스트 방 방장 도구의 문이다. */
@@ -414,8 +420,12 @@ export function beginGame(
       : shuffled;
   // 맵은 역할 배정 난수를 모두 쓴 뒤에 정한다(결정 D-21) — 허용 맵이 하나면 난수를 부르지 않아 기존 시드 시험이 그대로다.
   const map = decideMap(state.mapChoice ?? "random", randInt);
+  // 키워드는 맨 끝 난수 두 번이다(D-29) — 역할 → 맵 순서와 기존 시드 시험은 그대로. 스위치가 꺼지면 들어온 상태의 keyword 도 지운다(다시 하기가 옛 값을 끌고 오지 않게).
+  const { keyword: _prevKeyword, ...rest } = state;
+  const keyword = KEYWORD_SWITCH.on ? pickKeyword(randInt) : undefined;
   return {
-    ...state,
+    ...rest,
+    ...(keyword !== undefined ? { keyword } : {}),
     map,
     phase: "assigning",
     phaseEndsAt: now + ASSIGNING_MS,

@@ -26,9 +26,10 @@ export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 // 낮 두 단계(dayAnnounce·discussion)와 밤·아침(night·morning)은 단계 표(shared/game/phases.ts)의 한 줄씩이다.
 // discussion 다음에 지목(nomination) → 최후 변론(defense) → 찬반(verdict) → 처형(execution)이 이어지고(결정 0060),
 // 지목이 동률·0표면 바로 night 로 가고, 최다가 정확히 둘 동점이면 동점 결선 runoff 를 거친다(결정 0066-4, 분기는 shared/game/tick.ts). 종료 단계 ended 는 마감이 없다.
+// 키워드(keyword, 결정 0089-9·D-01)는 첫날 역할 확인(roleReveal)과 낮 시작 발표(dayAnnounce) 사이에 끼는 13초 단계다 — 키워드 기능이 켜진 판(방 상태에 keyword 가 있을 때)에서만 거친다(D-29).
 // 순차 직업 주장 단계(claim)는 7페이즈에서 없어졌다 — 낮 시작 발표 다음이 바로 자유 채팅 토론이다(CHAT-06). 옛 공개 연출 단계도 없다(결정 0027).
 export type PhaseId =
-  | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "discussion"
+  | "lobby" | "assigning" | "roleReveal" | "keyword" | "dayAnnounce" | "discussion"
   | "nomination" | "runoff" | "showdown" | "defense" | "verdict" | "execution"
   | "night" | "morning" | "ended"; // 8페이즈(결정 0060): 지목 15초 → 변론 20초 → 찬반 10초 → 처형 5.6초(결정 0066-7). 옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 지웠다
 
@@ -115,12 +116,22 @@ export interface GameResult {
   summary: SummaryRow[];
 }
 
+// ---- 첫날 키워드 계약(23페이즈, 결정 0089-2·3) ----
+/**
+ * 키워드 단계의 공개 값 — 모든 사람의 view 에 같은 모양으로 실린다(D-06). 장르 라벨뿐이다.
+ * 단어는 여기에 없다: 산 시민 편 본인에게만 me.keyword 로 가고 마피아에게는 키 자체가 없다. 답·정답 키는 뒤 계획(23-05·23-06)이 더한다.
+ */
+export interface KeywordView {
+  genre: string; // 장르 라벨(예: "영화")
+}
+
 // ---- 낮 토론 계약(2페이즈) ----
 // 07-11·07-12: 빠른 메시지(문구 표·say 메시지·옛 줄 타입)와 텍스트 이모티콘(emoji)은 자유 채팅(아래 7페이즈 구역)으로 대체돼 없어졌다. 동작(몸짓)은 10페이즈.
 export interface DayView {
   n: number; // 일차(1부터)
   roles: RoleId[]; // 이번 판 직업(구성표 순서, 공개 정보)
   morning?: MorningView; // morning 단계에서만
+  keyword?: KeywordView; // keyword 단계에서, 모두에게 같은 모양(D-06). 장르 라벨뿐 — 단어는 me.keyword
   chalk?: { x: number; z: number }; // 암살 현장 분필 자국 위치(고정소수점, 결정 0061-14). 채우는 일은 09-14
   // ---- 4페이즈 처형 필드 ----
   // 서버는 낮 단계마다(빈 배열 포함) 항상 싣는다. 타입을 optional 로 둔 이유: 필수로 하면 화면 테스트의 DayView 리터럴이 서버 웨이브에서 한꺼번에 바뀐다(화면 계획이 필요하면 필수로 올린다).
@@ -279,6 +290,7 @@ export interface MyInfo {
   allies?: number[]; // 같은 마피아 동료의 seat — 채우는 일은 01-07
   pick?: number; // 밤에 본인이 고른 seat(본인에게만)
   allyPicks?: number[]; // 생존 마피아에게만: 동료들이 고른 대상 seat 오름차순·중복 없음(누가 골랐는지는 싣지 않는다)
+  keyword?: string; // keyword 단계에서, 산 시민 편(경찰·의사·시민) 본인에게만 그 판의 키워드(D-06). 마피아·탈락자에게는 키 자체가 없다
   records?: RoleRecord[]; // 본인 역할의 일지 하나(경찰 수사·마피아 암살·의사 치료), 본인에게만
   testMode?: true; // 테스트 방 방장 본인만(결정 0022). 손님·일반 방·미리보기에는 키 자체가 없다
   testRole?: RoleId; // 그 방장의 대기실 view 에서만, 고른 직업이 있을 때(없으면 무작위, 결정 0022)

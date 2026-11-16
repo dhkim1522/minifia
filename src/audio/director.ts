@@ -21,11 +21,12 @@ import { recipeDurationMs, type BedId, type SfxId } from "./recipes";
 import { EMOTE_OTHERS_DB, emoteSoundGate, flipCue, lightCues, MORNING_SLASH_AT, morningScript, nightCues, pickTickSchedule, tickSchedule, verdictScript, willScript, type DuckSpan, type EmoteGateState, type Rng, type ScriptItem } from "./script";
 import type { EmoteSignal, LocalSignal, ResultSignal } from "./signals";
 
-/** 단계 → 침대 표: 15개 단계 전수. null 은 침대 없음(assigning: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
+/** 단계 → 침대 표: 15개 단계 전수(keyword 포함). null 은 침대 없음(assigning: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
 export const BED_OF: Readonly<Record<PhaseId, BedId | null>> = {
   lobby: "bed.lobby",
   assigning: null,
   roleReveal: "bed.reveal",
+  keyword: "bed.reveal", // 첫날 키워드(0089-9): 역할 확인과 같은 침대가 이어진다
   dayAnnounce: "bed.day",
   discussion: "bed.day",
   nomination: "bed.vote",
@@ -43,6 +44,7 @@ export const BED_OF: Readonly<Record<PhaseId, BedId | null>> = {
 const ENTER_SOUND: Partial<Record<PhaseId, SfxId>> = {
   assigning: "game.start",
   roleReveal: "role.flip",
+  keyword: "ui.card", // 키워드 카드가 나타나는 한 번
   dayAnnounce: "day.start",
   nomination: "phase.vote",
   runoff: "runoff.intro",

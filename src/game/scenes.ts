@@ -36,6 +36,7 @@ export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
   lobby: "lobby",
   assigning: "lobby",
   roleReveal: "lobby",
+  keyword: "lobby", // 첫날 키워드: 역할 확인과 같은 PreGame 무대(D-01)
   dayAnnounce: "day",
   discussion: "day",
   night: "night",

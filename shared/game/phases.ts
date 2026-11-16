@@ -22,6 +22,10 @@ export interface PhaseDef {
 
 export const ASSIGNING_MS = 3_000;
 export const ROLE_REVEAL_MS = 15_000;
+// 첫날 키워드 단계(결정 0089-3·4, D-01): 읽기 3초 + 쓰기 10초 = 13초. 시간은 참고 목표라 연출을 줄이는 근거로 쓰지 않는다.
+export const KEYWORD_READ_MS = 3_000; // 결정 0089-3 — 카드를 읽는 시간(답 시간에서 뺀다, 입력줄은 이 동안 잠긴다)
+export const KEYWORD_WRITE_MS = 10_000; // 결정 0089-4 — 떠오르는 말을 적는 시간
+export const KEYWORD_MS = KEYWORD_READ_MS + KEYWORD_WRITE_MS;
 export const DAY_ANNOUNCE_MS = 2_000; // D-20
 export const DISCUSSION_MS = 90_000; // DAY-07 — 낮 토론 90초(결정 0060-1). 과반이 토론 끝내기를 누르면 일찍 끝난다(DAY-03)
 export const NIGHT_MS = 30_000; // NIGHT-05
@@ -69,7 +73,9 @@ export const VERDICT_MS = 10_000; // 찬반(DAY-06, 결정 0060-1·0060-4) — �
 export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   lobby: Object.freeze({ durationMs: null, next: null, revealsOwnRole: false }), // start 로만 나간다
   assigning: Object.freeze({ durationMs: ASSIGNING_MS, next: "roleReveal", revealsOwnRole: false }),
-  roleReveal: Object.freeze({ durationMs: ROLE_REVEAL_MS, next: "dayAnnounce", revealsOwnRole: true }),
+  // 역할 확인 다음은 keyword(D-01). 방 상태에 keyword 가 없으면 마감 훅(routeAfterRoleReveal, keywordAnswer.ts)이 곧장 dayAnnounce 로 보낸다(D-29).
+  roleReveal: Object.freeze({ durationMs: ROLE_REVEAL_MS, next: "keyword", revealsOwnRole: true }),
+  keyword: Object.freeze({ durationMs: KEYWORD_MS, next: "dayAnnounce", revealsOwnRole: true }), // 첫날만 — 걷기·채팅·몸동작 없는 조용히 쓰는 시간
   dayAnnounce: Object.freeze({ durationMs: DAY_ANNOUNCE_MS, next: "discussion", revealsOwnRole: true }),
   discussion: Object.freeze({ durationMs: DISCUSSION_MS, next: "verdict", revealsOwnRole: true }),
   defense: Object.freeze({ durationMs: DEFENSE_MS, next: "execution", revealsOwnRole: true }),

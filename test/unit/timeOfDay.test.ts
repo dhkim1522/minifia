@@ -9,6 +9,7 @@ const EXPECT: Record<PhaseId, TimeOfDay> = {
   lobby: "day",
   assigning: "day",
   roleReveal: "day",
+  keyword: "day", // 23-01: lightingOf 기본 talk
   dayAnnounce: "day",
   discussion: "day",
   nomination: "dusk",

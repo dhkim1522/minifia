@@ -16,6 +16,7 @@ const KIND: Record<PhaseId, Kind> = {
   lobby: "lobby",
   assigning: "silent",
   roleReveal: "silent",
+  keyword: "silent", // 23-01: 조용히 쓰는 시간 — 서버가 채팅·동작·입력 중을 받지 않는다(D-01)
   dayAnnounce: "day",
   discussion: "day",
   nomination: "day",
