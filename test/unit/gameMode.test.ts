@@ -115,7 +115,7 @@ describe("pickMode (D-05·D-06, L40)", () => {
   });
   it("대기실·ended 가 아닌 단계는 거절이고 ended 에서는 받아들인다 (D-06)", () => {
     const s = started();
-    const phases = ["tutorial", "assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"] as const;
+    const phases = ["assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"] as const;
     expect(phases.map((phase) => `${phase}:${outcome(pickMode({ ...s, phase }, HOST, "basic"))}`).join(" ")).toBe(phases.map((phase) => `${phase}:no`).join(" "));
     const ended = pickMode({ ...s, phase: "ended" }, HOST, "basic");
     expect(ended.ok && ended.state.mode).toBe("basic");
@@ -324,21 +324,6 @@ describe("봇 계획 — basic 판은 심부름 행동이 없다 (D-11)", () => 
   });
   it("extended(mode 없음 포함): 지금처럼 봇마다 심부름 단계가 있다", () => {
     expect(`${errandActs(errandWithBots("extended")) > 0}/${errandActs(errandWithBots()) > 0}`).toBe("true/true");
-  });
-});
-
-describe("튜토리얼 — basic 판은 튜토리얼 없이 시작한다 (D-10)", () => {
-  const firstPhase = (mode?: GameMode): string => {
-    const base = lobby(4);
-    const r = startGame(mode === undefined ? base : { ...base, mode }, HOST, 1000, seededRandInt(1), { tutorial: true });
-    if (!r.ok) throw new Error("start failed");
-    return `${r.state.phase}:${modeOf(r.state)}`;
-  };
-  it("mode basic + tutorial: true → assigning (mode 는 그대로 basic)", () => {
-    expect(firstPhase("basic")).toBe("assigning:basic");
-  });
-  it("mode extended·mode 없음 + tutorial: true → tutorial", () => {
-    expect(`${firstPhase("extended")} / ${firstPhase()}`).toBe("tutorial:extended / tutorial:extended");
   });
 });
 

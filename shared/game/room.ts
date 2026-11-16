@@ -24,8 +24,9 @@ import { hostSuccessor } from "./continuity";
 import { resolveLookConflicts } from "./look";
 import { decideMap, startMapOf } from "./maps";
 import { enterNomination } from "./nomination";
-import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, ERRAND_TICK_MS, NOMINATION_GATHER_MS, TUTORIAL_MS } from "./phases";
+import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, ERRAND_TICK_MS, NOMINATION_GATHER_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
+import { REMATCH_PLAYER_KEYS, REMATCH_ROOM_KEYS, benchAsPlayers } from "./rematch";
 import { modeOf, rulesetOf } from "./ruleset";
 import type { RoleId } from "./roles";
 
@@ -189,8 +190,6 @@ export interface RoomState {
   phaseEndsAt: number | null;
   /** 서버 전용(결정 0074). errand 다음 근처·목격 표본 시각(ms). enterErrand 가 쓰고 sampleErrand 가 옮기고 enterDiscussion 이 키째 지운다. 어떤 view 에도 없다. */
   errandTickAt?: number;
-  /** 서버 전용, view 에 싣지 않는다 — 결정 0080-11. tutorial 단계에서 끝났음을 보낸 player id. markTutorialDone 이 쓰고 assigning 진입 훅(clearTutorial)이 키째 지운다. */
-  tutorialPassed?: string[];
   /** 일차(1부터). dayAnnounce 진입 때 tick 의 진입 훅이 올린다. 없으면 아직 낮이 시작되지 않았다. 뷰에는 DayView.n 으로 실린다. */
   day?: number;
   /** 판 번호(1부터, 결정 D-26). 다시 하기(11-08)가 올린다. 없으면 1 — 옛 저장 방은 읽는 쪽 기본값(roundOf)으로 읽는다. 단계 키 '판:일차:단계'의 앞 부분이고 view.round 로 실린다. */
@@ -438,11 +437,10 @@ export function startGame(
   actorId: string,
   now: number,
   randInt: (n: number) => number,
-  opts?: { tutorial?: boolean },
 ): { ok: true; state: RoomState } | { ok: false; error: StartError } {
   const error = checkStart(state, actorId);
   if (error !== null) return { ok: false, error };
-  return { ok: true, state: { ...beginGame(state, now, randInt, opts), expiresAt: now + ROOM_TTL_MS } };
+  return { ok: true, state: { ...beginGame(state, now, randInt), expiresAt: now + ROOM_TTL_MS } };
 }
 
 /**
@@ -456,7 +454,6 @@ export function beginGame(
   state: RoomState,
   now: number,
   randInt: (n: number) => number,
-  opts?: { tutorial?: boolean },
 ): RoomState {
   const seated = [...state.players].sort((a, b) => a.seat - b.seat);
   const orderedIds = seated.map((p) => p.id);
@@ -469,14 +466,11 @@ export function beginGame(
   // 맵은 역할 배정 난수를 모두 쓴 뒤에 정한다(결정 D-21) — 허용 맵이 하나면 난수를 부르지 않아 기존 시드 시험이 그대로다.
   // 판 종류의 고정 맵(20페이즈 D-02: 확장판은 늘 마을)은 그 결과를 덮기만 한다 — decideMap 을 먼저 그대로 불러 난수 순서가 바뀌지 않는다.
   const map = startMapOf(modeOf(state), decideMap(state.mapChoice ?? "random", randInt));
-  // 17페이즈(결정 0080-1·2): 방장이 튜토리얼을 켰을 때만 tutorial 단계(150초)로 시작한다 — 역할은 위에서 이미 정했지만 tutorial 은 revealsOwnRole:false 라 view 에 실리지 않는다.
-  // 19페이즈(D-10): 튜토리얼은 확장판(심부름·증거)을 가르친다(결정 0081-6) — basic 방은 tutorial: true 로 시작해도 튜토리얼 없이 assigning 으로 간다.
-  const tutorial = opts?.tutorial === true && modeOf(state) === "extended";
   return {
     ...state,
     map,
-    phase: tutorial ? "tutorial" : "assigning",
-    phaseEndsAt: tutorial ? now + TUTORIAL_MS : now + ASSIGNING_MS,
+    phase: "assigning",
+    phaseEndsAt: now + ASSIGNING_MS,
     players: resolveLookConflicts(state.players).map((p) => ({ ...p, role: roles.get(p.id) })),
   };
 }
@@ -510,6 +504,8 @@ const LEGACY_CHAT_ROOM_KEYS = ["nextMessageSeq", "nextNightSeq"] as const;
 
 /**
  * 저장소에서 읽은 방 상태를 새 코드에 맞춘다. 순수 함수다 — 호출(DO 생성자)과 알람 재설정은 호출하는 쪽의 몫이다.
+ * - 옛 표시(isLegacyV3Room: 22페이즈 시점 tutorial 단계·tutorialPassed·tutorialDone)가 있는 방은 다른 규칙보다 먼저 대기실로 되돌린다(toLobbyFromLegacy, 결정 0089·D-03·D-29).
+ *   표시가 없는 판 중 방은 그대로 둔다 — DO 가 다시 깰 때마다 진행 중 판을 잃지 않게(하이버네이션 재기동 안전). 호출하는 쪽은 phase 가 바뀌면 알람을 다시 건다.
  * - 1페이즈에서 저장된 방은 phase 가 "day"(마감 없음)일 수 있는데, 이 값은 PhaseId 에 없어 buildView 가 PHASE_DEFS 를 조회하다 터진다.
  *   그런 방은 낮 시작 발표(dayAnnounce)로 옮기고 마감을 now + DAY_ANNOUNCE_MS, 일차를 1로 둔다.
  * - 옛 공개 연출 단계(claimReveal)로 저장된 방은 discussion 으로 옮기고 마감을 now + DISCUSSION_MS 로 둔다(주장 기록은 새 방에 없다).
@@ -530,6 +526,9 @@ const LEGACY_CHAT_ROOM_KEYS = ["nextMessageSeq", "nextNightSeq"] as const;
  * 새 optional 필드가 없는 옛 상태는 읽는 쪽 기본값이 받는다(RESEARCH Pattern 6).
  */
 export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
+  // 옛 표시가 있는 방은 다른 정규화·맵·모드 조회보다 먼저 대기실로 되돌린다(결정 0089, D-03·D-29) — PHASE_DEFS 에 없는 단계로 tick 이 죽지 않게.
+  // 표시가 없는 방은 이 분기를 지나쳐 아래 기존 규칙만 탄다(하이버네이션 재기동에 진행 중 판을 잃지 않는다, T-22-04).
+  if (isLegacyV3Room(stored)) return toLobbyFromLegacy(stored);
   const phase = stored.phase as string;
   const isLegacyDay = phase === LEGACY_PHASES.day;
   const isLegacyReveal = phase === LEGACY_PHASES.claimReveal;
@@ -617,14 +616,61 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   return next;
 }
 
-/** (RED 자리) 옛 v3 방 표시 판정 — GREEN 에서 구현한다. */
-export function isLegacyV3Room(_stored: RoomState): boolean {
-  return false;
+/**
+ * 옛 방 표시 — 이 표 한 곳이 "배포 전에 저장된 방"을 알아보는 기준이다(결정 0089, D-03·D-29). 이후 삭제 계획이 키를 하나씩 더한다.
+ * 22-03: 옛 튜토리얼 — 방 키 tutorialPassed, 개인 키 tutorialDone, 단계 "tutorial". 22-04~22-07 이 등불·현장·건너뛰기·town·errand·mode 표시를 더한다.
+ */
+const LEGACY_V3_ROOM_KEYS: readonly string[] = ["tutorialPassed"];
+const LEGACY_V3_PLAYER_KEYS: readonly string[] = ["tutorialDone"];
+const LEGACY_V3_PHASES: readonly string[] = ["tutorial"];
+
+/**
+ * 옛 표시가 하나라도 있는 방인가. 표시가 없는 방(지금 판 중인 새 방 포함)은 거짓이다 —
+ * 방 DO 는 하이버네이션이라 생성자(normalizeStoredRoom)가 판 중에도 자주 다시 돌므로, "게임 중인 방 전부"를 되돌리면 새 판이 깰 때마다 사라진다(T-22-04).
+ */
+export function isLegacyV3Room(stored: RoomState): boolean {
+  return (
+    LEGACY_V3_PHASES.includes(stored.phase as string) ||
+    LEGACY_V3_ROOM_KEYS.some((key) => Object.hasOwn(stored, key)) ||
+    stored.players.some((p) => LEGACY_V3_PLAYER_KEYS.some((key) => Object.hasOwn(p, key)))
+  );
 }
 
-/** (RED 자리) 옛 방을 대기실로 되돌린다 — GREEN 에서 구현한다. */
+/** src 에서 keys 에 든 키만(값이 undefined 가 아닐 때) 하나씩 복사한 새 객체 — rematch 의 copyKeys 와 같은 모양. */
+function pickKeys<T extends object, K extends keyof T>(src: T, keys: readonly K[]): Pick<T, K> {
+  const out = {} as Pick<T, K>;
+  for (const key of keys) {
+    if (Object.hasOwn(src, key) && src[key] !== undefined) out[key] = src[key];
+  }
+  return out;
+}
+
+/**
+ * 옛 방을 대기실로 되돌린다(D-03·D-29): 방·사람 식별과 방장이 고른 값(REMATCH 허용 목록)만 남고 판 진행 키(day·voteLog·verdict·winner·역할 등)는 남기지 않는다.
+ * 이미 대기실인 방은 옛 키만 지운다. 입력은 바꾸지 않는다.
+ */
 export function toLobbyFromLegacy(stored: RoomState): RoomState {
-  return stored;
+  if (stored.phase === "lobby") {
+    const rest: Record<string, unknown> = { ...stored };
+    for (const key of LEGACY_V3_ROOM_KEYS) delete rest[key];
+    return {
+      ...(rest as unknown as RoomState),
+      players: stored.players.map((p) => {
+        if (!LEGACY_V3_PLAYER_KEYS.some((key) => Object.hasOwn(p, key))) return p;
+        const kept: Record<string, unknown> = { ...p };
+        for (const key of LEGACY_V3_PLAYER_KEYS) delete kept[key];
+        return kept as unknown as Player;
+      }),
+    };
+  }
+  return {
+    ...pickKeys(stored, REMATCH_ROOM_KEYS),
+    expiresAt: stored.expiresAt,
+    phase: "lobby",
+    phaseEndsAt: null,
+    // 쉬는 사람(bench)도 참가자로 합류시켜 아무도 잃지 않는다(resetToLobby 와 같다).
+    players: [...stored.players, ...benchAsPlayers(stored)].map((p) => pickKeys(p, REMATCH_PLAYER_KEYS)),
+  };
 }
 
 export function findPlayerByToken(state: RoomState, token: string): Player | undefined {

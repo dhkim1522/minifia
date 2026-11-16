@@ -37,7 +37,6 @@ import { ERRAND_TICK_MS, PHASE_DEFS, nextPhaseOf } from "./phases";
 import { modeOf, rulesetOf } from "./ruleset";
 import type { Ruleset } from "./ruleset";
 import type { RoomState } from "./room";
-import { clearTutorial } from "./tutorial";
 import { resolveVerdict } from "./verdict";
 
 /** 낮 시작 발표 진입: 일차 +1. 연장은 없다(결정 0017-5). */
@@ -77,7 +76,6 @@ export interface PhaseHooks {
 export function hooksOf(rules: Ruleset): PhaseHooks {
   return {
     enter: {
-      assigning: clearTutorial, // 17페이즈(결정 0080-11): tutorial 을 떠나며 서버 전용 tutorialPassed 를 지운다(tutorial 을 거치지 않았으면 같은 객체)
       dayAnnounce: enterDayAnnounce,
       // 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts). 16페이즈(결정 0079): 산 마피아의 가짜 한 곳은 난수 없이 뒤에서 정한다.
       // 원인 흐름(21페이즈 D-01·A4·A6): 일차 +1 이 낮 시작 발표 대신 저녁 진입이다(enterErrand 앞 — errandFake·nightLog·voteLog 가 day 를 읽는다). 마피아의 비밀 행동은 심지 자르기라 가짜 장소를 정하지 않는다.

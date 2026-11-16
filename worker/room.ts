@@ -45,7 +45,6 @@ import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
 import { skipReached, toggleSkip } from "../shared/game/skip";
-import { allTutorialDone, markTutorialDone } from "../shared/game/tutorial";
 import { MAP_PHASES, canMove, nearPhaseOf } from "../shared/game/movement";
 import { actErrand, nearSnapFrame, placeCenterFx, sampleErrand } from "../shared/game/errand";
 import { inspectSpot } from "../shared/game/scene";
@@ -291,10 +290,7 @@ export class Room extends DurableObject<Env> {
         await this.handleKick(ws, msg.seat);
         return;
       case "start":
-        await this.handleStart(ws, msg.tutorial === true);
-        return;
-      case "tutorialDone":
-        await this.handleTutorialDone(ws);
+        await this.handleStart(ws);
         return;
       case "pick":
         await this.handlePick(ws, msg.target);
@@ -492,14 +488,14 @@ export class Room extends DurableObject<Env> {
   }
 
   // 시작: 판정은 서버 상태와 소켓 첨부의 playerId 로만 한다(연결자 4명 이상, 방장만).
-  private async handleStart(ws: WebSocket, tutorial: boolean): Promise<void> {
+  private async handleStart(ws: WebSocket): Promise<void> {
     const att = this.attachmentOf(ws);
     if (!att || !this.room) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
     const now = Date.now();
-    const result = startGame(this.room, att.playerId, now, cryptoRandInt, { tutorial });
+    const result = startGame(this.room, att.playerId, now, cryptoRandInt);
     if (!result.ok) {
       // 거절되면 클라이언트가 서버 view 대로 다시 그리도록 최신 state 를 함께 보낸다.
       this.sendTo(ws, { t: "error", code: result.error });
@@ -1023,35 +1019,6 @@ export class Room extends DurableObject<Env> {
     }
     this.writeAt.set(key, now);
     if (skipReached(result.state)) {
-      const prev = this.room;
-      this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
-      await this.afterTransition(prev, now);
-      return null;
-    }
-    this.room = result.state;
-    await this.persistAndBroadcast();
-    return null;
-  }
-
-  // 튜토리얼 끝났음(17페이즈 tutorialDone 메시지, 결정 0078·0080): 신원은 소켓 첨부의 playerId 뿐이다(T-17-02) — 남의 완료를 표시할 수 없다.
-  private async handleTutorialDone(ws: WebSocket): Promise<void> {
-    const att = this.attachmentOf(ws);
-    if (!att || !this.room) {
-      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
-      return;
-    }
-    const error = await this.applyTutorialDone(att.playerId, Date.now());
-    if (error !== null) this.sendRejection(ws, att.playerId, error);
-  }
-
-  // 같은 사람이 또 보내면 같은 객체라 저장·전송이 없다(T-17-03). 전원 완료(allTutorialDone)의 순간 서버가 마감을 지금으로 당겨 tick 으로 정상 마감과 같은 경로를 탄다
-  // (applyEndDiscussion 과 같다) — tutorial → assigning 이고 진입 훅이 tutorialPassed 를 지운다. 단계 틀림·방 밖 사람은 규칙 함수가 WRONG_PHASE·BAD_MESSAGE 로 거절한다.
-  private async applyTutorialDone(playerId: string, now: number): Promise<WsErrorCode | null> {
-    if (!this.room) return "BAD_MESSAGE";
-    const result = markTutorialDone(this.room, playerId);
-    if (!result.ok) return result.error;
-    if (result.state === this.room) return null;
-    if (allTutorialDone(result.state)) {
       const prev = this.room;
       this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
       await this.afterTransition(prev, now);
@@ -1812,16 +1779,8 @@ export class Room extends DurableObject<Env> {
     const current = this.room.players.find((p) => p.id === att.playerId);
     if (!current || current.connId !== att.connId) return;
     const now = Date.now();
-    const prev = this.room;
     this.room = detachConnection(this.room, att.playerId, att.connId, now);
-    // 튜토리얼 중 끊김은 끝낸 것으로 센다(결정 0080-10): 남은 사람의 연결이 끊긴 순간에도 서버가 전원 완료를 다시 보고,
-    // applyTutorialDone 과 같은 경로(마감을 지금으로 당긴 tick + afterTransition)로 assigning 에 넘긴다.
-    if (this.room.phase === "tutorial" && allTutorialDone(this.room)) {
-      this.room = tick({ ...this.room, phaseEndsAt: now }, now, cryptoRandInt);
-      await this.afterTransition(prev, now);
-    } else {
-      await this.persistAndBroadcast();
-    }
+    await this.persistAndBroadcast();
     // 방장이 끊겼거나 대기실이면 알람이 필요하다(이양·정리 마감, D-17·D-18) — 항상 맞춘다.
     await this.reschedule();
     // 연결된 사람이 한 명도 남지 않으면 DO 가 곧 내려갈 수 있으니 대기 중이던 위치를 지금 저장한다(봇은 사람이 아니다).

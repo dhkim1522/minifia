@@ -70,8 +70,8 @@ async function table(mode?: GameMode): Promise<Table> {
   return { s, socks };
 }
 
-async function start(t: Table, tutorial = false): Promise<void> {
-  send(t.s.host, tutorial ? { t: "start", tutorial: true } : { t: "start" });
+async function start(t: Table): Promise<void> {
+  send(t.s.host, { t: "start" });
   for (const k of t.socks) await nextFrame(k, (m) => m.t === "state" && m.view.phase !== "lobby");
 }
 
@@ -202,9 +202,9 @@ describe("기본 마피아 판 한 판 전체 (D-08, D-11, D-12)", () => {
 });
 
 describe("기본 마피아 판의 시작·유지 (D-06, D-10)", () => {
-  it("basic 방은 tutorial: true 로 시작해도 모든 소켓의 첫 단계 프레임이 assigning 이고 tutorial 단계 프레임이 없다 (D-10)", async () => {
+  it("basic 방은 시작하면 모든 소켓의 첫 단계 프레임이 assigning 이고 tutorial 단계 프레임이 없다 (D-10, 22-03)", async () => {
     const t = await table("basic");
-    await start(t, true);
+    await start(t);
     for (const k of t.socks) await settle(k, mark(k));
     expect(t.socks.map((k) => phaseRun(k).filter((p) => p !== "lobby")[0]).join(",")).toBe("assigning,assigning,assigning");
     expect(t.socks.some((k) => phaseRun(k).includes("tutorial"))).toBe(false);

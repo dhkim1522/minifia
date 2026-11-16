@@ -9,7 +9,6 @@ import { TOD_LABEL, TOD_ORDER, todOf, todWordOf, type TimeOfDay } from "../../sr
 // 18.1-11(결정 0083-1): 헤더 시간대는 공개 단계 하나로 정한 글자다. 모든 PhaseId 를 표로 고정한다.
 const EXPECT: Record<PhaseId, TimeOfDay> = {
   lobby: "day",
-  tutorial: "day",
   assigning: "day",
   roleReveal: "day",
   dayAnnounce: "day",
