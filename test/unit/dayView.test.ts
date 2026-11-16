@@ -3,18 +3,16 @@
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 JSON 문자열로 한다.
 import { describe, expect, it } from "vitest";
 import type { DayView, PhaseId, PickTurnView, PublicPlayer, RoomView, ShowdownView } from "../../shared/protocol";
-import { EXECUTION_MS, VERDICT_LEAD_MS } from "../../shared/game/phases";
+import { EXEC_ANNOUNCE_MS, EXEC_TAIL_MS, EXECUTION_MS, WILL_REVEAL_MS } from "../../shared/game/phases";
 import {
   ANNOUNCE_DAY_MS,
   ANNOUNCE_EXEC_MS,
-  ANNOUNCE_LEAD_MS,
   ANNOUNCE_MORNING_AT,
   ANNOUNCE_MORNING_MS,
   ANNOUNCE_NIGHT_MS,
   ANNOUNCE_NOEXEC_MS,
   ANNOUNCE_POLICE_AT,
   ANNOUNCE_POLICE_MS,
-  ANNOUNCE_TALLY_MS,
   ANNOUNCE_VICTIM_AT,
   ANNOUNCE_VICTIM_MS,
   DAY_COPY,
@@ -22,6 +20,7 @@ import {
   GHOST_FADE_END_MS,
   GHOST_RISE_MS,
   headerFor,
+  willCardOf,
   POLICE_CARD_AT,
   pointsTally,
   policeResultOf,
@@ -151,29 +150,15 @@ describe("순차 지목에는 채팅 시스템 줄이 없다 (0063-1 → 22-10)"
 const ROLE_WORDS = ["마피아", "시민", "경찰", "의사"];
 const text = (e: DayEvents): string => JSON.stringify([e.lines, e.announces, e.fx]);
 
-/** 지목 마감 뒤 voteLog 한 줄 — 5명 중 4명이 seat 3 을 가리켰다. */
-const VOTE_LOG = [
-  {
-    n: 1,
-    exec: { yes: 0, no: 0, passed: false },
-    cand: {
-      votes: [
-        { seat: 0, target: 3 },
-        { seat: 1, target: 3 },
-        { seat: 2, target: 3 },
-        { seat: 4, target: 3 },
-        { seat: 3, target: 0 },
-      ],
-      candidate: 3,
-    },
-  },
-];
+/** 지목 마감 뒤 voteLog 한 줄 — 누가 누구를 골랐는지는 없다(D-25), 후보 seat 3 만. */
+const VOTE_LOG = [{ n: 1, cand: { candidate: 3 } }];
 const defenseView = (extra: ViewOpts = {}) =>
   viewOf("defense", { ...extra, day: { candidate: 3, voteLog: VOTE_LOG, ...extra.day } });
 const verdictView = (extra: ViewOpts = {}) =>
   viewOf("verdict", { ...extra, day: { candidate: 3, voteLog: VOTE_LOG, ...extra.day } });
-const executionView = (yes: number, no: number, passed: boolean, extra: ViewOpts = {}) =>
-  viewOf("execution", { ...extra, day: { candidate: 3, voteLog: VOTE_LOG, verdict: { yes, no, passed }, ...extra.day } });
+/** 처형 단계: 처형자 seat 3 이 있을 때만 day.execution. will 이 없으면 빈 유언. */
+const executionView = (will?: string, extra: ViewOpts = {}) =>
+  viewOf("execution", { ...extra, day: { candidate: 3, voteLog: VOTE_LOG, execution: { seat: 3, ...(will !== undefined ? { will } : {}) }, ...extra.day } });
 
 describe("dayEvents — 단계 진입 줄 (DAY-05·06)", () => {
   it("낮 토론 → 찬반(22-10): 시작 줄·알림 없음", () => {
@@ -211,39 +196,30 @@ describe("dayEvents — 단계 진입 줄 (DAY-05·06)", () => {
   });
 });
 
-describe("dayEvents — 찬반 결과·처형·처형 없음 (DAY-06)", () => {
-  it("찬반 → 처형(통과): 0.6초에 '찬성 5 · 반대 2', 2.6초에 '{이름} 님 처형' 알림과 유령 떠오름 (판결 앞머리 0.6초, 결정 0066-7)", () => {
-    const events = dayEvents(verdictView(), executionView(5, 2, true));
-    same(events.lines, [
-      { kind: "hot", text: "찬성 5 · 반대 2", at: 600 },
-      { kind: "hot", text: "지호 님 처형", at: 2600 },
-    ]);
-    same(events.announces, [
-      { text: "찬성 5 · 반대 2", at: 600, ms: 2000 },
-      { text: "지호 님 처형", at: 2600, ms: 3000 },
-    ]);
-    same(events.fx, [{ kind: "ghostRise", seat: 3, at: 2600 }]);
+describe("dayEvents — 처형·처형 없음 (DAY-06, 22-12 P22-13)", () => {
+  it("찬반 → 처형: 득표 알림 없이 3.0초에 '{이름} 님 처형' 알림 3.0초와 유령 떠오름 (유언 카드가 0~3.0초)", () => {
+    const events = dayEvents(verdictView(), executionView("잘 있어"));
+    same(events.lines, [{ kind: "hot", text: "지호 님 처형", at: 3000 }]);
+    same(events.announces, [{ text: "지호 님 처형", at: 3000, ms: 3000 }]);
+    same(events.fx, [{ kind: "ghostRise", seat: 3, at: 3000 }]);
   });
 
-  it("찬반 → 처형(부결): 0.6초 득표, 2.6초에 system '처형 없음' 과 1.4초 알림, 연출 없음", () => {
-    const events = dayEvents(verdictView(), executionView(2, 5, false));
-    same(events.lines, [
-      { kind: "hot", text: "찬성 2 · 반대 5", at: 600 },
-      { kind: "system", text: "처형 없음", at: 2600 },
-    ]);
-    same(events.announces, [
-      { text: "찬성 2 · 반대 5", at: 600, ms: 2000 },
-      { text: "처형 없음", at: 2600, ms: 1400 },
-    ]);
-    same(events.fx, []);
+  it("빈 유언이어도 처형 알림 시각표는 같다 — 길이로 구별되지 않는다", () => {
+    same(dayEvents(verdictView(), executionView()), dayEvents(verdictView(), executionView("잘 있어")));
   });
 
-  it("마지막 3인 처형(day.verdict.last): 득표 줄·알림 없이 0초에 '{이름} 님 처형' 3.0초, 유령은 0초 (결정 0066-5)", () => {
-    const last = executionView(0, 0, true, { day: { verdict: { yes: 0, no: 0, passed: true, last: true } } });
-    const events = dayEvents(verdictView(), last);
-    same(events.lines, [{ kind: "hot", text: "지호 님 처형", at: 0 }]);
-    same(events.announces, [{ text: "지호 님 처형", at: 0, ms: 3000 }]);
-    same(events.fx, [{ kind: "ghostRise", seat: 3, at: 0 }]);
+  it("처형자(day.execution)가 없는 처형 view 는 이벤트가 없다", () => {
+    const events = dayEvents(verdictView(), viewOf("execution", { day: { candidate: 3 } }));
+    same([events.lines, events.announces, events.fx], [[], [], []]);
+  });
+
+  it("유언 카드 계획: 글 또는 '말없이 떠났어요', 처형 단계 0~3.0초만(willCardOf)", () => {
+    same(willCardOf(executionView("잘 있어")), { text: "잘 있어", ms: 3000 });
+    same(willCardOf(executionView()), { text: "말없이 떠났어요", ms: 3000 });
+    expect(DAY_COPY.willEmpty).toBe("말없이 떠났어요");
+    expect(willCardOf(viewOf("defense", { day: { candidate: 3 } }))).toBeNull();
+    expect(willCardOf(viewOf("execution", { day: { candidate: 3 } }))).toBeNull();
+    expect(willCardOf(viewOf("night"))).toBeNull();
   });
 
   it("지목 → 밤(동률·0표, U-5): 즉시 system '처형 없음' 줄과 1.4초 알림 하나만 — 뒤이은 '밤이 되었습니다' 는 없다", () => {
@@ -256,28 +232,24 @@ describe("dayEvents — 찬반 결과·처형·처형 없음 (DAY-06)", () => {
   });
 
   it("처형 → 밤(U-5): 처형이 이미 알렸으므로 줄도 알림도 없다(띠가 '밤이 되었습니다' 를 말한다)", () => {
-    const events = dayEvents(executionView(5, 2, true), viewOf("night", { day: { candidate: 3 } }));
+    const events = dayEvents(executionView("잘 있어"), viewOf("night", { day: { candidate: 3 } }));
     same(events.lines, []);
     same(events.announces, []);
     expect(ANNOUNCE_NIGHT_MS).toBe(1600); // 상수는 지우지 않는다
   });
 
-  it("부결 처형 → 밤도 알림이 없다(U-5)", () => {
-    same(dayEvents(executionView(2, 5, false), viewOf("night")).announces, []);
-  });
-
   it("첫 스냅샷·reset 인 밤은 알림이 없다", () => {
     same(dayEvents(null, viewOf("night")).announces, []);
-    same(dayEvents(executionView(5, 2, true), viewOf("night"), { reset: true }).announces, []);
+    same(dayEvents(executionView("잘 있어"), viewOf("night"), { reset: true }).announces, []);
   });
 
   it("첫 스냅샷이 처형 단계면 줄·알림·연출이 없다", () => {
-    const events = dayEvents(null, executionView(5, 2, true));
+    const events = dayEvents(null, executionView("잘 있어"));
     same([events.lines, events.announces, events.fx], [[], [], []]);
   });
 
   it("reset 인 처형 스냅샷도 이벤트가 없다", () => {
-    const events = dayEvents(verdictView(), executionView(5, 2, true), { reset: true });
+    const events = dayEvents(verdictView(), executionView("잘 있어"), { reset: true });
     same([events.lines, events.announces, events.fx], [[], [], []]);
   });
 });
@@ -296,8 +268,7 @@ describe("dayEvents — 공개 정보만 (T-08-22)", () => {
       [nominationOf([[1, 2]]), nominationOf([[1, 2], [3, 2], [4, 2]])],
       [nominationOf([]), defenseView()],
       [defenseView(), verdictView()],
-      [verdictView(), executionView(5, 2, true)],
-      [verdictView(), executionView(2, 5, false)],
+      [verdictView(), executionView("잘 있어")],
     ];
     for (const [a, b] of pairs) {
       const plain = dayEvents(a, b);
@@ -315,8 +286,7 @@ describe("dayEvents — 공개 정보만 (T-08-22)", () => {
       [nominationOf([[1, 2]]), nominationOf([[1, 3]])],
       [nominationOf([]), defenseView()],
       [defenseView(), verdictView()],
-      [verdictView(), executionView(5, 2, true)],
-      [verdictView(), executionView(2, 5, false)],
+      [verdictView(), executionView("잘 있어")],
       [nominationOf([]), viewOf("night", { day: { noExecution: { reason: "tie" } } })],
     ];
     for (const [a, b] of pairs) {
@@ -357,17 +327,18 @@ describe("dayEvents — 마피아 확정 hot 줄 (NIGHT-08, E2 #16)", () => {
   });
 });
 
-describe("알림 시간표 (UI-SPEC 남은 위험 8)", () => {
-  it("상수 값", () => {
+describe("알림 시간표 (UI-SPEC 남은 위험 8, 22-12 P22-13)", () => {
+  it("상수 값: 처형 알림 3.0초, 처형 없음 1.4초, 낮 2.0초, 유령 1.4·2.4초", () => {
     same(
-      [ANNOUNCE_TALLY_MS, ANNOUNCE_EXEC_MS, ANNOUNCE_NOEXEC_MS, ANNOUNCE_DAY_MS, GHOST_RISE_MS, GHOST_FADE_END_MS],
-      [2000, 3000, 1400, 2000, 1400, 2400],
+      [ANNOUNCE_EXEC_MS, ANNOUNCE_NOEXEC_MS, ANNOUNCE_DAY_MS, GHOST_RISE_MS, GHOST_FADE_END_MS],
+      [3000, 1400, 2000, 1400, 2400],
     );
   });
 
-  it("찬반 결과 알림 + 처형(또는 처형 없음) 알림이 처형 단계 길이(EXECUTION_MS) 안이다 (판결 앞머리 포함)", () => {
-    expect(ANNOUNCE_LEAD_MS).toBe(VERDICT_LEAD_MS);
-    expect(ANNOUNCE_LEAD_MS + ANNOUNCE_TALLY_MS + Math.max(ANNOUNCE_EXEC_MS, ANNOUNCE_NOEXEC_MS)).toBeLessThanOrEqual(EXECUTION_MS);
+  it("처형 시간표 한 표: 유언 카드 3.0 + 처형 3.0 + 꼬리 0.6 = 6.6초, 알림은 꼬리(핀 끔) 앞에서 끝난다", () => {
+    same([WILL_REVEAL_MS, EXEC_ANNOUNCE_MS, EXEC_TAIL_MS, EXECUTION_MS], [3000, 3000, 600, 6600]);
+    expect(ANNOUNCE_EXEC_MS).toBe(EXEC_ANNOUNCE_MS);
+    expect(WILL_REVEAL_MS + ANNOUNCE_EXEC_MS + EXEC_TAIL_MS).toBe(EXECUTION_MS);
   });
 
   it("유령 떠오름·사라짐이 처형 알림 시간 안이다", () => {
@@ -377,12 +348,9 @@ describe("알림 시간표 (UI-SPEC 남은 위험 8)", () => {
   });
 
   it("처형 단계 이벤트의 알림은 모두 EXECUTION_MS 안에서 끝난다", () => {
-    for (const passed of [true, false]) {
-      const events = dayEvents(verdictView(), executionView(passed ? 5 : 2, passed ? 2 : 5, passed));
-      for (const a of events.announces) expect(a.at + a.ms).toBeLessThanOrEqual(EXECUTION_MS);
-    }
-    const last = executionView(0, 0, true, { day: { verdict: { yes: 0, no: 0, passed: true, last: true } } });
-    for (const a of dayEvents(verdictView(), last).announces) expect(a.at + a.ms).toBeLessThanOrEqual(EXECUTION_MS);
+    const events = dayEvents(verdictView(), executionView("잘 있어"));
+    for (const a of events.announces) expect(a.at + a.ms).toBeLessThanOrEqual(EXECUTION_MS - EXEC_TAIL_MS);
+    expect(willCardOf(executionView())!.ms).toBeLessThanOrEqual(EXECUTION_MS);
   });
 });
 
@@ -435,7 +403,7 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
   });
 
   it("처형·아침은 제목만, 역할이 없는 산 사람의 밤은 시민 안내", () => {
-    same(hdr(executionView(5, 2, true)), { title: "처형" });
+    same(hdr(executionView("잘 있어")), { title: "처형" });
     same(hdr(viewOf("morning")), { title: "아침" });
     same(hdr(viewOf("night")), { title: "밤", hint: "날이 밝길 기다려요" });
   });
@@ -446,7 +414,7 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     same(hdr(nominationOf([], g)), { title: "지목", hint: "모두의 직업이 보여요" });
     same(hdr(defenseView(g)), { title: "유언", hint: "모두의 직업이 보여요" });
     same(hdr(verdictView(g)), { title: "찬반", hint: "모두의 직업이 보여요" });
-    same(hdr(executionView(5, 2, true, g)), { title: "처형", hint: "모두의 직업이 보여요" });
+    same(hdr(executionView("잘 있어", g)), { title: "처형", hint: "모두의 직업이 보여요" });
     same(hdr(viewOf("morning", g)), { title: "아침", hint: "모두의 직업이 보여요" });
     same(hdr(viewOf("night", g)), { title: "밤", hint: "모두의 직업과 밤 행동이 보여요" });
   });
@@ -469,7 +437,7 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     const g = { players: ghostPlayers, mySeat: 0 };
     const views = [
       viewOf("dayAnnounce"), viewOf("discussion"), nominationOf([]), defenseView(), defenseView({ mySeat: 3 }),
-      verdictView(), verdictView({ mySeat: 3 }), executionView(5, 2, true), viewOf("morning"), viewOf("night"),
+      verdictView(), verdictView({ mySeat: 3 }), executionView("잘 있어"), viewOf("morning"), viewOf("night"),
       viewOf("discussion", g), viewOf("night", g), defenseView(g), verdictView(g),
     ];
     for (const v of views) {

@@ -2,9 +2,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { EXECUTION_MS } from "../../shared/game/phases";
-import { ANNOUNCE_LEAD_MS, ANNOUNCE_MORNING_AT, ANNOUNCE_TALLY_MS, ANNOUNCE_VICTIM_AT } from "../../src/game/dayView";
-import { BALLOT_END_AT, BALLOT_NO_AT, BALLOT_YES_AT } from "../../src/game/verdictMoment";
+import { EXECUTION_MS, EXEC_ANNOUNCE_MS, PIN_OFF_EXEC_AT, WILL_REVEAL_MS } from "../../shared/game/phases";
+import { ANNOUNCE_MORNING_AT, ANNOUNCE_VICTIM_AT } from "../../src/game/dayView";
 import { LETTER_FOLD_AT_MS, LETTER_SEAL_GAP_MS, LETTER_WRITE_AT_MS } from "../../src/game/willLetter";
 import { mulberry32, recipeDurationMs } from "../../src/audio/recipes";
 import {
@@ -29,72 +28,40 @@ import { planTensionCues } from "../../src/world/tension";
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const ids = (s: { items: readonly { id: string }[] }): string[] => s.items.map((i) => i.id);
 
-describe("판결 대본 — verdictScript (D-13, LS-11, T-12-07)", () => {
-  const FULL = { passed: true, last: false, hasBallots: true } as const;
-
-  it("앞머리: 심장 박동 다섯 번과 찬반 소리가 상수 시각에 난다", () => {
-    const s = verdictScript(FULL);
+describe("판결 대본 — verdictScript (D-13, LS-11, T-12-07, P22-13)", () => {
+  it("앞머리: 심장 박동 다섯 번이 상수 시각에 나고 덕킹은 처형 창 끝(PIN_OFF_EXEC_AT)까지다", () => {
+    const s = verdictScript();
     const hearts = s.items.filter((i) => i.id === "verdict.heart").map((i) => i.at);
     expect(hearts).toEqual([0, 800, 1500, 2050, 2400]);
-    expect(s.items.find((i) => i.id === "ballot.yes")!.at).toBe(BALLOT_YES_AT);
-    expect(s.items.find((i) => i.id === "ballot.no")!.at).toBe(BALLOT_NO_AT);
-    expect(s.items.find((i) => i.id === "ui.card")!.at).toBe(BALLOT_END_AT);
-    expect(s.duck).toEqual({ fromMs: 0, toMs: BALLOT_END_AT, db: -14, returnMs: 800 });
+    expect(s.duck).toEqual({ fromMs: 0, toMs: PIN_OFF_EXEC_AT, db: -14, returnMs: 800 });
   });
 
-  it("2600(= ANNOUNCE_LEAD_MS + ANNOUNCE_TALLY_MS)에 통과면 gavel + rise, 부결이면 reject", () => {
-    const at = ANNOUNCE_LEAD_MS + ANNOUNCE_TALLY_MS;
-    expect(at).toBe(2600);
-    const pass = verdictScript(FULL).items.filter((i) => i.at === at);
-    expect(pass.map((i) => i.id).sort()).toEqual(["execution.gavel", "execution.rise"]);
-    const fail = verdictScript({ ...FULL, passed: false }).items.filter((i) => i.at === at);
-    expect(fail.map((i) => i.id)).toEqual(["verdict.reject"]);
+  it("3000(= WILL_REVEAL_MS, 처형 발표 시작)에 gavel + rise 가 같이 난다", () => {
+    expect(WILL_REVEAL_MS).toBe(3000);
+    const at = WILL_REVEAL_MS;
+    const announce = verdictScript().items.filter((i) => i.at === at);
+    expect(announce.map((i) => i.id).sort()).toEqual(["execution.gavel", "execution.rise"]);
+    expect(at + EXEC_ANNOUNCE_MS).toBeLessThanOrEqual(PIN_OFF_EXEC_AT);
   });
 
-  it("2600 앞 목록(와 덕킹)은 통과/부결에서 같다 — 결과 누설 없음", () => {
-    for (const hasBallots of [true, false]) {
-      const a = verdictScript({ passed: true, last: false, hasBallots });
-      const b = verdictScript({ passed: false, last: false, hasBallots });
-      const front = (s: typeof a) => s.items.filter((i) => i.at < ANNOUNCE_LEAD_MS + ANNOUNCE_TALLY_MS);
-      expect(front(a)).toEqual(front(b));
-      expect(a.duck).toEqual(b.duck);
-    }
-  });
-
-  it("마지막 3인 처형: 0ms 에 gavel + rise 만", () => {
-    const s = verdictScript({ passed: true, last: true, hasBallots: true });
-    expect(s.items.map((i) => [i.at, i.id]).sort()).toEqual([
-      [0, "execution.gavel"],
-      [0, "execution.rise"],
-    ]);
-    expect(s.duck).toBeNull();
-  });
-
-  it("찬반 기록이 없으면 ballot.yes·ballot.no·ui.card 가 없다", () => {
-    const s = verdictScript({ passed: true, last: false, hasBallots: false });
-    for (const id of ["ballot.yes", "ballot.no", "ui.card"]) expect(ids(s)).not.toContain(id);
-    expect(ids(s)).toContain("verdict.heart");
+  it("찬반 소리(ballot.*)·카드음·부결음이 없다(D-14) — 부결은 처형 단계가 없어 대본이 없다", () => {
+    const list = ids(verdictScript());
+    for (const id of ["ballot.yes", "ballot.no", "ui.card", "verdict.reject"]) expect(list).not.toContain(id);
   });
 
   it("모든 소리의 시작 + 길이가 EXECUTION_MS 안이고 at 오름차순", () => {
-    for (const passed of [true, false]) {
-      for (const last of [true, false]) {
-        for (const hasBallots of [true, false]) {
-          const s = verdictScript({ passed, last, hasBallots });
-          for (const i of s.items) expect(i.at + recipeDurationMs(i.id)).toBeLessThanOrEqual(EXECUTION_MS);
-          const ats = s.items.map((i) => i.at);
-          expect(ats).toEqual([...ats].sort((a, b) => a - b));
-        }
-      }
-    }
+    const s = verdictScript();
+    for (const i of s.items) expect(i.at + recipeDurationMs(i.id)).toBeLessThanOrEqual(EXECUTION_MS);
+    const ats = s.items.map((i) => i.at);
+    expect(ats).toEqual([...ats].sort((a, b) => a - b));
   });
 
-  it("같은 입력이면 같은 출력이고 매번 새 객체를 낸다(변조가 번지지 않는다)", () => {
-    const a = verdictScript(FULL);
-    const b = verdictScript(FULL);
+  it("같은 호출이면 같은 출력이고 매번 새 객체를 낸다(변조가 번지지 않는다)", () => {
+    const a = verdictScript();
+    const b = verdictScript();
     expect(a).toEqual(b);
     a.items.length = 0;
-    expect(verdictScript(FULL)).toEqual(b);
+    expect(verdictScript()).toEqual(b);
   });
 });
 

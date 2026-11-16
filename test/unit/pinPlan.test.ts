@@ -2,9 +2,9 @@
 import { describe, expect, it } from "vitest";
 import { RUNOFF_SPOTS } from "../../shared/game/gather";
 import { UNIT } from "../../shared/game/map";
-import { EXECUTION_MS, PICK_GAP_MS } from "../../shared/game/phases";
+import { EXECUTION_MS, PICK_GAP_MS, PIN_OFF_EXEC_AT } from "../../shared/game/phases";
 import type { DayView, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
-import { easeInOut, PIN_DIM, PIN_OFF_EXEC_AT, PIN_OFF_NO_EXEC_AT, PIN_OFF_MS, PIN_ON_MS, PIN_STRENGTH, pinAt, pinLevel, pinLights, pinOf } from "../../src/world/pinPlan";
+import { easeInOut, PIN_DIM, PIN_OFF_MS, PIN_ON_MS, PIN_STRENGTH, pinAt, pinLevel, pinLights, pinOf } from "../../src/world/pinPlan";
 
 function viewOf(phase: PhaseId, day: Partial<DayView> = {}, count = 4): RoomView {
   const players: PublicPlayer[] = Array.from({ length: count }, (_, seat) => ({ seat, nickname: `p${seat}`, connected: true, isHost: seat === 0 }));
@@ -147,32 +147,33 @@ describe("pinLevel / pinLights", () => {
   });
 });
 
-describe("pinOf — 판결 순간(처형 단계, 09.1.1-13)", () => {
-  const exec = (verdict: DayView["verdict"], extra: Partial<DayView> = {}, endsAt: number | null = 100_000 + EXECUTION_MS): RoomView => ({
-    ...viewOf("execution", { candidate: 4, ballots: { yes: [0, 1], no: [2] }, ...(verdict !== undefined ? { verdict } : {}), ...extra }, 8),
+describe("pinOf — 처형 단계(22-12 P22-14: 처형자 존재 day.execution 이 켠다)", () => {
+  const exec = (extra: Partial<DayView> = {}, endsAt: number | null = 100_000 + EXECUTION_MS): RoomView => ({
+    ...viewOf("execution", { candidate: 4, execution: { seat: 4 }, ...extra }, 8),
     phaseEndsAt: endsAt,
   });
 
-  it("처형(passed): 변론자에게 고정 핀, 켜진 창은 처형 진입 시각부터 5.0초", () => {
-    expect(pinOf(exec({ yes: 2, no: 1, passed: true }))).toEqual({ mode: "fixed", seat: 4, startAt: 100_000, endAt: 100_000 + PIN_OFF_EXEC_AT });
+  it("시간표 한 표: 6.6초 단계, 핀은 처형 진입부터 6.0초까지", () => {
+    expect(EXECUTION_MS).toBe(6600);
+    expect(PIN_OFF_EXEC_AT).toBe(6000);
+    expect(pinOf(exec({ execution: { seat: 2 } }))).toEqual({ mode: "fixed", seat: 2, startAt: 100_000, endAt: 106_000 });
   });
 
-  it("부결: 창이 4.0초에 닫힌다", () => {
-    expect(pinOf(exec({ yes: 1, no: 2, passed: false }))).toEqual({ mode: "fixed", seat: 4, startAt: 100_000, endAt: 100_000 + PIN_OFF_NO_EXEC_AT });
+  it("day.ballots·day.verdict 와 무관하게 처형자 존재로 켜진다", () => {
+    expect(pinOf(exec())).toEqual({ mode: "fixed", seat: 4, startAt: 100_000, endAt: 100_000 + PIN_OFF_EXEC_AT });
   });
 
-  it("찬반 기록 없음·변론자 없음·마감 시각 없음은 핀 없음", () => {
-    expect(pinOf({ ...exec({ yes: 2, no: 1, passed: true }), day: { n: 1, roles: [], candidate: 4, verdict: { yes: 2, no: 1, passed: true } } })).toBeNull();
-    expect(pinOf(exec({ yes: 2, no: 1, passed: true }, { candidate: undefined }))).toBeNull();
-    expect(pinOf(exec({ yes: 2, no: 1, passed: true }, {}, null))).toBeNull();
+  it("처형자 없음·마감 시각 없음은 핀 없음", () => {
+    expect(pinOf(exec({ execution: undefined }))).toBeNull();
+    expect(pinOf(exec({}, null))).toBeNull();
   });
 
   it("pinAt: 고정 핀은 [startAt, endAt) 안에서만 켜지고 같은 좌석을 비춘다(역할 분기 없음)", () => {
-    const d = pinOf(exec({ yes: 2, no: 1, passed: true }))!;
+    const d = pinOf(exec())!;
     expect(pinAt(d, 99_999, false)).toMatchObject({ on: false });
     expect(pinAt(d, 100_000, false)).toMatchObject({ on: true, seat: 4, moving: false, t: 0 });
-    expect(pinAt(d, 104_999, true)).toMatchObject({ on: true, seat: 4 });
-    expect(pinAt(d, 105_000, false)).toMatchObject({ on: false });
+    expect(pinAt(d, 105_999, true)).toMatchObject({ on: true, seat: 4 });
+    expect(pinAt(d, 106_000, false)).toMatchObject({ on: false });
   });
 });
 
@@ -215,21 +216,6 @@ describe("pinOf — 마지막 3인 (09.1.1-15, UI-SPEC E-1·F)", () => {
     expect(pinOf(sd(7))).toBeNull();
   });
 });
-
-describe("pinOf — 마지막 3인 처형 (verdict.last, 09.1.1-15)", () => {
-  const lastExec = (extra: Partial<DayView> = {}, endsAt: number | null = 100_000 + EXECUTION_MS): RoomView => ({
-    ...viewOf("execution", { candidate: 2, verdict: { yes: 0, no: 0, passed: true, last: true }, ...extra }, 3),
-    phaseEndsAt: endsAt,
-  });
-  it("득표자에게 처형 진입 시각부터 5.0초 고정 핀(찬반 기록 ballots 가 없어도)", () => {
-    expect(pinOf(lastExec())).toEqual({ mode: "fixed", seat: 2, startAt: 100_000, endAt: 100_000 + PIN_OFF_EXEC_AT });
-  });
-  it("득표자·마감 시각이 없으면 핀 없음", () => {
-    expect(pinOf(lastExec({ candidate: undefined }))).toBeNull();
-    expect(pinOf(lastExec({}, null))).toBeNull();
-  });
-});
-
 
 describe("pinOf — 유언 단계(defense, 22-11 P22-10)", () => {
   it("처형자 한 명에게 turn 핀이 켜진다 — 조기 종료로 마감이 당겨지니 fixed 창이 아니다", () => {

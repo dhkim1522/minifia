@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { BAR_MASK } from "../../shared/game/map";
-import { DEFENSE_MS, NOMINATION_END_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
+import { DEFENSE_MS, EXECUTION_MS, NOMINATION_END_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { ANNOUNCE_MORNING_AT } from "../../src/game/dayView";
@@ -785,6 +785,13 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
     expect(DEFENSE_MS).toBe(10_000);
     expect(text).toMatch(/const DEFENSE_MS = 10_000;/);
     expect(text).toMatch(/유언 10초/);
+  });
+
+  it("scripts/smoke.mjs 의 EXECUTION_MS 사본이 서버의 처형 단계 길이(6_600, 유언 카드 3.0 + 처형 3.0 + 꼬리 0.6)와 같다 (22-12 P22-13)", () => {
+    const text = scriptText("smoke.mjs");
+    expect(EXECUTION_MS).toBe(6_600);
+    expect(text).toMatch(/const EXECUTION_MS = 6_600;/);
+    expect(text).not.toMatch(/VERDICT_LEAD_MS/);
   });
 
   // smoke.mjs 의 전이 표(PHASE_NEXT)는 판 종류가 없어 하나이고 서버와 같다.

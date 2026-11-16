@@ -554,19 +554,21 @@ describe("실제 흐름 (결정 0060-1)", () => {
     expect(lastViews(g).map((v) => v.day?.candidate).join(",")).toBe(g.socks.map(() => defender.seat).join(","));
     expect((await layOf(g.code)).key).toBe("1:stage");
 
+    // 처형자가 유언을 남긴다(22-12): 처형 단계 view 의 day.execution.will 로 모두에게 같은 값이 간다
+    await castAll(g, () => send(defender.sock, { t: "will", text: "잘 있어" }));
+
     const marks = g.socks.map(mark);
     await dueAgo(g.code, 1); // 변론 → 처형(찬반이 먼저 통과했으므로 처형자가 탈락한다)
     for (let i = 0; i < g.socks.length; i += 1) await settle(g.socks[i]!, marks[i]!);
     const inExecution = await storedFlow(g.code);
     expect(inExecution.phase).toBe("execution");
     expect(inExecution.players.find((p) => p.seat === defender.seat)!.alive).toBe(false);
-    expect(lastViews(g).map((v) => JSON.stringify(v.day?.verdict)).join("|")).toBe(
-      g.socks.map(() => JSON.stringify({ yes: 4, no: 1, passed: true })).join("|"),
-    );
-    // 처형 발표: 모든 소켓이 day.execution {seat}(문구 번호 없음, 결정 0060-5)를 받고, 관전은 처형된 소켓만 받는다
+    // 찬반 결과 수·좌석 목록(day.verdict·day.ballots)은 어느 소켓에도 없다(D-14)
+    expect(lastViews(g).map((v) => `${Object.hasOwn(v.day ?? {}, "verdict")}${Object.hasOwn(v.day ?? {}, "ballots")}`).join(",")).toBe("falsefalse,falsefalse,falsefalse,falsefalse,falsefalse");
+    // 처형 발표: 모든 소켓이 같은 day.execution {seat, will}(문구 번호 없음, 결정 0060-5)를 받고, 관전은 처형된 소켓만 받는다
     for (const [i, v] of lastViews(g).entries()) {
-      expect(Object.keys(v.day?.execution ?? {}).sort().join(",")).toBe("seat");
-      expect(v.day?.execution?.seat).toBe(defender.seat);
+      expect(Object.keys(v.day?.execution ?? {}).sort().join(",")).toBe("seat,will");
+      expect(v.day?.execution).toEqual({ seat: defender.seat, will: "잘 있어" });
       expect(Object.hasOwn(v, "spectate")).toBe(g.actors[i] === defender);
       expect(v.players.find((p) => p.seat === defender.seat)?.alive).toBe(false);
       // 살아 있는 소켓에는 역할 단어 값이 본인 역할·구성표 경로 밖에 없다(처형 발표에 직업이 실리지 않는다, D-09)
@@ -581,6 +583,23 @@ describe("실제 흐름 (결정 0060-1)", () => {
     const night = await storedFlow(g.code);
     expect(night.phase).toBe("night");
     expect(lastViews(g).map((v) => Object.hasOwn(v.day ?? {}, "noExecution")).join(",")).toBe("false,false,false,false,false");
+  }, 90_000);
+
+  it("처형자의 유언이 비어 있으면 day.execution 에 will 키가 없다(빈 글은 화면이 '말없이 떠났어요')", async () => {
+    const { g } = await toNominationByEnd();
+    const [defender, ...rest] = g.actors;
+    const bySeat: Record<number, number> = {};
+    for (const o of rest) bySeat[o.seat] = defender!.seat;
+    bySeat[defender!.seat] = rest[0]!.seat;
+    await pointAll(g, bySeat);
+    await dueAgo(g.code, 1);
+    await settleAllSocks(g);
+    expect((await storedFlow(g.code)).phase).toBe("defense");
+    const marks = g.socks.map(mark);
+    await dueAgo(g.code, 1);
+    for (let i = 0; i < g.socks.length; i += 1) await settle(g.socks[i]!, marks[i]!);
+    expect((await storedFlow(g.code)).phase).toBe("execution");
+    for (const v of lastViews(g)) expect(v.day?.execution).toEqual({ seat: defender!.seat });
   }, 90_000);
 
   it("지목 0표면 지목 마감 뒤 곧장 밤이고 night view 의 day.noExecution.reason 은 noVotes", async () => {
