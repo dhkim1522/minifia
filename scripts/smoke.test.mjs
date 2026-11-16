@@ -108,40 +108,22 @@ test("linkReport: 프레임이 없으면 없다고 쓰고, 토큰·채팅 본문
   assert.ok(!out.includes('"t"'), out);
 });
 
-// ---- 판 종류별 단계 전이 표 (기본판 · 확장판은 낮 시작 발표 뒤 심부름이 낀다) ----
-// 앱의 nextPhaseOf 와의 대조(두 표가 서버 분기와 같다)는 test/unit/e2eContract.test.ts 가 한다 — 이 시험은 표의 모양만 본다.
-import { FIRST_DAY_PHASE, PHASE_NEXT_BY_MODE } from "./smoke.mjs";
+// ---- 단계 전이 표 (판 종류가 없어 하나) ----
+// 앱의 nextPhaseOf 와의 대조(표가 서버 분기와 같다)는 test/unit/e2eContract.test.ts 가 한다 — 이 시험은 표의 모양만 본다.
+import { PHASE_NEXT } from "./smoke.mjs";
 
-test("PHASE_NEXT_BY_MODE: 판 종류가 둘이고 표마다 가리키는 단계가 모두 표의 키다", () => {
-  assert.deepEqual(Object.keys(PHASE_NEXT_BY_MODE).sort(), ["basic", "extended"]);
-  for (const [mode, graph] of Object.entries(PHASE_NEXT_BY_MODE)) {
-    for (const [from, nexts] of Object.entries(graph)) {
-      for (const to of nexts) assert.ok(Object.hasOwn(graph, to), `${mode}: ${from} → ${to} 가 표의 키가 아님`);
-    }
+test("PHASE_NEXT: 표마다 가리키는 단계가 모두 표의 키다", () => {
+  for (const [from, nexts] of Object.entries(PHASE_NEXT)) {
+    for (const to of nexts) assert.ok(Object.hasOwn(PHASE_NEXT, to), `${from} → ${to} 가 표의 키가 아님`);
   }
 });
 
-test("기본판 표: 역할 확인 → 낮 시작 발표 → 토론, 처형 뒤·지목 0표는 밤, 아침 다음은 낮 시작 발표다", () => {
-  const g = PHASE_NEXT_BY_MODE.basic;
+test("전이 표: 역할 확인 → 낮 시작 발표 → 토론, 처형 뒤·지목 0표는 밤, 아침 다음은 낮 시작 발표다", () => {
+  const g = PHASE_NEXT;
   assert.deepEqual(g.roleReveal, ["dayAnnounce"]);
   assert.deepEqual(g.dayAnnounce, ["discussion"]);
   assert.deepEqual(g.nomination.slice().sort(), ["defense", "night"]);
   assert.deepEqual(g.execution.slice().sort(), ["ended", "night"]);
   assert.deepEqual(g.morning.slice().sort(), ["dayAnnounce", "ended"]);
   assert.equal(Object.hasOwn(g, "errand"), false); // errand 0건
-});
-
-test("확장판 표: 22-06 부터 기본판과 같다(낮 시작 발표 다음이 토론), 처형 뒤·지목 0표는 밤이다", () => {
-  const g = PHASE_NEXT_BY_MODE.extended;
-  assert.deepEqual(g.roleReveal, ["dayAnnounce"]);
-  assert.deepEqual(g.dayAnnounce, ["discussion"]);
-  assert.equal(Object.hasOwn(g, "errand"), false); // errand 0건
-  assert.deepEqual(g.nomination.slice().sort(), ["defense", "night"]);
-  assert.deepEqual(g.execution.slice().sort(), ["ended", "night"]);
-  assert.deepEqual(g.morning.slice().sort(), ["dayAnnounce", "ended"]);
-});
-
-test("FIRST_DAY_PHASE: 두 판 모두 낮 시작 발표 — 첫날 단언이 day.n = 1 을 보는 단계", () => {
-  assert.deepEqual(FIRST_DAY_PHASE, { basic: "dayAnnounce", extended: "dayAnnounce" });
-  for (const mode of ["basic", "extended"]) assert.ok(PHASE_NEXT_BY_MODE[mode].roleReveal.includes(FIRST_DAY_PHASE[mode]));
 });

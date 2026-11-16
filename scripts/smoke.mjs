@@ -22,8 +22,6 @@
 //   node scripts/smoke.mjs --prod                 같은 폴더의 prod-url.txt 주소
 //   옵션: --stage create (기본값) | full | --print-version
 //         --players N (full 단계 인원, 4~8, 기본 5)
-//         --mode extended | basic (full 단계 판 종류, 기본 extended. extended 는 첫날 사슬(역할 확인 → 낮 시작 발표 → 토론)까지 돌고,
-//                                    basic 은 한 판을 끝까지 돈다 — 22-07·22-08 이 판 종류째 지운다)
 //         --previous-version V (full 단계: /api/health 의 version 이 V 와 같으면 실패 — 재배포 확인)
 // 토큰 값은 어떤 출력에도 찍지 않는다. 채팅 본문도 출력하지 않는다.
 // 가져오면 main 이 돌지 않는다(test/unit/e2eContract.test.ts·scripts/smoke.test.mjs 가 판정 함수를 가져간다).
@@ -92,11 +90,11 @@ const EXPECTED_ROLES = {
   7: { mafia: 2, police: 1, doctor: 1, citizen: 3 },
   8: { mafia: 2, police: 1, doctor: 1, citizen: 4 },
 };
-// 허용 전이 표(shared/game/phases.ts 의 nextPhaseOf + tick 분기와 같다). 판 종류별로 두 갈래다(21-13, 결정 0088): 방의 view.mode 가 표를 고른다. 분기형이라 값이 배열이다(결정 0060-1).
-// test/unit/e2eContract.test.ts 가 두 표를 nextPhaseOf(단계) 와 대조한다 — 어긋나면 거짓 통과·거짓 실패가 난다.
-// 기본 마피아 판(옛 순서): dayAnnounce → discussion → nomination → (최다 한 명) defense → verdict → execution → night | ended,
+// 허용 전이 표(shared/game/phases.ts 의 nextPhaseOf + tick 분기와 같다). 판 종류가 없어 표는 하나다(22-08). 분기형이라 값이 배열이다(결정 0060-1).
+// test/unit/e2eContract.test.ts 가 이 표를 nextPhaseOf(단계) 와 대조한다 — 어긋나면 거짓 통과·거짓 실패가 난다.
+// 마피아 판(옛 순서): dayAnnounce → discussion → nomination → (최다 한 명) defense → verdict → execution → night | ended,
 // 지목 0표·동률은 곧장 night, night → morning → dayAnnounce(다음 낮) | ended. 승패가 나지 않는 한 낮 루프라 끝이 없다.
-const PHASE_NEXT_BASIC = {
+export const PHASE_NEXT = {
   lobby: ["assigning"],
   assigning: ["roleReveal"],
   roleReveal: ["dayAnnounce"],
@@ -110,11 +108,6 @@ const PHASE_NEXT_BASIC = {
   morning: ["dayAnnounce", "ended"],
   ended: [],
 };
-// 확장판: 22-06 에서 심부름 단계가 없어져 기본판과 같다(판 종류째 22-07 이 지운다).
-const PHASE_NEXT_EXTENDED = PHASE_NEXT_BASIC;
-export const PHASE_NEXT_BY_MODE = { basic: PHASE_NEXT_BASIC, extended: PHASE_NEXT_EXTENDED };
-// 판 종류별 첫날의 시작 단계: 두 판 모두 낮 시작 발표다. 첫날 단언은 이 단계에서 day.n = 1 을 본다.
-export const FIRST_DAY_PHASE = { basic: "dayAnnounce", extended: "dayAnnounce" };
 const DAY_PHASES = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
 const ROLE_IDS = ["mafia", "police", "doctor", "citizen"];
 // 직업 이름 문자열이 나와도 되는 경로(배열 칸은 [] 로 줄여 비교한다). 채널 이름 mafia 가 든 ch·me.chat 은 채널 검사가 따로 본다.
@@ -208,21 +201,17 @@ const info = (text) => console.log(`  info: ${text}`);
 
 function usage(reason) {
   console.log(`사용법 오류: ${reason}`);
-  console.log("node scripts/smoke.mjs [<주소> | --prod] [--stage create|full] [--players 4~8] [--mode extended|basic] [--previous-version V] [--print-version]");
+  console.log("node scripts/smoke.mjs [<주소> | --prod] [--stage create|full] [--players 4~8] [--previous-version V] [--print-version]");
   process.exit(2);
 }
 
 function parseArgs(argv) {
-  const args = { base: null, prod: false, stage: "create", printVersion: false, players: 5, mode: "extended", previousVersion: null };
+  const args = { base: null, prod: false, stage: "create", printVersion: false, players: 5, previousVersion: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--prod") args.prod = true;
     else if (a === "--print-version") args.printVersion = true;
     else if (a === "--stage") args.stage = argv[++i] ?? "";
-    else if (a === "--mode") {
-      args.mode = argv[++i] ?? "";
-      if (!Object.hasOwn(PHASE_NEXT_BY_MODE, args.mode)) usage(`--mode 는 extended 또는 basic 이어야 함: ${args.mode}`);
-    }
     else if (a === "--players") {
       const raw = argv[++i] ?? "";
       if (!/^\d+$/.test(raw) || Number(raw) < 4 || Number(raw) > 8) usage(`--players 는 4~8 정수여야 함: ${raw}`);
@@ -458,10 +447,9 @@ async function expectError(client, msg, code, label, withState = false) {
   }
 }
 
-const inDayN = (n) => (v) => v.day?.n === n;
 const firstState = (c, phase, pred = () => true) => states(c).find((f) => f.msg.view.phase === phase && pred(f.msg.view));
 
-// 정적 에셋 확인(인물 그림·OG·배경 WebP) — 판 종류와 무관하다. 기본판 한 판 끝과 확장판 첫날 사슬 끝이 같은 점검을 쓴다(21-13).
+// 정적 에셋 확인(인물 그림·OG·배경 WebP) — 한 판 끝에서 점검한다.
 async function checkAssets(origin, isLocal) {
   // 에셋: 인물 그림 %40 주소(200 image/png + 하루 캐시)와 OG 이미지
   const figPath = "/characters/table/fig1_boy_brown_default%402x.png";
@@ -495,8 +483,6 @@ async function stageFull(url, args) {
   const origin = url.origin;
   const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1";
   const N = args.players;
-  const MODE = args.mode;
-  const PHASE_NEXT = PHASE_NEXT_BY_MODE[MODE];
   const wsBase = `${url.protocol === "https:" ? "wss:" : "ws:"}//${url.host}`;
   const httpLog = []; // { owner: 클라이언트 인덱스 또는 null, raw }
   const json = { "content-type": "application/json" };
@@ -630,7 +616,7 @@ async function stageFull(url, args) {
     expectedRejects[clients.indexOf(c)].push(why);
   }
 
-  // (7) 시작 — 22-07: 판 종류 고르기 메시지가 없어졌다. --mode 인자와 판 종류별 분기는 22-08 이 지운다(두 값 모두 같은 규칙의 방이다).
+  // (7) 시작
   host.ws.send(JSON.stringify({ t: "start" }));
 
   // (8) 두 번째 클라이언트: roleReveal 에서 소켓을 닫고 같은 토큰으로 다시 붙음 — hello 직후 chatLog 로 로비 줄이 돌아온다
@@ -645,61 +631,7 @@ async function stageFull(url, args) {
   if (afterFirst.me.seat !== before.seat) fail(`재접속 뒤 seat 가 다름: ${before.seat} → ${afterFirst.me.seat}`);
   if (afterFirst.me.role !== before.role) fail("재접속 뒤 역할이 끊기 전과 다름");
 
-  // (9·확장판) 첫날: 역할 확인 → 낮 시작 발표(일차 1) → 토론. 첫날 단언은 낮 시작 발표에서 day.n = 1 을 본다.
-  //            하루의 나머지(토론 채팅·지목·변론·찬반·처형·밤)는 기본판 한 판(--mode basic)과 워커 시험·폰 E2E 가 돈다 — 이 단계는 배포본이 첫날 사슬을 지키는지만 본다.
-  if (MODE === "extended") {
-    await waitUntil(() => clients.every((c) => firstState(c, FIRST_DAY_PHASE.extended)), 30_000, "모든 클라이언트가 roleReveal 다음에 dayAnnounce 를 받지 못함");
-    for (const c of clients) {
-      const ev = firstState(c, FIRST_DAY_PHASE.extended).msg.view;
-      if (ev.day?.n !== 1) fail(`${c.nickname} 의 첫 dayAnnounce 의 day.n 이 1 이 아님: ${ev.day?.n}`);
-      if (c.unexpectedClose !== null) fail(`${c.nickname} 소켓이 예상 밖으로 닫힘 (code ${c.unexpectedClose})`);
-    }
-    // 낮 시작 발표 마감 다음은 토론이다(서버 타이머, 넘기기 없음).
-    await waitUntil(() => clients.every((c) => firstState(c, "discussion", inDayN(1))), STATE_LIMIT_MS + 5000, "낮 시작 발표 마감 뒤 1일차 discussion 이 모든 클라이언트에 오지 않음");
-    for (const c of clients) {
-      const dv = firstState(c, "discussion", inDayN(1)).msg.view;
-      if (dv.phaseDurationMs !== DISCUSSION_MS) fail(`${c.nickname} 의 1일차 discussion phaseDurationMs 가 ${DISCUSSION_MS} 이 아님: ${dv.phaseDurationMs}`);
-    }
-    const afterDay = await http(null, "POST", `/api/rooms/${code}/join`, { nickname: "늦은사람" });
-    if (afterDay.status !== 409 || afterDay.data?.error !== "GAME_STARTED") fail(`시작 뒤 참가가 409 GAME_STARTED 가 아님: ${afterDay.status} ${afterDay.data?.error}`);
-    // 단계 순서·누설: 전이 표(확장판)가 허용하는 다음 단계로만, 다른 클라이언트의 토큰·서버 전용 키가 어떤 프레임에도 없다.
-    for (const [i, c] of clients.entries()) {
-      const seq = [];
-      for (const f of states(c)) if (seq.at(-1) !== f.msg.view.phase) seq.push(f.msg.view.phase);
-      for (let k = 1; k < seq.length; k++) {
-        if (!(PHASE_NEXT[seq[k - 1]] ?? []).includes(seq[k])) fail(`${c.nickname} 의 단계 순서가 이상함: ${seq.join(" → ")}`);
-      }
-      for (const f of c.frames) {
-        for (const o of clients.filter((_, k) => k !== i)) if (f.raw.includes(o.token)) fail(`${c.nickname} 의 프레임에 ${o.nickname} 의 토큰이 들어 있음`);
-        if (!f.msg) continue;
-        for (const key of SERVER_ONLY_KEYS) {
-          const kp = [];
-          collectKeyPaths(f.msg, key, "", kp);
-          const bad = kp.filter((p) => !(PUBLIC_KEY_PATHS[key] ?? []).includes(p));
-          if (bad.length > 0) fail(`${c.nickname} 의 프레임에 서버 전용·삭제된 키 ${key} 가 있음: ${bad.join(",")}`);
-        }
-      }
-      for (const f of states(c)) {
-        const rolePaths = [];
-        collectKeyPaths(f.msg, "role", "", rolePaths);
-        if (rolePaths.some((p) => p !== "view.me.role")) fail(`${c.nickname} 의 프레임에 view.me.role 밖의 role 키가 있음: ${rolePaths.join(",")}`);
-      }
-    }
-    for (const h of httpLog) {
-      clients.forEach((c, i) => {
-        if (h.owner !== i && h.raw.includes(c.token)) fail(`HTTP 응답(소유 ${h.owner === null ? "익명" : clients[h.owner].nickname})에 ${c.nickname} 의 토큰이 들어 있음`);
-      });
-    }
-    const serverSpreadDisc = serverSpread(clients.map((c) => firstState(c, "discussion", inDayN(1)).msg.view));
-    if (serverSpreadDisc === null) fail("discussion 서버 시각 편차 측정 못 함 (view.serverNow 가 숫자가 아님)");
-    if (serverSpreadDisc >= DAY_SPREAD_LIMIT_MS) fail(`discussion 서버 시각 편차 ${serverSpreadDisc}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
-    for (const c of clients) await closeSocket(c);
-    await checkAssets(origin, isLocal);
-    console.log(`SMOKE OK full mode=extended code=${code} players=${N} day1=dayAnnounce→discussion serverSpread=${serverSpreadDisc}ms version=${version}`);
-    return;
-  }
-
-  // (9) 낮 시작 발표(기본판) — 모든 클라이언트가 day.n 1 을 받는다
+  // (9) 낮 시작 발표 — 모든 클라이언트가 day.n 1 을 받는다
   await waitUntil(() => clients.every((c) => firstState(c, "dayAnnounce")), 30_000, "모든 클라이언트가 dayAnnounce 를 받지 못함");
   for (const c of clients) {
     const ann = firstState(c, "dayAnnounce").msg.view;

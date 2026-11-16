@@ -780,39 +780,37 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
     expect(text).toMatch(/const morningWant = 9_000;/);
   });
 
-  // smoke.mjs 의 전이 표는 아직 판 종류 이름이 붙은 두 갈래(PHASE_NEXT_BY_MODE)다 — 22-08 이 하나로 합친다. 두 표의 값은 같고 서버와 같다.
-  const smokeGraphs = (smoke as unknown as { PHASE_NEXT_BY_MODE: Record<string, Record<string, string[]>> }).PHASE_NEXT_BY_MODE;
+  // smoke.mjs 의 전이 표(PHASE_NEXT)는 판 종류가 없어 하나이고 서버와 같다.
+  const smokeGraph = (smoke as unknown as { PHASE_NEXT: Record<string, string[]> }).PHASE_NEXT;
 
-  it("smoke.mjs 의 전이 표가 판 종류별 두 갈래이고 둘 다 dayAnnounce → discussion 이며 낮 단계 목록에 errand 가 없다", () => {
+  it("smoke.mjs 의 전이 표가 하나이고 dayAnnounce → discussion 이며 낮 단계 목록에 errand 가 없다", () => {
     const text = scriptText("smoke.mjs");
     expect(text).toMatch(/dayAnnounce: \["discussion"\]/);
     expect(text).not.toMatch(/errand/);
-    expect(text).toMatch(/FIRST_DAY_PHASE = \{ basic: "dayAnnounce", extended: "dayAnnounce" \}/);
+    expect(text).not.toMatch(/PHASE_NEXT_BY_MODE|FIRST_DAY_PHASE/);
   });
 
-  it("smoke.mjs 의 두 전이 표가 서버의 nextPhaseOf·afterDayOf 와 같다: 표가 가리키는 모든 단계(기본 다음 단계·처형 없는 낮 분기)가 들어 있고, 낮 시작 발표 다음은 두 판 모두 토론이다 (T-21-45)", () => {
-    for (const mode of Object.keys(smokeGraphs)) {
-      const graph = smokeGraphs[mode]!;
-      expect(Object.keys(graph).sort(), `${mode} 표의 단계 목록`).toEqual(
-        ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"].sort(),
-      );
-      for (const [from, nexts] of Object.entries(graph)) {
-        if (from === "ended" || from === "lobby") continue; // 방장의 start 가 넘기는 단계라 표의 next 가 없다
-        const want = nextPhaseOf(from as PhaseId);
-        if (from === "nomination") {
-          // 지목 마감: 최다 한 명이면 변론, 처형 없이 끝나면 afterDayOf() = night
-          expect([...nexts].sort(), `${mode} nomination`).toEqual([afterDayOf(), "defense"].sort());
-          continue;
-        }
-        expect(nexts, `${mode} ${from} → ${want}`).toContain(want);
+  it("smoke.mjs 의 전이 표가 서버의 nextPhaseOf·afterDayOf 와 같다: 표가 가리키는 모든 단계(기본 다음 단계·처형 없는 낮 분기)가 들어 있고, 낮 시작 발표 다음은 토론이다 (T-21-45)", () => {
+    const graph = smokeGraph;
+    expect(Object.keys(graph).sort(), "표의 단계 목록").toEqual(
+      ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"].sort(),
+    );
+    for (const [from, nexts] of Object.entries(graph)) {
+      if (from === "ended" || from === "lobby") continue; // 방장의 start 가 넘기는 단계라 표의 next 가 없다
+      const want = nextPhaseOf(from as PhaseId);
+      if (from === "nomination") {
+        // 지목 마감: 최다 한 명이면 변론, 처형 없이 끝나면 afterDayOf() = night
+        expect([...nexts].sort(), "nomination").toEqual([afterDayOf(), "defense"].sort());
+        continue;
       }
+      expect(nexts, `${from} → ${want}`).toContain(want);
     }
-    expect([...smokeGraphs.extended.night!]).toEqual(["morning"]);
+    expect([...smokeGraph.night!]).toEqual(["morning"]);
     expect(nextPhaseOf("morning")).toBe("dayAnnounce");
     expect(nextPhaseOf("night")).toBe("morning");
   });
 
-  it("uat-test-room.mjs 의 전이 표도 판 종류별 두 갈래이고 둘 다 낮 시작 발표 다음이 토론이다", () => {
+  it("uat-test-room.mjs 의 전이 표도 하나이고 낮 시작 발표 다음이 토론이다", () => {
     const text = scriptText("uat-test-room.mjs");
     expect(text).toMatch(/roleReveal: \["dayAnnounce"\], dayAnnounce: \["discussion"\]/);
     expect(text).not.toContain("errand");
