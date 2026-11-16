@@ -503,7 +503,7 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
     expect(container.querySelectorAll("[data-side-column] [data-map-chip]")).toHaveLength(0);
   });
 
-  it("방장 대기실(봇 단추 없는 방): 오른쪽 열은 소리 자리 다음 [dress] 하나, 맵 단추는 왼쪽 방장 줄의 [판 종류] 아래다. 확장판 방의 줄은 [판 종류]·[튜토리얼 먼저]다 (19-04 D-13 → 20-07 D-02)", () => {
+  it("방장 대기실(봇 단추 없는 방): 오른쪽 열은 소리 자리 다음 [dress] 하나, 맵 단추는 왼쪽 방장 줄의 [판 종류] 아래다. 확장판 방의 줄은 [판 종류]뿐이다 (19-04 D-13 → 20-07 D-02 → 22-03 에서 [튜토리얼 먼저] 없어짐)", () => {
     const { container, unmount } = render(lobby(hostView()));
     const rail = (c: ParentNode) => [...c.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).join(",");
     expect([...container.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button")).join(",")).toBe("dress");
@@ -512,6 +512,6 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
     expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
     unmount();
     const extended = render(lobby(hostView({ mode: "extended" })));
-    expect(rail(extended.container)).toBe("mode,tutorial");
+    expect(rail(extended.container)).toBe("mode");
   });
 });

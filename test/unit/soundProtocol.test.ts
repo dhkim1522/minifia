@@ -1,6 +1,6 @@
 // 12-12: 소리가 와이어·서버에 닿지 않음을 고정한다 (LS-9, T-12-47).
 // (가) 서버(shared·worker)는 소리를 모른다 (나) 클라이언트 메시지 종류는 12페이즈 시작 때와 같다
-// (다) src/audio 는 네트워크 API 를 쓰지 않는다 (라) docs/audio.md 레시피 지도가 소리 id 68개를 모두 담는다.
+// (다) src/audio 는 네트워크 API 를 쓰지 않는다 (라) docs/audio.md 레시피 지도가 소리 id 56개를 모두 담는다.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -44,7 +44,6 @@ const CLIENT_MESSAGE_KINDS = [
   "testReset",
   "testRole",
   "testSkip",
-  "tutorialDone", // 17페이즈(결정 0080): 소리와 무관한 새 메시지 — 튜토리얼 끝났음. 이 목록은 소리가 만든 메시지가 없다는 것을 고정하는 것이라 17페이즈의 한 줄만 더했다
   "typing",
   "verdict",
   "whisper",
@@ -84,10 +83,10 @@ describe("소리 프로토콜 불변 (LS-9)", () => {
     expect(hits).toEqual([]);
   });
 
-  it("(라) docs/audio.md 레시피 지도가 소리 id 68개를 모두 담는다", () => {
-    expect(SOUND_IDS).toHaveLength(68);
+  it("(라) docs/audio.md 레시피 지도가 소리 id 56개를 모두 담는다", () => {
+    expect(SOUND_IDS).toHaveLength(56);
     expect(BED_IDS).toHaveLength(7);
-    expect(SFX_IDS).toHaveLength(61);
+    expect(SFX_IDS).toHaveLength(49);
     const doc = readFileSync(`${ROOT}docs/audio.md`, "utf8");
     const missing = SOUND_IDS.filter((id) => !doc.includes(`\`${id}\``));
     expect(missing).toEqual([]);

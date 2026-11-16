@@ -11,7 +11,7 @@ import { bindSignals, emitSignal, SIGNAL_KINDS } from "../../src/audio/signals";
 import { pinOf } from "../../src/world/pinPlan";
 
 const PHASES: readonly PhaseId[] = [
-  "lobby", "tutorial", "assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "runoff",
+  "lobby", "assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "runoff",
   "showdown", "defense", "verdict", "execution", "night", "morning", "ended",
 ];
 
@@ -51,7 +51,6 @@ describe("단계 → 침대 표 (D-17, O-7)", () => {
     expect(Object.keys(BED_OF).sort()).toEqual([...PHASES].sort());
     expect(BED_OF).toEqual({
       lobby: "bed.lobby",
-      tutorial: null,
       assigning: null,
       roleReveal: "bed.reveal",
       dayAnnounce: "bed.day",
@@ -69,12 +68,12 @@ describe("단계 → 침대 표 (D-17, O-7)", () => {
     });
   });
 
-  it("침대 id 는 모두 BED_IDS 안이다 (null 은 assigning·tutorial 둘)", () => {
+  it("침대 id 는 모두 BED_IDS 안이다 (null 은 assigning 하나)", () => {
     for (const p of PHASES) {
       const b = BED_OF[p];
       if (b !== null) expect(BED_IDS).toContain(b);
     }
-    expect(PHASES.filter((p) => BED_OF[p] === null)).toEqual(["tutorial", "assigning"]);
+    expect(PHASES.filter((p) => BED_OF[p] === null)).toEqual(["assigning"]);
   });
 });
 

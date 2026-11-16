@@ -49,7 +49,7 @@ describe("판 종류 문구 한 곳 (19-03, UI-SPEC Copywriting)", () => {
     expect(JSON.stringify(MODE_TEXT.desc)).toBe(JSON.stringify({ basic: "토론하고 투표해요", extended: "증거를 찾아 추리해요" }));
     expect([MODE_TEXT.aria("basic"), MODE_TEXT.aria("extended")].join(" | ")).toBe("판 종류: 기본 마피아 | 판 종류: 확장판");
     expect([MODE_TEXT.changed("basic"), MODE_TEXT.changed("extended")].join(" | ")).toBe("판 종류: 기본 마피아 | 판 종류: 확장판");
-    expect([MODE_TEXT.tutorialOn, MODE_TEXT.tutorialOff, MODE_TEXT.rail].join(" | ")).toBe("튜토리얼 먼저 켰어요 | 튜토리얼 껐어요 | 방장 전용");
+    expect(MODE_TEXT.rail).toBe("방장 전용");
   });
 });
 
@@ -86,7 +86,6 @@ describe("HostRailButton — 방장 원형 단추 (19-03, D-13·D-14, UI-SPEC A-
     expect(btn.getAttribute("aria-pressed")).toBe("false");
     expect(btn.getAttribute("type")).toBe("button");
     expect(btn.hasAttribute("data-float")).toBe(false);
-    expect(btn.hasAttribute("data-tutorial-toggle")).toBe(false);
     expect(btn.querySelector("svg")?.getAttribute("width")).toBe("24");
     // 깜빡임 클래스를 스스로 달지 않는다(정지한 금빛 = 방장 전용)
     expect(btn.classList.contains("is-call")).toBe(false);
@@ -116,28 +115,28 @@ describe("HostRailButton — 방장 원형 단추 (19-03, D-13·D-14, UI-SPEC A-
   });
 
   it("switchOn 을 주면 role=switch·aria-checked 이고 aria-pressed 는 없다", () => {
-    const on = render(<HostRailButton id="tutorial" icon="book" label="튜토리얼 먼저" switchOn onPress={() => {}} />);
+    const on = render(<HostRailButton id="bots" icon="bot" label="봇" switchOn onPress={() => {}} />);
     const a = on.container.querySelector("[data-host-rail-btn]");
     expect(a?.getAttribute("role")).toBe("switch");
     expect(a?.getAttribute("aria-checked")).toBe("true");
     expect(a?.hasAttribute("aria-pressed")).toBe(false);
     on.unmount();
-    const off = render(<HostRailButton id="tutorial" icon="book" label="튜토리얼 먼저" switchOn={false} onPress={() => {}} />);
+    const off = render(<HostRailButton id="bots" icon="bot" label="봇" switchOn={false} onPress={() => {}} />);
     const b = off.container.querySelector("[data-host-rail-btn]");
     expect(b?.getAttribute("role")).toBe("switch");
     expect(b?.getAttribute("aria-checked")).toBe("false");
     expect(b?.hasAttribute("aria-pressed")).toBe(false);
   });
 
-  it("기존 선택자를 잇는다: bots 는 data-float=bots, tutorial 은 data-tutorial-toggle 도 단다. 표식 값은 고정 낱말뿐이다", () => {
+  it("기존 선택자를 잇는다: bots 는 data-float=bots 도 단다. 표식 값은 고정 낱말뿐이다", () => {
     const seen: string[] = [];
-    for (const [id, icon] of [["mode", "deck"], ["bots", "bot"], ["tutorial", "book"]] as const) {
+    for (const [id, icon] of [["mode", "deck"], ["bots", "bot"]] as const) {
       const { container, unmount } = render(<HostRailButton id={id} icon={icon} label="이름" onPress={() => {}} />);
       const btn = container.querySelector("[data-host-rail-btn]");
       seen.push(`${btn?.getAttribute("data-host-rail-btn")}:${btn?.getAttribute("data-float") ?? "-"}:${btn?.hasAttribute("data-tutorial-toggle") ? "t" : "-"}`);
       unmount();
     }
-    expect(seen.join(" ")).toBe("mode:-:- bots:bots:- tutorial:-:t");
+    expect(seen.join(" ")).toBe("mode:-:- bots:bots:-");
   });
 
   it("mousedown 의 기본 동작을 막아 입력칸 포커스를 뺏지 않는다", () => {
@@ -296,7 +295,8 @@ const railButtons = (onPress: () => void = () => {}) => [
   <HostRailButton key="mode" id="mode" icon="deck" label="판 종류: 확장판" onPress={onPress} />,
   <MapChip key="map" rail choice="random" host onPress={onPress} />,
   <HostRailButton key="bots" id="bots" icon="bot" label="봇" onPress={onPress} />,
-  <HostRailButton key="tutorial" id="tutorial" icon="book" label="튜토리얼 먼저" switchOn onPress={onPress} />,
+  // 4번째 칸: 줄 틀 시험은 칸 수 4 에 맞춘 높이를 쓴다(토글 칸 자리의 일반 토글 단추 — 22-03 에서 [튜토리얼 먼저]가 없어졌다)
+  <HostRailButton key="bots-b" id="bots" icon="bot" label="봇" switchOn onPress={onPress} />,
 ];
 const colsOf = (container: HTMLElement) =>
   [...container.querySelectorAll(".mf-hostrail__col")]
@@ -320,11 +320,11 @@ describe("HostRail — 방장 줄 틀 (19-03, D-13, UI-SPEC A·F-2)", () => {
     expect(crowns[0]?.getAttribute("aria-label")).toBe("방장 전용");
     expect(crowns[0]?.querySelector("svg")?.getAttribute("width")).toBe("20");
     expect(crowns[0]?.querySelector("button")).toBeNull();
-    expect(colsOf(container)).toBe("mode,map,bots,tutorial");
+    expect(colsOf(container)).toBe("mode,map,bots,bots");
     // 표식이 열 묶음보다 먼저(위)다
     expect([...rail.children].map((c) => c.className).join(" > ")).toBe("mf-hostrail__crown > mf-hostrail__cols");
     // 표식 값은 고정 낱말뿐이다(T-19-11)
-    expect([...rail.querySelectorAll("[data-host-rail-btn]")].every((b) => ["mode", "map", "bots", "tutorial"].includes(b.getAttribute("data-host-rail-btn") ?? ""))).toBe(true);
+    expect([...rail.querySelectorAll("[data-host-rail-btn]")].every((b) => ["mode", "map", "bots"].includes(b.getAttribute("data-host-rail-btn") ?? ""))).toBe(true);
     // 줄에 보이는 글이 없다(D-15)
     expect((rail.textContent ?? "").trim()).toBe("");
   });
@@ -332,14 +332,14 @@ describe("HostRail — 방장 줄 틀 (19-03, D-13, UI-SPEC A·F-2)", () => {
   it("한 열에 안 들어가면 표식 없이 두 열로 나뉘고 줄의 접근성 이름은 남는다", () => {
     const { container } = render(<HostRail maxHeight={180}>{railButtons()}</HostRail>);
     expect(container.querySelectorAll("[data-host-rail-crown]").length).toBe(0);
-    expect(colsOf(container)).toBe("mode,map,bots | tutorial");
+    expect(colsOf(container)).toBe("mode,map,bots | bots");
     expect(container.querySelector("[data-host-rail]")?.getAttribute("aria-label")).toBe("방장 전용");
   });
 
   it("표식만 안 들어가면 표식 없는 한 열이다", () => {
     const { container } = render(<HostRail maxHeight={250}>{railButtons()}</HostRail>);
     expect(container.querySelectorAll("[data-host-rail-crown]").length).toBe(0);
-    expect(colsOf(container)).toBe("mode,map,bots,tutorial");
+    expect(colsOf(container)).toBe("mode,map,bots,bots");
   });
 
   it("null 자식은 칸이 아니다 — 기본 마피아 판처럼 토글이 빠지면 셋으로 센다", () => {

@@ -280,19 +280,17 @@ describe("mount — 지연 로드 본체 (D-19)", () => {
 // ───────────────────────── Task 2: 데이터·한 화면 전체·전부 계산 ─────────────────────────
 
 describe("LAB_GROUPS·SOUND_NAMES — 묶음과 한글 이름 (E)", () => {
-  it("효과음 61개를 일곱 묶음으로 나누고 합집합이 SFX_IDS 전부(중복·누락 0)", () => {
+  it("효과음 49개를 일곱 묶음으로 나누고 합집합이 SFX_IDS 전부(중복·누락 0)", () => {
     expect(LAB_GROUPS).toHaveLength(7);
     const all = LAB_GROUPS.flatMap((g) => [...g.ids]);
     expect(all).toHaveLength(SFX_IDS.length);
     expect(new Set(all).size).toBe(all.length);
     expect([...all].sort()).toEqual([...SFX_IDS].sort());
-    expect(LAB_GROUPS.map((g) => g.title)).toEqual(["공통·로비·역할", "낮·지목·변론", "판결·처형", "밤·아침", "동작", "결과", "튜토리얼"]);
+    expect(LAB_GROUPS.map((g) => g.title)).toEqual(["공통·로비·역할", "낮·지목·변론", "판결·처형", "밤·아침", "동작", "결과", "사회자 목소리"]);
   });
-  it("튜토리얼 묶음은 tut.* 12개와 voice.syl 이다 (17-02)", () => {
-    const g = LAB_GROUPS.find((x) => x.key === "tutorial")!;
-    expect(g.ids).toHaveLength(13);
-    expect(g.ids.filter((id) => id.startsWith("tut."))).toHaveLength(12);
-    expect(g.ids).toContain("voice.syl");
+  it("사회자 목소리 묶음은 voice.syl 하나다 (17-02, 22-03 에서 옛 튜토리얼 tut.* 12개가 빠졌다)", () => {
+    const g = LAB_GROUPS.find((x) => x.key === "voice")!;
+    expect(g.ids).toEqual(["voice.syl"]);
   });
   it("ui.host 는 '공통·로비·역할' 묶음에 한 번 있고 이름표는 '사회자 알림' (HOST-02, 14-03)", () => {
     const common = LAB_GROUPS.find((g) => g.key === "common")!;
@@ -300,7 +298,7 @@ describe("LAB_GROUPS·SOUND_NAMES — 묶음과 한글 이름 (E)", () => {
     expect(LAB_GROUPS.flatMap((g) => [...g.ids]).filter((id) => id === "ui.host")).toHaveLength(1);
     expect(SOUND_NAMES["ui.host"]).toBe("사회자 알림");
   });
-  it("68개 모두 한글 이름이 있고 한 줄이다", () => {
+  it("56개 모두 한글 이름이 있고 한 줄이다", () => {
     expect(Object.keys(SOUND_NAMES).sort()).toEqual([...SOUND_IDS].sort());
     for (const id of SOUND_IDS) {
       const n = SOUND_NAMES[id];
@@ -309,8 +307,8 @@ describe("LAB_GROUPS·SOUND_NAMES — 묶음과 한글 이름 (E)", () => {
       expect(n.length, id).toBeLessThanOrEqual(16);
     }
   });
-  it("SOUND_LIMITS 는 68·−3·−60·50", () => {
-    expect({ ...SOUND_LIMITS }).toEqual({ count: 68, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
+  it("SOUND_LIMITS 는 56·−3·−60·50", () => {
+    expect({ ...SOUND_LIMITS }).toEqual({ count: 56, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
   });
 });
 
@@ -347,17 +345,17 @@ describe("mount — 한 화면 전체 (E)", () => {
   }
   const hookOf = () => (window as unknown as { __mfSoundLab: LabHook }).__mfSoundLab;
 
-  it("[data-sound-id] 단추가 정확히 68개(침대 7 + 효과음 61)이고 id 가 SOUND_IDS 와 같다", () => {
+  it("[data-sound-id] 단추가 정확히 56개(침대 7 + 효과음 49)이고 id 가 SOUND_IDS 와 같다", () => {
     const { qa } = open();
     const ids = qa("[data-sound-id]").map((b) => b.getAttribute("data-sound-id"));
-    expect(ids).toHaveLength(68);
+    expect(ids).toHaveLength(56);
     expect([...ids].sort()).toEqual([...SOUND_IDS].sort());
   });
 
   it("누르는 대상은 모두 최소 44x44 (인라인 스타일 값)", () => {
     const { qa } = open();
     const targets = qa("button, input[type=range], label");
-    expect(targets.length).toBeGreaterThan(68);
+    expect(targets.length).toBeGreaterThan(56);
     for (const t of targets) {
       const h = parseFloat(t.style.minHeight || "0");
       expect(h, t.outerHTML.slice(0, 80)).toBeGreaterThanOrEqual(44);
@@ -513,7 +511,7 @@ describe("mount — 한 화면 전체 (E)", () => {
     expect(rig.engine.activeNodes()).toBeGreaterThan(0);
   });
 
-  it("[전부 계산]: 68개를 한 번에 하나씩 순차로 렌더하고 훅이 done 이 된다", async () => {
+  it("[전부 계산]: 56개를 한 번에 하나씩 순차로 렌더하고 훅이 done 이 된다", async () => {
     let inflight = 0;
     let maxInflight = 0;
     let n = 0;
@@ -539,7 +537,7 @@ describe("mount — 한 화면 전체 (E)", () => {
     await handle.idle();
     const hook = hookOf();
     expect(hook.done).toBe(true);
-    expect(n).toBe(68);
+    expect(n).toBe(56);
     expect(maxInflight).toBe(1);
     expect(hook.results.map((r) => r.id)).toEqual([...SOUND_IDS]);
     for (const r of hook.results) {
@@ -551,6 +549,6 @@ describe("mount — 한 화면 전체 (E)", () => {
     // 다시 누르면 새로 68 개(이전 결과를 덮어쓴다)
     q("[data-sound-calc-all]")!.click();
     await handle.idle();
-    expect(hookOf().results).toHaveLength(68);
+    expect(hookOf().results).toHaveLength(56);
   });
 });

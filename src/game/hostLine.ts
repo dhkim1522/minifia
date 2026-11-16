@@ -338,8 +338,6 @@ export function hostTimeOf(view: RoomView): boolean {
  */
 export function hostChimeOf(prev: PhaseId | null, cur: PhaseId, fresh: boolean): boolean {
   if (prev === null || fresh || prev === cur) return false;
-  // 17-07(결정 0080-14): 함께 진행 튜토리얼은 자기 띠·소리를 가진다 — 대기실 → tutorial, tutorial → 배정에는 실제 사회자 알림음이 없다(띠·알림음이 겹치지 않게)
-  if (prev === "tutorial" || cur === "tutorial") return false;
   if (prev === "dayAnnounce" && (cur === "discussion" || cur === "errand")) return false;
   // 21-08(UI-SPEC 알림음): 처형 → 저녁은 울리지 않는다(저녁 시작 카드가 신호). 저녁 → 밤·밤 → 아침·아침 → 토론·역할 확인 → 저녁은 다른 단계 바뀜과 같이 한 번 울린다
   if (prev === "execution" && cur === "errand") return false;

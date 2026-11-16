@@ -480,10 +480,7 @@ describe("알림음 판정 hostChimeOf (HOST-02)", () => {
     expect(hostChimeOf("discussion", "nomination", false)).toBe(true);
   });
 
-  it("17-07(0080-14): tutorial 로 들어가는 전환·tutorial 에서 나가는 전환은 울리지 않는다(띠가 둘이 되지 않게), 기존 기대는 그대로", () => {
-    expect(hostChimeOf("lobby", "tutorial", false)).toBe(false);
-    expect(hostChimeOf("tutorial", "assigning", false)).toBe(false);
-    expect(hostChimeOf("tutorial", "roleReveal", false)).toBe(false);
+  it("대기실 → 배정·배정 → 역할 확인은 울린다", () => {
     expect(hostChimeOf("lobby", "assigning", false)).toBe(true);
     expect(hostChimeOf("assigning", "roleReveal", false)).toBe(true);
   });

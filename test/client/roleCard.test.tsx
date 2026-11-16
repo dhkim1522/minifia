@@ -289,7 +289,6 @@ describe("문구 줄바꿈 CSS (A-1 계약 3·7)", () => {
   it.each([
     ["phase.css", ".mf-card__desc"],
     ["rolecard.css", ".mf-rolecard__desc"],
-    ["tutorial.css", ".tut-role__line"],
   ])("%s 의 %s 는 white-space: pre-line 과 word-break: keep-all 이다", (file, selector) => {
     const body = cssRule(read(file), selector);
     expect(body).toContain("white-space: pre-line");

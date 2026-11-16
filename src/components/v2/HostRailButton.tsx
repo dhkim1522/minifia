@@ -13,7 +13,7 @@ import type { V2IconName } from "./V2Icon";
 
 export interface HostRailButtonProps {
   /** 표식 data-host-rail-btn 의 값. [맵] 은 MapChip 의 줄 변형이 "map" 을 단다 */
-  id: "mode" | "bots" | "tutorial";
+  id: "mode" | "bots";
   /** 안에 그릴 아이콘 24 */
   icon: V2IconName;
   /** 접근성 이름(aria-label) */
@@ -36,9 +36,8 @@ export function HostRailButton({ id, icon, label, pressed, switchOn, disabled, o
       type="button"
       className="mv-hostrail-btn"
       data-host-rail-btn={id}
-      // 기존 E2E·시험 선택자를 잇는다: 봇 단추는 data-float="bots", 튜토리얼 토글은 data-tutorial-toggle
+      // 기존 E2E·시험 선택자를 잇는다: 봇 단추는 data-float="bots"
       {...(id === "bots" ? { "data-float": "bots" } : {})}
-      {...(id === "tutorial" ? { "data-tutorial-toggle": "" } : {})}
       {...(isSwitch ? { role: "switch", "aria-checked": switchOn } : { "aria-pressed": pressed === true })}
       aria-label={label}
       aria-disabled={disabled ? "true" : undefined}

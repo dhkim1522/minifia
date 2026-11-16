@@ -59,7 +59,6 @@ import { OUTFIT_IDS, PLACE_IDS, SPOT_IDS, TRACE_PIECE_IDS } from "../../shared/p
 import type { GameMode, OutfitId, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { HOST_HIDDEN_PHASES, HOST_LINES, type HostKey } from "../../src/game/hostLine";
-import { OPENING_LAMPS, TUTORIAL_CAST, TUTORIAL_DOT_COUNT, TUTORIAL_LINES, TUTORIAL_SCENES, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
 import { ROLE_TEXT } from "../../src/game/roleText";
 import { RESULT_TEXT } from "../../src/game/verdict";
 import { JOB_OUTFIT } from "../../src/world/jobOutfit";
@@ -1037,61 +1036,9 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
   }
 });
 
-// 17-09: 첫 사건(튜토리얼) E2E 판정의 사본 상수가 앱 대본(src/game/tutorialScript.ts)과 같다 — 어긋나면 점 수·램프 수·오답 도움·시각 판정이 거짓 통과·거짓 실패한다.
-describe("E2E 의 튜토리얼 사본 상수와 앱 대본 (17-09)", () => {
-  const lib = e2eLib as {
-    TUTORIAL_DOT_COUNT: number;
-    OPENING_LAMPS: number;
-    WRONG_HINT_AFTER: number;
-    TUTORIAL_OPENING_MS: number;
-    TUTORIAL_ERRAND_MS: number;
-    TUTORIAL_CAST_E2E: { me: number; victim: number; suspect: number; errandTarget: string; names: readonly string[] };
-  };
-
-  it("TUTORIAL_DOT_COUNT·OPENING_LAMPS·WRONG_HINT_AFTER 가 앱 상수와 같다", () => {
-    expect(lib.TUTORIAL_DOT_COUNT).toBe(TUTORIAL_DOT_COUNT);
-    expect(lib.OPENING_LAMPS).toBe(OPENING_LAMPS);
-    expect(lib.WRONG_HINT_AFTER).toBe(WRONG_HINT_AFTER);
-  });
-
-  it("오프닝 자동 넘김(4600ms)과 [처리] 뒤 지연(700ms)이 장면 표의 시각과 같다", () => {
-    const opening = TUTORIAL_SCENES.find((s) => s.n === 1)?.advance;
-    const errand = TUTORIAL_SCENES.find((s) => s.n === 3)?.advance;
-    expect(opening).toEqual({ kind: "auto", afterMs: lib.TUTORIAL_OPENING_MS });
-    expect(errand).toEqual({ kind: "act", afterMs: lib.TUTORIAL_ERRAND_MS });
-  });
-
-  it("출연 사본(내 좌석·탈락자·도윤·심부름 장소·가짜 이름 다섯)이 TUTORIAL_CAST 와 같다", () => {
-    expect(lib.TUTORIAL_CAST_E2E.me).toBe(TUTORIAL_CAST.me);
-    expect(lib.TUTORIAL_CAST_E2E.victim).toBe(TUTORIAL_CAST.victim);
-    expect(lib.TUTORIAL_CAST_E2E.suspect).toBe(TUTORIAL_CAST.suspect);
-    expect(lib.TUTORIAL_CAST_E2E.errandTarget).toBe(TUTORIAL_CAST.errand.target);
-    const castNames = TUTORIAL_CAST.seats.map((c) => c.name).filter((n) => n !== "나");
-    expect([...lib.TUTORIAL_CAST_E2E.names].sort()).toEqual([...castNames].sort());
-  });
-
-  it("browser.mjs 의 readTutorial 이 쓰는 출연 좌석 상수(5·2·1·mail)가 TUTORIAL_CAST 와 같다", () => {
-    const text = readFileSync(new URL("../../scripts/e2e/browser.mjs", import.meta.url), "utf8");
-    expect(text).toContain(`{ me: ${TUTORIAL_CAST.me}, victim: ${TUTORIAL_CAST.victim}, suspect: ${TUTORIAL_CAST.suspect}, errandTarget: "${TUTORIAL_CAST.errand.target}", extendDown: SUSPECT_EXTEND_DOWN }`);
-  });
-
-  it("TUTORIAL_ROLE_LINES_E2E 가 직업 카드 줄과 같다: 시민·마피아·의사는 TutorialRoleCards 의 새 흐름 고정 상수, 경찰은 ROLE_TEXT desc 그대로 (18-08, 21-12 D-28)", () => {
-    const lines = (e2eLib as { TUTORIAL_ROLE_LINES_E2E: readonly string[] }).TUTORIAL_ROLE_LINES_E2E;
-    expect(lines.join("|")).toBe(["단서로 마피아를 찾아요", "밤에 집 하나를 골라요", "밤에 한 집을 지켜요", ROLE_TEXT.police.desc].join("|"));
-    const cards = readFileSync(new URL("../../src/components/v2/TutorialRoleCards.tsx", import.meta.url), "utf8");
-    for (const line of lines.slice(0, 3)) expect(cards).toContain(`line: "${line}"`);
-    expect(cards).toContain("line: ROLE_TEXT.police.desc");
-  });
-
-  it("tutorial.mjs 의 오답 문구 사본이 대본 tutorial.vote.wrong 문구와 같다", () => {
-    const text = readFileSync(new URL("../../scripts/e2e/tutorial.mjs", import.meta.url), "utf8");
-    expect(text).toContain(`export const TUTORIAL_WRONG_LINE = "${TUTORIAL_LINES["tutorial.vote.wrong"]}";`);
-  });
-});
-
 describe("E2E 의 시간대 사본과 앱 todOf·TOD_LABEL (18.1-11, 0083-1)", () => {
   const e = polishE2e as { TOD_BY_PHASE: Record<string, string>; TOD_ABSENT_PHASES: readonly string[]; TOD_IDS: readonly string[]; TOD_WORD: Record<string, string> };
-  const ALL_PHASES: PhaseId[] = ["lobby", "tutorial", "assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
+  const ALL_PHASES: PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
 
   it("TOD_BY_PHASE 의 모든 키에서 값이 todOf(키)와 같다", () => {
     for (const [phase, tod] of Object.entries(e.TOD_BY_PHASE)) expect(tod, phase).toBe(todOf(phase as PhaseId));
@@ -1215,7 +1162,7 @@ describe("19페이즈 방장 줄·판 종류 E2E 사본 계약 (19-06, T-19-18·
     expect(text("components/v2/HostRailButton.tsx")).toContain("data-host-rail-btn={id}");
     expect(text("components/v2/MapChip.tsx")).toContain('"data-host-rail-btn": "map"');
     expect([...ids, "map"].sort().join(",")).toBe([...lib.HOST_RAIL_ORDER].sort().join(","));
-    expect(lib.HOST_RAIL_ORDER.join(",")).toBe("mode,map,bots,tutorial");
+    expect(lib.HOST_RAIL_ORDER.join(",")).toBe("mode,map,bots");
     // 칩·시트 칸 표식 값은 GameMode(= GAME_MODES)뿐이다
     expect(text("components/v2/ModeChip.tsx")).toContain("data-mode-chip={mode}");
     expect(text("components/v2/ModeChip.tsx")).toMatch(/mode: GameMode;/);
@@ -1351,11 +1298,6 @@ describe("21페이즈 원인 흐름 E2E 사본 계약 (21-15, D-29, T-21-47·T-2
     const ids = [...flows.matchAll(/\{ id: "(cause-[a-z]+)", run: /g)].map((m) => m[1]);
     expect(ids).toEqual(["cause-evening", "cause-night", "cause-morning", "cause-skip", "cause-basic", "cause-phones"]);
     for (const other of ["errand", "town", "mode-"]) expect(ids.filter((id) => id.includes(other))).toEqual([]);
-  });
-
-  it("튜토리얼 E2E 의 정체 공개 줄 사본은 TUTORIAL_LINES['tutorial.hidden'] 과 같다 (LH10)", () => {
-    const text = readFileSync(new URL("scripts/e2e/tutorial.mjs", root), "utf8");
-    expect(text).toContain(`TUTORIAL_HIDDEN_LINE = "${TUTORIAL_LINES["tutorial.hidden"]}"`);
   });
 
   it("CAUSE_ABSENT_SELECTORS(기본 마피아에서 0건이어야 하는 확장판 요소)의 속성이 git 이 추적하는 src 의 .tsx 에 있다(빈 선택자 금지)", () => {

@@ -7,7 +7,7 @@ import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 
 /** 집 창이 day.lamps 를 따르기 시작하는 단계 앞쪽(저녁 앞): 이 단계에서는 집 창이 지금 주인 규칙이다 */
-const BEFORE_NIGHT: ReadonlySet<PhaseId> = new Set<PhaseId>(["lobby", "tutorial", "assigning", "roleReveal", "dayAnnounce", "errand"]);
+const BEFORE_NIGHT: ReadonlySet<PhaseId> = new Set<PhaseId>(["lobby", "assigning", "roleReveal", "dayAnnounce", "errand"]);
 
 /** 원인 흐름이 켜진 마을 판인가 — 아니면 등불·집 창 파생은 모두 null(기본판·옛 확장판·재즈 바·광장) */
 function causeTown(view: RoomView): boolean {

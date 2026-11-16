@@ -1,4 +1,4 @@
-// 방 높이 고정 훅(RoomScreen 에서 옮김, 17-04): 방 화면과 첫 사건 화면(TutorialScreen)이 같은 훅을 쓴다 — 동작은 그대로다.
+// 방 높이 고정 훅(RoomScreen 에서 옮김, 17-04) — 동작은 그대로다.
 import { useLayoutEffect } from "react";
 import type { RefObject } from "react";
 

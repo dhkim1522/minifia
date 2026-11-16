@@ -1154,7 +1154,6 @@ export function headerContrastChecks(measure, { expectTimer }) {
 /** 단계 → 배경 장면 id. src/game/scenes.ts 의 PHASE_SCENE 과 같은 표다 — test/unit/scenes.test.ts 가 두 표가 같음을 확인한다. */
 export const EXPECTED_SCENE = {
   lobby: "lobby",
-  tutorial: "lobby", // 17페이즈(결정 0080): 튜토리얼 화면이 자기 장면을 그리기 전까지 대기실 장면
   assigning: "lobby",
   roleReveal: "lobby",
   dayAnnounce: "day",
@@ -2222,7 +2221,7 @@ export const SOUND_MARKERS = Object.freeze([
  * 오프라인 렌더 합격 문턱 (D-18). 낮추지 않는다: 실패하면 레시피를 고친다(T-12-22).
  * count 는 SOUND_IDS.length, 나머지는 src/debug/soundLabData.ts 의 SOUND_LIMITS 와 같아야 하고 e2eContract 시험이 대조한다.
  */
-export const SOUND_RENDER_LIMITS = Object.freeze({ count: 68, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
+export const SOUND_RENDER_LIMITS = Object.freeze({ count: 56, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
 
 /**
  * sound-render: 시험 페이지 [전부 계산] 결과(window.__mfSoundLab.results)를 판정한다.
@@ -2469,8 +2468,8 @@ export function sideColumnChecks(s = {}) {
 export const HOST_RAIL_E2E = Object.freeze({ cell: 52, gap: 12, crownH: 20, left: 16, testShift: 48, chipH: 32, chipTop: 20 });
 /** 앱이 더한 DOM 표식(19-03~19-05). 값은 enum 낱말뿐이다(역할·좌석 없음, T-19-19) */
 export const HOST_RAIL_MARKERS = Object.freeze(["data-host-rail", "data-host-rail-btn", "data-host-rail-crown", "data-mode-chip", "data-mode-sheet", "data-mode-card"]);
-/** 줄 단추의 위 → 아래 순서([data-host-rail-btn] 값). 봇은 대기실의 테스트 방, 튜토리얼 토글은 대기실의 확장판에만 있다 */
-export const HOST_RAIL_ORDER = Object.freeze(["mode", "map", "bots", "tutorial"]);
+/** 줄 단추의 위 → 아래 순서([data-host-rail-btn] 값). 봇은 대기실의 테스트 방에만 있다(22-03 에서 튜토리얼 토글이 없어졌다) */
+export const HOST_RAIL_ORDER = Object.freeze(["mode", "map", "bots"]);
 /** 줄 단추의 테두리·아이콘 색(--light-lamp 사본) · 오른쪽 열 단추의 테두리 색(--night-600 사본). getComputedStyle 이 주는 글 그대로 */
 export const LAMP_RGB = "rgb(255, 207, 138)";
 export const NIGHT600_RGB = "rgb(42, 55, 96)";
@@ -2572,10 +2571,10 @@ export function hostRailMeasure(s) {
  * HR2 단추 지름 52±1 · 열 안 간격 12±1 · 열 사이 12±1 · 왼쪽 16±1 · 줄 윗변 = 띠 아랫변 + 12(테스트 방 + 48) ±2 · 표식 높이 20±1 과 그 아래 12±1 ·
  * HR3 줄(표식 + 단추)이 아래 패널(윗변 − 8)·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열 단추와 교차 0, 오른쪽 열과는 가로 16 이상 떨어진다
  *     (접힌 줄의 둘째 열과 위 알림의 겹침만 HOST_RAIL_KNOWN_LIMITS 의 알려진 한계 — 잰 값을 남기고 실패로 세지 않는다) ·
- * HR4 순서·개수: 대기실 mode·map(mapsOn)·bots(botsOn)·tutorial(확장판만), 결과 mode·map(mapsOn). 오른쪽 열은 소리·옷장 둘 ·
+ * HR4 순서·개수: 대기실 mode·map(mapsOn)·bots(botsOn), 결과 mode·map(mapsOn). 오른쪽 열은 소리·옷장 둘 ·
  * HR5 줄 단추 테두리·아이콘 색 = LAMP_RGB(켜진 토글은 금빛 채움이라 테두리만), 오른쪽 열 단추 테두리 = NIGHT600_RGB, 줄 단추에 .is-call 없음 ·
  * HR6 왕관 표식 유무·열별 칸 수가 hostRailLayoutE2E(n, 잰 최대 높이)와 같다(최대 높이 ±2 안에서 배치가 갈리면 판정하지 않고 info), 줄의 접근성 이름은 "방장 전용" ·
- * HR7 튜토리얼 토글은 확장판에만 있고 role=switch·aria-checked, 패널 안 옛 스위치 줄 0 · HR8 대기실 패널 높이 222±1(방장·참가자 같다).
+ * HR7 튜토리얼 토글(id "tutorial"·role=switch)은 어느 판에도 없고 패널 안 옛 스위치 줄 0 · HR8 대기실 패널 높이 222±1(방장·참가자 같다).
  */
 export function hostRailChecks(s = {}) {
   const E = HOST_RAIL_E2E;
@@ -2584,10 +2583,10 @@ export function hostRailChecks(s = {}) {
     HR1: "방장 줄은 방장 대기실·결과에만(참가자·게임 중·키보드 열림에는 없다)",
     HR2: `줄 단추 지름 ${E.cell}±1 · 칸 사이 ${E.gap}±1 · 왼쪽 ${E.left}±1 · 윗변 = 띠 아랫변 + ${E.gap}(테스트 방 + ${E.testShift}) ±2`,
     HR3: "줄이 아래 패널·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열과 교차 0",
-    HR4: "줄 순서·개수: 판 종류·맵(기본 마피아만)·봇·튜토리얼(확장판만), 결과는 판 종류·맵(기본 마피아만) · 오른쪽 열은 소리·옷장",
+    HR4: "줄 순서·개수: 판 종류·맵(기본 마피아만)·봇, 결과는 판 종류·맵(기본 마피아만) · 오른쪽 열은 소리·옷장",
     HR5: "줄 단추 테두리·아이콘은 금빛(--light-lamp), 오른쪽 열 테두리는 --night-600 · 줄 단추에 빛남(.is-call) 없음",
     HR6: `왕관 표식·열 수는 F-2 식대로 · 줄의 접근성 이름 "${HOST_RAIL_NAME}"`,
-    HR7: "튜토리얼 토글: 확장판에만 · role=switch·aria-checked · 패널 안 옛 스위치 줄 0",
+    HR7: "튜토리얼 토글 없음(22-03) · role=switch 단추 0 · 패널 안 옛 스위치 줄 0",
     HR8: `대기실 패널 높이 ${panelH}±1(방장·참가자 같다)`,
   };
   if (!railInputOk(s)) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "viewport·screen·host·mode·rail·buttons·crown·chip·band·panel·head·test·toast·side"));
@@ -2679,7 +2678,7 @@ export function hostRailChecks(s = {}) {
 
     // HR4
     const bad4 = [];
-    const want = HOST_RAIL_ORDER.filter((id) => (id === "mode" ? true : id === "map" ? s.mapsOn === true : id === "bots" ? lobby && s.botsOn === true : lobby && s.mode === "extended"));
+    const want = HOST_RAIL_ORDER.filter((id) => (id === "mode" ? true : id === "map" ? s.mapsOn === true : lobby && s.botsOn === true));
     const got = cols.flat().map((b) => b.id);
     if (got.join(",") !== want.join(",")) bad4.push(`줄 ${got.join("·") || "없음"} (기대 ${want.join("·")})`);
     const sides = s.side.map((b) => b.side).sort();
@@ -2720,14 +2719,8 @@ export function hostRailChecks(s = {}) {
     if (!isNum(s.panelToggles)) out.push(noMeasure("HR7", L.HR7, "panelToggles"));
     else {
       const bad7 = [];
-      const toggles = s.buttons.filter((b) => b.id === "tutorial");
-      if (s.mode === "extended") {
-        if (toggles.length !== 1) bad7.push(`확장판인데 토글 ${toggles.length}개`);
-        for (const t of toggles) {
-          if (t.role !== "switch") bad7.push(`role ${t.role ?? "없음"}`);
-          if (t.ariaChecked !== "true" && t.ariaChecked !== "false") bad7.push(`aria-checked ${t.ariaChecked ?? "없음"}`);
-        }
-      } else if (toggles.length !== 0) bad7.push(`기본 마피아인데 토글 ${toggles.length}개`);
+      const toggles = s.buttons.filter((b) => b.id === "tutorial" || b.role === "switch");
+      if (toggles.length !== 0) bad7.push(`튜토리얼 토글·스위치 단추 ${toggles.length}개`);
       if (s.panelToggles !== 0) bad7.push(`패널 안 옛 스위치 줄 ${s.panelToggles}개`);
       out.push(result("HR7", L.HR7, bad7));
     }
@@ -3349,11 +3342,10 @@ export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time
  * 서버 view 허용 키(13페이즈 그대로, 서버 diff 0). test/unit/view.test.ts 의 TOP_KEYS·ME_KEYS·DAY_KEYS 에 더해, 그 시험의 풍부한 상태가 만들지 않는 9페이즈 상태 의존 키만 더했다:
  * me.will·me.note(유언·쪽지, 결정 0061-9·10)·day.chalk(암살 분필, 결정 0061-14). 실제 판의 state 프레임에는 이 키들이 나온다(emcee-leak 이 처음 걸렸다) — e2eContract 가 "view.test.ts 집합 + 이 셋" 임과
  * 그 셋이 shared/protocol.ts 의 MyInfo·DayView 에 선언된 키임을 고정한다. 14페이즈가 새 키를 더하면 여전히 VK1 이 잡는다.
- * 17-07: view.tutorial(모두에게 같은 진행 수)·me.tutorialDone(끝났음을 보낸 본인만) 은 tutorial 단계에서만 받는 키다(받을 권리, 결정 0080-11) — view.test.ts 의 TOP_KEYS·ME_KEYS 에도 같이 있다.
  * 19-01: view.mode 는 판 종류 공개 값이다(19페이즈 D-05) — 모든 소켓에 같고 view.test.ts 의 TOP_KEYS 에도 같이 있다.
  */
-export const VIEW_TOP_KEYS = new Set(["code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map", "mode", "tutorial"]);
-export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "errand", "record", "nightTally", "nightSure", "will", "note", "tutorialDone"]);
+export const VIEW_TOP_KEYS = new Set(["code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map", "mode"]);
+export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "errand", "record", "nightTally", "nightSure", "will", "note"]);
 export const VIEW_DAY_KEYS = new Set(["n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown", "chalk", "evidence"]);
 /** 밤 역할별 사회자 줄(src/game/hostLine.ts HOST_LINES 의 night.mafia·police·doctor 사본) — 다른 역할 화면에 있으면 누설이다. e2eContract 가 같음을 고정한다. */
 export const HOST_ACT_LINES = {

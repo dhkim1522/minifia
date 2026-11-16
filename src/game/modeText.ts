@@ -20,9 +20,6 @@ export const MODE_TEXT = {
   aria: (mode: GameMode): string => `판 종류: ${NAME[mode]}`,
   /** 판 종류가 바뀌었을 때 참가자에게 띄우는 한 줄(P19-9). 조사를 피한 고정 문구 */
   changed: (mode: GameMode): string => `판 종류: ${NAME[mode]}`,
-  /** [튜토리얼 먼저] 토글을 켜고 끌 때의 한 줄(P19-8) */
-  tutorialOn: "튜토리얼 먼저 켰어요",
-  tutorialOff: "튜토리얼 껐어요",
   /** 방장 줄·왕관 표식의 접근성 이름 */
   rail: "방장 전용",
 } as const;

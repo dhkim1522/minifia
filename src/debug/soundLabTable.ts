@@ -7,8 +7,8 @@ import type { SfxId, SoundId } from "../audio/recipes";
  * E2E 쪽 문턱(scripts/e2e/lib.mjs SOUND_RENDER_LIMITS)과 같아야 하고 e2eContract 시험이 대조한다.
  */
 export const SOUND_LIMITS = {
-  /** 소리 id 수: 침대 7 + 효과음 61 = 68 */
-  count: 68,
+  /** 소리 id 수: 침대 7 + 효과음 49 = 56 */
+  count: 56,
   peakMaxDb: -3,
   rmsMinDb: -60,
   /** 효과음 측정 길이와 선언 길이의 허용 차이(ms) */
@@ -34,9 +34,9 @@ export const LAB_GROUPS: readonly LabGroup[] = [
   { key: "emote", title: "동작", ids: ["emote.clap", "emote.praise", "emote.handshake", "emote.dance", "emote.surprise", "emote.cry", "emote.deny", "emote.point", "emote.throat"] },
   { key: "result", title: "결과", ids: ["result.win", "result.lose"] },
   {
-    key: "tutorial",
-    title: "튜토리얼",
-    ids: ["tut.lampOff", "tut.scream", "tut.whoosh", "tut.sting", "tut.step", "tut.eye", "tut.link", "tut.buzz", "tut.stamp", "tut.fanfare", "tut.flip", "tut.warm", "voice.syl"],
+    key: "voice",
+    title: "사회자 목소리",
+    ids: ["voice.syl"],
   },
 ];
 
@@ -97,17 +97,5 @@ export const SOUND_NAMES: Readonly<Record<SoundId, string>> = {
   "emote.throat": "목긋기",
   "result.win": "내 팀 승리",
   "result.lose": "내 팀 패배",
-  "tut.lampOff": "오프닝 램프 꺼짐",
-  "tut.scream": "오프닝 비명",
-  "tut.whoosh": "장면 전환 바람",
-  "tut.sting": "무거운 줄 등장",
-  "tut.step": "발자국",
-  "tut.eye": "눈 표시",
-  "tut.link": "연결선",
-  "tut.buzz": "오답 버저",
-  "tut.stamp": "정답 도장",
-  "tut.fanfare": "정체 공개 팡파르",
-  "tut.flip": "카드 뒤집기",
-  "tut.warm": "따뜻한 조명",
   "voice.syl": "사회자 웅얼 음절",
 };

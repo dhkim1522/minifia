@@ -23,7 +23,6 @@ import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { SideColumn } from "../components/v2/SideColumn";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
-import { emitSignal } from "../audio/signals";
 import type { ChatStore } from "../net/chatStore";
 import { CHAT_TEXT } from "../game/chatText";
 import { DRESS_TEXT } from "../game/dressText";
@@ -112,9 +111,6 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   const [locked, setLocked] = useState(false);
   // [시작] 빛남(HOST-03): 한 번 눌러 보냈으면 이 대기실 안에서는 되살아나지 않는다(거절돼 잠금이 풀려도).
   const [startPressed, setStartPressed] = useState(false);
-  // 방장 스위치 '튜토리얼 먼저'(17-07, 결정 0078-3·0080-1·3) — 방장 줄 토글(19-04, 0083-3 의 패널 줄을 대신): 화면 로컬 상태이고 서버에 방송하지 않는다 — [시작] 순간의 값이 start 메시지로 간다.
-  // 초기값은 첫 판 켜짐, 다시 하기(2판째)와 테스트 방 꺼짐(토글은 보인다). 기본 마피아면 토글을 그리지 않지만 값은 남아 확장판으로 돌아오면 이전 값이 보인다(D-10).
-  const [tutorialOn, setTutorialOn] = useState(() => (view.round ?? 1) === 1 && view.me.testMode !== true);
   const lockTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(
     () => () => {
@@ -187,13 +183,6 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   useEffect(() => {
     if (!isHost) setSheet((s) => (s?.kind === "mode" ? null : s));
   }, [isHost]);
-  // [튜토리얼 먼저] 누름: 옛 스위치 줄과 같은 누름 소리 신호 뒤 값을 뒤집고, 글 없는 단추라 한 줄 알림으로 뜻을 보탠다(P19-8). 서버로는 아무것도 보내지 않는다
-  const pressTutorial = () => {
-    emitSignal({ kind: "tap" });
-    const next = !tutorialOn;
-    setTutorialOn(next);
-    show(next ? MODE_TEXT.tutorialOn : MODE_TEXT.tutorialOff);
-  };
   // 테스트 방([테스트] 단추가 왼쪽 위에 있음): 줄·칩이 그 아래(48)에서 시작하고 줄 최대 높이도 그만큼 줄어든다(P19-5, F-1)
   const testShift = Boolean(testButton);
   // 맵 선택(11-13): 칩과 카드는 서버가 방송한 view.mapChoice 만 따른다. 보내기만 하고 미리 바꾸지 않는다
@@ -215,8 +204,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       show(`${view.minPlayers}명부터 시작해요`);
       return;
     }
-    // 기본 마피아에는 튜토리얼이 없다(D-10) — 숨은 토글 값이 켜져 있어도 false 를 보낸다. 서버도 같은 규칙으로 다시 판정한다(T-19-14)
-    send({ t: "start", tutorial: tutorialOn && mode === "extended" });
+    send({ t: "start" });
     setStartPressed(true);
     setLocked(true);
     lockTimer.current = setTimeout(() => {
@@ -280,14 +268,12 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       </section>
       {/* 꾸미기 시트·키보드가 열린 동안에는 줄·칩·오른쪽 열을 그리지 않는다(P19-16) */}
       {dressOpen || kbOpen ? null : isHost ? (
-        // 방장 전용 왼쪽 세로 줄(19-04 D-13): 판 종류 · 맵(허용 맵 둘 이상 + 기본 마피아만, 20-07) · 봇(봇 도구가 켜진 방) · 튜토리얼 먼저(확장판만). 방장 판정은 서버 view 의 isHost 뿐이고 참가자에게는 마크업이 없다(T-19-13)
+        // 방장 전용 왼쪽 세로 줄(19-04 D-13): 판 종류 · 맵(허용 맵 둘 이상 + 기본 마피아만, 20-07) · 봇(봇 도구가 켜진 방). 방장 판정은 서버 view 의 isHost 뿐이고 참가자에게는 마크업이 없다(T-19-13)
         <HostRail maxHeight={testShift ? Math.max(0, sideMaxH - 48) : sideMaxH} testShift={testShift}>
           <HostRailButton key="mode" ref={modeBtnRef} id="mode" icon="deck" label={MODE_TEXT.aria(mode)} pressed={modeOpen} disabled={!canSend} onPress={openMode} />
           {mapChip}
           {/* 결정 0075: 방장만 [봇] — 서버가 방장 대기실 view 에만 me.testBots 를 싣는다 */}
           {botsOn ? <HostRailButton key="bots" id="bots" icon="bot" label="봇" pressed={sheet?.kind === "bots"} disabled={!canSend} onPress={() => setSheet({ kind: "bots" })} /> : null}
-          {/* 맨 아래 칸이다. 판 종류가 바뀌면 이 칸과 [맵] 칸이 서로 바뀐다(확장판: 이 칸, 기본 마피아: [맵] — 20-07). [시작] 잠금 2초 동안은 눌리지 않는다 */}
-          {mode === "extended" ? <HostRailButton key="tutorial" id="tutorial" icon="book" label="튜토리얼 먼저" switchOn={tutorialOn} disabled={!canSend || locked} onPress={pressTutorial} /> : null}
         </HostRail>
       ) : (
         // 참가자: 읽기 전용 판 종류 칩 하나(D-07)
