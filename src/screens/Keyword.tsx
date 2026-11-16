@@ -6,6 +6,7 @@ import { emitSignal } from "../audio/signals";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { V2Icon } from "../components/v2/V2Icon";
 import { DAY_COPY } from "../game/dayView";
+import { callTargetsOf } from "../game/hostLine";
 import { sinceStartMs } from "../net/cardFace";
 import { timerTone } from "../net/countdown";
 import { useComposedText } from "../net/useComposedText";
@@ -76,7 +77,9 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent }: 
   const composed = useComposedText(inputRef);
   const { open: kbOpen } = useKeyboardLift({ inputRef, target: rootRef });
   const sent = answer.state === "sent";
-  const call = answer.callInput;
+  // 입력칸 빛남: 사회자 표(keyword.act → 입력칸)와 훅(읽기 3초가 지났고 아직 한 글자도 안 썼다)이 모두 참일 때만 — 시각은 화면이 잠금으로 정한다
+  const target = callTargetsOf(view);
+  const call = answer.callInput && target !== null && target.kind === "tool" && target.tool === "chat";
 
   // 읽기 3초가 끝나 입력칸이 풀리면 초점을 준다(키보드가 안 올라오는 기기에서는 빛나는 입력칸을 직접 누른다)
   const wasLocked = useRef(answer.state === "locked");

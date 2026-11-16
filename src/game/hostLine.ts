@@ -2,7 +2,7 @@
 // 자막 문장은 서버가 만들지 않는다. 클라이언트가 받은 자기 view 만으로 이 파일의 순수 함수가 한 줄을 만든다 — 서버·프로토콜 diff 0.
 // 읽는 값은 허용 목록뿐이다: phase · phaseEndsAt · phaseDurationMs · minPlayers · me.seat · me.role · me.isHost ·
 // players[].{seat, alive, connected} · day.candidate · day.execution(유무) · day.morning(유무) · local.cardSeen ·
-// players[].job · spectate · me.allies · me.records · me.pick · me.verdictVote · day.points · day.turn · day.roles 등 그 밖은 읽지 않는다
+// players[].job · spectate · me.allies · me.records · me.pick · me.verdictVote · day.points · day.turn · day.roles · me.answer.final(키워드 제출 여부, 글은 읽지 않는다) 등 그 밖은 읽지 않는다
 // (유령 줄도 남의 직업을 말하지 않는다). 시각·난수·DOM·window 를 읽지 않는다. 시험(test/unit/hostLine.test.ts "HOST-05")이 읽은 경로를 기록해 고정한다.
 // 역할별 줄(밤 마피아·경찰·의사)은 그 역할 분기 안에서 키가 정해진 뒤에만 꺼낸다(T-09-29 선례) — 여러 역할 줄을 모은 배열은 없다.
 // 18.1-12(결정 0083-8): 띠 문장은 "할 일 한 구절"(앞말·마침표·닉네임 없음, 공백 포함 19자 이하)이라 닉네임·아침 결과 문장은 읽지 않는다.
@@ -18,7 +18,7 @@ export type HostKey =
   | "lobby.ready" | "lobby.gather" | "lobby.guest"
   | "assigning"
   | "roleReveal.act" | "roleReveal.wait"
-  | "keyword.act"
+  | "keyword.act" | "keyword.wait"
   | "dayAnnounce.wait" | "dayAnnounce.ghost"
   | "discussion.act" | "discussion.ghost"
   | "nomination.act" | "nomination.ghost"
@@ -49,8 +49,9 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   assigning: "잠시만 기다려 주세요",
   "roleReveal.act": "내 역할 카드를 확인해 주세요",
   "roleReveal.wait": "그대로 기다려 주세요",
-  // 첫날 키워드(P23-8): 역할과 무관한 한 줄 — 문구가 키워드를 말하지 않아야 마피아 화면과 같은 줄이 된다. 제출 뒤 줄(keyword.wait)은 23-09 가 더한다.
+  // 첫날 키워드(P23-8): 역할과 무관한 두 줄 — 문구가 키워드를 말하지 않아야 마피아 화면과 같은 줄이 된다. 제출 전 act, 제출 뒤 wait(23-09).
   "keyword.act": "떠오르는 말을 적어요",
+  "keyword.wait": "곧 모두의 답이 나와요",
   "dayAnnounce.wait": "모두 모여 주세요",
   "dayAnnounce.ghost": "지켜봐 주세요",
   "discussion.act": "의심 가는 사람을 이야기해 주세요",
@@ -97,7 +98,7 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
       if (view.me.role === undefined) return "fallback";
       return local.cardSeen === true ? "roleReveal.wait" : "roleReveal.act";
     case "keyword":
-      return "keyword.act"; // 역할을 읽지 않는다(P23-8)
+      return view.me.answer?.final === true ? "keyword.wait" : "keyword.act"; // 제출 여부만 읽는다 — 역할·글은 읽지 않는다(P23-8)
     case "dayAnnounce":
       return ghost ? "dayAnnounce.ghost" : "dayAnnounce.wait";
     case "discussion":
@@ -182,6 +183,8 @@ export function callTargetsOf(view: RoomView, local: HostLocal = {}): CallTarget
       return { kind: "tool", tool: "card" };
     case "discussion.act":
       return { kind: "tool", tool: "chat" };
+    case "keyword.act":
+      return { kind: "tool", tool: "chat" }; // 입력칸 빛남 — 시각은 이 함수가 아니라 화면이 3초 잠금으로 정한다(P23-6)
     case "nomination.act": {
       // 순차 지목(P22-17): 내 차례(공개 값 day.turn — 차례 중이고 order[i] 가 나)에만 빛난다. 차례 전·후·확정 직후는 거짓 신호라 null
       const turn = view.day?.turn;
