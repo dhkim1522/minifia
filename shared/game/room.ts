@@ -210,6 +210,16 @@ export interface RoomState {
   /** 서버 전용(23-06, D-09). 그 판에서 마피아가 금지어로 거절당한 적이 있음 — D1 "떠보기 성공"의 근거. 어떤 view·프레임에도 싣지 않는다. */
   keywordProbed?: true;
   /**
+   * 서버 전용(23-10, D-16). 판이 시작된 시각(ms) — beginGame 이 now 로 기록하고 D1 판 길이 계산에만 쓴다. 어떤 view·프레임에도 싣지 않는다.
+   * 다시 하기 허용 목록 밖이라 새 판은 beginGame 이 다시 기록한다.
+   */
+  startedAt?: number;
+  /**
+   * 서버 전용(23-10, D-16). D1 games 의 판 id(uuid) — 방 DO 가 handleStart·handleRematch 직후 붙인다(beginGame 은 순수라 uuid 를 만들지 않는다).
+   * 방 코드와 무관하고 어떤 view·프레임에도 싣지 않는다. 다시 하기 허용 목록 밖이라 새 판에 넘어가지 않는다.
+   */
+  gameId?: string;
+  /**
    * 서버 전용(23-08, D-11). 조기 진행이 마감을 줄이기 전의 원래 마감 — 찬반 번복 연장의 상한이다. 키(phase+day)가 다르면 무시하므로 지우지 않는다.
    * 다시 하기 허용 목록 밖이라 새 판에 넘어가지 않는다. 어떤 view·프레임에도 싣지 않는다(T-23-31).
    */
@@ -439,6 +449,7 @@ export function beginGame(
   return {
     ...rest,
     ...(keyword !== undefined ? { keyword } : {}),
+    startedAt: now,
     map,
     phase: "assigning",
     phaseEndsAt: now + ASSIGNING_MS,

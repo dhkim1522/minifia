@@ -160,7 +160,7 @@ describe("rematch 게이트 (D-12)", () => {
 });
 
 describe("rematch 허용 목록 리터럴 (D-15, 누설 L39)", () => {
-  const ALLOWED_ROOM = "code,createdAt,everConnected,expiresAt,hostId,map,mapChoice,nextJoinSeq,phase,phaseEndsAt,players,round,testBotVote,testMode,testRole";
+  const ALLOWED_ROOM = "code,createdAt,everConnected,expiresAt,hostId,map,mapChoice,nextJoinSeq,phase,phaseEndsAt,players,round,startedAt,testBotVote,testMode,testRole";
   const ALLOWED_PLAYER = "connId,connected,id,joinSeq,look,nickname,nicknameKey,role,seat,token";
 
   it("4명 모두 준비 → round+1 의 assigning, 모두 역할을 받고, 방과 사람 행의 키 집합이 허용 목록과 정확히 같다", () => {
