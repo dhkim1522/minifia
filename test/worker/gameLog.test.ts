@@ -1,5 +1,5 @@
 // 판 기록 D1 (23-10 Task 2) — 방 DO 가 ended 전환에서 한 번 games 에 한 줄을 남기고, 저장이 실패해도 게임은 멈추지 않는다(D-16, T-23-38).
-// setup 이 실제 마이그레이션을 메모리 D1 에 적용해 두므로 env.DB 로 바로 읽는다. 삽입은 waitUntil 이라 until 로 폴링한다.
+// setup 이 실제 마이그레이션을 메모리 D1 에 적용해 두므로 env.DB 로 바로 읽는다. 삽입은 전환 끝(afterTransition)에서 기다리지만 시험은 소켓 쪽에서 보므로 until 로 폴링한다.
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildGameRow } from "../../shared/game/gameLog";
@@ -124,6 +124,8 @@ describe("판이 끝나면 D1 에 한 줄 (SC6)", () => {
     try {
       await driveHumansToEnded(room);
       for (const s of socks) expect(lastViewOf(s).phase).toBe("ended");
+      // 삽입 실패(WR-04)는 기다린 뒤 삼킨다 — 결과는 이미 저장·방송됐고 방 DO 는 던지지 않는다(저장된 방이 ended 다).
+      expect((await storedRoom(room.code)).phase).toBe("ended");
       await until("실패 로그", async () => logged.mock.calls.some((c) => c[0] === "game log failed"));
       // 로그는 고정 문구 한 줄뿐이다 — 행·오류 내용을 싣지 않는다(T-23-39).
       expect(logged.mock.calls.filter((c) => c[0] === "game log failed").every((c) => c.length === 1)).toBe(true);

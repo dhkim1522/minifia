@@ -32,6 +32,7 @@ import { BADGE_MIN_GAP_MS, setBadge } from "../shared/game/badge";
 import { LOOK_MIN_GAP_MS, setLook } from "../shared/game/look";
 import { attachBenchConnection, detachBenchConnection, findAnyByToken, isResting, leaveBench, rematch, setReady } from "../shared/game/rematch";
 import { buildGameRow } from "../shared/game/gameLog";
+import type { GameRow } from "../shared/game/gameLog";
 import { buildResultLog } from "../shared/game/resultLog";
 import { insertGame } from "./gameLog";
 import { sendWhisper } from "../shared/game/whisper";
@@ -1229,8 +1230,10 @@ export class Room extends DurableObject<Env> {
     await this.syncPositions(now);
     await this.emitDeathCards(prev, now);
     this.emitResultLog(prev);
-    this.recordGame(prev);
+    // 판 기록 행은 여기서(동기로, 전환 직후 상태로) 만들고, 삽입은 알람 재설정 뒤에 기다린다(WR-04) — 판 진행·알람에 지연이 없다.
+    const gameRow = this.gameRowFor(prev);
     await this.reschedule();
+    await this.recordGame(gameRow);
   }
 
   // 결과 공개(결정 D-10, 11-03): ended 로 들어서는 전환에서만 한 번, 방의 모든 사람에게 같은 프레임 열을 보낸다(신분별 차이 없음).
@@ -1244,15 +1247,25 @@ export class Room extends DurableObject<Env> {
   }
 
   // 판 기록(D-16, 결정 0089-16·21): ended 로 들어서는 전환에서만 한 번 D1 games 에 한 줄을 남긴다(emitResultLog 와 같은 조건).
-  // 동기 함수라 전환 사이에 다른 일이 끼어들지 않는다. 삽입은 기다리지 않는다(waitUntil) — 실패해도 결과 화면·다시 하기를 막지 않고, 로그에는 고정 문구 한 줄뿐이다(T-23-38·39).
-  // 바인딩이 없거나(옛 배포) 행을 못 만드는 판(keyword 없는 옛 판)은 아무것도 넣지 않는다. ended 를 거치지 않고 만료된 판은 기록하지 않는다.
-  private recordGame(prev: RoomState): void {
+  // 행 만들기는 동기 함수라 전환 사이에 다른 일이 끼어들지 않는다. 바인딩이 없거나(옛 배포) 행을 못 만드는 판(keyword 없는 옛 판)은 null 이다.
+  // ended 를 거치지 않고 만료된 판은 기록하지 않는다.
+  private gameRowFor(prev: RoomState): GameRow | null {
     const room = this.room;
-    if (!room || prev.phase === "ended" || room.phase !== "ended") return;
+    if (!room || prev.phase === "ended" || room.phase !== "ended") return null;
+    if (this.env.DB === undefined) return null;
+    return buildGameRow(room, Date.now());
+  }
+
+  // 삽입은 afterTransition 끝에서 기다린다(WR-04, waitUntil 이 DO 종료 뒤 D1 요청을 살리는지 확인되지 않았다). 실패는 삼킨다:
+  // 결과는 이미 저장·방송·알람 재설정까지 끝난 뒤이고, 로그에는 고정 문구 한 줄뿐이다(T-23-38·39). 이 함수는 던지지 않는다.
+  private async recordGame(row: GameRow | null): Promise<void> {
     const db: D1Database | undefined = this.env.DB;
-    const row = buildGameRow(room, Date.now());
     if (db === undefined || row === null) return;
-    this.ctx.waitUntil(insertGame(db, row).catch(() => console.error("game log failed")));
+    try {
+      await insertGame(db, row);
+    } catch {
+      console.error("game log failed");
+    }
   }
 
   // 이번 전환에서 산 사람 → 탈락이 된 사람의 seat 들(seat 오름차순).
