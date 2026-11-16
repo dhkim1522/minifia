@@ -53,6 +53,10 @@ interface ViewOpts {
   will?: string;
   note?: string;
   nightSure?: number;
+  /** 유언 단계(defense)의 처형자 좌석 — day.candidate */
+  candidate?: number;
+  /** 마감까지 남은 ms(기본 30초) */
+  endsIn?: number;
 }
 
 function makeView(o: ViewOpts = {}): RoomView {
@@ -69,12 +73,13 @@ function makeView(o: ViewOpts = {}): RoomView {
     ...(dead.includes(seat) ? { alive: false } : {}),
   }));
   const allies = JOBS.flatMap((j, s) => (j === "mafia" && s !== mySeat && s < 6 ? [s] : []));
-  const chat = meDead ? "ghost" : phase === "night" ? (role === "mafia" ? "mafia" : undefined) : "all";
+  // 유언 단계(22-11 D-16)는 서버가 채팅을 받지 않아 me.chat 키가 없다. 유령은 그대로 ghost 다.
+  const chat = meDead ? "ghost" : phase === "night" ? (role === "mafia" ? "mafia" : undefined) : phase === "defense" ? undefined : "all";
   const view = {
     code: "0042",
     phase,
-    phaseEndsAt: NOW + 30_000,
-    phaseDurationMs: 30_000,
+    phaseEndsAt: NOW + (o.endsIn ?? 30_000),
+    phaseDurationMs: phase === "defense" ? 10_000 : 30_000,
     serverNow: NOW,
     minPlayers: 4,
     maxPlayers: 8,
@@ -90,7 +95,7 @@ function makeView(o: ViewOpts = {}): RoomView {
       ...(o.will !== undefined ? { will: o.will } : {}),
       ...(o.note !== undefined ? { note: o.note } : {}),
     },
-    day: { n: 1, roles: [] },
+    day: { n: 1, roles: [], ...(o.candidate !== undefined ? { candidate: o.candidate } : {}) },
   } as RoomView;
   if (meDead) view.spectate = { seats: players.map((p) => ({ seat: p.seat, job: JOBS[p.seat] ?? "citizen" })) };
   return view;
@@ -431,10 +436,9 @@ describe("저장 실패 · 빈 칸 · 사망 (E7 #36~#38)", () => {
   });
 });
 
-describe("유언은 저장하면 창이 닫힌다 (0083-6) — 낮·최후 변론·밤", () => {
+describe("유언은 저장하면 창이 닫힌다 (0083-6) — 낮·밤 (유언 단계의 처형자는 [남기기], 아래 22-11 묶음)", () => {
   const cases: Array<[string, ViewOpts]> = [
     ["낮 토론(깃펜)", { phase: "discussion" }],
-    ["최후 변론(변론자)", { phase: "defense" }],
     ["밤([유언] 단추)", { phase: "night" }],
   ];
   for (const [name, opts] of cases) {
@@ -687,5 +691,151 @@ describe("키보드 배치 — 패널 숨김 · compact · 초점 복귀 (UI-SPE
     fireEvent.click(closeBtn(m.container));
     frame();
     expect(document.activeElement).toBe(opener);
+  });
+});
+
+
+// ---- 22-11: 유언 단계(defense) — 처형자 시트 자동 열림·[남기기]·자동 저장, 나머지 조용히 지켜보기 (P22-6~9·P22-17, D-15·D-16·D-28) ----
+const secs = (c: ParentNode): HTMLElement | null => c.querySelector<HTMLElement>(".mv-will__secs");
+const defenseOf = (o: ViewOpts = {}): RoomView => makeView({ phase: "defense", mySeat: 3, candidate: 3, endsIn: 10_000, ...o });
+const willMsgs = (send: Send): Array<Extract<ClientMessage, { t: "will" }>> => sent(send).filter((x): x is Extract<ClientMessage, { t: "will" }> => x.t === "will");
+const clock = (): void => {
+  vi.useFakeTimers({ now: NOW });
+};
+
+describe("유언 단계 — 처형자 화면 (22-11 P22-6~8)", () => {
+  it("유언 단계가 시작되면 시트가 미리 써 둔 글로 자동으로 열려 아래 패널을 대신하고, 아래줄에 n/50 · 남은 초 · [남기기] 가 있다", () => {
+    clock();
+    const m = mount(defenseOf({ will: "미리 쓴 글" }));
+    expect(sheet(m.container)).not.toBeNull();
+    expect(area(m.container).value).toBe("미리 쓴 글");
+    const foot = m.container.querySelector(".mv-will__foot")!;
+    expect([...foot.children].map((e) => e.classList[0]).join(",")).toBe("mv-will__count,mv-will__secs,mv-will__save");
+    expect(secs(m.container)?.textContent).toBe("10초");
+    expect(secs(m.container)?.getAttribute("aria-hidden")).toBe("true");
+    expect(saveBtn(m.container).textContent).toBe("남기기");
+    expect(saveBtn(m.container).hasAttribute("data-will-save")).toBe(true);
+    expect(saveBtn(m.container).getAttribute("aria-label")).toBe("유언 남기기");
+    expect(m.container.querySelector(".mv-will__head")?.textContent).toContain("유언");
+  });
+
+  it("마지막 5초는 남은 초가 진홍(urgent) 톤이다", () => {
+    clock();
+    const m = mount(defenseOf({ endsIn: 4_200 }));
+    expect(secs(m.container)?.textContent).toBe("5초");
+    expect(secs(m.container)?.getAttribute("data-tone")).toBe("urgent");
+  });
+
+  it("[남기기] → {t:'will', text, final:true} 한 번, 곧바로 '남김' 비활성이고 3초가 지나도 보내지 못했다는 알림이 없다(서버 응답 대기 표시 없음)", () => {
+    clock();
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(defenseOf(), { send });
+    fireEvent.change(area(m.container), { target: { value: "잘 있어" } });
+    fireEvent.click(saveBtn(m.container));
+    expect(willMsgs(send).filter((x) => x.final === true)).toEqual([{ t: "will", text: "잘 있어", final: true }]);
+    expect(saveBtn(m.container).textContent).toBe("남김");
+    expect(saveBtn(m.container).disabled).toBe(true);
+    act(() => {
+      vi.advanceTimersByTime(4_000);
+    });
+    expect(toastText(m.container)).toBe("");
+    expect(willMsgs(send).filter((x) => x.final === true)).toHaveLength(1);
+  });
+
+  it("빈 글이어도 [남기기]를 누를 수 있다", () => {
+    clock();
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(defenseOf(), { send });
+    expect(saveBtn(m.container).disabled).toBe(false);
+    fireEvent.click(saveBtn(m.container));
+    expect(willMsgs(send)).toEqual([{ t: "will", text: "", final: true }]);
+  });
+
+  it("연결이 끊기면 [남기기] 가 aria-disabled 이고 눌러도 보내지 않는다", () => {
+    clock();
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(defenseOf(), { send, canSend: false });
+    expect(saveBtn(m.container).getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(saveBtn(m.container));
+    expect(willMsgs(send)).toEqual([]);
+  });
+
+  it("입력이 바뀌고 600ms 뒤에 자동 저장(final 없음) — 500ms 에는 아직 보내지 않는다", () => {
+    clock();
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(defenseOf(), { send });
+    fireEvent.change(area(m.container), { target: { value: "새 글" } });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(willMsgs(send)).toEqual([]);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(willMsgs(send)).toEqual([{ t: "will", text: "새 글" }]);
+  });
+
+  it("마감 약 700ms 전에 쓰던 글을 한 번 더 보낸다(같은 글은 다시 보내지 않는다)", () => {
+    clock();
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(defenseOf(), { send });
+    act(() => {
+      vi.advanceTimersByTime(9_000);
+    });
+    fireEvent.change(area(m.container), { target: { value: "막판 글" } }); // 디바운스(600ms)는 9600 — 마감 직전 전송(9300)이 먼저다
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    expect(willMsgs(send)).toEqual([{ t: "will", text: "막판 글" }]);
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+    expect(willMsgs(send)).toHaveLength(1);
+  });
+
+  it("[닫기]는 글을 저장하고 시트만 접는다 — 다시 열리지 않고 [유언] 단추가 빛난다(P22-17)", () => {
+    clock();
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const m = mount(defenseOf(), { send });
+    fireEvent.change(area(m.container), { target: { value: "안녕" } });
+    fireEvent.click(closeBtn(m.container));
+    expect(willMsgs(send)).toEqual([{ t: "will", text: "안녕" }]);
+    expect(sheet(m.container)).toBeNull();
+    m.show(defenseOf({ will: "안녕" }));
+    expect(sheet(m.container)).toBeNull();
+    const pen = willBtn(m.container)!;
+    expect(pen).not.toBeNull();
+    expect(pen.hasAttribute("data-call")).toBe(true);
+    fireEvent.click(pen);
+    expect(sheet(m.container)).not.toBeNull();
+    expect(area(m.container).value).toBe("안녕");
+  });
+});
+
+describe("유언 단계 — 나머지 사람 화면 (22-11 P22-9, D-16)", () => {
+  const lockedOk = (c: ParentNode): void => {
+    expect(c.querySelector("[data-will-sheet]")).toBeNull();
+    expect(c.querySelector("[data-chat-locked]")).not.toBeNull();
+    const input = c.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    expect(input.getAttribute("aria-disabled")).toBe("true");
+    expect(input.disabled).toBe(true);
+    expect(input.getAttribute("placeholder")).toBeNull();
+    expect(c.querySelectorAll("[data-chat-send], [data-will-button], [data-emote-button]")).toHaveLength(0);
+  };
+
+  it("처형자가 아닌 산 사람: 시트 없음, 입력줄만 잠김(안내 글자·[보내기]·[유언]·깃펜 없음), 기록 칸 높이는 채팅 패널 그대로", () => {
+    clock();
+    const normal = mount(makeView({ phase: "discussion", mySeat: 3 }));
+    const normalLog = normal.container.querySelector<HTMLElement>("[data-chat-log]")!.style.height;
+    cleanup();
+    const m = mount(defenseOf({ mySeat: 3, candidate: 5 }));
+    lockedOk(m.container);
+    expect(m.container.querySelector<HTMLElement>("[data-chat-log]")!.style.height).toBe(normalLog);
+  });
+
+  it("유령: 시트·[유언]·깃펜 없고 입력줄이 잠긴다", () => {
+    clock();
+    const m = mount(defenseOf({ mySeat: 4, dead: [4], candidate: 5 }));
+    lockedOk(m.container);
   });
 });

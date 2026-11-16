@@ -25,6 +25,9 @@ interface HarnessProps {
   icon?: "quill" | "note";
   tone?: "mafia";
   placeholder?: string;
+  saveLabel?: string;
+  savedLabel?: string;
+  secondsLeft?: number;
 }
 
 function Harness({ initial = "", onSave = () => {}, onClose = () => {}, ...rest }: HarnessProps) {
@@ -300,7 +303,8 @@ describe("WillSheet — 쪽지 모드·compact (NIGHT-12, UI-SPEC Color)", () =>
     const willRules = rules.filter((r) => /\.mv-will/.test(r.sel));
     expect(willRules.length).toBeGreaterThan(5);
     for (const r of willRules) {
-      if (/crimson/.test(r.body)) expect(r.sel.startsWith(".mv-will--mafia")).toBe(true);
+      // 예외 하나: 유언 단계 남은 초의 마지막 5초 진홍은 시간 신호다(22-11 P22-8, 역할과 무관한 timerTone)
+      if (/crimson/.test(r.body)) expect(r.sel.startsWith(".mv-will--mafia") || r.sel === '.mv-will__secs[data-tone="urgent"]').toBe(true);
     }
     expect(willRules.some((r) => r.sel.startsWith(".mv-will--mafia") && /crimson-700/.test(r.body))).toBe(true);
     expect(willRules.some((r) => r.sel.startsWith(".mv-will--mafia") && /crimson-300/.test(r.body))).toBe(true);
@@ -312,5 +316,46 @@ describe("WillSheet — 시트는 send 를 갖지 않는다 (WILL-01, L7)", () =
   it("부품 소스에 send·typing 경로가 없다", () => {
     const src = readFileSync("src/components/v2/WillSheet.tsx", "utf8");
     expect(src).not.toMatch(/useChat|onTyping|typing|\bsend\(|innerHTML/);
+  });
+});
+
+
+describe("WillSheet — 유언 단계 [남기기]·남은 초 (22-11 P22-7·8)", () => {
+  it("saveLabel·savedLabel·secondsLeft: 아래줄이 글자 수 → 남은 초 → [남기기] 순서이고 남은 초는 aria-hidden, 단추 이름은 '유언 남기기'다", () => {
+    const { container } = render(<Harness initial="안녕" saveLabel="남기기" savedLabel="남김" secondsLeft={7} />);
+    const foot = container.querySelector(".mv-will__foot")!;
+    expect([...foot.children].map((e) => e.classList[0]).join(",")).toBe("mv-will__count,mv-will__secs,mv-will__save");
+    expect(count(container)).toBe("2/50");
+    const secs = container.querySelector(".mv-will__secs") as HTMLElement;
+    expect(secs.textContent).toBe("7초");
+    expect(secs.getAttribute("aria-hidden")).toBe("true");
+    expect(secs.getAttribute("data-tone")).toBe("calm");
+    expect(saveBtn(container).textContent).toBe("남기기");
+    expect(saveBtn(container).hasAttribute("data-will-save")).toBe(true);
+    expect(saveBtn(container).getAttribute("aria-label")).toBe("유언 남기기");
+  });
+
+  it("남은 초가 5초 이하면 진홍(urgent) 톤이다", () => {
+    for (const n of [5, 3, 1]) {
+      const { container } = render(<Harness saveLabel="남기기" savedLabel="남김" secondsLeft={n} />);
+      expect((container.querySelector(".mv-will__secs") as HTMLElement).getAttribute("data-tone"), `${n}`).toBe("urgent");
+      cleanup();
+    }
+    const six = render(<Harness saveLabel="남기기" savedLabel="남김" secondsLeft={6} />);
+    expect((six.container.querySelector(".mv-will__secs") as HTMLElement).getAttribute("data-tone")).toBe("calm");
+  });
+
+  it("saved 이면 savedLabel '남김' 이고 비활성이다", () => {
+    const { container } = render(<Harness saveLabel="남기기" savedLabel="남김" secondsLeft={4} saved />);
+    expect(saveBtn(container).textContent).toBe("남김");
+    expect(saveBtn(container).disabled).toBe(true);
+  });
+
+  it("세 prop 이 없으면 지금 모양이다 — 남은 초 없음, [저장]·저장됨, 단추에 data-will-save 만 붙는다(밤 유언·쪽지 회귀 없음)", () => {
+    const { container } = render(<Harness />);
+    expect(container.querySelector(".mv-will__secs")).toBeNull();
+    expect(saveBtn(container).textContent).toBe("저장");
+    expect(saveBtn(container).getAttribute("aria-label")).toBeNull();
+    expect(saveBtn(container).hasAttribute("data-will-save")).toBe(true);
   });
 });

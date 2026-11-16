@@ -188,7 +188,6 @@ describe("pinOf / pinAt — 결선 (09.1.1-14, UI-SPEC D-1: 두 후보 가운데
 
   it("결선이 아니면 이 핀이 아니다", () => {
     expect(pinOf(viewOf("discussion", { runoff: { cand: [2, 3], step: 1 } }))).toBeNull();
-    expect(pinOf(viewOf("defense", { candidate: 2 }))).toBeNull();
   });
 
   it("pinAt: point 모드는 켜짐이고 좌표를 그대로 돌려준다(좌석·이동 없음)", () => {
@@ -228,5 +227,23 @@ describe("pinOf — 마지막 3인 처형 (verdict.last, 09.1.1-15)", () => {
   it("득표자·마감 시각이 없으면 핀 없음", () => {
     expect(pinOf(lastExec({ candidate: undefined }))).toBeNull();
     expect(pinOf(lastExec({}, null))).toBeNull();
+  });
+});
+
+
+describe("pinOf — 유언 단계(defense, 22-11 P22-10)", () => {
+  it("처형자 한 명에게 turn 핀이 켜진다 — 조기 종료로 마감이 당겨지니 fixed 창이 아니다", () => {
+    expect(pinOf(viewOf("defense", { candidate: 3 }))).toEqual({ mode: "turn", seat: 3 });
+    expect(pinOf({ ...viewOf("defense", { candidate: 2 }), phaseEndsAt: 5000 })).toEqual({ mode: "turn", seat: 2 });
+  });
+
+  it("처형자 좌석이 없거나 이상한 값이면 핀이 없다", () => {
+    expect(pinOf(viewOf("defense"))).toBeNull();
+    expect(pinOf(viewOf("defense", { candidate: -1 }))).toBeNull();
+  });
+
+  it("유언 단계 밖의 단계는 candidate 가 있어도 영향이 없다(찬반·토론은 핀 없음)", () => {
+    expect(pinOf(viewOf("verdict", { candidate: 3 }))).toBeNull();
+    expect(pinOf(viewOf("discussion", { candidate: 3 }))).toBeNull();
   });
 });
