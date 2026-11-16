@@ -30,7 +30,7 @@ Worker  ── 방 코드로 라우팅 ──▶  Room Durable Object (방마다
 - 디렉토리: `src/` 는 React 앱(화면·접속·스타일), `worker/` 는 Worker 진입점과 `Room` Durable Object, `shared/` 는 서버와 브라우저가 함께 쓰는 프로토콜과 순수 게임 규칙, `test/` 는 `unit`(Node)·`client`(happy-dom)·`worker`(workerd) 세 갈래 테스트다. `shared/` 는 앱과 워커 두 tsconfig 에 모두 들어가므로 DOM 전용·workerd 전용 API 를 쓰지 못한다. 이 규칙을 두 타입체크가 함께 강제한다.
 - 서버가 단계 전환과 타이머의 기준이다. 클라이언트 타이머는 서버가 보낸 마감 시각으로 표시만 한다.
 - Durable Object 의 WebSocket Hibernation API 를 써서 대기 중 비용을 줄인다.
-- 기본판(결정 0072): 아래 낮 장치(순차 지목·결선·마지막 3인·배지·귓속말)는 `shared/game/ruleset.ts` 의 판 규칙 다섯 값으로 두 판 모두 꺼져 있다. 전역 규칙 상수는 없다(19페이즈 D-03) — 규칙은 판 종류마다 얼린 객체 하나(`rulesetOf(mode)`)이고, 서버는 방 상태의 판 종류에서(`rulesetOf(modeOf(state))`), 화면은 `view.mode` 에서 얻는다. 켜면 아래 설명대로 돈다. 꺼진 `badge`·`whisper` 메시지는 `BAD_MESSAGE` 한 프레임으로 거절한다.
+- 판 규칙(결정 0072·0089-12, 22페이즈): 판 종류는 없고 규칙은 얼린 상수 하나(`RULES`, `shared/game/ruleset.ts`)다. 서버 흐름·화면이 인자로 주고받지 않고 이것을 직접 읽는다. 직업 주장 배지(0066-1)·귓속말(0066-2)·동점 결선(0066-4)·마지막 3인 결전(0066-5) 코드는 남아 있고 값으로 꺼져 있으며, 순차 지목(`pickTurn`)은 22페이즈부터 켜져 있다. 꺼진 `badge`·`whisper` 메시지는 `BAD_MESSAGE` 한 프레임으로 거절한다.
 - 낮 단계 흐름(결정 0066·0067): 지목이 정확히 두 사람 동점이면 **runoff**(결선: 앞머리 1 + 투표 5 + 결과 1.5초 서버 사슬, `stepRunoff`·`castRunoffVote`, 투표 메시지는 기존 `point` 를 단계로 분기)로 가고, 낮 시작에 산 사람이 정확히 3명이면 토론 대신 **showdown**(마지막 3인: 모이기 → 한마디 셋 → 동시 지목 → 공개)이다. showdown 진입은 낮 시작 발표(`dayAnnounce`) 마감 훅 한 곳이고, 한마디는 기존 `chat` 을 차례 주인에 한해 확정하며 동시 지목은 기존 `point` 다. 새 메시지는 `badge`(직업 주장 배지)·`whisper`(귓속말) 둘뿐이다.
 - 핀 조명(`setPin`, `src/world/pinPlan.ts`): 렌더러가 처음부터 가진 focus 점광과 실내등 세기만 움직인다(새 광원 없음). 지목 차례·마지막 3인 한마디·결선·판결 순간에 쓰고, 판결 순간에는 줌 1.10 도 함께 쓴다(값은 결정 0067-8).
 
@@ -43,11 +43,9 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 - 저장: storage 의 `world` 키, `room` 키와 분리(위치가 room 키를 매번 다시 쓰지 않게). 이동 뒤 2초 디바운스로 쓰고, 나가기 · 내보내기 · 시작 · 마지막 연결 끊김 · 알람에서는 즉시 쓴다. DO 가 퇴거돼도 생성자가 두 키를 읽어 위치를 되살린다.
 - 클라이언트: `src/world/` — `WorldStore`(서버 구간을 받아 시각별 위치를 계산, `RoomScreen` 이 연결과 같은 수명으로 소유) → `runtime`(rAF 한 곳에서 그림 · 카메라 · 입력 · 목적지 링) → three 렌더러(`threeRenderer`, `import()` 지연 청크라 방 입장 화면에서 미리 받는다) · 3D 캐릭터(`character`) · DOM 이름표(`WorldStage` 의 이름표 층). 게임이 시작되면 맵을 가린 뒤 WebGL 자원을 해제한다. 내 캐릭터는 탭하자마자 공용 planMoveSegment 로 예측 구간을 그리고 서버 구간이 오면 그쪽으로 맞춘다. 그릴 구간이 바뀌면 화면 위치 차이를 150ms 에 걸쳐 줄이고 방향·자세도 짧게 섞는다. 남은 예측하지 않는다(결정 0059, src/world/motion.ts).
 - 성능 사다리(결정 0055): 합격선은 프레임 55fps 이상 등 숫자 기준이고, 모자라면 배율 → 그림자 → 광원 → 소품 → 안개 → 미리 구운 맵 이미지 순으로 줄인다. 그래픽을 못 쓰는 기기는 오류 카드를 띄우고 v1.0 테이블 로비로 몰래 바꾸지 않는다. 측정은 `?perf=1` 스파이크 장면에서 한다.
-- 낮 처형 단계(결정 0060-1): 서버 단계는 `discussion`(90초) → `nomination`(기본판은 15초 동시 투표 `NOMINATION_MS`: `castPoint` 로 마감까지 바꾸기, `day.points` 공개, 같은 사람 250ms 안 재지목은 방송 없음, 봇은 2~8초 안 한 번) → `defense`(최후 변론 20초) → `verdict`(찬반 10초) → `execution`(처형 5초) → `night`(30초) → `morning`(5초)이고 값은 `shared/game/phases.ts` 한 곳에 둔다. 토론은 산 사람 과반이 [토론 끝내기](`endDiscussion`)를 누르면 마감이 당겨진다. 지목은 마감에 최다 득표가 정확히 한 명일 때만 변론자가 되고, 동률이나 0표면 처형 없이 밤으로 간다(기본판은 결선 없음). 찬반은 변론자를 뺀 산 사람 수 E 를 분모로 찬성 × 2 > E 면 처형이며, 전원이 던져도 마감까지 기다린다. 처형된 사람은 유령이 되고 역할은 알리지 않는다(결정 0053).
-- 심부름·목격 기록·밤 통일·흔적(결정 0074): 서버 단계 `errand`(40초, 낮 시작 → errand → 토론, `ERRAND_MS`)가 낮 시작 다음에 끼고 `shared/game/errand.ts` 가 장소 3곳 뽑기·처리 판정을 맡는다(`{t:"errand"}` 한 메시지, 필드 없음·거절 응답 동일). 위치는 사건이 아니라 표본이다: 알람이 `ERRAND_TICK_MS` 1초마다 깨어 산 사람끼리 근처(`ERRAND_NEAR_R`)를 재고, 받는 사람마다 "나 + 근처 사람"의 `world` 프레임(`near: true`, 구간은 `ERRAND_VIEW_HORIZON_MS` 로 자름)만 보낸다. 같은 표본에서 본 사람·장소를 `Player.errandSeen` 에 쌓아 3곳을 마친 산 사람의 `me.record`(본인에게만, 상한 `RECORD_MAX`)로 토론에서 보낸다. 밤은 모든 산 사람이 같은 `pick` 메시지(대상 seat 하나)·같은 응답·본인 한 칸 snap 이고(마피아 걷기·접근 삭제, 밤 채팅 채널은 서버에 유지), 피해자가 나온 아침은 `shared/game/trace.ts` 가 피해자를 고른 산 사람 중 난수로 한 명의 의상에서 조각 id 하나를 정해 `day.morning.trace` 로 보낸다(아침 +`MORNING_TRACE_MS`). 허용 경로 사본 다섯 곳과 근처 집합을 독립 계산하는 누설 시험이 새 표면을 고정한다. 19페이즈부터 판 규칙의 `errand`·`witness`·`trace` 가 이 셋을 켜고 끈다(basic 판은 꺼짐 — 단계에 들어가지 않고 키를 싣지 않는다).
-- 마피아 가짜 장소·마지막 목격(결정 0079, 16페이즈): `shared/game/errandFake.ts` 의 `assignErrandFake` 가 마피아의 `errandFake`(서버 전용 `Player` 키) 한 곳을 `(seat + day) % 3` 번째 장소로 정한다(난수 없음). 심부름 모듈 중 역할을 읽는 유일한 파일이고(`errand.ts` 는 역할을 읽지 않는다) 처리는 기존 거절 경로를 타 마피아는 3/3 이 안 되어 `me.record` 를 받지 못한다. 마지막 목격은 서버 전용 `errandLast`(표본마다 산 사람 B 의 가장 가까운 근처 사람·장소)에서 아침 진입 때 피해자 줄만 `morning.seen` 으로 옮기고, 아침~처형 단계의 공개 필드 `day.evidence = { trace?, seen? }` 로 낮 끝까지 모두에게 같은 값을 싣는다(밤에는 싣지 않음). 저장은 `errandMarks` 비교로 바뀔 때만 한다. 같은 옷 표시는 서버가 새 값을 싣지 않고 클라이언트가 공개된 `look` 과 `TRACE_OF_OUTFIT` 역표로 계산한다(`src/game/traceMark.ts`). 컬러 장소·조각 그림은 `design/v3.0/assets/` 사본에서 `scripts/make-placeart.mjs` 가 만든 `src/components/v2/placeArt.tsx`(생성물, `--check` 가 `typecheck` 에 포함)다.
-- 순차 지목(결정 0063-1·0064-3·0064-11, 판 규칙의 `pickTurn` 일 때만 — 두 판 모두 아래 동시 투표): 모이기 3초 → 자리 순 한 명씩 8초 → 사이 0.9초 → 끝 2초. 서버가 진입 때 산 사람 좌석 순서를 `pickTurn`(서버 전용)에 두고 `stepNomination` 이 차례를 넘기며, `castTurnPoint` 는 차례 주인의 지목만 받는다(바꾸기 없음). 끊긴 사람의 차례도 8초를 기다린다. 공개 차례는 `day.turn` 이다.
-- 이동 마스크(MAP-04, 결정 0060-6): 서버 순수 함수 `canMove` 가 정한다. 로비 · 낮 시작 · 토론은 산 사람이 자유롭고, 지목 · 변론 · 찬반 · 처형 · 밤 · 아침은 산 사람이 정지한다. 유령은 모든 지도 단계에서 자유롭다. 막힌 요청은 오류 없이 버린다. 채팅은 막지 않는다.
+- 낮 단계 흐름(결정 0089-18·19, 22페이즈): 서버 단계는 `discussion`(90초) → `verdict`(찬반 10초, 후보 없음) → `nomination`(순차 지목) → `defense`(유언 10초 `DEFENSE_MS`) → `execution`(6.6초 시간표) → `night`(30초) → `morning`(기본 5초)이고 값은 `shared/game/phases.ts` 한 곳에 둔다. 단계 id 는 새로 만들지 않고 순서와 의미만 바꿨다(`defense` 가 유언 자리). 토론은 산 사람 과반이 [토론 끝내기](`endDiscussion`)를 누르면 마감이 당겨진다. 찬반(`shared/game/verdict.ts`)은 산 사람 전원이 한 표씩(마감까지 번복 가능, 일찍 끝나지 않는다) 던지고 던진 표의 과반이 찬성이면(찬성 × 2 > 던진 표 ⟺ 찬성 > 반대, 0표·동수는 부결) 지목으로 간다. 부결이면 바로 밤이고 이유(`rejected`)만 그날 `voteLog` 줄에 남는다. 지목 마감에 최다 득표가 정확히 한 명이면 처형자(`day.candidate`)가 되어 유언 → 처형으로 가고, 동점이나 0표면 처형 없이 밤이다(결선 없음). 처형 없음 알림은 이유와 무관하게 한 가지 글이다. 처형된 사람은 유령이 되고 역할은 알리지 않는다(결정 0053).
+- 순차 지목(결정 0063-1·0064-3·0064-11, 0089-18 — 판 규칙의 `pickTurn`, 22페이즈부터 기본): 모이기 3초 → 자리 순 한 명씩 8초 → 사이 0.9초 → 끝 2초. 서버가 진입 때 산 사람 좌석 순서를 `pickTurn`(서버 전용)에 두고 `stepNomination` 이 차례를 넘기며, `castTurnPoint` 는 차례 주인의 지목만 받는다(바꾸기 없음). 끊긴 사람의 차례도 8초를 기다린다. 공개 차례는 `day.turn` 이다. 고르는 순간은 모두 보지만 누가 누구를 골랐는지는 서버도 저장하지 않는다 — `voteLog` 줄은 `{n, exec 집계 수, cand{candidate?}, reason?}` 뿐이다(D-25). 지목 단계 길이는 진입 훅 뒤 `phaseDurationOf` 가 모이기 3초로 다시 구한다(표의 15초는 자리 값).
+- 이동 마스크(MAP-04, 결정 0060-6): 서버 순수 함수 `canMove` 가 정한다. 로비 · 낮 시작 · 토론은 산 사람이 자유롭고, 찬반 · 지목 · 유언 · 처형 · 밤 · 아침은 산 사람이 정지한다. 유령은 모든 지도 단계에서 자유롭다. 막힌 요청은 오류 없이 버린다. 채팅은 막지 않는다.
 - 지도 단계 위치 전송: world 프레임의 받는 사람은 **움직인 사람(mover) 기준**이다 — 산 사람이 움직이면 방 전원(산 사람 + 유령), 유령이 움직이면 유령에게만 간다(`shared/game/audience.ts`, mover 는 서버가 소켓의 playerId 로 넣는다). 접속(hello) 스냅샷은 **보는 사람(viewer) 기준**이다 — 산 사람에게는 산 사람 위치만, 유령에게는 전원. 그래서 유령의 위치는 산 사람 폰에 네트워크로도 가지 않는다(GHOST-01). 처형 연출은 화면이 처형 이벤트 하나로 그리는 일회성이고 서버가 산 사람에게 유령 위치를 보내는 것이 아니다.
 - 서버 주도 모이기(결정 0060-7): 지목이 시작되면 서버가 산 사람 N명(2~8)을 무대 둘레 반지름 2.65 원 위 슬롯으로 걷게 한다(`shared/game/gather.ts`). 배치는 "지금 단계가 요구하는 배치"를 맞추는 **멱등 동기화**라서 알람 따라잡기 · 퇴거 · 재접속에도 같은 결과가 나온다. 변론 · 찬반 동안 변론자는 무대 위 `STAGE_SPOT`(`shared/game/map.ts`)에 서며, 이것이 이동 마스크(`lineWalkable` · `snapToWalkable` · 저장 복원이 같은 판정)의 **단일 예외**다.
 - 화면 층 구조와 폰 크기별 영역은 `docs/screen-map.md` 의 '대기실 (맵 로비)'와 '게임 맵 화면'.
@@ -56,7 +54,7 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 
 밤에는 산 마피아만 맵을 걷고 시민 편은 어둠 속에 있으며, 아침에 현장·유언·쪽지가 공개된다. 판정은 모두 서버가 하고 화면은 받은 상태만 그린다.
 
-- 받는 사람(`shared/game/audience.ts`, 결정 0061-2·3): 이동 권한은 `canMoveIn(phase, alive, isMafia)` 한 표다(8페이즈 `canMove` 대체). 밤의 audience 는 산 마피아가 움직이면 {산 마피아 + 유령}, 산 비마피아는 이동 요청을 오류 없이 버리고 프레임이 가지 않는다. 보는 사람 기준 위치 snap 은 `worldVisibleTo` 가 정한다 — 밤 진입에서 시민·경찰·의사는 본인 한 칸, 산 마피아는 산 사람 전원, 유령은 전원이고 재접속 첫 snap 도 같은 함수를 지난다. 아침 snap 만 모든 산 소켓에 같은 내용이다.
+- 받는 사람(`shared/game/audience.ts`, 결정 0061-2·3): 이동 권한은 `canMoveIn(phase, alive)` 한 표다(8페이즈 `canMove` 대체, 밤에는 역할과 무관하게 모두 서 있다). 밤의 audience 는 산 마피아가 움직이면 {산 마피아 + 유령}, 산 비마피아는 이동 요청을 오류 없이 버리고 프레임이 가지 않는다. 보는 사람 기준 위치 snap 은 `worldVisibleTo` 가 정한다 — 밤 진입에서 시민·경찰·의사는 본인 한 칸, 산 마피아는 산 사람 전원, 유령은 전원이고 재접속 첫 snap 도 같은 함수를 지난다. 아침 snap 만 모든 산 소켓에 같은 내용이다.
 - 전환 후처리는 `worker/room.ts` 의 `afterTransition` 한 함수다(결정 0061-19). 단계 마감·토론 끝내기·테스트 넘기기가 같은 순서를 지난다(지목 중 넘기기는 남은 차례를 봇 표로 채워 지목을 한 번에 끝낸다, `finishNomination`): home 기억 → 분필 → 저장·방송 → 밤·아침 위치 동기화 → 새 유령 snap → 낮 배치 → 카드. 새 전송 경로를 더하지 않는다.
 - home 기억(0061-3~5): 그날 처음 걷기 단계(지목 이후)를 벗어날 때 각자 구간 끝점을 world 저장 키의 `home`(`{day, pos}`)에 기록하고 즉시 저장한다(`captureHome` 은 같은 일차면 입력 그대로라 멱등). 밤 진입은 home 으로 걷기 없이 옮기고(`teleportHome`), 아침은 산 사람과 그 밤의 피해자를 home 으로 되돌린다. home 은 서버 전용이라 프레임에 싣지 않는다. 지도 단계 레이아웃 키에 `{day}:night`·`{day}:morning` 이 더해졌다. 알람 따라잡기로 아침을 건너뛰어도 `:night` 키가 남으면 다음 지도 단계 진입에서 home 되돌림 + 보는 사람별 snap 한 번을 한다(0062-10).
 - 마피아 확정(0061-6·7): 산 마피아 전원이 같은 산 비마피아를 골랐을 때만 확정이다(도착은 조건이 아니고 판정에 난수가 없다). 연결은 보지 않는다 — 고르지 않은 채 끊긴 마피아가 있으면 그 밤은 무효, 고른 뒤 끊기면 선택이 유지된다. 집계는 산 마피아 본인 view 의 `me.nightTally`·`me.nightSure` 로만 가고 시민 편·유령 view 에는 키가 없다.
@@ -72,7 +70,6 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 
 - 이벤트 프레임(world · chat · typing)의 받는 사람은 `shared/game/audience.ts` 한 함수가 정하고 `worker/room.ts` 의 `deliver` 한 길로만 나간다. 채널은 보낸 사람 서버 상태로 정한다(`all` · `mafia` · `ghost`) — 클라이언트는 채널을 고르지 않고 받은 줄만 그린다. 봇 입력 중은 서버 안 `relayTyping`(사람과 같은 `channelOf`·`typingRelay`·audience)을 지나며 채팅 줄 1.5초 전에 켜진다(0062-9). 테스트 도구 `setBotCount` 는 난수(`randInt`)를 받아 첫 봇만 8자, 나머지를 1~8자로 정한다(0062-8). 채팅 줄은 DO storage 의 `chat:` 키에 보관하고, 재접속 때 보낼 때의 수신자 마스크로 채널별 최근 30줄을 되돌려 준다(결정 0058).
 - 귓속말(결정 0066-2·0067-4): 본문 줄(`k: whisper`)과 사실 줄(`k: whispered`, "A → B 귓속말")이 `all` 채널의 같은 seq 를 한 번만 쓴다(틈 없음). 받는 사람은 audience(all) 한 번을 당사자(보낸·받은 사람)와 나머지로 가르고, 본문은 당사자 소켓에만 간다. 본문은 `RoomState.whispers`(서버 전용)에도 쌓는다.
-- 찬반 기록 카드(`k: ballots`, 결정 0067-5): 보관 상한 계수·삭제에서 빠지고 복원 때 채널 30줄 한도와 별도로 최근 3장을 더한다(`CHAT_REPLAY_BALLOTS`).
 
 ## 캐릭터·동작·의상 (10페이즈, 결정 0068)
 
@@ -85,36 +82,22 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
 ## 결과 공개·다시 하기·방 연속성·맵 (11페이즈, 결정 0069)
 
 - 판 번호 `round`(`view.round`)가 단계 키 `'{판}:{일차}:{단계}'` 앞에 붙는다(`phaseKey` 한 곳). 새 메시지는 `ready{on,round}`·`rematch{round}`·`mapPick{map}`이고 거절은 오류 없이 보낸 소켓에 `state` 한 프레임이다.
-- 판 종류(19페이즈, 결정 0086): 방장이 대기실·결과 단계에서 `modePick{mode}`(`basic`·`extended`)를 보내면 서버가 방장·단계·허용 값을 판정해 방 상태 `mode` 에 저장하고 모두에게 `view.mode` 로 방송한다(거절은 `mapPick` 과 같은 모양). 다시 하기에서 유지되고, 저장된 옛 방(mode 없음)은 확장판으로 읽는다. 기본 마피아는 심부름 단계에 들어가지 않고 `me.errand`·`me.record`·`day.evidence`·아침 흔적 키를 싣지 않는다.
+- 판 하나(22페이즈, 결정 0089-12·0090): 판 종류 메시지·`view.mode`·방 상태 `mode` 는 없다. 저장된 옛 방은 옛 표시(튜토리얼·심부름 단계, 등불·현장·마을 키, `mode` 키)가 하나라도 있을 때만 `normalizeStoredRoom` 이 대기실로 되돌린다(`isLegacyV3Room`·`toLobbyFromLegacy`, 맵·규칙 조회보다 먼저). 표시가 없는 방은 그대로 둔다 — 방 DO 가 하이버네이션이라 생성자가 판 중에도 다시 돌기 때문이다.
 - 결과 단계 채팅은 `CHAT_PHASES`·`channelOf`(ended 에서 null)가 아니라 `applyChat`·`audience` 분기·`view.me.chat` 으로 열린다. 전체 채널 하나, 동작·입력 중은 서버가 버린다.
-- `resultLog{part,i,end,lines}` 프레임: mafia → ghost → whisper → claim → ballots, 40줄 청크, ended 진입 때 한 번과 hello 재전송(`shared/game/resultLog.ts`). 신분별 차이 없음, ended 전용.
-- `result.awards`: 칭호 점수·동점·패 순서를 서버가 끝내고(`shared/game/awards.ts`) 화면은 재정렬하지 않는다. 입력은 서버 전용 `Player.stats`(판 중 `say`·`emote`).
+- `resultLog{part,i,end,lines}` 프레임: mafia → ghost → whisper → claim, 40줄 청크, ended 진입 때 한 번과 hello 재전송(`shared/game/resultLog.ts`). 신분별 차이 없음, ended 전용.
 - 다시 하기(`shared/game/rematch.ts`): `ready` 한 연결된 사람 ≥ 4 이면 방장 `rematch`, 허용 목록 리터럴로 방을 다시 만든다(의상 유지). 준비 안 한 사람은 `bench`(게임 코드가 안 봄)에서 쉬다 `sat` 로 결과에 합류, 본인 view 는 `resting` + 자기 한 줄 `players`.
 - 연속성(`shared/game/continuity.ts`): 방장 이양(끊긴 지 45초, 가장 이른 `joinSeq`)·대기실 정리(3분)·결과 단계 `left` 표시, 테스트 방 3초·6초. 알람은 `nextWakeAt` 한 곳.
 - 맵: `MAPS` 표(`shared/game/maps.ts`, 광장은 `mapPlaza.ts`), `PLAYABLE_MAPS = ["bar","plaza"]`, 랜덤은 시작(`beginGame`)에서 서버가 정해 `view.map` 에 싣는다(시작 전엔 키 없음).
 
-## 마을 맵: 구역·문 프레임 (20페이즈, 결정 0087)
-
-확장판은 늘 마을(`town`)에서 한다. 광장 둘레에 실내 방 넷(`post`·`pub`·`clinic`·`police`)과 집 여덟이 있고, 벽이 시야를 나눈다. 서버가 규칙을 정하고(결정 0002) 보이지 않는 사람의 좌표는 보내지 않는다.
-
-- **판 종류의 고정 맵.** `MODE_MAPS`(`shared/game/maps.ts`)가 판 종류별 고정 맵을 표로 가진다(`{ extended: "town" }`). `startMapOf(mode, decided)` 가 시작 때 맵을 정하고, 기본 마피아는 방장이 고른 맵을 그대로 쓴다. 대기실은 늘 재즈 바다. 단위·워커 시험은 잠금을 걸어 확장판이 재즈 바에서 돌게 한다(마을 판은 `openTown()`). 마을은 `PLAYABLE_MAPS`·`MapChoice` 에 없다.
-- **맵별 격자.** `MapDef` 가 `size`·`origin`·`walkHalf`·`rooms` 를 가진다(`shared/game/map.ts`). 없으면 전역 상수(재즈 바·광장 값)다. 마을은 48×48·칸 0.5·원점 −12·걷기 한계 ±10이라 좌표 한계(`MOVE_COORD_LIMIT`)와 저장 슬롯 한계가 1200 으로 넓어졌다. 칸 중심을 구하는 호출은 반드시 맵을 넘긴다(`cellCenterFx(c, r, map)`). 마을의 방·집·소품·마스크는 `shared/game/mapTown.ts` 에 있고 마스크는 장애물 원문에서 래스터화한다(시험이 장애물과 마스크를 대조한다).
-- **구역 판정.** `zoneOf(map, xFx, zFx)`(`shared/game/zones.ts`)는 위치의 순수 함수다: 방 안쪽 사각형 안이면 그 방, 문턱 포함 그 밖은 `plaza`. 구간(`Segment`)에는 `zoneAt(map, seg, t)`·`clipToZone`·`nextCrossingAt` 이 있다. 클라이언트 메시지에 구역 값은 없다 — 서버가 가진 구간의 위치로만 판정한다. 방이 없는 맵(재즈 바·광장)은 구역이 광장 하나라 지금과 같다.
-- **이동 프레임 구역 거르기.** `emitMove` 가 구역을 나누는 한 곳이다: 본인과 유령은 모두를, 산 사람은 같은 구역 사람의 구간만 받는다. 문턱을 넘는 구간은 문턱에서 잘려 간다(들어가는 길은 안쪽 면 좌표에서, 나오는 길은 그 1 앞에서 끝난다). snap(접속·재접속·순간이동·본인 zone snap)은 **구역 기억이 아니라 지금 위치**로 거른다. 심부름의 근처만 보임(`nearSnapFrame`)은 구역 규칙 위에 얹힌다.
-- **문 프레임.** 구역을 넘는 순간 `world` 프레임 `{k:"door", e:"vanish", s, d}`(떠나는 쪽 같은 구역에 — 문까지만)와 `{k:"door", e:"appear", s, d, p, t0, v}`(들어가는 쪽에 — 문에서 걷기 시작)가 한 번씩 간다. 구역이 바뀐 본인에게는 새 구역 snap(`zone: true`)이 간다. 누가 어느 방에 있는지 알리는 표시는 따로 없다. 방 → 방(알람이 아주 늦은 경우)은 사라짐에 떠난 방, 나타남에 들어간 방을 싣는다.
-- **구역 기억.** 저장된 `world.zones` 가 구역 기억이고 `syncZones`/`reconcileZones` 가 기억과 지금 구역을 맞춘다. 문 통과 알람(`nextZoneAt`)은 통과 시각이 이를 때만 건다(기억과 지금 구역이 이미 다른 사람이 있으면 곧바로). 문 통과가 있을 때만 저장 타이머를 건다. 기억이 없는 저장 world 는 알림 없이 지금 위치로 맞춰진다.
-- **심부름·목격.** 장소 8곳은 방 4곳 안에 하나씩 + 광장 넷이다(장소 id 를 맵 기준으로 다시 썼다). 목격 기록·아침 snap 도 같은 구역 사람만 싣는다. 누설 시험(마을 한 판 전수)이 이동·스냅·재접속·목격·아침 어디에도 다른 구역 좌표가 없음을 고정한다.
-- **화면(`src/world/`).** `maps/town.ts` 가 장면(방 지붕·앞벽 컷어웨이, 간판·문패 판, 집, 방마다 따뜻한 등)을 만들고 `cutaway.ts` 의 `cutawayOf` 가 내 구역에서 열린 방을 정한다(유령·결과 화면은 네 방 모두). 렌더러는 지붕·집 몸통의 누르기(`rayAt`)를 문 앞 목적지로 바꾼다. 문 연출·벽 뒤 이름표 숨김은 `presence.ts`. 건물은 병합 지오메트리·공유 재질이고 그림자는 받기만 한다. 카메라 따라가기 한계는 마을 ±9.6(`camera.ts`). 층 구조와 표식은 `docs/screen-map.md` 의 '마을 맵'.
-
 ## 소리 (12페이즈, 결정 0070)
 
-- 소리 56개(배경음 7·효과음 49)는 전부 Web Audio 합성이고 외부 파일·라이브러리가 없다. 서버는 소리를 모른다 — 새 메시지·프레임·view 키가 0이다(`test/unit/soundProtocol.test.ts`). 출처와 레시피 지도는 `docs/audio.md`.
+- 소리 54개(배경음 7·효과음 47)는 전부 Web Audio 합성이고 외부 파일·라이브러리가 없다. 서버는 소리를 모른다 — 새 메시지·프레임·view 키가 0이다(`test/unit/soundProtocol.test.ts`). 출처와 레시피 지도는 `docs/audio.md`.
 - `src/audio/` 구조:
 
   | 파일 | 역할 |
   |------|------|
   | `recipes.ts` | 소리 id → 레시피 표(`RECIPES`·`BEDS`), 한계·믹스 상수, 결정적 렌더 계획(`renderPlan`·`bedPlan`). import 0, 순수 데이터 |
-  | `script.ts` | 시간표 대본(판결·밤·아침·결과·시상·유언·틱)과 동작 소리 게이트. 순수 함수 |
+  | `script.ts` | 시간표 대본(판결·밤·아침·결과·유언·틱)과 동작 소리 게이트. 순수 함수 |
   | `synth.ts` | 렌더 계획을 노드 그래프로(실시간 엔진과 오프라인 렌더가 함께 씀), 버스·compressor |
   | `engine.ts` | 컨텍스트·보이스 상한(8)·노드 예산(48)·침대 크로스페이드·덕킹·대본 실행, `createEngine(deps)` |
   | `prefs.ts` | 켬/끔 저장값(`localStorage`), 서버로 가지 않는다 |
@@ -126,26 +109,19 @@ v2.0 대기실은 "같은 공간" 맵이다(결정 0044·0050). 이동은 서버
   | `signals.ts` | 닫힌 로컬 신호 종류(`tap`·`card`·`deny`·`vote`·`emote`·`tensionCue`·`result`) |
 
 - 감독 입력 규칙: 공개 view 차이 + 닫힌 로컬 신호만. 인자에 선택값·역할·좌석이 없다. 밤에는 서버 입력이 0이고 각자 난수 큐(시민 편은 시각 큐를 구독), 첫 스냅샷·재접속·epoch 변경은 침대만 깔고 일회성 소리는 내지 않는다. 시작 시각은 공개 단계 시각이고 아침·편지만 view 도착 기준이다. 정적 가드(`soundStaticGuard`)가 `src/audio/` 의 import 와 읽는 경로를 고정한다.
-- 시험 페이지 `/?sound-lab=1`(개발·`?e2e=1` 문맥, 배포 진입 번들에 없음)이 56개를 들려주고 오프라인 렌더로 피크·NaN·길이를 검사한다(`window.__mfSoundLab`).
-- 알림음 `ui.host`(결정 0073-4, 14페이즈): 닫힌 신호 `{ kind: "host" }`(인자 없음)가 띠의 단계 키가 바뀐 프레임에 한 번 울린다(합성 종 두 음, 소리 57개). 밤 진입에도 모든 역할이 같은 소리를 듣는 LS-7 예외이고 낮 시작 → 토론은 무음이다.
+- 시험 페이지 `/?sound-lab=1`(개발·`?e2e=1` 문맥, 배포 진입 번들에 없음)이 54개를 들려주고 오프라인 렌더로 피크·NaN·길이를 검사한다(`window.__mfSoundLab`).
+- 알림음 `ui.host`(결정 0073-4, 14페이즈): 닫힌 신호 `{ kind: "host" }`(인자 없음)가 띠의 단계 키가 바뀐 프레임에 한 번 울린다(합성 종 두 음, 이 소리 하나가 54개에 든다). 밤 진입에도 모든 역할이 같은 소리를 듣는 LS-7 예외이고 낮 시작 → 토론은 무음이다.
 - 단추와 알약: `src/components/v2/SoundButton.tsx`. 화면 영역은 `docs/screen-map.md`.
-
-## 튜토리얼 첫 사건 (17페이즈, 결정 0078·0080)
-
-- **서버 게이트(함께 진행)**: 방장이 [시작] 때 `start` 메시지의 `tutorial: true` 를 실으면(서버 기본 꺼짐, 0080-1) 판이 `start → tutorial → assigning` 으로 간다. `tutorial` 단계는 `shared/game/phases.ts` 의 한 줄(`TUTORIAL_MS` 150초, `revealsOwnRole: false`)이고 `worker/room.ts` 가 `tutorialDone` 메시지(필드 없음, 신원은 소켓 첨부 playerId 뿐)를 받아 `shared/game/tutorial.ts` 가 서버 전용 `RoomState.tutorialPassed` 에 더한다. 앉은 사람(봇 제외) 전원이 끝났음을 보내거나 끊기거나(끊긴 사람은 끝난 것으로 센다, 0080-10) 150초가 지나면 `assigning` 으로 가고, 그때 `tutorialPassed` 를 지운다(`tick.ts` 의 `clearTutorial`). 역할은 `beginGame` 이 시작 때 정하지만 `tutorial` 단계 view 에는 어디에도 없다(0080-2, 누설 시험 `leak`·`tutorialLeak`).
-- **공개 값**: `view.tutorial = { done, total, endsAt }`(tutorial 단계에서만, 모두 같은 값 — 누가 끝냈는지는 싣지 않는다), 본인에게만 `me.tutorialDone?: true`(거짓은 키 없음). 재접속하면 `me.tutorialDone` 이 참이면 기다림 화면, 아니면 장면 1 부터(0080-15). 판 규칙에 튜토리얼 스위치는 없다 — basic 판은 튜토리얼 없이 시작한다(19페이즈 D-10).
-- **혼자 하기는 서버가 모른다**: 첫 화면 카드로 들어가는 혼자 하기는 방·소켓·`/api` 요청이 0 이고 `TutorialScreen` 이 로컬 대본만 돌린다(저장 키 `minifia.tutorial.seen` 만 쓴다, 0080-5·7).
-- **로컬 대본 구조**: `src/game/tutorialScript.ts`(장면 표·문구 키·출연 0080-16) 한 곳이 대본이고, `TutorialScreen` 하나가 장면 1~7 을 그린다. 장면 2~6 은 실제 `GameMap` 에 가짜 `RoomView`·로컬 `WorldStore`/`ChatStore`·로컬 `send` 어댑터를 준다(서버에 아무것도 보내지 않는다). 장면 1·7 은 `WorldStage` 를 직접 쓰고 장면 1→2·6→7 사이에 3D 무대를 다시 만든다(0080-12). 함께 진행은 같은 화면이 끝나면 `tutorialDone` 을 한 번 보내고 기다림 화면으로 간다. 소리는 화면이 자기 훅으로 쥔다(0080-14).
 
 ## 상태 공개 원칙
 
 - 서버는 플레이어마다 다른 상태를 보낸다. 시민에게는 다른 사람의 역할을 보내지 않는다.
 - 마피아는 서로의 정체를, 경찰은 자기 조사 결과만 받는다.
 - 게임이 끝났을 때와 탈락자 관전 화면에서만 전체 역할을 보낸다.
-- 찬반(결정 0060-4, 개정 0067-5): 투표 중에는 누가 무엇을 골랐는지 어떤 소켓에도 실리지 않는다. 투표를 마쳤는지(좌석)와 집계 수만 공개하고, 내 값은 본인에게만 보내며 집계 직후 개인 값을 키째 지운다. 마감 뒤 처형 단계의 view 에서만 `day.verdict.ballots`(찬성·반대 좌석 두 묶음)를 모두에게 공개한다. 처형 발표에는 좌석만 싣고 역할은 비공개다. 지목(누가 누구를 가리키는지)과 지목 차례 `day.turn` 은 공개 정보라 모두의 view 에 같은 값으로 실린다(역할 무관, 0064-11).
-- 정치·박진감 장치의 공개 값(결정 0066·0067): 공개는 `players[].badge`·`badgeSwapped`(직업 주장 배지와 말 바꿈 표시, 실제 역할이 아니다)·`day.runoff`(결선 후보와 단계, 마감 뒤 득표 수만)·`day.showdown`(단계와 차례, 동시 지목 중에는 `voted` 완료 좌석만, 공개에서 득표)·`day.verdict.ballots`·`day.verdict.last`(마지막 3인 처형)이고, 본인 한정은 `me.ballot`·`me.whisperUsed`다. 서버 전용은 `Player.badgeLog`·`RoomState.whispers`·`runoffVote`·`showdownPick`이며 어떤 프레임에도 실리지 않는다(누설 시험이 서버 전용 키를 본다). 기본판(결정 0072)에서는 `badge`·`badgeSwapped`·`day.turn`·`day.runoff`·`day.showdown`·`me.whisperUsed`·`me.ballot` 이 view 에 없다(누설 검사 허용 경로는 `politicsPathsFor(ruleset)`).
+- 찬반(결정 0060-4, 0089-18·0090): 투표 중에는 누가 무엇을 골랐는지 어떤 소켓에도 실리지 않는다. 공개는 집계 수 `day.verdictCount{yes,no}`(번복도 바로 반영) 뿐이고 던진 좌석(`day.voted`)은 싣지 않는다 — 좌석과 수가 함께 보이면 첫 투표자의 표가 추론되기 때문이다. 내 표는 본인 `me.verdictVote` 로만 가고, 개인 값(`Player.verdictVote`)은 집계 직후 키째 지운다. 마감 뒤에도 누가 찬성·반대했는지는 어디에도 남지 않는다(`day.verdict.ballots`·찬반 기록 카드·`resultLog` 의 ballots 부분 없음). 처형 발표에는 좌석만 싣고 역할은 비공개다. 지목 차례 `day.turn` 은 공개 정보라 모두의 view 에 같은 값으로 실린다(역할 무관, 0064-11). 유언 단계(`defense`)는 처형자 본인의 `will` 메시지와 [남기기](`final`)만 받고, 채팅은 `CHAT_PHASES` 에서 빠져 서버가 받지 않는다. 처형 단계의 `day.execution.will` 은 모두에게 같은 값이다.
+- 정치·박진감 장치의 공개 값(결정 0066·0067): 공개는 `players[].badge`·`badgeSwapped`(직업 주장 배지와 말 바꿈 표시, 실제 역할이 아니다)·`day.runoff`(결선 후보와 단계, 마감 뒤 득표 수만)·`day.showdown`(단계와 차례, 동시 지목 중에는 `voted` 완료 좌석만, 공개에서 득표)이고, 본인 한정은 `me.whisperUsed`다. 서버 전용은 `Player.badgeLog`·`RoomState.whispers`·`runoffVote`·`showdownPick`이며 어떤 프레임에도 실리지 않는다(누설 시험이 서버 전용 키를 본다). 이 장치들은 규칙 값이 꺼져 있어 `badge`·`badgeSwapped`·`day.runoff`·`day.showdown`·`me.whisperUsed` 가 view 에 없다(누설 검사 허용 경로는 `politicsPathsFor(ruleset)`).
 - 캐릭터 의상(결정 0068): 공개는 `players[].look`(역할과 무관, 모든 단계·viewer 같음)이고, 서버 전용은 동작 기록(`emoteRates`, 인메모리)이다. 동작 프레임 `n` 은 채널별로 세어 틈이 다른 채널에 새지 않는다.
-- 결과 공개·다시 하기(결정 0069): 공개는 `view.round`·`mapChoice`·`map`·`players[].ready`·`players[].sat`·`resting`(쉬는 사람 본인에게만, 자기 한 줄)·`result.awards`와 ended 에서만 가는 `resultLog` 프레임이다(끝난 뒤라 신분 구분 없음). 서버 전용은 `Player.stats`·`disconnectedAt`·`left`·`bench` 로 어떤 프레임에도 실리지 않는다.
+- 결과 공개·다시 하기(결정 0069): 공개는 `view.round`·`mapChoice`·`map`·`players[].ready`·`players[].sat`·`resting`(쉬는 사람 본인에게만, 자기 한 줄)와 ended 에서만 가는 `resultLog` 프레임이다(끝난 뒤라 신분 구분 없음). 서버 전용은 `Player.stats`·`disconnectedAt`·`left`·`bench` 로 어떤 프레임에도 실리지 않는다.
 - 사회자 띠·빛남(결정 0073, 14페이즈): 자막 문장과 빛남 대상은 클라이언트의 순수 함수 `src/game/hostLine.ts`(`hostLineOf`·`callTargetsOf`)가 자기 view 의 허용 목록 값(`phase`·`phaseEndsAt`·내 `me.role`·`players[].{seat,nickname,alive}`·`day.candidate` 등)만으로 만든다. 서버·프로토콜에 새 필드·메시지가 없다(`git diff -- worker shared` 가 0). 다른 사람의 역할을 드러내는 `players[].job`·`me.allies`·`day.turn` 은 읽지 않고, 유령 줄도 직업을 말하지 않는다.
 - 소리(결정 0070): 서버에 새 값·메시지가 없다. 설정(켬/끔)은 기기 저장소에만 있고, 훅 로그는 소리 id·시각만 싣는다(역할·좌석 없음). 12페이즈 누설 불변식 LS-1~LS-11: 소리가 정보를 나르면 화면에도 이미 있고, 밤 소리는 모든 역할이 같으며, 암살음은 피해자만, 받지 못한 프레임은 소리도 없다.
 - 유령(결정 0060-8, 0021): 유령은 모든 사람의 역할과 밤 선택을 본다(spectate 경로). 유령 시점의 직업 의상 안개는 이 spectate 로 화면이 입힌다(서버 새 필드 없음, 0063-2·0064-14). 반대로 산 사람의 소켓 · DOM 에는 유령의 위치 · 움직임 · 채팅 · 입력 중이 없다. 이 규칙은 서버 한 곳(audience)에서 막고 시험과 E2E 누설 검사가 증명한다.
