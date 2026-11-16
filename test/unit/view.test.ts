@@ -309,6 +309,7 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "earlyFrom", // 조기 진행이 마감을 줄이기 전의 원래 마감(23-08, D-11) — 서버 전용, 찬반 번복 연장의 상한. 화면은 줄어든 phaseEndsAt 만 본다
   "startedAt", // 판 시작 시각(23-10, D-16) — D1 판 길이 계산용 서버 전용
   "gameId", // D1 games 의 판 id(23-10, D-16) — 서버 전용, 방 코드와 무관한 uuid
+  "notes", // 의심 포스트잇 보관(24-01, D-06) — 서버 전용 이름. view 는 day.suspects·day.suspectLog·me.suspectTo 라는 다른 이름으로만 싣는다
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
@@ -321,10 +322,12 @@ const ME_KEYS: ReadonlySet<string> = new Set([
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
   "keyword", // 첫날 키워드(23-01, D-06) — keyword 단계의 산 시민 편 본인에게만. 조건은 phaseKeyViolations 가 단언한다
   "answer", // 키워드 단계 본인이 쓰던 글·확정 여부(23-06, P23-13) — keyword 단계의 산 본인에게만, 값이 있을 때만(phaseKeyViolations 가 단언)
+  "suspectTo", // 오늘 붙인 의심 대상 좌석(24-01, D-06) — discussion 의 산 본인에게만, 값이 있을 때만(아래 "의심 포스트잇 공개 값" describe 가 단언)
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
   "n", "roles", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdictCount", "turn", "runoff", "showdown",
   "keyword", // 첫날 키워드(23-01, D-06) — keyword 단계에서 모두에게 같은 { genre } 한 키
+  "suspects", "suspectLog", // 의심 포스트잇(24-01, D-06·D-07) — 오늘 줄·판 내내 기록, 모두에게 같은 공개 값. 줄이 있을 때만 키가 있다
 ]);
 const keysOf = (value: unknown): string => Object.keys((value ?? {}) as object).sort().join(",");
 
@@ -800,6 +803,67 @@ describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 
     }
   });
 
+});
+
+describe("buildView 의심 포스트잇 공개 값 (24-02, D-06·D-07, T-24-06)", () => {
+  /** 2일차 토론 상태에 줄을 직접 넣는다: 1일차 한 줄, 2일차 두 줄(좌석 0→1, 2→0). */
+  const withNotes = (): RoomState => {
+    const s = stateAt("discussion", 6, 1);
+    return { ...s, day: 2, notes: [{ n: 1, from: 3, to: 4 }, { n: 2, from: 0, to: 1 }, { n: 2, from: 2, to: 0 }] };
+  };
+
+  it("day.suspects 는 오늘(2일차) 두 줄만 {to, from} 모양이고 day.suspectLog 는 세 줄 모두 {n, from, to} 이며, 마피아·시민 viewer 의 두 값이 같다", () => {
+    const s = withNotes();
+    const views = s.players.map((p) => ({ p, view: buildView(s, p.id, START_AT) }));
+    for (const { view } of views) {
+      expect(view.day?.suspects).toEqual([{ to: 1, from: 0 }, { to: 0, from: 2 }]);
+      expect(view.day?.suspectLog).toEqual([{ n: 1, from: 3, to: 4 }, { n: 2, from: 0, to: 1 }, { n: 2, from: 2, to: 0 }]);
+      for (const row of view.day?.suspects ?? []) expect(Object.keys(row).sort().join(",")).toBe("from,to");
+      for (const row of view.day?.suspectLog ?? []) expect(Object.keys(row).sort().join(",")).toBe("from,n,to");
+    }
+    const mafia = views.find((v) => v.p.role === "mafia")!.view;
+    const citizen = views.find((v) => v.p.role === "citizen")!.view;
+    expect(mafia.day?.suspects).toEqual(citizen.day?.suspects);
+    expect(mafia.day?.suspectLog).toEqual(citizen.day?.suspectLog);
+  });
+
+  it("me.suspectTo 는 오늘 붙인 산 본인 discussion view 에만 있다(다른 사람·줄 없는 사람·탈락자에게는 키가 없다)", () => {
+    const s = withNotes();
+    for (const p of s.players) {
+      const view = buildView(s, p.id, START_AT);
+      if (p.seat === 0) expect(view.me.suspectTo).toBe(1);
+      else if (p.seat === 2) expect(view.me.suspectTo).toBe(0);
+      else expect("suspectTo" in view.me).toBe(false);
+    }
+    // 어제(1일차)만 붙인 좌석 3 은 오늘은 키가 없다. 죽은 본인에게도 없다.
+    const dead = { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, alive: false } : p)) };
+    expect("suspectTo" in buildView(dead, dead.players.find((p) => p.seat === 0)!.id, START_AT).me).toBe(false);
+  });
+
+  it("verdict 단계 view 에는 suspectTo 가 없고 suspects 는 남는다(그날 종이는 낮 끝까지 남는다)", () => {
+    const s = { ...withNotes(), phase: "verdict" as PhaseId };
+    for (const p of s.players) {
+      const view = buildView(s, p.id, START_AT);
+      expect("suspectTo" in view.me).toBe(false);
+      expect(view.day?.suspects?.length).toBe(2);
+    }
+  });
+
+  it("밤·아침 view 에도 그날의 day.suspects 가 남는다(낮 시작 발표에서 day.n 이 올라야 빈다) — 의도된 값이고 서버 전용 이름 notes 는 어떤 view 의 키 경로에도 없다", () => {
+    for (const phase of ["night", "morning", "discussion", "verdict", "nomination", "ended"] as const) {
+      const s = { ...withNotes(), phase: phase as PhaseId };
+      for (const p of s.players) {
+        const view = buildView(s, p.id, START_AT);
+        if (phase === "night" || phase === "morning") expect(view.day?.suspects?.length, phase).toBe(2);
+        for (const path of keyPaths(view)) expect(lastKey(path), `${phase} ${path}`).not.toBe("notes");
+      }
+    }
+    // 다음 일차로 올라가면 오늘 줄은 비고(키 자체가 없다) 기록만 남는다.
+    const next = { ...withNotes(), day: 3 };
+    const view = buildView(next, next.players[0]!.id, START_AT);
+    expect("suspects" in (view.day ?? {})).toBe(false);
+    expect(view.day?.suspectLog?.length).toBe(3);
+  });
 });
 
 describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
