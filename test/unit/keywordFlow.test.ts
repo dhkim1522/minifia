@@ -113,7 +113,6 @@ describe("keyword 단계 view (D-06 누설 없음)", () => {
       const view = buildView(state, p.id, state.phaseEndsAt! - 1000);
       expect(view.phase).toBe("keyword");
       expect(view.day?.keyword).toEqual({ genre: label });
-      expect(view.day?.keyword).toEqual({ genre: "영화" });
     }
   });
 
