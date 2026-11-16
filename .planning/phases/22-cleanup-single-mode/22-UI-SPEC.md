@@ -1,7 +1,8 @@
 ---
 phase: "22"
 slug: "cleanup-single-mode"
-status: draft
+status: approved
+reviewed_at: 2026-11-16
 shadcn_initialized: false
 preset: none
 created: "2026-11-16"
