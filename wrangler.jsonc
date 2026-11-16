@@ -16,5 +16,8 @@
   },
   "exports": {
     "Room": { "type": "durable-object", "storage": "sqlite" }
-  }
+  },
+  // 판 기록 D1(결정 0089-21). 원격 데이터베이스 id 는 24 배포 첫 단계에서 개인 계정을 확인한 뒤 손으로 넣는다(D-19).
+  // `--update-config` 는 주석 있는 jsonc 를 다시 쓸 수 있어 쓰지 않는다. id 가 없는 동안 npm run deploy 는 배포 가드가 멈춘다.
+  "d1_databases": [{ "binding": "DB", "database_name": "minifia-v3-games", "migrations_dir": "migrations" }]
 }

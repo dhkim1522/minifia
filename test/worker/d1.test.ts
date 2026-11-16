@@ -35,9 +35,6 @@ describe("D1 games 표", () => {
   it("열 이름 집합이 16개 계약과 정확히 같다(닉네임·채팅·답 글 열 없음)", async () => {
     const { results } = await env.DB.prepare("PRAGMA table_info(games)").all<{ name: string }>();
     expect(results.map((r) => r.name).sort()).toEqual([...CONTRACT_COLUMNS].sort());
-    for (const name of results.map((r) => r.name)) {
-      expect(name).not.toMatch(/nick|chat|text|answer|name_/i);
-    }
   });
 
   it("같은 id 두 번 INSERT OR IGNORE 는 1행, 승자 값은 CHECK 로 거절, 기본값 열은 생략 시 0", async () => {
@@ -52,6 +49,8 @@ describe("D1 games 표", () => {
     for (const col of ["first_day_caught", "probe_success", "bots", "has_bots", "left_count", "note_count", "no_answer_count", "tutorial"]) {
       expect(row[col], col).toBe(0);
     }
-    await expect(env.DB.prepare(insert).bind("g-2", 1_000, "x", "food", "김밥", 5, 300).run()).rejects.toThrow();
+    // OR IGNORE 는 CHECK 위반도 조용히 삼키므로 거절 확인은 일반 INSERT 로 한다.
+    const plain = insert.replace("INSERT OR IGNORE", "INSERT");
+    await expect(env.DB.prepare(plain).bind("g-2", 1_000, "x", "food", "김밥", 5, 300).run()).rejects.toThrow();
   });
 });
