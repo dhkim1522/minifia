@@ -17,6 +17,7 @@ import {
   ANNOUNCE_TALLY_MS,
   ANNOUNCE_VICTIM_AT,
   ANNOUNCE_VICTIM_MS,
+  DAY_COPY,
   dayEvents,
   GHOST_FADE_END_MS,
   GHOST_RISE_MS,
@@ -188,18 +189,13 @@ describe("dayEvents — 단계 진입 줄 (DAY-05·06)", () => {
     same(events.fx, []);
   });
 
-  it("지목 → 최후 변론: hot '{이름} 님 {N}표 · 최후 변론' 의 N 은 그날 voteLog 에서 변론자를 가리킨 수 (가정 A2)", () => {
-    const events = dayEvents(nominationOf([]), defenseView());
-    same(events.lines, [{ kind: "hot", text: "지호 님 4표 · 최후 변론" }]);
-  });
-
-  it("voteLog 줄이 없으면 이전 지목 집계의 표 수를 쓴다", () => {
-    const prev = nominationOf([[0, 3], [1, 3], [2, 3]]);
-    const events = dayEvents(prev, viewOf("defense", { day: { candidate: 3 } }));
-    same(events.lines, [{ kind: "hot", text: "지호 님 3표 · 최후 변론" }]);
-  });
-
-  it("변론자 정보가 없으면 줄을 만들지 않는다", () => {
+  it("지목 → 유언 단계(22-11 D-14·D-23): 득표 줄도 알림도 없다 — 처형자 한 명이 스포트라이트를 받을 뿐이다", () => {
+    for (const prev of [nominationOf([]), nominationOf([[0, 3], [1, 3], [2, 3]])]) {
+      const events = dayEvents(prev, defenseView());
+      same(events.lines, []);
+      same(events.announces, []);
+    }
+    same(dayEvents(nominationOf([]), viewOf("defense", { day: { candidate: 3 } })).lines, []);
     same(dayEvents(nominationOf([]), viewOf("defense")).lines, []);
   });
 
@@ -416,9 +412,21 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     same(hdr(priv), hdr(base));
   });
 
-  it("최후 변론: 남은 '{닉네임} 님의 변론', 변론자 본인 '해명할 시간이에요'", () => {
-    same(hdr(defenseView()), { title: "최후 변론", hint: "지호 님의 변론" });
-    same(hdr(defenseView({ mySeat: 3 })), { title: "최후 변론", hint: "해명할 시간이에요" });
+  it("유언(22-11 P22-1·D-23): 제목 '유언'뿐 — 안내 줄이 없고 처형자 시점이든 남의 시점이든 같다", () => {
+    same(hdr(defenseView()), { title: "유언" });
+    same(hdr(defenseView({ mySeat: 3 })), { title: "유언" });
+    same(hdr(viewOf("defense")), { title: "유언" });
+  });
+
+  it("DAY_COPY 어디에도 '최후 변론'·'변론'·'해명' 글이 없다(함수 문구는 예시 인자로 만들어 본다)", () => {
+    const strings: string[] = [];
+    const walk = (v: unknown): void => {
+      if (typeof v === "string") strings.push(v);
+      else if (typeof v === "function") strings.push(String((v as (...a: unknown[]) => unknown)("지호", 3, 2)));
+      else if (v !== null && typeof v === "object") Object.values(v as Record<string, unknown>).forEach(walk);
+    };
+    walk(DAY_COPY);
+    expect(strings.filter((t) => /최후 변론|변론|해명/.test(t))).toEqual([]);
   });
 
   it("찬반: 제목 '찬반'뿐 — 후보가 없어 이름이 든 안내 줄이 없고 누구 시점이든 같다 (P22-1, D-23)", () => {
@@ -436,7 +444,7 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     const g = { players: ghostPlayers, mySeat: 0 };
     same(hdr(viewOf("discussion", g)), { title: "토론", hint: "모두의 직업이 보여요" });
     same(hdr(nominationOf([], g)), { title: "지목", hint: "모두의 직업이 보여요" });
-    same(hdr(defenseView(g)), { title: "최후 변론", hint: "모두의 직업이 보여요" });
+    same(hdr(defenseView(g)), { title: "유언", hint: "모두의 직업이 보여요" });
     same(hdr(verdictView(g)), { title: "찬반", hint: "모두의 직업이 보여요" });
     same(hdr(executionView(5, 2, true, g)), { title: "처형", hint: "모두의 직업이 보여요" });
     same(hdr(viewOf("morning", g)), { title: "아침", hint: "모두의 직업이 보여요" });
@@ -451,10 +459,6 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     same(hdr(night("citizen")), { title: "밤", hint: "날이 밝길 기다려요" });
     const ghost = { ...viewOf("night", { players: ghostPlayers, mySeat: 0 }), me: { seat: 0, isHost: false, role: "mafia" as const } };
     same(hdr(ghost), { title: "밤", hint: "모두의 직업과 밤 행동이 보여요" });
-  });
-
-  it("변론자 정보가 없으면 안내를 만들지 않는다", () => {
-    same(hdr(viewOf("defense")), { title: "최후 변론" });
   });
 
   it("낮 틀이 아닌 단계는 빈 제목", () => {
@@ -647,15 +651,10 @@ describe("dayEvents — 결선 (09.1.1-14)", () => {
     same(events.announces, []);
   });
 
-  it("결선 → 최후 변론: hot '{이름} 님 결선 {k}표 · 최후 변론' (k 는 직전 view 의 tally 에서 승자 칸)", () => {
+  it("결선 → 유언 단계: 결선 득표 줄도 없다(22-11 D-23 — 변론 줄 삭제)", () => {
     const toDefense = (candidate: number) => viewOf("defense", { day: { candidate, voteLog: VOTE_LOG } });
-    same(dayEvents(runoffOf(2, { tally: [3, 1] }), toDefense(2)).lines, [{ kind: "hot", text: "도윤 님 결선 3표 · 최후 변론" }]);
-    same(dayEvents(runoffOf(2, { tally: [1, 2] }), toDefense(3)).lines, [{ kind: "hot", text: "지호 님 결선 2표 · 최후 변론" }]);
-  });
-
-  it("결선 → 변론인데 직전 view 에 tally 가 없으면 기존 변론 줄로 돌아간다", () => {
-    const events = dayEvents(runoffOf(1), viewOf("defense", { day: { candidate: 3, voteLog: VOTE_LOG } }));
-    same(events.lines, [{ kind: "hot", text: "지호 님 4표 · 최후 변론" }]);
+    same(dayEvents(runoffOf(2, { tally: [3, 1] }), toDefense(2)).lines, []);
+    same(dayEvents(runoffOf(1), toDefense(3)).lines, []);
   });
 
   it("결선 → 밤(또 동점, U-5): '처형 없음' 줄과 알림 하나만", () => {

@@ -102,9 +102,9 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     ["토론 유령", { phase: "discussion", ghost: true }, "유령끼리 이야기할 수 있습니다", "discussion.ghost"],
     ["지목 산 사람", { phase: "nomination" }, "차례대로 한 명을 골라요", "nomination.act"],
     ["지목 유령", { phase: "nomination", ghost: true }, "지켜봐 주세요", "nomination.ghost"],
-    ["변론 본인", { phase: "defense", candidate: 0 }, "마지막 말과 유언을 남겨 주세요", "defense.act"],
-    ["변론 남", { phase: "defense", candidate: 1 }, "변론을 들어 주세요", "defense.wait"],
-    ["변론 유령", { phase: "defense", candidate: 1, ghost: true }, "변론을 지켜봐 주세요", "defense.ghost"],
+    ["유언 처형자", { phase: "defense", candidate: 0 }, "마지막 한마디", "defense.act"],
+    ["유언 남", { phase: "defense", candidate: 1 }, "마지막 한마디를 들어요", "defense.wait"],
+    ["유언 유령", { phase: "defense", candidate: 1, ghost: true }, "지켜봐 주세요", "defense.ghost"],
     ["찬반 산 사람", { phase: "verdict" }, "오늘 처형할까요?", "verdict.act"],
     ["찬반 산 사람(투표 전·후 같음)", { phase: "verdict", noise: true }, "오늘 처형할까요?", "verdict.act"],
     ["찬반 유령", { phase: "verdict", ghost: true }, "지켜봐 주세요", "verdict.ghost"],
@@ -129,15 +129,24 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     expect(hostLineOf(view, local)).toBe(line);
   });
 
+  it("22-11 D-23: 유언 단계 띠에 '변론'·'해명'·'최후' 가 없고 역할을 읽지 않는다 — 처형자·남·유령 세 문장뿐", () => {
+    const lines = (["defense.act", "defense.wait", "defense.ghost"] as const).map((k) => HOST_LINES[k]);
+    expect(lines.join("|")).toBe("마지막 한마디|마지막 한마디를 들어요|지켜봐 주세요");
+    for (const l of lines) expect(/변론|해명|최후/.test(l)).toBe(false);
+    for (const role of ["mafia", "police", "doctor", "citizen"] as const) {
+      expect(hostLineOf(makeView({ phase: "defense", candidate: 1, role }))).toBe("마지막 한마디를 들어요");
+    }
+  });
+
   it("18.1-12: 변론·찬반·처형 줄에 닉네임이 없다 — 이름이 8자여도 같은 문장이고 변론자를 못 찾아도 문장이 나온다 (0083-8)", () => {
     const spec = { phase: "defense" as const, candidate: 1 };
     const named = makeView(spec);
     const longName = makeView(spec);
     longName.players = longName.players.map((p) => (p.seat === 1 ? { ...p, nickname: LONG_NAME } : p));
     expect(hostLineOf(longName)).toBe(hostLineOf(named));
-    expect(hostLineOf(named)).toBe("변론을 들어 주세요");
-    expect(hostLineOf(makeView({ phase: "defense", ghost: true }))).toBe("변론을 지켜봐 주세요");
-    expect(hostLineOf(makeView({ phase: "defense", candidate: 9 }))).toBe("변론을 들어 주세요");
+    expect(hostLineOf(named)).toBe("마지막 한마디를 들어요");
+    expect(hostLineOf(makeView({ phase: "defense", ghost: true }))).toBe("지켜봐 주세요");
+    expect(hostLineOf(makeView({ phase: "defense", candidate: 9 }))).toBe("마지막 한마디를 들어요");
     expect(hostLineOf(makeView({ phase: "verdict", candidate: 9 }))).toBe("오늘 처형할까요?");
     expect(hostLineOf(makeView({ phase: "execution", passed: true }))).toBe("");
   });
