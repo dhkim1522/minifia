@@ -36,6 +36,8 @@ interface Spec {
   map?: "bar" | "plaza";
   /** 순차 지목 차례(day.turn). order 기본 0~3, 차례 중이면 endsAt 이 있다 */
   turn?: { i: number; order?: number[]; doneAt?: number };
+  /** 키워드 단계에서 본인이 쓰던 글(me.answer, 23-09) */
+  answer?: { text: string; final: boolean };
 }
 
 function makeView(o: Spec): RoomView {
@@ -60,6 +62,7 @@ function makeView(o: Spec): RoomView {
       nightTally: [{ seat: 1, n: 2 }],
     });
   }
+  if (o.answer !== undefined) me.answer = o.answer;
   const day: Record<string, unknown> = { n: 1 };
   if (o.candidate !== undefined) day.candidate = o.candidate;
   if (o.passed === true) day.execution = { seat: o.candidate ?? 1 };
@@ -386,6 +389,9 @@ const ALLOWED_EXACT: ReadonlySet<string> = new Set([
   "me.seat",
   "me.role",
   "me.isHost",
+  // 23-09(P23-8): 키워드 단계 띠 — 제출 여부(final)만 읽는다. 글(text)은 읽지 않는다
+  "me.answer",
+  "me.answer.final",
   "players",
   "players[]",
   "players[].seat",
@@ -439,6 +445,11 @@ function matrixSpecs(): Spec[] {
     out.push({ ...base, host: true });
     out.push({ ...base, seat: 1, host: false, candidate: 1 });
     out.push({ ...base, seat: 1, candidate: 1 }); // 변론자 본인
+    if (phase === "keyword") {
+      out.push({ ...base, role: "mafia", answer: { text: "안경", final: false } });
+      out.push({ ...base, role: "citizen", answer: { text: "안경", final: true } });
+      out.push({ ...base, role: "mafia", answer: { text: "안경", final: true } });
+    }
   }
   return out;
 }
@@ -469,6 +480,57 @@ describe("정답 공개 사회자 줄 (23-07, P23-20)", () => {
     keys.add(hostKeyOf(view({ ghost: true })));
     keys.add(hostKeyOf(view({ host: true })));
     expect([...keys]).toEqual(["answerReveal"]);
+  });
+});
+
+describe("키워드 띠 문장 (23-09, P23-8)", () => {
+  const view = (o: Partial<Spec> = {}) => makeView({ phase: "keyword", endsAt: 1_700_000_013_000, durationMs: 13_000, ...o });
+
+  it("me.answer 가 없거나 초안(final false)이면 keyword.act '떠오르는 말을 적어요', 확정(final true)이면 keyword.wait '곧 모두의 답이 나와요'", () => {
+    expect(hostKeyOf(view())).toBe("keyword.act");
+    expect(hostLineOf(view())).toBe("떠오르는 말을 적어요");
+    expect(hostKeyOf(view({ answer: { text: "안경", final: false } }))).toBe("keyword.act");
+    expect(hostKeyOf(view({ answer: { text: "안경", final: true } }))).toBe("keyword.wait");
+    expect(hostLineOf(view({ answer: { text: "안경", final: true } }))).toBe("곧 모두의 답이 나와요");
+    expect(HOST_LINES["keyword.wait"]).toBe("곧 모두의 답이 나와요");
+  });
+
+  it("마피아·시민·경찰·의사·역할 없음이 같은 키다 — 역할을 읽지 않는다", () => {
+    for (const answer of [undefined, { text: "안경", final: false }, { text: "안경", final: true }]) {
+      const keys = new Set<string>();
+      for (const role of ["mafia", "citizen", "police", "doctor"] as RoleId[]) keys.add(hostKeyOf(view({ role, ...(answer ? { answer } : {}) })));
+      keys.add(hostKeyOf(view({ role: null, ...(answer ? { answer } : {}) })));
+      expect(keys.size).toBe(1);
+    }
+  });
+
+  it("빛남 대상: keyword.act 는 입력칸(chat 도구, 시각은 화면이 3초 잠금으로 정한다), keyword.wait 는 없다", () => {
+    expect(callTargetsOf(view())).toEqual({ kind: "tool", tool: "chat" });
+    expect(callTargetsOf(view({ answer: { text: "안경", final: true } }))).toBeNull();
+  });
+
+  it("두 문구 모두 공백 포함 19자 이하·마침표 없음", () => {
+    for (const key of ["keyword.act", "keyword.wait"] as const) {
+      expect([...HOST_LINES[key]].length, key).toBeLessThanOrEqual(19);
+      expect(HOST_LINES[key], key).not.toMatch(/[.。]/);
+    }
+  });
+
+  it("읽은 경로: me.answer.final 만 더해지고 me.role·me.answer.text 는 keyword 키에서 읽지 않는다", () => {
+    for (const role of ["mafia", "citizen"] as RoleId[]) {
+      for (const answer of [undefined, { text: "안경", final: false }, { text: "안경", final: true }]) {
+        const log = new Set<string>();
+        const v = recorder(view({ role, ...(answer ? { answer } : {}) }), log) as RoomView;
+        hostLineOf(v);
+        hostKeyOf(v);
+        callTargetsOf(v);
+        hostTimeOf(v);
+        expect(log.has("me.role")).toBe(false);
+        expect(log.has("me.answer.text")).toBe(false);
+        expect([...log].filter((p) => !isAllowed(p))).toEqual([]);
+        if (answer) expect(log.has("me.answer.final")).toBe(true);
+      }
+    }
   });
 });
 
