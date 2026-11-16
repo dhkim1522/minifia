@@ -168,3 +168,33 @@ describe("실제 목록 GENRES — 항목 불변식(D-05, P23-27, T-23-12·14, S
     }
   });
 });
+
+// ---- Task 2: 크기 불변식 ----
+
+describe("실제 목록 GENRES — 크기 불변식(SC5)", () => {
+  it("장르 6~8개, 장르마다 단어 30개 이상, 전체 210개 이상", () => {
+    expect(GENRES.length).toBeGreaterThanOrEqual(6);
+    expect(GENRES.length).toBeLessThanOrEqual(8);
+    for (const g of GENRES) expect(g.words.length, `${g.id} 단어 수`).toBeGreaterThanOrEqual(30);
+    expect(GENRES.reduce((s, g) => s + g.words.length, 0)).toBeGreaterThanOrEqual(210);
+  });
+
+  it("영화·음식·동물·장소·스포츠·물건·나라 일곱 장르가 있다", () => {
+    expect(GENRES.map((g) => g.id)).toEqual(["movie", "food", "animal", "place", "sport", "object", "country"]);
+  });
+
+  it("모든 항목의 별칭이 하나 이상이다(한국어 변형·영어·짧은 이름)", () => {
+    for (const g of GENRES) for (const e of g.words) expect(e.aliases.length, `${g.id}/${e.word}`).toBeGreaterThanOrEqual(1);
+  });
+
+  it("pickKeyword(seededRandInt(s)) 는 s=1..50 에서 모두 조회되고 둘 이상의 장르가 나온다", () => {
+    const picked = new Set<string>();
+    for (let s = 1; s <= 50; s++) {
+      const { genre, word } = pickKeyword(seededRandInt(s));
+      expect(keywordEntryOf(genre, word), `시드 ${s}: ${genre}/${word}`).toBeDefined();
+      expect(genreLabelOf(genre), `시드 ${s}: ${genre}`).toBeTruthy();
+      picked.add(genre);
+    }
+    expect(picked.size).toBeGreaterThanOrEqual(2);
+  });
+});
