@@ -23,6 +23,8 @@ export interface WorldTestHooks {
   interactiveMs(): number | null;
   /** 월드 바닥 점 → 화면 px (E2E 가 걸을 수 있는 점을 누를 때). 렌더러가 없으면 null */
   screenOf(x: number, z: number): { sx: number; sy: number } | null;
+  /** 의심 포스트잇(24-05, D-27): 좌석별 받은 종이 수 total 과 지금 몸에 붙어 있는 수 visible(≤3). 종이가 없는 좌석은 키가 없다. 공개 값뿐이다(역할·닉네임 없음) */
+  suspectNotes(): Record<number, { total: number; visible: number }>;
   debug: {
     loseContext(): void;
     restoreContext(): void;
@@ -74,6 +76,8 @@ export interface HookRuntime {
   status(): MapStatusState;
   interactiveMs(): number | null;
   renderer(): WorldRenderer | null;
+  /** 런타임이 내주면 그대로 노출한다(24-05). 없으면 빈 표 */
+  suspectNotes?(): Record<number, { total: number; visible: number }>;
 }
 
 /**
@@ -117,6 +121,7 @@ export function installWorldTestHooks(runtime: HookRuntime, store: WorldStore): 
     status: () => runtime.status().status,
     interactiveMs: () => runtime.interactiveMs(),
     screenOf: (x, z) => runtime.renderer()?.project({ x, y: 0, z }) ?? null,
+    suspectNotes: () => runtime.suspectNotes?.() ?? {},
     debug: {
       loseContext: () => runtime.renderer()?.debugLoseContext(),
       restoreContext: () => runtime.renderer()?.debugRestoreContext(),

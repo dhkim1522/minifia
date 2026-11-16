@@ -274,6 +274,8 @@ export interface WorldRuntime {
   status(): MapStatusState;
   /** performance.mark("map-interactive") 의 시각(ms). 아직 안 열렸으면 null */
   interactiveMs(): number | null;
+  /** 좌석별 받은 종이 수와 지금 붙어 있는 종이 수(E2E 훅 window.__mfWorld.suspectNotes, 24-05 D-27). 종이가 없는 좌석은 키가 없다. 공개 값뿐이다 */
+  suspectNotes(): Record<number, { total: number; visible: number }>;
 }
 
 /** 06-11 figForSeat 와 같은 식(character.ts 는 three 를 끌고 와서 정적으로 가져오지 않는다) */
@@ -285,6 +287,14 @@ function figIndexForSeat(seat: number): number {
 function spawnYaw(spawns: readonly Spawn[], seat: number): number {
   const n = spawns.length;
   return spawns[((seat % n) + n) % n]?.yaw ?? Math.PI / 4;
+}
+
+const EMPTY_NOTES: readonly number[] = [];
+
+function sameList(a: readonly number[], b: readonly number[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }
 
 const easeOut = (p: number): number => 1 - (1 - p) * (1 - p) * (1 - p);
@@ -328,6 +338,8 @@ interface Actor {
   ghostAt: number;
   /** handle.setGhost 에 마지막으로 보낸 밝기 배율(유령일 때) */
   ghostTint: number;
+  /** handle.setNotes 에 마지막으로 보낸(또는 맞춘) 종이 목록. null = 아직 장면을 받은 적 없음(처음 받는 목록은 모션 없이 맞춘다, 24-05) */
+  notes: readonly number[] | null;
   /** 결과 화면 장면 표(costume)로 지금 입고 있는 직업 의상(없으면 null) — 고른 look 과 별개 */
   costume: string | null;
   /** 연결 끊김으로 어둡게 그리나 */
@@ -792,6 +804,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       ghost: false,
       ghostAt: 0,
       ghostTint: 1,
+      notes: null,
       costume: null,
       away: false,
       sceneDim: false,
@@ -1038,6 +1051,17 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
   }
 
+  /** 종이 목록이 마지막으로 보낸 것과 다를 때만 handle.setNotes 를 부른다(T-24-15). instant = 모션 없이 맞춘다 */
+  function syncNotes(a: Actor, want: readonly number[], instant: boolean): void {
+    const prev = a.notes;
+    if (prev !== null && sameList(prev, want)) return;
+    const first = prev === null;
+    a.notes = want;
+    // 처음 받는 목록이 빈 것이면 핸들에는 아직 종이가 없다 — 부르지 않는다(종이 없는 캐릭터는 비용 0)
+    if (first && want.length === 0) return;
+    a.handle.setNotes?.(want, { animate: !(instant || first) });
+  }
+
   function drawFrame(r: WorldRenderer): void {
     const now = Date.now();
     const gapMs = now - lastFrameAt;
@@ -1106,6 +1130,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       // 탈락자는 누구든 같은 유령 그림(0083-2): 켤 때 불투명도 0(모션 줄이기면 바로 0.88)에서 inMs 동안 올린다.
       // 밝기는 조명 단계 배율(밤 < 저녁 ≤ 낮) × 끊김·진 팀 어둠 0.6 — 어두운 장면에서는 밝기만 낮추고 색은 그대로
       const ghostTint = ghostTintOf(lightNow) * (a.dim ? 0.6 : 1);
+      const ghostFlipped = wantGhost !== a.ghost;
       if (wantGhost && !a.ghost) {
         const start = reduced ? GHOST_SPRITE.opacity : 0;
         a.ghost = true;
@@ -1121,6 +1146,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         a.ghostTint = ghostTint;
         a.handle.setGhost?.(true, { tint: ghostTint });
       }
+      // 의심 포스트잇(24-05): 장면의 받은 종이 목록을 마지막으로 보낸 것과 비교해 달라졌을 때만 핸들에 건넨다.
+      // 유령 좌석은 빈 목록(모션 없음 — 핸들의 setGhost 도 떼지만 순서와 무관하게 맞춘다). 처음 받는 목록·유령 전환 프레임·모션 줄이기는 즉시(animate 거짓)
+      if (look !== null) syncNotes(a, wantGhost ? EMPTY_NOTES : (look.notes?.[a.seat] ?? EMPTY_NOTES), reduced || ghostFlipped);
       // 손가락 자세: 지목 중인 좌석만 유지하고, 풀리면 평소 자세로 돌아온다
       const pointAt = seatLook?.pointAt;
       if ((pointAt !== undefined) !== a.pointing) {
@@ -1565,6 +1593,14 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     },
     interactiveMs() {
       return interactiveAt;
+    },
+    suspectNotes() {
+      const out: Record<number, { total: number; visible: number }> = {};
+      for (const a of actors.values()) {
+        const c = a.handle.noteCounts?.();
+        if (c !== undefined && c.total > 0) out[a.seat] = { total: c.total, visible: c.visible };
+      }
+      return out;
     },
   };
 }

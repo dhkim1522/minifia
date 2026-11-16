@@ -8,6 +8,7 @@ import { STAGE_SPOT, UNIT } from "../../shared/game/map";
 import type { MapId, PhaseId, RoomView } from "../../shared/protocol";
 import { GHOST_FADE_END_MS, GHOST_RISE_MS, pointsTally } from "../game/dayView";
 import { pointSeatsOf, revealPoints, showdownStageOf } from "../game/showdownView";
+import { suspectStacks } from "../game/suspectView";
 import { ZOOM_IN_MS } from "../game/verdictMoment";
 import { GATHER_CENTER, ZOOM_MIN_STAGE_H } from "./camera";
 import type { OutfitId } from "./characterData";
@@ -59,6 +60,11 @@ export interface SceneLook {
   seats: Record<number, SeatLook>;
   /** 암살 현장 분필 자리(월드 단위). 서버 공개 값 day.chalk 를 UNIT 으로 나눈 것이고 유령·산 사람 viewer 가 같은 자리를 본다(결정 0061-14) */
   chalk?: { x: number; z: number };
+  /**
+   * "의심" 포스트잇(24-05, 결정 0089-11): 받은 좌석 → 붙인 좌석 배열(day.suspects 순서 = 아래→위, 공개 값). 그리는 산 좌석만 싣고 비어 있으면 키가 없다.
+   * 보이는 3장 자르기는 캐릭터 핸들 리그가 한다 — 여기는 전체 목록이다
+   */
+  notes?: Readonly<Record<number, readonly number[]>>;
 }
 
 /** 이 viewer 가 유령인지: 서버가 탈락한 본인 view 에만 싣는 spectate 가 있거나, 내 좌석이 탈락으로 내려온 경우 */
@@ -156,6 +162,11 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
   const seats = visibleSeats(view, opts.fading, opts.now);
   const pointing = pointingOf(view, opts.mine);
   const chalk = view.day?.chalk;
+  const notes: Record<number, readonly number[]> = {};
+  for (const [to, froms] of suspectStacks(view)) {
+    const look = seats[to];
+    if (look && !look.ghost && froms.length > 0) notes[to] = froms;
+  }
   for (const [seat, target] of Object.entries(pointing)) {
     const look = seats[Number(seat)];
     if (look && !look.ghost) look.pointAt = target; // 탈락한 좌석(유령)은 가리키지 않는다
@@ -168,6 +179,7 @@ export function sceneLook(view: RoomView, opts: { stageH: number; fading?: Reado
     pin: pinOf(view),
     seats,
     ...(chalk !== undefined ? { chalk: { x: chalk.x / UNIT, z: chalk.z / UNIT } } : {}),
+    ...(Object.keys(notes).length > 0 ? { notes } : {}),
   };
 }
 
