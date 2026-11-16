@@ -34,6 +34,8 @@ interface Spec {
   durationMs?: number | null;
   /** 이번 판의 맵(view.map) */
   map?: "bar" | "plaza";
+  /** 순차 지목 차례(day.turn). order 기본 0~3, 차례 중이면 endsAt 이 있다 */
+  turn?: { i: number; order?: number[]; doneAt?: number };
 }
 
 function makeView(o: Spec): RoomView {
@@ -62,6 +64,11 @@ function makeView(o: Spec): RoomView {
   if (o.candidate !== undefined) day.candidate = o.candidate;
   if (o.passed !== undefined) day.verdict = { yes: 3, no: 1, passed: o.passed };
   if (o.morning !== undefined) day.morning = o.morning;
+  if (o.turn !== undefined) {
+    const order = o.turn.order ?? [0, 1, 2, 3];
+    const inTurn = o.turn.i >= 0 && o.turn.i < order.length;
+    day.turn = { order, i: o.turn.i, ...(inTurn ? { endsAt: 1_700_000_008_000 } : {}), ...(o.turn.doneAt !== undefined ? { doneAt: o.turn.doneAt } : {}) };
+  }
   if (o.noise) Object.assign(day, { roles: ["mafia", "police", "citizen"], points: [{ seat: 1, target: 2 }], turn: { i: 0 }, voteLog: [{ seat: 1, target: 2 }] });
   const endsAt = o.endsAt === undefined ? 1_700_000_090_000 : o.endsAt;
   const view: Record<string, unknown> = {
@@ -262,10 +269,15 @@ describe("빛남 대상 callTargetsOf (HOST-03·04)", () => {
     expect(callTargetsOf(makeView({ phase: "discussion", ghost: true }))).toBeNull();
   });
 
-  it("투표: 나와 죽은 사람을 뺀 산 사람 좌석 오름차순, 유령 → null", () => {
-    expect(callTargetsOf(makeView({ phase: "nomination" }))).toEqual(tag(1, 2, 3));
-    expect(callTargetsOf(makeView({ phase: "nomination", seat: 3, dead: [1] }))).toEqual(tag(0, 2));
-    expect(callTargetsOf(makeView({ phase: "nomination", ghost: true }))).toBeNull();
+  it("지목(순차): 내 차례에만 나와 죽은 사람을 뺀 산 사람 이름표(좌석 오름차순)가 빛나고, 차례 밖·유령은 null (P22-17)", () => {
+    expect(callTargetsOf(makeView({ phase: "nomination", turn: { i: 0 } }))).toEqual(tag(1, 2, 3));
+    expect(callTargetsOf(makeView({ phase: "nomination", seat: 3, dead: [1], turn: { i: 3 } }))).toEqual(tag(0, 2));
+    // 남의 차례·모이는 중·끝 알림·확정 직후·day.turn 없음 → 빛남 없음
+    for (const turn of [{ i: 1 }, { i: -1 }, { i: 4 }, { i: 0, doneAt: 1_700_000_001_000 }]) {
+      expect(callTargetsOf(makeView({ phase: "nomination", turn })), JSON.stringify(turn)).toBeNull();
+    }
+    expect(callTargetsOf(makeView({ phase: "nomination" }))).toBeNull();
+    expect(callTargetsOf(makeView({ phase: "nomination", ghost: true, turn: { i: 0 } }))).toBeNull();
   });
 
   it("최후 변론: 변론자 본인 → will, 남·유령 → null", () => {

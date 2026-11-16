@@ -180,23 +180,23 @@ describe("지목 화면 — 이름표 하나 누르기 (DAY-04, 트레이서)", 
     expect(pickOf(container, 0)).toBeNull();
   });
 
-  it("좌석 2 를 누르면 point {target: 2} 를 한 번 보내고 그 이름표가 즉시 mine, 배지 +1, 버튼은 모두 사라진다(취소·바꾸기 없음)", () => {
+  it("좌석 2 를 누르면 point {target: 2} 를 한 번 보내고 그 이름표가 즉시 mine, 버튼은 모두 사라진다(취소·바꾸기 없음, 득표 배지 없음)", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
     const { container } = mount(makeView(), { send });
     fireEvent.click(pickOf(container, 2)!);
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith({ t: "point", target: 2 });
     expect(headOf(container, 2)?.getAttribute("data-mine")).toBe("true");
-    expect(headOf(container, 2)?.getAttribute("data-count")).toBe("1");
+    expect(container.querySelector("[data-count]")).toBeNull();
     expect(picks(container).length).toBe(0);
   });
 
-  it("서버 view(내가 2, 3 번이 2)가 오면 좌석 2 의 배지가 data-count=2 이고 0표 이름표에는 배지가 없다", () => {
+  it("지목 단계에는 득표 배지·유력 도장·선두 표식 DOM 이 한 개도 없다 — 서버가 점을 많이 보내도 같다(22-10, D-12)", () => {
     const m = mount(makeView());
-    expect(m.container.querySelectorAll("[data-count]").length).toBe(0);
-    m.show(makeView({ points: [[0, 2], [3, 2]], turn: { i: 4 } }));
-    expect(headOf(m.container, 2)?.getAttribute("data-count")).toBe("2");
-    expect(headOf(m.container, 1)?.hasAttribute("data-count")).toBe(false);
+    m.show(makeView({ points: [[0, 2], [3, 2], [4, 2]], turn: { i: 4 } }));
+    for (const sel of ["[data-count]", "[data-sure]", "[data-lead]", ".mv-badge", ".mv-stamp"]) {
+      expect(m.container.querySelectorAll(sel).length, sel).toBe(0);
+    }
   });
 
   it("유령(탈락한 나)의 지목 화면에는 지목 버튼이 하나도 없다", () => {
@@ -273,7 +273,7 @@ describe("지목 화면 — 채팅 줄·위 알림 없음 (E2 #9 → 09.1)", () 
 
   it("재접속·새로 고침 첫 화면(직전 view 없음): 배지는 상태로 바로 보이고(선두 표시는 없다) 알림·채팅 줄은 새로 만들지 않는다", () => {
     const { container } = mount(makeView({ points: [[1, 2], [3, 2]], turn: { i: 3 } }));
-    expect(headOf(container, 2)?.getAttribute("data-count")).toBe("2");
+    expect(container.querySelector("[data-count]")).toBeNull();
     expect(headOf(container, 2)?.hasAttribute("data-lead")).toBe(false);
     advance(2000);
     expect(toastText(container)).toBe("");
@@ -284,7 +284,7 @@ describe("지목 화면 — 채팅 줄·위 알림 없음 (E2 #9 → 09.1)", () 
     const m = mount(makeView());
     m.show(makeView({ points: [[1, 2]] }), { epoch: 2 });
     advance(2000);
-    expect(headOf(m.container, 2)?.getAttribute("data-count")).toBe("1");
+    expect(m.container.querySelector("[data-count]")).toBeNull();
     expect(toastText(m.container)).toBe("");
     expect(m.container.querySelectorAll(".mv-chat__sys").length).toBe(0);
   });
@@ -402,9 +402,9 @@ describe("지목 화면 — 내 차례에만 이름표 버튼·계속 깜빡임 
     expect(blinking(talk.container)).toBe(0);
   });
 
-  it("이름표 쌓임: 득표 배지 숫자만 — data-lead·data-sure 는 지목 단계에 없고 차례 좌석만 ring=turn·data-turn", () => {
+  it("이름표 쌓임: 득표 배지도 없다 — data-count·data-lead·data-sure 는 지목 단계에 없고 차례 좌석만 ring=turn·data-turn", () => {
     const { container } = mount(makeView({ points: [[1, 2], [3, 2], [4, 2]], turn: { i: 1 } }));
-    expect(headOf(container, 2)?.getAttribute("data-count")).toBe("3");
+    expect(container.querySelector("[data-count]")).toBeNull();
     expect(container.querySelector("[data-lead]")).toBeNull();
     expect(container.querySelector("[data-sure]")).toBeNull();
     const turnTags = [...container.querySelectorAll("[data-ring-kind='turn']")];
@@ -507,11 +507,11 @@ describe("지목 화면 — 장면 상태 (손가락·카메라·조명·긴장)
     expect(small.mode === "fixed" && small.zoom).toBe(1);
   });
 
-  it("득표가 바뀌어도 배지 숫자만 달라지고 선두·도장은 없으며 긴장은 내내 0", () => {
+  it("득표가 바뀌어도 배지·선두·도장은 없으며 긴장은 내내 0", () => {
     const m = mount(makeView({ points: [[1, 2], [3, 2], [4, 2]], turn: { i: 5 } }));
-    expect(headOf(m.container, 2)?.getAttribute("data-count")).toBe("3");
+    expect(m.container.querySelector("[data-count]")).toBeNull();
     m.show(makeView({ points: [[1, 2], [3, 2], [4, 0]], turn: { i: 5 } }));
-    expect(headOf(m.container, 2)?.getAttribute("data-count")).toBe("2");
+    expect(m.container.querySelector("[data-count]")).toBeNull();
     expect(headOf(m.container, 2)?.hasAttribute("data-sure")).toBe(false);
     expect(headOf(m.container, 2)?.hasAttribute("data-lead")).toBe(false);
     expect(lastScene().tension).toBe(0);
@@ -522,7 +522,7 @@ describe("지목 화면 — 장면 상태 (손가락·카메라·조명·긴장)
     fireEvent.click(pickOf(m.container, 2)!);
     expect(lastScene().seats[0]?.pointAt).toBe(2);
     expect(lastScene().seats[1]?.pointAt).toBeUndefined();
-    expect(headOf(m.container, 2)?.getAttribute("data-count")).toBe("1"); // 내 표는 서버가 세어 주기 전에도 +1 로 바로 보인다(UI-SPEC A-4)
+    expect(m.container.querySelector("[data-count]")).toBeNull(); // 득표 배지는 없다(22-10) — 내 표는 mine 표식만
   });
 
   it("지목 단계의 산 사람이 맵을 탭해도 걷지 않는다(낮 토론에서는 걷는다)", () => {
@@ -752,16 +752,16 @@ describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
     expect(line(m.container)).toBe("가운데로 모여요");
   });
 
-  it("끝 알림: 알약 없음, 위 한 줄 '모두 골랐어요 · {이름} 님 {k}표'(단독 최다), '동점이에요'(정확히 둘 동점) 또는 '모두 골랐어요'", () => {
+  it("끝 알림: 알약 없음, 위 한 줄 '모두 골랐어요 · {이름} 님 {k}표'(단독 최다), '동점이에요'(동점) 또는 '고른 사람이 없어요'(0표)", () => {
     const m = mount(turn4({ i: 3 }));
     m.show(turn4({ i: 4 }, { points: [[0, 2], [1, 2], [3, 1]] }));
     expect(m.container.querySelector(".mf-turn__pill")).toBeNull();
     expect(ring(m.container)).toBeNull();
     expect(line(m.container)).toBe("모두 골랐어요 · 서준 님 2표");
     m.show(turn4({ i: 4 }, { points: [[0, 2], [1, 3]] }));
-    expect(line(m.container)).toBe("동점이에요"); // 09.1.1-14: 최다가 정확히 둘 동점이면 결선이 열린다
+    expect(line(m.container)).toBe("동점이에요"); // 22-10: 결선 없이 처형 없음
     m.show(turn4({ i: 4 }, { points: [] }));
-    expect(line(m.container)).toBe("모두 골랐어요");
+    expect(line(m.container)).toBe("고른 사람이 없어요");
   });
 
   it("재접속 첫 화면(확정 직후 차례): 알약은 지금 값으로 바로 보이고 위 한 줄은 만들지 않는다. 그 뒤 차례가 넘어가면 줄이 생긴다", () => {
@@ -773,6 +773,14 @@ describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
     expect(line(m.container)).toBeUndefined(); // 차례 중에는 줄이 없다
     m.show(turn4({ i: 2, left: 8000, doneLeft: 2000 }, { points: [[1, 2], [2, 3]] }));
     expect(line(m.container)).toBe("서준 님이 지아 님을 가리켜요");
+  });
+
+  it("8자 닉네임의 '{닉네임} 님 차례' 는 알약 안에서 한 줄이다(white-space nowrap)", () => {
+    const nicknames = ["민수", "가나다라마바사아", "서준", "지아"];
+    const { container } = mount(turn4({ i: 1 }, { nicknames }));
+    expect(block(container)?.textContent).toContain("가나다라마바사아 님 차례");
+    const rule = readFileSync("src/styles/game.css", "utf8").split("\n").find((l) => l.startsWith(".mf-turn__name "));
+    expect(rule).toMatch(/white-space:\s*nowrap/);
   });
 
   it("지목이 아닌 단계에는 [data-turn-block] 이 없다", () => {

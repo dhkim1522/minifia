@@ -164,13 +164,14 @@ describe("turnTopLine — 위 한 줄 (UI-SPEC A-5)", () => {
     const points = [{ seat: 0, target: 2 }, { seat: 1, target: 2 }, { seat: 2, target: 0 }];
     expect(turnTopLine(view({ turn: { order: ORDER, i: 4 }, points }))).toBe("모두 골랐어요 · 도윤 님 2표");
   });
-  it("끝 알림: 최다가 정확히 둘 동점이면 '동점이에요' (UI-SPEC D-1, 결선이 열린다)", () => {
+  it("끝 알림: 최다가 동점(둘이든 셋 이상이든)이면 '동점이에요' — 결선 없이 처형 없음 (22-10, D-13)", () => {
     expect(turnTopLine(view({ turn: { order: ORDER, i: 4 }, points: [{ seat: 0, target: 2 }, { seat: 1, target: 3 }] }))).toBe("동점이에요");
-  });
-  it("끝 알림: 셋 이상 동률·0표는 '모두 골랐어요'", () => {
     const three = [{ seat: 0, target: 1 }, { seat: 1, target: 2 }, { seat: 2, target: 3 }];
-    expect(turnTopLine(view({ turn: { order: ORDER, i: 4 }, points: three }))).toBe("모두 골랐어요");
-    expect(turnTopLine(view({ turn: { order: ORDER, i: 4 }, points: [] }))).toBe("모두 골랐어요");
+    expect(turnTopLine(view({ turn: { order: ORDER, i: 4 }, points: three }))).toBe("동점이에요");
+  });
+  it("끝 알림: 아무도 고르지 않았으면(0표·모두 기권) '고른 사람이 없어요' (P22-5)", () => {
+    expect(turnTopLine(view({ turn: { order: ORDER, i: 4 }, points: [] }))).toBe("고른 사람이 없어요");
+    expect(TURN_COPY.noVotes).toBe("고른 사람이 없어요");
   });
 });
 
