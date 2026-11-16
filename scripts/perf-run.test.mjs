@@ -3,7 +3,7 @@
 // nightload 실행 자체는 이 시험이 하지 않는다(실행과 성능 합격선은 12-12).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LIGHT_MORNING_RATIO, LIGHT_TALK_RATIO, NIGHTLOAD_DWELL, USAGE, nightloadDwell, colorStats, lightRankVerdict, outputBase, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
+import { LIGHT_MORNING_RATIO, LIGHT_TALK_RATIO, NIGHTLOAD_DWELL, NIGHTLOAD_DWELL_BASIC, USAGE, nightloadDwell, colorStats, lightRankVerdict, outputBase, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
 
 test("parseArgs --map (20-09): town·bar·plaza 를 받고 저장 이름 끝이 -town·-bar·-plaza, 없으면 그대로", () => {
   const o = parseArgs(["--mode", "nightload", "--map", "town"]);
@@ -16,8 +16,11 @@ test("parseArgs --map (20-09): town·bar·plaza 를 받고 저장 이름 끝이 
   assert.match(USAGE, /town/);
 });
 
-test("nightloadDwell (20-09): 마을은 전부, 광장·재즈 바는 errand 만 뺀다", () => {
+test("nightloadDwell (21-17): 마을(확장판)은 새 하루 순서 errand → night → morning → discussion → nomination → defense → verdict → execution, 광장·재즈 바(기본 마피아)는 옛 순서에 errand 가 없다", () => {
   assert.equal(nightloadDwell("town"), NIGHTLOAD_DWELL);
+  assert.deepEqual(nightloadDwell("town").map(([p]) => p), ["errand", "night", "morning", "discussion", "nomination", "defense", "verdict", "execution"]);
+  assert.deepEqual(Object.fromEntries(nightloadDwell("town")), { errand: 20_000, night: 14_000, morning: 6_000, discussion: 10_000, nomination: 6_000, defense: 6_000, verdict: 6_000, execution: 4_000 });
+  assert.equal(nightloadDwell("plaza"), NIGHTLOAD_DWELL_BASIC);
   assert.deepEqual(nightloadDwell("plaza").map(([p]) => p), ["discussion", "nomination", "defense", "verdict", "execution", "night", "morning"]);
   assert.deepEqual(nightloadDwell("bar"), nightloadDwell("plaza"));
 });
@@ -113,10 +116,11 @@ test("readSoundState: page.evaluate 가 던지면 null", async () => {
   assert.equal(await readSoundState(page), null);
 });
 
-test("NIGHTLOAD_DWELL: 15페이즈 errand 장면이 첫 장면(낮 시작 다음·토론 앞)이고 한 바퀴 합은 70초다", () => {
-  assert.deepEqual(NIGHTLOAD_DWELL.map(([phase]) => phase), ["errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"]);
+test("NIGHTLOAD_DWELL: errand(저녁)가 첫 장면이고(21-17 새 하루 순서) 한 바퀴 합은 마을 72초·기본 마피아 50초다", () => {
   assert.deepEqual(NIGHTLOAD_DWELL[0], ["errand", 20_000]);
-  assert.equal(NIGHTLOAD_DWELL.reduce((sum, [, ms]) => sum + ms, 0), 70_000);
+  assert.equal(NIGHTLOAD_DWELL.reduce((sum, [, ms]) => sum + ms, 0), 72_000);
+  assert.equal(NIGHTLOAD_DWELL_BASIC.reduce((sum, [, ms]) => sum + ms, 0), 50_000);
+  assert.ok(NIGHTLOAD_DWELL_BASIC.every(([phase]) => phase !== "errand"));
 });
 
 // ---- 18-07: --mode light, 조명 렌더 순서 판정 ----

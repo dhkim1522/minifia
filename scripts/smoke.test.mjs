@@ -2,7 +2,7 @@
 // 가져오기만 해서는 main 이 돌지 않는다(직접 실행 가드). 서버 view 와의 묶음은 test/unit/e2eContract.test.ts 가 본다.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectRoleStringPaths, linkReport, morningProblems, roleStringAllowed, serverSpread } from "./smoke.mjs";
+import { LAMP_PLACE_IDS, PHASE_NEXT_BASIC, PHASE_NEXT_EXTENDED, collectRoleStringPaths, eveningProblems, linkReport, morningProblems, morningSceneProblems, phaseNextTable, roleStringAllowed, serverSpread } from "./smoke.mjs";
 
 const STATE = { spectate: false, ended: false, frameType: "state" };
 
@@ -113,4 +113,91 @@ test("linkReport: 프레임이 없으면 없다고 쓰고, 토큰·채팅 본문
   assert.ok(!out.includes(SECRET_TOKEN), out);
   assert.ok(!out.includes(SECRET_TEXT), out);
   assert.ok(!out.includes('"t"'), out);
+});
+
+// ---- 21-17: 확장판 새 하루 순서(역할 확인 → 저녁 → 밤 → (아침) → 토론 … 처형 → 저녁)의 다음 단계 표와 저녁·아침 view 판정 ----
+const seq = (table, path) => path.slice(1).every((to, i) => (table[path[i]] ?? []).includes(to));
+
+test("PHASE_NEXT_EXTENDED: 새 하루 순서를 허용하고 낮 시작 발표(dayAnnounce)는 어디에도 없다", () => {
+  assert.equal(seq(PHASE_NEXT_EXTENDED, ["lobby", "assigning", "roleReveal", "errand", "night", "morning", "discussion", "nomination", "defense", "verdict", "execution", "errand", "night", "discussion"]), true);
+  assert.equal(seq(PHASE_NEXT_EXTENDED, ["nomination", "errand"]), true); // 지목 0표·동률은 처형 없는 저녁으로
+  assert.equal(seq(PHASE_NEXT_EXTENDED, ["morning", "ended"]), true);
+  assert.equal(seq(PHASE_NEXT_EXTENDED, ["execution", "ended"]), true);
+  assert.equal("dayAnnounce" in PHASE_NEXT_EXTENDED, false);
+  for (const tos of Object.values(PHASE_NEXT_EXTENDED)) assert.equal(tos.includes("dayAnnounce"), false);
+  // 옛 순서는 확장판에서 허용하지 않는다
+  assert.equal(seq(PHASE_NEXT_EXTENDED, ["roleReveal", "dayAnnounce"]), false);
+  assert.equal(seq(PHASE_NEXT_EXTENDED, ["errand", "discussion"]), false);
+  assert.equal(seq(PHASE_NEXT_EXTENDED, ["discussion", "night"]), false);
+  assert.equal(seq(PHASE_NEXT_EXTENDED, ["execution", "night"]), false);
+  assert.equal(seq(PHASE_NEXT_EXTENDED, ["night", "dayAnnounce"]), false);
+});
+
+test("PHASE_NEXT_BASIC: 기본 마피아는 역할 확인 → 낮 시작 발표 → 토론 … 처형 → 밤 → 아침 → 낮 시작 발표 (심부름 없음)", () => {
+  assert.equal(seq(PHASE_NEXT_BASIC, ["roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "dayAnnounce"]), true);
+  assert.equal(seq(PHASE_NEXT_BASIC, ["nomination", "night"]), true);
+  assert.equal(seq(PHASE_NEXT_BASIC, ["morning", "ended"]), true);
+  for (const [from, tos] of Object.entries(PHASE_NEXT_BASIC)) assert.equal(from === "errand" || tos.includes("errand"), false, from);
+});
+
+test("phaseNextTable: 판 종류에 맞는 표를 돌려주고 모르는 종류는 거절한다", () => {
+  assert.equal(phaseNextTable("extended"), PHASE_NEXT_EXTENDED);
+  assert.equal(phaseNextTable("basic"), PHASE_NEXT_BASIC);
+  assert.throws(() => phaseNextTable("other"));
+});
+
+const lampsOk = (over = {}) => ({
+  phase: "errand",
+  phaseDurationMs: 40_000,
+  day: { n: 1, lamps: [], skipCount: 0 },
+  me: { errand: { places: ["lamp1", "lamp4", "lamp7"], done: [] } },
+  ...over,
+});
+
+test("eveningProblems: 가로등 id 셋·day.lamps 배열·day.skipCount 숫자·40초 마감이면 문제 없음", () => {
+  assert.deepEqual(eveningProblems(lampsOk()), []);
+  assert.deepEqual(eveningProblems(lampsOk({ day: { n: 1, lamps: [0, 3], skipCount: 2 } })), []);
+  assert.equal(LAMP_PLACE_IDS.length, 8);
+});
+
+test("eveningProblems: 장소가 가로등 id 셋이 아니거나 day.lamps 가 배열이 아니면 실패", () => {
+  assert.ok(eveningProblems(lampsOk({ me: { errand: { places: ["glass", "piano", "sax"], done: [] } } })).length > 0);
+  assert.ok(eveningProblems(lampsOk({ me: { errand: { places: ["lamp1", "lamp1", "lamp4"], done: [] } } })).length > 0);
+  assert.ok(eveningProblems(lampsOk({ me: { errand: { places: ["lamp1", "lamp4"], done: [] } } })).length > 0);
+  assert.ok(eveningProblems(lampsOk({ day: { n: 1, lamps: 3, skipCount: 0 } })).length > 0);
+  assert.ok(eveningProblems(lampsOk({ day: { n: 1, skipCount: 0 } })).length > 0);
+  assert.ok(eveningProblems(lampsOk({ day: { n: 1, lamps: [], skipCount: "0" } })).length > 0);
+  assert.ok(eveningProblems(lampsOk({ day: { n: 1, lamps: [] } })).length > 0);
+  assert.ok(eveningProblems(lampsOk({ phaseDurationMs: 39_000 })).length > 0);
+  assert.ok(eveningProblems(lampsOk({ me: { errand: { places: ["lamp1", "lamp4", "lamp7"], done: ["lamp1"] } } })).length > 0);
+  assert.ok(eveningProblems(lampsOk({ me: {} })).length > 0);
+  assert.ok(eveningProblems(lampsOk({ me: { errand: { places: ["lamp1", "lamp4", "lamp7"], done: [], seat: 2 } } })).length > 0);
+});
+
+const sceneOk = (over = {}) => ({
+  phase: "morning",
+  day: { n: 1, scene: { house: 2 }, lamps: [1], morning: { eliminated: 2 } },
+  me: {},
+  ...over,
+});
+
+test("morningSceneProblems: day.scene 은 house 하나, me.clues 는 본인 줄 모양만 — 통과하는 모양", () => {
+  assert.deepEqual(morningSceneProblems(sceneOk(), [0, 1, 2, 3, 4]), []);
+  const clues = [{ spot: 1, kind: "footprint", n: 2 }, { spot: 2, kind: "cloth", piece: "button" }, { spot: 3, kind: "dark" }];
+  assert.deepEqual(morningSceneProblems(sceneOk({ me: { clues } }), [0, 1, 2, 3, 4]), []);
+  // 확장판 아침에는 day.morning 의 trace·seen 이 없어도 된다
+  assert.deepEqual(morningSceneProblems(sceneOk({ day: { n: 1, scene: { house: 2 }, morning: { eliminated: 2 } } }), [0, 1, 2, 3, 4]), []);
+});
+
+test("morningSceneProblems: day.scene 키가 house 하나가 아니거나 me.clues 줄에 허용 밖 키가 있으면 실패", () => {
+  const seats = [0, 1, 2, 3, 4];
+  assert.ok(morningSceneProblems(sceneOk({ day: { n: 1, scene: { house: 2, role: "mafia" } } }), seats).length > 0);
+  assert.ok(morningSceneProblems(sceneOk({ day: { n: 1, scene: {} } }), seats).length > 0);
+  assert.ok(morningSceneProblems(sceneOk({ day: { n: 1, scene: { house: 9 } } }), seats).length > 0);
+  assert.ok(morningSceneProblems(sceneOk({ day: { n: 1, scene: "2" } }), seats).length > 0);
+  assert.ok(morningSceneProblems(sceneOk({ me: { clues: [{ spot: 1, kind: "footprint", n: 2, seat: 3 }] } }), seats).length > 0);
+  assert.ok(morningSceneProblems(sceneOk({ me: { clues: [{ spot: 4, kind: "footprint", n: 1 }] } }), seats).length > 0);
+  assert.ok(morningSceneProblems(sceneOk({ me: { clues: [{ spot: 1, kind: "mafia" }] } }), seats).length > 0);
+  assert.ok(morningSceneProblems(sceneOk({ me: { clues: [{ spot: 2, kind: "cloth", piece: "role" }] } }), seats).length > 0);
+  assert.ok(morningSceneProblems(sceneOk({ me: { clues: "x" } }), seats).length > 0);
 });

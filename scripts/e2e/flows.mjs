@@ -142,7 +142,6 @@ import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readR
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
-import { makeErrandFlows } from "./errand.mjs";
 import { makeTutorialFlows } from "./tutorial.mjs";
 import { makeModeFlows } from "./modes.mjs";
 import { makeTownFlows } from "./town.mjs";
@@ -1762,12 +1761,14 @@ async function dayFlow(ctx) {
     {
       // 처형 5초는 서버 타이머로 밤이 된다. 배포본처럼 지연이 큰 곳에서는 위 판정이 5초를 넘기고, 그 뒤 '다음 단계로 넘기기' 를
       // 누르면 이미 온 밤을 건너뛰어 아침·다음 날 토론까지 가 버린다 — 눌러 넘기지 않고 자연 전환을 기다린다(판정은 그대로).
+      // 21-17: 확장판(기본값)의 하루는 처형 → 저녁(errand) → 밤이다 — 저녁은 서버 타이머로 오고, 그 저녁을 넘겨 밤에 닿는다(판정·시간은 그대로, 순서만 새 하루)
       const night = await attempt(async () => {
-        await ht.waitFor((v) => v.phase === "night", 9000, "처형 뒤 밤(서버 타이머)");
+        await ht.waitFor((v) => v.phase === "errand", 9000, "처형 뒤 저녁(서버 타이머)");
+        await skipTo(hp, ht, "night");
         await Promise.all(guests.map((x) => untilGame(x.page, (g) => g.phase === "night", 15_000, "밤 도착")));
       });
       const nightSeen = night.ok ? "" : ` · 방장 서버 단계 ${ht.last()?.phase} · 손님 화면 단계 ${(await Promise.all(guests.map((x) => readGame(x.page).then((g) => g.phase).catch(() => "읽기 실패")))).join(",")}`;
-      rec(`${id}/night`, "NT1", "처형 뒤 밤으로 간다", night.ok, `${night.detail ?? ""}${nightSeen}`);
+      rec(`${id}/night`, "NT1", "처형 뒤 저녁을 지나 밤으로 간다", night.ok, `${night.detail ?? ""}${nightSeen}`);
       // 18.1-09 R3(C-6): 산 사람의 밤 화면에는 유령 actor 를 그리지 않는다(서버가 본인·근처만 보내는 단계, 밤 겉보기는 역할마다 같아야 한다)
       if (night.ok) {
         const lg = await liveGhostSettled(guests[0].page, [hostSeat], 3000);
@@ -1852,7 +1853,7 @@ async function ghostHookMatch(hp, view) {
 async function ghostFlow(ctx) {
   const id = "ghost";
   const rec = recorder(ctx);
-  const game = await openGame(ctx, id, { guests: 2, bots: 4, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion" });
+  const game = await openGame(ctx, id, { guests: 2, bots: 4, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion", mode: "basic" }); // 21-17: 유령 화면의 단계 순회(낮 시작 발표·밤 얼굴 목록 포함)는 기본 마피아의 하루다 — 확장판의 유령은 town-ghost 가 본다
   try {
     const { host, hp, ht, hostSeat, guests } = game;
     await executeHost(game);
@@ -2065,7 +2066,7 @@ async function noexecFlow(ctx) {
   // (a) 사람만 있는 방(봇 없음): 아무도 지목하지 않고 마감 → 0표 → 밤 시작 '처형 없음'
   {
     const sc = `${id}/zero`;
-    const game = await openGame(ctx, id, { guests: 3, bots: 0, role: "citizen", to: "nomination" });
+    const game = await openGame(ctx, id, { guests: 3, bots: 0, role: "citizen", to: "nomination", mode: "basic" }); // 21-17: 처형 없음 → 밤은 기본 마피아의 하루(확장판은 처형 없음 → 저녁)
     try {
       const { ht, guests } = game;
       await armAnnounceWatch(guests[0].page);
@@ -2092,7 +2093,7 @@ async function noexecFlow(ctx) {
   // (b) 봇 찬반 '반대': 봇이 방장을 가리켜 변론자가 되고, 찬반 부결 → '찬성 0 · 반대 3' 다음 '처형 없음', 변론자는 자리로 돌아온다
   {
     const sc = `${id}/rejected`;
-    const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "citizen", vote: { exec: "no", pick: "host" }, to: "nomination" });
+    const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "citizen", vote: { exec: "no", pick: "host" }, to: "nomination", mode: "basic" }); // 21-17: 이름표 [data-pick] 투표 화면은 기본 마피아 쪽 확인이다
     try {
       const { hp, ht, hostSeat } = game;
       // 기본판 동시 투표(13페이즈): 방장은 누르지 않는다. 봇 셋은 진입 2~8초 안에 모두 방장을 가리킨다. 봇 이름은 8자 고정이라 8자 이름 이름표 버튼의 기하도 본다.
@@ -2484,7 +2485,7 @@ async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe
 /** 밤까지 연다: 토론에서 봇 유언을 기다린 뒤(waitWill) 지목·변론·찬반·처형을 넘겨 밤에 닿는다. 막 관찰은 밤 진입 전에 건다. */
 async function openNight(ctx, flowId, opts) {
   const { waitWill = false, ...gameOpts } = opts;
-  const game = await openGame(ctx, flowId, { vote: { exec: "no", pick: "other" }, ...gameOpts, to: "discussion" });
+  const game = await openGame(ctx, flowId, { vote: { exec: "no", pick: "other" }, mode: "basic", ...gameOpts, to: "discussion" }); // 21-17: 9페이즈 밤(얼굴 목록·유언·아침 편지)은 기본 마피아의 밤이다 — 확장판 밤(집 고르기)은 causal-* 가 본다
   const { hp, ht } = game;
   if (waitWill) await sleep(BOT_WILL_WAIT_MS);
   await armSeenWatch(hp);
@@ -2796,7 +2797,7 @@ async function nightWill(ctx) {
   const id = "night";
   const sc = `${id}/will`;
   const rec = recorder(ctx);
-  const game = await openGame(ctx, id, { guests: 1, bots: 4, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion" });
+  const game = await openGame(ctx, id, { guests: 1, bots: 4, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion", mode: "basic" }); // 21-17: 9페이즈 밤·아침 편지는 기본 마피아의 하루다
   try {
     const { hp, ht, guests } = game;
     const guest = guests[0];
@@ -2835,7 +2836,7 @@ async function nightVictim(ctx, shared) {
   const id = "night";
   const sc = `${id}/victim`;
   const rec = recorder(ctx);
-  const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "citizen", vote: { exec: "no", pick: "other" }, to: "discussion" });
+  const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "citizen", vote: { exec: "no", pick: "other" }, to: "discussion", mode: "basic" }); // 21-17: 9페이즈 밤·아침 편지는 기본 마피아의 하루다
   try {
     const { host, hp, ht, hostSeat } = game;
     if (hostSeat !== 0) throw new SetupError(`방장 자리가 0 이 아님 (${hostSeat})`);
@@ -2930,7 +2931,7 @@ const WILL50 = "도윤님이마피아라고확신해요 어젯밤발소리를제
 async function nightSizesLetter(ctx, rec) {
   const id = "night-sizes";
   const sc = `${id}/letter`;
-  const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "citizen", vote: { exec: "no", pick: "other" }, to: "discussion" });
+  const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "citizen", vote: { exec: "no", pick: "other" }, to: "discussion", mode: "basic" }); // 21-17: 9페이즈 밤·아침 편지는 기본 마피아의 하루다
   try {
     const { hp, ht, hostSeat } = game;
     if (hostSeat !== 0) throw new SetupError(`방장 자리가 0 이 아님 (${hostSeat})`);
@@ -3775,9 +3776,6 @@ const { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow,
 // 사회자·이름표(14페이즈 14-08): emcee-band(띠, 폰 6종)·emcee-tools·emcee-leak·emcee-sound. 흐름 본문은 host.mjs, 도우미만 넘긴다. modeLeakFlow(19-07)는 emcee-leak 본문을 기본 마피아 판으로 돈다
 const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow, modeLeakFlow } = makeHostFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH, settledResult });
 
-// 심부름·목격 기록·밤 통일·아침 흔적(15페이즈 15-09): errand·witness·trace(폰 6종). 흐름 본문은 errand.mjs, 도우미만 넘긴다
-const { errandFlow, witnessFlow, traceFlow } = makeErrandFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH });
-
 // 첫 사건(튜토리얼, 17페이즈 17-09): tutorial-solo(혼자 하기, 폰 6종)·tutorial-together(함께 진행). 흐름 본문은 tutorial.mjs, 도우미만 넘긴다
 const { tutorialSoloFlow, tutorialTogetherFlow } = makeTutorialFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH });
 
@@ -3859,10 +3857,7 @@ export const FLOWS = [
   { id: "emcee-tools", run: emceeToolsFlow, size: GAME_SIZE },
   { id: "emcee-leak", run: emceeLeakFlow, size: GAME_SIZE },
   { id: "emcee-sound", run: emceeSoundFlow, size: GAME_SIZE },
-  // 15-09: 심부름(ERRAND-01~04)·목격 기록(ERRAND-05)·밤 얼굴 목록 통일 + 아침 흔적(TRACE-01~03). 이름 앞머리 errand·witness·trace — 다른 흐름과 --only 부분 일치가 겹치지 않는다. 폰 6종(영역 검사 필수)
-  { id: "errand", run: errandFlow, extraSizes: LOBBY_EXTRA_SIZES },
-  { id: "witness", run: witnessFlow, extraSizes: LOBBY_EXTRA_SIZES },
-  { id: "trace", run: traceFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  // 21-17: 옛 errand·witness·trace(15-09, 낮 심부름·목격 기록 카드·아침 공개 흔적)는 21페이즈 causal-* 가 대신해 빼고 errand.mjs 를 지웠다(D-29)
   // 17-09: 첫 사건 TUT-01~05. 이름 앞머리 tutorial — --only tutorial 하나로 둘 다 돈다. 혼자 하기는 폰 6종(기하·포커스·띠 판정), 함께 진행은 기다림 화면 기하까지 390x844 한 크기
   { id: "tutorial-solo", run: tutorialSoloFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "tutorial-together", run: tutorialTogetherFlow, size: GAME_SIZE },

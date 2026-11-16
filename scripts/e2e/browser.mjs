@@ -2207,113 +2207,8 @@ export function readErrand(page) {
   }, ERRAND_ATTRS);
 }
 
-/**
- * 토론의 목격 기록 화면 한 장(recordChecks 입력): [기록] 단추 수·눌림(aria-expanded)·빛, 카드 수·줄 수 표식·li 수·머리 숫자 글자, 사각형.
- * { buttons, expanded, buttonCall, cards, rowsAttr, rowCount, zeroText, cardRect, dockRect, bandRect, panelRect, inputRect(채팅 입력줄), callCount, bandLine, inputCount }
- */
-export function readRecord(page) {
-  return page.evaluate(() => {
-    const qa = (s) => [...document.querySelectorAll(s)];
-    const box = (el) => {
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
-    };
-    const btn = document.querySelector("[data-record-button] button");
-    const card = document.querySelector("[data-record-card]");
-    const bandLine = document.querySelector("[data-host-line]");
-    const kindOf = (el) => (el.hasAttribute("data-errand-act") ? "act" : el.hasAttribute("data-errand-place") ? "tile" : el.hasAttribute("data-errand-arrow") ? "arrow" : "other");
-    return {
-      buttons: qa("[data-record-button]").length,
-      expanded: btn ? btn.getAttribute("aria-expanded") === "true" : false,
-      buttonCall: !!btn && btn.hasAttribute("data-call"),
-      cards: qa("[data-record-card]").length,
-      rowsAttr: card ? card.getAttribute("data-record-rows") : null,
-      rowCount: qa("[data-record-card] li[data-record-row]").length,
-      zeroText: card ? (card.querySelector(".mv-record__count")?.textContent ?? "").trim() : "",
-      cardRect: box(card),
-      dockRect: box(document.querySelector("[data-host-band] .mv-host__dock")),
-      bandRect: box(document.querySelector("[data-host-band] .mv-host__band")),
-      panelRect: box(document.querySelector("[data-world-panel]")),
-      inputRect: box(document.querySelector(".mv-chat__form")),
-      callCount: qa("[data-call]").length,
-      callKinds: qa("[data-call]").map(kindOf),
-      restCount: qa("[data-rest]").length,
-      bandLine: bandLine ? (bandLine.textContent ?? "").replace(/\s+/g, " ").trim() : "",
-      inputCount: qa(".mv-chat__input").length,
-    };
-  });
-}
 
-/**
- * 아침 흔적 카드 화면 한 장(traceChecks 입력): 카드 수·글자·속성 값·줄 수·사각형, 피해자 알림이 보이는가, 띠 문장.
- * 글자 값은 이 판정이 금지 낱말만 검사하는 데 쓰고 결과 줄에는 싣지 않는다.
- * { cards, cardText, cardAttrText, nameLines, noteLines, lastseenRows, lastseenCount, rowLines, rowOverflow, cardRect, bandRect, dockRect, panelRect, announceVisible, bandLine, phase }
- */
-export function readTrace(page) {
-  return page.evaluate(() => {
-    const qa = (s) => [...document.querySelectorAll(s)];
-    const box = (el) => {
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
-    };
-    const lines = (el) => {
-      if (!el) return null;
-      const lh = parseFloat(getComputedStyle(el).lineHeight);
-      const fs = parseFloat(getComputedStyle(el).fontSize);
-      return Math.round(el.getBoundingClientRect().height / (Number.isFinite(lh) ? lh : fs * 1.4));
-    };
-    const card = document.querySelector("[data-trace-card]");
-    const row = card ? card.querySelector("[data-lastseen-row]") : null;
-    const attrs = card ? [card, ...card.querySelectorAll("*")].flatMap((el) => el.getAttributeNames().map((n) => `${n}=${el.getAttribute(n)}`)) : [];
-    const ann = document.querySelector("[data-announce]");
-    const bandLine = document.querySelector("[data-host-line]");
-    return {
-      cards: qa("[data-trace-card]").length,
-      cardText: card ? (card.textContent ?? "").replace(/\s+/g, " ").trim() : "",
-      cardAttrText: attrs.join(" "),
-      nameLines: lines(card?.querySelector(".mv-trace__name") ?? null),
-      noteLines: lines(card?.querySelector(".mv-trace__note") ?? null),
-      // 2행(마지막 목격, 16-09): 표식 수·목격 count·이름 줄 수(가장 긴 쪽)·카드 밖 넘침
-      lastseenRows: qa("[data-lastseen-row]").length,
-      lastseenCount: row ? row.getAttribute("data-lastseen-count") : null,
-      rowLines: row ? Math.max(1, ...[...row.querySelectorAll(".mv-evidence__victim, .mv-evidence__witness")].map((el) => lines(el) ?? 1)) : null,
-      rowOverflow: row ? row.scrollWidth > row.clientWidth + 1 : null,
-      cardRect: box(card),
-      bandRect: box(document.querySelector("[data-host-band] .mv-host__band")),
-      dockRect: box(document.querySelector("[data-host-band] .mv-host__dock")),
-      panelRect: box(document.querySelector("[data-world-panel]")),
-      announceVisible: !!ann && ann.getBoundingClientRect().height > 0 && getComputedStyle(ann).visibility !== "hidden" && getComputedStyle(ann).opacity !== "0",
-      bandLine: bandLine ? (bandLine.textContent ?? "").replace(/\s+/g, " ").trim() : "",
-      phase: document.querySelector("[data-game-stage]")?.getAttribute("data-phase") ?? "",
-    };
-  });
-}
 
-/**
- * 이름표 표시(16-09, 같은 옷·마지막 목격) 한 장(traceMarkChecks 입력의 값 부분): { trace: 좌석[], seen: 좌석[], unseated, attrValues }.
- * 표시는 이름표(.mv-tag)의 data-trace-mark·data-seen-mark 이고 좌석은 이름표 층 상자(data-seat)에서 읽는다. 값은 모두 빈 값이어야 한다.
- */
-export function readMarks(page) {
-  return page.evaluate(() => {
-    const qa = (s) => [...document.querySelectorAll(s)];
-    const seatsOf = (sel) => {
-      const seats = new Set();
-      let unseated = 0;
-      for (const el of qa(sel)) {
-        const n = Number(el.closest("[data-seat]")?.getAttribute("data-seat"));
-        if (Number.isInteger(n)) seats.add(n);
-        else unseated += 1;
-      }
-      return { seats: [...seats].sort((a, b) => a - b), unseated };
-    };
-    const trace = seatsOf("[data-trace-mark]");
-    const seen = seatsOf("[data-seen-mark]");
-    const attrValues = qa("[data-trace-mark], [data-seen-mark]").flatMap((el) => ["data-trace-mark", "data-seen-mark"].filter((n) => el.hasAttribute(n)).map((n) => el.getAttribute(n) ?? ""));
-    return { trace: trace.seats, seen: seen.seats, unseated: trace.unseated + seen.unseated, attrValues };
-  });
-}
 
 /**
  * 밤 얼굴 목록 한 시점(nightFaceChecks 입력의 값 부분): { count, itemH, listH, eyeHeal, ringMafia, callCount, disabledCount, toastShown, faceSeats: number[] }
@@ -2373,49 +2268,8 @@ export async function walkToPlace(page, id = null) {
   return target.kind;
 }
 
-/** 장소 위 [처리] 알약(처리 반경 안에서만 DOM 에 있다, 16-07)이 보이면 누르고 true, 없으면 false */
-export async function pressErrandAct(page) {
-  const ok = await page.evaluate(() => {
-    const act = document.querySelector("button[data-errand-act]");
-    if (!act || act.hidden) return false;
-    const r = act.getBoundingClientRect();
-    return r.width > 0 && r.height > 0;
-  });
-  if (!ok) return false;
-  await page.locator("button[data-errand-act]").click({ timeout: 3000 });
-  return true;
-}
 
-/**
- * 심부름 영역의 마크업 서명(ER1 입력): 층(타일·화살표·링)·알약 층·진행 점 줄·시작 카드 안의 data-* 이름 목록과 구조 표식 개수. 값·닉네임은 싣지 않는다.
- * { names: string[], counts: { [표식]: number } }
- */
-export function readErrandSignature(page) {
-  return page.evaluate((counted) => {
-    const scopes = [...document.querySelectorAll("[data-errand-layer], [data-errand-act-layer], [data-errand-dots], [data-errand-start-card]")];
-    const names = new Set();
-    for (const root of scopes) for (const el of [root, ...root.querySelectorAll("*")]) for (const n of el.getAttributeNames()) if (n.startsWith("data-")) names.add(n);
-    const counts = {};
-    for (const c of counted) counts[c] = scopes.reduce((n, root) => n + (root.hasAttribute(c) ? 1 : 0) + root.querySelectorAll(`[${c}]`).length, 0);
-    return { names: [...names].sort(), counts };
-  }, ["data-errand-start-card", "data-errand-dots", "data-errand-dot", "data-errand-progress", "data-errand-place", "data-errand-arrow", "data-near-ring"]);
-}
 
-/**
- * 시작 카드(16-08) 한 장 읽기(errandCardChecks 입력): { cards, tiles([role=img] 수), buttons, text(카드 글자) }. 카드가 없으면 cards 0.
- */
-export function readStartCard(page) {
-  return page.evaluate(() => {
-    const cards = [...document.querySelectorAll("[data-errand-start-card]")];
-    const c = cards[0] ?? null;
-    return {
-      cards: cards.length,
-      tiles: c ? c.querySelectorAll("[role='img']").length : 0,
-      buttons: c ? c.querySelectorAll("button, a, [tabindex]").length : 0,
-      text: c ? (c.textContent ?? "").replace(/\s+/g, " ").trim() : "",
-    };
-  });
-}
 
 /**
  * 요소 한가운데를 ms 동안 누르고 뗀다(저녁 [켜기] 의 길게 누르기 0.6초 이상, 21-16). 누르는 동안 채움 막대 등 DOM 변화는 부른 쪽이 읽는다(onHold 가 있으면 누른 채 한 번 부른다).

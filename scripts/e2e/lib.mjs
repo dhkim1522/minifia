@@ -3539,22 +3539,9 @@ export function hostChimeChecks(segs) {
 }
 
 
-// ---- 15페이즈 계약 (15-09) — 심부름·목격 기록·밤 얼굴 목록·아침 흔적 판정이 받는 값의 모양 ----
-// 판정은 모두 이 파일의 순수 함수고 흐름(scripts/e2e/errand.mjs)은 읽기만 한다. 값이 없거나 모양이 틀리면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다(공허 통과 금지, T-15-36).
+// ---- 15페이즈 계약 (15-09) — 심부름 표식·장소 id 사본 (21-17: 옛 errand·witness·trace 판정은 정리, causal 이 쓰는 표식·상수만 남음) ----
+// 판정은 모두 이 파일의 순수 함수고 흐름은 읽기만 한다. 값이 없거나 모양이 틀리면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다(공허 통과 금지, T-15-36).
 // 문턱은 여기서만 정하고 낮추지 않는다. 결과 줄에는 장소 id·진행 수·개수·단계 이름만 쓴다(닉네임·토큰 없음, T-15-35).
-//   EA1~EA11 errandChecks(s)   (16-07: 처리 입구가 아래 독 [처리] 에서 장소 위 알약으로 바뀌어 EA3 를 고치고 EA7~EA10 을 더했다. 16-08: 아래 패널·독·칩이 없어지고 진행 점 줄이 생겨 EA1·EA2·EA3 를 고치고 EA11 을 더했다)
-//     s = { total(진행 점 수), places: [{ id, done, hidden, call, rest }], doneAttr(data-done 점 수), progressText("n/N" — data-errand-progress 속성), bandLine(띠 문장 — 시작 카드가 떠 있는 동안은 빈 글), cards(시작 카드 수 — 18.1-12 부터 EA3 가 빈 글을 받아들이는 근거), panelCount(아래 패널·독·칩 수 — 0 이어야 한다),
-//           dotsRows([data-errand-dots] 수), dotsAria(그 aria-label), dotsLive(그 aria-live), dotsText(점 줄의 보이는 글자 — 없어야 한다),
-//           callCount([data-call] 수), callKinds([data-call] 요소 종류 목록: "act"|"tile"|"arrow"|"other"), reach("out" 반경 밖|"in" 반경 안|"done" 3곳 완료), actCount([data-errand-act] 수), arrowCount(보이는 화살표 수),
-//           tiles(보이는 타일 사각형 목록), seatsInWorld(__mfWorld.seats() 중 나 말고 수), nearSeats(그 가운데 근처 반경 + 여유 안), tagSeats(나 말고 이름표 수), attrValues(ERRAND_MARKERS 속성 값 전부) }
-//   EC1·EC2 errandCardChecks({ early, late })·errandCardWalkChecks({ moved, closed }) — 시작 카드(16-08): early = { cards, tiles, buttons, text }(단계 시작 2초 안), late = { cards }(2.5초 뒤)
-//   EO1~EO5 errandOverlapChecks({ stage, band, side, dots, vh, pins, arrow, act, tagButtons })   — 사각형은 { left, top, width, height } (DOMRect 값). stage = 띠 아랫변 ~ 진행 점 줄 윗변, pins = 보이는 타일, side = 오른쪽 열 단추들([data-side-button]),
-//           arrow = 보이는 화살표 사각형 | 목록 | null, act = 보이는 [처리] 알약 사각형 | null, dots = 진행 점 줄, vh = 창 높이
-//   ER1 errandParityChecks(mafia, citizen) — 마피아 판과 시민 판의 심부름 영역 마크업(data-* 이름·개수)이 같다(V-25, T-16-15)
-//   RC1~RC4 recordChecks(s)   s = { finished, hasButton, hasCard, rowsAttr, rowCount, zeroText, cardRect, dockRect, bandRect, inputRect, collapsedOnFocus } — inputRect = 채팅 입력줄(.mv-chat__form) 사각형
-//   TC1~TC6 traceChecks(s)    s = { expectCard, cards, cardText, cardAttrText, nameLines, noteLines, rowLines, lastseenRows, lastseenCount, expectSeen, rowOverflow, cardRect, bandRect, dockRect, panelRect, announceVisible } (16-09: 증거 카드 두 행)
-//   TC7·TC8 traceMarkChecks(s) s = { stage: "morning"|"discussion"|"night", expectTrace, expectSeen, trace, seen, unseated, attrValues } — 이름표 표시 좌석(같은 옷·마지막 목격). expect* 는 expectedMarks(view) 로 만든다
-//   NF1~NF6 nightFaceChecks(list)   list = [{ role, count, itemH, listH, eyeHeal, ringMafia, callCount, disabledCount, toastAfterTap }] — 마피아·경찰·의사·시민 네 시점
 
 /** E2E 가 읽는 15페이즈 표식(src 에 있어야 한다 — e2eContract 가 확인). */
 export const ERRAND_MARKERS = [
@@ -3579,41 +3566,10 @@ export const ERRAND_MARKERS = [
 ];
 /** 심부름 장소 id 24개(재즈 바 8 + 광장 8 + 마을 가로등 8, shared/protocol.ts PLACE_IDS 사본 — e2eContract 가 같음을 고정). 표식 값은 이 집합·숫자·"n/N"·빈 값뿐이어야 한다(좌석·역할 값 금지, D-08). */
 export const ERRAND_PLACE_IDS = ["glass", "piano", "sax", "stool", "door", "poster", "record", "candle", "clock", "fountain", "bench", "lamp", "mail", "tree", "flower", "stand", "lamp0", "lamp1", "lamp2", "lamp3", "lamp4", "lamp5", "lamp6", "lamp7"];
-/** 산 사람마다 받는 장소 수(shared/game/phases.ts ERRAND_COUNT 사본 — e2eContract 가 고정). */
-export const ERRAND_PER_PERSON = 3;
-/** 심부름 단계 길이 ms(ERRAND_MS 사본). 흔적 구간 길이 ms(MORNING_TRACE_MS 사본). */
-export const ERRAND_E2E_MS = 40_000;
-export const TRACE_WINDOW_MS = 5_000;
 /** 처리 반경·근처 반경(월드 단위, ERRAND_ACT_R·ERRAND_NEAR_R 사본). 근처 검사는 서버가 근처로 본 사람이 이 반경 + 여유 안인지 본다. */
 export const ERRAND_ACT_R_E2E = 1.2;
-export const ERRAND_NEAR_R_E2E = 3.0;
-/** 기록 카드 윗변은 독 아랫변보다 이만큼(px) 아래에 있어야 한다(UI-SPEC "기록 카드 영역"). */
-export const RECORD_DOCK_GAP = 8;
 /** 타일·알약·화살표 상자가 스테이지 안쪽에 있어야 하는 여백(px). */
 export const ERRAND_STAGE_INSET = 8;
-/** 장소 타일 한 변(px)과 허용 오차(UI-SPEC V-20). */
-export const ERRAND_TILE_PX = 64;
-export const ERRAND_TILE_EPS = 1;
-/** 마크업 동일 판정(ER1)이 개수까지 견주는 구조 표식, 그리고 상태에 따라 있고 없는 표식(이름만 허용 집합 안인지 본다). */
-export const ERRAND_PARITY_COUNTED = ["data-errand-start-card", "data-errand-dots", "data-errand-dot", "data-errand-progress", "data-errand-place", "data-errand-arrow", "data-near-ring"];
-/** 진행 점 줄 아랫변은 창 아래에서 이만큼(px) 위(UI-SPEC V-23: 아래 40 + 안전 영역). 허용 오차 2. */
-export const ERRAND_DOTS_BOTTOM = 40;
-export const ERRAND_DOTS_EPS = 2;
-/** 타일·알약·화살표는 진행 점 줄 윗변에서 이만큼(px) 위에만 놓인다(V-23). */
-export const ERRAND_DOTS_GAP = 8;
-/** 시작 카드: 장소 타일 수(내 목록 3곳)와 카드 글자 두 줄(UI-SPEC V-19). */
-export const ERRAND_CARD_TITLE = "오늘 갈 곳";
-export const ERRAND_CARD_LINE = "가는 길에 본 사람이 기록돼요";
-export const ERRAND_STATE_ATTRS = ["data-done", "data-call", "data-rest", "data-errand-act"];
-/** 사회자 띠 문장 사본(src/game/hostLine.ts HOST_LINES 의 errand·witness·trace·discussion 줄 — e2eContract 가 같음을 고정). */
-export const ERRAND_LINES = {
-  act: "등불 세 곳을 켜 주세요",
-  done: "곧 밤이 됩니다",
-  witness: "기록 단추로 본 것을 확인해 주세요",
-  discussionAct: "의심 가는 사람을 이야기해 주세요",
-  trace: "", // 18.1-12: 흔적 구간은 증거 카드가 말한다 — 띠 문장은 빈 글
-  discussionEvidence: "같은 옷과 엇갈린 목격을 살펴보세요",
-};
 /** 의상 → 조각 id 사본(shared/game/trace.ts TRACE_OF_OUTFIT — e2eContract 가 같음을 고정). 공개 players[].look 에서 같은 옷 좌석을 셈하는 데만 쓴다. */
 export const TRACE_OF_OUTFIT_E2E = {
   coat: "button",
@@ -3633,376 +3589,22 @@ export function sameOutfitSeatsE2E(players, piece) {
     .map((p) => p.seat)
     .sort((a, b) => a - b);
 }
-/** 한 view 가 이름표에 붙여야 할 표시 좌석: day.evidence.trace 가 있을 때만 { trace: 같은 옷 산 사람, seen: 목격자 }, 아니면 둘 다 빈 배열. */
-export function expectedMarks(view) {
-  const ev = view?.day?.evidence;
-  if (!ev || typeof ev.trace !== "string" || !Array.isArray(view.players)) return { trace: [], seen: [] };
-  return { trace: sameOutfitSeatsE2E(view.players, ev.trace), seen: ev.seen && Number.isInteger(ev.seen.seat) ? [ev.seen.seat] : [] };
-}
-/** 흔적·기록·표식 값에 있으면 안 되는 낱말(역할 연상어·확정 암시). */
-const ROLE_WORD_RE = /마피아|경찰|의사|시민|범인|증거|확정|mafia|police|doctor|citizen/i;
 
 const okRect = (r) => !!r && typeof r === "object" && isNum(r.left) && isNum(r.top) && isNum(r.width) && isNum(r.height);
-const asRectList = (x) => (x === null || x === undefined ? [] : Array.isArray(x) ? x : [x]);
 
-/** EA1~EA11 심부름 화면 판정(ERRAND-01~04·07, 16-07 D-06·D-07, 16-08 진행 점). s = 위 계약. */
-export function errandChecks(s) {
-  const L = {
-    EA1: `진행 점이 ${ERRAND_PER_PERSON}개이고 장소 타일 수와 같다`,
-    EA2: "진행 표식 n/N = data-done 점 수 = 처리한 타일 수",
-    EA3: "띠 문장(errand.act/done)이 맞고 아래 패널·독·칩이 0건([처리] 는 장소 위 알약뿐)",
-    EA4: "[data-call] 이 한 화면 1개 이하이고 화살표에는 없다(알약 또는 가장 가까운 타일)",
-    EA5: "월드·이름표에 근처 밖 좌석 0",
-    EA6: "표식 속성 값에 좌석·역할 없음(장소 id·숫자·진행 수뿐)",
-    EA7: `보이는 타일 상자가 ${ERRAND_TILE_PX}×${ERRAND_TILE_PX} ± ${ERRAND_TILE_EPS}`,
-    EA8: "반경 밖이면 알약 0·화살표 1, 반경 안이면 알약 1·화살표 0, 3곳 완료면 둘 다 0",
-    EA9: "빛남 우선: 반경 안이면 알약만, 반경 밖이면 가장 가까운 타일만(보이면), 3곳 완료면 없음",
-    EA10: "남은(미처리·빛나지 않는) 보이는 타일은 data-rest, 처리한 타일과 빛나는 타일은 data-rest 없음",
-    EA11: "진행 점 줄 1개·role=group aria-label '진행 n/N'·aria-live polite·보이는 글자 없음",
-  };
-  const ids = Object.keys(L);
-  if (!s || typeof s !== "object") return ids.map((id) => noMeasure(id, L[id], "심부름 읽기 값"));
-  const out = [];
-  const placesOk = Array.isArray(s.places) && s.places.every((p) => p && isStr(p.id) && typeof p.done === "boolean");
-  // EA1
-  if (isNum(s.total) && placesOk) {
-    const bad = [];
-    if (s.total !== ERRAND_PER_PERSON) bad.push(`점 ${s.total}개 ≠ ${ERRAND_PER_PERSON}`);
-    if (s.places.length !== s.total) bad.push(`타일 ${s.places.length}개 ≠ 점 ${s.total}개`);
-    out.push(result("EA1", L.EA1, bad));
-  } else out.push(noMeasure("EA1", L.EA1, "점 수·타일 목록"));
-  // EA2
-  if (isNum(s.total) && isNum(s.doneAttr) && isStr(s.progressText) && placesOk) {
-    const doneMarkers = s.places.filter((p) => p.done).length;
-    const bad = [];
-    if (s.progressText.trim() !== `${s.doneAttr}/${s.total}`) bad.push(`진행 '${s.progressText}' ≠ ${s.doneAttr}/${s.total}`);
-    if (doneMarkers !== s.doneAttr) bad.push(`처리한 타일 ${doneMarkers}개 ≠ data-done 점 ${s.doneAttr}개`);
-    out.push(result("EA2", L.EA2, bad));
-  } else out.push(noMeasure("EA2", L.EA2, "진행 표식·data-done 점 수·타일"));
-  // EA3
-  if (isNum(s.total) && isNum(s.doneAttr) && isStr(s.bandLine) && isNum(s.panelCount)) {
-    const bad = [];
-    const complete = s.doneAttr >= s.total;
-    if (complete) {
-      if (s.bandLine.trim() !== ERRAND_LINES.done) bad.push("3/3 인데 띠 문장이 errand.done 이 아님");
-    } else if (s.bandLine.trim() === "" && isNum(s.cards) && s.cards > 0) {
-      // 18.1-12: 시작 카드("오늘 갈 곳")가 떠 있는 동안은 카드가 같은 말을 해 띠 문장이 비어 있다
-    } else if (s.bandLine.trim() !== ERRAND_LINES.act) bad.push("미완인데 띠 문장이 errand.act 가 아님(시작 카드 중이면 빈 글)");
-    if (s.panelCount !== 0) bad.push(`아래 패널·독·칩 ${s.panelCount}개 ≠ 0`);
-    out.push(result("EA3", L.EA3, bad));
-  } else out.push(noMeasure("EA3", L.EA3, "띠 문장·아래 패널·독·칩 수"));
-  // EA4
-  if (isNum(s.callCount) && Array.isArray(s.callKinds) && s.callKinds.every(isStr)) {
-    const bad = [];
-    if (s.callCount > 1) bad.push(`[data-call] ${s.callCount}개 > 1`);
-    if (s.callKinds.length !== s.callCount) bad.push(`[data-call] ${s.callCount}개인데 종류 목록 ${s.callKinds.length}개`);
-    if (s.callKinds.some((k) => k !== "act" && k !== "tile")) bad.push(`알약·타일이 아닌 곳에 빛: ${s.callKinds.filter((k) => k !== "act" && k !== "tile").join(",")}`);
-    out.push(result("EA4", L.EA4, bad));
-  } else out.push(noMeasure("EA4", L.EA4, "[data-call] 수·종류"));
-  // EA5
-  if (isNum(s.seatsInWorld) && isNum(s.nearSeats) && isNum(s.tagSeats)) {
-    const bad = [];
-    if (s.nearSeats > s.seatsInWorld) bad.push(`근처 좌석 ${s.nearSeats} > 월드 좌석 ${s.seatsInWorld}`);
-    if (s.seatsInWorld !== s.nearSeats) bad.push(`월드에 근처 밖 좌석 ${s.seatsInWorld - s.nearSeats}개(월드 ${s.seatsInWorld}·근처 ${s.nearSeats})`);
-    if (s.tagSeats > s.seatsInWorld) bad.push(`이름표 ${s.tagSeats}개 > 월드 좌석 ${s.seatsInWorld}`);
-    out.push(result("EA5", L.EA5, bad));
-  } else out.push(noMeasure("EA5", L.EA5, "월드 좌석·근처 좌석·이름표 수"));
-  // EA6
-  if (Array.isArray(s.attrValues) && s.attrValues.every(isStr)) {
-    const bad = [];
-    for (const v of s.attrValues) {
-      const fine = v === "" || /^\d+$/.test(v) || /^\d+\/\d+$/.test(v) || ERRAND_PLACE_IDS.includes(v);
-      if (!fine || ROLE_WORD_RE.test(v)) bad.push(`표식 값 '${v}'`);
-    }
-    out.push(result("EA6", L.EA6, bad));
-  } else out.push(noMeasure("EA6", L.EA6, "표식 속성 값 목록"));
-  // EA7
-  if (Array.isArray(s.tiles) && s.tiles.every(okRect)) {
-    const bad = [];
-    s.tiles.forEach((t, i) => {
-      if (Math.abs(t.width - ERRAND_TILE_PX) > ERRAND_TILE_EPS || Math.abs(t.height - ERRAND_TILE_PX) > ERRAND_TILE_EPS) bad.push(`타일 ${i + 1} 상자 ${rd(t.width)}x${rd(t.height)} ≠ ${ERRAND_TILE_PX}`);
-    });
-    out.push(result("EA7", L.EA7, bad));
-  } else out.push(noMeasure("EA7", L.EA7, "타일 사각형"));
-  // EA8·EA9
-  const reachOk = s.reach === "out" || s.reach === "in" || s.reach === "done";
-  if (reachOk && isNum(s.actCount) && isNum(s.arrowCount)) {
-    const want = { out: [0, 1], in: [1, 0], done: [0, 0] }[s.reach];
-    const bad = [];
-    if (s.actCount !== want[0]) bad.push(`${s.reach}: 알약 ${s.actCount}개 ≠ ${want[0]}`);
-    if (s.arrowCount !== want[1]) bad.push(`${s.reach}: 화살표 ${s.arrowCount}개 ≠ ${want[1]}`);
-    out.push(result("EA8", L.EA8, bad));
-  } else out.push(noMeasure("EA8", L.EA8, "반경 상태(reach)·알약 수·화살표 수"));
-  if (reachOk && Array.isArray(s.callKinds) && s.callKinds.every(isStr)) {
-    const bad = [];
-    if (s.reach === "in" && !(s.callKinds.length === 1 && s.callKinds[0] === "act")) bad.push(`반경 안인데 빛이 알약 하나가 아님(${s.callKinds.join(",") || "없음"})`);
-    if (s.reach === "out" && s.callKinds.some((k) => k !== "tile")) bad.push(`반경 밖인데 타일 말고 빛남(${s.callKinds.join(",")})`);
-    if (s.reach === "done" && s.callKinds.length !== 0) bad.push(`3곳 완료인데 빛이 ${s.callKinds.length}개`);
-    out.push(result("EA9", L.EA9, bad));
-  } else out.push(noMeasure("EA9", L.EA9, "반경 상태(reach)·빛 종류"));
-  // EA10
-  if (placesOk && s.places.every((p) => typeof p.hidden === "boolean" && typeof p.call === "boolean" && typeof p.rest === "boolean")) {
-    const bad = [];
-    for (const p of s.places) {
-      if (p.hidden) continue;
-      if (p.done && (p.rest || p.call)) bad.push(`처리한 타일 ${p.id} 에 ${p.rest ? "data-rest" : "data-call"}`);
-      if (!p.done && p.call && p.rest) bad.push(`빛나는 타일 ${p.id} 에 data-rest`);
-      if (!p.done && !p.call && !p.rest) bad.push(`남은 타일 ${p.id} 에 data-rest 없음`);
-    }
-    out.push(result("EA10", L.EA10, bad));
-  } else out.push(noMeasure("EA10", L.EA10, "타일별 hidden·call·rest"));
-  // EA11
-  if (isNum(s.dotsRows) && isStr(s.progressText) && isStr(s.dotsAria) && isStr(s.dotsLive) && isStr(s.dotsText)) {
-    const bad = [];
-    if (s.dotsRows !== 1) bad.push(`진행 점 줄 ${s.dotsRows}개 ≠ 1`);
-    if (s.dotsAria !== `진행 ${s.progressText.trim()}`) bad.push(`aria-label '${s.dotsAria}' ≠ '진행 ${s.progressText.trim()}'`);
-    if (s.dotsLive !== "polite") bad.push(`aria-live '${s.dotsLive}' ≠ polite`);
-    if (s.dotsText.trim() !== "") bad.push("점 줄에 보이는 글자가 있음");
-    out.push(result("EA11", L.EA11, bad));
-  } else out.push(noMeasure("EA11", L.EA11, "점 줄 수·aria-label·aria-live·글자"));
-  return out;
-}
 
-/**
- * EC1 시작 카드(ERRAND-06, 16-08 V-19): 단계 시작 2초 안 읽기(early)에 카드 1개·타일 3개·단추 0·제목과 한 줄이 있고, 2.5초 뒤 읽기(late)에는 0개.
- * early = { cards, tiles, buttons, text }, late = { cards }. 장소 이름 글자는 타일에 없다(접근성 이름뿐) — 글자는 제목·한 줄 둘뿐이다.
- */
-export function errandCardChecks(c) {
-  const label = `시작 카드: 2초 안 1개(타일 ${ERRAND_PER_PERSON}·단추 0·제목·한 줄), 2.5초 뒤 0개`;
-  const e = c?.early;
-  const l = c?.late;
-  if (!e || !isNum(e.cards) || !isNum(e.tiles) || !isNum(e.buttons) || !isStr(e.text) || !l || !isNum(l.cards)) return [noMeasure("EC1", label, "시작 카드 읽기(2초 안·2.5초 뒤)")];
-  const bad = [];
-  if (e.cards !== 1) bad.push(`2초 안 카드 ${e.cards}개 ≠ 1`);
-  if (e.tiles !== ERRAND_PER_PERSON) bad.push(`카드 타일 ${e.tiles}개 ≠ ${ERRAND_PER_PERSON}`);
-  if (e.buttons !== 0) bad.push(`카드에 단추 ${e.buttons}개`);
-  if (e.text.replace(/\s+/g, "") !== `${ERRAND_CARD_TITLE}${ERRAND_CARD_LINE}`.replace(/\s+/g, "")) bad.push("카드 글자가 제목·한 줄과 다름");
-  if (l.cards !== 0) bad.push(`2.5초 뒤 카드 ${l.cards}개 ≠ 0`);
-  return [result("EC1", label, bad)];
-}
 
-/** EC2 카드가 떠 있어도 바닥을 누르면 걷고(moved: 위치가 바뀜) 그 누름에 카드가 닫힌다(closed). T-16-19: 카드는 입력을 막지 않는다. */
-export function errandCardWalkChecks(w) {
-  const label = "카드 중에도 바닥을 누르면 걷고, 그 누름에 카드가 닫힌다";
-  if (!w || typeof w.moved !== "boolean" || typeof w.closed !== "boolean") return [noMeasure("EC2", label, "카드 중 걷기·닫힘 읽기")];
-  const bad = [];
-  if (!w.moved) bad.push("카드가 떠 있는 동안 누른 바닥으로 걷지 않음(입력이 막힘)");
-  if (!w.closed) bad.push("바닥을 눌러도 카드가 닫히지 않음");
-  return [result("EC2", label, bad)];
-}
 
-/**
- * EO1~EO5 심부름 영역(UI-SPEC "심부름 화면 영역 표", 폰 6종). x = { stage, band, side, dots, vh, pins, arrow, act, tagButtons } — 사각형은 { left, top, width, height }.
- * EO1 타일끼리·[처리] 알약과 타일이 겹치지 않는다(화살표는 눌림을 통과하는 방향 표지라 가까이 다가가면 목표 타일 위로 지나갈 수 있어 타일과의 겹침은 보지 않는다 — 16-07).
- * EO2 타일·알약·화살표가 이름표 버튼과 겹치지 않는다. EO3 타일·알약·화살표가 띠 면·오른쪽 열 단추·진행 점 줄(윗변 − 8 부터)과 겹치지 않는다(SC2, V-23).
- * EO4 타일·알약·화살표 상자가 스테이지(띠 아랫변 ~ 점 줄 윗변) 안쪽 8 inset 안이고 화살표·알약은 한 개 이하. EO5 진행 점 줄 아랫변이 창 아래 − 40 ± 2 이고 화면 안에 있다. 판정 문턱(OVERLAP_EPS)은 낮추지 않는다.
- */
-export function errandOverlapChecks(x) {
-  const L = {
-    EO1: "타일끼리·알약과 타일 겹침 0",
-    EO2: "타일·알약·화살표가 이름표 버튼과 겹침 0",
-    EO3: `타일·알약·화살표가 띠 면·오른쪽 열 단추·진행 점 줄(윗변 − ${ERRAND_DOTS_GAP} 부터)과 겹침 0`,
-    EO4: `타일·알약·화살표 상자가 스테이지 안쪽 ${ERRAND_STAGE_INSET} 안이고 화살표·알약은 한 개 이하`,
-    EO5: `진행 점 줄 아랫변이 창 아래 − ${ERRAND_DOTS_BOTTOM} ± ${ERRAND_DOTS_EPS}`,
-  };
-  const ids = Object.keys(L);
-  const arrows = asRectList(x?.arrow);
-  const acts = asRectList(x?.act);
-  const pins = x?.pins;
-  const tags = x?.tagButtons;
-  const side = x?.side;
-  if (!x || !okRect(x.stage) || !okRect(x.band) || !okRect(x.dots) || !isNum(x.vh) || !Array.isArray(side) || !side.every(okRect) || !Array.isArray(pins) || !pins.every(okRect) || !arrows.every(okRect) || !acts.every(okRect) || !Array.isArray(tags) || !tags.every(okRect))
-    return ids.map((id) => noMeasure(id, L[id], "스테이지·띠·오른쪽 열·진행 점 줄·타일·화살표·알약·이름표 사각형"));
-  const marks = [...pins.map((r, i) => ({ r, name: `타일 ${i + 1}` })), ...acts.map((r, i) => ({ r, name: `알약 ${i + 1}` })), ...arrows.map((r, i) => ({ r, name: `화살표 ${i + 1}` }))];
-  const bad1 = [];
-  const solid = marks.filter((m) => !m.name.startsWith("화살표"));
-  for (let i = 0; i < solid.length; i++) for (let j = i + 1; j < solid.length; j++) if (rectsOverlap(solid[i].r, solid[j].r)) bad1.push(`${solid[i].name}·${solid[j].name} 겹침(${overlapText(solid[i].r, solid[j].r)})`);
-  const bad2 = [];
-  for (const m of marks) tags.forEach((t, k) => { if (rectsOverlap(m.r, t)) bad2.push(`${m.name} 이 이름표 ${k + 1} 과 겹침(${overlapText(m.r, t)})`); });
-  const bad3 = [];
-  const dotsZone = { left: x.dots.left, top: x.dots.top - ERRAND_DOTS_GAP, width: x.dots.width, height: x.dots.height + ERRAND_DOTS_GAP };
-  for (const m of marks) for (const [name, r] of [["띠", x.band], ...side.map((r, k) => [`오른쪽 열 단추 ${k + 1}`, r]), ["진행 점 줄", dotsZone]]) if (rectsOverlap(m.r, r)) bad3.push(`${m.name} 이 ${name}와 겹침(${overlapText(m.r, r)})`);
-  const bad4 = [];
-  const inner = { left: x.stage.left + ERRAND_STAGE_INSET, top: x.stage.top + ERRAND_STAGE_INSET, right: right(x.stage) - ERRAND_STAGE_INSET, bottom: bottom(x.stage) - ERRAND_STAGE_INSET };
-  for (const m of marks) if (!rectInside(m.r, inner)) bad4.push(`${m.name} 이 스테이지 안쪽 ${ERRAND_STAGE_INSET} 밖(${rd(m.r.left)},${rd(m.r.top)} ${rd(m.r.width)}x${rd(m.r.height)})`);
-  if (arrows.length > 1) bad4.push(`화살표 ${arrows.length}개 > 1`);
-  if (acts.length > 1) bad4.push(`알약 ${acts.length}개 > 1`);
-  const bad5 = [];
-  const dotsBottom = bottom(x.dots);
-  if (Math.abs(dotsBottom - (x.vh - ERRAND_DOTS_BOTTOM)) > ERRAND_DOTS_EPS) bad5.push(`점 줄 아랫변 ${rd(dotsBottom)} ≠ 창 아래 ${rd(x.vh)} − ${ERRAND_DOTS_BOTTOM}`);
-  return [result("EO1", L.EO1, bad1), result("EO2", L.EO2, bad2), result("EO3", L.EO3, bad3), result("EO4", L.EO4, bad4), result("EO5", L.EO5, bad5)];
-}
 
-/**
- * ER1 마피아 판과 시민 판의 심부름 영역 마크업이 같다(V-25, T-16-15). 입력은 각 판의 { names: 영역 안 data-* 이름 목록, counts: { [표식]: 개수 } } (browser.mjs readErrandSignature).
- * 같아야 하는 것: 구조 표식(ERRAND_PARITY_COUNTED)의 개수, 상태 표식(ERRAND_STATE_ATTRS)을 뺀 data-* 이름 집합.
- * 상태 표식(data-done·data-call·data-rest·data-errand-act)은 판마다 위치가 달라 있고 없고가 다르므로 개수는 견주지 않고 이름이 허용 집합 안인지만 본다. 역할류 이름(fake·mafia·role·decoy·bluff)은 어느 쪽에도 없어야 한다.
- */
-export function errandParityChecks(mafia, citizen) {
-  const id = "ER1";
-  const label = "마피아·시민 심부름 영역의 data-* 이름·구조 표식 개수가 같고 가짜·역할류 표식이 없다";
-  const okSig = (z) => z && Array.isArray(z.names) && z.names.every(isStr) && z.counts && typeof z.counts === "object" && ERRAND_PARITY_COUNTED.every((k) => isNum(z.counts[k]));
-  if (!okSig(mafia) || !okSig(citizen)) return [noMeasure(id, label, "마피아·시민 판의 심부름 영역 표식 이름·개수")];
-  const bad = [];
-  const structural = (z) => [...new Set(z.names)].filter((n) => !ERRAND_STATE_ATTRS.includes(n)).sort();
-  const a = structural(mafia);
-  const b = structural(citizen);
-  if (JSON.stringify(a) !== JSON.stringify(b)) bad.push(`표식 이름 집합이 다름(마피아 ${a.join(",")} ≠ 시민 ${b.join(",")})`);
-  for (const k of ERRAND_PARITY_COUNTED) if (mafia.counts[k] !== citizen.counts[k]) bad.push(`${k} 개수 마피아 ${mafia.counts[k]} ≠ 시민 ${citizen.counts[k]}`);
-  for (const [who, z] of [["마피아", mafia], ["시민", citizen]]) {
-    for (const n of new Set(z.names)) {
-      if (/fake|mafia|role|decoy|bluff/i.test(n)) bad.push(`${who} 판에 역할류 표식 ${n}`);
-      if (ERRAND_STATE_ATTRS.includes(n) === false && ERRAND_MARKERS.includes(n) === false && !ERRAND_STRUCT_EXTRA.includes(n)) bad.push(`${who} 판에 알 수 없는 표식 ${n}`);
-    }
-  }
-  return [result(id, label, bad)];
-}
 /** 심부름 영역에 구조적으로 더 있는 표식(층 상자) — 허용 집합. */
 const ERRAND_STRUCT_EXTRA = ["data-errand-layer", "data-errand-act-layer"];
 
-/**
- * RC1~RC4 목격 기록(ERRAND-05, D-04). s = 위 15페이즈 계약. finished = 3곳을 모두 마친 산 사람인가.
- * RC1 마친 사람만 [기록] 이 있고 못 마친 사람은 단추·카드 0. RC2 열린 카드의 줄 수 표식 = li 개수, 줄 0이면 '0' 한 칸.
- * RC3 열린 카드 윗변 ≥ 독 아랫변 + 8, 띠와 교차 0, 아랫변 ≤ 입력줄 윗변 − 8. 카드는 아래 패널의 채팅 기록 칸을 덮는 것이 설계다(UI-SPEC "기록 카드 영역": 아래는 입력줄 윗변 − 8,
- * 입력줄·[토론 끝내기]는 가려지지 않는다) — 그래서 패널 전체가 아니라 입력줄과의 교차를 본다(15-09 편차, 문턱은 같다). RC4 입력칸 포커스에 카드가 접힌다(마친 사람 필수).
- */
-export function recordChecks(s) {
-  const L = {
-    RC1: "[기록]·카드는 3곳을 마친 사람에게만(못 마친 사람 0건)",
-    RC2: "줄 수 표식 = 줄(li) 개수, 줄 0이면 '0'",
-    RC3: `카드 윗변 ≥ 독 아랫변 + ${RECORD_DOCK_GAP}, 띠와 교차 0, 아랫변 ≤ 입력줄 윗변 − ${RECORD_DOCK_GAP}`,
-    RC4: "입력칸 포커스에 카드가 접힌다",
-  };
-  const ids = Object.keys(L);
-  if (!s || typeof s !== "object" || typeof s.finished !== "boolean" || typeof s.hasButton !== "boolean" || typeof s.hasCard !== "boolean") return ids.map((id) => noMeasure(id, L[id], "기록 읽기 값(finished·hasButton·hasCard)"));
-  const out = [];
-  const bad1 = [];
-  if (s.finished && !s.hasButton) bad1.push("마친 사람인데 [기록] 단추가 없음");
-  if (!s.finished && s.hasButton) bad1.push("못 마친 사람에게 [기록] 단추가 있음");
-  if (!s.finished && s.hasCard) bad1.push("못 마친 사람에게 기록 카드가 있음");
-  out.push(result("RC1", L.RC1, bad1));
-  if (!s.finished) return [...out, result("RC2", L.RC2, []), result("RC3", L.RC3, []), result("RC4", L.RC4, [])];
-  // RC2·RC3 은 열린 카드에서만 잰다(마친 사람이 카드를 연 읽기). 카드가 없으면 그 읽기가 없었으므로 측정 불가
-  if (!s.hasCard) return [...out, noMeasure("RC2", L.RC2, "열린 카드"), noMeasure("RC3", L.RC3, "열린 카드"), typeof s.collapsedOnFocus === "boolean" ? result("RC4", L.RC4, s.collapsedOnFocus ? [] : ["포커스에도 카드가 남음"]) : noMeasure("RC4", L.RC4, "포커스 접힘 읽기")];
-  if (isNum(s.rowCount) && (isNum(s.rowsAttr) || (isStr(s.rowsAttr) && /^\d+$/.test(s.rowsAttr)))) {
-    const bad = [];
-    if (Number(s.rowsAttr) !== s.rowCount) bad.push(`data-record-rows ${s.rowsAttr} ≠ li ${s.rowCount}`);
-    if (s.rowCount === 0 && !(isStr(s.zeroText) && s.zeroText.trim() === "0")) bad.push(`줄 0개인데 머리 글자 '${s.zeroText}' ≠ '0'`);
-    out.push(result("RC2", L.RC2, bad));
-  } else out.push(noMeasure("RC2", L.RC2, "줄 수 표식·li 개수"));
-  if (okRect(s.cardRect) && okRect(s.dockRect) && okRect(s.bandRect) && okRect(s.inputRect)) {
-    const bad = [];
-    if (s.cardRect.top < bottom(s.dockRect) + RECORD_DOCK_GAP - OVERLAP_EPS) bad.push(`카드 윗변 ${rd(s.cardRect.top)} < 독 아랫변 ${rd(bottom(s.dockRect))} + ${RECORD_DOCK_GAP}`);
-    if (rectsOverlap(s.cardRect, s.bandRect)) bad.push(`카드·띠 겹침(${overlapText(s.cardRect, s.bandRect)})`);
-    if (bottom(s.cardRect) > s.inputRect.top - RECORD_DOCK_GAP + OVERLAP_EPS) bad.push(`카드 아랫변 ${rd(bottom(s.cardRect))} > 입력줄 윗변 ${rd(s.inputRect.top)} − ${RECORD_DOCK_GAP}`);
-    out.push(result("RC3", L.RC3, bad));
-  } else out.push(noMeasure("RC3", L.RC3, "카드·독·띠·입력줄 사각형"));
-  out.push(typeof s.collapsedOnFocus === "boolean" ? result("RC4", L.RC4, s.collapsedOnFocus ? [] : ["포커스에도 카드가 남음"]) : noMeasure("RC4", L.RC4, "포커스 접힘 읽기"));
-  return out;
-}
 
-/**
- * TC1~TC6 아침 증거 카드(TRACE-02·03, D-06, 16-09 EVID-02). s = 위 계약. expectCard = 피해자가 있고 흔적 구간 안인가(구간 전·피해자 없음은 false).
- * TC1 카드 수 = expectCard ? 1 : 0. TC2 1행 조각 이름 한 줄 + 보조 줄 합쳐 두 줄 이내 + 2행(마지막 목격) 한 줄. TC3 카드 글자·속성에 역할 낱말·'범인'·'증거'·'확정' 0.
- * TC4 피해자 알림과 카드가 동시에 보이지 않는다. TC5 카드가 띠·독 줄·아래 패널과 교차 0.
- * TC6 2행 표식: data-lastseen-row 하나·data-lastseen-count 가 목격자 유무(1|0)와 같고 2행이 카드 밖으로 넘치지 않는다.
- */
-export function traceChecks(s) {
-  const L = {
-    TC1: "피해자 있는 아침의 흔적 구간에만 카드 1개, 아니면 0개",
-    TC2: "1행 조각 이름 한 줄 + 보조 줄 합쳐 두 줄 이내 + 2행 한 줄",
-    TC3: "카드 글자·속성에 역할 낱말·'범인'·'증거'·'확정' 없음",
-    TC4: "피해자 알림과 카드가 동시에 보이지 않음",
-    TC5: "카드가 띠·독 줄·아래 패널과 교차 0",
-    TC6: "2행 표식 하나·목격자 유무와 같은 count(0|1)·카드 밖으로 안 넘침",
-  };
-  const ids = Object.keys(L);
-  if (!s || typeof s !== "object" || typeof s.expectCard !== "boolean" || !isNum(s.cards)) return ids.map((id) => noMeasure(id, L[id], "흔적 읽기 값(expectCard·cards)"));
-  const out = [result("TC1", L.TC1, s.cards === (s.expectCard ? 1 : 0) ? [] : [`카드 ${s.cards}개(기대 ${s.expectCard ? 1 : 0})`])];
-  if (s.cards === 0) {
-    // 카드가 없는 읽기는 알림 동시 표시 외에 볼 것이 없다 — 나머지는 해당 없음(통과)
-    return [...out, result("TC2", L.TC2, []), result("TC3", L.TC3, []), typeof s.announceVisible === "boolean" ? result("TC4", L.TC4, []) : noMeasure("TC4", L.TC4, "알림 표시 여부"), result("TC5", L.TC5, []), result("TC6", L.TC6, [])];
-  }
-  out.push(
-    isNum(s.nameLines) && isNum(s.noteLines) && isNum(s.rowLines)
-      ? result("TC2", L.TC2, [...(s.nameLines === 1 ? [] : [`조각 이름 ${s.nameLines}줄 ≠ 1`]), ...(s.nameLines + s.noteLines <= 2 ? [] : [`카드 ${s.nameLines + s.noteLines}줄 > 2`]), ...(s.rowLines === 1 ? [] : [`2행 ${s.rowLines}줄 ≠ 1`])])
-      : noMeasure("TC2", L.TC2, "이름·보조 줄·2행 줄 수"),
-  );
-  if (isStr(s.cardText) && isStr(s.cardAttrText)) {
-    const bad = [];
-    if (ROLE_WORD_RE.test(s.cardText)) bad.push("카드 글자에 금지 낱말");
-    if (ROLE_WORD_RE.test(s.cardAttrText)) bad.push("카드 속성에 금지 낱말");
-    out.push(result("TC3", L.TC3, bad));
-  } else out.push(noMeasure("TC3", L.TC3, "카드 글자·속성"));
-  out.push(typeof s.announceVisible === "boolean" ? result("TC4", L.TC4, s.announceVisible ? ["알림과 카드가 같이 보임"] : []) : noMeasure("TC4", L.TC4, "알림 표시 여부"));
-  if (okRect(s.cardRect) && okRect(s.bandRect) && okRect(s.dockRect) && okRect(s.panelRect)) {
-    const bad = [];
-    for (const [name, r] of [["띠", s.bandRect], ["독 줄", s.dockRect], ["아래 패널", s.panelRect]]) if (rectsOverlap(s.cardRect, r)) bad.push(`카드·${name} 겹침(${overlapText(s.cardRect, r)})`);
-    out.push(result("TC5", L.TC5, bad));
-  } else out.push(noMeasure("TC5", L.TC5, "카드·띠·독·패널 사각형"));
-  if (isNum(s.lastseenRows) && typeof s.expectSeen === "boolean" && typeof s.rowOverflow === "boolean" && (s.lastseenCount === "0" || s.lastseenCount === "1")) {
-    const bad = [];
-    if (s.lastseenRows !== 1) bad.push(`2행 표식 ${s.lastseenRows}개 ≠ 1`);
-    if (s.lastseenCount !== (s.expectSeen ? "1" : "0")) bad.push(`목격 count ${s.lastseenCount}(기대 ${s.expectSeen ? 1 : 0})`);
-    if (s.rowOverflow) bad.push("2행이 카드 밖으로 넘침");
-    out.push(result("TC6", L.TC6, bad));
-  } else out.push(noMeasure("TC6", L.TC6, "2행 표식 읽기"));
-  return out;
-}
 
-/**
- * TC7·TC8 이름표 표시 좌석(EVID-01, D-09·D-10). stage "morning"(흔적 구간 안) → TC7, "discussion"(낮 단계)·"night"(밤) → TC8.
- * 읽은 data-trace-mark 좌석 = expectTrace(같은 옷 산 사람), data-seen-mark 좌석 = expectSeen(마지막 목격자). 밤에는 expect* 가 모두 빈 배열이다(서버가 증거를 싣지 않음).
- * 표식 값은 모두 빈 값이고(좌석·역할·조각 id 금지) 좌석을 못 찾은 표식(unseated)이 0 이다. 결과 줄에는 좌석 번호만 쓴다.
- */
-export function traceMarkChecks(s) {
-  const id = s && s.stage === "morning" ? "TC7" : "TC8";
-  const label = s && s.stage === "night" ? "밤에는 이름표 표시가 0개" : s && s.stage === "discussion" ? "낮(토론)에도 같은 좌석에 표시가 남아 있다" : "흔적 구간: 같은 옷 산 사람·마지막 목격자 이름표에만 표시";
-  const okSeats = (a) => Array.isArray(a) && a.every((x) => Number.isInteger(x));
-  if (!s || !["morning", "discussion", "night"].includes(s.stage) || ![s.expectTrace, s.expectSeen, s.trace, s.seen].every(okSeats) || !isNum(s.unseated) || !Array.isArray(s.attrValues)) {
-    return [noMeasure(id, label, "표시 좌석 읽기(stage·expect*·trace·seen·unseated·attrValues)")];
-  }
-  const norm = (a) => JSON.stringify([...a].sort((x, y) => x - y));
-  const bad = [];
-  if (norm(s.trace) !== norm(s.expectTrace)) bad.push(`같은 옷 표시 좌석 [${[...s.trace].sort((x, y) => x - y)}] ≠ 기대 [${[...s.expectTrace].sort((x, y) => x - y)}]`);
-  if (norm(s.seen) !== norm(s.expectSeen)) bad.push(`목격 표시 좌석 [${[...s.seen].sort((x, y) => x - y)}] ≠ 기대 [${[...s.expectSeen].sort((x, y) => x - y)}]`);
-  if (s.unseated !== 0) bad.push(`좌석을 못 찾은 표식 ${s.unseated}개`);
-  const loud = s.attrValues.filter((v) => v !== "");
-  if (loud.length > 0) bad.push(`표식 값이 비어 있지 않음 ${loud.length}개`);
-  return [result(id, label, bad)];
-}
 
-/** 밤 얼굴 목록 판정이 요구하는 역할 네 시점. */
-export const NIGHT_FACE_ROLES = ["mafia", "police", "doctor", "citizen"];
 /** 네 시점의 높이 차 허용(px). 마피아 선택 수 배지는 칸 크기를 바꾸지 않아야 하므로 1px 만 본다. */
 export const NIGHT_FACE_H_EPS = 1;
 
-/**
- * NF1~NF6 밤 얼굴 목록(TRACE-01, D-05). list = [{ role, count, itemH, listH, eyeHeal, ringMafia, callCount, disabledCount, toastAfterTap }] — 네 역할이 모두 있어야 한다.
- * NF1 칸 수가 네 역할에서 같다. NF2 칸 높이·목록 높이가 같다(±1). NF3 eye·heal 아이콘 0. NF4 data-ring-kind="mafia" 0.
- * NF5 aria-disabled 칸 0이고 [data-call] 수가 네 역할에서 같고 칸 수와 같다(모든 칸이 같이 빛남). NF6 어떤 칸을 눌러도 거절 알림 0.
- */
-export function nightFaceChecks(list) {
-  const L = {
-    NF1: "밤 얼굴 목록 칸 수가 마피아·경찰·의사·시민에서 같다",
-    NF2: `칸 높이·목록 높이가 네 역할에서 같다(±${NIGHT_FACE_H_EPS}px)`,
-    NF3: "eye·heal 아이콘 0",
-    NF4: 'data-ring-kind="mafia" 0',
-    NF5: "aria-disabled 칸 0, [data-call] 수가 네 역할에서 같고 칸 수와 같다",
-    NF6: "어떤 칸을 눌러도 거절 알림 0",
-  };
-  const ids = Object.keys(L);
-  const okItem = (it) => it && NIGHT_FACE_ROLES.includes(it.role) && [it.count, it.itemH, it.listH, it.eyeHeal, it.ringMafia, it.callCount, it.disabledCount, it.toastAfterTap].every(isNum);
-  const roles = Array.isArray(list) ? new Set(list.map((it) => it?.role)) : new Set();
-  if (!Array.isArray(list) || !list.every(okItem) || !NIGHT_FACE_ROLES.every((r) => roles.has(r))) return ids.map((id) => noMeasure(id, L[id], "마피아·경찰·의사·시민 밤 얼굴 목록 읽기"));
-  const by = (key) => list.map((it) => `${it.role} ${rd(it[key])}`).join(" ≠ ");
-  const spread = (key) => Math.max(...list.map((it) => it[key])) - Math.min(...list.map((it) => it[key]));
-  const hits = (key) => list.filter((it) => it[key] !== 0).map((it) => `${it.role} ${it[key]}`);
-  const bad1 = spread("count") === 0 && list[0].count > 0 ? [] : [`칸 수 ${by("count")}`];
-  const bad2 = [...(spread("itemH") <= NIGHT_FACE_H_EPS ? [] : [`칸 높이 ${by("itemH")}`]), ...(spread("listH") <= NIGHT_FACE_H_EPS ? [] : [`목록 높이 ${by("listH")}`])];
-  const bad5 = [...hits("disabledCount").map((h) => `aria-disabled ${h}`), ...(spread("callCount") === 0 ? [] : [`[data-call] ${by("callCount")}`]), ...list.filter((it) => it.callCount !== it.count).map((it) => `${it.role} 빛남 ${it.callCount} ≠ 칸 ${it.count}`)];
-  return [result("NF1", L.NF1, bad1), result("NF2", L.NF2, bad2), result("NF3", L.NF3, hits("eyeHeal")), result("NF4", L.NF4, hits("ringMafia")), result("NF5", L.NF5, bad5), result("NF6", L.NF6, hits("toastAfterTap"))];
-}
 
 // ---- 17페이즈 첫 사건(튜토리얼) 판정 (17-09, TUT-01·TUT-02·TUT-03·TUT-05) ----
 // 사본 상수: 앱 src/game/tutorialScript.ts 와 같아야 한다 — test/unit/e2eContract.test.ts 가 대조한다(.mjs 가 TS 를 직접 import 하지 않는다).
@@ -4466,29 +4068,6 @@ export function dressLockChecks(s) {
   return [result("AL1", L.AL1, bad1), result("AL2", L.AL2, bad2), result("AL3", L.AL3, bad3)];
 }
 
-/**
- * OU1·OU2 한 판 옷 유일·같은 옷 표시(18-09, D-01·SC-1). s = { players: view.players([{ seat, look?, left? }]), traceSeats: 이름표에 같은 옷 표시가 붙은 좌석 배열 }.
- * OU1 앉은 사람(left 아님)의 (look ?? "coat") 이 서로 다르다 — 겹치면 옷 id 와 좌석을 나열 · OU2 같은 옷 표시 이름표가 많아야 1개.
- * players 가 배열이 아니거나 traceSeats 가 정수 배열이 아니면 두 줄 모두 측정 못 함이다. detail 에는 옷 id·좌석 번호·개수만 싣는다(역할·닉네임 없음, 옷은 공개 값 L25).
- */
-export function outfitUniqueChecks(s) {
-  const L = {
-    OU1: "한 판 안에서 옷이 서로 다르다(D-01)",
-    OU2: "같은 옷 표시 이름표가 많아야 1개(SC-1)",
-  };
-  if (!s || !Array.isArray(s.players) || !s.players.every((p) => p && Number.isInteger(p.seat)) || !Array.isArray(s.traceSeats) || !s.traceSeats.every((x) => Number.isInteger(x))) {
-    return Object.keys(L).map((id) => noMeasure(id, L[id], "view.players 와 같은 옷 표시 좌석"));
-  }
-  const byOutfit = new Map();
-  for (const p of s.players) {
-    if (p.left === true) continue;
-    const wear = p.look ?? "coat";
-    byOutfit.set(wear, [...(byOutfit.get(wear) ?? []), p.seat]);
-  }
-  const bad1 = [...byOutfit].filter(([, seats]) => seats.length > 1).map(([wear, seats]) => `옷 ${wear} 를 좌석 [${[...seats].sort((a, b) => a - b)}] 이 같이 입음`);
-  const bad2 = s.traceSeats.length <= 1 ? [] : [`같은 옷 표시 ${s.traceSeats.length}개 좌석 [${[...s.traceSeats].sort((a, b) => a - b)}]`];
-  return [result("OU1", L.OU1, bad1), result("OU2", L.OU2, bad2)];
-}
 
 // ---- 마을 맵 E2E (20-08, UI-SPEC TM1~TM10, 결정 D-10·D-11·D-14·D-15·D-19·D-21·D-22) ----
 

@@ -56,6 +56,7 @@ import {
   screensOfWorld,
   setBotVote,
   setBots,
+  skipOnce,
   skipTo,
   sleep,
   startGame,
@@ -70,10 +71,21 @@ const DEFAULT_OUT = join(REPO, ".planning/phases/06-world-skeleton/perf");
 const CHATLOAD_OUT = join(REPO, ".planning/phases/07-free-chat/perf");
 /** nightload 의 기본 저장 폴더(9페이즈) */
 const NIGHTLOAD_OUT = join(REPO, ".planning/phases/09-night-morning/perf");
-/** nightload: 장면마다 머무는 시간(ms). 합 70초 = 한 바퀴. 처형·아침은 서버 타이머가 5초 안팎이라 그보다 짧게 머문다.
- * errand(15페이즈, 결정 0074)는 낮 시작 다음·토론 앞 — 사람 입력 없이 20초 머문다(근처 snap 갱신·표지 투영·링이 매 프레임 일하는 구간, 봇이 장소를 돈다) */
+/** nightload: 확장판(마을) 장면마다 머무는 시간(ms) — 새 하루 순서(21페이즈 D-01: 저녁 → 밤 → 아침 → 토론 → 지목 → 변론 → 찬반 → 처형). 합 72초 = 한 바퀴.
+ * errand(저녁)는 사람 입력 없이 20초 머문다(근처 snap 갱신·가로등 표지·링이 매 프레임 일하는 구간, 봇이 가로등을 돈다). night(집 판·고정 시점) 14초 다음 아침 현장(피해자가 있는 밤 뒤에만 온다) 6초,
+ * 그 뒤 처형까지는 지금 값 그대로다. 시민 판의 '어둠·맥박 비네트'는 확장판 밤에는 없다 — 확장판은 두 역할이 같은 조명·같은 집 판을 쓰니(21페이즈 D-04·LH9) 두 판(마피아·시민)은 같은 조명 아래 역할만 다르다. */
 export const NIGHTLOAD_DWELL = [
   ["errand", 20_000],
+  ["night", 14_000],
+  ["morning", 6_000],
+  ["discussion", 10_000],
+  ["nomination", 6_000],
+  ["defense", 6_000],
+  ["verdict", 6_000],
+  ["execution", 4_000],
+];
+/** nightload: 기본 마피아(재즈 바·광장) 장면 표 — 낮 시작 → 토론 → … → 처형 → 밤 → 아침. 합 56초. 저녁(errand)은 없다(20-09). 시민 판의 밤은 어둠·맥박 비네트를 그린다. */
+export const NIGHTLOAD_DWELL_BASIC = [
   ["discussion", 10_000],
   ["nomination", 6_000],
   ["defense", 6_000],
@@ -806,6 +818,7 @@ async function nightloadOnce(browser, o, origin, chrome) {
     const startedAt = new Date().toISOString();
     const perPassMs = (o.minutes * 60_000) / NIGHTLOAD_PASSES.length;
     const cycles = {};
+    const noScene = { mafia: 0, citizen: 0 }; // 확장판 밤 뒤 아침 현장이 없어 아침 장면을 못 잰 바퀴 수
     // 옵션이 없거나 town 이면 확장판 = 마을, bar·plaza 는 기본 마피아로 바꿔 고른 맵
     const expectedMap = o.mapGiven && o.map !== "town" ? o.map : "town";
     const dwell = nightloadDwell(expectedMap);
@@ -827,14 +840,26 @@ async function nightloadOnce(browser, o, origin, chrome) {
           if (got !== expectedMap) throw new Error(`측정 맵이 기대와 다름: view.map ${got} (기대 ${expectedMap})`);
           mapChecked = true;
         }
-        for (const [phase, ms] of dwell) { // 확장판(마을)은 첫 장면이 errand 라 낮 시작에서 바로 넘긴다(15페이즈), 기본 마피아에는 errand 가 없다(20-09)
+        for (const [phase, ms] of dwell) { // 확장판(마을)은 첫 장면이 errand(저녁)라 역할 확인에서 바로 넘긴다, 기본 마피아에는 errand 가 없다(20-09)
           await mark(`${role}:setup`, true);
-          await skipTo(page, tracker, phase);
-          // 마피아 판의 밤: 대상 이름표를 눌러 내 캐릭터가 걷게 한다(이동·고리). 실패해도 측정은 이어 간다
+          if (phase === "morning" && expectedMap === "town") {
+            // 확장판 아침은 피해자·미수가 있는 밤 뒤에만 온다(D-17) — 밤에서 한 칸만 넘겨 아침이 오지 않으면(현장 없는 밤) 이 장면은 재지 않고 다음으로 간다. 목표 단계로 넘기면 하루를 돌아 버린다
+            if (tracker.last()?.phase === "night") {
+              const got = await skipOnce(page, tracker);
+              if (got !== "morning") {
+                noScene[role] += 1;
+                continue;
+              }
+            } else await skipTo(page, tracker, "morning");
+          } else await skipTo(page, tracker, phase);
+          // 마피아 판의 밤: 기본 마피아는 대상 이름표, 확장판(마을)은 대상 집 판을 눌러 내 캐릭터가 걷게 한다(이동·고리). 실패해도 측정은 이어 간다
           if (role === "mafia" && phase === "night") {
-            const g = await readGame(page).catch(() => null);
-            const seat = g?.picks?.map((b) => b.seat).sort((a, b) => a - b)[0];
-            if (seat !== undefined) await tapPick(page, seat).catch(() => {});
+            if (expectedMap === "town") await pickTownHouse(page, tracker).catch(() => {});
+            else {
+              const g = await readGame(page).catch(() => null);
+              const seat = g?.picks?.map((b) => b.seat).sort((a, b) => a - b)[0];
+              if (seat !== undefined) await tapPick(page, seat).catch(() => {});
+            }
           }
           await mark(`${role}:${phase}`, false);
           // 장면 도중(끝나기 직전)에 그리기 통계를 한 번 읽는다(20-09) — 로비에서 읽은 값은 게임 장면과 다르다. 읽는 시간은 아래 sleep 에서 뺀다
@@ -893,7 +918,7 @@ async function nightloadOnce(browser, o, origin, chrome) {
       schema: "nightload-1",
       startedAt,
       endedAt,
-      params: { map: expectedMap, minutes: o.minutes, bots: o.bots, passes: NIGHTLOAD_PASSES, dwellMs: Object.fromEntries(dwell), note: "넘기기·시트 조작 구간은 기록하지 않는다. 시민 판 아침은 봇 마피아가 방장을 노려 피해자 연출이 함께 잡힌다" },
+      params: { map: expectedMap, minutes: o.minutes, bots: o.bots, passes: NIGHTLOAD_PASSES, dwellMs: Object.fromEntries(dwell), noSceneNights: noScene, note: "넘기기·시트 조작 구간은 기록하지 않는다. 시민 판 아침은 봇 마피아가 방장을 노려 피해자 연출이 함께 잡힌다. 확장판(마을)은 저녁 → 밤 → 아침 → 토론 순서이고 밤 뒤 현장이 없으면 그 바퀴의 아침은 재지 않는다(noSceneNights)" },
       frames: { ...stats, jankPer5min: (stats.jank * 300) / stats.seconds },
       passes,
       scenes,
@@ -908,9 +933,27 @@ async function nightloadOnce(browser, o, origin, chrome) {
   }
 }
 
-/** 맵에 따른 장면 머무름 표: 마을(확장판)은 전부, 재즈 바·광장(기본 마피아)은 낮 심부름(errand) 단계가 없어 뺀다(20-09) */
+/**
+ * 마을(확장판) 밤: 집 판([data-house-pick])의 처음 켜진(data-house-off 가 없는) 내 집 아닌 판을 눌러 대상을 고른다.
+ * 판은 카메라가 밤 시점에 자리 잡은 뒤(약 1초)에야 눌린다 — 켜질 때까지 4초 기다린다. 내 집은 data-house-pick 값이 내 좌석이다.
+ */
+async function pickTownHouse(page, tracker) {
+  const me = tracker.last()?.me?.seat;
+  const sel = (seat) => `[data-house-pick="${seat}"]:not([data-house-off])`;
+  const seats = (tracker.last()?.players ?? []).map((p) => p.seat).filter((seat) => seat !== me).sort((a, b) => a - b);
+  for (const seat of seats) {
+    const plate = page.locator(sel(seat)).first();
+    if ((await plate.count().catch(() => 0)) === 0) await page.waitForSelector(sel(seat), { timeout: 4000 }).catch(() => {});
+    if ((await plate.count().catch(() => 0)) === 0) continue;
+    await plate.click({ timeout: 3000 });
+    return true;
+  }
+  return false;
+}
+
+/** 맵에 따른 장면 머무름 표: 마을(확장판)은 새 하루 순서(저녁 → 밤 → 아침 → 토론 …, 21-17), 재즈 바·광장(기본 마피아)은 옛 순서에 저녁이 없다(20-09) */
 export function nightloadDwell(map) {
-  return map === "town" ? NIGHTLOAD_DWELL : NIGHTLOAD_DWELL.filter(([phase]) => phase !== "errand");
+  return map === "town" ? NIGHTLOAD_DWELL : NIGHTLOAD_DWELL_BASIC;
 }
 
 /** 장면별 그리기 통계 중 칸마다 가장 큰 값(20-09 게이트: calls·pointLights 는 가장 무거운 장면 기준) */

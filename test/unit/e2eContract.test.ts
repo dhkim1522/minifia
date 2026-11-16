@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { TRACE_OF_OUTFIT } from "../../shared/game/trace";
 import { BAR_MASK } from "../../shared/game/map";
-import { ERRAND_ACT_R, ERRAND_COUNT, ERRAND_MS, ERRAND_NEAR_R, MORNING_TRACE_MS, NOMINATION_END_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
+import { ERRAND_ACT_R, ERRAND_MS, MORNING_SCENE_MS, NOMINATION_END_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nextPhaseOf, nominationMaxMs } from "../../shared/game/phases";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { ANNOUNCE_MORNING_AT } from "../../src/game/dayView";
@@ -59,6 +59,7 @@ import { buildView } from "../../shared/game/view";
 import { OUTFIT_IDS, PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
 import type { OutfitId, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
+import { openTown } from "../helpers/playable";
 import { HOST_HIDDEN_PHASES, HOST_LINES, type HostKey } from "../../src/game/hostLine";
 import { OPENING_LAMPS, TUTORIAL_CAST, TUTORIAL_DOT_COUNT, TUTORIAL_LINES, TUTORIAL_SCENES, WRONG_HINT_AFTER } from "../../src/game/tutorialScript";
 import { TRACE_TEXT } from "../../src/game/traceText";
@@ -812,12 +813,7 @@ describe("15페이즈 E2E 사본과 제품 값 (15-09, 사본 일치 규약)", (
   type L = {
     ERRAND_MARKERS: readonly string[];
     ERRAND_PLACE_IDS: readonly string[];
-    ERRAND_PER_PERSON: number;
-    ERRAND_E2E_MS: number;
-    TRACE_WINDOW_MS: number;
     ERRAND_ACT_R_E2E: number;
-    ERRAND_NEAR_R_E2E: number;
-    ERRAND_LINES: Record<string, string>;
     TRACE_OF_OUTFIT_E2E: Record<string, string>;
   };
   const lib = e2eLib as unknown as L;
@@ -832,31 +828,16 @@ describe("15페이즈 E2E 사본과 제품 값 (15-09, 사본 일치 규약)", (
     expect(lib.ERRAND_MARKERS.filter((m) => !all.includes(m))).toEqual([]);
   });
 
-  it("장소 id 16개·산 사람마다 3곳·심부름 40초·흔적 5초·처리·근처 반경 사본이 제품 값과 같다", () => {
+  it("장소 id 24곳·처리 반경 사본이 제품 값과 같다(21-17: 옛 심부름·흔적 시간·근처 반경·띠 문장 사본은 옛 흐름과 함께 정리)", () => {
     expect([...lib.ERRAND_PLACE_IDS]).toEqual([...PLACE_IDS]);
-    expect(lib.ERRAND_PER_PERSON).toBe(ERRAND_COUNT);
-    expect(lib.ERRAND_E2E_MS).toBe(ERRAND_MS);
-    expect(lib.TRACE_WINDOW_MS).toBe(MORNING_TRACE_MS);
     expect(lib.ERRAND_ACT_R_E2E).toBe(ERRAND_ACT_R);
-    expect(lib.ERRAND_NEAR_R_E2E).toBe(ERRAND_NEAR_R);
-  });
-
-  it("ERRAND_LINES 는 src/game/hostLine.ts 의 errand·witness·trace·discussion 줄과 한 글자도 다르지 않다", () => {
-    expect(lib.ERRAND_LINES).toEqual({
-      act: HOST_LINES["errand.act"],
-      done: HOST_LINES["errand.done"],
-      witness: HOST_LINES.witness,
-      discussionAct: HOST_LINES["discussion.act"],
-      trace: HOST_LINES.trace,
-      discussionEvidence: HOST_LINES["discussion.evidence"],
-    });
   });
 
   it("TRACE_OF_OUTFIT_E2E 는 shared/game/trace.ts 의 TRACE_OF_OUTFIT 과 같다 (16-09, 같은 옷 좌석 기대값 사본)", () => {
     expect(lib.TRACE_OF_OUTFIT_E2E).toEqual({ ...TRACE_OF_OUTFIT });
   });
 
-  it("E2E 의 흐름 파일(errand.mjs)·읽기 도우미(browser.mjs)는 표식 값 외에 닉네임·토큰을 결과로 돌려주지 않는다 — 읽기 도우미 반환 필드 이름에 nick·token 이 없다", () => {
+  it("E2E 의 읽기 도우미(browser.mjs)는 표식 값 외에 닉네임·토큰을 결과로 돌려주지 않는다 — 읽기 도우미 반환 필드 이름에 nick·token 이 없다", () => {
     const text = readFileSync(new URL("scripts/e2e/browser.mjs", root), "utf8");
     const start = text.indexOf("export function readErrand");
     expect(start).toBeGreaterThan(0);
@@ -874,21 +855,21 @@ describe("서버 계약 소비자 스크립트의 새 단계 흐름 (15-06, DEPL
     expect(Number(m![1]!.replaceAll("_", ""))).toBe(ERRAND_MS);
   });
 
-  it("scripts/smoke.mjs 의 MORNING_TRACE_MS 가 shared/game/phases.ts 의 MORNING_TRACE_MS 와 같고 아침 길이 기대에 그 상수를 쓴다 (16-10: 3초 하드코딩이 5초로 바뀐 값을 놓쳤다)", () => {
+  it("smoke.mjs 의 확장판 전이 표가 roleReveal → errand → night → morning|discussion → … → execution → errand 이고 낮 단계 목록에 errand 가 있으며 errand 40초 대기를 쓴다 (21-17)", () => {
     const text = scriptText("smoke.mjs");
-    const m = /^const MORNING_TRACE_MS = ([0-9_]+);/m.exec(text);
-    expect(m, "smoke.mjs 에 const MORNING_TRACE_MS 가 있어야 한다").not.toBeNull();
-    expect(Number(m![1]!.replaceAll("_", ""))).toBe(MORNING_TRACE_MS);
-    expect(text).toMatch(/morningWant = 9_000 \+ \(morning\.trace !== undefined \? MORNING_TRACE_MS : 0\)/);
-  });
-
-  it("smoke.mjs 의 전이 표가 dayAnnounce → errand → discussion 이고 낮 단계 목록에 errand 가 있으며 errand 40초 대기를 쓴다", () => {
-    const text = scriptText("smoke.mjs");
-    expect(text).toMatch(/dayAnnounce: \["errand"\]/);
-    expect(text).toMatch(/errand: \["discussion"\]/);
+    expect(text).toMatch(/roleReveal: \["errand"\]/);
+    expect(text).toMatch(/errand: \["night"\]/);
+    expect(text).toMatch(/night: \["morning", "discussion"\]/);
+    expect(text).toMatch(/execution: \["errand", "ended"\]/);
     expect(text).toMatch(/const DAY_PHASES = \[[^\]]*"errand"/);
     expect(text).toMatch(/ERRAND_WAIT_MS = ERRAND_MS \+ STATE_LIMIT_MS/);
-    expect(text).not.toMatch(/dayAnnounce: \["discussion"\]/);
+    expect(text).not.toMatch(/PHASE_NEXT_EXTENDED = \{[^}]*dayAnnounce/);
+  });
+
+  it("smoke.mjs 의 MORNING_SCENE_MS 가 shared/game/phases.ts 의 MORNING_SCENE_MS 와 같다 (21-17, 확장판 아침 현장 길이)", () => {
+    const m = /^const MORNING_SCENE_MS = ([0-9_]+);/m.exec(scriptText("smoke.mjs"));
+    expect(m, "smoke.mjs 에 const MORNING_SCENE_MS 가 있어야 한다").not.toBeNull();
+    expect(Number(m![1]!.replaceAll("_", ""))).toBe(MORNING_SCENE_MS);
   });
 
   it("uat-test-room.mjs 의 전이 표도 dayAnnounce → errand → discussion 이고 errand 로 한 번 넘긴다", () => {
@@ -919,6 +900,11 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
     collectRoleStringPaths: (value: unknown, path: string, out: Array<{ path: string; value: string }>) => void;
     roleStringAllowed: (path: string, value: string, ctx: { spectate: boolean; ended: boolean; frameType: string }) => boolean;
     morningProblems: (morning: unknown, seats: number[]) => string[];
+    PHASE_NEXT_BASIC: Record<string, string[]>;
+    PHASE_NEXT_EXTENDED: Record<string, string[]>;
+    LAMP_PLACE_IDS: string[];
+    eveningProblems: (view: unknown) => string[];
+    morningSceneProblems: (view: unknown, seats: number[]) => string[];
   };
   const START_AT = 10_000;
 
@@ -993,7 +979,82 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
     }
     expect(lookLeaves).toBeGreaterThan(0);
   });
+
+  // 21-17: 확장판 새 하루 순서의 smoke 판정이 shared 의 실제 전이·buildView 와 어긋나지 않는다.
+  it("smoke 의 다음 단계 표(확장판·기본 마피아)가 shared nextPhaseOf 의 기본 다음 단계를 모두 품는다 — 확장판에는 낮 시작 발표가 없다", () => {
+    const phases = Object.keys({ ...s.PHASE_NEXT_BASIC, ...s.PHASE_NEXT_EXTENDED });
+    for (const phase of phases) {
+      for (const [mode, table] of [["extended", s.PHASE_NEXT_EXTENDED], ["basic", s.PHASE_NEXT_BASIC]] as const) {
+        const tos = table[phase];
+        if (tos === undefined) continue;
+        const want = nextPhaseOf(phase as never, rulesetOf(mode));
+        if (want === null) continue;
+        expect(tos, `${mode} ${phase} → ${want}`).toContain(want);
+      }
+    }
+    expect(s.PHASE_NEXT_EXTENDED.roleReveal).toEqual(["errand"]);
+    expect(s.PHASE_NEXT_EXTENDED.errand).toEqual(["night"]);
+    expect(Object.keys(s.PHASE_NEXT_EXTENDED)).not.toContain("dayAnnounce");
+    expect(s.PHASE_NEXT_BASIC.roleReveal).toEqual(["dayAnnounce"]);
+    expect(s.PHASE_NEXT_BASIC.dayAnnounce).toEqual(["discussion"]);
+  });
+
+  it("실제 전이로 만든 확장판 한 판의 단계 열이 smoke 표를 지나고, 저녁·아침 view 를 smoke 판정이 통과시킨다", () => {
+    const closeTown = openTown(); // 단위 시험은 마을 고정 맵이 잠겨 있다(setup.ts) — 확장판의 마을 가로등 저녁을 이 시험 동안만 켠다
+    try {
+    const created = createRoomState({ code: "0421", hostId: "player-id-0000-aaaa", hostToken: "token-secret-0000-aaaa-0123456789", hostNickname: "이름0", now: 0 });
+    if (!created.ok) throw new Error("createRoomState failed");
+    let lobby = attachConnection(created.state, "player-id-0000-aaaa", "conn-0");
+    for (let i = 1; i < 5; i += 1) {
+      const id = `player-id-000${i}-aaaa`;
+      const joined = joinRoom(lobby, { playerId: id, token: `token-secret-000${i}-aaaa-0123456789`, nickname: `이름${i}` });
+      if (!joined.ok) throw new Error(`joinRoom failed: ${joined.error}`);
+      lobby = attachConnection(joined.state, id, `conn-${i}`);
+    }
+    const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(11));
+    if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
+    let state = started.state;
+    const phases: string[] = [state.phase];
+    const seats = state.players.map((p) => p.seat);
+    // 저녁(errand)에 닿을 때까지 — 낮 시작 발표(dayAnnounce)를 거치지 않는다
+    while (state.phase !== "errand") {
+      state = tick(state, state.phaseEndsAt!, seededRandInt(11));
+      phases.push(state.phase);
+    }
+    for (const p of state.players) {
+      const view = buildView(state, p.id, START_AT);
+      expect(s.eveningProblems(view), `${p.nickname} 의 저녁 view`).toEqual([]);
+      expect((view.phaseDurationMs ?? 0)).toBe(ERRAND_MS);
+      const places = (view.me.errand?.places ?? []) as string[];
+      for (const id of places) expect(s.LAMP_PLACE_IDS).toContain(id);
+    }
+    // 밤: 마피아가 시민을 고르면 아침에 현장이 생긴다
+    state = tick(state, state.phaseEndsAt!, seededRandInt(11));
+    phases.push(state.phase);
+    expect(state.phase).toBe("night");
+    const mafia = state.players.filter((p) => p.role === "mafia");
+    const victim = state.players.filter((p) => p.role === "citizen").sort((a, b) => a.seat - b.seat)[0]!;
+    for (const m of mafia) state = pickAs(state, m, victim);
+    state = tick(state, state.phaseEndsAt!, seededRandInt(11));
+    phases.push(state.phase);
+    expect(state.phase).toBe("morning");
+    for (const p of state.players) {
+      const view = buildView(state, p.id, START_AT);
+      expect(s.morningSceneProblems(view, seats), `${p.nickname} 의 아침 view`).toEqual([]);
+      expect(Object.keys((view.day as { scene?: object }).scene ?? {})).toEqual(["house"]);
+      expect(view.phaseDurationMs).toBe(MORNING_SCENE_MS);
+    }
+    state = tick(state, state.phaseEndsAt!, seededRandInt(11));
+    phases.push(state.phase);
+    expect(state.phase).toBe("discussion");
+    expect(phases).toEqual(["assigning", "roleReveal", "errand", "night", "morning", "discussion"]);
+    for (let i = 1; i < phases.length; i += 1) expect(s.PHASE_NEXT_EXTENDED[phases[i - 1]!], `${phases[i - 1]} → ${phases[i]}`).toContain(phases[i]);
+    } finally {
+      closeTown();
+    }
+  });
 });
+
 
 // 17-09: 첫 사건(튜토리얼) E2E 판정의 사본 상수가 앱 대본(src/game/tutorialScript.ts)과 같다 — 어긋나면 점 수·램프 수·오답 도움·시각 판정이 거짓 통과·거짓 실패한다.
 describe("E2E 의 튜토리얼 사본 상수와 앱 대본 (17-09)", () => {

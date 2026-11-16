@@ -469,7 +469,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
    */
   async function soundNightParityRun(ctx, rec) {
     const sc = "sound-night-parity";
-    const game = await openGame(ctx, "sound-night-parity", { guests: 3, bots: 1, role: "mafia", vote: { exec: "no", pick: "other" }, to: "discussion" });
+    const game = await openGame(ctx, "sound-night-parity", { guests: 3, bots: 1, role: "mafia", vote: { exec: "no", pick: "other" }, to: "discussion", mode: "basic" }); // 21-17: 밤 소리 동일성(12-09)은 기본 마피아의 밤(이름표 선택)이다 — 확장판 밤(집 고르기)은 causal-* 가 본다
     try {
       const { hp, ht, hostSeat, guests } = game;
       if (ht.last().me.role !== "mafia") throw new SetupError(`방장 직업이 마피아가 아님 (${ht.last().me.role})`);
