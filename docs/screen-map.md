@@ -200,7 +200,7 @@
 
 ## 첫날 키워드·모두의 답·정답 공개 (23페이즈, 결정 0089·0091)
 
-첫날에만 끼는 화면 셋이다. **① 키워드 화면**(`keyword` 단계 13초 = 읽기 3초 + 쓰기 10초: 가운데 카드 + 아래 입력줄), **② 모두의 답**(토론 시작 때 한 번 자동으로 열리는 역할 카드 시트의 "첫날 답" 탭, 시민 포함 판 내내 다시 볼 수 있다), **③ 정답 공개**(`answerReveal` 3초의 큰 글, 처형 없는 첫날은 "처형 없음" 1.4초 뒤 정답). 새 글 단추는 없고 입력줄의 [보내기]는 채팅과 같은 아이콘 단추다. 숫자의 원천은 코드다: `src/screens/Keyword.tsx`·`src/components/RoleCardSheet.tsx`·`src/components/ResultAnnounce.tsx`, 시간은 `shared/game/phases.ts`(`KEYWORD_MS`·`KEYWORD_READ_MS`·`ANSWER_REVEAL_MS`)·`shared/game/early.ts`(`EARLY_GRACE_MS`). 계약서는 `.planning/phases/23-keyword-day-one/23-UI-SPEC.md`(P23-1~).
+첫날에만 끼는 화면 셋이다. **① 키워드 화면**(`keyword` 단계 13초 = 읽기 3초 + 쓰기 10초: 가운데 카드 + 아래 입력줄), **② 모두의 답**(토론 시작 때 한 번 자동으로 열리는 역할 카드 시트의 "답과 의심" 탭(24페이즈부터 이름이 바뀜, 선택하면 시트 제목 "모두의 기록"), 시민 포함 판 내내 다시 볼 수 있다), **③ 정답 공개**(`answerReveal` 3초의 큰 글, 처형 없는 첫날은 "처형 없음" 1.4초 뒤 정답). 새 글 단추는 없고 입력줄의 [보내기]는 채팅과 같은 아이콘 단추다. 숫자의 원천은 코드다: `src/screens/Keyword.tsx`·`src/components/RoleCardSheet.tsx`·`src/components/ResultAnnounce.tsx`, 시간은 `shared/game/phases.ts`(`KEYWORD_MS`·`KEYWORD_READ_MS`·`ANSWER_REVEAL_MS`)·`shared/game/early.ts`(`EARLY_GRACE_MS`). 계약서는 `.planning/phases/23-keyword-day-one/23-UI-SPEC.md`(P23-1~).
 
 | 항목 | 값 |
 |---|---|
@@ -209,7 +209,7 @@
 | 입력줄 | 메타 줄 20("n초" · 거절 알림 · "n/20") + 입력 행 48(입력칸 + [보내기] 원 48), 높이 98(키보드 열림 84). 읽는 3초는 흐리고 잠겼다가 3초에 풀리며 입력칸이 빛난다. 제출 뒤 입력칸은 읽기 전용 |
 | 카드 영역 높이(닫힘, 띠 한 줄 `B` = 123, 독 아랫변 `D` = 175) | 360×560 279 · 360×640 359 · 390×664 383 · 390×844 563 · 402×874 593 · 430×932 651 — 모두 큰 카드(최대 201)가 들어간다 |
 | 컴팩트 카드 윗변(열림) | 360×560 64 · 360×640 144 · 390×664 168 · 390×844 348 · 402×874 378 · 430×932 436 — 머리 아랫변 62 와 겹침 없음 |
-| 모두의 답 시트 | 기존 시트 위치(화면 아래, 최대 `min(420, 80dvh)`). 토론 시작에 한 번 자동으로 열리고 닫을 때까지 열려 있다. 줄은 ①②③ 번호 + 좌석 점 + 답, 못 낸 사람은 "답 없음" 줄, 정답 공개 뒤에는 정답 줄이 붙는다. 일차별 구역이라 24 의 포스트잇이 줄을 더할 수 있다 |
+| 모두의 답 시트 | 기존 시트 위치(화면 아래, 최대 `min(420, 80dvh)`). 토론 시작에 한 번 자동으로 열리고 닫을 때까지 열려 있다. 줄은 ①②③ 번호 + 좌석 점 + 답, 못 낸 사람은 "답 없음" 줄, 정답 공개 뒤에는 정답 줄이 붙는다. 일차별 구역(`section[data-log-day]`, 최신 일차가 위·머리 줄 고정)이라 24 의 의심 줄(붙인 → 받은, `ul[data-suspect-list] > li[data-suspect-row]`)이 둘째 날 이후 구역에 더해진다. 시트 제목은 탭을 고르면 "모두의 기록" |
 | 정답 공개 | 카메라 모이는 자리 가운데 고정, 조명 `vote`, 장면 `dusk`, 아래 패널 채팅 160 · 입력줄 비활성(`data-chat-locked`). 큰 글 위 줄 "정답" + 키워드. 유언 깃펜은 이 단계에서 그리지 않는다 |
 | 조기 진행 | 키워드·찬반·밤에서 전원이 끝나면 마감이 1.5초로 줄고 띠 막대가 기존 전환으로 미끄러지며 색은 `calm` 고정(`[data-host-band][data-early]`). 번복(찬반)하면 막대가 다시 늘어난다. 새 단추·글자 없음 |
 | 결과 화면 | 첫날 안에 끝났거나 정답이 공개된 판은 결과 띠에 한 줄 `정답 · {키워드}` 가 보인다 |
@@ -224,7 +224,8 @@
 | `data-answer-state="locked\|open\|sent"` | 입력줄 루트 | 읽기 잠금 · 쓰기 · 제출 뒤 |
 | `data-answer-secs` · `data-answer-count` · `data-answer-notice` | 메타 줄 | 남은 초 · "n/20" · 거절 알림 |
 | `data-announce-label` | 정답 공개 큰 글 | 위 줄 "정답" |
-| `data-rolecard-tab="answers"` | 역할 카드 시트 | "첫날 답" 탭 |
+| `data-rolecard-tab="records"` | 역할 카드 시트 | "답과 의심" 탭(23 에서는 `answers`·"첫날 답") |
+| `data-log-day` · `data-suspect-list` · `data-suspect-row` · `data-suspect-from` · `data-suspect-to` | 기록 시트 일차 구역·의심 줄 | 일차·줄·붙인 좌석·받은 좌석(공개 값). `data-record*` 접두는 꺼진 장치 감시와 부딪혀 쓰지 않는다 |
 | `data-answer-list` · `data-answer-day` · `data-answer-row` · `data-answer-order` · `data-answer-seat` · `data-answer-none` · `data-answer-correct` | 모두의 답 목록 | 구역·줄·번호·좌석(공개 값)·"답 없음"·정답 줄 |
 | `data-early` | `[data-host-band]` | 마감 단축이 보인 단계 |
 | `data-host-line` | 결과 띠 | `정답 · {키워드}` 줄(`ended`) |

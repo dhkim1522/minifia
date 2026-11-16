@@ -178,17 +178,17 @@ function listProblems(rows, who) {
 }
 
 /**
- * KW8(P23-8) 모두의 답. pages = [{ who, autoOpened(토론 시작 뒤 시트가 저절로 열림), reopened(닫은 뒤 다시 열림), hasTab(탭 '첫날 답' 있음), rows: [{ order, seat, none }] }].
+ * KW8(P23-8) 모두의 답(24 부터 시트 제목 "모두의 기록", 탭 "답과 의심"). pages = [{ who, autoOpened(토론 시작 뒤 시트가 저절로 열림), reopened(닫은 뒤 다시 열림), hasTab(탭 '답과 의심' 있음), rows: [{ order, seat, none }] }].
  * 모두 자동으로 한 번 열리고 닫으면 안 다시 열리며 탭이 있고, 목록이 낸 순서(1..n)·'답 없음' 맨 끝이고, 페이지끼리 같다.
  */
 export function kw8AnswerList(pages) {
-  const label = "토론 시작 뒤 모두의 답이 자동으로 한 번 열리고 낸 순서·'답 없음' 맨 끝, 닫으면 다시 안 열린다, 탭 '첫날 답'이 있다";
+  const label = "토론 시작 뒤 모두의 답이 자동으로 한 번 열리고 낸 순서·'답 없음' 맨 끝, 닫으면 다시 안 열린다, 탭 '답과 의심'이 있다";
   if (!Array.isArray(pages) || pages.length === 0) return noMeasure("KW8", label, "페이지");
   const bad = [];
   for (const p of pages) {
     if (p.autoOpened !== true) bad.push(`${p.who} 시트가 저절로 안 열림`);
     if (p.reopened === true) bad.push(`${p.who} 닫은 뒤 다시 열림`);
-    if (p.hasTab !== true) bad.push(`${p.who} 탭 '첫날 답' 없음`);
+    if (p.hasTab !== true) bad.push(`${p.who} 탭 '답과 의심' 없음`);
     bad.push(...listProblems(p.rows, p.who));
   }
   const keys = pages.filter((p) => Array.isArray(p.rows) && p.rows.length > 0).map((p) => rowsKey(p.rows));
@@ -198,7 +198,7 @@ export function kw8AnswerList(pages) {
 
 /** KW9(P23-9) 재접속. m = { autoOpened(재접속 뒤 시트가 저절로 열림), rowsBefore, rowsAfter(탭으로 연 목록) } */
 export function kw9Reconnect(m) {
-  const label = "토론 중 재접속하면 시트가 자동으로 안 열리고 [내 역할] → 첫날 답 으로 같은 목록을 본다";
+  const label = "토론 중 재접속하면 시트가 자동으로 안 열리고 [내 역할] → 답과 의심 으로 같은 목록을 본다";
   if (!m || !Array.isArray(m.rowsBefore) || !Array.isArray(m.rowsAfter) || m.rowsBefore.length === 0 || m.rowsAfter.length === 0) return noMeasure("KW9", label, "재접속 전·뒤 목록");
   const bad = [];
   if (m.autoOpened === true) bad.push("재접속 뒤 시트가 저절로 열림");
@@ -383,7 +383,7 @@ const readAnswerSheet = (page) =>
     return {
       open: !!dlg,
       rows,
-      tabs: dlg ? dlg.querySelectorAll('[data-rolecard-tab="answers"]').length : 0,
+      tabs: dlg ? dlg.querySelectorAll('[data-rolecard-tab="records"]').length : 0,
       correct: correctEl ? (correctEl.textContent ?? "").trim() : null,
       correctLast: correctEl ? rowEls.every((r) => (r.compareDocumentPosition(correctEl) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0) : null,
     };
@@ -546,14 +546,14 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       for (const s of sheets) s.reopened = (await readAnswerSheet(s.page)).open;
       rec1(rec, `${id}/answers`, kw8AnswerList(sheets.map(({ page, ...rest }) => rest)));
 
-      // KW9: 참가자 재접속 — 저절로 안 열리고 [내 역할] → 첫날 답 으로 같은 목록. 그 연결 프레임에서 시민은 키워드를 받는다(KW13 대조군)
+      // KW9: 참가자 재접속 — 저절로 안 열리고 [내 역할] → 답과 의심 으로 같은 목록. 그 연결 프레임에서 시민은 키워드를 받는다(KW13 대조군)
       const rowsBefore = sheets[0].rows;
       await gp.reload({ waitUntil: "domcontentloaded" });
       await untilGame(gp, (x) => x.phase === "discussion", 10_000, "재접속 뒤 토론");
       await sleep(1800);
       const autoAfter = (await readAnswerSheet(gp)).open;
       await at("KW9 [내 역할]", () => gp.locator(".mf-rolecard-btn").click({ timeout: 4000 }));
-      await at("KW9 첫날 답 탭", () => gp.locator('dialog.mf-dialog--open [data-rolecard-tab="answers"]').click({ timeout: 4000 }));
+      await at("KW9 답과 의심 탭", () => gp.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
       await gp.waitForSelector("dialog.mf-dialog--open [data-answer-list]", { timeout: 4000 }).catch(() => {});
       const afterSheet = await readAnswerSheet(gp);
       rec1(rec, `${id}/reconnect`, kw9Reconnect({ autoOpened: autoAfter, rowsBefore, rowsAfter: afterSheet.rows ?? [] }));
@@ -577,7 +577,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const correct = [];
       for (const p of pages) {
         await at(`KW10 ${p.who} [내 역할]`, () => p.page.locator(".mf-rolecard-btn").click({ timeout: 4000 }));
-        await at(`KW10 ${p.who} 첫날 답 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="answers"]').click({ timeout: 4000 }));
+        await at(`KW10 ${p.who} 답과 의심 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
         await p.page.waitForSelector("dialog.mf-dialog--open [data-answer-list]", { timeout: 4000 }).catch(() => {});
         const sh = await readAnswerSheet(p.page);
         correct.push({ who: p.who, text: sh.correct, last: sh.correctLast });
