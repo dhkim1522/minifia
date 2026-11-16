@@ -320,3 +320,83 @@ describe("띠 아래 자리 (U-1·U-6·U-8)", () => {
     expect(css("v2")).toMatch(/\.mv-host\s*\{[^}]*--mf-host-top/);
   });
 });
+
+// ---- 23-11: 조기 진행 — 마감이 줄어든 단계는 막대·초·머리 링이 calm 으로 고정된다(P23-23, SC8) ----
+describe("조기 진행 타이머 표시 (23-11, P23-23·24)", () => {
+  const AGAIN = () => <RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />;
+  const bandOf = (c: HTMLElement) => c.querySelector<HTMLElement>("[data-host-band]")!;
+  const time = (c: HTMLElement) => c.querySelector<HTMLElement>("[data-host-time]")!;
+  const fill = (c: HTMLElement) => c.querySelector<HTMLElement>(".mv-host__bar i")!;
+  const swap = (v: RoomView) => {
+    connectionMock.current = { ...(connectionMock.current as RoomConnection), view: v };
+  };
+  // 단계 길이 30초: 마감을 줄여 다시 그린다
+  const verdict = (endsIn: number) => makeView({ phase: "verdict", endsIn, durationMs: 30_000 });
+
+  it("단축이 보이면 띠에 data-early 가 붙고 남은 1초에서도 초·막대가 calm 이다", () => {
+    const { container, rerender } = renderRoom(verdict(30_000));
+    expect(bandOf(container).hasAttribute("data-early")).toBe(false);
+    swap(verdict(1_000));
+    rerender(AGAIN());
+    expect(bandOf(container).hasAttribute("data-early")).toBe(true);
+    expect(time(container).getAttribute("data-tone")).toBe("calm");
+    expect(fill(container).getAttribute("data-tone")).toBe("calm");
+    expect(time(container).textContent).toBe("1초");
+  });
+
+  it("막대 비율은 남은 시간 ÷ 단계 길이 그대로라 0~1 안에 있다(단계 길이는 바뀌지 않는다)", () => {
+    const { container, rerender } = renderRoom(verdict(30_000));
+    swap(verdict(1_500));
+    rerender(AGAIN());
+    const m = /scaleX\(([0-9.]+)\)/.exec(fill(container).getAttribute("style") ?? "");
+    const ratio = Number(m?.[1]);
+    expect(ratio).toBeGreaterThan(0);
+    expect(ratio).toBeLessThanOrEqual(1);
+    expect(ratio).toBeCloseTo(1_500 / 30_000, 3);
+  });
+
+  it("번복으로 마감이 다시 늘어도 그 단계 동안 calm 이 유지된다", () => {
+    const { container, rerender } = renderRoom(verdict(30_000));
+    swap(verdict(1_500));
+    rerender(AGAIN());
+    swap(verdict(4_000));
+    rerender(AGAIN());
+    expect(bandOf(container).hasAttribute("data-early")).toBe(true);
+    expect(time(container).getAttribute("data-tone")).toBe("calm");
+  });
+
+  it("다음 단계에서는 풀리고, 줄지 않은 단계는 지금처럼 10초 놋쇠·5초 진홍이다", () => {
+    const { container, rerender } = renderRoom(verdict(30_000));
+    swap(verdict(1_000));
+    rerender(AGAIN());
+    swap(makeView({ phase: "night", endsIn: 9_000, durationMs: 30_000 }));
+    rerender(AGAIN());
+    expect(bandOf(container).hasAttribute("data-early")).toBe(false);
+    expect(time(container).getAttribute("data-tone")).toBe("warn");
+    // 줄지 않은 단계: 첫 프레임부터 4초
+    cleanup();
+    const fresh = renderRoom(makeView({ phase: "night", endsIn: 4_000, durationMs: 30_000 }));
+    expect(bandOf(fresh.container).hasAttribute("data-early")).toBe(false);
+    expect(time(fresh.container).getAttribute("data-tone")).toBe("urgent");
+  });
+
+  it("재접속·새로고침 첫 프레임에는 켜지지 않는다", () => {
+    const { container } = renderRoom(verdict(1_000));
+    expect(bandOf(container).hasAttribute("data-early")).toBe(false);
+    expect(time(container).getAttribute("data-tone")).toBe("urgent");
+  });
+
+  it("머리 링(PhaseHeader)은 calm 이면 마지막 5초에도 경고·진홍 클래스를 쓰지 않는다", async () => {
+    const { PhaseHeader } = await import("../../src/components/v2/PhaseHeader");
+    const ringOf = (calm: boolean | undefined) => {
+      const r = render(<PhaseHeader title="찬반" time={3} total={30} {...(calm === undefined ? {} : { calm })} />);
+      const cls = r.container.querySelector(".mv-ring")!.className;
+      r.unmount();
+      return cls;
+    };
+    expect(ringOf(undefined)).toContain("is-urgent");
+    expect(ringOf(false)).toContain("is-urgent");
+    expect(ringOf(true)).not.toContain("is-urgent");
+    expect(ringOf(true)).not.toContain("is-warn");
+  });
+});

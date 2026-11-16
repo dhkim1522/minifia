@@ -293,6 +293,28 @@ describe("timer.tick (C-2, LS-11)", () => {
     const out = direct(av("discussion", { endsAt: NOW + 3000 }), av("night", { endsAt: NOW + 30_000 }), clock());
     expect(out.cancel).toEqual(["phase:discussion:1"]);
   });
+
+  // 23-11(P23-24): 찬반에서 전원이 던져 서버가 마감을 줄이면 같은 키 한 대본으로 다시 선다 — 이전 대본의 옛 초 경계와 겹쳐 두 번 울리지 않는다
+  it("찬반 마감이 줄어든 두 번째 view 는 같은 키로 새 틱 대본을 세우고 옛 대본은 취소가 아니라 교체다", () => {
+    const first = direct(av("defense"), av("verdict", { endsAt: NOW + 30_000 }), clock());
+    expect(first.scripts[0]!.items.map((i) => i.at)).toEqual([25_000, 26_000, 27_000, 28_000, 29_000]);
+    const out = direct(av("verdict", { endsAt: NOW + 30_000 }), av("verdict", { endsAt: NOW + 1_500 }), clock());
+    expect(out.scripts.map((s) => s.key)).toEqual(["phase:verdict:1"]);
+    expect(out.scripts[0]!.items.map((i) => i.at)).toEqual([500]);
+    expect(out.cancel).toEqual([]);
+  });
+
+  it("번복으로 마감이 다시 늘면(원래 마감 이내) 그 키가 다시 새 대본으로 교체된다", () => {
+    const out = direct(av("verdict", { endsAt: NOW + 1_500 }), av("verdict", { endsAt: NOW + 3_000 }), clock());
+    expect(out.scripts.map((s) => s.key)).toEqual(["phase:verdict:1"]);
+    expect(out.scripts[0]!.items.map((i) => i.at)).toEqual([0, 1000, 2000]);
+    expect(out.cancel).toEqual([]);
+  });
+
+  it("마감이 같은 view 는 대본을 다시 세우지 않는다(같은 초 경계가 두 번 울리지 않는다)", () => {
+    const out = direct(av("verdict", { endsAt: NOW + 1_500 }), av("verdict", { endsAt: NOW + 1_500 }), clock());
+    expect(out.scripts).toEqual([]);
+  });
 });
 
 // ───────────────────────── 지목 ─────────────────────────
