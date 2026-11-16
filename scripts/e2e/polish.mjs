@@ -46,8 +46,8 @@ export const TOD_BY_PHASE = Object.freeze({
   night: "night",
   morning: "morning",
 });
-/** 시간대 글자를 그리지 않는 단계(대기실·역할 배정·역할 확인·결과, D 계약 2) */
-export const TOD_ABSENT_PHASES = Object.freeze(["lobby", "assigning", "roleReveal", "ended"]);
+/** 시간대 글자를 그리지 않는 단계(대기실·역할 배정·역할 확인·첫날 키워드 카드·결과, D 계약 2, 23-01 P23-2) */
+export const TOD_ABSENT_PHASES = Object.freeze(["lobby", "assigning", "roleReveal", "keyword", "ended"]);
 
 /** 허용 오차(px) — 반올림·서브픽셀 */
 const TOL = 1;

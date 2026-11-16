@@ -118,9 +118,10 @@ test("PHASE_NEXT: 표마다 가리키는 단계가 모두 표의 키다", () => 
   }
 });
 
-test("전이 표: 역할 확인 → 낮 시작 발표 → 토론, 처형 뒤·지목 0표는 밤, 아침 다음은 낮 시작 발표다", () => {
+test("전이 표: 역할 확인 → 키워드 → 낮 시작 발표 → 토론, 처형 뒤·지목 0표는 밤, 아침 다음은 낮 시작 발표다", () => {
   const g = PHASE_NEXT;
-  assert.deepEqual(g.roleReveal, ["dayAnnounce"]);
+  assert.deepEqual(g.roleReveal, ["keyword"]); // 첫날 키워드 카드(23-01, D-01)
+  assert.deepEqual(g.keyword, ["dayAnnounce"]);
   assert.deepEqual(g.dayAnnounce, ["discussion"]);
   assert.deepEqual(g.nomination.slice().sort(), ["defense", "night"]);
   assert.deepEqual(g.execution.slice().sort(), ["ended", "night"]);

@@ -634,13 +634,14 @@ export function offDeviceKeysOf(msg) {
 
 /**
  * 단계 그래프 사본: shared/game/phases.ts 의 nextPhaseOf·afterDayOf 와 tick 분기가 정하는 허용 전이(연속 중복은 접은 뒤). test/unit/e2eContract.test.ts 가 표를 앱과 대조한다.
- * roleReveal → dayAnnounce → discussion → verdict(찬반) → (과반 찬성) nomination(차례 지목) → (최다 한 명) defense(유언) → execution → night | ended,
+ * roleReveal → keyword(첫날 13초 키워드 카드, 23-01) → dayAnnounce → discussion → verdict(찬반) → (과반 찬성) nomination(차례 지목) → (최다 한 명) defense(유언) → execution → night | ended,
  * 찬반 부결·0표와 지목 0표·동률은 곧장 night, night → morning → dayAnnounce | ended. 판 종류가 없어(22-07) 표는 하나다. 22-09(D-10)로 순서가 바뀌었다.
  */
 export const PHASE_GRAPH = Object.freeze({
   lobby: ["assigning"],
   assigning: ["roleReveal"],
-  roleReveal: ["dayAnnounce"],
+  roleReveal: ["keyword"],
+  keyword: ["dayAnnounce"],
   dayAnnounce: ["discussion"],
   discussion: ["verdict"],
   verdict: ["nomination", "night"],
@@ -1137,6 +1138,7 @@ export const EXPECTED_SCENE = {
   lobby: "lobby",
   assigning: "lobby",
   roleReveal: "lobby",
+  keyword: "lobby", // 23-01: 첫날 키워드 카드도 역할 확인과 같은 PreGame 무대
   dayAnnounce: "day",
   discussion: "day",
   night: "night",
@@ -3120,8 +3122,8 @@ export const HOST_MARKERS = ["data-host-band", "data-host-line", "data-host-time
  * 그 셋이 shared/protocol.ts 의 MyInfo·DayView 에 선언된 키임을 고정한다. 14페이즈가 새 키를 더하면 여전히 VK1 이 잡는다.
  */
 export const VIEW_TOP_KEYS = new Set(["code", "phase", "round", "phaseEndsAt", "phaseDurationMs", "serverNow", "minPlayers", "maxPlayers", "players", "me", "day", "spectate", "result", "mapChoice", "map"]);
-export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "nightTally", "nightSure", "will", "note"]);
-export const VIEW_DAY_KEYS = new Set(["n", "roles", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdictCount", "turn", "runoff", "showdown", "chalk"]);
+export const VIEW_ME_KEYS = new Set(["seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote", "whisperUsed", "ballot", "nightTally", "nightSure", "keyword", "will", "note"]);
+export const VIEW_DAY_KEYS = new Set(["n", "roles", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdictCount", "turn", "runoff", "showdown", "keyword", "chalk"]);
 /** 밤 역할별 사회자 줄(src/game/hostLine.ts HOST_LINES 의 night.mafia·police·doctor 사본) — 다른 역할 화면에 있으면 누설이다. e2eContract 가 같음을 고정한다. */
 export const HOST_ACT_LINES = {
   mafia: "없앨 사람의 얼굴을 눌러 주세요",

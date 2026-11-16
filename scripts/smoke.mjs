@@ -94,13 +94,14 @@ const EXPECTED_ROLES = {
 };
 // 허용 전이 표(shared/game/phases.ts 의 nextPhaseOf + tick 분기와 같다). 판 종류가 없어 표는 하나다(22-08). 분기형이라 값이 배열이다(결정 0060-1).
 // test/unit/e2eContract.test.ts 가 이 표를 nextPhaseOf(단계) 와 대조한다 — 어긋나면 거짓 통과·거짓 실패가 난다.
-// 낮 순서(22-09, 결정 0089-18): dayAnnounce → discussion → verdict(찬반, 후보 없음) → (통과) nomination(순차 지목) → (최다 한 명) defense(유언 자리) → execution → night | ended,
+// 첫날(23-01): roleReveal → keyword(13초) → dayAnnounce. 낮 순서(22-09, 결정 0089-18): dayAnnounce → discussion → verdict(찬반, 후보 없음) → (통과) nomination(순차 지목) → (최다 한 명) defense(유언 자리) → execution → night | ended,
 // 찬반 부결·지목 0표·동률은 곧장 night, night → morning → dayAnnounce(다음 낮) | ended. 승패가 나지 않는 한 낮 루프라 끝이 없다.
 // 주의: 이 파일의 낮 흐름 걸음(토론 끝내기 → 지목 → 변론 → 찬반 단언)은 아직 옛 순서 그대로다 — 전이 표만 새 순서로 맞췄다(22-09). 걸음 개편은 이월(SUMMARY).
 export const PHASE_NEXT = {
   lobby: ["assigning"],
   assigning: ["roleReveal"],
-  roleReveal: ["dayAnnounce"],
+  roleReveal: ["keyword"], // 첫날 키워드 문제(23-01, D-01) — 역할 확인 다음은 13초 키워드 카드다(방 상태에 keyword 가 없는 옛 방만 곧장 dayAnnounce)
+  keyword: ["dayAnnounce"],
   dayAnnounce: ["discussion"], // 낮 시작 발표 다음이 바로 토론이다
   discussion: ["verdict"],
   verdict: ["nomination", "night"], // 찬반: 던진 표의 과반 찬성이면 지목, 부결(0표·동수 포함)이면 처형 없는 밤
@@ -111,7 +112,7 @@ export const PHASE_NEXT = {
   morning: ["dayAnnounce", "ended"],
   ended: [],
 };
-const DAY_PHASES = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
+const DAY_PHASES = ["keyword", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
 const ROLE_IDS = ["mafia", "police", "doctor", "citizen"];
 // 직업 이름 문자열이 나와도 되는 경로(배열 칸은 [] 로 줄여 비교한다). 채널 이름 mafia 가 든 ch·me.chat 은 채널 검사가 따로 본다.
 // 탈락자의 view.spectate.seats[].job 은 탈락 뒤 프레임에서만 따로 허용한다.
@@ -634,7 +635,7 @@ async function stageFull(url, args) {
   if (afterFirst.me.role !== before.role) fail("재접속 뒤 역할이 끊기 전과 다름");
 
   // (9) 낮 시작 발표 — 모든 클라이언트가 day.n 1 을 받는다
-  await waitUntil(() => clients.every((c) => firstState(c, "dayAnnounce")), 30_000, "모든 클라이언트가 dayAnnounce 를 받지 못함");
+  await waitUntil(() => clients.every((c) => firstState(c, "dayAnnounce")), 45_000, "모든 클라이언트가 dayAnnounce 를 받지 못함"); // 역할 확인 15초 + 키워드 13초(23-01)
   for (const c of clients) {
     const ann = firstState(c, "dayAnnounce").msg.view;
     if (ann.day?.n !== 1) fail(`${c.nickname} 의 첫 dayAnnounce 의 day.n 이 1 이 아님: ${ann.day?.n}`);
