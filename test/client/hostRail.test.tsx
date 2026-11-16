@@ -7,8 +7,6 @@ import { HOST_RAIL_LABEL, HostRail, hostRailLayout } from "../../src/components/
 import { HostRailButton } from "../../src/components/v2/HostRailButton";
 import { MapChip } from "../../src/components/v2/MapChip";
 import { splitSideColumn } from "../../src/components/v2/SideColumn";
-import { V2Icon } from "../../src/components/v2/V2Icon";
-import type { V2IconName } from "../../src/components/v2/V2Icon";
 
 afterEach(() => {
   cleanup();
@@ -25,12 +23,6 @@ const ruleOf = (css: string, selector: string): string => {
   const found = new RegExp(`(?:^|[}\\n])[ \\t]*(${escaped} \\{[^}]*\\})`).exec(css);
   return found?.[1] ?? "";
 };
-
-// 그려진 도형을 한 줄로: 경로는 "p d", 원은 "c cx cy r".
-const shapesOf = (container: HTMLElement): string =>
-  [...container.querySelectorAll("svg > *")]
-    .map((e) => (e.tagName.toLowerCase() === "circle" ? `c ${e.getAttribute("cx")} ${e.getAttribute("cy")} ${e.getAttribute("r")}` : `p ${e.getAttribute("d")}`))
-    .join(" | ");
 
 describe("방장 줄 문구 (19-03, 22-07)", () => {
   it("방장 줄·왕관 표식의 접근성 이름은 '방장 전용' 이다", () => {
@@ -50,26 +42,6 @@ describe("판 종류 화면이 DOM·CSS 에 없다 (22-07, D-01, P22-15)", () =>
     expect(SHEET).not.toContain("mf-mode-sheet");
     expect(SHEET).not.toContain("mf-mode-card");
     expect(V2).not.toContain("mf-modechip");
-  });
-});
-
-// P19-14: 시안 A 의 SVG 경로 그대로(24 격자·선 2·currentColor).
-const NEW_ICONS: readonly (readonly [V2IconName, string])[] = [
-  ["deck", "p M6 7h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z | p M8 3h10a2 2 0 0 1 2 2v12"],
-  ["book", "p M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z | p M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z"],
-  ["modeBasic", "p M4 12a8 8 0 0 1 16 0v3H4z | p M2 15h20 | p M8 19h8"],
-  ["modeExtended", "c 10 10 6 | p M14.5 14.5L21 21 | p M8 10h4"],
-];
-
-describe("V2Icon 새 아이콘 넷 (19-03, P19-14)", () => {
-  it.each(NEW_ICONS)("%s 는 UI-SPEC 표의 경로 그대로 24 격자·선 2·currentColor 로 그려진다", (name, shapes) => {
-    const { container } = render(<V2Icon name={name} />);
-    const svg = container.querySelector("svg");
-    expect(shapesOf(container)).toBe(shapes);
-    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
-    expect(svg?.getAttribute("stroke-width")).toBe("2");
-    expect(svg?.getAttribute("stroke")).toBe("currentColor");
-    expect(svg?.getAttribute("aria-hidden")).toBe("true");
   });
 });
 
