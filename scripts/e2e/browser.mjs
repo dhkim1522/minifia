@@ -1308,7 +1308,7 @@ export async function skipTo(page, tracker, phase) {
 export function offScannerScript(selectors, prefix) {
   return `(() => {
     const sels = ${JSON.stringify(selectors)};
-    const prefix = ${JSON.stringify(prefix)};
+    const prefixes = ${JSON.stringify(Array.isArray(prefix) ? prefix : prefix ? [prefix] : [])};
     const seen = {};
     const state = { seen, scans: 0, phases: [] };
     window.__mfOffScan = state;
@@ -1322,9 +1322,12 @@ export function offScannerScript(selectors, prefix) {
         const n = document.querySelectorAll(sel).length;
         if (n > 0 && !(sel in seen)) seen[sel] = { n, phase };
       }
-      for (const el of document.body.querySelectorAll("*")) {
-        for (const name of el.getAttributeNames()) {
-          if (name.startsWith(prefix) && !((prefix + "*") in seen)) seen[prefix + "*"] = { n: 1, phase, name };
+      if (prefixes.length > 0) {
+        for (const el of document.body.querySelectorAll("*")) {
+          for (const name of el.getAttributeNames()) {
+            const hit = prefixes.find((pre) => name.startsWith(pre));
+            if (hit !== undefined && !((hit + "*") in seen)) seen[hit + "*"] = { n: 1, phase, name };
+          }
         }
       }
     }, 100);
@@ -1349,6 +1352,21 @@ export async function skipOnce(page, tracker) {
   await tracker.waitFor((v) => v.phase !== before || v.phaseEndsAt !== beforeEnds, 3000, `${before} 다음 단계`);
   await closeSheet(page).catch(() => {});
   return tracker.last()?.phase;
+}
+
+/**
+ * 22페이즈 새 낮 순서(D-10)로 처형 단계까지 당긴다: 토론 → 찬반(voters 의 페이지가 [찬성]을 누름, 봇은 넘길 때 던진다) → 지목(봇이 고정 지목, 사람은 기권) → 유언 → 처형.
+ * 봇 찬반을 "모두 반대" 로 두었거나 후보가 갈리면 중간에 밤으로 가 SetupError 가 난다(호출한 흐름의 몫). voters 는 산 사람 손님 페이지 목록(방장도 넣을 수 있다).
+ */
+export async function skipDayToExecution(page, tracker, voters = []) {
+  await skipTo(page, tracker, "verdict");
+  for (const vp of voters) {
+    await vp.waitForSelector('[data-verdict="yes"]', { timeout: 6000 }).catch(() => {});
+    await chooseVerdict(vp, true).catch(() => {});
+  }
+  await skipTo(page, tracker, "nomination");
+  await skipTo(page, tracker, "defense");
+  await skipTo(page, tracker, "execution");
 }
 
 export async function openRoleCard(page) {
@@ -1419,7 +1437,7 @@ export async function tapAt(page, pt) {
  * { phase, ghostView, kbOpen, title, guide: { count, text }, header, stage, panel(사각형), chatChannel, hasInput, end: { present, pressed, on, total } | null,
  *   turn: { compact, no, seat, tone, block, pill, bar, pillScrollW, pillClientW, docScrollW, docClientW, minFontPx, line: { text } | null, hasLineEl } | null(09.1-08, 지목 차례 알약),
  *   dim: "on" | "off" | null(어둡게 막), 지목 단계의 stage.top = 알약·막대 아랫변 + 4,
- *   verdictRow: { hasPicker, hasCount, on, total } | null, verdictBtns, picks: [{ seat, rect, pressed, label }], tags: [{ seat, me, count, lead, sure, mine, done, ring, ghostSeat, roleChip, opacity }],
+ *   verdictRow: { hasPicker, hasCount } | null, verdictCounts: { yes, no } | null, willSheets, willReveals[], chatLockedCount, verdictBtns, picks: [{ seat, rect, pressed, label }], tags: [{ seat, me, count, lead, sure, mine, done, ring, ghostSeat, roleChip, opacity }],
  *   announce: { text, fontPx, lineCount, wordBreak } | null, counts: { ghostView, roleChips, ghostSeats, ghostTexts }, ring, testButton, nightPanel }
  */
 export async function readGame(page) {
@@ -1505,7 +1523,12 @@ export async function readGame(page) {
       hasChat: !!q("[data-chat-panel]"),
       hasInput: !!q("[data-chat-input]"),
       end: endBtn ? { pressed: endBtn.getAttribute("aria-pressed") === "true", ...(count(endBtn) ?? { on: 0, total: 0 }) } : null,
-      verdictRow: vrow ? { hasPicker: !!q(".mv-verdict", vrow), hasCount: !!q(".mv-count", vrow), ...(count(vrow) ?? { on: 0, total: 0 }) } : null,
+      // 22페이즈(D-11·P22-2): 찬반 숫자 줄은 두 덩이 [data-verdict-count=yes|no] 의 숫자뿐이다 — 'n / N' 모양이 아니다. 개인 표 표식은 없다
+      verdictRow: vrow ? { hasPicker: !!q(".mv-verdict", vrow), hasCount: !!q(".mv-count", vrow) } : null,
+      verdictCounts: qa("[data-verdict-count]").length === 2 ? Object.fromEntries(qa("[data-verdict-count]").map((el) => [el.getAttribute("data-verdict-count"), Number((q(".mv-count", el)?.textContent ?? "").trim())])) : null,
+      willSheets: qa("[data-will-sheet]").length,
+      willReveals: qa("[data-will-reveal]").map((el) => (el.textContent ?? "").trim()),
+      chatLockedCount: qa("[data-chat-locked]").length,
       verdictBtns: qa("[data-verdict]").map((b) => ({ v: b.getAttribute("data-verdict"), pressed: b.getAttribute("aria-pressed") === "true", disabled: b.disabled === true, rect: rect(b) })),
       picks: qa("[data-pick]").map((b) => ({ seat: Number(b.getAttribute("data-pick")), rect: rect(b), pressed: b.getAttribute("aria-pressed") === "true", label: b.getAttribute("aria-label") ?? "" })),
       tags: qa(".mf-world__tag").map((el) => {
@@ -1549,15 +1572,6 @@ export async function tapTurnPick(page, seat) {
   const btn = page.locator(`[data-pick="${seat}"]`);
   await btn.click({ timeout: 4000 });
   await page.waitForSelector(`[data-seat="${seat}"] .mv-head[data-mine]`, { timeout: 3000 });
-}
-
-/** 기록 칸에 시스템 줄(.mv-chat__sys)이 생기고 글자가 text 와 같을 때까지 기다린다(예: '{이름} · 기권'). 시간 안에 안 오면 던진다. */
-export async function waitSysLine(page, text, ms = 12_000) {
-  try {
-    await page.waitForFunction((t) => [...document.querySelectorAll("[data-chat-log] .mv-chat__sys")].some((el) => (el.textContent ?? "").trim() === t), text, { timeout: ms });
-  } catch {
-    throw new Error(`시스템 줄이 ${ms / 1000}초 안에 오지 않음`);
-  }
 }
 
 /** 찬반 버튼을 눌러 그 쪽이 aria-pressed 가 될 때까지 기다린다. */

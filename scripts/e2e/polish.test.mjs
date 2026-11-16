@@ -63,6 +63,7 @@ test("TOD_BY_PHASE 키 10개·TOD_ABSENT_PHASES 4개, 값은 네 시간대 안",
   assert.equal(TOD_BY_PHASE.night, "night");
   assert.equal(TOD_BY_PHASE.morning, "morning");
   assert.equal(TOD_BY_PHASE.nomination, "dusk");
+  assert.equal(TOD_BY_PHASE.verdict, "day", "찬반은 토론 장면(낮) 그대로 — 22-13 P22-3");
 });
 
 // ---- revealCardChecks ----
@@ -246,7 +247,7 @@ test("roleLineBoxChecks: 상자가 없거나 비면 측정값 없음으로 실�
 // ---- todChecks ----
 
 const WORD_OF = { day: "낮", dusk: "저녁", night: null, morning: null };
-const TITLE_OF = { dayAnnounce: "토론", discussion: "토론", nomination: "투표", runoff: "결선", showdown: "마지막 3인", defense: "최후 변론", verdict: "찬반", execution: "처형", night: "밤", morning: "아침" };
+const TITLE_OF = { dayAnnounce: "토론", discussion: "토론", nomination: "지목", runoff: "결선", showdown: "마지막 3인", defense: "유언", verdict: "찬반", execution: "처형", night: "밤", morning: "아침" };
 const todGood = (phase = "discussion") => {
   const tod = TOD_BY_PHASE[phase];
   return {

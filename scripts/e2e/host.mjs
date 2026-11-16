@@ -25,10 +25,11 @@ import {
   skipTo,
   sleep,
   startGame,
-  tapPick,
+  chooseVerdict,
+  tapTurnPick,
 } from "./browser.mjs";
 import { TOD_ABSENT_PHASES, TOD_BY_PHASE, readTodHead, todAbsentChecks, todChecks } from "./polish.mjs";
-import { TIMELESS_PHASES, hostBandChecks, hostChimeChecks, hostLeakChecks, hostOverlapChecks, toolLabelChecks, viewKeyChecks } from "./lib.mjs";
+import { TIMELESS_PHASES, willLeakChecks, hostBandChecks, hostChimeChecks, hostLeakChecks, hostOverlapChecks, toolLabelChecks, viewKeyChecks } from "./lib.mjs";
 
 const BAND_NICK = "띠검사방장";
 /** 8명 투표 화면 시험용 손님 일곱(모두 4자 — UI-SPEC "이름표 버튼 8개 … (4자 이름, 폰 6종)", basic-vote 와 같은 이름). 봇 이름은 첫 봇이 8자 고정이라 4자 이름 전제가 맞지 않는다(결정 0052-3 과 같은 이유) */
@@ -38,7 +39,7 @@ const MAX_STEPS = 90;
 /** 시간이 있는 단계의 최소 길이(ms) — src/game/hostLine.ts hostTimeOf 와 같은 값 */
 const HOST_TIME_MIN_MS = 3000;
 /** 띠 검사가 반드시 지나야 하는 단계(없으면 EB0 실패 — 공허 통과 금지). 배정은 3초 창이라 잡히면 더하고 못 잡아도 실패가 아니다 */
-const BAND_REQUIRED = ["lobby", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
+const BAND_REQUIRED = ["lobby", "roleReveal", "dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "night", "morning", "ended"];
 /** 이 높이(px) 미만의 폰은 방 틀 높이 575 미만의 짧은 폰이다(DEFAULT_SIZES 의 360x560 probe) — UI#14 알려진 한계 적용 대상 */
 const SHORT_PHONE_H = 575;
 /** 이름표·얼굴 칸이 눌려야 하는 단계(띠·이름표 겹침 검사) */
@@ -214,6 +215,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         rec(`${id}/assigning`, t.id, t.label, t.ok, t.detail);
       }
       let voted = false;
+      let yesCast = false;
       for (let steps = 0; ht.last().phase !== "ended" && steps < MAX_STEPS; steps++) {
         // 지금 단계를 먼저 읽고(낮 시작은 2초라 띠 감시가 맡는다) 한 칸 넘긴다 — 읽기가 길어져 단계가 지나가도 그 지금 단계를 건너뛰지 않는다
         const cur = ht.last().phase;
@@ -225,14 +227,27 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         if (!done.has(cur)) await measure(cur);
         if (done.has("morning")) break;
         if (ht.last().phase !== cur) continue;
+        if (cur === "verdict" && !yesCast) {
+          // 22페이즈 D-10: 찬반이 지목보다 앞이다 — 사람 손님들이 [찬성]을 눌러(0표면 곧장 밤이라 낮의 나머지 단계가 열리지 않는다) 지목으로 넘어가게 한다
+          yesCast = true;
+          const r = await attempt(async () => {
+            for (const g of host.guestPages) await chooseVerdict(g.page, true);
+          });
+          rec(`${id}/verdict`, "EB1", "손님들이 [찬성]을 눌러 지목 단계가 열린다", r.ok, r.detail);
+        }
         if (cur === "nomination" && !voted) {
-          // 사람 손님은 스스로 표를 던지지 않는다 — 첫째 손님 이외의 일곱이 첫째 손님을 눌러 변론·찬반·처형 단계가 열리게 한다(방장은 누르지 않아 빛남이 남는다)
+          // 순차 지목(D-12): 사람 손님은 스스로 표를 던지지 않는다 — 첫째 손님 이외의 일곱이 자기 차례에 첫째 손님을 눌러 유언·처형 단계가 열리게 한다(방장은 누르지 않아 자기 차례에 기권한다)
           const target = host.guestPages[0].seat;
           const r = await attempt(async () => {
-            for (const g of host.guestPages.slice(1)) await tapPick(g.page, target);
+            await Promise.all(
+              host.guestPages.slice(1).map(async (g) => {
+                await g.tracker.waitFor((v) => v.phase === "nomination" && v.day?.turn !== undefined && v.day.turn.order[v.day.turn.i] === g.seat && v.day.turn.doneAt === undefined, 120_000, "내 차례");
+                await tapTurnPick(g.page, target);
+              }),
+            );
           });
           voted = true;
-          rec(`${id}/nomination`, "EB2", "손님이 첫째 손님을 지목해 변론 단계가 열린다", r.ok, r.detail);
+          rec(`${id}/nomination`, "EB2", "손님이 자기 차례에 첫째 손님을 지목해 유언 단계가 열린다", r.ok, r.detail);
         }
         await skipOnce(hp, ht).catch((e) => {
           if (ht.last().phase === "ended") return;
@@ -241,7 +256,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       }
       // 한 칸 넘기고 읽기에는 짧은 단계(낮 시작 2초 등)는 띠 감시가 잡은 값으로 판정한다 — 같은 hostBandChecks, 시간 단계 여부는 서버 길이표(낮 시작 2초 < 3초)
       const watched = (await readBandWatch(hp)) ?? [];
-      const timedMs = { dayAnnounce: 2000, defense: 20000, verdict: 10000, execution: 5600 };
+      const timedMs = { dayAnnounce: 2000, defense: 10000, verdict: 10000, execution: 6600 };
       for (const phase of Object.keys(timedMs)) {
         if (done.has(phase)) continue;
         const hit = watched.find((s) => s.phase === phase);
@@ -251,7 +266,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         rec(`${id}/${phase}`, "HB", `띠 한 구절·한 줄·종 없음·시간 막대+초·옛 안내/링 없음·비는/숨는 단계(${phase}, 띠 감시, ${hit.text.length}자 문장)`, f.ok, f.detail);
       }
       const missingMap = BAND_REQUIRED.filter((p) => p !== "ended" && !done.has(p));
-      rec(`${id}/coverage`, "EB0", "띠를 읽은 단계가 대기실·역할 확인·낮 시작·토론·투표·변론·찬반·처형·밤·아침을 모두 덮는다", missingMap.length === 0, `못 읽은 단계: ${missingMap.join(", ")}`);
+      rec(`${id}/coverage`, "EB0", "띠를 읽은 단계가 대기실·역할 확인·낮 시작·토론·찬반·지목·유언·처형·밤·아침을 모두 덮는다", missingMap.length === 0, `못 읽은 단계: ${missingMap.join(", ")}`);
     } finally {
       await closeGame(asGame(host));
     }
@@ -341,7 +356,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       for (const phase of ["nomination", "night", "morning"]) {
         await skipTo(hp, ht, phase);
         await settleBand(hp, ht, phase).catch(() => {});
-        await readTools(hp, rec, `${id}/${phase}`, phase === "nomination" ? "투표" : phase === "night" ? "밤" : "아침");
+        await readTools(hp, rec, `${id}/${phase}`, phase === "nomination" ? "지목" : phase === "night" ? "밤" : "아침");
       }
       // 결과: 연출이 끝난 패널(18.1: 탭 없이 전체 대화 하나, 18.1-16: 시상식 없음)
       await driveToEnd(hp, ht);
@@ -378,7 +393,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
    * ghost 판이면 방장이 투표로 처형되어 탈락한 뒤부터 시점이 ghost 가 된다(ownRole 은 살았을 때 직업).
    * played 에는 걸은 판의 직업과 결과에 닿았는지를 남긴다(LKm 의 근거).
    */
-  async function walkLeak(ctx, flowId, role, ghostGame, items, viewKeys, { played = [] } = {}) {
+  async function walkLeak(ctx, flowId, role, ghostGame, items, viewKeys, { played = [], willReads = [] } = {}) {
     const rec = recorder(ctx);
     const host = await lobbyWith(ctx, flowId, { bots: 5, role, vote: ghostGame ? { exec: "yes", pick: "host" } : { exec: "yes", pick: "other" } });
     try {
@@ -418,6 +433,12 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
           throw e;
         });
         await capture(phase, phase, IDLE_PHASES.includes(phase) || (phase === "night" && nightRoleIdle));
+        if (phase === "defense" || phase === "execution") {
+          // 22페이즈 P22-11: 유언·처형 단계 view 의 day 키 이름과 유언 시트 DOM 수(처형자에게만 있어야 한다)
+          const v = ht.last();
+          const sheets = await hp.locator("[data-will-sheet]").count().catch(() => -1);
+          willReads.push({ role: ghostGame ? "ghost" : role, phase, keys: Object.keys(v.day ?? {}).sort(), sheets, condemned: v.day?.candidate !== undefined && v.day.candidate === v.me.seat });
+        }
         if (phase === "discussion" && !isGhostView(ht.last())) {
           // 내 역할 시트(목표 칩이 시트 안에도 있다) — 자기 역할의 목표만 있어야 한다
           const sheet = await attempt(async () => {
@@ -453,10 +474,11 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
     const items = [];
     const viewKeys = { top: new Set(), me: new Set(), day: new Set() };
     const played = [];
+    const willReads = [];
     for (const role of ["mafia", "police", "doctor", "citizen"]) {
-      await walkLeak(ctx, id, role, false, items, viewKeys, { played });
+      await walkLeak(ctx, id, role, false, items, viewKeys, { played, willReads });
     }
-    const reachedGhost = await walkLeak(ctx, id, "police", true, items, viewKeys, { played });
+    const reachedGhost = await walkLeak(ctx, id, "police", true, items, viewKeys, { played, willReads });
     const seats = new Set(items.map((i) => (i.role === "ghost" ? "ghost" : i.role)));
     const missingRoles = ["mafia", "police", "doctor", "citizen", "ghost"].filter((r) => !seats.has(r));
     rec(`${id}/coverage`, "LK1", "역할 다섯 시점(마피아·경찰·의사·시민·유령)을 모두 읽었다", missingRoles.length === 0 && reachedGhost, `못 읽은 시점: ${missingRoles.join(", ")}${reachedGhost ? "" : " (유령 판에서 탈락 뒤 밤에 닿지 못함)"}`);
@@ -471,6 +493,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       played.length !== 5 ? `걸은 판 ${played.length}개` : off.length > 0 ? off.map((p) => `${p.role} 판: 끝나지 않음`).join(" / ") : `판 ${played.length}개`,
     );
     for (const l of hostLeakChecks(items)) rec(`${id}/leak`, l.id, `${l.label} (읽기 ${items.length}곳)`, l.ok, l.detail);
+    for (const l of willLeakChecks(willReads)) rec(`${id}/leak`, l.id, `${l.label} (읽기 ${willReads.length}곳)`, l.ok, l.detail);
     const k = viewKeyChecks(viewKeys);
     rec(`${id}/frames`, k.id, `${k.label} (최상위 ${viewKeys.top.size}·me ${viewKeys.me.size}·day ${viewKeys.day.size}개)`, k.ok, k.detail);
     // 참고(판정 아님): 받은 me·day 키 이름 — 키 이름뿐, 값 없음

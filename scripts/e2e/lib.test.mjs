@@ -176,8 +176,8 @@ import {
   sheetFitChecks,
   claimBadgeChecks,
   announceClearChecks,
-  ballotCountChecks,
-  verdictTimelineChecks,
+  executionTimelineChecks,
+  willLeakChecks,
   parseRgb,
 } from "./lib.mjs";
 import { dropSockets } from "./browser.mjs";
@@ -638,7 +638,8 @@ test("EXPECTED_SCENE: 단계 열네 개(22-03 에서 tutorial, 22-06 에서 erra
   assert.deepEqual(Object.keys(EXPECTED_SCENE).sort(), [
     "assigning", "dayAnnounce", "defense", "discussion", "ended", "execution", "lobby", "morning", "night", "nomination", "roleReveal", "runoff", "showdown", "verdict",
   ]);
-  for (const p of ["nomination", "defense", "verdict", "execution", "runoff", "showdown"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
+  for (const p of ["nomination", "defense", "execution", "runoff", "showdown"]) assert.equal(EXPECTED_SCENE[p], "dusk", p);
+  assert.equal(EXPECTED_SCENE.verdict, "day", "찬반은 토론 장면 그대로(22-13 P22-3)");
   assert.equal(EXPECTED_SCENE.ended, "night");
   assert.equal(EXPECTED_SCENE.night, "night");
   assert.equal(EXPECTED_SCENE.morning, "morning");
@@ -1387,21 +1388,22 @@ test("LOBBY_SIZES: DEFAULT_SIZES 4개 + 390x844 + 402x874 여섯 개이고 LOBBY
   assert.deepEqual(DEFAULT_SIZES.map((x) => x.label), ["360x640", "390x664", "430x932", "360x560"]);
 });
 
-test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand(15-09 심부름 폰 6종, 21-15 에서 저녁 등불 기준으로 다시 씀 — 목격 기록·아침 흔적 흐름은 기능이 사라져 뺌)·cause-phones(21-15 원인 흐름 새 요소 겹침 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
+test("run.mjs: 흐름별 extraSizes 는 --sizes 를 주지 않았을 때만 더하고, FLOWS 의 lobby·world·chat-lobby·chat-keyboard·day·ghost·will-flow-sizes(22-13 유언 시트 폰 6종)·night-sizes(09-22 폰 크기 6종 기하)·result-reveal(11-07 결과 탭 패널 폰 6종)·map-select(11-13 맵 선택 폰 6종)·basic-vote(13-05 8명 투표 폰 6종)·politics-badge·politics-whisper(09.1.1-10 배지·귓속말 폰 6종)·politics-pin(09.1.1-11 핀 조명 폰 6종)·politics-verdict(09.1.1-13 판결 순간 폰 6종)·politics-runoff(09.1.1-14 동점 결선 폰 6종)·politics-showdown(09.1.1-16 마지막 3인 폰 6종)·avatar-emote(10-05 동작 판 폰 6종)·avatar-dress(10-07 꾸미기 폰 6종)·sound-unlock(12-12)·emcee-band(14-08 사회자 띠 폰 6종)·errand(15-09 심부름 폰 6종, 21-15 에서 저녁 등불 기준으로 다시 씀 — 목격 기록·아침 흔적 흐름은 기능이 사라져 뺌)·cause-phones(21-15 원인 흐름 새 요소 겹침 폰 6종)·polish-reveal(18.1-08 역할 확인 카드 폰 6종) 만 갖는다", () => {
   const run = readFileSync(new URL("./run.mjs", import.meta.url), "utf8");
   assert.match(run, /extraSizes/);
   assert.match(run, /!args\.sizesGiven/);
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const entries = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z(), ]+?(, extraSizes: LOBBY_EXTRA_SIZES)?(?:, skipByDefault: true)? \}/g)];
   const withExtra = entries.filter((m) => m[2]).map((m) => m[1]);
-  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "polish-reveal"]);
+  assert.deepEqual(withExtra, ["lobby", "world", "chat-lobby", "chat-keyboard", "day", "ghost", "will-flow-sizes", "night-sizes", "result-reveal", "map-select", "basic-vote", "politics-badge", "politics-whisper", "politics-pin", "politics-verdict", "politics-runoff", "politics-showdown", "avatar-emote", "avatar-dress", "sound-unlock", "emcee-band", "polish-reveal"]);
 });
 
-test("기본판(결정 0072)에서 꺼진 장치 흐름 7개는 skipByDefault 이고 politics-verdict 는 기본 실행에 남는다 (13-05)", () => {
+test("꺼진 장치 흐름 6개(배지·귓속말·결선 둘·결전 둘)는 skipByDefault 이고 politics-pin(22-13, 순차 지목이 기본 규칙)·politics-verdict 는 기본 실행에 남는다 (13-05 → 22-13)", () => {
   const flows = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
   const skipped = [...flows.matchAll(/\{ id: "([a-z0-9-]+)", run: [A-Za-z]+, (?:extraSizes: LOBBY_EXTRA_SIZES|size: GAME_SIZE), skipByDefault: true \}/g)].map((m) => m[1]);
-  for (const id of ["politics-badge", "politics-whisper", "politics-pin", "politics-runoff", "politics-runoff-tie", "politics-showdown", "politics-showdown-tie"]) assert.ok(skipped.includes(id), id);
+  for (const id of ["politics-badge", "politics-whisper", "politics-runoff", "politics-runoff-tie", "politics-showdown", "politics-showdown-tie"]) assert.ok(skipped.includes(id), id);
   assert.ok(!skipped.includes("politics-verdict"));
+  assert.ok(!skipped.includes("politics-pin"), "순차 지목은 기본 규칙(D-12)이라 politics-pin 은 기본 실행이다");
   const all = [{ id: "politics-badge", skipByDefault: true }, { id: "day" }];
   assert.deepEqual(selectFlows(all, null).map((f) => f.id), ["day"]);
   assert.deepEqual(selectFlows(all, ["politics-badge"]).map((f) => f.id), ["politics-badge"]);
@@ -2441,57 +2443,7 @@ test("claimBadgeChecks: 측정값이 없으면 통과시키지 않는다", () =>
   assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
 });
 
-// ---- 판결 순간 연출 (09.1.1-13) ----
-const VIEW_360x640 = { w: 360, h: 640 };
-/** 18.1-13: 처형의 찬반은 숫자 둘이다. 큰 글 아랫변 185, 숫자 줄 윗변 201, 패널 윗변 452 */
-const ballotGood = (over = {}) => ({
-  root: rect(16, 201, 328, 28),
-  groups: [
-    { side: "yes", rect: rect(100, 201, 70, 28), text: "찬성 4" },
-    { side: "no", rect: rect(210, 201, 70, 28), text: "반대 0" },
-  ],
-  pillCount: 0,
-  panelTop: 452,
-  announceBottom: 185,
-  viewport: VIEW_360x640,
-  ...over,
-});
-
-test("ballotCountChecks: 기대 모양(숫자 덩이 둘·알약 0)은 BF1~BF3 이 모두 통과하고 줄 모양은 { id, label, ok, detail }", () => {
-  const lines = ballotCountChecks(ballotGood());
-  assert.deepEqual(idsOk(lines), { BF1: true, BF2: true, BF3: true });
-  for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
-});
-
-test("ballotCountChecks BF1: 덩이가 둘이 아니거나 글자가 '찬성 N'·'반대 N' 이 아니거나 알약이 1개라도 있으면 실패한다", () => {
-  assert.equal(idsOk(ballotCountChecks(ballotGood({ pillCount: 1 }))).BF1, false);
-  assert.equal(idsOk(ballotCountChecks(ballotGood({ groups: [ballotGood().groups[0]] }))).BF1, false);
-  assert.equal(idsOk(ballotCountChecks(ballotGood({ groups: [{ side: "yes", rect: rect(100, 201, 70, 28), text: "찬성 4" }, { side: "no", rect: rect(210, 201, 70, 28), text: "서연 민준" }] }))).BF1, false);
-  const swapped = ballotGood({ groups: [{ side: "no", rect: rect(210, 201, 70, 28), text: "반대 0" }, { side: "yes", rect: rect(100, 201, 70, 28), text: "찬성 4" }] });
-  assert.equal(idsOk(ballotCountChecks(swapped)).BF1, false, "찬성이 먼저(왼쪽)여야 한다");
-});
-
-test("ballotCountChecks BF2: 큰 글 아래·패널 위·한 줄(두 덩이 세로 가운데 차 4 이하)", () => {
-  assert.equal(idsOk(ballotCountChecks(ballotGood({ announceBottom: 230 }))).BF2, false, "덩이가 큰 글과 겹친다");
-  assert.equal(idsOk(ballotCountChecks(ballotGood({ announceBottom: 201.4 }))).BF2, true, "0.5px 오차 허용");
-  assert.equal(idsOk(ballotCountChecks(ballotGood({ announceBottom: null }))).BF2, true, "큰 글이 없으면 그 검사는 건너뛴다");
-  assert.equal(idsOk(ballotCountChecks(ballotGood({ panelTop: 220 }))).BF2, false, "패널 윗변 아래로 내려간다");
-  const two = ballotGood({ groups: [{ side: "yes", rect: rect(100, 201, 70, 28), text: "찬성 4" }, { side: "no", rect: rect(100, 240, 70, 28), text: "반대 0" }] });
-  assert.equal(idsOk(ballotCountChecks(two)).BF2, false, "두 줄로 갈렸다");
-});
-
-test("ballotCountChecks BF3: 덩이가 화면 밖으로 나가면 실패한다(0.5px 오차 허용)", () => {
-  const out = ballotGood({ groups: [{ side: "yes", rect: rect(100, 201, 70, 28), text: "찬성 4" }, { side: "no", rect: rect(310, 201, 70, 28), text: "반대 0" }] });
-  assert.equal(idsOk(ballotCountChecks(out)).BF3, false);
-  const edge = ballotGood({ groups: [{ side: "yes", rect: rect(-0.4, 201, 70, 28), text: "찬성 4" }, { side: "no", rect: rect(210, 201, 70, 28), text: "반대 0" }] });
-  assert.equal(idsOk(ballotCountChecks(edge)).BF3, true);
-});
-
-test("ballotCountChecks: 측정값이 없으면 통과시키지 않는다", () => {
-  const lines = ballotCountChecks({ root: null, groups: null, pillCount: null, panelTop: null, announceBottom: null, viewport: null });
-  assert.equal(lines.length, 3);
-  assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
-});
+// ---- 판결 순간 연출 (09.1.1-13 → 22-13: 찬반 숫자 덩이 판정 BF1~BF3 은 지웠다) ----
 
 /** 큰 글 글자 사각형(띠 아래 142 부터), 띠 면 아랫변 124.6, 소리 단추 사각형(오른쪽 위 52x52) */
 const clearGood = (over = {}) => ({
@@ -2523,76 +2475,82 @@ test("announceClearChecks: 측정값이 없으면 통과시키지 않는다", ()
   assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
 });
 
-/** 시간표 기록(변할 때만): t 는 ms, 처형 진입 관찰 시각 1000 을 0 으로 본다. 처형 시나리오 */
+/** 처형 시간표 기록(변할 때만): t 는 ms, 처형 진입 관찰 시각 1000 을 0 으로 본다(22-12 P22-13 6.6초 시간표) */
 const tl = (over = {}) => [
-  { t: 900, phase: "verdict", stage: null, yes: false, no: false, seat: null, strength: 0, zoom: 1, dim: "off" },
-  { t: 1000, phase: "execution", stage: null, yes: false, no: false, seat: null, strength: 0, zoom: 1, dim: "verdict" },
-  { t: 1010, phase: "execution", stage: null, yes: false, no: false, seat: 4, strength: 0.1, zoom: 1, dim: "verdict" },
-  { t: 1200, phase: "execution", stage: null, yes: false, no: false, seat: 4, strength: 1, zoom: 1.04, dim: "verdict" },
-  { t: 1600, phase: "execution", stage: "yes", yes: true, no: false, seat: 4, strength: 1, zoom: 1.1, dim: "verdict" },
-  { t: 2000, phase: "execution", stage: "both", yes: true, no: true, seat: 4, strength: 1, zoom: 1.1, dim: "verdict" },
-  { t: 5600, phase: "execution", stage: null, yes: false, no: false, seat: 4, strength: 1, zoom: 1.1, dim: "off" },
-  { t: 5700, phase: "execution", stage: null, yes: false, no: false, seat: 4, strength: 1, zoom: 1.05, dim: "off" },
-  { t: 6000, phase: "execution", stage: null, yes: false, no: false, seat: null, strength: 0.6, zoom: 1, dim: "off" },
-  { t: 6420, phase: "execution", stage: null, yes: false, no: false, seat: null, strength: 0, zoom: 1, dim: "off" },
+  { t: 900, phase: "defense", card: false, announce: null, seat: 4, strength: 1, zoom: 1, dim: "off" },
+  { t: 1000, phase: "execution", card: true, announce: null, seat: 4, strength: 0.6, zoom: 1, dim: "verdict" },
+  { t: 1200, phase: "execution", card: true, announce: null, seat: 4, strength: 1, zoom: 1.04, dim: "verdict" },
+  { t: 1700, phase: "execution", card: true, announce: null, seat: 4, strength: 1, zoom: 1.1, dim: "verdict" },
+  { t: 4000, phase: "execution", card: false, announce: "방장 님 처형", seat: 4, strength: 1, zoom: 1.1, dim: "verdict" },
+  { t: 7000, phase: "execution", card: false, announce: "방장 님 처형", seat: null, strength: 0.5, zoom: 1.1, dim: "off" },
+  { t: 7300, phase: "execution", card: false, announce: "방장 님 처형", seat: null, strength: 0, zoom: 1.05, dim: "off" },
+  { t: 7600, phase: "night", card: false, announce: null, seat: null, strength: 0, zoom: 1, dim: "off" },
   ...(over.extra ?? []),
 ];
-const VT = { passed: true, candidate: 4, expectZoom: true };
+const VT = { candidate: 4, expectZoom: true };
 const vtIds = (lines) => Object.fromEntries(lines.map((l) => [l.id, l.ok]));
 
-test("verdictTimelineChecks: 처형 시나리오 기대 시간표(0.6/1.0/4.6초, 핀 5.0초, 줌 1.10)는 모두 통과한다", () => {
-  const lines = verdictTimelineChecks(tl(), VT);
-  assert.ok(lines.every((l) => l.ok), lines.filter((l) => !l.ok).map((l) => `${l.id} ${l.detail}`).join(" / "));
-  for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
+test("executionTimelineChecks: 기대 시간표(카드 0~3.0초, 큰 글 3.0초, 핀 6.0초, 줌 1.10, 6.6초 끝)는 VT1~VT6 모두 통과한다", () => {
+  const lines = executionTimelineChecks(tl(), VT);
   assert.deepEqual(lines.map((l) => l.id), ["VT1", "VT2", "VT3", "VT4", "VT5", "VT6"]);
+  assert.deepEqual(vtIds(lines), { VT1: true, VT2: true, VT3: true, VT4: true, VT5: true, VT6: true });
+  for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
 });
 
-test("verdictTimelineChecks VT1: 찬성 묶음이 0.3초 안에 이미 있으면 실패, 1.0초 넘어 나타나도 실패", () => {
-  const early = tl().map((e) => (e.t === 1600 ? { ...e, t: 1200 } : e)).filter((e) => !(e.t === 1200 && e.zoom === 1.04));
-  assert.equal(vtIds(verdictTimelineChecks(early, VT)).VT1, false);
-  const late = tl().map((e) => (e.t === 1600 ? { ...e, t: 2200 } : e)).sort((a, b) => a.t - b.t);
-  assert.equal(vtIds(verdictTimelineChecks(late, VT)).VT1, false);
+test("executionTimelineChecks VT1: 유언 카드가 늦게 뜨거나(0.5초 넘어) 3.0초(±0.4)가 아닌 때 사라지면 실패, 카드가 없으면 실패", () => {
+  const late = tl().map((e) => (e.t <= 1700 ? { ...e, card: false } : e.t === 4000 ? { ...e, card: true } : e));
+  assert.equal(vtIds(executionTimelineChecks(late, VT)).VT1, false, "카드가 3초에야 처음 보임");
+  const early = tl().map((e) => (e.t === 4000 ? { ...e, card: true } : e));
+  assert.equal(vtIds(executionTimelineChecks(early, VT)).VT1, false, "사라지지 않음");
+  const never = tl().map((e) => ({ ...e, card: false }));
+  assert.equal(vtIds(executionTimelineChecks(never, VT)).VT1, false);
 });
 
-test("verdictTimelineChecks VT2: 반대 묶음은 찬성 묶음보다 0.2~0.6초 뒤에 나타나고 그 순간 찬성은 이미 있다", () => {
-  const same = tl().map((e) => (e.t === 2000 ? { ...e, t: 1620 } : e));
-  assert.equal(vtIds(verdictTimelineChecks(same, VT)).VT2, false);
-  const together = tl().map((e) => (e.t === 1600 ? { ...e, stage: "both", no: true } : e));
-  assert.equal(vtIds(verdictTimelineChecks(together, VT)).VT2, false);
+test("executionTimelineChecks VT2: 큰 글이 2.6~3.4초에 나타나야 한다 — 2.0초에 이미 있으면 실패, 5초에 나타나도 실패", () => {
+  const early = tl({ extra: [{ t: 3000, phase: "execution", card: true, announce: "일찍", seat: 4, strength: 1, zoom: 1.1, dim: "verdict" }] });
+  assert.equal(vtIds(executionTimelineChecks(early, VT)).VT2, false);
+  const late = tl().map((e) => (e.t === 4000 ? { ...e, announce: null } : e.t === 7000 ? { ...e, announce: "방장 님 처형" } : e));
+  assert.equal(vtIds(executionTimelineChecks(late, VT)).VT2, false);
 });
 
-test("verdictTimelineChecks VT3: 묶음이 4.6초(±0.4)에 사라진다 — 3.5초에 사라지거나 한참 남아도 실패", () => {
-  const early = tl().map((e) => (e.t === 5600 ? { ...e, t: 4500 } : e));
-  assert.equal(vtIds(verdictTimelineChecks(early, VT)).VT3, false);
-  const never = tl().map((e) => (e.t >= 5600 ? { ...e, stage: "both", yes: true, no: true } : e));
-  assert.equal(vtIds(verdictTimelineChecks(never, VT)).VT3, false);
-});
-
-test("verdictTimelineChecks VT4: 핀이 변론자에게 켜지고(세기 0.5 이상) 처형은 5.0초·부결은 4.0초(±0.4)에 꺼지기 시작한다", () => {
-  assert.equal(vtIds(verdictTimelineChecks(tl(), VT)).VT4, true);
-  assert.equal(vtIds(verdictTimelineChecks(tl(), { ...VT, passed: false })).VT4, false, "부결이면 4.0초에 꺼져야 한다");
-  const other = tl().map((e) => (e.seat === 4 ? { ...e, seat: 2 } : e));
-  assert.equal(vtIds(verdictTimelineChecks(other, VT)).VT4, false);
+test("executionTimelineChecks VT3: 핀이 처형자에게 켜지고 6.0초(±0.4)에 꺼지기 시작한다 — 다른 좌석·일찍 꺼짐·안 켜짐은 실패", () => {
+  assert.equal(vtIds(executionTimelineChecks(tl(), VT)).VT3, true);
+  const other = tl().map((e) => (e.seat === 4 ? { ...e, seat: 5 } : e));
+  assert.equal(vtIds(executionTimelineChecks(other, VT)).VT3, false);
+  const earlyOff = tl().map((e) => (e.t === 4000 ? { ...e, seat: null, strength: 0 } : e));
+  assert.equal(vtIds(executionTimelineChecks(earlyOff, VT)).VT3, false);
   const noPin = tl().map((e) => ({ ...e, seat: null, strength: 0 }));
-  assert.equal(vtIds(verdictTimelineChecks(noPin, VT)).VT4, false);
+  assert.equal(vtIds(executionTimelineChecks(noPin, VT)).VT3, false);
 });
 
-test("verdictTimelineChecks VT5: 0.7초 뒤 줌 1.10±0.01 (높이 360 미만이면 모든 순간 1)", () => {
-  assert.equal(vtIds(verdictTimelineChecks(tl(), VT)).VT5, true);
+test("executionTimelineChecks VT4: 어둡게 막이 켜졌다가 6.0초 근처에 걷힌다", () => {
+  assert.equal(vtIds(executionTimelineChecks(tl(), VT)).VT4, true);
+  const never = tl().map((e) => ({ ...e, dim: "off" }));
+  assert.equal(vtIds(executionTimelineChecks(never, VT)).VT4, false);
+  const early = tl().map((e) => (e.t === 4000 ? { ...e, dim: "off" } : e));
+  assert.equal(vtIds(executionTimelineChecks(early, VT)).VT4, false);
+});
+
+test("executionTimelineChecks VT5: 0.7초 뒤 줌 1.10±0.01 이고 6.3초에 돌아오는 중 (높이 360 미만이면 모든 순간 1)", () => {
+  assert.equal(vtIds(executionTimelineChecks(tl(), VT)).VT5, true);
   const never = tl().map((e) => ({ ...e, zoom: 1 }));
-  assert.equal(vtIds(verdictTimelineChecks(never, VT)).VT5, false);
-  assert.equal(vtIds(verdictTimelineChecks(never, { ...VT, expectZoom: false })).VT5, true);
-  assert.equal(vtIds(verdictTimelineChecks(tl(), { ...VT, expectZoom: false })).VT5, false, "작은 스테이지에서 줌이 켜지면 실패");
+  assert.equal(vtIds(executionTimelineChecks(never, VT)).VT5, false);
+  assert.equal(vtIds(executionTimelineChecks(never, { ...VT, expectZoom: false })).VT5, true);
+  assert.equal(vtIds(executionTimelineChecks(tl(), { ...VT, expectZoom: false })).VT5, false, "작은 스테이지에서 줌이 켜지면 실패");
+  const stuck = tl().map((e) => (e.t >= 7000 ? { ...e, zoom: 1.1 } : e));
+  assert.equal(vtIds(executionTimelineChecks(stuck, VT)).VT5, false, "6.3초에 줌이 아직 1.10");
 });
 
-test("verdictTimelineChecks VT6: 5.45초에 줌이 1 로 돌아와 있다(처형 단계가 끝나기 전)", () => {
-  assert.equal(vtIds(verdictTimelineChecks(tl(), VT)).VT6, true);
-  const stuck = tl().map((e) => (e.t >= 6000 ? { ...e, zoom: 1.1 } : e));
-  assert.equal(vtIds(verdictTimelineChecks(stuck, VT)).VT6, false);
+test("executionTimelineChecks VT6: 처형 단계가 6.0~7.4초 안에 끝난다 — 3초에 끝나거나 안 끝나면 실패", () => {
+  assert.equal(vtIds(executionTimelineChecks(tl(), VT)).VT6, true);
+  const short = tl().map((e) => (e.t === 4000 ? { ...e, phase: "night" } : e));
+  assert.equal(vtIds(executionTimelineChecks(short, VT)).VT6, false);
+  const never = tl().filter((e) => e.phase !== "night");
+  assert.equal(vtIds(executionTimelineChecks(never, VT)).VT6, false);
 });
 
-test("verdictTimelineChecks: 처형 단계 기록이 없으면 모든 줄이 측정값 없음으로 실패한다", () => {
-  const lines = verdictTimelineChecks([{ t: 1, phase: "verdict", stage: null, yes: false, no: false, seat: null, strength: 0, zoom: 1, dim: "off" }], VT);
+test("executionTimelineChecks: 처형 단계 기록이 없으면 모든 줄이 측정값 없음으로 실패한다", () => {
+  const lines = executionTimelineChecks([{ t: 1, phase: "verdict", card: false, announce: null, seat: null, strength: 0, zoom: 1, dim: "off" }], VT);
   assert.equal(lines.length, 6);
   assert.ok(lines.every((l) => l.ok === false && /측정값 없음/.test(l.detail)));
 });
@@ -3330,75 +3288,90 @@ test("SOUND_SCRIPT_STEPS: 12-09 가 밤(night.fall·bed.night)과 아침(morning
   assert.ok(morning && morning.ids.includes("bed.dawn"));
 });
 
-// ---- 12-10: 판결 타이밍(V1~V5)·동작 소리 누설(E1~E3) 순수 판정 ----
+// ---- 12-10 → 22-13: 판결 타이밍(V1~V4, 처형 6.6초 시간표)·동작 소리 누설(E1~E3) 순수 판정 ----
 
 const HEART = [0, 800, 1500, 2050, 2400];
 const entry = (id, at, gain = 1) => ({ id, at, gain });
-/** 첫 심장 박동 시각 base 기준의 판결 로그. 통과면 gavel+rise, 부결이면 reject */
-const verdictLog = ({ passed = true, base = 100000, gavelAt = 2600, riseAt = gavelAt, hearts = HEART, extra = [] } = {}) => [
+/** 첫 심장 박동 시각 base 기준의 처형 단계 로그(통과): 심장 5 + 3.0초 gavel·rise. 찬반 소리(ballot.*)는 지웠다(D-14) */
+const verdictLog = ({ base = 100000, gavelAt = 3000, riseAt = gavelAt, hearts = HEART, extra = [] } = {}) => [
   entry("ui.tap", base - 500),
   ...hearts.map((h) => entry("verdict.heart", base + h)),
   entry("pin.on", base),
-  entry("ballot.yes", base + 600),
-  entry("ballot.no", base + 1000),
-  ...(passed ? [entry("execution.gavel", base + gavelAt), entry("execution.rise", base + riseAt)] : [entry("verdict.reject", base + gavelAt)]),
+  entry("execution.gavel", base + gavelAt),
+  entry("execution.rise", base + riseAt),
   ...extra,
 ].sort((a, b) => a.at - b.at);
-const vt = (pass, reject) => soundVerdictTimingChecks({ pass, reject });
+/** 처형 없는 판(찬반 부결 → 밤)의 로그: 판결 계열 소리가 없다 */
+const noExecLog = (extra = []) => [entry("ui.tap", 50), entry("ui.host", 900), entry("bed.night", 1500), ...extra].sort((a, b) => a.at - b.at);
+const vt = (pass, none) => soundVerdictTimingChecks({ pass, none });
 const vFails = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
 
-test("soundVerdictTimingChecks: 정상 통과·부결 로그는 V1~V5 모두 통과", () => {
-  const lines = vt(verdictLog({ passed: true }), verdictLog({ passed: false, base: 900000 }));
-  assert.deepEqual(lines.map((l) => l.id), ["V1", "V2", "V3", "V4", "V5"]);
+test("soundVerdictTimingChecks: 정상 통과 로그와 처형 없는 판 로그는 V1~V4 모두 통과", () => {
+  const lines = vt(verdictLog(), noExecLog());
+  assert.deepEqual(lines.map((l) => l.id), ["V1", "V2", "V3", "V4"]);
   assert.deepEqual(vFails(lines), []);
 });
 
-test("V1: verdict.heart 가 5개가 아니면 실패 (4·6)", () => {
-  assert.ok(vFails(vt(verdictLog({ hearts: HEART.slice(1) }), verdictLog({ passed: false }))).includes("V1"));
-  assert.ok(vFails(vt(verdictLog({ hearts: [...HEART, 2500] }), verdictLog({ passed: false }))).includes("V1"));
-  assert.ok(vFails(vt(verdictLog(), verdictLog({ passed: false, hearts: HEART.slice(0, 4) }))).includes("V1"));
+test("V1: verdict.heart 가 5개가 아니면 실패 (4·6), ballot.*·verdict.reject 가 있으면 실패", () => {
+  assert.ok(vFails(vt(verdictLog({ hearts: HEART.slice(1) }), noExecLog())).includes("V1"));
+  assert.ok(vFails(vt(verdictLog({ hearts: [...HEART, 2500] }), noExecLog())).includes("V1"));
+  assert.ok(vFails(vt(verdictLog({ extra: [entry("ballot.yes", 100600)] }), noExecLog())).includes("V1"), "찬반 소리는 지웠다(D-14)");
+  assert.ok(vFails(vt(verdictLog({ extra: [entry("verdict.reject", 100000 + 3000)] }), noExecLog())).includes("V1"));
 });
 
-test("V2: gavel 은 첫 심장 박동 +2600 ± 250 — 경계 2350·2850 통과, 2349·2851 실패", () => {
-  for (const at of [2350, 2850]) assert.deepEqual(vFails(vt(verdictLog({ gavelAt: at, riseAt: at }), verdictLog({ passed: false }))), [], `at ${at}`);
-  assert.ok(vFails(vt(verdictLog({ gavelAt: 2349, riseAt: 2349 }), verdictLog({ passed: false }))).includes("V2"));
-  for (const at of [2349, 2851]) assert.ok(vFails(vt(verdictLog({ gavelAt: at, riseAt: at }), verdictLog({ passed: false }))).includes("V2"), `at ${at}`);
+test("V2: gavel 은 첫 심장 박동 +3000 ± 250 — 경계 2750·3250 통과, 2749·3251 실패", () => {
+  for (const at of [2750, 3250]) assert.deepEqual(vFails(vt(verdictLog({ gavelAt: at, riseAt: at }), noExecLog())), [], `at ${at}`);
+  for (const at of [2749, 3251]) assert.ok(vFails(vt(verdictLog({ gavelAt: at, riseAt: at }), noExecLog())).includes("V2"), `at ${at}`);
+  assert.ok(vFails(vt(verdictLog({ gavelAt: 2600, riseAt: 2600 }), noExecLog())).includes("V2"), "옛 2600 시각은 이제 실패");
 });
 
 test("V3: rise 는 gavel 과 ±100 — 100 통과, 101 실패, 없으면 실패", () => {
-  assert.deepEqual(vFails(vt(verdictLog({ riseAt: 2700 }), verdictLog({ passed: false }))), []);
-  assert.deepEqual(vFails(vt(verdictLog({ riseAt: 2701 }), verdictLog({ passed: false }))), ["V3"]);
+  assert.deepEqual(vFails(vt(verdictLog({ riseAt: 3100 }), noExecLog())), []);
+  assert.deepEqual(vFails(vt(verdictLog({ riseAt: 3101 }), noExecLog())), ["V3"]);
   const noRise = verdictLog().filter((e) => e.id !== "execution.rise");
-  assert.ok(vFails(vt(noRise, verdictLog({ passed: false }))).includes("V3"));
+  assert.ok(vFails(vt(noRise, noExecLog())).includes("V3"));
 });
 
-test("V4: 부결 판은 gavel·rise 가 없고 verdict.reject 가 +2600 ± 250 이다", () => {
-  const withGavel = verdictLog({ passed: false, extra: [entry("execution.gavel", 100000 + 2600)] });
-  assert.ok(vFails(vt(verdictLog(), withGavel)).includes("V4"));
-  assert.ok(vFails(vt(verdictLog(), verdictLog({ passed: false, gavelAt: 2900 }))).includes("V4"));
-  assert.ok(vFails(vt(verdictLog(), verdictLog({ passed: false }).filter((e) => e.id !== "verdict.reject"))).includes("V4"));
-});
-
-test("V5: 두 판의 2600ms 앞(+2350 안) 판결 id 열이 같아야 한다 — 부결 판에 앞머리가 하나 빠지면 실패, 다른 소리(ui.tap)는 비교하지 않는다", () => {
-  const rejectNoPin = verdictLog({ passed: false, base: 900000 }).filter((e) => e.id !== "pin.on");
-  assert.deepEqual(vFails(vt(verdictLog(), rejectNoPin)), ["V5"]);
-  const rejectTap = verdictLog({ passed: false, base: 900000, extra: [entry("ui.tap", 900000 + 300)] });
-  assert.deepEqual(vFails(vt(verdictLog(), rejectTap)), []);
-});
-
-test("V5: 같은 진입 틱의 pin.on 이 첫 심장 박동보다 1~수 ms 앞서도 뒤에 있어도 같은 앞머리로 센다 — 한 판에만 없으면 여전히 실패", () => {
-  const withPinAt = (base, offset, passed) => verdictLog({ passed, base }).map((e) => (e.id === "pin.on" ? { ...e, at: base + offset } : e)).sort((a, b) => a.at - b.at);
-  assert.deepEqual(vFails(vt(withPinAt(100000, -3, true), withPinAt(900000, 0, false))), []);
-  assert.deepEqual(vFails(vt(withPinAt(100000, -3, true), withPinAt(900000, 2, false))), []);
-  assert.deepEqual(vFails(vt(withPinAt(100000, 0, true), withPinAt(900000, -99, false))), []);
-  // 100ms 보다 앞선 pin.on 은 앞머리가 아니다 → 한쪽에만 있는 것으로 보고 실패
-  assert.deepEqual(vFails(vt(withPinAt(100000, 0, true), withPinAt(900000, -101, false))), ["V5"]);
+test("V4: 처형 없는 판에는 verdict.*·ballot.*·execution.* 가 하나라도 있으면 실패, 다른 소리(ui.tap·ui.host·bed.*)는 본다 않는다", () => {
+  for (const id of ["verdict.heart", "verdict.reject", "ballot.yes", "ballot.no", "execution.gavel", "execution.rise"]) {
+    assert.deepEqual(vFails(vt(verdictLog(), noExecLog([entry(id, 1200)]))), ["V4"], id);
+  }
+  assert.deepEqual(vFails(vt(verdictLog(), noExecLog([entry("ui.tap", 1200), entry("pin.on", 1300)]))), []);
 });
 
 test("soundVerdictTimingChecks: 로그가 없거나 심장 박동이 없으면 측정값 없음으로 실패", () => {
   assert.ok(vt(null, null).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
-  assert.ok(vt(verdictLog(), null).some((l) => (l.id === "V4" || l.id === "V5") && !l.ok && /측정값 없음/.test(l.detail)));
-  assert.ok(vt([], []).every((l) => !l.ok));
+  assert.ok(vt(verdictLog(), null).some((l) => l.id === "V4" && !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(vt([], []).filter((l) => l.id !== "V4").every((l) => !l.ok));
+});
+
+const wr = (role, phase, over = {}) => ({ role, phase, keys: phase === "defense" ? ["candidate", "n"] : ["candidate", "execution", "n"], sheets: 0, condemned: false, ...over });
+const wlOk = () => [
+  ...["mafia", "police", "doctor", "citizen"].flatMap((r) => [wr(r, "defense"), wr(r, "execution")]),
+  wr("ghost", "defense", { sheets: 1, condemned: true }),
+  wr("ghost", "execution", { condemned: true }),
+];
+
+test("willLeakChecks: 키 집합이 같고 시트가 처형자에게만 있으면 LK-W1·LK-W2 통과", () => {
+  const lines = willLeakChecks(wlOk());
+  assert.deepEqual(lines.map((l) => [l.id, l.ok]), [["LK-W1", true], ["LK-W2", true]]);
+});
+
+test("LK-W1: 한 시점의 day 키가 다르면 실패한다(역할이 키 모양을 바꿈)", () => {
+  const bad = wlOk().map((r) => (r.role === "doctor" && r.phase === "defense" ? { ...r, keys: ["candidate", "n", "extra"] } : r));
+  assert.equal(willLeakChecks(bad)[0].ok, false);
+  assert.match(willLeakChecks(bad)[0].detail, /doctor/);
+});
+
+test("LK-W2: 처형자가 아닌 시점에 시트가 있거나 처형자에게 시트가 없거나 처형 단계에 시트가 있으면 실패한다", () => {
+  assert.equal(willLeakChecks(wlOk().map((r) => (r.role === "mafia" && r.phase === "defense" ? { ...r, sheets: 1 } : r)))[1].ok, false);
+  assert.equal(willLeakChecks(wlOk().map((r) => (r.role === "ghost" && r.phase === "defense" ? { ...r, sheets: 0 } : r)))[1].ok, false);
+  assert.equal(willLeakChecks(wlOk().map((r) => (r.role === "ghost" && r.phase === "execution" ? { ...r, sheets: 1 } : r)))[1].ok, false);
+});
+
+test("willLeakChecks: 유언·처형 읽기가 없으면 측정값 없음으로 실패한다", () => {
+  assert.ok(willLeakChecks([]).every((l) => !l.ok && /측정값 없음/.test(l.detail)));
+  assert.ok(willLeakChecks(wlOk().filter((r) => r.phase === "defense")).every((l) => !l.ok));
 });
 
 const emoteLog = (...rest) => rest;
@@ -3518,33 +3491,47 @@ test("NOMINATION_MS 사본은 15000 이다(shared/game/phases.ts 와 같은 값)
   assert.equal(NOMINATION_MS, 15000);
 });
 
-test("OFF_DEVICE_SELECTORS: UI-SPEC 표의 선택자 10개가 동결되어 있다", () => {
-  assert.equal(OFF_DEVICE_SELECTORS.length, 10);
+test("OFF_DEVICE_SELECTORS: 꺼진 장치(13)와 22페이즈 지운 화면(UI-SPEC 표)의 선택자가 동결되어 있다 — 순차 지목 선택자는 뺐다(D-12)", () => {
   assert.ok(Object.isFrozen(OFF_DEVICE_SELECTORS));
-  for (const sel of ['[data-float="claim"]', '[data-float="whisper"]', "[data-claim-sheet]", "[data-claim-chip]", "[data-claim]", "[data-badge-live]", "[data-line-sheet]", "[data-turn-block]", "[data-speak-sheet]", "[data-showdown-step]"]) {
+  for (const sel of [
+    '[data-float="claim"]', '[data-float="whisper"]', "[data-claim-sheet]", "[data-claim-chip]", "[data-claim]", "[data-badge-live]", "[data-line-sheet]", "[data-speak-sheet]", "[data-showdown-step]",
+    '[data-host-rail-btn="mode"]', "[data-mode-sheet]", "[data-mode-card]", "[data-mode-chip]", "[data-tutorial-toggle]", '[data-host-rail-btn="tutorial"]', "[data-tutorial]",
+    "[data-house-tag]", "[data-skip]", "[data-board]", "[data-record]", '[data-card="ballots"]', "[data-ballots]", "[data-ballot-side]", "[data-award]", /* 0건 */
+  ]) {
     assert.ok(OFF_DEVICE_SELECTORS.includes(sel), sel);
   }
-  assert.equal(OFF_DEVICE_ATTR_PREFIX, "data-turn");
+  assert.ok(!OFF_DEVICE_SELECTORS.includes("[data-turn-block]"), "순차 지목 차례 블록은 기본 규칙이다");
+  assert.ok(Object.isFrozen(OFF_DEVICE_ATTR_PREFIX));
+  assert.ok(!OFF_DEVICE_ATTR_PREFIX.includes("data-turn"), "data-turn* 은 더 이상 꺼진 장치가 아니다");
+  for (const pre of ["data-errand", "data-clue"]) assert.ok(OFF_DEVICE_ATTR_PREFIX.includes(pre), pre);
 });
 
-test("offDeviceKeysOf: 기본판 투표 view 는 빈 배열이다", () => {
-  const view = { phase: "nomination", players: [{ seat: 0 }, { seat: 1, away: true }], day: { points: [{ seat: 1, target: 0 }], voted: [1] }, me: { seat: 0 } };
+test("offDeviceKeysOf: 새 낮 순서의 view 는 빈 배열이다(day.turn·points·찬반 수는 기본 규칙)", () => {
+  const view = { phase: "nomination", players: [{ seat: 0 }, { seat: 1, away: true }], day: { points: [{ seat: 1, target: 0 }], turn: { i: 0 }, verdictCount: { yes: 1, no: 0 } }, me: { seat: 0 } };
   assert.deepEqual(offDeviceKeysOf({ t: "state", view }), []);
   assert.deepEqual(offDeviceKeysOf({ t: "chat", ch: "all", seat: 0, seq: 1, text: "x", at: 1 }), []);
-  assert.deepEqual(offDeviceKeysOf({ t: "chat", ch: "all", seat: 0, seq: 1, text: "x", at: 1, k: "ballots" }), [], "찬반 기록 카드는 기본판 장치다");
   assert.deepEqual(offDeviceKeysOf(null), []);
   assert.deepEqual(offDeviceKeysOf({ t: "pong" }), []);
+});
+
+test("offDeviceKeysOf: 지운 기록(찬반 기록 카드·day.ballots·voteLog)과 판 종류·시상·옛 단계를 표시한다", () => {
+  assert.deepEqual(offDeviceKeysOf({ t: "chat", ch: "all", seat: 0, seq: 1, text: "x", at: 1, k: "ballots" }), ["chat.k:ballots"], "찬반 기록 카드는 지운 장치다");
+  assert.deepEqual(offDeviceKeysOf({ t: "chatLog", lines: [{ k: "ballots" }] }), ["chatLog.k:ballots"]);
+  const got = offDeviceKeysOf({ t: "state", view: { phase: "errand", mode: "x", players: [], day: { ballots: [], voteLog: [] }, me: {}, result: { awards: [] } } });
+  for (const k of ["day.ballots", "day.voteLog", "phase:errand", "view.mode", "result.awards"]) assert.ok(got.includes(k), k);
+  assert.deepEqual(offDeviceKeysOf({ t: "state", view: { phase: "tutorial", players: [], day: {}, me: {} } }), ["phase:tutorial"]);
 });
 
 test("offDeviceKeysOf: 꺼진 장치 키를 경로 문자열로 모은다", () => {
   const view = {
     phase: "nomination",
     players: [{ seat: 0, badge: "doctor" }, { seat: 1, badgeSwapped: true }],
-    day: { turn: { i: 0 }, runoff: {}, showdown: {} },
+    day: { runoff: {}, showdown: {} },
     me: { seat: 0, whisperUsed: true, ballot: 2 },
   };
   const got = offDeviceKeysOf({ t: "state", view });
-  for (const k of ["players[].badge", "players[].badgeSwapped", "day.turn", "day.runoff", "day.showdown", "me.whisperUsed", "me.ballot"]) assert.ok(got.includes(k), k);
+  for (const k of ["players[].badge", "players[].badgeSwapped", "day.runoff", "day.showdown", "me.whisperUsed", "me.ballot"]) assert.ok(got.includes(k), k);
+  assert.ok(!got.includes("day.turn"), "day.turn 은 기본 규칙이다");
   assert.equal(new Set(got).size, got.length, "같은 경로는 한 번만");
   assert.ok(!JSON.stringify(got).includes("doctor"), "값은 싣지 않는다(경로만)");
 });
@@ -3566,33 +3553,41 @@ test("offDeviceKeysOf: 결과 공개 묶음(resultLog)은 귓속말·주장 줄�
 });
 
 test("basicOrderChecks: 기본판 단계 순서는 통과하고 연속 중복은 접는다", () => {
-  const ok = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "nomination", "defense", "verdict", "execution", "night", "morning", "dayAnnounce", "discussion", "nomination", "night", "morning", "ended"];
+  const ok = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "verdict", "nomination", "nomination", "defense", "execution", "night", "morning", "dayAnnounce", "discussion", "verdict", "night", "morning", "dayAnnounce", "discussion", "verdict", "nomination", "night", "morning", "ended"];
   const r = basicOrderChecks(ok);
   assert.ok(r.length >= 1 && r.every((x) => x.ok), JSON.stringify(r));
   for (const x of r) assert.ok(x.id && x.label);
-  assert.ok(basicOrderChecks(["nomination", "defense", "verdict", "execution", "ended"]).every((x) => x.ok), "처형 뒤 승패가 나면 결과");
+  assert.ok(basicOrderChecks(["verdict", "nomination", "defense", "execution", "ended"]).every((x) => x.ok), "처형 뒤 승패가 나면 결과");
+  assert.ok(basicOrderChecks(["discussion", "verdict", "night"]).every((x) => x.ok), "찬반 부결·0표는 지목을 건너뛰고 곧장 밤");
 });
 
 test("basicOrderChecks: runoff·showdown·건너뛴 전이는 처음 어긋난 곳을 detail 로 실패한다", () => {
-  const a = basicOrderChecks(["discussion", "nomination", "runoff", "defense"]);
+  const a = basicOrderChecks(["discussion", "verdict", "nomination", "runoff", "defense"]);
   assert.ok(a.some((x) => !x.ok && /runoff/.test(x.detail)));
-  const b = basicOrderChecks(["discussion", "nomination", "showdown", "night"]);
+  const b = basicOrderChecks(["discussion", "verdict", "nomination", "showdown", "night"]);
   assert.ok(b.some((x) => !x.ok && /showdown/.test(x.detail)));
-  const c = basicOrderChecks(["discussion", "verdict"]);
-  assert.ok(c.some((x) => !x.ok && /discussion/.test(x.detail) && /verdict/.test(x.detail)));
+  const c = basicOrderChecks(["discussion", "nomination"]);
+  assert.ok(c.some((x) => !x.ok && /discussion/.test(x.detail) && /nomination/.test(x.detail)), "옛 순서(토론 → 지목)는 어긋난다");
+  const d = basicOrderChecks(["verdict", "defense"]);
+  assert.ok(d.some((x) => !x.ok && /verdict/.test(x.detail)), "찬반 뒤 곧장 유언은 없다");
   assert.ok(basicOrderChecks([]).every((x) => !x.ok && /측정값 없음/.test(x.detail)));
   assert.ok(basicOrderChecks(null).every((x) => !x.ok));
 });
 
-test("SOUND_SCRIPT_STEPS: 13-05 투표 단계는 기본판 — bed.vote·phase.vote 를 기대하고 차례 소리는 나오면 안 된다", () => {
+test("SOUND_SCRIPT_STEPS: 22페이즈 새 낮 순서 — 찬반은 bed.vote 만, 지목 진입에 phase.vote, 내 [찬성]은 vote.cast, ballot.*·award.* 는 어디에도 없다", () => {
   const sc6 = SOUND_SCRIPT_STEPS.find((x) => x.id === "SC6");
-  assert.deepEqual(sc6.ids, ["bed.vote", "phase.vote"]);
-  for (const id of ["pin.on", "pick.turn", "pick.tick"]) assert.ok(sc6.notIds.includes(id), id);
+  assert.deepEqual(sc6.ids, ["bed.vote"]);
+  for (const id of ["phase.vote", "pin.on", "pick.turn", "pick.tick"]) assert.ok(sc6.notIds.includes(id), id);
   const sc7 = SOUND_SCRIPT_STEPS.find((x) => x.id === "SC7");
+  assert.deepEqual(sc7.ids, ["vote.cast"]);
   for (const id of ["pick.point", "pin.move", "pick.turn", "pin.on"]) assert.ok(sc7.notIds.includes(id), id);
   const sc8 = SOUND_SCRIPT_STEPS.find((x) => x.id === "SC8");
+  assert.deepEqual(sc8.ids, ["phase.vote"]);
   assert.equal(sc8.counts["bed.vote"], 0);
-  for (const id of ["pin.on", "pick.turn", "pick.tick", "phase.vote"]) assert.ok(sc8.notIds.includes(id), id);
+  const sc9 = SOUND_SCRIPT_STEPS.find((x) => x.id === "SC9");
+  assert.deepEqual(sc9.ids, ["timer.tick", "timer.tick"]);
+  const used = JSON.stringify(SOUND_SCRIPT_STEPS);
+  assert.ok(!/"(ballot|award)\./.test(used.replace(/"notIds":\[[^\]]*\]/g, "")), "기대 소리에 ballot.*·award.* 가 없다");
 });
 
 // ---- 14페이즈(14-08): 띠·이름표·누설·알림음·view 키 판정 ----
@@ -4413,9 +4408,9 @@ test("단계 그래프 사본: 낮 시작 발표 다음은 토론이고 심부�
 });
 
 test("basicOrderChecks(phases): 단계 그래프로 판정한다(errand 를 지나면 실패)", () => {
-  const ok = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "dayAnnounce", "discussion"];
+  const ok = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "night", "morning", "dayAnnounce", "discussion"];
   assert.ok(basicOrderChecks(ok).every((x) => x.ok), JSON.stringify(basicOrderChecks(ok)));
   assert.ok(basicOrderChecks(["roleReveal", "dayAnnounce", "errand", "discussion"]).some((x) => !x.ok), "errand 가 없다"); // errand 0건
-  assert.ok(basicOrderChecks(["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night"]).every((x) => x.ok));
+  assert.ok(basicOrderChecks(["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "night"]).every((x) => x.ok));
   assert.ok(basicOrderChecks(["roleReveal", "discussion"]).some((x) => !x.ok), "역할 확인 다음은 낮 시작 발표다");
 });

@@ -60,7 +60,9 @@ import { CHAT_PANEL_EXTRA as RESULT_CHAT_EXTRA } from "../../src/game/chatUi";
 import { hostRailLayout } from "../../src/components/v2/HostRail";
 import { SIDE_CELL, SIDE_GAP } from "../../src/components/v2/SideColumn";
 import { HOST_RAIL_LABEL } from "../../src/components/v2/HostRail";
-import { nextPhaseOf, afterDayOf } from "../../shared/game/phases";
+import { nextPhaseOf, afterDayOf, WILL_REVEAL_MS, PIN_OFF_EXEC_AT } from "../../shared/game/phases";
+// @ts-expect-error -- 선언 없는 스크립트 모듈
+import * as e2eDay from "../../scripts/e2e/day.mjs";
 
 describe("E2E 의 TIMELESS_PHASES 와 앱 상수", () => {
   it("scripts/e2e/lib.mjs 의 TIMELESS_PHASES 가 src/game/scenes.ts 의 같은 이름 상수와 같은 목록이다", () => {
@@ -647,9 +649,9 @@ describe("12페이즈 판결 타이밍·동작 소리 누설 E2E (12-10)", () =>
     expect(sound).toMatch(/data-emote/);
   });
 
-  it("흐름이 낮추지 못하는 문턱은 sound.mjs 에 숫자로 쓰지 않는다 (2600·250 은 lib.mjs 에만)", () => {
-    expect(sound).not.toMatch(/\b2600\b/);
-    expect(lib).toMatch(/2600/);
+  it("흐름이 낮추지 못하는 문턱은 sound.mjs 에 숫자로 쓰지 않는다 (announceAt 3000·tolerance 250 은 lib.mjs 에만, 22-12 P22-13)", () => {
+    expect(sound).not.toMatch(/\b2600\b|announceAt/);
+    expect(lib).toMatch(/announceAt: 3000/);
   });
 });
 
@@ -770,6 +772,16 @@ describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (
     expect(DEFENSE_MS).toBe(10_000);
     expect(text).toMatch(/const DEFENSE_MS = 10_000;/);
     expect(text).toMatch(/유언 10초/);
+  });
+
+  it("E2E 처형 시간표 사본(EXEC_TIMING·VERDICT_TIMING·day.mjs WILL_REVEAL_MS_COPY)이 서버 상수와 같다 (22-13)", () => {
+    expect(e2eLib.EXEC_TIMING.cardOffAt).toBe(WILL_REVEAL_MS);
+    expect(e2eLib.EXEC_TIMING.announceAt).toBe(WILL_REVEAL_MS);
+    expect(e2eLib.EXEC_TIMING.pinOffAt).toBe(PIN_OFF_EXEC_AT);
+    expect(e2eLib.EXEC_TIMING.endsBy[0]).toBeLessThanOrEqual(EXECUTION_MS);
+    expect(e2eLib.EXEC_TIMING.endsBy[1]).toBeGreaterThanOrEqual(EXECUTION_MS);
+    expect(e2eLib.VERDICT_TIMING.announceAt).toBe(WILL_REVEAL_MS);
+    expect(e2eDay.WILL_REVEAL_MS_COPY).toBe(WILL_REVEAL_MS);
   });
 
   it("scripts/smoke.mjs 의 EXECUTION_MS 사본이 서버의 처형 단계 길이(6_600, 유언 카드 3.0 + 처형 3.0 + 꼬리 0.6)와 같다 (22-12 P22-13)", () => {

@@ -503,8 +503,8 @@ export function makeAvatarFlows(helpers) {
   }
 
   /**
-   * avatar-phases (D-18, 390x844 한 크기): 한 판(방장 시민 + 손님 + 봇 4)으로 AP1 낮 토론(도착 + 떠 있는 버튼 숨김·복귀) · AP2 지목(이동이 막힌 단계에서도 동작과 채팅이 같이 도착) ·
-   * AP3 변론·찬반 · 처형 뒤 AP4 아침(산 사람 동작이 유령에게 도착) · AP6 유령 방장의 동작이 산 손님 페이지에 0건이고 유령 자기 페이지에는 있음 · AP7 모든 시점의 이름표 층에 [data-emote] 0개.
+   * avatar-phases (D-18, 390x844 한 크기): 한 판(방장 시민 + 손님 + 봇 4)으로 AP1 낮 토론(도착 + 떠 있는 버튼 숨김·복귀) · AP3b 찬반 · AP2 지목(이동이 막힌 단계에서도 동작과 채팅이 같이 도착) ·
+   * AP3a 유언(동작 막힘, 0건) · 처형 뒤 AP4 아침(산 사람 동작이 유령에게 도착) · AP6 유령 방장의 동작이 산 손님 페이지에 0건이고 유령 자기 페이지에는 있음 · AP7 모든 시점의 이름표 층에 [data-emote] 0개.
    * AP5(밤 마피아→시민 편 0건)는 방장이 마피아여야 해서 avatar-phases-night 가 맡는다.
    */
   async function avatarPhasesFlow(ctx) {
@@ -540,6 +540,18 @@ export function makeAvatarFlows(helpers) {
         await deliver(rec, sc, "AP1", { sender: G, receivers: [H], emoteId: "clap", mode: "arrive", tagSamples: tags });
       }
 
+      // AP3b 찬반(22페이즈 D-10: 토론 바로 뒤): 토론 장면 그대로라 동작이 도착한다
+      {
+        const sc = `${id}/verdict`;
+        await skipTo(hp, ht, "verdict");
+        await reach([hp, gp], "verdict");
+        await settle(hp);
+        await deliver(rec, sc, "AP3b", { sender: G, receivers: [H], emoteId: "clap", mode: "arrive", tagSamples: tags });
+        // 찬성을 누른다(봇도 넘길 때 찬성을 던진다)
+        await untilGame(gp, (x) => x.phase === "verdict" && x.verdictBtns.length === 2, 6000, "찬반 도착");
+        await chooseVerdict(gp, true).catch(() => {});
+      }
+
       // AP2 지목: 이동이 막힌 단계 — 동작과 채팅 한 줄이 같이 도착
       {
         const sc = `${id}/nomination`;
@@ -555,20 +567,13 @@ export function makeAvatarFlows(helpers) {
         rec(sc, "AP2-chat", "같은 지목 단계에서 손님의 채팅 한 줄도 방장에게 도착(이동 차단과 무관)", chat.ok, chat.detail);
       }
 
-      // AP3 변론·찬반: 봇이 방장을 가리켜 방장이 변론자. 변론자도 동작 가능
+      // AP3a 유언: 봇이 방장을 가리켜 방장이 처형자. 유언 단계는 조용히 지켜보는 장면이라 몸동작이 서버에서 막힌다(22-11 D-33) — 도착 0건
       {
-        const sc = `${id}/trial`;
+        const sc = `${id}/will`;
         await skipTo(hp, ht, "defense");
         await reach([hp, gp], "defense");
         await settle(hp);
-        await deliver(rec, `${sc}-defense`, "AP3a", { sender: H, receivers: [G], emoteId: "cry", mode: "arrive", tagSamples: tags });
-        await skipTo(hp, ht, "verdict");
-        await reach([hp, gp], "verdict");
-        await settle(hp);
-        await deliver(rec, `${sc}-verdict`, "AP3b", { sender: G, receivers: [H], emoteId: "clap", mode: "arrive", tagSamples: tags });
-        // 찬성으로 처형까지 보낸다
-        await untilGame(gp, (x) => x.phase === "verdict" && x.verdictBtns.length === 2, 6000, "찬반 도착");
-        await chooseVerdict(gp, true).catch(() => {});
+        await deliver(rec, `${sc}-defense`, "AP3a", { sender: H, receivers: [G], emoteId: "cry", mode: "absent", tagSamples: tags });
       }
 
       // 처형 → 밤 → 아침. 방장은 유령이 된다

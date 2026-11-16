@@ -555,7 +555,10 @@ export function turnBlockChecks(turn, vw, vh) {
 
 // ---- 기본판 꺼진 장치 부재 검사 (13-05, 결정 0072, UI-SPEC "끄는 장치" 표) ----
 
-/** 꺼진 장치의 DOM 선택자 — 기본판 한 판 전체에서 모두 0건이어야 한다. 이름 접두 OFF_DEVICE_ATTR_PREFIX 속성(`data-turn-*`)도 0건이어야 한다. */
+/**
+ * 꺼진 장치의 DOM 선택자 — 한 판 전체에서 모두 0건이어야 한다. 이름 접두 OFF_DEVICE_ATTR_PREFIX 속성도 0건이어야 한다.
+ * 22페이즈(D-12): 순차 지목(`data-turn-block`·`data-turn*`)이 기본 규칙이 되어 이 표에서 뺐다. 확장판·판 종류·튜토리얼·심부름 선택자(P22-1·P22-10)를 더했다.
+ */
 export const OFF_DEVICE_SELECTORS = Object.freeze([
   '[data-float="claim"]',
   '[data-float="whisper"]',
@@ -564,12 +567,27 @@ export const OFF_DEVICE_SELECTORS = Object.freeze([
   "[data-claim]",
   "[data-badge-live]",
   "[data-line-sheet]",
-  "[data-turn-block]",
   "[data-speak-sheet]",
   "[data-showdown-step]",
+  // 22페이즈 UI-SPEC "지우는 화면" 표: 판 종류·튜토리얼 진입·확장판 하루·낮 기록·시상 (D-01·D-04·D-08·D-14·D-19)
+  '[data-host-rail-btn="mode"]',
+  "[data-mode-sheet]",
+  "[data-mode-card]",
+  "[data-mode-chip]",
+  "[data-tutorial-toggle]",
+  '[data-host-rail-btn="tutorial"]',
+  "[data-tutorial]",
+  "[data-house-tag]",
+  "[data-skip]",
+  "[data-board]",
+  "[data-record]",
+  '[data-card="ballots"]',
+  "[data-ballots]", /* 0건 */
+  "[data-ballot-side]", /* 0건 */
+  "[data-award]",
 ]);
-/** 순차 지목 표시용 속성 접두 — `data-turn` 과 `data-turn-*` 모두 포함한다. */
-export const OFF_DEVICE_ATTR_PREFIX = "data-turn";
+/** 꺼진 장치 표시용 속성 접두(CSS 는 속성 이름 접두 선택자가 없어 스캐너가 이름을 훑는다) — 순차 지목이 기본이 되어(D-12) `data-turn*` 은 더 이상 꺼진 장치가 아니고, 심부름·단서 속성이 이 자리를 쓴다. */
+export const OFF_DEVICE_ATTR_PREFIX = Object.freeze(["data-errand", "data-clue", "data-board", "data-record"]);
 
 /**
  * 받은 프레임 하나에서 꺼진 장치 흔적의 경로 문자열을 모은다(원문·값·토큰은 싣지 않는다, T-13-16).
@@ -590,7 +608,8 @@ export function offDeviceKeysOf(msg) {
     }
     const day = v.day;
     if (day && typeof day === "object") {
-      if (day.turn !== undefined) add("day.turn");
+      if (day.ballots !== undefined) add("day.ballots");
+      if (day.voteLog !== undefined) add("day.voteLog");
       if (day.runoff !== undefined) add("day.runoff");
       if (day.showdown !== undefined) add("day.showdown");
     }
@@ -599,11 +618,13 @@ export function offDeviceKeysOf(msg) {
       if (me.whisperUsed !== undefined) add("me.whisperUsed");
       if (me.ballot !== undefined) add("me.ballot");
     }
-    if (v.phase === "runoff" || v.phase === "showdown") add(`phase:${v.phase}`);
+    if (v.phase === "runoff" || v.phase === "showdown" || v.phase === "errand" || v.phase === "tutorial") add(`phase:${v.phase}`);
+    if (v.mode !== undefined) add("view.mode"); // 판 종류가 없다(22-01, D-01)
+    if (v.result && typeof v.result === "object" && v.result.awards !== undefined) add("result.awards"); // 시상이 없다(D-19)
   } else if (msg.t === "chat") {
-    if (msg.k === "whisper" || msg.k === "whispered") add(`chat.k:${msg.k}`);
+    if (msg.k === "whisper" || msg.k === "whispered" || msg.k === "ballots") add(`chat.k:${msg.k}`);
   } else if (msg.t === "chatLog" && Array.isArray(msg.lines)) {
-    for (const l of msg.lines) if (l && (l.k === "whisper" || l.k === "whispered")) add(`chatLog.k:${l.k}`);
+    for (const l of msg.lines) if (l && (l.k === "whisper" || l.k === "whispered" || l.k === "ballots")) add(`chatLog.k:${l.k}`);
   } else if (msg.t === "resultLog" && (msg.part === "whisper" || msg.part === "claim") && Array.isArray(msg.lines) && msg.lines.length > 0) {
     // 결과 화면은 묶음 네 부분을 모두 요청하고 서버는 꺼진 부분을 빈 줄로 답한다 — 빈 묶음은 흔적이 아니고 줄이 실제로 올 때만 센다
     add(`resultLog.part:${msg.part}`);
@@ -613,18 +634,18 @@ export function offDeviceKeysOf(msg) {
 
 /**
  * 단계 그래프 사본: shared/game/phases.ts 의 nextPhaseOf·afterDayOf 와 tick 분기가 정하는 허용 전이(연속 중복은 접은 뒤). test/unit/e2eContract.test.ts 가 표를 앱과 대조한다.
- * roleReveal → dayAnnounce → discussion → nomination → (최다 한 명) defense → verdict → execution → night | ended, 지목 0표·동률은 곧장 night, night → morning → dayAnnounce | ended.
- * 판 종류가 없어(22-07) 표는 하나다.
+ * roleReveal → dayAnnounce → discussion → verdict(찬반) → (과반 찬성) nomination(차례 지목) → (최다 한 명) defense(유언) → execution → night | ended,
+ * 찬반 부결·0표와 지목 0표·동률은 곧장 night, night → morning → dayAnnounce | ended. 판 종류가 없어(22-07) 표는 하나다. 22-09(D-10)로 순서가 바뀌었다.
  */
 export const PHASE_GRAPH = Object.freeze({
   lobby: ["assigning"],
   assigning: ["roleReveal"],
   roleReveal: ["dayAnnounce"],
   dayAnnounce: ["discussion"],
-  discussion: ["nomination"],
+  discussion: ["verdict"],
+  verdict: ["nomination", "night"],
   nomination: ["defense", "night"],
-  defense: ["verdict"],
-  verdict: ["execution"],
+  defense: ["execution"],
   execution: ["night", "ended"],
   night: ["morning"],
   morning: ["dayAnnounce", "ended"],
@@ -636,7 +657,7 @@ export const PHASE_GRAPH = Object.freeze({
  * 로비 재시작(ended→lobby)은 한 판을 넘어가는 것이라 허용하지 않는다 — 한 판만 넘긴다. 판정은 PHASE_GRAPH 로 한다.
  */
 export function basicOrderChecks(phases) {
-  const label = "단계 순서가 기본판이다(투표 → 변론 → 찬반 → 처형, 결선·결전 없음)";
+  const label = "단계 순서가 기본 한 판이다(토론 → 찬반 → 지목 → 유언 → 처형 → 밤, 결선·결전 없음)";
   if (!Array.isArray(phases) || phases.length === 0 || phases.some((p) => typeof p !== "string")) return [noMeasure("OFF3", label, "phases[]")];
   const seq = phases.filter((p, i) => i === 0 || p !== phases[i - 1]);
   const bad = [];
@@ -1125,7 +1146,7 @@ export const EXPECTED_SCENE = {
   nomination: "dusk",
   runoff: "dusk",
   showdown: "dusk",
-  verdict: "dusk",
+  verdict: "day", // 22-13(P22-3): 찬반은 토론 장면 그대로
   ended: "night",
 };
 
@@ -1843,52 +1864,7 @@ export function selectFlows(flows, only) {
   return flows.filter((f) => keys.some((k) => f.id.includes(k) || k.startsWith(f.id)));
 }
 
-// ---- 판결 순간 연출 (09.1.1-13, 결정 0066-3·7, UI-SPEC C · 18.1-13 결정 0083-9·0083-10) ----
-/** 두 숫자 덩이가 한 줄이라고 볼 세로 가운데 차 상한(px) */
-export const BALLOT_ROW_TOL = 4;
-
-/**
- * 찬반 숫자 줄 판정(BF1~BF3, 18.1-13 결정 0083-9). 처형의 찬반은 큰 글 아래 한 줄의 숫자 둘이다.
- * root = .mv-ballots 사각형, groups = [{ side, rect, text }](찬성이 먼저), pillCount = [data-ballot-seat] 개수, panelTop = 아래 패널 윗변,
- * announceBottom = 큰 글 아랫변(없으면 null), viewport = { w, h }.
- * BF1 덩이가 정확히 둘(찬성 → 반대)이고 글자가 "찬성 N"·"반대 N" 이며 얼굴 칩·알약이 0개 ·
- * BF2 덩이 윗변 ≥ 큰 글 아랫변 · 덩이 아랫변 ≤ 패널 윗변 · 두 덩이가 한 줄(세로 가운데 차 ${BALLOT_ROW_TOL} 이하) · BF3 덩이가 화면 안.
- * 0.5px 오차(OVERLAP_EPS)를 허용한다.
- */
-export function ballotCountChecks({ root, groups, pillCount, panelTop, announceBottom, viewport }) {
-  const labels = {
-    BF1: "찬반이 숫자 덩이 둘('찬성 N'·'반대 N')이고 얼굴 칩·알약이 없다",
-    BF2: "숫자 줄이 큰 글 아래·패널 위의 한 줄이다",
-    BF3: "숫자 덩이가 화면 안",
-  };
-  const rectOk = (r) => r && [r.left, r.top, r.width, r.height].every(isNum);
-  const groupsOk = Array.isArray(groups) && groups.length > 0 && groups.every((g) => rectOk(g?.rect));
-  const vpOk = viewport && isNum(viewport.w) && isNum(viewport.h);
-  if (!groupsOk || !rectOk(root) || !vpOk || !isNum(panelTop) || !isNum(pillCount)) {
-    return Object.entries(labels).map(([id, label]) => noMeasure(id, label, "숫자 덩이·패널"));
-  }
-  const bad1 = [];
-  const sides = groups.map((g) => g.side);
-  if (groups.length !== 2 || sides[0] !== "yes" || sides[1] !== "no") bad1.push(`덩이 ${groups.length}개(${sides.join(",")}) — 찬성 → 반대 둘이어야 한다`);
-  for (const g of groups) {
-    const want = g.side === "yes" ? "찬성" : "반대";
-    if (!new RegExp(`^${want} \\d+$`).test((g.text ?? "").trim())) bad1.push(`${g.side} 글자 "${(g.text ?? "").trim()}"`);
-  }
-  if (pillCount !== 0) bad1.push(`알약·얼굴 칩 ${pillCount}개`);
-  const lines = [result("BF1", labels.BF1, bad1)];
-  const top = Math.min(...groups.map((g) => g.rect.top));
-  const lowest = Math.max(...groups.map((g) => bottom(g.rect)));
-  const bad2 = [];
-  if (isNum(announceBottom) && top < announceBottom - OVERLAP_EPS) bad2.push(`덩이 윗변 ${fmt(top)} < 큰 글 아랫변 ${fmt(announceBottom)}`);
-  if (lowest > panelTop + OVERLAP_EPS) bad2.push(`덩이 아랫변 ${fmt(lowest)} > 패널 윗변 ${fmt(panelTop)}`);
-  const centers = groups.map((g) => g.rect.top + g.rect.height / 2);
-  const spread = Math.max(...centers) - Math.min(...centers);
-  if (spread > BALLOT_ROW_TOL + 1e-9) bad2.push(`두 덩이 세로 가운데 차 ${fmt(spread)} > ${BALLOT_ROW_TOL}(두 줄로 갈림)`);
-  lines.push(result("BF2", labels.BF2, bad2));
-  const screen = { left: 0, top: 0, right: viewport.w, bottom: viewport.h };
-  lines.push(result("BF3", labels.BF3, groups.filter((g) => !rectInside(g.rect, screen)).map((g) => `${g.side} ${fmt(g.rect.left)},${fmt(g.rect.top)} ${fmt(g.rect.width)}x${fmt(g.rect.height)}`)));
-  return lines;
-}
+// ---- 판결 순간 연출 (09.1.1-13 → 22-12·22-13: 처형 6.6초 시간표, 찬반 숫자 덩이 판정 BF1~BF3 은 지웠다 — 찬반 기록이 처형에 없다, D-14) ----
 
 /**
  * 큰 글 자리 판정(AC1·AC2, 18.1-13 결정 0083-10). announce = 큰 글 글자 사각형(줄 사각형의 합), band = 자막 띠 면 사각형, sound = 소리 단추 사각형.
@@ -1906,56 +1882,74 @@ export function announceClearChecks({ announce, band, sound }) {
   return [ac1, ac2];
 }
 
-/** 판결 순간 시간표 허용 오차(ms): 관찰 시계는 처형 단계가 화면에 처음 보인 시각이라 서버 시각과 지연만큼 어긋난다 */
-export const VERDICT_TOL = { yes: [300, 900], gap: [200, 600], gone: [4200, 5000], pinOff: 400, zoomAt: 700, zoomBackAt: 5450 };
+/**
+ * 처형 시간표 허용 오차(ms, 22페이즈 P22-13): 관찰 시계는 처형 단계가 화면에 처음 보인 시각이라 서버 시각과 지연만큼 어긋난다.
+ * 상수 사본(WILL_REVEAL_MS 3000 · PIN_OFF_EXEC_AT 6000 · EXECUTION_MS 6600)은 test/unit/e2eContract.test.ts 가 shared/game/phases.ts 와 대조한다.
+ */
+export const EXEC_TIMING = Object.freeze({ cardOnBy: 500, cardOffAt: 3000, announceAt: 3000, pinOffAt: 6000, tolerance: 400, zoomAt: 700, zoomBackProbeAt: 6300, endsBy: [6000, 7400] });
 
 /**
- * 판결 순간 시간표 판정(VT1~VT6). log = 변할 때만 쌓은 기록 [{ t, phase, stage, yes, no, seat, strength, zoom, dim }](t 는 ms, 같은 시계),
- * opts = { passed(처형 성립), candidate(변론자 좌석), expectZoom(스테이지 높이 360 이상) }.
- * 0 = 기록에서 처음 phase "execution" 인 항목의 t.
- * VT1 찬성 묶음 0.6초(0.3~0.9) · VT2 반대 묶음이 찬성 뒤 0.4초(0.2~0.6) 그리고 그 순간 찬성은 이미 있음 · VT3 묶음 사라짐 4.6초(±0.4)
- * VT4 핀이 변론자에게 켜지고(세기 0.5 이상) 부결 4.0초·처형 5.0초(±0.4)에 꺼지기 시작 · VT5 0.7초 뒤 줌 1.10±0.01(작은 스테이지는 내내 1) · VT6 5.45초에 줌 1.
+ * 처형 시간표 판정(VT1~VT6). log = 변할 때만 쌓은 기록 [{ t, phase, card(유언 카드 [data-will-reveal] 보임), announce(큰 글 글자 또는 null), seat, strength, zoom, dim }](t 는 ms, 같은 시계),
+ * opts = { candidate(처형자 좌석), expectZoom(스테이지 높이 360 이상) }. 0 = 기록에서 처음 phase "execution" 인 항목의 t.
+ * VT1 유언 카드가 0~0.5초에 이미 보이고 3.0초(±0.4)에 사라진다 · VT2 큰 글이 3.0초(±0.4)에 나타난다(그 전에는 없다)
+ * VT3 핀이 처형자에게 켜지고(세기 0.5 이상) 6.0초(±0.4)에 꺼지기 시작 · VT4 어둡게 막이 켜졌다가 6.0초 근처에 걷힌다
+ * VT5 0.7초 뒤 줌 1.10±0.01(작은 스테이지는 내내 1) 이고 6.3초에는 돌아오는 중(1.08 미만) · VT6 처형 단계가 6.0~7.4초 안에 끝난다(6.6초 시간표)
  */
-export function verdictTimelineChecks(log, { passed, candidate, expectZoom }) {
+export function executionTimelineChecks(log, { candidate, expectZoom }) {
+  const T = EXEC_TIMING;
   const labels = {
-    VT1: "찬성 묶음이 처형 진입 0.6초(0.3~0.9)에 나타난다",
-    VT2: "반대 묶음이 찬성 묶음 뒤 0.4초(0.2~0.6)에 나타나고 그때 찬성은 이미 있다",
-    VT3: "묶음이 4.6초(±0.4)에 사라진다",
-    VT4: `핀 조명이 변론자에게 켜지고 ${passed ? "5.0" : "4.0"}초(±0.4)에 꺼지기 시작한다`,
-    VT5: expectZoom ? "0.7초 뒤 카메라 줌 1.10±0.01" : "스테이지 높이 360 미만이라 줌이 한 번도 켜지지 않는다",
-    VT6: "5.45초에 줌이 1 로 돌아와 있다",
+    VT1: `유언 카드가 처형 진입 0~${T.cardOnBy}ms 에 보이고 ${T.cardOffAt / 1000}초(±${T.tolerance / 1000})에 사라진다`,
+    VT2: `큰 글이 ${T.announceAt / 1000}초(±${T.tolerance / 1000})에 나타난다(그 전에는 없다)`,
+    VT3: `핀 조명이 처형자에게 켜지고 ${T.pinOffAt / 1000}초(±${T.tolerance / 1000})에 꺼지기 시작한다`,
+    VT4: "어둡게 막이 켜졌다가 6.0초 근처에 걷힌다",
+    VT5: expectZoom ? "0.7초 뒤 카메라 줌 1.10±0.01 이고 6.3초에는 돌아오는 중이다" : "스테이지 높이 360 미만이라 줌이 한 번도 켜지지 않는다",
+    VT6: `처형 단계가 ${T.endsBy[0] / 1000}~${T.endsBy[1] / 1000}초 안에 끝난다(6.6초 시간표)`,
   };
   const entries = Array.isArray(log) ? [...log].filter((e) => isNum(e?.t)).sort((a, b) => a.t - b.t) : [];
   const first = entries.find((e) => e.phase === "execution");
   if (!first) return Object.entries(labels).map(([id, label]) => noMeasure(id, label, "처형 단계 기록"));
   const t0 = first.t;
-  const ex = entries.filter((e) => e.t >= t0 && e.phase === "execution").map((e) => ({ ...e, rel: e.t - t0 }));
-  const at = (rel) => [...ex].reverse().find((e) => e.rel <= rel) ?? ex[0];
-  const inRange = (v, [lo, hi]) => v >= lo && v <= hi;
-  const yesE = ex.find((e) => e.yes === true);
-  const noE = ex.find((e) => e.no === true);
+  const rel = entries.filter((e) => e.t >= t0).map((e) => ({ ...e, rel: e.t - t0 }));
+  const ex = rel.filter((e) => e.phase === "execution");
+  const at = (r) => [...ex].reverse().find((e) => e.rel <= r) ?? ex[0];
+  const near = (v, target) => Math.abs(v - target) <= T.tolerance;
   const lines = [];
-  lines.push(result("VT1", labels.VT1, yesE && inRange(yesE.rel, VERDICT_TOL.yes) ? [] : [yesE ? `${Math.round(yesE.rel)}ms` : "찬성 묶음을 못 봄"]));
-  const gap = yesE && noE ? noE.rel - yesE.rel : null;
-  lines.push(result("VT2", labels.VT2, gap !== null && inRange(gap, VERDICT_TOL.gap) && noE.yes === true && yesE.no === false ? [] : [gap === null ? "묶음을 못 봄" : `간격 ${Math.round(gap)}ms · 반대가 나올 때 찬성 ${noE.yes} · 찬성이 나올 때 반대 ${yesE.no}`]));
-  const goneE = noE ? ex.find((e) => e.rel > noE.rel && e.stage === null) : null;
-  lines.push(result("VT3", labels.VT3, goneE && inRange(goneE.rel, VERDICT_TOL.gone) ? [] : [goneE ? `${Math.round(goneE.rel)}ms` : "사라지지 않음"]));
+  const cardOn = ex.find((e) => e.card === true);
+  const cardOff = cardOn ? ex.find((e) => e.rel > cardOn.rel && e.card !== true) : null;
+  const bad1 = [];
+  if (!cardOn) bad1.push("유언 카드를 못 봄");
+  else {
+    if (cardOn.rel > T.cardOnBy) bad1.push(`카드 첫 모습 ${Math.round(cardOn.rel)}ms`);
+    if (!cardOff || !near(cardOff.rel, T.cardOffAt)) bad1.push(`사라짐 ${cardOff ? Math.round(cardOff.rel) : "없음"}ms (기대 ${T.cardOffAt}±${T.tolerance})`);
+  }
+  lines.push(result("VT1", labels.VT1, bad1));
+  const annOn = ex.find((e) => typeof e.announce === "string" && e.announce !== "");
+  const bad2 = [];
+  if (!annOn) bad2.push("큰 글을 못 봄");
+  else if (!near(annOn.rel, T.announceAt)) bad2.push(`큰 글 ${Math.round(annOn.rel)}ms (기대 ${T.announceAt}±${T.tolerance})`);
+  lines.push(result("VT2", labels.VT2, bad2));
   const lit = ex.find((e) => e.seat !== null && e.strength >= 0.5);
   const wrongSeat = ex.filter((e) => e.seat !== null && e.seat !== candidate).map((e) => e.seat);
   const offE = lit ? ex.find((e) => e.rel > lit.rel && e.seat === null) : null;
-  const offAt = passed ? 5000 : 4000;
   const pinBad = [];
   if (!lit) pinBad.push("핀이 켜지지 않음");
   else if (lit.seat !== candidate) pinBad.push(`좌석 ${lit.seat} (기대 ${candidate})`);
   if (wrongSeat.length > 0) pinBad.push(`다른 좌석 ${[...new Set(wrongSeat)].join(",")}`);
-  if (lit && (!offE || Math.abs(offE.rel - offAt) > VERDICT_TOL.pinOff)) pinBad.push(`꺼짐 ${offE ? Math.round(offE.rel) : "없음"}ms (기대 ${offAt}±${VERDICT_TOL.pinOff})`);
-  lines.push(result("VT4", labels.VT4, pinBad));
-  const z = at(VERDICT_TOL.zoomAt)?.zoom;
-  lines.push(
-    result("VT5", labels.VT5, expectZoom ? (isNum(z) && Math.abs(z - 1.1) <= 0.01 ? [] : [`0.7초 줌 ${z}`]) : ex.some((e) => e.zoom > 1.0005) ? [`줌 ${Math.max(...ex.map((e) => e.zoom))}`] : []),
-  );
-  const zb = at(VERDICT_TOL.zoomBackAt)?.zoom;
-  lines.push(result("VT6", labels.VT6, isNum(zb) && zb <= 1.005 ? [] : [`5.45초 줌 ${zb}`]));
+  if (lit && (!offE || !near(offE.rel, T.pinOffAt))) pinBad.push(`꺼짐 ${offE ? Math.round(offE.rel) : "없음"}ms (기대 ${T.pinOffAt}±${T.tolerance})`);
+  lines.push(result("VT3", labels.VT3, pinBad));
+  const dimOn = ex.find((e) => e.dim === "verdict");
+  const dimOff = dimOn ? ex.find((e) => e.rel > dimOn.rel && e.dim !== "verdict") : null;
+  lines.push(result("VT4", labels.VT4, dimOn && dimOff && near(dimOff.rel, T.pinOffAt) ? [] : [dimOn ? `걷힘 ${dimOff ? Math.round(dimOff.rel) : "없음"}ms` : "막이 켜지지 않음"]));
+  if (expectZoom) {
+    const z = at(T.zoomAt)?.zoom;
+    const back = at(T.zoomBackProbeAt)?.zoom;
+    const bad = [];
+    if (!(isNum(z) && Math.abs(z - 1.1) <= 0.01)) bad.push(`0.7초 줌 ${z}`);
+    if (!(isNum(back) && back < 1.08)) bad.push(`6.3초 줌 ${back} (돌아오는 중이어야 함)`);
+    lines.push(result("VT5", labels.VT5, bad));
+  } else lines.push(result("VT5", labels.VT5, ex.some((e) => e.zoom > 1.0005) ? [`줌 ${Math.max(...ex.map((e) => e.zoom))}`] : []));
+  const end = rel.find((e) => e.phase !== "execution");
+  lines.push(result("VT6", labels.VT6, end && end.rel >= T.endsBy[0] && end.rel <= T.endsBy[1] ? [] : [end ? `${Math.round(end.rel)}ms 에 끝남` : "단계가 끝나지 않음"]));
   return lines;
 }
 
@@ -2740,9 +2734,10 @@ export const SOUND_SCRIPT_STEPS = Object.freeze([
   Object.freeze({ id: "SC3", label: "시작 → assigning: game.start, 일회성 뒤 소리 없음", ids: ["game.start"], notIds: ["role.flip", "bed.reveal"] }),
   Object.freeze({ id: "SC4", label: "roleReveal: bed.reveal → role.flip", ids: ["bed.reveal", "role.flip"], notIds: ["game.start"] }),
   Object.freeze({ id: "SC5", label: "dayAnnounce·discussion: bed.day → day.start, 침대 요청은 한 번뿐", ids: ["bed.day", "day.start"], counts: { "bed.day": 1, "bed.vote": 0 }, notIds: ["phase.vote", "role.flip"] }),
-  Object.freeze({ id: "SC6", label: "nomination(기본판 동시 투표): bed.vote → phase.vote, 차례 소리(pin.on·pick.turn·pick.tick) 없음", ids: ["bed.vote", "phase.vote"], counts: { "bed.vote": 1 }, notIds: ["day.start", "pin.on", "pick.turn", "pick.tick"] }),
-  Object.freeze({ id: "SC7", label: "내가 투표해도 차례 소리(pick.point·pin.move·pick.turn)가 없고 새 침대도 없음", ids: [], counts: { "bed.vote": 0 }, notIds: ["pick.point", "pin.move", "pick.turn", "pin.on", "pick.skip", "bed.vote"] }),
-  Object.freeze({ id: "SC8", label: "봇 투표·변론 진입: 차례 소리 없음, 새 침대 없음", ids: [], counts: { "bed.vote": 0 }, notIds: ["pin.on", "pick.turn", "pick.tick", "pick.point", "pin.move", "phase.vote", "day.start", "role.flip", "game.start"] }),
+  // 22페이즈 D-10: 새 낮 순서 토론 → 찬반 → 지목 → 유언. 찬반 진입에는 bed.vote 만(진입 소리 phase.vote 는 지목 몫), 지목 진입에 phase.vote 한 번
+  Object.freeze({ id: "SC6", label: "verdict(찬반): bed.vote 한 번, 지목 진입 소리(phase.vote)·차례 소리(pin.on·pick.turn·pick.tick) 없음", ids: ["bed.vote"], counts: { "bed.vote": 1 }, notIds: ["day.start", "phase.vote", "pin.on", "pick.turn", "pick.tick"] }),
+  Object.freeze({ id: "SC7", label: "내가 [찬성]을 누르면 vote.cast 한 번, 차례 소리·새 침대 없음", ids: ["vote.cast"], counts: { "vote.cast": 1, "bed.vote": 0 }, notIds: ["pick.point", "pin.move", "pick.turn", "pin.on", "pick.skip", "bed.vote"] }),
+  Object.freeze({ id: "SC8", label: "nomination(지목) 진입: phase.vote 한 번, 새 침대 없음, 일회성 낮·역할 소리 없음", ids: ["phase.vote"], counts: { "bed.vote": 0 }, notIds: ["day.start", "role.flip", "game.start", "pick.point"] }),
   Object.freeze({ id: "SC9", label: "verdict: 마지막 5초 timer.tick 이 초마다, 새 침대 없음", ids: ["timer.tick", "timer.tick"], counts: { "bed.vote": 0 }, notIds: ["phase.vote", "day.start", "role.flip", "game.start"] }),
   Object.freeze({ id: "SC10", label: "낮 중간 새로고침(LS-10): 현재 단계 침대만, 일회성 소리 없음", ids: ["bed.vote"], onlyPrefix: "bed.", notIds: [...ONE_SHOT_AFTER_RELOAD, ...OTHER_BEDS("bed.vote")] }),
   // 12-09: 새로고침 뒤 testSkip 으로 밤 → 아침. 지나온 단계의 소리가 앞에 끼어도 되도록 부분 수열로 본다(큐·역할별 동일성은 sound-night-parity 가 본다)
@@ -2862,64 +2857,41 @@ export function soundNightParityChecks(input) {
 
 // ---- 12페이즈 판결 타이밍·동작 소리 누설 (12-10, 결정 D-13·D-14·D-21, LS-4) ----
 
-/** 판결 타이밍 문턱: 결과 소리는 첫 심장 박동 +2600ms ± 250, 의사봉과 떠오름은 ±100 안에서 같이 난다 */
-export const VERDICT_TIMING = Object.freeze({ hearts: 5, announceAt: 2600, tolerance: 250, riseTolerance: 100, headBefore: 2350 });
-const VERDICT_FAMILY = ["verdict.", "ballot.", "pin.", "execution."];
+export const VERDICT_TIMING = Object.freeze({ hearts: 5, announceAt: 3000, tolerance: 250, riseTolerance: 100 });
+/** 처형 없는 낮(찬반 부결·동점·0표)에 하나도 없어야 하는 판결 계열 소리 접두 — 처형 단계가 없어 판결 대본이 없고(22-12), 찬반 소리(ballot.*)는 지웠다(D-14) */
+const VERDICT_FAMILY = ["verdict.", "ballot.", "execution."];
 
 const entriesOf = (log, id) => log.filter((e) => e.id === id);
 const validLog = (log) => Array.isArray(log) && log.every((e) => !!e && typeof e.id === "string" && Number.isFinite(e.at));
 
-/** 첫 박동과 이 시간(ms) 안에 요청된 소리는 같은 순간으로 보고 id 순으로 센다(틱 안 순서는 판마다 갈린다) */
-const VERDICT_HEAD_TICK_MS = 50;
-const headKey = (e, base) => (Math.abs(e.at - base) < VERDICT_HEAD_TICK_MS ? base : e.at);
-/** 첫 심장 박동 직전 이 시간(ms) 안에 요청된 판결 계열 소리도 앞머리에 센다(같은 진입 틱의 pin.on) */
-const VERDICT_HEAD_LEAD_MS = 100;
-/** 판결 앞머리 id 열: 첫 심장 박동부터 2350ms(= 2600 − 250, 결과 소리가 나도 되는 가장 이른 시각) 앞의 판결 계열 id (다른 UI 소리는 비교하지 않는다) */
-function verdictHead(log, base) {
-  // pin.on 은 같은 진입 순간에 즉시 요청되고 첫 심장 박동은 같은 틱의 타이머에서 나온다 — 로그 시각이 1~수 ms 앞서거나 같아 base 와 정확히 비교하면 판마다 갈린다(12-12).
-  // 첫 박동 직전 HEAD_LEAD_MS 안의 판결 계열도 같은 앞머리로 센다. 한 판에만 있으면 여전히 V5 가 실패한다
-  return log
-    .filter((e) => e.at >= base - VERDICT_HEAD_LEAD_MS && e.at - base < VERDICT_TIMING.headBefore && VERDICT_FAMILY.some((p) => e.id.startsWith(p)))
-    .sort((a, b) => headKey(a, base) - headKey(b, base) || a.id.localeCompare(b.id))
-    .map((e) => e.id);
-}
-
 /**
- * 판결 순간 소리 타이밍 판정 (sound-script, D-13·LS-1·T-12-36). 순수 함수 — 문턱은 여기에만 있고 흐름은 낮추지 않는다.
- * input = { pass, reject } (각 훅 로그 [{ id, at, … }]: 찬성으로 통과한 처형 판 · 반대로 부결된 판).
- *   V1 두 판 모두 verdict.heart 가 정확히 5개
- *   V2 통과 판: execution.gavel 이 정확히 1개이고 첫 심장 박동 +2600 ± 250
+ * 판결 순간 소리 타이밍 판정 (sound-script, D-13·LS-1·T-12-36 → 22-12 P22-13 으로 바뀜). 순수 함수 — 문턱은 여기에만 있고 흐름은 낮추지 않는다.
+ * input = { pass, none } (각 훅 로그 [{ id, at, … }]: 처형이 성립한 처형 단계 로그 · 처형 없이 밤으로 간 찬반 부결 판의 로그).
+ *   V1 통과 판: verdict.heart 가 정확히 5개이고 찬반 소리(ballot.*)·부결 소리(verdict.reject)가 0개
+ *   V2 통과 판: execution.gavel 이 정확히 1개이고 첫 심장 박동 +3000(유언 카드 3.0초 뒤) ± 250
  *   V3 통과 판: execution.rise 가 gavel 과 ±100 안
- *   V4 부결 판: gavel·rise 가 없고 verdict.reject 가 정확히 1개, 첫 심장 박동 +2600 ± 250
- *   V5 두 판의 2600ms 앞(첫 심장 박동 +2350 안) 판결 id 열이 같다 (결과가 앞머리에 새지 않는다)
+ *   V4 처형 없는 판: verdict.*·ballot.*·execution.* 소리가 0개(처형 단계가 없어 판결 대본이 없다)
  */
 export function soundVerdictTimingChecks(input) {
   const T = VERDICT_TIMING;
   const labels = {
-    V1: `verdict.heart 가 두 판 모두 정확히 ${T.hearts}개`,
+    V1: `통과: verdict.heart 가 정확히 ${T.hearts}개이고 ballot.*·verdict.reject 는 0개`,
     V2: `통과: execution.gavel 이 첫 심장 박동 +${T.announceAt}ms ± ${T.tolerance}`,
     V3: `통과: execution.rise 가 gavel 과 ±${T.riseTolerance}ms 안`,
-    V4: `부결: gavel·rise 없이 verdict.reject 가 첫 심장 박동 +${T.announceAt}ms ± ${T.tolerance}`,
-    V5: "두 판의 2600ms 앞 판결 소리 열이 같다 (결과 무관 앞머리)",
+    V4: "처형 없는 판(찬반 부결): 판결·찬반·처형 계열 소리가 0개",
   };
-  const ids = ["V1", "V2", "V3", "V4", "V5"];
   const pass = validLog(input?.pass) ? input.pass : null;
-  const reject = validLog(input?.reject) ? input.reject : null;
-  const base = (log) => {
-    const hs = log === null ? [] : entriesOf(log, "verdict.heart").sort((a, b) => a.at - b.at);
-    return hs.length > 0 ? hs[0].at : null;
-  };
-  const pb = base(pass);
-  const rb = base(reject);
+  const none = validLog(input?.none) ? input.none : null;
+  const hs = pass === null ? [] : entriesOf(pass, "verdict.heart").sort((a, b) => a.at - b.at);
+  const pb = hs.length > 0 ? hs[0].at : null;
   const out = [];
 
-  if (pass === null || reject === null) out.push(noMeasure("V1", labels.V1, "통과 판·부결 판 훅 로그"));
+  if (pass === null) out.push(noMeasure("V1", labels.V1, "통과 판 훅 로그"));
   else {
     const bad = [];
-    for (const [name, log] of [["통과", pass], ["부결", reject]]) {
-      const n = entriesOf(log, "verdict.heart").length;
-      if (n !== T.hearts) bad.push(`${name} 판 verdict.heart ${n}개`);
-    }
+    if (hs.length !== T.hearts) bad.push(`verdict.heart ${hs.length}개`);
+    const stray = pass.filter((e) => e.id.startsWith("ballot.") || e.id === "verdict.reject").map((e) => e.id);
+    if (stray.length > 0) bad.push(`없어야 할 소리 ${[...new Set(stray)].join(",")}`);
     out.push(result("V1", labels.V1, bad));
   }
 
@@ -2942,23 +2914,39 @@ export function soundVerdictTimingChecks(input) {
     out.push(result("V3", labels.V3, bad));
   }
 
-  if (reject === null || rb === null) out.push(noMeasure("V4", labels.V4, "부결 판의 verdict.heart"));
+  if (none === null) out.push(noMeasure("V4", labels.V4, "처형 없는 판 훅 로그"));
   else {
-    const rj = entriesOf(reject, "verdict.reject");
-    const bad = [];
-    if (entriesOf(reject, "execution.gavel").length > 0 || entriesOf(reject, "execution.rise").length > 0) bad.push("부결 판에 gavel/rise 가 남");
-    if (rj.length !== 1) bad.push(`verdict.reject ${rj.length}개`);
-    else if (Math.abs(rj[0].at - rb - T.announceAt) > T.tolerance) bad.push(`reject 간격 ${Math.round(rj[0].at - rb)}ms`);
-    out.push(result("V4", labels.V4, bad));
+    const stray = none.filter((e) => VERDICT_FAMILY.some((p) => e.id.startsWith(p))).map((e) => e.id);
+    out.push(result("V4", labels.V4, stray.length === 0 ? [] : [`없어야 할 소리 ${[...new Set(stray)].join(",")}`]));
   }
+  return out;
+}
 
-  if (pb === null || rb === null) out.push(noMeasure("V5", labels.V5, "두 판의 verdict.heart"));
-  else {
-    const a = verdictHead(pass, pb);
-    const b = verdictHead(reject, rb);
-    out.push(result("V5", labels.V5, a.join(",") === b.join(",") ? [] : [`통과 [${a.join(", ")}] ≠ 부결 [${b.join(", ")}]`]));
+/**
+ * 처형·유언 단계 누설 판정(emcee-leak LK-W1·LK-W2, 22-13 P22-11). reads = [{ role(시점), phase("defense"|"execution"), keys(그 시점 view.day 키 이름 정렬), sheets([data-will-sheet] 수), condemned(내가 처형자) }].
+ * LK-W1 같은 단계의 day 키 집합이 역할 다섯 시점에서 모두 같다(역할이 키 모양을 바꾸지 않는다) · LK-W2 유언 시트는 처형자 DOM 에만 있고(유언 단계 1개) 처형 단계에는 아무도 없다.
+ * 읽은 시점이 없으면 측정값 없음으로 실패한다(공허한 통과 방지).
+ */
+export function willLeakChecks(reads) {
+  const labels = {
+    "LK-W1": "유언·처형 단계의 day 키 집합이 모든 시점에서 같다",
+    "LK-W2": "유언 시트는 처형자 DOM 에만 있다(유언 단계 처형자 1개·나머지 0개, 처형 단계 0개)",
+  };
+  const list = Array.isArray(reads) ? reads.filter((r) => r && Array.isArray(r.keys) && isNum(r.sheets)) : [];
+  const phases = ["defense", "execution"];
+  if (list.length === 0 || !phases.every((p) => list.some((r) => r.phase === p))) return Object.entries(labels).map(([id, l]) => noMeasure(id, l, "유언·처형 단계 읽기"));
+  const bad1 = [];
+  const bad2 = [];
+  for (const ph of phases) {
+    const rs = list.filter((r) => r.phase === ph);
+    const first = rs[0].keys.join(",");
+    for (const r of rs) if (r.keys.join(",") !== first) bad1.push(`${ph} ${r.role} [${r.keys.join(",")}] ≠ [${first}]`);
+    for (const r of rs) {
+      const want = ph === "defense" && r.condemned === true ? 1 : 0;
+      if (r.sheets !== want) bad2.push(`${ph} ${r.role} 시트 ${r.sheets}개(기대 ${want}, 처형자 ${r.condemned === true})`);
+    }
   }
-  return ids.map((id) => out.find((l) => l.id === id));
+  return [result("LK-W1", labels["LK-W1"], bad1), result("LK-W2", labels["LK-W2"], bad2)];
 }
 
 /** 동작 소리 gain(선형): 내 것 0dB = 1, 남의 것 −6dB ≈ 0.501 */

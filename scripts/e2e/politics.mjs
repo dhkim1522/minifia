@@ -4,7 +4,7 @@
 // 판정 문턱은 lib.mjs 의 순수 검사 함수(floatButtonChecks·sheetFitChecks·claimBadgeChecks·pickButtonChecks)에 있고 여기서는 낮추지 않는다.
 // 귓속말 본문(canary)은 결과 표와 오류 문구에 쓰지 않는다 — 있는지 없는지(불리언)만 남긴다(T-09.1.1-28).
 import { chooseVerdict, hitsInputSurface, installFakeViewport, readAnnounceClear, readGame, readHostBand, readChatLines, sampleWorld, screensOfWorld, SetupError, settle, skipTo, sleep, tapTurnPick, tapWorld } from "./browser.mjs";
-import { FLOAT_BOX_H, announceClearChecks, ballotCountChecks, claimBadgeChecks, floatButtonChecks, gamePanelHeight, graphemeCount, pickButtonChecks, rectInside, rectsOverlap, runoffChecks, sheetFitChecks, showdownChecks, verdictTimelineChecks } from "./lib.mjs";
+import { FLOAT_BOX_H, announceClearChecks, claimBadgeChecks, floatButtonChecks, gamePanelHeight, graphemeCount, pickButtonChecks, rectInside, rectsOverlap, runoffChecks, sheetFitChecks, showdownChecks, executionTimelineChecks } from "./lib.mjs";
 
 /** 31자소 본문: 입력칸이 30자소로 자르는지 본다. 앞 30자소가 실제로 서버에 가는 본문(canary)이다 */
 const LONG_31 = "귓속말카나리아본문은제삼자에게보이면안돼요가나다라마바사아자차";
@@ -338,7 +338,7 @@ function installShowdownLog(page) {
         done: doneSeats,
         counts,
         announce: (q("[data-announce] .mf-announce__text")?.textContent ?? "").trim(),
-        ballots: q("[data-ballots]") !== null,
+        ballots: q("[data-ballots]") !== null, /* 0건 */
         roleChips: qa("[data-role-chip]").length,
         floats: qa("[data-float]").length,
         pin,
@@ -943,16 +943,26 @@ export function makePoliticsFlows(h) {
       });
       rec(sc, "PN5", "끝 알림에는 핀이 꺼져 있고 선두·과반(방장 득표)을 비추지 않는다", end.ok, end.detail);
       await attempt(async () => {
-        await ht.waitFor((v) => v.phase === "defense", 8000, "변론");
+        await ht.waitFor((v) => v.phase === "defense", 8000, "유언");
       });
       // PN7 봇들의 차례에도 핀이 그 차례 주인에게서 방장으로 간다: 기록한 좌석에 네 차례 주인이 모두 나오고, 끝 알림 직전 마지막 켜진 좌석은 방장이다
       const all = await logFrom(0);
       const seen = new Set(all.map((e) => e.seat).filter((x) => x !== null));
       const lastLit = [...all].reverse().find((e) => e.seat !== null);
-      rec(sc, "PN7", "봇 차례에도 핀이 지나간다: 기록에 네 좌석이 모두 나오고 마지막으로 비춘 사람은 방장(가장 많이 지목받은 사람)이다 — 끝 알림에서는 비추지 않는다", order.every((x) => seen.has(x)) && lastLit?.seat === hostSeat, `나온 좌석 ${[...seen].join(",")} · 마지막 켜진 좌석 ${lastLit?.seat}`);
-      // PN6 변론으로 넘어간 뒤에도 핀은 없다(이 계획의 핀은 지목 차례 전용)
-      const after = await nowPin();
-      rec(sc, "PN6", "지목이 끝난 뒤(변론)에는 핀이 없다", after.seat === null && after.strength === 0, JSON.stringify(after));
+      rec(sc, "PN7", "봇 차례에도 핀이 지나간다: 기록에 네 좌석이 모두 나오고 마지막으로 비춘 사람은 방장(가장 많이 지목받은 사람)이다 — 끝 알림에서는 비추지 않고 유언 단계에 방장에게 다시 선다", order.every((x) => seen.has(x)) && lastLit?.seat === hostSeat, `나온 좌석 ${[...seen].join(",")} · 마지막 켜진 좌석 ${lastLit?.seat}`);
+      // PN6 유언 단계(22페이즈 P22-10): 핀이 처형자(방장, 가장 많이 지목받은 사람)에게 서서 비춘다 — 지목 차례의 핀·손가락·day.points 는 단계 끝과 함께 사라졌다
+      const will = await attempt(async () => {
+        const p = await pinUntil((x) => x.seat === hostSeat && x.strength >= 0.5, 3000, "유언 단계 스포트라이트");
+        return { ok: true, detail: `seat ${p.seat} · strength ${r1(p.strength)}` };
+      });
+      rec(sc, "PN6", "유언 단계에는 핀이 처형자(방장, 좌석 " + hostSeat + ")에게 켜져 있다(__mfPin.seat = 처형자)", will.ok, will.detail);
+      // PN8 P22-4: 지목이 끝난 뒤 view 의 day.points·화면의 손가락·차례 블록이 없다(차례 연출은 단계 끝에 모두 사라진다)
+      const gone = await attempt(async () => {
+        const pts = (ht.last().day?.points ?? []).length;
+        const dom = await hp.evaluate(() => ({ finger: document.querySelectorAll("[data-finger], [data-point-line]").length, turn: document.querySelectorAll("[data-turn-block]").length, picks: document.querySelectorAll("[data-pick]").length }));
+        return pts === 0 && dom.finger === 0 && dom.turn === 0 && dom.picks === 0 ? true : { ok: false, detail: `points ${pts} · 손가락 ${dom.finger} · 차례 블록 ${dom.turn} · 이름표 단추 ${dom.picks}` };
+      });
+      rec(sc, "PN8", "지목이 끝난 뒤(유언) day.points·손가락·차례 블록·이름표 단추가 모두 0이다", gone.ok, gone.detail);
     } finally {
       await closeGame(game);
     }
@@ -960,15 +970,16 @@ export function makePoliticsFlows(h) {
 
 
   /**
-   * 판결 순간(09.1.1-13, UI-SPEC 흐름 E2E ③, 결정 0066-3·7): 방장 + 봇 7(8인판, 이름 8자), 봇은 모두 찬성·방장을 지목 → 방장이 변론자.
-   * 둘째 판(봇 모두 반대 → 부결, 변론자가 산 채로 남음)에서 처형 진입 2.0초에 새로 고침을 건다. 시계는 페이지가 처형 단계를 처음 그린 시각(= 0)이고, 서버 시각과의 어긋남(지연)만큼 허용 오차가 있다(lib.mjs VERDICT_TOL).
-   * 첫째 판: 시간표(VT1~VT6)·찬반 숫자 줄(BF1~BF3)·큰 글 자리(AC1·AC2) — 큰 글이 한 줄인 1.6초와 처형 큰 글 3.2초 두 번 —·채팅 카드(이름은 여기에 남는다)·직업 칩 없음·찬반 진행 중 view 에 day.ballots 없음.
-   * 18.1-13(결정 0083-9·0083-10): 찬반은 숫자 둘이라 얼굴 칩·이름 알약이 없고(BF1), 큰 글은 띠 면·소리 단추와 겹치지 않는다(AC1·AC2).
+   * 판결 순간(09.1.1-13 → 22-13, UI-SPEC P22-11·P22-12·P22-13): 방장 + 봇 7(8인판, 이름 8자), 봇은 모두 찬성·방장을 지목 → 방장이 처형자.
+   * 첫째 판: 찬반·지목·유언 단계 view 에 찬반 기록(day.ballots)이 없고(L19), 유언 단계에서 방장이 글을 남기면 처형 단계 6.6초 시간표를 잰다 —
+   * 유언 카드 0~3.0초(VT1)·큰 글 3.0초(VT2)·핀 6.0초(VT3)·어둡게 막(VT4)·줌(VT5)·끝 6.6초(VT6) — 와 카드 자리(AC1·AC2, 띠·소리 단추 밖)·큰 글 자리(AC1·AC2, 8자 이름이 여러 줄로 감겨도 띠·소리 단추를 피함)·찬반 기록 카드·개인 표 표식 0건.
+   * 둘째 판: 처형 진입 2.0초에 새로 고침 → 첫 화면에 유언 카드가 등장 모션 없이(is-still) 바로 있고 어둡게 막이 켜져 있다(재접속 첫 화면).
    */
   async function politicsVerdictFlow(ctx) {
     const id = "politics-verdict";
     const rec = recorder(ctx);
-    // 방장(변론자) 닉네임을 8자로 두어 처형 알림 "○○○○○○○○ 님 처형"이 소리 단추 폭만큼 좁아진 큰 글 폭에서 여러 줄로 감기는 최악 모양에서도 숫자 줄이 큰 글과 겹치지 않고 큰 글이 띠·소리 단추를 피하는지(BF2·AC1·AC2, 3.2초)까지 본다.
+    const WILL = "마지막 한마디 남깁니다";
+    // 방장(처형자) 닉네임을 8자로 두어 처형 알림 "○○○○○○○○ 님 처형"이 소리 단추 폭만큼 좁아진 큰 글 폭에서 여러 줄로 감기는 최악 모양에서도 큰 글이 띠·소리 단추를 피하는지(AC1·AC2, 3.2초)까지 본다.
     const OPEN = { guests: 0, bots: 7, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion", hostNick: "방장님이방장님이" };
     const sc = `${id}/main`;
 
@@ -977,7 +988,7 @@ export function makePoliticsFlows(h) {
     try {
       const { hp, ht, hostSeat } = game;
       await allAt([hp], "discussion");
-      // 처형 단계 기록기: 변할 때만 { t, phase, stage, yes, no, seat, strength, zoom, dim } 를 쌓는다(t = performance.now)
+      // 처형 단계 기록기: 변할 때만 { t, phase, card, announce, seat, strength, zoom, dim } 를 쌓는다(t = performance.now)
       const hasHook = await hp.evaluate(() => window.__mfPin !== undefined);
       if (!hasHook) throw new SetupError("window.__mfPin 훅이 없음(?e2e=1 세션이 아님)");
       await hp.evaluate(() => {
@@ -985,14 +996,11 @@ export function makePoliticsFlows(h) {
         let key = "";
         const tick = () => {
           const root = document.querySelector("[data-game-stage]");
-          const reveal = document.querySelector("[data-ballots]");
-          const shown = (side) => !!reveal && !!reveal.querySelector(`[data-ballot-side="${side}"]:not(.is-pending)`);
           const p = window.__mfPin;
           const e = {
             phase: root?.getAttribute("data-phase") ?? "",
-            stage: reveal?.getAttribute("data-stage") ?? null,
-            yes: shown("yes"),
-            no: shown("no"),
+            card: document.querySelector("[data-will-reveal]") !== null,
+            announce: (document.querySelector("[data-announce] .mf-announce__text")?.textContent ?? "").trim() || null,
             seat: p ? p.seat : null,
             strength: p ? Math.round(p.strength * 100) / 100 : 0,
             zoom: p ? p.zoom : 1,
@@ -1021,109 +1029,91 @@ export function makePoliticsFlows(h) {
         }
       };
 
-      // 찬반 진행 중에는 view 에 day.ballots 가 없다(L19): 처형으로 넘기기 전 방장 view 와 찬반 단계 동안 보이는 마지막 view 를 본다
+      // 찬반·지목·유언 동안 view 에 찬반 기록(day.ballots·voteLog·day.verdict)이 없다(L19, D-14): 단계마다 마지막 view 를 본다
       await skipTo(hp, ht, "verdict");
       await allAt([hp], "verdict");
+      const keysIn = (v) => ["ballots", "voteLog"].filter((k) => v.day?.[k] !== undefined || JSON.stringify(v).includes(`"${k}"`));
+      const v1 = keysIn(ht.last());
+      await skipTo(hp, ht, "nomination");
+      await skipTo(hp, ht, "defense");
+      await allAt([hp], "defense");
+      const v2 = keysIn(ht.last());
       const during = await attempt(async () => {
         const v = ht.last();
-        if (v.phase !== "verdict") throw new SetupError(`찬반 단계가 아님: ${v.phase}`);
-        if (v.day?.candidate !== hostSeat) throw new SetupError(`변론자가 방장이 아님: ${v.day?.candidate}`);
-        const leaked = v.day?.ballots !== undefined || JSON.stringify(v).includes('"ballots"');
-        return leaked ? { ok: false, detail: "찬반 진행 중 view 에 ballots 가 있다" } : true;
+        if (v.phase !== "defense") throw new SetupError(`유언 단계가 아님: ${v.phase}`);
+        if (v.day?.candidate !== hostSeat) throw new SetupError(`처형자가 방장이 아님: ${v.day?.candidate}`);
+        return v1.length === 0 && v2.length === 0 ? true : { ok: false, detail: `찬반 ${v1.join(",") || "-"} · 유언 ${v2.join(",") || "-"} 키가 view 에 있다` };
       });
-      rec(sc, "V0", "찬반 진행 중에는 view 에 day.ballots 가 없다", during.ok, during.detail);
-      await skipTo(hp, ht, "execution");
-      await ht.waitFor((v) => v.phase === "execution" && v.day?.ballots !== undefined && v.day?.verdict !== undefined, 4000, "처형 단계 view(찬반 기록 포함)");
+      rec(sc, "V0", "찬반·지목·유언 단계 view 에 찬반 기록(day.ballots·voteLog)이 없다", during.ok, during.detail);
+
+      // 방장이 유언을 고쳐 [남기기] → 곧바로 처형. 처형 단계 기록이 시작된다
+      await hp.locator('[data-will-sheet="will"] textarea').fill(WILL);
+      await hp.locator("[data-will-save]").click({ timeout: 4000 });
+      await ht.waitFor((v) => v.phase === "execution", 4000, "처형 단계 view");
       const exec = ht.last();
-      const passed = exec.day.verdict.passed === true;
       const bots = exec.players.filter((p) => p.seat !== hostSeat);
       if (bots.length !== 7) throw new SetupError(`봇이 7명이 아님: ${bots.length}`);
 
-      // V7 묶음 배치 — 알림이 한 줄인 1.6초
+      // 카드 자리 — 처형 진입 1.5초
       await waitRel(1500, "처형 단계를 못 봄");
-      const measure = () =>
-        hp.evaluate(() => {
-          const q = (s, r = document) => r.querySelector(s);
-          const qa = (s, r = document) => [...r.querySelectorAll(s)];
-          const rect = (el) => {
-            if (!el) return null;
-            const r = el.getBoundingClientRect();
-            return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
-          };
-          const root = q("[data-ballots]");
-          if (!root) return null;
-          const ann = q("[data-announce] .mf-announce__body");
-          const panel = q("[data-world-panel]");
-          const header = q(".mf-game__header");
-          return {
-            root: rect(root),
-            groups: qa("[data-ballot-side]", root).map((g) => ({ side: g.getAttribute("data-ballot-side"), rect: rect(g), text: (g.textContent ?? "").trim() })),
-            panelTop: panel ? panel.getBoundingClientRect().top : null,
-            announceBottom: ann ? ann.getBoundingClientRect().bottom : null,
-            announceText: ann ? (ann.textContent ?? "").trim() : null,
-            viewport: { w: window.innerWidth, h: window.innerHeight },
-            // 14페이즈: 앱의 스테이지 사각형(useMapInsets)은 윗변이 헤더가 아니라 자막 띠 면 아랫변이다 — 줌 문턱(스테이지 360 이상)은 그 높이로 본다
-            stageH: header && panel ? panel.getBoundingClientRect().top - Math.max(header.getBoundingClientRect().bottom, q("[data-host-band] .mv-host__band")?.getBoundingClientRect().bottom ?? 0) : null,
-            roleChips: qa("[data-role-chip]").length,
-            pillCount: qa("[data-ballot-seat], .mv-ballots__pill, .mv-ballots__face", root).length,
-          };
-        });
-      const m1 = await measure();
-      if (m1 === null) throw new Error("1.6초에 찬반 묶음이 없다");
-      recLines(rec, `${id}/fit`, ballotCountChecks(m1), " (1.6초 큰 글 한 줄)");
-      recLines(rec, `${id}/fit`, announceClearChecks(await readAnnounceClear(hp)), " (1.6초 큰 글)");
-      rec(`${id}/fit`, "BF-info", "숫자 덩이 글자(참고)", true, `${m1.groups.map((g) => g.text).join(" · ")} · 큰 글 "${m1.announceText}"`, true);
-      // 처형된 변론자(방장)는 이 순간부터 유령 시점이라 칩이 정상이다 — 산 사람 화면의 칩 없음은 부결 판(둘째 판)에서 본다
-      const expectZoom = m1.stageH !== null && m1.stageH >= 360;
-      // G 공통 검사는 묶음이 있는 지금 한 번
+      const card = await hp.evaluate(() => {
+        const el = document.querySelector("[data-will-reveal]");
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }, text: (el.textContent ?? "").trim(), pe: getComputedStyle(el).pointerEvents };
+      });
+      rec(sc, "V1", "1.5초에 유언 카드가 보이고 글이 방장이 남긴 글이다(처형 단계 0~3.0초)", card !== null && card.text === WILL, card === null ? "유언 카드가 없다" : `글 "${card.text}"`);
+      if (card !== null) {
+        const clear1 = await readAnnounceClear(hp);
+        recLines(rec, `${id}/fit`, announceClearChecks({ announce: card.rect, band: clear1.band, sound: clear1.sound }), " (유언 카드: 띠 면 아래·소리 단추 밖)");
+        rec(`${id}/fit`, "V1b", "유언 카드는 누를 수 없다(pointer-events: none)", card.pe === "none", `pointer-events ${card.pe}`);
+      }
+      const noRecord = await hp.evaluate(() => ({ cards: document.querySelectorAll('[data-card="ballots"]').length, reveal: document.querySelectorAll("[data-ballots], [data-ballot-side], [data-ballot-seat]").length, roleChips: document.querySelectorAll("[data-role-chip]").length })); /* 0건 */
+      rec(sc, "V7", "처형 단계에 찬반 기록 카드·찬반 묶음·얼굴 표식이 0건이다(찬반 기록이 없다, D-14)", noRecord.cards === 0 && noRecord.reveal === 0, `기록 카드 ${noRecord.cards} · 묶음 표식 ${noRecord.reveal}`);
+      // G 공통 검사는 카드가 있는 지금 한 번
       await gameGH(ctx, id, "reveal", game.host);
 
-      // 처형(또는 부결) 알림이 선 뒤(3.2초): 알림이 한 줄이면 묶음과 겹치지 않는다
-      await waitRel(3200, "3.2초");
-      const m2 = await measure();
-      if (m2 === null) throw new Error("3.2초에 찬반 묶음이 없다");
-      recLines(rec, `${id}/fit`, ballotCountChecks(m2), " (3.2초 처형 큰 글)");
+      // 처형 큰 글이 선 뒤(3.2초): 큰 글이 띠·소리 단추를 피한다(8자 이름은 여러 줄)
+      await waitRel(3300, "3.3초");
       const clear2 = await readAnnounceClear(hp);
-      recLines(rec, `${id}/fit`, announceClearChecks(clear2), " (3.2초 처형 큰 글)");
+      recLines(rec, `${id}/fit`, announceClearChecks(clear2), " (3.3초 처형 큰 글)");
       rec(`${id}/fit`, "AC-info", "큰 글 줄 수(참고, 8자 이름)", true, `큰 글 "${clear2.text}" · 높이 ${clear2.announce ? Math.round(clear2.announce.height) : "-"}px · 폭 ${clear2.announce ? Math.round(clear2.announce.width) : "-"}px`, true);
+      const cardGone = await hp.evaluate(() => document.querySelector("[data-will-reveal]") === null);
+      rec(sc, "V6", "3.3초에는 유언 카드가 사라졌고 큰 글만 남는다", cardGone, cardGone ? "" : "유언 카드가 남아 있다");
 
-      // V6 4.6초 뒤: 묶음은 없고 채팅 카드가 있다
-      await waitRel(4900, "4.9초");
-      const after = await hp.evaluate(() => {
-        const q = (s, r = document) => r.querySelector(s);
-        const qa = (s, r = document) => [...r.querySelectorAll(s)];
-        const card = q('[data-card="ballots"]');
-        const side = (k) => (card ? qa(`[data-ballot-side="${k}"] .mv-chat__ballots-name`, card).map((n) => (n.textContent ?? "").trim()) : null);
-        return { reveal: q("[data-ballots]") !== null, card: card !== null, yes: side("yes"), no: side("no") };
-      });
-      const botNames = bots.map((b) => b.nickname).sort();
-      const cardOk = after.card && JSON.stringify([...(after.yes ?? [])].sort()) === JSON.stringify(botNames) && (after.no ?? []).length === 0;
-      rec(sc, "V6", "4.6초 뒤 묶음은 사라지고 채팅 카드(찬성 7명 = 변론자 외 봇, 반대 0명)가 같은 시각에 도착해 있다", !after.reveal && cardOk, `묶음 ${after.reveal ? "남음" : "없음"} · 카드 ${after.card ? "있음" : "없음"} · 찬성 ${after.yes?.length ?? "-"} · 반대 ${after.no?.length ?? "-"}`);
-
-      // V1~V5 시간표(기록기)
-      await waitRel(5800, "5.8초");
+      // 처형 단계 끝(6.6초) 뒤까지 기록한다 — 밤으로 넘어간 첫 기록이 시간표 끝이다
+      await waitRel(6200, "6.2초");
+      await ht.waitFor((v) => v.phase === "night", 2500, "처형 뒤 밤");
+      await sleep(250);
       const log = await hp.evaluate(() => window.__vLog);
-      recLines(rec, `${id}/timeline`, verdictTimelineChecks(log, { passed, candidate: hostSeat, expectZoom }), ` (${passed ? "처형" : "부결"}, 스테이지 높이 ${m1.stageH === null ? "?" : Math.round(m1.stageH)})`);
+      const m = await hp.evaluate(() => {
+        const panel = document.querySelector("[data-world-panel]");
+        const header = document.querySelector(".mf-game__header");
+        return { stageH: header && panel ? panel.getBoundingClientRect().top - Math.max(header.getBoundingClientRect().bottom, document.querySelector("[data-host-band] .mv-host__band")?.getBoundingClientRect().bottom ?? 0) : null };
+      });
+      // 줌은 스테이지가 360 이상일 때만 켜진다(앱 ZOOM_MIN_STAGE_H) — 처형 진입 때 높이는 패널 160 기준이라 기록 시점 높이(밤 패널)와 다를 수 있어, 기록의 최대 줌으로 정한다
+      const expectZoom = log.some((e) => e.phase === "execution" && e.zoom > 1.0005);
+      recLines(rec, `${id}/timeline`, executionTimelineChecks(log, { candidate: hostSeat, expectZoom }), ` (처형 6.6초 시간표, 줌 ${expectZoom ? "켜짐" : "없음"}, 밤 스테이지 높이 ${m.stageH === null ? "?" : Math.round(m.stageH)})`);
       const t0 = log.find((e) => e.phase === "execution")?.t ?? 0;
-      const yesAt = log.find((e) => e.t >= t0 && e.yes)?.t;
-      const noAt = log.find((e) => e.t >= t0 && e.no)?.t;
-      rec(`${id}/timeline`, "VT-info", "측정 시각(참고)", true, `찬성 ${yesAt ? Math.round(yesAt - t0) : "-"}ms · 반대 ${noAt ? Math.round(noAt - t0) : "-"}ms · 어둡게 막 ${log.some((e) => e.t >= t0 && e.dim === "verdict") ? "켜짐" : "없음"}`, true);
-      const dimSeen = log.some((e) => e.t >= t0 && e.dim === "verdict");
-      rec(sc, "V3b", "어둡게 막(data-dim=verdict)이 처형 진입 때 켜졌다가 4.6초 뒤 걷힌다", dimSeen && log.some((e) => e.t > t0 + 4000 && e.phase === "execution" && e.dim !== "verdict"), `켜짐 ${dimSeen}`);
+      const cardOffAt = log.find((e) => e.t >= t0 && e.phase === "execution" && e.card === false && log.some((x) => x.t < e.t && x.t >= t0 && x.card === true))?.t;
+      const annAt = log.find((e) => e.t >= t0 && e.phase === "execution" && e.announce)?.t;
+      const endAt = log.find((e) => e.t >= t0 && e.phase !== "execution")?.t;
+      rec(`${id}/timeline`, "VT-info", "측정 시각(참고)", true, `카드 사라짐 ${cardOffAt ? Math.round(cardOffAt - t0) : "-"}ms · 큰 글 ${annAt ? Math.round(annAt - t0) : "-"}ms · 처형 끝 ${endAt ? Math.round(endAt - t0) : "-"}ms · 어둡게 막 ${log.some((e) => e.t >= t0 && e.dim === "verdict") ? "켜짐" : "없음"}`, true);
     } finally {
       await closeGame(game);
     }
 
-    // ---- 둘째 판: 처형 진입 2.0초에 새로 고침 → 첫 화면에 묶음이 애니메이션 없이 바로 있다 ----
-    // 둘째 판은 모두 반대(부결)라 변론자 방장이 산 채로 남는다 — 산 사람 화면의 직업 칩 없음(V8)을 본다
-    const game2 = await openGame(ctx, id, { ...OPEN, vote: { exec: "no", pick: "host" } });
+    // ---- 둘째 판: 처형 진입 2.0초에 새로 고침 → 첫 화면에 유언 카드가 등장 모션 없이 바로 있다 ----
+    const game2 = await openGame(ctx, id, OPEN);
     try {
-      const { hp, ht, hostSeat } = game2;
+      const { hp, ht } = game2;
       const sc2 = `${id}/reload`;
       await skipTo(hp, ht, "verdict");
-      await skipTo(hp, ht, "execution");
+      await skipTo(hp, ht, "defense");
+      await hp.locator('[data-will-sheet="will"] textarea').fill(WILL);
+      await hp.locator("[data-will-save]").click({ timeout: 4000 });
       const t0Node = performance.now();
-      await ht.waitFor((v) => v.phase === "execution" && v.day?.ballots !== undefined, 4000, "처형 단계 view");
+      await ht.waitFor((v) => v.phase === "execution" && v.day?.execution?.will !== undefined, 4000, "처형 단계 view");
       const waitMs = 2000 - (performance.now() - t0Node);
       if (waitMs > 0) await sleep(waitMs);
       await hp.reload({ waitUntil: "domcontentloaded" });
@@ -1132,54 +1122,22 @@ export function makePoliticsFlows(h) {
         try {
           handle = await hp.waitForFunction(
             () => {
-              const el = document.querySelector("[data-ballots]");
+              const el = document.querySelector("[data-will-reveal]");
               if (!el) return false;
-              return {
-                stage: el.getAttribute("data-stage"),
-                enter: el.querySelectorAll(".is-enter").length,
-                pending: el.querySelectorAll(".is-pending").length,
-                sides: el.querySelectorAll("[data-ballot-side]").length,
-                pills: el.querySelectorAll("[data-ballot-seat]").length,
-                dim: document.querySelector(".mf-game__dim")?.getAttribute("data-dim") ?? null,
-              };
+              return { still: el.classList.contains("is-still"), text: (el.textContent ?? "").trim(), dim: document.querySelector(".mf-game__dim")?.getAttribute("data-dim") ?? null };
             },
             null,
-            { polling: "raf", timeout: 3200 },
+            { polling: "raf", timeout: 2400 },
           );
         } catch {
-          throw new SetupError("새로 고침 뒤 4.6초 안에 묶음을 못 봄(느린 새로 고침)");
+          throw new SetupError("새로 고침 뒤 3.0초 안에 유언 카드를 못 봄(느린 새로 고침)");
         }
         const s = await handle.jsonValue();
-        if (s.stage !== "both" || s.enter !== 0 || s.pending !== 0 || s.sides !== 2 || s.pills !== 0) return { ok: false, detail: `첫 화면 숫자 줄 stage ${s.stage} · 등장 모션 ${s.enter} · 대기 ${s.pending} · 덩이 ${s.sides} · 알약 ${s.pills}` };
-        return { ok: true, detail: `stage ${s.stage} · 덩이 ${s.sides}` };
+        return s.still && s.text === WILL ? { ok: true, detail: `is-still · 글 "${s.text}"` } : { ok: false, detail: `첫 화면 카드 is-still ${s.still} · 글 "${s.text}"` };
       });
-      rec(sc2, "V9", "(부결 판) 처형 진입 2.0초에 새로 고침하면 첫 화면에 찬반 숫자 줄이 애니메이션 없이 바로 있다(숫자 덩이 둘·알약 0개)", first.ok, first.detail);
-      const alive = await hp.evaluate(() => ({ chips: document.querySelectorAll("[data-role-chip]").length, ghost: document.querySelector("[data-ghost-view]") !== null }));
-      rec(sc2, "V8", "산 사람 화면(부결로 살아남은 변론자)에 직업 칩이 없다", alive.chips === 0 && !alive.ghost, `칩 ${alive.chips}개 · 유령 시점 ${alive.ghost}`);
+      rec(sc2, "V9", "처형 진입 2.0초에 새로 고침하면 첫 화면에 유언 카드가 등장 모션 없이(is-still) 바로 있다", first.ok, first.detail);
       const dimNow = await hp.evaluate(() => document.querySelector(".mf-game__dim")?.getAttribute("data-dim") ?? null);
       rec(sc2, "V9b", "새로 고침 뒤에도 어둡게 막이 켜져 있다", dimNow === "verdict", `data-dim ${dimNow}`);
-      // 줌: 훅의 첫 1 이 아닌 값이 곧바로 1.10 이다(아래 stageH 조건이 맞을 때만)
-      const z = await attempt(async () => {
-        const stage = await readGame(hp);
-        // 14페이즈: 스테이지 윗변은 자막 띠 면 아랫변(앱 useMapInsets 와 같다)
-        const bandNow = await readHostBand(hp);
-        const stageH = stage?.stage ? stage.stage.bottom - Math.max(stage.stage.top, bandNow?.bandRect?.bottom ?? 0) : null;
-        if (stageH === null) throw new SetupError("스테이지를 못 읽음");
-        if (stageH < 360) {
-          const peek = await hp.evaluate(() => window.__mfPin?.zoom ?? null);
-          return peek === 1 || peek === null ? { ok: true, detail: `스테이지 ${Math.round(stageH)} < 360 이라 줌 없음` } : { ok: false, detail: `작은 스테이지에서 줌 ${peek}` };
-        }
-        let h;
-        try {
-          h = await hp.waitForFunction(() => (window.__mfPin && window.__mfPin.zoom !== 1 ? window.__mfPin.zoom : false), null, { polling: "raf", timeout: 2500 });
-        } catch {
-          return { ok: false, detail: "줌이 1.10 으로 오르지 않음" };
-        }
-        const v = await h.jsonValue();
-        return Math.abs(v - 1.1) <= 0.01 ? { ok: true, detail: `첫 값 ${v}` } : { ok: false, detail: `첫 값 ${v} (애니메이션으로 시작)` };
-      });
-      rec(sc2, "V9c", "새로 고침 뒤 줌이 현재 값(1.10, 높이 360 미만은 1)으로 시작한다", z.ok, z.detail);
-      void hostSeat;
     } finally {
       await closeGame(game2);
     }
@@ -1806,7 +1764,7 @@ export function makePoliticsFlows(h) {
           const ex = log.filter((e) => e.phase === "execution");
           const texts = [...new Set(ex.map((e) => e.announce).filter((t) => t !== ""))];
           rec(s6, "SD9c", `처형 알림이 '${nameC} 님 처형' 이다 (${hs[k].who})`, texts.includes(`${nameC} 님 처형`), `알림 ${texts.length}개 · 처형 알림 ${texts.includes(`${nameC} 님 처형`)}`);
-          rec(s6, "SD9d", `'찬성 n · 반대 m' 알림이 없고 찬반 묶음([data-ballots])이 없다 (${hs[k].who})`, !texts.some((t) => /찬성|반대/.test(t)) && ex.every((e) => e.ballots === false), `찬반 알림 ${texts.filter((t) => /찬성|반대/.test(t)).length}개 · 묶음 ${ex.filter((e) => e.ballots).length}`);
+          rec(s6, "SD9d", `'찬성 n · 반대 m' 알림이 없고 찬반 묶음([data-ballots])이 없다 (${hs[k].who})`, !texts.some((t) => /찬성|반대/.test(t)) && ex.every((e) => e.ballots === false), `찬반 알림 ${texts.filter((t) => /찬성|반대/.test(t)).length}개 · 묶음 ${ex.filter((e) => e.ballots).length}`); /* 0건 */
           const zooms = ex.map((e) => e.pin?.zoom).filter((z) => typeof z === "number");
           rec(s6, "SD9e", `처형 동안 카메라 줌이 올라가지 않는다 (__mfPin.zoom 1) (${hs[k].who})`, ex.length >= 1 && zooms.length >= 1 && zooms.every((z) => z === 1), `줌 ${[...new Set(zooms)].join("/") || "기록 없음"} · 처형 기록 ${ex.length}개`);
           const lit = ex.filter((e) => e.pin && e.pin.seat === C.seat && e.pin.strength >= 0.5);

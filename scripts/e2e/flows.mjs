@@ -20,7 +20,9 @@ import {
   setBotVote,
   skipOnce,
   skipTo,
+  skipDayToExecution,
   tapPick,
+  tapTurnPick,
   offScannerScript,
   readOffScan,
   backToLobby,
@@ -126,6 +128,8 @@ import {
   OFF_DEVICE_SELECTORS,
   NOMINATION_MS,
   verdictPanelChecks,
+  nominationMaxMs,
+  turnBlockChecks,
   ANNOUNCE_MORNING_AT,
   LETTER_END_AT_MS,
   LETTER_FOLD_AT_MS,
@@ -137,12 +141,13 @@ import {
   sideColumnChecks,
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
+import { makeDayFlows } from "./day.mjs";
 import { makeMapSelectFlows } from "./mapselect.mjs";
 import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readRestSheet, readResultStage, rematchChecks, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
-import { CHAT_KB_PANEL_REST, CHAT_OPEN_STAGE_MIN, chatOpenChecks, chatOpenHeight, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureBallotsBackstop, measureChatOpen, readChatWindow, readLiveGhost } from "./polish.mjs";
+import { CHAT_KB_PANEL_REST, CHAT_OPEN_STAGE_MIN, chatOpenChecks, chatOpenHeight, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureChatOpen, readChatWindow, readLiveGhost } from "./polish.mjs";
 
 // Windows 에서 URL.pathname 은 "/C:/..." 라 mkdir 이 "C:\C:\..." 로 깨진다 — fileURLToPath 로 바꾼다(21-16).
 export const OUT_DIR = fileURLToPath(new URL("./out/", import.meta.url));
@@ -1512,7 +1517,7 @@ async function waitAnnounces(page, want, ms = 7000) {
   }
 }
 
-// ---- day: 낮 토론 → 지목 → 변론 → 찬반 → 처형 → 밤 (사람 넷, 모두 4자 이름: 4자 이름 판의 지목 버튼 무가림) ----
+// ---- day: 낮 토론 → 찬반 → 지목 → 유언 → 처형 → 밤 (사람 넷, 모두 4자 이름: 4자 이름 판의 지목 버튼 무가림) — 22페이즈 D-10 새 낮 순서 ----
 
 async function dayFlow(ctx) {
   const id = "day";
@@ -1523,7 +1528,7 @@ async function dayFlow(ctx) {
     const { host, hp, ht, hostSeat, guests } = game;
     const humans = [{ page: hp, tracker: ht, handle: host, who: "방장" }, ...guests.map((x, i) => ({ page: x.page, tracker: x.tracker, handle: x, who: `손님${i + 1}` }))];
     const pages = humans.map((x) => x.page);
-    const N = humans.length; // 산 사람 4명: 과반 3, 지목 버튼 3, 찬반 숫자 3
+    const N = humans.length; // 산 사람 4명: 과반 3, 지목 버튼 3, 찬반은 전원 투표자
     await allAt(pages, "discussion");
     await Promise.all(pages.map((p) => settle(p)));
 
@@ -1545,7 +1550,7 @@ async function dayFlow(ctx) {
       }
     }
 
-    // [토론 끝내기]: 두 명이 눌러도 토론이 이어지고, 세 번째(과반)에서 지목으로 넘어간다
+    // [토론 끝내기]: 두 명이 눌러도 토론이 이어지고, 세 번째(과반)에서 찬반으로 넘어간다(22페이즈 D-10)
     {
       const sc = `${id}/discussion`;
       for (let i = 0; i < majorityOf(N) - 1; i++) {
@@ -1564,133 +1569,22 @@ async function dayFlow(ctx) {
       });
       rec(sc, "DY3", `[토론 끝내기] 누르면 눌림 표시 (${humans[N - 1].who})`, last.ok, last.detail);
       const moved = await attempt(async () => {
-        await ht.waitFor((v) => v.phase === "nomination", 5000, "과반 → 지목");
+        await ht.waitFor((v) => v.phase === "verdict", 5000, "과반 → 찬반");
       });
-      rec(sc, "DY5", `과반(${majorityOf(N)}명)이 누르면 지목으로 넘어간다`, moved.ok, moved.detail);
+      rec(sc, "DY5", `과반(${majorityOf(N)}명)이 누르면 찬반으로 넘어간다`, moved.ok, moved.detail);
     }
 
-    // 동시 투표(13페이즈 기본판, 결정 0072): 제목 '투표', 시작 직후 이름표 깜빡임(3초 안에 멈춤), 이름표 버튼은 나를 뺀 산 사람 수(44×44·무가림),
-    // 맵 탭은 move 를 보내지 않는다, 손님 셋이 방장을 누르면 눌림·득표 배지가 모든 페이지에서 같고 과반이면 선두·유력, 마음을 바꾸면 배지가 따라 바뀐다.
-    // 검사 ID NM1~NM6 은 v2.0 동시 지목에서 되살렸고 NM7~NM10 이 13페이즈에서 더해졌다. 순차 차례 검사(NT*)는 이 흐름에서 뺐다(turnBlockChecks 는 lib 에 남는다). 판정 문턱은 그대로다.
-    {
-      const sc = `${id}/nomination`;
-      await allAt(pages, "nomination");
-      // NM8 시작 직후(14페이즈 U-7): 누를 수 있는 이름표(나를 뺀 산 사람)가 빛난다([data-call]) — 옛 첫 깜빡임을 빛남이 대신한다. 누르고 나면 그 사람 화면에서 꺼진다(NM8b)
-      const startedAt = ht.last().phaseEndsAt - ht.last().phaseDurationMs;
-      const sinceStart = Date.now() - startedAt;
-      const callNow = await Promise.all(pages.map((p) => readCallCount(p)));
-      await Promise.all(pages.map((p) => settle(p)));
-      for (const x of humans) {
-        const g = await readGame(x.page);
-        recMany(rec, sc, pickButtonChecks(g.picks), ` (${x.who})`);
-        rec(sc, "NM1", `이름표 버튼은 나를 뺀 산 사람 ${N - 1}개 (${x.who})`, g.picks.length === N - 1 && !g.picks.some((b) => b.seat === x.tracker.last().me.seat), `버튼 ${g.picks.length}개`);
-        panelRow(rec, sc, "NM2", g, h, "chat", x.who);
-        rec(sc, "NM2b", `투표에는 토론 끝내기가 없다 (${x.who})`, g.end === null, `end ${JSON.stringify(g.end)}`);
-        rec(sc, "NM7", `헤더 제목이 '투표' 다 (${x.who})`, g.title === "투표", `제목 '${g.title}'`);
-        rec(sc, "NM10", `순차 차례 블록이 없고 어둡게 막이 꺼져 있다 (${x.who})`, g.turn === null && (g.dim === null || g.dim === "off"), `turn ${g.turn === null ? "없음" : "있음"}, dim ${g.dim}`);
-      }
-      rec(sc, "NM8", `투표 시작 직후(${Math.round(sinceStart)}ms) 누를 수 있는 이름표 ${N - 1}개가 빛난다(data-call)`, callNow.every((c) => c === N - 1), `빛나는 이름표 ${callNow.join("/")}개 (기대 ${N - 1})`);
-      // 맵 탭: 버튼이 아닌 바닥을 눌러도 이동 요청이 없고 목적지 링이 새로 생기지 않는다
-      const g0 = await readGame(hp);
-      const target = g0.stage ? await findTapTarget(hp, g0.stage, hostSeat, ctx.size) : null;
-      if (!target) rec(sc, "NM3", "투표에서는 맵 탭이 move 를 보내지 않는다(카메라 고정)", false, "탭할 목적지를 찾지 못함");
-      else {
-        const pt = await hp.evaluate(({ x, z }) => window.__mfWorld?.screenOf(x, z) ?? null, { x: target.x, z: target.z });
-        const before = ht.sentMoveAt.length;
-        const ringBefore = g0.ring;
-        if (pt) {
-          await hp.mouse.move(pt.sx, pt.sy);
-          await hp.mouse.down();
-          await hp.mouse.up();
-        }
-        await sleep(800);
-        const ringAfter = (await readGame(hp)).ring;
-        rec(sc, "NM3", "투표에서는 맵 탭이 move 를 보내지 않는다(카메라 고정)", !!pt && ht.sentMoveAt.length === before && (ringAfter === null || ringAfter === ringBefore), `보낸 move ${ht.sentMoveAt.length - before}개, 링 ${ringBefore} → ${ringAfter}`);
-      }
-      // 손님 셋이 방장을 누른다
-      for (let i = 0; i < guests.length; i++) {
-        const r = await attempt(async () => {
-          await tapPick(guests[i].page, hostSeat);
-        });
-        rec(sc, "NM4", `이름표 버튼을 누르면 눌림 표시 (${humans[i + 1].who})`, r.ok, r.detail);
-      }
-      // NM8b 누른 뒤: 눌러 고른 손님 화면의 빛남은 0, 아직 안 누른 방장 화면의 빛남은 그대로(U-7)
-      {
-        const afterTap = await attempt(async () => {
-          await sleep(400);
-          const guestCalls = await Promise.all(guests.map((x) => readCallCount(x.page)));
-          const hostCalls = await readCallCount(hp);
-          return guestCalls.every((c) => c === 0) && hostCalls === N - 1 ? true : { ok: false, detail: `손님 빛남 ${guestCalls.join("/")}개(기대 0), 방장 빛남 ${hostCalls}개(기대 ${N - 1})` };
-        });
-        rec(sc, "NM8b", "이름표를 누르면 그 사람 화면의 빛남이 꺼지고 안 누른 사람 화면은 그대로다", afterTap.ok, afterTap.detail);
-      }
-      const countsOf = async (seat) => Promise.all(pages.map(async (p) => (await readGame(p)).tags.find((t) => t.seat === seat)?.count ?? null));
-      const counts = await attempt(async () => {
-        for (const x of humans) await untilGame(x.page, (gm) => Number(gm.tags.find((t) => t.seat === hostSeat)?.count ?? 0) >= guests.length, 5000, `배지 ${guests.length}표`);
-        await sleep(400);
-        const finals = await countsOf(hostSeat);
-        return finals.every((c) => c === String(guests.length)) ? true : { ok: false, detail: `페이지마다 득표 ${finals.join("/")} (기대 ${guests.length})` };
-      });
-      rec(sc, "NM5", `득표 배지(data-count)가 모든 페이지에서 ${guests.length} 이다`, counts.ok, counts.detail);
-      const gm = await readGame(guests[0].page);
-      const hostTag = gm.tags.find((t) => t.seat === hostSeat);
-      rec(sc, "NM6", "내가 고른 사람의 이름표가 mine 표시이고, 과반이라 선두·유력 표시가 켜진다", !!hostTag?.mine && hostTag.lead && hostTag.sure, `mine ${hostTag?.mine}, lead ${hostTag?.lead}, sure ${hostTag?.sure}`);
-      // NM9 마음 바꾸기(U-3): 손님1 이 손님2 로 바꾸면 모든 페이지 배지가 따라 바뀌고(방장 2·손님2 1), 다시 방장으로 되돌리면 3 으로 돌아온다
-      {
-        const other = guests[1].seat;
-        await sleep(600); // 같은 연타 방어 간격(첫 표와 바꾸기 사이)
-        const swapped = await attempt(async () => {
-          await tapPick(guests[0].page, other);
-          for (const x of humans) await untilGame(x.page, (g) => Number(g.tags.find((t) => t.seat === hostSeat)?.count ?? 0) === guests.length - 1 && Number(g.tags.find((t) => t.seat === other)?.count ?? 0) === 1, 5000, "바꾼 표");
-          const hostC = await countsOf(hostSeat);
-          const otherC = await countsOf(other);
-          return hostC.every((c) => c === String(guests.length - 1)) && otherC.every((c) => c === "1") ? true : { ok: false, detail: `방장 ${hostC.join("/")}, 손님2 ${otherC.join("/")}` };
-        });
-        rec(sc, "NM9", "한 손님이 다른 사람으로 바꾸면 모든 페이지 득표 배지가 따라 바뀐다", swapped.ok, swapped.detail);
-        // 서버는 한 사람의 표 바꾸기를 250ms 안에 되풀이하면 받지 않는다(POINT_MIN_INTERVAL_MS, 연타 방어) — 사람이 마음을 바꾸는 속도로 간격을 둔다
-        await sleep(600);
-        const back = await attempt(async () => {
-          await tapPick(guests[0].page, hostSeat);
-          try {
-            for (const x of humans) await untilGame(x.page, (g) => Number(g.tags.find((t) => t.seat === hostSeat)?.count ?? 0) === guests.length && g.tags.find((t) => t.seat === other)?.count === null, 5000, "되돌린 표");
-          } catch (e) {
-            const hostC = await countsOf(hostSeat);
-            const otherC = await countsOf(other);
-            return { ok: false, detail: `${e.message} · 방장 ${hostC.join("/")}, 손님2 ${otherC.join("/")}, 지금 단계 ${ht.last().phase}` };
-          }
-        });
-        rec(sc, "NM9b", "다시 방장으로 되돌리면 배지가 3표로 돌아오고 손님2 의 배지는 사라진다", back.ok, back.detail);
-      }
-      await gameGH(ctx, id, "nomination", host);
-      await gameGH(ctx, id, "nomination-guest", guests[0]);
-      await skipTo(hp, ht, "defense");
-    }
-
-    // 최후 변론: 변론자(방장)만 득표 배지가 남는다, 패널 채팅
-    {
-      const sc = `${id}/defense`;
-      await allAt(pages, "defense");
-      await Promise.all(pages.map((p) => settle(p)));
-      for (const x of humans) {
-        const g = await readGame(x.page);
-        panelRow(rec, sc, "DF1", g, h, "chat", x.who);
-        const withBadge = g.tags.filter((t) => t.count !== null).map((t) => t.seat);
-        rec(sc, "DF2", `변론자 이름표만 득표 배지가 남는다 (${x.who})`, withBadge.length === 1 && withBadge[0] === hostSeat, `배지 자리 ${withBadge.join(",") || "없음"}`);
-      }
-    }
-
-    // 찬반: 투표자(손님)는 고르기+숫자 LOG_H + 218, 보기(변론자 방장)는 숫자만 LOG_H + 126. 누르면 눌림, 던진 사람 이름표에 체크, 찬반 값은 어디에도 없다
+    // 찬반(22페이즈 D-11, P22-2): 후보 없이 산 사람 전원이 "오늘 처형할까?" 에 답한다. 투표자 패널 LOG_H + 218(286), 숫자 줄 두 덩이가 모든 페이지에서 같고 개인 표 표식은 없다.
     {
       const sc = `${id}/verdict`;
-      await skipTo(hp, ht, "verdict");
       await allAt(pages, "verdict");
       await Promise.all(pages.map((p) => settle(p)));
       for (const x of humans) {
         const g = await readGame(x.page);
-        const viewer = x.handle === host;
-        recMany(rec, sc, verdictPanelChecks({ kind: viewer ? "viewer" : "voter", hasPicker: !!g.verdictRow?.hasPicker, hasCount: !!g.verdictRow?.hasCount, kbOpen: g.kbOpen }), ` (${x.who})`);
-        panelRow(rec, sc, "VD1", g, h, viewer ? "verdictViewer" : "verdictVoter", x.who);
-        rec(sc, "VD1b", `찬반 숫자 total = 산 사람 − 1 = ${N - 1} (${x.who})`, g.verdictRow?.total === N - 1, `total ${g.verdictRow?.total}`);
+        recMany(rec, sc, verdictPanelChecks({ kind: "voter", hasPicker: !!g.verdictRow?.hasPicker, hasCount: !!g.verdictRow?.hasCount, kbOpen: g.kbOpen }), ` (${x.who})`);
+        panelRow(rec, sc, "VD1", g, h, "verdictVoter", x.who);
+        rec(sc, "VD1b", `헤더 제목이 '찬반' 이고 이름표를 누르는 단추(data-pick)가 없다 (${x.who})`, g.title === "찬반" && g.picks.length === 0, `제목 '${g.title}' · 이름표 단추 ${g.picks.length}개`);
+        rec(sc, "VD1c", `숫자 줄이 처음엔 0·0 이다 (${x.who})`, g.verdictCounts?.yes === 0 && g.verdictCounts?.no === 0, `숫자 ${JSON.stringify(g.verdictCounts)}`);
       }
       for (let i = 0; i < guests.length; i++) {
         const r = await attempt(async () => {
@@ -1698,42 +1592,108 @@ async function dayFlow(ctx) {
         });
         rec(sc, "VD2", `[찬성]을 누르면 눌림 표시 (${humans[i + 1].who})`, r.ok, r.detail);
       }
-      const done = await attempt(async () => {
-        const g = await untilGame(hp, (gm) => gm.tags.filter((t) => t.done).length >= guests.length, 5000, "던진 사람 체크");
-        return g.tags.filter((t) => t.done).length >= guests.length ? true : false;
+      const counted = await attempt(async () => {
+        for (const x of humans) await untilGame(x.page, (gm) => gm.verdictCounts?.yes === guests.length && gm.verdictCounts?.no === 0, 5000, `찬성 ${guests.length}`);
       });
-      rec(sc, "VD3", "던진 사람 이름표에 체크(data-done)가 붙는다", done.ok, done.detail);
-      const leak = await hp.evaluate(() => /찬성|반대/.test(document.body.innerText));
-      rec(sc, "VD4", "변론자 화면에는 무엇을 골랐는지(찬성·반대 글자)가 어디에도 없다", !leak, "방장 화면 글자에 찬성/반대가 있음");
-      // E8 #28(알려진 한계, 계획 가정 A2): 찬반 투표자 스테이지가 낮은 폰(방 높이 560 이하)에서 위쪽 이름표가 스테이지 위로 올라간 높이 — 값만 기록하고 판정하지 않는다
-      {
-        const gv = await readGame(guests[0].page);
-        const tops = gv.tags.map((t) => t.top).filter((t) => typeof t === "number");
-        const rise = gv.stage && tops.length > 0 ? Math.max(0, Math.round((gv.stage.top - Math.min(...tops)) * 10) / 10) : null;
-        infoRow(ctx, sc, "VD5k", "알려진 한계(E8 #28): 위쪽 이름표가 스테이지 위로 올라간 높이(판정 아님)", `${rise === null ? "측정값 없음" : `${rise}px`} (스테이지 높이 ${gv.stage ? Math.round(gv.stage.bottom - gv.stage.top) : "?"}px, 방 높이 ${h}px)`);
-      }
+      rec(sc, "VD3", `숫자 줄이 모든 페이지에서 찬성 ${guests.length} · 반대 0 으로 같다`, counted.ok, counted.detail);
+      const noId = await attempt(async () => {
+        const leaks = [];
+        for (const x of humans) {
+          const gm = await readGame(x.page);
+          const body = await x.page.evaluate(() => ({
+            nameTexts: [...document.querySelectorAll("[data-verdict-row] *")].filter((el) => el.children.length === 0 && /님/.test(el.textContent ?? "")).length,
+            ballotEls: document.querySelectorAll("[data-ballots], [data-ballot-side], [data-card=\"ballots\"]").length, /* 0건 */
+          }));
+          if (body.nameTexts > 0 || body.ballotEls > 0) leaks.push(`${x.who}: 이름 글 ${body.nameTexts} · 기록 표식 ${body.ballotEls}`);
+          if (gm.verdictBtns.filter((b) => b.pressed).length > 1) leaks.push(`${x.who}: 눌린 단추가 둘`);
+        }
+        return leaks.length === 0 ? true : { ok: false, detail: leaks.join("; ") };
+      });
+      rec(sc, "VD4", "찬반 줄에 후보 이름·기록 표식이 없다(숫자만)", noId.ok, noId.detail);
       await gameGH(ctx, id, "verdict", host);
       await gameGH(ctx, id, "verdict-guest", guests[0]);
     }
 
-    // 처형: 결과 알림 '찬성 n · 반대 m' → '{닉네임} 님 처형' (36px·한두 줄·keep-all), 역할 글자 없음, 처형된 이름표는 산 사람 화면에서 사라진다
+    // 지목(22페이즈 D-12): 순차 차례 — 방장은 손님1 을, 손님 셋은 방장을 자기 차례에 가리킨다. 득표 배지·채팅 줄·기록 카드는 없고 끝나면 points 가 비워진다
+    {
+      const sc = `${id}/nomination`;
+      await skipTo(hp, ht, "nomination");
+      await allAt(pages, "nomination");
+      await ht.waitFor((v) => v.phase === "nomination" && v.day?.turn !== undefined, 6000, "차례 시작");
+      await Promise.all(pages.map((p) => settle(p)));
+      const g0 = await readGame(hp);
+      rec(sc, "NM7", "헤더 제목이 '지목' 이다", g0.title === "지목", `제목 '${g0.title}'`);
+      panelRow(rec, sc, "NM2", g0, h, "chat", "방장");
+      rec(sc, "NM2b", "지목에는 토론 끝내기·찬반 단추가 없다", g0.end === null && g0.verdictBtns.length === 0, `end ${JSON.stringify(g0.end)} · 찬반 단추 ${g0.verdictBtns.length}`);
+      // 차례 알약이 한 명씩 돈다: 방장 페이지가 본 차례 번호(1..N)를 모은다
+      const noRecord = await watchTurns(hp);
+      const picked = await Promise.all(
+        humans.map((x, i) =>
+          attempt(async () => {
+            await pickOnTurn(x, i === 0 ? guests[0].seat : hostSeat);
+          }),
+        ),
+      );
+      picked.forEach((r, i) => rec(sc, "NM4", `내 차례에 이름표를 누르면 확정된다 (${humans[i].who})`, r.ok, r.detail));
+      const rep = await noRecord();
+      recMany(rec, sc, turnBlockChecks(rep.turnSample, ctx.size.w, ctx.size.h), " (차례 알약)");
+      rec(sc, "NM5", `차례 알약이 한 명씩 돈다(본 차례 번호 ${[...rep.nos].join(",") || "없음"})`, rep.nos.size >= 2, `본 번호 ${[...rep.nos].join(",")}`);
+      rec(sc, "NM6", "지목 중에도 득표 배지(data-count)·선두·유력 표시가 어디에도 없다", rep.badgeSeen === 0, `배지 ${rep.badgeSeen}회`);
+      // 단계 끝: 방장 3표 → 유언
+      const toDefense = await attempt(async () => {
+        await ht.waitFor((v) => v.phase === "defense", nominationMaxMs(N) + 6000, "지목 끝 → 유언");
+      });
+      rec(sc, "NM8", "모두 고르면 가장 많이 가리킨 사람(방장)이 처형 후보가 되어 유언으로 넘어간다", toDefense.ok && ht.last().day?.candidate === hostSeat, `단계 ${ht.last().phase} · 후보 ${ht.last().day?.candidate}`);
+      // P22-4: 채팅에 'A → B' 줄·ballots 카드 0건, 단계 끝 뒤 day.points 0
+      const chatTexts = await Promise.all(pages.map((p) => p.evaluate(() => ({ arrows: [...document.querySelectorAll("[data-chat-log] *")].filter((el) => el.children.length === 0 && /→/.test(el.textContent ?? "")).length, cards: document.querySelectorAll('[data-card="ballots"]').length }))));
+      rec(sc, "NM9", "채팅에 'A → B' 줄과 [data-card=\"ballots\"] 가 없다(기록 없음, D-14)", chatTexts.every((c) => c.arrows === 0 && c.cards === 0), JSON.stringify(chatTexts));
+      const pointsAfter = humans.map((x) => (x.tracker.last().day?.points ?? []).length);
+      rec(sc, "NM9b", "지목이 끝난 뒤 view 의 day.points 가 비어 있다", pointsAfter.every((n) => n === 0), `points ${pointsAfter.join("/")}`);
+      const resid = await Promise.all(pages.map((p) => p.evaluate(() => ({ finger: document.querySelectorAll("[data-finger], [data-point-line]").length, turn: document.querySelectorAll("[data-turn-block]").length }))));
+      rec(sc, "NM9c", "지목이 끝난 뒤 손가락·차례 블록이 DOM 에 남지 않는다", resid.every((r) => r.finger === 0 && r.turn === 0), JSON.stringify(resid));
+    }
+
+    // 유언(22페이즈 D-15·D-16, P22-5·7): 처형자(방장)에게는 시트가 자동으로 열리고, 나머지는 채팅 입력이 잠긴 채(패널 160) 스포트라이트를 본다
+    {
+      const sc = `${id}/defense`;
+      await allAt(pages, "defense");
+      await Promise.all(pages.map((p) => settle(p)));
+      const gh = await readGame(hp);
+      rec(sc, "DF1", "처형자(방장)에게 유언 시트가 하나 자동으로 열려 있다", gh.willSheets === 1, `시트 ${gh.willSheets}개`);
+      for (let i = 0; i < guests.length; i++) {
+        const g = await readGame(guests[i].page);
+        panelRow(rec, sc, "DF2", g, h, "chat", humans[i + 1].who);
+        rec(sc, "DF3", `나머지 사람은 시트가 없고 채팅 입력이 잠겨 있다 (${humans[i + 1].who})`, g.willSheets === 0 && g.chatLockedCount === 1, `시트 ${g.willSheets} · 잠금 ${g.chatLockedCount}`);
+      }
+      await gameGH(ctx, id, "defense", host);
+    }
+
+    // 처형(22페이즈 D-15): 0~3.0초 유언 카드(모두에게) → "{닉네임} 님 처형" 큰 글(36px·한두 줄·keep-all), 역할 글자 없음, 처형된 사람은 산 사람 화면에 유령 그림으로 남는다
     {
       const sc = `${id}/execution`;
       await armAnnounceWatch(guests[0].page);
-      await skipTo(hp, ht, "execution");
-      const log = await waitAnnounces(guests[0].page, 2);
+      // 유언 단계에서 방장이 글을 고쳐 [남기기] 를 누르면 곧바로 처형으로 넘어간다(P22-5)
+      const WILL_TEXT = "다들 잘 부탁해요";
+      const saved = await attempt(async () => {
+        await hp.locator('[data-will-sheet="will"] textarea').fill(WILL_TEXT);
+        await hp.locator("[data-will-save]").click({ timeout: 4000 });
+        await ht.waitFor((v) => v.phase === "execution", 4000, "[남기기] → 처형");
+      });
+      rec(sc, "EX0", "유언을 고쳐 [남기기] 를 누르면 곧바로 처형 단계로 넘어간다", saved.ok, saved.detail);
+      const reveal = await attempt(async () => {
+        for (const x of humans) await untilGame(x.page, (g) => g.willReveals.length === 1 && g.willReveals[0] === WILL_TEXT, 3000, "유언 카드");
+      });
+      rec(sc, "EX0b", "모든 페이지에 유언 카드(data-will-reveal)가 같은 글로 보인다", reveal.ok, reveal.detail);
+      const log = await waitAnnounces(guests[0].page, 1, 9000);
       const texts = log.filter((a) => a.text !== null);
-      const iTally = annIndex(log, (t) => TALLY_RE.test(t));
       const iExec = annIndex(log, (t) => t === `${GAME_HOST_NICK} 님 처형`);
-      rec(sc, "EX1", "결과 알림이 '찬성 n · 반대 m' 다음 '{닉네임} 님 처형' 순서다", iTally >= 0 && iExec > iTally, `알림 ${texts.map((a) => a.text).join(" → ") || "없음"}`);
-      for (const [which, i] of [["찬반 결과", iTally], ["처형", iExec]]) {
-        if (i >= 0) recMany(rec, sc, announceChecks(log[i]), ` (${which})`);
-        else rec(sc, "AN0", `결과 알림 글자 판정 (${which})`, false, "알림을 보지 못함");
-      }
+      rec(sc, "EX1", "결과 큰 글이 '{닉네임} 님 처형' 이다(찬반 집계 알림 없음)", iExec >= 0 && !texts.some((a) => TALLY_RE.test(a.text)), `알림 ${texts.map((a) => a.text).join(" → ") || "없음"}`);
+      if (iExec >= 0) recMany(rec, sc, announceChecks(log[iExec]), " (처형)");
+      else rec(sc, "AN0", "결과 알림 글자 판정 (처형)", false, "알림을 보지 못함");
       rec(sc, "EX2", "알림 어디에도 역할 글자가 없다", !texts.some((a) => ROLE_WORD_RE.test(a.text)), `알림 ${texts.map((a) => a.text).join(" → ")}`);
-      // 18.1-09 R3: 처형 연출(알림 + 2.4초 + 여유 0.6초) 뒤 산 사람 화면에는 처형된 사람이 마지막 자리에 유령 그림으로 남는다(C1·C2) — 옛 EX3 '이름표가 사라진다' 를 바꿨다
+      // 18.1-09 R3: 처형 연출 뒤 산 사람 화면에는 처형된 사람이 마지막 자리에 유령 그림으로 남는다(C1·C2)
       {
-        const lg = await liveGhostSettled(guests[0].page, [hostSeat], 4000);
+        const lg = await liveGhostSettled(guests[0].page, [hostSeat], 5000);
         for (const r of lg.rows) rec(sc, r.id, `처형된 사람이 산 사람 화면에 유령 그림으로 남는다 — ${r.label} (${lg.phase})`, r.ok, r.detail, r.ok);
       }
       const ghosts = await attempt(async () => {
@@ -1742,11 +1702,13 @@ async function dayFlow(ctx) {
         return bad.length === 0 ? true : { ok: false, detail: bad.map((l) => l.detail).join("; ") };
       });
       rec(sc, "EX4", "처형 뒤 산 사람 화면에 유령 표식·문구가 없다", ghosts.ok, ghosts.detail);
-      // 18.1-13(0083-9): 처형 중에는 찬반 단추 줄을 접는다 — 산 사람(투표자) 화면에도 [data-verdict-row] 가 없고 패널은 채팅 패널 높이다
+      // 처형 중에는 찬반 단추 줄이 없고 패널은 채팅 패널 높이다(밤으로 넘어가기 전에 읽는다)
       {
-        const gx = await readGame(guests[0].page);
-        rec(sc, "EX5", "처형 단계 패널에 찬반 단추 줄이 없다([data-verdict-row] 0개, 찬반 단추 0개)", gx.verdictRow === null && (gx.verdictBtns?.length ?? 0) === 0, `찬반 줄 ${gx.verdictRow === null ? "없음" : "있음"} · 찬반 단추 ${gx.verdictBtns?.length ?? "?"}개`);
-        panelRow(rec, sc, "EX5b", gx, h, "chat", humans[1].who);
+        const gx = await readGame(guests[0].page).catch(() => null);
+        if (gx && gx.phase === "execution") {
+          rec(sc, "EX5", "처형 단계 패널에 찬반 단추 줄이 없다([data-verdict-row] 0개, 찬반 단추 0개)", gx.verdictRow === null && (gx.verdictBtns?.length ?? 0) === 0, `찬반 줄 ${gx.verdictRow === null ? "없음" : "있음"} · 찬반 단추 ${gx.verdictBtns?.length ?? "?"}개`);
+          panelRow(rec, sc, "EX5b", gx, h, "chat", humans[1].who);
+        } else infoRow(ctx, sc, "EX5", "처형 단계가 이미 끝나 패널 판정을 건너뜀(판정 아님)", `단계 ${gx?.phase ?? "읽기 실패"}`);
       }
     }
 
@@ -1769,6 +1731,43 @@ async function dayFlow(ctx) {
   } finally {
     await closeGame(game);
   }
+}
+
+/**
+ * 순차 지목(22페이즈 D-12)에서 한 사람이 자기 차례에 target 을 가리킨다: 내 차례(day.turn.order[i] === 내 좌석, 확정 전)가 올 때까지 기다린 뒤 이름표를 누른다.
+ * x = { page, tracker } (방장은 ht, 손님은 guests[i].tracker).
+ */
+async function pickOnTurn(x, target) {
+  const me = x.tracker.last().me.seat;
+  await x.tracker.waitFor((v) => v.phase === "nomination" && v.day?.turn !== undefined && v.day.turn.order[v.day.turn.i] === me && v.day.turn.doneAt === undefined, 90_000, "내 차례");
+  await tapTurnPick(x.page, target);
+}
+
+/**
+ * 지목 동안 한 페이지의 차례 알약을 150ms 마다 읽는다: 본 차례 번호(nos), 알약이 보이는 표본(turnSample), 득표 배지(data-count)를 본 횟수(badgeSeen).
+ * 돌려주는 함수를 부르면 멈추고 결과를 준다.
+ */
+async function watchTurns(page) {
+  const nos = new Set();
+  let turnSample = null;
+  let badgeSeen = 0;
+  let on = true;
+  const loop = (async () => {
+    while (on) {
+      const g = await readGame(page).catch(() => null);
+      if (g && g.phase === "nomination") {
+        if (g.turn && typeof g.turn.no === "number" && g.turn.no > 0) nos.add(g.turn.no);
+        if (g.turn && g.turn.pill && turnSample === null && g.turn.docClientW) turnSample = g.turn;
+        badgeSeen += g.tags.filter((t) => t.count !== null || t.lead || t.sure).length;
+      }
+      await sleep(150);
+    }
+  })();
+  return async () => {
+    on = false;
+    await loop;
+    return { nos, turnSample, badgeSeen };
+  };
 }
 
 /**
@@ -1805,22 +1804,15 @@ async function ghostViewSettled(page, view, ms) {
   }
 }
 
-/** ghost 흐름 단계 순회가 모두 거쳐야 하는 단계(낮 시작·토론·지목·변론·찬반·처형·밤·아침) */
-const STAGE_TARGETS = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"];
+/** ghost 흐름 단계 순회가 모두 거쳐야 하는 단계(낮 시작·토론·찬반·지목·유언·처형·밤·아침) */
+const STAGE_TARGETS = ["dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "night", "morning"];
 
 // ---- ghost: 처형된 사람은 유령 화면(직업 칩·유령 채널)으로 다음 날도 맵을 걷고, 산 사람 화면·소켓에는 아무것도 없다 ----
 
-/** 방장이 처형되도록 지목·찬반을 넘겨 execution 에 닿는다(봇 지목 = 방장, 봇 찬성; 손님은 찬성을 누른다). */
+/** 방장이 처형되도록 새 낮 순서(찬반 → 지목 → 유언)를 넘겨 execution 에 닿는다(봇 찬성·봇 지목 = 방장; 손님은 찬성을 누른다, 22페이즈 D-10). */
 async function executeHost(game) {
   const { hp, ht, guests } = game;
-  await skipTo(hp, ht, "nomination");
-  await skipTo(hp, ht, "defense"); // 봇이 지금 방장을 가리킨다
-  await skipTo(hp, ht, "verdict");
-  for (const g of guests) {
-    await untilGame(g.page, (x) => x.phase === "verdict" && x.verdictBtns.length === 2, 6000, "찬반 도착");
-    await chooseVerdict(g.page, true).catch(() => {});
-  }
-  await skipTo(hp, ht, "execution");
+  await skipDayToExecution(hp, ht, guests.map((g) => g.page));
 }
 
 const sortedNums = (list) => [...list].map(Number).sort((a, b) => a - b);
@@ -2023,19 +2015,6 @@ async function ghostFlow(ctx) {
           const view = ht.last();
           const gv = await ghostViewSettled(hp, view, 4000);
           for (const r of gv.rows) rec(sc, r.id, `${r.label} (${phase})`, r.ok, r.detail, r.ok);
-          // 찬반 기록 카드 overflow backstop(참고 줄): 첫 처형의 찬반 기록 카드가 기록에 남아 있다 — 접힌 칸에서는 위가 잘리고 늘어난 칸 안에는 카드 전체가 든다.
-          // 처형 단계는 5초라 시트를 여는 동안 밤으로 넘어가 사라질 수 있어, 단계가 길게 머무는 다음 날 지목에서 잰다
-          if (phase === "nomination" && !backstopDone) {
-            backstopDone = true;
-            const g0 = guests.find((g) => aliveOf(g.tracker.last()).includes(g.seat));
-            const ballots = await attempt(async () => {
-              if (!g0) throw new Error("산 손님 없음");
-              mkdirSync(OUT_DIR, { recursive: true });
-              const b = await measureBallotsBackstop(g0.page, { windowShot: join(OUT_DIR, `ghost-ballots-window-${ctx.size.label}.png`), openShot: join(OUT_DIR, `ghost-ballots-open-${ctx.size.label}.png`) });
-              infoRow(ctx, sc, "EX3b", "참고: 찬반 기록 카드 — 접힌 칸에서 위가 잘리고 늘어난 칸 안에 카드 전체가 든다(판정 아님)", b.measured ? `카드 높이 ${Math.round(b.cardH)} · 접힌 칸 높이 ${Math.round(b.windowH)} · 칸 위 끝 위로 벗어난 높이 ${Math.round(b.cutTop)}(칸 높이보다 크면 카드가 칸에서 잘림) · 늘어난 칸 높이 ${Math.round(b.openH)} · 늘어난 칸 안에 카드 전체 ${b.openFits ? "듦" : "안 듦"}` : `측정 안 함: ${b.why}`);
-            });
-            if (!ballots.ok) infoRow(ctx, sc, "EX3b", "참고: 찬반 기록 카드 overflow backstop(판정 아님)", `읽기 실패: ${ballots.detail}`);
-          }
           for (let i = 0; i < guests.length; i++) {
             const g = guests[i];
             const gview = g.tracker.last();
@@ -2049,7 +2028,7 @@ async function ghostFlow(ctx) {
         }
         prevAlive = aliveOf(ht.last());
         if (STAGE_TARGETS.every((x) => covered.includes(x)) || covered.length >= 14) break;
-        // 변론·찬반·처형까지 가려면 이 날 지목에 표가 있어야 한다 — 방장은 이미 죽어 봇이 방장을 가리킬 수 없으니, 산 손님 둘이 산 봇 하나를 가리키고 찬성한다
+        // 유언·처형까지 가려면 이 날 지목에 표가 있어야 한다 — 방장은 이미 죽어 봇이 방장을 가리킬 수 없으니, 산 손님이 산 봇 하나를 자기 차례에 가리킨다(찬반은 그보다 앞이라 지나는 길에 찬성한다)
         if (phase === "nomination") {
           // 마피아를 처형하면 시민 승리로 판이 끝나 순회가 짧아진다 — 유령 화면이 아는 직업(spectate)으로 마피아가 아닌 봇을 가리킨다
           const jobOf = (seat) => ht.last().spectate?.seats?.find((x) => x.seat === seat)?.job;
@@ -2057,9 +2036,10 @@ async function ghostFlow(ctx) {
           const botSeat = botSeats.find((seat) => jobOf(seat) !== "mafia") ?? botSeats[0];
           const picked = await attempt(async () => {
             if (botSeat === undefined) throw new Error("가리킬 산 봇이 없음");
-            for (const g of guests) if (aliveOf(g.tracker.last()).includes(g.seat)) await tapPick(g.page, botSeat);
+            // 순차 지목(22페이즈 D-12): 산 손님 각자가 자기 차례에 그 봇을 가리킨다(남은 봇의 차례는 넘길 때 서버가 채운다)
+            await Promise.all(guests.filter((g) => aliveOf(g.tracker.last()).includes(g.seat)).map((g) => pickOnTurn(g, botSeat)));
           });
-          if (!picked.ok) infoRow(ctx, sc, "C3p", "지목에 표를 넣지 못해 변론·찬반·처형 단계는 건너뛸 수 있다(판정 아님)", picked.detail);
+          if (!picked.ok) infoRow(ctx, sc, "C3p", "지목에 표를 넣지 못해 유언·처형 단계는 건너뛸 수 있다(판정 아님)", picked.detail);
         }
         if (phase === "verdict") {
           for (const g of guests) {
@@ -2083,85 +2063,89 @@ async function ghostFlow(ctx) {
   }
 }
 
-// ---- noexec: 지목 0표 → 밤 '처형 없음', 찬반 부결 → 처형 단계 '처형 없음'과 변론자 복귀 ----
+// ---- noexec: 처형 없음 — 찬반 0표·부결과 지목 동점 모두 '처형 없음' 큰 글 뒤 밤, 처형 단계·유언 시트가 없다(22페이즈 D-11·D-13, P22-3 → UI-SPEC P22-4 알림) ----
+
+/** 처형 없음 한 사례의 공통 판정: '처형 없음' 큰 글이 뜨고 곧 밤이며, 처형·유언 단계와 시트가 없고 이유가 맞다. skip = 이 사례에서 지나지 않아야 하는 단계 */
+async function noExecChecks(rec, sc, { ht, pages, watch, from, reason, forbidden }) {
+  let log = await readAnnounceWatch(watch, { stop: false });
+  for (const start = performance.now(); annIndex(log, (t) => t === "처형 없음") < 0 && performance.now() - start < 14_000; ) {
+    await sleep(100);
+    log = await readAnnounceWatch(watch, { stop: false });
+  }
+  const i = annIndex(log, (t) => t === "처형 없음");
+  rec(sc, "NE1", "'처형 없음' 큰 글이 뜬다", i >= 0, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
+  if (i >= 0) recMany(rec, sc, announceChecks(log[i]), " ('처형 없음')");
+  const night = await attempt(async () => {
+    await ht.waitFor((v) => v.phase === "night", 4000, "처형 없음 → 밤");
+  });
+  rec(sc, "NE2", "큰 글 뒤 곧바로 밤이다", night.ok, night.detail);
+  const seen = ht.phases.slice(from);
+  const crossed = forbidden.filter((p) => seen.includes(p));
+  rec(sc, "NE3", `${forbidden.join("·")} 단계를 지나지 않는다`, crossed.length === 0, `지난 단계 ${[...new Set(seen)].join(",")}`);
+  const dom = await Promise.all(pages.map((p) => p.evaluate(() => ({ sheets: document.querySelectorAll("[data-will-sheet]").length, cards: document.querySelectorAll("[data-will-reveal]").length }))));
+  rec(sc, "NE4", "유언 시트·유언 카드가 어느 페이지에도 나타나지 않는다", dom.every((d) => d.sheets === 0 && d.cards === 0), JSON.stringify(dom));
+  const got = ht.last().day?.noExecution?.reason;
+  rec(sc, "NE5", `밤 view 의 처형 없음 이유가 ${reason} 이다(day.noExecution)`, got === reason, `이유 ${got ?? "없음"}`);
+  const alive = aliveOf(ht.last()).length;
+  rec(sc, "NE6", "아무도 처형되지 않았다(산 사람 수가 그대로)", alive === ht.players0, `산 사람 ${alive} (처음 ${ht.players0})`);
+}
 
 async function noexecFlow(ctx) {
   const id = "noexec";
   const rec = recorder(ctx);
 
-  // (a) 사람만 있는 방(봇 없음): 아무도 지목하지 않고 마감 → 0표 → 밤 시작 '처형 없음'
+  // (a) 찬반 0표: 사람만 있는 방(봇 없음)에서 아무도 누르지 않고 마감 → 던진 표 0 → 처형 없음 → 밤. 지목은 건너뛴다(P22-4)
   {
     const sc = `${id}/zero`;
-    const game = await openGame(ctx, id, { guests: 3, bots: 0, role: "citizen", to: "nomination" });
+    const game = await openGame(ctx, id, { guests: 3, bots: 0, role: "citizen", to: "verdict" });
     try {
-      const { ht, guests } = game;
+      const { ht, hp, guests } = game;
+      ht.players0 = aliveOf(ht.last()).length;
+      const from = Math.max(0, ht.phases.length - 1);
       await armAnnounceWatch(guests[0].page);
-      // 기본판 동시 투표(13페이즈): 사람 4명이 아무도 누르지 않으면 투표 15초(NOMINATION_MS)가 끝나고 0표라 변론 없이 밤으로 간다(넘기기로 건너뛰지 않는다)
-      const toNight = await attempt(async () => {
-        await ht.waitFor((v) => v.phase === "night", NOMINATION_MS + 8000, "아무도 안 고름 → 밤");
-      });
-      rec(sc, "NE0", `아무도 고르지 않으면 투표 ${NOMINATION_MS / 1000}초 뒤 변론 없이 밤으로 간다`, toNight.ok, toNight.detail);
-      // 14페이즈 U-5: 36px '낮이 되었습니다'·'밤이 되었습니다' 알림은 꺼졌다(띠 문장이 말한다) — 값 있는 알림('처형 없음')이 생길 때까지 기다리는 기대는 그대로
-      let log = await readAnnounceWatch(guests[0].page, { stop: false });
-      for (const start = performance.now(); annIndex(log, (t) => t === "처형 없음") < 0 && performance.now() - start < 5000; ) {
-        await sleep(100);
-        log = await readAnnounceWatch(guests[0].page, { stop: false });
-      }
-      const i = annIndex(log, (t) => t === "처형 없음");
-      rec(sc, "NE1", "지목 0표면 밤 시작에 '처형 없음' 알림이 뜬다", i >= 0, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
-      if (i >= 0) recMany(rec, sc, announceChecks(log[i]), " ('처형 없음')");
-      rec(sc, "NE2", "그대로 밤이다(변론·찬반을 거치지 않음)", ht.last().phase === "night", `단계 ${ht.last().phase}`);
+      await noExecChecks(rec, sc, { ht, pages: [hp, ...guests.map((g) => g.page)], watch: guests[0].page, from, reason: "rejected", forbidden: ["nomination", "defense", "execution"] });
     } finally {
       await closeGame(game);
     }
   }
 
-  // (b) 봇 찬반 '반대': 봇이 방장을 가리켜 변론자가 되고, 찬반 부결 → '찬성 0 · 반대 3' 다음 '처형 없음', 변론자는 자리로 돌아온다
+  // (b) 찬반 부결: 봇 셋 모두 반대(찬성 0 · 반대 3) → 처형 없음 → 밤. 지목은 건너뛴다
   {
     const sc = `${id}/rejected`;
-    const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "citizen", vote: { exec: "no", pick: "host" }, to: "nomination" });
+    const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "citizen", vote: { exec: "no", pick: "host" }, to: "verdict" });
     try {
-      const { hp, ht, hostSeat } = game;
-      // 기본판 동시 투표(13페이즈): 방장은 누르지 않는다. 봇 셋은 진입 2~8초 안에 모두 방장을 가리킨다. 봇 이름은 8자 고정이라 8자 이름 이름표 버튼의 기하도 본다.
-      {
-        const bsc = `${id}/bot-vote`;
-        const started = ht.last().phaseEndsAt - ht.last().phaseDurationMs;
-        const g = await untilGame(hp, (x) => x.picks.length === 3, 4000, "봇 이름표 버튼 3개");
-        recMany(rec, bsc, pickButtonChecks(g.picks), " (봇 8자 이름 투표)");
-        rec(bsc, "NE6", "투표 이름표 버튼은 봇 셋이고 순차 차례 블록은 없다", g.picks.length === 3 && g.turn === null, `버튼 ${g.picks.length}개, turn ${g.turn === null ? "없음" : "있음"}`);
-        const voted = await attempt(async () => {
-          await untilGame(hp, (x) => Number(x.tags.find((t) => t.seat === hostSeat)?.count ?? 0) >= 3, 9000, "봇 셋의 표");
-        });
-        const elapsed = Date.now() - started;
-        rec(bsc, "NE7", "봇 셋이 모두 방장을 가리켜 방장 이름표 배지가 3 이 된다", voted.ok, voted.detail);
-        rec(bsc, "NE8", "봇은 진입 2~8초 안에 던진다(모두 던질 때까지 9초 이하)", voted.ok && elapsed <= 9000, `${Math.round(elapsed)}ms`);
-        await sleep(300);
-        const g2 = await readGame(hp);
-        const sum = g2.tags.reduce((a, t) => a + Number(t.count ?? 0), 0);
-        rec(bsc, "NE9", "모든 이름표 득표 배지 합이 봇 수(3)다", sum === 3, `배지 합 ${sum}`);
-      }
-      await skipTo(hp, ht, "defense");
-      await skipTo(hp, ht, "verdict");
-      await settle(hp);
-      const center = await sampleWorld(hp, hostSeat).catch(() => null);
+      const { ht, hp } = game;
+      ht.players0 = aliveOf(ht.last()).length;
+      const from = Math.max(0, ht.phases.length - 1);
       await armAnnounceWatch(hp);
-      await skipTo(hp, ht, "execution");
-      const log = await waitAnnounces(hp, 2);
-      const iTally = annIndex(log, (t) => TALLY_RE.test(t));
-      const iNo = annIndex(log, (t) => t === "처형 없음");
-      rec(sc, "NE3", "부결이면 '찬성 n · 반대 m' 다음 '처형 없음' 알림이 뜬다", iTally >= 0 && iNo > iTally, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
-      if (iNo >= 0) recMany(rec, sc, announceChecks(log[iNo]), " ('처형 없음')");
-      rec(sc, "NE4", "변론자는 처형되지 않고 산 사람이다", aliveOf(ht.last()).includes(hostSeat), `산 사람 ${aliveOf(ht.last()).join(",")}`);
-      const back = await attempt(async () => {
-        const start = performance.now();
-        for (;;) {
-          const now = await sampleWorld(hp, hostSeat).catch(() => null);
-          if (center && now && Math.hypot(now.x - center.x, now.z - center.z) > 1) return true;
-          if (performance.now() - start > 7000) return { ok: false, detail: `가운데 ${JSON.stringify(center)} → 지금 ${JSON.stringify(now)}` };
-          await sleep(200);
-        }
-      });
-      rec(sc, "NE5", "변론자가 가운데에서 자리로 돌아온다(위치가 1 단위 넘게 옮겨짐)", back.ok, back.detail);
+      await skipTo(hp, ht, "night");
+      await noExecChecks(rec, sc, { ht, pages: [hp], watch: hp, from, reason: "rejected", forbidden: ["nomination", "defense", "execution"] });
+    } finally {
+      await closeGame(game);
+    }
+  }
+
+  // (c) 지목 동점: 사람 넷이 찬반에 찬성하고 지목에서 서로 한 명씩(고리) 가리켜 1·1·1·1 동점 → 처형 없음 → 밤. 지목은 지나고 유언·처형이 없다
+  {
+    const sc = `${id}/tie`;
+    const game = await openGame(ctx, id, { guests: 3, bots: 0, role: "citizen", to: "verdict" });
+    try {
+      const { ht, hp, guests } = game;
+      ht.players0 = aliveOf(ht.last()).length;
+      const humans = [{ page: hp, tracker: ht }, ...guests.map((g) => ({ page: g.page, tracker: g.tracker }))];
+      const from = Math.max(0, ht.phases.length - 1);
+      for (const g of guests) {
+        await untilGame(g.page, (x) => x.phase === "verdict" && x.verdictBtns.length === 2, 6000, "찬반 도착");
+        await chooseVerdict(g.page, true);
+      }
+      await chooseVerdict(hp, true);
+      await armAnnounceWatch(guests[0].page);
+      await ht.waitFor((v) => v.phase === "nomination" && v.day?.turn !== undefined, 16_000, "찬반 통과 → 지목");
+      const seats = humans.map((x) => x.tracker.last().me.seat);
+      const picks = await Promise.all(humans.map((x, i) => attempt(async () => pickOnTurn(x, seats[(i + 1) % seats.length]))));
+      rec(sc, "NE0", "사람 넷이 자기 차례에 다음 사람을 가리킨다(1·1·1·1)", picks.every((r) => r.ok), picks.map((r) => r.detail).filter(Boolean).join("; "));
+      await noExecChecks(rec, sc, { ht, pages: humans.map((x) => x.page), watch: guests[0].page, from, reason: "tie", forbidden: ["defense", "execution"] });
+      rec(sc, "NE7", "지목은 지났다(nomination 단계를 거쳤다)", ht.phases.slice(from).includes("nomination"), `지난 단계 ${[...new Set(ht.phases.slice(from))].join(",")}`);
     } finally {
       await closeGame(game);
     }
@@ -2209,13 +2193,13 @@ async function basicOffFlow(ctx) {
     // OFF1 DOM: 로비부터 결과 연출까지 감시가 한 번도 못 본 선택자
     const scan = await readOffScan(hp);
     const hits = scan === null ? null : Object.entries(scan.seen).map(([sel, v]) => `${sel} ${v.n}건(${v.phase})`);
-    rec(`${id}/dom`, "OFF1", `꺼진 장치 선택자·${OFF_DEVICE_ATTR_PREFIX}* 속성이 한 판 전체에서 0건이다`, scan !== null && scan.scans > 20 && hits.length === 0, scan === null ? "감시 스크립트가 없음" : hits.length > 0 ? hits.join(", ") : `감시 ${scan.scans}회`);
+    rec(`${id}/dom`, "OFF1", `지운 장치(판 종류·튜토리얼·확장판·기록·시상) 선택자·${OFF_DEVICE_ATTR_PREFIX.join("·")}* 속성이 한 판 전체에서 0건이다`, scan !== null && scan.scans > 20 && hits.length === 0, scan === null ? "감시 스크립트가 없음" : hits.length > 0 ? hits.join(", ") : `감시 ${scan.scans}회`);
     infoRow(ctx, `${id}/dom`, "OFF1i", "감시가 본 단계 열(참고)", scan === null ? "없음" : scan.phases.join(" → "));
     // OFF2 프레임: 받은 모든 state·chat 프레임의 꺼진 장치 키
-    rec(`${id}/frames`, "OFF2", "받은 프레임에 players[].badge·badgeSwapped·day.turn·day.runoff·day.showdown·me.whisperUsed·me.ballot·귓속말 줄이 0건이다", ht.offKeys.length === 0, ht.offKeys.length === 0 ? `phase 열 ${ht.phases.length}개` : `처음 걸린 경로 ${ht.offKeys[0]} (전체 ${ht.offKeys.join(", ")})`);
+    rec(`${id}/frames`, "OFF2", "받은 프레임에 players[].badge·badgeSwapped·day.runoff·day.showdown·me.whisperUsed·me.ballot·귓속말 줄이 0건이다", ht.offKeys.length === 0, ht.offKeys.length === 0 ? `phase 열 ${ht.phases.length}개` : `처음 걸린 경로 ${ht.offKeys[0]} (전체 ${ht.offKeys.join(", ")})`);
     // OFF3 단계 순서
     recMany(rec, `${id}/order`, basicOrderChecks(ht.phases));
-    rec(`${id}/order`, "OFF3b", "투표(nomination)·변론(defense)·찬반(verdict)·처형(execution)을 한 번 이상 지났다", ["nomination", "defense", "verdict", "execution", "night", "morning"].every((p) => ht.phases.includes(p)), `지난 단계 ${[...new Set(ht.phases)].join(",")}`);
+    rec(`${id}/order`, "OFF3b", "찬반(verdict)·지목(nomination)·유언(defense)·처형(execution)을 한 번 이상 지났다", ["verdict", "nomination", "defense", "execution", "night", "morning"].every((p) => ht.phases.includes(p)), `지난 단계 ${[...new Set(ht.phases)].join(",")}`);
     // OFF4 결과 화면: 탭이 없다(전체 대화만, 18.1 P181-7) — 귓속말 탭도 당연히 없다
     const tabs = await hp.evaluate(() => ({ all: document.querySelectorAll("[data-result-tab]").length, whisper: document.querySelectorAll('[data-result-tab="whisper"]').length }));
     rec(`${id}/result`, "OFF4", "결과 화면에 탭이 없다(전체 대화만, 18.1 P181-7)", shown.ok && tabs.all === 0 && tabs.whisper === 0, shown.ok ? `탭 ${tabs.all}개, 귓속말 탭 ${tabs.whisper}개` : shown.detail);
@@ -2245,39 +2229,42 @@ async function readGameStable(page, maxMs = 11000) {
 }
 
 /**
- * basic-vote (FLOW-01, U-8): 8명(방장 + 사람 손님 7, 모두 4자 이름) 투표 화면의 기하. 이름표 버튼 7개가 44×44 이상·무가림(pickButtonChecks, 모여서 멈춘 뒤),
- * 묶음 G·H, 제목 '투표', 띠 시간(14페이즈: 옛 헤더 링을 옮김), 순차 블록 없음, 손님 일곱이 방장을 누르면 득표 배지 합 7 이고 표가 쌓인 뒤에도 기하가 유지된다.
- * 계획은 봇 7 이었으나 봇 이름은 첫 봇이 8자 고정이라 UI-SPEC 의 '4자 이름' 전제와 다르다 — 사람 손님으로 4자 이름을 만든다(결정 0052-3 과 같은 이유, SUMMARY 편차 참고).
+ * basic-vote (FLOW-01, U-8 → 22-13): 8명(방장 + 사람 손님 7, 모두 4자 이름) 지목 화면의 기하. 22페이즈 D-12 로 지목이 순차 차례가 되어 동시 투표 8인 화면은 뜻이 없다 —
+ * politics-pin 은 핀 조명만 보므로 "내 차례 이름표 7개 44×44·무가림(pickButtonChecks)"을 이 흐름이 잰다: 손님 일곱은 자기 차례에 방장을 가리키고(기다리는 시간을 줄인다), 방장은 자기 차례에 이름표를 읽은 뒤 첫 손님을 가리킨다.
+ * 묶음 G·H, 제목 '지목', 차례 블록이 있고 득표 배지가 어디에도 없다. 계획은 봇 7 이었으나 봇 이름은 첫 봇이 8자 고정이라 UI-SPEC 의 '4자 이름' 전제와 다르다 — 사람 손님으로 4자 이름을 만든다(결정 0052-3 과 같은 이유).
  */
 async function basicVoteFlow(ctx) {
   const id = "basic-vote";
   const rec = recorder(ctx);
   const sc = `${id}/nomination`;
-  const game = await openGame(ctx, id, { guests: 7, bots: 0, role: "citizen", to: "nomination", guestNames: BASIC_VOTE_GUESTS, hostNick: GAME_HOST_NICK });
+  const game = await openGame(ctx, id, { guests: 7, bots: 0, role: "citizen", to: "verdict", guestNames: BASIC_VOTE_GUESTS, hostNick: GAME_HOST_NICK });
   try {
     const { host, hp, ht, hostSeat, guests } = game;
-    await allAt([hp], "nomination");
-    const g = await readGameStable(hp);
-    rec(sc, "BV1", "이름표 버튼이 나를 뺀 산 사람 7개다", g.picks.length === 7 && !g.picks.some((b) => b.seat === hostSeat), `버튼 ${g.picks.length}개`);
-    recMany(rec, sc, pickButtonChecks(g.picks), " (8명판, 모여서 멈춘 뒤)");
-    // 14페이즈(TOOL-02): 헤더 시간 링은 자막 띠의 막대 + '남은 초'로 옮겼다 — 같은 뜻(남은 초 1~15)을 띠 시간에서 읽는다
-    const bandTime = await readHostBand(hp);
-    const secondsM = /^(\d+)초$/.exec(bandTime.timeText);
-    const ring = secondsM && bandTime.barShown ? { seconds: Number(secondsM[1]) } : null;
-    rec(sc, "BV4", "헤더 제목이 '투표'이고 띠에 시간 막대와 'n초'가 있다(남은 초 1~15)", g.title === "투표" && !!ring && ring.seconds !== null && ring.seconds >= 1 && ring.seconds <= 15 && bandTime.oldRing === 0, `제목 '${g.title}', 띠 시간 ${ring === null ? `없음('${bandTime.timeText}', 막대 ${bandTime.barShown})` : `${ring.seconds}초`}, 옛 링 ${bandTime.oldRing}개`);
-    rec(sc, "BV5", "순차 차례 블록([data-turn-block])이 없다", g.turn === null, `turn ${g.turn === null ? "없음" : "있음"}`);
-    await gameGH(ctx, id, "nomination", host);
-    // 손님 일곱이 방장을 누른다 → 모든 이름표 득표 배지 합 7, 방장 이름표 7표
-    const voted = await attempt(async () => {
-      for (const x of guests) await tapPick(x.page, hostSeat);
-      await untilGame(hp, (gm) => Number(gm.tags.find((t) => t.seat === hostSeat)?.count ?? 0) >= 7, NOMINATION_MS, "손님 일곱의 표");
+    for (const x of guests) {
+      await untilGame(x.page, (g) => g.phase === "verdict" && g.verdictBtns.length === 2, 6000, "찬반 도착");
+      await chooseVerdict(x.page, true);
+    }
+    await ht.waitFor((v) => v.phase === "nomination" && v.day?.turn !== undefined, 16_000, "찬반 통과 → 지목");
+    const first = guests[0].seat;
+    // 손님 일곱은 자기 차례에 방장을 가리킨다(방장 차례 앞뒤의 기다림을 줄인다)
+    const guestPicks = Promise.all(guests.map((x) => attempt(async () => pickOnTurn(x, hostSeat))));
+    // 방장 차례를 기다려 이름표를 읽는다(차례일 때만 이름표 단추가 나온다)
+    const mine = await attempt(async () => {
+      await ht.waitFor((v) => v.phase === "nomination" && v.day?.turn !== undefined && v.day.turn.order[v.day.turn.i] === hostSeat && v.day.turn.doneAt === undefined, 80_000, "방장 차례");
     });
-    await sleep(300);
-    const g2 = await readGameStable(hp, 4000);
-    const sum = g2.tags.reduce((a, t) => a + Number(t.count ?? 0), 0);
-    rec(sc, "BV6", "손님 일곱의 표가 모두 들어와 득표 배지 합이 7 이다", voted.ok && sum === 7, voted.ok ? `배지 합 ${sum}` : voted.detail);
-    // 표가 쌓인 뒤(배지·선두·유력 표시가 붙은 상태)에도 같은 기하
-    recMany(rec, `${sc}-voted`, pickButtonChecks(g2.picks), " (표가 쌓인 뒤)");
+    rec(sc, "BV0", "방장 차례가 온다(8명 순차 지목)", mine.ok, mine.detail);
+    if (mine.ok) {
+      await settle(hp);
+      const g = await readGameStable(hp, 4000);
+      rec(sc, "BV1", "내 차례 이름표 버튼이 나를 뺀 산 사람 7개다", g.picks.length === 7 && !g.picks.some((b) => b.seat === hostSeat), `버튼 ${g.picks.length}개`);
+      recMany(rec, sc, pickButtonChecks(g.picks), " (8명판, 내 차례)");
+      rec(sc, "BV4", "헤더 제목이 '지목'이다", g.title === "지목", `제목 '${g.title}'`);
+      rec(sc, "BV5", "순차 차례 블록([data-turn-block])이 있다", g.turn !== null, `turn ${g.turn === null ? "없음" : "있음"}`);
+      rec(sc, "BV6", "득표 배지(data-count)가 어느 이름표에도 없다", g.tags.every((t) => t.count === null), `배지 ${g.tags.filter((t) => t.count !== null).length}개`);
+      await gameGH(ctx, id, "nomination", host);
+      await tapTurnPick(hp, first).catch(() => {});
+    }
+    await guestPicks;
   } finally {
     await closeGame(game);
   }
@@ -3152,7 +3139,6 @@ async function resultFlow(ctx) {
     const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "mafia", vote: { exec: "yes", pick: "host" }, to: "nomination" });
     try {
       await step("시민 승 defense", () => skipTo(game.hp, game.ht, "defense"));
-      await step("시민 승 verdict", () => skipTo(game.hp, game.ht, "verdict"));
       await step("시민 승 execution", () => skipTo(game.hp, game.ht, "execution"));
       await step("시민 승 ended", () => toEnded(game));
       await resultState(ctx, id, game, { winner: "citizenWin", n: 4, skipProbe: true });
@@ -3165,10 +3151,7 @@ async function resultFlow(ctx) {
     const game = await openGame(ctx, id, { guests: 0, bots: 3, role: "mafia", vote: { exec: "yes", pick: "other" }, to: "nomination" });
     try {
       const { hp, ht, hostSeat } = game;
-      await skipTo(hp, ht, "defense");
-      await skipTo(hp, ht, "verdict");
-      await untilGame(hp, (g) => g.phase === "verdict" && g.verdictBtns.length === 2, 6000, "찬반 도착");
-      await chooseVerdict(hp, true);
+      await skipTo(hp, ht, "defense"); // 찬반은 openGame 이 지난 토론 → 찬반 → 지목 에서 봇이 던졌다(22페이즈 D-10)
       await skipTo(hp, ht, "night");
       await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
       await hp.waitForSelector("[data-face]", { timeout: 8000 });
@@ -3201,10 +3184,7 @@ async function resultRevealFlow(ctx) {
 
     await untilGame(g.page, (x) => x.phase === "discussion", 8000, "토론 도착(손님)");
     await step("지목", () => skipTo(hp, ht, "nomination"));
-    await step("변론", () => skipTo(hp, ht, "defense"));
-    await step("찬반", () => skipTo(hp, ht, "verdict"));
-    await untilGame(hp, (x) => x.phase === "verdict" && x.verdictBtns.length === 2, 6000, "찬반 도착");
-    await chooseVerdict(hp, true);
+    await step("유언", () => skipTo(hp, ht, "defense"));
     await step("밤", () => skipTo(hp, ht, "night"));
     await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
     await hp.waitForSelector("[data-face]", { timeout: 8000 }); // 15-08: 밤 고르기는 얼굴 목록 칸
@@ -3271,15 +3251,10 @@ const REMATCH_GUEST_SIZE = { w: 430, h: 932, label: "430x932" };
 const REMATCH_OLD_LINE = "지난 판 인사예요";
 const HANDOFF_SIZE = { w: 390, h: 844, label: "390x844" };
 
-/** nomination 에서 시작해 ended 까지: 방장(마피아)이 지목되어 처형된다(봇은 방장을 가리키고 찬성). voters 는 찬성을 누를 손님 페이지들이다 */
-async function playRematchGame(game, voters) {
+/** nomination 에서 시작해 ended 까지: 방장(마피아)이 지목되어 처형된다(봇은 방장을 가리키고 찬성 — 찬반은 nomination 에 닿기 전에 봇이 던졌다, 22페이즈 D-10). 두 번째 인자(찬성을 누를 손님)는 이제 쓰지 않는다 */
+async function playRematchGame(game, _voters) {
   const { hp, ht } = game;
   await step("defense", () => skipTo(hp, ht, "defense"));
-  await step("verdict", () => skipTo(hp, ht, "verdict"));
-  for (const g of voters) {
-    await untilGame(g.page, (x) => x.phase === "verdict" && x.verdictBtns.length === 2, 8000, "찬반 도착(손님)");
-    await chooseVerdict(g.page, true);
-  }
   await step("execution", () => skipTo(hp, ht, "execution"));
   await step("ended", () => toEnded(game));
 }
@@ -3554,14 +3529,14 @@ async function hostHandoffFlow(ctx) {
   }
 }
 
-// ---- chat-game: 지목·찬반·처형·아침에 채팅 입력줄이 있고 줄이 오가며, 유령 줄은 산 사람 화면에 없다 (07 D1 이월 해소) ----
+// ---- chat-game: 찬반·지목·처형·아침에 채팅 입력줄이 있고 줄이 오가며, 유령 줄은 산 사람 화면에 없다 (07 D1 이월 해소) ----
 
 const CHAT_TEXTS = { nomination: "지목은 신중하게 해요", verdict: "찬반은 조용히 골라요", execution: "처형 단계에서도 말해요", morning: "아침이 밝았어요", ghost: "나는 유령이에요" };
 
 async function chatGameFlow(ctx) {
   const id = "chat-game";
   const rec = recorder(ctx);
-  const game = await openGame(ctx, id, { guests: 2, bots: 4, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "nomination" });
+  const game = await openGame(ctx, id, { guests: 2, bots: 4, role: "citizen", vote: { exec: "yes", pick: "host" }, to: "discussion" });
   try {
     const { hp, ht, hostSeat, guests } = game;
     const [g1, g2] = guests;
@@ -3577,18 +3552,20 @@ async function chatGameFlow(ctx) {
       rec(sc, cid, label, gs.every((g) => g.hasInput), `입력줄 ${gs.map((g) => g.hasInput).join("/")}`);
     };
 
+    // 찬반(22페이즈 D-10: 지목보다 앞이다) — 토론에서 넘겨 닿는다
+    await skipTo(hp, ht, "verdict");
+    await allAt([hp, g1.page, g2.page], "verdict");
+    await inputs(`${id}/verdict`, "CG3", "찬반 단계에 채팅 입력줄이 있다(산 사람 전원)", [hp, g1.page, g2.page]);
+    await send(`${id}/verdict`, "CG4", "찬반 단계에서 보낸 줄이 다른 산 사람 화면에 보인다", g2, [{ page: hp }, g1], CHAT_TEXTS.verdict);
+
     // 지목
+    await skipTo(hp, ht, "nomination");
     await allAt([hp, g1.page, g2.page], "nomination");
     await inputs(`${id}/nomination`, "CG1", "지목 단계에 채팅 입력줄이 있다(방장·손님 둘)", [hp, g1.page, g2.page]);
     await send(`${id}/nomination`, "CG2", "지목 단계에서 보낸 줄이 다른 산 사람 화면에 보인다", { page: hp }, [g1, g2], CHAT_TEXTS.nomination);
 
-    // 찬반
+    // 유언(처형자 방장) 단계로 넘긴다 — 이 단계의 채팅은 잠기므로(22-11 D-16) 입력줄 판정은 처형에서 한다
     await skipTo(hp, ht, "defense");
-    await skipTo(hp, ht, "verdict");
-    await allAt([hp, g1.page, g2.page], "verdict");
-    await inputs(`${id}/verdict`, "CG3", "찬반 단계에 채팅 입력줄이 있다(투표자·변론자)", [hp, g1.page, g2.page]);
-    await send(`${id}/verdict`, "CG4", "찬반 단계에서 투표자가 보낸 줄이 변론자 화면에 보인다", g2, [{ page: hp }, g1], CHAT_TEXTS.verdict);
-    for (const g of guests) await chooseVerdict(g.page, true).catch(() => {});
 
     // 처형
     await skipTo(hp, ht, "execution");
@@ -3790,6 +3767,9 @@ async function wakeLockFlow(ctx) {
 // 정치 긴장 화면(09.1.1-10·11): 직업 배지·귓속말·지목 핀 조명. 흐름 본문은 politics.mjs, 도우미만 넘긴다
 const { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow, politicsVerdictFlow, politicsRunoffFlow, politicsRunoffTieFlow, politicsShowdownFlow, politicsShowdownTieFlow } = makePoliticsFlows({ recorder, openGame, closeGame, allAt, attempt, gameGH, walkableCentersOfApp, GAME_HOST_NICK });
 
+// 22페이즈 새 낮 흐름(D-24): vote-count(찬반 숫자 번복)·will-flow(유언 조기·시간 초과·빈 글·잠금)·will-flow-sizes(폰별 시트 기하·키보드). 흐름 본문은 day.mjs, 도우미만 넘긴다
+const { voteCountFlow, willFlow, willSizesFlow } = makeDayFlows({ recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK });
+
 // 캐릭터 동작·의상 화면(10페이즈): avatar-emote(10-05)·avatar-dress(10-07). 흐름 본문은 avatar.mjs, 도우미만 넘긴다
 const { avatarEmoteFlow, avatarDressFlow, avatarPhasesFlow, avatarPhasesNightFlow } = makeAvatarFlows({ recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave, openGame, closeGame, untilGame });
 
@@ -3820,6 +3800,10 @@ export const FLOWS = [
   // 맵 게임 흐름(08-24): day·ghost 는 폰 크기 6종, 나머지는 자기 크기로 한 번. 단계는 테스트 방 다음 단계와 봇 투표 규칙으로 넘긴다
   { id: "day", run: dayFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "ghost", run: ghostFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  // 22페이즈 D-24 바뀐 흐름: 찬반 숫자 줄 번복(P22-2) / 유언 시트 자동 열림·조기·시간 초과·빈 글·잠금(P22-5·6·7) / 폰별 시트 기하와 키보드 올림(P22-8)
+  { id: "vote-count", run: voteCountFlow, size: GAME_SIZE },
+  { id: "will-flow", run: willFlow, size: GAME_SIZE },
+  { id: "will-flow-sizes", run: willSizesFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "noexec", run: noexecFlow, size: GAME_SIZE },
   // 9페이즈 밤·아침(09-22): night = 시나리오(암살·구출·불일치·처형 유언·경찰·피해자)와 시민 편 DOM·G/H 는 승인 보드 폭 한 번, night-sizes = 폰 크기 6종 기하
   { id: "night", run: nightFlow, size: GAME_SIZE },
@@ -3839,8 +3823,8 @@ export const FLOWS = [
   // 9.1.1 페이즈 정치 긴장(09.1.1-10): 직업 배지(떠 있는 버튼→칩→이름표 배지→말 바꿈)·귓속말(모드→한 줄 시트→당사자만 본문). 둘 다 폰 6종, 방장·손님 두 화면
   { id: "politics-badge", run: politicsBadgeFlow, extraSizes: LOBBY_EXTRA_SIZES, skipByDefault: true },
   { id: "politics-whisper", run: politicsWhisperFlow, extraSizes: LOBBY_EXTRA_SIZES, skipByDefault: true },
-  // 지목 차례 핀 조명(09.1.1-11): 모이는 중 없음 → 차례 주인에게 켜짐 → 확정 때 0.9초 이동 → 끝 알림에서 꺼짐. window.__mfPin 훅을 읽는다. 폰 6종
-  { id: "politics-pin", run: politicsPinFlow, extraSizes: LOBBY_EXTRA_SIZES, skipByDefault: true },
+  // 지목 차례 핀 조명(09.1.1-11 → 22-13): 모이는 중 없음 → 차례 주인에게 켜짐 → 확정 때 0.9초 이동 → 끝 알림에서 꺼짐 → 유언 단계에 처형자에게 다시 섬. window.__mfPin 훅을 읽는다. 폰 6종
+  { id: "politics-pin", run: politicsPinFlow, extraSizes: LOBBY_EXTRA_SIZES }, // 22페이즈 D-12: 순차 지목이 기본 규칙이라 기본 실행에 다시 들어왔다(skipByDefault 해제)
   // 판결 순간(09.1.1-13): 처형 진입 기준 어둡게 막·핀·줌·찬성/반대 묶음 시간표, 8인판 R=4 배치, 채팅 카드, 새로 고침 즉시 표시. 폰 6종
   { id: "politics-verdict", run: politicsVerdictFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 동점 결선(09.1.1-14): 사람 4명이 2:2 동점 → 결선 투표(바꾸기·done 체크·득표 배지) → 변론. 폰 6종 / 결선도 동점이면 처형 없음 → 밤 한 번

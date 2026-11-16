@@ -41,7 +41,7 @@ export const TOD_BY_PHASE = Object.freeze({
   runoff: "dusk",
   showdown: "dusk",
   defense: "dusk",
-  verdict: "dusk",
+  verdict: "day", // 22-13(P22-3): 찬반은 토론 장면 그대로
   execution: "dusk",
   night: "night",
   morning: "morning",
@@ -818,46 +818,6 @@ export function readLiveGhost(page, seats) {
       ghostSeats: document.querySelectorAll("[data-ghost-seat]").length,
     };
   }, seats);
-}
-
-/**
- * 찬반 기록 카드 overflow backstop(UI-SPEC UI Considerations): 접힌 기록 칸에서는 창보다 큰 시스템 카드의 위가 잘리고, 늘어난 기록 칸(0083-4)에서는 카드 전체가 칸 안에 보여야 한다.
- * 칸에 찬반 카드(`[data-card="ballots"]`)가 있으면 칸 스크린샷을 남기고, [data-chat-open] 으로 칸을 늘려 카드를 칸 안으로 스크롤한 뒤 사각형을 읽고 스크린샷을 남기고 접는다.
- * 돌려주는 값: { measured: false, why } 또는 { measured: true, cardH, windowH, cutTop(접힌 칸에서 위가 잘린 높이), openFits(늘어난 칸 안에 카드 전체가 듦), openH(늘어난 칸 높이) }. 카드 안 글은 읽지 않는다.
- */
-export async function measureBallotsBackstop(page, { windowShot, openShot }) {
-  const win = await page.evaluate(() => {
-    const rect = (el) => {
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      return { top: r.top, bottom: r.bottom, height: r.height };
-    };
-    const log = document.querySelector("[data-chat-log]");
-    const cards = log ? [...log.querySelectorAll('[data-card="ballots"]')] : [];
-    return { log: rect(log), card: rect(cards[cards.length - 1] ?? null), open: document.querySelector("[data-chat-open]") !== null };
-  });
-  if (!win.log) return { measured: false, why: "기록 칸이 없음" };
-  if (!win.card) return { measured: false, why: "찬반 기록 카드가 기록에 없음" };
-  if (!win.open) return { measured: false, why: "[data-chat-open] 이 없음" };
-  await page.locator("[data-chat-log]").screenshot({ path: windowShot });
-  await page.locator("[data-chat-open]").click({ timeout: 4000 });
-  await waitChatExpanded(page, "true");
-  const open = await page.evaluate(() => {
-    const list = document.querySelector("[data-chat-log]");
-    const cards = list ? [...list.querySelectorAll('[data-card="ballots"]')] : [];
-    const card = cards[cards.length - 1];
-    if (!list || !card) return { missing: true, list: list !== null, lines: list ? list.children.length : 0, allCards: document.querySelectorAll('[data-card="ballots"]').length };
-    card.scrollIntoView({ block: "nearest" });
-    const l = list.getBoundingClientRect();
-    const c = card.getBoundingClientRect();
-    return { listH: l.height, cardH: c.height, fits: c.top >= l.top - 1 && c.bottom <= l.bottom + 1 };
-  });
-  await sleep(100);
-  await page.screenshot({ path: openShot });
-  await page.locator('[data-chat-open][aria-expanded="true"]').click({ timeout: 4000 }).catch(() => {});
-  await page.waitForSelector('[data-chat-open][aria-expanded="false"]', { timeout: 2000 }).catch(() => {});
-  if (open.missing) return { measured: false, why: `늘어난 칸에 찬반 기록 카드가 없음(칸 ${open.list ? "있음" : "없음"}·줄 ${open.lines}개·문서 전체 찬반 카드 ${open.allCards}개)` };
-  return { measured: true, cardH: open.cardH, windowH: win.log.height, cutTop: Math.max(0, win.log.top - win.card.top), openFits: open.fits, openH: open.listH };
 }
 
 // ---- 흐름 ----

@@ -380,14 +380,6 @@ export function makeMapSelectFlows(helpers) {
       // 한 판: 방장 마피아 + 봇이 방장을 지목·찬성 → 낮에 방장이 처형되어 시민 승
       const run = await attempt(async () => {
         await skipTo(hp, ht, "defense");
-        await skipTo(hp, ht, "verdict");
-        // 손님도 찬성한다(찬반 버튼이 뜬 뒤). 사람 표가 빠져도 봇 둘의 찬성이면 처형되지만, 손님 쪽 흐름도 같이 확인한다
-        const arrived = await until(async () => {
-          const gm = await readGame(gp);
-          return gm?.phase === "verdict" && gm.verdictBtns.length === 2;
-        }, 6000);
-        if (arrived === null) throw new Error("손님 쪽 찬반 버튼이 뜨지 않음");
-        await chooseVerdict(gp, true);
         await skipTo(hp, ht, "execution");
         try {
           await skipTo(hp, ht, "ended");
@@ -396,7 +388,7 @@ export function makeMapSelectFlows(helpers) {
         }
         await Promise.all([ht.waitFor((v) => v.phase === "ended" && v.result !== undefined, 10000, "방장 종료"), gt.waitFor((v) => v.phase === "ended" && v.result !== undefined, 10000, "손님 종료")]);
       });
-      rec(sc4, "MS13", "광장에서 한 판이 ended 까지 돈다(낮 토론 → 지목 → 변론 → 찬반 → 처형 → 결과)", run.ok, run.detail);
+      rec(sc4, "MS13", "광장에서 한 판이 ended 까지 돈다(낮 토론 → 찬반 → 지목 → 유언 → 처형 → 결과)", run.ok, run.detail);
       if (!run.ok) return;
 
       // ── 결과 화면: 칩이 보이고 카드 선택이 mapChoice 와 같다 ──
