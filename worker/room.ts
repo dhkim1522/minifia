@@ -34,6 +34,7 @@ import { attachBenchConnection, detachBenchConnection, findAnyByToken, isResting
 import { buildResultLog } from "../shared/game/resultLog";
 import { sendWhisper } from "../shared/game/whisper";
 import { ANSWER_MIN_GAP_MS } from "../shared/game/answerRules";
+import { shrinkDeadline } from "../shared/game/early";
 import { submitAnswer } from "../shared/game/keywordAnswer";
 import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared/game/will";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
@@ -525,14 +526,16 @@ export class Room extends DurableObject<Env> {
     if (error !== null) this.sendRejection(ws, att.playerId, error);
   }
 
-  // 마감이 바뀌지 않으니 reschedule 은 필요 없다(NIGHT-05). 같은 값을 다시 고르면 같은 객체라 저장·전송도 하지 않는다.
-  // 받아들여지면 전원 방송 대신 받는 사람에게만 state 를 보낸다 — 전원 방송은 행동 타이밍을 흘린다(RESEARCH Pitfall 1).
+  // 같은 값을 다시 고르면 같은 객체라 저장·전송도 하지 않는다. 받아들여지면 전원 방송 대신 받는 사람에게만 state 를 보낸다 —
+  // 전원 방송은 행동 타이밍을 흘린다(RESEARCH Pitfall 1). 예외는 산 사람 전원이 고른 그 순간 하나뿐이다(0089-26, D-11·D-13·D-25):
+  // 마감이 지금 + 1.5초로 줄어드는 값은 역할과 무관하고 전원에게 같게 방송한다. 줄어든 뒤의 변경은 마감을 건드리지 않고(연장 없음) 예전처럼 받는 사람에게만 간다.
   private async applyPick(playerId: string, target: number): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
     const result = pickTarget(this.room, playerId, target);
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     this.room = result.state;
+    if (await this.maybeAdvanceEarly(Date.now(), { extend: false })) return null;
     await this.ctx.storage.put("room", this.room);
     this.sendViewTo(pickRecipientIds(this.room, playerId));
     return null;
@@ -758,7 +761,7 @@ export class Room extends DurableObject<Env> {
   }
 
   // applyWill 과 같은 모양이다(D-10, T-23-19): 받아들여도 전원 방송(persistAndBroadcast)을 부르지 않는다 — 저장 한 번 + 보낸 본인에게만 sendViewTo.
-  // 누가 썼다·냈다는 타이밍이 다른 폰에 새면 안 되고 DO 쓰기 예산(결정 0076)도 지킨다. 마감이 바뀌지 않으니 reschedule 도 없다(조기 진행 호출은 23-08 이 붙인다).
+  // 누가 썼다·냈다는 타이밍이 다른 폰에 새면 안 되고 DO 쓰기 예산(결정 0076)도 지킨다. 마감은 사람 전원이 확정한 그 순간에만 줄어든다(maybeAdvanceEarly, 0089-26·D-11) — 그때는 전원 방송 + reschedule 이고 그 밖에는 reschedule 도 없다.
   // 다른 점 셋: ① 간격 키를 초안(answerD)·확정(answerF)으로 나눈다 — 입력 직후 [보내기]가 초안 간격에 막혀 사라지지 않게(Pitfall 6). 간격 안의 요청은 오류 없이 버린다.
   // ② 간격은 수락·거절 모두 기록한다(T-23-22) — 마피아의 떠보기가 400ms 당 1회로 묶인다. ③ 거절에 state(keywordProbed)가 딸려 오면 저장 한 번 한 뒤 오류를 돌려준다 —
   // handleAnswer 의 sendRejection 이 시민의 거절과 같은 두 프레임(오류 + 본인 state)으로 응답하므로 응답에서는 저장 여부를 알 수 없다(T-23-18).
@@ -778,6 +781,7 @@ export class Room extends DurableObject<Env> {
     }
     if (result.state === this.room) return null;
     this.room = result.state;
+    if (await this.maybeAdvanceEarly(now, { extend: false })) return null;
     await this.ctx.storage.put("room", this.room);
     this.sendViewTo([playerId]);
     return null;
@@ -886,7 +890,8 @@ export class Room extends DurableObject<Env> {
     if (error !== null) this.sendRejection(ws, att.playerId, error);
   }
 
-  // 마감을 건드리지 않는다(조기 종료 없음 — 모두가 일찍 던져도 10초를 다 채운다, 결정 0060-4). 같은 값을 다시 보내면 같은 객체라 저장·전송이 없다.
+  // 산 사람 전원이 던지면 마감이 마지막 표 뒤 1.5초로 줄고, 유예 안 번복은 다시 지금 + 1.5초로(원래 마감 이내) 늘어난다(0089-26·D-11·D-25, maybeAdvanceEarly).
+  // 순수 castVerdict 는 마감을 건드리지 않는다 — 줄이는 것은 이 본체다. 같은 값을 다시 보내면 같은 객체라 저장·전송이 없다.
   // 방송 규율(22-09 D-11·D-26, T-22-15·T-22-16): 집계 수(day.verdictCount)가 모두에게 실시간 공개라 값이 바뀌는 모든 투표 — 첫 투표든 번복이든 —
   // 가 전원에게 persistAndBroadcast 된다(사람당 값이 둘(찬·반)뿐이라 별도 간격 제한이 없다). 번복도 yes·no 둘이 함께 바뀌므로 한 번의 방송으로 둘 다 간다.
   // 던진 좌석(옛 day.voted)은 싣지 않으므로 방송 타이밍으로 새는 추가 정보가 없다 — 개인 값(me.verdictVote)만 본인 view 에 있다.
@@ -896,8 +901,25 @@ export class Room extends DurableObject<Env> {
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     this.room = result.state;
+    if (await this.maybeAdvanceEarly(Date.now(), { extend: true })) return null;
     await this.persistAndBroadcast();
     return null;
+  }
+
+  /**
+   * 일찍 넘어가기(0089-26, D-11): 순수 shrinkDeadline 이 마감을 줄였으면 저장·전원 방송·알람 이동을 한 번에 하고 true. 줄지 않았으면 아무것도 하지 않고 false —
+   * 부른 쪽이 예전 저장·전송을 이어 한다. 줄어드는 순간에만 방송하고 값(phaseEndsAt)은 역할과 무관해 모든 사람에게 같다(T-23-28).
+   * extend 는 찬반(번복 연장)만 true 다 — 밤 선택·키워드 답은 본인에게만 가는 정보라 연장 방송이 새 신호가 된다(D-25).
+   * 봇도 같은 apply* 본체를 지나므로 봇의 마지막 표·pick 이 조건을 채우는 경우도 여기서 처리된다. 봇 계획 키는 shrinkDeadline 이 새 마감으로 같이 갈아 끼운다(Pitfall 5).
+   */
+  private async maybeAdvanceEarly(now: number, opts: { extend: boolean }): Promise<boolean> {
+    if (!this.room) return false;
+    const next = shrinkDeadline(this.room, now, opts);
+    if (next === this.room) return false;
+    this.room = next;
+    await this.persistAndBroadcast();
+    await this.reschedule();
+    return true;
   }
 
   // 토론 끝내기(8페이즈, DAY-03): 신원은 소켓 첨부의 playerId 뿐이다(T-08-04).

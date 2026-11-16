@@ -5,7 +5,7 @@
 // 찬반 진행 중에는 집계 수(찬성·반대)만 모두에게 공개하고(day.verdictCount, 번복도 방송) 던진 좌석은 싣지 않는다(D-26). 개인 표(Player.verdictVote)는
 // 서버 전용이고 뷰 허용 목록에 없다(본인 me.verdictVote 만 예외). 마감 훅(resolveVerdict)이 집계 직후 키째 지운다 — 진행 중 비공개를 뷰 코드가 아니라 "데이터가 없다" 는 사실로 지킨다.
 // 마감 뒤에는 누가 찬성·반대했는지 어디에도 남지 않는다(22-12 D-14) — 판정 결과(passed)와 집계 수(voteLog exec)뿐이다.
-// 마감 시각은 건드리지 않는다: 모두가 일찍 던져도 10초를 다 채운다(조기 종료 없음, 사용자 확정 2026-11-02).
+// 순수 castVerdict·집계는 마감 시각을 건드리지 않는다. 산 사람 전원이 던지면 마지막 표 뒤 1.5초로 줄이고 번복은 연장하는 것은 방 DO 의 maybeAdvanceEarly 다(0089-26, shared/game/early.ts).
 import { isAlive } from "./alive";
 import { afterDayOf } from "./phases";
 import type { Player, RoomState } from "./room";

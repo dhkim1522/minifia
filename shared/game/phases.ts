@@ -71,7 +71,7 @@ export const SHOWDOWN_TURN_MS = 8_000; // 결정 0066-5 · 플레이테스트 �
 export const SHOWDOWN_POINT_MS = 8_000; // 결정 0066-5 · 플레이테스트 뒤 이 줄만 고친다 — 셋이 동시에 한 명을 지목하는 창
 export const SHOWDOWN_REVEAL_MS = 1_500; // 결정 0066-5 · 플레이테스트 뒤 이 줄만 고친다 — 누가 누구를 지목했는지 동시 공개
 
-export const VERDICT_MS = 10_000; // 찬반(DAY-06, 결정 0060-1·0060-4) — 조기 종료 없이 마감까지
+export const VERDICT_MS = 10_000; // 찬반(DAY-06, 결정 0060-1·0060-4) — 산 사람 전원이 던지면 마지막 표 뒤 1.5초로 줄고 번복은 연장한다(0089-26, 줄이는 쪽은 방 DO 의 maybeAdvanceEarly)
 
 export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   lobby: Object.freeze({ durationMs: null, next: null, revealsOwnRole: false }), // start 로만 나간다
