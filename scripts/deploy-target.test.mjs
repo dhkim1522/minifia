@@ -112,6 +112,29 @@ test("judgeDeployTarget: previewUrls 가 true 거나 누락이면 실패", () =>
   assert.equal(judgeDeployTarget({ ...goodInput(), previewUrls: undefined }).ok, false);
 });
 
+test("judgeDeployTarget: d1Databases 항목에 database_id 가 없으면 실패한다(원격 D1 자동 생성 방지, D-19)", () => {
+  const r = judgeDeployTarget({ ...goodInput(), d1Databases: [{ binding: "DB" }] });
+  assert.equal(r.ok, false);
+  assert.ok(r.problems.some((p) => p.includes("database_id") && p.includes("DB")));
+  assert.equal(judgeDeployTarget({ ...goodInput(), d1Databases: [{ binding: "DB", database_id: "" }] }).ok, false);
+});
+
+test("judgeDeployTarget: database_id 가 있거나 d1Databases 를 주지 않으면 지금 결과 그대로", () => {
+  assert.deepEqual(judgeDeployTarget({ ...goodInput(), d1Databases: [{ binding: "DB", database_id: "00000000-0000-0000-0000-000000000000" }] }), {
+    ok: true,
+    problems: [],
+  });
+  assert.deepEqual(judgeDeployTarget({ ...goodInput(), d1Databases: [] }), { ok: true, problems: [] });
+  assert.deepEqual(judgeDeployTarget(goodInput()), { ok: true, problems: [] });
+});
+
+test("저장소 사실: 지금 wrangler.jsonc 의 d1_databases 는 database_id 가 없어 배포가 막힌다(24 가 id 를 채우기 전까지)", () => {
+  const source = JSON.parse(stripJsonComments(read("wrangler.jsonc")));
+  assert.ok(Array.isArray(source.d1_databases) && source.d1_databases.length > 0);
+  const r = judgeDeployTarget({ ...goodInput(), d1Databases: source.d1_databases });
+  assert.equal(r.ok, false);
+});
+
 test("저장소 사실: wrangler.jsonc name === WORKER_NAME", () => {
   assert.equal(JSON.parse(stripJsonComments(read("wrangler.jsonc"))).name, WORKER_NAME);
 });
