@@ -1,18 +1,20 @@
-import { useId, useMemo, useRef } from "react";
+import { useEffect, useId, useMemo, useRef } from "react";
 import type { KeyboardEvent, ReactElement, RefObject } from "react";
 import type { KeywordAnswerRow, RoomView } from "../../shared/protocol";
 import type { RoleId } from "../../shared/game/roles";
 import { keywordAnswerOf, keywordAnswersOf, keywordGenreOf } from "../game/keywordView";
 import { ROLE_TEXT, alliesText, allyNicknames } from "../game/roleText";
+import { suspectLogByDay } from "../game/suspectView";
 import { roleArtSrc, seatColorVar } from "../net/assets";
 import type { JournalRole } from "../net/assets";
 import { Journal } from "./Journal";
 import { Diamond } from "./RoleCard";
 import { Sheet } from "./Sheet";
+import { V2Icon } from "./v2/V2Icon";
 import "../styles/phase.css";
 import "../styles/rolecard.css";
 
-export type RoleCardTab = "role" | "activity" | "answers";
+export type RoleCardTab = "role" | "activity" | "records";
 
 export interface RoleCardSheetProps {
   view: RoomView;
@@ -28,7 +30,7 @@ export interface RoleCardSheetProps {
   onClose: () => void;
 }
 
-const TAB_LABEL: Record<RoleCardTab, string> = { role: "내 역할", activity: "활동 기록", answers: "첫날 답" };
+const TAB_LABEL: Record<RoleCardTab, string> = { role: "내 역할", activity: "활동 기록", records: "답과 의심" };
 
 // 활동 기록(일지)이 있는 역할. 시민은 기록이 없어 탭 줄도 없다(결정 0026).
 function journalRoleOf(role: RoleId | null): JournalRole | null {
@@ -41,27 +43,28 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, on
   const role = view.me.role ?? null;
   const journalRole = showBack ? null : journalRoleOf(role);
   const answers = keywordAnswersOf(view);
-  const hasAnswers = !showBack && role !== null && answers !== undefined;
+  // 기록 탭(답과 의심): 첫날 답 또는 의심 기록이 하나라도 있으면 생긴다(P24-19)
+  const hasRecords = !showBack && role !== null && (answers !== undefined || (view.day?.suspectLog?.length ?? 0) > 0);
   const baseId = useId();
   const tabId = (t: RoleCardTab): string => `${baseId}-tab-${t}`;
   const panelId = `${baseId}-panel`;
   const tabRefs: Record<RoleCardTab, RefObject<HTMLButtonElement | null>> = {
     role: useRef<HTMLButtonElement>(null),
     activity: useRef<HTMLButtonElement>(null),
-    answers: useRef<HTMLButtonElement>(null),
+    records: useRef<HTMLButtonElement>(null),
   };
 
-  // 탭 순서: 시민 [내 역할, 첫날 답], 그 밖 [내 역할, 활동 기록, 첫날 답]. 답이 아직 없으면 지금 배열(시민은 탭 줄 없음, D-14·P23-16)
+  // 탭 순서: 시민 [내 역할, 답과 의심], 그 밖 [내 역할, 활동 기록, 답과 의심]. 답도 의심도 아직 없으면 지금 배열(시민은 탭 줄 없음, D-14·P23-16)
   const tabOrder = useMemo<readonly RoleCardTab[]>(() => {
     if (showBack || role === null) return [];
     const list: RoleCardTab[] = ["role"];
     if (journalRole !== null) list.push("activity");
-    if (hasAnswers) list.push("answers");
+    if (hasRecords) list.push("records");
     return list.length > 1 ? list : [];
-  }, [showBack, role, journalRole, hasAnswers]);
+  }, [showBack, role, journalRole, hasRecords]);
   const tabbed = tabOrder.length > 0;
   const selectedTab: RoleCardTab = tabbed && tabOrder.includes(tab) ? tab : "role";
-  const showingAnswers = tabbed && selectedTab === "answers";
+  const showingRecords = tabbed && selectedTab === "records";
 
   // ←/→ 는 이전/다음(끝에서 돈다), Home/End 는 처음/끝. 선택과 포커스를 함께 옮긴다.
   function onTabKeyDown(e: KeyboardEvent<HTMLButtonElement>, current: RoleCardTab): void {
@@ -117,8 +120,8 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, on
   } else if (tabbed) {
     content = (
       <div role="tabpanel" id={panelId} aria-labelledby={tabId(selectedTab)} className="mf-rolecard__panel">
-        {selectedTab === "answers" ? (
-          <AnswersPanel view={view} rows={answers ?? []} />
+        {selectedTab === "records" ? (
+          <RecordsPanel view={view} rows={answers} />
         ) : selectedTab === "activity" && journalRole !== null ? (
           <Journal role={journalRole} records={view.me.records ?? []} players={view.players} mySeat={view.me.seat} newCount={newCount} />
         ) : (
@@ -130,7 +133,7 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, on
     content = <Front view={view} role={role} />;
   }
 
-  const title = showingAnswers ? "모두의 답" : "역할 카드";
+  const title = showingRecords ? "모두의 기록" : "역할 카드";
   return (
     <Sheet
       label={title}
@@ -150,50 +153,89 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, on
   );
 }
 
-// 첫날 답 목록(23-11, P23-18·19). 일차 구역 배열 모양이라 24 가 2일차 이후 구역(포스트잇 줄)을 더할 수 있다.
-// 줄 = 번호 원 · 좌석 색 점 · 닉네임 · 답. 서버가 준 순서 그대로(낸 순서 → 답 없음), 글은 React 텍스트 노드만 쓴다(T-23-41).
-function AnswersPanel({ view, rows }: { view: RoomView; rows: readonly KeywordAnswerRow[] }): ReactElement {
+// 기록 카드 본문(23-11 첫날 답 → 24-06 일차별 기록, P23-18·19·P24-19·20). 일차 구역을 최신 일차가 위로 쌓는다.
+// 첫날 구역 = 23 의 답 목록 그대로(번호 원 · 좌석 색 점 · 닉네임 · 답, 서버 순서), 둘째 날 이후 구역 = 의심 줄(붙인 → 받은, 붙인 좌석 오름차순).
+// 의심이 없는 일차는 구역이 없다. 표식은 E2E 꺼진 장치 감시 접두와 부딪히지 않게 data-log-day 를 쓴다(D-27). 글은 React 텍스트 노드만 쓴다(T-23-41, T-24-16).
+function RecordsPanel({ view, rows }: { view: RoomView; rows: readonly KeywordAnswerRow[] | undefined }): ReactElement {
   const genre = keywordGenreOf(view);
   const correct = keywordAnswerOf(view);
   const nick = (seat: number): string => view.players.find((p) => p.seat === seat)?.nickname ?? "";
-  const days = [{ n: 1, rows }];
+  const suspectDays = suspectLogByDay(view);
+  const dayNumbers = new Set<number>(suspectDays.map((d) => d.n));
+  if (rows !== undefined) dayNumbers.add(1);
+  const days = [...dayNumbers].sort((a, b) => b - a);
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (scroller.current !== null) scroller.current.scrollTop = 0; // 처음 열 때 맨 위(최신 일차)
+  }, []);
   return (
-    <div className="mf-answers">
-      {days.map((d) => (
-        <section key={d.n} className="mf-answers__day" data-answer-day={d.n}>
-          <div className="mf-answers__head">
-            <span className="mf-answers__dayname">{d.n}일차</span>
-            {genre !== undefined ? <span className="mf-answers__genre">장르 : {genre}</span> : null}
-          </div>
-          <ol className="mf-answers__list" data-answer-list="">
-            {d.rows.map((r) => {
-              const mine = r.seat === view.me.seat;
-              const none = r.text === null;
-              return (
-                <li
-                  key={r.seat}
-                  className={mine ? "mf-answers__row mf-answers__row--mine" : "mf-answers__row"}
-                  data-answer-row=""
-                  data-answer-order={r.order}
-                  data-answer-seat={r.seat}
-                  data-answer-none={none ? "" : undefined}
-                  aria-label={mine ? `내 답, ${r.order}번 ${nick(r.seat)} ${none ? "답 없음" : r.text}` : undefined}
-                >
-                  <span className="mf-answers__no" aria-hidden="true">{r.order}</span>
-                  <span className="mf-answers__dot" style={{ background: seatColorVar(r.seat) }} aria-hidden="true" />
-                  <span className="mf-answers__nick">{nick(r.seat)}</span>
-                  <span className={none ? "mf-answers__text mf-answers__text--none" : "mf-answers__text"}>{none ? "답 없음" : r.text}</span>
-                </li>
-              );
-            })}
-          </ol>
-          {correct !== undefined ? (
-            <p className="mf-answers__correct" data-answer-correct="">
-              정답 · {correct}
-            </p>
-          ) : null}
-        </section>
-      ))}
+    <div className="mf-answers" ref={scroller}>
+      {days.map((n) => {
+        const answerRows = n === 1 ? rows : undefined;
+        const noteRows = suspectDays.find((d) => d.n === n)?.rows ?? [];
+        return (
+          <section key={n} className="mf-answers__day" data-log-day={n} data-answer-day={answerRows !== undefined ? n : undefined}>
+            <div className="mf-answers__head">
+              <span className="mf-answers__dayname">{n}일차</span>
+              {answerRows !== undefined && genre !== undefined ? <span className="mf-answers__genre">장르 : {genre}</span> : null}
+            </div>
+            {answerRows !== undefined ? (
+              <ol className="mf-answers__list" data-answer-list="">
+                {answerRows.map((r) => {
+                  const mine = r.seat === view.me.seat;
+                  const none = r.text === null;
+                  return (
+                    <li
+                      key={r.seat}
+                      className={mine ? "mf-answers__row mf-answers__row--mine" : "mf-answers__row"}
+                      data-answer-row=""
+                      data-answer-order={r.order}
+                      data-answer-seat={r.seat}
+                      data-answer-none={none ? "" : undefined}
+                      aria-label={mine ? `내 답, ${r.order}번 ${nick(r.seat)} ${none ? "답 없음" : r.text}` : undefined}
+                    >
+                      <span className="mf-answers__no" aria-hidden="true">{r.order}</span>
+                      <span className="mf-answers__dot" style={{ background: seatColorVar(r.seat) }} aria-hidden="true" />
+                      <span className="mf-answers__nick">{nick(r.seat)}</span>
+                      <span className={none ? "mf-answers__text mf-answers__text--none" : "mf-answers__text"}>{none ? "답 없음" : r.text}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : null}
+            {noteRows.length > 0 ? (
+              <ul className="mf-suspect__list" data-suspect-list="">
+                {noteRows.map((r) => {
+                  const mine = r.from === view.me.seat;
+                  return (
+                    <li
+                      key={r.from}
+                      className={mine ? "mf-suspect__row mf-suspect__row--mine" : "mf-suspect__row"}
+                      data-suspect-row=""
+                      data-suspect-from={r.from}
+                      data-suspect-to={r.to}
+                      aria-label={mine ? "내가 붙인 의심" : `${nick(r.from)}님이 ${nick(r.to)}님에게 의심`}
+                    >
+                      <span className="mf-suspect__dot" style={{ background: seatColorVar(r.from) }} aria-hidden="true" />
+                      <span className="mf-suspect__nick mf-suspect__nick--from">{nick(r.from)}</span>
+                      <span className="mf-suspect__arrow" aria-hidden="true">
+                        <V2Icon name="chevronRight" size={16} />
+                      </span>
+                      <span className="mf-suspect__dot" style={{ background: seatColorVar(r.to) }} aria-hidden="true" />
+                      <span className="mf-suspect__nick mf-suspect__nick--to">{nick(r.to)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+            {answerRows !== undefined && correct !== undefined ? (
+              <p className="mf-answers__correct" data-answer-correct="">
+                정답 · {correct}
+              </p>
+            ) : null}
+          </section>
+        );
+      })}
     </div>
   );
 }

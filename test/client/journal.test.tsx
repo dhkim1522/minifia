@@ -254,7 +254,12 @@ describe("rolecard.css — Journal 규약", () => {
 
   it("이름 칸에 말줄임(text-overflow) 규칙이 없다", () => {
     expect(rule(".mf-journal__w")).not.toContain("text-overflow");
-    expect(css).not.toMatch(/text-overflow/);
+    // 같은 파일에 24-06 의심 줄(.mf-suspect__nick)의 말줄임이 있으므로 일지 규칙(.mf-journal*)만 본다
+    const journalBodies = Array.from(css.matchAll(/([^{}]+)\{([^}]*)\}/g))
+      .filter((m) => m[1]!.replace(/\/\*[\s\S]*?\*\//g, "").includes("mf-journal"))
+      .map((m) => m[2]!)
+      .join("\n");
+    expect(journalBodies).not.toMatch(/text-overflow/);
   });
 
   it("종류별 변수 --jr-* 가 일지 토큰으로 정의된다(마피아 ink 는 crimson-300)", () => {

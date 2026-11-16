@@ -445,7 +445,7 @@ function answersView(role: RoleId | null, o: { rows?: KeywordAnswerRow[] | null;
   };
 }
 
-function renderAnswers(view: RoomView, tab: RoleCardTab = "records" as RoleCardTab, onTab: (t: RoleCardTab) => void = vi.fn()) {
+function renderAnswers(view: RoomView, tab: RoleCardTab = "records", onTab: (t: RoleCardTab) => void = vi.fn()) {
   return render(<RoleCardSheet view={view} showBack={false} tab={tab} onTab={onTab} unread={0} newCount={0} onClose={vi.fn()} />);
 }
 
@@ -518,7 +518,7 @@ describe("RoleCardSheet 답과 의심 탭 (P23-16·29, P24-19)", () => {
   });
 
   it("답과 의심 탭에는 점·NEW 가 없다", () => {
-    renderAnswers(answersView("police"), "records" as RoleCardTab);
+    renderAnswers(answersView("police"), "records");
     expect(tabs()[2]!.querySelector(".mf-rolecard__dot")).toBeNull();
   });
 });

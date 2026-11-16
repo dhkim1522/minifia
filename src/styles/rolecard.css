@@ -98,11 +98,12 @@
 .mf-rolecard__mates { margin: var(--space-sm) 0 0; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); word-break: keep-all; }
 .mf-rolecard__empty { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-300); word-break: keep-all; }
 
-/* ---- 첫날 답 탭(23-11, UI-SPEC P23-18·19) ---- */
+/* ---- 답과 의심 탭(23-11 첫날 답 → 24-06, UI-SPEC P23-18·19·P24-19·20) ---- */
 /* 본문만 세로로 스크롤한다(제목·탭은 고정). 구역 = 일차 하나, 24 가 구역을 더한다. 새 토큰·글자 크기 없음(16·14) */
 .mf-answers { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-sm) 0 0; }
 .mf-answers__day + .mf-answers__day { margin-top: var(--space-md); }
-.mf-answers__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+/* 구역 머리는 스크롤 중 맨 위에 붙는다(면 night-800 으로 아래 줄을 가린다) */
+.mf-answers__head { position: sticky; top: 0; z-index: 1; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); padding-bottom: var(--space-xs); margin-bottom: var(--space-xs); background: var(--night-800); }
 .mf-answers__dayname { font-size: 16px; line-height: 24px; font-weight: 700; color: var(--gray-50); }
 .mf-answers__genre { font-size: 14px; line-height: 20px; color: var(--gray-300); }
 .mf-answers__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-xs); }
@@ -121,6 +122,16 @@
 }
 .mf-answers__text--none { font-weight: 400; color: var(--gray-300); }
 .mf-answers__correct { margin: var(--space-sm) 0 0; padding-top: var(--space-sm); border-top: 1px solid var(--night-600); font-size: 16px; line-height: 24px; font-weight: 700; color: var(--gray-50); }
+
+/* 의심 줄(24-06, P24-20): 붙인 점·닉네임 → 화살표 → 받은 점·닉네임. 두 닉네임은 남는 폭을 반씩 나눠 한 줄 말줄임(전체 이름은 줄의 aria-label) */
+.mf-suspect__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-xs); }
+.mf-suspect__row { display: flex; align-items: center; gap: var(--space-xs); min-height: 32px; padding: 0 var(--space-sm); border-radius: var(--radius-md); }
+.mf-suspect__row--mine { background: var(--night-700); }
+.mf-suspect__dot { flex: none; width: 12px; height: 12px; border-radius: 50%; }
+.mf-suspect__nick { flex: 1 1 0; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; }
+.mf-suspect__nick--from { color: var(--gray-300); }
+.mf-suspect__nick--to { color: var(--gray-50); font-weight: 700; }
+.mf-suspect__arrow { flex: none; display: inline-flex; align-items: center; color: var(--gray-500); }
 
 /* ---- 헤더 [내 역할] 아이콘 단추(UI-SPEC V-1, 16페이즈) ---- */
 /* 44×44 정사각(radius-badge), 면 night-800 + 1px night-600 테두리, 글 없음. 단추 상자가 곧 면이다. 면의 점이 밖으로 나오므로 overflow 는 보인다.

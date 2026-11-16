@@ -345,7 +345,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     setNewCount(0);
   };
 
-  // 첫날 토론이 시작되면 "모두의 답"(역할 카드 시트의 첫날 답 탭)이 한 판에 한 번 저절로 열린다(23-11, P23-17, D-03).
+  // 첫날 토론이 시작되면 "모두의 기록"(역할 카드 시트의 답과 의심 탭)이 한 판에 한 번 저절로 열린다(23-11, P23-17, D-03).
   // 같은 연결에서 dayAnnounce → discussion 으로 넘어온 것을 보았을 때만이다 — 재접속·새로고침의 첫 프레임(arrivedFrom null)에는 열지 않는다.
   // 닫으면 다시 열리지 않고(ref), 자동으로 닫히지도 않는다. 새 판(대기실·배정)에서 ref 를 되돌려 다시 한 번 열린다.
   // 아래 새 판 리셋 effect 보다 먼저 선언해 같은 커밋에서 리셋이 막 연 시트를 닫지 않게 한다(리셋은 lobby·assigning 에서만).
@@ -356,7 +356,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     if (autoOpened.current) return;
     if (arrivedFrom !== "dayAnnounce" || phase !== "discussion" || dayNumber !== 1 || !answersReady) return;
     autoOpened.current = true;
-    setRoleCard({ open: true, tab: "answers" });
+    setRoleCard({ open: true, tab: "records" });
   }, [arrivedFrom, phase, dayNumber, answersReady]);
 
   // 새 판(대기실·배정)으로 돌아가면 앞면을 본 적 없는 상태로 되돌리고 시트를 닫는다.
