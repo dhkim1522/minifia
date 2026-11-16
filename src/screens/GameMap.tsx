@@ -6,14 +6,13 @@ import { CHAT_MAX_GRAPHEMES } from "../../shared/game/chatRules";
 import { canMoveIn } from "../../shared/game/movement";
 import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
-import type { ClientMessage, PlaceId, RoomView, SpotId } from "../../shared/protocol";
+import type { ClientMessage, PlaceId, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { KillFx } from "../components/KillFx";
 import { PoliceResultCard } from "../components/PoliceResultCard";
 import { BallotReveal } from "../components/v2/BallotReveal";
 import { ResultAnnounce } from "../components/ResultAnnounce";
 import { ErrandDots } from "../components/v2/ErrandDots";
-import { ClueCard } from "../components/v2/ClueCard";
 import { ErrandStartCard } from "../components/v2/ErrandStartCard";
 import { WillLetter } from "../components/v2/WillLetter";
 import type { WillLetter as WillLetterState } from "../net/useWillLetter";
@@ -22,7 +21,6 @@ import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { ToolButton } from "../components/ToolButton";
 import { RecordCard } from "../components/v2/RecordCard";
-import { SuspectBoard } from "../components/v2/SuspectBoard";
 import { EvidenceCard } from "../components/v2/EvidenceCard";
 import { V2Icon } from "../components/v2/V2Icon";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
@@ -35,7 +33,7 @@ import { SpeakSheet } from "../components/v2/SpeakSheet";
 import { WillSheet } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { WorldStage } from "../components/WorldStage";
-import type { ClueLayerProps, ErrandLayerProps, HouseLayerProps, WorldPick } from "../components/WorldStage";
+import type { ErrandLayerProps, WorldPick } from "../components/WorldStage";
 import { ERRAND_NEAR_R, PICK_TURN_MS } from "../../shared/game/phases";
 import { LOG_H } from "../game/chatUi";
 import { todOf, todWordOf } from "../game/timeOfDay";
@@ -43,12 +41,9 @@ import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
 import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../game/dayView";
-import { LAMP_ACT_LOOK, errandProgress, placeCentersOf } from "../game/errandView";
-import { houseTagsOf } from "../game/houseView";
-import { clueCardsOf, skipOf, spotsOf } from "../game/sceneView";
+import { errandProgress, placeCentersOf } from "../game/errandView";
 import { callTargetsOf, type HostLocal } from "../game/hostLine";
 import { recordRowsOf, traceWindowOf } from "../game/recordView";
-import { boardOf } from "../game/boardView";
 import { TRACE_MARK, sameOutfitSeats } from "../game/traceMark";
 import { faceSrc, seatColorVar } from "../net/assets";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
@@ -59,7 +54,6 @@ import { useCountdown } from "../net/countdown";
 import { useBadge, useBadgeFx } from "../net/useBadge";
 import { useChat } from "../net/useChat";
 import { useErrandPos } from "../net/useErrandPos";
-import { useMorningAnnouncing } from "../net/useMorningAnnouncing";
 import { useMyMotion } from "../net/useMyMotion";
 import { useTurnLook } from "../net/useTurnLook";
 import { useVerdictMoment } from "../net/useVerdictMoment";
@@ -78,7 +72,7 @@ import type { CameraMode } from "../world/presence";
 import { worldTestHooksEnabled } from "../world/testHooks";
 import type { RingKind } from "../world/runtime";
 import type { WorldStore } from "../world/store";
-import { GamePanel, SkipSlot } from "./GamePanel";
+import { GamePanel } from "./GamePanel";
 import "../styles/game.css";
 import "../styles/sheet.css";
 import "../styles/testtools.css";
@@ -101,9 +95,6 @@ const DEFAULT_INSET_TOP = 62;
 /** 심부름이 아닐 때·목록이 없을 때 쓰는 고정 빈 값(렌더마다 새 배열을 만들지 않는다) */
 const NO_CENTERS: ReturnType<typeof placeCentersOf> = [];
 const NO_PLACE_IDS: readonly PlaceId[] = [];
-/** 아침 현장이 없을 때 쓰는 고정 빈 값 */
-const NO_SPOTS: ReturnType<typeof spotsOf> = [];
-const NO_CARDS: ReturnType<typeof clueCardsOf> = [];
 const DEFAULT_INSET_BOTTOM = 250;
 /** 보이는 화면(visualViewport) 높이가 이보다 낮으면 유언 시트 입력칸을 2줄로 줄인다(UI-SPEC 282행) */
 const COMPACT_VV_MAX = 300;
@@ -174,8 +165,8 @@ interface GameMapProps {
   onEvent?: RoomConnection["onEvent"];
   /** 연결 번호. 바뀐 첫 스냅샷은 배지 효과(팝·알약)를 내지 않고 현재 상태로 바로 그린다(09.1.1-08). 기본 0 */
   epoch?: number;
-  /** 사회자 띠가 읽는 클라이언트 상태(15-07·18.1-12·21-10): 목격 기록을 열었는가·아침 흔적 구간인가·심부름 시작 카드가 떠 있는가·원인 흐름 아침 큰 글 발표 중인가. 방 화면이 띠에 넘긴다. 언마운트 때 빈 값 */
-  onHostLocal?: (local: Pick<HostLocal, "recordOpened" | "traceOn" | "startCard" | "announcing">) => void;
+  /** 사회자 띠가 읽는 클라이언트 상태(15-07·18.1-12): 목격 기록을 열었는가·아침 흔적 구간인가·심부름 시작 카드가 떠 있는가. 방 화면이 띠에 넘긴다. 언마운트 때 빈 값 */
+  onHostLocal?: (local: Pick<HostLocal, "recordOpened" | "traceOn" | "startCard">) => void;
   /** 맵을 쓸 수 없는 기기의 불가 카드 [처음으로] */
   onLeave?: () => void;
 }
@@ -189,8 +180,7 @@ function MapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { view: R
   const legacy = blockModeOf(view) !== null || hintOverride !== undefined;
   if (!legacy) {
     const title = headerFor(view).title;
-    const rules = rulesetOf(modeOf(view)); // 원인 흐름 저녁(errand)은 "저녁" 낱말(21-07 D-04)
-    return <PhaseHeader title={title} {...(tod ? { tod: { id: todOf(view.phase, rules), word: todWordOf(view.phase, title, rules) } } : {})} extra={extra} />;
+    return <PhaseHeader title={title} {...(tod ? { tod: { id: todOf(view.phase), word: todWordOf(view.phase, title) } } : {})} extra={extra} />;
   }
   return <LegacyMapHeader view={view} offset={offset} hintOn={hintOn} {...(hintOverride !== undefined ? { hintOverride } : {})} extra={extra} tod={tod} />;
 }
@@ -198,7 +188,6 @@ function MapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { view: R
 /** 꺼진 장치 화면의 헤더: 제목 + 접히는 안내 + (서버 마감 기준 시간·차례 링) + 링 왼쪽 [역할 카드] (13페이즈 계약 그대로) */
 function LegacyMapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode; tod: boolean }) {
   const head = headerFor(view);
-  const rules = rulesetOf(modeOf(view));
   // 순차 지목·결선은 단계 마감이 아니라 알약·막대와 같은 값(blockLook)으로 링을 그린다(UI-SPEC A-3·D-3). 지목의 세부 단계 길이 3000/8000/900/2000 이나 결선 앞머리 1000 은 링 비율에 쓰지 않는다.
   const blocked = blockModeOf(view) !== null;
   const look = useTurnLook(view, offset);
@@ -210,7 +199,7 @@ function LegacyMapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { v
   return (
     <PhaseHeader
       title={head.title}
-      {...(tod ? { tod: { id: todOf(view.phase, rules), word: todWordOf(view.phase, head.title, rules) } } : {})}
+      {...(tod ? { tod: { id: todOf(view.phase), word: todWordOf(view.phase, head.title) } } : {})}
       {...(hintOverride !== undefined ? { hint: hintOverride } : head.hint !== undefined ? { hint: head.hint } : {})}
       showHint={hintOverride !== undefined || hintOn}
       {...(timing ? { time, total } : {})}
@@ -364,8 +353,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 이동 권한: 산 사람은 낮 시작·토론에서만, 유령은 언제나(MAP-04). 권위는 서버 canMove 이고 화면은 같은 표로 맵 탭만 막는다.
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);
-  // 밤에는 산 사람 누구도 걷지 않는다(15페이즈 D-05) — 서버와 같은 이동 권한 표(canMoveIn)다. 원인 흐름(rules.cause)의 아침은 산 사람도 걷는다(21-10 A5 — 현장 조사).
-  const canWalk = canMoveIn(view.phase, meAlive, rules);
+  // 밤에는 산 사람 누구도 걷지 않는다(15페이즈 D-05) — 서버와 같은 이동 권한 표(canMoveIn)다.
+  const canWalk = canMoveIn(view.phase, meAlive);
   // 유령 화면(GHOST-02, 결정 0021): 내가 탈락했고 서버가 관전 정보(spectate)를 보냈을 때만 그린다. 서버가 안 보낸 view 에서는 이 분기가 아예 없다 — 받아서 감추는 방식이 아니다.
   const spectate = !meAlive ? view.spectate : undefined;
   const ghost = spectate !== undefined;
@@ -416,20 +405,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const canPick = voting ? meAlive : nominating && meAlive && myTurnNo !== undefined && pickedTurn !== myTurnNo && mine === undefined;
   // 목격 기록(15-07, ERRAND-05·D-04): 있는지는 서버가 준 view.me.record 의 유무 하나다(역할을 읽지 않는다). 토론에서만 [기록]·카드가 있고 단계가 바뀌면 사라진다.
   // 한 번 열면 [기록] 의 빛은 그 토론 안에서 되살아나지 않는다(열림 래치 — 단계·일차 키가 바뀌면 자동으로 풀린다).
-  // 원인 흐름(확장판) 토론은 [기록]·RecordCard 단독 대신 의심 보드(21-11, D-18·D-19·P21-14)가 목격 기록을 한 칸으로 품는다: [보드] 가 [기록] 자리를 이어받고 **열린 채로 시작**한다.
-  const causeFlow = rulesetOf(modeOf(view)).cause;
-  const boardModel = useMemo(() => (view.phase === "discussion" && meAlive && causeFlow ? boardOf(view) : null), [view, meAlive, causeFlow]);
-  const witnessRows = useMemo(() => (view.phase === "discussion" && meAlive && !causeFlow ? recordRowsOf(view) : null), [view, meAlive, causeFlow]);
+  const witnessRows = useMemo(() => (view.phase === "discussion" && meAlive ? recordRowsOf(view) : null), [view, meAlive]);
   const recordKey = `${view.phase}:${view.day?.n ?? 0}`;
   const [recordOpenKey, setRecordOpenKey] = useState<string | null>(null);
-  // 보드는 반대로 "접은 키"를 쥔다 — 단계·일차 키가 바뀌면 자동으로 다시 열린 상태로 시작한다
-  const [boardClosedKey, setBoardClosedKey] = useState<string | null>(null);
-  const boardOpen = boardModel !== null && boardClosedKey !== recordKey;
-  const boardShown = boardModel !== null;
-  // 토론을 벗어나면 접은 기록을 지운다 — 다음에 토론으로 돌아오면 다시 열린 채 시작한다
-  useEffect(() => {
-    if (!boardShown) setBoardClosedKey(null);
-  }, [boardShown]);
   const [recordSeenKey, setRecordSeenKey] = useState<string | null>(null);
   const recordOpened = recordSeenKey === recordKey;
   const recordOpen = witnessRows !== null && recordOpenKey === recordKey;
@@ -441,9 +419,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     setRecordOpenKey(recordKey);
     setRecordSeenKey(recordKey);
   };
-  const toggleBoard = (): void => setBoardClosedKey(boardOpen ? recordKey : null);
-  // 채팅 입력칸에 포커스가 가면 카드가 접힌다(카드는 기록 칸을 덮을 뿐 입력줄을 가리지 않지만, 쓰는 동안은 기록 칸이 보여야 한다). 기록 카드·의심 보드 같은 규칙
-  const panelOpen = recordOpen || boardOpen;
+  // 채팅 입력칸에 포커스가 가면 카드가 접힌다(카드는 기록 칸을 덮을 뿐 입력줄을 가리지 않지만, 쓰는 동안은 기록 칸이 보여야 한다). 기록 카드 규칙
+  const panelOpen = recordOpen;
   useEffect(() => {
     if (!panelOpen) return;
     const root = rootRef.current;
@@ -451,11 +428,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     const onFocusIn = (e: FocusEvent): void => {
       if (e.target === null || e.target !== inputRef.current) return;
       setRecordOpenKey(null);
-      setBoardClosedKey(recordKey);
     };
     root.addEventListener("focusin", onFocusIn);
     return () => root.removeEventListener("focusin", onFocusIn);
-  }, [panelOpen, recordKey, rootRef, inputRef]);
+  }, [panelOpen, rootRef, inputRef]);
   // 카드 아래 끝 = 입력줄 윗변 − 8 (CSS 변수 --mf-record-bottom = 루트 아랫변에서 카드 아랫변까지). 열려 있는 동안 다시 그릴 때마다 잰다(키보드·패널 높이)
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -473,7 +449,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
 
   // 아침 흔적(15-07, TRACE-02·03, D-06): 흔적이 있는 아침의 마지막 MORNING_TRACE_MS 동안 모두에게 같은 카드. 서버 시계 기준.
   // 구간 시작 전에 마운트하면 시작 시각까지 남은 ms 를 담은 소리 신호를 한 번 보낸다. 이미 구간 안에서 마운트(재접속·새로 고침)하면 신호는 없다.
-  const traceKey = view.phase === "morning" && !causeFlow && view.day?.morning?.trace !== undefined ? `${view.day.n}:${view.phaseEndsAt ?? ""}` : null;
+  const traceKey = view.phase === "morning" && view.day?.morning?.trace !== undefined ? `${view.day.n}:${view.phaseEndsAt ?? ""}` : null;
   const [traceOn, setTraceOn] = useState<boolean>(() => traceWindowOf(view, Date.now() + offset)?.on === true);
   const traceSignalKey = useRef<string | null>(null);
   useEffect(() => {
@@ -502,7 +478,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [traceKey]);
   // 증거 카드(16-01, D-10): 1행 흔적 + 2행 마지막 목격. 구간·소리는 15 흔적 구간 그대로이고 값은 모두에게 같은 day.evidence 에서만 읽는다(P-1).
-  const tracePiece = view.phase === "morning" && !causeFlow ? view.day?.evidence?.trace : undefined; // 원인 흐름은 공개 흔적 카드가 없다(P21-15 — 단서는 내가 직접 받는다)
+  const tracePiece = view.phase === "morning" ? view.day?.evidence?.trace : undefined;
   const evidenceVictim = view.day?.morning?.eliminated;
   const evidenceSeen = view.day?.evidence?.seen;
   const nameOfSeat = (seat: number | undefined): { name: string; color: string } | null => {
@@ -767,38 +743,27 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 사회자 띠가 같은 상태를 읽는다(RoomScreen 이 HostBand 에 넘긴다). 언마운트하면 비운다.
   // startCard(18.1-12): 시작 카드가 내 화면에 떠 있는 동안 — 카드가 같은 말을 하므로 띠 문장이 빈다(ErrandStartCard 를 그리는 조건과 같다)
   const startCard = errandCardOn && errandMine !== null;
-  // 아침 현장(21-10 D-02·P21-20): 원인 흐름 아침은 큰 글 발표가 먼저 뜨고 그동안 띠는 빈 줄이며 지점 층은 그리지 않는다. 발표가 사라지면 지점이 나타난다. 지점은 산 사람 화면에만 있다(유령은 지켜본다)
-  const morningAnnouncing = useMorningAnnouncing(view, shownAnnounce !== null);
-  const clueOn = rules.cause && view.phase === "morning" && meAlive && view.day?.scene !== undefined;
-  const clueShown = clueOn && !morningAnnouncing;
-  const clueSpots = useMemo(() => (clueOn ? spotsOf(view) : NO_SPOTS), [clueOn, view]);
-  const clueDone = useMemo(() => clueSpots.filter((sp) => sp.state !== "new").map((sp) => sp.id), [clueSpots]);
-  const cluePos = useErrandPos<SpotId>(store, view.me.seat, () => Date.now() + offset, clueSpots, clueDone, clueShown);
   useEffect(() => {
-    onHostLocal?.({ recordOpened, traceOn: traceShown, startCard, announcing: morningAnnouncing });
-  }, [onHostLocal, recordOpened, traceShown, startCard, morningAnnouncing]);
+    onHostLocal?.({ recordOpened, traceOn: traceShown, startCard });
+  }, [onHostLocal, recordOpened, traceShown, startCard]);
   useEffect(() => () => onHostLocal?.({}), [onHostLocal]);
   const errandCenters = useMemo(() => (errandMine === null ? NO_CENTERS : placeCentersOf(view)), [errandMine === null, view]);
   const errandPos = useErrandPos(store, view.me.seat, () => Date.now() + offset, errandCenters, errandMine?.done ?? NO_PLACE_IDS, errandMine !== null);
   const callTarget = useMemo(
-    () => callTargetsOf(view, { ...(view.phase === "errand" ? { pos: errandPos.pos() } : view.phase === "morning" ? { pos: cluePos.pos() } : {}), recordOpened, traceOn: traceShown }),
+    () => callTargetsOf(view, { ...(view.phase === "errand" ? { pos: errandPos.pos() } : {}), recordOpened, traceOn: traceShown }),
     // 위치는 표본이 바꾼 처리 가능·다음 장소로만 반영한다(errandPos.pos() 는 상태가 아니라 읽기)
-    [view, errandPos.actableId, errandPos.nextId, cluePos.actableId, cluePos.nextId, recordOpened, traceShown],
+    [view, errandPos.actableId, errandPos.nextId, recordOpened, traceShown],
   );
   // 심부름의 빛은 위치·진행으로만 정해진다 — 14페이즈의 "이미 썼는가"·열린 시트와 무관하다(UI-SPEC 빛남 계약 추가)
   const errandCallPlace = errandMine !== null && callTarget?.kind === "place";
-  // 원인 흐름 저녁(21-08): 안 켠 배정 등불 표지 전부 빛남(P21-6)과 [켜기] 단추 모양. 이 분기도 역할을 읽지 않는다
-  const lampCause = rulesetOf(modeOf(view)).cause;
-  const errandCallPlaces = useMemo(() => (errandMine !== null && callTarget?.kind === "places" ? callTarget.ids : undefined), [errandMine !== null, callTarget]);
   // [처리] 알약(장소 위, 16-07): 처리 반경 안 미완료 장소가 있을 때만 보낸다(서버가 다시 정한다). 못 보내면(소켓 닫힘) 아무 변화 없다.
   // 알약은 반경 안에서만 DOM 에 있어 헛누름이 없고, 누를 때 주요 버튼 소리(ui.tap)가 한 번 난다(V-31). 거절·실패 알림은 없다
   const errandActId = errandPos.actableId;
-  // 원인 흐름은 길게 누르기(hold)를 그대로 보낸다 — 짧게·길게 모두 모든 역할이 같은 제스처이고 뜻은 서버만 정한다(P21-7). 그 밖은 지금 메시지뿐이다
-  const onErrandAct = useCallback((hold: boolean = false): void => {
+  const onErrandAct = useCallback((): void => {
     if (!canSend || errandActId === null) return;
     emitSignal({ kind: "tap" });
-    send(hold && lampCause ? { t: "errand", hold: true } : { t: "errand" });
-  }, [canSend, errandActId, send, lampCause]);
+    send({ t: "errand" });
+  }, [canSend, errandActId, send]);
   const errandLayer = useMemo<ErrandLayerProps | undefined>(
     () =>
       errandMine === null
@@ -808,37 +773,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
             nextId: errandPos.nextId,
             actId: errandPos.actableId,
             callPlace: errandCallPlace,
-            ...(errandCallPlaces === undefined ? {} : { callPlaces: errandCallPlaces }),
-            ...(lampCause ? { actLook: LAMP_ACT_LOOK } : {}),
             nearR: ERRAND_NEAR_R,
             onAct: onErrandAct,
           },
-    [errandMine, errandCenters, errandPos.nextId, errandPos.actableId, errandCallPlace, errandCallPlaces, lampCause, onErrandAct],
+    [errandMine, errandCenters, errandPos.nextId, errandPos.actableId, errandCallPlace, onErrandAct],
   );
-  // 아침 현장 층(21-10 P21-11): [살펴보기] 는 처리 반경 안 안 살핀 지점이 있을 때만 서고 누르면 필드 없는 inspect 를 보낸다(지점·결과는 서버가 정한다). 반경 안에 없으면 안 살핀 지점 전부가 빛난다(callTargetsOf — 역할을 읽지 않는다)
-  const clueActId = cluePos.actableId;
-  const onInspect = useCallback((): void => {
-    if (!canSend || clueActId === null) return;
-    emitSignal({ kind: "tap" });
-    send({ t: "inspect" });
-  }, [canSend, clueActId, send]);
-  const clueCallSpots = useMemo(() => (clueShown && callTarget?.kind === "spots" ? callTarget.ids : undefined), [clueShown, callTarget]);
-  const clueLayer = useMemo<ClueLayerProps | undefined>(
-    () =>
-      clueShown
-        ? {
-            spots: clueSpots,
-            nextId: cluePos.nextId,
-            actId: clueActId,
-            ...(clueCallSpots === undefined ? {} : { callSpots: clueCallSpots }),
-            nearR: ERRAND_NEAR_R,
-            onAct: onInspect,
-          }
-        : undefined,
-    [clueShown, clueSpots, cluePos.nextId, clueActId, clueCallSpots, onInspect],
-  );
-  // 내가 받은 단서 카드 줄(P21-12): 아침에 내가 살핀 줄만, 살핀 순서대로 패널 윗변 위에 쌓인다. 0장이면 줄 자체가 없다
-  const clueCards = useMemo(() => (view.phase === "morning" && meAlive ? clueCardsOf(view) : NO_CARDS), [view, meAlive]);
   const callOn = callTarget !== null && !callUsed && layerKind === null && !kbOpen && !whisper.mode;
   const callTool = callOn && callTarget.kind === "tool" ? callTarget.tool : null;
   // [기록] 의 빛은 "이미 썼는가"(채팅 입력칸 포커스)와 무관하다 — 카드를 한 번도 열지 않았다는 사실(recordOpened) 하나가 끈다
@@ -851,27 +790,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     () => (callOn && callTarget.kind === "tag" && nighting && view.me.pick === undefined ? new Set(callTarget.seats) : undefined),
     [callOn, callTarget, nighting, view.me.pick],
   );
-  // 밤 집 문패(21-09 D-10): 원인 흐름 밤에는 모든 역할이 같은 개관 화면에서 집 문패를 눌러 pick { target } 을 보낸다 — 서버 메시지·판정은 그대로, 화면만 다르다.
-  // 문패 목록은 houseTagsOf 가 정한다(역할을 읽지 않는다). 내 선택은 누른 즉시 보이고(mine) 서버 view(me.pick)가 오면 서버 값이 이긴다. 빛남은 열린 시트·키보드·귓속말 모드가 끈다.
-  // 알림·토스트·소리는 없다(자기 화면의 표시만 바뀐다)
-  const houseNight = nighting && rules.cause;
-  const houseTags = useMemo(
-    () => (houseNight ? houseTagsOf(view, mine !== undefined ? { pick: mine } : {}).map((t) => (callOn ? t : { ...t, call: false })) : null),
-    [houseNight, view, mine, callOn],
-  );
-  const onHousePick = useCallback(
-    (seat: number): void => {
-      if (!canSend || seat === mine) return; // 이미 고른 집을 다시 눌러도 보내지 않는다. 다른 집을 누르면 마감까지 바꿀 수 있다(서버는 마지막 선택이 이긴다)
-      if (send({ t: "pick", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
-      pointSent.current = { target: seat, at: Date.now() };
-      chooseMine(seat);
-      markCallUsed();
-    },
-    // chooseMine 은 렌더마다 새 함수지만 setState 만 부른다
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canSend, mine, send, markCallUsed],
-  );
-  const houseLayer = useMemo<HouseLayerProps | undefined>(() => (houseTags === null ? undefined : { tags: houseTags, onPick: onHousePick }), [houseTags, onHousePick]);
   const stageTagProps = useMemo<WorldTagProps | undefined>(() => {
     if (!whisper.mode && callTagSeats === null) return claimTagProps;
     return (seat) => ({
@@ -947,13 +865,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           {...(whisper.mode ? { hintOverride: WHISPER_TEXT.modeHint } : {})}
           tod={tod}
           extra={
-            witnessRows !== null || boardModel !== null || roleCard ? (
+            witnessRows !== null || roleCard ? (
               <>
-                {boardModel !== null ? (
-                  <span className="mf-game__record-slot" data-board-button="">
-                    <ToolButton name="보드" icon={<V2Icon name="lens" size={22} />} expanded={boardOpen} onClick={toggleBoard} />
-                  </span>
-                ) : null}
                 {witnessRows !== null ? (
                   <span className="mf-game__record-slot" data-record-button="">
                     <ToolButton name="기록" icon={<V2Icon name="timeline" size={22} />} call={recordCall} expanded={recordOpen} onClick={toggleRecord} />
@@ -988,8 +901,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         {...(pick ? { pick } : {})}
         {...(stageTagProps ? { tagProps: stageTagProps } : {})}
         {...(errandLayer ? { errand: errandLayer } : {})}
-        {...(clueLayer ? { clues: clueLayer } : {})}
-        {...(houseLayer ? { houses: houseLayer } : {})}
         onNotice={(text) => show(text)}
         onLeave={() => onLeave?.()}
       />
@@ -1022,14 +933,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         // 심부름 단계에는 아래 패널이 없다(16-08, V-23): 진행 점 3 이 화면 아래 가운데에 떠 있다. 유령·목록 없음은 점도 없다(지켜본다).
         // 시작 2초 카드는 막 + 카드이고 눌림을 통과한다 — 닫는 누름은 useErrandStartCard 가 루트에서 받는다.
         <>
-          {startCard && errandMine !== null ? <ErrandStartCard places={errandMine.places} cause={rulesetOf(modeOf(view)).cause} /> : null}
+          {startCard && errandMine !== null ? <ErrandStartCard places={errandMine.places} /> : null}
           {errandMine !== null ? <ErrandDots total={errandMine.total} done={errandMine.n} /> : null}
-          {/* 원인 흐름 저녁의 [건너뛰기](21-10 D-23): 아래 패널이 없어 진행 점 줄 오른쪽 끝에 같은 부품을 놓는다. 유령·기본판은 skipOf 가 null 이라 없다 */}
-          {skipOf(view) !== null ? (
-            <div className="mf-game__skip">
-              <SkipSlot view={view} send={send} canSend={canSend} />
-            </div>
-          ) : null}
         </>
       ) : noPanel ? null : (
         <GamePanel
@@ -1072,18 +977,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           panelRef={panelRef}
         />
       )}
-      {clueCards.length > 0 ? (
-        <div className="mf-game__clues" data-clue-cards="">
-          {clueCards.map((c) => (
-            <ClueCard key={c.spot} card={c} />
-          ))}
-        </div>
-      ) : null}
-      {boardModel !== null && boardOpen ? (
-        <div className="mf-game__record">
-          <SuspectBoard model={boardModel} faceOf={faceSrc} colorOf={seatColorVar} onClose={() => setBoardClosedKey(recordKey)} />
-        </div>
-      ) : null}
       {witnessRows !== null && recordOpen ? (
         <div className="mf-game__record">
           <RecordCard rows={witnessRows} faceOf={faceSrc} colorOf={seatColorVar} onClose={() => setRecordOpenKey(null)} />

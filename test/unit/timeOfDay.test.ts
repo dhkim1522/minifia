@@ -1,9 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { PhaseId } from "../../shared/protocol";
-import { rulesetOf } from "../../shared/game/ruleset";
 import { lightingOf } from "../../src/world/presence";
-import { openCause } from "../helpers/playable";
 import { TOD_LABEL, TOD_ORDER, todOf, todWordOf, type TimeOfDay } from "../../src/game/timeOfDay";
 
 // 18.1-11(결정 0083-1): 헤더 시간대는 공개 단계 하나로 정한 글자다. 모든 PhaseId 를 표로 고정한다.
@@ -67,36 +65,5 @@ describe("날씨 배지 삭제 (0083-1)", () => {
   it("public/weather 폴더가 없고 _headers 에 날씨 캐시 규칙이 없다", () => {
     expect(existsSync("public/weather")).toBe(false);
     expect(readFileSync("public/_headers", "utf8")).not.toContain("weather");
-  });
-});
-
-describe("원인 흐름 저녁 시간대 (21-07, D-04·결정 0083-1)", () => {
-  // setup 이 원인 흐름을 잠가 두므로 이 묶음만 연다
-  let restore: () => void = () => {};
-  beforeAll(() => {
-    restore = openCause();
-  });
-  afterAll(() => restore());
-  const causeRules = (): ReturnType<typeof rulesetOf> => rulesetOf("extended");
-
-  it("errand 는 원인 규칙에서 dusk·낱말 저녁이고, 규칙이 없거나 원인 흐름이 아니면 day·낮 그대로다", () => {
-    expect(todOf("errand", causeRules())).toBe("dusk");
-    expect(todWordOf("errand", "심부름", causeRules())).toBe("저녁");
-    expect(todOf("errand")).toBe("day");
-    expect(todWordOf("errand", "심부름")).toBe("낮");
-    expect(todOf("errand", rulesetOf("basic"))).toBe("day");
-  });
-
-  it("morning·night·토론 등 나머지 단계는 규칙과 무관하게 그대로다", () => {
-    for (const phase of Object.keys(EXPECT) as PhaseId[]) {
-      if (phase === "errand") continue;
-      expect(todOf(phase, causeRules()), phase).toBe(EXPECT[phase]);
-    }
-    expect(todWordOf("night", "밤", causeRules())).toBeNull();
-    expect(todWordOf("morning", "아침", causeRules())).toBeNull();
-  });
-
-  it("소스: timeOfDay 가 원인 규칙(cause)을 읽는다", () => {
-    expect(readFileSync("src/game/timeOfDay.ts", "utf8")).toContain("cause");
   });
 });

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { phaseKey } from "../../shared/game/audience";
-import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import type { PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { useSound } from "../audio/useSound";
@@ -59,7 +58,7 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   assigning: () => "직업을 배정하고 있습니다",
   roleReveal: () => "역할 확인",
   dayAnnounce: (view) => `${view.day?.n ?? 1}일차 낮이 되었습니다`,
-  errand: (view) => (rulesetOf(modeOf(view)).cause ? "등불 켜기" : "심부름"), // 15페이즈(결정 0074) · 원인 흐름 확장판은 '등불 켜기'(21페이즈 P21-19)
+  errand: () => "심부름", // 15페이즈(결정 0074)
   discussion: () => "낮 토론",
   night: nightAnnounce,
   morning: morningAnnounce,
@@ -331,9 +330,9 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const [seenFront, setSeenFront] = useState(false);
   // 맵 화면이 알리는 띠용 클라이언트 상태(15-07): 목격 기록을 열었는가·아침 흔적 구간인가. 같은 값이면 상태를 바꾸지 않는다
   // 18.1-12: 심부름 시작 카드가 떠 있는가(startCard)도 함께 — 카드가 같은 말을 하는 동안 띠 문장이 비는 데 쓴다
-  const [hostLocal, setHostLocal] = useState<Pick<HostLocal, "recordOpened" | "traceOn" | "startCard" | "announcing">>({});
-  const onHostLocal = useCallback((next: Pick<HostLocal, "recordOpened" | "traceOn" | "startCard" | "announcing">): void => {
-    setHostLocal((prev) => (prev.recordOpened === next.recordOpened && prev.traceOn === next.traceOn && prev.startCard === next.startCard && prev.announcing === next.announcing ? prev : next));
+  const [hostLocal, setHostLocal] = useState<Pick<HostLocal, "recordOpened" | "traceOn" | "startCard">>({});
+  const onHostLocal = useCallback((next: Pick<HostLocal, "recordOpened" | "traceOn" | "startCard">): void => {
+    setHostLocal((prev) => (prev.recordOpened === next.recordOpened && prev.traceOn === next.traceOn && prev.startCard === next.startCard ? prev : next));
   }, []);
   const onSeenFront = useCallback(() => setSeenFront(true), []);
 

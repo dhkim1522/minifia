@@ -15,7 +15,7 @@ import type { V2IconName } from "../../src/components/v2/V2Icon";
 import { ERRAND_CARD_MS, ERRAND_TEXT, actablePlaceOf, errandProgress, nextPlaceOf, placeCentersOf, placeMarkerPlan, progressLabel, startCardOn } from "../../src/game/errandView";
 import type { Rect } from "../../src/game/errandView";
 import { PLACE_NAME, placeLabel } from "../../src/game/placeText";
-import { openCause, underCauseLock } from "../helpers/playable";
+import { underCauseLock } from "../helpers/playable";
 import { seededRandInt } from "../helpers/seededRandom";
 import { startedAt } from "../helpers/voteState";
 import { tick } from "../../shared/game/tick";
@@ -357,41 +357,5 @@ describe("시작 카드 표시 판정 (16-08, V-19)", () => {
     expect(startCardOn(at({}, null), START + 500)).toBe(false);
     expect(startCardOn(at({}, { places: [], done: [] }), START + 500)).toBe(false);
     expect(startCardOn(at({ phaseEndsAt: null }), START + 500)).toBe(false);
-  });
-});
-
-// 21-08: 원인 흐름의 가로등 중심(P21-6) — placeCentersOf 가 errandSpotsOf(맵, 규칙)로 읽는다(서버와 같은 함수). 옛 확장판·기본판은 지금 장소 중심 그대로.
-describe("placeCentersOf: 원인 흐름 마을은 가로등 중심 (21-08)", () => {
-  const townView = (): RoomView => {
-    const v = viewOf(undefined, { places: ["lamp0", "lamp3", "lamp6"] as PlaceId[], done: [] }) as unknown as Record<string, unknown>;
-    v.map = "town";
-    return v as unknown as RoomView;
-  };
-
-  it("원인 흐름: 내 배정 가로등 셋의 TOWN_LAMPS 중심(월드 단위)", () => {
-    const restore = openCause();
-    try {
-      const c = placeCentersOf(townView());
-      expect(JSON.stringify(c)).toBe(JSON.stringify([{ id: "lamp0", x: -2.25, z: -3.75 }, { id: "lamp3", x: 3.75, z: 2.25 }, { id: "lamp6", x: -3.75, z: 2.25 }]));
-    } finally {
-      restore();
-    }
-  });
-
-  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: 이 시험만 잠근다(갈래 B).
-  it("원인 흐름이 꺼진 판(옛 확장판 잠금)에서는 마을 맵의 장소 목록을 읽어 가로등 id 를 찾지 못한다 — 재즈 바 좌표는 그대로", underCauseLock(() => {
-    expect(JSON.stringify(placeCentersOf(townView()))).toBe("[]");
-    const bar = placeCentersOf(viewOf("bar", { places: ["glass"], done: [] }));
-    expect(JSON.stringify(bar)).toBe(JSON.stringify([{ id: "glass", x: BAR_PLACES.find((p) => p.id === "glass")!.x, z: BAR_PLACES.find((p) => p.id === "glass")!.z }]));
-  }));
-
-  it("원인 흐름이어도 가로등이 없는 맵(재즈 바)은 장소 중심이다", () => {
-    const restore = openCause();
-    try {
-      const c = placeCentersOf(viewOf("bar", { places: ["glass"], done: [] }));
-      expect(c.map((p) => p.id).join(",")).toBe("glass");
-    } finally {
-      restore();
-    }
   });
 });

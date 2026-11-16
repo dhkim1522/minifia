@@ -1,17 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { phaseKey } from "../../shared/game/audience";
-import type { ClientMessage, EmoteId, MapId, PlaceId, PublicPlayer, RoomView, SpotId } from "../../shared/protocol";
+import type { ClientMessage, EmoteId, MapId, PlaceId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { MOVE_COORD_LIMIT } from "../../shared/protocol";
 import { placeMarkerPlan } from "../game/errandView";
-import { PLACE_NAME } from "../game/placeText";
-import { houseLitOf, lampLitOf } from "../game/lampView";
-import { INSPECT_ACT_LOOK, inspectLabel } from "../game/sceneText";
-import type { DimWhy, SpotState } from "../game/sceneView";
 import type { Rect } from "../game/errandView";
 import { useReducedMotion } from "../net/useReducedMotion";
-import type { HouseTagModel } from "../game/houseView";
-import { HEADER_BOTTOM, HOUSE_TAG_BOX, houseTagCenters, PANEL_HEIGHT } from "../world/camera";
+import { HEADER_BOTTOM, PANEL_HEIGHT } from "../world/camera";
 import { createTapTracker } from "../world/input";
 import { createWorldRuntime, EXIT_CURTAIN_MS, EXIT_MS, ringKindAttr } from "../world/runtime";
 import type { RingKind, WorldModules, WorldRuntime } from "../world/runtime";
@@ -22,12 +17,9 @@ import type { WorldStore } from "../world/store";
 import { installCameraHook, installEmotesHook, installGhostsHook, installLooksHook, installMapHook, installPinHook, installTownHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
 import { MapStatusCard } from "./MapStatusCard";
 import { ErrandAct } from "./v2/ErrandAct";
-import { ClueSpot } from "./v2/ClueSpot";
 import { ErrandArrow, ErrandMarker } from "./v2/ErrandMarker";
 import { HeadStack } from "./v2/HeadStack";
-import { HouseTag } from "./v2/HouseTag";
 import type { HeadStackProps } from "./v2/HeadStack";
-import type { V2IconName } from "./v2/V2Icon";
 import "../styles/world.css";
 
 // 로비 맵 화면: 캔버스 한 장 + 입력 면 + 이름표 층. three 는 world/runtime 의 import() 로만 열린다(이 파일은 three 를 모른다).
@@ -99,59 +91,11 @@ export interface ErrandLayerProps {
   actId: PlaceId | null;
   /** 가장 가까운 미처리 타일을 빛나게 할지 — 처리 반경 안에 미완료가 있거나 3곳 완료·유령이면 거짓. 화살표는 빛나지 않는다 */
   callPlace: boolean;
-  /** 21페이즈 P21-6(원인 흐름 저녁): 빛나는 표지 전부 — 안 켠 배정 등불 전부. 알약이 서면 비운다(한 화면 한 종류). 없으면 callPlace 규칙만 */
-  callPlaces?: readonly PlaceId[];
-  /** [처리] 알약의 글·아이콘·접근성 동사(원인 흐름 저녁의 [켜기]). 없으면 지금 "처리"·손 */
-  actLook?: { label: string; icon: V2IconName; verb: string };
   nearR: number;
   /** 타일을 눌렀다는 알림(걷기는 이 층이 바닥 탭과 같은 경로로 한다) */
   onWalk?(id: PlaceId): void;
-  /** [처리] 알약을 눌렀다는 알림(처리 메시지는 쓰는 쪽이 보낸다). hold: 0.6초 넘게 눌렀다 뗐는가(21페이즈 P21-7 — 모든 역할이 같은 제스처) */
-  onAct?(hold?: boolean): void;
-}
-
-/**
- * 아침 현장 층 입력(21-10, 원인 흐름 아침만): 단서 지점 셋(월드 단위 좌표·상태)·가장 가까운 안 살핀 지점·처리 반경 안 안 살핀 지점·빛나는 지점·근처 반경.
- * 심부름 층(ErrandLayerProps)과 같은 투영·안쪽 8 inset·화살표 칩 규칙이다. 좌석·역할은 이 층에 들어오지 않는다(D-15·D-21).
- */
-export interface ClueLayerProps {
-  spots: ReadonlyArray<{ id: SpotId; x: number; z: number; state: SpotState; why?: DimWhy }>;
-  /** 가장 가까운 안 살핀 지점(화살표 칩 방향). 없으면 null */
-  nextId: SpotId | null;
-  /** 처리 반경 안 안 살핀 지점. 있을 때만 그 지점 위에 [살펴보기] 알약이 서고(그때 화살표·표지 빛은 꺼진다) 알약이 빛난다 */
-  actId: SpotId | null;
-  /** 빛나는 표지: 반경 안에 안 살핀 지점이 없을 때 안 살핀 지점 전부. 없으면 빛 없음 */
-  callSpots?: readonly SpotId[];
-  nearR: number;
-  /** [살펴보기] 알약을 눌렀다는 알림(inspect 전송은 쓰는 쪽이 한다) */
+  /** [처리] 알약을 눌렀다는 알림(처리 메시지는 쓰는 쪽이 보낸다) */
   onAct?(): void;
-}
-
-/**
- * 밤 집 문패 층(21페이즈 D-10, 원인 흐름 밤만). tags 는 houseTagsOf 의 8개, onPick 은 문패 단추를 눌렀을 때(pick 전송은 쓰는 쪽이 한다).
- * 위치는 개관 시점의 투영(houseTagCenters)으로 런타임 프레임 콜백에서 DOM 에 직접 쓴다 — 개관으로 바뀐 뒤에야 보인다. 좌석·역할 값은 이 층에 들어오지 않는다(역할을 모른다)
- */
-export interface HouseLayerProps {
-  tags: readonly HouseTagModel[];
-  onPick(seat: number): void;
-}
-
-/** 문패 층 프레임 쓰기: 개관 상태(data-ready)와 각 문패의 위치(transform)만 쓴다. 값이 같으면 쓰지 않는다 */
-function writeHouseLayer(layer: HTMLElement, host: HTMLElement, insets: { top: number; bottom: number }, ready: boolean): void {
-  if (ready !== layer.hasAttribute("data-ready")) {
-    if (ready) layer.setAttribute("data-ready", "");
-    else layer.removeAttribute("data-ready");
-  }
-  if (!ready) return;
-  const w = host.clientWidth || window.innerWidth;
-  const h = host.clientHeight || window.innerHeight;
-  const centers = houseTagCenters({ top: insets.top, bottom: h - insets.bottom }, { w, h });
-  for (const el of layer.querySelectorAll<HTMLElement>("[data-house-tag]")) {
-    const c = centers[Number(el.getAttribute("data-house-tag"))];
-    if (c === undefined) continue;
-    const t = `translate(${Math.round(c.sx - HOUSE_TAG_BOX / 2)}px, ${Math.round(c.sy - HOUSE_TAG_BOX / 2)}px)`;
-    if (el.style.transform !== t) el.style.transform = t;
-  }
 }
 
 const NEAR_RING_POINTS = 24;
@@ -173,8 +117,8 @@ interface ErrandWriteCache {
 }
 
 /**
- * 표지 층이 쓰는 사각형 캐시(스테이지·피할 사각형·내 이름표)를 RECT_TTL_MS 마다 다시 잰다(프레임마다 레이아웃을 강제하지 않는다). 심부름 층·아침 현장 층이 같이 쓴다.
- * 피할 사각형: 소리·오른쪽 열 단추, 저녁 [건너뛰기](21-10 P21-13), 진행 점 줄, 아침 단서 카드(21-10 P21-12 — 카드에 가려지는 지점은 화살표 칩이 대신한다).
+ * 표지 층이 쓰는 사각형 캐시(스테이지·피할 사각형·내 이름표)를 RECT_TTL_MS 마다 다시 잰다(프레임마다 레이아웃을 강제하지 않는다). 심부름 층이 쓴다.
+ * 피할 사각형: 소리·오른쪽 열 단추, 진행 점 줄.
  */
 function refreshWriteCache(host: HTMLElement, insets: { top: number; bottom: number }, cache: { current: ErrandWriteCache | null }, now: number): ErrandWriteCache {
   if (cache.current !== null && now - cache.current.at < RECT_TTL_MS) return cache.current;
@@ -185,7 +129,7 @@ function refreshWriteCache(host: HTMLElement, insets: { top: number; bottom: num
     const d = el.getBoundingClientRect();
     return { left: d.left - base.left, top: d.top - base.top, right: d.right - base.left, bottom: d.bottom - base.top };
   };
-  const avoid = [...host.ownerDocument.querySelectorAll("[data-side-button], [data-skip], [data-clue-card]")].map(rel);
+  const avoid = [...host.ownerDocument.querySelectorAll("[data-side-button]")].map(rel);
   // 진행 점 줄(16-08, V-23): 아래 패널이 없는 심부름 스테이지는 화면 아래까지 넓어서 타일·알약은 점 줄 윗변 − 8 위에만 놓는다.
   // 스테이지 아래 끝을 점 줄 윗변으로 올리고(안쪽 여백 8 이 윗변 − 8 이 된다) 줄 자체도 피할 사각형에 더한다.
   let stageBottom = h - insets.bottom;
@@ -202,7 +146,7 @@ function refreshWriteCache(host: HTMLElement, insets: { top: number; bottom: num
   return cache.current;
 }
 
-/** 근처 반경 링(24점 다각형)을 내 위치 둘레에 쓴다. 위치를 모르거나 투영이 안 되면 숨긴다. 심부름 층·아침 현장 층이 같이 쓴다 */
+/** 근처 반경 링(24점 다각형)을 내 위치 둘레에 쓴다. 위치를 모르거나 투영이 안 되면 숨긴다. 심부름 층이 쓴다 */
 function writeNearRing(layer: HTMLElement, mine: { x: number; z: number } | null, project: (x: number, z: number) => { sx: number; sy: number } | null, nearR: number): void {
   const ring = layer.querySelector<SVGElement>("svg[data-near-ring]");
   if (ring === null) return;
@@ -288,96 +232,9 @@ function writeErrandLayer(
     }
     place(el, pin.x, pin.y, TILE_HALF, TILE_HALF);
     // 빛남 우선: 알약이 있으면 알약만 빛나고(타일은 꺼짐), 아니면 가장 가까운 미처리 타일. 남은 곳 정지 후광(data-rest)은 빛남과 무관하게 유지
-    const on = cfg.actId === null && ((cfg.callPlace && cfg.nextId === id) || (cfg.callPlaces?.includes(id) ?? false));
+    const on = cfg.actId === null && cfg.callPlace && cfg.nextId === id;
     lit(on, el);
     toggle(el, "data-rest", !doneIds.has(id) && !on);
-  }
-  const arrowEl = layer.querySelector<HTMLElement>("[data-errand-arrow]");
-  if (arrowEl !== null) {
-    if (plan.arrow === null) {
-      if (!arrowEl.hidden) arrowEl.hidden = true;
-    } else {
-      place(arrowEl, plan.arrow.x, plan.arrow.y, ARROW_HALF, ARROW_HALF);
-      const turn = arrowEl.querySelector<HTMLElement>(".mv-errand-arrow__turn");
-      const rot = `rotate(${Math.round(plan.arrow.angle * 10) / 10}deg)`;
-      if (turn !== null && turn.style.transform !== rot) turn.style.transform = rot;
-    }
-  }
-  if (actEl !== null) {
-    if (plan.act === null) {
-      if (!actEl.hidden) actEl.hidden = true;
-    } else {
-      place(actEl, plan.act.x, plan.act.y, pillW / 2, PILL_H / 2);
-      lit(true, actEl);
-    }
-  }
-  writeNearRing(layer, mine, project, cfg.nearR);
-}
-
-const SPOT_HALF = 26; // 지점 표지 52 의 절반
-const SPOT_TILE = 52;
-
-/**
- * 아침 현장 층 프레임 쓰기(21-10, 심부름 층과 같은 규칙): 지점 표지는 상자(52) 전체가 스테이지 안쪽 8 inset 안이고 피할 사각형(소리·카드 줄 …)과 겹치지 않을 때만 그린다.
- * 안 살핀 가장 가까운 지점 방향 화살표 칩 하나(알약이 서면 없다), 반경 안 안 살핀 지점 위 [살펴보기] 알약(항상 빛남), 근처 반경 링. 표지의 상태(new·done·dim)는 React 가 쓰고 이 함수는 위치·숨김·빛남만 쓴다.
- */
-function writeClueLayer(
-  layer: HTMLElement,
-  actLayer: HTMLElement | null,
-  host: HTMLElement,
-  cfg: ClueLayerProps,
-  project: (x: number, z: number) => { sx: number; sy: number } | null,
-  mine: { x: number; z: number } | null,
-  insets: { top: number; bottom: number },
-  cache: { current: ErrandWriteCache | null },
-  now: number,
-): void {
-  const { stage, avoid, tag } = refreshWriteCache(host, insets, cache, now);
-  const items: Array<{ id: SpotId; x: number; y: number }> = [];
-  for (const sp of cfg.spots) {
-    const pt = project(sp.x, sp.z);
-    if (pt !== null) items.push({ id: sp.id, x: pt.sx, y: pt.sy });
-  }
-  const me = mine === null ? null : project(mine.x, mine.z);
-  const actEl = actLayer?.querySelector<HTMLElement>("[data-errand-act]") ?? null;
-  const pillW = actEl !== null && actEl.offsetWidth > 0 ? actEl.offsetWidth : PILL_W_FALLBACK;
-  const plan = placeMarkerPlan<SpotId>({
-    stage,
-    avoid,
-    items,
-    me: me === null ? null : { x: me.sx, y: me.sy },
-    nextId: cfg.nextId,
-    actId: cfg.actId,
-    ...(tag !== null ? { arrowAvoid: [tag] } : {}),
-    pillW,
-    tile: SPOT_TILE,
-  });
-  const shownPins = new Map(plan.pins.map((p) => [p.id, p]));
-  const toggle = (el: Element, name: string, on: boolean): void => {
-    if (on === el.hasAttribute(name)) return;
-    if (on) el.setAttribute(name, "");
-    else el.removeAttribute(name);
-  };
-  const lit = (on: boolean, el: Element): void => {
-    el.classList.toggle("is-call", on);
-    toggle(el, "data-call", on);
-  };
-  const place = (el: HTMLElement, x: number, y: number, halfX: number, halfY: number): void => {
-    const t = `translate(${Math.round(x - halfX)}px, ${Math.round(y - halfY)}px)`;
-    if (el.style.transform !== t) el.style.transform = t;
-    if (el.hidden) el.hidden = false;
-  };
-  for (const el of layer.querySelectorAll<HTMLElement>("button[data-clue-spot]")) {
-    const id = el.getAttribute("data-clue-spot") as SpotId;
-    const pin = shownPins.get(id);
-    if (pin === undefined) {
-      if (!el.hidden) el.hidden = true;
-      lit(false, el);
-      continue;
-    }
-    place(el, pin.x, pin.y, SPOT_HALF, SPOT_HALF);
-    // 빛남 우선: 알약이 있으면 알약만 빛나고(표지는 꺼짐), 아니면 안 살핀 지점 전부(callSpots). 살핀·점선 표지는 빛나지 않는다
-    lit(cfg.actId === null && (cfg.callSpots?.includes(id) ?? false), el);
   }
   const arrowEl = layer.querySelector<HTMLElement>("[data-errand-arrow]");
   if (arrowEl !== null) {
@@ -443,10 +300,6 @@ export interface WorldStageProps {
    * 위치는 런타임 프레임 콜백에서 투영해 DOM 에 직접 쓴다(React 상태를 프레임마다 바꾸지 않는다). 좌석·역할은 이 층에 들어오지 않는다
    */
   errand?: ErrandLayerProps;
-  /** 아침 현장 층(21-10, 원인 흐름 아침만, 큰 글 발표가 끝난 뒤). 있으면 단서 지점 셋·화살표 칩·[살펴보기] 알약·근처 반경 링을 심부름 층과 같은 규칙으로 그린다. 좌석·역할은 이 층에 들어오지 않는다 */
-  clues?: ClueLayerProps;
-  /** 밤 집 문패 층(21페이즈, 원인 흐름 밤만). 있으면 개관 시점에서 집 지붕 위에 문패 단추 8개를 그린다. 위치는 런타임 프레임 콜백이 쓴다 */
-  houses?: HouseLayerProps;
   onNotice(text: string): void;
   /** 있을 때만 연결이 끊긴 사람의 이름표가 [내보내기] 버튼이 된다(대기실 전용 — 게임 중 서버는 CANNOT_KICK) */
   onKick?(seat: number, nickname: string): void;
@@ -482,11 +335,6 @@ export function WorldStage(props: WorldStageProps) {
   const tagRef = useRef<HTMLDivElement>(null);
   const errandRef = useRef<HTMLDivElement>(null);
   const errandActRef = useRef<HTMLDivElement>(null);
-  const clueRef = useRef<HTMLDivElement>(null);
-  const clueActRef = useRef<HTMLDivElement>(null);
-  const houseRef = useRef<HTMLDivElement>(null);
-  /** 런타임이 지금 개관 기저로 그리는가(onCamera) — 문패 층은 이 값이 참일 때만 보이고 눌린다 */
-  const overviewRef = useRef(false);
   const runtimeRef = useRef<WorldRuntime | null>(null);
   const [tracker] = useState(createTapTracker);
   const [errandCache] = useState<{ current: ErrandWriteCache | null }>(() => ({ current: null }));
@@ -559,22 +407,12 @@ export function WorldStage(props: WorldStageProps) {
       onLooks: looksHook?.set,
       onCostumes: (costumes, dimmed) => live.current.props.onCostumes?.(costumes, dimmed),
       onZoom: pinHook?.setZoom,
-      onCamera: (state) => {
-        overviewRef.current = state.mode === "overview";
-        cameraHook?.set(state);
-      },
+      onCamera: (state) => cameraHook?.set(state),
       onTown: townHook === null ? undefined : (state) => townHook.patch(state),
       onProject: (project, now) => {
         const { props: p } = live.current;
         const ins = p.stageInsets;
-        const houseLayer = houseRef.current;
-        if (houseLayer !== null && p.houses !== undefined) writeHouseLayer(houseLayer, host, { top: ins?.top ?? HEADER_BOTTOM, bottom: ins?.bottom ?? PANEL_HEIGHT }, overviewRef.current);
         const insets = { top: ins?.top ?? HEADER_BOTTOM, bottom: ins?.bottom ?? PANEL_HEIGHT };
-        const clueLayer = clueRef.current;
-        if (clueLayer !== null && p.clues !== undefined) {
-          const mine = p.store.positionOf(p.view.me.seat, now + p.offset);
-          writeClueLayer(clueLayer, clueActRef.current, host, p.clues, project, mine, insets, errandCache, now);
-        }
         const layer = errandRef.current;
         if (layer === null || p.errand === undefined) return;
         const mine = p.store.positionOf(p.view.me.seat, now + p.offset);
@@ -583,7 +421,6 @@ export function WorldStage(props: WorldStageProps) {
       allowSoftware: hooksOn,
       loadModules: live.current.props.loadModules,
       mapId: () => mapId,
-      view: () => live.current.props.view,
     });
     runtimeRef.current = runtime;
     runtime.setScene(live.current.props.scene ?? null);
@@ -633,11 +470,9 @@ export function WorldStage(props: WorldStageProps) {
   }, [exiting]);
 
   // view 가 바뀌면 퇴장·끊김 표시를 런타임에 맞춘다(그리기 전에)
-  // 등불 켜짐(저녁은 내 진행, 밤부터 day.lamps — 21-07)도 같은 시점에 맞춘다: 값이 바뀔 때만 렌더러로 간다
-  const lampsKey = JSON.stringify([lampLitOf(view), houseLitOf(view)]);
   useLayoutEffect(() => {
     runtimeRef.current?.syncPlayers();
-  }, [view.players, lampsKey]);
+  }, [view.players]);
 
   // 장면 상태가 바뀌면 런타임에 건넨다(그리기 전에)
   useLayoutEffect(() => {
@@ -718,17 +553,6 @@ export function WorldStage(props: WorldStageProps) {
     sendWalk(at);
   };
 
-  // 아침 지점 표지: 그 지점 중심으로 걷는다(바닥 탭과 같은 경로 — 서버로 가는 메시지는 move 하나뿐). 살피기는 [살펴보기] 로만 한다(E-4 면제는 심부름 표지와 같다)
-  const onCluePin = (id: SpotId): void => {
-    const { props: p } = live.current;
-    const runtime = runtimeRef.current;
-    const sp = p.clues?.spots.find((x) => x.id === id);
-    if (sp === undefined || p.canWalk === false || runtime === null || !p.canSend || p.exiting) return;
-    const at = runtime.walkTo(sp.x, sp.z);
-    if (at === null) return;
-    sendWalk(at);
-  };
-
   const mySeat = view.me.seat;
   const here = new Set(view.players.map((p) => p.seat));
   const scene = props.scene;
@@ -791,38 +615,9 @@ export function WorldStage(props: WorldStageProps) {
               id={props.errand.actId}
               call={false}
               hidden
-              onPress={(hold) => live.current.props.errand?.onAct?.(hold)}
-              {...(props.errand.actLook === undefined
-                ? {}
-                : { label: props.errand.actLook.label, icon: props.errand.actLook.icon, aria: `${PLACE_NAME[props.errand.actId]}에서 ${props.errand.actLook.verb}` })}
+              onPress={() => live.current.props.errand?.onAct?.()}
             />
           ) : null}
-        </div>
-      ) : null}
-      {/* 아침 현장 층(21-10): 심부름 층과 같은 층 높이·같은 규칙. 큰 글 발표가 끝나면 --dur-med 로 나타난다(층의 CSS 애니메이션 한 번, 모션 줄이기면 즉시) */}
-      {props.clues ? (
-        <div ref={clueRef} className="mf-world__errand mf-world__clues" data-clue-layer="">
-          <svg className="mf-world__ring" data-near-ring={String(props.clues.nearR)} aria-hidden="true" focusable="false" style={RING_HIDDEN}>
-            <polygon points="" />
-          </svg>
-          {props.clues.spots.map((sp) => (
-            <ClueSpot key={sp.id} id={sp.id} state={sp.state} {...(sp.why !== undefined ? { why: sp.why } : {})} call={false} hidden onWalk={() => onCluePin(sp.id)} />
-          ))}
-          <ErrandArrow angle={0} call={false} hidden />
-        </div>
-      ) : null}
-      {props.clues ? (
-        <div ref={clueActRef} className="mf-world__errand-act mf-world__clues-act" data-errand-act-layer="">
-          {props.clues.actId !== null ? (
-            <ErrandAct call={false} hidden onPress={() => live.current.props.clues?.onAct?.()} label={INSPECT_ACT_LOOK.label} icon={INSPECT_ACT_LOOK.icon} aria={inspectLabel(props.clues.actId)} />
-          ) : null}
-        </div>
-      ) : null}
-      {props.houses ? (
-        <div ref={houseRef} className="mf-world__houses" data-house-layer="">
-          {props.houses.tags.map((t) => (
-            <HouseTag key={t.seat} {...t} disabled={!props.canSend} onPick={(seat) => live.current.props.houses?.onPick(seat)} />
-          ))}
         </div>
       ) : null}
       <div

@@ -333,22 +333,20 @@ describe("ClientMessageSchema endDiscussion (08-07, DAY-03: on 은 불리언)", 
   });
 });
 
-describe("ClientMessageSchema skip (21-05, D-23: on 은 불리언, strictObject)", () => {
+describe("ClientMessageSchema 지운 메시지 (22-04: skip·inspect·errand hold)", () => {
   it.each([
-    ["켜기", { t: "skip", on: true }],
-    ["끄기", { t: "skip", on: false }],
-  ])("받는다: %s", (_name, msg) => {
-    expect(ClientMessageSchema.safeParse(msg).success).toBe(true);
-  });
-
-  it.each([
-    ["on 빠짐", { t: "skip" }],
-    ["숫자 1", { t: "skip", on: 1 }],
-    ['문자열 "true"', { t: "skip", on: "true" }],
-    ["덧붙은 seat", { t: "skip", on: true, seat: 1 }],
-    ["덧붙은 count", { t: "skip", on: true, count: 99 }],
+    ["skip 켜기", { t: "skip", on: true }],
+    ["skip 끄기", { t: "skip", on: false }],
+    ["inspect", { t: "inspect" }],
+    ["errand hold true", { t: "errand", hold: true }],
+    ["errand hold false", { t: "errand", hold: false }],
   ])("거부한다: %s", (_name, msg) => {
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+
+  it("errand 는 필드 없는 모양만 받는다", () => {
+    expect(ClientMessageSchema.safeParse({ t: "errand" }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t: "errand", x: 1 }).success).toBe(false);
   });
 });
 
@@ -417,38 +415,3 @@ describe("ClientMessageSchema ready · rematch (11-08, D-12)", () => {
   });
 });
 
-// 21-03 errand 의 hold(길게 누르기, 결정 0088 D-06): 모든 역할이 보낼 수 있고 뜻은 서버가 정한다 — boolean optional, 덧붙은 키는 그대로 거부.
-describe("ClientMessageSchema errand hold (21-03, D-06)", () => {
-  it.each([
-    ["hold 없음", { t: "errand" }],
-    ["hold true", { t: "errand", hold: true }],
-    ["hold false", { t: "errand", hold: false }],
-  ])("errand 는 받는다: %s", (_name, msg) => {
-    expect(ClientMessageSchema.safeParse(msg).success).toBe(true);
-  });
-
-  it.each([
-    ["숫자 hold", { t: "errand", hold: 1 }],
-    ["문자열 hold", { t: "errand", hold: "true" }],
-    ["null hold", { t: "errand", hold: null }],
-    ["덧붙은 키", { t: "errand", hold: true, x: 1 }],
-  ])("errand 는 거부한다: %s", (_name, msg) => {
-    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
-  });
-});
-
-// 21-04 inspect(현장 단서 살피기, 결정 0088 D-13): 필드가 없다 — 위치·지점은 서버가 정한다(T-21-14). 덧붙은 키는 그대로 거부.
-describe("ClientMessageSchema inspect (21-04, D-13)", () => {
-  it("{ t: \"inspect\" } 는 받는다", () => {
-    expect(ClientMessageSchema.safeParse({ t: "inspect" }).success).toBe(true);
-  });
-
-  it.each([
-    ["지점 지정", { t: "inspect", spot: "cloth" }],
-    ["위치 지정", { t: "inspect", x: 1 }],
-    ["좌표 둘", { t: "inspect", x: 1, z: 2 }],
-    ["빈 문자열 지점", { t: "inspect", spot: "" }],
-  ])("inspect 는 거부한다: %s", (_name, msg) => {
-    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
-  });
-});

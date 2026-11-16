@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { rulesetOf } from "../../shared/game/ruleset";
-import { lockCause, openCause, underCauseLock } from "../helpers/playable";
+import { lockCause, underCauseLock } from "../helpers/playable";
 import type { ClientMessage, EvidenceView, GameMode, MorningView, PhaseId, PublicPlayer, RecordLine, RoleRecord, RoomView } from "../../shared/protocol";
 import { LineSheet } from "../../src/components/v2/LineSheet";
 import { floatVisible } from "../../src/game/badgeView";
@@ -608,25 +608,10 @@ describe("GameMap — 헤더 시간대 글자 (0083-1)", () => {
     }
   });
 
-  it("원인 흐름 확장판의 심부름(저녁)은 '저녁 · 심부름' 이고 data-tod 는 dusk 다 — 원인 흐름이 잠기면 '낮' 그대로 (21-07, D-04)", () => {
-    const restore = openCause();
-    try {
-      const { container, unmount } = mount(makeView({ phase: "errand", mode: "extended" }));
-      expect(header(container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("dusk");
-      expect(word(container)?.textContent).toBe("저녁");
-      unmount();
-    } finally {
-      restore();
-    }
-    // 꺼진 옛 확장판 경로 — 원인 흐름이 잠긴 확장판은 '낮 · 심부름' 그대로다(21-14 B).
-    const restoreLock = lockCause();
-    try {
-      const { container } = mount(makeView({ phase: "errand", mode: "extended" }));
-      expect(header(container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("day");
-      expect(word(container)?.textContent).toBe("낮");
-    } finally {
-      restoreLock();
-    }
+  it("확장판의 심부름(errand)은 '낮 · 심부름' 이고 data-tod 는 day 다 (22-04: 원인 흐름 저녁 조명을 지웠다)", () => {
+    const { container } = mount(makeView({ phase: "errand", mode: "extended" }));
+    expect(header(container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("day");
+    expect(word(container)?.textContent).toBe("낮");
   });
 
   it("tod={false} 로 그리면 [data-tod] 가 없다", () => {

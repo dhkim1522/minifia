@@ -1,7 +1,7 @@
 // 낮 처형 화면 연출 순수 모듈 시험 — DAY-04·05·06, 결정 0049·0053·0060, 08-UI-SPEC.
 // 서버 view 두 개의 공개 정보 차이에서만 채팅 줄·위 알림·결과 알림·연출 이벤트가 나온다.
 // 실패 출력은 한 줄이어야 해서(TAP) 비교는 가능한 한 JSON 문자열로 한다.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { DayView, PhaseId, PickTurnView, PublicPlayer, RoomView, ShowdownView } from "../../shared/protocol";
 import { EXECUTION_MS, VERDICT_LEAD_MS } from "../../shared/game/phases";
 import {
@@ -26,7 +26,7 @@ import {
   policeResultOf,
 } from "../../src/game/dayView";
 import type { DayEvents } from "../../src/game/dayView";
-import { openCause, underCauseLock } from "../helpers/playable";
+import { underCauseLock } from "../helpers/playable";
 
 // TAP 의 YAML 진단이 깨지지 않도록 따옴표 없는 한 줄 문자열로 만들어 비교한다.
 const flat = (value: unknown): string => JSON.stringify(value).replaceAll('"', "");
@@ -864,37 +864,18 @@ describe("기본판 투표 (결정 0072, U-1·U-4·U-5)", () => {
   });
 });
 
-describe("headerFor — 확장판 원인 흐름 제목 (21-01, P21-19)", () => {
+describe("headerFor — 판 종류와 무관한 제목 (22-04: 원인 흐름 제목을 지웠다)", () => {
   const modeView = (phase: PhaseId, mode: "basic" | "extended"): RoomView => ({ ...viewOf(phase), mode });
 
-  describe("잠금 아래(옛 확장판 순서)", () => {
-    // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: 옛 확장판 제목·안내를 단언하므로 이 시험만 잠근다(갈래 B).
-    it("확장판 view 도 옛 제목이다: 심부름·아침", underCauseLock(() => {
-      same(headerFor(modeView("errand", "extended")), { title: "심부름" });
-      same(headerFor(modeView("morning", "extended")), { title: "아침" });
-    }));
+  it("두 판 종류 모두 errand 는 '심부름', morning 은 '아침'이다", () => {
+    for (const mode of ["basic", "extended"] as const) {
+      same(headerFor(modeView("errand", mode)), { title: "심부름" });
+      same(headerFor(modeView("morning", mode)), { title: "아침" });
+    }
   });
 
-  describe("openCause 아래", () => {
-    let restore: () => void = () => {};
-    beforeAll(() => {
-      restore = openCause();
-    });
-    afterAll(() => restore());
-
-    it("확장판 errand 는 '등불 켜기', morning 은 '현장 조사'", () => {
-      same(headerFor(modeView("errand", "extended")), { title: "등불 켜기" });
-      same(headerFor(modeView("morning", "extended")), { title: "현장 조사" });
-    });
-
-    it("기본 마피아 view 는 같은 단계에서 지금 제목이다: 심부름·아침", () => {
-      same(headerFor(modeView("errand", "basic")), { title: "심부름" });
-      same(headerFor(modeView("morning", "basic")), { title: "아침" });
-    });
-
-    it("그 밖의 단계 제목은 그대로다", () => {
-      same(headerFor(modeView("discussion", "extended")), { title: "토론", hint: "이야기하며 마피아를 찾아요" });
-      same(headerFor(modeView("night", "extended")).title, "밤");
-    });
+  it("그 밖의 단계 제목은 그대로다", () => {
+    same(headerFor(modeView("discussion", "extended")), { title: "토론", hint: "이야기하며 마피아를 찾아요" });
+    same(headerFor(modeView("night", "extended")).title, "밤");
   });
 });

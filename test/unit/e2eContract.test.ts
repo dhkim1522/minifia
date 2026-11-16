@@ -28,10 +28,8 @@ import {
   openLogHeight,
 } from "../../src/game/chatUi";
 import { RESTORED_MS } from "../../src/net/linkReducer";
-import { HOUSE_TAG_BOX, HOUSE_TAG_CIRCLE, STAGE_SIZES, panBoxOf } from "../../src/world/camera";
-import { TOWN_CLUE_SPOTS, TOWN_LAMPS, TOWN_NEIGHBORS, TOWN_ROOMS, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
-import { CARD_TEXT } from "../../src/game/sceneText";
-import { ERRAND_HOLD_MS } from "../../src/components/v2/ErrandAct";
+import { STAGE_SIZES, panBoxOf } from "../../src/world/camera";
+import { TOWN_ROOMS, TOWN_ROOM_OUTER } from "../../shared/game/mapTown";
 import { CUTAWAY_MS } from "../../src/world/maps/town";
 import { DOOR_FADE_MS } from "../../src/world/runtime";
 import { DRAW_CALL_BUDGET } from "../../src/world/renderer";
@@ -55,7 +53,7 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
-import { OUTFIT_IDS, PLACE_IDS, SPOT_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
+import { OUTFIT_IDS, PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
 import type { GameMode, OutfitId, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { HOST_HIDDEN_PHASES, HOST_LINES, type HostKey } from "../../src/game/hostLine";
@@ -884,18 +882,17 @@ describe("서버 계약 소비자 스크립트의 새 단계 흐름 (15-06, DEPL
     expect(text).toMatch(/morningWant = 9_000 \+ \(morning\.trace !== undefined \? MORNING_TRACE_MS : 0\)/);
   });
 
-  // 21-13(갈래 C): 전이 표는 판 종류별 두 갈래다 — 기본판은 옛 순서, 확장판은 원인 흐름(저녁 → 밤 → 아침 → 토론).
+  // 전이 표는 판 종류별 두 갈래다 — 기본판은 낮 시작 발표 → 토론, 확장판은 낮 시작 발표 → 심부름 → 토론.
   const smokeGraphs = (smoke as unknown as { PHASE_NEXT_BY_MODE: Record<GameMode, Record<string, string[]>> }).PHASE_NEXT_BY_MODE;
 
-  it("smoke.mjs 의 전이 표가 판 종류별 두 갈래이고(기본판 dayAnnounce → discussion, 확장판 roleReveal → errand → night) 낮 단계 목록에 errand 가 있으며 errand 40초 대기를 쓴다", () => {
+  it("smoke.mjs 의 전이 표가 판 종류별 두 갈래이고(기본판 dayAnnounce → discussion, 확장판 dayAnnounce → errand → discussion) 낮 단계 목록에 errand 가 있으며 errand 40초 대기를 쓴다", () => {
     const text = scriptText("smoke.mjs");
-    expect(text).toMatch(/roleReveal: \["errand"\]/);
-    expect(text).toMatch(/errand: \["night"\]/);
+    expect(text).toMatch(/dayAnnounce: \["errand"\]/);
+    expect(text).toMatch(/errand: \["discussion"\]/);
     expect(text).toMatch(/dayAnnounce: \["discussion"\]/);
     expect(text).toMatch(/const DAY_PHASES = \[[^\]]*"errand"/);
     expect(text).toMatch(/ERRAND_WAIT_MS = ERRAND_MS \+ STATE_LIMIT_MS/);
-    expect(text).toMatch(/FIRST_DAY_PHASE = \{ basic: "dayAnnounce", extended: "errand" \}/);
-    expect(text).not.toMatch(/dayAnnounce: \["errand"\]/);
+    expect(text).toMatch(/FIRST_DAY_PHASE = \{ basic: "dayAnnounce", extended: "dayAnnounce" \}/);
   });
 
   it("smoke.mjs 의 두 전이 표가 서버의 nextPhaseOf·afterDayOf 와 같다: 표가 가리키는 모든 단계(기본 다음 단계·처형 없는 낮 분기)가 들어 있고, 낮 시작 발표는 기본판에만·저녁은 확장판에만 있다 (T-21-45)", () => {
@@ -905,33 +902,31 @@ describe("서버 계약 소비자 스크립트의 새 단계 흐름 (15-06, DEPL
       expect(Object.keys(graph).sort(), `${mode} 표의 단계 목록`).toEqual(
         (mode === "basic"
           ? ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"]
-          : ["lobby", "assigning", "roleReveal", "errand", "night", "morning", "discussion", "nomination", "defense", "verdict", "execution", "ended"]
+          : ["lobby", "assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"]
         ).sort(),
       );
       for (const [from, nexts] of Object.entries(graph)) {
         if (from === "ended" || from === "lobby") continue; // 방장의 start 가 넘기는 단계라 표의 next 가 없다
         const want = nextPhaseOf(from as PhaseId, rules);
         if (from === "nomination") {
-          // 지목 마감: 최다 한 명이면 변론, 처형 없이 끝나면 afterDayOf(기본판 night · 원인 흐름 errand)
-          expect([...nexts].sort(), `${mode} nomination`).toEqual([afterDayOf(rules), "defense"].sort());
+          // 지목 마감: 최다 한 명이면 변론, 처형 없이 끝나면 afterDayOf() = night
+          expect([...nexts].sort(), `${mode} nomination`).toEqual([afterDayOf(), "defense"].sort());
           continue;
         }
         expect(nexts, `${mode} ${from} → ${want}`).toContain(want);
       }
     }
-    // 원인 흐름 확장판의 갈림: 밤 다음은 아침이거나(현장이 있을 때) 현장 없는 아침(길이 0)을 건너뛴 토론이다.
-    expect([...smokeGraphs.extended.night!].sort()).toEqual(["discussion", "morning"]);
-    expect(nextPhaseOf("morning", rulesetOf("extended"))).toBe("discussion");
+    expect([...smokeGraphs.extended.night!]).toEqual(["morning"]);
+    expect(nextPhaseOf("morning", rulesetOf("extended"))).toBe("dayAnnounce");
     expect(nextPhaseOf("night", rulesetOf("extended"))).toBe("morning");
   });
 
-  it("uat-test-room.mjs 의 전이 표도 판 종류별 두 갈래이고 확장판은 errand 로 두 번 넘긴다(저녁 · 다음 날 저녁)", () => {
+  it("uat-test-room.mjs 의 전이 표도 판 종류별 두 갈래이고 확장판은 낮 시작 발표 다음에 errand 로 넘긴다", () => {
     const text = scriptText("uat-test-room.mjs");
     expect(text).toMatch(/roleReveal: \["dayAnnounce"\], dayAnnounce: \["discussion"\]/);
-    expect(text).toMatch(/roleReveal: \["errand"\], errand: \["night"\]/);
+    expect(text).toMatch(/roleReveal: \["dayAnnounce"\], dayAnnounce: \["errand"\], errand: \["discussion"\]/);
     expect(text).toContain('await skipTo("errand")');
     expect(text).toContain('{ t: "modePick", mode: "basic" }');
-    expect(text).not.toMatch(/dayAnnounce: \["errand"\]/);
   });
 
   it("bots.mjs 는 errand 단계를 알고(행동 없이 지나간다) 밤에는 시민 봇도 고른다", () => {
@@ -995,10 +990,8 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
     expect(s.LOOK_PATH).toBe("view.players[].look");
   });
 
-  // 21-13: 같은 시험을 두 흐름으로 돈다 — 꺼진 옛 확장판 경로(원인 흐름 잠금, 갈래 B: 서버가 trace 를 만든다)와 제품 확장판 흐름(갈래 C: 서버는 eliminated 뿐이고 seen 은 시험이 얹는다).
-  // smoke 의 morningProblems 는 eliminated 필수 + trace·seen 선택이라 두 모양을 모두 통과시켜야 한다.
-  for (const cause of [false, true]) {
-  it(`실제 전이로 만든 아침 view(${cause ? "원인 흐름: eliminated·seen" : "꺼진 옛 경로: eliminated·trace·seen"}, 직업 이름과 같은 옷 look)를 smoke 판정이 통과시키고 누설 검사는 look 한 경로만 허용한다`, (cause ? (body: () => void) => body : underCauseLock)(() => {
+  // smoke 의 morningProblems 는 eliminated 필수 + trace·seen 선택이다(22-04: 원인 흐름 갈래를 지웠다 — 서버가 trace 를 만드는 모양 하나).
+  it("실제 전이로 만든 아침 view(eliminated·trace·seen, 직업 이름과 같은 옷 look)를 smoke 판정이 통과시키고 누설 검사는 look 한 경로만 허용한다", underCauseLock(() => {
     const night = nightOf6();
     const mafia = night.players.filter((p) => p.role === "mafia").sort((a, b) => a.seat - b.seat);
     const citizens = night.players.filter((p) => p.role === "citizen").sort((a, b) => a.seat - b.seat);
@@ -1019,7 +1012,7 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
     for (const p of morningState.players) {
       const view = buildView(morningState, p.id, START_AT);
       const morning = view.day?.morning as Record<string, unknown>;
-      expect(Object.keys(morning).sort(), `${p.nickname} 의 아침 키`).toEqual(cause ? ["eliminated", "seen"] : [...s.MORNING_KEYS]);
+      expect(Object.keys(morning).sort(), `${p.nickname} 의 아침 키`).toEqual([...s.MORNING_KEYS]);
       expect(s.morningProblems(morning, seats)).toEqual([]);
       const spectator = morningState.players.find((q) => q.id === p.id)?.alive === false;
       const leaves: Array<{ path: string; value: string }> = [];
@@ -1033,7 +1026,6 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
     }
     expect(lookLeaves).toBeGreaterThan(0);
   }));
-  }
 });
 
 describe("E2E 의 시간대 사본과 앱 todOf·TOD_LABEL (18.1-11, 0083-1)", () => {
@@ -1191,9 +1183,7 @@ describe("19페이즈 기본 마피아 판 E2E 사본 계약 (19-07, T-19-22)", 
   const OFF_KEYS: readonly HostKey[] = ["errand.act", "errand.done", "errand.ghost", "witness", "discussion.evidence"];
 
   it("BASIC_FORBIDDEN_LINES 는 HOST_LINES 의 심부름·목격 기록·증거 줄 값이다 — 기본 마피아에서도 쓰는 다른 키와 글이 같은 줄(errand.ghost)만 빠진다", () => {
-    // 21-08: 원인 흐름 전용 키(저녁 등불·밤 집·아침 현장·토론 보드)도 기본 마피아에서 닿지 않는다 — 같은 문장("곧 토론이 시작됩니다")을 쓰는 scene.done 이 "다른 키" 계산에 끼지 않게 뺀다
-    const CAUSE_KEYS: readonly HostKey[] = ["errand.lamp.act", "errand.lamp.done", "night.mafia.house", "night.police.house", "night.doctor.house", "night.citizen.house", "scene.act", "scene.done", "scene.ghost", "discussion.board"];
-    const others = (Object.keys(HOST_LINES) as HostKey[]).filter((k) => !OFF_KEYS.includes(k) && !CAUSE_KEYS.includes(k)).map((k) => HOST_LINES[k]);
+    const others = (Object.keys(HOST_LINES) as HostKey[]).filter((k) => !OFF_KEYS.includes(k)).map((k) => HOST_LINES[k]);
     const want = OFF_KEYS.map((k) => HOST_LINES[k]).filter((v) => v !== "" && !others.includes(v));
     expect(lib.BASIC_FORBIDDEN_LINES.join("|")).toBe(want.join("|"));
     // 글이 겹쳐 금지 문구로 쓸 수 없는 키는 errand.ghost 하나다(dayAnnounce.ghost 등과 같은 문장) — 늘거나 줄면 사본과 이 설명을 같이 고친다
@@ -1222,87 +1212,5 @@ describe("19페이즈 기본 마피아 판 E2E 사본 계약 (19-07, T-19-22)", 
     const host = readFileSync(new URL("scripts/e2e/host.mjs", root), "utf8");
     expect(host).toContain('const emceeLeakFlow = (ctx) => leakFlow(ctx, "emcee-leak");');
     expect(host).toContain('const modeLeakFlow = (ctx) => leakFlow(ctx, "mode-leak", "basic");');
-  });
-});
-
-describe("21페이즈 원인 흐름 E2E 사본 계약 (21-15, D-29, T-21-47·T-21-48)", () => {
-  const lib = e2eLib as unknown as {
-    CAUSE_LAMPS_E2E: readonly { id: string; x: number; z: number }[];
-    CAUSE_CLUE_SPOTS_E2E: readonly (readonly { x: number; z: number }[])[];
-    CAUSE_NEIGHBORS_E2E: readonly (readonly [number, number])[];
-    CAUSE_PHASE_GRAPHS: Record<GameMode, Record<string, string[]>>;
-    CAUSE_LINES: Record<string, string>;
-    CAUSE_CARD_TEXT: Record<string, string>;
-    CAUSE_ABSENT_SELECTORS: readonly string[];
-    CAUSE_HOLD_MS_E2E: number;
-    CAUSE_SPOT_IDS_E2E: readonly string[];
-    CAUSE_HOUSE_CIRCLE_E2E: number;
-    CAUSE_HOUSE_BOX_E2E: number;
-    CAUSE_CARD_TITLE: string;
-  };
-  const root = new URL("../../", import.meta.url);
-  const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
-    .split("\n")
-    .filter((f) => f.endsWith(".tsx"));
-  const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
-
-  it("가로등 8곳 사본은 TOWN_LAMPS 와, 집별 단서 지점 사본은 TOWN_CLUE_SPOTS(고정소수점 / 100)와, 짝집 표는 TOWN_NEIGHBORS 와 같다", () => {
-    expect(lib.CAUSE_LAMPS_E2E.map((l) => ({ ...l }))).toEqual(TOWN_LAMPS.map((l) => ({ id: l.id, x: l.x, z: l.z })));
-    expect(lib.CAUSE_CLUE_SPOTS_E2E.map((spots) => spots.map((p) => ({ ...p })))).toEqual(TOWN_CLUE_SPOTS.map((spots) => spots.map((p) => ({ x: p.x / 100, z: p.z / 100 }))));
-    expect(lib.CAUSE_NEIGHBORS_E2E.map((p) => [...p])).toEqual(TOWN_NEIGHBORS.map((p) => [...p]));
-    expect([...lib.CAUSE_SPOT_IDS_E2E]).toEqual([...SPOT_IDS]);
-  });
-
-  it("판 종류별 단계 그래프 사본은 nextPhaseOf·afterDayOf 와 같다 — 표가 가리키는 모든 단계가 들어 있고 낮 시작 발표는 기본 마피아에만·저녁은 확장판에만 있다", () => {
-    for (const mode of GAME_MODES) {
-      const rules = rulesetOf(mode);
-      const graph = lib.CAUSE_PHASE_GRAPHS[mode];
-      for (const [from, nexts] of Object.entries(graph)) {
-        if (from === "ended" || from === "lobby") continue;
-        const want = nextPhaseOf(from as PhaseId, rules);
-        if (from === "nomination") {
-          expect([...nexts].sort(), `${mode} nomination`).toEqual([afterDayOf(rules), "defense"].sort());
-          continue;
-        }
-        expect(nexts, `${mode} ${from} → ${want}`).toContain(want);
-      }
-      expect(Object.hasOwn(graph, "errand"), `${mode} errand`).toBe(rules.errand);
-      expect(Object.hasOwn(graph, "dayAnnounce"), `${mode} dayAnnounce`).toBe(!rules.cause);
-    }
-    expect([...lib.CAUSE_PHASE_GRAPHS.extended.night!].sort()).toEqual(["discussion", "morning"]);
-  });
-
-  it("사회자 띠 문장 사본(CAUSE_LINES)은 HOST_LINES 와, 단서 카드 고정 문장은 CARD_TEXT 와, 길게 누르기 시간은 ERRAND_HOLD_MS 와 같다", () => {
-    expect(lib.CAUSE_LINES.lampAct).toBe(HOST_LINES["errand.lamp.act"]);
-    expect(lib.CAUSE_LINES.lampDone).toBe(HOST_LINES["errand.lamp.done"]);
-    expect(lib.CAUSE_LINES.sceneAct).toBe(HOST_LINES["scene.act"]);
-    expect(lib.CAUSE_LINES.sceneDone).toBe(HOST_LINES["scene.done"]);
-    expect(lib.CAUSE_LINES.board).toBe(HOST_LINES["discussion.board"]);
-    expect(lib.CAUSE_CARD_TEXT).toEqual({ touched: CARD_TEXT.touched, dark: CARD_TEXT.dark, none: CARD_TEXT.none });
-    expect(lib.CAUSE_HOLD_MS_E2E).toBeGreaterThan(ERRAND_HOLD_MS);
-  });
-
-  it("밤 문패의 보이는 원·누르기 영역 사본은 HOUSE_TAG_CIRCLE·HOUSE_TAG_BOX 와, 저녁 시작 카드 제목은 ErrandStartCard 의 글과 같다", () => {
-    expect(lib.CAUSE_HOUSE_CIRCLE_E2E).toBe(HOUSE_TAG_CIRCLE);
-    expect(lib.CAUSE_HOUSE_BOX_E2E).toBe(HOUSE_TAG_BOX);
-    const card = sources.find((s) => s.f.endsWith("components/v2/ErrandStartCard.tsx"))?.text ?? "";
-    expect(card).toContain(`"${lib.CAUSE_CARD_TITLE}"`);
-  });
-
-  it("원인 흐름 E2E 흐름 파일 cause.mjs 는 결과 줄에 닉네임·토큰을 싣지 않고 흐름 이름이 모두 cause- 로 시작해 errand·town·mode 와 --only 부분 일치가 겹치지 않는다 (T-21-48)", () => {
-    const text = readFileSync(new URL("scripts/e2e/cause.mjs", root), "utf8");
-    const recCalls = text.split("\n").filter((l) => /\brec\(/.test(l));
-    expect(recCalls.length).toBeGreaterThan(5);
-    expect(recCalls.filter((l) => /nickname|token/i.test(l))).toEqual([]);
-    const flows = readFileSync(new URL("scripts/e2e/flows.mjs", root), "utf8");
-    const ids = [...flows.matchAll(/\{ id: "(cause-[a-z]+)", run: /g)].map((m) => m[1]);
-    expect(ids).toEqual(["cause-evening", "cause-night", "cause-morning", "cause-skip", "cause-basic", "cause-phones"]);
-    for (const other of ["errand", "town", "mode-"]) expect(ids.filter((id) => id.includes(other))).toEqual([]);
-  });
-
-  it("CAUSE_ABSENT_SELECTORS(기본 마피아에서 0건이어야 하는 확장판 요소)의 속성이 git 이 추적하는 src 의 .tsx 에 있다(빈 선택자 금지)", () => {
-    expect(lib.CAUSE_ABSENT_SELECTORS.length).toBeGreaterThanOrEqual(6);
-    const attrs = lib.CAUSE_ABSENT_SELECTORS.map((sel) => /^\[(data-[a-z-]+)\]$/.exec(sel)?.[1] ?? `모양이 다름:${sel}`);
-    expect(attrs.filter((a) => !sources.some((s) => s.text.includes(`${a}=`))).join(",")).toBe("");
   });
 });

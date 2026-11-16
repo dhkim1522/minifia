@@ -24,7 +24,6 @@ import type { WorldModules } from "../../src/world/runtime";
 import { installWorldTestHooks, WORLD_TEST_KEY, worldTestHooksEnabled } from "../../src/world/testHooks";
 import { WorldStore } from "../../src/world/store";
 import { cameraModeOf } from "../../src/world/presence";
-import { openCause, underCauseLock } from "../helpers/playable";
 import type { SceneLook, SeatLook } from "../../src/world/presence";
 
 // 06-13: 로비 맵 화면(WorldStage + 런타임). happy-dom 에는 WebGL 이 없어 loadModules 로 가짜 렌더러·가짜 캐릭터를 주입한다(가정 A1).
@@ -2140,12 +2139,11 @@ describe("마을 컷어웨이·집 주인·__mfTown (20-05, D-07·D-10·D-11)", 
   });
 
   it("window.__mfTown: 내가 우체국 안이면 zone post·open [post]·owners 는 view 좌석·veiled·door 는 빈 배열이고, 렌더러의 지붕 불투명도를 소수 둘째 자리로 싣는다", async () => {
-    // 21-14 (A): 우체국·집 주인·지붕이 보는 것이라 가로등(원인 흐름) 필드는 null 인 기본 마피아 판으로 돈다 — 원인 흐름 마을의 lampLit·houseLit 은 21-07 구역이 본다.
     const s = await open({ view: { ...townView(), mode: "basic" } }, { ents: IN_POST() });
     const r = s.world.renderers[0]!;
     r.roofs.mockReturnValue({ post: 0.3333333, pub: 1, clinic: 1, police: 1 });
     frames(50);
-    expect(window.__mfTown).toEqual({ zone: "post", open: ["post"], roofs: { post: 0.33, pub: 1, clinic: 1, police: 1 }, owners: [0, 1], veiled: [], door: [], houseLit: null, lampLit: null });
+    expect(window.__mfTown).toEqual({ zone: "post", open: ["post"], roofs: { post: 0.33, pub: 1, clinic: 1, police: 1 }, owners: [0, 1], veiled: [], door: [] });
     s.utils.unmount();
     expect(window.__mfTown).toBeUndefined();
   });
@@ -2159,90 +2157,6 @@ describe("마을 컷어웨이·집 주인·__mfTown (20-05, D-07·D-10·D-11)", 
     expect(window.__mfTown).toBeUndefined();
   });
 });
-
-// ---------- 마을 가로등·집 창 (21-07) ----------
-
-describe("마을 가로등·집 창 setLamps·__mfTown (21-07, D-04·D-25)", () => {
-  let restoreCause: () => void = () => {};
-  const LAMPS = [true, false, true, true, false, false, true, false];
-  const str = (v: readonly boolean[] | null | undefined): string => (v === null || v === undefined ? "null" : v.map((b) => (b ? "1" : "0")).join(""));
-  const errandView = (done: string[]): RoomView =>
-    ({ ...makeView(TWO, 0), map: "town", phase: "errand", me: { seat: 0, isHost: true, errand: { places: ["lamp0", "lamp1", "lamp2"], done } }, day: { n: 1, roles: [] } }) as unknown as RoomView;
-  const nightView = (lamps: boolean[] = LAMPS): RoomView => ({ ...makeView(TWO, 0), map: "town", phase: "night", day: { n: 1, roles: [], lamps } }) as unknown as RoomView;
-  const calls = (r: FakeRenderer): string[] => r.setLamps.mock.calls.map(([l, h]) => str(l) + "/" + str(h));
-
-  describe("원인 흐름 켜짐", () => {
-    beforeEach(() => {
-      restoreCause = openCause();
-    });
-    afterEach(() => restoreCause());
-
-    it("시작 때 내 진행(errand.done)으로 한 번 보내고, 같은 값의 새 view 에는 다시 보내지 않으며, 값이 바뀌면 다시 보낸다", async () => {
-      const s = await open({ view: errandView(["lamp1"]) });
-      const r = s.world.renderers[0]!;
-      expect(calls(r)).toEqual(["01000000/null"]);
-      s.rerender({ view: errandView(["lamp1"]) });
-      frame();
-      expect(calls(r)).toEqual(["01000000/null"]);
-      s.rerender({ view: nightView() });
-      frame();
-      expect(calls(r)).toEqual(["01000000/null", "10110010/10110010"]);
-      expect(r.setLamps.mock.calls.at(-1)![2]).toBe(false);
-    });
-
-    it("recreated 이벤트 뒤에는 같은 값이라도 force 로 다시 보낸다", async () => {
-      const s = await open({ view: nightView() });
-      const r = s.world.renderers[0]!;
-      expect(calls(r)).toEqual(["10110010/10110010"]);
-      r.emit({ t: "recreated" });
-      frame();
-      expect(calls(r)).toEqual(["10110010/10110010", "10110010/10110010"]);
-    });
-
-    it("모션 줄이기면 instant true 로 보낸다", async () => {
-      stubReducedMotion(true);
-      const s = await open({ view: errandView(["lamp1"]) });
-      s.rerender({ view: nightView() });
-      frame();
-      expect(s.world.renderers[0]!.setLamps.mock.calls.at(-1)![2]).toBe(true);
-    });
-
-    it("재즈 바·광장에서는 setLamps 를 한 번도 부르지 않는다", async () => {
-      const bar = await open({ view: { ...nightView(), map: "bar" } });
-      frame();
-      expect(bar.world.renderers[0]!.setLamps).not.toHaveBeenCalled();
-      cleanup();
-      const plaza = await open({ view: { ...nightView(), map: "plaza" } });
-      frame();
-      expect(plaza.world.renderers[0]!.setLamps).not.toHaveBeenCalled();
-    });
-
-    it("window.__mfTown 에 houseLit·lampLit 이 view 의 공개 값(밤) / 내 진행(저녁) 그대로 실린다. 기존 필드는 그대로다", async () => {
-      const s = await open({ view: errandView(["lamp2"]) });
-      frames(50);
-      expect(str(window.__mfTown?.lampLit)).toBe("00100000");
-      expect(window.__mfTown?.houseLit).toBeNull();
-      s.rerender({ view: nightView() });
-      frames(50);
-      expect(str(window.__mfTown?.lampLit)).toBe("10110010");
-      expect(str(window.__mfTown?.houseLit)).toBe("10110010");
-      expect(Object.keys(window.__mfTown ?? {}).sort()).toEqual(["door", "houseLit", "lampLit", "open", "owners", "roofs", "veiled", "zone"]);
-    });
-  });
-
-  // 꺼진 옛 확장판 경로 — 원인 흐름을 잠근 마을은 가로등·집 창을 건드리지 않는다. setup 은 더는 잠그지 않으므로 이 시험이 스스로 잠근다(21-14 B).
-  describe("원인 흐름이 잠긴 마을", () => {
-    it("setLamps 를 부르지 않고 __mfTown 의 houseLit·lampLit 은 null 이다", underCauseLock(async () => {
-      const s = await open({ view: nightView() });
-      frames(50);
-      expect(s.world.renderers[0]!.setLamps).not.toHaveBeenCalled();
-      expect(window.__mfTown?.houseLit).toBeNull();
-      expect(window.__mfTown?.lampLit).toBeNull();
-    }));
-  });
-});
-
-// ---------- 마을 문 연출 (20-06) ----------
 
 describe("마을 문 연출 (20-06, D-15·P20-9)", () => {
   const PLAYERS4 = [player(0, "민지"), player(1, "철수"), player(2, "영희"), player(3, "바다")];
@@ -3061,32 +2975,6 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       expect(r.setZoom.mock.calls.at(-1)![0]).toBe(1);
       expect(r.views.at(-1)!.target.x).not.toBe(0);
       expect(window.__mfCamera).toMatchObject({ mode: "follow", scale: 58.2 });
-    });
-
-    // 21-09 D-10: 밤 집 문패 층 — 개관 기저가 선 뒤에야 보이고(data-ready), 위치는 개관 투영(houseTagCenters)과 같다
-    const HOUSE_TAGS = Array.from({ length: 8 }, (_, seat) => ({ seat, nickname: seat < 5 ? `닉${seat}` : null, owner: seat < 5, alive: seat < 5, button: seat < 5, lit: seat % 2 === 0, picked: false, call: seat < 5 }));
-    const houseOf = (s: Setup) => s.utils.container.querySelector<HTMLElement>("[data-house-layer]")!;
-    it("houses: 개관으로 바뀌기 전에는 문패 층이 준비 전(data-ready 없음)이고, 바뀐 뒤 문패마다 개관 투영 위치(transform)와 눌림이 선다", async () => {
-      const onPick = vi.fn();
-      const s = await openGame({ houses: { tags: HOUSE_TAGS, onPick } });
-      frames(100);
-      expect(houseOf(s).hasAttribute("data-ready")).toBe(false);
-      s.rerender({ scene: sceneOf(ALL, { camera: OVERVIEW }), houses: { tags: HOUSE_TAGS, onPick } });
-      frames(100);
-      expect(houseOf(s).hasAttribute("data-ready")).toBe(false); // 어둠 가림 가장 어두운 때(210ms) 전
-      frames(300);
-      expect(houseOf(s).hasAttribute("data-ready")).toBe(true);
-      const centers = houseTagCenters({ top: INSETS.top, bottom: window.innerHeight - INSETS.bottom }, { w: window.innerWidth, h: window.innerHeight });
-      for (const c of centers) {
-        const el = houseOf(s).querySelector<HTMLElement>(`[data-house-tag="${c.seat}"]`)!;
-        expect(el.style.transform, `seat ${c.seat}`).toBe(`translate(${Math.round(c.sx - 22)}px, ${Math.round(c.sy - 22)}px)`);
-      }
-      fireEvent.click(houseOf(s).querySelector('button[data-house-tag="2"]')!);
-      expect(onPick).toHaveBeenCalledWith(2);
-      // 개관에서 돌아오면 다시 준비 전
-      s.rerender({ scene: sceneOf(ALL), houses: { tags: HOUSE_TAGS, onPick } });
-      frames(400);
-      expect(houseOf(s).hasAttribute("data-ready")).toBe(false);
     });
 
     it("어둠 가림(data-night-dim): 개관으로(에서) 바뀔 때 한 번 생기고, 처음 마운트·모션 줄이기에는 없다", async () => {
@@ -4773,52 +4661,6 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, 16페이즈 D-06·D-07
     expect(s.utils.container.querySelectorAll("[data-call]")).toHaveLength(0);
   });
 
-  it("21-08 P21-6: callPlaces 의 보이는 표지는 전부 data-call(is-call)로 빛나고(안 켠 배정 등불 전부), 안 보이는 표지·처리한 표지·callPlaces 밖은 빛나지 않는다. 알약이 있으면 알약만 빛난다", async () => {
-    const E = { id: "sax" as const, x: 6, z: 0, done: false }; // (260, 300) 안
-    const s = await open({ stageInsets: INS, errand: errandProp({ places: [A, B, E], callPlaces: ["glass", "piano", "sax"], nextId: "glass" }) });
-    frame();
-    expect(pin(s, "glass").hasAttribute("data-call")).toBe(true);
-    expect(pin(s, "sax").hasAttribute("data-call")).toBe(true);
-    expect(pin(s, "sax").classList.contains("is-call")).toBe(true);
-    expect(pin(s, "piano").hasAttribute("data-call")).toBe(false); // 안 보이는 표지 — 화살표가 방향을 알린다
-    expect(s.utils.container.querySelectorAll("button[data-errand-place][data-call]")).toHaveLength(2);
-    expect(arrow(s).hasAttribute("data-call")).toBe(false);
-    // 하나를 켜면(done) 그 표지의 깜빡임이 멎는다
-    s.rerender({ errand: errandProp({ places: [{ ...A, done: true }, B, E], callPlaces: ["piano", "sax"], nextId: "sax" }) });
-    frame();
-    expect(pin(s, "glass").hasAttribute("data-call")).toBe(false);
-    expect(pin(s, "sax").hasAttribute("data-call")).toBe(true);
-    // 알약이 서면 표지 깜빡임은 꺼지고 알약만 빛난다(한 화면 한 종류)
-    s.rerender({ errand: errandProp({ places: [A, B, E], callPlaces: ["glass", "sax"], nextId: "glass", actId: "glass" }) });
-    frame();
-    expect(s.utils.container.querySelectorAll("[data-call]")).toHaveLength(1);
-    expect(act(s)!.hasAttribute("data-call")).toBe(true);
-  });
-
-  it("21-08 P21-7: actLook 이 있으면 [켜기] 글·불꽃 아이콘·접근성 이름 '가로등에서 켜기'이고, 알약을 짧게 누르면 onAct(false)·0.6초 길게 누르면 onAct(true)", async () => {
-    const onAct = vi.fn();
-    const L = { id: "lamp0" as const, x: 0, z: 0, done: false };
-    const s = await open({ stageInsets: INS, errand: errandProp({ places: [L], nextId: "lamp0", actId: "lamp0", actLook: { label: "켜기", icon: "flame", verb: "켜기" }, onAct }) });
-    frame();
-    const b = act(s)!;
-    expect(b.textContent).toBe("켜기");
-    expect(b.getAttribute("aria-label")).toBe("가로등에서 켜기");
-    expect(b.querySelector("svg")!.innerHTML).toContain("M12 3c3 4 5 6 5 10a5 5 0 0 1-10 0c0-4 2-6 5-10z");
-    fireEvent.click(b);
-    expect(onAct).toHaveBeenLastCalledWith(false);
-    const now = Date.now();
-    const spy = vi.spyOn(Date, "now");
-    spy.mockReturnValue(now);
-    fireEvent.pointerDown(b);
-    spy.mockReturnValue(now + 700);
-    fireEvent.pointerUp(b);
-    spy.mockRestore();
-    expect(onAct).toHaveBeenLastCalledWith(true);
-    // 켠 표지의 접근성 이름: 가로등 장소, 처리함
-    s.rerender({ errand: errandProp({ places: [{ ...L, done: true }], nextId: null, actId: null }) });
-    expect(pin(s, "lamp0").getAttribute("aria-label")).toBe("가로등 장소, 처리함");
-  });
-
   it("링: 내 위치를 중심으로 반경 nearR 월드 단위의 24점 다각형이 투영되어 points 가 갱신되고 내 위치가 없으면 hidden", async () => {
     const s = await open({ stageInsets: INS, errand: errandProp() }, { ents: [seg(0, [200, 100]), seg(1, [-300, 50])] });
     frame();
@@ -4864,128 +4706,3 @@ describe("WorldStage: errand 층 (15페이즈 D-02·D-09, 16페이즈 D-06·D-07
 });
 
 // ---------- 21-10: 아침 현장 층(단서 지점 표지·화살표 칩·[살펴보기] 알약·근처 링) — 심부름 층과 같은 투영·안쪽 8 inset·피할 사각형 규칙 ----------
-
-describe("WorldStage: 아침 현장 층 (21페이즈 D-13·D-26, UI-SPEC P21-10·P21-11, 21-10)", () => {
-  const INS = { top: 60, bottom: 84 };
-  // 가짜 렌더러: 발끝 (x, z) → sx = 200 + 10x, sy = 300 + 10z. 내 위치(기본 ents)는 (2, 1) → (220, 310)
-  const A = { id: "footprint" as const, x: 0, z: 0, state: "new" as const }; // (200, 300) 안
-  const B = { id: "cloth" as const, x: -100, z: 0, state: "new" as const }; // (-800, 300) 밖
-  const C = { id: "window" as const, x: 5, z: 5, state: "done" as const }; // (250, 350) 안
-  const cluesProp = (over: Partial<NonNullable<WorldStageProps["clues"]>> = {}): NonNullable<WorldStageProps["clues"]> => ({ spots: [A, B, C], nextId: "footprint", actId: null, nearR: 3, onAct: vi.fn(), ...over });
-  const layer = (s: Setup) => s.utils.container.querySelector<HTMLElement>("[data-clue-layer]");
-  const spot = (s: Setup, id: string) => s.utils.container.querySelector<HTMLElement>(`button[data-clue-spot="${id}"]`)!;
-  const arrow = (s: Setup) => s.utils.container.querySelector<HTMLElement>("[data-errand-arrow]")!;
-  const act = (s: Setup) => s.utils.container.querySelector<HTMLElement>("button[data-errand-act]");
-
-  it("clues prop 이 없으면 층이 DOM 에 없다(회귀)", async () => {
-    const s = await open({ stageInsets: INS });
-    expect(layer(s)).toBeNull();
-    expect(s.utils.container.querySelector("[data-clue-spot]")).toBeNull();
-  });
-
-  it("clues prop 이 있으면 지점마다 표지 버튼(data-state), 화살표 하나, 링 svg(data-near-ring=nearR)가 마운트되고 [살펴보기] 는 actId 가 있을 때만 하나다", async () => {
-    const s = await open({ stageInsets: INS, clues: cluesProp() });
-    expect(layer(s)).not.toBeNull();
-    expect(s.utils.container.querySelectorAll("button[data-clue-spot]")).toHaveLength(3);
-    expect(s.utils.container.querySelectorAll("[data-errand-arrow]")).toHaveLength(1);
-    expect(s.utils.container.querySelector("svg[data-near-ring]")!.getAttribute("data-near-ring")).toBe("3");
-    expect(spot(s, "window").getAttribute("data-state")).toBe("done");
-    expect(act(s)).toBeNull();
-    s.rerender({ clues: cluesProp({ actId: "footprint" }) });
-    expect(act(s)).not.toBeNull();
-    expect(act(s)!.textContent).toBe("살펴보기");
-    expect(act(s)!.getAttribute("aria-label")).toBe("발자국 살펴보기");
-  });
-
-  it("표지를 누르면 그 지점으로 걷는 move 가 한 번 간다(살피는 메시지 없음). canWalk 가 거짓이면 걷지 않는다", async () => {
-    const s = await open({ stageInsets: INS, clues: cluesProp() });
-    frame();
-    fireEvent.click(spot(s, "window"));
-    expect(s.send).toHaveBeenCalledTimes(1);
-    expect(s.send).toHaveBeenCalledWith({ t: "move", x: 500, z: 500 });
-    const t = await open({ stageInsets: INS, canWalk: false, clues: cluesProp() });
-    frame();
-    fireEvent.click(spot(t, "window"));
-    expect(t.send).not.toHaveBeenCalled();
-  });
-
-  it("프레임마다 스테이지 안(안쪽 8)의 표지는 52 상자 중심이 투영 좌표로 놓이고 화면 밖 표지는 hidden 이다", async () => {
-    const s = await open({ stageInsets: INS, clues: cluesProp() });
-    frame();
-    expect(spot(s, "footprint").hidden).toBe(false);
-    expect(spot(s, "footprint").style.transform).toBe("translate(174px, 274px)");
-    expect(spot(s, "window").hidden).toBe(false);
-    expect(spot(s, "window").style.transform).toBe("translate(224px, 324px)");
-    expect(spot(s, "cloth").hidden).toBe(true);
-  });
-
-  it("화살표 칩: 알약이 없으면 내 발밑에서 안 살핀 가장 가까운 지점 방향 하나(화면 밖 지점도), 알약이 서면 없다", async () => {
-    const s = await open({ stageInsets: INS, clues: cluesProp({ nextId: "cloth" }) });
-    frame();
-    expect(arrow(s).hidden).toBe(false);
-    const deg = Number(/rotate\((-?[\d.]+)deg\)/.exec(arrow(s).querySelector<HTMLElement>(".mv-errand-arrow__turn")!.style.transform)![1]);
-    expect(deg).toBeLessThan(-80);
-    expect(deg).toBeGreaterThan(-100);
-    const u = await open({ stageInsets: INS, clues: cluesProp({ nextId: "footprint", actId: "footprint" }) });
-    frame();
-    expect(arrow(u).hidden).toBe(true);
-  });
-
-  it("[살펴보기]: actId 지점 표지 위 8 에 서고(중심 y = 300 - 26 - 8 - 22) 누르면 onAct 가 한 번 불린다(inspect 전송은 GameMap 몫)", async () => {
-    const onAct = vi.fn();
-    const s = await open({ stageInsets: INS, clues: cluesProp({ actId: "footprint", onAct }) });
-    frame();
-    expect(act(s)!.hidden).toBe(false);
-    expect(act(s)!.style.transform).toBe("translate(152px, 222px)");
-    fireEvent.click(act(s)!);
-    expect(onAct).toHaveBeenCalledTimes(1);
-    expect(s.send).not.toHaveBeenCalled();
-  });
-
-  it("빛남: callSpots 의 보이는 표지는 data-call(is-call), 보이지 않는 표지·callSpots 밖은 빛나지 않고, 알약이 서면 알약만 빛난다", async () => {
-    const s = await open({ stageInsets: INS, clues: cluesProp({ callSpots: ["footprint", "cloth"] }) });
-    frame();
-    expect(spot(s, "footprint").hasAttribute("data-call")).toBe(true);
-    expect(spot(s, "footprint").classList.contains("is-call")).toBe(true);
-    expect(spot(s, "cloth").hasAttribute("data-call")).toBe(false); // 안 보이는 표지
-    expect(spot(s, "window").hasAttribute("data-call")).toBe(false); // 살핀 표지
-    expect(arrow(s).hasAttribute("data-call")).toBe(false);
-    s.rerender({ clues: cluesProp({ callSpots: ["footprint"], actId: "footprint" }) });
-    frame();
-    expect(s.utils.container.querySelectorAll("[data-call]")).toHaveLength(1);
-    expect(act(s)!.hasAttribute("data-call")).toBe(true);
-    expect(spot(s, "footprint").hasAttribute("data-call")).toBe(false);
-  });
-
-  it("단서 카드([data-clue-card])와 소리 단추([data-side-button])·[건너뛰기]([data-skip])에 가려지는 표지는 그리지 않는다", async () => {
-    const card = document.createElement("div");
-    card.setAttribute("data-clue-card", "cloth");
-    card.getBoundingClientRect = () => ({ left: 150, top: 280, right: 250, bottom: 336, width: 100, height: 56, x: 150, y: 280, toJSON() {} }) as DOMRect;
-    document.body.append(card);
-    const s = await open({ stageInsets: INS, clues: cluesProp({ nextId: "footprint" }) });
-    frame(600);
-    expect(spot(s, "footprint").hidden).toBe(true); // (174..226 × 274..326) 이 카드와 겹친다
-    expect(spot(s, "window").hidden).toBe(true); // (224..276 × 324..376) 도 겹친다
-    expect(arrow(s).hidden).toBe(false); // 가려진 지점은 화살표 칩이 가리킨다
-    card.remove();
-    const skip = document.createElement("button");
-    skip.setAttribute("data-skip", "");
-    skip.getBoundingClientRect = () => ({ left: 160, top: 260, right: 264, bottom: 308, width: 104, height: 48, x: 160, y: 260, toJSON() {} }) as DOMRect;
-    document.body.append(skip);
-    const t = await open({ stageInsets: INS, clues: cluesProp({ nextId: "footprint" }) });
-    frame(600);
-    expect(spot(t, "footprint").hidden).toBe(true);
-    skip.remove();
-  });
-
-  it("근처 링: 내 위치 둘레에 24점 다각형이 쓰이고 위치를 모르면 숨긴다", async () => {
-    const s = await open({ stageInsets: INS, clues: cluesProp() });
-    frame();
-    const ring = s.utils.container.querySelector<SVGElement>("svg[data-near-ring]")!;
-    expect(ring.style.display).not.toBe("none");
-    expect(ring.querySelector("polygon")!.getAttribute("points")!.split(" ")).toHaveLength(24);
-    const t = await open({ stageInsets: INS, clues: cluesProp() }, { ents: [seg(1, [-300, 50])] });
-    frame();
-    expect(t.utils.container.querySelector<SVGElement>("svg[data-near-ring]")!.style.display).toBe("none");
-  });
-});

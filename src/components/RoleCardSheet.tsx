@@ -2,7 +2,7 @@ import { useId, useRef } from "react";
 import type { KeyboardEvent, ReactElement } from "react";
 import type { RoomView } from "../../shared/protocol";
 import type { RoleId } from "../../shared/game/roles";
-import { ROLE_TEXT, alliesText, allyNicknames, roleHintOf } from "../game/roleText";
+import { ROLE_TEXT, alliesText, allyNicknames } from "../game/roleText";
 import { roleArtSrc } from "../net/assets";
 import type { JournalRole } from "../net/assets";
 import { Journal } from "./Journal";
@@ -135,14 +135,12 @@ function Front({ view, role }: { view: RoomView; role: RoleId }): ReactElement {
   const { src, srcSet } = roleArtSrc(role);
   const text = ROLE_TEXT[role];
   const allies = allyNicknames(view);
-  const hint = roleHintOf(view);
   return (
     <div className="mf-rolecard__body">
       <img className="mf-rolecard__art" src={src} srcSet={srcSet} width={128} height={160} alt="" draggable={false} />
       <div className="mf-rolecard__t">
         <h3 className="mf-rolecard__name">{text.name}</h3>
         <p className="mf-rolecard__desc" data-role-line="">{text.desc}</p>
-        {hint !== null ? <p className="mf-rolecard__desc" data-role-hint="">{hint}</p> : null}
         {allies !== null ? <p className="mf-rolecard__mates">{alliesText(allies)}</p> : null}
       </div>
     </div>

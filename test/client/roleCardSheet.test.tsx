@@ -268,12 +268,10 @@ describe("RoleCardSheet 내 역할 본문", () => {
     expect(document.querySelector(".mf-rolecard__t")?.textContent).toContain("혼자예요");
   });
 
-  it("원인 흐름 확장판의 마피아 본문은 설명과 동료 줄 사이에 심지 안내 한 줄이 더 있다(21-14 C)", () => {
+  it("확장판의 마피아 본문에도 심지 안내가 없다 — 설명과 동료 줄뿐이다 (22-04)", () => {
     renderSheet({ role: "mafia", allies: [1, 3], mode: "extended" });
     const lines = Array.from(document.querySelector<HTMLElement>(".mf-rolecard__t")!.children).map((el) => el.textContent);
-    expect(lines).toEqual(["마피아", ROLE_TEXT.mafia.desc, "길게 누르면 심지를 잘라요", "동료 · 하윤, 도현"]);
-    cleanup();
-    renderSheet({ role: "police", mode: "extended" });
+    expect(lines).toEqual(["마피아", ROLE_TEXT.mafia.desc, "동료 · 하윤, 도현"]);
     expect(document.body.textContent).not.toContain("심지");
   });
 

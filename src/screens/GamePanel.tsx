@@ -3,50 +3,20 @@ import type { RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { MAP_PHASES } from "../../shared/game/movement";
 import { majorityOf } from "../../shared/game/nomination";
-import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { ActionRow } from "../components/ActionButton";
 import { ChatPanel } from "../components/v2/ChatPanel";
 import { HeadCount } from "../components/v2/HeadCount";
 import { FaceList } from "../components/v2/FaceList";
 import { V2Icon } from "../components/v2/V2Icon";
-import { SkipPill } from "../components/v2/SkipPill";
 import { VerdictPicker } from "../components/v2/VerdictPicker";
 import type { Verdict } from "../components/v2/VerdictPicker";
-import { skipOf } from "../game/sceneView";
 import { faceSrc, seatColorVar } from "../net/assets";
 import type { ChatBinding } from "../net/useChat";
 import { useViewChoice } from "../net/useViewChoice";
 
 /** 채팅 부품에 그대로 펼치는 속성 묶음 — 머리 위 입력 중 좌석(typingSeats)은 화면 틀이 WorldStage 로 따로 넘긴다 */
 export type ChatPanelBinding = Omit<ChatBinding, "typingSeats" | "liveWhisperIn">;
-
-/**
- * [건너뛰기] 연결 부품(21-10 D-23, P21-13): 원인 흐름 저녁·아침의 산 사람에게만 알약 하나, 아니면 아무것도 그리지 않는다(유령·토론·기본판).
- * 누르면 { t: "skip", on } 을 보내고(토글 — 한 번 더 누르면 취소) 눌린 모양은 누른 즉시 보이되 서버 view(me.skip)가 오면 서버 값이 이긴다. 누른 수는 서버가 센 day.skipCount 뿐이다.
- * 아침은 GamePanel 의 채팅 입력줄 오른쪽 끝(trailing)에, 아래 패널이 없는 저녁은 GameMap 이 진행 점 옆에 같은 부품을 놓는다. 역할을 읽지 않는다.
- */
-export function SkipSlot({ view, send, canSend }: { view: RoomView; send: (msg: ClientMessage) => boolean | void; canSend: boolean }) {
-  const model = skipOf(view);
-  const [pressed, choose] = useViewChoice<boolean>(view, model?.pressed);
-  if (model === null) return null;
-  const on = pressed === true;
-  // 눌린 모양에 내 한 표를 미리 얹는다(서버 값이 오면 서버 수가 이긴다)
-  const count = Math.max(0, model.count + (on && !model.pressed ? 1 : 0) - (!on && model.pressed ? 1 : 0));
-  return (
-    <SkipPill
-      count={count}
-      total={model.total}
-      pressed={on}
-      {...(canSend ? {} : { disabled: true })}
-      onToggle={(next) => {
-        if (!canSend) return;
-        if (send({ t: "skip", on: next }) === false) return; // 소켓이 닫혀 못 보냈으면 눌림도 바꾸지 않는다
-        choose(next);
-      }}
-    />
-  );
-}
 
 export interface GamePanelProps {
   view: RoomView;
@@ -137,8 +107,6 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   const night = view.phase === "night";
   const myRole = view.me.role;
   const nightFaces = night && meAlive;
-  // 원인 흐름(21-09 D-10)의 밤 고르기는 지도의 집 문패(HouseTag)가 한다 — 얼굴 목록은 그리지 않고 아래 패널은 행 하나(쪽지·유언)라 모든 역할의 높이가 같다
-  const houseNight = nightFaces && rulesetOf(modeOf(view)).cause;
   const chatChannelOk = !night || view.me.chat === "ghost";
   // 후보: 산 사람 전원(나 포함). 좌석 오름차순. 후보가 없으면 목록을 그리지 않는다(E1 #1).
   const faces = !nightFaces ? [] : view.players
@@ -186,7 +154,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
         </div>
       ) : null}
       {nightFaces ? (
-        houseNight ? null : faces.length > 0 ? (
+        faces.length > 0 ? (
           <FaceList
             faces={faces}
             {...(nightPick !== undefined ? { value: nightPick } : {})}
@@ -215,7 +183,6 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
               }
             : {})}
           {...(call?.chat ? { callInput: true } : {})}
-          {...(skipOf(view) !== null ? { trailing: <SkipSlot view={view} send={send} canSend={canSend} /> } : {})}
           {...(penOn
             ? {
                 onWill: () => {

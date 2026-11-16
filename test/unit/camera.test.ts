@@ -748,9 +748,8 @@ describe("gatherView (UI-SPEC 카메라: 이름표가 몸보다 우선, E8 #31 b
 // 스테이지 사각형 = 위 B(띠 아랫변: 한 줄 123 / 두 줄 144) ~ 아래 패널 윗변(화면 높이 − 밤 고정 패널 88). 배율 = min(폭 − 16, 스테이지 높이 − 16) / 19.2.
 // ---------------------------------------------------------------------------------------------------------------------
 import { houseTagCenters, HOUSE_TAG_BOX, HOUSE_TAG_CIRCLE, NIGHT_PANEL_HEIGHT, overviewFraming } from "../../src/world/camera";
-import { cameraModeOf, visibleSeats as visibleSeatsOf } from "../../src/world/presence";
+import { cameraModeOf } from "../../src/world/presence";
 import type { PhaseId, RoomView } from "../../shared/protocol";
-import { openCause as openCauseNight } from "../helpers/playable";
 
 const BANDS = [123, 144] as const;
 const INSET = 8;
@@ -846,47 +845,5 @@ describe("개관(overview) 카메라 — 배율 식과 문패 계산 (D-11, P21-
     expect(b.back.y).toBeGreaterThan(0.95);
     expect(b.up.z).toBeLessThan(-0.9);
     expect(Math.abs(b.right.x)).toBeCloseTo(1, 6);
-  });
-});
-
-describe("cameraModeOf — 원인 흐름 마을 밤은 개관 (21-09, D-11)", () => {
-  const viewOf = (phase: PhaseId, o: { mode?: "basic" | "extended"; ghost?: boolean; role?: "mafia" | "citizen" } = {}): RoomView =>
-    ({
-      code: "0042",
-      phase,
-      phaseEndsAt: null,
-      phaseDurationMs: null,
-      serverNow: 0,
-      minPlayers: 4,
-      maxPlayers: 8,
-      players: [
-        { seat: 0, nickname: "a", isHost: false, connected: true, alive: !o.ghost },
-        { seat: 1, nickname: "b", isHost: false, connected: true, alive: true },
-      ],
-      me: { seat: 0, isHost: false, role: o.role ?? "citizen" },
-      map: "town",
-      ...(o.mode === undefined ? {} : { mode: o.mode }),
-      ...(o.ghost === true ? { spectate: {} } : {}),
-    }) as unknown as RoomView;
-
-  it("원인 흐름 마을 밤은 산 사람·유령·역할 모두 { mode: overview }", () => {
-    const restore = openCauseNight();
-    try {
-      for (const role of ["mafia", "citizen"] as const) for (const ghost of [false, true]) expect(cameraModeOf(viewOf("night", { mode: "extended", role, ghost }), 349), `${role}/${ghost}`).toEqual({ mode: "overview" });
-      expect(visibleSeatsOf(viewOf("night", { mode: "extended" }))).toEqual({});
-    } finally {
-      restore();
-    }
-  });
-
-  it("기본판 밤·원인 흐름의 낮 단계는 따라가기 그대로", () => {
-    const restore = openCauseNight();
-    try {
-      expect(cameraModeOf(viewOf("night", { mode: "basic" }), 349)).toEqual({ mode: "follow" });
-      expect(cameraModeOf(viewOf("errand", { mode: "extended" }), 349)).toEqual({ mode: "follow" });
-      expect(cameraModeOf(viewOf("morning", { mode: "extended" }), 349)).toEqual({ mode: "follow" });
-    } finally {
-      restore();
-    }
   });
 });

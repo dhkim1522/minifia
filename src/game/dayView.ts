@@ -9,7 +9,6 @@
 import { isAlive } from "../../shared/game/alive";
 import { majorityOf } from "../../shared/game/nomination";
 import { EXECUTION_MS, VERDICT_LEAD_MS } from "../../shared/game/phases";
-import { modeOf, rulesetOf } from "../../shared/game/ruleset";
 import type { ChatChannel, PhaseId, RoomView } from "../../shared/protocol";
 import type { V2IconName } from "../components/v2/V2Icon";
 import { MORNING_TEXT, morningText } from "./eliminationText";
@@ -56,11 +55,6 @@ export const DAY_COPY = {
     execution: "처형",
     night: "밤",
     morning: "아침",
-  } as Partial<Record<PhaseId, string>>,
-  /** 원인 흐름 확장판의 제목(21페이즈 P21-19): 저녁 '등불 켜기', 아침 '현장 조사'. 시간대 낱말(저녁·아침)과 조명은 헤더가 따로 말한다(21-07). */
-  causeTitles: {
-    errand: "등불 켜기",
-    morning: "현장 조사",
   } as Partial<Record<PhaseId, string>>,
   // ---- 단계 안내 한 줄 ----
   discussionHint: "이야기하며 마피아를 찾아요",
@@ -269,11 +263,6 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       // U-5: "낮이 되었습니다" 36px 알림은 없다(띠가 말한다). 채팅 줄 "{N}일차" 는 그대로
       out.lines.push({ kind: "system", text: DAY_COPY.dayLine(day.n) });
       return;
-    case "discussion":
-      // 원인 흐름의 현장 없는 밤(21페이즈 D-17·P21-20): 피해자도 미수도 없으면 아침 단계 없이 밤 → 토론으로 온다. 토론 첫머리에 아침 큰 글과 같은 문장(결정 0083 문구 그대로)만 한 번 띄운다 — 새 문장·채팅 줄 없음.
-      // 현장이 있었던 밤은 아침 단계를 지나 와서(prev 가 morning) 이 분기가 아니다. 기본판·옛 확장판은 밤 다음이 아침이라 여기에 오지 않는다.
-      if (prev.phase === "night" && rulesetOf(modeOf(cur)).cause) out.announces.push({ text: MORNING_TEXT.quiet, at: ANNOUNCE_MORNING_AT, ms: ANNOUNCE_MORNING_MS });
-      return;
     case "nomination":
       out.lines.push({ kind: "system", text: DAY_COPY.nominationStart });
       return;
@@ -435,8 +424,7 @@ export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: 
  * 밤은 산 사람마다 역할별 한 줄(마피아 '대상에게 다가가요', 경찰 '조사할 사람을 골라요', 의사 '지킬 사람을 골라요', 시민 '날이 밝길 기다려요'). 아침은 제목만. 낮 틀이 아닌 단계는 빈 제목.
  */
 export function headerFor(view: RoomView): { title: string; hint?: string } {
-  // 원인 흐름 판(규칙의 cause)이면 저녁·아침 제목이 갈린다(P21-19) — 규칙은 view.mode 에서 얻는다.
-  const title = (rulesetOf(modeOf(view)).cause ? DAY_COPY.causeTitles[view.phase] : undefined) ?? DAY_COPY.titles[view.phase];
+  const title = DAY_COPY.titles[view.phase];
   if (title === undefined) return { title: "" };
   const me = view.players.find((p) => p.seat === view.me.seat);
   if (me !== undefined && !isAlive(me)) {
@@ -476,8 +464,6 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
       if (isSelf) return { title, hint: DAY_COPY.verdictHintSelf };
       return defender === undefined ? { title } : { title, hint: DAY_COPY.verdictHint(defender) };
     case "night":
-      // 원인 흐름(21-09 D-10)의 밤은 네 역할이 같은 화면이고 같은 말은 사회자 띠가 한다(글 중복 금지, 결정 0051) — 역할별 한 줄을 그리지 않는다. 이 분기가 역할 읽기보다 먼저다
-      if (rulesetOf(modeOf(view)).cause) return { title };
       switch (view.me.role) {
         case "mafia":
           return { title, hint: DAY_COPY.nightHintMafia };

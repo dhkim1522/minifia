@@ -8,7 +8,7 @@ import type { PhaseId, RoomView } from "../../shared/protocol";
 import { nightDarkOf } from "../../src/game/nightDark";
 import { lightingFor, lightingOf, visibleSeats } from "../../src/world/presence";
 import { rulesetOf } from "../../shared/game/ruleset";
-import { lockCause, openCause } from "../helpers/playable";
+import { lockCause } from "../helpers/playable";
 import { ALBEDO_NONE, LIGHT_TUNE, type PhaseTune } from "../../src/world/maps/bar";
 import { PLAZA_LIGHT_TUNE } from "../../src/world/maps/plaza";
 import { TOKEN_COLORS } from "../../src/world/palette";
@@ -152,35 +152,11 @@ function viewOf(phase: PhaseId, o: { role?: "mafia" | "police" | "doctor" | "cit
 }
 const ROLES = ["mafia", "police", "doctor", "citizen"] as const;
 
-describe("원인 흐름 밤·저녁 조명 (21-07, D-04·D-10)", () => {
-  let restore: () => void = () => {};
-  beforeAll(() => {
-    restore = openCause();
-  });
-  afterAll(() => restore());
-
-  it("밤: 마피아·경찰·의사·시민 모두 lightingFor = night, visibleSeats 는 빈 표, nightDarkOf false", () => {
-    for (const role of ROLES) {
-      const v = viewOf("night", { role });
-      expect(lightingFor(v), role).toBe("night");
-      expect(Object.keys(visibleSeats(v)).length, role).toBe(0);
-      expect(nightDarkOf(v), role).toBe(false);
-    }
-  });
-
-  it("밤: 유령은 nightGhost 그대로이고 몸을 그리지 않으며 어둠 표식은 없다", () => {
-    const v = viewOf("night", { role: "citizen", dead: [0] });
-    expect(lightingFor(v)).toBe("nightGhost");
-    expect(Object.keys(visibleSeats(v)).length).toBe(0);
-    expect(nightDarkOf(v)).toBe(false);
-  });
-
-  it("저녁(errand): lightingOf(errand, 원인 규칙) = vote, 규칙이 없으면 talk 그대로. lightingFor 도 vote", () => {
-    expect(lightingOf("errand", rulesetOf("extended"))).toBe("vote");
+describe("저녁·아침·토론·기본판 밤 조명 (22-04: 원인 흐름 밤·저녁 조명을 지웠다)", () => {
+  it("저녁(errand) 단계는 낮 조명 talk 그대로다", () => {
     expect(lightingOf("errand")).toBe("talk");
-    expect(lightingOf("errand", rulesetOf("basic"))).toBe("talk");
-    expect(lightingFor(viewOf("errand", { role: "citizen" }))).toBe("vote");
-    expect(lightingFor(viewOf("errand", { role: "mafia" }))).toBe("vote");
+    expect(lightingFor(viewOf("errand", { role: "citizen" }))).toBe("talk");
+    expect(lightingFor(viewOf("errand", { role: "mafia" }))).toBe("talk");
   });
 
   it("아침·토론은 그대로(morning·talk)", () => {
@@ -188,7 +164,7 @@ describe("원인 흐름 밤·저녁 조명 (21-07, D-04·D-10)", () => {
     expect(lightingFor(viewOf("discussion", { role: "citizen" }))).toBe("talk");
   });
 
-  it("기본판 밤은 지금 그대로: 마피아 night, 시민 nightCitizen, 시민은 본인만 그리고 어둠 표식 true", () => {
+  it("밤은 마피아 night, 시민 nightCitizen, 시민은 본인만 그리고 어둠 표식 true, 유령은 nightGhost", () => {
     const mafia = viewOf("night", { role: "mafia", mode: "basic" });
     const citizen = viewOf("night", { role: "citizen", mode: "basic" });
     expect(lightingFor(mafia)).toBe("night");
@@ -197,28 +173,7 @@ describe("원인 흐름 밤·저녁 조명 (21-07, D-04·D-10)", () => {
     expect(Object.keys(visibleSeats(mafia)).length).toBe(5);
     expect(nightDarkOf(citizen)).toBe(true);
     expect(nightDarkOf(mafia)).toBe(false);
-    expect(lightingFor(viewOf("errand", { role: "citizen", mode: "basic" }))).toBe("talk");
-  });
-
-  it("소스 규약: lightingFor·visibleSeats·nightDarkOf 에서 원인 흐름 분기가 역할 읽기보다 먼저다", () => {
-    const code = (f: string): string =>
-      readFileSync(resolve(process.cwd(), f), "utf8")
-        .split("\n")
-        .filter((l) => !/^\s*\/\//.test(l))
-        .join("\n");
-    const presence = code("src/world/presence.ts");
-    const fnBody = (src: string, name: string): string => {
-      const at = src.indexOf("export function " + name);
-      return src.slice(at, src.indexOf("\n}\n", at));
-    };
-    for (const name of ["lightingFor", "visibleSeats"]) {
-      const body = fnBody(presence, name);
-      expect(body.indexOf("cause"), name).toBeGreaterThan(-1);
-      expect(body.indexOf("cause"), name).toBeLessThan(body.indexOf(".role") === -1 ? Infinity : body.indexOf(".role"));
-    }
-    const dark = fnBody(code("src/game/nightDark.ts"), "nightDarkOf");
-    expect(dark.indexOf("cause")).toBeGreaterThan(-1);
-    expect(dark.indexOf("cause")).toBeLessThan(dark.indexOf(".role"));
+    expect(lightingFor(viewOf("night", { role: "citizen", dead: [0] }))).toBe("nightGhost");
   });
 });
 

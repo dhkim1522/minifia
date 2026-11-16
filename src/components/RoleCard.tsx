@@ -11,8 +11,6 @@ export interface RoleCardProps {
   face: "back" | "front";
   /** null = 동료 줄 없음(마피아 아님), [] = "혼자예요" */
   allies: string[] | null;
-  /** 본인 카드의 한 줄 안내(21페이즈 P21-7 — 원인 흐름 마피아의 "길게 누르면 심지를 잘라요"). 없으면 줄 자체가 없다 */
-  hint?: string | null;
   /** 사회자 줄이 이 카드를 부를 때 true — 루트에 is-call + 값 없는 data-call(14페이즈 HOST-03). 모든 역할에게 같은 모양 */
   call?: boolean;
   onFlip: () => void;
@@ -33,7 +31,7 @@ export function Diamond() {
 // 카드 루트 전체가 버튼이다(뒷면·앞면 모두 누르면 onFlip). 뒤집을지 말지는 cardFace 가 정한다.
 // 뒷면 마크업은 역할과 무관하게 같고, 앞면은 면이 처음 front 가 될 때 마운트한다(Pitfall 20, T-01-26):
 // 뒷면 상태의 DOM·이미지 요청에 역할이 드러나지 않는다.
-export function RoleCard({ role, face, allies, hint = null, call = false, onFlip }: RoleCardProps) {
+export function RoleCard({ role, face, allies, call = false, onFlip }: RoleCardProps) {
   const [mountedFront, setMountedFront] = useState(face === "front" && role !== null);
   if (!mountedFront && face === "front" && role !== null) setMountedFront(true);
 
@@ -61,13 +59,13 @@ export function RoleCard({ role, face, allies, hint = null, call = false, onFlip
         <div className="mf-card__face mf-card__back">
           <Diamond />
         </div>
-        {mountedFront && role !== null ? <CardFront role={role} allies={allies} hint={hint} hidden={!showFront} /> : null}
+        {mountedFront && role !== null ? <CardFront role={role} allies={allies} hidden={!showFront} /> : null}
       </div>
     </div>
   );
 }
 
-function CardFront({ role, allies, hint, hidden }: { role: RoleId; allies: string[] | null; hint: string | null; hidden: boolean }) {
+function CardFront({ role, allies, hidden }: { role: RoleId; allies: string[] | null; hidden: boolean }) {
   const { src, srcSet } = roleArtSrc(role);
   const text = ROLE_TEXT[role];
   return (
@@ -75,7 +73,6 @@ function CardFront({ role, allies, hint, hidden }: { role: RoleId; allies: strin
       <img className="mf-card__art" src={src} srcSet={srcSet} width={150} alt="" draggable={false} />
       <p className="mf-t-display">{text.name}</p>
       <p className="mf-card__desc" data-role-line="">{text.desc}</p>
-      {hint !== null ? <p className="mf-card__desc" data-role-hint="">{hint}</p> : null}
       {allies !== null ? (
         <>
           <div className="mf-card__divider" aria-hidden="true" />
