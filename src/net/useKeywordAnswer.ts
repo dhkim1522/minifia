@@ -137,7 +137,7 @@ export function useKeywordAnswer({ view, send, canSend = true, offset = 0, onEve
   const saveDraft = useCallback(() => {
     const { clamped: text, send: out, canSend: ok, serverText: server, serverFinal: fin } = live.current;
     if (!ok || fin) return;
-    if (text.trim() === "") return;
+    // 지운 글도 보낸다: 서버는 공백뿐인 초안을 키째 지운다 — 안 보내면 지우기 전 초안이 마감에 나간다
     if (text === (lastSent.current ?? server)) return;
     if (out({ t: "answer", text, final: false }) === false) return;
     lastSent.current = text;

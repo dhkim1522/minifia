@@ -144,6 +144,30 @@ describe("초안 자동 저장 (P23-14)", () => {
     expect(t.sent).toHaveLength(1);
   });
 
+  it("저장된 초안을 모두 지우면 빈 초안을 보내 서버의 옛 초안을 지운다(안 보내면 지우기 전 글이 마감에 나간다)", () => {
+    const t = setup(makeView({ elapsed: 5_000 }));
+    act(() => t.result.current.setValue("안경"));
+    act(() => {
+      vi.advanceTimersByTime(KEYWORD_AUTOSAVE_MS);
+    });
+    act(() => t.result.current.setValue(""));
+    act(() => {
+      vi.advanceTimersByTime(KEYWORD_AUTOSAVE_MS);
+    });
+    expect(t.sent).toEqual([
+      { t: "answer", text: "안경", final: false },
+      { t: "answer", text: "", final: false },
+    ]);
+  });
+
+  it("아무것도 쓰지 않았으면 빈 초안도 보내지 않는다", () => {
+    const t = setup(makeView({ elapsed: 5_000 }));
+    act(() => {
+      vi.advanceTimersByTime(8_000);
+    });
+    expect(t.sent).toHaveLength(0);
+  });
+
   it("잠금 중 입력은 저장되지 않고(글 자체가 안 들어간다) 연결이 끊겨 있으면 보내지 않는다", () => {
     const off = setup(makeView({ elapsed: 5_000 }), { canSend: false });
     act(() => off.result.current.setValue("안경"));
