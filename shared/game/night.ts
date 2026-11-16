@@ -6,13 +6,9 @@
 // 읽은 역할 값은 어디에도 내보내지 않는다(결정 0002): 반환값에는 isMafia 불리언 하나와 seat 뿐이다.
 import type { AssassinationRecord, InvestigationRecord, MorningView, TreatmentRecord } from "../protocol";
 import { isAlive } from "./alive";
-import { errandSpotsOf } from "./errand";
-import { houseLitOf } from "./lamps";
-import { mapOf, roomMapId } from "./maps";
 import type { Player, RoomState } from "./room";
 import { modeOf, rulesetOf } from "./ruleset";
 import type { Ruleset } from "./ruleset";
-import { buildScene } from "./scene";
 import { pickTracePiece } from "./trace";
 import type { RandInt } from "./tick";
 
@@ -43,22 +39,14 @@ export function pickTarget(
 }
 
 /** 밤 진입 훅: 남은 선택(nightPick)·지난 아침 결과(morning)·쪽지(nightNote)·분필(chalk)을 키째 지운다(결정 0061-9·14). */
-export function enterNight(state: RoomState, rules: Ruleset = rulesetOf(modeOf(state))): RoomState {
-  // 원인 흐름(21페이즈 D-09·D-19·함정 2): 목록·진행·목격 표본(errandPlaces·errandDone·errandSeen)은 밤을 지나 토론까지 남는다 — 다음 저녁 진입(enterErrand)이 키째 지운다. view 는 단계 게이트로만 내보낸다(me.record 는 토론의 산 본인).
+export function enterNight(state: RoomState): RoomState {
   // errandLast(마지막 목격 줄, 16페이즈 D-10)는 일부러 지우지 않는다 — 낮 심부름에서 쌓은 줄을 다음 아침의 enterMorning 이 피해자 한 줄만 꺼내 쓴다.
   const { morning: _morning, nightNote: _nightNote, chalk: _chalk, ...rest } = state;
-  // 밤의 집 창 불(21-03, D-06·D-07·D-08, 결정 0088): 원인 흐름이고 맵에 가로등이 있으면 저녁에 쌓인 처리(errandDone)와 자르기(errandCut)로 등불 8개의 켜짐을 한 번 정한다 — 등불 i = 집 i.
-  // 켜짐 계산은 lamps.ts 의 houseLitOf 가 하고 이 함수는 역할을 읽지 않는다. 다음 저녁 진입(enterErrand)이 lamps 를 키째 지운다.
-  const map = mapOf(roomMapId(state));
-  const lamps = rules.cause && map.lamps !== undefined ? houseLitOf(state.players, errandSpotsOf(map, rules).map((spot) => spot.id)) : undefined;
   return {
     ...rest,
-    ...(lamps === undefined ? {} : { lamps }),
     players: state.players.map((p) => {
       // 심부름 목록·진행(15페이즈)도 키째 지운다 — 다음 낮에 새로 배정되므로 남은 값이 어떤 view 에도 새지 않는다.
-      const { nightPick: _nightPick, errandNear: _errandNear, errandFake: _errandFake, ...cleared } = p;
-      if (rules.cause) return cleared;
-      const { errandPlaces: _errandPlaces, errandDone: _errandDone, errandSeen: _errandSeen, ...kept } = cleared;
+      const { nightPick: _nightPick, errandNear: _errandNear, errandFake: _errandFake, errandPlaces: _errandPlaces, errandDone: _errandDone, errandSeen: _errandSeen, ...kept } = p;
       return kept;
     }),
   };
@@ -178,9 +166,8 @@ export function enterMorning(state: RoomState, randInt: RandInt = () => 0, rules
     };
     return result.eliminated === p.seat ? { ...withRecords, alive: false } : withRecords;
   });
-  // 원인 흐름(21페이즈 P21-15): 공개 흔적 조각·마지막 목격 줄을 만들지 않는다 — 현장에서 사람이 직접 찾는다. rules.trace·rules.witness 의 뜻은 그대로다(witness 는 me.record 로 계속 쓰인다).
-  const piece = result.eliminated === undefined || !rules.trace || rules.cause ? undefined : pickTracePiece(state, result.eliminated, randInt);
-  const seenRow = result.eliminated === undefined || !rules.witness || rules.cause ? undefined : state.errandLast?.find((row) => row.seat === result.eliminated);
+  const piece = result.eliminated === undefined || !rules.trace ? undefined : pickTracePiece(state, result.eliminated, randInt);
+  const seenRow = result.eliminated === undefined || !rules.witness ? undefined : state.errandLast?.find((row) => row.seat === result.eliminated);
   const morning: MorningView =
     result.eliminated !== undefined
       ? {
@@ -193,15 +180,10 @@ export function enterMorning(state: RoomState, randInt: RandInt = () => 0, rules
         : {};
   const { nightNote: _nightNote, errandLast: _errandLast, ...rest } = state;
   const { errandLast: _kept, ...stateNoLast } = state;
-  // 아침 현장(21-04, D-12~D-17, 결정 0088): 원인 흐름이면 피해자 집(없고 의사가 막았으면 그 밤의 확정 대상 집) 앞 현장을 만든다 — 둘 다 아니면 scene 키가 없다(D-17).
-  // 풀은 nightPick 을 지우기 전의 state 로 만들고(위 players 는 이미 지웠다), 역할은 읽지 않는다(scene.ts). 새 현장이 지난 sceneSeen 을 대신하므로 모든 사람의 sceneSeen 을 지운다.
-  const sceneHouse = result.eliminated ?? (result.saved ? result.target : undefined);
-  const scene = rules.cause ? buildScene(state, sceneHouse, randInt) : undefined;
-  const { scene: _prevScene, ...base } = result.eliminated === undefined ? rest : stateNoLast;
+  const base = result.eliminated === undefined ? rest : stateNoLast;
   return {
     ...base,
-    ...(scene === undefined ? {} : { scene }),
-    players: rules.cause ? players.map(({ sceneSeen: _seen, ...p }) => p) : players,
+    players,
     morning,
     nightLog: [
       ...(state.nightLog ?? []),

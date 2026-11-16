@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   ASSIGNING_MS,
   DAY_ANNOUNCE_MS,
@@ -24,7 +24,7 @@ import { enterDayAnnounce, nextWakeAt, tick } from "../../shared/game/tick";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, castVerdicts, stateWithVerdict } from "../helpers/voteState";
 import type { PhaseId } from "../../shared/protocol";
-import { lockCauseInFile, openCause } from "../helpers/playable";
+import { lockCauseInFile } from "../helpers/playable";
 
 // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 이 파일의 단계 연쇄·마감 시험은 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B). 제품 확장판 흐름은 맨 아래 구역(갈래 C)이 단언한다.
 lockCauseInFile();
@@ -540,41 +540,5 @@ describe("기본판 낮 분기 (결정 0072)", () => {
     expect(`${errand.phase}/${errand.phaseEndsAt}/${Object.hasOwn(errand, "showdown")}`).toBe(`errand/${T + ERRAND_MS}/false`);
     const out = tick(errand, T + ERRAND_MS, seededRandInt(1));
     expect(`${out.phase}/${out.phaseEndsAt}/${Object.hasOwn(out, "showdown")}`).toBe(`discussion/${T + ERRAND_MS + DISCUSSION_MS}/false`);
-  });
-});
-
-// 21-13(갈래 C): 제품 확장판 흐름. 위 시험은 꺼진 옛 경로(파일 머리의 잠금)이고, 여기서는 원인 흐름을 켜 저녁 → 밤 → 아침 → 토론 순서의 마감 연쇄를 단언한다.
-describe("tick - 확장판 원인 흐름의 단계 연쇄 (21-13, 결정 0088)", () => {
-  let restore: () => void = () => {};
-  beforeAll(() => {
-    restore = openCause();
-  });
-  afterAll(() => restore());
-  const T = 100_000;
-
-  it("역할 확인 마감에 낮 시작 발표가 아니라 저녁(errand)으로 넘어가고 일차 1 이 된다 — 마감 = 이전 마감 + ERRAND_MS", () => {
-    const s = stateIn("roleReveal", 19000);
-    const next = tick(s, 19000, rnd());
-    expect(`${next.phase}/${next.day}/${next.phaseEndsAt}`).toBe(`errand/1/${19000 + ERRAND_MS}`);
-  });
-
-  it("저녁 마감 다음은 밤이고(마감 + NIGHT_MS) 일차는 그대로다", () => {
-    const evening = tick(stateIn("roleReveal", T), T, rnd());
-    const night = tick(evening, evening.phaseEndsAt!, rnd());
-    expect(`${night.phase}/${night.day}/${night.phaseEndsAt}`).toBe(`night/1/${T + ERRAND_MS + NIGHT_MS}`);
-  });
-
-  it("지목 마감이 동률·0표면 밤이 아니라 다음 날 저녁이다 (일차 +1)", () => {
-    const base = { ...stateIn("nomination", T), day: 1 } as RoomState;
-    const out = tick(base, T, rnd());
-    expect(`${out.phase}/${out.day}/${out.phaseEndsAt}`).toBe(`errand/2/${T + ERRAND_MS}`);
-  });
-
-  it("늦은 알람이 한 바퀴를 따라잡아도 저녁 → 밤 → 아침 → 토론으로 이어지고 일차는 저녁에서 정확히 한 번 오른다", () => {
-    const s: RoomState = { ...stateIn("discussion", T), day: 1 };
-    // 마감: nomination → (0표) errand(2일차) → night → morning(현장 없는 밤은 길이 0) → discussion.
-    const out = tick(s, T + NOM_SPAN_MS + ERRAND_MS + NIGHT_MS + DISCUSSION_MS - 5_000, rnd());
-    expect(`${out.phase}/${out.day}`).toBe("discussion/2");
-    expect(out.phaseEndsAt).toBe(T + NOM_SPAN_MS + ERRAND_MS + NIGHT_MS + DISCUSSION_MS);
   });
 });

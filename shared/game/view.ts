@@ -27,7 +27,6 @@ import { isAlive } from "./alive";
 import { channelOf } from "./audience";
 import { botCount } from "./bots";
 import { endCountOf, phaseDurationOf } from "./discussion";
-import { skipCountOf } from "./skip";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
 import { MAP_PHASES } from "./movement";
@@ -92,8 +91,6 @@ function buildDay(state: RoomState, rules: Ruleset): DayView {
   };
   // 토론 끝내기는 누른 산 사람 수만 공개한다 — 누가 눌렀는지는 서버 전용(Player.endVote)이고 본인 값만 me.endDiscussion 으로 간다(결정 0060-2).
   if (state.phase === "discussion") day.endCount = endCountOf(state);
-  // 건너뛰기(21페이즈 D-23, 결정 0088)도 누른 산 사람 수만 공개한다 — 원인 흐름 저녁·아침에서만, 누가 눌렀는지는 서버 전용(Player.skipVote)이고 본인 값만 me.skip 으로 간다(D-21).
-  if (rules.cause && (state.phase === "errand" || state.phase === "morning")) day.skipCount = skipCountOf(state);
   // 찬반은 던진 유권자 좌석만 공개한다(값 없음 — 익명, 결정 0053). 개인 값은 me.verdictVote 로 본인에게만 간다.
   if (state.phase === "verdict") day.voted = votedSeatsOf(state);
   // 지목 줄은 지목 단계 동안 모두에게 같은 공개 목록이다(결정 0060-3) — 필드별 복사 함수(pointLinesOf)로 만든다.
@@ -166,11 +163,6 @@ function buildDay(state: RoomState, rules: Ruleset): DayView {
   // 암살 현장 분필(MORN-01, 결정 0061-14): 방 DO 가 채운 좌표를 그날 낮 동안 모두에게 같은 값으로 싣는다. 필드별 복사이고, 없으면 키 자체가 없다.
   // 구출·무효 밤에는 DO 가 채우지 않으므로 어디에도 드러나지 않는다(결정 0044-22). 다음 밤 진입 훅이 지운다.
   if (state.chalk !== undefined) day.chalk = { x: state.chalk.x, z: state.chalk.z };
-  // 밤 집 창 불(21페이즈 D-06·D-07·D-08, 결정 0088): 원인 흐름이고 enterNight 가 켜짐을 정한 뒤(저녁에는 없다) 모두에게 같은 boolean 여덟을 필드 복사로 싣는다.
-  // 꺼진 이유·자른 사람(Player.errandCut)은 이 파일이 읽지 않는다 — 안 켠 등불과 자른 등불은 똑같이 false 다.
-  if (rules.cause && state.lamps !== undefined) day.lamps = state.lamps.map((lit) => lit === true);
-  // 아침 현장(21-04, D-16, 결정 0088): 현장 집 좌석 하나만 morning 단계에서 모두에게 같은 값으로 싣는다. 현장의 서버 값(수·조각·손댄 표시·창 불)은 이 파일이 읽지 않는다.
-  if (rules.cause && state.phase === "morning" && state.scene !== undefined) day.scene = { house: state.scene.house };
   return day;
 }
 
@@ -292,11 +284,6 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     myInfo.errand = { places: [...me.errandPlaces], done: [...(me.errandDone ?? [])] };
   }
 
-  // 내 현장 단서(21-04, D-14·D-15): 원인 흐름에서 본인이 살핀 줄만 본인에게 — 줄마다 r·n·piece 필드 복사라 서버 상태를 펼치지 않는다. errand 단계(새 저녁)에는 싣지 않고 누가 먼저 손댔는지는 어디에도 없다.
-  if (rules.cause && state.phase !== "errand" && me.sceneSeen !== undefined && me.sceneSeen.length > 0) {
-    myInfo.scene = me.sceneSeen.map((l) => ({ spot: l.spot, r: l.r, ...(l.n === undefined ? {} : { n: l.n }), ...(l.piece === undefined ? {} : { piece: l.piece }) }));
-  }
-
   // 내 목격 기록(D-04)은 토론 단계에서 심부름 3곳을 모두 처리한 산 본인에게만 — 줄이 0개여도 빈 배열. 필드별 복사({seat, place})라 서버 상태를 펼치지 않고, 역할을 읽지 않는다.
   if (
     rules.witness &&
@@ -347,11 +334,6 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 토론 끝내기 누름은 본인에게만(결정 0060-2) — 산 본인이 discussion 에서 눌렀을 때만 키를 만든다. 누른 사람이 누구인지는 어떤 키로도 싣지 않는다.
   if (state.phase === "discussion" && isAlive(me) && me.endVote === true) {
     myInfo.endDiscussion = true;
-  }
-
-  // 건너뛰기 누름은 본인에게만(21페이즈 D-23·D-21) — 원인 흐름 저녁·아침의 산 본인이 눌렀을 때만 키를 만든다.
-  if (rules.cause && (state.phase === "errand" || state.phase === "morning") && isAlive(me) && me.skipVote === true) {
-    myInfo.skip = true;
   }
 
   // 찬반 값은 본인에게만(결정 0053·0060-4, T-08-02) — verdict 단계에서 유권자(변론자를 뺀 산 사람)인 본인이 던진 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.

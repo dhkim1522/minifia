@@ -8,7 +8,6 @@ import { MOVE_V, restSegment } from "../../shared/game/world";
 import type { Segment, WorldState } from "../../shared/game/world";
 import { nextCrossingAt, zoneOf } from "../../shared/game/zones";
 import type { ChatLineWire, CreateRoomResponse, GameMode, PhaseId, RoleId, RoomView, ServerMessage, ZoneId } from "../../shared/protocol";
-import { rulesetOf } from "../../shared/game/ruleset";
 import { openTown } from "../helpers/playable";
 
 export interface TestSocket {
@@ -725,8 +724,7 @@ export async function startedGame(phase: PhaseId, guests = 5, mode?: GameMode): 
   }
   send(room.host, { t: "start" });
   for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
-  // 21-13: 원인 흐름 판(제품 확장판)의 첫 낮 단계는 저녁(errand)이다 — 낮 시작 발표를 지나지 않는다. 원인 흐름을 잠근 파일(꺼진 옛 경로)은 dayAnnounce 로 들어간다.
-  await advanceTo(room.code, socks, rulesetOf(mode ?? "extended").cause ? "errand" : "dayAnnounce");
+  await advanceTo(room.code, socks, "dayAnnounce");
   for (const sock of socks) await settle(sock, mark(sock));
   const actors = actorsOf(room);
   await advanceTo(room.code, socks, phase);

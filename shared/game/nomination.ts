@@ -65,7 +65,7 @@ export function tallyPoints(state: RoomState): {
 /**
  * nomination 마감 훅(결정 0060-3, DAY-05). 그날 voteLog 줄 {n, exec:{0,0,false}, cand:{votes, candidate?}} 을 항상 쌓는다 —
  * 찬반 마감(resolveVerdict)이 같은 줄의 exec 를 채운다. 최다 한 명이면 verdict {passed:false, candidate} 로 표의 기본 다음 단계(defense),
- * 동률·0표면 next afterDayOf(rules) 다(기본 night, 원인 흐름 errand). 단 판 규칙(rules, 기본값은 방 상태의 판 종류에서 얻는다 — 19페이즈 D-03)의 runoff 가 켜져 있고 최다 득표자가 정확히 둘이면 동점 결선 runoff 로 간다(결정 0066-4, 그날 줄은 candidate 없이 쌓고 결선이 채운다) — 두 판 모두(결정 0072) 꺼져 있어 동점도 night 다. 집계 직후 모든 플레이어의 nominate 키를 구조 분해로 지운다.
+ * 동률·0표면 next night 다. 단 판 규칙(rules, 기본값은 방 상태의 판 종류에서 얻는다 — 19페이즈 D-03)의 runoff 가 켜져 있고 최다 득표자가 정확히 둘이면 동점 결선 runoff 로 간다(결정 0066-4, 그날 줄은 candidate 없이 쌓고 결선이 채운다) — 두 판 모두(결정 0072) 꺼져 있어 동점도 night 다. 집계 직후 모든 플레이어의 nominate 키를 구조 분해로 지운다.
  */
 export function resolveNomination(state: RoomState, rules: Ruleset = rulesetOf(modeOf(state))): DeadlineResult {
   const { votes, leader, leaders } = tallyPoints(state);
@@ -86,8 +86,8 @@ export function resolveNomination(state: RoomState, rules: Ruleset = rulesetOf(m
     verdict: leader === undefined ? { passed: false } : { passed: false, candidate: leader },
   };
   if (rules.runoff && leaders.length === 2) return { state: startRunoff(next, [leaders[0]!, leaders[1]!]), stay: false, next: "runoff" };
-  // 처형 없는 낮의 다음 단계는 규칙이 정한다(21페이즈 D-01): 기본은 밤, 원인 흐름은 다음 날 저녁.
-  return leader === undefined ? { state: next, stay: false, next: afterDayOf(rules) } : { state: next, stay: false };
+  // 처형 없는 낮의 다음 단계는 afterDayOf 한 곳이다(밤).
+  return leader === undefined ? { state: next, stay: false, next: afterDayOf() } : { state: next, stay: false };
 }
 
 /**

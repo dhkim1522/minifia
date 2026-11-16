@@ -80,28 +80,6 @@ export function captureHome(w: WorldState, ids: readonly string[], day: number):
 }
 
 /**
- * 밤의 집 앞 자리를 기록한다(21페이즈 D-11, 결정 0088): captureHome 의 짝이다. 사람마다 fronts[seat](집 앞 목적지, 고정소수점)를 HomeMemo 로 적는다 —
- * 토론이 끝난 자리가 아니라 좌석 번호가 정하는 자리라 시각·위치를 읽지 않는다. 같은 일차가 이미 기록돼 있으면 입력 객체를 그대로 돌려준다(멱등 — captureHome 과 같다).
- * 구간이 있는 사람만 적는다(teleportHome 이 구간 없는 사람을 건드리지 않는 것과 같은 방침). fronts 에 그 좌석이 없으면 그 사람은 적지 않는다(fail-safe).
- */
-export function houseHome(
-  w: WorldState,
-  players: readonly { id: string; seat: number }[],
-  fronts: readonly { x: number; z: number }[],
-  day: number,
-): WorldState {
-  if (w.home !== undefined && w.home.day === day) return w;
-  const pos: Record<string, readonly [number, number]> = {};
-  for (const p of players) {
-    if (!Object.prototype.hasOwnProperty.call(w.segs, p.id)) continue;
-    const at = fronts[p.seat];
-    if (at === undefined) continue;
-    pos[p.id] = [at.x, at.z];
-  }
-  return { ...w, home: { day, pos } };
-}
-
-/**
  * 기록한 자리로 되돌린다: ids 중 home 점과 구간이 모두 있는 사람만 서 있는 한 점(restSegment)으로 바꾼다(forceSegment — lastMoveAt 은 건드리지 않는다).
  * home 이 없으면 입력 객체 그대로(fail-safe).
  */

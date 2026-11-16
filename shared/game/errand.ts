@@ -6,12 +6,9 @@
 import { PLACE_IDS } from "../protocol";
 import type { PlaceId, RecordLine, WorldFrame } from "../protocol";
 import { isAlive } from "./alive";
-import { withCut } from "./lamps";
 import { UNIT } from "./map";
 import type { MapDef, PlaceDef } from "./map";
 import { mapOf, roomMapId } from "./maps";
-import { modeOf, rulesetOf } from "./ruleset";
-import type { Ruleset } from "./ruleset";
 import { ERRAND_ACT_R, ERRAND_COUNT, ERRAND_NEAR_R, ERRAND_TICK_MS, ERRAND_VIEW_HORIZON_MS, RECORD_MAX } from "./phases";
 import type { RoomState } from "./room";
 import { positionAtFx, snapFrame, truncateSegment } from "./world";
@@ -27,20 +24,17 @@ function isPlaceId(id: string): id is PlaceId {
   return PLACE_SET.has(id);
 }
 
-/**
- * 이 판의 심부름 자리 후보(21페이즈 D-05, 결정 0088): 원인 흐름 규칙이고 맵에 가로등(lamps)이 있으면 가로등, 아니면 장소(places).
- * 집·가로등이 없는 맵의 원인 흐름은 장소를 그대로 쓴다. 배정(enterErrand)·처리(actErrand)·목격 장소(sampleErrand)가 모두 이 함수 하나로 후보를 정한다.
- */
-export function errandSpotsOf(map: MapDef, rules: Ruleset): readonly PlaceDef[] {
-  return rules.cause && map.lamps !== undefined ? map.lamps : (map.places ?? []);
+/** 이 판의 심부름 자리 후보: 맵의 장소(places). 배정(enterErrand)·처리(actErrand)·목격 장소(sampleErrand)가 모두 이 함수 하나로 후보를 정한다. */
+export function errandSpotsOf(map: MapDef): readonly PlaceDef[] {
+  return map.places ?? [];
 }
 
 /** 후보 자리 한 곳의 중앙(고정소수점). */
 const centerOfSpot = (spot: PlaceDef): { x: number; z: number } => ({ x: Math.round(spot.x * UNIT), z: Math.round(spot.z * UNIT) });
 
-/** 장소·가로등 중앙(고정소수점). 맵의 places 와 lamps 둘 다에서 id 를 찾는다(봇이 가로등으로 걷는다). 맵에 없는 id 는 undefined. */
+/** 장소 중앙(고정소수점). 맵에 없는 id 는 undefined. */
 export function placeCenterFx(map: MapDef, id: string): { x: number; z: number } | undefined {
-  const place = map.places?.find((p) => p.id === id) ?? map.lamps?.find((p) => p.id === id);
+  const place = map.places?.find((p) => p.id === id);
   if (place === undefined) return undefined;
   return { x: Math.round(place.x * UNIT), z: Math.round(place.z * UNIT) };
 }
@@ -71,7 +65,7 @@ export function nearestPlaceId(map: MapDef, posFx: { x: number; z: number }, spo
  * at(진입 시각 = 이전 마감)을 받아 첫 근처·목격 표본 시각 errandTickAt = at + ERRAND_TICK_MS 를 정하고, 모든 사람의 errandNear·errandSeen 을 지운다(15-02).
  */
 export function enterErrand(state: RoomState, randInt: RandInt, at: number): RoomState {
-  const candidates = errandSpotsOf(mapOf(roomMapId(state)), rulesetOf(modeOf(state))).map((p) => p.id).filter(isPlaceId);
+  const candidates = errandSpotsOf(mapOf(roomMapId(state))).map((p) => p.id).filter(isPlaceId);
   const picks = new Map<string, PlaceId[]>();
   const alive = state.players.filter((p) => isAlive(p)).sort((a, b) => a.seat - b.seat);
   for (const p of alive) {
@@ -85,12 +79,12 @@ export function enterErrand(state: RoomState, randInt: RandInt, at: number): Roo
     }
     picks.set(p.id, pool.slice(0, count));
   }
-  const { errandLast: _last, lamps: _lamps, scene: _scene, ...rest } = state; // 새 저녁이므로 지난 밤의 등불 켜짐(lamps, 21-03)과 아침 현장(scene, 21-04)도 키째 지운다
+  const { errandLast: _last, ...rest } = state;
   return {
     ...rest,
     errandTickAt: at + ERRAND_TICK_MS,
     players: state.players.map((p) => {
-      const { errandPlaces: _places, errandDone: _done, errandNear: _near, errandSeen: _seen, errandFake: _fake, errandCut: _cut, sceneSeen: _sceneSeen, ...kept } = p;
+      const { errandPlaces: _places, errandDone: _done, errandNear: _near, errandSeen: _seen, errandFake: _fake, ...kept } = p;
       const mine = picks.get(p.id);
       return mine === undefined ? kept : { ...kept, errandPlaces: mine, errandDone: [] };
     }),
@@ -100,19 +94,17 @@ export function enterErrand(state: RoomState, randInt: RandInt, at: number): Roo
 /**
  * 심부름 처리. errand 단계 · 행위자가 방에 있는 산 사람 · errandPlaces 가 있을 때, 미완료 장소 중 중앙까지 거리가
  * ERRAND_ACT_R × UNIT 이하인 것 가운데 가장 가까운 하나(같으면 목록 앞)를 errandDone 끝에 더한다. 그 밖은 사유를 가르지 않고 { ok: false }.
- * hold(길게 누르기, 21페이즈 D-06)는 모든 역할이 보낼 수 있다 — 받아들인 처리 뒤에 lamps.ts 의 withCut 을 부를 뿐이고 이 파일은 역할을 읽지 않는다(마피아만 서버 전용 cut 이 된다). 응답 모양은 hold·역할과 무관하다.
  */
 export function actErrand(
   state: RoomState,
   actorId: string,
   posFx: { x: number; z: number },
-  hold = false,
 ): { ok: true; state: RoomState } | { ok: false } {
   if (state.phase !== "errand") return { ok: false };
   const actor = state.players.find((p) => p.id === actorId);
   if (actor === undefined || !isAlive(actor) || actor.errandPlaces === undefined) return { ok: false };
   const done = actor.errandDone ?? [];
-  const spots = errandSpotsOf(mapOf(roomMapId(state)), rulesetOf(modeOf(state)));
+  const spots = errandSpotsOf(mapOf(roomMapId(state)));
   const reach = ERRAND_ACT_R * UNIT;
   let best: PlaceId | undefined;
   let bestD = Infinity;
@@ -129,11 +121,10 @@ export function actErrand(
   }
   if (best === undefined) return { ok: false };
   const finished = best;
-  const accepted: RoomState = {
-    ...state,
-    players: state.players.map((p) => (p.id === actorId ? { ...p, errandDone: [...done, finished] } : p)),
+  return {
+    ok: true,
+    state: { ...state, players: state.players.map((p) => (p.id === actorId ? { ...p, errandDone: [...done, finished] } : p)) },
   };
-  return { ok: true, state: withCut(accepted, actorId, finished, hold) };
 }
 
 // ---- 근처 판정·목격 표본·근처 snap(15-02, D-02·D-04) — 역할을 읽지 않는다 ----
@@ -186,7 +177,7 @@ export function nearIdsOf(
 export function sampleErrand(state: RoomState, posOf: (id: string) => Pos | undefined, at: number): RoomState {
   if (state.phase !== "errand") return state;
   const map = mapOf(roomMapId(state));
-  const spots = errandSpotsOf(map, rulesetOf(modeOf(state)));
+  const spots = errandSpotsOf(map);
   const radiusFx = ERRAND_NEAR_R * UNIT;
   const seatOf = new Map(state.players.map((p) => [p.id, p.seat] as const));
   const players = state.players.map((a) => {
@@ -205,10 +196,8 @@ export function sampleErrand(state: RoomState, posOf: (id: string) => Pos | unde
     return { ...a, errandNear: nearSeats, errandSeen: seen };
   });
   const last = new Map((state.errandLast ?? []).map((row) => [row.seat, row] as const));
-  // 원인 흐름(21페이즈 P21-15·함정 2): 마지막 목격 줄은 쌓지 않는다 — 아침에 공개되지 않으니 저장만 늘기 때문이다. 표본(근처·목격 기록)은 그대로다.
-  const keepLast = !rulesetOf(modeOf(state)).cause;
   for (const b of state.players) {
-    if (!keepLast || !isAlive(b)) continue;
+    if (!isAlive(b)) continue;
     const here = posOf(b.id);
     if (here === undefined) continue;
     let by: number | undefined;

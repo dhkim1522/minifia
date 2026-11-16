@@ -18,7 +18,6 @@
 // 분기(4페이즈): 마감 훅이 next 를 돌려주면 그 단계로, 없으면 단계 표(PHASE_DEFS)의 기본 next 로 간다. 표는 데이터만 두고 분기는 훅이 정한다.
 // 판 종류(19페이즈 D-03·D-08): 규칙은 전역 값이 아니라 방 상태의 판 종류에서 얻는다 — 한 걸음마다 그 판의 규칙(rulesetOf(modeOf(상태)))과 그 규칙의 훅 표(hooksFor)를 고른다.
 // 기본 다음 단계는 nextPhaseOf(단계, 규칙) 가 고른다 — basic 판은 낮 시작 발표 다음이 errand 가 아니라 discussion 이다.
-// 원인 흐름(21페이즈 D-01, 규칙의 cause): 확장판은 roleReveal → errand(저녁, 일차 +1) → night → morning(현장 없으면 길이 0) → discussion … execution → errand 다. dayAnnounce 를 지나지 않는다.
 // 진입 훅의 세 번째 인자 at 은 진입 시각(= 이전 마감)이다 — 시각을 스스로 읽지 않는 순수 규칙이 "진입 + 30분" 같은 계산을 할 때 쓴다.
 import type { PhaseId } from "../protocol";
 import { emptyGameCloseAt, nextContinuityAt } from "./continuity";
@@ -30,10 +29,9 @@ import { enterExecution } from "./execution";
 import { enterNomination, enterVote, stepNomination, resolveNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
 import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
-import { clearSkip } from "./skip";
 import { enterMorning, enterNight } from "./night";
 import { nearPhaseOf } from "./movement";
-import { ERRAND_TICK_MS, PHASE_DEFS, nextPhaseOf } from "./phases";
+import { PHASE_DEFS, nextPhaseOf } from "./phases";
 import { modeOf, rulesetOf } from "./ruleset";
 import type { Ruleset } from "./ruleset";
 import type { RoomState } from "./room";
@@ -68,9 +66,9 @@ export interface PhaseHooks {
 }
 
 /**
- * 판 규칙으로 진입·마감 훅 표를 만든다(19페이즈 D-03). 규칙에 따라 갈리는 줄은 넷이다:
+ * 판 규칙으로 진입·마감 훅 표를 만든다(19페이즈 D-03). 규칙에 따라 갈리는 줄은 셋이다:
  * 투표 진입(순차 지목이면 enterNomination, 아니면 동시 투표 enterVote) · 투표 마감(순차 지목이면 stepNomination, 아니면 집계 한 번) ·
- * 낮 시작 발표 마감(마지막 3인 결전이 켜졌을 때만) · 아침 진입(흔적·마지막 목격을 그 판의 규칙으로).
+ * 낮 시작 발표 마감(마지막 3인 결전이 켜졌을 때만) · 밤·아침 진입(흔적·마지막 목격을 그 판의 규칙으로).
  * tick 은 매 걸음 이 함수를 부르지 않고 아래 HOOKS 에서 고른다.
  */
 export function hooksOf(rules: Ruleset): PhaseHooks {
@@ -78,16 +76,13 @@ export function hooksOf(rules: Ruleset): PhaseHooks {
     enter: {
       dayAnnounce: enterDayAnnounce,
       // 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts). 16페이즈(결정 0079): 산 마피아의 가짜 한 곳은 난수 없이 뒤에서 정한다.
-      // 원인 흐름(21페이즈 D-01·A4·A6): 일차 +1 이 낮 시작 발표 대신 저녁 진입이다(enterErrand 앞 — errandFake·nightLog·voteLog 가 day 를 읽는다). 마피아의 비밀 행동은 심지 자르기라 가짜 장소를 정하지 않는다.
-      // 건너뛰기 표(D-23)는 저녁 진입에서 먼저 키째 지운다 — 지난 아침·토론 표가 새 저녁으로 새지 않는다.
-      errand: rules.cause ? (s, r, at) => enterErrand(enterDayAnnounce(clearSkip(s)), r, at) : (s, r, at) => assignErrandFake(enterErrand(s, r, at)),
+      errand: (s, r, at) => assignErrandFake(enterErrand(s, r, at)),
       discussion: enterDiscussion,
       nomination: rules.pickTurn ? enterNomination : enterVote,
       execution: enterExecution,
-      night: (s) => enterNight(s, rules), // 세 번째 자리 인자가 규칙 자리로 들어가지 않게 감싸고, 이 표의 규칙을 넘긴다(원인 흐름이면 심부름 키를 토론까지 남긴다)
-      // 세 번째 인자 at(진입 시각)이 enterMorning 의 규칙 자리로 들어가지 않게 감싸고, 이 표의 규칙을 넘긴다. 원인 흐름이면 저녁 건너뛰기 표를 먼저 지운다(D-23 — 저녁 표가 아침으로 새지 않는다).
-      // 원인 흐름 아침은 근처 snap 표본(A5)이 돌므로 진입 마감 + 한 간격을 첫 표본 시각으로 정한다(errandTickAt — 아침에는 목격 기록을 쌓지 않고 시각만 옮긴다). 토론 진입(enterDiscussion)이 키째 지운다.
-      morning: rules.cause ? (s, r, at) => ({ ...enterMorning(clearSkip(s), r, rules), errandTickAt: at + ERRAND_TICK_MS }) : (s, r) => enterMorning(s, r, rules),
+      night: enterNight,
+      // 세 번째 인자 at(진입 시각)이 enterMorning 의 규칙 자리로 들어가지 않게 감싸고, 이 표의 규칙을 넘긴다.
+      morning: (s, r) => enterMorning(s, r, rules),
       ended: enterEnded,
     },
     deadline: {
@@ -103,7 +98,7 @@ export function hooksOf(rules: Ruleset): PhaseHooks {
   };
 }
 
-/** 규칙 객체마다 훅 표 하나 — 처음 쓸 때 만들어 두고 같은 객체면 다시 쓴다(매 걸음 새 객체를 만들지 않는다). 시험 잠금(CAUSE_MODES)이 규칙 객체를 바꿔도 맞다(21-01). */
+/** 규칙 객체마다 훅 표 하나 — 처음 쓸 때 만들어 두고 같은 객체면 다시 쓴다(매 걸음 새 객체를 만들지 않는다). */
 const HOOKS = new WeakMap<Ruleset, PhaseHooks>();
 function hooksFor(rules: Ruleset): PhaseHooks {
   let hooks = HOOKS.get(rules);
@@ -159,7 +154,7 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
 
 /** DO 알람 하나로 단계 마감과 방 만료, 방장 이양·로비 정리 마감(continuity)을 함께 다룬다. */
 export function nextWakeAt(state: RoomState): number {
-  // 근처 단계(저녁과 원인 흐름 아침, nearPhaseOf)의 근처 표본 시각(15페이즈). 다른 단계에서는 errandTickAt 이 있어도 무시한다.
+  // 근처 단계(저녁, nearPhaseOf)의 근처 표본 시각(15페이즈). 다른 단계에서는 errandTickAt 이 있어도 무시한다.
   const errandTick = nearPhaseOf(state) && state.errandTickAt !== undefined ? state.errandTickAt : Number.POSITIVE_INFINITY;
   // 버려진 게임 방 닫기(결정 0076)도 같은 알람에 합친다.
   return Math.min(state.phaseEndsAt ?? Number.POSITIVE_INFINITY, state.expiresAt, nextContinuityAt(state), errandTick, emptyGameCloseAt(state));

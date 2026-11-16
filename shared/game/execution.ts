@@ -4,7 +4,6 @@
 // 이 파일은 플레이어의 role 을 읽지 않는다: 후보(변론자)는 직업이 아니라 지목이 정하고(결정 0060), 처형 발표에는 직업을 싣지 않는다(D-09).
 import type { NoExecutionReason } from "../protocol";
 import type { RoomState } from "./room";
-import { modeOf, rulesetOf } from "./ruleset";
 
 /**
  * execution 진입 훅: 후보를 탈락(alive false)시키고 처형 발표(execution { seat, phrase })를 기록한다(D-06, D-11).
@@ -24,7 +23,7 @@ export function enterExecution(state: RoomState): RoomState {
 }
 
 /**
- * 처형이 성립하지 않아 밤으로 온 그 밤 단계의 이유 코드(D-34). 원인 흐름 판에서는 다음 날 저녁(errand) 단계가 같은 값을 준다. 새 상태 필드를 두지 않고 그날 공개 투표 기록(voteLog)에서 파생한다 —
+ * 처형이 성립하지 않아 밤으로 온 그 밤 단계의 이유 코드(D-34). 새 상태 필드를 두지 않고 그날 공개 투표 기록(voteLog)에서 파생한다 —
  * 새 정보가 생기지 않고, 단계가 night 일 때만 값을 주므로 아침으로 넘어가면 저절로 사라진다(지울 상태가 없다).
  *   night 가 아니거나 그날(n === day ?? 1) 줄이 없음            → 없음
  *   줄에 cand 가 없음(옛 상태)                                  → 없음
@@ -34,11 +33,8 @@ export function enterExecution(state: RoomState): RoomState {
  * 찬반 부결은 처형 단계가 알린다(이유 코드는 tie·noVotes 둘뿐). 반환은 새 객체 리터럴이다(키는 reason 하나).
  */
 export function noExecutionOf(state: RoomState): { reason: NoExecutionReason } | undefined {
-  // 원인 흐름(21페이즈 D-01·함정 11): 처형 없는 낮 다음은 밤이 아니라 다음 날 저녁(errand)이다 — 값은 저녁 단계에서만 주고, 일차는 저녁 진입에서 이미 올랐으므로 지난 낮(day - 1)의 줄을 읽는다.
-  const cause = rulesetOf(modeOf(state)).cause;
-  if (state.phase !== (cause ? "errand" : "night")) return undefined;
-  const day = (state.day ?? 1) - (cause ? 1 : 0);
-  const entry = (state.voteLog ?? []).find((e) => e.n === day);
+  if (state.phase !== "night") return undefined;
+  const entry = (state.voteLog ?? []).find((e) => e.n === (state.day ?? 1));
   if (entry?.cand === undefined || entry.cand.candidate !== undefined) return undefined;
   return { reason: entry.cand.votes.length === 0 ? "noVotes" : "tie" };
 }

@@ -44,17 +44,15 @@ import { castRunoffVote } from "../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
-import { skipReached, toggleSkip } from "../shared/game/skip";
 import { MAP_PHASES, canMove, nearPhaseOf } from "../shared/game/movement";
 import { actErrand, nearSnapFrame, placeCenterFx, sampleErrand } from "../shared/game/errand";
-import { inspectSpot } from "../shared/game/scene";
-import { ERRAND_MIN_GAP_MS, ERRAND_TICK_MS, SKIP_MIN_GAP_MS } from "../shared/game/phases";
+import { ERRAND_MIN_GAP_MS, ERRAND_TICK_MS } from "../shared/game/phases";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
 import type { MapDef } from "../shared/game/map";
 import { mapOf, pickMap, roomMapId } from "../shared/game/maps";
 import { pickMode } from "../shared/game/mode";
-import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, houseHome, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
+import { WORLD_FLUSH_MS, captureHome, compactWorld, despawnPlayer, emptyWorld, forceSegment, moveFrame, nextWanderAt, planMoveSegment, planWander, positionAtFx, requestMove, respawnAll, restoreWorld, segmentEndsAt, snapFrame, spawnPlayer, teleportHome } from "../shared/game/world";
 import type { Segment, WorldState } from "../shared/game/world";
 import { buildPreview, buildView } from "../shared/game/view";
 import { clipToZone, nextCrossingAt, reconcileZones, settleZones, zoneAt } from "../shared/game/zones";
@@ -298,9 +296,6 @@ export class Room extends DurableObject<Env> {
       case "endDiscussion":
         await this.handleEndDiscussion(ws, msg.on);
         return;
-      case "skip":
-        await this.handleSkip(ws, msg.on);
-        return;
       case "point":
         await this.handlePoint(ws, msg.target);
         return;
@@ -323,10 +318,7 @@ export class Room extends DurableObject<Env> {
         await this.handleTestBotVote(ws, msg.exec, msg.pick);
         return;
       case "errand":
-        await this.handleErrand(ws, msg.hold === true);
-        return;
-      case "inspect":
-        await this.handleInspect(ws);
+        await this.handleErrand(ws);
         return;
       case "move":
         this.handleMove(ws, msg.x, msg.z);
@@ -733,20 +725,19 @@ export class Room extends DurableObject<Env> {
   }
 
   // 심부름 처리(15페이즈, 결정 0074): 메시지에 필드가 없다 — 신원은 소켓 첨부의 playerId 뿐이고 위치는 서버 world 구간, 장소는 서버 목록이 정한다(D-08).
-  private async handleErrand(ws: WebSocket, hold: boolean): Promise<void> {
+  private async handleErrand(ws: WebSocket): Promise<void> {
     const att = this.attachmentOf(ws);
     if (!att || !this.room) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    await this.applyErrand(att.playerId, Date.now(), hold);
+    await this.applyErrand(att.playerId, Date.now());
   }
 
   // 사람의 errand 메시지와 봇 errandAct 가 같은 본체를 지난다(특권 없음). 간격(ERRAND_MIN_GAP_MS) 안의 요청과 규칙 거절(단계·생존·반경·중복·위치 없음)은
   // 사람·역할·이유와 무관하게 같은 응답이다: 상태 변화 없이 보낸 사람에게만 자기 state 한 프레임(오류 프레임·방송 없음, D-08·T-15-02·T-15-04).
   // 받아들이면 저장한 뒤 역시 본인에게만 state 를 보낸다 — 진행은 본인 view 에만 있어 다른 폰에 방송할 것이 없다.
-  // hold(길게 누르기, 21페이즈 D-06)도 역할도 이 모양을 바꾸지 않는다: 마피아의 자르기(errandCut)는 같은 상태 쓰기에 실려 저장 한 번 + 본인 state 한 프레임, 시민의 hold 와 구별되지 않는다(L40).
-  private async applyErrand(playerId: string, now: number, hold = false): Promise<void> {
+  private async applyErrand(playerId: string, now: number): Promise<void> {
     const room = this.room;
     if (!room) return;
     const key = `errand:${playerId}`;
@@ -754,37 +745,7 @@ export class Room extends DurableObject<Env> {
     if (last === undefined || now - last >= ERRAND_MIN_GAP_MS) {
       this.writeAt.set(key, now);
       const seg = Object.prototype.hasOwnProperty.call(this.world.segs, playerId) ? this.world.segs[playerId] : undefined;
-      const result = seg === undefined ? null : actErrand(room, playerId, positionAtFx(seg, now), hold);
-      if (result !== null && result.ok) {
-        this.room = result.state;
-        await this.ctx.storage.put("room", this.room);
-      }
-    }
-    this.sendViewTo([playerId]);
-  }
-
-  // 현장 단서 살피기(21페이즈 D-13, 결정 0088): 메시지에 필드가 없다 — 신원은 소켓 첨부의 playerId 뿐이고 위치는 서버 world 구간, 지점은 서버가 고른다(T-21-14).
-  private async handleInspect(ws: WebSocket): Promise<void> {
-    const att = this.attachmentOf(ws);
-    if (!att || !this.room) {
-      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
-      return;
-    }
-    await this.applyInspect(att.playerId, Date.now());
-  }
-
-  // applyErrand 와 같은 응답 규칙(T-21-12, D-15·D-21): 간격(ERRAND_MIN_GAP_MS) 안의 요청과 규칙 거절(단계·생존·반경·이미 살핌·현장 없음·위치 없음)은 사람·역할·이유와 무관하게
-  // 같은 응답이다 — 상태 변화 없이 보낸 사람에게만 자기 state 한 프레임(오류 프레임·방송 없음). 받아들이면 저장 한 번 + 본인 state 한 프레임이다. 산 마피아가 살폈다는 표시(touched)는
-  // 같은 상태 쓰기에 실리므로 마피아·시민의 응답 횟수와 모양이 같고, 받은 단서는 본인 view(me.scene)에만 있다.
-  private async applyInspect(playerId: string, now: number): Promise<void> {
-    const room = this.room;
-    if (!room) return;
-    const key = `inspect:${playerId}`;
-    const last = this.writeAt.get(key);
-    if (last === undefined || now - last >= ERRAND_MIN_GAP_MS) {
-      this.writeAt.set(key, now);
-      const seg = Object.prototype.hasOwnProperty.call(this.world.segs, playerId) ? this.world.segs[playerId] : undefined;
-      const result = seg === undefined ? null : inspectSpot(room, playerId, positionAtFx(seg, now));
+      const result = seg === undefined ? null : actErrand(room, playerId, positionAtFx(seg, now));
       if (result !== null && result.ok) {
         this.room = result.state;
         await this.ctx.storage.put("room", this.room);
@@ -981,44 +942,6 @@ export class Room extends DurableObject<Env> {
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     if (endReached(result.state)) {
-      const prev = this.room;
-      this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
-      await this.afterTransition(prev, now);
-      return null;
-    }
-    this.room = result.state;
-    await this.persistAndBroadcast();
-    return null;
-  }
-
-  // 건너뛰기(21페이즈 D-23, 결정 0088): 신원은 소켓 첨부의 playerId 뿐이다(T-21-19) — 남의 표를 누를 수 없다.
-  private async handleSkip(ws: WebSocket, on: boolean): Promise<void> {
-    const att = this.attachmentOf(ws);
-    if (!att || !this.room) {
-      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
-      return;
-    }
-    const error = await this.applySkip(att.playerId, on, Date.now());
-    if (error !== null) this.sendRejection(ws, att.playerId, error);
-  }
-
-  // applyEndDiscussion 과 같은 길이다. 누른 수(day.skipCount)는 모두에게 공개되는 실시간 정보라 바뀔 때마다 모든 소켓이 각자 view 를 받는다(누른 본인 값은 me.skip 으로만 간다).
-  // 같은 값이면 같은 객체라 저장·전송이 없고, 값이 바뀌는 켜기·끄기도 같은 사람은 SKIP_MIN_GAP_MS 안에 거듭 받지 않는다(T-21-20 연타, WR-02). 과반(skipReached)에 닿는 순간 서버가 마감을 지금으로 당겨 tick 으로 정상 마감과 같은 경로를 탄다 —
-  // 새 마감은 now + 다음 단계 길이이고 알람이 따라 옮겨진다. 저녁·아침이 아니거나 유령이면 규칙 함수가 WRONG_PHASE·BAD_MESSAGE 로 거절한다.
-  private async applySkip(playerId: string, on: boolean, now: number): Promise<WsErrorCode | null> {
-    if (!this.room) return "BAD_MESSAGE";
-    const result = toggleSkip(this.room, playerId, on);
-    if (!result.ok) return result.error;
-    if (result.state === this.room) return null;
-    // 속도 제한(WR-02): 규칙을 통과해 값이 바뀌는 요청만 간격(SKIP_MIN_GAP_MS)을 센다. 간격 안의 요청은 상태 변화·저장·방송 없이 보낸 사람에게만 자기 state 한 프레임이다(오류 프레임 없음).
-    const key = `skip:${playerId}`;
-    const last = this.writeAt.get(key);
-    if (last !== undefined && now - last < SKIP_MIN_GAP_MS) {
-      this.sendViewTo([playerId]);
-      return null;
-    }
-    this.writeAt.set(key, now);
-    if (skipReached(result.state)) {
       const prev = this.room;
       this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
       await this.afterTransition(prev, now);
@@ -1431,24 +1354,18 @@ export class Room extends DurableObject<Env> {
     const room = this.room;
     if (!room || room.day === undefined) return false;
     if (!MAP_PHASES.has(room.phase) || room.phase === "dayAnnounce" || room.phase === "errand" || room.phase === "discussion") return false;
-    // 원인 흐름(21페이즈 D-11, 결정 0088): 집이 있는 맵(MapDef.houseFronts — 마을)이면 토론이 끝난 자리가 아니라 좌석의 집 앞을 기억한다 — 밤에 산 사람 모두가 집 앞으로 순간이동하고(syncHome 의 teleportHome),
-    // 피해자의 분필(fillChalk 가 이 기억을 읽는다)이 집 앞에 놓인다(D-13). 집이 없는 맵의 시험 전용 원인 흐름은 지금처럼 토론이 끝난 자리다.
-    const fronts = this.mapDef().houseFronts;
-    const next =
-      fronts !== undefined && rulesetOf(modeOf(room)).cause
-        ? houseHome(this.world, room.players, fronts, room.day)
-        : captureHome(
-            this.world,
-            room.players.map((p) => p.id),
-            room.day,
-          );
+    const next = captureHome(
+      this.world,
+      room.players.map((p) => p.id),
+      room.day,
+    );
     if (next === this.world) return false;
     this.world = next;
     return true;
   }
 
   // 위치 동기화 한 번: 밤·아침 home → 방금 탈락한 사람 snap → 지목 배치. 모두 지금 단계 키와 world.lay.key 비교로 멱등이다.
-  // 근처 단계(저녁·원인 흐름 아침)를 들고 나는 snap 은 배치(move 프레임)보다 먼저 보낸다 — 아침 → 토론에서 전체 snap 이 지금 자리를 알린 뒤 둘레로 걷는 move 가 이어진다(D-18).
+  // 근처 단계(저녁)를 들고 나는 snap 은 배치(move 프레임)보다 먼저 보낸다 — 아침 → 토론에서 전체 snap 이 지금 자리를 알린 뒤 둘레로 걷는 move 가 이어진다(D-18).
   // prev 가 없으면(전환 없이 맞추기만 하는 호출) 들고남 snap 은 건너뛴다.
   private async syncPositions(now: number, prev?: RoomState): Promise<void> {
     // syncHome 이 이미 모두에게 snap 을 보냈으면(snapEachViewer 는 지금 단계 규칙을 따른다) 진입·이탈 snap 은 건너뛴다 — 한 전환에 snap 이 한 번이다.
@@ -1560,12 +1477,6 @@ export class Room extends DurableObject<Env> {
   private async runErrandTick(now: number): Promise<void> {
     const room = this.room;
     if (!room || !nearPhaseOf(room) || room.errandTickAt === undefined || room.errandTickAt > now) return;
-    // 원인 흐름 아침(21페이즈 A5, 결정 0088): 목격 기록을 쌓지 않는다 — 표본 시각만 옮기고(메모리, 저장 없음 — 결정 0076) 근처 snap 만 보낸다.
-    if (room.phase !== "errand") {
-      this.room = { ...room, errandTickAt: now + ERRAND_TICK_MS };
-      this.syncErrandView(now);
-      return;
-    }
     const has = (id: string): boolean => Object.prototype.hasOwnProperty.call(this.world.segs, id);
     const next = sampleErrand(room, (id) => (has(id) ? positionAtFx(this.world.segs[id]!, now) : undefined), now);
     this.room = next;

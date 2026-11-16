@@ -1,5 +1,5 @@
 // 22-03: 옛 방 정규화(결정 0089, D-03·D-29) — 옛 표시가 있는 방만 대기실로 되돌리고, 표시 없는 판은 DO 가 다시 깨어나도 그대로 둔다.
-// 이후 계획(22-04~22-07)이 같은 판정(isLegacyV3Room)에 표시(등불·현장·건너뛰기 키, town, errand 단계·키, mode 키)를 하나씩 더한다.
+// 22-04 가 등불·현장·건너뛰기 키 표시를 더했다. 22-05~22-07 이 town, errand 단계·키, mode 키 표시를 하나씩 더한다.
 import { describe, expect, it } from "vitest";
 import { attachConnection, createRoomState, isLegacyV3Room, joinRoom, normalizeStoredRoom, startGame, toLobbyFromLegacy } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
@@ -77,6 +77,35 @@ describe("normalizeStoredRoom — 옛 튜토리얼 방 (D-03·D-29, T-22-03)", (
   it("두 번 정규화해도 같다 (두 번째는 같은 객체)", () => {
     const once = normalizeStoredRoom(oldTutorialRoom(), 5000);
     expect(normalizeStoredRoom(once, 6000) === once).toBe(true);
+  });
+});
+
+describe("normalizeStoredRoom — 옛 원인 흐름 방 (22-04, D-03, T-22-06)", () => {
+  it("등불 키(lamps)가 있는 판 중 방은 대기실로 되돌아가고 등불 키는 없다", () => {
+    const stored = { ...started(4), phase: "night", day: 2, lamps: [true, false, true, false, true, false, true, false] } as unknown as RoomState;
+    const out = normalizeStoredRoom(stored, 5000);
+    expect(`${out.phase}/${Object.hasOwn(out, "lamps")}/${out.code}`).toBe("lobby/false/0420");
+  });
+
+  it("아침 현장 키(scene)가 있는 판 중 방은 대기실로 되돌아간다", () => {
+    const stored = { ...started(4), phase: "morning", day: 2, scene: { house: 1, footprints: 0, windowLit: false, touched: {} } } as unknown as RoomState;
+    expect(normalizeStoredRoom(stored, 5000).phase).toBe("lobby");
+  });
+
+  it("건너뛰기 표·자른 등불·살핀 지점 개인 키가 있는 판 중 방은 각각 대기실로 되돌아가고 그 키는 남지 않는다", () => {
+    for (const key of ["skipVote", "errandCut", "sceneSeen"]) {
+      const base = started(4);
+      const stored = { ...base, phase: "discussion", day: 2, players: base.players.map((p, i) => (i === 0 ? { ...p, [key]: key === "skipVote" ? true : [] } : p)) } as unknown as RoomState;
+      const out = normalizeStoredRoom(stored, 5000);
+      expect(`${key}:${out.phase}/${out.players.some((p) => Object.hasOwn(p, key))}`).toBe(`${key}:lobby/false`);
+    }
+  });
+
+  it("대기실 방에 남은 현장·등불 키는 지워지고 나머지는 그대로다", () => {
+    const base = lobby(4);
+    const stored = { ...base, scene: { house: 0 }, lamps: [true] } as unknown as RoomState;
+    const out = normalizeStoredRoom(stored, 5000);
+    expect(`${Object.hasOwn(out, "scene")}/${Object.hasOwn(out, "lamps")}/${JSON.stringify(out) === JSON.stringify(base)}`).toBe("false/false/true");
   });
 });
 

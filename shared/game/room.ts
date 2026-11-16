@@ -6,7 +6,6 @@ import type { GameMode, MapChoice, MapId, PlaceId, RecordLine } from "../protoco
 import type {
   AssassinationRecord,
   BadgeId,
-  ClueLine,
   ExecutionView,
   GameWinner,
   InvestigationRecord,
@@ -14,7 +13,6 @@ import type {
   OutfitId,
   PhaseId,
   PointLine,
-  SpotId,
   TracePiece,
   TreatmentRecord,
   VoteLogEntry,
@@ -24,7 +22,7 @@ import { hostSuccessor } from "./continuity";
 import { resolveLookConflicts } from "./look";
 import { decideMap, startMapOf } from "./maps";
 import { enterNomination } from "./nomination";
-import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, ERRAND_TICK_MS, NOMINATION_GATHER_MS } from "./phases";
+import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
 import { REMATCH_PLAYER_KEYS, REMATCH_ROOM_KEYS, benchAsPlayers } from "./rematch";
 import { modeOf, rulesetOf } from "./ruleset";
@@ -76,8 +74,6 @@ export interface Player {
   showdownPick?: number;
   /** 토론 끝내기를 누른 표시. 누르면 true, 취소하면 키째 지운다. 누가 눌렀는지는 서버 전용이고 enterDiscussion 이 다음 낮 시작에 지운다. */
   endVote?: true;
-  /** 서버 전용(21페이즈 D-23·D-21, 결정 0088). 원인 흐름 저녁·아침에 [건너뛰기]를 누른 표시. 누르면 true, 취소하면 키째 지운다. 누가 눌렀는지는 view 에 싣지 않고(공개 값은 day.skipCount 수뿐) 저녁·아침 진입(clearSkip)이 모든 사람에게서 키째 지운다. */
-  skipVote?: true;
   /** 서버 전용(결정 0061-10). 본인이 남긴 유언 — saveWill(09-12)만 쓰고, 사후에도 바꿀 수 없다. 아침에 서버가 채팅 카드로 만들어 보내며 view 의 me.will 로 산 본인에게만 간다. */
   will?: string;
   /** 공개 직업 주장(결정 0066-1). setBadge 만 쓴다. 실제 역할과 무관한 값이고 view 에는 산 사람 것만 players[].badge 로 실린다. */
@@ -92,10 +88,6 @@ export interface Player {
   errandSeen?: RecordLine[];
   /** 서버 전용(16페이즈 결정 0079 예정, D-08). 산 마피아의 가짜 심부름 장소 한 곳 — errandPlaces 안의 값이고 actErrand 가 이 장소를 처리 후보에서 뺀다. errandFake.ts 가 errand 진입 직후 쓰고 enterErrand·enterNight 가 키째 지운다. 어떤 view 에도 싣지 않는다(me.errand.places 는 시민과 같은 목록 그대로). */
   errandFake?: PlaceId;
-  /** 서버 전용(21페이즈 결정 0088, D-06·D-21). 산 마피아가 길게 눌러 자른 등불 id(처리 순서). lamps.ts 의 withCut 만 쓰고 enterErrand 가 키째 지운다. 어떤 view 에도 싣지 않는다 — 밤에는 켜짐 boolean(RoomState.lamps)으로만 드러나 자른 사실·사람은 구별되지 않는다. */
-  errandCut?: PlaceId[];
-  /** 서버 전용(21페이즈 결정 0088, D-14·D-15·D-21). 아침 현장에서 본인이 살핀 지점 줄(살핀 순서). scene.ts 의 inspectSpot 만 쓰고 enterMorning 이 새 현장을 만들 때·enterErrand 가 키째 지운다. 본인 view(me.scene)에만 간다. */
-  sceneSeen?: ClueLine[];
   /** 로비 의상(결정 D-6). setLook 만 쓴다. 사람이 고른 공개 값이고 역할과 무관하다. 없으면 기본 coat 로 읽고, 게임 시작·테스트 방 되돌리기 뒤에도 남는다. */
   look?: OutfitId;
   /** 직업을 건 뒤 다른 값으로 바꾼 적이 있음(결정 0066-1, O-1). 한 번 켜지면 판이 끝날 때까지 끄지 않는다. 이전 값은 어디에도 없다. */
@@ -167,16 +159,6 @@ export interface WhisperRecord {
   at: number;
 }
 
-/** 아침 현장의 서버 전용 값(21페이즈 D-12~D-17, 결정 0088). 필드 설명은 RoomState.scene. */
-export interface SceneState {
-  house: number;
-  footprints: number;
-  cloth?: TracePiece;
-  window?: TracePiece;
-  windowLit: boolean;
-  touched: Partial<Record<SpotId, true>>;
-}
-
 export interface RoomState {
   code: string;
   createdAt: number;
@@ -201,17 +183,6 @@ export interface RoomState {
    * 가장 가까운 사람(by)과 곁 장소(place)" 한 줄(seat 오름차순). enterErrand 가 비우고 enterNight 는 남기며 enterMorning 이 피해자 줄을 morning.seen 으로 옮긴 뒤 지운다.
    */
   errandLast?: Array<{ seat: number; by: number; place: PlaceId }>;
-  /**
-   * 밤 집 창 불 켜짐(21페이즈 결정 0088, D-06·D-07·D-08). 원인 흐름 + 맵에 가로등이 있을 때 enterNight 가 한 번 정한다 — 등불 i = 집 i, houseLitOf(켠 사람 있음 + 자른 사람 없음).
-   * 저녁 동안에는 없고(남의 켜짐은 방송하지 않는다) enterErrand 가 키째 지운다. 공개 값이라 view.day.lamps 로 모두에게 같은 boolean 배열로 간다 — 꺼진 이유·자른 사람은 어디에도 없다.
-   */
-  lamps?: boolean[];
-  /**
-   * 서버 전용(21페이즈 결정 0088, D-12~D-17·D-21). 아침 현장: house = 현장 집 좌석(피해자, 없으면 의사가 막은 확정 대상), footprints = 그 밤 그 집을 고른 산 사람 수(집 주인 제외),
-   * cloth·window = 지점 ②·③ 이 줄 조각(window 는 창이 켜졌을 때만 읽힌다), windowLit = 짝집 창 불, touched = 산 마피아가 살핀 지점(그 뒤 사람은 흔적을 받는다).
-   * enterMorning 이 원인 흐름에서 만들고 scene.ts 의 inspectSpot 이 touched 를 더하며 enterErrand 가 키째 지운다. 공개되는 것은 day.scene = { house } 하나뿐이다 — 나머지는 어떤 view 에도 없다.
-   */
-  scene?: SceneState;
   /** 서버 전용(결정 0061-9). 이번 밤 마피아가 남긴 쪽지 — saveNote(09-12)가 쓰고 enterMorning(탈락 없는 밤)·enterNight 가 키째 지운다. 구출·무효 밤의 쪽지는 폐기된다. */
   nightNote?: string;
   /** 서버 전용(결정 0061-14). 암살 현장 분필 자국(고정소수점) — 방 DO 가 채우고 enterNight 가 지운다(09-14). */
@@ -520,8 +491,6 @@ const LEGACY_CHAT_ROOM_KEYS = ["nextMessageSeq", "nextNightSeq"] as const;
  * 채팅은 서버에 저장하지 않는다(결정 0017-7) — 배포 전 저장된 messages 는 깨어날 때 지운다.
  * 채팅 옛 번호·쿨다운 필드(결정 0058 로 대체): 방 키 nextMessageSeq·nextNightSeq 와 Player 키 lastSendAt 도 키째 뺀다.
  * - 판 종류(19페이즈 D-04, T-19-05): 허용 밖 값이 저장된 mode 는 키째 뺀다 — 읽는 쪽 기본값(modeOf → extended)이 받는다. mode 가 없거나 올바른 값인 방은 그대로다(같은 객체).
- * - 원인 흐름 아침(21페이즈 WR-03, 결정 0088): 원인 흐름 규칙(cause)이 켜진 판의 morning 인데 첫 근처 표본 시각(errandTickAt)이 없는 방(배포 전에 시작돼 아침 중이던 확장판 방)은
- *   errandTickAt 을 now + ERRAND_TICK_MS 로 채운다 — 안 그러면 아침 걸음이 근처로만 가는데(nearPhaseOf) 근처 snap 표본이 영영 돌지 않아 산 사람이 서로 안 보인다. 호출하는 쪽은 errandTickAt 이 바뀌면 알람을 다시 건다.
  * 아무것도 해당하지 않으면 같은 객체를 돌려준다(DO 생성자의 "바뀌었을 때만 저장·알람" 규칙이 이 동일성에 기댄다).
  * 새 optional 필드가 없는 옛 상태는 읽는 쪽 기본값이 받는다(RESEARCH Pattern 6).
  */
@@ -544,9 +513,7 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   const hasOldChatRoomKeys = LEGACY_CHAT_ROOM_KEYS.some((key) => Object.hasOwn(stored, key));
   const hasBadMode = Object.hasOwn(stored, "mode") && !(GAME_MODES as readonly unknown[]).includes(stored.mode);
   const hasOldPlayerFields = stored.players.some((p) => LEGACY_CLAIM_KEYS.some((key) => Object.hasOwn(p, key)) || Object.hasOwn(p, "lastSendAt"));
-  // 배포 전에 시작돼 아침 중이던 확장판 방: 규칙은 저장된 mode(없으면 extended)로 읽어 cause 가 켜지는데 아침 표본 시각이 없다(WR-03). 허용 밖 mode 는 modeOf 가 기본값(extended)으로 읽는다.
-  const needsMorningTick = stored.phase === "morning" && stored.errandTickAt === undefined && rulesetOf(modeOf(stored)).cause;
-  if (!needsMorningTick && !isLegacyDay && !isLegacyReveal && !isLegacyClaim && !isLegacyVote && !isLegacyNomination && !hasOldVoteRoomKey && !hasOldVotePlayerKeys && !hasOldClaimState && !hasOldMessages && !hasOldChatRoomKeys && !hasOldPlayerFields && !hasBadMode) return stored;
+  if (!isLegacyDay && !isLegacyReveal && !isLegacyClaim && !isLegacyVote && !isLegacyNomination && !hasOldVoteRoomKey && !hasOldVotePlayerKeys && !hasOldClaimState && !hasOldMessages && !hasOldChatRoomKeys && !hasOldPlayerFields && !hasBadMode) return stored;
   // 옛 키는 구조 분해로만 뺀다. 필드 선언이 RoomState 에서 사라져도 컴파일되게 지역 교차 타입으로 받는다.
   const {
     messages: _dropped,
@@ -612,16 +579,16 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   if (isLegacyDay) return { ...next, phase: "dayAnnounce", phaseEndsAt: now + DAY_ANNOUNCE_MS, day: 1 };
   if (isLegacyReveal || isLegacyClaim) return { ...next, phase: "discussion", phaseEndsAt: now + DISCUSSION_MS };
   if (isLegacyNomination) return { ...enterNomination(next), phaseEndsAt: now + NOMINATION_GATHER_MS };
-  if (needsMorningTick) return { ...next, errandTickAt: now + ERRAND_TICK_MS };
   return next;
 }
 
 /**
  * 옛 방 표시 — 이 표 한 곳이 "배포 전에 저장된 방"을 알아보는 기준이다(결정 0089, D-03·D-29). 이후 삭제 계획이 키를 하나씩 더한다.
- * 22-03: 옛 튜토리얼 — 방 키 tutorialPassed, 개인 키 tutorialDone, 단계 "tutorial". 22-04~22-07 이 등불·현장·건너뛰기·town·errand·mode 표시를 더한다.
+ * 22-03: 옛 튜토리얼 — 방 키 tutorialPassed, 개인 키 tutorialDone, 단계 "tutorial".
+ * 22-04: 원인 흐름 — 방 키 lamps(등불 켜짐)·scene(아침 현장), 개인 키 skipVote(건너뛰기)·errandCut(자른 등불)·sceneSeen(살핀 지점). 22-05~22-07 이 town·errand·mode 표시를 더한다.
  */
-const LEGACY_V3_ROOM_KEYS: readonly string[] = ["tutorialPassed"];
-const LEGACY_V3_PLAYER_KEYS: readonly string[] = ["tutorialDone"];
+const LEGACY_V3_ROOM_KEYS: readonly string[] = ["tutorialPassed", "lamps", "scene"];
+const LEGACY_V3_PLAYER_KEYS: readonly string[] = ["tutorialDone", "skipVote", "errandCut", "sceneSeen"];
 const LEGACY_V3_PHASES: readonly string[] = ["tutorial"];
 
 /**

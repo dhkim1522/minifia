@@ -8,7 +8,6 @@
 import { isAlive } from "./alive";
 import { STAGE_SPOT } from "./map";
 import type { RoomState } from "./room";
-import { modeOf, rulesetOf } from "./ruleset";
 import { positionAtFx } from "./world";
 import type { LayoutMemo, WorldState } from "./world";
 
@@ -137,13 +136,10 @@ export function assignSlots(people: readonly { id: string; x: number; z: number 
   return out;
 }
 
-/** 지금 단계가 요구하는 배치의 키: 원인 흐름 토론 '{일차}:board' · 지목 '{일차}:ring' · 결선 '{일차}:runoff' · 마지막 3인 '{일차}:showdown' · 변론·찬반 '{일차}:stage' · 처형 '{일차}:exec' · 그 밖은 null(아무것도 안 한다). */
+/** 지금 단계가 요구하는 배치의 키: 지목 '{일차}:ring' · 결선 '{일차}:runoff' · 마지막 3인 '{일차}:showdown' · 변론·찬반 '{일차}:stage' · 처형 '{일차}:exec' · 그 밖은 null(아무것도 안 한다). */
 export function layoutKey(state: RoomState): string | null {
   const day = state.day ?? 0;
   switch (state.phase) {
-    // 원인 흐름 토론(21페이즈 D-18·Open Q 8, 결정 0088): 토론이 시작되면 산 사람이 둘레 자리로 모인다. 지목의 '{일차}:ring' 과 다른 키라 지목에 들어서면 다시 모인다.
-    case "discussion":
-      return rulesetOf(modeOf(state)).cause ? `${day}:board` : null;
     case "nomination":
       return `${day}:ring`;
     case "runoff":
@@ -192,7 +188,7 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
   const key = layoutKey(state);
   if (key === null) return null;
   const day = state.day ?? 0;
-  const trial = state.phase !== "nomination" && state.phase !== "discussion"; // 토론 모이기(board)는 지목처럼 같은 키일 때만 기억을 잇는다
+  const trial = state.phase !== "nomination" && state.phase !== "discussion";
   const defender = trial && state.phase !== "runoff" && state.phase !== "showdown" ? state.verdict?.candidate : undefined;
   const runoffCand = state.phase === "runoff" ? state.runoff?.cand : undefined;
 

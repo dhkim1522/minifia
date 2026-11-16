@@ -2,10 +2,9 @@
 // 전역 규칙 상수는 없다 — 서버는 방 상태의 판 종류에서, 화면은 view.mode 에서 rulesetOf(modeOf(…)) 로 얻는다.
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CAUSE_MODES, modeOf, politicsOn, rulesetOf } from "../../shared/game/ruleset";
+import { describe, expect, it } from "vitest";
+import { modeOf, politicsOn, rulesetOf } from "../../shared/game/ruleset";
 import { DEFAULT_MODE, GAME_MODES } from "../../shared/protocol";
-import { lockCause, openCause, SHIPPED_CAUSE_MODES } from "../helpers/playable";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string): string => readFileSync(`${ROOT}${rel}`, "utf8");
@@ -23,9 +22,9 @@ function sourceFiles(): string[] {
 }
 
 describe("판 규칙 표 (결정 0072, 19페이즈 D-02)", () => {
-  it("두 판의 아홉 값(제품 상태, 21-13: setup 이 원인 흐름을 잠그지 않는다): 정치 장치 다섯은 두 판 모두 꺼짐, 심부름·목격 기록·흔적·cause 는 extended 만 켜짐", () => {
-    expect(JSON.stringify(rulesetOf("basic"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false, errand: false, witness: false, trace: false, cause: false }));
-    expect(JSON.stringify(rulesetOf("extended"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false, errand: true, witness: true, trace: true, cause: true }));
+  it("두 판의 여덟 값: 정치 장치 다섯은 두 판 모두 꺼짐, 심부름·목격 기록·흔적은 extended 만 켜짐(22-04: cause 는 지웠다)", () => {
+    expect(JSON.stringify(rulesetOf("basic"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false, errand: false, witness: false, trace: false }));
+    expect(JSON.stringify(rulesetOf("extended"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false, errand: true, witness: true, trace: true }));
   });
 
   it("판 종류는 둘뿐이고 어느 판도 정치 장치가 켜져 있지 않다 (T-19-07)", () => {
@@ -44,65 +43,10 @@ describe("판 규칙 표 (결정 0072, 19페이즈 D-02)", () => {
   });
 });
 
-describe("원인 흐름 플래그 (21-01, D-01·결정 0081-2·3)", () => {
-  it("제품 값: 원인 흐름 판 종류 표는 확장판 하나다 (잠긴 뒤에도 사본이 지킨다)", () => {
-    expect(SHIPPED_CAUSE_MODES.join(",")).toBe("extended");
-  });
-
-  it("setup 이 잠그지 않은 상태(21-13): 표가 제품 값 확장판 하나이고 확장판만 cause 가 켜져 있다", () => {
-    expect(CAUSE_MODES.join(",")).toBe("extended");
-    expect(GAME_MODES.map((mode) => `${mode}:${rulesetOf(mode).cause}`).join(" ")).toBe("basic:false extended:true");
-  });
-
-  describe("lockCause 아래(꺼진 옛 확장판 경로를 단언하는 시험이 쓰는 잠금)", () => {
-    let restore: () => void = () => {};
-    beforeAll(() => {
-      restore = lockCause();
-    });
-    afterAll(() => restore());
-
-    it("표가 비고 두 판 모두 cause 가 꺼져 있으며 나머지 여덟 값은 그대로다", () => {
-      expect(CAUSE_MODES.length).toBe(0);
-      expect(GAME_MODES.map((mode) => `${mode}:${rulesetOf(mode).cause}`).join(" ")).toBe("basic:false extended:false");
-      expect(JSON.stringify(rulesetOf("extended"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false, errand: true, witness: true, trace: true, cause: false }));
-    });
-  });
-
-  describe("openCause 아래", () => {
-    let restore: () => void = () => {};
-    beforeAll(() => {
-      restore = openCause();
-    });
-    afterAll(() => restore());
-
-    it("확장판 cause 는 켜지고 기본 마피아는 늘 꺼져 있다", () => {
-      expect(GAME_MODES.map((mode) => `${mode}:${rulesetOf(mode).cause}`).join(" ")).toBe("basic:false extended:true");
-    });
-
-    it("나머지 여덟 값은 잠금과 무관하다", () => {
-      expect(JSON.stringify(rulesetOf("extended"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false, errand: true, witness: true, trace: true, cause: true }));
-    });
-
-    it("같은 잠금 상태면 같은 얼린 객체를 돌려준다", () => {
-      expect(GAME_MODES.map((mode) => `${Object.isFrozen(rulesetOf(mode))}/${rulesetOf(mode) === rulesetOf(mode)}`).join(" ")).toBe("true/true true/true");
-    });
-  });
-
-  it("openCause·lockCause 는 되돌리면 부르기 전 상태다(제품 상태에서 시작한다)", () => {
-    const close = openCause();
-    close();
-    expect(`${CAUSE_MODES.join(",")}/${rulesetOf("extended").cause}`).toBe("extended/true");
-    const unlock = lockCause();
-    expect(`${CAUSE_MODES.length}/${rulesetOf("extended").cause}`).toBe("0/false");
-    unlock();
-    expect(`${CAUSE_MODES.join(",")}/${rulesetOf("extended").cause}`).toBe("extended/true");
-  });
-});
-
 describe("전역 규칙 상수가 없다 (19-02, D-03)", () => {
-  it("ruleset.ts 가 내보내는 이름은 타입·함수 셋과 시험 잠금 표 CAUSE_MODES 하나뿐이다 (대문자 상수는 이 표뿐)", () => {
+  it("ruleset.ts 가 내보내는 이름은 타입·함수 셋뿐이다 (대문자 상수가 없다 — 22-04 가 시험 잠금 표 CAUSE_MODES 를 지웠다)", () => {
     const names = [...read("shared/game/ruleset.ts").matchAll(/^export (?:const|function|interface|type) (\w+)/gm)].map((m) => m[1]);
-    expect(names.join(",")).toBe("Ruleset,CAUSE_MODES,rulesetOf,modeOf,politicsOn");
+    expect(names.join(",")).toBe("Ruleset,rulesetOf,modeOf,politicsOn");
   });
 
   it("src·shared·worker·test·scripts 의 소스 어디에도 옛 전역 상수 이름이 없다 (주석 포함)", () => {
