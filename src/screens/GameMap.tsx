@@ -450,11 +450,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const verdicting = view.phase === "verdict";
   const defending = view.phase === "defense";
   const baseTagProps = useMemo<WorldTagProps | undefined>(() => {
-    // 찬반(DAY-06): 던진 사람의 이름표에 체크만 붙는다. 서버 day.voted 는 좌석뿐이고 무엇을 골랐는지는 어디에도 없다(결정 0053)
-    if (verdicting) {
-      const voted = new Set(view.day?.voted ?? []);
-      return (seat) => (voted.has(seat) ? { done: true } : {});
-    }
+    // 찬반(22-10, D-26): 이름표에 아무것도 붙이지 않는다 — 누가 던졌는지는 서버도 보내지 않고 집계 수는 아래 패널 숫자 줄이 보인다
+    if (verdicting) return undefined;
     // 최후 변론(DAY-05): 변론자 이름표만 지목 때 받은 득표 배지와 유력 도장을 유지하고 다른 이름표의 배지는 사라진다(공개 기록 voteLog 에서)
     if (defending) {
       const candidate = view.day?.candidate;
