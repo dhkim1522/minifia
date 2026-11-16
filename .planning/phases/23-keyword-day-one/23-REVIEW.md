@@ -91,8 +91,8 @@ export function normalizeForGuard(s: string): string {
 
 **File:** `src/net/useKeywordAnswer.ts:185-199` (주석 `:9-11`)
 **Issue:** 거절 감지는 `e.t === "error"` 면 코드와 무관하게 `KEYWORD_REJECT_WINDOW_MS`(3초) 안에서 거절로 본다. 서버가 같은 창에 보내는 다른 오류가 있다:
-- 확정이 마감 직후에 도착하면 서버는 먼저 `advance` 로 `dayAnnounce` 로 넘기고 `WRONG_PHASE` + state 를 보낸다(`room.ts:1124` `sendRejection`). 프레임 순서가 error → state 라서, `Keyword` 화면이 아직 마운트된 순간 이 오류를 받아 `setNotice("쓸 수 없는 말이에요")` 와 `emitSignal({ kind: "deny" })` 를 낸다. 주석(`:11`)은 "그 시간이 지난 뒤 온 거절은 조용히 넘긴다" 고 하지만 3초 창이 이 경우를 덮는다.
-- `RATE_LIMITED` 도 같다(`room.ts:393`).
+- 확정이 마감 직후에 도착하면 서버는 먼저 `advance` 로 `dayAnnounce` 로 넘기고 `WRONG_PHASE` + state 를 보낸다(`worker/room.ts:1131` `sendRejection`). 프레임 순서가 error → state 라서, `Keyword` 화면이 아직 마운트된 순간 이 오류를 받아 `setNotice("쓸 수 없는 말이에요")` 와 `emitSignal({ kind: "deny" })` 를 낸다. 주석(`:11`)은 "그 시간이 지난 뒤 온 거절은 조용히 넘긴다" 고 하지만 3초 창이 이 경우를 덮는다.
+- `RATE_LIMITED` 도 같다(`worker/room.ts:393`).
 
 실패 시나리오: 사용자가 마감 0.3초 전에 [보내기] → 왕복 지연이 0.3초를 넘으면 낮 시작 순간에 deny 소리가 나고 "쓸 수 없는 말이에요" 가 한 프레임 뜬다. 금지어는 지금 서버에서 `BAD_MESSAGE` 로만 오므로 코드로 가르면 정확하다.
 **Fix:**
