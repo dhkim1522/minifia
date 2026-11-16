@@ -112,6 +112,8 @@
 .mv-chat__will-dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); }
 .mv-chat__input:focus-visible, .mv-chat__newdot:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 .mv-chat__send.is-dim { opacity: 0.45; }
+/* [의심] 단추(24-03, P24-2): 입력줄 맨 오른쪽 끝 48 원 아이콘 단추. 면 night-700·아이콘 gray-100 은 .mv-tool__face 그대로, 눌림(모드)은 .mv-tool[aria-pressed] 의 안쪽 테두리 2px */
+.mv-chat__suspect { width: var(--control-input); height: var(--control-input); border-radius: var(--radius-pill); }
 /* 입력줄 오른쪽 끝 슬롯(11-12): 결과 화면의 다시 하기 알약 자리. 줄어들지 않는다 */
 .mv-chat__trailing { display: flex; flex: none; align-items: center; }
 /* 다시 하기 알약(11-12, UI-SPEC D-1·G): 96×48. 손님 = night-700 면에 check 20 + 라벨 14px, 켜지면 안쪽 테두리 2px gray-100. 방장 = gray-100 면 + night-900 글 두 줄(14px × 줄 높이 20). 흐림은 불투명도만 */
@@ -298,6 +300,9 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 
 /* 직업 주장 배지(09.1.1-08, UI-SPEC A-1): 이름표 오른쪽 위 모서리에 걸친다. 표시 전용(포인터 없음). 면 overlay-ink-strong·테두리와 아이콘 gray-100 — 어떤 직업도 진홍을 쓰지 않는다.
    앵커(.mv-claim-anchor)는 이름표(.mv-tag, position: relative) 전체를 덮어 이름표 폭·쌓임 높이를 늘리지 않는다. */
+/* 의심 칩(24-03, P24-16): 이름표 왼쪽 위(득표 배지·직업 주장 배지 자리와 반대). 종이 아이콘 + 장수, 이름표 폭·쌓임 높이를 늘리지 않는다 */
+.mv-suspect-count { position: absolute; top: -8px; left: calc(var(--space-xs) * -1); display: inline-flex; align-items: center; justify-content: center; gap: 2px; box-sizing: border-box; min-width: 20px; height: 20px; padding: 0 var(--space-xs); border-radius: var(--radius-pill); background: var(--night-700); border: 1.5px solid var(--gray-100); color: var(--gray-100); font-size: 14px; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; text-shadow: none; pointer-events: none; }
+.mv-suspect-count__n { display: inline-block; }
 .mv-claim-anchor { position: absolute; inset: 0; pointer-events: none; }
 .mv-claim { position: absolute; top: -8px; right: calc(var(--space-xs) * -1); display: grid; place-items: center; box-sizing: border-box; width: 20px; height: 20px; border-radius: var(--radius-pill); background: var(--overlay-ink-strong); border: 1.5px solid var(--gray-100); color: var(--gray-100); text-shadow: none; pointer-events: none; }
 .mv-claim.is-quiet { border-style: dashed; }

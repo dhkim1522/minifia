@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from "react";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { MAP_PHASES } from "../../shared/game/movement";
 import { majorityOf } from "../../shared/game/nomination";
@@ -55,6 +55,8 @@ export interface GamePanelProps {
   onCallUsed?: () => void;
   inputRef?: RefObject<HTMLInputElement | null>;
   panelRef?: RefObject<HTMLElement | null>;
+  /** 입력줄 맨 오른쪽 끝 슬롯(ChatPanel trailing)에 놓을 요소 — 낮 토론의 [의심] 단추(24-03). 없으면 슬롯도 없다 */
+  chatTrailing?: ReactNode;
 }
 
 /**
@@ -62,7 +64,7 @@ export interface GamePanelProps {
  * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + 찬성·반대 숫자 줄, 22-10)을 얹는다 — 변론·처형·유령은 채팅만이다(처형은 찬반 줄을 접는다, 18.1-13 결정 0083-9).
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef }: GamePanelProps) {
+export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, chatTrailing }: GamePanelProps) {
   const serverPressed = view.me.endDiscussion === true;
   const [pressed, choose] = useViewChoice<boolean>(view, serverPressed);
   // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
@@ -200,6 +202,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
               }
             : {})}
           {...(call?.chat ? { callInput: true } : {})}
+          {...(chatTrailing ? { trailing: chatTrailing } : {})}
           {...(penOn
             ? {
                 onWill: () => {

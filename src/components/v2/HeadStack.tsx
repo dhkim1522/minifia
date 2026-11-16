@@ -26,6 +26,10 @@ const DONE_LABEL = "투표함";
 /** 첫 사건(튜토리얼)의 내 이름표는 이름이 이미 "나" 라 접미를 붙이지 않는다(0080-16) */
 const ME_NAME = "나";
 
+/** 의심 칩(P24-16): 남의 이름표는 이 장수 이상일 때만, 내 이름표는 1장 이상이면 늘 보인다(내 가슴은 등 쪽 카메라에서 안 보여 이것이 유일한 알림) */
+export const SUSPECT_CHIP_MIN_OTHER = 4;
+export const suspectChipShown = (count: number | undefined, mine: boolean): boolean => count !== undefined && count >= (mine ? 1 : SUSPECT_CHIP_MIN_OTHER);
+
 export interface NameTagProps {
   name: string;
   /** 자리 구분색 — `var(--seat-1)` ~ `var(--seat-8)` 값 */
@@ -46,11 +50,13 @@ export interface NameTagProps {
   call?: boolean;
   /** 유령 표식(is-ghost). 이름표는 불투명 — 몸이 유령 그림이라 직업은 RoleChip 이 알린다(0083-2) */
   ghost?: boolean;
+  /** 이 사람이 받은 의심 종이 수(공개 값). 남은 4장 이상, 나는 1장 이상일 때만 이름표 왼쪽 위에 칩을 그린다(P24-16). 몇 장인지만 알리고 누가 붙였는지는 싣지 않는다 */
+  suspect?: number;
   /** 이름표 모서리에 걸 요소(직업 주장 배지). 이름표 폭·쌓임 높이를 늘리지 않는다 */
   children?: ReactNode;
 }
 
-export function NameTag({ name, color, me, away, mine, done, doneLabel, blink, call, ghost, children }: NameTagProps) {
+export function NameTag({ name, color, me, away, mine, done, doneLabel, blink, call, ghost, suspect, children }: NameTagProps) {
   const cls = ["mv-tag", me && "is-me", away && "is-away", blink && "is-blink", call && "is-call", mine && "is-mine", ghost && "is-ghost"]
     .filter(Boolean)
     .join(" ");
@@ -62,6 +68,12 @@ export function NameTag({ name, color, me, away, mine, done, doneLabel, blink, c
       {done ? (
         <span className="mv-tag__done">
           <V2Icon name="check" size={16} label={doneLabel ?? DONE_LABEL} />
+        </span>
+      ) : null}
+      {suspect !== undefined && suspectChipShown(suspect, me === true) ? (
+        <span className="mv-suspect-count" role="img" data-suspect-count={String(suspect)} aria-label={`의심 ${suspect}장`}>
+          <V2Icon name="postit" size={14} />
+          <span className="mv-suspect-count__n">{suspect}</span>
         </span>
       ) : null}
       {children}
@@ -89,7 +101,7 @@ export type HeadStackProps = NameTagProps & {
 };
 
 // 바닥 가운데를 캐릭터 머리 꼭대기에 translate(-50%, -100%) 로 놓는 일은 쓰는 쪽(이름표 층, 06-13)이 한다.
-export function HeadStack({ name, color, me, away, typing, role, count, lead, mine, done, doneLabel, blink, call, ghost, claim, claimSwapped, claimPop, claimNotice }: HeadStackProps) {
+export function HeadStack({ name, color, me, away, typing, role, count, lead, mine, done, doneLabel, blink, call, ghost, suspect, claim, claimSwapped, claimPop, claimNotice }: HeadStackProps) {
   const hasBadge = count !== undefined && count >= 1;
   return (
     <div
@@ -110,7 +122,7 @@ export function HeadStack({ name, color, me, away, typing, role, count, lead, mi
       ) : null}
       {role ? <RoleChip role={role} /> : null}
       {hasBadge ? <VoteBadge count={count} lead={lead} /> : null}
-      <NameTag name={name} color={color} me={me} away={away} mine={mine} done={done} doneLabel={doneLabel} blink={blink} call={call} ghost={ghost}>
+      <NameTag name={name} color={color} me={me} away={away} mine={mine} done={done} doneLabel={doneLabel} blink={blink} call={call} ghost={ghost} suspect={suspect}>
         {claim !== undefined ? (
           <ClaimBadge key={claimPop ?? 0} claim={claim} swapped={claimSwapped === true} pop={claimPop !== undefined && claimPop > 0} notice={claimNotice === true} />
         ) : null}
