@@ -619,7 +619,7 @@ Plans:
 **Goal:** 둘째 날 이후의 위트 있는 정치 장치로 "의심" 포스트잇을 넣고, 새 흐름 기준으로 튜토리얼을 다시 만든다. 끝에 폰 6종 전체 회귀 뒤 minifia-v3 에 한 번 배포한다(결정 0089-10·11·15·24·25).
 **Requirements**: TBD
 **Depends on:** Phase 23
-**Plans:** 0 plans
+**Plans:** 12 plans
 
 **Success Criteria:**
 1. 낮에 의심 가는 사람 가까이 가서 "의심" 포스트잇을 붙인다. 하루 한 장, 붙인 사람은 옮길 수 있고 받은 사람은 뗄 수 없으며, 다음 날 아침에 떨어지고 기록 카드에 남는다. 투표·판정에는 영향이 없다
@@ -628,4 +628,15 @@ Plans:
 4. 폰 6종 전체 E2E 회귀가 로컬에서 통과하고, 개인 계정 확인 뒤 minifia-v3 에 배포되어 health·smoke 가 통과한다
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 24 to break down)
+- [ ] 24-01-PLAN.md — 트레이서: suspect 메시지 → 방 DO → stickNote → notes → 전원 방송 → view, 거절 균일·간격·다시 하기 비움, 선택기 suspectView (W1)
+- [ ] 24-02-PLAN.md — 누설 감시선(notes 이름·마피아/시민 동일)·view 키 사본, D1 note_count (W2)
+- [ ] 24-03-PLAN.md — [의심] 단추·모드 훅·postit 아이콘·이름표 칩·GameMap 배선과 튜토리얼 prop 둘 (W2)
+- [ ] 24-04-PLAN.md — 종이 에셋: 좌석 8색·주입식 텍스처·재질 캐시·쌓기·붙음/떨어짐 리그·캐릭터 부착 (W2)
+- [ ] 24-05-PLAN.md — 종이 배선(SceneLook·runtime·__mfWorld.suspectNotes)·perf-run --notes (W3)
+- [ ] 24-06-PLAN.md — 기록 카드 '답과 의심'(일차 구역·data-log-day)·E2E 하네스 개명 (W2)
+- [ ] 24-07-PLAN.md — 튜토리얼 기반: 대본·가짜 view·FocusRing·틀·봤음 키·네트워크 0 정적 가드 (W2)
+- [ ] 24-08-PLAN.md — 튜토리얼 화면 뼈대와 장면 1~5 (W3)
+- [ ] 24-09-PLAN.md — 튜토리얼 장면 6~10(실제 종이)과 첫 화면 [혼자 하기] (W4)
+- [ ] 24-10-PLAN.md — E2E 새 흐름 suspect·suspect-sizes·tutorial, 부분 회귀, 종이 성능·크기 확정, 회귀 다섯 묶음 (W5)
+- [ ] 24-11-PLAN.md — 결정 0092·기획서·구조·화면 지도 (W6)
+- [ ] 24-12-PLAN.md — 폰 6종 전체 회귀·로컬 D1·개인 계정 확인 뒤 D1 생성과 배포(정지 조건)·HANDOFF (W7)
