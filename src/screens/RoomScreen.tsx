@@ -63,7 +63,7 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   morning: morningAnnounce,
   defense: defenseAnnounceOf,
   execution: executionAnnounceOf,
-  nomination: () => "지목", // 8페이즈: 서버가 아직 이 단계를 만들지 않는다 — 문구는 08-13 이 다시 본다
+  nomination: () => "지목",
   runoff: () => "결선", // 09.1.1-14: 동점 결선 화면(GameMap)
   showdown: () => "마지막 셋", // 09.1.1-15: 마지막 3인 결전 화면(GameMap)
   verdict: () => "찬반",
@@ -80,7 +80,7 @@ function morningAnnounce(view: RoomView): string {
 }
 
 // 밤 안내: "{N}일차 밤. " 뒤에 내 처지에 맞는 한 줄. 탈락한 사람은 역할과 무관하게 관전 문구다(결정 0021).
-// 처형 무효로 온 밤이면 그 앞에 `처형 무효. {부제}. ` 를 붙인다(04-24, UI-SPEC 7.3). 카드는 aria-hidden 이라 이 문구가 읽는다.
+// 처형 없음으로 온 밤이면 그 앞에 `처형 없음. ` 을 붙인다(22-10 P22-4 — 이유별 문구 없음). 큰 글은 시각 알림이고 이 문구가 읽는다.
 function nightAnnounce(view: RoomView): string {
   const noExecution = view.day?.noExecution;
   return `${noExecution ? noExecutionPrefix(noExecution.reason) : ""}${nightAnnounceBase(view)}`;

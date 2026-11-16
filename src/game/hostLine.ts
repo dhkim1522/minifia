@@ -22,7 +22,7 @@ export type HostKey =
   | "discussion.act" | "discussion.ghost"
   | "nomination.act" | "nomination.ghost"
   | "defense.act" | "defense.wait" | "defense.ghost"
-  | "verdict.act" | "verdict.wait" | "verdict.ghost"
+  | "verdict.act" | "verdict.ghost"
   | "execution.passed" | "execution.failed"
   | "night.mafia" | "night.police" | "night.doctor" | "night.citizen" | "night.ghost"
   | "morning" | "ended"
@@ -51,13 +51,12 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   "dayAnnounce.ghost": "지켜봐 주세요",
   "discussion.act": "의심 가는 사람을 이야기해 주세요",
   "discussion.ghost": "유령끼리 이야기할 수 있습니다",
-  "nomination.act": "처형할 사람의 이름표를 눌러 주세요",
+  "nomination.act": "차례대로 한 명을 골라요",
   "nomination.ghost": "지켜봐 주세요",
   "defense.act": "마지막 말과 유언을 남겨 주세요",
   "defense.wait": "변론을 들어 주세요",
   "defense.ghost": "변론을 지켜봐 주세요",
-  "verdict.act": "찬성 또는 반대를 눌러 주세요",
-  "verdict.wait": "결과를 기다려 주세요",
+  "verdict.act": "오늘 처형할까요?",
   "verdict.ghost": "지켜봐 주세요",
   // 큰 글(처형 결과)이 말한다
   "execution.passed": "",
@@ -103,8 +102,8 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
       if (ghost) return "defense.ghost";
       return defender ? "defense.act" : "defense.wait";
     case "verdict":
-      if (ghost) return "verdict.ghost";
-      return defender ? "verdict.wait" : "verdict.act";
+      // 후보가 없다(22-10, D-11): 산 사람 전원이 같은 줄이다
+      return ghost ? "verdict.ghost" : "verdict.act";
     case "execution": {
       const passed = view.day?.verdict?.passed;
       if (passed === undefined) return "fallback";

@@ -169,7 +169,7 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
 
   it("18.1-12: 보이는 띠 줄(대기실·결과 제외, 빈 줄 제외)은 공백 포함 19자 이하·마침표 없음·'입니다.'·'되었습니다.' 없음 — 폭 360 한 줄 (0073-1)", () => {
     const visible = (Object.keys(HOST_LINES) as HostKey[]).filter((key) => !key.startsWith("lobby.") && key !== "ended").map((key) => HOST_LINES[key]).filter((text) => text !== "");
-    expect(visible.length).toBeGreaterThan(20);
+    expect(visible.length).toBeGreaterThan(18); // 22-10: verdict.wait 키 삭제
     for (const text of visible) {
       expect([...text].length, text).toBeLessThanOrEqual(19);
       expect(text.endsWith("."), text).toBe(false);

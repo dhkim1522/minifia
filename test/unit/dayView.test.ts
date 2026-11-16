@@ -435,7 +435,7 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
   it("유령은 같은 제목에 '모두의 직업이 보여요'(밤은 '모두의 직업과 밤 행동이 보여요')", () => {
     const g = { players: ghostPlayers, mySeat: 0 };
     same(hdr(viewOf("discussion", g)), { title: "토론", hint: "모두의 직업이 보여요" });
-    same(hdr(nominationOf([], g)), { title: "투표", hint: "모두의 직업이 보여요" });
+    same(hdr(nominationOf([], g)), { title: "지목", hint: "모두의 직업이 보여요" });
     same(hdr(defenseView(g)), { title: "최후 변론", hint: "모두의 직업이 보여요" });
     same(hdr(verdictView(g)), { title: "찬반", hint: "모두의 직업이 보여요" });
     same(hdr(executionView(5, 2, true, g)), { title: "처형", hint: "모두의 직업이 보여요" });

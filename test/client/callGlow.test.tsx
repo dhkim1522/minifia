@@ -364,14 +364,14 @@ describe("맵 화면 빛남 (HOST-03·04·05)", () => {
       expect(calls(container)).toHaveLength(0);
     });
 
-    it("변론자 본인·유령·이미 고른 사람은 0개", () => {
-      const a = mount(mapView({ phase: "verdict", mySeat: 2, candidate: 2 }));
-      expect(calls(a.container)).toHaveLength(0);
+    it("처형 후보가 없어 누구나 두 단추(22-10) — 유령·이미 고른 사람은 0개", () => {
+      const a = mount(mapView({ phase: "verdict", mySeat: 2 }));
+      expect(calls(a.container)).toHaveLength(2);
       a.unmount();
-      const b = mount(mapView({ phase: "verdict", mySeat: 0, candidate: 2, dead: [0] }));
+      const b = mount(mapView({ phase: "verdict", mySeat: 0, dead: [0] }));
       expect(calls(b.container)).toHaveLength(0);
       b.unmount();
-      const c = mount(mapView({ phase: "verdict", mySeat: 0, candidate: 2, verdictVote: true }));
+      const c = mount(mapView({ phase: "verdict", mySeat: 0, verdictVote: true }));
       expect(calls(c.container)).toHaveLength(0);
     });
   });

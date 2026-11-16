@@ -18,18 +18,12 @@ import { isMySpeakTurn, pointSeatsOf, SHOWDOWN_COPY, showdownStageOf } from "./s
 /** 문구 표. UI-SPEC "Copywriting Contract" 원문 — 해요체, 마침표·느낌표 없음. 역할 단어는 토론 안내의 '마피아'(모두에게 같은 문장) 하나뿐이다. */
 export const DAY_COPY = {
   // ---- 채팅 시스템 줄 ----
-  /** 지목 한 줄 '민준 → 도윤' */
-  pointLine: (from: string, to: string): string => `${from} → ${to}`,
-  /** 시간 안에 못 골라 기권으로 확정된 차례 '민준 · 기권' */
-  abstainLine: (name: string): string => `${name} · 기권`,
   dayLine: (n: number): string => `${n}일차`,
-  nominationStart: "투표 시작",
   defenseLine: (name: string, votes: number): string => `${name} 님 ${votes}표 · 최후 변론`,
   /** 결선(09.1.1-14) 시작 채팅 시스템 줄 */
   runoffStart: "결선 시작",
   /** 결선을 이기고 최후 변론으로 가는 hot 줄 '{이름} 님 결선 {k}표 · 최후 변론' */
   runoffDefenseLine: (name: string, votes: number): string => `${name} 님 결선 ${votes}표 · 최후 변론`,
-  verdictStart: "찬반 시작",
   tallyText: (yes: number, no: number): string => `찬성 ${yes} · 반대 ${no}`,
   executedText: (name: string): string => `${name} 님 처형`,
   noExecution: "처형 없음",
@@ -42,7 +36,7 @@ export const DAY_COPY = {
   titles: {
     dayAnnounce: "토론", // 앞의 "낮" 은 헤더 시간대 낱말이 말한다(결정 0083-1)
     discussion: "토론",
-    nomination: "투표",
+    nomination: "지목",
     runoff: "결선",
     showdown: SHOWDOWN_COPY.title,
     defense: "최후 변론",
@@ -53,13 +47,8 @@ export const DAY_COPY = {
   } as Partial<Record<PhaseId, string>>,
   // ---- 단계 안내 한 줄 ----
   discussionHint: "이야기하며 마피아를 찾아요",
-  nominationHint: "의심되는 사람을 눌러요",
-  /** 지목 시작 때 모이는 동안의 헤더 안내 */
-  nominationGatherHint: "모이는 중",
   defenseHint: (name: string): string => `${name} 님의 변론`,
   defenseHintSelf: "해명할 시간이에요",
-  verdictHint: (name: string): string => `${name} 님을 처형할까요?`,
-  verdictHintSelf: "결과를 기다려요",
   /** 밤 산 마피아 헤더 안내(UI-SPEC 단계표 202행). 이 문자열은 마피아 분기 안에서만 만든다 — 다른 신분 DOM 에 없다(T-09-29) */
   nightHintMafia: "대상에게 다가가요",
   /** 밤 산 시민·경찰·의사 헤더 안내(UI-SPEC 단계표 203~205행). 각 문자열은 그 역할 분기 안에서만 만든다 — 다른 신분 DOM 에 없다(T-09-33) */
@@ -246,9 +235,6 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       // U-5: "낮이 되었습니다" 36px 알림은 없다(띠가 말한다). 채팅 줄 "{N}일차" 는 그대로
       out.lines.push({ kind: "system", text: DAY_COPY.dayLine(day.n) });
       return;
-    case "nomination":
-      out.lines.push({ kind: "system", text: DAY_COPY.nominationStart });
-      return;
     case "runoff":
       out.lines.push({ kind: "system", text: DAY_COPY.runoffStart });
       return;
@@ -276,9 +262,6 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       out.lines.push({ kind: "hot", text: DAY_COPY.defenseLine(name, votes) });
       return;
     }
-    case "verdict":
-      out.lines.push({ kind: "system", text: DAY_COPY.verdictStart });
-      return;
     case "execution": {
       const verdict = day.verdict;
       if (!verdict) return;
@@ -308,8 +291,9 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       // 지목 동률·0표로 처형 없이 온 밤은 "처형 없음"(0~1.4초) 알림만 남는다. 찬반 뒤의 밤은 처형 단계가 이미 알렸다.
       // 마지막 3인(showdown)의 1-1-1·무표도 같다: 처형 단계 없이 밤으로 와서 이 알림이 처형 없음을 알린다(09.1.1-16, UI-SPEC E-1).
       // U-5: "밤이 되었습니다" 36px 알림은 이어지지 않는다(띠가 말한다).
+      // 22-10(P22-4): 찬반 부결(rejected)·지목 동점(tie)·0표(noVotes)는 같은 큰 글 '처형 없음' 1.4초 한 가지 — 이유를 구별해 보이지 않는다.
       const reason = day.noExecution?.reason;
-      if ((prev.phase === "nomination" || prev.phase === "runoff" || prev.phase === "showdown") && (reason === "tie" || reason === "noVotes")) {
+      if ((prev.phase === "verdict" || prev.phase === "nomination" || prev.phase === "runoff" || prev.phase === "showdown") && (reason === "tie" || reason === "noVotes" || reason === "rejected")) {
         out.lines.push({ kind: "system", text: DAY_COPY.noExecution });
         out.announces.push({ text: DAY_COPY.noExecution, at: 0, ms: ANNOUNCE_NOEXEC_MS });
       }
@@ -355,24 +339,7 @@ export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: 
   // ---- 단계 진입: 줄·결과 알림·연출 ----
   if (prev.phase !== cur.phase) phaseEntry(prev, cur, cur.day, events);
 
-  // ---- 투표 차이: 새로 생긴 표마다 vote 줄(순차 지목, 선두·과반·위 알림 없음 — 동시 투표 화면은 22-10 에서 지웠다, D-12) ----
-  const before = new Map(pointsOf(prev).map((l) => [l.seat, l.target]));
-  const after = [...pointsOf(cur)].sort((a, b) => a.seat - b.seat);
-  for (const line of after) {
-    if (before.get(line.seat) === line.target) continue;
-    const from = nameOf(cur, line.seat);
-    const to = nameOf(cur, line.target);
-    if (from === undefined || to === undefined) continue;
-    events.lines.push({ kind: "vote", text: DAY_COPY.pointLine(from, to) });
-  }
-  const turn = cur.phase === "nomination" ? cur.day.turn : undefined;
-  if (turn !== undefined && turn.skip === true && turn.i >= 0 && turn.i < turn.order.length) {
-    const was = prev.phase === "nomination" ? prev.day?.turn : undefined;
-    if (was === undefined || was.i !== turn.i || was.skip !== true) {
-      const name = nameOf(cur, turn.order[turn.i]!);
-      if (name !== undefined) events.lines.push({ kind: "vote", text: DAY_COPY.abstainLine(name) });
-    }
-  }
+  // 지목 줄·기권 줄·단계 시작 줄은 채팅에 쌓이지 않는다(22-10, UI-SPEC C '끝': 누가 누구를 골랐는지 흔적이 남지 않는다) — 차례 위 한 줄·핀·손가락이 그 순간만 보인다.
 
   // ---- 밤 마피아 확정: 서버가 산 마피아에게만 보낸 me.nightSure 가 새로 서거나 바뀌면 마피아 채널에 한 줄(깨질 때는 줄 없음). 마피아가 아닌 view 는 읽지 않는다 ----
   if (cur.me.role === "mafia" && cur.phase === "night" && cur.me.nightSure !== undefined && cur.me.nightSure !== prev.me.nightSure) {
@@ -401,13 +368,9 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
   switch (view.phase) {
     case "discussion":
       return { title, hint: DAY_COPY.discussionHint };
-    case "nomination": {
-      // 기본판(day.turn 없음) 동시 투표: 항상 '의심되는 사람을 눌러요'. 09.1 순차: 모이는 중 → '모이는 중', 내 차례 → '의심되는 사람을 눌러요', 남의 차례·끝 알림 → 제목만
-      const stage = turnStageOf(view);
-      if (stage === null) return { title, hint: DAY_COPY.nominationHint };
-      if (stage === "gather") return { title, hint: DAY_COPY.nominationGatherHint };
-      return isMyTurn(view) ? { title, hint: DAY_COPY.nominationHint } : { title };
-    }
+    case "nomination":
+      // 22-10(P22-1, D-23): 제목만 — 안내는 띠('차례대로 한 명을 골라요')가 말해 같은 글을 두 번 쓰지 않는다
+      return { title };
     case "runoff": {
       // 결선(09.1.1-14): 후보 본인 '결과를 기다려요', 후보 아닌 산 사람은 투표 중에만 '둘 중 한 명을 눌러요', 앞머리·결과는 제목만
       const runoff = view.day?.runoff;
@@ -426,8 +389,8 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
       if (isSelf) return { title, hint: DAY_COPY.defenseHintSelf };
       return defender === undefined ? { title } : { title, hint: DAY_COPY.defenseHint(defender) };
     case "verdict":
-      if (isSelf) return { title, hint: DAY_COPY.verdictHintSelf };
-      return defender === undefined ? { title } : { title, hint: DAY_COPY.verdictHint(defender) };
+      // 후보가 없다(22-10, D-11): 제목만 — 안내는 띠('오늘 처형할까요?')가 말한다
+      return { title };
     case "night":
       switch (view.me.role) {
         case "mafia":

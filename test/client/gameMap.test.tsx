@@ -563,20 +563,20 @@ describe("GameMap — 헤더 시간대 글자 (0083-1)", () => {
     expect(header(container).querySelectorAll(".mf-rolecard-btn").length).toBe(1);
   });
 
-  it("토론에서 지목으로 넘어가면 '낮 · 토론' 이 '저녁 · 투표' 로 바뀐다", () => {
+  it("토론에서 지목으로 넘어가면 '낮 · 토론' 이 '저녁 · 지목' 으로 바뀐다", () => {
     const m = mount(makeView());
     expect(header(m.container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("day");
     m.show(makeView({ phase: "nomination", candidate: 1 }));
     expect(header(m.container).querySelectorAll("[data-tod]").length).toBe(1);
     expect(header(m.container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("dusk");
     expect(word(m.container)?.textContent).toBe("저녁");
-    expect(header(m.container).querySelector(".mv-phase__title")?.textContent).toBe("투표");
+    expect(header(m.container).querySelector(".mv-phase__title")?.textContent).toBe("지목");
   });
 
   it("단계마다 todOf 대응: 낱말·제목", () => {
     const cells: Array<[PhaseId, string, string | null, string]> = [
       ["dayAnnounce", "day", "낮", "토론"],
-      ["nomination", "dusk", "저녁", "투표"],
+      ["nomination", "dusk", "저녁", "지목"],
       ["defense", "dusk", "저녁", "최후 변론"],
       ["verdict", "dusk", "저녁", "찬반"],
       ["execution", "dusk", "저녁", "처형"],

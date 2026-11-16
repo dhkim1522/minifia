@@ -15,21 +15,13 @@ export function defenseAnnounce(name: string | null): string {
   return name === null ? "내 최후 변론" : `${name}님의 최후 변론`;
 }
 
-/** 처형 무효 카드 부제 (D-34) */
-export function noExecutionText(reason: NoExecutionReason): string {
-  switch (reason) {
-    case "tie":
-      return "동률이라 처형하지 않아요";
-    case "noVotes":
-      return "던진 표가 없어요";
-    case "rejected":
-      // 22-09: 찬반 부결(던진 표 0 포함). 화면은 세 경우를 같은 "처형 없음" 알림으로 덮는다(UI-SPEC P22-4) — 이 부제 문구는 22-10 이 화면 연결 때 정한다.
-      return "처형하지 않아요";
-  }
+/** 처형 없음 문구(P22-4, D-14): 부결·동점·0표를 이유와 무관하게 같은 글 한 가지로 알린다 — 이유를 구별해 보이지 않는다 */
+export function noExecutionText(_reason: NoExecutionReason): string {
+  return "처형 없음";
 }
-/** 처형 무효로 시작한 밤의 단계 안내 앞에 붙는 접두 */
+/** 처형 없음으로 시작한 밤의 단계 안내 앞에 붙는 접두(aria-live) */
 export function noExecutionPrefix(reason: NoExecutionReason): string {
-  return `처형 무효. ${noExecutionText(reason)}. `;
+  return `${noExecutionText(reason)}. `;
 }
 
 /** 종료 단계 읽기 문구 */
