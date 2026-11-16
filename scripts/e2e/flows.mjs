@@ -1718,7 +1718,7 @@ async function dayFlow(ctx) {
       // 처형 5초는 서버 타이머로 밤이 된다. 배포본처럼 지연이 큰 곳에서는 위 판정이 5초를 넘기고, 그 뒤 '다음 단계로 넘기기' 를
       // 누르면 이미 온 밤을 건너뛰어 아침·다음 날 토론까지 가 버린다 — 눌러 넘기지 않고 자연 전환을 기다린다(판정은 그대로).
       const night = await attempt(async () => {
-        await ht.waitFor((v) => v.phase === "night", 9000, "처형 뒤 밤(서버 타이머)");
+        await ht.waitFor((v) => v.phase === "night", 14_000, "처형 뒤 정답 공개(첫날 3초)를 지나 밤(서버 타이머)");
         await Promise.all(guests.map((x) => untilGame(x.page, (g) => g.phase === "night", 15_000, "밤 도착")));
       });
       const nightSeen = night.ok ? "" : ` · 방장 서버 단계 ${ht.last()?.phase} · 손님 화면 단계 ${(await Promise.all(guests.map((x) => readGame(x.page).then((g) => g.phase).catch(() => "읽기 실패")))).join(",")}`;
@@ -2076,10 +2076,13 @@ async function noExecChecks(rec, sc, { ht, pages, watch, from, reason, forbidden
   const i = annIndex(log, (t) => t === "처형 없음");
   rec(sc, "NE1", "'처형 없음' 큰 글이 뜬다", i >= 0, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
   if (i >= 0) recMany(rec, sc, announceChecks(log[i]), " ('처형 없음')");
+  // 23페이즈 D-22: 첫날은 "처형 없음" 큰 글 자리가 정답 공개(answerReveal) 진입이다 — 큰 글 1.4초 → 정답 3초 → 밤. (이전 기대: 큰 글 뒤 곧바로 밤)
   const night = await attempt(async () => {
-    await ht.waitFor((v) => v.phase === "night", 4000, "처형 없음 → 밤");
+    await ht.waitFor((v) => v.phase === "night", 9000, "처형 없음 → 정답 공개 → 밤");
   });
-  rec(sc, "NE2", "큰 글 뒤 곧바로 밤이다", night.ok, night.detail);
+  const seenPhases = ht.phases.slice(from);
+  const revealBeforeNight = seenPhases.includes("answerReveal") && seenPhases.indexOf("answerReveal") < seenPhases.indexOf("night");
+  rec(sc, "NE2", "큰 글 뒤 첫날 정답 공개(answerReveal)를 거쳐 밤이다(D-22)", night.ok && revealBeforeNight, night.ok ? `지난 단계 ${[...new Set(seenPhases)].join(",")}` : night.detail);
   const seen = ht.phases.slice(from);
   const crossed = forbidden.filter((p) => seen.includes(p));
   rec(sc, "NE3", `${forbidden.join("·")} 단계를 지나지 않는다`, crossed.length === 0, `지난 단계 ${[...new Set(seen)].join(",")}`);

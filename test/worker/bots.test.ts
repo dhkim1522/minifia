@@ -850,7 +850,7 @@ describe("기본판 봇 방 자동 완주 (FLOW-05, 결정 0072)", () => {
     const fail = (why: string): string => `${why} | 지나간 단계: ${trail}`;
 
     expect(fail(`ended 에 닿는다(${rounds}회)`) && (await stored(r.code)).phase).toBe("ended");
-    const allowed: PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
+    const allowed: PhaseId[] = ["lobby", "assigning", "roleReveal", "keyword", "answerReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
     expect(fail("허용 밖 단계") && seen.filter((p) => !allowed.includes(p)).join(",")).toBe("");
     expect(fail("runoff·showdown") && seen.filter((p) => p === "runoff" || p === "showdown").join(",")).toBe("");
     const withKeys = views.filter((v) => {
@@ -859,7 +859,7 @@ describe("기본판 봇 방 자동 완주 (FLOW-05, 결정 0072)", () => {
     });
     expect(fail("day.runoff·day.showdown·players[].badge 키") && String(withKeys.length)).toBe("0"); // day.turn 은 순차 지목이 기본 규칙이라 지목 단계에 늘 있다(22-09)
     const afterNomination = seen.filter((p, i) => i > 0 && seen[i - 1] === "nomination" && p !== "nomination");
-    expect(fail("nomination 다음 단계") && afterNomination.filter((p) => p !== "defense" && p !== "night").join(",")).toBe("");
+    expect(fail("nomination 다음 단계") && afterNomination.filter((p) => p !== "defense" && p !== "night" && p !== "answerReveal").join(",")).toBe("");
     expect(fail("nomination 에 닿는다") && String(seen.includes("nomination"))).toBe("true");
     const result = views.at(-1)!.result;
     expect(fail("결과 winner") && String(result?.winner === "citizenWin" || result?.winner === "mafiaWin")).toBe("true");

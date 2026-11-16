@@ -1083,7 +1083,7 @@ export function makePoliticsFlows(h) {
 
       // 처형 단계 끝(6.6초) 뒤까지 기록한다 — 밤으로 넘어간 첫 기록이 시간표 끝이다
       await waitRel(6200, "6.2초");
-      await ht.waitFor((v) => v.phase === "night", 2500, "처형 뒤 밤");
+      await ht.waitFor((v) => v.phase !== "execution", 2500, "처형 끝(23페이즈: 첫날은 정답 공개, 아니면 밤)");
       await sleep(250);
       const log = await hp.evaluate(() => window.__vLog);
       const m = await hp.evaluate(() => {

@@ -16,8 +16,6 @@ const HOOK_WAIT_MS = 3000;
 const BTN = "[data-sound-button]";
 
 const SCRIPT_NICK = "소리방장";
-/** 찬반(10초) 안에서 마지막 5초 틱이 두 번 이상 쌓이기까지 기다리는 시간(ms) — 5초째·6초째 틱 */
-const VERDICT_TICK_WAIT_MS = 7200;
 
 const infoRow = (rec, scenario, id, detail) => rec(scenario, id, detail.split(" · ")[0], true, detail, true);
 const recOne = (rec, scenario, r) => rec(scenario, r.id, r.label, r.ok, r.detail, r.relaxed === true || r.info === true);
@@ -328,7 +326,14 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       await sleep(800);
       judge("sound-script/verdict", "SC6", await readLogWith(hp, "bed.vote"));
 
-      // ⑥ 방장이 [찬성]을 누른다: 로컬 vote.cast 한 번, 새 침대도 차례 소리도 없다
+      // ⑥ 찬반 마지막 5초 timer.tick 이 초마다, 새 침대 요청 없음.
+      // 23페이즈(D-11): 산 사람 전원이 던지면 마지막 표 뒤 1.5초로 마감이 줄어 틱 구간이 없어진다 — 그래서 방장이 던지기 전에(마감 2.4초 전까지) 틱을 먼저 본다.
+      await clearLog(hp);
+      const tickUntil = (ht.last().phaseEndsAt ?? Date.now() + 7600) - 2400;
+      await sleep(Math.max(0, tickUntil - Date.now()));
+      judge("sound-script/verdict", "SC9", await readLog(hp));
+
+      // ⑦ 방장이 [찬성]을 누른다: 로컬 vote.cast 한 번, 새 침대도 차례 소리도 없다
       await clearLog(hp);
       const picked = await attempt(async () => {
         await chooseVerdict(hp, true);
@@ -337,11 +342,6 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       rec("sound-script/verdict", "SC7w", "방장이 [찬성]을 눌러 눌림 표시가 선다", picked.ok, picked.detail);
       if (!picked.ok) return;
       judge("sound-script/verdict", "SC7", await readLogWith(hp, "vote.cast"));
-
-      // ⑦ 찬반 마지막 5초 timer.tick 이 초마다, 새 침대 요청 없음
-      await clearLog(hp);
-      await sleep(VERDICT_TICK_WAIT_MS);
-      judge("sound-script/verdict", "SC9", await readLog(hp));
 
       // ⑧ 지목: 진입 phase.vote 한 번, 새 침대 없음
       await clearLog(hp);
