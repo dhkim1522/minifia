@@ -121,8 +121,6 @@ export interface PointsTally {
   leader?: number;
   /** 산 사람 수의 과반 수 */
   majority: number;
-  /** 선두의 표가 과반에 닿았을 때 그 사람 */
-  sure?: number;
 }
 
 /** 이 화면에만 남는 채팅 카드(경찰 조사 결과). 서버 채널 기록이 아니다. at 은 단계 진입 기준 ms */
@@ -146,7 +144,7 @@ function pointsOf(view: RoomView | null): { seat: number; target: number }[] {
   return view.day?.points ?? [];
 }
 
-/** 지금 투표 집계(공개 정보). 선두는 최다 득표가 정확히 한 명일 때만이고 동점이면 없다. 과반(sure)은 선두 표가 majority 이상일 때. */
+/** 지금 투표 집계(공개 정보). 선두는 최다 득표가 정확히 한 명일 때만이고 동점이면 없다. */
 export function pointsTally(view: RoomView): PointsTally {
   const counts: Record<number, number> = {};
   for (const line of pointsOf(view)) counts[line.target] = (counts[line.target] ?? 0) + 1;
@@ -156,12 +154,10 @@ export function pointsTally(view: RoomView): PointsTally {
     .filter((seat) => counts[seat] === top && top > 0);
   const majority = majorityOf(view.players.filter(isAlive).length);
   const leader = tops.length === 1 ? tops[0]! : undefined;
-  const sure = leader !== undefined && counts[leader]! >= majority ? leader : undefined;
   return {
     counts,
     majority,
     ...(leader !== undefined ? { leader } : {}),
-    ...(sure !== undefined ? { sure } : {}),
   };
 }
 

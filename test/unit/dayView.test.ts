@@ -721,15 +721,12 @@ describe("기본판 투표 (결정 0072, U-1·U-4·U-5)", () => {
     const two = pointsTally(nominationOf([[1, 2], [3, 2], [4, 0]]));
     expect(two.leader).toBe(2);
     expect(two.majority).toBe(3);
-    expect(two.sure).toBeUndefined();
-    const three = pointsTally(nominationOf([[1, 2], [3, 2], [4, 2]]));
-    expect(three.sure).toBe(2);
+    expect("sure" in two).toBe(false); // 과반 도장(sure)은 22-13 에서 지웠다
   });
 
-  it("집계: 동점이면 leader·sure 없음 (산 4명, 2:2 는 과반 3 미만이라 어차피 sure 없음)", () => {
+  it("집계: 동점이면 leader 없음", () => {
     const tie = pointsTally(nominationOf([[1, 2], [3, 2], [4, 0], [2, 0]]));
     expect(tie.leader).toBeUndefined();
-    expect(tie.sure).toBeUndefined();
   });
 
   it("새 표가 와도 채팅 줄·위 알림 재료가 없다 (22-10, D-12)", () => {

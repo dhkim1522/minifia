@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { bindSignals } from "../../src/audio/signals";
 import { RoleChip } from "../../src/components/v2/RoleChip";
-import { SureStamp } from "../../src/components/v2/SureStamp";
 import { VerdictPicker } from "../../src/components/v2/VerdictPicker";
 import { V2Icon, type V2IconName } from "../../src/components/v2/V2Icon";
 import { VoteBadge } from "../../src/components/v2/VoteBadge";
@@ -105,15 +104,6 @@ describe("v2.css 득표 배지 스타일 계약 (DAY-04)", () => {
   it("모션 줄이기면 배지 애니메이션이 꺼지고 선두 배지는 scale(1.18) 로 고정된다", () => {
     expect(bodyOf(reducedMotionRules(V2_CSS, ".mv-badge"), "모션 줄이기 " + ".mv-badge")).toContain("animation: none");
     expect(bodyOf(reducedMotionRules(V2_CSS, ".mv-badge.is-lead"), "모션 줄이기 " + ".mv-badge.is-lead")).toContain("scale(1.18)");
-  });
-});
-
-describe("SureStamp (DAY-04, 결정 0049)", () => {
-  it("span.mv-stamp 에 글자 유력 한 단어를 그린다", () => {
-    const { container } = render(<SureStamp />);
-    const stamp = container.querySelector("span.mv-stamp");
-    expect(stamp).not.toBeNull();
-    expect(stamp?.textContent).toBe("유력");
   });
 });
 

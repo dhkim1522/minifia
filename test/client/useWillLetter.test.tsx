@@ -152,11 +152,11 @@ describe("useWillLetter", () => {
     expect(reset.hook.result.current).toBeNull();
   });
 
-  it("처형 아침이 아닌 곳(처형 카드)은 9페이즈 2.4초 보류 그대로다", () => {
+  it("처형 아침이 아닌 곳(처형 카드)은 유언 공개 카드 시간 3.0초 보류다(22-13)", () => {
     const s = setup();
     s.chat.setContext({ pk: "1:1:execution", channel: "all", epoch: 1 });
     s.give(card("will", 4, 1, "처형 유언"));
-    expect(s.chat.nextCardReveal(Date.now())).toBe(Date.now() + 2400);
+    expect(s.chat.nextCardReveal(Date.now())).toBe(Date.now() + 3000);
     expect(s.hook.result.current).toBeNull();
   });
 

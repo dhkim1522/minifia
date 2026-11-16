@@ -3109,7 +3109,7 @@ describe("게임 이름표: 지목 버튼·tagProps·canWalk (DAY-04, MAP-04)", 
   describe("tagProps", () => {
     it("tagProps(seat) 가 주는 속성이 그 이름표 쌓임에 들어간다", async () => {
       const s = await open(
-        { scene: SCENE5, tagProps: (seat) => (seat === 2 ? { count: 3, lead: true } : seat === 4 ? { sure: true, done: true } : {}) },
+        { scene: SCENE5, tagProps: (seat) => (seat === 2 ? { count: 3, lead: true } : seat === 4 ? { done: true } : {}) },
         { players: FIVE, ents: FIVE_ENTS() },
       );
       const head2 = tagOf(s.utils, 2)!.querySelector(".mv-head")!;
@@ -3117,7 +3117,6 @@ describe("게임 이름표: 지목 버튼·tagProps·canWalk (DAY-04, MAP-04)", 
       expect(head2.getAttribute("data-lead")).toBe("true");
       expect(head2.querySelector(".mv-badge.is-lead")).not.toBeNull();
       const head4 = tagOf(s.utils, 4)!.querySelector(".mv-head")!;
-      expect(head4.getAttribute("data-sure")).toBe("true");
       expect(head4.getAttribute("data-done")).toBe("true");
       expect(tagOf(s.utils, 1)!.querySelector(".mv-head")!.hasAttribute("data-count")).toBe(false);
     });

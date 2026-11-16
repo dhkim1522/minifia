@@ -5,7 +5,6 @@ import "../helpers/singleLineErrors";
 import { ActionButton, ActionRow } from "../../src/components/ActionButton";
 import { HeadCount } from "../../src/components/v2/HeadCount";
 import { HeadStack, NameTag } from "../../src/components/v2/HeadStack";
-import { SureStamp } from "../../src/components/v2/SureStamp";
 import { PhaseHeader } from "../../src/components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../../src/components/v2/TopToast";
 import { V2Icon, type V2IconName } from "../../src/components/v2/V2Icon";
@@ -161,26 +160,17 @@ describe("HeadStack 8페이즈 칸(DAY-04, GHOST-02)", () => {
     expect(head?.getAttribute("data-lead")).toBe("true");
   });
 
-  it("typing · role mafia · sure · count 3 이면 자식 순서가 알약 → 직업 칩 → 도장 → 배지 → 이름표", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" typing role="mafia" sure count={3} />);
+  it("typing · role mafia · count 3 이면 자식 순서가 알약 → 직업 칩 → 배지 → 이름표 (유력 도장은 22-13 에서 지웠다)", () => {
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" typing role="mafia" count={3} />);
     const head = container.querySelector("div.mv-head");
-    expect(order(head)).toBe("mv-typing,mv-rolechip,mv-stamp,mv-badge,mv-tag");
-    expect(head?.getAttribute("data-sure")).toBe("true");
+    expect(order(head)).toBe("mv-typing,mv-rolechip,mv-badge,mv-tag");
+    expect(head?.hasAttribute("data-sure")).toBe(false);
     expect(head?.getAttribute("data-count")).toBe("3");
     expect(head?.querySelector("[data-role-chip]")?.getAttribute("data-role-chip")).toBe("mafia");
   });
 
-  it("SureStamp 는 label 이 없으면 '유력', label 을 주면 그 글자다. HeadStack sureLabel 은 도장 글자를 바꾼다", () => {
-    expect(render(<SureStamp />).container.textContent).toBe("유력");
-    expect(render(<SureStamp label="확정" />).container.textContent).toBe("확정");
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" sure sureLabel="확정" />);
-    expect(container.querySelector(".mv-stamp")?.textContent).toBe("확정");
-    const plain = render(<HeadStack name="도윤" color="var(--seat-2)" sure />);
-    expect(plain.container.querySelector(".mv-stamp")?.textContent).toBe("유력");
-  });
-
   it("role 이 없으면 직업 칩 요소도 data-role-chip 도 DOM 에 없다 (GHOST-02 산 사람 쪽, T-08-20)", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" count={1} sure />);
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" count={1} />);
     expect(container.querySelectorAll("[data-role-chip]").length).toBe(0);
     expect(container.querySelectorAll(".mv-rolechip").length).toBe(0);
   });
@@ -247,7 +237,7 @@ describe("HeadStack 8페이즈 칸(DAY-04, GHOST-02)", () => {
   });
 
   it("false 로 끈 속성은 data-* 를 싣지 않는다", () => {
-    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" lead={false} sure={false} mine={false} done={false} ghost={false} blink={false} />);
+    const { container } = render(<HeadStack name="도윤" color="var(--seat-2)" lead={false} mine={false} done={false} ghost={false} blink={false} />);
     const head = container.querySelector("div.mv-head");
     for (const a of ["data-lead", "data-sure", "data-mine", "data-done", "data-ghost"]) {
       expect(head?.hasAttribute(a), a).toBe(false);
