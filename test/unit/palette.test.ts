@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { PALETTE, PLAZA_PALETTE, TOKEN_COLORS } from "../../src/world/palette";
+import { NOTE_COLORS, PALETTE, PLAZA_PALETTE, SEAT_COLORS, TOKEN_COLORS } from "../../src/world/palette";
 
 type Token = { name: string; value: string };
 const doc = JSON.parse(readFileSync(resolve(process.cwd(), "design/tokens.json"), "utf8")) as { color: { tokens: Token[] } };
@@ -42,5 +42,21 @@ describe("3D 팔레트 ↔ 토큰", () => {
     expect(PALETTE.darkMetal).toBe("#14161c");
     expect(PALETTE.stageBody).toBe("#2c2234");
     expect(PALETTE.brass).toBe("#a98559");
+  });
+});
+
+describe("3D 좌석 8색 ↔ 토큰 (24-04, D-28)", () => {
+  it("SEAT_COLORS 는 8개이고 모두 #rrggbb 이다", () => {
+    expect(SEAT_COLORS).toHaveLength(8);
+    for (const c of SEAT_COLORS) expect(c).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+
+  it("SEAT_COLORS[i] 는 design/tokens.json 의 seat-(i+1) 값과 같다(소문자 비교)", () => {
+    for (let i = 0; i < 8; i++) expect(SEAT_COLORS[i].toLowerCase()).toBe(token(`seat-${i + 1}`));
+  });
+
+  it("종이 바탕·글자 색은 gray-50·night-950 을 가리킨다(새 hex 없음)", () => {
+    expect(NOTE_COLORS.paper).toBe(TOKEN_COLORS.ring);
+    expect(NOTE_COLORS.ink).toBe(TOKEN_COLORS.ringOutline);
   });
 });
