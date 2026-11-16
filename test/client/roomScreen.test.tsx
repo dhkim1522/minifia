@@ -789,7 +789,7 @@ describe("RoomScreen: 모두의 답 자동 열림·결과 정답 줄 (23-11)", (
     connectionMock.current = { ...(connectionMock.current as RoomConnection), view: v, ...(epoch !== undefined ? { epoch } : {}) };
   };
   const sheet = (): HTMLElement | null => document.querySelector<HTMLElement>("dialog");
-  const answersTab = (): HTMLElement | null => document.querySelector<HTMLElement>('[data-rolecard-tab="answers"]');
+  const recordsTab = (): HTMLElement | null => document.querySelector<HTMLElement>('[data-rolecard-tab="records"]');
 
   // 시트 닫기는 닫히는 애니메이션(260ms) 뒤에 onClose 를 부른다
   const closeSheet = () => {
@@ -807,15 +807,15 @@ describe("RoomScreen: 모두의 답 자동 열림·결과 정답 줄 (23-11)", (
     stage.props = null;
   });
 
-  it("같은 연결에서 dayAnnounce 1일차 → discussion 이면 시트가 `첫날 답` 탭으로 열린다", () => {
+  it("같은 연결에서 dayAnnounce 1일차 → discussion 이면 시트가 `답과 의심` 탭으로 열린다", () => {
     connectionMock.current = conn({ view: play("dayAnnounce") });
     const { rerender } = mount();
     expect(sheet()).toBeNull();
     setView(play("discussion"));
     again(rerender);
     expect(sheet()).not.toBeNull();
-    expect(answersTab()?.getAttribute("aria-selected")).toBe("true");
-    expect(sheet()?.getAttribute("aria-label")).toBe("모두의 답");
+    expect(recordsTab()?.getAttribute("aria-selected")).toBe("true");
+    expect(sheet()?.getAttribute("aria-label")).toBe("모두의 기록");
   });
 
   it("닫은 뒤에는 토론 갱신·찬반으로 가도 다시 열리지 않는다", () => {
@@ -828,7 +828,7 @@ describe("RoomScreen: 모두의 답 자동 열림·결과 정답 줄 (23-11)", (
     again(rerender);
     setView(play("verdict"));
     again(rerender);
-    expect(answersTab()).toBeNull();
+    expect(recordsTab()).toBeNull();
   });
 
   it("재접속·새로고침 첫 프레임이 discussion 이면 열리지 않는다", () => {
@@ -853,6 +853,18 @@ describe("RoomScreen: 모두의 답 자동 열림·결과 정답 줄 (23-11)", (
     expect(sheet()).toBeNull();
   });
 
+  it("2일차에 의심 기록이 있어도 자동으로 열리지 않고 탭은 있다(P24-19)", () => {
+    const withLog = (phase: RoomView["phase"]): RoomView => {
+      const v = play(phase, { n: 2 });
+      return { ...v, day: { ...v.day!, suspectLog: [{ n: 2, from: 1, to: 2 }] } };
+    };
+    connectionMock.current = conn({ view: withLog("dayAnnounce") });
+    const { rerender } = mount();
+    setView(withLog("discussion"));
+    again(rerender);
+    expect(sheet()).toBeNull();
+  });
+
   it("답 목록이 없는 view(키워드 없는 판)는 열지 않는다", () => {
     connectionMock.current = conn({ view: play("dayAnnounce", { answers: false }) });
     const { rerender } = mount();
@@ -866,7 +878,7 @@ describe("RoomScreen: 모두의 답 자동 열림·결과 정답 줄 (23-11)", (
     const { rerender } = mount();
     setView(play("discussion"));
     again(rerender);
-    expect(answersTab()).not.toBeNull();
+    expect(recordsTab()).not.toBeNull();
     closeSheet();
     setView(play("lobby", { round: 2 }));
     again(rerender);
@@ -874,7 +886,7 @@ describe("RoomScreen: 모두의 답 자동 열림·결과 정답 줄 (23-11)", (
     again(rerender);
     setView(play("discussion", { round: 2 }));
     again(rerender);
-    expect(answersTab()?.getAttribute("aria-selected")).toBe("true");
+    expect(recordsTab()?.getAttribute("aria-selected")).toBe("true");
   });
 
   it("결과(ended): 정답이 있으면 띠 줄이 `정답 · 해리포터`, 시간 행은 없다", () => {
