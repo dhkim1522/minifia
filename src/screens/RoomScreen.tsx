@@ -508,7 +508,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             {view.phase === "assigning" ? (
               <Assigning view={view} />
             ) : view.phase === "keyword" ? (
-              <Keyword view={view} offset={connection.offset} myRoleButton={withTest(myRoleButton)} />
+              <Keyword view={view} offset={connection.offset} myRoleButton={withTest(myRoleButton)} send={connection.send} canSend={connection.canSend} onEvent={connection.onEvent} />
             ) : (
               <RoleReveal view={view} offset={connection.offset} myRoleButton={withTest(myRoleButton)} onSeenFront={onSeenFront} />
             )}
