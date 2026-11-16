@@ -18,7 +18,7 @@ import type { PhaseId } from "../../shared/protocol";
 import { POLICE_CARD_AT } from "../game/dayView";
 import type { AudioView } from "./audioView";
 import { recipeDurationMs, type BedId, type SfxId } from "./recipes";
-import { EMOTE_OTHERS_DB, emoteSoundGate, flipCue, lightCues, MORNING_SLASH_AT, morningScript, nightCues, plateCues, pickTickSchedule, tickSchedule, verdictScript, willScript, type DuckSpan, type EmoteGateState, type Rng, type ScriptItem } from "./script";
+import { EMOTE_OTHERS_DB, emoteSoundGate, flipCue, lightCues, MORNING_SLASH_AT, morningScript, nightCues, pickTickSchedule, tickSchedule, verdictScript, willScript, type DuckSpan, type EmoteGateState, type Rng, type ScriptItem } from "./script";
 import type { EmoteSignal, LocalSignal, ResultSignal } from "./signals";
 
 /** 단계 → 침대 표: 16개 단계 전수. null 은 침대 없음(assigning·tutorial: 침대가 페이드아웃). 맵에 따라 바꾸지 않는다 (O-7) */
@@ -126,18 +126,13 @@ function scriptKeys(v: AudioView): string[] {
   if (v.phase === "night") keys.push(nightKey(v));
   if (v.phase === "morning") keys.push(phaseKey(v), killKey(v), letterKey(v), policeCardKey(v));
   if (v.phase === "execution") keys.push(phaseKey(v));
-  if (v.phase === "ended") {
-    keys.push(RESULT_LIGHT_KEY);
-    for (let k = 0; k < RESULT_PLATE_KEYS_MAX; k += 1) keys.push(`${RESULT_PLATE_KEY}${k}`);
-  }
+  if (v.phase === "ended") keys.push(RESULT_LIGHT_KEY);
   if (inTurn(v) && v.turn!.doneAt === undefined) keys.push(pickKey(v));
   return keys;
 }
 
-/** 결과 사건 대본 키: 박수 꼬리(80·160ms)가 로비로 넘어가면 취소되게 scriptKeys 가 ended 에서 이 키들을 낸다 */
+/** 결과 사건 대본 키: 박수 꼬리(80·160ms)가 로비로 넘어가면 취소되게 scriptKeys 가 ended 에서 이 키를 낸다 */
 const RESULT_LIGHT_KEY = "result:light";
-const RESULT_PLATE_KEY = "result:plate:";
-const RESULT_PLATE_KEYS_MAX = 16;
 const pickKey = (v: AudioView): string => `pick:${v.dayN ?? 0}:${v.turn?.i ?? -1}`;
 
 // ───────────────────────── 지목 핀 (src/world/pinPlan.ts pinOf 의 nomination 부분 복제) ─────────────────────────
@@ -346,13 +341,9 @@ function resultSignal(signal: ResultSignal, cur: AudioView, out: DirectOutput): 
     emitTimed(`result:flip:${signal.i}`, flipCue(signal.i), out);
     return;
   }
-  if (signal.step === "light") {
-    const s = lightCues({ win: signal.win });
-    emitTimed(RESULT_LIGHT_KEY, s.items, out);
-    out.duck = s.duck;
-    return;
-  }
-  emitTimed(`${RESULT_PLATE_KEY}${signal.k}`, plateCues({ k: signal.k, total: signal.total }), out);
+  const s = lightCues({ win: signal.win });
+  emitTimed(RESULT_LIGHT_KEY, s.items, out);
+  out.duck = s.duck;
 }
 
 /**

@@ -8,7 +8,6 @@ import { BALLOT_END_AT, BALLOT_NO_AT, BALLOT_YES_AT } from "../../src/game/verdi
 import { LETTER_FOLD_AT_MS, LETTER_SEAL_GAP_MS, LETTER_WRITE_AT_MS } from "../../src/game/willLetter";
 import { mulberry32, recipeDurationMs } from "../../src/audio/recipes";
 import {
-  awardScript,
   EMOTE_GATE_EMPTY,
   EMOTE_SOUND_MAX,
   EMOTE_SOUND_PER_SEC,
@@ -143,7 +142,7 @@ describe("밤 대본 — nightCues·nightScript (D-11, LS-3)", () => {
   });
 });
 
-describe("결과·시상 대본 — resultScript·awardScript (D-15)", () => {
+describe("결과 대본 — resultScript (D-15)", () => {
   it("n=4, 내 팀 승: role.flip 4번(+20 cents 씩), 4600 에 result.win + 박수 3 + 침대 −6dB 1400ms", () => {
     const s = resultScript({ n: 4, win: true });
     const flips = s.items.filter((i) => i.id === "role.flip");
@@ -177,20 +176,6 @@ describe("결과·시상 대본 — resultScript·awardScript (D-15)", () => {
   it("n 이 8 보다 크면 8번까지만, 0 이하면 뒤집기 없음", () => {
     expect(resultScript({ n: 12, win: true }).items.filter((i) => i.id === "role.flip")).toHaveLength(8);
     expect(resultScript({ n: 0, win: true }).items.filter((i) => i.id === "role.flip")).toHaveLength(0);
-  });
-
-  it("시상: k번째 패는 5600 + 2500k + 900, 마지막 패는 award.final, 같은 시각 박수 ×3(−12dB, 80ms 간격)", () => {
-    const first = awardScript({ k: 0, total: 3 });
-    expect(first.items.map((i) => [i.at, i.id, i.gainDb])).toEqual([
-      [6500, "award.plate", undefined],
-      [6500, "emote.clap", -12],
-      [6580, "emote.clap", -12],
-      [6660, "emote.clap", -12],
-    ]);
-    const last = awardScript({ k: 2, total: 3 });
-    expect(last.items[0]).toEqual({ at: 11500, id: "award.final" });
-    expect(awardScript({ k: 0, total: 1 }).items[0]!.id).toBe("award.final");
-    expect(first.duck).toBeNull();
   });
 });
 
@@ -232,7 +217,7 @@ describe("카운트다운 시각표 — tickSchedule·pickTickSchedule", () => {
 describe("대본 입력 경계 (LS-11)", () => {
   const src = readFileSync(`${ROOT}src/audio/script.ts`, "utf8");
   const FORBIDDEN_PARAMS = ["phaseEndsAt", "serverNow", "arrivedAt", "frame", "view", "RoomView", "role", "now"];
-  const FUNCTIONS = ["verdictScript", "nightCues", "nightScript", "resultScript", "awardScript", "flipCue", "lightCues", "plateCues", "willScript", "tickSchedule", "pickTickSchedule"];
+  const FUNCTIONS = ["verdictScript", "nightCues", "nightScript", "resultScript", "flipCue", "lightCues", "willScript", "tickSchedule", "pickTickSchedule"];
 
   it.each(FUNCTIONS)("%s 의 인자에 서버 프레임·도착 시각·역할이 없다", (name) => {
     const m = new RegExp(`export function ${name}\\(([^)]*)\\)`).exec(src);
@@ -248,7 +233,7 @@ describe("대본 입력 경계 (LS-11)", () => {
     };
     expect(fields("VerdictInput")).toEqual(["passed", "last", "hasBallots"]);
     expect(fields("ResultInput")).toEqual(["n", "win"]);
-    expect(fields("AwardInput")).toEqual(["k", "total"]);
+    expect(src).not.toContain("AwardInput"); // 시상 입력은 없다(D-19)
     expect(fields("LightInput")).toEqual(["win"]);
     expect(fields("WillInput")).toEqual(["writeMs"]);
   });

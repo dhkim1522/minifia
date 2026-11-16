@@ -39,7 +39,7 @@ export const VERDICT_DUCK_DB = -14;
 export const VERDICT_DUCK_RETURN_MS = 800;
 
 /**
- * 결과·시상 시각 — 11페이즈 시간표와 같은 값, 12-11 의 시험이 대조한다.
+ * 결과 시각 — 11페이즈 시간표와 같은 값, 12-11 의 시험이 대조한다.
  * (소리 모듈은 11페이즈 모듈을 import 하지 못한다: LS-6)
  */
 export const RESULT_AT = {
@@ -48,13 +48,9 @@ export const RESULT_AT = {
   flipMax: 8,
   flipCents: 20,
   verdict: 4600,
-  awardBase: 5600,
-  awardStep: 2500,
-  awardLead: 900,
 } as const;
 export const RESULT_CLAP_DB = -10;
 export const RESULT_DUCK = { db: -6, holdMs: 1400, returnMs: 250 } as const;
-export const AWARD_CLAP_DB = -12;
 /** 박수 소리 셋의 간격 */
 export const CLAP_STEP_MS = 80;
 export const CLAP_COUNT = 3;
@@ -176,7 +172,7 @@ export function morningScript(input: MorningInput): MorningScript {
   return { items, duck: null, bed: "bed.dawn" };
 }
 
-// ───────────────────────── 결과·시상 ─────────────────────────
+// ───────────────────────── 결과 ─────────────────────────
 
 export interface ResultInput {
   n: number;
@@ -208,21 +204,9 @@ export function resultScript(input: ResultInput): Script {
   };
 }
 
-export interface AwardInput {
-  k: number;
-  total: number;
-}
-
-/** 시상 k번째 패(결과 진입 기준): 패 소리 + 같은 시각 박수. 마지막 패는 award.final */
-export function awardScript(input: AwardInput): Script {
-  const at = RESULT_AT.awardBase + RESULT_AT.awardStep * input.k + RESULT_AT.awardLead;
-  const id: SfxId = input.k >= input.total - 1 ? "award.final" : "award.plate";
-  return { items: [{ at, id }, ...clapsAt(at, AWARD_CLAP_DB)], duck: null };
-}
-
-// ───────────────────────── 결과·시상: 사건 → 소리 (12-11) ─────────────────────────
-// 11페이즈 시계가 사건(뒤집기·조명·패)을 낼 때마다 그 사건 하나의 소리 목록을 만든다. 시각 at 은 사건 기준 상대 ms 다.
-// 절대 시각 표(resultScript·awardScript)가 기준이고 시험이 둘의 일치를 단언한다. 좌석·직업·닉네임·칭호는 입력에 없다.
+// ───────────────────────── 결과: 사건 → 소리 (12-11) ─────────────────────────
+// 11페이즈 시계가 사건(뒤집기·조명)을 낼 때마다 그 사건 하나의 소리 목록을 만든다. 시각 at 은 사건 기준 상대 ms 다.
+// 절대 시각 표(resultScript)가 기준이고 시험이 일치를 단언한다. 좌석·직업·닉네임은 입력에 없다.
 
 export interface LightInput {
   win: boolean;
@@ -240,12 +224,6 @@ export function lightCues(input: LightInput): Script & { duck: DuckSpan } {
     items: [{ at: 0, id: input.win ? "result.win" : "result.lose" }, ...clapsAt(0, RESULT_CLAP_DB)],
     duck: { fromMs: 0, toMs: RESULT_DUCK.holdMs, db: RESULT_DUCK.db, returnMs: RESULT_DUCK.returnMs },
   };
-}
-
-/** 시상 k 번째 패가 뜨는 순간: 패 소리 + 박수 셋(−12dB). 마지막 패는 award.final */
-export function plateCues(input: AwardInput): ScriptItem[] {
-  const id: SfxId = input.k >= input.total - 1 ? "award.final" : "award.plate";
-  return [{ at: 0, id }, ...clapsAt(0, AWARD_CLAP_DB)];
 }
 
 // ───────────────────────── 유언 편지 ─────────────────────────

@@ -240,7 +240,7 @@ describe("보이스 한도 — 우선순위 낮은 것 → 오래된 것을 끊�
 
   it("활성 보이스가 전부 우선 0 이면 우선 0 이 아닌 새 요청은 버려지고 우선 0 은 일시 초과로 난다", () => {
     const rig = unlocked();
-    const zero: SfxId[] = ["verdict.heart", "verdict.heart", "execution.gavel", "execution.gavel", "kill.slash", "kill.slash", "award.final", "award.final"];
+    const zero: SfxId[] = ["verdict.heart", "verdict.heart", "execution.gavel", "execution.gavel", "kill.slash", "kill.slash", "result.win", "result.win"];
     zero.forEach((id) => fire(rig, id));
     expect(rig.engine.voiceCount()).toBe(8);
     const dropped = fire(rig, "ui.deny");

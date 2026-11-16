@@ -966,7 +966,7 @@ describe("시상식 없는 결과 (18.1-16, 0083-7)", () => {
     expect(r.container.querySelector("[data-result-announce]")).toBeNull();
   });
 
-  it("소리 신호: flip 은 참가자 수만큼(0..4), light 한 번, plate 는 없다 — 박수 큐는 4600 의 이긴 팀 것 하나뿐", () => {
+  it("소리 신호: flip 은 참가자 수만큼(0..4), light 한 번, 그 밖 신호는 없다 — 박수 큐는 4600 의 이긴 팀 것 하나뿐", () => {
     const r = arrive();
     const cueNonces = new Set<number>();
     for (let t = 0; t < 5600 + 20_000; t += 100) {
@@ -976,7 +976,7 @@ describe("시상식 없는 결과 (18.1-16, 0083-7)", () => {
     const results = sigs.got.filter((s) => s.kind === "result");
     expect(results.filter((s) => s.step === "flip").map((s) => s.i)).toEqual([0, 1, 2, 3, 4]);
     expect(results.filter((s) => s.step === "light")).toHaveLength(1);
-    expect(results.filter((s) => s.step === "plate")).toHaveLength(0);
+    expect(results.filter((s) => s.step !== "flip" && s.step !== "light")).toHaveLength(0); // 결과 신호는 flip·light 둘뿐(D-19)
     expect(results).toHaveLength(6);
     expect(cueNonces.size).toBe(4); // 이긴 팀(0·1·2·4) 박수 한 묶음
     expect((stage.props!.emoteCues ?? []).map((c) => c.seat)).toEqual([0, 1, 2, 4]);
@@ -1024,7 +1024,7 @@ describe("시상식 없는 결과 (18.1-16, 0083-7)", () => {
       expect(stageName(r.container)).toBe("final");
       expect(title(r.container)).toBe("시민 승리");
       noAwardUi(r.container);
-      expect(sigs.got.filter((s) => s.kind === "result" && s.step === "plate")).toHaveLength(0);
+      expect(sigs.got.filter((s) => s.kind === "result" && s.step !== "flip" && s.step !== "light")).toHaveLength(0);
     } finally {
       Object.defineProperty(window, "matchMedia", { configurable: true, writable: true, value: real });
     }
@@ -1883,7 +1883,7 @@ describe("결과 사건 신호 (12-11)", () => {
   const results = () => sigs.got.filter((s) => s.kind === "result");
   const flips = () => results().filter((s) => s.step === "flip").map((s) => s.i);
   const lights = () => results().filter((s) => s.step === "light").map((s) => s.win);
-  const plates = () => results().filter((s) => s.step === "plate").map((s) => [s.k, s.total]);
+  const plates = () => results().filter((s) => s.step !== "flip" && s.step !== "light").map((s) => s.step); // flip·light 밖 신호(없어야 한다)
   const withReduced = (fn: () => void) => {
     const real = window.matchMedia;
     Object.defineProperty(window, "matchMedia", { configurable: true, writable: true, value: () => ({ matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }) });

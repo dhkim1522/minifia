@@ -7,8 +7,8 @@ import type { SfxId, SoundId } from "../audio/recipes";
  * E2E 쪽 문턱(scripts/e2e/lib.mjs SOUND_RENDER_LIMITS)과 같아야 하고 e2eContract 시험이 대조한다.
  */
 export const SOUND_LIMITS = {
-  /** 소리 id 수: 침대 7 + 효과음 63 = 70 */
-  count: 70,
+  /** 소리 id 수: 침대 7 + 효과음 61 = 68 */
+  count: 68,
   peakMaxDb: -3,
   rmsMinDb: -60,
   /** 효과음 측정 길이와 선언 길이의 허용 차이(ms) */
@@ -32,7 +32,7 @@ export const LAB_GROUPS: readonly LabGroup[] = [
   { key: "verdict", title: "판결·처형", ids: ["verdict.heart", "ballot.yes", "ballot.no", "execution.gavel", "execution.rise", "verdict.reject"] },
   { key: "night", title: "밤·아침", ids: ["night.fall", "night.cue", "kill.slash", "morning.dawn", "morning.calm", "chalk.draw", "morning.saved", "will.quill", "will.seal", "will.fold"] },
   { key: "emote", title: "동작", ids: ["emote.clap", "emote.praise", "emote.handshake", "emote.dance", "emote.surprise", "emote.cry", "emote.deny", "emote.point", "emote.throat"] },
-  { key: "result", title: "결과·시상", ids: ["result.win", "result.lose", "award.plate", "award.final"] },
+  { key: "result", title: "결과", ids: ["result.win", "result.lose"] },
   {
     key: "tutorial",
     title: "튜토리얼",
@@ -97,8 +97,6 @@ export const SOUND_NAMES: Readonly<Record<SoundId, string>> = {
   "emote.throat": "목긋기",
   "result.win": "내 팀 승리",
   "result.lose": "내 팀 패배",
-  "award.plate": "시상 패",
-  "award.final": "마지막 패",
   "tut.lampOff": "오프닝 램프 꺼짐",
   "tut.scream": "오프닝 비명",
   "tut.whoosh": "장면 전환 바람",

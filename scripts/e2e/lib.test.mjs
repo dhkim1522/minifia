@@ -2986,11 +2986,11 @@ test("floatTrayChecks 기본판(결정 0072): 세 시점 모두 떠 있는 버�
 // ---- 12-06: 소리 시험 페이지 sound-render 순수 판정 (D-18, T-12-22) ----
 
 const soundRow = (id, over = {}) => ({ id, peakDb: -9, rmsDb: -30, nan: 0, lengthMs: 300, declaredMs: id.startsWith("bed.") ? null : 300, ok: true, ...over });
-const soundRows = () => [...Array.from({ length: 7 }, (_, i) => soundRow(`bed.${i}`)), ...Array.from({ length: 63 }, (_, i) => soundRow(`sfx.${i}`))];
+const soundRows = () => [...Array.from({ length: 7 }, (_, i) => soundRow(`bed.${i}`)), ...Array.from({ length: 61 }, (_, i) => soundRow(`sfx.${i}`))];
 const soundFails = (lines) => lines.filter((l) => !l.ok).map((l) => l.id);
 
-test("SOUND_RENDER_LIMITS: 70개 · 피크 −3 · RMS −60 · 길이 ±50ms (문턱은 이 한 곳)", () => {
-  assert.deepEqual({ ...SOUND_RENDER_LIMITS }, { count: 70, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
+test("SOUND_RENDER_LIMITS: 68개 · 피크 −3 · RMS −60 · 길이 ±50ms (문턱은 이 한 곳)", () => {
+  assert.deepEqual({ ...SOUND_RENDER_LIMITS }, { count: 68, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
   assert.throws(() => {
     SOUND_RENDER_LIMITS.peakMaxDb = 0;
   });
@@ -3491,9 +3491,9 @@ test("soundEmoteLeakChecks: 입력 모양이 틀리면 측정값 없음으로 �
   assert.ok(leak({ ...eOk(), day: undefined }).some((l) => l.id === "E3" && !l.ok && /측정값 없음/.test(l.detail)));
 });
 
-// ---- 12-11: 결과 소리 sound-result 순수 판정 (D-15·D-21·T-12-41·T-12-44) — 18.1-16: 시상식이 없어 시상 소리(award.*)는 0회여야 한다 ----
+// ---- 12-11: 결과 소리 sound-result 순수 판정 (D-15·D-21·T-12-41·T-12-44) — 결정 0089-20: 시상 판정(R4)은 없다 ----
 const rl = (id, at) => ({ id, at, gain: 1, played: true });
-/** 참가자 4명인 정상 로그: bed.result → 뒤집기 4(1200+400i) → 승패 4600 + 박수. 시상 소리는 없다 */
+/** 참가자 4명인 정상 로그: bed.result → 뒤집기 4(1200+400i) → 승패 4600 + 박수 */
 const resultLog = () => [
   rl("bed.result", 0),
   rl("role.flip", 1200),
@@ -3506,9 +3506,9 @@ const resultLog = () => [
 const rOk = () => ({ log: resultLog(), participants: 4, expectWin: false, reloadLog: [rl("bed.result", 10)] });
 const rFails = (over) => soundResultChecks({ ...rOk(), ...over }).filter((l) => !l.ok).map((l) => l.id);
 
-test("soundResultChecks: 정상 로그는 R1~R6 통과", () => {
+test("soundResultChecks: 정상 로그는 R1~R3·R5·R6 통과(R4 는 없다)", () => {
   const lines = soundResultChecks(rOk());
-  assert.deepEqual(lines.map((l) => l.id), ["R1", "R2", "R3", "R4", "R5", "R6"]);
+  assert.deepEqual(lines.map((l) => l.id), ["R1", "R2", "R3", "R5", "R6"]);
   assert.deepEqual(rFails({}), []);
 });
 
@@ -3532,16 +3532,6 @@ test("R3: result.win/lose 가 정확히 한 번이고 expectWin 쪽이어야 한
   assert.deepEqual(rFails({ expectWin: undefined }), []);
 });
 
-test("R4(18.1-16): 시상 소리 award.plate·award.final 은 0회여야 하고 1회라도 있으면 실패", () => {
-  assert.deepEqual(rFails({}), []);
-  assert.deepEqual(rFails({ log: [...resultLog(), rl("award.plate", 6500)] }), ["R4"]);
-  assert.deepEqual(rFails({ log: [...resultLog(), rl("award.final", 11500)] }), ["R4"]);
-  assert.deepEqual(rFails({ log: [...resultLog(), rl("award.plate", 6500), rl("award.final", 11500)] }), ["R4"]);
-  assert.match(soundResultChecks({ ...rOk(), log: [...resultLog(), rl("award.plate", 6500)] }).find((l) => l.id === "R4").detail, /award/);
-  // 박수(emote.clap)는 시상 소리가 아니다
-  assert.deepEqual(rFails({ log: [...resultLog(), rl("emote.clap", 6500)] }), []);
-});
-
 test("R5: 첫 뒤집기가 승패보다 먼저여야 한다(뒤집기 < 승패)", () => {
   const swapped = resultLog().map((e) => (e.id === "result.lose" ? { ...e, at: 1000 } : e));
   assert.deepEqual(rFails({ log: swapped }), ["R5"]);
@@ -3549,10 +3539,9 @@ test("R5: 첫 뒤집기가 승패보다 먼저여야 한다(뒤집기 < 승패)"
   assert.deepEqual(rFails({ log: late }), []); // 시상 뒤 순서는 더 보지 않는다
 });
 
-test("R6: 새로고침 로그에 role.flip·result.*·award.*·game.start 가 있으면 실패, bed.result 가 없어도 실패", () => {
+test("R6: 새로고침 로그에 role.flip·result.*·game.start 가 있으면 실패, bed.result 가 없어도 실패", () => {
   assert.deepEqual(rFails({ reloadLog: [rl("bed.result", 10), rl("role.flip", 20)] }), ["R6"]);
   assert.deepEqual(rFails({ reloadLog: [rl("bed.result", 10), rl("result.win", 20)] }), ["R6"]);
-  assert.deepEqual(rFails({ reloadLog: [rl("bed.result", 10), rl("award.plate", 20)] }), ["R6"]);
   assert.deepEqual(rFails({ reloadLog: [rl("bed.result", 10), rl("game.start", 20)] }), ["R6"]);
   assert.deepEqual(rFails({ reloadLog: [rl("bed.vote", 10)] }), ["R6"]);
   assert.deepEqual(rFails({ reloadLog: [rl("bed.result", 10), rl("ui.tap", 20)] }), []);

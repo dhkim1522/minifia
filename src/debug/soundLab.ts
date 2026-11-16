@@ -20,7 +20,7 @@ import {
   type SfxId,
   type SoundId,
 } from "../audio/recipes";
-import { awardScript, morningScript, nightScript, resultScript, verdictScript, willScript, type MorningOutcome, type Script } from "../audio/script";
+import { morningScript, nightScript, resultScript, verdictScript, willScript, type MorningOutcome, type Script } from "../audio/script";
 import { buildMixGraph, buildVoice, noiseBufferFor } from "../audio/synth";
 import { installSoundHook } from "../audio/testHook";
 import { LAB_GROUPS, SOUND_LIMITS, SOUND_NAMES } from "./soundLabTable";
@@ -171,8 +171,6 @@ const MUTED = "#a9a3b5";
 const BAD = "#ff8a80";
 /** 최악 합 시험이 한꺼번에 요청하는 효과음 수 */
 const WORST_SFX = 6;
-/** 시상 시험의 칭호 수(마지막 패가 award.final) */
-const AWARD_TOTAL = 3;
 /** 유언 시험의 쓰기 길이(ms, LETTER_WRITE_MAX_MS 안) */
 const WILL_WRITE_MS = 2000;
 const POLL_MS = 250;
@@ -351,16 +349,12 @@ export function mount(root: HTMLElement, _params: URLSearchParams, deps: LabDeps
   const willLine = line();
   willLine.append(el("span", {}, "유언 편지", "flex:1 0 100%;"), scriptBtn("편지 재생", "will", () => play("will", willScript({ writeMs: WILL_WRITE_MS }))));
   const resultLine = line();
-  resultLine.append(el("span", {}, "결과·시상", "flex:1 0 100%;"));
+  resultLine.append(el("span", {}, "결과", "flex:1 0 100%;"));
   for (const n of [4, 8]) {
     for (const win of [true, false]) {
       resultLine.append(
         scriptBtn(`${n}명 ${win ? "승" : "패"}`, `result:${n}:${win ? "win" : "lose"}`, () => {
-          const base = resultScript({ n, win });
-          const items = [...base.items];
-          for (let k = 0; k < AWARD_TOTAL; k += 1) items.push(...awardScript({ k, total: AWARD_TOTAL }).items);
-          items.sort((a, b) => a.at - b.at);
-          play("result", { items, duck: base.duck }, "bed.result");
+          play("result", resultScript({ n, win }), "bed.result");
         }),
       );
     }

@@ -5,7 +5,7 @@
 import { chooseRole, dropSockets, leaveLobby, openTestSheet, pickModeViaRail, reconnectInit, SetupError, setBotVote, setBots, settle, skipTo, sleep, startGame, tapPick } from "./browser.mjs";
 import { SOUND_RENDER_LIMITS, SOUND_SCRIPT_STEPS, soundButtonChecks, soundEmoteLeakChecks, soundNightParityChecks, soundRenderChecks, soundResultChecks, soundResultSkipChecks, soundSequenceChecks, soundVerdictTimingChecks } from "./lib.mjs";
 
-/** [전부 계산] 57개 렌더가 끝나기를 기다리는 상한(ms) */
+/** [전부 계산] 68개 렌더가 끝나기를 기다리는 상한(ms) */
 const CALC_LIMIT_MS = 60000;
 const LAB_URL = "/?e2e=1&sound-lab=1";
 
@@ -39,7 +39,7 @@ const VERDICT_PIN_SETTLE_MS = 1200;
 const EMOTE_ARRIVE_MS = 6000;
 /** 결과 연출이 최종 상태(final, 5.6초)에 닿기를 기다리는 상한(ms) */
 const RESULT_FINAL_WAIT_MS = 12000;
-/** 최종 상태에 닿은 뒤 늦게 오는 소리(시상 소리가 새는 경우)까지 로그에 쌓이도록 기다리는 시간(ms) */
+/** 최종 상태에 닿은 뒤 늦게 오는 소리까지 로그에 쌓이도록 기다리는 시간(ms) */
 const RESULT_TAIL_MS = 3000;
 /** 건너뛰기 변형: 탭 뒤 원래 조명 시각(4600ms)을 넘겨 늦게 오는 소리가 없는지 볼 때까지 기다리는 시간(ms) */
 const RESULT_SKIP_WATCH_MS = 5200;
@@ -49,7 +49,7 @@ const EMOTE_OPEN_TRIES = 12;
 
 export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGame, nightScenario }) {
   /**
-   * sound-render: 방 없이 새 컨텍스트(GAME_SIZE)로 시험 페이지를 열고 [전부 계산] → 57개 렌더 결과를 순수 판정 함수로 확인한다.
+   * sound-render: 방 없이 새 컨텍스트(GAME_SIZE)로 시험 페이지를 열고 [전부 계산] → 68개 렌더 결과를 순수 판정 함수로 확인한다.
    * 소리 출력은 없다(OfflineAudioContext). 서버 호출도 없다.
    */
   async function soundRenderFlow(ctx) {
@@ -590,8 +590,8 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
   }
 
   /**
-   * sound-result 본판 (D-21): ended 도착 순간부터 연출 시계를 건너뛰지 않고 최종 상태(final)까지 본다. 시상식이 없어(18.1-16, 0083-7) 시상 소리는 0회여야 한다 — 최종 상태 뒤 3초까지 로그를 받는다.
-   * 로그는 ended 도착 직전에 비운다. 판정은 lib.mjs soundResultChecks(R1~R5), 새로고침 직후 로그는 R6.
+   * sound-result 본판 (D-21): ended 도착 순간부터 연출 시계를 건너뛰지 않고 최종 상태(final)까지 본다. 최종 상태 뒤 3초까지 로그를 받는다.
+   * 로그는 ended 도착 직전에 비운다. 판정은 lib.mjs soundResultChecks(R1~R3·R5), 새로고침 직후 로그는 R6.
    */
   async function soundResultMain(ctx, rec) {
     const sc = "sound-result/main";
@@ -609,7 +609,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       const seats = view.result?.seats ?? [];
       const mine = seats.find((x) => x.seat === view.me.seat);
       const expectWin = mine ? (mine.job === "mafia") === (view.result?.winner === "mafiaWin") : undefined;
-      // 연출이 끝(final)까지 도는지 본다 — 이어서 3초를 더 받아 늦게 새는 시상 소리까지 잡는다
+      // 연출이 끝(final)까지 도는지 본다 — 이어서 3초를 더 받아 늦게 오는 소리까지 로그에 쌓는다
       const finals = await attempt(async () => {
         await hp.waitForFunction(() => window.__mfResult?.stage === "final", null, { timeout: RESULT_FINAL_WAIT_MS });
         await sleep(RESULT_TAIL_MS);
@@ -636,7 +636,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
         rec,
         `${sc}-info`,
         "SRi-1",
-        `참고: role.flip ${counts(log, (id) => id === "role.flip")}개 · result.win/lose ${counts(log, (id) => id.startsWith("result."))}회 · award.* ${counts(log, (id) => id.startsWith("award."))}개 · 박수 ${counts(log, (id) => id === "emote.clap")}개 · 참가자 ${seats.length}`,
+        `참고: role.flip ${counts(log, (id) => id === "role.flip")}개 · result.win/lose ${counts(log, (id) => id.startsWith("result."))}회 · 박수 ${counts(log, (id) => id === "emote.clap")}개 · 참가자 ${seats.length}`,
       );
     } finally {
       await closeGame(game);

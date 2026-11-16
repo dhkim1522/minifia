@@ -147,7 +147,7 @@ describe("소리 레시피 — 트레이서 (D-1, D-18)", () => {
   });
 });
 
-// ───────────────────────── Task 2: 70개 전수 ─────────────────────────
+// ───────────────────────── Task 2: 68개 전수 ─────────────────────────
 
 const EXPECTED_BEDS = ["bed.lobby", "bed.reveal", "bed.day", "bed.vote", "bed.night", "bed.dawn", "bed.result"];
 const EXPECTED_SFX = [
@@ -157,16 +157,16 @@ const EXPECTED_SFX = [
   "execution.rise", "verdict.reject", "night.fall", "night.cue", "kill.slash", "morning.dawn", "morning.calm",
   "chalk.draw", "morning.saved", "will.quill", "will.seal", "will.fold", "emote.clap", "emote.praise",
   "emote.handshake", "emote.dance", "emote.surprise", "emote.cry", "emote.deny", "emote.point", "emote.throat",
-  "result.win", "result.lose", "award.plate", "award.final",
+  "result.win", "result.lose",
   "tut.lampOff", "tut.scream", "tut.whoosh", "tut.sting", "tut.step", "tut.eye", "tut.link", "tut.buzz", "tut.stamp",
   "tut.fanfare", "tut.flip", "tut.warm", "voice.syl",
 ];
-const PRIO0 = ["verdict.heart", "execution.gavel", "kill.slash", "result.win", "result.lose", "award.final"];
+const PRIO0 = ["verdict.heart", "execution.gavel", "kill.slash", "result.win", "result.lose"];
 
-describe("소리 레시피 — 70개 전수 (D-1, D-16, D-17)", () => {
-  it("SOUND_IDS 는 70개(침대 7 + 효과음 63)이고 중복이 없으며 목록이 같다", () => {
-    expect(SOUND_IDS).toHaveLength(70);
-    expect(new Set(SOUND_IDS).size).toBe(70);
+describe("소리 레시피 — 68개 전수 (D-1, D-16, D-17)", () => {
+  it("SOUND_IDS 는 68개(침대 7 + 효과음 61)이고 중복이 없으며 목록이 같다", () => {
+    expect(SOUND_IDS).toHaveLength(68);
+    expect(new Set(SOUND_IDS).size).toBe(68);
     expect([...BED_IDS]).toEqual(EXPECTED_BEDS);
     expect([...SFX_IDS]).toEqual(EXPECTED_SFX);
   });
@@ -212,9 +212,9 @@ describe("소리 레시피 — 70개 전수 (D-1, D-16, D-17)", () => {
     expect(planHash(renderPlan(id))).toBe(planHash(plan));
   });
 
-  it("효과음 63개는 서로 다른 해시다(같은 소리 복사 금지)", () => {
+  it("효과음 61개는 서로 다른 해시다(같은 소리 복사 금지)", () => {
     const hashes = SFX_IDS.map((id) => planHash(renderPlan(id)));
-    expect(new Set(hashes).size).toBe(63);
+    expect(new Set(hashes).size).toBe(61);
   });
 
   it.each(BED_IDS)("%s: 발진기 ≤ 6 + 소음 1, 노드·레벨 한계", (id) => {
@@ -278,8 +278,7 @@ describe("소리 레시피 — 70개 전수 (D-1, D-16, D-17)", () => {
     expect(renderPlan("pin.on")[0]!.dur).toBe(180);
     expect(RECIPES["result.win"].layers.map((l) => l.f![0])).toEqual([262, 330, 392]);
     expect(RECIPES["result.lose"].layers.map((l) => l.f![0])).toEqual([262, 247]);
-    expect(RECIPES["award.final"].layers.some((l) => l.f?.[0] === 784)).toBe(true);
-    expect(RECIPES["award.final"].layers.some((l) => l.f?.[0] === 196)).toBe(true);
+    expect(SOUND_IDS.filter((id) => id.startsWith("award."))).toHaveLength(0); // 시상 소리는 없다(D-19)
     expect(RECIPES["emote.cry"].layers[0]!.lfo?.hz).toBe(6);
     expect(recipeDurationMs("game.start")).toBeGreaterThanOrEqual(2800);
   });
@@ -348,7 +347,7 @@ describe("소리 레시피 — 70개 전수 (D-1, D-16, D-17)", () => {
     expect(() => renderPlan("role.flip", { variant: "mafia" })).toThrow();
   });
 
-  it("화면 대응 표: 70개 모두 한 줄, ambient 는 침대 7개와 night.cue 뿐 (LS-1)", () => {
+  it("화면 대응 표: 68개 모두 한 줄, ambient 는 침대 7개와 night.cue 뿐 (LS-1)", () => {
     expect(Object.keys(SCREEN_COUNTERPART).sort()).toEqual([...SOUND_IDS].sort());
     for (const id of SOUND_IDS) {
       expect(SCREEN_COUNTERPART[id].trim()).not.toBe("");
@@ -385,8 +384,8 @@ const TUT_LAYERS: Readonly<Record<string, number>> = {
 };
 
 describe("tut.* 효과음 12개 — 층 수·버스·한계 (17-02, 0080-8)", () => {
-  it("SFX_IDS 는 tut.* 12개를 이 순서로 voice.syl 앞에 두고 63개다", () => {
-    expect(SFX_IDS).toHaveLength(63);
+  it("SFX_IDS 는 tut.* 12개를 이 순서로 voice.syl 앞에 두고 61개다", () => {
+    expect(SFX_IDS).toHaveLength(61);
     const tut = SFX_IDS.filter((id) => id.startsWith("tut."));
     expect(tut).toEqual(Object.keys(TUT_LAYERS));
     expect(SFX_IDS.indexOf("voice.syl")).toBe(SFX_IDS.length - 1);

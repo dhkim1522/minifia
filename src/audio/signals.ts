@@ -39,14 +39,13 @@ export interface EmoteSignal {
   mine: boolean;
 }
 /**
- * 결과 화면 시계가 낸 사건 하나(12-11, D-15). ResultScreen 이 단계·뒤집힘 수·패 index 를 바꾸는 바로 그 자리에서 한 번 나간다 —
- * 건너뛴 사건은 신호도 없고 재접속·처음 마운트(연출 없는 마운트)는 신호가 없다. 인자는 정수·불리언뿐이다(좌석·직업·닉네임·칭호 id 없음, LS-6).
- *   flip: i 번째 뒤집기(0 기준) · light: 이긴 팀 조명(win = 내 팀이 이겼나) · plate: k 번째 패(총 total 개)
+ * 결과 화면 시계가 낸 사건 하나(12-11, D-15). ResultScreen 이 단계·뒤집힘 수를 바꾸는 바로 그 자리에서 한 번 나간다 —
+ * 건너뛴 사건은 신호도 없고 재접속·처음 마운트(연출 없는 마운트)는 신호가 없다. 인자는 정수·불리언뿐이다(좌석·직업·닉네임 없음, LS-6).
+ *   flip: i 번째 뒤집기(0 기준) · light: 이긴 팀 조명(win = 내 팀이 이겼나)
  */
 export type ResultSignal =
   | { kind: "result"; step: "flip"; i: number }
-  | { kind: "result"; step: "light"; win: boolean }
-  | { kind: "result"; step: "plate"; k: number; total: number };
+  | { kind: "result"; step: "light"; win: boolean };
 /**
  * 사회자 자막 띠의 단계가 바뀌었다(14-03, HOST-02) — 공개 단계 전환 신호. 인자가 없다: 역할·좌석·단계 이름도 싣지 않는다(결정 0073).
  * 모든 사람에게 같은 프레임에 같은 소리라서 밤 진입에도 난다(밤 무음 LS-7 의 유일한 예외, 감독이 정한다).

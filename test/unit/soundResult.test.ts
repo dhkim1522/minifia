@@ -1,11 +1,11 @@
-// 12-11: 결과·시상 소리 — 사건(뒤집기·조명·패) → 소리 순수 함수, 감독의 ended 규칙, 11페이즈 상수 대조 (SOUND-01·02, D-15, LS-1, LS-10, T-12-41, T-12-42).
+// 12-11: 결과 소리 — 사건(뒤집기·조명) → 소리 순수 함수, 감독의 ended 규칙, 11페이즈 상수 대조 (SOUND-01·02, D-15, LS-1, LS-10, T-12-41, T-12-42).
 // 소리는 11페이즈 시계가 낸 사건에 붙는다: 건너뛰기·일시정지·재접속의 규칙은 시계(ResultScreen)가 정하고 여기서는 사건 하나가 낼 소리만 본다.
 import { describe, expect, it } from "vitest";
 import type { PhaseId } from "../../shared/protocol";
 import type { AudioView } from "../../src/audio/audioView";
 import { direct, directSignal } from "../../src/audio/director";
 import { SCREEN_COUNTERPART } from "../../src/audio/recipes";
-import { awardScript, flipCue, lightCues, plateCues, RESULT_AT, resultScript } from "../../src/audio/script";
+import { flipCue, lightCues, RESULT_AT, resultScript } from "../../src/audio/script";
 import { SIGNAL_KINDS, type LocalSignal } from "../../src/audio/signals";
 import { RESULT_TIMELINE } from "../../src/game/resultDirector";
 
@@ -41,12 +41,10 @@ describe("11페이즈 상수 대조 (T-12-42)", () => {
     expect(RESULT_AT.flipFirst).toBe(RESULT_TIMELINE.flipStartMs);
     expect(RESULT_AT.flipStep).toBe(RESULT_TIMELINE.flipGapMs);
     expect(RESULT_AT.verdict).toBe(RESULT_TIMELINE.lightAtMs);
-    expect(RESULT_AT.awardBase).toBe(RESULT_TIMELINE.finalAtMs);
   });
 
-  it("시상 대본 상수는 그대로다 (18.1-16: 화면의 시상식은 지웠고 소리 대본·시험 페이지만 남는다)", () => {
-    expect(RESULT_AT.awardStep).toBe(2500);
-    expect(RESULT_AT.awardLead).toBe(900);
+  it("시상 대본 상수는 없다 (결정 0089-20, D-19)", () => {
+    expect(Object.keys(RESULT_AT).filter((k) => k.startsWith("award"))).toEqual([]);
   });
 });
 
@@ -72,17 +70,6 @@ describe("사건 → 소리 (D-15, C-6)", () => {
     }
   });
 
-  it("plateCues({k, total}): 패 소리 + 박수 3개(−12dB), 마지막 패는 award.final", () => {
-    expect(plateCues({ k: 0, total: 3 }).map((i) => [i.at, i.id, i.gainDb])).toEqual([
-      [0, "award.plate", undefined],
-      [0, "emote.clap", -12],
-      [80, "emote.clap", -12],
-      [160, "emote.clap", -12],
-    ]);
-    expect(plateCues({ k: 2, total: 3 })[0]!.id).toBe("award.final");
-    expect(plateCues({ k: 0, total: 1 })[0]!.id).toBe("award.final");
-  });
-
   it.each([4, 8])("n=%i · win 참/거짓: 사건 함수를 시각에 옮기면 resultScript 와 같은 줄이다", (n) => {
     for (const win of [true, false]) {
       const table = resultScript({ n, win });
@@ -96,27 +83,19 @@ describe("사건 → 소리 (D-15, C-6)", () => {
     }
   });
 
-  it.each([4, 8, 12])("total=%i: 모든 k 에서 plateCues 를 패 시각에 옮기면 awardScript 와 같은 줄이다", (total) => {
-    for (let k = 0; k < total; k += 1) {
-      const shift = RESULT_AT.awardBase + RESULT_AT.awardStep * k + RESULT_AT.awardLead;
-      expect(rows(plateCues({ k, total }), shift)).toEqual(rows(awardScript({ k, total }).items));
-    }
-  });
-
   it("승패 소리 id 는 win 에만 달렸다: 같은 win 이면 누가 불러도 같다 (순수)", () => {
     expect(lightCues({ win: true })).toEqual(lightCues({ win: true }));
     expect(lightCues({ win: true }).items[0]!.id).not.toBe(lightCues({ win: false }).items[0]!.id);
   });
 
   it("화면 대응 문구가 있다 (LS-1)", () => {
-    for (const id of ["role.flip", "result.win", "result.lose", "award.plate", "award.final", "bed.result"] as const) expect(SCREEN_COUNTERPART[id], id).toBeTruthy();
+    for (const id of ["role.flip", "result.win", "result.lose", "bed.result"] as const) expect(SCREEN_COUNTERPART[id], id).toBeTruthy();
   });
 });
 
 describe("감독: result 신호는 ended 에서만 소리가 된다 (T-12-41)", () => {
   const flip = (i: number): LocalSignal => ({ kind: "result", step: "flip", i });
   const light = (win: boolean): LocalSignal => ({ kind: "result", step: "light", win });
-  const plate = (k: number, total: number): LocalSignal => ({ kind: "result", step: "plate", k, total });
   const ids = (o: ReturnType<typeof directSignal>): string[] => [...o.now.map((c) => c.id), ...o.scripts.flatMap((s) => s.items.map((i) => i.id))];
 
   it("result 는 닫힌 신호 종류다", () => {
@@ -145,15 +124,10 @@ describe("감독: result 신호는 ended 에서만 소리가 된다 (T-12-41)", 
     expect(ids(directSignal(light(false), av("ended")))[0]).toBe("result.lose");
   });
 
-  it("ended: plate 는 패 소리 + 박수 3개, 마지막 패는 award.final", () => {
-    expect(ids(directSignal(plate(0, 3), av("ended")))).toEqual(["award.plate", "emote.clap", "emote.clap", "emote.clap"]);
-    expect(ids(directSignal(plate(2, 3), av("ended")))[0]).toBe("award.final");
-  });
-
   it.each<PhaseId>(["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning"])(
     "%s 에서는 어떤 result 신호도 소리가 없다",
     (phase) => {
-      for (const s of [flip(0), light(true), light(false), plate(0, 3)]) {
+      for (const s of [flip(0), light(true), light(false)]) {
         const o = directSignal(s, av(phase));
         expect(o.now).toEqual([]);
         expect(o.scripts).toEqual([]);
@@ -166,11 +140,10 @@ describe("감독: result 신호는 ended 에서만 소리가 된다 (T-12-41)", 
     expect(directSignal(light(true), null).now).toEqual([]);
   });
 
-  it("신호 객체의 키 집합은 정수·불리언 인자뿐이다 (좌석·직업·닉네임·칭호 없음, LS-6)", () => {
+  it("신호 객체의 키 집합은 정수·불리언 인자뿐이다 (좌석·직업·닉네임 없음, LS-6)", () => {
     const keys = (s: LocalSignal): string[] => Object.keys(s).sort();
     expect(keys(flip(0))).toEqual(["i", "kind", "step"]);
     expect(keys(light(true))).toEqual(["kind", "step", "win"]);
-    expect(keys(plate(0, 3))).toEqual(["k", "kind", "step", "total"]);
   });
 });
 
@@ -214,6 +187,6 @@ describe("감독: 결과 진입·재접속·다시 하기 (D-15, LS-10)", () => 
   it("ended 를 떠나면 아직 남은 박수 꼬리 대본을 취소한다", () => {
     const o = direct(av("ended"), av("lobby"), local);
     expect(o.cancel).toContain("result:light");
-    expect(o.cancel).toContain("result:plate:0");
+    expect(o.cancel.filter((k) => k.startsWith("result:plate"))).toEqual([]); // 시상 패 대본 키는 없다(D-19)
   });
 });

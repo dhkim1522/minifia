@@ -133,13 +133,13 @@ export const SFX_IDS = [
   "will.quill", "will.seal", "will.fold",
   "emote.clap", "emote.praise", "emote.handshake", "emote.dance", "emote.surprise", "emote.cry", "emote.deny",
   "emote.point", "emote.throat",
-  "result.win", "result.lose", "award.plate", "award.final",
+  "result.win", "result.lose",
   // 튜토리얼(17-02, TUT-04, 결정 0080-8): 장면 효과음 12개 + 사회자 음절. voice.syl 이 끝에 온다
   "tut.lampOff", "tut.scream", "tut.whoosh", "tut.sting", "tut.step", "tut.eye", "tut.link", "tut.buzz", "tut.stamp",
   "tut.fanfare", "tut.flip", "tut.warm", "voice.syl",
 ] as const;
 export type SfxId = (typeof SFX_IDS)[number];
-/** 소리 id 70개: 침대 7 + 효과음 63 */
+/** 소리 id 68개: 침대 7 + 효과음 61 */
 export const SOUND_IDS = [...BED_IDS, ...SFX_IDS] as const;
 export type SoundId = BedId | SfxId;
 
@@ -443,7 +443,7 @@ export const RECIPES: Readonly<Record<SfxId, Recipe>> = {
     gapMs: EMOTE_GAP,
   }),
 
-  // 결과·시상
+  // 결과
   "result.win": recipe("result.win", "sfx", 0, -14, [
     osc("triangle", 0, 400, 262, 1, [20, 300, 0.4, 300], { filter: lp(1800) }),
     osc("triangle", 350, 400, 330, 1, [20, 300, 0.4, 300], { filter: lp(1800) }),
@@ -452,12 +452,6 @@ export const RECIPES: Readonly<Record<SfxId, Recipe>> = {
   "result.lose": recipe("result.lose", "sfx", 0, -16, [
     osc("triangle", 0, 600, 262, 1, [20, 500, 0.3, 300], { filter: lp(1500) }),
     osc("triangle", 500, 600, 247, 1, [20, 500, 0.3, 300], { filter: lp(1500) }),
-  ]),
-  "award.plate": recipe("award.plate", "sfx", 1, -20, [osc("sine", 0, 600, 784, 1, [3, 590, 0, 30])]),
-  "award.final": recipe("award.final", "sfx", 0, -16, [
-    osc("sine", 0, 600, 784, 1, [3, 590, 0, 30]),
-    osc("sine", 0, 1200, 196, 0.8, [30, 1000, 0, 300]),
-    osc("sine", 0, 1200, 294, 0.5, [30, 1000, 0, 300]),
   ]),
 
   // 튜토리얼 장면 효과음 12개(17-02, TUT-04, 결정 0080-8). 값은 승인 시안(design/v3.0/first-case/Sound.dc.html)의 소리 시트를 층 한계(4) 안으로 옮긴 것이다.
@@ -667,8 +661,6 @@ export const SCREEN_COUNTERPART: Readonly<Record<SoundId, string>> = {
   "emote.throat": "캐릭터의 목긋기 몸동작",
   "result.win": "이긴 팀 조명과 결과 화면",
   "result.lose": "진 팀의 결과 화면",
-  "award.plate": "시상 패가 등장하는 모습",
-  "award.final": "마지막 큰 칭호 패가 등장하는 모습",
   "tut.lampOff": "오프닝 램프 번짐 하나가 어두워질 때",
   "tut.scream": "오프닝에서 한 사람이 사라지며 진홍빛이 번쩍일 때",
   "tut.whoosh": "장면이 바뀌며 새 무대가 미끄러져 들어올 때",

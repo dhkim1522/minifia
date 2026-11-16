@@ -2222,7 +2222,7 @@ export const SOUND_MARKERS = Object.freeze([
  * 오프라인 렌더 합격 문턱 (D-18). 낮추지 않는다: 실패하면 레시피를 고친다(T-12-22).
  * count 는 SOUND_IDS.length, 나머지는 src/debug/soundLabData.ts 의 SOUND_LIMITS 와 같아야 하고 e2eContract 시험이 대조한다.
  */
-export const SOUND_RENDER_LIMITS = Object.freeze({ count: 70, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
+export const SOUND_RENDER_LIMITS = Object.freeze({ count: 68, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
 
 /**
  * sound-render: 시험 페이지 [전부 계산] 결과(window.__mfSoundLab.results)를 판정한다.
@@ -3233,27 +3233,25 @@ export function soundEmoteLeakChecks(input) {
   return out;
 }
 
-/** 결과 소리 일회성 id(새로고침·재접속 로그에 있으면 안 된다). award.* 는 화면이 더는 내지 않지만 로그에 새어 들어오면 잡는다 */
+/** 결과 소리 일회성 id(새로고침·재접속 로그에 있으면 안 된다) */
 const RESULT_ONE_SHOTS = ["role.flip", "result.win", "result.lose", "game.start"];
-const isResultOneShot = (id) => RESULT_ONE_SHOTS.includes(id) || id.startsWith("award.");
+const isResultOneShot = (id) => RESULT_ONE_SHOTS.includes(id);
 
 /**
  * 결과 소리 판정 (sound-result, D-15·D-21·T-12-41·T-12-44). 순수 함수 — 문턱은 여기에만 있고 흐름은 낮추지 않는다.
  * input = { log, participants, expectWin?, reloadLog } — log 는 ended 도착 직전에 비운 뒤 최종 상태 뒤까지 받은 훅 로그, reloadLog 는 같은 페이지를 새로고침한 직후 로그.
- * 18.1-16(결정 0083-7): 결과 화면에 시상식이 없어 시상 소리(award.plate·award.final)는 0회여야 한다.
+ * 결정 0089-20(D-19): 시상이 없어 시상 판정(옛 R4)은 지웠다 — 남은 판정 번호는 다시 매기지 않는다.
  *   R1 결과 구간 로그의 첫 침대 요청이 bed.result
  *   R2 role.flip 개수 == min(참가자 수, 8)
  *   R3 result.win + result.lose 가 정확히 1회 (expectWin 이 있으면 그 쪽 id)
- *   R4 award.plate·award.final 이 0회 (award.* 가 하나도 없다)
  *   R5 순서: 첫 role.flip < result.win/lose
- *   R6 새로고침 로그: bed.result 가 있고 role.flip·result.*·award.*·game.start 가 없다
+ *   R6 새로고침 로그: bed.result 가 있고 role.flip·result.*·game.start 가 없다
  */
 export function soundResultChecks(input) {
   const labels = {
     R1: "결과 구간의 첫 침대 요청이 bed.result",
     R2: "role.flip 이 참가자 수(최대 8)만큼",
     R3: "result.win/lose 가 정확히 한 번(내 팀에 맞는 쪽)",
-    R4: "시상 소리(award.plate·award.final)가 0회",
     R5: "순서: 뒤집기 < 승패",
     R6: "새로고침 로그는 bed.result 만(일회성 소리 없음)",
   };
@@ -3265,7 +3263,7 @@ export function soundResultChecks(input) {
   const at = (e) => (e ? e.at : null);
 
   if (log === null || !Number.isInteger(n) || n < 1) {
-    for (const id of ["R1", "R2", "R3", "R4", "R5"]) out.push(noMeasure(id, labels[id], "결과 구간 훅 로그·참가자 수"));
+    for (const id of ["R1", "R2", "R3", "R5"]) out.push(noMeasure(id, labels[id], "결과 구간 훅 로그·참가자 수"));
   } else {
     const firstBed = log.find((e) => e.id.startsWith("bed."));
     out.push(result("R1", labels.R1, firstBed?.id === "bed.result" ? [] : [`첫 침대 요청 ${firstBed?.id ?? "(없음)"}`]));
@@ -3282,13 +3280,6 @@ export function soundResultChecks(input) {
       if (wl[0].id !== wantId) bad3.push(`${wl[0].id} (기대 ${wantId})`);
     }
     out.push(result("R3", labels.R3, bad3));
-
-    const plates = idsOf(log, (id) => id === "award.plate");
-    const finals = idsOf(log, (id) => id === "award.final");
-    const bad4 = [];
-    if (plates.length !== 0) bad4.push(`award.plate ${plates.length}개 ≠ 0`);
-    if (finals.length !== 0) bad4.push(`award.final ${finals.length}개 ≠ 0`);
-    out.push(result("R4", labels.R4, bad4));
 
     const bad5 = [];
     const firstFlip = at(flips.sort((a, b) => a.at - b.at)[0]);
