@@ -36,7 +36,7 @@ import type { GameRow } from "../shared/game/gameLog";
 import { buildResultLog } from "../shared/game/resultLog";
 import { insertGame } from "./gameLog";
 import { sendWhisper } from "../shared/game/whisper";
-import { stickNote } from "../shared/game/postit";
+import { SUSPECT_MIN_GAP_MS, stickNote } from "../shared/game/postit";
 import { ANSWER_MIN_GAP_MS } from "../shared/game/answerRules";
 import { shrinkDeadline } from "../shared/game/early";
 import { submitAnswer } from "../shared/game/keywordAnswer";
@@ -845,6 +845,12 @@ export class Room extends DurableObject<Env> {
   // 같은 대상을 다시 누르면 같은 state 객체라 저장·방송이 없다. 마감이 바뀌지 않으므로 reschedule 이 필요 없다. 봇 행동(BotAct)에는 붙이지 않는다(D-05).
   private async applySuspect(playerId: string, target: number, now: number): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
+    // 옮기기는 횟수 제한이 없어 받아들일 때마다 저장 1회 + 전원 방송이다(결정 0076 쓰기 예산) — 한 사람의 요청 간격(SUSPECT_MIN_GAP_MS) 안은 오류 없이 버린다.
+    // 받아들임·거절 모두 시각을 기록한다(applyAnswer 와 같은 writeAt 맵 — 다시 하기가 비운다).
+    const key = `suspect:${playerId}`;
+    const last = this.writeAt.get(key);
+    if (last !== undefined && now - last < SUSPECT_MIN_GAP_MS) return null;
+    this.writeAt.set(key, now);
     const result = stickNote(this.room, this.world, playerId, target, now);
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
