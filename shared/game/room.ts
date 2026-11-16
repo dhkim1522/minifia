@@ -617,6 +617,16 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
   return next;
 }
 
+/** (RED 자리) 옛 v3 방 표시 판정 — GREEN 에서 구현한다. */
+export function isLegacyV3Room(_stored: RoomState): boolean {
+  return false;
+}
+
+/** (RED 자리) 옛 방을 대기실로 되돌린다 — GREEN 에서 구현한다. */
+export function toLobbyFromLegacy(stored: RoomState): RoomState {
+  return stored;
+}
+
 export function findPlayerByToken(state: RoomState, token: string): Player | undefined {
   // 봇은 토큰이 없어(빈 문자열) 어떤 hello 로도 붙을 수 없다(결정 0024).
   return state.players.find((p) => p.isBot !== true && p.token === token);
