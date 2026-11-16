@@ -2,6 +2,7 @@
 // 키워드는 서버 전용 값이다 — 장르 라벨은 모두에게, 단어는 산 시민 편 본인에게만(마피아 view 에는 키가 없다).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { genreLabelOf, GENRES, keywordEntryOf, KEYWORD_SWITCH } from "../../shared/game/keywords";
+import { answerOpenOf } from "../../shared/game/keywordAnswer";
 import { noExecutionOf } from "../../shared/game/execution";
 import { phaseDurationOf } from "../../shared/game/discussion";
 import {
@@ -257,5 +258,81 @@ describe("처형 없는 첫날 → answerReveal 4.4초 (D-22)", () => {
   it("keyword 없는 day 1 부결 → night(D-29)", () => {
     const verdict = withoutKeyword(againstAll(stateWithVerdict(6, 1, "verdict")));
     expect(tick(verdict, verdict.phaseEndsAt!, seededRandInt(9)).phase).toBe("night");
+  });
+});
+
+// ---- 23-05 Task 2: 정답 view — answerOpenOf·day.keyword.answer (D-03·D-14·D-23, T-23-15) ----
+
+describe("정답은 answerReveal 진입 프레임부터 모두에게 같은 값으로 (answerOpenOf)", () => {
+  const tickTo = (state: RoomState, phase: RoomState["phase"]): RoomState => {
+    let s = state;
+    for (let guard = 0; s.phase !== phase; guard += 1) {
+      if (s.phaseEndsAt === null || guard > 40) throw new Error(`cannot reach ${phase} from ${state.phase}`);
+      s = tick(s, s.phaseEndsAt, seededRandInt(11));
+    }
+    return s;
+  };
+  const answerOf = (state: RoomState, id: string): string | undefined =>
+    (buildView(state, id, 20_000).day?.keyword as { answer?: string } | undefined)?.answer;
+
+  it("answerOpenOf: keyword 가 없으면 거짓, 첫날은 answerReveal·night·morning 에서만, 둘째 날 이후·ended 는 늘 참", () => {
+    const kw = { genre: "movie", word: "w" } as RoomState["keyword"];
+    const base = { keyword: kw } as unknown as RoomState;
+    expect(answerOpenOf({ ...base, phase: "answerReveal", day: 1 })).toBe(true);
+    expect(answerOpenOf({ ...base, phase: "night", day: 1 })).toBe(true);
+    expect(answerOpenOf({ ...base, phase: "morning", day: 1 })).toBe(true);
+    for (const phase of ["keyword", "dayAnnounce", "discussion", "verdict", "nomination", "runoff", "showdown", "defense", "execution"] as const) {
+      expect(answerOpenOf({ ...base, phase, day: 1 }), phase).toBe(false);
+    }
+    expect(answerOpenOf({ ...base, phase: "keyword" })).toBe(false); // keyword 단계는 day 가 아직 없다
+    expect(answerOpenOf({ ...base, phase: "discussion", day: 2 })).toBe(true);
+    expect(answerOpenOf({ ...base, phase: "ended", day: 1 })).toBe(true);
+    expect(answerOpenOf({ ...base, phase: "answerReveal", day: 1, keyword: undefined })).toBe(false);
+  });
+
+  it("첫날 키워드·낮 단계(keyword·dayAnnounce·discussion·verdict·nomination·defense·execution) view 에는 어떤 viewer 에도 day.keyword.answer 가 없고, 마피아 view 에는 단어 문자열도 없다 (T-23-15)", () => {
+    const seen: string[] = [];
+    let s = startedAt(6, 1, "keyword");
+    const word = s.keyword!.word;
+    const phases = ["keyword", "dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution"] as const;
+    for (const phase of phases) {
+      s = phase === "keyword" ? s : phase === "defense" || phase === "execution" ? stateWithVerdict(6, 1, phase) : startedAt(6, 1, phase);
+      for (const p of s.players) {
+        const view = buildView(s, p.id, s.phaseEndsAt! - 1000);
+        expect(view.phase).toBe(phase);
+        expect(answerOf(s, p.id), `${phase}`).toBeUndefined();
+        if (p.role === "mafia") expect(JSON.stringify(view), `${phase} 마피아`).not.toContain(word);
+      }
+      seen.push(phase);
+    }
+    expect(seen.length).toBe(7);
+  });
+
+  it("answerReveal·night(첫날)에는 모든 viewer 에게 같은 answer 와 장르 라벨이 실린다 (D-23)", () => {
+    const reveal = tick(againstAll(stateWithVerdict(6, 1, "verdict")), stateWithVerdict(6, 1, "verdict").phaseEndsAt!, seededRandInt(9));
+    expect(reveal.phase).toBe("answerReveal");
+    const word = reveal.keyword!.word;
+    const label = genreLabelOf(reveal.keyword!.genre);
+    for (const s of [reveal, tickTo(reveal, "night")]) {
+      for (const p of s.players) {
+        const view = buildView(s, p.id, s.phaseEndsAt! - 1000);
+        expect(view.day?.keyword, `${s.phase}`).toEqual({ genre: label, answer: word });
+      }
+    }
+  });
+
+  it("둘째 날 이후(day 2)·ended 에는 계속 모든 viewer 에게 실린다", () => {
+    const day2 = { ...startedAt(6, 1, "discussion"), day: 2 };
+    const word = day2.keyword!.word;
+    for (const p of day2.players) expect(answerOf(day2, p.id)).toBe(word);
+    const exec = stateWithVerdict(4, 1, "execution", { candidate: "mafia" });
+    const ended = tick(exec, exec.phaseEndsAt!, seededRandInt(9));
+    expect(ended.phase).toBe("ended");
+    for (const p of ended.players) expect(answerOf(ended, p.id)).toBe(ended.keyword!.word);
+  });
+
+  it("keyword 가 없는 판의 view 에는 day.keyword 가 없다(옛 방)", () => {
+    const reveal = withoutKeyword({ ...startedAt(6, 1, "discussion"), day: 2 });
+    for (const p of reveal.players) expect(buildView(reveal, p.id, 20_000).day?.keyword).toBeUndefined();
   });
 });
