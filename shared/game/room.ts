@@ -209,6 +209,11 @@ export interface RoomState {
   keywordAnswers?: Array<{ order: number; seat: number; text: string | null }>;
   /** 서버 전용(23-06, D-09). 그 판에서 마피아가 금지어로 거절당한 적이 있음 — D1 "떠보기 성공"의 근거. 어떤 view·프레임에도 싣지 않는다. */
   keywordProbed?: true;
+  /**
+   * 서버 전용(23-08, D-11). 조기 진행이 마감을 줄이기 전의 원래 마감 — 찬반 번복 연장의 상한이다. 키(phase+day)가 다르면 무시하므로 지우지 않는다.
+   * 다시 하기 허용 목록 밖이라 새 판에 넘어가지 않는다. 어떤 view·프레임에도 싣지 않는다(T-23-31).
+   */
+  earlyFrom?: { phase: PhaseId; day: number; endsAt: number };
   /** 서버 전용 결정값(결정 D-21). startGame 이 mapChoice 로 정해 싣는다 — 시작 전에는 어떤 view·프레임에도 싣지 않는다(L42). 대기실 복귀가 버린다. */
   map?: MapId;
   /** 서버 전용(결정 0022). 방을 만들 때만 정해지는 테스트 방 표시 — true 일 때만 키가 있다. 테스트 방 방장 도구의 문이다. */
