@@ -14,7 +14,7 @@ const EXPECT: Record<PhaseId, TimeOfDay> = {
   nomination: "dusk",
   runoff: "dusk",
   showdown: "dusk",
-  verdict: "dusk",
+  verdict: "day", // 22-13(P22-3): 찬반은 토론 장면 그대로
   defense: "dusk",
   execution: "dusk",
   night: "night",
@@ -49,7 +49,7 @@ describe("헤더 시간대 낱말 (todWordOf, 결정 0083-1)", () => {
     expect(todWordOf("nomination", "투표")).toBe("저녁");
     expect(todWordOf("runoff", "결선")).toBe("저녁");
     expect(todWordOf("defense", "최후 변론")).toBe("저녁");
-    expect(todWordOf("verdict", "찬반")).toBe("저녁");
+    expect(todWordOf("verdict", "찬반")).toBe("낮"); // 22-13(P22-3)
     expect(todWordOf("execution", "처형")).toBe("저녁");
   });
 

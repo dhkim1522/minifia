@@ -324,11 +324,11 @@ describe("유령 조작 없음 · 걷기 · 카메라 (GHOST-01, A4)", () => {
     expect(sendL.mock.calls.filter(([m]) => m.t === "move")).toHaveLength(0);
   });
 
-  it("카메라: 유령도 낮 토론은 내 유령을 따라가고(follow) 지목·변론·찬반·처형은 가운데 고정(fixed)", () => {
+  it("카메라: 유령도 낮 토론·찬반은 내 유령을 따라가고(follow) 지목·유언·처형은 가운데 고정(fixed)", () => {
     for (const phase of phases) {
       rt.scenes.length = 0;
       mount(ghostIn(phase));
-      expect(lastScene().camera.mode, phase).toBe(phase === "discussion" ? "follow" : "fixed");
+      expect(lastScene().camera.mode, phase).toBe(phase === "discussion" || phase === "verdict" ? "follow" : "fixed");
       cleanup();
     }
   });

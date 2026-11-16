@@ -141,7 +141,7 @@ describe("밤 분위기 — 맵 조명 night (D-04·D-05)", () => {
       r.unmount();
       return `${phase}:${l}`;
     });
-    expect(seen.join(",")).toBe("dayAnnounce:talk,discussion:talk,nomination:vote,defense:trial,verdict:vote,execution:trial,morning:morning");
+    expect(seen.join(",")).toBe("dayAnnounce:talk,discussion:talk,nomination:vote,defense:trial,verdict:talk,execution:trial,morning:morning");
   });
 
   it("결과 화면(ended, 같은 night 그림)에는 비네팅이 0개", () => {

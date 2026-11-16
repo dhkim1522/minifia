@@ -96,10 +96,10 @@ export function visibleSeats(view: RoomView, fading?: ReadonlyMap<number, number
   return seats;
 }
 
-const FIXED_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["nomination", "runoff", "showdown", "defense", "verdict", "execution"]);
+const FIXED_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["nomination", "runoff", "showdown", "defense", "execution"]);
 
 /**
- * 카메라 구도(UI-SPEC 카메라 표): 지목·변론·찬반·처형은 모이는 자리 가운데 고정, 그 밖(낮 시작·토론·밤·아침·로비)은 따라가기.
+ * 카메라 구도(UI-SPEC 카메라 표): 지목·유언·처형은 모이는 자리 가운데 고정, 그 밖(낮 시작·토론·찬반·밤·아침·로비)은 따라가기. 찬반은 토론 장면 그대로다(22-13, P22-3).
  * 순차 지목은 득표가 과반이어도 확대하지 않는다(M-4). 동시 투표의 과반 확대는 22-10 에서 지웠다(D-12).
  */
 export function cameraModeOf(view: RoomView, stageH: number, opts: { verdictZoom?: number } = {}): CameraMode {
@@ -111,7 +111,7 @@ export function cameraModeOf(view: RoomView, stageH: number, opts: { verdictZoom
 }
 
 /**
- * 단계 조명(UI-SPEC): 낮 시작·토론 talk, 지목·결선·찬반 vote, 변론·처형 trial, 밤 night, 아침 morning.
+ * 단계 조명(UI-SPEC): 낮 시작·토론·찬반 talk(찬반은 토론 장면 그대로, 22-13 P22-3), 지목·결선 vote, 유언·처형 trial, 밤 night, 아침 morning.
  * 로비·종료는 talk.
  */
 export function lightingOf(phase: PhaseId): LightingStage {
@@ -119,7 +119,6 @@ export function lightingOf(phase: PhaseId): LightingStage {
     case "nomination":
     case "runoff":
     case "showdown":
-    case "verdict":
       return "vote";
     case "defense":
     case "execution":

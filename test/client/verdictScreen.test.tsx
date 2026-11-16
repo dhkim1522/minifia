@@ -380,9 +380,9 @@ describe("찬반 화면 — 유령·헤더·조명 (22-10)", () => {
     expect(container.querySelectorAll("[data-done]").length).toBe(0);
   });
 
-  it("조명 vote, 긴장 0·초점 없음 — 찬반에는 후보가 없다", () => {
+  it("조명 talk(토론 장면 그대로, 22-13 P22-3), 긴장 0·초점 없음 — 찬반에는 후보가 없다", () => {
     mount(makeView());
-    expect(lastScene().lighting).toBe("vote");
+    expect(lastScene().lighting).toBe("talk");
     expect(lastScene().tension).toBe(0);
     expect(lastScene().focusSeat).toBeUndefined();
   });

@@ -579,7 +579,7 @@ describe("GameMap — 헤더 시간대 글자 (0083-1)", () => {
       ["dayAnnounce", "day", "낮", "토론"],
       ["nomination", "dusk", "저녁", "지목"],
       ["defense", "dusk", "저녁", "유언"],
-      ["verdict", "dusk", "저녁", "찬반"],
+      ["verdict", "day", "낮", "찬반"], // 22-13(P22-3): 찬반은 토론 장면(낮) 그대로
       ["execution", "dusk", "저녁", "처형"],
     ];
     for (const [phase, tod, w, title] of cells) {

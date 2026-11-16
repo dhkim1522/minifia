@@ -2,7 +2,7 @@
 //
 // - 장면 목록(SCENES): 앱 그림 한 장이 장면 하나다(public/backgrounds/bg_{game|entry}_{파일 조각}.webp).
 // - 단계 → 장면 규칙표(PHASE_SCENE): 화면에 단계별 분기를 따로 두지 않는다.
-//   투표·공개·변론·처형 단계는 해질녘 그림 dusk 한 장이다. 종료(ended)는 night(P-2).
+//   지목·유언·처형 단계는 해질녘 그림 dusk 한 장이다(찬반은 토론 장면 day 그대로, 22-13 P22-3). 종료(ended)는 night(P-2).
 //   verdictDusk 는 등록만 남고 어떤 단계도 가리키지 않는다(그림에 위에서 떨어지는 조명이 구워져 있어 D-29 와 맞지 않는다, P-1).
 //   PhaseId 가 늘면 Record<PhaseId, SceneId> 가 타입 오류로 알려 준다.
 // - 해·달: 그림에 이미 그려져 있고 장면마다 위치가 다르다(아침 해 오른쪽 위 → 낮 해 더 왼쪽·아래, 밤 달). 이미지에서 떼어낼 수 없으므로
@@ -45,7 +45,7 @@ export const PHASE_SCENE: Readonly<Record<PhaseId, SceneId>> = Object.freeze({
   defense: "dusk",
   execution: "dusk",
   nomination: "dusk", // 8페이즈: defense 와 같은 값
-  verdict: "dusk",
+  verdict: "day", // 22-13(P22-3): 찬반은 토론 장면 그대로 — 모이기·해질녘은 지목부터
   ended: "night",
 });
 

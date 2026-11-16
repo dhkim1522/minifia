@@ -143,7 +143,7 @@ describe("cameraModeOf (UI-SPEC 카메라 표)", () => {
     });
   }
 
-  for (const phase of ["nomination", "runoff", "showdown", "defense", "verdict", "execution"] as const) {
+  for (const phase of ["nomination", "runoff", "showdown", "defense", "execution"] as const) {
     it(`${phase} → 모이는 자리 가운데 고정, 확대 1`, () => {
       same(cameraModeOf(viewOf(phase), 500), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
     });
@@ -175,7 +175,8 @@ describe("cameraModeOf (UI-SPEC 카메라 표)", () => {
     });
     it("배율을 주지 않으면 지금과 같고, 처형이 아닌 단계는 배율을 줘도 무시한다", () => {
       same(cameraModeOf(exec, 800), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
-      same(cameraModeOf(viewOf("verdict"), 800, { verdictZoom: 1.1 }), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
+      same(cameraModeOf(viewOf("nomination"), 800, { verdictZoom: 1.1 }), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
+      same(cameraModeOf(viewOf("verdict"), 800, { verdictZoom: 1.1 }), { mode: "follow" }); // 찬반은 토론 장면 그대로(22-13, P22-3)
       same(cameraModeOf(viewOf("night"), 800, { verdictZoom: 1.1 }), { mode: "follow" });
     });
     it("역할에 따라 달라지지 않는다(유령·변론자·시민 같은 값)", () => {
@@ -188,9 +189,9 @@ describe("cameraModeOf (UI-SPEC 카메라 표)", () => {
       same(sceneLook(exec, { stageH: 500 }).camera, { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
     });
   });
-  it("과반이어도 지목 단계가 아니면 확대 1 (찬반)", () => {
+  it("찬반은 후보가 없고 토론 장면 그대로라 따라가기 카메라다(확대 없음, 22-13 P22-3)", () => {
     const verdict = viewOf("verdict", { day: { points: points([0, 2], [1, 2], [3, 2]), candidate: 2 } });
-    same((cameraModeOf(verdict, 600) as { zoom: number }).zoom, 1);
+    same(cameraModeOf(verdict, 600), { mode: "follow" });
   });
 });
 
@@ -201,7 +202,7 @@ describe("lightingOf (UI-SPEC 단계 조명)", () => {
     ["nomination", "vote"],
     ["runoff", "vote"],
     ["showdown", "vote"],
-    ["verdict", "vote"],
+    ["verdict", "talk"], // 22-13(P22-3): 찬반은 토론 장면 그대로
     ["defense", "trial"],
     ["execution", "trial"],
     ["night", "night"],
@@ -482,7 +483,7 @@ describe("lightingFor (UI-SPEC 단계 조명: 밤은 보는 사람마다 다르�
     expect(lightingFor(viewOf("discussion"))).toBe("talk");
     expect(lightingFor(viewOf("nomination"))).toBe("vote");
     expect(lightingFor(viewOf("defense"))).toBe("trial");
-    expect(lightingFor(viewOf("verdict"))).toBe("vote");
+    expect(lightingFor(viewOf("verdict"))).toBe("talk");
   });
 });
 
