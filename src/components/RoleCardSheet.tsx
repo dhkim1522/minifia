@@ -1,9 +1,10 @@
-import { useId, useRef } from "react";
-import type { KeyboardEvent, ReactElement } from "react";
-import type { RoomView } from "../../shared/protocol";
+import { useId, useMemo, useRef } from "react";
+import type { KeyboardEvent, ReactElement, RefObject } from "react";
+import type { KeywordAnswerRow, RoomView } from "../../shared/protocol";
 import type { RoleId } from "../../shared/game/roles";
+import { keywordAnswerOf, keywordAnswersOf, keywordGenreOf } from "../game/keywordView";
 import { ROLE_TEXT, alliesText, allyNicknames } from "../game/roleText";
-import { roleArtSrc } from "../net/assets";
+import { roleArtSrc, seatColorVar } from "../net/assets";
 import type { JournalRole } from "../net/assets";
 import { Journal } from "./Journal";
 import { Diamond } from "./RoleCard";
@@ -11,7 +12,7 @@ import { Sheet } from "./Sheet";
 import "../styles/phase.css";
 import "../styles/rolecard.css";
 
-export type RoleCardTab = "role" | "activity";
+export type RoleCardTab = "role" | "activity" | "answers";
 
 export interface RoleCardSheetProps {
   view: RoomView;
@@ -27,7 +28,7 @@ export interface RoleCardSheetProps {
   onClose: () => void;
 }
 
-const TAB_ORDER: readonly RoleCardTab[] = ["role", "activity"];
+const TAB_LABEL: Record<RoleCardTab, string> = { role: "내 역할", activity: "활동 기록", answers: "첫날 답" };
 
 // 활동 기록(일지)이 있는 역할. 시민은 기록이 없어 탭 줄도 없다(결정 0026).
 function journalRoleOf(role: RoleId | null): JournalRole | null {
@@ -39,38 +40,56 @@ function journalRoleOf(role: RoleId | null): JournalRole | null {
 export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, onClose }: RoleCardSheetProps): ReactElement {
   const role = view.me.role ?? null;
   const journalRole = showBack ? null : journalRoleOf(role);
+  const answers = keywordAnswersOf(view);
+  const hasAnswers = !showBack && role !== null && answers !== undefined;
   const baseId = useId();
   const tabId = (t: RoleCardTab): string => `${baseId}-tab-${t}`;
   const panelId = `${baseId}-panel`;
-  const roleTabRef = useRef<HTMLButtonElement>(null);
-  const activityTabRef = useRef<HTMLButtonElement>(null);
-  const tabRefs: Record<RoleCardTab, typeof roleTabRef> = { role: roleTabRef, activity: activityTabRef };
+  const tabRefs: Record<RoleCardTab, RefObject<HTMLButtonElement | null>> = {
+    role: useRef<HTMLButtonElement>(null),
+    activity: useRef<HTMLButtonElement>(null),
+    answers: useRef<HTMLButtonElement>(null),
+  };
+
+  // 탭 순서: 시민 [내 역할, 첫날 답], 그 밖 [내 역할, 활동 기록, 첫날 답]. 답이 아직 없으면 지금 배열(시민은 탭 줄 없음, D-14·P23-16)
+  const tabOrder = useMemo<readonly RoleCardTab[]>(() => {
+    if (showBack || role === null) return [];
+    const list: RoleCardTab[] = ["role"];
+    if (journalRole !== null) list.push("activity");
+    if (hasAnswers) list.push("answers");
+    return list.length > 1 ? list : [];
+  }, [showBack, role, journalRole, hasAnswers]);
+  const tabbed = tabOrder.length > 0;
+  const selectedTab: RoleCardTab = tabbed && tabOrder.includes(tab) ? tab : "role";
+  const showingAnswers = tabbed && selectedTab === "answers";
 
   // ←/→ 는 이전/다음(끝에서 돈다), Home/End 는 처음/끝. 선택과 포커스를 함께 옮긴다.
   function onTabKeyDown(e: KeyboardEvent<HTMLButtonElement>, current: RoleCardTab): void {
-    const at = TAB_ORDER.indexOf(current);
+    const at = tabOrder.indexOf(current);
     let next: number;
-    if (e.key === "ArrowRight") next = (at + 1) % TAB_ORDER.length;
-    else if (e.key === "ArrowLeft") next = (at - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+    if (e.key === "ArrowRight") next = (at + 1) % tabOrder.length;
+    else if (e.key === "ArrowLeft") next = (at - 1 + tabOrder.length) % tabOrder.length;
     else if (e.key === "Home") next = 0;
-    else if (e.key === "End") next = TAB_ORDER.length - 1;
+    else if (e.key === "End") next = tabOrder.length - 1;
     else return;
     e.preventDefault();
-    const target = TAB_ORDER[next]!;
+    const target = tabOrder[next]!;
     onTab(target);
     tabRefs[target].current?.focus();
   }
 
-  const tabButton = (t: RoleCardTab, label: string, ref: typeof roleTabRef): ReactElement => {
-    const selected = tab === t;
+  const tabButton = (t: RoleCardTab): ReactElement => {
+    const selected = selectedTab === t;
     const hasDot = t === "activity" && unread > 0;
     return (
       <button
-        ref={ref}
+        key={t}
+        ref={tabRefs[t]}
         type="button"
         role="tab"
         id={tabId(t)}
         className="mf-rolecard__tab"
+        data-rolecard-tab={t}
         aria-selected={selected}
         aria-controls={selected ? panelId : undefined}
         aria-label={t === "activity" ? (hasDot ? "활동 기록, 새 기록" : "활동 기록") : undefined}
@@ -78,7 +97,7 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, on
         onClick={() => onTab(t)}
         onKeyDown={(e) => onTabKeyDown(e, t)}
       >
-        {label}
+        {TAB_LABEL[t]}
         {hasDot ? <span className="mf-rolecard__dot" aria-hidden="true" /> : null}
       </button>
     );
@@ -95,11 +114,12 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, on
         </div>
       </div>
     );
-  } else if (journalRole !== null) {
-    const selectedTab = tab;
+  } else if (tabbed) {
     content = (
       <div role="tabpanel" id={panelId} aria-labelledby={tabId(selectedTab)} className="mf-rolecard__panel">
-        {selectedTab === "activity" ? (
+        {selectedTab === "answers" ? (
+          <AnswersPanel view={view} rows={answers ?? []} />
+        ) : selectedTab === "activity" && journalRole !== null ? (
           <Journal role={journalRole} records={view.me.records ?? []} players={view.players} mySeat={view.me.seat} newCount={newCount} />
         ) : (
           <Front view={view} role={role} />
@@ -110,23 +130,71 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, on
     content = <Front view={view} role={role} />;
   }
 
+  const title = showingAnswers ? "모두의 답" : "역할 카드";
   return (
     <Sheet
-      label="역할 카드"
+      label={title}
       onClose={onClose}
       showClose
       className="mf-sheet--rolecard"
-      initialFocusRef={journalRole !== null && tab === "activity" ? activityTabRef : undefined}
+      initialFocusRef={tabbed && selectedTab !== "role" ? tabRefs[selectedTab] : undefined}
     >
-      <h2 className="mf-t-heading mf-sheet__title">역할 카드</h2>
-      {journalRole !== null ? (
-        <div role="tablist" aria-label="역할 카드 탭" className="mf-rolecard__tabs">
-          {tabButton("role", "내 역할", roleTabRef)}
-          {tabButton("activity", "활동 기록", activityTabRef)}
+      <h2 className="mf-t-heading mf-sheet__title">{title}</h2>
+      {tabbed ? (
+        <div role="tablist" aria-label="역할 카드 탭" className={`mf-rolecard__tabs mf-rolecard__tabs--${tabOrder.length}`}>
+          {tabOrder.map((t) => tabButton(t))}
         </div>
       ) : null}
       {content}
     </Sheet>
+  );
+}
+
+// 첫날 답 목록(23-11, P23-18·19). 일차 구역 배열 모양이라 24 가 2일차 이후 구역(포스트잇 줄)을 더할 수 있다.
+// 줄 = 번호 원 · 좌석 색 점 · 닉네임 · 답. 서버가 준 순서 그대로(낸 순서 → 답 없음), 글은 React 텍스트 노드만 쓴다(T-23-41).
+function AnswersPanel({ view, rows }: { view: RoomView; rows: readonly KeywordAnswerRow[] }): ReactElement {
+  const genre = keywordGenreOf(view);
+  const correct = keywordAnswerOf(view);
+  const nick = (seat: number): string => view.players.find((p) => p.seat === seat)?.nickname ?? "";
+  const days = [{ n: 1, rows }];
+  return (
+    <div className="mf-answers">
+      {days.map((d) => (
+        <section key={d.n} className="mf-answers__day" data-answer-day={d.n}>
+          <div className="mf-answers__head">
+            <span className="mf-answers__dayname">{d.n}일차</span>
+            {genre !== undefined ? <span className="mf-answers__genre">장르 : {genre}</span> : null}
+          </div>
+          <ol className="mf-answers__list" data-answer-list="">
+            {d.rows.map((r) => {
+              const mine = r.seat === view.me.seat;
+              const none = r.text === null;
+              return (
+                <li
+                  key={r.seat}
+                  className={mine ? "mf-answers__row mf-answers__row--mine" : "mf-answers__row"}
+                  data-answer-row=""
+                  data-answer-order={r.order}
+                  data-answer-seat={r.seat}
+                  data-answer-none={none ? "" : undefined}
+                  aria-label={mine ? `내 답, ${r.order}번 ${nick(r.seat)} ${none ? "답 없음" : r.text}` : undefined}
+                >
+                  <span className="mf-answers__no" aria-hidden="true">{r.order}</span>
+                  <span className="mf-answers__dot" style={{ background: seatColorVar(r.seat) }} aria-hidden="true" />
+                  <span className="mf-answers__nick">{nick(r.seat)}</span>
+                  <span className={none ? "mf-answers__text mf-answers__text--none" : "mf-answers__text"}>{none ? "답 없음" : r.text}</span>
+                </li>
+              );
+            })}
+          </ol>
+          {correct !== undefined ? (
+            <p className="mf-answers__correct" data-answer-correct="">
+              정답 · {correct}
+            </p>
+          ) : null}
+        </section>
+      ))}
+    </div>
   );
 }
 
