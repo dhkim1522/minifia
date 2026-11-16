@@ -1,12 +1,13 @@
 // 수동 확인용 봇: 사람이 만든 방에 가짜 플레이어를 채워 넣는다. 방장은 브라우저에서 직접 [시작] 을 누른다.
-// 봇은 자유 채팅을 한다(7페이즈, 결정 0058): 낮 토론에서 50% 확률로 고정 문구 한 줄, 밤 마피아 봇은 가끔 한 줄, 최후 변론에서 후보인 봇은 변론 문구 한 줄.
+// 봇은 자유 채팅을 한다(7페이즈, 결정 0058): 낮 토론에서 50% 확률로 고정 문구 한 줄, 밤 마피아 봇은 가끔 한 줄. (22페이즈: 유언 단계는 서버가 채팅을 막고 봇이 처형되면 서버가 유언을 낸다 — 봇 스크립트는 말하지 않는다.)
 // 줄은 사람과 같은 `{t:"chat", text, pk}` 로 보낸다. 단계 키(pk)는 봇이 마지막으로 받은 state 의 일차·단계로 만든다.
 // 직업 주장 차례·빠른 메시지·이모티콘은 없다(7페이즈에서 없어졌다).
 // 밤에는 역할대로 행동한다: 마피아·경찰·의사 봇은 살아 있는 사람 중 하나를 pick 하고(마피아는 동료 제외). 탈락한 봇은 멈춘다.
 // 낮 처형 구간(결정 0024·0060-13, 서버 봇 shared/game/bots.ts 와 같은 성향): 토론(discussion) 30~60초에 토론 끝내기(endDiscussion) 한 번,
-// 투표(nomination, 기본판 결정 0072)는 동시 투표라 일차·단계 키로 한 번만 1~3초 뒤(아직 같은 단계면) 자기를 뺀 살아 있는 한 명 지목(point) — day.turn 이 있는 방(순차 지목, 결정 0063-1)이면 지금 차례가 내 좌석일 때만,
-// 최후 변론(defense)에서는 자기가 변론자일 때만 변론 문구 하나,
-// 찬반(verdict) 1~6초에 변론자가 아니면 70% 찬성·30% 반대(verdict).
+// 22페이즈 새 낮 순서(D-10): 토론 → 찬반(verdict) → 지목(nomination) → 유언(defense) → 처형.
+// 찬반(verdict)은 후보가 없어 산 봇 모두 1~6초에 70% 찬성·30% 반대(verdict)를 던진다.
+// 지목(nomination)은 순차 지목(결정 0063-1)이라 day.turn 의 지금 차례가 내 좌석일 때만 1~3초 뒤(아직 같은 차례면) 자기를 뺀 살아 있는 한 명 지목(point)한다.
+// 유언(defense)에는 봇이 할 일이 없다(처형자가 봇이면 서버가 유언을 낸다).
 // 동점 결선(runoff, 결정 0066-4)·마지막 3인 결전(showdown, 결정 0066-5)은 기본판(결정 0072)에서 서버가 단계에 들어가지 않아 아래 행동이 불리지 않는다(켠 판을 위해 남긴다).
 // 결선은 투표 창(step 1)에서 후보가 아닌 봇이 후보 둘 중 하나에게 point 한 번,
 // 결전은 자기 한마디 차례에 고정 문구 하나를 chat 으로, 동시 지목 창에서 자기를 뺀 산 사람 하나에게 point 한 번 보낸다(사람이 앉은 방에서 봇이 막히지 않게 하는 것이 목적).
@@ -248,17 +249,12 @@ function onState(bot, view) {
     if (bot.voteKey === key) return;
     bot.voteKey = key;
     if (view.phase === "verdict") {
-      if (view.day?.candidate === bot.seat) return; // 변론자는 자기 처형 찬반에 투표하지 않는다(결정 0053)
       const agree = Math.random() < 0.7;
       setTimeout(() => {
         if (bot.view?.phase !== "verdict") return;
         sendTo(bot, { t: "verdict", agree });
         log(`${bot.nickname}: 찬반 ${agree ? "찬성" : "반대"}`);
       }, 1000 + Math.random() * 5000);
-    } else {
-      // 변론은 변론자 본인만 한다. 고정 변론 문구 셋 중 하나를 자유 채팅 한 줄로 보낸다.
-      if (view.day?.candidate !== bot.seat) return;
-      sayLater(bot, "defense", day, pick(DEFENSE_LINES), 1000 + Math.random() * 3000, "변론 채팅");
     }
   } else if (view.phase === "runoff") {
     stopTalk(bot);

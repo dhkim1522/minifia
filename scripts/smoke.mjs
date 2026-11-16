@@ -1,12 +1,11 @@
 // 스모크: 배포(또는 로컬) 주소에서 방 만들기 → WebSocket hello → 대기실 상태까지 확인한다.
-// full 단계는 한 판을 끝까지 돈다(8페이즈 낮 흐름, 결정 0060): 로비 채팅 한 줄 → 낮 시작 발표 → 낮 토론(자유 채팅, 결정 0058)
-// → 과반이 토론 끝내기(DAY-03) → 동시 투표(DAY-04, 기본판 결정 0072: 산 사람 모두 15초 안에 동시에 point, 자기 지목·유령 지목은 BAD_MESSAGE, 한 명에게 몰아 줌,
-//   줄은 모두에게 같고 한 사람이 바꾸면 모두 따라감, day.turn 은 없다) → 유언 10초(22-11)
-// → 찬반 10초(DAY-06: 변론자는 못 던짐, 값 변경은 본인에게만) → 처형 5초(DAY-07: 수만 공개, 역할 키 없음) → 밤 30초(역할별 행동·마피아 채널 채팅)
+// full 단계는 한 판을 끝까지 돈다(22페이즈 D-10 새 낮 흐름): 로비 채팅 한 줄 → 낮 시작 발표 → 낮 토론(자유 채팅, 결정 0058)
+// → 과반이 토론 끝내기(DAY-03) → 찬반 10초(D-11: 후보 없이 산 사람 전원이 답하고 공개 값은 집계 수 day.verdictCount 뿐, 값 변경은 마감 전 번복)
+// → 차례 지목(D-12: 산 사람이 한 명씩 자기 차례에 point, 자기 지목·유령 지목은 BAD_MESSAGE, day.points 는 모두에게 같고 단계가 끝나면 없다) → 유언 10초(D-15)
+// → 처형 6.6초(DAY-07: 좌석만 공개·유언이 있으면 will, 역할 키 없음) → 밤 30초(역할별 행동·마피아 채널 채팅)
 // → 아침 5초(탈락 발표·탈락자 채널 채팅) → 승패가 날 때까지 다음 낮을 같은 방식으로 돌아 ended 에서 끝난다.
-// 기본판(결정 0072)에서는 산 사람이 3명이어도 같은 토론 → 투표 흐름이다 — 하루 반복은 서버가 보낸 단계(discussion·showdown)로 갈래를 고른다.
-// 아래 마지막 3인 결전(09.1.1, 결정 0066-5, 판 규칙(RULES)의 showdown 을 켠 판)은 이렇게 돈다: 모이기 2초 → 좌석 순서로 한마디(8초 차례, 차례 주인의 chat 이 그 차례의 한마디, 시간 초과는 건너뜀)
-// → 동시 지목 8초(남의 선택은 마감 전에 어느 프레임에도 없고 던진 좌석만 공개) → 공개 1.5초 → 2표 이상이면 찬반 없이 처형(day.verdict.last, day.ballots 없음)·아니면 처형 없는 밤.
+// 아래 마지막 3인 결전(09.1.1, 결정 0066-5, 판 규칙(RULES)의 showdown 을 켠 판)은 기본판에서 꺼져 있다(판 종류가 없어진 22페이즈에서도 RULES 가 false) — 켠 판에서만 이렇게 돈다: 모이기 2초 → 좌석 순서로 한마디(8초 차례, 차례 주인의 chat 이 그 차례의 한마디, 시간 초과는 건너뜀)
+// → 동시 지목 8초(남의 선택은 마감 전에 어느 프레임에도 없고 던진 좌석만 공개) → 공개 1.5초 → 2표 이상이면 찬반 없이 처형·아니면 처형 없는 밤.
 // 첫 낮은 마피아가 아닌 시민 한 명을 처형하고 그날 밤 다른 시민이 암살당한다. 마피아가 남아 있는 날은 마피아 한 명을 처형해 판을 끝낸다.
 // 자유 채팅 규칙(CHAT-01·02·03·05·06): 낮 토론의 산 사람 줄은 모두에게 ch all 로 seq 틈 없이 가고 보낸 사람에게도 돌아온다.
 // 600ms 안 두 번째 전송은 보낸 클라이언트에만 chatReject{rate} 가 가고 다른 클라이언트에는 아무것도 가지 않는다.
@@ -41,6 +40,9 @@ const NOMINATION_MS = 15_000;
 const POINT_CHANGE_GAP_MS = 300;
 // 순차 지목(결정 0063-1, 판 규칙(RULES)의 pickTurn)의 길이 사본 — 기본판에서는 서버가 쓰지 않는다. 아래 마지막 3인 구간의 차례 사이 간격이 PICK_GAP_MS 를 쓴다.
 const PICK_GAP_MS = 900;
+const NOMINATION_GATHER_MS = 3_000; // 22페이즈 D-12: 순차 지목이 기본 — shared/game/phases.ts 의 모이기·차례·끝 알림 길이 사본(최악 길이 계산용)
+const PICK_TURN_MS = 8_000;
+const NOMINATION_END_MS = 2_000;
 const DEFENSE_MS = 10_000; // shared/game/phases.ts DEFENSE_MS 사본 — 유언 단계(결정 0089-19, 22-11)
 const VERDICT_MS = 10_000;
 // 마지막 3인 결전(shared/game/phases.ts 의 SHOWDOWN_* 사본, 결정 0066-5): 모이기 2초 · 차례마다 한마디 8초 · 동시 지목 8초 · 공개 1.5초. 차례 사이는 PICK_GAP_MS 와 같다.
@@ -123,10 +125,10 @@ const ENDED_ROLE_STRING_PATHS = new Set(["view.result.seats[].job"]);
 // 9페이즈(결정 0061): 마피아 쪽지 한 줄(nightNote)은 서버 안에만 있고 아침 chat 카드(k:"note")로만 나온다.
 // 8페이즈(결정 0060): 개인 지목(nominate)·토론 끝내기(endVote)·찬반 값(verdictVote)과 판정(verdict)은 서버 안에만 있다.
 const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "claim" + "Done", "claims", "claimLog", "turn", "pickTurn", "nominate", "endVote", "verdictVote", "verdict", "nightLog", "lastExecPhrase", "chatRates", "typingRelays", "nextSeq", "nightNote", "showdownPick", "runoffVote", "showdown", "runoff"];
-// 같은 이름의 공개 와이어 경로(이 밖의 경로에 이름이 나오면 실패): 처형 단계의 찬반 수 day.verdict, 본인에게만 가는 me.verdictVote.
+// 같은 이름의 공개 와이어 경로(이 밖의 경로에 이름이 나오면 실패): 지목 단계의 차례 day.turn, 본인에게만 가는 me.verdictVote. 처형 단계의 찬반 수 day.verdict 는 22-12 에서 없어졌다(어떤 경로에도 허용하지 않는다).
 // turn·showdown·runoff·pickTurn·showdownPick·runoffVote: 기본판(결정 0072)에서 꺼진 장치의 키다. 공개 경로로도 허용하지 않아 어느 프레임에도 이름이 나오면 안 된다.
 // 기본판(결정 0072): turn·showdown·runoff 는 공개 경로도 없다 — 어떤 프레임에 이름이 나오면 실패한다(T-13-07, 허용 경로를 좁히기만 한다).
-const PUBLIC_KEY_PATHS = { verdict: ["view.day.verdict"], verdictVote: ["view.me.verdictVote"] };
+const PUBLIC_KEY_PATHS = { turn: ["view.day.turn"], verdictVote: ["view.me.verdictVote"] }; // 22페이즈: day.turn(순차 지목, 지목 단계만)이 공개 경로가 되었고 day.verdict(찬반 집계)는 사라졌다
 // 사본 상수(스크립트는 TS 를 import 하지 않는다): test/unit/e2eContract.test.ts 가 shared 와 같은지 묶는다.
 // shared/protocol.ts OUTFIT_IDS — 공개 의상 id. 직업 이름과 같은 단어(police·doctor·mafia)가 있지만 역할의 함수가 아니다(결정 D-6, 서버 쪽 증명 test/unit/dress.test.ts).
 export const OUTFIT_IDS = ["coat", "police", "doctor", "mafia", "detective", "reporter", "elder", "hood", "noir"];
@@ -419,8 +421,7 @@ export function collectRoleStringPaths(value, path, out) {
 
 const sortedKeys = (o) => Object.keys(o).sort().join(",");
 // 서버가 만든 카드 줄(유언·찬반 기록)만 k 키를 더 싣는다(결정 0061-11·0066-3). 일반 대화 줄에는 k 가 없어야 한다.
-// 찬반 기록 카드(k ballots, 결정 0066-3)도 같은 모양이다: 본문은 `찬성좌석들|반대좌석들`(shared/game/ballots.ts), 보낸 사람 자리는 변론자.
-const lineKeys = (line, base) => [...base, ...(line.k === "will" || line.k === "ballots" ? ["k"] : [])].sort().join(",");
+const lineKeys = (line, base) => [...base, ...(line.k === "will" ? ["k"] : [])].sort().join(",");
 // 클라이언트가 지금 보는 단계 키 '판:일차:단계'(shared/game/audience.ts phaseKey 와 같은 모양). 판이 없으면 1, 로비는 day 가 없어 0.
 const pkOf = (c) => {
   const v = lastView(c);
@@ -747,115 +748,115 @@ async function stageFull(url, args) {
       }
     }
 
-    // (b) 투표 단계(기본판 동시 투표, 결정 0072): 과반 직후 넘어왔다(마감 90초를 기다리지 않음). 줄은 비어 있고 첫 길이는 동시 15초이며 day.turn 키가 없다.
-    await waitUntil(() => allSee(alive, "nomination", n), STATE_LIMIT_MS, `${label} 토론 끝내기 과반 뒤 nomination 이 모든 클라이언트에 오지 않음`);
-    const nomEnds = new Set(alive.map((c) => firstState(c, "nomination", inDay(n)).msg.view.phaseEndsAt));
-    if (nomEnds.size !== 1) fail(`${label} nomination 의 phaseEndsAt 이 클라이언트마다 다름 (${nomEnds.size}종)`);
-    for (const c of alive) {
-      const nv = firstState(c, "nomination", inDay(n)).msg.view;
-      if (nv.phaseDurationMs !== NOMINATION_MS) fail(`${c.nickname} 의 ${label} nomination phaseDurationMs 가 ${NOMINATION_MS} 가 아님: ${nv.phaseDurationMs}`);
-      if (JSON.stringify(nv.day.points) !== "[]") fail(`${c.nickname} 의 ${label} nomination 첫 day.points 가 []가 아님: ${JSON.stringify(nv.day.points)}`);
-      if (nv.day.turn !== undefined) fail(`${c.nickname} 의 ${label} nomination 첫 view 에 day.turn 이 있음(기본판은 차례가 없는 동시 투표): ${JSON.stringify(nv.day.turn)}`);
-      if (nv.serverNow >= discEndsAt - 5_000) fail(`${label} 과반 토론 끝내기 뒤에도 토론 마감(${discEndsAt})을 거의 다 기다림 (serverNow ${nv.serverNow})`);
-    }
-
-    // (c) 동시 투표(DAY-04, 결정 0072): 산 사람이 모두 동시에 point 하고(자기 지목·유령 지목은 BAD_MESSAGE) 줄은 모두에게 같은 공개 목록이다.
-    // 한 사람이 마감 전에 바꾸면 모든 클라이언트의 줄이 따라간다(마감까지 바꿀 수 있다).
-    if (ghosts.length > 0) await expectError(ghosts[0], { t: "point", target: victim.seat }, "BAD_MESSAGE", `${label} 유령의 지목`);
-    await expectError(victim, { t: "point", target: victim.seat }, "BAD_MESSAGE", `${label} 자기 지목`);
-    const lines = new Map();
-    const linesNow = () => [...lines.entries()].sort((a, b) => a[0] - b[0]).map(([seat, target]) => ({ seat, target }));
-    const waitLines = (what) => {
-      const want = JSON.stringify(linesNow());
-      return waitUntil(
-        () => alive.every((x) => lastView(x)?.phase === "nomination" && JSON.stringify(lastView(x).day.points) === want),
-        STATE_LIMIT_MS,
-        `${label} ${what} 뒤 모든 클라이언트의 day.points 가 같아지지 않음 (기대 ${want})`,
-      );
-    };
-    const changer = others[0];
-    const altTarget = alive.find((c) => c !== changer && c !== victim); // 산 사람이 셋 이상이라 항상 있다
-    for (const c of alive) {
-      const target = c === victim ? others[0].seat : c === changer ? altTarget.seat : victim.seat;
-      c.ws.send(JSON.stringify({ t: "point", target }));
-      lines.set(c.seat, target);
-    }
-    await waitLines("산 사람 모두의 동시 지목");
-    for (const c of alive) {
-      const turnPaths = [];
-      collectKeyPaths(lastView(c), "turn", "", turnPaths);
-      if (turnPaths.length > 0) fail(`${c.nickname} 의 ${label} 투표 view 에 turn 키가 있음: ${turnPaths.join(",")}`);
-    }
-    await sleep(POINT_CHANGE_GAP_MS); // 같은 사람의 지목 간격(250ms)
-    changer.ws.send(JSON.stringify({ t: "point", target: victim.seat }));
-    lines.set(changer.seat, victim.seat);
-    await waitLines(`${changer.nickname} 의 지목 바꾸기`);
-
-    // (d) 변론(DAY-05): 마감에 최다 득표 한 명이 변론자가 된다.
-    await waitUntil(() => allSee(alive, "defense", n), NOMINATION_MS + STATE_LIMIT_MS, `${label} 투표 마감 뒤 defense 가 모든 클라이언트에 오지 않음`);
-    for (const c of alive) {
-      const dv = firstState(c, "defense", inDay(n)).msg.view;
-      if (dv.day.candidate !== victim.seat) fail(`${c.nickname} 의 ${label} defense day.candidate 가 ${victim.seat} 가 아님: ${dv.day.candidate}`);
-      if (dv.phaseDurationMs !== DEFENSE_MS) fail(`${c.nickname} 의 ${label} defense phaseDurationMs 가 ${DEFENSE_MS} 가 아님: ${dv.phaseDurationMs}`);
-    }
-
-    // (e) 찬반(DAY-06, 결정 0053): 변론자는 못 던진다. 첫 표는 던진 좌석만 모두에게, 값 변경은 본인에게만(다른 소켓은 프레임이 0).
-    await waitUntil(() => allSee(alive, "verdict", n), DEFENSE_WAIT_MS, `${label} 변론 마감 뒤 verdict 가 모든 클라이언트에 오지 않음`);
+    // (b) 찬반(22페이즈 D-10·D-11): 과반 직후 넘어왔다(마감 90초를 기다리지 않음). 후보 없이 산 사람 전원이 "오늘 처형할까?" 에 답한다 — 첫 길이는 VERDICT_MS 이고
+    // 공개 값은 집계 수 day.verdictCount 뿐이다(던진 좌석 day.voted·찬반 기록 day.ballots·후보 day.candidate 는 없다, D-26). 개인 선택은 me.verdictVote 로 본인에게만 간다.
+    await waitUntil(() => allSee(alive, "verdict", n), STATE_LIMIT_MS, `${label} 토론 끝내기 과반 뒤 verdict 가 모든 클라이언트에 오지 않음`);
+    const verdictEnds = new Set(alive.map((c) => firstState(c, "verdict", inDay(n)).msg.view.phaseEndsAt));
+    if (verdictEnds.size !== 1) fail(`${label} verdict 의 phaseEndsAt 이 클라이언트마다 다름 (${verdictEnds.size}종)`);
     for (const c of alive) {
       const vv = firstState(c, "verdict", inDay(n)).msg.view;
-      if (vv.day.ballots !== undefined) fail(`${c.nickname} 의 ${label} verdict 첫 view 에 day.ballots 가 이미 있음(찬반 진행 중에는 비공개)`);
       if (vv.phaseDurationMs !== VERDICT_MS) fail(`${c.nickname} 의 ${label} verdict phaseDurationMs 가 ${VERDICT_MS} 가 아님: ${vv.phaseDurationMs}`);
-      if (JSON.stringify(vv.day.voted) !== "[]") fail(`${c.nickname} 의 ${label} verdict 첫 day.voted 가 []가 아님: ${JSON.stringify(vv.day.voted)}`);
+      if (JSON.stringify(vv.day.verdictCount) !== JSON.stringify({ yes: 0, no: 0 })) fail(`${c.nickname} 의 ${label} verdict 첫 day.verdictCount 가 {yes:0,no:0} 이 아님: ${JSON.stringify(vv.day.verdictCount)}`);
+      for (const key of ["voted", "ballots", "candidate", "points", "turn", "verdict"]) if (vv.day[key] !== undefined) fail(`${c.nickname} 의 ${label} verdict view 에 day.${key} 가 있음(찬반에는 후보·던진 좌석·기록이 없다, D-11·D-26)`);
       if (vv.me.verdictVote !== undefined) fail(`${c.nickname} 의 ${label} verdict 첫 view 에 verdictVote 가 이미 있음`);
+      if (vv.serverNow >= discEndsAt - 5_000) fail(`${label} 과반 토론 끝내기 뒤에도 토론 마감(${discEndsAt})을 거의 다 기다림 (serverNow ${vv.serverNow})`);
     }
     if (ghosts.length > 0) await expectError(ghosts[0], { t: "verdict", agree: true }, "BAD_MESSAGE", `${label} 유령의 찬반`);
-    await expectError(victim, { t: "verdict", agree: true }, "BAD_MESSAGE", `${label} 변론자의 찬반`);
-    const voters = others;
+    const voters = alive; // 후보가 없어 산 사람 전원이 던진다(처형 대상 victim 도)
     const sent = new Map();
     const sendVerdict = (c, agree) => {
       c.ws.send(JSON.stringify({ t: "verdict", agree }));
       sent.set(c, agree);
       (c.verdictSent ??= []).push(agree);
     };
+    let yesNow = 0;
+    let noNow = 0;
     for (let k = 0; k < voters.length; k++) {
-      sendVerdict(voters[k], k !== 0); // 첫 사람은 먼저 반대를 던졌다가 아래에서 찬성으로 바꾼다
-      const wantVoted = JSON.stringify(voters.slice(0, k + 1).map((c) => c.seat).sort((a, b) => a - b));
+      const agree = k !== 0; // 첫 사람은 먼저 반대를 던졌다가 아래에서 찬성으로 바꾼다
+      sendVerdict(voters[k], agree);
+      if (agree) yesNow += 1;
+      else noNow += 1;
+      const want = JSON.stringify({ yes: yesNow, no: noNow });
       await waitUntil(
-        () => alive.every((x) => lastView(x)?.phase === "verdict" && JSON.stringify(lastView(x).day.voted) === wantVoted),
+        () => alive.every((x) => lastView(x)?.phase === "verdict" && JSON.stringify(lastView(x).day.verdictCount) === want),
         STATE_LIMIT_MS,
-        `${label} ${k + 1}번째 찬반 뒤 모든 클라이언트의 day.voted 가 ${wantVoted} 로 같아지지 않음`,
+        `${label} ${k + 1}번째 찬반 뒤 모든 클라이언트의 day.verdictCount 가 ${want} 로 같아지지 않음`,
       );
       for (const x of alive) {
         if (lastView(x).me.verdictVote !== sent.get(x)) fail(`${label} ${k + 1}번째 찬반 뒤 ${x.nickname} 의 me.verdictVote 가 ${sent.get(x)} 가 아님: ${lastView(x).me.verdictVote}`);
+        if (lastView(x).day.voted !== undefined) fail(`${label} ${k + 1}번째 찬반 뒤 ${x.nickname} 의 view 에 day.voted 가 있음(던진 좌석은 공개하지 않는다, D-26)`);
       }
     }
+    // 마감 전 번복: 첫 사람이 반대 → 찬성. 숫자가 모두에게 같이 바뀌고 다른 사람의 me.verdictVote 는 그대로다
     const flip = voters[0];
-    const framesBefore = new Map(alive.map((x) => [x, states(x).length]));
     sendVerdict(flip, true);
-    await waitUntil(() => lastView(flip).me.verdictVote === true, STATE_LIMIT_MS, `${label} 값을 바꾼 ${flip.nickname} 에게 새 me.verdictVote 가 오지 않음`);
-    await sleep(300);
-    for (const x of alive) {
-      if (x !== flip && states(x).length !== framesBefore.get(x)) fail(`${label} ${flip.nickname} 의 찬반 값 변경이 ${x.nickname} 에게 state 프레임으로 방송됨`);
+    yesNow += 1;
+    noNow -= 1;
+    const wantFlip = JSON.stringify({ yes: yesNow, no: noNow });
+    await waitUntil(
+      () => alive.every((x) => lastView(x)?.phase === "verdict" && JSON.stringify(lastView(x).day.verdictCount) === wantFlip) && lastView(flip).me.verdictVote === true,
+      STATE_LIMIT_MS,
+      `${label} ${flip.nickname} 의 번복 뒤 모든 클라이언트의 day.verdictCount 가 ${wantFlip} 로 같아지지 않음`,
+    );
+
+    // (c) 차례 지목(22페이즈 D-12): 찬반이 과반 찬성으로 끝나 지목이 온다 — 산 사람이 한 명씩 자기 차례에 한 명을 가리킨다(자기 지목·유령 지목은 BAD_MESSAGE).
+    // victim 은 다른 사람을, 나머지는 victim 을 가리킨다. day.points 는 모두에게 같은 공개 목록이고 지목 단계가 끝나면 사라진다(기록 없음, D-14).
+    await waitUntil(() => allSee(alive, "nomination", n), VERDICT_WAIT_MS, `${label} 찬반 마감 뒤 nomination 이 모든 클라이언트에 오지 않음`);
+    for (const c of alive) {
+      const nv = firstState(c, "nomination", inDay(n)).msg.view;
+      if (JSON.stringify(nv.day.points) !== "[]") fail(`${c.nickname} 의 ${label} nomination 첫 day.points 가 []가 아님: ${JSON.stringify(nv.day.points)}`);
+      if (nv.day.turn === undefined) fail(`${c.nickname} 의 ${label} nomination 첫 view 에 day.turn 이 없음(순차 지목은 차례가 있다)`);
+      if (nv.day.verdictCount !== undefined) fail(`${c.nickname} 의 ${label} nomination view 에 day.verdictCount 가 남아 있음(찬반 단계에만 있다)`);
+    }
+    if (ghosts.length > 0) await expectError(ghosts[0], { t: "point", target: victim.seat }, "BAD_MESSAGE", `${label} 유령의 지목`);
+    const lines = new Map();
+    const linesNow = () => [...lines.entries()].sort((a, b) => a[0] - b[0]).map(([seat, target]) => ({ seat, target }));
+    const myTurn = (c) => {
+      const t = lastView(c)?.day?.turn;
+      return lastView(c)?.phase === "nomination" && t !== undefined && t.order[t.i] === c.seat && t.doneAt === undefined;
+    };
+    const nominationWaitMs = NOMINATION_GATHER_MS + alive.length * (PICK_TURN_MS + PICK_GAP_MS) + NOMINATION_END_MS + STATE_LIMIT_MS;
+    let selfChecked = false;
+    // 차례 순서대로 한 명씩(좌석 순서는 날마다 달라 차례가 온 사람부터 보낸다)
+    for (let k = 0; k < alive.length; k++) {
+      await waitUntil(() => alive.some((c) => !lines.has(c.seat) && myTurn(c)), nominationWaitMs, `${label} ${k + 1}번째 차례가 오지 않음`);
+      const c = alive.find((x) => !lines.has(x.seat) && myTurn(x));
+      if (!selfChecked) {
+        selfChecked = true;
+        await expectError(c, { t: "point", target: c.seat }, "BAD_MESSAGE", `${label} 자기 지목`);
+      }
+      const target = c === victim ? others[0].seat : victim.seat;
+      c.ws.send(JSON.stringify({ t: "point", target }));
+      lines.set(c.seat, target);
+      const want = JSON.stringify(linesNow());
+      await waitUntil(() => alive.every((x) => lastView(x)?.phase !== "nomination" || JSON.stringify(lastView(x).day.points) === want), STATE_LIMIT_MS, `${label} ${k + 1}번째 지목 뒤 모든 클라이언트의 day.points 가 같아지지 않음 (기대 ${want})`);
     }
 
-    // (f) 처형(DAY-07, 결정 0053): 처형된 사람과 찬반 수만 공개하고 역할 키는 없다. 부결은 없다(전원 찬성).
-    await waitUntil(() => allSee(clients, "execution", n), VERDICT_WAIT_MS, `${label} 찬반 마감 뒤 execution 이 모든 클라이언트에 오지 않음`);
+    // (d) 유언(22페이즈 D-15): 마감에 최다 득표 한 명이 처형자가 되어 유언 단계(defense, 10초)에 선다. 지목 기록(day.points·day.turn)은 모두 사라졌다.
+    await waitUntil(() => allSee(alive, "defense", n), NOMINATION_END_MS + STATE_LIMIT_MS, `${label} 지목 마감 뒤 defense 가 모든 클라이언트에 오지 않음`);
+    for (const c of alive) {
+      const dv = firstState(c, "defense", inDay(n)).msg.view;
+      if (dv.day.candidate !== victim.seat) fail(`${c.nickname} 의 ${label} defense day.candidate 가 ${victim.seat} 가 아님: ${dv.day.candidate}`);
+      if (dv.phaseDurationMs !== DEFENSE_MS) fail(`${c.nickname} 의 ${label} defense phaseDurationMs 가 ${DEFENSE_MS} 가 아님: ${dv.phaseDurationMs}`);
+      for (const key of ["points", "turn", "voted", "ballots", "verdictCount"]) if (dv.day[key] !== undefined && JSON.stringify(dv.day[key]) !== "[]") fail(`${c.nickname} 의 ${label} defense view 에 day.${key} 가 남아 있음(지목·찬반 기록은 단계가 끝나면 없다, D-14)`);
+    }
+
+    // (f) 처형(DAY-07, 결정 0053 → 22-12): 처형된 사람 좌석만 공개하고(유언이 있으면 will 도) 역할 키는 없다. 찬반 수 day.verdict·찬반 기록 day.ballots 는 없다.
+    await waitUntil(() => allSee(clients, "execution", n), DEFENSE_WAIT_MS, `${label} 유언 마감 뒤 execution 이 모든 클라이언트에 오지 않음`);
     const execViews = clients.map((c) => firstState(c, "execution", inDay(n)).msg.view);
     for (const [i, ev] of execViews.entries()) {
       const c = clients[i];
       if (ev.day.execution?.seat !== victim.seat) fail(`${c.nickname} 의 ${label} day.execution.seat 가 ${victim.seat} 가 아님: ${JSON.stringify(ev.day.execution)}`);
-      if (Object.keys(ev.day.execution).sort().join(",") !== "seat") fail(`${c.nickname} 의 ${label} day.execution 키 집합이 seat 가 아님(결정 0060-5: 좌석만, 문구 번호·역할 없음): ${Object.keys(ev.day.execution).sort().join(",")}`);
-      if (JSON.stringify(ev.day.verdict) !== JSON.stringify({ yes: voters.length, no: 0, passed: true })) fail(`${c.nickname} 의 ${label} day.verdict 가 {yes:${voters.length}, no:0, passed:true} 가 아님: ${JSON.stringify(ev.day.verdict)}`);
-      // 찬반 기록 공개(결정 0066-3): 처형 단계 첫 view 에 모두에게 같은 목록 — 전원 찬성이라 찬성 = 유권자 좌석(오름차순), 반대 = 빈 목록, 변론자는 어느 쪽에도 없다.
-      const wantBallots = JSON.stringify({ yes: voters.map((x) => x.seat).sort((a, b) => a - b), no: [] });
-      if (JSON.stringify(ev.day.ballots) !== wantBallots) fail(`${c.nickname} 의 ${label} execution day.ballots 가 ${wantBallots} 가 아님: ${JSON.stringify(ev.day.ballots)}`);
+      const exKeys = Object.keys(ev.day.execution).sort().join(",");
+      if (exKeys !== "seat" && exKeys !== "seat,will") fail(`${c.nickname} 의 ${label} day.execution 키 집합이 seat(유언이 있으면 seat,will)가 아님(역할 키 없음): ${exKeys}`);
+      for (const key of ["verdict", "ballots", "voteLog"]) if (ev.day[key] !== undefined) fail(`${c.nickname} 의 ${label} execution view 에 day.${key} 가 있음(찬반 집계·기록은 처형에 없다, D-14)`);
       if (ev.phaseDurationMs !== EXECUTION_MS) fail(`${c.nickname} 의 ${label} execution phaseDurationMs 가 ${EXECUTION_MS} 가 아님: ${ev.phaseDurationMs}`);
       const victimRow = ev.players.find((p) => p.seat === victim.seat);
       if (victimRow?.alive !== false) fail(`${c.nickname} 의 ${label} execution players 에서 처형된 seat ${victim.seat} 의 alive 가 false 가 아님`);
     }
     victim.ghostFrom = firstState(victim, "execution", inDay(n)).at;
     dead.add(victim);
-    return { yes: voters.length, no: 0, lines: linesNow(), victimSeat: victim.seat, ballotsText: `${voters.map((x) => x.seat).sort((a, b) => a - b).join(",")}|` };
+    return { yes: yesNow, no: noNow, lines: linesNow(), victimSeat: victim.seat };
   }
 
   // 마지막 3인 결전(09.1.1, 결정 0066-5): 산 사람이 정확히 3명인 낮. 낮 시작 발표 뒤 토론·지목 없이 showdown 으로 간다.
@@ -1055,11 +1056,8 @@ async function stageFull(url, args) {
   for (const c of clients) {
     const nv = firstState(c, "night").msg.view;
     if (nv.day?.noExecution !== undefined) fail(`${c.nickname} 의 night day.noExecution 이 있음 (처형이 성립한 날): ${JSON.stringify(nv.day.noExecution)}`);
-    const lastLine = nv.day?.voteLog?.at(-1);
-    if (!lastLine || lastLine.n !== 1) fail(`${c.nickname} 의 night voteLog 마지막 줄이 1일차가 아님: ${JSON.stringify(lastLine)}`);
-    if (Object.keys(lastLine.exec).sort().join(",") !== "no,passed,yes") fail(`${c.nickname} 의 voteLog exec 키 집합이 no,passed,yes 가 아님: ${Object.keys(lastLine.exec).sort().join(",")}`);
-    if (lastLine.exec.yes !== trial1.yes || lastLine.exec.no !== trial1.no || lastLine.exec.passed !== true) fail(`${c.nickname} 의 voteLog exec 가 {yes:${trial1.yes}, no:${trial1.no}, passed:true} 가 아님: ${JSON.stringify(lastLine.exec)}`);
-    if (lastLine.cand?.candidate !== trial1.victimSeat || JSON.stringify(lastLine.cand?.votes) !== JSON.stringify(trial1.lines)) fail(`${c.nickname} 의 voteLog cand 가 지목 줄·변론자와 다름: ${JSON.stringify(lastLine.cand)}`);
+    if (nv.day?.voteLog !== undefined) fail(`${c.nickname} 의 night view 에 day.voteLog 가 있음(지목·찬반 기록은 화면으로 가지 않는다, D-14)`);
+    for (const key of ["points", "ballots", "verdict", "voted", "verdictCount", "turn"]) if (nv.day?.[key] !== undefined) fail(`${c.nickname} 의 night view 에 day.${key} 가 남아 있음`);
     // 마감 뒤에는 개인 표 키가 view 어디에도 없다(마감 훅이 삭제, 결정 0053)
     for (const key of ["verdictVote", "endDiscussion", "nominate", "endVote"]) {
       const vp = [];
@@ -1067,7 +1065,7 @@ async function stageFull(url, args) {
       if (vp.length > 0) fail(`${c.nickname} 의 night view 에 ${key} 키가 남아 있음: ${vp.join(",")}`);
     }
   }
-  info(`처형 1일차: 토론 끝내기 과반 → 지목 ${trial1.lines.length}줄 → 변론 → 찬반 찬성 ${trial1.yes} 반대 ${trial1.no} → 처형 seat ${trial1.victimSeat}`);
+  info(`처형 1일차: 토론 끝내기 과반 → 찬반 찬성 ${trial1.yes} 반대 ${trial1.no} → 지목 ${trial1.lines.length}줄 → 유언 → 처형 seat ${trial1.victimSeat}`);
   for (const c of clients) {
     const nv = firstState(c, "night").msg.view;
     if (nv.day?.n !== 1) fail(`${c.nickname} 의 night 의 day.n 이 1 이 아님: ${nv.day?.n}`);
@@ -1170,11 +1168,11 @@ async function stageFull(url, args) {
     // 마피아가 다시 붙으면 공개 줄에 더해 밤 마피아 줄도 돌아온다. 복원이 라이브보다 넓어지지 않는다(T-07-35).
     const townLines = await reconnectAndReplay(policeClient, "산 시민 편");
     if (townLines.some((l) => l.ch !== "all")) fail(`산 시민 편 재접속 chatLog 에 ch all 밖의 줄이 있음: ${[...new Set(townLines.map((l) => l.ch))].join(",")}`);
-    if (townLines.map((l) => l.text).join("|") !== [...DAY_TEXTS, trial1.ballotsText, WILL_TEXT].join("|")) fail("산 시민 편 재접속 chatLog 의 낮 줄 + 찬반 기록 카드 + 유언 카드 순서·본문이 받은 순서와 다름");
+    if (townLines.map((l) => l.text).join("|") !== [...DAY_TEXTS, WILL_TEXT].join("|")) fail("산 시민 편 재접속 chatLog 의 낮 줄 + 유언 카드 순서·본문이 받은 순서와 다름(찬반 기록 카드는 없다, D-14)");
     const mafiaLines = await reconnectAndReplay(talker, "마피아");
     if (!mafiaLines.some((l) => l.ch === "mafia" && l.text === NIGHT_TEXT && l.seat === talker.seat)) fail("마피아 재접속 chatLog 에 밤 마피아 줄이 없음");
     if (mafiaLines.some((l) => l.ch === "ghost")) fail("마피아 재접속 chatLog 에 ghost 줄이 있음");
-    info(`재접속 복원: 산 시민 편 ${townLines.length}줄(전부 ch all, 찬반 기록·유언 카드 포함), 마피아 ${mafiaLines.length}줄`);
+    info(`재접속 복원: 산 시민 편 ${townLines.length}줄(전부 ch all, 유언 카드 포함), 마피아 ${mafiaLines.length}줄`);
     info(`재접속 복원 검사 단계: ${where}`);
   }
 
@@ -1352,11 +1350,11 @@ async function stageFull(url, args) {
       if (agreePaths.length > 0) fail(`${c.nickname} 의 state 프레임에 agree 키가 있음: ${agreePaths.join(",")}`);
       if (v.day?.endCount !== undefined && v.phase !== "discussion") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.endCount 가 있음`);
       if (v.day?.points !== undefined && v.phase !== "nomination") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.points 가 있음`);
-      if (v.day?.voted !== undefined && v.phase !== "verdict") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.voted 가 있음`);
-      if (v.day?.verdict !== undefined && v.phase !== "execution") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.verdict 가 있음`);
-      if (v.day?.ballots !== undefined && v.phase !== "execution") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.ballots 가 있음(찬반 진행 중 비공개, 결정 0066-3)`);
+      // 22페이즈(D-14·D-26): 던진 좌석(day.voted)·찬반 집계(day.verdict)·찬반 기록(day.ballots)·지목 기록(day.voteLog)은 어느 단계에도 없다. 찬반 숫자 day.verdictCount 는 찬반에만, 차례 day.turn 은 지목에만.
+      for (const key of ["voted", "verdict", "ballots", "voteLog"]) if (v.day?.[key] !== undefined && !(key === "voted" && v.phase === "showdown")) fail(`${c.nickname} 의 ${v.phase} 프레임에 day.${key} 가 있음(22페이즈에서 없어진 키)`);
+      if (v.day?.verdictCount !== undefined && v.phase !== "verdict") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.verdictCount 가 있음`);
+      if (v.day?.turn !== undefined && v.phase !== "nomination") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.turn 이 있음`);
       if (v.day?.execution !== undefined && v.phase !== "execution") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.execution 이 있음`);
-      if (v.day?.voted !== undefined && !v.day.voted.every((seat) => Number.isInteger(seat))) fail(`${c.nickname} 의 day.voted 가 좌석 번호 목록이 아님: ${JSON.stringify(v.day.voted)}`);
       // 마지막 3인 결전(결정 0066-5): day.showdown 은 showdown 단계에만, points 는 공개(i 4)에만, voted 는 지목 창(i 3)에만 있다. me.ballot 은 본인이 보낸 값뿐이다.
       if (v.day?.showdown !== undefined && v.phase !== "showdown") fail(`${c.nickname} 의 ${v.phase} 프레임에 day.showdown 이 있음`);
       if (v.day?.showdown?.points !== undefined && v.day.showdown.i !== 4) fail(`${c.nickname} 의 showdown i ${v.day.showdown.i} 프레임에 points 가 있음(공개 전 비공개)`);
@@ -1399,22 +1397,21 @@ async function stageFull(url, args) {
   }
   // (b) 공개 채널(CHAT-01): ch all 줄은 모든 클라이언트가 같은 {seat, seq, text, at} 로, seq 1 부터 틈 없이 보낸 순서대로 받는다.
   const allLinesWithCards = clients.map((c) => chatsOf(c).filter((f) => f.msg.ch === "all").map((f) => f.msg));
-  // 카드(k)는 일반 줄과 같은 seq 번호를 이어 받는다: 보낸 줄 4개 다음 5번이 처형 진입의 찬반 기록 카드(본문 `찬성|반대` 좌석, 보낸 자리는 변론자), 6번이 아침 유언 카드(피해자 seat, 저장한 유언).
+  // 카드(k)는 일반 줄과 같은 seq 번호를 이어 받는다: 보낸 줄 4개 다음 5번이 아침 유언 카드(피해자 seat, 저장한 유언). 찬반 기록 카드는 없다(22-12 D-14).
   // 그 뒤 마지막 3인 결전의 일반 줄(차례 아닌 사람의 글·한마디)이 보낸 순서대로 이어진다. 모든 클라이언트가 같은 줄을 같은 번호로 받는다.
   const cardSpec = [
-    { k: "ballots", seat: trial1.victimSeat, text: trial1.ballotsText, seq: DAY_TEXTS.length + 1 },
-    { k: "will", seat: targetX, text: WILL_TEXT, seq: DAY_TEXTS.length + 2 },
+    { k: "will", seat: targetX, text: WILL_TEXT, seq: DAY_TEXTS.length + 1 },
   ];
   allLinesWithCards.forEach((all, i) => {
     const allCards = all.filter((l) => l.k !== undefined);
-    // 인원이 많으면(예: 8명) 2일차 이후에도 처형 낮이 이어져 같은 종류의 찬반 기록 카드(k ballots)가 seq 순으로 더 온다 — 첫 두 장(1일차 찬반 기록·아침 유언)은 그대로 고정하고, 그 뒤 카드는 찬반 기록 카드만 허용한다
+    // 처형 낮이 2일차 이후로 이어져도 카드는 아침 유언 카드(k will)뿐이다 — 찬반 기록 카드(k ballots)는 서버가 만들지 않는다. 첫 장은 1일차 아침 유언 카드로 고정한다
     const cards = allCards.slice(0, cardSpec.length);
     const laterCards = allCards.slice(cardSpec.length);
-    if (laterCards.some((l, k) => l.k !== "ballots" || l.seq <= (k === 0 ? cardSpec[cardSpec.length - 1].seq : laterCards[k - 1].seq))) {
-      fail(`${clients[i].nickname} 가 받은 2일차 이후 카드가 seq 순서의 찬반 기록 카드만이 아님: ${JSON.stringify(laterCards)}`);
+    if (laterCards.some((l, k) => l.k !== "will" || l.seq <= (k === 0 ? cardSpec[cardSpec.length - 1].seq : laterCards[k - 1].seq))) {
+      fail(`${clients[i].nickname} 가 받은 2일차 이후 카드가 seq 순서의 유언 카드만이 아님: ${JSON.stringify(laterCards)}`);
     }
     if (JSON.stringify(cards.map((l) => ({ k: l.k, seat: l.seat, text: l.text, seq: l.seq }))) !== JSON.stringify(cardSpec)) {
-      fail(`${clients[i].nickname} 가 받은 카드가 [찬반 기록(seq ${DAY_TEXTS.length + 1}, seat ${trial1.victimSeat}), 유언(seq ${DAY_TEXTS.length + 2}, seat ${targetX})] 가 아님: ${JSON.stringify(cards)}`);
+      fail(`${clients[i].nickname} 가 받은 카드가 [유언(seq ${DAY_TEXTS.length + 1}, seat ${targetX})] 가 아님: ${JSON.stringify(cards)}`);
     }
     if (JSON.stringify(allCards) !== JSON.stringify(allLinesWithCards[0].filter((l) => l.k !== undefined))) fail(`${clients[i].nickname} 가 받은 카드가 방장과 다름`);
   });

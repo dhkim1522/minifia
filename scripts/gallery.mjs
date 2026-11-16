@@ -1,5 +1,5 @@
 // 화면설계서용 화면 갤러리(design/screens/README.md). 테스트 방 + 서버 봇으로 한 판을 돌며 단계·시트마다 390×844(2배) 사진을 찍는다.
-// 8페이즈(08-25): 맵 게임 화면 기준 — 낮 토론 → 지목 → 최후 변론 → 찬반 → 처형 → (유령) → 밤 임시 틀 → 아침 → 결과.
+// 22페이즈 새 낮 순서(D-10): 맵 게임 화면 기준 — 낮 토론 → 찬반 → 지목 → 유언 → 처형 → (유령) → 밤 임시 틀 → 아침 → 결과.
 // 사용법: node scripts/gallery.mjs <저장 폴더> [police|mafia|doctor|citizen] [봇 수 3~7] [other|host] — 경찰이면 입장·닉네임 화면도 찍는다.
 //   환경 변수 GALLERY_URL 이 있으면 그 주소(로컬 서버 등)를 쓴다. 없으면 v2.0 배포 주소.
 //   마지막 인자: 봇 지목 대상(기본 other = 방장 아닌 사람, host 이면 방장이 처형되어 유령 화면이 찍힌다). Chrome 경로는 E2E 와 같다.
@@ -87,25 +87,20 @@ await step("end-discussion", async () => {
   await snap(page, `16-end-discussion-${ROLE}`);
 });
 
-// 지목: 봇이 가리키고 나는 이름표 하나를 누른다(배지·선두 점광)
-await step("nomination", async () => {
-  if (v().phase !== "nomination") await skipTo(page, tracker, "nomination");
-  await sleep(2500); await snap(page, `17-nomination-${ROLE}`);
-  const g = await readGame(page);
-  const target = g?.picks.find((b) => b.seat !== mySeat)?.seat;
-  if (target !== undefined) { await tapPick(page, target); await sleep(900); await snap(page, `18-nomination-picked-${ROLE}`); }
-});
-
-// 최후 변론 → 찬반(찬성) → 처형
-await step("defense", async () => {
-  if (v().phase !== "defense") await skipTo(page, tracker, "defense");
-  await sleep(1500); await snap(page, `19-defense-${ROLE}`);
-});
+// 찬반(후보 없이 산 사람 전원) → 지목(차례마다 한 명, 내 차례에만 이름표 단추) → 유언(처형자는 시트) → 처형
 await step("verdict", async () => {
   if (v().phase !== "verdict") await skipTo(page, tracker, "verdict");
   await sleep(1200);
-  await chooseVerdict(page, true).catch((e) => log("verdict-btn", String(e?.message ?? e).slice(0, 80))); // 변론자 본인이면 찬반 버튼이 없다
-  await sleep(600); await snap(page, `20-verdict-${ROLE}`);
+  await chooseVerdict(page, true).catch((e) => log("verdict-btn", String(e?.message ?? e).slice(0, 80)));
+  await sleep(600); await snap(page, `17-verdict-${ROLE}`);
+});
+await step("nomination", async () => {
+  if (v().phase !== "nomination") await skipTo(page, tracker, "nomination");
+  await sleep(2500); await snap(page, `18-nomination-${ROLE}`);
+});
+await step("defense", async () => {
+  if (v().phase !== "defense") await skipTo(page, tracker, "defense");
+  await sleep(1500); await snap(page, `19-defense-${ROLE}`);
 });
 await step("execution", async () => {
   if (v().phase !== "execution") await skipTo(page, tracker, "execution");
