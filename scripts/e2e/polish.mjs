@@ -43,6 +43,7 @@ export const TOD_BY_PHASE = Object.freeze({
   defense: "dusk",
   verdict: "day", // 22-13(P22-3): 찬반은 토론 장면 그대로
   execution: "dusk",
+  answerReveal: "dusk", // 23-05: 첫날 정답 공개 — lightingOf vote → 저녁(P23-2)
   night: "night",
   morning: "morning",
 });

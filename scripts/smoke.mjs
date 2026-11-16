@@ -96,6 +96,7 @@ const EXPECTED_ROLES = {
 // test/unit/e2eContract.test.ts 가 이 표를 nextPhaseOf(단계) 와 대조한다 — 어긋나면 거짓 통과·거짓 실패가 난다.
 // 첫날(23-01): roleReveal → keyword(13초) → dayAnnounce. 낮 순서(22-09, 결정 0089-18): dayAnnounce → discussion → verdict(찬반, 후보 없음) → (통과) nomination(순차 지목) → (최다 한 명) defense(유언 자리) → execution → night | ended,
 // 찬반 부결·지목 0표·동률은 곧장 night, night → morning → dayAnnounce(다음 낮) | ended. 승패가 나지 않는 한 낮 루프라 끝이 없다.
+// 첫날 정답 공개(23-05, D-02): 키워드가 있는 판의 첫날은 처형 뒤(승패 없음)와 처형 없는 낮(찬반 부결·지목 0표·동률) 뒤에 night 앞의 answerReveal(3초, 처형 없음이면 4.4초)이 끼고, 승패가 나면 건너뛴다. 둘째 날부터는 곧장 night 다.
 // 주의: 이 파일의 낮 흐름 걸음(토론 끝내기 → 지목 → 변론 → 찬반 단언)은 아직 옛 순서 그대로다 — 전이 표만 새 순서로 맞췄다(22-09). 걸음 개편은 이월(SUMMARY).
 export const PHASE_NEXT = {
   lobby: ["assigning"],
@@ -104,15 +105,16 @@ export const PHASE_NEXT = {
   keyword: ["dayAnnounce"],
   dayAnnounce: ["discussion"], // 낮 시작 발표 다음이 바로 토론이다
   discussion: ["verdict"],
-  verdict: ["nomination", "night"], // 찬반: 던진 표의 과반 찬성이면 지목, 부결(0표·동수 포함)이면 처형 없는 밤
-  nomination: ["defense", "night"], // 동점·0표는 runoff 가 아니라 처형 없는 밤
+  verdict: ["nomination", "night", "answerReveal"], // 찬반: 던진 표의 과반 찬성이면 지목, 부결(0표·동수 포함)이면 처형 없는 밤(첫날 키워드 판은 정답 공개 뒤 밤)
+  nomination: ["defense", "night", "answerReveal"], // 동점·0표는 runoff 가 아니라 처형 없는 밤(첫날은 정답 공개 뒤)
   defense: ["execution"],
-  execution: ["night", "ended"],
+  execution: ["night", "ended", "answerReveal"], // 첫날 키워드 판은 처형 뒤(승패 없음) 정답 공개, 승패가 나면 곧장 결과
+  answerReveal: ["night"], // 첫날 정답 공개(23-05, D-02)
   night: ["morning"],
   morning: ["dayAnnounce", "ended"],
   ended: [],
 };
-const DAY_PHASES = ["keyword", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
+const DAY_PHASES = ["keyword", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "answerReveal", "night", "morning", "ended"];
 const ROLE_IDS = ["mafia", "police", "doctor", "citizen"];
 // 직업 이름 문자열이 나와도 되는 경로(배열 칸은 [] 로 줄여 비교한다). 채널 이름 mafia 가 든 ch·me.chat 은 채널 검사가 따로 본다.
 // 탈락자의 view.spectate.seats[].job 은 탈락 뒤 프레임에서만 따로 허용한다.

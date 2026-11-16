@@ -248,7 +248,7 @@ test("roleLineBoxChecks: 상자가 없거나 비면 측정값 없음으로 실�
 // ---- todChecks ----
 
 const WORD_OF = { day: "낮", dusk: "저녁", night: null, morning: null };
-const TITLE_OF = { dayAnnounce: "토론", discussion: "토론", nomination: "지목", runoff: "결선", showdown: "마지막 3인", defense: "유언", verdict: "찬반", execution: "처형", night: "밤", morning: "아침" };
+const TITLE_OF = { dayAnnounce: "토론", discussion: "토론", nomination: "지목", runoff: "결선", showdown: "마지막 3인", defense: "유언", verdict: "찬반", execution: "처형", answerReveal: "정답", night: "밤", morning: "아침" };
 const todGood = (phase = "discussion") => {
   const tod = TOD_BY_PHASE[phase];
   return {
