@@ -1,6 +1,8 @@
 // 테스트 방 방장 도구(결정 0022) 배포본 확인: 단계 넘기기·대기실 복귀·내 직업 지정과 손님·일반 방·시작 뒤 거부를 증명한다.
 // 방장 1명 + 봇 3명(모두 연결)으로 테스트 방(POST /api/rooms 본문 testMode true)을 만들어 단계를 testSkip 으로 넘기므로
 // 토론 90초·밤 30초를 기다리지 않는다(전체 약 1분). 넘기기 한 번 = 단계 하나다(직업 주장 차례는 7페이즈에서 없어졌다).
+// 23페이즈: 낮 순서는 토론 → 찬반 → (찬성) 지목 → 유언 → 처형이고, 첫날은 역할 확인 다음에 키워드 단계가, 처형(또는 처형 없음) 뒤 밤 앞에 정답 공개가 낀다.
+// 키워드 단계 검사 셋: 모든 소켓의 day.keyword.genre 가 같고, 마피아(방장) 소켓에는 me.keyword 키가 없으며, 정답 공개 전 마피아 소켓 프레임 원문에 시민 편의 키워드가 없다.
 // 일반 방(본문 nickname 만)에서는 세 요청이 모두 거부되는지도 본다.
 // 스크립트는 전지적이다: 각 클라이언트의 view 로 확인한다. 토큰은 어떤 출력에도 찍지 않는다. Node 22 내장 fetch·WebSocket 만 쓴다.
 //
@@ -102,10 +104,12 @@ async function act(c, msg) {
 }
 
 // 허용 전이 표 — scripts/smoke.mjs 의 PHASE_NEXT 와 같다(대조는 test/unit/e2eContract.test.ts).
-// 마피아 판은 낮 시작 발표 → 토론 …, 처형·0표 뒤 밤이다. 값이 배열인 이유: 분기가 있는 단계가 있다(결정 0022·0060).
+// 첫날: 역할 확인 → 키워드 → 낮 시작 발표 → 토론 → 찬반 → (찬성이면 지목 → 변론(유언) → 처형) → 정답 공개 → 밤, 이후 날은 정답 공개 없이 밤이다.
+// 값이 배열인 이유: 분기가 있는 단계가 있다(결정 0022·0060). 이 방은 사람만 있고 아무도 투표하지 않아 찬반이 0표로 끝나므로 처형 없이 정답 공개로 간다.
 const PHASE_NEXT = {
-  roleReveal: ["dayAnnounce"], dayAnnounce: ["discussion"], discussion: ["nomination"],
-  nomination: ["night", "defense"], night: ["morning"], morning: ["dayAnnounce"],
+  roleReveal: ["keyword"], keyword: ["dayAnnounce"], dayAnnounce: ["discussion"], discussion: ["verdict"],
+  verdict: ["nomination", "night", "answerReveal"], nomination: ["defense", "night", "answerReveal"], defense: ["execution"],
+  execution: ["night", "ended", "answerReveal"], answerReveal: ["night"], night: ["morning"], morning: ["dayAnnounce", "ended"],
 };
 
 const newClient = (nickname) => ({ nickname, token: "", seat: -1, frames: [], ws: null, leaving: false, closedCode: null });
@@ -187,8 +191,7 @@ async function main() {
   check("d", "역할 확인에서 방장 testRole → WRONG_PHASE", revealRole === "[error:WRONG_PHASE,state:roleReveal]", revealRole);
 
   // ---- e. 단계를 거듭 넘기기 ----
-  // 값이 배열인 이유: 분기가 있는 단계가 있다(결정 0022·0060). 이 방은 사람만 있어 지목이 없으므로 nomination 은 변론 없이 처형 없는 다음 단계로 가지만,
-  // 지목이 있으면 defense 쪽으로 갈 수 있다 — 순서 확인은 "허용된 다음 단계 중 하나" 로 본다. 표는 위 PHASE_NEXT 하나다.
+  // 순서 확인은 "허용된 다음 단계 중 하나" 로 본다. 표는 위 PHASE_NEXT 하나다.
   const order = [];
   let current = "roleReveal";
   let orderOk = true;
@@ -202,18 +205,37 @@ async function main() {
     current = next;
   };
   const victim = guests[0];
-  // 역할 확인 → 낮 시작 발표(일차 1) → 토론 → 지목(0표) → 밤 → 아침 → 다음 낮(일차 2).
+  // 역할 확인 → 키워드(첫날) → 낮 시작 발표(일차 1) → 토론 → 찬반(0표) → 정답 공개 → 밤 → 아침 → 다음 낮(일차 2).
+  await skipTo("keyword");
+  const genres = clients.map((c) => lastView(c).day?.keyword?.genre);
+  check("e", "키워드 단계: 모든 소켓의 day.keyword.genre 가 같은 글(장르)", genres.every((x) => typeof x === "string" && x !== "" && x === genres[0]), genres.join(","));
+  const kw = lastView(guests[0]).me.keyword;
+  check("e", "키워드 단계: 시민 편 손님 셋 모두 me.keyword 를 받고 같은 키워드", typeof kw === "string" && kw !== "" && guests.every((g) => lastView(g).me.keyword === kw), `${guests.map((g) => typeof lastView(g).me.keyword).join(",")}`);
+  check("e", "키워드 단계: 마피아(방장) 소켓의 me 에 keyword 키가 없음", !("keyword" in lastView(host).me), Object.keys(lastView(host).me).join(","));
+  check("e", "키워드 단계: 정답 공개 전 view 에 day.keyword.answer 가 어느 소켓에도 없음", clients.every((c) => lastView(c).day?.keyword?.answer === undefined), "");
+  const mafiaLeak = () => host.frames.filter((f) => f.raw.includes(kw)).length;
+  check("e", "키워드 단계: 마피아(방장) 소켓이 지금까지 받은 프레임 원문에 시민 편의 키워드가 없음", mafiaLeak() === 0, `${mafiaLeak()}개`);
+  const sendAnswer = summary(await act(guests[0], { t: "answer", text: "나만아는말", final: true }));
+  check("e", "키워드 단계: 시민 편의 답 확정 제출이 받아들여짐(error 없음)", !sendAnswer.includes("error"), sendAnswer);
+  const forbidden = summary(await act(guests[1], { t: "answer", text: kw, final: true }));
+  check("e", "키워드 단계: 키워드 자체를 확정 제출하면 거절(BAD_MESSAGE)", forbidden.includes("error:BAD_MESSAGE"), forbidden);
   await skipTo("dayAnnounce");
   check("e", "낮 시작 발표의 day.n 이 1", clients.every((c) => lastView(c).day?.n === 1), clients.map((c) => lastView(c).day?.n).join(","));
   await skipTo("discussion");
-  await skipTo("nomination");
-  // 사람만 있는 방이라 아무도 지목하지 않았다: 지목 0표는 변론 없이 곧장 night 이다(day.points 도 빈 목록).
-  check("e", "discussion 다음은 nomination (지목 단계, 공개 목록 day.points 가 모든 소켓에서 빈 목록)",
-    clients.every((c) => lastView(c).phase === "nomination" && Array.isArray(lastView(c).day?.points) && lastView(c).day.points.length === 0),
-    JSON.stringify(lastView(host).day?.points ?? null));
+  const lists = clients.map((c) => lastView(c).day?.keyword?.answers);
+  check("e", "토론: 모든 소켓의 첫날 답 목록이 같고 시민 편 손님이 낸 답이 있음(낸 순서 1번)",
+    lists.every((l) => same(l, lists[0])) && Array.isArray(lists[0]) && lists[0][0]?.order === 1 && lists[0][0]?.seat === guests[0].seat && lists[0][0]?.text === "나만아는말", JSON.stringify(lists[0]));
+  await skipTo("verdict");
+  check("e", "discussion 다음은 verdict (찬반 단계, 낮 순서 토론 → 찬반)", clients.every((c) => lastView(c).phase === "verdict"), clients.map((c) => lastView(c).phase).join(","));
+  // 사람만 있는 방이라 아무도 던지지 않았다: 0표는 지목 없이 처형 없는 날이고, 첫날은 정답 공개로 간다.
+  const beforeReveal = mafiaLeak();
+  await skipTo("answerReveal");
+  check("e", "찬반 0표로 온 정답 공개: 모든 소켓의 day.noExecution 이 같은 값(처형 없음)",
+    clients.every((c) => lastView(c).day?.noExecution !== undefined && same(lastView(c).day.noExecution, lastView(host).day.noExecution)), JSON.stringify(lastView(host).day?.noExecution ?? null));
+  check("e", "정답 공개 전까지 마피아(방장) 소켓 프레임 원문에 키워드가 한 번도 없었음", beforeReveal === 0, `${beforeReveal}개`);
+  check("e", "정답 공개: 모든 소켓(마피아 포함)의 day.keyword.answer 가 시민 편이 본 키워드와 같음", clients.every((c) => lastView(c).day?.keyword?.answer === kw), clients.map((c) => lastView(c).day?.keyword?.answer).join(","));
   await skipTo("night");
-  check("e", "지목 0표로 온 밤: 모든 소켓의 day.noExecution 이 {reason:noVotes}",
-    clients.every((c) => same(lastView(c).day?.noExecution, { reason: "noVotes" })), JSON.stringify(lastView(host).day?.noExecution ?? null));
+  check("e", "정답 공개 다음은 night 이고 첫날 정답이 판 내내 남음(day.keyword.answer)", clients.every((c) => lastView(c).day?.keyword?.answer === kw), "");
   await act(host, { t: "pick", target: victim.seat });
   check("e", "밤에 마피아(방장)의 pick 이 me.pick 으로 돌아옴", lastView(host).me.pick === victim.seat, String(lastView(host).me.pick));
   await skipTo("morning");
@@ -221,7 +243,7 @@ async function main() {
   check("e", "넘긴 밤도 정상 판정: 모든 소켓의 day.morning 이 같고 지목한 사람이 탈락",
     mornings.every((m) => same(m, mornings[0])) && mornings[0]?.eliminated === victim.seat, JSON.stringify(mornings[0]));
   await skipTo("dayAnnounce");
-  check("e", "roleReveal → dayAnnounce → discussion → nomination → night → morning → dayAnnounce 를 넘기기 한 번에 하나씩 네 소켓 모두 3초 안에 받음",
+  check("e", "roleReveal → keyword → dayAnnounce → discussion → verdict → answerReveal → night → morning → dayAnnounce 를 넘기기 한 번에 하나씩 네 소켓 모두 3초 안에 받음",
     orderOk && clients.every((c) => lastView(c).day?.n === 2), `${order.join(" → ")} (${Math.round(performance.now() - t0)}ms, 토론 90초·밤 30초를 기다리지 않음)`);
   const afterMorning = "dayAnnounce"; // 아침을 넘긴 뒤의 단계
   const guestMid = summary(await act(guests[1], { t: "testSkip" }));

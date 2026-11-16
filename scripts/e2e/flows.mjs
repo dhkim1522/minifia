@@ -142,6 +142,7 @@ import {
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
 import { makeDayFlows } from "./day.mjs";
+import { makeKeywordFlows } from "./keyword.mjs";
 import { makeMapSelectFlows } from "./mapselect.mjs";
 import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readRestSheet, readResultStage, rematchChecks, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
@@ -3770,6 +3771,9 @@ const { politicsBadgeFlow, politicsWhisperFlow, politicsPinFlow, politicsVerdict
 // 22페이즈 새 낮 흐름(D-24): vote-count(찬반 숫자 번복)·will-flow(유언 조기·시간 초과·빈 글·잠금)·will-flow-sizes(폰별 시트 기하·키보드). 흐름 본문은 day.mjs, 도우미만 넘긴다
 const { voteCountFlow, willFlow, willSizesFlow } = makeDayFlows({ recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK });
 
+// 23페이즈 첫날 키워드·조기 진행 흐름: keyword(첫날 한 판 완주·카드·거절·모두의 답·정답 공개)·keyword-sizes(폰 6종 거절·키보드 컴팩트 카드)·early(키워드·찬반·밤 조기 진행). 흐름 본문은 keyword.mjs, 도우미만 넘긴다
+const { keywordFlow, keywordSizesFlow, earlyFlow } = makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK });
+
 // 캐릭터 동작·의상 화면(10페이즈): avatar-emote(10-05)·avatar-dress(10-07). 흐름 본문은 avatar.mjs, 도우미만 넘긴다
 const { avatarEmoteFlow, avatarDressFlow, avatarPhasesFlow, avatarPhasesNightFlow } = makeAvatarFlows({ recorder, startHost, openGuest, attempt, walkableCentersOfApp, LOBBY_HOST_NICK, WORLD_GUEST_NICK, resetAndLeave, openGame, closeGame, untilGame });
 
@@ -3804,6 +3808,10 @@ export const FLOWS = [
   { id: "vote-count", run: voteCountFlow, size: GAME_SIZE },
   { id: "will-flow", run: willFlow, size: GAME_SIZE },
   { id: "will-flow-sizes", run: willSizesFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  // 23페이즈 첫날 키워드: 첫날 단계 열·시민/마피아 카드·읽기 3초·20자소·거절·모두의 답·재접속·정답 공개·첫날 승패·view 누설(P23-1~6·8~11·13) / 폰 6종 거절·키보드 컴팩트 카드(P23-6·7) / 일찍 넘어가기(P23-12)
+  { id: "keyword", run: keywordFlow, size: GAME_SIZE },
+  { id: "keyword-sizes", run: keywordSizesFlow, extraSizes: LOBBY_EXTRA_SIZES },
+  { id: "early", run: earlyFlow, size: GAME_SIZE },
   { id: "noexec", run: noexecFlow, size: GAME_SIZE },
   // 9페이즈 밤·아침(09-22): night = 시나리오(암살·구출·불일치·처형 유언·경찰·피해자)와 시민 편 DOM·G/H 는 승인 보드 폭 한 번, night-sizes = 폰 크기 6종 기하
   { id: "night", run: nightFlow, size: GAME_SIZE },

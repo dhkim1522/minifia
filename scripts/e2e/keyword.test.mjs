@@ -204,5 +204,6 @@ test("KW13: 마피아·시민 view 키가 me.keyword 외 같고 마피아 프레
   assert.equal(kw13Leak({ ...ok, mafia: { ...mafia, day: ["n"] } }).ok, false); // day 키 차이(장르 day.keyword 는 둘 다 있어야 한다)
   assert.equal(kw13Leak({ ...ok, mafia: { ...mafia, top: ["code"] } }).ok, false); // 최상위 키 차이
   assert.equal(kw13Leak({ ...ok, mafia: keys(["seat", "role", "testRole"]), hostOnlyMe: ["testRole"] }).ok, true); // 방장 전용 테스트 키는 허용
+  assert.equal(kw13Leak({ ...ok, mafia: keys(["seat", "role", "allies"]), roleMe: ["allies"] }).ok, true); // 23페이즈 전부터 있던 역할 키는 허용
   assert.ok(noMeasure(kw13Leak({ ...ok, mafia: null })));
 });

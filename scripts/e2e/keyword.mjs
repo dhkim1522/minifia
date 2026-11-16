@@ -3,7 +3,7 @@
 // day.mjs·avatar.mjs 와 같은 모양: helpers 를 받고 서로 import 하지 않는다.
 // helpers: { recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK }.
 // 표식(data-keyword-*·data-answer-*·data-announce-label·data-early)에는 역할·키워드 값이 없다 — 키워드는 텍스트 노드로만 읽는다(T-23-43).
-import { chooseVerdict, installFakeViewport, openTestSheet, readGame, settle, skipTo, sleep } from "./browser.mjs";
+import { chooseVerdict, installFakeViewport, settle, skipDayToExecution, skipTo, sleep, watchSockets } from "./browser.mjs";
 import { OVERLAP_EPS, TAP_MIN } from "./lib.mjs";
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
@@ -35,6 +35,8 @@ export const KEYWORD_NOTE_COPY = "* 직접적인 키워드는 언급하면 안 �
 export const KW_TOL_MS = 800;
 /** 방장 화면에만 있는 테스트 방 키(me) — 마피아·시민 키 비교에서 방장 전용으로 허용한다 */
 export const HOST_ONLY_ME_KEYS = ["testMode", "testRole", "testBots", "testBotVote"];
+/** 23페이즈 전부터 역할에 따라 있던 me 키(마피아 동료·활동 기록) — 키워드와 무관한 기존 차이라 KW13 비교에서 뺀다 */
+export const ROLE_ME_KEYS = ["allies", "records", "allyPicks", "nightTally", "nightSure"];
 
 const MASK = "???";
 
@@ -259,14 +261,14 @@ export function kw12Early(items) {
 const sameSet = (a, b) => a.length === b.length && a.every((k) => b.includes(k));
 /**
  * KW13(P23-13) 누설. m = { mafia: { top, me, day }, citizen: { top, me, day }(키 이름 목록), mafiaFrameHits(마피아 소켓 프레임 중 키워드가 든 수), citizenFrameHits(시민 소켓 프레임 중 키워드가 든 수 — 측정이 맞는지 본다), hostOnlyMe }.
- * 최상위·day 키 집합은 같고, me 는 시민에게만 keyword(방장 전용 테스트 키는 빼고) — 마피아 프레임에는 키워드 문자열이 없다.
+ * 최상위·day 키 집합은 같고, me 는 시민에게만 keyword(방장 전용 테스트 키 hostOnlyMe·23페이즈 전부터 있던 역할 키 roleMe 는 빼고) — 마피아 프레임에는 키워드 문자열이 없다.
  */
 export function kw13Leak(m) {
   const label = "키워드 단계 view 키 집합이 마피아·시민에서 me.keyword 외 같다 · 마피아 소켓 프레임에 정답 문자열이 없다";
   const ok = (s) => s && Array.isArray(s.top) && Array.isArray(s.me) && Array.isArray(s.day) && s.top.length > 0 && s.me.length > 0;
   if (!m || !ok(m.mafia) || !ok(m.citizen) || !isNum(m.mafiaFrameHits) || !isNum(m.citizenFrameHits)) return noMeasure("KW13", label, "마피아·시민 view 키·프레임 수");
   const bad = [];
-  const hostOnly = new Set(m.hostOnlyMe ?? []);
+  const hostOnly = new Set([...(m.hostOnlyMe ?? []), ...(m.roleMe ?? [])]);
   if (!sameSet(m.mafia.top, m.citizen.top)) bad.push(`최상위 키 차이: ${[...new Set([...m.mafia.top, ...m.citizen.top])].filter((k) => m.mafia.top.includes(k) !== m.citizen.top.includes(k)).join("·")}`);
   if (!sameSet(m.mafia.day, m.citizen.day)) bad.push(`day 키 차이: ${[...new Set([...m.mafia.day, ...m.citizen.day])].filter((k) => m.mafia.day.includes(k) !== m.citizen.day.includes(k)).join("·")}`);
   if (m.mafia.me.includes("keyword")) bad.push("마피아가 me.keyword 를 받음");
@@ -278,9 +280,472 @@ export function kw13Leak(m) {
   return result("KW13", label, bad);
 }
 
-// ---- 흐름(Task 2) ----
-export function makeKeywordFlows(helpers) {
-  void helpers;
-  void [chooseVerdict, installFakeViewport, openTestSheet, readGame, settle, skipTo, sleep];
-  return { keywordFlow: async () => {}, keywordSizesFlow: async () => {}, earlyFlow: async () => {} };
+// ---- 페이지 안 감시(init 스크립트) ----
+
+/**
+ * 키워드 입력줄 감시. 모든 페이지가 만들어질 때 넣는다(함수 하나 — addInitScript 가 문자열로 직렬화하므로 바깥 값을 쓰지 않는다).
+ * 30ms 마다 `[data-answer-state]` 의 상태 바뀜·입력칸 data-call 첫 시각·거절 알림 글(떴다 사라진 시각)·조기 진행 표식(`[data-host-band][data-early]`)을 기록한다.
+ * 키워드·역할 값은 기록하지 않는다 — 입력칸 글(사용자가 쓴 글)과 알림 글만 담는다. 읽기는 window.__kwWatch.
+ */
+export function installKeywordWatch() {
+  const st = { states: [], callAt: null, notices: [], earlyAt: null, tones: [] };
+  window.__kwWatch = st;
+  setInterval(() => {
+    const now = Date.now();
+    const band = document.querySelector("[data-host-band][data-early]");
+    if (band && st.earlyAt === null) st.earlyAt = now;
+    const root = document.querySelector("[data-answer-state]");
+    if (!root) return;
+    const state = root.getAttribute("data-answer-state");
+    const lastState = st.states[st.states.length - 1];
+    if (!lastState || lastState.state !== state) st.states.push({ state, at: now });
+    const input = root.querySelector("[data-answer-input]");
+    if (input && input.hasAttribute("data-call") && st.callAt === null) st.callAt = now;
+    const text = (root.querySelector("[data-answer-notice]")?.textContent ?? "").trim();
+    const last = st.notices[st.notices.length - 1];
+    if (text !== "" && (!last || last.endAt !== null)) st.notices.push({ text, startAt: now, endAt: null, value: input ? input.value : "" });
+    else if (text === "" && last && last.endAt === null) last.endAt = now;
+    if (st.earlyAt !== null) {
+      const tone = root.querySelector("[data-answer-secs]")?.getAttribute("data-tone");
+      if (tone && !st.tones.includes(tone)) st.tones.push(tone);
+    }
+  }, 30);
+}
+
+// ---- 읽기 ----
+
+const readWatch = (page) => page.evaluate(() => (window.__kwWatch ? JSON.parse(JSON.stringify(window.__kwWatch)) : null));
+
+/** 키워드 카드의 세 줄 글(키워드는 텍스트 노드로만 읽는다) */
+const readCard = (page) =>
+  page.evaluate(() => ({
+    genre: document.querySelector("[data-keyword-genre]")?.textContent ?? null,
+    word: document.querySelector("[data-keyword-word]")?.textContent ?? null,
+    note: document.querySelector("[data-keyword-note]")?.textContent ?? null,
+  }));
+
+/** 문서 원문과 모든 속성 값(키워드·정답이 DOM 어디에도 없는지 보는 재료) */
+const readDomText = (page) =>
+  page.evaluate(() => {
+    const attrs = [];
+    for (const el of document.querySelectorAll("*")) for (const n of el.getAttributeNames()) attrs.push(`${n}=${el.getAttribute(n)}`);
+    return { html: document.documentElement.outerHTML, attrs: attrs.join("\n") };
+  });
+
+/** 입력줄 한 장: 입력칸 자소 수·글자 수 글·상태·읽기 전용·[보내기] 이름 */
+const readAnswerLine = (page) =>
+  page.evaluate(() => {
+    const root = document.querySelector("[data-answer-state]");
+    const input = root?.querySelector("[data-answer-input]");
+    const v = input ? input.value : "";
+    return {
+      state: root?.getAttribute("data-answer-state") ?? null,
+      value: v,
+      inputLen: [...new Intl.Segmenter("ko", { granularity: "grapheme" }).segment(v)].length,
+      countText: root?.querySelector("[data-answer-count]")?.textContent ?? "",
+      readOnly: !!input && input.readOnly,
+      label: root?.querySelector("[data-answer-send]")?.getAttribute("aria-label") ?? null,
+    };
+  });
+
+/** 키보드 열림 기하(가짜 visualViewport 높이 기준) */
+const readGeometry = (page) =>
+  page.evaluate(() => {
+    const rectOf = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+    };
+    const vv = window.visualViewport;
+    const q = (s) => document.querySelector(s);
+    return {
+      vw: window.innerWidth,
+      vh: vv ? vv.height : window.innerHeight,
+      compact: q("[data-keyword-card]")?.getAttribute("data-compact") === "true",
+      header: rectOf(q(".mf-reveal__header")),
+      card: rectOf(q("[data-keyword-card]")),
+      meta: rectOf(q(".mf-keyword__meta")),
+      form: rectOf(q(".mv-chat__form")),
+      send: rectOf(q("[data-answer-send]")),
+      secs: rectOf(q("[data-answer-secs]")),
+      count: rectOf(q("[data-answer-count]")),
+    };
+  });
+
+/** 열린 시트 안 목록: 줄(번호·좌석·답 없음)과 정답 줄 글·맨 아래 여부, 탭 수. 시트가 없거나 목록이 없으면 rows null */
+const readAnswerSheet = (page) =>
+  page.evaluate(() => {
+    const dlg = document.querySelector("dialog.mf-dialog--open");
+    const list = dlg?.querySelector("[data-answer-list]") ?? null;
+    const rows = list ? [...list.querySelectorAll("[data-answer-row]")].map((r) => ({ order: Number(r.getAttribute("data-answer-order")), seat: Number(r.getAttribute("data-answer-seat")), none: r.hasAttribute("data-answer-none") })) : null;
+    const correctEl = dlg?.querySelector("[data-answer-correct]") ?? null;
+    const rowEls = list ? [...list.querySelectorAll("[data-answer-row]")] : [];
+    return {
+      open: !!dlg,
+      rows,
+      tabs: dlg ? dlg.querySelectorAll('[data-rolecard-tab="answers"]').length : 0,
+      correct: correctEl ? (correctEl.textContent ?? "").trim() : null,
+      correctLast: correctEl ? rowEls.every((r) => (r.compareDocumentPosition(correctEl) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0) : null,
+    };
+  });
+
+/** 정답 공개 큰 글: 라벨과 키워드 글 */
+const readAnnounce = (page) =>
+  page.evaluate(() => ({
+    label: document.querySelector("[data-announce-label]")?.textContent ?? null,
+    text: document.querySelector("[data-announce] .mf-announce__text")?.textContent ?? null,
+  }));
+
+const keysOf = (v) => ({ top: Object.keys(v ?? {}), me: Object.keys(v?.me ?? {}), day: Object.keys(v?.day ?? {}) });
+
+/** 시트를 닫는다(닫기 단추). 없으면 그대로 */
+async function closeOpenSheet(page) {
+  const dlg = page.locator("dialog.mf-dialog--open");
+  if ((await dlg.count()) === 0) return;
+  await dlg.locator('[aria-label="닫기"]').first().click({ timeout: 3000 });
+  await dlg.first().waitFor({ state: "detached", timeout: 3000 });
+}
+
+/** 입력칸에 글을 쓰고 [보내기]를 누른다 */
+async function typeAndSend(page, text) {
+  await page.locator("[data-answer-input]").fill(text);
+  await page.locator("[data-answer-send]").click({ timeout: 3000 });
+}
+
+/** 거절 알림이 한 번 떴다 사라질 때까지 기다려 그 기록을 돌려준다 */
+async function waitNoticeCycle(page, ms = 6000) {
+  const start = performance.now();
+  for (;;) {
+    const w = await readWatch(page);
+    const n = w?.notices?.[w.notices.length - 1];
+    if (n && n.endAt !== null) return n;
+    if (performance.now() - start > ms) return null;
+    await sleep(50);
+  }
+}
+
+/** 단계가 pred 로 바뀔 때까지 tracker 를 10ms 로 읽는다. 바뀐 시각(performance.now) 또는 null */
+async function phaseLeftAt(tracker, phase, ms) {
+  const start = performance.now();
+  while (performance.now() - start < ms) {
+    if (tracker.last()?.phase !== phase) return performance.now();
+    await sleep(10);
+  }
+  return null;
+}
+
+/** 단계 이름을 오류 글 앞에 붙인다(여러 단추를 누르는 흐름에서 어디서 멈췄는지 알도록) */
+async function at(label, fn) {
+  try {
+    return await fn();
+  } catch (e) {
+    if (e instanceof Error) e.message = `${label}: ${e.message}`;
+    throw e;
+  }
+}
+
+const KW_WORD = "나만아는말";
+const KW_LONG = "가나다라마바사아자차카타파하거너더러머버서"; // 21자
+const GAME4 = { guests: 1, bots: 2 };
+
+// ---- 흐름 ----
+
+export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK }) {
+  const recLines = (rec, sc, lines, suffix = "") => {
+    for (const l of lines) rec(sc, l.id, `${l.label}${suffix}`, l.ok, l.detail);
+  };
+  const rec1 = (rec, sc, r, suffix = "") => rec(sc, r.id, `${r.label}${suffix}`, r.ok, r.detail);
+
+  /** 키워드 단계까지: 방장 마피아 + 참가자 1(시민 편) + 봇 2. 두 페이지에 입력줄 감시를 넣는다 */
+  const openKeyword = (ctx, id, { extraHost = [], vote = { exec: "no", pick: "host" } } = {}) =>
+    openGame(ctx, id, { ...GAME4, role: "mafia", vote, to: "keyword", hostNick: GAME_HOST_NICK, hostInitScripts: [installKeywordWatch, ...extraHost], guestInitScripts: [installKeywordWatch, ...extraHost] });
+
+  /** 키워드 단계 시작(서버 시각, 이 기계에서는 브라우저 시각과 같다) — 아직 아무도 제출하지 않았을 때 읽는다 */
+  const startOf = (tracker) => {
+    const v = tracker.last();
+    return v.phaseEndsAt - v.phaseDurationMs;
+  };
+
+  /** 두 페이지가 그 판 키워드를 같이 보내 거절을 받는다. 돌려주는 값: KW6 입력(페이지별 알림 기록) */
+  async function rejectBoth(pages, word) {
+    for (const p of pages) await waitOpen(p.page);
+    await at("거절 보내기", () => Promise.all(pages.map((p) => typeAndSend(p.page, word))));
+    const notices = await Promise.all(pages.map((p) => waitNoticeCycle(p.page)));
+    const lines = await Promise.all(pages.map((p) => readAnswerLine(p.page)));
+    return pages.map((p, i) => ({ who: p.who, text: notices[i]?.text ?? null, noticeMs: notices[i] ? notices[i].endAt - notices[i].startAt : null, valueKept: lines[i].value === word, stateAfter: lines[i].state }));
+  }
+
+  const waitOpen = (page, ms = 8000) => page.waitForSelector('[data-answer-state="open"]', { timeout: ms });
+
+  // ---- keyword: 첫날 한 판 완주 (P23-1~6·8~10·13, 390x844) ----
+  async function keywordFlow(ctx) {
+    const id = "keyword";
+    const rec = recorder(ctx);
+    const game = await openKeyword(ctx, id);
+    try {
+      const { hp, ht, guests } = game;
+      const [g] = guests;
+      const gp = g.page;
+      const pages = [{ who: "참가자(시민 편)", page: gp, tracker: g.tracker }, { who: "방장(마피아)", page: hp, tracker: ht }];
+      await Promise.all(pages.map((p) => p.page.waitForSelector("[data-keyword-card]", { timeout: 6000 })));
+      const t0 = startOf(g.tracker);
+
+      // KW2·KW4: 참가자(시민 편) 카드와 읽기 3초 잠금
+      const card = await readCard(gp);
+      const word = (card.word ?? "").trim();
+      rec1(rec, `${id}/citizen`, kw2CitizenCard(card));
+      const answerAtStart = (await readAnswerLine(gp)).state;
+      rec(`${id}/citizen`, "KW4a", "키워드 단계가 열리자마자 입력줄이 locked 다", answerAtStart === "locked", `처음 읽은 상태 ${answerAtStart}`);
+
+      // KW13: 방장(마피아)·참가자(시민 편) 페이지를 다시 연결해 그 연결의 모든 프레임에 키워드가 있는지 본다(정답 공개 전까지, 시민 쪽은 키워드를 받는 대조군)
+      const keyBefore = { mafia: keysOf(ht.last()), citizen: keysOf(g.tracker.last()) };
+      const mafiaWs = watchSockets(hp, { needles: [word] });
+      const citizenWs = watchSockets(gp, { needles: [word] });
+      await Promise.all([hp, gp].map((p) => p.reload({ waitUntil: "domcontentloaded" })));
+      await Promise.all([hp, gp].map((p) => p.waitForSelector("[data-keyword-card]", { timeout: 8000 })));
+
+      // KW3: 방장(마피아) 카드 ??? 와 DOM 원문·속성에 키워드 없음
+      const mcard = await readCard(hp);
+      const dom = await readDomText(hp);
+      rec1(rec, `${id}/mafia`, kw3MafiaCard({ word: mcard.word ?? "", genre: mcard.genre ?? "", html: dom.html, attrs: dom.attrs, answer: word }));
+
+      // KW4: 시작 → locked → 3초 → open + data-call (참가자 페이지 감시 기록)
+      await waitOpen(gp);
+      await sleep(250);
+      const w = await readWatch(gp);
+      const openAt = w?.states?.find((s) => s.state === "open")?.at;
+      rec1(rec, `${id}/citizen`, kw4ReadLock({ firstState: w?.states?.[0]?.state, firstAtMs: w?.states?.[0] ? w.states[0].at - t0 : undefined, openAtMs: openAt !== undefined ? openAt - t0 : undefined, callAtMs: w?.callAt != null ? w.callAt - t0 : null }));
+
+      // KW6: 시민·마피아가 같은 금지어(그 판 키워드)를 보낸다
+      const rej = await rejectBoth([{ who: "참가자(시민 편)", page: gp }, { who: "방장(마피아)", page: hp }], word);
+      rec1(rec, `${id}/reject`, kw6Reject(rej));
+
+      // KW5: 21자 입력 → 20 에서 멈춤, n/20 → 보내면 sent·읽기 전용
+      await gp.locator("[data-answer-input]").fill(KW_LONG);
+      await sleep(100);
+      const longLine = await readAnswerLine(gp);
+      await at("KW5 보내기", () => typeAndSend(gp, KW_WORD));
+      await gp.waitForSelector('[data-answer-state="sent"]', { timeout: 4000 }).catch(() => {});
+      const sent = await readAnswerLine(gp);
+      rec1(rec, `${id}/input`, kw5InputLimit({ inputLen: longLine.inputLen, countText: longLine.countText, afterSend: { state: sent.state, readOnly: sent.readOnly, label: sent.label } }));
+
+      // 방장도 거절 뒤 다른 글을 보낸다(두 번째로 낸 사람)
+      await at("방장 보내기", () => typeAndSend(hp, "다른말"));
+      await hp.waitForSelector('[data-answer-state="sent"]', { timeout: 4000 }).catch(() => {});
+
+      // 사람 전원이 냈으니 곧 낮 시작 → 토론. 토론 시작에 모두의 답이 저절로 한 번 열린다(KW8)
+      await Promise.all(pages.map((p) => p.tracker.waitFor((v) => v.phase === "discussion", 12_000, "낮 시작 → 토론")));
+      const sheets = [];
+      for (const p of pages) {
+        const opened = await p.page.waitForSelector("dialog.mf-dialog--open [data-answer-list]", { timeout: 4000 }).then(() => true).catch(() => false);
+        const sh = await readAnswerSheet(p.page);
+        sheets.push({ who: p.who, page: p.page, autoOpened: opened, hasTab: sh.tabs >= 1, rows: sh.rows ?? [] });
+      }
+      for (const s of sheets) await closeOpenSheet(s.page).catch(() => {});
+      await sleep(1600);
+      for (const s of sheets) s.reopened = (await readAnswerSheet(s.page)).open;
+      rec1(rec, `${id}/answers`, kw8AnswerList(sheets.map(({ page, ...rest }) => rest)));
+
+      // KW9: 참가자 재접속 — 저절로 안 열리고 [내 역할] → 첫날 답 으로 같은 목록. 그 연결 프레임에서 시민은 키워드를 받는다(KW13 대조군)
+      const rowsBefore = sheets[0].rows;
+      await gp.reload({ waitUntil: "domcontentloaded" });
+      await untilGame(gp, (x) => x.phase === "discussion", 10_000, "재접속 뒤 토론");
+      await sleep(1800);
+      const autoAfter = (await readAnswerSheet(gp)).open;
+      await at("KW9 [내 역할]", () => gp.locator(".mf-rolecard-btn").click({ timeout: 4000 }));
+      await at("KW9 첫날 답 탭", () => gp.locator('dialog.mf-dialog--open [data-rolecard-tab="answers"]').click({ timeout: 4000 }));
+      await gp.waitForSelector("dialog.mf-dialog--open [data-answer-list]", { timeout: 4000 }).catch(() => {});
+      const afterSheet = await readAnswerSheet(gp);
+      rec1(rec, `${id}/reconnect`, kw9Reconnect({ autoOpened: autoAfter, rowsBefore, rowsAfter: afterSheet.rows ?? [] }));
+      await closeOpenSheet(gp).catch(() => {});
+
+      // KW13: 정답 공개 전 마피아 프레임에 키워드 문자열 0, view 키 집합(키워드 단계 스냅샷)
+      await sleep(300);
+      const mafiaHits = mafiaWs.hits[word] ?? 0;
+      const citizenHits = citizenWs.hits[word] ?? 0;
+      mafiaWs.stop();
+      citizenWs.stop();
+      rec1(rec, `${id}/leak`, kw13Leak({ mafia: keyBefore.mafia, citizen: keyBefore.citizen, mafiaFrameHits: mafiaHits, citizenFrameHits: citizenHits, hostOnlyMe: HOST_ONLY_ME_KEYS, roleMe: ROLE_ME_KEYS }));
+
+      // 정답 공개: 찬반 부결(봇 둘 반대) → 처형 없음 → 정답 공개(KW10)
+      await at("정답 공개로 넘기기", () => skipTo(hp, ht, "answerReveal"));
+      const reveal = await Promise.all(pages.map(async (p) => {
+        await p.page.waitForSelector("[data-announce-label]", { timeout: 6000 }).catch(() => {});
+        return { who: p.who, ...(await readAnnounce(p.page)) };
+      }));
+      await Promise.all(pages.map((p) => p.tracker.waitFor((v) => v.phase === "night", 9000, "정답 공개 → 밤")));
+      const correct = [];
+      for (const p of pages) {
+        await at(`KW10 ${p.who} [내 역할]`, () => p.page.locator(".mf-rolecard-btn").click({ timeout: 4000 }));
+        await at(`KW10 ${p.who} 첫날 답 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="answers"]').click({ timeout: 4000 }));
+        await p.page.waitForSelector("dialog.mf-dialog--open [data-answer-list]", { timeout: 4000 }).catch(() => {});
+        const sh = await readAnswerSheet(p.page);
+        correct.push({ who: p.who, text: sh.correct, last: sh.correctLast });
+        await closeOpenSheet(p.page).catch(() => {});
+      }
+      rec1(rec, `${id}/reveal`, kw10Reveal({ pages: reveal, answer: word, correct }));
+
+      // KW1: 둘째 날까지 단계 열
+      await skipTo(hp, ht, "dayAnnounce");
+      rec1(rec, `${id}/phases`, kw1PhaseColumns({ seq: ht.phases.slice(), endedDayOne: false }));
+      await gameGH(ctx, id, "day2", game.host);
+    } finally {
+      await closeGame(game);
+    }
+
+    // KW11: 첫날 처형으로 끝난 판 — 정답 공개 없이 결과로, 결과에 정답 한 줄
+    {
+      const sc = `${id}/end`;
+      const game2 = await openGame(ctx, id, { ...GAME4, role: "mafia", vote: { exec: "yes", pick: "host" }, to: "keyword", hostNick: GAME_HOST_NICK });
+      try {
+        const { hp, ht, guests } = game2;
+        const gp = guests[0].page;
+        await gp.waitForSelector("[data-keyword-word]", { timeout: 6000 });
+        const word = ((await readCard(gp)).word ?? "").trim();
+        await skipTo(hp, ht, "discussion");
+        await skipDayToExecution(hp, ht, [gp]);
+        await skipTo(hp, ht, "ended");
+        let line = "";
+        const start = performance.now();
+        while (performance.now() - start < 14_000) {
+          line = ((await gp.evaluate(() => document.querySelector("[data-host-line]")?.textContent ?? "")) || "").trim();
+          if (line.startsWith("정답")) break;
+          await sleep(200);
+        }
+        const from = Math.max(0, ht.phases.indexOf("execution"));
+        rec1(rec, sc, kw11FirstDayEnd({ phases: ht.phases.slice(from), hostLine: line, answer: word }));
+        rec1(rec, sc, kw1PhaseColumns({ seq: ht.phases.slice(), endedDayOne: true }), " (첫날 끝)");
+      } finally {
+        await closeGame(game2);
+      }
+    }
+  }
+
+  // ---- keyword-sizes: 폰 6종 — 금지어 거절(KW6)과 키보드 열림 컴팩트 카드 기하(KW7, P23-6·7) ----
+  async function keywordSizesFlow(ctx) {
+    const id = "keyword-sizes";
+    const rec = recorder(ctx);
+    const K = 336;
+    const game = await openKeyword(ctx, id, { extraHost: [installFakeViewport] });
+    try {
+      const { hp, ht, guests } = game;
+      const [g] = guests;
+      const pages = [{ who: "참가자(시민 편)", page: g.page }, { who: "방장(마피아)", page: hp }];
+      await Promise.all(pages.map((p) => p.page.waitForSelector("[data-keyword-card]", { timeout: 6000 })));
+      const word = (((await readCard(g.page)).word) ?? "").trim();
+      const rej = await rejectBoth(pages, word);
+      recLines(rec, `${id}/reject`, [kw6Reject(rej)], ` (${ctx.size.label})`);
+      // 키보드 열림: 입력칸 포커스 + 가짜 키보드(visualViewport 높이 − K)
+      for (const p of pages) {
+        await p.page.locator("[data-answer-input]").focus();
+        await p.page.evaluate((k) => window.__mfVv.set(window.innerHeight - k, 0), K);
+      }
+      await sleep(700);
+      for (const p of pages) {
+        const geo = await readGeometry(p.page);
+        recLines(rec, `${id}/keyboard`, [kw7CompactGeometry(geo)], ` (${p.who}, ${ctx.size.label}, K ${K})`);
+        // 키보드가 열려도 단계가 그대로 키워드다
+      }
+      rec(`${id}/keyboard`, "KW7b", `키보드를 열어도 단계가 그대로 키워드다 (${ctx.size.label})`, ht.last().phase === "keyword", `단계 ${ht.last().phase}`);
+      for (const p of pages) await p.page.evaluate(() => window.__mfVv.set(window.innerHeight, 0));
+    } finally {
+      await closeGame(game);
+    }
+  }
+
+  // ---- early: 일찍 넘어가기 — 키워드·찬반·밤 (P23-12, 390x844) ----
+  async function earlyFlow(ctx) {
+    const id = "early";
+    const rec = recorder(ctx);
+    const game = await openKeyword(ctx, id, { vote: { exec: "no", pick: "host" } });
+    try {
+      const { hp, ht, guests } = game;
+      const [g] = guests;
+      const gt = g.tracker;
+      const pages = [{ who: "참가자(시민 편)", page: g.page, tracker: gt }, { who: "방장(마피아)", page: hp, tracker: ht }];
+      const items = [];
+
+      // 키워드: 사람 둘이 모두 내면(봇은 안 낸다) 1.5초 안에 낮 시작
+      await Promise.all(pages.map((p) => waitOpen(p.page)));
+      await typeAndSend(g.page, KW_WORD);
+      await typeAndSend(hp, "다른말");
+      const tLast = performance.now();
+      const left = await phaseLeftAt(ht, "keyword", 6000);
+      await sleep(100);
+      const wk = await readWatch(hp);
+      items.push({ stage: "keyword", advanceMs: left === null ? undefined : left - tLast, early: wk?.earlyAt != null, tone: wk?.tones?.length ? (wk.tones.every((t) => t === "calm") ? "calm" : wk.tones.find((t) => t !== "calm")) : undefined });
+      rec(`${id}/keyword`, "KW12k", "봇은 답을 내지 않고 사람 둘만 냈는데 낮 시작으로 넘어간다", ht.last().phase === "dayAnnounce" || ht.last().phase === "discussion", `단계 ${ht.last().phase}`);
+
+      // 찬반: 봇 표가 다 들어온 뒤 사람 둘이 던지면 1.5초 안에 넘어가고, 유예 안 번복은 마감을 다시 늘린다
+      await ht.waitFor((v) => v.phase === "discussion", 6000, "토론");
+      await sleep(900);
+      for (const p of pages) await closeOpenSheet(p.page).catch(() => {}); // 첫날 토론 시작에 저절로 열린 모두의 답
+      await skipTo(hp, ht, "verdict");
+      await allAt(pages.map((p) => p.page), "verdict");
+      await Promise.all(pages.map((p) => untilGame(p.page, (x) => x.verdictCounts?.yes + x.verdictCounts?.no === 2, 9000, "봇 표 둘")));
+      await chooseVerdict(g.page, false);
+      await chooseVerdict(hp, false);
+      const ends1 = await (async () => {
+        const start = performance.now();
+        while (performance.now() - start < 3000) {
+          const v = ht.last();
+          if (v.phase === "verdict" && v.phaseEndsAt - Date.now() <= EARLY_GRACE_MS_COPY + 400) return v.phaseEndsAt;
+          await sleep(15);
+        }
+        return null;
+      })();
+      await sleep(400);
+      await chooseVerdict(g.page, true).catch(() => {});
+      const tFlip = performance.now();
+      let ends2 = null;
+      const sw = performance.now();
+      while (performance.now() - sw < 2500 && ends1 !== null) {
+        const v = ht.last();
+        if (v.phase === "verdict" && v.phaseEndsAt > ends1 + 50) {
+          ends2 = v.phaseEndsAt;
+          break;
+        }
+        await sleep(15);
+      }
+      const leftV = await phaseLeftAt(ht, "verdict", 4000);
+      const wv = await readWatch(hp);
+      items.push({ stage: "verdict", advanceMs: leftV === null ? undefined : leftV - tFlip, early: wv?.earlyAt != null, extendedMs: ends1 !== null && ends2 !== null ? ends2 - ends1 : 0 });
+
+      // 밤: 정답 공개를 지나 밤. 전원(사람 둘 + 봇 둘)이 고르면 1.5초 안에 넘어간다 — 마피아·시민 두 화면의 마감·표식이 같다
+      await ht.waitFor((v) => v.phase === "night", 12_000, "정답 공개 → 밤");
+      await Promise.all(pages.map((p) => untilGame(p.page, (x) => x.phase === "night", 6000, "밤 도착")));
+      const seatOf = (t) => t.last().me.seat;
+      const aliveOthers = (t) => t.last().players.filter((p) => p.seat !== seatOf(t) && p.alive !== false).map((p) => p.seat);
+      for (const p of pages) {
+        const target = aliveOthers(p.tracker)[0];
+        await p.page.locator(`[data-face="${target}"], [data-pick="${target}"]`).first().click({ timeout: 4000 });
+      }
+      // 봇이 모두 고르면(원래 마감보다 일찍) 마감이 now+1.5초로 줄어든다 — 그 순간을 잡아 다음 단계까지의 시간을 잰다
+      const sn = performance.now();
+      let shrunkAt = null;
+      let endsH = null;
+      let endsG = null;
+      while (performance.now() - sn < 28_000) {
+        const v = ht.last();
+        if (v.phase !== "night") break;
+        if (v.phaseEndsAt - Date.now() <= EARLY_GRACE_MS_COPY + 300 && v.phaseDurationMs - (v.phaseEndsAt - Date.now()) > 0 && performance.now() - sn > 1500) {
+          shrunkAt = performance.now();
+          endsH = v.phaseEndsAt;
+          endsG = gt.last().phaseEndsAt;
+          break;
+        }
+        await sleep(15);
+      }
+      const leftN = await phaseLeftAt(ht, "night", 4000);
+      const wn = await Promise.all(pages.map((p) => readWatch(p.page)));
+      const parity = endsH !== null && endsH === endsG && wn.every((w) => w?.earlyAt != null);
+      items.push({ stage: "night", advanceMs: leftN === null || shrunkAt === null ? undefined : leftN - shrunkAt, early: wn.every((w) => w?.earlyAt != null), parity });
+      rec1(rec, `${id}/early`, kw12Early(items));
+      for (const it of items) rec(`${id}/early`, `KW12-${it.stage}`, `${it.stage}: 마감 단축 측정(참고)`, true, JSON.stringify(it), true);
+    } finally {
+      await closeGame(game);
+    }
+  }
+
+  return { keywordFlow, keywordSizesFlow, earlyFlow };
 }
