@@ -12,7 +12,7 @@
 // 유언 단계(defense, 22-11 D-15·D-16·D-28): 처형자(공개 값 day.candidate === 나)만 쓸 수 있다(서버 saveWill 과 같은 조건).
 // - 단계가 시작되면 미리 써 둔 유언이 채워진 채 시트가 자동으로 열린다(한 단계에 한 번 — [닫기]로 접은 뒤 다시 열리지 않는다).
 // - [남기기]: {t:"will", text, final:true} 를 보내고 곧바로 '남김'이다(서버 응답을 기다리는 표시 없음 — 단계가 곧 넘어간다). 거절이 오면 '남김' 을 풀고 알림 한 번(다시 누를 수 있다). [닫기]는 글을 저장하고 시트만 접는다(Pitfall 8).
-// - 자동 저장: 입력이 바뀌고 600ms 뒤 한 번(서버 간격 500ms 위), 마감 700ms 전에 한 번 더. 시간이 끝나면 서버가 마지막 저장본을 낸다(마지막 약 0.5초 입력 손실 허용).
+// - 자동 저장: 입력이 바뀌고 600ms 뒤 한 번(서버 간격 500ms 위), 마감 700ms 전에 한 번 더. 이 저장의 거절은 알림 없이 넘긴다(마감을 넘겨 늦게 닿을 수 있다). 시간이 끝나면 서버가 마지막 저장본을 낸다(마지막 약 0.5초 입력 손실 허용).
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
@@ -74,6 +74,8 @@ function normalized(text: string): string {
 export const WILL_AUTOSAVE_MS = 600;
 /** 마감 이만큼 전에 쓰던 글을 한 번 더 보낸다(ms) */
 export const WILL_LAST_SEND_LEAD_MS = 700;
+/** 자동 저장을 보낸 뒤 이 시간 안에 오는 거절은 조용히 넘긴다(ms) — 마감을 넘겨 늦게 닿은 저장이 처형 연출 중에 오류 알림을 띄우지 않게(22 WR-02) */
+export const WILL_QUIET_MS = 1500;
 
 export function useWill({ view, send, canSend = true, offset = 0, rejected = 0, onFail, busyRef }: UseWillOptions): WillApi {
   const meSeat = view.me.seat;
@@ -104,11 +106,14 @@ export function useWill({ view, send, canSend = true, offset = 0, rejected = 0, 
   const [finalFor, setFinalFor] = useState<number | null>(null);
   const finalSent = condemned && finalFor !== null && finalFor === view.phaseEndsAt;
   const lastSent = useRef<string | null>(null);
-  // 화면 틀이 거절 프레임에 "지금은 고를 수 없어요" 를 띄울지 가르는 busyRef 는 두 가지가 켠다: 저장 확인 대기 / [남기기] 확인 대기
+  // 화면 틀이 거절 프레임에 "지금은 고를 수 없어요" 를 띄울지 가르는 busyRef 는 세 가지가 켠다: 저장 확인 대기 / [남기기] 확인 대기 / 자동 저장 직후의 조용한 구간
   const finalWaiting = useRef(false);
+  const quiet = useRef(false);
+  const quietTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const syncBusy = useCallback(() => {
-    if (busyRef) busyRef.current = pendingRef.current !== null || finalWaiting.current;
+    if (busyRef) busyRef.current = pendingRef.current !== null || finalWaiting.current || quiet.current;
   }, [busyRef]);
+  useEffect(() => () => clearTimeout(quietTimer.current), []);
 
   const setPendingBoth = useCallback(
     (next: { kind: WillKind; text: string } | null) => {
@@ -151,6 +156,7 @@ export function useWill({ view, send, canSend = true, offset = 0, rejected = 0, 
   }, [pending, setPendingBoth]);
 
   // 거절 = 실패 (기다리는 중이 아니면 이 훅의 일이 아니다). [남기기]도 기다리는 중이다: 거절되면 '남김' 을 풀어 다시 보낼 수 있게 하고 한 번 알린다(22 WR-01).
+  // 자동 저장의 거절은 기다림이 아니라서 아래에서 걸러진다 — 알림도 되돌림도 없이 조용히 넘어간다(22 WR-02).
   const seenRejected = useRef(rejected);
   useEffect(() => {
     if (seenRejected.current === rejected) return;
@@ -208,9 +214,17 @@ export function useWill({ view, send, canSend = true, offset = 0, rejected = 0, 
     (text: string) => {
       const n = normalized(text);
       if (n === (lastSent.current ?? (serverWill ?? ""))) return;
-      if (send({ t: "will", text }) !== false) lastSent.current = n;
+      if (send({ t: "will", text }) === false) return;
+      lastSent.current = n;
+      quiet.current = true;
+      syncBusy();
+      clearTimeout(quietTimer.current);
+      quietTimer.current = setTimeout(() => {
+        quiet.current = false;
+        syncBusy();
+      }, WILL_QUIET_MS);
     },
-    [send, serverWill],
+    [send, serverWill, syncBusy],
   );
   const autoSaveRef = useRef(autoSave);
   useLayoutEffect(() => {

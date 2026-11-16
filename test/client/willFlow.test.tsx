@@ -4,6 +4,7 @@ import "../helpers/singleLineErrors";
 import { installMemoryStorage } from "../helpers/memoryStorage";
 import type { RoleId } from "../../shared/game/roles";
 import type { ClientMessage, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
+import { WILL_QUIET_MS } from "../../src/net/useWill";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
 // WILL-01·NIGHT-12, UI-SPEC 279~286행. 유언·쪽지 화면 흐름: RoomScreen → GameMap → GamePanel·WillSheet 를 진짜로 그리고
@@ -812,6 +813,33 @@ describe("유언 단계 — 처형자 화면 (22-11 P22-6~8)", () => {
       vi.advanceTimersByTime(600);
     });
     expect(willMsgs(send)).toHaveLength(1);
+  });
+
+  it("마감 직전 자동 저장이 마감을 넘겨 거절돼도(WR-02) 알림·되돌림 없이 조용하다 — 시트와 쓰던 글이 그대로이고, 조용한 구간이 지나면 다른 거절은 다시 알린다", () => {
+    clock();
+    const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
+    const { handlers, onEvent } = withHandlers();
+    const m = mount(defenseOf(), { send, onEvent });
+    fireEvent.change(area(m.container), { target: { value: "막판 글" } });
+    act(() => {
+      vi.advanceTimersByTime(650);
+    });
+    expect(willMsgs(send)).toEqual([{ t: "will", text: "막판 글" }]);
+    emitError(handlers, "WRONG_PHASE");
+    expect(toastText(m.container)).toBe("");
+    expect(sheet(m.container)).not.toBeNull();
+    expect(area(m.container).value).toBe("막판 글");
+    // 단계가 처형으로 넘어간 뒤 닿은 거절도 알림이 없다
+    m.show({ ...defenseOf(), phase: "execution" });
+    emitError(handlers, "BAD_MESSAGE");
+    expect(toastText(m.container)).toBe("");
+    // 조용한 구간(WILL_QUIET_MS)이 지나면 일반 거절 알림은 그대로다
+    m.show(makeView({ phase: "discussion", mySeat: 3 }));
+    act(() => {
+      vi.advanceTimersByTime(WILL_QUIET_MS + 100);
+    });
+    emitError(handlers, "WRONG_PHASE");
+    expect(toastText(m.container)).toBe("지금은 고를 수 없어요");
   });
 
   it("[닫기]는 글을 저장하고 시트만 접는다 — 다시 열리지 않고 [유언] 단추가 빛난다(P22-17)", () => {
