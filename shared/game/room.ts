@@ -76,6 +76,8 @@ export interface Player {
   endVote?: true;
   /** 서버 전용(결정 0061-10). 본인이 남긴 유언 — saveWill(09-12)만 쓰고, 사후에도 바꿀 수 없다. 아침에 서버가 채팅 카드로 만들어 보내며 view 의 me.will 로 산 본인에게만 간다. */
   will?: string;
+  /** 서버 전용(23-06, D-07). 키워드 단계에서 쓰던 글(초안) — submitAnswer 가 쓰고 closeKeyword 가 마감에 지운다. 어떤 view 에도 이 키로 실리지 않고 본인 me.answer 로만 간다. */
+  answerDraft?: string;
   /** 공개 직업 주장(결정 0066-1). setBadge 만 쓴다. 실제 역할과 무관한 값이고 view 에는 산 사람 것만 players[].badge 로 실린다. */
   badge?: BadgeId;
   /** 로비 의상(결정 D-6). setLook 만 쓴다. 사람이 고른 공개 값이고 역할과 무관하다. 없으면 기본 coat 로 읽고, 게임 시작·테스트 방 되돌리기 뒤에도 남는다. */
@@ -201,6 +203,12 @@ export interface RoomState {
    * view 키 day.keyword(장르 라벨)·me.keyword(시민 편 본인의 단어)와 이름이 같아 SERVER_ONLY_KEYS 이름 검사에 넣지 않고 값으로 지킨다(RESEARCH P2).
    */
   keyword?: { genre: string; word: string };
+  /** 서버 전용(23-06, D-07). 키워드 단계에서 확정 제출한 답 — 낸 순서가 배열 순서다. closeKeyword 가 키째 지운다(공개 값은 keywordAnswers). 어떤 view 에도 이 키로 실리지 않는다. */
+  answerSubmits?: Array<{ seat: number; text: string }>;
+  /** 키워드 마감 뒤 공개 값(D-14·D-24): 확정 낸 순서 → 쓰던 글(좌석 순) → 답 없음(좌석 순). view 의 day.keyword.answers 로 keyword 단계 뒤 모두에게 같은 값이 간다. */
+  keywordAnswers?: Array<{ order: number; seat: number; text: string | null }>;
+  /** 서버 전용(23-06, D-09). 그 판에서 마피아가 금지어로 거절당한 적이 있음 — D1 "떠보기 성공"의 근거. 어떤 view·프레임에도 싣지 않는다. */
+  keywordProbed?: true;
   /** 서버 전용 결정값(결정 D-21). startGame 이 mapChoice 로 정해 싣는다 — 시작 전에는 어떤 view·프레임에도 싣지 않는다(L42). 대기실 복귀가 버린다. */
   map?: MapId;
   /** 서버 전용(결정 0022). 방을 만들 때만 정해지는 테스트 방 표시 — true 일 때만 키가 있다. 테스트 방 방장 도구의 문이다. */
