@@ -9,8 +9,8 @@
 // 08-21: 옛 처형 여부·후보 선택 단계의 계획과 행동이 없어졌다. 봇 계획이 서는 단계는 discussion·nomination·verdict·night·defense 다(09.1.1-05: 동점 결선 runoff 가 더해졌다).
 //
 // 구현됨(결정 0024, 0060-13, 0089-18): 토론(discussion)에는 채팅 두 줄과 토론 끝내기 한 번, 찬반(verdict, 후보 없음)에는 산 봇 모두의 찬성·반대 하나,
-// 지목(nomination, 순차)에는 자기 차례인 봇이 자기를 뺀 살아 있는 한 명(역할을 보지 않는다), 최후 변론(defense)에서는 변론자인 봇만 고정 문구(BOT_DEFENSE_LINES) 하나를 자유 채팅으로 보낸다(22-11 이 유언으로 바꾼다). 공개·처형·종료 단계에는 계획이 없다.
-// 07-11: 봇은 고정 문구 목록에서 자유 채팅 줄(chat)을 보낸다 — 낮 토론 두 줄(BOT_CHAT_LINES), 밤 산 마피아 60% 한 줄(BOT_NIGHT_LINES), 후보 봇의 변론 한 줄.
+// 지목(nomination, 순차)에는 자기 차례인 봇이 자기를 뺀 살아 있는 한 명(역할을 보지 않는다), 유언 단계(defense)에서는 처형자인 봇만 고정 문구(BOT_DEFENSE_LINES) 하나를 유언(will, final)으로 보낸다(22-11 D-18). 공개·처형·종료 단계에는 계획이 없다.
+// 07-11: 봇은 고정 문구 목록에서 자유 채팅 줄(chat)을 보낸다 — 낮 토론 두 줄(BOT_CHAT_LINES), 밤 산 마피아 60% 한 줄(BOT_NIGHT_LINES), 유언 단계 처형자 봇의 will 한 줄.
 // 이모티콘·빠른 메시지(say)는 더 이상 보내지 않는다. 로비에서는 말하지 않는다(계획이 서지 않는다). 줄은 사람과 같은 applyChat 본체를 지나 단계 키·채널·D5 제한을 그대로 받는다.
 //
 // 난수 호출 순서가 계약이다(시드 테스트가 고정한다). randInt(0) 호출은 어디에도 없다(cryptoRandInt(0) 은 RangeError).
@@ -74,7 +74,7 @@ export const RUNOFF_BOT_SPAN_MS = 2_500;
 /** 마지막 3인 동시 지목 지연: 500 + [0, 2500) ms (지목 창 8초에서 마감 − 500 안, 결정 0066-5). */
 export const SHOWDOWN_BOT_POINT_BASE_MS = 500;
 export const SHOWDOWN_BOT_POINT_SPAN_MS = 2_500;
-/** 최후 변론 지연: 1000 + [0, 4000) ms (단계 10초 안). */
+/** 유언 지연(처형자 봇): 1000 + [0, 4000) ms (단계 10초 안). */
 const DEFENSE_SAY_BASE_MS = 1_000;
 const DEFENSE_SAY_SPAN_MS = 4_000;
 
@@ -92,7 +92,7 @@ export const BOT_CHAT_LINES: readonly string[] = [
 ];
 /** 밤에 산 마피아 봇이 고르는 문구(3개). */
 export const BOT_NIGHT_LINES: readonly string[] = ["동의해요", "그 사람으로 가요", "다른 사람으로 해요"];
-/** 최후 변론에서 후보인 봇이 고르는 문구(3개). 길이를 옛 템플릿 목록과 같은 3 으로 두어 defense 의 시드 호출 수가 그대로다. */
+/** 유언 단계에서 처형자인 봇이 남기는 문구(3개). 길이를 옛 템플릿 목록과 같은 3 으로 두어 defense 의 시드 호출 수가 그대로다. */
 export const BOT_DEFENSE_LINES: readonly string[] = ["저 아니에요", "저는 시민이에요", "한 번만 믿어 주세요"];
 
 /** 1일차 토론에서 봇이 남기는 유언 문장(3개, 역할 단어 없음). 봇 seat % 길이 번째 줄을 쓴다 — 난수 없음. sanitizeChatText 를 그대로 통과하며 유언 상한 WILL_MAX_GRAPHEMES(50) 자소 이하다(결정 0061-18, 사용자 결정 2026-11-05). */
@@ -110,8 +110,8 @@ export type BotAct =
   | { t: "endDiscussion" }
   | { t: "point"; target: number }
   | { t: "verdict"; agree: boolean }
-  // 9페이즈(결정 0061-18): 유언 한 줄(방 DO 의 applyWill 본체). 난수 없음.
-  | { t: "will"; text: string }
+  // 9페이즈(결정 0061-18): 유언 한 줄(방 DO 의 applyWill 본체). 난수 없음. final: 유언 단계의 처형자 봇 — 사람의 [남기기]와 같은 길로 단계를 끝낸다(22-11 D-18).
+  | { t: "will"; text: string; final?: true }
   // 9페이즈 보완(09-24, feedback-1): 채팅 줄 직전에 서버 안에서 입력 중 켜짐을 중계한다(방 DO 의 relayTyping 본체, 사람의 typing 메시지와 같은 길). 난수 없음, 꺼짐은 보내지 않는다.
   | { t: "typing" };
 export interface BotStep {
@@ -311,10 +311,11 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
       addChat(at, BOT_NIGHT_LINES[randInt(BOT_NIGHT_LINES.length)]!);
     }
   } else if (state.phase === "defense") {
-    // 변론은 후보 봇만 한다(서버는 산 사람 누구의 변론 채팅도 받지만 봇은 후보만 말한다). 후보가 아닌 봇은 아무것도 하지 않는다.
+    // 유언 단계(22-11 D-18): 처형자인 봇만 고정 문구 하나를 유언으로 남긴다(final — 사람의 [남기기]와 같다). 채팅은 이 단계에서 잠겼고 typing 은 붙이지 않는다.
+    // 난수 호출 수·순서는 옛 변론과 같다(randInt(3) → randInt(4000)). 후보가 아닌 봇은 아무것도 하지 않는다.
     if (state.verdict?.candidate === bot.seat) {
       const text = BOT_DEFENSE_LINES[randInt(BOT_DEFENSE_LINES.length)]!;
-      addChat(now + DEFENSE_SAY_BASE_MS + randInt(DEFENSE_SAY_SPAN_MS), text);
+      add(now + DEFENSE_SAY_BASE_MS + randInt(DEFENSE_SAY_SPAN_MS), { t: "will", text, final: true });
     }
   }
   return steps;

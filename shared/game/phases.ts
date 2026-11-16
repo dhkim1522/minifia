@@ -31,7 +31,7 @@ export const MORNING_VICTIM_MS = 2_000; // 탈락 발표(MORN-04)
 export const MORNING_WILL_MS = 2_000; // 피해자 유언이 비어 있지 않을 때
 export const MORNING_NOTE_MS = 2_000; // 마피아 쪽지가 비어 있지 않을 때(탈락한 밤에만 남는다)
 export const MORNING_MAX_MS = 16_000; // 아침 길이 상한 — 결정 0079(A3) · 흔적 카드가 두 줄이 되어 3→5초, 상한 15→16초 (시간은 참고 목표)
-export const DEFENSE_MS = 20_000; // 최후 변론(DAY-07, 결정 0060-1) — 변론자가 무대에서 말하는 20초
+export const DEFENSE_MS = 10_000; // 유언 단계(결정 0089-19, D-15) — 처형자가 스포트라이트 아래 마지막 한마디를 쓰는 10초. 단계 id 는 defense 그대로다. [남기기]로 일찍 끝날 수 있다
 /** 판결 앞머리(결정 0066-7) — 처형 단계 맨 앞 0.6초는 화면의 느린 확대·핀 조명이 알림보다 앞선다. */
 export const VERDICT_LEAD_MS = 600;
 export const EXECUTION_MS = 5_000 + VERDICT_LEAD_MS; // 처형 발표 5초(D-01, VOTE-04) + 판결 앞머리 0.6초(결정 0066-7)

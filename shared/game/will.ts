@@ -33,6 +33,7 @@ function readBody(raw: string, max: number): { erase: true } | { erase: false; t
 
 /**
  * 유언 저장(WILL-01). 검사 순서가 계약이다: 단계(지도 단계 dayAnnounce~morning 이 아니면 WRONG_PHASE) → 행위자(방에 있고 산 사람, 아니면 BAD_MESSAGE)
+ * → 유언 단계(defense)면 처형자(verdict.candidate)가 아닌 사람은 WRONG_PHASE(22-11 D-16)
  * → 본문(공백뿐이면 지움, 아니면 sanitizeChatText 뒤 WILL_MAX_GRAPHEMES(50) 자소, 실패면 BAD_MESSAGE) → 같은 값이면 입력 객체 그대로 → 그 사람의 will 만 바뀐 새 상태(지움은 키째 삭제).
  * 죽은 사람은 고칠 수 없다(E7 #36). 로비·역할 확인·종료는 받지 않는다.
  */
@@ -44,6 +45,10 @@ export function saveWill(
   if (!MAP_PHASES.has(state.phase)) return { ok: false, error: "WRONG_PHASE" };
   const actor = state.players.find((p) => p.id === actorId);
   if (!actor || !isAlive(actor)) return { ok: false, error: "BAD_MESSAGE" };
+  // 유언 단계(defense, 22-11 D-16): 처형자만 쓰거나 고친다. 다른 산 사람은 이 단계에 유언을 바꾸지 못한다(그가 미리 써 둔 글은 그대로). 후보가 없으면 아무도 쓰지 못한다(fail-closed).
+  if (state.phase === "defense" && (state.verdict?.candidate === undefined || actor.seat !== state.verdict.candidate)) {
+    return { ok: false, error: "WRONG_PHASE" };
+  }
   const body = readBody(text, WILL_MAX_GRAPHEMES);
   if (body === null) return { ok: false, error: "BAD_MESSAGE" };
   if (body.erase) {

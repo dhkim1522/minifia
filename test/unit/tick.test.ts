@@ -93,7 +93,7 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(row("discussion")).toBe("90000/verdict/true"); // 토론 다음은 찬반(결정 0089-18, D-10)
     expect(row("verdict")).toBe("10000/nomination/true"); // 찬반 다음은 지목 — 부결이면 마감 훅이 night 로 보낸다
     expect(row("nomination")).toBe(`${NOMINATION_MS}/defense/true`); // 단계 표 값은 자리 값 — 진입 훅 뒤 phaseDurationOf 가 모이기(3000)로 다시 구한다. 동률·0표면 마감 훅이 night 로 보낸다
-    expect(row("defense")).toBe("20000/execution/true"); // 변론(유언 자리) 다음은 처형
+    expect(row("defense")).toBe("10000/execution/true"); // 변론(유언 자리) 다음은 처형
     expect(row("execution")).toBe("5600/night/true");
     expect(row("night")).toBe("30000/morning/true");
     expect(row("morning")).toBe("5000/dayAnnounce/true");
@@ -104,7 +104,7 @@ describe("PHASE_DEFS (단계 표, D-01·D-02·D-19·D-20, NIGHT-05·NIGHT-06)", 
     expect(DISCUSSION_MS).toBe(90000);
     expect(NIGHT_MS).toBe(30000);
     expect(MORNING_MS).toBe(5000);
-    expect(DEFENSE_MS).toBe(20000);
+    expect(DEFENSE_MS).toBe(10000);
     expect(NOMINATION_GATHER_MS).toBe(3000);
     expect(VERDICT_MS).toBe(10000);
     expect(EXECUTION_MS).toBe(5000 + VERDICT_LEAD_MS); // 처형 발표 5초 + 판결 앞머리 0.6초(결정 0066-7)
@@ -201,7 +201,7 @@ describe("tick (순수 단계 진행)", () => {
     expect(s.phase).toBe("night");
   });
 
-  it("지목 마감에 최다 한 명이면 변론(마감 +20000)으로, 동률이면 밤으로 간다", () => {
+  it("지목 마감에 최다 한 명이면 유언 단계(마감 +10000)로, 동률이면 밤으로 간다", () => {
     const T = 100_000;
     const nomination = nominationFrom(T);
     const oneEnd = castPoints(nomination, { 0: 2, 1: 2, 2: 3 });
@@ -446,8 +446,8 @@ describe("nextWakeAt (알람 하나로 단계 마감과 방 만료)", () => {
 });
 
 describe("낮 처형 구간 길이 (결정 0060-1, 0063-1)", () => {
-  it("지목 마감부터 처형 마감까지는 인원과 무관하게 고정 35초다: 변론 20 + 찬반 10 + 처형 5.6(판결 앞머리 0.6 포함). 지목 구간은 산 사람 수에 따라 최대 모이기 3 + 인원 × 8.9 + 끝 알림 2초다", () => {
-    expect(DEFENSE_MS + VERDICT_MS + EXECUTION_MS).toBe(35_600);
+  it("지목 마감부터 처형 마감까지는 인원과 무관하게 고정 25.6초다: 유언 10 + 찬반 10 + 처형 5.6(판결 앞머리 0.6 포함). 지목 구간은 산 사람 수에 따라 최대 모이기 3 + 인원 × 8.9 + 끝 알림 2초다", () => {
+    expect(DEFENSE_MS + VERDICT_MS + EXECUTION_MS).toBe(25_600);
     expect(`${nominationMaxMs(4)}/${nominationMaxMs(8)}`).toBe("40600/76200");
   });
 });

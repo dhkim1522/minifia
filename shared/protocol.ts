@@ -393,6 +393,8 @@ export interface ChatRejectFrame {
 export interface WillSendMessage {
   t: "will";
   text: string;
+  /** [남기기](22-11 D-15) — 처형자가 유언 단계에서 보내면 글을 저장하고 단계를 곧바로 끝낸다. 처형자가 아니면 서버가 무시한다. */
+  final?: true;
 }
 /** 쪽지 저장(밤의 산 마피아, 확정 대상이 있을 때만, 결정 0061-9). 작성자를 싣지 않는다 — 익명이다. */
 export interface NoteSendMessage {

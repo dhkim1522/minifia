@@ -514,7 +514,7 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
     expect(got.join(" ")).toBe(
-      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:20000:true:77777 verdict:10000:true:77777 execution:5600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
+      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:3000:true:77777 defense:10000:true:77777 verdict:10000:true:77777 execution:5600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
     );
   });
 
@@ -1465,7 +1465,12 @@ describe("buildView me.chat — 서버가 정한 내 채널 (07-10, CHAT-02·03)
     expect(chatLine(s)).toBe(everyone(s, "all"));
   });
 
-  it.each(["dayAnnounce", "discussion", "defense", "execution", "morning"] as const)(
+  it("defense(유언 단계, 22-11 D-16): 누구의 me 에도 chat 키가 없다 — 산 사람·유령 모두 조용히 지켜본다", () => {
+    const s = withDead(stateAt("defense", 6, 1), 2);
+    expect(chatLine(s)).toBe([...s.players].sort((a, b) => a.seat - b.seat).map((p) => `${p.seat}:-`).join(" "));
+  });
+
+  it.each(["dayAnnounce", "discussion", "execution", "morning"] as const)(
     "%s: 살아 있는 사람은 모두 all",
     (phase) => {
       const s = stateAt(phase, 6, 1);

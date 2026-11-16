@@ -21,7 +21,7 @@ const KIND: Record<PhaseId, Kind> = {
   nomination: "day",
   runoff: "day",
   showdown: "day",
-  defense: "day",
+  defense: "silent", // 유언 단계(22-11 D-16): 서버가 채팅·동작·입력 중을 받지 않는다 — 조용히 지켜본다
   verdict: "day",
   execution: "day",
   night: "night",
@@ -94,9 +94,9 @@ describe("동작 수신자 표 — 단계 × 신분 (UI-SPEC A-6, D-12·D-14)", 
     expect(Object.keys(KIND).sort().join(",")).toBe(Object.keys(PHASE_DEFS).sort().join(","));
   });
 
-  it("A-6 의 낮 단계는 정확히 아홉이다(dayAnnounce discussion nomination runoff showdown defense verdict execution morning)", () => {
+  it("A-6 의 낮 단계는 정확히 여덟이다(dayAnnounce discussion nomination runoff showdown verdict execution morning — defense 는 22-11 유언 단계라 조용하다)", () => {
     const day = (Object.keys(KIND) as PhaseId[]).filter((k) => KIND[k] === "day");
-    expect(day.sort().join(",")).toBe(["dayAnnounce", "defense", "discussion", "execution", "morning", "nomination", "runoff", "showdown", "verdict"].join(","));
+    expect(day.sort().join(",")).toBe(["dayAnnounce", "discussion", "execution", "morning", "nomination", "runoff", "showdown", "verdict"].join(","));
   });
 
   const phases = Object.keys(KIND) as PhaseId[];
@@ -112,7 +112,7 @@ describe("동작 수신자 표 — 단계 × 신분 (UI-SPEC A-6, D-12·D-14)", 
     }
   }
 
-  it("기대표는 구현의 CHAT_PHASES 를 읽지 않고도 아홉 낮 단계의 산 사람 → 방 모두(탈락자 포함)로 계산된다", () => {
+  it("기대표는 구현의 CHAT_PHASES 를 읽지 않고도 여덟 낮 단계의 산 사람 → 방 모두(탈락자 포함)로 계산된다", () => {
     const s = sixAt("nomination", [2]);
     expect(expectedEmoteRecipients("nomination", { seat: 0 }, view(s))).toBe("0,1,2,3,4,5");
     expect(expectedEmoteRecipients("nomination", { seat: 2 }, view(s))).toBe("2");
@@ -129,12 +129,13 @@ describe("동작 수신자 표 — 단계 × 신분 (UI-SPEC A-6, D-12·D-14)", 
 
 describe("동작은 이동 차단과 무관하다 (AVTR-05, movement.ts 머리 주석)", () => {
   const blockedDay = [...MAP_PHASES].filter((p) => p !== "night" && !canMoveIn(p, true));
+  const blockedTalking = blockedDay.filter((p) => p !== "defense"); // 유언 단계는 조용하다(22-11 D-16)
 
   it("이동이 막힌 낮 지도 단계가 지목·결선·마지막 3인·변론·찬반·처형·아침을 포함한다", () => {
     expect(blockedDay.sort().join(",")).toBe(["defense", "execution", "morning", "nomination", "runoff", "showdown", "verdict"].join(","));
   });
 
-  it.each([...new Set(blockedDay)])("%s: canMoveIn 이 산 사람에게 거짓이어도 산 사람의 동작 수신자는 비어 있지 않고 보낸 사람 자신이 든다", (phase) => {
+  it.each([...new Set(blockedTalking)])("%s: canMoveIn 이 산 사람에게 거짓이어도 산 사람의 동작 수신자는 비어 있지 않고 보낸 사람 자신이 든다", (phase) => {
     const state = sixAt(phase, [2]);
     for (const s of SENDERS.filter((x) => x.dead.length === 0)) {
       const got = actualRecipients(state, idOf(s.seat));

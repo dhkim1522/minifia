@@ -89,8 +89,8 @@ describe("동작 — 이동이 막힌 단계에서도 도착한다 (10-08, AVTR-
     for (const a of lively) points[a.seat] = target.seat;
     await pointAll(g.code, g.actors, points);
     await at(g, "defense");
-    expect(row(await sendAndCount(g, lively[0]!, "dance"))).toBe(want(g, allSeats)); // 변론(처형자 포함 모두 동작 가능)
-    expect(row(await sendAndCount(g, target, "cry"))).toBe(want(g, allSeats)); // 처형자도 동작 가능
+    expect(row(await sendAndCount(g, lively[0]!, "dance"))).toBe(want(g, [])); // 유언 단계(22-11 D-16)는 조용하다 — 동작도 버려진다
+    expect(row(await sendAndCount(g, target, "cry"))).toBe(want(g, [])); // 처형자도 같다
 
     // 처형
     await closePhase(g.code);

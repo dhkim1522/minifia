@@ -708,7 +708,7 @@ describe("실제 흐름 (결정 0060-1)", () => {
     expect(await storedNominates(g.code)).toBe(g.actors.map((a) => a.seat).sort((x, y) => x - y).map((s) => `${s}:-`).join(" "));
   }, 40_000);
 
-  it("변론 중 변론자의 chat 은 모두에게 ch all 로 가고 빠른 메시지(say)는 변론자 소켓만 BAD_MESSAGE 이며, 변론자가 아닌 산 사람의 chat 도 모두에게 간다", async () => {
+  it("유언 단계(defense, 22-11 D-16): 처형자의 chat 도 다른 산 사람의 chat 도 보낸 소켓만 chatReject 를 받고 다른 소켓은 0프레임이며, 빠른 메시지(say)는 BAD_MESSAGE 다", async () => {
     const { g } = await toNominationByEnd();
     const defender = g.actors.find((a) => a.role !== "mafia")!;
     const others = g.actors.filter((a) => a.seat !== defender.seat);
@@ -717,15 +717,11 @@ describe("실제 흐름 (결정 0060-1)", () => {
     await settleAllSocks(g);
     expect((await storedFlow(g.code)).phase).toBe("defense");
     const said = await castAll(g, () => send(defender.sock, chatMsg(defender.sock, "저 아니에요")));
-    expect(said.map(summary).join(" ")).toBe(g.actors.map(() => "[chat]").join(" "));
-    for (const f of said) {
-      const chat = f[0] as Extract<ServerMessage, { t: "chat" }>;
-      expect(`${chat.ch} ${chat.seat} ${chat.text}`).toBe(`all ${defender.seat} 저 아니에요`);
-    }
+    expect(said.map(summary).join(" ")).toBe(g.actors.map((a) => (a === defender ? "[chatReject,state:defense]" : "[]")).join(" "));
     const quick = await castAll(g, () => send(defender.sock, { t: "say", template: "defNotMe" }));
     expect(quick.map(summary).join(" ")).toBe(g.actors.map((a) => (a === defender ? "[error:BAD_MESSAGE]" : "[]")).join(" "));
     const by = await castAll(g, () => send(others[0]!.sock, chatMsg(others[0]!.sock, "믿어 주세요")));
-    expect(by.map(summary).join(" ")).toBe(g.actors.map(() => "[chat]").join(" "));
+    expect(by.map(summary).join(" ")).toBe(g.actors.map((a) => (a === others[0] ? "[chatReject,state:defense]" : "[]")).join(" "));
   }, 60_000);
 
   it("처형으로 승패가 나면(마피아 한 명이 변론자로 통과) 처형 마감에서 ended 가 된다", async () => {

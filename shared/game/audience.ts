@@ -15,6 +15,7 @@ export type AudienceEvent = { k: "chat" | "typing" | "emote"; ch: ChatChannel } 
 
 /**
  * 서버가 채팅을 받는 단계. 화면이 없는 낮 단계도 받는다(UI-SPEC D1, 결정 0044-23) — 8·9페이즈는 화면만 붙이면 된다.
+ * 유언 단계(defense)는 들지 않는다 — 산 사람·유령 모두 조용히 지켜본다(22-11 D-16, 서버 권위 T-22-23). 화면 잠금은 표시일 뿐이다.
  * assigning·roleReveal 은 패널이 없고 ended 는 11페이즈 결과 화면이다. 옛 claim 은 07-08 이 PhaseId 에서 지울 때까지 여기에 들지 않는다.
  */
 export const CHAT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
@@ -24,7 +25,6 @@ export const CHAT_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
   "nomination",
   "runoff",
   "showdown",
-  "defense",
   "verdict",
   "execution",
   "night",

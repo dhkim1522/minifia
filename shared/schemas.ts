@@ -50,6 +50,8 @@ export const ChatMessageSchema = z.strictObject({
 export const WillMessageSchema = z.strictObject({
   t: z.literal("will"),
   text: z.string().max(CHAT_TEXT_MAX_UTF16),
+  // [남기기](22-11 D-15): 처형자가 유언 단계를 곧바로 끝낸다. true 뿐이다(false·다른 값은 거부) — 처형자가 아닌 사람의 final 은 서버가 무시한다.
+  final: z.literal(true).optional(),
 }) satisfies z.ZodType<WillSendMessage>;
 export const NoteMessageSchema = z.strictObject({
   t: z.literal("note"),

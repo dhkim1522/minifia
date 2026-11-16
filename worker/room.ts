@@ -346,7 +346,7 @@ export class Room extends DurableObject<Env> {
         await this.handleWhisper(ws, msg.to, msg.text);
         return;
       case "will":
-        await this.handleWill(ws, msg.text);
+        await this.handleWill(ws, msg.text, msg.final === true);
         return;
       case "note":
         await this.handleNote(ws, msg.text);
@@ -690,21 +690,34 @@ export class Room extends DurableObject<Env> {
   }
 
   // 유언(9페이즈, WILL-01, 결정 0061-10): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-09-28).
-  private async handleWill(ws: WebSocket, text: string): Promise<void> {
+  private async handleWill(ws: WebSocket, text: string, final: boolean): Promise<void> {
     const att = this.attachmentOf(ws);
     if (!att || !this.room) {
       this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
       return;
     }
-    const error = await this.applyWill(att.playerId, text, Date.now());
+    const error = await this.applyWill(att.playerId, text, Date.now(), final);
     if (error !== null) this.sendRejection(ws, att.playerId, error);
   }
 
   // 마감이 바뀌지 않으니 reschedule 은 필요 없다. 검사는 규칙 함수(saveWill)가 하고, 받아들이면 저장한 본인 소켓에만 state 를 보낸다 —
   // persistAndBroadcast 를 부르지 않는다(L7): 전원 방송이나 '누군가 썼다' 는 타이밍이 다른 폰에 새면 안 된다. 같은 값은 같은 객체라 저장·전송이 없다.
   // 간격(WILL_MIN_GAP_MS) 안의 요청은 상태를 바꾸지 않고 오류 없이 버린다(T-09-27). 봇도 같은 본체를 지난다(특권 없음).
-  private async applyWill(playerId: string, text: string, now: number): Promise<WsErrorCode | null> {
+  // 유언 단계 [남기기](22-11 D-15, T-22-21): final 이고 지금이 defense 이며 보낸 사람이 처형자(verdict.candidate)일 때만 간격 검사 없이(자동 저장 직후여도 버려지지 않게) 저장하고,
+  // 마감을 지금으로 당겨 applyEndDiscussion 과 같은 길(tick → afterTransition)로 처형 단계에 들어간다 — 처형 진입·사망 카드(유언)·방송·알람이 정상 마감과 같다.
+  // 처형자가 아니면 final 은 무시하고 일반 저장 경로를 탄다(응답이 일반 저장 거절과 같아 처형자가 누구인지 알려 주는 신호가 없다).
+  private async applyWill(playerId: string, text: string, now: number, final = false): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
+    const before = this.room;
+    const actor = before.players.find((p) => p.id === playerId);
+    if (final && before.phase === "defense" && actor !== undefined && isAlive(actor) && actor.seat === before.verdict?.candidate) {
+      const saved = saveWill(before, playerId, text);
+      if (!saved.ok) return saved.error;
+      this.writeAt.set(`will:${playerId}`, now);
+      this.room = tick({ ...saved.state, phaseEndsAt: now }, now, cryptoRandInt);
+      await this.afterTransition(before, now);
+      return null;
+    }
     const key = `will:${playerId}`;
     const last = this.writeAt.get(key);
     if (last !== undefined && now - last < WILL_MIN_GAP_MS) return null;
@@ -903,7 +916,7 @@ export class Room extends DurableObject<Env> {
         return;
       // 9페이즈(결정 0061-18): 유언 한 줄은 사람과 같은 applyWill 본체를 지난다(500ms 간격·단계·생존 검사, 특권 없음). 거부는 버린다.
       case "will":
-        await this.applyWill(step.botId, act.text, Date.now());
+        await this.applyWill(step.botId, act.text, Date.now(), act.final === true);
         return;
       case "point":
         await this.applyPoint(step.botId, act.target, Date.now());
