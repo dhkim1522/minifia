@@ -307,6 +307,8 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "answerSubmits", // 확정 제출 목록(낸 순서) — 공개는 마감 뒤 day.keyword.answers 뿐
   "answerDraft", // 쓰던 글 — 본인 값은 me.answer 로만
   "earlyFrom", // 조기 진행이 마감을 줄이기 전의 원래 마감(23-08, D-11) — 서버 전용, 찬반 번복 연장의 상한. 화면은 줄어든 phaseEndsAt 만 본다
+  "startedAt", // 판 시작 시각(23-10, D-16) — D1 판 길이 계산용 서버 전용
+  "gameId", // D1 games 의 판 id(23-10, D-16) — 서버 전용, 방 코드와 무관한 uuid
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
@@ -2351,6 +2353,17 @@ describe("키워드 답 view (23-06)", () => {
       expect(JSON.stringify(v).includes("earlyFrom")).toBe(false);
       expect(JSON.stringify(v).includes("987654321")).toBe(false);
       expect(v.phaseEndsAt).toBe(12_345);
+    }
+  });
+
+  it("startedAt·gameId(D1 판 기록, 23-10 D-16)는 어떤 viewer 의 view 에도 이름도 값도 없다", () => {
+    for (const phase of PHASES) {
+      const s = phase === "lobby" ? base() : richStateAt(phase, 5, 1);
+      const logged: RoomState = { ...s, startedAt: 424_242_424, gameId: "99999999-aaaa-bbbb-cccc-dddddddddddd" };
+      for (const p of s.players) {
+        const json = JSON.stringify(viewOf(logged, p.seat));
+        for (const needle of ["startedAt", "gameId", "424242424", "99999999-aaaa"]) expect(`${phase}:${needle}:${json.includes(needle)}`).toBe(`${phase}:${needle}:false`);
+      }
     }
   });
 
