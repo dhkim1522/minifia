@@ -5,8 +5,9 @@ import { evictDurableObject, runDurableObjectAlarm } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
+import { EARLY_GRACE_MS } from "../../shared/game/early";
 import { PHASE_DEFS } from "../../shared/game/phases";
-import { advanceTo, chatSend, chatKeysOf, connect, editRoom, mapPlayers, endAs, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, restoreStorage, segEndsBySeat, settle, snapSeatsOf, snapshotStorage, stable, startedGame, storedRoom, summary, typingSend, withRole, worldFramesOf, worldOf } from "./helpers";
+import { actorsOf, advanceTo, chatSend, chatKeysOf, connect, editRoom, mapPlayers, endAs, lastViewOf, seat, send, skipThrough, flushWorld, homeBySeat, mark, moveAs, nextFrame, observe, pause, pickAs, restoreStorage, segEndsBySeat, settle, snapSeatsOf, snapshotStorage, stable, startedGame, storedRoom, summary, typingSend, withRole, worldFramesOf, worldOf } from "./helpers";
 import type { Game } from "./helpers";
 
 /** 마지막 world snap 의 '좌석:x,z' 오름차순 문자열. snap 이 없으면 'none'. */
@@ -448,5 +449,111 @@ describe("아침 길이·구출 개별 알림 없음 (L6, MORN-03·MORN-04)", ()
     const r = await morningOf("saved");
     expect(r.otherFrames.includes("state:morning")).toBe(true);
     expect(r.savedFrames).toBe(r.otherFrames);
+  }, 60_000);
+});
+
+// 23-08 (0089-26, D-11·D-13·D-25, T-23-28): 밤에 산 사람 전원이 고르면 마감이 마지막 선택 + 1.5초로 줄어든다. 그 종료 시각·전환 프레임이 역할을 흘리지 않음을
+// 같은 인원·같은 좌석 순서의 두 판(방장 역할만 마피아/시민으로 다름)으로 고정한다. 마지막으로 고르는 사람은 두 판 모두 방장(좌석 0)이라 "마피아가 마지막" 인지가 유일한 차이다.
+describe("메타모픽 (iii) 밤 조기 마감 — 역할만 다른 두 판의 종료 시각·프레임 열이 같다 (D-13)", () => {
+  interface EarlyRun {
+    hostRole: "mafia" | "citizen";
+    /** 마지막 pick 직후 소켓별로 받은 프레임 열 요약. */
+    columns: string[];
+    /** 마지막 pick 직후 소켓별 state view. */
+    views: Array<Extract<ServerMessage, { t: "state" }>["view"]>;
+    stored: number;
+    origin: number;
+    /** 줄어든 뒤 방장이 고른 값을 바꿨을 때 소켓별로 받은 프레임 열 요약과 그 뒤 저장 마감. */
+    afterChange: string[];
+    changedStored: number;
+    roles: string[];
+  }
+
+  async function earlyNight(hostRole: "mafia" | "citizen"): Promise<EarlyRun> {
+    const room = await seat(3, 0, { testMode: true });
+    const socks = [room.host, ...room.guests.map((g) => g.sock)];
+    for (const sock of socks) await settle(sock, mark(sock));
+    send(room.host, { t: "testRole", role: hostRole });
+    await settle(room.host, mark(room.host));
+    send(room.host, { t: "start" });
+    for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
+    await advanceTo(room.code, socks, "night");
+    for (const sock of socks) await settle(sock, mark(sock));
+    const origin = (await storedRoom(room.code)).phaseEndsAt!;
+    const actors = actorsOf(room);
+    expect(actors.find((a) => a.seat === 0)!.role).toBe(hostRole);
+    // 같은 순서(좌석 큰 쪽부터, 방장이 마지막)로 모두 좌석 0 을 고른다.
+    const order = [...actors].sort((a, b) => b.seat - a.seat);
+    for (const a of order.slice(0, 3)) send(a.sock, { t: "pick", target: 0 });
+    for (const sock of socks) await settle(sock, mark(sock));
+    expect((await storedRoom(room.code)).phaseEndsAt).toBe(origin); // 마지막 한 명 전까지는 줄지 않는다
+
+    const marks = socks.map((s) => mark(s));
+    send(order[3]!.sock, { t: "pick", target: 0 });
+    const got: ServerMessage[][] = [];
+    for (let i = 0; i < socks.length; i += 1) got.push(await settle(socks[i]!, marks[i]!));
+    const stored = (await storedRoom(room.code)).phaseEndsAt!;
+    const views = got.map((frames) => {
+      const state = frames.find((m): m is Extract<ServerMessage, { t: "state" }> => m.t === "state");
+      return state!.view;
+    });
+
+    // 줄어든 뒤 방장이 마음을 바꿔도 마감은 그대로이고(연장 없음, D-25) 방장(과 같은 편 마피아)에게만 프레임이 간다.
+    await pause(40);
+    const marks2 = socks.map((s) => mark(s));
+    send(room.host, { t: "pick", target: 1 });
+    const after: ServerMessage[][] = [];
+    for (let i = 0; i < socks.length; i += 1) after.push(await settle(socks[i]!, marks2[i]!));
+    return {
+      hostRole,
+      columns: got.map((f) => summary(f)),
+      views,
+      stored,
+      origin,
+      afterChange: after.map((f) => summary(f)),
+      changedStored: (await storedRoom(room.code)).phaseEndsAt!,
+      roles: actors.map((a) => a.role),
+    };
+  }
+
+  it("마지막 pick 직후 모든 소켓이 같은 한 장의 state 를 받고, 마감은 서버 시각 + 1.5초로 두 판에서 같으며, 판·소켓 사이에 me 밖의 키가 같다", async () => {
+    const a = await earlyNight("mafia");
+    const b = await earlyNight("citizen");
+    for (const run of [a, b]) {
+      expect(run.columns.join("")).toBe("[state:night]".repeat(4)); // 소켓마다 정확히 한 장 — 역할별로 장수가 다르지 않다
+      expect(new Set(run.views.map((v) => v.phaseEndsAt)).size).toBe(1);
+      expect(run.views[0]!.phaseEndsAt).toBe(run.stored);
+      for (const v of run.views) {
+        expect(v.phaseDurationMs).toBe(PHASE_DEFS.night.durationMs);
+        // 종료 = 마지막 선택 시각(서버 시각) + EARLY_GRACE_MS — 역할과 무관한 값이다.
+        expect(v.phaseEndsAt! - v.serverNow).toBeLessThanOrEqual(EARLY_GRACE_MS);
+        expect(v.phaseEndsAt! - v.serverNow).toBeGreaterThan(EARLY_GRACE_MS - 800);
+      }
+      expect(run.stored).toBeLessThan(run.origin);
+      const keysOutsideMe = run.views.map((v) => Object.keys(v).filter((k) => k !== "me").sort().join(","));
+      expect(new Set(keysOutsideMe).size).toBe(1);
+    }
+    // 두 판 사이: 프레임 열 요약과 me 밖의 키 집합이 같고, 마지막 선택에서 마감까지의 길이도 같은 범위다.
+    expect(a.columns.join("|")).toBe(b.columns.join("|"));
+    const keysOf = (r: EarlyRun): string => Object.keys(r.views[0]!).filter((k) => k !== "me").sort().join(",");
+    expect(keysOf(a)).toBe(keysOf(b));
+    const gap = (r: EarlyRun): number => r.stored - r.views[0]!.serverNow;
+    expect(Math.abs(gap(a) - gap(b))).toBeLessThan(800);
+    // 대조: 두 판은 정말로 방장의 역할만 다르다.
+    expect(a.roles[0]).toBe("mafia");
+    expect(b.roles[0]).toBe("citizen");
+  }, 60_000);
+
+  it("줄어든 뒤 선택 변경은 마감을 바꾸지 않고(연장 없음) 마피아가 바꾸든 시민이 바꾸든 마피아가 아닌 다른 소켓에는 프레임이 없다 (D-25)", async () => {
+    for (const hostRole of ["mafia", "citizen"] as const) {
+      const run = await earlyNight(hostRole);
+      expect(run.changedStored, hostRole).toBe(run.stored);
+      // 방장 소켓(0번)은 한 장, 마피아가 아닌 다른 사람 소켓은 0장.
+      expect(run.afterChange[0], hostRole).toBe("[state:night]");
+      run.roles.forEach((role, i) => {
+        if (i === 0 || role === "mafia") return;
+        expect(run.afterChange[i], `${hostRole}:${i}`).toBe("[]");
+      });
+    }
   }, 60_000);
 });
