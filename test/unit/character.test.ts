@@ -1,12 +1,11 @@
 // 06-11 3D 캐릭터 — 원본 design/v2.0/blockout/character.js(결정 0048)를 관절 병합으로 옮긴 모듈 (MAP-01, MAP-02).
 // WebGL 없이 node 에서 장면 그래프로 검사한다.
-import { Box3, BufferGeometry, CircleGeometry, Color, type Group, type Material, type Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D } from "three";
+import { Box3, BufferGeometry, CircleGeometry, Color, Euler, type Group, type Material, type Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, Quaternion } from "three";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { emoteDurationMs } from "../../src/world/emoteCap";
 import { CHAR_SCALE, characterKit, createCharacter, figForSeat, POSE_BLEND_MS, setGhostArt, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
 import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, type OutfitId } from "../../src/world/characterData";
-import { CAM_YAW } from "../../src/world/camera";
 
 function meshes(root: Object3D, visibleOnly = true): Mesh[] {
   const out: Mesh[] = [];
@@ -731,7 +730,7 @@ describe("3D 유령 (0083-2, 0084)", () => {
     setGhostArt(true);
   });
 
-  it("켜면 관절 메시가 모두 안 보이고 원판이 숨고 3D 유령 묶음 하나가 선다(높이 약 2.45, 발밑 0)", () => {
+  it("켜면 관절 메시가 모두 안 보이고 원판이 숨고 3D 유령 묶음 하나가 선다(높이 약 2.45 × 0.75, 발밑 0)", () => {
     const c = createCharacter(0, "coat");
     c.setGhost(true);
     expect(shown(c.root)).toHaveLength(0);
@@ -742,7 +741,7 @@ describe("3D 유령 (0083-2, 0084)", () => {
     c.root.updateMatrixWorld(true);
     const box = new Box3().setFromObject(g);
     expect(box.min.y / CHAR_SCALE).toBeCloseTo(0, 1);
-    expect(box.max.y / CHAR_SCALE).toBeCloseTo(2.45, 1);
+    expect(box.max.y / CHAR_SCALE).toBeCloseTo(2.45 * 0.75, 1); // D-20: 산 캐릭터의 75%
     expect(c.meshCount()).toBe(11); // 3D 유령의 메시(몸·눈 막대 4·입·볼 2·팔 2·후광)
   });
 
@@ -803,20 +802,26 @@ describe("3D 유령 (0083-2, 0084)", () => {
     expect(matSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("유령일 때 update 의 headY 는 자세와 무관하게 머리 꼭대기 값이다", () => {
+  it("유령일 때 update 의 headY 는 자세와 무관하게 2.45 × CHAR_SCALE × 0.75 다(D-20)", () => {
     const c = createCharacter(0, "coat");
     c.setGhost(true);
     c.playEmote("surprise");
-    for (let i = 0; i < 20; i++) expect(c.update(0.016, i * 0.016, false).headY).toBeCloseTo(2.45 * CHAR_SCALE, 9);
+    for (let i = 0; i < 20; i++) expect(c.update(0.016, i * 0.016, false).headY).toBeCloseTo(2.45 * CHAR_SCALE * 0.75, 9);
   });
 
-  it("캐릭터가 어느 쪽을 보든 유령은 카메라(CAM_YAW)를 본다", () => {
+  it("유령은 산 캐릭터처럼 이동 방향을 본다 — 묶음 자체 회전은 0, 세계 방향은 root 의 rotation.y (D-21)", () => {
     const c = createCharacter(0, "coat");
     c.setGhost(true);
-    for (const yaw of [0, 1, -2.2, 3]) {
+    const q = new Quaternion();
+    const e = new Euler();
+    for (const yaw of [0, 1.2, -2.0]) {
       c.setYaw(yaw);
       c.update(0.016, 0, false);
-      expect(ghostOf(c.root)!.rotation.y + c.root.rotation.y).toBeCloseTo(CAM_YAW, 9);
+      expect(ghostOf(c.root)!.rotation.y).toBe(0);
+      c.root.updateMatrixWorld(true);
+      ghostOf(c.root)!.getWorldQuaternion(q);
+      e.setFromQuaternion(q, "YXZ");
+      expect(Math.cos(e.y - yaw)).toBeCloseTo(1, 6);
     }
   });
 
