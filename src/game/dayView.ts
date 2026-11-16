@@ -43,6 +43,7 @@ export const DAY_COPY = {
     defense: "유언", // 결정 0089-19(D-15): defense id 는 처형자의 10초 유언 단계 — 변론은 없다(P22-1)
     verdict: "찬반",
     execution: "처형",
+    answerReveal: "정답", // 첫날 정답 공개(23-07, P23-2): 앞의 "저녁" 은 헤더 시간대 낱말이 말한다
     night: "밤",
     morning: "아침",
   } as Partial<Record<PhaseId, string>>,

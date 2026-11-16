@@ -25,6 +25,7 @@ export type HostKey =
   | "defense.act" | "defense.wait" | "defense.ghost"
   | "verdict.act" | "verdict.ghost"
   | "execution.passed"
+  | "answerReveal"
   | "night.mafia" | "night.police" | "night.doctor" | "night.citizen" | "night.ghost"
   | "morning" | "ended"
   | "fallback";
@@ -63,6 +64,8 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   "verdict.ghost": "지켜봐 주세요",
   // 큰 글(처형 결과)이 말한다
   "execution.passed": "",
+  // 첫날 정답 공개(23-07, P23-20): 큰 글 "정답 + 키워드"가 말한다 — 빈 줄이라 띠는 초·막대만(blank). 역할 분기 없음
+  answerReveal: "",
   "night.mafia": "없앨 사람의 얼굴을 눌러 주세요",
   "night.police": "조사할 사람의 얼굴을 눌러 주세요",
   "night.doctor": "지킬 사람의 얼굴을 눌러 주세요",
@@ -111,6 +114,8 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
     case "execution":
       // 22-12 P22-14: 처형자 존재(day.execution)가 키다 — 부결·동점·0표는 처형 단계가 없어 실패 갈래가 없다. 줄은 비어 있고 유언 카드·큰 글이 말한다
       return view.day?.execution === undefined ? "fallback" : "execution.passed";
+    case "answerReveal":
+      return "answerReveal"; // 역할·생존을 읽지 않는다 — 모두 같은 줄(23-07)
     case "night": {
       if (ghost) return "night.ghost";
       const role = view.me.role;

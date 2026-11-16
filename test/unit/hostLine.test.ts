@@ -160,9 +160,9 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     expect(hostKeyOf(makeView({ phase: "runoff" }))).toBe("fallback");
   });
 
-  it("18.1-12: 표의 문장은 모두 문자열이고, 빈 문자열은 큰 글이 말하는 키(처형·아침)뿐이다 — 빈 줄을 대체 문장으로 바꾸지 않는다", () => {
+  it("18.1-12: 표의 문장은 모두 문자열이고, 빈 문자열은 큰 글이 말하는 키(처형·정답 공개·아침)뿐이다 — 빈 줄을 대체 문장으로 바꾸지 않는다", () => {
     const empty = (Object.keys(HOST_LINES) as HostKey[]).filter((key) => HOST_LINES[key] === "").sort();
-    expect(empty).toEqual(["execution.passed", "morning"]);
+    expect(empty).toEqual(["answerReveal", "execution.passed", "morning"]);
     for (const key of Object.keys(HOST_LINES) as HostKey[]) expect(typeof HOST_LINES[key], key).toBe("string");
     expect(HOST_LINES["discussion.act"]).toBe("의심 가는 사람을 이야기해 주세요");
     expect(HOST_FALLBACK).toBe("잠시만 기다려 주세요");
