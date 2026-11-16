@@ -1249,3 +1249,42 @@ describe("공개 예고 문구 — 규칙은 인자다 (19-02, D-03)", () => {
     expect([noticeOf(), noticeOf(false), noticeOf(true)].join(" | ")).toBe("끝나면 밤 대화가 공개돼요 | 끝나면 밤 대화가 공개돼요 | 끝나면 밤 대화와 귓속말이 공개돼요");
   });
 });
+
+// 24-03(D-31): 튜토리얼이 쓸 GameMap 선택 prop. 주지 않으면 기존 동작 그대로(실제 판은 넘기지 않는다).
+describe("GameMap — bottomExtra 는 스테이지 아래 여백에 더해진다 (24-03)", () => {
+  const PANEL_H = LOG_H + 154;
+  const realInnerH = window.innerHeight;
+  beforeEach(() => {
+    Object.defineProperty(window, "innerHeight", { value: 844, configurable: true, writable: true });
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("mf-game__panel")) return PANEL_H;
+      if (this.classList.contains("mf-game__header")) return 62;
+      return 0;
+    });
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    Object.defineProperty(window, "innerHeight", { value: realInnerH, configurable: true, writable: true });
+  });
+
+  const mountMap = (extra: { bottomExtra?: number }) =>
+    render(<GameMap view={makeView()} store={new WorldStore()} chat={new ChatStore()} send={() => true} tod={false} {...extra} />);
+
+  it("주지 않으면 패널 높이 그대로다", () => {
+    mountMap({});
+    expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: PANEL_H });
+  });
+  it("bottomExtra 60 → 아래 여백이 60 늘고 위는 그대로다", () => {
+    mountMap({ bottomExtra: 60 });
+    expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: PANEL_H + 60 });
+  });
+});

@@ -11,6 +11,23 @@ import { useSuspect } from "../../src/net/useSuspect";
 import { HeadStack } from "../../src/components/v2/HeadStack";
 import { SuspectButton } from "../../src/components/v2/SuspectButton";
 import { GamePanel } from "../../src/screens/GamePanel";
+import type { WorldStageProps } from "../../src/components/WorldStage";
+import type { RoomConnection } from "../../src/net/useRoomConnection";
+
+// GameMap 시험의 WorldStage 는 받은 props 만 쥐는 가짜다(캔버스·런타임은 worldStage.test 몫).
+const stage = vi.hoisted(() => ({ props: null as null | WorldStageProps }));
+vi.mock("../../src/components/WorldStage", async () => {
+  const { createElement } = await import("react");
+  return {
+    WorldStage: (props: WorldStageProps) => {
+      stage.props = props;
+      return createElement("div", { "data-world-stage-fake": "" });
+    },
+  };
+});
+const { GameMap } = await import("../../src/screens/GameMap");
+const { WorldStore } = await import("../../src/world/store");
+const { ChatStore } = await import("../../src/net/chatStore");
 
 // 24-03: [의심] 모드 훅(useSuspect) → 단추·칩 부품 → GameMap 배선. 근처 판정은 서버 구간(store.segOf)이고 화면은 켜 주기만 한다(결정 0002).
 const NOW = 1_700_000_000_000;
@@ -64,6 +81,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  stage.props = null;
   unbindSignals?.();
   unbindSignals = null;
   vi.useRealTimers();
@@ -409,5 +427,237 @@ describe("HeadStack 의심 칩", () => {
     zero.unmount();
     const none = render(<HeadStack name="민수" color="var(--seat-1)" me />);
     expect(none.container.querySelector("[data-suspect-count]")).toBeNull();
+  });
+});
+
+// ── GameMap 배선 (D-10·D-24·D-31, P24-5·P24-7) ──
+type Send = ReturnType<typeof vi.fn<(m: ClientMessage) => boolean>>;
+type Listener = Parameters<RoomConnection["onEvent"]>[0];
+
+interface MapOpts {
+  segs?: Record<number, Segment>;
+  canSend?: boolean;
+}
+
+function mountMap(view: RoomView, o: MapOpts = {}) {
+  const segs = o.segs ?? { 0: at(0), 1: at(50), 2: at(60), 3: at(900) };
+  const store = new WorldStore();
+  store.applyFrame({ t: "world", k: "snap", at: NOW, ents: Object.entries(segs).map(([seat, g]) => ({ s: Number(seat), p: [...g.p], t0: g.t0, v: g.v })) }, 1);
+  const chat = new ChatStore();
+  const send: Send = vi.fn(() => true);
+  const listeners = new Set<Listener>();
+  const onEvent: RoomConnection["onEvent"] = (fn) => {
+    listeners.add(fn);
+    return () => listeners.delete(fn);
+  };
+  const ui = (v: RoomView) => <GameMap view={v} store={store} chat={chat} send={send} canSend={o.canSend ?? true} tod={false} onEvent={onEvent} />;
+  const r = render(ui(view));
+  return {
+    ...r,
+    send,
+    show: (v: RoomView) => r.rerender(ui(v)),
+    emitError: (code: "WRONG_PHASE" | "BAD_MESSAGE" | "RATE_LIMITED") =>
+      act(() => {
+        for (const fn of listeners) fn({ t: "error", code } as Parameters<Listener>[0], { epoch: 1 });
+      }),
+  };
+}
+
+const sentOf = (send: Send): ClientMessage[] => send.mock.calls.map(([m]) => m);
+const suspectBtn = (c: ParentNode): HTMLButtonElement | null => c.querySelector<HTMLButtonElement>("[data-suspect-btn]");
+const stageEl = (c: ParentNode): HTMLElement => c.querySelector<HTMLElement>("[data-game-stage]")!;
+const hintOf = (c: ParentNode): string | undefined => c.querySelector<HTMLElement>(".mv-phase__hint")?.textContent ?? undefined;
+const noticeOf = (c: ParentNode): HTMLElement | null => c.querySelector<HTMLElement>("[data-suspect-notice]");
+
+describe("GameMap — [의심] 단추 보임 (P24-1·P24-2)", () => {
+  it("둘째 날 토론·산 본인: [data-chat-trailing] 안에 단추가 있다", () => {
+    const { container } = mountMap(makeView());
+    expect(container.querySelector("[data-chat-trailing] [data-suspect-btn]")).not.toBeNull();
+    expect(suspectBtn(container)?.getAttribute("aria-label")).toBe("의심 붙이기");
+    expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("off");
+  });
+  it("첫날·찬반·유령 화면에는 DOM 에 없다", () => {
+    expect(suspectBtn(mountMap(makeView({ day: 1 })).container)).toBeNull();
+    cleanup();
+    expect(suspectBtn(mountMap(makeView({ phase: "verdict" })).container)).toBeNull();
+    cleanup();
+    expect(suspectBtn(mountMap(makeView({ dead: [0] })).container)).toBeNull();
+  });
+  it("오늘 붙인 사람은 '의심 옮기기' 점 상태다", () => {
+    const { container } = mountMap(makeView({ suspectTo: 1 }));
+    expect(suspectBtn(container)?.getAttribute("aria-label")).toBe("의심 옮기기");
+    expect(suspectBtn(container)?.hasAttribute("data-suspect-stuck")).toBe(true);
+  });
+  it("연결이 끊기면(canSend 거짓) aria-disabled 이고 눌러도 모드가 켜지지 않는다", () => {
+    const { container } = mountMap(makeView(), { canSend: false });
+    expect(suspectBtn(container)?.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(suspectBtn(container)!);
+    expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("off");
+    expect(noticeOf(container)).toBeNull();
+  });
+});
+
+describe("GameMap — 의심 모드 (P24-5·P24-8)", () => {
+  it("단추를 누르면 모드가 켜진다: 표식·눌림·머리 안내·이름표 묶음·깜빡임", () => {
+    const { container } = mountMap(makeView());
+    fireEvent.click(suspectBtn(container)!);
+    expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("on");
+    expect(suspectBtn(container)?.getAttribute("aria-pressed")).toBe("true");
+    expect(hintOf(container)).toBe("의심 가는 사람을 눌러요");
+    const pick = stage.props!.pick!;
+    expect([...pick.seats].sort()).toEqual([1, 2]);
+    expect(pick.group).toBe("의심 붙이기");
+    expect(pick.label("영희")).toBe("영희 님에게 의심 붙이기");
+    expect(pick.attr).toBe("data-suspect-tag");
+    expect(stage.props!.tagProps?.(1).blink).toBe(true);
+    expect(stage.props!.tagProps?.(2).blink).toBe(true);
+    expect(stage.props!.tagProps?.(3).blink).toBeUndefined();
+  });
+  it("모드 중 호출 빛남(입력칸 call)은 꺼진다", () => {
+    const view = makeView();
+    const { container } = mountMap(view);
+    const had = container.querySelector("[data-chat-input][data-call]") !== null;
+    fireEvent.click(suspectBtn(container)!);
+    expect(container.querySelector("[data-chat-input][data-call]")).toBeNull();
+    // 모드 밖에서 빛나던 화면이라면 모드가 그것을 껐다는 뜻이다(빛남 대상이 없는 판이면 이 단언은 자명하다)
+    expect(typeof had).toBe("boolean");
+  });
+  it("같은 단추를 다시 누르면 모드가 꺼진다(머리 안내도 돌아온다)", () => {
+    const { container } = mountMap(makeView());
+    fireEvent.click(suspectBtn(container)!);
+    fireEvent.click(suspectBtn(container)!);
+    expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("off");
+    expect(stage.props!.pick).toBeUndefined();
+    expect(hintOf(container)).not.toBe("의심 가는 사람을 눌러요");
+  });
+  it("이름표를 고르면 suspect 가 한 번 나가고 같은 프레임에 모드가 끝난다(낙관 그림 없음)", () => {
+    const { container, send } = mountMap(makeView());
+    fireEvent.click(suspectBtn(container)!);
+    act(() => stage.props!.pick!.onPick(1));
+    expect(sentOf(send).filter((m) => m.t === "suspect")).toEqual([{ t: "suspect", target: 1 }]);
+    expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("off");
+    expect(stage.props!.pick).toBeUndefined();
+    expect(suspectBtn(container)?.hasAttribute("data-suspect-stuck")).toBe(false); // 서버 view 가 오기 전엔 그대로
+  });
+  it("모드 중 단계가 토론을 벗어나면 즉시 꺼진다", () => {
+    const r = mountMap(makeView());
+    fireEvent.click(suspectBtn(r.container)!);
+    r.show(makeView({ phase: "verdict" }));
+    expect(stageEl(r.container).getAttribute("data-suspect-mode")).toBe("off");
+    expect(stage.props!.pick).toBeUndefined();
+  });
+  it("대상이 죽으면 그 이름표가 버튼에서 빠진다", () => {
+    const r = mountMap(makeView());
+    fireEvent.click(suspectBtn(r.container)!);
+    r.show(makeView({ dead: [1] }));
+    expect([...stage.props!.pick!.seats]).toEqual([2]);
+  });
+  it("붙인 사람에게만 role=status 안내가 생긴다", () => {
+    const r = mountMap(makeView());
+    expect(r.container.querySelector("[data-suspect-said]")?.textContent ?? "").toBe("");
+    r.show(makeView({ suspectTo: 1 }));
+    const said = r.container.querySelector("[data-suspect-said]");
+    expect(said?.getAttribute("role")).toBe("status");
+    expect(said?.textContent).toBe("영희 님에게 의심을 붙였어요");
+  });
+});
+
+describe("GameMap — 근처 0명과 거절 알림 (P24-5·P24-7)", () => {
+  const FAR = { 0: at(0), 1: at(500), 2: at(600), 3: at(900) };
+  it("근처 0명이면 단추가 aria-disabled 이고 눌러도 모드는 안 켜지며 '가까이 가야 붙여요' 알림이 뜬다", () => {
+    const { container, send } = mountMap(makeView(), { segs: FAR });
+    expect(suspectBtn(container)?.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(suspectBtn(container)!);
+    expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("off");
+    expect(noticeOf(container)?.textContent).toContain("가까이 가야 붙여요");
+    expect(sentOf(send).filter((m) => m.t === "suspect")).toEqual([]);
+  });
+  it("알림은 2.5초 뒤 접힌다", () => {
+    const { container } = mountMap(makeView(), { segs: FAR });
+    fireEvent.click(suspectBtn(container)!);
+    expect(container.querySelector(".mv-toast--top.is-on")).not.toBeNull();
+    act(() => void vi.advanceTimersByTime(2400));
+    expect(container.querySelector(".mv-toast--top.is-on")).not.toBeNull();
+    act(() => void vi.advanceTimersByTime(200));
+    expect(container.querySelector(".mv-toast--top.is-on")).toBeNull();
+  });
+  it("suspect 를 보낸 직후 BAD_MESSAGE 가 오면 같은 알림이다. 모드는 되돌리지 않는다", () => {
+    const signals: LocalSignal[] = [];
+    unbindSignals = bindSignals((sig) => signals.push(sig));
+    const r = mountMap(makeView());
+    fireEvent.click(suspectBtn(r.container)!);
+    act(() => stage.props!.pick!.onPick(1));
+    signals.length = 0;
+    r.emitError("BAD_MESSAGE");
+    expect(noticeOf(r.container)?.textContent).toContain("가까이 가야 붙여요");
+    expect(stageEl(r.container).getAttribute("data-suspect-mode")).toBe("off");
+    expect(signals).toEqual([{ kind: "deny" }]);
+  });
+  it("RATE_LIMITED 는 알림이 없다", () => {
+    const r = mountMap(makeView());
+    fireEvent.click(suspectBtn(r.container)!);
+    act(() => stage.props!.pick!.onPick(1));
+    r.emitError("RATE_LIMITED");
+    expect(noticeOf(r.container)).toBeNull();
+  });
+  it("suspect 를 보낸 적이 없으면 BAD_MESSAGE 도 의심 알림이 아니다", () => {
+    const r = mountMap(makeView());
+    r.emitError("BAD_MESSAGE");
+    expect(noticeOf(r.container)).toBeNull();
+  });
+});
+
+describe("GameMap — 열린 시트와 표식 (D-31, P24-16)", () => {
+  it("열린 시트(유언)가 있으면 단추가 비활성이고 눌러도 모드가 켜지지 않는다", () => {
+    const { container } = mountMap(makeView());
+    const pen = container.querySelector<HTMLElement>("[data-will-button]");
+    expect(pen).not.toBeNull();
+    fireEvent.click(pen!);
+    expect(container.querySelector("[data-sheet-layer]")).not.toBeNull();
+    expect(suspectBtn(container)?.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(suspectBtn(container)!);
+    expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("off");
+    expect(noticeOf(container)).toBeNull();
+  });
+  it("e2e 문맥: data-suspects 는 받은 좌석:장수(0장 생략)이고 이름표 칩은 남 4장 이상·나 1장 이상만 값이 실린다", () => {
+    const suspects = [
+      { to: 1, from: 2 },
+      { to: 1, from: 3 },
+      { to: 1, from: 4 },
+      { to: 1, from: 5 },
+      { to: 0, from: 2 },
+      { to: 2, from: 3 },
+      { to: 2, from: 4 },
+    ];
+    const { container } = mountMap(makeView({ suspects }));
+    expect(stageEl(container).getAttribute("data-suspects")).toBe("0:1,1:4,2:2");
+    const tp = stage.props!.tagProps!;
+    expect(tp(1).suspect).toBe(4);
+    expect(tp(0).suspect).toBe(1);
+    expect(tp(2).suspect).toBeUndefined();
+    expect(tp(3).suspect).toBeUndefined();
+  });
+  it("붙인 종이가 없으면 data-suspects 도 없다", () => {
+    const { container } = mountMap(makeView());
+    expect(stageEl(container).hasAttribute("data-suspects")).toBe(false);
+  });
+});
+
+describe("GameMap — 튜토리얼 prop timeless (D-31)", () => {
+  const ring = (c: ParentNode): Element | null => c.querySelector('[role="timer"]');
+  const modeOn = (props: { timeless?: boolean }) => {
+    const store = new WorldStore();
+    store.applyFrame({ t: "world", k: "snap", at: NOW, ents: [0, 1].map((s) => ({ s, p: [s * 50, 0], t0: NOW, v: 0 })) }, 1);
+    const r = render(<GameMap view={makeView()} store={store} chat={new ChatStore()} send={() => true} tod={false} {...props} />);
+    fireEvent.click(suspectBtn(r.container)!);
+    return r;
+  };
+  it("기본은 의심 모드 머리에 시간 링이 있다", () => {
+    expect(ring(modeOn({}).container)).not.toBeNull();
+  });
+  it("timeless 면 머리에 시간 링이 없고 스테이지는 원래 view 의 마감을 받는다", () => {
+    const r = modeOn({ timeless: true });
+    expect(ring(r.container)).toBeNull();
+    expect(stage.props!.view.phaseEndsAt).toBe(NOW + 90_000);
   });
 });
