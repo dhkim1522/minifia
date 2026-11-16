@@ -36,6 +36,7 @@ import type { GameRow } from "../shared/game/gameLog";
 import { buildResultLog } from "../shared/game/resultLog";
 import { insertGame } from "./gameLog";
 import { sendWhisper } from "../shared/game/whisper";
+import { stickNote } from "../shared/game/postit";
 import { ANSWER_MIN_GAP_MS } from "../shared/game/answerRules";
 import { shrinkDeadline } from "../shared/game/early";
 import { submitAnswer } from "../shared/game/keywordAnswer";
@@ -310,6 +311,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "point":
         await this.handlePoint(ws, msg.target);
+        return;
+      case "suspect":
+        await this.handleSuspect(ws, msg.target);
         return;
       case "verdict":
         await this.handleVerdict(ws, msg.agree);
@@ -823,6 +827,29 @@ export class Room extends DurableObject<Env> {
     this.room = result.state;
     await this.ctx.storage.put("room", this.room);
     this.sendViewTo(noteRecipientIds(this.room));
+    return null;
+  }
+
+  // 의심 포스트잇(24-01, 결정 0089-10): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에는 대상 seat 뿐이다(T-24-04). 처리기는 판 규칙 스위치가 없다(늘 켜짐).
+  private async handleSuspect(ws: WebSocket, target: number): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applySuspect(att.playerId, target, Date.now());
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // 규칙 함수(stickNote)가 검사하고 서버 전용 RoomState.notes 에 보관한다. 종이는 공개 값이라 받아들이면 모든 소켓이 각자 view 를 받는다(persistAndBroadcast, applyPoint 선례).
+  // 같은 대상을 다시 누르면 같은 state 객체라 저장·방송이 없다. 마감이 바뀌지 않으므로 reschedule 이 필요 없다. 봇 행동(BotAct)에는 붙이지 않는다(D-05).
+  private async applySuspect(playerId: string, target: number, now: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = stickNote(this.room, this.world, playerId, target, now);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    this.room = result.state;
+    await this.persistAndBroadcast();
     return null;
   }
 

@@ -139,6 +139,13 @@ function buildDay(state: RoomState): DayView {
   // 암살 현장 분필(MORN-01, 결정 0061-14): 방 DO 가 채운 좌표를 그날 낮 동안 모두에게 같은 값으로 싣는다. 필드별 복사이고, 없으면 키 자체가 없다.
   // 구출·무효 밤에는 DO 가 채우지 않으므로 어디에도 드러나지 않는다(결정 0044-22). 다음 밤 진입 훅이 지운다.
   if (state.chalk !== undefined) day.chalk = { x: state.chalk.x, z: state.chalk.z };
+  // 의심 포스트잇(결정 0089-10, D-06·D-07): 오늘 줄(suspects, 배열 순서 = 쌓는 순서)과 판 내내 전체 기록(suspectLog)은 모두에게 같은 공개 값이다. 줄마다 필드별 리터럴로 복사하고 줄이 없으면 키가 없다.
+  // 새 일차 진입에서 n === day 필터로 종이가 비어 떨어진다. 판 규칙 스위치로 막지 않는다(늘 켜짐).
+  const today = state.day ?? 1;
+  const notes = state.notes ?? [];
+  const todayNotes = notes.filter((x) => x.n === today);
+  if (todayNotes.length > 0) day.suspects = todayNotes.map((x) => ({ to: x.to, from: x.from }));
+  if (notes.length > 0) day.suspectLog = notes.map((x) => ({ n: x.n, from: x.from, to: x.to }));
   return day;
 }
 
@@ -293,6 +300,12 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 쪽지는 밤의 산 마피아에게만, 마피아끼리 같은 글이다(결정 0061-9). 작성자는 어디에도 없다. 유령·시민 편·아침 view 에는 키 자체가 없다.
   if (state.phase === "night" && isAlive(me) && me.role === "mafia" && state.nightNote !== undefined) {
     myInfo.note = state.nightNote;
+  }
+
+  // 내가 오늘 붙인 의심 대상(옮기기 표시, 결정 0089-10 D-06) — discussion 의 산 본인에게만. 공개 day.suspects 의 from === me.seat 줄에서 파생되는 중복 값이다.
+  if (state.phase === "discussion" && isAlive(me)) {
+    const mine = (state.notes ?? []).find((x) => x.n === (state.day ?? 1) && x.from === me.seat);
+    if (mine !== undefined) myInfo.suspectTo = mine.to;
   }
 
   // 귓속말 사용함 표시는 본인에게만(결정 0066-2) — discussion 의 산 본인이 오늘 이미 보냈을 때만 키를 만든다. 본문·상대는 어떤 view 에도 없다(whispers 는 서버 전용).

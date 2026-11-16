@@ -21,6 +21,7 @@ import { hostSuccessor } from "./continuity";
 import { resolveLookConflicts } from "./look";
 import { decideMap } from "./maps";
 import { enterNomination } from "./nomination";
+import type { NoteRow } from "./postit";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS } from "./phases";
 import { assignRoles, giveRoleTo, rolesInPlay } from "./roles";
 import { REMATCH_PLAYER_KEYS, REMATCH_ROOM_KEYS, benchAsPlayers } from "./rematch";
@@ -187,6 +188,8 @@ export interface RoomState {
   winner?: GameWinner;
   /** 서버 전용(결정 0066-2, O-20). 귓속말 본문 — sendWhisper 만 쓴다. 채팅 보관 상한(all 100줄)에 밀리지 않는다. 어떤 view 에도 싣지 않는다. */
   whispers?: WhisperRecord[];
+  /** 서버 전용 이름(결정 0089-10, 24 D-01·D-06·D-07). 의심 포스트잇 — stickNote 만 쓴다. view 는 day.suspects·day.suspectLog·me.suspectTo 로 필드별 복사한다. 다시 하기·대기실 되돌리기는 허용 목록 복사라 담지 않고 beginGame 도 뺀다(D-08). */
+  notes?: NoteRow[];
   hostId: string;
   nextJoinSeq: number;
   players: Player[];
@@ -454,7 +457,8 @@ export function beginGame(
   // 맵은 역할 배정 난수를 모두 쓴 뒤에 정한다(결정 D-21) — 허용 맵이 하나면 난수를 부르지 않아 기존 시드 시험이 그대로다.
   const map = decideMap(state.mapChoice ?? "random", randInt);
   // 키워드는 맨 끝 난수 두 번이다(D-29) — 역할 → 맵 순서와 기존 시드 시험은 그대로. 고르는 함수가 없으면(스위치 끔) 들어온 상태의 keyword 도 지운다(다시 하기가 옛 값을 끌고 오지 않게).
-  const { keyword: _prevKeyword, ...rest } = state;
+  // 의심 포스트잇(notes)도 같은 구조 분해로 뺀다 — 새 판에 어제 판의 종이가 따라오지 않게(벨트, D-08).
+  const { keyword: _prevKeyword, notes: _prevNotes, ...rest } = state;
   const keyword = pickKeyword !== undefined ? pickKeyword(randInt) : undefined;
   return {
     ...rest,
