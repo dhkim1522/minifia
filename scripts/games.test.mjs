@@ -1,5 +1,6 @@
 // node --test scripts/games.test.mjs
 // npm run games(23-02, D-17): 인자 가드·고정 SQL·한국어 요약·원격 계정 확인 순서.
+// exec 는 wrangler 인자 배열만 받는 가짜 실행기다(실제 실행기는 셸 없이 node 로 wrangler 를 부른다).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { planGames, summarySql, formatSummary, runGames } from "./games.mjs";
@@ -69,42 +70,41 @@ const D1_JSON = JSON.stringify([
 
 test("runGames: 로컬은 셸 없이 인자 배열로 wrangler d1 execute 를 한 번 부른다", () => {
   const calls = [];
-  const exec = (command, args) => {
-    calls.push({ command, args });
+  const exec = (args) => {
+    calls.push({ args });
     return { status: 0, stdout: D1_JSON, stderr: "" };
   };
   const r = runGames({ ok: true, target: "local", includeBots: false }, { exec });
   assert.equal(r.ok, true);
   assert.match(r.output, /판 2/);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].command, "npx");
-  assert.deepEqual(calls[0].args.slice(0, 6), ["wrangler", "d1", "execute", "DB", "--local", "--json"]);
-  assert.equal(calls[0].args[6], "--command");
-  assert.equal(calls[0].args[7], summarySql(false));
-  assert.equal(calls[0].args.length, 8);
+  assert.deepEqual(calls[0].args.slice(0, 5), ["d1", "execute", "DB", "--local", "--json"]);
+  assert.equal(calls[0].args[5], "--command");
+  assert.equal(calls[0].args[6], summarySql(false));
+  assert.equal(calls[0].args.length, 7);
 });
 
 test("runGames: 원격은 먼저 whoami 를 부르고 개인 계정일 때만 d1 execute 를 부른다", () => {
   const calls = [];
-  const exec = (command, args) => {
+  const exec = (args) => {
     calls.push(args.slice(0, 2).join(" "));
-    return args[1] === "whoami" ? { status: 0, stdout: WHOAMI_OK, stderr: "" } : { status: 0, stdout: D1_JSON, stderr: "" };
+    return args[0] === "whoami" ? { status: 0, stdout: WHOAMI_OK, stderr: "" } : { status: 0, stdout: D1_JSON, stderr: "" };
   };
   const r = runGames({ ok: true, target: "remote", includeBots: true }, { exec });
   assert.equal(r.ok, true);
-  assert.deepEqual(calls, ["wrangler whoami", "wrangler d1"]);
+  assert.deepEqual(calls, ["whoami", "d1 execute"]);
 });
 
 test("runGames: 원격에서 개인 계정이 아니면 d1 execute 를 부르지 않고 실패한다", () => {
   const calls = [];
-  const exec = (command, args) => {
+  const exec = (args) => {
     calls.push(args.slice(0, 2).join(" "));
     return { status: 0, stdout: WHOAMI_OTHER, stderr: "" };
   };
   const r = runGames({ ok: true, target: "remote", includeBots: false }, { exec });
   assert.equal(r.ok, false);
   assert.match(r.reason, /개인 계정이 아님/);
-  assert.deepEqual(calls, ["wrangler whoami"]);
+  assert.deepEqual(calls, ["whoami"]);
 });
 
 test("runGames: wrangler 실패나 읽을 수 없는 출력은 실패로 돌려준다", () => {

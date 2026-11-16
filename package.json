@@ -18,7 +18,8 @@
     "tokens": "node scripts/gen-tokens.mjs",
     "tokens:check": "node scripts/gen-tokens.mjs --check",
     "backdrops": "node scripts/make-backdrops.mjs",
-    "check:character": "node scripts/check-character.mjs"
+    "check:character": "node scripts/check-character.mjs",
+    "games": "node scripts/games.mjs"
   },
   "dependencies": {
     "react": "19.3.1",
