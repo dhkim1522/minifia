@@ -131,7 +131,6 @@ export interface DayView {
   points?: PointLine[]; // nomination 단계 동안만, 지금 지목 줄(공개 차례 연출용). 단계가 끝나면 키가 없다 — 기록으로 남기지 않는다(D-14)
   endCount?: number; // discussion 단계에서, 토론 끝내기를 누른 산 사람 수(누가 눌렀는지는 싣지 않는다)
   verdictCount?: { yes: number; no: number }; // verdict 단계에서만, 모두에게 같은 찬반 집계 수(번복도 바로 반영, D-11). 던진 좌석(옛 voted)은 싣지 않는다(D-26) — 내 표는 me.verdictVote
-  voted?: number[]; // 22-09 부터 서버가 싣지 않는다(D-26). 화면이 읽는 자리를 22-10 이 지운 뒤 이 필드도 지운다
   turn?: PickTurnView; // nomination 단계에서만, 모두에게 같은 차례 정보(결정 0063-1, L14)
   runoff?: RunoffView; // runoff 단계에서만, 모두에게 같은 동점 결선 정보(결정 0066-4, L20)
   showdown?: ShowdownView; // showdown 단계에서만, 모두에게 같은 마지막 3인 결전 정보(결정 0066-5, L21)
