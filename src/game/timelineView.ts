@@ -91,7 +91,7 @@ interface Eliminations {
   night: Map<number, number>;
 }
 
-/** 탈락 일차 표(shared/game/awards 의 eliminationOf 와 같은 규칙을 공개 값으로 다시 쓴다 — 서버 모듈을 import 하지 않는다) */
+/** 탈락 일차 표(공개 값으로 만든다) */
 function eliminationsOf(view: TimelineViewInput): Eliminations {
   const out: Eliminations = { exec: new Map(), night: new Map() };
   for (const row of view.result.summary) {

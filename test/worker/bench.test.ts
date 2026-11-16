@@ -274,7 +274,6 @@ describe("쉬는 사람 — 결과 합류 (D-13, sat)", () => {
       for (const s of t.players) {
         const v = lastViewOf(s);
         expect(v.players.filter((p) => p.sat === true).length).toBe(2);
-        expect(v.result?.awards?.length).toBe(4);
       }
       const stored = (await storedRoom(code)) as unknown as { bench?: unknown; players: Array<{ sat?: boolean; role?: string }> };
       expect(stored.bench).toBeUndefined();

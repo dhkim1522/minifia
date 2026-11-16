@@ -47,7 +47,6 @@ function dirtyPlayer(i: number, over: Partial<Player> = {}): Player {
     badge: "police",
     badgeSwapped: true,
     badgeLog: [{ n: 1, v: "police" }],
-    stats: { say: 3, emote: 1 },
     disconnectedAt: undefined,
     ...over,
   };

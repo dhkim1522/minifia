@@ -253,7 +253,7 @@ describe("ended 전용 result view (END-02, D-17)", () => {
       );
       expect(result.seats.every((s) => Object.keys(s).sort().join(",") === "job,seat")).toBe(true);
       expect(JSON.stringify(result.summary)).toBe(JSON.stringify(buildSummary(ended)));
-      expect(Object.keys(result).sort().join(",")).toBe("awards,seats,summary,winner");
+      expect(Object.keys(result).sort().join(",")).toBe("seats,summary,winner");
     });
   }
 
@@ -371,12 +371,11 @@ describe("enterEnded — 쉬는 사람 합류 (D-13, 11-08)", () => {
     expect(entered.players.length).toBe(before.players.length + 3);
   });
 
-  it("view: result.seats·awards 는 참가자만 본다(sat 는 칭호 없음), players[] 에는 sat 가 실린다", () => {
+  it("view: result.seats 는 참가자만 본다, players[] 에는 sat 가 실린다", () => {
     const entered = enterEnded(mafiaWinWithBench(), THROWING_RAND, 1_000);
     const viewer = entered.players.find((p) => p.sat !== true)!;
     const v = buildView(entered, viewer.id, 0);
     expect(v.result!.seats.map((e) => e.seat)).toEqual(entered.players.filter((p) => p.role !== undefined).map((p) => p.seat).sort((a, b) => a - b));
-    expect(v.result!.awards!.length).toBe(4);
     expect(v.players.filter((p) => p.sat === true).map((p) => p.seat)).toEqual([4, 5, 6]);
     const sitterView = buildView(entered, "b0", 0);
     expect(sitterView.result!.seats.length).toBe(4);

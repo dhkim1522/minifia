@@ -51,14 +51,13 @@ describe("결과 단계 채팅 (D-11)", () => {
     expect(got.flatMap(chatsOf)).toEqual([]);
   });
 
-  it("결과 단계 줄은 판 통계 say 를 올리지 않는다", { timeout: 40_000 }, async () => {
+  it("결과 단계 줄은 서버에 판 통계(stats)를 남기지 않는다(시상 없음, D-19)", { timeout: 40_000 }, async () => {
     const g = await endedGame4();
     const [alive] = g.living as [Actor, ...Actor[]];
-    const before = JSON.stringify(await stats(g.code, alive.seat));
     await resetChatRates(g.code);
     const marks = g.socks.map((s) => mark(s));
     chatSend(alive.sock, "통계에 안 센다");
     for (const [i, s] of g.socks.entries()) await settle(s, marks[i]!);
-    expect(JSON.stringify(await stats(g.code, alive.seat))).toBe(before);
+    expect(await stats(g.code, alive.seat)).toBeUndefined();
   });
 });

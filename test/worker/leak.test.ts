@@ -1063,8 +1063,8 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
             if (key === "verdictVote") expect(path).toBe(".view.me.verdictVote");
             if (key === "endDiscussion") expect(path).toBe(".view.me.endDiscussion");
           }
-          // 칭호 패(11-02, L35): awards 키는 ended 의 state 프레임에만 있다 — 다른 메시지·판 중 어떤 프레임에도 0건.
-          expect(`${msg.t}:${raw.includes('"awards"') && !(msg.t === "state" && msg.view.phase === "ended")}`).toBe(`${msg.t}:false`);
+          // 시상 칭호는 없다(결정 0089-20, D-19): 어느 소켓·어느 단계 프레임에도 awards 키가 0건(ended 포함).
+          expect(`${msg.t}:${raw.includes('"awards"')}`).toBe(`${msg.t}:false`);
           // 결과 공개(11-03, L35·L36): 판 중 어떤 프레임에도 resultLog 가 없고, ended 뒤에는 키 집합이 정해진 프레임만 온다.
           expect(`${msg.t}:${raw.includes("resultLog") && !endedSeen}`).toBe(`${msg.t}:false`);
           if (msg.t === "resultLog") {
@@ -1108,7 +1108,6 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
 
           // result 는 ended 프레임에만
           expect(has(".view.result")).toBe(v.phase === "ended");
-          expect(has(".view.result.awards")).toBe(v.phase === "ended");
           if (v.phase === "ended") seen.result.add(a.seat);
           // 새 공개 키는 그 단계에만, 그리고 모두에게 같은 값일 때만 허용한다(위 라이브 검사가 같은 시점 모든 소켓의 값이 같음을 본다)
           expect(has(".view.day.endCount")).toBe(v.phase === "discussion"); // 개수만 — 누가 눌렀는지는 없다
@@ -1190,14 +1189,13 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
       const result = results[0]!;
       expect(result.winner).toBe("citizenWin");
       expect(result.seats).toEqual(bySeat.map((a) => ({ seat: a.seat, job: a.role })));
-      // 칭호 패(L36): 시민·경찰·의사·마피아·유령 어느 소켓에서도 같은 JSON(위 results 비교가 awards 를 포함한다) — 참가자 6명에 한 장씩, 줄 키는 허용 경로뿐
-      expect(result.awards?.map((l) => l.seat).sort((x, y) => x - y)).toEqual(bySeat.map((a) => a.seat));
-      for (const line of result.awards!) expect(["award,seat", "award,k,seat", "at,award,k,seat"]).toContain(Object.keys(line).sort().join(","));
+      // result 키는 seats·summary·winner 셋뿐이다(시상 없음, D-19)
+      expect(Object.keys(result).sort().join(",")).toBe("seats,summary,winner");
       // 재접속(hello)해도 같은 값이다 — 산 사람과 탈락자 한 명씩
       for (const a of [actors.find((x) => !dead.has(x.seat))!, actors.find((x) => dead.has(x.seat))!]) {
         const again = await connect(code);
         const first = await hello(again, a.token);
-        expect(JSON.stringify(first.view.result?.awards)).toBe(JSON.stringify(result.awards));
+        expect(JSON.stringify(first.view.result)).toBe(JSON.stringify(result));
         again.ws.close();
       }
       const row = (n: number) => result.summary.find((r) => r.n === n);

@@ -6,7 +6,7 @@ import "../helpers/singleLineErrors";
 import { phaseKey } from "../../shared/game/audience";
 import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
-import type { AwardLine, GameMode, GameWinner, MapId, RoomView, SummaryRow, VoteLogEntry } from "../../shared/protocol";
+import type { GameMode, GameWinner, MapId, RoomView, SummaryRow, VoteLogEntry } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { ResultPanelProps } from "../../src/components/v2/ResultPanel";
@@ -100,8 +100,6 @@ interface Opts {
   spectate?: boolean;
   chat?: RoomView["me"]["chat"] | null;
   nicknames?: string[];
-  /** 서버가 정렬해 보낸 시상 칭호 패 목록(11-09). 없으면 키 자체가 없다(옛 서버) */
-  awards?: AwardLine[];
   /** 판 요약·공개 투표 기록(11-11 기록 탭). 없으면 빈 배열 */
   summary?: SummaryRow[];
   voteLog?: VoteLogEntry[];
@@ -154,7 +152,7 @@ function makeView(o: Opts = {}): RoomView {
     me: { seat: me, isHost: me === (o.hostSeat ?? 0), ...(o.sat?.includes(me) ? {} : { role: jobs[me]! }), ...(chat === null ? {} : { chat }) },
     day: { n: 2, roles: ["mafia", "police", "citizen"], voteLog: o.voteLog ?? [] },
     ...(o.spectate ? { spectate: { seats } } : {}),
-    ...(o.withResult === false ? {} : { result: { winner: o.winner ?? "citizenWin", seats, summary: o.summary ?? [], ...(o.awards !== undefined ? { awards: o.awards } : {}) } }),
+    ...(o.withResult === false ? {} : { result: { winner: o.winner ?? "citizenWin", seats, summary: o.summary ?? [] } }),
   };
 }
 
@@ -903,13 +901,7 @@ describe("결과 화면 기록 숨김 (18.1 R5, P181-7)", () => {
 
 // ---------- 18.1-16: 결과 화면에는 시상식이 없다 (G-18.1-4, 결정 0083-7) — 서버가 칭호를 보내도 화면은 읽지도 그리지도 않는다 ----------
 describe("시상식 없는 결과 (18.1-16, 0083-7)", () => {
-  // 좌석 0 시민 · 1 경찰 · 2 의사(탈락) · 3 마피아 · 4 시민, 시민 승. 서버가 보낸 칭호 넷(화면은 쓰지 않는다)
-  const AWARDS4: AwardLine[] = [
-    { seat: 3, award: "whiff", k: 2 },
-    { seat: 2, award: "spectator", k: 1, at: "night" },
-    { seat: 1, award: "detective", k: 1 },
-    { seat: 0, award: "survivor" },
-  ];
+  // 좌석 0 시민 · 1 경찰 · 2 의사(탈락) · 3 마피아 · 4 시민, 시민 승.
   const executionView = (): RoomView => {
     const v = makeView();
     v.phase = "execution";
@@ -919,7 +911,7 @@ describe("시상식 없는 결과 (18.1-16, 0083-7)", () => {
   };
   const arrive = (opts: Opts = {}) => {
     const r = renderRoom(executionView());
-    r.rerenderRoom(makeView({ awards: AWARDS4, ...opts }));
+    r.rerenderRoom(makeView({ ...opts }));
     return r;
   };
   // 표시각(100ms 배수)마다 React 가 그리도록 100ms 경계에서 끊어 나아간다
@@ -1017,7 +1009,7 @@ describe("시상식 없는 결과 (18.1-16, 0083-7)", () => {
   });
 
   it("재접속·처음 마운트: 칭호가 있어도 곧바로 최종 상태(승패 제목), 패·[넘기기] 없음", () => {
-    const r = renderRoom(makeView({ awards: AWARDS4 }));
+    const r = renderRoom(makeView());
     advance(8000);
     expect(title(r.container)).toBe("시민 승리");
     noAwardUi(r.container);
@@ -1239,7 +1231,6 @@ describe("쉬었던 사람(sat) 표시 (11-12, D-13, UI-SPEC A-5)", () => {
 describe("결과 단계 꾸미기 (11-12, D-16)", () => {
   const dress = (c: ParentNode) => c.querySelector<HTMLElement>('[data-float="dress"]');
   const skip = (c: ParentNode) => c.querySelector<HTMLElement>('[data-float="skip"]');
-  const AW = [{ seat: 3, award: "whiff" as const, k: 2 }, { seat: 0, award: "survivor" as const }];
   const executionView = (): RoomView => {
     const v = makeView();
     v.phase = "execution";
@@ -1266,7 +1257,7 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
 
   it("칭호가 있는 판도 5600 에 오른쪽 열 [꾸미기]가 나타나고 [넘기기]는 끝까지 없다 (0083-7 — 시상식 뒤를 기다리지 않는다)", () => {
     const r = renderRoom(executionView());
-    r.rerenderRoom(makeView({ awards: AW }));
+    r.rerenderRoom(makeView());
     advance(5600 - 100);
     expect(dress(r.container)).toBeNull();
     expect(skip(r.container)).toBeNull();
@@ -1280,7 +1271,7 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
 
   it("방장이면 5600 에 오른쪽 열 [dress] 와 왼쪽 줄(맵 단추 포함 — 기본 마피아 판, 20-07 D-02)이 한 번에 나타난다 — 떠 있는 [넘기기]는 없다 (16-06 D-05 → 19-05 D-13)", () => {
     const r = renderRoom({ ...executionView(), mode: "basic" });
-    r.rerenderRoom({ ...makeView({ me: 0, awards: AW }), mode: "basic" });
+    r.rerenderRoom({ ...makeView({ me: 0 }), mode: "basic" });
     advance(5600 - 100);
     expect(r.container.querySelector("[data-side-column]")).toBeNull();
     expect(r.container.querySelector("[data-host-rail]")).toBeNull();
@@ -1867,13 +1858,6 @@ describe("결과 화면 방장 줄과 판 종류 (19-05, D-06·D-13)", () => {
 
 // ---------- 12-11: 결과·시상 사건 신호 — 시계가 낸 사건에 소리가 붙는다 (D-15, LS-10, T-12-41, T-12-44) ----------
 describe("결과 사건 신호 (12-11)", () => {
-  const AWARDS5: AwardLine[] = [
-    { seat: 3, award: "whiff", k: 2 },
-    { seat: 2, award: "spectator", k: 1, at: "night" },
-    { seat: 1, award: "detective", k: 1 },
-    { seat: 4, award: "talker", k: 12 },
-    { seat: 0, award: "survivor" },
-  ];
   const executionView = (count = 5): RoomView => {
     const v = makeView({ count });
     v.phase = "execution";
@@ -1965,7 +1949,7 @@ describe("결과 사건 신호 (12-11)", () => {
   });
 
   it("신호 인자는 닫힌 값뿐이다: flip{i} · light{win} 만, 좌석·직업·닉네임 키가 없다", () => {
-    arrive({ awards: AWARDS5 });
+    arrive();
     advance(5600 + 900);
     const keys = new Set(results().flatMap((s) => Object.keys(s)));
     expect([...keys].sort()).toEqual(["i", "kind", "step", "win"]);
@@ -1987,14 +1971,14 @@ describe("결과 사건 신호 (12-11)", () => {
   });
 
   it("재접속·처음 마운트(arrivedFrom 없음)는 신호가 하나도 없다", () => {
-    renderRoom(makeView({ awards: AWARDS5 }));
+    renderRoom(makeView());
     advance(20_000);
     expect(results()).toEqual([]);
   });
 
   it("에포크가 바뀐 재접속으로 받은 ended 도 신호가 없다", () => {
     const r = renderRoom(executionView());
-    r.rerenderRoom(makeView({ awards: AWARDS5 }), { epoch: 2 });
+    r.rerenderRoom(makeView(), { epoch: 2 });
     advance(20_000);
     expect(results()).toEqual([]);
   });
@@ -2011,7 +1995,7 @@ describe("결과 사건 신호 (12-11)", () => {
   });
 
   it("시상 패 신호는 없다: 칭호가 있어도 5600 이후 20초 동안 plate 가 0회이고 flip·light 개수는 그대로다 (0083-7)", () => {
-    arrive({ awards: AWARDS5 });
+    arrive();
     advance(5600 + 20_000);
     expect(plates()).toEqual([]);
     expect(flips()).toEqual([0, 1, 2, 3, 4]);
@@ -2020,7 +2004,7 @@ describe("결과 사건 신호 (12-11)", () => {
 
   it("모션 줄이기라도 시상 패 신호는 없다", () => {
     withReduced(() => {
-      arrive({ awards: AWARDS5 });
+      arrive();
       advance(10_000);
       expect(plates()).toEqual([]);
     });
