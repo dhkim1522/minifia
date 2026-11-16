@@ -75,8 +75,13 @@ function buildDay(state: RoomState): DayView {
   };
   // 첫날 키워드(D-06): 장르 라벨은 모두에게 같은 공개 값이다 — 필드별 리터럴이라 서버 전용 word 가 새지 않는다. 단어는 me.keyword 로 시민 편 본인에게만 간다.
   // 정답(answer)은 answerOpenOf 가 참일 때만(answerReveal 진입부터 모두에게 같은 값, 23-05) — 장르 라벨은 정답이 열린 뒤에도 같이 싣는다(D-23, 기록 카드 구역 머리).
-  if (state.keyword !== undefined && (state.phase === "keyword" || answerOpenOf(state))) {
+  // 제출된 답 목록(answers, 23-06 D-14·D-24)은 keyword 단계가 끝난 뒤 모두에게 같은 값으로, 판 내내 남는다 — 필드별 복사라 서버 전용 answerSubmits·answerDraft 는 닿지 않는다.
+  // 마감 전(keyword 단계)에는 목록 자체가 없다: 누가 냈는지가 어느 view 에도 새지 않는다(D-10).
+  if (state.keyword !== undefined && (state.phase === "keyword" || answerOpenOf(state) || state.keywordAnswers !== undefined)) {
     const kw: KeywordView = { genre: genreLabelOf(state.keyword.genre) ?? "" };
+    if (state.phase !== "keyword" && state.keywordAnswers !== undefined) {
+      kw.answers = state.keywordAnswers.map((r) => ({ order: r.order, seat: r.seat, text: r.text }));
+    }
     if (answerOpenOf(state)) kw.answer = state.keyword.word;
     day.keyword = kw;
   }
@@ -230,6 +235,13 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 마피아·탈락자·다른 단계의 view 에는 키 자체가 없다(값이 빈 것이 아니라 키가 없다).
   if (state.phase === "keyword" && state.keyword !== undefined && isAlive(me) && me.role !== undefined && me.role !== "mafia") {
     myInfo.keyword = state.keyword.word;
+  }
+  // 내 답(P23-13 재접속 복원): keyword 단계에서만, 본인의 확정(answerSubmits 의 내 좌석)이 우선이고 없으면 쓰던 글(초안). 값이 있을 때만 키를 만든다.
+  // 남의 초안·확정은 어느 view 에도 없다 — 이 조각만 본인 좌석의 값을 읽는다.
+  if (state.phase === "keyword" && isAlive(me)) {
+    const mine = state.answerSubmits?.find((a) => a.seat === me.seat);
+    if (mine !== undefined) myInfo.answer = { text: mine.text, final: true };
+    else if (me.answerDraft !== undefined) myInfo.answer = { text: me.answerDraft, final: false };
   }
 
   // 내 채널은 서버가 보낸 사람 상태로 정한 값(channelOf) 그대로 본인에게만 싣는다(07-10). 말할 수 없으면(밤의 산 비마피아·채팅 단계 밖) 키 자체가 없다.

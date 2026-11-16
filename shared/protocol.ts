@@ -122,8 +122,15 @@ export interface GameResult {
  * 키워드 단계의 공개 값 — 모든 사람의 view 에 같은 모양으로 실린다(D-06). 장르 라벨뿐이다.
  * 단어는 여기에 없다: 산 시민 편 본인에게만 me.keyword 로 가고 마피아에게는 키 자체가 없다. 답·정답 키는 뒤 계획(23-05·23-06)이 더한다.
  */
+/** 공개된 첫날 답 한 줄: 확정 낸 순서 → 쓰던 글 → 답 없음(text null). 좌석 번호만 싣는다(D-24). */
+export interface KeywordAnswerRow {
+  order: number;
+  seat: number;
+  text: string | null;
+}
 export interface KeywordView {
   genre: string; // 장르 라벨(예: "영화")
+  answers?: KeywordAnswerRow[]; // 첫날 답 공개 목록 — keyword 단계가 끝난 뒤 모두에게 같은 값, 판 내내 남는다(D-14·D-24, 23-06)
   answer?: string; // 정답 — answerReveal 진입 프레임부터 모두에게 같은 공개 값(D-03·D-14). 그 전에는 키 자체가 없다(T-23-15)
 }
 
@@ -265,7 +272,9 @@ export type ClientMessage =
   // 유언·쪽지 저장(9페이즈 결정 0061-9·10) — 본문 text 하나뿐이다. 행위자는 소켓 첨부 playerId 뿐이고 seat·id·채널은 없다.
   // 응답은 저장한 본인(유언)·산 마피아(쪽지)에게만 간다 — 전원 방송이 없다(L7). 빈 값(공백뿐)은 지움이다.
   | WillSendMessage
-  | NoteSendMessage;
+  | NoteSendMessage
+  // 키워드 답(23페이즈 D-07) — 본문과 확정 여부뿐이다. 응답은 보낸 본인에게만 간다(초안·확정 모두 전원 방송 없음, D-10)
+  | AnswerSendMessage;
 
 // 테스트 방 봇 투표 선택(결정 0022·0024 확장, P-13). 무작위가 기본이고 고정 값은 방장이 대기실에서 정한다.
 export type BotVoteExec = "random" | "yes" | "no";
@@ -292,6 +301,7 @@ export interface MyInfo {
   allies?: number[]; // 같은 마피아 동료의 seat — 채우는 일은 01-07
   pick?: number; // 밤에 본인이 고른 seat(본인에게만)
   allyPicks?: number[]; // 생존 마피아에게만: 동료들이 고른 대상 seat 오름차순·중복 없음(누가 골랐는지는 싣지 않는다)
+  answer?: { text: string; final: boolean }; // keyword 단계에서, 본인이 쓰던 글(확정 우선, 없으면 초안) — 본인에게만, 값이 있을 때만 키가 있다(재접속 복원, 23-06)
   keyword?: string; // keyword 단계에서, 산 시민 편(경찰·의사·시민) 본인에게만 그 판의 키워드(D-06). 마피아·탈락자에게는 키 자체가 없다
   records?: RoleRecord[]; // 본인 역할의 일지 하나(경찰 수사·마피아 암살·의사 치료), 본인에게만
   testMode?: true; // 테스트 방 방장 본인만(결정 0022). 손님·일반 방·미리보기에는 키 자체가 없다
@@ -402,6 +412,12 @@ export interface WillSendMessage {
   text: string;
   /** [남기기](22-11 D-15) — 처형자가 유언 단계에서 보내면 글을 저장하고 단계를 곧바로 끝낸다. 처형자가 아니면 서버가 무시한다. */
   final?: true;
+}
+/** 키워드 답(keyword 단계의 산 사람, D-07). final:false 는 초안 저장(금지어 검사 없음), final:true 는 확정 제출(금지어면 BAD_MESSAGE). 정리·20자소·금지어는 서버(submitAnswer)가 정한다. */
+export interface AnswerSendMessage {
+  t: "answer";
+  text: string;
+  final: boolean;
 }
 /** 쪽지 저장(밤의 산 마피아, 확정 대상이 있을 때만, 결정 0061-9). 작성자를 싣지 않는다 — 익명이다. */
 export interface NoteSendMessage {

@@ -18,6 +18,7 @@ function trackedFiles(...dirs: string[]): string[] {
 
 /** 12페이즈 시작 시점(소리를 더하기 전)의 클라이언트 메시지 종류. 소리가 새 메시지를 만들지 않았음을 고정한다. */
 const CLIENT_MESSAGE_KINDS = [
+  "answer", // 23-06: 키워드 답(소리와 무관한 새 메시지)
   "badge",
   "chat",
   "dress",

@@ -33,6 +33,8 @@ import { LOOK_MIN_GAP_MS, setLook } from "../shared/game/look";
 import { attachBenchConnection, detachBenchConnection, findAnyByToken, isResting, leaveBench, rematch, setReady } from "../shared/game/rematch";
 import { buildResultLog } from "../shared/game/resultLog";
 import { sendWhisper } from "../shared/game/whisper";
+import { ANSWER_MIN_GAP_MS } from "../shared/game/answerRules";
+import { submitAnswer } from "../shared/game/keywordAnswer";
 import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared/game/will";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
@@ -360,6 +362,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "note":
         await this.handleNote(ws, msg.text);
+        return;
+      case "answer":
+        await this.handleAnswer(ws, msg.text, msg.final);
         return;
       default: {
         // 새 메시지를 ClientMessage 에 더하고 여기를 빠뜨리면 컴파일이 실패한다 — 조용히 무시되지 않게(Pitfall 15).
@@ -735,6 +740,43 @@ export class Room extends DurableObject<Env> {
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     this.writeAt.set(key, now);
+    this.room = result.state;
+    await this.ctx.storage.put("room", this.room);
+    this.sendViewTo([playerId]);
+    return null;
+  }
+
+  // 키워드 답(23페이즈, D-07): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-23-21).
+  private async handleAnswer(ws: WebSocket, text: string, final: boolean): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applyAnswer(att.playerId, text, final, Date.now());
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  // applyWill 과 같은 모양이다(D-10, T-23-19): 받아들여도 전원 방송(persistAndBroadcast)을 부르지 않는다 — 저장 한 번 + 보낸 본인에게만 sendViewTo.
+  // 누가 썼다·냈다는 타이밍이 다른 폰에 새면 안 되고 DO 쓰기 예산(결정 0076)도 지킨다. 마감이 바뀌지 않으니 reschedule 도 없다(조기 진행 호출은 23-08 이 붙인다).
+  // 다른 점 셋: ① 간격 키를 초안(answerD)·확정(answerF)으로 나눈다 — 입력 직후 [보내기]가 초안 간격에 막혀 사라지지 않게(Pitfall 6). 간격 안의 요청은 오류 없이 버린다.
+  // ② 간격은 수락·거절 모두 기록한다(T-23-22) — 마피아의 떠보기가 400ms 당 1회로 묶인다. ③ 거절에 state(keywordProbed)가 딸려 오면 저장 한 번 한 뒤 오류를 돌려준다 —
+  // handleAnswer 의 sendRejection 이 시민의 거절과 같은 두 프레임(오류 + 본인 state)으로 응답하므로 응답에서는 저장 여부를 알 수 없다(T-23-18).
+  private async applyAnswer(playerId: string, text: string, final: boolean, now: number): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const key = `answer${final ? "F" : "D"}:${playerId}`;
+    const last = this.writeAt.get(key);
+    if (last !== undefined && now - last < ANSWER_MIN_GAP_MS) return null;
+    this.writeAt.set(key, now);
+    const result = submitAnswer(this.room, playerId, text, final);
+    if (!result.ok) {
+      if (result.state !== undefined) {
+        this.room = result.state;
+        await this.ctx.storage.put("room", this.room);
+      }
+      return result.error;
+    }
+    if (result.state === this.room) return null;
     this.room = result.state;
     await this.ctx.storage.put("room", this.room);
     this.sendViewTo([playerId]);

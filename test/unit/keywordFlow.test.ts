@@ -316,7 +316,7 @@ describe("정답은 answerReveal 진입 프레임부터 모두에게 같은 값�
     for (const s of [reveal, tickTo(reveal, "night")]) {
       for (const p of s.players) {
         const view = buildView(s, p.id, s.phaseEndsAt! - 1000);
-        expect(view.day?.keyword, `${s.phase}`).toEqual({ genre: label, answer: word });
+        expect(view.day?.keyword, `${s.phase}`).toMatchObject({ genre: label, answer: word }); // 23-06: keyword 마감 훅을 지난 판이라 answers 도 함께 실린다(여기서는 정답 쪽만 단언)
       }
     }
   });

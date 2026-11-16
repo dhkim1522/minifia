@@ -313,6 +313,7 @@ const ME_KEYS: ReadonlySet<string> = new Set([
   "ballot", // 동점 결선(결정 0066-4)·마지막 3인 동시 지목(결정 0066-5)에서 본인이 고른 좌석 — 투표 창·결과/지목 창·공개의 산 본인에게만, 값은 좌석 하나
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
   "keyword", // 첫날 키워드(23-01, D-06) — keyword 단계의 산 시민 편 본인에게만. 조건은 phaseKeyViolations 가 단언한다
+  "answer", // 키워드 단계 본인이 쓰던 글·확정 여부(23-06, P23-13) — keyword 단계의 산 본인에게만, 값이 있을 때만(phaseKeyViolations 가 단언)
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
   "n", "roles", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdictCount", "turn", "runoff", "showdown",
@@ -359,13 +360,22 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   if ("voted" in day) out.push(`${tag}: day.voted present`);
   // 첫날 키워드(23-01, D-06): day.keyword 는 keyword 단계에만, genre 한 키뿐(단어 없음). 정답이 열린 뒤(answerOpenOf, 23-05)에는 genre·answer 두 키 — 모두에게 같은 값. me.keyword 는 그 단계의 산 시민 편 본인에게만 서버 값 그대로 — 마피아·유령에게는 키 자체가 없다.
   const answerOpen = s.keyword !== undefined && answerOpenOf(s);
-  const wantDayKeyword = phase === "keyword" || answerOpen;
+  // 23-06: 마감 뒤(keywordAnswers 가 생긴 뒤)에는 day.keyword.answers 가 판 내내 남고, keyword 단계에는 없다. 키 집합은 모든 viewer 가 같다.
+  const wantAnswers = phase !== "keyword" && s.keyword !== undefined && s.keywordAnswers !== undefined;
+  const wantDayKeyword = phase === "keyword" || answerOpen || wantAnswers;
+  const wantKeywordKeys = ["genre", ...(answerOpen ? ["answer"] : []), ...(wantAnswers ? ["answers"] : [])].sort().join(",");
   if (("keyword" in day) !== wantDayKeyword) out.push(`${tag}: day.keyword presence ${"keyword" in day}`);
-  else if (wantDayKeyword && keysOf(day.keyword) !== (answerOpen ? "answer,genre" : "genre")) out.push(`${tag}: day.keyword keys ${keysOf(day.keyword)}`);
+  else if (wantDayKeyword && keysOf(day.keyword) !== wantKeywordKeys) out.push(`${tag}: day.keyword keys ${keysOf(day.keyword)} want ${wantKeywordKeys}`);
   else if (answerOpen && (day.keyword as { answer?: string }).answer !== s.keyword?.word) out.push(`${tag}: day.keyword.answer value`);
+  else if (wantAnswers && flat(day.keyword!.answers) !== flat(s.keywordAnswers)) out.push(`${tag}: day.keyword.answers value`);
   const wantMeKeyword = phase === "keyword" && isAlive(viewer) && viewer.role !== undefined && viewer.role !== "mafia";
   if (("keyword" in view.me) !== wantMeKeyword) out.push(`${tag}: me.keyword presence ${"keyword" in view.me}`);
   else if (wantMeKeyword && view.me.keyword !== s.keyword?.word) out.push(`${tag}: me.keyword value`);
+  // 내 답(23-06): keyword 단계의 산 본인에게만, 쓴 것이 있을 때만(확정 우선). 남의 것은 값으로도 닿지 않는다.
+  const mySubmit = s.answerSubmits?.find((a) => a.seat === viewer.seat);
+  const wantMeAnswer = phase === "keyword" && isAlive(viewer) && (mySubmit !== undefined || viewer.answerDraft !== undefined);
+  if (("answer" in view.me) !== wantMeAnswer) out.push(`${tag}: me.answer presence ${"answer" in view.me}`);
+  else if (wantMeAnswer && flat(view.me.answer) !== flat(mySubmit !== undefined ? { text: mySubmit.text, final: true } : { text: viewer.answerDraft, final: false })) out.push(`${tag}: me.answer value`);
   const wantExecution = phase === "execution";
   if (("execution" in day) !== wantExecution) out.push(`${tag}: day.execution presence ${"execution" in day}`);
   else if (wantExecution) {
@@ -771,13 +781,15 @@ describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 
       const keys = new Set(s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(",")));
       got.push(`${phase}:${[...keys].join("|")}`);
     }
-    expect(got.join(" ")).toBe("dayAnnounce:n,roles discussion:endCount,n,roles night:keyword,n,noExecution,roles morning:keyword,morning,n,roles"); // 23-05: 정답이 열린 뒤(첫날 night·morning)에는 day.keyword { genre, answer }
+    expect(got.join(" ")).toBe("dayAnnounce:keyword,n,roles discussion:endCount,keyword,n,roles night:keyword,n,noExecution,roles morning:keyword,morning,n,roles"); // 23-05: 정답이 열린 뒤(첫날 night·morning)에는 day.keyword { genre, answer }, 23-06: keyword 마감 뒤에는 { genre, answers } 가 판 내내 남는다
   });
 
-  it("dayAnnounce 뷰의 day 는 {n, roles} 뿐이다", () => {
+  it("dayAnnounce 뷰의 day 는 {n, roles} 에 keyword(첫날 답 공개 목록, 23-06)를 더한 것뿐이다", () => {
     const s = stateAt("dayAnnounce", 5, 1);
     for (const p of s.players) {
-      expect(flat(buildView(s, p.id, START_AT).day)).toBe(flat({ n: 1, roles: rolesInPlay(5) }));
+      const { keyword, ...rest } = buildView(s, p.id, START_AT).day!;
+      expect(flat(rest)).toBe(flat({ n: 1, roles: rolesInPlay(5) }));
+      expect(Object.keys(keyword ?? {}).sort().join(",")).toBe("answers,genre");
     }
   });
 
@@ -806,7 +818,7 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
     const s = stateAt("discussion", 5, 1);
     for (const viewer of s.players) {
       const view = buildView(s, viewer.id, START_AT);
-      expect(Object.keys(view.day ?? {}).sort().join(",")).toBe("endCount,n,roles");
+      expect(Object.keys(view.day ?? {}).sort().join(",")).toBe("endCount,keyword,n,roles"); // 23-06: keyword 마감 뒤 day.keyword.answers 가 남는다
       expect(roleValueLeaks(view).join(";")).toBe("");
     }
   });

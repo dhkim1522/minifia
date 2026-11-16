@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { NICKNAME_MAX_UTF16 } from "./nickname";
 import { CHAT_TEXT_MAX_UTF16, EMOTE_IDS, MAP_CHOICES, MAX_TEST_BOTS, MOVE_COORD_LIMIT, OUTFIT_IDS, PHASE_KEY_MAX } from "./protocol";
-import type { ChatSendMessage, ClientMessage, CreateRoomBody, EmoteSendMessage, JoinRoomBody, MoveMessage, NoteSendMessage, TypingSendMessage, WillSendMessage } from "./protocol";
+import type { AnswerSendMessage, ChatSendMessage, ClientMessage, CreateRoomBody, EmoteSendMessage, JoinRoomBody, MoveMessage, NoteSendMessage, TypingSendMessage, WillSendMessage } from "./protocol";
 
 // 상한은 UTF-16 길이다. 제품 규칙(8 자소)은 validateNickname 이 판정한다 — 여기서 64 처럼 낮게 잡으면
 // 자소 8 개짜리 유효 이름(가족 이모지 88 단위)이 스키마에서 먼저 400 으로 막힌다(06 리뷰 WR-03).
@@ -58,6 +58,14 @@ export const NoteMessageSchema = z.strictObject({
   text: z.string().max(CHAT_TEXT_MAX_UTF16),
 }) satisfies z.ZodType<NoteSendMessage>;
 
+// 키워드 답(23-06, D-07): 본문과 확정 여부뿐 — 행위자는 소켓 첨부 playerId 로만 정해지므로 seat·id 가 덧붙으면 거부한다(T-23-21). final 은 필수(초안 false 도 명시).
+// 상한은 UTF-16 300(프레임 1024B 안)이고 정리·20자소·금지어는 submitAnswer 가 판정한다. ClientMessageSchema 의 멤버라 먼저 선언한다(TDZ).
+export const AnswerMessageSchema = z.strictObject({
+  t: z.literal("answer"),
+  text: z.string().max(CHAT_TEXT_MAX_UTF16),
+  final: z.boolean(),
+}) satisfies z.ZodType<AnswerSendMessage>;
+
 export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("hello"), token: z.string().min(16).max(128) }),
   z.object({ t: z.literal("ping"), c: z.number() }),
@@ -100,4 +108,5 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   ChatMessageSchema,
   WillMessageSchema,
   NoteMessageSchema,
+  AnswerMessageSchema,
 ]) satisfies z.ZodType<ClientMessage>;

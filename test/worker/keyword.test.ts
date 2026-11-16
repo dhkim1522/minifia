@@ -84,12 +84,12 @@ describe("첫날 정답 공개 단계 (D-02·D-22)", () => {
       const view = lastViewOf(a.sock);
       expect(view.phase).toBe("answerReveal");
       expect(view.phaseDurationMs).toBe(4400);
-      expect(view.day?.keyword).toEqual({ genre: label, answer: word });
+      expect(view.day?.keyword).toMatchObject({ genre: label, answer: word }); // 23-06: keyword 마감 뒤 answers 도 같이 남는다
       expect(view.day?.noExecution).toEqual({ reason: "rejected" });
     }
 
     await advanceTo(room.code, socks, "night");
-    for (const a of actors) expect(lastViewOf(a.sock).day?.keyword).toEqual({ genre: label, answer: word });
+    for (const a of actors) expect(lastViewOf(a.sock).day?.keyword).toMatchObject({ genre: label, answer: word });
   }, 60_000);
 
   it("둘째 날 찬반 부결은 곧장 night 이다(answerReveal 없음)", async () => {
