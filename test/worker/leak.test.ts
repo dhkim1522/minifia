@@ -1989,3 +1989,37 @@ describe.skipIf(politicsOn(GAME_RULES))("기본판 — 꺼진 장치 키 0건 (F
     for (const a of g.actors) expect(lastViewOf(a.sock).phase).toBe("ended");
   });
 });
+
+// ---- 찬반 집계 공개 (22-09, D-11·D-26) ----
+// 찬반 중 모두에게 같은 값은 day.verdictCount{yes,no} 뿐이다. 던진 좌석(day.voted)·후보(day.candidate)는 싣지 않고, 개인 표(verdictVote)는 본인 me 에만 간다.
+describe("찬반 집계 공개 — 수만 모두에게, 좌석·개인 표는 아니다 (D-11·D-26, T-22-15)", () => {
+  it("찬반 단계 프레임: 모든 소켓의 day.verdictCount 가 같고, day.voted·day.candidate·서버 전용 키가 없으며 verdictVote 는 본인 me 에만 있다", { timeout: 60_000 }, async () => {
+    const g = await startedGame("verdict", 3);
+    const [a0, a1, a2] = g.actors;
+    const from = g.socks.map(mark);
+    send(a0!.sock, { t: "verdict", agree: true });
+    for (const sock of g.socks) await settle(sock, mark(sock));
+    send(a1!.sock, { t: "verdict", agree: false });
+    for (const sock of g.socks) await settle(sock, mark(sock));
+    send(a0!.sock, { t: "verdict", agree: false }); // 번복
+    for (const sock of g.socks) await settle(sock, mark(sock));
+
+    const counts = g.socks.map((s) => JSON.stringify(lastViewOf(s).day?.verdictCount));
+    expect(new Set(counts).size).toBe(1);
+    expect(counts[0]).toBe('{"yes":0,"no":2}');
+    for (let i = 0; i < g.socks.length; i += 1) {
+      const actor = g.actors[i]!;
+      for (const msg of framesOf(g.socks[i]!).slice(from[i]!)) {
+        if (msg.t !== "state" || msg.view.phase !== "verdict") continue;
+        const paths = keyPaths(msg);
+        expect(paths.filter((p) => p === ".view.day.voted" || p === ".view.day.candidate").join(",")).toBe("");
+        expect(paths.filter((p) => p.endsWith(".verdictVote") && p !== ".view.me.verdictVote").join(",")).toBe("");
+        // 개인 표는 본인 소켓의 me 로만: 던지지 않은 사람의 me 에는 키가 없다
+        if (actor.seat === a2!.seat) expect(Object.hasOwn(msg.view.me, "verdictVote")).toBe(false);
+      }
+    }
+    expect(lastViewOf(a0!.sock).me.verdictVote).toBe(false);
+    expect(lastViewOf(a1!.sock).me.verdictVote).toBe(false);
+    expect(Object.hasOwn(lastViewOf(a2!.sock).me, "verdictVote")).toBe(false);
+  });
+});
