@@ -10,6 +10,7 @@
 // 남의 지목·찬반 값·토론 끝내기 누름은 어떤 키로도 싣지 않는다 — Player.nominate·verdictVote 는 마감 훅이 키째 지운다(결정 0060·D-02).
 import type {
   DayView,
+  KeywordView,
   MorningView,
   MyInfo,
   PhaseId,
@@ -27,6 +28,7 @@ import { botCount } from "./bots";
 import { endCountOf, phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
+import { answerOpenOf } from "./keywordAnswer";
 import { genreLabelOf } from "./keywords";
 import { MAP_PHASES } from "./movement";
 import { confirmedTarget } from "./night";
@@ -47,6 +49,7 @@ import { WHISPER_PER_DAY, whisperUsedToday } from "./whisper";
  * ended 도 넣는다: day 에는 공개 정보(일차·구성·투표 기록)만 있어 누출이 없고, 결과 화면이 테이블을 다시 쓸 수 있다.
  */
 const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
+  "answerReveal", // 첫날 정답 공개(23-05, D-23): 정답이 열리는 단계 — 처형 뒤 밤 직전
   "keyword", // 첫날 키워드(D-23): view.day 가 있어야 day.keyword(장르 라벨)를 싣는다. 클라이언트 걷기·채팅 집합(MAP_PHASES·CHAT_PHASES)에는 넣지 않는다(D-01).
   "dayAnnounce",
   "discussion",
@@ -71,8 +74,11 @@ function buildDay(state: RoomState): DayView {
     roles: rolesInPlay(state.players.length),
   };
   // 첫날 키워드(D-06): 장르 라벨은 모두에게 같은 공개 값이다 — 필드별 리터럴이라 서버 전용 word 가 새지 않는다. 단어는 me.keyword 로 시민 편 본인에게만 간다.
-  if (state.phase === "keyword" && state.keyword !== undefined) {
-    day.keyword = { genre: genreLabelOf(state.keyword.genre) ?? "" };
+  // 정답(answer)은 answerOpenOf 가 참일 때만(answerReveal 진입부터 모두에게 같은 값, 23-05) — 장르 라벨은 정답이 열린 뒤에도 같이 싣는다(D-23, 기록 카드 구역 머리).
+  if (state.keyword !== undefined && (state.phase === "keyword" || answerOpenOf(state))) {
+    const kw: KeywordView = { genre: genreLabelOf(state.keyword.genre) ?? "" };
+    if (answerOpenOf(state)) kw.answer = state.keyword.word;
+    day.keyword = kw;
   }
   // 토론 끝내기는 누른 산 사람 수만 공개한다 — 누가 눌렀는지는 서버 전용(Player.endVote)이고 본인 값만 me.endDiscussion 으로 간다(결정 0060-2).
   if (state.phase === "discussion") day.endCount = endCountOf(state);

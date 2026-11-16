@@ -124,6 +124,7 @@ export interface GameResult {
  */
 export interface KeywordView {
   genre: string; // 장르 라벨(예: "영화")
+  answer?: string; // 정답 — answerReveal 진입 프레임부터 모두에게 같은 공개 값(D-03·D-14). 그 전에는 키 자체가 없다(T-23-15)
 }
 
 // ---- 낮 토론 계약(2페이즈) ----
@@ -132,7 +133,7 @@ export interface DayView {
   n: number; // 일차(1부터)
   roles: RoleId[]; // 이번 판 직업(구성표 순서, 공개 정보)
   morning?: MorningView; // morning 단계에서만
-  keyword?: KeywordView; // keyword 단계에서, 모두에게 같은 모양(D-06). 장르 라벨뿐 — 단어는 me.keyword
+  keyword?: KeywordView; // keyword 단계와 정답이 열린 뒤(answerOpenOf)에, 모두에게 같은 모양(D-06). 정답 전에는 장르 라벨뿐 — 단어는 me.keyword
   chalk?: { x: number; z: number }; // 암살 현장 분필 자국 위치(고정소수점, 결정 0061-14). 채우는 일은 09-14
   // ---- 4페이즈 처형 필드 ----
   // 서버는 낮 단계마다(빈 배열 포함) 항상 싣는다. 타입을 optional 로 둔 이유: 필수로 하면 화면 테스트의 DayView 리터럴이 서버 웨이브에서 한꺼번에 바뀐다(화면 계획이 필요하면 필수로 올린다).

@@ -19,6 +19,7 @@ export const MAP_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
   "defense",
   "verdict",
   "execution",
+  "answerReveal", // 첫날 정답 공개(23-05): 맵 위 연출 — 월드 프레임·집 위치 기억이 처형·밤과 이어진다. CHAT_PHASES 에는 넣지 않는다(서버가 채팅·동작을 받지 않는다)
   "night",
   "morning",
 ]);
