@@ -867,9 +867,8 @@ describe("기본판 투표 (결정 0072, U-1·U-4·U-5)", () => {
 describe("headerFor — 판 종류와 무관한 제목 (22-04: 원인 흐름 제목을 지웠다)", () => {
   const modeView = (phase: PhaseId, mode: "basic" | "extended"): RoomView => ({ ...viewOf(phase), mode });
 
-  it("두 판 종류 모두 errand 는 '심부름', morning 은 '아침'이다", () => {
+  it("두 판 종류 모두 morning 은 '아침'이다", () => {
     for (const mode of ["basic", "extended"] as const) {
-      same(headerFor(modeView("errand", mode)), { title: "심부름" });
       same(headerFor(modeView("morning", mode)), { title: "아침" });
     }
   });

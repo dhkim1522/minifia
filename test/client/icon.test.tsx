@@ -188,7 +188,7 @@ describe("V2Icon chevronRight (17-04)", () => {
       const r = render(<V2Icon name={name} />);
       return [...r.container.querySelectorAll("path,circle")].map((e) => e.outerHTML).join("");
     };
-    expect(shape("chevronRight" as V2IconName)).not.toBe(shape("arrow"));
+    expect(shape("chevronRight" as V2IconName)).not.toBe(shape("point"));
     expect(shape("chevronRight" as V2IconName)).not.toBe(shape("play"));
   });
 });

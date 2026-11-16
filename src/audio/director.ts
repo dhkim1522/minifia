@@ -27,7 +27,6 @@ export const BED_OF: Readonly<Record<PhaseId, BedId | null>> = {
   assigning: null,
   roleReveal: "bed.reveal",
   dayAnnounce: "bed.day",
-  errand: "bed.day", // 15페이즈: 진입 소리는 없다(낮 시작에서 이미 울렸다, UI-SPEC U-15)
   discussion: "bed.day",
   nomination: "bed.vote",
   runoff: "bed.vote",

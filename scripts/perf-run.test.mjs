@@ -3,7 +3,7 @@
 // nightload 실행 자체는 이 시험이 하지 않는다(실행과 성능 합격선은 12-12).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LIGHT_MORNING_RATIO, LIGHT_TALK_RATIO, NIGHTLOAD_DWELL, USAGE, nightloadDwell, colorStats, lightRankVerdict, outputBase, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
+import { LIGHT_MORNING_RATIO, LIGHT_TALK_RATIO, NIGHTLOAD_DWELL, USAGE, colorStats, lightRankVerdict, outputBase, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
 
 test("parseArgs --map (20-09): bar·plaza 를 받고 저장 이름 끝이 -bar·-plaza, 없으면 그대로", () => {
   const o = parseArgs(["--mode", "nightload", "--map", "plaza"]);
@@ -14,12 +14,6 @@ test("parseArgs --map (20-09): bar·plaza 를 받고 저장 이름 끝이 -bar·
   assert.throws(() => parseArgs(["--map", "space"]), /--map/);
   assert.throws(() => parseArgs(["--map", "town"]), /--map/);
   assert.match(USAGE, /--map bar\|plaza\]/);
-});
-
-test("nightloadDwell (20-09): 맵을 고른 판(광장·재즈 바)은 표에서 errand 만 빼고, 맵을 안 고른 판(null)은 표 전부다", () => {
-  assert.equal(nightloadDwell(null), NIGHTLOAD_DWELL);
-  assert.deepEqual(nightloadDwell("plaza").map(([p]) => p), ["discussion", "nomination", "defense", "verdict", "execution", "night", "morning"]);
-  assert.deepEqual(nightloadDwell("bar"), nightloadDwell("plaza"));
 });
 
 test("parseArgs --sound: 기본 on, on·off 를 받는다", () => {
@@ -113,10 +107,10 @@ test("readSoundState: page.evaluate 가 던지면 null", async () => {
   assert.equal(await readSoundState(page), null);
 });
 
-test("NIGHTLOAD_DWELL: 15페이즈 errand 장면이 첫 장면(낮 시작 다음·토론 앞)이고 한 바퀴 합은 70초다", () => {
-  assert.deepEqual(NIGHTLOAD_DWELL.map(([phase]) => phase), ["errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"]);
-  assert.deepEqual(NIGHTLOAD_DWELL[0], ["errand", 20_000]);
-  assert.equal(NIGHTLOAD_DWELL.reduce((sum, [, ms]) => sum + ms, 0), 70_000);
+test("NIGHTLOAD_DWELL: 토론이 첫 장면이고 errand 장면이 없으며 한 바퀴 합은 50초다", () => {
+  assert.deepEqual(NIGHTLOAD_DWELL.map(([phase]) => phase), ["discussion", "nomination", "defense", "verdict", "execution", "night", "morning"]);
+  assert.deepEqual(NIGHTLOAD_DWELL[0], ["discussion", 10_000]);
+  assert.equal(NIGHTLOAD_DWELL.reduce((sum, [, ms]) => sum + ms, 0), 50_000);
 });
 
 // ---- 18-07: --mode light, 조명 렌더 순서 판정 ----

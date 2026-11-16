@@ -1,10 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { phaseKey } from "../../shared/game/audience";
-import type { ClientMessage, EmoteId, MapId, PlaceId, PublicPlayer, RoomView } from "../../shared/protocol";
+import type { ClientMessage, EmoteId, MapId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { MOVE_COORD_LIMIT } from "../../shared/protocol";
-import { placeMarkerPlan } from "../game/errandView";
-import type { Rect } from "../game/errandView";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { HEADER_BOTTOM, PANEL_HEIGHT } from "../world/camera";
 import { createTapTracker } from "../world/input";
@@ -16,8 +14,6 @@ import type { MapStatusState } from "../world/status";
 import type { WorldStore } from "../world/store";
 import { installCameraHook, installEmotesHook, installGhostsHook, installLooksHook, installMapHook, installPinHook, installWorldTestHooks, worldTestHooksEnabled } from "../world/testHooks";
 import { MapStatusCard } from "./MapStatusCard";
-import { ErrandAct } from "./v2/ErrandAct";
-import { ErrandArrow, ErrandMarker } from "./v2/ErrandMarker";
 import { HeadStack } from "./v2/HeadStack";
 import type { HeadStackProps } from "./v2/HeadStack";
 import "../styles/world.css";
@@ -83,181 +79,6 @@ export interface WorldPick {
   disabled?: boolean;
 }
 
-/** 심부름 층 입력: 장소 중심(월드 단위)·처리 여부, 가장 가까운 미처리 장소, 처리 반경 안 미처리 장소, 빛남 여부, 근처 반경(월드 단위) */
-export interface ErrandLayerProps {
-  places: ReadonlyArray<{ id: PlaceId; x: number; z: number; done: boolean }>;
-  nextId: PlaceId | null;
-  /** 처리 반경 안 미처리 장소. 있을 때만 그 타일 위에 [처리] 알약이 서고(그때 화살표·타일 빛은 꺼진다) 알약이 빛난다 */
-  actId: PlaceId | null;
-  /** 가장 가까운 미처리 타일을 빛나게 할지 — 처리 반경 안에 미완료가 있거나 3곳 완료·유령이면 거짓. 화살표는 빛나지 않는다 */
-  callPlace: boolean;
-  nearR: number;
-  /** 타일을 눌렀다는 알림(걷기는 이 층이 바닥 탭과 같은 경로로 한다) */
-  onWalk?(id: PlaceId): void;
-  /** [처리] 알약을 눌렀다는 알림(처리 메시지는 쓰는 쪽이 보낸다) */
-  onAct?(): void;
-}
-
-const NEAR_RING_POINTS = 24;
-/** 링 svg 의 처음 마운트 스타일(위치를 아직 모른다). 값이 늘 같아 React 가 다시 쓰지 않는다 */
-const RING_HIDDEN: CSSProperties = { display: "none" };
-const TILE_HALF = 32; // 타일 64 의 절반
-const ARROW_HALF = 20; // 화살표 글리프 40 의 절반
-const PILL_H = 44; // [처리] 알약 높이
-const PILL_W_FALLBACK = 96; // 알약 폭을 아직 잴 수 없을 때(그리기 전)
-const RECT_TTL_MS = 250; // 소리 열·이름표 사각형을 다시 재는 간격(프레임마다 레이아웃을 강제하지 않는다)
-
-interface ErrandWriteCache {
-  at: number;
-  stage: Rect;
-  /** 소리 열 첫 칸·오른쪽 열 단추들과 진행 점 줄(윗변 − 8 부터)을 타일·알약·화살표가 피한다 */
-  avoid: Rect[];
-  /** 내 이름표 사각형(화살표만 피한다) */
-  tag: Rect | null;
-}
-
-/**
- * 표지 층이 쓰는 사각형 캐시(스테이지·피할 사각형·내 이름표)를 RECT_TTL_MS 마다 다시 잰다(프레임마다 레이아웃을 강제하지 않는다). 심부름 층이 쓴다.
- * 피할 사각형: 소리·오른쪽 열 단추, 진행 점 줄.
- */
-function refreshWriteCache(host: HTMLElement, insets: { top: number; bottom: number }, cache: { current: ErrandWriteCache | null }, now: number): ErrandWriteCache {
-  if (cache.current !== null && now - cache.current.at < RECT_TTL_MS) return cache.current;
-  const w = host.clientWidth || window.innerWidth;
-  const h = host.clientHeight || window.innerHeight;
-  const base = host.getBoundingClientRect();
-  const rel = (el: Element): Rect => {
-    const d = el.getBoundingClientRect();
-    return { left: d.left - base.left, top: d.top - base.top, right: d.right - base.left, bottom: d.bottom - base.top };
-  };
-  const avoid = [...host.ownerDocument.querySelectorAll("[data-side-button]")].map(rel);
-  // 진행 점 줄(16-08, V-23): 아래 패널이 없는 심부름 스테이지는 화면 아래까지 넓어서 타일·알약은 점 줄 윗변 − 8 위에만 놓는다.
-  // 스테이지 아래 끝을 점 줄 윗변으로 올리고(안쪽 여백 8 이 윗변 − 8 이 된다) 줄 자체도 피할 사각형에 더한다.
-  let stageBottom = h - insets.bottom;
-  const dotsEl = host.ownerDocument.querySelector("[data-errand-dots]");
-  if (dotsEl !== null) {
-    const dr = rel(dotsEl);
-    if (dr.bottom > dr.top) {
-      avoid.push({ left: dr.left, top: dr.top - 8, right: dr.right, bottom: dr.bottom });
-      stageBottom = Math.min(stageBottom, dr.top);
-    }
-  }
-  const tagEl = host.querySelector(".mf-world__tag[data-me]");
-  cache.current = { at: now, stage: { left: 0, top: insets.top, right: w, bottom: stageBottom }, avoid, tag: tagEl === null ? null : rel(tagEl) };
-  return cache.current;
-}
-
-/** 근처 반경 링(24점 다각형)을 내 위치 둘레에 쓴다. 위치를 모르거나 투영이 안 되면 숨긴다. 심부름 층이 쓴다 */
-function writeNearRing(layer: HTMLElement, mine: { x: number; z: number } | null, project: (x: number, z: number) => { sx: number; sy: number } | null, nearR: number): void {
-  const ring = layer.querySelector<SVGElement>("svg[data-near-ring]");
-  if (ring === null) return;
-  let pts: string | null = null;
-  if (mine !== null) {
-    const parts: string[] = [];
-    for (let i = 0; i < NEAR_RING_POINTS; i++) {
-      const a = (i / NEAR_RING_POINTS) * Math.PI * 2;
-      const pt = project(mine.x + Math.cos(a) * nearR, mine.z + Math.sin(a) * nearR);
-      if (pt === null) {
-        parts.length = 0;
-        break;
-      }
-      parts.push(`${pt.sx.toFixed(1)},${pt.sy.toFixed(1)}`);
-    }
-    if (parts.length === NEAR_RING_POINTS) pts = parts.join(" ");
-  }
-  const poly = ring.querySelector("polygon");
-  // svg 는 hidden 속성이 타입에도 브라우저 기본 스타일에도 없다 — display 로 숨긴다(처음 마운트 값 RING_HIDDEN 과 같은 쪽)
-  if (pts === null) {
-    if (ring.style.display !== "none") ring.style.display = "none";
-  } else {
-    if (poly !== null && poly.getAttribute("points") !== pts) poly.setAttribute("points", pts);
-    if (ring.style.display === "none") ring.style.display = "";
-  }
-}
-
-/** 프레임 투영 쓰기 — 숨김·transform·빛남·후광·링 점만 DOM 에 직접 쓴다. 값이 같으면 쓰지 않는다 */
-function writeErrandLayer(
-  layer: HTMLElement,
-  actLayer: HTMLElement | null,
-  host: HTMLElement,
-  cfg: ErrandLayerProps,
-  project: (x: number, z: number) => { sx: number; sy: number } | null,
-  mine: { x: number; z: number } | null,
-  insets: { top: number; bottom: number },
-  cache: { current: ErrandWriteCache | null },
-  now: number,
-): void {
-  const { stage, avoid, tag } = refreshWriteCache(host, insets, cache, now);
-  const items: Array<{ id: PlaceId; x: number; y: number }> = [];
-  for (const pl of cfg.places) {
-    const pt = project(pl.x, pl.z);
-    if (pt !== null) items.push({ id: pl.id, x: pt.sx, y: pt.sy });
-  }
-  const me = mine === null ? null : project(mine.x, mine.z);
-  const actEl = actLayer?.querySelector<HTMLElement>("[data-errand-act]") ?? null;
-  const pillW = actEl !== null && actEl.offsetWidth > 0 ? actEl.offsetWidth : PILL_W_FALLBACK;
-  const plan = placeMarkerPlan({
-    stage,
-    avoid,
-    items,
-    me: me === null ? null : { x: me.sx, y: me.sy },
-    nextId: cfg.nextId,
-    actId: cfg.actId,
-    ...(tag !== null ? { arrowAvoid: [tag] } : {}),
-    pillW,
-  });
-  const shownPins = new Map(plan.pins.map((p) => [p.id, p]));
-  const toggle = (el: Element, name: string, on: boolean): void => {
-    if (on === el.hasAttribute(name)) return;
-    if (on) el.setAttribute(name, "");
-    else el.removeAttribute(name);
-  };
-  const lit = (on: boolean, el: Element): void => {
-    el.classList.toggle("is-call", on);
-    toggle(el, "data-call", on);
-  };
-  const place = (el: HTMLElement, x: number, y: number, halfX: number, halfY: number): void => {
-    const t = `translate(${Math.round(x - halfX)}px, ${Math.round(y - halfY)}px)`;
-    if (el.style.transform !== t) el.style.transform = t;
-    if (el.hidden) el.hidden = false;
-  };
-  const doneIds = new Set(cfg.places.filter((p) => p.done).map((p) => p.id));
-  for (const el of layer.querySelectorAll<HTMLElement>("button[data-errand-place]")) {
-    const id = el.getAttribute("data-errand-place") as PlaceId;
-    const pin = shownPins.get(id);
-    if (pin === undefined) {
-      if (!el.hidden) el.hidden = true;
-      lit(false, el);
-      toggle(el, "data-rest", false);
-      continue;
-    }
-    place(el, pin.x, pin.y, TILE_HALF, TILE_HALF);
-    // 빛남 우선: 알약이 있으면 알약만 빛나고(타일은 꺼짐), 아니면 가장 가까운 미처리 타일. 남은 곳 정지 후광(data-rest)은 빛남과 무관하게 유지
-    const on = cfg.actId === null && cfg.callPlace && cfg.nextId === id;
-    lit(on, el);
-    toggle(el, "data-rest", !doneIds.has(id) && !on);
-  }
-  const arrowEl = layer.querySelector<HTMLElement>("[data-errand-arrow]");
-  if (arrowEl !== null) {
-    if (plan.arrow === null) {
-      if (!arrowEl.hidden) arrowEl.hidden = true;
-    } else {
-      place(arrowEl, plan.arrow.x, plan.arrow.y, ARROW_HALF, ARROW_HALF);
-      const turn = arrowEl.querySelector<HTMLElement>(".mv-errand-arrow__turn");
-      const rot = `rotate(${Math.round(plan.arrow.angle * 10) / 10}deg)`;
-      if (turn !== null && turn.style.transform !== rot) turn.style.transform = rot;
-    }
-  }
-  if (actEl !== null) {
-    if (plan.act === null) {
-      if (!actEl.hidden) actEl.hidden = true;
-    } else {
-      place(actEl, plan.act.x, plan.act.y, pillW / 2, PILL_H / 2);
-      lit(true, actEl);
-    }
-  }
-  writeNearRing(layer, mine, project, cfg.nearR);
-}
-
 export interface WorldStageProps {
   view: RoomView;
   store: WorldStore;
@@ -295,11 +116,6 @@ export interface WorldStageProps {
   underlay?: ReactNode;
   /** 좌석별 이름표 쌓임 속성(득표 배지·선두·도장·내 선택·투표함·직업 칩 …)과 발밑 고리 종류 */
   tagProps?: (seat: number) => Partial<Omit<HeadStackProps, "name" | "color">> & { ring?: RingKind; turn?: boolean };
-  /**
-   * 심부름 층(15·16페이즈, errand 단계만). 있으면 이름표 층 아래에 내 장소 타일·발밑 화살표·근처 반경 링을, 위에 [처리] 알약을 그린다.
-   * 위치는 런타임 프레임 콜백에서 투영해 DOM 에 직접 쓴다(React 상태를 프레임마다 바꾸지 않는다). 좌석·역할은 이 층에 들어오지 않는다
-   */
-  errand?: ErrandLayerProps;
   onNotice(text: string): void;
   /** 있을 때만 연결이 끊긴 사람의 이름표가 [내보내기] 버튼이 된다(대기실 전용 — 게임 중 서버는 CANNOT_KICK) */
   onKick?(seat: number, nickname: string): void;
@@ -333,11 +149,8 @@ export function WorldStage(props: WorldStageProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const tagRef = useRef<HTMLDivElement>(null);
-  const errandRef = useRef<HTMLDivElement>(null);
-  const errandActRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<WorldRuntime | null>(null);
   const [tracker] = useState(createTapTracker);
-  const [errandCache] = useState<{ current: ErrandWriteCache | null }>(() => ({ current: null }));
   // 손가락을 대는 순간 입력칸에 포커스가 있었던 포인터(D4). 떼는 순간에 정하지 않는 이유: 마우스는 누르는 동안 브라우저가 포커스를 옮긴다.
   const downWhileTyping = useRef(new Set<number>());
   const [mapStatus, setMapStatus] = useState<MapStatusState>(initialMapStatus);
@@ -406,15 +219,6 @@ export function WorldStage(props: WorldStageProps) {
       onCostumes: (costumes, dimmed) => live.current.props.onCostumes?.(costumes, dimmed),
       onZoom: pinHook?.setZoom,
       onCamera: (state) => cameraHook?.set(state),
-      onProject: (project, now) => {
-        const { props: p } = live.current;
-        const ins = p.stageInsets;
-        const insets = { top: ins?.top ?? HEADER_BOTTOM, bottom: ins?.bottom ?? PANEL_HEIGHT };
-        const layer = errandRef.current;
-        if (layer === null || p.errand === undefined) return;
-        const mine = p.store.positionOf(p.view.me.seat, now + p.offset);
-        writeErrandLayer(layer, errandActRef.current, host, p.errand, project, mine, insets, errandCache, now);
-      },
       allowSoftware: hooksOn,
       loadModules: live.current.props.loadModules,
       mapId: () => mapId,
@@ -525,20 +329,6 @@ export function WorldStage(props: WorldStageProps) {
     sendWalk(at);
   };
 
-  // 심부름 표지: 그 장소 중심으로 걷는다(바닥 탭과 같은 경로 — 서버로 가는 메시지는 move 하나뿐). 처리는 [처리] 로만 한다
-  const onErrandPin = (id: PlaceId): void => {
-    const { props: p } = live.current;
-    const runtime = runtimeRef.current;
-    const errand = p.errand;
-    const pl = errand?.places.find((x) => x.id === id);
-    if (errand === undefined || pl === undefined) return;
-    errand.onWalk?.(id);
-    if (p.canWalk === false || runtime === null || !p.canSend || p.exiting) return;
-    const at = runtime.walkTo(pl.x, pl.z);
-    if (at === null) return;
-    sendWalk(at);
-  };
-
   const mySeat = view.me.seat;
   const here = new Set(view.players.map((p) => p.seat));
   const scene = props.scene;
@@ -582,30 +372,6 @@ export function WorldStage(props: WorldStageProps) {
         }}
       />
       {props.underlay}
-      {props.errand ? (
-        <div ref={errandRef} className="mf-world__errand" data-errand-layer="">
-          <svg className="mf-world__ring" data-near-ring={String(props.errand.nearR)} aria-hidden="true" focusable="false" style={RING_HIDDEN}>
-            <polygon points="" />
-          </svg>
-          {props.errand.places.map((pl) => (
-            <ErrandMarker key={pl.id} id={pl.id} done={pl.done} call={false} hidden onWalk={() => onErrandPin(pl.id)} />
-          ))}
-          <ErrandArrow angle={0} call={false} hidden />
-        </div>
-      ) : null}
-      {/* [처리] 알약은 타일·화살표 층보다 위(z-tags + 1)라 층을 따로 둔다. 처리 반경 안 미처리 장소가 있을 때만 DOM 에 있다 */}
-      {props.errand ? (
-        <div ref={errandActRef} className="mf-world__errand-act" data-errand-act-layer="">
-          {props.errand.actId !== null ? (
-            <ErrandAct
-              id={props.errand.actId}
-              call={false}
-              hidden
-              onPress={() => live.current.props.errand?.onAct?.()}
-            />
-          ) : null}
-        </div>
-      ) : null}
       <div
         ref={tagRef}
         className="mf-world__tags"

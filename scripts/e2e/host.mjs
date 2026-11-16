@@ -40,7 +40,6 @@ const MAX_STEPS = 90;
 /** 시간이 있는 단계의 최소 길이(ms) — src/game/hostLine.ts hostTimeOf 와 같은 값 */
 const HOST_TIME_MIN_MS = 3000;
 /** 띠 검사가 반드시 지나야 하는 단계(없으면 EB0 실패 — 공허 통과 금지). 배정은 3초 창이라 잡히면 더하고 못 잡아도 실패가 아니다 */
-// 21-16: 이 흐름은 기본 마피아 판으로 돈다(저녁 errand 가 없다) — errand(원인 흐름 저녁) 띠는 cause-evening 이 문장·한 줄·겹침까지 본다. 그래서 필수 단계에서 errand 를 뺀다.
 const BAND_REQUIRED = ["lobby", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
 /** 이 높이(px) 미만의 폰은 방 틀 높이 575 미만의 짧은 폰이다(DEFAULT_SIZES 의 360x560 probe) — UI#14 알려진 한계 적용 대상 */
 const SHORT_PHONE_H = 575;
@@ -86,7 +85,7 @@ async function readTagsStable(page, maxMs = 11000) {
 }
 
 /** ended 까지 넘긴다. 처형이 없는 날이 이어지면 한 번의 skipTo(24칸)로 모자랄 수 있어 몇 번 더 시도한다(마감이 먼저 지나 이미 ended 면 그대로 둔다).
- *  15페이즈: 하루에 심부름 단계가 하나 늘어(6칸) 시도 횟수를 5 → 8 로 올렸다(15-09). */
+ *  15페이즈: 하루에 단계가 하나 늘어(6칸) 시도 횟수를 5 → 8 로 올렸다(15-09, 22-06 에서 그 단계가 없어졌지만 한도라 그대로 둔다). */
 async function driveToEnd(hp, ht, tries = 8) {
   for (let i = 0; i < tries && ht.last().phase !== "ended"; i++) {
     try {
@@ -124,7 +123,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
     if (!r.ok) rec(sc, "D0", `시간대 글자를 읽는다(${phase})`, false, r.detail);
   }
 
-  /** 방장 한 명 + 봇 n 으로 시작 직전(로비)까지 만든다. 시트는 닫아 둔다. mode("basic"|"extended", 19-07)를 주면 직업을 정한 뒤 방장 줄의 [판 종류] 로 그 판 종류를 고른다(21-16: 기본값은 기본 마피아 판("basic") 이다 — 제품 기본 확장판이 원인 흐름이 되어, 낮 시작·밤 얼굴 목록 순서를 전제한 띠·도구·누설 흐름은 기본 마피아 판으로 돈다(원인 흐름은 cause-* 가 본다)) */
+  /** 방장 한 명 + 봇 n 으로 시작 직전(로비)까지 만든다. 시트는 닫아 둔다. mode("basic"|"extended", 19-07)를 주면 직업을 정한 뒤 방장 줄의 [판 종류] 로 그 판 종류를 고른다(기본값은 기본 마피아 판("basic") 이다 — 22-04 가 원인 흐름을 지웠다) */
   async function lobbyWith(ctx, flowId, { bots, role, vote, guests = 0, mode = "basic" }) {
     const host = await startHost(ctx, flowId, { nickname: BAND_NICK });
     const { page: hp, tracker: ht } = host;
@@ -380,7 +379,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
   /**
    * 한 판을 한 시점(role = 방장 직업)으로 걸으며 단계마다 띠·목표·빛남 DOM 을 읽어 items 에 쌓는다.
    * ghost 판이면 방장이 투표로 처형되어 탈락한 뒤부터 시점이 ghost 가 된다(ownRole 은 살았을 때 직업).
-   * mode(19-07)를 주면 그 판 종류로 걷고, 걸은 판의 마지막 view.mode 와 errand 단계를 지났는지를 played 에 남긴다(판 종류가 실제로 적용됐는지의 근거).
+   * mode(19-07)를 주면 그 판 종류로 걷고, 걸은 판의 마지막 view.mode 를 played 에 남긴다(판 종류가 실제로 적용됐는지의 근거).
    */
   async function walkLeak(ctx, flowId, role, ghostGame, items, viewKeys, { mode = undefined, played = [] } = {}) {
     const rec = recorder(ctx);
@@ -440,7 +439,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       for (const k of ht.viewKeys.top) viewKeys.top.add(k);
       for (const k of ht.viewKeys.me) viewKeys.me.add(k);
       for (const k of ht.viewKeys.day) viewKeys.day.add(k);
-      played.push({ role: ghostGame ? "ghost" : role, mode: ht.last()?.mode ?? "extended", errand: ht.phases.includes("errand"), ended: ht.last()?.phase === "ended" });
+      played.push({ role: ghostGame ? "ghost" : role, mode: ht.last()?.mode ?? "extended", ended: ht.last()?.phase === "ended" });
       return ghostGame ? seen.has(`ghost/night`) : true;
     } finally {
       await closeGame(asGame(host));
@@ -467,13 +466,13 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
     const nights = items.filter((i) => i.phase === "night").length;
     rec(`${id}/coverage`, "LK2", "밤 화면을 시점마다 읽었다(마피아·경찰·의사·시민·유령 5곳)", nights >= 5, `밤 읽기 ${nights}곳`);
     if (mode) {
-      const off = played.filter((p) => p.mode !== mode || (mode === "basic" && p.errand) || !p.ended);
+      const off = played.filter((p) => p.mode !== mode || !p.ended);
       rec(
         `${id}/coverage`,
         "LKm",
-        `다섯 판 모두 판 종류가 ${mode} 이고 결과까지 갔다${mode === "basic" ? "(심부름 단계 없음)" : ""}`,
+        `다섯 판 모두 판 종류가 ${mode} 이고 결과까지 갔다`,
         played.length === 5 && off.length === 0,
-        played.length !== 5 ? `걸은 판 ${played.length}개` : off.length > 0 ? off.map((p) => `${p.role} 판: mode ${p.mode}${p.errand ? " · errand 를 지남" : ""}${p.ended ? "" : " · 끝나지 않음"}`).join(" / ") : `판 ${played.length}개`,
+        played.length !== 5 ? `걸은 판 ${played.length}개` : off.length > 0 ? off.map((p) => `${p.role} 판: mode ${p.mode}${p.ended ? "" : " · 끝나지 않음"}`).join(" / ") : `판 ${played.length}개`,
       );
     }
     for (const l of hostLeakChecks(items)) rec(`${id}/leak`, l.id, `${l.label} (읽기 ${items.length}곳)`, l.ok, l.detail);
@@ -523,7 +522,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       await setBots(hp, ht, 4);
       await setBotVote(hp, ht, { exec: "no", pick: "other" });
       await chooseRole(hp, ht, "citizen");
-      // 21-16: 낮 시작 발표(dayAnnounce)가 있는 판은 기본 마피아뿐이다(확장판 원인 흐름은 역할 확인 → 저녁) — 이 흐름은 낮 시작 구간을 재므로 기본 마피아 판으로 돈다
+      // 이 흐름은 낮 시작 구간을 재므로 기본 마피아 판으로 돈다
       await pickModeViaRail(hp, ht, "basic");
       await startGame(hp, ht);
       await settleBand(hp, ht, "roleReveal").catch(() => {});
@@ -537,18 +536,17 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         segs.push({ kind, name, count: log?.length ?? -1, played: log?.filter((e) => e.played).length ?? -1 });
         return phase;
       };
-      // roleReveal → dayAnnounce(전환 1), dayAnnounce → errand(0, 15페이즈), errand → discussion(1), discussion → nomination(1), nomination → …
+      // roleReveal → dayAnnounce(전환 1), dayAnnounce → discussion(0), discussion → nomination(1), nomination → …
       const toDay = await stepSeg("transition", "역할 확인 → 낮 시작");
       if (toDay === "dayAnnounce") {
-        // 낮 시작은 2초 단계라 넘기기를 누르면 심부름까지 건너뛰거나(14-09: 배포본은 지연이 커서 이미 토론으로 넘어간 뒤 넘기기가 토론 → 투표를 건드려 1번이 잡혔다)
+        // 낮 시작은 2초 단계라 넘기기를 누르면 토론까지 건너뛰거나(14-09: 배포본은 지연이 커서 이미 토론으로 넘어간 뒤 넘기기가 토론 → 투표를 건드려 1번이 잡혔다)
         // 자동으로 넘어가는 것을 기다려 그 구간의 ui.host 를 센다. 0번이어야 한다는 문턱은 그대로다.
         await clearLog(hp);
-        await ht.waitFor((v) => v.phase === "errand" || v.phase === "discussion", 8000, "낮 시작 → 다음 단계 자동 전환").catch(() => {});
+        await ht.waitFor((v) => v.phase === "discussion", 8000, "낮 시작 → 다음 단계 자동 전환").catch(() => {});
         await sleep(CHIME_SETTLE_MS);
         const log = await hostLog(hp);
-        // 기본 마피아는 낮 시작 다음이 토론이다(심부름 없음), 꺼진 옛 확장판 경로만 심부름이다 — 두 구간 모두 ui.host 0번이어야 한다(HS3)
-        const toErrand = ht.last().phase === "errand";
-        segs.push({ kind: toErrand ? "dayToErrand" : "dayToDiscussion", name: toErrand ? "낮 시작 → 심부름" : "낮 시작 → 토론", count: log?.length ?? -1, played: log?.filter((e) => e.played).length ?? -1 });
+        // 낮 시작 다음은 토론이다 — 그 구간의 ui.host 는 0번이어야 한다(HS3)
+        segs.push({ kind: "dayToDiscussion", name: "낮 시작 → 토론", count: log?.length ?? -1, played: log?.filter((e) => e.played).length ?? -1 });
       }
       for (let i = 0; i < 6 && ht.last().phase !== "ended"; i++) {
         const from = ht.last().phase;

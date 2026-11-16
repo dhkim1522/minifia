@@ -233,7 +233,7 @@ describe("기본 마피아 판의 시작·유지 (D-06, D-10)", () => {
     expect(String((await raw(g.s.code)).mode)).toBe("basic");
     const walked: string[] = ["assigning"];
     await clearRates(g.s.code);
-    for (let i = 0; i < 4 && walked.at(-1) !== "discussion" && walked.at(-1) !== "errand"; i += 1) {
+    for (let i = 0; i < 4 && walked.at(-1) !== "discussion"; i += 1) {
       await skipOnce(g.s);
       walked.push((await raw(g.s.code)).phase);
     }
@@ -241,19 +241,18 @@ describe("기본 마피아 판의 시작·유지 (D-06, D-10)", () => {
   });
 });
 
-describe("대조 — 판 종류를 고르지 않은 같은 구성의 판 (D-04, 성공 기준 4)", () => {
-  it("mode 를 고르지 않으면 view.mode 는 extended 이고 낮 시작 발표 다음이 심부름(errand)이며, 산 사람은 그 단계에서 me.errand 를 받는다", { timeout: 60_000 }, async () => {
+describe("대조 — 판 종류를 고르지 않은 같은 구성의 판 (D-04, 22-06: 확장판도 심부름이 없다)", () => {
+  it("mode 를 고르지 않으면 view.mode 는 extended 이고 낮 시작 발표 다음이 토론이며, me.errand 키는 어느 프레임에도 없다", { timeout: 60_000 }, async () => {
     const t = await table();
     await start(t);
     const walked: string[] = ["assigning"];
-    for (let i = 0; i < 4 && walked.at(-1) !== "discussion" && walked.at(-1) !== "errand"; i += 1) {
+    for (let i = 0; i < 4 && walked.at(-1) !== "discussion"; i += 1) {
       await skipOnce(t.s);
       walked.push((await raw(t.s.code)).phase);
     }
     for (const k of t.socks) await settle(k, mark(k));
-    expect(walked.join(">")).toBe("assigning>roleReveal>dayAnnounce>errand");
+    expect(walked.join(">")).toBe("assigning>roleReveal>dayAnnounce>discussion");
     expect(t.socks.map((k) => String(lastViewOf(k).mode)).join(",")).toBe("extended,extended,extended");
-    // 같은 전수 방식이 확장판의 키는 본다 — basic 판의 "키 없음" 검사가 빈 검사가 아니다
-    expect(t.socks.map((k) => statesOf(k).some((m) => keyPaths(m).includes(".view.me.errand"))).join(",")).toBe("true,true,true");
+    expect(t.socks.map((k) => statesOf(k).some((m) => keyPaths(m).includes(".view.me.errand"))).join(",")).toBe("false,false,false");
   });
 });

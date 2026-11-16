@@ -221,7 +221,7 @@ export interface WorldRuntimeDeps {
   onCamera?: (state: { mode: "follow" | "fixed"; scale: number }) => void;
   /**
    * 프레임마다 이름표 쓰기 다음에 한 번 불린다(15-05). project(x, z) 는 월드 바닥점(발끝)의 화면 좌표(host 기준 px)를 돌려준다 —
-   * 심부름 표지·화살표·근처 링이 이 콜백 안에서 DOM 에 직접 쓴다(React 상태를 프레임마다 바꾸지 않는다). 투영할 수 없으면 null
+   * 이 콜백 안에서 DOM 에 직접 쓸 수 있다(React 상태를 프레임마다 바꾸지 않는다). 투영할 수 없으면 null
    */
   onProject?: (project: (x: number, z: number) => { sx: number; sy: number } | null, now: number) => void;
 }
@@ -248,7 +248,7 @@ export interface WorldRuntime {
   /** 화면 좌표의 탭. 받아들이면 바닥 교점(월드 단위)을 돌려주고 목적지 링을 바로 띄운다 */
   tap(clientX: number, clientY: number): { x: number; z: number } | null;
   /**
-   * 월드 단위 목적지로 걷는다 — tap 이 바닥 교점을 얻은 뒤와 같은 경로(링을 바로 띄우고 목적지를 돌려준다, 15-05 심부름 표지).
+   * 월드 단위 목적지로 걷는다 — tap 이 바닥 교점을 얻은 뒤와 같은 경로(링을 바로 띄우고 목적지를 돌려준다).
    * 서버로 보내는 일과 notifyMoveSent 는 부른 쪽이 탭과 똑같이 한다
    */
   walkTo(x: number, z: number): { x: number; z: number } | null;

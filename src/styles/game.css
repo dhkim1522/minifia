@@ -14,7 +14,6 @@
 /* 헤더: 위 18, 좌우 16. 제목·안내는 왼쪽, 오른쪽에 [역할 카드] 44×44 + 시간 링 44(간격 8). 맵 탭을 가로채지 않도록 버튼만 입력을 받는다. */
 .mf-game__header { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-toast); box-sizing: border-box; height: 62px; padding: var(--space-sm) var(--space-md) 0; pointer-events: none; }
 .mf-game__header .mf-btn, .mf-game__header .mv-tool { pointer-events: auto; }
-.mf-game__record-slot { display: contents; }
 .mf-game__header .mv-phase { align-items: flex-start; }
 .mf-game__header .mv-phase__title, .mf-game__header .mv-phase__tod, .mf-game__header .mv-phase__sep, .mf-game__header .mv-phase__hint { text-shadow: var(--shadow-text); }
 /* 접히는 안내 줄 높이(한 줄)만큼만 헤더 아래로 삐져나온다 */
@@ -51,12 +50,6 @@
 @keyframes mf-announce-dim { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mf-announce-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .mf-announce, .mf-announce__text { animation: none; } }
-/* 목격 기록 카드 자리(15-07, UI-SPEC "기록 카드 영역"): 좌우 16, 위 = 독 줄 아래 8, 아래 = 채팅 입력줄 윗변 − 8(GameMap 이 --mf-record-bottom 으로 잰다).
- * 층 z-overlay — 띠(+1)·소리 단추 아래. 틀은 눌림을 통과시키고 카드만 받는다(입력줄·[토론 끝내기]는 틀 밖이라 가려지지 않는다). */
-.mf-game__record { position: absolute; left: var(--space-md); right: var(--space-md); top: calc(var(--mf-host-dock, 175px) + 8px); bottom: var(--mf-record-bottom, 150px); z-index: var(--z-overlay); display: flex; flex-direction: column; justify-content: flex-start; pointer-events: none; }
-.mf-game__record > .mv-record { pointer-events: auto; }
-/* 아침 증거 카드 자리(15-07 → 16-01 V-28): 위 = 소리 독 아랫변 + 16(16-06 이 독 아랫변을 옮기면 따라간다), 좌우 16. 누를 것이 아니므로 눌림 통과, 사라질 때는 opacity 만 */
-.mf-game__trace { position: absolute; top: calc(var(--mf-host-dock, 175px) + 16px); left: var(--space-md); right: var(--space-md); z-index: calc(var(--z-toast) + 5); display: flex; justify-content: center; pointer-events: none; }
 
 /* 유령이 되는 순간(08-17, UI-SPEC "유령이 되는 순간"): 이름표 위 직업 칩이 dur-med 동안 나타난다. 재접속 첫 화면에는 data-ghost-enter 가 없어 연출이 없다 */
 .mf-game[data-ghost-enter] .mv-rolechip { animation: mf-chip-in var(--dur-med) var(--ease-out) both; }
@@ -96,16 +89,4 @@
    배지 버튼이 위, 귓속말 버튼(09.1.1-09)이 아래라 두 칸(48 + 8 + 48)을 항상 잡아 둔다 — 버튼이 하나일 때도 위 칸 자리는 그대로다. 빈 칸은 포인터를 받지 않는다(땅 탭 걷기를 가리지 않는다). 시트 아래(z-overlay − 1) */
 .mf-float { position: absolute; right: var(--space-md); bottom: calc(var(--mf-kb-lift, 0px) + var(--mf-panel-h, 0px) + var(--space-sm)); z-index: calc(var(--z-overlay) - 1); display: flex; flex-direction: column; gap: var(--space-sm); min-height: calc(var(--control-input) * 2 + var(--space-sm)); pointer-events: none; }
 
-/* 심부름 층(15-05): 이름표 층보다 한 단 아래. 층 전체는 눌림 통과, 표지 버튼만 받는다(바닥 탭이 표지 없는 곳에서 그대로 걷기로 간다).
-   위치·숨김은 런타임 프레임 콜백이 DOM 에 직접 쓴다 — 이 파일에는 자리 값이 없다. */
-.mf-world__errand { position: absolute; inset: 0; z-index: calc(var(--z-tags) - 1); pointer-events: none; overflow: hidden; }
-.mf-world__errand > .mv-errand-pin, .mf-world__errand > .mv-errand-arrow { left: 0; top: 0; }
-.mf-world__errand > .mv-errand-pin { pointer-events: auto; }
-.mf-world__errand [hidden] { display: none; }
-/* [처리] 알약 층(16-07): 타일·화살표 층보다 한 단 위(z-tags + 1), 이름표 층 위. 층은 눌림 통과, 알약 버튼만 받는다 */
-.mf-world__errand-act { position: absolute; inset: 0; z-index: calc(var(--z-tags) + 1); pointer-events: none; overflow: hidden; }
-.mf-world__errand-act > .mv-errand-act { left: 0; top: 0; }
-.mf-world__errand-act [hidden] { display: none; }
-/* 근처 반경 링: 굵기 2·gray-50 35% 점선, 정지 모양(모션 줄이기와 무관). 처리 반경은 그리지 않는다 */
-.mf-world__ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; fill: none; stroke: var(--gray-50); stroke-opacity: 0.35; stroke-width: 2; stroke-dasharray: 6 6; stroke-linejoin: round; }
 

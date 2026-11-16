@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import "../../styles/v2.css";
 import type { SoundView } from "../../audio/useSound";
 import type { RoomView } from "../../../shared/protocol";
-import { hostBandModeOf, hostLineOf, hostTimeOf, type HostLocal } from "../../game/hostLine";
+import { hostBandModeOf, hostLineOf, hostTimeOf } from "../../game/hostLine";
 import { timerTone, useCountdown } from "../../net/countdown";
 import { SoundButton } from "./SoundButton";
 
@@ -19,8 +19,6 @@ export interface HostBandProps {
   offset: number;
   /** 역할 카드 앞면을 본 적이 있는가(클라이언트 상태) */
   cardSeen: boolean;
-  /** 클라이언트 상태(15-07·18.1-12): 목격 기록을 열었는가·아침 흔적 구간인가·심부름 시작 카드가 떠 있는가. 맵 화면이 알린다. 없으면 모두 거짓 */
-  local?: Pick<HostLocal, "recordOpened" | "traceOn" | "startCard">;
   /** 소리를 지원하는 환경이면 독에 단추를 둔다 */
   sound?: SoundView | null;
 }
@@ -95,10 +93,10 @@ export function useHostMetrics(rootRef: RefObject<HTMLDivElement | null>, bandRe
   }, [rootRef]);
 }
 
-export function HostBand({ view, offset, cardSeen, local, sound }: HostBandProps) {
+export function HostBand({ view, offset, cardSeen, sound }: HostBandProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const bandRef = useRef<HTMLDivElement>(null);
-  const line = hostLineOf(view, { cardSeen, ...(local ?? {}) });
+  const line = hostLineOf(view, { cardSeen });
   const showTime = hostTimeOf(view);
   // 세 상태(18.1-12): show = 문장 + 초·막대, blank = 초·막대만(큰 글·시작 카드가 말한다), off = 면을 보이지 않게(자리는 그대로)
   const mode = hostBandModeOf(view, line);

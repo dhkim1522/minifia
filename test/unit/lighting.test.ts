@@ -152,13 +152,7 @@ function viewOf(phase: PhaseId, o: { role?: "mafia" | "police" | "doctor" | "cit
 }
 const ROLES = ["mafia", "police", "doctor", "citizen"] as const;
 
-describe("저녁·아침·토론·기본판 밤 조명 (22-04: 원인 흐름 밤·저녁 조명을 지웠다)", () => {
-  it("저녁(errand) 단계는 낮 조명 talk 그대로다", () => {
-    expect(lightingOf("errand")).toBe("talk");
-    expect(lightingFor(viewOf("errand", { role: "citizen" }))).toBe("talk");
-    expect(lightingFor(viewOf("errand", { role: "mafia" }))).toBe("talk");
-  });
-
+describe("아침·토론·기본판 밤 조명 (22-04: 원인 흐름 밤·저녁 조명을 지웠다)", () => {
   it("아침·토론은 그대로(morning·talk)", () => {
     expect(lightingFor(viewOf("morning", { role: "mafia" }))).toBe("morning");
     expect(lightingFor(viewOf("discussion", { role: "citizen" }))).toBe("talk");
@@ -185,10 +179,9 @@ describe("원인 흐름이 잠긴 확장판은 옛 조명 그대로", () => {
   });
   afterAll(() => restoreLock());
 
-  it("밤 시민 nightCitizen·마피아 night, errand 는 talk", () => {
+  it("밤 시민 nightCitizen·마피아 night", () => {
     expect(lightingFor(viewOf("night", { role: "citizen" }))).toBe("nightCitizen");
     expect(lightingFor(viewOf("night", { role: "mafia" }))).toBe("night");
-    expect(lightingFor(viewOf("errand", { role: "citizen" }))).toBe("talk");
     expect(nightDarkOf(viewOf("night", { role: "citizen" }))).toBe(true);
   });
 });

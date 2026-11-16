@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import type { RoomView, ServerMessage } from "../../shared/protocol";
 import { closePhase, endAs, framesOf, lastViewOf, mark, pause, pointAll, pointAs, settle, startedGame, storedRoom, threeAliveGame, verdictAll, chatsOf } from "./helpers";
 import type { Game } from "./helpers";
-import { underCauseLock } from "../helpers/playable";
 
 const viewsOf = (msgs: ServerMessage[]): RoomView[] =>
   msgs.filter((m): m is Extract<ServerMessage, { t: "state" }> => m.t === "state").map((m) => m.view);
@@ -119,17 +118,13 @@ describe("기본판 낮 분기 (FLOW-02·03, 결정 0072)", () => {
     expect(g.socks.map((s) => lastViewOf(s).day?.noExecution?.reason).join(",")).toBe("noVotes,noVotes,noVotes,noVotes");
   }, 60_000);
 
-  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 이 시험만 원인 흐름을 잠근다(갈래 B).
-  it("산 사람이 정확히 셋인 낮 시작 발표 마감 뒤에는 심부름을 지나 토론으로 가고 showdown 프레임이 0이다", underCauseLock(async () => {
+  it("산 사람이 정확히 셋인 낮 시작 발표 마감 뒤에는 곧바로 토론으로 가고 showdown 프레임이 0이다", async () => {
     const g = await threeAliveGame();
     const from = g.socks.map(mark);
-    await closePhase(g.code); // 낮 시작 → 심부름(15페이즈)
-    await settleAll(g);
-    expect((await storedRoom(g.code)).phase).toBe("errand");
-    await closePhase(g.code); // 심부름 → 토론
+    await closePhase(g.code); // 낮 시작 → 토론
     await settleAll(g);
     expect((await storedRoom(g.code)).phase).toBe("discussion");
     expect(g.socks.map((s) => lastViewOf(s).phase).join(",")).toBe("discussion,discussion,discussion,discussion");
     expect(seenPhases(g, from).filter((p) => p === "showdown").length).toBe(0);
-  }), 60_000);
+  }, 60_000);
 });

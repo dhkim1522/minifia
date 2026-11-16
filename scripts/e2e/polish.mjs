@@ -36,7 +36,6 @@ const ONE_WORD_TODS = Object.freeze(["morning", "night"]);
 /** 게임 맵 단계 → 시간대 (src/game/timeOfDay.ts todOf 의 사본 — test/unit/e2eContract.test.ts 가 모든 키에서 같음을 고정한다) */
 export const TOD_BY_PHASE = Object.freeze({
   dayAnnounce: "day",
-  errand: "day",
   discussion: "day",
   nomination: "dusk",
   runoff: "dusk",
@@ -700,8 +699,8 @@ export async function measureChatOpen(page, draft) {
 
 // ---- C 탈락자는 누구든 같은 유령 그림 (18.1-09, 18.1-17 0083-2: 훅 window.__mfGhosts) ----
 
-/** 산 사람 화면이 탈락자 유령을 그리지 않는 단계(밤·심부름 — 서버가 본인(+근처)만 보내는 단계, 18.1-02 선택) */
-export const LIVE_GHOST_ABSENT_PHASES = Object.freeze(["night", "errand"]);
+/** 산 사람 화면이 탈락자 유령을 그리지 않는 단계(밤 — 서버가 본인만 보내는 단계, 18.1-02 선택) */
+export const LIVE_GHOST_ABSENT_PHASES = Object.freeze(["night"]);
 /** 유령이 걷기 전·후 산 사람 화면의 유령 자리가 같다고 보는 허용 오차(월드 단위) */
 export const GHOST_STILL_TOL = 0.05;
 
@@ -711,13 +710,13 @@ const isGhostsHook = (g) => g !== null && typeof g === "object" && Array.isArray
 
 /**
  * C1·C2 판정(산 사람 화면 유령). m = readLiveGhost 의 값 { hook, seats: [{ seat, shown, ghostTags, chips }], ghosts: { seats, ready } | null, roleChips, ghostSeats }.
- * ctx = { deadSeats, phase }. 밤·심부름(LIVE_GHOST_ABSENT_PHASES)이 아니면 C1 = 탈락 좌석마다 마지막 자리(shown)에 actor 가 있고 `.mv-tag.is-ghost` 이름표가 정확히 1개이며
- * 유령 훅(__mfGhosts)의 seats 에 그 좌석이 있고 ready(그림을 불러옴)다 — 사람 모양으로 남으면 seats 에 없다. 밤·심부름이면 기대가 반대 — shown null·유령 이름표 0·훅 seats 에 없음.
+ * ctx = { deadSeats, phase }. 밤(LIVE_GHOST_ABSENT_PHASES)이 아니면 C1 = 탈락 좌석마다 마지막 자리(shown)에 actor 가 있고 `.mv-tag.is-ghost` 이름표가 정확히 1개이며
+ * 유령 훅(__mfGhosts)의 seats 에 그 좌석이 있고 ready(그림을 불러옴)다 — 사람 모양으로 남으면 seats 에 없다. 밤이면 기대가 반대 — shown null·유령 이름표 0·훅 seats 에 없음.
  * C2 = [data-role-chip]·[data-ghost-seat] 이 0개(신분 단서 없음, 결정 0021) — 단계와 무관.
  */
 export function liveGhostChecks(m, { deadSeats, phase } = {}) {
   const L = {
-    C1: "탈락 좌석이 유령 그림으로 남는다(마지막 자리 actor·is-ghost 이름표 1·유령 훅 seats 에 있고 ready, 밤·심부름은 그리지 않음)",
+    C1: "탈락 좌석이 유령 그림으로 남는다(마지막 자리 actor·is-ghost 이름표 1·유령 훅 seats 에 있고 ready, 밤은 그리지 않음)",
     C2: "산 사람 화면에 직업 칩·죽은 자리 표식이 0개다",
   };
   const ok =

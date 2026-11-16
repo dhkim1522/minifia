@@ -44,9 +44,7 @@ import { castRunoffVote } from "../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
 import { castVerdict } from "../shared/game/verdict";
 import { endReached, toggleEnd } from "../shared/game/discussion";
-import { MAP_PHASES, canMove, nearPhaseOf } from "../shared/game/movement";
-import { actErrand, nearSnapFrame, placeCenterFx, sampleErrand } from "../shared/game/errand";
-import { ERRAND_MIN_GAP_MS, ERRAND_TICK_MS } from "../shared/game/phases";
+import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
 import type { MapDef } from "../shared/game/map";
@@ -121,8 +119,6 @@ export class Room extends DurableObject<Env> {
   private readonly writeAt = new Map<string, number>();
   // 새 유령 snap 을 이미 보낸 사람 id(08-09, 가정 A1). 인메모리라 하이버네이션·퇴거로 비면 유령에게 snap 이 한 번 더 갈 뿐이다(유령에게만, 무해).
   private readonly ghostSnapped = new Set<string>();
-  /** snapEachViewer 를 부른 횟수 — afterTransition 이 한 전환에 전체 snap 이 두 번 가지 않게 센다(메모리뿐, 저장하지 않는다). */
-  private snapEachCount = 0;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -163,8 +159,7 @@ export class Room extends DurableObject<Env> {
           await ctx.storage.put("room", this.room);
           // 정규화로 생긴 이른 마감(now + 2초)이 기존 만료 알람(90초 뒤 등)보다 먼저 깨어나야 하므로 마감이 바뀐 경우에만 여기서 알람을 건다.
           // 옛 messages 키만 지운 경우(결정 0017-7)는 마감이 그대로라 대기 중인 알람을 건드리지 않는다.
-          // 아침 근처 표본 시각(errandTickAt)을 채운 경우(WR-03)도 알람이 그 시각에 깨어나야 하므로 함께 다시 건다.
-          if (normalized.phaseEndsAt !== stored.phaseEndsAt || normalized.errandTickAt !== stored.errandTickAt) await ctx.storage.setAlarm(nextWakeAt(this.room));
+          if (normalized.phaseEndsAt !== stored.phaseEndsAt) await ctx.storage.setAlarm(nextWakeAt(this.room));
         }
         // 보관 줄을 되살린다(MAP-05 와 같은 복원 규칙, 결정 0058-1). 손상 레코드는 restoreChatLog 가 버린다. 방이 없으면 줄도 없다.
         const lines = await ctx.storage.list({ prefix: CHAT_KEY_PREFIX });
@@ -315,9 +310,6 @@ export class Room extends DurableObject<Env> {
         return;
       case "testBotVote":
         await this.handleTestBotVote(ws, msg.exec, msg.pick);
-        return;
-      case "errand":
-        await this.handleErrand(ws);
         return;
       case "move":
         this.handleMove(ws, msg.x, msg.z);
@@ -723,36 +715,6 @@ export class Room extends DurableObject<Env> {
     return null;
   }
 
-  // 심부름 처리(15페이즈, 결정 0074): 메시지에 필드가 없다 — 신원은 소켓 첨부의 playerId 뿐이고 위치는 서버 world 구간, 장소는 서버 목록이 정한다(D-08).
-  private async handleErrand(ws: WebSocket): Promise<void> {
-    const att = this.attachmentOf(ws);
-    if (!att || !this.room) {
-      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
-      return;
-    }
-    await this.applyErrand(att.playerId, Date.now());
-  }
-
-  // 사람의 errand 메시지와 봇 errandAct 가 같은 본체를 지난다(특권 없음). 간격(ERRAND_MIN_GAP_MS) 안의 요청과 규칙 거절(단계·생존·반경·중복·위치 없음)은
-  // 사람·역할·이유와 무관하게 같은 응답이다: 상태 변화 없이 보낸 사람에게만 자기 state 한 프레임(오류 프레임·방송 없음, D-08·T-15-02·T-15-04).
-  // 받아들이면 저장한 뒤 역시 본인에게만 state 를 보낸다 — 진행은 본인 view 에만 있어 다른 폰에 방송할 것이 없다.
-  private async applyErrand(playerId: string, now: number): Promise<void> {
-    const room = this.room;
-    if (!room) return;
-    const key = `errand:${playerId}`;
-    const last = this.writeAt.get(key);
-    if (last === undefined || now - last >= ERRAND_MIN_GAP_MS) {
-      this.writeAt.set(key, now);
-      const seg = Object.prototype.hasOwnProperty.call(this.world.segs, playerId) ? this.world.segs[playerId] : undefined;
-      const result = seg === undefined ? null : actErrand(room, playerId, positionAtFx(seg, now));
-      if (result !== null && result.ok) {
-        this.room = result.state;
-        await this.ctx.storage.put("room", this.room);
-      }
-    }
-    this.sendViewTo([playerId]);
-  }
-
   // 유언(9페이즈, WILL-01, 결정 0061-10): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다(T-09-28).
   private async handleWill(ws: WebSocket, text: string): Promise<void> {
     const att = this.attachmentOf(ws);
@@ -997,38 +959,6 @@ export class Room extends DurableObject<Env> {
       case "verdict":
         await this.applyVerdict(step.botId, act.agree);
         return;
-      // 15페이즈(결정 0074): 심부름. errandGo 는 그 봇의 미완료 장소(가짜는 마지막, 16페이즈 D-08) 중 지금 위치에서 가장 가까운 곳 중앙으로 사람과 같은 applyMove(단계·150ms·걷기 칸 보정)를 지난다.
-      // errandAct 는 사람의 errand 메시지와 같은 applyErrand 본체다. 난수 없음, 특권 없음.
-      case "errandGo": {
-        const bot = room.players.find((p) => p.id === step.botId);
-        const seg = Object.prototype.hasOwnProperty.call(this.world.segs, step.botId) ? this.world.segs[step.botId] : undefined;
-        if (!bot || !seg || bot.errandPlaces === undefined) return;
-        const map = this.mapDef();
-        const here = positionAtFx(seg, Date.now());
-        const done = bot.errandDone ?? [];
-        // 가짜 장소(16페이즈 D-08, 서버 전용 errandFake 키)는 마지막으로 미룬다: 가짜가 아닌 미완료 장소 중 가장 가까운 곳, 없을 때만 가짜로 간다.
-        // 가짜에서는 처리가 조용히 실패하지만 가짜가 가장 가깝다고 거기 서 버리는 겉보기 차이는 생기지 않는다.
-        let best: { x: number; z: number } | undefined;
-        let bestD = Infinity;
-        for (const pass of [false, true]) {
-          for (const id of bot.errandPlaces) {
-            if (done.includes(id) || (id === bot.errandFake) !== pass) continue;
-            const c = placeCenterFx(map, id);
-            if (c === undefined) continue;
-            const d = (c.x - here.x) ** 2 + (c.z - here.z) ** 2;
-            if (d < bestD) {
-              bestD = d;
-              best = c;
-            }
-          }
-          if (best !== undefined) break;
-        }
-        if (best !== undefined) this.applyMove(step.botId, best, Date.now());
-        return;
-      }
-      case "errandAct":
-        await this.applyErrand(step.botId, Date.now());
-        return;
       default: {
         // 새 봇 행동을 BotAct 에 더하고 여기를 빠뜨리면 컴파일이 실패한다(Pitfall 15).
         const unhandled: never = act;
@@ -1251,12 +1181,8 @@ export class Room extends DurableObject<Env> {
   private async afterTransition(prev: RoomState, now: number): Promise<void> {
     if (this.captureHomeNow()) await this.flushWorld();
     this.fillChalk(prev);
-    // 알람 따라잡기로 늦게 errand 에 닿으면 첫 표본 시각(진입 마감 + 1초)이 이미 지났다 — 지금부터 한 간격 뒤로 옮겨 들어오자마자 snap 이 두 번 가지 않게 한다(저장은 아래 한 번).
-    if (this.room !== null && nearPhaseOf(this.room) && !nearPhaseOf(prev) && this.room.errandTickAt !== undefined && this.room.errandTickAt <= now) {
-      this.room = { ...this.room, errandTickAt: now + ERRAND_TICK_MS };
-    }
     await this.persistAndBroadcast();
-    await this.syncPositions(now, prev);
+    await this.syncPositions(now);
     await this.emitDeathCards(prev, now);
     await this.emitBallotsCard(prev, now);
     this.emitResultLog(prev);
@@ -1345,12 +1271,12 @@ export class Room extends DurableObject<Env> {
     this.deliver(ids, { t: "chat", ...toWire(appended.record) });
   }
 
-  // 그날 처음으로 걷기 단계(dayAnnounce·errand·discussion)를 벗어난 지도 단계에 들어오면 각자 토론이 끝난 자리를 기억한다(결정 0061-5).
+  // 그날 처음으로 걷기 단계(dayAnnounce·discussion)를 벗어난 지도 단계에 들어오면 각자 토론이 끝난 자리를 기억한다(결정 0061-5).
   // captureHome 이 같은 일차면 입력을 그대로 돌려주므로(멱등) 지목 → 변론 → 밤처럼 이어지는 단계에서 자리를 덮지 않는다. 바뀌었으면 true.
   private captureHomeNow(): boolean {
     const room = this.room;
     if (!room || room.day === undefined) return false;
-    if (!MAP_PHASES.has(room.phase) || room.phase === "dayAnnounce" || room.phase === "errand" || room.phase === "discussion") return false;
+    if (!MAP_PHASES.has(room.phase) || room.phase === "dayAnnounce" || room.phase === "discussion") return false;
     const next = captureHome(
       this.world,
       room.players.map((p) => p.id),
@@ -1362,14 +1288,9 @@ export class Room extends DurableObject<Env> {
   }
 
   // 위치 동기화 한 번: 밤·아침 home → 방금 탈락한 사람 snap → 지목 배치. 모두 지금 단계 키와 world.lay.key 비교로 멱등이다.
-  // 근처 단계(저녁)를 들고 나는 snap 은 배치(move 프레임)보다 먼저 보낸다 — 아침 → 토론에서 전체 snap 이 지금 자리를 알린 뒤 둘레로 걷는 move 가 이어진다(D-18).
-  // prev 가 없으면(전환 없이 맞추기만 하는 호출) 들고남 snap 은 건너뛴다.
-  private async syncPositions(now: number, prev?: RoomState): Promise<void> {
-    // syncHome 이 이미 모두에게 snap 을 보냈으면(snapEachViewer 는 지금 단계 규칙을 따른다) 진입·이탈 snap 은 건너뛴다 — 한 전환에 snap 이 한 번이다.
-    const eachBefore = this.snapEachCount;
+  private async syncPositions(now: number): Promise<void> {
     await this.syncHome(now);
     this.snapNewGhosts(now);
-    if (prev !== undefined && this.snapEachCount === eachBefore) this.syncErrandTransition(prev, now);
     this.syncLayout(now);
   }
 
@@ -1406,7 +1327,6 @@ export class Room extends DurableObject<Env> {
   private snapEachViewer(now: number): void {
     const room = this.room;
     if (!room) return;
-    this.snapEachCount += 1;
     for (const viewer of room.players) {
       const frame = this.snapFrameFor(viewer, now);
       if (frame === null) continue;
@@ -1415,51 +1335,18 @@ export class Room extends DurableObject<Env> {
     }
   }
 
-  // 보는 사람 한 명에게 갈 지금 위치 프레임 한 곳(15-02, D-02): errand 단계의 산 사람은 본인 + 근처(nearSnapFrame), 그 밖은 worldVisibleTo 로 거른 snapFrame.
+  // 보는 사람 한 명에게 갈 지금 위치 프레임 한 곳: worldVisibleTo 로 거른 snapFrame.
   // 보낼 좌석이 없는 단계(ended 등)는 null — 보내지 않는다. handleHello·snapEachViewer·snapNewGhosts 가 모두 이 함수를 쓴다.
   private snapFrameFor(viewer: Player, now: number): Extract<WorldFrame, { k: "snap" }> | null {
     const room = this.room;
     if (!room) return null;
     const visible = worldVisibleTo(room, viewer.id);
     if (visible.size === 0) return null;
-    if (nearPhaseOf(room) && isAlive(viewer)) return nearSnapFrame(this.world, room.players, viewer.id, now);
     return snapFrame(
       this.world,
       room.players.filter((q) => visible.has(q.id)),
       now,
     );
-  }
-
-  // errand 의 근처 snap 을 산 사람마다 한 명씩 보낸다(D-02) — 새 무차별 방송 길을 만들지 않고 deliver 한 명씩(결정 0002·0021).
-  private syncErrandView(now: number): void {
-    const room = this.room;
-    if (!room || !nearPhaseOf(room)) return;
-    for (const viewer of room.players) {
-      if (!isAlive(viewer)) continue;
-      this.deliver(new Set([viewer.id]), nearSnapFrame(this.world, room.players, viewer.id, now));
-    }
-  }
-
-  // errand 로 들어오면 근처 snap, errand 를 벗어나면(토론으로) 모든 산 사람에게 전체 snap. 알람 따라잡기로 여러 단계를 지나도 "전 단계 → 지금 단계" 한 번이다.
-  private syncErrandTransition(prev: RoomState, now: number): void {
-    const room = this.room;
-    if (!room) return;
-    if (nearPhaseOf(room) && !nearPhaseOf(prev)) this.syncErrandView(now);
-    else if (!nearPhaseOf(room) && nearPhaseOf(prev)) this.snapEachViewer(now);
-  }
-
-  // errand 표본 한 번(D-04, 알람 하나에 합친다): 위치는 world.segs 의 positionAtFx. 상태(errandNear·errandSeen·errandTickAt)는 방 상태에 저장돼 하이버네이션에도 이어진다.
-  // 방 상태가 바뀌어도 view 에는 실리는 값이 없어 state 를 다시 방송하지 않는다 — 저장만 한다(표본당 쓰기 한 번). 이어서 근처 snap 을 보낸다.
-  private async runErrandTick(now: number): Promise<void> {
-    const room = this.room;
-    if (!room || !nearPhaseOf(room) || room.errandTickAt === undefined || room.errandTickAt > now) return;
-    const has = (id: string): boolean => Object.prototype.hasOwnProperty.call(this.world.segs, id);
-    const next = sampleErrand(room, (id) => (has(id) ? positionAtFx(this.world.segs[id]!, now) : undefined), now);
-    this.room = next;
-    // 결정 0076: 근처·목격 결과가 바뀐 표본만 저장한다. 표본 시각(errandTickAt)만 옮겨진 1초 표본은 메모리에 두고 다음 저장이 함께 싣는다
-    // (심부름 40초에 40번 쓰던 것). DO 가 도중에 내려가도 목격 기록은 저장돼 있고, 옛 표본 시각은 다시 깨어나자마자 곧바로 표본을 뜬다.
-    if (errandMarks(next) !== errandMarks(room)) await this.ctx.storage.put("room", next);
-    this.syncErrandView(now);
   }
 
   // 지금 단계의 배치(지목 둘레 자리·변론 무대·부결 복귀)를 서버가 걷게 한다(DAY-04·05, 결정 0060-7).
@@ -1549,7 +1436,6 @@ export class Room extends DurableObject<Env> {
       await this.advance(Date.now());
       await this.runDueBots(Date.now());
       this.runBotWander(Date.now());
-      await this.runErrandTick(Date.now());
       await this.reschedule();
     } catch (err) {
       // 토큰 없는 짧은 로그만 남기고, 예외로 재시도 한도가 소진되어 알람이 멈추지 않게 1초 뒤 다시 건다.
@@ -1977,9 +1863,4 @@ export class Room extends DurableObject<Env> {
       // 닫히는 중인 소켓에는 보낼 수 없다.
     }
   }
-}
-
-/** 심부름 표본이 바꾸는 사람별 근처·목격 값과 마지막 목격 줄(errandLast, 16페이즈)의 비교 키(결정 0076). 같으면 저장하지 않는다. */
-function errandMarks(state: RoomState): string {
-  return JSON.stringify([state.players.map((p) => [p.errandNear ?? null, p.errandSeen ?? null]), state.errandLast ?? null]);
 }

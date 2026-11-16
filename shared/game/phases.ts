@@ -1,7 +1,7 @@
 // 단계 정의 표. 코드 분기 대신 데이터 한 곳에 둔다(roles.ts 의 ROLE_TABLE 과 같은 원칙) —
 // 이후 페이즈는 이 표에 행을 더하는 방식으로만 단계를 늘린다(D-01).
-// 역할 확인(roleReveal) 뒤에는 낮 단계(dayAnnounce → errand → discussion)가 돈다(errand 는 15페이즈 결정 0074). 순차 주장 단계는 7페이즈에서 없어졌다(CHAT-06).
-// basic 판은 dayAnnounce → discussion 이다(19페이즈 D-08) — 표의 next 는 그대로 두고 nextPhaseOf 가 판 규칙으로 고른다.
+// 역할 확인(roleReveal) 뒤에는 낮 단계(dayAnnounce → discussion)가 돈다. 순차 주장 단계는 7페이즈에서 없어졌다(CHAT-06).
+// 낮 시작 발표 다음은 곧바로 토론이다(22페이즈 D-04 — 심부름 단계가 없어졌다). 기본 다음 단계는 nextPhaseOf 가 표에서 읽는다.
 // 기본판 낮 흐름(결정 0072, 8페이즈 결정 0060-1·DAY-07): discussion → nomination(투표, 동시 15초) → defense → verdict → execution → night → morning → dayAnnounce.
 // 승패가 나면 execution·morning 의 마감에서 ended(마감 없음)로 간다. 투표 동점·0표는 결선 없이 night 다. 순차 지목(0063-1)·동점 결선 runoff(0066-4)·마지막 3인 결전 showdown(0066-5)은
 // 판 규칙(ruleset.ts 의 rulesetOf)이 켜졌을 때만 돈다(두 판 모두 꺼짐). 분기(투표 동률·0표 → night 등)는 tick.ts 의 ON_DEADLINE 이
@@ -9,7 +9,6 @@
 // 단계 길이는 이 파일 한 곳에서만 정한다(6페이즈 플레이테스트가 여기만 고친다).
 // 표는 데이터만 둔다 — 진입 전이(훅)는 tick.ts 의 ON_ENTER 표에 있다.
 import type { PhaseId } from "../protocol";
-import type { Ruleset } from "./ruleset";
 
 export interface PhaseDef {
   /** 단계 길이(ms). null 이면 시간으로 끝나지 않는다. */
@@ -59,25 +58,13 @@ export const SHOWDOWN_TURN_MS = 8_000; // 결정 0066-5 · 플레이테스트 �
 export const SHOWDOWN_POINT_MS = 8_000; // 결정 0066-5 · 플레이테스트 뒤 이 줄만 고친다 — 셋이 동시에 한 명을 지목하는 창
 export const SHOWDOWN_REVEAL_MS = 1_500; // 결정 0066-5 · 플레이테스트 뒤 이 줄만 고친다 — 누가 누구를 지목했는지 동시 공개
 
-// 심부름(15페이즈, 결정 0074). 낮 시작 다음 40초. 거리는 월드 단위(1 단위 = 칸 하나). 플레이테스트 뒤 이 블록의 줄만 고친다 — 다른 곳에 같은 값을 쓰지 않는다.
-export const ERRAND_MS = 40_000; // 결정 0074 · 플레이테스트 뒤 이 줄만 고친다 — 심부름 단계 길이(D-01)
-export const ERRAND_COUNT = 3; // 결정 0074 — 산 사람마다 받는 장소 수(D-01)
-export const ERRAND_ACT_R = 1.2; // 결정 0074 — 처리 반경(월드 단위)
-export const ERRAND_NEAR_R = 3.0; // 결정 0074 — 근처 반경(월드 단위, 근처 사람만 보인다 D-02)
-export const ERRAND_TICK_MS = 1_000; // 결정 0074 — 근처·목격 표본 간격
-export const ERRAND_VIEW_HORIZON_MS = 1_500; // 결정 0074 — 근처 사람 이동 구간을 자르는 길이
-export const ERRAND_MIN_GAP_MS = 250; // 결정 0074 — 같은 사람의 처리 요청 최소 간격(연타 방어)
-export const RECORD_MAX = 6; // 결정 0074 — 목격 기록 줄 상한
-export const MORNING_TRACE_MS = 5_000; // 결정 0079(A3) · 흔적 카드가 두 줄이 되어 3→5초, 상한 15→16초 — 시간은 참고 목표(결정 0074 의 흔적 공개 구간)
-
 export const VERDICT_MS = 10_000; // 찬반(DAY-06, 결정 0060-1·0060-4) — 조기 종료 없이 마감까지
 
 export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
   lobby: Object.freeze({ durationMs: null, next: null, revealsOwnRole: false }), // start 로만 나간다
   assigning: Object.freeze({ durationMs: ASSIGNING_MS, next: "roleReveal", revealsOwnRole: false }),
   roleReveal: Object.freeze({ durationMs: ROLE_REVEAL_MS, next: "dayAnnounce", revealsOwnRole: true }),
-  dayAnnounce: Object.freeze({ durationMs: DAY_ANNOUNCE_MS, next: "errand", revealsOwnRole: true }),
-  errand: Object.freeze({ durationMs: ERRAND_MS, next: "discussion", revealsOwnRole: true }), // 15페이즈(결정 0074) — 낮 시작 다음 40초 심부름, 끝나면 토론
+  dayAnnounce: Object.freeze({ durationMs: DAY_ANNOUNCE_MS, next: "discussion", revealsOwnRole: true }),
   discussion: Object.freeze({ durationMs: DISCUSSION_MS, next: "nomination", revealsOwnRole: true }),
   defense: Object.freeze({ durationMs: DEFENSE_MS, next: "verdict", revealsOwnRole: true }),
   execution: Object.freeze({ durationMs: EXECUTION_MS, next: "night", revealsOwnRole: true }),
@@ -93,13 +80,10 @@ export const PHASE_DEFS: Readonly<Record<PhaseId, PhaseDef>> = Object.freeze({
 });
 
 /**
- * 기본 다음 단계(19페이즈 D-08). 단계 표(PHASE_DEFS)는 데이터 그대로 두고, 판 규칙에 따라 갈리는 곳만 여기서 고른다:
- *   낮 시작 발표 → 심부름이 켜진 판(extended)이면 errand, 꺼진 판(basic)이면 바로 discussion
- *   그 밖은 표 그대로 — roleReveal → dayAnnounce … execution → night → morning → dayAnnounce 다.
+ * 기본 다음 단계. 단계 표(PHASE_DEFS)의 next 그대로다 — roleReveal → dayAnnounce → discussion … execution → night → morning → dayAnnounce.
  * 마감 훅이 돌려준 분기(next)가 이 값보다 먼저다(tick.ts). 처형이 없는 낮의 다음 단계는 훅이 afterDayOf 로 정한다.
  */
-export function nextPhaseOf(phase: PhaseId, rules: Ruleset): PhaseId | null {
-  if (phase === "dayAnnounce") return rules.errand ? "errand" : "discussion";
+export function nextPhaseOf(phase: PhaseId): PhaseId | null {
   return PHASE_DEFS[phase].next;
 }
 

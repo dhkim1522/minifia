@@ -90,7 +90,6 @@ describe("visibleSeats (GHOST-01, T-08-25)", () => {
     const night = viewOf("night", { dead: [3], mySeat: 1 });
     expect(3 in visibleSeats(asRole(night, "mafia"))).toBe(false);
     expect(3 in visibleSeats(asRole(night, "citizen"))).toBe(false);
-    expect(3 in visibleSeats(viewOf("errand", { dead: [3], mySeat: 1 }))).toBe(false);
   });
 
   it("산 사람 viewer: 낮 시작~아침 단계에서는 탈락 좌석이 ghost 로 있다", () => {
@@ -563,9 +562,8 @@ describe("탈락자 장면 표는 직업과 무관하다 (결정 0083-2, L13)", 
     same(seats[3], { show: true, ghost: false, fadeAt: 1000 });
   });
 
-  it("산 사람의 밤·심부름에는 탈락 좌석이 없다(겉보기 같음)", () => {
+  it("산 사람의 밤에는 탈락 좌석이 없다", () => {
     expect(3 in visibleSeats(viewOf("night", { dead: [3], mySeat: 0 }))).toBe(false);
-    expect(3 in visibleSeats(viewOf("errand", { dead: [3], mySeat: 0 }))).toBe(false);
   });
 
   it("튜토리얼 지도 장면(아침·투표)의 피해자 좌석은 { show, ghost } 이고 의상 키가 없다", () => {

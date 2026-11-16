@@ -56,8 +56,8 @@ test("상수: UI-SPEC 값 그대로", () => {
   assert.deepEqual([...TOD_IDS], ["morning", "day", "dusk", "night"]);
 });
 
-test("TOD_BY_PHASE 키 11개·TOD_ABSENT_PHASES 5개, 값은 네 시간대 안", () => {
-  assert.equal(Object.keys(TOD_BY_PHASE).length, 11);
+test("TOD_BY_PHASE 키 10개·TOD_ABSENT_PHASES 4개, 값은 네 시간대 안", () => {
+  assert.equal(Object.keys(TOD_BY_PHASE).length, 10);
   assert.deepEqual([...TOD_ABSENT_PHASES].sort(), ["assigning", "ended", "lobby", "roleReveal"]);
   for (const v of Object.values(TOD_BY_PHASE)) assert.ok(TOD_IDS.includes(v));
   assert.equal(TOD_BY_PHASE.night, "night");
@@ -246,7 +246,7 @@ test("roleLineBoxChecks: 상자가 없거나 비면 측정값 없음으로 실�
 // ---- todChecks ----
 
 const WORD_OF = { day: "낮", dusk: "저녁", night: null, morning: null };
-const TITLE_OF = { dayAnnounce: "토론", errand: "심부름", discussion: "토론", nomination: "투표", runoff: "결선", showdown: "마지막 3인", defense: "최후 변론", verdict: "찬반", execution: "처형", night: "밤", morning: "아침" };
+const TITLE_OF = { dayAnnounce: "토론", discussion: "토론", nomination: "투표", runoff: "결선", showdown: "마지막 3인", defense: "최후 변론", verdict: "찬반", execution: "처형", night: "밤", morning: "아침" };
 const todGood = (phase = "discussion") => {
   const tod = TOD_BY_PHASE[phase];
   return {
@@ -549,8 +549,8 @@ test("chatOpenChecks: 측정값이 없으면 측정값 없음으로 실패", () 
 
 // ---- C 탈락자는 유령 그림 (18.1-09, 18.1-17: 훅 __mfGhosts) ----
 
-test("유령 상수: 밤/심부름 단계·위치 허용 오차", () => {
-  assert.deepEqual([...LIVE_GHOST_ABSENT_PHASES].sort(), ["errand", "night"]);
+test("유령 상수: 밤 단계·위치 허용 오차", () => {
+  assert.deepEqual([...LIVE_GHOST_ABSENT_PHASES].sort(), ["night"]);
   assert.equal(GHOST_STILL_TOL, 0.05);
 });
 
@@ -595,7 +595,7 @@ test("liveGhostChecks: 직업 칩·죽은 자리 표식이 있으면 C2 실패",
   assert.deepEqual(failing(liveRows({ seats: [{ seat: 3, shown: { x: 0, z: 0 }, ghostTags: 1, chips: 1 }] })), ["C2"]);
 });
 
-test("liveGhostChecks: 밤·심부름은 기대가 반대 — shown null·유령 이름표 0·훅 seats 에 없음이어야 통과", () => {
+test("liveGhostChecks: 밤은 기대가 반대 — shown null·유령 이름표 0·훅 seats 에 없음이어야 통과", () => {
   for (const phase of LIVE_GHOST_ABSENT_PHASES) {
     const none = { seats: [{ seat: 3, shown: null, ghostTags: 0, chips: 0 }], ghosts: { seats: [], ready: true } };
     assert.deepEqual(failing(liveRows(none, { phase })), [], phase);

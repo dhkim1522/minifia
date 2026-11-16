@@ -5,7 +5,7 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { Player, RoomState } from "../../shared/game/room";
 import type { RoleId } from "../../shared/game/roles";
 import { tick } from "../../shared/game/tick";
-import { ERRAND_MS, NIGHT_MS } from "../../shared/game/phases";
+import { NIGHT_MS } from "../../shared/game/phases";
 import type { PhaseId } from "../../shared/protocol";
 import { buildView } from "../../shared/game/view";
 import { seededRandInt } from "../helpers/seededRandom";
@@ -45,7 +45,7 @@ function nightOf(n: number, seed: number): RoomState {
   let state = started.state;
   while (state.phase !== "night") {
     if (state.phaseEndsAt === null) throw new Error("phase has no deadline");
-    state = tick(state, state.phaseEndsAt, seededRandInt(seed)); // errand 진입(15페이즈)이 난수를 쓴다
+    state = tick(state, state.phaseEndsAt, seededRandInt(seed));
   }
   return state;
 }
@@ -69,8 +69,8 @@ describe("밤 → 아침 한 줄 (NIGHT-01, NIGHT-06, D-08)", () => {
     const morning = tick(picked, picked.phaseEndsAt ?? 0, seededRandInt(1));
     expect(morning.phase).toBe("morning");
     expect(morning.players.find((p) => p.id === victim.id)?.alive).toBe(false);
-    // 피해자가 나온 아침에는 흔적 조각이 함께 실린다(15페이즈 D-06) — 키는 eliminated·trace 둘뿐이다.
-    expect(Object.keys(morning.morning ?? {}).sort().join(",")).toBe("eliminated,trace");
+    // 피해자가 나온 아침의 키는 eliminated 하나뿐이다.
+    expect(Object.keys(morning.morning ?? {}).sort().join(",")).toBe("eliminated");
     expect(morning.morning?.eliminated).toBe(victim.seat);
     expect(morning.players.some((p) => "nightPick" in p)).toBe(false);
   });
@@ -572,9 +572,9 @@ describe("confirmedTarget — 마피아 전원 일치 (NIGHT-08, 결정 0061-6, 
 describe("buildView 아침 day.morning (MORN-03, T-09-13)", () => {
   const dayMorning = (s: RoomState, viewerId: string): string =>
     JSON.stringify(buildView(s, viewerId, START_AT).day?.morning);
-  const toMorning = (s: RoomState): RoomState => tick(s, s.phaseEndsAt ?? 0, seededRandInt(1)); // 흔적 조각을 정하는 난수 한 번(D-06)
+  const toMorning = (s: RoomState): RoomState => tick(s, s.phaseEndsAt ?? 0, seededRandInt(1));
 
-  it("구출은 { saved: true }, 탈락은 { eliminated, trace } 만, 미선택·불일치는 {} — 모든 viewer 가 같다", () => {
+  it("구출은 { saved: true }, 탈락은 { eliminated } 만, 미선택·불일치는 {} — 모든 viewer 가 같다", () => {
     const { night, m1, m2, doctor, c1, c2 } = cast6();
     const saved = toMorning(picks(night, [m1, c1], [m2, c1], [doctor, c1]));
     const killed = toMorning(picks(night, [m1, c1], [m2, c1]));
@@ -582,8 +582,7 @@ describe("buildView 아침 day.morning (MORN-03, T-09-13)", () => {
     const split = toMorning(picks(night, [m1, c1], [m2, c2]));
     for (const p of night.players) {
       expect(dayMorning(saved, p.id)).toBe(JSON.stringify({ saved: true }));
-      // 흔적 조각(D-06)은 모든 viewer 에게 같은 값이다 — 구출·무효 밤에는 키가 없다.
-      expect(dayMorning(killed, p.id)).toBe(JSON.stringify({ eliminated: c1.seat, trace: killed.morning?.trace }));
+      expect(dayMorning(killed, p.id)).toBe(JSON.stringify({ eliminated: c1.seat }));
       expect(dayMorning(none, p.id)).toBe("{}");
       expect(dayMorning(split, p.id)).toBe("{}");
     }
@@ -617,7 +616,7 @@ describe("난수 없음 계약 (결정 0061-6·17)", () => {
     expect([none.target, none.eliminated, none.saved]).toEqual([undefined, undefined, false]);
   });
 
-  it("판정(resolveNight)에는 난수가 없다 — tick 에 난수를 주지 않아도 탈락자 없는 밤 → 아침은 넘어가고, 탈락자가 있는 아침의 흔적에만 난수 한 번이 든다 (D-06)", () => {
+  it("판정(resolveNight)에는 난수가 없다 — tick 에 난수를 주지 않아도 탈락자 없는 밤도 있는 밤도 아침으로 넘어가고 난수 호출이 없다", () => {
     const { night, m1, m2, c1, c2 } = cast6();
     const none = picks(night, [m1, c1], [m2, c2]);
     expect(tick(none, none.phaseEndsAt ?? 0).phase).toBe("morning");
@@ -629,15 +628,15 @@ describe("난수 없음 계약 (결정 0061-6·17)", () => {
     });
     expect(morning.phase).toBe("morning");
     expect(morning.morning?.eliminated).toBe(c1.seat);
-    expect(calls).toBe(1);
+    expect(calls).toBe(0);
   });
 });
 
 describe("아침 결과 morning (MORN-03, 결정 0061-12·17)", () => {
-  it("탈락이면 키는 eliminated·trace 둘뿐이다(문구 번호·역할 없음, D-06)", () => {
+  it("탈락이면 키는 eliminated 하나뿐이다(문구 번호·역할 없음)", () => {
     const { night, m1, m2, c1 } = cast6();
     const out = enterMorning(picks(night, [m1, c1], [m2, c1]));
-    expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated,trace");
+    expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated");
     expect(out.morning?.eliminated).toBe(c1.seat);
     expect(JSON.stringify(out.morning).includes("citizen")).toBe(false);
   });
@@ -659,7 +658,7 @@ describe("아침 결과 morning (MORN-03, 결정 0061-12·17)", () => {
   it("의사가 확정이 아닌 다른 사람을 지키면 탈락이다(saved 키 없음)", () => {
     const { night, m1, m2, doctor, c1, c2 } = cast6();
     const out = enterMorning(picks(night, [m1, c1], [m2, c1], [doctor, c2]));
-    expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated,trace");
+    expect(Object.keys(out.morning ?? {}).sort().join(",")).toBe("eliminated");
     expect(out.morning?.eliminated).toBe(c1.seat);
   });
 
@@ -693,7 +692,7 @@ describe("따라잡기", () => {
     const endsAt = discussion.phaseEndsAt ?? 0;
     // 토론 마감 한 번으로 지목 첫 순간을 만들고, 거기서 마감 사슬을 따라 계산한 지목 길이를 더한다(지목 방식과 무관).
     const nomination = tick(discussion, endsAt, seededRandInt(11));
-    const caught = tick(discussion, endsAt + nominationSpanMs(nomination, 11) + NIGHT_MS + 5_000 + 2_000 + ERRAND_MS, seededRandInt(11)); // 낮 시작 다음 심부름 단계(15페이즈)가 끼어 ERRAND_MS 만큼 늘었다
+    const caught = tick(discussion, endsAt + nominationSpanMs(nomination, 11) + NIGHT_MS + 5_000 + 2_000, seededRandInt(11));
     expect(caught.phase).toBe("discussion");
     expect(caught.day).toBe((discussion.day ?? 0) + 1);
     expect(caught.morning === undefined).toBe(false);

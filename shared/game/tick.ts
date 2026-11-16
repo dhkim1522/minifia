@@ -17,20 +17,17 @@
 // 난수는 세 번째 인자로만 받는다 — 방 DO 는 cryptoRandInt, 테스트는 seededRandInt.
 // 분기(4페이즈): 마감 훅이 next 를 돌려주면 그 단계로, 없으면 단계 표(PHASE_DEFS)의 기본 next 로 간다. 표는 데이터만 두고 분기는 훅이 정한다.
 // 판 종류(19페이즈 D-03·D-08): 규칙은 전역 값이 아니라 방 상태의 판 종류에서 얻는다 — 한 걸음마다 그 판의 규칙(rulesetOf(modeOf(상태)))과 그 규칙의 훅 표(hooksFor)를 고른다.
-// 기본 다음 단계는 nextPhaseOf(단계, 규칙) 가 고른다 — basic 판은 낮 시작 발표 다음이 errand 가 아니라 discussion 이다.
+// 기본 다음 단계는 nextPhaseOf(단계) 가 표에서 읽는다 — 낮 시작 발표 다음은 discussion 이다.
 // 진입 훅의 세 번째 인자 at 은 진입 시각(= 이전 마감)이다 — 시각을 스스로 읽지 않는 순수 규칙이 "진입 + 30분" 같은 계산을 할 때 쓴다.
 import type { PhaseId } from "../protocol";
 import { emptyGameCloseAt, nextContinuityAt } from "./continuity";
 import { enterDiscussion, phaseDurationOf } from "./discussion";
 import { enterEnded, routeAfterExecution, routeAfterMorning } from "./endgame";
-import { enterErrand } from "./errand";
-import { assignErrandFake } from "./errandFake";
 import { enterExecution } from "./execution";
 import { enterNomination, enterVote, stepNomination, resolveNomination } from "./nomination";
 import { stepRunoff } from "./runoff";
 import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
 import { enterMorning, enterNight } from "./night";
-import { nearPhaseOf } from "./movement";
 import { PHASE_DEFS, nextPhaseOf } from "./phases";
 import { modeOf, rulesetOf } from "./ruleset";
 import type { Ruleset } from "./ruleset";
@@ -68,21 +65,19 @@ export interface PhaseHooks {
 /**
  * 판 규칙으로 진입·마감 훅 표를 만든다(19페이즈 D-03). 규칙에 따라 갈리는 줄은 셋이다:
  * 투표 진입(순차 지목이면 enterNomination, 아니면 동시 투표 enterVote) · 투표 마감(순차 지목이면 stepNomination, 아니면 집계 한 번) ·
- * 낮 시작 발표 마감(마지막 3인 결전이 켜졌을 때만) · 밤·아침 진입(흔적·마지막 목격을 그 판의 규칙으로).
+ * 낮 시작 발표 마감(마지막 3인 결전이 켜졌을 때만).
  * tick 은 매 걸음 이 함수를 부르지 않고 아래 HOOKS 에서 고른다.
  */
 export function hooksOf(rules: Ruleset): PhaseHooks {
   return {
     enter: {
       dayAnnounce: enterDayAnnounce,
-      // 15페이즈(결정 0074): 산 사람마다 장소 3곳 배정 — 난수는 호출 순서가 계약이다(errand.ts). 16페이즈(결정 0079): 산 마피아의 가짜 한 곳은 난수 없이 뒤에서 정한다.
-      errand: (s, r, at) => assignErrandFake(enterErrand(s, r, at)),
       discussion: enterDiscussion,
       nomination: rules.pickTurn ? enterNomination : enterVote,
       execution: enterExecution,
       night: enterNight,
-      // 세 번째 인자 at(진입 시각)이 enterMorning 의 규칙 자리로 들어가지 않게 감싸고, 이 표의 규칙을 넘긴다.
-      morning: (s, r) => enterMorning(s, r, rules),
+      // 진입 훅의 둘째·셋째 인자(난수·진입 시각)가 enterMorning 에 들어가지 않게 감싼다.
+      morning: (s) => enterMorning(s),
       ended: enterEnded,
     },
     deadline: {
@@ -134,8 +129,8 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
       closing = resolved.state;
       branch = resolved.next;
     }
-    // 마감 훅의 분기가 먼저고, 없으면 규칙이 고른 기본 다음 단계다.
-    const next = branch ?? nextPhaseOf(closing.phase, rules);
+    // 마감 훅의 분기가 먼저고, 없으면 표의 기본 다음 단계다.
+    const next = branch ?? nextPhaseOf(closing.phase);
     if (next === null) break;
     const duration = PHASE_DEFS[next].durationMs;
     const entered: RoomState = {
@@ -154,8 +149,6 @@ export function tick(state: RoomState, now: number, randInt: RandInt = NO_RANDOM
 
 /** DO 알람 하나로 단계 마감과 방 만료, 방장 이양·로비 정리 마감(continuity)을 함께 다룬다. */
 export function nextWakeAt(state: RoomState): number {
-  // 근처 단계(저녁, nearPhaseOf)의 근처 표본 시각(15페이즈). 다른 단계에서는 errandTickAt 이 있어도 무시한다.
-  const errandTick = nearPhaseOf(state) && state.errandTickAt !== undefined ? state.errandTickAt : Number.POSITIVE_INFINITY;
   // 버려진 게임 방 닫기(결정 0076)도 같은 알람에 합친다.
-  return Math.min(state.phaseEndsAt ?? Number.POSITIVE_INFINITY, state.expiresAt, nextContinuityAt(state), errandTick, emptyGameCloseAt(state));
+  return Math.min(state.phaseEndsAt ?? Number.POSITIVE_INFINITY, state.expiresAt, nextContinuityAt(state), emptyGameCloseAt(state));
 }

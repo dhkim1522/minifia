@@ -389,8 +389,8 @@ describe("산 사람 화면에는 유령의 흔적이 없다 (결정 0021, T-08-
     }
   });
 
-  it("밤(산 시민 편)의 장면 표는 내 좌석 하나뿐이고, 밤·심부름의 산 사람 화면에는 유령 좌석이 없다", () => {
-    for (const phase of ["night", "errand"] as PhaseId[]) {
+  it("밤(산 시민 편)의 장면 표는 내 좌석 하나뿐이고, 밤의 산 사람 화면에는 유령 좌석이 없다", () => {
+    for (const phase of ["night"] as PhaseId[]) {
       rt.scenes.length = 0;
       mount(makeView({ phase, count: 6, mySeat: 0, dead: [3, 4] }));
       const scene = lastScene().seats;

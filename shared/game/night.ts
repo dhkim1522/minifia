@@ -2,15 +2,11 @@
 // 밤 판정에는 난수가 없다(결정 0061-6·17): 마피아 전원이 같은 대상을 골라야 확정이고, 갈리면 아무도 죽지 않는다.
 //
 // 이 파일이 플레이어의 role 을 읽는 이유는 행동 종류(지목·조사·보호)·마피아 표·조사 결과가 서버 판정이기 때문이다(pickTarget 은 읽지 않는다 — 15페이즈 D-05).
-// 밤 고르기는 산 사람 누구나 같은 입력·같은 응답이고, 효과는 판정이 역할로 가른다. 피해자가 나온 아침에는 enterMorning 이 그 밤 피해자를 고른 사람 중 한 명의 의상으로 흔적 조각을 정한다(D-06, trace.ts).
+// 밤 고르기는 산 사람 누구나 같은 입력·같은 응답이고, 효과는 판정이 역할로 가른다.
 // 읽은 역할 값은 어디에도 내보내지 않는다(결정 0002): 반환값에는 isMafia 불리언 하나와 seat 뿐이다.
 import type { AssassinationRecord, InvestigationRecord, MorningView, TreatmentRecord } from "../protocol";
 import { isAlive } from "./alive";
 import type { Player, RoomState } from "./room";
-import { modeOf, rulesetOf } from "./ruleset";
-import type { Ruleset } from "./ruleset";
-import { pickTracePiece } from "./trace";
-import type { RandInt } from "./tick";
 
 export type NightError = "WRONG_PHASE" | "BAD_MESSAGE";
 
@@ -40,13 +36,11 @@ export function pickTarget(
 
 /** 밤 진입 훅: 남은 선택(nightPick)·지난 아침 결과(morning)·쪽지(nightNote)·분필(chalk)을 키째 지운다(결정 0061-9·14). */
 export function enterNight(state: RoomState): RoomState {
-  // errandLast(마지막 목격 줄, 16페이즈 D-10)는 일부러 지우지 않는다 — 낮 심부름에서 쌓은 줄을 다음 아침의 enterMorning 이 피해자 한 줄만 꺼내 쓴다.
   const { morning: _morning, nightNote: _nightNote, chalk: _chalk, ...rest } = state;
   return {
     ...rest,
     players: state.players.map((p) => {
-      // 심부름 목록·진행(15페이즈)도 키째 지운다 — 다음 낮에 새로 배정되므로 남은 값이 어떤 view 에도 새지 않는다.
-      const { nightPick: _nightPick, errandNear: _errandNear, errandFake: _errandFake, errandPlaces: _errandPlaces, errandDone: _errandDone, errandSeen: _errandSeen, ...kept } = p;
+      const { nightPick: _nightPick, ...kept } = p;
       return kept;
     }),
   };
@@ -144,14 +138,9 @@ export function resolveNight(state: RoomState): ResolvedNight {
  * 경찰 investigations·마피아 assassinations·의사 treatments 뒤에 추가, morning 은 탈락이면 { eliminated }, 의사 구출이면 { saved: true }, 확정이 없으면 {},
  * 탈락이 없으면 nightNote 를 키째 지운다(구출·무효 밤의 쪽지 폐기, 결정 0061-9),
  * 모든 nightPick 키 제거(아침 뷰에 선택 흔적이 남지 않는다), nightLog 끝에 그 밤 한 줄 추가(서버 전용, 키를 필드별로 만든다).
- * 판정에는 난수가 없다(결정 0061-17). 난수는 탈락자가 있을 때 흔적을 낼 사람을 뽑는 한 번뿐이다(D-06, randInt 를 안 받으면 첫 후보 — 결정적).
- * 흔적(morning.trace): 탈락자가 있을 때만, 그 밤 피해자를 고른 산 사람(피해자 본인 제외) 풀에서 한 명의 의상 조각 하나. 풀은 nightPick 을 지우기 전의 players 로 만든다.
- * 구출·무효 밤은 trace 키가 없다.
- * 마지막 목격(16페이즈 D-10): 탈락자가 있고 errandLast 에 그 seat 줄이 있으면 morning.seen = { seat: 관찰자, place }. 어느 분기든 반환 상태에서 errandLast 를 지운다(서버 전용, 피해자 아닌 사람의 줄은 공개되지 않는다).
- * 판 규칙(19페이즈 D-08): 흔적은 rules.trace, 마지막 목격은 rules.witness 가 켜진 판에서만 만든다. 흔적은 심부름과 무관하게 nightPick·look 으로 만들어지므로 basic 에서 여기서 막는다 —
- * basic 판은 흔적 난수도 부르지 않는다. errandLast 를 지우는 처리는 판과 무관하게 그대로다. rules 를 안 받으면 방 상태의 판 종류에서 얻는다(전역 값이 아니다).
+ * 판정에는 난수가 없다(결정 0061-17) — 이 훅은 난수를 받지 않는다.
  */
-export function enterMorning(state: RoomState, randInt: RandInt = () => 0, rules: Ruleset = rulesetOf(modeOf(state))): RoomState {
+export function enterMorning(state: RoomState): RoomState {
   const result = resolveNight(state);
   const players: Player[] = state.players.map((p) => {
     const { nightPick: _nightPick, ...kept } = p;
@@ -166,21 +155,14 @@ export function enterMorning(state: RoomState, randInt: RandInt = () => 0, rules
     };
     return result.eliminated === p.seat ? { ...withRecords, alive: false } : withRecords;
   });
-  const piece = result.eliminated === undefined || !rules.trace ? undefined : pickTracePiece(state, result.eliminated, randInt);
-  const seenRow = result.eliminated === undefined || !rules.witness ? undefined : state.errandLast?.find((row) => row.seat === result.eliminated);
   const morning: MorningView =
     result.eliminated !== undefined
-      ? {
-          eliminated: result.eliminated,
-          ...(piece === undefined ? {} : { trace: piece }),
-          ...(seenRow === undefined ? {} : { seen: { seat: seenRow.by, place: seenRow.place } }),
-        }
+      ? { eliminated: result.eliminated }
       : result.saved
         ? { saved: true }
         : {};
-  const { nightNote: _nightNote, errandLast: _errandLast, ...rest } = state;
-  const { errandLast: _kept, ...stateNoLast } = state;
-  const base = result.eliminated === undefined ? rest : stateNoLast;
+  const { nightNote: _nightNote, ...rest } = state;
+  const base = result.eliminated === undefined ? rest : state;
   return {
     ...base,
     players,

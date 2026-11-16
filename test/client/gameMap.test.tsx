@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { rulesetOf } from "../../shared/game/ruleset";
 import { lockCause, underCauseLock } from "../helpers/playable";
-import type { ClientMessage, EvidenceView, GameMode, MorningView, PhaseId, PublicPlayer, RecordLine, RoleRecord, RoomView } from "../../shared/protocol";
+import type { ClientMessage, GameMode, MorningView, PhaseId, PublicPlayer, RoleRecord, RoomView } from "../../shared/protocol";
 import { LineSheet } from "../../src/components/v2/LineSheet";
 import { floatVisible } from "../../src/game/badgeView";
 import { RESULT_PANEL_TEXT } from "../../src/game/resultText";
@@ -580,7 +580,6 @@ describe("GameMap — 헤더 시간대 글자 (0083-1)", () => {
   it("단계마다 todOf 대응: 낱말·제목", () => {
     const cells: Array<[PhaseId, string, string | null, string]> = [
       ["dayAnnounce", "day", "낮", "토론"],
-      ["errand", "day", "낮", "심부름"],
       ["nomination", "dusk", "저녁", "투표"],
       ["defense", "dusk", "저녁", "최후 변론"],
       ["verdict", "dusk", "저녁", "찬반"],
@@ -606,12 +605,6 @@ describe("GameMap — 헤더 시간대 글자 (0083-1)", () => {
       expect(header(container).querySelector(".mv-phase__title")?.textContent, phase).toBe(title);
       unmount();
     }
-  });
-
-  it("확장판의 심부름(errand)은 '낮 · 심부름' 이고 data-tod 는 day 다 (22-04: 원인 흐름 저녁 조명을 지웠다)", () => {
-    const { container } = mount(makeView({ phase: "errand", mode: "extended" }));
-    expect(header(container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("day");
-    expect(word(container)?.textContent).toBe("낮");
   });
 
   it("tod={false} 로 그리면 [data-tod] 가 없다", () => {
@@ -1212,20 +1205,14 @@ describe("GameMap — 기본 마피아 판 화면 (19-02, D-09)", () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  const REC: RecordLine[] = [
-    { seat: 1, place: "glass" },
-    { seat: 2, place: "piano" },
-  ];
-  const EVIDENCE: EvidenceView = { trace: "pin", seen: { seat: 3, place: "glass" } };
   /** 서버가 싣는 모양 그대로: basic 판에는 me.record·day.evidence·morning.trace·seen 키가 없다 */
-  const modeView = (mode: GameMode, o: ViewOpts = {}, extra: { record?: RecordLine[]; morning?: MorningView; evidence?: EvidenceView; endsInMs?: number } = {}): RoomView => {
+  const modeView = (mode: GameMode, o: ViewOpts = {}, extra: { morning?: MorningView; endsInMs?: number } = {}): RoomView => {
     const v = makeView(o);
     return {
       ...v,
       mode,
       ...(extra.endsInMs !== undefined ? { phaseEndsAt: NOW + extra.endsInMs } : {}),
-      me: { ...v.me, ...(extra.record !== undefined ? { record: extra.record } : {}) },
-      day: { ...v.day!, ...(extra.morning !== undefined ? { morning: extra.morning } : {}), ...(extra.evidence !== undefined ? { evidence: extra.evidence } : {}) },
+      day: { ...v.day!, ...(extra.morning !== undefined ? { morning: extra.morning } : {}) },
     };
   };
   /** 기록·흔적·증거 요소의 DOM 수와 이름표 표시 수 */
@@ -1248,13 +1235,6 @@ describe("GameMap — 기본 마피아 판 화면 (19-02, D-09)", () => {
     expect(container.querySelectorAll("[data-end-discussion]").length).toBe(1);
   });
 
-  it("같은 토론 view 가 extended + me.record + day.evidence 면 [기록] 이 하나이고 이름표 표시가 붙는다 (지금 그대로)", underCauseLock(() => {
-    const { container } = mount(modeView("extended", { phase: "discussion" }, { record: REC, evidence: EVIDENCE }));
-    expect(container.querySelectorAll("button[aria-label='기록']").length).toBe(1);
-    expect(container.querySelectorAll("[data-record-button]").length).toBe(1);
-    expect(stage.props?.tagProps?.(3)).toMatchObject({ seenMark: true });
-  }));
-
   it("basic 아침(morning.eliminated 뿐): 흔적 구간이 지나도 증거 카드·이름표 표시가 없고 탈락 발표는 그대로 있다", () => {
     const { container } = mount(modeView("basic", { phase: "morning", dead: [2] }, { morning: { eliminated: 2 }, endsInMs: 7000 }));
     expect(census(container)).toBe(NONE);
@@ -1262,13 +1242,6 @@ describe("GameMap — 기본 마피아 판 화면 (19-02, D-09)", () => {
     expect(census(container)).toBe(NONE);
     expect(container.textContent).toContain("서준 님이 당했습니다");
   });
-
-  it("같은 아침이 extended + 흔적이면 구간 뒤 증거 카드가 하나다 (지금 그대로)", underCauseLock(() => {
-    const morning: MorningView = { eliminated: 2, trace: "pin", seen: { seat: 3, place: "glass" } };
-    const { container } = mount(modeView("extended", { phase: "morning", dead: [2] }, { morning, evidence: EVIDENCE, endsInMs: 7000 }));
-    advance(2500);
-    expect(container.querySelectorAll("[data-trace-card]").length).toBe(1);
-  }));
 
   it("basic 의 낮 단계(투표·변론·찬반·처형) 어디에도 기록·흔적·증거 요소가 없다", () => {
     const phases: PhaseId[] = ["nomination", "defense", "verdict", "execution"];

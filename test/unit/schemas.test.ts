@@ -333,21 +333,18 @@ describe("ClientMessageSchema endDiscussion (08-07, DAY-03: on 은 불리언)", 
   });
 });
 
-describe("ClientMessageSchema 지운 메시지 (22-04: skip·inspect·errand hold)", () => {
+describe("ClientMessageSchema 지운 메시지 (22-04: skip·inspect, 22-06: errand)", () => {
   it.each([
     ["skip 켜기", { t: "skip", on: true }],
     ["skip 끄기", { t: "skip", on: false }],
     ["inspect", { t: "inspect" }],
+    ["errand", { t: "errand" }],
     ["errand hold true", { t: "errand", hold: true }],
     ["errand hold false", { t: "errand", hold: false }],
   ])("거부한다: %s", (_name, msg) => {
     expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
   });
 
-  it("errand 는 필드 없는 모양만 받는다", () => {
-    expect(ClientMessageSchema.safeParse({ t: "errand" }).success).toBe(true);
-    expect(ClientMessageSchema.safeParse({ t: "errand", x: 1 }).success).toBe(false);
-  });
 });
 
 describe("ClientMessageSchema will·note (09-12, 결정 0061-9·10: 본문 text 하나뿐)", () => {

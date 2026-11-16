@@ -3,9 +3,8 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { TRACE_OF_OUTFIT } from "../../shared/game/trace";
 import { BAR_MASK } from "../../shared/game/map";
-import { ERRAND_ACT_R, ERRAND_COUNT, ERRAND_MS, ERRAND_NEAR_R, MORNING_TRACE_MS, NOMINATION_END_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
+import { NOMINATION_END_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PICK_GAP_MS, PICK_TURN_MS, SHOWDOWN_GATHER_MS, SHOWDOWN_POINT_MS, SHOWDOWN_REVEAL_MS, SHOWDOWN_TURN_MS, nominationMaxMs } from "../../shared/game/phases";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { NICKNAME_MAX_GRAPHEMES, countGraphemes } from "../../shared/nickname";
 import { ANNOUNCE_MORNING_AT } from "../../src/game/dayView";
@@ -50,7 +49,7 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
-import { OUTFIT_IDS, PLACE_IDS, TRACE_PIECE_IDS } from "../../shared/protocol";
+import { OUTFIT_IDS } from "../../shared/protocol";
 import type { GameMode, OutfitId, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
 import { HOST_HIDDEN_PHASES, HOST_LINES, type HostKey } from "../../src/game/hostLine";
@@ -62,7 +61,6 @@ import { hostRailLayout } from "../../src/components/v2/HostRail";
 import { SIDE_CELL, SIDE_GAP } from "../../src/components/v2/SideColumn";
 import { MODE_TEXT } from "../../src/game/modeText";
 import { GAME_MODES } from "../../shared/protocol";
-import { underCauseLock } from "../helpers/playable";
 import { nextPhaseOf, afterDayOf } from "../../shared/game/phases";
 import { rulesetOf } from "../../shared/game/ruleset";
 
@@ -721,7 +719,7 @@ describe("14페이즈 사회자·이름표 E2E 사본과 제품 값 (14-08, 사�
   });
 
   it("18.1-12: HOST_BLANK_PHASES 의 단계마다 그 단계 키들의 줄이 모두 빈 문자열이고, 빈 줄인 키는 모두 그 단계들 안에 있다", () => {
-    const keysOf: Record<string, HostKey[]> = { execution: ["execution.passed", "execution.failed"], morning: ["morning", "trace"] };
+    const keysOf: Record<string, HostKey[]> = { execution: ["execution.passed", "execution.failed"], morning: ["morning"] };
     expect([...lib.HOST_BLANK_PHASES].sort()).toEqual(Object.keys(keysOf).sort());
     for (const phase of lib.HOST_BLANK_PHASES) for (const key of keysOf[phase]!) expect(HOST_LINES[key], `${phase}/${key}`).toBe("");
     const blankKeys = (Object.keys(HOST_LINES) as HostKey[]).filter((k) => HOST_LINES[k] === "").sort();
@@ -775,107 +773,34 @@ describe("14페이즈 사회자·이름표 E2E 사본과 제품 값 (14-08, 사�
   });
 });
 
-describe("15페이즈 E2E 사본과 제품 값 (15-09, 사본 일치 규약)", () => {
-  type L = {
-    ERRAND_MARKERS: readonly string[];
-    ERRAND_PLACE_IDS: readonly string[];
-    ERRAND_PER_PERSON: number;
-    ERRAND_E2E_MS: number;
-    TRACE_WINDOW_MS: number;
-    ERRAND_ACT_R_E2E: number;
-    ERRAND_NEAR_R_E2E: number;
-    ERRAND_LINES: Record<string, string>;
-    TRACE_OF_OUTFIT_E2E: Record<string, string>;
-  };
-  const lib = e2eLib as unknown as L;
-  const root = new URL("../../", import.meta.url);
-
-  it("ERRAND_MARKERS(E2E 가 읽는 15·16페이즈 표식 열여덟 — 16-07 이 data-rest 를, 16-08 이 시작 카드·진행 점을, 16-09 가 증거 카드 2행·이름표 표시를 더했다)가 git 이 추적하는 src/ 파일 어딘가에 있다(표식 이름 오타 방지)", () => {
-    const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
-      .split("\n")
-      .filter((f) => /\.(tsx?|css)$/.test(f));
-    const all = tracked.map((f) => readFileSync(new URL(f, root), "utf8")).join("\n");
-    expect(lib.ERRAND_MARKERS).toHaveLength(18);
-    expect(lib.ERRAND_MARKERS.filter((m) => !all.includes(m))).toEqual([]);
-  });
-
-  it("장소 id 16개·산 사람마다 3곳·심부름 40초·흔적 5초·처리·근처 반경 사본이 제품 값과 같다", () => {
-    expect([...lib.ERRAND_PLACE_IDS]).toEqual([...PLACE_IDS]);
-    expect(lib.ERRAND_PLACE_IDS).toHaveLength(16);
-    expect(lib.ERRAND_PER_PERSON).toBe(ERRAND_COUNT);
-    expect(lib.ERRAND_E2E_MS).toBe(ERRAND_MS);
-    expect(lib.TRACE_WINDOW_MS).toBe(MORNING_TRACE_MS);
-    expect(lib.ERRAND_ACT_R_E2E).toBe(ERRAND_ACT_R);
-    expect(lib.ERRAND_NEAR_R_E2E).toBe(ERRAND_NEAR_R);
-  });
-
-  it("ERRAND_LINES 는 src/game/hostLine.ts 의 errand·witness·trace·discussion 줄과 한 글자도 다르지 않다", () => {
-    expect(lib.ERRAND_LINES).toEqual({
-      act: HOST_LINES["errand.act"],
-      done: HOST_LINES["errand.done"],
-      witness: HOST_LINES.witness,
-      discussionAct: HOST_LINES["discussion.act"],
-      trace: HOST_LINES.trace,
-      discussionEvidence: HOST_LINES["discussion.evidence"],
-    });
-  });
-
-  it("TRACE_OF_OUTFIT_E2E 는 shared/game/trace.ts 의 TRACE_OF_OUTFIT 과 같다 (16-09, 같은 옷 좌석 기대값 사본)", () => {
-    expect(lib.TRACE_OF_OUTFIT_E2E).toEqual({ ...TRACE_OF_OUTFIT });
-  });
-
-  it("E2E 의 흐름 파일(errand.mjs)·읽기 도우미(browser.mjs)는 표식 값 외에 닉네임·토큰을 결과로 돌려주지 않는다 — 읽기 도우미 반환 필드 이름에 nick·token 이 없다", () => {
-    const text = readFileSync(new URL("scripts/e2e/browser.mjs", root), "utf8");
-    const start = text.indexOf("export function readErrand");
-    expect(start).toBeGreaterThan(0);
-    const body = text.slice(start);
-    expect(body).not.toMatch(/nickname|\btoken\b/i);
-  });
-});
-
-describe("서버 계약 소비자 스크립트의 새 단계 흐름 (15-06, DEPLOY-03, 결정 0074)", () => {
+describe("서버 계약 소비자 스크립트의 낮 시작 → 토론 흐름 (15-06, DEPLOY-03; 22-06 에서 심부름 단계가 없어졌다)", () => {
   const scriptText = (name: string): string => readFileSync(new URL(`../../scripts/${name}`, import.meta.url), "utf8");
 
-  it("scripts/smoke.mjs 의 ERRAND_MS 가 shared/game/phases.ts 의 ERRAND_MS 와 같다 (스크립트는 shared 를 import 하지 않는다)", () => {
-    const m = /^const ERRAND_MS = ([0-9_]+);/m.exec(scriptText("smoke.mjs"));
-    expect(m, "smoke.mjs 에 const ERRAND_MS 가 있어야 한다").not.toBeNull();
-    expect(Number(m![1]!.replaceAll("_", ""))).toBe(ERRAND_MS);
-  });
-
-  it("scripts/smoke.mjs 의 MORNING_TRACE_MS 가 shared/game/phases.ts 의 MORNING_TRACE_MS 와 같고 아침 길이 기대에 그 상수를 쓴다 (16-10: 3초 하드코딩이 5초로 바뀐 값을 놓쳤다)", () => {
+  it("scripts/smoke.mjs 에 지운 상수(ERRAND_MS·MORNING_TRACE_MS)가 없고 아침 길이 기대는 9초다", () => {
     const text = scriptText("smoke.mjs");
-    const m = /^const MORNING_TRACE_MS = ([0-9_]+);/m.exec(text);
-    expect(m, "smoke.mjs 에 const MORNING_TRACE_MS 가 있어야 한다").not.toBeNull();
-    expect(Number(m![1]!.replaceAll("_", ""))).toBe(MORNING_TRACE_MS);
-    expect(text).toMatch(/morningWant = 9_000 \+ \(morning\.trace !== undefined \? MORNING_TRACE_MS : 0\)/);
+    expect(text).not.toMatch(/ERRAND_MS|ERRAND_WAIT_MS|MORNING_TRACE_MS/);
+    expect(text).toMatch(/const morningWant = 9_000;/);
   });
 
-  // 전이 표는 판 종류별 두 갈래다 — 기본판은 낮 시작 발표 → 토론, 확장판은 낮 시작 발표 → 심부름 → 토론.
+  // 전이 표는 판 종류별 두 갈래다 — 22-06 부터 두 판 모두 낮 시작 발표 → 토론이다(판 종류째 22-07 이 지운다).
   const smokeGraphs = (smoke as unknown as { PHASE_NEXT_BY_MODE: Record<GameMode, Record<string, string[]>> }).PHASE_NEXT_BY_MODE;
 
-  it("smoke.mjs 의 전이 표가 판 종류별 두 갈래이고(기본판 dayAnnounce → discussion, 확장판 dayAnnounce → errand → discussion) 낮 단계 목록에 errand 가 있으며 errand 40초 대기를 쓴다", () => {
+  it("smoke.mjs 의 전이 표가 판 종류별 두 갈래이고 둘 다 dayAnnounce → discussion 이며 낮 단계 목록에 errand 가 없다", () => {
     const text = scriptText("smoke.mjs");
-    expect(text).toMatch(/dayAnnounce: \["errand"\]/);
-    expect(text).toMatch(/errand: \["discussion"\]/);
     expect(text).toMatch(/dayAnnounce: \["discussion"\]/);
-    expect(text).toMatch(/const DAY_PHASES = \[[^\]]*"errand"/);
-    expect(text).toMatch(/ERRAND_WAIT_MS = ERRAND_MS \+ STATE_LIMIT_MS/);
+    expect(text).not.toMatch(/errand/);
     expect(text).toMatch(/FIRST_DAY_PHASE = \{ basic: "dayAnnounce", extended: "dayAnnounce" \}/);
   });
 
-  it("smoke.mjs 의 두 전이 표가 서버의 nextPhaseOf·afterDayOf 와 같다: 표가 가리키는 모든 단계(기본 다음 단계·처형 없는 낮 분기)가 들어 있고, 낮 시작 발표는 기본판에만·저녁은 확장판에만 있다 (T-21-45)", () => {
+  it("smoke.mjs 의 두 전이 표가 서버의 nextPhaseOf·afterDayOf 와 같다: 표가 가리키는 모든 단계(기본 다음 단계·처형 없는 낮 분기)가 들어 있고, 낮 시작 발표 다음은 두 판 모두 토론이다 (T-21-45)", () => {
     for (const mode of GAME_MODES) {
-      const rules = rulesetOf(mode);
       const graph = smokeGraphs[mode];
       expect(Object.keys(graph).sort(), `${mode} 표의 단계 목록`).toEqual(
-        (mode === "basic"
-          ? ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"]
-          : ["lobby", "assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"]
-        ).sort(),
+        ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"].sort(),
       );
       for (const [from, nexts] of Object.entries(graph)) {
         if (from === "ended" || from === "lobby") continue; // 방장의 start 가 넘기는 단계라 표의 next 가 없다
-        const want = nextPhaseOf(from as PhaseId, rules);
+        const want = nextPhaseOf(from as PhaseId);
         if (from === "nomination") {
           // 지목 마감: 최다 한 명이면 변론, 처형 없이 끝나면 afterDayOf() = night
           expect([...nexts].sort(), `${mode} nomination`).toEqual([afterDayOf(), "defense"].sort());
@@ -885,21 +810,20 @@ describe("서버 계약 소비자 스크립트의 새 단계 흐름 (15-06, DEPL
       }
     }
     expect([...smokeGraphs.extended.night!]).toEqual(["morning"]);
-    expect(nextPhaseOf("morning", rulesetOf("extended"))).toBe("dayAnnounce");
-    expect(nextPhaseOf("night", rulesetOf("extended"))).toBe("morning");
+    expect(nextPhaseOf("morning")).toBe("dayAnnounce");
+    expect(nextPhaseOf("night")).toBe("morning");
   });
 
-  it("uat-test-room.mjs 의 전이 표도 판 종류별 두 갈래이고 확장판은 낮 시작 발표 다음에 errand 로 넘긴다", () => {
+  it("uat-test-room.mjs 의 전이 표도 판 종류별 두 갈래이고 둘 다 낮 시작 발표 다음이 토론이다", () => {
     const text = scriptText("uat-test-room.mjs");
     expect(text).toMatch(/roleReveal: \["dayAnnounce"\], dayAnnounce: \["discussion"\]/);
-    expect(text).toMatch(/roleReveal: \["dayAnnounce"\], dayAnnounce: \["errand"\], errand: \["discussion"\]/);
-    expect(text).toContain('await skipTo("errand")');
+    expect(text).not.toContain("errand");
     expect(text).toContain('{ t: "modePick", mode: "basic" }');
   });
 
-  it("bots.mjs 는 errand 단계를 알고(행동 없이 지나간다) 밤에는 시민 봇도 고른다", () => {
+  it("bots.mjs 는 errand 단계를 모르고 밤에는 시민 봇도 고른다", () => {
     const text = scriptText("bots.mjs");
-    expect(text).toContain('view.phase === "errand"');
+    expect(text).not.toContain("errand");
     expect(text).toContain('role !== "citizen"');
   });
 });
@@ -909,8 +833,6 @@ describe("서버 계약 소비자 스크립트의 새 단계 흐름 (15-06, DEPL
 describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
   const s = smoke as {
     OUTFIT_IDS: string[];
-    PLACE_IDS: string[];
-    TRACE_PIECES: string[];
     MORNING_KEYS: string[];
     LOOK_PATH: string;
     ALLOWED_PLAYER_KEYS: string[];
@@ -921,7 +843,7 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
   };
   const START_AT = 10_000;
 
-  /** 6명 판 1일차 밤을 실제 전이로 만든다(test/unit/trace.test.ts 방식). */
+  /** 6명 판 1일차 밤을 실제 전이로 만든다. */
   function nightOf6(seed = 11): RoomState {
     const created = createRoomState({ code: "0420", hostId: "player-id-0000-aaaa", hostToken: "token-secret-0000-aaaa-0123456789", hostNickname: "이름0", now: 0 });
     if (!created.ok) throw new Error("createRoomState failed");
@@ -948,32 +870,24 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
     return r.state;
   };
 
-  it("사본 상수 OUTFIT_IDS·PLACE_IDS·TRACE_PIECES 가 shared/protocol.ts 와 같고 MORNING_KEYS 는 eliminated·seen·trace 다", () => {
+  it("사본 상수 OUTFIT_IDS 가 shared/protocol.ts 와 같고 MORNING_KEYS 는 eliminated 하나다(22-06: trace·seen 이 없어졌다)", () => {
     expect([...s.OUTFIT_IDS]).toEqual([...OUTFIT_IDS]);
-    expect([...s.PLACE_IDS]).toEqual([...PLACE_IDS]);
-    expect(s.PLACE_IDS).toHaveLength(16);
-    expect([...s.TRACE_PIECES]).toEqual([...TRACE_PIECE_IDS]);
-    expect([...s.MORNING_KEYS]).toEqual(["eliminated", "seen", "trace"]);
+    expect([...s.MORNING_KEYS]).toEqual(["eliminated"]);
     expect(s.LOOK_PATH).toBe("view.players[].look");
   });
 
-  // smoke 의 morningProblems 는 eliminated 필수 + trace·seen 선택이다(22-04: 원인 흐름 갈래를 지웠다 — 서버가 trace 를 만드는 모양 하나).
-  it("실제 전이로 만든 아침 view(eliminated·trace·seen, 직업 이름과 같은 옷 look)를 smoke 판정이 통과시키고 누설 검사는 look 한 경로만 허용한다", underCauseLock(() => {
+  // smoke 의 morningProblems 는 eliminated 필수다(22-06: trace·seen 이 없어졌다).
+  it("실제 전이로 만든 아침 view(eliminated, 직업 이름과 같은 옷 look)를 smoke 판정이 통과시키고 누설 검사는 look 한 경로만 허용한다", () => {
     const night = nightOf6();
     const mafia = night.players.filter((p) => p.role === "mafia").sort((a, b) => a.seat - b.seat);
     const citizens = night.players.filter((p) => p.role === "citizen").sort((a, b) => a.seat - b.seat);
     const [m1, m2] = mafia as [Player, Player];
     const victim = citizens[0]!;
-    const witness = night.players.find((p) => p.id !== victim.id && p.id !== m1.id)!;
     // 옷 look: 직업 이름과 같은 단어 셋(서버는 look 을 역할의 함수로 만들지 않는다 — 서버 쪽 증명은 dress.test.ts L25)
     const looks: OutfitId[] = ["police", "doctor", "mafia"];
     const dressed: RoomState = { ...night, players: night.players.map((p, i) => (i < 3 ? { ...p, look: looks[i]! } : p)) };
-    const base = enterMorning(pickAs(pickAs(dressed, m1, victim), m2, victim), () => 0);
-    const morningState: RoomState = {
-      ...base,
-      phase: "morning",
-      morning: { ...base.morning, seen: { seat: witness.seat, place: PLACE_IDS[0] } },
-    };
+    const base = enterMorning(pickAs(pickAs(dressed, m1, victim), m2, victim));
+    const morningState: RoomState = { ...base, phase: "morning" };
     const seats = morningState.players.map((p) => p.seat);
     let lookLeaves = 0;
     for (const p of morningState.players) {
@@ -992,12 +906,12 @@ describe("smoke 허용 키·경로와 서버 view (18-13, G-18-3)", () => {
       for (const pp of view.players) for (const k of Object.keys(pp)) expect(allowed.has(k), `players 키 ${k}`).toBe(true);
     }
     expect(lookLeaves).toBeGreaterThan(0);
-  }));
+  });
 });
 
 describe("E2E 의 시간대 사본과 앱 todOf·TOD_LABEL (18.1-11, 0083-1)", () => {
   const e = polishE2e as { TOD_BY_PHASE: Record<string, string>; TOD_ABSENT_PHASES: readonly string[]; TOD_IDS: readonly string[]; TOD_WORD: Record<string, string> };
-  const ALL_PHASES: PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
+  const ALL_PHASES: PhaseId[] = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
 
   it("TOD_BY_PHASE 의 모든 키에서 값이 todOf(키)와 같다", () => {
     for (const [phase, tod] of Object.entries(e.TOD_BY_PHASE)) expect(tod, phase).toBe(todOf(phase as PhaseId));
@@ -1146,25 +1060,19 @@ describe("19페이즈 기본 마피아 판 E2E 사본 계약 (19-07, T-19-22)", 
     .split("\n")
     .filter((f) => f.endsWith(".tsx"));
   const sources = tracked.map((f) => ({ f, text: readFileSync(new URL(f, root), "utf8") }));
-  /** 기본 마피아에서 닿지 않는 사회자 줄의 키(UI-SPEC E-3) */
-  const OFF_KEYS: readonly HostKey[] = ["errand.act", "errand.done", "errand.ghost", "witness", "discussion.evidence"];
-
-  it("BASIC_FORBIDDEN_LINES 는 HOST_LINES 의 심부름·목격 기록·증거 줄 값이다 — 기본 마피아에서도 쓰는 다른 키와 글이 같은 줄(errand.ghost)만 빠진다", () => {
-    const others = (Object.keys(HOST_LINES) as HostKey[]).filter((k) => !OFF_KEYS.includes(k)).map((k) => HOST_LINES[k]);
-    const want = OFF_KEYS.map((k) => HOST_LINES[k]).filter((v) => v !== "" && !others.includes(v));
-    expect(lib.BASIC_FORBIDDEN_LINES.join("|")).toBe(want.join("|"));
-    // 글이 겹쳐 금지 문구로 쓸 수 없는 키는 errand.ghost 하나다(dayAnnounce.ghost 등과 같은 문장) — 늘거나 줄면 사본과 이 설명을 같이 고친다
-    expect(OFF_KEYS.filter((k) => others.includes(HOST_LINES[k])).join(",")).toBe("errand.ghost");
+  it("BASIC_FORBIDDEN_LINES 는 지운 심부름·목격 기록·증거 줄의 글이다 — 22-06 에서 HOST_LINES 에서 키째 없어져 어떤 키의 문장과도 같지 않다(다시 생기면 이 시험이 실패한다)", () => {
     expect(lib.BASIC_FORBIDDEN_LINES.length).toBe(4);
+    const lines = new Set(Object.values(HOST_LINES));
+    expect(lib.BASIC_FORBIDDEN_LINES.filter((line) => lines.has(line))).toEqual([]);
   });
 
-  it("BASIC_ABSENT_SELECTORS 의 속성과 BASIC_ABSENT_ATTR_PREFIX 로 시작하는 속성이 git 이 추적하는 src 의 .tsx 에 있다(빈 선택자 금지)", () => {
+  it("BASIC_ABSENT_SELECTORS 의 속성과 BASIC_ABSENT_ATTR_PREFIX 로 시작하는 속성은 22-06 부터 src 의 .tsx 어디에도 없다 — 없음 판정(0건)은 남고 부품은 지워졌다", () => {
     expect(lib.BASIC_ABSENT_SELECTORS.length).toBe(5);
     const attrs = lib.BASIC_ABSENT_SELECTORS.map((sel) => /^\[(data-[a-z-]+)\]$/.exec(sel)?.[1] ?? `모양이 다름:${sel}`);
-    expect(attrs.filter((a) => !sources.some((s) => s.text.includes(`${a}=`))).join(",")).toBe("");
+    expect(attrs.filter((a) => sources.some((s) => s.text.includes(`${a}=`))).join(",")).toBe("");
     expect(lib.BASIC_ABSENT_ATTR_PREFIX).toBe("data-errand-");
     const named = new Set(sources.flatMap((s) => [...s.text.matchAll(/data-errand-[a-z-]+/g)].map((m) => m[0])));
-    expect(named.size).toBeGreaterThan(0);
+    expect([...named]).toEqual([]);
     // 앞머리가 다른 표식(예: data-errand 단독)을 삼키지 않도록 끝이 "-" 다
     expect(lib.BASIC_ABSENT_ATTR_PREFIX.endsWith("-")).toBe(true);
   });

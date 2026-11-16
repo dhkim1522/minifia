@@ -71,7 +71,7 @@ function isGhostViewer(view: RoomView): boolean {
 /**
  * 그릴 좌석 표. 산 viewer 는 산 좌석 + 탈락 좌석(처형 연출 중이면 ghost 아님 + fadeAt, 연출 뒤·그 밖은 ghost),
  * 유령 viewer 는 모든 좌석이고 탈락 좌석은 ghost 다. 어느 쪽이든 의상 키가 없다 — 탈락자의 모습은 직업과 무관하다(0083-2).
- * 밤·심부름은 서버가 산 사람에게 본인(+근처)만 보내는 단계라(결정 0074 D-02·D-05) 산 viewer 의 탈락 좌석을 넣지 않는다 — 역할마다 겉보기가 달라지지 않게(0074-4).
+ * 밤은 서버가 산 사람에게 본인만 보내는 단계라(결정 0074 D-05) 산 viewer 의 탈락 좌석을 넣지 않는다 — 역할마다 겉보기가 달라지지 않게(0074-4).
  * fading = 좌석 → 처형 연출 시작 시각(화면이 처형 이벤트를 본 시각). now 를 생략하면 표에 있는 연출은 아직 진행 중으로 본다.
  */
 export function visibleSeats(view: RoomView, fading?: ReadonlyMap<number, number>, now?: number): Record<number, SeatLook> {
@@ -80,7 +80,7 @@ export function visibleSeats(view: RoomView, fading?: ReadonlyMap<number, number
   // 밤·산 시민 편(시민·경찰·의사): 내 좌석 하나뿐이다. 서버가 이 밤에 남의 위치를 한 번도 보내지 않으므로(09-03·09-09, 결정 0061-3)
   // 장면 표도 그 사실을 따른다 — 받은 위치를 화면에서만 숨기는 방식이 아니다(결정 0002·0021, T-09-21). 세 역할이 같은 값이다.
   const nightCitizen = view.phase === "night" && !ghostViewer && view.me.role !== "mafia";
-  const hidesDead = view.phase === "night" || view.phase === "errand";
+  const hidesDead = view.phase === "night";
   for (const p of view.players) {
     if (nightCitizen && p.seat !== view.me.seat) continue;
     const dead = !isAlive(p);

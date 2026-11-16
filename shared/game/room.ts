@@ -2,7 +2,7 @@
 // 모든 함수는 새 객체를 돌려주고 입력을 바꾸지 않는다. DOM·workerd 전용 API 를 쓰지 않는다(앱·워커 두 tsconfig 에 모두 들어감).
 import { validateNickname } from "../nickname";
 import { GAME_MODES, MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
-import type { GameMode, MapChoice, MapId, PlaceId, RecordLine } from "../protocol";
+import type { GameMode, MapChoice, MapId } from "../protocol";
 import type {
   AssassinationRecord,
   BadgeId,
@@ -77,16 +77,6 @@ export interface Player {
   will?: string;
   /** 공개 직업 주장(결정 0066-1). setBadge 만 쓴다. 실제 역할과 무관한 값이고 view 에는 산 사람 것만 players[].badge 로 실린다. */
   badge?: BadgeId;
-  /** 서버 전용(15페이즈 결정 0074). errand 진입 때 enterErrand 가 뽑은 장소 id 목록 — 모든 역할이 같은 모양이다(D-03). enterNight 가 키째 지운다. 뷰에는 me.errand 로만 간다. */
-  errandPlaces?: PlaceId[];
-  /** 서버 전용(결정 0074). 처리한 장소 id 를 처리한 순서로. enterErrand 가 빈 배열로 시작하고 enterNight 가 키째 지운다. */
-  errandDone?: PlaceId[];
-  /** 서버 전용(결정 0074). errand 표본마다 갱신하는 내 근처 산 사람의 좌석 집합(오름차순). 어떤 view 에도 싣지 않는다 — me.record 로 필드별 복사만. enterNight 가 키째 지운다. */
-  errandNear?: number[];
-  /** 서버 전용(결정 0074). 목격 줄({seat, place}, 시간순, 상한 RECORD_MAX). 어떤 view 에도 싣지 않는다 — me.record 로 필드별 복사만. enterNight 가 키째 지운다(토론 때 쓴다). */
-  errandSeen?: RecordLine[];
-  /** 서버 전용(16페이즈 결정 0079 예정, D-08). 산 마피아의 가짜 심부름 장소 한 곳 — errandPlaces 안의 값이고 actErrand 가 이 장소를 처리 후보에서 뺀다. errandFake.ts 가 errand 진입 직후 쓰고 enterErrand·enterNight 가 키째 지운다. 어떤 view 에도 싣지 않는다(me.errand.places 는 시민과 같은 목록 그대로). */
-  errandFake?: PlaceId;
   /** 로비 의상(결정 D-6). setLook 만 쓴다. 사람이 고른 공개 값이고 역할과 무관하다. 없으면 기본 coat 로 읽고, 게임 시작·테스트 방 되돌리기 뒤에도 남는다. */
   look?: OutfitId;
   /** 직업을 건 뒤 다른 값으로 바꾼 적이 있음(결정 0066-1, O-1). 한 번 켜지면 판이 끝날 때까지 끄지 않는다. 이전 값은 어디에도 없다. */
@@ -169,19 +159,12 @@ export interface RoomState {
   everConnected?: boolean;
   phase: PhaseId;
   phaseEndsAt: number | null;
-  /** 서버 전용(결정 0074). errand 다음 근처·목격 표본 시각(ms). enterErrand 가 쓰고 sampleErrand 가 옮기고 enterDiscussion 이 키째 지운다. 어떤 view 에도 없다. */
-  errandTickAt?: number;
   /** 일차(1부터). dayAnnounce 진입 때 tick 의 진입 훅이 올린다. 없으면 아직 낮이 시작되지 않았다. 뷰에는 DayView.n 으로 실린다. */
   day?: number;
   /** 판 번호(1부터, 결정 D-26). 다시 하기(11-08)가 올린다. 없으면 1 — 옛 저장 방은 읽는 쪽 기본값(roundOf)으로 읽는다. 단계 키 '판:일차:단계'의 앞 부분이고 view.round 로 실린다. */
   round?: number;
   /** 지난밤 결과 한 곳 — enterMorning 이 쓰고 enterNight 가 지운다. 없으면 아직 아침이 오지 않았다(3페이즈, 모두 optional). */
   morning?: MorningView;
-  /**
-   * 서버 전용 — view 에 그대로 싣지 않는다(결정 0079 예정, 16페이즈 D-10). 심부름 표본이 피해자 후보(산 사람) 좌석마다 덮어쓰는 "반경 안에 다른 산 사람이 있었던 마지막 표본의
-   * 가장 가까운 사람(by)과 곁 장소(place)" 한 줄(seat 오름차순). enterErrand 가 비우고 enterNight 는 남기며 enterMorning 이 피해자 줄을 morning.seen 으로 옮긴 뒤 지운다.
-   */
-  errandLast?: Array<{ seat: number; by: number; place: PlaceId }>;
   /** 서버 전용(결정 0061-9). 이번 밤 마피아가 남긴 쪽지 — saveNote(09-12)가 쓰고 enterMorning(탈락 없는 밤)·enterNight 가 키째 지운다. 구출·무효 밤의 쪽지는 폐기된다. */
   nightNote?: string;
   /** 서버 전용(결정 0061-14). 암살 현장 분필 자국(고정소수점) — 방 DO 가 채우고 enterNight 가 지운다(09-14). */
@@ -583,11 +566,11 @@ export function normalizeStoredRoom(stored: RoomState, now: number): RoomState {
 /**
  * 옛 방 표시 — 이 표 한 곳이 "배포 전에 저장된 방"을 알아보는 기준이다(결정 0089, D-03·D-29). 이후 삭제 계획이 키를 하나씩 더한다.
  * 22-03: 옛 튜토리얼 — 방 키 tutorialPassed, 개인 키 tutorialDone, 단계 "tutorial".
- * 22-04: 원인 흐름 — 방 키 lamps(등불 켜짐)·scene(아침 현장), 개인 키 skipVote(건너뛰기)·errandCut(자른 등불)·sceneSeen(살핀 지점). 22-05: 마을 — 저장된 맵 값 town(옛 값)(방 map 또는 방장 선택 mapChoice, 타입에서 빠졌으므로 문자열로 비교한다). 구역·문 기억은 방이 아니라 world 저장소의 키라 표시에 없다(복원이 모르는 키를 무시한다). 22-06~22-07 이 errand·mode 표시를 더한다.
+ * 22-04: 원인 흐름 — 방 키 lamps(등불 켜짐)·scene(아침 현장), 개인 키 skipVote(건너뛰기)·errandCut(자른 등불)·sceneSeen(살핀 지점). 22-05: 마을 — 저장된 맵 값 town(옛 값)(방 map 또는 방장 선택 mapChoice, 타입에서 빠졌으므로 문자열로 비교한다). 구역·문 기억은 방이 아니라 world 저장소의 키라 표시에 없다(복원이 모르는 키를 무시한다). 22-06: 심부름 — 단계 errand, 방 키 errandTickAt(표본 시각)·errandLast(마지막 목격 줄), 개인 키 errandPlaces·errandDone·errandNear·errandSeen·errandFake(저장에 남은 심부름 상태). 22-07 이 mode 표시를 더한다.
  */
-const LEGACY_V3_ROOM_KEYS: readonly string[] = ["tutorialPassed", "lamps", "scene"];
-const LEGACY_V3_PLAYER_KEYS: readonly string[] = ["tutorialDone", "skipVote", "errandCut", "sceneSeen"];
-const LEGACY_V3_PHASES: readonly string[] = ["tutorial"];
+const LEGACY_V3_ROOM_KEYS: readonly string[] = ["tutorialPassed", "lamps", "scene", "errandTickAt", "errandLast"];
+const LEGACY_V3_PLAYER_KEYS: readonly string[] = ["tutorialDone", "skipVote", "errandCut", "sceneSeen", "errandPlaces", "errandDone", "errandNear", "errandSeen", "errandFake"];
+const LEGACY_V3_PHASES: readonly string[] = ["tutorial", "errand"];
 
 /** 22-05: 마을 맵으로 저장된 방인가(MapId 에서 빠진 값이라 문자열로 비교한다). 맵 조회(roomMapId)·MAPS 조회보다 먼저 돌아야 한다(T-22-08). */
 function hasLegacyTown(stored: RoomState): boolean {

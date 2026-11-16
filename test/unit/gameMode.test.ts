@@ -1,8 +1,6 @@
 // 19-01: 판 종류(결정 0081-6, D-01·D-02·D-05·D-06·D-08) — 규칙 표·판별·고르기·다음 단계. 순수 규칙만 본다(방 DO 는 test/worker/modePick·modeBasic).
 import { describe, expect, it } from "vitest";
-import { planBotSteps } from "../../shared/game/bots";
 import { pickMode } from "../../shared/game/mode";
-import { enterMorning, pickTarget } from "../../shared/game/night";
 import { enterNomination, enterVote, resolveNomination, stepNomination } from "../../shared/game/nomination";
 import { PHASE_DEFS, nextPhaseOf } from "../../shared/game/phases";
 import { rematch } from "../../shared/game/rematch";
@@ -14,10 +12,9 @@ import { routeAfterDayAnnounce } from "../../shared/game/showdown";
 import { resetToLobby } from "../../shared/game/testTools";
 import { hooksOf, tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
-import { DEFAULT_MODE, GAME_MODES, PLACE_IDS } from "../../shared/protocol";
+import { DEFAULT_MODE, GAME_MODES } from "../../shared/protocol";
 import type { GameMode, PhaseId } from "../../shared/protocol";
 import { seededRandInt } from "../helpers/seededRandom";
-import { underCauseLock } from "../helpers/playable";
 
 const HOST = "player-id-0000-aaaa";
 const GUEST = "player-id-0001-aaaa";
@@ -43,7 +40,6 @@ function started(n = 4): RoomState {
 }
 
 const POLITICS = ["badge", "whisper", "pickTurn", "runoff", "showdown"] as const;
-const EXTRAS = ["errand", "witness", "trace"] as const;
 const flags = (mode: GameMode, keys: readonly string[]): string => {
   const rules = rulesetOf(mode) as unknown as Record<string, unknown>;
   return keys.map((k) => `${k}:${String(rules[k])}`).join(" ");
@@ -57,11 +53,9 @@ describe("판 종류 값 (D-01)", () => {
 });
 
 describe("rulesetOf (D-02)", () => {
-  it("basic 은 errand·witness·trace 가 모두 꺼짐이다", () => {
-    expect(flags("basic", EXTRAS)).toBe("errand:false witness:false trace:false");
-  });
-  it("extended 는 errand·witness·trace 가 모두 켜짐이다", () => {
-    expect(flags("extended", EXTRAS)).toBe("errand:true witness:true trace:true");
+  it("규칙 필드는 정치 장치 다섯뿐이다(22페이즈에서 errand·witness·trace 가 지워졌다)", () => {
+    expect(Object.keys(rulesetOf("basic")).sort().join(",")).toBe("badge,pickTurn,runoff,showdown,whisper");
+    expect(Object.keys(rulesetOf("extended")).sort().join(",")).toBe("badge,pickTurn,runoff,showdown,whisper");
   });
   it("정치 장치 다섯은 두 판 모두 꺼짐이다", () => {
     const off = "badge:false whisper:false pickTurn:false runoff:false showdown:false";
@@ -114,7 +108,7 @@ describe("pickMode (D-05·D-06, L40)", () => {
   });
   it("대기실·ended 가 아닌 단계는 거절이고 ended 에서는 받아들인다 (D-06)", () => {
     const s = started();
-    const phases = ["assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"] as const;
+    const phases = ["assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"] as const;
     expect(phases.map((phase) => `${phase}:${outcome(pickMode({ ...s, phase }, HOST, "basic"))}`).join(" ")).toBe(phases.map((phase) => `${phase}:no`).join(" "));
     const ended = pickMode({ ...s, phase: "ended" }, HOST, "basic");
     expect(ended.ok && ended.state.mode).toBe("basic");
@@ -124,184 +118,22 @@ describe("pickMode (D-05·D-06, L40)", () => {
   });
 });
 
-describe("nextPhaseOf (D-08)", () => {
-  it("basic 판은 낮 시작 발표 다음이 토론이다", () => {
-    expect(nextPhaseOf("dayAnnounce", rulesetOf("basic"))).toBe("discussion");
+describe("nextPhaseOf (22페이즈: 두 판 모두 단계 표의 next 그대로)", () => {
+  it("낮 시작 발표 다음은 두 판 모두 토론이다", () => {
+    expect(nextPhaseOf("dayAnnounce")).toBe("discussion");
   });
-  it("extended 판은 낮 시작 발표 다음이 심부름이다", () => {
-    expect(nextPhaseOf("dayAnnounce", rulesetOf("extended"))).toBe("errand");
+  it("모든 단계가 단계 표의 next 와 같다", () => {
+    const all = Object.keys(PHASE_DEFS) as PhaseId[];
+    const want = all.map((p) => `${p}>${PHASE_DEFS[p].next}`).join(" ");
+    expect(all.map((p) => `${p}>${nextPhaseOf(p)}`).join(" ")).toBe(want);
   });
-  it("그 밖의 단계는 기본판이 단계 표의 next 와 같다", () => {
-    const others = (Object.keys(PHASE_DEFS) as PhaseId[]).filter((p) => p !== "dayAnnounce");
-    const want = others.map((p) => `${p}>${PHASE_DEFS[p].next}`).join(" ");
-    expect(others.map((p) => `${p}>${nextPhaseOf(p, rulesetOf("basic"))}`).join(" ")).toBe(want);
-  });
-  it("꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'): 원인 흐름을 잠그면 확장판도 단계 표의 next 와 같다 (21-13, 갈래 B)", underCauseLock(() => {
-    const others = (Object.keys(PHASE_DEFS) as PhaseId[]).filter((p) => p !== "dayAnnounce");
-    const want = others.map((p) => `${p}>${PHASE_DEFS[p].next}`).join(" ");
-    expect(others.map((p) => `${p}>${nextPhaseOf(p, rulesetOf("extended"))}`).join(" ")).toBe(want);
-  }));
 });
 
-describe("tick — 판 종류에 따른 낮 흐름 (D-04·D-08)", () => {
+describe("tick — 낮 흐름 (22페이즈: 두 판 모두 낮 시작 발표 다음이 토론)", () => {
   const atDayAnnounce = (extra: Partial<RoomState>): RoomState => ({ ...started(), phase: "dayAnnounce", day: 1, phaseEndsAt: 5000, ...extra });
-  it("mode basic 인 낮 시작 발표는 마감 뒤 토론으로 간다", () => {
-    expect(tick(atDayAnnounce({ mode: "basic" }), 5000, seededRandInt(1)).phase).toBe("discussion");
-  });
-  it("mode 없는 방(옛 저장 방 포함)은 마감 뒤 심부름으로 간다", () => {
-    expect(tick(atDayAnnounce({}), 5000, seededRandInt(1)).phase).toBe("errand");
-  });
-  it("mode extended 는 마감 뒤 심부름으로 간다", () => {
-    expect(tick(atDayAnnounce({ mode: "extended" }), 5000, seededRandInt(1)).phase).toBe("errand");
-  });
-  it("basic 판의 토론은 심부름 배정 없이 시작한다 — errandPlaces 를 가진 사람이 없다", () => {
-    const s = tick(atDayAnnounce({ mode: "basic" }), 5000, seededRandInt(1));
-    expect(s.players.filter((p) => p.errandPlaces !== undefined).length).toBe(0);
-  });
-});
-
-// ---- Task 2: basic 판의 서버 차단과 유지 (D-04·D-06·D-08·D-10·D-11) ----
-
-/** 실제 전이로 1일차 밤 상태를 만든다(6명 판: 마피아 둘). mode 는 시작 전에 방에 실린다. */
-function nightOf(mode?: GameMode): RoomState {
-  const base = lobby(6);
-  const r = startGame(mode === undefined ? base : { ...base, mode }, HOST, 10_000, seededRandInt(11));
-  if (!r.ok) throw new Error("start failed");
-  let state = r.state;
-  while (state.phase !== "night") {
-    if (state.phaseEndsAt === null) throw new Error("phase has no deadline");
-    state = tick(state, state.phaseEndsAt, seededRandInt(11));
-  }
-  return state;
-}
-
-/** 마피아 전원이 첫 시민을 고른 밤(피해자가 나온다)과 그 피해자·마피아. errandLast 에 피해자 줄을 일부러 남긴다. */
-function killNight(mode?: GameMode): { night: RoomState; victim: Player; mafia: Player[] } {
-  let night = nightOf(mode);
-  const mafia = night.players.filter((p) => p.role === "mafia").sort((a, b) => a.seat - b.seat);
-  const victim = night.players.filter((p) => p.role === "citizen").sort((a, b) => a.seat - b.seat)[0]!;
-  for (const m of mafia) {
-    const picked = pickTarget(night, m.id, victim.seat);
-    if (!picked.ok) throw new Error("pickTarget rejected");
-    night = picked.state;
-  }
-  return { night: { ...night, errandLast: [{ seat: victim.seat, by: mafia[0]!.seat, place: PLACE_IDS[0] }] }, victim, mafia };
-}
-
-/** 호출 횟수를 세는 난수(늘 0). */
-function counting(): { fn: (n: number) => number; calls: () => number } {
-  let calls = 0;
-  return { fn: () => ((calls += 1), 0), calls: () => calls };
-}
-
-const keysOf = (o: object | undefined): string => (o === undefined ? "(없음)" : Object.keys(o).sort().join(","));
-
-describe("enterMorning — basic 판은 흔적·마지막 목격을 만들지 않는다 (D-08, T-19-03)", () => {
-  it("basic: 피해자가 나온 밤이어도 morning 에 eliminated 뿐이고 trace·seen 키가 없다 (errandLast 가 있어도)", () => {
-    const { night, victim } = killNight("basic");
-    const morning = enterMorning(night, seededRandInt(3)).morning;
-    expect(`${morning?.eliminated === victim.seat}/${keysOf(morning)}`).toBe("true/eliminated");
-  });
-  it("basic: 흔적 난수를 부르지 않는다 (randInt 호출 0회)", () => {
-    const { night } = killNight("basic");
-    const rng = counting();
-    enterMorning(night, rng.fn);
-    expect(rng.calls()).toBe(0);
-  });
-  it("basic: errandLast 는 판과 무관하게 지워진다", () => {
-    const { night } = killNight("basic");
-    expect("errandLast" in enterMorning(night, seededRandInt(3))).toBe(false);
-  });
-  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: 원인 흐름 판은 공개 흔적·마지막 목격을 만들지 않으므로(아래 갈래 C 시험) 옛 단언은 잠금 아래에서 그대로 둔다(갈래 B).
-  it("extended(mode 없음 포함), 원인 흐름 잠금 아래: 지금처럼 trace 와 seen 이 있고 흔적 난수를 한 번 부른다", underCauseLock(() => {
-    for (const mode of [undefined, "extended"] as const) {
-      const { night } = killNight(mode);
-      const rng = counting();
-      const morning = enterMorning(night, rng.fn).morning;
-      expect(`${String(mode)}:${keysOf(morning)}:${rng.calls()}`).toBe(`${String(mode)}:eliminated,seen,trace:1`);
-    }
-  }));
-  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제')(갈래 B).
-  it("tick 으로 아침에 들어가도 같다, 원인 흐름 잠금 아래 — basic 은 trace·seen 없음, extended 는 있음 (ON_ENTER 의 세 번째 인자가 규칙으로 새지 않는다)", underCauseLock(() => {
-    const viaTick = (mode?: GameMode): string => {
-      const { night } = killNight(mode);
-      return keysOf(tick(night, night.phaseEndsAt!, seededRandInt(3)).morning);
-    };
-    expect(`${viaTick("basic")} / ${viaTick("extended")} / ${viaTick()}`).toBe("eliminated / eliminated,seen,trace / eliminated,seen,trace");
-  }));
-});
-
-describe("buildView — basic 판에는 심부름·기록·흔적 키가 없다 (D-08, 값이 빈 것이 아니라 키가 없다)", () => {
-  /** 심부름·기록·증거가 서버 상태에 억지로 남아 있는 방(옛 저장 방·판 종류를 바꾼 방을 흉내 낸다). */
-  function stuffed(phase: PhaseId, mode?: GameMode): RoomState {
-    const s = started(4);
-    const places = [PLACE_IDS[0], PLACE_IDS[1], PLACE_IDS[2]];
-    return {
-      ...s,
-      ...(mode === undefined ? {} : { mode }),
-      phase,
-      day: 2,
-      phaseEndsAt: 99_000,
-      morning: { eliminated: 3, trace: "button", seen: { seat: 1, place: PLACE_IDS[0] } },
-      players: s.players.map((p) => ({
-        ...p,
-        ...(p.seat === 3 ? { alive: false } : {}),
-        errandPlaces: [...places],
-        errandDone: [...places],
-        errandSeen: [{ seat: 1, place: PLACE_IDS[1] }],
-      })),
-    };
-  }
-  const meKeys = (s: RoomState): string => Object.keys(buildView(s, HOST, 50_000).me).filter((k) => k === "errand" || k === "record").join(",");
-
-  it("basic: errand 단계 상태를 억지로 만들어도 me.errand 키가 없다", () => {
-    expect(meKeys(stuffed("errand", "basic"))).toBe("");
-  });
-  it("extended: errand 단계의 산 본인은 me.errand 를 받는다 (기존 그대로)", () => {
-    expect(`${meKeys(stuffed("errand", "extended"))}/${meKeys(stuffed("errand"))}`).toBe("errand/errand");
-  });
-  it("basic: discussion 에 errandPlaces·errandDone·errandSeen 이 있어도 me.record 키가 없다", () => {
-    expect(meKeys(stuffed("discussion", "basic"))).toBe("");
-  });
-  it("extended: discussion 의 심부름을 끝낸 산 본인은 me.record 를 받는다 (기존 그대로)", () => {
-    expect(`${meKeys(stuffed("discussion", "extended"))}/${meKeys(stuffed("discussion"))}`).toBe("record/record");
-  });
-  it("basic: morning.trace·seen 이 상태에 남아 있어도 view.day.morning 에는 eliminated 뿐이고 view.day.evidence 키가 없다", () => {
-    const day = buildView(stuffed("morning", "basic"), HOST, 50_000).day;
-    expect(`${keysOf(day?.morning)}/${"evidence" in (day ?? {})}`).toBe("eliminated/false");
-  });
-  it("basic: 아침~처형 어느 단계에도 view.day.evidence 키가 없다", () => {
-    const phases = ["morning", "dayAnnounce", "errand", "discussion", "nomination", "defense", "verdict", "execution"] as const;
-    expect(phases.filter((phase) => "evidence" in (buildView(stuffed(phase, "basic"), HOST, 50_000).day ?? {})).join(",")).toBe("");
-  });
-  it("extended: 아침은 trace·seen 을 싣고 day.evidence 도 둘 다 싣는다 (기존 그대로)", () => {
-    for (const mode of [undefined, "extended"] as const) {
-      const day = buildView(stuffed("morning", mode), HOST, 50_000).day;
-      expect(`${String(mode)}:${keysOf(day?.morning)}/${keysOf(day?.evidence)}`).toBe(`${String(mode)}:eliminated,seen,trace/seen,trace`);
-    }
-  });
-});
-
-describe("봇 계획 — basic 판은 심부름 행동이 없다 (D-11)", () => {
-  /** 봇 둘이 앉은 errand 단계 상태(사람 넷은 연결). */
-  function errandWithBots(mode?: GameMode): RoomState {
-    const s = started(6);
-    return {
-      ...s,
-      ...(mode === undefined ? {} : { mode }),
-      phase: "errand",
-      day: 1,
-      phaseEndsAt: 100_000,
-      players: s.players.map((p) => (p.seat >= 4 ? { ...p, isBot: true as const } : p)),
-    };
-  }
-  const errandActs = (s: RoomState): number => planBotSteps(s, 60_000, seededRandInt(5)).filter((step) => step.act.t === "errandGo" || step.act.t === "errandAct").length;
-
-  it("basic: errand 단계 상태여도 errandGo·errandAct 단계가 0개다", () => {
-    expect(errandActs(errandWithBots("basic"))).toBe(0);
-  });
-  it("extended(mode 없음 포함): 지금처럼 봇마다 심부름 단계가 있다", () => {
-    expect(`${errandActs(errandWithBots("extended")) > 0}/${errandActs(errandWithBots()) > 0}`).toBe("true/true");
+  it("mode basic·extended·없음(옛 저장 방 포함) 모두 낮 시작 발표 마감 뒤 토론으로 간다", () => {
+    const phases = [{ mode: "basic" as const }, { mode: "extended" as const }, {}].map((extra) => tick(atDayAnnounce(extra), 5000, seededRandInt(1)).phase);
+    expect(phases.join(",")).toBe("discussion,discussion,discussion");
   });
 });
 

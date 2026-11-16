@@ -4,7 +4,7 @@
 // 흐름은 화면을 읽기만 하고 판정은 lib.mjs 의 순수 함수(hostRailChecks·modeChipChecks·modeSheetChecks·basicModeChecks)에 맡긴다 — 문턱 숫자는 여기에 두지 않는다(T-19-18·T-19-22).
 // 결과 줄에는 닉네임·토큰을 남기지 않는다 — 표식 값·판 이름·단계 이름·개수·사각형 수치만 쓴다.
 // E2E 방은 모두 테스트 방이라 대기실 줄은 [테스트] 단추 아래(띠 아랫변 + 12 + 48)에서 시작한다. 일반 방 자리(띠 아랫변 + 12)는 화면 시험(test/client)이 맡는다.
-// helpers 는 flows.mjs 가 넘긴다(errand.mjs·mapselect.mjs 와 같은 모양 — 서로 import 하지 않는다): { recorder, attempt, startHost, openGuest, openGame, closeGame, settledResult }
+// helpers 는 flows.mjs 가 넘긴다(mapselect.mjs 와 같은 모양 — 서로 import 하지 않는다): { recorder, attempt, startHost, openGuest, openGame, closeGame, settledResult }
 import {
   SetupError,
   chooseRole,

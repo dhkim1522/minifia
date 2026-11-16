@@ -143,7 +143,6 @@ import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readR
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
-import { makeErrandFlows } from "./errand.mjs";
 import { makeModeFlows } from "./modes.mjs";
 import { CHAT_KB_PANEL_REST, CHAT_OPEN_STAGE_MIN, chatOpenChecks, chatOpenHeight, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureBallotsBackstop, measureChatOpen, readChatWindow, readLiveGhost } from "./polish.mjs";
 
@@ -1416,7 +1415,7 @@ async function untilGame(page, pred, ms = 6000, label = "게임 화면") {
 
 /**
  * 방장 + 손님(사람 페이지) + 봇 → 시작 → to 단계까지. 돌려주는 값: { host, hp, ht, hostSeat, guests: [{ context, page, tracker, takeIssues, seat }] }
- * 21-16: 기본값은 기본 마피아 판("basic") 이다 — 제품 기본(확장판)이 원인 흐름(저녁·밤·아침)이 되어, 옛 낮 순서(밤 → 아침 → 토론, 얼굴 목록 밤)를 전제한 흐름은 21-13·21-14 의 갈래 A 와 같이 기본 마피아 판으로 돈다. 심부름 흐름은 openExtended 로 연다.
+ * 기본값은 기본 마피아 판("basic") 이다(22-04 가 원인 흐름을 지웠다).
  * mode("basic"|"extended", 19-06)를 주면 봇·직업을 정한 뒤 시작 전에 방장 줄의 [판 종류] 로 그 판 종류를 고른다(안 주면 서버 기본값 그대로).
  */
 async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", vote = { exec: "yes", pick: "host" }, to = "discussion", hostNick = undefined, guestInitScripts = [], guestSize = undefined, minBotNameChars = 0, hostInitScripts = [], guestNames = GAME_GUESTS, mode = "basic" } = {}) {
@@ -1444,9 +1443,6 @@ async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", v
   if (to) await skipTo(hp, ht, to);
   return { host, hp, ht, hostSeat: ht.last().me.seat, guests: pages };
 }
-
-/** 확장판을 여는 openGame — errand 흐름이 쓴다(22-06 이 흐름과 함께 지운다). */
-const openExtended = (ctx, flowId, opts = {}) => openGame(ctx, flowId, { mode: "extended", ...opts });
 
 async function closeGame(game) {
   for (const g of game.guests) await g.context.close().catch(() => {});
@@ -2015,7 +2011,7 @@ async function ghostFlow(ctx) {
     }
 
     // 18.1-09 R3(C3·C1·C2): 다음 날 단계를 한 칸씩 넘기며(낮 시작·토론·지목·변론·찬반·처형·밤·아침 중 판이 거치는 것) 단계마다
-    // 유령(방장) 화면은 탈락 좌석 전원이 직업 칩 1개·유령 이름표·유령 그림이고(직업과 무관), 같은 단계의 산 손님 화면은 탈락 좌석을 유령 그림으로 그린다(밤·심부름은 그리지 않음)
+    // 유령(방장) 화면은 탈락 좌석 전원이 직업 칩 1개·유령 이름표·유령 그림이고(직업과 무관), 같은 단계의 산 손님 화면은 탈락 좌석을 유령 그림으로 그린다(밤은 그리지 않음)
     {
       const sc = `${id}/stages`;
       const covered = [];
@@ -3811,9 +3807,6 @@ const { soundRenderFlow, soundUnlockFlow, soundScriptFlow, soundNightParityFlow,
 // 사회자·이름표(14페이즈 14-08): emcee-band(띠, 폰 6종)·emcee-tools·emcee-leak·emcee-sound. 흐름 본문은 host.mjs, 도우미만 넘긴다. modeLeakFlow(19-07)는 emcee-leak 본문을 기본 마피아 판으로 돈다
 const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow, modeLeakFlow } = makeHostFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH, settledResult });
 
-// 심부름·목격 기록·밤 통일·아침 흔적(15페이즈 15-09): errand·witness·trace(폰 6종). 흐름 본문은 errand.mjs, 도우미만 넘긴다
-const { errandFlow } = makeErrandFlows({ recorder, openGame: openExtended, closeGame, gameGH });
-
 // 방장 줄·판 종류(19페이즈 19-06): mode-rail(폰 6종)·mode-pick. 19-07: modeBasicFlow(기본 마피아 완주). 흐름 본문은 modes.mjs, 도우미만 넘긴다
 const { modeRailFlow, modePickFlow, modeBasicFlow } = makeModeFlows({ recorder, attempt, startHost, openGuest, openGame, closeGame, settledResult });
 
@@ -3886,8 +3879,6 @@ export const FLOWS = [
   { id: "emcee-tools", run: emceeToolsFlow, size: GAME_SIZE },
   { id: "emcee-leak", run: emceeLeakFlow, size: GAME_SIZE },
   { id: "emcee-sound", run: emceeSoundFlow, size: GAME_SIZE },
-  // 15-09: 심부름(ERRAND-01~04)·목격 기록(ERRAND-05)·밤 얼굴 목록 통일 + 아침 흔적(TRACE-01~03). 이름 앞머리 errand·witness·trace — 다른 흐름과 --only 부분 일치가 겹치지 않는다. 폰 6종(영역 검사 필수)
-  { id: "errand", run: errandFlow, extraSizes: LOBBY_EXTRA_SIZES },
   // 19-06: 방장 줄(HR1~HR8)·참가자 칩(CH)·판 종류 시트(MS1) 기하와 색은 폰 6종, 판 종류 선택의 방송·새로고침·재접속·다시 하기 유지(MS2·MS3·D-10)는 390x844 한 크기. 이름 앞머리 mode — --only mode 하나로 모두 돈다
   { id: "mode-rail", run: modeRailFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "mode-pick", run: modePickFlow, size: GAME_SIZE },

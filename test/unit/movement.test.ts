@@ -100,10 +100,10 @@ describe("canMoveIn — 밤에는 산 사람 누구도 걷지 못한다 (15페�
   });
 });
 
-describe("MAP_PHASES — 지도 단계 11개", () => {
-  it("낮 시작·심부름(15페이즈)·토론·지목·동점 결선·마지막 3인 결전·변론·찬반·처형·밤·아침이고 로비·역할 단계·종료·옛 투표 단계는 들지 않는다", () => {
+describe("MAP_PHASES — 지도 단계 10개", () => {
+  it("낮 시작·토론·지목·동점 결선·마지막 3인 결전·변론·찬반·처형·밤·아침이고 로비·역할 단계·종료·옛 투표 단계는 들지 않는다", () => {
     expect([...MAP_PHASES].sort().join(",")).toBe(
-      ["dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning"].sort().join(","),
+      ["dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning"].sort().join(","),
     );
   });
 });

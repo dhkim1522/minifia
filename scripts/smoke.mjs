@@ -22,7 +22,7 @@
 //   node scripts/smoke.mjs --prod                 같은 폴더의 prod-url.txt 주소
 //   옵션: --stage create (기본값) | full | --print-version
 //         --players N (full 단계 인원, 4~8, 기본 5)
-//         --mode extended | basic (full 단계 판 종류, 기본 extended. extended 는 첫날 사슬(역할 확인 → 낮 시작 발표 → 심부름 → 토론)까지 돌고,
+//         --mode extended | basic (full 단계 판 종류, 기본 extended. extended 는 첫날 사슬(역할 확인 → 낮 시작 발표 → 토론)까지 돌고,
 //                                    basic 은 한 판을 끝까지 돈다 — 22-07·22-08 이 판 종류째 지운다)
 //         --previous-version V (full 단계: /api/health 의 version 이 V 와 같으면 실패 — 재배포 확인)
 // 토큰 값은 어떤 출력에도 찍지 않는다. 채팅 본문도 출력하지 않는다.
@@ -34,12 +34,9 @@ import { exitIfV1 } from "./deploy-target.mjs";
 
 const TOTAL_LIMIT_MS = 30_000;
 const STATE_LIMIT_MS = 10_000;
-const FULL_TOTAL_LIMIT_MS = 900_000; // 시작 → ended. 낮 하루(심부름 40 + 과반 토론 끝내기 → 순차 지목 최악 3 + 산 사람 수 × 8.9 + 2 (스크립트는 차례마다 곧바로 지목해 약 10초) + 변론 20 + 찬반 10 + 처형 5 + 밤 30 + 아침 5~15 초) 최대 3일 + 여유(15페이즈: 하루마다 심부름 40초 늘었다)
+const FULL_TOTAL_LIMIT_MS = 900_000; // 시작 → ended. 낮 하루(과반 토론 끝내기 → 순차 지목 최악 3 + 산 사람 수 × 8.9 + 2 (스크립트는 차례마다 곧바로 지목해 약 10초) + 변론 20 + 찬반 10 + 처형 5 + 밤 30 + 아침 5~15 초) 최대 3일 + 여유
 // 낮 단계 길이(shared/game/phases.ts 와 같은 값, 결정 0060-1). 스크립트는 TS 를 import 하지 않는다.
 const DISCUSSION_MS = 90_000;
-// 15페이즈(결정 0074): 낮 시작 발표 다음에 심부름 단계가 40초 돈다. shared/game/phases.ts 의 ERRAND_MS 와 같은 값 — test/unit/e2eContract.test.ts 가 두 값이 같은지 묶는다.
-const ERRAND_MS = 40_000;
-const ERRAND_WAIT_MS = ERRAND_MS + STATE_LIMIT_MS;
 // 기본판 동시 투표(결정 0072): 산 사람 모두 한 번에 15초. shared/game/phases.ts 의 NOMINATION_MS 와 같은 값 — 고치면 함께.
 const NOMINATION_MS = 15_000;
 // 봇 지연 등 서버 간격: 한 사람이 지목을 바꾸는 최소 간격(applyPoint)은 250ms 라 바꾸기 전에 이만큼 기다린다.
@@ -70,8 +67,6 @@ const EXECUTION_WAIT_MS = EXECUTION_MS + STATE_LIMIT_MS;
 // 밤 30초, 아침은 최대 길이 16초 + 여유. MORNING_MAX_MS 는 shared/game/phases.ts 의 사본이다(결정 0061-13: 기본 5 + 피해자 2 + 유언 2 + 쪽지 2, 상한 16초 — 16페이즈 A3).
 const NIGHT_WAIT_MS = 30_000 + STATE_LIMIT_MS;
 const MORNING_MAX_MS = 16_000;
-// 아침 흔적 구간. shared/game/phases.ts 의 MORNING_TRACE_MS 사본(결정 0079-10: 3초 → 5초) — test/unit/e2eContract.test.ts 가 같은 값인지 묶는다.
-const MORNING_TRACE_MS = 5_000;
 const MORNING_WAIT_MS = 15_000 + STATE_LIMIT_MS;
 // 자유 채팅 와이어(shared/protocol.ts ChatLineWire·TypingFrame·ChatLogFrame·ChatRejectFrame): 이 키 밖은 어떤 프레임에도 없다(CHAT-06).
 // 채널 필드는 서버 → 클라이언트에만 있고(ch), id·역할·토큰·수신자 마스크는 싣지 않는다(결정 0002·0058).
@@ -105,7 +100,7 @@ const PHASE_NEXT_BASIC = {
   lobby: ["assigning"],
   assigning: ["roleReveal"],
   roleReveal: ["dayAnnounce"],
-  dayAnnounce: ["discussion"], // 기본판(결정 0072): 심부름·흔적이 없어 낮 시작 발표 다음이 바로 토론이다
+  dayAnnounce: ["discussion"], // 낮 시작 발표 다음이 바로 토론이다
   discussion: ["nomination"],
   nomination: ["defense", "night"], // 기본판(결정 0072): 동점·0표는 runoff 가 아니라 처형 없는 밤
   defense: ["verdict"],
@@ -115,27 +110,12 @@ const PHASE_NEXT_BASIC = {
   morning: ["dayAnnounce", "ended"],
   ended: [],
 };
-// 확장판: 기본판과 같고 낮 시작 발표 다음에 심부름(errand, 40초)이 낀다 — roleReveal → dayAnnounce → errand → discussion → nomination → (최다 한 명) defense → verdict → execution → night | ended,
-// 지목 0표·동률은 곧장 night, night → morning → dayAnnounce(다음 낮) | ended. (22-04: 원인 흐름 순서를 지웠다)
-const PHASE_NEXT_EXTENDED = {
-  lobby: ["assigning"],
-  assigning: ["roleReveal"],
-  roleReveal: ["dayAnnounce"],
-  dayAnnounce: ["errand"],
-  errand: ["discussion"],
-  discussion: ["nomination"],
-  nomination: ["defense", "night"],
-  defense: ["verdict"],
-  verdict: ["execution"],
-  execution: ["night", "ended"],
-  night: ["morning"],
-  morning: ["dayAnnounce", "ended"],
-  ended: [],
-};
+// 확장판: 22-06 에서 심부름 단계가 없어져 기본판과 같다(판 종류째 22-07 이 지운다).
+const PHASE_NEXT_EXTENDED = PHASE_NEXT_BASIC;
 export const PHASE_NEXT_BY_MODE = { basic: PHASE_NEXT_BASIC, extended: PHASE_NEXT_EXTENDED };
 // 판 종류별 첫날의 시작 단계: 두 판 모두 낮 시작 발표다. 첫날 단언은 이 단계에서 day.n = 1 을 본다.
 export const FIRST_DAY_PHASE = { basic: "dayAnnounce", extended: "dayAnnounce" };
-const DAY_PHASES = ["dayAnnounce", "errand", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
+const DAY_PHASES = ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning", "ended"];
 const ROLE_IDS = ["mafia", "police", "doctor", "citizen"];
 // 직업 이름 문자열이 나와도 되는 경로(배열 칸은 [] 로 줄여 비교한다). 채널 이름 mafia 가 든 ch·me.chat 은 채널 검사가 따로 본다.
 // 탈락자의 view.spectate.seats[].job 은 탈락 뒤 프레임에서만 따로 허용한다.
@@ -153,18 +133,11 @@ const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "
 // turn·showdown·runoff·pickTurn·showdownPick·runoffVote: 기본판(결정 0072)에서 꺼진 장치의 키다. 공개 경로로도 허용하지 않아 어느 프레임에도 이름이 나오면 안 된다.
 // 기본판(결정 0072): turn·showdown·runoff 는 공개 경로도 없다 — 어떤 프레임에 이름이 나오면 실패한다(T-13-07, 허용 경로를 좁히기만 한다).
 const PUBLIC_KEY_PATHS = { verdict: ["view.day.verdict"], verdictVote: ["view.me.verdictVote"] };
-// 아침 흔적 조각 id 닫힌 집합(shared/protocol.ts TRACE_PIECE_IDS 사본, 결정 0074-5)
-export const TRACE_PIECES = ["button", "pin", "whiteCloth", "blackCloth", "brownCloth", "pencil", "grayThread", "navyThread", "redCloth"];
 // 사본 상수(스크립트는 TS 를 import 하지 않는다): test/unit/e2eContract.test.ts 가 shared 와 같은지 묶는다.
 // shared/protocol.ts OUTFIT_IDS — 공개 의상 id. 직업 이름과 같은 단어(police·doctor·mafia)가 있지만 역할의 함수가 아니다(결정 D-6, 서버 쪽 증명 test/unit/dress.test.ts).
 export const OUTFIT_IDS = ["coat", "police", "doctor", "mafia", "detective", "reporter", "elder", "hood", "noir"];
-// shared/protocol.ts PLACE_IDS — 심부름 장소 id(마지막 목격 seen.place 의 닫힌 집합)
-export const PLACE_IDS = [
-  "glass", "piano", "sax", "stool", "door", "poster", "record", "candle",
-  "clock", "fountain", "bench", "lamp", "mail", "tree", "flower", "stand",
-];
-// 아침 day.morning 이 가질 수 있는 키(MorningView 중 이번 판이 만드는 셋). 이번 판은 eliminated 필수다.
-export const MORNING_KEYS = ["eliminated", "seen", "trace"];
+// 아침 day.morning 이 가질 수 있는 키(MorningView 중 이번 판이 만드는 셋). 이번 판은 eliminated 필수다. 22-06: 흔적(trace)·마지막 목격(seen)이 없어졌다.
+export const MORNING_KEYS = ["eliminated"];
 // 옷 id 는 이 경로에서만 직업 이름 단어를 허용한다(값이 OUTFIT_IDS 안일 때만).
 export const LOOK_PATH = "view.players[].look";
 
@@ -180,7 +153,7 @@ export function roleStringAllowed(path, value, ctx) {
 
 /**
  * 아침 day.morning 모양 문제 목록(비면 통과). seats 는 이 판의 좌석 번호들.
- * 키는 MORNING_KEYS 부분집합 + eliminated 필수, trace 는 닫힌 조각 id, seen 은 {seat, place} 둘뿐이고 seat 는 판의 좌석·place 는 PLACE_IDS 안.
+ * 키는 MORNING_KEYS 부분집합 + eliminated 필수다.
  */
 export function morningProblems(morning, seats) {
   const problems = [];
@@ -189,16 +162,6 @@ export function morningProblems(morning, seats) {
   const extra = keys.filter((k) => !MORNING_KEYS.includes(k));
   if (extra.length > 0) problems.push(`아침 day.morning 에 허용 밖 키가 있음: ${extra.sort().join(",")}`);
   if (morning.eliminated === undefined) problems.push("아침 day.morning 에 eliminated 가 없음");
-  if (morning.trace !== undefined && !TRACE_PIECES.includes(morning.trace)) problems.push(`아침 day.morning.trace 가 닫힌 조각 id 가 아님: ${JSON.stringify(morning.trace)}`);
-  if (morning.seen !== undefined) {
-    const seen = morning.seen;
-    if (seen === null || typeof seen !== "object" || Array.isArray(seen)) problems.push("아침 day.morning.seen 이 객체가 아님");
-    else {
-      if (Object.keys(seen).sort().join(",") !== "place,seat") problems.push(`아침 day.morning.seen 의 키가 place,seat 가 아님: ${Object.keys(seen).sort().join(",")}`);
-      if (!Number.isInteger(seen.seat) || !seats.includes(seen.seat)) problems.push(`아침 day.morning.seen.seat 가 판의 좌석이 아님: ${JSON.stringify(seen.seat)}`);
-      if (!PLACE_IDS.includes(seen.place)) problems.push(`아침 day.morning.seen.place 가 닫힌 장소 id 가 아님: ${JSON.stringify(seen.place)}`);
-    }
-  }
   return problems;
 }
 
@@ -686,7 +649,7 @@ async function stageFull(url, args) {
   if (afterFirst.me.seat !== before.seat) fail(`재접속 뒤 seat 가 다름: ${before.seat} → ${afterFirst.me.seat}`);
   if (afterFirst.me.role !== before.role) fail("재접속 뒤 역할이 끊기 전과 다름");
 
-  // (9·확장판) 첫날: 역할 확인 → 낮 시작 발표(일차 1) → 심부름(errand) → 토론. 첫날 단언은 낮 시작 발표에서 day.n = 1 을 본다.
+  // (9·확장판) 첫날: 역할 확인 → 낮 시작 발표(일차 1) → 토론. 첫날 단언은 낮 시작 발표에서 day.n = 1 을 본다.
   //            하루의 나머지(토론 채팅·지목·변론·찬반·처형·밤)는 기본판 한 판(--mode basic)과 워커 시험·폰 E2E 가 돈다 — 이 단계는 배포본이 첫날 사슬을 지키는지만 본다.
   if (MODE === "extended") {
     await waitUntil(() => clients.every((c) => firstState(c, FIRST_DAY_PHASE.extended)), 30_000, "모든 클라이언트가 roleReveal 다음에 dayAnnounce 를 받지 못함");
@@ -696,21 +659,8 @@ async function stageFull(url, args) {
       if (ev.mode !== "extended") fail(`${c.nickname} 의 첫 dayAnnounce view.mode 가 extended 가 아님: ${ev.mode}`);
       if (c.unexpectedClose !== null) fail(`${c.nickname} 소켓이 예상 밖으로 닫힘 (code ${c.unexpectedClose})`);
     }
-    await waitUntil(() => clients.every((c) => firstState(c, "errand")), 30_000, "모든 클라이언트가 dayAnnounce 다음에 errand 를 받지 못함");
-    // 심부름: 마감·길이는 모든 클라이언트에 같고, 산 사람 모두가 같은 모양의 me.errand(장소 3곳·처리 0곳)를 받는다. 값(장소 id)은 클라이언트마다 다를 수 있어 구조로 견준다.
-    const errandEnds = new Set(clients.map((c) => firstState(c, "errand").msg.view.phaseEndsAt));
-    if (errandEnds.size !== 1) fail(`errand 의 phaseEndsAt 이 클라이언트마다 다름 (${errandEnds.size}종)`);
-    for (const c of clients) {
-      const ev = firstState(c, "errand").msg.view;
-      if (ev.phaseDurationMs !== ERRAND_MS) fail(`${c.nickname} 의 errand phaseDurationMs 가 ${ERRAND_MS} 이 아님: ${ev.phaseDurationMs}`);
-      const errand = ev.me.errand;
-      if (!errand || Object.keys(errand).sort().join(",") !== "done,places") fail(`${c.nickname} 의 errand view 에 me.errand{done,places} 가 없음`);
-      if (!Array.isArray(errand.places) || errand.places.length !== 3 || new Set(errand.places).size !== 3) fail(`${c.nickname} 의 me.errand.places 가 서로 다른 3곳이 아님`);
-      if (!Array.isArray(errand.done) || errand.done.length !== 0) fail(`${c.nickname} 의 me.errand.done 이 빈 배열이 아님`);
-    }
-    info(`심부름(1일차): 산 ${clients.length}명 모두 day.n 1, 같은 마감(${ERRAND_MS / 1000}초)과 같은 모양의 me.errand(장소 3곳)를 받음`);
-    // 심부름 마감 다음은 토론이다(서버 타이머, 넘기기 없음).
-    await waitUntil(() => clients.every((c) => firstState(c, "discussion", inDayN(1))), ERRAND_WAIT_MS + 5000, "심부름 마감 뒤 1일차 discussion 이 모든 클라이언트에 오지 않음");
+    // 낮 시작 발표 마감 다음은 토론이다(서버 타이머, 넘기기 없음).
+    await waitUntil(() => clients.every((c) => firstState(c, "discussion", inDayN(1))), STATE_LIMIT_MS + 5000, "낮 시작 발표 마감 뒤 1일차 discussion 이 모든 클라이언트에 오지 않음");
     for (const c of clients) {
       const dv = firstState(c, "discussion", inDayN(1)).msg.view;
       if (dv.phaseDurationMs !== DISCUSSION_MS) fail(`${c.nickname} 의 1일차 discussion phaseDurationMs 가 ${DISCUSSION_MS} 이 아님: ${dv.phaseDurationMs}`);
@@ -750,7 +700,7 @@ async function stageFull(url, args) {
     if (serverSpreadDisc >= DAY_SPREAD_LIMIT_MS) fail(`discussion 서버 시각 편차 ${serverSpreadDisc}ms 가 ${DAY_SPREAD_LIMIT_MS}ms 이상`);
     for (const c of clients) await closeSocket(c);
     await checkAssets(origin, isLocal);
-    console.log(`SMOKE OK full mode=extended code=${code} players=${N} day1=errand→night→discussion serverSpread=${serverSpreadDisc}ms version=${version}`);
+    console.log(`SMOKE OK full mode=extended code=${code} players=${N} day1=dayAnnounce→discussion serverSpread=${serverSpreadDisc}ms version=${version}`);
     return;
   }
 
@@ -762,7 +712,7 @@ async function stageFull(url, args) {
     if (c.unexpectedClose !== null) fail(`${c.nickname} 소켓이 예상 밖으로 닫힘 (code ${c.unexpectedClose})`);
   }
 
-  // (10) 낮 토론 진입 — 기본판(결정 0072)은 심부름 없이 낮 시작 발표 다음이 자유 채팅 토론이다(CHAT-06). 직업 목록(day.roles)은 모두 같다.
+  // (10) 낮 토론 진입 — 낮 시작 발표 다음이 곧바로 자유 채팅 토론이다(CHAT-06). 직업 목록(day.roles)은 모두 같다.
   await waitUntil(() => clients.every((c) => firstState(c, "discussion")), STATE_LIMIT_MS + 5000, "모든 클라이언트가 dayAnnounce 다음에 discussion 을 받지 못함");
   const roleList = firstState(clients[1], "discussion").msg.view.day.roles;
   if (roleList.includes("doctor") !== (N >= 5)) fail(`day.roles 의 의사 포함 여부가 인원(${N})과 맞지 않음: ${roleList.join(",")}`);
@@ -1282,7 +1232,7 @@ async function stageFull(url, args) {
   sendChat(ghostClient, GHOST_TEXT);
   await waitUntil(() => hasLine(ghostClient, ghostAt, "ghost", ghostClient.seat, GHOST_TEXT), STATE_LIMIT_MS, "탈락자 chat 줄이 탈락자 자신에게 돌아오지 않음");
   await sleep(300);
-  // 재접속 복원 검사는 짧은 단계 경계(아침 → 2초 dayAnnounce)를 걸치지 않게 한다(18-13, G-18-3): 판이 이어지면 2일차 errand(40초) 안에서,
+  // 재접속 복원 검사는 짧은 단계 경계(아침 → 2초 dayAnnounce)를 걸치지 않게 한다(18-13, G-18-3): 판이 이어지면 2일차 토론 안에서,
   // 첫 아침에 판이 끝나면(4명 판, 다음 단계가 ended 라 허용 전이) 아침에 한 번 한다. 단언 내용은 그대로이고 끝에서 한 번 돌았음을 확인한다.
   let replayDone = null; // 검사를 한 단계 이름
   async function checkReplay(where) {
@@ -1309,14 +1259,14 @@ async function stageFull(url, args) {
     dayNo += 1;
     await waitUntil(() => allSee(aliveNow(), "dayAnnounce", dayNo), dayNo === 2 ? MORNING_WAIT_MS : NIGHT_WAIT_MS, `아침 마감 뒤 dayAnnounce(day.n ${dayNo}) 가 산 클라이언트에 오지 않음`);
     if (dayNo === 2) {
-      // 90초 discussion 안에서 다시 붙는다: 아침 → dayAnnounce(2초) 경계를 걸칠 수 없다. 기본판은 심부름이 없다.
+      // 90초 discussion 안에서 다시 붙는다: 아침 → dayAnnounce(2초) 경계를 걸칠 수 없다.
       await waitUntil(() => allSee(aliveNow(), "discussion", dayNo), STATE_LIMIT_MS + 5000, "2일차 dayAnnounce 뒤 discussion 이 산 클라이언트에 오지 않음");
       await checkReplay("discussion(2일차)");
     }
     // 하루 갈래는 산 사람 수가 아니라 서버가 보낸 단계로 고른다. 기본판(결정 0072)은 산 사람이 3명이어도 discussion 이다 — showdown 이 오면 전이 표(PHASE_NEXT)가 실패시킨다.
     await waitUntil(
       () => aliveNow().every((c) => lastView(c)?.day?.n === dayNo && (lastView(c).phase === "discussion" || lastView(c).phase === "showdown")),
-      STATE_LIMIT_MS + 5000, // 기본판: dayAnnounce → discussion (심부름 없음)
+      STATE_LIMIT_MS + 5000, // dayAnnounce → discussion
       `${dayNo}일차 dayAnnounce 다음에 discussion 이 오지 않음`,
     );
     if (lastView(aliveNow()[0]).phase === "showdown") {
@@ -1640,7 +1590,7 @@ async function stageFull(url, args) {
     if (JSON.stringify(v.day?.morning) !== morningJson) fail(`${clients[i].nickname} 의 day.morning 이 다른 클라이언트와 다름`);
   });
   const morning = morningViews[0].day.morning;
-  // day.morning: eliminated 필수 + trace(15페이즈, 결정 0074-5)·seen(16페이즈 D-10) 선택. 모양 판정은 morningProblems — test/unit/e2eContract.test.ts 가 서버 view 와 묶는다.
+  // day.morning: eliminated 필수. 모양 판정은 morningProblems — test/unit/e2eContract.test.ts 가 서버 view 와 묶는다.
   const morningIssues = morningProblems(morning, clients.map((c) => c.seat));
   if (morningIssues.length > 0) fail(morningIssues[0]);
   if (morning.eliminated !== targetX) fail(`아침 탈락자가 지목한 seat(${targetX})가 아님: ${morning.eliminated}`);
@@ -1706,9 +1656,9 @@ async function stageFull(url, args) {
   if (nightEnds.size !== 1) fail(`night 의 phaseEndsAt 이 클라이언트마다 다름 (${nightEnds.size}종)`);
   const morningEnds = new Set(morningViews.map((v) => v.phaseEndsAt));
   if (morningEnds.size !== 1) fail(`morning 의 phaseEndsAt 이 클라이언트마다 다름 (${morningEnds.size}종)`);
-  // 아침 길이(MORN-04, 결정 0061-13): 기본 5 + 피해자 2 + 유언 2 = 9초(쪽지 없음). 흔적이 있으면 + MORNING_TRACE_MS(15페이즈 3초, 16페이즈 5초 — 결정 0079-10). 모든 클라이언트가 같다.
-  const morningWant = 9_000 + (morning.trace !== undefined ? MORNING_TRACE_MS : 0);
-  if (morningViews.some((v) => v.phaseDurationMs !== morningWant)) fail(`morning phaseDurationMs 가 ${morningWant}(피해자 + 유언${morning.trace !== undefined ? " + 흔적" : ""})이 아님: ${morningViews.map((v) => v.phaseDurationMs).join(",")}`);
+  // 아침 길이(MORN-04, 결정 0061-13): 기본 5 + 피해자 2 + 유언 2 = 9초(쪽지 없음). 모든 클라이언트가 같다.
+  const morningWant = 9_000;
+  if (morningViews.some((v) => v.phaseDurationMs !== morningWant)) fail(`morning phaseDurationMs 가 ${morningWant}(피해자 + 유언)이 아님: ${morningViews.map((v) => v.phaseDurationMs).join(",")}`);
 
   for (const c of clients) await closeSocket(c);
 

@@ -8,9 +8,7 @@ import "../../styles/v2.css";
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
 // 18페이즈: eyeOff(목격자 없음, eye 에 사선)·lock(옷장 잠금).
 // 19페이즈: deck·book·modeBasic·modeExtended(방장 줄·판 종류 시트, 시안 A 경로).
-// 21페이즈: flame·flameOff(등불 켜기·꺼짐)·footprint·window(단서 지점) — UI-SPEC 새 아이콘 규격 경로(선 2). 옷 조각은 기존 thread.
-// arrow(위쪽을 가리킴, 회전해 쓴다)·thread(끝이 풀린 사각 천)는 15페이즈가 더한 선 그림이다. 장소·조각 그림은 컬러 에셋 파일이 맡는다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "arrow" | "thread" | "bot" | "hand" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff" | "lock" | "deck" | "book" | "modeBasic" | "modeExtended" | "flame" | "flameOff" | "footprint" | "window";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "bot" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff" | "lock" | "deck" | "book" | "modeBasic" | "modeExtended";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
@@ -182,34 +180,7 @@ const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
     ["p", "M10.5 4.5a6 6 0 110 12 6 6 0 010-12z"],
     ["p", "M15 15l5.5 5.5"],
   ],
-  // 15페이즈(심부름): 임시 선 그림. 같은 이름의 경로만 나중에 바꾼다.
-  arrow: [
-    ["p", "M12 20V5"],
-    ["p", "M6 11l6-6 6 6"],
-  ],
-  thread: [
-    ["p", "M5 4h14v11H5z"],
-    ["p", "M7.5 15v5"],
-    ["p", "M12 15v4"],
-    ["p", "M16.5 15v5.5"],
-  ],
-  // 21페이즈(UI-SPEC 새 아이콘 규격): 등불 켜기 단추·꺼진 등불·단서 지점 아이콘
-  flame: [["p", "M12 3c3 4 5 6 5 10a5 5 0 0 1-10 0c0-4 2-6 5-10z"]],
-  flameOff: [
-    ["p", "M12 3c3 4 5 6 5 10a5 5 0 0 1-10 0c0-4 2-6 5-10z"],
-    ["p", "M5 4l14 16"],
-  ],
-  footprint: [
-    ["p", "M8 4c2 0 3 2 3 4s-1 3-2 3-3-1-3-3 0-4 2-4z"],
-    ["p", "M16 11c2 0 3 2 3 4s-1 3-2 3-3-1-3-3 0-4 2-4z"],
-  ],
-  window: [
-    ["p", "M5 5h14v14H5z"],
-    ["p", "M12 5v14M5 12h14"],
-  ],
   // 결정 0075: 일반 방 방장의 [봇] 버튼 — 안테나 달린 네모 얼굴.
-  // 16-07: [처리] 알약의 손(Errand-Map 시안 경로)
-  hand: [["p", "M9 11V5a1.5 1.5 0 0 1 3 0v5V4a1.5 1.5 0 0 1 3 0v6V6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-3l-2.5-4a1.5 1.5 0 0 1 2.5-1.5L9 13"]],
   bot: [
     ["p", "M6.5 9h11a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2V11a2 2 0 0 1 2-2z"],
     ["p", "M12 9V5.8"],

@@ -10,7 +10,6 @@
 // 남의 지목·찬반 값·토론 끝내기 누름은 어떤 키로도 싣지 않는다 — Player.nominate·verdictVote 는 마감 훅이 키째 지운다(결정 0060·D-02).
 import type {
   DayView,
-  EvidenceView,
   MorningView,
   MyInfo,
   PhaseId,
@@ -34,7 +33,7 @@ import { confirmedTarget } from "./night";
 import { pointLinesOf, turnViewOf } from "./nomination";
 import { runoffVotersOf, runoffViewOf } from "./runoff";
 import { showdownViewOf } from "./showdown";
-import { PHASE_DEFS, RECORD_MAX } from "./phases";
+import { PHASE_DEFS } from "./phases";
 import { modeOf, rulesetOf } from "./ruleset";
 import type { Ruleset } from "./ruleset";
 import { isReady } from "./rematch";
@@ -50,7 +49,6 @@ import { WHISPER_PER_DAY, whisperUsedToday } from "./whisper";
  */
 const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
   "dayAnnounce",
-  "errand",
   "discussion",
   "nomination",
   "runoff",
@@ -73,15 +71,9 @@ function voteLogLine(entry: VoteLogEntry): VoteLogEntry {
   return line;
 }
 
-/** day.evidence 가 실리는 단계(아침~처형, 16페이즈 D-10·R-4). */
-const EVIDENCE_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>([
-  "morning", "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution",
-]);
-
 /**
  * 낮 정보. 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드는 싣지 않는다.
  * 읽는 쪽이 기본값을 쥔다: 일차 없으면 1(RESEARCH Pattern 6).
- * 판 규칙(19페이즈 D-08): 흔적(rules.trace)·마지막 목격(rules.witness)이 꺼진 판은 서버 상태에 값이 남아 있어도 싣지 않는다 — 값이 빈 것이 아니라 키가 없다.
  */
 function buildDay(state: RoomState, rules: Ruleset): DayView {
   const day: DayView = {
@@ -141,24 +133,11 @@ function buildDay(state: RoomState, rules: Ruleset): DayView {
     const result = state.morning;
     if (result?.eliminated !== undefined) {
       morning.eliminated = result.eliminated;
-      // 흔적(15페이즈 D-06): 서버가 정한 조각 id 하나를 모든 view 에 같은 값으로 필드별 복사한다 — 좌석·의상·역할·풀은 없다.
-      if (rules.trace && result.trace !== undefined) morning.trace = result.trace;
-      // 마지막 목격(16페이즈 D-10): 좌석과 장소 id 만 필드별로 복사한다 — 좌표·역할은 없다.
-      if (rules.witness && result.seen !== undefined) morning.seen = { seat: result.seen.seat, place: result.seen.place };
     } else if (result?.saved === true) {
       // 의사 구출은 saved 하나만 공개한다 — 보호받은 사람이 누구인지·쪽지는 어디에도 싣지 않는다(결정 0061-12, 0044-22).
       morning.saved = true;
     }
     day.morning = morning;
-  }
-  // 증거(16페이즈 D-10·R-4): 피해자가 나온 아침부터 처형까지 모두에게 같은 값을 싣는다(day.chalk 와 같은 "그날 낮 동안" 선례). 밤·끝·대기실에는 만들지 않는다(enterNight 가 morning 을 지운다).
-  // 필드별 복사 — 조각 id 와 {seat, place} 뿐이고 역할·의상 id·좌표·피해자를 고른 사람 풀은 어디에도 없다.
-  // 판 규칙(19페이즈 D-08): trace 칸은 rules.trace, seen 칸은 rules.witness 가 켜진 판에서만 채운다. 둘 다 없으면 evidence 키를 만들지 않는다(basic 판 — 값이 빈 것이 아니라 키가 없다).
-  if (EVIDENCE_PHASES.has(state.phase) && state.morning !== undefined) {
-    const evidence: EvidenceView = {};
-    if (rules.trace && state.morning.trace !== undefined) evidence.trace = state.morning.trace;
-    if (rules.witness && state.morning.seen !== undefined) evidence.seen = { seat: state.morning.seen.seat, place: state.morning.seen.place };
-    if (evidence.trace !== undefined || evidence.seen !== undefined) day.evidence = evidence;
   }
   // 암살 현장 분필(MORN-01, 결정 0061-14): 방 DO 가 채운 좌표를 그날 낮 동안 모두에게 같은 값으로 싣는다. 필드별 복사이고, 없으면 키 자체가 없다.
   // 구출·무효 밤에는 DO 가 채우지 않으므로 어디에도 드러나지 않는다(결정 0044-22). 다음 밤 진입 훅이 지운다.
@@ -278,23 +257,6 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 서버 봇 수는 방장 본인의 대기실 view 에서만, 0 포함 항상 숫자로(결정 0024). 결정 0075 부터 일반 방 방장도 받는다([봇] 버튼).
   // isBot·botPlan·봇 id 는 어디에도 싣지 않는다.
   if (me.id === state.hostId && state.phase === "lobby") myInfo.testBots = botCount(state);
-
-  // 내 심부름(15페이즈, 결정 0074)은 errand 단계의 산 본인에게만 — 목록·진행뿐이고 좌표·역할은 없다. 필드별 복사라 서버 상태 객체를 펼치지 않는다.
-  if (rules.errand && state.phase === "errand" && isAlive(me) && me.errandPlaces !== undefined) {
-    myInfo.errand = { places: [...me.errandPlaces], done: [...(me.errandDone ?? [])] };
-  }
-
-  // 내 목격 기록(D-04)은 토론 단계에서 심부름 3곳을 모두 처리한 산 본인에게만 — 줄이 0개여도 빈 배열. 필드별 복사({seat, place})라 서버 상태를 펼치지 않고, 역할을 읽지 않는다.
-  if (
-    rules.witness &&
-    state.phase === "discussion" &&
-    isAlive(me) &&
-    me.errandPlaces !== undefined &&
-    me.errandPlaces.length > 0 &&
-    (me.errandDone ?? []).length >= me.errandPlaces.length
-  ) {
-    myInfo.record = (me.errandSeen ?? []).slice(0, RECORD_MAX).map((l) => ({ seat: l.seat, place: l.place }));
-  }
 
   // 본인 선택은 본인에게만(D-06) — 남의 nightPick 은 어떤 키로도 싣지 않는다. 밤에 살아 있는 본인이 고른 값이 있을 때만 키를 만든다.
   if (state.phase === "night" && isAlive(me) && me.nightPick !== undefined) {

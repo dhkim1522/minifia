@@ -28,27 +28,9 @@ export const MAX_BODY_BYTES = 1024; // HTTP 본문 상한
 // 지목이 동률·0표면 바로 night 로 가고, 최다가 정확히 둘 동점이면 동점 결선 runoff 를 거친다(결정 0066-4, 분기는 shared/game/tick.ts). 종료 단계 ended 는 마감이 없다.
 // 순차 직업 주장 단계(claim)는 7페이즈에서 없어졌다 — 낮 시작 발표 다음이 바로 자유 채팅 토론이다(CHAT-06). 옛 공개 연출 단계도 없다(결정 0027).
 export type PhaseId =
-  | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "errand" | "discussion"
+  | "lobby" | "assigning" | "roleReveal" | "dayAnnounce" | "discussion"
   | "nomination" | "runoff" | "showdown" | "defense" | "verdict" | "execution"
   | "night" | "morning" | "ended"; // 8페이즈(결정 0060): 지목 15초 → 변론 20초 → 찬반 10초 → 처형 5.6초(결정 0066-7). 옛 처형 여부·후보 선택·후보 공개 단계는 08-22 에 지웠다
-
-// ---- 심부름 계약(15페이즈, 결정 0074) ----
-/** 심부름 장소 id 닫힌 집합 — 재즈 바 8곳 + 시계탑 광장 8곳. 좌표는 프로토콜에 싣지 않는다(클라이언트가 같은 MapDef 에서 읽는다). */
-export const PLACE_IDS = [
-  "glass", "piano", "sax", "stool", "door", "poster", "record", "candle",
-  "clock", "fountain", "bench", "lamp", "mail", "tree", "flower", "stand",
-] as const;
-export type PlaceId = (typeof PLACE_IDS)[number];
-/** 내 심부름(errand 단계, MyInfo.errand): 서버가 뽑은 장소 목록(순서에 뜻 없음)과 처리한 순서. 모든 역할이 같은 모양이다(D-03). */
-export interface ErrandMine {
-  places: PlaceId[];
-  done: PlaceId[];
-}
-/** 목격 기록 한 줄(MyInfo.record, D-04): 내 근처를 지나간 사람의 좌석과 그 순간 그 사람에게 가장 가까운 장소 id. 시간순, 역할·좌표는 없다. */
-export interface RecordLine {
-  seat: number;
-  place: PlaceId;
-}
 
 // ---- 밤·아침 계약(3페이즈) ----
 /** 경찰 본인에게만 보이는 수사 기록 한 줄: 그 밤의 일차·대상 seat·마피아인지 불리언 하나. 직업 이름은 싣지 않는다. */
@@ -70,25 +52,10 @@ export interface TreatmentRecord {
 }
 /** 본인 역할의 일지 한 줄 — 줄 모양은 키로 구별되고 화면은 me.role 로 해석한다(결정 0027). */
 export type RoleRecord = InvestigationRecord | AssassinationRecord | TreatmentRecord;
-/** 아침 흔적 조각(15페이즈 D-06): 닫힌 집합 9개. 의상의 함수이지 역할의 함수가 아니고 확정 증거가 아니다. 의상 id 와 이름이 다르다(의상 id 를 싣지 않는다). 이름·그림은 클라이언트 표가 정한다. */
-export const TRACE_PIECE_IDS = ["button", "pin", "whiteCloth", "blackCloth", "brownCloth", "pencil", "grayThread", "navyThread", "redCloth"] as const;
-export type TracePiece = (typeof TRACE_PIECE_IDS)[number];
-/** 마지막 목격(16페이즈 D-10): 심부름 동안 피해자 곁에 마지막으로 있던 사람의 좌석과 그 순간 피해자 곁 장소 id(닫힌 집합, 좌표 없음). */
-export interface LastSeen {
-  seat: number;
-  place: PlaceId;
-}
 /** 아침 결과. 키 없는 객체는 지난밤 무사. 결정 0061-12·17: eliminated·saved 둘뿐이고 문장은 화면이 만든다(문구 번호 없음). */
 export interface MorningView {
   eliminated?: number; // 탈락한 seat
   saved?: true; // 의사가 확정 대상을 지킨 아침. 누구인지는 싣지 않는다(결정 0061-12, 0044-22)
-  trace?: TracePiece; // 탈락자가 있는 아침에만(15페이즈 D-06). 흔적 조각 id 하나뿐 — 좌석·의상·역할·고른 사람 풀은 싣지 않는다
-  seen?: LastSeen; // 탈락자가 있는 아침에만, 마지막 목격자가 있을 때만(16페이즈 D-10). 모두에게 같은 값 — 좌표·역할은 없다
-}
-/** 아침~처형의 공개 증거(16페이즈 D-10·R-4): 모두에게 같은 값. 필드별 복사로 만들며 좌표·의상 id·역할·고른 사람 풀은 없다. */
-export interface EvidenceView {
-  trace?: TracePiece;
-  seen?: LastSeen;
 }
 /** 탈락자 전용 관전 정보(결정 0021): 한 사람의 실제 직업. 키 이름은 role 이 아니라 job 이다(누출 테스트 불변식). */
 export interface SpectateSeat {
@@ -156,7 +123,6 @@ export interface DayView {
   roles: RoleId[]; // 이번 판 직업(구성표 순서, 공개 정보)
   morning?: MorningView; // morning 단계에서만
   chalk?: { x: number; z: number }; // 암살 현장 분필 자국 위치(고정소수점, 결정 0061-14). 채우는 일은 09-14
-  evidence?: EvidenceView; // 아침~처형 단계에서, trace 나 seen 이 있을 때만(모두에게 같은 값, 16페이즈 D-10·R-4)
   // ---- 4페이즈 처형 필드 ----
   // 서버는 낮 단계마다(빈 배열 포함) 항상 싣는다. 타입을 optional 로 둔 이유: 필수로 하면 화면 테스트의 DayView 리터럴이 서버 웨이브에서 한꺼번에 바뀐다(화면 계획이 필요하면 필수로 올린다).
   voteLog?: VoteLogEntry[];
@@ -267,7 +233,6 @@ export type ClientMessage =
   | { t: "whisper"; to: number; text: string } // 귓속말(결정 0066-2) — 낮 토론, 하루 1번, 산 다른 사람 한 명에게 30자소 이하. 본문은 보낸·받은 사람 소켓에만 간다
   | { t: "badge"; role: BadgeId } // 직업 주장(결정 0066-1) — 서버가 정하는 것은 값의 형식뿐 참·거짓은 판정하지 않는다. 낮 시작 발표·토론·지목 단계에서만
   | { t: "dress"; look: OutfitId } // 로비 의상(결정 D-6) — 의상 id 하나뿐, 대기실에서만. 서버는 고른 값을 저장·방송할 뿐 역할과 비교하지 않는다
-  | { t: "errand" } // 심부름 처리(결정 0074) — 위치·장소는 서버가 정하고, 못 받는 모든 이유에 응답이 같다(D-08)
   | { t: "ready"; on: boolean; round: number } // 다시 하기 준비(결정 D-12) — 결과 단계의 손님이 토글한다. round 는 지금 보는 판 번호(1 이상 정수)이고 어긋나면 서버가 버린다. 신원은 소켓 첨부 playerId 뿐
   | { t: "rematch"; round: number } // 다시 하기 시작(결정 D-12) — 방장만, 결과 단계에서, round 가 서버 판 번호와 같고 준비한 연결 참가자(방장·봇 포함)가 4명 이상일 때. 서버가 모든 조건을 판정하고 거절 응답은 사유와 무관하게 같다(L40)
   | { t: "mapPick"; map: MapChoice } // 맵 선택(결정 D-20) — 방장이 대기실·결과 단계에서만. 값은 enum 뿐이고 서버가 방장·단계·허용 값을 판정한다. 거절은 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임(L40)
@@ -332,8 +297,6 @@ export interface MyInfo {
   will?: string; // 산 본인에게만: 본인이 남긴 유언(결정 0061-10). 지도 단계에서 저장된 값이 있을 때만(09-12)
   note?: string; // 밤, 산 마피아에게만: 남긴 쪽지(결정 0061-9). 산 마피아끼리 같은 글(09-12)
   ballot?: number; // runoff step 1·2 또는 showdown i 3·4 에서 산 본인이 고른 좌석(본인에게만, 결정 0066-4·0066-5). 후보·유령·미투표자에는 키가 없다
-  errand?: ErrandMine; // errand 단계의 산 본인에게만(15페이즈, 결정 0074). 다른 사람·다른 단계·유령 view 에는 키가 없고 좌표는 싣지 않는다
-  record?: RecordLine[]; // 토론 단계에서 심부름 3곳을 모두 처리한 산 본인에게만(줄이 0개여도 빈 배열, D-04). 못 마친 사람·다른 사람·다른 단계·유령 view 에는 키가 없다
   verdictVote?: boolean; // verdict 단계에서 본인이 던진 찬반(본인에게만, 남의 값은 어떤 키로도 싣지 않는다, 8페이즈 결정 0060)
 }
 export interface RoomView {
@@ -391,8 +354,7 @@ export interface WorldSeg {
  */
 export type WorldFrame =
   | { t: "world"; k: "move"; s: number; p: number[]; t0: number; v: number }
-  // near = errand 의 근처 snap(근처 산 사람만, 15페이즈 D-02). 값은 true 뿐이고 역할·좌석과 무관하다
-  | { t: "world"; k: "snap"; at: number; ents: WorldSeg[]; near?: true };
+  | { t: "world"; k: "snap"; at: number; ents: WorldSeg[] };
 
 // ---- 7페이즈 자유 채팅 계약(결정 0058, 07-02) ----
 // 키 이름은 ch·seat·seq·text·at·on·why·lines·pk 만 쓴다 — test/worker/leak.test.ts 의 FORBIDDEN_KEYS 에 id·playerId 가 있다.

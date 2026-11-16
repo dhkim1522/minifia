@@ -23,8 +23,8 @@ function sourceFiles(): string[] {
 
 describe("판 규칙 표 (결정 0072, 19페이즈 D-02)", () => {
   it("두 판의 여덟 값: 정치 장치 다섯은 두 판 모두 꺼짐, 심부름·목격 기록·흔적은 extended 만 켜짐(22-04: cause 는 지웠다)", () => {
-    expect(JSON.stringify(rulesetOf("basic"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false, errand: false, witness: false, trace: false }));
-    expect(JSON.stringify(rulesetOf("extended"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false, errand: true, witness: true, trace: true }));
+    expect(JSON.stringify(rulesetOf("basic"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false }));
+    expect(JSON.stringify(rulesetOf("extended"))).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false }));
   });
 
   it("판 종류는 둘뿐이고 어느 판도 정치 장치가 켜져 있지 않다 (T-19-07)", () => {
@@ -56,13 +56,13 @@ describe("전역 규칙 상수가 없다 (19-02, D-03)", () => {
     expect(hits.join(" ")).toBe("");
   });
 
-  it("규칙으로 갈리는 서버 모듈은 규칙을 ./ruleset 에서 얻는다 — tick·nomination·room·view·방 DO 는 rulesetOf 를 가져오고, phases 는 규칙을 인자로 받는다(타입만)", () => {
+  it("규칙으로 갈리는 서버 모듈은 규칙을 ./ruleset 에서 얻는다 — tick·nomination·room·view·방 DO 는 rulesetOf 를 가져오고, phases 는 규칙을 가져오지도 받지도 않는다(22페이즈: 낮 시작 분기가 사라졌다)", () => {
     const takes = (rel: string, from: string): boolean => new RegExp(`import \\{[^}]*\\brulesetOf\\b[^}]*\\} from "${from}"`).test(read(rel));
     const seen = ["tick.ts", "nomination.ts", "room.ts", "view.ts"].map((f) => `${f}:${takes(`shared/game/${f}`, "\\./ruleset")}`);
     expect(seen.join(" ")).toBe("tick.ts:true nomination.ts:true room.ts:true view.ts:true");
     expect(takes("worker/room.ts", "\\.\\./shared/game/ruleset")).toBe(true);
     const phases = read("shared/game/phases.ts");
-    expect(`${/import type \{ Ruleset \} from "\.\/ruleset"/.test(phases)}/${/import \{[^}]*\} from "\.\/ruleset"/.test(phases)}`).toBe("true/false");
+    expect(/from "\.\/ruleset"/.test(phases)).toBe(false);
   });
 
   it("규칙 값은 한 파일에만 있다 — 갈리는 모듈에 정치 장치 값을 직접 적지 않았다", () => {

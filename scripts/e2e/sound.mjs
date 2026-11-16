@@ -295,7 +295,7 @@ export function makeSoundFlows({ recorder, attempt, startHost, openGame, closeGa
       judge("sound-script/lobby", "SC2", await readLog(hp));
       await setBotVote(hp, ht, { exec: "yes", pick: "host" });
       await chooseRole(hp, ht, "citizen");
-      // 21-16: 낮 시작 발표(day.start)는 기본 마피아에만 있다(확장판 원인 흐름은 역할 확인 → 저녁) — 이 흐름은 낮 시작 소리를 보므로 기본 마피아 판으로 돈다
+      // 이 흐름은 낮 시작 소리를 보므로 기본 마피아 판으로 돈다
       await pickModeViaRail(hp, ht, "basic");
 
       // ③ 시작 → assigning(침대 정지 요청, game.start) → roleReveal(bed.reveal, role.flip)

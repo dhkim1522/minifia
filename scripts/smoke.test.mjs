@@ -42,21 +42,14 @@ test("collectRoleStringPaths: 배열 인덱스를 [] 로 줄여 직업 이름 �
 test("morningProblems: 통과하는 모양", () => {
   const seats = [0, 1, 2, 3, 4];
   assert.deepEqual(morningProblems({ eliminated: 2 }, seats), []);
-  assert.deepEqual(morningProblems({ eliminated: 2, trace: "button", seen: { seat: 1, place: "glass" } }, seats), []);
-  assert.deepEqual(morningProblems({ eliminated: 2, seen: { seat: 4, place: "tree" } }, seats), []);
 });
 
-test("morningProblems: 허용 밖 키·eliminated 없음·trace·seen 모양은 문제로 돌려준다", () => {
+test("morningProblems: 허용 밖 키(지운 trace·seen 포함)·eliminated 없음은 문제로 돌려준다", () => {
   const seats = [0, 1, 2, 3, 4];
   assert.notEqual(morningProblems({ eliminated: 2, phrase: 1 }, seats).length, 0);
-  assert.notEqual(morningProblems({ trace: "button" }, seats).length, 0);
-  assert.notEqual(morningProblems({ eliminated: 2, trace: "hat" }, seats).length, 0);
-  assert.notEqual(morningProblems({ eliminated: 2, seen: { seat: 1, place: "nowhere" } }, seats).length, 0);
-  assert.notEqual(morningProblems({ eliminated: 2, seen: { seat: 1, place: "glass", x: 1 } }, seats).length, 0);
-  assert.notEqual(morningProblems({ eliminated: 2, seen: { seat: 9, place: "glass" } }, seats).length, 0);
-  assert.notEqual(morningProblems({ eliminated: 2, seen: { seat: 1.5, place: "glass" } }, seats).length, 0);
-  assert.notEqual(morningProblems({ eliminated: 2, seen: "glass" }, seats).length, 0);
-  assert.notEqual(morningProblems({ eliminated: 2, seen: null }, seats).length, 0);
+  assert.notEqual(morningProblems({}, seats).length, 0);
+  assert.notEqual(morningProblems({ eliminated: 2, trace: "button" }, seats).length, 0);
+  assert.notEqual(morningProblems({ eliminated: 2, seen: { seat: 1, place: "glass" } }, seats).length, 0);
 });
 
 test("serverSpread: view.serverNow 의 최대 - 최소(반올림 ms)", () => {
@@ -83,14 +76,14 @@ const fakeClient = (nickname, over = {}) => ({
   ws: { readyState: 1 },
   frames: [
     { at: 500, sock: 1, raw: `{"t":"chat","text":"${SECRET_TEXT}"}`, msg: { t: "chat", text: SECRET_TEXT } },
-    { at: 900, sock: 1, raw: `{"t":"state","token":"${SECRET_TOKEN}"}`, msg: { t: "state", token: SECRET_TOKEN, text: SECRET_TEXT, view: { phase: "errand" } } },
+    { at: 900, sock: 1, raw: `{"t":"state","token":"${SECRET_TOKEN}"}`, msg: { t: "state", token: SECRET_TOKEN, text: SECRET_TEXT, view: { phase: "discussion" } } },
   ],
   ...over,
 });
 
 test("linkReport: 열린 소켓·마지막 프레임 경과·마지막 단계를 닉네임과 함께 한 줄에 담는다", () => {
   const out = linkReport([fakeClient("스모크1")], 1000);
-  assert.ok(out.includes("스모크1: 소켓 열림 · 마지막 프레임 100 ms 전 · 단계 errand"), out);
+  assert.ok(out.includes("스모크1: 소켓 열림 · 마지막 프레임 100 ms 전 · 단계 discussion"), out);
 });
 
 test("linkReport: 예기치 않게 닫힌 클라이언트는 닫힘(code N)", () => {
@@ -135,14 +128,14 @@ test("기본판 표: 역할 확인 → 낮 시작 발표 → 토론, 처형 뒤�
   assert.deepEqual(g.nomination.slice().sort(), ["defense", "night"]);
   assert.deepEqual(g.execution.slice().sort(), ["ended", "night"]);
   assert.deepEqual(g.morning.slice().sort(), ["dayAnnounce", "ended"]);
-  assert.equal(Object.hasOwn(g, "errand"), false);
+  assert.equal(Object.hasOwn(g, "errand"), false); // errand 0건
 });
 
-test("확장판 표: 기본판과 같고 낮 시작 발표 다음에 심부름(errand) 이 낀다, 처형 뒤·지목 0표는 밤이다", () => {
+test("확장판 표: 22-06 부터 기본판과 같다(낮 시작 발표 다음이 토론), 처형 뒤·지목 0표는 밤이다", () => {
   const g = PHASE_NEXT_BY_MODE.extended;
   assert.deepEqual(g.roleReveal, ["dayAnnounce"]);
-  assert.deepEqual(g.dayAnnounce, ["errand"]);
-  assert.deepEqual(g.errand, ["discussion"]);
+  assert.deepEqual(g.dayAnnounce, ["discussion"]);
+  assert.equal(Object.hasOwn(g, "errand"), false); // errand 0건
   assert.deepEqual(g.nomination.slice().sort(), ["defense", "night"]);
   assert.deepEqual(g.execution.slice().sort(), ["ended", "night"]);
   assert.deepEqual(g.morning.slice().sort(), ["dayAnnounce", "ended"]);

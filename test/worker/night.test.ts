@@ -172,10 +172,7 @@ describe("마피아 전원 일치 (NIGHT-08, 결정 0061-6)", () => {
     await advanceTo(r.code, allSockets(r), "morning");
 
     const mornings = actors.map((x) => viewsIn(x.sock, "morning").at(-1)!);
-    // 흔적 조각(D-06)도 모든 소켓에 같은 값이다.
-    const trace = mornings[0]!.day?.morning?.trace;
-    expect(typeof trace).toBe("string");
-    for (const v of mornings) expect(JSON.stringify(v.day?.morning)).toBe(JSON.stringify({ eliminated: victim.seat, trace }));
+    for (const v of mornings) expect(JSON.stringify(v.day?.morning)).toBe(JSON.stringify({ eliminated: victim.seat }));
   });
 
   it("6명 판: 마피아 둘이 갈라 고르고 마감하면 모든 소켓의 day.morning 이 {} 이고 아무도 탈락하지 않는다", async () => {

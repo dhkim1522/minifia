@@ -3,7 +3,7 @@ import { isAlive } from "../../shared/game/alive";
 import { channelOf } from "../../shared/game/audience";
 import { pickTarget } from "../../shared/game/night";
 import { castTurnPoint, enterNomination, nominationStepMs, stepNomination, turnViewOf } from "../../shared/game/nomination";
-import { DISCUSSION_MS, ERRAND_MS, MORNING_MS, NIGHT_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PHASE_DEFS, nominationMaxMs } from "../../shared/game/phases";
+import { DISCUSSION_MS, MORNING_MS, NIGHT_MS, NOMINATION_GATHER_MS, NOMINATION_MS, PHASE_DEFS, nominationMaxMs } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, roundOf, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
@@ -32,7 +32,6 @@ const PHASES: readonly PhaseId[] = [
   "assigning",
   "roleReveal",
   "dayAnnounce",
-  "errand",
   "discussion",
   "nomination",
   "defense",
@@ -289,24 +288,19 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "runoffVote", // 동점 결선의 개인 선택(결정 0066-4): 서버 전용 — 본인 값은 me.ballot, 공개는 day.runoff 의 voted·tally 뿐
   "whispers", // 귓속말 본문 보관(결정 0066-2, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
   "badgeLog", // 직업 주장 이력(결정 0066-1, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
-  "errandFake", // 마피아의 가짜 심부름 장소(16페이즈 D-08): 서버 전용 — 어떤 view 에도 없다. me.errand.places 는 시민과 같은 목록 그대로
-  "errandLast", // 심부름 중 피해자 후보별 마지막 관찰자 줄(16페이즈 D-10): 서버 전용 — 공개는 아침의 피해자 한 줄(day.evidence.seen)뿐
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([
-  "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended",
+  "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended",
 ]);
 const ME_KEYS: ReadonlySet<string> = new Set([
   "seat", "isHost", "role", "allies", "testMode", "testRole", "testBots", "testBotVote", "pick", "allyPicks", "records", "chat", "endDiscussion", "verdictVote",
   "whisperUsed", // 오늘 귓속말을 이미 보냈다(결정 0066-2) — 토론 단계의 산 본인에게만, 값은 true 뿐
   "ballot", // 동점 결선(결정 0066-4)·마지막 3인 동시 지목(결정 0066-5)에서 본인이 고른 좌석 — 투표 창·결과/지목 창·공개의 산 본인에게만, 값은 좌석 하나
-  "errand", // 심부름 목록·진행(15페이즈, 결정 0074) — errand 단계의 산 본인에게만, 아래 "심부름 me.errand" describe 가 조건을 단언한다
-  "record", // 목격 기록(15-02, D-04) — 토론 단계에서 심부름 3곳을 모두 처리한 산 본인에게만, errandNear.test.ts 의 "me.record" describe 가 조건을 단언한다
   "nightTally", "nightSure", // 밤 산 마피아 본인에게만(결정 0061-7) — 아래 "마피아 집계" describe 가 조건을 단언한다
 ]);
 const DAY_KEYS: ReadonlySet<string> = new Set([
   "n", "roles", "voteLog", "morning", "candidate", "execution", "noExecution", "points", "endCount", "voted", "verdict", "turn", "ballots", "runoff", "showdown",
-  "evidence", // 아침~처형의 공개 증거(16페이즈 D-10·R-4) — 모두에게 같은 값, 아래 "day.evidence 수명" describe 가 조건을 단언한다
 ]);
 const keysOf = (value: unknown): string => Object.keys((value ?? {}) as object).sort().join(",");
 
@@ -489,65 +483,6 @@ function mafiaSeatsOtherThan(state: RoomState, p: Player): number[] {
     .sort((a, b) => a - b);
 }
 
-describe("day.evidence 수명 (16페이즈 D-10·R-4)", () => {
-  const SEEN = { seat: 1, place: "glass" } as const;
-  /** 1일차 밤 뒤 피해자가 나온 아침. 서버 상태 morning 에 trace 가 있고, 필요하면 seen 도 얹는다. */
-  const victimMorning = (withSeen: boolean): RoomState => {
-    const { s } = morningWithVictim(5, 1);
-    return withSeen ? { ...s, morning: { ...s.morning!, seen: { ...SEEN } } } : s;
-  };
-  const evidenceOf = (s: RoomState, viewer: Player): unknown => buildView(s, viewer.id, START_AT).day?.evidence;
-  const EVIDENCE_PHASE_LIST: readonly PhaseId[] = ["morning", "dayAnnounce", "errand", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution"];
-
-  it("아침~처형 단계에서 모든 viewer(역할 넷 + 유령)에게 같은 { trace, seen } 이다", () => {
-    const base = victimMorning(true);
-    const ghost = base.players.find((p) => p.alive === false)!;
-    expect(ghost).toBeDefined();
-    for (const phase of EVIDENCE_PHASE_LIST) {
-      const s = { ...base, phase };
-      const values = new Set(s.players.map((p) => JSON.stringify(evidenceOf(s, p))));
-      expect(`${phase}:${[...values].join("|")}`).toBe(`${phase}:${JSON.stringify({ trace: base.morning!.trace, seen: SEEN })}`);
-    }
-  });
-
-  it("실제로 마감을 넘겨도 dayAnnounce·errand·discussion 까지 이어지고 밤에는 키가 없다", () => {
-    let s = victimMorning(true);
-    for (const phase of ["dayAnnounce", "errand", "discussion"] as const) {
-      s = advanceTo(s, phase, 1);
-      expect(`${phase}:${Object.keys((evidenceOf(s, s.players[0]!) ?? {}) as object).sort().join(",")}`).toBe(`${phase}:seen,trace`);
-    }
-  });
-
-  it("night·ended·lobby view 와 state.morning 이 없는 낮에는 키가 없다", () => {
-    const base = victimMorning(true);
-    for (const phase of ["night", "ended", "lobby", "assigning", "roleReveal"] as const) {
-      const s = { ...base, phase };
-      for (const p of s.players) expect(`${phase}:${"evidence" in (buildView(s, p.id, START_AT).day ?? {})}`).toBe(`${phase}:false`);
-    }
-    const { morning: _gone, ...noMorning } = { ...base, phase: "discussion" as const };
-    for (const p of noMorning.players) expect("evidence" in (buildView(noMorning, p.id, START_AT).day ?? {})).toBe(false);
-  });
-
-  it("trace 만 있으면 trace 만, seen 만 있으면 seen 만 만든다(필드별 복사 — 좌표·역할·풀이 없다)", () => {
-    const withTrace = victimMorning(false);
-    expect(JSON.stringify(evidenceOf(withTrace, withTrace.players[0]!))).toBe(JSON.stringify({ trace: withTrace.morning!.trace }));
-    const { trace: _t, ...onlySeen } = victimMorning(true).morning!;
-    const s: RoomState = { ...victimMorning(true), morning: onlySeen };
-    expect(JSON.stringify(evidenceOf(s, s.players[0]!))).toBe(JSON.stringify({ seen: SEEN }));
-    // 서버 상태의 seen 에 여분 키가 있어도 view 로는 seat·place 만 간다
-    const dirty: RoomState = { ...victimMorning(true), morning: { ...victimMorning(true).morning!, seen: { ...SEEN, x: 1, role: "mafia" } as never } };
-    expect(JSON.stringify(evidenceOf(dirty, dirty.players[0]!))).toBe(JSON.stringify({ trace: dirty.morning!.trace, seen: SEEN }));
-  });
-
-  it("morning 단계의 day.morning.seen 도 같은 값이고, 피해자가 없는 아침은 seen 키가 없다", () => {
-    const s = victimMorning(true);
-    expect(JSON.stringify(buildView(s, s.players[0]!.id, START_AT).day?.morning?.seen)).toBe(JSON.stringify(SEEN));
-    const quiet = tick(stateAt("night", 5, 1), stateAt("night", 5, 1).phaseEndsAt!, seededRandInt(1));
-    expect("seen" in (buildView(quiet, quiet.players[0]!.id, START_AT).day?.morning ?? {})).toBe(false);
-    expect("evidence" in (buildView(quiet, quiet.players[0]!.id, START_AT).day ?? {})).toBe(false);
-  });
-});
-
 describe("공개 직업 주장 경로 (결정 0066-1)", () => {
   it("주장 값(직업과 같은 단어)은 players[].badge 에서만 허용되고 다른 경로에 나오면 누출로 잡힌다", () => {
     let s = startedAt(6, 1, "discussion");
@@ -575,26 +510,24 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
       return `${phase}:${v.phaseDurationMs}:${v.phaseEndsAt === s.phaseEndsAt}:${v.serverNow}`;
     });
     expect(got.join(" ")).toBe(
-      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 errand:40000:true:77777 discussion:90000:true:77777 nomination:15000:true:77777 defense:20000:true:77777 verdict:10000:true:77777 execution:5600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
+      `lobby:null:true:77777 assigning:3000:true:77777 roleReveal:15000:true:77777 dayAnnounce:2000:true:77777 discussion:90000:true:77777 nomination:15000:true:77777 defense:20000:true:77777 verdict:10000:true:77777 execution:5600:true:77777 night:30000:true:77777 morning:5000:true:77777 ended:null:true:77777`,
     );
   });
 
-  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, errand +40000(15페이즈), discussion +90000, nomination +15000(기본판 동시 투표 15초), night +30000(전원 기권), morning +5000", () => {
+  it("마감은 이전 마감 + 단계 길이로 이어진다: assigning +3000, roleReveal +15000, dayAnnounce +2000, discussion +90000, nomination +15000(기본판 동시 투표 15초), night +30000(전원 기권), morning +5000", () => {
     const a = stateAt("assigning", 4, 1);
     const r = stateAt("roleReveal", 4, 1);
-    const ends = ["assigning", "roleReveal", "dayAnnounce", "errand", "discussion", "nomination", "night", "morning"].map(
+    const ends = ["assigning", "roleReveal", "dayAnnounce", "discussion", "nomination", "night", "morning"].map(
       (phase) => stateAt(phase as PhaseId, 4, 1).phaseEndsAt,
     );
-    // errand 는 낮 시작 발표 마감(20000) 바로 뒤에 이어지고(20000 + ERRAND_MS), discussion 은 그 마감 뒤에 이어진다(+ DISCUSSION_MS)
-    const errandEnd = START_AT + 20000 + ERRAND_MS;
-    const discussionEnd = errandEnd + DISCUSSION_MS;
+    // discussion 은 낮 시작 발표 마감(20000) 바로 뒤에 이어진다(+ DISCUSSION_MS)
+    const discussionEnd = START_AT + 20000 + DISCUSSION_MS;
     expect(DISCUSSION_MS).toBe(90000);
     expect(ends.join("/")).toBe(
       [
         START_AT + 3000,
         START_AT + 18000,
         START_AT + 20000,
-        errandEnd,
         discussionEnd,
         discussionEnd + NOMINATION_MS,
         discussionEnd + NOMINATION_MS + NIGHT_MS,
@@ -603,23 +536,6 @@ describe("buildView 단계 길이 (D-15, 결정 0012)", () => {
     );
     expect(r.phaseEndsAt).toBe(START_AT + 18000);
     expect(a.expiresAt).toBe(START_AT + ROOM_TTL_MS);
-  });
-});
-
-describe("심부름 me.errand (15페이즈, 결정 0074)", () => {
-  it("errand 단계의 산 본인에게만 { places, done } 이 실리고, 다른 단계·유령·다른 사람 view 에는 키가 없다", () => {
-    const s = stateAt("errand", 6, 3);
-    for (const p of s.players) {
-      const me = buildView(s, p.id, 0).me;
-      expect(keysOf(me.errand)).toBe("done,places");
-      expect(me.errand?.places).toEqual(p.errandPlaces);
-      expect(me.errand?.done).toEqual([]);
-    }
-    const ghost = { ...s, players: s.players.map((p, i) => (i === 0 ? { ...p, alive: false } : p)) };
-    expect("errand" in buildView(ghost, s.players[0]!.id, 0).me).toBe(false);
-    for (const phase of ["dayAnnounce", "discussion", "night", "morning"] as PhaseId[]) {
-      expect(`${phase}:${"errand" in buildView(stateAt(phase, 6, 3), s.players[0]!.id, 0).me}`).toBe(`${phase}:false`);
-    }
   });
 });
 
@@ -835,14 +751,14 @@ describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 
     expect(bad.join(",")).toBe("");
   });
 
-  it("dayAnnounce·discussion·night·morning 의 day 키는 n,roles,voteLog(discussion 은 + endCount, night 는 + noExecution: 표 없이 지나온 밤, morning 은 + morning·evidence: 피해자가 나온 아침의 흔적)이고 turn 키가 없다", () => {
+  it("dayAnnounce·discussion·night·morning 의 day 키는 n,roles,voteLog(discussion 은 + endCount, night 는 + noExecution: 표 없이 지나온 밤, morning 은 + morning)이고 turn 키가 없다", () => {
     const got: string[] = [];
     for (const phase of ["dayAnnounce", "discussion", "night", "morning"] as const) {
       const s = richStateAt(phase, 5, 1);
       const keys = new Set(s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(",")));
       got.push(`${phase}:${[...keys].join("|")}`);
     }
-    expect(got.join(" ")).toBe("dayAnnounce:n,roles,voteLog discussion:endCount,n,roles,voteLog night:n,noExecution,roles,voteLog morning:evidence,morning,n,roles,voteLog");
+    expect(got.join(" ")).toBe("dayAnnounce:n,roles,voteLog discussion:endCount,n,roles,voteLog night:n,noExecution,roles,voteLog morning:morning,n,roles,voteLog");
   });
 
   it("dayAnnounce 뷰의 day 는 {n, roles, voteLog []} 뿐이다", () => {
@@ -1173,14 +1089,14 @@ describe("buildView 아침 결과 (NIGHT-06·D-13)", () => {
   const morningsOf = (s: RoomState): string[] => s.players.map((p) => flat(buildView(s, p.id, START_AT).day?.morning));
   const toMorning = (s: RoomState): RoomState => tick(s, s.phaseEndsAt!, seededRandInt(1));
 
-  it("마피아 전원이 시민 X 지목 → 모든 viewer 의 day.morning 이 같은 {eliminated: X, trace} 하나(문구 번호 없음)", () => {
+  it("마피아 전원이 시민 X 지목 → 모든 viewer 의 day.morning 이 같은 {eliminated: X} 하나(문구 번호 없음)", () => {
     const s0 = stateAt("night", 5, 1);
     const x = seatOfRole(s0, "citizen");
     const s = toMorning(s0.players.filter((p) => p.role === "mafia").reduce((acc, p) => actAt(acc, p.seat, x), s0));
     const got = morningsOf(s);
     expect(new Set(got).size).toBe(1);
     const m = buildView(s, s.hostId, START_AT).day?.morning ?? {};
-    expect(`${Object.keys(m).sort().join(",")} ${m.eliminated}`).toBe(`eliminated,trace ${x}`); // 흔적 조각(D-06)
+    expect(`${Object.keys(m).sort().join(",")} ${m.eliminated}`).toBe(`eliminated ${x}`);
   });
 
   it("의사가 X 를 지킴 → { saved: true }, 아무도 안 고름 → {}", () => {
