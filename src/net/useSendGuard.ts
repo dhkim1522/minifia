@@ -4,7 +4,7 @@
 import { useMemo, useRef } from "react";
 
 /** 거절을 기다리는 행동 종류 */
-export type SendKind = "badge" | "whisper";
+export type SendKind = "badge" | "whisper" | "suspect";
 
 /** 보낸 뒤 이 시간 안의 오류 프레임은 그 행동의 거절로 본다(지목과 같은 값) */
 export const SEND_GUARD_MS = 3000;
