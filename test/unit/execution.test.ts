@@ -66,12 +66,15 @@ const passedDefenseOf = (n: number, seed: number, opts: { candidate?: "citizen" 
 describe("enterExecution (VOTE-04, D-06, D-09, 결정 0060-5)", () => {
   const defenseOf = (seed: number): RoomState => passedDefenseOf(6, seed);
 
-  it("찬반이 통과하지 않았으면(부결) 입력 그대로이다 — 아무도 탈락하지 않는다 (DAY-06)", () => {
-    const rejected = stateWithVerdict(6, 1, "defense");
-    expect(rejected.verdict?.passed).toBe(false);
+  it("찬반이 통과하지 않았으면(부결 표시) 입력 그대로이다 — 아무도 탈락하지 않는다 (DAY-06)", () => {
+    const rejected: RoomState = { ...stateWithVerdict(6, 1, "defense"), verdict: { passed: false, candidate: 2 } };
     expect(enterExecution(rejected)).toBe(rejected);
     const { verdict: _none, ...noVerdict } = rejected;
     expect(enterExecution(noVerdict as RoomState)).toBe(noVerdict);
+  });
+
+  it("지목 마감이 찬반 통과를 보존해 변론 상태의 verdict.passed 는 true 다 (Pitfall 1)", () => {
+    expect(stateWithVerdict(6, 1, "defense").verdict?.passed).toBe(true);
   });
 
   it("후보만 alive false 가 되고 다른 필드(역할 포함)는 그대로다; execution 은 {seat} 뿐이고 lastExecPhrase 키는 만들지 않는다", () => {
@@ -94,9 +97,9 @@ describe("enterExecution (VOTE-04, D-06, D-09, 결정 0060-5)", () => {
   it("tick 으로 처형에 들어가도 난수를 한 번도 부르지 않는다 (4~8명 × 시드 3)", () => {
     for (let n = 4; n <= 8; n += 1) {
       for (const seed of SEEDS) {
-        const verdictPhase = stateWithVerdict(n, seed, "verdict");
+        const defensePhase = stateWithVerdict(n, seed, "defense");
         const spy = spyRand();
-        const executed = tick(verdictPhase, verdictPhase.phaseEndsAt!, spy.randInt);
+        const executed = tick(defensePhase, defensePhase.phaseEndsAt!, spy.randInt);
         expect(`${n}/${seed}: ${executed.phase}/${spy.calls.length}`).toBe(`${n}/${seed}: execution/0`);
       }
     }
@@ -182,7 +185,7 @@ describe("noExecutionOf · day.noExecution (D-34)", () => {
     return [...seen].join("|");
   };
 
-  it("지목 0표로 온 밤은 noVotes, 최다 동률로 온 밤은 tie 이고 모든 viewer 가 같은 값을 본다 (DAY-05, 결정 0060)", () => {
+  it("지목 0표로 온 밤은 noVotes, 최다 동률로 온 밤은 tie 이고 모든 viewer 가 같은 값을 본다 (DAY-05, 결정 0060, 22-09 D-13)", () => {
     const rows: string[] = [];
     for (const [name, picks] of [["none", {}], ["tie", { 0: 1, 1: 0 }]] as const) {
       const nomination = castPoints(startedAt(6, 1, "nomination"), picks);
@@ -193,15 +196,14 @@ describe("noExecutionOf · day.noExecution (D-34)", () => {
     expect(rows.join(" ")).toBe('none:{"reason":"noVotes"} tie:{"reason":"tie"}');
   });
 
-  it("찬반 부결로 온 밤에는 키가 없다 — '처형 없음' 은 처형 단계에서 알렸다 (notMajority 는 더 나오지 않는다)", () => {
+  it("찬반 부결로 온 밤은 rejected 이고 모든 viewer 가 같은 값을 본다 (D-11, Pitfall 7)", () => {
     const verdict = stateWithVerdict(6, 1, "verdict");
-    const defender = verdict.verdict!.candidate!;
-    const against = Object.fromEntries(verdict.players.filter((p) => p.seat !== defender).map((p) => [p.seat, false]));
+    const against = Object.fromEntries(verdict.players.map((p) => [p.seat, false]));
     const night = nightWith(castVerdicts(verdict, against), 1);
     expect(night.players.every((p) => p.alive !== false)).toBe(true);
     expect(night.voteLog?.[0]?.exec.passed).toBe(false);
-    expect(noExecutionOf(night)).toBeUndefined();
-    expect(reasonsOf(night)).toBe("-");
+    expect(JSON.stringify(noExecutionOf(night))).toBe('{"reason":"rejected"}');
+    expect(reasonsOf(night)).toBe('{"reason":"rejected"}');
   });
 
   it("처형이 이뤄진 날의 밤 view 에는 키가 없다", () => {

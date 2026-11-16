@@ -38,7 +38,7 @@ import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from ".
 import type { RoleId } from "../shared/game/roles";
 import { RULES } from "../shared/game/ruleset";
 import { nextWakeAt, tick } from "../shared/game/tick";
-import { castPoint, castTurnPoint, turnStartOf } from "../shared/game/nomination";
+import { castTurnPoint, turnStartOf } from "../shared/game/nomination";
 import { castRunoffVote } from "../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
 import { castVerdict } from "../shared/game/verdict";
@@ -74,9 +74,6 @@ function jsonError(error: ApiErrorCode, status: number): Response {
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
 }
-
-// 동시 투표(기본판, 결정 0072): 같은 사람이 이 간격(ms) 안에 다시 던진 표는 저장·방송 없이 본인에게 state 한 프레임만 주고 버린다(T-13-02).
-const POINT_MIN_INTERVAL_MS = 250;
 
 // 연결당 속도 제한: 1000ms 창에 20개를 넘으면 처리하지 않고 창마다 한 번만 알린다.
 const RATE_WINDOW_MS = 1000;
@@ -760,29 +757,13 @@ export class Room extends DurableObject<Env> {
     if (error !== null) this.sendRejection(ws, att.playerId, error);
   }
 
-  // 순차 지목(결정 0063-1): 차례 주인만, 받아들이면 마감 = 지금 + 사이(0.9초). 검사는 규칙 함수(castTurnPoint)가 먼저다 —
+  // 지목은 순차 지목뿐이다(결정 0063-1, 22-09 D-12 — 동시 투표 분기는 지웠다): 차례 주인만, 받아들이면 마감 = 지금 + 사이(0.9초). 검사는 규칙 함수(castTurnPoint)가 먼저다 —
   // 차례가 아닌 사람·확정 뒤 재전송은 WRONG_PHASE, 거절은 보낸 소켓에만 간다(sendRejection). 받아들이면 지목 줄은 모두에게 공개라 모든 소켓이 각자 view 를 받는다.
   // 마감이 앞당겨지므로 알람과 봇 계획을 옮긴다(reschedule).
   private async applyPoint(playerId: string, target: number, now: number): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
     if (this.room.phase === "runoff") return this.applyRunoffVote(playerId, target, now);
     if (this.room.phase === "showdown") return this.applyShowdownPoint(playerId, target, now);
-    // 차례 정보가 없으면 기본판 동시 투표다(결정 0072): 누구나 마감 전까지 던지고 바꾼다. 마감을 바꾸지 않으므로 reschedule 이 필요 없다(과반이어도 15초를 다 채운다).
-    if (this.room.pickTurn === undefined) {
-      const voted = castPoint(this.room, playerId, target);
-      if (!voted.ok) return voted.error;
-      if (voted.state === this.room) return null;
-      const key = `point:${playerId}`;
-      const last = this.writeAt.get(key);
-      if (last !== undefined && now - last < POINT_MIN_INTERVAL_MS) {
-        this.sendViewTo([playerId]);
-        return null;
-      }
-      this.writeAt.set(key, now);
-      this.room = voted.state;
-      await this.persistAndBroadcast();
-      return null;
-    }
     const result = castTurnPoint(this.room, playerId, target, now);
     if (!result.ok) return result.error;
     this.room = result.state;
@@ -792,7 +773,7 @@ export class Room extends DurableObject<Env> {
   }
 
   // 동점 결선(결정 0066-4): 메시지는 기존 point 를 단계별로 분기한다. 마감을 건드리지 않는다(5초를 다 채운다) — reschedule 이 필요 없다.
-  // 방송 규율(applyVerdict 와 같다): 그 사람의 첫 표는 day.runoff.voted(던진 좌석 목록)가 모두에게 바뀌므로 전원이 각자 view 를 받는다.
+  // 방송 규율: 그 사람의 첫 표는 day.runoff.voted(던진 좌석 목록)가 모두에게 바뀌므로 전원이 각자 view 를 받는다.
   // 이미 던진 사람이 값을 바꾸면 공개 값은 그대로이고 바뀌는 것은 본인 값(me.ballot)뿐이다 — 전원에게 보내면 '누군가 마음을 바꿨다' 는 타이밍이 샌다.
   private async applyRunoffVote(playerId: string, target: number, now: number): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
@@ -841,22 +822,16 @@ export class Room extends DurableObject<Env> {
   }
 
   // 마감을 건드리지 않는다(조기 종료 없음 — 모두가 일찍 던져도 10초를 다 채운다, 결정 0060-4). 같은 값을 다시 보내면 같은 객체라 저장·전송이 없다.
-  // 방송 규율(결정 0053·0060-4, T-08-02): 그 사람의 첫 투표는 day.voted(던진 사람 목록)가 모두에게 바뀌므로 모든 소켓이 각자 view 를 받는다.
-  // 이미 던진 사람이 값을 바꾸면 공개 값(day.voted)은 그대로이고 바뀌는 것은 본인 값(me.verdictVote)뿐이다 — 전원에게 보내면 '누군가 마음을 바꿨다' 는 타이밍이 샌다.
-  // 그래서 저장하고 본인 소켓에만 view 를 보낸다(applyCandidateVote 와 같은 모양).
+  // 방송 규율(22-09 D-11·D-26, T-22-15·T-22-16): 집계 수(day.verdictCount)가 모두에게 실시간 공개라 값이 바뀌는 모든 투표 — 첫 투표든 번복이든 —
+  // 가 전원에게 persistAndBroadcast 된다(사람당 값이 둘(찬·반)뿐이라 별도 간격 제한이 없다). 번복도 yes·no 둘이 함께 바뀌므로 한 번의 방송으로 둘 다 간다.
+  // 던진 좌석(옛 day.voted)은 싣지 않으므로 방송 타이밍으로 새는 추가 정보가 없다 — 개인 값(me.verdictVote)만 본인 view 에 있다.
   private async applyVerdict(playerId: string, agree: boolean): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
-    const castBefore = this.room.players.find((p) => p.id === playerId)?.verdictVote !== undefined;
     const result = castVerdict(this.room, playerId, agree);
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     this.room = result.state;
-    if (!castBefore) {
-      await this.persistAndBroadcast();
-      return null;
-    }
-    await this.ctx.storage.put("room", this.room);
-    this.sendViewTo([playerId]);
+    await this.persistAndBroadcast();
     return null;
   }
 

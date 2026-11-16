@@ -22,6 +22,9 @@ export function noExecutionText(reason: NoExecutionReason): string {
       return "동률이라 처형하지 않아요";
     case "noVotes":
       return "던진 표가 없어요";
+    case "rejected":
+      // 22-09: 찬반 부결(던진 표 0 포함). 화면은 세 경우를 같은 "처형 없음" 알림으로 덮는다(UI-SPEC P22-4) — 이 부제 문구는 22-10 이 화면 연결 때 정한다.
+      return "처형하지 않아요";
   }
 }
 /** 처형 무효로 시작한 밤의 단계 안내 앞에 붙는 접두 */

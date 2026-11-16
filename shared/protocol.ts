@@ -87,6 +87,8 @@ export interface VoteLogEntry {
   n: number;
   exec: { yes: number; no: number; passed: boolean };
   cand?: { votes: CandidateVoteLine[]; candidate?: number };
+  /** 서버 저장용 새 선택 필드(22-09): 처형 없이 밤으로 간 날의 이유. 찬반 부결이면 rejected(찬반 마감이), 지목 동점·0표면 tie·noVotes(지목 마감이) 쓴다. noExecutionOf 가 밤 단계에서 읽는다. view 의 voteLog 줄은 이 키를 옮기지 않는다 — 공개 경로는 day.noExecution 하나다. */
+  reason?: NoExecutionReason;
   /** 서버 저장용 표시(결정 0066-5): 마지막 3인 결전으로 끝난 날의 줄이다 — 찬반 없이 지목만으로 처형이 정해졌다(exec 는 0·0). view 는 이 키를 옮기지 않고 처형 단계의 day.verdict.last 로만 알린다. */
   last?: true;
 }
@@ -99,8 +101,8 @@ export interface PointLine {
 export interface ExecutionView {
   seat: number;
 }
-/** 처형이 성립하지 않아 밤으로 온 이유 코드(D-34): 지목 동률 · 지목 0표. 찬반 부결은 처형 단계가 알린다(결정 0060-4). */
-export type NoExecutionReason = "tie" | "noVotes";
+/** 처형이 성립하지 않아 밤으로 온 이유 코드(D-34, 22-09 D-11·D-13): 찬반 부결(던진 표 0 포함) · 지목 동률 · 지목 0표. */
+export type NoExecutionReason = "rejected" | "tie" | "noVotes";
 /** 판 요약 한 줄(종료 뒤에만 모두에게, D-17·D-27). died false 는 지목했으나 죽지 않은 밤(의사가 지킴)이다. */
 export interface SummaryRow {
   n: number;
@@ -126,13 +128,14 @@ export interface DayView {
   // ---- 4페이즈 처형 필드 ----
   // 서버는 낮 단계마다(빈 배열 포함) 항상 싣는다. 타입을 optional 로 둔 이유: 필수로 하면 화면 테스트의 DayView 리터럴이 서버 웨이브에서 한꺼번에 바뀐다(화면 계획이 필요하면 필수로 올린다).
   voteLog?: VoteLogEntry[];
-  candidate?: number; // defense·verdict·execution 에서, 변론자가 있을 때만
+  candidate?: number; // defense·execution 에서, 변론자(처형자)가 있을 때만 — 찬반(verdict)에는 후보가 없다(D-11)
   execution?: ExecutionView; // execution 단계에서만
   noExecution?: { reason: NoExecutionReason }; // 처형이 성립하지 않아 밤으로 온 그 밤 단계에서만(D-34)
   // ---- 8페이즈 낮 처형 필드(결정 0060). 서버가 채우는 일은 08-07 이후 — 지금은 타입만이다. ----
   points?: PointLine[]; // nomination 단계에서, 지금 지목 줄(공개)
   endCount?: number; // discussion 단계에서, 토론 끝내기를 누른 산 사람 수(누가 눌렀는지는 싣지 않는다)
-  voted?: number[]; // verdict 단계에서, 찬반을 던진 좌석(오름차순, 값은 싣지 않는다 — 익명)
+  verdictCount?: { yes: number; no: number }; // verdict 단계에서만, 모두에게 같은 찬반 집계 수(번복도 바로 반영, D-11). 던진 좌석(옛 voted)은 싣지 않는다(D-26) — 내 표는 me.verdictVote
+  voted?: number[]; // 22-09 부터 서버가 싣지 않는다(D-26). 화면이 읽는 자리를 22-10 이 지운 뒤 이 필드도 지운다
   verdict?: { yes: number; no: number; passed: boolean; last?: true }; // execution 단계에서, 찬반 결과 수(개인 값 없음). last 는 마지막 3인 결전으로 온 처형(찬반 없음, 결정 0066-5)
   ballots?: { yes: number[]; no: number[] }; // execution 단계에서만, 찬성·반대한 좌석(오름차순, 변론자·미투표자 제외 — 결정 0066-3). 찬반 진행 중에는 없다
   turn?: PickTurnView; // nomination 단계에서만, 모두에게 같은 차례 정보(결정 0063-1, L14)

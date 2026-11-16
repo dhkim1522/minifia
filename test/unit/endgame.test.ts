@@ -189,13 +189,13 @@ describe("buildSummary (END-02, D-27, T-04-21)", () => {
     it(`시드 ${seed}: 처형으로 끝난 판의 마지막 날은 exec 만 있다`, () => {
       const { ended, candidate } = endedByExecution(seed);
       expect(JSON.stringify(buildSummary(ended))).toBe(
-        JSON.stringify([{ n: 1, exec: { yes: 3, no: 0, passed: true, candidate } }]), // 4명 판: 변론자를 뺀 유권자 3명이 모두 찬성(결정 0053-3)
+        JSON.stringify([{ n: 1, exec: { yes: 4, no: 0, passed: true, candidate } }]), // 4명 판: 후보 없이 산 사람 4명이 모두 찬성(22-09 D-11)
       );
     });
     it(`시드 ${seed}: 아침으로 끝난 판의 마지막 날은 exec 와 night 둘 다 있다`, () => {
       const { ended, candidate, victim } = endedByMorning(seed);
       expect(JSON.stringify(buildSummary(ended))).toBe(
-        JSON.stringify([{ n: 1, exec: { yes: 3, no: 0, passed: true, candidate }, night: { target: victim, died: true } }]),
+        JSON.stringify([{ n: 1, exec: { yes: 4, no: 0, passed: true, candidate }, night: { target: victim, died: true } }]),
       );
     });
   }
