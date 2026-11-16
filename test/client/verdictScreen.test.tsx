@@ -297,28 +297,26 @@ describe("찬반 화면 — 숫자 줄과 두 단추 (22-10, D-11·D-26)", () =>
 const hintOf = (c: ParentNode): string => c.querySelector(".mv-phase__hint")?.textContent ?? "";
 const titleOf = (c: ParentNode): string => c.querySelector(".mv-phase__title")?.textContent ?? "";
 
-describe("최후 변론 화면 (DAY-05)", () => {
-  // 변론자 3(지아), 그날 voteLog 의 cand.votes 중 3 을 가리킨 표 4
+describe("유언 단계 화면 (22-11 D-15·P22-1)", () => {
+  // 처형자 3(지아). 득표 기록(voteLog)이 있어도 화면에 득표 표시를 내지 않는다
   const defense = (mySeat = 0) =>
     makeView({ phase: "defense", candidate: 3, mySeat, count: 6, candVotes: [[0, 3], [1, 3], [2, 3], [4, 3], [5, 2]] });
 
-  it("제목 '최후 변론', 헤더 안내 줄은 없다", () => {
+  it("제목 '유언', 헤더 안내 줄은 없다", () => {
     const { container } = mount(defense());
-    expect(titleOf(container)).toBe("최후 변론");
+    expect(titleOf(container)).toBe("유언");
     expect(hintOf(container)).toBe("");
   });
 
-  it("변론자 본인도 헤더 안내 줄이 없다", () => {
+  it("처형자 본인도 헤더 안내 줄이 없다", () => {
     const { container } = mount(defense(3));
     expect(hintOf(container)).toBe("");
   });
 
-  it("변론자 이름표만 득표 배지(data-count=4)와 유력 도장(data-sure)을 유지하고 다른 이름표에는 배지·도장이 없다", () => {
+  it("이름표에 득표 배지·유력 도장·맥박이 없다 — 처형자 스포트라이트(핀·콘)만 비춘다(UI-SPEC D: 득표 표시 없음)", () => {
     const { container } = mount(defense());
-    expect(headOf(container, 3)?.getAttribute("data-count")).toBe("4");
-    expect(headOf(container, 3)?.getAttribute("data-sure")).toBe("true");
-    expect(container.querySelectorAll(".mv-head[data-count]").length).toBe(1);
-    expect(container.querySelectorAll(".mv-head[data-sure]").length).toBe(1);
+    expect(container.querySelectorAll(".mv-head[data-count]").length).toBe(0);
+    expect(container.querySelectorAll(".mv-head[data-sure]").length).toBe(0);
     expect(container.querySelectorAll("[data-lead]").length).toBe(0);
   });
 
@@ -328,7 +326,7 @@ describe("최후 변론 화면 (DAY-05)", () => {
     expect(hintOf(container)).toBe("");
   });
 
-  it("행동 줄이 없다: 찬반 버튼·토론 끝내기·지목 버튼이 하나도 없고 패널은 채팅뿐", () => {
+  it("행동 줄이 없다: 찬반 버튼·토론 끝내기·지목 버튼이 하나도 없고 패널은 잠긴 채팅뿐", () => {
     const { container } = mount(defense());
     expect(verdictBtns(container).length).toBe(0);
     expect(container.querySelector("[data-end-discussion]")).toBeNull();

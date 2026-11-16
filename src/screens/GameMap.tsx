@@ -35,7 +35,7 @@ import { todOf, todWordOf } from "../game/timeOfDay";
 import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
-import { defenderVotes, headerFor, nominationVotesOf } from "../game/dayView";
+import { headerFor, nominationVotesOf } from "../game/dayView";
 import { callTargetsOf } from "../game/hostLine";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
@@ -208,7 +208,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 }
 
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
-// 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
+// 낮 시작·낮 토론·찬반·지목·유언·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
 export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave }: GameMapProps) {
   const toast = useTopToast();
@@ -450,13 +450,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const baseTagProps = useMemo<WorldTagProps | undefined>(() => {
     // 찬반(22-10, D-26): 이름표에 아무것도 붙이지 않는다 — 누가 던졌는지는 서버도 보내지 않고 집계 수는 아래 패널 숫자 줄이 보인다
     if (verdicting) return undefined;
-    // 최후 변론(DAY-05): 변론자 이름표만 지목 때 받은 득표 배지와 유력 도장을 유지하고 다른 이름표의 배지는 사라진다(공개 기록 voteLog 에서)
-    if (defending) {
-      const candidate = view.day?.candidate;
-      const votes = defenderVotes(view);
-      if (candidate === undefined || votes === undefined || votes < 1) return undefined;
-      return (seat) => (seat === candidate ? { count: votes, sure: true } : {});
-    }
+    // 유언 단계(22-11 P22-10, UI-SPEC D): 이름표에 아무것도 붙이지 않는다 — 득표 배지·유력 도장·손가락 없이 처형자 스포트라이트(핀·콘 조명)만 비춘다
+    if (defending) return undefined;
     // 밤 발밑 고리(A2 임시 예외): 유령만 — 서버가 유령에게만 보낸 spectate.picks(한 좌석에 여럿이면 마피아 → 경찰 → 의사 하나).
     // 산 사람 화면(마피아 포함)에는 고리·배지가 없다(D-05) — 선택은 아래 얼굴 목록이 보인다.
     if (nighting) {

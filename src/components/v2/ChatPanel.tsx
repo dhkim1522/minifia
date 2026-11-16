@@ -90,7 +90,7 @@ export interface ChatPanelProps {
   willSaved?: boolean;
   /** 빛남(14-04): 입력칸이 빛난다(토론 — 입력칸에 is-call, 입력칸에 data-call). 값 없는 표식 */
   callInput?: boolean;
-  /** 빛남(14-04): [유언] 단추가 빛난다(최후 변론의 변론자 본인, HOST-04) */
+  /** 빛남(14-04): [유언] 단추가 빛난다(유언 단계에서 시트를 접은 처형자 본인, HOST-04·22-11) */
   callWill?: boolean;
   /** 유언 단계(22-11 P22-9, D-16): 입력줄만 잠근다 — 기록 칸·높이는 그대로, 입력칸은 disabled·aria-disabled·안내 글자 없음, [보내기]·동작 버튼 없음. 깃펜(onWill)은 부르는 쪽이 줄 때만(처형자) 있다. 서버가 채팅을 받지 않는 것이 본체이고 이것은 표시다 */
   locked?: boolean;

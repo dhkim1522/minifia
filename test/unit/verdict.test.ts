@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   RESULT_TEXT,
-  defenseAnnounce,
   endedAnnounce,
   noExecutionPrefix,
   noExecutionText,
@@ -36,8 +35,6 @@ describe("순수 모듈 검사 (D-38)", () => {
 
 describe("verdict 문구 함수 — UI-SPEC 7.2·7.3", () => {
   it("읽기용 단계 안내와 보조 문구 함수", () => {
-    expect(defenseAnnounce("도윤")).toBe("도윤님의 최후 변론");
-    expect(defenseAnnounce(null)).toBe("내 최후 변론");
     expect(endedAnnounce("citizenWin")).toBe("게임이 끝났습니다. 시민 팀 승리");
     expect(endedAnnounce("mafiaWin")).toBe("게임이 끝났습니다. 마피아 팀 승리");
     expect(noExecutionPrefix("tie")).toBe("처형 없음. ");
@@ -59,8 +56,3 @@ describe("noExecutionText · winnerText (D-34, UI-SPEC 7.2)", () => {
   });
 });
 
-describe("T-04-40: 닉네임은 평문으로만 이어 붙인다", () => {
-  it("문구 함수가 마크업·중괄호를 그대로 둔 문자열을 돌려준다", () => {
-    expect(defenseAnnounce("<i>")).toBe("<i>님의 최후 변론");
-  });
-});

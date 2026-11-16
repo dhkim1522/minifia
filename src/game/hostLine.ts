@@ -53,9 +53,9 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   "discussion.ghost": "유령끼리 이야기할 수 있습니다",
   "nomination.act": "차례대로 한 명을 골라요",
   "nomination.ghost": "지켜봐 주세요",
-  "defense.act": "마지막 말과 유언을 남겨 주세요",
-  "defense.wait": "변론을 들어 주세요",
-  "defense.ghost": "변론을 지켜봐 주세요",
+  "defense.act": "마지막 한마디",
+  "defense.wait": "마지막 한마디를 들어요",
+  "defense.ghost": "지켜봐 주세요",
   "verdict.act": "오늘 처형할까요?",
   "verdict.ghost": "지켜봐 주세요",
   // 큰 글(처형 결과)이 말한다

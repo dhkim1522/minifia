@@ -577,7 +577,7 @@ describe("GameMap — 헤더 시간대 글자 (0083-1)", () => {
     const cells: Array<[PhaseId, string, string | null, string]> = [
       ["dayAnnounce", "day", "낮", "토론"],
       ["nomination", "dusk", "저녁", "지목"],
-      ["defense", "dusk", "저녁", "최후 변론"],
+      ["defense", "dusk", "저녁", "유언"],
       ["verdict", "dusk", "저녁", "찬반"],
       ["execution", "dusk", "저녁", "처형"],
     ];

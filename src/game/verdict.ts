@@ -10,11 +10,6 @@ export const RESULT_TEXT = {
   title: { result: "결과", citizenWin: "시민 승리", mafiaWin: "마피아 승리" },
 } as const;
 
-/** 변론 단계 안내(aria-live). name 이 null 이면 후보 본인 */
-export function defenseAnnounce(name: string | null): string {
-  return name === null ? "내 최후 변론" : `${name}님의 최후 변론`;
-}
-
 /** 처형 없음 문구(P22-4, D-14): 부결·동점·0표를 이유와 무관하게 같은 글 한 가지로 알린다 — 이유를 구별해 보이지 않는다 */
 export function noExecutionText(_reason: NoExecutionReason): string {
   return "처형 없음";

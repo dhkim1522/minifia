@@ -18,7 +18,7 @@ import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
 import { HostBand, HostDock } from "../components/v2/HostBand";
 import { MORNING_TEXT, morningText } from "../game/eliminationText";
 import { READY_TEXT } from "../game/resultText";
-import { defenseAnnounce, noExecutionPrefix, winnerText } from "../game/verdict";
+import { noExecutionPrefix, winnerText } from "../game/verdict";
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { ChatStore } from "../net/chatStore";
 import { ResultLogStore } from "../net/resultLogStore";
@@ -61,7 +61,7 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   discussion: () => "낮 토론",
   night: nightAnnounce,
   morning: morningAnnounce,
-  defense: defenseAnnounceOf,
+  defense: () => "유언", // 22-11 P22-1: 처형자의 10초 유언 단계(이름을 읽지 않는다)
   execution: executionAnnounceOf,
   nomination: () => "지목",
   runoff: () => "결선", // 09.1.1-14: 동점 결선 화면(GameMap)
@@ -102,15 +102,6 @@ function nightAnnounceBase(view: RoomView): string {
   }
 }
 
-// 최후 변론 안내: 후보 본인이면 `내 최후 변론`, 남이면 `{이름}님의 최후 변론`. 후보를 못 찾으면(서버 이상) `최후 변론`.
-function defenseAnnounceOf(view: RoomView): string {
-  const seat = view.day?.candidate;
-  if (seat === undefined) return "최후 변론";
-  if (seat === view.me.seat) return defenseAnnounce(null);
-  const nickname = view.players.find((p) => p.seat === seat)?.nickname;
-  return nickname === undefined ? "최후 변론" : defenseAnnounce(nickname);
-}
-
 // 처형 안내(결정 0060-5): `{닉네임} 님 처형` 하나뿐이다(문구 번호 없음). 처형된 자리를 못 찾으면(서버 이상) `처형`.
 // 찬반이 부결이면 서버는 day.execution 을 싣지 않고 candidate 만 남기므로, 통과가 아니면 처형 문구를 만들지 않고 `처형 없음` 을 읽는다
 // (화면의 시각 알림 dayView.phaseEntry 가 verdict.passed 로 가르는 것과 같은 기준).
@@ -121,7 +112,7 @@ function executionAnnounceOf(view: RoomView): string {
   return nickname === undefined ? "처형" : `${nickname} 님 처형`;
 }
 
-// 장면 키: 낮 시작·토론·지목·최후 변론·찬반·처형(8페이즈 지도 단계)은 같은 장면(GameMap)이라 같은 키를 쓴다 — 단계가 바뀌어도 맵(three 렌더러)을 다시 만들지 않는다(DAY-07).
+// 장면 키: 낮 시작·토론·찬반·지목·유언·처형(8페이즈 지도 단계)은 같은 장면(GameMap)이라 같은 키를 쓴다 — 단계가 바뀌어도 맵(three 렌더러)을 다시 만들지 않는다(DAY-07).
 // 밤·아침(08-18 임시 틀, UI-SPEC A1)도 같은 맵이다. 옛 투표 세 단계는 08-19 에 화면을 지웠고 08-22 에 PhaseId 에서도 지웠다. 낮 시작 전용 화면은 없다(결정 0030).
 // 래퍼와 장면은 장면에 들어올 때만 mf-phase-enter 가 돈다. 그 밖은 단계 이름이 키다.
 function sceneKey(phase: PhaseId): string {

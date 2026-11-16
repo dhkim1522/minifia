@@ -26,7 +26,7 @@ export const TEST_PHASE_LABEL: Readonly<Record<PhaseId, string>> = {
   discussion: "낮 토론",
   night: "밤",
   morning: "아침",
-  defense: "최후 변론",
+  defense: "유언",
   execution: "처형",
   nomination: "지목",
   runoff: "동점 결선",

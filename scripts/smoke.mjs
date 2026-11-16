@@ -1,7 +1,7 @@
 // 스모크: 배포(또는 로컬) 주소에서 방 만들기 → WebSocket hello → 대기실 상태까지 확인한다.
 // full 단계는 한 판을 끝까지 돈다(8페이즈 낮 흐름, 결정 0060): 로비 채팅 한 줄 → 낮 시작 발표 → 낮 토론(자유 채팅, 결정 0058)
 // → 과반이 토론 끝내기(DAY-03) → 동시 투표(DAY-04, 기본판 결정 0072: 산 사람 모두 15초 안에 동시에 point, 자기 지목·유령 지목은 BAD_MESSAGE, 한 명에게 몰아 줌,
-//   줄은 모두에게 같고 한 사람이 바꾸면 모두 따라감, day.turn 은 없다) → 변론 20초(DAY-05)
+//   줄은 모두에게 같고 한 사람이 바꾸면 모두 따라감, day.turn 은 없다) → 유언 10초(22-11)
 // → 찬반 10초(DAY-06: 변론자는 못 던짐, 값 변경은 본인에게만) → 처형 5초(DAY-07: 수만 공개, 역할 키 없음) → 밤 30초(역할별 행동·마피아 채널 채팅)
 // → 아침 5초(탈락 발표·탈락자 채널 채팅) → 승패가 날 때까지 다음 낮을 같은 방식으로 돌아 ended 에서 끝난다.
 // 기본판(결정 0072)에서는 산 사람이 3명이어도 같은 토론 → 투표 흐름이다 — 하루 반복은 서버가 보낸 단계(discussion·showdown)로 갈래를 고른다.
@@ -32,7 +32,7 @@ import { exitIfV1 } from "./deploy-target.mjs";
 
 const TOTAL_LIMIT_MS = 30_000;
 const STATE_LIMIT_MS = 10_000;
-const FULL_TOTAL_LIMIT_MS = 900_000; // 시작 → ended. 낮 하루(과반 토론 끝내기 → 순차 지목 최악 3 + 산 사람 수 × 8.9 + 2 (스크립트는 차례마다 곧바로 지목해 약 10초) + 변론 20 + 찬반 10 + 처형 5 + 밤 30 + 아침 5~15 초) 최대 3일 + 여유
+const FULL_TOTAL_LIMIT_MS = 900_000; // 시작 → ended. 낮 하루(과반 토론 끝내기 → 순차 지목 최악 3 + 산 사람 수 × 8.9 + 2 (스크립트는 차례마다 곧바로 지목해 약 10초) + 유언 10 + 찬반 10 + 처형 5 + 밤 30 + 아침 5~15 초) 최대 3일 + 여유
 // 낮 단계 길이(shared/game/phases.ts 와 같은 값, 결정 0060-1). 스크립트는 TS 를 import 하지 않는다.
 const DISCUSSION_MS = 90_000;
 // 기본판 동시 투표(결정 0072): 산 사람 모두 한 번에 15초. shared/game/phases.ts 의 NOMINATION_MS 와 같은 값 — 고치면 함께.
@@ -41,7 +41,7 @@ const NOMINATION_MS = 15_000;
 const POINT_CHANGE_GAP_MS = 300;
 // 순차 지목(결정 0063-1, 판 규칙(RULES)의 pickTurn)의 길이 사본 — 기본판에서는 서버가 쓰지 않는다. 아래 마지막 3인 구간의 차례 사이 간격이 PICK_GAP_MS 를 쓴다.
 const PICK_GAP_MS = 900;
-const DEFENSE_MS = 20_000;
+const DEFENSE_MS = 10_000; // shared/game/phases.ts DEFENSE_MS 사본 — 유언 단계(결정 0089-19, 22-11)
 const VERDICT_MS = 10_000;
 // 마지막 3인 결전(shared/game/phases.ts 의 SHOWDOWN_* 사본, 결정 0066-5): 모이기 2초 · 차례마다 한마디 8초 · 동시 지목 8초 · 공개 1.5초. 차례 사이는 PICK_GAP_MS 와 같다.
 const SHOWDOWN_GATHER_MS = 2_000;

@@ -19,11 +19,8 @@ import { isMySpeakTurn, pointSeatsOf, SHOWDOWN_COPY, showdownStageOf } from "./s
 export const DAY_COPY = {
   // ---- 채팅 시스템 줄 ----
   dayLine: (n: number): string => `${n}일차`,
-  defenseLine: (name: string, votes: number): string => `${name} 님 ${votes}표 · 최후 변론`,
   /** 결선(09.1.1-14) 시작 채팅 시스템 줄 */
   runoffStart: "결선 시작",
-  /** 결선을 이기고 최후 변론으로 가는 hot 줄 '{이름} 님 결선 {k}표 · 최후 변론' */
-  runoffDefenseLine: (name: string, votes: number): string => `${name} 님 결선 ${votes}표 · 최후 변론`,
   tallyText: (yes: number, no: number): string => `찬성 ${yes} · 반대 ${no}`,
   executedText: (name: string): string => `${name} 님 처형`,
   noExecution: "처형 없음",
@@ -39,7 +36,7 @@ export const DAY_COPY = {
     nomination: "지목",
     runoff: "결선",
     showdown: SHOWDOWN_COPY.title,
-    defense: "최후 변론",
+    defense: "유언", // 결정 0089-19(D-15): defense id 는 처형자의 10초 유언 단계 — 변론은 없다(P22-1)
     verdict: "찬반",
     execution: "처형",
     night: "밤",
@@ -47,8 +44,6 @@ export const DAY_COPY = {
   } as Partial<Record<PhaseId, string>>,
   // ---- 단계 안내 한 줄 ----
   discussionHint: "이야기하며 마피아를 찾아요",
-  defenseHint: (name: string): string => `${name} 님의 변론`,
-  defenseHintSelf: "해명할 시간이에요",
   /** 밤 산 마피아 헤더 안내(UI-SPEC 단계표 202행). 이 문자열은 마피아 분기 안에서만 만든다 — 다른 신분 DOM 에 없다(T-09-29) */
   nightHintMafia: "대상에게 다가가요",
   /** 밤 산 시민·경찰·의사 헤더 안내(UI-SPEC 단계표 203~205행). 각 문자열은 그 역할 분기 안에서만 만든다 — 다른 신분 DOM 에 없다(T-09-33) */
@@ -176,18 +171,6 @@ export function pointsTally(view: RoomView): PointsTally {
 }
 
 /**
- * 최후 변론에서 변론자 이름표에 유지하는 지목 득표 수(공개 기록). 그날 voteLog 줄의 cand.votes 에서 변론자를 가리킨 수이고,
- * 변론자가 없거나 줄이 없으면(재접속 직후 등) undefined — 화면은 배지를 그리지 않는다.
- */
-export function defenderVotes(view: RoomView): number | undefined {
-  const seat = view.day?.candidate;
-  if (seat === undefined) return undefined;
-  const entry = view.day?.voteLog?.find((e) => e.n === view.day?.n);
-  if (!entry?.cand) return undefined;
-  return entry.cand.votes.filter((v) => v.target === seat).length;
-}
-
-/**
  * 결선 마감 전(앞머리·투표)에 후보 머리 위에 걸어 두는 지목 득표(공개 기록, 09.1.1-14): 그날 voteLog 줄의 cand.votes 에서 좌석별로 센 수.
  * 줄이 없으면(재접속 직후 등) 빈 표 — 화면은 배지를 그리지 않는다.
  */
@@ -241,27 +224,9 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
     case "showdown":
       out.lines.push({ kind: "system", text: SHOWDOWN_COPY.chatLine });
       return;
-    case "defense": {
-      const seat = day.candidate;
-      const name = seat === undefined ? undefined : nameOf(cur, seat);
-      if (seat === undefined || name === undefined) return;
-      // 결선을 이기고 온 변론(09.1.1-14): 직전 view 의 day.runoff.tally 에서 승자 칸. tally 가 없으면(결과 단계를 못 받았으면) 아래 기존 줄
-      const runoff = prev.phase === "runoff" ? prev.day?.runoff : undefined;
-      if (runoff?.tally !== undefined) {
-        const k = seat === runoff.cand[0] ? runoff.tally[0] : seat === runoff.cand[1] ? runoff.tally[1] : undefined;
-        if (k !== undefined) {
-          out.lines.push({ kind: "hot", text: DAY_COPY.runoffDefenseLine(name, k) });
-          return;
-        }
-      }
-      // 가정 A2: 그날 voteLog 줄의 cand.votes 에서 변론자를 가리킨 수(공개 기록). 줄이 없으면 이전 지목 집계.
-      const entry = day.voteLog?.find((e) => e.n === day.n);
-      const votes = entry?.cand
-        ? entry.cand.votes.filter((v) => v.target === seat).length
-        : (pointsTally(prev).counts[seat] ?? 0);
-      out.lines.push({ kind: "hot", text: DAY_COPY.defenseLine(name, votes) });
+    case "defense":
+      // 유언 단계(22-11 D-14·D-23): 득표 줄·알림이 없다 — 지목·찬반 기록을 남기지 않는다. 장면(처형자 스포트라이트)과 띠가 말한다
       return;
-    }
     case "execution": {
       const verdict = day.verdict;
       if (!verdict) return;
@@ -362,9 +327,6 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
   if (me !== undefined && !isAlive(me)) {
     return { title, hint: view.phase === "night" ? DAY_COPY.ghostNightHint : DAY_COPY.ghostHint };
   }
-  const candidate = view.day?.candidate;
-  const defender = candidate === undefined ? undefined : nameOf(view, candidate);
-  const isSelf = candidate !== undefined && candidate === view.me.seat;
   switch (view.phase) {
     case "discussion":
       return { title, hint: DAY_COPY.discussionHint };
@@ -386,8 +348,8 @@ export function headerFor(view: RoomView): { title: string; hint?: string } {
       return { title };
     }
     case "defense":
-      if (isSelf) return { title, hint: DAY_COPY.defenseHintSelf };
-      return defender === undefined ? { title } : { title, hint: DAY_COPY.defenseHint(defender) };
+      // 유언 단계(22-11 D-23): 제목만 — 안내는 띠('마지막 한마디'·'마지막 한마디를 들어요')가 말한다
+      return { title };
     case "verdict":
       // 후보가 없다(22-10, D-11): 제목만 — 안내는 띠('오늘 처형할까요?')가 말한다
       return { title };
