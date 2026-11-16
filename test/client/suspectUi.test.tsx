@@ -1,4 +1,4 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import type { ClientMessage, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
@@ -8,6 +8,9 @@ import { bindSignals } from "../../src/audio/signals";
 import type { LocalSignal } from "../../src/audio/signals";
 import { useSendGuard } from "../../src/net/useSendGuard";
 import { useSuspect } from "../../src/net/useSuspect";
+import { HeadStack } from "../../src/components/v2/HeadStack";
+import { SuspectButton } from "../../src/components/v2/SuspectButton";
+import { GamePanel } from "../../src/screens/GamePanel";
 
 // 24-03: [의심] 모드 훅(useSuspect) → 단추·칩 부품 → GameMap 배선. 근처 판정은 서버 구간(store.segOf)이고 화면은 켜 주기만 한다(결정 0002).
 const NOW = 1_700_000_000_000;
@@ -286,5 +289,125 @@ describe("useSuspect — 서버 확인", () => {
   it("처음 마운트 때 이미 붙어 있던 것은 안내하지 않는다", () => {
     const r = mountHook({ view: makeView({ suspectTo: 1 }), segs: { 0: at(0), 1: at(50) } });
     expect(r.result.current.api.said).toBe("");
+  });
+});
+
+// ── 단추 부품 (P24-2·P24-3·P24-4·P24-9) ──
+describe("SuspectButton", () => {
+  const base = { mode: false, used: false, disabled: false, noTargets: false, onToggle: () => {}, onDeny: () => {} };
+
+  it("쉼: 이름 '의심 붙이기', aria-pressed false, postit 아이콘, 글자 노드 없음", () => {
+    const { container } = render(<SuspectButton {...base} />);
+    const btn = container.querySelector("button[data-suspect-btn]");
+    expect(btn).not.toBeNull();
+    expect(btn?.getAttribute("aria-label")).toBe("의심 붙이기");
+    expect(btn?.getAttribute("aria-pressed")).toBe("false");
+    expect(btn?.getAttribute("type")).toBe("button");
+    expect(btn?.querySelector("svg path")).not.toBeNull();
+    expect(btn?.textContent).toBe("");
+    expect(btn?.hasAttribute("data-suspect-stuck")).toBe(false);
+    expect(btn?.querySelector(".mv-chat__will-dot")).toBeNull();
+  });
+  it("모드: aria-pressed true", () => {
+    const { container } = render(<SuspectButton {...base} mode />);
+    expect(container.querySelector("[data-suspect-btn]")?.getAttribute("aria-pressed")).toBe("true");
+  });
+  it("오늘 붙였음: 이름 '의심 옮기기', data-suspect-stuck, 점", () => {
+    const { container } = render(<SuspectButton {...base} used />);
+    const btn = container.querySelector("[data-suspect-btn]");
+    expect(btn?.getAttribute("aria-label")).toBe("의심 옮기기");
+    expect(btn?.hasAttribute("data-suspect-stuck")).toBe(true);
+    expect(btn?.querySelector(".mv-chat__will-dot")).not.toBeNull();
+  });
+  it("누르면 onToggle", () => {
+    const onToggle = vi.fn();
+    const { container } = render(<SuspectButton {...base} onToggle={onToggle} />);
+    fireEvent.click(container.querySelector("[data-suspect-btn]")!);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+  it("근처 0명 비활성: aria-disabled, 눌러도 onToggle 이 아니라 onDeny", () => {
+    const onToggle = vi.fn();
+    const onDeny = vi.fn();
+    const { container } = render(<SuspectButton {...base} disabled noTargets onToggle={onToggle} onDeny={onDeny} />);
+    const btn = container.querySelector("[data-suspect-btn]")!;
+    expect(btn.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(btn);
+    expect(onToggle).not.toHaveBeenCalled();
+    expect(onDeny).toHaveBeenCalledTimes(1);
+  });
+  it("연결 끊김 비활성: 둘 다 안 불린다", () => {
+    const onToggle = vi.fn();
+    const onDeny = vi.fn();
+    const { container } = render(<SuspectButton {...base} disabled onToggle={onToggle} onDeny={onDeny} />);
+    fireEvent.click(container.querySelector("[data-suspect-btn]")!);
+    expect(onToggle).not.toHaveBeenCalled();
+    expect(onDeny).not.toHaveBeenCalled();
+  });
+  it("누르면 포커스된 입력칸을 놓아 키보드를 닫는다(P24-4), mousedown 기본 동작은 막지 않는다", () => {
+    const { container } = render(
+      <div>
+        <input data-chat-input="" />
+        <SuspectButton {...base} />
+      </div>,
+    );
+    const input = container.querySelector("input")!;
+    input.focus();
+    expect(document.activeElement).toBe(input);
+    const btn = container.querySelector("[data-suspect-btn]")!;
+    // fireEvent 는 기본 동작이 막혔으면 false 를 돌려준다
+    expect(fireEvent.mouseDown(btn)).toBe(true);
+    fireEvent.click(btn);
+    expect(document.activeElement).not.toBe(input);
+  });
+});
+
+// ── 입력줄 슬롯 ──
+describe("GamePanel chatTrailing", () => {
+  it("chatTrailing 은 [data-chat-trailing] 안에 그려진다", () => {
+    const view = makeView();
+    const { container } = render(
+      <GamePanel
+        view={view}
+        send={() => true}
+        canSend
+        binding={{ messages: [], value: "", onChange: () => {}, onSend: () => {} }}
+        logHeight={68}
+        chatTrailing={<button data-probe="" type="button" />}
+      />,
+    );
+    expect(container.querySelector("[data-chat-trailing] [data-probe]")).not.toBeNull();
+  });
+  it("주지 않으면 슬롯 자체가 없다", () => {
+    const { container } = render(<GamePanel view={makeView()} send={() => true} canSend binding={{ messages: [], value: "", onChange: () => {}, onSend: () => {} }} logHeight={68} />);
+    expect(container.querySelector("[data-chat-trailing]")).toBeNull();
+  });
+});
+
+// ── 이름표 칩 (P24-16) ──
+describe("HeadStack 의심 칩", () => {
+  it("남의 이름표는 4장 이상일 때만 칩이 보인다", () => {
+    for (const n of [0, 1, 2, 3]) {
+      const { container, unmount } = render(<HeadStack name="영희" color="var(--seat-2)" suspect={n} />);
+      expect(container.querySelector("[data-suspect-count]")).toBeNull();
+      unmount();
+    }
+    const { container } = render(<HeadStack name="영희" color="var(--seat-2)" suspect={4} />);
+    const chip = container.querySelector("[data-suspect-count]");
+    expect(chip?.getAttribute("data-suspect-count")).toBe("4");
+    expect(chip?.getAttribute("aria-label")).toBe("의심 4장");
+    expect(chip?.textContent).toBe("4");
+    expect(chip?.querySelector("svg")).not.toBeNull();
+    // 이름표 안(득표 배지 자리와 반대인 왼쪽 위)에 있다
+    expect(container.querySelector(".mv-tag [data-suspect-count]")).not.toBeNull();
+  });
+  it("내 이름표는 1장 이상이면 늘 보이고 0장·값 없음은 없다", () => {
+    const one = render(<HeadStack name="민수" color="var(--seat-1)" me suspect={1} />);
+    expect(one.container.querySelector("[data-suspect-count]")?.getAttribute("aria-label")).toBe("의심 1장");
+    one.unmount();
+    const zero = render(<HeadStack name="민수" color="var(--seat-1)" me suspect={0} />);
+    expect(zero.container.querySelector("[data-suspect-count]")).toBeNull();
+    zero.unmount();
+    const none = render(<HeadStack name="민수" color="var(--seat-1)" me />);
+    expect(none.container.querySelector("[data-suspect-count]")).toBeNull();
   });
 });

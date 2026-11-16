@@ -274,3 +274,20 @@ describe("옷장 자물쇠 CSS 자리 (18-05, v2.css)", () => {
     expect(body).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
   });
 });
+
+// 24-03: 의심 포스트잇 단추 아이콘 — 정사각 종이·접힌 모서리·글줄. 마피아 쪽지(note)와 다른 모양이다
+describe("V2Icon postit (24-03, P24-3)", () => {
+  it("24 격자 svg, 선 2px·둥근 끝이고 path 가 셋이다", () => {
+    const { container } = render(<V2Icon name="postit" />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.getAttribute("stroke-width")).toBe("2");
+    expect(svg?.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.querySelectorAll("path").length).toBe(3);
+  });
+  it("note 와 다른 모양이다", () => {
+    const shape = (name: V2IconName): string => [...render(<V2Icon name={name} />).container.querySelectorAll("path,circle")].map((e) => e.outerHTML).join("");
+    expect(shape("postit")).not.toBe(shape("note"));
+  });
+});
