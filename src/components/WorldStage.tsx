@@ -77,6 +77,8 @@ export interface WorldPick {
   group: string;
   /** 참이면(연결 끊김 등) 이름표 버튼은 aria-disabled="true" 이고 눌러도 onPick 을 부르지 않는다. 누르기 영역·모양은 그대로 */
   disabled?: boolean;
+  /** 있으면 이름표 버튼마다 이 data 속성에 좌석 번호를 단다(E2E 표식, 예 "data-suspect-tag"). 없으면 기존 data-pick 뿐 */
+  attr?: `data-${string}`;
 }
 
 export interface WorldStageProps {
@@ -429,6 +431,7 @@ export function WorldStage(props: WorldStageProps) {
                   type="button"
                   className="mf-world__pick"
                   data-pick={p.seat}
+                  {...(pick.attr !== undefined ? { [pick.attr]: p.seat } : {})}
                   data-call={extra.call ? "" : undefined}
                   aria-label={pick.label(p.nickname)}
                   aria-pressed={pick.mine === p.seat}

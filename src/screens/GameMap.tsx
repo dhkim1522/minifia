@@ -19,6 +19,8 @@ import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
+import { SuspectButton } from "../components/v2/SuspectButton";
+import { suspectChipShown } from "../components/v2/HeadStack";
 import { CLAIM_ICON } from "../components/v2/ClaimBadge";
 import { ClaimSheet } from "../components/v2/ClaimSheet";
 import { FloatAction, FloatActions } from "../components/v2/FloatAction";
@@ -35,6 +37,7 @@ import { todOf, todWordOf } from "../game/timeOfDay";
 import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
+import { suspectStacks } from "../game/suspectView";
 import { headerFor } from "../game/dayView";
 import { callTargetsOf } from "../game/hostLine";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
@@ -51,6 +54,7 @@ import { useVerdictMoment } from "../net/useVerdictMoment";
 import { useSendGuard } from "../net/useSendGuard";
 import { useSheetLayer } from "../net/useSheetLayer";
 import { useViewChoice } from "../net/useViewChoice";
+import { useSuspect } from "../net/useSuspect";
 import { useWhisper } from "../net/useWhisper";
 import { useWill } from "../net/useWill";
 import { useMapInsets } from "../net/useMapInsets";
@@ -81,6 +85,16 @@ const DEFAULT_INSET_TOP = 62;
 const DEFAULT_INSET_BOTTOM = 250;
 /** 보이는 화면(visualViewport) 높이가 이보다 낮으면 유언 시트 입력칸을 2줄로 줄인다(UI-SPEC 282행) */
 const COMPACT_VV_MAX = 300;
+
+/** 의심 포스트잇(24-03, UI-SPEC 문구 표): 단추 이름·모드 안내·거절 알림·이름표 버튼 이름·묶음 이름. 사람은 '참가자'가 아니라 이름으로만 부른다 */
+const SUSPECT_TEXT = {
+  modeHint: "의심 가는 사람을 눌러요",
+  reject: "가까이 가야 붙여요",
+  groupLabel: "의심 붙이기",
+  tagLabel: (nickname: string): string => `${nickname} 님에게 의심 붙이기`,
+} as const;
+/** 거절 알림이 머무는 시간(P24-7, 2.5초) */
+const SUSPECT_NOTICE_MS = 2500;
 
 /** 암살당한 본인의 연출 시간표(UI-SPEC 247~252행, 아침 view 를 받은 시각 기준): 0.7초에 놀란 표정, 2.8초까지 막 유지 */
 const KILL_SURPRISE_MS = 700;
@@ -148,6 +162,10 @@ interface GameMapProps {
   epoch?: number;
   /** 맵을 쓸 수 없는 기기의 불가 카드 [처음으로] */
   onLeave?: () => void;
+  /** 튜토리얼 전용(24 D-31): 스테이지 아래 여백에 더하는 px(예: 튜토리얼 띠 묶음 60). 실제 판은 넘기지 않는다 — 기본 0 */
+  bottomExtra?: number;
+  /** 튜토리얼 전용(24 D-31): 참이면 머리의 시간 링·시간 행이 없다(머리에는 마감을 지운 view 사본을 주고, 스테이지·연출 부품에는 원래 view 를 준다). 실제 판은 넘기지 않는다 */
+  timeless?: boolean;
 }
 
 /**
@@ -210,14 +228,29 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·찬반·지목·유언·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드는 대기실과 같은 훅이다. 기록 칸은 LOG_H(68) 한 값 — 키보드가 열리면 행동 줄만 숨긴다(07-19, 18.1 P181-3).
   // 지목이면 스테이지 윗변을 차례 알약 아랫변 + 4 로 내리고(UI-SPEC A-1) 작은 폰은 압축형 알약을 받는다(turnCompact). 알약 요소는 훅이 루트에서 `[data-turn-block]` 으로 찾는다.
   // 튜토리얼 지도 장면(panelless prop, 18-03)은 아래 패널이 없다: 스테이지가 띠 아래부터 화면 아래까지 넓어진다
   const noPanel = panelless === true;
-  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets } = useMapInsets(blockModeOf(view) !== null, noPanel);
+  const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets: measuredInsets } = useMapInsets(blockModeOf(view) !== null, noPanel);
+  // 튜토리얼(24 D-31): 아래 여백에 bottomExtra 를 더한다. 키보드 높이를 프레임마다 읽는 getter 는 그대로 살린다. 실제 판은 0 이라 측정값 그대로다.
+  const stageInsets = useMemo(
+    () =>
+      measuredInsets !== undefined && bottomExtra > 0
+        ? {
+            top: measuredInsets.top,
+            get bottom() {
+              return measuredInsets.bottom + bottomExtra;
+            },
+          }
+        : measuredInsets,
+    [measuredInsets, bottomExtra],
+  );
+  // 머리용 view: 튜토리얼은 마감을 지워 시간 링이 없다. 스테이지·연출 부품은 원래 view 를 받는다
+  const headerView = useMemo<RoomView>(() => (timeless ? { ...view, phaseEndsAt: null, phaseDurationMs: null } : view), [view, timeless]);
   // 키보드가 시트의 textarea 때문에 열린 것이면 채팅 패널을 줄이거나 행동 줄을 숨기지 않는다(시트를 연 버튼이 남아야 닫을 때 초점이 돌아온다). 패널은 키보드 위로 올라간다(lifted).
   const kbOpen = kbLifted && !kbInSheet;
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
@@ -291,6 +324,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 귓속말(09.1.1-09)의 거절도 따로 센다
   const [whisperRejects, setWhisperRejects] = useState(0);
   const sendGuard = useSendGuard();
+  // 의심 거절·근처 0명 알림은 한 문구(P24-7): 위 알림 2.5초 + 소리 deny. 모드는 되돌리지 않는다
+  const denySuspect = useCallback((): void => {
+    show(SUSPECT_TEXT.reject, "postit", SUSPECT_NOTICE_MS, "data-suspect-notice");
+    emitSignal({ kind: "deny" });
+  }, [show]);
   const willBusy = useRef(false); // 유언·쪽지 저장 확인을 기다리는 중(useWill 이 쓴다)
   const pointSent = useRef<{ target: number; at: number } | null>(null);
   useEffect(() => {
@@ -303,6 +341,13 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         show(e.code === "WRONG_PHASE" ? WHISPER_TEXT.rejectPhase : WHISPER_TEXT.rejectOther);
         emitSignal({ kind: "deny" });
         setWhisperRejects((n) => n + 1);
+        return;
+      }
+      // 의심(24-03): 최근 3초 안에 보냈으면 이 오류는 그 거절이다. 귓속말 바로 뒤·배지 분기 앞에 둔다 — take() 는 종류와 무관하게 기억을 지우므로 배지 분기가 먼저면 의심 거절이 삼켜진다.
+      // 거절은 사유 구별 없이 BAD_MESSAGE 하나(D-26, 단계 어긋남 코드는 오지 않는다). 그 밖의 코드(채팅 속도 제한 등)는 알림 없이 기억만 지운다
+      if (sendGuard.peek() === "suspect") {
+        sendGuard.take();
+        if (e.code === "BAD_MESSAGE") denySuspect();
         return;
       }
       // 직업 배지: 최근 3초 안에 보냈고 단계 어긋남·잘못된 요청이면 그 거절이다. 그 밖의 코드는 이 분기를 지나친다
@@ -328,7 +373,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       }
       setRejects((n) => n + 1);
     });
-  }, [onEvent, show, sendGuard]);
+  }, [onEvent, show, sendGuard, denySuspect]);
 
   // 지목에는 표마다 띄우는 위 알림이 없다(차례 위 한 줄이 대신, UI-SPEC A-7). 동시 투표 화면은 22-10 에서 지웠다(D-12).
 
@@ -414,6 +459,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   }, [canPick, runoffVoting, runoffCand, showdownPointing, view.players, view.me.seat, view.day?.showdown?.order]);
   // 귓속말(09.1.1-09, UI-SPEC B): 모드·한 줄 시트·보내기는 useWhisper 가 쥔다. 모드에서는 나를 뺀 산 사람의 이름표가 버튼이 된다(낮 토론이라 지목·밤 선택의 pickSeats 와 겹치지 않는다).
   const whisper = useWhisper({ view, send, canSend, rejected: whisperRejects, guard: sendGuard });
+  // [의심](24-03, D-10): 모드·근처 판정(서버 구간)·보내기는 useSuspect 가 쥔다. 귓속말 모드와 동시에 켜지지 않는다(D-24) — 한쪽 단추가 먼저 다른 쪽을 끈다.
+  const suspect = useSuspect({ view, store, offset, send, canSend, guard: sendGuard });
   // 받은 순간 위 알림 "{A} 님의 귓속말"(본문 없음). 라이브로 받은 줄만 번호가 바뀐다 — 재접속 복원 줄·내가 보낸 줄은 알림이 없다. 처음 마운트 때의 번호는 지난 일이다
   const whisperInNonce = liveWhisperIn?.nonce ?? 0;
   const seenWhisperIn = useRef(whisperInNonce);
@@ -424,7 +471,17 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     // 번호가 바뀔 때만 한 번 — 알림 글자는 그 렌더의 view 로 만든다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [whisperInNonce]);
-  const pick: WorldPick | undefined = whisper.mode
+  const pick: WorldPick | undefined = suspect.mode
+    ? {
+        seats: suspect.targets,
+        // 연결이 끊긴 동안은 버튼이 aria-disabled 이고 눌러도 보내지 않는다
+        ...(canSend ? {} : { disabled: true as const }),
+        label: SUSPECT_TEXT.tagLabel,
+        onPick: suspect.pick,
+        group: SUSPECT_TEXT.groupLabel,
+        attr: "data-suspect-tag",
+      }
+    : whisper.mode
     ? { seats: whisper.targets, label: WHISPER_TEXT.tagLabel, onPick: whisper.pick, group: WHISPER_TEXT.groupLabel }
     : pickSeats
     ? {
@@ -586,19 +643,33 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 빛남 대상(14-04): 열린 시트·키보드·귓속말 모드·이미 썼음이면 켜지 않는다. 한 화면에는 한 종류(tool 하나 / 이름표 무리 / 얼굴 칸 무리)만 나온다.
   // 마피아 밤·산 시민·유령·할 일 없는 사람은 callTargetsOf 가 null 이라 빛이 0개다(HOST-05).
   const callTarget = useMemo(() => callTargetsOf(view), [view]);
-  const callOn = callTarget !== null && !callUsed && layerKind === null && !kbOpen && !whisper.mode;
+  const callOn = callTarget !== null && !callUsed && layerKind === null && !kbOpen && !whisper.mode && !suspect.mode;
   const callTool = callOn && callTarget.kind === "tool" ? callTarget.tool : null;
   const callFaceSeats = useMemo<ReadonlySet<number> | undefined>(
     () => (callOn && callTarget.kind === "tag" && nighting && view.me.pick === undefined ? new Set(callTarget.seats) : undefined),
     [callOn, callTarget, nighting, view.me.pick],
   );
+  // 의심 칩 값(P24-16): 받은 종이 수. 남은 4장 이상, 나는 1장 이상일 때만 이름표에 값이 실린다(공개 view 값 — 누설 없음)
+  const suspectStack = useMemo(() => suspectStacks(view), [view]);
+  const suspectChips = useMemo(() => {
+    const out = new Map<number, number>();
+    for (const [seat, from] of suspectStack) if (suspectChipShown(from.length, seat === view.me.seat)) out.set(seat, from.length);
+    return out;
+  }, [suspectStack, view.me.seat]);
   const stageTagProps = useMemo<WorldTagProps | undefined>(() => {
-    if (!whisper.mode) return claimTagProps;
+    if (!whisper.mode && !suspect.mode && suspectChips.size === 0) return claimTagProps;
     return (seat) => ({
       ...(claimTagProps?.(seat) ?? {}),
-      ...(whisper.targets.has(seat) ? { blink: true } : {}),
+      ...(whisper.mode && whisper.targets.has(seat) ? { blink: true } : {}),
+      ...(suspect.mode && suspect.targets.has(seat) ? { blink: true } : {}),
+      ...(suspectChips.has(seat) ? { suspect: suspectChips.get(seat) } : {}),
     });
-  }, [whisper.mode, whisper.targets, claimTagProps]);
+  }, [whisper.mode, whisper.targets, suspect.mode, suspect.targets, suspectChips, claimTagProps]);
+  // E2E 표식 data-suspects="좌석:장수,…"(0장 생략, 공개 값). ?e2e=1 문맥에서만(recordCue 와 같은 판정) — 3D 종이는 DOM 이 아니라서 이것으로 거울을 본다
+  const suspectsMirror = useMemo(
+    () => (recordCue === undefined || suspectStack.size === 0 ? undefined : [...suspectStack].sort((a, b) => a[0] - b[0]).map(([seat, from]) => `${seat}:${from.length}`).join(",")),
+    [recordCue, suspectStack],
+  );
 
   // 아래 패널 높이(--mf-panel-h)는 DOM 에서 재서 루트에 한 번 정한다(패널이 자라도 따라간다). 떠 있는 버튼 묶음(아래 끝 = 키보드 올림 + 패널 높이 + 8)과
   // 찬반 기록 묶음(09.1.1-13)이 CSS 상속으로 같은 값을 읽는다
@@ -639,15 +710,15 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   );
 
   return (
-    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined}>
+    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
       {/* DOM 순서 = Tab 순서: 헤더([역할 카드]) → 맵(이름표) → 아래 패널(입력). 층 순서는 z 가 정한다 */}
       <div className="mf-game__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-game__header">
         <MapHeader
-          view={view}
+          view={headerView}
           offset={offset}
           hintOn={hintOn}
-          {...(whisper.mode ? { hintOverride: WHISPER_TEXT.modeHint } : {})}
+          {...(suspect.mode ? { hintOverride: SUSPECT_TEXT.modeHint } : whisper.mode ? { hintOverride: WHISPER_TEXT.modeHint } : {})}
           tod={tod}
           extra={roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null}
         />
@@ -678,6 +749,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         onLeave={() => onLeave?.()}
       />
       <TopToast {...toast.props} />
+      {/* 붙인 사람에게만 읽히는 한 줄(P24-8) — 서버 view(me.suspectTo)가 확인한 뒤에만 채워진다. 화면에는 안 보인다 */}
+      {suspect.visible ? (
+        <div className="mf-sr-only" role="status" data-suspect-said="">
+          {suspect.said}
+        </div>
+      ) : null}
       {/* 누가 배지를 걸거나 바꿨을 때 읽히는 한 줄(화면에는 안 보인다). 판 규칙 RULES 에서 주장이 꺼져 있으면 줄 자체를 만들지 않는다(결정 0072·U-8, E2E basic-off) */}
       {RULES.badge ? (
         <div className="mf-sr-only" role="status" data-badge-live="">
@@ -728,8 +805,25 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           onNightPickSent={(target) => {
             pointSent.current = { target, at: Date.now() };
           }}
+          chatTrailing={
+            suspect.visible ? (
+              <SuspectButton
+                mode={suspect.mode}
+                used={suspect.used}
+                // 열린 시트·연결 끊김·근처 0명이면 비활성. 근처 0명일 때만 눌림이 거절 알림을 부른다(시트·끊김은 무반응)
+                disabled={!canSend || layerKind !== null || suspect.targets.size === 0}
+                noTargets={canSend && layerKind === null && suspect.targets.size === 0}
+                onToggle={() => {
+                  whisper.off();
+                  if (suspect.toggleMode() === "deny") denySuspect();
+                }}
+                onDeny={denySuspect}
+              />
+            ) : undefined
+          }
           onOpenWill={(opener) => {
             badge.setOpen(false);
+            suspect.off();
             whisper.off();
             whisper.close();
             will.openSheet("will", opener);
@@ -738,6 +832,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           willSaved={will.hasWill}
           onOpenNote={(opener) => {
             badge.setOpen(false);
+            suspect.off();
             whisper.off();
             whisper.close();
             will.openSheet("note", opener);
@@ -779,6 +874,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
               onPress={() => {
                 if (will.open !== null) return;
                 badge.setOpen(false);
+                suspect.off();
                 whisper.toggleMode();
               }}
             />

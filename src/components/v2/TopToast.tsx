@@ -7,15 +7,21 @@ import type { V2IconName } from "./V2Icon";
 // 한 줄(nowrap) 알림 하나, role status·aria-live polite. 알림은 쌓지 않는다: 새 알림이 이전 알림을 바꾼다.
 // 닉네임이 들어가는 글자는 React 텍스트 노드로만 그린다(T-06-26).
 
+/** 알림에 붙이는 값 없는 표식 이름(E2E·시험이 어떤 알림인지 알아본다). 예: "data-suspect-notice" */
+export type ToastMarker = `data-${string}`;
+
 export interface TopToastProps {
   text: string;
   visible: boolean;
   icon?: V2IconName;
+  /** 값 없는 data 표식. 알림이 바뀌면 함께 바뀐다 */
+  marker?: ToastMarker;
 }
 
-export function TopToast({ text, visible, icon }: TopToastProps) {
+export function TopToast({ text, visible, icon, marker }: TopToastProps) {
+  const mark: Record<string, string> = marker !== undefined ? { [marker]: "" } : {};
   return (
-    <div className={visible ? "mv-toast mv-toast--top is-on" : "mv-toast mv-toast--top"} role="status" aria-live="polite">
+    <div className={visible ? "mv-toast mv-toast--top is-on" : "mv-toast mv-toast--top"} role="status" aria-live="polite" {...mark}>
       <span className="mv-toast__text">
         {icon ? <V2Icon name={icon} size={18} /> : null}
         {text}
@@ -33,7 +39,7 @@ export interface UseTopToast {
   /** `<TopToast {...toast.props} />` */
   props: TopToastProps;
   /** 이전 알림이 있으면 바꾸고 타이머를 다시 시작한다. durationMs 를 주면 그 시간 동안 머문다(기본 TOAST_DURATION_MS) */
-  show(text: string, icon?: V2IconName, durationMs?: number): void;
+  show(text: string, icon?: V2IconName, durationMs?: number, marker?: ToastMarker): void;
   dismiss(): void;
 }
 
@@ -61,9 +67,9 @@ export function useTopToast(): UseTopToast {
   }, [stopTimers]);
 
   const show = useCallback(
-    (text: string, icon?: V2IconName, durationMs: number = TOAST_DURATION_MS) => {
+    (text: string, icon?: V2IconName, durationMs: number = TOAST_DURATION_MS, marker?: ToastMarker) => {
       stopTimers();
-      setState({ text, visible: true, icon });
+      setState({ text, visible: true, icon, marker });
       hideTimer.current = setTimeout(() => {
         hideTimer.current = undefined;
         dismiss();
