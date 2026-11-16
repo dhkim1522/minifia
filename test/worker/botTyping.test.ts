@@ -8,10 +8,6 @@ import type { BotStep } from "../../shared/game/bots";
 import type { ServerMessage } from "../../shared/protocol";
 import { advanceTo, editRoom, mapPlayers, mark, nextFrame, pause, seat, send, settle, storedRoom, until } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
-import { lockCauseInFile } from "../helpers/playable";
-
-// 꺼진 옛 확장판 경로 — 낮 토론으로 가는 순서가 낮 시작 발표 → 심부름 → 토론이라는 전제의 시험이라 원인 흐름을 잠근다(21-13 갈래 B 와 같다, 21-16 에서 빠진 파일을 채움).
-lockCauseInFile();
 
 type TypingFrame = Extract<ServerMessage, { t: "typing" }>;
 const typingsOf = (msgs: ServerMessage[]): TypingFrame[] => msgs.filter((m): m is TypingFrame => m.t === "typing");

@@ -3,11 +3,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Color } from "three";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { nightDarkOf } from "../../src/game/nightDark";
 import { lightingFor, lightingOf, visibleSeats } from "../../src/world/presence";
-import { lockCause } from "../helpers/playable";
 import { ALBEDO_NONE, LIGHT_TUNE, type PhaseTune } from "../../src/world/maps/bar";
 import { PLAZA_LIGHT_TUNE } from "../../src/world/maps/plaza";
 import { TOKEN_COLORS } from "../../src/world/palette";
@@ -169,14 +168,7 @@ describe("아침·토론·기본판 밤 조명 (22-04: 원인 흐름 밤·저녁
   });
 });
 
-describe("원인 흐름이 잠긴 확장판은 옛 조명 그대로", () => {
-  // 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 21-13: 기본 세계가 원인 흐름이므로 이 구역이 직접 잠근다(갈래 B).
-  let restoreLock: () => void = () => {};
-  beforeAll(() => {
-    restoreLock = lockCause();
-  });
-  afterAll(() => restoreLock());
-
+describe("밤 조명", () => {
   it("밤 시민 nightCitizen·마피아 night", () => {
     expect(lightingFor(viewOf("night", { role: "citizen" }))).toBe("nightCitizen");
     expect(lightingFor(viewOf("night", { role: "mafia" }))).toBe("night");

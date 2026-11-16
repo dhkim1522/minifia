@@ -8,10 +8,6 @@ import type { ServerMessage } from "../../shared/protocol";
 import { MORNING_MAX_MS } from "../../shared/game/phases";
 import { editRoom, flushWorld, homeBySeat, layOf, mark, moveAs, nextFrame, pause, pickAs, segEndsBySeat, settle, snapSeatsOf, startedGame, storedRoom, withRole, worldFramesOf, worldOf } from "./helpers";
 import type { Game } from "./helpers";
-import { lockCauseInFile } from "../helpers/playable";
-
-// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B). 원인 흐름은 cause*·lamp*·scene* 시험이 단언한다.
-lockCauseInFile();
 
 /** 마지막 world snap 의 '좌석:x,z' 오름차순 문자열. snap 이 없으면 'none'. */
 function snapPoints(msgs: ServerMessage[]): string {

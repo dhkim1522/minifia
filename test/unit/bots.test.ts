@@ -58,10 +58,7 @@ import { castVerdict } from "../../shared/game/verdict";
 import { castRunoffVote, runoffStepMs, stepRunoff } from "../../shared/game/runoff";
 import { RUNOFF_VOTE_MS, SHOWDOWN_POINT_MS, SHOWDOWN_TURN_MS } from "../../shared/game/phases";
 import { LAST_WORD_CHIPS, acceptLastWord, castShowdownPoint, showdownStepMs, stepShowdown } from "../../shared/game/showdown";
-import { lockCauseInFile } from "../helpers/playable";
 
-// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표(dayAnnounce)·심부름을 지나 단계를 따라가므로 원인 흐름을 잠근다(21-13, 갈래 B).
-lockCauseInFile();
 const GAME_RULES = RULES;
 
 const START_AT = 10_000;

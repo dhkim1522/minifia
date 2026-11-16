@@ -8,7 +8,6 @@ import { attachConnection, createRoomState, joinRoom, startGame } from "../../sh
 import type { Player, RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
-import { underCauseLock } from "../helpers/playable";
 import { seededRandInt } from "../helpers/seededRandom";
 const GAME_RULES = RULES;
 
@@ -47,7 +46,7 @@ function actNight(s: RoomState): RoomState {
 describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", () => {
   for (const n of [5, 6, 7, 8]) {
     for (const seed of [1, 2, 3]) {
-      it(`${n}명 seed ${seed}: 날마다 낮 시작 발표 다음이 바로 토론(산 사람이 셋이면 마지막 3인 결전)이고 일지가 독립 모델과 같다`, underCauseLock(() => {
+      it(`${n}명 seed ${seed}: 날마다 낮 시작 발표 다음이 바로 토론(산 사람이 셋이면 마지막 3인 결전)이고 일지가 독립 모델과 같다`, () => {
         const rand = seededRandInt(seed);
         const lobby = lobbyOf(n);
         const started = startGame(lobby, lobby.hostId, 10_000, rand);
@@ -105,7 +104,7 @@ describe("여러 날 낮 흐름 + 일지 누적 (CHAT-06, NIGHT-04, ELIM-01)", (
         for (const c of s.players.filter((p) => p.role === "citizen")) {
           expect("records" in buildView(s, c.id, s.phaseEndsAt ?? 0).me).toBe(false);
         }
-      }));
+      });
     }
   }
 });

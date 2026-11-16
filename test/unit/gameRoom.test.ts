@@ -22,12 +22,10 @@ import type { PhaseId } from "../../shared/protocol";
 import { ROLE_IDS, ROLE_TABLE } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
 import { seededRandInt } from "../helpers/seededRandom";
-import { lockCauseInFile, onlyBar } from "../helpers/playable";
+import { onlyBar } from "../helpers/playable";
 import { buildView } from "../../shared/game/view";
 import { nicknameKey, validateNickname } from "../../shared/nickname";
 
-// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B).
-lockCauseInFile();
 const GAME_RULES = RULES;
 
 interface Spec {

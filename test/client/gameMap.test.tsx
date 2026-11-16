@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
 import { RULES } from "../../shared/game/ruleset";
-import { lockCause, underCauseLock } from "../helpers/playable";
 import type { ClientMessage, MorningView, PhaseId, PublicPlayer, RoleRecord, RoomView } from "../../shared/protocol";
 import { LineSheet } from "../../src/components/v2/LineSheet";
 import { floatVisible } from "../../src/game/badgeView";

@@ -25,10 +25,7 @@ import {
 } from "./helpers";
 import type { Actor, Game } from "./helpers";
 import { RULES } from "../../shared/game/ruleset";
-import { lockCauseInFile } from "../helpers/playable";
 
-// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B). 원인 흐름은 cause*·lamp*·scene* 시험이 단언한다.
-lockCauseInFile();
 const GAME_RULES = RULES;
 
 /** 모든 위치 구간이 끝날 때까지 기다린다(모이기 걷기 뒤). */

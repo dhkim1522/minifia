@@ -6,10 +6,6 @@ import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
 import { isAlive } from "../../shared/game/alive";
 import { seededRandInt } from "../helpers/seededRandom";
-import { lockCauseInFile } from "../helpers/playable";
-
-// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B).
-lockCauseInFile();
 
 // Nyquist 03: 밤 → 아침 전체 사슬을 시드 여러 개로 돌려 viewer 간 불변식을 확인한다.
 function lobbyOf(n: number): RoomState {

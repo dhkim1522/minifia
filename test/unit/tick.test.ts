@@ -22,10 +22,7 @@ import { enterDayAnnounce, nextWakeAt, tick } from "../../shared/game/tick";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, castVerdicts, stateWithVerdict } from "../helpers/voteState";
 import type { PhaseId } from "../../shared/protocol";
-import { lockCauseInFile } from "../helpers/playable";
 
-// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 이 파일의 단계 연쇄·마감 시험은 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B). 제품 확장판 흐름은 맨 아래 구역(갈래 C)이 단언한다.
-lockCauseInFile();
 const GAME_RULES = RULES;
 
 function player(i: number, connected: boolean): Player {

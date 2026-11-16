@@ -15,10 +15,7 @@ import { seededRandInt } from "../helpers/seededRandom";
 import { castRunoffVote } from "../../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../../shared/game/showdown";
 import { castPoints, castRunoff, castShowdown, castVerdicts, runoffStateOf, startedAt, stateWithVerdict, threeAliveAt } from "../helpers/voteState";
-import { lockCauseInFile } from "../helpers/playable";
 
-// 꺼진 옛 확장판 경로 — 코드는 끄기만 한다(REQUIREMENTS Out of Scope '기능 코드 삭제'). 낮 시작 발표 → 심부름 → 토론 순서를 전제하므로 원인 흐름을 잠근다(21-13, 갈래 B).
-lockCauseInFile();
 const GAME_RULES = RULES;
 
 const PLAYER_COUNTS = [4, 5, 6, 7, 8] as const;
