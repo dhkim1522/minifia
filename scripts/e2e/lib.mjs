@@ -3142,15 +3142,17 @@ export const ROLE_LINES = {
 const isStr = (x) => typeof x === "string";
 
 /** HB1~HB7 자막 띠 판정(HOST-01, TOOL-02, 18.1-12 결정 0083-8). b = 위 14페이즈 계약. */
-export function hostBandChecks(b, { phase, timed }) {
+export function hostBandChecks(b, { phase, timed, answer = false }) {
+  // 23-11: 결과(ended)는 첫날 정답이 공개된 판(answer)이면 띠가 보이고 `정답 · {키워드}` 한 줄을 가진다 — 숨는 단계에서 빠진다
+  const hiddenPhase = HOST_OFF_PHASES.includes(phase) && !(phase === "ended" && answer === true);
   const L = {
     HB1: `띠 하나·문장 하나(${phase})`,
     HB2: "data-guide 하나가 띠 안",
     HB3: "띠 문장 한 줄",
     HB4: timed ? "시간 막대 + 'n초'" : "시간 없는 단계는 막대·숫자 없음",
     HB5: "옛 안내줄·링·m:ss 타이머 없음",
-    HB6: `종 0개 + 띠 면 ${HOST_OFF_PHASES.includes(phase) ? "숨김" : "보임"}`,
-    HB7: HOST_BLANK_PHASES.includes(phase) ? "띠 문장 빈 글(큰 글이 말한다)" : HOST_OFF_PHASES.includes(phase) ? "숨는 단계(문장은 판정 밖)" : "띠 문장 글 있음",
+    HB6: `종 0개 + 띠 면 ${hiddenPhase ? "숨김" : "보임"}`,
+    HB7: HOST_BLANK_PHASES.includes(phase) ? "띠 문장 빈 글(큰 글이 말한다)" : hiddenPhase ? "숨는 단계(문장은 판정 밖)" : "띠 문장 글 있음",
   };
   const ids = ["HB1", "HB2", "HB3", "HB4", "HB5", "HB6", "HB7"];
   const nm = (id, what) => noMeasure(id, L[id], what);
@@ -3185,7 +3187,7 @@ export function hostBandChecks(b, { phase, timed }) {
   if (isNum(b.bells) && typeof b.faceHidden === "boolean") {
     const bad = [];
     if (b.bells > 0) bad.push(`종 아이콘 ${b.bells}개`);
-    const wantHidden = HOST_OFF_PHASES.includes(phase);
+    const wantHidden = hiddenPhase;
     if (wantHidden && !b.faceHidden) bad.push(`${phase} 의 띠 면이 보임(숨겨야 한다)`);
     if (!wantHidden && b.faceHidden) bad.push(`${phase} 의 띠 면이 숨겨져 있음(보여야 한다)`);
     out.push(result("HB6", L.HB6, bad));
@@ -3196,7 +3198,7 @@ export function hostBandChecks(b, { phase, timed }) {
     const empty = b.text.trim() === "";
     if (HOST_BLANK_PHASES.includes(phase)) {
       if (!empty) bad.push(`${phase} 의 띠 문장이 빈 글이 아님('${b.text.trim()}')`);
-    } else if (!HOST_OFF_PHASES.includes(phase) && empty) bad.push(`${phase} 의 띠 문장이 비었음(글 없음)`);
+    } else if (!hiddenPhase && empty) bad.push(`${phase} 의 띠 문장이 비었음(글 없음)`);
     out.push(result("HB7", L.HB7, bad));
   } else out.push(nm("HB7", "띠 문장 글자"));
   return out;

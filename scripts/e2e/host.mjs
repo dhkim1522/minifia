@@ -39,7 +39,7 @@ const MAX_STEPS = 90;
 /** 시간이 있는 단계의 최소 길이(ms) — src/game/hostLine.ts hostTimeOf 와 같은 값 */
 const HOST_TIME_MIN_MS = 3000;
 /** 띠 검사가 반드시 지나야 하는 단계(없으면 EB0 실패 — 공허 통과 금지). 배정은 3초 창이라 잡히면 더하고 못 잡아도 실패가 아니다 */
-const BAND_REQUIRED = ["lobby", "roleReveal", "dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "night", "morning", "ended"];
+const BAND_REQUIRED = ["lobby", "roleReveal", "keyword", "dayAnnounce", "discussion", "verdict", "nomination", "defense", "execution", "night", "morning", "ended"];
 /** 이 높이(px) 미만의 폰은 방 틀 높이 575 미만의 짧은 폰이다(DEFAULT_SIZES 의 360x560 probe) — UI#14 알려진 한계 적용 대상 */
 const SHORT_PHONE_H = 575;
 /** 이름표·얼굴 칸이 눌려야 하는 단계(띠·이름표 겹침 검사) */
@@ -283,7 +283,7 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
       rec(sc, "EB1", "띠를 읽는다(ended)", ok.ok, ok.detail);
       if (ok.ok) {
         const band = await readHostBand(hp);
-        const f = fold(hostBandChecks(band, { phase: "ended", timed: timedOf(ht.last()) }));
+        const f = fold(hostBandChecks(band, { phase: "ended", timed: timedOf(ht.last()), answer: ht.last()?.day?.keyword?.answer !== undefined }));
         rec(sc, "HB", `띠 한 구절·한 줄·종 없음·시간 막대+초·옛 안내/링 없음·비는/숨는 단계(ended, ${band.text.length}자 문장)`, f.ok, f.detail);
         await recordTod(hp, rec, sc, "ended");
       }
