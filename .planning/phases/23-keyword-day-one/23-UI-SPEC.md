@@ -1,7 +1,8 @@
 ---
 phase: "23"
 slug: "keyword-day-one"
-status: draft
+status: approved
+reviewed_at: 2026-11-16
 shadcn_initialized: false
 preset: none
 created: "2026-11-16"
