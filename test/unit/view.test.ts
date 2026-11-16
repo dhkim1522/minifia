@@ -302,6 +302,10 @@ const SERVER_ONLY_KEYS: readonly string[] = [
   "runoffVote", // 동점 결선의 개인 선택(결정 0066-4): 서버 전용 — 본인 값은 me.ballot, 공개는 day.runoff 의 voted·tally 뿐
   "whispers", // 귓속말 본문 보관(결정 0066-2, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
   "badgeLog", // 직업 주장 이력(결정 0066-1, O-20): 서버 전용, 11페이즈 입력 — 판 중에는 어떤 view 에도 없다
+  // 키워드 답(23-06): 서버 전용 이름 셋. RoomState.keyword 는 view 키 day.keyword·me.keyword 와 이름이 같아 넣지 않고 값(단어 문자열) 검사로 지킨다(RESEARCH P2, keywordLeak.test.ts ①).
+  "keywordProbed", // 마피아가 금지어로 거절당한 적(D1 떠보기 근거, D-09)
+  "answerSubmits", // 확정 제출 목록(낸 순서) — 공개는 마감 뒤 day.keyword.answers 뿐
+  "answerDraft", // 쓰던 글 — 본인 값은 me.answer 로만
 ];
 /** view.day 가 있는 열 단계. 이 밖의 단계 뷰에는 day 키 자체가 없다(D-07). */
 const DAY_VIEW_PHASES: ReadonlySet<PhaseId> = new Set([

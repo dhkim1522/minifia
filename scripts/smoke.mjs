@@ -127,7 +127,7 @@ const ENDED_ROLE_STRING_PATHS = new Set(["view.result.seats[].job"]);
 // 7페이즈: 채팅 도배 기록·입력 중 중계 기록·줄 저장 레코드의 마스크(r)·쓰기 순번(g)은 서버 안에만 있다.
 // 9페이즈(결정 0061): 마피아 쪽지 한 줄(nightNote)은 서버 안에만 있고 아침 chat 카드(k:"note")로만 나온다.
 // 8페이즈(결정 0060): 개인 지목(nominate)·토론 끝내기(endVote)·찬반 값(verdictVote)과 판정(verdict)은 서버 안에만 있다.
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "claim" + "Done", "claims", "claimLog", "turn", "pickTurn", "nominate", "endVote", "verdictVote", "verdict", "nightLog", "lastExecPhrase", "chatRates", "typingRelays", "nextSeq", "nightNote", "showdownPick", "runoffVote", "showdown", "runoff"];
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "claim" + "Done", "claims", "claimLog", "turn", "pickTurn", "nominate", "endVote", "verdictVote", "verdict", "nightLog", "lastExecPhrase", "chatRates", "typingRelays", "nextSeq", "nightNote", "showdownPick", "runoffVote", "showdown", "runoff", "keywordProbed", "answerSubmits", "answerDraft"]; // 23-06: 키워드 답의 서버 전용 이름(RoomState.keyword 는 view 키 이름과 같아 값 검사로 지킨다)
 // 같은 이름의 공개 와이어 경로(이 밖의 경로에 이름이 나오면 실패): 지목 단계의 차례 day.turn, 본인에게만 가는 me.verdictVote. 처형 단계의 찬반 수 day.verdict 는 22-12 에서 없어졌다(어떤 경로에도 허용하지 않는다).
 // turn·showdown·runoff·pickTurn·showdownPick·runoffVote: 기본판(결정 0072)에서 꺼진 장치의 키다. 공개 경로로도 허용하지 않아 어느 프레임에도 이름이 나오면 안 된다.
 // 기본판(결정 0072): turn·showdown·runoff 는 공개 경로도 없다 — 어떤 프레임에 이름이 나오면 실패한다(T-13-07, 허용 경로를 좁히기만 한다).

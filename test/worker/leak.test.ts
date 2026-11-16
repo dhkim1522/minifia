@@ -113,7 +113,7 @@ const ROLE_PATHS_ALIVE = [
  * 서버 전용 키: 어떤 프레임의 어떤 경로에도 없어야 한다. stats 는 판 통계 카운터(11-01, 결정 D-6, L35)다. 주장 차례(결정 0027-3)와 4페이즈 투표·종료(결정 0036-12)·순차 지목 차례(pickTurn, 결정 0063-1)의 서버 상태.
  * winner·execution 은 같은 이름의 view 키(result.winner·day.execution)가 있어 넣지 않고, 경로·단계로 검사한다.
  */
-const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick", "stats", "badgeLog", "whispers", "disconnectedAt", "left", "errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick", "errandFake"]; // (22-04: 원인 흐름의 서버 전용 이름 errandCut·skipVote·sceneSeen·touched·footprints·windowLit 은 키째 지웠다.) errandPlaces·errandDone·errandNear·errandSeen·errandTickAt·nightPick(15-06, T-15-25): 심부름·밤 선택의 서버 전용 이름 — view 는 me.errand·me.record·me.pick 이라는 다른 이름으로만 본인에게 싣는다. disconnectedAt·left(11-04): 방 연속성 서버 전용 기록 (L43). badgeLog·whispers(11-03): 결과 공개 줄은 v·to 같은 다른 이름을 쓴다 — 서버 전용 이름은 어떤 프레임에도 키로 없다 (L35)
+const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "execVote", "candidateVote", "verdict", "nightLog", "lastExecPhrase", "nominate", "verdictVote", "endVote", "nightNote", "pickTurn", "runoffVote", "showdownPick", "stats", "badgeLog", "whispers", "disconnectedAt", "left", "errandPlaces", "errandDone", "errandNear", "errandSeen", "errandTickAt", "nightPick", "errandFake", "keywordProbed", "answerSubmits", "answerDraft"]; // (23-06: keywordProbed·answerSubmits·answerDraft 는 키워드 답의 서버 전용 이름 — view 는 me.answer·day.keyword.answers 라는 다른 이름으로만 싣는다. RoomState.keyword 는 view 키 day.keyword·me.keyword 와 이름이 같아 여기 넣지 않고 값 검사(keywordLeak.test.ts ①)로 지킨다, RESEARCH P2.) (22-04: 원인 흐름의 서버 전용 이름 errandCut·skipVote·sceneSeen·touched·footprints·windowLit 은 키째 지웠다.) errandPlaces·errandDone·errandNear·errandSeen·errandTickAt·nightPick(15-06, T-15-25): 심부름·밤 선택의 서버 전용 이름 — view 는 me.errand·me.record·me.pick 이라는 다른 이름으로만 본인에게 싣는다. disconnectedAt·left(11-04): 방 연속성 서버 전용 기록 (L43). badgeLog·whispers(11-03): 결과 공개 줄은 v·to 같은 다른 이름을 쓴다 — 서버 전용 이름은 어떤 프레임에도 키로 없다 (L35)
 /**
  * 서버 전용 이름과 같은 공개 와이어 필드의 경로(08-11, 결정 0060-3·4) — 이 경로만 SERVER_ONLY_KEYS 검사에서 빼고 이유를 단다. 목록은 줄이지 않고, 새 경로는 받을 권리 조건이 있을 때만 더한다.
  *  - .view.me.verdictVote: 그 소켓 본인이 던진 찬반 값(변론자·유령·던지지 않은 사람에게는 키 자체가 없다). 남의 값은 어떤 경로로도 가지 않는다.
@@ -121,6 +121,26 @@ const SERVER_ONLY_KEYS = ["claimPick", "claimOrder", "claimIdx", "claimStart", "
  * 22-12 에서 .view.day.verdict({yes,no,passed}) 예외가 사라졌다 — 찬반 결과 수는 처형 단계에 싣지 않는다(D-14).
  */
 const ALLOWED_WIRE_PATHS: ReadonlySet<string> = new Set([".view.me.verdictVote", ".view.day.execution.will"]);
+/**
+ * 키워드(23페이즈, 결정 0089)가 와이어에 더한 공개 경로 전부(23-06, D-06·D-14·D-20). 시험 setup 이 키워드 기능을 꺼 두어 이 파일의 한 판 전수 검사에는 나오지 않고, 켠 판의 전수는 keywordLeak.test.ts 가 맡는다.
+ * 넓히려면 받을 권리를 이 주석에 적고 아래 "키워드 공개 경로 고정" 시험의 기대 목록을 같이 고친다. SERVER_ONLY_KEYS 의 키워드 이름(keywordProbed·answerSubmits·answerDraft)은 이 목록에 들 수 없다.
+ *  - .view.me.keyword: keyword 단계, 산 시민 편(경찰·의사·시민) 본인에게만 — 마피아·탈락자·다른 단계에는 키 자체가 없다(D-06).
+ *  - .view.me.answer(.text/.final): keyword 단계, 산 본인이 쓰던 글·확정 여부 — 본인에게만, 값이 있을 때만(재접속 복원, P23-13).
+ *  - .view.day.keyword(.genre/.answer/.answers[].order/.seat/.text): 모든 소켓에 같은 모양. genre 는 keyword 단계와 이후 내내, answers 는 keyword 마감 뒤 내내, answer(정답)는 answerReveal 진입 프레임부터(answerOpenOf).
+ */
+const KEYWORD_WIRE_PATHS: readonly string[] = [
+  ".view.me.keyword",
+  ".view.me.answer",
+  ".view.me.answer.text",
+  ".view.me.answer.final",
+  ".view.day.keyword",
+  ".view.day.keyword.genre",
+  ".view.day.keyword.answer",
+  ".view.day.keyword.answers",
+  ".view.day.keyword.answers[].order",
+  ".view.day.keyword.answers[].seat",
+  ".view.day.keyword.answers[].text",
+];
 /**
  * 동점 결선(결정 0066-4)의 공개 경로 — SERVER_ONLY_KEYS 의 runoffVote 와 이름이 겹치지 않아 위 허용 목록은 넓히지 않았다. 새로 생기는 경로는 이 둘뿐이고 받을 권리가 단계별로 갈린다:
  *  - .view.day.runoff(.cand/.step/.voted/.tally): runoff 단계에서 모든 소켓에 같다. 마감 전(step 0·1)에는 cand·step·voted(던진 좌석)뿐, 마감 뒤(step 2)에는 cand·step·tally(득표 수)뿐이다.
@@ -2012,5 +2032,23 @@ describe("찬반 집계 공개 — 수만 모두에게, 좌석·개인 표는 �
     expect(lastViewOf(a0!.sock).me.verdictVote).toBe(false);
     expect(lastViewOf(a1!.sock).me.verdictVote).toBe(false);
     expect(Object.hasOwn(lastViewOf(a2!.sock).me, "verdictVote")).toBe(false);
+  });
+});
+
+describe("키워드 공개 경로 고정 (23-06, D-06·D-14, T-23-20)", () => {
+  it("키워드가 view 에 싣는 경로는 허용 목록과 정확히 같고, 서버 전용 이름은 그 경로의 어디에도 없다", () => {
+    const sample = {
+      view: {
+        me: { keyword: "단어", answer: { text: "글", final: true } },
+        day: { keyword: { genre: "영화", answer: "단어", answers: [{ order: 1, seat: 0, text: "글" }] } },
+      },
+    };
+    // 컨테이너 경로(.view·.view.me·.view.day)는 다른 키도 담으므로 키워드 줄기(keyword·answer)만 본다.
+    const keywordOnly = keyPaths(sample).filter((pth) => /^\.view\.(me\.(keyword|answer)|day\.keyword)/.test(pth));
+    expect(keywordOnly.sort()).toEqual([...KEYWORD_WIRE_PATHS].sort());
+    for (const path of KEYWORD_WIRE_PATHS) expect(SERVER_ONLY_KEYS.includes(path.slice(path.lastIndexOf(".") + 1)), path).toBe(false);
+    for (const name of ["keywordProbed", "answerSubmits", "answerDraft"]) expect(SERVER_ONLY_KEYS.includes(name), name).toBe(true);
+    // 서버 전용 이름이 와이어에 나오면 이 검사가 잡는다
+    expect(keyPaths({ view: { me: { answerDraft: "x" } } }).filter((pth) => SERVER_ONLY_KEYS.includes(pth.slice(pth.lastIndexOf(".") + 1)))).toEqual([".view.me.answerDraft"]);
   });
 });
