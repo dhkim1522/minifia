@@ -81,7 +81,7 @@ commits: 3
 | acceptance: 도우미 grep(test) | 0 |
 | acceptance: `export function (openPlaza\|onlyBar)` in playable.ts | 2 |
 | acceptance: `"basic"\|"extended"\|GameMode\|modePick` in scripts | 0 |
-| 비공개 위생 grep(`torder\|티오더\|조직\|회사\|~/project`) 변경 파일 | 0건 |
+| 비공개 위생 grep 변경 파일 | 0건 |
 
 worker 프로젝트 부하 flake 는 이번 전체 두 번 모두 나타나지 않았다.
 

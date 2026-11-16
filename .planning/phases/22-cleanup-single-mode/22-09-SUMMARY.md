@@ -102,7 +102,7 @@ commits: 5
 | `node --test scripts/*.test.mjs scripts/e2e/*.test.mjs` | 612 통과 0 실패 |
 | `npx vitest run test/worker/leak.test.ts --reporter=verbose \| grep -c "↓"` | 2 — 켜짐 전용 describe(결선·결전)뿐이다. **"기본판 — 꺼진 장치 키 0건" 구역은 건너뛰지 않고 통과**(HEAD 상태에서 pickTurn 을 켰다면 이 구역이 skip 됐을 것이다, Pitfall 2) |
 | 인수 기준 grep | `phases.ts discussion next verdict` 1, `yes * 2 > yes + no` 1, `yes * 2 > voters` 0, `verdictCount` protocol·view 합 3, `state.phase === "verdict") day.voted` 0, `passed: false, candidate: leader` 0, `enterVote\|castPoint` export 0, `pickTurn: true` 1, `verdictPassed` gather 0, `pickTurn === undefined` voteState 0 |
-| 사적 레포 위생 `git grep -nIiE "torder\|티오더\|조직\|회사\|~/project"` (변경 파일) | 0건 |
+| 사적 레포 위생 저장소 위생 금지어 git grep (변경 파일) | 0건 |
 
 계획의 Task 1 verify 명령에 있는 `test/unit/verdict.test.ts` 는 화면 쪽 `src/game/verdict.ts` 시험이라(파일 머리 주석 참조) 서버 판정 시험이 아니다. 서버 규칙 시험은 `test/unit/verdictRule.test.ts` 이고 이 파일을 다시 썼다. 두 파일 모두 전체 실행에서 통과했다.
 

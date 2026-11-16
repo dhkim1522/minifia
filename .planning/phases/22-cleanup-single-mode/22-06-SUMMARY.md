@@ -96,7 +96,7 @@ commits: 1
 - `node --test scripts/*.test.mjs scripts/e2e/*.test.mjs` — 628 pass · 0 fail.
 - `npx vitest run test/worker/morningCards.test.ts test/worker/night.test.ts`(분필 윤곽 유지) — 전체 실행에 포함돼 초록.
 - 인수 기준: errand 모듈 3·placeart 3파일·errand.mjs 부재, `grep -c placeart package.json` 0, `data-(errand|record)` 가 src 에 0건, hostLine 의 errand/witness/trace 키 0, `id: "errand"` 0, `rules.errand|witness|trace` 0, `PHASE_DEFS.dayAnnounce.next = discussion`. `git grep '"errand"'` 필터 결과 0(남은 문자열은 LEGACY 표시와 없음(0건) 단언뿐).
-- 위생: 변경 파일의 금지어(`torder|티오더|조직|회사|~/project`) git grep 결과 0.
+- 위생: 변경 파일의 금지어 git grep 결과 0.
 
 ## Deviations from Plan
 

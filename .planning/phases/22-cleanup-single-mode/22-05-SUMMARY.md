@@ -92,7 +92,7 @@ commits: 1
 | Task 3 verify: `npx vitest run`(전체) | 264 파일 통과·6 건너뜀, 7913 통과(e2eContract 한 건을 고친 뒤 그 파일 93 통과를 따로 확인)·실패 0 |
 | `node --test scripts/*.test.mjs scripts/e2e/*.test.mjs` | pass 651 / fail 0 (22-04 의 662 에서 마을 판정·TOWN_E2E 시험 11건이 빠짐) |
 | 수용 기준 | mapTown·zones·town.ts·cutaway·town.mjs 없음 / `MODE_MAPS` 0 / protocol·maps 의 `"town"` 0 / setup 의 lockModeMaps 0 / `TOWN_PLATE_FAR` 0 / plaza.ts 의 `PLAZA_SPAWNS` 0 / flows 의 `id: "town-` 0 / `mapTown\|cutaway` 0 / `"town"` 잔여(legacy 제외) 0 |
-| 위생: `git grep -nIiE "torder\|티오더\|조직\|회사\|~/project"` (변경 파일) | 결과 없음 |
+| 위생: 저장소 위생 금지어 git grep (변경 파일) | 결과 없음 |
 
 워커 전체 실행의 부하 flake 는 이번에 나타나지 않았다.
 

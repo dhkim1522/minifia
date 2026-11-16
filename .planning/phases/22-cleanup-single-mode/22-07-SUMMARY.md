@@ -71,7 +71,7 @@ commits: 2
 | `npm run typecheck` + `npx vitest run test/client/{hostRail,lobby,resultScreen,mapChip}.test.tsx` (Task 2 verify) | typecheck exit 0, 4파일 통과(client 전체 76파일 2618+ 통과) |
 | `npx vitest run` + `node --test scripts/*.test.mjs scripts/e2e/*.test.mjs` + `npm run typecheck` (Task 3 verify) | vitest 244 파일 통과 6 건너뜀(7289 통과·261 건너뜀, 실패 0), node:test 614 통과 0 실패, typecheck exit 0. 이번 실행에서는 worker 부하 flake 가 없었다 |
 | 인수 기준 grep | `mode.ts` 없음, `rulesetOf\|modeOf\|GAME_MODES\|DEFAULT_MODE\|GameMode\|modePick` shared·worker 0건(HEAD 77), src 0건, test 0건, scripts 0건, 전체(src shared worker scripts test) 0건, `export const RULES` 1건, rematch.ts `"mode"` 0건, `pickModeViaRail\|pickModeViaUi\|openExtended` scripts 0건(HEAD 29), flows.mjs `id: "mode-` 0건(HEAD 4), hostRail.test `data-mode` 2건 |
-| 사적 레포 위생 `git grep -nIiE "torder\|티오더\|조직\|회사\|~/project"` (변경 파일) | 0건 |
+| 사적 레포 위생 저장소 위생 금지어 git grep (변경 파일) | 0건 |
 
 ## 남은 `"basic"`·`"extended"` 문자열
 
