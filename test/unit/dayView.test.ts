@@ -92,94 +92,50 @@ describe("pointsTally — 지목 집계(공개 정보만)", () => {
   });
 });
 
-describe("dayEvents — 지목 차이 (DAY-04)", () => {
-  it("순차 지목(day.turn 있음)의 새 지목은 vote 줄 '민준 → 도윤' 한 줄만 만든다 (위 알림 재료는 22-10 에서 없어졌다)", () => {
+describe("dayEvents — 지목 차이 (DAY-04, 22-10: 지목 줄은 채팅에 쌓이지 않는다)", () => {
+  it("순차 지목의 새 지목은 채팅 줄도 위 알림도 만들지 않는다 — 누가 누구를 골랐는지 흔적이 남지 않는다 (UI-SPEC C '끝')", () => {
     const withTurn = (pairs: [number, number][]) => nominationOf(pairs, { day: { turn: { order: [0, 1, 2, 3, 4], i: 1, endsAt: 8_000 } } });
     const events = dayEvents(withTurn([]), withTurn([[1, 2]]));
-    same(events.lines, [{ kind: "vote", text: "민준 → 도윤" }]);
+    same(events.lines, []);
     expect("toasts" in events).toBe(false);
     same(events.announces, []);
     same(events.fx, []);
   });
 
-  it("같은 대상을 다시 보낸 것(변화 없음)은 줄이 없다", () => {
-    const events = dayEvents(nominationOf([[1, 2]]), nominationOf([[1, 2]]));
-    same(events.lines, []);
+  it("day.turn 이 없는 지목 view 쌍·여러 표·바뀐 표도 줄이 없다", () => {
+    same(dayEvents(nominationOf([]), nominationOf([[3, 2], [1, 2]])).lines, []);
+    same(dayEvents(nominationOf([[1, 2]]), nominationOf([[1, 3]])).lines, []);
+    same(dayEvents(nominationOf([[1, 2]]), nominationOf([[1, 2]])).lines, []);
   });
 
-  it("이전 view 가 없으면(첫 스냅샷·재접속) 이벤트가 없다", () => {
+  it("이전 view 가 없으면(첫 스냅샷·재접속)·reset 이면 이벤트가 없다", () => {
     const events = dayEvents(null, nominationOf([[1, 2]]));
-    same(events.lines, []);
-    same(events.announces, []);
-    same(events.fx, []);
-  });
-
-  it("reset 옵션(epoch 가 바뀐 첫 스냅샷)도 이벤트가 없다", () => {
-    const events = dayEvents(nominationOf([]), nominationOf([[1, 2], [3, 2]]), { reset: true });
-    same(events.lines, []);
-  });
-
-  it("닉네임에 HTML 이 있어도 문자열 그대로 둔다", () => {
-    const players = [pl(0, "서연"), pl(1, "<b>민준</b>"), pl(2, "도윤"), pl(3, "지호"), pl(4, "하윤")];
-    const events = dayEvents(nominationOf([], { players }), nominationOf([[1, 2]], { players }));
-    expect(events.lines[0]!.text).toBe("<b>민준</b> → 도윤");
-  });
-
-  it("앉은 사람 목록에 없는 seat 의 지목은 vote 줄 없이 건너뛴다(득표 집계에는 남는다)", () => {
-    const events = dayEvents(nominationOf([]), nominationOf([[9, 2]]));
-    same(events.lines.filter((l) => l.kind === "vote"), []);
-  });
-
-  it("지목 줄 순서는 좌석 오름차순(서버 view 순서와 무관)", () => {
-    const events = dayEvents(nominationOf([]), nominationOf([[3, 2], [1, 2]]));
-    same(events.lines.filter((l) => l.kind === "vote").map((l) => l.text), ["민준 → 도윤", "지호 → 도윤"]);
+    same([events.lines, events.announces, events.fx], [[], [], []]);
+    same(dayEvents(nominationOf([]), nominationOf([[1, 2], [3, 2]]), { reset: true }).lines, []);
   });
 });
 
-describe("순차 지목 채팅 줄 (0063-1)", () => {
+describe("순차 지목에는 채팅 시스템 줄이 없다 (0063-1 → 22-10)", () => {
   const ORDER = [0, 1, 2, 3, 4];
   const turnView = (turn: PickTurnView, pairs: [number, number][] = [], opts: ViewOpts = {}): RoomView =>
     nominationOf(pairs, { ...opts, day: { turn, ...opts.day } });
   const running = (i: number, extra: Partial<PickTurnView> = {}): PickTurnView => ({ order: ORDER, i, endsAt: 8_000, ...extra });
 
-  it("선두가 새로 생겨도 '앞서요' 줄이 없다", () => {
-    const events = dayEvents(turnView(running(1, { doneAt: 1 }), []), turnView(running(1, { doneAt: 1 }), [[1, 2]]));
-    same(events.lines, [{ kind: "vote", text: "민준 → 도윤" }]);
+  it("선두·과반이 생겨도 줄이 없다", () => {
+    same(dayEvents(turnView(running(1, { doneAt: 1 }), []), turnView(running(1, { doneAt: 1 }), [[1, 2]])).lines, []);
+    same(dayEvents(turnView(running(4), [[1, 2], [3, 2]]), turnView(running(4, { doneAt: 2 }), [[1, 2], [3, 2], [4, 2]])).lines, []);
   });
 
-  it("과반에 닿아도 '과반' 줄이 없다", () => {
-    const events = dayEvents(turnView(running(4), [[1, 2], [3, 2]]), turnView(running(4, { doneAt: 2 }), [[1, 2], [3, 2], [4, 2]]));
-    same(events.lines, [{ kind: "vote", text: "하윤 → 도윤" }]);
-    expect(events.lines.some((l) => l.kind === "hot")).toBe(false);
+  it("차례가 새로 기권이 되어도 '{이름} · 기권' 줄이 없다(위 한 줄이 말한다)", () => {
+    same(dayEvents(turnView(running(2)), turnView(running(2, { doneAt: 8_000, skip: true }))).lines, []);
   });
 
-  it("지금 차례가 새로 기권이 되면 vote 줄 '{이름} · 기권'", () => {
-    const events = dayEvents(turnView(running(2)), turnView(running(2, { doneAt: 8_000, skip: true })));
-    same(events.lines, [{ kind: "vote", text: "도윤 · 기권" }]);
+  it("차례 확정(지목)에도 줄이 없다", () => {
+    same(dayEvents(turnView(running(2)), turnView(running(2, { doneAt: 3_000 }), [[2, 3]])).lines, []);
   });
 
-  it("이미 기권인 차례가 다시 와도(같은 차례) 줄을 반복하지 않는다", () => {
-    const skipped = running(2, { doneAt: 8_000, skip: true });
-    same(dayEvents(turnView(skipped), turnView(skipped)).lines, []);
-  });
-
-  it("기권이 아닌 확정(지목)에는 기권 줄이 없다", () => {
-    const events = dayEvents(turnView(running(2)), turnView(running(2, { doneAt: 3_000 }), [[2, 3]]));
-    same(events.lines, [{ kind: "vote", text: "도윤 → 지호" }]);
-  });
-
-  it("모이기 → 첫 차례 같은 단계 안 이동은 줄이 없다", () => {
-    same(dayEvents(turnView({ order: ORDER, i: -1 }), turnView(running(0))).lines, []);
-  });
-
-  it("토론 → 지목은 시스템 줄 '투표 시작'", () => {
-    same(dayEvents(viewOf("discussion"), turnView({ order: ORDER, i: -1 })).lines, [{ kind: "system", text: "투표 시작" }]);
-  });
-
-  it("첫 스냅샷·reset 은 기권 줄도 만들지 않는다", () => {
-    const skipped = turnView(running(2, { doneAt: 8_000, skip: true }));
-    same(dayEvents(null, skipped).lines, []);
-    same(dayEvents(turnView(running(2)), skipped, { reset: true }).lines, []);
+  it("토론 → 지목은 시스템 줄 '투표 시작' 도 없다", () => {
+    same(dayEvents(viewOf("discussion"), turnView({ order: ORDER, i: -1 })).lines, []);
   });
 
   it("role·spectate 를 넣어도 줄이 같다", () => {
@@ -219,10 +175,17 @@ const executionView = (yes: number, no: number, passed: boolean, extra: ViewOpts
   viewOf("execution", { ...extra, day: { candidate: 3, voteLog: VOTE_LOG, verdict: { yes, no, passed }, ...extra.day } });
 
 describe("dayEvents — 단계 진입 줄 (DAY-05·06)", () => {
-  it("낮 토론 → 지목: system '투표 시작'", () => {
-    const events = dayEvents(viewOf("discussion"), nominationOf([]));
-    same(events.lines, [{ kind: "system", text: "투표 시작" }]);
+  it("낮 토론 → 찬반(22-10): 시작 줄·알림 없음", () => {
+    const events = dayEvents(viewOf("discussion"), verdictView());
+    same(events.lines, []);
     same(events.announces, []);
+  });
+
+  it("찬반 → 지목(통과): 줄도 알림도 없다 — 띠 문구가 바뀌고 모이기가 시작될 뿐이다 (P22-4)", () => {
+    const events = dayEvents(verdictView(), nominationOf([]));
+    same(events.lines, []);
+    same(events.announces, []);
+    same(events.fx, []);
   });
 
   it("지목 → 최후 변론: hot '{이름} 님 {N}표 · 최후 변론' 의 N 은 그날 voteLog 에서 변론자를 가리킨 수 (가정 A2)", () => {
@@ -238,10 +201,6 @@ describe("dayEvents — 단계 진입 줄 (DAY-05·06)", () => {
 
   it("변론자 정보가 없으면 줄을 만들지 않는다", () => {
     same(dayEvents(nominationOf([]), viewOf("defense")).lines, []);
-  });
-
-  it("최후 변론 → 찬반: system '찬반 시작'", () => {
-    same(dayEvents(defenseView(), verdictView()).lines, [{ kind: "system", text: "찬반 시작" }]);
   });
 
   it("낮 시작(U-5 띠가 대신 말한다): system '{N}일차' 줄은 그대로, 36px '낮이 되었습니다' 알림은 없다", () => {
@@ -440,19 +399,15 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     same(hdr(viewOf("discussion")), { title: "토론", hint: "이야기하며 마피아를 찾아요" });
   });
 
-  it("지목: 순차 진행의 안내 (UI-SPEC Copywriting)", () => {
+  it("지목: 제목 '지목'뿐 — 안내 줄이 없다(띠가 '차례대로 한 명을 골라요' 를 말한다, P22-1)", () => {
     const withTurn = (turn: PickTurnView, opts: ViewOpts = {}) => nominationOf([], { ...opts, day: { turn } });
     const order = [0, 1, 2, 3, 4];
-    // 모이는 중
-    same(hdr(withTurn({ order, i: -1 })), { title: "투표", hint: "모이는 중" });
-    // 내 차례(seat 0 이 i 0)
-    same(hdr(withTurn({ order, i: 0, endsAt: 8_000 })), { title: "투표", hint: "의심되는 사람을 눌러요" });
-    // 남의 차례·확정 뒤 사이·끝 알림은 제목만
-    same(hdr(withTurn({ order, i: 1, endsAt: 8_000 })), { title: "투표" });
-    same(hdr(withTurn({ order, i: 0, endsAt: 8_000, doneAt: 3_000 })), { title: "투표" });
-    same(hdr(withTurn({ order, i: 5 })), { title: "투표" });
-    // day.turn 이 없으면(기본판 동시 투표) 항상 안내 한 줄
-    same(hdr(nominationOf([])), { title: "투표", hint: "의심되는 사람을 눌러요" });
+    same(hdr(withTurn({ order, i: -1 })), { title: "지목" });
+    same(hdr(withTurn({ order, i: 0, endsAt: 8_000 })), { title: "지목" });
+    same(hdr(withTurn({ order, i: 1, endsAt: 8_000 })), { title: "지목" });
+    same(hdr(withTurn({ order, i: 0, endsAt: 8_000, doneAt: 3_000 })), { title: "지목" });
+    same(hdr(withTurn({ order, i: 5 })), { title: "지목" });
+    same(hdr(nominationOf([])), { title: "지목" });
   });
 
   it("지목 안내는 역할·spectate 를 읽지 않는다", () => {
@@ -466,9 +421,9 @@ describe("headerFor — 단계표의 제목·안내 (UI-SPEC)", () => {
     same(hdr(defenseView({ mySeat: 3 })), { title: "최후 변론", hint: "해명할 시간이에요" });
   });
 
-  it("찬반: 남은 '{닉네임} 님을 처형할까요?', 변론자 본인 '결과를 기다려요'", () => {
-    same(hdr(verdictView()), { title: "찬반", hint: "지호 님을 처형할까요?" });
-    same(hdr(verdictView({ mySeat: 3 })), { title: "찬반", hint: "결과를 기다려요" });
+  it("찬반: 제목 '찬반'뿐 — 후보가 없어 이름이 든 안내 줄이 없고 누구 시점이든 같다 (P22-1, D-23)", () => {
+    same(hdr(verdictView()), { title: "찬반" });
+    same(hdr(verdictView({ mySeat: 3 })), { title: "찬반" });
   });
 
   it("처형·아침은 제목만, 역할이 없는 산 사람의 밤은 시민 안내", () => {
@@ -781,20 +736,20 @@ describe("dayEvents — 마지막 3인 진입 (09.1.1-15)", () => {
 
 describe("기본판 투표 (결정 0072, U-1·U-4·U-5)", () => {
   // 산 다섯 명, day.turn 없음 = 동시 투표
-  it("제목은 '투표', 시작 줄은 '투표 시작'", () => {
-    same(headerFor(nominationOf([])), { title: "투표", hint: "의심되는 사람을 눌러요" });
+  it("제목은 '지목', 안내 줄·시작 줄은 없다", () => {
+    same(headerFor(nominationOf([])), { title: "지목" });
     const events = dayEvents(viewOf("discussion"), nominationOf([]));
-    same(events.lines, [{ kind: "system", text: "투표 시작" }]);
+    same(events.lines, []);
   });
 
   it("유령은 같은 제목에 기존 유령 안내", () => {
     const players = NAMES.map((name, seat) => pl(seat, name, seat !== 0));
-    same(headerFor(nominationOf([], { players })), { title: "투표", hint: "모두의 직업이 보여요" });
+    same(headerFor(nominationOf([], { players })), { title: "지목", hint: "모두의 직업이 보여요" });
   });
 
-  it("day.turn 이 있으면 기존 순차 규칙(제목만 '투표')", () => {
+  it("day.turn 이 있어도 제목만 '지목'", () => {
     const withTurn = nominationOf([], { day: { turn: { order: [0, 1, 2, 3, 4], i: 1, endsAt: 8_000 } } });
-    same(headerFor(withTurn), { title: "투표" });
+    same(headerFor(withTurn), { title: "지목" });
   });
 
   it("집계: 선두·과반·majority (산 5명 → 과반 3)", () => {
@@ -812,31 +767,15 @@ describe("기본판 투표 (결정 0072, U-1·U-4·U-5)", () => {
     expect(tie.sure).toBeUndefined();
   });
 
-  it("새 표마다 vote 줄 한 건 — 위 알림 재료(toasts)와 '(바꿈)' 은 없다 (22-10, D-12)", () => {
+  it("새 표가 와도 채팅 줄·위 알림 재료가 없다 (22-10, D-12)", () => {
     const first = dayEvents(nominationOf([]), nominationOf([[1, 2]]));
-    same(first.lines.filter((l) => l.kind === "vote"), [{ kind: "vote", text: "민준 → 도윤" }]);
+    same(first.lines, []);
     expect("toasts" in first).toBe(false);
-    const moved = dayEvents(nominationOf([[1, 2]]), nominationOf([[1, 3]]));
-    same(moved.lines.filter((l) => l.kind === "vote"), [{ kind: "vote", text: "민준 → 지호" }]);
-  });
-
-  it("한 번에 여러 표가 생기면 좌석 오름차순으로 vote 줄", () => {
-    const events = dayEvents(nominationOf([]), nominationOf([[3, 2], [1, 2]]));
-    same(events.lines.filter((l) => l.kind === "vote").map((l) => l.text), ["민준 → 도윤", "지호 → 도윤"]);
   });
 
   it("선두·과반이 새로 서도 hot 줄('앞서요'·'과반')이 없다 — day.turn 이 없어도 같다 (동시 투표 화면 삭제)", () => {
-    const lead = dayEvents(nominationOf([]), nominationOf([[1, 2]]));
-    same(lead.lines.filter((l) => l.kind === "hot"), []);
-    const major = dayEvents(nominationOf([[1, 2], [3, 2]]), nominationOf([[1, 2], [3, 2], [4, 2]]));
-    same(major.lines.filter((l) => l.kind === "hot"), []);
-  });
-
-  it("prev 가 null 이거나 reset 이면 줄 없음", () => {
-    const first = dayEvents(null, nominationOf([[1, 2], [3, 2], [4, 2]]));
-    same(first.lines, []);
-    const reset = dayEvents(nominationOf([]), nominationOf([[1, 2], [3, 2], [4, 2]]), { reset: true });
-    same(reset.lines, []);
+    same(dayEvents(nominationOf([]), nominationOf([[1, 2]])).lines, []);
+    same(dayEvents(nominationOf([[1, 2], [3, 2]]), nominationOf([[1, 2], [3, 2], [4, 2]])).lines, []);
   });
 
   it("turn 이 있는 view 쌍에서는 선두·과반 hot 줄이 없다 (순차 M-4)", () => {
@@ -864,5 +803,36 @@ describe("headerFor — 단계 제목 (22-04: 원인 흐름 제목을 지웠다,
   it("그 밖의 단계 제목은 그대로다", () => {
     same(headerFor(viewOf("discussion")), { title: "토론", hint: "이야기하며 마피아를 찾아요" });
     same(headerFor(viewOf("night")).title, "밤");
+  });
+});
+
+describe("처형 없음 알림 한 가지 — 찬반 부결·지목 동점·0표 (P22-4, 22-10)", () => {
+  const night = (reason: "rejected" | "tie" | "noVotes") => viewOf("night", { day: { noExecution: { reason } } });
+  const ONE = [{ text: "처형 없음", at: 0, ms: 1400 }];
+
+  it("찬반 → 밤(부결, reason rejected): 큰 글 '처형 없음' 1.4초 한 가지", () => {
+    const events = dayEvents(verdictView(), night("rejected"));
+    same(events.announces, ONE);
+    same(events.lines, [{ kind: "system", text: "처형 없음" }]);
+    same(events.fx, []);
+  });
+
+  it("지목 → 밤(동점·0표)도 같은 알림 한 가지 — 이유별로 다른 문구가 없다", () => {
+    for (const reason of ["tie", "noVotes"] as const) {
+      const events = dayEvents(nominationOf([[0, 1], [1, 0]]), night(reason));
+      same(events.announces, ONE);
+      same(events.lines, [{ kind: "system", text: "처형 없음" }]);
+    }
+    const a = dayEvents(verdictView(), night("rejected"));
+    const b = dayEvents(nominationOf([]), night("tie"));
+    same(a.announces, b.announces);
+  });
+
+  it("찬반 → 지목(통과)에는 알림이 없다", () => {
+    same(dayEvents(verdictView(), nominationOf([])).announces, []);
+  });
+
+  it("이유가 없는 밤(다른 경로)에는 알림이 없다", () => {
+    same(dayEvents(verdictView(), viewOf("night")).announces, []);
   });
 });

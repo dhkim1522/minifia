@@ -222,23 +222,24 @@ describe("지목 화면 — 채팅 줄·위 알림 없음 (E2 #9 → 09.1)", () 
   const sysLines = (c: ParentNode, kind: "vote" | "hot"): string[] =>
     [...c.querySelectorAll(`.mv-chat__sys.is-${kind}`)].map((el) => el.textContent ?? "");
 
-  it("지목해도 TopToast 가 뜨지 않는다(09.1): 채팅 vote 줄 '영희 → 서준' 만 바로 남는다", () => {
+  it("지목해도 TopToast 도 채팅 줄도 없다(22-10): 누가 누구를 골랐는지는 위 한 줄·핀·손가락만 보인다", () => {
     const m = mount(makeView());
     m.show(makeView({ points: [[1, 2]] }));
-    expect(sysLines(m.container, "vote")).toEqual(["영희 → 서준"]);
+    expect(sysLines(m.container, "vote")).toEqual([]);
     advance(2000);
     expect(toastText(m.container)).toBe("");
     expect(m.container.querySelector(".mv-toast.is-on")).toBeNull();
   });
 
-  it("여러 지목이 겹쳐도 알림은 없고 채팅 줄만 쌓인다 — '(바꿈)'·합친 이름도 없다", () => {
+  it("여러 지목이 겹쳐도 알림도 채팅 줄도 없다 — '(바꿈)'·합친 이름도 없다", () => {
     const m = mount(makeView());
     m.show(makeView({ points: [[1, 2]] }));
     advance(100);
     m.show(makeView({ points: [[1, 2], [3, 2]] }));
     advance(2000);
     expect(toastText(m.container)).toBe("");
-    expect(sysLines(m.container, "vote")).toEqual(["영희 → 서준", "지아 → 서준"]);
+    expect(sysLines(m.container, "vote")).toEqual([]);
+    expect(logText(m.container)).not.toContain("→");
     expect(logText(m.container)).not.toContain("바꿈");
   });
 
@@ -254,10 +255,10 @@ describe("지목 화면 — 채팅 줄·위 알림 없음 (E2 #9 → 09.1)", () 
     expect(toastText(m.container)).toBe("지금은 고를 수 없어요");
   });
 
-  it("지목이 시작되면(낮 토론 → 지목) 채팅 system 줄 '투표 시작' 이 남는다", () => {
+  it("지목이 시작돼도(낮 토론 → 지목) 채팅 system 줄이 없다 — '투표 시작' 도 없다(22-10)", () => {
     const m = mount(makeView({ phase: "discussion" }));
     m.show(makeView());
-    expect(logText(m.container)).toContain("투표 시작");
+    expect(logText(m.container)).not.toContain("투표");
     expect(sysLines(m.container, "hot")).toEqual([]);
   });
 
@@ -268,7 +269,7 @@ describe("지목 화면 — 채팅 줄·위 알림 없음 (E2 #9 → 09.1)", () 
     expect(sysLines(m.container, "hot")).toEqual([]);
     expect(logText(m.container)).not.toContain("앞서요");
     expect(logText(m.container)).not.toContain("과반");
-    expect(sysLines(m.container, "vote")).toEqual(["영희 → 서준", "지아 → 서준", "도윤 → 서준"]);
+    expect(sysLines(m.container, "vote")).toEqual([]);
   });
 
   it("재접속·새로 고침 첫 화면(직전 view 없음): 배지는 상태로 바로 보이고(선두 표시는 없다) 알림·채팅 줄은 새로 만들지 않는다", () => {
@@ -293,7 +294,7 @@ describe("지목 화면 — 채팅 줄·위 알림 없음 (E2 #9 → 09.1)", () 
     const nicknames = ["민수", "<b>영희</b>", "서준", "지아", "도윤"];
     const m = mount(makeView({ nicknames }));
     m.show(makeView({ nicknames, points: [[1, 2]] }));
-    expect(sysLines(m.container, "vote")).toEqual(["<b>영희</b> → 서준"]);
+    expect(sysLines(m.container, "vote")).toEqual([]);
     expect(m.container.querySelector("[data-chat-log] b")).toBeNull();
   });
 });
@@ -421,19 +422,15 @@ describe("지목 화면 — 내 차례에만 이름표 버튼·계속 깜빡임 
     }
   });
 
-  it("헤더 안내: 모이는 중 '모이는 중' 이 접힌 뒤 내 차례가 시작되면 '의심되는 사람을 눌러요' 가 다시 보였다 2.5초 뒤 접힌다", () => {
+  it("헤더: 제목 '지목'뿐 — 모이는 중·내 차례 어디서도 안내 줄 글이 없다(띠가 말한다, 22-10)", () => {
     const m = mount(makeView({ turn: { i: -1 } }));
-    const hint = () => m.container.querySelector(".mv-phase__hint") as HTMLElement;
-    expect(hint().textContent).toBe("모이는 중");
-    advance(2500);
-    expect(hint().classList.contains("is-folded")).toBe(true);
+    const hintText = () => m.container.querySelector(".mv-phase__hint")?.textContent ?? "";
+    expect(m.container.querySelector(".mv-phase__title")?.textContent).toBe("지목");
+    expect(hintText()).toBe("");
     m.show(makeView({ turn: { i: 0 } }));
-    expect(hint().textContent).toBe("의심되는 사람을 눌러요");
-    expect(hint().classList.contains("is-folded")).toBe(false);
-    advance(2499);
-    expect(hint().classList.contains("is-folded")).toBe(false);
-    advance(1);
-    expect(hint().classList.contains("is-folded")).toBe(true);
+    expect(hintText()).toBe("");
+    advance(2500);
+    expect(hintText()).toBe("");
   });
 
   it("어둡게 막 .mf-game__dim: 모이기·차례·확정 동안 on, 끝 알림과 다른 단계는 off, 누를 수 없고 읽히지 않는다", () => {

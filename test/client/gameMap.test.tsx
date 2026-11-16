@@ -1125,7 +1125,7 @@ describe("GameMap — 순차 지목 이름표 (22-10, D-12)", () => {
     expect(under.querySelector(".mf-game__dim")?.getAttribute("data-dim")).toBe("on");
   });
 
-  it("표마다 위 알림은 없고 채팅 vote 줄만 쌓인다 — 새 표가 와도 TopToast 가 뜨지 않는다", () => {
+  it("표마다 위 알림도 채팅 줄도 없다 — 새 표가 와도 TopToast 가 뜨지 않는다", () => {
     const m = mount(makeView({ phase: "discussion" }));
     m.show(voteView());
     expect(toastText(m.container)).toBe("");
@@ -1134,8 +1134,7 @@ describe("GameMap — 순차 지목 이름표 (22-10, D-12)", () => {
     m.show(voteView([[1, 2], [3, 2]], { i: 3 }));
     expect(toastText(m.container)).toBe("");
     const log = m.container.querySelector("[data-chat-log]")?.textContent ?? "";
-    expect(log).toContain("영희 → 서준");
-    expect(log).toContain("지아 → 서준");
+    expect(log).not.toContain("→"); // 22-10: 지목 줄은 채팅에 쌓이지 않는다
   });
 
   it("재접속 첫 스냅샷은 위 알림·채팅 줄 없이 지금 표를 바로 그린다", () => {
@@ -1145,12 +1144,12 @@ describe("GameMap — 순차 지목 이름표 (22-10, D-12)", () => {
     expect(tag(2)).toEqual({ mine: true });
   });
 
-  it("닉네임의 HTML 은 채팅 줄에서 글자 그대로다", () => {
+  it("닉네임의 HTML 은 어디서도 요소가 되지 않는다", () => {
     const nicknames = ["민수", "<b>영희</b>", "서준", "지아"];
     const m = mount(makeView({ phase: "discussion", nicknames }));
     m.show(voteView([], { nicknames, i: 2 }));
     m.show(voteView([[1, 2]], { nicknames, i: 3 }));
-    expect(m.container.querySelector("[data-chat-log]")?.textContent).toContain("<b>영희</b> → 서준");
+    expect(m.container.querySelector("[data-turn-block]")?.textContent).not.toContain("<b>영희</b> 님이"); // 위 한 줄은 글자로만(차례 알약)
     expect(m.container.querySelector("[data-chat-log] b")).toBeNull();
   });
 

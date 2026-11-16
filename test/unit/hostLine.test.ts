@@ -100,14 +100,14 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     ["낮 시작 유령", { phase: "dayAnnounce", ghost: true }, "지켜봐 주세요", "dayAnnounce.ghost"],
     ["토론 산 사람", { phase: "discussion" }, "의심 가는 사람을 이야기해 주세요", "discussion.act"],
     ["토론 유령", { phase: "discussion", ghost: true }, "유령끼리 이야기할 수 있습니다", "discussion.ghost"],
-    ["투표 산 사람", { phase: "nomination" }, "처형할 사람의 이름표를 눌러 주세요", "nomination.act"],
-    ["투표 유령", { phase: "nomination", ghost: true }, "지켜봐 주세요", "nomination.ghost"],
+    ["지목 산 사람", { phase: "nomination" }, "차례대로 한 명을 골라요", "nomination.act"],
+    ["지목 유령", { phase: "nomination", ghost: true }, "지켜봐 주세요", "nomination.ghost"],
     ["변론 본인", { phase: "defense", candidate: 0 }, "마지막 말과 유언을 남겨 주세요", "defense.act"],
     ["변론 남", { phase: "defense", candidate: 1 }, "변론을 들어 주세요", "defense.wait"],
     ["변론 유령", { phase: "defense", candidate: 1, ghost: true }, "변론을 지켜봐 주세요", "defense.ghost"],
-    ["찬반 변론자 아닌 산 사람", { phase: "verdict", candidate: 1 }, "찬성 또는 반대를 눌러 주세요", "verdict.act"],
-    ["찬반 변론자 본인", { phase: "verdict", candidate: 0 }, "결과를 기다려 주세요", "verdict.wait"],
-    ["찬반 유령", { phase: "verdict", candidate: 1, ghost: true }, "지켜봐 주세요", "verdict.ghost"],
+    ["찬반 산 사람", { phase: "verdict" }, "오늘 처형할까요?", "verdict.act"],
+    ["찬반 산 사람(투표 전·후 같음)", { phase: "verdict", noise: true }, "오늘 처형할까요?", "verdict.act"],
+    ["찬반 유령", { phase: "verdict", ghost: true }, "지켜봐 주세요", "verdict.ghost"],
     ["처형 통과", { phase: "execution", candidate: 1, passed: true }, "", "execution.passed"],
     ["처형 통과 유령(같은 문장)", { phase: "execution", candidate: 1, passed: true, ghost: true }, "", "execution.passed"],
     ["처형 부결", { phase: "execution", candidate: 1, passed: false }, "", "execution.failed"],
@@ -138,7 +138,7 @@ describe("사회자 문구 표 (D-03, UI-SPEC)", () => {
     expect(hostLineOf(named)).toBe("변론을 들어 주세요");
     expect(hostLineOf(makeView({ phase: "defense", ghost: true }))).toBe("변론을 지켜봐 주세요");
     expect(hostLineOf(makeView({ phase: "defense", candidate: 9 }))).toBe("변론을 들어 주세요");
-    expect(hostLineOf(makeView({ phase: "verdict", candidate: 9 }))).toBe("찬성 또는 반대를 눌러 주세요");
+    expect(hostLineOf(makeView({ phase: "verdict", candidate: 9 }))).toBe("오늘 처형할까요?");
     expect(hostLineOf(makeView({ phase: "execution", passed: true }))).toBe("");
   });
 
@@ -286,10 +286,9 @@ describe("빛남 대상 callTargetsOf (HOST-03·04)", () => {
     expect(callTargetsOf(makeView({ phase: "defense", candidate: 1, ghost: true }))).toBeNull();
   });
 
-  it("찬반: 변론자 아닌 산 사람 → verdict, 변론자 본인·유령 → null", () => {
-    expect(callTargetsOf(makeView({ phase: "verdict", candidate: 1 }))).toEqual(tool("verdict"));
-    expect(callTargetsOf(makeView({ phase: "verdict", candidate: 0 }))).toBeNull();
-    expect(callTargetsOf(makeView({ phase: "verdict", candidate: 1, ghost: true }))).toBeNull();
+  it("찬반: 산 사람 전원 → verdict(후보 개념 없음), 유령 → null", () => {
+    for (const seat of [0, 1, 3]) expect(callTargetsOf(makeView({ phase: "verdict", seat }))).toEqual(tool("verdict"));
+    expect(callTargetsOf(makeView({ phase: "verdict", ghost: true }))).toBeNull();
   });
 
   it("밤: 산 마피아·경찰·의사·시민 모두 나를 포함한 산 사람 전원(네 시점 같음), 유령 → null (D-05)", () => {
@@ -521,5 +520,29 @@ describe("사회자 줄은 판 종류를 읽지 않는다 (19-02, E-3, 22-07: �
     const code = src.split("\n").filter((line) => !line.trimStart().startsWith("//")).join("\n");
     expect(/\bview\.mode\b/.test(code)).toBe(false);
     expect(/\bRULES\b/.test(code)).toBe(false);
+  });
+});
+
+describe("찬반·지목 띠 문장 (22-10, P22-1·D-23)", () => {
+  it("문구: 찬반 '오늘 처형할까요?'·지목 '차례대로 한 명을 골라요'·유령 '지켜봐 주세요', verdict.wait 키는 없다", () => {
+    expect(HOST_LINES["verdict.act"]).toBe("오늘 처형할까요?");
+    expect(HOST_LINES["verdict.ghost"]).toBe("지켜봐 주세요");
+    expect(HOST_LINES["nomination.act"]).toBe("차례대로 한 명을 골라요");
+    expect(HOST_LINES["nomination.ghost"]).toBe("지켜봐 주세요");
+    expect(Object.keys(HOST_LINES)).not.toContain("verdict.wait");
+  });
+
+  it("공백 포함 19자 이하·마침표 없음", () => {
+    for (const key of ["verdict.act", "verdict.ghost", "nomination.act", "nomination.ghost"] as const) {
+      expect([...HOST_LINES[key]].length, key).toBeLessThanOrEqual(19);
+      expect(HOST_LINES[key], key).not.toMatch(/[.。]/);
+    }
+  });
+
+  it("찬반은 처형 후보 값(day.candidate)을 읽지 않는다 — 누구 시점이든 같은 키", () => {
+    for (const seat of [0, 1, 2]) {
+      expect(hostKeyOf(makeView({ phase: "verdict", seat, candidate: 0 }))).toBe("verdict.act");
+      expect(hostKeyOf(makeView({ phase: "verdict", seat }))).toBe("verdict.act");
+    }
   });
 });

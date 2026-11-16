@@ -40,14 +40,14 @@ describe("verdict 문구 함수 — UI-SPEC 7.2·7.3", () => {
     expect(defenseAnnounce(null)).toBe("내 최후 변론");
     expect(endedAnnounce("citizenWin")).toBe("게임이 끝났습니다. 시민 팀 승리");
     expect(endedAnnounce("mafiaWin")).toBe("게임이 끝났습니다. 마피아 팀 승리");
-    expect(noExecutionPrefix("tie")).toBe("처형 무효. 동률이라 처형하지 않아요. ");
+    expect(noExecutionPrefix("tie")).toBe("처형 없음. ");
+    expect(noExecutionPrefix("rejected")).toBe("처형 없음. ");
   });
 });
 
 describe("noExecutionText · winnerText (D-34, UI-SPEC 7.2)", () => {
-  it("무효 이유 부제 둘(찬반 부결은 처형 단계가 알린다)", () => {
-    expect(noExecutionText("tie")).toBe("동률이라 처형하지 않아요");
-    expect(noExecutionText("noVotes")).toBe("던진 표가 없어요");
+  it("처형 없음은 이유와 무관하게 같은 글 한 가지다 (P22-4, UI-SPEC: 이유를 구별해 보이지 않는다)", () => {
+    for (const reason of ["tie", "noVotes", "rejected"] as const) expect(noExecutionText(reason)).toBe("처형 없음");
   });
   it("승리 배너", () => {
     expect(winnerText("citizenWin")).toEqual({ title: "시민 팀 승리", sub: "마피아가 모두 탈락했어요", announce: "게임이 끝났습니다. 시민 팀 승리" });
