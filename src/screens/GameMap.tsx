@@ -42,6 +42,7 @@ import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, show
 import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
+import { useEarlyCalm } from "../net/earlyCalm";
 import { useBadge, useBadgeFx } from "../net/useBadge";
 import { useChat } from "../net/useChat";
 import { useMyMotion } from "../net/useMyMotion";
@@ -170,6 +171,8 @@ function LegacyMapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { v
   const blocked = blockModeOf(view) !== null;
   const look = useTurnLook(view, offset);
   const { seconds } = useCountdown(blocked ? 0 : (view.phaseEndsAt ?? 0), view.phaseDurationMs ?? 0, offset);
+  // 조기 진행(23-11 P23-23): 단계 마감이 줄어든 단계는 링도 calm. 지목·결선(blocked)은 마감이 아니라 알약·막대 값으로 그리므로 대상이 아니다
+  const early = useEarlyCalm(view);
   // 낮 시작은 링이 없다(2초 알림 단계). 마감이 없는 view 도 링을 그리지 않는다. 지목의 모이는 중·끝 알림, 결선의 앞머리·결과에도 없다
   const timing = blocked ? look !== null && (look.stage === "turn" || look.stage === "done") : view.phase !== "dayAnnounce" && view.phaseEndsAt !== null && view.phaseDurationMs !== null;
   const time = blocked ? (look?.seconds ?? 0) : seconds;
@@ -181,6 +184,7 @@ function LegacyMapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { v
       {...(hintOverride !== undefined ? { hint: hintOverride } : head.hint !== undefined ? { hint: head.hint } : {})}
       showHint={hintOverride !== undefined || hintOn}
       {...(timing ? { time, total } : {})}
+      {...(!blocked && early ? { calm: true } : {})}
       extra={extra}
     />
   );

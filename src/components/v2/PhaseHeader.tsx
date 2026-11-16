@@ -18,6 +18,8 @@ export interface PhaseHeaderProps {
   total?: number;
   /** 시간 링 왼쪽(링이 없으면 오른쪽 끝)에 놓는 버튼 자리. 8페이즈 게임 화면의 [역할 카드] 44×44 (UI-SPEC A2) */
   extra?: ReactNode;
+  /** true 면 링이 경고·진홍 색을 쓰지 않는다(조기 진행 단계, 23-11 P23-23). Timer 의 calm 과 같은 뜻 */
+  calm?: boolean;
   /** 시간대 글자(0083-1). id 는 [data-tod] 값, word 는 단계 이름 앞의 낱말(없으면 null). 안 주면 제목만 */
   tod?: { id: string; word: string | null };
 }
@@ -25,10 +27,10 @@ export interface PhaseHeaderProps {
 const RADIUS = 18;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-export function PhaseHeader({ title, hint, showHint, time, total, extra, tod }: PhaseHeaderProps) {
+export function PhaseHeader({ title, hint, showHint, time, total, extra, tod, calm }: PhaseHeaderProps) {
   const hasTime = time != null && !!total;
   // 색 규칙은 역할 확인 막대 타이머와 같은 timerTone 하나(feedback-4): 10초 놋쇠, 5초 진홍, 단계가 문턱 이하로 짧으면 그 색 없음
-  const tone = hasTime ? timerTone(time * 1000, total * 1000) : "calm";
+  const tone = hasTime && calm !== true ? timerTone(time * 1000, total * 1000) : "calm";
   const urgent = tone === "urgent";
   const frac = hasTime ? Math.max(0, Math.min(1, time / total)) : 0;
   const ring = hasTime ? (

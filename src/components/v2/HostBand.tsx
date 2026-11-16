@@ -5,6 +5,7 @@ import type { SoundView } from "../../audio/useSound";
 import type { RoomView } from "../../../shared/protocol";
 import { hostBandModeOf, hostLineOf, hostTimeOf } from "../../game/hostLine";
 import { timerTone, useCountdown } from "../../net/countdown";
+import { useEarlyCalm } from "../../net/earlyCalm";
 import { SoundButton } from "./SoundButton";
 
 // 사회자 자막 띠 (14-01, HOST-01·03, TOOL-02, UI-SPEC "자막 띠 계약"): 모든 방 화면 헤더 바로 아래 같은 자리·같은 모양의 한 줄.
@@ -21,6 +22,8 @@ export interface HostBandProps {
   cardSeen: boolean;
   /** 소리를 지원하는 환경이면 독에 단추를 둔다 */
   sound?: SoundView | null;
+  /** 연결 번호. 바뀐 첫 프레임(재접속)에는 조기 진행 표시를 켜지 않는다(23-11) */
+  epoch?: number;
 }
 
 /** 화면 헤더(방 틀 본문의 첫 것): 로비·게임 맵·결과의 absolute 헤더, 역할 확인의 absolute 헤더, 배정 바 */
@@ -93,7 +96,7 @@ export function useHostMetrics(rootRef: RefObject<HTMLDivElement | null>, bandRe
   }, [rootRef]);
 }
 
-export function HostBand({ view, offset, cardSeen, sound }: HostBandProps) {
+export function HostBand({ view, offset, cardSeen, sound, epoch }: HostBandProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const bandRef = useRef<HTMLDivElement>(null);
   const line = hostLineOf(view, { cardSeen });
@@ -110,13 +113,15 @@ export function HostBand({ view, offset, cardSeen, sound }: HostBandProps) {
 
   const endsAt = view.phaseEndsAt;
   const durationMs = view.phaseDurationMs;
+  // 조기 진행(P23-23): 이 단계에서 마감이 줄어든 것을 보았으면 data-early — 막대·초 색을 calm 으로 고정한다. 모두에게 같은 공개 값에서만 파생(T-23-42)
+  const early = useEarlyCalm(view, epoch);
   return (
-    <div ref={rootRef} className="mv-host" data-host-band="">
+    <div ref={rootRef} className="mv-host" data-host-band="" {...(early ? { "data-early": "" } : {})}>
       <div ref={bandRef} className={mode === "off" ? "mv-host__band is-off" : "mv-host__band"} {...(mode === "off" ? { "aria-hidden": true } : {})}>
         <p key={`line-${view.phase}`} className={swap ? "mv-host__line is-swap" : "mv-host__line"} data-host-line="" data-guide="" role="status" aria-live="polite" aria-atomic="false">
           {line}
         </p>
-        {showTime && endsAt !== null && durationMs !== null ? <HostTime endsAt={endsAt} durationMs={durationMs} offset={offset} /> : null}
+        {showTime && endsAt !== null && durationMs !== null ? <HostTime endsAt={endsAt} durationMs={durationMs} offset={offset} calm={early} /> : null}
       </div>
       {sound ? (
         <div className="mv-host__dock">
@@ -139,9 +144,10 @@ export function HostDock({ sound }: { sound: SoundView }) {
 }
 
 /** 남은 시간 "{n}초"(올림 초)와 막대. 한 훅 값에서 나온다. 마감이 지나도 서버 시계 기준으로 0 에 머문다. */
-function HostTime({ endsAt, durationMs, offset }: { endsAt: number; durationMs: number; offset: number }) {
+function HostTime({ endsAt, durationMs, offset, calm }: { endsAt: number; durationMs: number; offset: number; calm: boolean }) {
   const { seconds, remainingMs, ratio } = useCountdown(endsAt, durationMs, offset);
-  const tone = timerTone(remainingMs, durationMs);
+  // 단축이 보인 단계는 calm 고정(Timer 의 calm 과 같은 뜻). 막대는 기존 transform 1s linear 전환 그대로 미끄러진다
+  const tone = calm ? "calm" : timerTone(remainingMs, durationMs);
   return (
     <>
       <span className="mv-host__time" data-host-time="" data-tone={tone} role="timer" aria-label={`남은 시간 ${seconds}초`}>

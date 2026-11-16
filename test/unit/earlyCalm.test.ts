@@ -56,8 +56,9 @@ describe("earlyCalmNext 순수 판정", () => {
     expect(run([v("night", 30_000, { round: 1 }), v("night", 1_000, { round: 1 }), v("night", 30_000, { round: 2 })])).toEqual([false, true, false]);
   });
 
-  it("마감이 없는 프레임은 판정하지 않고 값을 건드리지 않는다", () => {
-    expect(run([v("verdict", 30_000), v("verdict", null), v("verdict", 29_000)])).toEqual([false, false, false]);
+  it("마감이 없는 프레임은 판정하지 않고 기억한 마감을 건드리지 않는다", () => {
+    expect(run([v("verdict", 30_000), v("verdict", null), v("verdict", 30_000)])).toEqual([false, false, false]);
+    expect(run([v("verdict", 30_000), v("verdict", null), v("verdict", 29_000)])).toEqual([false, false, true]);
   });
 
   it("연결 번호가 바뀐 첫 프레임에는 켜지지 않는다", () => {

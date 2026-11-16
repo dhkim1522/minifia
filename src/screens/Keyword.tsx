@@ -9,6 +9,7 @@ import { DAY_COPY } from "../game/dayView";
 import { callTargetsOf } from "../game/hostLine";
 import { sinceStartMs } from "../net/cardFace";
 import { timerTone } from "../net/countdown";
+import { useEarlyCalm } from "../net/earlyCalm";
 import { useComposedText } from "../net/useComposedText";
 import { useKeyboardLift } from "../net/useKeyboardLift";
 import { useKeywordAnswer } from "../net/useKeywordAnswer";
@@ -102,7 +103,9 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent }: 
     if (el) answer.setValue(el.value);
   };
 
-  const tone = durationMs === null ? "calm" : timerTone(answer.secondsLeft * 1000, durationMs);
+  // 전원이 내서 마감이 줄어든 단계는 "n초" 도 calm 고정이다(23-11 P23-23) — 마지막 1.5초가 진홍으로 번쩍이지 않게 띠·링과 같은 규칙
+  const early = useEarlyCalm(view);
+  const tone = durationMs === null || early ? "calm" : timerTone(answer.secondsLeft * 1000, durationMs);
   const rootCls = kbOpen ? "mf-root mf-reveal mf-keyword is-kb" : "mf-root mf-reveal mf-keyword";
   const cardCls = ["mf-keyword__card", still && "is-still", kbOpen && "is-compact"].filter(Boolean).join(" ");
 
