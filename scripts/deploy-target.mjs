@@ -83,11 +83,12 @@ export function stripJsonComments(text) {
 }
 
 /**
- * 배포 직전 대상 일치 여부를 판정한다. 네 조건을 각각 문제 문장으로 모은다.
- * @param {{ builtName: unknown, sourceName: unknown, prodUrl: string, previewUrls: unknown }} input
+ * 배포 직전 대상 일치 여부를 판정한다. 네 조건(과 D1 id)을 각각 문제 문장으로 모은다.
+ * d1Databases 는 원본 설정의 d1_databases — database_id 가 없는 항목이 있으면 wrangler deploy 가 원격 D1 을 자동으로 만들 수 있어 멈춘다(23-02, D-19).
+ * @param {{ builtName: unknown, sourceName: unknown, prodUrl: string, previewUrls: unknown, d1Databases?: ReadonlyArray<{ binding?: string, database_id?: string }> }} input
  * @returns {{ ok: boolean, problems: string[] }}
  */
-export function judgeDeployTarget({ builtName, sourceName, prodUrl, previewUrls }) {
+export function judgeDeployTarget({ builtName, sourceName, prodUrl, previewUrls, d1Databases }) {
   const problems = [];
   if (builtName !== WORKER_NAME) {
     problems.push(
@@ -109,6 +110,13 @@ export function judgeDeployTarget({ builtName, sourceName, prodUrl, previewUrls 
   }
   if (previewUrls !== false) {
     problems.push(`wrangler.jsonc 의 preview_urls 가 false 가 아님: ${JSON.stringify(previewUrls)} (결정 0042)`);
+  }
+  for (const db of d1Databases ?? []) {
+    if (typeof db?.database_id !== "string" || db.database_id.trim() === "") {
+      problems.push(
+        `D1 바인딩 ${db?.binding ?? "(이름 없음)"} 의 database_id 가 없음 — 24 배포 첫 단계(개인 계정 확인 → d1 create → id 기입 → 원격 마이그레이션) 전에는 배포하지 않는다`,
+      );
+    }
   }
   return { ok: problems.length === 0, problems };
 }

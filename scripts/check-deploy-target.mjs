@@ -2,6 +2,7 @@
 //   node scripts/check-deploy-target.mjs
 // 실제 배포 입력(.wrangler/deploy/config.json 이 가리키는 dist/worker/wrangler.json)의 name 이
 // deploy-target.mjs 의 WORKER_NAME 이 아니면 wrangler deploy 전에 종료 상태 1 로 멈춘다.
+// 원본 설정의 d1_databases 에 database_id 가 없는 항목이 있어도 멈춘다 — id 없이 배포해 원격 D1 이 자동 생성되는 일을 막는다(23-02, D-19).
 // Node 내장만 쓴다. 경로는 이 파일 기준으로 풀어 실행 위치와 무관하다.
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -24,6 +25,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       sourceName: source.name,
       prodUrl: readFileSync(root("scripts/prod-url.txt"), "utf8"),
       previewUrls: source.preview_urls,
+      d1Databases: source.d1_databases ?? [],
     });
   } catch (err) {
     console.error(`배포 중단 — 배포 대상 설정을 읽지 못함: ${err instanceof Error ? err.message : String(err)}`);
