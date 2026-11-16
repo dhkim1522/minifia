@@ -69,7 +69,7 @@ function makeView(o: Spec): RoomView {
     const inTurn = o.turn.i >= 0 && o.turn.i < order.length;
     day.turn = { order, i: o.turn.i, ...(inTurn ? { endsAt: 1_700_000_008_000 } : {}), ...(o.turn.doneAt !== undefined ? { doneAt: o.turn.doneAt } : {}) };
   }
-  if (o.noise) Object.assign(day, { roles: ["mafia", "police", "citizen"], points: [{ seat: 1, target: 2 }], turn: { i: 0 }, voteLog: [{ seat: 1, target: 2 }] });
+  if (o.noise) Object.assign(day, { roles: ["mafia", "police", "citizen"], points: [{ seat: 1, target: 2 }], voteLog: [{ seat: 1, target: 2 }] });
   const endsAt = o.endsAt === undefined ? 1_700_000_090_000 : o.endsAt;
   const view: Record<string, unknown> = {
     code: "0042",
@@ -389,6 +389,12 @@ const ALLOWED_EXACT: ReadonlySet<string> = new Set([
   "day.verdict",
   "day.verdict.passed",
   "day.morning",
+  // 22-10(P22-17): 순차 지목에서 내 차례를 가르는 공개 값
+  "day.turn",
+  "day.turn.i",
+  "day.turn.order",
+  "day.turn.order[]",
+  "day.turn.doneAt",
 ]);
 /** 18.1-12: 하위 값 허용 접두사는 없다 — 닉네임·아침 결과 문장은 더는 읽지 않는다 */
 const ALLOWED_PREFIX: readonly string[] = [];
@@ -421,7 +427,7 @@ const MATRIX_PHASES: readonly PhaseId[] = ["lobby", "assigning", "roleReveal", "
 function matrixSpecs(): Spec[] {
   const out: Spec[] = [];
   for (const phase of MATRIX_PHASES) {
-    const base: Spec = { phase, candidate: 1, passed: true, morning: { eliminated: 2 } };
+    const base: Spec = { phase, candidate: 1, passed: true, morning: { eliminated: 2 }, ...(phase === "nomination" ? { turn: { i: 0 } } : {}) };
     for (const role of ["mafia", "police", "doctor", "citizen"] as RoleId[]) out.push({ ...base, role });
     out.push({ ...base, ghost: true });
     out.push({ ...base, host: true });
@@ -486,7 +492,7 @@ describe("HOST-05 허용 목록만 읽는다 (T-14-01)", () => {
     expect(Object.values(own)).not.toContain(hostLineOf(makeView({ phase: "night", role: "mafia", ghost: true })));
   });
 
-  it("허용 목록 밖 값(allies·records·pick·verdictVote·nightTally·spectate·job·points·turn·voteLog·roles)을 채운 view 와 지운 view 의 결과가 같다", () => {
+  it("허용 목록 밖 값(allies·records·pick·verdictVote·nightTally·spectate·job·points·voteLog·roles)을 채운 view 와 지운 view 의 결과가 같다", () => {
     for (const spec of matrixSpecs()) {
       for (const cardSeen of [false, true]) {
         const plain = makeView(spec);

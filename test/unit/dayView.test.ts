@@ -93,11 +93,11 @@ describe("pointsTally — 지목 집계(공개 정보만)", () => {
 });
 
 describe("dayEvents — 지목 차이 (DAY-04)", () => {
-  it("순차 지목(day.turn 있음)의 새 지목은 vote 줄 '민준 → 도윤' 한 줄만 만든다 (위 알림 재료 없음)", () => {
+  it("순차 지목(day.turn 있음)의 새 지목은 vote 줄 '민준 → 도윤' 한 줄만 만든다 (위 알림 재료는 22-10 에서 없어졌다)", () => {
     const withTurn = (pairs: [number, number][]) => nominationOf(pairs, { day: { turn: { order: [0, 1, 2, 3, 4], i: 1, endsAt: 8_000 } } });
     const events = dayEvents(withTurn([]), withTurn([[1, 2]]));
     same(events.lines, [{ kind: "vote", text: "민준 → 도윤" }]);
-    same(events.toasts, []);
+    expect("toasts" in events).toBe(false);
     same(events.announces, []);
     same(events.fx, []);
   });
@@ -812,35 +812,31 @@ describe("기본판 투표 (결정 0072, U-1·U-4·U-5)", () => {
     expect(tie.sure).toBeUndefined();
   });
 
-  it("새 표마다 vote 줄과 toasts, 바꾸면 '(바꿈)'", () => {
+  it("새 표마다 vote 줄 한 건 — 위 알림 재료(toasts)와 '(바꿈)' 은 없다 (22-10, D-12)", () => {
     const first = dayEvents(nominationOf([]), nominationOf([[1, 2]]));
     same(first.lines.filter((l) => l.kind === "vote"), [{ kind: "vote", text: "민준 → 도윤" }]);
-    same(first.toasts, [{ to: 2, from: [1], toName: "도윤", fromNames: ["민준"] }]);
+    expect("toasts" in first).toBe(false);
     const moved = dayEvents(nominationOf([[1, 2]]), nominationOf([[1, 3]]));
-    same(moved.lines.filter((l) => l.kind === "vote"), [{ kind: "vote", text: "민준 → 지호 (바꿈)" }]);
-    same(moved.toasts, [{ to: 3, from: [1], toName: "지호", fromNames: ["민준"], changed: true }]);
+    same(moved.lines.filter((l) => l.kind === "vote"), [{ kind: "vote", text: "민준 → 지호" }]);
   });
 
-  it("한 번에 여러 표가 생기면 좌석 오름차순으로 같은 순서의 toasts", () => {
+  it("한 번에 여러 표가 생기면 좌석 오름차순으로 vote 줄", () => {
     const events = dayEvents(nominationOf([]), nominationOf([[3, 2], [1, 2]]));
-    same(events.toasts.map((t) => t.fromNames[0]), ["민준", "지호"]);
+    same(events.lines.filter((l) => l.kind === "vote").map((l) => l.text), ["민준 → 도윤", "지호 → 도윤"]);
   });
 
-  it("선두가 새 사람이면 hot '{이름} 님이 앞서요', 과반이 서면 '{이름} 님 과반'", () => {
+  it("선두·과반이 새로 서도 hot 줄('앞서요'·'과반')이 없다 — day.turn 이 없어도 같다 (동시 투표 화면 삭제)", () => {
     const lead = dayEvents(nominationOf([]), nominationOf([[1, 2]]));
-    same(lead.lines.filter((l) => l.kind === "hot"), [{ kind: "hot", text: "도윤 님이 앞서요" }]);
+    same(lead.lines.filter((l) => l.kind === "hot"), []);
     const major = dayEvents(nominationOf([[1, 2], [3, 2]]), nominationOf([[1, 2], [3, 2], [4, 2]]));
-    same(major.lines.filter((l) => l.kind === "hot"), [{ kind: "hot", text: "도윤 님 과반" }]);
-    // 선두가 그대로면 줄이 없다
-    const same2 = dayEvents(nominationOf([[1, 2]]), nominationOf([[1, 2], [3, 2]]));
-    same(same2.lines.filter((l) => l.kind === "hot"), []);
+    same(major.lines.filter((l) => l.kind === "hot"), []);
   });
 
-  it("prev 가 null 이거나 reset 이면 줄·toasts 없음", () => {
+  it("prev 가 null 이거나 reset 이면 줄 없음", () => {
     const first = dayEvents(null, nominationOf([[1, 2], [3, 2], [4, 2]]));
-    same([first.lines, first.toasts], [[], []]);
+    same(first.lines, []);
     const reset = dayEvents(nominationOf([]), nominationOf([[1, 2], [3, 2], [4, 2]]), { reset: true });
-    same([reset.lines, reset.toasts], [[], []]);
+    same(reset.lines, []);
   });
 
   it("turn 이 있는 view 쌍에서는 선두·과반 hot 줄이 없다 (순차 M-4)", () => {

@@ -64,7 +64,7 @@
 .mf-turn__pill { display: flex; align-items: center; gap: var(--space-sm); max-width: 100%; box-sizing: border-box; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--night-800) 92%, transparent); border: 1.5px solid var(--gray-100); animation: mf-turn-in var(--dur-med) var(--ease-out) both; transition: border-color 300ms; }
 .mf-turn__pill.is-still { animation: none; }
 .mf-turn__count { flex: none; font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); }
-.mf-turn__name { min-width: 0; font-family: var(--font-ui); font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); word-break: keep-all; overflow-wrap: anywhere; }
+.mf-turn__name { min-width: 0; font-family: var(--font-ui); font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); white-space: nowrap; }
 .mf-turn__sec { flex: none; min-width: 2ch; text-align: right; font-family: var(--font-ui); font-size: 24px; line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gray-50); transition: color 300ms; }
 .mf-turn__bar { width: 220px; max-width: 100%; height: 4px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--gray-50) 14%, transparent); }
 .mf-turn__fill { height: 100%; background: var(--gray-100); transition: width 1000ms linear, background-color 300ms; }

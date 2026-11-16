@@ -262,13 +262,13 @@ describe("결선 화면 — 헤더 안내 (UI-SPEC D-2)", () => {
 });
 
 describe("결선 — 막과 레이아웃 연결", () => {
-  it("coversNext: 지목 끝 알림의 정확히 둘 동점은 막을 덮지 않고(결선이 이어진다), 결선 결과가 또 동점이면 덮는다", async () => {
+  it("coversNext: 지목 끝 알림의 동점(둘이든 셋 이상이든)은 결선 없이 밤이라 막을 덮고(22-10), 결선 결과가 또 동점이어도 덮는다", async () => {
     const { coversNext } = await import("../../src/components/SceneCurtain");
     const mkNom = (points: Array<{ seat: number; target: number }>): RoomView => {
       const v = makeRunoff({ count: 4 });
       return { ...v, phase: "nomination", day: { n: 1, roles: [], points, turn: { order: [0, 1, 2, 3], i: 4 } } };
     };
-    expect(coversNext(mkNom([{ seat: 0, target: 2 }, { seat: 1, target: 3 }]))).toBe(false);
+    expect(coversNext(mkNom([{ seat: 0, target: 2 }, { seat: 1, target: 3 }]))).toBe(true);
     expect(coversNext(mkNom([{ seat: 0, target: 1 }, { seat: 1, target: 2 }, { seat: 2, target: 3 }]))).toBe(true);
     expect(coversNext(mkNom([]))).toBe(true);
     expect(coversNext(makeRunoff({ step: 2, tally: [2, 2] }))).toBe(true);

@@ -251,12 +251,13 @@ describe("view 의 주장 → 이름표 모서리 배지 (UI-SPEC A-1)", () => {
     expect(container.querySelector("[data-claim]")).toBeNull();
   });
 
-  it("기존 tagProps 키는 덮어쓰지 않는다 — 지목 단계의 득표 배지(count)와 같이 온다", () => {
+  it("기존 tagProps 키는 덮어쓰지 않는다 — 지목 단계에서도 claim 이 그대로 오고 득표 배지(count)는 없다(22-10)", () => {
     const base = makeView({ phase: "nomination", badges: { 1: "citizen" } });
     base.day = { ...base.day!, points: [{ seat: 0, target: 1 }] } as RoomView["day"];
     mount(base);
     const props = stage.props!.tagProps!(1);
-    expect(props).toMatchObject({ claim: "citizen", count: 1 });
+    expect(props).toMatchObject({ claim: "citizen" });
+    expect(props.count).toBeUndefined();
   });
 });
 

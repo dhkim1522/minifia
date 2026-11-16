@@ -162,6 +162,8 @@ interface MapOpts {
   points?: [number, number][];
   pick?: number;
   verdictVote?: boolean;
+  /** 순차 지목 차례 번호(산 사람 오름차순 order 의 i). 지목 단계에서 기본은 내 차례(내 좌석의 자리) */
+  turnI?: number;
 }
 
 function mapView(o: MapOpts): RoomView {
@@ -198,6 +200,13 @@ function mapView(o: MapOpts): RoomView {
       roles: [],
       ...(o.candidate !== undefined ? { candidate: o.candidate } : {}),
       ...(o.points ? { points: o.points.map(([seat, target]) => ({ seat, target })) } : {}),
+      ...(o.phase === "nomination"
+        ? (() => {
+            const order = players.filter((p) => p.alive !== false).map((p) => p.seat);
+            const i = o.turnI ?? Math.max(0, order.indexOf(mySeat));
+            return { turn: { order, i, endsAt: NOW + 8_000 } };
+          })()
+        : {}),
     },
   };
 }
@@ -235,6 +244,8 @@ const mount = (view: RoomView, over: Partial<RoomConnection> = {}) => {
 
 /** 방 화면 전체의 빛남 DOM 과 이름표 call 좌석 */
 const calls = (c: ParentNode): HTMLElement[] => [...c.querySelectorAll<HTMLElement>("[data-call]")];
+const tagBlinks = (count: number): number[] =>
+  Array.from({ length: count }, (_, seat) => seat).filter((seat) => stage.props?.tagProps?.(seat).blink === true);
 const tagCalls = (count: number): number[] =>
   Array.from({ length: count }, (_, seat) => seat).filter((seat) => stage.props?.tagProps?.(seat).call === true);
 
@@ -262,12 +273,12 @@ describe("맵 화면 빛남 (HOST-03·04·05)", () => {
       expect(calls(container)).toHaveLength(0);
     });
 
-    it("단계가 바뀌면 새 단계의 빛으로 넘어간다(토론 → 투표: 입력칸은 꺼지고 이름표가 켜진다)", () => {
+    it("단계가 바뀌면 새 단계의 빛으로 넘어간다(토론 → 지목: 입력칸은 꺼지고 내 차례 이름표가 깜빡인다)", () => {
       const { container, show } = mount(mapView({ phase: "discussion" }));
       fireEvent.focus(container.querySelector("input[data-chat-input]")!);
       show(mapView({ phase: "nomination" }));
       expect(calls(container)).toHaveLength(0);
-      expect(tagCalls(4)).toEqual([1, 2, 3]);
+      expect(tagBlinks(4)).toEqual([1, 2, 3]);
     });
 
     it("유령 토론은 0개", () => {
@@ -277,50 +288,49 @@ describe("맵 화면 빛남 (HOST-03·04·05)", () => {
     });
   });
 
-  describe("투표 — 이름표 전부 (UI#7)", () => {
-    it("4명 중 1명 사망: 나와 죽은 사람을 뺀 이름표만 call", () => {
+  // 22-10(P22-17): 지목의 빛남은 순차 지목의 깜빡임(blink)이 맡는다 — 내 차례에만 켜지고 차례 밖에는 없다. 이름표의 call(정지 빛)은 쓰지 않는다
+  describe("지목 — 내 차례에만 이름표 빛남 (P22-17)", () => {
+    it("4명 중 1명 사망: 나와 죽은 사람을 뺀 이름표만 깜빡인다", () => {
       mount(mapView({ phase: "nomination", dead: [2] }));
-      expect(tagCalls(4)).toEqual([1, 3]);
+      expect(tagBlinks(4)).toEqual([1, 3]);
+      expect(tagCalls(4)).toEqual([]);
     });
 
     it("zero-one-many: 산 사람이 2명이면 1개, 8명이면 7개, 유령은 0개", () => {
       mount(mapView({ phase: "nomination", dead: [2, 3] }));
-      expect(tagCalls(4)).toEqual([1]);
+      expect(tagBlinks(4)).toEqual([1]);
       cleanup();
       mount(mapView({ phase: "nomination", count: 8 }));
-      expect(tagCalls(8)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+      expect(tagBlinks(8)).toEqual([1, 2, 3, 4, 5, 6, 7]);
       cleanup();
       mount(mapView({ phase: "nomination", dead: [0] }));
-      expect(tagCalls(4)).toEqual([]);
+      expect(tagBlinks(4)).toEqual([]);
     });
 
-    it("하나를 누르면 모두 꺼지고, 서버가 거절해도 되살아나지 않는다", () => {
+    it("차례 밖(남의 차례)에는 이름표가 빛나지 않고 누를 수도 없다", () => {
+      mount(mapView({ phase: "nomination", turnI: 2 }));
+      expect(tagBlinks(4)).toEqual([]);
+      expect(stage.props?.pick).toBeUndefined();
+    });
+
+    it("하나를 누르면 모두 꺼지고, 서버가 거절하면 같은 차례에 다시 켜진다", () => {
       const listeners: Array<(e: { t: "error"; code: string }, meta: { epoch: number }) => void> = [];
       const onEvent = vi.fn((l: (typeof listeners)[number]) => {
         listeners.push(l);
         return () => {};
       });
       mount(mapView({ phase: "nomination" }), { onEvent: onEvent as unknown as RoomConnection["onEvent"] });
-      expect(tagCalls(4)).toEqual([1, 2, 3]);
+      expect(tagBlinks(4)).toEqual([1, 2, 3]);
       act(() => stage.props!.pick!.onPick(2));
-      expect(tagCalls(4)).toEqual([]);
+      expect(tagBlinks(4)).toEqual([]);
       act(() => listeners.forEach((l) => l({ t: "error", code: "WRONG_PHASE" }, { epoch: 1 })));
       expect(stage.props?.pick?.mine).toBeUndefined();
-      expect(tagCalls(4)).toEqual([]);
+      expect(tagBlinks(4)).toEqual([1, 2, 3]);
     });
 
-    it("이미 골랐으면(재접속) 처음부터 켜지 않는다. is-blink 는 기본판 투표에 없다(U-7)", () => {
+    it("이미 골랐으면(재접속) 처음부터 켜지 않는다", () => {
       mount(mapView({ phase: "nomination", points: [[0, 2]] }));
-      expect(tagCalls(4)).toEqual([]);
-      cleanup();
-      mount(mapView({ phase: "nomination" }));
-      for (const seat of [1, 2, 3]) expect(stage.props?.tagProps?.(seat).blink).toBeUndefined();
-    });
-
-    it("순차 지목(day.turn)에는 빛이 없다 — 13 기본판 투표만", () => {
-      const v = mapView({ phase: "nomination" });
-      mount({ ...v, day: { ...v.day!, turn: { order: [1, 2, 3, 0], i: 0 } } as RoomView["day"] });
-      expect(tagCalls(4)).toEqual([]);
+      expect(tagBlinks(4)).toEqual([]);
     });
   });
 
@@ -427,14 +437,14 @@ describe("맵 화면 빛남 (HOST-03·04·05)", () => {
       }
     });
 
-    it("한 화면에는 한 종류만: 투표는 이름표만(DOM data-call 0), 토론은 입력칸만(이름표 call 0)", () => {
+    it("한 화면에는 한 종류만: 지목은 이름표만(DOM data-call 0), 토론은 입력칸만(이름표 깜빡임 0)", () => {
       const vote = mount(mapView({ phase: "nomination" }));
       expect(calls(vote.container)).toHaveLength(0);
-      expect(tagCalls(4)).toHaveLength(3);
+      expect(tagBlinks(4)).toHaveLength(3);
       vote.unmount();
       const talk = mount(mapView({ phase: "discussion" }));
       expect(calls(talk.container)).toHaveLength(1);
-      expect(tagCalls(4)).toHaveLength(0);
+      expect(tagBlinks(4)).toHaveLength(0);
     });
 
     it("빛남은 소리를 내지 않는다 — 신호 관련 새 코드 없음(소스 검사)", () => {

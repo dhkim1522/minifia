@@ -676,37 +676,24 @@ describe("SeatLook.opacity 는 판 중 경로에 없다 (11-12)", () => {
   });
 });
 
-describe("기본판 투표 선두·과반 (U-4)", () => {
-  // day.turn 없음 = 동시 투표. 산 5명 → 과반 3, 산 8명 → 과반 5
+describe("동시 투표 선두·과반 장치 삭제 (22-10, D-12)", () => {
+  // day.turn 이 없는 지목 view 라도(서버는 더는 보내지 않는다) 선두·과반이 긴장·확대로 이어지지 않는다
   const vote = (count: number, ...pairs: [number, number][]) => viewOf("nomination", { count, day: { points: points(...pairs) } });
 
-  it("tensionOf: 과반 → level 2·초점 그 좌석, 선두만 → level 1, 동점·0표 → 0", () => {
-    same(tensionOf(vote(5, [0, 2], [1, 2], [3, 2])), { level: 2, focus: 2 });
-    same(tensionOf(vote(8, [0, 2], [1, 2], [3, 2], [4, 5])), { level: 1, focus: 2 });
-    same(tensionOf(vote(5, [0, 2], [1, 3])), { level: 0 });
-    same(tensionOf(vote(5)), { level: 0 });
+  it("tensionOf: 과반이어도 선두만이어도 level 0·초점 없음", () => {
+    same(tensionOf(vote(5, [0, 2], [1, 2], [3, 2])), { level: 0 });
+    same(tensionOf(vote(8, [0, 2], [1, 2], [3, 2], [4, 5])), { level: 0 });
   });
 
-  it("tensionOf: 선두라도 과반 아닌 3:1 (산 8명)은 level 1", () => {
-    same(tensionOf(vote(8, [0, 2], [1, 2], [3, 2], [4, 5])).level, 1);
-  });
-
-  it("tensionOf: day.turn 이 있으면 선두·과반이어도 0", () => {
-    const v = viewOf("nomination", { day: { turn: { order: [0, 1, 2, 3, 4], i: 3, endsAt: 9000 }, points: points([0, 2], [1, 2], [3, 2]) } });
-    same(tensionOf(v), { level: 0 });
-  });
-
-  it("cameraModeOf: 과반 + 스테이지 400 → 1.08, 300 → 1, 과반 아님 → 1", () => {
+  it("cameraModeOf: 과반이어도 스테이지가 높아도 확대 1", () => {
     const majority = vote(5, [0, 2], [1, 2], [3, 2]);
-    same(cameraModeOf(majority, 400), { mode: "fixed", target: GATHER_CENTER, zoom: ZOOM_MAJORITY });
-    expect(ZOOM_MAJORITY).toBe(1.08);
-    same(cameraModeOf(majority, ZOOM_MIN_STAGE_H), { mode: "fixed", target: GATHER_CENTER, zoom: ZOOM_MAJORITY });
-    same(cameraModeOf(majority, 300), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
-    same(cameraModeOf(vote(5, [0, 2], [1, 2]), 400), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
+    same(cameraModeOf(majority, 600), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
+    same(cameraModeOf(majority, ZOOM_MIN_STAGE_H), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
   });
 
-  it("cameraModeOf: day.turn 이 있으면 과반이어도 확대 1", () => {
+  it("cameraModeOf: day.turn 이 있어도 과반이어도 확대 1", () => {
     const v = viewOf("nomination", { day: { turn: { order: [0, 1, 2, 3, 4], i: 3, endsAt: 9000 }, points: points([0, 2], [1, 2], [3, 2]) } });
     same(cameraModeOf(v, 600), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
   });
 });
+

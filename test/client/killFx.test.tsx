@@ -169,10 +169,10 @@ describe("장면 전환 막 — 공개 마감 420ms 전 덮기 → 다음 단계
     expect(curtain(container)?.getAttribute("data-curtain")).toBe("true");
   });
 
-  it("끝 알림 단계에서 최다가 정확히 둘 동점이면 결선이 이어지므로 덮지 않는다 (09.1.1-14)", () => {
+  it("끝 알림 단계에서 최다가 둘 동점이어도 결선 없이 밤이라 마감 420ms 전에 덮는다 (22-10)", () => {
     const { container } = render(<SceneCurtain view={curtainView({ phase: "nomination", turn: "end", endsIn: 1000, points: [{ seat: 1, target: 2 }, { seat: 2, target: 3 }] })} offset={0} reducedMotion={false} />);
     advance(2000);
-    expect(curtain(container)).toBeNull();
+    expect(curtain(container)?.getAttribute("data-curtain")).toBe("true");
   });
 
   it("day.turn 이 없는 지목 view 는 덮지 않는다", () => {

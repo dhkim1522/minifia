@@ -18,12 +18,8 @@ import { isMySpeakTurn, pointSeatsOf, SHOWDOWN_COPY, showdownStageOf } from "./s
 /** 문구 표. UI-SPEC "Copywriting Contract" 원문 — 해요체, 마침표·느낌표 없음. 역할 단어는 토론 안내의 '마피아'(모두에게 같은 문장) 하나뿐이다. */
 export const DAY_COPY = {
   // ---- 채팅 시스템 줄 ----
-  /** 지목 한 줄 '민준 → 도윤' (동시 투표에서 대상을 바꾸면 '(바꿈)') */
-  pointLine: (from: string, to: string, changed = false): string => `${from} → ${to}${changed ? " (바꿈)" : ""}`,
-  /** 선두가 새로 생겼을 때 hot 줄(기본판 동시 투표) */
-  leadLine: (name: string): string => `${name} 님이 앞서요`,
-  /** 과반이 새로 섰을 때 hot 줄(기본판 동시 투표) */
-  majorityLine: (name: string): string => `${name} 님 과반`,
+  /** 지목 한 줄 '민준 → 도윤' */
+  pointLine: (from: string, to: string): string => `${from} → ${to}`,
   /** 시간 안에 못 골라 기권으로 확정된 차례 '민준 · 기권' */
   abstainLine: (name: string): string => `${name} · 기권`,
   dayLine: (n: number): string => `${n}일차`,
@@ -139,16 +135,6 @@ export interface DayFx {
   at: number;
 }
 
-/** 위 알림 재료 한 건: from 이 to 를 가리켰다. 이름은 만든 순간의 닉네임이다. 대기열·합치기 없음(U-5) */
-export interface PointToast {
-  to: number;
-  from: number[];
-  toName: string;
-  fromNames: string[];
-  /** 대상을 바꾼 표('(바꿈)') */
-  changed?: boolean;
-}
-
 export interface PointsTally {
   /** 대상 seat → 받은 표 수(0표는 키 없음) */
   counts: Record<number, number>;
@@ -171,8 +157,6 @@ export interface DayEvents {
   lines: DayLine[];
   /** 경찰 화면에서만 생긴다(L8). 없으면 키 자체가 없다 */
   localCards?: LocalCard[];
-  /** 기본판 동시 투표의 새 표마다 한 건(좌석 오름차순). 순차 view 에서는 비어 있다 */
-  toasts: PointToast[];
   announces: DayAnnounce[];
   fx: DayFx[];
 }
@@ -365,39 +349,21 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
  * prev 가 null 이거나 opts.reset(epoch 가 바뀐 첫 스냅샷)이면 이벤트 없이 빈 묶음만 준다.
  */
 export function dayEvents(prev: RoomView | null, cur: RoomView, opts: { reset?: boolean } = {}): DayEvents {
-  const events: DayEvents = { lines: [], toasts: [], announces: [], fx: [] };
+  const events: DayEvents = { lines: [], announces: [], fx: [] };
   if (!prev || opts.reset || !cur.day) return events;
 
   // ---- 단계 진입: 줄·결과 알림·연출 ----
   if (prev.phase !== cur.phase) phaseEntry(prev, cur, cur.day, events);
 
-  // ---- 투표 차이: 새로 생기거나 바뀐 표마다 vote 줄과 위 알림 재료. 선두·과반은 동시 투표(day.turn 없음)에서만 hot 줄 (순차 M-4 그대로) ----
+  // ---- 투표 차이: 새로 생긴 표마다 vote 줄(순차 지목, 선두·과반·위 알림 없음 — 동시 투표 화면은 22-10 에서 지웠다, D-12) ----
   const before = new Map(pointsOf(prev).map((l) => [l.seat, l.target]));
   const after = [...pointsOf(cur)].sort((a, b) => a.seat - b.seat);
-  const simultaneous = cur.day.turn === undefined;
   for (const line of after) {
-    const old = before.get(line.seat);
-    if (old === line.target) continue;
+    if (before.get(line.seat) === line.target) continue;
     const from = nameOf(cur, line.seat);
     const to = nameOf(cur, line.target);
     if (from === undefined || to === undefined) continue;
-    const changed = simultaneous && old !== undefined;
-    events.lines.push({ kind: "vote", text: DAY_COPY.pointLine(from, to, changed) });
-    if (simultaneous) {
-      events.toasts.push({ to: line.target, from: [line.seat], toName: to, fromNames: [from], ...(changed ? { changed: true } : {}) });
-    }
-  }
-  if (simultaneous && cur.phase === "nomination") {
-    const now = pointsTally(cur);
-    const was = pointsTally(prev);
-    if (now.leader !== undefined && now.leader !== was.leader) {
-      const name = nameOf(cur, now.leader);
-      if (name !== undefined) events.lines.push({ kind: "hot", text: DAY_COPY.leadLine(name) });
-    }
-    if (now.sure !== undefined && now.sure !== was.sure) {
-      const name = nameOf(cur, now.sure);
-      if (name !== undefined) events.lines.push({ kind: "hot", text: DAY_COPY.majorityLine(name) });
-    }
+    events.lines.push({ kind: "vote", text: DAY_COPY.pointLine(from, to) });
   }
   const turn = cur.phase === "nomination" ? cur.day.turn : undefined;
   if (turn !== undefined && turn.skip === true && turn.i >= 0 && turn.i < turn.order.length) {

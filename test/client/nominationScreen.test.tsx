@@ -358,7 +358,7 @@ describe("지목 화면 — 내 차례에만 이름표 버튼·계속 깜빡임 
     fireEvent.click(pickOf(m.container, 2)!);
     m.show(makeView({ points: [[0, 2]], turn: { i: 0, doneLeft: 5000 } }));
     expect(headOf(m.container, 2)?.getAttribute("data-mine")).toBe("true");
-    expect(headOf(m.container, 2)?.getAttribute("data-count")).toBe("1");
+    expect(m.container.querySelector("[data-count]")).toBeNull();
     expect(picks(m.container).length).toBe(0);
     m.show(makeView({ points: [[0, 2]], turn: { i: 1 } }));
     expect(headOf(m.container, 2)?.getAttribute("data-mine")).toBe("true");

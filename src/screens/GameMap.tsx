@@ -34,7 +34,7 @@ import { todOf, todWordOf } from "../game/timeOfDay";
 import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
-import { defenderVotes, headerFor, nominationVotesOf, pointsTally } from "../game/dayView";
+import { defenderVotes, headerFor, nominationVotesOf } from "../game/dayView";
 import { callTargetsOf } from "../game/hostLine";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
@@ -132,8 +132,6 @@ interface GameMapProps {
   testButton?: ReactNode;
   /** 지금 띄울 결과 알림 글자·아이콘(useDayFx 가 서버 view 의 차이로 만든다). 없으면 null */
   announce?: DayFx["announce"];
-  /** 기본판 동시 투표의 가장 최근 표 위 알림(useDayFx, 대기열 없음). id 가 바뀔 때만 TopToast 에 띄운다 — 처음 마운트 때의 알림은 지난 일이다 */
-  toast?: DayFx["toast"];
   /** 처형 떠오름 연출 중인 좌석 → 시작 시각(useDayFx). 처형된 사람이 연출이 끝날 때까지 표에 남는다 */
   fading?: DayFx["fading"];
   /** 내가 유령이 된 순간마다 늘어나는 번호(useDayFx). 번호가 바뀔 때만 안내 한 줄과 직업 칩 등장을 다시 보인다 — 처음 마운트 때의 값은 지난 일이다 */
@@ -201,7 +199,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·지목·최후 변론·찬반·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, tod = true, panelless, camera, testButton, announce = null, toast: pointToast = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드는 대기실과 같은 훅이다. 기록 칸은 LOG_H(68) 한 값 — 키보드가 열리면 행동 줄만 숨긴다(07-19, 18.1 P181-3).
@@ -321,15 +319,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     });
   }, [onEvent, show, sendGuard]);
 
-  // 순차 지목(09.1)에는 표마다 띄우던 위 알림이 없다(차례 위 한 줄이 대신, UI-SPEC A-7). 기본판 동시 투표(결정 0072, U-5)는 표마다 한 줄 '민준 → 도윤' 을 띄운다:
-  // useDayFx 의 toast 는 대기열 없이 가장 최근 표 하나이고 id 가 바뀔 때만 띄운다(새 표가 이전 알림을 바꾼다). 처음 마운트 때의 알림은 지난 것이라 띄우지 않는다.
-  // 닉네임은 글자 그대로 TopToast 의 텍스트 노드로만 간다(T-13-09).
-  const seenPointToast = useRef(pointToast?.id);
-  useEffect(() => {
-    if (pointToast === null || pointToast.id === seenPointToast.current) return;
-    seenPointToast.current = pointToast.id;
-    show(pointToast.text, pointToast.icon);
-  }, [pointToast, show]);
+  // 지목에는 표마다 띄우는 위 알림이 없다(차례 위 한 줄이 대신, UI-SPEC A-7). 동시 투표 화면은 22-10 에서 지웠다(D-12).
 
   // 이동 권한: 산 사람은 낮 시작·토론에서만, 유령은 언제나(MAP-04). 권위는 서버 canMove 이고 화면은 같은 표로 맵 탭만 막는다.
   const me = view.players.find((p) => p.seat === view.me.seat);
@@ -346,8 +336,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 지목 단계(DAY-04): 산 사람은 나를 뺀 산 사람의 이름표를 눌러 가리킨다. 내 선택만 서버 응답 전에 보이고(낙관적), 서버 view 가 오면 서버 값(day.points 의 내 줄, 가정 A1)이 이긴다.
   // 남의 지목·득표·선두·과반은 서버가 보낸 day.points 로만 그린다(T-08-38).
   const nominating = view.phase === "nomination";
-  // 기본판 동시 투표(결정 0072): 서버 view 에 day.turn 이 없는 지목 단계. 순차·동시를 설정 값이 아니라 view 가 가른다 — day.turn 이 있으면 아래 순차 코드가 그대로 쓰인다.
-  const voting = nominating && view.day?.turn === undefined;
   // 밤 선택: 산 사람 모두 아래 패널 얼굴 목록(GamePanel)으로 고른다(D-05) — 지도 이름표로 고르는 길은 없다.
   const nighting = view.phase === "night";
   // 시민 편(산 시민·경찰·의사)의 밤: 같은 어둠 표식과 긴장 비네트를 본다. 역할마다 다르지 않다(NIGHT-10, E3 #20). 마피아·유령·낮에는 없다.
@@ -383,7 +371,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 순차 지목(결정 0063-1): 이름표는 내 차례에만 버튼이다. 누르면 그 차례는 끝난다 — 깜빡임·버튼이 사라지고 취소·바꾸기는 없다.
   // pickedTurn = 내가 이미 누른 차례 번호. 서버가 거절하면 비워 다시 고를 수 있게 한다.
   const [pickedTurn, setPickedTurn] = useState<number | undefined>(undefined);
-  const canPick = voting ? meAlive : nominating && meAlive && myTurnNo !== undefined && pickedTurn !== myTurnNo && mine === undefined;
+  const canPick = nominating && meAlive && myTurnNo !== undefined && pickedTurn !== myTurnNo && mine === undefined;
   // 빛남(14-04, HOST-03·04, U-7): 13 의 투표 처음 3초 깜빡임을 대체한다. 대상은 callTargetsOf(view)(공개 정보·내 역할만) 하나가 정하고,
   // 같은 단계 안에서 내가 그 도구를 쓰면 즉시 꺼져 되살아나지 않는다(서버가 거절해도 다시 켜지 않는다). "썼음" 은 단계 키(단계·일차·변론자) 하나로 쥐어 키가 바뀌면 자동으로 풀린다.
   // 내 행동만으로 끄는 로컬 상태이고 남의 행동·서버 값을 미리 그리지 않는다(T-14-13). 빛은 소리를 내지 않는다.
@@ -439,10 +427,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           if (send({ t: "point", target: seat }) === false) return; // 소켓이 닫혀 못 보냈으면 표시도 바꾸지 않는다
           pointSent.current = { target: seat, at: Date.now() };
           chooseMine(seat);
-          if (voting) markCallUsed();
-          else if (nominating) setPickedTurn(myTurnNo);
+          if (nominating) setPickedTurn(myTurnNo);
         },
-        group: runoffVoting ? "결선" : showdownPointing ? SHOWDOWN_COPY.pointGroup : voting ? "투표" : "지목",
+        group: runoffVoting ? "결선" : showdownPointing ? SHOWDOWN_COPY.pointGroup : "지목",
       }
     : undefined;
 
@@ -501,36 +488,19 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       });
     }
     if (!nominating) return undefined;
-    // 기본판 동시 투표(결정 0072, U-4): 득표 배지·선두(맥박)·과반(도장)은 서버가 보낸 day.points 의 집계(pointsTally)로만 그린다 — 남의 표·배지·선두를 미리 만들지 않는다(T-13-08).
-    // 서버 응답 전에 보이는 것은 내 선택(mine)뿐이다. 0표 이름표에는 배지가 없고 동점이면 선두·도장이 없다.
-    if (voting) {
-      const tally = pointsTally(view);
-      return (seat) => {
-        const count = tally.counts[seat] ?? 0;
-        return {
-          ...(mine === seat ? { mine: true } : {}),
-          ...(count >= 1 ? { count } : {}),
-          ...(tally.leader === seat ? { lead: true } : {}),
-          ...(tally.sure === seat ? { sure: true } : {}),
-        };
-      };
-    }
-    // 순차 지목: 득표는 배지 숫자만(선두 맥박·과반 도장 없음, 09.1 M-4). 내가 방금 누른 표는 서버가 세어 주기 전에도 +1 로 바로 보인다(UI-SPEC A-4).
+    // 순차 지목(22-10): 득표 배지·선두·도장은 없다(D-12) — 누가 누구를 골랐는지는 위 한 줄·핀·손가락이 보이고 집계는 끝 줄이 말한다.
     // 차례인 사람은 발밑 흰 고리와 맨 앞 이름표(모이는 중·끝 알림에는 없다).
-    const tally = pointsTally(view);
     const stage = turnStageOf(view);
     const turn = view.day?.turn;
     const turnSeat = (stage === "turn" || stage === "done") && turn !== undefined ? turn.order[turn.i] : undefined;
     return (seat) => {
-      const count = (tally.counts[seat] ?? 0) + (mine === seat && serverMine !== seat ? 1 : 0);
       return {
         ...(canPick && pickSeats?.has(seat) ? { blink: true } : {}),
         ...(mine === seat ? { mine: true } : {}),
-        ...(count >= 1 ? { count } : {}),
         ...(turnSeat === seat ? { ring: "turn" as const, turn: true } : {}),
       };
     };
-  }, [nominating, voting, nighting, mine, serverMine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting, showdownPointing, showdownStage]);
+  }, [nominating, nighting, mine, spectate, verdicting, defending, view, canPick, pickSeats, runoff, runoffVoting, showdownPointing, showdownStage]);
 
   // 유령 화면의 이름표: 모든 이름표 위에 그 사람의 직업 칩(spectate.seats 의 job), 죽은 좌석은 반투명. 산 사람 view 에는 spectate 가 없어 이 겹침이 없다.
   const roleTagProps = useMemo<WorldTagProps | undefined>(() => {
@@ -609,22 +579,17 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const callTarget = useMemo(() => callTargetsOf(view), [view]);
   const callOn = callTarget !== null && !callUsed && layerKind === null && !kbOpen && !whisper.mode;
   const callTool = callOn && callTarget.kind === "tool" ? callTarget.tool : null;
-  const callTagSeats = useMemo<ReadonlySet<number> | null>(
-    () => (callOn && callTarget.kind === "tag" && voting && mine === undefined ? new Set(callTarget.seats) : null),
-    [callOn, callTarget, voting, mine],
-  );
   const callFaceSeats = useMemo<ReadonlySet<number> | undefined>(
     () => (callOn && callTarget.kind === "tag" && nighting && view.me.pick === undefined ? new Set(callTarget.seats) : undefined),
     [callOn, callTarget, nighting, view.me.pick],
   );
   const stageTagProps = useMemo<WorldTagProps | undefined>(() => {
-    if (!whisper.mode && callTagSeats === null) return claimTagProps;
+    if (!whisper.mode) return claimTagProps;
     return (seat) => ({
       ...(claimTagProps?.(seat) ?? {}),
-      ...(whisper.mode && whisper.targets.has(seat) ? { blink: true } : {}),
-      ...(callTagSeats?.has(seat) ? { call: true } : {}),
+      ...(whisper.targets.has(seat) ? { blink: true } : {}),
     });
-  }, [whisper.mode, whisper.targets, claimTagProps, callTagSeats]);
+  }, [whisper.mode, whisper.targets, claimTagProps]);
 
   // 아래 패널 높이(--mf-panel-h)는 DOM 에서 재서 루트에 한 번 정한다(패널이 자라도 따라간다). 떠 있는 버튼 묶음(아래 끝 = 키보드 올림 + 패널 높이 + 8)과
   // 찬반 기록 묶음(09.1.1-13)이 CSS 상속으로 같은 값을 읽는다

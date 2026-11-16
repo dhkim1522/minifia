@@ -177,6 +177,10 @@ export function callTargetsOf(view: RoomView, local: HostLocal = {}): CallTarget
     case "discussion.act":
       return { kind: "tool", tool: "chat" };
     case "nomination.act": {
+      // 순차 지목(P22-17): 내 차례(공개 값 day.turn — 차례 중이고 order[i] 가 나)에만 빛난다. 차례 전·후·확정 직후는 거짓 신호라 null
+      const turn = view.day?.turn;
+      const myTurn = turn !== undefined && turn.i >= 0 && turn.i < turn.order.length && turn.doneAt === undefined && turn.order[turn.i] === view.me.seat;
+      if (!myTurn) return null;
       const seats = aliveSeats(view, false);
       return seats.length === 0 ? null : { kind: "tag", seats };
     }

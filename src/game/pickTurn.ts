@@ -16,8 +16,9 @@ export const TURN_COPY = {
   abstained: (name: string): string => `${name} 님이 고르지 못했어요`,
   allPicked: "모두 골랐어요",
   allPickedTop: (name: string, votes: number): string => `모두 골랐어요 · ${name} 님 ${votes}표`,
-  // ---- 동점 결선(09.1.1-14, UI-SPEC D) ----
-  /** 지목 끝 알림에서 최다가 정확히 둘 동점일 때, 그리고 결선 앞머리의 위 한 줄 */
+  /** 지목 끝 알림에서 아무도 고르지 않았을 때(0표·모두 기권, 22-10 P22-5) */
+  noVotes: "고른 사람이 없어요",
+  /** 지목 끝 알림에서 최다가 동점일 때(둘이든 셋 이상이든 — 결선 없이 처형 없음), 그리고 결선 앞머리의 위 한 줄 */
   tie: "동점이에요",
   /** 결선 알약의 단계 이름 */
   runoffPill: "결선",
@@ -112,11 +113,6 @@ function topSeatsOf(points: readonly { target: number }[]): { top: number; seats
   return { top, seats: top > 0 ? [...counts].filter(([, k]) => k === top).map(([seat]) => seat) : [] };
 }
 
-/** 지목 끝 알림 시점에 최다 득표가 정확히 둘로 동점인가(결선이 열린다). 지목이 아니거나 끝 알림이 아니면 false */
-export function isRunoffTie(view: RoomView): boolean {
-  return turnStageOf(view) === "end" && topSeatsOf(view.day?.points ?? []).seats.length === 2;
-}
-
 /** 위 한 줄 문장. 차례 중이거나 day.turn 이 없으면 null(진행은 알약이 말한다). 결선은 앞머리 '동점이에요'·결과 '{이름} 님 {k}표'/'또 동점이에요'. */
 export function turnTopLine(view: RoomView): string | null {
   const mode = blockModeOf(view);
@@ -138,10 +134,11 @@ export function turnTopLine(view: RoomView): string | null {
     const target = line === undefined ? undefined : nameOf(view, line.target);
     return target === undefined ? null : TURN_COPY.pointed(name, target);
   }
-  // end: 최다가 정확히 둘 동점이면 '동점이에요', 정확히 한 명이면 이름과 표 수, 그 밖은 '모두 골랐어요'
+  // end(22-10, P22-5): 아무도 안 골랐으면 '고른 사람이 없어요', 최다가 동점이면 '동점이에요', 단독 최다면 이름과 표 수
   const { top, seats } = topSeatsOf(points);
-  if (seats.length === 2) return TURN_COPY.tie;
-  const leaderName = seats.length === 1 ? nameOf(view, seats[0]!) : undefined;
+  if (seats.length === 0) return TURN_COPY.noVotes;
+  if (seats.length >= 2) return TURN_COPY.tie;
+  const leaderName = nameOf(view, seats[0]!);
   return leaderName === undefined ? TURN_COPY.allPicked : TURN_COPY.allPickedTop(leaderName, top);
 }
 
