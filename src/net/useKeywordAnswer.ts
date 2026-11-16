@@ -7,7 +7,8 @@
 // 시간: 단계 시작 = phaseEndsAt − phaseDurationMs(서버 시각, offset 으로 로컬 시각에 맞춘다). 시작 뒤 KEYWORD_READ_MS 까지 locked.
 // 초안(22 유언 useWill 과 같은 규칙·수치): 입력이 바뀌고 600ms 뒤 한 번, 마감 700ms 전에 한 번 더 {t:"answer", final:false}. 같은 글은 다시 보내지 않고 거절은 알림 없이 넘긴다.
 // 확정: {t:"answer", final:true} 를 보내고 서버 응답을 기다리지 않고 곧바로 sent. 확정을 보낸 뒤 REJECT_WINDOW_MS 안에 서버 view 가 확정을 돌려주기 전에 오는 error 프레임은
-// 그 확정의 거절이다(코드 무관 — 화면이 빈 글·20자 초과·잠김·연타를 미리 막아 그 시간의 BAD_MESSAGE 는 금지어뿐이다, GameMap sendGuard 선례).
+// 그 확정의 거절이다. 금지어 거절은 BAD_MESSAGE 로만 온다(화면이 빈 글·20자 초과·잠김·연타를 미리 막아 그 시간의 BAD_MESSAGE 는 금지어뿐이다, GameMap sendGuard 선례).
+// WRONG_PHASE(마감 직후 도착한 확정)·RATE_LIMITED 는 거절이 아니라 조용히 넘긴다 — 알림도 deny 소리도 없다(WR-02).
 // 거절이면 모두에게 같은 문구·시간으로 알리고(T-23-32) 입력 가능으로 돌아온다 — 글은 남는다. 그 시간이 지난 뒤 온 거절(단계가 넘어간 뒤)은 조용히 넘긴다(22 WILL_QUIET_MS 교훈).
 // 복원: 본인 view 의 me.answer(확정 우선, 없으면 초안)가 쓰던 글·제출 상태의 기준이다.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -185,7 +186,7 @@ export function useKeywordAnswer({ view, send, canSend = true, offset = 0, onEve
   useEffect(() => {
     if (!onEvent) return;
     return onEvent((e) => {
-      if (e.t !== "error") return;
+      if (e.t !== "error" || e.code !== "BAD_MESSAGE") return; // 금지어 거절은 BAD_MESSAGE 뿐이다
       const at = finalAt.current;
       if (at === null || live.current.serverFinal) return;
       if (Date.now() - at > KEYWORD_REJECT_WINDOW_MS) return;

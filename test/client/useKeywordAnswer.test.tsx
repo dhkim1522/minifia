@@ -2,6 +2,7 @@
 // 서버가 규칙을 정하고 이 훅은 표시·전송만 한다(결정 0002). fake timer + 가짜 send/onEvent 로 시간 규칙만 시험한다.
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { bindSignals, type LocalSignal } from "../../src/audio/signals";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import type { RoomEvent } from "../../src/net/useRoomConnection";
 import { useKeywordAnswer, KEYWORD_AUTOSAVE_MS, KEYWORD_LAST_SEND_LEAD_MS, KEYWORD_NOTICE_MS } from "../../src/net/useKeywordAnswer";
@@ -62,7 +63,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const errorFrame = (): RoomEvent => ({ t: "error", code: "BAD_MESSAGE", message: "x" }) as RoomEvent;
+const errorFrame = (code = "BAD_MESSAGE"): RoomEvent => ({ t: "error", code, message: "x" }) as RoomEvent;
 
 describe("읽기 3초 잠금 (P23-6)", () => {
   it("단계 시작 뒤 3초 전에는 locked, 3초가 되면 open 이고 locked 중 submit 은 아무것도 보내지 않는다", () => {
@@ -245,6 +246,27 @@ describe("거절 알림 (P23-11, T-23-32)", () => {
       vi.advanceTimersByTime(1);
     });
     expect(t.result.current.notice).toBeNull();
+  });
+
+  it("WRONG_PHASE·RATE_LIMITED 는 거절이 아니다: 알림도 되돌림도 없고 deny 소리도 나지 않는다(WR-02)", () => {
+    const signals: LocalSignal[] = [];
+    const unbind = bindSignals((sig) => signals.push(sig));
+    for (const code of ["WRONG_PHASE", "RATE_LIMITED"]) {
+      const t = setup(makeView({ elapsed: 5_000 }));
+      act(() => t.result.current.setValue("안경"));
+      act(() => t.result.current.submit());
+      signals.length = 0;
+      act(() => t.emit(errorFrame(code)));
+      expect(t.result.current.notice).toBeNull();
+      expect(t.result.current.state).toBe("sent");
+      expect(signals).toEqual([]);
+      // 그 뒤 진짜 거절(BAD_MESSAGE)은 여전히 거절이다
+      act(() => t.emit(errorFrame()));
+      expect(t.result.current.notice).toBe("쓸 수 없는 말이에요");
+      expect(signals).toEqual([{ kind: "deny" }]);
+      cleanup();
+    }
+    unbind();
   });
 
   it("마피아와 시민에게 같은 문구·같은 시간이다", () => {
