@@ -137,12 +137,26 @@ describe("buildGameRow 열 계산", () => {
     expect(row?.no_answer_count).toBe(2);
   });
 
-  it("떠보기 성공은 keywordProbed 일 때만, 포스트잇·튜토리얼은 0", () => {
+  it("떠보기 성공은 keywordProbed 일 때만, 튜토리얼 열은 늘 0(혼자 하기 튜토리얼은 서버를 거치지 않는다, D-18)", () => {
     expect(buildGameRow(ended(), NOW)?.probe_success).toBe(0);
     const row = buildGameRow(ended({ keywordProbed: true }), NOW);
     expect(row?.probe_success).toBe(1);
-    expect(row?.note_count).toBe(0);
     expect(row?.tutorial).toBe(0);
+  });
+
+  it("포스트잇 수 = notes 줄 수(옮겨 바뀐 줄도 한 장), notes 키가 없으면 0 (24-02, D-09)", () => {
+    // 세 줄 중 하나는 옮겨 바뀐 줄이다: stickNote 는 줄을 빼고 끝에 새 줄을 넣어 줄 수를 그대로 둔다 — 장 수는 줄 수다.
+    const notes = [
+      { n: 2, from: 0, to: 1 },
+      { n: 2, from: 2, to: 3 },
+      { n: 3, from: 0, to: 2 },
+    ];
+    expect(buildGameRow(ended({ notes }), NOW)?.note_count).toBe(3);
+    expect(buildGameRow(ended({ notes: [] }), NOW)?.note_count).toBe(0);
+    expect(buildGameRow(ended(), NOW)?.note_count).toBe(0);
+    expect(buildGameRow(ended({ notes }), NOW)?.tutorial).toBe(0);
+    // 누가 누구에게는 행에 없다(숫자 하나뿐, T-24-08)
+    expect(JSON.stringify(buildGameRow(ended({ notes }), NOW))).not.toContain("from");
   });
 
   it("장르 id 와 단어, 판 id, 끝난 시각", () => {

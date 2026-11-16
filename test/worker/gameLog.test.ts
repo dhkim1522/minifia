@@ -1,9 +1,10 @@
 // 판 기록 D1 (23-10 Task 2) — 방 DO 가 ended 전환에서 한 번 games 에 한 줄을 남기고, 저장이 실패해도 게임은 멈추지 않는다(D-16, T-23-38).
 // setup 이 실제 마이그레이션을 메모리 D1 에 적용해 두므로 env.DB 로 바로 읽는다. 삽입은 전환 끝(afterTransition)에서 기다리지만 시험은 소켓 쪽에서 보므로 until 로 폴링한다.
-import { env } from "cloudflare:test";
+import { env, runInDurableObject } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildGameRow } from "../../shared/game/gameLog";
 import type { RoomState } from "../../shared/game/room";
+import { restSegment } from "../../shared/game/world";
 import { insertGame } from "../../worker/gameLog";
 import { openKeyword } from "../helpers/keyword";
 import {
@@ -19,6 +20,7 @@ import {
   send,
   settle,
   storedRoom,
+  toPhase,
   until,
 } from "./helpers";
 import type { Seated, TestSocket } from "./helpers";
@@ -86,6 +88,37 @@ describe("판이 끝나면 D1 에 한 줄 (SC6)", () => {
     expect(typeof row.duration_s).toBe("number");
     expect(JSON.stringify(row)).not.toContain("방장");
     expect(JSON.stringify(row)).not.toContain("손님");
+  });
+
+  it("둘째 날 토론에서 한 사람이 붙이고 옮긴 판은 note_count 1(옮긴 것은 한 장), tutorial 0 (24-02, D-09·D-18)", { timeout: 90_000 }, async () => {
+    const room = await inKeyword();
+    const socks = socksOf(room);
+    await advanceTo(room.code, socks, "discussion");
+    await toPhase(room.code, "discussion", (r) => ({ ...r, day: 2 }));
+    // 서버 전용 월드 구간: 모두를 한 자리에 세운다(거리 판정 통과).
+    await runInDurableObject(env.ROOM.getByName(room.code), async (instance) => {
+      const inst = instance as unknown as { room: { players: Array<{ id: string }> }; world: { segs: Record<string, unknown> } };
+      const now = Date.now();
+      const segs: Record<string, unknown> = {};
+      for (const p of inst.room.players) segs[p.id] = restSegment(0, 0, now);
+      inst.world = { ...inst.world, segs } as typeof inst.world;
+    });
+    for (const s of socks) await settle(s, mark(s));
+    const stuckBy = room.guests[0]!;
+    send(stuckBy.sock, { t: "suspect", target: room.guests[1]!.seat });
+    await until("첫 붙이기 저장", async () => ((await storedRoom(room.code)) as unknown as { notes?: unknown[] }).notes?.length === 1);
+    await pause(700); // 연타 간격(600ms)을 넘긴다
+    send(stuckBy.sock, { t: "suspect", target: 0 });
+    await until("옮기기 저장", async () => {
+      const notes = ((await storedRoom(room.code)) as unknown as { notes?: Array<{ to: number }> }).notes ?? [];
+      return notes.length === 1 && notes[0]!.to === 0;
+    });
+    await driveHumansToEnded(room);
+    const id = ((await storedRoom(room.code)) as unknown as KeywordRoom).gameId!;
+    await until("D1 한 줄", async () => (await rowOf(id)) !== null);
+    const row = (await rowOf(id))!;
+    expect(row.note_count).toBe(1);
+    expect(row.tutorial).toBe(0);
   });
 
   it("키워드 단계에서 마피아가 금지어 확정으로 한 번 거절된 판은 probe_success 1", { timeout: 90_000 }, async () => {
