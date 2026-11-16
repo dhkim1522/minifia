@@ -22,17 +22,19 @@ function sourceFiles(): string[] {
 }
 
 describe("단일 규칙 RULES (결정 0089-12, 22-07 D-01)", () => {
-  it("키 집합은 badge·pickTurn·runoff·showdown·whisper 다섯이고 값은 모두 꺼짐이다 — 22-09 가 pickTurn 을 true 로 켠다", () => {
+  it("키 집합은 badge·pickTurn·runoff·showdown·whisper 다섯이고 pickTurn 만 켜짐이다 (순차 지목이 기본 규칙, 22-09 D-01·D-12)", () => {
     expect(Object.keys(RULES).sort().join(",")).toBe("badge,pickTurn,runoff,showdown,whisper");
-    expect(JSON.stringify(RULES)).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: false, runoff: false, showdown: false }));
+    expect(JSON.stringify(RULES)).toBe(JSON.stringify({ badge: false, whisper: false, pickTurn: true, runoff: false, showdown: false }));
   });
 
   it("RULES 는 얼린 객체 하나다", () => {
     expect(Object.isFrozen(RULES)).toBe(true);
   });
 
-  it("politicsOn 은 이 계획 시점의 RULES 에 대해 거짓이고 장치 하나라도 켜면 참이다", () => {
-    expect(`${politicsOn(RULES)}/${politicsOn({ ...RULES, runoff: true })}`).toBe("false/true");
+  it("politicsOn 은 순차 지목을 빼고 정의돼 RULES 에 대해 거짓이고, 배지·귓속말·결선·결전 중 하나라도 켜면 참이다 (누설 시험의 꺼진 장치 구역이 skip 되지 않는다, Pitfall 2)", () => {
+    expect(`${politicsOn(RULES)}/${politicsOn({ ...RULES, pickTurn: false })}/${politicsOn({ ...RULES, runoff: true })}/${politicsOn({ ...RULES, showdown: true })}/${politicsOn({ ...RULES, badge: true })}/${politicsOn({ ...RULES, whisper: true })}`).toBe(
+      "false/false/true/true/true/true",
+    );
   });
 });
 

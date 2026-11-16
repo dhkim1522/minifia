@@ -27,6 +27,8 @@ import { RULES } from "../../shared/game/ruleset";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { castPoints, nominationSpanMs, startedAt } from "../helpers/voteState";
+import { seededRandInt } from "../helpers/seededRandom";
+import { noExecutionOf } from "../../shared/game/execution";
 
 const GAME_RULES = RULES;
 
@@ -544,5 +546,69 @@ describe("기본판 투표 castPoint·집계 (결정 0072, D-03)", () => {
   it("최다 한 명이면 next 없이(defense) verdict.candidate 가 그 좌석이다", () => {
     const r = resolveNomination(withPoints(nominationOf(), { 0: 3, 1: 3, 2: 3, 4: 1 }));
     expect(`${String(r.next)} ${JSON.stringify(r.state.verdict)}`).toBe(`undefined ${JSON.stringify({ passed: false, candidate: 3 })}`);
+  });
+});
+
+// ---- 22-09: 찬반 뒤 순차 지목(결정 0089-18, D-12·D-13) ----
+describe("지목 마감 — 통과한 찬반을 보존하고 동점·0표는 밤으로 (22-09, Pitfall 1·7)", () => {
+  /** 산 4명 판: 찬반을 전원 찬성으로 통과시켜 순차 지목에 들어가고, points 대로 차례를 걸어 끝 알림 자리에 선 상태. */
+  function pointedAfterVerdict(points: Record<number, number>): RoomState {
+    const verdict = startedAt(4, 1, "verdict");
+    const agreed: RoomState = { ...verdict, players: verdict.players.map((p) => ({ ...p, verdictVote: true })) };
+    const nomination = tick(agreed, agreed.phaseEndsAt!, seededRandInt(2));
+    expect(nomination.phase).toBe("nomination");
+    return castPoints(nomination, points);
+  }
+  const closeOf = (state: RoomState): RoomState => tick(state, state.phaseEndsAt!, seededRandInt(3));
+
+  it("찬반 통과 직후 지목 단계에는 순차 지목 차례(pickTurn order 4, i -1, 모이기 3000ms)가 생긴다 — HOOKS.enter.nomination 은 enterNomination", () => {
+    const verdict = startedAt(4, 1, "verdict");
+    const agreed: RoomState = { ...verdict, players: verdict.players.map((p) => ({ ...p, verdictVote: true })) };
+    const nomination = tick(agreed, agreed.phaseEndsAt!, seededRandInt(2));
+    expect(`${nomination.pickTurn?.order.join(",")}/${nomination.pickTurn?.i}/${phaseDurationOf(nomination)}`).toBe(`0,1,2,3/-1/${NOMINATION_GATHER_MS}`);
+  });
+
+  it("모이기 마감은 같은 단계에서 첫 차례로 걷는다(stay 사슬) — HOOKS.deadline.nomination 은 stepNomination", () => {
+    const verdict = startedAt(4, 1, "verdict");
+    const agreed: RoomState = { ...verdict, players: verdict.players.map((p) => ({ ...p, verdictVote: true })) };
+    const nomination = tick(agreed, agreed.phaseEndsAt!, seededRandInt(2));
+    const walked = tick(nomination, nomination.phaseEndsAt!, seededRandInt(2));
+    expect(`${walked.phase} ${walked.pickTurn?.i}`).toBe("nomination 0");
+  });
+
+  it("A·B 가 C, C 가 D, D 기권: 마감 뒤 verdict 는 {passed:true, candidate:C} 이고 다음 단계는 defense 다", () => {
+    const next = closeOf(pointedAfterVerdict({ 0: 2, 1: 2, 2: 3 }));
+    expect(`${next.phase} ${next.verdict?.passed} ${next.verdict?.candidate}`).toBe("defense true 2");
+  });
+
+  it("그 상태로 defense → execution 에 들어가면 C 가 탈락한다 (Pitfall 1 회귀 시험)", () => {
+    const defense = closeOf(pointedAfterVerdict({ 0: 2, 1: 2, 2: 3 }));
+    const execution = closeOf(defense);
+    expect(`${execution.phase} ${execution.players.find((p) => p.seat === 2)!.alive} ${execution.execution?.seat}`).toBe("execution false 2");
+  });
+
+  it("2:2 동점이면 night, verdict 키가 없고 그날 voteLog 줄은 reason tie 다 (찬반 줄 하나에 이어 붙는다)", () => {
+    const night = closeOf(pointedAfterVerdict({ 0: 2, 1: 2, 2: 0, 3: 0 }));
+    const line = night.voteLog!.filter((e) => e.n === 1);
+    expect(`${night.phase} ${"verdict" in night} ${line.length} ${line[0]!.exec.passed} ${line[0]!.reason}`).toBe("night false 1 true tie");
+  });
+
+  it("모두 기권이면 night 이고 reason 은 noVotes 다", () => {
+    const night = closeOf(pointedAfterVerdict({}));
+    expect(`${night.phase} ${night.voteLog!.find((e) => e.n === 1)!.reason}`).toBe("night noVotes");
+  });
+
+  it("밤에 도착한 noExecutionOf 가 줄의 reason 을 돌려준다(tie·noVotes), 찬반 통과 후 처형 낮에는 값이 없다", () => {
+    const tie = closeOf(pointedAfterVerdict({ 0: 2, 1: 2, 2: 0, 3: 0 }));
+    const none = closeOf(pointedAfterVerdict({}));
+    const executed = closeOf(closeOf(closeOf(pointedAfterVerdict({ 0: 2, 1: 2, 2: 3 }))));
+    expect(`${JSON.stringify(noExecutionOf(tie))} ${JSON.stringify(noExecutionOf(none))} ${executed.phase} ${String(noExecutionOf(executed))}`).toBe(
+      '{"reason":"tie"} {"reason":"noVotes"} night undefined',
+    );
+  });
+
+  it("동시 투표 코드는 없다: enterVote·castPoint 는 모듈이 내보내지 않는다", async () => {
+    const mod = (await import("../../shared/game/nomination")) as Record<string, unknown>;
+    expect(`${Object.hasOwn(mod, "enterVote")} ${Object.hasOwn(mod, "castPoint")}`).toBe("false false");
   });
 });

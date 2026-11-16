@@ -239,12 +239,12 @@ describe("assignSlots — 현재 위치 각도 순 sweep (A2)", () => {
 });
 
 describe("layoutKey", () => {
-  it("지목 {일차}:ring · 변론·찬반 {일차}:stage · 처형 {일차}:exec · 그 밖은 null", () => {
+  it("지목 {일차}:ring · 변론 {일차}:stage · 처형 {일차}:exec · 찬반(토론 자리 그대로)·그 밖은 null (22-09 P22-3)", () => {
     const keys = (["nomination", "defense", "verdict", "execution", "discussion", "night", "dayAnnounce", "morning", "lobby", "assigning", "roleReveal", "ended"] as PhaseId[])
       .map((ph) => `${ph}:${layoutKey(stateAt(ph, 5, { day: 3 }))}`)
       .join(" ");
     expect(keys).toBe(
-      "nomination:3:ring defense:3:stage verdict:3:stage execution:3:exec discussion:null night:null dayAnnounce:null morning:null lobby:null assigning:null roleReveal:null ended:null",
+      "nomination:3:ring defense:3:stage verdict:null execution:3:exec discussion:null night:null dayAnnounce:null morning:null lobby:null assigning:null roleReveal:null ended:null",
     );
   });
 });
@@ -472,8 +472,12 @@ describe("layoutFor — 마지막 3인: 산 세 사람이 삼각형 자리로 (�
   });
 });
 
-describe("layoutFor — 변론·찬반: 변론자는 무대, 나머지는 자기 자리 (DAY-05)", () => {
-  it.each(["defense", "verdict"] as PhaseId[])("%s: 지목 때의 lay 가 있으면 변론자만 무대(0,0)로 가고 나머지는 이동 없음, key '2:stage'", (phase) => {
+describe("layoutFor — 변론: 변론자는 무대, 나머지는 자기 자리 (DAY-05)", () => {
+  it("찬반(verdict)은 배치 단계가 아니다 — 토론 자리 그대로라 null (22-09 P22-3)", () => {
+    expect(layoutFor(stateAt("verdict", 6), worldOf(6), 1000)).toBeNull();
+  });
+
+  it.each(["defense"] as PhaseId[])("%s: 지목 때의 lay 가 있으면 변론자만 무대(0,0)로 가고 나머지는 이동 없음, key '2:stage'", (phase) => {
     const nom = stateAt("nomination", 6);
     const laid = applyLayout(nom, worldOf(6), 1000);
     const state = stateAt(phase, 6, { candidate: 3 });
@@ -501,8 +505,6 @@ describe("layoutFor — 변론·찬반: 변론자는 무대, 나머지는 자기
     expect(endOf(atStage.segs[idOf(2)]!)).toBe("0,0");
     const again = layoutFor(state, atStage, 60_500)!;
     expect(again.moves.length).toBe(0);
-    const verdict = layoutFor(stateAt("verdict", 6, { candidate: 2 }), atStage, 70_000)!;
-    expect(verdict.moves.length).toBe(0);
   });
 
   it("변론자 없음(verdict.candidate 없음)이면 아무도 무대로 보내지 않는다", () => {
@@ -511,13 +513,13 @@ describe("layoutFor — 변론·찬반: 변론자는 무대, 나머지는 자기
   });
 });
 
-describe("layoutFor — 처형: 통과면 무대 유지, 부결이면 자기 자리 복귀", () => {
+describe("layoutFor — 처형: 처형자는 무대에 남는다 (22-09: 처형 단계는 찬반이 통과한 날에만 온다)", () => {
   function atStageWorld(n: number, candidate: number): WorldState {
     const laid = applyLayout(stateAt("nomination", n), worldOf(n), 1000);
     return applyLayout(stateAt("defense", n, { candidate }), laid, 60_000);
   }
 
-  it("통과(변론자는 이미 유령): 변론자 목적지 없음 — 이동 목록이 비고 key '2:exec'", () => {
+  it("처형자는 이미 유령: 처형자 목적지 없음 — 이동 목록이 비고 key '2:exec'", () => {
     const w = atStageWorld(6, 3);
     const state = stateAt("execution", 6, { candidate: 3, passed: true, dead: [3] });
     const lay = layoutFor(state, w, 90_000)!;
@@ -526,31 +528,14 @@ describe("layoutFor — 처형: 통과면 무대 유지, 부결이면 자기 자
     expect(endOf(w.segs[idOf(3)]!)).toBe("0,0");
   });
 
-  it("통과(변론자가 아직 산 사람으로 보여도): 무대에 남는다", () => {
+  it("처형자가 아직 산 사람으로 보여도 무대에 남는다", () => {
     const lay = layoutFor(stateAt("execution", 6, { candidate: 3, passed: true }), atStageWorld(6, 3), 90_000)!;
     expect(lay.moves.length).toBe(0);
   });
 
-  it("부결: 변론자가 기억해 둔 자기 둘레 자리로 돌아간다", () => {
-    const w = atStageWorld(6, 3);
-    const state = stateAt("execution", 6, { candidate: 3, passed: false });
-    const lay = layoutFor(state, w, 90_000)!;
-    expect(lay.moves.map((m) => `${m.playerId}>${str(m.dest)}`).join(" ")).toBe(`${idOf(3)}>${str(w.lay!.slots[idOf(3)]!)}`);
-  });
-
-  it("부결 처형을 적용하고 다시 부르면 이동이 없다(멱등)", () => {
-    const state = stateAt("execution", 6, { candidate: 3, passed: false });
-    const applied = applyLayout(state, atStageWorld(6, 3), 90_000);
-    expect(layoutFor(state, applied, 91_000)!.moves.length).toBe(0);
-    expect(layoutFor(state, applied, 200_000)!.moves.length).toBe(0);
-  });
-
-  it("그날 voteLog 줄이 없으면 verdict.passed 를 따른다", () => {
+  it("그날 voteLog 줄이 없어도 같다(통과 여부를 따로 읽지 않는다)", () => {
     const base = stateAt("execution", 6, { candidate: 3 });
-    const passedState: RoomState = { ...base, verdict: { passed: true, candidate: 3 } };
-    expect(layoutFor(passedState, atStageWorld(6, 3), 90_000)!.moves.length).toBe(0);
-    const failedState: RoomState = { ...base, verdict: { passed: false, candidate: 3 } };
-    expect(layoutFor(failedState, atStageWorld(6, 3), 90_000)!.moves.length).toBe(1);
+    expect(layoutFor(base, atStageWorld(6, 3), 90_000)!.moves.length).toBe(0);
   });
 });
 
