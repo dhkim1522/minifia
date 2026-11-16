@@ -372,7 +372,7 @@ Accent reserved for: (1) **포커스 링** `light-lamp` 4px 깜빡임(튜토리�
 
 ## UI Considerations
 
-Applicable state considerations resolved: 20 covered, 6 backstop, 5 unresolved
+Applicable state considerations resolved: 19 covered, 6 backstop, 5 unresolved
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
