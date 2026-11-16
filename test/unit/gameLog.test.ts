@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { buildGameRow } from "../../shared/game/gameLog";
 import { beginGame, type Player, type RoomState } from "../../shared/game/room";
-import { openKeyword } from "../helpers/keyword";
+import { keywordPickerNow, openKeyword } from "../helpers/keyword";
 import { seededRandInt } from "../helpers/seededRandom";
 
 function person(seat: number, over: Partial<Player> = {}): Player {
@@ -180,7 +180,7 @@ describe("beginGame startedAt (D-16)", () => {
     const restore = openKeyword();
     try {
       const lobby = ended({ phase: "lobby", winner: undefined, startedAt: undefined, gameId: undefined });
-      const started = beginGame({ ...lobby, players: lobby.players.slice(0, 4).map((p) => ({ ...p, role: undefined })) }, 4242, seededRandInt(1));
+      const started = beginGame({ ...lobby, players: lobby.players.slice(0, 4).map((p) => ({ ...p, role: undefined })) }, 4242, seededRandInt(1), keywordPickerNow());
       expect(started.startedAt).toBe(4242);
     } finally {
       restore();

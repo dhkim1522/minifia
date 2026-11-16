@@ -21,7 +21,7 @@ import { beginGame, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
 import { buildView } from "../../shared/game/view";
-import { openKeyword } from "../helpers/keyword";
+import { keywordPickerNow, openKeyword } from "../helpers/keyword";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castPoints, castVerdicts, lobbyOf, startedAt, stateWithVerdict } from "../helpers/voteState";
 
@@ -58,7 +58,7 @@ describe("키워드 모듈 (영화 장르)", () => {
 
 describe("beginGame 의 키워드 선택 (D-05·D-29)", () => {
   it("시작하면 서버 전용 keyword { genre, word } 가 있고 단어 목록에서 조회된다", () => {
-    const started = startGame(lobbyOf(6), "player-id-0000-aaaa", 1000, seededRandInt(1));
+    const started = startGame(lobbyOf(6), "player-id-0000-aaaa", 1000, seededRandInt(1), keywordPickerNow());
     expect(started.ok).toBe(true);
     if (!started.ok) return;
     const kw = started.state.keyword;
@@ -69,7 +69,7 @@ describe("beginGame 의 키워드 선택 (D-05·D-29)", () => {
   it("스위치를 끄면 keyword 키가 없고, 들어온 상태에 있던 keyword 도 지운다", () => {
     KEYWORD_SWITCH.on = false;
     const lobby: RoomState = { ...lobbyOf(6), keyword: { genre: GENRES[0]!.id, word: "해리포터" } };
-    const next = beginGame(lobby, 1000, seededRandInt(1));
+    const next = beginGame(lobby, 1000, seededRandInt(1), keywordPickerNow());
     expect("keyword" in next).toBe(false);
   });
 
@@ -80,7 +80,7 @@ describe("beginGame 의 키워드 선택 (D-05·D-29)", () => {
       beginGame(lobbyOf(6), 1000, (k) => {
         n += 1;
         return gen(k);
-      });
+      }, keywordPickerNow());
       return n;
     };
     const on = count();

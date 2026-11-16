@@ -4,7 +4,7 @@
 // 이전 판의 비공개 정보(역할·밤 선택·수사/치료/암살 기록·유언·주장·귓속말·통계 등)가 새 판에 남지 않는 이유는 규칙이 아니라 구조다:
 // 새 방·새 사람 행을 "허용 목록 키 배열"에서 키 하나씩 복사해 만든다 — 펼쳐 복사(...state, ...player)를 하지 않으므로 앞으로 늘어나는 게임 필드도 자동으로 빠진다(L39, T-11-26).
 import { MIN_PLAYERS } from "../protocol";
-import { ROOM_TTL_MS, beginGame, roundOf } from "./room";
+import { ROOM_TTL_MS, beginGame, roundOf, type KeywordPicker } from "./room";
 import type { Player, RoomState } from "./room";
 
 /** 방 생성 시각 기준 최대 수명 — 다시 하기를 거듭해도 방이 이 시간 넘게 살지 않는다(D-19). */
@@ -70,7 +70,7 @@ export type RematchResult = { ok: true; state: RoomState; removedIds: string[] }
  * 그 밖(연결된 미준비자·60초 미만 끊김)은 쉬는 사람(bench)으로 둔다. 새 방은 허용 목록 리터럴로 만든다(round + 1, 만료 min(방 생성 + 12시간, now + 3시간)).
  * 이어서 startGame 과 같은 본체 beginGame 으로 역할 배정 → 맵 결정 → assigning 으로 간다(쉬는 사람은 역할 배정에 들지 않는다).
  */
-export function rematch(state: RoomState, actorId: string, round: number, now: number, randInt: (n: number) => number): RematchResult {
+export function rematch(state: RoomState, actorId: string, round: number, now: number, randInt: (n: number) => number, pickKeyword?: KeywordPicker): RematchResult {
   if (state.phase !== "ended" || actorId !== state.hostId || round !== roundOf(state)) return { ok: false };
   const host = state.players.find((p) => p.id === state.hostId);
   if (host === undefined || host.left === true) return { ok: false };
@@ -95,7 +95,7 @@ export function rematch(state: RoomState, actorId: string, round: number, now: n
     players: participants.map(playerRow),
     ...(bench.length > 0 ? { bench } : {}),
   };
-  return { ok: true, state: beginGame(fresh, now, randInt), removedIds };
+  return { ok: true, state: beginGame(fresh, now, randInt, pickKeyword), removedIds };
 }
 
 // ---- 쉬는 사람(bench) 도우미 ----

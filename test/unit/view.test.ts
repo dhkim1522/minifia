@@ -12,7 +12,7 @@ import { RULES } from "../../shared/game/ruleset";
 import { tick } from "../../shared/game/tick";
 import { buildPreview, buildView } from "../../shared/game/view";
 import type { PhaseId, RoomView } from "../../shared/protocol";
-import { openKeyword } from "../helpers/keyword";
+import { keywordPickerNow, openKeyword } from "../helpers/keyword";
 import { seededRandInt } from "../helpers/seededRandom";
 import { castRunoffVote } from "../../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../../shared/game/showdown";
@@ -98,7 +98,7 @@ function stateAt(phase: PhaseId, n: number, seed: number): RoomState {
   if (phase === "ended") return endedState(n, seed, "citizen");
   const lobby = lobbyOf(n);
   if (phase === "lobby") return lobby;
-  const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed));
+  const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed), keywordPickerNow());
   if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
   let state = started.state;
   for (let guard = 0; state.phase !== phase; guard += 1) {

@@ -1,8 +1,8 @@
 // 초안, 사용자 검토 대기(0089-23). 이 파일 하나가 키워드의 원천이다. src 에서 import 하지 않는다(Pitfall 8).
 // 첫날 키워드 문제(결정 0089-2·3, D-05)의 장르·단어·별칭 목록. 서버가 시작할 때 무작위로 하나를 고른다(pickKeyword).
 // 클라이언트는 이 목록을 읽지 않는다 — 장르 라벨은 view 의 day.keyword.genre 로, 단어는 시민 편 본인의 me.keyword 로만 받는다.
-// 다만 shared/game/room.ts 를 클라이언트(hostLine·Lobby 의 connectedCount)가 import 하므로, 이 파일은 최상위에서 함수를 부르지 않는다
-// (리터럴 + as const satisfies 만) — 번들 트리 셰이킹이 확실해야 목록이 브라우저에 실리지 않는다(T-23-02).
+// shared/game/room.ts 는 클라이언트(hostLine·Lobby 의 connectedCount)가 import 하므로 이 파일을 import 하지 않는다 — 방 DO(worker/room.ts)가
+// pickKeyword 를 beginGame 에 넘긴다(WR-03). 클라이언트에서 닿는 모듈이 이 파일을 가져오면 keywordStaticGuard 의 전이 가드가 실패한다.
 
 /** 키워드 하나: 정답으로 보이는 단어와 같은 뜻으로 인정할 별칭(한국어 변형·영어·짧은 이름). 한 글자 단어는 없다. */
 export interface KeywordEntry {

@@ -8,6 +8,7 @@ import { isAlive } from "../../shared/game/alive";
 import { attachConnection, createRoomState, joinRoom, startGame } from "../../shared/game/room";
 import type { RoomState } from "../../shared/game/room";
 import { tick } from "../../shared/game/tick";
+import { keywordPickerNow } from "./keyword";
 import { castTurnPoint, nominationStepMs, stepNomination } from "../../shared/game/nomination";
 import { PICK_TURN_MS, SHOWDOWN_POINT_MS, SHOWDOWN_TURN_MS } from "../../shared/game/phases";
 import { castRunoffVote, runoffStepMs, stepRunoff } from "../../shared/game/runoff";
@@ -54,7 +55,7 @@ export function startedAt(n: number, seed: number, phase: PhaseId): RoomState {
 
 /** startedAt 과 같되 대기실을 직접 준다(봇이 낀 테스트 방처럼 lobbyOf 와 다른 방). */
 export function startedFrom(lobby: RoomState, seed: number, phase: PhaseId): RoomState {
-  const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed));
+  const started = startGame(lobby, lobby.hostId, START_AT, seededRandInt(seed), keywordPickerNow());
   if (!started.ok) throw new Error(`startGame failed: ${started.error}`);
   let state = started.state;
   for (let guard = 0; state.phase !== phase; guard += 1) {

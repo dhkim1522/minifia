@@ -38,6 +38,8 @@ import { sendWhisper } from "../shared/game/whisper";
 import { ANSWER_MIN_GAP_MS } from "../shared/game/answerRules";
 import { shrinkDeadline } from "../shared/game/early";
 import { submitAnswer } from "../shared/game/keywordAnswer";
+import { KEYWORD_SWITCH, pickKeyword } from "../shared/game/keywords";
+import type { KeywordPicker } from "../shared/game/room";
 import { WILL_MIN_GAP_MS, noteRecipientIds, saveNote, saveWill } from "../shared/game/will";
 import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from "../shared/game/testTools";
 import type { RoleId } from "../shared/game/roles";
@@ -71,6 +73,11 @@ export type JoinRpcResult =
 interface SocketAttachment {
   playerId: string;
   connId: string;
+}
+
+/** 첫날 키워드 고르는 함수(WR-03): 키워드 목록은 서버만 import 한다. 스위치(D-29, 시험에서 끔)는 호출 시점에 읽어 꺼져 있으면 키워드 단계가 없다. */
+function keywordPickerNow(): KeywordPicker | undefined {
+  return KEYWORD_SWITCH.on ? pickKeyword : undefined;
 }
 
 function jsonError(error: ApiErrorCode, status: number): Response {
@@ -488,7 +495,7 @@ export class Room extends DurableObject<Env> {
       return;
     }
     const now = Date.now();
-    const result = startGame(this.room, att.playerId, now, cryptoRandInt);
+    const result = startGame(this.room, att.playerId, now, cryptoRandInt, keywordPickerNow());
     if (!result.ok) {
       // 거절되면 클라이언트가 서버 view 대로 다시 그리도록 최신 state 를 함께 보낸다.
       this.sendTo(ws, { t: "error", code: result.error });
@@ -644,7 +651,7 @@ export class Room extends DurableObject<Env> {
       return;
     }
     const now = Date.now();
-    const result = rematch(this.room, att.playerId, round, now, cryptoRandInt);
+    const result = rematch(this.room, att.playerId, round, now, cryptoRandInt, keywordPickerNow());
     if (!result.ok) {
       this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, now) });
       return;

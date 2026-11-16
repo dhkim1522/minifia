@@ -19,7 +19,6 @@ import type {
 import type { BotPlan } from "./bots";
 import { hostSuccessor } from "./continuity";
 import { resolveLookConflicts } from "./look";
-import { KEYWORD_SWITCH, pickKeyword } from "./keywords";
 import { decideMap } from "./maps";
 import { enterNomination } from "./nomination";
 import { ASSIGNING_MS, DAY_ANNOUNCE_MS, DISCUSSION_MS, NOMINATION_GATHER_MS } from "./phases";
@@ -393,6 +392,13 @@ export const connectedCount = (players: readonly { connected: boolean }[]): numb
 export type StartError = "NOT_HOST" | "WRONG_PHASE" | "NOT_ENOUGH_PLAYERS";
 
 /**
+ * 첫날 키워드를 고르는 서버 쪽 함수(WR-03). 방 Durable Object 가 keywords.ts 의 pickKeyword 를 넘긴다 — 이 파일은 키워드 목록을 import 하지 않는다
+ * (클라이언트가 connectedCount 때문에 이 파일을 import 하므로 목록이 브라우저 번들 그래프에 들어오면 안 된다, keywordStaticGuard 전이 가드).
+ * 장르 randInt 한 번 → 단어 randInt 한 번 순서로 난수를 쓴다. 넘기지 않으면 키워드 단계가 없다(D-29).
+ */
+export type KeywordPicker = (randInt: (n: number) => number) => { genre: string; word: string };
+
+/**
  * 시작할 수 있으면 null. 검사 순서는 NOT_HOST → WRONG_PHASE → NOT_ENOUGH_PLAYERS.
  * 인원은 연결된 사람 기준이다(결정 0012): 끊긴 사람은 자리를 지키지만 세지 않는다.
  * 입력은 서버 상태와 요청자 id 뿐이다 — 클라이언트가 보낸 방장 여부·인원·연결 상태는 쓰지 않는다.
@@ -409,16 +415,18 @@ export function checkStart(state: RoomState, actorId: string): StartError | null
  * (결정 0012, D-16 "돌아오면 자기 역할로 이어서"). 자리 수 ≥ 연결자 수 ≥ 4 이므로 assignRoles 의 4~8명 범위 안이다.
  * 난수는 인자 randInt 로만 받는다(방 Durable Object 는 cryptoRandInt 를 넘긴다) — 이 파일에서 전역 난수나 시각 시드를 쓰지 않는다.
  * 배정 입력은 seat 오름차순 id 라 같은 시드·같은 상태는 같은 배정을 낸다. now 는 서버 시각이다.
+ * pickKeyword 는 서버(방 DO)가 넘기는 첫날 키워드 선택 함수다(WR-03) — 없으면 키워드를 고르지 않는다(옛 흐름).
  */
 export function startGame(
   state: RoomState,
   actorId: string,
   now: number,
   randInt: (n: number) => number,
+  pickKeyword?: KeywordPicker,
 ): { ok: true; state: RoomState } | { ok: false; error: StartError } {
   const error = checkStart(state, actorId);
   if (error !== null) return { ok: false, error };
-  return { ok: true, state: { ...beginGame(state, now, randInt), expiresAt: now + ROOM_TTL_MS } };
+  return { ok: true, state: { ...beginGame(state, now, randInt, pickKeyword), expiresAt: now + ROOM_TTL_MS } };
 }
 
 /**
@@ -427,11 +435,13 @@ export function startGame(
  * 만료(expiresAt)는 건드리지 않는다 — 시작은 now + ROOM_TTL_MS, 다시 하기는 min(방 생성 + 12시간, now + ROOM_TTL_MS)로 호출하는 쪽이 정한다.
  * 시작 순간 겹친 옷을 푼다(D-01) — 역할을 붙이기 전에 resolveLookConflicts 를 부르며 난수·역할을 읽지 않으므로 위 난수 순서는 그대로다.
  * players 는 4~8명이어야 한다(호출하는 쪽이 보장). 입력은 바꾸지 않는다.
+ * 키워드는 호출하는 쪽이 넘긴 pickKeyword 로 고른다(WR-03) — 이 파일은 키워드 목록을 알지 못한다. 시험 스위치(KEYWORD_SWITCH)도 호출하는 쪽이 읽는다.
  */
 export function beginGame(
   state: RoomState,
   now: number,
   randInt: (n: number) => number,
+  pickKeyword?: KeywordPicker,
 ): RoomState {
   const seated = [...state.players].sort((a, b) => a.seat - b.seat);
   const orderedIds = seated.map((p) => p.id);
@@ -443,9 +453,9 @@ export function beginGame(
       : shuffled;
   // 맵은 역할 배정 난수를 모두 쓴 뒤에 정한다(결정 D-21) — 허용 맵이 하나면 난수를 부르지 않아 기존 시드 시험이 그대로다.
   const map = decideMap(state.mapChoice ?? "random", randInt);
-  // 키워드는 맨 끝 난수 두 번이다(D-29) — 역할 → 맵 순서와 기존 시드 시험은 그대로. 스위치가 꺼지면 들어온 상태의 keyword 도 지운다(다시 하기가 옛 값을 끌고 오지 않게).
+  // 키워드는 맨 끝 난수 두 번이다(D-29) — 역할 → 맵 순서와 기존 시드 시험은 그대로. 고르는 함수가 없으면(스위치 끔) 들어온 상태의 keyword 도 지운다(다시 하기가 옛 값을 끌고 오지 않게).
   const { keyword: _prevKeyword, ...rest } = state;
-  const keyword = KEYWORD_SWITCH.on ? pickKeyword(randInt) : undefined;
+  const keyword = pickKeyword !== undefined ? pickKeyword(randInt) : undefined;
   return {
     ...rest,
     ...(keyword !== undefined ? { keyword } : {}),
