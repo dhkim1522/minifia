@@ -51,6 +51,16 @@
 - D-23: 튜토리얼 장면 "≤ 1탭" 규칙의 출처는 UI-SPEC(P24-27)이다. 포스트잇 장면만 [의심] → 이름표 두 번 누름(실제 조작을 거짓 연습으로 만들지 않기 위해).
 - D-24: 포스트잇은 새 `V2Icon` `postit` 한 개(폴백 `note`), `palette.ts` 에 좌석 8색 복사(`tokens:check` 로 동기화), 탭 키 `answers`→`records` 개명에 따른 23 의 E2E 표식·`e2eContract` 정정이 이 페이즈 계획에 들어간다. 귓속말 모드(`GameMap` 의 `whisper.mode`)와 [의심] 모드는 동시에 켜지지 않게 서로 끈다.
 
+### 리서치 열린 질문 자동 채택 (24-RESEARCH Q1~Q10)
+- D-25: `NOTE_REACH_FX = 240`(반경의 약 6.9배), [의심] 켜는 문턱 220, 연타 간격 `SUSPECT_MIN_GAP_MS = 600`(일일 상한 없음). 근처 판정은 서버 구간(`store.segOf`)으로 한다(내 예측 위치가 아니라).
+- D-26: 거절은 단계 어긋남까지 포함해 모두 `BAD_MESSAGE` 하나(`whisper.ts` 의 `WRONG_PHASE` 를 따라 하지 않는다). 포스트잇은 공개 값이라 전원 방송(`applyPoint` 모양).
+- D-27: 표식 이름은 `data-log-day`(UI-SPEC 의 `data-record-day` 는 E2E 꺼진 장치 접두 감시와 부딪힘). 기록 시트 제목을 바꾸면 E2E 하네스(`browser.mjs` 첫날 자동 열림 시트 닫기)도 같은 계획에서 고친다. E2E 훅은 `__mfWorld.suspectNotes()`. 옮기기는 목록에서 빼고 끝에 추가(최신이 위).
+- D-28: 좌석 8색 동기는 `palette.test.ts` 확장으로 한다(`gen-tokens --check` 는 `palette.ts` 를 보지 않음). 종이 크기는 `CHAR_SCALE 0.83` 을 반영해 0.34~0.36·중심 y 0.54~0.56 두 안을 스크린샷으로 확정한다. 텍스처 굽기는 주입식(happy-dom 에 canvas 없음). `perf-run` 에 `--notes N` 옵션을 더해 최악 8장 장면을 잰다.
+- D-29: **실제 `database_id` 는 커밋하지 않는다**(배포하는 Mac 의 작업 폴더 `wrangler.jsonc` 에만 둔다. 공개 저장소에 올린 값은 되돌리기 어렵고 안 올리는 건 언제든 되돌릴 수 있다). 문서·커밋 메시지에도 값을 옮기지 않는다. 커밋 여부와 다른 PC 에서의 배포는 사용자가 정하도록 HANDOFF 에 적는다. 로컬 D1 확인은 id 기입 전에 끝낸다(기입하면 로컬 id 가 바뀌어 로컬 DB 가 빔).
+- D-30: 로컬 D1 상태 공유는 23 리서치에서 확인됨(`npm run games -- --local --all` 이 `vite dev` 가 쓴 행을 읽음, 기본 실행은 봇 판을 빼서 "기록 없음"으로 보임) → `games.mjs` 수정 불필요. 배포본 `smoke --stage full` 은 운영 D1 에 `has_bots=0` 행 한 줄을 남기므로 삭제하지 않고 0092·HANDOFF 에 표시한다.
+- D-31: [의심] 모드 헤더는 귓속말 선례대로 두고 360×560 레이아웃 이동을 스크린샷으로 확인한다. 튜토리얼의 `Keyword` "0초" 메타는 선택 prop `timeless` 하나만 추가한다. 튜토리얼 화면 부품에는 장면 시작 기준 실제 시계를, 띠·헤더에는 시계를 `null` 로 지운 사본을 준다.
+- D-32: 마지막 계획(회귀·배포)의 정지 조건: `wrangler whoami`/`check-account` 가 개인 계정이 아니거나 로그인이 없으면 로그인 시도·가드 우회 없이 멈추고 사용자에게 알린다.
+
 ### Claude's Discretion
 - 계획 나누기(조사 권장: 서버 규칙+D1 공유 확인 → 프로토콜·view → [의심] UX·에셋·기록 카드 → 튜토리얼 스크립트·화면 → E2E 부분 회귀 → 전체 회귀·배포), `NOTE_REACH_FX` 정확한 값, 틴트·그림자 수치, 튜토리얼 문구는 계획자·실행자가 정한다.
 
