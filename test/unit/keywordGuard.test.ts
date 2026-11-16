@@ -1,6 +1,6 @@
 // 23-03: 금지어 판정 violatesKeyword 의 우회 표(결정 0089-5·D-08, SC2, T-23-09). RESEARCH P3 실행 확인 표 전부를 단언한다.
 import { describe, expect, it } from "vitest";
-import { choseongOf, normalizeForGuard, violatesKeyword } from "../../shared/game/keywordGuard";
+import { choseongOf, jamoSkeleton, normalizeForGuard, violatesKeyword } from "../../shared/game/keywordGuard";
 
 const HARRY = { word: "해리포터", aliases: ["Harry Potter", "해리", "해포", "potter", "harry", "포터"] } as const;
 
@@ -95,6 +95,49 @@ describe("violatesKeyword — 경계", () => {
 
   it("알려진 한계, 0091 에 기록: 고양이 에 가을이 왔다 는 초성열 ㄱㅇㅇ 이 들어 있어 막힌다(D-08 문언대로)", () => {
     expect(violatesKeyword("가을이 왔다", { word: "고양이", aliases: [] })).toBe(true);
+  });
+});
+
+describe("violatesKeyword — 자모를 풀어 쓴 답(WR-01)", () => {
+  const 명량 = { word: "명량", aliases: ["이순신"] };
+  const 부산행 = { word: "부산행", aliases: [] };
+
+  it("ㅁㅕㅇㄹㅑㅇ 은 명량 으로 막힌다(받침 자리 호환 자음)", () => {
+    expect(violatesKeyword("ㅁㅕㅇㄹㅑㅇ", 명량)).toBe(true);
+    expect(violatesKeyword("나는 ㅁㅕㅇㄹㅑㅇ 을 봤다", 명량)).toBe(true);
+  });
+
+  it("ㅂㅜㅅㅏㄴㅎㅐㅇ 은 부산행 으로 막힌다", () => {
+    expect(violatesKeyword("ㅂㅜㅅㅏㄴㅎㅐㅇ", 부산행)).toBe(true);
+    expect(violatesKeyword("ㅂ ㅜ ㅅ ㅏ ㄴ ㅎ ㅐ ㅇ", 부산행)).toBe(true);
+  });
+
+  it("해리ㅍㅗㅌㅓ 같은 음절 + 자모 혼합도 막힌다", () => {
+    expect(violatesKeyword("해리ㅍㅗㅌㅓ", HARRY)).toBe(true);
+    expect(violatesKeyword("ㅎㅐ리포ㅌㅓ", HARRY)).toBe(true);
+  });
+
+  it("겹받침·겹모음을 풀어 써도 막힌다(닭갈비 ㄷㅏㄹㄱㄱㅏㄹㅂㅣ, 왕국 ㅇㅗㅏㅇㄱㅜㄱ)", () => {
+    expect(violatesKeyword("ㄷㅏㄹㄱㄱㅏㄹㅂㅣ", { word: "닭갈비", aliases: [] })).toBe(true);
+    expect(violatesKeyword("ㅇㅗㅏㅇㄱㅜㄱ", { word: "왕국", aliases: [] })).toBe(true);
+  });
+
+  it("오탐 점검: 모음이 다르거나 순서가 다른 풀어쓰기·무관한 답은 통과한다", () => {
+    expect(violatesKeyword("ㅁㅓㅇㄹㅏㅇ", 명량)).toBe(false); // 멍랑
+    expect(violatesKeyword("ㅁㅕㅇㄹㅕㅇ", 명량)).toBe(false); // 명령
+    expect(violatesKeyword("ㅂㅜㅅㅏㄴㅅㅏㅇ", 부산행)).toBe(false); // 부산상
+    expect(violatesKeyword("합니다 감사합니다", 부산행)).toBe(false);
+    expect(violatesKeyword("바다 위의 전투", 명량)).toBe(false);
+    expect(violatesKeyword("마법사 안경 소년", HARRY)).toBe(false);
+  });
+
+  it("hery foter 는 여전히 통과한다", () => {
+    expect(violatesKeyword("hery foter", HARRY)).toBe(false);
+  });
+
+  it("jamoSkeleton: 음절·풀어쓴 자모·종성·겹모음이 같은 열이 된다", () => {
+    expect(jamoSkeleton(normalizeForGuard("ㅁㅕㅇㄹㅑㅇ"))).toBe(jamoSkeleton(normalizeForGuard("명량")));
+    expect(jamoSkeleton("ab1")).toBe("ab1");
   });
 });
 
