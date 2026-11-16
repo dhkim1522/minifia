@@ -275,7 +275,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     myInfo.endDiscussion = true;
   }
 
-  // 찬반 값은 본인에게만(결정 0053·0060-4, T-08-02) — verdict 단계에서 유권자(변론자를 뺀 산 사람)인 본인이 던진 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.
+  // 찬반 값은 본인에게만(결정 0053·0060-4, T-08-02) — verdict 단계에서 유권자(산 사람 전원 — 찬반에는 후보가 없다, D-11)인 본인이 던진 값이 있을 때만 키를 만든다. 남의 값은 어떤 키로도 싣지 않는다.
   if (state.phase === "verdict" && me.verdictVote !== undefined && verdictVotersOf(state).some((p) => p.id === me.id)) {
     myInfo.verdictVote = me.verdictVote;
   }
