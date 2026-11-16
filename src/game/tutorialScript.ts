@@ -1,0 +1,516 @@
+// 혼자 하기 튜토리얼 대본(결정 0089-15, 24페이즈 D-15~D-17·D-23·D-31, UI-SPEC P24-21~33).
+// 열 장면(roles → keyword → answers → discussion → verdict → pick → will → night → postit → end)의 장면 표·출연·대본 글·가짜 RoomView·월드 스냅·로컬 send 어댑터를 한 곳에 둔다.
+// 서버·소켓·세션 모듈을 import 하지 않는다 — 정적 가드(test/unit/tutorialStaticGuard.test.ts)가 이 파일의 값 import 폐포를 지킨다.
+// 순수 모듈 — DOM·window·현재 시각·난수를 읽지 않는다. 시각은 모두 인자(startedAt, at)로 받는다.
+// 가짜 view 는 `satisfies RoomView` 로 만든다: RoomView 모양이 바뀌면 컴파일러가 잡는다.
+// 시계(D-31): 가짜 view 는 장면 시작 기준의 실제 phaseEndsAt·phaseDurationMs 를 가진다 — 역할 카드 자동 뒤집힘·처형 순간 연출이 시계로 돌기 때문이다.
+// 시간 표시를 지운 사본(머리·띠용)은 화면 쪽이 만든다. 튜토리얼 루트에 맨 이름 data-tutorial 속성은 쓰지 않는다(표식 이름은 UI-SPEC 표).
+// 옛 서버 쪽 표식과 같은 이름(통과·완료 표식·튜토리얼 단계)은 만들지 않는다 — 혼자 하기는 서버 상태가 없다(D-15).
+import { UNIT } from "../../shared/game/map";
+import { rolesInPlay } from "../../shared/game/roles";
+import { emptyWorld, restSegment, snapFrame } from "../../shared/game/world";
+import type { WorldState } from "../../shared/game/world";
+import type { ClientMessage, EmoteId, KeywordAnswerRow, OutfitId, PhaseId, PublicPlayer, RoomView, WorldFrame } from "../../shared/protocol";
+import { AUTO_FLIP_MS } from "../net/cardFace";
+
+// ---- 타입 ----
+
+export type TutorialSceneId = "roles" | "keyword" | "answers" | "discussion" | "verdict" | "pick" | "will" | "night" | "postit" | "end";
+
+/** 장면 안의 비트. 시각표로 가는 비트(at 숫자)와 눌러서 들어가는 비트(at null) 모두 이 이름으로 가짜 view 를 고른다 */
+export type TutorialBeatId = "start" | "a" | "b" | "c";
+
+/** 링 대상의 안정 id(E2E 표식 data-tutorial-target 값) */
+export type TutorialTargetId = "send" | "endDiscussion" | "yes" | "tag-4" | "face-0" | "suspect-btn";
+
+/** 장면 소리 큐 — 새 레시피 없이 기존 ui.* 만 쓴다(P24-31) */
+export type TutorialCue = "ui.card" | "ui.tap" | "ui.host";
+
+/** 알약 문구 키(문구는 TUTORIAL_PILLS 한 곳에만 있다) */
+export type TutorialPillKey = keyof typeof TUTORIAL_PILLS;
+
+export interface TutorialBeat {
+  id: TutorialBeatId;
+  /** 장면 시작부터 ms. null 이면 사람이 눌러서(또는 앞 비트의 holdMs 가 지나) 들어가는 비트 */
+  at: number | null;
+  /** 눌러서 들어간 비트가 머무는 시간(ms). 지나면 다음 비트(마지막 비트면 다음 장면) */
+  holdMs?: number;
+  pill: TutorialPillKey | null;
+  sfx?: TutorialCue;
+}
+
+export interface TutorialScene {
+  id: TutorialSceneId;
+  /** watch = 자동으로 넘어감 · do = 링 대상을 누름(12초 뒤 대본이 대신) */
+  kind: "watch" | "do";
+  /** 장면 길이(ms) — 가짜 view 의 실제 시계가 이만큼 흐른다(하기 장면은 링 + 12초 대행 + 뒷마무리까지 덮는다) */
+  ms: number;
+  beats: readonly TutorialBeat[];
+  /** 하기 장면의 링 대상(눌러야 하는 순서) */
+  targets?: readonly TutorialTargetId[];
+  /** 링이 켜지는 시각(장면 시작부터 ms) */
+  ringAtMs?: number;
+  /** 링이 켜진 뒤(여러 단계면 각 단계 시작 뒤) 이만큼 안 누르면 대본이 대신 누른다 */
+  autoActMs?: number;
+  /** 누른 뒤 가짜 반응이 한 단계씩 나오는 간격(ms) */
+  stepMs?: number;
+  /** 반응이 끝난 뒤 다음 장면까지 머무는 시간(ms) */
+  tailMs?: number;
+}
+
+/** 눌렀을 때(또는 12초 뒤 대본이 대신) 일어나는 일 */
+export interface TutorialAction {
+  target: TutorialTargetId;
+  /** 대상의 실제 핸들러가 보내는 메시지. [의심] 단추처럼 보내지 않는 조작은 null */
+  msg: ClientMessage | null;
+  /** 누른 뒤 가짜 반응이 나오는 단계 수(tutorialView 의 acted 가 0 → steps 로 올라간다) */
+  steps: number;
+  /** 눌러서 들어가는 다음 비트. 없으면 null */
+  next: TutorialBeatId | null;
+}
+
+// ---- 상수 ----
+
+/** 하기 장면에서 이만큼 안 누르면 대본이 대신 한다(P24-27) */
+export const TUTORIAL_AUTO_ACT_MS = 12000;
+/** 역할 카드가 장면 시작 뒤 이 시각에 저절로 뒤집힌다(UI-SPEC E 표 장면 1) */
+export const TUTORIAL_FLIP_AT_MS = 400;
+/** 역할 아이콘 4개가 올라오는 간격과 시작 시각(장면 1) */
+export const ROLE_ICON_STEP_MS = 150;
+export const ROLE_ICON_START_MS = 2200;
+/** 모두의 기록 줄 등장: 시작·간격·마지막(답 없음) 줄을 한 박자 쉬는 시간(장면 3) */
+export const ANSWER_ROW_START_MS = 300;
+export const ANSWER_ROW_STEP_MS = 350;
+export const ANSWER_ROW_LAST_EXTRA_MS = 200;
+/** 장면 9: 아침으로 넘어가는 막 길이와 종이 떨어짐 시간 */
+export const POSTIT_CURTAIN_MS = 600;
+export const POSTIT_FALL_MS = 1200;
+
+/** 알약 문구 열여섯(UI-SPEC 297행, 공백 포함 17자 이하·해요체·마침표 없음). 같은 장면 사회자 띠 줄을 되풀이하지 않는다 */
+export const TUTORIAL_PILLS = {
+  "roles.citizen": "나는 시민이에요",
+  "roles.find": "마피아를 찾아내요",
+  "roles.others": "경찰·의사도 있어요",
+  "keyword.citizen": "시민은 키워드를 알아요",
+  "keyword.mafia": "마피아는 키워드를 몰라요",
+  "keyword.noAnswer": "정답은 말하면 안 돼요",
+  "answers.suspect": "답 없는 사람이 수상해요",
+  "discussion.talk": "말로 서로 의심해요",
+  "discussion.end": "과반이 눌러야 끝나요",
+  "verdict.majority": "과반이면 처형해요",
+  "pick.point": "의심 가는 사람을 가리켜요",
+  "will.will": "처형되는 사람은 유언을 남겨요",
+  "night.mafia": "마피아는 몰래 한 명을 노려요",
+  "postit.near": "의심 가는 사람 곁에서 눌러요",
+  "postit.pick": "붙일 사람을 눌러요",
+  "postit.fall": "하루 한 장, 아침에 떨어져요",
+} as const;
+
+/**
+ * 출연(P24-29, 0080-16). 가짜 방은 6명이고 의상 이름에 역할 낱말(police·doctor·mafia)이 없다.
+ * 나 = 시민, 마피아 = 하린(비밀), 키워드 = 장르 "동물" / "고양이". 이야기: 하린만 첫날 답이 없다 → 모두가 도윤을 처형(직업은 공개하지 않는다) → 밤에 서연이 떠난다 → 둘째 날 아침 하린 곁에서 포스트잇.
+ */
+export const TUTORIAL_CAST = {
+  me: 5,
+  /** 마피아(비밀) — 어떤 화면 글에도 쓰지 않는다 */
+  suspect: 4,
+  executed: 1,
+  nightVictim: 2,
+  genre: "동물",
+  word: "고양이",
+  seats: [
+    { seat: 0, name: "민준", look: "detective" },
+    { seat: 1, name: "도윤", look: "noir" },
+    { seat: 2, name: "서연", look: "elder" },
+    { seat: 3, name: "지호", look: "reporter" },
+    { seat: 4, name: "하린", look: "hood" },
+    { seat: 5, name: "나", look: "coat" },
+  ],
+} as const;
+
+/** 장면 2c 내 입력칸에 채워지는 글(읽기 전용)과 장면 3 의 모두의 답 */
+export const TUTORIAL_MY_ANSWER = "발소리가 안 들려요";
+export const TUTORIAL_ANSWERS: readonly KeywordAnswerRow[] = [
+  { order: 1, seat: 0, text: "꼬리가 길어요" },
+  { order: 2, seat: 2, text: "털이 부드러워요" },
+  { order: 3, seat: 5, text: TUTORIAL_MY_ANSWER },
+  { order: 4, seat: 3, text: "밥 줄 때만 와요" },
+  { order: 5, seat: 1, text: "눈이 동그래요" },
+  { order: 6, seat: 4, text: null },
+];
+
+/** 장면 4: 시작부터 ms 에 뜨는 가짜 채팅 셋(도윤은 deny 동작) */
+export const TUTORIAL_CHAT: readonly { atMs: number; seat: number; text: string; emote?: EmoteId }[] = [
+  { atMs: 1000, seat: 0, text: "하린은 왜 답이 없지?" },
+  { atMs: 2200, seat: 4, text: "아… 생각이 안 났어" },
+  { atMs: 3400, seat: 1, text: "난 아니야", emote: "deny" },
+];
+/** 장면 7: 처형되는 도윤의 유언 카드(공백 포함 13자) */
+export const TUTORIAL_WILL = "믿어줘, 난 정말 아니야";
+
+/** 누른 뒤 가짜 반응(다른 참가자의 행동)이 나오는 단계 수와 간격 */
+const END_STEPS = 4; // 나 + 나머지 셋 = 6명 중 과반
+const VERDICT_VOTES: readonly boolean[] = [true, true, false, true, false, true]; // 나 → 찬성 4 · 반대 2
+/** 장면 6 차례 순서: 민준→도윤, 서연→도윤, 나→(하린), 지호→도윤, 도윤→민준, 하린→도윤 */
+const PICK_ORDER: readonly number[] = [0, 2, 5, 3, 1, 4];
+const PICK_LINES: readonly { seat: number; target: number }[] = [
+  { seat: 0, target: 1 },
+  { seat: 2, target: 1 },
+  { seat: 5, target: 4 },
+  { seat: 3, target: 1 },
+  { seat: 1, target: 0 },
+  { seat: 4, target: 1 },
+];
+const PICK_MINE_AT = 2; // PICK_ORDER 에서 내 차례 자리
+
+const beat = (id: TutorialBeatId, at: number | null, pill: TutorialPillKey | null, extra: { holdMs?: number; sfx?: TutorialCue } = {}): TutorialBeat => ({ id, at, pill, ...extra });
+
+/** 장면 표(UI-SPEC E 표 그대로 — 비트 시각·알약 키·소리 큐) */
+export const TUTORIAL_SCENES: readonly TutorialScene[] = [
+  {
+    id: "roles",
+    kind: "watch",
+    ms: 6400,
+    beats: [beat("start", 0, null), beat("a", TUTORIAL_FLIP_AT_MS, "roles.citizen", { sfx: "ui.card" }), beat("b", 2200, "roles.find"), beat("c", 4200, "roles.others")],
+  },
+  {
+    id: "keyword",
+    kind: "do",
+    ms: 18600,
+    ringAtMs: 5800,
+    autoActMs: TUTORIAL_AUTO_ACT_MS,
+    tailMs: 800,
+    targets: ["send"],
+    beats: [beat("a", 0, "keyword.citizen"), beat("b", 2600, "keyword.mafia", { sfx: "ui.card" }), beat("c", 5800, "keyword.noAnswer", { sfx: "ui.card" })],
+  },
+  {
+    id: "answers",
+    kind: "watch",
+    ms: 7000,
+    beats: [beat("a", 0, null, { sfx: "ui.card" }), beat("b", 2600, "answers.suspect")],
+  },
+  {
+    id: "discussion",
+    kind: "do",
+    ms: 19200,
+    ringAtMs: 4400,
+    autoActMs: TUTORIAL_AUTO_ACT_MS,
+    stepMs: 400,
+    tailMs: 1200,
+    targets: ["endDiscussion"],
+    beats: [beat("a", 0, "discussion.talk"), beat("b", 4400, "discussion.end")],
+  },
+  {
+    id: "verdict",
+    kind: "do",
+    ms: 16400,
+    ringAtMs: 1000,
+    autoActMs: TUTORIAL_AUTO_ACT_MS,
+    stepMs: 300,
+    tailMs: 1600,
+    targets: ["yes"],
+    beats: [beat("a", 0, "verdict.majority")],
+  },
+  {
+    id: "pick",
+    kind: "do",
+    ms: 18300,
+    ringAtMs: 3200,
+    autoActMs: TUTORIAL_AUTO_ACT_MS,
+    stepMs: 400,
+    tailMs: 1500,
+    targets: ["tag-4"],
+    beats: [beat("a", 0, null), beat("b", 1600, null), beat("c", 3200, "pick.point")],
+  },
+  {
+    id: "will",
+    kind: "watch",
+    ms: 6000,
+    beats: [beat("a", 0, "will.will", { sfx: "ui.card" }), beat("b", 3000, "will.will")],
+  },
+  {
+    id: "night",
+    kind: "do",
+    ms: 17500,
+    ringAtMs: 0,
+    autoActMs: TUTORIAL_AUTO_ACT_MS,
+    targets: ["face-0"],
+    beats: [beat("a", 0, "night.mafia"), beat("b", null, null, { holdMs: 2500, sfx: "ui.tap" }), beat("c", null, null, { holdMs: 3000 })],
+  },
+  {
+    id: "postit",
+    kind: "do",
+    ms: 28800,
+    ringAtMs: 0,
+    autoActMs: TUTORIAL_AUTO_ACT_MS,
+    targets: ["suspect-btn", "tag-4"],
+    beats: [
+      beat("start", 0, "postit.near"),
+      beat("a", null, "postit.pick", { sfx: "ui.tap" }),
+      beat("b", null, "postit.fall", { holdMs: 3000, sfx: "ui.tap" }),
+      beat("c", null, null, { holdMs: POSTIT_CURTAIN_MS + POSTIT_FALL_MS, sfx: "ui.host" }),
+    ],
+  },
+  {
+    id: "end",
+    kind: "watch",
+    ms: 4000,
+    beats: [beat("a", 0, null, { sfx: "ui.card" })],
+  },
+];
+
+const sceneOf = (id: TutorialSceneId): TutorialScene => TUTORIAL_SCENES.find((s) => s.id === id)!;
+
+/** 가짜 시계의 기준 시각 — 인자를 안 주면 쓰는 고정 값(시험·정적 미리보기용) */
+export const TUTORIAL_EPOCH = 1_700_000_000_000;
+
+// ---- 대행·반응 ----
+
+/**
+ * 장면 scene(비트 beat)의 링 대상을 눌렀을 때의 일. 12초 안 누르면 대본이 이것을 대신 한다(같은 결과). 보기 장면·눌러서 할 일이 더 없는 비트는 null.
+ * postit 만 두 단계라 비트로 가른다: start → [의심] 누름(메시지 없음) → a → 하린 이름표 → b.
+ */
+export function autoAct(id: TutorialSceneId, at?: TutorialBeatId): TutorialAction | null {
+  switch (id) {
+    case "keyword":
+      return { target: "send", msg: { t: "answer", text: TUTORIAL_MY_ANSWER, final: true }, steps: 1, next: null };
+    case "discussion":
+      return { target: "endDiscussion", msg: { t: "endDiscussion", on: true }, steps: END_STEPS, next: null };
+    case "verdict":
+      return { target: "yes", msg: { t: "verdict", agree: true }, steps: VERDICT_VOTES.length, next: null };
+    case "pick":
+      return { target: "tag-4", msg: { t: "point", target: TUTORIAL_CAST.suspect }, steps: PICK_LINES.length - PICK_MINE_AT, next: null };
+    case "night":
+      return at === undefined || at === "a" ? { target: "face-0", msg: { t: "pick", target: 0 }, steps: 1, next: "b" } : null;
+    case "postit":
+      if (at === undefined || at === "start") return { target: "suspect-btn", msg: null, steps: 0, next: "a" };
+      if (at === "a") return { target: "tag-4", msg: { t: "suspect", target: TUTORIAL_CAST.suspect }, steps: 0, next: "b" };
+      return null;
+    default:
+      return null;
+  }
+}
+
+/** 화면이 보낸 메시지가 그 비트의 링 대상 조작이면 그 일을, 아니면 null(그 밖의 조작은 대본이 반응하지 않는다) */
+export function reactTo(id: TutorialSceneId, at: TutorialBeatId, msg: ClientMessage): TutorialAction | null {
+  const act = autoAct(id, at);
+  if (act === null || act.msg === null) return null;
+  return JSON.stringify(act.msg) === JSON.stringify(msg) ? act : null;
+}
+
+// ---- 가짜 view ----
+
+/** 그 장면·비트에서 유령인 좌석(공개 값) */
+function deadSeats(id: TutorialSceneId, at: TutorialBeatId): number[] {
+  const { executed, nightVictim } = TUTORIAL_CAST;
+  if (id === "will") return at === "a" ? [] : [executed];
+  if (id === "night") return at === "c" ? [executed, nightVictim] : [executed];
+  if (id === "postit" || id === "end") return [executed, nightVictim];
+  return [];
+}
+
+function playersOf(dead: readonly number[]): PublicPlayer[] {
+  return TUTORIAL_CAST.seats.map((c): PublicPlayer => {
+    const look: OutfitId = c.look;
+    return { seat: c.seat, nickname: c.name, connected: true, isHost: false, ...(dead.includes(c.seat) ? { alive: false } : {}), look };
+  });
+}
+
+/**
+ * 장면 id 의 비트 at 에 보이는 가짜 RoomView. 매번 새 객체다.
+ * startedAt 은 장면 시작 시각(서버 시각 자리) — phaseEndsAt = startedAt + 장면 길이. acted 는 눌러서 반응이 나온 단계 수(0 = 아직)다.
+ * 마피아 ??? 맛보기(keyword 의 비트 b)만 역할 mafia 이고 me.keyword 키가 없다.
+ */
+export function tutorialView(id: TutorialSceneId, at: TutorialBeatId = sceneOf(id).beats[0]!.id, startedAt: number = TUTORIAL_EPOCH, acted = 0): RoomView {
+  const scene = sceneOf(id);
+  // 역할 확인은 시작 5초에 저절로 뒤집힌다 — 시계를 앞당겨 0.4초에 뒤집히게 한다(실제 카드 규칙을 그대로 쓴다)
+  const duration = id === "roles" ? scene.ms + (AUTO_FLIP_MS - TUTORIAL_FLIP_AT_MS) : scene.ms;
+  const roles = rolesInPlay(TUTORIAL_CAST.seats.length);
+  const phase = phaseOf(id, at);
+  const dayN = id === "postit" ? (at === "c" ? 3 : 2) : id === "end" ? 3 : 1;
+  const mine = { seat: TUTORIAL_CAST.me, isHost: false } as const;
+  const keyword = { genre: TUTORIAL_CAST.genre };
+
+  const view = {
+    code: "",
+    phase,
+    round: 1,
+    phaseEndsAt: startedAt + scene.ms,
+    phaseDurationMs: duration,
+    serverNow: startedAt,
+    minPlayers: 4,
+    maxPlayers: 8,
+    mapChoice: "plaza",
+    map: "plaza",
+    players: playersOf(deadSeats(id, at)),
+    me: { ...mine },
+    day: { n: dayN, roles },
+  } satisfies RoomView;
+
+  const out: RoomView = view;
+  const day = out.day!;
+  switch (id) {
+    case "roles":
+      out.me = { ...mine, role: "citizen" };
+      break;
+    case "keyword": {
+      if (at === "b") {
+        // 마피아 면: 모양은 같고 키워드 줄만 ??? — me.keyword 키가 없다
+        out.me = { ...mine, role: "mafia" };
+      } else {
+        out.me = { ...mine, role: "citizen", keyword: TUTORIAL_CAST.word, ...(at === "c" ? { answer: { text: TUTORIAL_MY_ANSWER, final: acted >= 1 } } : {}) };
+      }
+      day.keyword = keyword;
+      break;
+    }
+    case "answers":
+      out.me = { ...mine, role: "citizen" };
+      day.keyword = { ...keyword, answers: TUTORIAL_ANSWERS.map((r) => ({ ...r })) };
+      break;
+    case "discussion": {
+      const count = Math.min(acted, END_STEPS);
+      out.me = { ...mine, role: "citizen", ...(count >= 1 ? { endDiscussion: true as const } : {}) };
+      day.endCount = count;
+      break;
+    }
+    case "verdict": {
+      const shown = VERDICT_VOTES.slice(0, Math.min(acted, VERDICT_VOTES.length));
+      out.me = { ...mine, role: "citizen", ...(acted >= 1 ? { verdictVote: true } : {}) };
+      day.verdictCount = { yes: shown.filter((v) => v).length, no: shown.filter((v) => !v).length };
+      break;
+    }
+    case "pick": {
+      // 비트 a·b 는 앞 차례(0, 1), 비트 c 는 내 차례에서 시작해 acted 만큼 뒤 차례가 나온다
+      const turn = at === "a" ? 0 : at === "b" ? 1 : PICK_MINE_AT + Math.min(acted, PICK_LINES.length - PICK_MINE_AT);
+      const shown = PICK_LINES.slice(0, at === "c" ? turn : turn + 1).map((l) => ({ ...l }));
+      out.me = { ...mine, role: "citizen" };
+      day.points = shown;
+      day.turn = { order: [...PICK_ORDER], i: turn, ...(turn < PICK_ORDER.length ? { endsAt: startedAt + scene.ms } : {}) };
+      break;
+    }
+    case "will":
+      out.me = { ...mine, role: "citizen" };
+      day.candidate = TUTORIAL_CAST.executed;
+      day.execution = { seat: TUTORIAL_CAST.executed, will: TUTORIAL_WILL };
+      break;
+    case "night":
+      out.me = { ...mine, role: "citizen", ...(at === "b" ? { pick: 0 } : {}) };
+      if (at === "c") day.morning = { eliminated: TUTORIAL_CAST.nightVictim };
+      break;
+    case "postit":
+      out.me = { ...mine, role: "citizen", ...(at === "b" ? { suspectTo: TUTORIAL_CAST.suspect } : {}) };
+      if (at === "b") day.suspects = [{ to: TUTORIAL_CAST.suspect, from: TUTORIAL_CAST.me }];
+      break;
+    case "end":
+      out.me = { ...mine, role: "citizen" };
+      break;
+  }
+  return out;
+}
+
+function phaseOf(id: TutorialSceneId, at: TutorialBeatId): PhaseId {
+  switch (id) {
+    case "roles":
+      return "roleReveal";
+    case "keyword":
+      return "keyword";
+    case "answers":
+    case "discussion":
+    case "end":
+      return "discussion";
+    case "verdict":
+      return "verdict";
+    case "pick":
+      return "nomination";
+    case "will":
+      return "execution";
+    case "night":
+      return at === "c" ? "morning" : "night";
+    case "postit":
+      return at === "c" ? "dayAnnounce" : "discussion";
+  }
+}
+
+// ---- 월드 스냅 ----
+
+/**
+ * 좌석이 서는 자리(월드 단위, 시계탑 광장). 둘레 반지름 약 2.6 의 고리 — 연단(반지름 1.4 + 캐릭터 0.35) 밖이고 모두 걸을 수 있는 칸이다(시험).
+ * 도윤(1)·서연(2)의 자리는 이름표가 폰 화면 안쪽에 들게 정한 옛 측정값을 따른다(24-10 스크린샷에서 다시 확인).
+ */
+const RING_SPOTS: Readonly<Record<number, { x: number; z: number }>> = {
+  0: { x: -2.6, z: 0 },
+  1: { x: 1.3, z: -1.5 },
+  2: { x: -1.3, z: -2.3 },
+  3: { x: -1.3, z: 2.3 },
+  4: { x: 2.6, z: 0 },
+  5: { x: 1.3, z: 2.3 },
+};
+/**
+ * 장면 9: 내 자리(5) 곁에 하린(4)·민준(0)·지호(3)가 모여 선다 — 모두 켜는 문턱(92%, 2.2 단위) 안이다.
+ * 도윤(1)·서연(2) 은 유령이고 멀리 있다(근처 판정 거짓). 시험이 withinNoteReach 로 지킨다.
+ */
+const NOTE_SPOTS: Readonly<Record<number, { x: number; z: number }>> = {
+  0: { x: 2.2, z: 4.0 },
+  1: { x: -2.6, z: 0 },
+  2: { x: -1.3, z: -2.3 },
+  3: { x: -0.4, z: 3.4 },
+  4: { x: 3.0, z: 1.6 },
+  5: { x: 1.3, z: 2.3 },
+};
+
+/** 서 있는 여섯 좌석의 위치 snap 한 프레임(로컬 WorldStore.applyFrame 에 주는 값). 시각 at 은 호출한 쪽이 준다 */
+export function tutorialSnap(id: TutorialSceneId, at: number): Extract<WorldFrame, { k: "snap" }> {
+  const spots = id === "postit" ? NOTE_SPOTS : RING_SPOTS;
+  let world: WorldState = emptyWorld();
+  const players: { id: string; seat: number }[] = [];
+  for (const { seat } of TUTORIAL_CAST.seats) {
+    const spot = spots[seat]!;
+    const pid = `tut-${seat}`;
+    players.push({ id: pid, seat });
+    world = { ...world, segs: { ...world.segs, [pid]: restSegment(Math.round(spot.x * UNIT), Math.round(spot.z * UNIT), at) } };
+  }
+  return snapFrame(world, players, at);
+}
+
+// ---- 로컬 send 어댑터 ----
+
+export interface TutorialSendHandlers {
+  onAnswer?: (text: string, final: boolean) => void;
+  onEndDiscussion?: (on: boolean) => void;
+  onVerdict?: (agree: boolean) => void;
+  onPoint?: (target: number) => void;
+  onPick?: (target: number) => void;
+  onSuspect?: (target: number) => void;
+}
+
+/**
+ * 로컬 send. 화면이 보내는 메시지 가운데 대본이 아는 여섯 가지(답·토론 끝내기·찬반·지목·밤 고르기·의심)만 해당 콜백을 부르고, 그 밖(이동·채팅·입력 중·동작 …)은
+ * 아무 일 없이 true 를 돌려준다 — false 를 주면 보내지 못한 분기를 타기 때문이다. 서버·소켓으로는 아무것도 나가지 않는다.
+ */
+export function makeTutorialSend(h: TutorialSendHandlers): (msg: ClientMessage) => boolean {
+  return (msg) => {
+    switch (msg.t) {
+      case "answer":
+        h.onAnswer?.(msg.text, msg.final);
+        break;
+      case "endDiscussion":
+        h.onEndDiscussion?.(msg.on);
+        break;
+      case "verdict":
+        h.onVerdict?.(msg.agree);
+        break;
+      case "point":
+        h.onPoint?.(msg.target);
+        break;
+      case "pick":
+        h.onPick?.(msg.target);
+        break;
+      case "suspect":
+        h.onSuspect?.(msg.target);
+        break;
+      default:
+        break;
+    }
+    return true;
+  };
+}
