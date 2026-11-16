@@ -7,16 +7,16 @@ current_phase_name: map-expansion
 current_plan: 10
 status: verifying
 stopped_at: Completed 21-16-PLAN.md
-last_updated: "2026-11-15T13:07:40.946Z"
+last_updated: "2026-11-16T07:13:49.267Z"
 last_activity: 2026-11-13
 last_activity_desc: Phase 20 plan 03 완료 (심부름·목격·아침 snap 구역 거르기, 마을 한 판 누설 전수)
-state_head: 1df4591013a909d04829c161539d909eca74ae8f
+state_head: d5feb6ed0c352e003d3f84760144c8bbf2cee9e4
 progress:
-  total_phases: 10
+  total_phases: 13
   completed_phases: 6
   total_plans: 113
   completed_plans: 113
-  percent: 60
+  percent: 46
 ---
 
 # Project State
@@ -718,6 +718,9 @@ None yet.
 - Phase 20 added: 결정 0081 반영(17 UAT 후 할 일 재설계)
 - Phase 21 added: 결정 0081 반영(17 UAT 후 할 일 재설계)
 - Phase 18.1 inserted after Phase 18: 화면 손보기 5가지(역할카드·채팅 2줄·유령·시간대 아이콘·결과 기록 숨김) (URGENT)
+- Phase 22 added: 결정 0089 (질문 카드 전환)
+- Phase 23 added: 결정 0089 (질문 카드 전환)
+- Phase 24 added: 결정 0089 (질문 카드 전환)
 
 ## Deferred Items
 
