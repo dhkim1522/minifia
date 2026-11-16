@@ -361,6 +361,26 @@ describe("ClientMessageSchema will·note (09-12, 결정 0061-9·10: 본문 text 
   });
 });
 
+// 23-06: 키워드 답 — 본문과 확정 여부뿐이다. final 은 필수 불리언(초안 false 도 명시), 덧붙은 키는 거부한다(T-23-21).
+describe("ClientMessageSchema answer (23-06, D-07)", () => {
+  it("받는다: 초안·확정·빈 글·300 UTF-16", () => {
+    expect(ClientMessageSchema.safeParse({ t: "answer", text: "안경", final: false }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t: "answer", text: "안경", final: true }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t: "answer", text: "", final: false }).success).toBe(true);
+    expect(ClientMessageSchema.safeParse({ t: "answer", text: "a".repeat(300), final: true }).success).toBe(true);
+  });
+
+  it("거부한다: final 없음·final 이 불리언 아님·301 UTF-16·덧붙은 키·text 없음", () => {
+    expect(ClientMessageSchema.safeParse({ t: "answer", text: "안경" }).success).toBe(false);
+    expect(ClientMessageSchema.safeParse({ t: "answer", text: "안경", final: "true" }).success).toBe(false);
+    expect(ClientMessageSchema.safeParse({ t: "answer", text: "a".repeat(301), final: true }).success).toBe(false);
+    expect(ClientMessageSchema.safeParse({ t: "answer", final: true }).success).toBe(false);
+    for (const extra of [{ seat: 1 }, { id: "x" }, { ch: "all" }, { pk: "k" }]) {
+      expect(ClientMessageSchema.safeParse({ t: "answer", text: "안경", final: true, ...extra }).success).toBe(false);
+    }
+  });
+});
+
 // 10-01: 동작(emote) — 종류 id 와 단계 키뿐이다. 좌석·채널·수신자·시각은 보내지 않는다(D-12, D-19).
 describe("ClientMessageSchema emote (10-01, AVTR-03)", () => {
   it.each(["throat", "deny", "clap", "cry", "handshake", "point", "praise", "surprise", "dance"])("동작 %s 를 받는다", (id) => {

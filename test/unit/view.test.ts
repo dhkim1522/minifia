@@ -2306,3 +2306,54 @@ describe("기본판 view 게이트 (D-05, 결정 0072, T-13-11)", () => {
     expect(JSON.stringify(viewsOfAll(s)).includes("비밀-CANARY")).toBe(false);
   });
 });
+
+// 23-06: 키워드 답 view(D-03·D-14·P23-13) — 본인 초안·확정만 me.answer, 남의 것은 어디에도 없고 공개 목록은 keyword 단계 뒤 모두에게 같은 값.
+describe("키워드 답 view (23-06)", () => {
+  const WORD = "해리포터";
+  const base = (): RoomState => {
+    const s = startedAt(5, 7, "keyword");
+    return { ...s, keyword: { genre: s.keyword!.genre, word: WORD } };
+  };
+  const idOf = (s: RoomState, seat: number): string => s.players.find((p) => p.seat === seat)!.id;
+  const viewOf = (s: RoomState, seat: number): RoomView => buildView(s, idOf(s, seat), START_AT);
+
+  it("초안이면 me.answer { text, final:false }, 확정이면 { text, final:true }, 둘 다 없으면 키가 없다", () => {
+    const s = base();
+    expect("answer" in viewOf(s, 1).me).toBe(false);
+    const drafted: RoomState = { ...s, players: s.players.map((p) => (p.seat === 1 ? { ...p, answerDraft: "쓰던 글" } : p)) };
+    expect(viewOf(drafted, 1).me.answer).toEqual({ text: "쓰던 글", final: false });
+    const submitted: RoomState = { ...drafted, answerSubmits: [{ seat: 1, text: "낸 글" }] };
+    expect(viewOf(submitted, 1).me.answer).toEqual({ text: "낸 글", final: true });
+  });
+
+  it("남의 초안·확정은 어떤 view 에도 없다 — 본인 외 view 에 글이 없고 me.answer 키도 없다", () => {
+    const s = base();
+    const withOthers: RoomState = {
+      ...s,
+      players: s.players.map((p) => (p.seat === 1 ? { ...p, answerDraft: "비밀초안CANARY" } : p)),
+      answerSubmits: [{ seat: 2, text: "비밀확정CANARY" }],
+    };
+    for (const seat of [0, 3, 4]) {
+      const v = viewOf(withOthers, seat);
+      expect("answer" in v.me).toBe(false);
+      expect(JSON.stringify(v).includes("CANARY")).toBe(false);
+    }
+    expect(JSON.stringify(viewOf(withOthers, 1)).includes("비밀확정CANARY")).toBe(false);
+  });
+
+  it("keyword 단계 view 에는 day.keyword.answers 가 없고, 마감 뒤 dayAnnounce 부터 모든 viewer 에게 같은 값이다", () => {
+    const s = base();
+    for (const p of s.players) expect("answers" in (viewOf(s, p.seat).day!.keyword ?? {})).toBe(false);
+    const rows = [
+      { order: 1, seat: 2, text: "마법" },
+      { order: 2, seat: 0, text: null },
+    ];
+    const after: RoomState = { ...s, phase: "dayAnnounce", keywordAnswers: rows };
+    const got = s.players.map((p) => JSON.stringify(viewOf(after, p.seat).day!.keyword));
+    expect(new Set(got).size).toBe(1);
+    expect(viewOf(after, 0).day!.keyword!.answers).toEqual(rows);
+    // 이후 단계(첫날 discussion·둘째 날)에도 남는다
+    const later: RoomState = { ...after, phase: "discussion", day: 2 };
+    expect(viewOf(later, 3).day!.keyword!.answers).toEqual(rows);
+  });
+});
