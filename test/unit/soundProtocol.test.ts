@@ -36,6 +36,7 @@ const CLIENT_MESSAGE_KINDS = [
   "ready",
   "rematch",
   "start",
+  "suspect", // 24-01: 의심 포스트잇(소리와 무관한 새 메시지)
   "testBotVote",
   "testBots",
   "testReset",

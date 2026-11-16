@@ -291,6 +291,28 @@ describe("ClientMessageSchema point (08-07, DAY-04: target 은 0..7 정수)", ()
   });
 });
 
+// 24-01: 의심 포스트잇(결정 0089-10, D-04). 메시지는 대상 좌석 하나뿐 — 행위자는 소켓 첨부 playerId 로만 정해진다(T-24-04).
+describe("ClientMessageSchema suspect (24-01, D-04: target 은 0..7 정수)", () => {
+  it.each([
+    ["0", { t: "suspect", target: 0 }],
+    ["7", { t: "suspect", target: 7 }],
+  ])("받는다: target %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(true);
+  });
+
+  it.each([
+    ["target 빠짐", { t: "suspect" }],
+    ["8", { t: "suspect", target: 8 }],
+    ["-1", { t: "suspect", target: -1 }],
+    ["1.5", { t: "suspect", target: 1.5 }],
+    ['"1"', { t: "suspect", target: "1" }],
+    ["덧붙은 seat", { t: "suspect", target: 1, seat: 2 }],
+    ["덧붙은 id", { t: "suspect", target: 1, id: "x" }],
+  ])("거부한다: %s", (_name, msg) => {
+    expect(ClientMessageSchema.safeParse(msg).success).toBe(false);
+  });
+});
+
 describe("ClientMessageSchema verdict (08-07, DAY-06: agree 는 불리언)", () => {
   it.each([
     ["찬성", { t: "verdict", agree: true }],
