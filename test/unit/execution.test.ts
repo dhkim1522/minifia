@@ -235,6 +235,16 @@ describe("noExecutionOf · day.noExecution (D-34)", () => {
     expect(noExecutionOf({ ...night, phase: "morning" })).toBeUndefined();
   });
 
+  it("noExecutionOf 는 answerReveal·night 에서 이유를 주고 그 밖 단계는 undefined 다 (D-22)", () => {
+    const verdict = stateWithVerdict(6, 1, "verdict");
+    const night = nightWith(castVerdicts(verdict, Object.fromEntries(verdict.players.map((p) => [p.seat, false]))), 1);
+    expect(noExecutionOf({ ...night, phase: "answerReveal" })).toEqual({ reason: "rejected" });
+    expect(noExecutionOf({ ...night, phase: "night" })).toEqual({ reason: "rejected" });
+    for (const phase of ["defense", "execution", "morning", "dayAnnounce", "ended", "keyword"] as const) {
+      expect(noExecutionOf({ ...night, phase }), phase).toBeUndefined();
+    }
+  });
+
   it("입력 상태를 바꾸지 않는다 (깊은 동결)", () => {
     const night = deepFreeze(nightWith(stateWithVerdict(6, 1, "execution"), 1));
     expect(() => noExecutionOf(night)).not.toThrow();

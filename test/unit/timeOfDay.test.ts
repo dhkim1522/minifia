@@ -18,6 +18,7 @@ const EXPECT: Record<PhaseId, TimeOfDay> = {
   verdict: "day", // 22-13(P22-3): 찬반은 토론 장면 그대로
   defense: "dusk",
   execution: "dusk",
+  answerReveal: "dusk", // 23-05(P23-2): lightingOf vote → 저녁
   night: "night",
   morning: "morning",
   ended: "day",

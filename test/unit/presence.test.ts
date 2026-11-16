@@ -143,7 +143,7 @@ describe("cameraModeOf (UI-SPEC 카메라 표)", () => {
     });
   }
 
-  for (const phase of ["nomination", "runoff", "showdown", "defense", "execution"] as const) {
+  for (const phase of ["nomination", "runoff", "showdown", "defense", "execution", "answerReveal"] as const) {
     it(`${phase} → 모이는 자리 가운데 고정, 확대 1`, () => {
       same(cameraModeOf(viewOf(phase), 500), { mode: "fixed", target: GATHER_CENTER, zoom: 1 });
     });
@@ -205,6 +205,7 @@ describe("lightingOf (UI-SPEC 단계 조명)", () => {
     ["verdict", "talk"], // 22-13(P22-3): 찬반은 토론 장면 그대로
     ["defense", "trial"],
     ["execution", "trial"],
+    ["answerReveal", "vote"], // 23-05(P23-21): 정답 공개는 저녁빛(vote) — 장면 dusk
     ["night", "night"],
     ["morning", "morning"],
     ["lobby", "talk"],
