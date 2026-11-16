@@ -883,3 +883,9 @@ describe("정답 공개 알림 시간표 (23-07, D-22, P23-20)", () => {
     expect(answerStillOf(viewOf("answerReveal", { day: { keyword: { genre: "영화" } } }))).toBeNull();
   });
 });
+
+describe("정답 공개 머리 제목 (23-07, P23-2)", () => {
+  it("answerReveal 제목은 '정답' 이고 안내 줄이 없다(띠가 빈 줄이라 큰 글이 말한다)", () => {
+    same(headerFor(viewOf("answerReveal", { day: { keyword: { genre: "영화", answer: "해리포터" } } })), { title: "정답" });
+  });
+});

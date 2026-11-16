@@ -427,7 +427,7 @@ function recorder(root: object, log: Set<string>): object {
 
 const isAllowed = (path: string): boolean => ALLOWED_EXACT.has(path) || ALLOWED_PREFIX.some((p) => path.startsWith(p));
 
-const MATRIX_PHASES: readonly PhaseId[] = ["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "night", "morning", "ended"];
+const MATRIX_PHASES: readonly PhaseId[] = ["lobby", "assigning", "roleReveal", "keyword", "dayAnnounce", "discussion", "nomination", "runoff", "showdown", "defense", "verdict", "execution", "answerReveal", "night", "morning", "ended"];
 
 /** 단계 15개 × 시점(마피아·경찰·의사·시민 산 사람, 유령, 방장/손님, 변론자 본인) */
 function matrixSpecs(): Spec[] {
@@ -450,6 +450,27 @@ function matrixKeys(): HostKey[] {
 function allLines(): string[] {
   return (Object.keys(HOST_LINES) as HostKey[]).map((key) => HOST_LINES[key]);
 }
+
+describe("정답 공개 사회자 줄 (23-07, P23-20)", () => {
+  const view = (o: Partial<Spec> = {}) => makeView({ phase: "answerReveal", endsAt: 1_700_000_003_000, durationMs: 3_000, ...o });
+
+  it("키는 answerReveal(fallback 아님), 줄은 빈 문자열(큰 글이 말한다), 띠는 시간 행이 있어 blank, 빛남 대상은 없다", () => {
+    expect(hostKeyOf(view())).toBe("answerReveal");
+    expect(hostLineOf(view())).toBe("");
+    expect(HOST_LINES.answerReveal).toBe("");
+    expect(hostTimeOf(view())).toBe(true);
+    expect(hostBandModeOf(view(), hostLineOf(view()))).toBe("blank");
+    expect(callTargetsOf(view())).toBeNull();
+  });
+
+  it("마피아·경찰·의사·시민·유령·방장 모두 같은 키다 — 역할 분기가 없다", () => {
+    const keys = new Set<string>();
+    for (const role of ["mafia", "police", "doctor", "citizen"] as RoleId[]) keys.add(hostKeyOf(view({ role })));
+    keys.add(hostKeyOf(view({ ghost: true })));
+    keys.add(hostKeyOf(view({ host: true })));
+    expect([...keys]).toEqual(["answerReveal"]);
+  });
+});
 
 describe("HOST-05 허용 목록만 읽는다 (T-14-01)", () => {
   it("단계 15개 × 시점마다 hostLineOf·hostKeyOf·callTargetsOf 가 읽은 경로가 모두 허용 목록 안이다", () => {

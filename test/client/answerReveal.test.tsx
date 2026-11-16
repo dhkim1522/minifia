@@ -200,3 +200,34 @@ describe("정답 공개 화면 — 큰 글 (23-07, P23-20, D-22)", () => {
     expect(new Set(texts)).toEqual(new Set(["정답 해리포터"]));
   });
 });
+
+describe("정답 공개 화면 — 띠·제목·패널 (23-07, P23-21)", () => {
+  const checks = (c: HTMLElement) => {
+    expect(c.querySelector(".mv-phase__title")?.textContent).toBe("정답");
+    expect(c.querySelector("[data-host-line]")?.textContent).toBe("");
+    expect(c.querySelector("[data-host-time]")).not.toBeNull();
+    const panel = c.querySelector("[data-chat-panel]")!;
+    expect(panel.hasAttribute("data-chat-locked")).toBe(true);
+    const input = c.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    expect(input.getAttribute("aria-disabled")).toBe("true");
+    expect(c.querySelectorAll("[data-chat-send], [data-will-button], [data-emote-button]")).toHaveLength(0);
+  };
+
+  it("산 사람: 제목 '정답', 띠는 초만, 채팅 패널 입력줄이 잠기고 동작 단추·보내기·유언 깃펜이 없다", () => {
+    const { container } = mount(makeView({ role: "citizen" }));
+    checks(container);
+  });
+
+  it("마피아와 유령도 같다", () => {
+    checks(mount(makeView({ role: "mafia" })).container);
+    cleanup();
+    checks(mount(makeView({ role: "citizen", ghost: true })).container);
+  });
+
+  it("채팅 기록 칸 높이가 바뀌지 않는다 — 처형 단계의 산 사람 패널과 같다", () => {
+    const logH = (c: HTMLElement) => c.querySelector<HTMLElement>("[data-chat-log]")!.style.height;
+    const a = logH(mount(makeView({ phase: "discussion" })).container);
+    cleanup();
+    expect(logH(mount(makeView()).container)).toBe(a);
+  });
+});
