@@ -772,6 +772,7 @@ Resume file: .planning/phases/22-cleanup-single-mode/22-UI-SPEC.md
 | Phase | State | Resume |
 |-------|-------|--------|
 | 22 | verification_deferred_human | v3.0 전체 실테스트 때 /gsd-verify-work 22 (실기기: 새 낮 흐름 한 판, 유령 크기·방향, 알려진 한계 셋, 유언 중 몸동작 결정 0090-8) |
+| 23 | verification_deferred_human | v3.0 전체 실테스트 때 /gsd-verify-work 23 (실기기 첫날 한 판, 키워드 목록 306개 검토, 664높이 키보드 한계, 자동 열린 시트, 4.4초·밤/키워드 연장 없음 정책, 배포 뒤 `npm run games -- --remote` 한 줄 확인) |
 | 18.1 | verification_deferred_human | /gsd-verify-work 18.1 |
 | 19 | verification_deferred_human | /gsd-verify-work 19 |
 | 20 | verification_deferred_human | /gsd-verify-work 20 |
