@@ -24,7 +24,6 @@ import {
   TOD_ABSENT_PHASES,
   TOD_LINE_MAX_H,
   TOD_WORD,
-  TUTORIAL_ROLE_MAX_LINES,
   revealCardChecks,
   chatOpenChecks,
   chatOpenHeight,
@@ -49,7 +48,6 @@ test("상수: UI-SPEC 값 그대로", () => {
   assert.equal(ROLE_CARD_MAX_LINES, 2);
   assert.equal(ROLE_CARD_MAX_LINES_SHORT_DOCTOR, 3);
   assert.equal(ROLE_SHEET_MAX_LINES, 3);
-  assert.equal(TUTORIAL_ROLE_MAX_LINES, 3);
   assert.equal(ROLE_ART_MIN_H, 64);
   assert.equal(CARD_INNER_INSET, 14);
   assert.equal(TOD_LINE_MAX_H, 40);
@@ -233,7 +231,7 @@ test("roleLineBoxChecks: 목표 줄이 남아 있으면 실패", () => {
   assert.equal(roleLineBoxChecks([{ ...lineGood(), goalCount: 1 }], { max: 3, id: "x" }).ok, false);
 });
 
-test("roleLineBoxChecks: height 가 없으면 lines 로 센다(튜토리얼 인라인 글)", () => {
+test("roleLineBoxChecks: height 가 없으면 lines 로 센다(인라인 글)", () => {
   assert.equal(roleLineBoxChecks([{ lines: 3, newlines: 0 }], { max: 3, id: "x" }).ok, true);
   assert.equal(roleLineBoxChecks([{ lines: 4, newlines: 0 }], { max: 3, id: "x" }).ok, false);
 });

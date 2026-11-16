@@ -144,7 +144,6 @@ import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
 import { makeErrandFlows } from "./errand.mjs";
-import { makeTutorialFlows } from "./tutorial.mjs";
 import { makeModeFlows } from "./modes.mjs";
 import { makeTownFlows } from "./town.mjs";
 import { makeCauseFlows } from "./cause.mjs";
@@ -3819,9 +3818,6 @@ const { emceeBandFlow, emceeToolsFlow, emceeLeakFlow, emceeSoundFlow, modeLeakFl
 // 심부름·목격 기록·밤 통일·아침 흔적(15페이즈 15-09): errand·witness·trace(폰 6종). 흐름 본문은 errand.mjs, 도우미만 넘긴다
 const { errandFlow } = makeErrandFlows({ recorder, openGame: openExtended, closeGame, gameGH });
 
-// 첫 사건(튜토리얼, 17페이즈 17-09): tutorial-solo(혼자 하기, 폰 6종)·tutorial-together(함께 진행). 흐름 본문은 tutorial.mjs, 도우미만 넘긴다
-const { tutorialSoloFlow, tutorialTogetherFlow } = makeTutorialFlows({ recorder, attempt, startHost, openGuest, closeGame, gameGH });
-
 // 방장 줄·판 종류(19페이즈 19-06): mode-rail(폰 6종)·mode-pick. 19-07: modeBasicFlow(기본 마피아 완주). 흐름 본문은 modes.mjs, 도우미만 넘긴다
 const { modeRailFlow, modePickFlow, modeBasicFlow } = makeModeFlows({ recorder, attempt, startHost, openGuest, openGame, closeGame, settledResult });
 
@@ -3902,9 +3898,6 @@ export const FLOWS = [
   { id: "emcee-sound", run: emceeSoundFlow, size: GAME_SIZE },
   // 15-09: 심부름(ERRAND-01~04)·목격 기록(ERRAND-05)·밤 얼굴 목록 통일 + 아침 흔적(TRACE-01~03). 이름 앞머리 errand·witness·trace — 다른 흐름과 --only 부분 일치가 겹치지 않는다. 폰 6종(영역 검사 필수)
   { id: "errand", run: errandFlow, extraSizes: LOBBY_EXTRA_SIZES },
-  // 17-09: 첫 사건 TUT-01~05. 이름 앞머리 tutorial — --only tutorial 하나로 둘 다 돈다. 혼자 하기는 폰 6종(기하·포커스·띠 판정), 함께 진행은 기다림 화면 기하까지 390x844 한 크기
-  { id: "tutorial-solo", run: tutorialSoloFlow, extraSizes: LOBBY_EXTRA_SIZES },
-  { id: "tutorial-together", run: tutorialTogetherFlow, size: GAME_SIZE },
   // 19-06: 방장 줄(HR1~HR8)·참가자 칩(CH)·판 종류 시트(MS1) 기하와 색은 폰 6종, 판 종류 선택의 방송·새로고침·재접속·다시 하기 유지(MS2·MS3·D-10)는 390x844 한 크기. 이름 앞머리 mode — --only mode 하나로 모두 돈다
   { id: "mode-rail", run: modeRailFlow, extraSizes: LOBBY_EXTRA_SIZES },
   { id: "mode-pick", run: modePickFlow, size: GAME_SIZE },

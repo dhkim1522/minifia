@@ -2,7 +2,7 @@
 // 판정은 순수 함수(playwright·네트워크 없음, 단위 시험은 polish.test.mjs)이고 흐름은 화면을 읽기만 한다.
 // 결과 줄(detail)에는 크기·직업·단계·숫자·사각형만 싣는다 — 닉네임·토큰·채팅 본문은 싣지 않는다(T-18.1-15).
 // 문턱은 UI-SPEC(18.1-UI-SPEC.md A1·A2·D) 값 그대로다. 실패를 줄이려고 낮추지 않는다. 앱 결함은 SUMMARY 에 분류해 남긴다.
-// flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다: `makePolishFlows(helpers)` (host.mjs·tutorial.mjs 와 같은 모양, 서로 import 하지 않는다).
+// flows.mjs 가 이미 3천 줄이라 흐름 본문은 이 파일에 둔다: `makePolishFlows(helpers)` (host.mjs 와 같은 모양, 서로 import 하지 않는다).
 // helpers: { recorder, attempt, openGame, closeGame }
 import { ROLE_LINES, rectInside, rectsOverlap } from "./lib.mjs";
 import { closeRoleCard, openRoleCard, settle, skipTo, sleep } from "./browser.mjs";
@@ -17,8 +17,6 @@ export const ROLE_CARD_MAX_LINES = 2;
 export const ROLE_CARD_MAX_LINES_SHORT_DOCTOR = 3;
 /** [내 역할] 시트 문구 줄 수 상한(A1b) */
 export const ROLE_SHEET_MAX_LINES = 3;
-/** 튜토리얼 직업 카드 문구 줄 수 상한(A1b·A1f) — 열 130px@360 에서 의사 3줄 */
-export const TUTORIAL_ROLE_MAX_LINES = 3;
 /** 직업 그림 높이 하한(A-1 계약 6·A1e) */
 export const ROLE_ART_MIN_H = 64;
 /** 카드 면 안쪽 틀선(.mf-card__face::after inset, A1e) */
@@ -194,10 +192,10 @@ export function revealStageChecks(m) {
   return out;
 }
 
-// ---- 문구 상자(시트·튜토리얼 카드 공용) ----
+// ---- 문구 상자(시트 공용) ----
 
 /**
- * 문구 상자 목록 판정 — [내 역할] 시트(max 3, id A1s)·튜토리얼 직업 카드(max 3, id TC6)가 쓴다. 한 줄(row) 하나를 돌려준다.
+ * 문구 상자 목록 판정 — [내 역할] 시트(max 3, id A1s)가 쓴다. 한 줄(row) 하나를 돌려준다.
  * boxes[i] = { height, lineHeight 또는 lines, newlines, goalCount? }, count 가 있으면 상자 개수가 그 수여야 한다.
  */
 export function roleLineBoxChecks(boxes, { max, id, count }) {
@@ -358,7 +356,7 @@ export function readRevealStage(page) {
 
 /**
  * 문구 상자 읽기(선택자에 맞는 요소마다): 높이·줄 높이·줄 수·글자 안의 줄바꿈 문자 수·문서의 목표 줄 수.
- * 인라인 요소(튜토리얼 카드 글)는 높이가 줄 높이를 뜻하지 않아 height 를 비우고 lines(글자 범위의 줄 수)만 둔다.
+ * 인라인 요소(글줄)는 높이가 줄 높이를 뜻하지 않아 height 를 비우고 lines(글자 범위의 줄 수)만 둔다.
  */
 export function readRoleLineBoxes(page, selector) {
   return page.evaluate((sel) => {

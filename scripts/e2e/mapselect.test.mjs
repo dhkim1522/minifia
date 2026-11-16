@@ -96,8 +96,8 @@ test("측정값이 없으면 해당 항목이 실패한다(거짓 통과 없음)
 
 // ---- 20-07: [맵] 숨김 mapRailChecks (TM11, D-02·P20-16) — 확장판은 늘 마을이라 [맵] 단추·맵 탭이 없고, 기본 마피아로 되돌리면 이전 맵 선택과 함께 다시 있다 ----
 
-/** 확장판 대기실(테스트 방) 정상값: 줄은 판 종류·봇·튜토리얼, [옷장]으로 연 시트에 맵 탭·카드 0 */
-const hidden = (over = {}) => ({ screen: "lobby", mode: "extended", viewMode: "extended", railButtons: ["mode", "bots", "tutorial"], tabs: 0, ...over });
+/** 확장판 대기실(테스트 방) 정상값: 줄은 판 종류·봇, [옷장]으로 연 시트에 맵 탭·카드 0 */
+const hidden = (over = {}) => ({ screen: "lobby", mode: "extended", viewMode: "extended", railButtons: ["mode", "bots"], tabs: 0, ...over });
 /** 기본 마피아로 되돌린 대기실 정상값: 줄은 판 종류·맵·봇, 맵 선택은 이전 값 그대로이고 칩도 그 값 */
 const shown = (over = {}) => ({ screen: "lobby", mode: "basic", viewMode: "basic", railButtons: ["mode", "map", "bots"], mapChoice: "plaza", prevChoice: "plaza", chipId: "plaza", ...over });
 /** 판정 줄은 늘 하나다 */
@@ -113,15 +113,15 @@ test("TM11a: 확장판 줄에 map 이 없고 시트에 맵 탭이 없으면 통�
   assert.equal(r.ok, true, r.detail);
   assert.deepEqual(Object.keys(r).sort(), ["detail", "id", "label", "ok"]);
   assert.equal(one(hidden()).ok, true);
-  assert.equal(one(hidden({ railButtons: ["mode"] })).ok, true); // 봇 도구가 꺼진 방·튜토리얼이 없는 화면도 [맵] 만 없으면 된다
+  assert.equal(one(hidden({ railButtons: ["mode"] })).ok, true); // 봇 도구가 꺼진 방도 [맵] 만 없으면 된다
 });
 
 test("TM11a: 확장판 줄에 map 이 있으면 실패하고 개수와 줄 이름을 말한다. 시트에 맵 탭·카드가 있어도, 서버 판 종류가 다른 값이어도 실패한다", () => {
-  const r = one(hidden({ railButtons: ["mode", "map", "bots", "tutorial"] }));
+  const r = one(hidden({ railButtons: ["mode", "map", "bots"] }));
   assert.equal(r.id, "TM11a");
   assert.equal(r.ok, false);
   assert.match(r.detail, /map 1개/);
-  assert.match(r.detail, /mode·map·bots·tutorial/);
+  assert.match(r.detail, /mode·map·bots/);
   const t = one(hidden({ tabs: 2 }));
   assert.equal(t.ok, false);
   assert.match(t.detail, /맵 탭·카드 2개/);
@@ -134,7 +134,7 @@ test("TM11a·TM11b: 줄을 못 읽었으면(단추 0·mode 없음) [맵] 이 없
   const empty = one(hidden({ railButtons: [] }));
   assert.equal(empty.ok, false);
   assert.match(empty.detail, /mode 단추 없음/);
-  assert.equal(one(hidden({ railButtons: ["bots", "tutorial"] })).ok, false);
+  assert.equal(one(hidden({ railButtons: ["bots"] })).ok, false);
   assert.equal(one(shown({ railButtons: ["map", "bots"] })).ok, false);
 });
 

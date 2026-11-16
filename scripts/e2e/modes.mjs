@@ -127,9 +127,9 @@ export function makeModeFlows({ recorder, attempt, startHost, openGuest, openGam
   }
 
   /**
-   * mode-rail (D-13·D-14·D-07, 폰 6종): 대기실에서 방장 줄(확장판 셋: 판 종류·봇·튜토리얼 → 기본 마피아 셋: 판 종류·맵·봇, 20-07 D-02)과 참가자 칩, 판 종류 시트를 잰다.
+   * mode-rail (D-13·D-14·D-07, 폰 6종): 대기실에서 방장 줄(확장판 둘: 판 종류·봇 → 기본 마피아 셋: 판 종류·맵·봇, 20-07 D-02·22-03 에서 [튜토리얼 먼저] 없어짐)과 참가자 칩, 판 종류 시트를 잰다.
    * ① 확장판: 방장 HR1~HR8 · 참가자 HR1·HR8·CH1·CH2 ② [판 종류] → 시트 MS1·MS1g ③ 기본 마피아: 방장 HR1~HR8(토글 없음)·참가자 칩·알림 한 줄
-   * ④ 키보드 열림(두 크기만): 줄·칩 0 ⑤ 확장판으로 되돌림: 줄 셋([맵] 없음·토글 복귀)·칩 복귀.
+   * ④ 키보드 열림(두 크기만): 줄·칩 0 ⑤ 확장판으로 되돌림: 줄 둘([맵] 없음)·칩 복귀.
    */
   async function modeRailFlow(ctx) {
     const id = "mode-rail";
@@ -198,7 +198,7 @@ export function makeModeFlows({ recorder, attempt, startHost, openGuest, openGam
         }
       }
 
-      // ── ⑤ 확장판으로 되돌린다: 줄이 다시 판 종류·봇·튜토리얼([맵] 없음), 참가자 칩 복귀 ──
+      // ── ⑤ 확장판으로 되돌린다: 줄이 다시 판 종류·봇([맵] 없음), 참가자 칩 복귀 ──
       const sc5 = `${id}/back`;
       const back = await attempt(async () => {
         await pickModeViaRail(hp, ht, "extended");
@@ -213,7 +213,7 @@ export function makeModeFlows({ recorder, attempt, startHost, openGuest, openGam
         ...hostRailChecks(railArgs(g5, { screen: "lobby", host: false, mode: "extended", botsOn })).map((l) => ({ ...l, who: "참가자" })),
         ...modeChipChecks(chipArgs(g5, modeOf(gt))).map((l) => ({ ...l, who: "참가자" })),
       ].filter((l) => !l.ok);
-      rec(sc5, "MR5", "되돌린 뒤 방장 줄(튜토리얼 토글 복귀·[맵] 없음)·참가자 칩이 처음과 같은 판정(HR·CH)을 통과", failed.length === 0, failed.map((l) => `${l.who} ${l.id} ${l.detail}`).join(" / "));
+      rec(sc5, "MR5", "되돌린 뒤 방장 줄([맵] 없음)·참가자 칩이 처음과 같은 판정(HR·CH)을 통과", failed.length === 0, failed.map((l) => `${l.who} ${l.id} ${l.detail}`).join(" / "));
     } finally {
       await room.guest.context.close().catch(() => {});
     }
@@ -222,7 +222,7 @@ export function makeModeFlows({ recorder, attempt, startHost, openGuest, openGam
   /**
    * mode-pick (D-05·D-06·D-07·D-10, 390x844): 판 종류 선택이 한 번만 가고, 방송·새로고침·재접속·한 판·다시 하기에 남는다.
    * MS1 시트 눌림 = 서버 값 → MS2 기본 마피아 고름(modePick 한 번·같은 칸은 안 보냄·참가자 칩) → 방장 새로고침·참가자 재접속 뒤에도 기본 마피아 →
-   * D-10 확장판에서 토글을 켠 뒤 기본 마피아로 바꿔 시작하면 tutorial 단계가 없다 → MS3 진행 중에는 줄·칩이 없다 → 결과 화면 줄·칩(연출 뒤)·결과 화면에서 고르기 → 다시 하기 뒤에도 기본 마피아.
+   * D-10 확장판에서 기본 마피아로 바꿔 시작하면 tutorial 단계가 없다(22-03: 튜토리얼 토글은 어느 판에도 없다) → MS3 진행 중에는 줄·칩이 없다 → 결과 화면 줄·칩(연출 뒤)·결과 화면에서 고르기 → 다시 하기 뒤에도 기본 마피아.
    */
   async function modePickFlow(ctx) {
     const id = "mode-pick";
@@ -289,19 +289,17 @@ export function makeModeFlows({ recorder, attempt, startHost, openGuest, openGam
       if (!gBack.ok) return;
       recLines(rec, sc3, modeChipChecks(chipArgs(await readHostRail(gp), modeOf(gt))), { tag: "-재접속", who: "재접속 뒤 " });
 
-      // ── D-10: 확장판에서 토글을 켠 뒤 기본 마피아로 바꿔 시작하면 튜토리얼을 거치지 않는다 ──
+      // ── D-10: 확장판에서 기본 마피아로 바꿔 시작하면 튜토리얼을 거치지 않는다(22-03: 토글은 어느 판에도 없다) ──
       const sc4 = `${id}/start`;
       const prep = await attempt(async () => {
         await pickModeViaRail(hp, ht, "extended");
-        const toggle = hp.locator('[data-host-rail] [data-host-rail-btn="tutorial"]');
-        await toggle.waitFor({ timeout: 4000 });
-        if ((await toggle.getAttribute("aria-checked")) !== "true") await toggle.click({ timeout: 3000 });
-        if ((await toggle.getAttribute("aria-checked")) !== "true") return { ok: false, detail: `aria-checked ${await toggle.getAttribute("aria-checked")}` };
+        const toggles = await hp.locator('[data-tutorial-toggle], [data-host-rail-btn="tutorial"]').count();
+        if (toggles !== 0) return { ok: false, detail: `튜토리얼 토글 ${toggles}개` };
         await pickModeViaRail(hp, ht, "basic");
         await gt.waitFor((v) => v.mode === "basic", 4000, "참가자 쪽 판 종류 basic");
         return true;
       });
-      rec(sc4, "D10a", "확장판에서 [튜토리얼 먼저] 를 켠 뒤 기본 마피아로 바꾼다(준비)", prep.ok, prep.detail);
+      rec(sc4, "D10a", "확장판에서 기본 마피아로 바꾼다(준비, 튜토리얼 토글 0개)", prep.ok, prep.detail);
       if (!prep.ok) return;
       await sleep(300);
       const h4 = await readHostRail(hp);
