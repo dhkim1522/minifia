@@ -1,7 +1,8 @@
 ---
 phase: "24"
 slug: "suspect-note-tutorial"
-status: draft
+status: approved
+reviewed_at: 2026-11-17
 reviewed_at: null
 shadcn_initialized: false
 preset: none

@@ -46,6 +46,11 @@
 - D-20: 배포 단계는 외부 계정 변경이므로 **개인 Cloudflare 계정이 확인될 때만** 진행한다: `npx wrangler whoami`(= `scripts/check-account.mjs`)가 개인 계정이 아니거나 로그인이 없으면 거기서 멈추고 사용자에게 알린다(자동 로그인 시도 금지). 확인되면 0091-18 순서대로: `npx wrangler d1 create minifia-v3-games --location apac` → `database_id` 를 `wrangler.jsonc` 에 손으로 기입(값을 문서·커밋 메시지에 옮기지 않는다) → `npx wrangler d1 migrations apply DB --remote` → `npm run games -- --remote`(빈 표) → `npm run deploy`(계정·대상 가드 우회 금지) → `npm run smoke`(생성 단계)와 `node scripts/smoke.mjs <주소> --stage full` → `/api/health` 버전 확인. `main` 은 건드리지 않는다.
 - D-21: 새 결정 기록 `docs/decisions/0092-v3-suspect-note-tutorial.md`(포스트잇 규칙·메시지 이름·view 모양·에셋 결정·튜토리얼 범위(혼자 하기만)·배포 결과·알려진 한계)와 기획서·구조 문서·화면 지도 갱신, HANDOFF(6KB 이하)에 "v3.0 구현 끝, 실테스트 대기, 사용자가 할 일 목록(키워드 목록 검토·실기기 확인 항목·main 반영 결정)"을 적는다.
 
+### UI 계약 점검 후 보강 (자동 채택)
+- D-22: `suspect` 는 **둘째 날부터**(`day ≥ 2`) 서버가 받는다(첫날은 키워드 문제가 근거를 대신하므로 BAD_MESSAGE). 화면의 [의심] 도 같은 조건에서만 보인다(UI-SPEC P24-1). 화면과 서버가 다른 값을 쓰지 않게 한 상수/함수로 맞춘다.
+- D-23: 튜토리얼 장면 "≤ 1탭" 규칙의 출처는 UI-SPEC(P24-27)이다. 포스트잇 장면만 [의심] → 이름표 두 번 누름(실제 조작을 거짓 연습으로 만들지 않기 위해).
+- D-24: 포스트잇은 새 `V2Icon` `postit` 한 개(폴백 `note`), `palette.ts` 에 좌석 8색 복사(`tokens:check` 로 동기화), 탭 키 `answers`→`records` 개명에 따른 23 의 E2E 표식·`e2eContract` 정정이 이 페이즈 계획에 들어간다. 귓속말 모드(`GameMap` 의 `whisper.mode`)와 [의심] 모드는 동시에 켜지지 않게 서로 끈다.
+
 ### Claude's Discretion
 - 계획 나누기(조사 권장: 서버 규칙+D1 공유 확인 → 프로토콜·view → [의심] UX·에셋·기록 카드 → 튜토리얼 스크립트·화면 → E2E 부분 회귀 → 전체 회귀·배포), `NOTE_REACH_FX` 정확한 값, 틴트·그림자 수치, 튜토리얼 문구는 계획자·실행자가 정한다.
 
