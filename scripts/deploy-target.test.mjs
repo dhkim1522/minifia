@@ -128,11 +128,13 @@ test("judgeDeployTarget: database_id 가 있거나 d1Databases 를 주지 않으
   assert.deepEqual(judgeDeployTarget(goodInput()), { ok: true, problems: [] });
 });
 
-test("저장소 사실: 지금 wrangler.jsonc 의 d1_databases 는 database_id 가 없어 배포가 막힌다(24 가 id 를 채우기 전까지)", () => {
+test("저장소 사실: v3 판 기록용 DB 바인딩에 원격 데이터베이스 ID가 있다", () => {
   const source = JSON.parse(stripJsonComments(read("wrangler.jsonc")));
-  assert.ok(Array.isArray(source.d1_databases) && source.d1_databases.length > 0);
+  const gamesDb = source.d1_databases.find((db) => db.binding === "DB");
+  assert.equal(gamesDb?.database_name, "minifia-v3-games");
+  assert.match(gamesDb?.database_id, /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i);
   const r = judgeDeployTarget({ ...goodInput(), d1Databases: source.d1_databases });
-  assert.equal(r.ok, false);
+  assert.deepEqual(r, { ok: true, problems: [] });
 });
 
 test("저장소 사실: wrangler.jsonc name === WORKER_NAME", () => {

@@ -4,7 +4,7 @@
 
 ## 지금 상태
 
-- **v3.0 구현 중(브랜치 `v3`)**: 13~18.1·21 까지 배포(결정 0072~0088, 배포 version `2026-11-15T13:03:01Z+e3cb26fa`, minifia-v3). **22 정리 완료(미배포)**: 판 하나, 낮 순서 토론 → 찬반(집계 수만) → 순차 지목 → 유언 → 처형, 유령 75%(결정 0089·0090). **23 첫날 키워드·D1 판 기록 완료(2026-11-17, 미배포 — 배포 가드가 D1 `database_id` 없으면 막는다)**: 첫날만 `keyword` 13초 → 낮 … 처형 → `answerReveal` → 밤, 개인 단계 전원 완료 시 1.5초 뒤 넘어감, 판 끝 D1 한 줄(결정 0091). 기획서·구조·화면 지도도 고쳤다.
+- **v3.0 구현 중(브랜치 `v3`)**: 13~18.1·21 까지 배포(결정 0072~0088, 배포 version `2026-11-15T13:03:01Z+e3cb26fa`, minifia-v3). **22 정리 완료(미배포)**: 판 하나, 낮 순서 토론 → 찬반(집계 수만) → 순차 지목 → 유언 → 처형, 유령 75%(결정 0089·0090). **23 첫날 키워드·D1 판 기록 완료(2026-11-17, 원격 D1 생성·스키마 적용)**: 첫날만 `keyword` 13초 → 낮 … 처형 → `answerReveal` → 밤, 개인 단계 전원 완료 시 1.5초 뒤 넘어감, 판 끝 D1 한 줄(결정 0091). 기획서·구조·화면 지도도 고쳤다.
 - **방향(결정 0089)**: 둘째 날부터 의심 포스트잇·새 튜토리얼은 24. 배포·폰 6종 전체 회귀는 24 끝에 한 번(0089-25).
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`. 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터(결정 0047·0048)**: 원본 https://claude.ai/artifact/NP1XfUrYTTqQ5nAB1HKYT5 (사본 `design/v2.0/figure/`, 모듈 `design/v2.0/blockout/character.js`). `3d/mf3d.js` 는 옛 방식이라 안 쓴다.
@@ -29,5 +29,5 @@
 
 ## 다음 할 일
 
-1. **Codex 작업 방식**은 [AGENTS.md](AGENTS.md)의 역할별 직접 위임. 재디자인 기준은 [B안](design/v3.0/redesign/b-noir.png)이고, 재즈 바 낮·밤 조명부터 8인판 성능과 가독성을 확인한다. **24페이즈**는 24-01~07 구현 기록까지 있으며, 다음 기능 작업은 24-08 튜토리얼 장면이다.
-2. **24 끝**: 폰 6종 전체 회귀 → **D1: 개인 계정 확인 → `wrangler d1 create minifia-v3-games --location apac` → `database_id` 손 기입 → `wrangler d1 migrations apply DB --remote` → `npm run games -- --remote` 빈 표 → 배포**(가드가 id 없으면 막는다, 0091-18) → minifia-v3 배포·smoke → v3.0 실테스트(17 UAT Test 3 폰 2대, v2.0 실기기 칸 `.planning/milestones/v2.0-phases/12-sound-polish/12-TEAM-TEST.md` 포함). 통과하면 main 반영.
+1. **재디자인 [B안](design/v3.0/redesign/b-noir.png)** 재즈 바 낮·밤 조명 시범 구현(창살 투영, 무대등 재사용). 8인판 모바일 브라우저 비교 후 실기기 확인 대기. **24페이즈**는 24-01~07 구현 기록까지 있으며, 다음 기능 작업은 24-08 튜토리얼 장면이다. Codex는 [AGENTS.md](AGENTS.md)의 역할별 직접 위임으로 진행한다.
+2. **24 끝**: 폰 6종 전체 회귀 → minifia-v3 배포·smoke → v3.0 실테스트(17 UAT Test 3 폰 2대, v2.0 실기기 칸 `.planning/milestones/v2.0-phases/12-sound-polish/12-TEAM-TEST.md` 포함). 통과하면 main 반영. 판 기록 D1은 `npm run games -- --remote`로 확인한다.

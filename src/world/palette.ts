@@ -45,6 +45,7 @@ export const PALETTE = {
 
   // 창
   windowGlass: "#56648f",
+  windowBeam: "#8eb2f2",
   blind: "#16131c",
   sill: "#3b2a22",
 

@@ -97,12 +97,14 @@ describe("재즈 바 장면 구조 (MAP-01, 렌더 예산)", () => {
     bar.dispose();
   });
 
-  it("고유 재질 수는 14 이하다 — 시안처럼 박스마다 새 재질이 아니다", () => {
+  it("창빛 재질을 제외한 맵 재질은 14개 이하이며 창빛은 한 가지 재질을 쓴다", () => {
     const bar = buildBarScene(LADDER[0]!);
     const set = new Set<Material>();
-    for (const m of allMeshes(bar.root)) for (const x of mats(m)) set.add(x);
+    const beam = bar.meshes.windowBeam!;
+    for (const m of allMeshes(bar.root)) if (m !== beam) for (const x of mats(m)) set.add(x);
     expect(set.size).toBeGreaterThan(3);
-    expect(set.size).toBeLessThanOrEqual(14); // 08-10: 변론 원뿔 빛 재질 하나가 늘었다(12 → 13), 09-10: 분필 윤곽 재질 하나(13 → 14)
+    expect(set.size).toBeLessThanOrEqual(14);
+    expect(mats(beam)).toHaveLength(1);
     bar.dispose();
   });
 
@@ -149,28 +151,27 @@ describe("재즈 바 장면 구조 (MAP-01, 렌더 예산)", () => {
 });
 
 describe("조명 단계 (talk · vote)", () => {
-  it("vote: 무대 위 점광원이 켜지고 펜던트는 talk 의 0.45 배. talk: 무대 위 점광원 0", () => {
+  it("vote 에서는 talk 보다 무대 조명을 높이고 펜던트는 0.45배로 낮춘다", () => {
     const bar = buildBarScene(LADDER[0]!);
     bar.setLighting("talk");
-    expect(bar.lights.stage.intensity).toBe(0);
+    const talkStage = bar.lights.stage.intensity;
+    expect(talkStage).toBeGreaterThan(0);
     const talkPendant = bar.lights.pendantA.intensity;
     expect(talkPendant).toBeGreaterThan(0);
     bar.setLighting("vote");
-    expect(bar.lights.stage.intensity).toBeGreaterThan(0);
+    expect(bar.lights.stage.intensity).toBeGreaterThan(talkStage);
     expect(bar.lights.pendantA.intensity).toBeCloseTo(talkPendant * 0.45, 6);
     expect(bar.lights.pendantB.intensity).toBeCloseTo(talkPendant * 0.45, 6);
     bar.setLighting("talk");
-    expect(bar.lights.stage.intensity).toBe(0);
+    expect(bar.lights.stage.intensity).toBe(talkStage);
     bar.dispose();
   });
 
-  it("조명 단계 데이터는 승인 맵 그림(map-bar.png)과 나란히 놓고 맞춘 값이다 (06-14): talk 반구 1.1π·달빛 0.85π, vote 0.7π·0.55π, 노출 1.25, vote 무대 점광원 8", () => {
-    // 출발값은 시안 세기 × π(talk 0.42·0.35, vote 0.3·0.25)였고, 390×844 에서 바닥 판자·캐릭터·무대 둘레가 어둠에 묻혀 talk 는 약 2.6배, vote 는 약 2.3배 올렸다
-    expect(LIGHT_TUNE.talk.hemi).toBeCloseTo(1.1 * Math.PI, 6);
-    expect(LIGHT_TUNE.talk.moon).toBeCloseTo(0.85 * Math.PI, 6);
+  it("talk 에는 인물 보조광을 두고 vote 의 조명 세기와 노출은 기존 값을 쓴다", () => {
+    expect(LIGHT_TUNE.talk.hemi).toBeGreaterThan(LIGHT_TUNE.morning.hemi);
     expect(LIGHT_TUNE.vote.hemi).toBeCloseTo(0.7 * Math.PI, 6);
     expect(LIGHT_TUNE.vote.moon).toBeCloseTo(0.55 * Math.PI, 6);
-    expect(LIGHT_TUNE.talk.exposure).toBe(1.25);
+    expect(LIGHT_TUNE.talk.exposure).toBe(1.45);
     expect(LIGHT_TUNE.vote.exposure).toBe(1.25);
     expect(LIGHT_TUNE.vote.stage).toBeCloseTo(2.0 * 4, 6);
     // 18-12: talk·vote 하늘은 재질 보정과 함께 시간대 색으로 나뉘었다 — 값은 표 참조(허용 범위는 lighting.test.ts)
@@ -178,11 +179,10 @@ describe("조명 단계 (talk · vote)", () => {
     expect(LIGHT_TUNE.vote.sky).toHaveLength(3);
   });
 
-  it("vote 는 talk 보다 어둡고(반구·달빛·배경) 무대에만 점광원이 있다 — 화면 전체를 밝게 덮지 않는다", () => {
+  it("vote 는 talk 보다 배경이 어두워지고 무대가 강조된다", () => {
     expect(LIGHT_TUNE.vote.hemi).toBeLessThan(LIGHT_TUNE.talk.hemi);
     expect(LIGHT_TUNE.vote.moon).toBeLessThan(LIGHT_TUNE.talk.moon);
-    expect(LIGHT_TUNE.talk.stage).toBe(0);
-    expect(LIGHT_TUNE.vote.stage).toBeGreaterThan(0);
+    expect(LIGHT_TUNE.vote.stage).toBeGreaterThan(LIGHT_TUNE.talk.stage);
   });
 
   it("장면 배경과 안개 색은 같은 색이고 단계에 따라 바뀐다", () => {
@@ -297,6 +297,27 @@ describe("조명 단계 다섯 (trial · night · morning, 08-10)", () => {
     bar.dispose();
   });
 
+  it("창살 투영은 바닥 메시 하나를 재사용하고 시민 밤과 빛 무리 없는 품질에서 숨긴다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    const beam = bar.meshes.windowBeam!;
+    const geometry = beam.geometry;
+    expect(geometry.getIndex()?.count).toBe(9 * 6);
+    expect(worldVertices(beam).every(({ y }) => y > 0 && y < 0.01)).toBe(true);
+    expect(beam.castShadow).toBe(false);
+    expect((beam.material as MeshBasicMaterial).depthWrite).toBe(false);
+    for (const phase of STAGES) {
+      bar.setLighting(phase);
+      expect(beam.visible, phase).toBe(["talk", "night", "nightGhost"].includes(phase));
+      expect(beam.geometry).toBe(geometry);
+    }
+    bar.setLighting("night");
+    bar.applyBudget(LADDER[5]!);
+    expect(beam.visible).toBe(false);
+    bar.applyBudget(LADDER[0]!);
+    expect(beam.visible).toBe(true);
+    bar.dispose();
+  });
+
   it("유령 8명(발밑 고리 포함)이 서 있어도 단계마다 그리기 호출 추정이 DRAW_CALL_BUDGET 이내다(보이는 메시 + 그림자를 드리우는 메시)", () => {
     const bar = buildBarScene(LADDER[0]!);
     const chars = Array.from({ length: 8 }, (_, i) => createCharacter(figForSeat(i), "coat"));
@@ -323,12 +344,13 @@ describe("조명 단계 다섯 (trial · night · morning, 08-10)", () => {
       for (let i = 0; i < 3; i++) expect(lum(LIGHT_TUNE[s].sky[i]!), `${s} sky[${i}]`).toBeLessThanOrEqual(lum(LIGHT_TUNE.talk.sky[i]!));
   });
 
-  it("단계 값: trial 은 실내 5% · 무대 전구 유지, night 는 무대 점광원 0 · 실내 15%, morning 은 talk 보다 낮은 반구", () => {
+  it("단계 값: trial 실내 5%, night 은은한 무대와 실내 15%, morning 은 talk 보다 낮은 반구", () => {
     expect(LIGHT_TUNE.trial.emissive.room).toBeCloseTo(0.05, 9);
     expect(LIGHT_TUNE.trial.glow.room).toBeCloseTo(0.05, 9);
     expect(LIGHT_TUNE.trial.stage).toBe(LIGHT_TUNE.vote.stage);
     expect(LIGHT_TUNE.trial.emissive.vote).toBe(LIGHT_TUNE.vote.emissive.vote);
-    expect(LIGHT_TUNE.night.stage).toBe(0);
+    expect(LIGHT_TUNE.night.stage).toBeGreaterThan(0);
+    expect(LIGHT_TUNE.night.stage).toBeLessThan(LIGHT_TUNE.talk.stage);
     expect(LIGHT_TUNE.night.emissive.room).toBeCloseTo(0.15, 9);
     expect(LIGHT_TUNE.night.hemi).toBeLessThan(LIGHT_TUNE.vote.hemi);
     expect(LIGHT_TUNE.morning.hemi).toBeLessThan(LIGHT_TUNE.talk.hemi);
@@ -755,13 +777,13 @@ describe("재즈 바 재질 보정 albedo (18-12, G-18-1)", () => {
     bar.dispose();
   });
 
-  it("(h) talk 의 plate 재질 색은 B ≤ max(R,G) 이다(파랑 우세 아님)", () => {
+  it("(h) B안 talk 의 plate 재질 색은 푸른 기운이 우세하다", () => {
     const bar = buildBarScene(LADDER[0]!);
     const n = (bar.plate.material as MeshStandardMaterial).color.getHex();
     const r = (n >> 16) & 255;
     const g = (n >> 8) & 255;
     const b = n & 255;
-    expect(b).toBeLessThanOrEqual(Math.max(r, g));
+    expect(b).toBeGreaterThan(Math.max(r, g));
     bar.dispose();
   });
 

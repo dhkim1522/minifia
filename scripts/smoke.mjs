@@ -1270,9 +1270,9 @@ async function stageFull(url, args) {
     for (let k = 1; k < seq.length; k++) {
       if (!(PHASE_NEXT[seq[k - 1]] ?? []).includes(seq[k])) fail(`${c.nickname} 의 단계 순서가 이상함: ${seq.join(" → ")}`);
     }
-    // 첫 낮은 토론 → 찬반 → 지목 → 변론(유언) → 처형 → 밤 → 아침 순서로 돈다(옛 처형 여부·후보 선택 단계는 어떤 경로로도 없다). 마지막 단계는 ended.
+    // 첫날은 처형 뒤 키워드 정답을 공개한 다음 밤으로 넘어간다.
     const iDisc = seq.indexOf("discussion");
-    const firstDay = ["discussion", "verdict", "nomination", "defense", "execution", "night", "morning"];
+    const firstDay = ["discussion", "verdict", "nomination", "defense", "execution", "answerReveal", "night", "morning"];
     if (iDisc < 0 || seq.slice(iDisc, iDisc + firstDay.length).join(",") !== firstDay.join(",")) fail(`${c.nickname} 의 첫 낮 단계 순서가 ${firstDay.join(" → ")} 가 아님: ${seq.join(" → ")}`);
     if (seq.at(-1) !== "ended") fail(`${c.nickname} 의 마지막 단계가 ended 가 아님: ${seq.join(" → ")}`);
   }

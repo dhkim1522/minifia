@@ -69,9 +69,10 @@ export function outfitCardSrc(id: OutfitId): string {
   return `/outfits/outfit-${id}.png?v=${ASSET_VERSION}`;
 }
 
-// 꾸미기 시트 맵 탭의 카드 그림(11-13, 승인 디자인 시스템 사본 두 장 560×320). 표시 80×80 cover. 랜덤 카드는 그림 없이 shuffle 아이콘이다. 외부 주소 없음(O-8).
+// 꾸미기 시트 맵 카드(560×320)는 가운데를 80×80으로 잘라 표시한다. 재즈 바는 B안의 실제 장면 캡처다.
 export function mapCardSrc(id: MapId): string {
-  return `/maps/map-${id}.png?v=${ASSET_VERSION}`;
+  const version = id === "bar" ? "noir-1" : ASSET_VERSION;
+  return `/maps/map-${id}.png?v=${version}`;
 }
 
 // 직업 그림은 150px 로 표시한다. @2x 파일은 1x, @4x 파일은 2x. 역할을 보낼 수 있는 화면에서만 쓴다.

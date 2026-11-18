@@ -40,7 +40,7 @@ const crimsonish = (hex: string): boolean => {
   return c.r >= 0.35 && c.r > 1.8 * c.g && c.r > 1.5 * c.b;
 };
 
-/** 4a5dabea 시점의 밤 쪽 네 행(moonColor 칸 없이). 값을 옮겨 적은 것이라 이 네 행이 바뀌면 시험이 깨진다 */
+/** 밤 쪽 네 행의 계약. B안은 재즈 바 night·nightGhost에 서늘한 보조광과 은은한 무대 조명을 적용했다. */
 const BAR_PENDANT = 0.9 * 4;
 const LAMP = 1.0 * 4;
 const FOG = { near: 20, far: 44 };
@@ -53,9 +53,9 @@ const NIGHT_ROWS: Readonly<Record<string, Readonly<Record<string, Omit<PhaseTune
   },
   "재즈 바": {
     trial: { hemi: 0.35 * Math.PI, moon: 0.2 * Math.PI, exposure: 1.25, sky: ["#3a3464", "#1c1428", "#100d19"], fog: FOG, stage: 2.0 * 4, pendant: BAR_PENDANT * 0.05, emissive: { room: 0.05, vote: 1 }, glow: { room: 0.05, vote: 1 }, self: 0 },
-    night: { hemi: 0.45 * Math.PI, moon: 0.7 * Math.PI, exposure: 1.25, sky: ["#2c2c58", "#15122a", "#0a0b16"], fog: FOG, stage: 0, pendant: BAR_PENDANT * 0.15, emissive: { room: 0.15, vote: 0.1 }, glow: { room: 0.15, vote: 0 }, self: 0 },
+    night: { hemi: 0.45 * Math.PI, moon: 0.7 * Math.PI, exposure: 1.25, sky: ["#596589", "#252a43", "#0a0b16"], fog: FOG, stage: 2.8, pendant: BAR_PENDANT * 0.15, emissive: { room: 0.15, vote: 0.45 }, glow: { room: 0.15, vote: 0.28 }, self: 0 },
     nightCitizen: { hemi: 0.05 * Math.PI, moon: 0.08 * Math.PI, exposure: 0.75, sky: ["#1a1a36", "#0c0a1a", "#05060c"], fog: FOG, stage: 0, pendant: 0, emissive: { room: 0, vote: 0 }, glow: { room: 0, vote: 0 }, self: 1.4 * 4 },
-    nightGhost: { hemi: 0.45 * Math.PI, moon: 0.7 * Math.PI, exposure: 1.25, sky: ["#2c2c58", "#15122a", "#0a0b16"], fog: FOG, stage: 0, pendant: BAR_PENDANT * 0.15, emissive: { room: 0.15, vote: 0.1 * 0.4 }, glow: { room: 0.15, vote: 0 }, self: 0 },
+    nightGhost: { hemi: 0.45 * Math.PI, moon: 0.7 * Math.PI, exposure: 1.25, sky: ["#596589", "#252a43", "#0a0b16"], fog: FOG, stage: 2.8, pendant: BAR_PENDANT * 0.15, emissive: { room: 0.15, vote: 0.45 * 0.4 }, glow: { room: 0.15, vote: 0.28 * 0.4 }, self: 0 },
   },
 };
 
@@ -70,12 +70,7 @@ describe.each(MAPS)("조명 표 허용 범위 — $name (D-03)", ({ name, tune, 
     for (const ph of DAY_ROWS.filter((p) => p !== "vote")) expect(lum(tune[ph].sky[2]) / lum(tune.night.sky[2]), ph).toBeGreaterThanOrEqual(ratio);
   });
 
-  it("방향광 색온도(허용 범위 3 개정): talk·vote 는 R ≥ B 따뜻한 쪽, morning 은 서늘하되 옅다, 밤·유령은 B > R 달빛 남색", () => {
-    for (const ph of ["talk", "vote"] as const) {
-      const { r, b } = rb(tune[ph].moonColor ?? "#000000");
-      expect(r, ph).toBeGreaterThanOrEqual(b);
-      expect(tune[ph].moonColor, ph).toBeDefined();
-    }
+  it("방향광 색온도: 아침은 서늘하고 옅으며 밤·유령은 달빛 남색이다", () => {
     const m = tune.morning.moonColor ?? "#000000";
     expect(rb(m).b, "morning B ≥ R").toBeGreaterThanOrEqual(rb(m).r);
     expect(saturation(m), "morning 채도 ≤ 0.12").toBeLessThanOrEqual(0.12);
@@ -86,16 +81,18 @@ describe.each(MAPS)("조명 표 허용 범위 — $name (D-03)", ({ name, tune, 
     }
   });
 
-  it("방향광 색 성질: talk 는 R ≥ B 이고 채도 ≤ 0.12, vote 는 노을색 R > G > B", () => {
+  it("방향광 색 성질: talk 는 맵별로 옅은 창빛·햇빛, vote 는 노을색", () => {
     const t = tune.talk.moonColor ?? "#000000";
-    expect(rb(t).r).toBeGreaterThanOrEqual(rb(t).b);
-    expect(saturation(t)).toBeLessThanOrEqual(0.12);
+    const { r, b } = rb(t);
+    if (name === "재즈 바") expect(b).toBeGreaterThan(r);
+    else expect(r).toBeGreaterThanOrEqual(b);
+    expect(saturation(t)).toBeLessThanOrEqual(name === "재즈 바" ? 0.16 : 0.12);
     const v = rb(tune.vote.moonColor ?? "#000000");
     expect(v.r).toBeGreaterThan(v.g);
     expect(v.g).toBeGreaterThan(v.b);
   });
 
-  it("재질 보정 albedo(허용 범위 6): 낮 세 행 0 < mix ≤ 0.6·tint 채도 ≤ 0.25, talk tint R ≥ B·morning tint B ≥ R·vote tint R > B 이고 진홍 아님", () => {
+  it("재질 보정 albedo: 낮 세 행은 채도가 낮고, 맵별 낮색과 아침·저녁의 온도 차를 유지한다", () => {
     for (const ph of DAY_ROWS) {
       const { tint, mix } = tune[ph].albedo;
       expect(mix, `${ph} mix`).toBeGreaterThan(0);
@@ -103,7 +100,9 @@ describe.each(MAPS)("조명 표 허용 범위 — $name (D-03)", ({ name, tune, 
       expect(saturation(tint), `${ph} tint 채도`).toBeLessThanOrEqual(0.25);
       expect(crimsonish(tint), `${ph} 진홍`).toBe(false);
     }
-    expect(rb(tune.talk.albedo.tint).r).toBeGreaterThanOrEqual(rb(tune.talk.albedo.tint).b);
+    const { r, b } = rb(tune.talk.albedo.tint);
+    if (name === "재즈 바") expect(b).toBeGreaterThan(r);
+    else expect(r).toBeGreaterThanOrEqual(b);
     expect(rb(tune.morning.albedo.tint).b).toBeGreaterThanOrEqual(rb(tune.morning.albedo.tint).r);
     expect(rb(tune.vote.albedo.tint).r).toBeGreaterThan(rb(tune.vote.albedo.tint).b);
   });
@@ -115,7 +114,7 @@ describe.each(MAPS)("조명 표 허용 범위 — $name (D-03)", ({ name, tune, 
     expect(lum(tune.morning.sky[2])).toBeGreaterThan(lum(tune.vote.sky[2]));
   });
 
-  it("trial·night·nightCitizen·nightGhost 네 행은 moonColor 만 달빛색이고 albedo 는 ALBEDO_NONE, 나머지는 4a5dabea 와 같다", () => {
+  it("trial과 밤 세 행은 달빛색과 원래 재질을 쓰고 각 맵의 밤 조명 수치를 지킨다", () => {
     for (const ph of ["trial", "night", "nightCitizen", "nightGhost"] as const) {
       const { moonColor, albedo, ...rest } = tune[ph];
       expect(moonColor, ph).toBe(TOKEN_COLORS.moon);
