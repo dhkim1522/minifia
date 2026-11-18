@@ -52,10 +52,10 @@ describe("Home 첫 화면 (S-01, 결정 0014)", () => {
     expect(screen.queryByText(/^v/)).toBeNull();
   });
 
-  it("방 만들기 아래에 혼자 하기 진입이 있고 처음 오는 사람에게만 강조한다", () => {
+  it("방 만들기 아래에 혼자 연습하기 진입이 있고 처음 오는 사람에게만 강조한다", () => {
     const { container } = render(<Home onEnterRoom={vi.fn()} />);
     const actions = container.querySelector(".mf-entry__actions");
-    const entry = screen.getByRole("button", { name: "혼자 하며 배우기" });
+    const entry = screen.getByRole("button", { name: "혼자 연습하기" });
     expect(entry).toBe(actions?.lastElementChild);
     expect(entry.hasAttribute("data-tutorial-entry")).toBe(true);
     expect(entry.hasAttribute("data-call")).toBe(true);

@@ -2394,10 +2394,10 @@ async function nightUntil(page, pred, ms = 6000) {
   }
 }
 
-const MORNING_SAVED = "누군가 살아났습니다";
-const MORNING_SENTENCE_RE = /님이 당했습니다$|^누군가 살아났습니다$|^아무 일도 없었습니다$/;
+const MORNING_SAVED = "누군가를 지켜냈어요";
+const MORNING_SENTENCE_RE = /님이 밤사이 탈락했어요$|^누군가를 지켜냈어요$|^아무 일도 없었습니다$/;
 
-/** 아침 문장(당했습니다·살아났습니다·아무 일도)이 나올 때까지 알림 기록을 본다. 밤 진입 때 남은 알림('처형 없음' 등)은 건너뛴다. */
+/** 아침 문장(밤사이 탈락·지켜냄·아무 일도)이 나올 때까지 알림 기록을 본다. 밤 진입 때 남은 알림('처형 없음' 등)은 건너뛴다. */
 async function waitMorningAnnounce(page, ms, re = MORNING_SENTENCE_RE) {
   const start = performance.now();
   for (;;) {
@@ -2579,11 +2579,11 @@ async function nightAssassin(ctx) {
     if (morning?.text === MORNING_SAVED) throw new SetupError("의사 봇이 우연히 이 밤의 대상을 지킴");
     const chalk = await nightUntil(hp, (x) => x.chalk !== null, 2000);
     rec(sc, "MA1", "아침에 암살 현장 분필([data-chalk])이 있다", !!chalk && /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(chalk.chalk), `chalk ${chalk?.chalk ?? "없음"}`);
-    rec(sc, "MA2", `아침 알림이 '${victim} 님이 당했습니다' 이다`, morning?.text === `${victim} 님이 당했습니다`, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
+    rec(sc, "MA2", `아침 알림이 '${victim} 님이 밤사이 탈락했어요' 이다`, morning?.text === `${victim} 님이 밤사이 탈락했어요`, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
     // 편지가 있는 아침의 큰 글은 띠·소리 단추를 피해 좁은 자리(.is-top)라 8자 이름이 세 줄까지 감길 수 있다(18.1-13)
     if (morning) recMany(rec, sc, announceChecks(morning, { maxLines: 3 }), " (아침)");
     // 유언 편지(09.1-11): 일반 화면은 아침 0.4초에 편지가 뜨고 T0 + 5.0초에 접히며 카드가 채팅에 나온다. 편지가 걷힌 뒤에 아래 카드·G 검사를 본다.
-    await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: ANNOUNCE_MORNING_AT + 600, announceRe: /님이 당했습니다$/, wills: BOT_WILL_TEXTS, name: victim });
+    await morningLetterChecks(ctx, sc, rec, game, { appearMaxMs: ANNOUNCE_MORNING_AT + 600, announceRe: /님이 밤사이 탈락했어요$/, wills: BOT_WILL_TEXTS, name: victim });
     const cards = await nightUntil(hp, (x) => x.cards.some((c) => c.kind === "will") && x.cards.some((c) => c.kind === "note"), 7000);
     const kinds = (cards ?? (await readNight(hp)))?.cards.map((c) => c.kind) ?? [];
     rec(sc, "MA3", "편지가 접힌 뒤(아침 약 5.4초) 채팅에 유언 카드와 쪽지 카드가 순서대로(유언 → 쪽지) 나온다", !!cards && kinds.indexOf("will") >= 0 && kinds.indexOf("note") > kinds.indexOf("will"), `카드 ${kinds.join(",") || "없음"}`);
@@ -2672,7 +2672,7 @@ async function tapFace(page, seat) {
   await page.waitForSelector(`[data-face="${seat}"][aria-pressed="true"]`, { timeout: 3000 });
 }
 
-/** 구출: 방장 의사가 봇 마피아의 대상(가장 낮은 seat 의 산 비마피아 = 방장 자신, seat 0)을 얼굴 목록에서 골라 막는다 → 아침 '누군가 살아났습니다', 분필·카드 없음 (MORN-03, NIGHT-09, L10) */
+/** 구출: 방장 의사가 봇 마피아의 대상(가장 낮은 seat 의 산 비마피아 = 방장 자신, seat 0)을 얼굴 목록에서 골라 막는다 → 아침 '누군가를 지켜냈어요', 분필·카드 없음 (MORN-03, NIGHT-09, L10) */
 async function nightSaved(ctx, shared) {
   const id = "night";
   const sc = `${id}/saved`;
@@ -2699,7 +2699,7 @@ async function nightSaved(ctx, shared) {
     await skipTo(hp, ht, "morning");
     await untilGame(hp, (x) => x.phase === "morning", 6000, "아침 도착");
     const { log, morning } = await waitMorningAnnounce(hp, 6000);
-    rec(sc, "SV5", "아침 알림이 '누군가 살아났습니다' 이다", morning?.text === MORNING_SAVED, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
+    rec(sc, "SV5", "아침 알림이 '누군가를 지켜냈어요' 이다", morning?.text === MORNING_SAVED, `알림 ${log.filter((a) => a.text).map((a) => a.text).join(" → ") || "없음"}`);
     if (morning) recMany(rec, sc, announceChecks(morning), " (구출)");
     await sleep(3300); // 카드 공개(2.8초)가 지난 뒤에도 없어야 한다
     const after = await readNight(hp);

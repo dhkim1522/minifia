@@ -35,19 +35,19 @@ export interface KeywordProps {
 
 /** 키워드 카드 글(P23-4·5). 이 화면의 문구는 이 한 곳이다 — 키워드·역할 값은 데이터 속성에 싣지 않는다. */
 const KEYWORD_COPY = {
-  /** 장르 줄: `장르 : 영화` */
-  genre: (genre: string): string => `장르 : ${genre}`,
+  genre: (genre: string): string => `주제 · ${genre}`,
   /** 마피아의 키워드 자리(서버가 단어를 보내지 않는다) */
   hidden: "???",
   /** 마피아 키워드 자리의 접근성 이름 */
-  hiddenName: "키워드는 알 수 없어요",
+  hiddenName: "제시어를 볼 수 없어요",
   /** 카드 접근성 이름 */
-  cardName: "첫날 문제",
-  note: "* 직접적인 키워드는 언급하면 안 됩니다.",
+  cardName: "제시어 카드",
+  note: "제시어는 쓰지 말고 단서를 남겨요",
+  hiddenHint: "주제를 보고 단서를 써요",
   /** 입력줄: 입력칸 접근성 이름·[보내기] 이름(제출 전·뒤)·제출 뒤 메타 가운데 글. 안내 글자는 두지 않는다(띠가 맡는다) */
-  inputName: "답 입력",
-  sendName: "답 보내기",
-  sentName: "답 보냄",
+  inputName: "단서 입력",
+  sendName: "단서 보내기",
+  sentName: "단서 보냄",
   done: "냈어요",
   /** 남은 초: `n초` */
   secs: (n: number): string => `${n}초`,
@@ -173,7 +173,7 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
               spellCheck={false}
               aria-label={KEYWORD_COPY.inputName}
               aria-describedby={META_ID}
-              placeholder={playtest && !sent ? word === undefined ? "장르를 보고 단서를 써요" : "정답을 빼고 단서를 써요" : undefined}
+              placeholder={playtest && !sent ? word === undefined ? KEYWORD_COPY.hiddenHint : KEYWORD_COPY.note : undefined}
               disabled={answer.state === "locked"}
               readOnly={sent || timeless}
               value={answer.value}

@@ -302,7 +302,7 @@ describe("useSuspect — 서버 확인", () => {
     expect(r.result.current.api.said).toBe("");
     r.rerender({ view: makeView({ suspectTo: 1 }), segs });
     expect(r.result.current.guard.peek()).toBeNull();
-    expect(r.result.current.api.said).toBe("영희 님에게 의심을 붙였어요");
+    expect(r.result.current.api.said).toBe("영희 님에게 의심딱지를 붙였어요");
   });
   it("처음 마운트 때 이미 붙어 있던 것은 안내하지 않는다", () => {
     const r = mountHook({ view: makeView({ suspectTo: 1 }), segs: { 0: at(0), 1: at(50) } });
@@ -314,11 +314,11 @@ describe("useSuspect — 서버 확인", () => {
 describe("SuspectButton", () => {
   const base = { mode: false, used: false, disabled: false, noTargets: false, onToggle: () => {}, onDeny: () => {} };
 
-  it("쉼: 이름 '의심 붙이기', aria-pressed false, postit 아이콘, 글자 노드 없음", () => {
+  it("쉼: 이름 '의심딱지 붙이기', aria-pressed false, postit 아이콘, 글자 노드 없음", () => {
     const { container } = render(<SuspectButton {...base} />);
     const btn = container.querySelector("button[data-suspect-btn]");
     expect(btn).not.toBeNull();
-    expect(btn?.getAttribute("aria-label")).toBe("의심 붙이기");
+    expect(btn?.getAttribute("aria-label")).toBe("의심딱지 붙이기");
     expect(btn?.getAttribute("aria-pressed")).toBe("false");
     expect(btn?.getAttribute("type")).toBe("button");
     expect(btn?.querySelector("svg path")).not.toBeNull();
@@ -330,10 +330,10 @@ describe("SuspectButton", () => {
     const { container } = render(<SuspectButton {...base} mode />);
     expect(container.querySelector("[data-suspect-btn]")?.getAttribute("aria-pressed")).toBe("true");
   });
-  it("오늘 붙였음: 이름 '의심 옮기기', data-suspect-stuck, 점", () => {
+  it("오늘 붙였음: 이름 '의심딱지 옮기기', data-suspect-stuck, 점", () => {
     const { container } = render(<SuspectButton {...base} used />);
     const btn = container.querySelector("[data-suspect-btn]");
-    expect(btn?.getAttribute("aria-label")).toBe("의심 옮기기");
+    expect(btn?.getAttribute("aria-label")).toBe("의심딱지 옮기기");
     expect(btn?.hasAttribute("data-suspect-stuck")).toBe(true);
     expect(btn?.querySelector(".mv-chat__will-dot")).not.toBeNull();
   });
@@ -412,7 +412,7 @@ describe("HeadStack 의심 칩", () => {
     const { container } = render(<HeadStack name="영희" color="var(--seat-2)" suspect={4} />);
     const chip = container.querySelector("[data-suspect-count]");
     expect(chip?.getAttribute("data-suspect-count")).toBe("4");
-    expect(chip?.getAttribute("aria-label")).toBe("의심 4장");
+    expect(chip?.getAttribute("aria-label")).toBe("의심딱지 4장");
     expect(chip?.textContent).toBe("4");
     expect(chip?.querySelector("svg")).not.toBeNull();
     // 이름표 안(득표 배지 자리와 반대인 왼쪽 위)에 있다
@@ -420,7 +420,7 @@ describe("HeadStack 의심 칩", () => {
   });
   it("내 이름표는 1장 이상이면 늘 보이고 0장·값 없음은 없다", () => {
     const one = render(<HeadStack name="민수" color="var(--seat-1)" me suspect={1} />);
-    expect(one.container.querySelector("[data-suspect-count]")?.getAttribute("aria-label")).toBe("의심 1장");
+    expect(one.container.querySelector("[data-suspect-count]")?.getAttribute("aria-label")).toBe("의심딱지 1장");
     one.unmount();
     const zero = render(<HeadStack name="민수" color="var(--seat-1)" me suspect={0} />);
     expect(zero.container.querySelector("[data-suspect-count]")).toBeNull();
@@ -473,7 +473,7 @@ describe("GameMap — [의심] 단추 보임 (P24-1·P24-2)", () => {
   it("둘째 날 토론·산 본인: [data-chat-trailing] 안에 단추가 있다", () => {
     const { container } = mountMap(makeView());
     expect(container.querySelector("[data-chat-trailing] [data-suspect-btn]")).not.toBeNull();
-    expect(suspectBtn(container)?.getAttribute("aria-label")).toBe("의심 붙이기");
+    expect(suspectBtn(container)?.getAttribute("aria-label")).toBe("의심딱지 붙이기");
     expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("off");
   });
   it("첫날·찬반·유령 화면에는 DOM 에 없다", () => {
@@ -483,9 +483,9 @@ describe("GameMap — [의심] 단추 보임 (P24-1·P24-2)", () => {
     cleanup();
     expect(suspectBtn(mountMap(makeView({ dead: [0] })).container)).toBeNull();
   });
-  it("오늘 붙인 사람은 '의심 옮기기' 점 상태다", () => {
+  it("오늘 붙인 사람은 '의심딱지 옮기기' 점 상태다", () => {
     const { container } = mountMap(makeView({ suspectTo: 1 }));
-    expect(suspectBtn(container)?.getAttribute("aria-label")).toBe("의심 옮기기");
+    expect(suspectBtn(container)?.getAttribute("aria-label")).toBe("의심딱지 옮기기");
     expect(suspectBtn(container)?.hasAttribute("data-suspect-stuck")).toBe(true);
   });
   it("연결이 끊기면(canSend 거짓) aria-disabled 이고 눌러도 모드가 켜지지 않는다", () => {
@@ -503,11 +503,11 @@ describe("GameMap — 의심 모드 (P24-5·P24-8)", () => {
     fireEvent.click(suspectBtn(container)!);
     expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("on");
     expect(suspectBtn(container)?.getAttribute("aria-pressed")).toBe("true");
-    expect(hintOf(container)).toBe("의심 가는 사람을 눌러요");
+    expect(hintOf(container)).toBe("의심 가는 사람의 이름표를 눌러요");
     const pick = stage.props!.pick!;
     expect([...pick.seats].sort()).toEqual([1, 2]);
-    expect(pick.group).toBe("의심 붙이기");
-    expect(pick.label("영희")).toBe("영희 님에게 의심 붙이기");
+    expect(pick.group).toBe("의심딱지 붙이기");
+    expect(pick.label("영희")).toBe("영희 님에게 의심딱지 붙이기");
     expect(pick.attr).toBe("data-suspect-tag");
     expect(stage.props!.tagProps?.(1).blink).toBe(true);
     expect(stage.props!.tagProps?.(2).blink).toBe(true);
@@ -528,7 +528,7 @@ describe("GameMap — 의심 모드 (P24-5·P24-8)", () => {
     fireEvent.click(suspectBtn(container)!);
     expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("off");
     expect(stage.props!.pick).toBeUndefined();
-    expect(hintOf(container)).not.toBe("의심 가는 사람을 눌러요");
+    expect(hintOf(container)).not.toBe("의심 가는 사람의 이름표를 눌러요");
   });
   it("이름표를 고르면 suspect 가 한 번 나가고 같은 프레임에 모드가 끝난다(낙관 그림 없음)", () => {
     const { container, send } = mountMap(makeView());
@@ -558,18 +558,18 @@ describe("GameMap — 의심 모드 (P24-5·P24-8)", () => {
     r.show(makeView({ suspectTo: 1 }));
     const said = r.container.querySelector("[data-suspect-said]");
     expect(said?.getAttribute("role")).toBe("status");
-    expect(said?.textContent).toBe("영희 님에게 의심을 붙였어요");
+    expect(said?.textContent).toBe("영희 님에게 의심딱지를 붙였어요");
   });
 });
 
 describe("GameMap — 근처 0명과 거절 알림 (P24-5·P24-7)", () => {
   const FAR = { 0: at(0), 1: at(500), 2: at(600), 3: at(900) };
-  it("근처 0명이면 단추가 aria-disabled 이고 눌러도 모드는 안 켜지며 '가까이 가야 붙여요' 알림이 뜬다", () => {
+  it("근처 0명이면 단추가 aria-disabled 이고 눌러도 모드는 안 켜지며 '조금 더 가까이 가 보세요' 알림이 뜬다", () => {
     const { container, send } = mountMap(makeView(), { segs: FAR });
     expect(suspectBtn(container)?.getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(suspectBtn(container)!);
     expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("off");
-    expect(noticeOf(container)?.textContent).toContain("가까이 가야 붙여요");
+    expect(noticeOf(container)?.textContent).toContain("조금 더 가까이 가 보세요");
     expect(sentOf(send).filter((m) => m.t === "suspect")).toEqual([]);
   });
   it("알림은 2.5초 뒤 접힌다", () => {
@@ -589,7 +589,7 @@ describe("GameMap — 근처 0명과 거절 알림 (P24-5·P24-7)", () => {
     act(() => stage.props!.pick!.onPick(1));
     signals.length = 0;
     r.emitError("BAD_MESSAGE");
-    expect(noticeOf(r.container)?.textContent).toContain("가까이 가야 붙여요");
+    expect(noticeOf(r.container)?.textContent).toContain("조금 더 가까이 가 보세요");
     expect(stageEl(r.container).getAttribute("data-suspect-mode")).toBe("off");
     expect(signals).toEqual([{ kind: "deny" }]);
   });

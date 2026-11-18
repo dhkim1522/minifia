@@ -58,7 +58,7 @@ describe("useWillLetter", () => {
     s.rerender(morning());
     const letter = s.hook.result.current;
     expect(letter).toMatchObject({ seat: 3, name: "지호", text: "현우 님 말투가 이상해요", t0: T + 400 });
-    expect(letter?.announce).toMatchObject({ text: "지호 님이 당했습니다", icon: "target" });
+    expect(letter?.announce).toMatchObject({ text: "지호 님이 밤사이 탈락했어요", icon: "target" });
     expect(s.chat.visibleLines("all", T + 400 + LETTER_FOLD_AT_MS - 1)).toHaveLength(0);
     expect(s.chat.visibleLines("all", T + 400 + LETTER_FOLD_AT_MS)).toHaveLength(1);
   });

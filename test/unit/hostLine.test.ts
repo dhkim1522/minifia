@@ -493,13 +493,13 @@ describe("정답 공개 사회자 줄 (23-07, P23-20)", () => {
 describe("키워드 띠 문장 (23-09, P23-8)", () => {
   const view = (o: Partial<Spec> = {}) => makeView({ phase: "keyword", endsAt: 1_700_000_013_000, durationMs: 13_000, ...o });
 
-  it("me.answer 가 없거나 초안(final false)이면 keyword.act '떠오르는 말을 적어요', 확정(final true)이면 keyword.wait '곧 모두의 답이 나와요'", () => {
+  it("me.answer 가 없거나 초안(final false)이면 keyword.act '단서를 한 줄 써요', 확정(final true)이면 keyword.wait '곧 모두의 단서가 나와요'", () => {
     expect(hostKeyOf(view())).toBe("keyword.act");
-    expect(hostLineOf(view())).toBe("떠오르는 말을 적어요");
+    expect(hostLineOf(view())).toBe("단서를 한 줄 써요");
     expect(hostKeyOf(view({ answer: { text: "안경", final: false } }))).toBe("keyword.act");
     expect(hostKeyOf(view({ answer: { text: "안경", final: true } }))).toBe("keyword.wait");
-    expect(hostLineOf(view({ answer: { text: "안경", final: true } }))).toBe("곧 모두의 답이 나와요");
-    expect(HOST_LINES["keyword.wait"]).toBe("곧 모두의 답이 나와요");
+    expect(hostLineOf(view({ answer: { text: "안경", final: true } }))).toBe("곧 모두의 단서가 나와요");
+    expect(HOST_LINES["keyword.wait"]).toBe("곧 모두의 단서가 나와요");
   });
 
   it("마피아·시민·경찰·의사·역할 없음이 같은 키다 — 역할을 읽지 않는다", () => {
@@ -647,10 +647,10 @@ describe("찬반·지목 띠 문장 (22-10, P22-1·D-23)", () => {
 describe("결과 정답 줄 ended.answer (23-11, P23-22, D-02)", () => {
   const ended = (o: Partial<Spec> = {}) => makeView({ phase: "ended", endsAt: null, ...o });
 
-  it("정답이 있으면 키 ended.answer, 줄 `정답 · 해리포터`, 띠는 show, 시간 행 없음", () => {
+  it("정답이 있으면 키 ended.answer, 줄 `제시어 · 해리포터`, 띠는 show, 시간 행 없음", () => {
     const v = ended({ keywordAnswer: "해리포터" });
     expect(hostKeyOf(v)).toBe("ended.answer");
-    expect(hostLineOf(v)).toBe("정답 · 해리포터");
+    expect(hostLineOf(v)).toBe("제시어 · 해리포터");
     expect(hostBandModeOf(v, hostLineOf(v))).toBe("show");
     expect(hostTimeOf(v)).toBe(false);
   });
@@ -671,7 +671,7 @@ describe("결과 정답 줄 ended.answer (23-11, P23-22, D-02)", () => {
     const lines = new Set<string>();
     for (const role of ["mafia", "citizen", "police", "doctor"] as RoleId[]) lines.add(hostLineOf(ended({ keywordAnswer: "해리포터", role })));
     lines.add(hostLineOf(ended({ keywordAnswer: "해리포터", ghost: true })));
-    expect([...lines]).toEqual(["정답 · 해리포터"]);
+    expect([...lines]).toEqual(["제시어 · 해리포터"]);
     expect(hostLineOf(makeView({ phase: "discussion", keywordAnswer: "해리포터" }))).toBe("의심 가는 사람을 이야기해 주세요");
     expect(hostBandModeOf(makeView({ phase: "lobby", host: true, endsAt: null, keywordAnswer: "해리포터" }), HOST_LINES["lobby.ready"])).toBe("off");
   });

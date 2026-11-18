@@ -5,27 +5,27 @@ import { MORNING_TEXT, morningText } from "../../src/game/eliminationText";
 
 describe("MORNING_TEXT", () => {
   it("세 문장과 피해자 본인 문장의 글자가 UI-SPEC 과 같다", () => {
-    expect(MORNING_TEXT.killed("서연")).toBe("서연 님이 당했습니다");
-    expect(MORNING_TEXT.saved).toBe("누군가 살아났습니다");
+    expect(MORNING_TEXT.killed("서연")).toBe("서연 님이 밤사이 탈락했어요");
+    expect(MORNING_TEXT.saved).toBe("누군가를 지켜냈어요");
     expect(MORNING_TEXT.quiet).toBe("아무 일도 없었습니다");
     expect(MORNING_TEXT.victim).toBe("암살당했습니다");
   });
 
   it("이름 뒤는 받침과 무관하게 항상 ' 님이'", () => {
-    expect(MORNING_TEXT.killed("민")).toBe("민 님이 당했습니다");
-    expect(MORNING_TEXT.killed("가나다라마")).toBe("가나다라마 님이 당했습니다");
+    expect(MORNING_TEXT.killed("민")).toBe("민 님이 밤사이 탈락했어요");
+    expect(MORNING_TEXT.killed("가나다라마")).toBe("가나다라마 님이 밤사이 탈락했어요");
   });
 });
 
 describe("morningText", () => {
   const nick = (seat: number) => (seat === 3 ? "서연" : undefined);
 
-  it("피해자가 있으면 '{닉네임} 님이 당했습니다' 와 target 아이콘", () => {
-    expect(morningText({ eliminated: 3 }, nick)).toEqual({ text: "서연 님이 당했습니다", icon: "target" });
+  it("피해자가 있으면 '{닉네임} 님이 밤사이 탈락했어요' 와 target 아이콘", () => {
+    expect(morningText({ eliminated: 3 }, nick)).toEqual({ text: "서연 님이 밤사이 탈락했어요", icon: "target" });
   });
 
-  it("saved 이면 '누군가 살아났습니다' 와 heal 아이콘 — 누구인지는 어디에도 없다", () => {
-    expect(morningText({ saved: true }, nick)).toEqual({ text: "누군가 살아났습니다", icon: "heal" });
+  it("saved 이면 '누군가를 지켜냈어요' 와 heal 아이콘 — 누구인지는 어디에도 없다", () => {
+    expect(morningText({ saved: true }, nick)).toEqual({ text: "누군가를 지켜냈어요", icon: "heal" });
   });
 
   it("{}·undefined 는 '아무 일도 없었습니다' 이고 아이콘이 없다", () => {
@@ -39,6 +39,6 @@ describe("morningText", () => {
   });
 
   it("피해자와 saved 가 함께 와도(있을 수 없는 조합) 피해자 문장이 이긴다", () => {
-    expect(morningText({ eliminated: 3, saved: true }, nick).text).toBe("서연 님이 당했습니다");
+    expect(morningText({ eliminated: 3, saved: true }, nick).text).toBe("서연 님이 밤사이 탈락했어요");
   });
 });

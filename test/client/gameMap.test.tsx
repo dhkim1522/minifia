@@ -237,7 +237,7 @@ describe("GameMap — 실험방 토론 도구", () => {
       expect(suspect.getAttribute("aria-pressed")).toBe("true");
       expect(stage.props?.canWalk).toBe(true);
       expect(stage.props?.pick?.seats.size).toBe(0);
-      expect(container.textContent).toContain("가까이 가서 이름을 눌러요");
+      expect(container.textContent).toContain("조금 더 가까이 가 보세요");
       act(() => vi.advanceTimersByTime(45_000));
       expect(button.getAttribute("aria-label")).toContain("0/3");
     } finally {
@@ -256,7 +256,7 @@ describe("GameMap — 실험방 토론 도구", () => {
     expect(container.querySelector("[data-face-list]")).toBeNull();
     expect(stage.props?.canWalk).toBe(false);
     show({ ...view, me: { ...view.me, nightDone: true } });
-    expect(button.textContent).toBe("밤 준비 완료");
+    expect(button.textContent).toBe("준비 완료");
     expect(button.disabled).toBe(true);
   });
 });
@@ -1324,7 +1324,7 @@ describe("GameMap — 꺼진 장치의 화면 (19-02, D-09, 22-07)", () => {
     expect(census(container)).toBe(NONE);
     advance(2500);
     expect(census(container)).toBe(NONE);
-    expect(container.textContent).toContain("서준 님이 당했습니다");
+    expect(container.textContent).toContain("서준 님이 밤사이 탈락했어요");
   });
 
   it("낮 단계(투표·변론·찬반·처형) 어디에도 기록·흔적·증거 요소가 없다", () => {

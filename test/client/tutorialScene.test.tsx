@@ -64,4 +64,36 @@ describe("혼자 하기 장면 시계", () => {
     expect(clickSuspect).not.toHaveBeenCalled();
     expect(result.current.scene.id).toBe("end");
   });
+
+  it("실험방에서는 단서 열기, 첫 투표, 아침 준비를 실제 입력과 이어 준다", async () => {
+    const clickTool = vi.fn();
+    const { result } = renderHook(() => useTutorialScene(clickTool, true));
+    expect(result.current.steps).toBe(9);
+    act(() => result.current.go("answers"));
+    await wait(0);
+    expect(result.current.target).toBe("clues-btn");
+    await wait(12_000);
+    expect(clickTool).toHaveBeenCalledWith("clues-btn");
+    expect(result.current.beat.id).toBe("b");
+    await wait(3600);
+    expect(result.current.scene.id).toBe("postit");
+
+    act(() => result.current.go("verdict"));
+    await wait(0);
+    expect(result.current.target).toBe("first-ballot");
+    act(() => result.current.send({ t: "firstBallot", target: 4 }));
+    expect(result.current.cursor.firstBallot).toBe(4);
+    await wait(1500);
+    expect(result.current.beat.id).toBe("c");
+    await wait(3000);
+    expect(result.current.scene.id).toBe("answerReveal");
+
+    act(() => result.current.go("night"));
+    await wait(0);
+    expect(result.current.target).toBe("night-done");
+    act(() => result.current.send({ t: "nightDone" }));
+    expect(result.current.beat.id).toBe("b");
+    await wait(1500);
+    expect(result.current.beat.id).toBe("c");
+  });
 });

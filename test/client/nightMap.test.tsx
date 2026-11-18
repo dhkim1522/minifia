@@ -535,7 +535,7 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
       morning: eliminated !== undefined ? { eliminated } : saved ? { saved: true } : {},
     });
 
-  it("밤 → 아침(탈락 있음): 0.4초에 36px 알림 '{닉네임} 님이 당했습니다'(target 아이콘 56), 채팅 패널 all, 아침 조명, 탈락자는 떠오름 없이 산 사람 화면에 ghost(is-ghost 이름표)로 남는다(18.1 P181-6)", () => {
+  it("밤 → 아침(탈락 있음): 0.4초에 36px 알림 '{닉네임} 님이 밤사이 탈락했어요'(target 아이콘 56), 채팅 패널 all, 아침 조명, 탈락자는 떠오름 없이 산 사람 화면에 ghost(is-ghost 이름표)로 남는다(18.1 P181-6)", () => {
     const m = mount(night());
     expect(announceText(m.container)).toBe("");
     expect(rosterSeats(m.container)).toEqual([3]); // 09-10: 밤 시민 편 이름표 층에는 내 이름표 하나뿐이다
@@ -544,7 +544,7 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
     advance(399);
     expect(announceText(m.container)).toBe("");
     advance(1);
-    expect(announceText(m.container)).toBe("서준 님이 당했습니다");
+    expect(announceText(m.container)).toBe("서준 님이 밤사이 탈락했어요");
     expect(m.container.querySelector('[data-announce]')?.getAttribute("role")).toBe("status");
     const icon = m.container.querySelector<SVGElement>("[data-announce] svg");
     expect(icon?.getAttribute("width")).toBe("56");
@@ -557,7 +557,7 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
     expect(chatChannel(m.container)).toBe("all");
     expect(titleText(m.container)).toBe("아침");
     // 같은 시각 채팅에 같은 문장의 hot 줄(범위 all)
-    expect([...m.container.querySelectorAll("[data-chat-log] > p.is-hot")].map((p) => (p.textContent ?? "").trim())).toEqual(["서준 님이 당했습니다"]);
+    expect([...m.container.querySelectorAll("[data-chat-log] > p.is-hot")].map((p) => (p.textContent ?? "").trim())).toEqual(["서준 님이 밤사이 탈락했어요"]);
   });
 
   it("무사한 아침: 0.4초에 아이콘 없는 '아무 일도 없었습니다', 전원이 그대로 서 있다", () => {
@@ -569,7 +569,7 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
     expect(rosterSeats(m.container)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
-  it("의사가 살린 아침: '누군가 살아났습니다'(heal 아이콘, 진홍 아님)가 0.4~2.8초에 뜨고 사라진다. 구출된 사람 화면과 다른 시민 화면이 같다 (T-09-41)", () => {
+  it("의사가 살린 아침: '누군가를 지켜냈어요'(heal 아이콘, 진홍 아님)가 0.4~2.8초에 뜨고 사라진다. 구출된 사람 화면과 다른 시민 화면이 같다 (T-09-41)", () => {
     const seenBy = (seat: number): string[] => {
       const m = mount(night(seat));
       m.show(morning(seat, undefined, [], true));
@@ -585,9 +585,9 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
     const saved = seenBy(2); // 의사가 지킨 좌석 자리의 시민 편 화면이라고 가정(공개 view 는 누구인지 싣지 않는다)
     const other = seenBy(3);
     expect(saved).toEqual(other);
-    expect(saved[0]).toBe("누군가 살아났습니다");
+    expect(saved[0]).toBe("누군가를 지켜냈어요");
     expect(saved[1]).not.toContain("is-death");
-    expect(saved[2]).toBe("누군가 살아났습니다");
+    expect(saved[2]).toBe("누군가를 지켜냈어요");
     expect(saved[3]).toBe("gone");
   });
 
@@ -640,7 +640,7 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
     const icon = m.container.querySelector<SVGElement>("[data-announce] svg");
     expect(icon?.getAttribute("width")).toBe("56");
     expect(icon?.classList.contains("is-death")).toBe(false);
-    expect([...m.container.querySelectorAll("[data-chat-log] > p.is-hot")].map((p) => (p.textContent ?? "").trim())).toEqual(["서준 님이 당했습니다"]);
+    expect([...m.container.querySelectorAll("[data-chat-log] > p.is-hot")].map((p) => (p.textContent ?? "").trim())).toEqual(["서준 님이 밤사이 탈락했어요"]);
     advance(1_999);
     expect(announceText(m.container)).toBe("암살당했습니다");
     advance(1);

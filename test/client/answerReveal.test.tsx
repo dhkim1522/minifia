@@ -8,7 +8,7 @@ import { ResultAnnounce } from "../../src/components/ResultAnnounce";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
-// 23-07: 첫날 정답 공개(answerReveal) 화면 — 큰 글 "정답"+키워드, 띠 blank, 제목 "정답", 패널 잠금, 역할 무관, 재접속 모션 없음.
+// 23-07: 첫날 정답 공개(answerReveal) 화면 — 큰 글 "제시어"+키워드, 띠 blank, 제목 "제시어", 패널 잠금, 역할 무관, 재접속 모션 없음.
 const connectionMock = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("../../src/net/useRoomConnection", () => ({
   useRoomConnection: () => connectionMock.current,
@@ -97,16 +97,16 @@ afterEach(() => {
 });
 
 describe("ResultAnnounce label (23-07, P23-20)", () => {
-  it("label 이 있으면 위 줄 '정답' 이 키워드 줄 위에 서고 role=status 의 읽는 글은 '정답 해리포터' 하나다", () => {
-    const { container } = render(<ResultAnnounce text={ANSWER} label="정답" />);
+  it("label 이 있으면 위 줄 '제시어' 이 키워드 줄 위에 서고 role=status 의 읽는 글은 '제시어 해리포터' 하나다", () => {
+    const { container } = render(<ResultAnnounce text={ANSWER} label="제시어" />);
     const status = container.querySelector<HTMLElement>("[data-announce][role='status']")!;
     expect(status).not.toBeNull();
     const label = status.querySelector<HTMLElement>("[data-announce-label]")!;
     const text = status.querySelector<HTMLElement>(".mf-announce__text")!;
-    expect(label.textContent).toBe("정답");
+    expect(label.textContent).toBe("제시어");
     expect(text.textContent).toBe(ANSWER);
     expect(label.compareDocumentPosition(text) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(status.textContent).toBe("정답 해리포터");
+    expect(status.textContent).toBe("제시어 해리포터");
   });
 
   it("label 이 없으면 지금 모양 그대로다 — data-announce-label 0건", () => {
@@ -122,7 +122,7 @@ describe("ResultAnnounce label (23-07, P23-20)", () => {
   });
 
   it("still 이면 모션 없는 모양 표식(is-still)이 선다", () => {
-    const { container } = render(<ResultAnnounce text={ANSWER} label="정답" still />);
+    const { container } = render(<ResultAnnounce text={ANSWER} label="제시어" still />);
     expect(announceEl(container)?.classList.contains("is-still")).toBe(true);
   });
 
@@ -135,19 +135,19 @@ describe("ResultAnnounce label (23-07, P23-20)", () => {
 });
 
 describe("정답 공개 화면 — 큰 글 (23-07, P23-20, D-22)", () => {
-  it("처형 뒤 answerReveal 에 들어오면 0초부터 '정답' + 키워드가 3초 서고, 3초 뒤 사라진다", () => {
+  it("처형 뒤 answerReveal 에 들어오면 0초부터 '제시어' + 키워드가 3초 서고, 3초 뒤 사라진다", () => {
     const m = mount(makeView({ phase: "execution", execution: true, answer: false }));
     expect(announceEl(m.container)).toBeNull();
     m.show(makeView());
-    expect(announceEl(m.container)?.textContent).toBe("정답 해리포터");
-    expect(m.container.querySelector("[data-announce-label]")?.textContent).toBe("정답");
+    expect(announceEl(m.container)?.textContent).toBe("제시어 해리포터");
+    expect(m.container.querySelector("[data-announce-label]")?.textContent).toBe("제시어");
     advance(2999);
     expect(announceEl(m.container)).not.toBeNull();
     advance(1);
     expect(announceEl(m.container)).toBeNull();
   });
 
-  it("처형 없는 첫날: '처형 없음' 0~1.4초 다음에 '정답' 3초 — 겹치지 않는다", () => {
+  it("처형 없는 첫날: '처형 없음' 0~1.4초 다음에 '제시어' 3초 — 겹치지 않는다", () => {
     const m = mount(makeView({ phase: "verdict", answer: false }));
     m.show(makeView({ noExecution: "rejected", left: 4400 }));
     expect(announceEl(m.container)?.textContent).toBe("처형 없음");
@@ -155,7 +155,7 @@ describe("정답 공개 화면 — 큰 글 (23-07, P23-20, D-22)", () => {
     advance(1399);
     expect(announceEl(m.container)?.textContent).toBe("처형 없음");
     advance(1);
-    expect(announceEl(m.container)?.textContent).toBe("정답 해리포터");
+    expect(announceEl(m.container)?.textContent).toBe("제시어 해리포터");
     advance(3000);
     expect(announceEl(m.container)).toBeNull();
   });
@@ -174,7 +174,7 @@ describe("정답 공개 화면 — 큰 글 (23-07, P23-20, D-22)", () => {
   it("재접속·새로고침으로 answerReveal 중간에 들어오면 남은 시간만 모션 없이 보인다", () => {
     const { container } = mount(makeView({ left: 1500 }));
     const el = announceEl(container)!;
-    expect(el.textContent).toBe("정답 해리포터");
+    expect(el.textContent).toBe("제시어 해리포터");
     expect(el.classList.contains("is-still")).toBe(true);
     advance(1499);
     expect(announceEl(container)).not.toBeNull();
@@ -197,13 +197,13 @@ describe("정답 공개 화면 — 큰 글 (23-07, P23-20, D-22)", () => {
       expect(html).not.toMatch(/mafia|citizen|police|doctor/);
       cleanup();
     }
-    expect(new Set(texts)).toEqual(new Set(["정답 해리포터"]));
+    expect(new Set(texts)).toEqual(new Set(["제시어 해리포터"]));
   });
 });
 
 describe("정답 공개 화면 — 띠·제목·패널 (23-07, P23-21)", () => {
   const checks = (c: HTMLElement) => {
-    expect(c.querySelector(".mv-phase__title")?.textContent).toBe("정답");
+    expect(c.querySelector(".mv-phase__title")?.textContent).toBe("제시어");
     expect(c.querySelector("[data-host-line]")?.textContent).toBe("");
     expect(c.querySelector("[data-host-time]")).not.toBeNull();
     const panel = c.querySelector("[data-chat-panel]")!;
@@ -213,7 +213,7 @@ describe("정답 공개 화면 — 띠·제목·패널 (23-07, P23-21)", () => {
     expect(c.querySelectorAll("[data-chat-send], [data-will-button], [data-emote-button]")).toHaveLength(0);
   };
 
-  it("산 사람: 제목 '정답', 띠는 초만, 채팅 패널 입력줄이 잠기고 동작 단추·보내기·유언 깃펜이 없다", () => {
+  it("산 사람: 제목 '제시어', 띠는 초만, 채팅 패널 입력줄이 잠기고 동작 단추·보내기·유언 깃펜이 없다", () => {
     const { container } = mount(makeView({ role: "citizen" }));
     checks(container);
   });

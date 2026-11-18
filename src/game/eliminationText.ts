@@ -8,9 +8,9 @@ import type { MorningView } from "../../shared/protocol";
 
 export const MORNING_TEXT = {
   /** 피해자가 있는 아침(다른 모두에게) */
-  killed: (name: string): string => `${name} 님이 당했습니다`,
+  killed: (name: string): string => `${name} 님이 밤사이 탈락했어요`,
   /** 의사가 확정 대상을 지킨 아침. 누구인지는 없다 */
-  saved: "누군가 살아났습니다",
+  saved: "누군가를 지켜냈어요",
   /** 아무도 안 죽고 아무도 안 지킨 아침 */
   quiet: "아무 일도 없었습니다",
   /** 피해자 본인에게만(36px 알림 한 번, 결정 NIGHT-11) */

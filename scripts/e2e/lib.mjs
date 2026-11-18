@@ -3138,10 +3138,10 @@ export const HOST_ACT_LINES = {
 };
 /** 역할 카드 문구 사본 — src/game/roleText.ts ROLE_TEXT[role].desc, 할 일 한 문장(줄바꿈 없음, 2026-11-12 첫 문장 제거). e2eContract 가 같음을 고정한다. */
 export const ROLE_LINES = {
-  mafia: "몰래 암살하여 승리하세요.",
-  police: "의심되는 사람을 조사하세요.",
-  doctor: "시민 팀을 마피아에게서 지키세요.",
-  citizen: "추리로 마피아를 찾아내세요.",
+  mafia: "밤마다 노릴 사람을 고르세요.",
+  police: "밤마다 한 사람을 조사하세요.",
+  doctor: "밤마다 지킬 사람을 고르세요.",
+  citizen: "단서와 행동을 살펴 마피아를 찾으세요.",
 };
 const isStr = (x) => typeof x === "string";
 

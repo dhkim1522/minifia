@@ -11,6 +11,7 @@
 import type { PhaseId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import { connectedCount } from "../../shared/game/room";
+import { DAY_COPY } from "./dayView";
 import { keywordAnswerOf } from "./keywordView";
 import { morningText } from "./eliminationText";
 import { TIMELESS_PHASES } from "./scenes";
@@ -52,8 +53,8 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   "roleReveal.act": "내 역할 카드를 확인해 주세요",
   "roleReveal.wait": "그대로 기다려 주세요",
   // 첫날 키워드(P23-8): 역할과 무관한 두 줄 — 문구가 키워드를 말하지 않아야 마피아 화면과 같은 줄이 된다. 제출 전 act, 제출 뒤 wait(23-09).
-  "keyword.act": "떠오르는 말을 적어요",
-  "keyword.wait": "곧 모두의 답이 나와요",
+  "keyword.act": "단서를 한 줄 써요",
+  "keyword.wait": "곧 모두의 단서가 나와요",
   "dayAnnounce.wait": "모두 모여 주세요",
   "dayAnnounce.ghost": "지켜봐 주세요",
   "discussion.act": "의심 가는 사람을 이야기해 주세요",
@@ -77,8 +78,8 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   // 큰 글(아침 결과)이 말한다
   morning: "",
   ended: "게임이 끝났습니다. 다음 판을 준비해 주세요.",
-  // 결과 화면의 정답 한 줄(23-11, P23-22): 동적 — 뒤에 키워드(공개 값 day.keyword.answer)를 붙여 쓴다. 키워드 12자소 상한 덕에 "정답 · " 포함 19자 이하
-  "ended.answer": "정답 · ",
+  // 결과 화면의 제시어 한 줄(23-11, P23-22): 뒤에 공개된 제시어(day.keyword.answer)를 붙인다
+  "ended.answer": `${DAY_COPY.answerLabel} · `,
   fallback: HOST_FALLBACK,
 };
 
@@ -157,17 +158,17 @@ function playtestHostLine(view: RoomView): string | undefined {
     case "roleReveal":
       return view.me.roleReady ? "다른 사람을 기다려요" : "내 역할을 읽고 준비해 주세요";
     case "keyword":
-      if (view.me.answer?.final) return "모두의 답을 기다려요";
-      return view.me.keyword === undefined ? "장르만 보고 아는 척 한 줄 써요" : "단어를 빼고 한 줄로 설명해요";
+      if (view.me.answer?.final) return "모두의 단서를 기다려요";
+      return view.me.keyword === undefined ? "주제를 보고 단서를 써요" : "제시어 없이 단서를 써요";
     case "discussion":
-      if (view.day?.n === 1 && !isGhost(view)) return "궁금한 답을 눌러 물어보세요";
+      if (view.day?.n === 1 && !isGhost(view)) return "모두의 단서를 살펴봐요";
       break;
     case "verdict":
       if (view.day?.firstBallot?.result) return "";
-      if (view.day?.firstBallot && !isGhost(view)) return "의심되는 사람 또는 보류를 골라요";
+      if (view.day?.firstBallot && !isGhost(view)) return "한 명을 고르거나 건너뛰어요";
       break;
     case "night":
-      if (!isGhost(view) && view.me.role === "citizen") return "아침을 기다려요";
+      if (!isGhost(view) && view.me.role === "citizen") return view.me.nightDone ? "다른 사람을 기다려요" : "아침 준비를 눌러요";
       break;
   }
   return playtestResultLine(view);
@@ -182,7 +183,7 @@ export function playtestResultLine(view: RoomView): string | undefined {
   }
   if (view.phase === "answerReveal") {
     const word = keywordAnswerOf(view);
-    return word === undefined ? undefined : `정답 · ${word}`;
+    return word === undefined ? undefined : `${DAY_COPY.answerLabel} · ${word}`;
   }
   if (view.phase === "morning") return morningText(view.day?.morning, (seat) => view.players.find((player) => player.seat === seat)?.nickname).text;
   return undefined;
@@ -190,7 +191,7 @@ export function playtestResultLine(view: RoomView): string | undefined {
 
 /**
  * 띠 면이 기본으로 보이지 않는 단계: 대기실·결과(초가 없다). 면의 한 줄 자리는 그대로 차지한다(18.1-12).
- * 결과(ended)는 예외가 하나 있다 — 첫날 정답 값(day.keyword.answer)이 있으면 띠 자리에 `정답 · {키워드}` 한 줄을 보인다(23-11, P23-22).
+ * 결과(ended)에서는 공개한 제시어(day.keyword.answer)가 있으면 띠에 `제시어 · {제시어}` 한 줄을 보인다(23-11, P23-22).
  * 그래서 목록은 그대로 두고 hostBandModeOf 가 ended 만 정답 유무로 가른다(e2e 사본 HOST_OFF_PHASES 와 같은 값을 유지한다).
  */
 export const HOST_HIDDEN_PHASES: readonly PhaseId[] = Object.freeze(["lobby", "ended"] as const);

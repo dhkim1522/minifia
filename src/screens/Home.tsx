@@ -52,6 +52,8 @@ export function Home({ onEnterRoom }: HomeProps) {
   const localError = touched && !validation.ok ? nicknameErrorText(validation.reason) : null;
   const nicknameError = serverNicknameError ?? localError;
   const codeReady = isRoomCode(code) && !busy && !tutorial;
+  const { hostname, search } = window.location;
+  const playtest = isPlaytestHost(hostname) && new URLSearchParams(search).get("playtest") === "1";
 
   function handleNicknameChange(value: string) {
     setNickname(value);
@@ -98,8 +100,6 @@ export function Home({ onEnterRoom }: HomeProps) {
     setBusy(true);
     setServerNicknameError(null);
     setServerCodeError(null);
-    const { hostname, search } = window.location;
-    const playtest = isPlaytestHost(hostname) && new URLSearchParams(search).get("playtest") === "1";
     const result = await createRoom(validation.nickname, {
       testMode: testModeFromSearch(search),
       ...(playtest ? { playtest: true } : {}),
@@ -178,14 +178,13 @@ export function Home({ onEnterRoom }: HomeProps) {
             variant="secondary"
             block
             icon={<V2Icon name="play" size={16} />}
-            aria-label="혼자 하며 배우기"
             data-tutorial-entry=""
             data-call={tutorialSeen ? undefined : ""}
             className={tutorialSeen ? undefined : "is-call"}
             onClick={openTutorial}
             disabled={busy || tutorial}
           >
-            혼자 하기
+            혼자 연습하기
           </Button>
         </div>
         {BUILD_LABEL[WORKER_NAME] ? <p className="mf-entry__build">{BUILD_LABEL[WORKER_NAME]}</p> : null}
@@ -206,7 +205,7 @@ export function Home({ onEnterRoom }: HomeProps) {
   );
   return tutorial ? (
     <Suspense fallback={home}>
-      <TutorialScreen onExit={() => setTutorial(false)} />
+      <TutorialScreen playtest={playtest} onExit={() => setTutorial(false)} />
     </Suspense>
   ) : home;
 }

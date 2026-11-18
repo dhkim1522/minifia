@@ -3652,10 +3652,10 @@ test("hostBandChecks HB6: 종 0개 + 띠 면 보임/숨김이 단계 기대와 �
 test("hostBandChecks HB6·HB7: 결과(ended)는 첫날 정답이 공개된 판(answer)이면 띠가 보이고 정답 한 줄이 있다 (23-12)", () => {
   const run = (over, answer) => hostBandChecks(bandOk({ timeText: "", barShown: false, ...over }), { phase: "ended", timed: false, answer });
   const by = (rs, id) => rs.find((r) => r.id === id);
-  assert.equal(by(run({ faceHidden: false, text: "정답 · 기생충" }, true), "HB6").ok, true);
-  assert.equal(by(run({ faceHidden: true, text: "정답 · 기생충" }, true), "HB6").ok, false);
+  assert.equal(by(run({ faceHidden: false, text: "제시어 · 기생충" }, true), "HB6").ok, true);
+  assert.equal(by(run({ faceHidden: true, text: "제시어 · 기생충" }, true), "HB6").ok, false);
   assert.equal(by(run({ faceHidden: false, text: "" }, true), "HB7").ok, false);
-  assert.equal(by(run({ faceHidden: false, text: "정답 · 기생충" }, true), "HB7").ok, true);
+  assert.equal(by(run({ faceHidden: false, text: "제시어 · 기생충" }, true), "HB7").ok, true);
   // 정답이 없는 판(answer 생략·false)은 그대로 숨는 단계다
   assert.equal(by(run({ faceHidden: true }, false), "HB6").ok, true);
   assert.equal(by(run({ faceHidden: false }, false), "HB6").ok, false);

@@ -66,6 +66,7 @@
   cursor: pointer;
 }
 .mf-playtest__action svg { flex: none; color: var(--noir-silver); }
+.mf-playtest__action--stacked { flex-direction: column; gap: 2px; font-size: clamp(10px, 3.33vw, 14px); }
 .mf-playtest__action[aria-expanded="true"],
 .mf-playtest__action[aria-pressed="true"] { border-color: var(--noir-paper); background: var(--noir-raised); color: var(--noir-paper); }
 .mf-playtest__action:disabled { opacity: 0.5; cursor: default; }

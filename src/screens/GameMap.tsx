@@ -38,7 +38,7 @@ import { todOf, todWordOf } from "../game/timeOfDay";
 import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
-import { suspectStacks } from "../game/suspectView";
+import { SUSPECT_TEXT, suspectStacks } from "../game/suspectView";
 import { headerFor } from "../game/dayView";
 import { discussionEvidenceOf, type MorningVictim } from "../game/discussionEvidence";
 import { callTargetsOf, playtestResultLine } from "../game/hostLine";
@@ -88,13 +88,6 @@ const DEFAULT_INSET_BOTTOM = 250;
 /** 보이는 화면(visualViewport) 높이가 이보다 낮으면 유언 시트 입력칸을 2줄로 줄인다(UI-SPEC 282행) */
 const COMPACT_VV_MAX = 300;
 
-/** 의심 포스트잇(24-03, UI-SPEC 문구 표): 단추 이름·모드 안내·거절 알림·이름표 버튼 이름·묶음 이름. 사람은 '참가자'가 아니라 이름으로만 부른다 */
-const SUSPECT_TEXT = {
-  modeHint: "의심 가는 사람을 눌러요",
-  reject: "가까이 가야 붙여요",
-  groupLabel: "의심 붙이기",
-  tagLabel: (nickname: string): string => `${nickname} 님에게 의심 붙이기`,
-} as const;
 /** 거절 알림이 머무는 시간(P24-7, 2.5초) */
 const SUSPECT_NOTICE_MS = 2500;
 
@@ -277,7 +270,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     if (eliminated === undefined || day === undefined) return;
     setMorningVictim({ round: view.round ?? 1, day: day + 1, seat: eliminated });
   }, [eliminated, day, view.round]);
-  const evidence = timeless || view.phase !== "discussion" ? undefined : (
+  const evidence = (timeless && !playtest) || view.phase !== "discussion" ? undefined : (
     discussionEvidenceOf(view, morningVictim, chat.visibleLines("all", Date.now()))
   );
 
@@ -351,7 +344,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const sendGuard = useSendGuard();
   // 의심 거절·근처 0명 알림은 한 문구(P24-7): 위 알림 2.5초 + 소리 deny. 모드는 되돌리지 않는다
   const denySuspect = useCallback((): void => {
-    show(SUSPECT_TEXT.reject, "postit", SUSPECT_NOTICE_MS, "data-suspect-notice");
+    show(SUSPECT_TEXT.tooFar, "postit", SUSPECT_NOTICE_MS, "data-suspect-notice");
     emitSignal({ kind: "deny" });
   }, [show]);
   const willBusy = useRef(false); // 유언·쪽지 저장 확인을 기다리는 중(useWill 이 쓴다)
@@ -501,12 +494,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         seats: suspect.targets,
         // 연결이 끊긴 동안은 버튼이 aria-disabled 이고 눌러도 보내지 않는다
         ...(canSend ? {} : { disabled: true as const }),
-        label: SUSPECT_TEXT.tagLabel,
+        label: SUSPECT_TEXT.target,
         onPick: (seat) => {
           suspect.pick(seat);
           if (playtest) panelRef.current?.querySelector<HTMLButtonElement>('[data-playtest-action="suspect"]')?.focus({ preventScroll: true });
         },
-        group: SUSPECT_TEXT.groupLabel,
+        group: SUSPECT_TEXT.ready,
         attr: "data-suspect-tag",
       }
     : whisper.mode

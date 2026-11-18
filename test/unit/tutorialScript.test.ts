@@ -12,6 +12,7 @@ import type { Segment } from "../../shared/game/world";
 import {
   TUTORIAL_CAST,
   TUTORIAL_PILLS,
+  TUTORIAL_PLAYTEST_SCENES,
   TUTORIAL_SCENES,
   autoAct,
   makeTutorialSend,
@@ -125,19 +126,27 @@ describe("알약 문구(P24-25)", () => {
       "나는 시민이에요",
       "마피아를 찾아내요",
       "경찰·의사도 있어요",
-      "시민은 키워드를 알아요",
-      "마피아는 키워드를 몰라요",
-      "정답은 말하면 안 돼요",
-      "답을 읽고 비교해요",
-      "궁금한 답을 캐물어요",
-      "과반이 눌러야 끝나요",
-      "과반이면 처형해요",
+      "시민 팀은 제시어를 알아요",
+      "마피아는 제시어를 몰라요",
+      "제시어 대신 단서를 써요",
+      "단서를 읽고 비교해요",
+      "궁금한 점을 물어봐요",
+      "절반 넘게 누르면 끝나요",
+      "찬성이 더 많으면 지목해요",
       "의심 가는 사람을 가리켜요",
       "처형되는 사람은 유언을 남겨요",
       "마피아는 몰래 한 명을 노려요",
       "의심 가는 사람 곁에서 눌러요",
       "붙일 사람을 눌러요",
       "하루 한 장, 아침에 떨어져요",
+      "역할을 읽고 준비를 눌러요",
+      "단서를 눌러 살펴봐요",
+      "가까이서 의심딱지를 눌러요",
+      "모두 요청하면 투표해요",
+      "45초 뒤엔 절반만 넘으면 돼요",
+      "투표 요청을 눌러요",
+      "한 명을 뽑거나 건너뛰어요",
+      "시민은 아침을 준비해요",
     ]);
   });
 
@@ -399,6 +408,44 @@ describe("로컬 send 어댑터(makeTutorialSend)", () => {
     const send = makeTutorialSend({});
     expect(send({ t: "suspect", target: 1 })).toBe(true);
     expect(send({ t: "leave" })).toBe(true);
+  });
+});
+
+describe("첫날 실험방 연습", () => {
+  const playtest = { playtest: true };
+
+  it("첫날 안에 단서를 보고 의심딱지를 붙인 뒤 투표 한 번과 제시어 공개를 거친다", () => {
+    expect(TUTORIAL_PLAYTEST_SCENES.map((scene) => scene.id)).toEqual([
+      "roles", "keyword", "answers", "postit", "discussion", "verdict", "answerReveal", "night", "end",
+    ]);
+    const postit = tutorialView("postit", "b", T0, 0, playtest);
+    expect(postit).toMatchObject({ map: "bar", playtest: true, day: { n: 1, suspects: [{ from: 5, to: 4 }] } });
+    const discussion = tutorialView("discussion", "c", T0, 6, playtest);
+    expect(discussion.day).toMatchObject({ endCount: 6, voteOpensAt: T0 + 45_000, voteReadyTotal: 6, voteReadyRequired: 4 });
+    expect(tutorialView("answerReveal", "a", T0, 0, playtest).day?.keyword?.answer).toBe(TUTORIAL_CAST.word);
+  });
+
+  it("다른 사람에게 투표하거나 건너뛰면 첫 투표 집계에 내 선택을 반영한다", () => {
+    expect(reactTo("verdict", "a", { t: "firstBallot", target: TUTORIAL_CAST.me }, true)).toBeNull();
+    for (const [firstBallot, votes, holds] of [[4, 1, 5], [null, 0, 6]] as const) {
+      const action = reactTo("verdict", "a", { t: "firstBallot", target: firstBallot }, true);
+      expect(action?.next).toBe("b");
+      const options = { ...playtest, firstBallot };
+      expect(tutorialView("verdict", "b", T0, 1, options).me.firstBallot).toBe(firstBallot);
+      const result = tutorialView("verdict", "c", T0, 1, options);
+      expect(result.day?.firstBallot?.result).toEqual({ target: null, votes, holds, reason: "held" });
+      expect(result.me.firstBallot).toBeUndefined();
+    }
+  });
+
+  it("시민의 밤에는 얼굴 대신 준비를 받고 아침에 밤의 피해자만 탈락한다", () => {
+    expect(reactTo("night", "a", { t: "pick", target: 0 }, true)).toBeNull();
+    expect(reactTo("night", "a", { t: "nightDone" }, true)?.next).toBe("b");
+    const waiting = tutorialView("night", "b", T0, 1, playtest);
+    expect(waiting.me.nightDone).toBe(true);
+    expect(waiting.me.pick).toBeUndefined();
+    const morning = tutorialView("night", "c", T0, 1, playtest);
+    expect(morning.players.filter((player) => player.alive === false).map(({ seat }) => seat)).toEqual([TUTORIAL_CAST.nightVictim]);
   });
 });
 

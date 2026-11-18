@@ -456,17 +456,17 @@ describe("dayEvents — 아침 알림 (MORN-03)", () => {
     same([ANNOUNCE_MORNING_AT, ANNOUNCE_MORNING_MS], [400, 2400]);
   });
 
-  it("밤 → 아침(피해자 3): 0.4초 target 알림 '지호 님이 당했습니다' 2.4초, 같은 문장의 hot 줄(범위 all) 0.4초", () => {
+  it("밤 → 아침(피해자 3): 0.4초 target 알림 '지호 님이 밤사이 탈락했어요' 2.4초, 같은 문장의 hot 줄(범위 all) 0.4초", () => {
     const events = dayEvents(nightView(), morningView({ eliminated: 3 }));
-    same(events.announces, [{ text: "지호 님이 당했습니다", icon: "target", at: 400, ms: 2400 }]);
-    same(events.lines, [{ kind: "hot", text: "지호 님이 당했습니다", at: 400 }]);
+    same(events.announces, [{ text: "지호 님이 밤사이 탈락했어요", icon: "target", at: 400, ms: 2400 }]);
+    same(events.lines, [{ kind: "hot", text: "지호 님이 밤사이 탈락했어요", at: 400 }]);
     expect(events.lines[0]?.scope).toBeUndefined();
   });
 
-  it("밤 → 아침(saved): heal 알림 '누군가 살아났습니다'. 누가 살아났는지 어디에도 없다", () => {
+  it("밤 → 아침(saved): heal 알림 '누군가를 지켜냈어요'. 누가 살아났는지 어디에도 없다", () => {
     const events = dayEvents(nightView(), morningView({ saved: true }));
-    same(events.announces, [{ text: "누군가 살아났습니다", icon: "heal", at: 400, ms: 2400 }]);
-    same(events.lines, [{ kind: "hot", text: "누군가 살아났습니다", at: 400 }]);
+    same(events.announces, [{ text: "누군가를 지켜냈어요", icon: "heal", at: 400, ms: 2400 }]);
+    same(events.lines, [{ kind: "hot", text: "누군가를 지켜냈어요", at: 400 }]);
     for (const n of NAMES) expect(text(events).includes(n)).toBe(false);
   });
 
@@ -502,23 +502,23 @@ describe("dayEvents — 피해자 본인 '암살당했습니다' (NIGHT-11, 결�
     same([ANNOUNCE_VICTIM_AT, ANNOUNCE_VICTIM_MS], [700, 2000]);
   });
 
-  it("채팅 hot 줄은 다른 사람과 같은 '{닉네임} 님이 당했습니다'(0.4초)다", () => {
+  it("채팅 hot 줄은 다른 사람과 같은 '{닉네임} 님이 밤사이 탈락했어요'(0.4초)다", () => {
     const events = dayEvents(nightOfMe(), morningOfMe());
-    same(events.lines, [{ kind: "hot", text: "민준 님이 당했습니다", at: 400 }]);
+    same(events.lines, [{ kind: "hot", text: "민준 님이 밤사이 탈락했어요", at: 400 }]);
   });
 
   it("처형으로 이미 탈락한 유령 화면(밤에도 탈락)은 세 문장 중 하나를 받는다 (가정 A3)", () => {
     const ghostNight = viewOf("night", { mySeat: 1, players: deadMe });
     const ghostMorning = viewOf("morning", { mySeat: 1, players: deadMe, day: { morning: { eliminated: 3 } } });
     const events = dayEvents(ghostNight, ghostMorning);
-    same(events.announces, [{ text: "지호 님이 당했습니다", icon: "target", at: 400, ms: 2400 }]);
+    same(events.announces, [{ text: "지호 님이 밤사이 탈락했어요", icon: "target", at: 400, ms: 2400 }]);
   });
 
-  it("의사가 살린 사람(아침에도 산 사람) 화면은 다른 시민과 같은 '누군가 살아났습니다' 다 (T-09-41)", () => {
+  it("의사가 살린 사람(아침에도 산 사람) 화면은 다른 시민과 같은 '누군가를 지켜냈어요' 다 (T-09-41)", () => {
     const saved = (mySeat: number) => dayEvents(viewOf("night", { mySeat }), viewOf("morning", { mySeat, day: { morning: { saved: true } } }));
     same(saved(2).announces, saved(3).announces);
     same(saved(2).lines, saved(3).lines);
-    same(saved(2).announces, [{ text: "누군가 살아났습니다", icon: "heal", at: 400, ms: 2400 }]);
+    same(saved(2).announces, [{ text: "누군가를 지켜냈어요", icon: "heal", at: 400, ms: 2400 }]);
   });
 });
 
@@ -576,7 +576,7 @@ describe("dayEvents — 경찰 화면 순서 (UI-SPEC 245·266행, E6 #35)", () 
 
   it("대상이 마피아면 본문 '마피아', 피해자 문장도 2.6초", () => {
     const events = dayEvents(police("night", []), police("morning", [{ n: 1, target: 4, isMafia: true }], undefined, { morning: { eliminated: 3 } }));
-    same(events.announces, [{ text: "지호 님이 당했습니다", icon: "target", at: 2600, ms: 2200 }]);
+    same(events.announces, [{ text: "지호 님이 밤사이 탈락했어요", icon: "target", at: 2600, ms: 2200 }]);
     same(events.localCards, [{ at: 2400, title: "하윤", text: "마피아" }]);
   });
 
@@ -811,7 +811,7 @@ describe("지목 기록 없음 (22-12 D-14)", () => {
 describe("정답 공개 알림 시간표 (23-07, D-22, P23-20)", () => {
   const reveal = (day: Partial<DayView> = {}) => viewOf("answerReveal", { day: { keyword: { genre: "영화", answer: "해리포터" }, ...day } });
   const exec = () => viewOf("execution", { day: { execution: { seat: 1 } } });
-  const ANSWER = { text: "해리포터", label: "정답" };
+  const ANSWER = { text: "해리포터", label: "제시어" };
 
   it("ANNOUNCE_NOEXEC_MS 는 서버 상수 NO_EXECUTION_MS 와 같은 값이다", () => {
     expect(ANNOUNCE_NOEXEC_MS).toBe(NO_EXECUTION_MS);
@@ -885,7 +885,7 @@ describe("정답 공개 알림 시간표 (23-07, D-22, P23-20)", () => {
 });
 
 describe("정답 공개 머리 제목 (23-07, P23-2)", () => {
-  it("answerReveal 제목은 '정답' 이고 안내 줄이 없다(띠가 빈 줄이라 큰 글이 말한다)", () => {
-    same(headerFor(viewOf("answerReveal", { day: { keyword: { genre: "영화", answer: "해리포터" } } })), { title: "정답" });
+  it("answerReveal 제목은 '제시어' 이고 안내 줄이 없다(띠가 빈 줄이라 큰 글이 말한다)", () => {
+    same(headerFor(viewOf("answerReveal", { day: { keyword: { genre: "영화", answer: "해리포터" } } })), { title: "제시어" });
   });
 });

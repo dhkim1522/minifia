@@ -226,7 +226,7 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
         ) : null
       ) : citizenNight ? (
         <button type="button" className="mf-btn mf-btn--secondary mf-playtest__night-done" data-night-done="" disabled={!canSend || nightDone} onClick={() => send({ t: "nightDone" })}>
-          {nightDone ? "밤 준비 완료" : "밤 마치기"}
+          {nightDone ? "준비 완료" : "아침 준비"}
         </button>
       ) : playtest && condemned ? (
         <button type="button" className="mf-btn mf-btn--secondary" data-will-button="" aria-pressed={willOpen} disabled={!canSend} onClick={(event) => onOpenWill?.(event.currentTarget)}>유언</button>
@@ -341,12 +341,12 @@ function PlaytestBallot({ view, ballot, canVote, send }: {
   if (result !== undefined) {
     const name = view.players.find((player) => player.seat === result.target)?.nickname;
     const summary = result.target === null
-      ? result.reason === "tie" ? "동률이라 오늘은 보류됐어요" : "오늘은 보류됐어요"
-      : `${name ?? "한 사람"} 님이 지목됐어요`;
+      ? "오늘은 아무도 지목되지 않았어요"
+      : name === undefined ? "한 사람이 지목됐어요" : `${name} 님이 지목됐어요`;
     return (
       <div className="mf-playtest__ballot-result" data-first-ballot-result="" role="status">
         <strong>{summary}</strong>
-        {result.votes > 0 || result.holds > 0 ? <span>지목 {result.votes}표 · 보류 {result.holds}표</span> : null}
+        {result.votes > 0 || result.holds > 0 ? <span>최다 득표 {result.votes}표 · 안 뽑기 {result.holds}표</span> : null}
       </div>
     );
   }
@@ -365,7 +365,7 @@ function PlaytestBallot({ view, ballot, canVote, send }: {
           <FaceList faces={faces} label="지목할 사람" disabled={!canVote} {...(typeof chosen === "number" ? { value: chosen } : {})} onPick={(target) => send({ t: "firstBallot", target })} />
           <button type="button" className="mf-btn mf-btn--secondary" data-first-ballot-hold="" disabled={!canVote} aria-pressed={chosen === null} onClick={() => {
             if (chosen !== null) send({ t: "firstBallot", target: null });
-          }}>오늘은 보류</button>
+          }}>오늘은 안 뽑기</button>
         </>
       ) : null}
       <p className="mf-playtest__ballot-count" role="status">{chosen !== undefined ? "선택했어요 · " : ""}{ballot.count}/{alive.length}명 선택</p>

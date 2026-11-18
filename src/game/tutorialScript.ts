@@ -1,13 +1,16 @@
 // 혼자 하기 튜토리얼 대본(결정 0089-15, 24페이즈 D-15~D-17·D-23·D-31, UI-SPEC P24-21~33).
-// 열 장면(roles → keyword → answers → discussion → verdict → pick → will → night → postit → end)의 장면 표·출연·대본 글·가짜 RoomView·월드 스냅·로컬 send 어댑터를 한 곳에 둔다.
+// 기본 방과 실험방의 장면 표, 출연, 안내, 가짜 RoomView, 월드 스냅, 로컬 입력을 한 곳에 둔다.
 // 서버·소켓·세션 모듈을 import 하지 않는다 — 정적 가드(test/unit/tutorialStaticGuard.test.ts)가 이 파일의 값 import 폐포를 지킨다.
 // 순수 모듈 — DOM·window·현재 시각·난수를 읽지 않는다. 시각은 모두 인자(startedAt, at)로 받는다.
 // 가짜 view 는 `satisfies RoomView` 로 만든다: RoomView 모양이 바뀌면 컴파일러가 잡는다.
 // 시계(D-31): 가짜 view 는 장면 시작 기준의 실제 phaseEndsAt·phaseDurationMs 를 가진다 — 역할 카드 자동 뒤집힘·처형 순간 연출이 시계로 돌기 때문이다.
 // 시간 표시를 지운 사본(머리·띠용)은 화면 쪽이 만든다. 튜토리얼 루트에 맨 이름 data-tutorial 속성은 쓰지 않는다(표식 이름은 UI-SPEC 표).
 // 옛 서버 쪽 표식과 같은 이름(통과·완료 표식·튜토리얼 단계)은 만들지 않는다 — 혼자 하기는 서버 상태가 없다(D-15).
-import { UNIT } from "../../shared/game/map";
-import { EXECUTION_MS, WILL_REVEAL_MS } from "../../shared/game/phases";
+import { EARLY_GRACE_MS } from "../../shared/game/early";
+import { BAR_MAP, snapToWalkable, UNIT } from "../../shared/game/map";
+import { majorityOf } from "../../shared/game/nomination";
+import { ANSWER_REVEAL_MS, EXECUTION_MS, WILL_REVEAL_MS } from "../../shared/game/phases";
+import { PLAYTEST_DISCUSSION_MIN_MS } from "../../shared/game/playtest";
 import { rolesInPlay } from "../../shared/game/roles";
 import { emptyWorld, restSegment, snapFrame } from "../../shared/game/world";
 import type { WorldState } from "../../shared/game/world";
@@ -16,13 +19,13 @@ import { AUTO_FLIP_MS } from "../net/cardFace";
 
 // ---- 타입 ----
 
-export type TutorialSceneId = "roles" | "keyword" | "answers" | "discussion" | "verdict" | "pick" | "will" | "night" | "postit" | "end";
+export type TutorialSceneId = "roles" | "keyword" | "answers" | "discussion" | "verdict" | "pick" | "will" | "answerReveal" | "night" | "postit" | "end";
 
 /** 장면 안의 비트. 시각표로 가는 비트(at 숫자)와 눌러서 들어가는 비트(at null) 모두 이 이름으로 가짜 view 를 고른다 */
 export type TutorialBeatId = "start" | "a" | "b" | "c";
 
 /** 링 대상의 안정 id(E2E 표식 data-tutorial-target 값) */
-export type TutorialTargetId = "send" | "endDiscussion" | "yes" | "tag-4" | "face-0" | "suspect-btn";
+export type TutorialTargetId = "role-ready" | "send" | "clues-btn" | "endDiscussion" | "first-ballot" | "yes" | "tag-4" | "face-0" | "night-done" | "suspect-btn";
 
 /** 장면 소리 큐 — 새 레시피 없이 기존 ui.* 만 쓴다(P24-31) */
 export type TutorialCue = "ui.card" | "ui.tap" | "ui.host";
@@ -62,7 +65,7 @@ export interface TutorialScene {
 /** 눌렀을 때(또는 12초 뒤 대본이 대신) 일어나는 일 */
 export interface TutorialAction {
   target: TutorialTargetId;
-  /** 대상의 실제 핸들러가 보내는 메시지. [의심] 단추처럼 보내지 않는 조작은 null */
+  /** 대상의 실제 핸들러가 보내는 메시지. 화면 안에서만 열리는 도구의 조작은 null */
   msg: ClientMessage | null;
   /** 누른 뒤 가짜 반응이 나오는 단계 수(tutorialView 의 acted 가 0 → steps 로 올라간다) */
   steps: number;
@@ -87,24 +90,32 @@ export const ANSWER_ROW_LAST_EXTRA_MS = 200;
 export const POSTIT_CURTAIN_MS = 600;
 export const POSTIT_FALL_MS = 1200;
 
-/** 알약 문구 열여섯(UI-SPEC 297행, 공백 포함 17자 이하·해요체·마침표 없음). 같은 장면 사회자 띠 줄을 되풀이하지 않는다 */
+/** 안내 한 줄(UI-SPEC 297행, 공백 포함 17자 이하·해요체·마침표 없음) */
 export const TUTORIAL_PILLS = {
   "roles.citizen": "나는 시민이에요",
   "roles.find": "마피아를 찾아내요",
   "roles.others": "경찰·의사도 있어요",
-  "keyword.citizen": "시민은 키워드를 알아요",
-  "keyword.mafia": "마피아는 키워드를 몰라요",
-  "keyword.noAnswer": "정답은 말하면 안 돼요",
-  "answers.suspect": "답을 읽고 비교해요",
-  "discussion.talk": "궁금한 답을 캐물어요",
-  "discussion.end": "과반이 눌러야 끝나요",
-  "verdict.majority": "과반이면 처형해요",
+  "keyword.citizen": "시민 팀은 제시어를 알아요",
+  "keyword.mafia": "마피아는 제시어를 몰라요",
+  "keyword.noAnswer": "제시어 대신 단서를 써요",
+  "answers.suspect": "단서를 읽고 비교해요",
+  "discussion.talk": "궁금한 점을 물어봐요",
+  "discussion.end": "절반 넘게 누르면 끝나요",
+  "verdict.majority": "찬성이 더 많으면 지목해요",
   "pick.point": "의심 가는 사람을 가리켜요",
   "will.will": "처형되는 사람은 유언을 남겨요",
   "night.mafia": "마피아는 몰래 한 명을 노려요",
   "postit.near": "의심 가는 사람 곁에서 눌러요",
   "postit.pick": "붙일 사람을 눌러요",
   "postit.fall": "하루 한 장, 아침에 떨어져요",
+  "roles.ready": "역할을 읽고 준비를 눌러요",
+  "answers.open": "단서를 눌러 살펴봐요",
+  "postit.tool": "가까이서 의심딱지를 눌러요",
+  "discussion.unanimous": "모두 요청하면 투표해요",
+  "discussion.majority": `${PLAYTEST_DISCUSSION_MIN_MS / 1000}초 뒤엔 절반만 넘으면 돼요`,
+  "discussion.request": "투표 요청을 눌러요",
+  "verdict.choice": "한 명을 뽑거나 건너뛰어요",
+  "night.ready": "시민은 아침을 준비해요",
 } as const;
 
 /**
@@ -264,6 +275,51 @@ export const TUTORIAL_SCENES: readonly TutorialScene[] = [
 
 const sceneOf = (id: TutorialSceneId): TutorialScene => TUTORIAL_SCENES.find((s) => s.id === id)!;
 
+/** 실험방 첫날에는 단서와 딱지를 낮에 써 보고 투표를 한 번만 한다. */
+export const TUTORIAL_PLAYTEST_SCENES: readonly TutorialScene[] = [
+  {
+    ...sceneOf("roles"),
+    ms: 16800, kind: "do", ringAtMs: 3800, autoActMs: TUTORIAL_AUTO_ACT_MS, tailMs: 900,
+    targets: ["role-ready"],
+    beats: [beat("a", 0, "roles.citizen", { sfx: "ui.card" }), beat("b", 1900, "roles.find"), beat("c", 3800, "roles.ready")],
+  },
+  sceneOf("keyword"),
+  {
+    id: "answers", kind: "do", ms: 16000, autoActMs: TUTORIAL_AUTO_ACT_MS, targets: ["clues-btn"],
+    beats: [beat("a", 0, "answers.open"), beat("b", null, "answers.suspect", { holdMs: 3600 })],
+  },
+  {
+    ...sceneOf("postit"),
+    beats: [
+      beat("start", 0, "postit.tool"),
+      beat("a", null, "postit.pick", { sfx: "ui.tap" }),
+      beat("b", null, "postit.fall", { holdMs: 2200, sfx: "ui.tap" }),
+    ],
+  },
+  {
+    ...sceneOf("discussion"),
+    ms: 19500, ringAtMs: 4100,
+    beats: [beat("a", 0, "discussion.unanimous"), beat("b", 2100, "discussion.majority"), beat("c", 4100, "discussion.request")],
+  },
+  {
+    id: "verdict", kind: "do", ms: 16800, autoActMs: TUTORIAL_AUTO_ACT_MS, targets: ["first-ballot"],
+    beats: [beat("a", 0, "verdict.choice"), beat("b", null, null, { holdMs: EARLY_GRACE_MS }), beat("c", null, null, { holdMs: 3000 })],
+  },
+  {
+    id: "answerReveal", kind: "watch", ms: ANSWER_REVEAL_MS, beats: [beat("a", 0, null)],
+  },
+  {
+    ...sceneOf("night"),
+    targets: ["night-done"],
+    beats: [
+      beat("a", 0, "night.ready"),
+      beat("b", null, null, { holdMs: EARLY_GRACE_MS, sfx: "ui.tap" }),
+      sceneOf("night").beats[2]!,
+    ],
+  },
+  sceneOf("end"),
+];
+
 /** 가짜 시계의 기준 시각 — 인자를 안 주면 쓰는 고정 값(시험·정적 미리보기용) */
 export const TUTORIAL_EPOCH = 1_700_000_000_000;
 
@@ -271,20 +327,32 @@ export const TUTORIAL_EPOCH = 1_700_000_000_000;
 
 /**
  * 장면 scene(비트 beat)의 링 대상을 눌렀을 때의 일. 12초 안 누르면 대본이 이것을 대신 한다(같은 결과). 보기 장면·눌러서 할 일이 더 없는 비트는 null.
- * postit 만 두 단계라 비트로 가른다: start → [의심] 누름(메시지 없음) → a → 하린 이름표 → b.
+ * 도구 열기와 선택·결과가 한 장면에 있으면 비트로 가른다.
  */
-export function autoAct(id: TutorialSceneId, at?: TutorialBeatId): TutorialAction | null {
+export function autoAct(id: TutorialSceneId, at?: TutorialBeatId, playtest = false): TutorialAction | null {
   switch (id) {
+    case "roles":
+      return playtest && at === "c" ? { target: "role-ready", msg: { t: "roleReady" }, steps: 1, next: null } : null;
     case "keyword":
       return { target: "send", msg: { t: "answer", text: TUTORIAL_MY_ANSWER, final: true }, steps: 1, next: null };
+    case "answers":
+      return playtest && (at === undefined || at === "a") ? { target: "clues-btn", msg: null, steps: 0, next: "b" } : null;
     case "discussion":
-      return { target: "endDiscussion", msg: { t: "endDiscussion", on: true }, steps: END_STEPS, next: null };
+      return { target: "endDiscussion", msg: { t: "endDiscussion", on: true }, steps: playtest ? TUTORIAL_CAST.seats.length : END_STEPS, next: null };
     case "verdict":
+      if (playtest) {
+        return at === undefined || at === "a"
+          ? { target: "first-ballot", msg: { t: "firstBallot", target: null }, steps: 1, next: "b" }
+          : null;
+      }
       return { target: "yes", msg: { t: "verdict", agree: true }, steps: VERDICT_VOTES.length, next: null };
     case "pick":
       return { target: "tag-4", msg: { t: "point", target: TUTORIAL_CAST.suspect }, steps: PICK_LINES.length - PICK_MINE_AT, next: null };
     case "night":
-      return at === undefined || at === "a" ? { target: "face-0", msg: { t: "pick", target: 0 }, steps: 1, next: "b" } : null;
+      if (at !== undefined && at !== "a") return null;
+      return playtest
+        ? { target: "night-done", msg: { t: "nightDone" }, steps: 1, next: "b" }
+        : { target: "face-0", msg: { t: "pick", target: 0 }, steps: 1, next: "b" };
     case "postit":
       if (at === undefined || at === "start") return { target: "suspect-btn", msg: null, steps: 0, next: "a" };
       if (at === "a") return { target: "tag-4", msg: { t: "suspect", target: TUTORIAL_CAST.suspect }, steps: 0, next: "b" };
@@ -295,17 +363,22 @@ export function autoAct(id: TutorialSceneId, at?: TutorialBeatId): TutorialActio
 }
 
 /** 화면이 보낸 메시지가 그 비트의 링 대상 조작이면 그 일을, 아니면 null(그 밖의 조작은 대본이 반응하지 않는다) */
-export function reactTo(id: TutorialSceneId, at: TutorialBeatId, msg: ClientMessage): TutorialAction | null {
-  const act = autoAct(id, at);
+export function reactTo(id: TutorialSceneId, at: TutorialBeatId, msg: ClientMessage, playtest = false): TutorialAction | null {
+  const act = autoAct(id, at, playtest);
   if (act === null || act.msg === null) return null;
+  if (act.msg.t === "firstBallot" && msg.t === "firstBallot") {
+    const valid = msg.target === null || (msg.target !== TUTORIAL_CAST.me && TUTORIAL_CAST.seats.some(({ seat }) => seat === msg.target));
+    return valid ? { ...act, msg } : null;
+  }
   return JSON.stringify(act.msg) === JSON.stringify(msg) ? act : null;
 }
 
 // ---- 가짜 view ----
 
 /** 그 장면·비트에서 유령인 좌석(공개 값) */
-function deadSeats(id: TutorialSceneId, at: TutorialBeatId): number[] {
+function deadSeats(id: TutorialSceneId, at: TutorialBeatId, playtest: boolean): number[] {
   const { executed, nightVictim } = TUTORIAL_CAST;
+  if (playtest) return id === "end" || (id === "night" && at === "c") ? [nightVictim] : [];
   if (id === "will") return at === "a" ? [] : [executed];
   if (id === "night") return at === "c" ? [executed, nightVictim] : [executed];
   if (id === "postit" || id === "end") return [executed, nightVictim];
@@ -324,13 +397,20 @@ function playersOf(dead: readonly number[]): PublicPlayer[] {
  * startedAt 은 장면 시작 시각(서버 시각 자리) — phaseEndsAt = startedAt + 장면 길이. acted 는 눌러서 반응이 나온 단계 수(0 = 아직)다.
  * 마피아 ??? 맛보기(keyword 의 비트 b)만 역할 mafia 이고 me.keyword 키가 없다.
  */
-export function tutorialView(id: TutorialSceneId, at: TutorialBeatId = sceneOf(id).beats[0]!.id, startedAt: number = TUTORIAL_EPOCH, acted = 0): RoomView {
-  const scene = sceneOf(id);
+export function tutorialView(
+  id: TutorialSceneId,
+  at?: TutorialBeatId,
+  startedAt: number = TUTORIAL_EPOCH,
+  acted = 0,
+  { playtest = false, firstBallot }: { playtest?: boolean; firstBallot?: number | null } = {},
+): RoomView {
+  const scene = (playtest ? TUTORIAL_PLAYTEST_SCENES : TUTORIAL_SCENES).find((entry) => entry.id === id)!;
+  at ??= scene.beats[0]!.id;
   // 역할 확인은 시작 5초에 저절로 뒤집힌다 — 시계를 앞당겨 0.4초에 뒤집히게 한다(실제 카드 규칙을 그대로 쓴다)
   const duration = id === "roles" ? scene.ms + (AUTO_FLIP_MS - TUTORIAL_FLIP_AT_MS) : scene.ms;
   const roles = rolesInPlay(TUTORIAL_CAST.seats.length);
   const phase = phaseOf(id, at);
-  const dayN = id === "postit" ? (at === "c" ? 3 : 2) : id === "end" ? 3 : 1;
+  const dayN = playtest ? id === "end" ? 2 : 1 : id === "postit" ? (at === "c" ? 3 : 2) : id === "end" ? 3 : 1;
   const daytime = phase === "discussion" || phase === "verdict" || phase === "nomination" || phase === "execution" || phase === "morning";
   const mine = { seat: TUTORIAL_CAST.me, isHost: false, ...(daytime ? { chat: "all" as const } : {}) } as const;
   const keyword = { genre: TUTORIAL_CAST.genre };
@@ -344,18 +424,24 @@ export function tutorialView(id: TutorialSceneId, at: TutorialBeatId = sceneOf(i
     serverNow: startedAt,
     minPlayers: 4,
     maxPlayers: 8,
-    mapChoice: "plaza",
-    map: "plaza",
-    players: playersOf(deadSeats(id, at)),
+    mapChoice: playtest ? "bar" : "plaza",
+    map: playtest ? "bar" : "plaza",
+    ...(playtest ? { playtest: true as const } : {}),
+    players: playersOf(deadSeats(id, at, playtest)),
     me: { ...mine },
     day: { n: dayN, roles },
   } satisfies RoomView;
 
   const out: RoomView = view;
   const day = out.day!;
+  if (playtest && phase === "discussion" && dayN === 1) {
+    day.voteOpensAt = startedAt + PLAYTEST_DISCUSSION_MIN_MS;
+    day.voteReadyTotal = TUTORIAL_CAST.seats.length;
+    day.voteReadyRequired = majorityOf(TUTORIAL_CAST.seats.length);
+  }
   switch (id) {
     case "roles":
-      out.me = { ...mine, role: "citizen" };
+      out.me = { ...mine, role: "citizen", ...(playtest && acted >= 1 ? { roleReady: true as const } : {}) };
       break;
     case "keyword": {
       if (at === "b") {
@@ -372,13 +458,25 @@ export function tutorialView(id: TutorialSceneId, at: TutorialBeatId = sceneOf(i
       day.keyword = { ...keyword, answers: TUTORIAL_ANSWERS.map((r) => ({ ...r })) };
       break;
     case "discussion": {
-      const count = Math.min(acted, END_STEPS);
+      const count = Math.min(acted, playtest ? TUTORIAL_CAST.seats.length : END_STEPS);
       out.me = { ...mine, role: "citizen", ...(count >= 1 ? { endDiscussion: true as const } : {}) };
       day.endCount = count;
       day.keyword = { ...keyword, answers: TUTORIAL_ANSWERS.map((r) => ({ ...r })) };
+      if (playtest) day.suspects = [{ to: TUTORIAL_CAST.suspect, from: TUTORIAL_CAST.me }];
       break;
     }
     case "verdict": {
+      if (playtest) {
+        const count = at === "a" ? 0 : TUTORIAL_CAST.seats.length;
+        // 다른 참가자들은 건너뛴다. 어느 얼굴을 고르든 그 한 표까지 공개 집계에 반영한다.
+        const votes = typeof firstBallot === "number" ? 1 : 0;
+        out.me = { ...mine, role: "citizen", ...(at === "b" ? { firstBallot: firstBallot ?? null } : {}) };
+        day.firstBallot = {
+          count,
+          ...(at === "c" ? { result: { target: null, votes, holds: count - votes, reason: "held" as const } } : {}),
+        };
+        break;
+      }
       const shown = VERDICT_VOTES.slice(0, Math.min(acted, VERDICT_VOTES.length));
       out.me = { ...mine, role: "citizen", ...(acted >= 1 ? { verdictVote: true } : {}) };
       day.verdictCount = { yes: shown.filter((v) => v).length, no: shown.filter((v) => !v).length };
@@ -398,12 +496,17 @@ export function tutorialView(id: TutorialSceneId, at: TutorialBeatId = sceneOf(i
       day.candidate = TUTORIAL_CAST.executed;
       day.execution = { seat: TUTORIAL_CAST.executed, will: TUTORIAL_WILL };
       break;
+    case "answerReveal":
+      out.me = { ...mine, role: "citizen" };
+      day.keyword = { ...keyword, answer: TUTORIAL_CAST.word };
+      break;
     case "night":
-      out.me = { ...mine, role: "citizen", ...(at === "b" ? { pick: 0 } : {}) };
+      out.me = { ...mine, role: "citizen", ...(at === "b" ? playtest ? { nightDone: true as const } : { pick: 0 } : {}) };
       if (at === "c") day.morning = { eliminated: TUTORIAL_CAST.nightVictim };
       break;
     case "postit":
       out.me = { ...mine, role: "citizen", ...(at === "b" ? { suspectTo: TUTORIAL_CAST.suspect } : {}) };
+      if (playtest) day.keyword = { ...keyword, answers: TUTORIAL_ANSWERS.map((r) => ({ ...r })) };
       if (at === "b") day.suspects = [{ to: TUTORIAL_CAST.suspect, from: TUTORIAL_CAST.me }];
       break;
     case "end":
@@ -429,6 +532,8 @@ function phaseOf(id: TutorialSceneId, at: TutorialBeatId): PhaseId {
       return "nomination";
     case "will":
       return "execution";
+    case "answerReveal":
+      return "answerReveal";
     case "night":
       return at === "c" ? "morning" : "night";
     case "postit":
@@ -464,7 +569,7 @@ const NOTE_SPOTS: Readonly<Record<number, { x: number; z: number }>> = {
 };
 
 /** 서 있는 여섯 좌석의 위치 snap 한 프레임(로컬 WorldStore.applyFrame 에 주는 값). 시각 at 은 호출한 쪽이 준다 */
-export function tutorialSnap(id: TutorialSceneId, at: number): Extract<WorldFrame, { k: "snap" }> {
+export function tutorialSnap(id: TutorialSceneId, at: number, playtest = false): Extract<WorldFrame, { k: "snap" }> {
   const spots = id === "postit" ? NOTE_SPOTS : RING_SPOTS;
   let world: WorldState = emptyWorld();
   const players: { id: string; seat: number }[] = [];
@@ -472,7 +577,9 @@ export function tutorialSnap(id: TutorialSceneId, at: number): Extract<WorldFram
     const spot = spots[seat]!;
     const pid = `tut-${seat}`;
     players.push({ id: pid, seat });
-    world = { ...world, segs: { ...world.segs, [pid]: restSegment(Math.round(spot.x * UNIT), Math.round(spot.z * UNIT), at) } };
+    const position = { x: Math.round(spot.x * UNIT), z: Math.round(spot.z * UNIT) };
+    const { x, z } = playtest ? snapToWalkable(BAR_MAP, position) : position;
+    world = { ...world, segs: { ...world.segs, [pid]: restSegment(x, z, at) } };
   }
   return snapFrame(world, players, at);
 }
@@ -480,21 +587,27 @@ export function tutorialSnap(id: TutorialSceneId, at: number): Extract<WorldFram
 // ---- 로컬 send 어댑터 ----
 
 export interface TutorialSendHandlers {
+  onRoleReady?: () => void;
   onAnswer?: (text: string, final: boolean) => void;
   onEndDiscussion?: (on: boolean) => void;
   onVerdict?: (agree: boolean) => void;
+  onFirstBallot?: (target: number | null) => void;
   onPoint?: (target: number) => void;
   onPick?: (target: number) => void;
+  onNightDone?: () => void;
   onSuspect?: (target: number) => void;
 }
 
 /**
- * 로컬 send. 화면이 보내는 메시지 가운데 대본이 아는 여섯 가지(답·토론 끝내기·찬반·지목·밤 고르기·의심)만 해당 콜백을 부르고, 그 밖(이동·채팅·입력 중·동작 …)은
+ * 로컬 send. 대본이 아는 메시지만 해당 콜백을 부르고, 그 밖(이동·채팅·입력 중·동작 …)은
  * 아무 일 없이 true 를 돌려준다 — false 를 주면 보내지 못한 분기를 타기 때문이다. 서버·소켓으로는 아무것도 나가지 않는다.
  */
 export function makeTutorialSend(h: TutorialSendHandlers): (msg: ClientMessage) => boolean {
   return (msg) => {
     switch (msg.t) {
+      case "roleReady":
+        h.onRoleReady?.();
+        break;
       case "answer":
         h.onAnswer?.(msg.text, msg.final);
         break;
@@ -504,11 +617,17 @@ export function makeTutorialSend(h: TutorialSendHandlers): (msg: ClientMessage) 
       case "verdict":
         h.onVerdict?.(msg.agree);
         break;
+      case "firstBallot":
+        h.onFirstBallot?.(msg.target);
+        break;
       case "point":
         h.onPoint?.(msg.target);
         break;
       case "pick":
         h.onPick?.(msg.target);
+        break;
+      case "nightDone":
+        h.onNightDone?.();
         break;
       case "suspect":
         h.onSuspect?.(msg.target);

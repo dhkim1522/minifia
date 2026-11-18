@@ -46,23 +46,23 @@ const renderKeyword = (view: RoomView) =>
   render(<Keyword view={view} offset={0} myRoleButton={<button type="button">역할 카드</button>} send={() => true} canSend onEvent={() => () => {}} />);
 
 describe("키워드 카드 — 시민 편", () => {
-  it("장르 줄·키워드·각주가 카드에 있고 카드는 '첫날 문제' 그룹이다", () => {
+  it("장르 줄·키워드·각주가 카드에 있고 카드는 '제시어 카드' 그룹이다", () => {
     const { container, getByRole } = renderKeyword(makeView({ seat: 0, isHost: true, role: "citizen", keyword: "해리포터" }));
     expect(container.querySelector("[data-keyword-screen]")).not.toBeNull();
-    expect(container.querySelector("[data-keyword-genre]")!.textContent).toBe("장르 : 영화");
+    expect(container.querySelector("[data-keyword-genre]")!.textContent).toBe("주제 · 영화");
     expect(container.querySelector("[data-keyword-word]")!.textContent).toBe("해리포터");
-    expect(container.querySelector("[data-keyword-note]")!.textContent).toBe("* 직접적인 키워드는 언급하면 안 됩니다.");
-    expect(getByRole("group", { name: "첫날 문제" })).toBe(container.querySelector("[data-keyword-card]"));
+    expect(container.querySelector("[data-keyword-note]")!.textContent).toBe("제시어는 쓰지 말고 단서를 남겨요");
+    expect(getByRole("group", { name: "제시어 카드" })).toBe(container.querySelector("[data-keyword-card]"));
   });
 });
 
 describe("키워드 카드 — 마피아", () => {
-  it("키워드 자리는 ??? 이고 접근성 이름은 '키워드는 알 수 없어요', 어떤 data- 속성 값에도 역할·키워드가 없다", () => {
+  it("키워드 자리는 ??? 이고 접근성 이름은 '제시어를 볼 수 없어요', 어떤 data- 속성 값에도 역할·키워드가 없다", () => {
     const { container, getByLabelText } = renderKeyword(makeView({ seat: 1, isHost: false, role: "mafia", allies: [] }));
     const word = container.querySelector("[data-keyword-word]")!;
     expect(word.textContent).toBe("???");
-    expect(getByLabelText("키워드는 알 수 없어요")).toBe(word);
-    expect(container.querySelector("[data-keyword-genre]")!.textContent).toBe("장르 : 영화");
+    expect(getByLabelText("제시어를 볼 수 없어요")).toBe(word);
+    expect(container.querySelector("[data-keyword-genre]")!.textContent).toBe("주제 · 영화");
     for (const el of container.querySelectorAll("*")) {
       for (const attr of Array.from(el.attributes)) {
         if (!attr.name.startsWith("data-")) continue;
@@ -72,7 +72,7 @@ describe("키워드 카드 — 마피아", () => {
   });
 });
 
-// ---- 23-09: 답 입력줄·컴팩트 카드 (P23-6·9·12·13·15) ----
+// ---- 23-09: 단서 입력줄·컴팩트 카드 (P23-6·9·12·13·15) ----
 
 const CITIZEN: RoomView["me"] = { seat: 0, isHost: true, role: "citizen", keyword: "해리포터" };
 const MAFIA: RoomView["me"] = { seat: 0, isHost: true, role: "mafia", allies: [] };
@@ -136,10 +136,10 @@ describe("키워드 입력줄 — 읽기 3초 잠금과 입력칸 (P23-6·9)", (
     expect(input(container).hasAttribute("data-call")).toBe(false);
   });
 
-  it("입력칸 접근성·입력 속성: 이름 '답 입력', enterKeyHint send, autoComplete off, 안내 글자 없음", () => {
+  it("입력칸 접근성·입력 속성: 이름 '단서 입력', enterKeyHint send, autoComplete off, 안내 글자 없음", () => {
     const { container } = renderAnswer(makeView(CITIZEN, 5_000));
     const el = input(container);
-    expect(el.getAttribute("aria-label")).toBe("답 입력");
+    expect(el.getAttribute("aria-label")).toBe("단서 입력");
     expect(el.getAttribute("enterkeyhint")).toBe("send");
     expect(el.getAttribute("autocomplete")).toBe("off");
     expect(el.getAttribute("placeholder")).toBeNull();
@@ -192,17 +192,17 @@ describe("키워드 입력줄 — 보내기와 제출 뒤 (P23-12·13)", () => {
     expect(off.sent).toHaveLength(0);
   });
 
-  it("글이 있으면 [보내기]·Enter(제출)가 final:true 로 보내고 곧바로 sent: 읽기 전용·check 아이콘·'답 보냄'·'냈어요'", () => {
+  it("글이 있으면 [보내기]·Enter(제출)가 final:true 로 보내고 곧바로 sent: 읽기 전용·check 아이콘·'단서 보냄'·'냈어요'", () => {
     const { container, sent } = renderAnswer(makeView(CITIZEN, 5_000));
     type(container, "안경");
     expect(sendBtn(container).getAttribute("aria-disabled")).toBe("false");
-    expect(sendBtn(container).getAttribute("aria-label")).toBe("답 보내기");
+    expect(sendBtn(container).getAttribute("aria-label")).toBe("단서 보내기");
     fireEvent.click(sendBtn(container));
     expect(sent).toEqual([{ t: "answer", text: "안경", final: true }]);
     expect(root(container).getAttribute("data-answer-state")).toBe("sent");
     expect(input(container).readOnly).toBe(true);
     expect(input(container).value).toBe("안경");
-    expect(sendBtn(container).getAttribute("aria-label")).toBe("답 보냄");
+    expect(sendBtn(container).getAttribute("aria-label")).toBe("단서 보냄");
     expect(sendBtn(container).querySelector("svg path")!.getAttribute("d")).toBe("M5 12.5l4.5 4.5L19 7.5"); // check 아이콘
     expect(q(container, "[data-answer-done]").textContent).toBe("냈어요");
     // 제출 뒤 다시 제출해도 더 보내지 않는다
@@ -251,7 +251,7 @@ describe("키워드 입력줄 — 보내기와 제출 뒤 (P23-12·13)", () => {
     expect(q(container, "[data-keyword-card]").classList.contains("is-still")).toBe(true);
     expect(root(container).getAttribute("data-answer-state")).toBe("sent");
     expect(input(container).value).toBe("안경");
-    expect(sendBtn(container).getAttribute("aria-label")).toBe("답 보냄");
+    expect(sendBtn(container).getAttribute("aria-label")).toBe("단서 보냄");
   });
 
   it("재접속: 초안이면 글을 채우고 open 으로 이어 쓴다", () => {

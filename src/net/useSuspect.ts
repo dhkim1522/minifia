@@ -17,7 +17,7 @@ import type { SendGuard } from "./useSendGuard";
 export const SUSPECT_POLL_MS = 250;
 
 /** 붙인 사람에게만 읽히는 안내(P24-8) */
-export const suspectSaid = (nickname: string): string => `${nickname} 님에게 의심을 붙였어요`;
+export const suspectSaid = (nickname: string): string => `${nickname} 님에게 의심딱지를 붙였어요`;
 
 export interface UseSuspectOptions {
   view: RoomView;

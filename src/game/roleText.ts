@@ -3,10 +3,10 @@ import type { RoleId } from "../../shared/game/roles";
 import type { RoomView } from "../../shared/protocol";
 
 export const ROLE_TEXT: Readonly<Record<RoleId, { name: string; desc: string }>> = {
-  mafia: { name: "마피아", desc: "몰래 암살하여 승리하세요." },
-  police: { name: "경찰", desc: "의심되는 사람을 조사하세요." },
-  doctor: { name: "의사", desc: "시민 팀을 마피아에게서 지키세요." },
-  citizen: { name: "시민", desc: "추리로 마피아를 찾아내세요." },
+  mafia: { name: "마피아", desc: "밤마다 노릴 사람을 고르세요." },
+  police: { name: "경찰", desc: "밤마다 한 사람을 조사하세요." },
+  doctor: { name: "의사", desc: "밤마다 지킬 사람을 고르세요." },
+  citizen: { name: "시민", desc: "단서와 행동을 살펴 마피아를 찾으세요." },
 };
 
 /** 마피아 동료 줄. 동료가 없으면 "혼자예요". */

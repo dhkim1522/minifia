@@ -79,7 +79,7 @@ function logOf(container: HTMLElement): HTMLElement {
 describe("ChatPanel 공개 근거 인용", () => {
   const evidence: NonNullable<ChatPanelProps["evidence"]> = {
     key: "answers",
-    label: "모두의 답",
+    label: "모두의 단서",
     rows: [
       { seat: 2, name: "지호", text: "창문을 봤어요", order: 1 },
       { seat: 3, name: "지아", text: null, order: 2 },
@@ -91,7 +91,7 @@ describe("ChatPanel 공개 근거 인용", () => {
     const onSend = vi.fn();
     const { container } = render(<Harness initial="제 생각은" evidence={evidence} onSend={onSend} />);
     expect(container.querySelectorAll("[data-evidence-quote]")).toHaveLength(1);
-    expect(container.querySelector("[data-evidence-none]")?.textContent).toContain("답 없음");
+    expect(container.querySelector("[data-evidence-none]")?.textContent).toContain("단서 없음");
     fireEvent.click(quote(container));
     expect(input(container).value).toBe("제 생각은 지호 “창문을 봤어요”");
     expect(document.activeElement).toBe(input(container));

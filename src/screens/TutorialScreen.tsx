@@ -7,7 +7,7 @@ import { Button } from "../components/Button";
 import { RoleCardSheet } from "../components/RoleCardSheet";
 import { FocusRing } from "../components/tutorial/FocusRing";
 import { TutorialFrame } from "../components/tutorial/TutorialFrame";
-import { HostBand } from "../components/v2/HostBand";
+import { HostBand, HostDock } from "../components/v2/HostBand";
 import { V2Icon } from "../components/v2/V2Icon";
 import type { V2IconName } from "../components/v2/V2Icon";
 import { dayEvents } from "../game/dayView";
@@ -33,6 +33,7 @@ import { Keyword } from "./Keyword";
 import { PreGame } from "./PreGame";
 import { RoleReveal } from "./RoleReveal";
 import "../styles/room.css";
+import "../styles/playtest.css";
 import "../styles/tutorial.css";
 
 const ROLE_ICONS: readonly V2IconName[] = ["roleCitizen", "roleMafia", "rolePolice", "roleDoctor"];
@@ -41,14 +42,18 @@ const CONTROL = "button, input, textarea, select, a[href]";
 const ALWAYS_ALLOWED = "[data-tutorial-exit], [data-tutorial-home], [data-tutorial-replay], [data-sound-button]";
 const NOOP = () => {};
 
-function selectorFor(target: TutorialTargetId, scene: TutorialSceneId): string {
+function selectorFor(target: TutorialTargetId, scene: TutorialSceneId, playtest: boolean): string {
   switch (target) {
+    case "role-ready": return "[data-role-ready]";
     case "send": return "[data-answer-send]";
+    case "clues-btn": return '[data-playtest-action="clues"]';
     case "endDiscussion": return "[data-end-discussion]";
+    case "first-ballot": return "[data-first-ballot] [data-face], [data-first-ballot-hold]";
     case "yes": return '[data-verdict="yes"]';
     case "tag-4": return scene === "postit" ? '[data-suspect-tag="4"]' : '[data-pick="4"]';
     case "face-0": return '[data-face="0"]';
-    case "suspect-btn": return "[data-suspect-btn]";
+    case "night-done": return "[data-night-done]";
+    case "suspect-btn": return playtest ? '[data-playtest-action="suspect"]' : "[data-suspect-btn]";
   }
 }
 
@@ -99,41 +104,48 @@ interface TutorialTestHook {
 }
 type TestWindow = Window & { __mfTutorial?: TutorialTestHook };
 
-export function TutorialScreen({ onExit }: { onExit: () => void }) {
+export function TutorialScreen({ onExit, playtest = false }: { onExit: () => void; playtest?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   useFixedRoomHeight(root);
-  const clickSuspect = useCallback(() => root.current?.querySelector<HTMLButtonElement>("[data-suspect-btn]")?.click(), []);
-  const { cursor, scene, beat, target, send, openSuspect, go } = useTutorialScene(clickSuspect);
-  const { index, startedAt, beatAt, acted } = cursor;
+  const clickTool = useCallback((target: TutorialTargetId) => {
+    const selector = selectorFor(target, target === "suspect-btn" ? "postit" : "answers", playtest);
+    root.current?.querySelector<HTMLButtonElement>(selector)?.click();
+  }, [playtest]);
+  const { cursor, scene, beat, target, steps, send, openTool, go } = useTutorialScene(clickTool, playtest);
+  const { index, startedAt, beatAt, acted, firstBallot } = cursor;
   const sceneId = scene.id;
   const beatId = beat.id;
-  const selector = target === null ? null : selectorFor(target, sceneId);
+  const selector = target === null ? null : selectorFor(target, sceneId, playtest);
+  const showRecords = !playtest && sceneId === "answers";
   const bottomEdge = useTutorialLayout(root, selector, sceneId, beatId);
   const [store] = useState(() => {
     const world = new WorldStore();
-    world.applyFrame(tutorialSnap("roles", startedAt), 0);
+    world.applyFrame(tutorialSnap("roles", startedAt, playtest), 0);
     return world;
   });
   const [chat] = useState(() => new ChatStore());
   const [cardSeen, setCardSeen] = useState(false);
   const [shownAnswers, setShownAnswers] = useState(0);
 
-  const view = useMemo(() => tutorialView(sceneId, beatId, startedAt, acted), [sceneId, beatId, startedAt, acted]);
+  const view = useMemo(
+    () => tutorialView(sceneId, beatId, startedAt, acted, { playtest, ...(firstBallot === undefined ? {} : { firstBallot }) }),
+    [sceneId, beatId, startedAt, acted, playtest, firstBallot],
+  );
   const timelessView = useMemo(() => ({ ...view, phaseEndsAt: null, phaseDurationMs: null }), [view]);
   const answers = view.day?.keyword?.answers;
-  const recordsView = sceneId === "answers" && view.day && answers
+  const recordsView = showRecords && view.day && answers
     ? { ...view, day: { ...view.day, keyword: { ...view.day.keyword, genre: TUTORIAL_CAST.genre, answers: answers.slice(0, shownAnswers) } } }
     : view;
   const sound = useSound({ view: timelessView });
 
   useEffect(() => preloadRoleAssets(), []);
   useLayoutEffect(() => {
-    store.applyFrame(tutorialSnap(sceneId, startedAt), 0);
+    store.applyFrame(tutorialSnap(sceneId, startedAt, playtest), 0);
     if (sceneId === "roles") {
       chat.reset();
       setCardSeen(false);
     }
-  }, [sceneId, startedAt, store, chat]);
+  }, [sceneId, startedAt, store, chat, playtest]);
   const entrySoundAt = useRef<number | null>(null);
   useEffect(() => {
     if (entrySoundAt.current === startedAt) return;
@@ -148,22 +160,22 @@ export function TutorialScreen({ onExit }: { onExit: () => void }) {
 
   useEffect(() => {
     setShownAnswers(0);
-    if (sceneId !== "answers" || answers === undefined) return;
+    if (!showRecords || answers === undefined) return;
     const timers = answers.map((_, i) => setTimeout(
       () => setShownAnswers(i + 1),
       ANSWER_ROW_START_MS + ANSWER_ROW_STEP_MS * i + (i === answers.length - 1 ? ANSWER_ROW_LAST_EXTRA_MS : 0),
     ));
     return () => timers.forEach(clearTimeout);
-  }, [sceneId, startedAt]);
+  }, [showRecords, startedAt]);
   useEffect(() => {
-    if (sceneId !== "discussion") return;
+    if (playtest || sceneId !== "discussion") return;
     const timers = TUTORIAL_CHAT.map((line, i) => setTimeout(() => {
       const now = Date.now();
       chat.apply({ t: "chat", ch: "all", seat: line.seat, seq: i + 1, text: line.text, at: now }, 0, now);
       if (line.emote) store.applyEmote({ t: "emote", seat: line.seat, id: line.emote, n: i + 1 }, 0);
     }, line.atMs));
     return () => timers.forEach(clearTimeout);
-  }, [sceneId, startedAt, chat, store]);
+  }, [sceneId, startedAt, chat, store, playtest]);
 
   const points = view.day?.points;
   const lastPoint = points?.at(-1);
@@ -173,12 +185,17 @@ export function TutorialScreen({ onExit }: { onExit: () => void }) {
     if (sceneId === "pick" && pointSeat !== undefined) store.applyEmote({ t: "emote", seat: pointSeat, id: "point", n: nPoints }, 0);
   }, [sceneId, pointSeat, nPoints, store]);
   useEffect(() => {
+    if (playtest && sceneId === "postit" && beatId === "b") {
+      store.applyEmote({ t: "emote", seat: TUTORIAL_CAST.me, id: "point", target: TUTORIAL_CAST.suspect, n: 1 }, 0);
+    }
+  }, [playtest, sceneId, beatId, store]);
+  useEffect(() => {
     if (sceneId !== "end") return;
     for (const { seat } of TUTORIAL_CAST.seats) {
-      if (seat === TUTORIAL_CAST.executed || seat === TUTORIAL_CAST.nightVictim) continue;
+      if ((!playtest && seat === TUTORIAL_CAST.executed) || seat === TUTORIAL_CAST.nightVictim) continue;
       store.applyEmote({ t: "emote", seat, id: "clap", n: 1 }, 0);
     }
-  }, [sceneId, startedAt, store]);
+  }, [sceneId, startedAt, store, playtest]);
 
   const testScene = useRef<TutorialSceneId>(sceneId);
   testScene.current = sceneId;
@@ -195,8 +212,8 @@ export function TutorialScreen({ onExit }: { onExit: () => void }) {
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
     const element = event.target instanceof Element ? event.target : null;
     if (element?.closest(ALWAYS_ALLOWED)) return;
-    if (selector !== null && element?.closest(selector)) {
-      if (target === "suspect-btn") openSuspect();
+    if (target !== null && selector !== null && element?.closest(selector)) {
+      openTool(target);
       return;
     }
     event.preventDefault();
@@ -204,7 +221,7 @@ export function TutorialScreen({ onExit }: { onExit: () => void }) {
   };
   const pregame = sceneId === "roles" || sceneId === "keyword";
   const finalScreen = sceneId === "end";
-  const liveAnnouncements = sceneId === "will" && beatId === "b"
+  const liveAnnouncements = playtest ? [] : sceneId === "will" && beatId === "b"
     ? dayEvents(tutorialView("pick", "c", startedAt), view).announces
     : sceneId === "night" && beatId === "c"
     ? dayEvents(tutorialView("night", "b", startedAt), view).announces
@@ -217,6 +234,7 @@ export function TutorialScreen({ onExit }: { onExit: () => void }) {
       data-tutorial-screen=""
       data-tutorial-scene={sceneId}
       data-tutorial-beat={beatId}
+      data-first-round-playtest={playtest ? "" : undefined}
       onClickCapture={onClick}
       onKeyDownCapture={(event) => {
         if (event.key === "Escape") {
@@ -225,12 +243,14 @@ export function TutorialScreen({ onExit }: { onExit: () => void }) {
         }
       }}
     >
-      <HostBand view={timelessView} offset={0} cardSeen={cardSeen} sound={sound.supported ? sound : null} />
+      {playtest
+        ? sound.supported && <HostDock sound={sound} />
+        : <HostBand view={timelessView} offset={0} cardSeen={cardSeen} sound={sound.supported ? sound : null} />}
       <div className="mf-room__body">
         {pregame ? (
           <PreGame view={view} store={store} send={send} canSend offset={0} onLeave={onExit}>
             {sceneId === "roles" ? (
-              <RoleReveal view={view} offset={0} myRoleButton={null} onSeenFront={() => setCardSeen(true)} />
+              <RoleReveal view={playtest ? timelessView : view} offset={0} myRoleButton={null} onSeenFront={() => setCardSeen(true)} send={send} canSend />
             ) : (
               <Keyword key={beatId} view={view} offset={0} myRoleButton={null} send={send} canSend timeless />
             )}
@@ -246,20 +266,20 @@ export function TutorialScreen({ onExit }: { onExit: () => void }) {
           {ROLE_ICONS.map((icon, i) => <span key={icon} style={{ animationDelay: `${i * ROLE_ICON_STEP_MS}ms` }}><V2Icon name={icon} size={22} /></span>)}
         </div>
       ) : null}
-      {sceneId === "answers" ? (
+      {showRecords ? (
         <RoleCardSheet view={recordsView} showBack={false} tab="records" onTab={NOOP} unread={0} newCount={0} onClose={NOOP} modal={false} />
       ) : null}
       {finalScreen ? (
         <section className="tut-end" aria-labelledby="tut-end-title">
-          <h2 id="tut-end-title" className="mf-t-heading">이제 친구와 한 판 해요</h2>
+          <h2 id="tut-end-title" className="mf-t-heading">이제 친구들과 한 판 해요</h2>
           <Button block data-tutorial-home="" onClick={onExit}>홈으로</Button>
-          <Button variant="text" block data-tutorial-replay="" onClick={() => go("roles")}>다시 보기</Button>
+          <Button variant="text" block data-tutorial-replay="" onClick={() => go("roles")}>다시 연습하기</Button>
         </section>
       ) : null}
       <div key={startedAt} className="tut-cut" aria-hidden="true" />
-      <FocusRing target={target === null || selector === null ? null : { id: target, selectors: [selector], pill: target === "tag-4" }} />
-      <TutorialFrame step={index + 1} pill={beat.pill === null ? null : TUTORIAL_PILLS[beat.pill]}
-        place={sceneId === "answers" ? "top" : bottomEdge > 0 && !finalScreen ? "aboveBottom" : "bottom"}
+      <FocusRing target={target === null || selector === null ? null : { id: target, selectors: [target === "first-ballot" ? "[data-first-ballot]" : selector], pill: target === "tag-4" }} />
+      <TutorialFrame step={index + 1} steps={steps} pill={beat.pill === null ? null : TUTORIAL_PILLS[beat.pill]}
+        place={showRecords ? "top" : bottomEdge > 0 && !finalScreen ? "aboveBottom" : "bottom"}
         bottomEdge={bottomEdge} hideExit={finalScreen} onExit={onExit} />
     </div>
   );

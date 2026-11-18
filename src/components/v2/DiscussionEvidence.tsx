@@ -40,7 +40,7 @@ export function DiscussionEvidence({ evidence, hidden, collapseOnSmallScreen = f
                   <i aria-hidden="true" style={{ background: seatColorVar(row.seat) }} />
                   {row.name}
                 </span>
-                <span className="mf-discussion-evidence__text">{row.text ?? "답 없음"}</span>
+                <span className="mf-discussion-evidence__text">{row.text ?? "단서 없음"}</span>
               </>
             );
             return (
@@ -50,7 +50,7 @@ export function DiscussionEvidence({ evidence, hidden, collapseOnSmallScreen = f
                     type="button"
                     className="mf-discussion-evidence__row"
                     data-evidence-quote=""
-                    aria-label={`${row.name}의 ${evidence.label === "아침 유언" ? "유언" : "답"} 인용, ${row.text}`}
+                    aria-label={`${row.name}의 ${evidence.label === "아침 유언" ? "유언" : "단서"} 인용, ${row.text}`}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
                       const result = onQuote(row);

@@ -15,8 +15,9 @@ export const TUTORIAL_STEPS = 10;
 export const TUTORIAL_STACK_TOP = 131;
 
 export interface TutorialFrameProps {
-  /** 장면 번호 1..10 */
+  /** 현재 장면 번호와 전체 장면 수 */
   step: number;
+  steps?: number;
   /** 알약 문구. null 이면 알약을 그리지 않는다(장면 10) */
   pill: string | null;
   place: TutorialPlace;
@@ -33,7 +34,7 @@ function stackStyle(place: TutorialPlace, bottomEdge: number | undefined): CSSPr
   return { bottom: "calc(24px + env(safe-area-inset-bottom, 0px))" };
 }
 
-export function TutorialFrame({ step, pill, place, bottomEdge, onExit, hideExit }: TutorialFrameProps) {
+export function TutorialFrame({ step, steps = TUTORIAL_STEPS, pill, place, bottomEdge, onExit, hideExit }: TutorialFrameProps) {
   return (
     <>
       <div className="tut-stack" data-tutorial-stack="" data-place={place} style={stackStyle(place, bottomEdge)}>
@@ -42,11 +43,11 @@ export function TutorialFrame({ step, pill, place, bottomEdge, onExit, hideExit 
           data-tutorial-dots=""
           role="progressbar"
           aria-valuemin={1}
-          aria-valuemax={TUTORIAL_STEPS}
+          aria-valuemax={steps}
           aria-valuenow={step}
-          aria-label={`${TUTORIAL_STEPS}단계 중 ${step}단계`}
+          aria-label={`${steps}단계 중 ${step}단계`}
         >
-          {Array.from({ length: TUTORIAL_STEPS }, (_, i) => (
+          {Array.from({ length: steps }, (_, i) => (
             <i key={i} className={i < step ? "tut-dots__dot is-on" : "tut-dots__dot"} />
           ))}
         </div>

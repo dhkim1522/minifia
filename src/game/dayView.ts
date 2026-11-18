@@ -26,7 +26,7 @@ export const DAY_COPY = {
   /** 유언 공개 카드(22-12 P22-12): 처형자가 유언을 남기지 않았을 때 같은 카드·같은 3.0초에 쓰는 한 줄 */
   willEmpty: "말없이 떠났어요",
   /** 첫날 정답 공개 큰 글의 위 줄(23-07, P23-20) — 아래 줄이 키워드다 */
-  answerLabel: "정답",
+  answerLabel: "제시어",
   // ---- 결과 알림(36px) ----
   // 14페이즈 U-5: 아래 두 문구는 결과 알림(36px)으로 쓰지 않는다(자막 띠가 같은 말을 한다). 상수는 지우지 않는다.
   announceDay: "낮이 되었습니다",
@@ -34,7 +34,7 @@ export const DAY_COPY = {
   announceNight: "밤이 되었습니다",
   // ---- 단계 제목 ----
   titles: {
-    keyword: "키워드", // 첫날 키워드 카드(23-01, P23-2) — PreGame 틀이라 시간대 낱말이 없다
+    keyword: "제시어", // 첫날 키워드 카드(23-01, P23-2) — PreGame 틀이라 시간대 낱말이 없다
     dayAnnounce: "토론", // 앞의 "낮" 은 헤더 시간대 낱말이 말한다(결정 0083-1)
     discussion: "토론",
     nomination: "지목",
@@ -43,7 +43,7 @@ export const DAY_COPY = {
     defense: "유언", // 결정 0089-19(D-15): defense id 는 처형자의 10초 유언 단계 — 변론은 없다(P22-1)
     verdict: "찬반",
     execution: "처형",
-    answerReveal: "정답", // 첫날 정답 공개(23-07, P23-2): 앞의 "저녁" 은 헤더 시간대 낱말이 말한다
+    answerReveal: "제시어", // 첫날 제시어 공개(23-07, P23-2): 앞의 "저녁" 은 헤더 시간대 낱말이 말한다
     night: "밤",
     morning: "아침",
   } as Partial<Record<PhaseId, string>>,

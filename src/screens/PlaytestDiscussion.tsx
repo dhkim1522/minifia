@@ -6,6 +6,7 @@ import { V2Icon } from "../components/v2/V2Icon";
 import { EMOTE_LABEL, EMOTE_SHORT } from "../game/chatText";
 import { appendEvidenceQuote } from "../game/discussionEvidence";
 import type { DiscussionEvidenceRow } from "../game/discussionEvidence";
+import { SUSPECT_TEXT } from "../game/suspectView";
 import type { SuspectApi } from "../net/useSuspect";
 import type { ChatPanelBinding } from "./GamePanel";
 
@@ -18,7 +19,7 @@ export interface DiscussionToolsProps {
   kbOpen: boolean;
   chatOnly?: boolean;
   inputRef?: RefObject<HTMLInputElement | null>;
-  suspect?: Pick<SuspectApi, "mode" | "targets" | "disabled" | "off" | "toggleMode">;
+  suspect?: Pick<SuspectApi, "mode" | "targets" | "disabled" | "used" | "off" | "toggleMode">;
   vote?: { enabled: boolean; pressed: boolean; count: number; total: number; request: () => void };
 }
 
@@ -77,7 +78,7 @@ export function PlaytestDiscussion({ binding, logHeight, kbOpen, chatOnly = fals
       }
     }}>
       <span className="mf-sr-only" role="status">{reacted}</span>
-      {suspect?.mode && suspect.targets.size === 0 ? <p className="mf-playtest__feedback" role="status">가까이 가서 이름을 눌러요</p> : null}
+      {suspect?.mode && suspect.targets.size === 0 ? <p className="mf-playtest__feedback" role="status">{SUSPECT_TEXT.tooFar}</p> : null}
       {surface === "clues" ? (
         <div ref={surfaceRef} className="mf-playtest__surface" data-playtest-surface="clues" role="region" aria-label="단서" tabIndex={-1}>
           {evidence ? (
@@ -88,9 +89,9 @@ export function PlaytestDiscussion({ binding, logHeight, kbOpen, chatOnly = fals
                   <li key={row.seat} data-evidence-row="" data-evidence-seat={row.seat}>
                     {row.order !== undefined ? <span className="mf-playtest__clue-order">{row.order}</span> : null}
                     <strong className="mf-playtest__clue-name">{row.name}</strong>
-                    <span className="mf-playtest__clue-text">{row.text ?? "답 없음"}</span>
+                    <span className="mf-playtest__clue-text">{row.text ?? "단서 없음"}</span>
                     {row.text !== null && binding.onSend ? (
-                      <button type="button" className="mf-playtest__clue-quote" data-evidence-quote="" aria-label={`${row.name}의 ${evidence.label === "아침 유언" ? "유언" : "답"} 인용, ${row.text}`} onClick={() => quote(row)}>인용</button>
+                      <button type="button" className="mf-playtest__clue-quote" data-evidence-quote="" aria-label={`${row.name}의 ${evidence.label === "아침 유언" ? "유언" : "단서"} 인용, ${row.text}`} onClick={() => quote(row)}>인용</button>
                     ) : null}
                   </li>
                 ))}
@@ -126,14 +127,14 @@ export function PlaytestDiscussion({ binding, logHeight, kbOpen, chatOnly = fals
       ) : (
         <div className="mf-playtest__toolbar" ref={toolsRef} role="group" aria-label="토론 도구">
           {chatOnly ? null : <button type="button" className="mf-playtest__action" data-playtest-action="clues" aria-expanded={surface === "clues"} onClick={(event) => openSurface("clues", event.detail === 0)}><V2Icon name="lens" size={18} />단서</button>}
-          {suspect ? <button type="button" className="mf-playtest__action" data-playtest-action="suspect" aria-pressed={suspect.mode} disabled={suspect.disabled} onClick={() => {
+          {suspect ? <button type="button" className="mf-playtest__action mf-playtest__action--stacked" data-playtest-action="suspect" aria-label={suspect.used ? SUSPECT_TEXT.moved : SUSPECT_TEXT.ready} aria-pressed={suspect.mode} disabled={suspect.disabled} onClick={() => {
             setSurface(null);
             suspect.toggleMode();
-          }}><V2Icon name="postit" size={18} />의심</button> : null}
+          }}><V2Icon name="postit" size={16} /><span>의심딱지</span></button> : null}
           {chatOnly ? null : <button type="button" className="mf-playtest__action" data-playtest-action="reaction" aria-expanded={surface === "reaction"} disabled={!binding.onEmote} onClick={(event) => openSurface("reaction", event.detail === 0)}><V2Icon name="face" size={18} />반응</button>}
           <button type="button" className="mf-playtest__action" data-playtest-action="chat" aria-expanded={false} onClick={(event) => openSurface("chat", event.detail === 0)}>채팅</button>
-          {vote ? <button type="button" className="mf-playtest__action" data-playtest-action="vote" data-end-discussion="" aria-pressed={vote.pressed}
-            aria-label={`투표로 가기, ${vote.count}/${vote.total}명 요청`} disabled={!vote.enabled} onClick={vote.request}>투표 <small className="mv-count">{vote.count}/{vote.total}</small></button> : null}
+          {vote ? <button type="button" className="mf-playtest__action mf-playtest__action--stacked" data-playtest-action="vote" data-end-discussion="" aria-pressed={vote.pressed}
+            aria-label={`투표 요청, ${vote.count}/${vote.total}명 요청`} disabled={!vote.enabled} onClick={vote.request}><span>투표 요청</span><small className="mv-count">{vote.count}/{vote.total}</small></button> : null}
         </div>
       )}
     </div>

@@ -31,7 +31,7 @@ export interface RoleCardSheetProps {
   onClose: () => void;
 }
 
-const TAB_LABEL: Record<RoleCardTab, string> = { role: "내 역할", activity: "활동 기록", records: "답과 의심" };
+const TAB_LABEL: Record<RoleCardTab, string> = { role: "내 역할", activity: "활동 기록", records: "단서와 의심" };
 
 // 활동 기록(일지)이 있는 역할. 시민은 기록이 없어 탭 줄도 없다(결정 0026).
 function journalRoleOf(role: RoleId | null): JournalRole | null {
@@ -44,7 +44,7 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, mo
   const role = view.me.role ?? null;
   const journalRole = showBack ? null : journalRoleOf(role);
   const answers = keywordAnswersOf(view);
-  // 기록 탭(답과 의심): 첫날 답 또는 의심 기록이 하나라도 있으면 생긴다(P24-19)
+  // 첫날 단서 또는 의심딱지 기록이 하나라도 있으면 기록 탭이 생긴다(P24-19)
   const hasRecords = !showBack && role !== null && (answers !== undefined || (view.day?.suspectLog?.length ?? 0) > 0);
   const baseId = useId();
   const tabId = (t: RoleCardTab): string => `${baseId}-tab-${t}`;
@@ -55,7 +55,7 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, mo
     records: useRef<HTMLButtonElement>(null),
   };
 
-  // 탭 순서: 시민 [내 역할, 답과 의심], 그 밖 [내 역할, 활동 기록, 답과 의심]. 답도 의심도 아직 없으면 지금 배열(시민은 탭 줄 없음, D-14·P23-16)
+  // 시민에게는 공통 기록만, 나머지 역할에는 활동 기록 탭도 보인다(D-14·P23-16)
   const tabOrder = useMemo<readonly RoleCardTab[]>(() => {
     if (showBack || role === null) return [];
     const list: RoleCardTab[] = ["role"];
@@ -179,7 +179,7 @@ function RecordsPanel({ view, rows }: { view: RoomView; rows: readonly KeywordAn
           <section key={n} className="mf-answers__day" data-log-day={n} data-answer-day={answerRows !== undefined ? n : undefined}>
             <div className="mf-answers__head">
               <span className="mf-answers__dayname">{n}일차</span>
-              {answerRows !== undefined && genre !== undefined ? <span className="mf-answers__genre">장르 : {genre}</span> : null}
+              {answerRows !== undefined && genre !== undefined ? <span className="mf-answers__genre">주제 · {genre}</span> : null}
             </div>
             {answerRows !== undefined ? (
               <ol className="mf-answers__list" data-answer-list="">
@@ -194,12 +194,12 @@ function RecordsPanel({ view, rows }: { view: RoomView; rows: readonly KeywordAn
                       data-answer-order={r.order}
                       data-answer-seat={r.seat}
                       data-answer-none={none ? "" : undefined}
-                      aria-label={mine ? `내 답, ${r.order}번 ${nick(r.seat)} ${none ? "답 없음" : r.text}` : undefined}
+                      aria-label={mine ? `내 단서, ${r.order}번 ${nick(r.seat)} ${none ? "단서 없음" : r.text}` : undefined}
                     >
                       <span className="mf-answers__no" aria-hidden="true">{r.order}</span>
                       <span className="mf-answers__dot" style={{ background: seatColorVar(r.seat) }} aria-hidden="true" />
                       <span className="mf-answers__nick">{nick(r.seat)}</span>
-                      <span className={none ? "mf-answers__text mf-answers__text--none" : "mf-answers__text"}>{none ? "답 없음" : r.text}</span>
+                      <span className={none ? "mf-answers__text mf-answers__text--none" : "mf-answers__text"}>{none ? "단서 없음" : r.text}</span>
                     </li>
                   );
                 })}
@@ -216,7 +216,7 @@ function RecordsPanel({ view, rows }: { view: RoomView; rows: readonly KeywordAn
                       data-suspect-row=""
                       data-suspect-from={r.from}
                       data-suspect-to={r.to}
-                      aria-label={mine ? "내가 붙인 의심" : `${nick(r.from)}님이 ${nick(r.to)}님에게 의심`}
+                      aria-label={mine ? `${nick(r.to)} 님에게 내가 붙인 의심딱지` : `${nick(r.from)} 님이 ${nick(r.to)} 님에게 붙인 의심딱지`}
                     >
                       <span className="mf-suspect__dot" style={{ background: seatColorVar(r.from) }} aria-hidden="true" />
                       <span className="mf-suspect__nick mf-suspect__nick--from">{nick(r.from)}</span>
@@ -232,7 +232,7 @@ function RecordsPanel({ view, rows }: { view: RoomView; rows: readonly KeywordAn
             ) : null}
             {answerRows !== undefined && correct !== undefined ? (
               <p className="mf-answers__correct" data-answer-correct="">
-                정답 · {correct}
+                제시어 · {correct}
               </p>
             ) : null}
           </section>

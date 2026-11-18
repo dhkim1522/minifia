@@ -53,8 +53,8 @@ test("KW1: 첫날 처형으로 끝난 판은 정답 공개 없이 ended 면 통�
 test("KW1: 열이 없으면 측정값 없음", () => assert.ok(noMeasure(kw1PhaseColumns({ seq: [], endedDayOne: false }))));
 
 // ---- KW2·KW3 ----
-test("KW2: 장르 줄·키워드·각주가 맞으면 통과, 하나씩 어긋나면 실패", () => {
-  const ok = { genre: "장르 : 영화", word: "기생충", note: KEYWORD_NOTE_COPY };
+test("KW2: 주제 줄·키워드·각주가 맞으면 통과, 하나씩 어긋나면 실패", () => {
+  const ok = { genre: "주제 · 영화", word: "기생충", note: KEYWORD_NOTE_COPY };
   assert.equal(kw2CitizenCard(ok).ok, true);
   assert.equal(kw2CitizenCard({ ...ok, genre: "영화" }).ok, false);
   assert.equal(kw2CitizenCard({ ...ok, word: "???" }).ok, false);
@@ -63,7 +63,7 @@ test("KW2: 장르 줄·키워드·각주가 맞으면 통과, 하나씩 어긋�
   assert.ok(noMeasure(kw2CitizenCard(null)));
 });
 test("KW3: 마피아 카드는 ??? 이고 DOM 원문·속성 어디에도 정답이 없어야 통과", () => {
-  const ok = { word: "???", genre: "장르 : 영화", html: "<main>장르 : 영화 ???</main>", attrs: "data-keyword-card class", answer: "기생충" };
+  const ok = { word: "???", genre: "주제 · 영화", html: "<main>주제 · 영화 ???</main>", attrs: "data-keyword-card class", answer: "기생충" };
   assert.equal(kw3MafiaCard(ok).ok, true);
   assert.equal(kw3MafiaCard({ ...ok, word: "기생충" }).ok, false);
   assert.equal(kw3MafiaCard({ ...ok, html: "<p>기생충</p>" }).ok, false);
@@ -81,14 +81,14 @@ test("KW4: 처음 locked, 3초(±) 뒤 open, 입력칸 data-call 이면 통과",
   assert.equal(kw4ReadLock({ ...ok, callAtMs: null }).ok, false);
   assert.ok(noMeasure(kw4ReadLock({ ...ok, openAtMs: null })));
 });
-test("KW5: 20자소에서 멈추고 20/20, 보내면 sent·읽기 전용·답 보냄이면 통과", () => {
-  const ok = { inputLen: 20, countText: "20/20", afterSend: { state: "sent", readOnly: true, label: "답 보냄" } };
+test("KW5: 20자소에서 멈추고 20/20, 보내면 sent·읽기 전용·단서 보냄이면 통과", () => {
+  const ok = { inputLen: 20, countText: "20/20", afterSend: { state: "sent", readOnly: true, label: "단서 보냄" } };
   assert.equal(kw5InputLimit(ok).ok, true);
   assert.equal(kw5InputLimit({ ...ok, inputLen: 21 }).ok, false);
   assert.equal(kw5InputLimit({ ...ok, countText: "21/20" }).ok, false);
   assert.equal(kw5InputLimit({ ...ok, afterSend: { ...ok.afterSend, readOnly: false } }).ok, false);
   assert.equal(kw5InputLimit({ ...ok, afterSend: { ...ok.afterSend, state: "open" } }).ok, false);
-  assert.equal(kw5InputLimit({ ...ok, afterSend: { ...ok.afterSend, label: "답 보내기" } }).ok, false);
+  assert.equal(kw5InputLimit({ ...ok, afterSend: { ...ok.afterSend, label: "단서 보내기" } }).ok, false);
   assert.ok(noMeasure(kw5InputLimit(null)));
 });
 
@@ -144,7 +144,7 @@ test("KW8: 답·입력칸 동시 접근, 인용, 접기, 기록 탭과 정렬을
   }
   assert.equal(kw8AnswerList([pg("시민", { hasTab: false }), pg("마피아")]).ok, false);
   const none2 = [rows[0], rows[2], rows[1], rows[3]].map((r, i) => ({ ...r, order: i + 1 }));
-  assert.equal(kw8AnswerList([pg("시민", { rows: none2 }), pg("마피아", { rows: none2 })]).ok, false); // 답 없음이 가운데
+  assert.equal(kw8AnswerList([pg("시민", { rows: none2 }), pg("마피아", { rows: none2 })]).ok, false); // 단서 없음이 가운데
   assert.equal(kw8AnswerList([pg("시민"), pg("마피아", { rows: rows.slice().reverse().map((r, i) => ({ ...r, order: i + 1 })) })]).ok, false);
   assert.equal(kw8AnswerList([pg("시민", { rows: rows.map((r) => ({ ...r, none: true })) }), pg("마피아")]).ok, false);
   assert.ok(noMeasure(kw8AnswerList([])));
@@ -158,16 +158,16 @@ test("KW9: 재접속 뒤 자동으로 안 열리고 탭으로 같은 목록이�
 
 // ---- KW10·KW11 ----
 test("KW10: 정답 큰 글이 같고 목록 맨 아래에 정답 줄이 있으면 통과", () => {
-  const ok = { pages: [{ who: "시민", label: "정답", text: "기생충" }, { who: "마피아", label: "정답", text: "기생충" }], answer: "기생충", correct: [{ who: "시민", text: "정답 · 기생충", last: true }] };
+  const ok = { pages: [{ who: "시민", label: "제시어", text: "기생충" }, { who: "마피아", label: "제시어", text: "기생충" }], answer: "기생충", correct: [{ who: "시민", text: "제시어 · 기생충", last: true }] };
   assert.equal(kw10Reveal(ok).ok, true);
   assert.equal(kw10Reveal({ ...ok, pages: [ok.pages[0], { ...ok.pages[1], text: "???" }] }).ok, false);
   assert.equal(kw10Reveal({ ...ok, pages: [{ ...ok.pages[0], label: "" }, ok.pages[1]] }).ok, false);
-  assert.equal(kw10Reveal({ ...ok, correct: [{ who: "시민", text: "정답 · 기생충", last: false }] }).ok, false);
-  assert.equal(kw10Reveal({ ...ok, correct: [{ who: "시민", text: "정답 · 다른", last: true }] }).ok, false);
+  assert.equal(kw10Reveal({ ...ok, correct: [{ who: "시민", text: "제시어 · 기생충", last: false }] }).ok, false);
+  assert.equal(kw10Reveal({ ...ok, correct: [{ who: "시민", text: "제시어 · 다른", last: true }] }).ok, false);
   assert.ok(noMeasure(kw10Reveal({ ...ok, answer: "" })));
 });
-test("KW11: 정답 공개 없이 ended 이고 결과 줄이 정답 · 키워드면 통과", () => {
-  const ok = { phases: ["execution", "ended"], hostLine: "정답 · 기생충", answer: "기생충" };
+test("KW11: 정답 공개 없이 ended 이고 결과 줄이 제시어 · 키워드면 통과", () => {
+  const ok = { phases: ["execution", "ended"], hostLine: "제시어 · 기생충", answer: "기생충" };
   assert.equal(kw11FirstDayEnd(ok).ok, true);
   assert.equal(kw11FirstDayEnd({ ...ok, phases: ["execution", "answerReveal", "ended"] }).ok, false);
   assert.equal(kw11FirstDayEnd({ ...ok, phases: ["execution", "night"] }).ok, false);

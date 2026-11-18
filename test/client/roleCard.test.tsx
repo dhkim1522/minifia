@@ -198,14 +198,14 @@ describe("RoleCard 입력", () => {
 
 describe("roleText (역할 문구 한 곳)", () => {
   const CONFIRMED = {
-    citizen: "추리로 마피아를 찾아내세요.",
-    mafia: "몰래 암살하여 승리하세요.",
-    police: "의심되는 사람을 조사하세요.",
-    doctor: "시민 팀을 마피아에게서 지키세요.",
+    citizen: "단서와 행동을 살펴 마피아를 찾으세요.",
+    mafia: "밤마다 노릴 사람을 고르세요.",
+    police: "밤마다 한 사람을 조사하세요.",
+    doctor: "밤마다 지킬 사람을 고르세요.",
   } as const;
   const ROLES = ["mafia", "police", "doctor", "citizen"] as const;
 
-  it.each(ROLES)("ROLE_TEXT[%s].desc 가 사용자 확정 문구와 글자 그대로 같다 (P181-0)", (role) => {
+  it.each(ROLES)("ROLE_TEXT[%s].desc 가 각 역할의 행동을 한 줄로 알려 준다", (role) => {
     expect(ROLE_TEXT[role].desc).toBe(CONFIRMED[role]);
   });
 

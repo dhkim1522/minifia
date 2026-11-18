@@ -63,14 +63,14 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   lobby: () => "",
   assigning: () => "직업을 배정하고 있습니다",
   roleReveal: () => "역할 확인",
-  keyword: () => "첫날 키워드 문제", // 23-01: 첫날 역할 확인 뒤 13초 키워드 카드
+  keyword: () => "첫날 단서 쓰기",
   dayAnnounce: (view) => `${view.day?.n ?? 1}일차 낮이 되었습니다`,
   discussion: () => "낮 토론",
   night: nightAnnounce,
   morning: morningAnnounce,
   defense: () => "유언", // 22-11 P22-1: 처형자의 10초 유언 단계(이름을 읽지 않는다)
   execution: executionAnnounceOf,
-  answerReveal: () => "정답 공개", // 23-05: 첫날 처형 뒤 밤 직전 정답 공개(큰 글 화면은 23-07)
+  answerReveal: () => "제시어 공개",
   nomination: () => "지목",
   runoff: () => "결선", // 09.1.1-14: 동점 결선 화면(GameMap)
   showdown: () => "마지막 셋", // 09.1.1-15: 마지막 3인 결전 화면(GameMap)
@@ -105,6 +105,8 @@ function nightAnnounceBase(view: RoomView): string {
       return `${head}조사할 사람을 고르세요`;
     case "doctor":
       return `${head}지킬 사람을 고르세요`;
+    case "citizen":
+      return `${head}${view.playtest === true ? "아침 준비를 눌러요" : "밤이 되었어요"}`;
     default:
       return `${head}밤이 되었어요`;
   }

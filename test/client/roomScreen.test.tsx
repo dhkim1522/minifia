@@ -892,10 +892,10 @@ describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
     expect(toggle().getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("결과(ended): 정답이 있으면 띠 줄이 `정답 · 해리포터`, 시간 행은 없다", () => {
+  it("결과(ended): 정답이 있으면 띠 줄이 `제시어 · 해리포터`, 시간 행은 없다", () => {
     connectionMock.current = conn({ view: { ...play("ended", { answer: "해리포터" }), phaseEndsAt: null, phaseDurationMs: null } });
     const { container } = mount();
-    expect(container.querySelector("[data-host-band] [data-host-line]")?.textContent).toBe("정답 · 해리포터");
+    expect(container.querySelector("[data-host-band] [data-host-line]")?.textContent).toBe("제시어 · 해리포터");
     expect(container.querySelector("[data-host-band] [data-host-time]")).toBeNull();
     expect(container.querySelector(".mv-host__band")?.classList.contains("is-off")).toBe(false);
   });

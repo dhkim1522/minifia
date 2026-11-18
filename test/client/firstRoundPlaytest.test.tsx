@@ -56,26 +56,29 @@ describe("첫날 실험방의 최소 조작", () => {
     const view = fixture({ day: { n: 1, roles, voteOpensAt: NOW + 45_000, voteReadyTotal: 4, voteReadyRequired: 3 } });
     const send = vi.fn();
     render(<GamePanel view={view} send={send} binding={binding} logHeight={68} canSend />);
-    const vote = screen.getByRole("button", { name: /투표로 가기, 0\/4명 요청/ });
+    const vote = screen.getByRole("button", { name: /투표 요청, 0\/4명 요청/ });
     fireEvent.click(vote);
     expect(send).toHaveBeenCalledWith({ t: "endDiscussion", on: true });
     act(() => { vi.advanceTimersByTime(45_000); });
-    expect(screen.getByRole("button", { name: /투표로 가기, 0\/3명 요청/ })).toBe(vote);
+    expect(screen.getByRole("button", { name: /투표 요청, 0\/3명 요청/ })).toBe(vote);
     expect(vote.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("대상과 보류를 같은 화면에서 보내고 서버 결과로 선택 목록을 바꾼다", () => {
+  it("대상과 안 뽑기를 같은 화면에서 보내고 서버 결과로 선택 목록을 바꾼다", () => {
     const day = { n: 1, roles, firstBallot: { count: 0 } };
     const view = fixture({ phase: "verdict", day });
     const send = vi.fn();
     const node = (room: RoomView) => <GamePanel view={room} send={send} binding={binding} logHeight={68} canSend />;
     const { rerender } = render(node(view));
     fireEvent.click(screen.getByRole("button", { name: "하린" }));
-    fireEvent.click(screen.getByRole("button", { name: "오늘은 보류" }));
+    fireEvent.click(screen.getByRole("button", { name: "오늘은 안 뽑기" }));
     expect(send.mock.calls).toEqual([[{ t: "firstBallot", target: 2 }], [{ t: "firstBallot", target: null }]]);
     rerender(node({ ...view, day: { ...day, firstBallot: { count: 4, result: { target: 2, votes: 3, holds: 1 } } } }));
     expect(screen.queryByRole("button", { name: "하린" })).toBeNull();
     expect(screen.getByText("하린 님이 지목됐어요")).toBeTruthy();
+    rerender(node({ ...view, day: { ...day, firstBallot: { count: 4, result: { target: null, votes: 0, holds: 4, reason: "held" } } } }));
+    expect(screen.getByText("오늘은 아무도 지목되지 않았어요")).toBeTruthy();
+    expect(screen.getByText("최다 득표 0표 · 안 뽑기 4표")).toBeTruthy();
   });
 
   it("밤 시민에게 선택이 없고 경찰은 자신을 제외한 사람을 고른다", () => {

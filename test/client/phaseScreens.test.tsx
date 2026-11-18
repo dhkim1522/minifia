@@ -418,7 +418,7 @@ describe("단계 안내 aria-live · 단계 전환 (UI-SPEC 접근성·Motion)",
     rerenderRoom(r.rerender, makeView({ phase: "keyword", endsIn: 13_000, durationMs: 13_000, role: "citizen" }));
     expect(r.container.querySelector("[data-keyword-screen]")).not.toBeNull();
     expect(r.container.querySelector(".mf-phase-enter") === before).toBe(true);
-    expect(liveRegion(r.container).textContent).toBe("첫날 키워드 문제");
+    expect(liveRegion(r.container).textContent).toBe("첫날 단서 쓰기");
     rerenderRoom(r.rerender, makeView({ phase: "dayAnnounce", endsIn: 2_000, role: "citizen", day: 1 }));
     expect(r.container.querySelector(".mf-phase-enter") === before).toBe(false);
   });
@@ -459,14 +459,14 @@ describe("밤·아침 라우팅과 안내 (UI-SPEC C5·접근성, RESEARCH A6)",
     expect(r.container.querySelector("[data-game-stage]") === stage, "morning 맵 유지").toBe(true);
   });
 
-  it("morning view(eliminated 2) → 안내 '아침이 밝았습니다. 민지 님이 당했습니다'", () => {
+  it("morning view(eliminated 2) → 안내 '아침이 밝았습니다. 민지 님이 밤사이 탈락했어요'", () => {
     const r = renderRoom(morning({ morning: { eliminated: 2 } }));
-    expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 민지 님이 당했습니다");
+    expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 민지 님이 밤사이 탈락했어요");
   });
 
-  it("morning view(saved) → '아침이 밝았습니다. 누군가 살아났습니다' (누구인지 없음, 결정 0044-22)", () => {
+  it("morning view(saved) → '아침이 밝았습니다. 누군가를 지켜냈어요' (누구인지 없음, 결정 0044-22)", () => {
     const r = renderRoom(morning({ morning: { saved: true } }));
-    expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 누군가 살아났습니다");
+    expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 누군가를 지켜냈어요");
   });
 
   it("morning view 에서 피해자 본인(좌석 0 탈락) → '아침이 밝았습니다. 암살당했습니다'", () => {
@@ -476,7 +476,7 @@ describe("밤·아침 라우팅과 안내 (UI-SPEC C5·접근성, RESEARCH A6)",
 
   it("morning view 에서 이미 유령인 사람(처형으로 탈락)은 다른 시민과 같은 문장을 읽는다", () => {
     const r = renderRoom(morning({ morning: { eliminated: 2 }, meAlive: false }));
-    expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 민지 님이 당했습니다");
+    expect(liveRegion(r.container).textContent).toBe("아침이 밝았습니다. 민지 님이 밤사이 탈락했어요");
   });
 
   it("morning view({}) → '아침이 밝았습니다. 아무 일도 없었습니다'", () => {

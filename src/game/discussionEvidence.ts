@@ -39,7 +39,7 @@ export function discussionEvidenceOf(view: RoomView, victim: MorningVictim | nul
     if (answers === undefined || answers.length === 0) return undefined;
     return {
       key: `${view.round ?? 1}:answers`,
-      label: "모두의 답",
+      label: "모두의 단서",
       rows: answers.map(({ seat, text, order }) => ({ seat, name: nameOf(seat), text, order })),
     };
   }

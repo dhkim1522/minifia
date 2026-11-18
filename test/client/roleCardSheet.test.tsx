@@ -423,7 +423,7 @@ describe("RoleCardSheet 역할 문구 한 덩어리 (P181-0, HOST-05)", () => {
   });
 });
 
-// ---- 기록 카드 답과 의심 탭(23-11 첫날 답 → 24-06 일반화, P23-16·18·19·29, P24-19·20, D-14) ----
+// ---- 기록 카드 단서와 의심 탭(23-11 첫날 답 → 24-06 일반화, P23-16·18·19·29, P24-19·20, D-14) ----
 import type { KeywordAnswerRow } from "../../shared/protocol";
 import { keywordAnswerOf, keywordAnswersOf, keywordGenreOf } from "../../src/game/keywordView";
 
@@ -462,16 +462,16 @@ describe("keywordView 선택기 (T-23-40)", () => {
   });
 });
 
-describe("RoleCardSheet 답과 의심 탭 (P23-16·29, P24-19)", () => {
-  it("시민: 답이 있으면 탭 둘 `내 역할`·`답과 의심`", () => {
+describe("RoleCardSheet 단서와 의심 탭 (P23-16·29, P24-19)", () => {
+  it("시민: 답이 있으면 탭 둘 `내 역할`·`단서와 의심`", () => {
     renderAnswers(answersView("citizen"), "role");
-    expect(tabs().map((t) => t.textContent)).toEqual(["내 역할", "답과 의심"]);
+    expect(tabs().map((t) => t.textContent)).toEqual(["내 역할", "단서와 의심"]);
     expect(tabs()[1]!.getAttribute("data-rolecard-tab")).toBe("records");
   });
 
-  it.each(TABBED)("%s: 탭 셋 `내 역할`·`활동 기록`·`답과 의심`", (role) => {
+  it.each(TABBED)("%s: 탭 셋 `내 역할`·`활동 기록`·`단서와 의심`", (role) => {
     renderAnswers(answersView(role), "role");
-    expect(tabs().map((t) => t.textContent)).toEqual(["내 역할", "활동 기록", "답과 의심"]);
+    expect(tabs().map((t) => t.textContent)).toEqual(["내 역할", "활동 기록", "단서와 의심"]);
   });
 
   it("답이 없으면 시민은 탭 줄이 없고 경찰은 둘이다", () => {
@@ -517,7 +517,7 @@ describe("RoleCardSheet 답과 의심 탭 (P23-16·29, P24-19)", () => {
     expect(onTab2).toHaveBeenLastCalledWith("records");
   });
 
-  it("답과 의심 탭에는 점·NEW 가 없다", () => {
+  it("단서와 의심 탭에는 점·NEW 가 없다", () => {
     renderAnswers(answersView("police"), "records");
     expect(tabs()[2]!.querySelector(".mf-rolecard__dot")).toBeNull();
   });
@@ -530,11 +530,11 @@ describe("RoleCardSheet 첫날 답 목록 (P23-18·19)", () => {
   it("1일차 구역 머리와 장르 줄", () => {
     renderAnswers(answersView("citizen"));
     expect(sec().textContent).toContain("1일차");
-    expect(sec().textContent).toContain("장르 : 영화");
+    expect(sec().textContent).toContain("주제 · 영화");
     expect(document.querySelectorAll("section[data-answer-day]").length).toBe(1);
   });
 
-  it("서버 순서 그대로 번호·좌석·닉네임·답, 답 없음은 맨 끝에 번호가 이어진다", () => {
+  it("서버 순서 그대로 번호·좌석·닉네임·답, 단서 없음은 맨 끝에 번호가 이어진다", () => {
     renderAnswers(answersView("citizen"));
     const r = rows();
     expect(r.length).toBe(4);
@@ -544,18 +544,18 @@ describe("RoleCardSheet 첫날 답 목록 (P23-18·19)", () => {
     expect(r[0]!.textContent).toContain("해리포터");
     expect(r[1]!.textContent).toContain("안경");
     expect(r.map((x) => x.hasAttribute("data-answer-none"))).toEqual([false, false, true, true]);
-    expect(r[2]!.textContent).toContain("답 없음");
+    expect(r[2]!.textContent).toContain("단서 없음");
     expect(r[2]!.textContent).toContain("3");
   });
 
-  it("내 줄만 aria-label 에 `내 답`이 있다", () => {
+  it("내 줄만 aria-label 에 `내 단서`이 있다", () => {
     renderAnswers(answersView("citizen", { mySeat: 2 }));
-    const mine = rows().filter((x) => (x.getAttribute("aria-label") ?? "").includes("내 답"));
+    const mine = rows().filter((x) => (x.getAttribute("aria-label") ?? "").includes("내 단서"));
     expect(mine.length).toBe(1);
     expect(mine[0]!.getAttribute("data-answer-seat")).toBe("2");
   });
 
-  it("8명 판은 8줄, 전원 답 없음이어도 같은 모양이다", () => {
+  it("8명 판은 8줄, 전원 단서 없음이어도 같은 모양이다", () => {
     const eight: KeywordAnswerRow[] = Array.from({ length: 8 }, (_, i) => ({ order: i + 1, seat: i, text: i < 3 ? `답${i}` : null }));
     renderAnswers(answersView("citizen", { rows: eight, n: 8 }));
     expect(rows().length).toBe(8);
@@ -575,14 +575,14 @@ describe("RoleCardSheet 첫날 답 목록 (P23-18·19)", () => {
     expect(rows()[1]!.querySelector(".mf-answers__text")?.textContent).toBe("가나다라마바사아자차카타파하가나다라마바");
   });
 
-  it("정답이 있으면 `정답 · 해리포터` 한 줄, 없으면 0건", () => {
+  it("정답이 있으면 `제시어 · 해리포터` 한 줄, 없으면 0건", () => {
     renderAnswers(answersView("citizen", { answer: "해리포터" }));
     expect(document.querySelectorAll("[data-answer-correct]").length).toBe(1);
-    expect(document.querySelector("[data-answer-correct]")?.textContent).toBe("정답 · 해리포터");
+    expect(document.querySelector("[data-answer-correct]")?.textContent).toBe("제시어 · 해리포터");
     cleanup();
     renderAnswers(answersView("citizen"));
     expect(document.querySelectorAll("[data-answer-correct]").length).toBe(0);
-    expect(document.querySelector("dialog")?.textContent).not.toContain("정답");
+    expect(document.querySelector("dialog")?.textContent).not.toContain("제시어");
   });
 
   it("마피아 view 도 같은 목록이고 유령도 본다", () => {
@@ -607,7 +607,7 @@ describe("RoleCardSheet 의심 구역 (P24-19·20, D-27)", () => {
 
   it("답 없이 의심 기록만 있어도 탭이 있고 구역이 최신 일차부터 [3일차, 2일차] 다", () => {
     renderAnswers(suspectView("citizen", LOG));
-    expect(tabs().map((t) => t.textContent)).toEqual(["내 역할", "답과 의심"]);
+    expect(tabs().map((t) => t.textContent)).toEqual(["내 역할", "단서와 의심"]);
     expect(secs().map((x) => x.getAttribute("data-log-day"))).toEqual(["3", "2"]);
     expect(secs().map((x) => x.querySelector(".mf-answers__dayname")?.textContent)).toEqual(["3일차", "2일차"]);
     expect(document.querySelector("h2.mf-sheet__title")?.textContent).toBe("모두의 기록");
@@ -622,10 +622,10 @@ describe("RoleCardSheet 의심 구역 (P24-19·20, D-27)", () => {
     expect(lines(d2!).map((x) => `${x.getAttribute("data-suspect-from")}>${x.getAttribute("data-suspect-to")}`)).toEqual(["0>3", "2>1"]);
   });
 
-  it("접근성 이름은 `{붙인}님이 {받은}님에게 의심`, 내가 붙인 줄은 `내가 붙인 의심`이다", () => {
+  it("접근성 이름으로 딱지를 붙인 사람과 받은 사람을 읽는다", () => {
     renderAnswers(suspectView("citizen", LOG));
     const d3 = secs()[0]!;
-    expect(lines(d3).map((x) => x.getAttribute("aria-label"))).toEqual(["내가 붙인 의심", "하윤님이 지우님에게 의심", "도현님이 민지님에게 의심"]);
+    expect(lines(d3).map((x) => x.getAttribute("aria-label"))).toEqual(["하윤 님에게 내가 붙인 의심딱지", "하윤 님이 지우 님에게 붙인 의심딱지", "도현 님이 민지 님에게 붙인 의심딱지"]);
     expect(lines(d3)[0]!.className).toContain("mf-suspect__row--mine");
     expect(lines(d3)[1]!.className).not.toContain("--mine");
   });
@@ -643,7 +643,7 @@ describe("RoleCardSheet 의심 구역 (P24-19·20, D-27)", () => {
     expect(secs().map((x) => x.getAttribute("data-log-day"))).toEqual(["2", "1"]);
     const first = secs()[1]!;
     expect(first.querySelector("ol[data-answer-list]")).not.toBeNull();
-    expect(first.textContent).toContain("장르 : 영화");
+    expect(first.textContent).toContain("주제 · 영화");
     expect(secs()[0]!.querySelector("ol[data-answer-list]")).toBeNull();
     expect(lines(secs()[0]!).length).toBe(1);
     expect(document.querySelectorAll("section[data-answer-day]").length).toBe(1);
@@ -669,7 +669,7 @@ describe("RoleCardSheet 의심 구역 (P24-19·20, D-27)", () => {
     renderAnswers(suspectView("citizen", eight, { n: 2, nicks, mySeat: 5 }));
     expect(lines().length).toBe(8);
     const last = lines()[7]!;
-    expect(last.getAttribute("aria-label")).toBe("여덟글자닉네임이다님이 지우님에게 의심");
+    expect(last.getAttribute("aria-label")).toBe("여덟글자닉네임이다 님이 지우 님에게 붙인 의심딱지");
     expect(last.querySelector(".mf-suspect__nick")?.textContent).toBe("여덟글자닉네임이다");
   });
 

@@ -30,7 +30,7 @@ export const EARLY_GRACE_MS_COPY = 1_500;
 export const KEYWORD_REJECT_COPY = "쓸 수 없는 말이에요";
 export const KEYWORD_NOTICE_MS_COPY = 2_500;
 /** 키워드 카드 각주(사용자 글) */
-export const KEYWORD_NOTE_COPY = "* 직접적인 키워드는 언급하면 안 됩니다.";
+export const KEYWORD_NOTE_COPY = "제시어는 쓰지 말고 단서를 남겨요";
 /** 판정 시간 오차(ms) */
 export const KW_TOL_MS = 800;
 /** 방장 화면에만 있는 테스트 방 키(me) — 마피아·시민 키 비교에서 방장 전용으로 허용한다 */
@@ -79,12 +79,12 @@ export function kw1PhaseColumns(m) {
   return result("KW1", label, bad);
 }
 
-/** KW2(P23-2) 시민 카드. m = { genre(장르 줄 글), word(키워드 줄 글), note(각주 글) } */
+/** KW2(P23-2) 시민 카드. m = { genre(주제 줄 글), word(키워드 줄 글), note(각주 글) } */
 export function kw2CitizenCard(m) {
-  const label = "시민 카드: 장르 줄 `장르 : …` · 키워드 줄 · 각주가 사용자 글과 같다";
+  const label = "시민 카드: 주제 줄 `주제 · …` · 키워드 줄 · 각주가 사용자 글과 같다";
   if (!m || typeof m.genre !== "string" || typeof m.word !== "string" || typeof m.note !== "string") return noMeasure("KW2", label, "장르·키워드·각주 글");
   const bad = [];
-  if (!/^장르 : \S.*$/.test(m.genre.trim())) bad.push(`장르 줄 '${m.genre}'`);
+  if (!/^주제 · \S.*$/.test(m.genre.trim())) bad.push(`주제 줄 '${m.genre}'`);
   if (m.word.trim() === "" || m.word.trim() === MASK) bad.push(`키워드 줄 '${m.word}'(시민은 키워드가 보여야 한다)`);
   if (m.note.trim() !== KEYWORD_NOTE_COPY) bad.push(`각주 '${m.note}'`);
   return result("KW2", label, bad);
@@ -96,7 +96,7 @@ export function kw3MafiaCard(m) {
   if (!m || typeof m.answer !== "string" || m.answer === "" || typeof m.word !== "string" || typeof m.html !== "string" || typeof m.attrs !== "string") return noMeasure("KW3", label, "키워드·DOM 원문·속성");
   const bad = [];
   if (m.word.trim() !== MASK) bad.push(`키워드 줄 '${m.word}' ≠ ???`);
-  if (typeof m.genre !== "string" || !/^장르 : \S/.test(m.genre.trim())) bad.push(`장르 줄 '${m.genre}'`);
+  if (typeof m.genre !== "string" || !/^주제 · \S/.test(m.genre.trim())) bad.push(`주제 줄 '${m.genre}'`);
   if (m.html.includes(m.answer)) bad.push("DOM 원문에 키워드가 있음");
   if (m.attrs.includes(m.answer)) bad.push("속성 값에 키워드가 있음");
   return result("KW3", label, bad);
@@ -116,14 +116,14 @@ export function kw4ReadLock(m) {
 
 /** KW5(P23-5) 입력·제출. m = { inputLen(21자 입력 뒤 입력칸 자소 수), countText, afterSend: { state, readOnly, label } } */
 export function kw5InputLimit(m) {
-  const label = `${ANSWER_MAX_GRAPHEMES_COPY}자소에서 멈추고 'n/${ANSWER_MAX_GRAPHEMES_COPY}' 가 맞다 · 보내면 sent·읽기 전용·'답 보냄'`;
+  const label = `${ANSWER_MAX_GRAPHEMES_COPY}자소에서 멈추고 'n/${ANSWER_MAX_GRAPHEMES_COPY}' 가 맞다 · 보내면 sent·읽기 전용·'단서 보냄'`;
   if (!m || !isNum(m.inputLen) || typeof m.countText !== "string" || !m.afterSend) return noMeasure("KW5", label, "입력 길이·글자 수·제출 뒤 상태");
   const bad = [];
   if (m.inputLen !== ANSWER_MAX_GRAPHEMES_COPY) bad.push(`입력칸 ${m.inputLen}자소(기대 ${ANSWER_MAX_GRAPHEMES_COPY})`);
   if (m.countText.trim() !== `${ANSWER_MAX_GRAPHEMES_COPY}/${ANSWER_MAX_GRAPHEMES_COPY}`) bad.push(`글자 수 '${m.countText}'`);
   if (m.afterSend.state !== "sent") bad.push(`제출 뒤 상태 ${m.afterSend.state}`);
   if (m.afterSend.readOnly !== true) bad.push("제출 뒤 입력칸이 읽기 전용이 아님");
-  if (m.afterSend.label !== "답 보냄") bad.push(`제출 뒤 [보내기] 이름 '${m.afterSend.label}'`);
+  if (m.afterSend.label !== "단서 보냄") bad.push(`제출 뒤 [보내기] 이름 '${m.afterSend.label}'`);
   return result("KW5", label, bad);
 }
 
@@ -164,7 +164,7 @@ export function kw7CompactGeometry(m) {
 }
 
 const rowsKey = (rows) => rows.map((r) => `${r.order}:${r.seat}:${r.none ? "n" : "a"}`).join(",");
-/** 목록 줄 하나가 서로 이어지는 번호(1..n)·답 없음이 맨 끝·답이 하나 이상인지 본다. 어긋난 곳 글 목록을 돌려준다. */
+/** 목록 줄 하나가 서로 이어지는 번호(1..n)·단서 없음이 맨 끝·답이 하나 이상인지 본다. 어긋난 곳 글 목록을 돌려준다. */
 function listProblems(rows, who) {
   const bad = [];
   if (!Array.isArray(rows) || rows.length === 0) return [`${who} 목록이 비어 있음`];
@@ -173,13 +173,13 @@ function listProblems(rows, who) {
   });
   const firstNone = rows.findIndex((r) => r.none);
   if (firstNone === 0) bad.push(`${who} 답이 하나도 없음`);
-  if (firstNone >= 0 && rows.slice(firstNone).some((r) => !r.none)) bad.push(`${who} '답 없음' 이 맨 끝이 아님`);
+  if (firstNone >= 0 && rows.slice(firstNone).some((r) => !r.none)) bad.push(`${who} '단서 없음' 이 맨 끝이 아님`);
   return bad;
 }
 
 /**
- * KW8 모두의 답. 모달 없이 공개 답과 채팅을 읽고, 누르면 자동 전송 없이 현재 초안에 인용한다.
- * 접기 상태, 별도 기록 탭, 제출 순·'답 없음' 순서가 참가 화면에서 일치하는지도 본다.
+ * KW8 모두의 단서. 모달 없이 공개 답과 채팅을 읽고, 누르면 자동 전송 없이 현재 초안에 인용한다.
+ * 접기 상태, 별도 기록 탭, 제출 순·'단서 없음' 순서가 참가 화면에서 일치하는지도 본다.
  */
 export function kw8AnswerList(pages) {
   const label = "토론에서 답과 입력칸이 함께 보이고, 인용은 초안에만 들어간다. 제출 순서와 기록 탭을 유지한다";
@@ -189,7 +189,7 @@ export function kw8AnswerList(pages) {
     if (p.listOpen !== true || p.dialogOpen !== false || p.inputVisible !== true) bad.push(`${p.who} 목록·입력칸을 함께 볼 수 없음`);
     if (p.quoted !== true) bad.push(`${p.who} 인용 초안 오류`);
     if (p.collapsed !== true) bad.push(`${p.who} 인용 뒤 목록이 접히지 않음`);
-    if (p.hasTab !== true) bad.push(`${p.who} 탭 '답과 의심' 없음`);
+    if (p.hasTab !== true) bad.push(`${p.who} 탭 '단서와 의심' 없음`);
     bad.push(...listProblems(p.rows, p.who));
   }
   const keys = pages.filter((p) => Array.isArray(p.rows) && p.rows.length > 0).map((p) => rowsKey(p.rows));
@@ -199,7 +199,7 @@ export function kw8AnswerList(pages) {
 
 /** KW9(P23-9) 재접속. m = { autoOpened(재접속 뒤 시트가 저절로 열림), rowsBefore, rowsAfter(탭으로 연 목록) } */
 export function kw9Reconnect(m) {
-  const label = "토론 중 재접속하면 시트가 자동으로 안 열리고 [내 역할] → 답과 의심 으로 같은 목록을 본다";
+  const label = "토론 중 재접속하면 시트가 자동으로 안 열리고 [내 역할] → 단서와 의심 으로 같은 목록을 본다";
   if (!m || !Array.isArray(m.rowsBefore) || !Array.isArray(m.rowsAfter) || m.rowsBefore.length === 0 || m.rowsAfter.length === 0) return noMeasure("KW9", label, "재접속 전·뒤 목록");
   const bad = [];
   if (m.autoOpened === true) bad.push("재접속 뒤 시트가 저절로 열림");
@@ -209,18 +209,18 @@ export function kw9Reconnect(m) {
 
 /**
  * KW10(P23-10) 정답 공개. m = { pages: [{ who, label(정답 라벨 글), text(키워드 글) }], answer, correct: [{ who, text(정답 줄 글), last(목록 맨 아래) }] }.
- * 정답 공개 3초 동안 '정답' + 키워드가 시민·마피아에게 같고, 그 뒤 목록 맨 아래에 `정답 · {키워드}` 줄이 생긴다.
+ * 정답 공개 3초 동안 '제시어' + 키워드가 시민·마피아에게 같고, 그 뒤 목록 맨 아래에 `제시어 · {키워드}` 줄이 생긴다.
  */
 export function kw10Reveal(m) {
-  const label = "정답 공개 3초: '정답' + 키워드가 시민·마피아에게 같다 · 그 뒤 목록 맨 아래에 '정답 · 키워드' 줄";
+  const label = "정답 공개 3초: '제시어' + 키워드가 시민·마피아에게 같다 · 그 뒤 목록 맨 아래에 '제시어 · 키워드' 줄";
   if (!m || typeof m.answer !== "string" || m.answer === "" || !Array.isArray(m.pages) || m.pages.length === 0 || !Array.isArray(m.correct) || m.correct.length === 0) return noMeasure("KW10", label, "정답·큰 글·정답 줄");
   const bad = [];
   for (const p of m.pages) {
-    if (p.label !== "정답") bad.push(`${p.who} 라벨 '${p.label}'`);
+    if (p.label !== "제시어") bad.push(`${p.who} 라벨 '${p.label}'`);
     if (p.text !== m.answer) bad.push(`${p.who} 큰 글 '${p.text}' ≠ 키워드`);
   }
   for (const c of m.correct) {
-    if (c.text !== `정답 · ${m.answer}`) bad.push(`${c.who} 정답 줄 '${c.text}'`);
+    if (c.text !== `제시어 · ${m.answer}`) bad.push(`${c.who} 정답 줄 '${c.text}'`);
     if (c.last !== true) bad.push(`${c.who} 정답 줄이 목록 맨 아래가 아님`);
   }
   return result("KW10", label, bad);
@@ -228,12 +228,12 @@ export function kw10Reveal(m) {
 
 /** KW11(P23-11) 첫날 승패. m = { phases(처형 이후 단계 열), hostLine(결과 띠 글), answer } */
 export function kw11FirstDayEnd(m) {
-  const label = "첫날 처형으로 끝난 판: 정답 공개 없이 ended, 결과에 '정답 · 키워드' 한 줄";
+  const label = "첫날 처형으로 끝난 판: 정답 공개 없이 ended, 결과에 '제시어 · 키워드' 한 줄";
   if (!m || typeof m.answer !== "string" || m.answer === "" || !Array.isArray(m.phases) || m.phases.length === 0) return noMeasure("KW11", label, "단계 열·정답");
   const bad = [];
   if (m.phases.includes("answerReveal")) bad.push("answerReveal 단계가 끼어 있음");
   if (m.phases[m.phases.length - 1] !== "ended") bad.push(`마지막 단계 ${m.phases[m.phases.length - 1]}(ended 여야 함)`);
-  if (m.hostLine !== `정답 · ${m.answer}`) bad.push(`결과 줄 '${m.hostLine}' ≠ '정답 · ${m.answer}'`);
+  if (m.hostLine !== `제시어 · ${m.answer}`) bad.push(`결과 줄 '${m.hostLine}' ≠ '제시어 · ${m.answer}'`);
   return result("KW11", label, bad);
 }
 
@@ -373,7 +373,7 @@ const readGeometry = (page) =>
     };
   });
 
-/** 열린 시트 안 목록: 줄(번호·좌석·답 없음)과 정답 줄 글·맨 아래 여부, 탭 수. 시트가 없거나 목록이 없으면 rows null */
+/** 열린 시트 안 목록: 줄(번호·좌석·단서 없음)과 정답 줄 글·맨 아래 여부, 탭 수. 시트가 없거나 목록이 없으면 rows null */
 const readAnswerSheet = (page) =>
   page.evaluate(() => {
     const dlg = document.querySelector("dialog.mf-dialog--open");
@@ -570,21 +570,21 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         await input.fill("");
         await input.blur();
         await at(`KW8 ${p.who} [내 역할]`, () => p.page.locator(".mf-rolecard-btn").click({ timeout: 4000 }));
-        await at(`KW8 ${p.who} 답과 의심 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
+        await at(`KW8 ${p.who} 단서와 의심 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
         const sh = await readAnswerSheet(p.page);
         await closeOpenSheet(p.page);
         sheets.push({ who: p.who, ...evidence, quoted, collapsed, hasTab: sh.tabs === 1 && rowsKey(sh.rows ?? []) === rowsKey(evidence.rows) });
       }
       rec1(rec, `${id}/answers`, kw8AnswerList(sheets));
 
-      // KW9: 참가자 재접속 — 저절로 안 열리고 [내 역할] → 답과 의심 으로 같은 목록. 그 연결 프레임에서 시민은 키워드를 받는다(KW13 대조군)
+      // KW9: 참가자 재접속 — 저절로 안 열리고 [내 역할] → 단서와 의심 으로 같은 목록. 그 연결 프레임에서 시민은 키워드를 받는다(KW13 대조군)
       const rowsBefore = sheets[0].rows;
       await gp.reload({ waitUntil: "domcontentloaded" });
       await untilGame(gp, (x) => x.phase === "discussion", 10_000, "재접속 뒤 토론");
       await sleep(1800);
       const autoAfter = (await readAnswerSheet(gp)).open;
       await at("KW9 [내 역할]", () => gp.locator(".mf-rolecard-btn").click({ timeout: 4000 }));
-      await at("KW9 답과 의심 탭", () => gp.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
+      await at("KW9 단서와 의심 탭", () => gp.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
       await gp.waitForSelector("dialog.mf-dialog--open [data-answer-list]", { timeout: 4000 }).catch(() => {});
       const afterSheet = await readAnswerSheet(gp);
       rec1(rec, `${id}/reconnect`, kw9Reconnect({ autoOpened: autoAfter, rowsBefore, rowsAfter: afterSheet.rows ?? [] }));
@@ -608,7 +608,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const correct = [];
       for (const p of pages) {
         await at(`KW10 ${p.who} [내 역할]`, () => p.page.locator(".mf-rolecard-btn").click({ timeout: 4000 }));
-        await at(`KW10 ${p.who} 답과 의심 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
+        await at(`KW10 ${p.who} 단서와 의심 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
         await p.page.waitForSelector("dialog.mf-dialog--open [data-answer-list]", { timeout: 4000 }).catch(() => {});
         const sh = await readAnswerSheet(p.page);
         correct.push({ who: p.who, text: sh.correct, last: sh.correctLast });
@@ -640,7 +640,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         const start = performance.now();
         while (performance.now() - start < 14_000) {
           line = ((await gp.evaluate(() => document.querySelector("[data-host-line]")?.textContent ?? "")) || "").trim();
-          if (line.startsWith("정답")) break;
+          if (line.startsWith("제시어")) break;
           await sleep(200);
         }
         const from = Math.max(0, ht.phases.indexOf("execution"));
