@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { validateNickname } from "../../shared/nickname";
+import { isPlaytestHost } from "../../shared/playtestHost";
 import { isRoomCode } from "../../shared/roomCode";
 import { WORKER_NAME } from "../../shared/version";
 
@@ -98,7 +99,7 @@ export function Home({ onEnterRoom }: HomeProps) {
     setServerNicknameError(null);
     setServerCodeError(null);
     const { hostname, search } = window.location;
-    const playtest = ["localhost", "127.0.0.1", "[::1]"].includes(hostname) && new URLSearchParams(search).get("playtest") === "1";
+    const playtest = isPlaytestHost(hostname) && new URLSearchParams(search).get("playtest") === "1";
     const result = await createRoom(validation.nickname, {
       testMode: testModeFromSearch(search),
       ...(playtest ? { playtest: true } : {}),

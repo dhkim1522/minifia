@@ -5,27 +5,44 @@ import { openKeyword } from "../helpers/keyword";
 import { closePhase, connect, editRoom, hello, joinOk, lastViewOf, mark, nextFrame, send, settle, storedRoom } from "./helpers";
 import type { TestSocket } from "./helpers";
 
-const createPlaytest = (origin: string) => exports.default.fetch(`${origin}/api/rooms`, {
+const createRoom = (origin: string, options: { playtest?: true; testMode?: true }) => exports.default.fetch(`${origin}/api/rooms`, {
   method: "POST",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ nickname: "방장", testMode: true, playtest: true }),
+  body: JSON.stringify({ nickname: "방장", ...options }),
 });
 
 async function settleAll(sockets: TestSocket[]) {
   for (const sock of sockets) await settle(sock, mark(sock));
 }
 
-describe("로컬 첫날 실험방 HTTP·소켓", () => {
-  it("공개 호스트에서는 실험방 생성을 거절한다", async () => {
-    const res = await createPlaytest("https://minifia-v3.example");
+describe("첫날 실험방 HTTP·소켓", () => {
+  it.each(["https://minifia.dhplay.workers.dev", "https://minifia-v3.dhplay.workers.dev.example"])("다른 호스트 %s에서는 실험방 생성을 거절한다", async (origin) => {
+    const res = await createRoom(origin, { playtest: true });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "BAD_REQUEST" });
+  });
+
+  it("v3 공개 주소에서 실험방을 명시적으로 만들 수 있다", async () => {
+    const origin = "https://minifia-v3.dhplay.workers.dev";
+    for (const playtest of [true, undefined] as const) {
+      const response = await createRoom(origin, playtest === true ? { playtest } : {});
+      expect(response.status).toBe(201);
+      const { code, token } = await response.json() as CreateRoomResponse;
+      const { view } = await hello(await connect(code), token);
+      expect(view.playtest).toBe(playtest);
+      expect(view.me.testMode).toBeUndefined();
+      if (playtest === true) {
+        const guest = await joinOk(code, "참가자");
+        const { view: joined } = await hello(await connect(code), guest.token);
+        expect(joined).toMatchObject({ playtest: true, phase: "lobby", me: { isHost: false } });
+      }
+    }
   });
 
   it("4인 실제 연결의 역할 확인, 토론 하한, 비공개 지목 보류와 고정 밤을 첫 아침까지 지킨다", async () => {
     const restore = openKeyword();
     try {
-      const response = await createPlaytest("http://localhost");
+      const response = await createRoom("http://localhost", { playtest: true, testMode: true });
       expect(response.status).toBe(201);
       const room = await response.json() as CreateRoomResponse;
       const host = await connect(room.code);
