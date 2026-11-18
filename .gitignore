@@ -12,6 +12,9 @@ Thumbs.db
 # Claude Code PC별 설정
 .claude/settings.local.json
 
+# Codex용 GSD 로컬 설치 결과
+/.codex/
+
 # Node·빌드
 node_modules/
 dist/
