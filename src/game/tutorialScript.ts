@@ -7,6 +7,7 @@
 // 시간 표시를 지운 사본(머리·띠용)은 화면 쪽이 만든다. 튜토리얼 루트에 맨 이름 data-tutorial 속성은 쓰지 않는다(표식 이름은 UI-SPEC 표).
 // 옛 서버 쪽 표식과 같은 이름(통과·완료 표식·튜토리얼 단계)은 만들지 않는다 — 혼자 하기는 서버 상태가 없다(D-15).
 import { UNIT } from "../../shared/game/map";
+import { EXECUTION_MS, WILL_REVEAL_MS } from "../../shared/game/phases";
 import { rolesInPlay } from "../../shared/game/roles";
 import { emptyWorld, restSegment, snapFrame } from "../../shared/game/world";
 import type { WorldState } from "../../shared/game/world";
@@ -78,7 +79,7 @@ export const TUTORIAL_FLIP_AT_MS = 400;
 /** 역할 아이콘 4개가 올라오는 간격과 시작 시각(장면 1) */
 export const ROLE_ICON_STEP_MS = 150;
 export const ROLE_ICON_START_MS = 2200;
-/** 모두의 기록 줄 등장: 시작·간격·마지막(답 없음) 줄을 한 박자 쉬는 시간(장면 3) */
+/** 모두의 기록 줄 등장: 시작·간격·마지막 답에 주는 여유(장면 3) */
 export const ANSWER_ROW_START_MS = 300;
 export const ANSWER_ROW_STEP_MS = 350;
 export const ANSWER_ROW_LAST_EXTRA_MS = 200;
@@ -94,8 +95,8 @@ export const TUTORIAL_PILLS = {
   "keyword.citizen": "시민은 키워드를 알아요",
   "keyword.mafia": "마피아는 키워드를 몰라요",
   "keyword.noAnswer": "정답은 말하면 안 돼요",
-  "answers.suspect": "답 없는 사람이 수상해요",
-  "discussion.talk": "말로 서로 의심해요",
+  "answers.suspect": "답을 읽고 비교해요",
+  "discussion.talk": "궁금한 답을 캐물어요",
   "discussion.end": "과반이 눌러야 끝나요",
   "verdict.majority": "과반이면 처형해요",
   "pick.point": "의심 가는 사람을 가리켜요",
@@ -108,7 +109,8 @@ export const TUTORIAL_PILLS = {
 
 /**
  * 출연(P24-29, 0080-16). 가짜 방은 6명이고 의상 이름에 역할 낱말(police·doctor·mafia)이 없다.
- * 나 = 시민, 마피아 = 하린(비밀), 키워드 = 장르 "동물" / "고양이". 이야기: 하린만 첫날 답이 없다 → 모두가 도윤을 처형(직업은 공개하지 않는다) → 밤에 서연이 떠난다 → 둘째 날 아침 하린 곁에서 포스트잇.
+ * 나 = 시민, 마피아 = 하린(비밀), 키워드 = 장르 "동물" / "고양이". 모두 답하고 하린의 무난한 답은 토론에서 허점이 드러난다.
+ * 다수는 도윤을 처형한다(직업은 공개하지 않는다). 밤에 서연이 떠나고 둘째 날 하린 곁에서 포스트잇을 붙인다.
  */
 export const TUTORIAL_CAST = {
   me: 5,
@@ -136,14 +138,15 @@ export const TUTORIAL_ANSWERS: readonly KeywordAnswerRow[] = [
   { order: 3, seat: 5, text: TUTORIAL_MY_ANSWER },
   { order: 4, seat: 3, text: "밥 줄 때만 와요" },
   { order: 5, seat: 1, text: "눈이 동그래요" },
-  { order: 6, seat: 4, text: null },
+  { order: 6, seat: 4, text: "사람을 잘 따라와요" },
 ];
 
-/** 장면 4: 시작부터 ms 에 뜨는 가짜 채팅 셋(도윤은 deny 동작) */
+/** 장면 4에서 답의 세부를 묻는다. 도윤은 자신에게 의심이 옮겨오자 손사래를 친다. */
 export const TUTORIAL_CHAT: readonly { atMs: number; seat: number; text: string; emote?: EmoteId }[] = [
-  { atMs: 1000, seat: 0, text: "하린은 왜 답이 없지?" },
-  { atMs: 2200, seat: 4, text: "아… 생각이 안 났어" },
-  { atMs: 3400, seat: 1, text: "난 아니야", emote: "deny" },
+  { atMs: 500, seat: 0, text: "하린아, 언제 잘 따라와?" },
+  { atMs: 1700, seat: 4, text: "목줄 들면 짖으면서 와" },
+  { atMs: 3000, seat: 2, text: "짖는다고? 도윤이는 왜 조용해?" },
+  { atMs: 4200, seat: 1, text: "답은 냈어. 난 아니야", emote: "deny" },
 ];
 /** 장면 7: 처형되는 도윤의 유언 카드(공백 포함 13자) */
 export const TUTORIAL_WILL = "믿어줘, 난 정말 아니야";
@@ -225,8 +228,8 @@ export const TUTORIAL_SCENES: readonly TutorialScene[] = [
   {
     id: "will",
     kind: "watch",
-    ms: 6000,
-    beats: [beat("a", 0, "will.will", { sfx: "ui.card" }), beat("b", 3000, "will.will")],
+    ms: EXECUTION_MS,
+    beats: [beat("a", 0, "will.will", { sfx: "ui.card" }), beat("b", WILL_REVEAL_MS, "will.will")],
   },
   {
     id: "night",
@@ -328,7 +331,8 @@ export function tutorialView(id: TutorialSceneId, at: TutorialBeatId = sceneOf(i
   const roles = rolesInPlay(TUTORIAL_CAST.seats.length);
   const phase = phaseOf(id, at);
   const dayN = id === "postit" ? (at === "c" ? 3 : 2) : id === "end" ? 3 : 1;
-  const mine = { seat: TUTORIAL_CAST.me, isHost: false } as const;
+  const daytime = phase === "discussion" || phase === "verdict" || phase === "nomination" || phase === "execution" || phase === "morning";
+  const mine = { seat: TUTORIAL_CAST.me, isHost: false, ...(daytime ? { chat: "all" as const } : {}) } as const;
   const keyword = { genre: TUTORIAL_CAST.genre };
 
   const view = {
@@ -371,6 +375,7 @@ export function tutorialView(id: TutorialSceneId, at: TutorialBeatId = sceneOf(i
       const count = Math.min(acted, END_STEPS);
       out.me = { ...mine, role: "citizen", ...(count >= 1 ? { endDiscussion: true as const } : {}) };
       day.endCount = count;
+      day.keyword = { ...keyword, answers: TUTORIAL_ANSWERS.map((r) => ({ ...r })) };
       break;
     }
     case "verdict": {
@@ -454,7 +459,7 @@ const NOTE_SPOTS: Readonly<Record<number, { x: number; z: number }>> = {
   1: { x: -2.6, z: 0 },
   2: { x: -1.3, z: -2.3 },
   3: { x: -0.4, z: 3.4 },
-  4: { x: 3.0, z: 1.6 },
+  4: { x: 2.6, z: 2.8 },
   5: { x: 1.3, z: 2.3 },
 };
 

@@ -14,7 +14,7 @@ import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
 import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, PAN_BOX, PX_PER_UNIT, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
-import { FIGS, GHOST_SCALE } from "./characterData";
+import { figForSeat, GHOST_SCALE } from "./characterData";
 import type { OutfitId } from "./characterData";
 import { admitEmote, EMOTE_RENDER_MAX, emoteDurationMs } from "./emoteCap";
 import type { PlayingEmote } from "./emoteCap";
@@ -276,11 +276,6 @@ export interface WorldRuntime {
   interactiveMs(): number | null;
   /** 좌석별 받은 종이 수와 지금 붙어 있는 종이 수(E2E 훅 window.__mfWorld.suspectNotes, 24-05 D-27). 종이가 없는 좌석은 키가 없다. 공개 값뿐이다 */
   suspectNotes(): Record<number, { total: number; visible: number }>;
-}
-
-/** 06-11 figForSeat 와 같은 식(character.ts 는 three 를 끌고 와서 정적으로 가져오지 않는다) */
-function figIndexForSeat(seat: number): number {
-  return ((seat % FIGS.length) + FIGS.length) % FIGS.length;
 }
 
 /** 입장 지점의 방향. 없는 곳은 카메라 쪽(π/4) */
@@ -782,7 +777,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   function createActor(seat: number, now: number): void {
     if (renderer === null || kit === null) return;
     const chosen = lookOf(seat);
-    const handle = kit.create(figIndexForSeat(seat), chosen);
+    const handle = kit.create(figForSeat(seat), chosen);
     const startSeg = segFor(seat);
     const at = startSeg === undefined ? null : positionAt(startSeg, deps.serverNow());
     const a: Actor = {

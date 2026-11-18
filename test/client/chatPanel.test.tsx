@@ -76,6 +76,51 @@ function logOf(container: HTMLElement): HTMLElement {
   return el as HTMLElement;
 }
 
+describe("ChatPanel 공개 근거 인용", () => {
+  const evidence: NonNullable<ChatPanelProps["evidence"]> = {
+    key: "answers",
+    label: "모두의 답",
+    rows: [
+      { seat: 2, name: "지호", text: "창문을 봤어요", order: 1 },
+      { seat: 3, name: "지아", text: null, order: 2 },
+    ],
+  };
+  const quote = (container: HTMLElement) => container.querySelector<HTMLButtonElement>("[data-evidence-quote]")!;
+
+  it("기존 글에 인용을 덧붙이고 입력칸으로 돌아간다. 보내기는 사용자가 한다", () => {
+    const onSend = vi.fn();
+    const { container } = render(<Harness initial="제 생각은" evidence={evidence} onSend={onSend} />);
+    expect(container.querySelectorAll("[data-evidence-quote]")).toHaveLength(1);
+    expect(container.querySelector("[data-evidence-none]")?.textContent).toContain("답 없음");
+    fireEvent.click(quote(container));
+    expect(input(container).value).toBe("제 생각은 지호 “창문을 봤어요”");
+    expect(document.activeElement).toBe(input(container));
+    expect(container.querySelector("[data-evidence-toggle]")?.getAttribute("aria-expanded")).toBe("false");
+    expect(onSend).not.toHaveBeenCalled();
+    fireEvent.change(input(container), { target: { value: `${input(container).value} 왜요?` } });
+    fireEvent.submit(form(container));
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(onSend).toHaveBeenCalledWith("제 생각은 지호 “창문을 봤어요” 왜요?");
+  });
+
+  it("조합 중과 입력 한도를 넘는 때 기존 초안을 지키며 키보드가 올라오면 근거만 접힌다", () => {
+    const draft = "가".repeat(96);
+    const { container, rerender } = render(<Harness initial={draft} evidence={evidence} />);
+    fireEvent.focus(input(container));
+    fireEvent.compositionStart(input(container));
+    fireEvent.click(quote(container));
+    expect(screen.getByText("입력을 마친 뒤 눌러 주세요")).toBeDefined();
+    fireEvent.compositionEnd(input(container));
+    fireEvent.click(quote(container));
+    expect(screen.getByText("입력 글을 줄이면 인용할 수 있어요")).toBeDefined();
+    expect(input(container).value).toBe(draft);
+    rerender(<Harness initial={draft} evidence={evidence} compact />);
+    expect(container.querySelector("[data-discussion-evidence]")?.hasAttribute("hidden")).toBe(true);
+    expect(input(container).disabled).toBe(false);
+    expect(input(container).value).toBe(draft);
+  });
+});
+
 describe("ChatPanel 기록 칸 (CHAT-01)", () => {
   it("받은 줄을 순서대로 그린다: player 는 data-seat·data-ch·자리 구분색 점·이름·본문", () => {
     const { container } = render(<Harness />);

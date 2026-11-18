@@ -178,16 +178,17 @@ function listProblems(rows, who) {
 }
 
 /**
- * KW8(P23-8) 모두의 답(24 부터 시트 제목 "모두의 기록", 탭 "답과 의심"). pages = [{ who, autoOpened(토론 시작 뒤 시트가 저절로 열림), reopened(닫은 뒤 다시 열림), hasTab(탭 '답과 의심' 있음), rows: [{ order, seat, none }] }].
- * 모두 자동으로 한 번 열리고 닫으면 안 다시 열리며 탭이 있고, 목록이 낸 순서(1..n)·'답 없음' 맨 끝이고, 페이지끼리 같다.
+ * KW8 모두의 답. 모달 없이 공개 답과 채팅을 읽고, 누르면 자동 전송 없이 현재 초안에 인용한다.
+ * 접기 상태, 별도 기록 탭, 제출 순·'답 없음' 순서가 참가 화면에서 일치하는지도 본다.
  */
 export function kw8AnswerList(pages) {
-  const label = "토론 시작 뒤 모두의 답이 자동으로 한 번 열리고 낸 순서·'답 없음' 맨 끝, 닫으면 다시 안 열린다, 탭 '답과 의심'이 있다";
+  const label = "토론에서 답과 입력칸이 함께 보이고, 인용은 초안에만 들어간다. 제출 순서와 기록 탭을 유지한다";
   if (!Array.isArray(pages) || pages.length === 0) return noMeasure("KW8", label, "페이지");
   const bad = [];
   for (const p of pages) {
-    if (p.autoOpened !== true) bad.push(`${p.who} 시트가 저절로 안 열림`);
-    if (p.reopened === true) bad.push(`${p.who} 닫은 뒤 다시 열림`);
+    if (p.listOpen !== true || p.dialogOpen !== false || p.inputVisible !== true) bad.push(`${p.who} 목록·입력칸을 함께 볼 수 없음`);
+    if (p.quoted !== true) bad.push(`${p.who} 인용 초안 오류`);
+    if (p.collapsed !== true) bad.push(`${p.who} 인용 뒤 목록이 접히지 않음`);
     if (p.hasTab !== true) bad.push(`${p.who} 탭 '답과 의심' 없음`);
     bad.push(...listProblems(p.rows, p.who));
   }
@@ -389,6 +390,24 @@ const readAnswerSheet = (page) =>
     };
   });
 
+const readDiscussionEvidence = (page) =>
+  page.evaluate(() => {
+    const input = document.querySelector("[data-chat-input]");
+    const box = input?.getBoundingClientRect();
+    const evidence = document.querySelector("[data-discussion-evidence]");
+    const rows = [...evidence?.querySelectorAll("[data-evidence-row]") ?? []].map((row) => ({
+      order: Number(row.getAttribute("data-evidence-order")),
+      seat: Number(row.getAttribute("data-evidence-seat")),
+      none: row.hasAttribute("data-evidence-none"),
+    }));
+    return {
+      listOpen: evidence?.querySelector("[data-evidence-toggle]")?.getAttribute("aria-expanded") === "true",
+      dialogOpen: !!document.querySelector("dialog.mf-dialog--open"),
+      inputVisible: !!box && document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === input && !input.disabled,
+      rows,
+    };
+  });
+
 /** 정답 공개 큰 글: 라벨과 키워드 글 */
 const readAnnounce = (page) =>
   page.evaluate(() => ({
@@ -533,18 +552,30 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       await at("방장 보내기", () => typeAndSend(hp, "다른말"));
       await hp.waitForSelector('[data-answer-state="sent"]', { timeout: 4000 }).catch(() => {});
 
-      // 사람 전원이 냈으니 곧 낮 시작 → 토론. 토론 시작에 모두의 답이 저절로 한 번 열린다(KW8)
+      // 사람 전원이 낸 뒤 토론에서 공개 답과 채팅을 동시에 읽고 인용할 수 있다(KW8).
       await Promise.all(pages.map((p) => p.tracker.waitFor((v) => v.phase === "discussion", 12_000, "낮 시작 → 토론")));
       const sheets = [];
       for (const p of pages) {
-        const opened = await p.page.waitForSelector("dialog.mf-dialog--open [data-answer-list]", { timeout: 4000 }).then(() => true).catch(() => false);
+        await p.page.waitForSelector("[data-evidence-quote]", { timeout: 4000 });
+        const evidence = await readDiscussionEvidence(p.page);
+        const quote = p.page.locator("[data-evidence-quote]").first();
+        const name = await quote.locator(".mf-discussion-evidence__name").innerText();
+        const answer = await quote.locator(".mf-discussion-evidence__text").innerText();
+        const input = p.page.locator("[data-chat-input]");
+        await input.fill("제 생각은");
+        await quote.click();
+        const draft = `제 생각은 ${name} “${answer}”`;
+        const quoted = await input.inputValue() === draft && !(await p.page.locator("[data-chat-log]").innerText()).includes(draft);
+        const collapsed = !(await readDiscussionEvidence(p.page)).listOpen;
+        await input.fill("");
+        await input.blur();
+        await at(`KW8 ${p.who} [내 역할]`, () => p.page.locator(".mf-rolecard-btn").click({ timeout: 4000 }));
+        await at(`KW8 ${p.who} 답과 의심 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
         const sh = await readAnswerSheet(p.page);
-        sheets.push({ who: p.who, page: p.page, autoOpened: opened, hasTab: sh.tabs >= 1, rows: sh.rows ?? [] });
+        await closeOpenSheet(p.page);
+        sheets.push({ who: p.who, ...evidence, quoted, collapsed, hasTab: sh.tabs === 1 && rowsKey(sh.rows ?? []) === rowsKey(evidence.rows) });
       }
-      for (const s of sheets) await closeOpenSheet(s.page).catch(() => {});
-      await sleep(1600);
-      for (const s of sheets) s.reopened = (await readAnswerSheet(s.page)).open;
-      rec1(rec, `${id}/answers`, kw8AnswerList(sheets.map(({ page, ...rest }) => rest)));
+      rec1(rec, `${id}/answers`, kw8AnswerList(sheets));
 
       // KW9: 참가자 재접속 — 저절로 안 열리고 [내 역할] → 답과 의심 으로 같은 목록. 그 연결 프레임에서 시민은 키워드를 받는다(KW13 대조군)
       const rowsBefore = sheets[0].rows;
@@ -679,7 +710,6 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       // 찬반: 봇 표가 다 들어온 뒤 사람 둘이 던지면 1.5초 안에 넘어가고, 유예 안 번복은 마감을 다시 늘린다
       await ht.waitFor((v) => v.phase === "discussion", 6000, "토론");
       await sleep(900);
-      for (const p of pages) await closeOpenSheet(p.page).catch(() => {}); // 첫날 토론 시작에 저절로 열린 모두의 답
       await skipTo(hp, ht, "verdict");
       await allAt(pages.map((p) => p.page), "verdict");
       await Promise.all(pages.map((p) => untilGame(p.page, (x) => x.verdictCounts?.yes + x.verdictCounts?.no === 2, 9000, "봇 표 둘")));

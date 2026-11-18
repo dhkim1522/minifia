@@ -78,6 +78,52 @@
 }
 .tut-exit:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 
+.tut-room { background: var(--night-950); --tut-exit-top: 10px; }
+.tut-room .mf-world__input,
+.tut-room .mf-card,
+.tut-room .mf-sheet__handle { pointer-events: none; }
+.tut-room .mf-card { user-select: none; }
+.tut-room .mf-turn__sec,
+.tut-room .mf-turn__bar { display: none; }
+.tut-room .mf-turn { top: calc(var(--mf-host-bottom, 106px) + var(--space-sm)); }
+
+/* 기록은 게임의 시트를 쓰되 상단의 그만두기와 소리 단추를 계속 쓸 수 있다. */
+.tut-room .mf-dialog { position: absolute; z-index: var(--z-overlay); pointer-events: none; }
+.tut-room .mf-sheet.mf-sheet--rolecard {
+  pointer-events: auto; max-height: calc(100% - 191px);
+  padding: var(--space-md); gap: var(--space-sm);
+}
+.tut-room .mf-sheet__handle,
+.tut-room .mf-sheet__close { display: none; }
+.tut-room .mf-answers { padding-top: 0; }
+
+.tut-role-icons {
+  position: absolute; inset: auto 0 90px; display: flex; justify-content: center; gap: var(--space-sm);
+  pointer-events: none; z-index: var(--z-overlay);
+}
+.tut-role-icons span {
+  display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-pill);
+  background: var(--noir-panel); border: 1px solid var(--noir-line); color: var(--noir-paper);
+  animation: tut-arrive 200ms var(--ease-out) both;
+}
+.tut-room[data-tutorial-scene="keyword"][data-tutorial-beat="b"] .mf-keyword__card,
+.tut-room[data-tutorial-scene="keyword"][data-tutorial-beat="c"] .mf-keyword__card { animation: tut-card 500ms var(--ease-out) both; }
+@keyframes tut-arrive { from { opacity: 0; transform: translateY(8px); } }
+@keyframes tut-card { from { opacity: 0; transform: perspective(700px) rotateY(90deg); } }
+
+.tut-cut {
+  position: absolute; inset: 0; pointer-events: none; z-index: calc(var(--z-overlay) + 2);
+  background: var(--night-950); animation: tut-cut 300ms var(--ease-out) both;
+}
+@keyframes tut-cut { to { opacity: 0; } }
+
+.tut-end {
+  position: absolute; inset: 0; z-index: var(--z-overlay); display: grid; align-content: center;
+  gap: var(--space-md); padding: var(--space-lg); text-align: center; background: var(--scrim);
+}
+.tut-end h2 { margin: 0 0 var(--space-sm); }
+.tut-end .mf-btn { width: min(100%, 296px); margin: 0 auto; }
+
 /* 튜토리얼 안에서는 이름표 깜빡임·호출 빛남을 끈다(깜빡이는 것은 링 하나 — 0080-6). 호출 테두리 자체도 감춰 링과 겹쳐 보이지 않게 한다 */
 [data-tutorial-screen] .mv-tag.is-blink { animation: none; }
 [data-tutorial-screen] .is-call::before { animation: none; opacity: 0; }

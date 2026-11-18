@@ -145,6 +145,38 @@ afterEach(() => {
   stage.props = null;
 });
 
+describe("GameMap — 아침 유언 인용", () => {
+  it("둘째 날 토론에는 이번 아침 피해자의 공개 유언만 표시한다", () => {
+    const store = new WorldStore();
+    const chat = new ChatStore();
+    const send = vi.fn();
+    const frame = (view: RoomView) => <GameMap view={view} store={store} chat={chat} send={send} />;
+    const morning = makeView({ phase: "morning", n: 1, dead: [1, 2] });
+    morning.day!.morning = { eliminated: 2 };
+    const { container, rerender } = render(frame(morning));
+    const evidence = () => container.querySelector<HTMLElement>("[data-discussion-evidence]");
+    const input = () => container.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    expect(evidence()).toBeNull();
+    act(() => {
+      chat.apply({ t: "chatLog", lines: [
+        { ch: "all", k: "will", at: NOW - 60_000, seat: 1, seq: 1, text: "지난 처형 유언" },
+        { ch: "all", k: "note", at: NOW, seat: 2, seq: 2, text: "아침 쪽지" },
+      ] }, 1, NOW);
+    });
+    rerender(frame(makeView({ n: 2, dead: [1, 2] })));
+    expect(evidence()).toBeNull();
+    act(() => chat.apply({ t: "chatLog", lines: [
+      { ch: "all", k: "will", at: NOW, seat: 2, seq: 3, text: "이번 아침 유언" },
+    ] }, 1, NOW));
+    expect(evidence()?.textContent).toBe("아침 유언서준이번 아침 유언");
+    fireEvent.click(evidence()!.querySelector("[data-evidence-quote]")!);
+    expect(input().value).toBe("서준 “이번 아침 유언”");
+    expect(send.mock.calls.some(([message]) => message.t === "chat")).toBe(false);
+    rerender(frame(makeView({ n: 3, dead: [1, 2] })));
+    expect(evidence()).toBeNull();
+  });
+});
+
 describe("GameMap — 낮 토론 [토론 끝내기] (DAY-03, 08-13)", () => {
   it("산 사람의 낮 토론은 루트가 data-game-stage·data-phase 이고 [토론 끝내기] 가 하나이며 점 total = 산 사람의 과반 수", () => {
     const { container } = mount(makeView({ count: 5 }));

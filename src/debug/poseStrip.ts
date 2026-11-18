@@ -1,5 +1,5 @@
 // ?pose-strip=1 포즈 스트립 디버그 화면(10-06, D-8·O-11). 제품 화면이 아니다 — 개발 빌드·?e2e=1 문맥에서만, 지연 로드 청크로만 열린다(perfProbe.initPerfDebug).
-// 행 = 동작 9종 + 서기 + 걷기, 열 = 4 샘플 시각(strip) / 의상 9행 × 인물 5열(combos). 하나의 WebGLRenderer 와 scissor 로 칸마다 자세를 잡아 그린다.
+// 행 = 동작 9종 + 서기 + 걷기, 열 = 4 샘플 시각(strip) / 의상 9행 × 인물 8열(combos). 하나의 WebGLRenderer 와 scissor 로 칸마다 자세를 잡아 그린다.
 // 걷기·방향·모자·소품 겹침을 눈으로 확인하는 용도다. 머리 위에는 아무것도 그리지 않는다. 글자는 textContent 로만 넣는다(innerHTML 없음).
 import { ACESFilmicToneMapping, AmbientLight, Color, DirectionalLight, PerspectiveCamera, SRGBColorSpace, Scene, WebGLRenderer } from "three";
 import { EMOTE_LABEL } from "../game/chatText";
@@ -72,7 +72,8 @@ export function mount(root: HTMLElement, params: URLSearchParams): PoseStrip {
     l.appendChild(s);
     bar.appendChild(l);
   };
-  select("보기", [["strip", "동작 줄"], ["combos", "45조합"]], state.view, (v) => {
+  const combinationLabel = `${FIGS.length * OUTFIT_ORDER.length}조합`;
+  select("보기", [["strip", "동작 줄"], ["combos", combinationLabel]], state.view, (v) => {
     state.view = v === "combos" ? "combos" : "strip";
     draw();
   });
@@ -84,7 +85,7 @@ export function mount(root: HTMLElement, params: URLSearchParams): PoseStrip {
     state.outfit = v as PoseStripParams["outfit"];
     draw();
   });
-  select("자세(45조합)", [["idle", "서기"], ["walk", "걷기"]], state.pose, (v) => {
+  select(`자세(${combinationLabel})`, [["idle", "서기"], ["walk", "걷기"]], state.pose, (v) => {
     state.pose = v === "walk" ? "walk" : "idle";
     draw();
   });

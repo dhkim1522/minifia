@@ -3,10 +3,12 @@ import "../../styles/v2.css";
 import { CHAT_MAX_GRAPHEMES } from "../../../shared/game/chatRules";
 import { CHAT_TEXT } from "../../game/chatText";
 import { AUTO_SCROLL_SLOP_PX, DUP_SUBMIT_MS, IME_WAIT_MS, LOG_FADE_H, LOG_H, LOG_OPEN_MAX, OPEN_STAGE_MIN, TAIL_WINDOW_MS } from "../../game/chatUi";
+import type { DiscussionEvidence as Evidence, DiscussionEvidenceRow } from "../../game/discussionEvidence";
 import type { EmoteId } from "../../../shared/protocol";
 import { EMOTE_TEXT } from "../../game/chatText";
 import { EmoteTray } from "./EmoteTray";
 import { ChatLines } from "./ChatLines";
+import { DiscussionEvidence, type QuoteResult } from "./DiscussionEvidence";
 import { V2Icon, type V2IconName } from "./V2Icon";
 
 // 채팅 패널(기록 칸 + 입력줄). design/v2.0/design-system/components/bundle.js 의 ChatPanel 과
@@ -94,6 +96,8 @@ export interface ChatPanelProps {
   locked?: boolean;
   /** 입력줄 맨 오른쪽(보내기·깃펜 뒤)에 놓을 요소. 결과 화면의 다시 하기 알약(11-12). 없으면 자리도 없다 */
   trailing?: ReactNode;
+  /** 토론 중 읽을 수 있는 공개 근거. 인용을 누르면 입력칸에 추가한다. */
+  evidence?: Evidence;
 }
 
 interface ChannelUi {
@@ -196,6 +200,18 @@ export function ChatPanel(props: ChatPanelProps) {
     fieldRef.current = el;
     if (typeof inputRef === "function") inputRef(el);
     else if (inputRef) (inputRef as { current: HTMLInputElement | null }).current = el;
+  };
+
+  const addQuote = ({ name, text }: DiscussionEvidenceRow): QuoteResult => {
+    const p = latest.current;
+    const el = fieldRef.current;
+    if (!el || !p.onSend || p.locked || text === null || composingRef.current || pendingRef.current !== null) return "busy";
+    const separator = el.value !== "" && !/\s$/.test(el.value) ? " " : "";
+    const quoted = `${el.value}${separator}${name} “${text}”`;
+    if (quoted.length > el.maxLength) return "full";
+    p.onChange(quoted);
+    el.focus({ preventScroll: true });
+    return "added";
   };
 
   // 값은 언제나 DOM 입력칸에서 읽는다(조합이 끝난 뒤의 값).
@@ -342,6 +358,9 @@ export function ChatPanel(props: ChatPanelProps) {
 
   return (
     <section className={rootCls} data-chat-panel="" data-chat-channel={channel} {...(locked ? { "data-chat-locked": "" } : {})}>
+      {props.evidence && onSend && !locked ? (
+        <DiscussionEvidence key={props.evidence.key} evidence={props.evidence} hidden={!!compact} onQuote={addQuote} />
+      ) : null}
       <div
         className={open ? "mv-chat__logbox is-open" : "mv-chat__logbox"}
         // 숫자 한 곳은 chatUi.ts 다 — CSS 가 읽는 변수로 넘긴다(.mv-chat__log.is-open 의 clamp)

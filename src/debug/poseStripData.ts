@@ -3,15 +3,15 @@
 // 의상 목록은 OUTFIT_ORDER 로 되풀이해 두고 test/unit/poseStrip.test.ts 가 OUTFITS 와 어긋남을 잡는다.
 import { EMOTE_MS } from "../../shared/game/emote";
 import { MOVE_SPEED } from "../../shared/game/world";
-import { EMOTE_IDS, type EmoteId } from "../../shared/protocol";
+import { EMOTE_IDS, MAX_PLAYERS, type EmoteId } from "../../shared/protocol";
 import { worldTestHooksEnabled } from "../world/testHooks";
 import type { StorageLike } from "../net/session";
 
 export const POSE_STRIP_PARAM = "pose-strip";
 /** 샘플 시각 열 수 */
 export const STRIP_COLS = 4;
-/** 인물 수(characterData.FIGS 와 같다 — 시험이 확인) */
-export const FIG_COUNT = 5;
+/** 좌석당 한 인물(characterData.FIGS 와 같다 — 시험이 확인) */
+export const FIG_COUNT = MAX_PLAYERS;
 /** 의상 9종(characterData.OUTFITS 키 순서 — 시험이 확인) */
 export const OUTFIT_ORDER = ["coat", "police", "doctor", "detective", "noir", "mafia", "reporter", "elder", "hood"] as const;
 export type StripOutfit = (typeof OUTFIT_ORDER)[number];

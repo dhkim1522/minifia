@@ -73,10 +73,10 @@ describe("stripRows / samplePlan — 격자 (D-8)", () => {
       expect(p.t).toBeCloseTo(((i * Math.PI) / 2) / WALK_PHASE_RATE, 9);
     });
   });
-  it("combos 보기는 의상 9행 × 인물 5열이고 자세는 idle(t=0) 또는 walk(위상 π/2)", () => {
+  it("combos 보기는 의상 9행 × 인물 8열이고 자세는 idle(t=0) 또는 walk(위상 π/2)", () => {
     expect(OUTFIT_ORDER).toEqual(Object.keys(OUTFITS));
     expect(OUTFIT_ORDER.length).toBe(9);
-    expect(FIGS.length).toBe(5);
+    expect(FIGS.length).toBe(8);
     expect(samplePlan({ view: "combos", pose: "idle" }, 0)).toEqual({ kind: "idle", t: 0 });
     const w = samplePlan({ view: "combos", pose: "walk" }, 4);
     expect(w.kind).toBe("walk");
@@ -90,10 +90,10 @@ describe("parsePoseStripParams — 선택값", () => {
     expect(parsePoseStripParams("?pose-strip=1")).toEqual({ fig: 0, outfit: "coat", view: "strip", pose: "idle" });
   });
   it("정상 값을 읽는다", () => {
-    expect(parsePoseStripParams("?fig=3&outfit=hood&view=combos&pose=walk")).toEqual({ fig: 3, outfit: "hood", view: "combos", pose: "walk" });
+    expect(parsePoseStripParams("?fig=7&outfit=hood&view=combos&pose=walk")).toEqual({ fig: 7, outfit: "hood", view: "combos", pose: "walk" });
   });
   it("잘못된 값은 기본값", () => {
-    expect(parsePoseStripParams("?fig=9&outfit=zzz&view=x&pose=y")).toEqual({ fig: 0, outfit: "coat", view: "strip", pose: "idle" });
+    expect(parsePoseStripParams("?fig=8&outfit=zzz&view=x&pose=y")).toEqual({ fig: 0, outfit: "coat", view: "strip", pose: "idle" });
     expect(parsePoseStripParams("?fig=-1")).toMatchObject({ fig: 0 });
     expect(parsePoseStripParams("?fig=1.5")).toMatchObject({ fig: 0 });
     expect(parsePoseStripParams("?fig=abc")).toMatchObject({ fig: 0 });

@@ -2,6 +2,7 @@ import type { ReactNode, Ref } from "react";
 import { emitSignal } from "../audio/signals";
 
 export interface ButtonProps {
+  [attribute: `data-${string}`]: string | undefined;
   variant?: "primary" | "secondary" | "text";
   block?: boolean;
   compact?: boolean;
@@ -29,6 +30,7 @@ export function Button({
   className,
   ref,
   children,
+  ...data
 }: ButtonProps) {
   const classes = ["mf-btn", `mf-btn--${variant}`, block && "mf-btn--block", compact && "mf-btn--compact", className]
     .filter(Boolean)
@@ -42,7 +44,7 @@ export function Button({
         }
       : onClick;
   return (
-    <button ref={ref} type={type} className={classes} disabled={disabled} onClick={handleClick} aria-label={ariaLabel}>
+    <button {...data} ref={ref} type={type} className={classes} disabled={disabled} onClick={handleClick} aria-label={ariaLabel}>
       {icon}
       {children}
     </button>

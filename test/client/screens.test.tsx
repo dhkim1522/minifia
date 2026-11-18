@@ -52,11 +52,14 @@ describe("Home 첫 화면 (S-01, 결정 0014)", () => {
     expect(screen.queryByText(/^v/)).toBeNull();
   });
 
-  it("튜토리얼 진입(큰 카드·작은 단추·마무리 카드)이 마운트되지 않고 남은 단추가 위로 올라온다 — DOM 0건 (22-03, D-08, P22-16)", () => {
+  it("방 만들기 아래에 혼자 하기 진입이 있고 처음 오는 사람에게만 강조한다", () => {
     const { container } = render(<Home onEnterRoom={vi.fn()} />);
-    expect(container.querySelectorAll("[data-tutorial], [data-tutorial-entry], [data-tutorial-end], [data-tutorial-toggle]")).toHaveLength(0);
     const actions = container.querySelector(".mf-entry__actions");
-    expect([...(actions?.children ?? [])].map((el) => el.tagName).join(",")).toBe("FORM,BUTTON");
+    const entry = screen.getByRole("button", { name: "혼자 하며 배우기" });
+    expect(entry).toBe(actions?.lastElementChild);
+    expect(entry.hasAttribute("data-tutorial-entry")).toBe(true);
+    expect(entry.hasAttribute("data-call")).toBe(true);
+    expect(container.querySelector("[data-tutorial-screen]")).toBeNull();
   });
 
   it("[방 만들기]는 닉네임 없이도 눌려 시트를 연다. 처음 열었을 때 오류 문장은 없다", () => {

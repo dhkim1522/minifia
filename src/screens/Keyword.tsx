@@ -26,6 +26,8 @@ export interface KeywordProps {
   send: (msg: ClientMessage) => boolean | void;
   /** 연결이 열려 보낼 수 있는가 */
   canSend: boolean;
+  /** 혼자 하기의 카드 예시와 미리 적힌 답. 무대의 타이머와 입력 포커스는 숨긴다. */
+  timeless?: boolean;
   /** 서버 오류 프레임 구독 — 금지어 거절을 입력줄이 받는다 */
   onEvent?: (listener: (e: RoomEvent, meta: { epoch: number }) => void) => () => void;
 }
@@ -63,7 +65,7 @@ const CARD_ENTER_MS = 420;
 // 키워드는 서버가 시민 편 본인에게만 보낸다(me.keyword). 마피아는 키 자체가 없으니 DOM 에도 단어가 없다. 입력줄 표식(data-answer-*)에는 역할·키워드 값이 없다(T-23-33).
 // 입력줄: 메타 줄(남은 초·거절/냈어요·n/20) + 입력 행(입력칸 + [보내기] 원). 읽기 3초 동안 잠기고(locked) 풀리면 빛난다(open), 보내면 읽기 전용·check(sent).
 // 글 규칙(잠금·20자소·거절·초안 저장)은 useKeywordAnswer, 서버가 정한 규칙을 표시·전송만 한다(결정 0002). 키보드가 열리면 카드가 컴팩트형으로 입력줄 위에 붙는다.
-export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent }: KeywordProps) {
+export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, timeless = false }: KeywordProps) {
   const word = view.me.keyword;
   const genre = view.day?.keyword?.genre ?? "";
   const endsAt = view.phaseEndsAt;
@@ -85,9 +87,9 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent }: 
   // 읽기 3초가 끝나 입력칸이 풀리면 초점을 준다(키보드가 안 올라오는 기기에서는 빛나는 입력칸을 직접 누른다)
   const wasLocked = useRef(answer.state === "locked");
   useEffect(() => {
-    if (wasLocked.current && answer.state === "open") inputRef.current?.focus({ preventScroll: true });
+    if (!timeless && wasLocked.current && answer.state === "open") inputRef.current?.focus({ preventScroll: true });
     wasLocked.current = answer.state === "locked";
-  }, [answer.state]);
+  }, [answer.state, timeless]);
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -134,11 +136,11 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent }: 
           </p>
         </div>
       </section>
-      <div className="mf-keyword__answer" data-answer-state={answer.state}>
+      {!timeless || view.me.answer !== undefined ? <div className="mf-keyword__answer" data-answer-state={answer.state}>
         <div className="mf-keyword__meta" id={META_ID}>
-          <span className="mf-keyword__secs" data-answer-secs="" data-tone={tone} aria-hidden="true">
+          {!timeless ? <span className="mf-keyword__secs" data-answer-secs="" data-tone={tone} aria-hidden="true">
             {KEYWORD_COPY.secs(answer.secondsLeft)}
-          </span>
+          </span> : null}
           <span className="mf-keyword__mid">
             <span className="mv-chat__notice" role="status" data-answer-notice="">
               {answer.notice ?? ""}
@@ -170,7 +172,7 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent }: 
               aria-label={KEYWORD_COPY.inputName}
               aria-describedby={META_ID}
               disabled={answer.state === "locked"}
-              readOnly={sent}
+              readOnly={sent || timeless}
               value={answer.value}
               onChange={(e) => answer.setValue(e.target.value, composed.composing())}
               onCompositionStart={composed.bind.onCompositionStart}
@@ -192,7 +194,7 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent }: 
             </span>
           </button>
         </form>
-      </div>
+      </div> : null}
     </main>
   );
 }

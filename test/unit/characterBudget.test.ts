@@ -1,10 +1,10 @@
-// 10-06: 인물 에셋 예산 — 인물 5명 × 의상 9종 45조합 (D-15, D-16). `npm run check:character` 의 본체다.
+// 10-06: 인물 에셋 예산 — 인물 8명 × 의상 9종 72조합 (D-15, D-16). `npm run check:character` 의 본체다.
 // WebGL 없이 node 에서 장면 그래프만 검사한다. 새 3D 부품은 만들지 않는다(O-4).
 import { readFileSync } from "node:fs";
 import { Box3, type BufferGeometry, type Mesh, type Object3D, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
 import { EMOTE_MS } from "../../shared/game/emote";
-import { EMOTE_IDS } from "../../shared/protocol";
+import { EMOTE_IDS, MAX_PLAYERS } from "../../shared/protocol";
 import { createCharacter } from "../../src/world/character";
 import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, type OutfitId } from "../../src/world/characterData";
 
@@ -17,7 +17,7 @@ const HEIGHT_MIN = 1.5;
 /** 높이 밴드 상한: 결정 0068 이 1.9 에서 1.92 로 올렸다(여자 머리 위 기자 모자 1.918). 하한·다른 문턱은 그대로. */
 const HEIGHT_MAX = 1.92;
 const MAX_OWNED_GEOMETRIES = 14;
-const SEATS = 8;
+const SEATS = MAX_PLAYERS;
 const SCENE_TRIANGLES = 120_000;
 const SCENE_DRAW_CALLS = 64;
 
@@ -49,11 +49,11 @@ interface Measure {
 }
 const measured = new Map<string, Measure>();
 
-describe("인물 에셋 예산 — 45조합 (D-15, D-16)", () => {
-  it("조합은 5 × 9 = 45 개다", () => {
-    expect(FIGS.length).toBe(5);
+describe("인물 에셋 예산 — 72조합 (D-15, D-16)", () => {
+  it("좌석마다 인물 한 명씩, 8 × 9 = 72 조합이다", () => {
+    expect(FIGS.length).toBe(SEATS);
     expect(OUTFIT_IDS.length).toBe(9);
-    expect(COMBOS.length).toBe(45);
+    expect(COMBOS.length).toBe(72);
   });
 
   it.each(COMBOS)("인물 %i × 의상 %s: 메시·삼각형·높이·유한성·지오메트리 수", (fig, outfit) => {
@@ -83,7 +83,7 @@ describe("인물 에셋 예산 — 45조합 (D-15, D-16)", () => {
   });
 
   it("8명 전원 최악 조합 삼각형 합 ≤ 120,000, draw call 합 ≤ 64", () => {
-    expect(measured.size).toBe(45);
+    expect(measured.size).toBe(COMBOS.length);
     const worstTris = Math.max(...[...measured.values()].map((m) => m.tris));
     const worstMeshes = Math.max(...[...measured.values()].map((m) => m.meshes));
     expect(worstTris * SEATS).toBeLessThanOrEqual(SCENE_TRIANGLES);

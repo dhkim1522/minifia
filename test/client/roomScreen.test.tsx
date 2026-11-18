@@ -764,9 +764,9 @@ describe("RoomScreen: 쉬는 사람 화면 (11-12)", () => {
   });
 });
 
-// ---------- 23-11: 토론 시작 모두의 답 자동 열림(P23-17, D-03) · 결과 정답 줄(P23-22, D-02) ----------
+// ---------- 첫날 토론의 공개 답과 결과 정답 줄 ----------
 
-describe("RoomScreen: 모두의 답 자동 열림·결과 정답 줄 (23-11)", () => {
+describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
   const mount = () => render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
   const again = (rerender: (ui: React.ReactElement) => void) => rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
   const four: RoomView["players"] = ["민수", "하윤", "민지", "도현"].map((nickname, seat) => ({ seat, nickname, connected: true, isHost: seat === 0 }));
@@ -789,15 +789,8 @@ describe("RoomScreen: 모두의 답 자동 열림·결과 정답 줄 (23-11)", (
     connectionMock.current = { ...(connectionMock.current as RoomConnection), view: v, ...(epoch !== undefined ? { epoch } : {}) };
   };
   const sheet = (): HTMLElement | null => document.querySelector<HTMLElement>("dialog");
-  const recordsTab = (): HTMLElement | null => document.querySelector<HTMLElement>('[data-rolecard-tab="records"]');
-
-  // 시트 닫기는 닫히는 애니메이션(260ms) 뒤에 onClose 를 부른다
-  const closeSheet = () => {
-    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
-    act(() => {
-      vi.advanceTimersByTime(400);
-    });
-  };
+  const evidence = (): HTMLElement | null => document.querySelector<HTMLElement>("[data-discussion-evidence]");
+  const toggle = (): HTMLButtonElement => evidence()!.querySelector<HTMLButtonElement>("[data-evidence-toggle]")!;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -807,34 +800,41 @@ describe("RoomScreen: 모두의 답 자동 열림·결과 정답 줄 (23-11)", (
     stage.props = null;
   });
 
-  it("같은 연결에서 dayAnnounce 1일차 → discussion 이면 시트가 `답과 의심` 탭으로 열린다", () => {
+  it("첫 토론은 채팅과 답을 함께 보여 주고 역할 카드의 기록 탭을 수동으로 열 수 있다", () => {
     connectionMock.current = conn({ view: play("dayAnnounce") });
-    const { rerender } = mount();
+    const { rerender, container } = mount();
+    expect(evidence()).toBeNull();
     expect(sheet()).toBeNull();
     setView(play("discussion"));
     again(rerender);
-    expect(sheet()).not.toBeNull();
-    expect(recordsTab()?.getAttribute("aria-selected")).toBe("true");
+    expect(sheet()).toBeNull();
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    expect(evidence()?.querySelectorAll("[data-evidence-row]")).toHaveLength(rows.length);
+    expect(container.querySelector<HTMLInputElement>("[data-chat-input]")?.disabled).toBe(false);
+    fireEvent.click(container.querySelector(".mf-rolecard-btn")!);
+    fireEvent.click(container.querySelector('[data-rolecard-tab="records"]')!);
     expect(sheet()?.getAttribute("aria-label")).toBe("모두의 기록");
   });
 
-  it("닫은 뒤에는 토론 갱신·찬반으로 가도 다시 열리지 않는다", () => {
+  it("답 목록을 접으면 토론 뷰 갱신 중에도 접힌 채이며 찬반에 들어가면 사라진다", () => {
     connectionMock.current = conn({ view: play("dayAnnounce") });
     const { rerender } = mount();
     setView(play("discussion"));
     again(rerender);
-    closeSheet();
+    fireEvent.click(toggle());
     setView({ ...play("discussion"), serverNow: 2000 });
     again(rerender);
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
     setView(play("verdict"));
     again(rerender);
-    expect(recordsTab()).toBeNull();
+    expect(evidence()).toBeNull();
   });
 
-  it("재접속·새로고침 첫 프레임이 discussion 이면 열리지 않는다", () => {
+  it("첫 토론 중 새로고침하면 모달 없이 공개 답을 다시 볼 수 있다", () => {
     connectionMock.current = conn({ view: play("discussion") });
     mount();
     expect(sheet()).toBeNull();
+    expect(evidence()).not.toBeNull();
   });
 
   it("같은 연결에서 epoch 가 바뀌며(재접속) 도착한 discussion 도 열리지 않는다", () => {
@@ -843,14 +843,16 @@ describe("RoomScreen: 모두의 답 자동 열림·결과 정답 줄 (23-11)", (
     setView(play("discussion"), 2);
     again(rerender);
     expect(sheet()).toBeNull();
+    expect(evidence()).not.toBeNull();
   });
 
-  it("2일차 dayAnnounce → discussion 은 열지 않는다", () => {
+  it("2일차에는 첫날 답을 다시 위에 띄우지 않는다", () => {
     connectionMock.current = conn({ view: play("dayAnnounce", { n: 2 }) });
     const { rerender } = mount();
     setView(play("discussion", { n: 2 }));
     again(rerender);
     expect(sheet()).toBeNull();
+    expect(evidence()).toBeNull();
   });
 
   it("2일차에 의심 기록이 있어도 자동으로 열리지 않고 탭은 있다(P24-19)", () => {
@@ -865,28 +867,29 @@ describe("RoomScreen: 모두의 답 자동 열림·결과 정답 줄 (23-11)", (
     expect(sheet()).toBeNull();
   });
 
-  it("답 목록이 없는 view(키워드 없는 판)는 열지 않는다", () => {
+  it("키워드 공개 답이 없는 판에는 목록이 없다", () => {
     connectionMock.current = conn({ view: play("dayAnnounce", { answers: false }) });
     const { rerender } = mount();
     setView(play("discussion", { answers: false }));
     again(rerender);
-    expect(sheet()).toBeNull();
+    expect(evidence()).toBeNull();
   });
 
-  it("새 판(lobby)을 거치면 다시 한 번 열린다", () => {
+  it("새 판의 첫 토론에서는 답 목록이 다시 펼쳐진다", () => {
     connectionMock.current = conn({ view: play("dayAnnounce") });
     const { rerender } = mount();
     setView(play("discussion"));
     again(rerender);
-    expect(recordsTab()).not.toBeNull();
-    closeSheet();
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
     setView(play("lobby", { round: 2 }));
     again(rerender);
     setView(play("dayAnnounce", { round: 2 }));
     again(rerender);
     setView(play("discussion", { round: 2 }));
     again(rerender);
-    expect(recordsTab()?.getAttribute("aria-selected")).toBe("true");
+    act(() => { vi.advanceTimersByTime(EXIT_CURTAIN_MS); });
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
   });
 
   it("결과(ended): 정답이 있으면 띠 줄이 `정답 · 해리포터`, 시간 행은 없다", () => {

@@ -120,7 +120,7 @@ describe("알약 문구(P24-25)", () => {
     }
   });
 
-  it("UI-SPEC 문구 표 그대로", () => {
+  it("각 장면의 목표를 한 줄로 안내한다", () => {
     expect(pills).toEqual([
       "나는 시민이에요",
       "마피아를 찾아내요",
@@ -128,8 +128,8 @@ describe("알약 문구(P24-25)", () => {
       "시민은 키워드를 알아요",
       "마피아는 키워드를 몰라요",
       "정답은 말하면 안 돼요",
-      "답 없는 사람이 수상해요",
-      "말로 서로 의심해요",
+      "답을 읽고 비교해요",
+      "궁금한 답을 캐물어요",
       "과반이 눌러야 끝나요",
       "과반이면 처형해요",
       "의심 가는 사람을 가리켜요",
@@ -179,13 +179,14 @@ describe("가짜 view(D-17, P24-19 판정)", () => {
     expect(tutorialView("keyword", "c", T0, 1).me.answer).toEqual({ text: "발소리가 안 들려요", final: true });
   });
 
-  it("answers: day.keyword.answers 6줄, 하린(좌석 4) 줄 text null 이고 맨 끝", () => {
+  it("answers: 마피아를 포함해 여섯 명 모두 답하고, 같은 답으로 토론한다", () => {
     const answers = tutorialView("answers", "a", T0).day?.keyword?.answers;
     expect(answers).toHaveLength(6);
     const last = answers![5]!;
     expect(last.seat).toBe(4);
-    expect(last.text).toBeNull();
-    expect(answers!.filter((a) => a.text === null)).toHaveLength(1);
+    expect(last.text).toBe("사람을 잘 따라와요");
+    expect(answers!.every((row) => row.text !== null)).toBe(true);
+    expect(tutorialView("discussion", "a", T0).day?.keyword?.answers).toEqual(answers);
     expect(answers![2]).toMatchObject({ seat: 5, text: "발소리가 안 들려요" });
     expect(answers!.map((a) => a.order)).toEqual([1, 2, 3, 4, 5, 6]);
   });

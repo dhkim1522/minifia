@@ -1,5 +1,6 @@
 // B안 2D 그림을 실제 Three.js 에셋에서 렌더한다.
 // npm run dev 실행 후 node scripts/render-noir-assets.mjs http://127.0.0.1:5173
+// 얼굴과 전신만 다시 만들 때는 --seat-portraits-only.
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -93,10 +94,9 @@ try {
     }
   }
 
-  if (process.argv.includes("--backdrops-only")) {
-    await renderBackdrops(scene);
-  } else {
-    const portrait = (options) => page.evaluate((opts) => window.noirPortrait(opts), options);
+  const portrait = (options) => page.evaluate((opts) => window.noirPortrait(opts), options);
+
+  async function renderSeatPortraits() {
     for (const [seat, figure] of figures.entries()) {
       const full = await portrait({ seat, outfit: "coat", ratio: 0.75 });
       await savePng(full, `public/characters/table/${figure}_default@2x.png`, 144, 192);
@@ -104,7 +104,9 @@ try {
       const head = await portrait({ seat, outfit: "coat", head: true, ratio: 1 });
       await savePng(head, `public/characters/faces/face-${seat}.png`, 200, 200);
     }
+  }
 
+  async function renderRoleAndOutfitPortraits() {
     // 역할 그림은 본인 카드에만 등장한다. 살아 있는 인물의 공개 외형은 좌석·꾸미기와만 연동된다.
     for (const [role, seat, outfit] of [
       ["citizen", 2, "coat"],
@@ -125,12 +127,24 @@ try {
       const image = await portrait({ seat: 0, outfit, ratio: 0.8 });
       await savePng(image, `public/outfits/outfit-${outfit}.png`, 240, 300);
     }
+  }
 
+  async function renderMapCards() {
     for (const [mapId, x, z, zoom] of [["bar", -1.3, -1.2, 0.64], ["plaza", -0.25, -1.4, 0.62]]) {
       const image = await scene({ mapId, phase: "talk", width: 560, height: 320, x, z, zoom, offset: 0 });
       const png = await sharp(image).resize(560, 320).removeAlpha().png({ palette: true, quality: 95 }).toBuffer();
       await writeFile(root(`public/maps/map-${mapId}.png`), png);
     }
+  }
+
+  if (process.argv.includes("--backdrops-only")) {
+    await renderBackdrops(scene);
+  } else if (process.argv.includes("--seat-portraits-only")) {
+    await renderSeatPortraits();
+  } else {
+    await renderSeatPortraits();
+    await renderRoleAndOutfitPortraits();
+    await renderMapCards();
     await renderBackdrops(scene);
   }
 } finally {

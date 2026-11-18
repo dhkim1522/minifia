@@ -28,7 +28,7 @@ export type PreloadItem = { href: string; imageSrcSet?: string };
  * 정적 그림 주소 끝에 붙이는 값. 파일 이름이 같아도 그림을 바꾼 배포가 바로 보이게 한다
  * (정적 그림 캐시가 max-age 1일이라 같은 주소는 하루 동안 옛 그림이 나온다). 그림을 바꾸면 값을 바꾼다.
  */
-export const ASSET_VERSION = "noir-2";
+export const ASSET_VERSION = "noir-3";
 
 // 파일 이름의 @ 는 URL 에서 %40 으로 쓴다.
 function png(dir: "table" | "roles" | "ghost", id: string, scale: 2 | 4): string {

@@ -27,6 +27,7 @@ export interface RoleCardSheetProps {
   unread: number;
   /** 활동 기록의 맨 위 몇 줄에 NEW 를 다는가 */
   newCount: number;
+  modal?: boolean;
   onClose: () => void;
 }
 
@@ -39,7 +40,7 @@ function journalRoleOf(role: RoleId | null): JournalRole | null {
 
 // 역할 카드 시트(결정 0026, UI-SPEC D, 시안 R2~R5). [내 역할]·[수사 기록] 두 시트를 하나로 합친 것이다.
 // 내용은 서버가 본인에게만 보낸 me.role·me.records 에서만 만든다(T-01-45). 직업 그림은 내 역할 하나만 그린다(T-03.1-20).
-export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, onClose }: RoleCardSheetProps): ReactElement {
+export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, modal = true, onClose }: RoleCardSheetProps): ReactElement {
   const role = view.me.role ?? null;
   const journalRole = showBack ? null : journalRoleOf(role);
   const answers = keywordAnswersOf(view);
@@ -139,6 +140,7 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, on
       label={title}
       onClose={onClose}
       showClose
+      modal={modal}
       className="mf-sheet--rolecard"
       initialFocusRef={tabbed && selectedTab !== "role" ? tabRefs[selectedTab] : undefined}
     >

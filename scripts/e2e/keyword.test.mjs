@@ -136,11 +136,12 @@ const rows = [
   { order: 3, seat: 2, none: true },
   { order: 4, seat: 3, none: true },
 ];
-const pg = (who, over = {}) => ({ who, autoOpened: true, reopened: false, hasTab: true, rows, ...over });
-test("KW8: 자동으로 한 번 열리고 낸 순서·답 없음 맨 끝·닫으면 다시 안 열리며 두 페이지가 같으면 통과", () => {
+const pg = (who, over = {}) => ({ who, listOpen: true, dialogOpen: false, inputVisible: true, quoted: true, collapsed: true, hasTab: true, rows, ...over });
+test("KW8: 답·입력칸 동시 접근, 인용, 접기, 기록 탭과 정렬을 검사한다", () => {
   assert.equal(kw8AnswerList([pg("시민"), pg("마피아")]).ok, true);
-  assert.equal(kw8AnswerList([pg("시민"), pg("마피아", { autoOpened: false })]).ok, false);
-  assert.equal(kw8AnswerList([pg("시민"), pg("마피아", { reopened: true })]).ok, false);
+  for (const over of [{ listOpen: false }, { dialogOpen: true }, { inputVisible: false }, { quoted: false }, { collapsed: false }]) {
+    assert.equal(kw8AnswerList([pg("시민"), pg("마피아", over)]).ok, false);
+  }
   assert.equal(kw8AnswerList([pg("시민", { hasTab: false }), pg("마피아")]).ok, false);
   const none2 = [rows[0], rows[2], rows[1], rows[3]].map((r, i) => ({ ...r, order: i + 1 }));
   assert.equal(kw8AnswerList([pg("시민", { rows: none2 }), pg("마피아", { rows: none2 })]).ok, false); // 답 없음이 가운데

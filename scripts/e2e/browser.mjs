@@ -67,19 +67,6 @@ export function launchChrome(executablePath) {
 }
 
 /**
- * 23페이즈 하네스 init 스크립트: 첫날 토론 시작 때 저절로 열리는 "모두의 기록"(옛 "모두의 답") 시트(P23-8)를 100ms 마다 닫는다. 앱 동작이 아니라 이 도구가 기존 흐름의 단추를 가리지 않게 하는 것이다.
- * 키워드 흐름(keyword.mjs)은 입력줄 감시(window.__kwWatch)를 넣어 두므로 이 스크립트가 멈추고 시트가 열린 채로 검사한다.
- */
-export function dismissAnswerSheetInit() {
-  setInterval(() => {
-    if (window.__kwWatch) return;
-    // 24페이즈에서 시트 제목이 "모두의 답" → "모두의 기록" 으로 바뀌었다. 옛 배포본을 대상으로 한 실행도 있어 두 이름을 모두 닫는다.
-    const dlg = document.querySelector('dialog[aria-label="모두의 기록"].mf-dialog--open, dialog[aria-label="모두의 답"].mf-dialog--open');
-    if (dlg) dlg.querySelector('[aria-label="닫기"]')?.click();
-  }, 100);
-}
-
-/**
  * 방장으로 붙은 휴대폰 크기 페이지를 연다.
  * 선택 인자(05-07): mobile = true(거짓이면 isMobile·hasTouch 를 꺼 데스크톱 창처럼 연다), guest = true(06-17: 방장이 아니라 손님으로 붙는다 — 방장 확인 대신 로비 도달을 기다린다),
  * initScripts = [] (세션 init 스크립트 다음에 순서대로 addInitScript 할 함수 또는 문자열 — 시험 컨텍스트에만 들어간다),
@@ -130,7 +117,6 @@ export async function openHostPage(browser, { origin, code, token, size, dpr, mo
       /* 저장소가 막힌 환경은 훅이 꺼진 채로 둔다 — 로비 검사가 측정값 없음으로 실패한다 */
     }
   }, WORLD_HOOK_KEY);
-  await context.addInitScript(dismissAnswerSheetInit); // 23페이즈: 첫날 토론이 시작되면 "모두의 기록" 시트가 저절로 열려 뒤 단추를 가린다 — 키워드 흐름(window.__kwWatch)만 그대로 둔다
   for (const script of initScripts) await context.addInitScript(script);
   if (preRoute) await preRoute(context);
 

@@ -38,10 +38,7 @@ export const WALK_PHASE_RATE = (11 * MOVE_SPEED) / 1.245;
 /** 걷기·서기 전환 섞기(ms) — 결정 0059-3 짧은 자세 섞기 */
 export const POSE_BLEND_MS = 120;
 
-/** 인물 5명 중 자리 번호가 가리키는 인물 — 같은 방 같은 자리면 어느 폰에서나 같은 인물이다 */
-export function figForSeat(seat: number): number {
-  return ((seat % FIGS.length) + FIGS.length) % FIGS.length;
-}
+export { figForSeat } from "./characterData";
 
 // ---------- 부품 → 관절 병합 ----------
 
@@ -246,7 +243,7 @@ interface BrimmedOpts {
   curl: number;
 }
 
-function buildHats(head: Object3D, F: number): void {
+function buildHats(head: Object3D, F: number, defaultHat: string): void {
   function grp(n: string): Group {
     const g = new Group();
     g.userData.tag = `hat:${n}`;
@@ -292,6 +289,13 @@ function buildHats(head: Object3D, F: number): void {
   brimmed("fedoraDark", { ...fedora, crown: "#3d4357", band: "#22252e", crease: "#30354a" });
   brimmed("fedoraTan", { ...fedora, crown: "#a98559", band: "#5a3a26", crease: "#8f7048" });
   brimmed("fedoraMafia", { ...fedora, crown: "#1a1d24", band: "#8e0b21", crease: "#14161c" });
+  // 클로슈는 윗면이 둥글고 좁은 챙이 아래로 향한다.
+  if (defaultHat === "cloche") {
+    brimmed("cloche", {
+      ...fedora, h: 0.14, taper: 0.02, dome: 0.68, brim: 0.075,
+      lift: -0.65, flip: 0, curl: 0, crown: "#395b60", band: "#a5826b", crease: "",
+    });
+  }
 
   // 경찰 모자: 검은 띠, 위로 퍼지는 윗판(앞이 살짝 들림), 은빛 휘장·턱끈, 반짝이는 검은 챙
   let g = grp("police");
@@ -355,7 +359,7 @@ function buildHats(head: Object3D, F: number): void {
 // ---------- 템플릿 조립 → 관절별 부품 ----------
 
 /** Sweep the raised front edge into a side part. The hat variant keeps only the hair below the brim. */
-function sculptedHair(radius: number, bob: boolean, hat: boolean): BufferGeometry {
+function sculptedHair(radius: number, bob: boolean, hat: boolean, crop: boolean): BufferGeometry {
   const columns = 32;
   const rows = 14;
   const start = hat ? Math.acos((HAT_Y + 0.025) / radius) : 0;
@@ -366,8 +370,9 @@ function sculptedHair(radius: number, bob: boolean, hat: boolean): BufferGeometr
       const angle = (column / columns) * Math.PI * 2;
       const side = -Math.cos(angle);
       const towardFace = Math.min(1, Math.max(0, (Math.sin(angle) - 0.32) / 0.68));
-      const sweep = 1.19 + side * 0.26 + Math.sin(angle * 3) * 0.065;
-      const edge = (bob ? 2.36 : 1.82) * (1 - towardFace) + sweep * towardFace;
+      const sweep = crop ? 1.02 - side * 0.16 : 1.19 + side * 0.26 + Math.sin(angle * 3) * 0.065;
+      const backEdge = bob ? 2.36 : crop ? 1.63 : 1.82;
+      const edge = backEdge * (1 - towardFace) + sweep * towardFace;
       const theta = start + (Math.max(start, edge) - start) * (row / rows);
       const wave = hat ? 1 : 1 + 0.022 * Math.sin(angle * 2 + theta * 3) * Math.sin(theta);
       const r = radius * wave;
@@ -472,10 +477,16 @@ function bakeFig(fig: Fig): Record<JointName, Part[]> {
     }
   }
   const hairRadius = R + (girl ? 0.055 : 0.041);
-  part(head, sculptedHair(hairRadius, girl, false), "hair", "hair");
-  part(head, sculptedHair(hairRadius, girl, true), "hair", "hatHair");
+  const crop = fig.haircut === "crop";
+  part(head, sculptedHair(hairRadius, girl, false, crop), "hair", "hair");
+  part(head, sculptedHair(hairRadius, girl, true, crop), "hair", "hatHair");
+  if (fig.haircut === "bun") {
+    const bun = part(head, new SphereGeometry(0.21, 16, 12), "hair", "bun");
+    bun.scale.set(1, 0.82, 0.9);
+    bun.position.set(-0.29, 0.54, -0.14);
+  }
   buildFaces(head, R * 0.98, hairRadius + 0.008);
-  buildHats(head, Math.sqrt(hairRadius ** 2 - HAT_Y ** 2) + 0.018);
+  buildHats(head, Math.sqrt(hairRadius ** 2 - HAT_Y ** 2) + 0.018, fig.hat);
 
   // 선글라스·수염
   const FR = R * 0.98;
@@ -588,6 +599,7 @@ function isShown(tag: string, o: Outfit, fig: Fig, face: string): boolean {
   if (tag === "tie") return !!tie;
   if (tag === "hair") return !cut;
   if (tag === "hatHair") return cut;
+  if (tag === "bun") return !hat;
   if (tag === "ear") return hat !== "hood";
   const [kind, name] = tag.split(":");
   switch (kind) {
@@ -858,7 +870,7 @@ function paint(m: Merged, dim: boolean): void {
   a.needsUpdate = true;
 }
 
-/** 인물 figIndex(0~4)를 만든다 — 원문 MFChar.create. 병합 재질은 모든 캐릭터가 공유한다 */
+/** 인물 번호에 맞는 모형을 만든다. 병합 재질은 모든 캐릭터가 공유한다. */
 export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): WorldCharacter {
   const fig = FIGS[figIndex];
   const parts = figParts(figIndex);

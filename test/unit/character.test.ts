@@ -88,8 +88,10 @@ describe("기본 코트 인물 하나 (트레이서)", () => {
     expect(c.root.rotation.y).toBe(1.2);
   });
 
-  it("자리 번호 → 인물은 seat % 5 이다(5~7 은 0~2 재사용)", () => {
-    expect([0, 1, 2, 3, 4, 5, 6, 7].map(figForSeat).join(",")).toBe("0,1,2,3,4,0,1,2");
+  it("여덟 좌석은 서로 다른 인물을 쓰고 범위 밖 번호는 순환한다", () => {
+    expect([0, 1, 2, 3, 4, 5, 6, 7].map(figForSeat)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(figForSeat(8)).toBe(0);
+    expect(figForSeat(-1)).toBe(7);
   });
 
   it("characterKit.create 가 렌더러가 쓰는 모양을 준다", () => {
@@ -99,8 +101,8 @@ describe("기본 코트 인물 하나 (트레이서)", () => {
     expect(h.root.scale.x).toBeCloseTo(0.83, 6);
   });
 
-  it("5명 모두 어느 쪽 메시도 그림자를 던지지 않는다", () => {
-    for (let i = 0; i < 5; i++) {
+  it("여덟 인물 모두 어느 쪽 메시도 그림자를 던지지 않는다", () => {
+    for (let i = 0; i < FIGS.length; i++) {
       const c = createCharacter(i, "coat");
       for (const m of meshes(c.root, false)) expect(m.castShadow).toBe(false);
     }

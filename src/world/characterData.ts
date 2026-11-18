@@ -1,5 +1,5 @@
 // 달빛 누아르의 인물·의상 팔레트. 관절 동작과 의상 식별자는 v2.0과 공유한다.
-// 인물 5명(FIGS)·의상 9종(OUTFITS)·표정 7종·동작 9종(EMOTES)·자세 키(KEYS)·피부/눈/입 색.
+// 좌석별 인물 8명(FIGS)·의상 9종(OUTFITS)·표정 7종·동작 9종(EMOTES)·자세 키(KEYS)·피부/눈/입 색.
 
 /** 피부색(머리·귀·손) */
 export const SKIN = "#efbc98";
@@ -13,19 +13,28 @@ export interface Fig {
   name: string;
   hair: string;
   style: "boy" | "girl";
+  haircut?: "bun" | "crop";
   /** 인물이 기본으로 쓰는 모자(없으면 빈 문자열). 의상의 hat 이 null 이면 이 값을 쓴다 */
   hat: string;
   tie: string;
 }
 
-/** 인물 5명: 갈색 머리·금발·단발·검은 페도라·갈색 페도라 */
+/** 각 좌석의 기본 외형. 앞 다섯 인물의 순서를 유지한다. */
 export const FIGS: readonly Fig[] = [
   { id: "fig1", name: "지호", hair: "#53362d", style: "boy", hat: "", tie: "#6e83a2" },
   { id: "fig3", name: "민준", hair: "#b99050", style: "boy", hat: "", tie: "#648c81" },
   { id: "fig4", name: "서연", hair: "#664236", style: "girl", hat: "", tie: "#ab8f73" },
   { id: "fig7", name: "도윤", hair: "#332922", style: "boy", hat: "fedoraDark", tie: "#a8816c" },
   { id: "fig8", name: "하은", hair: "#553830", style: "girl", hat: "fedoraTan", tie: "#9ca3b5" },
+  { id: "fig6", name: "유나", hair: "#8b4539", style: "girl", haircut: "bun", hat: "", tie: "#ac6b5f" },
+  { id: "fig2", name: "준호", hair: "#85858e", style: "boy", haircut: "crop", hat: "", tie: "#718f9d" },
+  { id: "fig5", name: "수아", hair: "#3e3147", style: "girl", hat: "cloche", tie: "#9b749e" },
 ];
+
+/** 무대와 초상화가 같은 좌석에 같은 인물을 쓴다. */
+export function figForSeat(seat: number): number {
+  return ((seat % FIGS.length) + FIGS.length) % FIGS.length;
+}
 
 export type OutfitId = "coat" | "police" | "doctor" | "detective" | "noir" | "mafia" | "reporter" | "elder" | "hood";
 

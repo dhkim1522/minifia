@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ROLE_IDS } from "../../shared/game/roles";
-import { OUTFIT_IDS } from "../../shared/protocol";
+import { MAX_PLAYERS, OUTFIT_IDS } from "../../shared/protocol";
 import { SCENE_IDS } from "../../src/game/scenes";
 
 vi.mock("react-dom", () => ({ preload: vi.fn() }));
@@ -213,7 +215,7 @@ describe("실제 파일과의 일치", () => {
     const urls: string[] = [];
     for (let seat = 0; seat < FIGURE_IDS.length; seat++) {
       const fig = figureSrc(seat);
-      urls.push(fig.src, ...urlsOfSrcSet(fig.srcSet));
+      urls.push(faceSrc(seat), fig.src, ...urlsOfSrcSet(fig.srcSet));
     }
     for (const role of ROLE_IDS) {
       const art = roleArtSrc(role);
@@ -233,6 +235,39 @@ describe("실제 파일과의 일치", () => {
       const path = decodeURIComponent(url.split("?")[0]!);
       const files = path.startsWith("/backgrounds/") ? backdropFiles : characterFiles;
       expect(files.has(`/public${path}`), `${url} → /public${path}`).toBe(true);
+    }
+  });
+
+  it("좌석마다 얼굴·전신 PNG의 픽셀이 다르고 표시 규격을 지킨다", async () => {
+    expect(FIGURE_IDS).toHaveLength(MAX_PLAYERS);
+    const faces = new Set<string>();
+    const figures2x = new Set<string>();
+    const figures4x = new Set<string>();
+    const files = FIGURE_IDS.flatMap((_, seat) => {
+      const [body2x, body4x] = urlsOfSrcSet(figureSrc(seat).srcSet);
+      return [
+        { url: faceSrc(seat), width: 200, height: 200, group: faces },
+        { url: body2x!, width: 144, height: 192, group: figures2x },
+        { url: body4x!, width: 288, height: 384, group: figures4x },
+      ];
+    });
+    await Promise.all(files.map(async ({ url, width, height, group }) => {
+      const path = decodeURIComponent(url.split("?")[0]!);
+      const file = readFileSync(`public${path}`);
+      expect(file.subarray(0, 8).toString("hex"), path).toBe("89504e470d0a1a0a");
+      const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      expect([info.width, info.height], path).toEqual([width, height]);
+      const hash = createHash("sha256").update(data).digest("hex");
+      expect(group.has(hash), `${path} 이미지 중복`).toBe(false);
+      group.add(hash);
+    }));
+  });
+
+  it("홈 아이콘과 공유 그림도 최신 그림 캐시 버전을 쓴다", () => {
+    expect(ASSET_VERSION).not.toBe("noir-2");
+    const html = readFileSync("index.html", "utf8");
+    for (const icon of ["favicon.svg", "favicon-32.png", "apple-touch-icon.png", "og.png"]) {
+      expect(html).toContain(`/${icon}?v=${ASSET_VERSION}`);
     }
   });
 

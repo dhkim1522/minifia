@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { validateNickname } from "../../shared/nickname";
 import { isRoomCode } from "../../shared/roomCode";
@@ -10,14 +10,16 @@ import { Button } from "../components/Button";
 import { NicknameSheet } from "../components/NicknameSheet";
 import { TextField } from "../components/TextField";
 import { Toast, useToast } from "../components/Toast";
+import { V2Icon } from "../components/v2/V2Icon";
 import { createRoom, joinRoom, testModeFromSearch } from "../net/api";
 import { preloadEntryAssets } from "../net/assets";
 import { messageForApiError, nicknameErrorText } from "../net/copy";
-import { loadLastNickname, loadSession, saveLastNickname } from "../net/session";
+import { loadLastNickname, loadSession, markTutorialSeen, readTutorialSeen, saveLastNickname } from "../net/session";
 import { preloadWorld } from "../world/runtime";
 
 /** 시험판 Worker 별 첫 화면 표식. v1.0(`minifia`)·dev 에는 없다. */
 const BUILD_LABEL: Record<string, string> = { "minifia-v2": "v2.0 시험판", "minifia-v3": "v3.0 시험판" };
+const TutorialScreen = lazy(() => import("./TutorialScreen").then(({ TutorialScreen }) => ({ default: TutorialScreen })));
 
 interface HomeProps {
   onEnterRoom: (code: string, token: string) => void;
@@ -36,6 +38,8 @@ export function Home({ onEnterRoom }: HomeProps) {
   const [serverNicknameError, setServerNicknameError] = useState<string | null>(null);
   const [serverCodeError, setServerCodeError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tutorial, setTutorial] = useState(false);
+  const [tutorialSeen, setTutorialSeen] = useState(readTutorialSeen);
   const { toast, show } = useToast();
   // 대기실 첫 그림(배경·인물)과 맵 청크(three)가 비어 보이지 않게 첫 화면에서 미리 받아 둔다.
   useEffect(() => {
@@ -46,7 +50,7 @@ export function Home({ onEnterRoom }: HomeProps) {
   const validation = validateNickname(nickname);
   const localError = touched && !validation.ok ? nicknameErrorText(validation.reason) : null;
   const nicknameError = serverNicknameError ?? localError;
-  const codeReady = isRoomCode(code) && !busy;
+  const codeReady = isRoomCode(code) && !busy && !tutorial;
 
   function handleNicknameChange(value: string) {
     setNickname(value);
@@ -63,6 +67,13 @@ export function Home({ onEnterRoom }: HomeProps) {
     setServerNicknameError(null);
     setServerCodeError(null);
     setSheet("create");
+  }
+
+  function openTutorial() {
+    unlockAudio();
+    markTutorialSeen();
+    setTutorialSeen(true);
+    setTutorial(true);
   }
 
   function openJoin(e: FormEvent) {
@@ -131,7 +142,7 @@ export function Home({ onEnterRoom }: HomeProps) {
     else show(message.text);
   }
 
-  return (
+  const home = (
     <Backdrop layout="entry" scene="lobby">
       <main className="mf-root mf-entry">
         <header className="mf-entry__head">
@@ -154,8 +165,21 @@ export function Home({ onEnterRoom }: HomeProps) {
               }
             />
           </form>
-          <Button variant="primary" block type="button" onClick={openCreate} disabled={busy}>
+          <Button variant="primary" block type="button" onClick={openCreate} disabled={busy || tutorial}>
             방 만들기
+          </Button>
+          <Button
+            variant="secondary"
+            block
+            icon={<V2Icon name="play" size={16} />}
+            aria-label="혼자 하며 배우기"
+            data-tutorial-entry=""
+            data-call={tutorialSeen ? undefined : ""}
+            className={tutorialSeen ? undefined : "is-call"}
+            onClick={openTutorial}
+            disabled={busy || tutorial}
+          >
+            혼자 하기
           </Button>
         </div>
         {BUILD_LABEL[WORKER_NAME] ? <p className="mf-entry__build">{BUILD_LABEL[WORKER_NAME]}</p> : null}
@@ -174,4 +198,9 @@ export function Home({ onEnterRoom }: HomeProps) {
       <Toast toast={toast} placement="bottom" />
     </Backdrop>
   );
+  return tutorial ? (
+    <Suspense fallback={home}>
+      <TutorialScreen onExit={() => setTutorial(false)} />
+    </Suspense>
+  ) : home;
 }
