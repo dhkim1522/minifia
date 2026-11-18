@@ -4,6 +4,7 @@ import { validateNickname } from "../nickname";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import type { MapChoice, MapId } from "../protocol";
 import type {
+  FirstBallotResult,
   AssassinationRecord,
   BadgeId,
   ExecutionView,
@@ -40,6 +41,8 @@ export interface NightLogEntry {
 }
 
 export interface Player {
+  roleReady?: true;
+  firstBallot?: number | null;
   id: string;
   token: string;
   seat: number;
@@ -230,6 +233,8 @@ export interface RoomState {
   map?: MapId;
   /** 서버 전용(결정 0022). 방을 만들 때만 정해지는 테스트 방 표시 — true 일 때만 키가 있다. 테스트 방 방장 도구의 문이다. */
   testMode?: true;
+  playtest?: true;
+  firstBallotOutcome?: { count: number; result: FirstBallotResult };
   /** 서버 전용(결정 0022). 테스트 방 방장이 고른 다음 판 직업. 대기실 복귀 뒤에도 남아 새 판마다 다시 쓰인다. 없으면 무작위. */
   testRole?: RoleId;
   /** 서버 전용(결정 0022·0024 확장, P-13). 테스트 방 방장이 고른 봇 투표 규칙 — 무작위가 아닌 값만 저장한다. 대기실 복귀 뒤에도 남는다. 둘 다 무작위면 키가 없다. */
@@ -258,6 +263,7 @@ export function createRoomState(input: {
   hostNickname: string;
   now: number;
   testMode?: boolean;
+  playtest?: true;
 }): CreateRoomStateResult {
   const checked = validateNickname(input.hostNickname);
   if (!checked.ok) return { ok: false, error: "NICKNAME_INVALID" };
@@ -284,6 +290,7 @@ export function createRoomState(input: {
       nextJoinSeq: 1,
       players: [host],
       ...(input.testMode === true ? { testMode: true as const } : {}),
+      ...(input.playtest === true ? { playtest: true as const, mapChoice: "bar" as const } : {}),
     },
   };
 }
@@ -460,6 +467,8 @@ export function beginGame(
   // 의심 포스트잇(notes)도 같은 구조 분해로 뺀다 — 새 판에 어제 판의 종이가 따라오지 않게(벨트, D-08).
   const { keyword: _prevKeyword, notes: _prevNotes, ...rest } = state;
   const keyword = pickKeyword !== undefined ? pickKeyword(randInt) : undefined;
+  // 옷장 조작이 없는 실험방은 좌석별 외형과 기본 코트로 인물을 구분한다.
+  const dressed = state.playtest === true ? state.players : resolveLookConflicts(state.players);
   return {
     ...rest,
     ...(keyword !== undefined ? { keyword } : {}),
@@ -467,7 +476,7 @@ export function beginGame(
     map,
     phase: "assigning",
     phaseEndsAt: now + ASSIGNING_MS,
-    players: resolveLookConflicts(state.players).map((p) => ({ ...p, role: roles.get(p.id) })),
+    players: dressed.map((p) => ({ ...p, role: roles.get(p.id) })),
   };
 }
 

@@ -2,8 +2,9 @@
 // three 본체를 끌고 오지 않는다. three 를 값으로 쓰는 모듈은 threeRenderer.ts·threeCamera.ts·maps/ 이고 06-13 이 import() 로만 연다.
 import type { Object3D } from "three";
 
-/** nightCitizen = 밤·산 시민 편(거의 깜깜 + 내 캐릭터 빛), nightGhost = 밤·유령(달빛 + 약한 무대 기운). 마피아의 밤은 night (09-10) */
+/** nightCitizen은 내 캐릭터에 약한 빛을 더한다. 살아 있는 참가자에게 보이는 인원은 서버가 정한다. */
 export type LightingPhase = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
+export const LIGHT_BLEND_SEC = 2.8;
 
 export interface Budget {
   /** 화면 배율 상한(장치 배율과 작은 쪽을 쓴다) */
@@ -78,7 +79,8 @@ export interface WorldRenderer {
   readonly canvas: HTMLCanvasElement;
   resize(w: number, h: number): void;
   setView(target: { x: number; z: number }, offsetY: number): void;
-  setLighting(phase: LightingPhase): void;
+  /** 전환 시간이 없으면 바로 적용한다. 초기 진입, 저감 모션, 정지 장면에서 사용한다. */
+  setLighting(phase: LightingPhase, seconds?: number): void;
   /** 긴장 단계 0·1·2 (결정 0049): 1 = 무대 점광원이 초점 위로 선두 세기, 2 = 그에 더해 실내 emissive 절반. 시험 가짜 렌더러 호환을 위해 optional (08-10) */
   setTension?(level: 0 | 1 | 2, focus?: { x: number; z: number }): void;
   /** 핀 조명(결정 0066-6): pin 자리(월드 단위)에 무대 점광원이 가 세기가 strength(0~1, 단계 값 → 선두 세기)만큼 오르고 실내 발광에 dim 이 곱해진다. null 이면 끈다. 시험 가짜 렌더러 호환을 위해 optional */

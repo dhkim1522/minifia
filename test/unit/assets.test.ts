@@ -76,6 +76,23 @@ describe("그림 URL 헬퍼", () => {
     expect(art.srcSet).toBe(`/characters/roles/mafia_default%402x.png?v=${ASSET_VERSION} 1x, /characters/roles/mafia_default%404x.png?v=${ASSET_VERSION} 2x`);
   });
 
+  it("경찰 역할 카드 그림은 두 해상도 모두 파란 제복을 보여 준다", async () => {
+    const files = urlsOfSrcSet(roleArtSrc("police").srcSet);
+    for (const [i, url] of files.entries()) {
+      const file = `public${decodeURIComponent(url.split("?")[0]!)}`;
+      const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      expect([info.width, info.height]).toEqual([144 * (i + 1), 192 * (i + 1)]);
+      let visible = 0;
+      let blue = 0;
+      for (let p = 0; p < data.length; p += info.channels) {
+        if (data[p + 3]! < 220) continue;
+        visible++;
+        if (data[p + 2]! - data[p]! > 25 && data[p + 2]! - data[p + 1]! > 10) blue++;
+      }
+      expect(blue / visible, file).toBeGreaterThan(0.25);
+    }
+  });
+
   it("배경: /backgrounds/bg_{layout}_{장면 파일 조각}.webp?v=버전", () => {
     expect(backdropUrl("game", "day")).toBe(`/backgrounds/bg_game_day.webp?v=${ASSET_VERSION}`);
     expect(backdropUrl("game", "night")).toBe(`/backgrounds/bg_game_night.webp?v=${ASSET_VERSION}`);

@@ -57,8 +57,12 @@ export function testModeFromSearch(search: string): boolean {
 }
 
 // testMode 는 true 일 때만 본문에 싣는다 — 일반 방 본문은 nickname 하나로 그대로다.
-export function createRoom(nickname: string, options: { testMode?: boolean } = {}): Promise<ApiResult<CreateRoomResponse>> {
-  return postJson<CreateRoomResponse>("/api/rooms", options.testMode === true ? { nickname, testMode: true } : { nickname });
+export function createRoom(nickname: string, options: { testMode?: boolean; playtest?: true } = {}): Promise<ApiResult<CreateRoomResponse>> {
+  return postJson<CreateRoomResponse>("/api/rooms", {
+    nickname,
+    ...(options.testMode === true ? { testMode: true } : {}),
+    ...(options.playtest === true ? { playtest: true } : {}),
+  });
 }
 
 // 비인증 미리보기. 4자리 코드로 누구나 받는 응답이고, 앉은 사람의 자리·닉네임만 들어 있다.

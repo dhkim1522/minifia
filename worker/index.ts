@@ -26,6 +26,7 @@ function apiError(error: ApiErrorCode, status: number): Response {
 const WS_PATH = /^\/api\/rooms\/([^/]+)\/ws$/;
 const PREVIEW_PATH = /^\/api\/rooms\/([^/]+)$/;
 const JOIN_PATH = /^\/api\/rooms\/([^/]+)\/join$/;
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /** 본문을 상한 안에서 읽어 JSON 으로 파싱한다. 상한 초과·JSON 아님은 null. */
 async function readJsonBody(request: Request): Promise<unknown | null> {
@@ -52,6 +53,7 @@ async function handleCreateRoom(request: Request, env: Env): Promise<Response> {
   if (raw === null) return apiError("BAD_REQUEST", 400);
   const parsed = CreateRoomBodySchema.safeParse(raw);
   if (!parsed.success) return apiError(isNicknameTooBig(parsed.error) ? "NICKNAME_INVALID" : "BAD_REQUEST", 400);
+  if (parsed.data.playtest === true && !LOOPBACK_HOSTS.has(new URL(request.url).hostname)) return apiError("BAD_REQUEST", 400);
 
   const result = await allocateRoom(
     (code) => env.ROOM.getByName(code),
@@ -59,6 +61,7 @@ async function handleCreateRoom(request: Request, env: Env): Promise<Response> {
     cryptoRandInt,
     Date.now(),
     parsed.data.testMode === true,
+    parsed.data.playtest,
   );
   switch (result.kind) {
     case "created": {

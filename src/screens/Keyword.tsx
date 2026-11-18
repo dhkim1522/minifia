@@ -70,6 +70,7 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
   const genre = view.day?.keyword?.genre ?? "";
   const endsAt = view.phaseEndsAt;
   const durationMs = view.phaseDurationMs;
+  const playtest = view.playtest === true;
 
   // 단계 시작 뒤 420ms 안에 마운트되면 등장 모션, 그보다 늦으면(재접속·새로고침) 바로 보인다. 마운트 때 한 번만 정한다.
   const [still] = useState(() => endsAt === null || durationMs === null || sinceStartMs(endsAt, durationMs, offset, Date.now()) >= CARD_ENTER_MS);
@@ -87,9 +88,9 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
   // 읽기 3초가 끝나 입력칸이 풀리면 초점을 준다(키보드가 안 올라오는 기기에서는 빛나는 입력칸을 직접 누른다)
   const wasLocked = useRef(answer.state === "locked");
   useEffect(() => {
-    if (!timeless && wasLocked.current && answer.state === "open") inputRef.current?.focus({ preventScroll: true });
+    if (!timeless && !playtest && wasLocked.current && answer.state === "open") inputRef.current?.focus({ preventScroll: true });
     wasLocked.current = answer.state === "locked";
-  }, [answer.state, timeless]);
+  }, [answer.state, timeless, playtest]);
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -115,7 +116,7 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
     <main ref={rootRef} className={rootCls} data-keyword-screen="" data-kb-open={kbOpen ? "true" : undefined}>
       <div className="mf-reveal__dim" aria-hidden="true" />
       <header className="mf-reveal__header">
-        <PhaseHeader title={DAY_COPY.titles.keyword ?? ""} extra={myRoleButton} />
+        <PhaseHeader title={playtest ? "첫 단서" : DAY_COPY.titles.keyword ?? ""} extra={myRoleButton} />
       </header>
       <section className="mf-reveal__stage">
         <div className={cardCls} data-keyword-card="" data-compact={kbOpen ? "true" : undefined} role="group" aria-label={KEYWORD_COPY.cardName}>
@@ -131,14 +132,14 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
               {KEYWORD_COPY.hidden}
             </p>
           )}
-          <p className="mf-keyword__note" data-keyword-note="" hidden={kbOpen}>
+          {!playtest ? <p className="mf-keyword__note" data-keyword-note="" hidden={kbOpen}>
             {KEYWORD_COPY.note}
-          </p>
+          </p> : null}
         </div>
       </section>
       {!timeless || view.me.answer !== undefined ? <div className="mf-keyword__answer" data-answer-state={answer.state}>
-        <div className="mf-keyword__meta" id={META_ID}>
-          {!timeless ? <span className="mf-keyword__secs" data-answer-secs="" data-tone={tone} aria-hidden="true">
+        <div className="mf-keyword__meta" id={META_ID} hidden={playtest && !answer.notice && !sent}>
+          {!timeless && !playtest ? <span className="mf-keyword__secs" data-answer-secs="" data-tone={tone} aria-hidden="true">
             {KEYWORD_COPY.secs(answer.secondsLeft)}
           </span> : null}
           <span className="mf-keyword__mid">
@@ -151,9 +152,9 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
               </span>
             ) : null}
           </span>
-          <span className="mf-keyword__count" data-answer-count="" data-full={answer.count >= ANSWER_MAX_GRAPHEMES ? "true" : undefined}>
+          {!playtest ? <span className="mf-keyword__count" data-answer-count="" data-full={answer.count >= ANSWER_MAX_GRAPHEMES ? "true" : undefined}>
             {KEYWORD_COPY.count(answer.count)}
-          </span>
+          </span> : null}
         </div>
         <form className="mv-chat__form" onSubmit={onSubmit}>
           <div className={call ? "mv-chat__field is-call" : "mv-chat__field"}>
@@ -180,7 +181,7 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
               onBlur={composed.bind.onBlur}
             />
           </div>
-          <button
+          {!playtest || !sent ? <button
             type="submit"
             className="mv-tool mv-chat__send"
             data-answer-send=""
@@ -192,7 +193,7 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
             <span className="mv-tool__face">
               <V2Icon name={sent ? "check" : "send"} size={22} />
             </span>
-          </button>
+          </button> : null}
         </form>
       </div> : null}
     </main>

@@ -30,7 +30,7 @@
 //              baseline 칸에 적을 뿐 판정하지 않는다 — 합격 판정은 실기기 확인(사용자 결정 2026-11-02). 방은 끝에 나가서 지운다. v1.0 주소는 어떤 요청보다 먼저 거부한다.
 //   --map bar|plaza (nightload, 11-13·20-09): 시작 전에 방장이 지도 칩 → 맵 탭 → 그 맵 카드를 고른다(pickMapViaUi). 시작 뒤 view.map 이 그 맵이 아니면 오류로 끝낸다.
 //              저장 이름 끝 `-bar`·`-plaza`, JSON params.map. 옵션이 없으면 아무것도 고르지 않는다(이름은 이전 그대로 끝 표시 없음, 맵 확인도 없음).
-//   --mode light (18-07): 광장·재즈 바 × talk·morning·vote·night 정지 화면(?perf=1&shot=1, 시드 1, 사람 6, 코트)을 같은 카메라로 찍어 캔버스 평균 상대 휘도를 재고
+//   --mode light: 광장·재즈 바의 talk·morning·vote·night 화면을 같은 카메라로 찍어 평균 상대 휘도를 재고
 //              순서(talk > morning > vote > night)·배율(talk ≥ 2.0×night, morning ≥ 1.6×night)을 판정한다. 결과 `light-{크기}.json`·`light-{맵}-{단계}.png`. 실패가 있으면 종료 코드 1.
 //   사용 예:   node scripts/perf-run.mjs --mode nightload --url http://localhost:5173 --minutes 5 --throttle 4 --size 390x844
 // 종료 코드: 0 = 결과 저장, 1 = 인자·주소·Chrome·시간 초과·페이지 오류.
@@ -222,36 +222,33 @@ export function outputBase(o) {
   return o.shot ? `shot-${base}` : base;
 }
 
-/** 조명 렌더 판정 문턱(18-07, UI-SPEC 허용 범위 4): 낮 talk 는 night 의 2.0배, 아침 morning 은 1.6배 이상 */
-export const LIGHT_TALK_RATIO = 2.0;
-export const LIGHT_MORNING_RATIO = 1.6;
+/** 같은 낮의 투표는 토론 밝기의 ±12% 안에 들고, 밝은 장면과 밤의 대비에는 상한도 둔다. */
+export const LIGHT_VOTE_DELTA = 0.12;
+export const LIGHT_TALK_RATIO = { min: 1.15, max: 2.8 };
+export const LIGHT_MORNING_RATIO = { min: 1.12, max: 2.8 };
 
-/**
- * 조명 렌더 순서·배율 판정(순수). means = { talk, morning, vote, night } 평균 상대 휘도(0~1).
- * L4a 순서 talk > morning > vote > night, L4b talk ≥ 2.0×night, L4c morning ≥ 1.6×night.
- * 숫자가 아닌 값이 하나라도 있으면 세 줄 모두 ok false(측정 못 함).
- */
+/** 평균 상대 휘도(0~1)로 장면의 시간대 구분과 지나친 점멸을 함께 검사한다. */
 export function lightRankVerdict(means) {
   const { talk, morning, vote, night } = means ?? {};
   const f = (n) => (typeof n === "number" ? n.toFixed(4) : String(n));
   const rows = [
-    { id: "L4a", label: "순서 talk > morning > vote > night" },
-    { id: "L4b", label: `talk ≥ night × ${LIGHT_TALK_RATIO}` },
-    { id: "L4c", label: `morning ≥ night × ${LIGHT_MORNING_RATIO}` },
+    { id: "L4a", label: `토론과 투표의 평균 휘도 차이 ≤ ${LIGHT_VOTE_DELTA * 100}%` },
+    { id: "L4b", label: `낮 / 밤 휘도 ${LIGHT_TALK_RATIO.min}~${LIGHT_TALK_RATIO.max}배` },
+    { id: "L4c", label: `아침 / 밤 휘도 ${LIGHT_MORNING_RATIO.min}~${LIGHT_MORNING_RATIO.max}배` },
   ];
-  if ([talk, morning, vote, night].some((v) => typeof v !== "number" || !Number.isFinite(v))) {
+  if ([talk, morning, vote, night].some((v) => typeof v !== "number" || !Number.isFinite(v) || v <= 0 || v > 1)) {
     const detail = `측정 못 함 (talk ${f(talk)}, morning ${f(morning)}, vote ${f(vote)}, night ${f(night)})`;
     return { ok: false, rows: rows.map((r) => ({ ...r, ok: false, detail })) };
   }
-  const oks = [
-    talk > morning && morning > vote && vote > night,
-    talk >= night * LIGHT_TALK_RATIO,
-    morning >= night * LIGHT_MORNING_RATIO,
-  ];
+  const inRange = (value, { min, max }) => value >= min && value <= max;
+  const voteDelta = Math.abs(vote - talk) / talk;
+  const dayRatio = talk / night;
+  const morningRatio = morning / night;
+  const oks = [voteDelta <= LIGHT_VOTE_DELTA, inRange(dayRatio, LIGHT_TALK_RATIO), inRange(morningRatio, LIGHT_MORNING_RATIO)];
   const details = [
-    `talk ${f(talk)}, morning ${f(morning)}, vote ${f(vote)}, night ${f(night)}`,
-    `talk ${f(talk)} / night ${f(night)} = ${f(talk / night)}배 (문턱 ${LIGHT_TALK_RATIO})`,
-    `morning ${f(morning)} / night ${f(night)} = ${f(morning / night)}배 (문턱 ${LIGHT_MORNING_RATIO})`,
+    `talk ${f(talk)}, vote ${f(vote)}, 차이 ${f(voteDelta * 100)}%`,
+    `talk ${f(talk)} / night ${f(night)} = ${f(dayRatio)}배`,
+    `morning ${f(morning)} / night ${f(night)} = ${f(morningRatio)}배`,
   ];
   const out = rows.map((r, i) => ({ ...r, ok: oks[i], detail: details[i] }));
   return { ok: out.every((r) => r.ok), rows: out };
@@ -1015,7 +1012,7 @@ export async function readLowerHalfColor(page, png) {
 const LIGHT_MAPS = ["plaza", "bar"];
 const LIGHT_SCENES = ["talk", "morning", "vote", "night"];
 
-/** --mode light(18-07): 맵 × 단계 정지 화면의 평균 휘도를 재고 맵마다 순서·배율을 판정한다. 하나라도 실패하면 1 */
+/** --mode light: 맵별 정지 화면의 평균 휘도를 재고 시간대 차이를 판정한다. 하나라도 실패하면 1 */
 async function runLight(browser, o, origin) {
   const lo = { ...o, shot: true, throttle: 1, minutes: 1, seed: 1 };
   const maps = {};

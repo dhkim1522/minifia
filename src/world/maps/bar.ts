@@ -44,6 +44,7 @@ import { cameraBasis, PLATE_FAR } from "../camera";
 import { CHAR_SCALE } from "../character";
 import { PALETTE, TOKEN_COLORS } from "../palette";
 import type { Budget, LightingPhase } from "../renderer";
+import { phaseLighting } from "./phaseLighting";
 
 // ---------- 조명 시작값 (가정 A1) ----------
 // B안 재즈 바: 낮은 창빛과 따뜻한 무대, 밤은 낮은 채광과 남색 창빛. 재질 색은 albedo 로 단계마다 섞는다(18-12, G-18-1).
@@ -70,7 +71,7 @@ export interface PhaseTune {
   glow: { room: number; vote: number };
   /** 내 캐릭터 위 작은 점광원 세기(밤·시민 편 nightCitizen 에서만 0 보다 크다) */
   self: number;
-  /** 재질 보정(18-12): 정점 색·연장 판 색을 tint 쪽으로 mix 만큼 섞는다. 밤 쪽 행은 ALBEDO_NONE */
+  /** 맵 고유의 재질 보정. 색을 시간대별로 다시 쓰지 않는다. */
   albedo: AlbedoGrade;
 }
 
@@ -79,7 +80,7 @@ export interface AlbedoGrade {
   tint: string;
   mix: number;
 }
-/** 보정 없음(원래 색 그대로) — 밤 쪽 행과 trial 이 쓴다 */
+/** 보정 없음(원래 색 그대로) */
 export const ALBEDO_NONE: AlbedoGrade = { tint: "#808080", mix: 0 };
 
 /**
@@ -118,121 +119,54 @@ export function albedoGrader(meshes: readonly Mesh[], mats: readonly MeshStandar
 }
 
 const PENDANT_TALK = 0.9 * 4;
-const NIGHT_STAGE = 2.8;
+// 벽·바닥의 색과 주 조명의 방향을 밤에도 공유한다. 창가의 빛과 무대 전구가 시간대를 나타낸다.
+const BAR_TALK: PhaseTune = {
+  hemi: 1.04 * Math.PI,
+  moon: 0.95 * Math.PI,
+  moonColor: "#dce8ff",
+  exposure: 1.45,
+  sky: ["#aeb5c8", "#464c59", "#454953"],
+  fog: { near: 20, far: 44 },
+  stage: 4.8,
+  pendant: PENDANT_TALK,
+  emissive: { room: 1, vote: 0.65 },
+  glow: { room: 1, vote: 0.45 },
+  self: 0,
+  albedo: { tint: "#737a87", mix: 0.38 },
+};
+const BAR_NIGHT: PhaseTune = {
+  ...BAR_TALK,
+  hemi: 0.74 * Math.PI,
+  moon: 0.66 * Math.PI,
+  moonColor: "#adc4ee",
+  sky: ["#99a5c1", "#3e4559", "#394051"],
+  stage: 3.2,
+  pendant: PENDANT_TALK * 0.88,
+  emissive: { room: 0.88, vote: 0.55 },
+  glow: { room: 0.88, vote: 0.37 },
+};
 export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   point: { stage: { x: number; y: number; z: number; distance: number }; pendantA: { x: number; y: number; z: number; distance: number }; self: { x: number; y: number; z: number; distance: number }; decay: number };
   tension: { lead: number; halfRoom: number };
-  moonPos: { x: number; y: number; z: number };
   moonTarget: { x: number; y: number; z: number };
 } = {
-  talk: {
-    hemi: 1.04 * Math.PI,
-    moon: 0.95 * Math.PI,
-    moonColor: "#dce8ff",
-    exposure: 1.45,
-    sky: ["#aeb5c8", "#464c59", "#454953"],
-    fog: { near: 20, far: 44 },
-    stage: 4.8,
-    pendant: PENDANT_TALK,
-    emissive: { room: 1, vote: 0.65 },
-    glow: { room: 1, vote: 0.45 },
-    self: 0,
-    albedo: { tint: "#737a87", mix: 0.38 },
-  },
-  vote: {
-    hemi: 0.7 * Math.PI,
-    moon: 0.55 * Math.PI,
-    moonColor: "#d8b48a",
-    exposure: 1.25,
-    sky: ["#8e7e78", "#2c2224", "#241c20"],
-    fog: { near: 20, far: 44 },
-    stage: 2.0 * 4,
-    pendant: PENDANT_TALK * 0.45,
-    emissive: { room: 0.45, vote: 1 },
-    glow: { room: 0.45, vote: 1 },
-    self: 0,
-    albedo: { tint: "#8c766c", mix: 0.25 },
-  },
-  // 08-10 단계 조명 셋. 정확한 값은 기존 talk·vote 에서 파생한 시작값이고 읽힘의 최종 확인은 실기기 몫이다(가정 A2).
-  // 하늘·안개 색은 모두 talk 의 같은 칸보다 밝지 않다 — 낮도 마피아 분위기(새 밝은 색면 없음).
-  /** 변론·처형: vote 기반으로 실내 5%, 무대 전구는 그대로, 한 줄기 원뿔 빛(원뿔 메시는 trial 에서만 보인다) */
-  trial: {
-    hemi: 0.35 * Math.PI,
-    moon: 0.2 * Math.PI,
-    moonColor: TOKEN_COLORS.moon,
-    exposure: 1.25,
-    sky: ["#3a3464", "#1c1428", "#100d19"],
-    fog: { near: 20, far: 44 },
-    stage: 2.0 * 4,
-    pendant: PENDANT_TALK * 0.05,
-    emissive: { room: 0.05, vote: 1 },
-    glow: { room: 0.05, vote: 1 },
-    self: 0,
-    albedo: ALBEDO_NONE,
-  },
-  /** 밤: 남색 창빛과 낮은 무대 조명 */
-  night: {
-    hemi: 0.45 * Math.PI,
-    moon: 0.7 * Math.PI,
-    moonColor: TOKEN_COLORS.moon,
-    exposure: 1.25,
-    sky: ["#596589", "#252a43", "#0a0b16"],
-    fog: { near: 20, far: 44 },
-    stage: NIGHT_STAGE,
-    pendant: PENDANT_TALK * 0.15,
-    emissive: { room: 0.15, vote: 0.45 },
-    glow: { room: 0.15, vote: 0.28 },
-    self: 0,
-    albedo: ALBEDO_NONE,
-  },
-  /**
-   * 밤·산 시민 편(NIGHT-07·10, 가정 A1): 블록아웃 값 반구 0.05·달빛 0.08·노출 0.75·내 캐릭터 빛 1.4 를 단위 변환(반구·달빛 × π, 점광원 × 4)한 거의 깜깜한 방.
-   * "밤 전용 빛 0.15" 는 night 행의 펜던트·실내 emissive 0.15 배와 같은 뜻이라 여기서는 0(내 캐릭터 외 아무도 안 그린다).
-   * 하늘·안개 색은 night 보다 어둡다. 읽힘의 최종 확인은 실기기 몫이다.
-   */
-  nightCitizen: {
-    hemi: 0.05 * Math.PI,
-    moon: 0.08 * Math.PI,
-    moonColor: TOKEN_COLORS.moon,
-    exposure: 0.75,
-    sky: ["#1a1a36", "#0c0a1a", "#05060c"],
-    fog: { near: 20, far: 44 },
-    stage: 0,
-    pendant: 0,
-    emissive: { room: 0, vote: 0 },
-    glow: { room: 0, vote: 0 },
-    self: 1.4 * 4,
-    albedo: ALBEDO_NONE,
-  },
-  /** 밤·유령(가정 A3): 마피아 화면(night)과 같은 달빛·반구, 무대 쪽 기운(vote 그룹 emissive·빛 무리)만 night 의 0.4 배. 모두 보인다 */
+  talk: BAR_TALK,
+  vote: { ...BAR_TALK, stage: 8, emissive: { ...BAR_TALK.emissive, vote: 1 }, glow: { ...BAR_TALK.glow, vote: 1 } },
+  trial: { ...BAR_TALK, stage: 8, emissive: { ...BAR_TALK.emissive, vote: 1 }, glow: { ...BAR_TALK.glow, vote: 1 } },
+  night: BAR_NIGHT,
+  nightCitizen: { ...BAR_NIGHT, self: 1.2 },
   nightGhost: {
-    hemi: 0.45 * Math.PI,
-    moon: 0.7 * Math.PI,
-    moonColor: TOKEN_COLORS.moon,
-    exposure: 1.25,
-    sky: ["#596589", "#252a43", "#0a0b16"],
-    fog: { near: 20, far: 44 },
-    stage: NIGHT_STAGE,
-    pendant: PENDANT_TALK * 0.15,
-    emissive: { room: 0.15, vote: 0.45 * 0.4 },
-    glow: { room: 0.15, vote: 0.28 * 0.4 },
-    self: 0,
-    albedo: ALBEDO_NONE,
+    ...BAR_NIGHT,
+    emissive: { ...BAR_NIGHT.emissive, vote: BAR_NIGHT.emissive.vote * 0.4 },
+    glow: { ...BAR_NIGHT.glow, vote: BAR_NIGHT.glow.vote * 0.4 },
   },
-  /** 아침: talk 보다 낮은 반구·달빛(18-07 렌더 측정으로 올림), 채도 낮은 하늘 */
   morning: {
-    hemi: 1.0 * Math.PI,
-    moon: 0.55 * Math.PI,
-    moonColor: "#e2e8ee",
-    exposure: 1.25,
-    sky: ["#9aa2b0", "#444a54", "#3c4048"],
-    fog: { near: 20, far: 44 },
-    stage: 0,
-    pendant: PENDANT_TALK * 0.6,
-    emissive: { room: 0.7, vote: 0.2 },
-    glow: { room: 0.6, vote: 0 },
-    self: 0,
-    albedo: { tint: "#8e98a6", mix: 0.25 },
+    ...BAR_TALK,
+    hemi: 0.93 * Math.PI,
+    moon: 0.82 * Math.PI,
+    moonColor: "#d7e0f0",
+    sky: ["#a8b0c2", "#424858", "#404651"],
+    stage: 3.8,
   },
   /** 긴장 단계(결정 0049): lead = 1·2 단계에서 초점 위로 옮긴 무대 점광원 세기(vote 의 1.5 배), halfRoom = 2 단계에서 실내 emissive 에 곱하는 값 */
   tension: { lead: 2.0 * 4 * 1.5, halfRoom: 0.5 },
@@ -243,8 +177,6 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
     self: { x: 0, y: 2.0, z: 0, distance: 4 },
     decay: 2,
   },
-  // 시안 blockout.js: moon.position = (t0.x − 5, 12, t0.z + 7), target = t0 = (−0.4, −0.4)
-  moonPos: { x: -5.4, y: 12, z: 6.6 },
   moonTarget: { x: -0.4, y: 0, z: -0.4 },
 };
 
@@ -354,7 +286,9 @@ export interface BarScene {
   plate: Mesh;
   /** 마지막으로 적용한 조명 단계의 톤매핑 노출 */
   readonly exposure: number;
-  setLighting(phase: LightingPhase): void;
+  setLighting(phase: LightingPhase, seconds?: number): void;
+  /** 프레임 사이 경과 초와 단조 증가 시각. */
+  update(dt: number, t: number): void;
   /** 분필 윤곽을 그 자리(월드 단위, 바닥 y 0.015)에 보인다. null 이면 숨긴다. 메시는 처음부터 만들어 두고 보이기·불투명도만 바꾼다 */
   setChalk(at: { x: number; z: number } | null, opacity: number): void;
   /** 내 캐릭터 빛을 그 자리(월드 단위) 위 높이 2.0 으로 옮긴다. null 이면 기본 자리. 광원은 처음부터 있고 세기만 조명 단계가 바꾼다(광원 수 불변, Pitfall 7) */
@@ -388,7 +322,17 @@ const TABLES: readonly (readonly [number, number])[] = [
 const SHELF_YS = [0.9, 1.6, 2.3] as const;
 const BAR_WINDOW = { x: 2.2, y: 1.9, z: -6.97, width: 2.4, height: 1.5, divisions: 3, mullion: 0.08 };
 const WINDOW_LIGHT = { x: 6.6, y: 7, z: -22.45 };
-const WINDOW_BEAM_OPACITY: Partial<Record<LightingPhase, number>> = { talk: 0.36, night: 0.34, nightGhost: 0.26 };
+const WINDOW_BEAM_DAY = { beam: 0.36 };
+const WINDOW_BEAM_NIGHT = { beam: 0.18 };
+const WINDOW_LIGHT_ACCENTS = {
+  talk: WINDOW_BEAM_DAY,
+  vote: WINDOW_BEAM_DAY,
+  trial: { ...WINDOW_BEAM_DAY, cone: 0.12 },
+  night: WINDOW_BEAM_NIGHT,
+  nightCitizen: WINDOW_BEAM_NIGHT,
+  nightGhost: WINDOW_BEAM_NIGHT,
+  morning: { beam: 0.28 },
+} satisfies Partial<Record<LightingPhase, { beam: number; cone?: number }>>;
 
 /** 창살 사이 유리의 실루엣을 방향광을 따라 바닥에 투영한다. 한 번 만든 메시의 불투명도만 단계별로 바꾼다. */
 function windowBeamGeometry(): BufferGeometry {
@@ -686,9 +630,8 @@ export function buildBarScene(budget: Budget): BarScene {
   meshes.glowRoom!.renderOrder = 2;
   meshes.glowVote!.renderOrder = 2;
   for (const m of Object.values(meshes)) root.add(m);
-  // 재질 보정(18-12): 조명을 받는 정점 색 묶음과 연장 판 재질 color 를 단계가 바뀔 때만 다시 쓴다
-  const grade = albedoGrader([meshes.shell!, meshes.furniture!, meshes.furnitureFar!, meshes.pendants!], [matPlate]);
-  let gradedFor: LightingPhase | null = null;
+  // 색 보정은 맵을 만들 때 한 번 한다. 시간대 변경에는 정점 색 버퍼를 다시 올리지 않는다.
+  albedoGrader([meshes.shell!, meshes.furniture!, meshes.furnitureFar!, meshes.pendants!], [matPlate])(LIGHT_TUNE.talk.albedo);
 
   // 분필 윤곽: 처음부터 만들어 두고 숨긴다(보이기만 바꾼다). 바닥에 눕는 선이라 이동을 막지 않는다
   const chalk = new Mesh(
@@ -747,6 +690,7 @@ export function buildBarScene(budget: Budget): BarScene {
   const hemi = new HemisphereLight(T.talk.sky[0], T.talk.sky[1], T.talk.hemi);
   const moon = new DirectionalLight(T.talk.moonColor, T.talk.moon);
   moon.target.position.set(T.moonTarget.x, T.moonTarget.y, T.moonTarget.z);
+  moon.position.set(WINDOW_LIGHT.x, WINDOW_LIGHT.y, WINDOW_LIGHT.z);
   moon.castShadow = budget.shadowMap !== 0;
   const shadowSize = budget.shadowMap === 0 ? 1024 : budget.shadowMap;
   moon.shadow.mapSize.set(shadowSize, shadowSize);
@@ -779,7 +723,7 @@ export function buildBarScene(budget: Budget): BarScene {
   let exposure = T.talk.exposure;
   let disposed = false;
   let current = budget;
-  let phase: LightingPhase = "talk";
+  const lighting = phaseLighting(T, WINDOW_LIGHT_ACCENTS);
   let tensionLevel: 0 | 1 | 2 = 0;
   let tensionFocus: { x: number; z: number } | null = null;
   // 핀 조명(결정 0066-6): applyLook 이 정한 단계·긴장 값 위에 얹는다. 기본 값은 applyLook 이 매번 채운다
@@ -805,24 +749,17 @@ export function buildBarScene(budget: Budget): BarScene {
 
   /** 단계·긴장·예산을 모두 합쳐 장면에 반영한다(셋 중 무엇이 바뀌어도 같은 곳에서 다시 계산) */
   const applyLook = (): void => {
-    const t = T[phase];
+    const t = lighting.current;
     const b = current;
-    const windowOpacity = WINDOW_BEAM_OPACITY[phase] ?? 0;
-    if (gradedFor !== phase) {
-      grade(t.albedo);
-      const lightPosition = windowOpacity > 0 ? WINDOW_LIGHT : T.moonPos;
-      moon.position.set(lightPosition.x, lightPosition.y, lightPosition.z);
-      gradedFor = phase;
-    }
-    hemi.color.set(t.sky[0]);
-    hemi.groundColor.set(t.sky[1]);
+    hemi.color.copy(t.sky[0]);
+    hemi.groundColor.copy(t.sky[1]);
     hemi.intensity = t.hemi;
-    background.set(t.sky[2]);
-    fog.color.set(t.sky[2]);
+    background.copy(t.sky[2]);
+    fog.color.copy(t.sky[2]);
     fog.near = t.fog.near;
     fog.far = t.fog.far;
     moon.intensity = t.moon;
-    moon.color.set(t.moonColor);
+    moon.color.copy(t.moonColor);
     self.intensity = t.self;
     // 긴장 1·2: 무대 점광원이 초점 위로 옮겨 선두 세기(초점이 없으면 무대 중앙). 0: 단계 값과 무대 중앙
     const lead = tensionLevel >= 1;
@@ -845,15 +782,19 @@ export function buildBarScene(budget: Budget): BarScene {
     matGlowVote.opacity = t.glow.vote;
     meshes.glowRoom!.visible = b.glows && t.glow.room > 0;
     meshes.glowVote!.visible = b.glows && t.glow.vote > 0;
-    trialCone.visible = phase === "trial" && b.glows; // 원뿔 빛은 trial 에서만(빛 무리를 끄는 5단계에선 같이 끈다)
-    matWindowBeam.opacity = windowOpacity;
-    windowBeam.visible = b.glows && windowOpacity > 0;
+    matCone.opacity = t.cone;
+    trialCone.visible = b.glows && t.cone > 0;
+    matWindowBeam.opacity = t.beam;
+    windowBeam.visible = b.glows && t.beam > 0;
     root.fog = b.fog ? fog : null;
     exposure = t.exposure;
   };
-  const setLighting = (next: LightingPhase): void => {
-    phase = next;
+  const setLighting = (next: LightingPhase, seconds = 0): void => {
+    lighting.set(next, seconds);
     applyLook();
+  };
+  const update = (dt: number): void => {
+    if (!disposed && lighting.advance(dt)) applyLook();
   };
   const setSelfLight = (at: { x: number; z: number } | null): void => {
     if (at === null) self.position.set(T.point.self.x, T.point.self.y, T.point.self.z);
@@ -900,7 +841,7 @@ export function buildBarScene(budget: Budget): BarScene {
     meshes.furnitureFar!.visible = far;
     meshes.emissiveRoomFar!.visible = far;
     meshes.pendants!.visible = far;
-    setLighting(phase); // 점광원 core·빛 무리·안개를 현재 조명 단계 위에 다시 반영
+    applyLook();
   };
   applyBudget(budget);
 
@@ -914,6 +855,7 @@ export function buildBarScene(budget: Budget): BarScene {
       return exposure;
     },
     setLighting,
+    update,
     setChalk,
     setSelfLight,
     setTension,

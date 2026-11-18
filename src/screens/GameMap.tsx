@@ -135,6 +135,7 @@ interface GameMapProps {
   offset?: number;
   /** 헤더의 [역할 카드] 아이콘 버튼 재료: 안 읽은 일지가 있는가와 여는 동작 */
   roleCard?: { unread: boolean; onOpen: () => void };
+  headerAction?: ReactNode;
   /** 헤더 시간대 글자(0083-1, "낮 · 토론"). 튜토리얼만 false — 17·18 레이아웃을 건드리지 않는다. 기본 true */
   tod?: boolean;
   /** 아래 패널을 그리지 않는 지도 장면(18-03) */
@@ -177,7 +178,7 @@ interface GameMapProps {
 function MapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode; tod: boolean }) {
   const legacy = blockModeOf(view) !== null || hintOverride !== undefined;
   if (!legacy) {
-    const title = headerFor(view).title;
+    const title = view.phase === "verdict" && view.day?.firstBallot !== undefined ? "투표" : headerFor(view).title;
     return <PhaseHeader title={title} {...(tod ? { tod: { id: todOf(view.phase), word: todWordOf(view.phase, title) } } : {})} extra={extra} />;
   }
   return <LegacyMapHeader view={view} offset={offset} hintOn={hintOn} {...(hintOverride !== undefined ? { hintOverride } : {})} extra={extra} tod={tod} />;
@@ -229,13 +230,15 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
 // 낮 시작·낮 토론·찬반·지목·유언·처형이 이 화면 하나를 같은 장면 키로 그려 단계가 바뀌어도 맵이 다시 만들어지지 않는다.
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)·알림 글자는 React 텍스트 노드로만 그린다.
-export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
+export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, headerAction, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
   // 측정(스테이지 사각형)·키보드는 대기실과 같은 훅이다. 기록 칸은 LOG_H(68) 한 값 — 키보드가 열리면 행동 줄만 숨긴다(07-19, 18.1 P181-3).
   // 지목이면 스테이지 윗변을 차례 알약 아랫변 + 4 로 내리고(UI-SPEC A-1) 작은 폰은 압축형 알약을 받는다(turnCompact). 알약 요소는 훅이 루트에서 `[data-turn-block]` 으로 찾는다.
   // 튜토리얼 지도 장면(panelless prop, 18-03)은 아래 패널이 없다: 스테이지가 띠 아래부터 화면 아래까지 넓어진다
-  const noPanel = panelless === true;
+  const playtest = view.playtest === true;
+  const waitingAtNight = playtest && view.phase === "night" && view.me.role === "citizen" && view.spectate === undefined;
+  const noPanel = panelless === true || waitingAtNight;
   const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets: measuredInsets } = useMapInsets(blockModeOf(view) !== null, noPanel);
   // 튜토리얼(24 D-31): 아래 여백에 bottomExtra 를 더한다. 키보드 높이를 프레임마다 읽는 getter 는 그대로 살린다. 실제 판은 0 이라 측정값 그대로다.
   const stageInsets = useMemo(
@@ -409,7 +412,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const nighting = view.phase === "night";
   // 시민 편(산 시민·경찰·의사)의 밤: 같은 어둠 표식과 긴장 비네트를 본다. 역할마다 다르지 않다(NIGHT-10, E3 #20). 마피아·유령·낮에는 없다.
   // 판정식은 nightDarkOf 하나다 — RoomScreen 이 같은 식으로 소리의 시각 큐 갈래를 정한다(12-09).
-  const nightDark = nightDarkOf(view);
+  const nightDark = !playtest && nightDarkOf(view);
   const recordCue = useMemo(
     () =>
       tensionHooksOn()
@@ -656,7 +659,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 빛남 대상(14-04): 열린 시트·키보드·귓속말 모드·이미 썼음이면 켜지 않는다. 한 화면에는 한 종류(tool 하나 / 이름표 무리 / 얼굴 칸 무리)만 나온다.
   // 마피아 밤·산 시민·유령·할 일 없는 사람은 callTargetsOf 가 null 이라 빛이 0개다(HOST-05).
   const callTarget = useMemo(() => callTargetsOf(view), [view]);
-  const callOn = callTarget !== null && !callUsed && layerKind === null && !kbOpen && !whisper.mode && !suspect.mode;
+  const callOn = !playtest && callTarget !== null && !callUsed && layerKind === null && !kbOpen && !whisper.mode && !suspect.mode;
   const callTool = callOn && callTarget.kind === "tool" ? callTarget.tool : null;
   const callFaceSeats = useMemo<ReadonlySet<number> | undefined>(
     () => (callOn && callTarget.kind === "tag" && nighting && view.me.pick === undefined ? new Set(callTarget.seats) : undefined),
@@ -712,7 +715,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
 
   // 판결 순간(UI-SPEC C-1, 22-12 P22-13·P22-14): 처형자 존재 기준 처형 진입 시각의 어둡게 막·카메라 줌·유언 공개 카드(0~3.0초). 모션 줄이기는 줌 없이 막·핀·카드만 쓴다
   const moment = useVerdictMoment(view, offset);
-  const verdictZoom = moment.active && !reducedMotion ? moment.zoom : undefined;
+  const verdictZoom = moment.active && !reducedMotion && !playtest ? moment.zoom : undefined;
 
   const scene = useMemo(
     () => ({
@@ -723,7 +726,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   );
 
   return (
-    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
+    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={suspect.mode ? "on" : "off"} data-suspects={suspectsMirror} data-playtest-waiting={waitingAtNight ? "" : undefined}>
       {/* DOM 순서 = Tab 순서: 헤더([역할 카드]) → 맵(이름표) → 아래 패널(입력). 층 순서는 z 가 정한다 */}
       <div className="mf-game__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-game__header">
@@ -732,8 +735,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           offset={offset}
           hintOn={hintOn}
           {...(suspect.mode ? { hintOverride: SUSPECT_TEXT.modeHint } : whisper.mode ? { hintOverride: WHISPER_TEXT.modeHint } : {})}
-          tod={tod}
-          extra={roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null}
+          tod={tod && !playtest}
+          extra={headerAction ?? (roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null)}
         />
       </header>
       <WorldStage
@@ -747,7 +750,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         scene={scene}
         canWalk={canWalk}
         underlay={
-          nightDark ? (
+          playtest ? null : nightDark ? (
             <TensionVignette reducedMotion={reducedMotion} onCue={onTensionCue} />
           ) : (
             // 지목 동안 화면을 살짝 어둡게(UI-SPEC A-1): 모이기·차례·확정에 켜고 끝 알림에 걷는다. 캔버스 위·이름표 층 아래라서 WorldStage 의 underlay 자리에 둔다
@@ -778,9 +781,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       {blockMode !== null ? <TurnBlock view={view} offset={offset} line={topLine} compact={compactTurn} reducedMotion={reducedMotion} /> : null}
       {testButton ? <div className="mf-game__test">{testButton}</div> : null}
       {/* 장면 전환 막(09-20): 결과 알림보다 앞(DOM 순서)에 두어 막을 붙잡는 동안 알림이 막 위로 올라올 수 있게 한다. 덮기는 공개 마감만의 함수다 */}
-      <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} />
-      <KillFx nonce={killNonce} reducedMotion={reducedMotion} />
-      <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(shownAnnounce?.label !== undefined ? { label: shownAnnounce.label } : {})} {...(shownAnnounce?.still === true ? { still: true } : {})} {...(letter !== null || moment.active ? { placement: "top" as const } : {})} />
+      {!playtest ? <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} /> : null}
+      {!playtest ? <KillFx nonce={killNonce} reducedMotion={reducedMotion} /> : null}
+      {!playtest ? <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(shownAnnounce?.label !== undefined ? { label: shownAnnounce.label } : {})} {...(shownAnnounce?.still === true ? { still: true } : {})} {...(letter !== null || moment.active ? { placement: "top" as const } : {})} /> : null}
       {/* 유언 공개 카드(P22-11): 처형 단계 0~3.0초 모두의 화면. 독 아랫변 + 8, 폭 = 화면 − 32, 누를 수 없다. 사라질 때는 dur-med 페이드 */}
       {moment.will !== null ? (
         <div className="mv-will-reveal">
@@ -800,6 +803,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       {noPanel ? null : (
         <GamePanel
           view={view}
+          offset={offset}
           send={send}
           canSend={canSend}
           binding={evidence === undefined ? binding : { ...binding, evidence }}

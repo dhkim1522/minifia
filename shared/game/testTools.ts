@@ -10,10 +10,11 @@ import { NICKNAME_MAX_GRAPHEMES, graphemePrefix, validateNickname } from "../nic
 import { MAX_PLAYERS, MAX_TEST_BOTS } from "../protocol";
 import type { BotVoteExec, BotVotePick } from "../protocol";
 import { isAlive } from "./alive";
-import { BOT_NAMES, botCount, botExecAgree, botNightTarget, botPointTarget, botRunoffTarget, isBot } from "./bots";
+import { BOT_NAMES, botCount, botExecAgree, botFirstBallotTarget, botNightTarget, botPointTarget, botRunoffTarget, isBot } from "./bots";
 import { testRoleOptions } from "./roles";
 import type { RoleId } from "./roles";
 import { pickTarget } from "./night";
+import { castFirstBallot, firstPlaytestDay } from "./playtest";
 import { benchAsPlayers } from "./rematch";
 import { lowestFreeSeat } from "./room";
 import type { Player, RoomState } from "./room";
@@ -147,6 +148,12 @@ function botsVoteNow(state: RoomState, randInt: RandInt): RoomState {
   let next = state;
   const bots = state.players.filter((p) => isBot(p) && isAlive(p)).sort((a, b) => a.seat - b.seat);
   for (const bot of bots) {
+    if (firstPlaytestDay(state)) {
+      if (state.firstBallotOutcome !== undefined || bot.firstBallot !== undefined) continue;
+      const cast = castFirstBallot(next, bot.id, botFirstBallotTarget(next, bot, randInt));
+      if (cast.ok) next = cast.state;
+      continue;
+    }
     if (bot.verdictVote !== undefined) continue;
     const cast = castVerdict(next, bot.id, botExecAgree(randInt, state.testBotVote?.exec));
     if (cast.ok) next = cast.state;
@@ -189,6 +196,7 @@ export function resetToLobby(state: RoomState, actorId: string): TestToolResult 
     nextJoinSeq: state.nextJoinSeq,
     players,
     testMode: true,
+    ...(state.playtest === true ? { playtest: true as const } : {}),
     // 고른 맵은 대기실로 돌아와도 남고(결정 D-20), 이번 판의 결정값 map 은 버린다 — 다음 시작이 다시 정한다.
     ...(state.mapChoice !== undefined ? { mapChoice: state.mapChoice } : {}),
     ...(state.testRole !== undefined ? { testRole: state.testRole } : {}),

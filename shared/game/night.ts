@@ -25,6 +25,7 @@ export function pickTarget(
   if (state.phase !== "night") return { ok: false, error: "WRONG_PHASE" };
   const actor = state.players.find((p) => p.id === actorId);
   if (!actor || !isAlive(actor)) return { ok: false, error: "BAD_MESSAGE" };
+  if (state.playtest === true && (actor.role === undefined || actor.role === "citizen")) return { ok: false, error: "BAD_MESSAGE" };
   const chosen = Number.isInteger(target) ? state.players.find((p) => p.seat === target) : undefined;
   if (!chosen || !isAlive(chosen)) return { ok: false, error: "BAD_MESSAGE" };
   if (actor.nightPick === target) return { ok: true, state };

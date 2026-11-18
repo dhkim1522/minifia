@@ -90,7 +90,7 @@ describe("재즈 바 장면 구조 (MAP-01, 렌더 예산)", () => {
     expect(lightsOf(bar.root, DirectionalLight)).toHaveLength(1);
     expect(hex()).toBe(LIGHT_TUNE.talk.moonColor);
     bar.setLighting("night");
-    expect(hex()).toBe(TOKEN_COLORS.moon);
+    expect(hex()).toBe(LIGHT_TUNE.night.moonColor);
     bar.setLighting("talk");
     expect(hex()).toBe(LIGHT_TUNE.talk.moonColor);
     expect(lightsOf(bar.root, DirectionalLight)).toHaveLength(1);
@@ -151,7 +151,7 @@ describe("재즈 바 장면 구조 (MAP-01, 렌더 예산)", () => {
 });
 
 describe("조명 단계 (talk · vote)", () => {
-  it("vote 에서는 talk 보다 무대 조명을 높이고 펜던트는 0.45배로 낮춘다", () => {
+  it("투표의 무대등만 밝아지고 펜던트는 같은 밝기다", () => {
     const bar = buildBarScene(LADDER[0]!);
     bar.setLighting("talk");
     const talkStage = bar.lights.stage.intensity;
@@ -160,28 +160,28 @@ describe("조명 단계 (talk · vote)", () => {
     expect(talkPendant).toBeGreaterThan(0);
     bar.setLighting("vote");
     expect(bar.lights.stage.intensity).toBeGreaterThan(talkStage);
-    expect(bar.lights.pendantA.intensity).toBeCloseTo(talkPendant * 0.45, 6);
+    expect(bar.lights.pendantA.intensity).toBe(talkPendant);
     bar.setLighting("talk");
     expect(bar.lights.stage.intensity).toBe(talkStage);
     bar.dispose();
   });
 
-  it("talk 에는 인물 보조광을 두고 vote 의 조명 세기와 노출은 기존 값을 쓴다", () => {
-    expect(LIGHT_TUNE.talk.hemi).toBeGreaterThan(LIGHT_TUNE.morning.hemi);
-    expect(LIGHT_TUNE.vote.hemi).toBeCloseTo(0.7 * Math.PI, 6);
-    expect(LIGHT_TUNE.vote.moon).toBeCloseTo(0.55 * Math.PI, 6);
-    expect(LIGHT_TUNE.talk.exposure).toBe(1.45);
-    expect(LIGHT_TUNE.vote.exposure).toBe(1.25);
-    expect(LIGHT_TUNE.vote.stage).toBeCloseTo(2.0 * 4, 6);
-    // 18-12: talk·vote 하늘은 재질 보정과 함께 시간대 색으로 나뉘었다 — 값은 표 참조(허용 범위는 lighting.test.ts)
-    expect(LIGHT_TUNE.talk.sky).toHaveLength(3);
-    expect(LIGHT_TUNE.vote.sky).toHaveLength(3);
+  it("토론과 투표의 반구광·방향광·노출은 같다", () => {
+    expect(LIGHT_TUNE.vote.hemi).toBe(LIGHT_TUNE.talk.hemi);
+    expect(LIGHT_TUNE.vote.moon).toBe(LIGHT_TUNE.talk.moon);
+    expect(LIGHT_TUNE.vote.exposure).toBe(LIGHT_TUNE.talk.exposure);
+    expect(LIGHT_TUNE.vote.sky).toEqual(LIGHT_TUNE.talk.sky);
   });
 
-  it("vote 는 talk 보다 배경이 어두워지고 무대가 강조된다", () => {
-    expect(LIGHT_TUNE.vote.hemi).toBeLessThan(LIGHT_TUNE.talk.hemi);
-    expect(LIGHT_TUNE.vote.moon).toBeLessThan(LIGHT_TUNE.talk.moon);
-    expect(LIGHT_TUNE.vote.stage).toBeGreaterThan(LIGHT_TUNE.talk.stage);
+  it("유언의 원뿔 빛은 주변광과 별도로 적용된다", () => {
+    const bar = buildBarScene(LADDER[0]!);
+    bar.setLighting("vote");
+    expect(bar.meshes.trialCone!.visible).toBe(false);
+    bar.setLighting("trial");
+    expect(bar.meshes.trialCone!.visible).toBe(true);
+    expect(LIGHT_TUNE.trial.hemi).toBe(LIGHT_TUNE.talk.hemi);
+    expect(LIGHT_TUNE.trial.sky).toEqual(LIGHT_TUNE.talk.sky);
+    bar.dispose();
   });
 
   it("장면 배경과 안개 색은 같은 색이고 단계에 따라 바뀐다", () => {
@@ -296,7 +296,7 @@ describe("조명 단계 다섯 (trial · night · morning, 08-10)", () => {
     bar.dispose();
   });
 
-  it("창살 투영은 바닥 메시 하나를 재사용하고 시민 밤과 빛 무리 없는 품질에서 숨긴다", () => {
+  it("모든 시간대가 같은 창살 투영을 쓰고 빛 무리를 끄면 숨긴다", () => {
     const bar = buildBarScene(LADDER[0]!);
     const beam = bar.meshes.windowBeam!;
     const geometry = beam.geometry;
@@ -306,7 +306,7 @@ describe("조명 단계 다섯 (trial · night · morning, 08-10)", () => {
     expect((beam.material as MeshBasicMaterial).depthWrite).toBe(false);
     for (const phase of STAGES) {
       bar.setLighting(phase);
-      expect(beam.visible, phase).toBe(["talk", "night", "nightGhost"].includes(phase));
+      expect(beam.visible, phase).toBe(true);
       expect(beam.geometry).toBe(geometry);
     }
     bar.setLighting("night");
@@ -343,17 +343,13 @@ describe("조명 단계 다섯 (trial · night · morning, 08-10)", () => {
       for (let i = 0; i < 3; i++) expect(lum(LIGHT_TUNE[s].sky[i]!), `${s} sky[${i}]`).toBeLessThanOrEqual(lum(LIGHT_TUNE.talk.sky[i]!));
   });
 
-  it("단계 값: trial 실내 5%, night 은은한 무대와 실내 15%, morning 은 talk 보다 낮은 반구", () => {
-    expect(LIGHT_TUNE.trial.emissive.room).toBeCloseTo(0.05, 9);
-    expect(LIGHT_TUNE.trial.glow.room).toBeCloseTo(0.05, 9);
-    expect(LIGHT_TUNE.trial.stage).toBe(LIGHT_TUNE.vote.stage);
-    expect(LIGHT_TUNE.trial.emissive.vote).toBe(LIGHT_TUNE.vote.emissive.vote);
+  it("밤에는 무대와 창빛이 은은해지고 펜던트는 얼굴을 비춘다", () => {
+    expect(LIGHT_TUNE.trial.emissive.room).toBe(LIGHT_TUNE.talk.emissive.room);
     expect(LIGHT_TUNE.night.stage).toBeGreaterThan(0);
     expect(LIGHT_TUNE.night.stage).toBeLessThan(LIGHT_TUNE.talk.stage);
-    expect(LIGHT_TUNE.night.emissive.room).toBeCloseTo(0.15, 9);
-    expect(LIGHT_TUNE.night.hemi).toBeLessThan(LIGHT_TUNE.vote.hemi);
+    expect(LIGHT_TUNE.night.pendant).toBeGreaterThan(LIGHT_TUNE.talk.pendant * 0.75);
+    expect(LIGHT_TUNE.night.hemi).toBeLessThan(LIGHT_TUNE.morning.hemi);
     expect(LIGHT_TUNE.morning.hemi).toBeLessThan(LIGHT_TUNE.talk.hemi);
-    expect(LIGHT_TUNE.morning.stage).toBe(0);
   });
 
   it("setLighting 이 단계 값을 장면에 반영한다(반구 세기·무대 점광원·실내 emissive)", () => {
@@ -563,13 +559,11 @@ describe("시민 편 어둠·유령 밤 조명·내 캐릭터 빛 (NIGHT-07, NIG
     return c.r + c.g + c.b;
   };
 
-  it("nightCitizen 행: 반구 0.05π · 달빛 0.08π · 노출 0.75 · 무대·펜던트·실내 emissive 0 · 내 빛 1.4×4", () => {
-    const t = LIGHT_TUNE.nightCitizen;
-    expect(t.hemi).toBeCloseTo(0.05 * Math.PI, 9);
-    expect(t.moon).toBeCloseTo(0.08 * Math.PI, 9);
-    expect(t.exposure).toBeCloseTo(0.75, 9);
-    expect([t.stage, t.pendant, t.emissive.room, t.emissive.vote, t.glow.room, t.glow.vote]).toEqual([0, 0, 0, 0, 0, 0]);
-    expect(t.self).toBeCloseTo(1.4 * 4, 9);
+  it("시민 편도 같은 밤 조명에 자기 자리의 보조광만 켠다", () => {
+    const { self, ...rest } = LIGHT_TUNE.nightCitizen;
+    expect({ ...rest, self: 0 }).toEqual(LIGHT_TUNE.night);
+    expect(self).toBeGreaterThan(0);
+    expect(self).toBeLessThan(LIGHT_TUNE.night.pendant);
   });
 
   it("nightGhost 행: night 달빛·반구와 같고 무대 쪽 기운(vote 그룹)은 night 의 0.4 배", () => {
@@ -620,14 +614,12 @@ describe("시민 편 어둠·유령 밤 조명·내 캐릭터 빛 (NIGHT-07, NIG
     }
   });
 
-  it("nightCitizen 에서 실내 emissive 가 0, nightGhost 에서 vote 그룹 emissive 가 night 의 0.4 배로 장면에 반영된다", () => {
+  it("야간의 펜던트와 실내 발광은 시민 화면에도 나타난다", () => {
     const bar = buildBarScene(LADDER[0]!);
     bar.setLighting("nightCitizen");
-    expect(room(bar)).toBe(0);
-    expect(vote(bar)).toBe(0);
-    expect(bar.lights.stage.intensity).toBe(0);
-    expect(bar.lights.pendantA.intensity).toBe(0);
-    expect(bar.exposure).toBeCloseTo(0.75, 9);
+    expect(room(bar)).toBeCloseTo(LIGHT_TUNE.night.emissive.room, 9);
+    expect(vote(bar)).toBeCloseTo(LIGHT_TUNE.night.emissive.vote, 9);
+    expect(bar.lights.pendantA.intensity).toBeCloseTo(LIGHT_TUNE.night.pendant, 9);
     bar.setLighting("nightGhost");
     expect(vote(bar)).toBeCloseTo(LIGHT_TUNE.night.emissive.vote * 0.4, 9);
     expect(room(bar)).toBeCloseTo(LIGHT_TUNE.night.emissive.room, 9);
@@ -691,60 +683,26 @@ describe("재즈 바 재질 보정 albedo (18-12, G-18-1)", () => {
   const colorArr = (b: Bar, n: string): Float32Array => b.meshes[n]!.geometry.getAttribute("color").array as Float32Array;
   const snap = (b: Bar): Float32Array[] => GRADED.map((n) => Float32Array.from(colorArr(b, n)));
   const same = (a: Float32Array, b: Float32Array): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
-  const dist = (a: Color, b: Color): number => Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
-  const floorColor = new Color(PALETTE.floorA);
-  const findFloorVertex = (orig: Float32Array): number => {
-    for (let i = 0; i < orig.length; i += 3) if (Math.abs(orig[i]! - floorColor.r) < 1e-6 && Math.abs(orig[i + 1]! - floorColor.g) < 1e-6 && Math.abs(orig[i + 2]! - floorColor.b) < 1e-6) return i;
-    return -1;
-  };
-
-  it("(a) 만든 직후(talk) 바닥 정점 색은 팔레트 바닥색과 다르고 그 색보다 talk tint 에 가깝다", () => {
-    const night = buildBarScene(LADDER[0]!);
-    night.setLighting("night");
-    const i = findFloorVertex(colorArr(night, "shell"));
-    expect(i).toBeGreaterThanOrEqual(0);
+  it("바닥과 바깥판은 같은 보정을 받고 조명에 관계없이 같은 재질을 쓴다", () => {
     const bar = buildBarScene(LADDER[0]!);
-    const a = colorArr(bar, "shell");
-    const got = new Color(a[i]!, a[i + 1]!, a[i + 2]!);
     const tint = new Color(LIGHT_TUNE.talk.albedo.tint);
-    expect(dist(got, floorColor)).toBeGreaterThan(1e-3);
-    expect(dist(got, tint)).toBeLessThan(dist(floorColor, tint));
-    night.dispose();
-    bar.dispose();
-  });
-
-  it("(b) night 로 가면 정점 색·plate 재질 색이 팔레트 원래 값과 같다", () => {
-    const bar = buildBarScene(LADDER[0]!);
-    bar.setLighting("night");
-    expect(findFloorVertex(colorArr(bar, "shell"))).toBeGreaterThanOrEqual(0);
-    const plate = (bar.plate.material as MeshStandardMaterial).color;
-    const want = new Color(PALETTE.plate);
-    expect(plate.r).toBeCloseTo(want.r, 6);
-    expect(plate.g).toBeCloseTo(want.g, 6);
-    expect(plate.b).toBeCloseTo(want.b, 6);
-    bar.dispose();
-  });
-
-  it("(c) talk → night → talk → night 왕복 뒤에도 정점 색 배열이 첫 night 와 정확히 같다(누적 없음)", () => {
-    const bar = buildBarScene(LADDER[0]!);
-    bar.setLighting("night");
+    const mix = LIGHT_TUNE.talk.albedo.mix;
+    const floor = new Color(PALETTE.floorA).lerp(tint, mix);
     const first = snap(bar);
-    bar.setLighting("talk");
-    const talk1 = snap(bar);
-    bar.setLighting("night");
-    bar.setLighting("talk");
-    const talk2 = snap(bar);
-    bar.setLighting("night");
-    const again = snap(bar);
-    GRADED.forEach((_, k) => {
-      expect(same(again[k]!, first[k]!), `night ${GRADED[k]}`).toBe(true);
-      expect(same(talk2[k]!, talk1[k]!), `talk ${GRADED[k]}`).toBe(true);
-    });
-    expect(same(talk1[0]!, first[0]!)).toBe(false);
+    const shell = first[0]!;
+    const hasFloor = shell.some((r, i) => i % 3 === 0 && Math.hypot(r - floor.r, shell[i + 1]! - floor.g, shell[i + 2]! - floor.b) < 1e-6);
+    expect(hasFloor).toBe(true);
+    const plate = (bar.plate.material as MeshStandardMaterial).color;
+    expect(plate.equals(new Color(PALETTE.plate).lerp(tint, mix))).toBe(true);
+    for (const phase of STAGES) {
+      bar.setLighting(phase);
+      snap(bar).forEach((arr, i) => expect(same(arr, first[i]!), GRADED[i]).toBe(true));
+      expect(plate.equals(new Color(PALETTE.plate).lerp(tint, mix))).toBe(true);
+    }
     bar.dispose();
   });
 
-  it("(d) 조명 단계가 바뀔 때만 color 속성 version 이 는다(긴장·핀·같은 단계 예산 변경으로는 그대로)", () => {
+  it("조명·긴장·핀·예산이 바뀌어도 정점 색을 업로드하지 않는다", () => {
     const bar = buildBarScene(LADDER[0]!);
     bar.setLighting("talk");
     const ver = (): number => (bar.meshes.shell!.geometry.getAttribute("color") as { version: number }).version;
@@ -759,7 +717,7 @@ describe("재즈 바 재질 보정 albedo (18-12, G-18-1)", () => {
     bar.setLighting("talk");
     expect(ver()).toBe(v0);
     bar.setLighting("vote");
-    expect(ver()).toBeGreaterThan(v0);
+    expect(ver()).toBe(v0);
     bar.dispose();
   });
 
@@ -786,7 +744,7 @@ describe("재즈 바 재질 보정 albedo (18-12, G-18-1)", () => {
     bar.dispose();
   });
 
-  it("밤 쪽 네 행 albedo 는 ALBEDO_NONE 이다", () => {
-    for (const ph of ["trial", "night", "nightCitizen", "nightGhost"] as const) expect(LIGHT_TUNE[ph].albedo, ph).toEqual(ALBEDO_NONE);
+  it("밤에도 같은 재질 보정 값을 쓴다", () => {
+    for (const ph of STAGES) expect(LIGHT_TUNE[ph].albedo, ph).toEqual(LIGHT_TUNE.talk.albedo);
   });
 });

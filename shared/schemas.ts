@@ -8,7 +8,7 @@ import type { AnswerSendMessage, ChatSendMessage, ClientMessage, CreateRoomBody,
 // 자소 8 개짜리 유효 이름(가족 이모지 88 단위)이 스키마에서 먼저 400 으로 막힌다(06 리뷰 WR-03).
 const nickname = z.string().max(NICKNAME_MAX_UTF16);
 
-export const CreateRoomBodySchema = z.object({ nickname, testMode: z.boolean().optional() }) satisfies z.ZodType<CreateRoomBody>;
+export const CreateRoomBodySchema = z.object({ nickname, testMode: z.boolean().optional(), playtest: z.literal(true).optional() }) satisfies z.ZodType<CreateRoomBody>;
 export const JoinRoomBodySchema = z.object({ nickname }) satisfies z.ZodType<JoinRoomBody>;
 
 // 로비 이동 입력(결정 0044-17): 목적지 두 정수뿐이다. 속도·경로·시각·신원(seat·v·t0 등)이 덧붙으면 거부한다(T-06-09).
@@ -77,6 +77,8 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   // 2페이즈 변형은 strictObject 다: 알 수 없는 키가 있으면 거부한다(T-02-15, D-16).
   // 밤 행동은 대상 seat 하나뿐이다. 행동 종류는 보내지 않는다 — 서버 저장 역할이 정한다(T-03-06).
   z.strictObject({ t: z.literal("pick"), target: z.number().int().min(0).max(7) }),
+  z.strictObject({ t: z.literal("roleReady") }),
+  z.strictObject({ t: z.literal("firstBallot"), target: z.number().int().min(0).max(7).nullable() }),
   // 8페이즈 낮 처형(결정 0060, 08-07): 모두 strictObject — 행위자는 소켓 첨부 playerId 로만 정해지므로 seat·id·ch 가 덧붙으면 거부한다(T-08-04, T-08-24).
   // 토론 끝내기 on / 지목 target(0..7, 취소 없음 — null 거부) / 찬반 agree. 단계·산 사람·자기 자신·변론자 검사는 서버 규칙(shared/game/{discussion,nomination,verdict}.ts)이 한다.
   z.strictObject({ t: z.literal("endDiscussion"), on: z.boolean() }),

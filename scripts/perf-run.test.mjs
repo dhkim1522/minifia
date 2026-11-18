@@ -3,7 +3,7 @@
 // nightload 실행 자체는 이 시험이 하지 않는다(실행과 성능 합격선은 12-12).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LIGHT_MORNING_RATIO, LIGHT_TALK_RATIO, NIGHTLOAD_DWELL, USAGE, colorStats, lightRankVerdict, outputBase, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
+import { LIGHT_MORNING_RATIO, LIGHT_TALK_RATIO, LIGHT_VOTE_DELTA, NIGHTLOAD_DWELL, USAGE, colorStats, lightRankVerdict, outputBase, parseArgs, readSoundState, soundInitScript, wakeAudio } from "./perf-run.mjs";
 
 test("parseArgs --map (20-09): bar·plaza 를 받고 저장 이름 끝이 -bar·-plaza, 없으면 그대로", () => {
   const o = parseArgs(["--mode", "nightload", "--map", "plaza"]);
@@ -129,32 +129,33 @@ test("USAGE 에 --mode light 가 있다", () => {
   assert.match(USAGE, /light/);
 });
 
-test("문턱 상수: talk 2.0배, morning 1.6배", () => {
-  assert.equal(LIGHT_TALK_RATIO, 2.0);
-  assert.equal(LIGHT_MORNING_RATIO, 1.6);
+test("고정 카메라 휘도 검사에는 낮과 밤의 대비 상한이 있다", () => {
+  assert.equal(LIGHT_VOTE_DELTA, 0.12);
+  assert.deepEqual(LIGHT_TALK_RATIO, { min: 1.15, max: 2.8 });
+  assert.deepEqual(LIGHT_MORNING_RATIO, { min: 1.12, max: 2.8 });
 });
 
-test("lightRankVerdict: 순서·배율이 맞으면 ok, L4a·L4b·L4c 모두 ok", () => {
-  const v = lightRankVerdict({ talk: 0.3, morning: 0.22, vote: 0.12, night: 0.08 });
+test("lightRankVerdict: 같은 낮의 투표와 읽을 수 있는 밤을 허용한다", () => {
+  const v = lightRankVerdict({ talk: 0.1, morning: 0.083, vote: 0.104, night: 0.047 });
   assert.equal(v.ok, true);
   assert.deepEqual(v.rows.map((r) => r.id), ["L4a", "L4b", "L4c"]);
   assert.ok(v.rows.every((r) => r.ok));
 });
 
-test("lightRankVerdict: vote 가 morning 보다 밝으면 L4a 실패, detail 에 morning·vote 숫자", () => {
-  const v = lightRankVerdict({ talk: 0.3, morning: 0.12, vote: 0.14, night: 0.08 });
-  assert.equal(v.ok, false);
-  const a = v.rows.find((r) => r.id === "L4a");
-  assert.equal(a.ok, false);
-  assert.match(a.detail, /0\.12/);
-  assert.match(a.detail, /0\.14/);
+test("lightRankVerdict: 투표 화면만 지나치게 밝거나 어두우면 L4a가 실패한다", () => {
+  for (const vote of [0.06, 0.16]) {
+    const v = lightRankVerdict({ talk: 0.1, morning: 0.082, vote, night: 0.046 });
+    assert.equal(v.ok, false);
+    assert.equal(v.rows.find((r) => r.id === "L4a").ok, false);
+  }
 });
 
-test("lightRankVerdict: 배율 모자라면 L4b(talk 0.15 < 0.18)·L4c(morning 0.14 < 0.144) 실패", () => {
-  const v = lightRankVerdict({ talk: 0.15, morning: 0.14, vote: 0.1, night: 0.09 });
-  assert.equal(v.rows.find((r) => r.id === "L4b").ok, false);
-  assert.equal(v.rows.find((r) => r.id === "L4c").ok, false);
-  assert.equal(v.ok, false);
+test("lightRankVerdict: 밤이 너무 어둡거나 시간대가 비슷하면 L4b와 L4c가 실패한다", () => {
+  for (const night of [0.02, 0.096]) {
+    const v = lightRankVerdict({ talk: 0.1, morning: 0.098, vote: 0.1, night });
+    assert.equal(v.rows.find((r) => r.id === "L4b").ok, false);
+    assert.equal(v.rows.find((r) => r.id === "L4c").ok, false);
+  }
 });
 
 test("lightRankVerdict: 숫자가 아닌 값이 있으면 모든 줄이 ok false(측정 못 함)", () => {

@@ -1,0 +1,60 @@
+[data-first-round-playtest] .mf-playtest__menu-button {
+  min-width: 44px;
+  min-height: 44px;
+  padding-inline: 10px;
+  border: 1px solid var(--noir-line);
+  border-radius: 8px;
+  background: var(--noir-inset);
+  color: var(--gray-50);
+}
+
+[data-first-round-playtest] .mf-playtest__sound {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--gray-50);
+}
+
+[data-playtest-role] .mf-card { cursor: default; }
+[data-playtest-role] .mf-playtest__ready { box-sizing: border-box; min-height: 84px; }
+[data-first-round-playtest] .mf-keyword__meta[hidden] { display: none; }
+
+.mf-playtest__vote-start {
+  display: flex;
+  min-height: 44px;
+  justify-content: space-between;
+  padding-inline: 14px;
+}
+
+.mf-playtest__ballot,
+.mf-playtest__ballot-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mf-playtest__ballot-result {
+  min-height: 52px;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.mf-playtest__ballot-result strong { color: var(--noir-paper); font-size: 20px; }
+
+.mf-playtest__ballot-result span,
+.mf-playtest__ballot-count {
+  margin: 0;
+  color: var(--gray-200);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.mf-playtest__ballot [data-first-ballot-hold] { min-height: 44px; }
+.mf-playtest__ballot [data-first-ballot-hold][aria-pressed="true"] { border-color: var(--noir-paper); }
+
+@media (max-height: 680px) {
+  [data-first-round-playtest] .mv-face { min-height: 74px; }
+  [data-first-round-playtest] .mv-face__img,
+  [data-first-round-playtest] .mv-face--fallback { width: min(100%, 48px); }
+}

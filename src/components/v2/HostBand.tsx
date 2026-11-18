@@ -121,7 +121,7 @@ export function HostBand({ view, offset, cardSeen, sound, epoch }: HostBandProps
         <p key={`line-${view.phase}`} className={swap ? "mv-host__line is-swap" : "mv-host__line"} data-host-line="" data-guide="" role="status" aria-live="polite" aria-atomic="false">
           {line}
         </p>
-        {showTime && endsAt !== null && durationMs !== null ? <HostTime endsAt={endsAt} durationMs={durationMs} offset={offset} calm={early} /> : null}
+        {showTime && endsAt !== null && durationMs !== null ? <HostTime endsAt={endsAt} durationMs={durationMs} offset={offset} calm={early || view.playtest === true} /> : null}
       </div>
       {sound ? (
         <div className="mv-host__dock">

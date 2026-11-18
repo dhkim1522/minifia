@@ -6,6 +6,7 @@
 import { isAlive } from "./alive";
 import { noExecutionOf } from "./execution";
 import { majorityOf, nominationStepMs } from "./nomination";
+import { firstPlaytestDay, humanSeats, PLAYTEST_BALLOT_MS, PLAYTEST_DISCUSSION_MS, PLAYTEST_KEYWORD_MS, PLAYTEST_MORNING_EXTRA_MS, PLAYTEST_RESULT_MS, PLAYTEST_ROLE_MS } from "./playtest";
 import { runoffStepMs } from "./runoff";
 import { showdownStepMs } from "./showdown";
 import { ANSWER_REVEAL_MS, MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, NO_EXECUTION_MS, PHASE_DEFS } from "./phases";
@@ -35,6 +36,13 @@ export function morningMsOf(state: RoomState): number {
  * 지금 단계의 전체 길이(ms). 단계 표 길이 그대로이고(아침은 morningMsOf), 길이가 없는 단계는 null. buildView 가 이 함수로 phaseDurationMs 를 만든다.
  */
 export function phaseDurationOf(state: RoomState): number | null {
+  if (firstPlaytestDay(state)) {
+    if (state.phase === "roleReveal") return PLAYTEST_ROLE_MS;
+    if (state.phase === "keyword") return PLAYTEST_KEYWORD_MS;
+    if (state.phase === "discussion") return PLAYTEST_DISCUSSION_MS;
+    if (state.phase === "verdict") return state.firstBallotOutcome === undefined ? PLAYTEST_BALLOT_MS : PLAYTEST_RESULT_MS;
+    if (state.phase === "morning") return morningMsOf(state) + PLAYTEST_MORNING_EXTRA_MS;
+  }
   if (state.phase === "morning") return morningMsOf(state);
   // 첫날 정답 공개(D-22): 처형이 있었으면 3초, 처형 없는 첫날이면 "처형 없음" 큰 글 1.4초가 앞에 붙어 4.4초다. 처형 없음 여부는 이미 공개된 값(day.noExecution)이라 길이로 새는 정보가 없다.
   if (state.phase === "answerReveal") return ANSWER_REVEAL_MS + (noExecutionOf(state) === undefined ? 0 : NO_EXECUTION_MS);
@@ -75,12 +83,18 @@ export function toggleEnd(
 
 /** 토론 끝내기를 누른 산 사람 수. 누가 눌렀는지는 서버 전용이고 공개 값은 이 개수뿐이다. 죽은 사람의 남은 표는 세지 않는다. */
 export function endCountOf(state: RoomState): number {
-  return state.players.filter((p) => isAlive(p) && p.endVote === true).length;
+  const voters = firstPlaytestDay(state) ? humanSeats(state) : state.players.filter(isAlive);
+  return voters.filter((p) => p.endVote === true).length;
 }
 
 /** 누른 수가 산 사람 수의 과반(majorityOf)에 닿았는가. */
 export function endReached(state: RoomState): boolean {
-  return endCountOf(state) >= majorityOf(state.players.filter(isAlive).length);
+  return endCountOf(state) >= endRequiredOf(state);
+}
+
+export function endRequiredOf(state: RoomState): number {
+  const voters = firstPlaytestDay(state) ? humanSeats(state) : state.players.filter(isAlive);
+  return majorityOf(voters.length);
 }
 
 /**
@@ -88,11 +102,11 @@ export function endReached(state: RoomState): boolean {
  * 날짜별 기록(voteLog)과 그 밖의 키는 그대로 둔다.
  */
 export function enterDiscussion(state: RoomState): RoomState {
-  const { verdict: _verdict, execution: _execution, pickTurn: _pickTurn, runoff: _runoff, showdown: _showdown, ...rest } = state;
+  const { verdict: _verdict, execution: _execution, pickTurn: _pickTurn, runoff: _runoff, showdown: _showdown, firstBallotOutcome: _firstBallotOutcome, ...rest } = state;
   return {
     ...rest,
     players: state.players.map((p) => {
-      const { nominate: _nominate, verdictVote: _verdictVote, endVote: _endVote, runoffVote: _runoffVote, showdownPick: _showdownPick, ...kept } = p;
+      const { nominate: _nominate, verdictVote: _verdictVote, endVote: _endVote, runoffVote: _runoffVote, showdownPick: _showdownPick, roleReady: _roleReady, firstBallot: _firstBallot, ...kept } = p;
       return kept;
     }),
   };

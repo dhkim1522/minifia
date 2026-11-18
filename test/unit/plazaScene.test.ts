@@ -6,7 +6,7 @@ import { createCharacter, figForSeat } from "../../src/world/character";
 import { buildPlazaScene, PLAZA_CLOCK_HOURS, PLAZA_LIGHT_TUNE } from "../../src/world/maps/plaza";
 import { PLAZA_PALETTE } from "../../src/world/palette";
 import { DRAW_CALL_BUDGET, LADDER } from "../../src/world/renderer";
-import { ALBEDO_NONE, buildBarScene, LIGHT_TUNE } from "../../src/world/maps/bar";
+import { buildBarScene, LIGHT_TUNE } from "../../src/world/maps/bar";
 import { MeshBasicMaterial } from "three";
 import type { LightingPhase } from "../../src/world/renderer";
 
@@ -191,7 +191,7 @@ describe("광장 단계 조명 표 PLAZA_LIGHT_TUNE (D-22, O-9)", () => {
     expect(lightsOf(p.root, DirectionalLight)).toHaveLength(1);
     expect(hex()).toBe(PLAZA_LIGHT_TUNE.talk.moonColor);
     p.setLighting("night");
-    expect(hex()).toBe("#c9d4ff");
+    expect(hex()).toBe(PLAZA_LIGHT_TUNE.night.moonColor);
     p.setLighting("talk");
     expect(hex()).toBe(PLAZA_LIGHT_TUNE.talk.moonColor);
     expect(lightsOf(p.root, DirectionalLight)).toHaveLength(1);
@@ -220,23 +220,19 @@ describe("광장 단계 조명 표 PLAZA_LIGHT_TUNE (D-22, O-9)", () => {
     p.dispose();
   });
 
-  it("가로등 발광 배율: talk 0 · vote 1 · night 0.7 · trial 0.06, 가로등 점광원은 talk 에 꺼지고 vote 부터 켜진다", () => {
+  it("가로등은 밤이 깊어지며 발광과 점광원이 함께 밝아진다", () => {
     const p = buildPlazaScene(LADDER[0]!);
     const lamp = p.lights.pendantA;
-    const want: [LightingPhase, number][] = [
-      ["talk", 0],
-      ["vote", 1],
-      ["trial", 0.06],
-      ["night", 0.7],
-    ];
-    for (const [ph, k] of want) {
-      p.setLighting(ph);
-      expect(emissiveRoomScalar(p), ph).toBeCloseTo(k, 6);
+    const day = emissiveRoomScalar(p);
+    const dayLamp = lamp.intensity;
+    for (const phase of ["vote", "trial"] as const) {
+      p.setLighting(phase);
+      expect(emissiveRoomScalar(p), phase).toBeCloseTo(day, 6);
+      expect(lamp.intensity).toBe(dayLamp);
     }
-    p.setLighting("talk");
-    expect(lamp.intensity).toBe(0);
-    p.setLighting("vote");
-    expect(lamp.intensity).toBeGreaterThan(0);
+    p.setLighting("night");
+    expect(emissiveRoomScalar(p)).toBeGreaterThan(day);
+    expect(lamp.intensity).toBeGreaterThan(dayLamp);
     p.dispose();
   });
 
@@ -425,69 +421,25 @@ describe("광장 재질 보정 albedo (18-12, G-18-1)", () => {
   const colorArr = (p: ReturnType<typeof buildPlazaScene>, n: string): Float32Array => p.meshes[n]!.geometry.getAttribute("color").array as Float32Array;
   const snap = (p: ReturnType<typeof buildPlazaScene>): Float32Array[] => GRADED.map((n) => Float32Array.from(colorArr(p, n)));
   const same = (a: Float32Array, b: Float32Array): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
-  const dist = (a: Color, b: Color): number => Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
-  const floorColor = new Color(PLAZA_PALETTE.floor);
-  /** 정점 색 배열에서 팔레트 바닥색과 같은(원래 색) 정점 번호 */
-  const findFloorVertex = (orig: Float32Array): number => {
-    for (let i = 0; i < orig.length; i += 3) if (Math.abs(orig[i]! - floorColor.r) < 1e-6 && Math.abs(orig[i + 1]! - floorColor.g) < 1e-6 && Math.abs(orig[i + 2]! - floorColor.b) < 1e-6) return i;
-    return -1;
-  };
-  const srgb = (c: Color): { r: number; g: number; b: number; sat: number } => {
-    const n = c.getHex();
-    const r = (n >> 16) & 255;
-    const g = (n >> 8) & 255;
-    const b = n & 255;
-    const max = Math.max(r, g, b);
-    return { r, g, b, sat: max === 0 ? 0 : (max - Math.min(r, g, b)) / max };
-  };
-
-  it("(a) 만든 직후(talk) 바닥 정점 색은 팔레트 바닥색과 다르고 그 색보다 talk tint 에 가깝다", () => {
-    const night = buildPlazaScene(LADDER[0]!);
-    night.setLighting("night");
-    const i = findFloorVertex(colorArr(night, "shell"));
-    expect(i).toBeGreaterThanOrEqual(0);
+  it("조명 단계들에서 바닥·바깥판의 회청색 재질과 정점 배열이 일치한다", () => {
     const p = buildPlazaScene(LADDER[0]!);
-    const a = colorArr(p, "shell");
-    const got = new Color(a[i]!, a[i + 1]!, a[i + 2]!);
-    const tint = new Color(PLAZA_LIGHT_TUNE.talk.albedo.tint);
-    expect(dist(got, floorColor)).toBeGreaterThan(1e-3);
-    expect(dist(got, tint)).toBeLessThan(dist(floorColor, tint));
-    night.dispose();
-    p.dispose();
-  });
-
-  it("(b) night 로 가면 정점 색·plate 재질 색이 팔레트 원래 값과 같다", () => {
-    const p = buildPlazaScene(LADDER[0]!);
-    p.setLighting("night");
-    const i = findFloorVertex(colorArr(p, "shell"));
-    expect(i).toBeGreaterThanOrEqual(0);
-    const plate = (p.plate.material as MeshStandardMaterial).color;
-    expect(plate.r).toBeCloseTo(floorColor.r, 6);
-    expect(plate.g).toBeCloseTo(floorColor.g, 6);
-    expect(plate.b).toBeCloseTo(floorColor.b, 6);
-    p.dispose();
-  });
-
-  it("(c) talk → night → talk → night 왕복 뒤에도 정점 색 배열이 첫 night 와 정확히 같다(누적 없음)", () => {
-    const p = buildPlazaScene(LADDER[0]!);
-    p.setLighting("night");
+    const { tint, mix } = PLAZA_LIGHT_TUNE.talk.albedo;
+    const floor = new Color(PLAZA_PALETTE.floor).lerp(new Color(tint), mix);
     const first = snap(p);
-    p.setLighting("talk");
-    const talk1 = snap(p);
-    p.setLighting("night");
-    p.setLighting("talk");
-    const talk2 = snap(p);
-    p.setLighting("night");
-    const again = snap(p);
-    GRADED.forEach((_, k) => {
-      expect(same(again[k]!, first[k]!), `night ${GRADED[k]}`).toBe(true);
-      expect(same(talk2[k]!, talk1[k]!), `talk ${GRADED[k]}`).toBe(true);
-    });
-    expect(same(talk1[0]!, first[0]!)).toBe(false);
+    const shell = first[0]!;
+    const hasFloor = shell.some((r, i) => i % 3 === 0 && Math.hypot(r - floor.r, shell[i + 1]! - floor.g, shell[i + 2]! - floor.b) < 1e-6);
+    expect(hasFloor).toBe(true);
+    const plate = (p.plate.material as MeshStandardMaterial).color;
+    expect(plate.equals(floor)).toBe(true);
+    for (const phase of PHASES) {
+      p.setLighting(phase);
+      snap(p).forEach((arr, i) => expect(same(arr, first[i]!), GRADED[i]).toBe(true));
+      expect(plate.equals(floor)).toBe(true);
+    }
     p.dispose();
   });
 
-  it("(d) 조명 단계가 바뀔 때만 color 속성 version 이 는다(긴장·핀·같은 단계 예산 변경으로는 그대로)", () => {
+  it("조명·긴장·핀·예산이 바뀌어도 정점 색을 업로드하지 않는다", () => {
     const p = buildPlazaScene(LADDER[0]!);
     p.setLighting("talk");
     const ver = (): number => (p.meshes.shell!.geometry.getAttribute("color") as { version: number }).version;
@@ -502,7 +454,7 @@ describe("광장 재질 보정 albedo (18-12, G-18-1)", () => {
     p.setLighting("talk");
     expect(ver()).toBe(v0);
     p.setLighting("vote");
-    expect(ver()).toBeGreaterThan(v0);
+    expect(ver()).toBe(v0);
     p.dispose();
   });
 
@@ -520,30 +472,19 @@ describe("광장 재질 보정 albedo (18-12, G-18-1)", () => {
     p.dispose();
   });
 
-  it("(h) 바닥 정점·plate 는 낮에 채도 0.20 이하인 회청색이고 밤에는 채도가 높아진다", () => {
+  it("바닥과 바깥판의 보정색은 채도 0.20 이하인 회청색이다", () => {
     const p = buildPlazaScene(LADDER[0]!);
-    const a0 = colorArr(p, "shell");
-    // talk 에서 바닥 정점 번호는 night 의 원래 색으로 찾는다
-    const q = buildPlazaScene(LADDER[0]!);
-    q.setLighting("night");
-    const i = findFloorVertex(colorArr(q, "shell"));
-    expect(i).toBeGreaterThanOrEqual(0);
-    const floorTalk = srgb(new Color(a0[i]!, a0[i + 1]!, a0[i + 2]!));
-    const plateTalk = srgb((p.plate.material as MeshStandardMaterial).color);
-    for (const [name, c] of [["바닥 정점", floorTalk], ["plate", plateTalk]] as const) {
-      expect(c.sat, `${name} 채도 ${JSON.stringify(c)}`).toBeLessThanOrEqual(0.2);
-      expect(c.b, `${name} B ${JSON.stringify(c)}`).toBeGreaterThan(Math.max(c.r, c.g));
-    }
-    const floorNight = srgb(floorColor);
-    expect(floorNight.sat).toBeGreaterThan(0.2);
-    expect(floorNight.b).toBeGreaterThan(Math.max(floorNight.r, floorNight.g));
-    const plateNight = srgb((q.plate.material as MeshStandardMaterial).color);
-    expect(plateNight.sat).toBeGreaterThan(0.2);
+    const c = (p.plate.material as MeshStandardMaterial).color;
+    const n = c.getHex();
+    const r = (n >> 16) & 255;
+    const g = (n >> 8) & 255;
+    const b = n & 255;
+    expect((b - Math.min(r, g)) / b).toBeLessThanOrEqual(0.20);
+    expect(b).toBeGreaterThan(Math.max(r, g));
     p.dispose();
-    q.dispose();
   });
 
-  it("밤 쪽 네 행 albedo 는 ALBEDO_NONE 이다", () => {
-    for (const ph of ["trial", "night", "nightCitizen", "nightGhost"] as const) expect(PLAZA_LIGHT_TUNE[ph].albedo, ph).toEqual(ALBEDO_NONE);
+  it("밤에도 같은 재질 보정 값을 쓴다", () => {
+    for (const ph of PHASES) expect(PLAZA_LIGHT_TUNE[ph].albedo, ph).toEqual(PLAZA_LIGHT_TUNE.talk.albedo);
   });
 });

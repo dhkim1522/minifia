@@ -25,7 +25,7 @@ import { MAX_PLAYERS, MIN_PLAYERS } from "../protocol";
 import { isAlive } from "./alive";
 import { channelOf } from "./audience";
 import { botCount } from "./bots";
-import { endCountOf, phaseDurationOf } from "./discussion";
+import { endCountOf, endRequiredOf, phaseDurationOf } from "./discussion";
 import { buildSummary } from "./endgame";
 import { noExecutionOf } from "./execution";
 import { answerOpenOf } from "./keywordAnswer";
@@ -36,6 +36,7 @@ import { pointLinesOf, turnViewOf } from "./nomination";
 import { runoffVotersOf, runoffViewOf } from "./runoff";
 import { showdownViewOf } from "./showdown";
 import { PHASE_DEFS } from "./phases";
+import { firstBallotCount, firstPlaytestDay, voteOpensAt } from "./playtest";
 import { RULES } from "./ruleset";
 import { isReady } from "./rematch";
 import { rolesInPlay } from "./roles";
@@ -86,10 +87,22 @@ function buildDay(state: RoomState): DayView {
     day.keyword = kw;
   }
   // 토론 끝내기는 누른 산 사람 수만 공개한다 — 누가 눌렀는지는 서버 전용(Player.endVote)이고 본인 값만 me.endDiscussion 으로 간다(결정 0060-2).
-  if (state.phase === "discussion") day.endCount = endCountOf(state);
+  if (state.phase === "discussion") {
+    day.endCount = endCountOf(state);
+    const opens = voteOpensAt(state);
+    if (opens !== undefined) {
+      day.voteOpensAt = opens;
+      day.voteReadyRequired = endRequiredOf(state);
+    }
+  }
   // 찬반은 집계 수(찬성·반대)만 모두에게 공개한다(D-11) — 던진 좌석(옛 day.voted)은 싣지 않는다: 좌석과 수가 함께 보이면 첫 투표자의 표가 추론된다(D-26).
   // 개인 값은 me.verdictVote 로 본인에게만 간다. 필드별 복사라 voters 같은 다른 키가 새지 않는다.
-  if (state.phase === "verdict") {
+  if (firstPlaytestDay(state) && state.firstBallotOutcome !== undefined) {
+    const { count, result: { target, votes, holds, reason } } = state.firstBallotOutcome;
+    day.firstBallot = { count, result: { target, votes, holds, ...(reason === undefined ? {} : { reason }) } };
+  } else if (state.phase === "verdict" && firstPlaytestDay(state)) {
+    day.firstBallot = { count: firstBallotCount(state) };
+  } else if (state.phase === "verdict") {
     const tally = verdictTallyOf(state);
     day.verdictCount = { yes: tally.yes, no: tally.no };
   }
@@ -178,6 +191,7 @@ function buildRestingView(state: RoomState, resting: Player, now: number): RoomV
   const view: RoomView = {
     code: state.code,
     phase: state.phase,
+    ...(state.playtest === true ? { playtest: true as const } : {}),
     round: roundOf(state),
     phaseEndsAt: null,
     phaseDurationMs: null,
@@ -226,6 +240,10 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
 
   // 내 정보도 허용 목록으로만 만든다. role·allies 는 조건을 채울 때만 키 자체를 만든다(undefined 로 남기지 않는다).
   const myInfo: MyInfo = { seat: me.seat, isHost: me.id === state.hostId };
+  if (state.playtest === true && state.phase === "roleReveal" && me.roleReady === true) myInfo.roleReady = true;
+  if (firstPlaytestDay(state) && state.phase === "verdict" && state.firstBallotOutcome === undefined && isAlive(me) && me.firstBallot !== undefined) {
+    myInfo.firstBallot = me.firstBallot;
+  }
   const def = PHASE_DEFS[state.phase];
   if (def.revealsOwnRole && me.role !== undefined) {
     myInfo.role = me.role;
@@ -370,6 +388,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   const view: RoomView = {
     code: state.code,
     phase: state.phase,
+    ...(state.playtest === true ? { playtest: true as const } : {}),
     round: roundOf(state),
     phaseEndsAt: state.phaseEndsAt,
     phaseDurationMs: phaseDurationOf(state), // 단계 표 길이 — 파생은 한 곳(discussion.ts)

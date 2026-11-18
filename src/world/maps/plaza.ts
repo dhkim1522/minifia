@@ -35,16 +35,37 @@ import { cameraBasis, PLATE_FAR } from "../camera";
 import { CHAR_SCALE } from "../character";
 import { PLAZA_PALETTE as P, TOKEN_COLORS } from "../palette";
 import type { Budget, LightingPhase } from "../renderer";
-import { ALBEDO_NONE, albedoGrader, Bundle, CHALK_OPACITY, CHALK_POINTS, CHALK_RADIUS, makeGlowTexture, tf, under } from "./bar";
+import { albedoGrader, Bundle, CHALK_OPACITY, CHALK_POINTS, CHALK_RADIUS, makeGlowTexture, tf, under } from "./bar";
 import type { MarkerRing, PhaseTune } from "./bar";
+import { phaseLighting } from "./phaseLighting";
 import type { MapScene } from "./types";
 
-// ---------- 조명 시작값 ----------
-// 단위 변환은 bar 와 같다(반구·방향광 = 시안 세기 × π, 점광원 = 시안 세기 × 4). 값은 기본값이고 육안 조정은 실기기 묶음(999.6)의 몫이다.
-// 노출·점광 세기는 bar 의 같은 단계 값을 기준으로 두고, 반구·달빛의 상대 비율만 blockout plaza.js 의 env 를 따른다.
-// 낮 = 회백~살짝 따뜻, 아침 = 서늘한 옅은 푸른빛, 저녁 = 노을(결정 0081-1, D-03). 재질 색은 albedo 로 단계마다 섞는다(18-12, G-18-1). 밤 쪽 행은 그대로.
-// 하늘·안개 색은 모두 talk 의 같은 칸보다 밝지 않다 — 낮도 마피아 분위기(밝고 맑은 하늘 없음, 진홍 없음).
+// 광장의 차가운 석재 재질과 그림자 방향은 고정한다. 밤에는 가로등의 따뜻한 포인트를 살린다.
 const LAMP_ON = 1.0 * 4;
+const PLAZA_TALK: PhaseTune = {
+  hemi: 1.05 * Math.PI,
+  moon: 0.9 * Math.PI,
+  moonColor: "#e1e8f4",
+  exposure: 1.25,
+  sky: ["#b4bac6", "#606678", "#969eac"],
+  fog: { near: 20, far: 44 },
+  stage: 0,
+  pendant: LAMP_ON * 0.25,
+  emissive: { room: 0.25, vote: 0 },
+  glow: { room: 0.25, vote: 0 },
+  self: 0,
+  albedo: { tint: "#929ba9", mix: 0.31 },
+};
+const PLAZA_NIGHT: PhaseTune = {
+  ...PLAZA_TALK,
+  hemi: 0.74 * Math.PI,
+  moon: 0.62 * Math.PI,
+  moonColor: "#b3c6ee",
+  sky: ["#9ba9c5", "#4c576e", "#727e99"],
+  pendant: LAMP_ON * 0.7,
+  emissive: { room: 0.7, vote: 0.16 },
+  glow: { room: 0.7, vote: 0.16 },
+};
 export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   point: {
     stage: { x: number; y: number; z: number; distance: number };
@@ -56,110 +77,21 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   moonPos: { x: number; y: number; z: number };
   moonTarget: { x: number; y: number; z: number };
 } = {
-  /** 흐린 낮: 가로등·시계탑 조명 꺼짐, 반구가 높다 */
-  talk: {
-    hemi: 1.05 * Math.PI,
-    moon: 0.9 * Math.PI,
-    moonColor: "#e1e8f4",
-    exposure: 1.25,
-    sky: ["#b4bac6", "#606678", "#969eac"],
-    fog: { near: 20, far: 44 },
-    stage: 0,
-    pendant: 0,
-    emissive: { room: 0, vote: 0 },
-    glow: { room: 0, vote: 0 },
-    self: 0,
-    albedo: { tint: "#929ba9", mix: 0.31 },
-  },
-  /** 저녁 지목: 가로등 켜짐, 반구·달빛 낮춤, 무대 점광원이 연단을 비춘다 */
-  vote: {
-    hemi: 0.6 * Math.PI,
-    moon: 0.4 * Math.PI,
-    moonColor: "#d8b48a",
-    exposure: 1.25,
-    sky: ["#a8968e", "#3a2e2e", "#6a585a"],
-    fog: { near: 20, far: 44 },
-    stage: 2.0 * 4,
-    pendant: LAMP_ON,
-    emissive: { room: 1, vote: 0 },
-    glow: { room: 1, vote: 0 },
-    self: 0,
-    albedo: { tint: "#8c766c", mix: 0.3 },
-  },
-  /** 변론·처형: 시계탑 조명(무대 점광원)이 연단의 변론자만 비춘다, 가로등은 거의 꺼짐 */
-  trial: {
-    hemi: 0.3 * Math.PI,
-    moon: 0.2 * Math.PI,
-    moonColor: TOKEN_COLORS.moon,
-    exposure: 1.25,
-    sky: ["#3a3464", "#1c1428", "#100d19"],
-    fog: { near: 20, far: 44 },
-    stage: 2.0 * 4,
-    pendant: LAMP_ON * 0.06,
-    emissive: { room: 0.06, vote: 1 },
-    glow: { room: 0.06, vote: 1 },
-    self: 0,
-    albedo: ALBEDO_NONE,
-  },
-  /** 밤: 가로등 희미 + 달빛 */
-  night: {
-    hemi: 0.45 * Math.PI,
-    moon: 0.7 * Math.PI,
-    moonColor: TOKEN_COLORS.moon,
-    exposure: 1.25,
-    sky: ["#2c2c58", "#15122a", "#0a0b16"],
-    fog: { near: 20, far: 44 },
-    stage: 0,
-    pendant: LAMP_ON * 0.7,
-    emissive: { room: 0.7, vote: 0 },
-    glow: { room: 0.7, vote: 0 },
-    self: 0,
-    albedo: ALBEDO_NONE,
-  },
-  /** 밤·산 시민 편: bar 와 같은 거의 깜깜한 광장 + 내 캐릭터 빛 */
-  nightCitizen: {
-    hemi: 0.05 * Math.PI,
-    moon: 0.08 * Math.PI,
-    moonColor: TOKEN_COLORS.moon,
-    exposure: 0.75,
-    sky: ["#1a1a36", "#0c0a1a", "#05060c"],
-    fog: { near: 20, far: 44 },
-    stage: 0,
-    pendant: 0,
-    emissive: { room: 0, vote: 0 },
-    glow: { room: 0, vote: 0 },
-    self: 1.4 * 4,
-    albedo: ALBEDO_NONE,
-  },
-  /** 밤·유령: 마피아 화면(night)과 같은 달빛·반구·가로등, 모두 보인다 */
-  nightGhost: {
-    hemi: 0.45 * Math.PI,
-    moon: 0.7 * Math.PI,
-    moonColor: TOKEN_COLORS.moon,
-    exposure: 1.25,
-    sky: ["#2c2c58", "#15122a", "#0a0b16"],
-    fog: { near: 20, far: 44 },
-    stage: 0,
-    pendant: LAMP_ON * 0.7,
-    emissive: { room: 0.7, vote: 0 },
-    glow: { room: 0.7, vote: 0 },
-    self: 0,
-    albedo: ALBEDO_NONE,
-  },
-  /** 아침: talk 와 같은 반구·낮은 달빛(18-07 렌더 측정으로 올림), 채도 낮은 흐린 하늘, 가로등은 이미 꺼져 있다 */
+  talk: PLAZA_TALK,
+  vote: { ...PLAZA_TALK, stage: 8 },
+  trial: { ...PLAZA_TALK, stage: 8, emissive: { ...PLAZA_TALK.emissive, vote: 0.55 }, glow: { ...PLAZA_TALK.glow, vote: 0.55 } },
+  night: PLAZA_NIGHT,
+  nightCitizen: { ...PLAZA_NIGHT, self: 1.2 },
+  nightGhost: PLAZA_NIGHT,
   morning: {
-    hemi: 1.05 * Math.PI,
-    moon: 0.7 * Math.PI,
+    ...PLAZA_TALK,
+    hemi: 0.94 * Math.PI,
+    moon: 0.77 * Math.PI,
     moonColor: "#e2e8ee",
-    exposure: 1.25,
-    sky: ["#aab4c2", "#545c66", "#8a94a2"],
-    fog: { near: 20, far: 44 },
-    stage: 0,
-    pendant: 0,
-    emissive: { room: 0, vote: 0 },
-    glow: { room: 0, vote: 0 },
-    self: 0,
-    albedo: { tint: "#8e98a6", mix: 0.5 },
+    sky: ["#aab4c2", "#545c6d", "#8993a5"],
+    pendant: LAMP_ON * 0.18,
+    emissive: { room: 0.18, vote: 0 },
+    glow: { room: 0.18, vote: 0 },
   },
   tension: { lead: 2.0 * 4 * 1.5, halfRoom: 0.5 },
   point: {
@@ -402,9 +334,8 @@ export function buildPlazaScene(budget: Budget): MapScene {
   meshes.glowRoom!.renderOrder = 2;
   meshes.glowTower!.renderOrder = 2;
   for (const m of Object.values(meshes)) root.add(m);
-  // 재질 보정(18-12): 조명을 받는 정점 색 묶음과 연장 판 재질 color 를 단계가 바뀔 때만 다시 쓴다
-  const grade = albedoGrader([meshes.shell!, meshes.furniture!, meshes.furnitureFar!], [matPlate]);
-  let gradedFor: LightingPhase | null = null;
+  // 색 보정은 맵을 만들 때 한 번 한다. 시간대 변경에는 정점 색 버퍼를 다시 올리지 않는다.
+  albedoGrader([meshes.shell!, meshes.furniture!, meshes.furnitureFar!], [matPlate])(PLAZA_LIGHT_TUNE.talk.albedo);
   root.add(handsGroup);
   for (const h of [...hourHands, ...minuteHands]) meshes[h.name] = h;
 
@@ -498,6 +429,7 @@ export function buildPlazaScene(budget: Budget): MapScene {
   let disposed = false;
   let current = budget;
   let phase: LightingPhase = "talk";
+  const lighting = phaseLighting(T);
   let tensionLevel: 0 | 1 | 2 = 0;
   let tensionFocus: { x: number; z: number } | null = null;
   let pinState: { x: number; z: number; strength: number } | null = null;
@@ -522,21 +454,17 @@ export function buildPlazaScene(budget: Budget): MapScene {
   };
 
   const applyLook = (): void => {
-    const t = T[phase];
+    const t = lighting.current;
     const b = current;
-    if (gradedFor !== phase) {
-      grade(t.albedo);
-      gradedFor = phase;
-    }
-    hemi.color.set(t.sky[0]);
-    hemi.groundColor.set(t.sky[1]);
+    hemi.color.copy(t.sky[0]);
+    hemi.groundColor.copy(t.sky[1]);
     hemi.intensity = t.hemi;
-    background.set(t.sky[2]);
-    fog.color.set(t.sky[2]);
+    background.copy(t.sky[2]);
+    fog.color.copy(t.sky[2]);
     fog.near = t.fog.near;
     fog.far = t.fog.far;
     moon.intensity = t.moon;
-    moon.color.set(t.moonColor);
+    moon.color.copy(t.moonColor);
     self.intensity = t.self;
     const lead = tensionLevel >= 1;
     base.stage = lead ? T.tension.lead : t.stage;
@@ -574,15 +502,17 @@ export function buildPlazaScene(budget: Budget): MapScene {
   setHands();
   const update = (dt: number, t: number): void => {
     if (disposed) return;
+    if (lighting.advance(dt)) applyLook();
     // 변론 때는 분침이 벽시계 30초 주기로 18.5~19 사이를 돈다
     const goal = phase === "trial" ? 18.5 + ((((t % 30) + 30) % 30) / 30) * 0.5 : clockWant;
     clockShown += (goal - clockShown) * Math.min(1, Math.max(0, dt) * CLOCK_FOLLOW);
     setHands();
   };
 
-  const setLighting = (next: LightingPhase): void => {
+  const setLighting = (next: LightingPhase, seconds = 0): void => {
     phase = next;
     clockWant = PLAZA_CLOCK_HOURS[next];
+    lighting.set(next, seconds);
     applyLook();
   };
   const setSelfLight = (at: { x: number; z: number } | null): void => {
@@ -627,7 +557,7 @@ export function buildPlazaScene(budget: Budget): MapScene {
     const far = b.props === "full";
     meshes.furnitureFar!.visible = far;
     if (meshes.emissiveRoomFar) meshes.emissiveRoomFar.visible = far;
-    setLighting(phase);
+    applyLook();
   };
   applyBudget(budget);
 

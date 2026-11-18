@@ -164,8 +164,8 @@ async function build(opts: Opts): Promise<WorldRenderer> {
     setPin(pin: { x: number; z: number; strength: number } | null, dim: number): void {
       bar.setPin(pin, dim);
     },
-    setLighting(phase: LightingPhase): void {
-      bar.setLighting(phase);
+    setLighting(phase: LightingPhase, seconds = 0): void {
+      bar.setLighting(phase, seconds);
       gl.toneMappingExposure = bar.exposure;
       gl.shadowMap.needsUpdate = true; // 조명 단계가 바뀌면 그림자를 다시 굽는다
     },
@@ -205,12 +205,10 @@ async function build(opts: Opts): Promise<WorldRenderer> {
     },
     render(): void {
       if (disposed) return;
-      if (bar.update) {
-        // 맵이 프레임마다 움직이는 것(광장 시계 바늘)이 있을 때만 시간을 잰다
-        const now = performance.now() / 1000;
-        bar.update(Math.min(0.25, Math.max(0, now - lastTick)), now);
-        lastTick = now;
-      }
+      const now = performance.now() / 1000;
+      bar.update(now - lastTick, now);
+      lastTick = now;
+      gl.toneMappingExposure = bar.exposure;
       gl.render(scene, camera);
     },
     setBudget(next: number): void {

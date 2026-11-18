@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { MAP_PHASES } from "../../shared/game/movement";
@@ -20,6 +20,7 @@ export type ChatPanelBinding = Omit<ChatBinding, "typingSeats" | "liveWhisperIn"
 
 export interface GamePanelProps {
   view: RoomView;
+  offset?: number;
   /** 보냈으면 true, 소켓이 닫혀 못 보냈으면 false. 반환값이 없는 함수(void)는 보낸 것으로 본다 */
   send: (msg: ClientMessage) => boolean | void;
   /** 연결이 열려 있어 서버로 보낼 수 있는가 */
@@ -64,7 +65,17 @@ export interface GamePanelProps {
  * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + 찬성·반대 숫자 줄, 22-10)을 얹는다 — 변론·처형·유령은 채팅만이다(처형은 찬반 줄을 접는다, 18.1-13 결정 0083-9).
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, chatTrailing }: GamePanelProps) {
+export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, chatTrailing }: GamePanelProps) {
+  const playtest = view.playtest === true;
+  const voteOpensAt = playtest && view.phase === "discussion" ? view.day?.voteOpensAt : undefined;
+  const [openedVoteAt, setOpenedVoteAt] = useState<number>();
+  useEffect(() => {
+    if (voteOpensAt === undefined) return;
+    const delay = voteOpensAt - Date.now() - offset;
+    if (delay <= 0) return;
+    const id = setTimeout(() => setOpenedVoteAt(voteOpensAt), delay);
+    return () => clearTimeout(id);
+  }, [voteOpensAt, offset]);
   const serverPressed = view.me.endDiscussion === true;
   const [pressed, choose] = useViewChoice<boolean>(view, serverPressed);
   // 거절이 오면 서버 값으로 되돌린다. 처음 그릴 때(거절 0)는 아무것도 하지 않는다.
@@ -86,13 +97,15 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
 
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);
-  const showEnd = view.phase === "discussion" && meAlive && !kbOpen;
-  const total = majorityOf(view.players.filter(isAlive).length);
+  const voteUnlocked = voteOpensAt === undefined || openedVoteAt === voteOpensAt || Date.now() + offset >= voteOpensAt;
+  const showEnd = view.phase === "discussion" && meAlive && !kbOpen && voteUnlocked;
+  const total = view.day?.voteReadyRequired ?? majorityOf(view.players.filter(isAlive).length);
   const count = view.day?.endCount ?? 0;
 
   // 찬반 줄(22-10, D-11·D-26): 처형 후보가 없어 산 사람 전원이 던진다. 유령은 같은 숫자 줄만 본다(보기 패널).
   // 숫자는 서버가 모두에게 같게 보낸 집계(day.verdictCount)뿐이다 — 누가 던졌는지는 어디에도 없다.
-  const inVerdict = view.phase === "verdict" && !kbOpen;
+  const firstBallot = playtest && view.phase === "verdict" ? view.day?.firstBallot : undefined;
+  const inVerdict = view.phase === "verdict" && firstBallot === undefined && !kbOpen;
   const showVerdict = inVerdict && meAlive; // 찬반 버튼 + 숫자
   const showVerdictCount = inVerdict; // 산 사람·유령 모두 같은 숫자 줄
   const verdictYes = view.day?.verdictCount?.yes ?? 0;
@@ -108,11 +121,11 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   // 채팅 패널은 서버가 보낸 view.me.chat 이 그 채널일 때만 그린다(서버 값이 기준, T-08-47). 산 마피아의 밤 채팅은 그리지 않는다.
   const night = view.phase === "night";
   const myRole = view.me.role;
-  const nightFaces = night && meAlive;
+  const nightFaces = night && meAlive && (!playtest || myRole === "mafia" || myRole === "police" || myRole === "doctor");
   const chatChannelOk = !night || view.me.chat === "ghost";
   // 후보: 산 사람 전원(나 포함). 좌석 오름차순. 후보가 없으면 목록을 그리지 않는다(E1 #1).
   const faces = !nightFaces ? [] : view.players
-    .filter((p) => isAlive(p))
+    .filter((p) => isAlive(p) && (!playtest || (myRole !== "police" && myRole !== "mafia") || p.seat !== view.me.seat && !view.me.allies?.includes(p.seat)))
     .sort((a, b) => a.seat - b.seat)
     .map((p) => ({ seat: p.seat, name: p.nickname, img: faceSrc(p.seat), color: seatColorVar(p.seat) }));
   // 마피아의 합의 수단(결정 0074): 서버가 산 마피아 본인에게만 보낸 집계를 칸 안 작은 배지로 그린다. 다른 역할 view 에는 값이 없고 읽지도 않는다.
@@ -135,10 +148,10 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
   const answerReveal = view.phase === "answerReveal";
   const chatLocked = defense || answerReveal;
   const condemned = defense && meAlive && view.day?.candidate === view.me.seat;
-  const penOn = meAlive && MAP_PHASES.has(view.phase) && onOpenWill !== undefined && !answerReveal && (!defense || condemned);
-  const showNoteRow = nightFaces && myRole === "mafia" && onOpenNote !== undefined;
+  const penOn = meAlive && MAP_PHASES.has(view.phase) && onOpenWill !== undefined && !answerReveal && (!defense || condemned) && (!playtest || condemned);
+  const showNoteRow = !playtest && nightFaces && myRole === "mafia" && onOpenNote !== undefined;
   const noteHintId = useId();
-  const showWillRow = nightFaces && myRole !== "mafia" && onOpenWill !== undefined;
+  const showWillRow = !playtest && nightFaces && myRole !== "mafia" && onOpenWill !== undefined;
 
   const pressEnd = (): void => {
     if (!canSend) return;
@@ -154,6 +167,12 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
       data-world-panel=""
       {...(veiled ? { "data-will-hide-panel": "true" } : {})}
     >
+      {showEnd && voteOpensAt !== undefined ? (
+        <button type="button" className="mf-btn mf-btn--secondary mf-playtest__vote-start" data-end-discussion="" aria-pressed={pressed === true} disabled={!canSend} onClick={pressEnd}>
+          <span>{pressed ? "투표로 가기 요청함" : "투표로 가기"}</span>
+          <span className="mv-count">{count}/{total}</span>
+        </button>
+      ) : null}
       {showVerdictCount ? (
         <div className="mf-game__verdict" data-verdict-row="">
           {showVerdict ? (
@@ -171,7 +190,9 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
           </div>
         </div>
       ) : null}
-      {nightFaces ? (
+      {firstBallot !== undefined ? (
+        <PlaytestBallot view={view} ballot={firstBallot} canVote={meAlive && canSend} send={send} />
+      ) : nightFaces ? (
         faces.length > 0 ? (
           <FaceList
             faces={faces}
@@ -188,6 +209,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
       ) : chatChannelOk ? (
         <ChatPanel
           {...binding}
+          {...(playtest ? { emotes: [], collapseEvidenceOnSmallScreen: true, keepLogHeightOnFocus: true } : {})}
           logHeight={logHeight}
           compact={kbOpen}
           {...(chatLocked ? { locked: true } : {})}
@@ -202,7 +224,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
               }
             : {})}
           {...(call?.chat ? { callInput: true } : {})}
-          {...(chatTrailing ? { trailing: chatTrailing } : {})}
+          {...(!playtest && chatTrailing ? { trailing: chatTrailing } : {})}
           {...(penOn
             ? {
                 onWill: () => {
@@ -265,7 +287,7 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
           </button>
         </ActionRow>
       ) : null}
-      {showEnd ? (
+      {showEnd && voteOpensAt === undefined ? (
         <ActionRow>
           <button
             type="button"
@@ -283,5 +305,47 @@ export function GamePanel({ view, send, canSend, binding, logHeight, kbOpen = fa
         </ActionRow>
       ) : null}
     </section>
+  );
+}
+
+function PlaytestBallot({ view, ballot, canVote, send }: {
+  view: RoomView;
+  ballot: NonNullable<NonNullable<RoomView["day"]>["firstBallot"]>;
+  canVote: boolean;
+  send: GamePanelProps["send"];
+}) {
+  const { result } = ballot;
+  if (result !== undefined) {
+    const name = view.players.find((player) => player.seat === result.target)?.nickname;
+    const summary = result.target === null
+      ? result.reason === "tie" ? "동률이라 오늘은 보류됐어요" : "오늘은 보류됐어요"
+      : `${name ?? "한 사람"} 님이 지목됐어요`;
+    return (
+      <div className="mf-playtest__ballot-result" data-first-ballot-result="" role="status">
+        <strong>{summary}</strong>
+        {result.votes > 0 || result.holds > 0 ? <span>지목 {result.votes}표 · 보류 {result.holds}표</span> : null}
+      </div>
+    );
+  }
+  const chosen = view.me.firstBallot;
+  const alive = [...view.players].filter(isAlive).sort((a, b) => a.seat - b.seat);
+  const faces = alive.filter((player) => player.seat !== view.me.seat).map((player) => ({
+    seat: player.seat,
+    name: player.nickname,
+    img: faceSrc(player.seat),
+    color: seatColorVar(player.seat),
+  }));
+  return (
+    <div className="mf-playtest__ballot" data-first-ballot="">
+      {canVote || alive.some((player) => player.seat === view.me.seat) ? (
+        <>
+          <FaceList faces={faces} label="지목할 사람" disabled={!canVote} {...(typeof chosen === "number" ? { value: chosen } : {})} onPick={(target) => send({ t: "firstBallot", target })} />
+          <button type="button" className="mf-btn mf-btn--secondary" data-first-ballot-hold="" disabled={!canVote} aria-pressed={chosen === null} onClick={() => {
+            if (chosen !== null) send({ t: "firstBallot", target: null });
+          }}>오늘은 보류</button>
+        </>
+      ) : null}
+      <p className="mf-playtest__ballot-count" role="status">{chosen !== undefined ? "선택했어요 · " : ""}{ballot.count}/{alive.length}명 선택</p>
+    </div>
   );
 }

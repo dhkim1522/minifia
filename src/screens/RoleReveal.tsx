@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { RoomView } from "../../shared/protocol";
+import type { ClientMessage, RoomView } from "../../shared/protocol";
+import { Button } from "../components/Button";
 import { RoleCard } from "../components/RoleCard";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
 import { callTargetsOf } from "../game/hostLine";
@@ -17,13 +18,43 @@ export interface RoleRevealProps {
   myRoleButton: ReactNode;
   /** 카드가 앞면이 된 적이 있음을 알린다. 마운트 때 이미 앞면인 경우(5초 뒤 입장·새로고침)도 첫 effect 에서 한 번 부른다 */
   onSeenFront: () => void;
+  send?: (msg: ClientMessage) => boolean | void;
+  canSend?: boolean;
 }
 
 // S-05 역할 확인(15초). 테이블은 그리지 않는다(D-13 개정). 뒤 3D 무대는 PreGame 이 깐다. 카드 면은 cardFace 가 정하고,
 // 마감이 지나도 화면이 스스로 단계를 넘기지 않는다(서버 view 만 따름, T-01-46).
 // 14페이즈(U-2·U-3, TOOL-02): 머리는 제목 + [내 역할] 뿐이다 — 안내·보조 줄은 자막 띠(HostBand)가, 남은 시간은 띠의 막대 + 초가 맡는다.
 // 카드 빛남(HOST-03): callTargetsOf 가 "카드"를 부르면 카드가 빛나고, 처음 앞면을 보면 꺼진다(되살아나지 않는다).
-export function RoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleRevealProps) {
+export function RoleReveal(props: RoleRevealProps) {
+  return props.view.playtest === true ? <PlaytestRoleReveal {...props} /> : <FlippingRoleReveal {...props} />;
+}
+
+function PlaytestRoleReveal({ view, myRoleButton, onSeenFront, send, canSend }: RoleRevealProps) {
+  const role = view.me.role ?? null;
+  const ready = view.me.roleReady === true;
+  useEffect(() => {
+    if (role !== null) onSeenFront();
+  }, [role, onSeenFront]);
+  return (
+    <main className="mf-root mf-reveal" data-playtest-role="">
+      <div className="mf-reveal__dim" aria-hidden="true" />
+      <header className="mf-reveal__header">
+        <PhaseHeader title="내 역할" extra={myRoleButton} />
+      </header>
+      <section className="mf-reveal__stage">
+        <RoleCard role={role} face={role === null ? "back" : "front"} allies={allyNicknames(view)} />
+      </section>
+      <div className="mf-reveal__hints mf-playtest__ready">
+        {role !== null && !ready ? (
+          <Button block disabled={!canSend} data-role-ready="" onClick={() => send?.({ t: "roleReady" })}>준비</Button>
+        ) : null}
+      </div>
+    </main>
+  );
+}
+
+function FlippingRoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleRevealProps) {
   const role = view.me.role ?? null;
   const hasRole = role !== null;
   const endsAt = view.phaseEndsAt;

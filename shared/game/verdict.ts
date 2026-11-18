@@ -7,6 +7,7 @@
 // 마감 뒤에는 누가 찬성·반대했는지 어디에도 남지 않는다(22-12 D-14) — 판정 결과(passed)와 집계 수(voteLog exec)뿐이다.
 // 순수 castVerdict·집계는 마감 시각을 건드리지 않는다. 산 사람 전원이 던지면 마지막 표 뒤 1.5초로 줄이고 번복은 연장하는 것은 방 DO 의 maybeAdvanceEarly 다(0089-26, shared/game/early.ts).
 import { isAlive } from "./alive";
+import { firstPlaytestDay } from "./playtest";
 import { afterDayOf } from "./phases";
 import type { Player, RoomState } from "./room";
 import type { DeadlineResult } from "./tick";
@@ -28,7 +29,7 @@ export function castVerdict(
   actorId: string,
   agree: boolean,
 ): { ok: true; state: RoomState } | { ok: false; error: VoteError } {
-  if (state.phase !== "verdict") return { ok: false, error: "WRONG_PHASE" };
+  if (state.phase !== "verdict" || firstPlaytestDay(state)) return { ok: false, error: "WRONG_PHASE" };
   const actor = state.players.find((p) => p.id === actorId);
   if (!actor || !isAlive(actor)) return { ok: false, error: "BAD_MESSAGE" };
   if (typeof agree !== "boolean") return { ok: false, error: "BAD_MESSAGE" };

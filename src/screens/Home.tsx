@@ -97,7 +97,12 @@ export function Home({ onEnterRoom }: HomeProps) {
     setBusy(true);
     setServerNicknameError(null);
     setServerCodeError(null);
-    const result = await createRoom(validation.nickname, { testMode: testModeFromSearch(window.location.search) });
+    const { hostname, search } = window.location;
+    const playtest = ["localhost", "127.0.0.1", "[::1]"].includes(hostname) && new URLSearchParams(search).get("playtest") === "1";
+    const result = await createRoom(validation.nickname, {
+      testMode: testModeFromSearch(search),
+      ...(playtest ? { playtest: true } : {}),
+    });
     setBusy(false);
     if (result.ok) {
       saveLastNickname(validation.nickname);

@@ -1,6 +1,7 @@
 // B안 2D 그림을 실제 Three.js 에셋에서 렌더한다.
 // npm run dev 실행 후 node scripts/render-noir-assets.mjs http://127.0.0.1:5173
 // 얼굴과 전신만 다시 만들 때는 --seat-portraits-only.
+// 역할 카드만 다시 만들 때는 --role-portraits-only.
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -106,11 +107,11 @@ try {
     }
   }
 
-  async function renderRoleAndOutfitPortraits() {
+  async function renderRolePortraits() {
     // 역할 그림은 본인 카드에만 등장한다. 살아 있는 인물의 공개 외형은 좌석·꾸미기와만 연동된다.
     for (const [role, seat, outfit] of [
       ["citizen", 2, "coat"],
-      ["police", 0, "detective"],
+      ["police", 0, "police"],
       ["doctor", 2, "doctor"],
       ["mafia", 3, "mafia"],
     ]) {
@@ -118,7 +119,9 @@ try {
       await savePng(image, `public/characters/roles/${role}_default@2x.png`, 144, 192);
       await savePng(image, `public/characters/roles/${role}_default@4x.png`, 288, 384);
     }
+  }
 
+  async function renderOtherPortraits() {
     const ghost = await portrait({ ghost: true, ratio: 0.75 });
     await savePng(ghost, "public/characters/ghost/ghost_default@2x.png", 144, 192);
     await savePng(ghost, "public/characters/ghost/ghost_default@4x.png", 288, 384);
@@ -141,9 +144,12 @@ try {
     await renderBackdrops(scene);
   } else if (process.argv.includes("--seat-portraits-only")) {
     await renderSeatPortraits();
+  } else if (process.argv.includes("--role-portraits-only")) {
+    await renderRolePortraits();
   } else {
     await renderSeatPortraits();
-    await renderRoleAndOutfitPortraits();
+    await renderRolePortraits();
+    await renderOtherPortraits();
     await renderMapCards();
     await renderBackdrops(scene);
   }

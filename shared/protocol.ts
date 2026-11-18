@@ -136,6 +136,14 @@ export interface KeywordView {
 
 // ---- 낮 토론 계약(2페이즈) ----
 // 07-11·07-12: 빠른 메시지(문구 표·say 메시지·옛 줄 타입)와 텍스트 이모티콘(emoji)은 자유 채팅(아래 7페이즈 구역)으로 대체돼 없어졌다. 동작(몸짓)은 10페이즈.
+export interface FirstBallotResult {
+  target: number | null;
+  /** 지목 대상 중 가장 많은 표 수. */
+  votes: number;
+  holds: number;
+  reason?: "held" | "tie" | "noVotes";
+}
+
 export interface DayView {
   n: number; // 일차(1부터)
   roles: RoleId[]; // 이번 판 직업(구성표 순서, 공개 정보)
@@ -150,6 +158,9 @@ export interface DayView {
   // ---- 8페이즈 낮 처형 필드(결정 0060). 서버가 채우는 일은 08-07 이후 — 지금은 타입만이다. ----
   points?: PointLine[]; // nomination 단계 동안만, 지금 지목 줄(공개 차례 연출용). 단계가 끝나면 키가 없다 — 기록으로 남기지 않는다(D-14)
   endCount?: number; // discussion 단계에서, 토론 끝내기를 누른 산 사람 수(누가 눌렀는지는 싣지 않는다)
+  voteOpensAt?: number; // 실험방 첫날 토론에서 표결 진입을 요청할 수 있는 서버 시각
+  voteReadyRequired?: number; // 실험방에서 투표 진입을 결정하는 사람 수, 봇 제외
+  firstBallot?: { count: number; result?: FirstBallotResult }; // 실험방 첫날의 투표 수와 공개 결과
   verdictCount?: { yes: number; no: number }; // verdict 단계에서만, 모두에게 같은 찬반 집계 수(번복도 바로 반영, D-11). 던진 좌석(옛 voted)은 싣지 않는다(D-26) — 내 표는 me.verdictVote
   turn?: PickTurnView; // nomination 단계에서만, 모두에게 같은 차례 정보(결정 0063-1, L14)
   runoff?: RunoffView; // runoff 단계에서만, 모두에게 같은 동점 결선 정보(결정 0066-4, L20)
@@ -199,6 +210,7 @@ export interface CreateRoomBody {
   nickname: string;
   /** true 일 때만 테스트 방이다(결정 0022). 방을 만들 때만 정해지고 바꿀 수 없다. */
   testMode?: boolean;
+  playtest?: true;
 }
 export interface JoinRoomBody {
   nickname: string;
@@ -243,6 +255,8 @@ export type ClientMessage =
   | { t: "hello"; token: string }
   | { t: "ping"; c: number }
   | { t: "start" } // 방장만 대기실에서(결정 0089-15: 옛 tutorial 옵션은 22페이즈에서 없어졌다 — 덧붙은 키는 스키마가 거부한다)
+  | { t: "roleReady" } // 실험방 본인 역할 확인 완료
+  | { t: "firstBallot"; target: number | null } // 실험방 첫날 비공개 지목 또는 보류(null)
   | { t: "leave" }
   | { t: "kick"; seat: number }
   | { t: "pick"; target: number } // 밤 행동 — 행동 종류는 보내지 않는다(서버 저장 역할이 정한다)
@@ -302,6 +316,8 @@ export interface MyInfo {
   seat: number;
   isHost: boolean;
   role?: RoleId; // 내 역할 — 채우는 일은 01-07
+  roleReady?: true; // 역할 확인 단계에 준비를 누른 본인에게만
+  firstBallot?: number | null; // 닫히기 전의 본인 투표만, null은 보류
   allies?: number[]; // 같은 마피아 동료의 seat — 채우는 일은 01-07
   pick?: number; // 밤에 본인이 고른 seat(본인에게만)
   allyPicks?: number[]; // 생존 마피아에게만: 동료들이 고른 대상 seat 오름차순·중복 없음(누가 골랐는지는 싣지 않는다)
@@ -326,6 +342,7 @@ export interface MyInfo {
 export interface RoomView {
   code: string;
   phase: PhaseId;
+  playtest?: true;
   /** 판 번호(첫 판 1, 결정 D-5·D-26). 공개 숫자이고 역할의 함수가 아니다. 서버는 항상 싣는다 — 타입을 optional 로 둔 것은 화면 시험의 리터럴을 한꺼번에 바꾸지 않기 위해서다(화면은 `view.round ?? 1`). */
   round?: number;
   phaseEndsAt: number | null;

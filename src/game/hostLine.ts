@@ -12,6 +12,7 @@ import type { PhaseId, RoomView } from "../../shared/protocol";
 import { isAlive } from "../../shared/game/alive";
 import { connectedCount } from "../../shared/game/room";
 import { keywordAnswerOf } from "./keywordView";
+import { morningText } from "./eliminationText";
 import { TIMELESS_PHASES } from "./scenes";
 
 /** 문구 표의 키 하나 = 한 줄. */
@@ -142,9 +143,45 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
  * 한 줄 — 키의 줄 그대로. 빈 줄은 빈 줄이다(큰 글이 말하는 동안). 대체 문장은 키가 fallback 일 때만(HOST_FALLBACK).
  */
 export function hostLineOf(view: RoomView, local: HostLocal = {}): string {
+  if (view.playtest === true) {
+    const line = playtestHostLine(view);
+    if (line !== undefined) return line;
+  }
   const key = hostKeyOf(view, local);
   if (key === "ended.answer") return `${HOST_LINES[key]}${keywordAnswerOf(view) ?? ""}`;
   return HOST_LINES[key];
+}
+
+function playtestHostLine(view: RoomView): string | undefined {
+  switch (view.phase) {
+    case "roleReveal":
+      return view.me.roleReady ? "다른 사람을 기다려요" : "내 역할을 읽고 준비해 주세요";
+    case "keyword":
+      if (view.me.answer?.final) return "모두의 답을 기다려요";
+      return view.me.keyword === undefined ? "장르만 보고 아는 척 한 줄 써요" : "단어를 빼고 한 줄로 설명해요";
+    case "discussion":
+      if (view.day?.n === 1 && !isGhost(view)) return "궁금한 답을 눌러 물어보세요";
+      break;
+    case "verdict":
+      if (view.day?.firstBallot?.result) return "";
+      if (view.day?.firstBallot && !isGhost(view)) return "의심되는 사람 또는 보류를 골라요";
+      break;
+    case "execution": {
+      const seat = view.day?.execution?.seat;
+      const name = view.players.find((player) => player.seat === seat)?.nickname;
+      return name === undefined ? undefined : `${name} 님이 떠났어요`;
+    }
+    case "answerReveal": {
+      const word = keywordAnswerOf(view);
+      return word === undefined ? undefined : `정답 · ${word}`;
+    }
+    case "night":
+      if (!isGhost(view) && view.me.role === "citizen") return "아침을 기다려요";
+      break;
+    case "morning":
+      return morningText(view.day?.morning, (seat) => view.players.find((player) => player.seat === seat)?.nickname).text;
+  }
+  return undefined;
 }
 
 /**
@@ -221,6 +258,7 @@ export function callTargetsOf(view: RoomView, local: HostLocal = {}): CallTarget
 
 /** 막대·숫자 행을 그리는가: 시간이 있는 단계이고 마감·길이가 있고 3초 이상 */
 export function hostTimeOf(view: RoomView): boolean {
+  if (view.playtest === true && (view.phase === "roleReveal" || view.day?.firstBallot?.result && view.phase === "verdict")) return false;
   if (TIMELESS_PHASES.includes(view.phase)) return false;
   if (view.phaseEndsAt === null || view.phaseDurationMs === null) return false;
   return view.phaseDurationMs >= 3000;

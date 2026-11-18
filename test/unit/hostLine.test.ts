@@ -384,6 +384,7 @@ describe("알림음 판정 hostChimeOf (HOST-02)", () => {
 
 /** 허용 목록(UI-SPEC HOST-05). 배열 첨자는 [] 로 적는다. 중간 경로(me·players·day)도 읽기이므로 포함한다. */
 const ALLOWED_EXACT: ReadonlySet<string> = new Set([
+  "playtest",
   "phase",
   "phaseEndsAt",
   "phaseDurationMs",

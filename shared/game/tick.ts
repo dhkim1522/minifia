@@ -31,6 +31,7 @@ import { routeAfterDayAnnounce, stepShowdown } from "./showdown";
 import { enterMorning, enterNight } from "./night";
 import { PHASE_DEFS, nextPhaseOf } from "./phases";
 import { RULES } from "./ruleset";
+import { firstPlaytestDay, stepFirstBallot } from "./playtest";
 import type { RoomState } from "./room";
 import { resolveVerdict } from "./verdict";
 
@@ -89,7 +90,7 @@ const HOOKS: PhaseHooks = {
     showdown: stepShowdown,
     nomination: stepNomination,
     runoff: stepRunoff,
-    verdict: resolveVerdict,
+    verdict: (s) => firstPlaytestDay(s) ? stepFirstBallot(s) : resolveVerdict(s),
     execution: routeAfterExecution,
     morning: routeAfterMorning,
   },

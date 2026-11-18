@@ -38,6 +38,7 @@
 import { isAlive } from "./alive";
 import { SHOWDOWN_TURN_MS } from "./phases";
 import type { Player, RoomState } from "./room";
+import { firstPlaytestDay } from "./playtest";
 import { LAST_WORD_CHIPS } from "./showdown";
 import type { RandInt } from "./tick";
 
@@ -110,6 +111,7 @@ export type BotAct =
   | { t: "endDiscussion" }
   | { t: "point"; target: number }
   | { t: "verdict"; agree: boolean }
+  | { t: "firstBallot"; target: number | null }
   // 9페이즈(결정 0061-18): 유언 한 줄(방 DO 의 applyWill 본체). 난수 없음. final: 유언 단계의 처형자 봇 — 사람의 [남기기]와 같은 길로 단계를 끝낸다(22-11 D-18).
   | { t: "will"; text: string; final?: true }
   // 9페이즈 보완(09-24, feedback-1): 채팅 줄 직전에 서버 안에서 입력 중 켜짐을 중계한다(방 DO 의 relayTyping 본체, 사람의 typing 메시지와 같은 길). 난수 없음, 꺼짐은 보내지 않는다.
@@ -288,7 +290,7 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
     const second = first + DISCUSSION_GAP_BASE_MS + randInt(DISCUSSION_GAP_SPAN_MS);
     addChat(second, discussionText(randInt));
     // 토론 끝내기(08-07): 채팅 두 줄 다음 난수 한 번. 사람과 같은 toggleEnd 를 지난다.
-    add(now + END_DISCUSSION_BASE_MS + randInt(END_DISCUSSION_SPAN_MS), { t: "endDiscussion" });
+    if (!firstPlaytestDay(state)) add(now + END_DISCUSSION_BASE_MS + randInt(END_DISCUSSION_SPAN_MS), { t: "endDiscussion" });
     // 유언(09-12): 1일차에만 한 번, 고정 문장, 난수 없음 — 위 난수 호출 순서가 그대로다.
     if ((state.day ?? 1) === 1) add(now + BOT_WILL_AT_MS, { t: "will", text: BOT_WILL_LINES[bot.seat % BOT_WILL_LINES.length]! });
   } else if (state.phase === "nomination") {
@@ -299,12 +301,19 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
   } else if (state.phase === "showdown") {
     steps.push(...showdownSteps(state, bot, now, randInt));
   } else if (state.phase === "verdict") {
+    if (firstPlaytestDay(state)) {
+      if (state.firstBallotOutcome === undefined && bot.firstBallot === undefined) {
+        const target = botFirstBallotTarget(state, bot, randInt);
+        add(now + VERDICT_BASE_MS + randInt(VERDICT_SPAN_MS), { t: "firstBallot", target });
+      }
+      return steps;
+    }
     // 찬반(08-07, 22-09 D-11): 후보가 없어 산 봇 모두가 던진다. 고정 exec(yes·no)도 따른다(결정 0060-13).
     const agree = botExecAgree(randInt, state.testBotVote?.exec);
     add(now + VERDICT_BASE_MS + randInt(VERDICT_SPAN_MS), { t: "verdict", agree });
   } else if (state.phase === "night") {
     // 모든 역할의 산 봇이 한 명을 고른다(D-05) — 시민 봇의 고르기도 같은 pickTarget 을 지나 효과 없이 저장된다.
-    const target = botNightTarget(state, bot, randInt);
+    const target = state.playtest === true && bot.role === "citizen" ? undefined : botNightTarget(state, bot, randInt);
     if (target !== undefined) add(now + NIGHT_PICK_BASE_MS + randInt(NIGHT_PICK_SPAN_MS), { t: "pick", target });
     if (bot.role === "mafia" && randInt(10) < NIGHT_CHAT_TENTHS) {
       const at = now + NIGHT_CHAT_BASE_MS + randInt(NIGHT_CHAT_SPAN_MS);
@@ -319,6 +328,11 @@ function planFor(state: RoomState, bot: Player, now: number, randInt: RandInt): 
     }
   }
   return steps;
+}
+
+export function botFirstBallotTarget(state: RoomState, bot: Player, randInt: RandInt): number | null {
+  if (!botExecAgree(randInt, state.testBotVote?.exec)) return null;
+  return botPointTarget(state, bot, randInt, state.testBotVote?.pick) ?? null;
 }
 
 /**

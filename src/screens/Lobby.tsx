@@ -67,6 +67,7 @@ interface LobbyProps {
 // 19-04(D-13): 방장 전용 조작([맵]·[봇])은 왼쪽 세로 줄(HostRail)에 모으고 오른쪽 열은 모두가 쓰는 [소리]·[옷장]만 둔다. 참가자에게는 줄 마크업이 없다(22-07).
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)은 WorldStage 가 React 텍스트 노드로만 그린다.
 export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offset = 0, bannerVisible = false, exiting = false, onLeave, testButton }: LobbyProps) {
+  const playtest = view.playtest === true;
   // 입장·퇴장·방장 변경 알림: 서버가 보낸 스냅샷 두 개의 차이로만 만든다. 처음 열 때·epoch 가 바뀐 직후(재연결)에는
   // 직전 스냅샷을 비워 지난 일을 다시 알리지 않는다. 재접속 띠가 떠 있는 동안은 알림을 띄우지 않되 기준선은 갱신한다.
   const toast = useTopToast();
@@ -132,7 +133,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   const restoreDressFocus = useRef(false);
   // 시트 탭(11-13): 지도 칩 → 맵 탭, 꾸미기 버튼 → 의상 탭. 칩·맵 탭은 허용 맵이 둘 이상일 때만 있다(22-07: 판 종류가 없어 늘 켜진다).
   const [dressTab, setDressTab] = useState<"map" | "dress">("dress");
-  const mapsOn = PLAYABLE_MAPS.length > 1;
+  const mapsOn = !playtest && PLAYABLE_MAPS.length > 1;
   const openDress = (tab: "map" | "dress" = "dress") => {
     inputRef.current?.blur();
     setDressTab(tab);
@@ -215,7 +216,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       <TopToast {...toast.props} />
       {testButton ? <div className="mf-lobby__test">{testButton}</div> : null}
       <section ref={panelRef} className={kbOpen ? "mf-lobby__panel mf-lobby__panel--kb" : "mf-lobby__panel"} data-world-panel="">
-        <ChatPanel {...binding} logHeight={LOG_H} compact={kbOpen} inputRef={inputRef} />
+        <ChatPanel {...binding} {...(playtest ? { emotes: [] } : {})} logHeight={LOG_H} compact={kbOpen} inputRef={inputRef} />
         {kbOpen ? null : (
           <ActionRow>
             {isHost ? (
@@ -244,7 +245,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           {botsOn ? <HostRailButton key="bots" id="bots" icon="bot" label="봇" pressed={sheet?.kind === "bots"} disabled={!canSend} onPress={() => setSheet({ kind: "bots" })} /> : null}
         </HostRail>
       ) : null}
-      {dressOpen || kbOpen ? null : (
+      {playtest || dressOpen || kbOpen ? null : (
         // 오른쪽 세로 한 줄: 방장도 소리 · 옷장(19-04, 방장 전용은 왼쪽 줄)
         <SideColumn soundSlot maxHeight={sideMaxH}>
           <FloatAction key="dress" ref={dressBtnRef} kind="dress" side="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={() => openDress()} />

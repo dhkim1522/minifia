@@ -6,7 +6,7 @@ import type { CreateRoomRpcResult } from "./room";
 export const MAX_CODE_ATTEMPTS = 8;
 
 export interface RoomCreator {
-  createRoom(input: { code: string; nickname: string; now: number; testMode?: boolean }): Promise<CreateRoomRpcResult>;
+  createRoom(input: { code: string; nickname: string; now: number; testMode?: boolean; playtest?: true }): Promise<CreateRoomRpcResult>;
 }
 
 export type AllocateResult =
@@ -20,10 +20,11 @@ export async function allocateRoom(
   randInt: (n: number) => number,
   now: number,
   testMode = false,
+  playtest?: true,
 ): Promise<AllocateResult> {
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
     const code = generateRoomCode(randInt);
-    const result = await getRoom(code).createRoom({ code, nickname, now, ...(testMode ? { testMode: true } : {}) });
+    const result = await getRoom(code).createRoom({ code, nickname, now, ...(testMode ? { testMode: true } : {}), ...(playtest === true ? { playtest } : {}) });
     if (result.ok) return { kind: "created", code, token: result.token, seat: result.seat };
     if (result.error === "NICKNAME_INVALID") return { kind: "nickname_invalid" };
     // CODE_TAKEN: 살아 있는 방이 있으니 덮어쓰지 않고 다른 코드로 다시 시도한다.

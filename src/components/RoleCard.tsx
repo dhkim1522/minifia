@@ -13,7 +13,7 @@ export interface RoleCardProps {
   allies: string[] | null;
   /** 사회자 줄이 이 카드를 부를 때 true — 루트에 is-call + 값 없는 data-call(14페이즈 HOST-03). 모든 역할에게 같은 모양 */
   call?: boolean;
-  onFlip: () => void;
+  onFlip?: () => void;
 }
 
 // 뒷면 마름모(design-system 의 Diamond). 역할과 무관하게 모든 사람에게 같은 마크업이다.
@@ -41,19 +41,17 @@ export function RoleCard({ role, face, allies, call = false, onFlip }: RoleCardP
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key === " " || e.key === "Enter") {
       e.preventDefault(); // Space 의 스크롤 방지
-      onFlip();
+      onFlip?.();
     }
   }
 
   return (
     <div
       className={classes}
-      role="button"
-      tabIndex={0}
-      aria-label={showFront ? undefined : "역할 카드 뒤집기"}
+      {...(onFlip ? { role: "button", tabIndex: 0, "aria-label": showFront ? undefined : "역할 카드 뒤집기" } : {})}
       {...(call ? { "data-call": "" } : {})}
       onClick={onFlip}
-      onKeyDown={onKeyDown}
+      onKeyDown={onFlip ? onKeyDown : undefined}
     >
       <div className="mf-card__inner">
         <div className="mf-card__face mf-card__back">

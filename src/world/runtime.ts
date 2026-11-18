@@ -20,7 +20,7 @@ import { admitEmote, EMOTE_RENDER_MAX, emoteDurationMs } from "./emoteCap";
 import type { PlayingEmote } from "./emoteCap";
 import { createTapGate } from "./input";
 import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment, stepYaw, travelYaw } from "./motion";
-import { DEFAULT_BUDGET_STEP, nextLadderStep } from "./renderer";
+import { DEFAULT_BUDGET_STEP, LIGHT_BLEND_SEC, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
 import { EXEC_END_OPACITY, executionFade, GHOST_OPACITY, GHOST_SPRITE, ghostFloatY, ghostTintOf, stageLiftY } from "./presence";
 import { easeInOut, pinAt, pinLevel, pinLights } from "./pinPlan";
@@ -395,6 +395,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   let look: SceneLook | null = null;
   /** 렌더러에 마지막으로 보낸 조명 단계·긴장 키·확대(바뀔 때만 다시 보낸다) */
   let lightSent: LightingPhase | null = null;
+  let lightReduced = false;
   let tensionKey: string | null = "0";
   /** 핀 조명(결정 0066-6): 켜짐 수준 0~1, 마지막으로 비춘 자리, 이어짐 키(다른 좌석으로 건너뛰면 다시 켠다), 렌더러·훅에 마지막으로 보낸 키 */
   let pinK = 0;
@@ -639,7 +640,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     kit = mods.characterKit;
     seenSize = s;
     offRendererStatus = r.onStatus(onRendererStatus);
-    lightSent = deps.lighting ?? "talk";
+    lightSent = look?.lighting ?? deps.lighting ?? "talk";
+    lightReduced = deps.reducedMotion();
     r.setLighting(lightSent);
     syncPlayers();
     lastFrameAt = Date.now();
@@ -1313,10 +1315,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
     // 단계 조명·긴장: 바뀐 때만 렌더러에 보낸다. 장면이 없으면 부팅 때 정한 조명(로비·성능 스파이크)
     const wantLight = look?.lighting ?? deps.lighting ?? "talk";
-    if (wantLight !== lightSent) {
+    if (wantLight !== lightSent || (reduced && !lightReduced)) {
       lightSent = wantLight;
-      r.setLighting(wantLight);
+      r.setLighting(wantLight, reduced || resync ? 0 : LIGHT_BLEND_SEC);
     }
+    lightReduced = reduced;
     const tension = look?.tension ?? 0;
     const focusPos = tension > 0 && look?.focusSeat !== undefined ? actors.get(look.focusSeat)?.pos : undefined;
     const nextTensionKey = tension === 0 ? "0" : `${tension}|${focusPos === undefined ? "-" : `${focusPos.x.toFixed(2)},${focusPos.z.toFixed(2)}`}`;

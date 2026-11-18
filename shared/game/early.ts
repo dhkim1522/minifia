@@ -12,6 +12,7 @@
 // 봇 계획 키("단계:마감")도 새 마감으로 같이 갈아 끼운다 — 마감이 바뀌었다는 이유로 syncBotPlan 이 계획을 다시 세우지(난수를 쓰고 봇이 다시 던지지) 않게 한다(Pitfall 5).
 import { isAlive } from "./alive";
 import { botPlanKey, isBot } from "./bots";
+import { firstPlaytestDay } from "./playtest";
 import type { RoomState } from "./room";
 
 /** 전원이 끝낸 뒤 남기는 시간(0089-26 문언 1.5초). 유예 안 번복·변경을 받아 주는 여유이자 화면이 "곧 넘어감" 을 보여 주는 시간이다. */
@@ -19,6 +20,8 @@ export const EARLY_GRACE_MS = 1_500;
 
 /** 지금 단계의 "개인 행동"이 산 사람 전원 끝났는가. 연결 여부는 보지 않는다 — 끊긴 사람은 고르지 않으니 자연히 거짓이다(D-12). */
 export function earlyReady(state: RoomState): boolean {
+  if (state.playtest === true && state.phase === "night") return false;
+  if (firstPlaytestDay(state) && (state.phase === "keyword" || state.phase === "verdict")) return false;
   const alive = state.players.filter(isAlive);
   switch (state.phase) {
     case "keyword": {

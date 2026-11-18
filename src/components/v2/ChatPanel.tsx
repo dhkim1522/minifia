@@ -98,6 +98,8 @@ export interface ChatPanelProps {
   trailing?: ReactNode;
   /** 토론 중 읽을 수 있는 공개 근거. 인용을 누르면 입력칸에 추가한다. */
   evidence?: Evidence;
+  collapseEvidenceOnSmallScreen?: boolean;
+  keepLogHeightOnFocus?: boolean;
 }
 
 interface ChannelUi {
@@ -188,7 +190,7 @@ export function ChatPanel(props: ChatPanelProps) {
   // 입력칸을 누르면 기록 칸이 커지고 키보드도 열린다(켜기만). 접는 길은 [data-chat-open] 하나다 — 포커스가 풀려도 저절로 접지 않는다.
   const onFocus = () => {
     setFocused(true);
-    if (!open) {
+    if (!open && latest.current.keepLogHeightOnFocus !== true) {
       atBottomRef.current = true;
       setNewDot(false);
       setOpen(true);
@@ -359,7 +361,7 @@ export function ChatPanel(props: ChatPanelProps) {
   return (
     <section className={rootCls} data-chat-panel="" data-chat-channel={channel} {...(locked ? { "data-chat-locked": "" } : {})}>
       {props.evidence && onSend && !locked ? (
-        <DiscussionEvidence key={props.evidence.key} evidence={props.evidence} hidden={!!compact} onQuote={addQuote} />
+        <DiscussionEvidence key={props.evidence.key} evidence={props.evidence} hidden={!!compact} collapseOnSmallScreen={props.collapseEvidenceOnSmallScreen === true} onQuote={addQuote} />
       ) : null}
       <div
         className={open ? "mv-chat__logbox is-open" : "mv-chat__logbox"}

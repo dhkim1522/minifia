@@ -14,7 +14,7 @@ import type { OutfitId, PublicPlayer, RoomView, WorldSeg } from "../../shared/pr
 import { WorldStage } from "../../src/components/WorldStage";
 import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
-import { UnsupportedRendererError } from "../../src/world/renderer";
+import { LIGHT_BLEND_SEC, UnsupportedRendererError } from "../../src/world/renderer";
 import type { CharacterHandle, LightingPhase, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
 import { gatherView, PAN_BOX, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
 import { predictSegment, SEG_BLEND_MS, YAW_TURN_RATE } from "../../src/world/motion";
@@ -36,7 +36,7 @@ export interface FakeRenderer extends WorldRenderer {
   chars: Map<number, CharacterHandle>;
   views: { target: { x: number; z: number }; offsetY: number }[];
   markers: { kind: string; at: { x: number; z: number } | null; scale: number; opacity: number }[];
-  setLighting: Mock<(phase: LightingPhase) => void>;
+  setLighting: Mock<(phase: LightingPhase, seconds?: number) => void>;
   setZoom: Mock<(zoom: number) => void>;
   setTension: Mock<(level: 0 | 1 | 2, focus?: { x: number; z: number }) => void>;
   setPin: Mock<(pin: { x: number; z: number; strength: number } | null, dim: number) => void>;
@@ -2606,7 +2606,7 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
   });
 
   describe("조명·긴장", () => {
-    it("lighting 이 바뀌면 setLighting 을 한 번 부르고 같은 값이면 다시 부르지 않는다", async () => {
+    it("처음 들어온 장면을 바로 그리고 다음 조명부터 보간한다", async () => {
       const s = await openGame();
       const r = s.world.renderers[0]!;
       expect(r.setLighting.mock.calls).toEqual([["talk"]]);
@@ -2614,7 +2614,16 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       frames(100);
       s.rerender({ scene: sceneOf(ALL, { lighting: "trial" }) });
       frames(100);
-      expect(r.setLighting.mock.calls).toEqual([["talk"], ["trial"]]);
+      expect(r.setLighting.mock.calls).toEqual([["talk"], ["trial", LIGHT_BLEND_SEC]]);
+    });
+
+    it("저감 모션에서는 밤 조명을 즉시 적용한다", async () => {
+      stubReducedMotion(true);
+      const s = await openGame();
+      const r = s.world.renderers[0]!;
+      s.rerender({ scene: sceneOf(ALL, { lighting: "nightCitizen" }) });
+      frames(100);
+      expect(r.setLighting.mock.calls).toEqual([["talk"], ["nightCitizen", 0]]);
     });
 
     it("tension 1 + focusSeat 2 면 그 좌석 위치로 setTension, 0 으로 돌아오면 setTension(0)", async () => {

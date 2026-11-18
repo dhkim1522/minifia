@@ -7,13 +7,14 @@ import "../../styles/discussion-evidence.css";
 export type QuoteResult = "added" | "busy" | "full";
 
 /** 채팅 안에서 공개 답과 유언을 읽고, 입력칸에 옮긴다. */
-export function DiscussionEvidence({ evidence, hidden, onQuote }: {
+export function DiscussionEvidence({ evidence, hidden, collapseOnSmallScreen = false, onQuote }: {
   evidence: Evidence;
   hidden: boolean;
+  collapseOnSmallScreen?: boolean;
   onQuote: (row: DiscussionEvidenceRow) => QuoteResult;
 }) {
   const listId = useId();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(() => !collapseOnSmallScreen || typeof window.matchMedia !== "function" || !window.matchMedia("(max-height: 680px)").matches);
   const [notice, setNotice] = useState<"busy" | "full" | null>(null);
 
   return (

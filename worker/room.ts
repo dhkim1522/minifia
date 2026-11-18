@@ -47,6 +47,7 @@ import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from ".
 import type { RoleId } from "../shared/game/roles";
 import { RULES } from "../shared/game/ruleset";
 import { nextWakeAt, tick } from "../shared/game/tick";
+import { allRolesReady, castFirstBallot, confirmRole, voteOpensAt } from "../shared/game/playtest";
 import { castTurnPoint, turnStartOf } from "../shared/game/nomination";
 import { castRunoffVote } from "../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
@@ -188,7 +189,7 @@ export class Room extends DurableObject<Env> {
   }
 
   /** Worker 가 부르는 RPC. 살아 있는 방이 있으면 덮어쓰지 않고 CODE_TAKEN 을 돌려준다. 만료된 방은 정리하고 새로 만든다. */
-  async createRoom(input: { code: string; nickname: string; now: number; testMode?: boolean }): Promise<CreateRoomRpcResult> {
+  async createRoom(input: { code: string; nickname: string; now: number; testMode?: boolean; playtest?: true }): Promise<CreateRoomRpcResult> {
     // 만료됐지만 알람이 아직 못 지운 방이면 먼저 정리한다(옛 소켓을 닫고 저장소를 비운다). 안 그러면 옛 소켓이 새 방에서 죽은 연결로 남는다.
     await this.advance(input.now);
     if (this.room) return { ok: false, error: "CODE_TAKEN" };
@@ -202,6 +203,7 @@ export class Room extends DurableObject<Env> {
       hostNickname: input.nickname,
       now: input.now,
       testMode: input.testMode === true,
+      ...(input.playtest === true ? { playtest: input.playtest } : {}),
     });
     if (!created.ok) return { ok: false, error: created.error };
 
@@ -302,6 +304,12 @@ export class Room extends DurableObject<Env> {
         return;
       case "start":
         await this.handleStart(ws);
+        return;
+      case "roleReady":
+        await this.handleRoleReady(ws);
+        return;
+      case "firstBallot":
+        await this.handleFirstBallot(ws, msg.target);
         return;
       case "pick":
         await this.handlePick(ws, msg.target);
@@ -966,6 +974,50 @@ export class Room extends DurableObject<Env> {
     return true;
   }
 
+  private async handleRoleReady(ws: WebSocket): Promise<void> {
+    const att = this.attachmentOf(ws);
+    const before = this.room;
+    if (!att || !before) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const ready = confirmRole(before, att.playerId);
+    if (!ready.ok) {
+      this.sendRejection(ws, att.playerId, ready.error);
+      return;
+    }
+    if (ready.state === before) return;
+    if (allRolesReady(ready.state)) {
+      const now = Date.now();
+      this.room = tick({ ...ready.state, phaseEndsAt: now }, now, cryptoRandInt);
+      await this.afterTransition(before, now);
+      return;
+    }
+    this.room = ready.state;
+    await this.ctx.storage.put("room", this.room);
+    this.sendViewTo([att.playerId]);
+  }
+
+  private async handleFirstBallot(ws: WebSocket, target: number | null): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const error = await this.applyFirstBallot(att.playerId, target);
+    if (error !== null) this.sendRejection(ws, att.playerId, error);
+  }
+
+  private async applyFirstBallot(playerId: string, target: number | null): Promise<WsErrorCode | null> {
+    if (!this.room) return "BAD_MESSAGE";
+    const result = castFirstBallot(this.room, playerId, target);
+    if (!result.ok) return result.error;
+    if (result.state === this.room) return null;
+    this.room = result.state;
+    await this.persistAndBroadcast();
+    return null;
+  }
+
   // 토론 끝내기(8페이즈, DAY-03): 신원은 소켓 첨부의 playerId 뿐이다(T-08-04).
   private async handleEndDiscussion(ws: WebSocket, on: boolean): Promise<void> {
     const att = this.attachmentOf(ws);
@@ -982,6 +1034,8 @@ export class Room extends DurableObject<Env> {
   // 유령·단계 틀림은 규칙 함수가 BAD_MESSAGE·WRONG_PHASE 로 거절한다.
   private async applyEndDiscussion(playerId: string, on: boolean, now: number): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
+    const opensAt = voteOpensAt(this.room);
+    if (opensAt !== undefined && now < opensAt) return "WRONG_PHASE";
     const result = toggleEnd(this.room, playerId, on);
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
@@ -1041,6 +1095,9 @@ export class Room extends DurableObject<Env> {
         return;
       case "verdict":
         await this.applyVerdict(step.botId, act.agree);
+        return;
+      case "firstBallot":
+        await this.applyFirstBallot(step.botId, act.target);
         return;
       default: {
         // 새 봇 행동을 BotAct 에 더하고 여기를 빠뜨리면 컴파일이 실패한다(Pitfall 15).
