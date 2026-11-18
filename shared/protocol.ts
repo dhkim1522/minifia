@@ -159,7 +159,8 @@ export interface DayView {
   points?: PointLine[]; // nomination 단계 동안만, 지금 지목 줄(공개 차례 연출용). 단계가 끝나면 키가 없다 — 기록으로 남기지 않는다(D-14)
   endCount?: number; // discussion 단계에서, 토론 끝내기를 누른 산 사람 수(누가 눌렀는지는 싣지 않는다)
   voteOpensAt?: number; // 실험방 첫날 토론에서 표결 진입을 요청할 수 있는 서버 시각
-  voteReadyRequired?: number; // 실험방에서 투표 진입을 결정하는 사람 수, 봇 제외
+  voteReadyRequired?: number; // 실험방 과반이 되는 인원, 봇 제외
+  voteReadyTotal?: number; // 실험방 첫 토론에서 투표로 넘기는 데 동의할 수 있는 총인원
   firstBallot?: { count: number; result?: FirstBallotResult }; // 실험방 첫날의 투표 수와 공개 결과
   verdictCount?: { yes: number; no: number }; // verdict 단계에서만, 모두에게 같은 찬반 집계 수(번복도 바로 반영, D-11). 던진 좌석(옛 voted)은 싣지 않는다(D-26) — 내 표는 me.verdictVote
   turn?: PickTurnView; // nomination 단계에서만, 모두에게 같은 차례 정보(결정 0063-1, L14)
@@ -256,6 +257,7 @@ export type ClientMessage =
   | { t: "ping"; c: number }
   | { t: "start" } // 방장만 대기실에서(결정 0089-15: 옛 tutorial 옵션은 22페이즈에서 없어졌다 — 덧붙은 키는 스키마가 거부한다)
   | { t: "roleReady" } // 실험방 본인 역할 확인 완료
+  | { t: "nightDone" } // 실험방 시민 본인의 밤 완료
   | { t: "firstBallot"; target: number | null } // 실험방 첫날 비공개 지목 또는 보류(null)
   | { t: "leave" }
   | { t: "kick"; seat: number }
@@ -317,6 +319,7 @@ export interface MyInfo {
   isHost: boolean;
   role?: RoleId; // 내 역할 — 채우는 일은 01-07
   roleReady?: true; // 역할 확인 단계에 준비를 누른 본인에게만
+  nightDone?: true; // 실험방 밤 단계에 완료를 누른 시민 본인에게만
   firstBallot?: number | null; // 닫히기 전의 본인 투표만, null은 보류
   allies?: number[]; // 같은 마피아 동료의 seat — 채우는 일은 01-07
   pick?: number; // 밤에 본인이 고른 seat(본인에게만)
@@ -481,7 +484,7 @@ export const MAP_CHOICES = ["bar", "plaza", "random"] as const;
 export type MapChoice = (typeof MAP_CHOICES)[number];
 
 /**
- * 동작 프레임(결정 D-12). 키는 t·seat·id·n 뿐이다 — 채널·역할·player id·시각이 없다.
+ * 동작 프레임(결정 D-12). 의심표가 붙은 가리키기에는 대상 좌석을 싣는다.
  * n 은 채널(all·mafia·ghost)별 번호다: 방 전체로 세면 받지 못한 프레임의 틈이 시민 편에 새므로 채팅 seq 와 같은 이유로 따로 센다(결정 0068).
  */
 export interface EmoteFrame {
@@ -489,6 +492,7 @@ export interface EmoteFrame {
   seat: number;
   id: EmoteId;
   n: number;
+  target?: number;
 }
 
 // ---- 11페이즈 결과 공개(결정 D-9·D-10, 미결 O-14) ----

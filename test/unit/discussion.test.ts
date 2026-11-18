@@ -49,8 +49,8 @@ describe("phaseDurationOf - 단계 길이 파생 (결정 0017-5, Pitfall 3)", ()
     expect(phaseDurationOf(room("discussion", 100_000, { extendUsed: true }))).toBe(DISCUSSION_MS);
   });
 
-  it("discussion 모듈은 단계 길이와 토론 끝내기, 실험방 필요 인원만 제공한다", () => {
-    expect(Object.keys(discussionModule).sort().join(",")).toBe("endCountOf,endReached,endRequiredOf,enterDiscussion,morningMsOf,phaseDurationOf,toggleEnd");
+  it("discussion 모듈은 단계 길이와 토론 마감 판정을 제공한다", () => {
+    expect(Object.keys(discussionModule).sort().join(",")).toBe("discussionMajorityAt,endCountOf,endReached,endRequiredOf,enterDiscussion,morningMsOf,phaseDurationOf,toggleEnd");
   });
 
   it("phases 모듈에 연장 길이 상수가 없다", () => {

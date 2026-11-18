@@ -6,6 +6,7 @@
 // 배치는 '지금 단계가 요구하는 모습' 기준의 멱등 동기화다 — 단계 전환 이벤트에 걸지 않으므로 알람이 늦어 단계를 건너뛰어도,
 // 퇴거·재시작 뒤에도 같은 판단을 한다. 이미 목적지에 선(또는 그리로 걷는 중인) 사람은 이동 목록에 없다.
 import { isAlive } from "./alive";
+import { firstPlaytestDay } from "./playtest";
 import { STAGE_SPOT } from "./map";
 import type { RoomState } from "./room";
 import { positionAtFx } from "./world";
@@ -136,10 +137,14 @@ export function assignSlots(people: readonly { id: string; x: number; z: number 
   return out;
 }
 
-/** 지금 단계가 요구하는 배치의 키: 지목 '{일차}:ring' · 결선 '{일차}:runoff' · 마지막 3인 '{일차}:showdown' · 변론(유언) '{일차}:stage' · 처형 '{일차}:exec' · 그 밖은 null(아무것도 안 한다). 찬반(verdict)은 null 이다 — 토론 자리 그대로이고 모이기는 지목부터다(22-09, P22-3). */
+/** 모이는 단계만 배치 키를 가진다. 역할 확인과 첫 투표 배치는 실험방에만 적용한다. */
 export function layoutKey(state: RoomState): string | null {
   const day = state.day ?? 0;
   switch (state.phase) {
+    case "roleReveal":
+      return state.playtest === true ? `${day}:role` : null;
+    case "verdict":
+      return firstPlaytestDay(state) ? `${day}:firstBallot` : null;
     case "nomination":
       return `${day}:ring`;
     case "runoff":
@@ -179,8 +184,8 @@ export function layoutFor(state: RoomState, w: WorldState, now: number): GatherL
   const key = layoutKey(state);
   if (key === null) return null;
   const day = state.day ?? 0;
-  const trial = state.phase !== "nomination"; // layoutKey 가 null 이 아닌 단계 중 지목 밖(결선·결전·변론·처형)은 같은 날 기억을 이어 쓴다
-  const defender = trial && state.phase !== "runoff" && state.phase !== "showdown" ? state.verdict?.candidate : undefined;
+  const trial = state.phase === "runoff" || state.phase === "showdown" || state.phase === "defense" || state.phase === "execution";
+  const defender = state.phase === "defense" || state.phase === "execution" ? state.verdict?.candidate : undefined;
   const runoffCand = state.phase === "runoff" ? state.runoff?.cand : undefined;
 
   const participants = [...state.players]

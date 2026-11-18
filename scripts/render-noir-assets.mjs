@@ -48,8 +48,8 @@ try {
     rim.position.set(3, 4, -3);
     studio.add(key, rim);
 
-    window.noirPortrait = ({ seat, outfit, head, ghost, ratio }) => {
-      const character = ghost ? buildGhost3d() : model.createCharacter(model.figForSeat(seat), outfit);
+    window.noirPortrait = ({ seat, outfit, colors, head, ghost, ratio }) => {
+      const character = ghost ? buildGhost3d() : model.createCharacter(model.figForSeat(seat), outfit, colors);
       const subject = character.root;
       // 실제 램프의 발밑 그림자와 선택 표시가 투명 PNG의 알파에 들어가지 않게 한다.
       if (!ghost) for (const part of subject.children) if (part.isMesh) part.visible = false;
@@ -109,13 +109,13 @@ try {
 
   async function renderRolePortraits() {
     // 역할 그림은 본인 카드에만 등장한다. 살아 있는 인물의 공개 외형은 좌석·꾸미기와만 연동된다.
-    for (const [role, seat, outfit] of [
-      ["citizen", 2, "coat"],
-      ["police", 0, "police"],
-      ["doctor", 2, "doctor"],
-      ["mafia", 3, "mafia"],
+    for (const [role, seat, outfit, colors] of [
+      ["citizen", 2, "coat", { coat: "#a07754", shirt: "#b6bd9e", tie: "", pants: "#545c59", shoe: "#4a352c" }],
+      ["police", 0, "police", { coat: "#305889", shirt: "#a6bbd5", pants: "#243b5a" }],
+      ["doctor", 5, "doctor", { coat: "#e6e7e6", shirt: "#397e77", pants: "#576d79" }],
+      ["mafia", 3, "mafia", { coat: "#2c2934", shirt: "#74666d", tie: "#95465a", pants: "#24252d" }],
     ]) {
-      const image = await portrait({ seat, outfit, ratio: 0.75 });
+      const image = await portrait({ seat, outfit, colors, ratio: 0.75 });
       await savePng(image, `public/characters/roles/${role}_default@2x.png`, 144, 192);
       await savePng(image, `public/characters/roles/${role}_default@4x.png`, 288, 384);
     }

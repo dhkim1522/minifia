@@ -3655,6 +3655,20 @@ describe("지목 유지 자세 위의 동작 · 위치와 방향 불변 (AVTR-05
   const openGame = (scene = sceneOf(ALL4)) => open({ scene }, { players: FOUR, ents: FOUR_ENTS() });
   const handleOf = (s: Setup, seat: number): FakeHandle => s.world.renderers[0]!.chars.get(seat) as FakeHandle;
 
+  it("의심 동작은 현재 위치에서 대상 쪽으로 몸을 돌린다", async () => {
+    const s = await openGame();
+    frames(500);
+    const actor = handleOf(s, 1);
+    const target = handleOf(s, 3);
+    const { x, z } = actor.root.position;
+    const direction = Math.atan2(target.root.position.x - x, target.root.position.z - z);
+    act(() => s.store.applyEmote({ t: "emote", seat: 1, id: "point", target: 3, n: 1 }, 1));
+    frames(450);
+    expect(actor.playEmote).toHaveBeenCalledWith("point", { reduced: false });
+    expect(Math.cos(actor.yaws.at(-1)! - direction)).toBeCloseTo(1, 4);
+    expect(actor.root.position).toMatchObject({ x, z });
+  });
+
   it("지목 단계(장면 표 pointAt)의 좌석에 emote 프레임이 와도 holdPose(null) 은 불리지 않고 playEmote 만 불린다", async () => {
     const s = await openGame(sceneOf({ ...ALL4, 1: { pointAt: 2 } }));
     frames(300);

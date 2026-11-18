@@ -4,6 +4,7 @@ import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
 import { RoleCard } from "../components/RoleCard";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
+import { PlaytestHeader } from "../components/v2/PlaytestHeader";
 import { callTargetsOf } from "../game/hostLine";
 import { allyNicknames } from "../game/roleText";
 import { autoFlipDelayMs, initialCardState, onAutoTimer, onTap, sinceStartMs } from "../net/cardFace";
@@ -30,7 +31,7 @@ export function RoleReveal(props: RoleRevealProps) {
   return props.view.playtest === true ? <PlaytestRoleReveal {...props} /> : <FlippingRoleReveal {...props} />;
 }
 
-function PlaytestRoleReveal({ view, myRoleButton, onSeenFront, send, canSend }: RoleRevealProps) {
+function PlaytestRoleReveal({ view, offset, myRoleButton, onSeenFront, send, canSend }: RoleRevealProps) {
   const role = view.me.role ?? null;
   const ready = view.me.roleReady === true;
   useEffect(() => {
@@ -40,7 +41,7 @@ function PlaytestRoleReveal({ view, myRoleButton, onSeenFront, send, canSend }: 
     <main className="mf-root mf-reveal" data-playtest-role="">
       <div className="mf-reveal__dim" aria-hidden="true" />
       <header className="mf-reveal__header">
-        <PhaseHeader title="내 역할" extra={myRoleButton} />
+        <PlaytestHeader title="내 역할" view={view} offset={offset} extra={myRoleButton} />
       </header>
       <section className="mf-reveal__stage">
         <RoleCard role={role} face={role === null ? "back" : "front"} allies={allyNicknames(view)} />
@@ -48,7 +49,7 @@ function PlaytestRoleReveal({ view, myRoleButton, onSeenFront, send, canSend }: 
       <div className="mf-reveal__hints mf-playtest__ready">
         {role !== null && !ready ? (
           <Button block disabled={!canSend} data-role-ready="" onClick={() => send?.({ t: "roleReady" })}>준비</Button>
-        ) : null}
+        ) : ready ? <span className="mf-playtest__feedback" role="status">준비 완료</span> : null}
       </div>
     </main>
   );

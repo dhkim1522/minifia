@@ -166,21 +166,25 @@ function playtestHostLine(view: RoomView): string | undefined {
       if (view.day?.firstBallot?.result) return "";
       if (view.day?.firstBallot && !isGhost(view)) return "의심되는 사람 또는 보류를 골라요";
       break;
-    case "execution": {
-      const seat = view.day?.execution?.seat;
-      const name = view.players.find((player) => player.seat === seat)?.nickname;
-      return name === undefined ? undefined : `${name} 님이 떠났어요`;
-    }
-    case "answerReveal": {
-      const word = keywordAnswerOf(view);
-      return word === undefined ? undefined : `정답 · ${word}`;
-    }
     case "night":
       if (!isGhost(view) && view.me.role === "citizen") return "아침을 기다려요";
       break;
-    case "morning":
-      return morningText(view.day?.morning, (seat) => view.players.find((player) => player.seat === seat)?.nickname).text;
   }
+  return playtestResultLine(view);
+}
+
+/** 맵 위 결과 도크에 들어가는 공개 사실. */
+export function playtestResultLine(view: RoomView): string | undefined {
+  if (view.phase === "execution") {
+    const seat = view.day?.execution?.seat;
+    const name = view.players.find((player) => player.seat === seat)?.nickname;
+    return name === undefined ? undefined : `${name} 님이 떠났어요`;
+  }
+  if (view.phase === "answerReveal") {
+    const word = keywordAnswerOf(view);
+    return word === undefined ? undefined : `정답 · ${word}`;
+  }
+  if (view.phase === "morning") return morningText(view.day?.morning, (seat) => view.players.find((player) => player.seat === seat)?.nickname).text;
   return undefined;
 }
 

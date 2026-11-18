@@ -1,8 +1,7 @@
 // 밤 규칙. 순수 모듈이다 — 현재 시각·전역 난수를 읽지 않고, 입력 상태는 바꾸지 않는다.
 // 밤 판정에는 난수가 없다(결정 0061-6·17): 마피아 전원이 같은 대상을 골라야 확정이고, 갈리면 아무도 죽지 않는다.
 //
-// 이 파일이 플레이어의 role 을 읽는 이유는 행동 종류(지목·조사·보호)·마피아 표·조사 결과가 서버 판정이기 때문이다(pickTarget 은 읽지 않는다 — 15페이즈 D-05).
-// 밤 고르기는 산 사람 누구나 같은 입력·같은 응답이고, 효과는 판정이 역할로 가른다.
+// 역할별 행동·마피아 표·조사 결과는 서버가 판정한다.
 // 읽은 역할 값은 어디에도 내보내지 않는다(결정 0002): 반환값에는 isMafia 불리언 하나와 seat 뿐이다.
 import type { AssassinationRecord, InvestigationRecord, MorningView, TreatmentRecord } from "../protocol";
 import { isAlive } from "./alive";
@@ -11,7 +10,7 @@ import type { Player, RoomState } from "./room";
 export type NightError = "WRONG_PHASE" | "BAD_MESSAGE";
 
 /**
- * 밤에 한 명 고르기. 산 사람 누구나 같은 메시지·같은 규칙·같은 응답이다(15페이즈 D-05) — 이 함수는 역할을 읽지 않는다.
+ * 밤에 한 명 고르기. 실험방에서는 밤 능력이 있는 사람만 대상을 고른다.
  * 고른 값은 그 사람의 nightPick 에 저장되고, 효과가 있는지(마피아 팀 확정·경찰 조사·의사 보호)는 판정(resolveNight·confirmedTarget)이 역할로 가른다.
  * 시민의 고르기·마피아가 동료나 자신을 고르는 것은 효과 없이 받는다 — 응답으로 역할이 갈라지지 않게 한다(D-08).
  * 검사 순서가 계약이다: 단계(night 아니면 WRONG_PHASE) → 행위자(방에 있고 생존, 아니면 BAD_MESSAGE)
@@ -25,7 +24,7 @@ export function pickTarget(
   if (state.phase !== "night") return { ok: false, error: "WRONG_PHASE" };
   const actor = state.players.find((p) => p.id === actorId);
   if (!actor || !isAlive(actor)) return { ok: false, error: "BAD_MESSAGE" };
-  if (state.playtest === true && (actor.role === undefined || actor.role === "citizen")) return { ok: false, error: "BAD_MESSAGE" };
+  if (state.playtest === true && (actor.role === undefined || actor.role === "citizen" || actor.left === true)) return { ok: false, error: "BAD_MESSAGE" };
   const chosen = Number.isInteger(target) ? state.players.find((p) => p.seat === target) : undefined;
   if (!chosen || !isAlive(chosen)) return { ok: false, error: "BAD_MESSAGE" };
   if (actor.nightPick === target) return { ok: true, state };
@@ -35,13 +34,26 @@ export function pickTarget(
   };
 }
 
-/** 밤 진입 훅: 남은 선택(nightPick)·지난 아침 결과(morning)·쪽지(nightNote)·분필(chalk)을 키째 지운다(결정 0061-9·14). */
+/** 실험방 시민은 대상을 고르지 않고 자기 행동을 마친다. */
+export function completeNight(state: RoomState, actorId: string): ReturnType<typeof pickTarget> {
+  if (state.playtest !== true) return { ok: false, error: "BAD_MESSAGE" };
+  if (state.phase !== "night") return { ok: false, error: "WRONG_PHASE" };
+  const actor = state.players.find((p) => p.id === actorId);
+  if (actor?.role !== "citizen" || !isAlive(actor) || actor.left === true) return { ok: false, error: "BAD_MESSAGE" };
+  if (actor.nightDone === true) return { ok: true, state };
+  return {
+    ok: true,
+    state: { ...state, players: state.players.map((p) => (p.id === actorId ? { ...p, nightDone: true as const } : p)) },
+  };
+}
+
+/** 밤 진입 훅: 지난 밤 선택·완료 상태와 아침 결과·쪽지·분필을 지운다. */
 export function enterNight(state: RoomState): RoomState {
   const { morning: _morning, nightNote: _nightNote, chalk: _chalk, ...rest } = state;
   return {
     ...rest,
     players: state.players.map((p) => {
-      const { nightPick: _nightPick, ...kept } = p;
+      const { nightPick: _nightPick, nightDone: _nightDone, ...kept } = p;
       return kept;
     }),
   };
@@ -144,7 +156,7 @@ export function resolveNight(state: RoomState): ResolvedNight {
 export function enterMorning(state: RoomState): RoomState {
   const result = resolveNight(state);
   const players: Player[] = state.players.map((p) => {
-    const { nightPick: _nightPick, ...kept } = p;
+    const { nightPick: _nightPick, nightDone: _nightDone, ...kept } = p;
     const added = result.records.filter((r) => r.playerId === p.id).map((r) => r.record);
     const killed = result.assassinations.filter((r) => r.playerId === p.id).map((r) => r.record);
     const healed = result.treatments.filter((r) => r.playerId === p.id).map((r) => r.record);

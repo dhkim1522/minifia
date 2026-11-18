@@ -15,6 +15,13 @@ export interface DiscussionEvidence {
   rows: DiscussionEvidenceRow[];
 }
 
+export function appendEvidenceQuote(draft: string, { name, text }: Pick<DiscussionEvidenceRow, "name" | "text">, limit: number): string | undefined {
+  if (text === null) return undefined;
+  const separator = draft && !/\s$/.test(draft) ? " " : "";
+  const quoted = `${draft}${separator}${name} “${text}”`;
+  return quoted.length <= limit ? quoted : undefined;
+}
+
 /** 아침의 공개 피해자와 이어지는 토론의 일차. 아침 view를 본 연결에서만 알 수 있다. */
 export interface MorningVictim {
   round: number;

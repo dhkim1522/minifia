@@ -28,6 +28,7 @@ function av(phase: PhaseId, over: Partial<AudioView> = {}): AudioView {
     dayN: phase === "lobby" || phase === "assigning" ? null : 1,
     turn: null,
     points: [],
+    suspectMarks: [],
     candidate: null,
     morning: null,
     hasExecution: false,
@@ -109,6 +110,25 @@ describe("첫 스냅샷·epoch 변경·같은 view 의 되풀이 (LS-10)", () =>
     const turn = phase === "nomination" ? { order: [0, 1, 2], i: 1, endsAt: NOW + 6000 } : null;
     const a = av(phase, { endsAt: NOW + 30_000, turn });
     expect(quiet(direct(a, structuredClone(a), clock()))).toBe(true);
+  });
+});
+
+describe("공개 의심표 소리", () => {
+  const withMarks = (...suspectMarks: string[]): AudioView => av("discussion", { suspectMarks });
+
+  it("붙이기·옮기기는 같은 소리 한 번, 여러 표가 같은 스냅샷에서 와도 한 번이다", () => {
+    const before = withMarks("0:1");
+    expect(ids(direct(before, withMarks("0:1", "1:2"), clock()))).toEqual(["suspect.mark"]);
+    expect(ids(direct(before, withMarks("0:2", "1:2"), clock()))).toEqual(["suspect.mark"]);
+  });
+
+  it("첫 스냅샷·재접속·제거·재정렬·밤에 표 소리를 재생하지 않는다", () => {
+    const before = withMarks("0:1", "1:2");
+    expect(ids(direct(null, before, clock()))).toEqual([]);
+    expect(ids(direct(before, withMarks("0:2"), clock({ reset: true })))).toEqual([]);
+    expect(ids(direct(before, withMarks("0:1"), clock()))).toEqual([]);
+    expect(ids(direct(before, withMarks("1:2", "0:1"), clock()))).toEqual([]);
+    expect(ids(direct(av("night"), av("night", { suspectMarks: ["0:1"] }), clock()))).toEqual([]);
   });
 });
 
@@ -680,6 +700,7 @@ describe("audioViewOf: 허용 필드만 (LS-6, T-12-27)", () => {
       dayN: 3,
       turn: { order: [0, 2], i: 1, endsAt: 130_000 },
       points: [{ seat: 0, target: 2 }],
+      suspectMarks: [],
       candidate: 2,
       morning: null,
       hasExecution: false,
@@ -704,12 +725,19 @@ describe("audioViewOf: 허용 필드만 (LS-6, T-12-27)", () => {
       (v) => { v.serverNow = 999_999; v.phaseDurationMs = 1; v.round = 9; v.code = "9999"; },
       (v) => { v.players = v.players.map((p) => ({ ...p, nickname: "x", connected: !p.connected, isHost: !p.isHost, badge: "mafia" as never, look: "hat" as never })); },
       (v) => { v.mapChoice = "plaza"; v.map = "bar"; v.resting = true as never; },
+      (v) => { v.me.suspectTo = 0; v.day!.suspectLog = [{ n: 2, from: 2, to: 0 }]; },
     ];
     for (const m of mutations) {
       const v = baseView();
       m(v);
       expect(audioViewOf(v)).toEqual(want);
     }
+  });
+
+  it("현재 공개 의심표에서 붙인 좌석과 대상 좌석만 가져온다", () => {
+    const v = baseView();
+    v.day!.suspects = [{ from: 1, to: 0 }, { from: 2, to: 1 }];
+    expect(audioViewOf(v).suspectMarks).toEqual(["1:0", "2:1"]);
   });
 
   it("day 가 없으면 turn·points·candidate·dayN 은 비어 있다", () => {

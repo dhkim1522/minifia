@@ -105,15 +105,17 @@ export interface Bed {
   /** 코드 진행(MIDI). 드론 침대는 비어 있다 */
   chords: readonly (readonly number[])[];
   barsPerChord: number;
-  /** 코드마다 하나(MIDI), 1·3박 플럭. 없으면 빈 배열 */
-  bass: readonly number[];
+  /** 코드별 베이스 한 마디(MIDI). null은 쉼표다. */
+  bass: readonly (readonly (number | null)[])[];
   pad?: { wave: "triangle" | "sine"; filter: Filter };
   /** 길게 이어지는 사인 드론. open 이 있으면 로우패스가 ms 에 걸쳐 from→to 로 열린다 */
   drone?: { notes: readonly number[]; open?: { from: number; to: number; ms: number } };
-  /** 2·4박 브러시 비율(1 이면 매번) */
+  /** 엇박 시작 위치(한 박 안의 비율). */
+  swing?: number;
+  /** 브러시 백비트 비율(1 이면 매번). 엇박은 더 가볍다. */
   brush?: number;
-  /** 피아노 비슷한 코드톤 음: 박마다 확률 p */
-  notes?: { p: number; octave: number };
+  /** 건반 코드톤: 박마다 확률 p, 옥타브와 저역 통과 필터로 음색을 바꾼다. */
+  notes?: { p: number; octave: number; cutoff: number };
   room?: { f: number };
   wind?: { f: readonly [number, number]; lfoHz: number };
   /** 부품별 레벨(dB, 버스 이전) */
@@ -126,7 +128,7 @@ export const BED_IDS = ["bed.lobby", "bed.reveal", "bed.day", "bed.vote", "bed.n
 export type BedId = (typeof BED_IDS)[number];
 export const SFX_IDS = [
   "ui.tap", "ui.toggle", "ui.deny", "ui.card", "ui.host", "lobby.join", "game.start", "role.flip",
-  "day.start", "timer.tick", "phase.vote", "pin.on", "pin.move", "pick.turn", "pick.tick", "pick.point",
+  "day.start", "timer.tick", "suspect.mark", "phase.vote", "pin.on", "pin.move", "pick.turn", "pick.tick", "pick.point",
   "pick.skip", "runoff.intro", "runoff.reveal", "showdown.reveal", "vote.cast",
   "verdict.heart", "execution.gavel", "execution.rise", "verdict.reject",
   "night.fall", "night.cue", "kill.slash", "morning.dawn", "morning.calm", "chalk.draw", "morning.saved",
@@ -138,7 +140,7 @@ export const SFX_IDS = [
   "voice.syl",
 ] as const;
 export type SfxId = (typeof SFX_IDS)[number];
-/** 소리 id 54개: 침대 7 + 효과음 47 */
+/** 소리 id 55개: 침대 7 + 효과음 48 */
 export const SOUND_IDS = [...BED_IDS, ...SFX_IDS] as const;
 export type SoundId = BedId | SfxId;
 
@@ -398,6 +400,13 @@ export const RECIPES: Readonly<Record<SfxId, Recipe>> = {
   ]),
   "will.fold": recipe("will.fold", "sfx", 2, -28, [nz(0, 220, hp(1500, 3000), 1, [10, 200, 0, 20])]),
 
+  // 종이가 스치고 손끝이 눌러 붙인 뒤 얇은 가장자리가 가라앉는다.
+  "suspect.mark": recipe("suspect.mark", "sfx", 2, -20, [
+    nz(0, 95, bp(2650, 1250, 1.6), 0.7, [12, 54, 0.14, 22]),
+    osc("triangle", 47, 55, [410, 245], 0.56, perc(55)),
+    nz(64, 60, bp(1900, 3400, 1.1), 0.34, [9, 38, 0.04, 16]),
+  ], { gapMs: 160 }),
+
   // 동작 9개
   "emote.clap": recipe("emote.clap", "sfx", 2, -20, [
     nz(0, 40, bp(2000, 2000, 1.5), 1, perc(40)),
@@ -405,17 +414,20 @@ export const RECIPES: Readonly<Record<SfxId, Recipe>> = {
     nz(160, 40, bp(2000, 2000, 1.5), 1, perc(40)),
   ], { gapMs: EMOTE_GAP }),
   "emote.praise": recipe("emote.praise", "sfx", 2, -24, [
-    osc("sine", 0, 100, 440, 1, perc(100)),
-    osc("sine", 120, 140, 587, 1, perc(140)),
+    osc("triangle", 0, 110, 440, 0.8, [4, 96, 0.1, 32]),
+    osc("sine", 82, 148, 587.3, 1, [5, 120, 0.04, 40]),
+    osc("sine", 108, 133, 880, 0.35, [7, 98, 0.02, 42]),
   ], { gapMs: EMOTE_GAP }),
   "emote.handshake": recipe("emote.handshake", "sfx", 2, -24, [
-    osc("sine", 0, 90, 130, 1, thud(90), { filter: lp(400) }),
-    osc("sine", 150, 90, 130, 1, thud(90), { filter: lp(400) }),
+    osc("triangle", 0, 95, [205, 138], 1, thud(95), { filter: lp(760) }),
+    nz(48, 105, bp(1230, 740), 0.38, [14, 60, 0.08, 20]),
+    osc("triangle", 132, 80, [198, 146], 0.68, thud(80)),
   ], { gapMs: EMOTE_GAP }),
   "emote.dance": recipe("emote.dance", "sfx", 2, -26, [
-    osc("triangle", 0, 70, 300, 1, perc(70)),
-    osc("triangle", 150, 70, 300, 1, perc(70)),
-    osc("triangle", 300, 70, 300, 1, perc(70)),
+    osc("triangle", 0, 105, 293.7, 1, perc(105)),
+    osc("triangle", 94, 80, 349.2, 0.71, perc(80)),
+    osc("triangle", 224, 125, 440, 0.85, perc(125)),
+    nz(220, 45, bp(2520, 1950), 0.5, perc(45)),
   ], { gapMs: EMOTE_GAP }),
   "emote.surprise": recipe("emote.surprise", "sfx", 2, -22, [osc("sine", 0, 120, [300, 700], 1, [3, 100, 0.2, 20])], {
     gapMs: EMOTE_GAP,
@@ -432,9 +444,10 @@ export const RECIPES: Readonly<Record<SfxId, Recipe>> = {
     osc("triangle", 0, 100, [330, 250], 1, perc(100)),
     osc("triangle", 140, 100, [330, 250], 1, perc(100)),
   ], { gapMs: EMOTE_GAP }),
-  "emote.point": recipe("emote.point", "sfx", 2, -24, [
-    nz(0, 15, bp(3000, 3000, 1.5), 0.8, perc(15)),
-    osc("sine", 10, 40, 400, 1, perc(40)),
+  "emote.point": recipe("emote.point", "sfx", 2, -18, [
+    nz(0, 27, bp(3550, 2400, 1.4), 0.96, perc(27)),
+    osc("triangle", 2, 34, [805, 370], 0.75, perc(34)),
+    nz(13, 27, bp(1600, 960, 1.7), 0.40, perc(27)),
   ], { gapMs: EMOTE_GAP }),
   "emote.throat": recipe("emote.throat", "sfx", 2, -28, [nz(0, 300, bp(1500, 400, 1.2), 1, [40, 0, 1, 60])], {
     gapMs: EMOTE_GAP,
@@ -463,12 +476,11 @@ export const RECIPES: Readonly<Record<SfxId, Recipe>> = {
 // 코드 진행은 일반 화성 기능(D 단조 순환)만 쓴다. 알려진 곡의 선율을 옮기지 않는다.
 
 const MINOR_LOOP: readonly (readonly number[])[] = [
-  [50, 57, 60, 64], // Dm9
-  [55, 58, 62, 65], // Gm9
-  [61, 64, 67, 70], // A7♭9
-  [50, 57, 60, 64], // Dm9
+  [53, 60, 64], // Dm9
+  [53, 58, 69], // Gm9
+  [55, 61, 70], // A7♭9
+  [53, 59, 64], // Dm6/9
 ];
-const MINOR_LOOP_BASS = [38, 43, 45, 38];
 
 export const BEDS: Readonly<Record<BedId, Bed>> = {
   "bed.lobby": {
@@ -476,11 +488,13 @@ export const BEDS: Readonly<Record<BedId, Bed>> = {
     bpm: 64,
     seed: 11,
     chords: MINOR_LOOP,
-    barsPerChord: 4,
-    bass: MINOR_LOOP_BASS,
+    barsPerChord: 1,
+    bass: [[38, null, 45, null], [43, null, 50, null], [45, null, 52, null], [38, null, 45, null]],
     pad: { wave: "triangle", filter: { type: "lowpass", f: [700, 1100], q: 0.7, lfoHz: 0.08 } },
-    brush: 1,
-    db: { pad: -26, bass: -20, brush: -34 },
+    swing: 0.66,
+    brush: 0.9,
+    notes: { p: 0.32, octave: 1, cutoff: 1100 },
+    db: { pad: -29, bass: -20, brush: -29, notes: -24 },
   },
   "bed.reveal": {
     id: "bed.reveal",
@@ -498,12 +512,13 @@ export const BEDS: Readonly<Record<BedId, Bed>> = {
     bpm: 76,
     seed: 31,
     chords: MINOR_LOOP,
-    barsPerChord: 4,
-    bass: MINOR_LOOP_BASS,
+    barsPerChord: 1,
+    bass: [[38, 45, 48, 42], [43, 46, 50, 44], [45, 52, 55, 37], [38, 45, 47, 37]],
     pad: { wave: "triangle", filter: { type: "lowpass", f: [1200, 1600], q: 0.7, lfoHz: 0.08 } },
+    swing: 0.63,
     brush: 1,
-    notes: { p: 0.3, octave: 1 },
-    db: { pad: -26, bass: -20, brush: -34, notes: -24 },
+    notes: { p: 0.52, octave: 1, cutoff: 1450 },
+    db: { pad: -30, bass: -21, brush: -28, notes: -22 },
   },
   "bed.vote": {
     id: "bed.vote",
@@ -520,13 +535,15 @@ export const BEDS: Readonly<Record<BedId, Bed>> = {
     id: "bed.night",
     bpm: 60,
     seed: 5,
-    chords: [],
-    barsPerChord: 1,
+    chords: [[53, 57, 64], [53, 58, 62], [55, 57, 61], [53, 57, 64]],
+    barsPerChord: 2,
     bass: [],
     drone: { notes: [38, 33] },
+    swing: 0.65,
+    notes: { p: 0.24, octave: 0, cutoff: 820 },
     room: { f: 300 },
     wind: { f: [400, 800], lfoHz: 0.05 },
-    db: { drone: -34, room: -40, wind: -40 },
+    db: { drone: -34, notes: -31, room: -40, wind: -40 },
   },
   "bed.dawn": {
     id: "bed.dawn",
@@ -545,7 +562,7 @@ export const BEDS: Readonly<Record<BedId, Bed>> = {
     chords: MINOR_LOOP,
     barsPerChord: 4,
     bass: [],
-    notes: { p: 0.2, octave: 1 },
+    notes: { p: 0.2, octave: 1, cutoff: 1100 },
     db: { notes: -22 },
   },
 };
@@ -605,6 +622,7 @@ export const SCREEN_COUNTERPART: Readonly<Record<SoundId, string>> = {
   "emote.cry": "캐릭터의 엉엉 몸동작",
   "emote.deny": "캐릭터의 손사래 몸동작",
   "emote.point": "캐릭터의 손가락 몸동작",
+  "suspect.mark": "토론 중 상대에게 공개 의심표가 새로 붙거나 다른 상대에게 옮겨짐",
   "emote.throat": "캐릭터의 목긋기 몸동작",
   "result.win": "이긴 팀 조명과 결과 화면",
   "result.lose": "진 팀의 결과 화면",
@@ -681,6 +699,7 @@ export const BED_SEGMENT_MS = 4000;
 export const BED_OVERLAP_MS = 800;
 const PAD_ENV: Env = [600, 0, 1, 800];
 const SEG_ENV: Env = [BED_OVERLAP_MS, 0, 1, BED_OVERLAP_MS];
+const BASS_ACCENTS = [1, 0.76, 0.89, 0.63] as const;
 
 /** 동시에 울리는 발진기 수(정상 상태). 한계 6 */
 export function bedOscCount(bed: Bed): number {
@@ -697,6 +716,7 @@ export function bedNoiseCount(bed: Bed): number {
 export function bedNodeCount(bed: Bed): number {
   const filters =
     (bed.pad !== undefined ? 1 : 0) +
+    (bed.bass.length > 0 ? 1 : 0) +
     (bed.drone?.open !== undefined ? 1 : 0) +
     (bed.brush !== undefined ? 1 : 0) +
     (bed.room !== undefined ? 1 : 0) +
@@ -767,7 +787,7 @@ export function bedPlan(bedOrId: Bed | BedId, fromMs: number, toMs: number): Pla
           kind: "osc",
           wave: bed.pad!.wave,
           t: k * chordMs,
-          dur: chordMs,
+          dur: Math.max(1, chordMs - PAD_ENV[3]),
           f0: midiToHz(m),
           f1: midiToHz(m),
           gain: lin("pad"),
@@ -779,55 +799,63 @@ export function bedPlan(bedOrId: Bed | BedId, fromMs: number, toMs: number): Pla
     }
   }
 
-  // 박 단위: 베이스 플럭(1·3박), 브러시(2·4박), 피아노 비슷한 음(박마다 확률)
+  // 박자와 엇박. 질의 첫 시각보다 앞에서 시작한 박도 그 박의 엇박을 놓치지 않도록 본다.
   const chordIndexAtBeat = (n: number): number => Math.floor(n / 4 / bed.barsPerChord) % Math.max(1, bed.chords.length);
-  for (let n = Math.ceil(from / beatMs); n * beatMs < toMs; n += 1) {
+  const inside = (t: number): boolean => t >= from && t < toMs;
+  for (let n = Math.floor(from / beatMs); n * beatMs < toMs; n += 1) {
     const t = n * beatMs;
     const inBar = n % 4;
-    if (bed.bass.length > 0 && (inBar === 0 || inBar === 2)) {
-      const m = bed.bass[chordIndexAtBeat(n) % bed.bass.length]!;
+    const chordIndex = chordIndexAtBeat(n);
+    const offbeat = t + beatMs * (bed.swing ?? 0);
+    const bassNote = bed.bass[chordIndex]?.[inBar];
+    if (bassNote != null && inside(t)) {
+      const hz = midiToHz(bassNote);
       events.push({
         kind: "osc",
-        wave: "sine",
+        wave: "triangle",
         t,
-        dur: 450,
-        f0: midiToHz(m),
-        f1: midiToHz(m),
-        gain: lin("bass"),
-        env: [3, 440, 0, 12],
+        dur: 420,
+        f0: hz,
+        f1: hz,
+        gain: lin("bass") * BASS_ACCENTS[inBar]!,
+        env: [9, 285, 0.08, 62],
+        filter: lp(850, 320),
         detune: 0,
       });
     }
-    if (bed.brush !== undefined && (inBar === 1 || inBar === 3) && stepRng(bed.seed, n, 1)() < bed.brush) {
+    const backbeat = inBar % 2 === 1;
+    const brushAt = backbeat ? t : offbeat;
+    const brushChance = (bed.brush ?? 0) * (backbeat ? 1 : 0.78);
+    if (inside(brushAt) && brushChance > 0 && stepRng(bed.seed, n, 1)() < brushChance) {
       events.push({
         kind: "noise",
         wave: "noise",
-        t,
-        dur: 30,
+        t: brushAt,
+        dur: backbeat ? 82 : 48,
         f0: 0,
         f1: 0,
-        gain: lin("brush"),
-        env: perc(30),
-        filter: { type: "highpass", f: [5000, 5000], q: 0.7 },
+        gain: lin("brush") * (backbeat ? 1 : 0.55),
+        env: backbeat ? [13, 64, 0.08, 18] : [4, 34, 0, 12],
+        filter: backbeat ? bp(4300, 2280, 0.8) : bp(6100, 4300, 0.9),
         detune: 0,
         seed: (bed.seed + n * 31) >>> 0,
       });
     }
-    if (bed.notes !== undefined && bed.chords.length > 0) {
+    if (bed.notes !== undefined && bed.chords.length > 0 && inside(offbeat)) {
       const rng = stepRng(bed.seed, n, 2);
       if (rng() < bed.notes.p) {
-        const chord = bed.chords[chordIndexAtBeat(n)]!;
-        const m = chord[Math.floor(rng() * chord.length)]! + 12 * bed.notes.octave;
+        const chord = bed.chords[chordIndex]!;
+        const hz = midiToHz(chord[Math.floor(rng() * chord.length)]! + 12 * bed.notes.octave);
         events.push({
           kind: "osc",
           wave: "triangle",
-          t,
-          dur: 900,
-          f0: midiToHz(m),
-          f1: midiToHz(m),
-          gain: lin("notes"),
-          env: [4, 800, 0, 200],
-          filter: lp(3000),
+          t: offbeat,
+          dur: 450,
+          f0: hz,
+          f1: hz,
+          gain: lin("notes") * (0.76 + rng() * 0.24),
+          env: [15, 295, 0.055, 110],
+          filter: lp(bed.notes.cutoff, Math.max(420, hz * 1.15)),
           detune: 0,
         });
       }

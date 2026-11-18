@@ -44,7 +44,7 @@ export interface SuspectApi {
   mode: boolean;
   /** 지금 근처의 산 사람 좌석(나 제외, 죽은 사람 제외). 모드의 이름표 버튼 대상 */
   targets: ReadonlySet<number>;
-  /** 지금 누를 수 없다(연결 끊김 또는 근처 0명) */
+  /** 지금 누를 수 없다(연결 끊김 또는 기본 방에서 근처 0명) */
   disabled: boolean;
   toggleMode: () => SuspectToggle;
   off: () => void;
@@ -59,6 +59,7 @@ const EMPTY: ReadonlySet<number> = new Set<number>();
 
 export function useSuspect({ view, store, offset, send, canSend = true, guard }: UseSuspectOptions): SuspectApi {
   const visible = suspectVisible(view);
+  const walkToTarget = view.playtest === true;
   const used = suspectUsed(view);
   const dayN = view.day?.n;
   // 간격 타이머가 최신 값을 읽게 한다(렌더마다 타이머를 다시 걸지 않는다)
@@ -135,7 +136,7 @@ export function useSuspect({ view, store, offset, send, canSend = true, guard }:
     setSaid(suspectSaid(name));
   }, [suspectTo, guard]);
 
-  const disabled = !canSend || targets.size === 0;
+  const disabled = !canSend || (!walkToTarget && targets.size === 0);
 
   const toggleMode = useCallback((): SuspectToggle => {
     if (!visible || !canSend) return null;
@@ -144,10 +145,10 @@ export function useSuspect({ view, store, offset, send, canSend = true, guard }:
       return "off";
     }
     // 눌린 순간의 근처를 바로 다시 잰다(간격 사이에 가까워졌어도 알림 없이 켜진다)
-    if (refresh().size === 0) return "deny";
+    if (refresh().size === 0 && !walkToTarget) return "deny";
     setMode(true);
     return "on";
-  }, [visible, canSend, mode, refresh]);
+  }, [visible, canSend, mode, refresh, walkToTarget]);
 
   const off = useCallback(() => setMode(false), []);
 

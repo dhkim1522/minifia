@@ -59,6 +59,7 @@ export interface Player {
   // ---- 3페이즈 밤 상태(타입만 — 쓰는 코드는 03-03·03-04). 모두 optional — 옛 방도 읽힌다. ----
   /** 이번 밤 고른 대상 seat — enterNight 가 비우고 enterMorning 이 쓰고 지운다. 뷰에는 본인(과 관전)에게만 실린다. */
   nightPick?: number;
+  nightDone?: true;
   /** 경찰만 누적하는 수사 기록 — 뷰에는 경찰 본인에게만 실린다. */
   investigations?: InvestigationRecord[];
   /** 마피아 팀 암살일지의 사본 — 밤 시작 때 살아 있던 마피아 각자에게 같은 줄이 쌓인다. 뷰에는 그 마피아 본인에게만 실린다. */

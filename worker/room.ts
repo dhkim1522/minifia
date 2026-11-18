@@ -27,7 +27,7 @@ import {
 } from "../shared/game/room";
 import type { JoinError } from "../shared/game/room";
 import type { Player, RoomState } from "../shared/game/room";
-import { pickRecipientIds, pickTarget } from "../shared/game/night";
+import { completeNight, pickRecipientIds, pickTarget } from "../shared/game/night";
 import { BADGE_MIN_GAP_MS, setBadge } from "../shared/game/badge";
 import { LOOK_MIN_GAP_MS, setLook } from "../shared/game/look";
 import { attachBenchConnection, detachBenchConnection, findAnyByToken, isResting, leaveBench, rematch, setReady } from "../shared/game/rematch";
@@ -47,12 +47,12 @@ import { resetToLobby, setBotCount, setBotVote, setTestRole, skipPhase } from ".
 import type { RoleId } from "../shared/game/roles";
 import { RULES } from "../shared/game/ruleset";
 import { nextWakeAt, tick } from "../shared/game/tick";
-import { allRolesReady, castFirstBallot, confirmRole, voteOpensAt } from "../shared/game/playtest";
+import { allRolesReady, castFirstBallot, confirmRole, keywordReadUntil } from "../shared/game/playtest";
 import { castTurnPoint, turnStartOf } from "../shared/game/nomination";
 import { castRunoffVote } from "../shared/game/runoff";
 import { acceptLastWord, castShowdownPoint } from "../shared/game/showdown";
 import { castVerdict } from "../shared/game/verdict";
-import { endReached, toggleEnd } from "../shared/game/discussion";
+import { discussionMajorityAt, endReached, toggleEnd } from "../shared/game/discussion";
 import { MAP_PHASES, canMove } from "../shared/game/movement";
 import { layoutFor, layoutKey } from "../shared/game/gather";
 import { STAGE_SPOT } from "../shared/game/map";
@@ -311,6 +311,9 @@ export class Room extends DurableObject<Env> {
       case "firstBallot":
         await this.handleFirstBallot(ws, msg.target);
         return;
+      case "nightDone":
+        await this.handleNightDone(ws);
+        return;
       case "pick":
         await this.handlePick(ws, msg.target);
         return;
@@ -564,6 +567,24 @@ export class Room extends DurableObject<Env> {
     return null;
   }
 
+  private async handleNightDone(ws: WebSocket): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const result = completeNight(this.room, att.playerId);
+    if (!result.ok) {
+      this.sendRejection(ws, att.playerId, result.error);
+      return;
+    }
+    if (result.state === this.room) return;
+    this.room = result.state;
+    if (await this.maybeAdvanceEarly(Date.now(), { extend: false })) return;
+    await this.ctx.storage.put("room", this.room);
+    this.sendViewTo([att.playerId]);
+  }
+
   // 직업 주장(09.1.1, 결정 0066-1): 신원은 소켓 첨부의 playerId 뿐이다 — 메시지에 seat·id 가 없다.
   private async handleBadge(ws: WebSocket, role: BadgeId): Promise<void> {
     const att = this.attachmentOf(ws);
@@ -790,6 +811,8 @@ export class Room extends DurableObject<Env> {
   // handleAnswer 의 sendRejection 이 시민의 거절과 같은 두 프레임(오류 + 본인 state)으로 응답하므로 응답에서는 저장 여부를 알 수 없다(T-23-18).
   private async applyAnswer(playerId: string, text: string, final: boolean, now: number): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
+    const readUntil = keywordReadUntil(this.room);
+    if (readUntil !== undefined && now < readUntil) return "WRONG_PHASE";
     const key = `answer${final ? "F" : "D"}:${playerId}`;
     const last = this.writeAt.get(key);
     if (last !== undefined && now - last < ANSWER_MIN_GAP_MS) return null;
@@ -864,6 +887,10 @@ export class Room extends DurableObject<Env> {
     if (result.state === this.room) return null;
     this.room = result.state;
     await this.persistAndBroadcast();
+    const note = result.state.notes?.at(-1);
+    if (result.state.playtest === true && note !== undefined) {
+      this.broadcastEmote(result.state, "all", note.from, "point", note.to);
+    }
     return null;
   }
 
@@ -1010,11 +1037,18 @@ export class Room extends DurableObject<Env> {
 
   private async applyFirstBallot(playerId: string, target: number | null): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
+    const castBefore = this.room.players.find((p) => p.id === playerId)?.firstBallot !== undefined;
     const result = castFirstBallot(this.room, playerId, target);
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
     this.room = result.state;
-    await this.persistAndBroadcast();
+    if (await this.maybeAdvanceEarly(Date.now(), { extend: false })) return null;
+    if (!castBefore) {
+      await this.persistAndBroadcast();
+    } else {
+      await this.ctx.storage.put("room", this.room);
+      this.sendViewTo([playerId]);
+    }
     return null;
   }
 
@@ -1034,12 +1068,11 @@ export class Room extends DurableObject<Env> {
   // 유령·단계 틀림은 규칙 함수가 BAD_MESSAGE·WRONG_PHASE 로 거절한다.
   private async applyEndDiscussion(playerId: string, on: boolean, now: number): Promise<WsErrorCode | null> {
     if (!this.room) return "BAD_MESSAGE";
-    const opensAt = voteOpensAt(this.room);
-    if (opensAt !== undefined && now < opensAt) return "WRONG_PHASE";
+    const majorityAt = discussionMajorityAt(this.room);
     const result = toggleEnd(this.room, playerId, on);
     if (!result.ok) return result.error;
     if (result.state === this.room) return null;
-    if (endReached(result.state)) {
+    if (endReached(result.state, now)) {
       const prev = this.room;
       this.room = tick({ ...result.state, phaseEndsAt: now }, now, cryptoRandInt);
       await this.afterTransition(prev, now);
@@ -1047,6 +1080,7 @@ export class Room extends DurableObject<Env> {
     }
     this.room = result.state;
     await this.persistAndBroadcast();
+    if (majorityAt !== discussionMajorityAt(result.state)) await this.reschedule();
     return null;
   }
 
@@ -1254,7 +1288,9 @@ export class Room extends DurableObject<Env> {
       return;
     }
     // 난수는 여기서만 넣는다 — 아침 판정(03-03)의 동률·문구 추첨
-    const next = tick(room, now, cryptoRandInt);
+    const majorityAt = discussionMajorityAt(room);
+    const closing = majorityAt <= now ? { ...room, phaseEndsAt: majorityAt } : room;
+    const next = tick(closing, now, cryptoRandInt);
     // 방장 이양(D-17)은 단계 전환과 무관하게 같은 호출에서 맞춘다(멱등). 어떤 진입점이든 advance 를 지난다.
     // 대기실 정리(D-18)는 이양 뒤에 적용한다 — 옛 방장도 같은 규칙을 받는다. 게임 중·결과 단계는 pruneLobby 가 건드리지 않는다.
     const hosted = resolveHost(next, now);
@@ -1521,6 +1557,7 @@ export class Room extends DurableObject<Env> {
       this.emitWorld(moveFrame(me.seat, seg), me.id);
     }
     this.world = { ...this.world, lay: { key: layout.key, slots: layout.slots } };
+    if (room.phase === "roleReveal" && layout.moves.length > 0) this.snapEachViewer(now);
     this.markWorldDirty();
   }
 
@@ -1802,11 +1839,15 @@ export class Room extends DurableObject<Env> {
     const gate = emoteGate(this.emoteRates.get(playerId), id, now);
     if (!gate.ok) return;
     this.emoteRates.set(playerId, gate.next);
+    this.broadcastEmote(room, ch, me.seat, id);
+  }
+
+  private broadcastEmote(room: RoomState, ch: ChatChannel, seat: number, id: EmoteId, target?: number): void {
     const ids = audience(room, { k: "emote", ch });
     // 번호는 채널별로 센다 — 받지 못한 프레임의 번호 틈이 시민 편에 새지 않게(채팅 seq 와 같은 이유, 결정 0068). 인메모리라 하이버네이션으로 비면 1 부터 다시 센다(무해).
     const n = (this.emoteSeq[ch] ?? 0) + 1;
     this.emoteSeq[ch] = n;
-    this.deliver(ids, { t: "emote", seat: me.seat, id, n });
+    this.deliver(ids, { t: "emote", seat, id, n, ...(target === undefined ? {} : { target }) });
   }
 
   // 자유 채팅(07-11, CHAT-01·02·03·05): 신원은 소켓 첨부 playerId 뿐이고 채널은 서버가 보낸 사람 상태로 정한다(결정 0002).

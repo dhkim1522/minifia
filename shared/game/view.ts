@@ -36,7 +36,7 @@ import { pointLinesOf, turnViewOf } from "./nomination";
 import { runoffVotersOf, runoffViewOf } from "./runoff";
 import { showdownViewOf } from "./showdown";
 import { PHASE_DEFS } from "./phases";
-import { firstBallotCount, firstPlaytestDay, voteOpensAt } from "./playtest";
+import { firstBallotCount, firstPlaytestDay, humanSeats, voteOpensAt } from "./playtest";
 import { RULES } from "./ruleset";
 import { isReady } from "./rematch";
 import { rolesInPlay } from "./roles";
@@ -93,6 +93,7 @@ function buildDay(state: RoomState): DayView {
     if (opens !== undefined) {
       day.voteOpensAt = opens;
       day.voteReadyRequired = endRequiredOf(state);
+      day.voteReadyTotal = humanSeats(state).length;
     }
   }
   // 찬반은 집계 수(찬성·반대)만 모두에게 공개한다(D-11) — 던진 좌석(옛 day.voted)은 싣지 않는다: 좌석과 수가 함께 보이면 첫 투표자의 표가 추론된다(D-26).
@@ -293,6 +294,9 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   // 본인 선택은 본인에게만(D-06) — 남의 nightPick 은 어떤 키로도 싣지 않는다. 밤에 살아 있는 본인이 고른 값이 있을 때만 키를 만든다.
   if (state.phase === "night" && isAlive(me) && me.nightPick !== undefined) {
     myInfo.pick = me.nightPick;
+  }
+  if (state.playtest === true && state.phase === "night" && isAlive(me) && me.role === "citizen" && me.nightDone === true) {
+    myInfo.nightDone = true;
   }
 
   // 마피아 집계(결정 0061-7, L8)는 밤에 산 마피아 본인에게만: 앉은 산 비마피아별 산 마피아 선택 수(seat 오름차순, 본인 포함)와 전원 일치로 확정된 대상.

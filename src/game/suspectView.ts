@@ -15,7 +15,7 @@ export interface SuspectDayRows {
 
 /** [의심] 을 낼 수 있는가: 서버와 같은 noteAllowedNow(토론·둘째 날부터, D-22) + 내가 산 사람 + 나를 뺀 산 사람 ≥ 1. 유령에게는 만들지 않는다. */
 export function suspectVisible(view: RoomView): boolean {
-  if (!noteAllowedNow(view.phase, view.day?.n)) return false;
+  if (!noteAllowedNow(view.phase, view.day?.n, view.playtest)) return false;
   const me = view.players.find((p) => p.seat === view.me.seat);
   if (me === undefined || !isAlive(me)) return false;
   return view.players.some((p) => p.seat !== view.me.seat && isAlive(p));

@@ -21,6 +21,7 @@ function av(phase: PhaseId, over: Partial<AudioView> = {}): AudioView {
     dayN: 1,
     turn: null,
     points: [],
+    suspectMarks: [],
     candidate: null,
     morning: null,
     hasExecution: false,

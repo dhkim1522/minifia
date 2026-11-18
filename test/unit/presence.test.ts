@@ -193,6 +193,11 @@ describe("cameraModeOf (UI-SPEC 카메라 표)", () => {
     const verdict = viewOf("verdict", { day: { points: points([0, 2], [1, 2], [3, 2]), candidate: 2 } });
     same(cameraModeOf(verdict, 600), { mode: "follow" });
   });
+
+  it("실험방 첫 투표는 모이는 자리 전체를 프레임에 담는다", () => {
+    const ballot: RoomView = { ...viewOf("verdict", { count: 8, day: { firstBallot: { count: 0 } } }), playtest: true };
+    same(cameraModeOf(ballot, 250), { mode: "fixed", target: GATHER_CENTER, zoom: 0.82, frameGroup: true });
+  });
 });
 
 describe("lightingOf (UI-SPEC 단계 조명)", () => {

@@ -20,10 +20,11 @@ export function emoteDurationMs(id: EmoteId, reduced = false): number {
   return Math.round((d.frames.length * d.seg * emoteCycles(id, reduced) + d.hold) * 1000);
 }
 
-/** 재생 중인 사람 동작 하나: 좌석과 끝나는 시각(ms) */
+/** 재생 중인 사람 동작과 가리키는 대상 */
 export interface PlayingEmote {
   seat: number;
   until: number;
+  target?: number;
 }
 
 /**

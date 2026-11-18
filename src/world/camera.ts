@@ -6,7 +6,7 @@
 // 배율은 PX_PER_UNIT × zoom(zoom 은 지목 과반 연출의 확대 1.08, 생략하면 1 — 화면 가운데(오프셋 반영)에서 거리가 zoom 배가 된다).
 // 클라이언트 전용이라 삼각함수를 써도 된다(shared 의 서버 판정 모듈 규칙은 여기 적용되지 않는다).
 
-import { ringSlots } from "../../shared/game/gather";
+import { ringSlots, RING_RADIUS_FX } from "../../shared/game/gather";
 import { HEAD_TOP_Y, STAGE_SPOT, UNIT } from "../../shared/game/map";
 import { lobbyPanelHeight, LOG_H, TYPING_PILL_H } from "../game/chatUi";
 
@@ -188,6 +188,14 @@ export const GATHER_STACK_H = 122;
 /** 유령 화면 최대: 산 사람 쌓임 + 직업 표시 32 (UI-SPEC 카메라) */
 export const GATHER_STACK_H_GHOST = 154;
 
+/** 첫 투표에서 머리부터 발까지 담을 수 있는 확대 배율. 같은 둘레의 8인 배치로 여유를 잡는다. */
+export function gatherGroupZoom(stage: { top: number; bottom: number }, c: Canvas, maxZoom: number): number {
+  const diameter = 2 * RING_RADIUS_FX / UNIT;
+  const height = (diameter * Math.hypot(BASIS.up.x, BASIS.up.z) + (HEAD_TOP_Y + 0.15) * BASIS.up.y) * PX_PER_UNIT;
+  const width = (diameter + 1) * PX_PER_UNIT;
+  return Math.max(0.05, Math.min(maxZoom, (stage.bottom - stage.top - 16) / height, (c.w - 24) / width));
+}
+
 /**
  * 모이는 자리 고정 구도(지목·변론·찬반·처형). UI-SPEC 카메라 표: 이름표가 몸보다 우선이다 — 지목은 이름표를 눌러야 하기 때문이다.
  * 목표는 늘 모이는 자리 가운데이고, 8슬롯(최악의 8명) 이름표 상자 = 뒤 머리 꼭대기 − 쌓임 높이 ~ 앞 머리 꼭대기를 스테이지 사각형 세로 가운데에 두는 offsetY 를 정한다.
@@ -195,9 +203,9 @@ export const GATHER_STACK_H_GHOST = 154;
  * 상자가 스테이지보다 높으면(300 미만 — 알려진 한계 E8 #28) 앞 머리 꼭대기를 스테이지 아래 끝에 맞춘다(앞 사람 이름표가 우선, 뒤쪽 이름표가 위로 잘림).
  * zoom 은 과반 연출 확대(같은 확대로 투영해 구도를 잡는다).
  */
-export function gatherView(stage: { top: number; bottom: number }, c: Canvas, opts: { ghost?: boolean; zoom?: number } = {}): { target: { x: number; z: number }; offsetY: number } {
+export function gatherView(stage: { top: number; bottom: number }, c: Canvas, opts: { ghost?: boolean; zoom?: number; frameGroup?: boolean } = {}): { target: { x: number; z: number }; offsetY: number } {
   const zoom = opts.zoom ?? 1;
-  const stackH = opts.ghost ? GATHER_STACK_H_GHOST : GATHER_STACK_H;
+  const stackH = opts.frameGroup ? 0 : opts.ghost ? GATHER_STACK_H_GHOST : GATHER_STACK_H;
   const target = { x: GATHER_CENTER.x, z: GATHER_CENTER.z };
   let headTop = Infinity;
   let headBottom = -Infinity;

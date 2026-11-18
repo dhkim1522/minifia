@@ -8,7 +8,7 @@
 - 소리 라이브러리: **0** (`package.json` 에 howler·tone·zzfx 등이 없다. 소리는 브라우저 기본 Web Audio 만 쓴다).
 - 레시피(발진기·필터링한 잡음·엔벨로프)는 이 저장소에서 직접 작성했다. 알려진 곡의 선율을 인용하지 않았다. 코드 진행은 일반적인 재즈 화성(Dm9·Gm9·A7♭9)이고 음높이·리듬 배치는 직접 정했다.
 - 작성일: 2026-11-06 (12페이즈).
-- 정적 시험: `test/unit/soundProvenance.test.ts` (오디오 파일·소리 라이브러리가 생기면 아래 표에 행이 있어야 통과), `test/unit/soundProtocol.test.ts` (이 문서의 레시피 지도가 소리 id 54개를 모두 담는지, 서버가 소리를 모르는지), `test/unit/soundStaticGuard.test.ts` (`src/audio/` 가 허용된 입력만 읽는지).
+- 정적 시험: `test/unit/soundProvenance.test.ts` (오디오 파일·소리 라이브러리가 생기면 아래 표에 행이 있어야 통과), `test/unit/soundProtocol.test.ts` (이 문서의 레시피 지도가 소리 id 55개를 모두 담는지, 서버가 소리를 모르는지), `test/unit/soundStaticGuard.test.ts` (`src/audio/` 가 허용된 입력만 읽는지).
 
 ## 샘플을 들일 때 필수 항목
 
@@ -20,7 +20,9 @@
 
 ## 레시피 지도
 
-소리 id 54개(배경음 7 + 효과음 47). 레시피는 `src/audio/recipes.ts` 한 표(`RECIPES`·`BEDS`)가 단일 정의라서 id 하나를 바꾸려면 그 줄만 고치면 된다. 감독 규칙은 `src/audio/director.ts`(공개 view 차이·닫힌 로컬 신호), 시간표 대본은 `src/audio/script.ts` 에 있다. 값(레벨·길이·음높이)은 모두 첫 초안이고 폰으로 듣고 조정한다.
+소리 id는 배경음 7개와 효과음 48개다. `src/audio/recipes.ts`의 `RECIPES`·`BEDS`가 각 소리를 정의한다. 공개 방 상태와 로컬 신호를 해석하는 규칙은 `src/audio/director.ts`, 시간표는 `src/audio/script.ts`에 있다.
+
+대기실과 토론에서는 D단조 재즈 화성에 베이스, 브러시, 부드러운 건반을 쌓는다. 대기실은 박마다 여유를 두고 토론은 네 박을 걷는 베이스와 스윙 엇박으로 움직인다. 밤에는 같은 D단조의 건반을 낮게 드문드문 연주한다. 가리키기는 짧은 손가락 스냅, 의심표는 종이가 스치고 눌러 붙는 소리다. 의심표 음은 토론 중 현재 공개 의심표가 새로 붙거나 다른 상대에게 옮겨질 때 모두에게 한 번 재생된다.
 
 | 소리 id | 일어나는 일 | 정의 → 규칙이 있는 파일 |
 |---------|-------------|--------------------------|
@@ -41,6 +43,7 @@
 | `role.flip` | 역할 카드 공개·결과의 직업 뒤집기(직업별 차이 없음) | recipes.ts → script.ts · director.ts |
 | `day.start` | 낮 알림 진입 | recipes.ts → director.ts |
 | `timer.tick` | 공개 카운트다운 마지막 5초 초마다(낮 토론·변론·찬반만) | recipes.ts → director.ts |
+| `suspect.mark` | 낮에 공개 의심표가 새로 붙거나 다른 상대에게 옮겨짐 | recipes.ts → director.ts |
 | `phase.vote` | 지목 단계 진입 | recipes.ts → director.ts |
 | `pin.on` | 핀 조명이 켜짐 | recipes.ts → director.ts |
 | `pin.move` | 핀 조명이 다음 사람으로 이동 | recipes.ts → director.ts |
@@ -85,7 +88,7 @@
 ## 시험 페이지
 
 - 열기: `npm run dev` (`--host` 포함) 후 폰에서 `http://<Mac IP>:5173/?sound-lab=1`. 개발 문맥 전용이고 배포본 번들에는 들어가지 않는다.
-- 54개를 ▶ 로 하나씩 듣고, [전부 계산] 으로 오프라인 렌더 검사(피크·NaN·무음·길이)를 헤드리스에서도 돌릴 수 있다.
+- 55개를 ▶ 로 하나씩 듣고, [전부 계산] 으로 오프라인 렌더 검사(피크·NaN·무음·길이)를 헤드리스에서도 돌릴 수 있다.
 - 마음에 들지 않는 id 를 알려 주면 `src/audio/recipes.ts` 의 레시피 한 줄만 고친다. 레벨이 문제면 `gainDb`, 길이면 `dur`, 음높이면 `f0`·`f1`.
 
 ## iOS 메모

@@ -18,6 +18,7 @@ import { SceneCurtain } from "../components/SceneCurtain";
 import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
+import { PlaytestHeader } from "../components/v2/PlaytestHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { SuspectButton } from "../components/v2/SuspectButton";
 import { suspectChipShown } from "../components/v2/HeadStack";
@@ -40,7 +41,7 @@ import { WHISPER_TEXT } from "../game/whisperView";
 import { suspectStacks } from "../game/suspectView";
 import { headerFor } from "../game/dayView";
 import { discussionEvidenceOf, type MorningVictim } from "../game/discussionEvidence";
-import { callTargetsOf } from "../game/hostLine";
+import { callTargetsOf, playtestResultLine } from "../game/hostLine";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
 import type { ChatStore } from "../net/chatStore";
@@ -176,9 +177,13 @@ interface GameMapProps {
  * 기본판에서는 서버가 그 view 를 보내지 않는다. 시간 링의 다시 그리기가 맵 화면 전체로 번지지 않게 시계 훅은 꺼진 장치 갈래 부품 안에 둔다.
  */
 function MapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode; tod: boolean }) {
+  if (view.playtest === true) {
+    const title = view.phase === "verdict" && view.day?.firstBallot !== undefined ? "투표" : headerFor(view).title;
+    return <PlaytestHeader title={title} view={view} offset={offset} extra={extra} />;
+  }
   const legacy = blockModeOf(view) !== null || hintOverride !== undefined;
   if (!legacy) {
-    const title = view.phase === "verdict" && view.day?.firstBallot !== undefined ? "투표" : headerFor(view).title;
+    const title = headerFor(view).title;
     return <PhaseHeader title={title} {...(tod ? { tod: { id: todOf(view.phase), word: todWordOf(view.phase, title) } } : {})} extra={extra} />;
   }
   return <LegacyMapHeader view={view} offset={offset} hintOn={hintOn} {...(hintOverride !== undefined ? { hintOverride } : {})} extra={extra} tod={tod} />;
@@ -237,8 +242,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 지목이면 스테이지 윗변을 차례 알약 아랫변 + 4 로 내리고(UI-SPEC A-1) 작은 폰은 압축형 알약을 받는다(turnCompact). 알약 요소는 훅이 루트에서 `[data-turn-block]` 으로 찾는다.
   // 튜토리얼 지도 장면(panelless prop, 18-03)은 아래 패널이 없다: 스테이지가 띠 아래부터 화면 아래까지 넓어진다
   const playtest = view.playtest === true;
-  const waitingAtNight = playtest && view.phase === "night" && view.me.role === "citizen" && view.spectate === undefined;
-  const noPanel = panelless === true || waitingAtNight;
+  const mapResult = playtest ? playtestResultLine(view) : undefined;
+  const policeName = policeResult ? view.players.find((player) => player.seat === policeResult.seat)?.nickname ?? "" : "";
+  const privateResult = playtest && policeResult ? `조사 결과 · ${policeName} · ${policeResult.isMafia ? "마피아" : "마피아 아님"}` : undefined;
+  const toastText = playtest && toast.props.visible ? toast.props.text : undefined;
+  const playtestPanel = mapResult !== undefined || privateResult !== undefined || toastText !== undefined || view.me.chat === "ghost" || view.phase === "discussion" || view.phase === "night" && view.spectate === undefined || view.phase === "verdict" || view.phase === "defense" && view.day?.candidate === view.me.seat;
+  const noPanel = panelless === true || (playtest && !playtestPanel);
   const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets: measuredInsets } = useMapInsets(blockModeOf(view) !== null, noPanel);
   // 튜토리얼(24 D-31): 아래 여백에 bottomExtra 를 더한다. 키보드 높이를 프레임마다 읽는 getter 는 그대로 살린다. 실제 판은 0 이라 측정값 그대로다.
   const stageInsets = useMemo(
@@ -493,7 +502,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         // 연결이 끊긴 동안은 버튼이 aria-disabled 이고 눌러도 보내지 않는다
         ...(canSend ? {} : { disabled: true as const }),
         label: SUSPECT_TEXT.tagLabel,
-        onPick: suspect.pick,
+        onPick: (seat) => {
+          suspect.pick(seat);
+          if (playtest) panelRef.current?.querySelector<HTMLButtonElement>('[data-playtest-action="suspect"]')?.focus({ preventScroll: true });
+        },
         group: SUSPECT_TEXT.groupLabel,
         attr: "data-suspect-tag",
       }
@@ -726,7 +738,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   );
 
   return (
-    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={suspect.mode ? "on" : "off"} data-suspects={suspectsMirror} data-playtest-waiting={waitingAtNight ? "" : undefined}>
+    <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
       {/* DOM 순서 = Tab 순서: 헤더([역할 카드]) → 맵(이름표) → 아래 패널(입력). 층 순서는 z 가 정한다 */}
       <div className="mf-game__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-game__header">
@@ -764,7 +776,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         onNotice={(text) => show(text)}
         onLeave={() => onLeave?.()}
       />
-      <TopToast {...toast.props} />
+      {!playtest ? <TopToast {...toast.props} /> : null}
       {/* 붙인 사람에게만 읽히는 한 줄(P24-8) — 서버 view(me.suspectTo)가 확인한 뒤에만 채워진다. 화면에는 안 보인다 */}
       {suspect.visible ? (
         <div className="mf-sr-only" role="status" data-suspect-said="">
@@ -785,13 +797,13 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       {!playtest ? <KillFx nonce={killNonce} reducedMotion={reducedMotion} /> : null}
       {!playtest ? <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(shownAnnounce?.label !== undefined ? { label: shownAnnounce.label } : {})} {...(shownAnnounce?.still === true ? { still: true } : {})} {...(letter !== null || moment.active ? { placement: "top" as const } : {})} /> : null}
       {/* 유언 공개 카드(P22-11): 처형 단계 0~3.0초 모두의 화면. 독 아랫변 + 8, 폭 = 화면 − 32, 누를 수 없다. 사라질 때는 dur-med 페이드 */}
-      {moment.will !== null ? (
+      {!playtest && moment.will !== null ? (
         <div className="mv-will-reveal">
           <QuoteCard text={moment.will.text} visible={moment.will.visible} still={moment.will.still} will />
         </div>
       ) : null}
-      {letter !== null ? <WillLetter key={`${letter.t0}:${letter.seat}`} letter={letter} reducedMotion={reducedMotion} getInputTop={letterInputTop} onLive={setLetterLive} /> : null}
-      {policeResult !== null ? (
+      {!playtest && letter !== null ? <WillLetter key={`${letter.t0}:${letter.seat}`} letter={letter} reducedMotion={reducedMotion} getInputTop={letterInputTop} onLive={setLetterLive} /> : null}
+      {!playtest && policeResult !== null ? (
         <PoliceResultCard
           key={policeResult.id}
           seat={policeResult.seat}
@@ -811,6 +823,16 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           kbOpen={kbOpen}
           lifted={kbLifted}
           veiled={veiled || (speakOpen && !speakWriting)}
+          suspect={playtest && suspect.visible && layerKind === null ? suspect : undefined}
+          result={mapResult}
+          notice={playtest ? (
+            <>
+              {toastText ? <p className="mf-playtest__feedback" role="status" {...(toast.props.marker ? { [toast.props.marker]: "" } : {})}>{toastText}</p> : null}
+              {privateResult ? <p className="mf-playtest__result" role="status">{privateResult}</p> : null}
+              {moment.will?.visible ? <p className="mf-playtest__result" role="status">유언 · {moment.will.text}</p> : null}
+              {view.phase === "morning" && letter?.text ? <p className="mf-playtest__result" role="status">유언 · {letter.text}</p> : null}
+            </>
+          ) : undefined}
           call={{
             ...(callTool === "chat" ? { chat: true } : {}),
             ...(callTool === "will" ? { will: true } : {}),
@@ -823,7 +845,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
             pointSent.current = { target, at: Date.now() };
           }}
           chatTrailing={
-            suspect.visible ? (
+            !playtest && suspect.visible ? (
               <SuspectButton
                 mode={suspect.mode}
                 used={suspect.used}

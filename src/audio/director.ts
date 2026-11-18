@@ -256,6 +256,9 @@ function onPhaseChange(prev: AudioView, cur: AudioView, local: LocalClock, out: 
 
 /** 같은 단계 안의 변화 */
 function inPhase(prev: AudioView, cur: AudioView, local: LocalClock, out: DirectOutput): void {
+  if (cur.phase === "discussion" && cur.dayN === prev.dayN && cur.suspectMarks.some((mark) => !prev.suspectMarks.includes(mark))) {
+    out.now.push({ id: "suspect.mark" });
+  }
   if (cur.phase === "lobby" && cur.players.length > prev.players.length) {
     if (local.lastJoinAt === null || local.now - local.lastJoinAt >= JOIN_GAP_MS) out.now.push({ id: "lobby.join" });
   }

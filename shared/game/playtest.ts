@@ -22,6 +22,13 @@ export function voteOpensAt(state: RoomState): number | undefined {
   return state.phaseEndsAt - PLAYTEST_DISCUSSION_MS + PLAYTEST_DISCUSSION_MIN_MS;
 }
 
+export function keywordReadUntil(state: RoomState): number | undefined {
+  if (!firstPlaytestDay(state) || state.phase !== "keyword" || state.phaseEndsAt === null) return undefined;
+  const from = state.earlyFrom;
+  const originalEnd = from?.phase === "keyword" && from.day === (state.day ?? 0) ? from.endsAt : state.phaseEndsAt;
+  return originalEnd - PLAYTEST_KEYWORD_MS + KEYWORD_READ_MS;
+}
+
 export function humanSeats(state: RoomState): Player[] {
   return state.players.filter((p) => isAlive(p) && p.isBot !== true && p.left !== true);
 }

@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { endCountOf, endReached, phaseDurationOf, toggleEnd } from "../../shared/game/discussion";
 import { shrinkDeadline } from "../../shared/game/early";
-import { pickTarget } from "../../shared/game/night";
-import { allRolesReady, castFirstBallot, confirmRole, voteOpensAt } from "../../shared/game/playtest";
+import { layoutKey } from "../../shared/game/gather";
+import { canMoveIn } from "../../shared/game/movement";
+import { completeNight, pickTarget } from "../../shared/game/night";
+import { allRolesReady, castFirstBallot, confirmRole, keywordReadUntil, voteOpensAt } from "../../shared/game/playtest";
 import type { PhaseId } from "../../shared/protocol";
 import { createRoomState, type RoomState } from "../../shared/game/room";
 import { resetToLobby } from "../../shared/game/testTools";
-import { tick } from "../../shared/game/tick";
+import { nextWakeAt, tick } from "../../shared/game/tick";
 import { castVerdict } from "../../shared/game/verdict";
 import { buildView } from "../../shared/game/view";
 
@@ -54,15 +56,26 @@ describe("로컬 첫날 실험 규칙", () => {
     expect(timedOut.phaseEndsAt).toBe(288_000);
   });
 
-  it("공개 키워드 마감과 첫 아침 읽기 여유, 45초 이후 토론 마감 요청을 적용한다", () => {
+  it("키워드 읽기와 마지막 답 뒤 유예, 첫 아침 읽기 시간을 보장한다", () => {
     const keyword = room("keyword");
-    keyword.answerSubmits = keyword.players.map(({ seat }) => ({ seat, text: "한 줄" }));
-    expect(shrinkDeadline(keyword, 160_000, { extend: false })).toBe(keyword);
+    expect(keywordReadUntil(keyword)).toBe(170_000);
+    keyword.answerSubmits = keyword.players.slice(0, 3).map(({ seat }) => ({ seat, text: "한 줄" }));
+    expect(shrinkDeadline(keyword, 173_000, { extend: false })).toBe(keyword);
+    const allAnswered = { ...keyword, answerSubmits: [...keyword.answerSubmits, { seat: 3, text: "둘째 답" }] };
+    const shortened = shrinkDeadline(allAnswered, 173_000, { extend: false });
+    expect(shortened.phaseEndsAt).toBe(174_500);
+    expect(keywordReadUntil(shortened)).toBe(170_000);
+    expect(tick(shortened, 174_499)).toBe(shortened);
+    expect(tick(shortened, 174_500).phase).toBe("dayAnnounce");
     expect(phaseDurationOf(keyword)).toBe(33_000);
+    expect(phaseDurationOf(room("morning"))).toBe(8_000);
+  });
+
+  it("투표로 넘기는 데 45초까지 전원, 이후 과반을 요구하고 봇은 제외한다", () => {
     const discussion = room("discussion");
     discussion.players[3] = { ...discussion.players[3]!, isBot: true, endVote: true };
     expect(voteOpensAt(discussion)).toBe(125_000);
-    expect(buildView(discussion, "p0", 100_000).day).toMatchObject({ endCount: 0, voteOpensAt: 125_000, voteReadyRequired: 2 });
+    expect(buildView(discussion, "p0", 100_000).day).toMatchObject({ endCount: 0, voteOpensAt: 125_000, voteReadyRequired: 2, voteReadyTotal: 3 });
     let ended = discussion;
     for (const actor of ["p0", "p1"]) {
       const next = toggleEnd(ended, actor, true);
@@ -70,8 +83,26 @@ describe("로컬 첫날 실험 규칙", () => {
       ended = next.state;
     }
     expect(endCountOf(ended)).toBe(2);
-    expect(endReached(ended)).toBe(true);
-    expect(phaseDurationOf(room("morning"))).toBe(8_000);
+    expect(nextWakeAt(ended)).toBe(125_000);
+    expect(endReached(ended, 124_999)).toBe(false);
+    expect(endReached(ended, 125_000)).toBe(true);
+    const last = toggleEnd(ended, "p2", true);
+    if (!last.ok) throw new Error(last.error);
+    expect(endReached(last.state, 124_999)).toBe(true);
+    expect(toggleEnd(ended, "p3", true)).toEqual({ ok: false, error: "BAD_MESSAGE" });
+  });
+
+  it.each([
+    ["roleReveal", "1:role"],
+    ["verdict", "1:firstBallot"],
+    ["defense", "1:stage"],
+    ["execution", "1:exec"],
+    ["dayAnnounce", null],
+    ["discussion", null],
+    ["night", null],
+  ] as const)("실험방 %s 배치 및 이동 권한이 일치한다", (phase, key) => {
+    expect(layoutKey(room(phase))).toBe(key);
+    expect(canMoveIn(phase, true)).toBe(phase === "dayAnnounce" || phase === "discussion");
   });
 
   it("개인 표와 자기·탈락자의 투표를 차단하고 마감 뒤 집계만 공개한다", () => {
@@ -96,6 +127,18 @@ describe("로컬 첫날 실험 규칙", () => {
     expect(tick(defense, defense.phaseEndsAt!).players[2]?.alive).toBe(false);
   });
 
+  it("마지막 첫 투표 뒤 1.5초, 결과 공개 뒤 7초를 남긴다", () => {
+    const partial = ballot(ballot(ballot(room(), 0, null), 1, null), 2, null);
+    expect(shrinkDeadline(partial, 180_000, { extend: false })).toBe(partial);
+    const voted = shrinkDeadline(ballot(partial, 3, null), 180_000, { extend: false });
+    expect(voted.phaseEndsAt).toBe(181_500);
+    const revised = ballot(voted, 0, 1);
+    expect(shrinkDeadline(revised, 181_000, { extend: false })).toBe(revised);
+    const result = tick(revised, 181_500);
+    expect(result.phaseEndsAt).toBe(188_500);
+    expect(shrinkDeadline(result, 182_000, { extend: false })).toBe(result);
+  });
+
   it.each([
     { targets: [null, null, 1] as const, reason: "held" },
     { targets: [1, 2] as const, reason: "tie" },
@@ -112,17 +155,31 @@ describe("로컬 첫날 실험 규칙", () => {
     expect(answer.players.every((p) => p.alive !== false)).toBe(true);
   });
 
-  it("같은 밤 마감과 기존 둘째 날 투표를 사용하고 실험 모드는 방에 남긴다", () => {
+  it("시민의 완료는 본인에게만 보이고 전원이 행동한 뒤 밤 마감이 함께 바뀐다", () => {
     let night = room("night");
     expect(pickTarget(night, "p2", 1)).toEqual({ ok: false, error: "BAD_MESSAGE" });
+    expect(completeNight(night, "p0")).toEqual({ ok: false, error: "BAD_MESSAGE" });
+    expect(completeNight({ ...night, phase: "discussion" }, "p2")).toEqual({ ok: false, error: "WRONG_PHASE" });
     for (const [id, target] of [["p0", 1], ["p1", 3]] as const) {
       const picked = pickTarget(night, id, target);
       if (!picked.ok) throw new Error(picked.error);
       night = picked.state;
     }
-    expect(shrinkDeadline(night, 171_000, { extend: false })).toBe(night);
-    expect(buildView(night, "p2", 185_000).phaseEndsAt).toBe(200_000);
-    expect(buildView(night, "p2", 185_000).me).not.toHaveProperty("pick");
+    const privateDone = completeNight(night, "p2");
+    if (!privateDone.ok) throw new Error(privateDone.error);
+    expect(shrinkDeadline(privateDone.state, 171_000, { extend: false })).toBe(privateDone.state);
+    expect(completeNight(privateDone.state, "p2")).toEqual(privateDone);
+    const civilian = buildView(privateDone.state, "p2", 171_000);
+    expect(civilian).toMatchObject({ phaseEndsAt: 200_000, me: { nightDone: true } });
+    expect(civilian.me).not.toHaveProperty("pick");
+    for (const id of ["p0", "p1", "p3"]) {
+      expect(JSON.stringify(buildView(privateDone.state, id, 171_000))).not.toContain("nightDone");
+    }
+    const last = completeNight(privateDone.state, "p3");
+    if (!last.ok) throw new Error(last.error);
+    const shortened = shrinkDeadline(last.state, 172_000, { extend: false });
+    expect(shortened.phaseEndsAt).toBe(173_500);
+    expect(tick(shortened, 173_500).players.every((p) => !Object.hasOwn(p, "nightDone"))).toBe(true);
     const morning = tick(night, 200_000);
     expect(morning.morning?.eliminated).toBe(3);
     const second = tick(morning, 210_000);
@@ -135,6 +192,7 @@ describe("로컬 첫날 실험 규칙", () => {
   it("일반 방에는 실험 프로토콜과 규칙이 적용되지 않는다", () => {
     const { playtest: _test, ...legacy } = room();
     expect(castFirstBallot(legacy, "p0", 1)).toEqual({ ok: false, error: "BAD_MESSAGE" });
+    expect(completeNight({ ...legacy, phase: "night" }, "p2")).toEqual({ ok: false, error: "BAD_MESSAGE" });
     expect(buildView(legacy, "p0", 190_000)).not.toHaveProperty("playtest");
     expect(buildView(legacy, "p0", 190_000).day?.verdictCount).toEqual({ yes: 0, no: 0 });
     expect(tick(legacy, 200_000).phase).toBe("answerReveal");

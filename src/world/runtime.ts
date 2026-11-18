@@ -13,7 +13,7 @@ import type { MapId } from "../../shared/protocol";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
-import { clampTarget, DEFAULT_TARGET, followStep, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, PAN_BOX, PX_PER_UNIT, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
+import { clampTarget, DEFAULT_TARGET, followStep, gatherGroupZoom, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, PAN_BOX, PX_PER_UNIT, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { figForSeat, GHOST_SCALE } from "./characterData";
 import type { OutfitId } from "./characterData";
 import { admitEmote, EMOTE_RENDER_MAX, emoteDurationMs } from "./emoteCap";
@@ -457,13 +457,15 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     emitEmotes();
   }
   /** 동작 하나를 재생 목록에 넣고 재생한다(서버 프레임·화면 연출 공통). 넣었으면 true */
-  function startEmote(seat: number, id: EmoteId): boolean {
+  function startEmote(seat: number, id: EmoteId, target?: number): boolean {
     const a = actors.get(seat);
     if (a === undefined || a.exit !== null) return false;
     const now = Date.now();
     // 상한: 새 동작은 항상 재생하고, 넘치면 가장 먼저 시작한 것을 부드럽게 끝낸다(D-13). 순서는 도착 순서다
     const reduced = deps.reducedMotion();
-    const admitted = admitEmote(emotePlaying, { seat, until: now + emoteDurationMs(id, reduced) }, now, EMOTE_RENDER_MAX);
+    const incoming = { seat, until: now + emoteDurationMs(id, reduced) };
+    const directed = id === "point" && target !== undefined ? { ...incoming, target } : incoming;
+    const admitted = admitEmote(emotePlaying, directed, now, EMOTE_RENDER_MAX);
     for (const stop of admitted.stopSeats) stopHandleEmote(stop);
     emotePlaying = admitted.playing;
     (a.handle as PlayableCharacter).playEmote?.(id, { reduced }); // 모션 줄이기에서도 다른 사람의 동작은 정보라 재생한다(O-5)
@@ -471,7 +473,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   }
   const offEmote = store.onEmote((f) => {
     if (disposed) return;
-    if (!startEmote(f.seat, f.id)) return;
+    if (!startEmote(f.seat, f.id, f.target)) return;
     lastEmote = { seat: f.seat, id: f.id, n: f.n };
     emitEmotes();
   });
@@ -1179,9 +1181,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       } else {
         const target = eff === undefined ? null : travelYaw(eff, segNow);
         if (target !== null) a.yawGoal = target;
-        else if (pointAt !== undefined) {
+        else {
           // 서 있는 채 가리킨다: 대상 쪽을 본다(걷는 중에는 걷는 방향이 먼저)
-          const tp = actors.get(pointAt)?.pos;
+          const aim = pointAt ?? emotePlaying.find((p) => p.seat === a.seat && p.until > now)?.target;
+          const tp = aim === undefined ? undefined : actors.get(aim)?.pos;
           if (tp !== undefined && (tp.x !== at.x || tp.z !== at.z)) a.yawGoal = Math.atan2(tp.x - at.x, tp.z - at.z);
         }
         if (a.yawGoal !== null) {
@@ -1249,8 +1252,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     if (camLook !== undefined && camLook.mode === "fixed") {
       // zoomMs 가 있는 구도(판결 순간 느린 확대, 09.1.1-13): 위치·세로 오프셋·줌이 모두 그 시간에 ease-in-out 으로 같이 간다. 모션 줄이기는 줌 없이 1 을 지킨다
       const slow = camLook.zoomMs !== undefined;
-      const goalZoom = slow && reduced ? 1 : camLook.zoom;
-      const g = gatherView(rect, { w: s.w, h: s.h }, { ghost: look?.seats[deps.mySeat()]?.ghost === true, zoom: goalZoom });
+      const goalZoom = camLook.frameGroup ? gatherGroupZoom(rect, s, camLook.zoom) : slow && reduced ? 1 : camLook.zoom;
+      const g = gatherView(rect, s, { ghost: look?.seats[deps.mySeat()]?.ghost === true, zoom: goalZoom, frameGroup: camLook.frameGroup === true });
       offsetGoal = g.offsetY;
       if (fixed === null || fixed.zoom !== goalZoom) {
         const here = cam ?? DEFAULT_TARGET;

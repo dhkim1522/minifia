@@ -21,7 +21,8 @@ export const NOTE_MAX_VISIBLE = 3;
 export const SUSPECT_MIN_GAP_MS = 600;
 
 /** 이 단계·일차에 붙일 수 있는가. 서버 stickNote 와 화면 suspectVisible 이 같은 함수를 쓴다(D-22). */
-export const noteAllowedNow = (phase: PhaseId, day: number | undefined): boolean => NOTE_PHASES.has(phase) && (day ?? 1) >= NOTE_FIRST_DAY;
+export const noteAllowedNow = (phase: PhaseId, day: number | undefined, playtest?: boolean): boolean =>
+  NOTE_PHASES.has(phase) && (playtest === true || (day ?? 1) >= NOTE_FIRST_DAY);
 
 /**
  * 두 구간의 시각 now 위치가 붙일 거리 안인가. 정수 제곱 비교라 삼각함수·제곱근이 없고 서버와 폰이 같은 값을 얻는다.
@@ -54,7 +55,7 @@ const REJECT: StickResult = { ok: false, error: "BAD_MESSAGE" };
  * 결과는 { ...state, notes } 하나만 바꾼다. 연결이 끊긴 대상·봇에게도 붙는다(D-05).
  */
 export function stickNote(state: RoomState, world: Pick<WorldState, "segs">, actorId: string, toSeat: number, now: number): StickResult {
-  if (!noteAllowedNow(state.phase, state.day)) return REJECT;
+  if (!noteAllowedNow(state.phase, state.day, state.playtest)) return REJECT;
   const actor = state.players.find((p) => p.id === actorId);
   if (!actor || !isAlive(actor)) return REJECT;
   if (!Number.isInteger(toSeat)) return REJECT;

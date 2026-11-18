@@ -280,7 +280,7 @@ describe("mount — 지연 로드 본체 (D-19)", () => {
 // ───────────────────────── Task 2: 데이터·한 화면 전체·전부 계산 ─────────────────────────
 
 describe("LAB_GROUPS·SOUND_NAMES — 묶음과 한글 이름 (E)", () => {
-  it("효과음 47개를 일곱 묶음으로 나누고 합집합이 SFX_IDS 전부(중복·누락 0)", () => {
+  it("효과음 48개를 일곱 묶음으로 나누고 합집합이 SFX_IDS 전부(중복·누락 0)", () => {
     expect(LAB_GROUPS).toHaveLength(7);
     const all = LAB_GROUPS.flatMap((g) => [...g.ids]);
     expect(all).toHaveLength(SFX_IDS.length);
@@ -298,7 +298,7 @@ describe("LAB_GROUPS·SOUND_NAMES — 묶음과 한글 이름 (E)", () => {
     expect(LAB_GROUPS.flatMap((g) => [...g.ids]).filter((id) => id === "ui.host")).toHaveLength(1);
     expect(SOUND_NAMES["ui.host"]).toBe("사회자 알림");
   });
-  it("54개 모두 한글 이름이 있고 한 줄이다", () => {
+  it("55개 모두 한글 이름이 있고 한 줄이다", () => {
     expect(Object.keys(SOUND_NAMES).sort()).toEqual([...SOUND_IDS].sort());
     for (const id of SOUND_IDS) {
       const n = SOUND_NAMES[id];
@@ -307,8 +307,8 @@ describe("LAB_GROUPS·SOUND_NAMES — 묶음과 한글 이름 (E)", () => {
       expect(n.length, id).toBeLessThanOrEqual(16);
     }
   });
-  it("SOUND_LIMITS 는 54·−3·−60·50", () => {
-    expect({ ...SOUND_LIMITS }).toEqual({ count: 54, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
+  it("SOUND_LIMITS 는 55·−3·−60·50", () => {
+    expect({ ...SOUND_LIMITS }).toEqual({ count: 55, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
   });
 });
 
@@ -345,10 +345,10 @@ describe("mount — 한 화면 전체 (E)", () => {
   }
   const hookOf = () => (window as unknown as { __mfSoundLab: LabHook }).__mfSoundLab;
 
-  it("[data-sound-id] 단추가 정확히 54개(침대 7 + 효과음 47)이고 id 가 SOUND_IDS 와 같다", () => {
+  it("[data-sound-id] 단추가 정확히 55개(침대 7 + 효과음 48)이고 id 가 SOUND_IDS 와 같다", () => {
     const { qa } = open();
     const ids = qa("[data-sound-id]").map((b) => b.getAttribute("data-sound-id"));
-    expect(ids).toHaveLength(54);
+    expect(ids).toHaveLength(55);
     expect([...ids].sort()).toEqual([...SOUND_IDS].sort());
   });
 
@@ -500,7 +500,7 @@ describe("mount — 한 화면 전체 (E)", () => {
     expect(rig.engine.activeNodes()).toBeGreaterThan(0);
   });
 
-  it("[전부 계산]: 54개를 한 번에 하나씩 순차로 렌더하고 훅이 done 이 된다", async () => {
+  it("[전부 계산]: 55개를 한 번에 하나씩 순차로 렌더하고 훅이 done 이 된다", async () => {
     let inflight = 0;
     let maxInflight = 0;
     let n = 0;
@@ -526,7 +526,7 @@ describe("mount — 한 화면 전체 (E)", () => {
     await handle.idle();
     const hook = hookOf();
     expect(hook.done).toBe(true);
-    expect(n).toBe(54);
+    expect(n).toBe(55);
     expect(maxInflight).toBe(1);
     expect(hook.results.map((r) => r.id)).toEqual([...SOUND_IDS]);
     for (const r of hook.results) {
@@ -538,6 +538,6 @@ describe("mount — 한 화면 전체 (E)", () => {
     // 다시 누르면 새로 68 개(이전 결과를 덮어쓴다)
     q("[data-sound-calc-all]")!.click();
     await handle.idle();
-    expect(hookOf().results).toHaveLength(54);
+    expect(hookOf().results).toHaveLength(55);
   });
 });

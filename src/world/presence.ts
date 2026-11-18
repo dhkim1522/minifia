@@ -18,7 +18,7 @@ import { pinOf, type PinDesc } from "./pinPlan";
 export type LightingStage = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
 
 /** 따라가기 = 내 캐릭터(6페이즈 규칙), 고정 = 모이는 자리 가운데에서 움직이지 않음(zoom 은 과반 연출) */
-export type CameraMode = { mode: "follow" } | { mode: "fixed"; target: { x: number; z: number }; zoom: number; zoomMs?: number };
+export type CameraMode = { mode: "follow" } | { mode: "fixed"; target: { x: number; z: number }; zoom: number; zoomMs?: number; frameGroup?: true };
 
 /** 긴장 단계: 0 평상시, 1 선두·찬반(초점에 점광), 2 과반(실내등 절반) */
 export interface Tension {
@@ -109,8 +109,11 @@ const FIXED_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["nomination", "runo
  * 순차 지목은 득표가 과반이어도 확대하지 않는다(M-4). 동시 투표의 과반 확대는 22-10 에서 지웠다(D-12).
  */
 export function cameraModeOf(view: RoomView, stageH: number, opts: { verdictZoom?: number } = {}): CameraMode {
-  if (!FIXED_PHASES.has(view.phase)) return { mode: "follow" };
   const target = { x: GATHER_CENTER.x, z: GATHER_CENTER.z };
+  if (view.playtest === true && view.phase === "verdict" && view.day?.firstBallot !== undefined) {
+    return { mode: "fixed", target, zoom: 0.82, frameGroup: true };
+  }
+  if (!FIXED_PHASES.has(view.phase)) return { mode: "follow" };
   // 판결 순간(09.1.1-13, O-15): 처형 단계에서 호출 쪽이 배율을 주면 0.6초 ease-in-out 으로 다가갔다 돌아온다. 스테이지가 낮으면(360 미만) 줌 없이 핀 조명과 막만 한다. 역할은 보지 않는다
   if (view.phase === "execution" && opts.verdictZoom !== undefined && stageH >= ZOOM_MIN_STAGE_H) return { mode: "fixed", target, zoom: opts.verdictZoom, zoomMs: ZOOM_IN_MS };
   return { mode: "fixed", target, zoom: 1 };

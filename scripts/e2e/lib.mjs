@@ -2178,7 +2178,7 @@ export const SOUND_MARKERS = Object.freeze([
  * 오프라인 렌더 합격 문턱 (D-18). 낮추지 않는다: 실패하면 레시피를 고친다(T-12-22).
  * count 는 SOUND_IDS.length, 나머지는 src/debug/soundLabData.ts 의 SOUND_LIMITS 와 같아야 하고 e2eContract 시험이 대조한다.
  */
-export const SOUND_RENDER_LIMITS = Object.freeze({ count: 54, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
+export const SOUND_RENDER_LIMITS = Object.freeze({ count: 55, peakMaxDb: -3, rmsMinDb: -60, lengthTolMs: 50 });
 
 /**
  * sound-render: 시험 페이지 [전부 계산] 결과(window.__mfSoundLab.results)를 판정한다.

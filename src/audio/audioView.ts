@@ -1,6 +1,6 @@
 // 12-08: 소리 감독의 입력 — 방 화면이 이미 쓰는 공개 view 에서 허용 필드만 고른다 (D-3, LS-6, T-12-27).
 // 이 파일만 RoomView 를 읽는다. 읽는 경로는 test/unit/soundStaticGuard.test.ts 의 허용 목록이 고정한다:
-//   view.phase · view.phaseEndsAt · view.day.{n, turn, points, candidate, morning, execution, runoff, showdown} · view.players · view.me.seat
+//   view.phase · view.phaseEndsAt · view.day.{n, turn, points, candidate, morning, execution, runoff, showdown, suspects} · view.players · view.me.seat
 // 이후 계획(09·10·11)이 필요한 공개 필드를 여기와 허용 목록에 함께 더한다. 역할·선택·기록·관전·본문 필드는 읽지 않는다.
 import type { PhaseId, PointLine, RoomView } from "../../shared/protocol";
 
@@ -44,12 +44,14 @@ export interface AudioView {
   hasExecution: boolean;
   runoff: AudioRunoff | null;
   showdown: AudioShowdown | null;
+  /** 현재 공개 의심표의 붙인 좌석·대상 좌석 쌍. 새로 붙은 표인지 비교할 때만 쓴다. */
+  suspectMarks: string[];
   players: { seat: number; alive: boolean }[];
   mySeat: number;
 }
 
 /** AudioView 의 키 목록. 시험이 audioViewOf 출력의 키가 이 안에 있음을 단언한다 */
-export const AUDIO_VIEW_FIELDS = ["phase", "endsAt", "dayN", "turn", "points", "candidate", "morning", "hasExecution", "runoff", "showdown", "players", "mySeat"] as const;
+export const AUDIO_VIEW_FIELDS = ["phase", "endsAt", "dayN", "turn", "points", "candidate", "morning", "hasExecution", "runoff", "showdown", "suspectMarks", "players", "mySeat"] as const;
 
 export function audioViewOf(view: RoomView): AudioView {
   const t = view.day?.turn;
@@ -78,6 +80,7 @@ export function audioViewOf(view: RoomView): AudioView {
     hasExecution: view.day?.execution !== undefined,
     runoff: ro === undefined ? null : { step: ro.step },
     showdown: sd === undefined ? null : { order: [...sd.order], i: sd.i },
+    suspectMarks: view.day?.suspects?.map(({ from, to }) => `${from}:${to}`) ?? [],
     players: view.players.map((p) => ({ seat: p.seat, alive: p.alive !== false })),
     mySeat: view.me.seat,
   };

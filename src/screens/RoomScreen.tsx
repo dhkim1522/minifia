@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { isAlive } from "../../shared/game/alive";
+import { MAP_PHASES } from "../../shared/game/movement";
 import { phaseKey } from "../../shared/game/audience";
 import type { PhaseId, RemovedReason, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
@@ -385,6 +386,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 화면들이 받는 prop 이름은 myRoleButton 그대로다.
   const myRoleButton = <RoleCardButton unread={unread > 0} onOpen={() => setRoleCard({ open: true, tab: "role" })} />;
   const reducedControls = shown?.playtest === true && shown.phase !== "lobby" && shown.phase !== "ended";
+  const playtestHeader = shown?.playtest === true && (MAP_PHASES.has(shown.phase) || shown.phase === "roleReveal" || shown.phase === "keyword");
   const playtestMenu = <Button variant="text" className="mf-playtest__menu-button" data-playtest-menu="" onClick={() => setPlaytestSheet("menu")}>메뉴</Button>;
 
   // 위쪽 바처럼 장면에 빈 왼쪽 위가 없는 단계(역할 확인)에서는 [테스트] 가 [역할 카드] 왼쪽 같은 칸에 놓인다.
@@ -402,7 +404,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   return (
     <div ref={roomRef} className="mf-root mf-room" data-first-round-playtest={reducedControls ? "" : undefined}>
       {view && banner !== "hidden" && <ReconnectBanner mode={banner} floating={shown?.phase === "lobby"} />}
-      {shown && !shown.resting && status !== "replaced" && status !== "failed" ? (
+      {playtestHeader ? null : shown && !shown.resting && status !== "replaced" && status !== "failed" ? (
         <HostBand view={shown} offset={connection.offset} cardSeen={seenFront} sound={sound.supported && (shown.playtest !== true || shown.phase === "ended") ? sound : null} epoch={connection.epoch} />
       ) : view && sound.supported ? (
         // 쉬는 사람·안내 화면에는 띠가 없다(T-14-04). 소리 단추만 옛 자리의 독으로 둔다

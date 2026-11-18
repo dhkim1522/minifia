@@ -1,9 +1,9 @@
 // 일찍 넘어가기 순수 규칙(23페이즈, 결정 0089-26·D-11·D-12·D-25). 현재 시각을 스스로 읽지 않고(now 는 인자) 입력 상태를 바꾸지 않는다.
 //
-// 개인 행동 단계 셋 — 키워드·찬반·밤 — 은 산 사람 전원이 끝내면 마감을 "지금 + 1.5초" 로 줄인다(원래 마감을 넘지 않는다).
+// 키워드·투표·밤의 개인 행동이 모두 끝나면 마감을 "지금 + 1.5초" 로 줄인다(원래 마감을 넘지 않는다).
 //  - 키워드: 산 사람 중 사람 전원이 확정 제출(봇은 대상 아님 — 봇은 답을 내지 않는다).
 //  - 찬반: 산 사람 전원이 투표. 번복이 들어오면 다시 지금 + 1.5초(상한은 원래 마감, D-25).
-//  - 밤: 산 사람 전원이 nightPick 을 가짐. 처음 한 번만 줄이고 연장하지 않는다 — 밤 선택은 본인에게만 가는 정보라 연장 방송이 새 신호가 된다(D-25).
+//  - 밤: 능력 사용과 실험방 시민의 밤 마치기를 센다. 처음 한 번만 줄이고 연장하지 않는다 — 연장 방송은 밤 행동에 대해 새 신호가 된다(D-25).
 // 연결이 끊긴 사람은 고르지 않으므로 조건이 참이 되지 않아 그 판은 정해진 시간을 다 쓴다(D-12, 연결 여부는 보지 않는다).
 // 토론(과반 끝내기)·유언([남기기])·연출 단계(처형·아침·정답 공개)·낮 시작은 여기서 넘기지 않는다 — earlyReady 가 늘 거짓이다.
 //
@@ -20,9 +20,7 @@ export const EARLY_GRACE_MS = 1_500;
 
 /** 지금 단계의 "개인 행동"이 산 사람 전원 끝났는가. 연결 여부는 보지 않는다 — 끊긴 사람은 고르지 않으니 자연히 거짓이다(D-12). */
 export function earlyReady(state: RoomState): boolean {
-  if (state.playtest === true && state.phase === "night") return false;
-  if (firstPlaytestDay(state) && (state.phase === "keyword" || state.phase === "verdict")) return false;
-  const alive = state.players.filter(isAlive);
+  const alive = state.players.filter((p) => isAlive(p) && (state.playtest !== true || p.left !== true));
   switch (state.phase) {
     case "keyword": {
       const humans = alive.filter((p) => !isBot(p));
@@ -31,8 +29,16 @@ export function earlyReady(state: RoomState): boolean {
       return humans.every((p) => submits.some((s) => s.seat === p.seat));
     }
     case "verdict":
+      if (firstPlaytestDay(state)) {
+        return state.firstBallotOutcome === undefined && alive.length > 0 && alive.every((p) => p.firstBallot !== undefined);
+      }
       return alive.length > 0 && alive.every((p) => p.verdictVote !== undefined);
     case "night":
+      if (state.playtest === true) {
+        return alive.length > 0 && alive.every((p) => p.role === "citizen"
+          ? p.nightDone === true || isBot(p)
+          : p.nightPick !== undefined);
+      }
       return alive.length > 0 && alive.every((p) => p.nightPick !== undefined);
     default:
       return false;

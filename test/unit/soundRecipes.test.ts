@@ -147,11 +147,11 @@ describe("소리 레시피 — 트레이서 (D-1, D-18)", () => {
   });
 });
 
-// ───────────────────────── Task 2: 54개 전수 ─────────────────────────
+// ───────────────────────── Task 2: 55개 전수 ─────────────────────────
 
 const EXPECTED_BEDS = ["bed.lobby", "bed.reveal", "bed.day", "bed.vote", "bed.night", "bed.dawn", "bed.result"];
 const EXPECTED_SFX = [
-  "ui.tap", "ui.toggle", "ui.deny", "ui.card", "ui.host", "lobby.join", "game.start", "role.flip", "day.start", "timer.tick",
+  "ui.tap", "ui.toggle", "ui.deny", "ui.card", "ui.host", "lobby.join", "game.start", "role.flip", "day.start", "timer.tick", "suspect.mark",
   "phase.vote", "pin.on", "pin.move", "pick.turn", "pick.tick", "pick.point", "pick.skip", "runoff.intro",
   "runoff.reveal", "showdown.reveal", "vote.cast", "verdict.heart", "execution.gavel",
   "execution.rise", "verdict.reject", "night.fall", "night.cue", "kill.slash", "morning.dawn", "morning.calm",
@@ -162,10 +162,10 @@ const EXPECTED_SFX = [
 ];
 const PRIO0 = ["verdict.heart", "execution.gavel", "kill.slash", "result.win", "result.lose"];
 
-describe("소리 레시피 — 54개 전수 (D-1, D-16, D-17)", () => {
-  it("SOUND_IDS 는 54개(침대 7 + 효과음 47)이고 중복이 없으며 목록이 같다", () => {
-    expect(SOUND_IDS).toHaveLength(54);
-    expect(new Set(SOUND_IDS).size).toBe(54);
+describe("소리 레시피 — 55개 전수 (D-1, D-16, D-17)", () => {
+  it("SOUND_IDS 는 55개(침대 7 + 효과음 48)이고 중복이 없으며 목록이 같다", () => {
+    expect(SOUND_IDS).toHaveLength(55);
+    expect(new Set(SOUND_IDS).size).toBe(55);
     expect([...BED_IDS]).toEqual(EXPECTED_BEDS);
     expect([...SFX_IDS]).toEqual(EXPECTED_SFX);
   });
@@ -211,9 +211,9 @@ describe("소리 레시피 — 54개 전수 (D-1, D-16, D-17)", () => {
     expect(planHash(renderPlan(id))).toBe(planHash(plan));
   });
 
-  it("효과음 47개는 서로 다른 해시다(같은 소리 복사 금지)", () => {
+  it("효과음 48개는 서로 다른 해시다(같은 소리 복사 금지)", () => {
     const hashes = SFX_IDS.map((id) => planHash(renderPlan(id)));
-    expect(new Set(hashes).size).toBe(47);
+    expect(new Set(hashes).size).toBe(48);
   });
 
   it.each(BED_IDS)("%s: 발진기 ≤ 6 + 소음 1, 노드·레벨 한계", (id) => {
@@ -244,12 +244,13 @@ describe("소리 레시피 — 54개 전수 (D-1, D-16, D-17)", () => {
     expect(RECIPES["execution.gavel"].duck).toEqual({ db: -12, holdMs: 1200 });
   });
 
-  it("같은 id 간격 규칙: timer.tick 800 · emote.* 250 · vote.cast 120 · ui.tap 80, 그 밖은 0, max 기본 2", () => {
+  it("반복되는 이벤트의 같은 id 재생 간격과 동시 음 개수 제한", () => {
     expect(RECIPES["timer.tick"].gapMs).toBe(800);
     expect(RECIPES["vote.cast"].gapMs).toBe(120);
     expect(RECIPES["ui.tap"].gapMs).toBe(80);
     for (const id of SFX_IDS.filter((x) => x.startsWith("emote."))) expect(RECIPES[id].gapMs).toBe(250);
-    const special = new Set(["timer.tick", "vote.cast", "ui.tap", "ui.host", ...SFX_IDS.filter((x) => x.startsWith("emote."))]);
+    expect(RECIPES["suspect.mark"].gapMs).toBe(160);
+    const special = new Set(["suspect.mark", "timer.tick", "vote.cast", "ui.tap", "ui.host", ...SFX_IDS.filter((x) => x.startsWith("emote."))]);
     for (const id of SFX_IDS) {
       if (!special.has(id)) expect(RECIPES[id].gapMs).toBe(0);
       expect(RECIPES[id].max).toBe(2);
@@ -298,22 +299,32 @@ describe("소리 레시피 — 54개 전수 (D-1, D-16, D-17)", () => {
     expect(mid).toEqual(long.filter((e) => e.t >= 4000));
   });
 
-  it("침대 음 고르기는 시드 고정 — bed.day 는 박마다 확률 0.3 으로 코드톤을 고른다", () => {
+  it("낮의 워킹 베이스는 네 박에 다른 음을 내고 건반은 스윙 엇박을 탄다", () => {
     const plan = bedPlan("bed.day", 0, 60000);
-    const triangleNotes = plan.filter((e) => e.kind === "osc" && e.dur === 900);
-    const beats = Math.floor(60000 / (60000 / BEDS["bed.day"].bpm));
-    expect(triangleNotes.length).toBeGreaterThan(beats * 0.15);
-    expect(triangleNotes.length).toBeLessThan(beats * 0.45);
-    expect(bedPlan("bed.vote", 0, 30000).some((e) => e.dur === 900)).toBe(false);
+    const bed = BEDS["bed.day"];
+    const beat = 60000 / bed.bpm;
+    const bass = plan.filter((e) => e.filter?.f[0] === 850 && e.t < beat * 4);
+    expect(bass.map((e) => e.t)).toEqual([0, beat, 2 * beat, 3 * beat]);
+    expect(new Set(bass.map((e) => e.f0)).size).toBe(4);
+    const keys = plan.filter((e) => e.filter?.f[0] === bed.notes?.cutoff);
+    expect(keys.length).toBeGreaterThan(20);
+    for (const e of keys) expect((e.t / beat) % 1).toBeCloseTo(bed.swing!);
+    const split = keys[0]!.t - 1; // 앞선 박에서 시작한 엇박도 다음 예약 구간에 같은 이벤트로 들어온다.
+    expect(bedPlan(bed, split, split + 2)).toContainEqual(keys[0]);
   });
 
-  it("침대 일부 규칙: lobby 브러시 2·4박, vote 는 브러시·피아노 없음, reveal 필터가 15초에 열린다", () => {
+  it("대기실의 브러시는 2·4박과 엇박에 있고 역할 확인의 필터는 15초에 열린다", () => {
     const lobby = bedPlan("bed.lobby", 0, 20000);
     const beat = 60000 / BEDS["bed.lobby"].bpm;
-    for (const e of lobby.filter((x) => x.kind === "noise" && x.dur === 30)) {
+    const brushes = lobby.filter((x) => x.kind === "noise" && x.dur === 82);
+    const ghosts = lobby.filter((x) => x.kind === "noise" && x.dur === 48);
+    expect(brushes.length).toBeGreaterThan(0);
+    expect(ghosts.length).toBeGreaterThan(0);
+    for (const e of brushes) {
       const n = Math.round(e.t / beat);
       expect([1, 3]).toContain(n % 4);
     }
+    for (const e of ghosts) expect((e.t / beat) % 1).toBeCloseTo(BEDS["bed.lobby"].swing!);
     expect(BEDS["bed.vote"].brush).toBeUndefined();
     expect(BEDS["bed.vote"].notes).toBeUndefined();
     const early = bedPlan("bed.reveal", 0, 4000).find((e) => e.filter !== undefined)!;
@@ -346,7 +357,7 @@ describe("소리 레시피 — 54개 전수 (D-1, D-16, D-17)", () => {
     expect(() => renderPlan("role.flip", { variant: "mafia" })).toThrow();
   });
 
-  it("화면 대응 표: 54개 모두 한 줄, ambient 는 침대 7개와 night.cue 뿐 (LS-1)", () => {
+  it("화면 대응 표: 55개 모두 한 줄, ambient 는 침대 7개와 night.cue 뿐 (LS-1)", () => {
     expect(Object.keys(SCREEN_COUNTERPART).sort()).toEqual([...SOUND_IDS].sort());
     for (const id of SOUND_IDS) {
       expect(SCREEN_COUNTERPART[id].trim()).not.toBe("");

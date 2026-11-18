@@ -871,10 +871,17 @@ function paint(m: Merged, dim: boolean): void {
 }
 
 /** 인물 번호에 맞는 모형을 만든다. 병합 재질은 모든 캐릭터가 공유한다. */
-export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): WorldCharacter {
+export function createCharacter(
+  figIndex: number,
+  outfit: OutfitId = "coat",
+  portraitColors?: Partial<Pick<Outfit, "coat" | "shirt" | "tie" | "pants" | "shoe">>,
+): WorldCharacter {
   const fig = FIGS[figIndex];
   const parts = figParts(figIndex);
   let outfitId: OutfitId = Object.hasOwn(OUTFITS, outfit) ? outfit : "coat";
+  const initialOutfit = outfitId;
+  // 에셋 렌더에서만 카드 팔레트를 덮는다. 공개 의상 표와 지오메트리 캐시는 공유 상태를 바꾸지 않는다.
+  const portraitOutfit = portraitColors === undefined ? undefined : { ...OUTFITS[initialOutfit], ...portraitColors };
   let face = "base";
   let lastPoseFace = "base";
   let dim = false;
@@ -936,7 +943,8 @@ export function createCharacter(figIndex: number, outfit: OutfitId = "coat"): Wo
     const key = j === "head" ? `${j}|${outfitId}|${faceId}` : `${j}|${outfitId}`;
     let m = cache.get(key);
     if (!m) {
-      m = mergeJoint(parts[j], OUTFITS[outfitId], fig, faceId);
+      const colors = (outfitId === initialOutfit ? portraitOutfit : undefined) ?? OUTFITS[outfitId];
+      m = mergeJoint(parts[j], colors, fig, faceId);
       owned.add(m.geo);
       if (dim) paint(m, true);
       cache.set(key, m);

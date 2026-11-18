@@ -4,6 +4,7 @@ import { CHAT_MAX_GRAPHEMES } from "../../../shared/game/chatRules";
 import { CHAT_TEXT } from "../../game/chatText";
 import { AUTO_SCROLL_SLOP_PX, DUP_SUBMIT_MS, IME_WAIT_MS, LOG_FADE_H, LOG_H, LOG_OPEN_MAX, OPEN_STAGE_MIN, TAIL_WINDOW_MS } from "../../game/chatUi";
 import type { DiscussionEvidence as Evidence, DiscussionEvidenceRow } from "../../game/discussionEvidence";
+import { appendEvidenceQuote } from "../../game/discussionEvidence";
 import type { EmoteId } from "../../../shared/protocol";
 import { EMOTE_TEXT } from "../../game/chatText";
 import { EmoteTray } from "./EmoteTray";
@@ -208,9 +209,8 @@ export function ChatPanel(props: ChatPanelProps) {
     const p = latest.current;
     const el = fieldRef.current;
     if (!el || !p.onSend || p.locked || text === null || composingRef.current || pendingRef.current !== null) return "busy";
-    const separator = el.value !== "" && !/\s$/.test(el.value) ? " " : "";
-    const quoted = `${el.value}${separator}${name} “${text}”`;
-    if (quoted.length > el.maxLength) return "full";
+    const quoted = appendEvidenceQuote(el.value, { name, text }, el.maxLength);
+    if (quoted === undefined) return "full";
     p.onChange(quoted);
     el.focus({ preventScroll: true });
     return "added";
@@ -280,7 +280,7 @@ export function ChatPanel(props: ChatPanelProps) {
 
   // Esc 는 입력을 비우지 않고 blur 만 한다. 보내기는 onSubmit 한 길이다.
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Escape") e.currentTarget.blur();
+    if (e.key === "Escape" && !e.nativeEvent.isComposing) e.currentTarget.blur();
   };
 
   // 동작 판 (10-05). 닫을 때 초점은 동작 버튼으로 돌아온다(바깥 누름으로 닫을 때만 빼고).

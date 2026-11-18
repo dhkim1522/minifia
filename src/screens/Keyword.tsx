@@ -4,6 +4,7 @@ import { ANSWER_MAX_GRAPHEMES } from "../../shared/game/answerRules";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
+import { PlaytestHeader } from "../components/v2/PlaytestHeader";
 import { V2Icon } from "../components/v2/V2Icon";
 import { DAY_COPY } from "../game/dayView";
 import { callTargetsOf } from "../game/hostLine";
@@ -116,7 +117,7 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
     <main ref={rootRef} className={rootCls} data-keyword-screen="" data-kb-open={kbOpen ? "true" : undefined}>
       <div className="mf-reveal__dim" aria-hidden="true" />
       <header className="mf-reveal__header">
-        <PhaseHeader title={playtest ? "첫 단서" : DAY_COPY.titles.keyword ?? ""} extra={myRoleButton} />
+        {playtest ? <PlaytestHeader title="첫 단서" view={view} offset={offset} extra={myRoleButton} timeless={timeless} /> : <PhaseHeader title={DAY_COPY.titles.keyword ?? ""} extra={myRoleButton} />}
       </header>
       <section className="mf-reveal__stage">
         <div className={cardCls} data-keyword-card="" data-compact={kbOpen ? "true" : undefined} role="group" aria-label={KEYWORD_COPY.cardName}>
@@ -172,6 +173,7 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
               spellCheck={false}
               aria-label={KEYWORD_COPY.inputName}
               aria-describedby={META_ID}
+              placeholder={playtest && !sent ? word === undefined ? "장르를 보고 단서를 써요" : "정답을 빼고 단서를 써요" : undefined}
               disabled={answer.state === "locked"}
               readOnly={sent || timeless}
               value={answer.value}

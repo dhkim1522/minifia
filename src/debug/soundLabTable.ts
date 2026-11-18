@@ -7,8 +7,8 @@ import type { SfxId, SoundId } from "../audio/recipes";
  * E2E 쪽 문턱(scripts/e2e/lib.mjs SOUND_RENDER_LIMITS)과 같아야 하고 e2eContract 시험이 대조한다.
  */
 export const SOUND_LIMITS = {
-  /** 소리 id 수: 침대 7 + 효과음 47 = 54 */
-  count: 54,
+  /** 소리 id 수: 침대 7 + 효과음 48 = 55 */
+  count: 55,
   peakMaxDb: -3,
   rmsMinDb: -60,
   /** 효과음 측정 길이와 선언 길이의 허용 차이(ms) */
@@ -21,13 +21,13 @@ export interface LabGroup {
   ids: readonly SfxId[];
 }
 
-/** 효과음 63개를 단계로 묶는다(UI-SPEC C-2 의 표 제목 순서). 합집합이 SFX_IDS 전부 — 시험이 확인한다 */
+/** 효과음을 단계로 묶는다(UI-SPEC C-2 의 표 제목 순서). 합집합이 SFX_IDS 전부 — 시험이 확인한다 */
 export const LAB_GROUPS: readonly LabGroup[] = [
   { key: "common", title: "공통·로비·역할", ids: ["ui.tap", "ui.toggle", "ui.deny", "ui.card", "ui.host", "lobby.join", "game.start", "role.flip"] },
   {
     key: "day",
     title: "낮·지목·변론",
-    ids: ["day.start", "timer.tick", "phase.vote", "pin.on", "pin.move", "pick.turn", "pick.tick", "pick.point", "pick.skip", "runoff.intro", "runoff.reveal", "showdown.reveal", "vote.cast"],
+    ids: ["day.start", "timer.tick", "suspect.mark", "phase.vote", "pin.on", "pin.move", "pick.turn", "pick.tick", "pick.point", "pick.skip", "runoff.intro", "runoff.reveal", "showdown.reveal", "vote.cast"],
   },
   { key: "verdict", title: "판결·처형", ids: ["verdict.heart", "execution.gavel", "execution.rise", "verdict.reject"] },
   { key: "night", title: "밤·아침", ids: ["night.fall", "night.cue", "kill.slash", "morning.dawn", "morning.calm", "chalk.draw", "morning.saved", "will.quill", "will.seal", "will.fold"] },
@@ -59,6 +59,7 @@ export const SOUND_NAMES: Readonly<Record<SoundId, string>> = {
   "role.flip": "직업 카드 공개",
   "day.start": "낮 시작 종",
   "timer.tick": "마지막 5초 틱",
+  "suspect.mark": "의심표 붙이기",
   "phase.vote": "지목 시작 노크",
   "pin.on": "핀 조명 켜짐",
   "pin.move": "핀 조명 이동",

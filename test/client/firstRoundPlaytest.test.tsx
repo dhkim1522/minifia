@@ -50,16 +50,18 @@ describe("첫날 실험방의 최소 조작", () => {
     expect(hostLineOf(confirmed)).toBe("다른 사람을 기다려요");
   });
 
-  it("토론 최소 시간이 지난 뒤 투표 진입 요청을 보낸다", () => {
+  it("토론을 시작하면 곧바로 투표를 요청하고 45초 뒤 과반으로 바뀐다", () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
-    const view = fixture({ day: { n: 1, roles, voteOpensAt: NOW + 45_000, voteReadyRequired: 2 } });
+    const view = fixture({ day: { n: 1, roles, voteOpensAt: NOW + 45_000, voteReadyTotal: 4, voteReadyRequired: 3 } });
     const send = vi.fn();
     render(<GamePanel view={view} send={send} binding={binding} logHeight={68} canSend />);
-    expect(screen.queryByRole("button", { name: /투표로 가기/ })).toBeNull();
-    act(() => { vi.advanceTimersByTime(45_000); });
-    fireEvent.click(screen.getByRole("button", { name: /투표로 가기/ }));
+    const vote = screen.getByRole("button", { name: /투표로 가기, 0\/4명 요청/ });
+    fireEvent.click(vote);
     expect(send).toHaveBeenCalledWith({ t: "endDiscussion", on: true });
+    act(() => { vi.advanceTimersByTime(45_000); });
+    expect(screen.getByRole("button", { name: /투표로 가기, 0\/3명 요청/ })).toBe(vote);
+    expect(vote.getAttribute("aria-pressed")).toBe("true");
   });
 
   it("대상과 보류를 같은 화면에서 보내고 서버 결과로 선택 목록을 바꾼다", () => {
@@ -87,5 +89,16 @@ describe("첫날 실험방의 최소 조작", () => {
     expect(screen.queryByRole("button", { name: "민준 고르기" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "지호 고르기" }));
     expect(send).toHaveBeenCalledWith({ t: "pick", target: 1 });
+  });
+
+  it.each(["night", "verdict"] as const)("%s 단계의 유령은 채팅을 직접 열고 닫는다", (phase) => {
+    const view = fixture({ phase, players: players.map((player) => player.seat === 0 ? { ...player, alive: false } : player) });
+    view.me.chat = "ghost";
+    render(<GamePanel view={view} send={vi.fn()} binding={{ ...binding, channel: "ghost" }} logHeight={68} canSend />);
+    expect(screen.queryByRole("textbox")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "채팅" }));
+    expect(screen.getByRole("textbox", { name: "유령 채팅 입력" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "채팅 닫기" }));
+    expect(screen.queryByRole("textbox")).toBeNull();
   });
 });

@@ -6,7 +6,7 @@
 import { isAlive } from "./alive";
 import { noExecutionOf } from "./execution";
 import { majorityOf, nominationStepMs } from "./nomination";
-import { firstPlaytestDay, humanSeats, PLAYTEST_BALLOT_MS, PLAYTEST_DISCUSSION_MS, PLAYTEST_KEYWORD_MS, PLAYTEST_MORNING_EXTRA_MS, PLAYTEST_RESULT_MS, PLAYTEST_ROLE_MS } from "./playtest";
+import { firstPlaytestDay, humanSeats, PLAYTEST_BALLOT_MS, PLAYTEST_DISCUSSION_MS, PLAYTEST_KEYWORD_MS, PLAYTEST_MORNING_EXTRA_MS, PLAYTEST_RESULT_MS, PLAYTEST_ROLE_MS, voteOpensAt } from "./playtest";
 import { runoffStepMs } from "./runoff";
 import { showdownStepMs } from "./showdown";
 import { ANSWER_REVEAL_MS, MORNING_MAX_MS, MORNING_MS, MORNING_NOTE_MS, MORNING_VICTIM_MS, MORNING_WILL_MS, NO_EXECUTION_MS, PHASE_DEFS } from "./phases";
@@ -64,7 +64,7 @@ export function toggleEnd(
 ): { ok: true; state: RoomState } | { ok: false; error: VoteError } {
   if (state.phase !== "discussion") return { ok: false, error: "WRONG_PHASE" };
   const actor = state.players.find((p) => p.id === actorId);
-  if (!actor || !isAlive(actor)) return { ok: false, error: "BAD_MESSAGE" };
+  if (!actor || !isAlive(actor) || (firstPlaytestDay(state) && (actor.isBot === true || actor.left === true))) return { ok: false, error: "BAD_MESSAGE" };
   if (typeof on !== "boolean") return { ok: false, error: "BAD_MESSAGE" };
   if ((actor.endVote === true) === on) return { ok: true, state };
   return {
@@ -87,9 +87,20 @@ export function endCountOf(state: RoomState): number {
   return voters.filter((p) => p.endVote === true).length;
 }
 
-/** 누른 수가 산 사람 수의 과반(majorityOf)에 닿았는가. */
-export function endReached(state: RoomState): boolean {
+/** 실험방 첫 토론에서 과반 인정 시점 전에는 전원이 동의해야 한다. */
+export function endReached(state: RoomState, now?: number): boolean {
+  const opensAt = voteOpensAt(state);
+  if (now !== undefined && opensAt !== undefined && now < opensAt) {
+    const total = humanSeats(state).length;
+    return total > 0 && endCountOf(state) === total;
+  }
   return endCountOf(state) >= endRequiredOf(state);
+}
+
+/** 먼저 모인 과반은 하한에 도달하면 서버 알람으로 진행한다. */
+export function discussionMajorityAt(state: RoomState): number {
+  const opensAt = voteOpensAt(state);
+  return opensAt !== undefined && endReached(state) ? opensAt : Number.POSITIVE_INFINITY;
 }
 
 export function endRequiredOf(state: RoomState): number {

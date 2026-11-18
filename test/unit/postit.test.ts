@@ -71,6 +71,17 @@ describe("noteAllowedNow (D-22)", () => {
     expect(noteAllowedNow("verdict", 2)).toBe(false);
     expect(noteAllowedNow("dayAnnounce", 2)).toBe(false);
   });
+
+  it("실험방 첫 토론부터 같은 거리와 한 장 이동 규칙을 쓴다", () => {
+    expect(noteAllowedNow("discussion", 1, true)).toBe(true);
+    expect(noteAllowedNow("keyword", 1, true)).toBe(false);
+    const first = { ...room("discussion", 1), playtest: true as const };
+    expect(stickNote(first, world(), "p0", 2, T0)).toEqual({ ok: false, error: "BAD_MESSAGE" });
+    const placed = stickNote(first, world(), "p0", 1, T0);
+    if (!placed.ok) throw new Error(placed.error);
+    expect(out(placed)).toBe("ok|1:0>1");
+    expect(out(stickNote(placed.state, world(), "p0", 3, T0))).toBe("ok|1:0>3");
+  });
 });
 
 describe("withinNoteReach (D-03·D-25, 정수 제곱 비교)", () => {

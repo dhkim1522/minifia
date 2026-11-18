@@ -177,6 +177,90 @@ describe("GameMap — 아침 유언 인용", () => {
   });
 });
 
+describe("GameMap — 실험방 토론 도구", () => {
+  it("단서, 반응, 채팅을 따로 열고 채팅을 닫았다 열어도 인용과 초안을 보관한다", () => {
+    const send = vi.fn();
+    const view: RoomView = { ...makeView({ count: 4 }), playtest: true };
+    view.day!.keyword = { genre: "영화", answers: [{ seat: 1, order: 1, text: "공개된 단서" }] };
+    const { container, getByRole } = mount(view, { send });
+    const action = (name: string) => container.querySelector<HTMLButtonElement>(`[data-playtest-action="${name}"]`)!;
+    const activeSurface = () => container.querySelector("[data-playtest-surface]")?.getAttribute("data-playtest-surface");
+    const input = () => container.querySelector<HTMLInputElement>("[data-chat-input]");
+
+    expect(container.querySelector("[data-guide]")).toBeNull();
+    expect(container.querySelectorAll('[role="timer"]')).toHaveLength(1);
+    expect(input()).toBeNull();
+    fireEvent.click(action("clues"));
+    expect(activeSurface()).toBe("clues");
+    expect(input()).toBeNull();
+    fireEvent.click(action("reaction"));
+    expect(activeSurface()).toBe("reaction");
+    fireEvent.click(getByRole("button", { name: "최고" }));
+    expect(activeSurface()).toBeUndefined();
+    expect(send).toHaveBeenCalledWith({ t: "emote", id: "praise", pk: "1:1:discussion" });
+
+    fireEvent.click(action("chat"));
+    expect(activeSurface()).toBe("chat");
+    expect(container.querySelector("[data-playtest-action]")).toBeNull();
+    fireEvent.change(input()!, { target: { value: "내 초안" } });
+    input()?.focus();
+    fireEvent.keyDown(input()!, { key: "Escape", isComposing: true });
+    expect(document.activeElement).toBe(input());
+    fireEvent.click(getByRole("button", { name: "채팅 닫기" }));
+    expect(input()).toBeNull();
+    expect(document.activeElement).toBe(action("chat"));
+
+    fireEvent.click(action("clues"));
+    fireEvent.click(container.querySelector("[data-evidence-quote]")!);
+    expect(activeSurface()).toBe("chat");
+    expect(input()?.value).toMatch(/^내 초안 .*“공개된 단서”$/);
+    expect(document.activeElement).toBe(input());
+    expect(send.mock.calls.some(([message]) => message.t === "chat")).toBe(false);
+  });
+
+  it("토론 시작부터 투표를 요청하고 근처에 아무도 없어도 의심 모드로 걸을 수 있다", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    try {
+      const send = vi.fn();
+      const view: RoomView = { ...makeView({ count: 5 }), playtest: true };
+      Object.assign(view.day!, { voteOpensAt: NOW + 45_000, voteReadyTotal: 4, voteReadyRequired: 3 });
+      const { container } = mount(view, { send });
+      const button = endButton(container)!;
+      expect(button.getAttribute("aria-label")).toContain("0/4");
+      fireEvent.click(button);
+      expect(send).toHaveBeenCalledWith({ t: "endDiscussion", on: true });
+      expect(button.getAttribute("aria-pressed")).toBe("true");
+
+      const suspect = container.querySelector<HTMLButtonElement>('[data-playtest-action="suspect"]')!;
+      fireEvent.click(suspect);
+      expect(suspect.getAttribute("aria-pressed")).toBe("true");
+      expect(stage.props?.canWalk).toBe(true);
+      expect(stage.props?.pick?.seats.size).toBe(0);
+      expect(container.textContent).toContain("가까이 가서 이름을 눌러요");
+      act(() => vi.advanceTimersByTime(45_000));
+      expect(button.getAttribute("aria-label")).toContain("0/3");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("밤 시민은 완료 버튼과 서버 확인을 보고 얼굴 고르기는 하지 않는다", () => {
+    const send = vi.fn();
+    const view: RoomView = { ...makeView({ phase: "night" }), playtest: true };
+    view.me.role = "citizen";
+    const { container, show } = mount(view, { send });
+    const button = container.querySelector<HTMLButtonElement>("[data-night-done]")!;
+    fireEvent.click(button);
+    expect(send).toHaveBeenCalledWith({ t: "nightDone" });
+    expect(container.querySelector("[data-face-list]")).toBeNull();
+    expect(stage.props?.canWalk).toBe(false);
+    show({ ...view, me: { ...view.me, nightDone: true } });
+    expect(button.textContent).toBe("밤 준비 완료");
+    expect(button.disabled).toBe(true);
+  });
+});
+
 describe("GameMap — 낮 토론 [토론 끝내기] (DAY-03, 08-13)", () => {
   it("산 사람의 낮 토론은 루트가 data-game-stage·data-phase 이고 [토론 끝내기] 가 하나이며 점 total = 산 사람의 과반 수", () => {
     const { container } = mount(makeView({ count: 5 }));

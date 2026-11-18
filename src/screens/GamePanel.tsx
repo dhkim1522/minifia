@@ -14,6 +14,8 @@ import type { Verdict } from "../components/v2/VerdictPicker";
 import { faceSrc, seatColorVar } from "../net/assets";
 import type { ChatBinding } from "../net/useChat";
 import { useViewChoice } from "../net/useViewChoice";
+import { PlaytestDiscussion } from "./PlaytestDiscussion";
+import type { DiscussionToolsProps } from "./PlaytestDiscussion";
 
 /** 채팅 부품에 그대로 펼치는 속성 묶음 — 머리 위 입력 중 좌석(typingSeats)은 화면 틀이 WorldStage 로 따로 넘긴다 */
 export type ChatPanelBinding = Omit<ChatBinding, "typingSeats" | "liveWhisperIn">;
@@ -58,6 +60,9 @@ export interface GamePanelProps {
   panelRef?: RefObject<HTMLElement | null>;
   /** 입력줄 맨 오른쪽 끝 슬롯(ChatPanel trailing)에 놓을 요소 — 낮 토론의 [의심] 단추(24-03). 없으면 슬롯도 없다 */
   chatTrailing?: ReactNode;
+  suspect?: DiscussionToolsProps["suspect"];
+  result?: string;
+  notice?: ReactNode;
 }
 
 /**
@@ -65,7 +70,7 @@ export interface GamePanelProps {
  * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + 찬성·반대 숫자 줄, 22-10)을 얹는다 — 변론·처형·유령은 채팅만이다(처형은 찬반 줄을 접는다, 18.1-13 결정 0083-9).
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, chatTrailing }: GamePanelProps) {
+export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, chatTrailing, suspect, result, notice }: GamePanelProps) {
   const playtest = view.playtest === true;
   const voteOpensAt = playtest && view.phase === "discussion" ? view.day?.voteOpensAt : undefined;
   const [openedVoteAt, setOpenedVoteAt] = useState<number>();
@@ -98,8 +103,9 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);
   const voteUnlocked = voteOpensAt === undefined || openedVoteAt === voteOpensAt || Date.now() + offset >= voteOpensAt;
-  const showEnd = view.phase === "discussion" && meAlive && !kbOpen && voteUnlocked;
-  const total = view.day?.voteReadyRequired ?? majorityOf(view.players.filter(isAlive).length);
+  const showEnd = !playtest && view.phase === "discussion" && meAlive && !kbOpen;
+  const aliveCount = view.players.filter(isAlive).length;
+  const total = voteUnlocked ? view.day?.voteReadyRequired ?? majorityOf(aliveCount) : view.day?.voteReadyTotal ?? aliveCount;
   const count = view.day?.endCount ?? 0;
 
   // 찬반 줄(22-10, D-11·D-26): 처형 후보가 없어 산 사람 전원이 던진다. 유령은 같은 숫자 줄만 본다(보기 패널).
@@ -121,6 +127,8 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
   // 채팅 패널은 서버가 보낸 view.me.chat 이 그 채널일 때만 그린다(서버 값이 기준, T-08-47). 산 마피아의 밤 채팅은 그리지 않는다.
   const night = view.phase === "night";
   const myRole = view.me.role;
+  const citizenNight = playtest && night && meAlive && myRole === "citizen";
+  const nightDone = view.me.nightDone === true;
   const nightFaces = night && meAlive && (!playtest || myRole === "mafia" || myRole === "police" || myRole === "doctor");
   const chatChannelOk = !night || view.me.chat === "ghost";
   // 후보: 산 사람 전원(나 포함). 좌석 오름차순. 후보가 없으면 목록을 그리지 않는다(E1 #1).
@@ -147,6 +155,8 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
   const defense = view.phase === "defense";
   const answerReveal = view.phase === "answerReveal";
   const chatLocked = defense || answerReveal;
+  const discussion = view.phase === "discussion";
+  const ghostChat = !chatLocked && !meAlive && view.me.chat === "ghost";
   const condemned = defense && meAlive && view.day?.candidate === view.me.seat;
   const penOn = meAlive && MAP_PHASES.has(view.phase) && onOpenWill !== undefined && !answerReveal && (!defense || condemned) && (!playtest || condemned);
   const showNoteRow = !playtest && nightFaces && myRole === "mafia" && onOpenNote !== undefined;
@@ -163,16 +173,12 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
   return (
     <section
       ref={panelRef}
-      className={lifted ?? kbOpen ? "mf-game__panel mf-game__panel--kb" : "mf-game__panel"}
+      className={`mf-game__panel${lifted ?? kbOpen ? " mf-game__panel--kb" : ""}${playtest ? " mf-playtest__panel" : ""}`}
       data-world-panel=""
       {...(veiled ? { "data-will-hide-panel": "true" } : {})}
     >
-      {showEnd && voteOpensAt !== undefined ? (
-        <button type="button" className="mf-btn mf-btn--secondary mf-playtest__vote-start" data-end-discussion="" aria-pressed={pressed === true} disabled={!canSend} onClick={pressEnd}>
-          <span>{pressed ? "투표로 가기 요청함" : "투표로 가기"}</span>
-          <span className="mv-count">{count}/{total}</span>
-        </button>
-      ) : null}
+      {notice}
+      {result ? <p className="mf-playtest__result" data-playtest-result="" role="status">{result}</p> : null}
       {showVerdictCount ? (
         <div className="mf-game__verdict" data-verdict-row="">
           {showVerdict ? (
@@ -190,6 +196,18 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
           </div>
         </div>
       ) : null}
+      {playtest && (discussion || ghostChat) ? (
+        <PlaytestDiscussion
+          key={`${view.round ?? 1}:${view.day?.n ?? 0}:${view.phase}`}
+          binding={binding}
+          logHeight={logHeight}
+          kbOpen={kbOpen}
+          inputRef={inputRef}
+          chatOnly={!discussion}
+          suspect={suspect}
+          vote={discussion && meAlive ? { enabled: canSend, pressed: pressed === true, count, total, request: pressEnd } : undefined}
+        />
+      ) : null}
       {firstBallot !== undefined ? (
         <PlaytestBallot view={view} ballot={firstBallot} canVote={meAlive && canSend} send={send} />
       ) : nightFaces ? (
@@ -206,10 +224,15 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
             {...(myRole === "mafia" && view.me.nightSure !== undefined ? { sure: view.me.nightSure } : {})}
           />
         ) : null
-      ) : chatChannelOk ? (
+      ) : citizenNight ? (
+        <button type="button" className="mf-btn mf-btn--secondary mf-playtest__night-done" data-night-done="" disabled={!canSend || nightDone} onClick={() => send({ t: "nightDone" })}>
+          {nightDone ? "밤 준비 완료" : "밤 마치기"}
+        </button>
+      ) : playtest && condemned ? (
+        <button type="button" className="mf-btn mf-btn--secondary" data-will-button="" aria-pressed={willOpen} disabled={!canSend} onClick={(event) => onOpenWill?.(event.currentTarget)}>유언</button>
+      ) : !playtest && chatChannelOk ? (
         <ChatPanel
           {...binding}
-          {...(playtest ? { emotes: [], collapseEvidenceOnSmallScreen: true, keepLogHeightOnFocus: true } : {})}
           logHeight={logHeight}
           compact={kbOpen}
           {...(chatLocked ? { locked: true } : {})}
@@ -224,7 +247,7 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
               }
             : {})}
           {...(call?.chat ? { callInput: true } : {})}
-          {...(!playtest && chatTrailing ? { trailing: chatTrailing } : {})}
+          {...(chatTrailing ? { trailing: chatTrailing } : {})}
           {...(penOn
             ? {
                 onWill: () => {
@@ -287,7 +310,7 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
           </button>
         </ActionRow>
       ) : null}
-      {showEnd && voteOpensAt === undefined ? (
+      {showEnd ? (
         <ActionRow>
           <button
             type="button"

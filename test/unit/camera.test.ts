@@ -15,6 +15,7 @@ import {
   GATHER_CENTER,
   GATHER_STACK_H,
   GATHER_STACK_H_GHOST,
+  gatherGroupZoom,
   gatherView,
   groundToScreen,
   HEAD_STACK_H,
@@ -609,6 +610,16 @@ describe("gatherView (UI-SPEC 카메라: 이름표가 몸보다 우선, E8 #31 b
   it("고정 목표는 모이는 자리 가운데다", () => {
     const size = STAGE_SIZES[0]!;
     expect(gatherView(chatStage(size), size, { ghost: false }).target).toEqual(GATHER_CENTER);
+  });
+
+  it("작은 폰의 첫 투표 영역에는 여덟 명의 머리와 발이 들어간다", () => {
+    const size = { w: 360, h: 560 };
+    const rect = { top: 62, bottom: 252 };
+    const zoom = gatherGroupZoom(rect, size, 0.82);
+    const frame = gatherView(rect, size, { zoom, frameGroup: true });
+    const y = ringY(size, frame, zoom);
+    expect(y.headTop).toBeGreaterThan(rect.top);
+    expect(y.footBottom).toBeLessThan(rect.bottom);
   });
 
   for (const size of STAGE_SIZES) {
