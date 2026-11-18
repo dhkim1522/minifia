@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>미니피아 · 필드와 테이블 시안</title>
+<link rel="stylesheet" href="review.css">
+<link rel="stylesheet" href="stage.css">
+</head>
+<body>
+<main id="mf8" lang="ko">
+  <div class="reviewbar">
+    <label>참가 인원<select id="mf8-count" class="form-select"><option value="4">4명</option><option value="5">5명</option><option value="6">6명</option><option value="7">7명</option><option value="8" selected>8명</option></select></label>
+    <label>시나리오 장면<select id="mf8-chapter" class="form-select"></select></label>
+    <div class="viz-row pager"><button type="button" class="btn" id="mf8-prev">이전</button><button type="button" class="btn" id="mf8-next">다음 장면</button></div>
+  </div>
+  <div class="spread">
+    <section class="handset" aria-label="게임 화면">
+      <div class="gamebar"><span class="wordmark">MINIFIA</span><span id="mf8-phase"></span></div>
+      <header class="headline"><span class="place">THE JAZZ ROOM</span><h2 id="mf8-title"></h2><p id="mf8-rule"></p></header>
+      <div id="mf8-world" class="world" role="group" aria-label="재즈 바"></div>
+      <div id="mf8-controls" class="gamecontrols" aria-live="polite"></div>
+    </section>
+    <aside class="support">
+      <details class="comparison" open><summary id="mf8-compare-label">집결 후 좌석</summary><div class="compworld"><div id="mf8-preview" class="world seated" aria-hidden="true"></div></div></details>
+      <div class="reviewnote"><strong id="mf8-point"></strong><p id="mf8-detail"></p></div>
+    </aside>
+  </div>
+</main>
+<script src="motion.js"></script>
+<script src="review.js"></script>
+</body>
+</html>

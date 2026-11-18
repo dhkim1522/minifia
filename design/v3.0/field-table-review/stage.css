@@ -1,0 +1,201 @@
+/* Coordinates passed to each actor locate the bottom of its nameplate. */
+#mf8 .world {
+  --edge: #122337;
+  --blue: #91aebc;
+  --amber: #e0be7b;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  height: 360px;
+  background: #334151;
+  color: #faf2d9;
+}
+#mf8 .world.seated { height: 280px; }
+#mf8 .world .room {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(153deg, rgba(104,109,129,.1), transparent 40%, rgba(14,25,39,.18)),
+    var(--room) center 47% / cover no-repeat, #455366;
+  filter: saturate(.91) brightness(1.13);
+}
+#mf8 .world .room::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 77% 4%, rgba(245,202,125,.15), transparent 31%),
+    linear-gradient(180deg, rgba(15,28,42,.19), transparent 14%, transparent 85%, rgba(15,28,42,.28));
+}
+#mf8 .world.seated .room {
+  background-position: center, 50% 66%, center;
+  background-size: auto, auto 135%, auto;
+  filter: saturate(.78) brightness(.92);
+}
+#mf8 .world.seated .room::after {
+  background: radial-gradient(ellipse at 50% 65%, rgba(235,181,108,.24), transparent 67%),
+    linear-gradient(180deg, rgba(16,27,41,.14), transparent 45%, rgba(16,27,41,.29));
+}
+#mf8 .world .booth, #mf8 .world .light { display: none; pointer-events: none; }
+#mf8 .world.seated .booth {
+  display: block;
+  position: absolute;
+  z-index: 1;
+  left: 12%;
+  top: 45%;
+  width: 76%;
+  height: 30%;
+  box-sizing: border-box;
+  border: 1px solid #bb9a6e;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 52% 47%,rgba(243,197,137,.34),transparent 41%),
+    repeating-linear-gradient(2deg, transparent 0 4px, rgba(53,35,26,.065) 5px,transparent 6px 11px),
+    linear-gradient(161deg,#ae8062,#88654f 48%,#655045);
+  box-shadow: inset 0 1px 1px #e3bf89, inset 0 -3px 3px #604436,
+    0 4px #5a4236, 0 6px #342e2b, 0 10px 8px rgba(20,25,32,.42);
+}
+#mf8 .world.seated .light {
+  display: block;
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 57%;
+  height: 27px;
+  width: 4px;
+  transform: translate(-50%,-64%);
+  border-radius: 45%;
+  background: linear-gradient(90deg,#765a3d,#f2d69b,#8a6c4b);
+  box-shadow: 0 -2px 15px 6px rgba(252,200,125,.25);
+}
+#mf8 .world.seated .light::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 0;
+  width: 24px;
+  height: 13px;
+  box-sizing: border-box;
+  border-radius: 15px 15px 3px 3px;
+  border-bottom: 1px solid #a38053;
+  background: radial-gradient(ellipse at 50% 90%,#fff1c5,#f4d299 62%,#caa473);
+}
+#mf8 .world.seated .light::after {
+  content: "";
+  position: absolute;
+  left: -7px;
+  bottom: -1px;
+  width: 18px;
+  height: 4px;
+  border-radius: 50%;
+  background: #a28a66;
+  box-shadow: 0 1px 2px #45372d;
+}
+#mf8 .world .actor {
+  z-index: 3;
+  position: absolute;
+  width: clamp(37px,13%,56px);
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  transform: translate(-50%,-100%);
+  transform-origin: center bottom;
+  transition: left 650ms cubic-bezier(.24,.69,.24,1), top 650ms cubic-bezier(.24,.69,.24,1), opacity 220ms ease;
+}
+#mf8 .world.seated .actor { width: clamp(39px,13.5%,58px); }
+#mf8 .world .actor .doll {
+  display: block;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(1px 3px 2px rgba(14,22,28,.46));
+}
+#mf8 .world .actor .doll img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+#mf8 .world .actor .nametag {
+  display: block;
+  position: relative;
+  margin-top: -2px;
+  width: max-content;
+  max-width: min(145%,76px);
+  padding: 2px 5px 3px;
+  box-sizing: border-box;
+  border-radius: 5px;
+  border: 1px solid rgba(213,221,218,.46);
+  background: #243241;
+  color: #fffcf1;
+  font-size: 11px;
+  line-height: 1.16;
+  font-weight: 650;
+  text-align: center;
+  word-break: break-all;
+  box-shadow: 0 2px 4px rgba(12,20,29,.3);
+}
+#mf8 .world .actor.me .nametag {
+  color: #18303e;
+  border-color: #e2eef1;
+  background: #d4e2e4;
+}
+#mf8 .world .actor.speaker .doll {
+  filter: drop-shadow(0 0 1px #ebfaff) drop-shadow(0 -1px 3px rgba(165,216,235,.44))
+    drop-shadow(1px 3px 2px rgba(14,22,28,.48));
+}
+#mf8 .world .actor.speaker .nametag { border-color: #a9dae6; }
+#mf8 .world .actor.picked .nametag {
+  background: #efd5a4;
+  color: #342c22;
+  border-color: #fff0c7;
+}
+#mf8 .world .actor.picked .nametag::before { content: "✓ "; font-weight: 800; }
+#mf8 .world .actor.dead .doll { filter: grayscale(1) brightness(.88); opacity: .61; }
+#mf8 .world .actor.dead .nametag { color: #d9dfe2; background: #37434b; border-style: dashed; }
+#mf8 .world .actor:focus-visible { outline: 2px solid #fff2cf; border-radius: 5px; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  #mf8 .world .actor { transition: none; }
+}
+#mf8 .world.seated.four .booth {left:25%;width:50%;height:36%;top:43%}
+#mf8 .world.seated.medium .booth {left:17%;width:66%}
+#mf8 .world .actor.dead .doll {visibility:hidden}
+#mf8 .world .actor.dead::before {content:"";position:absolute;bottom:17px;width:53%;height:9px;border-radius:50%;border:1px dashed #e2d7be;background:#51473fbb}
+#mf8 .world .actor.speaker .nametag::before {content:"♪ ";color:#d5eefd}
+#mf8 .world.night .room {filter:brightness(.45) saturate(.75)}
+#mf8 .world.assembling .booth,#mf8 .world.assembling .light {display:block;opacity:.6}
+#mf8 .world .actor:not(button){cursor:default}
+#mf8 .world .actor.me .nametag {white-space:nowrap}
+#mf8 .world.homeview .nametag {visibility:hidden}
+#mf8 .world {transition:height .75s ease}
+#mf8 .world.assembling {height:280px}
+#mf8 .world.assembling .room {transform:scale(1.18);transition:transform .78s ease}
+#mf8 .world.seated .room {
+  background-size:auto,auto 195%,auto;
+  background-position:center,48% 13%,center;
+  filter:saturate(.72) brightness(.68) blur(.9px);
+  transform:scale(1.015);
+}
+#mf8 .world.seated .actor:not(.dead)::before {
+  content:"";position:absolute;left:21%;right:21%;bottom:20px;height:29%;
+  border:1px solid #af8c69;border-radius:8px 8px 3px 3px;
+  background:linear-gradient(90deg,#413a35,#78523b 45%,#634a3e);
+  box-shadow:0 4px 1px #28292b;
+}
+#mf8 .world.seated .doll {clip-path:inset(0 0 19%);margin-bottom:-17%}
+#mf8 .world.seated .front:not(.right) .doll{transform:rotate(5deg)}
+#mf8 .world.seated .front.right .doll{transform:rotate(-5deg)}
+#mf8 .world.seated .actor:not(.front){margin-top:4%}
+#mf8 .voting .world.seated{height:215px}
+#mf8 .voting .world.seated .actor{width:clamp(32px,11%,44px)}
+#mf8 .world.seated .actor.dead{margin-top:0}
+@media(prefers-reduced-motion:reduce){#mf8 .world,#mf8 .world.assembling .room{transition:none}}

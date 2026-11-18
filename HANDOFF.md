@@ -29,5 +29,5 @@
 
 ## 다음 할 일
 
-1. **개편 시안 평가 대기**. [전면 재평가](docs/redesign-audit-2026-11-19.md)를 바탕으로 [홈·첫날](design/v3.0/scenario-review-2026-11-19/01-first-day.jpg), [밤·아침](design/v3.0/scenario-review-2026-11-19/02-night.jpg), [토론 두 구도·표결](design/v3.0/scenario-review-2026-11-19/03-vote.jpg)을 만들었다. 같은 4인 캐릭터와 재즈 바에서 단서 제출 없이 잠정 지목 후 다음 날 표결하는 검토용 예시다. 사용자 평가 후 게임 규칙과 구현 범위를 정한다.
+1. **개편 시안 평가 대기**. [4~8인 이동·집결 시안](design/v3.0/field-table-review/index.html), [8인 진행](design/v3.0/field-table-review/field-to-vote.jpg), [좌석 비교](design/v3.0/field-table-review/seat-layouts.jpg). 작은 재즈 바에서 첫 이동 20초 뒤 집결, 첫날 잠정 지목, 둘째 날 자유 대화와 고정 좌석 토론·투표를 비교한다. 320px에서 4~8명 이름표, 8인 탈락 후 6후보와 입력 보존을 확인했다. [앞선 4인 시안](design/v3.0/scenario-review-2026-11-19/)과 [전면 평가](docs/redesign-audit-2026-11-19.md) 참고. 실제 규칙·시간은 사용자 평가 후 결정한다.
 2. **실기기**. 작은 폰의 키보드와 채팅·이름표, 소리 크기, 처음 온 사람이 채팅 없이 단서와 의심딱지를 쓸 수 있는지 팀에서 확인한다. 결과로 실험방의 기본 적용 범위를 판단한다. 24페이즈의 남은 모바일 전체 회귀와 실기기 항목을 확인한 뒤 main 반영을 판단한다.
