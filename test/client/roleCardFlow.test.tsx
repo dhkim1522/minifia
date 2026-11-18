@@ -104,7 +104,7 @@ const advance = (ms: number): void => {
   });
 };
 
-const headBtn = (): HTMLElement | null => document.querySelector<HTMLElement>(".mf-rolecard-btn");
+const headBtn = (): HTMLElement | null => document.querySelector<HTMLElement>(".mf-rolecard-btn, [data-game-menu]");
 const headDot = (): boolean => headBtn()?.querySelector(".mf-rolecard-btn__dot") != null;
 const sheet = (): HTMLElement | null => document.querySelector<HTMLElement>('dialog[aria-label="역할 카드"]');
 const tabs = (): HTMLElement[] => Array.from(document.querySelectorAll<HTMLElement>('dialog[aria-label="역할 카드"] [role="tab"]'));
@@ -118,6 +118,11 @@ function openSheet() {
   const b = headBtn();
   expect(b === null ? "(버튼 없음)" : "버튼").toBe("버튼");
   fireEvent.click(b!);
+  if (b?.hasAttribute("data-game-menu")) {
+    const item = document.querySelector<HTMLElement>('[aria-label="게임 메뉴"] [data-game-menu-role]');
+    expect(item).not.toBeNull();
+    fireEvent.click(item!);
+  }
 }
 function openActivity() {
   const t = tabNamed("활동 기록");
@@ -143,20 +148,19 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("헤더 [내 역할] 아이콘 단추 하나 (D-08, TOOL-04)", () => {
+describe("토론의 메뉴와 다른 단계의 내 역할 아이콘", () => {
   const ROLES: RoleId[] = ["police", "mafia", "doctor", "citizen"];
   const PHASES: PhaseId[] = ["roleReveal", "dayAnnounce", "discussion", "night", "morning"];
 
-  it.each(ROLES)("%s: 모든 단계에서 `내 역할` 버튼이 정확히 하나, `수사 기록`·옛 `역할 카드` 이름의 버튼은 없다", (role) => {
+  it.each(ROLES)("%s: 토론은 메뉴, 다른 단계는 내 역할 아이콘 하나를 표시한다", (role) => {
     for (const phase of PHASES) {
       const r = renderRoom(makeView({ role, phase }));
       const buttons = Array.from(document.querySelectorAll<HTMLElement>("button"));
       const names = buttons.map((b) => b.getAttribute("aria-label") ?? b.textContent ?? "");
-      const head = buttons.filter((b) => b.classList.contains("mf-rolecard-btn"));
+      const head = buttons.filter((b) => b.matches(".mf-rolecard-btn, [data-game-menu]"));
       expect(`${phase}:${head.length}`).toBe(`${phase}:1`);
-      // 16-04: 두 화면 모두 같은 모양 — 글 없는 아이콘 단추, 이름은 aria-label `내 역할`, 이름표 속성 없음
       expect(`${phase}:${head[0]!.textContent}`).toBe(`${phase}:`);
-      expect(`${phase}:${head[0]!.getAttribute("aria-label")}`).toBe(`${phase}:내 역할`);
+      expect(`${phase}:${head[0]!.getAttribute("aria-label")}`).toBe(`${phase}:${phase === "discussion" ? "메뉴" : "내 역할"}`);
       expect(`${phase}:${head[0]!.hasAttribute("data-tool-label")}`).toBe(`${phase}:false`);
       expect(`${phase}:${names.some((x) => x.includes("수사 기록"))}`).toBe(`${phase}:false`);
       expect(`${phase}:${names.some((x) => x === "역할 카드")}`).toBe(`${phase}:false`);
@@ -164,40 +168,63 @@ describe("헤더 [내 역할] 아이콘 단추 하나 (D-08, TOOL-04)", () => {
     }
   });
 
-  it.each(["roleReveal", "discussion"] as const)("%s: 버튼은 아이콘 면(36) 하나, 글 없음 한 모양이다(두 모양 통일, 16-04)", (phase) => {
-    renderRoom(makeView({ phase }));
+  it("역할 확인의 예전 아이콘과 바로 열리는 역할 카드 동작을 유지한다", () => {
+    renderRoom(makeView({ phase: "roleReveal" }));
     const svg = headBtn()?.querySelector("svg");
     expect(svg?.getAttribute("width") ?? "(아이콘 없음)").toBe("22");
     expect(headBtn()?.querySelector(".mf-rolecard-btn__face svg") === null ? "면 없음" : "면 있음").toBe("면 있음");
     expect(headBtn()?.querySelector(".mf-rolecard-btn__label")).toBeNull();
     expect(headBtn()?.textContent).toBe("");
+    openSheet();
+    expect(sheet()).not.toBeNull();
+  });
+
+  it("토론 점 세 개 메뉴에서 연 역할 카드를 닫으면 메뉴에 초점을 돌려준다", () => {
+    renderRoom(makeView({ phase: "discussion" }));
+    const button = headBtn();
+    expect(button?.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(button?.querySelectorAll("svg circle")).toHaveLength(3);
+    openSheet();
+    expect(sheet()).not.toBeNull();
+    closeSheet();
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("토론에서 역할 카드를 보는 사이 밤으로 넘어가면 닫을 때 내 역할 아이콘에 초점을 돌려준다", () => {
+    const room = renderRoom(makeView({ phase: "discussion" }));
+    openSheet();
+    feed(room, makeView({ phase: "night" }));
+    expect(sheet()).not.toBeNull();
+    closeSheet();
+    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할");
+    expect(document.activeElement).toBe(headBtn());
   });
 });
 
 describe("앰버 점과 읽음 (D-11)", () => {
-  it("경찰이 기록 2개·읽은 개수 0: 이름 `내 역할, 새 기록`, 점 1개(aria-hidden)", () => {
+  it("경찰이 기록 2개·읽은 개수 0: 토론 메뉴 이름에 새 기록을 알리고 점을 단다", () => {
     renderRoom(makeView({ phase: "discussion", records: POLICE_TWO }));
-    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할, 새 기록");
+    expect(headBtn()?.getAttribute("aria-label")).toBe("메뉴, 새 기록");
     const dots = headBtn()!.querySelectorAll(".mf-rolecard-btn__dot");
     expect(dots.length).toBe(1);
     expect(dots[0]!.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("기록 0개 또는 모두 읽음이면 이름 `내 역할`, 점 없음", () => {
+  it("토론에서 기록 0개 또는 모두 읽음이면 메뉴에 점 없음", () => {
     renderRoom(makeView({ records: [] }));
-    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할");
+    expect(headBtn()?.getAttribute("aria-label")).toBe("메뉴");
     expect(headDot()).toBe(false);
     cleanup();
     storage.setItem(KEY, "2");
     renderRoom(makeView({ records: POLICE_TWO }));
-    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할");
+    expect(headBtn()?.getAttribute("aria-label")).toBe("메뉴");
     expect(headDot()).toBe(false);
   });
 
   it("시민·기록 없는 view 는 점이 없다", () => {
     renderRoom(makeView({ role: "citizen" }));
     expect(headDot()).toBe(false);
-    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할");
+    expect(headBtn()?.getAttribute("aria-label")).toBe("메뉴");
   });
 
   it("누르면 dialog `역할 카드` 가 `내 역할` 탭으로 열리고 점은 그대로이며 탭에 `활동 기록, 새 기록` 점이 있다", () => {
@@ -217,7 +244,7 @@ describe("앰버 점과 읽음 (D-11)", () => {
     openActivity();
     expect(selectedTab()).toBe("활동 기록");
     expect(headDot()).toBe(false);
-    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할");
+    expect(headBtn()?.getAttribute("aria-label")).toBe("메뉴");
     expect(tabDot()).toBe(false);
     expect(storage.getItem(KEY)).toBe("2");
     expect(newMarks()).toEqual(["NEW", "NEW"]);
@@ -301,7 +328,7 @@ describe("옛 [수사 기록] 시나리오 이전 (03.1-11 Task 3)", () => {
   it("읽은 개수 1 + 기록 2개면 점이 켜지고, 활동 기록 탭에서 모자란 한 줄(맨 위)만 NEW 다", () => {
     storage.setItem(KEY, "1");
     renderRoom(makeView({ records: POLICE_TWO }));
-    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할, 새 기록");
+    expect(headBtn()?.getAttribute("aria-label")).toBe("메뉴, 새 기록");
     openSheet();
     openActivity();
     expect(newMarks()).toEqual(["NEW", "-"]);

@@ -9,10 +9,11 @@ import { floatVisible } from "../../src/game/badgeView";
 import { RESULT_PANEL_TEXT } from "../../src/game/resultText";
 import { whisperVisible } from "../../src/game/whisperView";
 import type { WorldStageProps } from "../../src/components/WorldStage";
-import { LOG_H } from "../../src/game/chatUi";
+import { DISCUSSION_LOG_H, DISCUSSION_PANEL_EXTRA, LOG_H } from "../../src/game/chatUi";
+import { faceSrc } from "../../src/net/assets";
 
-/** 키보드 열림 패널 = 14 + 기록 칸 + 8 + 입력줄 48 + 아래 여백 8 (UI-SPEC B 계약 4: 146) */
-const KB_PANEL = 8 + 44 + 8 + 40 + 8 + 48 + 8;
+/** 토론 키보드 열림 패널 = 도구 58 + 기록 42 + 입력 간격 8 + 입력 44 + 하단 8 */
+const KB_PANEL = 58 + 42 + 8 + 44 + 8;
 import { bindSignals, type LocalSignal } from "../../src/audio/signals";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 const GAME_RULES = RULES;
@@ -411,7 +412,7 @@ describe("GameMap — 한 장면 키 (DAY-07, 08-13)", () => {
 describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13)", () => {
   const INNER_H = 844;
   const realInnerH = window.innerHeight;
-  const DISCUSSION_PANEL_H = 8 + 44 + 8 + LOG_H + 8 + 48 + 12;
+  const DISCUSSION_PANEL_H = DISCUSSION_LOG_H + DISCUSSION_PANEL_EXTRA;
   let panelH = DISCUSSION_PANEL_H;
   let resizeCallbacks: Array<() => void> = [];
 
@@ -536,7 +537,7 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: LOG_H + 92 });
   });
 
-  it("키보드가 열려도 투표 요청은 같은 줄에 있고 기록 칸을 40px로 줄여 패널을 336px 올린다", () => {
+  it("키보드가 열려도 투표 요청은 같은 줄에 있고 기록 칸을 42px로 줄여 패널을 336px 올린다", () => {
     const vv = installVV(INNER_H);
     const { container } = mount(makeView());
     const vote = endButton(container);
@@ -546,7 +547,7 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     remeasure();
     expect(gameOf(container).getAttribute("data-kb-open")).toBe("true");
     expect(endButton(container)).toBe(vote);
-    expect(logHeight(container)).toBe("40px");
+    expect(logHeight(container)).toBe("42px");
     expect(container.querySelector("[data-chat-log]")?.classList.contains("is-fixed")).toBe(true);
     expect(container.querySelector(".mv-chat.is-compact")).not.toBeNull();
     expect(container.querySelector(".mf-game__panel")?.classList.contains("mf-game__panel--kb")).toBe(true);
@@ -566,37 +567,37 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     expect(container.querySelector('[data-playtest-surface="clues"]')).not.toBeNull();
   });
 
-  it("키보드 열림 경계(lift 60) 아래에서는 기록 칸이 68px이고, 블러하면 68px로 돌아온다", () => {
+  it("키보드 열림 경계(lift 60) 아래에서는 기록 칸이 92px이고, 블러하면 92px로 돌아온다", () => {
     const vv = installVV(INNER_H);
     const { container } = mount(makeView());
     focusWithKeyboard(container, vv, 60);
     expect(gameOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(endButton(container)).not.toBeNull();
-    expect(logHeight(container)).toBe("68px");
+    expect(logHeight(container)).toBe("92px");
     focusWithKeyboard(container, vv, 336);
     panelH = KB_PANEL;
     remeasure();
-    expect(logHeight(container)).toBe("40px");
+    expect(logHeight(container)).toBe("42px");
     act(() => inputOf(container).blur());
     panelH = DISCUSSION_PANEL_H;
     remeasure();
     expect(gameOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(endButton(container)).not.toBeNull();
-    expect(logHeight(container)).toBe("68px");
+    expect(logHeight(container)).toBe("92px");
     expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: DISCUSSION_PANEL_H });
   });
 
-  it("키보드가 닫힌 토론 기록은 방 높이와 무관하게 68px이다", () => {
+  it("키보드가 닫힌 토론 기록은 방 높이와 무관하게 92px이다", () => {
     for (const h of [560, 640, 844, 932]) {
       Object.defineProperty(window, "innerHeight", { value: h, configurable: true, writable: true });
       const { container, unmount } = mount(makeView());
-      expect(logHeight(container)).toBe("68px");
+      expect(logHeight(container)).toBe("92px");
       unmount();
     }
     expect(LOG_H).toBe(68);
-    expect(DISCUSSION_PANEL_H).toBe(196);
+    expect(DISCUSSION_PANEL_H).toBe(222);
     expect(LOG_H + 92).toBe(160);
-    expect(KB_PANEL).toBe(164);
+    expect(KB_PANEL).toBe(160);
   });
 });
 
@@ -652,32 +653,32 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
     expect(container.textContent).not.toContain("모두의 직업이 보여요");
   });
 
-  it("[내 역할]은 글 없는 아이콘이며 게이지 오른쪽에 놓인다 (TOOL-04)", () => {
+  it("토론의 메뉴는 글 없는 점 세 개 아이콘이며 게이지 오른쪽에 놓인다", () => {
     const { container } = mount(makeView());
     const btn = container.querySelector(".mf-game__header button") as HTMLButtonElement;
-    expect(btn.getAttribute("aria-label")).toBe("내 역할");
+    expect(btn.getAttribute("aria-label")).toBe("메뉴");
     expect(btn.hasAttribute("data-tool-label")).toBe(false);
     expect(btn.querySelector(".mf-rolecard-btn__label")).toBeNull();
     expect(btn.textContent).toBe("");
-    expect(btn.querySelector("svg")).not.toBeNull();
+    expect(btn.querySelectorAll("svg circle")).toHaveLength(3);
     expect(btn.parentElement?.classList.contains("mf-game-phase-header__actions")).toBe(true);
     expect(container.querySelector(".mf-game__header [data-phase-gauge]")).not.toBeNull();
-    // 헤더가 맵보다 DOM 앞이라 Tab 순서가 [내 역할] → 이름표 → 입력이다
-    expect(container.querySelectorAll("button[aria-label='내 역할']").length).toBe(1);
+    expect(container.querySelectorAll("button[data-game-menu]").length).toBe(1);
   });
 
-  it("안 읽은 일지가 있으면 이름이 '내 역할, 새 기록' 이고 gray-100 점이 붙는다(앰버 아님)", () => {
+  it("안 읽은 일지가 있으면 토론 메뉴 이름과 점으로 새 기록을 알린다", () => {
     const { container } = mount(makeView({ records: [{ n: 1, target: 1, isMafia: false }] }));
     const btn = container.querySelector(".mf-game__header button") as HTMLButtonElement;
-    expect(btn.getAttribute("aria-label")).toBe("내 역할, 새 기록");
+    expect(btn.getAttribute("aria-label")).toBe("메뉴, 새 기록");
     expect(btn.querySelector(".mf-rolecard-btn__dot")).not.toBeNull();
     const css = readFileSync("src/styles/rolecard.css", "utf8");
     expect(css).toMatch(/\.mf-rolecard-btn__dot[^}]*var\(--gray-100\)/);
   });
 
-  it("눌러 열면 역할 카드 시트가 열린다", () => {
+  it("메뉴에서 내 역할과 기록을 누르면 역할 카드 시트가 열린다", () => {
     const { container } = mount(makeView());
     fireEvent.click(container.querySelector(".mf-game__header button")!);
+    fireEvent.click(container.querySelector("[data-game-menu-role]")!);
     expect(document.querySelector('dialog[aria-label="역할 카드"]')).not.toBeNull();
   });
 });
@@ -686,20 +687,20 @@ describe("GameMap — 헤더 시간대 글자 (0083-1)", () => {
   const header = (c: ParentNode) => c.querySelector(".mf-game__header") as HTMLElement;
   const word = (c: ParentNode) => header(c).querySelector(".mv-phase__tod");
 
-  it("낮 토론: [data-tod=day] 하나 안에 낱말 '낮'·제목 '토론', 헤더에 img 0개, [역할 카드] 단추 하나", () => {
+  it("낮 토론은 시간대를 보존하고 제목 '토론', 숫자 없는 게이지, 메뉴만 보인다", () => {
     const { container } = mount(makeView());
     const lines = header(container).querySelectorAll("[data-tod]");
     expect(lines.length).toBe(1);
     expect(lines[0]?.getAttribute("data-tod")).toBe("day");
     expect(lines[0]?.classList.contains("mv-phase__line")).toBe(true);
-    expect(word(container)?.textContent).toBe("낮");
-    expect(lines[0]?.querySelector(".mv-phase__sep")?.getAttribute("aria-hidden")).toBe("true");
+    expect(word(container)).toBeNull();
+    expect(lines[0]?.querySelector(".mv-phase__sep")).toBeNull();
     expect(lines[0]?.querySelector(".mv-phase__title")?.textContent).toBe("토론");
     expect(header(container).querySelectorAll("img").length).toBe(0);
-    expect(header(container).querySelectorAll(".mf-rolecard-btn").length).toBe(1);
+    expect(header(container).querySelectorAll("[data-game-menu]").length).toBe(1);
   });
 
-  it("토론에서 지목으로 넘어가면 '낮 · 토론' 이 '저녁 · 지목' 으로 바뀐다", () => {
+  it("토론에서 지목으로 넘어가면 '토론'이 '저녁 · 지목'으로 바뀐다", () => {
     const m = mount(makeView());
     expect(header(m.container).querySelector("[data-tod]")?.getAttribute("data-tod")).toBe("day");
     m.show(makeView({ phase: "nomination", candidate: 1 }));
@@ -1100,7 +1101,10 @@ describe("GameMap — 낮 토론 채팅 패널·방장 줄 없음 (CHAT-06, DAY-
     f.emit({ t: "chat", seat: 0, ch: "all", seq: 1, text: "저는 시민이에요", at: NOW });
     const line = container.querySelector("[data-chat-log] .mv-chat__msg");
     expect(line?.getAttribute("data-ch")).toBe("all");
-    expect(line?.querySelector(".mv-chat__name")?.textContent).toBe("나");
+    expect(line?.querySelector(".mv-chat__byline .mv-chat__name")?.textContent).toBe("나");
+    expect(line?.querySelector(".mv-chat__avatar")?.getAttribute("src")).toBe(faceSrc(0));
+    expect(line?.querySelector(".mv-chat__avatar")?.getAttribute("alt")).toBe("");
+    expect(line?.querySelector(".mv-chat__byline")?.nextElementSibling?.textContent).toBe("저는 시민이에요");
   });
 
   it("서버가 보낸 입력 중 좌석만 이름표에 입력 중 신호(typingSeats)로 넘기고 4.5초 뒤 저절로 꺼진다 (CHAT-04)", () => {

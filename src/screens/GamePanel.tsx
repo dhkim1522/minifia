@@ -204,7 +204,6 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
         <DiscussionPanel
           key={`${view.round ?? 1}:${view.day?.n ?? 0}:${view.phase}`}
           binding={binding.onSend ? { ...binding, onSend: sendChat } : binding}
-          logHeight={logHeight}
           kbOpen={kbOpen}
           playtest={playtest}
           inputRef={inputRef}

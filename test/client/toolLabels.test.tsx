@@ -533,10 +533,13 @@ describe("방 화면 전수 — 이름표 0건·접근성 이름 (TOOL-04)", () 
     l.unmount();
     // [내 역할] 시트(낮 토론)
     const day = renderRoom(makeView({ phase: "discussion", viewpoint: "police" }));
-    const role = document.body.querySelector<HTMLElement>('.mf-rolecard-btn[aria-label^="내 역할"]');
+    const menu = document.body.querySelector<HTMLElement>("[data-game-menu]");
+    expect(menu, "메뉴 단추").not.toBeNull();
+    act(() => void fireEvent.click(menu!));
+    const role = document.body.querySelector<HTMLElement>("[data-game-menu-role]");
     expect(role, "내 역할 단추").not.toBeNull();
     act(() => void fireEvent.click(role!));
-    expect(document.body.querySelector("dialog"), "내 역할 시트").not.toBeNull();
+    expect(document.body.querySelector('dialog[aria-label="역할 카드"]'), "내 역할 시트").not.toBeNull();
     expect(violations("내 역할 시트")).toEqual([]);
     day.unmount();
     // 유언 시트(낮 토론 — [유언] 단추)

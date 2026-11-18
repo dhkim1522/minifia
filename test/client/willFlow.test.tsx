@@ -874,7 +874,7 @@ describe("유언 단계 — 나머지 사람 화면 (22-11 P22-9, D-16)", () => 
 
   it("처형자가 아닌 산 사람: 시트 없음, 입력줄만 잠김(안내 글자·[보내기]·[유언]·깃펜 없음), 기록 칸 높이는 채팅 패널 그대로", () => {
     clock();
-    const normal = mount(makeView({ phase: "discussion", mySeat: 3 }));
+    const normal = mount(makeView({ phase: "morning", mySeat: 3 }));
     const normalLog = normal.container.querySelector<HTMLElement>("[data-chat-log]")!.style.height;
     cleanup();
     const m = mount(defenseOf({ mySeat: 3, candidate: 5 }));

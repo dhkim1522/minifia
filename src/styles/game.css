@@ -1,4 +1,4 @@
-/* 게임 맵 화면 틀(8페이즈 08-13, UI-SPEC "게임 화면 틀"). 6페이즈 대기실 틀(lobby.css)의 층·z 를 그대로 쓴다. 값은 tokens.css 변수만 쓴다(색 직접 지정 없음).
+/* 게임 맵 화면 틀(8페이즈 08-13, UI-SPEC "게임 화면 틀"). 6페이즈 대기실 틀(lobby.css)의 층·z 를 그대로 쓴다.
    캔버스(WorldStage) 한 장이 방 화면 본문을 채우고, 위쪽 가림막·헤더·알림·[테스트]·아래 패널이 그 위에 얹힌다.
    캔버스는 헤더·패널 때문에 크기가 줄지 않는다 — 카메라 중심만 스테이지 사각형(헤더 아래 ~ 패널 위)으로 옮긴다.
    안전 영역: 앱 틀(#root 패딩 · .mf-room 높이)이 이미 비켜 있어 여기서 env() 를 더하지 않는다. */
@@ -30,16 +30,65 @@
 /* iOS 가 키보드를 위해 화면을 위로 밀면 헤더 계열이 그만큼 내려와 보이는 영역 맨 위에 머문다. */
 .mf-game__scrim, .mf-game__header, .mf-game__test, .mf-game .mv-toast { transform: translateY(var(--mf-vv-top, 0px)); }
 
-/* 토론 기록은 메시지를 말풍선으로 읽게 하고, 참여·단계 기록은 배경 없이 표시한다. */
-.mf-discussion-panel .mv-chat__msg { font-size: 14px; line-height: 1.4; }
-.mf-discussion-panel .mv-chat__name { color: var(--noir-silver); }
-.mf-discussion-panel .mv-chat__msg .mv-chat__text {
-  display: inline-block;
-  max-width: 100%;
-  padding: 2px 7px;
-  border-radius: 3px 7px 7px;
-  background: var(--noir-raised);
+/* A안의 도구 줄과 채팅 사이에는 구분선 하나를 둔다. */
+.mf-game .mf-discussion-panel {
+  --mf-discussion-font: "Apple SD Gothic Neo", system-ui, sans-serif;
+  gap: 0;
+  padding: 0;
+  background: #182332;
+  border-radius: 0;
+  box-shadow: none;
 }
+.mf-discussion-panel > .mf-playtest__feedback,
+.mf-discussion-panel > .mf-playtest__result { padding-inline: 12px; }
+.mf-discussion-panel .mv-chat { gap: 0; font-family: var(--mf-discussion-font); }
+.mf-discussion-panel .mv-chat__log {
+  gap: 5px;
+  padding: 7px 12px 4px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.mf-discussion-panel .mv-chat.is-compact .mv-chat__log { padding-block: 2px; }
+.mf-discussion-panel .mv-chat__msg {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 8px;
+  color: #fbf5e9;
+}
+.mf-discussion-panel .mv-chat__avatar {
+  flex: none;
+  border-radius: 50%;
+  background: #394762;
+  object-fit: cover;
+}
+.mf-discussion-panel .mv-chat__bubble-body { min-width: 0; }
+.mf-discussion-panel .mv-chat__byline { display: flex; align-items: center; min-height: 14px; margin-bottom: 1px; }
+.mf-discussion-panel .mv-chat__name { margin: 0; color: #ccd6e4; font-size: 14px; font-weight: 700; line-height: 14px; }
+.mf-discussion-panel .mv-chat__msg .mv-chat__text {
+  display: block;
+  width: fit-content;
+  padding: 3px 7px;
+  border-radius: 2px 7px 7px;
+  background: #2a374b;
+  font-size: 14px;
+  line-height: 17px;
+}
+.mf-discussion-panel .mv-chat__form { gap: 6px; margin: 8px 12px 12px; }
+.mf-discussion-panel .mv-chat.is-compact .mv-chat__form { margin-bottom: 8px; }
+.mf-discussion-panel .mv-chat__input { height: var(--tap-min); padding-inline: 9px; border-color: #68788caa; border-radius: 7px; background: #101927; }
+.mf-discussion-panel .mv-chat__input::placeholder { color: #bdc6d3; font-size: 14px; opacity: 1; }
+.mf-discussion-panel .mv-chat__send { width: var(--tap-min); height: var(--tap-min); border-radius: 7px; }
+.mf-discussion-panel .mv-chat__send .mv-tool__face {
+  border: 1px solid #879bb4;
+  background: #435471;
+  color: #f8e4c4;
+  box-shadow: none;
+}
+.mf-discussion-panel .mv-chat__send[aria-disabled="true"] { opacity: 1; }
+.mf-discussion-panel .mv-chat__send[aria-disabled="true"] .mv-tool__face { border-color: #62748c; background: #364458; color: #e1d2b9; }
+.mf-discussion-panel .mv-chat__send svg { width: 20px; height: 20px; }
 
 /* 찬반 줄(08-16, UI-SPEC 패널 높이 표): VerdictPicker 84 + 간격 8 + 숫자 한 줄, 아래 기록과는 패널 간격 10. 변론자·유령은 숫자만 */
 .mf-game__verdict { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }

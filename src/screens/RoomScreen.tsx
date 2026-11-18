@@ -328,7 +328,9 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 역할 카드 시트(결정 0026): 열림·선택 탭과 "카드가 앞면이 된 적이 있는가" 는 단계 switch 밖에서 쥔다 —
   // 단계 화면이 바뀌어도 시트가 살아 있어야 한다(Pitfall 19 ⑧, UI-SPEC D).
   const [roleCard, setRoleCard] = useState<{ open: boolean; tab: RoleCardTab }>({ open: false, tab: "role" });
-  const [playtestSheet, setPlaytestSheet] = useState<"menu" | "leave" | null>(null);
+  const [gameMenu, setGameMenu] = useState<"menu" | "leave" | null>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const returnToMenu = useRef(false);
   const [seenFront, setSeenFront] = useState(false);
   const onSeenFront = useCallback(() => setSeenFront(true), []);
 
@@ -358,7 +360,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 읽은 개수도 0 으로 되돌린다 — 같은 방 코드로 새 판이 열려도 옛 값이 남지 않는다.
   useEffect(() => {
     if (phase === "lobby" || phase === "assigning") {
-      setPlaytestSheet(null);
+      setGameMenu(null);
       setSeenFront(false);
       setRoleCard({ open: false, tab: "role" });
       setNewCount(0);
@@ -373,7 +375,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   // 판이 끝나면 열려 있던 역할 카드·테스트 시트를 닫는다 — 결과 화면에는 두 버튼이 없고, 열린 시트가 [처음으로] 를 가리지 않게 한다(UI-SPEC 11, 04-25).
   useEffect(() => {
     if (phase === "ended") {
-      setPlaytestSheet(null);
+      setGameMenu(null);
       setRoleCard({ open: false, tab: "role" });
       setNewCount(0);
       setTestOpen(false);
@@ -386,15 +388,40 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     if (status === "removed") onExit(removedReason ?? "room_closed");
   }, [status, removedReason, onExit]);
 
-  // 헤더 오른쪽 슬롯은 모든 역할·모든 시점에 [역할 카드] 하나다(D-08). 안 읽은 일지가 있으면 앰버 점이 붙는다.
-  // 화면들이 받는 prop 이름은 myRoleButton 그대로다.
+  // 토론과 실험방에서는 메뉴 안에서 역할·기록과 소리에 접근한다.
   const myRoleButton = <RoleCardButton unread={unread > 0} onOpen={() => setRoleCard({ open: true, tab: "role" })} />;
   const reducedControls = shown?.playtest === true && shown.phase !== "lobby" && shown.phase !== "ended";
+  const discussionMenu = shown?.phase === "discussion" && shown.resting !== true;
+  const menuAvailable = (discussionMenu || reducedControls) && !shown?.resting && status !== "replaced" && status !== "failed";
+  useEffect(() => {
+    if (!menuAvailable && gameMenu !== null) setGameMenu(null);
+    if (gameMenu !== null || roleCard.open || !returnToMenu.current) return;
+    returnToMenu.current = false;
+    const target = menuButton.current ?? roomRef.current?.querySelector<HTMLButtonElement>(".mf-rolecard-btn");
+    target?.focus({ preventScroll: true });
+  }, [gameMenu, menuAvailable, roleCard.open]);
   const playtestHeader = shown?.playtest === true && (MAP_PHASES.has(shown.phase) || shown.phase === "roleReveal" || shown.phase === "keyword");
   const headerGauge = shown !== null && shown.playtest !== true && (
     shown.phase === "roleReveal" || shown.phase === "keyword" || (MAP_PHASES.has(shown.phase) && blockModeOf(shown) === null)
   );
-  const playtestMenu = <Button variant="text" className="mf-playtest__menu-button" data-playtest-menu="" aria-label="메뉴" onClick={() => setPlaytestSheet("menu")}><V2Icon name="ellipsis" size={23} /></Button>;
+  const menuAction = (
+    <button
+      ref={menuButton}
+      type="button"
+      className="mf-btn mf-game-menu"
+      data-game-menu=""
+      data-playtest-menu={shown?.playtest === true ? "" : undefined}
+      aria-label={unread > 0 ? "메뉴, 새 기록" : "메뉴"}
+      aria-haspopup="dialog"
+      onClick={() => {
+        returnToMenu.current = true;
+        setGameMenu("menu");
+      }}
+    >
+      <V2Icon name="ellipsis" size={23} />
+      {unread > 0 ? <span className="mf-rolecard-btn__dot" aria-hidden="true" /> : null}
+    </button>
+  );
 
   // 위쪽 바처럼 장면에 빈 왼쪽 위가 없는 단계(역할 확인)에서는 [테스트] 가 [역할 카드] 왼쪽 같은 칸에 놓인다.
   const testButton = testTools ? <TestToolsButton onOpen={() => setTestOpen(true)} /> : null;
@@ -412,27 +439,27 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     <div ref={roomRef} className="mf-root mf-room" data-first-round-playtest={reducedControls ? "" : undefined}>
       {view && banner !== "hidden" && <ReconnectBanner mode={banner} floating={shown?.phase === "lobby"} />}
       {playtestHeader ? null : shown && !shown.resting && status !== "replaced" && status !== "failed" ? (
-        <HostBand view={shown} offset={connection.offset} cardSeen={seenFront} sound={sound.supported && (shown.playtest !== true || shown.phase === "ended") ? sound : null} epoch={connection.epoch} headerGauge={headerGauge} />
+        <HostBand view={shown} offset={connection.offset} cardSeen={seenFront} sound={sound.supported && !discussionMenu && (shown.playtest !== true || shown.phase === "ended") ? sound : null} epoch={connection.epoch} headerGauge={headerGauge} />
       ) : view && sound.supported ? (
         // 쉬는 사람·안내 화면에는 띠가 없다(T-14-04). 소리 단추만 옛 자리의 독으로 둔다
         <HostDock sound={sound} />
       ) : null}
       <div className="mf-room__body">{renderBody()}</div>
-      {reducedControls && playtestSheet === "menu" ? (
-        <Sheet label="게임 메뉴" showClose onClose={() => setPlaytestSheet(null)}>
+      {menuAvailable && gameMenu === "menu" ? (
+        <Sheet label="게임 메뉴" showClose onClose={() => setGameMenu(null)}>
           <h2 className="mf-t-heading mf-sheet__title">게임 메뉴</h2>
           <div className="mf-sheet__actions">
-            <Button variant="secondary" block onClick={() => {
-              setPlaytestSheet(null);
+            <Button variant="secondary" block data-game-menu-role="" onClick={() => {
+              setGameMenu(null);
               setRoleCard({ open: true, tab: "role" });
             }}>내 역할과 기록</Button>
-            {sound.supported ? <div className="mf-playtest__sound"><span>소리</span><SoundButton sound={sound} /></div> : null}
-            <Button variant="text" block onClick={() => setPlaytestSheet("leave")}>방 나가기</Button>
+            {sound.supported ? <div className="mf-game-menu__sound"><span>소리</span><SoundButton sound={sound} /></div> : null}
+            <Button variant="text" block onClick={() => setGameMenu("leave")}>방 나가기</Button>
           </div>
         </Sheet>
       ) : null}
-      {reducedControls && playtestSheet === "leave" ? (
-        <ConfirmSheet title="방에서 나갈까요?" confirmLabel="나가기" confirmDisabled={!connection.canSend} onClose={() => setPlaytestSheet(null)} onConfirm={() => {
+      {menuAvailable && gameMenu === "leave" ? (
+        <ConfirmSheet title="방에서 나갈까요?" confirmLabel="나가기" confirmDisabled={!connection.canSend} onClose={() => setGameMenu(null)} onConfirm={() => {
           if (connection.send({ t: "leave" }) !== false) onExit("left");
         }} />
       ) : null}
@@ -544,9 +571,9 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             {view.phase === "assigning" ? (
               <Assigning view={view} />
             ) : view.phase === "keyword" ? (
-              <Keyword view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(view.playtest === true ? playtestMenu : myRoleButton)} send={connection.send} canSend={connection.canSend} onEvent={connection.onEvent} />
+              <Keyword view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(view.playtest === true ? menuAction : myRoleButton)} send={connection.send} canSend={connection.canSend} onEvent={connection.onEvent} />
             ) : (
-              <RoleReveal view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(view.playtest === true ? playtestMenu : myRoleButton)} onSeenFront={onSeenFront} send={connection.send} canSend={connection.canSend} />
+              <RoleReveal view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(view.playtest === true ? menuAction : myRoleButton)} onSeenFront={onSeenFront} send={connection.send} canSend={connection.canSend} />
             )}
           </PreGame>
         );
@@ -570,7 +597,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             store={store}
             chat={chat}
             roleCard={{ unread: unread > 0, onOpen: () => setRoleCard({ open: true, tab: "role" }) }}
-            {...(view.playtest === true ? { headerAction: playtestMenu } : {})}
+            {...(view.playtest === true || view.phase === "discussion" ? { headerAction: menuAction } : {})}
             testButton={testButton}
             announce={announce}
             deny={deny}

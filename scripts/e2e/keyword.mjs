@@ -3,7 +3,7 @@
 // day.mjs·avatar.mjs 와 같은 모양: helpers 를 받고 서로 import 하지 않는다.
 // helpers: { recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK }.
 // 표식(data-keyword-*·data-answer-*·data-announce-label·data-early)에는 역할·키워드 값이 없다 — 키워드는 텍스트 노드로만 읽는다(T-23-43).
-import { chooseVerdict, installFakeViewport, settle, skipDayToExecution, skipTo, sleep, watchSockets } from "./browser.mjs";
+import { chooseVerdict, installFakeViewport, openRoleCard, settle, skipDayToExecution, skipTo, sleep, watchSockets } from "./browser.mjs";
 import { OVERLAP_EPS, TAP_MIN } from "./lib.mjs";
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
@@ -577,7 +577,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         const collapsed = !(await readDiscussionEvidence(p.page)).listOpen;
         await input.fill("");
         await input.blur();
-        await at(`KW8 ${p.who} [내 역할]`, () => p.page.locator(".mf-rolecard-btn").click({ timeout: 4000 }));
+        await at(`KW8 ${p.who} 내 역할과 기록`, () => openRoleCard(p.page));
         await at(`KW8 ${p.who} 단서와 의심 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
         const sh = await readAnswerSheet(p.page);
         await closeOpenSheet(p.page);
@@ -614,7 +614,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       await Promise.all(pages.map((p) => p.tracker.waitFor((v) => v.phase === "night", 9000, "정답 공개 → 밤")));
       const correct = [];
       for (const p of pages) {
-        await at(`KW10 ${p.who} [내 역할]`, () => p.page.locator(".mf-rolecard-btn").click({ timeout: 4000 }));
+        await at(`KW10 ${p.who} 내 역할과 기록`, () => openRoleCard(p.page));
         await at(`KW10 ${p.who} 단서와 의심 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
         await p.page.waitForSelector("dialog.mf-dialog--open [data-answer-list]", { timeout: 4000 }).catch(() => {});
         const sh = await readAnswerSheet(p.page);

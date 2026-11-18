@@ -1370,7 +1370,15 @@ export async function skipDayToExecution(page, tracker, voters = []) {
 }
 
 export async function openRoleCard(page) {
-  if ((await dialogOf(page, "역할 카드").count()) === 0) await page.locator(".mf-rolecard-btn").click();
+  if ((await dialogOf(page, "역할 카드").count()) === 0) {
+    const menu = page.locator("[data-game-menu]");
+    if (await menu.count()) {
+      if ((await dialogOf(page, "게임 메뉴").count()) === 0) await menu.click({ timeout: 4000 });
+      await dialogOf(page, "게임 메뉴").locator("[data-game-menu-role]").click({ timeout: 4000 });
+    } else {
+      await page.locator(".mf-rolecard-btn").click({ timeout: 4000 });
+    }
+  }
   await page.locator('dialog[aria-label="역할 카드"].mf-dialog--open').waitFor({ state: "attached", timeout: 5000 });
   await page.waitForTimeout(300);
 }

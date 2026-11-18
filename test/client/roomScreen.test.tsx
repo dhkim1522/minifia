@@ -816,7 +816,8 @@ describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
     expect(evidence()?.querySelectorAll("[data-evidence-row]")).toHaveLength(rows.length);
     expect(container.querySelector("[data-chat-input]")).toBe(chat);
     expect(container.querySelector<HTMLInputElement>("[data-chat-input]")?.disabled).toBe(false);
-    fireEvent.click(container.querySelector(".mf-rolecard-btn")!);
+    fireEvent.click(container.querySelector("[data-game-menu]")!);
+    fireEvent.click(container.querySelector("[data-game-menu-role]")!);
     fireEvent.click(container.querySelector('[data-rolecard-tab="records"]')!);
     expect(sheet()?.getAttribute("aria-label")).toBe("모두의 기록");
   });

@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PhaseId, RoomView } from "../../shared/protocol";
@@ -142,15 +142,15 @@ describe("자막 띠 트레이서 (HOST-01, TOOL-02)", () => {
     expect(bands(container)).toHaveLength(0);
   });
 
-  it("소리 지원 환경이면 소리 단추가 띠 안 독에 있다 (방 틀 직속이 아님)", () => {
+  it("토론에서는 헤더 메뉴에서 소리를 조절한다", () => {
     const rig = makeRig();
     rig.engine.unlock();
     setEngineForTest(rig.engine);
     const { container } = renderRoom(makeView({ phase: "discussion" }));
-    const button = container.querySelector("[data-sound-button]");
-    expect(button).not.toBeNull();
-    expect(button?.closest("[data-host-band]")).not.toBeNull();
-    expect(button?.parentElement?.classList.contains("mv-host__dock")).toBe(true);
+    expect(container.querySelector("[data-sound-button]")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "메뉴" }));
+    const menu = screen.getByRole("dialog", { name: "게임 메뉴" });
+    expect(menu.querySelector("[data-sound-button]")).not.toBeNull();
   });
 
   it("띠의 data 속성은 값 없는 표식뿐이다 (T-14-03)", () => {
@@ -262,7 +262,7 @@ describe("띠 아래 자리 (U-1·U-6·U-8)", () => {
   });
 
   it("헤더 아랫변 + 8과 소리 독 아랫변이 방 틀 변수로 쓰인다", () => {
-    renderRoom(makeView({ phase: "discussion" }));
+    renderRoom(makeView({ phase: "night" }));
     expect(roomVar("--mf-host-top")).toBe("70px");
     expect(roomVar("--mf-host-bottom")).toBe("");
     expect(roomVar("--mf-host-dock")).toBe("126px");

@@ -15,9 +15,9 @@ type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", st
 
 const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
   ellipsis: [
-    ["c", 5, 12, 1.6, true],
-    ["c", 12, 12, 1.6, true],
-    ["c", 19, 12, 1.6, true],
+    ["c", 5, 12, 1, true],
+    ["c", 12, 12, 1, true],
+    ["c", 19, 12, 1, true],
   ],
   ballot: [
     ["p", "M3 15h18v6H3zM3 15l3-4h3m7 0h2l3 4M9 15h6"],

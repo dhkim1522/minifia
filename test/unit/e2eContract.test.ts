@@ -16,6 +16,7 @@ import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS, SEAL_GLYPH } from "../../src/game/
 import { RESULT_PANEL_TEXT, RESULT_TABS } from "../../src/game/resultText";
 import {
   CHAT_PANEL_EXTRA,
+  DISCUSSION_LOG_H,
   DISCUSSION_PANEL_EXTRA,
   KB_PANEL_H,
   KB_PANEL_REST,
@@ -228,7 +229,7 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     }
     for (const roomH of [560, 640, 664, 779, 780, 844, 874, 932]) {
       expect(gamePanelHeight(roomH, "chat")).toBe(LOG_H + CHAT_PANEL_EXTRA);
-      expect(gamePanelHeight(roomH, "talk")).toBe(LOG_H + DISCUSSION_PANEL_EXTRA);
+      expect(gamePanelHeight(roomH, "talk")).toBe(DISCUSSION_LOG_H + DISCUSSION_PANEL_EXTRA);
     }
   });
 

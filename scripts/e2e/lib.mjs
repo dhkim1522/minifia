@@ -246,6 +246,8 @@ export const ONE_LINE_FACTOR = 1.6;
 //      값을 바꾸려면 UI-SPEC 과 chatUi.ts 를 먼저 바꾼다. ----
 /** 기록 칸 한 값(chatUi.LOG_H 사본, 18.1 P181-3) — 방 높이·키보드와 무관 */
 export const LOG_H = 68;
+/** 토론 고정 기록 높이(chatUi.DISCUSSION_LOG_H 사본) */
+export const DISCUSSION_LOG_H = 92;
 /** 로비 패널 = LOG_H + 154 */
 export const LOBBY_PANEL_EXTRA = 154;
 /** 채팅 패널(게임 맵의 지목·변론 단계의 입력줄 패널) = LOG_H + 92 */
@@ -270,7 +272,7 @@ export function lobbyPanelHeight(logH) {
 // 모든 판정은 다른 판정과 같은 { id, label, ok, detail } 줄(들)을 돌려준다. 값이 없거나 숫자가 아니면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
 
 /** 게임 맵 패널에서 기록 칸 밖 높이. 토론은 DISCUSSION_PANEL_EXTRA 사본, 밤은 faceListPanelH를 사용한다. */
-export const GAME_PANEL_EXTRA = Object.freeze({ talk: 128, chat: CHAT_PANEL_EXTRA, verdictVoter: 218, verdictViewer: 126 });
+export const GAME_PANEL_EXTRA = Object.freeze({ talk: 130, chat: CHAT_PANEL_EXTRA, verdictVoter: 218, verdictViewer: 126 });
 
 /**
  * 밤 얼굴 목록 패널 높이(09-UI-SPEC 160행 식, 안전 영역 제외). w = 폰 폭, n = 후보 수(밤 동안 변하지 않는다), wrappedRows = 이름이 줄바꿈된 행 수.
@@ -284,7 +286,7 @@ export function faceListPanelH({ w, n, wrappedRows = 0 }) {
 }
 
 /**
- * 게임 맵 아래 패널의 기대 높이(기록 칸 + 여분 — 입력줄 단추가 48 원이라 보정 없음, 16-05). kind 는 GAME_PANEL_EXTRA 의 키 또는 "faceList"(opts = { w, n, wrappedRows? }). roomH 는 faceList 와 호출 모양을 맞추려고 받는다 — 18.1 부터 기록 칸은 한 값(LOG_H)이라 값에 쓰지 않는다.
+ * 게임 맵 아래 패널의 기대 높이. kind는 GAME_PANEL_EXTRA의 키 또는 "faceList"(opts = { w, n, wrappedRows? }).
  * 알 수 없는 kind 는 던진다.
  */
 export function gamePanelHeight(roomH, kind, opts) {
@@ -294,7 +296,7 @@ export function gamePanelHeight(roomH, kind, opts) {
   }
   const extra = Object.hasOwn(GAME_PANEL_EXTRA, kind) ? GAME_PANEL_EXTRA[kind] : undefined;
   if (extra === undefined) throw new Error(`알 수 없는 패널 종류: ${kind}`);
-  return LOG_H + extra;
+  return (kind === "talk" ? DISCUSSION_LOG_H : LOG_H) + extra;
 }
 
 // ---- 9페이즈 표식·판정 (09-21, 09-UI-SPEC "검사 가능하게 둘 것" 450~455행). 8페이즈 표식(data-game-stage·data-announce·data-pick 등)은 그대로라 여기 없다. ----

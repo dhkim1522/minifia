@@ -8,10 +8,12 @@
 
 /** 채팅 기록 칸의 기본 높이. 로비와 이전 지도 단계는 눌러서 기록 칸을 늘린다(0083-4). */
 export const LOG_H = 68;
+/** 이름·아바타·한 줄 말풍선을 두 건 온전히 읽을 수 있는 토론 기록 높이 */
+export const DISCUSSION_LOG_H = 92;
 /** 토론에서 키보드 위에 고정하는 기록 칸 높이 */
-export const DISCUSSION_KB_LOG_H = 40;
-/** 토론 패널의 기록 칸 밖 높이 = 여백 8+12, 도구 44, 간격 8+8, 입력 48 */
-export const DISCUSSION_PANEL_EXTRA = 128;
+export const DISCUSSION_KB_LOG_H = 42;
+/** 토론 패널의 기록 칸 밖 높이 = 도구 66, 입력 간격 8 + 입력 44 + 하단 12 */
+export const DISCUSSION_PANEL_EXTRA = 130;
 
 /** 로비 패널 = LOG_H + 154 = 14 + LOG_H + 8 + 48(입력줄) + 10 + 52(행동 줄) + 22. 방장 패널 = 참가자 패널(19-04, P19-12) — 튜토리얼 스위치는 방장 줄의 토글이라 패널에 줄을 더하지 않는다 */
 export const LOBBY_PANEL_EXTRA = 154;

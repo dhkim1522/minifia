@@ -21,7 +21,7 @@ export function GamePhaseHeader({ title, view, offset, extra, timeless, tod, epo
   const roleReadyTimed = view.playtest === true && view.phase === "roleReveal" && phaseDurationMs !== null && phaseDurationMs >= 3000;
   const hasTime = !timeless && view.phase !== "dayAnnounce" && phaseEndsAt !== null && phaseDurationMs !== null && (roleReadyTimed || hostTimeOf(view));
   return (
-    <div className="mf-game-phase-header" data-phase-header="" data-early={early ? "" : undefined}>
+    <div className="mf-game-phase-header" data-phase-header="" data-discussion-header={view.phase === "discussion" ? "" : undefined} data-early={early ? "" : undefined}>
       <span className="mv-phase__line" data-tod={tod?.id}>
         {tod?.word ? (
           <>

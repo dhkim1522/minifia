@@ -254,7 +254,7 @@ const todGood = (phase = "discussion") => {
   return {
     count: 1,
     tod,
-    word: WORD_OF[tod],
+    word: phase === "discussion" ? null : WORD_OF[tod],
     titleText: TITLE_OF[phase],
     line: box(16, 18, 150, 29),
     title: box(76, 18, 90, 29),
@@ -289,8 +289,8 @@ test("todChecks: 밤인데 낱말 요소가 있으면 D1 실패, 아침도 같�
   assert.deepEqual(failing(todChecks({ ...todGood("morning"), word: "아침" }, { phase: "morning" })), ["D1"]);
 });
 
-test("todChecks: 토론인데 낱말이 없거나 '저녁' 이면 D1 실패", () => {
-  assert.deepEqual(failing(todChecks({ ...todGood(), word: null }, { phase: "discussion" })), ["D1"]);
+test("todChecks: 토론 제목 앞에 시간대 낱말을 쓰면 D1 실패", () => {
+  assert.deepEqual(failing(todChecks({ ...todGood(), word: "낮" }, { phase: "discussion" })), ["D1"]);
   assert.deepEqual(failing(todChecks({ ...todGood(), word: "저녁" }, { phase: "discussion" })), ["D1"]);
 });
 

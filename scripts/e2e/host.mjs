@@ -578,12 +578,18 @@ export function makeHostFlows({ recorder, attempt, startHost, openGuest, closeGa
         // 새로고침 뒤에는 잠김(locked) → 한 번 누르면 켬(on) → 한 번 더 누르면 끔(off). 끔이 될 때까지 최대 3번 누른다
         const off = await attempt(async () => {
           const btn = hp.locator("[data-sound-button]").first();
-          for (let i = 0; i < 3; i++) {
-            if ((await btn.getAttribute("data-sound-state")) === "off") return;
-            await btn.click({ timeout: 4000 });
-            await sleep(500);
+          const openMenu = (await btn.count()) === 0 && (await hp.locator("[data-game-menu]").count()) > 0;
+          if (openMenu) await hp.locator("[data-game-menu]").click({ timeout: 4000 });
+          try {
+            for (let i = 0; i < 3; i++) {
+              if ((await btn.getAttribute("data-sound-state")) === "off") return;
+              await btn.click({ timeout: 4000 });
+              await sleep(500);
+            }
+            if ((await btn.getAttribute("data-sound-state")) !== "off") return { ok: false, detail: `소리 단추 상태 ${await btn.getAttribute("data-sound-state")}` };
+          } finally {
+            if (openMenu) await closeSheet(hp, "게임 메뉴");
           }
-          if ((await btn.getAttribute("data-sound-state")) !== "off") return { ok: false, detail: `소리 단추 상태 ${await btn.getAttribute("data-sound-state")}` };
         });
         rec(`${id}/muted`, "ES1", "소리 단추로 소리를 끈다", off.ok, off.detail);
         if (off.ok) await stepSeg("muted", "소리 끔 → 단계 전환");

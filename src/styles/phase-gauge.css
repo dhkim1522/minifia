@@ -14,6 +14,39 @@
   font-size: clamp(16px, 4.8vw, 20px);
 }
 
+/* 승인된 토론 시안 A의 제목과 헤더 간격. 시간은 공용 게이지를 쓴다. */
+.mf-game__header:has([data-discussion-header]) {
+  height: var(--mf-discussion-header-height, 61px);
+  padding: 8px 10px 8px 14px;
+}
+
+.mf-game-phase-header[data-discussion-header] .mv-phase__title {
+  color: #fbf5e9;
+  font: 700 19px/1.2 "Apple SD Gothic Neo", system-ui, "Noto Sans KR", "Malgun Gothic", sans-serif;
+  text-shadow: 0 2px 4px #0c1322;
+}
+
+.mf-btn.mf-game-menu {
+  position: relative;
+  flex: none;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  min-height: var(--tap-min);
+  padding: 0;
+  border: 1px solid #68758b82;
+  border-radius: 11px;
+  background: #1c2638dc;
+  color: #f8f0e3;
+}
+
+.mf-game-menu__sound {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--gray-50);
+}
+
 .mf-game-phase-header__actions {
   grid-column: 3;
   display: flex;

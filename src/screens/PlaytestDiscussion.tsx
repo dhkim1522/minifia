@@ -7,7 +7,7 @@ import { EmoteTray } from "../components/v2/EmoteTray";
 import { HeadCount } from "../components/v2/HeadCount";
 import { V2Icon } from "../components/v2/V2Icon";
 import { CHAT_TEXT, EMOTE_SHORT, EMOTE_TEXT } from "../game/chatText";
-import { DISCUSSION_KB_LOG_H } from "../game/chatUi";
+import { DISCUSSION_KB_LOG_H, DISCUSSION_LOG_H } from "../game/chatUi";
 import { SUSPECT_TEXT } from "../game/suspectView";
 import type { SuspectApi } from "../net/useSuspect";
 import type { ChatPanelBinding } from "./GamePanel";
@@ -17,7 +17,6 @@ const QUICK_REACTIONS = ["praise", "deny", "surprise"] as const;
 
 export interface DiscussionToolsProps {
   binding: ChatPanelBinding;
-  logHeight: number;
   kbOpen: boolean;
   playtest: boolean;
   callInput?: boolean;
@@ -30,7 +29,7 @@ export interface DiscussionToolsProps {
   will?: { open: boolean; saved: boolean; request: (opener: HTMLElement) => void };
 }
 
-export function DiscussionPanel({ binding, logHeight, kbOpen, playtest, callInput, onInputFocus, inputRef, suspect, vote, will }: DiscussionToolsProps) {
+export function DiscussionPanel({ binding, kbOpen, playtest, callInput, onInputFocus, inputRef, suspect, vote, will }: DiscussionToolsProps) {
   const [surface, setSurface] = useState<Surface | null>(null);
   const [reacted, setReacted] = useState("");
   const { evidence, ...composer } = binding;
@@ -92,7 +91,7 @@ export function DiscussionPanel({ binding, logHeight, kbOpen, playtest, callInpu
       {playtest ? <span className="mf-sr-only" role="status">{reacted}</span> : null}
       <ChatPanel
         {...composer}
-        logHeight={kbOpen ? Math.min(logHeight, DISCUSSION_KB_LOG_H) : logHeight}
+        logHeight={kbOpen ? DISCUSSION_KB_LOG_H : DISCUSSION_LOG_H}
         compact={kbOpen}
         fixedLog
         emotes={[]}
@@ -151,7 +150,7 @@ export function DiscussionPanel({ binding, logHeight, kbOpen, playtest, callInpu
   );
 }
 
-export function PlaytestGhostChat({ binding, logHeight, kbOpen, inputRef }: Pick<DiscussionToolsProps, "binding" | "logHeight" | "kbOpen" | "inputRef">) {
+export function PlaytestGhostChat({ binding, logHeight, kbOpen, inputRef }: Pick<DiscussionToolsProps, "binding" | "kbOpen" | "inputRef"> & { logHeight: number }) {
   const [open, setOpen] = useState(false);
   const opening = useRef(false);
   const returning = useRef(false);

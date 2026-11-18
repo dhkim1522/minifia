@@ -216,13 +216,13 @@ export function roleLineBoxChecks(boxes, { max, id, count }) {
 /**
  * D1·D4·D5 판정(게임 맵 단계 하나). 입력 m = { count, tod, word, titleText, line, title, header, headerButtons: [rect], oldBadges, weatherImgs } (readTodHead).
  * ctx = { phase }. 사각형은 같은 좌표계(보이는 화면)다.
- * D1 [data-tod] 하나·값 = TOD_BY_PHASE[phase]·낱말 규칙(밤·아침은 낱말 요소 없음, 낮·저녁은 TOD_WORD 낱말) ·
+ * D1 [data-tod] 하나·값 = TOD_BY_PHASE[phase]·낱말 규칙(토론·밤·아침은 낱말 요소 없음) ·
  * D4 헤더 높이 62·시간대 글자가 한 줄·글자 오른쪽 끝이 헤더 단추 왼쪽 끝을 넘지 않음 ·
  * D5 옛 날씨 배지(.mv-tod) 0개·날씨 그림 요소 0개.
  */
 export function todChecks(m, { phase }) {
   const L = {
-    D1: `시간대 글자가 하나·값 ${TOD_BY_PHASE[phase] ?? "?"}·낱말 규칙대로다(밤·아침은 한 단어)`,
+    D1: `시간대 표식은 하나·값 ${TOD_BY_PHASE[phase] ?? "?"}·토론·밤·아침은 제목만 보인다`,
     D4: "헤더 높이가 그대로고 시간대 글자가 한 줄이며 헤더 단추와 겹치지 않는다",
     D5: "옛 날씨 배지와 날씨 그림이 없다",
   };
@@ -239,8 +239,8 @@ export function todChecks(m, { phase }) {
     else {
       if (m.tod !== want) bad.push(`값 ${m.tod} (기대 ${want})`);
       if (want !== undefined) {
-        if (ONE_WORD_TODS.includes(want)) {
-          if (m.word !== null) bad.push(`${want} 는 한 단어인데 낱말 요소 '${m.word}' 가 있음`);
+        if (phase === "discussion" || ONE_WORD_TODS.includes(want)) {
+          if (m.word !== null) bad.push(`${phase} 제목 앞에 낱말 요소 '${m.word}' 가 있음`);
         } else if (m.word !== TOD_WORD[want]) bad.push(`낱말 ${m.word === null ? "없음" : `'${m.word}'`} (기대 '${TOD_WORD[want]}')`);
       }
       if (typeof m.titleText !== "string" || m.titleText === "") bad.push("측정값 없음(단계 이름 글자)");

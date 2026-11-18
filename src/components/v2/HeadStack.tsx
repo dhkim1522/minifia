@@ -63,7 +63,7 @@ export function NameTag({ name, color, me, away, mine, done, doneLabel, blink, c
   return (
     <span className={cls}>
       <span className="mv-tag__dot" style={{ background: color }} />
-      <span className="mv-tag__name">{me && name !== ME_NAME ? `${name} (나)` : name}</span>
+      <span className="mv-tag__name">{name}{me && name !== ME_NAME ? <span className="mv-tag__self"> (나)</span> : null}</span>
       {mine ? <V2Icon name="point" size={16} label={MINE_LABEL} /> : null}
       {done ? (
         <span className="mv-tag__done">

@@ -170,7 +170,7 @@ interface GameMapProps {
 function MapHeader({ view, offset, hintOn, hintOverride, extra, tod, epoch }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode; tod: boolean; epoch: number }) {
   if (view.playtest === true || blockModeOf(view) === null) {
     const title = view.phase === "verdict" && view.day?.firstBallot !== undefined ? "투표" : headerFor(view).title;
-    return <GamePhaseHeader title={title} view={view} offset={offset} epoch={epoch} {...(tod ? { tod: { id: todOf(view.phase), word: todWordOf(view.phase, title) } } : {})} extra={extra} />;
+    return <GamePhaseHeader title={title} view={view} offset={offset} epoch={epoch} {...(tod ? { tod: { id: todOf(view.phase), word: view.phase === "discussion" ? null : todWordOf(view.phase, title) } } : {})} extra={extra} />;
   }
   return <LegacyMapHeader view={view} offset={offset} hintOn={hintOn} {...(hintOverride !== undefined ? { hintOverride } : {})} extra={extra} tod={tod} />;
 }
@@ -725,7 +725,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
 
   return (
     <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>
-      {/* DOM 순서 = Tab 순서: 헤더([역할 카드]) → 맵(이름표) → 아래 패널(입력). 층 순서는 z 가 정한다 */}
+      {/* DOM 순서 = Tab 순서: 헤더 조작 → 맵 이름표 → 아래 패널 입력 */}
       <div className="mf-game__scrim" aria-hidden="true" />
       <header ref={headerRef} className="mf-game__header">
         <MapHeader

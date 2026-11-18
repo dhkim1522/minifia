@@ -114,7 +114,6 @@ import {
   walkStartChecks,
   pcCenterChecks,
   wakeLockChecks,
-  GAME_PANEL_EXTRA,
   announceChecks,
   announceClearChecks,
   faceListPanelH,
@@ -1460,7 +1459,7 @@ function panelRow(rec, sc, id, g, h, kind, who) {
   const want = gamePanelHeight(h, kind);
   const got = g?.panel?.height;
   const ok = typeof got === "number" && Math.abs(got - want) <= 1;
-  rec(sc, id, `아래 패널 높이 LOG_H + ${GAME_PANEL_EXTRA[kind]} (${who})`, ok, `실제 ${typeof got === "number" ? Math.round(got * 10) / 10 : got} ≠ 기대 ${want}`);
+  rec(sc, id, `아래 패널 높이 ${want}px (${who})`, ok, `실제 ${typeof got === "number" ? Math.round(got * 10) / 10 : got} ≠ 기대 ${want}`);
 }
 
 /** 게임 화면의 G(공통)·H(헤더 대비) 묶음을 한 페이지에 적용한다. */

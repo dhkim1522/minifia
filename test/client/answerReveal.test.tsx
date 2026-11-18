@@ -227,7 +227,7 @@ describe("정답 공개 화면 — 띠·제목·패널 (23-07, P23-21)", () => {
 
   it("채팅 기록 칸 높이가 바뀌지 않는다 — 처형 단계의 산 사람 패널과 같다", () => {
     const logH = (c: HTMLElement) => c.querySelector<HTMLElement>("[data-chat-log]")!.style.height;
-    const a = logH(mount(makeView({ phase: "discussion" })).container);
+    const a = logH(mount(makeView({ phase: "execution" })).container);
     cleanup();
     expect(logH(mount(makeView()).container)).toBe(a);
   });

@@ -17,6 +17,34 @@
 /* 겹친 맨 앞 이름표의 어두운 면은 불투명하게 한다. 지목한 이름표의 종이 면은 그대로 쓴다. */
 .mf-world__tag[data-front="true"] .mv-tag:not(.is-mine) { background: var(--overlay-ink-strong); }
 
+/* 토론 A안의 이름표. 자신의 이름은 밝은 면으로 구분하고 전체 이름과 선택 상태를 보존한다. */
+[data-game-stage][data-phase="discussion"] { --mf-discussion-header-height: 61px; }
+[data-game-stage][data-phase="discussion"] .mf-world__tags {
+  clip-path: inset(calc(var(--mf-discussion-header-height) + var(--mf-vv-top, 0px)) 0 0);
+}
+[data-game-stage][data-phase="discussion"] .mv-tag {
+  padding: 4px 7px;
+  border-radius: 7px;
+  font-family: system-ui, "Apple SD Gothic Neo", sans-serif;
+  line-height: 1.25;
+  text-shadow: none;
+}
+[data-game-stage][data-phase="discussion"] .mv-tag:not(.is-mine) {
+  background: #172234ee;
+  box-shadow: inset 0 0 0 1px #8297b5bd, 0 2px 8px #11162565;
+}
+[data-game-stage][data-phase="discussion"] .mf-world__tag[data-front="true"] .mv-tag:not(.is-mine, .is-me) { background: #172234; }
+[data-game-stage][data-phase="discussion"] .mv-tag.is-me:not(.is-mine) {
+  background: #e2edf9;
+  color: #273854;
+  box-shadow: 0 2px 8px #11162565;
+}
+[data-game-stage][data-phase="discussion"] .mv-tag__dot { display: none; }
+[data-game-stage][data-phase="discussion"] .mv-tag__self { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (prefers-reduced-motion: reduce) {
+  [data-game-stage][data-phase="discussion"] .mv-tag.is-blink { outline: 2px solid var(--gray-100); }
+}
+
 /* 방장이 누를 수 있는 끊긴 사람 이름표: 누르기 영역 44×44 이상(이름표 24 + 안쪽 11×2), 이름표 모양은 그대로(margin 으로 상쇄). */
 .mf-world__kick { display: block; padding: 11px; margin: -11px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; border-radius: var(--radius-pill); }
 .mf-world__kick:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
