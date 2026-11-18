@@ -666,16 +666,16 @@ test("04-30·06-17·08-23: 닫기 — 승인 목록은 네 건(결정 0056 의 �
 
 // ---- 08-23: 게임 맵 판정 (UI-SPEC "아래 패널 종류와 높이"·"검사 가능하게 둘 것") ----
 
-test("gamePanelHeight: 토론 LOG_H+154 · 채팅 +92 · 찬반 투표자 +218 · 찬반 보기 +126 (기록 칸 68 한 값 — 방 높이와 무관, 이름표 보정 없음 — 16-05)", () => {
-  assert.equal(gamePanelHeight(780, "talk"), 222);
+test("gamePanelHeight: 토론 LOG_H+128 · 채팅 +92 · 찬반 투표자 +218 · 찬반 보기 +126", () => {
+  assert.equal(gamePanelHeight(780, "talk"), 196);
   assert.equal(gamePanelHeight(640, "chat"), 160);
   assert.equal(gamePanelHeight(844, "verdictVoter"), 286);
   assert.equal(gamePanelHeight(640, "verdictViewer"), 194);
   // 방 높이를 바꿔도 값이 같다: [방 높이, 토론, 채팅, 투표자, 보기]
-  for (const [h, talk, chat, voter, viewer] of [[640, 222, 160, 286, 194], [664, 222, 160, 286, 194], [932, 222, 160, 286, 194], [560, 222, 160, 286, 194], [844, 222, 160, 286, 194], [874, 222, 160, 286, 194]]) {
+  for (const [h, talk, chat, voter, viewer] of [[640, 196, 160, 286, 194], [664, 196, 160, 286, 194], [932, 196, 160, 286, 194], [560, 196, 160, 286, 194], [844, 196, 160, 286, 194], [874, 196, 160, 286, 194]]) {
     assert.deepEqual([gamePanelHeight(h, "talk"), gamePanelHeight(h, "chat"), gamePanelHeight(h, "verdictVoter"), gamePanelHeight(h, "verdictViewer")], [talk, chat, voter, viewer], `방 높이 ${h}`);
   }
-  assert.deepEqual({ ...GAME_PANEL_EXTRA }, { talk: 154, chat: 92, verdictVoter: 218, verdictViewer: 126 });
+  assert.deepEqual({ ...GAME_PANEL_EXTRA }, { talk: 128, chat: 92, verdictVoter: 218, verdictViewer: 126 });
   assert.equal(GAME_PANEL_EXTRA.chat, CHAT_PANEL_EXTRA);
   assert.throws(() => gamePanelHeight(640, "table"), /알 수 없는 패널 종류/);
   assert.throws(() => gamePanelHeight(640, "toString"), /알 수 없는 패널 종류/);

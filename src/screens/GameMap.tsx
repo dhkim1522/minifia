@@ -18,9 +18,8 @@ import { SceneCurtain } from "../components/SceneCurtain";
 import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
-import { PlaytestHeader } from "../components/v2/PlaytestHeader";
+import { GamePhaseHeader } from "../components/v2/GamePhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
-import { SuspectButton } from "../components/v2/SuspectButton";
 import { suspectChipShown } from "../components/v2/HeadStack";
 import { CLAIM_ICON } from "../components/v2/ClaimBadge";
 import { ClaimSheet } from "../components/v2/ClaimSheet";
@@ -165,19 +164,13 @@ interface GameMapProps {
 }
 
 /**
- * 헤더(14-02, U-2·U-3): 기본판 화면은 제목 + [역할 카드] 뿐이다 — 안내 줄은 자막 띠(HostBand)가, 남은 시간은 띠의 막대 + 초가 맡는다.
- * 꺼진 장치 화면(day.turn 이 있는 순차 지목·결선·마지막 3인·귓속말 모드, 결정 0072 선례)은 13페이즈 계약 그대로 접히는 안내 줄 + 시간·차례 링을 쓴다.
- * 기본판에서는 서버가 그 view 를 보내지 않는다. 시간 링의 다시 그리기가 맵 화면 전체로 번지지 않게 시계 훅은 꺼진 장치 갈래 부품 안에 둔다.
+ * 일반 지도 단계는 제목, 남은 시간 게이지, 오른쪽 조작을 한 줄에 둔다.
+ * 순차 지목·결선·마지막 3인은 별도 차례 시계를 쓴다.
  */
-function MapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode; tod: boolean }) {
-  if (view.playtest === true) {
+function MapHeader({ view, offset, hintOn, hintOverride, extra, tod, epoch }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode; tod: boolean; epoch: number }) {
+  if (view.playtest === true || blockModeOf(view) === null) {
     const title = view.phase === "verdict" && view.day?.firstBallot !== undefined ? "투표" : headerFor(view).title;
-    return <PlaytestHeader title={title} view={view} offset={offset} extra={extra} />;
-  }
-  const legacy = blockModeOf(view) !== null || hintOverride !== undefined;
-  if (!legacy) {
-    const title = headerFor(view).title;
-    return <PhaseHeader title={title} {...(tod ? { tod: { id: todOf(view.phase), word: todWordOf(view.phase, title) } } : {})} extra={extra} />;
+    return <GamePhaseHeader title={title} view={view} offset={offset} epoch={epoch} {...(tod ? { tod: { id: todOf(view.phase), word: todWordOf(view.phase, title) } } : {})} extra={extra} />;
   }
   return <LegacyMapHeader view={view} offset={offset} hintOn={hintOn} {...(hintOverride !== undefined ? { hintOverride } : {})} extra={extra} tod={tod} />;
 }
@@ -231,7 +224,7 @@ function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomV
 export function GameMap({ view, store, chat, send, canSend = true, offset = 0, roleCard, headerAction, tod = true, panelless, camera, testButton, announce = null, deny, fading, ghostEnter = 0, killFx = null, policeResult = null, letter = null, onEvent, epoch = 0, onLeave, bottomExtra = 0, timeless = false }: GameMapProps) {
   const toast = useTopToast();
   const { show } = toast;
-  // 측정(스테이지 사각형)·키보드는 대기실과 같은 훅이다. 기록 칸은 LOG_H(68) 한 값 — 키보드가 열리면 행동 줄만 숨긴다(07-19, 18.1 P181-3).
+  // 스테이지 측정과 키보드 올림은 대기실과 같은 훅이다. 토론은 키보드가 열리면 기록 칸만 줄인다.
   // 지목이면 스테이지 윗변을 차례 알약 아랫변 + 4 로 내리고(UI-SPEC A-1) 작은 폰은 압축형 알약을 받는다(turnCompact). 알약 요소는 훅이 루트에서 `[data-turn-block]` 으로 찾는다.
   // 튜토리얼 지도 장면(panelless prop, 18-03)은 아래 패널이 없다: 스테이지가 띠 아래부터 화면 아래까지 넓어진다
   const playtest = view.playtest === true;
@@ -497,7 +490,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         label: SUSPECT_TEXT.target,
         onPick: (seat) => {
           suspect.pick(seat);
-          if (playtest) panelRef.current?.querySelector<HTMLButtonElement>('[data-playtest-action="suspect"]')?.focus({ preventScroll: true });
+          panelRef.current?.querySelector<HTMLButtonElement>('[data-suspect-btn]')?.focus({ preventScroll: true });
         },
         group: SUSPECT_TEXT.ready,
         attr: "data-suspect-tag",
@@ -738,6 +731,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         <MapHeader
           view={headerView}
           offset={offset}
+          epoch={epoch}
           hintOn={hintOn}
           {...(suspect.mode ? { hintOverride: SUSPECT_TEXT.modeHint } : whisper.mode ? { hintOverride: WHISPER_TEXT.modeHint } : {})}
           tod={tod && !playtest}
@@ -816,7 +810,17 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           kbOpen={kbOpen}
           lifted={kbLifted}
           veiled={veiled || (speakOpen && !speakWriting)}
-          suspect={playtest && suspect.visible && layerKind === null ? suspect : undefined}
+          suspect={suspect.visible && (!playtest || layerKind === null) ? {
+            ...suspect,
+            disabled: layerKind !== null || suspect.disabled,
+            toggleMode: () => {
+              whisper.off();
+              const result = suspect.toggleMode();
+              if (result === "deny") denySuspect();
+              return result;
+            },
+            ...(!playtest && canSend && layerKind === null && suspect.targets.size === 0 ? { deny: denySuspect } : {}),
+          } : undefined}
           result={mapResult}
           notice={playtest ? (
             <>
@@ -837,22 +841,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           onNightPickSent={(target) => {
             pointSent.current = { target, at: Date.now() };
           }}
-          chatTrailing={
-            !playtest && suspect.visible ? (
-              <SuspectButton
-                mode={suspect.mode}
-                used={suspect.used}
-                // 열린 시트·연결 끊김·근처 0명이면 비활성. 근처 0명일 때만 눌림이 거절 알림을 부른다(시트·끊김은 무반응)
-                disabled={!canSend || layerKind !== null || suspect.targets.size === 0}
-                noTargets={canSend && layerKind === null && suspect.targets.size === 0}
-                onToggle={() => {
-                  whisper.off();
-                  if (suspect.toggleMode() === "deny") denySuspect();
-                }}
-                onDeny={denySuspect}
-              />
-            ) : undefined
-          }
           onOpenWill={(opener) => {
             badge.setOpen(false);
             suspect.off();

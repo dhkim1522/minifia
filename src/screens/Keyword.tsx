@@ -3,14 +3,11 @@ import type { FormEvent, ReactNode } from "react";
 import { ANSWER_MAX_GRAPHEMES } from "../../shared/game/answerRules";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
-import { PhaseHeader } from "../components/v2/PhaseHeader";
-import { PlaytestHeader } from "../components/v2/PlaytestHeader";
+import { GamePhaseHeader } from "../components/v2/GamePhaseHeader";
 import { V2Icon } from "../components/v2/V2Icon";
 import { DAY_COPY } from "../game/dayView";
 import { callTargetsOf } from "../game/hostLine";
 import { sinceStartMs } from "../net/cardFace";
-import { timerTone } from "../net/countdown";
-import { useEarlyCalm } from "../net/earlyCalm";
 import { useComposedText } from "../net/useComposedText";
 import { useKeyboardLift } from "../net/useKeyboardLift";
 import { useKeywordAnswer } from "../net/useKeywordAnswer";
@@ -21,6 +18,8 @@ export interface KeywordProps {
   view: RoomView;
   /** 서버 시각 − 로컬 시각 */
   offset: number;
+  /** 연결 번호. 재연결 뒤 조기 진행 표시를 초기화한다 */
+  epoch?: number;
   /** [내 역할] 버튼. 모양은 RoomScreen 이 한 가지로 만들어 넘긴다 */
   myRoleButton: ReactNode;
   /** 답을 서버로 보낸다(보냈으면 true) */
@@ -44,13 +43,11 @@ const KEYWORD_COPY = {
   cardName: "제시어 카드",
   note: "제시어는 쓰지 말고 단서를 남겨요",
   hiddenHint: "주제를 보고 단서를 써요",
-  /** 입력줄: 입력칸 접근성 이름·[보내기] 이름(제출 전·뒤)·제출 뒤 메타 가운데 글. 안내 글자는 두지 않는다(띠가 맡는다) */
+  /** 입력줄: 입력칸 접근성 이름·[보내기] 이름(제출 전·뒤)·제출 뒤 상태 이름 */
   inputName: "단서 입력",
   sendName: "단서 보내기",
   sentName: "단서 보냄",
   done: "냈어요",
-  /** 남은 초: `n초` */
-  secs: (n: number): string => `${n}초`,
   /** 글자 수: `n/20` */
   count: (n: number): string => `${n}/${ANSWER_MAX_GRAPHEMES}`,
 } as const;
@@ -64,9 +61,9 @@ const CARD_ENTER_MS = 420;
 // 첫날 키워드 카드(23-01, P23-1~5) + 답 입력줄(23-09, P23-6·9~15). 역할 확인과 같은 3D 무대(PreGame, sceneKey preGame) 위 가운데 카드 하나와 아래 입력줄이다 — 무대는 PreGame 이 깐다.
 // 카드는 맨 위 장르, 가운데 큰 키워드(마피아는 ???), 아래 각주 한 줄이다. 마피아 표식 칩·색·문구는 따로 두지 않는다 — 모양은 시민과 같고 ??? 하나만 다르다.
 // 키워드는 서버가 시민 편 본인에게만 보낸다(me.keyword). 마피아는 키 자체가 없으니 DOM 에도 단어가 없다. 입력줄 표식(data-answer-*)에는 역할·키워드 값이 없다(T-23-33).
-// 입력줄: 메타 줄(남은 초·거절/냈어요·n/20) + 입력 행(입력칸 + [보내기] 원). 읽기 3초 동안 잠기고(locked) 풀리면 빛난다(open), 보내면 읽기 전용·check(sent).
+// 입력줄: 메타 줄(거절·n/20) + 입력 행(입력칸 + [보내기] 원). 읽기 3초 동안 잠기고(locked) 풀리면 빛난다(open), 보내면 읽기 전용·check(sent).
 // 글 규칙(잠금·20자소·거절·초안 저장)은 useKeywordAnswer, 서버가 정한 규칙을 표시·전송만 한다(결정 0002). 키보드가 열리면 카드가 컴팩트형으로 입력줄 위에 붙는다.
-export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, timeless = false }: KeywordProps) {
+export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, onEvent, timeless = false }: KeywordProps) {
   const word = view.me.keyword;
   const genre = view.day?.keyword?.genre ?? "";
   const endsAt = view.phaseEndsAt;
@@ -107,9 +104,6 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
     if (el) answer.setValue(el.value);
   };
 
-  // 전원이 내서 마감이 줄어든 단계는 "n초" 도 calm 고정이다(23-11 P23-23) — 마지막 1.5초가 진홍으로 번쩍이지 않게 띠·링과 같은 규칙
-  const early = useEarlyCalm(view);
-  const tone = durationMs === null || early ? "calm" : timerTone(answer.secondsLeft * 1000, durationMs);
   const rootCls = kbOpen ? "mf-root mf-reveal mf-keyword is-kb" : "mf-root mf-reveal mf-keyword";
   const cardCls = ["mf-keyword__card", still && "is-still", kbOpen && "is-compact"].filter(Boolean).join(" ");
 
@@ -117,7 +111,7 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
     <main ref={rootRef} className={rootCls} data-keyword-screen="" data-kb-open={kbOpen ? "true" : undefined}>
       <div className="mf-reveal__dim" aria-hidden="true" />
       <header className="mf-reveal__header">
-        {playtest ? <PlaytestHeader title="첫 단서" view={view} offset={offset} extra={myRoleButton} timeless={timeless} /> : <PhaseHeader title={DAY_COPY.titles.keyword ?? ""} extra={myRoleButton} />}
+        <GamePhaseHeader title={playtest ? "첫 단서" : DAY_COPY.titles.keyword ?? ""} view={view} offset={offset} epoch={epoch} extra={myRoleButton} timeless={timeless} />
       </header>
       <section className="mf-reveal__stage">
         <div className={cardCls} data-keyword-card="" data-compact={kbOpen ? "true" : undefined} role="group" aria-label={KEYWORD_COPY.cardName}>
@@ -139,24 +133,17 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
         </div>
       </section>
       {!timeless || view.me.answer !== undefined ? <div className="mf-keyword__answer" data-answer-state={answer.state}>
-        <div className="mf-keyword__meta" id={META_ID} hidden={playtest && !answer.notice && !sent}>
-          {!timeless && !playtest ? <span className="mf-keyword__secs" data-answer-secs="" data-tone={tone} aria-hidden="true">
-            {KEYWORD_COPY.secs(answer.secondsLeft)}
-          </span> : null}
+        <div className="mf-keyword__meta" id={META_ID} hidden={playtest && !answer.notice}>
           <span className="mf-keyword__mid">
             <span className="mv-chat__notice" role="status" data-answer-notice="">
               {answer.notice ?? ""}
             </span>
-            {sent ? (
-              <span className="mf-keyword__done" data-answer-done="">
-                {KEYWORD_COPY.done}
-              </span>
-            ) : null}
           </span>
           {!playtest ? <span className="mf-keyword__count" data-answer-count="" data-full={answer.count >= ANSWER_MAX_GRAPHEMES ? "true" : undefined}>
             {KEYWORD_COPY.count(answer.count)}
           </span> : null}
         </div>
+        <span className="mf-sr-only" role="status" data-answer-done={sent ? "" : undefined}>{sent ? KEYWORD_COPY.done : ""}</span>
         <form className="mv-chat__form" onSubmit={onSubmit}>
           <div className={call ? "mv-chat__field is-call" : "mv-chat__field"}>
             <input
@@ -183,10 +170,11 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
               onBlur={composed.bind.onBlur}
             />
           </div>
-          {!playtest || !sent ? <button
+          <button
             type="submit"
             className="mv-tool mv-chat__send"
             data-answer-send=""
+            disabled={sent}
             aria-label={sent ? KEYWORD_COPY.sentName : KEYWORD_COPY.sendName}
             aria-disabled={sent ? undefined : answer.canSubmit ? "false" : "true"}
             // 누르는 순간 포커스가 버튼으로 옮겨 가 입력칸이 blur 되어 키보드가 닫히지 않게 한다(채팅 입력줄과 같다)
@@ -195,7 +183,7 @@ export function Keyword({ view, offset, myRoleButton, send, canSend, onEvent, ti
             <span className="mv-tool__face">
               <V2Icon name={sent ? "check" : "send"} size={22} />
             </span>
-          </button> : null}
+          </button>
         </form>
       </div> : null}
     </main>

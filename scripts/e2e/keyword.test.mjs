@@ -114,7 +114,7 @@ const geo = (over = {}) => ({
   meta: rect(12, 132, 336, 20),
   form: rect(12, 156, 336, 56),
   send: rect(292, 160, 48, 48),
-  secs: rect(14, 134, 40, 16),
+  gauge: rect(140, 24, 80, 8),
   count: rect(300, 134, 40, 16),
   ...over,
 });
@@ -125,7 +125,8 @@ test("KW7: 컴팩트 카드가 머리·메타·입력줄과 겹치지 않고 보
   assert.equal(kw7CompactGeometry(geo({ card: rect(24, 90, 312, 70) })).ok, false); // 입력줄과 겹침
   assert.equal(kw7CompactGeometry(geo({ send: rect(292, 160, 40, 40) })).ok, false);
   assert.equal(kw7CompactGeometry(geo({ form: rect(12, 190, 336, 56) })).ok, false); // 보이는 높이 밖
-  assert.equal(kw7CompactGeometry(geo({ secs: rect(0, 0, 0, 0) })).ok, false);
+  assert.equal(kw7CompactGeometry(geo({ gauge: rect(0, 0, 0, 0) })).ok, false);
+  assert.equal(kw7CompactGeometry(geo({ gauge: rect(40, 24, 80, 8) })).ok, false);
   assert.ok(noMeasure(kw7CompactGeometry(geo({ card: null }))));
 });
 
@@ -136,10 +137,10 @@ const rows = [
   { order: 3, seat: 2, none: true },
   { order: 4, seat: 3, none: true },
 ];
-const pg = (who, over = {}) => ({ who, listOpen: true, dialogOpen: false, inputVisible: true, quoted: true, collapsed: true, hasTab: true, rows, ...over });
-test("KW8: 답·입력칸 동시 접근, 인용, 접기, 기록 탭과 정렬을 검사한다", () => {
+const pg = (who, over = {}) => ({ who, initiallyClosed: true, listOpen: true, dialogOpen: false, inputVisible: true, logVisible: true, quoted: true, collapsed: true, hasTab: true, rows, ...over });
+test("KW8: 단서 열기, 고정 채팅, 인용 뒤 접기, 기록 탭과 정렬을 검사한다", () => {
   assert.equal(kw8AnswerList([pg("시민"), pg("마피아")]).ok, true);
-  for (const over of [{ listOpen: false }, { dialogOpen: true }, { inputVisible: false }, { quoted: false }, { collapsed: false }]) {
+  for (const over of [{ initiallyClosed: false }, { listOpen: false }, { dialogOpen: true }, { inputVisible: false }, { logVisible: false }, { quoted: false }, { collapsed: false }]) {
     assert.equal(kw8AnswerList([pg("시민"), pg("마피아", over)]).ok, false);
   }
   assert.equal(kw8AnswerList([pg("시민", { hasTab: false }), pg("마피아")]).ok, false);
@@ -149,7 +150,7 @@ test("KW8: 답·입력칸 동시 접근, 인용, 접기, 기록 탭과 정렬을
   assert.equal(kw8AnswerList([pg("시민", { rows: rows.map((r) => ({ ...r, none: true })) }), pg("마피아")]).ok, false);
   assert.ok(noMeasure(kw8AnswerList([])));
 });
-test("KW9: 재접속 뒤 자동으로 안 열리고 탭으로 같은 목록이면 통과", () => {
+test("KW9: 재접속 뒤 단서가 자동으로 안 열리고 아이콘으로 같은 목록이면 통과", () => {
   assert.equal(kw9Reconnect({ autoOpened: false, rowsBefore: rows, rowsAfter: rows }).ok, true);
   assert.equal(kw9Reconnect({ autoOpened: true, rowsBefore: rows, rowsAfter: rows }).ok, false);
   assert.equal(kw9Reconnect({ autoOpened: false, rowsBefore: rows, rowsAfter: rows.slice(0, 3) }).ok, false);
@@ -185,6 +186,7 @@ test("KW12: 키워드·찬반·밤 마감이 1.5초(±)로 줄고 data-early·ca
   assert.equal(kw12Early(early).ok, true);
   assert.equal(kw12Early([{ ...early[0], advanceMs: 5200 }, early[1], early[2]]).ok, false);
   assert.equal(kw12Early([{ ...early[0], early: false }, early[1], early[2]]).ok, false);
+  assert.equal(kw12Early([{ ...early[0], tone: undefined }, early[1], early[2]]).ok, false);
   assert.equal(kw12Early([{ ...early[0], tone: "warn" }, early[1], early[2]]).ok, false);
   assert.equal(kw12Early([early[0], { ...early[1], extendedMs: 0 }, early[2]]).ok, false);
   assert.equal(kw12Early([early[0], early[1], { ...early[2], parity: false }]).ok, false);

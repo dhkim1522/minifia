@@ -8,6 +8,7 @@ import { emitSignal } from "../audio/signals";
 import { useSound } from "../audio/useSound";
 import { hostChimeOf } from "../game/hostLine";
 import { nightDarkOf } from "../game/nightDark";
+import { blockModeOf } from "../game/pickTurn";
 import { LETTER_MS_PER_CHAR, LETTER_WRITE_MAX_MS, oneParagraph } from "../game/willLetter";
 import { countGraphemes } from "../../shared/nickname";
 import { Button } from "../components/Button";
@@ -20,6 +21,7 @@ import { Sheet } from "../components/Sheet";
 import { TestToolsButton, TestToolsSheet } from "../components/TestTools";
 import { HostBand, HostDock } from "../components/v2/HostBand";
 import { SoundButton } from "../components/v2/SoundButton";
+import { V2Icon } from "../components/v2/V2Icon";
 import { MORNING_TEXT, morningText } from "../game/eliminationText";
 import { READY_TEXT } from "../game/resultText";
 import { noExecutionPrefix, winnerText } from "../game/verdict";
@@ -389,7 +391,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   const myRoleButton = <RoleCardButton unread={unread > 0} onOpen={() => setRoleCard({ open: true, tab: "role" })} />;
   const reducedControls = shown?.playtest === true && shown.phase !== "lobby" && shown.phase !== "ended";
   const playtestHeader = shown?.playtest === true && (MAP_PHASES.has(shown.phase) || shown.phase === "roleReveal" || shown.phase === "keyword");
-  const playtestMenu = <Button variant="text" className="mf-playtest__menu-button" data-playtest-menu="" onClick={() => setPlaytestSheet("menu")}>메뉴</Button>;
+  const headerGauge = shown !== null && shown.playtest !== true && (
+    shown.phase === "roleReveal" || shown.phase === "keyword" || (MAP_PHASES.has(shown.phase) && blockModeOf(shown) === null)
+  );
+  const playtestMenu = <Button variant="text" className="mf-playtest__menu-button" data-playtest-menu="" aria-label="메뉴" onClick={() => setPlaytestSheet("menu")}><V2Icon name="ellipsis" size={23} /></Button>;
 
   // 위쪽 바처럼 장면에 빈 왼쪽 위가 없는 단계(역할 확인)에서는 [테스트] 가 [역할 카드] 왼쪽 같은 칸에 놓인다.
   const testButton = testTools ? <TestToolsButton onOpen={() => setTestOpen(true)} /> : null;
@@ -407,7 +412,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
     <div ref={roomRef} className="mf-root mf-room" data-first-round-playtest={reducedControls ? "" : undefined}>
       {view && banner !== "hidden" && <ReconnectBanner mode={banner} floating={shown?.phase === "lobby"} />}
       {playtestHeader ? null : shown && !shown.resting && status !== "replaced" && status !== "failed" ? (
-        <HostBand view={shown} offset={connection.offset} cardSeen={seenFront} sound={sound.supported && (shown.playtest !== true || shown.phase === "ended") ? sound : null} epoch={connection.epoch} />
+        <HostBand view={shown} offset={connection.offset} cardSeen={seenFront} sound={sound.supported && (shown.playtest !== true || shown.phase === "ended") ? sound : null} epoch={connection.epoch} headerGauge={headerGauge} />
       ) : view && sound.supported ? (
         // 쉬는 사람·안내 화면에는 띠가 없다(T-14-04). 소리 단추만 옛 자리의 독으로 둔다
         <HostDock sound={sound} />
@@ -539,9 +544,9 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
             {view.phase === "assigning" ? (
               <Assigning view={view} />
             ) : view.phase === "keyword" ? (
-              <Keyword view={view} offset={connection.offset} myRoleButton={withTest(view.playtest === true ? playtestMenu : myRoleButton)} send={connection.send} canSend={connection.canSend} onEvent={connection.onEvent} />
+              <Keyword view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(view.playtest === true ? playtestMenu : myRoleButton)} send={connection.send} canSend={connection.canSend} onEvent={connection.onEvent} />
             ) : (
-              <RoleReveal view={view} offset={connection.offset} myRoleButton={withTest(view.playtest === true ? playtestMenu : myRoleButton)} onSeenFront={onSeenFront} send={connection.send} canSend={connection.canSend} />
+              <RoleReveal view={view} offset={connection.offset} epoch={connection.epoch} myRoleButton={withTest(view.playtest === true ? playtestMenu : myRoleButton)} onSeenFront={onSeenFront} send={connection.send} canSend={connection.canSend} />
             )}
           </PreGame>
         );

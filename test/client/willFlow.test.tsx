@@ -266,10 +266,10 @@ const noteBtn = (c: ParentNode): HTMLButtonElement | null => c.querySelector<HTM
 const FAIL = "보내지 못했어요. 다시 해 보세요";
 
 describe("깃펜 배선 (WILL-01, UI-SPEC 281행)", () => {
-  it("낮 토론 산 사람: 채팅 입력줄 깃펜이 있고 누르면 유언 시트, 닫으면 초점이 깃펜으로 돌아간다", () => {
+  it("낮 토론 산 사람: 도구 줄 깃펜을 누르면 유언 시트가 열리고, 닫으면 초점이 돌아간다", () => {
     const m = mount(makeView({ phase: "discussion" }));
     const pen = willBtn(m.container)!;
-    expect(pen.classList.contains("mv-chat__will")).toBe(true);
+    expect(pen.closest('[role="group"][aria-label="토론 도구"]')).not.toBeNull();
     expect(pen.getAttribute("aria-label")).toBe("유언 쓰기");
     fireEvent.click(pen);
     expect(sheet(m.container)).not.toBeNull();
@@ -279,11 +279,11 @@ describe("깃펜 배선 (WILL-01, UI-SPEC 281행)", () => {
     expect(document.activeElement).toBe(willBtn(m.container));
   });
 
-  it("낮 토론 깃펜은 보내기 버튼 뒤 입력줄 끝에 있고, 눌러 열고 저장하는 동안 typing 이 0회다(feedback-11, WILL-01)", () => {
+  it("낮 토론 깃펜은 입력줄 바깥에 있고, 열고 저장하는 동안 typing 이 0회다(WILL-01)", () => {
     const send = vi.fn<(m: ClientMessage) => boolean>(() => true);
     const m = mount(makeView({ phase: "discussion" }), { send });
     const pen = willBtn(m.container)!;
-    expect(m.container.querySelector(".mv-chat__form")?.lastElementChild).toBe(pen);
+    expect(pen.closest(".mv-chat__form")).toBeNull();
     fireEvent.click(pen);
     fireEvent.focus(area(m.container));
     fireEvent.change(area(m.container), { target: { value: "범인은 셋" } });

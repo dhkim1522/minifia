@@ -1533,7 +1533,7 @@ async function dayFlow(ctx) {
     await allAt(pages, "discussion");
     await Promise.all(pages.map((p) => settle(p)));
 
-    // 낮 토론: 패널 LOG_H + 154, [토론 끝내기] 숫자 최대 = 과반, 지목 버튼 없음. 맵 탭은 걷기(move)를 보낸다(대조)
+    // 낮 토론: 고정 채팅 패널 높이, 투표 요청의 과반 집계, 맵 탭으로 걷기를 확인한다.
     {
       const sc = `${id}/discussion`;
       for (const x of humans) {

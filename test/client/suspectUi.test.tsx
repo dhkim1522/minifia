@@ -10,7 +10,6 @@ import { useSendGuard } from "../../src/net/useSendGuard";
 import { useSuspect } from "../../src/net/useSuspect";
 import { HeadStack } from "../../src/components/v2/HeadStack";
 import { SuspectButton } from "../../src/components/v2/SuspectButton";
-import { GamePanel } from "../../src/screens/GamePanel";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
@@ -379,28 +378,6 @@ describe("SuspectButton", () => {
   });
 });
 
-// ── 입력줄 슬롯 ──
-describe("GamePanel chatTrailing", () => {
-  it("chatTrailing 은 [data-chat-trailing] 안에 그려진다", () => {
-    const view = makeView();
-    const { container } = render(
-      <GamePanel
-        view={view}
-        send={() => true}
-        canSend
-        binding={{ messages: [], value: "", onChange: () => {}, onSend: () => {} }}
-        logHeight={68}
-        chatTrailing={<button data-probe="" type="button" />}
-      />,
-    );
-    expect(container.querySelector("[data-chat-trailing] [data-probe]")).not.toBeNull();
-  });
-  it("주지 않으면 슬롯 자체가 없다", () => {
-    const { container } = render(<GamePanel view={makeView()} send={() => true} canSend binding={{ messages: [], value: "", onChange: () => {}, onSend: () => {} }} logHeight={68} />);
-    expect(container.querySelector("[data-chat-trailing]")).toBeNull();
-  });
-});
-
 // ── 이름표 칩 (P24-16) ──
 describe("HeadStack 의심 칩", () => {
   it("남의 이름표는 4장 이상일 때만 칩이 보인다", () => {
@@ -466,13 +443,13 @@ function mountMap(view: RoomView, o: MapOpts = {}) {
 const sentOf = (send: Send): ClientMessage[] => send.mock.calls.map(([m]) => m);
 const suspectBtn = (c: ParentNode): HTMLButtonElement | null => c.querySelector<HTMLButtonElement>("[data-suspect-btn]");
 const stageEl = (c: ParentNode): HTMLElement => c.querySelector<HTMLElement>("[data-game-stage]")!;
-const hintOf = (c: ParentNode): string | undefined => c.querySelector<HTMLElement>(".mv-phase__hint")?.textContent ?? undefined;
+const hintOf = (c: ParentNode): string | undefined => c.querySelector<HTMLElement>("[data-suspect-guidance]")?.textContent ?? undefined;
 const noticeOf = (c: ParentNode): HTMLElement | null => c.querySelector<HTMLElement>("[data-suspect-notice]");
 
 describe("GameMap — [의심] 단추 보임 (P24-1·P24-2)", () => {
-  it("둘째 날 토론·산 본인: [data-chat-trailing] 안에 단추가 있다", () => {
+  it("둘째 날 토론·산 본인: 채팅 기록 위 도구 줄에 의심 단추가 있다", () => {
     const { container } = mountMap(makeView());
-    expect(container.querySelector("[data-chat-trailing] [data-suspect-btn]")).not.toBeNull();
+    expect(container.querySelector('[role="group"][aria-label="토론 도구"] [data-suspect-btn]')).toBe(suspectBtn(container));
     expect(suspectBtn(container)?.getAttribute("aria-label")).toBe("의심딱지 붙이기");
     expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("off");
   });
@@ -498,7 +475,7 @@ describe("GameMap — [의심] 단추 보임 (P24-1·P24-2)", () => {
 });
 
 describe("GameMap — 의심 모드 (P24-5·P24-8)", () => {
-  it("단추를 누르면 모드가 켜진다: 표식·눌림·머리 안내·이름표 묶음·깜빡임", () => {
+  it("단추를 누르면 모드가 켜진다: 표식·눌림·도구 안내·이름표 묶음·깜빡임", () => {
     const { container } = mountMap(makeView());
     fireEvent.click(suspectBtn(container)!);
     expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("on");
@@ -522,7 +499,7 @@ describe("GameMap — 의심 모드 (P24-5·P24-8)", () => {
     // 모드 밖에서 빛나던 화면이라면 모드가 그것을 껐다는 뜻이다(빛남 대상이 없는 판이면 이 단언은 자명하다)
     expect(typeof had).toBe("boolean");
   });
-  it("같은 단추를 다시 누르면 모드가 꺼진다(머리 안내도 돌아온다)", () => {
+  it("같은 단추를 다시 누르면 모드와 도구 안내가 닫힌다", () => {
     const { container } = mountMap(makeView());
     fireEvent.click(suspectBtn(container)!);
     fireEvent.click(suspectBtn(container)!);

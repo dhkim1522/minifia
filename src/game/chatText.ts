@@ -19,6 +19,7 @@ export const CHAT_TEXT = {
   inputLabel: { all: "채팅 입력", mafia: "마피아 채팅 입력", ghost: "유령 채팅 입력" },
   // 입력칸 안내 문구(HTML placeholder 값). all 은 안내가 없다.
   hint: { all: "", mafia: "마피아끼리만 보여요", ghost: "유령끼리만 보여요" },
+  discussionHint: "메시지 입력",
   reject: {
     rate: "조금 천천히 보내요",
     repeat: "같은 말은 잠시 뒤에 보내요",

@@ -146,11 +146,12 @@ describe("키워드 입력줄 — 읽기 3초 잠금과 입력칸 (P23-6·9)", (
     expect(el.getAttribute("aria-describedby")).toBe(q(container, ".mf-keyword__meta").id);
   });
 
-  it("메타 줄: 남은 초(aria-hidden)와 n/20 — 쓰면 늘고 20이면 data-full", () => {
+  it("메타 줄: 시간은 헤더 막대에 두고 n/20은 쓰면 늘고 20이면 data-full", () => {
     const { container } = renderAnswer(makeView(CITIZEN, 5_000));
-    const secs = q(container, "[data-answer-secs]");
-    expect(secs.textContent).toBe("8초");
-    expect(secs.getAttribute("aria-hidden")).toBe("true");
+    const gauge = q(container, ".mf-reveal__header [data-phase-gauge]");
+    expect(gauge.getAttribute("aria-label")).toBe("남은 시간 8초");
+    expect(gauge.textContent).toBe("");
+    expect(container.querySelector("[data-answer-secs]")).toBeNull();
     expect(q(container, "[data-answer-count]").textContent).toBe("0/20");
     type(container, "안경");
     expect(q(container, "[data-answer-count]").textContent).toBe("2/20");

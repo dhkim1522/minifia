@@ -27,6 +27,7 @@
 .mf-discussion-evidence button { cursor: pointer; }
 .mf-discussion-evidence button:focus-visible { outline: 2px solid var(--noir-paper); outline-offset: -2px; }
 .mf-discussion-evidence__toggle { justify-content: space-between; font-weight: 700; color: var(--noir-paper); }
+.mf-discussion-evidence__heading { display: block; margin: 0; padding: 5px 8px; color: var(--noir-paper); font-size: 14px; font-weight: 700; }
 .mf-discussion-evidence__toggle svg { transform: rotate(90deg); }
 .mf-discussion-evidence__toggle[aria-expanded="true"] svg { transform: rotate(-90deg); }
 

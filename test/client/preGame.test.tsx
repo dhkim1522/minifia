@@ -130,7 +130,7 @@ describe("PreGame 무대 틀", () => {
     }
   });
 
-  it("역할 확인의 어두운 막·카드·[역할 카드] 버튼은 그대로 있고 옛 타이머는 없다(14-05)", () => {
+  it("역할 확인의 어두운 막·카드·[역할 카드] 버튼과 숫자 없는 시간 막대가 보인다", () => {
     const view = makeView("roleReveal");
     const { container } = render(
       <PreGame view={view} store={new WorldStore()} send={vi.fn()} canSend offset={0} onLeave={vi.fn()}>
@@ -139,7 +139,9 @@ describe("PreGame 무대 틀", () => {
     );
     expect(container.querySelector(".mf-reveal__dim")).not.toBeNull();
     expect(container.querySelector(".mf-card")).not.toBeNull();
-    expect(container.querySelector('[role="timer"]')).toBeNull();
+    const gauge = container.querySelector('.mf-reveal__header [data-phase-gauge][role="timer"]');
+    expect(gauge).not.toBeNull();
+    expect(gauge?.textContent).toBe("");
     expect(container.querySelector(".mf-reveal__header .mv-phase__title")?.textContent).toBe("역할 확인");
     expect(container.textContent).toContain("역할 카드");
   });

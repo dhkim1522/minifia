@@ -8,12 +8,24 @@ import "../../styles/v2.css";
 // 로비 헤더의 [나가기]·[공유] 는 v1.0 Icon 을 그대로 쓴다(UI-SPEC 결정 현황) — 여기에 back·share 를 더하지 않는다.
 // 18페이즈: eyeOff(목격자 없음, eye 에 사선)·lock(옷장 잠금).
 // 24페이즈: postit(의심 포스트잇 — 정사각 종이 + 접힌 모서리 + 글줄, P24-3). 마피아 쪽지(note)와 모양이 다르다.
-export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "bot" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff" | "lock" | "postit";
+export type V2IconName = "point" | "crown" | "play" | "check" | "roleCitizen" | "send" | "ghost" | "roleMafia" | "rolePolice" | "roleDoctor" | "skip" | "thumbUp" | "thumbDown" | "quill" | "note" | "target" | "eye" | "heal" | "close" | "whisper" | "swap" | "quiet" | "face" | "throat" | "deny" | "clap" | "cry" | "handshake" | "praise" | "surprise" | "dance" | "hanger" | "timeline" | "trophy" | "hourglass" | "mapBar" | "mapPlaza" | "shuffle" | "sound" | "soundOff" | "bell" | "bot" | "chevronRight" | "mask" | "shield" | "lens" | "eyeOff" | "lock" | "postit" | "ballot" | "ellipsis" | "sunrise";
 
 // ["c", cx, cy, r, filled?] 원 · ["p", d, filled?] 경로
 type Part = readonly ["c", number, number, number, boolean?] | readonly ["p", string, boolean?];
 
 const ICONS: Readonly<Record<V2IconName, readonly Part[]>> = {
+  ellipsis: [
+    ["c", 5, 12, 1.6, true],
+    ["c", 12, 12, 1.6, true],
+    ["c", 19, 12, 1.6, true],
+  ],
+  ballot: [
+    ["p", "M3 15h18v6H3zM3 15l3-4h3m7 0h2l3 4M9 15h6"],
+    ["p", "M8 4l8-2 2 8-8 2z"],
+  ],
+  sunrise: [
+    ["p", "M2 17h20M5 21h14M7 17a5 5 0 0 1 10 0M12 3v3M4 8l2 2m14-2-2 2M2 13h3m14 0h3"],
+  ],
   point: [
     ["p", "M3 9.5h11.5a1.5 1.5 0 0 1 0 3H12"],
     ["p", "M12 12.5h.5a1.5 1.5 0 0 1 0 3H11"],

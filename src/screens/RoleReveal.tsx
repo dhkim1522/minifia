@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { Button } from "../components/Button";
 import { RoleCard } from "../components/RoleCard";
-import { PhaseHeader } from "../components/v2/PhaseHeader";
-import { PlaytestHeader } from "../components/v2/PlaytestHeader";
+import { GamePhaseHeader } from "../components/v2/GamePhaseHeader";
+import { V2Icon } from "../components/v2/V2Icon";
 import { callTargetsOf } from "../game/hostLine";
 import { allyNicknames } from "../game/roleText";
 import { autoFlipDelayMs, initialCardState, onAutoTimer, onTap, sinceStartMs } from "../net/cardFace";
@@ -15,6 +15,8 @@ export interface RoleRevealProps {
   view: RoomView;
   /** 서버 시각 − 로컬 시각 */
   offset: number;
+  /** 연결 번호. 재연결 뒤 조기 진행 표시를 초기화한다 */
+  epoch?: number;
   /** [내 역할] 버튼. 모양은 RoomScreen 이 한 가지로 만들어 넘긴다 */
   myRoleButton: ReactNode;
   /** 카드가 앞면이 된 적이 있음을 알린다. 마운트 때 이미 앞면인 경우(5초 뒤 입장·새로고침)도 첫 effect 에서 한 번 부른다 */
@@ -25,13 +27,13 @@ export interface RoleRevealProps {
 
 // S-05 역할 확인(15초). 테이블은 그리지 않는다(D-13 개정). 뒤 3D 무대는 PreGame 이 깐다. 카드 면은 cardFace 가 정하고,
 // 마감이 지나도 화면이 스스로 단계를 넘기지 않는다(서버 view 만 따름, T-01-46).
-// 14페이즈(U-2·U-3, TOOL-02): 머리는 제목 + [내 역할] 뿐이다 — 안내·보조 줄은 자막 띠(HostBand)가, 남은 시간은 띠의 막대 + 초가 맡는다.
+// 제목과 역할 버튼 사이에 공용 시간 막대를 표시한다.
 // 카드 빛남(HOST-03): callTargetsOf 가 "카드"를 부르면 카드가 빛나고, 처음 앞면을 보면 꺼진다(되살아나지 않는다).
 export function RoleReveal(props: RoleRevealProps) {
   return props.view.playtest === true ? <PlaytestRoleReveal {...props} /> : <FlippingRoleReveal {...props} />;
 }
 
-function PlaytestRoleReveal({ view, offset, myRoleButton, onSeenFront, send, canSend }: RoleRevealProps) {
+function PlaytestRoleReveal({ view, offset, epoch = 0, myRoleButton, onSeenFront, send, canSend }: RoleRevealProps) {
   const role = view.me.role ?? null;
   const ready = view.me.roleReady === true;
   useEffect(() => {
@@ -41,21 +43,26 @@ function PlaytestRoleReveal({ view, offset, myRoleButton, onSeenFront, send, can
     <main className="mf-root mf-reveal" data-playtest-role="">
       <div className="mf-reveal__dim" aria-hidden="true" />
       <header className="mf-reveal__header">
-        <PlaytestHeader title="내 역할" view={view} offset={offset} extra={myRoleButton} />
+        <GamePhaseHeader title="내 역할" view={view} offset={offset} epoch={epoch} extra={myRoleButton} />
       </header>
       <section className="mf-reveal__stage">
         <RoleCard role={role} face={role === null ? "back" : "front"} allies={allyNicknames(view)} />
       </section>
       <div className="mf-reveal__hints mf-playtest__ready">
         {role !== null && !ready ? (
-          <Button block disabled={!canSend} data-role-ready="" onClick={() => send?.({ t: "roleReady" })}>준비</Button>
-        ) : ready ? <span className="mf-playtest__feedback" role="status">준비 완료</span> : null}
+          <Button className={`mf-playtest__ready-control${canSend ? " is-call" : ""}`} icon={<V2Icon name="check" size={24} />} aria-label="준비" disabled={!canSend} data-role-ready="" onClick={() => send?.({ t: "roleReady" })} />
+        ) : ready ? (
+          <span className="mf-playtest__ready-control mf-playtest__ready-status" aria-hidden="true">
+            <V2Icon name="check" size={24} />
+          </span>
+        ) : null}
+        <span className="mf-sr-only" role="status">{ready ? "준비 완료" : ""}</span>
       </div>
     </main>
   );
 }
 
-function FlippingRoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleRevealProps) {
+function FlippingRoleReveal({ view, offset, epoch = 0, myRoleButton, onSeenFront }: RoleRevealProps) {
   const role = view.me.role ?? null;
   const hasRole = role !== null;
   const endsAt = view.phaseEndsAt;
@@ -103,7 +110,7 @@ function FlippingRoleReveal({ view, offset, myRoleButton, onSeenFront }: RoleRev
     <main className="mf-root mf-reveal">
       <div className="mf-reveal__dim" aria-hidden="true" />
       <header className="mf-reveal__header">
-        <PhaseHeader title="역할 확인" extra={myRoleButton} />
+        <GamePhaseHeader title="역할 확인" view={view} offset={offset} epoch={epoch} extra={myRoleButton} />
       </header>
       <section className="mf-reveal__stage">
         <RoleCard role={role} face={card.face} allies={allies} call={callCard} onFlip={() => setCard((s) => onTap(s, hasRole))} />

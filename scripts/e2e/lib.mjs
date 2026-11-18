@@ -269,8 +269,8 @@ export function lobbyPanelHeight(logH) {
 // ---- 게임 맵 판정 (08-23, 08-UI-SPEC "아래 패널 종류와 높이"·"검사 가능하게 둘 것"). 순수 함수 — 브라우저에서 읽는 값은 08-24 의 readGame 이 만든다. ----
 // 모든 판정은 다른 판정과 같은 { id, label, ok, detail } 줄(들)을 돌려준다. 값이 없거나 숫자가 아니면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
 
-/** 게임 맵 아래 패널 높이 덧셈(안전 영역 제외): 토론 = LOG_H + 154, 채팅 = + 92, 찬반 투표자 = + 218, 찬반 보기 = + 126(0062-2: 점 9px 대신 숫자 한 줄 24px 이라 +15). 밤은 네 역할 모두 얼굴 목록 하나라 여기 없다(15-08, faceListPanelH). */
-export const GAME_PANEL_EXTRA = Object.freeze({ talk: 154, chat: CHAT_PANEL_EXTRA, verdictVoter: 218, verdictViewer: 126 });
+/** 게임 맵 패널에서 기록 칸 밖 높이. 토론은 DISCUSSION_PANEL_EXTRA 사본, 밤은 faceListPanelH를 사용한다. */
+export const GAME_PANEL_EXTRA = Object.freeze({ talk: 128, chat: CHAT_PANEL_EXTRA, verdictVoter: 218, verdictViewer: 126 });
 
 /**
  * 밤 얼굴 목록 패널 높이(09-UI-SPEC 160행 식, 안전 영역 제외). w = 폰 폭, n = 후보 수(밤 동안 변하지 않는다), wrappedRows = 이름이 줄바꿈된 행 수.
@@ -3149,13 +3149,15 @@ const isStr = (x) => typeof x === "string";
 export function hostBandChecks(b, { phase, timed, answer = false }) {
   // 23-11: 결과(ended)는 첫날 정답이 공개된 판(answer)이면 띠가 보이고 `정답 · {키워드}` 한 줄을 가진다 — 숨는 단계에서 빠진다
   const hiddenPhase = HOST_OFF_PHASES.includes(phase) && !(phase === "ended" && answer === true);
+  const gaugeHeader = b?.gaugeHeader === true;
+  const faceHidden = hiddenPhase || gaugeHeader;
   const L = {
     HB1: `띠 하나·문장 하나(${phase})`,
     HB2: "data-guide 하나가 띠 안",
     HB3: "띠 문장 한 줄",
-    HB4: timed ? "시간 막대 + 'n초'" : "시간 없는 단계는 막대·숫자 없음",
+    HB4: timed ? gaugeHeader ? "상단 게이지 하나 · 화면 초 숫자 없음" : "시간 막대 + 'n초'" : "시간 없는 단계는 막대·숫자 없음",
     HB5: "옛 안내줄·링·m:ss 타이머 없음",
-    HB6: `종 0개 + 띠 면 ${hiddenPhase ? "숨김" : "보임"}`,
+    HB6: `종 0개 + 띠 면 ${faceHidden ? "숨김" : "보임"}`,
     HB7: HOST_BLANK_PHASES.includes(phase) ? "띠 문장 빈 글(큰 글이 말한다)" : hiddenPhase ? "숨는 단계(문장은 판정 밖)" : "띠 문장 글 있음",
   };
   const ids = ["HB1", "HB2", "HB3", "HB4", "HB5", "HB6", "HB7"];
@@ -3171,7 +3173,11 @@ export function hostBandChecks(b, { phase, timed, answer = false }) {
   if (isStr(b.timeText) && typeof b.barShown === "boolean") {
     const bad = [];
     const hasText = b.timeText.trim() !== "";
-    if (timed) {
+    if (gaugeHeader) {
+      if (hasText || b.barShown) bad.push("자막 띠에 타이머가 중복됨");
+      if (b.gaugeCount !== Number(timed)) bad.push(`상단 게이지 ${b.gaugeCount}개`);
+      if (timed && (!/^남은 시간 \d+초$/.test(b.gaugeLabel) || b.gaugeText !== "")) bad.push("시간은 접근성 이름에만 있어야 함");
+    } else if (timed) {
       if (!/^\d+초$/.test(b.timeText.trim())) bad.push(`시간 글자 '${b.timeText}' 가 'n초' 가 아님`);
       if (!b.barShown) bad.push("시간 막대 없음");
     } else {
@@ -3191,7 +3197,7 @@ export function hostBandChecks(b, { phase, timed, answer = false }) {
   if (isNum(b.bells) && typeof b.faceHidden === "boolean") {
     const bad = [];
     if (b.bells > 0) bad.push(`종 아이콘 ${b.bells}개`);
-    const wantHidden = hiddenPhase;
+    const wantHidden = faceHidden;
     if (wantHidden && !b.faceHidden) bad.push(`${phase} 의 띠 면이 보임(숨겨야 한다)`);
     if (!wantHidden && b.faceHidden) bad.push(`${phase} 의 띠 면이 숨겨져 있음(보여야 한다)`);
     out.push(result("HB6", L.HB6, bad));

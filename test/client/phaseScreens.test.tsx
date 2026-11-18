@@ -122,7 +122,7 @@ function card(container: HTMLElement): HTMLElement {
 }
 
 // getBy* 는 실패 때 DOM 전체를 여러 줄로 찍어 TAP 보고서를 깨뜨린다. 한 줄 메시지로 단언한다.
-/** 띠([data-host-band]) 밖의 시간 표시(timer 역할). 14-05 가 역할 확인의 옛 Timer 를 지워 이제 0개여야 한다 */
+/** 실제 단계 화면 상단의 시간 막대. 기존 자막 띠에 붙는 시간 표시는 제외한다 */
 function stageTimers(): HTMLElement[] {
   return screen.queryAllByRole("timer").filter((el) => el.closest("[data-host-band]") === null);
 }
@@ -156,7 +156,7 @@ afterEach(() => {
 });
 
 describe("S-05 역할 확인 (GAME-01, ROLE-02, D-13 개정, D-14, D-15, R12)", () => {
-  it("역할 확인 뒷면: 머리는 제목 '역할 확인' + [내 역할] 뿐이고 카드 뒷면이 보인다 — 안내·보조 줄·m:ss 타이머가 없다 (U-2, U-3, TOOL-02)", () => {
+  it("역할 확인 뒷면: 제목 '역할 확인'과 [내 역할], 숫자 없는 시간 막대를 표시한다", () => {
     const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
     expect(revealTitle(container)).toBe("역할 확인");
     const header = container.querySelector(".mf-reveal__header") as HTMLElement;
@@ -169,7 +169,9 @@ describe("S-05 역할 확인 (GAME-01, ROLE-02, D-13 개정, D-14, D-15, R12)", 
     expect(container.querySelector(".mf-timer")).toBeNull();
     expect(container.querySelector(".mf-reveal__hint")).toBeNull();
     expect(container.querySelector(".mf-reveal__sub")).toBeNull();
-    expect(stageTimers()).toHaveLength(0);
+    expect(stageTimers()).toHaveLength(1);
+    expect(stageTimers()[0].getAttribute("aria-label")).toBe("남은 시간 15초");
+    expect(stageTimers()[0].textContent).toBe("");
     expect(container.textContent).not.toContain("0:15");
     for (const old of ["카드를 눌러 확인하세요", "카드를 눌러 직업을 확인하세요", "다른 사람에게 보이지 않게 가려 주세요"]) {
       expect(screen.queryByText(old), old).toBeNull();
@@ -252,7 +254,8 @@ describe("S-05 역할 확인 (GAME-01, ROLE-02, D-13 개정, D-14, D-15, R12)", 
     const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
     advance(15_000);
     expect(revealTitle(container)).toBe("역할 확인");
-    expect(stageTimers()).toHaveLength(0);
+    expect(stageTimers()).toHaveLength(1);
+    expect(stageTimers()[0].getAttribute("aria-label")).toBe("남은 시간 0초");
     expect(screen.queryByText("낮이 되었습니다")).toBeNull();
   });
 });
@@ -720,11 +723,12 @@ describe("C-01 [역할 카드] 시트", () => {
     expect(dialog.querySelectorAll("img").length).toBe(0);
   });
 
-  it("[닫기] 를 누르면 260ms 뒤 시트가 사라지고, 시트가 열려 있어도 역할 확인에는 옛 타이머가 없다", () => {
+  it("[닫기] 를 누르면 260ms 뒤 시트가 사라지고, 역할 확인의 시간 막대는 이어진다", () => {
     const { container } = renderRoom(mafiaReveal(15_000));
     const dialog = openRoleCard();
     advance(3_000);
-    expect(stageTimers()).toHaveLength(0);
+    expect(stageTimers()).toHaveLength(1);
+    expect(stageTimers()[0].getAttribute("aria-label")).toBe("남은 시간 12초");
     const close = within(dialog).queryByRole("button", { name: "닫기" });
     expect(close, "시트 [닫기]").not.toBeNull();
     fireEvent.click(close!);
@@ -823,7 +827,7 @@ describe("헤더 줄바꿈 금지 (03.1-10, D-16, UI-SPEC A)", () => {
 describe("공개 예고 없음 (18-11, D-09)", () => {
   const PRE_WORDS = ["공개돼요", "끝나면 밤 대화"];
 
-  it("역할 넷 모두 [data-pre-notice] 0개·예고 글 없음·빈 hints 칸 1개이고 4초가 지나도 같다(타이머 없음)", () => {
+  it("역할 넷 모두 [data-pre-notice] 0개·예고 글 없음·빈 hints 칸 1개이고 4초가 지나도 같다", () => {
     const rows = (["citizen", "mafia", "police", "doctor"] as const).map((role) => {
       const { container, unmount } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role, allies: role === "mafia" ? [2] : [] }));
       const snap = () => {
@@ -848,6 +852,6 @@ describe("공개 예고 없음 (18-11, D-09)", () => {
     fireEvent.click(byRole("button", "역할 카드 뒤집기"));
     expect(container.querySelectorAll("[data-pre-notice]").length).toBe(0);
     expect(container.querySelector(".mf-reveal__hints")?.children.length).toBe(0);
-    expect(stageTimers()).toHaveLength(0);
+    expect(stageTimers()).toHaveLength(1);
   });
 });

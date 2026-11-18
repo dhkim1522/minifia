@@ -144,13 +144,13 @@ export function kw6Reject(pages) {
 }
 
 /**
- * KW7(P23-7) 키보드 열림 컴팩트 카드 기하. m = { vw, vh(보이는 영역 높이), compact(data-compact), header, card, meta, form, send, secs, count } (사각형 { left, top, right, bottom, width, height }).
- * 카드가 컴팩트형이고, 머리·카드·메타·입력줄이 서로 겹치지 않으며 보이는 영역 안(머리 아랫변 ≥ 0 포함), n초·n/20·[보내기]가 보이고 보내기는 44 이상이다.
+ * KW7(P23-7) 키보드 열림 컴팩트 카드 기하. m = { vw, vh(보이는 영역 높이), compact(data-compact), header, card, meta, form, send, gauge, count } (사각형 { left, top, right, bottom, width, height }).
+ * 카드가 컴팩트형이고, 머리·카드·메타·입력줄이 서로 겹치지 않으며 보이는 영역 안, 시간 막대·n/20·[보내기]가 보이고 보내기는 44 이상이다.
  */
 export function kw7CompactGeometry(m) {
-  const label = "키보드 열림: 카드가 컴팩트형 · 머리·카드·입력줄이 겹치지 않고 보이는 영역 안 · n초·n/20·[보내기] 보임, 보내기 44 이상";
-  const parts = m && isNum(m.vw) && isNum(m.vh) && ["header", "card", "meta", "form", "send", "secs", "count"].every((k) => rectOk(m[k]));
-  if (!parts) return noMeasure("KW7", label, "머리·카드·메타·입력줄·보내기·초·글자 수 사각형");
+  const label = "키보드 열림: 카드가 컴팩트형 · 머리·카드·입력줄이 겹치지 않고 보이는 영역 안 · 시간 막대·n/20·[보내기] 보임, 보내기 44 이상";
+  const parts = m && isNum(m.vw) && isNum(m.vh) && ["header", "card", "meta", "form", "send", "gauge", "count"].every((k) => rectOk(m[k]));
+  if (!parts) return noMeasure("KW7", label, "머리·카드·메타·입력줄·보내기·시간 막대·글자 수 사각형");
   const bad = [];
   if (m.compact !== true) bad.push("카드가 컴팩트형(data-compact)이 아님");
   const named = [["머리", m.header], ["카드", m.card], ["메타 줄", m.meta], ["입력줄", m.form]];
@@ -158,7 +158,8 @@ export function kw7CompactGeometry(m) {
   if (m.header.bottom < -OVERLAP_EPS) bad.push(`머리 아랫변 ${fmt(m.header.bottom)} < 0`);
   if (m.card.top < m.header.bottom - OVERLAP_EPS) bad.push(`카드 윗변 ${fmt(m.card.top)} 이 머리 아랫변 ${fmt(m.header.bottom)} 위`);
   for (const [n, r] of [...named, ["보내기", m.send]]) if (r.top < -OVERLAP_EPS || r.bottom > m.vh + OVERLAP_EPS || r.left < -OVERLAP_EPS || r.right > m.vw + OVERLAP_EPS) bad.push(`${n} 가 보이는 영역(${fmt(m.vw)}x${fmt(m.vh)}) 밖 ${fmt(r.left)},${fmt(r.top)}~${fmt(r.right)},${fmt(r.bottom)}`);
-  for (const [n, r] of [["n초", m.secs], ["n/20", m.count]]) if (r.width <= 0 || r.height <= 0) bad.push(`${n} 가 안 보임`);
+  for (const [n, r] of [["시간 막대", m.gauge], ["n/20", m.count]]) if (r.width <= 0 || r.height <= 0) bad.push(`${n} 가 안 보임`);
+  if (Math.abs((m.gauge.left + m.gauge.right - m.header.left - m.header.right) / 2) > OVERLAP_EPS) bad.push("시간 막대가 머리 가운데에 있지 않음");
   if (m.send.width + OVERLAP_EPS < TAP_MIN || m.send.height + OVERLAP_EPS < TAP_MIN) bad.push(`[보내기] ${fmt(m.send.width)}x${fmt(m.send.height)} < ${TAP_MIN}`);
   return result("KW7", label, bad);
 }
@@ -178,15 +179,16 @@ function listProblems(rows, who) {
 }
 
 /**
- * KW8 모두의 단서. 모달 없이 공개 답과 채팅을 읽고, 누르면 자동 전송 없이 현재 초안에 인용한다.
+ * KW8 모두의 단서. 단서 아이콘을 눌러 모달 없이 공개 답과 채팅을 읽고, 누르면 자동 전송 없이 현재 초안에 인용한다.
  * 접기 상태, 별도 기록 탭, 제출 순·'단서 없음' 순서가 참가 화면에서 일치하는지도 본다.
  */
 export function kw8AnswerList(pages) {
-  const label = "토론에서 답과 입력칸이 함께 보이고, 인용은 초안에만 들어간다. 제출 순서와 기록 탭을 유지한다";
+  const label = "토론에서 단서를 열면 공개 답과 고정 채팅이 함께 보이고 인용은 초안에만 들어간다";
   if (!Array.isArray(pages) || pages.length === 0) return noMeasure("KW8", label, "페이지");
   const bad = [];
   for (const p of pages) {
-    if (p.listOpen !== true || p.dialogOpen !== false || p.inputVisible !== true) bad.push(`${p.who} 목록·입력칸을 함께 볼 수 없음`);
+    if (p.initiallyClosed !== true) bad.push(`${p.who} 토론 진입 시 단서가 자동으로 열림`);
+    if (p.listOpen !== true || p.dialogOpen !== false || p.inputVisible !== true || p.logVisible !== true) bad.push(`${p.who} 단서·채팅을 함께 볼 수 없음`);
     if (p.quoted !== true) bad.push(`${p.who} 인용 초안 오류`);
     if (p.collapsed !== true) bad.push(`${p.who} 인용 뒤 목록이 접히지 않음`);
     if (p.hasTab !== true) bad.push(`${p.who} 탭 '단서와 의심' 없음`);
@@ -197,12 +199,12 @@ export function kw8AnswerList(pages) {
   return result("KW8", label, bad);
 }
 
-/** KW9(P23-9) 재접속. m = { autoOpened(재접속 뒤 시트가 저절로 열림), rowsBefore, rowsAfter(탭으로 연 목록) } */
+/** KW9(P23-9) 재접속. m = { autoOpened(재접속 뒤 단서가 저절로 열림), rowsBefore, rowsAfter(아이콘으로 연 목록) } */
 export function kw9Reconnect(m) {
-  const label = "토론 중 재접속하면 시트가 자동으로 안 열리고 [내 역할] → 단서와 의심 으로 같은 목록을 본다";
+  const label = "토론 중 재접속하면 단서를 아이콘으로 열어 같은 목록을 본다";
   if (!m || !Array.isArray(m.rowsBefore) || !Array.isArray(m.rowsAfter) || m.rowsBefore.length === 0 || m.rowsAfter.length === 0) return noMeasure("KW9", label, "재접속 전·뒤 목록");
   const bad = [];
-  if (m.autoOpened === true) bad.push("재접속 뒤 시트가 저절로 열림");
+  if (m.autoOpened === true) bad.push("재접속 뒤 단서가 저절로 열림");
   if (rowsKey(m.rowsBefore) !== rowsKey(m.rowsAfter)) bad.push(`목록이 다름(${rowsKey(m.rowsBefore)} ≠ ${rowsKey(m.rowsAfter)})`);
   return result("KW9", label, bad);
 }
@@ -239,7 +241,7 @@ export function kw11FirstDayEnd(m) {
 
 const EARLY_STAGES = ["keyword", "verdict", "night"];
 /**
- * KW12(P23-12) 조기 진행. items = [{ stage, advanceMs(마지막 행동 → 다음 단계), early(data-early 가 보임), tone?(초·띠 색), extendedMs?(유예 안 번복이 마감을 늘린 양, 찬반), parity?(밤 두 페이지 프레임·표식 같음, 밤) }].
+ * KW12(P23-12) 조기 진행. items = [{ stage, advanceMs(마지막 행동 → 다음 단계), early(data-early 가 보임), tone?(키워드의 막대 색), extendedMs?(유예 안 번복이 마감을 늘린 양, 찬반), parity?(밤 두 페이지 프레임·표식 같음, 밤) }].
  * 키워드·찬반·밤 셋이 모두 있어야 하고, 각 단계 1.5초(+오차) 안에 넘어가며 data-early·calm 이 보인다. 찬반은 번복이 마감을 늘리고, 밤은 두 역할 화면이 같다.
  */
 export function kw12Early(items) {
@@ -252,7 +254,7 @@ export function kw12Early(items) {
     if (!isNum(it.advanceMs)) bad.push(`${it.stage} 넘어간 시간 없음`);
     else if (it.advanceMs > EARLY_GRACE_MS_COPY + KW_TOL_MS) bad.push(`${it.stage} ${Math.round(it.advanceMs)}ms 걸림(≤ ${EARLY_GRACE_MS_COPY + KW_TOL_MS})`);
     if (it.early !== true) bad.push(`${it.stage} data-early 가 안 보임`);
-    if (it.tone !== undefined && it.tone !== "calm") bad.push(`${it.stage} 색 ${it.tone}(calm 이어야 함)`);
+    if ((it.stage === "keyword" || it.tone !== undefined) && it.tone !== "calm") bad.push(`${it.stage} 색 ${it.tone ?? "측정값 없음"}(calm 이어야 함)`);
     if (it.stage === "verdict" && !(isNum(it.extendedMs) && it.extendedMs > 0)) bad.push("찬반 번복이 마감을 늘리지 않음");
     if (it.stage === "night" && it.parity !== true) bad.push("밤 프레임·표식이 역할마다 다름");
   }
@@ -285,7 +287,7 @@ export function kw13Leak(m) {
 
 /**
  * 키워드 입력줄 감시. 모든 페이지가 만들어질 때 넣는다(함수 하나 — addInitScript 가 문자열로 직렬화하므로 바깥 값을 쓰지 않는다).
- * 30ms 마다 `[data-answer-state]` 의 상태 바뀜·입력칸 data-call 첫 시각·거절 알림 글(떴다 사라진 시각)·조기 진행 표식(`[data-host-band][data-early]`)을 기록한다.
+ * 30ms 마다 `[data-answer-state]` 상태 바뀜·입력칸 data-call 첫 시각·거절 알림 글(떴다 사라진 시각)·조기 진행 표식을 기록한다.
  * 키워드·역할 값은 기록하지 않는다 — 입력칸 글(사용자가 쓴 글)과 알림 글만 담는다. 읽기는 window.__kwWatch.
  */
 export function installKeywordWatch() {
@@ -293,8 +295,8 @@ export function installKeywordWatch() {
   window.__kwWatch = st;
   setInterval(() => {
     const now = Date.now();
-    const band = document.querySelector("[data-host-band][data-early]");
-    if (band && st.earlyAt === null) st.earlyAt = now;
+    const header = document.querySelector("[data-phase-header][data-early]");
+    if ((header || document.querySelector("[data-host-band][data-early]")) && st.earlyAt === null) st.earlyAt = now;
     const root = document.querySelector("[data-answer-state]");
     if (!root) return;
     const state = root.getAttribute("data-answer-state");
@@ -306,8 +308,8 @@ export function installKeywordWatch() {
     const last = st.notices[st.notices.length - 1];
     if (text !== "" && (!last || last.endAt !== null)) st.notices.push({ text, startAt: now, endAt: null, value: input ? input.value : "" });
     else if (text === "" && last && last.endAt === null) last.endAt = now;
-    if (st.earlyAt !== null) {
-      const tone = root.querySelector("[data-answer-secs]")?.getAttribute("data-tone");
+    if (header) {
+      const tone = header.querySelector("[data-phase-gauge]")?.getAttribute("data-tone");
       if (tone && !st.tones.includes(tone)) st.tones.push(tone);
     }
   }, 30);
@@ -368,7 +370,7 @@ const readGeometry = (page) =>
       meta: rectOf(q(".mf-keyword__meta")),
       form: rectOf(q(".mv-chat__form")),
       send: rectOf(q("[data-answer-send]")),
-      secs: rectOf(q("[data-answer-secs]")),
+      gauge: rectOf(q("[data-phase-gauge]")),
       count: rectOf(q("[data-answer-count]")),
     };
   });
@@ -394,6 +396,8 @@ const readDiscussionEvidence = (page) =>
   page.evaluate(() => {
     const input = document.querySelector("[data-chat-input]");
     const box = input?.getBoundingClientRect();
+    const log = document.querySelector("[data-chat-log]");
+    const logBox = log?.getBoundingClientRect();
     const evidence = document.querySelector("[data-discussion-evidence]");
     const rows = [...evidence?.querySelectorAll("[data-evidence-row]") ?? []].map((row) => ({
       order: Number(row.getAttribute("data-evidence-order")),
@@ -401,9 +405,10 @@ const readDiscussionEvidence = (page) =>
       none: row.hasAttribute("data-evidence-none"),
     }));
     return {
-      listOpen: evidence?.querySelector("[data-evidence-toggle]")?.getAttribute("aria-expanded") === "true",
+      listOpen: document.querySelector('[data-playtest-action="clues"]')?.getAttribute("aria-expanded") === "true" && !!evidence,
       dialogOpen: !!document.querySelector("dialog.mf-dialog--open"),
       inputVisible: !!box && document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === input && !input.disabled,
+      logVisible: !!logBox && logBox.height > 0 && log.contains(document.elementFromPoint(logBox.left + logBox.width / 2, logBox.top + logBox.height / 2)),
       rows,
     };
   });
@@ -556,6 +561,9 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       await Promise.all(pages.map((p) => p.tracker.waitFor((v) => v.phase === "discussion", 12_000, "낮 시작 → 토론")));
       const sheets = [];
       for (const p of pages) {
+        const clues = p.page.locator('[data-playtest-action="clues"]');
+        const initiallyClosed = (await clues.getAttribute("aria-expanded")) === "false";
+        await at(`KW8 ${p.who} 단서`, () => clues.click({ timeout: 4000 }));
         await p.page.waitForSelector("[data-evidence-quote]", { timeout: 4000 });
         const evidence = await readDiscussionEvidence(p.page);
         const quote = p.page.locator("[data-evidence-quote]").first();
@@ -573,22 +581,21 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         await at(`KW8 ${p.who} 단서와 의심 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
         const sh = await readAnswerSheet(p.page);
         await closeOpenSheet(p.page);
-        sheets.push({ who: p.who, ...evidence, quoted, collapsed, hasTab: sh.tabs === 1 && rowsKey(sh.rows ?? []) === rowsKey(evidence.rows) });
+        sheets.push({ who: p.who, ...evidence, initiallyClosed, quoted, collapsed, hasTab: sh.tabs === 1 && rowsKey(sh.rows ?? []) === rowsKey(evidence.rows) });
       }
       rec1(rec, `${id}/answers`, kw8AnswerList(sheets));
 
-      // KW9: 참가자 재접속 — 저절로 안 열리고 [내 역할] → 단서와 의심 으로 같은 목록. 그 연결 프레임에서 시민은 키워드를 받는다(KW13 대조군)
+      // KW9: 참가자 재접속 — 단서 아이콘으로 같은 목록을 다시 연다. 그 연결 프레임에서 시민은 키워드를 받는다(KW13 대조군)
       const rowsBefore = sheets[0].rows;
       await gp.reload({ waitUntil: "domcontentloaded" });
       await untilGame(gp, (x) => x.phase === "discussion", 10_000, "재접속 뒤 토론");
       await sleep(1800);
-      const autoAfter = (await readAnswerSheet(gp)).open;
-      await at("KW9 [내 역할]", () => gp.locator(".mf-rolecard-btn").click({ timeout: 4000 }));
-      await at("KW9 단서와 의심 탭", () => gp.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
-      await gp.waitForSelector("dialog.mf-dialog--open [data-answer-list]", { timeout: 4000 }).catch(() => {});
-      const afterSheet = await readAnswerSheet(gp);
-      rec1(rec, `${id}/reconnect`, kw9Reconnect({ autoOpened: autoAfter, rowsBefore, rowsAfter: afterSheet.rows ?? [] }));
-      await closeOpenSheet(gp).catch(() => {});
+      const beforeOpen = await readDiscussionEvidence(gp);
+      if (!beforeOpen.listOpen) await at("KW9 단서", () => gp.locator('[data-playtest-action="clues"]').click({ timeout: 4000 }));
+      await gp.waitForSelector("[data-evidence-quote]", { timeout: 4000 });
+      const afterOpen = await readDiscussionEvidence(gp);
+      rec1(rec, `${id}/reconnect`, kw9Reconnect({ autoOpened: beforeOpen.listOpen || beforeOpen.dialogOpen, rowsBefore, rowsAfter: afterOpen.rows }));
+      await gp.locator('[data-playtest-action="clues"]').click({ timeout: 4000 });
 
       // KW13: 정답 공개 전 마피아 프레임에 키워드 문자열 0, view 키 집합(키워드 단계 스냅샷)
       await sleep(300);

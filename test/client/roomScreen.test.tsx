@@ -790,7 +790,7 @@ describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
   };
   const sheet = (): HTMLElement | null => document.querySelector<HTMLElement>("dialog");
   const evidence = (): HTMLElement | null => document.querySelector<HTMLElement>("[data-discussion-evidence]");
-  const toggle = (): HTMLButtonElement => evidence()!.querySelector<HTMLButtonElement>("[data-evidence-toggle]")!;
+  const toggle = (): HTMLButtonElement => document.querySelector<HTMLButtonElement>('[data-playtest-action="clues"]')!;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -800,7 +800,7 @@ describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
     stage.props = null;
   });
 
-  it("첫 토론은 채팅과 답을 함께 보여 주고 역할 카드의 기록 탭을 수동으로 열 수 있다", () => {
+  it("첫 토론은 채팅을 고정하고 단서와 역할 기록을 각각 열 수 있다", () => {
     connectionMock.current = conn({ view: play("dayAnnounce") });
     const { rerender, container } = mount();
     expect(evidence()).toBeNull();
@@ -808,8 +808,13 @@ describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
     setView(play("discussion"));
     again(rerender);
     expect(sheet()).toBeNull();
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    expect(evidence()).toBeNull();
+    const chat = container.querySelector("[data-chat-input]");
+    fireEvent.click(toggle());
     expect(toggle().getAttribute("aria-expanded")).toBe("true");
     expect(evidence()?.querySelectorAll("[data-evidence-row]")).toHaveLength(rows.length);
+    expect(container.querySelector("[data-chat-input]")).toBe(chat);
     expect(container.querySelector<HTMLInputElement>("[data-chat-input]")?.disabled).toBe(false);
     fireEvent.click(container.querySelector(".mf-rolecard-btn")!);
     fireEvent.click(container.querySelector('[data-rolecard-tab="records"]')!);
@@ -821,6 +826,8 @@ describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
     const { rerender } = mount();
     setView(play("discussion"));
     again(rerender);
+    fireEvent.click(toggle());
+    expect(evidence()).not.toBeNull();
     fireEvent.click(toggle());
     setView({ ...play("discussion"), serverNow: 2000 });
     again(rerender);
@@ -834,6 +841,8 @@ describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
     connectionMock.current = conn({ view: play("discussion") });
     mount();
     expect(sheet()).toBeNull();
+    expect(evidence()).toBeNull();
+    fireEvent.click(toggle());
     expect(evidence()).not.toBeNull();
   });
 
@@ -843,6 +852,8 @@ describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
     setView(play("discussion"), 2);
     again(rerender);
     expect(sheet()).toBeNull();
+    expect(evidence()).toBeNull();
+    fireEvent.click(toggle());
     expect(evidence()).not.toBeNull();
   });
 
@@ -875,13 +886,13 @@ describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
     expect(evidence()).toBeNull();
   });
 
-  it("새 판의 첫 토론에서는 답 목록이 다시 펼쳐진다", () => {
+  it("새 판의 첫 토론에서는 지난 단서 패널을 닫고 다시 열 수 있다", () => {
     connectionMock.current = conn({ view: play("dayAnnounce") });
     const { rerender } = mount();
     setView(play("discussion"));
     again(rerender);
     fireEvent.click(toggle());
-    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
     setView(play("lobby", { round: 2 }));
     again(rerender);
     setView(play("dayAnnounce", { round: 2 }));
@@ -889,6 +900,8 @@ describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
     setView(play("discussion", { round: 2 }));
     again(rerender);
     act(() => { vi.advanceTimersByTime(EXIT_CURTAIN_MS); });
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle());
     expect(toggle().getAttribute("aria-expanded")).toBe("true");
   });
 

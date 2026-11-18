@@ -360,7 +360,7 @@ export async function readHeaderContrast(page) {
       { name: "제목", sels: [".mf-phasebar h1", ".mf-assign__bar h1", ".mf-lobby__header .mv-phase__title", ".mf-game__header .mv-phase__title"] },
       { name: "타이머", sels: [".mf-timer__num"] },
       // 14-08(HOST-01·TOOL-02): 자막 띠 문장과 남은 초도 같은 대비 기준을 받는다
-      { name: "띠 문장", sels: ["[data-host-line]"] },
+      { name: "띠 문장", sels: ["[data-host-line]:not(.mf-sr-only *)"] },
       { name: "띠 시간", sels: ["[data-host-time]"] },
     ];
     const items = [];
@@ -1904,6 +1904,8 @@ export function readHostBand(page) {
     const lh = cs ? parseFloat(cs.lineHeight) : NaN;
     const time = document.querySelector("[data-host-time]");
     const bar = document.querySelector("[data-host-band] .mv-host__bar");
+    const gauge = document.querySelector("[data-phase-gauge]");
+    const gaugeHeader = document.querySelector("[data-phase-header]");
     const guides = qa("[data-guide]");
     const face = document.querySelector("[data-host-band] .mv-host__band");
     const sound = document.querySelector("[data-sound-button]");
@@ -1915,17 +1917,21 @@ export function readHostBand(page) {
       guideCount: guides.length,
       guideInBand: guides.length > 0 && guides.every((g) => g.closest("[data-host-band]") !== null),
       timeText: time ? (time.textContent ?? "").replace(/\s+/g, "") : "",
+      gaugeHeader: gaugeHeader !== null,
+      gaugeCount: qa("[data-phase-gauge]").length,
+      gaugeLabel: gauge?.getAttribute("aria-label") ?? "",
+      gaugeText: gauge?.textContent?.trim() ?? "",
       barShown: !!bar && bar.getBoundingClientRect().width > 0 && bar.getBoundingClientRect().height > 0,
       oldHint: qa(".mv-phase__hint").length,
       oldRing: qa(".mv-ring").length,
       oldTimer: qa(".mf-timer").length,
       text: line ? (line.textContent ?? "").replace(/\s+/g, " ").trim() : "",
       // 18.1-12: 종 아이콘 수(띠 면 안 svg·종 요소 — 0)·면 계산된 visibility(숨은 단계만 hidden)·소리 단추 윗변(자리가 승인안과 같은가). 면 사각형은 숨어도 그대로 읽힌다(자리는 남는다)
-      bells: face ? face.querySelectorAll("svg, .mv-host__bell").length : null,
-      faceHidden: face ? getComputedStyle(face).visibility === "hidden" : null,
+      bells: face ? face.querySelectorAll("svg, .mv-host__bell").length : gaugeHeader ? 0 : null,
+      faceHidden: face ? getComputedStyle(face).visibility === "hidden" : !!line?.closest(".mf-sr-only"),
       soundTop: sound ? sound.getBoundingClientRect().top : null,
       dockBottom: document.querySelector("[data-host-band] .mv-host__dock") ? document.querySelector("[data-host-band] .mv-host__dock").getBoundingClientRect().bottom : null,
-      bandRect: box(face),
+      bandRect: box(face ?? gaugeHeader),
       vw: window.innerWidth,
     };
   });
@@ -2031,13 +2037,15 @@ export function armBandWatch(page) {
       const lh = parseFloat(cs.lineHeight);
       const time = document.querySelector("[data-host-time]");
       const bar = document.querySelector("[data-host-band] .mv-host__bar");
+      const gauge = document.querySelector("[data-phase-gauge]");
+      const gaugeHeader = document.querySelector("[data-phase-header]");
       const guides = qa("[data-guide]");
       const face = document.querySelector("[data-host-band] .mv-host__band");
       snaps.push({
         phase,
         text,
-        bells: face ? face.querySelectorAll("svg, .mv-host__bell").length : null,
-        faceHidden: face ? getComputedStyle(face).visibility === "hidden" : null,
+        bells: face ? face.querySelectorAll("svg, .mv-host__bell").length : gaugeHeader ? 0 : null,
+        faceHidden: face ? getComputedStyle(face).visibility === "hidden" : !!line.closest(".mf-sr-only"),
         bands: qa("[data-host-band]").length,
         lineCount: qa("[data-host-line]").length,
         lineH: line.getBoundingClientRect().height,
@@ -2045,6 +2053,10 @@ export function armBandWatch(page) {
         guideCount: guides.length,
         guideInBand: guides.length > 0 && guides.every((g) => g.closest("[data-host-band]") !== null),
         timeText: time ? (time.textContent ?? "").replace(/\s+/g, "") : "",
+        gaugeHeader: gaugeHeader !== null,
+        gaugeCount: qa("[data-phase-gauge]").length,
+        gaugeLabel: gauge?.getAttribute("aria-label") ?? "",
+        gaugeText: gauge?.textContent?.trim() ?? "",
         barShown: !!bar && bar.getBoundingClientRect().width > 0 && bar.getBoundingClientRect().height > 0,
         oldHint: qa(".mv-phase__hint").length,
         oldRing: qa(".mv-ring").length,

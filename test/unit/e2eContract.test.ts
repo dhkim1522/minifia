@@ -16,6 +16,7 @@ import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS, SEAL_GLYPH } from "../../src/game/
 import { RESULT_PANEL_TEXT, RESULT_TABS } from "../../src/game/resultText";
 import {
   CHAT_PANEL_EXTRA,
+  DISCUSSION_PANEL_EXTRA,
   KB_PANEL_H,
   KB_PANEL_REST,
   LOBBY_PANEL_EXTRA,
@@ -209,11 +210,11 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     for (const gone of ["LOG_H_SHORT", "LOG_H_TALL", "LOG_H_KB", "TALL_ROOM_MIN_H", "logHeightFor"]) expect(keys).not.toContain(gone);
   });
 
-  it("GAME_PANEL_EXTRA 의 채팅(92)·토론(154)은 앱의 CHAT_PANEL_EXTRA·LOBBY_PANEL_EXTRA 와 같고, 찬반 두 값(218·126)은 UI-SPEC 표 값에 숫자 줄 +15 를 더한 값이다(0062-2) (08-23)", () => {
+  it("GAME_PANEL_EXTRA 의 채팅과 토론은 앱 치수와 같고 찬반은 각각 218·126이다", () => {
     const extra = (e2eLib as unknown as { GAME_PANEL_EXTRA: Record<string, number>; gamePanelHeight: (h: number, k: string) => number }).GAME_PANEL_EXTRA;
     const gamePanelHeight = (e2eLib as unknown as { gamePanelHeight: (h: number, k: string) => number }).gamePanelHeight;
     expect(extra.chat).toBe(CHAT_PANEL_EXTRA);
-    expect(extra.talk).toBe(LOBBY_PANEL_EXTRA);
+    expect(extra.talk).toBe(DISCUSSION_PANEL_EXTRA);
     expect(extra.verdictVoter).toBe(218);
     expect(extra.verdictViewer).toBe(126);
     // 16-05: 입력줄 단추가 48 원이라 입력칸 48 과 높이가 같다 — 패널 높이에 보정이 없고, 판정은 "기록 칸 + 여분" 이다. CSS 의 단추 크기와도 견준다
@@ -227,7 +228,7 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
     }
     for (const roomH of [560, 640, 664, 779, 780, 844, 874, 932]) {
       expect(gamePanelHeight(roomH, "chat")).toBe(LOG_H + CHAT_PANEL_EXTRA);
-      expect(gamePanelHeight(roomH, "talk")).toBe(LOG_H + LOBBY_PANEL_EXTRA);
+      expect(gamePanelHeight(roomH, "talk")).toBe(LOG_H + DISCUSSION_PANEL_EXTRA);
     }
   });
 
@@ -267,9 +268,8 @@ describe("9페이즈 E2E 표식·패널(09-21)", () => {
     expect(missing).toEqual([]);
   });
 
-  it("밤 패널 종류는 얼굴 목록 하나다 — lib 의 GAME_PANEL_EXTRA 에 nightMafia 덧셈이 없고(15-08 이 마피아 밤 채팅 패널을 지웠다), 토론 덧셈은 앱 LOBBY_PANEL_EXTRA(154)와 같다", () => {
+  it("밤 패널 종류는 얼굴 목록 하나다(15-08)", () => {
     expect(Object.hasOwn(lib.GAME_PANEL_EXTRA, "nightMafia")).toBe(false);
-    expect(lib.GAME_PANEL_EXTRA.talk).toBe(LOBBY_PANEL_EXTRA);
   });
 });
 

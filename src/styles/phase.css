@@ -66,6 +66,9 @@
 /* 빛나는 카드: ::after/::before 의 둥근 모서리를 카드 면과 맞춘다(루트에는 반경이 없다) */
 .mf-card.is-call::after, .mf-card.is-call::before { border-radius: var(--radius-lg); }
 .mf-reveal__hints { flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); padding: var(--space-md) var(--space-lg) var(--space-xl); text-align: center; }
+[data-playtest-role] .mf-playtest__ready { align-items: flex-end; padding-inline: var(--space-md); }
+.mf-playtest__ready .mf-playtest__ready-control { width: var(--control-input); height: var(--control-input); min-height: var(--control-input); padding: 0; border-radius: var(--radius-md); }
+.mf-playtest__ready-status { display: grid; place-items: center; border: 1px solid var(--noir-line); color: var(--noir-silver); background: var(--noir-inset); }
 
 /* 첫날 증거지는 판화선과 따뜻한 종이로 무대에서 분리한다. 카드 안의 간격은 키보드가 열린 크기 계약을 유지한다. */
 .mf-keyword__card { position: relative; width: 100%; max-width: 344px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); padding: var(--space-md) 20px; clip-path: var(--noir-cut); background: repeating-linear-gradient(112deg, transparent 0 3px, color-mix(in srgb, var(--noir-paper-line) 5%, transparent) 3px 4px), var(--noir-paper); border: 1.5px solid var(--noir-paper-line); text-align: center; pointer-events: none; animation: mf-keyword-in var(--dur-med) var(--ease-out) both; }
@@ -87,17 +90,16 @@
    키보드가 열리면 입력줄이 --mf-kb-lift(useKeyboardLift 가 방 루트에 쓴다)만큼 올라간다 — 닫히면 0. */
 .mf-keyword__answer { flex: none; display: flex; flex-direction: column; gap: var(--space-xs); padding: var(--space-xs) var(--space-md) 22px; margin-bottom: var(--mf-kb-lift, 0px); background: var(--noir-sheet-light), color-mix(in srgb, var(--noir-panel) 96%, transparent); box-shadow: var(--noir-rail); }
 .mf-keyword.is-kb .mf-keyword__answer { padding-bottom: var(--space-sm); }
-/* 메타 줄 20: 왼쪽 남은 초 · 가운데 거절 알림/냈어요 · 오른쪽 n/20. Label 14·tabular-nums·gray-300 */
+/* 메타 줄 20: 가운데 거절 알림 · 오른쪽 n/20. Label 14·tabular-nums·gray-300 */
 .mf-keyword__meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: 20px; font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; color: var(--gray-300); }
-.mf-keyword__secs, .mf-keyword__count { flex: none; min-width: 3ch; }
-.mf-keyword__count { text-align: right; }
-.mf-keyword__secs[data-tone="warn"] { color: var(--brass-200); }
-.mf-keyword__secs[data-tone="urgent"] { color: var(--crimson-400); }
+.mf-keyword__count { flex: none; min-width: 3ch; text-align: right; }
 /* 20자소가 차면 글자색만 gray-50(색 변화는 이것뿐, P23-10) */
 .mf-keyword__count[data-full="true"] { color: var(--gray-50); }
 .mf-keyword__mid { flex: 1; min-width: 0; text-align: center; }
 .mf-keyword__mid .mv-chat__notice { display: block; }
-.mf-keyword__done { color: var(--gray-300); }
+.mf-playtest__ready-control.is-call::before,
+.mf-reveal .mf-card.is-call::before,
+.mf-keyword .mv-chat__field.is-call::before { animation-iteration-count: 1; }
 /* 20자소 답은 입력칸 안에서 가로로 밀린다(입력칸은 줄바꿈 없는 한 줄). 낸 글은 night-700 면 없이 gray-100 글자만(P23-13) */
 .mf-keyword__answer .mv-chat__input[readonly] { color: var(--gray-100); }
 

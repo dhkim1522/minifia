@@ -24,6 +24,8 @@ export interface HostBandProps {
   sound?: SoundView | null;
   /** 연결 번호. 바뀐 첫 프레임(재접속)에는 조기 진행 표시를 켜지 않는다(23-11) */
   epoch?: number;
+  /** 단계 머리에 시간 게이지가 있는 게임 화면에서는 문장을 읽기 지원용으로만 남긴다. */
+  headerGauge?: boolean;
 }
 
 /** 화면 헤더(방 틀 본문의 첫 것): 로비·게임 맵·결과의 absolute 헤더, 역할 확인의 absolute 헤더, 배정 바 */
@@ -96,14 +98,14 @@ export function useHostMetrics(rootRef: RefObject<HTMLDivElement | null>, bandRe
   }, [rootRef]);
 }
 
-export function HostBand({ view, offset, cardSeen, sound, epoch }: HostBandProps) {
+export function HostBand({ view, offset, cardSeen, sound, epoch, headerGauge = false }: HostBandProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const bandRef = useRef<HTMLDivElement>(null);
   const line = hostLineOf(view, { cardSeen });
-  const showTime = hostTimeOf(view);
+  const showTime = !headerGauge && hostTimeOf(view);
   // 세 상태(18.1-12): show = 문장 + 초·막대, blank = 초·막대만(큰 글·시작 카드가 말한다), off = 면을 보이지 않게(자리는 그대로)
   const mode = hostBandModeOf(view, line);
-  useHostMetrics(rootRef, bandRef, [view.phase, line, mode, showTime, sound != null]);
+  useHostMetrics(rootRef, bandRef, [view.phase, line, mode, showTime, sound != null, headerGauge]);
   // 단계가 바뀐 렌더에서만 교체 연출(문장 페이드). 첫 마운트·같은 단계 안 다시 그리기에는 하지 않는다.
   const prevPhase = useRef<string | null>(null);
   const swap = prevPhase.current !== null && prevPhase.current !== view.phase;
@@ -117,7 +119,7 @@ export function HostBand({ view, offset, cardSeen, sound, epoch }: HostBandProps
   const early = useEarlyCalm(view, epoch);
   return (
     <div ref={rootRef} className="mv-host" data-host-band="" {...(early ? { "data-early": "" } : {})}>
-      <div ref={bandRef} className={mode === "off" ? "mv-host__band is-off" : "mv-host__band"} {...(mode === "off" ? { "aria-hidden": true } : {})}>
+      <div ref={headerGauge ? undefined : bandRef} className={headerGauge ? "mf-sr-only" : mode === "off" ? "mv-host__band is-off" : "mv-host__band"} {...(mode === "off" ? { "aria-hidden": true } : {})}>
         <p key={`line-${view.phase}`} className={swap ? "mv-host__line is-swap" : "mv-host__line"} data-host-line="" data-guide="" role="status" aria-live="polite" aria-atomic="false">
           {line}
         </p>

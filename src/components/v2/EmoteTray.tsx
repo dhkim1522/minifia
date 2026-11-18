@@ -1,4 +1,4 @@
-import type { Ref } from "react";
+import type { KeyboardEvent, Ref } from "react";
 import type { EmoteId } from "../../../shared/protocol";
 import { EMOTE_LABEL, EMOTE_SHORT, EMOTE_TEXT } from "../../game/chatText";
 import { V2Icon, type V2IconName } from "./V2Icon";
@@ -16,12 +16,22 @@ export interface EmoteTrayProps {
   playing?: EmoteId | null;
   /** 열릴 때 초점을 받을 첫 칸 */
   firstRef?: Ref<HTMLButtonElement>;
-  onKeyDown?(e: React.KeyboardEvent<HTMLDivElement>): void;
+  columns?: number;
 }
 
-export function EmoteTray({ ids, onPick, disabled, playing, firstRef, onKeyDown }: EmoteTrayProps) {
+export function EmoteTray({ ids, onPick, disabled, playing, firstRef, columns = 5 }: EmoteTrayProps) {
+  const moveFocus = (event: KeyboardEvent<HTMLDivElement>) => {
+    const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : event.key === "ArrowDown" ? columns : event.key === "ArrowUp" ? -columns : 0;
+    if (step === 0) return;
+    const cells = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[data-emote]"));
+    const index = cells.findIndex((cell) => cell === document.activeElement);
+    if (index < 0) return;
+    event.preventDefault();
+    cells[Math.max(0, Math.min(cells.length - 1, index + step))]?.focus({ preventScroll: true });
+  };
+
   return (
-    <div className="mv-emote-tray" data-emote-tray="" role="group" aria-label={EMOTE_TEXT.tray} onKeyDown={onKeyDown}>
+    <div className="mv-emote-tray" data-emote-tray="" role="group" aria-label={EMOTE_TEXT.tray} onKeyDown={moveFocus}>
       {ids.map((id, i) => {
         const cls = ["mv-emote-tray__cell", playing === id && "is-playing"].filter(Boolean).join(" ");
         return (

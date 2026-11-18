@@ -7,11 +7,14 @@ import "../../styles/discussion-evidence.css";
 export type QuoteResult = "added" | "busy" | "full";
 
 /** 채팅 안에서 공개 답과 유언을 읽고, 입력칸에 옮긴다. */
-export function DiscussionEvidence({ evidence, hidden, collapseOnSmallScreen = false, onQuote }: {
+export function DiscussionEvidence({ evidence, hidden, collapseOnSmallScreen = false, expanded = false, canQuote = true, onQuote, onQuoted }: {
   evidence: Evidence;
-  hidden: boolean;
+  hidden?: boolean;
   collapseOnSmallScreen?: boolean;
+  expanded?: boolean;
+  canQuote?: boolean;
   onQuote: (row: DiscussionEvidenceRow) => QuoteResult;
+  onQuoted?: () => void;
 }) {
   const listId = useId();
   const [open, setOpen] = useState(() => !collapseOnSmallScreen || typeof window.matchMedia !== "function" || !window.matchMedia("(max-height: 680px)").matches);
@@ -19,18 +22,20 @@ export function DiscussionEvidence({ evidence, hidden, collapseOnSmallScreen = f
 
   return (
     <section className="mf-discussion-evidence" data-discussion-evidence="" hidden={hidden}>
-      <button
-        type="button"
-        className="mf-discussion-evidence__toggle"
-        data-evidence-toggle=""
-        aria-expanded={open}
-        aria-controls={listId}
-        onClick={() => { setOpen(!open); setNotice(null); }}
-      >
-        {evidence.label}
-        <V2Icon name="chevronRight" size={16} />
-      </button>
-      <div id={listId} hidden={!open}>
+      {expanded ? <strong className="mf-discussion-evidence__heading">{evidence.label}</strong> : (
+        <button
+          type="button"
+          className="mf-discussion-evidence__toggle"
+          data-evidence-toggle=""
+          aria-expanded={open}
+          aria-controls={listId}
+          onClick={() => { setOpen(!open); setNotice(null); }}
+        >
+          {evidence.label}
+          <V2Icon name="chevronRight" size={16} />
+        </button>
+      )}
+      <div id={listId} hidden={!expanded && !open}>
         <ul className="mf-discussion-evidence__list" aria-label={evidence.label}>
           {evidence.rows.map((row) => {
             const content = (
@@ -45,7 +50,7 @@ export function DiscussionEvidence({ evidence, hidden, collapseOnSmallScreen = f
             );
             return (
               <li key={row.seat} data-evidence-row="" data-evidence-seat={row.seat} data-evidence-order={row.order} data-evidence-none={row.text === null ? "" : undefined}>
-                {row.text === null ? <div className="mf-discussion-evidence__row">{content}</div> : (
+                {row.text === null || !canQuote ? <div className="mf-discussion-evidence__row">{content}</div> : (
                   <button
                     type="button"
                     className="mf-discussion-evidence__row"
@@ -54,7 +59,7 @@ export function DiscussionEvidence({ evidence, hidden, collapseOnSmallScreen = f
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
                       const result = onQuote(row);
-                      if (result === "added") { setOpen(false); setNotice(null); }
+                      if (result === "added") { setOpen(false); setNotice(null); onQuoted?.(); }
                       else setNotice(result);
                     }}
                   >

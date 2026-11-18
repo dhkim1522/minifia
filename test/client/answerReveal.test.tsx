@@ -205,7 +205,8 @@ describe("정답 공개 화면 — 띠·제목·패널 (23-07, P23-21)", () => {
   const checks = (c: HTMLElement) => {
     expect(c.querySelector(".mv-phase__title")?.textContent).toBe("제시어");
     expect(c.querySelector("[data-host-line]")?.textContent).toBe("");
-    expect(c.querySelector("[data-host-time]")).not.toBeNull();
+    expect(c.querySelector("[data-phase-gauge]")).not.toBeNull();
+    expect(c.querySelector("[data-host-time]")).toBeNull();
     const panel = c.querySelector("[data-chat-panel]")!;
     expect(panel.hasAttribute("data-chat-locked")).toBe(true);
     const input = c.querySelector<HTMLInputElement>("[data-chat-input]")!;

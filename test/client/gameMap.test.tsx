@@ -12,7 +12,7 @@ import type { WorldStageProps } from "../../src/components/WorldStage";
 import { LOG_H } from "../../src/game/chatUi";
 
 /** 키보드 열림 패널 = 14 + 기록 칸 + 8 + 입력줄 48 + 아래 여백 8 (UI-SPEC B 계약 4: 146) */
-const KB_PANEL = 14 + LOG_H + 8 + 48 + 8;
+const KB_PANEL = 8 + 44 + 8 + 40 + 8 + 48 + 8;
 import { bindSignals, type LocalSignal } from "../../src/audio/signals";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 const GAME_RULES = RULES;
@@ -164,6 +164,7 @@ describe("GameMap — 아침 유언 인용", () => {
       ] }, 1, NOW);
     });
     rerender(frame(makeView({ n: 2, dead: [1, 2] })));
+    fireEvent.click(container.querySelector('[data-playtest-action="clues"]')!);
     expect(evidence()).toBeNull();
     act(() => chat.apply({ t: "chatLog", lines: [
       { ch: "all", k: "will", at: NOW, seat: 2, seq: 3, text: "이번 아침 유언" },
@@ -178,43 +179,46 @@ describe("GameMap — 아침 유언 인용", () => {
 });
 
 describe("GameMap — 실험방 토론 도구", () => {
-  it("단서, 반응, 채팅을 따로 열고 채팅을 닫았다 열어도 인용과 초안을 보관한다", () => {
+  it("단서와 반응을 열어도 채팅 입력·도구·초안을 유지하고 조합이 끝난 뒤 인용한다", () => {
     const send = vi.fn();
     const view: RoomView = { ...makeView({ count: 4 }), playtest: true };
     view.day!.keyword = { genre: "영화", answers: [{ seat: 1, order: 1, text: "공개된 단서" }] };
     const { container, getByRole } = mount(view, { send });
     const action = (name: string) => container.querySelector<HTMLButtonElement>(`[data-playtest-action="${name}"]`)!;
     const activeSurface = () => container.querySelector("[data-playtest-surface]")?.getAttribute("data-playtest-surface");
-    const input = () => container.querySelector<HTMLInputElement>("[data-chat-input]");
+    const input = container.querySelector<HTMLInputElement>("[data-chat-input]")!;
 
     expect(container.querySelector("[data-guide]")).toBeNull();
     expect(container.querySelectorAll('[role="timer"]')).toHaveLength(1);
-    expect(input()).toBeNull();
-    fireEvent.click(action("clues"));
+    expect(input).not.toBeNull();
+    expect(container.querySelector("[data-chat-open]")).toBeNull();
+    fireEvent.change(input, { target: { value: "내 초안" } });
+    input.focus();
+    fireEvent.click(action("clues"), { detail: 1 });
     expect(activeSurface()).toBe("clues");
-    expect(input()).toBeNull();
-    fireEvent.click(action("reaction"));
+    expect(document.activeElement).toBe(input);
+    fireEvent.click(action("reaction"), { detail: 1 });
     expect(activeSurface()).toBe("reaction");
     fireEvent.click(getByRole("button", { name: "최고" }));
     expect(activeSurface()).toBeUndefined();
     expect(send).toHaveBeenCalledWith({ t: "emote", id: "praise", pk: "1:1:discussion" });
+    expect(container.querySelector("[data-chat-input]")).toBe(input);
+    expect(input.value).toBe("내 초안");
+    expect(endButton(container)).not.toBeNull();
+    expect(document.activeElement).toBe(input);
 
-    fireEvent.click(action("chat"));
-    expect(activeSurface()).toBe("chat");
-    expect(container.querySelector("[data-playtest-action]")).toBeNull();
-    fireEvent.change(input()!, { target: { value: "내 초안" } });
-    input()?.focus();
-    fireEvent.keyDown(input()!, { key: "Escape", isComposing: true });
-    expect(document.activeElement).toBe(input());
-    fireEvent.click(getByRole("button", { name: "채팅 닫기" }));
-    expect(input()).toBeNull();
-    expect(document.activeElement).toBe(action("chat"));
-
-    fireEvent.click(action("clues"));
+    fireEvent.click(action("clues"), { detail: 1 });
+    fireEvent.compositionStart(input);
+    fireEvent.keyDown(input, { key: "Escape", isComposing: true });
+    expect(activeSurface()).toBe("clues");
     fireEvent.click(container.querySelector("[data-evidence-quote]")!);
-    expect(activeSurface()).toBe("chat");
-    expect(input()?.value).toMatch(/^내 초안 .*“공개된 단서”$/);
-    expect(document.activeElement).toBe(input());
+    expect(input.value).toBe("내 초안");
+    expect(container.querySelector("[data-playtest-surface] [role='status']")?.textContent).toBe("입력을 마친 뒤 눌러 주세요");
+    fireEvent.compositionEnd(input);
+    fireEvent.click(container.querySelector("[data-evidence-quote]")!);
+    expect(activeSurface()).toBeUndefined();
+    expect(input.value).toMatch(/^내 초안 .*“공개된 단서”$/);
+    expect(document.activeElement).toBe(input);
     expect(send.mock.calls.some(([message]) => message.t === "chat")).toBe(false);
   });
 
@@ -256,7 +260,8 @@ describe("GameMap — 실험방 토론 도구", () => {
     expect(container.querySelector("[data-face-list]")).toBeNull();
     expect(stage.props?.canWalk).toBe(false);
     show({ ...view, me: { ...view.me, nightDone: true } });
-    expect(button.textContent).toBe("준비 완료");
+    expect(button.getAttribute("aria-label")).toBe("준비 완료");
+    expect(button.querySelector("svg")).not.toBeNull();
     expect(button.disabled).toBe(true);
   });
 });
@@ -270,7 +275,7 @@ describe("GameMap — 낮 토론 [토론 끝내기] (DAY-03, 08-13)", () => {
     expect(root.getAttribute("data-phase")).toBe("discussion");
     expect(root.querySelector("[data-world-stage-fake]")).not.toBeNull();
     expect(container.querySelectorAll("[data-end-discussion]").length).toBe(1);
-    expect(endButton(container)?.getAttribute("aria-label")).toBe("토론 끝내기");
+    expect(endButton(container)?.getAttribute("aria-label")).toBe("투표 요청, 0/3명 요청");
     expect(endButton(container)?.getAttribute("aria-pressed")).toBe("false");
     // 5명 → 과반 3
     expect(countMax(container)).toBe(3);
@@ -406,7 +411,7 @@ describe("GameMap — 한 장면 키 (DAY-07, 08-13)", () => {
 describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13)", () => {
   const INNER_H = 844;
   const realInnerH = window.innerHeight;
-  const DISCUSSION_PANEL_H = LOG_H + 154;
+  const DISCUSSION_PANEL_H = 8 + 44 + 8 + LOG_H + 8 + 48 + 12;
   let panelH = DISCUSSION_PANEL_H;
   let resizeCallbacks: Array<() => void> = [];
 
@@ -531,44 +536,57 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: LOG_H + 92 });
   });
 
-  it("키보드 열림(포커스 + lift 336): data-kb-open, 행동 줄([토론 끝내기]) 없음, 기록 칸 68, 패널 --kb, 스테이지 아래 = 146 + 336", () => {
+  it("키보드가 열려도 투표 요청은 같은 줄에 있고 기록 칸을 40px로 줄여 패널을 336px 올린다", () => {
     const vv = installVV(INNER_H);
     const { container } = mount(makeView());
-    expect(endButton(container)).not.toBeNull();
+    const vote = endButton(container);
+    expect(vote).not.toBeNull();
     focusWithKeyboard(container, vv, 336);
     panelH = KB_PANEL;
     remeasure();
     expect(gameOf(container).getAttribute("data-kb-open")).toBe("true");
-    expect(endButton(container)).toBeNull();
-    // 포커스가 기록 칸을 늘린다(0083-4): 인라인 높이 없이 CSS 식이 높이를 정한다
-    expect(logHeight(container)).toBe("");
-    expect(container.querySelector("[data-chat-log]")?.classList.contains("is-open")).toBe(true);
+    expect(endButton(container)).toBe(vote);
+    expect(logHeight(container)).toBe("40px");
+    expect(container.querySelector("[data-chat-log]")?.classList.contains("is-fixed")).toBe(true);
     expect(container.querySelector(".mv-chat.is-compact")).not.toBeNull();
     expect(container.querySelector(".mf-game__panel")?.classList.contains("mf-game__panel--kb")).toBe(true);
     expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: KB_PANEL + 336 });
   });
 
-  it("키보드 열림 경계(lift 60) 아래에서는 행동 줄이 그대로 있고, 블러하면 원래대로 돌아온다", () => {
+  it("키보드가 열려 있을 때 단서 도구를 누르면 초안을 유지하고 키보드를 접는다", () => {
+    const vv = installVV(INNER_H);
+    const { container } = mount(makeView());
+    focusWithKeyboard(container, vv, 336);
+    const input = inputOf(container);
+    fireEvent.change(input, { target: { value: "쓰던 말" } });
+    fireEvent.click(container.querySelector('[data-playtest-action="clues"]')!);
+    advance(20);
+    expect(document.activeElement).not.toBe(input);
+    expect(input.value).toBe("쓰던 말");
+    expect(container.querySelector('[data-playtest-surface="clues"]')).not.toBeNull();
+  });
+
+  it("키보드 열림 경계(lift 60) 아래에서는 기록 칸이 68px이고, 블러하면 68px로 돌아온다", () => {
     const vv = installVV(INNER_H);
     const { container } = mount(makeView());
     focusWithKeyboard(container, vv, 60);
     expect(gameOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(endButton(container)).not.toBeNull();
+    expect(logHeight(container)).toBe("68px");
     focusWithKeyboard(container, vv, 336);
     panelH = KB_PANEL;
     remeasure();
-    expect(endButton(container)).toBeNull();
+    expect(logHeight(container)).toBe("40px");
     act(() => inputOf(container).blur());
     panelH = DISCUSSION_PANEL_H;
     remeasure();
     expect(gameOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(endButton(container)).not.toBeNull();
-    // 블러해도 늘어난 기록 칸은 저절로 접지 않는다(닫기는 [data-chat-open] 하나, 0083-4)
-    expect(logHeight(container)).toBe("");
+    expect(logHeight(container)).toBe("68px");
     expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: DISCUSSION_PANEL_H });
   });
 
-  it("기록 칸 높이는 어느 방 높이에서나 68 한 값이다(P181-3), 패널 표 222·160·146", () => {
+  it("키보드가 닫힌 토론 기록은 방 높이와 무관하게 68px이다", () => {
     for (const h of [560, 640, 844, 932]) {
       Object.defineProperty(window, "innerHeight", { value: h, configurable: true, writable: true });
       const { container, unmount } = mount(makeView());
@@ -576,9 +594,9 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
       unmount();
     }
     expect(LOG_H).toBe(68);
-    expect(DISCUSSION_PANEL_H).toBe(222);
+    expect(DISCUSSION_PANEL_H).toBe(196);
     expect(LOG_H + 92).toBe(160);
-    expect(KB_PANEL).toBe(146);
+    expect(KB_PANEL).toBe(164);
   });
 });
 
@@ -594,20 +612,21 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
       vi.advanceTimersByTime(ms);
     });
 
-  // 14-02(U-2·U-3, TOOL-02): 기본판 헤더는 제목 + [역할 카드] 뿐이다. 안내 줄은 자막 띠가, 남은 시간은 띠의 막대 + 초가 맡는다.
-  it("기본판 낮 토론 산 사람: 헤더는 제목 '토론'(앞에 옅은 낱말 '낮') + [역할 카드] 뿐 — 안내 줄·시간 링·타이머가 없다", () => {
+  it("기본판 낮 토론: 제목·상단 시간 게이지·내 역할이 한 줄에 있다", () => {
     const { container } = mount(makeView());
     const header = container.querySelector(".mf-game__header") as HTMLElement;
     expect(header.querySelector(".mv-phase__title")?.textContent).toBe("토론");
     expect(header.querySelectorAll(".mv-phase__title").length).toBe(1);
     expect(header.querySelector(".mv-phase__hint")).toBeNull();
     expect(header.querySelector(".mv-ring")).toBeNull();
-    expect(header.querySelector('[role="timer"]')).toBeNull();
+    const gauge = header.querySelector('[role="timer"][data-phase-gauge]');
+    expect(gauge?.textContent).toBe("");
+    expect(gauge?.getAttribute("aria-label")).toBe("남은 시간 90초");
     expect(header.querySelectorAll("button").length).toBe(1);
     expect(header.querySelector("[data-guide]")).toBeNull();
   });
 
-  it("기본판 단계 전부(낮 시작·토론·투표·변론·찬반·처형·밤·아침), 산 사람·유령 모두: 헤더에 안내 줄·시간 링·타이머가 없다", () => {
+  it("기본판 산 사람과 유령의 헤더에서 안내 줄과 시간 링을 중복 표시하지 않는다", () => {
     for (const phase of ["dayAnnounce", "discussion", "nomination", "defense", "verdict", "execution", "night", "morning"] as const) {
       for (const dead of [[], [0]] as const) {
         const { container, unmount } = mount(makeView({ phase, candidate: 1, dead: [...dead] }));
@@ -616,7 +635,7 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
         expect(header.querySelectorAll(".mv-phase__title").length, `${cell}: 제목`).toBe(1);
         expect(header.querySelector(".mv-phase__hint"), `${cell}: 안내 줄`).toBeNull();
         expect(header.querySelector(".mv-ring"), `${cell}: 시간 링`).toBeNull();
-        expect(header.querySelector('[role="timer"]'), `${cell}: 타이머`).toBeNull();
+        expect(header.querySelectorAll("[data-phase-gauge]").length, `${cell}: 게이지`).toBe(phase === "dayAnnounce" ? 0 : 1);
         unmount();
       }
     }
@@ -633,7 +652,7 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
     expect(container.textContent).not.toContain("모두의 직업이 보여요");
   });
 
-  it("[내 역할] 은 글 없는 아이콘 단추이고 헤더 오른쪽 끝(.mv-phase__side)에 홀로 놓인다 — aria-label '내 역할' (TOOL-04)", () => {
+  it("[내 역할]은 글 없는 아이콘이며 게이지 오른쪽에 놓인다 (TOOL-04)", () => {
     const { container } = mount(makeView());
     const btn = container.querySelector(".mf-game__header button") as HTMLButtonElement;
     expect(btn.getAttribute("aria-label")).toBe("내 역할");
@@ -641,8 +660,8 @@ describe("GameMap — 헤더·[역할 카드] (UI-SPEC A2)", () => {
     expect(btn.querySelector(".mf-rolecard-btn__label")).toBeNull();
     expect(btn.textContent).toBe("");
     expect(btn.querySelector("svg")).not.toBeNull();
-    expect(btn.parentElement?.classList.contains("mv-phase__side")).toBe(true);
-    expect(container.querySelector('.mf-game__header [role="timer"]')).toBeNull();
+    expect(btn.parentElement?.classList.contains("mf-game-phase-header__actions")).toBe(true);
+    expect(container.querySelector(".mf-game__header [data-phase-gauge]")).not.toBeNull();
     // 헤더가 맵보다 DOM 앞이라 Tab 순서가 [내 역할] → 이름표 → 입력이다
     expect(container.querySelectorAll("button[aria-label='내 역할']").length).toBe(1);
   });
@@ -1052,16 +1071,17 @@ describe("GameMap — 낮 토론 채팅 패널·방장 줄 없음 (CHAT-06, DAY-
   };
   const sentTypes = (send: unknown): string[] => (send as ReturnType<typeof vi.fn>).mock.calls.map((c) => (c[0] as ClientMessage).t);
 
-  it("산 사람의 낮 토론 아래는 채널 all 채팅 패널이다: 입력칸 '채팅 입력'(안내 문구 없음)·보내기·기록 칸 role=log, 채널 아이콘·빠른 메시지·이모티콘 버튼 없음", () => {
+  it("산 사람의 공용 채팅은 입력칸·보내기·스크롤되는 기록이 함께 있고 채널 아이콘은 없다", () => {
     const { container } = mount(makeView());
     const panel = container.querySelector<HTMLElement>("[data-chat-panel]")!;
     expect(panel.getAttribute("data-chat-channel")).toBe("all");
     const input = panel.querySelector<HTMLInputElement>("[data-chat-input]")!;
     expect(input.getAttribute("aria-label")).toBe("채팅 입력");
-    expect(input.getAttribute("placeholder") ?? "").toBe("");
-    // 보내기는 입력 중이거나 쓴 글이 있을 때만 있다(0083-5)
-    expect(panel.querySelector("[data-chat-send]")).toBeNull();
+    expect(input.getAttribute("placeholder")).toBe("메시지 입력");
+    expect(panel.querySelector("[data-chat-send]")?.getAttribute("aria-disabled")).toBe("true");
+    expect(panel.querySelector("[data-chat-open]")).toBeNull();
     expect(container.querySelector('[role="log"]')?.getAttribute("aria-label")).toBe("채팅 기록");
+    expect(container.querySelector('[role="log"]')?.getAttribute("tabindex")).toBe("0");
     expect(panel.querySelector(".mv-chat__chan")).toBeNull();
     expect(container.querySelector('button[aria-label="빠른 메시지"], button[aria-label="이모티콘"]')).toBeNull();
   });

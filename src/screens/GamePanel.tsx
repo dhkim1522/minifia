@@ -6,7 +6,6 @@ import { majorityOf } from "../../shared/game/nomination";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { ActionRow } from "../components/ActionButton";
 import { ChatPanel } from "../components/v2/ChatPanel";
-import { HeadCount } from "../components/v2/HeadCount";
 import { FaceList } from "../components/v2/FaceList";
 import { V2Icon } from "../components/v2/V2Icon";
 import { VerdictPicker } from "../components/v2/VerdictPicker";
@@ -14,7 +13,7 @@ import type { Verdict } from "../components/v2/VerdictPicker";
 import { faceSrc, seatColorVar } from "../net/assets";
 import type { ChatBinding } from "../net/useChat";
 import { useViewChoice } from "../net/useViewChoice";
-import { PlaytestDiscussion } from "./PlaytestDiscussion";
+import { DiscussionPanel, PlaytestGhostChat } from "./PlaytestDiscussion";
 import type { DiscussionToolsProps } from "./PlaytestDiscussion";
 
 /** 채팅 부품에 그대로 펼치는 속성 묶음 — 머리 위 입력 중 좌석(typingSeats)은 화면 틀이 WorldStage 로 따로 넘긴다 */
@@ -58,8 +57,6 @@ export interface GamePanelProps {
   onCallUsed?: () => void;
   inputRef?: RefObject<HTMLInputElement | null>;
   panelRef?: RefObject<HTMLElement | null>;
-  /** 입력줄 맨 오른쪽 끝 슬롯(ChatPanel trailing)에 놓을 요소 — 낮 토론의 [의심] 단추(24-03). 없으면 슬롯도 없다 */
-  chatTrailing?: ReactNode;
   suspect?: DiscussionToolsProps["suspect"];
   result?: string;
   notice?: ReactNode;
@@ -67,10 +64,10 @@ export interface GamePanelProps {
 
 /**
  * 게임 맵 화면의 아래 패널(UI-SPEC "아래 패널 종류와 높이"). 단계마다 행동 줄이 다르다.
- * 낮 토론은 [토론 끝내기], 찬반은 위쪽 찬반 줄(VerdictPicker + 찬성·반대 숫자 줄, 22-10)을 얹는다 — 변론·처형·유령은 채팅만이다(처형은 찬반 줄을 접는다, 18.1-13 결정 0083-9).
+ * 낮 토론은 채팅 위에 도구와 투표 요청을, 찬반은 집계와 선택을 둔다.
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, chatTrailing, suspect, result, notice }: GamePanelProps) {
+export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, result, notice }: GamePanelProps) {
   const playtest = view.playtest === true;
   const voteOpensAt = playtest && view.phase === "discussion" ? view.day?.voteOpensAt : undefined;
   const [openedVoteAt, setOpenedVoteAt] = useState<number>();
@@ -103,7 +100,6 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);
   const voteUnlocked = voteOpensAt === undefined || openedVoteAt === voteOpensAt || Date.now() + offset >= voteOpensAt;
-  const showEnd = !playtest && view.phase === "discussion" && meAlive && !kbOpen;
   const aliveCount = view.players.filter(isAlive).length;
   const total = voteUnlocked ? view.day?.voteReadyRequired ?? majorityOf(aliveCount) : view.day?.voteReadyTotal ?? aliveCount;
   const count = view.day?.endCount ?? 0;
@@ -169,11 +165,19 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
     if (send({ t: "endDiscussion", on }) === false) return;
     choose(on);
   };
+  const sendChat = (text: string): void => {
+    binding.onSend?.(text);
+    onCallUsed?.();
+  };
+  const openWillFrom = (opener: HTMLElement | null): void => {
+    if (canSend) onOpenWill?.(opener);
+    onCallUsed?.();
+  };
 
   return (
     <section
       ref={panelRef}
-      className={`mf-game__panel${lifted ?? kbOpen ? " mf-game__panel--kb" : ""}${playtest ? " mf-playtest__panel" : ""}`}
+      className={`mf-game__panel${lifted ?? kbOpen ? " mf-game__panel--kb" : ""}${playtest ? " mf-playtest__panel" : ""}${discussion ? " mf-discussion-panel" : ""}`}
       data-world-panel=""
       {...(veiled ? { "data-will-hide-panel": "true" } : {})}
     >
@@ -196,16 +200,19 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
           </div>
         </div>
       ) : null}
-      {playtest && (discussion || ghostChat) ? (
-        <PlaytestDiscussion
+      {discussion ? (
+        <DiscussionPanel
           key={`${view.round ?? 1}:${view.day?.n ?? 0}:${view.phase}`}
-          binding={binding}
+          binding={binding.onSend ? { ...binding, onSend: sendChat } : binding}
           logHeight={logHeight}
           kbOpen={kbOpen}
+          playtest={playtest}
           inputRef={inputRef}
-          chatOnly={!discussion}
+          callInput={call?.chat}
+          onInputFocus={onCallUsed}
           suspect={suspect}
-          vote={discussion && meAlive ? { enabled: canSend, pressed: pressed === true, count, total, request: pressEnd } : undefined}
+          vote={meAlive ? { enabled: canSend, pressed: pressed === true, count, total, request: pressEnd } : undefined}
+          will={penOn ? { open: willOpen, saved: willSaved, request: openWillFrom } : undefined}
         />
       ) : null}
       {firstBallot !== undefined ? (
@@ -225,12 +232,14 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
           />
         ) : null
       ) : citizenNight ? (
-        <button type="button" className="mf-btn mf-btn--secondary mf-playtest__night-done" data-night-done="" disabled={!canSend || nightDone} onClick={() => send({ t: "nightDone" })}>
-          {nightDone ? "준비 완료" : "아침 준비"}
+        <button type="button" className="mf-btn mf-btn--secondary mf-playtest__night-done" data-night-done="" aria-label={nightDone ? "준비 완료" : "아침 준비"} disabled={!canSend || nightDone} onClick={() => send({ t: "nightDone" })}>
+          <V2Icon name={nightDone ? "check" : "sunrise"} size={22} />
         </button>
       ) : playtest && condemned ? (
         <button type="button" className="mf-btn mf-btn--secondary" data-will-button="" aria-pressed={willOpen} disabled={!canSend} onClick={(event) => onOpenWill?.(event.currentTarget)}>유언</button>
-      ) : !playtest && chatChannelOk ? (
+      ) : playtest && !discussion && ghostChat ? (
+        <PlaytestGhostChat key={view.phase} binding={binding} logHeight={logHeight} kbOpen={kbOpen} inputRef={inputRef} />
+      ) : !playtest && !discussion && chatChannelOk ? (
         <ChatPanel
           {...binding}
           logHeight={logHeight}
@@ -240,20 +249,13 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
           onInputFocus={() => onCallUsed?.()}
           {...(binding.onSend && !chatLocked
             ? {
-                onSend: (text: string) => {
-                  binding.onSend?.(text);
-                  onCallUsed?.();
-                },
+                onSend: sendChat,
               }
             : {})}
           {...(call?.chat ? { callInput: true } : {})}
-          {...(chatTrailing ? { trailing: chatTrailing } : {})}
           {...(penOn
             ? {
-                onWill: () => {
-                  if (canSend) onOpenWill?.(panelRef?.current?.querySelector<HTMLElement>("[data-will-button]") ?? null);
-                  onCallUsed?.();
-                },
+                onWill: () => openWillFrom(panelRef?.current?.querySelector<HTMLElement>("[data-will-button]") ?? null),
                 willOpen,
                 willSaved,
                 ...(call?.will ? { callWill: true } : {}),
@@ -310,23 +312,6 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
           </button>
         </ActionRow>
       ) : null}
-      {showEnd ? (
-        <ActionRow>
-          <button
-            type="button"
-            className="mf-act mf-game__end"
-            aria-label="토론 끝내기"
-            aria-pressed={pressed === true}
-            aria-disabled={canSend ? undefined : "true"}
-            data-end-discussion=""
-            onClick={pressEnd}
-          >
-            <V2Icon name="skip" size={22} />
-            <span className="mf-act__label">토론 끝내기</span>
-            <HeadCount count={count} total={total} label={`${count}/${total}`} />
-          </button>
-        </ActionRow>
-      ) : null}
     </section>
   );
 }
@@ -368,7 +353,10 @@ function PlaytestBallot({ view, ballot, canVote, send }: {
           }}>오늘은 안 뽑기</button>
         </>
       ) : null}
-      <p className="mf-playtest__ballot-count" role="status">{chosen !== undefined ? "선택했어요 · " : ""}{ballot.count}/{alive.length}명 선택</p>
+      <p className="mf-playtest__ballot-count" role="status">
+        {chosen !== undefined ? <><V2Icon name="check" size={18} /><span className="mf-sr-only">선택했어요 · </span></> : null}
+        {ballot.count}/{alive.length}명 선택
+      </p>
     </div>
   );
 }

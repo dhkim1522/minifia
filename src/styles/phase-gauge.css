@@ -1,0 +1,69 @@
+.mf-game-phase-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(64px, 24%, 148px) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--tap-min);
+}
+
+.mf-game-phase-header .mv-phase__line {
+  gap: var(--space-xs);
+}
+
+.mf-game-phase-header :is(.mv-phase__title, .mv-phase__tod, .mv-phase__sep) {
+  font-size: clamp(16px, 4.8vw, 20px);
+}
+
+.mf-game-phase-header__actions {
+  grid-column: 3;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+}
+
+.mf-game-phase-header__actions .mf-tt {
+  position: relative;
+  flex: none;
+  width: var(--tap-min);
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.mf-game-phase-header__actions .mf-tt__label {
+  position: absolute;
+  clip-path: inset(50%);
+}
+
+.mf-phase-gauge {
+  grid-column: 2;
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid var(--noir-line);
+  border-radius: var(--radius-pill);
+  background: var(--noir-inset);
+}
+
+.mf-phase-gauge__fill {
+  display: block;
+  height: 100%;
+  background: var(--mf-gauge-fill, var(--noir-paper));
+  transform-origin: left center;
+  transition: transform 250ms linear;
+}
+
+.mf-phase-gauge[data-tone="warn"] {
+  --mf-gauge-fill: var(--brass-400);
+}
+
+.mf-phase-gauge[data-tone="urgent"] {
+  --mf-gauge-fill: var(--crimson-300);
+}
+
+/* 긴 토론 막대가 마지막에 아주 짧아져도 색 상태가 읽히게 테두리에도 반영한다. */
+.mf-phase-gauge:is([data-tone="warn"], [data-tone="urgent"]) {
+  border-color: var(--mf-gauge-fill);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mf-phase-gauge__fill { transition: none; }
+}

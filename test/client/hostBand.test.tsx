@@ -94,17 +94,18 @@ afterEach(() => {
 const bands = (c: HTMLElement) => c.querySelectorAll<HTMLElement>("[data-host-band]");
 
 describe("자막 띠 트레이서 (HOST-01, TOOL-02)", () => {
-  it("낮 토론: 띠가 하나, 문장·90초 숫자·timer 이름이 보인다", () => {
+  it("낮 토론: 안내는 읽기 지원용으로 남고 상단 게이지 하나에 시간이 표시된다", () => {
     const { container } = renderRoom(makeView({ phase: "discussion" }));
     expect(bands(container)).toHaveLength(1);
     const line = container.querySelector("[data-host-line]");
     expect(line?.textContent).toBe("의심 가는 사람을 이야기해 주세요");
     expect(container.querySelectorAll("[data-host-band] svg")).toHaveLength(0); // 18.1-12: 종 아이콘 없음
     expect(container.querySelectorAll("[data-host-band] .mv-host__bell")).toHaveLength(0);
-    expect(container.querySelectorAll("[data-host-band] .mv-host__bar")).toHaveLength(1);
+    expect(container.querySelectorAll("[data-host-band] .mv-host__bar")).toHaveLength(0);
+    expect(line?.closest(".mf-sr-only")).not.toBeNull();
     expect(container.querySelectorAll("[data-host-band] p")).toHaveLength(1);
-    const time = container.querySelector<HTMLElement>("[data-host-time]");
-    expect(time?.textContent).toBe("90초");
+    const time = container.querySelector<HTMLElement>("[data-phase-gauge]");
+    expect(time?.textContent).toBe("");
     expect(time?.getAttribute("role")).toBe("timer");
     expect(time?.getAttribute("aria-label")).toBe("남은 시간 90초");
   });
@@ -114,8 +115,8 @@ describe("자막 띠 트레이서 (HOST-01, TOOL-02)", () => {
     act(() => {
       vi.advanceTimersByTime(85_000);
     });
-    const time = container.querySelector<HTMLElement>("[data-host-time]");
-    expect(time?.textContent).toBe("5초");
+    const time = container.querySelector<HTMLElement>("[data-phase-gauge]");
+    expect(time?.getAttribute("aria-label")).toBe("남은 시간 5초");
     expect(time?.getAttribute("data-tone")).toBe("urgent");
   });
 
@@ -181,27 +182,22 @@ describe("띠 세 상태 (18.1-12)", () => {
     }
   });
 
-  it("처형: 띠 면은 보이고(is-off 없음) 문장 p 는 빈 글, 초와 막대는 있다 — 큰 글이 결과를 말한다", () => {
-    const { container } = renderRoom(makeView({ phase: "execution", endsIn: 5_000, passed: true }));
-    expect(face(container).classList.contains("is-off")).toBe(false);
-    expect(face(container).hasAttribute("aria-hidden")).toBe(false);
+  it.each(["execution", "morning"] as const)("%s: 결과 문장을 중복하지 않고 헤더에 무숫자 게이지를 둔다", (phase) => {
+    const { container } = renderRoom(makeView({ phase, endsIn: 5_000, passed: true, morning: { eliminated: 2 } }));
+    expect(face(container)).toBeNull();
     expect(container.querySelector("[data-host-line]")?.textContent).toBe("");
-    expect(container.querySelector("[data-host-time]")?.textContent).toBe("5초");
-    expect(container.querySelectorAll(".mv-host__bar")).toHaveLength(1);
-  });
-
-  it("아침: 문장 p 는 빈 글, 초·막대가 있다", () => {
-    const { container } = renderRoom(makeView({ phase: "morning", endsIn: 5_000, morning: { eliminated: 2 } }));
-    expect(face(container).classList.contains("is-off")).toBe(false);
-    expect(container.querySelector("[data-host-line]")?.textContent).toBe("");
-    expect(container.querySelector("[data-host-time]")?.textContent).toBe("5초");
-  });
-
-  it("낮 시작: 한 구절이 있고(큰 글은 없다) 시간 행은 없다(2초 단계)", () => {
-    const { container } = renderRoom(makeView({ phase: "dayAnnounce", endsIn: 2_000 }));
-    expect(face(container).classList.contains("is-off")).toBe(false);
-    expect(container.querySelector("[data-host-line]")?.textContent).toBe("모두 모여 주세요");
     expect(container.querySelector("[data-host-time]")).toBeNull();
+    const gauge = container.querySelector("[data-phase-gauge]");
+    expect(gauge?.textContent).toBe("");
+    expect(gauge?.getAttribute("aria-label")).toBe("남은 시간 5초");
+    expect(gauge?.getAttribute("data-tone")).toBe("calm");
+  });
+
+  it("낮 시작: 안내는 읽기 지원용이고 2초 막간에는 게이지가 없다", () => {
+    const { container } = renderRoom(makeView({ phase: "dayAnnounce", endsIn: 2_000 }));
+    expect(face(container)).toBeNull();
+    expect(container.querySelector("[data-host-line]")?.textContent).toBe("모두 모여 주세요");
+    expect(container.querySelector("[data-phase-gauge]")).toBeNull();
     expect(container.querySelector("[data-announce]")).toBeNull();
   });
 
@@ -237,7 +233,7 @@ describe("띠 아래 자리 (U-1·U-6·U-8)", () => {
       if (this.tagName === "BUTTON" && this.closest(".mf-game__header") !== null) return rect(18, headerButtonBottom || 62);
       const hostTop = Number.parseFloat(document.querySelector<HTMLElement>(".mf-room")?.style.getPropertyValue("--mf-host-top") || "") || 70;
       if (cls.contains("mv-host__band")) return rect(hostTop, hostTop + bandH);
-      if (cls.contains("mv-host__dock")) return rect(hostTop + bandH + 8, hostTop + bandH + 8 + 4 + 52); // 독 위 안쪽 여백 4 + 소리 원 52
+      if (cls.contains("mv-host__dock")) return rect(hostTop, hostTop + 4 + 52); // 독 여백 4 + 소리 단추 52
       return rect(0, 0);
     });
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
@@ -265,18 +261,18 @@ describe("띠 아래 자리 (U-1·U-6·U-8)", () => {
     vi.restoreAllMocks();
   });
 
-  it("헤더 아랫변 + 8, 띠 면 아랫변, 독 아랫변이 방 틀 변수로 쓰인다", () => {
+  it("헤더 아랫변 + 8과 소리 독 아랫변이 방 틀 변수로 쓰인다", () => {
     renderRoom(makeView({ phase: "discussion" }));
     expect(roomVar("--mf-host-top")).toBe("70px");
-    expect(roomVar("--mf-host-bottom")).toBe("118px");
-    expect(roomVar("--mf-host-dock")).toBe("182px"); // 띠 아랫변 118 + 64 (16-06 V-4)
+    expect(roomVar("--mf-host-bottom")).toBe("");
+    expect(roomVar("--mf-host-dock")).toBe("126px");
   });
 
   it("헤더 안 단추가 헤더보다 아래로 나오면 단추 아랫변을 쓴다 (띠가 이름표 단추를 덮지 않게)", () => {
     headerButtonBottom = 80;
     renderRoom(makeView({ phase: "discussion" }));
     expect(roomVar("--mf-host-top")).toBe("88px");
-    expect(roomVar("--mf-host-bottom")).toBe("136px");
+    expect(roomVar("--mf-host-bottom")).toBe("");
   });
 
   it("측정이 0 이면 변수를 쓰지 않는다 (CSS 기본값 70·62·80 이 옛 자리)", () => {
@@ -300,15 +296,15 @@ describe("띠 아래 자리 (U-1·U-6·U-8)", () => {
   it("연결이 끊겨도 띠는 마지막 문장과 시간 행을 유지한다 (U-9)", () => {
     const { container } = renderRoom(makeView({ phase: "discussion" }), { status: "reconnecting", banner: "reconnecting", canSend: false });
     expect(container.querySelector("[data-host-line]")?.textContent).toBe("의심 가는 사람을 이야기해 주세요");
-    expect(container.querySelector("[data-host-time]")?.textContent).toBe("90초");
+    expect(container.querySelector("[data-phase-gauge]")?.getAttribute("aria-label")).toBe("남은 시간 90초");
   });
 
-  it("스테이지 위쪽 안전선 = max(헤더 62, 띠 면 아랫변), 띠가 높아지면 따라 내려간다", () => {
+  it("스테이지 위쪽 안전선은 게이지가 있는 헤더를 기준으로 잰다", () => {
     renderRoom(makeView({ phase: "discussion" }));
-    expect(lastWorldStage.props?.stageInsets?.top).toBe(118);
+    expect(lastWorldStage.props?.stageInsets?.top).toBe(62);
     bandH = 80;
     act(() => void resizeCallbacks.forEach((cb) => cb()));
-    expect(lastWorldStage.props?.stageInsets?.top).toBe(150);
+    expect(lastWorldStage.props?.stageInsets?.top).toBe(62);
   });
 
   it("자리 규칙이 CSS 에 있다: 테스트 단추·오른쪽 열은 띠 면 아래, 위 알림은 독 아래", () => {
@@ -325,8 +321,8 @@ describe("띠 아래 자리 (U-1·U-6·U-8)", () => {
 describe("조기 진행 타이머 표시 (23-11, P23-23·24)", () => {
   const AGAIN = () => <RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />;
   const bandOf = (c: HTMLElement) => c.querySelector<HTMLElement>("[data-host-band]")!;
-  const time = (c: HTMLElement) => c.querySelector<HTMLElement>("[data-host-time]")!;
-  const fill = (c: HTMLElement) => c.querySelector<HTMLElement>(".mv-host__bar i")!;
+  const time = (c: HTMLElement) => c.querySelector<HTMLElement>("[data-phase-gauge]")!;
+  const fill = (c: HTMLElement) => c.querySelector<HTMLElement>(".mf-phase-gauge__fill")!;
   const swap = (v: RoomView) => {
     connectionMock.current = { ...(connectionMock.current as RoomConnection), view: v };
   };
@@ -340,8 +336,8 @@ describe("조기 진행 타이머 표시 (23-11, P23-23·24)", () => {
     rerender(AGAIN());
     expect(bandOf(container).hasAttribute("data-early")).toBe(true);
     expect(time(container).getAttribute("data-tone")).toBe("calm");
-    expect(fill(container).getAttribute("data-tone")).toBe("calm");
-    expect(time(container).textContent).toBe("1초");
+    expect(time(container).textContent).toBe("");
+    expect(time(container).getAttribute("aria-label")).toBe("남은 시간 1초");
   });
 
   it("막대 비율은 남은 시간 ÷ 단계 길이 그대로라 0~1 안에 있다(단계 길이는 바뀌지 않는다)", () => {

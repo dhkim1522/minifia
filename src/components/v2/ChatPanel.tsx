@@ -101,6 +101,10 @@ export interface ChatPanelProps {
   evidence?: Evidence;
   collapseEvidenceOnSmallScreen?: boolean;
   keepLogHeightOnFocus?: boolean;
+  /** 토론에서는 기록을 항상 스크롤할 수 있고 고정 높이를 유지한다. */
+  fixedLog?: boolean;
+  /** 토론 도구가 같은 입력칸에 단서를 안전하게 인용할 때 쓴다. */
+  renderTools?: (addQuote: (row: DiscussionEvidenceRow) => QuoteResult) => ReactNode;
 }
 
 interface ChannelUi {
@@ -117,7 +121,7 @@ function channelUi(channel: "all" | "mafia" | "ghost"): ChannelUi {
 }
 
 export function ChatPanel(props: ChatPanelProps) {
-  const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef, onWill, willOpen, willSaved, callInput, callWill, trailing, locked } = props;
+  const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef, onWill, willOpen, willSaved, callInput, callWill, trailing, locked, fixedLog, renderTools } = props;
   const fieldRef = useRef<HTMLInputElement | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
   const composingRef = useRef(false);
@@ -126,6 +130,7 @@ export function ChatPanel(props: ChatPanelProps) {
   const [trayOpen, setTrayOpen] = useState(false);
   // 기록 칸이 늘어나 있다(0083-4). 켜는 길: [data-chat-open] 누름. 끄는 길: 같은 단추 하나.
   const [open, setOpen] = useState(false);
+  const scrollable = fixedLog || open;
   // 늘어난 칸을 위로 올려 읽는 중이면 새 줄이 와도 끌어내리지 않고 새 글 알약을 띄운다(접힌 상태에는 없다)
   const [newDot, setNewDot] = useState(false);
   const atBottomRef = useRef(true);
@@ -158,16 +163,16 @@ export function ChatPanel(props: ChatPanelProps) {
     lastKeyRef.current = lastKey;
     const el = logRef.current;
     if (!el) return;
-    if (!open || atBottomRef.current) {
+    if (!scrollable || atBottomRef.current) {
       el.scrollTop = el.scrollHeight;
     } else if (added && !quiet) {
       setNewDot(true);
     }
-  }, [messages, notice, lastKey, open, quiet]);
+  }, [messages, notice, lastKey, scrollable, quiet, logHeight]);
 
   const onLogScroll = () => {
     const el = logRef.current;
-    if (!el || !open) return;
+    if (!el || !scrollable) return;
     const bottom = el.scrollHeight - el.scrollTop - el.clientHeight <= AUTO_SCROLL_SLOP_PX;
     atBottomRef.current = bottom;
     if (bottom) setNewDot(false);
@@ -191,7 +196,7 @@ export function ChatPanel(props: ChatPanelProps) {
   // 입력칸을 누르면 기록 칸이 커지고 키보드도 열린다(켜기만). 접는 길은 [data-chat-open] 하나다 — 포커스가 풀려도 저절로 접지 않는다.
   const onFocus = () => {
     setFocused(true);
-    if (!open && latest.current.keepLogHeightOnFocus !== true) {
+    if (!open && !fixedLog && latest.current.keepLogHeightOnFocus !== true) {
       atBottomRef.current = true;
       setNewDot(false);
       setOpen(true);
@@ -337,29 +342,17 @@ export function ChatPanel(props: ChatPanelProps) {
     };
   }, [trayOpen]);
 
-  // 판 안 화살표키: 좌우 한 칸, 위아래 다섯 칸(끝에서 멈춘다). Enter·Space 는 칸이 button 이라 기본 동작이 선택이다.
-  const onTrayKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : e.key === "ArrowDown" ? 5 : e.key === "ArrowUp" ? -5 : 0;
-    if (step === 0) return;
-    const list = [...e.currentTarget.querySelectorAll<HTMLButtonElement>("[data-emote]")];
-    const at = list.findIndex((c) => c === document.activeElement);
-    if (at < 0) return;
-    e.preventDefault();
-    const next = Math.max(0, Math.min(list.length - 1, at + step));
-    // 아랫줄에서 위로 5칸은 윗줄로, 윗줄에서 아래 5칸이 없으면 마지막 칸에서 멈춘다
-    list[next]?.focus({ preventScroll: true });
-  };
-
   const ui = channelUi(channel);
   const blank = value.trim() === "";
   const sendOff = blank || !!sendDisabled;
   // [보내기] 는 입력 중이거나 쓴 글이 있을 때만 보이고, 보이는 동안 같은 자리의 유언 단추는 없다(0083-5)
-  const showSend = !locked && (focused || !blank);
-  const rootCls = ["mv-chat", onSend && ui.icon && !locked && "has-chan", compact && "is-compact"].filter(Boolean).join(" ");
+  const showSend = !locked && (fixedLog || focused || !blank);
+  const rootCls = ["mv-chat", onSend && ui.icon && !locked && "has-chan", compact && "is-compact", fixedLog && "is-fixed"].filter(Boolean).join(" ");
   const sendCls = sendDim ? "mv-tool mv-chat__send is-dim" : "mv-tool mv-chat__send";
 
   return (
     <section className={rootCls} data-chat-panel="" data-chat-channel={channel} {...(locked ? { "data-chat-locked": "" } : {})}>
+      {renderTools?.(addQuote)}
       {props.evidence && onSend && !locked ? (
         <DiscussionEvidence key={props.evidence.key} evidence={props.evidence} hidden={!!compact} collapseOnSmallScreen={props.collapseEvidenceOnSmallScreen === true} onQuote={addQuote} />
       ) : null}
@@ -377,12 +370,13 @@ export function ChatPanel(props: ChatPanelProps) {
       >
         <div
           ref={logRef}
-          className={open ? "mv-chat__log is-open" : "mv-chat__log is-window"}
+          className={fixedLog ? "mv-chat__log is-fixed" : open ? "mv-chat__log is-open" : "mv-chat__log is-window"}
           data-chat-log=""
           role="log"
           aria-live="polite"
           aria-label={CHAT_TEXT.logLabel}
-          style={open ? undefined : { height: logHeight }}
+          style={fixedLog || !open ? { height: logHeight } : undefined}
+          tabIndex={fixedLog ? 0 : undefined}
           onScroll={onLogScroll}
         >
           <ChatLines messages={messages} channel={channel} />
@@ -392,12 +386,14 @@ export function ChatPanel(props: ChatPanelProps) {
             </p>
           ) : null}
         </div>
-        <button type="button" className="mv-chat__open" data-chat-open="" aria-label={open ? CHAT_TEXT.logClose : CHAT_TEXT.logOpen} aria-expanded={open} onClick={toggleLog}>
-          <span className="mv-chat__open-arrow" aria-hidden="true">
-            <V2Icon name="chevronRight" size={16} />
-          </span>
-        </button>
-        {open && newDot ? (
+        {fixedLog ? null : (
+          <button type="button" className="mv-chat__open" data-chat-open="" aria-label={open ? CHAT_TEXT.logClose : CHAT_TEXT.logOpen} aria-expanded={open} onClick={toggleLog}>
+            <span className="mv-chat__open-arrow" aria-hidden="true">
+              <V2Icon name="chevronRight" size={16} />
+            </span>
+          </button>
+        )}
+        {scrollable && newDot ? (
           <button type="button" className="mv-chat__newdot" data-chat-newdot="" aria-label={CHAT_TEXT.newDot} onClick={jumpToBottom}>
             <span className="mv-chat__newdot-pill">{CHAT_TEXT.newDot}</span>
           </button>
@@ -424,7 +420,7 @@ export function ChatPanel(props: ChatPanelProps) {
               </span>
             </button>
           ) : null}
-          {hasEmotes && trayOpen ? <EmoteTray ids={props.emotes ?? []} onPick={pickEmote} disabled={!!sendDisabled || !!props.emoteBlocked} playing={props.emotePlaying ?? null} firstRef={firstCellRef} onKeyDown={onTrayKeyDown} /> : null}
+          {hasEmotes && trayOpen ? <EmoteTray ids={props.emotes ?? []} onPick={pickEmote} disabled={!!sendDisabled || !!props.emoteBlocked} playing={props.emotePlaying ?? null} firstRef={firstCellRef} /> : null}
           <div className={callInput ? "mv-chat__field is-call" : "mv-chat__field"}>
             {ui.icon && !locked ? (
               <span className={channel === "mafia" ? "mv-chat__chan is-mafia" : "mv-chat__chan is-ghost"}>
@@ -446,7 +442,7 @@ export function ChatPanel(props: ChatPanelProps) {
               spellCheck={false}
               maxLength={CHAT_MAX_GRAPHEMES}
               aria-label={ui.label}
-              placeholder={locked ? undefined : ui.hint}
+              placeholder={locked ? undefined : fixedLog && channel === "all" ? CHAT_TEXT.discussionHint : ui.hint}
               {...(locked ? { disabled: true, "aria-disabled": "true" as const } : {})}
               value={value}
               onChange={(e) => onChange(e.target.value)}
