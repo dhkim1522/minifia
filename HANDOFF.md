@@ -30,7 +30,7 @@
 
 ## 다음 할 일
 
-[토론 UI 3안](design/v3.0/redesign/discussion-layouts.webp) 선택 대기. 고정 하단에 인물 직접 조작을 더하는 구성을 추천한다. 버튼은 아이콘 중심, 채팅 내역과 입력은 한 패널, 단계 행동은 고정 위치에서 짧게 강조한다.
+[조작 배치 3안](design/v3.0/redesign/fixed-chat-controls.webp) 선택 대기. 토론 채팅 내역과 입력은 하단 고정. 채팅 위 아이콘 한 줄을 추천한다. 단계 행동은 같은 자리에 두고 필요한 때 짧게 강조한다.
 
 1. **첫날 실험방**에서 신규 참가자가 채팅 없이 단서와 의심딱지를 써 보고 투표 이유를 설명하는지 확인한다(결정 0096). 이 결과로 기본 방에 적용할 범위를 판단한다. 24-10 이후 포스트잇·튜토리얼 폰 6종 검증 대기.
 2. **24 끝**: 폰 6종 전체 회귀 → minifia-v3 배포·smoke → v3.0 실테스트(17 UAT Test 3 폰 2대, v2.0 실기기 칸 `.planning/milestones/v2.0-phases/12-sound-polish/12-TEAM-TEST.md` 포함). 통과하면 main 반영. 판 기록 D1은 `npm run games -- --remote`로 확인한다.
