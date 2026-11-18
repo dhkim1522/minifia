@@ -355,7 +355,7 @@ E2E 판정(`scripts/e2e/lib.mjs`): `sideColumnChecks` (SC1~SC6, 폰 6종) — �
 - `npm run tokens`(`scripts/gen-tokens.mjs`): `design/tokens.json` → `src/styles/tokens.css`. 테스트가 둘의 일치를 확인한다.
 - `test/unit/backdropContrast.test.ts`: 헤더 글씨 대비를 오프라인으로 재합성.
 - smoke: 배포본 배경이 `image/webp` · `max-age=86400` · RIFF/WEBP 머리 · 용량 상한인지 확인.
-- 그림을 바꾸면 `ASSET_VERSION`(`src/net/assets.ts`)을 올린다.
+- 그림을 바꾸면 `src/net/assets.ts`의 캐시 버전을 올린다. 재즈 바 맵 카드는 B안 토론 장면을 캡처한 560×320 PNG이며 `mapCardSrc`의 전용 버전을 사용한다.
 - 화면 사진 다시 찍기: `node scripts/e2e/run.mjs --shots --sizes 390x844`, `node scripts/gallery.mjs <폴더> police 5` · `mafia 7`.
 
 ## 다음에 할 수 있는 것 (백로그)
