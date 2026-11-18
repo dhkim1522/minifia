@@ -1,6 +1,6 @@
 // v2.0 디자인 시스템 토큰이 앱 토큰(design/tokens.json → src/styles/tokens.css)에 같은 값으로 들어 있음을 고정한다.
 // 명조 글꼴(type.families.serif → --font-serif)은 8페이즈(08-05)에서 합쳤다. 글자 스타일 묶음(.badge-number 등)은 변수가 아니라
-// v2.css 의 배지·도장 규칙에 직접 쓴다(생성기는 :root 변수만 만든다).
+// v2.css 의 배지·도장과 B안 제목·유언 규칙에 직접 쓴다.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
@@ -103,9 +103,9 @@ describe("명조 글꼴 토큰 --font-serif (08-05, UI-SPEC Font)", () => {
     expect(links[0]?.includes("family=Gowun+Dodum")).toBe(true);
   });
 
-  it("v2.css 에서 --font-serif 는 배지 숫자·유력 도장에만 쓰이고 대체값이 없다", () => {
+  it("v2.css 의 명조는 단계 제목·배지 숫자·도장·유언 제목 및 인용문에 쓰인다", () => {
     const users = [...V2_CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => (m[2] ?? "").includes("--font-serif")).map((m) => (m[1] ?? "").trim());
-    expect(users.join("|")).toBe(".mv-badge__num|.mv-stamp");
+    expect(users.sort()).toEqual([".mv-badge__num", ".mv-phase__title", ".mv-quote--will", ".mv-stamp", ".mv-will__title"]);
     expect(V2_CSS.includes("var(--font-serif,")).toBe(false);
   });
 
@@ -206,12 +206,12 @@ describe("귓속말 CSS 규칙 (09.1.1-09)", () => {
     }
   });
 
-  it("밝은 종이 면·진홍·놋쇠·초록·호박이 없다 — 색 변수는 night/gray 계열뿐", () => {
+  it("귓속말 시트는 중립색 중심이고 보내기 버튼은 종이·잉크 색으로 표시한다", () => {
     for (const r of NEW) {
       for (const m of r.body.matchAll(/var\(--([a-z0-9-]+)\)/g)) {
         const name = m[1] ?? "";
         if (/^(space|radius|tap|control|font|shadow|dur|ease|z)-?/.test(name)) continue;
-        expect(name, `${r.selector}: --${name}`).toMatch(/^(night|gray)-/);
+        expect(name, `${r.selector}: --${name}`).toMatch(/^(night|gray|noir)-/);
       }
       expect(r.body, r.selector).not.toMatch(/--(crimson|brass|cream|journal|amber|felt)-/);
     }
@@ -222,11 +222,12 @@ describe("귓속말 CSS 규칙 (09.1.1-09)", () => {
     expect(NEW.some((r) => /font-size/.test(r.body))).toBe(true);
   });
 
-  it("시트 틀은 유언 시트와 같은 값 — night-800 면·night-600 테두리·radius-lg·안쪽 12·폭 부모 − 20", () => {
+  it("시트는 누아르 패널과 구분선, 안쪽 여백 12px, 부모 폭 − 20px을 쓴다", () => {
     const body = NEW.find((r) => r.selector === ".mv-line-sheet")?.body ?? "";
-    expect(body).toMatch(/background:\s*var\(--night-800\)/);
-    expect(body).toMatch(/border:\s*1px solid var\(--night-600\)/);
-    expect(body).toMatch(/border-radius:\s*var\(--radius-lg\)/);
+    expect(body).toMatch(/background:\s*var\(--noir-sheet-light\), var\(--noir-panel\)/);
+    expect(body).toMatch(/border:\s*1px solid/);
+    expect(body).toMatch(/border-color:\s*var\(--noir-line\)/);
+    expect(body).toMatch(/border-radius:\s*8px/);
     expect(body).toMatch(/padding:\s*12px/);
     expect(body).toMatch(/width:\s*calc\(100% - 20px\)/);
   });
@@ -242,12 +243,12 @@ describe("귓속말 CSS 규칙 (09.1.1-09)", () => {
     expect(body(".mv-line__close")).toMatch(/height:\s*var\(--tap-min\)/);
   });
 
-  it("입력칸 16px night-900 면, 보내기 gray-100 면 night-900 글자, 글자 수 tabular-nums", () => {
+  it("입력칸 글자는 16px, 보내기는 종이 면과 잉크 글자, 글자 수는 고정 너비 숫자", () => {
     const body = (sel: string) => NEW.find((r) => r.selector === sel)?.body ?? "";
     expect(body(".mv-line__input")).toMatch(/font-size:\s*16px/);
-    expect(body(".mv-line__input")).toMatch(/background:\s*var\(--night-900\)/);
-    expect(body(".mv-line__send")).toMatch(/background:\s*var\(--gray-100\)/);
-    expect(body(".mv-line__send")).toMatch(/color:\s*var\(--night-900\)/);
+    expect(body(".mv-line__input")).toMatch(/background:\s*var\(--noir-inset\)/);
+    expect(body(".mv-line__send")).toMatch(/background:\s*var\(--noir-paper\)/);
+    expect(body(".mv-line__send")).toMatch(/color:\s*var\(--noir-ink\)/);
     expect(body(".mv-line__count")).toMatch(/tabular-nums/);
   });
 
@@ -277,13 +278,13 @@ describe("마지막 3인 CSS 규칙 (09.1.1-15)", () => {
     }
   });
 
-  it("진홍·놋쇠 등 의미 색 변수가 없다 — 진홍은 알약 숫자·막대의 data-turn-tone 기존 규칙만, 여기는 night/gray 뿐", () => {
+  it("인용문에는 누아르와 기존 중립색을 쓴다", () => {
     for (const r of NEW) {
       expect(r.body, r.selector).not.toMatch(/--(crimson|brass|cream|green|amber|felt)-/);
       for (const m of r.body.matchAll(/var\(--([a-z0-9-]+)\)/g)) {
         const name = m[1] ?? "";
         if (/^(space|radius|tap|control|font|shadow|dur|ease|z|mf)-?/.test(name)) continue;
-        expect(name, `${r.selector}: --${name}`).toMatch(/^(night|gray)/);
+        expect(name, `${r.selector}: --${name}`).toMatch(/^(night|gray|noir)-/);
       }
     }
   });
@@ -294,11 +295,12 @@ describe("마지막 3인 CSS 규칙 (09.1.1-15)", () => {
     expect(body(".mv-quote")).toMatch(/font-size:\s*16px; line-height: 1\.5; font-weight: 700/);
   });
 
-  it("인용 카드: 테두리 1.5px gray-100, 면 night-800 92%, radius-lg, 안쪽 8 16, 두 줄까지(keep-all·anywhere), 누를 수 없다", () => {
+  it("인용 카드: 은색 테두리 1.5px, 안쪽 8px 16px, 두 줄까지, 누를 수 없다", () => {
     const q = body(".mv-quote");
-    expect(q).toMatch(/border:\s*1\.5px solid var\(--gray-100\)/);
-    expect(q).toMatch(/background:\s*color-mix\(in srgb, var\(--night-800\) 92%, transparent\)/);
-    expect(q).toMatch(/border-radius:\s*var\(--radius-lg\)/);
+    expect(q).toMatch(/border:\s*1\.5px solid/);
+    expect(q).toMatch(/border-color:\s*var\(--noir-silver\)/);
+    expect(q).toMatch(/background:\s*color-mix\(in srgb, var\(--noir-inset\) 96%, transparent\)/);
+    expect(q).toMatch(/border-radius:\s*7px/);
     expect(q).toMatch(/padding:\s*var\(--space-sm\) var\(--space-md\)/);
     expect(q).toMatch(/color:\s*var\(--gray-50\)/);
     expect(q).toMatch(/word-break:\s*keep-all/);

@@ -1,10 +1,9 @@
-// 지하 재즈 바 장면(maps/bar.ts). design/v2.0/screens/bar.js 의 좌표·치수·색을 그대로 옮기되, 시안의 구조는 옮기지 않는다:
-//   시안: 박스마다 새 재질 · 매 프레임 2048 그림자 · 점광원 12개  →  여기: 재질별·버텍스 컬러 병합 · 그림자 한 번 · 점광원 3개.
+// 달빛 누아르의 지하 재즈 바. 기존 이동 범위에 새 아르데코 가구를 넣고 재질별 병합과 점광원 3개를 유지한다.
 // three 를 값으로 쓰므로 정적 import 경로에 두지 않는다(06-13 이 threeRenderer 와 함께 import() 로만 연다). WebGL 없이 node 에서 만들어지고 검사된다.
 //
 // 그리기 단위(보이는 메시, 모두 병합):  1 shell(바닥·벽·창틀, 그림자 받기만)  2 furniture(카운터·스툴·피아노 몸·무대·탁자·의자)
 //   2b furnitureFar(피아노 뚜껑·술병 선반 널)  3 brass(놋쇠 테두리·서는 자리 8·마이크 대)  4 emissiveRoom(창유리·촛불·벽등)
-//   4b emissiveRoomFar(술병·펜던트 전구·선반 등)  5 emissiveVote(무대 가장자리 전구 20)  6 glowRoom·glowVote(빛 무리 쿼드)
+//   4b emissiveRoomFar(술병·펜던트 전구·선반 등)  5 emissiveVote(무대 가장자리 전구)  6 glowRoom·glowVote(빛 무리 쿼드)
 //   7 plate(연장 판)  8 pendants(펜던트 갓·줄).  강등 사다리 4단계(props reduced)는 2b·4b·8 을 끈다.
 // emissive 는 조명을 받지 않는 MeshBasicMaterial + 버텍스 컬러(색 × 밝기를 정점에 굽는다)로 만든다 — MeshStandardMaterial 의 emissive 는
 // 정점 색을 곱하지 않아 병합하면 색을 하나밖에 못 쓰기 때문이다. 단계별 밝기는 재질 color 배율로 바꾼다.
@@ -63,7 +62,7 @@ export interface PhaseTune {
   fog: { near: number; far: number };
   /** 무대 위 점광원 세기 */
   stage: number;
-  /** 펜던트 점광원 세기(둘 다 같다) */
+  /** 무대 밖 조명(바의 펜던트, 광장의 가로등) 점광원 세기 */
   pendant: number;
   /** emissive 재질 배율(그룹 room: 실내등, vote: 무대 가장자리 전구) */
   emissive: { room: number; vote: number };
@@ -121,7 +120,7 @@ export function albedoGrader(meshes: readonly Mesh[], mats: readonly MeshStandar
 const PENDANT_TALK = 0.9 * 4;
 const NIGHT_STAGE = 2.8;
 export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
-  point: { stage: { x: number; y: number; z: number; distance: number }; pendantA: { x: number; y: number; z: number; distance: number }; pendantB: { x: number; y: number; z: number; distance: number }; self: { x: number; y: number; z: number; distance: number }; decay: number };
+  point: { stage: { x: number; y: number; z: number; distance: number }; pendantA: { x: number; y: number; z: number; distance: number }; self: { x: number; y: number; z: number; distance: number }; decay: number };
   tension: { lead: number; halfRoom: number };
   moonPos: { x: number; y: number; z: number };
   moonTarget: { x: number; y: number; z: number };
@@ -240,7 +239,6 @@ export const LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   point: {
     stage: { x: 0, y: 3.0, z: 0, distance: 6 },
     pendantA: { x: -2.4, y: 2.6, z: -4.6, distance: 5 },
-    pendantB: { x: 4.4, y: 2.6, z: -3.2, distance: 5 },
     /** 내 캐릭터 위(높이 2.0)에서 비추는 작은 빛. 자리는 setSelfLight 가 따라간다 */
     self: { x: 0, y: 2.0, z: 0, distance: 4 },
     decay: 2,
@@ -347,7 +345,7 @@ export const CHALK_POINTS: readonly (readonly [number, number])[] = [
 export interface BarScene {
   /** 맵 전체(조명·배경·안개 포함). 캐릭터 그룹은 렌더러가 여기에 붙인다 */
   root: Scene;
-  lights: { hemi: HemisphereLight; moon: DirectionalLight; stage: PointLight; pendantA: PointLight; pendantB: PointLight; self: PointLight };
+  lights: { hemi: HemisphereLight; moon: DirectionalLight; stage: PointLight; pendantA: PointLight; self: PointLight };
   /** 병합된 그리기 단위(이름은 파일 머리 주석의 번호) */
   meshes: Record<string, Mesh>;
   /** 목적지 링(ring)과 첫 방문 손짓 링(cue) — 같은 모양의 두 겹 */
@@ -432,7 +430,7 @@ export function buildBarScene(budget: Budget): BarScene {
   const P = PALETTE;
 
   // ----- 재질 -----
-  const matProp = new MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 });
+  const matProp = new MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0 });
   const matBrass = new MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.5 });
   const matPendant = new MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, side: DoubleSide });
   const matEmRoom = new MeshBasicMaterial({ vertexColors: true });
@@ -466,13 +464,41 @@ export function buildBarScene(budget: Budget): BarScene {
     b.add(new PlaneGeometry(size, size), hex, m, 1, k);
   };
 
-  // 바닥: 널 28장(0.5 × 14), 두 색 번갈아
-  for (let i = 0; i < 28; i++) shell.box(0.5, 0.1, 14, i % 2 ? P.floorA : P.floorB, tf(-6.75 + i * 0.5, -0.05, 0));
+  // 짙은 월넛을 폭 좁은 널로 엮고 줄마다 이음새를 엇갈리게 배치한다.
+  const wood = [P.floorA, P.floorB, P.floorC] as const;
+  const boardWidth = 14 / 36;
+  shell.box(14, 0.07, 14, P.floorB, tf(0, -0.057, 0));
+  for (let column = 0; column < 36; column++) {
+    const boardX = -7 + boardWidth * (column + 0.5);
+    const offset = (column % 4) * 0.65;
+    for (let board = 0; board < 5; board++) {
+      const start = Math.max(-7, -7 - offset + board * 3.5);
+      const end = Math.min(7, -7 - offset + (board + 1) * 3.5);
+      if (end > start) shell.box(boardWidth - 0.011, 0.03, end - start - 0.012, wood[(column * 5 + board * 7) % wood.length]!, tf(boardX, -0.015, (start + end) / 2));
+    }
+  }
   // 벽(뒤 두 면) + 허리판
   shell.box(0.3, 3.6, 14.3, P.wall, tf(-7.15, 1.8, 0));
   shell.box(14.3, 3.6, 0.3, P.wall, tf(0, 1.8, -7.15));
   shell.box(0.06, 1.0, 14, P.wainscot, tf(-6.98, 0.5, 0));
   shell.box(14, 1.0, 0.06, P.wainscot, tf(0, 0.5, -6.98));
+  const decorateWall = (center: Matrix4): void => {
+    for (const height of [0.17, 0.96, 3.39]) shell.box(14, 0.065, 0.055, P.wallTrim, under(center, tf(0, height, 0)));
+    for (let panel = -5; panel <= 5; panel++) shell.box(0.037, 0.74, 0.04, P.wallTrim, under(center, tf(panel * 1.19, 0.56, 0.026)));
+  };
+  decorateWall(tf(0, 0, -6.94));
+  decorateWall(tf(-6.94, 0, 0, 0, Math.PI / 2, 0));
+
+  // 황동 부채 문양: 벽에 붙인 선과 같은 두께의 색면을 한 묶음으로 그린다.
+  const wallFan = tf(-2.2, 0, -6.895);
+  for (const side of [-1, 1]) {
+    for (let ray = 0; ray < 4; ray++) {
+      const span = 0.16 + ray * 0.23;
+      const rise = 1.64 - ray * 0.23;
+      shell.box(0.026, Math.hypot(span, rise), 0.017, P.inlay, under(wallFan, tf(side * span / 2, 1.18 + rise / 2, 0, 0, 0, -Math.atan2(side * span, rise))));
+    }
+  }
+  shell.box(1.9, 0.025, 0.025, P.inlay, under(wallFan, tf(0, 1.18, 0)));
 
   // 창과 창살(뒷벽). 투영과 같은 치수를 쓴다
   const { x, y, z, width, height, divisions, mullion } = BAR_WINDOW;
@@ -483,48 +509,80 @@ export function buildBarScene(budget: Budget): BarScene {
     shell.box(mullion, height, 0.04, P.blind, under(win, tf(width * (line / divisions - 0.5), 0, 0.03)));
   }
   shell.box(width + 0.2, 0.1, 0.12, P.sill, under(win, tf(0, -height / 2 - 0.05, 0.04)));
+  for (const side of [-1, 1]) {
+    shell.box(0.1, height + 0.13, 0.07, P.sill, under(win, tf(side * (width / 2 + 0.075), 0, 0.035)));
+    shell.box(width + 0.19, 0.08, 0.07, P.sill, under(win, tf(0, side * (height / 2 + 0.065), 0.035)));
+  }
 
   // 바 카운터와 술병 선반(왼쪽 벽)
-  furniture.box(1.0, 1.05, 6.2, P.counter, tf(-5.7, 0.525, -2.2));
-  furniture.box(1.2, 0.08, 6.4, P.counterTop, tf(-5.7, 1.09, -2.2));
-  for (const y of SHELF_YS) furnitureFar.box(0.35, 0.05, 6.0, P.shelf, tf(-6.8, y, -2.2));
-  for (let b = 0; b < 33; b++) {
-    const bz = -5.0 + (b % 11) * 0.55;
-    const by = SHELF_YS[Math.floor(b / 11)]!;
-    emRoomFar.cyl(0.06, 0.07, 0.3, 8, P.bottles[b % 4]!, tf(-6.8, by + 0.18, bz), 0.35);
+  furniture.box(0.97, 0.93, 6.17, P.counter, tf(-5.71, 0.49, -2.2));
+  furniture.box(1.0, 0.075, 6.2, P.shelf, tf(-5.7, 0.9925, -2.2));
+  furniture.box(1.0, 0.065, 6.2, P.counterTop, tf(-5.7, 1.0975, -2.2));
+  furniture.box(1.0, 0.12, 6.2, P.darkMetal, tf(-5.7, 0.06, -2.2));
+  brass.box(0.024, 0.023, 6.03, P.brass, tf(-5.214, 0.19, -2.2));
+  for (let panel = 0; panel < 18; panel++) furniture.box(0.025, 0.7, 0.047, P.wallTrim, tf(-5.216, 0.58, -5.02 + panel * 0.33));
+  for (const height of SHELF_YS) furnitureFar.box(0.35, 0.065, 6.0, P.shelf, tf(-6.8, height, -2.2));
+  for (let b = 0; b < 27; b++) {
+    const bz = -5.02 + (b % 9) * 0.66;
+    const by = SHELF_YS[Math.floor(b / 9)]!;
+    const bottle = P.bottles[b % 4]!;
+    const tall = 0.16 + (b % 3) * 0.032;
+    emRoomFar.cyl(0.073, 0.082, tall, 7, bottle, tf(-6.78, by + 0.035 + tall / 2, bz), 0.45);
+    emRoomFar.cyl(0.029, 0.066, 0.055, 7, bottle, tf(-6.78, by + 0.062 + tall, bz), 0.55);
+    emRoomFar.cyl(0.033, 0.028, 0.049, 7, P.lamp, tf(-6.78, by + 0.113 + tall, bz), 0.62);
   }
   // 선반 아래 따뜻한 띠: 시안의 카운터 위 점광원(0.8)을 점광원 예산 밖으로 빼면서 emissive 로 옮겼다
   emRoomFar.box(0.04, 0.03, 5.6, P.lamp, tf(-6.65, 2.25, -2.2), 1.0);
   glow(glowRoom, P.lamp, 2.4, -5.6, 2.4, -2.2, 0.3);
   for (let st = 0; st < 4; st++) {
-    furniture.cyl(0.24, 0.24, 0.07, 14, P.stoolSeat, tf(-4.8, 0.72, -4.4 + st * 1.4));
-    furniture.cyl(0.04, 0.06, 0.7, 8, P.darkMetal, tf(-4.8, 0.35, -4.4 + st * 1.4));
+    const stool = tf(-4.8, 0, -4.4 + st * 1.4);
+    furniture.cyl(0.219, 0.238, 0.067, 16, P.stoolSeat, under(stool, tf(0, 0.721, 0)));
+    furniture.cyl(0.236, 0.202, 0.05, 16, P.shelf, under(stool, tf(0, 0.662, 0)));
+    for (const side of [-1, 1]) {
+      for (const across of [-1, 1]) furniture.box(0.043, 0.65, 0.043, P.darkMetal, under(stool, tf(side * 0.134, 0.325, across * 0.133, -across * 0.09, 0, side * 0.09)));
+    }
+    brass.add(new TorusGeometry(0.165, 0.012, 4, 16), P.brass, under(stool, tf(0, 0.248, 0, -Math.PI / 2)));
   }
 
   // 피아노(뒤 구석)
   const pi = tf(-4.6, 0, -5.0, 0, 0.6, 0);
-  furniture.box(1.6, 0.35, 1.2, P.darkMetal, under(pi, tf(0, 0.8, 0)));
-  furnitureFar.box(1.6, 0.04, 1.2, P.darkMetal, under(pi, tf(0, 1.2, -0.3, -0.55, 0, 0)));
-  furniture.box(1.5, 0.06, 0.25, P.pianoKeys, under(pi, tf(0, 0.83, 0.62)));
+  furniture.box(1.56, 0.19, 0.97, P.pianoBody, under(pi, tf(0, 0.77, 0.01)));
+  furniture.box(1.56, 0.47, 0.56, P.pianoBody, under(pi, tf(0, 1.047, -0.28)));
+  furnitureFar.box(1.6, 0.059, 0.585, P.counterTop, under(pi, tf(0, 1.296, -0.28)));
+  furniture.box(1.56, 0.057, 0.18, P.darkMetal, under(pi, tf(0, 0.855, 0.5)));
+  const keyWidth = 1.42 / 24;
+  for (let i = 0; i < 24; i++) {
+    const keyX = -0.71 + (i + 0.5) * keyWidth;
+    furniture.box(keyWidth - 0.004, 0.032, 0.145, P.pianoKeys, under(pi, tf(keyX, 0.893, 0.49)));
+    if (i % 7 !== 2 && i % 7 !== 6 && i < 23) furniture.box(keyWidth * 0.53, 0.034, 0.081, P.darkMetal, under(pi, tf(keyX + keyWidth / 2, 0.917, 0.452)));
+  }
+  brass.box(1.43, 0.017, 0.012, P.brass, under(pi, tf(0, 1.179, 0.007)));
   for (const [lx, lz] of [
     [-0.7, -0.5],
     [0.7, -0.5],
     [0, 0.5],
   ] as const)
-    furniture.cyl(0.05, 0.05, 0.62, 8, P.darkMetal, under(pi, tf(lx, 0.31, lz)));
+    furniture.cyl(0.055, 0.03, 0.69, 8, P.pianoBody, under(pi, tf(lx, 0.345, lz)));
 
-  // 무대: 지름 2.2, 높이 0.28. 가장자리 전구는 지목·변론 때 켜진다
-  furniture.cyl(1.12, 1.18, 0.28, 48, P.stageBody, tf(0, 0.14, 0));
-  brass.cyl(1.13, 1.13, 0.03, 48, P.brass, tf(0, 0.29, 0));
-  for (let r = 0; r < 20; r++) {
-    const ra = (r / 20) * Math.PI * 2;
-    emVote.sph(0.04, P.rimBulb, tf(Math.sin(ra) * 1.17, 0.2, Math.cos(ra) * 1.17), 1.4);
+  // 무대: 높이 약 0.28. 가장자리 전구는 지목·변론 때 켜진다.
+  furniture.cyl(1.14, 1.17, 0.21, 48, P.stageBody, tf(0, 0.105, 0));
+  furniture.cyl(1.17, 1.14, 0.066, 48, P.stageWood, tf(0, 0.243, 0));
+  for (const y of [0.055, 0.22]) brass.add(new TorusGeometry(1.147, 0.014, 5, 48), P.brass, tf(0, y, 0, -Math.PI / 2));
+  for (const x of [-0.79, -0.53, -0.26, 0, 0.27, 0.54, 0.81]) {
+    const length = Math.sqrt(1.14 ** 2 - x ** 2) * 2;
+    furniture.add(new PlaneGeometry(0.012, length), P.stageSeam, tf(x, 0.278, 0, -Math.PI / 2));
+  }
+  for (let r = 0; r < 26; r++) {
+    const ra = (r / 26) * Math.PI * 2;
+    emVote.add(new SphereGeometry(0.028, 7, 5), P.rimBulb, tf(Math.sin(ra) * 1.15, 0.155, Math.cos(ra) * 1.15), 1.4);
   }
   glow(glowVote, P.stageGlow, 3.2, 0, 0.4, 0, 0.35);
   const mic = tf(-0.45, 0.28, -0.45);
-  brass.cyl(0.015, 0.015, 1.1, 6, P.micStand, under(mic, tf(0, 0.55, 0)));
-  furniture.sph(0.06, P.micHead, under(mic, tf(0, 1.12, 0)));
-  furniture.cyl(0.16, 0.16, 0.02, 12, P.micHead, under(mic, tf(0, 0.01, 0)));
+  brass.cyl(0.019, 0.019, 0.99, 8, P.brass, under(mic, tf(0, 0.51, 0)));
+  brass.cyl(0.026, 0.026, 0.24, 8, P.brass, under(mic, tf(0, 1.012, 0.064, Math.PI * 0.44)));
+  const grille = new SphereGeometry(0.058, 10, 8).scale(1, 1.52, 0.89);
+  furniture.add(grille, P.micStand, under(mic, tf(0, 1.041, 0.166, Math.PI * 0.44)));
+  furniture.cyl(0.115, 0.152, 0.041, 18, P.micHead, under(mic, tf(0, 0.023, 0)));
 
   // 서는 자리 8개: 놋쇠 표시만 둔다(표는 화면 겹침 층이 보여 준다)
   for (let i = 0; i < 8; i++) {
@@ -532,25 +590,32 @@ export function buildBarScene(budget: Budget): BarScene {
     brass.cyl(0.36, 0.36, 0.02, 24, P.brass, tf(Math.sin(a) * SEAT_RADIUS, 0.011, Math.cos(a) * SEAT_RADIUS));
   }
 
-  // 탁자와 의자(낮 배치만. 밤에 의자를 탁자 위로 올리는 일은 이 페이즈 범위 밖)
+  // 월넛 원탁과 곡면 등받이 의자. 탁상등은 발광 표면만 써 실제 광원을 늘리지 않는다.
   for (const [x, z] of TABLES) {
-    furniture.cyl(0.5, 0.5, 0.05, 20, P.tableTop, tf(x, 0.74, z));
-    furniture.cyl(0.05, 0.05, 0.72, 8, P.darkMetal, tf(x, 0.36, z));
-    furniture.cyl(0.25, 0.25, 0.03, 12, P.darkMetal, tf(x, 0.015, z));
-    emRoom.sph(0.04, P.lamp, tf(x, 0.86, z), 1.2);
-    glow(glowRoom, P.lamp, 0.5, x, 0.88, z, 0.6);
+    furniture.cyl(0.47, 0.5, 0.075, 24, P.tableTop, tf(x, 0.752, z));
+    furniture.cyl(0.46, 0.37, 0.04, 24, P.shelf, tf(x, 0.697, z));
+    furniture.cyl(0.064, 0.046, 0.66, 10, P.darkMetal, tf(x, 0.355, z));
+    furniture.cyl(0.155, 0.22, 0.068, 16, P.darkMetal, tf(x, 0.038, z));
+    brass.add(new TorusGeometry(0.479, 0.007, 4, 24), P.brass, tf(x, 0.761, z, -Math.PI / 2));
+    brass.cyl(0.051, 0.07, 0.024, 12, P.brass, tf(x, 0.806, z));
+    brass.cyl(0.012, 0.02, 0.151, 8, P.brass, tf(x, 0.892, z));
+    emRoom.add(new SphereGeometry(0.146, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), P.lamp, tf(x, 0.968, z), 0.88);
+    brass.add(new TorusGeometry(0.142, 0.008, 5, 15), P.brass, tf(x, 0.969, z, -Math.PI / 2));
+    // 앞쪽 탁상등의 빛 무리도 높이 1.2 시야 제한 안에 둔다.
+    glow(glowRoom, P.lamp, x + z > 4 ? 0.54 : 0.66, x, 0.971, z, 0.46);
     for (let j = 0; j < 2; j++) {
       const a = Math.atan2(x, z) + (j ? Math.PI / 2 : -Math.PI / 2);
       const ch = tf(x + Math.sin(a) * 0.8, 0, z + Math.cos(a) * 0.8, 0, a + Math.PI, 0);
-      furniture.box(0.62, 0.07, 0.6, P.chairSeat, under(ch, tf(0, 0.42, 0)));
-      furniture.box(0.62, 0.55, 0.06, P.chairBack, under(ch, tf(0, 0.72, -0.28)));
+      furniture.add(new CylinderGeometry(0.295, 0.279, 0.075, 16).scale(1, 1, 0.91), P.chairSeat, under(ch, tf(0, 0.425, 0)));
+      furniture.add(new SphereGeometry(0.3, 14, 8).scale(1, 0.56, 0.14), P.chairBack, under(ch, tf(0, 0.795, -0.255, -0.17, 0, 0)));
       for (const [lx, lz] of [
-        [-0.26, -0.24],
-        [0.26, -0.24],
-        [-0.26, 0.24],
-        [0.26, 0.24],
+        [-0.19, -0.184],
+        [0.19, -0.184],
+        [-0.19, 0.184],
+        [0.19, 0.184],
       ] as const)
-        furniture.box(0.05, 0.42, 0.05, P.chairBack, under(ch, tf(lx, 0.21, lz)));
+        furniture.cyl(0.029, 0.021, 0.42, 6, P.chairBack, under(ch, tf(lx, 0.21, lz, -lz * 0.49, 0, lx * 0.49)));
+      for (const side of [-1, 1]) furniture.cyl(0.026, 0.036, 0.44, 8, P.chairBack, under(ch, tf(side * 0.2, 0.62, -0.242, -0.11, 0, 0)));
     }
   }
 
@@ -559,9 +624,10 @@ export function buildBarScene(budget: Budget): BarScene {
     [-2.4, -4.6],
     [4.4, -3.2],
   ] as const) {
-    pendants.cyl(0.01, 0.01, 1.0, 4, P.darkMetal, tf(x, 3.4, z));
-    pendants.add(new ConeGeometry(0.3, 0.26, 16, 1, true), P.shade, tf(x, 2.8, z));
-    emRoomFar.sph(0.07, P.lamp, tf(x, 2.72, z), 1.6);
+    pendants.cyl(0.016, 0.016, 0.97, 6, P.darkMetal, tf(x, 3.4, z));
+    pendants.add(new SphereGeometry(0.306, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.63, 1), P.shade, tf(x, 2.729, z));
+    pendants.add(new TorusGeometry(0.292, 0.015, 5, 18), P.brass, tf(x, 2.729, z, -Math.PI / 2));
+    emRoomFar.sph(0.08, P.lamp, tf(x, 2.68, z), 1.36);
   }
 
   // 벽등
@@ -574,7 +640,10 @@ export function buildBarScene(budget: Budget): BarScene {
     const onX = j < 2;
     const x = onX ? px! + 0.1 : px!;
     const z = onX ? pz! : pz! + 0.1;
-    emRoom.sph(0.09, P.lamp, tf(x, 2.2, z), 1.2);
+    const backplate = tf(x, 2.2, z, 0, onX ? Math.PI / 2 : 0, 0);
+    brass.box(0.22, 0.39, 0.04, P.brass, backplate);
+    brass.cyl(0.07, 0.115, 0.075, 10, P.brass, under(backplate, tf(0, -0.114, 0.054)));
+    emRoom.add(new SphereGeometry(0.079, 10, 8).scale(1, 1.42, 0.78), P.lamp, under(backplate, tf(0, 0.032, 0.066)), 1.2);
     glow(glowRoom, P.lamp, 1.0, x, 2.2, z, 0.5);
   });
 
@@ -697,11 +766,10 @@ export function buildBarScene(budget: Budget): BarScene {
   const stage = point(T.point.stage);
   stage.color.set(P.stageGlow);
   const pendantA = point(T.point.pendantA);
-  const pendantB = point(T.point.pendantB);
   // 내 캐릭터 빛: 세기 0 으로 처음부터 만든다 — 조명 단계가 바뀌어도 점광원 개수가 변하지 않아 셰이더를 다시 컴파일하지 않는다(연구 Pitfall 7).
   // 예산 core 에서도 visible 을 끄지 않는다(끄면 개수가 변한다)
   const self = point(T.point.self);
-  root.add(hemi, moon, moon.target, stage, pendantA, pendantB, self);
+  root.add(hemi, moon, moon.target, stage, pendantA, self);
 
   const background = new Color(T.talk.sky[2]);
   const fog = new Fog(T.talk.sky[2], T.talk.fog.near, T.talk.fog.far);
@@ -766,12 +834,10 @@ export function buildBarScene(budget: Budget): BarScene {
       base.x = T.point.stage.x;
       base.z = T.point.stage.z;
     }
-    // 점광원 core: 펜던트 둘은 세기 0 + 장면 광원 목록에서 뺀다(셰이더 광원 수가 줄어든다). 벽·촛불 빛은 emissive 와 빛 무리가 이미 낸다
+    // 점광원 core: 대표 펜던트만 끈다. 무대등과 플레이어 조명은 재사용한다.
     const pendant = b.lights === "full" ? t.pendant : 0;
     pendantA.intensity = pendant;
-    pendantB.intensity = pendant;
     pendantA.visible = b.lights === "full";
-    pendantB.visible = b.lights === "full";
     base.room = t.emissive.room * (tensionLevel === 2 ? T.tension.halfRoom : 1);
     base.vote = t.emissive.vote;
     applyPin();
@@ -840,7 +906,7 @@ export function buildBarScene(budget: Budget): BarScene {
 
   return {
     root,
-    lights: { hemi, moon, stage, pendantA, pendantB, self },
+    lights: { hemi, moon, stage, pendantA, self },
     meshes,
     markers,
     plate,

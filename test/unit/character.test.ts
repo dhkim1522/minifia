@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { emoteDurationMs } from "../../src/world/emoteCap";
 import { CHAR_SCALE, characterKit, createCharacter, figForSeat, POSE_BLEND_MS, setGhostArt, WALK_PHASE_RATE, type WorldCharacter } from "../../src/world/character";
-import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, type OutfitId } from "../../src/world/characterData";
+import { EMOTE_KEYS, EMOTES, type EmoteId, FACE_IDS, FIGS, OUTFITS, SKIN, type OutfitId } from "../../src/world/characterData";
 import { noteKit } from "../../src/world/postit";
 
 function meshes(root: Object3D, visibleOnly = true): Mesh[] {
@@ -139,19 +139,19 @@ function armMesh(c: WorldCharacter, name: "armA" | "armB"): Mesh {
 function vcount(g: BufferGeometry): number {
   return g.getAttribute("position").count;
 }
-/** 정점 색이 hex 와 같은 정점 수 */
-function countColor(g: BufferGeometry, hex: string): number {
+/** 정점 색이 hex와 같은 정점 번호 */
+function colorVertices(g: BufferGeometry, hex: string): number[] {
   const c = new Color(hex);
   const a = g.getAttribute("color");
-  let n = 0;
+  const vertices: number[] = [];
   for (let i = 0; i < a.count; i++) {
-    if (Math.abs(a.getX(i) - c.r) < 1e-4 && Math.abs(a.getY(i) - c.g) < 1e-4 && Math.abs(a.getZ(i) - c.b) < 1e-4) n++;
+    if (Math.abs(a.getX(i) - c.r) < 1e-4 && Math.abs(a.getY(i) - c.g) < 1e-4 && Math.abs(a.getZ(i) - c.b) < 1e-4) vertices.push(i);
   }
-  return n;
+  return vertices;
 }
-const HAIR_PIECE = 33 * 17; // SphereGeometry(32, 16) 한 조각의 정점 수
-const SKULL = 33 * 25;
-const EAR_PAIR = 2 * 15 * 11;
+function countColor(g: BufferGeometry, hex: string): number {
+  return colorVertices(g, hex).length;
+}
 
 describe("의상 9종", () => {
   it("의상을 9종 각각으로 바꿔도 관절 메시는 6 그대로이고 전체 메시는 8 이하이다", () => {
@@ -166,26 +166,46 @@ describe("의상 9종", () => {
   it("모자 의상이면 머리카락 정수리를 빼고 잘린 벌(hatHair)로 바꾼다", () => {
     const c = createCharacter(0, "coat");
     const hair = FIGS[0].hair;
-    expect(countColor(headMesh(c).geometry, hair)).toBe(3 * HAIR_PIECE);
+    const topOfHair = (): number => {
+      const head = headMesh(c).geometry;
+      const vertices = colorVertices(head, hair);
+      expect(vertices.length).toBeGreaterThan(0);
+      const positions = head.getAttribute("position");
+      return Math.max(...vertices.map((i) => positions.getY(i)));
+    };
+    const bareTop = topOfHair();
     c.applyOutfit("police");
-    expect(countColor(headMesh(c).geometry, hair)).toBe(2 * HAIR_PIECE);
+    expect(topOfHair()).toBeLessThan(bareTop - 0.15);
     expect(countColor(headMesh(c).geometry, "#2a4372")).toBeGreaterThan(0);
   });
 
   it("후드는 머리카락 그대로이고 귀는 빠진다", () => {
     const c = createCharacter(0, "coat");
-    expect(countColor(headMesh(c).geometry, "#f7c9a6")).toBe(SKULL + EAR_PAIR);
+    const hairShape = (head: BufferGeometry): number[][] => {
+      const positions = head.getAttribute("position");
+      return colorVertices(head, FIGS[0].hair).map((i) => [positions.getX(i), positions.getY(i), positions.getZ(i)]);
+    };
+    const bare = headMesh(c).geometry;
+    const bareHair = hairShape(bare);
+    const bareSkin = countColor(bare, SKIN);
+    expect(countColor(bare, "#d79078")).toBeGreaterThan(0);
     c.applyOutfit("hood");
-    expect(countColor(headMesh(c).geometry, FIGS[0].hair)).toBe(3 * HAIR_PIECE);
-    expect(countColor(headMesh(c).geometry, "#f7c9a6")).toBe(SKULL);
-    expect(countColor(headMesh(c).geometry, "#5a5f6c")).toBeGreaterThan(0);
+    const hood = headMesh(c).geometry;
+    expect(hairShape(hood)).toEqual(bareHair);
+    expect(countColor(hood, SKIN)).toBeLessThan(bareSkin);
+    expect(countColor(hood, "#d79078")).toBe(0);
+    expect(countColor(hood, "#5a5f6c")).toBeGreaterThan(0);
   });
 
   it("단발(girl) 인물은 어떤 의상에서도 귀가 없다", () => {
+    const hood = createCharacter(0, "hood");
+    const skinWithoutEars = countColor(headMesh(hood).geometry, SKIN);
+    expect(skinWithoutEars).toBeGreaterThan(0);
     const c = createCharacter(2, "coat");
     for (const id of OUTFIT_IDS) {
       c.applyOutfit(id);
-      expect(countColor(headMesh(c).geometry, "#f7c9a6")).toBe(SKULL);
+      expect(countColor(headMesh(c).geometry, SKIN)).toBe(skinWithoutEars);
+      expect(countColor(headMesh(c).geometry, "#d79078")).toBe(0);
     }
   });
 
@@ -199,15 +219,20 @@ describe("의상 9종", () => {
   it("마피아는 선글라스, 어르신은 수염·흰 머리 색, 후드는 장갑 손 색이다", () => {
     const c = createCharacter(0, "coat");
     expect(countColor(headMesh(c).geometry, "#14161c")).toBe(0);
+    const baseHairCount = countColor(headMesh(c).geometry, FIGS[0].hair);
+    expect(baseHairCount).toBeGreaterThan(0);
     c.applyOutfit("mafia");
     expect(countColor(headMesh(c).geometry, "#14161c")).toBeGreaterThan(0);
     c.applyOutfit("elder");
     expect(countColor(headMesh(c).geometry, "#e6e8ee")).toBeGreaterThan(0);
-    expect(countColor(headMesh(c).geometry, "#d8dbe3")).toBe(3 * HAIR_PIECE);
+    expect(countColor(headMesh(c).geometry, OUTFITS.elder.hair!)).toBe(baseHairCount);
+    expect(countColor(headMesh(c).geometry, FIGS[0].hair)).toBe(0);
     c.applyOutfit("hood");
-    expect(countColor(armMesh(c, "armA").geometry, "#7a5236")).toBeGreaterThan(0);
+    expect(countColor(armMesh(c, "armA").geometry, OUTFITS.hood.glove!)).toBeGreaterThan(0);
+    expect(countColor(armMesh(c, "armA").geometry, SKIN)).toBe(0);
     c.applyOutfit("coat");
-    expect(countColor(armMesh(c, "armA").geometry, "#7a5236")).toBe(0);
+    expect(countColor(armMesh(c, "armA").geometry, OUTFITS.hood.glove!)).toBe(0);
+    expect(countColor(armMesh(c, "armA").geometry, SKIN)).toBeGreaterThan(0);
   });
 
   it("소품은 오른팔 메시에 병합되고, 돋보기 유리만 투명 조각으로 따로 둔다", () => {
@@ -502,12 +527,16 @@ describe("동작 9종", () => {
 
   it("동작이 끝난 뒤에는 표정도 기본으로 돌아가고, 몸 비틀기·찌그러짐도 풀린다", () => {
     const c = createCharacter(0, "coat");
-    const base = vcount(headMesh(c).geometry);
+    const base = headMesh(c).geometry;
+    c.setFace("surprise");
+    const surprised = headMesh(c).geometry;
+    c.setFace("base");
+    expect(surprised).not.toBe(base);
     c.playEmote("surprise");
     c.update(0.1, 0, false);
-    expect(vcount(headMesh(c).geometry)).not.toBe(base);
+    expect(headMesh(c).geometry).toBe(surprised);
     c.update(3, 3, false);
-    expect(vcount(headMesh(c).geometry)).toBe(base);
+    expect(headMesh(c).geometry).toBe(base);
     expect(readPose(c).s).toBe(1);
     expect(readPose(c).ry).toBe(0);
   });
@@ -722,7 +751,7 @@ describe("3D 유령 (0083-2, 0084)", () => {
   const ghostOf = (root: Object3D): Object3D | undefined => root.children.find((o) => o.name === "ghost-3d");
   const bodyOf = (root: Object3D): Mesh => ghostOf(root)!.getObjectByName("ghost-body") as Mesh;
   const matOf = (root: Object3D): MeshStandardMaterial => bodyOf(root).material as MeshStandardMaterial;
-  const shown = (root: Object3D): Mesh[] => meshes(root).filter((m) => (m.material as MeshStandardMaterial).vertexColors === true);
+  const shown = (root: Object3D): Mesh[] => jointMeshes(joint(root, "body"));
 
   beforeEach(() => {
     setGhostArt(true);

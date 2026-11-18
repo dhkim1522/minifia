@@ -5,6 +5,7 @@ import type { ResultLogChatLine, ResultLogWhisperLine } from "../../shared/proto
 import { ResultPanel } from "../../src/components/v2/ResultPanel";
 import type { ResultPanelProps, ResultTab } from "../../src/components/v2/ResultPanel";
 import { RESULT_TABS, RESULT_TABS_SHOWN } from "../../src/game/resultText";
+import { faceSrc } from "../../src/net/assets";
 import type { ResultLogSnapshot } from "../../src/net/resultLogStore";
 
 afterEach(cleanup);
@@ -155,8 +156,8 @@ describe("유령·귓속말·기록 탭 (A-3)", () => {
     const rows = Array.from(body.querySelectorAll<HTMLElement>("[data-result-whisper]"));
     expect(rows).toHaveLength(2);
     const heads = rows.map((r) => Array.from(r.querySelectorAll<HTMLImageElement>(".mf-result__face")).map((i) => i.getAttribute("src")));
-    expect(heads[0]).toEqual(["/characters/faces/face-0.png", "/characters/faces/face-1.png"]);
-    expect(heads[1]).toEqual(["/characters/faces/face-1.png", "/characters/faces/face-0.png"]);
+    expect(heads[0]).toEqual([faceSrc(0), faceSrc(1)]);
+    expect(heads[1]).toEqual([faceSrc(1), faceSrc(0)]);
     expect(rows[0]!.querySelector(".mf-result__arrow")).not.toBeNull();
     expect(rows[0]!.querySelector<HTMLElement>(".mf-result__whisper-dot")!.style.background).toContain("var(--seat-1)");
     expect(text(rows[0]!.querySelector(".mf-result__whisper-text"))).toBe("비밀이야");

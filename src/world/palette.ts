@@ -1,5 +1,5 @@
 // 3D 색 상수. 재질에만 쓴다 — 화면 CSS 에는 이 상수를 쓰지 않는다(CSS 색은 src/styles/tokens.css 의 토큰이 원천).
-// 값의 출처는 design/v2.0/screens/bar.js 의 색 리터럴(지하 재즈 바)이다. 따뜻한 색은 장면 안 빛에만 쓴다(UI-SPEC Color).
+// 달빛 누아르 시안의 월넛·청색 그림자·황동 팔레트.
 import type { LightingPhase } from "./renderer";
 
 /**
@@ -27,6 +27,7 @@ export const SEAT_COLORS = ["#7a8fb8", "#8e7ab8", "#6fa59a", "#b89a6f", "#6f8fa8
 export const NOTE_COLORS = {
   paper: TOKEN_COLORS.ring,
   ink: TOKEN_COLORS.ringOutline,
+  edge: "#ad936f",
 } as const;
 
 export const PALETTE = {
@@ -36,70 +37,78 @@ export const PALETTE = {
   moon: TOKEN_COLORS.moon,
 
   // 바닥·벽
-  floorA: "#3a2a22",
-  floorB: "#33241d",
+  floorA: "#2c2931",
+  floorB: "#25262e",
+  floorC: "#31303a",
   /** 연장 판: 바닥 널 색(floorB)과 같다 */
-  plate: "#33241d",
-  wall: "#211a26",
-  wainscot: "#3b2a22",
+  plate: "#25262e",
+  wall: "#202431",
+  wainscot: "#292933",
+  wallTrim: "#3f3b45",
+  inlay: "#806851",
 
   // 창
   windowGlass: "#56648f",
   windowBeam: "#8eb2f2",
-  blind: "#16131c",
-  sill: "#3b2a22",
+  blind: "#252b39",
+  sill: "#514852",
 
   // 바 카운터·선반·스툴
-  counter: "#2e2018",
-  counterTop: "#5a3f2f",
-  shelf: "#3b2a22",
-  bottles: ["#d9a050", "#7fb08a", "#c9a0c0", "#a9c0d9"],
-  stoolSeat: "#4a2f3a",
+  counter: "#31282d",
+  counterTop: "#65463b",
+  shelf: "#45332e",
+  bottles: ["#d9a050", "#7d9681", "#b99575", "#8190a7"],
+  stoolSeat: "#764d45",
   darkMetal: "#14161c",
 
   // 피아노
-  pianoKeys: "#e6e8ee",
+  pianoKeys: "#e0d6bc",
+  pianoBody: "#272a36",
 
   // 무대·놋쇠·마이크
-  stageBody: "#2c2234",
-  brass: "#a98559",
+  stageBody: "#2c2630",
+  stageWood: "#654736",
+  stageSeam: "#42303a",
+  brass: "#ad8855",
   rimBulb: "#ffd59a",
   stageGlow: "#ffd59a",
   micStand: "#a9aebb",
   micHead: "#2b2f38",
 
   // 탁자·의자·펜던트
-  tableTop: "#4a3426",
-  chairSeat: "#4a2f3a",
-  chairBack: "#2e2018",
-  shade: "#2b2f38",
+  tableTop: "#53413d",
+  chairSeat: "#593f42",
+  chairBack: "#392f37",
+  shade: "#5d4d42",
 } as const;
 
 /**
- * 시계탑 광장(maps/plaza.ts) 3D 색. 값의 출처는 design/v2.0/blockout/plaza.js 의 색 리터럴이다. 재질에만 쓴다 — CSS 에는 쓰지 않는다.
- * 진홍(crimson)은 마피아 전용이라 장면 색에 없다. 낮 하늘은 흐린 보랏빛 회색(sky-overcast #8a8496 계열)이다.
+ * 시계탑 광장은 청회색 석재·아연 지붕과 따뜻한 가로등을 중심으로 잡았다.
  */
 export const PLAZA_PALETTE = {
-  floor: "#121a30",
-  cobbles: ["#1c2440", "#202a4a", "#192138"],
-  daisLow: "#b9b09a",
-  daisHigh: "#e0d8c4",
-  brass: "#a98559",
-  stoneL: "#3a3f55",
-  stoneD: "#2a2f45",
-  cream: "#b9b09a",
-  roof: "#151c36",
-  clockFace: "#e8dfc6",
-  clockHand: "#14161c",
+  floor: "#222938",
+  cobbles: ["#3b4353", "#464c5a", "#505566", "#353d4a"],
+  curb: "#555d6b",
+  daisLow: "#70717a",
+  daisHigh: "#afb0ae",
+  brass: "#b59261",
+  stoneL: "#5a5d6b",
+  stoneD: "#454957",
+  cream: "#8f8f8c",
+  roof: "#303844",
+  roofEdge: "#475160",
+  clockFace: "#e5d9b8",
+  clockHand: "#242932",
   flood: "#ffe6c4",
-  lampPost: "#0b1024",
-  lampBulb: "#ffd59a",
-  facades: ["#1e2847", "#24305a", "#24305a", "#1b2442"],
-  facadeCap: "#151c36",
-  paneDark: "#0e1326",
-  paneLit: "#9fb3e0",
-  bench: "#3b2a22",
-  benchLeg: "#0b1024",
-  planter: "#3a3f4b",
-  treeDark: "#0b1024",
+  lampPost: "#272d39",
+  lampBulb: "#f6c88b",
+  facades: ["#454757", "#585060", "#4b5362", "#484958"],
+  facadeCap: "#333744",
+  paneDark: "#252c3c",
+  paneLit: "#e9c792",
+  bench: "#69554c",
+  benchLeg: "#2d3542",
+  planter: "#505764",
+  treeDark: "#363344",
+  leaves: ["#444c54", "#495258", "#3b4560"],
 } as const;

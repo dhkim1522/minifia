@@ -152,7 +152,7 @@ describe("채팅 입력줄 단추 (TOOL-04, D-01)", () => {
     expectTextControl(container.querySelector("button[data-chat-newdot]"), "새 글", { name: "새 글" });
   });
 
-  it("머리 단추 CSS(V-1): 44×44 정사각, 모서리 radius-badge, 면 night-800, 테두리 1px night-600, 막힘은 불투명도만", () => {
+  it("머리 단추 CSS(V-1): 44×44 정사각, 모서리 radius-badge, 누아르 패널과 1px 구분선, 비활성은 불투명도만", () => {
     const tool = rule(".mv-tool");
     expect(tool).toMatch(/(^|[;\s])width:\s*var\(--tap-min\)/);
     expect(tool).toMatch(/(^|[;\s])height:\s*var\(--tap-min\)/);
@@ -160,8 +160,9 @@ describe("채팅 입력줄 단추 (TOOL-04, D-01)", () => {
     expect(tool).not.toContain("flex-direction: column");
     expect(rule(".mv-tool--head")).toContain("border-radius: var(--radius-badge)");
     const face = rule(".mv-tool--head .mv-tool__face");
-    expect(face).toContain("background: var(--night-800)");
-    expect(face).toContain("border: 1px solid var(--night-600)");
+    expect(face).toContain("background: var(--noir-panel)");
+    expect(face).toMatch(/border: 1px solid/);
+    expect(face).toContain("border-color: var(--noir-line)");
     expect(rule('.mv-tool[aria-disabled="true"]')).toContain("opacity: 0.45");
   });
 

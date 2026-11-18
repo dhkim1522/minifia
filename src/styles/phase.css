@@ -8,8 +8,8 @@
 
 /* Timer */
 .mf-timer { --mf-timer-tick: 250ms; --mf-timer-pop: 220ms; display: flex; align-items: center; gap: var(--space-md); width: 100%; }
-.mf-timer__track { flex: 1; height: 8px; background: var(--gray-700); border-radius: var(--radius-sm); overflow: hidden; }
-.mf-timer__fill { height: 100%; background: var(--gray-100); transform-origin: left center; border-radius: var(--radius-sm); transition: transform var(--mf-timer-tick) linear; }
+.mf-timer__track { flex: 1; height: 8px; background: var(--noir-raised); border-radius: var(--radius-sm); overflow: hidden; }
+.mf-timer__fill { height: 100%; background: var(--noir-paper); transform-origin: left center; border-radius: var(--radius-sm); transition: transform var(--mf-timer-tick) linear; }
 .mf-timer__num { font-size: 24px; line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gray-50); min-width: 4ch; text-align: right; transform-origin: right center; }
 .mf-timer--warn .mf-timer__fill { background: var(--brass-400); }
 .mf-timer--warn .mf-timer__num { color: var(--brass-200); }
@@ -22,14 +22,16 @@
 .mf-card:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 4px; border-radius: var(--radius-lg); }
 .mf-card__inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform var(--dur-slow) var(--ease-out); }
 .mf-card--front .mf-card__inner { transform: rotateY(180deg); }
-.mf-card__face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: var(--radius-lg); background: var(--night-800); box-shadow: var(--shadow-card); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: var(--space-lg); text-align: center; overflow: hidden; }
-.mf-card__face::before { content: ""; position: absolute; inset: 8px; border: 1px solid var(--gray-500); border-radius: var(--radius-md); pointer-events: none; }
-.mf-card__face::after { content: ""; position: absolute; inset: 14px; border: 1px solid var(--gray-700); border-radius: var(--radius-sm); pointer-events: none; }
+.mf-card__face { position: absolute; inset: 0; isolation: isolate; backface-visibility: hidden; -webkit-backface-visibility: hidden; clip-path: var(--noir-cut); background: var(--noir-sheet-light), var(--noir-panel); box-shadow: inset 0 0 0 2px var(--noir-silver), inset 0 0 0 5px var(--noir-inset); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: var(--space-lg); text-align: center; overflow: hidden; }
+.mf-card__face::before { content: ""; position: absolute; inset: 7px; border: 1px solid var(--noir-silver); clip-path: var(--noir-ticket); pointer-events: none; }
+.mf-card__face::after { content: ""; position: absolute; inset: 10px 15px; border-block: 1px solid var(--noir-line); pointer-events: none; }
 .mf-card__front { transform: rotateY(180deg); }
+.mf-card__front .mf-t-display { order: -1; font-family: var(--font-serif); color: var(--noir-paper); }
+.mf-card__back { background: radial-gradient(ellipse at 50% 55%, var(--noir-raised), transparent 70%), var(--noir-inset); }
 .mf-card__diamond { width: 40%; aspect-ratio: 1; }
 /* 직업 그림은 표시 폭 150(3:4). 카드가 낮으면 그림이 먼저 줄어 글자가 잘리지 않는다. */
 .mf-card__art { width: 150px; max-width: 100%; height: auto; flex: 0 1 auto; min-height: 0; object-fit: contain; filter: drop-shadow(0 8px 12px var(--shadow)); }
-.mf-card__desc { font-size: 16px; line-height: 1.5; color: var(--gray-300); margin: 0; word-break: keep-all; white-space: pre-line; }
+.mf-card__desc { font-size: 16px; line-height: 1.5; color: var(--noir-silver); margin: 0; word-break: keep-all; white-space: pre-line; }
 .mf-card__divider { flex: none; width: 100%; height: 1px; background: var(--gray-700); }
 .mf-card__mates { flex: none; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); margin: 0; word-break: keep-all; }
 @keyframes mf-card-rise { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -53,7 +55,7 @@
 /* 역할 배정·확인 무대는 꾸밈이라 3D 이름표 층을 보이지 않게 한다 — 제목·띠·소리 단추·카드와 겹쳤다(18.1 P181-1). DOM 은 남겨 런타임 측정·AP7 이 그대로 돈다 */
 .mf-pregame .mf-world__tags { visibility: hidden; }
 .mf-reveal { position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-.mf-reveal__dim { position: absolute; inset: 0; background: var(--scrim); pointer-events: none; z-index: 0; }
+.mf-reveal__dim { position: absolute; inset: 0; background: linear-gradient(to bottom, color-mix(in srgb, var(--noir-inset) 65%, transparent), color-mix(in srgb, var(--noir-inset) 38%, transparent) 45%, color-mix(in srgb, var(--noir-inset) 76%, transparent)); pointer-events: none; z-index: 0; }
 .mf-reveal > :not(.mf-reveal__dim) { position: relative; z-index: 1; }
 /* 머리는 게임 화면 헤더와 같은 모양(62, 맵 위에 얹음). 무대(카드)는 소리 단추 독 아랫변 + 8 아래에서 시작한다(18.1 P181-2) — HostBand 가 --mf-host-dock 으로 알리고, 없으면 기존 독 자리 80. */
 .mf-reveal > .mf-reveal__header { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-toast); box-sizing: border-box; height: 62px; padding: var(--space-sm) var(--space-md) 0; pointer-events: none; }
@@ -65,24 +67,25 @@
 .mf-card.is-call::after, .mf-card.is-call::before { border-radius: var(--radius-lg); }
 .mf-reveal__hints { flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); padding: var(--space-md) var(--space-lg) var(--space-xl); text-align: center; }
 
-/* 첫날 키워드 카드(23-01, P23-3~5). 면은 QuoteCard(.mv-quote)와 같은 토큰: night-800 92%·테두리 1.5px gray-100·radius-lg. 새 토큰·hex 없음.
-   카드 높이: 장르 24 + 간격 8 + 키워드 43(1줄)·86(2줄) + 간격 8 + 각주 20(1줄)·40(2줄) + 안쪽 16+16 + 테두리 3 = 138 / 158(키워드 2줄이면 +43 → 최악 201). 스테이지 안에 든다. */
-.mf-keyword__card { width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); padding: var(--space-md); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--night-800) 92%, transparent); border: 1.5px solid var(--gray-100); text-align: center; pointer-events: none; animation: mf-keyword-in var(--dur-med) var(--ease-out) both; }
+/* 첫날 증거지는 판화선과 따뜻한 종이로 무대에서 분리한다. 카드 안의 간격은 키보드가 열린 크기 계약을 유지한다. */
+.mf-keyword__card { position: relative; width: 100%; max-width: 344px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); padding: var(--space-md) 20px; clip-path: var(--noir-cut); background: repeating-linear-gradient(112deg, transparent 0 3px, color-mix(in srgb, var(--noir-paper-line) 5%, transparent) 3px 4px), var(--noir-paper); border: 1.5px solid var(--noir-paper-line); text-align: center; pointer-events: none; animation: mf-keyword-in var(--dur-med) var(--ease-out) both; }
+.mf-keyword__card::before { content: ""; position: absolute; inset: 6px; border: 1px solid color-mix(in srgb, var(--noir-paper-line) 65%, transparent); clip-path: var(--noir-ticket); pointer-events: none; }
 .mf-keyword__card.is-still { animation: none; }
-.mf-keyword__genre { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
+.mf-keyword__genre { position: relative; margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; letter-spacing: 0.05em; color: var(--noir-ink); word-break: keep-all; }
+.mf-keyword__genre::after { content: ""; position: absolute; top: calc(100% + 3px); left: -8px; right: -8px; height: 1px; background: color-mix(in srgb, var(--noir-paper-line) 60%, transparent); }
 /* 키워드: Display 36/700/1.2. 글자를 줄이지 않고 줄만 감는다(최대 2줄, 12자소 상한) */
-.mf-keyword__word { margin: 0; max-width: 100%; font-size: 36px; line-height: 1.2; font-weight: 700; color: var(--gray-50); word-break: keep-all; overflow-wrap: anywhere; }
+.mf-keyword__word { margin: 0; max-width: 100%; font-family: var(--font-serif); font-size: 36px; line-height: 1.2; font-weight: 700; color: var(--noir-ink); word-break: keep-all; overflow-wrap: anywhere; }
 /* 마피아의 ???: 글자 모양은 시민 카드와 같고 글자 간격만 0.2em(키워드 자리 높이가 같다) */
 .mf-keyword__word.is-hidden { letter-spacing: 0.2em; }
 /* 각주: Label 14/400 — 360 폭에서 2줄이 될 수 있다 */
-.mf-keyword__note { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
+.mf-keyword__note { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--noir-ink); opacity: 0.76; word-break: keep-all; }
 @keyframes mf-keyword-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .mf-keyword__card { animation: none; } }
 
 /* 답 입력줄(23-09, P23-9). 입력 행은 채팅 입력줄 클래스(.mv-chat__form·__field·__input·__send) 그대로 — 새 토큰·hex 없음.
    바깥: 좌우 16·위 4·아래 22(키보드 닫힘) / 8(열림). 높이 = 메타 20 + 간격 4 + 입력 행 48 + 위 4 + 아래 22 = 98 (열림 84).
    키보드가 열리면 입력줄이 --mf-kb-lift(useKeyboardLift 가 방 루트에 쓴다)만큼 올라간다 — 닫히면 0. */
-.mf-keyword__answer { flex: none; display: flex; flex-direction: column; gap: var(--space-xs); padding: var(--space-xs) var(--space-md) 22px; margin-bottom: var(--mf-kb-lift, 0px); }
+.mf-keyword__answer { flex: none; display: flex; flex-direction: column; gap: var(--space-xs); padding: var(--space-xs) var(--space-md) 22px; margin-bottom: var(--mf-kb-lift, 0px); background: var(--noir-sheet-light), color-mix(in srgb, var(--noir-panel) 96%, transparent); box-shadow: var(--noir-rail); }
 .mf-keyword.is-kb .mf-keyword__answer { padding-bottom: var(--space-sm); }
 /* 메타 줄 20: 왼쪽 남은 초 · 가운데 거절 알림/냈어요 · 오른쪽 n/20. Label 14·tabular-nums·gray-300 */
 .mf-keyword__meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: 20px; font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; color: var(--gray-300); }
@@ -103,6 +106,7 @@
 .mf-keyword__note[hidden] { display: none; }
 .mf-keyword.is-kb .mf-reveal__stage { align-items: flex-end; padding-top: 0; padding-bottom: var(--space-xs); z-index: var(--z-overlay); pointer-events: none; }
 .mf-keyword__card.is-compact { padding: 8px 16px; gap: 0; }
+.mf-keyword__card.is-compact .mf-keyword__genre::after { display: none; }
 .mf-keyword__card.is-compact .mf-keyword__word { font-size: 24px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: clip; }
 @media (prefers-reduced-motion: reduce) { .mf-keyword__card.is-compact { animation: none; } }
 
@@ -119,7 +123,7 @@
    이 숫자는 test/client/stageBox.test.tsx 가 지킨다. */
 .mf-assign__bar { flex: none; box-sizing: border-box; height: 119.2px; padding: var(--space-md); }
 .mf-assign__bar .mf-t-heading { margin: 0; text-shadow: var(--shadow-text); }
-.mf-assign__panel { flex: none; margin-top: auto; box-sizing: border-box; height: calc(157px + env(safe-area-inset-bottom)); background: var(--night-800); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+.mf-assign__panel { flex: none; margin-top: auto; box-sizing: border-box; height: calc(157px + env(safe-area-inset-bottom)); background: var(--noir-panel); border-radius: 8px 8px 0 0; box-shadow: var(--noir-rail); }
 .mf-assign__veil { position: absolute; inset: 0; background: var(--night-950); opacity: 0.9; animation: mf-assign-veil var(--dur-med) var(--ease-out) both; pointer-events: none; }
 @keyframes mf-assign-veil { from { opacity: 0; } to { opacity: 0.9; } }
 .mf-assign__center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: var(--space-lg); text-align: center; }

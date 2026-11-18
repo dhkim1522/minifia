@@ -520,7 +520,7 @@ describe("광장 재질 보정 albedo (18-12, G-18-1)", () => {
     p.dispose();
   });
 
-  it("(h) 남색 벗어남: talk 의 바닥 정점·plate 는 채도 ≤ 0.20 이고 B ≤ max(R,G), night 의 팔레트 남색은 그렇지 않다", () => {
+  it("(h) 바닥 정점·plate 는 낮에 채도 0.20 이하인 회청색이고 밤에는 채도가 높아진다", () => {
     const p = buildPlazaScene(LADDER[0]!);
     const a0 = colorArr(p, "shell");
     // talk 에서 바닥 정점 번호는 night 의 원래 색으로 찾는다
@@ -532,7 +532,7 @@ describe("광장 재질 보정 albedo (18-12, G-18-1)", () => {
     const plateTalk = srgb((p.plate.material as MeshStandardMaterial).color);
     for (const [name, c] of [["바닥 정점", floorTalk], ["plate", plateTalk]] as const) {
       expect(c.sat, `${name} 채도 ${JSON.stringify(c)}`).toBeLessThanOrEqual(0.2);
-      expect(c.b, `${name} B ${JSON.stringify(c)}`).toBeLessThanOrEqual(Math.max(c.r, c.g));
+      expect(c.b, `${name} B ${JSON.stringify(c)}`).toBeGreaterThan(Math.max(c.r, c.g));
     }
     const floorNight = srgb(floorColor);
     expect(floorNight.sat).toBeGreaterThan(0.2);

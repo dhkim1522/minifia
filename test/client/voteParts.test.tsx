@@ -325,13 +325,13 @@ describe("VerdictPicker (DAY-06, 결정 0053)", () => {
 describe("v2.css 찬반 스타일 계약 (DAY-06, UI Considerations E4)", () => {
   const verdictBody = () => [...bodyOf(rulesFor(V2_CSS, ".mv-verdict"), ".mv-verdict"), bodyOf(rulesFor(V2_CSS, ".mv-verdict__btn"), ".mv-verdict__btn")].join(" ");
 
-  it("버튼은 min-height 84, 안 고른 쪽 night-700, 고른 쪽 gray-100 면에 night-900 글자다", () => {
+  it("최소 높이 84px의 투표 버튼은 선택하면 종이 면과 잉크 글자로 바뀐다", () => {
     const base = bodyOf(rulesFor(V2_CSS, ".mv-verdict__btn"), ".mv-verdict__btn");
     expect(base).toMatch(/min-height:\s*84px/);
-    expect(base).toContain("background: var(--night-700)");
+    expect(base).toContain("background: var(--noir-raised)");
     const on = bodyOf(rulesFor(V2_CSS, ".mv-verdict__btn.is-on"), ".mv-verdict__btn.is-on");
-    expect(on).toContain("background: var(--gray-100)");
-    expect(on).toContain("color: var(--night-900)");
+    expect(on).toContain("background: var(--noir-paper)");
+    expect(on).toContain("color: var(--noir-ink)");
   });
 
   it("disabled 는 불투명도 0.45 이고 포커스 링 규칙이 있다", () => {

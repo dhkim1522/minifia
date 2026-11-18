@@ -1,6 +1,7 @@
 // 3D 색 중 토큰과 같은 값을 쓰는 곳은 design/tokens.json 값과 같다는 것을 고정한다 (UI-SPEC Color: 3D 장면 전용 상수는 화면 CSS 에 쓰지 않는다).
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { Color } from "three";
 import { describe, expect, it } from "vitest";
 import { NOTE_COLORS, PALETTE, PLAZA_PALETTE, SEAT_COLORS, TOKEN_COLORS } from "../../src/world/palette";
 
@@ -34,14 +35,17 @@ describe("3D 팔레트 ↔ 토큰", () => {
     for (const c of all) expect(c).toMatch(/^#[0-9a-f]{6}$/i);
   });
 
-  it("bar.js 원문 색을 그대로 쓴다: 바닥 #3a2a22·#33241d, 벽 #211a26, 카운터 #2e2018, 피아노 #14161c, 무대 #2c2234, 놋쇠 #a98559", () => {
-    expect(PALETTE.floorA).toBe("#3a2a22");
-    expect(PALETTE.floorB).toBe("#33241d");
-    expect(PALETTE.wall).toBe("#211a26");
-    expect(PALETTE.counter).toBe("#2e2018");
-    expect(PALETTE.darkMetal).toBe("#14161c");
-    expect(PALETTE.stageBody).toBe("#2c2234");
-    expect(PALETTE.brass).toBe("#a98559");
+  it("재즈 바의 바닥과 벽은 서늘하고, 황동은 월넛보다 밝고 따뜻하다", () => {
+    expect(PALETTE.plate).toBe(PALETTE.floorB);
+    for (const surface of [PALETTE.floorA, PALETTE.floorB, PALETTE.floorC, PALETTE.wall]) {
+      const { r, b } = new Color(surface);
+      expect(b).toBeGreaterThan(r);
+    }
+    const brass = new Color(PALETTE.brass);
+    expect(brass.r).toBeGreaterThan(brass.g);
+    expect(brass.g).toBeGreaterThan(brass.b);
+    expect(brass.r).toBeGreaterThan(new Color(PALETTE.stageWood).r);
+    expect(brass.g).toBeGreaterThan(new Color(PALETTE.counterTop).g);
   });
 });
 

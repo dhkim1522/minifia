@@ -329,7 +329,7 @@ describe("css 규약: 머리말 간격과 [역할 카드] 버튼 (UI-SPEC A·S5)
     expect(rule(phaseCss, ".mf-day__top")).toBe("");
   });
 
-  it("[내 역할] 단추는 44×44 정사각(radius-badge, night-800 면, 테두리 1px night-600), 라벨 규칙 없음, 점이 밖으로 나오도록 overflow visible (V-1, TOOL-01)", () => {
+  it("[내 역할] 단추는 44×44 정사각, 누아르 패널과 1px 구분선, 새 기록 점이 바깥으로 보인다 (V-1, TOOL-01)", () => {
     const r = rule(roleCss, ".mf-btn.mf-rolecard-btn");
     expect(/position:\s*relative/.test(r)).toBe(true);
     expect(/overflow:\s*visible/.test(r)).toBe(true);
@@ -341,7 +341,9 @@ describe("css 규약: 머리말 간격과 [역할 카드] 버튼 (UI-SPEC A·S5)
     expect(rule(roleCss, ".mf-rolecard-btn__label")).toBe("");
     const face = rule(roleCss, ".mf-rolecard-btn__face");
     expect(/width:\s*100%/.test(face) && /height:\s*100%/.test(face)).toBe(true);
-    expect(/var\(--night-800\)/.test(face) && /1px solid var\(--night-600\)/.test(face)).toBe(true);
+    expect(face).toMatch(/background:\s*var\(--noir-panel\)/);
+    expect(face).toMatch(/border:\s*1px solid/);
+    expect(face).toMatch(/border-color:\s*var\(--noir-line\)/);
   });
 
   it("점은 면 오른쪽 위의 gray-100 8px(테두리 night-900 1px), 전환·애니메이션 없음 — v2.0 에서 앰버는 쓰지 않는다", () => {

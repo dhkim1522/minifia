@@ -58,12 +58,12 @@ describe("Backdrop 층 규칙", () => {
     expect(root.classList.contains("x")).toBe(true);
   });
 
-  it("층은 aria-hidden 이고 그림은 장면의 WebP 하나뿐이다 (막은 그림에 합치지 않는다)", () => {
+  it("층은 aria-hidden이고 버전이 붙은 장면 WebP 하나를 쓴다", () => {
     stubImages("immediate");
     const { container } = render(<Backdrop layout="game" scene="morning" />);
     const art = container.querySelector<HTMLElement>(".mf-backdrop__art")!;
     expect(art.getAttribute("aria-hidden")).toBe("true");
-    expect(art.style.backgroundImage).toMatch(/^url\(["']?\/backgrounds\/bg_game_morning\.webp\?v=i\d+["']?\)$/);
+    expect(art.style.backgroundImage.replace(/["']/g, "")).toBe(`url(/backgrounds/bg_game_morning.webp?v=${ASSET_VERSION})`);
     expect(art.style.backgroundPosition).toContain("top");
   });
 

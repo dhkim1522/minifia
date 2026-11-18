@@ -119,7 +119,7 @@ describe("CSS 계약 (토큰만, 새 hex 없음)", () => {
     return [...bare.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => (m[1] ?? "").split(",").some((s) => s.trim() === sel)).map((m) => m[2] ?? "").join(";");
   };
 
-  it("동작 버튼은 입력줄 48 원(.mv-tool 면이 단추를 채움), 판은 z-overlay+1·night-700·night-600 테두리", () => {
+  it("동작 버튼은 입력줄 48px 원, 선택판은 z-overlay+1에 누아르 면과 구분선을 쓴다", () => {
     const b = block(".mv-tool__face");
     expect(/width:\s*100%/.test(b) && /height:\s*100%/.test(b)).toBe(true);
     expect(/(^|[;\s])width:\s*var\(--tap-min\)/.test(block(".mv-tool"))).toBe(true);
@@ -127,7 +127,9 @@ describe("CSS 계약 (토큰만, 새 hex 없음)", () => {
     expect(/width:\s*var\(--control-input\)/.test(e) && /height:\s*var\(--control-input\)/.test(e)).toBe(true);
     const t = block(".mv-emote-tray");
     expect(/calc\(var\(--z-overlay\) \+ 1\)/.test(t)).toBe(true);
-    expect(/var\(--night-700\)/.test(t) && /var\(--night-600\)/.test(t)).toBe(true);
+    expect(t).toMatch(/background:\s*var\(--noir-sheet-light\), var\(--noir-panel\)/);
+    expect(t).toMatch(/border:\s*1px solid/);
+    expect(t).toMatch(/border-color:\s*var\(--noir-line\)/);
     expect(/#[0-9a-fA-F]{3,8}\b/.test(`${b};${t};${block(".mv-emote-tray__cell")}`)).toBe(false);
   });
 });

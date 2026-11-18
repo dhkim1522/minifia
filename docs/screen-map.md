@@ -87,7 +87,7 @@
 
 | 층 (아래 → 위) | 위치 · 크기 | 내용 |
 |---|---|---|
-| 캔버스 (`z-world`) | 화면 전체, 크기 불변 | three.js 재즈 바 또는 시계탑 광장 + 3D 캐릭터. 단계마다 조명이 바뀐다(지목 무대 조명 · 유언 스포트라이트 · 밤 달빛). B안 재즈 바는 낮 토론과 밤에 차가운 창빛과 따뜻한 무대등을 함께 쓴다. |
+| 캔버스 (`z-world`) | 화면 전체, 크기 불변 | Three.js B안 재즈 바·시계탑 광장과 3D 캐릭터. 바에서는 창빛과 따뜻한 무대등, 광장에서는 서늘한 바깥빛과 가로등을 쓴다. 단계마다 지목·유언·밤 조명이 바뀐다. |
 | 위쪽 가림막 | 위 0, 높이 120 | `night-900` 88% → 60%@70 → 0%@120 |
 | 이름표 층 (`z-tags`) | 캔버스와 같은 크기 | 머리 위 이름표 + 지목 배지·도장·체크·`RoleChip`. 지목 단계에서 나를 뺀 산 사람의 이름표만 버튼(누르기 44×44, 안쪽 11 / 바깥 -11) |
 | 결과 알림 (`z-toast`+5) | 가운데, 위 240, 좌우 16 | 36px 700, 뒤에 어두운 면 62%. 처형 단계 3.0초부터 "{닉네임} 님 처형" / "처형 없음"(처형 6.6초 시간표는 아래 22 절, 결정 0089-19) |
@@ -349,13 +349,13 @@ E2E 판정(`scripts/e2e/lib.mjs`): `sideColumnChecks` (SC1~SC6, 폰 6종) — �
 
 ## 에셋 자동 검사
 
-- `npm run backdrops`(`scripts/make-backdrops.mjs`): 원본 PNG → WebP, 게임 구도 명도 0.8 굽기, 결정적 출력, 용량 상한을 넘으면 실패.
+- 로컬 개발 서버 실행 후 `node scripts/render-noir-assets.mjs http://127.0.0.1:5173`으로 실제 Three.js 모델에서 배경, 560×320 맵 카드, 전신·얼굴·역할·유령·의상 그림을 만든다. `npm run backdrops -- http://127.0.0.1:5173`은 배경 WebP 7종만 만들고 용량 상한을 검사한다.
 - `npm run check:character`(10페이즈): 5명 × 의상 9종 조합이 만들어지고 메시 ≤ 8·삼각형 ≤ 15,000·높이 1.5~1.92·지오메트리 소유 ≤ 14, 동작 표와 `EMOTE_MS` 일치, 8명 장면 합계를 WebGL 없이 확인한다(결정 0068-9).
 - 포즈 스트립(10페이즈): 개발 서버에서 `?e2e=1&pose-strip=1`, 사진은 `node scripts/pose-strip-shot.mjs --url http://localhost:5173 --out <폴더>`. 개발 빌드와 `?e2e=1` 에서만 켜진다.
 - `npm run tokens`(`scripts/gen-tokens.mjs`): `design/tokens.json` → `src/styles/tokens.css`. 테스트가 둘의 일치를 확인한다.
 - `test/unit/backdropContrast.test.ts`: 헤더 글씨 대비를 오프라인으로 재합성.
 - smoke: 배포본 배경이 `image/webp` · `max-age=86400` · RIFF/WEBP 머리 · 용량 상한인지 확인.
-- 그림을 바꾸면 `src/net/assets.ts`의 캐시 버전을 올린다. 재즈 바 맵 카드는 B안 토론 장면을 캡처한 560×320 PNG이며 `mapCardSrc`의 전용 버전을 사용한다.
+- 그림을 바꾸면 `src/net/assets.ts`의 캐시 버전을 올린다. 브라우저 아이콘은 `node scripts/make-noir-brand.mjs`, 공유 그림은 `node scripts/make-og.mjs`로 재생성하고 `index.html`의 버전을 올린다.
 - 화면 사진 다시 찍기: `node scripts/e2e/run.mjs --shots --sizes 390x844`, `node scripts/gallery.mjs <폴더> police 5` · `mafia 7`.
 
 ## 다음에 할 수 있는 것 (백로그)

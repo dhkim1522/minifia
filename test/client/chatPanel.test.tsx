@@ -226,12 +226,12 @@ describe("ChatPanel 입력칸 계약 (CHAT-05, UI-SPEC 패널과 키보드)", ()
     expect(btn.hasAttribute("data-tool-label")).toBe(false);
   });
 
-  it("CSS: 입력칸 글자 16px, 입력줄 높이 control-input, 보내기 면 gray-100, 비활성은 night-700 면·gray-500 아이콘", () => {
+  it("입력칸 글자 16px, 입력줄 높이 control-input, 보내기 버튼은 종이색과 비활성 남색", () => {
     expect(rulesFor(V2_CSS, ".mv-chat__input").join(";")).toContain("font-size: 16px");
     expect(rulesFor(V2_CSS, ".mv-chat__input").join(";")).toContain("height: var(--control-input)");
-    expect(rulesFor(V2_CSS, ".mv-chat__send").join(";")).toContain("background: var(--gray-100)");
+    expect(rulesFor(V2_CSS, ".mv-chat__send").join(";")).toContain("background: var(--noir-paper)");
     const off = rulesFor(V2_CSS, '.mv-chat__send[aria-disabled="true"]').join(";");
-    expect(off).toContain("background: var(--night-700)");
+    expect(off).toContain("background: var(--noir-raised)");
     expect(off).toContain("color: var(--gray-500)");
   });
 
@@ -648,13 +648,13 @@ describe("ChatPanel 두 줄 창 (18.1 B 계약 1·2·3)", () => {
     expect(arrows.length).toBe(1);
   });
 
-  it("스타일: is-window overflow hidden, 위 12px 페이드(night-900 → 투명), 투명 열기 단추, 회전한 화살표, hex 없음", () => {
+  it("채팅 창을 접으면 위 12px 페이드, 투명 열기 단추와 회전한 화살표", () => {
     const win = rulesFor(V2_CSS, ".mv-chat__log.is-window").join(";");
     expect(win).toContain("overflow: hidden");
     const fade = rulesFor(V2_CSS, ".mv-chat__logbox::before").join(";");
     expect(fade).toContain("height: var(--mv-chat-fade");
     expect(fade).toContain("linear-gradient");
-    expect(fade).toContain("var(--night-900)");
+    expect(fade).toContain("var(--noir-inset)");
     expect(fade).toContain("pointer-events: none");
     const open = rulesFor(V2_CSS, ".mv-chat__open").join(";");
     expect(open).toContain("position: absolute");
@@ -988,10 +988,12 @@ describe("ChatPanel card 메시지 (MORN-02)", () => {
     expect(container.querySelector(".mv-chat__card-text")?.textContent).toBe("<b>x</b>");
   });
 
-  it("카드 CSS: 반경 sm·면 night-800·테두리 night-600(쪽지 crimson-700), 제목 14px 700, 본문 16px gray-100·keep-all", () => {
-    expect(rulesFor(V2_CSS, ".mv-chat__card").join(";")).toContain("background: var(--night-800)");
-    expect(rulesFor(V2_CSS, ".mv-chat__card").join(";")).toContain("border: 1px solid var(--night-600)");
-    expect(rulesFor(V2_CSS, ".mv-chat__card").join(";")).toContain("border-radius: var(--radius-sm)");
+  it("카드는 누아르 면과 1px 구분선, 쪽지는 진홍 구분선, 본문은 어절 단위 줄바꿈", () => {
+    const card = rulesFor(V2_CSS, ".mv-chat__card").join(";");
+    expect(card).toContain("background: var(--noir-sheet-light), var(--noir-panel)");
+    expect(card).toMatch(/border: 1px solid/);
+    expect(card).toContain("border-color: var(--noir-line)");
+    expect(card).toContain("border-radius: 5px");
     expect(rulesFor(V2_CSS, ".mv-chat__card--mafia").join(";")).toContain("border-color: var(--crimson-700)");
     expect(rulesFor(V2_CSS, ".mv-chat__card-title").join(";")).toContain("font-size: 14px");
     expect(rulesFor(V2_CSS, ".mv-chat__card-text").join(";")).toContain("word-break: keep-all");
@@ -1046,11 +1048,11 @@ describe("ChatPanel 깃펜 버튼 (WILL-01)", () => {
     expect(ev.defaultPrevented).toBe(true);
   });
 
-  it("CSS: 유언 단추는 48 원, 면 night-700 아이콘 gray-100(단추 상자를 채움), 점은 gray-100 8px", () => {
+  it("유언 단추는 지름 48px의 남색 원, 아이콘은 밝게, 새 기록 점은 8px", () => {
     const rule = rulesFor(V2_CSS, ".mv-tool__face").join(";");
     expect(rule).toContain("width: 100%");
     expect(rule).toContain("height: 100%");
-    expect(rule).toContain("background: var(--night-700)");
+    expect(rule).toContain("background: var(--noir-raised)");
     expect(rule).toContain("color: var(--gray-100)");
     expect(rule).toContain("border-radius: inherit");
     const will = rulesFor(V2_CSS, ".mv-chat__will").join(";");
@@ -1084,12 +1086,13 @@ describe("ChatPanel 귓속말 줄 (09.1.1-09, UI-SPEC B-3)", () => {
     expect(pub.textContent).toBe("지아 → 도윤 귓속말");
   });
 
-  it("비공개 블록 CSS: night-700 면, 반경 8, 안쪽 8/12, 왼쪽 3px gray-100 막대, 본문 14px 감김", () => {
+  it("비공개 블록은 누아르 면, 안쪽 여백 8px/12px, 왼쪽 은색 막대 3px, 본문 14px 줄바꿈", () => {
     const body = rulesFor(V2_CSS, ".mv-chat__whisper").join(";");
-    expect(body).toContain("background: var(--night-700)");
+    expect(body).toContain("background: var(--noir-raised)");
     expect(body).toContain("border-radius: var(--radius-sm)");
     expect(body).toContain("padding: var(--space-sm) 12px");
-    expect(body).toContain("border-left: 3px solid var(--gray-100)");
+    expect(body).toMatch(/border-left: 3px solid/);
+    expect(body).toContain("border-left-color: var(--noir-silver)");
     const text = rulesFor(V2_CSS, ".mv-chat__whisper-text").join(";");
     expect(text).toContain("font-size: 14px");
     expect(text).toContain("font-weight: 400");

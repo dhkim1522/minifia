@@ -120,10 +120,10 @@ describe("HostRailButton — 방장 원형 단추 (19-03, D-13·D-14, UI-SPEC A-
     expect(ev.defaultPrevented).toBe(true);
   });
 
-  it("CSS: 지름 52 원·테두리 1.5px 금빛·바탕 night-700, 눌림은 안쪽 2px 금빛 링, 켜진 토글은 금빛 채움 + night-900, 사용 불가 0.45, 누름은 scale(0.94)", () => {
+  it("CSS: 지름 52px의 누아르 면과 금빛 테두리, 눌림과 켜짐 상태를 금빛으로 표시", () => {
     const base = ruleOf(V2, ".mv-hostrail-btn");
     expect(base).toContain("border: 1.5px solid var(--light-lamp)");
-    expect(base).toContain("background: var(--night-700)");
+    expect(base).toContain("background: var(--noir-panel)");
     expect(base).toContain("color: var(--light-lamp)");
     expect(base).toContain("width: var(--control-button)");
     expect(base).toContain("height: var(--control-button)");

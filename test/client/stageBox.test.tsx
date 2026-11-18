@@ -49,10 +49,10 @@ describe("장면 상자: 하단 패널 높이 157 (+ 안전 영역)", () => {
     expect(b).toMatch(/box-sizing:\s*border-box/);
   });
 
-  it("역할 배정 패널의 면과 모서리는 night-800, 위쪽 radius-lg 다", () => {
+  it("역할 배정 패널은 누아르 면과 위쪽 모서리 8px을 쓴다", () => {
     const b = norm(body(phase, ".mf-assign__panel"));
-    expect(b).toContain("background: var(--night-800)");
-    expect(b).toContain("border-radius: var(--radius-lg) var(--radius-lg) 0 0");
+    expect(b).toContain("background: var(--noir-panel)");
+    expect(b).toContain("border-radius: 8px 8px 0 0");
   });
 });
 

@@ -258,11 +258,11 @@ describe("HeadStack 8페이즈 칸(DAY-04, GHOST-02)", () => {
     expect(/import\s+\{[^}]*\bROLES?\b[^}]*\}/.test(src)).toBe(false);
   });
 
-  it("스타일: 쌓임 간격 space-xs, is-mine 은 gray-100 면·night-900 글자, is-ghost 는 불투명(불투명도 규칙 없음, 09.1-09)", () => {
+  it("이름표는 space-xs 간격, 내 이름표는 종이 면과 잉크 글자, 유령 이름표는 불투명(09.1-09)", () => {
     expect(rulesFor(V2_CSS, ".mv-head")[0] ?? "").toContain("gap: var(--space-xs)");
     const mine = rulesFor(V2_CSS, ".mv-tag.is-mine").join(";");
-    expect(mine).toContain("background: var(--gray-100)");
-    expect(mine).toContain("color: var(--night-900)");
+    expect(mine).toContain("background: var(--noir-paper)");
+    expect(mine).toContain("color: var(--noir-ink)");
     // 09.1-09(UI-SPEC 시안과 다르게 7): 몸이 0.26 안개라 이름표는 불투명, 직업은 RoleChip 이 알린다
     const ghost = rulesFor(V2_CSS, ".mv-tag.is-ghost").join(";");
     expect(ghost).not.toContain("opacity");
@@ -345,11 +345,11 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
     expect(V2_CSS).not.toContain("ellipsis");
   });
 
-  it("승인 치수: 안쪽 2px 8px, 점 8×8, 점과 이름 6px, 면 overlay-ink, 글자 gray-50 14px 700", () => {
+  it("이름표의 안쪽 여백 2px 8px, 점 8×8, 이름 간격 6px, 어두운 면에 밝은 글자 14px 700", () => {
     const tag = rulesFor(V2_CSS, ".mv-tag")[0] ?? "";
     expect(tag).toContain("gap: 6px");
     expect(tag).toContain("padding: 2px var(--space-sm)");
-    expect(tag).toContain("background: var(--overlay-ink)");
+    expect(tag).toContain("background: color-mix(in srgb, var(--noir-inset) 94%, transparent)");
     expect(tag).toContain("color: var(--gray-50)");
     expect(tag).toContain("font-size: 14px");
     expect(tag).toContain("font-weight: 700");
@@ -359,10 +359,12 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
     expect(dot).toContain("height: 8px");
   });
 
-  it("겹친 이름표 중 맨 앞(data-front)만 면이 overlay-ink-strong 이고 기본 면은 overlay-ink 그대로다 (G-06-4)", () => {
-    const front = rulesFor(WORLD_CSS, '.mf-world__tag[data-front="true"] .mv-tag').join(";");
+  it("겹친 이름표의 앞면은 어둡게, 지목한 이름표의 면은 종이색으로 유지한다 (G-06-4)", () => {
+    const selector = '.mf-world__tag[data-front="true"] .mv-tag';
+    const front = rulesFor(WORLD_CSS, `${selector}:not(.is-mine)`).join(";");
     expect(front).toContain("background: var(--overlay-ink-strong)");
-    expect(rulesFor(V2_CSS, ".mv-tag")[0] ?? "").toContain("background: var(--overlay-ink);");
+    expect(WORLD_CSS).not.toContain(`${selector} {`);
+    expect(rulesFor(V2_CSS, ".mv-tag")[0] ?? "").toContain("background: color-mix(in srgb, var(--noir-inset) 94%, transparent)");
   });
 
   it("내 이름표는 안쪽 테두리 1.5px gray-100, 끊긴 이름표는 불투명도 0.55 와 점 gray-700", () => {
@@ -651,10 +653,10 @@ describe("ActionButton·ActionRow (UI-SPEC 행동 줄, E6)", () => {
     expect((two.container.querySelector(".mf-act-row") as HTMLElement).style.gridTemplateColumns).toBe("repeat(2, minmax(0, 1fr))");
   });
 
-  it("승인 보드 act() 치수: 높이 52·반경 14·테두리 1px·16px 700·안쪽 0 12px·아이콘 22 + 라벨 + 점 간격 8, 한 줄", () => {
+  it("행동 버튼 높이 52px, 반경 5px, 한 줄 글자 16px 700, 안쪽 여백 0 12px, 간격 8px", () => {
     const btnRule = rulesFor(V2_CSS, ".mf-act")[0] ?? "";
     expect(btnRule).toContain("min-height: var(--control-button)");
-    expect(btnRule).toContain("border-radius: var(--radius-md)");
+    expect(btnRule).toContain("border-radius: 5px");
     expect(btnRule).toMatch(/border: 1px solid/);
     expect(btnRule).toContain("font-size: 16px");
     expect(btnRule).toContain("font-weight: 700");
@@ -672,9 +674,9 @@ describe("ActionButton·ActionRow (UI-SPEC 행동 줄, E6)", () => {
     expect(svg?.getAttribute("width")).toBe("22");
   });
 
-  it("세 모양의 색: primary gray-100 면·night-900 글자, inactive night-700 면·night-600 테두리·0.45, flat 투명·gray-300", () => {
-    expect(V2_CSS).toMatch(/\.mf-act--primary\s*\{[^}]*background: var\(--gray-100\)[^}]*color: var\(--night-900\)/);
-    expect(V2_CSS).toMatch(/\.mf-act--inactive\s*\{[^}]*background: var\(--night-700\)[^}]*border-color: var\(--night-600\)[^}]*opacity: 0\.45/);
+  it("행동 버튼은 기본 종이색, 비활성 남색·불투명도 0.45, 보조 버튼은 투명", () => {
+    expect(V2_CSS).toMatch(/\.mf-act--primary\s*\{[^}]*background: var\(--noir-paper\)[^}]*color: var\(--noir-ink\)/);
+    expect(V2_CSS).toMatch(/\.mf-act--inactive\s*\{[^}]*background: var\(--noir-raised\)[^}]*border-color: var\(--noir-line\)[^}]*opacity: 0\.45/);
     expect(V2_CSS).toMatch(/\.mf-act--flat\s*\{[^}]*background: transparent[^}]*color: var\(--gray-300\)/);
   });
 

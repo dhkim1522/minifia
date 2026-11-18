@@ -4,6 +4,7 @@ import "../helpers/singleLineErrors";
 import { RULES } from "../../shared/game/ruleset";
 import type { ChatLineWire, ClientMessage, PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
+import { faceSrc } from "../../src/net/assets";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 const GAME_RULES = RULES;
 
@@ -609,7 +610,7 @@ describe.skipIf(!GAME_RULES.whisper)("접근성 (UI-SPEC 접근성 · 모션 · 
     const { container } = mount(makeView());
     openSheet(container, 2);
     const img = sheet(container)!.querySelector("img.mv-line__face")!;
-    expect(img.getAttribute("src")).toBe("/characters/faces/face-2.png");
+    expect(img.getAttribute("src")).toBe(faceSrc(2));
     fireEvent.error(img);
     const dot = sheet(container)!.querySelector<HTMLElement>(".mv-line__face.is-fallback")!;
     expect(dot).not.toBeNull();

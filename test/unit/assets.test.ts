@@ -39,9 +39,9 @@ function urlsOfSrcSet(srcSet: string): string[] {
 
 describe("그림 URL 헬퍼", () => {
   it("인물: src 는 @2x, srcSet 은 파일 폭 ÷ 표시 폭(72px 표시라 2x·4x), @ 는 %40", () => {
-    expect(figureSrc(0).src).toBe("/characters/table/fig1_boy_brown_default%402x.png");
+    expect(figureSrc(0).src).toBe(`/characters/table/fig1_boy_brown_default%402x.png?v=${ASSET_VERSION}`);
     expect(figureSrc(7).srcSet).toBe(
-      "/characters/table/fig8_girl_tanhat_default%402x.png 2x, /characters/table/fig8_girl_tanhat_default%404x.png 4x",
+      `/characters/table/fig8_girl_tanhat_default%402x.png?v=${ASSET_VERSION} 2x, /characters/table/fig8_girl_tanhat_default%404x.png?v=${ASSET_VERSION} 4x`,
     );
   });
 
@@ -60,18 +60,18 @@ describe("그림 URL 헬퍼", () => {
   });
 
   it("얼굴: /characters/faces/face-{seat % 8}.png (09-05, NIGHT-09)", () => {
-    expect(faceSrc(0)).toBe("/characters/faces/face-0.png");
-    expect(faceSrc(9)).toBe("/characters/faces/face-1.png");
-    expect(faceSrc(-1)).toBe("/characters/faces/face-7.png");
+    expect(faceSrc(0)).toBe(`/characters/faces/face-0.png?v=${ASSET_VERSION}`);
+    expect(faceSrc(9)).toBe(`/characters/faces/face-1.png?v=${ASSET_VERSION}`);
+    expect(faceSrc(-1)).toBe(`/characters/faces/face-7.png?v=${ASSET_VERSION}`);
     for (let seat = 0; seat < 8; seat++) {
-      expect(characterFiles.has(`/public${faceSrc(seat)}`), `public 에 ${faceSrc(seat)} 파일`).toBe(true);
+      expect(characterFiles.has(`/public${faceSrc(seat).split("?")[0]}`), `public 에 ${faceSrc(seat)} 파일`).toBe(true);
     }
   });
 
   it("직업 그림: src 는 @2x, srcSet 은 150px 표시라 1x·2x", () => {
     const art = roleArtSrc("mafia");
-    expect(art.src).toBe("/characters/roles/mafia_default%402x.png");
-    expect(art.srcSet).toBe("/characters/roles/mafia_default%402x.png 1x, /characters/roles/mafia_default%404x.png 2x");
+    expect(art.src).toBe(`/characters/roles/mafia_default%402x.png?v=${ASSET_VERSION}`);
+    expect(art.srcSet).toBe(`/characters/roles/mafia_default%402x.png?v=${ASSET_VERSION} 1x, /characters/roles/mafia_default%404x.png?v=${ASSET_VERSION} 2x`);
   });
 
   it("배경: /backgrounds/bg_{layout}_{장면 파일 조각}.webp?v=버전", () => {
@@ -91,10 +91,10 @@ const JOURNAL_ROLES = ["police", "mafia", "doctor"] as const;
 const JOURNAL_SLOTS = ["cover", "page", "icon"] as const;
 
 describe("일지 그림 슬롯", () => {
-  it("journalArt(role, slot) 은 /journals/journal_${role}_${slot}.svg 를 돌려주고 srcSet 이 없다", () => {
-    expect(journalArt("police", "icon")).toEqual({ src: "/journals/journal_police_icon.svg" });
-    expect(journalArt("mafia", "cover").src).toBe("/journals/journal_mafia_cover.svg");
-    expect(journalArt("doctor", "page").src).toBe("/journals/journal_doctor_page.svg");
+  it("journalArt(role, slot)은 캐시 버전이 붙은 SVG 주소를 반환한다", () => {
+    expect(journalArt("police", "icon")).toEqual({ src: `/journals/journal_police_icon.svg?v=${ASSET_VERSION}` });
+    expect(journalArt("mafia", "cover").src).toBe(`/journals/journal_mafia_cover.svg?v=${ASSET_VERSION}`);
+    expect(journalArt("doctor", "page").src).toBe(`/journals/journal_doctor_page.svg?v=${ASSET_VERSION}`);
     for (const role of JOURNAL_ROLES) for (const slot of JOURNAL_SLOTS) expect("srcSet" in journalArt(role, slot)).toBe(false);
   });
 });
@@ -269,12 +269,12 @@ describe("outfitCardSrc (10-07)", () => {
   });
 });
 
-// 맵 카드 두 장(560×320). 재즈 바는 B안 렌더, 광장은 디자인 시스템 사본.
+// 맵 카드 두 장(560×320). 두 맵 모두 B안의 실제 렌더.
 describe("mapCardSrc (11-13)", () => {
   const mapFiles = new Set(Object.keys(import.meta.glob("/public/maps/*.png")));
 
-  it("새 재즈 바 그림에만 별도 캐시 버전을 쓴다", () => {
-    expect(mapCardSrc("bar")).toBe("/maps/map-bar.png?v=noir-1");
+  it("두 맵 카드에 새 캐시 버전을 적용한다", () => {
+    expect(mapCardSrc("bar")).toBe(`/maps/map-bar.png?v=${ASSET_VERSION}`);
     expect(mapCardSrc("plaza")).toBe(`/maps/map-plaza.png?v=${ASSET_VERSION}`);
   });
 
@@ -282,16 +282,14 @@ describe("mapCardSrc (11-13)", () => {
     expect(ASSET_VERSION).not.toBe("i4");
   });
 
-  it("재즈 바는 560×320 PNG이고 광장은 기존 승인 사본과 바이트가 같다", () => {
+  it("재즈 바와 광장이 각각 560×320 PNG다", () => {
     expect(mapFiles.size).toBe(2);
     for (const id of ["bar", "plaza"]) {
       expect(mapFiles.has(`/public/maps/map-${id}.png`), id).toBe(true);
+      const file = readFileSync(`public/maps/map-${id}.png`);
+      expect(file.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+      expect([file.readUInt32BE(16), file.readUInt32BE(20)]).toEqual([560, 320]);
     }
-    const bar = readFileSync("public/maps/map-bar.png");
-    expect(bar.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
-    expect([bar.readUInt32BE(16), bar.readUInt32BE(20)]).toEqual([560, 320]);
-    const plaza = readFileSync("public/maps/map-plaza.png");
-    expect(plaza.equals(readFileSync("design/v2.0/design-system/assets/Maps/map-plaza.png"))).toBe(true);
   });
 
   it("public/_headers 에 /maps/* 1일 캐시 규칙이 있고 규칙은 100개 아래다", () => {

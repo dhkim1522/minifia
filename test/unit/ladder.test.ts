@@ -172,11 +172,10 @@ describe("BarScene 에 예산 반영 (재생성 없이)", () => {
     bar.dispose();
   });
 
-  it("점광원 core(3단계): 펜던트 두 점광원은 꺼지고(세기 0·장면에서 빠짐) 무대 점광원은 vote 에서 유지", () => {
+  it("점광원 core(3단계): 펜던트 점광원은 꺼지고 무대 점광원은 vote 에서 유지", () => {
     const bar = buildBarScene(LADDER[3]!);
     bar.setLighting("talk");
     expect(bar.lights.pendantA.intensity).toBe(0);
-    expect(bar.lights.pendantB.intensity).toBe(0);
     expect(bar.lights.pendantA.visible).toBe(false);
     bar.setLighting("vote");
     expect(bar.lights.pendantA.intensity).toBe(0);
@@ -259,7 +258,7 @@ describe("threeRenderer: 예산·재생성·통계·해제 (가짜 WebGLRenderer
 
   it("info(): 그리기 호출·삼각형·지오메트리·텍스처·프로그램·보이는 점광원 수. core 단계에서 점광원이 줄어든다", async () => {
     const r = await make();
-    expect(r.info()).toEqual({ calls: 7, triangles: 99, geometries: 3, textures: 2, programs: 4, pointLights: 4 });
+    expect(r.info()).toEqual({ calls: 7, triangles: 99, geometries: 3, textures: 2, programs: 4, pointLights: 3 });
     r.setBudget(3);
     expect(r.info().pointLights).toBe(2);
     r.dispose();

@@ -980,9 +980,9 @@ describe("Lobby — 스타일 계약 (lobby.css)", () => {
     expect(css).toMatch(/\.mf-lobby__scrim[^}]*120px/);
   });
 
-  it("아래 패널: night-800 97%·위 모서리 radius-lg", () => {
-    expect(css).toMatch(/\.mf-lobby__panel[^}]*var\(--night-800\)\s+97%/);
-    expect(css).toMatch(/\.mf-lobby__panel[^}]*var\(--radius-lg\)\s+var\(--radius-lg\)\s+0\s+0/);
+  it("아래 패널은 누아르 패널 97%와 위쪽 모서리 9px", () => {
+    expect(css).toMatch(/\.mf-lobby__panel[^}]*var\(--noir-panel\)\s+97%/);
+    expect(css).toMatch(/\.mf-lobby__panel[^}]*border-radius:\s*9px 9px 0 0/);
   });
 
   it("아래 패널 안쪽 여백은 14 16 22, 항목 간격 10 — 기록 LOG_H + 입력줄 48 + 행동 줄 52 라 높이 LOG_H + 154 (07-13, 6페이즈 때는 행동 줄 하나라 88)", () => {

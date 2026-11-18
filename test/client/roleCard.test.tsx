@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Icon } from "../../src/components/Icon";
 import { RoleCard } from "../../src/components/RoleCard";
 import { ROLE_TEXT, alliesText } from "../../src/game/roleText";
+import { roleArtSrc } from "../../src/net/assets";
 
 afterEach(cleanup);
 
@@ -72,7 +73,7 @@ describe("RoleCard 앞면 (D-14, E8)", () => {
     rerender(<RoleCard role="mafia" face="front" allies={["서준", "민지"]} onFlip={vi.fn()} />);
     const img = container.querySelector("img") as HTMLImageElement;
     expect(img.getAttribute("src")).toContain("mafia_default%402x.png");
-    expect(img.getAttribute("srcset")).toContain("mafia_default%404x.png 2x");
+    expect(img.getAttribute("srcset")).toBe(roleArtSrc("mafia").srcSet);
     expect(img.getAttribute("width")).toBe("150");
     expect(img.getAttribute("alt")).toBe("");
     expect(screen.getByText("마피아").className).toContain("mf-t-display");

@@ -62,9 +62,9 @@ describe("재즈 바 장면 구조 (MAP-01, 렌더 예산)", () => {
     bar.dispose();
   });
 
-  it("점광원 4(무대·펜던트 둘·내 캐릭터) · 반구광 1 · 달빛 방향광 1(그림자 1024)", () => {
+  it("점광원 3(무대·펜던트·내 캐릭터) · 반구광 1 · 달빛 방향광 1(그림자 1024)", () => {
     const bar = buildBarScene(LADDER[0]!);
-    expect(lightsOf(bar.root, PointLight)).toHaveLength(4);
+    expect(lightsOf(bar.root, PointLight)).toHaveLength(3);
     expect(lightsOf(bar.root, HemisphereLight)).toHaveLength(1);
     const dirs = lightsOf(bar.root, DirectionalLight);
     expect(dirs).toHaveLength(1);
@@ -130,15 +130,15 @@ describe("재즈 바 장면 구조 (MAP-01, 렌더 예산)", () => {
     bar.dispose();
   });
 
-  it("bar.js 원문 좌표: 벽·창·바 카운터·탁자·무대·펜던트 전구·서는 자리 8개 놋쇠", () => {
+  it("재즈 바 소품 좌표: 벽·창·바 카운터·탁자·무대·펜던트 전구·서는 자리 8개", () => {
     const bar = buildBarScene(LADDER[0]!);
     const m = bar.meshes;
     expect(hasVertex(m.shell!, [-7.3, 3.6, 7.15])).toBe(true); // 왼쪽 벽 끝 위
     expect(hasVertex(m.emissiveRoom!, [3.4, 2.65, -6.97])).toBe(true); // 블라인드 창 유리 모서리
-    expect(hasVertex(m.furniture!, [-5.1, 1.13, 1.0])).toBe(true); // 바 카운터 윗판 모서리
-    expect(hasVertex(m.furniture!, [4.6, 0.765, 1.7])).toBe(true); // 탁자 (4.6, 1.2) 윗판
-    expect(hasVertex(m.furniture!, [0, 0.28, 1.12])).toBe(true); // 무대 몸통 위
-    expect(hasVertex(m.emissiveRoomFar!, [-2.4, 2.79, -4.6])).toBe(true); // 펜던트 전구
+    expect(hasVertex(m.furniture!, [-5.2, 1.13, 0.9])).toBe(true); // 바 카운터 윗판 모서리
+    expect(hasVertex(m.furniture!, [4.6, 0.79, 1.67])).toBe(true); // 탁자 (4.6, 1.2) 윗판
+    expect(hasVertex(m.furniture!, [0, 0.276, 1.17])).toBe(true); // 무대 윗판
+    expect(hasVertex(m.emissiveRoomFar!, [-2.4, 2.76, -4.6])).toBe(true); // 펜던트 전구
     for (let i = 0; i < 8; i++) {
       const a = Math.PI / 4 + (i / 8) * Math.PI * 2;
       const x = Math.sin(a) * 2.4;
@@ -161,7 +161,6 @@ describe("조명 단계 (talk · vote)", () => {
     bar.setLighting("vote");
     expect(bar.lights.stage.intensity).toBeGreaterThan(talkStage);
     expect(bar.lights.pendantA.intensity).toBeCloseTo(talkPendant * 0.45, 6);
-    expect(bar.lights.pendantB.intensity).toBeCloseTo(talkPendant * 0.45, 6);
     bar.setLighting("talk");
     expect(bar.lights.stage.intensity).toBe(talkStage);
     bar.dispose();
@@ -271,10 +270,10 @@ describe("조명 단계 다섯 (trial · night · morning, 08-10)", () => {
     }
   });
 
-  it("단계를 모두 바꿔도 광원 개수는 처음과 같다(새 광원 없음) — 반구 1 · 방향 1 · 점광원 4", () => {
+  it("조명 단계가 바뀌어도 반구 1 · 방향 1 · 점광원 3개를 유지한다", () => {
     const bar = buildBarScene(LADDER[0]!);
     const first = lightCount(bar.root);
-    expect(first).toBe(6);
+    expect(first).toBe(5);
     for (const s of [...STAGES, "talk"] as const) {
       bar.setLighting(s);
       expect(lightCount(bar.root), s).toBe(first);

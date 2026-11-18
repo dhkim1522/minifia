@@ -1,13 +1,12 @@
-// 캐릭터 원문 데이터 — 원본 design/v2.0/blockout/character.js(결정 0047·0048) 의 값을 그대로 옮겼다.
-// 값을 고치려면 원본 아티팩트(https://claude.ai/artifact/NP1XfUrYTTqQ5nAB1HKYT5)를 먼저 고친다.
+// 달빛 누아르의 인물·의상 팔레트. 관절 동작과 의상 식별자는 v2.0과 공유한다.
 // 인물 5명(FIGS)·의상 9종(OUTFITS)·표정 7종·동작 9종(EMOTES)·자세 키(KEYS)·피부/눈/입 색.
 
 /** 피부색(머리·귀·손) */
-export const SKIN = "#f7c9a6";
+export const SKIN = "#efbc98";
 /** 눈·눈썹 색 */
-export const EYE = "#2b2118";
+export const EYE = "#26272e";
 /** 입 색 */
-export const MOUTH = "#7a3b2e";
+export const MOUTH = "#623b35";
 
 export interface Fig {
   id: string;
@@ -21,11 +20,11 @@ export interface Fig {
 
 /** 인물 5명: 갈색 머리·금발·단발·검은 페도라·갈색 페도라 */
 export const FIGS: readonly Fig[] = [
-  { id: "fig1", name: "지호", hair: "#6b4630", style: "boy", hat: "", tie: "#7a8fb8" },
-  { id: "fig3", name: "민준", hair: "#d9b25c", style: "boy", hat: "", tie: "#6fa59a" },
-  { id: "fig4", name: "서연", hair: "#6b4630", style: "girl", hat: "", tie: "#b89a6f" },
-  { id: "fig7", name: "도윤", hair: "#2b2118", style: "boy", hat: "fedoraDark", tie: "#b87a5c" },
-  { id: "fig8", name: "하은", hair: "#5a3a26", style: "girl", hat: "fedoraTan", tie: "#a9aebb" },
+  { id: "fig1", name: "지호", hair: "#53362d", style: "boy", hat: "", tie: "#6e83a2" },
+  { id: "fig3", name: "민준", hair: "#b99050", style: "boy", hat: "", tie: "#648c81" },
+  { id: "fig4", name: "서연", hair: "#664236", style: "girl", hat: "", tie: "#ab8f73" },
+  { id: "fig7", name: "도윤", hair: "#332922", style: "boy", hat: "fedoraDark", tie: "#a8816c" },
+  { id: "fig8", name: "하은", hair: "#553830", style: "girl", hat: "fedoraTan", tie: "#9ca3b5" },
 ];
 
 export type OutfitId = "coat" | "police" | "doctor" | "detective" | "noir" | "mafia" | "reporter" | "elder" | "hood";
@@ -48,15 +47,15 @@ export interface Outfit {
 }
 
 export const OUTFITS: Readonly<Record<OutfitId, Outfit>> = {
-  coat: { label: "기본 코트", coat: "#4a5163", shirt: "#eef0f4", tie: null, pants: "#2b2f38", shoe: "#1f2229", hat: null, badge: "", prop: "" },
-  police: { label: "경찰", coat: "#2a4372", shirt: "#c9d3ea", tie: "#16213d", pants: "#1e2847", shoe: "#16181e", hat: "police", badge: "star", prop: "" },
-  doctor: { label: "의사", coat: "#e9ecf2", shirt: "#2FA4A0", tie: "", pants: "#6b7180", shoe: "#3a3f4b", hat: "", badge: "cross", prop: "" },
-  detective: { label: "탐정", coat: "#8a6a45", shirt: "#eef0f4", tie: "#4a3a28", pants: "#3a3f4b", shoe: "#2b2118", hat: "deer", badge: "", prop: "mag" },
-  noir: { label: "누아르 정장", coat: "#1a1d24", shirt: "#a9aebb", tie: "#3a3f4b", pants: "#16181e", shoe: "#0a0e1c", hat: "fedoraDark", badge: "", prop: "" },
-  mafia: { label: "마피아", coat: "#1a1d24", shirt: "#3a3f4b", tie: "#8e0b21", pants: "#16181e", shoe: "#0a0e1c", hat: "fedoraMafia", badge: "", prop: "", acc: "shades" },
-  reporter: { label: "기자", coat: "#6f8fa8", shirt: "#eef0f4", tie: "", pants: "#3a3f4b", shoe: "#2b2118", hat: "news", badge: "press", prop: "cam" },
-  elder: { label: "어르신", coat: "#6b5a48", shirt: "#e6e8ee", tie: "", pants: "#3a3f4b", shoe: "#2b2118", hat: "", badge: "", prop: "cane", hair: "#d8dbe3", acc: "beard" },
-  hood: { label: "후드", coat: "#5a5f6c", shirt: "#3a3f4b", tie: "", pants: "#3a3f4b", shoe: "#2b2118", hat: "hood", badge: "", prop: "", glove: "#7a5236" },
+  coat: { label: "기본 코트", coat: "#4e586d", shirt: "#d8cbb4", tie: null, pants: "#343846", shoe: "#2a2526", hat: null, badge: "", prop: "" },
+  police: { label: "경찰", coat: "#3b5375", shirt: "#bfcbdc", tie: "#1f324c", pants: "#29384d", shoe: "#242634", hat: "police", badge: "star", prop: "" },
+  doctor: { label: "의사", coat: "#d7d1c4", shirt: "#598c8a", tie: "", pants: "#6e767f", shoe: "#3a414e", hat: "", badge: "cross", prop: "" },
+  detective: { label: "탐정", coat: "#a18364", shirt: "#ded0b7", tie: "#645442", pants: "#414958", shoe: "#392e2b", hat: "deer", badge: "", prop: "mag" },
+  noir: { label: "누아르 정장", coat: "#333a48", shirt: "#bfaf95", tie: "#4a4f5d", pants: "#2a2d38", shoe: "#24262d", hat: "fedoraDark", badge: "", prop: "" },
+  mafia: { label: "마피아", coat: "#343544", shirt: "#555565", tie: "#843e48", pants: "#2a2e38", shoe: "#25262d", hat: "fedoraMafia", badge: "", prop: "", acc: "shades" },
+  reporter: { label: "기자", coat: "#688194", shirt: "#ded0b7", tie: "", pants: "#414658", shoe: "#392e2b", hat: "news", badge: "press", prop: "cam" },
+  elder: { label: "어르신", coat: "#7f6b5c", shirt: "#d4c3a9", tie: "", pants: "#454754", shoe: "#392e2b", hat: "", badge: "", prop: "cane", hair: "#bfc2cb", acc: "beard" },
+  hood: { label: "후드", coat: "#666477", shirt: "#515464", tie: "", pants: "#414658", shoe: "#392e2b", hat: "hood", badge: "", prop: "", glove: "#856950" },
 };
 
 /** 표정 7종(원문 buildFaces 의 그룹 이름 그대로) */

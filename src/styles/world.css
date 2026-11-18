@@ -14,8 +14,8 @@
 /* 이름표 한 개: 런타임이 transform(translate + translate(-50%, -100%))·opacity·z-index(순위)·data-front 를 매 프레임 쓴다. */
 .mf-world__tag { position: absolute; left: 0; top: 0; will-change: transform; }
 
-/* 다른 이름표와 겹친 것 가운데 맨 앞 하나(런타임이 data-front="true" 를 붙임): 뒤가 비치지 않게 면을 승인 토큰 overlay-ink-strong 으로. 겹치지 않으면 .mv-tag 의 overlay-ink(80%) 그대로. */
-.mf-world__tag[data-front="true"] .mv-tag { background: var(--overlay-ink-strong); }
+/* 겹친 맨 앞 이름표의 어두운 면은 불투명하게 한다. 지목한 이름표의 종이 면은 그대로 쓴다. */
+.mf-world__tag[data-front="true"] .mv-tag:not(.is-mine) { background: var(--overlay-ink-strong); }
 
 /* 방장이 누를 수 있는 끊긴 사람 이름표: 누르기 영역 44×44 이상(이름표 24 + 안쪽 11×2), 이름표 모양은 그대로(margin 으로 상쇄). */
 .mf-world__kick { display: block; padding: 11px; margin: -11px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; border-radius: var(--radius-pill); }

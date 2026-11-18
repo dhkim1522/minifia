@@ -61,6 +61,13 @@ const NIGHT_ROWS: Readonly<Record<string, Readonly<Record<string, Omit<PhaseTune
 
 const DAY_ROWS: readonly LightingPhase[] = ["talk", "morning", "vote"];
 
+it("낮에 광장은 재즈 바보다 밝은 재질과 중립에 가까운 방향광을 쓴다", () => {
+  const jazzLight = rb(LIGHT_TUNE.talk.moonColor);
+  const plazaLight = rb(PLAZA_LIGHT_TUNE.talk.moonColor);
+  expect(jazzLight.b - jazzLight.r).toBeGreaterThan(plazaLight.b - plazaLight.r);
+  expect(lum(PLAZA_LIGHT_TUNE.talk.albedo.tint)).toBeGreaterThan(lum(LIGHT_TUNE.talk.albedo.tint));
+});
+
 describe.each(MAPS)("조명 표 허용 범위 — $name (D-03)", ({ name, tune, ratio }) => {
   it("낮 행의 하늘색 sky[0] 채도 (max−min)/max 가 0.20 이하다 (허용 범위 1)", () => {
     for (const ph of DAY_ROWS) expect(saturation(tune[ph].sky[0]), ph).toBeLessThanOrEqual(0.2);
@@ -81,18 +88,17 @@ describe.each(MAPS)("조명 표 허용 범위 — $name (D-03)", ({ name, tune, 
     }
   });
 
-  it("방향광 색 성질: talk 는 맵별로 옅은 창빛·햇빛, vote 는 노을색", () => {
+  it("방향광 색 성질: talk 는 옅은 회청색, vote 는 노을색", () => {
     const t = tune.talk.moonColor ?? "#000000";
     const { r, b } = rb(t);
-    if (name === "재즈 바") expect(b).toBeGreaterThan(r);
-    else expect(r).toBeGreaterThanOrEqual(b);
+    expect(b).toBeGreaterThan(r);
     expect(saturation(t)).toBeLessThanOrEqual(name === "재즈 바" ? 0.16 : 0.12);
     const v = rb(tune.vote.moonColor ?? "#000000");
     expect(v.r).toBeGreaterThan(v.g);
     expect(v.g).toBeGreaterThan(v.b);
   });
 
-  it("재질 보정 albedo: 낮 세 행은 채도가 낮고, 맵별 낮색과 아침·저녁의 온도 차를 유지한다", () => {
+  it("재질 보정 albedo: 낮 세 행의 채도가 낮고 낮·아침의 회청색과 저녁의 온기가 구별된다", () => {
     for (const ph of DAY_ROWS) {
       const { tint, mix } = tune[ph].albedo;
       expect(mix, `${ph} mix`).toBeGreaterThan(0);
@@ -101,8 +107,7 @@ describe.each(MAPS)("조명 표 허용 범위 — $name (D-03)", ({ name, tune, 
       expect(crimsonish(tint), `${ph} 진홍`).toBe(false);
     }
     const { r, b } = rb(tune.talk.albedo.tint);
-    if (name === "재즈 바") expect(b).toBeGreaterThan(r);
-    else expect(r).toBeGreaterThanOrEqual(b);
+    expect(b).toBeGreaterThan(r);
     expect(rb(tune.morning.albedo.tint).b).toBeGreaterThanOrEqual(rb(tune.morning.albedo.tint).r);
     expect(rb(tune.vote.albedo.tint).r).toBeGreaterThan(rb(tune.vote.albedo.tint).b);
   });

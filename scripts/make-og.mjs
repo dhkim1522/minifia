@@ -14,8 +14,8 @@ const H = 630;
 const FONT = root("design/fonts/GowunDodum-og-subset.ttf");
 const FONT_FAMILY = "Gowun Dodum";
 
-// 입장 배경(원본 SVG, design/backgrounds/A_cute — 앱 그림은 WebP 로 바뀌었다)을 1200×630 으로 채우고 위아래를 어둡게 가린다(제목·인물이 읽히도록).
-const background = await sharp(root("design/backgrounds/A_cute/bg_entry_lobby.svg"), { density: 144 })
+// B안 입장 배경을 1200×630으로 잘라 제목과 인물이 읽히도록 어둡게 가린다.
+const background = await sharp(root("public/backgrounds/bg_entry_lobby.webp"))
   .resize(W, H, { fit: "cover", position: "centre" })
   .png()
   .toBuffer();
@@ -28,6 +28,8 @@ const veil = Buffer.from(
       <stop offset="1" stop-color="#0a0e1c" stop-opacity="0.55"/>
     </linearGradient></defs>
     <rect width="${W}" height="${H}" fill="url(#v)"/>
+    <path d="M42 22h1116l20 20v546l-20 20H42l-20-20V42Z" fill="none" stroke="#c8a77e" stroke-width="2" stroke-opacity=".78"/>
+    <path d="M48 32h1104l16 16v534l-16 16H48l-16-16V48Z" fill="none" stroke="#8096b4" stroke-opacity=".55"/>
   </svg>`,
 );
 
@@ -59,7 +61,7 @@ async function bold(input, top, spread = 3) {
   return offsets.map(([dx, dy]) => ({ ...base, left: base.left + dx, top: base.top + dy }));
 }
 
-const title = await text("Minifia", 168, "#f1f2f5");
+const title = await text("Minifia", 168, "#f3e3ca");
 const titleShadow = await text("Minifia", 168, "#000000");
 const sub = await text("친구들과 5분 만에 한 판, 마피아 게임", 44, "#e6e8ee");
 const subShadow = await text("친구들과 5분 만에 한 판, 마피아 게임", 44, "#000000");

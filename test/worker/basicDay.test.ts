@@ -64,18 +64,21 @@ describe("낮 흐름 (D-10~D-13)", () => {
     expect(entered.pickTurn !== undefined).toBe(true);
     expect(g.socks.map((s) => Object.hasOwn(lastViewOf(s).day ?? {}, "turn")).join(",")).toBe("true,true,true,true");
 
-    // 순차 지목: 모두가 a3 를 가리키고 a3 는 a0 를 가리킨다 → 변론(변론자 = a3)
-    await pointAll(g.code, g.actors, { [a0!.seat]: a3!.seat, [a1!.seat]: a3!.seat, [a2!.seat]: a3!.seat, [a3!.seat]: a0!.seat });
+    // 처형 뒤 밤으로 이어지도록 시민 팀에서 변론자를 고른다. 변론자는 자신 이외의 좌석을 가리킨다.
+    const defender = g.actors.find((a) => a.role !== "mafia")!;
+    const other = g.actors.find((a) => a.seat !== defender.seat)!;
+    const picks = Object.fromEntries(g.actors.map((a) => [a.seat, a === defender ? other.seat : defender.seat]));
+    await pointAll(g.code, g.actors, picks);
     await settleAll(g);
     expect((await storedRoom(g.code)).phase).toBe("defense");
-    expect(g.socks.map((s) => lastViewOf(s).day?.candidate).join(",")).toBe(g.socks.map(() => a3!.seat).join(","));
+    expect(g.socks.map((s) => lastViewOf(s).day?.candidate)).toEqual(g.socks.map(() => defender.seat));
 
     // 변론 마감 → 처형(통과한 찬반이 보존돼 변론자가 탈락한다) → 밤
     await closePhase(g.code);
     await settleAll(g);
     const exec = await storedRoom(g.code);
     expect(exec.phase).toBe("execution");
-    expect(exec.players.find((p) => p.seat === a3!.seat)!.alive).toBe(false);
+    expect(exec.players.find((p) => p.seat === defender.seat)!.alive).toBe(false);
     await closePhase(g.code);
     await settleAll(g);
     expect((await storedRoom(g.code)).phase).toBe("night");

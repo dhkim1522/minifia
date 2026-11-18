@@ -11,7 +11,7 @@ const INK: Record<JournalRole, string> = { police: "#9ec2ff", mafia: "#f2556a", 
 
 function fileOf(role: JournalRole, slot: JournalSlot): string {
   // journalArt 가 돌려주는 URL 은 public/ 아래 같은 경로다.
-  return `public${journalArt(role, slot).src}`;
+  return `public${journalArt(role, slot).src.split("?")[0]}`;
 }
 
 function read(role: JournalRole, slot: JournalSlot): string {

@@ -1,7 +1,6 @@
 // 공유 재질(bodyMaterial 등)은 건드리지 않는다 — 반투명이 필요한 캐릭터만 복제 재질을 쓴다(RESEARCH Anti-Pattern, 08-10).
-// 3D 조립 인물 — 원본 design/v2.0/blockout/character.js(r128 전역 THREE, 결정 0047·0048)를 three ES 모듈로 옮겼다.
-// 지오메트리·위치·크기·색·자세는 원문과 같고, 그리기 묶음만 바꿨다: 부품(구·원통)을 관절 단위로
-// 버텍스 컬러 병합해 한 명이 보이는 메시 6개(몸통·머리·팔 2·다리 2) + 발밑 원판 1개다(RESEARCH 개정 B).
+// 달빛 누아르의 조립 인물. 새 외형도 기존 관절에 버텍스 컬러로 병합해
+// 한 명을 몸통·머리·팔 2·다리 2와 발밑 원판으로 그린다.
 import {
   BackSide,
   BoxGeometry,
@@ -10,6 +9,7 @@ import {
   Color,
   ConeGeometry,
   CylinderGeometry,
+  ExtrudeGeometry,
   Float32BufferAttribute,
   Group,
   Matrix4,
@@ -18,6 +18,7 @@ import {
   MeshStandardMaterial,
   type Object3D,
   RingGeometry,
+  Shape,
   SphereGeometry,
   TorusGeometry,
   Uint32BufferAttribute,
@@ -148,11 +149,14 @@ function buildFaces(head: Object3D, R: number, browR: number): void {
     g.userData.tag = `face:${name}`;
     return g;
   }
-  const ex = 0.21;
-  const ey = 0.02;
+  const ex = 0.194;
+  const ey = 0.037;
   let g = grp("base");
-  for (const x of [-ex, ex]) g.add(onHead(faceSphere(0.058, EYE, 1, 1.25, 0.5), x, ey, R));
-  g.add(onHead(arc(0.075, 0.018, MOUTH), 0, -0.16, R, 0.005, Math.PI));
+  for (const x of [-ex, ex]) {
+    g.add(onHead(faceSphere(0.065, EYE, 0.86, 1.28, 0.42), x, ey, R));
+    g.add(onHead(faceSphere(0.014, "#efd9bd", 1, 1, 0.6), x - 0.017, ey + 0.024, R, 0.031));
+  }
+  g.add(onHead(arc(0.078, 0.015, MOUTH), 0, -0.155, R, 0.005, Math.PI));
   g = grp("happy");
   for (const x of [-ex, ex]) g.add(onHead(arc(0.055, 0.017, EYE), x, ey - 0.02, R));
   g.add(onHead(faceSphere(0.085, MOUTH, 1, 0.75, 0.3), 0, -0.17, R));
@@ -177,8 +181,8 @@ function buildFaces(head: Object3D, R: number, browR: number): void {
   g = grp("dead");
   for (const x of [-ex, ex]) for (const r of [0.78, -0.78]) g.add(onHead(faceBox(0.13, 0.028, EYE), x, ey, R, 0.005, r));
   g.add(onHead(faceBox(0.1, 0.024, MOUTH), 0, -0.18, R));
-  head.add(onHead(faceSphere(0.05, "#ef9a7c", 1, 1, 0.8), 0, -0.065, R, 0.01));
-  for (const x of [-0.31, 0.31]) head.add(onHead(faceSphere(0.085, "#f2988a", 1.35, 0.8, 0.25), x, -0.11, R, 0));
+  head.add(onHead(faceSphere(0.052, "#d98670", 1.06, 0.84, 0.88), 0, -0.065, R, 0.01));
+  for (const x of [-0.31, 0.31]) head.add(onHead(faceSphere(0.081, "#d48676", 1.3, 0.68, 0.3), x, -0.107, R, 0));
 }
 
 // ---------- 모자 (원문 brimGeo·buildHats) ----------
@@ -350,12 +354,42 @@ function buildHats(head: Object3D, F: number): void {
 
 // ---------- 템플릿 조립 → 관절별 부품 ----------
 
-interface HairSpec {
-  r: number;
-  sc: [number, number, number];
-  phi: [number, number];
-  th: [number, number];
-  top?: boolean;
+/** Sweep the raised front edge into a side part. The hat variant keeps only the hair below the brim. */
+function sculptedHair(radius: number, bob: boolean, hat: boolean): BufferGeometry {
+  const columns = 32;
+  const rows = 14;
+  const start = hat ? Math.acos((HAT_Y + 0.025) / radius) : 0;
+  const shell = new SphereGeometry(radius, columns, rows, 0, Math.PI * 2, start, Math.PI - start - 0.1);
+  const positions = shell.getAttribute("position");
+  for (let row = 0; row <= rows; row++) {
+    for (let column = 0; column <= columns; column++) {
+      const angle = (column / columns) * Math.PI * 2;
+      const side = -Math.cos(angle);
+      const towardFace = Math.min(1, Math.max(0, (Math.sin(angle) - 0.32) / 0.68));
+      const sweep = 1.19 + side * 0.26 + Math.sin(angle * 3) * 0.065;
+      const edge = (bob ? 2.36 : 1.82) * (1 - towardFace) + sweep * towardFace;
+      const theta = start + (Math.max(start, edge) - start) * (row / rows);
+      const wave = hat ? 1 : 1 + 0.022 * Math.sin(angle * 2 + theta * 3) * Math.sin(theta);
+      const r = radius * wave;
+      positions.setXYZ(row * (columns + 1) + column, side * Math.sin(theta) * r, Math.cos(theta) * r, Math.sin(angle) * Math.sin(theta) * r);
+    }
+  }
+  shell.computeVertexNormals();
+  return shell;
+}
+
+/** Folded coat lapel, cut as a single piece and joined to the torso batch. */
+function coatLapel(): ExtrudeGeometry {
+  const edge = new Shape();
+  edge.moveTo(0.025, -0.18);
+  edge.lineTo(0.022, 0.145);
+  edge.lineTo(0.15, 0.123);
+  edge.lineTo(0.09, 0.04);
+  edge.lineTo(0.124, 0.015);
+  edge.closePath();
+  const lapel = new ExtrudeGeometry(edge, { depth: 0.017, bevelEnabled: false });
+  lapel.setIndex(Array.from({ length: lapel.getAttribute("position").count }, (_, i) => i));
+  return lapel;
 }
 
 /** 원문 create(fig) 의 부품을 Mesh 대신 "지오메트리 + 색 + 보이기 이름" 으로 모은 관절별 목록 */
@@ -381,7 +415,7 @@ function bakeFig(fig: Fig): Record<JointName, Part[]> {
   const legA = leg(0.13);
   const legB = leg(-0.13);
 
-  // 몸통
+  // 코트 아래의 곡면은 포스트잇 부착 좌표와 공유한다.
   part(body, new CylinderGeometry(0.29, 0.39, 0.6, 24), "coat").position.y = 0.66;
   part(body, new SphereGeometry(0.39, 24, 10, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.18), "coat").position.y = 0.38;
   const shoulder = part(body, new SphereGeometry(0.3, 24, 14), "coat");
@@ -395,11 +429,17 @@ function bakeFig(fig: Fig): Record<JointName, Part[]> {
   tie.position.set(0, 0.8, 0.305);
   tie.rotation.x = -0.18;
   for (const s of [-1, 1]) {
-    const lap = part(body, new BoxGeometry(0.1, 0.32, 0.03), "coat");
-    lap.position.set(s * 0.085, 0.88, 0.29);
-    lap.rotation.set(-0.15, 0, s * 0.42);
+    const lapel = coatLapel();
+    if (s < 0) lapel.rotateY(Math.PI);
+    const lap = part(body, lapel, "coat");
+    lap.position.set(0, 0.86, s < 0 ? 0.315 : 0.298);
+    lap.rotation.x = -0.11;
   }
-  for (const y of [0.68, 0.55]) part(body, new SphereGeometry(0.025, 8, 6), "#22252e").position.set(0.07, y, 0.33);
+  for (const [x, y] of [[0.055, 0.66], [0.045, 0.545]] as const) {
+    const button = part(body, new CylinderGeometry(0.025, 0.025, 0.014, 10), "#9a8065");
+    button.rotation.x = Math.PI / 2;
+    button.position.set(x, y, 0.39 - (0.1 * (y - 0.36)) / 0.6);
+  }
   const star = part(body, new SphereGeometry(0.05, 10, 8), "#c9d3ea", "badge:star");
   star.scale.z = 0.4;
   star.position.set(0.17, 0.8, 0.29);
@@ -418,44 +458,24 @@ function bakeFig(fig: Fig): Record<JointName, Part[]> {
   const head = new Group();
   head.position.y = 0.48;
   neck.add(head);
-  const skull = part(head, new SphereGeometry(R, 32, 24), "skin");
+  const skull = part(head, new SphereGeometry(R, 28, 22), "skin");
   skull.scale.set(1.04, 0.96, 0.98);
   // 단발은 귀를 덮는다. 귀를 그리면 머리카락을 뚫고 나온다
   if (!girl) {
     for (const s of [-1, 1]) {
       const ear = part(head, new SphereGeometry(0.15, 14, 10), "skin", "ear");
-      ear.scale.set(0.6, 1, 0.8);
-      ear.position.set(s * (R + 0.02), 0, 0);
+      ear.scale.set(0.57, 0.88, 0.83);
+      ear.position.set(s * (R + 0.012), -0.035, 0.019);
+      const inside = part(head, new SphereGeometry(0.085, 12, 8), "#d79078", "ear");
+      inside.scale.set(0.62, 0.86, 0.46);
+      inside.position.set(s * (R + 0.026), -0.035, 0.115);
     }
   }
-  // 머리카락 조각: r 반지름, sc 비율, phi·th 범위(phi = π/2 가 앞). top 은 정수리라 모자를 쓰면 통째로 감춘다
-  const hair: HairSpec[] = girl
-    ? [
-        { r: R + 0.058, sc: [1.04, 1.02, 1], phi: [Math.PI / 2 - 1.1, 2.2], th: [0, Math.PI * 0.4], top: true },
-        { r: R + 0.07, sc: [1.04, 1.02, 1], phi: [Math.PI / 2 - 1.05, 2.1], th: [Math.PI * 0.3, Math.PI * 0.16] },
-        { r: R + 0.06, sc: [1.04, 1.02, 1], phi: [Math.PI / 2 + 1.05, Math.PI * 2 - 2.1], th: [0, Math.PI * 0.8] },
-      ]
-    : [
-        { r: R + 0.035, sc: [1, 1, 1], phi: [0, Math.PI * 2], th: [0, Math.PI * 0.4], top: true },
-        { r: R + 0.04, sc: [1, 1, 1], phi: [Math.PI / 2 - 1.15, 2.3], th: [Math.PI * 0.3, Math.PI * 0.16] },
-        { r: R + 0.03, sc: [1, 1, 1], phi: [Math.PI / 2 + 1.2, Math.PI * 2 - 2.4], th: [0, Math.PI * 0.55] },
-      ];
-  function hairMesh(h: HairSpec, th0: number, th1: number, tag: string): void {
-    const m = part(head, new SphereGeometry(h.r, 32, 16, h.phi[0], h.phi[1], th0, th1 - th0), "hair", tag);
-    m.scale.set(h.sc[0], h.sc[1], h.sc[2]);
-  }
-  // 모자를 쓰면 띠(HAT_Y)보다 조금 위(HAT_CUT)를 잘라 낸 머리카락으로 바꾼다. 모자 둘레(fit)는 그 높이의 머리카락 바깥에 맞춘다
-  const HAT_CUT = HAT_Y + 0.03;
-  let fit = 1.04 * Math.sqrt(R * R - (HAT_Y / 0.96) ** 2);
-  for (const h of hair) {
-    hairMesh(h, h.th[0], h.th[0] + h.th[1], "hair");
-    if (h.top) continue;
-    const cut = Math.max(h.th[0], Math.acos(Math.min(1, HAT_CUT / h.sc[1] / h.r)));
-    hairMesh(h, cut, h.th[0] + h.th[1], "hatHair");
-    fit = Math.max(fit, h.sc[0] * Math.sqrt(h.r * h.r - (HAT_Y / h.sc[1]) ** 2));
-  }
-  buildFaces(head, R * 0.98, hair[1].r + 0.006);
-  buildHats(head, fit + 0.012);
+  const hairRadius = R + (girl ? 0.055 : 0.041);
+  part(head, sculptedHair(hairRadius, girl, false), "hair", "hair");
+  part(head, sculptedHair(hairRadius, girl, true), "hair", "hatHair");
+  buildFaces(head, R * 0.98, hairRadius + 0.008);
+  buildHats(head, Math.sqrt(hairRadius ** 2 - HAT_Y ** 2) + 0.018);
 
   // 선글라스·수염
   const FR = R * 0.98;
@@ -481,7 +501,8 @@ function bakeFig(fig: Fig): Record<JointName, Part[]> {
     const g = new Group();
     g.position.set(x, 0.9, 0);
     body.add(g);
-    part(g, new CylinderGeometry(0.085, 0.095, 0.4, 12), "coat").position.y = -0.2;
+    part(g, new CylinderGeometry(0.101, 0.086, 0.4, 14), "coat").position.y = -0.2;
+    part(g, new CylinderGeometry(0.088, 0.086, 0.039, 12), "shirt").position.y = -0.393;
     part(g, new SphereGeometry(0.1, 14, 10), "hand").position.y = -0.43;
     return g;
   }
@@ -795,7 +816,7 @@ const GHOST_HOP_H = 0.18;
 const GHOST_HOP_MS = 420;
 
 /** 모든 캐릭터가 함께 쓰는 병합 재질(버텍스 컬러). 피부 0.7·놋쇠 금속감의 작은 차이는 합친다(가정 A1) */
-const bodyMaterial = new MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 });
+const bodyMaterial = new MeshStandardMaterial({ vertexColors: true, roughness: 0.64, metalness: 0 });
 /** 돋보기 유리처럼 투명한 조각만 따로 둔다(가정 A1) */
 const glassMaterial = new MeshStandardMaterial({ color: "#9ec2ff", transparent: true, opacity: 0.6 });
 const shadowMaterial = new MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.3, depthWrite: false });

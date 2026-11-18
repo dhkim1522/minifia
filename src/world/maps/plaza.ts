@@ -1,4 +1,4 @@
-// 시계탑 광장 장면(maps/plaza.ts, MAP-06, 결정 D-22). design/v2.0/blockout/plaza.js 의 좌표·치수·색을 그대로 옮기되 bar.ts 와 같은 구조로 만든다:
+// 달빛 누아르 시계탑 광장. 기존 이동 지형 위에 청회색 석재, 시계탑, 지붕과 황동 가로등을 배치한다.
 //   재질별·버텍스 컬러 병합 · 그림자 한 번 · 점광원 3개(무대 위·가로등 하나·내 캐릭터) — 나머지 가로등은 emissive 와 빛 무리 쿼드로 표현한다.
 // three 를 값으로 쓰므로 정적 import 경로에 두지 않는다(threeRenderer 와 함께 import() 로만 열린다). WebGL 없이 node 에서 만들어지고 검사된다.
 // 핀 조명·긴장 연출·유령 안개·단계 조명은 재즈 바와 같은 규칙으로 돈다 — 새 연출 코드를 만들지 않고, 같은 인터페이스(MapScene)를 같은 의미로 구현한다.
@@ -60,16 +60,16 @@ export const PLAZA_LIGHT_TUNE: Readonly<Record<LightingPhase, PhaseTune>> & {
   talk: {
     hemi: 1.05 * Math.PI,
     moon: 0.9 * Math.PI,
-    moonColor: "#eadfd0",
+    moonColor: "#e1e8f4",
     exposure: 1.25,
-    sky: ["#c2beb6", "#6a665e", "#a29e96"],
+    sky: ["#b4bac6", "#606678", "#969eac"],
     fog: { near: 20, far: 44 },
     stage: 0,
     pendant: 0,
     emissive: { room: 0, vote: 0 },
     glow: { room: 0, vote: 0 },
     self: 0,
-    albedo: { tint: "#9a948a", mix: 0.45 },
+    albedo: { tint: "#929ba9", mix: 0.31 },
   },
   /** 저녁 지목: 가로등 켜짐, 반구·달빛 낮춤, 무대 점광원이 연단을 비춘다 */
   vote: {
@@ -224,13 +224,22 @@ export function buildPlazaScene(budget: Budget): MapScene {
     b.add(new PlaneGeometry(size, size), hex, m, 1, k);
   };
 
-  // 바닥 판 40 × 40(y −0.06, 높이 0.1)과 자갈 14 × 14 칸(칸 0.96, 높이 0.08, 색 3가지 순환)
+  // 석재 포장은 얕은 줄눈과 가장자리 띠가 드러나는 정적 메시다.
   shell.box(FLOOR_HALF * 2, 0.1, FLOOR_HALF * 2, P.floor, tf(0, -0.06, 0));
-  for (let ix = 0; ix < 14; ix++) for (let iz = 0; iz < 14; iz++) shell.box(0.96, 0.08, 0.96, P.cobbles[(ix * 3 + iz * 5) % 3]!, tf(-6.5 + ix, 0.04, -6.5 + iz));
+  for (let ix = 0; ix < 14; ix++) for (let iz = 0; iz < 14; iz++) {
+    const color = P.cobbles[(ix * iz + ix * 2 + iz * 3) % P.cobbles.length]!;
+    shell.add(new PlaneGeometry(0.963, 0.963), color, tf(-6.5 + ix, 0, -6.5 + iz, -Math.PI / 2));
+  }
+  for (const p of [-6.92, 6.92]) {
+    shell.box(13.68, 0.1, 0.115, P.curb, tf(0, 0.05, p));
+    shell.box(0.115, 0.1, 13.68, P.curb, tf(p, 0.05, 0));
+  }
 
   // 연단: 아래 단 반지름 1.4/1.45 높이 0.18, 위 단 1.05/1.08 높이 0.2(윗면 0.46)
   furniture.cyl(1.4, 1.45, 0.18, 48, P.daisLow, tf(0, 0.17, 0));
   furniture.cyl(1.05, 1.08, 0.2, 48, P.daisHigh, tf(0, 0.36, 0));
+  furniture.cyl(1.445, 1.445, 0.028, 48, P.cream, tf(0, 0.196, 0));
+  brass.add(new TorusGeometry(0.93, 0.011, 5, 48), P.brass, tf(0, 0.466, 0, -Math.PI / 2));
 
   // 서는 자리 8개: 놋쇠 표시(반지름 2.6 원 위 8등분, 첫 자리는 카메라 쪽)
   for (let i = 0; i < 8; i++) {
@@ -238,20 +247,36 @@ export function buildPlazaScene(budget: Budget): MapScene {
     brass.cyl(0.36, 0.36, 0.02, 24, P.brass, tf(Math.sin(a) * SEAT_RADIUS, 0.09, Math.cos(a) * SEAT_RADIUS));
   }
 
-  // 시계탑(뒤 구석): 상자 셋과 띠 둘, 사각뿔 지붕
+  // 시계탑: 층마다 코니스와 모서리 기둥을 두고 청회색 지붕에 이음선을 올린다.
   const tw = tf(TOWER.x, 0, TOWER.z);
   furniture.box(2.6, 0.8, 2.6, P.stoneL, under(tw, tf(0, 0.4, 0)));
   furniture.box(2.0, 1.6, 2.0, P.stoneD, under(tw, tf(0, 1.6, 0)));
   furniture.box(2.4, 1.9, 2.4, P.stoneL, under(tw, tf(0, 3.35, 0)));
   furniture.box(2.6, 0.18, 2.6, P.cream, under(tw, tf(0, 2.4, 0)));
   furniture.box(2.6, 0.18, 2.6, P.cream, under(tw, tf(0, 4.3, 0)));
-  furniture.add(new ConeGeometry(1.8, 1.4, 4), P.roof, under(tw, tf(0, 5.1, 0, 0, Math.PI / 4, 0)));
+  furniture.box(2.78, 0.12, 2.78, P.roofEdge, under(tw, tf(0, 4.46, 0)));
+  furniture.add(new ConeGeometry(1.86, 1.32, 4), P.roof, under(tw, tf(0, 5.17, 0, 0, Math.PI / 4, 0)));
+  furniture.cyl(0.01, 0.036, 0.22, 8, P.brass, under(tw, tf(0, 5.94, 0)));
+  for (const x of [-1.16, 1.16]) for (const z of [-1.16, 1.16]) {
+    furniture.box(0.16, 1.62, 0.16, P.cream, under(tw, tf(x, 3.35, z)));
+  }
   // 시계판 두 면(원 반지름 0.72, 발광 크림색): 앞(+z)면과 옆(+x)면
   const faces: readonly (readonly [number, number, number])[] = [
     [0, 1.21, 0],
     [1.21, 0, Math.PI / 2],
   ];
-  for (const [fx, fz, ry] of faces) emTower.add(new CircleGeometry(0.72, 40), P.clockFace, under(tw, tf(fx, 3.35, fz, 0, ry, 0)), 1);
+  for (const [fx, fz, ry] of faces) {
+    const dial = under(tw, tf(fx, 3.35, fz, 0, ry, 0));
+    furniture.add(new CircleGeometry(0.71, 40), P.clockFace, dial);
+    brass.add(new TorusGeometry(0.735, 0.032, 6, 40), P.brass, under(dial, tf(0, 0, 0.018)));
+    // 시계판은 조명이 꺼져 있어도 읽을 수 있고, 변론 때만 빛을 더 받는다.
+    emTower.add(new CircleGeometry(0.7, 40), P.clockFace, under(dial, tf(0, 0, 0.002)), 0.68);
+    for (let hour = 0; hour < 12; hour++) {
+      const a = hour * (Math.PI / 6);
+      const length = hour % 3 === 0 ? 0.115 : 0.062;
+      furniture.box(0.024, length, 0.008, P.clockHand, under(dial, tf(Math.sin(a) * 0.59, Math.cos(a) * 0.59, 0.011, 0, 0, -a)));
+    }
+  }
   // 시계탑 조명: 변론 때 연단을 비춘다(구 + 빛 무리)
   emTower.sph(0.14, P.flood, under(tw, tf(1.25, 4.5, 1.25)), 1.6);
   glow(glowTower, P.flood, 1.3, TOWER.x + 1.25, 4.5, TOWER.z + 1.25, 0.8);
@@ -278,25 +303,39 @@ export function buildPlazaScene(budget: Budget): MapScene {
     minuteHands.push(minute);
   });
 
-  // 가로등 4개: 기둥 높이 2.6, 갓 0.3, 발광 구 반지름 0.13 y 2.6
+  // 가로등 4개. 손질한 주물 받침과 사각 유리 등은 기존 광원 수 안에서 표현한다.
   for (const [x, z] of LAMPS) {
+    furniture.cyl(0.12, 0.21, 0.23, 8, P.lampPost, tf(x, 0.13, z));
     furniture.cyl(0.06, 0.08, 2.6, 8, P.lampPost, tf(x, 1.3, z));
-    furniture.cyl(0.16, 0.12, 0.3, 8, P.lampPost, tf(x, 2.7, z));
-    emRoom.sph(0.13, P.lampBulb, tf(x, 2.6, z), 1.5);
+    brass.cyl(0.11, 0.11, 0.055, 8, P.brass, tf(x, 0.41, z));
+    furniture.box(0.31, 0.052, 0.31, P.lampPost, tf(x, 2.48, z));
+    furniture.add(new ConeGeometry(0.28, 0.16, 4), P.roofEdge, tf(x, 2.82, z, 0, Math.PI / 4, 0));
+    for (const dx of [-0.131, 0.131]) for (const dz of [-0.131, 0.131]) {
+      furniture.box(0.021, 0.29, 0.021, P.lampPost, tf(x + dx, 2.635, z + dz));
+    }
+    emRoom.box(0.206, 0.235, 0.206, P.lampBulb, tf(x, 2.62, z), 1.5);
     glow(glowRoom, P.lampBulb, 1.4, x, 2.6, z, 0.7);
   }
 
-  // 건물 앞면 4(뒤 두 가장자리): 몸 + 지붕띠 + 창 칸(일부만 발광)
+  // 배경 건물: 돌출된 처마와 문, 깊이가 있는 창틀. 먼 창 장식은 사다리에서 끈다.
   const facade = (x: number, z: number, w: number, h: number, ry: number, body: string): void => {
     const g = tf(x, 0, z, 0, ry, 0);
     furniture.box(w, h, 1.2, body, under(g, tf(0, h / 2, 0)));
-    furniture.box(w + 0.1, 0.16, 1.3, P.facadeCap, under(g, tf(0, h, 0)));
+    furniture.box(w + 0.18, 0.15, 1.42, P.facadeCap, under(g, tf(0, h, 0)));
+    furniture.box(w + 0.08, 0.095, 1.28, P.cream, under(g, tf(0, 0.96, 0)));
+    furniture.box(w - 0.16, 0.18, 1.18, P.roof, under(g, tf(0, h + 0.16, 0)));
+    furniture.box(0.72, 0.84, 0.08, P.stoneD, under(g, tf(0.18, 0.42, 0.64)));
+    furniture.box(0.56, 0.76, 0.09, P.paneDark, under(g, tf(0.18, 0.4, 0.675)));
     for (let fx = 0; fx < Math.floor(w / 0.9); fx++) {
       for (let fy = 0; fy < Math.floor((h - 1) / 1.1); fy++) {
         const lit = (fx * 7 + fy * 3 + Math.round(x)) % 4 === 0;
-        const m = under(g, tf(-w / 2 + 0.45 + fx * 0.9, 1.4 + fy * 1.1, 0.61));
-        if (lit) emRoomFar.add(new PlaneGeometry(0.4, 0.6), P.paneLit, m, 0.5);
-        else furniture.add(new PlaneGeometry(0.4, 0.6), P.paneDark, m);
+        const m = under(g, tf(-w / 2 + 0.45 + fx * 0.9, 1.52 + fy * 1.075, 0.61));
+        furnitureFar.box(0.54, 0.71, 0.047, P.cream, m);
+        const pane = under(m, tf(0, 0, 0.026));
+        if (lit) emRoomFar.add(new PlaneGeometry(0.406, 0.57), P.paneLit, pane, 0.75);
+        else furnitureFar.add(new PlaneGeometry(0.406, 0.57), P.paneDark, pane);
+        furnitureFar.box(0.029, 0.566, 0.015, P.paneDark, under(pane, tf(0, 0, 0.009)));
+        furnitureFar.box(0.41, 0.027, 0.015, P.paneDark, under(pane, tf(0, -0.04, 0.009)));
       }
     }
   };
@@ -305,15 +344,19 @@ export function buildPlazaScene(budget: Budget): MapScene {
   facade(-7.4, -0.6, 4.2, 4.2, Math.PI / 2, P.facades[2]!);
   facade(-7.4, 3.6, 3.6, 5.0, Math.PI / 2, P.facades[3]!);
 
-  // 벤치 2: 앉는 널·등널은 몸, 다리는 먼 소품
+  // 벤치 두 개는 독립 널판과 팔걸이 형태로 보인다.
   for (const [bx, bz, bry] of [
     [4.6, -3.4, 0],
     [-3.4, 4.6, Math.PI / 2],
   ] as const) {
     const g = tf(bx, 0.08, bz, 0, bry, 0);
-    furniture.box(1.4, 0.08, 0.42, P.bench, under(g, tf(0, 0.42, 0)));
-    furniture.box(1.4, 0.3, 0.06, P.bench, under(g, tf(0, 0.66, -0.18)));
-    for (const lx of [-0.6, 0.6]) furnitureFar.box(0.06, 0.42, 0.36, P.benchLeg, under(g, tf(lx, 0.21, 0)));
+    for (const dz of [-0.14, 0, 0.14]) furniture.box(1.4, 0.064, 0.126, P.bench, under(g, tf(0, 0.42, dz)));
+    for (const y of [0.58, 0.725]) furniture.box(1.4, 0.12, 0.052, P.bench, under(g, tf(0, y, -0.18)));
+    for (const lx of [-0.6, 0.6]) {
+      furnitureFar.box(0.06, 0.42, 0.36, P.benchLeg, under(g, tf(lx, 0.21, 0)));
+      furnitureFar.box(0.043, 0.36, 0.059, P.benchLeg, under(g, tf(lx, 0.58, -0.2)));
+      furnitureFar.box(0.052, 0.052, 0.35, P.benchLeg, under(g, tf(lx, 0.627, 0)));
+    }
   }
   // 나무 2: 화단 + 줄기는 몸, 가지는 먼 소품
   for (const [tx, tz] of [
@@ -321,6 +364,7 @@ export function buildPlazaScene(budget: Budget): MapScene {
     [4.4, -4.6],
   ] as const) {
     furniture.box(0.9, 0.4, 0.9, P.planter, tf(tx, 0.28, tz));
+    furniture.box(0.96, 0.09, 0.96, P.curb, tf(tx, 0.48, tz));
     furniture.cyl(0.07, 0.11, 1.9, 7, P.treeDark, tf(tx, 1.4, tz));
     for (const [bx, by, bz, bk] of [
       [0.4, 1.9, 0.2, 0.7],
@@ -328,6 +372,10 @@ export function buildPlazaScene(budget: Budget): MapScene {
       [0.2, 2.5, -0.5, 0.5],
     ] as const)
       furnitureFar.cyl(0.025, 0.05, 1.0, 6, P.treeDark, tf(tx + bx / 2, by, tz + bz / 2, bz, 0, -bk));
+    for (const [i, crown] of [[0.23, 2.57, 0.15, 0.39], [-0.28, 2.34, 0, 0.35], [0.01, 2.81, -0.19, 0.35]].entries()) {
+      const [x, y, z, radius] = crown;
+      furnitureFar.sph(radius!, P.leaves[i]!, tf(tx + x!, y!, tz + z!));
+    }
   }
 
   // ----- 메시 만들기 -----

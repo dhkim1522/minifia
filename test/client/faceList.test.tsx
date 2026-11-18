@@ -148,13 +148,13 @@ describe("FaceList — 고른 칸·줄바꿈·그림 실패·칸 수 (E1 #2~#5)"
     expect(container.querySelector("button")!.getAttribute("aria-label")).toBe("<b>해킹</b>");
   });
 
-  it("고른 칸 테두리 2px gray-100, 안 고른 칸은 brightness .85 saturate .85 (E1 #3)", () => {
+  it("고른 칸은 종이색 테두리 2px, 안 고른 얼굴 그림은 밝기 .95와 채도 .92 (E1 #3)", () => {
     const face_ = rulesStarting(".mv-face").filter((r) => /^\s*\.mv-face\s*\{/.test(r)).join("");
     expect(face_).toMatch(/border:\s*2px solid transparent/);
-    // 승인 bundle.css 처럼 얼굴 그림에만 건다(이름·점은 어둡게 하지 않는다)
-    expect(rulesStarting(".mv-face__img").join("")).toMatch(/brightness\(0?\.85\)\s*saturate\(0?\.85\)/);
+    // 필터는 얼굴 그림에만 건다.
+    expect(rulesStarting(".mv-face__img").join("")).toMatch(/brightness\(0?\.95\)\s*saturate\(0?\.92\)/);
     expect(rulesStarting(".mv-face.is-on .mv-face__img").join("")).toMatch(/filter:\s*none/);
-    expect(rulesStarting(".mv-face.is-on").join("")).toMatch(/border-color:\s*var\(--gray-100\)/);
+    expect(rulesStarting(".mv-face.is-on").join("")).toMatch(/border-color:\s*var\(--noir-paper\)/);
     expect(rulesStarting(".mv-face__mark").join("")).toMatch(/width:\s*26px/);
   });
 

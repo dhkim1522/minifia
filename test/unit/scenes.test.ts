@@ -27,8 +27,8 @@ import * as e2eLib from "../../scripts/e2e/lib.mjs";
 
 interface SourceRow {
   out: string;
-  src: string;
-  quality: number;
+  mapId: string;
+  phase: string;
   maxKB: number;
 }
 const SOURCES = (backdropScript as { SOURCES: SourceRow[] }).SOURCES;
@@ -222,17 +222,20 @@ describe("scripts/make-backdrops.mjs (SOURCES)", () => {
     expect(SOURCES.map((s) => s.out).sort()).toEqual(EXPECTED_FILES);
   });
 
-  it("원본이 있다: 게임 구도는 design/backgrounds/v5(실내 V2), 입구 구도는 v3", () => {
-    for (const s of SOURCES) {
-      const isEntry = s.out.startsWith("bg_entry_");
-      expect(s.src.startsWith(isEntry ? "design/backgrounds/v3/" : "design/backgrounds/v5/"), s.src).toBe(true);
-      expect(existsSync(s.src), s.src).toBe(true);
-    }
+  it("배경마다 실제 맵과 장면 조명을 사용한다", () => {
+    expect(Object.fromEntries(SOURCES.map(({ out, mapId, phase }) => [out, [mapId, phase]]))).toEqual({
+      "bg_entry_lobby.webp": ["bar", "night"],
+      "bg_game_lobby.webp": ["bar", "talk"],
+      "bg_game_night.webp": ["bar", "night"],
+      "bg_game_morning.webp": ["plaza", "morning"],
+      "bg_game_day.webp": ["plaza", "talk"],
+      "bg_game_dusk.webp": ["plaza", "vote"],
+      "bg_game_verdict_dusk.webp": ["bar", "trial"],
+    });
   });
 
-  it("품질 86, 상한은 장면별 예산과 같다", () => {
+  it("생성기의 용량 상한은 장면별 예산과 같다", () => {
     for (const s of SOURCES) {
-      expect(s.quality).toBe(86);
       expect(s.maxKB, s.out).toBe(LIMIT_KB[s.out]);
     }
   });
