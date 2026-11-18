@@ -1875,17 +1875,17 @@ export function selectFlows(flows, only) {
 // ---- 판결 순간 연출 (09.1.1-13 → 22-12·22-13: 처형 6.6초 시간표, 찬반 숫자 덩이 판정 BF1~BF3 은 지웠다 — 찬반 기록이 처형에 없다, D-14) ----
 
 /**
- * 큰 글 자리 판정(AC1·AC2, 18.1-13 결정 0083-10). announce = 큰 글 글자 사각형(줄 사각형의 합), band = 자막 띠 면 사각형, sound = 소리 단추 사각형.
- * AC1 큰 글 윗변이 띠 면 아랫변 아래(0.5px 허용) · AC2 큰 글이 소리 단추와 겹치지 않는다(가로·세로 모두 겹칠 때만 실패).
+ * 큰 글 자리 판정(AC1·AC2, 18.1-13 결정 0083-10). announce = 큰 글 글자 사각형(줄 사각형의 합), band = 현재 헤더·안내띠 중 가장 아래 면 사각형, sound = 소리 단추 사각형.
+ * AC1 큰 글 윗변이 헤더·안내띠 아랫변 아래(0.5px 허용) · AC2 큰 글이 소리 단추와 겹치지 않는다(가로·세로 모두 겹칠 때만 실패).
  */
 export function announceClearChecks({ announce, band, sound }) {
   const labels = {
-    AC1: "큰 글이 자막 띠 면 아래에서 시작한다",
+    AC1: "큰 글이 현재 헤더·안내띠 아래에서 시작한다",
     AC2: "큰 글이 소리 단추와 겹치지 않는다",
   };
   const rectOk = (r) => r && [r.left, r.top, r.width, r.height].every(isNum);
   const miss = (id, what) => noMeasure(id, labels[id], what);
-  const ac1 = !rectOk(announce) || !rectOk(band) ? miss("AC1", "큰 글·띠 면") : result("AC1", labels.AC1, announce.top < bottom(band) - OVERLAP_EPS ? [`큰 글 윗변 ${fmt(announce.top)} < 띠 면 아랫변 ${fmt(bottom(band))}`] : []);
+  const ac1 = !rectOk(announce) || !rectOk(band) ? miss("AC1", "큰 글·헤더 또는 안내띠") : result("AC1", labels.AC1, announce.top < bottom(band) - OVERLAP_EPS ? [`큰 글 윗변 ${fmt(announce.top)} < 헤더·안내띠 아랫변 ${fmt(bottom(band))}`] : []);
   const ac2 = !rectOk(announce) || !rectOk(sound) ? miss("AC2", "큰 글·소리 단추") : result("AC2", labels.AC2, rectsOverlap(announce, sound) ? [`큰 글 ${fmt(announce.left)},${fmt(announce.top)} ${fmt(announce.width)}x${fmt(announce.height)} 이 소리 단추 ${fmt(sound.left)},${fmt(sound.top)} ${fmt(sound.width)}x${fmt(sound.height)} 와 겹친다`] : []);
   return [ac1, ac2];
 }

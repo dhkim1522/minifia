@@ -1686,7 +1686,7 @@ export function readLetterWatch(page, { stop = true } = {}) {
 }
 
 /**
- * 큰 글 자리 판정(announceClearChecks, 18.1-13)에 쓸 사각형을 읽는다: 큰 글 글자 사각형(.mf-announce__text 줄들의 합), 자막 띠 면, 소리 단추.
+ * 큰 글 자리 판정(announceClearChecks, 18.1-13)에 쓸 사각형을 읽는다: 큰 글 글자 사각형(.mf-announce__text 줄들의 합), 헤더·안내띠, 소리 단추.
  * 큰 글이 없으면 announce 는 null(띠·소리 단추는 있으면 읽는다). 큰 글 등장 애니메이션(600ms)이 끝난 뒤에 부른다.
  */
 export function readAnnounceClear(page) {
@@ -1699,9 +1699,13 @@ export function readAnnounceClear(page) {
       range.selectNodeContents(textEl);
       announce = rectOf(range.getBoundingClientRect());
     }
-    const band = document.querySelector("[data-host-band] .mv-host__band");
+    // 현재 단계 헤더와 사회자 띠가 보이는 장면 모두에서 가장 아래에 있는 면까지 비워야 한다.
+    const headerFaces = [...document.querySelectorAll(".mf-game__header, [data-host-band] .mv-host__band")]
+      .map((el) => el.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.height > 0);
+    const band = headerFaces.sort((a, b) => b.bottom - a.bottom)[0];
     const sound = document.querySelector("[data-sound-button]");
-    return { announce, band: rectOf(band?.getBoundingClientRect()), sound: rectOf(sound?.getBoundingClientRect()), text: (textEl?.textContent ?? "").trim() };
+    return { announce, band: rectOf(band), sound: rectOf(sound?.getBoundingClientRect()), text: (textEl?.textContent ?? "").trim() };
   });
 }
 

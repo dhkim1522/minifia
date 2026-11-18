@@ -2847,7 +2847,7 @@ async function nightWill(ctx) {
 /** 피해자 편지용 유언(짧은 두 줄감) */
 const VICTIM_WILL = "범인은 분명히 도윤 님이에요";
 
-/** 피해자: 방장 시민이 봇 마피아에게 당한다(4명판 — 의사가 없어 반드시 죽는다). 처형 → 밤 → 아침을 자연 타이머로 지나며 막이 나타났다 사라지고, 아침에 번쩍임 한 번·'암살당했습니다'·유령 화면 (NIGHT-11, 시민 편 DOM) */
+/** 피해자: 방장 시민이 봇 마피아에게 당한다(4명판). 찬반이 부결된 밤과 다음 아침의 막·피해자 연출·유령 화면을 확인한다. */
 async function nightVictim(ctx, shared) {
   const id = "night";
   const sc = `${id}/victim`;
@@ -2862,20 +2862,14 @@ async function nightVictim(ctx, shared) {
       await writeSheet(hp, ht, "will", VICTIM_WILL);
     });
     rec(sc, "VC12", "토론에서 깃펜으로 유언을 쓰고 저장하면 서버가 같은 글을 돌려준다(피해자 편지용)", wrote.ok, wrote.detail);
-    await skipTo(hp, ht, "execution"); // 봇 반대 → '처형 없음', 처형 5초 뒤 서버 타이머로 밤이 된다
+    await skipTo(hp, ht, "verdict");
+    // 첫날 부결은 정답 공개(처형 없음 안내 포함)를 거친다. 실제 밤 진입 직전에 관찰을 시작한다.
+    await ht.waitFor((v) => v.phase === "answerReveal", 15_000, "찬반 부결 뒤 첫날 정답 공개");
     await armSeenWatch(hp);
-    await ht.waitFor((v) => v.phase === "night", 12_000, "처형 뒤 밤(서버 타이머)");
+    await ht.waitFor((v) => v.phase === "night", 12_000, "첫날 정답 공개 뒤 밤(서버 타이머)");
     const g = await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
-    const curtainIn = await attempt(async () => {
-      const start = performance.now();
-      for (;;) {
-        const s = await readSeen(hp);
-        if (s.curtain >= 1 && s.curtainGone >= 1) return true;
-        if (performance.now() - start > 4000) return { ok: false, detail: `막 나타남 ${s.curtain}회, 사라짐 ${s.curtainGone}회` };
-        await sleep(100);
-      }
-    });
-    rec(sc, "VC1", "밤 진입 때 장면 전환 막([data-curtain])이 나타났다 사라진다", curtainIn.ok, curtainIn.detail);
+    const nightEntry = await readSeen(hp);
+    rec(sc, "VC1", "첫날 정답 공개에서 밤으로 이어질 때 무대를 덮지 않는다", nightEntry.curtain === 0 && nightEntry.curtainGone === 0, `막 나타남 ${nightEntry.curtain}회, 사라짐 ${nightEntry.curtainGone}회`);
     await settle(hp);
     const n = await readNight(hp);
     rec(sc, "VC2", "내 직업이 시민이다", ht.last().me.role === "citizen", `직업 ${ht.last().me.role}`);
@@ -2918,7 +2912,7 @@ async function nightVictim(ctx, shared) {
     const done = await nightUntil(hp, (x) => x.curtain === 0, 5000);
     rec(sc, "VC10", "막이 걷혀 DOM 에 남지 않는다", !!done, "막이 남아 있음");
     const seenEnd = await readSeen(hp);
-    rec(sc, "VC8", "아침 진입 때도 막이 나타났다 사라진다(밤·아침 두 번)", seenEnd.curtain >= 2 && seenEnd.curtainGone >= 2, `막 나타남 ${seenEnd.curtain}회, 사라짐 ${seenEnd.curtainGone}회`);
+    rec(sc, "VC8", "밤이 끝나 아침으로 넘어갈 때 막이 한 번 나타났다 사라진다", seenEnd.curtain === 1 && seenEnd.curtainGone === 1, `막 나타남 ${seenEnd.curtain}회, 사라짐 ${seenEnd.curtainGone}회`);
   } finally {
     await closeGame(game);
   }
