@@ -12,8 +12,13 @@ Thumbs.db
 # Claude Code PC별 설정
 .claude/settings.local.json
 
-# Codex용 GSD 로컬 설치 결과
-/.codex/
+# 프로젝트 역할은 공유하고 Codex의 로컬 설정과 설치 결과는 제외한다
+/.codex/*
+!/.codex/agents/
+/.codex/agents/*
+!/.codex/agents/designer.toml
+!/.codex/agents/developer.toml
+!/.codex/agents/tester.toml
 
 # Node·빌드
 node_modules/

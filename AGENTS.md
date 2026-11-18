@@ -1,18 +1,28 @@
 # 미니피아 Codex 작업 지침
 
-## 세션 시작
+## 시작
 
-1. `CLAUDE.md`를 읽는다. 프로젝트 규칙, 문서 지도, GSD 작업 원칙은 이 문서를 기준으로 삼는다.
-2. `HANDOFF.md`, 현재 브랜치와 최근 커밋, 해당 페이즈의 `*-PLAN.md`와 `*-SUMMARY.md`를 확인한다. 인계 문서보다 현재 브랜치에 구현 기록이 앞서 있으면 남은 계획부터 이어간다.
-3. 작업 범위에 해당하는 `docs/`와 승인된 `design/` 사본을 읽는다. GSD 응답과 `.planning/` 문서는 한국어로 작성한다.
+- `HANDOFF.md`와 현재 브랜치·최근 커밋을 확인한다. 기능이나 디자인을 바꿀 때 관련 `docs/`, 결정 기록, 승인된 `design/` 자료를 읽는다. 진행 중인 24페이즈의 범위·완료 내역은 `.planning/phases/24-suspect-note-tutorial/`에서 이어 읽는다.
+- `CLAUDE.md`의 게임·디자인 원칙을 따른다. Codex의 작업 배정과 검증은 아래 절차를 적용한다. CLAUDE.md의 GSD 명령과 문서 작성 절차는 Claude Code 작업에 적용한다.
+- 사용자 응답과 인계는 한국어로 작성한다.
 
-## Codex에서 GSD 사용
+## 작업 배정
 
-- 기존 `.planning/`에서 이어간다. 현재 페이즈 확인은 `$gsd-progress`, 화면 계약은 `$gsd-ui-phase`, 계획은 `$gsd-plan-phase`, 실행과 검증은 `$gsd-execute-phase`와 `$gsd-verify-work`를 사용한다. UI가 있는 새 페이즈는 계획보다 UI-SPEC을 먼저 확정한다.
-- 기존 계획의 `@~/.claude-personal/gsd-core/…` 실행 참조는 Codex에서 `.codex/gsd-core/…`의 같은 상대 경로를 읽는다. 계획 파일에 저장된 원래 경로는 Claude에서 사용한다.
-- 계획의 의존성과 테스트 기준을 따른다. TDD가 지정된 계획은 실패 시험 → 구현 → 통과 확인 순으로 진행한다. 완료 범위와 검증 결과를 GSD 요약과 인계 문서에 남긴다.
-- UI 설계·구현·검토에는 [디자인 참고 자료 스킬](.agents/skills/minifia-design-refs/SKILL.md)을 적용한다. Claude Design 아티팩트로 승인된 내용은 저장소의 `design/` 사본으로 확인한다.
+메인이 요청을 정리하고, 변경 범위와 완료 기준을 짧게 정한 뒤 필요한 역할에 직접 위임한다. 현재 요청 범위 안의 판단과 진행은 각 역할에 맡긴다.
+
+| 작업 | 호출할 역할 |
+|---|---|
+| 화면·에셋·조명 방향이나 표현을 새로 정해야 하는 작업 | [designer](.codex/agents/designer.toml) |
+| 앱·3D·서버·빌드 도구 구현 및 수정 | [developer](.codex/agents/developer.toml) |
+| 독립 검수 요청 또는 화면·성능·게임 흐름에 영향 있는 구현 후 확인 | [tester](.codex/agents/tester.toml) |
+
+- 방향이 확정된 구현은 developer부터 시작하고 검수가 필요한 변경은 tester가 뒤이어 확인한다. 질문 답변, 계획 논의, Git 확인, 단순 문서 변경은 메인이 처리한다.
+- 위임 메시지에 목표, 참고 경로, 수정 가능 범위, 완료 기준을 넣는다. 서로 기다릴 필요가 없고 쓰는 파일이 겹치지 않는 일만 병렬로 맡긴다. 구현이 시안에 의존하면 디자인 결과를 받은 뒤 시작한다.
+- 호출 도구가 커스텀 역할을 지원하면 이름으로 지정한다. 역할 선택 인자가 없는 채팅에서는 일반 서브에이전트에 해당 TOML의 `developer_instructions`를 전달한다. 역할을 받은 에이전트는 맡은 범위에서 직접 수행하고 결과를 메인에 돌려준다.
+- 작업용 문서는 기존 인계와 결정 기록을 사용한다. 검수에서 문제가 나오면 담당 역할에 돌려보내고 해당 부분을 다시 확인한다. 메인이 최종 변경과 검수 결과를 확인하고 현재 브랜치에 커밋·푸시한다. 다음 세션에 필요한 변경점과 미확인 항목은 `HANDOFF.md`에 남긴다.
+
+## 제품 기준
+
 - 게임 규칙과 판정은 서버가 정한다. 다른 사람의 역할은 살아 있는 플레이어에게 보내지 않는다. UI는 장면·아이콘·숫자와 대상을 직접 누르는 조작을 우선한다.
-- 개발은 `npm run dev`, 타입 검사는 `npm run typecheck`, 시험은 `npm test`를 사용한다. 로컬 브라우저 E2E는 `npm run e2e -- --url http://localhost:5173`로 실행한다. 배포를 진행할 때는 해당 페이즈에 기록된 검증 순서와 `npm run deploy`의 계정·대상 가드를 따른다.
-
-Codex용 GSD 설치와 확인 명령은 [환경 설정 문서](docs/setup.md#codex에서-gsd-사용)에 있다.
+- 재디자인의 기준은 [B안 달빛 누아르](design/v3.0/redesign/b-noir.png)다. 맵별 채광과 색온도를 달리하고, 캐릭터와 조작 UI 스타일은 공유한다. 토론에서는 얼굴과 이름표가 읽혀야 한다.
+- 검증 범위는 변경에 맞춘다. 개발은 `npm run dev`, 타입 검사는 `npm run typecheck`, 시험은 `npm test`다. 화면은 로컬 `npm run e2e -- --url http://localhost:5173 --only <흐름>`와 실제 캡처, 3D 부하는 `scripts/perf-run.mjs`의 해당 장면으로 확인한다. 배포 작업에서는 `npm run deploy`의 계정·대상 가드를 따른다.

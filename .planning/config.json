@@ -63,19 +63,19 @@
   "phase_naming": "sequential",
   "agent_skills": {
     "gsd-ui-researcher": [
-      ".agents/skills/minifia-design-refs"
+      "global:gsd-addons:design-refs"
     ],
     "gsd-ui-checker": [
-      ".agents/skills/minifia-design-refs"
+      "global:gsd-addons:design-refs"
     ],
     "gsd-ui-auditor": [
-      ".agents/skills/minifia-design-refs"
+      "global:gsd-addons:design-refs"
     ],
     "gsd-planner": [
-      ".agents/skills/minifia-design-refs"
+      "global:gsd-addons:design-refs"
     ],
     "gsd-executor": [
-      ".agents/skills/minifia-design-refs"
+      "global:gsd-addons:design-refs"
     ]
   },
   "claude_md_path": "./.claude/CLAUDE.md",

@@ -29,5 +29,5 @@
 
 ## 다음 할 일
 
-1. **24페이즈(의심 포스트잇·새 튜토리얼)** — discuss → UI-SPEC → 계획·실행. 24 가 `note_count`·`tutorial`(지금 0 고정)을 채운다. `scripts/uat-test-room.mjs` 는 23 에서 새 순서로 고쳤다.
+1. **Codex 작업 방식**은 [AGENTS.md](AGENTS.md)의 역할별 직접 위임. 재디자인 기준은 [B안](design/v3.0/redesign/b-noir.png)이고, 재즈 바 낮·밤 조명부터 8인판 성능과 가독성을 확인한다. **24페이즈**는 24-01~07 구현 기록까지 있으며, 다음 기능 작업은 24-08 튜토리얼 장면이다.
 2. **24 끝**: 폰 6종 전체 회귀 → **D1: 개인 계정 확인 → `wrangler d1 create minifia-v3-games --location apac` → `database_id` 손 기입 → `wrangler d1 migrations apply DB --remote` → `npm run games -- --remote` 빈 표 → 배포**(가드가 id 없으면 막는다, 0091-18) → minifia-v3 배포·smoke → v3.0 실테스트(17 UAT Test 3 폰 2대, v2.0 실기기 칸 `.planning/milestones/v2.0-phases/12-sound-polish/12-TEAM-TEST.md` 포함). 통과하면 main 반영.

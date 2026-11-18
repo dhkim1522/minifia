@@ -16,33 +16,10 @@
   - gsd-addons: `~/personal/gsd-addons` 에 clone 한 뒤 `claude plugin marketplace add ~/personal/gsd-addons`, `claude plugin install gsd-addons@gsd-addons --scope user`. 고친 뒤에는 `claude plugin marketplace update gsd-addons`.
   - Windows: 같은 명령을 그 PC 의 개인 Claude 설정 폴더 기준으로 실행한다.
 
-## Codex에서 GSD 사용
+## Codex 역할 설정
 
-이 저장소의 `AGENTS.md`가 Codex 진입점이다. Claude Code는 `CLAUDE.md`와 `.claude/`를 사용한다. 두 환경은 `.planning/`, `HANDOFF.md`, `docs/`, `design/`를 공유한다.
+저장소를 열고 새 채팅에서 작업을 요청하면 된다. [AGENTS.md](../AGENTS.md)의 배정 절차와 `.codex/agents/`의 `designer.toml`, `developer.toml`, `tester.toml`을 저장소에서 함께 받는다. Codex 작업은 이 세 역할을 통해 직접 진행한다.
 
-새 PC나 새 체크아웃에서 저장소 루트에 **GSD Core 1.20.1**을 설치한다. 기존 Claude 설치와 같은 버전이다. `GSD_HOME`을 설치 명령에만 지정해 GSD 설치기가 만드는 기본값을 임시 디렉터리에 둔다. 설치 결과인 `.codex/`는 PC마다 생성된다.
+예전에 Codex용 GSD를 설치한 체크아웃은 `.codex/gsd-install-state.json`으로 확인할 수 있다. 설치 당시 추가된 `gsd-core`, `skills/gsd-*`, `agents/gsd-*`와 GSD가 생성한 훅 및 설정을 프로젝트 밖에 보관하면 불필요한 GSD 항목이 새 채팅에 표시되지 않는다. 위 세 역할 파일은 저장소 설정이다.
 
-Mac 또는 Linux
-
-```sh
-GSD_HOME="$(mktemp -d)" npx --yes @opengsd/gsd-core@1.20.1 --codex --local --relative-includes --no-legacy-cleanup
-```
-
-Windows PowerShell
-
-```powershell
-$minifiaGsdHome = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "minifia-gsd-" + [guid]::NewGuid().ToString())
-$minifiaPreviousGsdHome = $env:GSD_HOME
-try {
-    $env:GSD_HOME = $minifiaGsdHome
-    npx.cmd --yes '@opengsd/gsd-core@1.20.1' --codex --local --relative-includes --no-legacy-cleanup
-} finally {
-    $env:GSD_HOME = $minifiaPreviousGsdHome
-}
-```
-
-설치한 뒤 프로젝트에서 Codex의 새 채팅을 열고 `$gsd-progress`를 실행한다. CLI에서 페이즈별 계획을 읽기만 하려면 `node .codex/gsd-core/bin/gsd-tools.cjs query init.execute-phase 24`를 실행한다(숫자는 대상 페이즈).
-
-- 두 환경의 GSD 디자인·계획·실행 에이전트는 `.planning/config.json`의 `agent_skills`를 통해 같은 [미니피아 디자인 참고 자료 스킬](../.agents/skills/minifia-design-refs/SKILL.md)을 읽는다. 이 스킬은 Claude 플러그인의 디자인 참고 규칙을 저장소 안에서 쓸 수 있게 옮긴 것이다.
-- Codex에서는 기존 계획의 `@~/.claude-personal/gsd-core/` 참조를 로컬 `.codex/gsd-core/`의 대응 파일로 읽는다. UI 작업은 `design/`에 저장된 승인본을 기준으로 한다. Claude Design 아티팩트 편집은 Claude에서 이어간다.
-- GSD의 Codex 설치기는 세션 시작 업데이트 확인 훅을 제공한다. Claude의 상태줄과 컨텍스트 사용량 경고는 Claude에서 제공된다.
+Claude Code는 위의 Claude용 GSD 설치 절차와 `CLAUDE.md`를 사용한다. 두 환경 모두 `HANDOFF.md`, `.planning/`, `docs/`, `design/`의 기록을 참고한다.
