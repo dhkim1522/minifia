@@ -4,11 +4,12 @@
 
 ## 지금 상태
 
-- **v3.0 시험판(브랜치 `v3`)**: [B안 달빛 누아르](docs/decisions/0093-v3-noir-visual-redesign.md)를 두 맵의 3D 공간·조명, 캐릭터·유령·초상화·의상·배경 이미지, 홈부터 결과까지의 공통 UI에 적용했다. **22** 낮은 토론 → 찬반 → 지목 → 유언 → 처형(결정 0090). **23** 첫날 키워드와 정답 공개, 조기 진행, D1 판 기록(결정 0091). **24-01~07** 구현 완료.
-- **B안 로컬 검증**: 배포용 빌드 4인 스모크 통과. Chrome의 휴대폰 크기에서 두 맵 8인 토론을 각각 15초 측정했다(CPU 4배 감속, DPR 2). 평균 각각 59.94fps, 긴 프레임 0회, 최대 드로 콜 바 69·광장 49, 점광원 각각 3개. 실제 폰 성능은 팀 실테스트 때 확인한다.
+- **v3.0 시험판**(`v3`)에 [B안 달빛 누아르](docs/decisions/0093-v3-noir-visual-redesign.md)를 두 맵의 3D 공간·조명, 캐릭터·유령·초상화·의상·배경 이미지, 홈부터 결과까지의 공통 UI에 적용했다. **22** 낮은 토론 → 찬반 → 지목 → 유언 → 처형(결정 0090). **23** 첫날 키워드와 정답 공개, 조기 진행, D1 판 기록(결정 0091). **24-01~07** 구현 완료.
+- **B안 배포** `2026-11-18T08:56:43Z+763c571d`. `minifia-v3`에서 교체 이미지 69개가 빌드와 일치하고 4인 스모크(방 `2426`)가 통과했다. 원격 D1 판 기록 1→2를 확인했다.
+- **B안 로컬 검증**에서 4인 스모크, 대표 E2E 507개, `npm test` 7,851개가 통과했다. Chrome의 휴대폰 크기에서 두 맵 8인 토론을 각각 15초 측정했다(CPU 4배 감속, DPR 2). 평균 각각 59.94fps, 긴 프레임 0회, 최대 드로 콜 바 69·광장 49, 점광원 각각 3개. 실제 폰 성능은 팀 실테스트 때 확인한다.
 - **24페이즈(결정 0089)**: 둘째 날부터 의심 포스트잇을 쓴다. 혼자 하는 새 튜토리얼과 폰 6종 전체 회귀는 남아 있다.
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`. 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
-- **캐릭터·맵**: 현재 B안 모델은 `src/world/character.ts`, `src/world/ghost3d.ts`, `src/world/maps/`. 시안은 `design/v3.0/redesign/b-noir.png`. 이미지 재생성은 [에셋 자동 검사](docs/screen-map.md#에셋-자동-검사) 참고.
+- **캐릭터·맵**의 B안 모델은 `src/world/character.ts`, `src/world/ghost3d.ts`, `src/world/maps/`에 있다. 시안은 `design/v3.0/redesign/b-noir.png`. 이미지 재생성은 [에셋 자동 검사](docs/screen-map.md#에셋-자동-검사) 참고.
 - **시안**: 사본은 `design/v3.0/`(유령 `ghost3d/` 등). 18.1 헤더 시안 https://claude.ai/artifact/8598QRUVpJ1DaEnrqrtb48 .
 - **맵(결정 0050)**: 재즈 바 + 시계탑 광장(`PLAYABLE_MAPS`, 방장이 고름). 블록아웃 https://claude.ai/artifact/1hzgEyAufgnDPVMvPvxdhP (사본 `design/v2.0/blockout/`).
 - **브랜치**: 지금은 **`v3`**. `v2` 는 v2.0 그대로, `v1` 은 v1.0 배포본 수정 전용, `main` 은 배포된 v1.0. 다른 PC 는 `git fetch` 후 `git switch v3`.
@@ -30,5 +31,5 @@
 
 ## 다음 할 일
 
-1. **24-08 튜토리얼 장면**: 24-07의 로컬 대본·포커스 링·진행 틀을 화면에 연결한다. Codex는 [AGENTS.md](AGENTS.md)의 역할별 직접 위임으로 진행한다.
+1. **24-08 튜토리얼 장면**에 24-07의 로컬 대본·포커스 링·진행 틀을 연결한다. Codex는 [AGENTS.md](AGENTS.md)의 역할별 직접 위임으로 진행한다.
 2. **24 끝**: 폰 6종 전체 회귀 → minifia-v3 배포·smoke → v3.0 실테스트(17 UAT Test 3 폰 2대, v2.0 실기기 칸 `.planning/milestones/v2.0-phases/12-sound-polish/12-TEAM-TEST.md` 포함). 통과하면 main 반영. 판 기록 D1은 `npm run games -- --remote`로 확인한다.
