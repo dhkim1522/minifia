@@ -348,7 +348,7 @@ describe("rolecard.css — 시트 규약", () => {
     expect(rule(".mf-rolecard__tab")).toContain("min-height: var(--tap-min)");
     const sel = rule('.mf-rolecard__tab[aria-selected="true"]');
     expect(sel).toContain("background: var(--noir-raised)");
-    expect(sel).toContain("border-color: var(--noir-silver)");
+    expect(sel).toContain("border-color: var(--noir-accent)");
     expect(sel).toContain("color: var(--noir-paper)");
     const off = rule(".mf-rolecard__tab");
     expect(off).toContain("background: var(--noir-inset)");
@@ -364,11 +364,11 @@ describe("rolecard.css — 시트 규약", () => {
     expect(dot).not.toContain("transition");
   });
 
-  it("액자: 128×160, 반경 6px, 안쪽 여백 8px", () => {
+  it("액자: 128×160, 공통 모서리, 안쪽 여백 8px", () => {
     const art = rule(".mf-rolecard__art");
     expect(art).toContain("width: 128px");
     expect(art).toContain("height: 160px");
-    expect(art).toContain("border-radius: 6px");
+    expect(art).toContain("border-radius: var(--noir-control-radius)");
     expect(art).toContain("padding: 8px");
   });
 

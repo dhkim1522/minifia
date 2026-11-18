@@ -472,7 +472,7 @@ async function checkAssets(origin, isLocal) {
   if (!(og.headers.get("content-type") ?? "").includes("image/png")) fail("/og.png 가 image/png 가 아님");
   await og.arrayBuffer();
   // 배경 WebP(결정 0030): 없는 경로는 SPA 가 index.html 을 200 으로 주므로 content-type·RIFF/WEBP 머리로 파일 존재를 증명한다. 상한은 scenes.test.ts 와 같다.
-  for (const [path, maxKB] of [["/backgrounds/bg_game_night.webp", 48], ["/backgrounds/bg_entry_lobby.webp", 64]]) {
+  for (const [path, maxKB] of [["/backgrounds/bg_game_night.webp", 48], ["/backgrounds/noir-entry.webp", 96]]) {
     const bg = await fetch(`${origin}${path}`);
     if (bg.status !== 200) fail(`${path} 상태 ${bg.status}`);
     if (!(bg.headers.get("content-type") ?? "").includes("image/webp")) fail(`${path} 가 image/webp 가 아님: ${bg.headers.get("content-type")}`);

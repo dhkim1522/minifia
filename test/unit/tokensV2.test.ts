@@ -90,22 +90,23 @@ describe("명조 글꼴 토큰 --font-serif (08-05, UI-SPEC Font)", () => {
     expect(m?.[1] === fam(v2, "serif")).toBe(true);
   });
 
-  it("design/tokens.json type.families.serif 가 v2.0 과 같고 ui 는 그대로다", () => {
+  it("인쇄물의 명조와 조작부의 시스템 산세리프를 구분한다", () => {
     expect(fam(app, "serif") !== undefined).toBe(true);
     expect(fam(app, "serif") === fam(v2, "serif")).toBe(true);
-    expect(fam(app, "ui") === fam(v2, "ui")).toBe(true);
+    expect(fam(app, "ui")).toContain("system-ui");
+    expect(fam(app, "ui")).not.toContain("Gowun");
   });
 
-  it("index.html 은 Gowun Batang 700 과 Gowun Dodum 을 한 요청(같은 호스트)으로 부른다", () => {
+  it("index.html 은 필요한 Gowun Batang 700만 요청한다", () => {
     const links = [...INDEX.matchAll(/<link[^>]*href="(https:\/\/fonts\.googleapis\.com\/css2[^"]*)"/g)].map((m) => m[1] ?? "");
     expect(links.length).toBe(1);
     expect(links[0]?.includes("family=Gowun+Batang:wght@700")).toBe(true);
-    expect(links[0]?.includes("family=Gowun+Dodum")).toBe(true);
+    expect(links[0]?.includes("family=Gowun+Dodum")).toBe(false);
   });
 
-  it("v2.css 의 명조는 단계 제목·배지 숫자·도장·유언 제목 및 인용문에 쓰인다", () => {
+  it("v2.css 의 명조는 배지 숫자·도장·유언 제목 및 인용문에 쓰인다", () => {
     const users = [...V2_CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => (m[2] ?? "").includes("--font-serif")).map((m) => (m[1] ?? "").trim());
-    expect(users.sort()).toEqual([".mv-badge__num", ".mv-phase__title", ".mv-quote--will", ".mv-stamp", ".mv-will__title"]);
+    expect(users.sort()).toEqual([".mv-badge__num", ".mv-quote--will", ".mv-stamp", ".mv-will__title"]);
     expect(V2_CSS.includes("var(--font-serif,")).toBe(false);
   });
 
@@ -227,7 +228,7 @@ describe("귓속말 CSS 규칙 (09.1.1-09)", () => {
     expect(body).toMatch(/background:\s*var\(--noir-sheet-light\), var\(--noir-panel\)/);
     expect(body).toMatch(/border:\s*1px solid/);
     expect(body).toMatch(/border-color:\s*var\(--noir-line\)/);
-    expect(body).toMatch(/border-radius:\s*8px/);
+    expect(body).toMatch(/border-radius:\s*var\(--noir-control-radius\)/);
     expect(body).toMatch(/padding:\s*12px/);
     expect(body).toMatch(/width:\s*calc\(100% - 20px\)/);
   });
@@ -300,7 +301,7 @@ describe("마지막 3인 CSS 규칙 (09.1.1-15)", () => {
     expect(q).toMatch(/border:\s*1\.5px solid/);
     expect(q).toMatch(/border-color:\s*var\(--noir-silver\)/);
     expect(q).toMatch(/background:\s*color-mix\(in srgb, var\(--noir-inset\) 96%, transparent\)/);
-    expect(q).toMatch(/border-radius:\s*7px/);
+    expect(q).toMatch(/border-radius:\s*var\(--noir-control-radius\)/);
     expect(q).toMatch(/padding:\s*var\(--space-sm\) var\(--space-md\)/);
     expect(q).toMatch(/color:\s*var\(--gray-50\)/);
     expect(q).toMatch(/word-break:\s*keep-all/);

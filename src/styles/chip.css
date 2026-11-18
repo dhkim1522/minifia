@@ -4,8 +4,8 @@
   appearance: none; display: inline-flex; align-items: center; gap: var(--space-xs); max-width: 100%;
   min-height: var(--tap-min); padding: 0 var(--space-md);
   font: inherit; font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap;
-  color: var(--gray-100); background: var(--night-700); border: 1px solid var(--night-600);
-  border-radius: var(--radius-pill); cursor: pointer; touch-action: manipulation;
+  color: var(--noir-paper); background: var(--noir-raised); border: 1px solid var(--noir-line);
+  border-radius: var(--noir-control-radius); cursor: pointer; touch-action: manipulation;
   transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 .mf-chip:active:not(:disabled) { transform: scale(0.96); }

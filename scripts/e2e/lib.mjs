@@ -20,7 +20,7 @@ export const LOBBY_EXTRA_SIZES = LOBBY_SIZES.filter((s) => !DEFAULT_SIZES.some((
 export const OVERLAP_EPS = 0.5;
 /** 탭 대상 하한(px). */
 export const TAP_MIN = 44;
-/** index.html 이 불러오는 Gowun Dodum 글꼴 호스트 — 대상 주소 밖에서 요청을 허용하는 유일한 두 곳. */
+/** index.html 이 불러오는 Gowun Batang 글꼴 호스트 — 대상 주소 밖에서 요청을 허용하는 유일한 두 곳. */
 export const FONT_HOSTS = ["fonts.googleapis.com", "fonts.gstatic.com"];
 export const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 export const MAX_PARALLEL = 3;
@@ -1426,10 +1426,10 @@ export function nameTagFitChecks(tags, { expectTexts = [] } = {}) {
   return result("NT1", label, bad);
 }
 
-/** 맨 앞 겹침 이름표 면 알파 하한: overlay-ink-strong(0.92). */
-export const TAG_FRONT_ALPHA_MIN = 0.9;
-/** 겹치지 않는 이름표 면 알파 상한: overlay-ink(0.8) 유지. */
-export const TAG_BASE_ALPHA_MAX = 0.85;
+/** 자신의 이름표와 겹침 묶음의 맨 앞 이름표는 불투명하다. */
+export const TAG_FRONT_ALPHA_MIN = 0.99;
+/** 다른 이름표는 배경이 조금 비치는 짙은 청회색 면(#172234ee)이다. */
+export const TAG_BASE_ALPHA_MAX = 0.96;
 
 /** CSS 색 문자열의 알파: "rgba(14, 19, 38, 0.92)" → 0.92, "rgb(…)" → 1, "transparent" → 0, 읽지 못하면 NaN. */
 export function cssAlpha(color) {
@@ -1446,14 +1446,10 @@ export function cssAlpha(color) {
   return Number.isFinite(v) ? v : Number.NaN;
 }
 
-/**
- * NT3 겹친 이름표(UI-SPEC E2, G-06-4): ① 사각형이 겹치는 쌍은 z-index 가 서로 달라 앞뒤가 정해진다 ② 내 이름표가 모두의 위
- * ③ 다른 이름표와 겹치고 겹친 모두보다 위에 있는 맨 앞 이름표의 면은 overlay-ink-strong(알파 ≥ TAG_FRONT_ALPHA_MIN)
- * ④ 어떤 이름표와도 겹치지 않는 이름표의 면은 overlay-ink 80%(알파 ≤ TAG_BASE_ALPHA_MAX).
- * tags = [{ seat, me, rect, z, face }] (face = .mv-tag 의 계산된 배경색). 겹치는 쌍이 없어도 ②·④는 판정한다.
- */
+/** 이름표가 겹치면 z-index 순서와 맨 앞의 불투명도를 검사한다.
+ * 모든 이름표에서 실제 닉네임 글자 대비와 자신의 밝은 면·다른 사람의 어두운 면을 확인한다. */
 export function tagStackChecks(tags) {
-  const label = "겹친 이름표: 내 이름표 맨 위·맨 앞 면 짙음·안 겹치면 80%";
+  const label = "내 이름표 맨 위·본인과 선택한 대상의 밝은 면·상대의 어두운 면·글자 대비";
   if (!Array.isArray(tags) || tags.length === 0) return result("NT3", label, ["측정값 없음(이름표가 없음)"]);
   const bad = [];
   const touching = tags.map(() => []);
@@ -1472,20 +1468,26 @@ export function tagStackChecks(tags) {
       if (Number.isFinite(me.z) && Number.isFinite(o.z) && me.z <= o.z) bad.push(`내 이름표(자리 ${me.seat}) z ${me.z} 가 자리 ${o.seat} z ${o.z} 보다 위가 아님`);
     }
   }
-  let faceMissing = false;
   tags.forEach((t, i) => {
+    const face = parseRgb(t.face);
     const alpha = cssAlpha(t.face);
-    const nearby = touching[i];
-    const isFront = nearby.length > 0 && nearby.every((j) => Number.isFinite(t.z) && Number.isFinite(tags[j].z) && t.z > tags[j].z);
-    if (nearby.length > 0 && !isFront) return;
-    if (!Number.isFinite(alpha)) {
-      faceMissing = true;
+    const contrast = contrastRatio(t.ink, t.face);
+    if (!face || !Number.isFinite(alpha)) {
+      bad.push(`자리 ${t.seat} 측정값 없음(면 색)`);
       return;
     }
-    if (isFront && alpha < TAG_FRONT_ALPHA_MIN) bad.push(`자리 ${t.seat} 맨 앞 겹침 이름표 면 알파 ${alpha} < ${TAG_FRONT_ALPHA_MIN} (overlay-ink-strong 이어야 함)`);
-    if (nearby.length === 0 && alpha > TAG_BASE_ALPHA_MAX) bad.push(`자리 ${t.seat} 겹치지 않는 이름표 면 알파 ${alpha} > ${TAG_BASE_ALPHA_MAX} (overlay-ink 80% 여야 함)`);
+    const bright = t.me || t.selected;
+    const luminance = relLuminance(face);
+    if (bright ? luminance < 0.6 : luminance > 0.10) bad.push(`자리 ${t.seat} ${bright ? "밝은" : "어두운"} 이름표 면 기대, 측정 ${t.face}`);
+    if (contrast === null || contrast < 4.5) bad.push(`자리 ${t.seat} 닉네임 대비 ${contrast ?? "측정값 없음"} (4.5 이상)`);
+    const nearby = touching[i];
+    const isFront = nearby.length > 0 && nearby.every((j) => Number.isFinite(t.z) && Number.isFinite(tags[j].z) && t.z > tags[j].z);
+    if (bright || isFront) {
+      if (alpha < TAG_FRONT_ALPHA_MIN) bad.push(`자리 ${t.seat} 밝은 면 또는 맨 앞 면 알파 ${alpha} < ${TAG_FRONT_ALPHA_MIN}`);
+    } else if (alpha < 0.9 || (nearby.length === 0 && alpha > TAG_BASE_ALPHA_MAX)) {
+      bad.push(`자리 ${t.seat} 상대 이름표 기본 면 알파 ${alpha}`);
+    }
   });
-  if (faceMissing) bad.push("측정값 없음(면 색)");
   return result("NT3", label, bad);
 }
 

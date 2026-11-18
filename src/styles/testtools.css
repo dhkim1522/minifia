@@ -5,8 +5,8 @@
 .mf-tt {
   appearance: none; flex: none; display: inline-flex; align-items: center; gap: 6px;
   min-width: var(--tap-min); min-height: var(--tap-min); padding: 0 12px;
-  border-radius: var(--radius-md); border: 1px dashed var(--gray-300);
-  background: color-mix(in srgb, var(--night-900) 86%, transparent); color: var(--gray-100);
+  border-radius: var(--noir-control-radius); border: 1px dashed var(--noir-silver);
+  background: color-mix(in srgb, var(--noir-panel) 92%, transparent); color: var(--noir-paper);
   font: 700 14px/1.4 var(--font-ui); cursor: pointer; touch-action: manipulation;
 }
 .mf-tt:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }

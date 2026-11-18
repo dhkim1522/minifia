@@ -4,6 +4,7 @@ import { SCENES, SCENE_FADE_MS, SCENE_IMAGE_WAIT_MS, headerScrimGradient, nightV
 import type { SceneId } from "../game/scenes";
 import { backdropUrl } from "../net/assets";
 import "../styles/atmosphere.css";
+import "../styles/entry.css";
 
 type LayerState = "entering" | "current" | "leaving";
 interface Layer {
@@ -119,13 +120,13 @@ export function Backdrop(props: BackdropProps) {
     return () => window.clearTimeout(timer);
   }, [leavingKey]);
 
-  const classes = ["mf-backdrop", `mf-backdrop--${scene}`, className].filter(Boolean).join(" ");
+  const classes = ["mf-backdrop", `mf-backdrop--${scene}`, layout === "entry" && "mf-entry-scene", className].filter(Boolean).join(" ");
   return (
     <div className={classes} ref={rootRef}>
       {layers.map((l) => {
         const style: CSSProperties & Record<string, string> = {
           backgroundImage: `url("${urlOf(layout, l.scene)}")`,
-          backgroundPosition: "center top",
+          backgroundPosition: layout === "entry" ? "center center" : "center top",
         };
         if (SCENES[l.scene].scrim) style["--mf-scrim"] = headerScrimGradient();
         // 비네팅은 night 그림 층의 자식이라 층의 0.8초 크로스페이드를 그대로 따른다(재접속 instant 는 한 층이라 바로 켜진 상태).

@@ -181,13 +181,14 @@ const LIMIT_KB: Record<string, number> = {
 };
 const TOTAL_LIMIT_KB = 260;
 
-describe("public/backgrounds (WebP 일곱 개, 옛 SVG 는 없다)", () => {
-  it("정확히 WebP 일곱 개뿐이고 SVG 는 없다 (원본은 design/ 에만)", () => {
-    expect(readdirSync("public/backgrounds").sort()).toEqual(EXPECTED_FILES);
+describe("public/backgrounds (무대 일곱 장과 입장 원화)", () => {
+  it("무대 배경과 새 입장 원화가 모두 있다", () => {
+    expect(readdirSync("public/backgrounds").sort()).toEqual([...EXPECTED_FILES, "noir-entry.webp"]);
+    expect(statSync("public/backgrounds/noir-entry.webp").size).toBeLessThanOrEqual(96 * KB);
   });
 
   it("각 파일은 RIFF…WEBP 머리를 갖는다", () => {
-    for (const name of EXPECTED_FILES) {
+    for (const name of [...EXPECTED_FILES, "noir-entry.webp"]) {
       const head = readFileSync(`public/backgrounds/${name}`).subarray(0, 12);
       expect(head.subarray(0, 4).toString("latin1"), `${name} RIFF`).toBe("RIFF");
       expect(head.subarray(8, 12).toString("latin1"), `${name} WEBP`).toBe("WEBP");

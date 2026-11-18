@@ -15,18 +15,37 @@
 .mf-lobby__header { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-toast); box-sizing: border-box; height: 62px; padding: var(--space-sm) var(--space-md) 0; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); pointer-events: none; }
 .mf-lobby__header .mf-btn, .mf-lobby__header .mv-tool { pointer-events: auto; }
 .mf-lobby__header-gap { flex: none; width: var(--tap-min); height: var(--tap-min); }
-.mf-lobby__header .mv-phase { flex: 1 1 auto; min-width: 0; justify-content: center; text-align: center; }
-.mf-lobby__header .mv-phase__text { align-items: center; }
+.mf-lobby__header .mv-phase { flex: 1 1 auto; min-width: 0; justify-content: flex-start; text-align: left; }
+.mf-lobby__header .mv-phase__text { min-height: var(--tap-min); justify-content: center; }
+.mf-lobby__header .mv-phase__title { font: 700 19px/1.2 var(--font-ui); color: var(--noir-paper); }
 .mf-lobby__header .mv-phase__title, .mf-lobby__header .mv-phase__hint { text-shadow: var(--shadow-text); }
 /* 접히는 안내 줄 높이(한 줄)만큼만 헤더 아래로 삐져나온다 */
 .mf-lobby__header .mv-phase__text { gap: 0; }
+
+/* 코드를 누르거나 공유 아이콘을 눌러 같은 초대 시트를 연다. */
+.mf-lobby__invite {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding-inline-start: 12px;
+  border-radius: var(--noir-control-radius);
+  background: var(--noir-panel);
+  box-shadow: inset 0 0 0 1px var(--noir-line);
+  color: var(--noir-paper);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.09em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.mf-lobby__invite .mv-tool__face { background: transparent; border-color: transparent; box-shadow: none; }
 
 /* [테스트] 버튼 자리: 헤더 아래 8, 왼쪽 16 (16-06: 맵 칩은 오른쪽 열로 옮겨 가 이 자리에는 [테스트]만 남는다) */
 .mf-lobby__test { position: absolute; top: calc(var(--mf-host-bottom, 62px) + 8px); left: var(--space-md); z-index: var(--z-overlay); display: flex; align-items: flex-start; gap: var(--space-sm); }
 
 /* 아래 패널: night-800 97%, 위 모서리 radius-lg, 안쪽 14 16 22. 위에서부터 채팅 기록 칸(LOG_H 96·152) + 입력줄(48) + 행동 줄(52), 사이 간격은 부품 8 · 패널 10 → 높이 LOG_H + 154 (07-13).
    채팅 없는 6페이즈 때는 행동 줄 하나라 88 이었다. 높이는 DOM 에서 재서 스테이지 사각형에 넘기므로 식이 바뀌어도 카메라가 따라간다. */
-.mf-lobby__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: var(--noir-sheet-light), color-mix(in srgb, var(--noir-panel) 97%, transparent); border-radius: 9px 9px 0 0; box-shadow: var(--noir-rail); }
+.mf-lobby__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: var(--noir-panel); box-shadow: inset 0 1px var(--noir-line); }
 
 /* 재접속 띠(떠 있는 변형): 방 화면 루트(.mf-room) 위에 헤더 아래 top 72, 가로 전체. 높이 52·문구·아이콘·색은 v1.0 그대로. 흐름을 밀지 않는다. */
 .mf-reconnect--floating { position: absolute; top: 72px; left: 0; right: 0; z-index: calc(var(--z-overlay) + 2); }

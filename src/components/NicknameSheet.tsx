@@ -6,8 +6,9 @@ import { TextField } from "./TextField";
 import { validateNickname } from "../../shared/nickname";
 
 export interface NicknameSheetProps {
-  /** 방 만들기 후 열렸는지, 코드 참가 후 열렸는지. 제출 버튼 글자만 다르다 */
+  /** 방 만들기와 코드 참가에 맞춰 시트 제목과 제출 동작을 표시한다. */
   mode: "create" | "join";
+  roomCode: string;
   nickname: string;
   onNicknameChange: (v: string) => void;
   error?: string | null;
@@ -19,9 +20,10 @@ export interface NicknameSheetProps {
 
 // 첫 화면에서 [방 만들기]·[참가] 를 누르면 올라오는 닉네임 시트(S-01, 결정 0014).
 // 마지막에 쓴 닉네임은 미리 채워져 있고, 열릴 때 쓸 수 있는 닉네임이 채워져 있으면 포커스는 제출 버튼, 아니면 입력칸에 간다.
-export function NicknameSheet({ mode, nickname, onNicknameChange, error, submitDisabled, onSubmit, onClose }: NicknameSheetProps) {
+export function NicknameSheet({ mode, roomCode, nickname, onNicknameChange, error, submitDisabled, onSubmit, onClose }: NicknameSheetProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const submitRef = useRef<HTMLButtonElement>(null);
+  const title = mode === "create" ? "방 만들기" : `방 ${roomCode} 참가`;
   const submitLabel = mode === "create" ? "만들기" : "참가하기";
 
   const handleSubmit = (e: FormEvent) => {
@@ -31,10 +33,10 @@ export function NicknameSheet({ mode, nickname, onNicknameChange, error, submitD
 
   return (
     // 미리 채운 닉네임이 쓸 수 있으면 포커스를 제출 버튼에 둬 키패드가 저절로 뜨지 않게 한다. 비어 있거나 고쳐야 하면 입력칸.
-    <Sheet label="내 닉네임" onClose={onClose} initialFocusRef={validateNickname(nickname).ok ? submitRef : inputRef} showClose>
+    <Sheet label={title} onClose={onClose} initialFocusRef={validateNickname(nickname).ok ? submitRef : inputRef} showClose>
       <form className="mf-nick-sheet" onSubmit={handleSubmit}>
-        <h2 className="mf-t-heading mf-sheet__title">내 닉네임</h2>
-        <TextField label="닉네임" kind="nickname" value={nickname} onChange={onNicknameChange} error={error} inputRef={inputRef} />
+        <h2 className="mf-t-heading mf-sheet__title">{title}</h2>
+        <TextField label="닉네임" kind="nickname" placeholder="닉네임 입력" value={nickname} onChange={onNicknameChange} error={error} inputRef={inputRef} />
         <Button ref={submitRef} variant="primary" block type="submit" disabled={submitDisabled}>
           {submitLabel}
         </Button>

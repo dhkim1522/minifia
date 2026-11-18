@@ -152,13 +152,13 @@ describe("채팅 입력줄 단추 (TOOL-04, D-01)", () => {
     expectTextControl(container.querySelector("button[data-chat-newdot]"), "새 글", { name: "새 글" });
   });
 
-  it("머리 단추 CSS(V-1): 44×44 정사각, 모서리 radius-badge, 누아르 패널과 1px 구분선, 비활성은 불투명도만", () => {
+  it("머리 단추 CSS(V-1): 44×44 정사각, 공통 모서리, 누아르 패널과 1px 구분선, 비활성은 불투명도만", () => {
     const tool = rule(".mv-tool");
     expect(tool).toMatch(/(^|[;\s])width:\s*var\(--tap-min\)/);
     expect(tool).toMatch(/(^|[;\s])height:\s*var\(--tap-min\)/);
     expect(tool).not.toContain("max-width");
     expect(tool).not.toContain("flex-direction: column");
-    expect(rule(".mv-tool--head")).toContain("border-radius: var(--radius-badge)");
+    expect(rule(".mv-tool--head")).toContain("border-radius: var(--noir-control-radius)");
     const face = rule(".mv-tool--head .mv-tool__face");
     expect(face).toContain("background: var(--noir-panel)");
     expect(face).toMatch(/border: 1px solid/);
@@ -166,12 +166,12 @@ describe("채팅 입력줄 단추 (TOOL-04, D-01)", () => {
     expect(rule('.mv-tool[aria-disabled="true"]')).toContain("opacity: 0.45");
   });
 
-  it("입력줄 단추(V-6, A5): 동작·보내기·유언은 48(--control-input) 원이다", () => {
+  it("입력줄 단추(V-6, A5): 동작·보내기·유언은 48(--control-input) 타일이다", () => {
     for (const sel of [".mv-chat__emote", ".mv-chat__send", ".mv-chat__will"]) {
       const r = rule(sel);
       expect(r, sel).toContain("width: var(--control-input)");
       expect(r, sel).toContain("height: var(--control-input)");
-      expect(r, sel).toContain("border-radius: var(--radius-pill)");
+      expect(r, sel).toContain("border-radius: var(--noir-control-radius)");
     }
   });
 
@@ -191,9 +191,9 @@ describe("채팅 입력줄 단추 (TOOL-04, D-01)", () => {
     }
   });
 
-  it("빛남: 머리 단추 .is-call 의 빛 모서리는 면(radius-badge)을 따르고, 유언 단추는 원(pill)이다", () => {
-    expect(rule(".mv-tool--head.is-call::after")).toContain("border-radius: var(--radius-badge)");
-    expect(rule(".mv-chat__will.is-call::after")).toContain("border-radius: var(--radius-pill)");
+  it("빛남: 머리 단추 .is-call 의 빛 모서리는 머리와 유언 타일의 모서리를 따른다", () => {
+    expect(rule(".mv-tool--head.is-call::after")).toContain("border-radius: inherit");
+    expect(rule(".mv-chat__will.is-call::after")).toContain("border-radius: inherit");
   });
 });
 

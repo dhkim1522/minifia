@@ -653,10 +653,10 @@ describe("ActionButton·ActionRow (UI-SPEC 행동 줄, E6)", () => {
     expect((two.container.querySelector(".mf-act-row") as HTMLElement).style.gridTemplateColumns).toBe("repeat(2, minmax(0, 1fr))");
   });
 
-  it("행동 버튼 높이 52px, 반경 5px, 한 줄 글자 16px 700, 안쪽 여백 0 12px, 간격 8px", () => {
+  it("행동 버튼 높이 52px, 공통 모서리, 한 줄 글자 16px 700, 안쪽 여백 0 12px, 간격 8px", () => {
     const btnRule = rulesFor(V2_CSS, ".mf-act")[0] ?? "";
     expect(btnRule).toContain("min-height: var(--control-button)");
-    expect(btnRule).toContain("border-radius: 5px");
+    expect(btnRule).toContain("border-radius: var(--noir-control-radius)");
     expect(btnRule).toMatch(/border: 1px solid/);
     expect(btnRule).toContain("font-size: 16px");
     expect(btnRule).toContain("font-weight: 700");
@@ -674,8 +674,8 @@ describe("ActionButton·ActionRow (UI-SPEC 행동 줄, E6)", () => {
     expect(svg?.getAttribute("width")).toBe("22");
   });
 
-  it("행동 버튼은 기본 종이색, 비활성 남색·불투명도 0.45, 보조 버튼은 투명", () => {
-    expect(V2_CSS).toMatch(/\.mf-act--primary\s*\{[^}]*background: var\(--noir-paper\)[^}]*color: var\(--noir-ink\)/);
+  it("행동 버튼은 기본 금빛, 비활성 남색·불투명도 0.45, 보조 버튼은 투명", () => {
+    expect(V2_CSS).toMatch(/\.mf-act--primary\s*\{[^}]*background: var\(--noir-accent\)[^}]*color: var\(--noir-ink\)/);
     expect(V2_CSS).toMatch(/\.mf-act--inactive\s*\{[^}]*background: var\(--noir-raised\)[^}]*border-color: var\(--noir-line\)[^}]*opacity: 0\.45/);
     expect(V2_CSS).toMatch(/\.mf-act--flat\s*\{[^}]*background: transparent[^}]*color: var\(--gray-300\)/);
   });

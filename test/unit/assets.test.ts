@@ -97,12 +97,12 @@ describe("그림 URL 헬퍼", () => {
     expect(backdropUrl("game", "day")).toBe(`/backgrounds/bg_game_day.webp?v=${ASSET_VERSION}`);
     expect(backdropUrl("game", "night")).toBe(`/backgrounds/bg_game_night.webp?v=${ASSET_VERSION}`);
     expect(backdropUrl("game", "verdictDusk")).toBe(`/backgrounds/bg_game_verdict_dusk.webp?v=${ASSET_VERSION}`);
-    expect(backdropUrl("entry", "lobby")).toBe(`/backgrounds/bg_entry_lobby.webp?v=${ASSET_VERSION}`);
+    expect(backdropUrl("entry", "lobby")).toBe(`/backgrounds/noir-entry.webp?v=${ASSET_VERSION}`);
   });
 
   it("배경: entry 구도는 lobby 장면만 받는다 (타입)", () => {
     // @ts-expect-error -- entry 구도에는 lobby 가 아닌 장면이 없다
-    expect(backdropUrl("entry", "night")).toBe(`/backgrounds/bg_entry_night.webp?v=${ASSET_VERSION}`);
+    backdropUrl("entry", "night");
   });
 });
 
@@ -167,7 +167,7 @@ describe("일지 색 토큰 (UI-SPEC 새 토큰 12개)", () => {
 describe("미리 받기 목록", () => {
   it("입장 화면 목록: 입장·대기실 배경(WebP)과 인물 8종", () => {
     const hrefs = entryPreloadList().map((item) => item.href);
-    expect(hrefs).toContain(`/backgrounds/bg_entry_lobby.webp?v=${ASSET_VERSION}`);
+    expect(hrefs).toContain(`/backgrounds/noir-entry.webp?v=${ASSET_VERSION}`);
     expect(hrefs).toContain(`/backgrounds/bg_game_lobby.webp?v=${ASSET_VERSION}`);
     expect(hrefs.some((h) => h.endsWith(".svg"))).toBe(false);
     for (let seat = 0; seat < FIGURE_IDS.length; seat++) expect(hrefs).toContain(figureSrc(seat).src);

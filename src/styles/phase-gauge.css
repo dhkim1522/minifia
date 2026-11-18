@@ -22,7 +22,7 @@
 
 .mf-game-phase-header[data-discussion-header] .mv-phase__title {
   color: #fbf5e9;
-  font: 700 19px/1.2 "Apple SD Gothic Neo", system-ui, "Noto Sans KR", "Malgun Gothic", sans-serif;
+  font: 700 19px/1.2 var(--font-ui);
   text-shadow: 0 2px 4px #0c1322;
 }
 
@@ -36,7 +36,7 @@
   border: 1px solid #68758b82;
   border-radius: 11px;
   background: #1c2638dc;
-  color: #f8f0e3;
+  color: var(--noir-paper);
 }
 
 .mf-game-menu__sound {

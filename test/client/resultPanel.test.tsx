@@ -110,12 +110,12 @@ describe("마피아 탭: 확장 (D-3, D-9)", () => {
     expect(order).toEqual(["|1밤", "오늘 밤은 지우", "좋아", "|2밤", "다음은 하윤"]);
   });
 
-  it("줄은 이름 점(자리 구분색) + 닉네임 + 본문 모양이다", () => {
+  it("줄은 좌석 초상화 + 닉네임 + 본문 모양이다", () => {
     const { container } = open();
     const first = container.querySelector<HTMLElement>(".mv-chat__msg")!;
     expect(first.getAttribute("data-seat")).toBe("3");
     expect(text(first.querySelector(".mv-chat__name"))).toBe("도현");
-    expect(first.querySelector<HTMLElement>(".mv-chat__dot")!.style.background).toContain("var(--seat-4)");
+    expect(first.querySelector(".mv-chat__avatar")?.getAttribute("src")).toBe(faceSrc(3));
   });
 
   it("높이는 expandedHeight 로 정해진다 (인라인 height)", () => {

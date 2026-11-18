@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { CSSProperties, FormEvent } from "react";
 import type { ApiErrorCode, RoomPreview } from "../../shared/protocol";
 import { NICKNAME_MAX_GRAPHEMES, validateNickname } from "../../shared/nickname";
 import { unlockAudio } from "../audio/unlock";
@@ -11,6 +11,7 @@ import { Toast, useToast } from "../components/Toast";
 import { getPreview, joinRoom } from "../net/api";
 import { messageForApiError, nicknameErrorText } from "../net/copy";
 import { loadLastNickname, saveLastNickname } from "../net/session";
+import { useVisualViewportHeight } from "../net/useKeyboardLift";
 import { preloadWorld } from "../world/runtime";
 
 interface JoinByLinkProps {
@@ -60,6 +61,7 @@ export function JoinByLink({ code, notice, onEnterRoom, onHome }: JoinByLinkProp
   const { toast, show } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const focused = useRef(false);
+  const viewportHeight = useVisualViewportHeight(true);
   // 방이 없어졌거나 시작되면 더 받지 않는다. 참가 거절로 알게 된 경우도 같다.
   const stopped = useRef(false);
 
@@ -244,9 +246,9 @@ export function JoinByLink({ code, notice, onEnterRoom, onHome }: JoinByLinkProp
 
   return (
     <Backdrop layout="entry" scene="lobby">
-      <main className={`mf-root mf-entry mf-join${compact && !blocked ? " mf-join--many" : ""}`}>
+      <main style={{ "--entry-height": `${viewportHeight}px` } as CSSProperties} className={`mf-root mf-entry mf-join${compact && !blocked ? " mf-join--many" : ""}`}>
         <header className="mf-entry__head">
-          <p className="mf-t-label">Minifia에 초대받았어요</p>
+          <p className="mf-t-label">미니피아 초대장</p>
           <h1 className="mf-t-display">{`방 ${code}`}</h1>
         </header>
         {body}

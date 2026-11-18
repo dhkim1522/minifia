@@ -51,8 +51,8 @@
    마피아면 테두리 crimson-500·글자 crimson-300(UI-SPEC 407행 진홍 ⑦), 아니면 테두리 night-600·글자 gray-100. 결과 알림(+5)보다 위·막(+8)보다 아래. 가운데 맞춤은 left 로 해서 transform 은 등장 모션이 쓴다. */
 .mf-police-card {
   position: absolute; left: calc(50% - 110px); top: 170px; z-index: calc(var(--z-toast) + 6); box-sizing: border-box; width: 220px;
-  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: var(--space-md); border-radius: 20px;
-  background: var(--night-800); border: 2px solid var(--night-600); box-shadow: var(--shadow-card); pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: var(--space-md); border-radius: 14px;
+  background: var(--noir-panel); border: 1px solid var(--noir-line); box-shadow: var(--shadow-card); pointer-events: none;
 }
 .mf-police-card.is-mafia { border-color: var(--crimson-500); }
 .mf-police-card.is-enter { animation: mf-police-in var(--dur-med) var(--ease-out) both; }
@@ -74,7 +74,7 @@
 .mf-game__panel[data-will-hide-panel="true"] { visibility: hidden; pointer-events: none; }
 .mf-will-layer[data-panel-hidden="true"] { bottom: calc(var(--mf-kb-lift, 0px) + 8px); }
 /* 밤 시민 편 아래 행동 줄 [유언] (UI-SPEC 237행): night-700 면·gray-100 글자, 눌리면 gray-100 면 + night-900 글자. 진홍·놋쇠는 쓰지 않는다 */
-.mf-game__will { background: var(--night-700); border-color: var(--night-600); color: var(--gray-100); }
+.mf-game__will { background: var(--noir-raised); border-color: var(--noir-line); color: var(--noir-paper); }
 .mf-game__will[aria-pressed="true"] { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
 .mf-game__will[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 /* 저장 표시(0083-6): 깃펜 아이콘 오른쪽 위 점 — 채팅 깃펜 점(.mv-chat__will-dot)과 같은 크기·색. 눌린 면(gray-100)에서는 night-900 으로 뒤집어 보인다 */
@@ -83,7 +83,7 @@
 .mf-game__will[aria-pressed="true"] .mf-game__will-dot { background: var(--night-900); }
 
 /* 밤 마피아 아래 행동 줄 [쪽지] (UI-SPEC 228행): 면 night-700·글자 gray-100. 진홍은 아이콘 하나에만(면·테두리에는 쓰지 않는다), 확정 전은 불투명도 0.45 */
-.mf-game__note { background: var(--night-700); border-color: var(--night-600); color: var(--gray-100); }
+.mf-game__note { background: var(--noir-raised); border-color: var(--noir-line); color: var(--noir-paper); }
 .mf-game__note-icon { display: inline-flex; color: var(--crimson-300); }
 .mf-game__note[aria-pressed="true"] { background: var(--gray-100); border-color: var(--gray-100); color: var(--night-900); }
 .mf-game__note[aria-disabled="true"] { opacity: 0.45; cursor: default; }

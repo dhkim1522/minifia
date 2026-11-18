@@ -193,7 +193,7 @@ export async function startHost(ctx, flowId, { nickname = HOST_NICK, initScripts
   ctx.host = host;
   const v = host.tracker.last();
   rec(`${flowId}/setup`, "S1", "방장으로 연결", v?.me?.isHost === true && v?.me?.testMode === true, `isHost ${v?.me?.isHost}, testMode ${v?.me?.testMode}`);
-  rec(`${flowId}/setup`, "S2", "글꼴 Gowun Dodum", host.fontOk, host.fontDetail);
+  rec(`${flowId}/setup`, "S2", "대기실 시스템 글꼴 준비", host.fontOk, host.fontDetail);
   return host;
 }
 
@@ -254,10 +254,10 @@ async function lobbyFlow(ctx) {
   const sideHost = await readSideColumn(page);
   for (const r of sideColumnChecks({ viewport: { w, h }, screen: "lobby", host: true, ...sideHost })) recOne(rec, "lobby/lobby", r);
 
-  // 방 코드는 헤더에 없고 공유 시트 안에서만 보인다
+  // 헤더의 방 코드와 초대 시트의 방 코드가 일치한다
   const share = await attempt(async () => {
     const headerText = await page.locator(".mf-lobby__header").innerText();
-    if (headerText.includes(ctx.roomCode)) return { ok: false, detail: "헤더에 방 코드가 보임" };
+    if (!headerText.includes(ctx.roomCode)) return { ok: false, detail: "헤더에 방 코드가 없음" };
     await page.locator('.mf-lobby__header [aria-label="공유"]').click();
     await page.waitForSelector("dialog[open]", { timeout: 3000 });
     const text = await page.locator("dialog[open]").first().innerText();
@@ -266,7 +266,7 @@ async function lobbyFlow(ctx) {
     await page.waitForSelector("dialog[open]", { state: "detached", timeout: 3000 });
     return { ok: inSheet, detail: "공유 시트 안에 방 코드가 없음" };
   });
-  rec("lobby/lobby", "L10", "방 코드는 공유 시트 안에서만", share.ok, share.detail);
+  rec("lobby/lobby", "L10", "헤더와 공유 시트에 같은 방 코드", share.ok, share.detail);
 
   // [테스트] 자리(L1·L2 의 새 판): 헤더 아래 왼쪽, 눌림, 다른 조작과 안 겹침
   const tt = s1.tt;

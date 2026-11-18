@@ -108,7 +108,7 @@ describe("Lobby — 맵 로비 틀 (MAP-01, 06-15)", () => {
     expect(props().exiting).toBe(true);
   });
 
-  it("헤더: 왼쪽 [나가기]·가운데 '대기실'·오른쪽 [공유], 방 코드는 어디에도 보이지 않는다 (3초 규칙)", () => {
+  it("헤더에 제목과 방 코드를 표시하고 공유 아이콘과 코드를 함께 누를 수 있다", () => {
     const { container } = render(lobby(view));
     const header = container.querySelector(".mf-lobby__header") as HTMLElement;
     expect(within(header).getByRole("button", { name: "나가기" })).toBeTruthy();
@@ -120,7 +120,7 @@ describe("Lobby — 맵 로비 틀 (MAP-01, 06-15)", () => {
     expect([leave.hasAttribute("data-tool-label"), share.hasAttribute("data-tool-label")]).toEqual([false, false]);
     expect([leave.textContent, share.textContent]).toEqual(["", ""]);
     expect(header.querySelector(".mv-tool__label")).toBeNull();
-    expect(container.textContent).not.toContain("0042");
+    expect(within(header).getByText("0042").closest("label")?.control).toBe(share);
     expect(container.querySelector(".mf-lobby__code") === null).toBe(true);
     // 14-02(U-2): 읽을 글은 '대기실' 하나뿐 — 안내 줄은 자막 띠가 맡는다
     expect(header.querySelectorAll(".mv-phase__title").length).toBe(1);
@@ -898,7 +898,7 @@ describe("Lobby — [나가기] 로 방 나가기 (D-17, WR-01)", () => {
 describe("Lobby — 공유 시트와 끊긴 사람 내보내기 (ROOM-01, D-16)", () => {
   const shareDialog = () => screen.getByRole("dialog", { name: "친구 초대하기" });
 
-  it("헤더 [공유](aria-label) → '친구 초대하기' 시트(방 코드는 여기서만 보임), 방장도 참가자도 같다", () => {
+  it("헤더 [공유](aria-label) → '친구 초대하기' 시트(헤더와 같은 코드), 방장도 참가자도 같다", () => {
     for (const mySeat of [0, 1]) {
       const { unmount } = render(lobby(makeView([player(0, "민수"), player(1, "서준")], mySeat)));
       expect(screen.queryByRole("dialog")).toBeNull();
@@ -980,9 +980,9 @@ describe("Lobby — 스타일 계약 (lobby.css)", () => {
     expect(css).toMatch(/\.mf-lobby__scrim[^}]*120px/);
   });
 
-  it("아래 패널은 누아르 패널 97%와 위쪽 모서리 9px", () => {
-    expect(css).toMatch(/\.mf-lobby__panel[^}]*var\(--noir-panel\)\s+97%/);
-    expect(css).toMatch(/\.mf-lobby__panel[^}]*border-radius:\s*9px 9px 0 0/);
+  it("아래 패널과 상단 경계선은 공통 색을 쓴다", () => {
+    expect(css).toMatch(/\.mf-lobby__panel[^}]*background:\s*var\(--noir-panel\)/);
+    expect(css).toMatch(/\.mf-lobby__panel[^}]*inset 0 1px var\(--noir-line\)/);
   });
 
   it("아래 패널 안쪽 여백은 14 16 22, 항목 간격 10 — 기록 LOG_H + 입력줄 48 + 행동 줄 52 라 높이 LOG_H + 154 (07-13, 6페이즈 때는 행동 줄 하나라 88)", () => {

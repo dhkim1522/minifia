@@ -1,0 +1,142 @@
+/* 입장 무대는 제목과 입력 사이를 비워 테이블을 보여 준다.
+   키보드를 열면 입력 패널만 보이는 높이에 맞춰 올라온다. */
+.mf-entry-scene .mf-backdrop__art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(8 16 30 / 74%), transparent 33%, transparent 60%, rgb(12 20 33 / 70%) 86%, var(--noir-inset));
+}
+.mf-entry-scene .mf-entry {
+  --entry-gutter: clamp(16px, 5vw, 24px);
+  min-height: calc(var(--entry-height, 100dvh) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  padding: clamp(24px, 5vh, 54px) var(--entry-gutter) 16px;
+  color: var(--noir-paper);
+}
+.mf-entry-scene .mf-entry__head {
+  align-items: flex-start;
+  text-align: left;
+  margin: 0 0 20px;
+  gap: 8px;
+}
+.mf-entry-scene .mf-entry__head .mf-t-display {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  letter-spacing: -.055em;
+  line-height: 1.1;
+  color: var(--noir-paper);
+  text-shadow: 0 2px 16px rgb(4 10 19 / 50%);
+}
+.mf-entry-scene .mf-entry__head .mf-t-display::after { content: none; }
+.mf-entry-scene .mf-home .mf-t-display { font-size: clamp(48px, 14vw, 68px); }
+.mf-entry__subtitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 550;
+  line-height: 1.5;
+  letter-spacing: -.025em;
+  text-shadow: 0 1px 8px var(--noir-inset);
+}
+.mf-entry-scene :is(.mf-entry__actions, .mf-entry__card, .mf-join__blocked, .mf-error__body, .mf-join__loading, .mf-entry__loading) {
+  padding: 16px;
+  background: var(--noir-panel);
+  border: 1px solid var(--noir-line);
+  border-radius: 14px;
+  box-shadow: 0 8px 22px rgb(6 12 24 / 32%);
+}
+.mf-entry-scene .mf-entry__actions {
+  margin-top: auto;
+  gap: 12px;
+}
+.mf-entry-scene .mf-field { gap: 6px; }
+.mf-entry-scene .mf-field__label {
+  font-weight: 650;
+  color: var(--noir-paper);
+  text-shadow: none;
+}
+.mf-entry-scene .mf-field__input {
+  height: 48px;
+  background: var(--noir-inset);
+  border-radius: var(--noir-control-radius, 10px);
+  color: var(--noir-paper);
+}
+.mf-entry-scene .mf-field__input--code {
+  text-align: left;
+  letter-spacing: .18em;
+}
+.mf-entry-scene .mf-field__input--code::placeholder {
+  letter-spacing: normal;
+  font-weight: 400;
+}
+.mf-entry-scene .mf-btn {
+  min-height: 48px;
+  border-radius: var(--noir-control-radius, 10px);
+  gap: 8px;
+}
+.mf-entry-scene .mf-btn--secondary {
+  background: var(--noir-raised);
+  border-color: var(--noir-line);
+}
+.mf-entry-scene .mf-btn--field:not(:disabled) {
+  color: var(--noir-accent);
+  border-color: var(--noir-accent);
+}
+.mf-entry-scene .mf-btn--primary {
+  background: var(--noir-paper);
+  color: var(--noir-ink);
+  border: 1px solid transparent;
+  box-shadow: none;
+  clip-path: none;
+}
+.mf-entry-scene .mf-entry__build {
+  margin: 10px 0 0;
+  padding: 0;
+  text-align: right;
+  font-size: 14px;
+  color: var(--noir-silver);
+}
+.mf-entry-scene .mf-join__plaza {
+  padding: 12px;
+  gap: 8px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--noir-inset) 90%, transparent);
+}
+.mf-entry-scene .mf-join__count { color: var(--noir-silver); }
+.mf-entry-scene .mf-join .mf-entry__card {
+  margin-top: 8px;
+  gap: 10px;
+}
+.mf-entry-scene .mf-tag__name {
+  background: var(--noir-raised);
+  color: var(--noir-paper);
+  text-shadow: none;
+  border-radius: 6px;
+}
+.mf-entry-scene .mf-entry__card .mf-btn--text { min-height: 44px; }
+.mf-entry-scene .mf-join__blocked,
+.mf-entry-scene .mf-error__body {
+  align-self: stretch;
+  align-items: stretch;
+  margin: auto 0 0;
+  max-width: none;
+  text-align: left;
+}
+.mf-entry-scene .mf-error__message {
+  text-shadow: none;
+  max-width: none;
+}
+.mf-entry-scene .mf-join__loading,
+.mf-entry-scene .mf-entry__loading {
+  margin: auto 0 0;
+  text-shadow: none;
+  text-align: left;
+}
+.mf-nick-sheet .mf-sheet__title {
+  font-family: var(--font-ui);
+  letter-spacing: -.035em;
+}
+@media (max-height: 620px) {
+  .mf-entry-scene .mf-entry { padding-top: 18px; }
+  .mf-entry-scene .mf-entry__head { margin-bottom: 12px; }
+  .mf-entry-scene .mf-join--many .mf-join__plaza { padding: 8px; }
+}

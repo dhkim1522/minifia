@@ -27,7 +27,7 @@
   position: relative; display: flex; flex-direction: column; gap: var(--space-lg);
   width: 100%; max-width: 430px; margin: 0 auto; max-height: 80dvh; overflow-y: auto;
   padding: var(--space-lg); padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
-  background: var(--noir-sheet-light), var(--noir-panel); border-radius: 9px 9px 0 0; box-shadow: var(--noir-rail), var(--shadow-card);
+  background: var(--noir-panel); border-radius: 16px 16px 0 0; box-shadow: var(--noir-rail), var(--shadow-card);
   transform: translateY(100%);
   transition: transform var(--mf-sheet-ms) var(--ease-out);
 }
@@ -42,12 +42,12 @@
 .mf-sheet__handle::before { content: ""; position: absolute; inset: calc(-1 * var(--space-md)) calc(-1 * var(--space-lg)); }
 
 /* 닫기 알약(14-06): × 20 + 4 + 글자 3자 + 좌우 안쪽 여백 → 약 84 폭 */
-.mf-sheet__title { padding-right: calc(var(--tap-min) * 2 + var(--space-sm)); font-family: var(--font-serif); color: var(--noir-paper); }
+.mf-sheet__title { padding-right: calc(var(--tap-min) + var(--space-sm)); font-family: var(--font-ui); color: var(--noir-paper); font-size: 21px; letter-spacing: -0.03em; }
 .mf-sheet__actions { display: flex; flex-direction: column; gap: var(--space-sm); }
 .mf-sheet__close { position: absolute; top: var(--space-md); right: var(--space-md); }
 
 /* 아이콘 버튼: 44×44 정사각. 대기실 위쪽 바의 [뒤로]·[공유]와 시트의 [닫기]가 쓴다. */
-.mf-btn.mf-iconbtn { flex: none; width: var(--tap-min); height: var(--tap-min); min-height: var(--tap-min); padding: 0; border-radius: var(--radius-md); background: var(--night-800); border-color: var(--gray-700); color: var(--gray-50); }
+.mf-btn.mf-iconbtn { flex: none; width: var(--tap-min); height: var(--tap-min); min-height: var(--tap-min); padding: 0; border-radius: var(--noir-control-radius); background: var(--noir-raised); border-color: var(--noir-line); color: var(--noir-paper); }
 
 /* 공유 시트(C-03) */
 .mf-share { display: flex; flex-direction: column; gap: var(--space-md); }

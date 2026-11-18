@@ -67,12 +67,12 @@
 .mf-rolecard__tabs--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .mf-rolecard__tab {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs);
-  min-height: var(--tap-min); padding: 0 var(--space-md); border-radius: 5px;
+  min-height: var(--tap-min); padding: 0 var(--space-md); border-radius: var(--noir-control-radius);
   background: var(--noir-inset); border: 1px solid var(--night-600); color: var(--gray-300);
   font: inherit; font-size: 14px; line-height: 20px; font-weight: 700; cursor: pointer;
   border-color: var(--noir-line);
 }
-.mf-rolecard__tab[aria-selected="true"] { background: var(--noir-raised); border-color: var(--noir-silver); color: var(--noir-paper); }
+.mf-rolecard__tab[aria-selected="true"] { background: var(--noir-raised); border-color: var(--noir-accent); color: var(--noir-paper); }
 .mf-rolecard__tab:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 /* 안 읽은 기록 점: 앰버는 "읽지 않음" 하나만 뜻한다(UI-SPEC 앰버 예약 2번) */
 .mf-rolecard__dot { flex: none; width: 10px; height: 10px; margin-left: var(--space-xs); border-radius: 50%; background: var(--amber-400); }
@@ -83,12 +83,12 @@
 /* 내 역할 본문(시안 .cs): 가로 배치, 간격 16, 세로 가운데, 안쪽 16, 면 night-700 */
 .mf-rolecard__body {
   display: flex; align-items: center; gap: var(--space-md); padding: var(--space-md);
-  background: var(--noir-sheet-light), var(--noir-panel); border-radius: 8px;
+  background: var(--noir-sheet-light), var(--noir-panel); border-radius: var(--noir-control-radius);
   box-shadow: inset 0 0 0 1px var(--noir-line);
 }
 .mf-rolecard__body--back { justify-content: center; }
 .mf-rolecard__art, .mf-rolecard__back {
-  flex: none; box-sizing: border-box; width: 128px; height: 160px; padding: 8px; border-radius: 6px;
+  flex: none; box-sizing: border-box; width: 128px; height: 160px; padding: 8px; border-radius: var(--noir-control-radius);
   background: var(--noir-inset); border: 1px solid var(--night-600);
   border-color: var(--noir-line);
 }
@@ -96,7 +96,7 @@
 .mf-rolecard__back { display: flex; align-items: center; justify-content: center; }
 .mf-rolecard__back .mf-card__diamond { width: 64px; }
 .mf-rolecard__t { flex: 1; min-width: 0; }
-.mf-rolecard__name { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--noir-paper); font-family: var(--font-serif); }
+.mf-rolecard__name { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--noir-paper); font-family: var(--font-ui); letter-spacing: -0.03em; }
 .mf-rolecard__desc { margin: var(--space-xs) 0 0; font-size: 14px; line-height: 20px; color: var(--gray-300); word-break: keep-all; white-space: pre-line; }
 .mf-rolecard__mates { margin: var(--space-sm) 0 0; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); word-break: keep-all; }
 .mf-rolecard__empty { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-300); word-break: keep-all; }
@@ -106,7 +106,7 @@
 .mf-answers { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-sm) 0 0; }
 .mf-answers__day + .mf-answers__day { margin-top: var(--space-md); }
 /* 구역 머리는 스크롤 중 맨 위에 붙는다(면 night-800 으로 아래 줄을 가린다) */
-.mf-answers__head { position: sticky; top: 0; z-index: 1; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); padding-bottom: var(--space-xs); margin-bottom: var(--space-xs); background: var(--night-800); }
+.mf-answers__head { position: sticky; top: 0; z-index: 1; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); padding-bottom: var(--space-xs); margin-bottom: var(--space-xs); background: var(--noir-panel); }
 .mf-answers__dayname { font-size: 16px; line-height: 24px; font-weight: 700; color: var(--gray-50); }
 .mf-answers__genre { font-size: 14px; line-height: 20px; color: var(--gray-300); }
 .mf-answers__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-xs); }

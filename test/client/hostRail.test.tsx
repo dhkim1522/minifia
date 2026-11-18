@@ -45,7 +45,7 @@ describe("판 종류 화면이 DOM·CSS 에 없다 (22-07, D-01, P22-15)", () =>
   });
 });
 
-describe("HostRailButton — 방장 원형 단추 (19-03, D-13·D-14, UI-SPEC A-3·A-4)", () => {
+describe("HostRailButton — 방장 도구 타일 (19-03, D-13·D-14, UI-SPEC A-3·A-4)", () => {
   it("id=bots: 단추 하나, 표식 bots, 접근성 이름은 받은 글, 보이는 글이 없고 눌림은 기본 false 다", () => {
     const { container } = render(<HostRailButton id="bots" icon="bot" label="봇" onPress={() => {}} />);
     const buttons = [...container.querySelectorAll("button")];
@@ -120,14 +120,14 @@ describe("HostRailButton — 방장 원형 단추 (19-03, D-13·D-14, UI-SPEC A-
     expect(ev.defaultPrevented).toBe(true);
   });
 
-  it("CSS: 지름 52px의 누아르 면과 금빛 테두리, 눌림과 켜짐 상태를 금빛으로 표시", () => {
+  it("CSS: 52px 누아르 타일과 금빛 테두리, 눌림과 켜짐 상태를 금빛으로 표시", () => {
     const base = ruleOf(V2, ".mv-hostrail-btn");
     expect(base).toContain("border: 1.5px solid var(--light-lamp)");
     expect(base).toContain("background: var(--noir-panel)");
     expect(base).toContain("color: var(--light-lamp)");
     expect(base).toContain("width: var(--control-button)");
     expect(base).toContain("height: var(--control-button)");
-    expect(base).toContain("border-radius: var(--radius-pill)");
+    expect(base).toContain("border-radius: var(--noir-control-radius)");
     expect(ruleOf(V2, '.mv-hostrail-btn[aria-pressed="true"]')).toContain("box-shadow: inset 0 0 0 2px var(--light-lamp)");
     const on = ruleOf(V2, '.mv-hostrail-btn[role="switch"][aria-checked="true"]');
     expect(on).toContain("background: var(--light-lamp)");

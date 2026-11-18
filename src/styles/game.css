@@ -22,7 +22,7 @@
 /* [테스트] 버튼 자리: 헤더 아래 8, 왼쪽 16 (6페이즈 그대로) */
 .mf-game__test { position: absolute; top: calc(var(--mf-host-bottom, 62px) + 8px); left: var(--space-md); z-index: var(--z-overlay); }
 /* 아래 패널: night-800 97%, 위 모서리 radius-lg, 안쪽 14 16 22. 위에서부터 채팅 기록 칸 + 입력줄(48) + 단계별 행동 줄. 높이는 DOM 에서 재서 스테이지 사각형에 넘긴다. */
-.mf-game__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: var(--noir-sheet-light), color-mix(in srgb, var(--noir-panel) 97%, transparent); border-radius: 9px 9px 0 0; box-shadow: var(--noir-rail); }
+.mf-game__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: var(--noir-panel); border-radius: 0; box-shadow: var(--noir-rail); }
 
 /* 키보드(7페이즈 규칙 그대로): 패널은 키보드 바로 위로 --mf-kb-lift 만큼 올라가고 아래 여백이 22 → 8 로 줄어든다. 행동 줄은 그리지 않는다. */
 .mf-game__panel--kb { bottom: var(--mf-kb-lift, 0px); padding-bottom: 8px; }
@@ -32,16 +32,15 @@
 
 /* A안의 도구 줄과 채팅 사이에는 구분선 하나를 둔다. */
 .mf-game .mf-discussion-panel {
-  --mf-discussion-font: "Apple SD Gothic Neo", system-ui, sans-serif;
   gap: 0;
   padding: 0;
-  background: #182332;
+  background: var(--noir-panel);
   border-radius: 0;
   box-shadow: none;
 }
 .mf-discussion-panel > .mf-playtest__feedback,
 .mf-discussion-panel > .mf-playtest__result { padding-inline: 12px; }
-.mf-discussion-panel .mv-chat { gap: 0; font-family: var(--mf-discussion-font); }
+.mf-discussion-panel .mv-chat { gap: 0; font-family: var(--font-ui); }
 .mf-discussion-panel .mv-chat__log {
   gap: 5px;
   padding: 7px 12px 4px;
@@ -50,34 +49,9 @@
   box-shadow: none;
 }
 .mf-discussion-panel .mv-chat.is-compact .mv-chat__log { padding-block: 2px; }
-.mf-discussion-panel .mv-chat__msg {
-  display: flex;
-  flex: none;
-  align-items: flex-start;
-  gap: 8px;
-  color: #fbf5e9;
-}
-.mf-discussion-panel .mv-chat__avatar {
-  flex: none;
-  border-radius: 50%;
-  background: #394762;
-  object-fit: cover;
-}
-.mf-discussion-panel .mv-chat__bubble-body { min-width: 0; }
-.mf-discussion-panel .mv-chat__byline { display: flex; align-items: center; min-height: 14px; margin-bottom: 1px; }
-.mf-discussion-panel .mv-chat__name { margin: 0; color: #ccd6e4; font-size: 14px; font-weight: 700; line-height: 14px; }
-.mf-discussion-panel .mv-chat__msg .mv-chat__text {
-  display: block;
-  width: fit-content;
-  padding: 3px 7px;
-  border-radius: 2px 7px 7px;
-  background: #2a374b;
-  font-size: 14px;
-  line-height: 17px;
-}
 .mf-discussion-panel .mv-chat__form { gap: 6px; margin: 8px 12px 12px; }
 .mf-discussion-panel .mv-chat.is-compact .mv-chat__form { margin-bottom: 8px; }
-.mf-discussion-panel .mv-chat__input { height: var(--tap-min); padding-inline: 9px; border-color: #68788caa; border-radius: 7px; background: #101927; }
+.mf-discussion-panel .mv-chat__input { height: var(--tap-min); padding-inline: 9px; border-color: #68788caa; border-radius: 7px; background: var(--noir-inset); }
 .mf-discussion-panel .mv-chat__input::placeholder { color: #bdc6d3; font-size: 14px; opacity: 1; }
 .mf-discussion-panel .mv-chat__send { width: var(--tap-min); height: var(--tap-min); border-radius: 7px; }
 .mf-discussion-panel .mv-chat__send .mv-tool__face {
@@ -119,7 +93,7 @@
    알약 면 night-800 92%·테두리 1.5px gray-100(마지막 5초는 v2.css)·pill·안쪽 8/16. n / N 14 400 gray-300, 이름 16 700 gray-50, 초 24 700 tabular-nums(마지막 5초는 v2.css).
    막대 220×4 반경 4, 바탕 gray-50 14%·채움 gray-100(마지막 5초는 v2.css). 색은 timerTone 한 호출의 결과(data-turn-tone)다. */
 .mf-turn { position: absolute; top: 100px; left: var(--space-md); right: var(--space-md); z-index: calc(var(--z-toast) + 4); display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); pointer-events: none; transform: translateY(var(--mf-vv-top, 0px)); }
-.mf-turn__pill { display: flex; align-items: center; gap: var(--space-sm); max-width: 100%; box-sizing: border-box; padding: var(--space-sm) var(--space-md); border-radius: 6px; background: color-mix(in srgb, var(--noir-inset) 96%, transparent); border: 1.5px solid var(--gray-100); animation: mf-turn-in var(--dur-med) var(--ease-out) both; transition: border-color 300ms; border-color: var(--noir-silver); box-shadow: var(--noir-rail); }
+.mf-turn__pill { display: flex; align-items: center; gap: var(--space-sm); max-width: 100%; box-sizing: border-box; padding: var(--space-sm) var(--space-md); border-radius: var(--noir-control-radius); background: color-mix(in srgb, var(--noir-inset) 96%, transparent); border: 1.5px solid var(--gray-100); animation: mf-turn-in var(--dur-med) var(--ease-out) both; transition: border-color 300ms; border-color: var(--noir-silver); box-shadow: var(--noir-rail); }
 .mf-turn__pill.is-still { animation: none; }
 .mf-turn__count { flex: none; font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); }
 .mf-turn__name { min-width: 0; font-family: var(--font-ui); font-size: 16px; line-height: 1.5; font-weight: 700; color: var(--gray-50); white-space: nowrap; }

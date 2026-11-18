@@ -47,15 +47,15 @@
   border-color: #64738ea6;
   border-radius: 11px;
   background: #263346;
-  color: #f8f0e3;
-  font-family: var(--mf-discussion-font);
+  color: var(--noir-paper);
+  font-family: var(--font-ui);
 }
 .mf-discussion-panel .mf-playtest__action svg { color: currentColor; }
 .mf-discussion-panel .mf-playtest__action--vote {
   min-width: 78px;
   border-color: #bd9d6ea6;
   background: #252d3a;
-  color: #f2d4a1;
+  color: var(--noir-accent);
 }
 .mf-discussion-panel .mf-playtest__action[aria-expanded="true"],
 .mf-discussion-panel .mf-playtest__action[aria-pressed="true"] {
@@ -114,7 +114,7 @@
 .mf-playtest__ballot-result span,
 .mf-playtest__ballot-count {
   margin: 0;
-  color: var(--gray-200);
+  color: var(--noir-silver);
   font-size: 14px;
   line-height: 1.35;
 }

@@ -38,8 +38,8 @@ const submitJoin = () => screen.getByRole("button", { name: "참가하기" }) as
 describe("Home 첫 화면 (S-01, 결정 0014)", () => {
   it("구성: 입장 배경, 소개와 서비스 이름, [방 만들기], 방 코드 칸과 [참가]. 닉네임 칸과 카드는 없다", () => {
     const { container } = render(<Home onEnterRoom={vi.fn()} />);
-    expect(screen.getByRole("heading", { name: "Minifia" })).toBeTruthy();
-    expect(screen.getByText("친구들과 한 판, 점심시간 마피아")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "미니피아" })).toBeTruthy();
+    expect(screen.getByText("이 테이블에 마피아가 있다.")).toBeTruthy();
     expect(createRoomButton()).toBeTruthy();
     expect(codeInput().getAttribute("placeholder")).toBe("4자리 숫자");
     expect(codeInput().getAttribute("inputmode")).toBe("numeric");
@@ -48,18 +48,14 @@ describe("Home 첫 화면 (S-01, 결정 0014)", () => {
     expect(screen.queryByText("또는")).toBeNull();
     expect(container.querySelector(".mf-entry__card")).toBeNull();
     const art = container.querySelector(".mf-backdrop__art") as HTMLElement | null;
-    expect(art?.style.backgroundImage).toContain("/backgrounds/bg_entry_lobby.webp");
+    expect(art?.style.backgroundImage).toContain("/backgrounds/noir-entry.webp");
     expect(screen.queryByText(/^v/)).toBeNull();
   });
 
-  it("방 만들기 아래에 혼자 연습하기 진입이 있고 처음 오는 사람에게만 강조한다", () => {
+  it("홈에서 선택할 수 있는 행동은 코드 참가와 방 만들기 두 개다", () => {
     const { container } = render(<Home onEnterRoom={vi.fn()} />);
-    const actions = container.querySelector(".mf-entry__actions");
-    const entry = screen.getByRole("button", { name: "혼자 연습하기" });
-    expect(entry).toBe(actions?.lastElementChild);
-    expect(entry.hasAttribute("data-tutorial-entry")).toBe(true);
-    expect(entry.hasAttribute("data-call")).toBe(true);
-    expect(container.querySelector("[data-tutorial-screen]")).toBeNull();
+    expect(screen.getAllByRole("button")).toEqual([joinCodeButton(), createRoomButton()]);
+    expect(container.querySelector("[data-tutorial-entry], [data-tutorial-screen]")).toBeNull();
   });
 
   it("[방 만들기]는 닉네임 없이도 눌려 시트를 연다. 처음 열었을 때 오류 문장은 없다", () => {

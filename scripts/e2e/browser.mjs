@@ -216,23 +216,19 @@ export async function openHostPage(browser, { origin, code, token, size, dpr, mo
   if (guest) await tracker.waitFor((v) => v.phase === "lobby" && v.me?.isHost === false, 15_000, "손님으로 연결");
   else await tracker.waitFor((v) => v.phase === "lobby" && v.me?.isHost === true && v.me?.testMode === true, 15_000, "방장으로 연결");
 
-  const fonts = await page.evaluate(async () => {
+  const fonts = await page.locator(".mf-lobby").evaluate(async (lobby) => {
     await document.fonts.ready;
-    try {
-      await document.fonts.load('24px "Gowun Dodum"', "낮 토론 직업 공개");
-    } catch {
-      /* 아래 검사가 실패로 보고한다 */
-    }
-    const faces = [...document.fonts].filter((f) => f.family.replace(/["']/g, "") === "Gowun Dodum");
-    return { check: document.fonts.check('24px "Gowun Dodum"', "낮 토론 직업 공개"), loaded: faces.filter((f) => f.status === "loaded").length, total: faces.length };
+    const family = getComputedStyle(lobby).fontFamily;
+    const systemUi = family.split(",").some((name) => name.trim() === "system-ui");
+    return { family, ready: systemUi && document.fonts.check(`16px ${family}`, "미니피아 대기실") };
   });
 
   return {
     context,
     page,
     tracker,
-    fontOk: fonts.check && fonts.loaded > 0,
-    fontDetail: `check ${fonts.check}, 불러온 글꼴 ${fonts.loaded}/${fonts.total}`,
+    fontOk: fonts.ready,
+    fontDetail: `준비 ${fonts.ready}, 적용 글꼴 ${fonts.family}`,
     takeIssues() {
       const out = issues;
       issues = { console: [], failed: [], offOrigin: [] };
@@ -575,6 +571,8 @@ export async function readWorld(page) {
         fontSize: ncs ? parseFloat(ncs.fontSize) : null,
         z: Number.isFinite(z) ? z : Number.NaN,
         face: tcs ? tcs.backgroundColor : "",
+        ink: ncs?.color ?? "",
+        selected: tag?.classList.contains("is-mine") ?? false,
         opacity: Number(getComputedStyle(el).opacity),
       };
     });

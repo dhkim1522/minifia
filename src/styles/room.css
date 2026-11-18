@@ -54,17 +54,17 @@
   gap: var(--space-sm);
   width: 100%;
   height: var(--mf-reconnect-h, 52px);
-  background: var(--night-700);
-  border-bottom: 1px solid var(--night-600);
+  background: var(--noir-panel);
+  border-bottom: 1px solid var(--noir-line);
   font-size: 14px;
-  color: var(--gray-100);
+  color: var(--noir-paper);
 }
 
 .mf-reconnect__dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--gray-100);
+  background: var(--noir-accent);
   animation: mf-blink 1.4s ease-in-out infinite;
 }
 

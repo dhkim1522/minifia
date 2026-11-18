@@ -1,3 +1,4 @@
+import { ChatPlayerLine } from "./ChatLines";
 import { useState } from "react";
 import { useEffect, useRef } from "react";
 import type { CSSProperties, KeyboardEvent, ReactNode, Ref } from "react";
@@ -95,11 +96,7 @@ function ChatRows({ lines, contacts, label, ch }: { lines: readonly ResultLogCha
   return (
     <>
       {withDividers(lines, label, (l, i) => (
-        <p key={`l${i}`} className={ch === "mafia" ? "mv-chat__msg is-mafia" : "mv-chat__msg"} data-seat={l.seat} data-ch={ch}>
-          <span className="mv-chat__dot" style={{ background: seatColorVar(l.seat) }} />
-          <span className="mv-chat__name">{contacts.get(l.seat) ?? ""}</span>
-          <span className="mv-chat__text">{l.text}</span>
-        </p>
+        <ChatPlayerLine key={`l${i}`} channel={ch} seat={l.seat} name={contacts.get(l.seat) ?? ""} text={l.text} />
       ))}
     </>
   );

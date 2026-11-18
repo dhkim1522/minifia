@@ -379,7 +379,7 @@ export function ChatPanel(props: ChatPanelProps) {
           tabIndex={fixedLog ? 0 : undefined}
           onScroll={onLogScroll}
         >
-          <ChatLines messages={messages} channel={channel} portraits={fixedLog === true} />
+          <ChatLines messages={messages} channel={channel} />
           {notice ? (
             <p className="mv-chat__notice" role="status" data-chat-notice="">
               {notice}

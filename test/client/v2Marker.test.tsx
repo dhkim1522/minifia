@@ -50,11 +50,11 @@ describe("v2.0 시험판 표식 (DEPLOY-02)", () => {
 describe("index.html 탭 제목 (DEPLOY-02)", () => {
   const html = readFileSync("index.html", "utf8");
 
-  it("title 은 'Minifia v3' 다", () => {
-    expect(html).toContain("<title>Minifia v3</title>");
+  it("title 은 '미니피아 v3' 다", () => {
+    expect(html).toContain("<title>미니피아 v3</title>");
   });
 
-  it("og:title 은 'Minifia' 그대로다", () => {
-    expect(html).toContain('<meta property="og:title" content="Minifia" />');
+  it("og:title 은 홈 브랜드와 같다", () => {
+    expect(html).toContain('<meta property="og:title" content="미니피아" />');
   });
 });

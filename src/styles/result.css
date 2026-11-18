@@ -14,12 +14,12 @@
 .mf-result__header { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-toast); box-sizing: border-box; height: 62px; padding: var(--space-sm) var(--space-md) 0; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); pointer-events: none; }
 .mf-result__header .mf-btn, .mf-result__header .mv-tool { pointer-events: auto; }
 .mf-result__header-gap { flex: none; width: var(--tap-min); height: var(--tap-min); }
-.mf-result__title { flex: 1 1 auto; min-width: 0; margin: 0; min-height: var(--tap-min); display: flex; align-items: center; justify-content: center; gap: var(--space-xs); text-align: center; font-family: var(--font-serif); font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--noir-paper); text-shadow: var(--shadow-text); word-break: keep-all; }
-.mf-result__title-icon { flex: none; color: var(--brass-400); filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--night-950) 70%, transparent)); }
+.mf-result__title { flex: 1 1 auto; min-width: 0; margin: 0; min-height: var(--tap-min); display: flex; align-items: center; justify-content: center; gap: var(--space-xs); text-align: center; font-family: var(--font-ui); font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--noir-paper); text-shadow: var(--shadow-text); word-break: keep-all; }
+.mf-result__title-icon { flex: none; color: var(--noir-accent); filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--night-950) 70%, transparent)); }
 .mf-result__title-icon.is-mafia { color: var(--crimson-400); }
 
 /* 아래 패널: 접힌 게임 패널과 같은 틀 — night-800 97%, 위 모서리 radius-lg, 안쪽 14 16 22. 채팅 기록 칸(LOG_H 96·152) + 입력줄(48) = LOG_H + 92 → 188 · 244 */
-.mf-result__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: var(--noir-sheet-light), color-mix(in srgb, var(--noir-panel) 97%, transparent); border-radius: 9px 9px 0 0; box-shadow: var(--noir-rail); }
+.mf-result__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: var(--noir-panel); box-shadow: inset 0 1px var(--noir-line); }
 
 /* 키보드가 열리면(입력칸 포커스 + lift > 80) 패널이 키보드 위로 올라가고 아래 여백이 8 로 줄어 높이 150 이 된다 */
 .mf-result__panel--kb { bottom: var(--mf-kb-lift, 0px); padding-bottom: 8px; }
@@ -30,9 +30,9 @@
 
 /* 승리 알림(4600~5200, A-1): 가운데 한 줄 36px + 아이콘 56, 배경 어둡게 80%. 시민 승리는 놋쇠 아이콘, 마피아 승리는 진홍 아이콘. 터치를 막지 않는다(건너뛰기 탭이 통과한다). opacity 만 쓴다 */
 .mf-result__announce { position: absolute; inset: 0; z-index: calc(var(--z-toast) + 5); box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: 0 var(--space-md); pointer-events: none; background: color-mix(in srgb, var(--night-950) 80%, transparent); animation: mf-result-announce 600ms var(--ease-out) both; }
-.mf-result__announce-icon { flex: none; color: var(--brass-400); filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--night-950) 70%, transparent)); }
+.mf-result__announce-icon { flex: none; color: var(--noir-accent); filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--night-950) 70%, transparent)); }
 .mf-result__announce-icon.is-mafia { color: var(--crimson-400); }
-.mf-result__announce-text { display: block; max-width: 100%; text-align: center; font-family: var(--font-serif); font-size: 36px; line-height: 1.2; font-weight: 700; color: var(--noir-paper); text-shadow: var(--shadow-text); word-break: keep-all; overflow-wrap: anywhere; }
+.mf-result__announce-text { display: block; max-width: 100%; text-align: center; font-family: var(--font-ui); font-size: 36px; line-height: 1.2; font-weight: 700; color: var(--noir-paper); text-shadow: var(--shadow-text); word-break: keep-all; overflow-wrap: anywhere; }
 @keyframes mf-result-announce {
   0% { opacity: 0; }
   15% { opacity: 1; }
@@ -86,7 +86,7 @@
 .mf-bench { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; isolation: isolate; background: var(--night-950); }
 .mf-bench > .mf-world { z-index: var(--z-world); }
 .mf-bench__scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 280px; z-index: 2; pointer-events: none; background: linear-gradient(to top, color-mix(in srgb, var(--night-900) 88%, transparent) 0, color-mix(in srgb, var(--night-900) 60%, transparent) 160px, transparent 280px); }
-.mf-bench__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; height: 188px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: 14px var(--space-md) 22px; background: var(--noir-sheet-light), color-mix(in srgb, var(--noir-panel) 97%, transparent); border-radius: 9px 9px 0 0; box-shadow: var(--noir-rail); }
+.mf-bench__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; height: 188px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: 14px var(--space-md) 22px; background: var(--noir-panel); box-shadow: inset 0 1px var(--noir-line); }
 .mf-bench__icon { flex: none; display: grid; place-items: center; color: var(--gray-300); }
 .mf-bench__text { margin: 0; text-align: center; font-family: var(--font-ui); font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--gray-50); word-break: keep-all; }
 .mf-bench__panel .mf-btn { min-width: 160px; }

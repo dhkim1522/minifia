@@ -70,7 +70,7 @@ describe("Backdrop 층 규칙", () => {
   it("entry 구도는 입구 lobby WebP 를 쓴다", () => {
     stubImages("immediate");
     const { container } = render(<Backdrop layout="entry" scene="lobby" />);
-    expect(container.querySelector<HTMLElement>(".mf-backdrop__art")!.style.backgroundImage).toContain("/backgrounds/bg_entry_lobby.webp");
+    expect(container.querySelector<HTMLElement>(".mf-backdrop__art")!.style.backgroundImage).toContain("/backgrounds/noir-entry.webp");
   });
 
   it("scene 이 바뀌면 새 층이 entering 으로 쌓이고, 그림이 준비되면 이전 층은 leaving·새 층은 current, 전환이 끝나면 한 층이 남는다", async () => {

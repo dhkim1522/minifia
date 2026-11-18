@@ -63,7 +63,7 @@ interface LobbyProps {
 }
 
 // S-03 대기실(06-15, 07-13): 지하 재즈 바 맵(WorldStage) 위에 승인 로비 틀을 얹는다 — 위쪽 가림막, 헤더([나가기]·PhaseHeader "대기실"·[공유]),
-// 위 알림(TopToast), 아래 패널의 채팅 기록 + 입력줄 + 행동 줄 하나. 방 코드는 공유 시트 안에서만 보인다. 읽을 글은 "대기실" 과 접히는 한 줄뿐이다(3초 규칙).
+// 위 알림(TopToast), 아래 패널의 채팅 기록 + 입력줄 + 행동 줄 하나. 방 코드는 헤더의 공유 버튼과 초대 시트에 표시한다. 읽을 글은 "대기실" 과 접히는 한 줄뿐이다(3초 규칙).
 // 19-04(D-13): 방장 전용 조작([맵]·[봇])은 왼쪽 세로 줄(HostRail)에 모으고 오른쪽 열은 모두가 쓰는 [소리]·[옷장]만 둔다. 참가자에게는 줄 마크업이 없다(22-07).
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)은 WorldStage 가 React 텍스트 노드로만 그린다.
 export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offset = 0, bannerVisible = false, exiting = false, onLeave, testButton }: LobbyProps) {
@@ -208,7 +208,10 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
         <ToolButton name="나가기" icon={<Icon name="back" />} disabled={!canSend} onClick={() => setSheet({ kind: "leave" })} />
         <PhaseHeader title="대기실" />
         {view.code ? (
-          <ToolButton name="공유" icon={<Icon name="share" />} onClick={() => setSheet({ kind: "share" })} />
+          <label className="mf-lobby__invite">
+            <span><span className="mv-sr">방 코드 </span>{view.code}</span>
+            <ToolButton name="공유" icon={<Icon name="share" />} onClick={() => setSheet({ kind: "share" })} />
+          </label>
         ) : (
           <span className="mf-lobby__header-gap" aria-hidden="true" />
         )}

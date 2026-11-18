@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useState } from "react";
+import type { CSSProperties, FormEvent } from "react";
 import { validateNickname } from "../../shared/nickname";
 import { isPlaytestHost } from "../../shared/playtestHost";
 import { isRoomCode } from "../../shared/roomCode";
@@ -8,6 +8,7 @@ import { WORKER_NAME } from "../../shared/version";
 import { unlockAudio } from "../audio/unlock";
 import { Backdrop } from "../components/Backdrop";
 import { Button } from "../components/Button";
+import { Icon } from "../components/Icon";
 import { NicknameSheet } from "../components/NicknameSheet";
 import { TextField } from "../components/TextField";
 import { Toast, useToast } from "../components/Toast";
@@ -15,12 +16,12 @@ import { V2Icon } from "../components/v2/V2Icon";
 import { createRoom, joinRoom, testModeFromSearch } from "../net/api";
 import { preloadEntryAssets } from "../net/assets";
 import { messageForApiError, nicknameErrorText } from "../net/copy";
-import { loadLastNickname, loadSession, markTutorialSeen, readTutorialSeen, saveLastNickname } from "../net/session";
+import { loadLastNickname, loadSession, saveLastNickname } from "../net/session";
+import { useVisualViewportHeight } from "../net/useKeyboardLift";
 import { preloadWorld } from "../world/runtime";
 
 /** 시험판 Worker 별 첫 화면 표식. v1.0(`minifia`)·dev 에는 없다. */
 const BUILD_LABEL: Record<string, string> = { "minifia-v2": "v2.0 시험판", "minifia-v3": "v3.0 시험판" };
-const TutorialScreen = lazy(() => import("./TutorialScreen").then(({ TutorialScreen }) => ({ default: TutorialScreen })));
 
 interface HomeProps {
   onEnterRoom: (code: string, token: string) => void;
@@ -39,8 +40,7 @@ export function Home({ onEnterRoom }: HomeProps) {
   const [serverNicknameError, setServerNicknameError] = useState<string | null>(null);
   const [serverCodeError, setServerCodeError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [tutorial, setTutorial] = useState(false);
-  const [tutorialSeen, setTutorialSeen] = useState(readTutorialSeen);
+  const viewportHeight = useVisualViewportHeight(true);
   const { toast, show } = useToast();
   // 대기실 첫 그림(배경·인물)과 맵 청크(three)가 비어 보이지 않게 첫 화면에서 미리 받아 둔다.
   useEffect(() => {
@@ -51,7 +51,7 @@ export function Home({ onEnterRoom }: HomeProps) {
   const validation = validateNickname(nickname);
   const localError = touched && !validation.ok ? nicknameErrorText(validation.reason) : null;
   const nicknameError = serverNicknameError ?? localError;
-  const codeReady = isRoomCode(code) && !busy && !tutorial;
+  const codeReady = isRoomCode(code) && !busy;
   const { hostname, search } = window.location;
   const playtest = isPlaytestHost(hostname) && new URLSearchParams(search).get("playtest") === "1";
 
@@ -70,13 +70,6 @@ export function Home({ onEnterRoom }: HomeProps) {
     setServerNicknameError(null);
     setServerCodeError(null);
     setSheet("create");
-  }
-
-  function openTutorial() {
-    unlockAudio();
-    markTutorialSeen();
-    setTutorialSeen(true);
-    setTutorial(true);
   }
 
   function openJoin(e: FormEvent) {
@@ -148,12 +141,12 @@ export function Home({ onEnterRoom }: HomeProps) {
     else show(message.text);
   }
 
-  const home = (
+  return (
     <Backdrop layout="entry" scene="lobby">
-      <main className="mf-root mf-entry">
+      <main className="mf-root mf-entry mf-home" style={{ "--entry-height": `${viewportHeight}px` } as CSSProperties}>
         <header className="mf-entry__head">
-          <p className="mf-t-label">친구들과 한 판, 점심시간 마피아</p>
-          <h1 className="mf-t-display">Minifia</h1>
+          <h1 className="mf-t-display">미니피아</h1>
+          <p className="mf-entry__subtitle">이 테이블에 마피아가 있다.</p>
         </header>
         <div className="mf-entry__actions">
           <form className="mf-entry__form" onSubmit={openJoin}>
@@ -166,25 +159,13 @@ export function Home({ onEnterRoom }: HomeProps) {
               error={serverCodeError}
               trailing={
                 <Button variant="secondary" type="submit" disabled={!codeReady} className="mf-btn--field">
-                  참가
+                  참가 <V2Icon name="chevronRight" size={16} />
                 </Button>
               }
             />
           </form>
-          <Button variant="primary" block type="button" onClick={openCreate} disabled={busy || tutorial}>
+          <Button variant="primary" block icon={<Icon name="plus" size={20} />} onClick={openCreate} disabled={busy}>
             방 만들기
-          </Button>
-          <Button
-            variant="secondary"
-            block
-            icon={<V2Icon name="play" size={16} />}
-            data-tutorial-entry=""
-            data-call={tutorialSeen ? undefined : ""}
-            className={tutorialSeen ? undefined : "is-call"}
-            onClick={openTutorial}
-            disabled={busy || tutorial}
-          >
-            혼자 연습하기
           </Button>
         </div>
         {BUILD_LABEL[WORKER_NAME] ? <p className="mf-entry__build">{BUILD_LABEL[WORKER_NAME]}</p> : null}
@@ -192,6 +173,7 @@ export function Home({ onEnterRoom }: HomeProps) {
       {sheet ? (
         <NicknameSheet
           mode={sheet}
+          roomCode={code}
           nickname={nickname}
           onNicknameChange={handleNicknameChange}
           error={nicknameError}
@@ -203,9 +185,4 @@ export function Home({ onEnterRoom }: HomeProps) {
       <Toast toast={toast} placement="bottom" />
     </Backdrop>
   );
-  return tutorial ? (
-    <Suspense fallback={home}>
-      <TutorialScreen playtest={playtest} onExit={() => setTutorial(false)} />
-    </Suspense>
-  ) : home;
 }

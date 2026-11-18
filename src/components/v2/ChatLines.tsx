@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { CHAT_TEXT } from "../../game/chatText";
 import { faceSrc } from "../../net/assets";
 import type { ChatPanelMessage } from "./ChatPanel";
@@ -7,10 +8,9 @@ import { V2Icon } from "./V2Icon";
 // 감싸는 요소 없음 — 기록 칸 직속 자식 선택자(`[data-chat-log] > p…`)가 그대로 통한다.
 // 채널로 줄을 거르지 않는다: 받을 권리가 없는 줄은 서버가 보내지 않는다(결정 0002·0021).
 
-export function ChatLines({ messages, channel, portraits }: {
+export function ChatLines({ messages, channel }: {
   messages: readonly ChatPanelMessage[];
   channel: "all" | "mafia" | "ghost";
-  portraits?: boolean;
 }) {
   return (
     <>
@@ -64,26 +64,28 @@ export function ChatLines({ messages, channel, portraits }: {
           ) : null;
         const name = m.me ? CHAT_TEXT.me : (m.name ?? "");
         return (
-          <p key={m.key} className={m.ch === "mafia" ? "mv-chat__msg is-mafia" : "mv-chat__msg"} data-seat={m.seat} data-ch={m.ch ?? "all"}>
-            {portraits ? (
-              <>
-                {m.seat === undefined ? null : <img className="mv-chat__avatar" src={faceSrc(m.seat)} width={25} height={25} alt="" decoding="async" />}
-                <span className="mv-chat__bubble-body">
-                  <span className="mv-chat__byline">{mark}<span className="mv-chat__name">{name}</span></span>
-                  <span className="mv-chat__text">{m.text}</span>
-                </span>
-              </>
-            ) : (
-              <>
-                {m.seat !== undefined ? <span className="mv-chat__dot" style={{ background: `var(--seat-${m.seat + 1})` }} /> : null}
-                {mark}
-                <span className="mv-chat__name">{name}</span>
-                <span className="mv-chat__text">{m.text}</span>
-              </>
-            )}
-          </p>
+          <ChatPlayerLine key={m.key} channel={m.ch ?? "all"} seat={m.seat} name={name} text={m.text} mark={mark} />
         );
       })}
     </>
+  );
+}
+
+/** 공개 좌석 초상화를 쓴다. 인물의 직업과 의상은 표시하지 않는다. */
+export function ChatPlayerLine({ channel, seat, name, text, mark }: {
+  channel: "all" | "mafia" | "ghost";
+  seat?: number;
+  name: string;
+  text: string;
+  mark?: ReactNode;
+}) {
+  return (
+    <p className={channel === "mafia" ? "mv-chat__msg is-mafia" : "mv-chat__msg"} data-seat={seat} data-ch={channel}>
+      {seat === undefined ? null : <img className="mv-chat__avatar" src={faceSrc(seat)} width={25} height={25} alt="" decoding="async" />}
+      <span className="mv-chat__bubble-body">
+        <span className="mv-chat__byline">{mark}<span className="mv-chat__name">{name}</span></span>
+        <span className="mv-chat__text">{text}</span>
+      </span>
+    </p>
   );
 }

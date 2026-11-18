@@ -596,14 +596,14 @@ describe("경찰 조사 결과 카드 (NIGHT-09, UI-SPEC 245행)", () => {
     expect(cards(b.container)).toHaveLength(0);
   });
 
-  it("카드 치수·색 규칙: 폭 220·반경 20·위 170·night-800 면·기본 테두리 night-600, 마피아는 crimson-500 테두리·crimson-300 글자, 토큰 변수만", () => {
+  it("카드 치수·색 규칙: 폭 220·반경 14·위 170·청회색 패널·공통 구분선, 마피아는 crimson-500 테두리·crimson-300 글자, 토큰 변수만", () => {
     const css = readFileSync("src/styles/night.css", "utf8");
     const base = css.match(/\.mf-police-card\s*\{([^}]*)\}/)?.[1] ?? "";
     expect(base).toMatch(/width:\s*220px/);
     expect(base).toMatch(/top:\s*170px/);
-    expect(base).toMatch(/border-radius:\s*20px|border-radius:\s*var\(--radius-lg\)/);
-    expect(base).toMatch(/var\(--night-800\)/);
-    expect(base).toMatch(/border:\s*2px solid var\(--night-600\)/);
+    expect(base).toMatch(/border-radius:\s*14px/);
+    expect(base).toMatch(/var\(--noir-panel\)/);
+    expect(base).toMatch(/border:\s*1px solid var\(--noir-line\)/);
     expect(base).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     const mafia = css.match(/\.mf-police-card\.is-mafia\s*\{([^}]*)\}/)?.[1] ?? "";
     expect(mafia).toMatch(/crimson-500/);

@@ -1,3 +1,4 @@
+import { faceSrc } from "../../src/net/assets";
 import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
@@ -122,7 +123,7 @@ describe("ChatPanel 공개 근거 인용", () => {
 });
 
 describe("ChatPanel 기록 칸 (CHAT-01)", () => {
-  it("받은 줄을 순서대로 그린다: player 는 data-seat·data-ch·자리 구분색 점·이름·본문", () => {
+  it("받은 줄을 순서대로 그린다: player 는 data-seat·data-ch·좌석 초상화·이름·본문", () => {
     const { container } = render(<Harness />);
     const log = logOf(container);
     const lines = [...log.children];
@@ -130,7 +131,7 @@ describe("ChatPanel 기록 칸 (CHAT-01)", () => {
     const first = lines[0] as HTMLElement;
     expect(first.getAttribute("data-seat")).toBe("2");
     expect(first.getAttribute("data-ch")).toBe("all");
-    expect(first.querySelector(".mv-chat__dot")?.getAttribute("style")).toContain("var(--seat-3)");
+    expect(first.querySelector(".mv-chat__avatar")?.getAttribute("src")).toBe(faceSrc(2));
     expect(first.querySelector(".mv-chat__name")?.textContent).toBe("지호");
     expect(first.textContent).toContain("안녕");
     const second = lines[1] as HTMLElement;
@@ -271,13 +272,13 @@ describe("ChatPanel 입력칸 계약 (CHAT-05, UI-SPEC 패널과 키보드)", ()
     expect(btn.hasAttribute("data-tool-label")).toBe(false);
   });
 
-  it("입력칸 글자 16px, 입력줄 높이 control-input, 보내기 버튼은 종이색과 비활성 남색", () => {
+  it("입력칸 글자 16px, 입력줄 높이 control-input, 보내기는 금빛 아이콘, 비활성은 흐린 아이보리", () => {
     expect(rulesFor(V2_CSS, ".mv-chat__input").join(";")).toContain("font-size: 16px");
     expect(rulesFor(V2_CSS, ".mv-chat__input").join(";")).toContain("height: var(--control-input)");
-    expect(rulesFor(V2_CSS, ".mv-chat__send").join(";")).toContain("background: var(--noir-paper)");
+    expect(rulesFor(V2_CSS, ".mv-chat__send").join(";")).toContain("color: var(--noir-accent)");
     const off = rulesFor(V2_CSS, '.mv-chat__send[aria-disabled="true"]').join(";");
     expect(off).toContain("background: var(--noir-raised)");
-    expect(off).toContain("color: var(--gray-500)");
+    expect(off).toContain("color: var(--noir-paper)");
   });
 
   it("CSS: 줄 글자 규칙(player 16px/1.5, system 14px/1.4, keep-all, overflow-wrap anywhere)과 기록 칸 고정 높이", () => {
@@ -1093,7 +1094,7 @@ describe("ChatPanel 깃펜 버튼 (WILL-01)", () => {
     expect(ev.defaultPrevented).toBe(true);
   });
 
-  it("유언 단추는 지름 48px의 남색 원, 아이콘은 밝게, 새 기록 점은 8px", () => {
+  it("유언 단추는 48px의 청회색 타일, 아이콘은 밝게, 새 기록 점은 8px", () => {
     const rule = rulesFor(V2_CSS, ".mv-tool__face").join(";");
     expect(rule).toContain("width: 100%");
     expect(rule).toContain("height: 100%");
@@ -1102,7 +1103,7 @@ describe("ChatPanel 깃펜 버튼 (WILL-01)", () => {
     expect(rule).toContain("border-radius: inherit");
     const will = rulesFor(V2_CSS, ".mv-chat__will").join(";");
     expect(will).toContain("width: var(--control-input)");
-    expect(will).toContain("border-radius: var(--radius-pill)");
+    expect(will).toContain("border-radius: var(--noir-control-radius)");
     // 14페이즈: 보내기와의 여분 margin-left 8 은 없어졌다(폭 360 에서 입력칸 160, UI-SPEC 접근성·입력)
     expect(rulesFor(V2_CSS, ".mv-chat__will").join(";")).not.toContain("margin-left");
     const dot = rulesFor(V2_CSS, ".mv-chat__will-dot").join(";");
