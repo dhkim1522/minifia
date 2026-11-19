@@ -92,12 +92,12 @@ function env(opts: { canvas?: boolean; font?: boolean | "reject" } = {}): { env:
 const hex2 = (n: number): string => Math.round(n).toString(16).padStart(2, "0");
 function expectedTint(seat: number): string {
   const p = (h: string, i: number): number => Number.parseInt(h.slice(1 + 2 * i, 3 + 2 * i), 16);
-  const c = (i: number): string => hex2(p(SEAT_COLORS[seat], i) * 0.45 + p(NOTE_COLORS.paper, i) * 0.55);
+  const c = (i: number): string => hex2(p(SEAT_COLORS[seat], i) * 0.18 + p(NOTE_COLORS.tint, i) * 0.82);
   return `#${c(0)}${c(1)}${c(2)}`;
 }
 
 describe("종이 틴트 (P24-10)", () => {
-  it("좌석 색 45% + 종이 바탕(gray-50) 55% 섞임", () => {
+  it("붉은 종이 색을 기본으로 하고 좌석색을 조금 남긴다", () => {
     for (let s = 0; s < 8; s++) expect(noteTint(s)).toBe(expectedTint(s));
   });
   it("좌석 번호는 0~7 로 감싼다(범위 밖 값도 터지지 않는다)", () => {

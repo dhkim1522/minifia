@@ -435,6 +435,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const pick: WorldPick | undefined = suspect.mode
     ? {
         seats: suspect.targets,
+        hit: "body",
         // 연결이 끊긴 동안은 버튼이 aria-disabled 이고 눌러도 보내지 않는다
         ...(canSend ? {} : { disabled: true as const }),
         label: SUSPECT_TEXT.target,
@@ -621,14 +622,13 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     return out;
   }, [suspectStack, view.me.seat]);
   const stageTagProps = useMemo<WorldTagProps | undefined>(() => {
-    if (!whisper.mode && !suspect.mode && suspectChips.size === 0) return claimTagProps;
+    if (!whisper.mode && suspectChips.size === 0) return claimTagProps;
     return (seat) => ({
       ...(claimTagProps?.(seat) ?? {}),
       ...(whisper.mode && whisper.targets.has(seat) ? { blink: true } : {}),
-      ...(suspect.mode && suspect.targets.has(seat) ? { blink: true } : {}),
       ...(suspectChips.has(seat) ? { suspect: suspectChips.get(seat) } : {}),
     });
-  }, [whisper.mode, whisper.targets, suspect.mode, suspect.targets, suspectChips, claimTagProps]);
+  }, [whisper.mode, whisper.targets, suspectChips, claimTagProps]);
   // E2E 표식 data-suspects="좌석:장수,…"(0장 생략, 공개 값). ?e2e=1 문맥에서만(recordCue 와 같은 판정) — 3D 종이는 DOM 이 아니라서 이것으로 거울을 본다
   const suspectsMirror = useMemo(
     () => (recordCue === undefined || suspectStack.size === 0 ? undefined : [...suspectStack].sort((a, b) => a[0] - b[0]).map(([seat, from]) => `${seat}:${from.length}`).join(",")),

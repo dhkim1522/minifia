@@ -12,6 +12,7 @@ export type IconName =
   | "copy"
   | "check"
   | "card"
+  | "exit"
   | "disconnected"
   | "plus"
   | "minus"
@@ -32,6 +33,7 @@ const ICONS: Readonly<Record<IconName, readonly Part[]>> = {
     ["rect", { x: 6, y: 3, width: 12, height: 18, rx: 2.5 }],
     ["path", { d: "M12 9 15 12 12 15 9 12z", fill: "currentColor", stroke: "none" }],
   ],
+  exit: [["path", { d: "M12 5H5v14h7M9 12h11m-4-4 4 4-4 4" }]],
   disconnected: [
     ["path", { d: "M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 8.5-2.6M9 15.5a5 5 0 0 1 4.5-.9M3 3l18 18" }],
     ["circle", { cx: 12, cy: 19.5, r: 1, fill: "currentColor" }],

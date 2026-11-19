@@ -25,6 +25,7 @@ import {
   LOG_OPEN_MAX,
   OPEN_STAGE_MIN,
   TYPING_PILL_H,
+  discussionLogHeight,
   lobbyPanelHeight,
   openLogHeight,
 } from "../../src/game/chatUi";
@@ -58,8 +59,7 @@ import { HOST_HIDDEN_PHASES, HOST_LINES, type HostKey } from "../../src/game/hos
 import { ROLE_TEXT } from "../../src/game/roleText";
 import { RESULT_TEXT } from "../../src/game/verdict";
 import { JOB_OUTFIT } from "../../src/world/jobOutfit";
-import { hostRailLayout } from "../../src/components/v2/HostRail";
-import { SIDE_CELL, SIDE_GAP } from "../../src/components/v2/SideColumn";
+import { SIDE_CELL, SIDE_GAP, splitSideColumn } from "../../src/components/v2/SideColumn";
 import { HOST_RAIL_LABEL } from "../../src/components/v2/HostRail";
 import { nextPhaseOf, afterDayOf, WILL_REVEAL_MS, PIN_OFF_EXEC_AT, KEYWORD_MS, KEYWORD_READ_MS, ANSWER_REVEAL_MS } from "../../shared/game/phases";
 import { ANSWER_MAX_GRAPHEMES, ANSWER_MIN_GAP_MS } from "../../shared/game/answerRules";
@@ -226,9 +226,9 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
       expect(rule(sel)).toContain("width: var(--control-input)");
       expect(rule(sel)).toContain("height: var(--control-input)");
     }
-    for (const roomH of [560, 640, 664, 779, 780, 844, 874, 932]) {
+    for (const roomH of [560, 568, 610, 640, 664, 779, 780, 844, 874, 932]) {
       expect(gamePanelHeight(roomH, "chat")).toBe(LOG_H + CHAT_PANEL_EXTRA);
-      expect(gamePanelHeight(roomH, "talk")).toBe(DISCUSSION_LOG_H + DISCUSSION_PANEL_EXTRA);
+      expect(gamePanelHeight(roomH, "talk")).toBe(discussionLogHeight(roomH) + DISCUSSION_PANEL_EXTRA);
     }
   });
 
@@ -471,7 +471,7 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     expect({ ...r.RESULT_JOB_OUTFIT }).toEqual({ ...JOB_OUTFIT });
     expect({ ...r.RESULT_WIN_TITLE }).toEqual({ citizenWin: RESULT_TEXT.title.citizenWin, mafiaWin: RESULT_TEXT.title.mafiaWin });
     expect(r.RESULT_PANEL_H).toBe(DISCUSSION_LOG_H + DISCUSSION_PANEL_EXTRA);
-    expect(r.RESULT_PANEL_H).toBe(222);
+    expect(r.RESULT_PANEL_H).toBe(274);
   });
 
   it("11-12: 다시 하기 알약·쉬는 사람 화면 표식과 훅 sat 가 앱에 있고, 알약 치수가 CSS 와 같다", () => {
@@ -490,9 +490,10 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     expect(dock).toMatch(/\.mf-room-chat__advance \.mv-ready\s*\{[^}]*height: var\(--tap-min\)/);
     expect(tokens).toContain(`--tap-min: ${r.READY_PILL.h}px`);
     // 입력줄은 도구 줄의 알약과 별개로 보내기·간격·양옆 여백만 가진다.
-    expect(dock).toMatch(/\.mf-room-chat \.mv-chat__form\s*\{ gap: 6px; padding: 8px 12px 12px; \}/);
+    expect(dock).toMatch(/\.mf-room-chat \.mv-chat\s*\{[^}]*margin-inline: 8px/);
+    expect(dock).toMatch(/\.mf-room-chat \.mv-chat__form\s*\{ gap: 6px; padding: 8px 9px; \}/);
     expect(dock).toMatch(/\.mf-room-chat \.mv-chat__send\s*\{[^}]*width: var\(--tap-min\)/);
-    expect(r.READY_PILL.h + 6 + 12 * 2).toBe(r.READY_PILL.inputExtra);
+    expect(r.READY_PILL.h + 6 + (8 + 9) * 2).toBe(r.READY_PILL.inputExtra);
   });
 });
 
@@ -988,16 +989,15 @@ describe("E2E 의 시간대 사본과 앱 todOf·TOD_LABEL (18.1-11, 0083-1)", (
 });
 
 describe("방장 줄 E2E 사본 계약 (19-06, T-19-18·T-19-19; 22-07 판 종류 칩·시트 없어짐)", () => {
-  type Layout = { crown: boolean; columns: number[] };
   const lib = e2eLib as unknown as {
-    HOST_RAIL_E2E: { cell: number; gap: number; crownH: number; left: number; testShift: number };
+    HOST_RAIL_E2E: { cell: number; gap: number; left: number; testShift: number };
     HOST_RAIL_MARKERS: readonly string[];
     HOST_RAIL_ORDER: readonly string[];
     TOOL_ICON_RGB: string;
     TOOL_BORDER_RGBA: string;
     LOG_H: number;
     lobbyPanelHeight(logH: number): number;
-    hostRailLayoutE2E(n: number, maxH: number): Layout;
+    hostRailLayoutE2E(n: number, maxH: number): number[];
   };
   const root = new URL("../../", import.meta.url);
   const tracked = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8" })
@@ -1022,21 +1022,19 @@ describe("방장 줄 E2E 사본 계약 (19-06, T-19-18·T-19-19; 22-07 판 종�
     expect(/--space-md:\s*(\d+)px/.exec(tokens)?.[1]).toBe(String(lib.HOST_RAIL_E2E.left));
     expect(body(".mf-hostrail")).toContain(`top: calc(var(--mf-host-bottom, 62px) + ${lib.HOST_RAIL_E2E.gap}px)`);
     expect(body(".mf-hostrail[data-test-shift]")).toContain(`+ ${lib.HOST_RAIL_E2E.gap}px + ${lib.HOST_RAIL_E2E.testShift}px)`);
-    expect(body(".mf-hostrail__crown")).toContain(`height: ${lib.HOST_RAIL_E2E.crownH}px`);
-    expect(body(".mf-hostrail__crown")).toContain(`margin-bottom: ${lib.HOST_RAIL_E2E.gap}px`);
     expect(body(".mf-hostrail__cols")).toContain(`gap: ${lib.HOST_RAIL_E2E.gap}px`);
     expect(body(".mf-hostrail__col")).toContain(`gap: ${lib.HOST_RAIL_E2E.gap}px`);
     expect(body(".mv-hostrail-btn")).toContain("width: var(--control-button)");
     expect(/--control-button:\s*(\d+)px/.exec(tokens)?.[1]).toBe(String(lib.HOST_RAIL_E2E.cell));
   });
 
-  it("hostRailLayoutE2E 가 n 0..5 × 최대 높이 100..600(4 간격)과 측정 전(무한)에서 앱 hostRailLayout 과 같다", () => {
+  it("hostRailLayoutE2E 가 n 0..5 × 최대 높이 100..600(4 간격)과 측정 전(무한)에서 앱 splitSideColumn 과 같다", () => {
     const diff: string[] = [];
     for (let n = 0; n <= 5; n++) {
       for (const maxH of [...Array.from({ length: 126 }, (_, i) => 100 + i * 4), Number.POSITIVE_INFINITY]) {
-        const want = hostRailLayout(n, maxH);
+        const want = splitSideColumn(n, maxH);
         const got = lib.hostRailLayoutE2E(n, maxH);
-        if (got.crown !== want.crown || got.columns.join(",") !== want.columns.join(",")) diff.push(`${n}@${maxH}`);
+        if (got.join(",") !== want.join(",")) diff.push(`${n}@${maxH}`);
       }
     }
     expect(diff.slice(0, 5).join(" ")).toBe("");
@@ -1072,8 +1070,8 @@ describe("방장 줄 E2E 사본 계약 (19-06, T-19-18·T-19-19; 22-07 판 종�
     expect(lib.lobbyPanelHeight(lib.LOG_H)).toBe(160);
   });
 
-  it("DOM 표식 셋이 git 이 추적하는 src/ 에 있고 값은 enum 낱말뿐이다 — 좌석·역할 값이 실리지 않는다. 판 종류 표식은 src 에 없다", () => {
-    expect(lib.HOST_RAIL_MARKERS.join(",")).toBe("data-host-rail,data-host-rail-btn,data-host-rail-crown");
+  it("DOM 표식 둘이 git 이 추적하는 src/ 에 있고 값은 enum 낱말뿐이다 — 좌석·역할 값이 실리지 않는다. 판 종류 표식은 src 에 없다", () => {
+    expect(lib.HOST_RAIL_MARKERS.join(",")).toBe("data-host-rail,data-host-rail-btn");
     expect(lib.HOST_RAIL_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)))).toEqual([]);
     const text = (file: string): string => sources.find((s) => s.f.endsWith(file))!.text.replace(/\/\/.*$/gm, "");
     // 줄 단추 표식 값: HostRailButton 의 id 유니언 + MapChip 줄 변형의 "map" = HOST_RAIL_ORDER
@@ -1083,9 +1081,9 @@ describe("방장 줄 E2E 사본 계약 (19-06, T-19-18·T-19-19; 22-07 판 종�
     expect(text("components/v2/MapChip.tsx")).toContain('"data-host-rail-btn": "map"');
     expect([...ids, "map"].sort().join(",")).toBe([...lib.HOST_RAIL_ORDER].sort().join(","));
     expect(lib.HOST_RAIL_ORDER.join(",")).toBe("map,bots");
-    // 값 없는 표식 둘
+    // 줄을 표시하던 왕관 장식은 제거했다.
     expect(text("components/v2/HostRail.tsx")).toContain('data-host-rail=""');
-    expect(text("components/v2/HostRail.tsx")).toContain('data-host-rail-crown=""');
+    expect(text("components/v2/HostRail.tsx")).not.toContain('data-host-rail-crown');
     for (const f of ["components/v2/HostRail.tsx", "components/v2/HostRailButton.tsx"]) expect(text(f), f).not.toMatch(/seat|nonce|mafia|police|doctor/i);
     // 판 종류 표식·부품은 src 어디에도 없다(22-07)
     expect(sources.filter((s) => /data-mode-(?:chip|sheet|card)/.test(s.text)).map((s) => s.f)).toEqual([]);

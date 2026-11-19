@@ -3,7 +3,7 @@
 // flows.mjs 가 이미 3천 8백 줄이라 흐름은 이 파일에 둔다(avatar.mjs·sound.mjs 와 같은 모양 — helpers 를 받고 서로 import 하지 않는다).
 // helpers: { recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK }.
 import { chooseVerdict, installFakeViewport, readGame, settle, skipTo, sleep } from "./browser.mjs";
-import { DISCUSSION_LOG_H, OVERLAP_EPS, TAP_MIN } from "./lib.mjs";
+import { DISCUSSION_LOG_H, OVERLAP_EPS, TAP_MIN, discussionLogHeight } from "./lib.mjs";
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 const result = (id, label, bad) => ({ id, label, ok: bad.length === 0, detail: bad.length === 0 ? "" : bad.join("; ") });
@@ -63,7 +63,7 @@ export function willCarryChecks(m) {
 
 /**
  * 유언 단계 나머지 사람 화면 판정(WF5, P22-7). pages = [{ who, sheets, locked([data-chat-locked] 수), panelH, pinSeat(__mfPin.seat) }], condemned = 처형자 좌석, panelWant = 공용 기록과 입력 높이.
- * 시트 0개 · 채팅 잠금 1개 · 패널 높이 156(±1) · 스포트라이트(__mfPin.seat)가 처형자.
+ * 시트 0개 · 채팅 잠금 1개 · 지정 패널 높이(±1) · 스포트라이트(__mfPin.seat)가 처형자.
  */
 export function willLockChecks(pages, { condemned, panelWant = LOCKED_DOCK_HEIGHT }) {
   const label = "나머지 사람: 시트 0개 · 채팅 잠금 · 고정 패널 · 스포트라이트가 처형자";
@@ -325,8 +325,9 @@ export function makeDayFlows({ recorder, attempt, openGame, closeGame, allAt, un
         // 나머지 사람 화면(P22-7)
         const gg = await readGame(g.page);
         const pin = await g.page.evaluate(() => window.__mfPin?.seat ?? null);
-        recLines(rec, sc, willLockChecks([{ who: "손님", sheets: gg.willSheets, locked: gg.chatLockedCount, panelH: gg.panel?.height, pinSeat: pin }], { condemned: hostSeat }));
-        rec(sc, "WF5h", `나머지 사람 패널 높이는 방 높이 ${h} 와 상관없이 ${LOCKED_DOCK_HEIGHT} 이다`, Math.abs((gg.panel?.height ?? 0) - LOCKED_DOCK_HEIGHT) <= 1, `패널 ${gg.panel?.height}`);
+        const panelWant = discussionLogHeight(h) + 64;
+        recLines(rec, sc, willLockChecks([{ who: "손님", sheets: gg.willSheets, locked: gg.chatLockedCount, panelH: gg.panel?.height, pinSeat: pin }], { condemned: hostSeat, panelWant }));
+        rec(sc, "WF5h", `방 높이 ${h}에서 나머지 사람 패널 높이는 ${panelWant}이다`, Math.abs((gg.panel?.height ?? 0) - panelWant) <= 1, `패널 ${gg.panel?.height}`);
         // 고쳐 [남기기] → 곧바로 처형 단계
         const stops = await Promise.all(pages.map((p) => watchWillReveal(p.page)));
         const t0 = performance.now();

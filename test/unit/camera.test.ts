@@ -36,7 +36,7 @@ import {
   ZOOM_MAJORITY,
   ZOOM_MIN_STAGE_H,
 } from "../../src/world/camera";
-import { CHAT_PANEL_EXTRA, DISCUSSION_LOG_H, DISCUSSION_PANEL_EXTRA, LOG_H, lobbyPanelHeight, TYPING_PILL_H } from "../../src/game/chatUi";
+import { CHAT_PANEL_EXTRA, DISCUSSION_PANEL_EXTRA, LOG_H, discussionLogHeight, lobbyPanelHeight, TYPING_PILL_H } from "../../src/game/chatUi";
 import { HEAD_TOP_Y as HEAD_TOP } from "../../shared/game/map";
 import { ringSlots } from "../../shared/game/gather";
 
@@ -432,12 +432,13 @@ describe("가시성: 걷는 영역 전 격자점 × 6개 폰 크기 (UI-SPEC E1 
 
   it("대기실의 최소 반폭은 4.8이고, 공통 PAN_BOX는 대기실과 토론을 모두 담는 최소 반폭이다", () => {
     const lobby = Math.max(...STAGE_SIZES.map((s) => minPanFor(s)));
-    const discussionHeight = DISCUSSION_LOG_H + DISCUSSION_PANEL_EXTRA;
-    const discussion = Math.max(...STAGE_SIZES.map((s) => minPanFor(s, discussionHeight)));
+    const discussionHeight = (s: Size) => discussionLogHeight(s.h) + DISCUSSION_PANEL_EXTRA;
+    const discussionSizes = [{ w: 320, h: 568, label: "320x568" }, ...STAGE_SIZES];
+    const discussion = Math.max(...discussionSizes.map((s) => minPanFor(s, discussionHeight(s))));
     expect(lobby).toBe(4.8);
     expect(PAN_BOX.maxX).toBe(Math.max(lobby, discussion));
     const narrower = symBox(Math.round((PAN_BOX.maxX - 0.1) * 10) / 10);
-    expect(STAGE_SIZES.some((s) => visibilityFailures(s, narrower, discussionHeight).length > 0)).toBe(true);
+    expect(discussionSizes.some((s) => visibilityFailures(s, narrower, discussionHeight(s)).length > 0)).toBe(true);
   });
 
   it("카메라가 한계에 걸리지 않는 안쪽 점(|x|,|z| ≤ PAN)에서는 캐릭터가 스테이지 사각형 가운데에 온다", () => {

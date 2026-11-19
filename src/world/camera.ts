@@ -50,9 +50,9 @@ export const NAMETAG_GAP = 4;
 export const HEAD_STACK_H = NAMETAG_H + TYPING_PILL_H;
 /**
  * 따라가기 카메라의 공통 이동 한계. 폰 6종의 걷는 영역을 0.25 간격으로 검사해 발과 이름표·입력 중 칸이 보이는 최소 반폭을 정한다.
- * 대기실 패널 160px에서는 ±4.8, 토론 패널 222px에서는 ±5.4가 필요하다. 키보드를 닫은 두 화면을 모두 담는다.
+ * 짧은 화면은 채팅 영역을 줄여 맵을 확보한다. 360×560에서 기록 116px일 때 필요한 반폭은 ±5.7이다.
  */
-export const PAN_BOX: Readonly<{ minX: number; maxX: number; minZ: number; maxZ: number }> = { minX: -5.4, maxX: 5.4, minZ: -5.4, maxZ: 5.4 };
+export const PAN_BOX: Readonly<{ minX: number; maxX: number; minZ: number; maxZ: number }> = { minX: -5.7, maxX: 5.7, minZ: -5.7, maxZ: 5.7 };
 /**
  * 두 맵의 연장 바닥 판 반폭. 공통 이동 한계의 9개 카메라 목표에서 가장 넓은 대기실 스테이지(430×932, 패널 160px)의
  * 바닥 표본이 닿는 거리를 0.5 단위로 올린 16.5에 헤더 뒤쪽 여유 2를 더한다.

@@ -13,6 +13,7 @@ import { countGraphemes } from "../../shared/nickname";
 import { Button } from "../components/Button";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { FirstAnswers } from "../components/FirstAnswers";
+import { Icon } from "../components/Icon";
 import { ReconnectBanner } from "../components/ReconnectBanner";
 import { RoleCardSheet } from "../components/RoleCardSheet";
 import type { RoleCardTab } from "../components/RoleCardSheet";
@@ -50,6 +51,7 @@ import { Keyword } from "./Keyword";
 import { RoleReveal } from "./RoleReveal";
 import "../styles/phase.css";
 import "../styles/room.css";
+import "../styles/room-menu.css";
 import "../styles/playtest.css";
 
 // gaveUp: 30초 연결 실패 뒤 [처음으로]. App 은 default 분기로 입장 정보를 지우지 않고 첫 화면으로 간다.
@@ -410,6 +412,7 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       data-playtest-menu={shown?.playtest === true ? "" : undefined}
       aria-label={unread > 0 ? "메뉴, 새 기록" : "메뉴"}
       aria-haspopup="dialog"
+      aria-expanded={gameMenu !== null}
       onClick={() => {
         returnToMenu.current = true;
         setGameMenu("menu");
@@ -447,22 +450,28 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       ) : null}
       <div className="mf-room__body">{renderBody()}</div>
       {menuAvailable && gameMenu === "menu" ? (
-        <Sheet label="게임 메뉴" showClose onClose={() => setGameMenu(null)}>
-          <h2 className="mf-t-heading mf-sheet__title">게임 메뉴</h2>
-          <div className="mf-sheet__actions">
-            <div className="mf-game-menu__tools">
-              {inGame ? <Button variant="secondary" block data-game-menu-role="" onClick={() => {
+        <Sheet label="게임 메뉴" centered showClose className="mf-room-menu" onClose={() => setGameMenu(null)}>
+          <div className="mf-room-menu__header">
+            <h2 className="mf-t-heading mf-room-menu__title">게임 메뉴</h2>
+            {sound.supported ? <SoundButton sound={sound} /> : null}
+          </div>
+          <div className="mf-room-menu__actions">
+            {inGame ? (
+              <Button variant="secondary" className="mf-room-menu__row" data-game-menu-role="" icon={<Icon name="card" size={22} />} onClick={() => {
                 setGameMenu(null);
                 setRoleCard({ open: true, tab: "role" });
-              }}>내 역할과 기록</Button> : null}
-              {sound.supported ? <SoundButton sound={sound} /> : null}
-            </div>
-            <Button variant="text" block onClick={() => setGameMenu("leave")}>방 나가기</Button>
+              }}>
+                <span>내 역할과 기록</span><V2Icon name="chevronRight" size={18} />
+              </Button>
+            ) : null}
+            <Button variant="secondary" className="mf-room-menu__row" data-game-menu-leave="" icon={<Icon name="exit" size={22} />} onClick={() => setGameMenu("leave")}>
+              <span>방 나가기</span><V2Icon name="chevronRight" size={18} />
+            </Button>
           </div>
         </Sheet>
       ) : null}
       {menuAvailable && gameMenu === "leave" ? (
-        <ConfirmSheet title="방에서 나갈까요?" confirmLabel="나가기" confirmDisabled={!connection.canSend} onClose={() => setGameMenu(null)} onConfirm={() => {
+        <ConfirmSheet title="방에서 나갈까요?" confirmLabel="나가기" centered className="mf-room-menu" confirmDisabled={!connection.canSend} onClose={() => setGameMenu(null)} onConfirm={() => {
           if (connection.send({ t: "leave" }) !== false) onExit("left");
         }} />
       ) : null}

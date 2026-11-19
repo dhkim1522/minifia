@@ -1,6 +1,6 @@
 .mf-game-phase-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(64px, 24%, 148px) minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
   align-items: center;
   gap: var(--space-sm);
   min-height: var(--tap-min);
@@ -39,17 +39,6 @@ header.mf-result__header {
   border-radius: var(--noir-control-radius);
   background: var(--noir-control);
   color: var(--noir-paper);
-}
-
-.mf-game-menu__tools {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.mf-game-menu__tools .mv-sound {
-  width: var(--tap-min);
-  height: var(--tap-min);
 }
 
 .mf-game-phase-header__actions {

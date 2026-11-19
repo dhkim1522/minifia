@@ -922,7 +922,8 @@ export interface WorldCharacter {
    * animate 가 참이면 발밑 고리가 PICK_RING_FROM 배에서 PICK_LOCK_MS 에 걸쳐 1 배로 조여진 뒤 가볍게 맥박친다. 거짓(움직임 줄이기)이면 윤곽만 있고 고리는 늘 1 배다.
    * 끄면 껍질과 재질을 해제하고 고리 배율을 1 로 돌린다. 켠 채 다시 켜면 색·animate 만 바꾸고(조임은 처음부터 다시 하지 않는다) 껍질은 늘지 않는다.
    */
-  setPickMark(on: boolean, opts?: { color: string; animate: boolean }): void;
+  setPickMark(on: boolean, opts?: { color: string; animate: boolean; pulseOutline?: boolean }): void;
+  bodyMeshes(): readonly Mesh[];
   /**
    * "의심" 포스트잇(결정 0089-11, 24 D-11): 이 사람이 받은 종이의 붙인 좌석 목록(오래된 것부터)을 몸통(body 그룹)의 자식 평면 메시로 맞춘다. 보이는 것은 마지막 3장(postit.ts).
    * animate 거짓 = 처음 받은 프레임·모션 줄이기(즉시). 종이는 병합 지오메트리 경로 밖이라 옷·표정 바꾸기가 건드리지 않는다.
@@ -1052,6 +1053,8 @@ export function createCharacter(
   /** 밤 선택 표시: 켜짐 · 고리 조임·맥박 여부 · 켠 뒤 지난 시간(s) · 윤곽 껍질 재질과 껍질들(관절 메시마다 하나) */
   let pickOn = false;
   let pickAnimate = false;
+  let pulseOutline = false;
+  const pickColor = new Color();
   let pickAge = 0;
   let pickMat: MeshBasicMaterial | null = null;
   const pickShells = new Map<JointName, Mesh>();
@@ -1323,7 +1326,10 @@ export function createCharacter(
       }
       applyPose(pose);
       // 밤 선택 표시의 고리: 켠 동안만 배율을 정한다(꺼진 뒤 한 번 1 로 돌리는 것은 setPickMark). 고리가 나중에 붙어도 이 줄이 맞춘다
-      if (pickOn) {
+      if (pickOn && pulseOutline && pickMat) {
+        const pulse = pickAnimate ? 0.58 + 0.42 * (0.5 - 0.5 * Math.cos(t * Math.PI * 2 / 1.2)) : 0.86;
+        pickMat.color.copy(pickColor).multiplyScalar(pulse);
+      } else if (pickOn) {
         pickAge += dt;
         if (ring) ring.scale.setScalar(pickAnimate ? pickRingScale(pickAge, t) : 1);
       }
@@ -1434,9 +1440,12 @@ export function createCharacter(
       const wasOn = pickOn;
       pickOn = true;
       pickAnimate = opts?.animate === true;
+      pulseOutline = opts?.pulseOutline === true;
       if (!wasOn) pickAge = 0;
       if (!pickMat) pickMat = new MeshBasicMaterial({ color, side: BackSide });
       else pickMat.color.set(color);
+      pickMat.toneMapped = !pulseOutline;
+      pickColor.set(color);
       for (const j of JOINTS) {
         if (pickShells.has(j)) continue;
         const shell = new Mesh(meshes[j].geometry, pickMat);
@@ -1446,7 +1455,10 @@ export function createCharacter(
         meshes[j].add(shell);
         pickShells.set(j, shell);
       }
-      if (ring) ring.scale.setScalar(pickAnimate ? pickRingScale(pickAge, 0) : 1);
+      if (ring) ring.scale.setScalar(pickAnimate && !pulseOutline ? pickRingScale(pickAge, 0) : 1);
+    },
+    bodyMeshes() {
+      return JOINTS.map((joint) => meshes[joint]);
     },
     setOpacity(alpha) {
       if (disposed || !ghostOn) return;

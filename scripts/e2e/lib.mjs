@@ -246,8 +246,10 @@ export const ONE_LINE_FACTOR = 1.6;
 //      값을 바꾸려면 UI-SPEC 과 chatUi.ts 를 먼저 바꾼다. ----
 /** 기록 칸 한 값(chatUi.LOG_H 사본, 18.1 P181-3) — 방 높이·키보드와 무관 */
 export const LOG_H = 68;
-/** 토론 고정 기록 높이(chatUi.DISCUSSION_LOG_H 사본) */
-export const DISCUSSION_LOG_H = 92;
+/** 채팅 기록의 높이 범위(chatUi.ts 사본) */
+export const DISCUSSION_LOG_H = 144;
+export const DISCUSSION_SHORT_LOG_H = 116;
+export const DISCUSSION_VIEWPORT_ALLOWANCE = 480;
 /** 로비 패널 = LOG_H + 92 */
 export const LOBBY_PANEL_EXTRA = 92;
 /** 채팅 패널(게임 맵의 지목·변론 단계의 입력줄 패널) = LOG_H + 92 */
@@ -266,6 +268,11 @@ export const TYPING_PILL_H = 22;
 /** 로비 채팅 패널 높이(chatUi.lobbyPanelHeight 사본). 안전 영역 제외. 방장 패널 = 참가자 패널(19-04, P19-12) */
 export function lobbyPanelHeight(logH) {
   return logH + LOBBY_PANEL_EXTRA;
+}
+
+/** 실제 방 높이가 줄면 기록 영역부터 줄인다(chatUi.discussionLogHeight 사본). */
+export function discussionLogHeight(roomH) {
+  return Math.min(DISCUSSION_LOG_H, Math.max(DISCUSSION_SHORT_LOG_H, roomH - DISCUSSION_VIEWPORT_ALLOWANCE));
 }
 
 // ---- 게임 맵 판정 (08-23, 08-UI-SPEC "아래 패널 종류와 높이"·"검사 가능하게 둘 것"). 순수 함수 — 브라우저에서 읽는 값은 08-24 의 readGame 이 만든다. ----
@@ -296,7 +303,7 @@ export function gamePanelHeight(roomH, kind, opts) {
   }
   const extra = Object.hasOwn(GAME_PANEL_EXTRA, kind) ? GAME_PANEL_EXTRA[kind] : undefined;
   if (extra === undefined) throw new Error(`알 수 없는 패널 종류: ${kind}`);
-  return (kind === "talk" ? DISCUSSION_LOG_H : LOG_H) + extra;
+  return (kind === "talk" ? discussionLogHeight(roomH) : LOG_H) + extra;
 }
 
 // ---- 9페이즈 표식·판정 (09-21, 09-UI-SPEC "검사 가능하게 둘 것" 450~455행). 8페이즈 표식(data-game-stage·data-announce·data-pick 등)은 그대로라 여기 없다. ----
@@ -2440,16 +2447,16 @@ export function sideColumnChecks(s = {}) {
 // 방장 전용 조작은 왼쪽 세로 줄([data-host-rail])에 있고 참가자 화면에는 이 자리에 아무것도 없다(22-07: 판 종류 칩·시트 없어짐). 판정 문턱은 이 절 한 곳에만 둔다(T-19-18) —
 // 흐름(mapselect.mjs)은 화면을 읽어 넘기기만 한다. 앱 값과의 사본 일치는 test/unit/e2eContract.test.ts 가 고정한다.
 
-/** 줄 치수 사본: 칸 지름·칸 사이·왕관 표식 높이·왼쪽 여백·테스트 방에서 내려오는 높이(src/styles/v2.css .mf-hostrail) */
-export const HOST_RAIL_E2E = Object.freeze({ cell: 52, gap: 12, crownH: 20, left: 16, testShift: 48 });
+/** 줄 치수 사본: 칸 지름·칸 사이·왼쪽 여백·테스트 방에서 내려오는 높이(src/styles/v2.css .mf-hostrail) */
+export const HOST_RAIL_E2E = Object.freeze({ cell: 52, gap: 12, left: 16, testShift: 48 });
 /** 앱이 더한 DOM 표식(19-03~19-05). 값은 enum 낱말뿐이다(역할·좌석 없음, T-19-19) */
-export const HOST_RAIL_MARKERS = Object.freeze(["data-host-rail", "data-host-rail-btn", "data-host-rail-crown"]);
+export const HOST_RAIL_MARKERS = Object.freeze(["data-host-rail", "data-host-rail-btn"]);
 /** 줄 단추의 위 → 아래 순서([data-host-rail-btn] 값). 봇은 대기실의 테스트 방에만 있다(22-03 에서 튜토리얼 토글이 없어졌다) */
 export const HOST_RAIL_ORDER = Object.freeze(["map", "bots"]);
 /** 방장 줄과 오른쪽 열의 테두리 색 토큰을 getComputedStyle 의 형식으로 비교한다. */
 export const TOOL_BORDER_RGBA = "rgba(100, 115, 142, 0.65)";
 export const TOOL_ICON_RGB = "rgb(248, 240, 227)";
-/** 줄의 접근성 이름(src/components/v2/HostRail.tsx HOST_RAIL_LABEL 사본) — 왕관 표식이 빠져도 남는다 */
+/** 줄의 접근성 이름(src/components/v2/HostRail.tsx HOST_RAIL_LABEL 사본) */
 const HOST_RAIL_NAME = "방장 전용";
 /** 줄의 오른쪽 끝과 오른쪽 열의 왼쪽 끝 사이 최소 간격(UI-SPEC F-1) */
 const HOST_RAIL_SIDE_CLEAR = 16;
@@ -2462,24 +2469,20 @@ const HOST_RAIL_SIDE_CLEAR = 16;
 export const HOST_RAIL_KNOWN_LIMITS = Object.freeze([
   Object.freeze({ id: "fold-toast", reason: "두 열로 접힌 방장 줄의 둘째 열 단추와 위 알림(1.5초, 눌림 통과)이 겹칠 수 있는 알려진 한계 — 첫 열·한 열 줄은 예외가 아니다" }),
 ]);
-/** 배치 식의 경계 여유: 잰 최대 높이가 문턱과 이 값 안이면 표식·열 수를 판정하지 않고 참고 줄로 남긴다 */
+/** 배치 식의 경계 여유: 잰 최대 높이가 문턱과 이 값 안이면 열 수를 판정하지 않고 참고 줄로 남긴다 */
 const HOST_RAIL_EDGE = 2;
 
 /**
- * 줄 안 단추 수 n 과 줄 최대 높이로 표식 여부와 열(왼쪽부터 칸 수)을 고른다 — src/components/v2/HostRail.tsx hostRailLayout 사본(UI-SPEC F-2).
- * ① n·52 + (n−1)·12 + 32 ≤ 최대 높이 → 표식 + 한 열 ② n·52 + (n−1)·12 ≤ 최대 높이 → 표식 없는 한 열 ③ 아니면 한 열 최소 2칸으로 나눈 열들.
+ * 줄 안 단추 수와 최대 높이로 열을 나눈다. HostRail이 쓰는 splitSideColumn의 사본이다.
  */
 export function hostRailLayoutE2E(n, maxH) {
-  const { cell, gap, crownH } = HOST_RAIL_E2E;
-  if (!(n > 0)) return { crown: false, columns: [] };
-  if (!Number.isFinite(maxH)) return { crown: true, columns: [n] };
-  const height = n * cell + (n - 1) * gap;
-  if (height + crownH + gap <= maxH) return { crown: true, columns: [n] };
-  if (height <= maxH) return { crown: false, columns: [n] };
+  const { cell, gap } = HOST_RAIL_E2E;
+  if (!(n > 0)) return [];
+  if (!Number.isFinite(maxH)) return [n];
   const k = Math.max(2, Math.floor((maxH + gap) / (cell + gap)));
   const columns = [];
   for (let left = n; left > 0; left -= k) columns.push(Math.min(k, left));
-  return { crown: false, columns };
+  return columns;
 }
 
 /**
@@ -2521,7 +2524,7 @@ function railInputOk(s) {
 
 /**
  * 잰 값에서 배치 식의 입력과 결과를 뽑는다(판정 아님 — 흐름이 폰별 실측 표를 참고 줄로 남길 때 쓴다).
- * { bandBottom 띠 면 아랫변, shift 테스트 방 48|0, maxH 줄 최대 높이(= 패널 윗변 − 8 − (띠 아랫변 + 12) − shift), n 단추 수, crown 표식 있음, columns 실제 열별 칸 수, expect 식이 고른 배치 }. 못 재면 null.
+ * { bandBottom 띠 면 아랫변, shift 테스트 방 48|0, maxH 줄 최대 높이(= 패널 윗변 − 8 − (띠 아랫변 + 12) − shift), n 단추 수, columns 실제 열별 칸 수, expect 식이 고른 배치 }. 못 재면 null.
  */
 export function hostRailMeasure(s) {
   if (!railInputOk(s) || !railExpected(s) || !s.rail || !s.band || s.buttons.length === 0) return null;
@@ -2529,7 +2532,7 @@ export function hostRailMeasure(s) {
   const bandBottom = bottom(s.band);
   const maxH = s.panel.top - 8 - (bandBottom + HOST_RAIL_E2E.gap) - shift;
   const n = s.buttons.length;
-  return { bandBottom, shift, maxH, n, crown: s.crown !== null, columns: railColumns(s.buttons).map((c) => c.length), expect: hostRailLayoutE2E(n, maxH) };
+  return { bandBottom, shift, maxH, n, columns: railColumns(s.buttons).map((c) => c.length), expect: hostRailLayoutE2E(n, maxH) };
 }
 
 /**
@@ -2541,12 +2544,12 @@ export function hostRailMeasure(s) {
  *       test [테스트] 사각형|null(있으면 줄이 48 내려온 테스트 방) · toast 떠 있는 위 알림 사각형|null · side [{ side, rect, borderColor }] 오른쪽 열 단추 · panelToggles 패널 안 옛 스위치 줄 수 }.
  * 줄이 있어야 하는 화면(방장 대기실·결과, 키보드 닫힘)은 HR1~HR6(대기실은 HR7·HR8 도), 그 밖은 HR1(대기실이고 키보드가 닫혀 있으면 HR8 도)만 낸다. 못 잰 입력은 여덟 줄 모두 "측정값 없음" 실패다.
  * HR1 방장 대기실·결과에만 줄이 있고 참가자·게임 중·키보드 열림에는 없다 ·
- * HR2 단추 지름 52±1 · 열 안 간격 12±1 · 열 사이 12±1 · 왼쪽 16±1 · 줄 윗변 = 띠 아랫변 + 12(테스트 방 + 48) ±2 · 표식 높이 20±1 과 그 아래 12±1 ·
- * HR3 줄(표식 + 단추)이 아래 패널(윗변 − 8)·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열 단추와 교차 0, 오른쪽 열과는 가로 16 이상 떨어진다
+ * HR2 단추 지름 52±1 · 열 안 간격 12±1 · 열 사이 12±1 · 왼쪽 16±1 · 줄 윗변 = 띠 아랫변 + 12(테스트 방 + 48) ±2 ·
+ * HR3 줄 단추가 아래 패널(윗변 − 8)·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열 단추와 교차 0, 오른쪽 열과는 가로 16 이상 떨어진다
  *     (접힌 줄의 둘째 열과 위 알림의 겹침만 HOST_RAIL_KNOWN_LIMITS 의 알려진 한계 — 잰 값을 남기고 실패로 세지 않는다) ·
  * HR4 순서·개수: 대기실 map(mapsOn)·bots(botsOn), 결과 map(mapsOn). 오른쪽 열은 소리·옷장 둘 ·
  * HR5 방장·참가자 도구의 공통 테두리와 선택 색, 줄 단추에 .is-call 없음 ·
- * HR6 왕관 표식 유무·열별 칸 수가 hostRailLayoutE2E(n, 잰 최대 높이)와 같다(최대 높이 ±2 안에서 배치가 갈리면 판정하지 않고 info), 줄의 접근성 이름은 "방장 전용" ·
+ * HR6 왕관 표식이 없고 열별 칸 수가 hostRailLayoutE2E(n, 잰 최대 높이)와 같다(최대 높이 ±2 안에서 배치가 갈리면 info), 줄의 접근성 이름은 "방장 전용" ·
  * HR7 튜토리얼 토글(id "tutorial"·role=switch)은 어느 판에도 없고 패널 안 옛 스위치 줄 0 · HR8 대기실 패널 높이 160±1(방장·참가자 같다).
  */
 export function hostRailChecks(s = {}) {
@@ -2558,7 +2561,7 @@ export function hostRailChecks(s = {}) {
     HR3: "줄이 아래 패널·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열과 교차 0",
     HR4: "줄 순서·개수: 맵(허용 맵 둘 이상)·봇, 결과는 맵 · 오른쪽 열은 소리·옷장",
     HR5: "양쪽 도구는 같은 테두리와 상아색 아이콘 · 줄 단추에 빛남(.is-call) 없음",
-    HR6: `왕관 표식·열 수는 F-2 식대로 · 줄의 접근성 이름 "${HOST_RAIL_NAME}"`,
+    HR6: `왕관 표식 없음 · 높이에 맞춘 열 수 · 줄의 접근성 이름 "${HOST_RAIL_NAME}"`,
     HR7: "튜토리얼 토글 없음(22-03) · role=switch 단추 0 · 패널 안 옛 스위치 줄 0",
     HR8: `대기실 패널 높이 ${panelH}±1(방장·참가자 같다)`,
   };
@@ -2588,7 +2591,7 @@ export function hostRailChecks(s = {}) {
   } else {
     const btns = s.buttons;
     const cols = railColumns(btns);
-    const parts = [...btns.map((b) => ({ name: b.id, r: b.rect })), ...(s.crown ? [{ name: "표식", r: s.crown }] : [])];
+    const parts = btns.map((b) => ({ name: b.id, r: b.rect }));
     const shift = s.test ? E.testShift : 0;
 
     // HR2
@@ -2612,11 +2615,6 @@ export function hostRailChecks(s = {}) {
       const top = Math.min(...parts.map((p) => p.r.top));
       if (Math.abs(top - wantTop) > 2) bad2.push(`줄 윗변 ${fmt(top)} (띠 아랫변 ${fmt(bottom(s.band))} + ${E.gap}${shift ? ` + ${shift}` : ""} = ${fmt(wantTop)})`);
     }
-    if (s.crown) {
-      if (Math.abs(s.crown.height - E.crownH) > 1) bad2.push(`표식 높이 ${fmt(s.crown.height)} (기대 ${E.crownH})`);
-      const under = Math.min(...btns.map((b) => b.rect.top)) - bottom(s.crown);
-      if (Math.abs(under - E.gap) > 1) bad2.push(`표식 아래 간격 ${fmt(under)} (기대 ${E.gap})`);
-    }
     out.push(result("HR2", L.HR2, bad2));
 
     // HR3
@@ -2629,7 +2627,7 @@ export function hostRailChecks(s = {}) {
     for (const h of s.head) hit(`머리 ${h.kind ?? "?"}`, h.rect);
     if (s.band) hit("자막 띠", s.band);
     if (s.test) hit("[테스트]", s.test);
-    // 위 알림: 접힌 줄의 둘째 열부터는 알려진 한계(HOST_RAIL_KNOWN_LIMITS fold-toast), 첫 열·표식·한 열 줄은 그대로 판정한다
+    // 위 알림: 접힌 줄의 둘째 열부터는 알려진 한계(HOST_RAIL_KNOWN_LIMITS fold-toast), 첫 열은 그대로 판정한다
     const known3 = [];
     if (s.toast) {
       for (const p of parts) {
@@ -2673,14 +2671,15 @@ export function hostRailChecks(s = {}) {
 
     // HR6
     const bad6 = [];
+    if (s.crown) bad6.push("줄 위에 왕관 장식이 있음");
     if (s.rail.ariaLabel !== HOST_RAIL_NAME) bad6.push(`줄의 접근성 이름 "${s.rail.ariaLabel ?? ""}" (기대 "${HOST_RAIL_NAME}")`);
     const m = hostRailMeasure(s);
     let edgeNote = null;
     if (!m) bad6.push("자막 띠 사각형 없음(줄 최대 높이를 알 수 없다)");
     else {
-      const key = (l) => `${l.crown ? "표식 + " : ""}[${l.columns.join(",")}]`;
-      const actual = key({ crown: m.crown, columns: m.columns });
-      // 잰 최대 높이 ±2 안에서 식의 답이 갈리면(표식 문턱·열 문턱 근처) 어느 쪽이 맞는지 가를 수 없다 — 판정하지 않고 잰 값을 남긴다
+      const key = (columns) => `[${columns.join(",")}]`;
+      const actual = key(m.columns);
+      // 잰 최대 높이 ±2 안에서 식의 답이 갈리면 어느 쪽이 맞는지 가를 수 없다.
       if (key(hostRailLayoutE2E(m.n, m.maxH - HOST_RAIL_EDGE)) !== key(hostRailLayoutE2E(m.n, m.maxH + HOST_RAIL_EDGE))) {
         edgeNote = `경계(판정 아님): 줄 최대 높이 ${fmt(m.maxH)} ±${HOST_RAIL_EDGE} 안에서 배치가 갈린다 — 실제 ${actual}, 식 ${key(m.expect)}`;
       } else if (actual !== key(m.expect)) bad6.push(`실제 ${actual} (줄 최대 높이 ${fmt(m.maxH)}·단추 ${m.n} → 기대 ${key(m.expect)})`);

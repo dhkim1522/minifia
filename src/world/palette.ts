@@ -23,10 +23,12 @@ export const TOKEN_COLORS = {
  */
 export const SEAT_COLORS = ["#7a8fb8", "#8e7ab8", "#6fa59a", "#b89a6f", "#6f8fa8", "#9aa86f", "#b87a5c", "#a9aebb"] as const;
 
-/** "의심" 종이 그림 색: 바탕 = gray-50, 손글씨·밑줄 = night-950 (새 hex 없음 — TOKEN_COLORS 를 가리킨다) */
+/** 의심딱지는 붉은 종이와 어두운 잉크로 만들고 후보 캐릭터는 더 밝게 비춘다. */
 export const NOTE_COLORS = {
   paper: TOKEN_COLORS.ring,
   ink: TOKEN_COLORS.ringOutline,
+  tint: "#f78791",
+  outline: "#ff9da6",
   edge: "#ad936f",
 } as const;
 

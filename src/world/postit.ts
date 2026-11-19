@@ -64,9 +64,9 @@ function mixHex(a: string, b: string, t: number): string {
 }
 const rgba = (hex: string, a: number): string => `rgba(${chan(hex, 0)},${chan(hex, 1)},${chan(hex, 2)},${a})`;
 
-/** 종이 재질 색: 붙인 사람 좌석 색 45% + 종이 바탕(gray-50) 55%(P24-10). 텍스처의 종이 바탕과 곱해져 옅은 틴트로 보인다 */
+/** 붉은 종이를 기본으로 하고 붙인 사람의 좌석색을 조금 남긴다. */
 export function noteTint(seat: number): string {
-  return mixHex(SEAT_COLORS[wrapSeat(seat)], NOTE_COLORS.paper, 0.55);
+  return mixHex(SEAT_COLORS[wrapSeat(seat)], NOTE_COLORS.tint, 0.82);
 }
 
 // ---------- 몸통 원통에 감기 ----------

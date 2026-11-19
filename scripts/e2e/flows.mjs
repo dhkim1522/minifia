@@ -136,7 +136,7 @@ import {
   letterChecks,
   ownPenFontRequests,
   sideColumnChecks,
-  DISCUSSION_LOG_H as ROOM_CHAT_LOG,
+  discussionLogHeight,
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
 import { makeDayFlows } from "./day.mjs";
@@ -589,7 +589,7 @@ const CHAT_PANEL_EPS = 1;
 /** 한 페이지의 로비 채팅 패널 치수 판정. m 은 readChatPanel 의 값. 방장 패널 = 참가자 패널(19-04, P19-12). 검사 행 목록을 돌려준다. */
 function chatPanelRows(m) {
   if (!m) return [{ id: "CP0", label: "채팅 패널을 읽음", ok: false, detail: "패널·기록 칸·입력칸 중 없는 것이 있음" }];
-  const logWant = ROOM_CHAT_LOG;
+  const logWant = discussionLogHeight(m.roomH);
   const panelWant = logWant + ROOM_CHAT_EXTRA;
   const near = (a, b) => Math.abs(a - b) <= CHAT_PANEL_EPS;
   const r1 = (n) => Math.round(n * 10) / 10;
@@ -660,6 +660,7 @@ async function chatLobbyFlow(ctx) {
     await hp.waitForTimeout(1700);
     const readDock = (page) => page.locator("[data-chat-log]").evaluate((el) => ({
       height: el.getBoundingClientRect().height,
+      roomH: el.closest(".mf-lobby")?.getBoundingClientRect().height ?? 0,
       scrollHeight: el.scrollHeight,
       atBottom: el.scrollHeight - el.scrollTop - el.clientHeight <= 2,
       fixed: el.classList.contains("is-fixed"),
@@ -675,13 +676,13 @@ async function chatLobbyFlow(ctx) {
     rec(wsc, "B0", "두 화면에 채팅 기록과 긴 줄이 도착", sent.ok, sent.detail);
     for (const [who, page] of [["방장", hp], ["참가자", gp]]) {
       const dock = await readDock(page);
-      rec(wsc, `B1-${who}`, "기록을 고정하고 제자리에서 스크롤", dock.fixed && !dock.expanded && dock.height === ROOM_CHAT_LOG && dock.scrollHeight > dock.height && dock.atBottom, JSON.stringify(dock));
+      rec(wsc, `B1-${who}`, "기록을 고정하고 제자리에서 스크롤", dock.fixed && !dock.expanded && dock.height === discussionLogHeight(dock.roomH) && dock.scrollHeight > dock.height && dock.atBottom, JSON.stringify(dock));
     }
     const input = gp.locator("[data-chat-input]");
     await input.fill(CHAT_DRAFT_TEXT);
     await gp.locator("[data-chat-log]").evaluate((el) => { el.scrollTop = 0; });
     const older = await readDock(gp);
-    rec(wsc, "B2", "이전 기록까지 스크롤해도 기록 높이와 작성 중인 내용 유지", older.fixed && !older.atBottom && older.height === ROOM_CHAT_LOG && (await input.inputValue()) === CHAT_DRAFT_TEXT, JSON.stringify(older));
+    rec(wsc, "B2", "이전 기록까지 스크롤해도 기록 높이와 작성 중인 내용 유지", older.fixed && !older.atBottom && older.height === discussionLogHeight(older.roomH) && (await input.inputValue()) === CHAT_DRAFT_TEXT, JSON.stringify(older));
     await input.fill("");
     await checkState(ctx, "chat-lobby", "lobby"); // 방장 화면의 G (콘솔 오류·가로 넘침·누르기 크기·글자 크기)
   } finally {
@@ -1437,10 +1438,11 @@ function panelRow(rec, sc, id, g, h, who) {
   const input = g?.chatInput;
   const verdict = g?.verdictBtns ?? [];
   const verdictCard = g?.verdictCard;
-  const want = ROOM_CHAT_LOG + (g?.chatLockedCount > 0 ? 64 : ROOM_CHAT_EXTRA);
+  const logWant = discussionLogHeight(h);
+  const want = logWant + (g?.chatLockedCount > 0 ? 64 : ROOM_CHAT_EXTRA);
   const near = (a, b) => Math.abs(a - b) <= 1;
   const ok = dock && input && near(dock.height, want) && near(dock.bottom, h)
-    && near(g.chatLog?.height, ROOM_CHAT_LOG) && near(input.bottom, h - 12)
+    && near(g.chatLog?.height, logWant) && near(input.bottom, h - 12)
     && near(input.height, CHAT_CONTROL)
     && (verdict.length === 0 || verdictCard && verdictCard.top >= g.header.bottom && verdictCard.bottom <= dock.top
       && verdict.every(({ rect }) => rect.top >= verdictCard.top && rect.bottom <= verdictCard.bottom));

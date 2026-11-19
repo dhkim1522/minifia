@@ -1,9 +1,9 @@
-// [의심] 모드의 상태 (24-03, D-10·D-25, UI-SPEC P24-4~9): 모드(근처 산 사람 이름표가 버튼) → 이름표를 고르면 {t:"suspect", target} 한 번 + 모드 끝.
+// [의심] 모드의 상태(24-03): 근처 산 사람을 고르면 {t:"suspect", target} 한 번 + 모드 끝.
 //
 // - 근처 판정은 서버 구간(store.segOf) — 내 예측 위치를 쓰지 않는다(D-25). 서버가 같은 구간·같은 함수로 거리를 재므로 켠 대상은 서버가 받아 준다. 판정 함수는 suspectTargets(히스테리시스 92%/100%).
 // - 근처 집합은 250ms 간격으로 다시 잰다(걷는 중 이름표가 프레임마다 켜졌다 꺼지지 않게). 모드가 아닐 때도 같은 간격으로 재서 단추의 비활성(근처 0명)을 정한다.
 // - 낙관 그림은 없다(P24-8): 붙었다는 확인은 서버 view(me.suspectTo·day.suspects)가 오면 3D 가 보여 준다. 이 훅은 보내고 모드만 끝낸다.
-// - 땅을 눌러 걷는 것은 모드를 끝내지 않는다. 끝나는 때: 이름표 고름 · 같은 단추 · Esc · 낮 토론을 벗어남 · 일차 바뀜 · 내가 죽음.
+// - 땅을 눌러 걷는 것은 모드를 끝내지 않는다. 끝나는 때: 대상 고름 · 같은 단추 · Esc · 낮 토론을 벗어남 · 일차 바뀜 · 내가 죽음.
 // - 거절을 알아보는 기억은 SendGuard("suspect") 이고 알림은 GameMap 의 오류 구독이 낸다. 연타는 pick 이 같은 렌더에서 모드를 끄는 것이 막고 서버 600ms 간격(24-01)이 받친다.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isAlive } from "../../shared/game/alive";
@@ -40,15 +40,15 @@ export interface SuspectApi {
   visible: boolean;
   /** 오늘 이미 붙였다(서버 값) — 단추가 "옮기기" */
   used: boolean;
-  /** [의심] 모드(근처 이름표가 버튼) */
+  /** [의심] 모드(근처 캐릭터를 누르면 붙인다) */
   mode: boolean;
-  /** 지금 근처의 산 사람 좌석(나 제외, 죽은 사람 제외). 모드의 이름표 버튼 대상 */
+  /** 지금 근처의 산 사람 좌석(나 제외, 죽은 사람 제외) */
   targets: ReadonlySet<number>;
   /** 지금 누를 수 없다(연결 끊김 또는 기본 방에서 근처 0명) */
   disabled: boolean;
   toggleMode: () => SuspectToggle;
   off: () => void;
-  /** 이름표 고르기 — 보내고 모드를 끈다 */
+  /** 대상 고르기 — 보내고 모드를 끈다 */
   pick: (seat: number) => void;
   /** 붙인 사람에게만 읽히는 안내 문장(role="status"). 처음 마운트 때 이미 붙어 있던 것은 비어 있다 */
   said: string;
@@ -111,7 +111,7 @@ export function useSuspect({ view, store, offset, send, canSend = true, guard }:
     return () => document.removeEventListener("keydown", onKey);
   }, [mode]);
 
-  // 대상이 죽으면 그 이름표가 곧바로 버튼에서 빠진다(간격을 기다리지 않는다)
+  // 대상이 죽으면 곧바로 후보에서 빠진다(간격을 기다리지 않는다)
   const players = view.players;
   const targets = useMemo<ReadonlySet<number>>(() => {
     if (!visible) return EMPTY;

@@ -475,20 +475,18 @@ describe("GameMap — [의심] 단추 보임 (P24-1·P24-2)", () => {
 });
 
 describe("GameMap — 의심 모드 (P24-5·P24-8)", () => {
-  it("단추를 누르면 모드가 켜진다: 표식·눌림·도구 안내·이름표 묶음·깜빡임", () => {
+  it("단추를 누르면 모드가 켜져 근처 캐릭터의 몸을 고를 수 있다", () => {
     const { container } = mountMap(makeView());
     fireEvent.click(suspectBtn(container)!);
     expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("on");
     expect(suspectBtn(container)?.getAttribute("aria-pressed")).toBe("true");
-    expect(hintOf(container)).toBe("의심 가는 사람의 이름표를 눌러요");
+    expect(hintOf(container)).toBe("의심 가는 캐릭터를 눌러요");
     const pick = stage.props!.pick!;
     expect([...pick.seats].sort()).toEqual([1, 2]);
     expect(pick.group).toBe("의심딱지 붙이기");
     expect(pick.label("영희")).toBe("영희 님에게 의심딱지 붙이기");
     expect(pick.attr).toBe("data-suspect-tag");
-    expect(stage.props!.tagProps?.(1).blink).toBe(true);
-    expect(stage.props!.tagProps?.(2).blink).toBe(true);
-    expect(stage.props!.tagProps?.(3).blink).toBeUndefined();
+    expect(pick.hit).toBe("body");
   });
   it("모드 중 호출 빛남(입력칸 call)은 꺼진다", () => {
     const view = makeView();
@@ -505,9 +503,9 @@ describe("GameMap — 의심 모드 (P24-5·P24-8)", () => {
     fireEvent.click(suspectBtn(container)!);
     expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("off");
     expect(stage.props!.pick).toBeUndefined();
-    expect(hintOf(container)).not.toBe("의심 가는 사람의 이름표를 눌러요");
+    expect(hintOf(container)).not.toBe("의심 가는 캐릭터를 눌러요");
   });
-  it("이름표를 고르면 suspect 가 한 번 나가고 같은 프레임에 모드가 끝난다(낙관 그림 없음)", () => {
+  it("대상을 고르면 suspect 가 한 번 나가고 같은 프레임에 모드가 끝난다(낙관 그림 없음)", () => {
     const { container, send } = mountMap(makeView());
     fireEvent.click(suspectBtn(container)!);
     act(() => stage.props!.pick!.onPick(1));

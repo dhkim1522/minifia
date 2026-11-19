@@ -66,9 +66,10 @@ const SCENE_LABEL = "지하 재즈 바 로비. 바닥을 누르면 그쪽으로 
 /** 이름표는 런타임이 첫 위치를 놓을 때까지 보이지 않는다(옛 자리 0,0 에서 한 프레임 번쩍이지 않게). 값이 늘 같아 React 가 다시 쓰지 않는다. */
 const TAG_INITIAL_STYLE: CSSProperties = { opacity: 0 };
 
-/** 지목 단계의 이름표 버튼(DAY-04): seats 의 이름표가 누르는 버튼이 된다 */
+/** 지목 대상. 기본은 이름표 버튼이고, 의심딱지는 캐릭터 몸을 직접 누른다. */
 export interface WorldPick {
   seats: ReadonlySet<number>;
+  hit?: "body";
   /** 지금 고른 좌석(aria-pressed) */
   mine?: number;
   /** 버튼의 접근성 이름. 닉네임을 받아 문장을 만든다("{닉네임} 님 가리키기") */
@@ -199,6 +200,10 @@ export function WorldStage(props: WorldStageProps) {
       mySeat: () => live.current.props.view.me.seat,
       players: () => live.current.props.view.players,
       reducedMotion: () => live.current.reduced,
+      suspectTargets: () => {
+        const { pick, canSend, exiting } = live.current.props;
+        return pick?.hit === "body" && canSend && !pick.disabled && !exiting ? pick.seats : undefined;
+      },
       stageRect: () => {
         const ins = live.current.props.stageInsets;
         const h = host.clientHeight || window.innerHeight;
@@ -323,7 +328,15 @@ export function WorldStage(props: WorldStageProps) {
     const { props: p } = live.current;
     const runtime = runtimeRef.current;
     p.onStageTap?.();
-    if (p.canWalk === false || runtime === null || !p.canSend || p.exiting) return;
+    if (runtime === null || !p.canSend || p.exiting) return;
+    if (p.pick?.hit === "body" && !p.pick.disabled) {
+      const seat = runtime.suspectAt(clientX, clientY);
+      if (seat !== null) {
+        p.pick.onPick(seat);
+        return;
+      }
+    }
+    if (p.canWalk === false) return;
     const at = runtime.tap(clientX, clientY);
     if (at === null) return;
     sendWalk(at);
@@ -390,6 +403,7 @@ export function WorldStage(props: WorldStageProps) {
           const me = p.seat === mySeat;
           const away = !p.connected;
           const pickable = current && pick !== undefined && pick.seats.has(p.seat);
+          const bodyPick = pickable && pick.hit === "body";
           const kickable = !pickable && current && canKick && away && !me;
           const { ring, turn, ...extra } = props.tagProps?.(p.seat) ?? {};
           // 죽은 자리 표식(유령 시점에서만): GameMap roleTagProps 가 spectate 가 있을 때만 tagProps.ghost 를 준다.
@@ -420,6 +434,7 @@ export function WorldStage(props: WorldStageProps) {
               data-lead={extra.lead ? "true" : undefined}
               // 지목에서 지금 차례인 사람: 런타임이 이름표를 겹침 맨 앞으로 올린다(HeadStack 으로는 넘기지 않는다)
               data-turn={turn ? "true" : undefined}
+              data-suspect-target={bodyPick && props.canSend && !pick.disabled ? "" : undefined}
               data-ring-kind={ring === undefined ? undefined : ringKindAttr(ring)}
               aria-hidden={kickable || pickable ? undefined : true}
               style={TAG_INITIAL_STYLE}
@@ -427,7 +442,7 @@ export function WorldStage(props: WorldStageProps) {
               {pickable ? (
                 <button
                   type="button"
-                  className="mf-world__pick"
+                  className={bodyPick ? "mf-world__pick mf-world__pick--body" : "mf-world__pick"}
                   data-pick={p.seat}
                   {...(pick.attr !== undefined ? { [pick.attr]: p.seat } : {})}
                   data-call={extra.call ? "" : undefined}
@@ -438,7 +453,7 @@ export function WorldStage(props: WorldStageProps) {
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
                     const pickNow = live.current.props.pick;
-                    if (live.current.props.canSend && pickNow?.disabled !== true) pickNow?.onPick(p.seat);
+                    if (live.current.props.canSend && !pickNow?.disabled && pickNow?.seats.has(p.seat)) pickNow.onPick(p.seat);
                   }}
                 >
                   {stack}

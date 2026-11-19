@@ -237,7 +237,7 @@ export function makeMapSelectFlows(helpers) {
     const hostIn = railIn(h, true);
     for (const r of hostRailChecks(hostIn)) rec(sc, `${pre}${r.id}-방장`, `방장 줄: ${r.label}`, r.ok, r.detail, r.info === true);
     const m = hostRailMeasure(hostIn);
-    rec(sc, `${pre}HRM`, `실측(판정 아님): ${screen === "result" ? "결과 화면" : "대기실"} 방장 줄`, true, m ? `띠 아랫변 ${r1(m.bandBottom)} · 패널 윗변 ${r1(h.panel.top)} · 줄 최대 높이 ${r1(m.maxH)}${m.shift ? `(테스트 방 −${m.shift} 포함)` : ""} · 단추 ${m.n} · 표식 ${m.crown ? "있음" : "없음"} · 열 [${m.columns.join(",")}] · 식 ${m.expect.crown ? "표식 + " : ""}[${m.expect.columns.join(",")}]` : "잴 수 없음(줄·띠 없음)", true);
+    rec(sc, `${pre}HRM`, `실측(판정 아님): ${screen === "result" ? "결과 화면" : "대기실"} 방장 줄`, true, m ? `띠 아랫변 ${r1(m.bandBottom)} · 패널 윗변 ${r1(h.panel.top)} · 줄 최대 높이 ${r1(m.maxH)}${m.shift ? `(테스트 방 −${m.shift} 포함)` : ""} · 단추 ${m.n} · 열 [${m.columns.join(",")}] · 식 [${m.expect.join(",")}]` : "잴 수 없음(줄·띠 없음)", true);
     for (const r of hostRailChecks(railIn(g, false))) rec(sc, `${pre}${r.id}-참가자`, `참가자: ${r.label}`, r.ok, r.detail, r.info === true);
   }
 

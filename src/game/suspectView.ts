@@ -10,7 +10,7 @@ import type { RoomView } from "../../shared/protocol";
 export const SUSPECT_TEXT = {
   ready: "의심딱지 붙이기",
   moved: "의심딱지 옮기기",
-  modeHint: "의심 가는 사람의 이름표를 눌러요",
+  modeHint: "의심 가는 캐릭터를 눌러요",
   tooFar: "조금 더 가까이 가 보세요",
   target: (nickname: string): string => `${nickname} 님에게 의심딱지 붙이기`,
 } as const;

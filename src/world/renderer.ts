@@ -49,7 +49,9 @@ export interface CharacterHandle {
   holdPose?(id: "point" | null): void;
   setRing?(color: string | null): void;
   /** 마피아 밤 선택 표시(결정 0065) — 몸 윤곽 껍질과 발밑 고리 조임. optional(시험 가짜 호환) */
-  setPickMark?(on: boolean, opts?: { color: string; animate: boolean }): void;
+  setPickMark?(on: boolean, opts?: { color: string; animate: boolean; pulseOutline?: boolean }): void;
+  /** 화면 탭에 맞는 관절 메시. 그림자·고리·장식용 메시를 제외한다. */
+  bodyMeshes?(): readonly Object3D[];
   /**
    * "의심" 포스트잇(결정 0089-11): 이 사람이 받은 종이의 붙인 좌석 목록(오래된 것부터)을 몸통에 맞춘다. 보이는 것은 마지막 3장.
    * animate 거짓 = 처음 받은 프레임·모션 줄이기(즉시). 유령에게는 붙지 않는다. optional(시험 가짜 호환 — runtime.ts 는 three 를 값으로 부르지 않아 동적으로 불러온 캐릭터 모듈이 구현한다)
@@ -98,6 +100,7 @@ export interface WorldRenderer {
   setMarker(kind: MarkerKind, at: { x: number; z: number } | null, scale: number, opacity: number): void;
   project(p: { x: number; y: number; z: number }): { sx: number; sy: number };
   groundAt(sx: number, sy: number): { x: number; z: number };
+  bodyAt?(sx: number, sy: number): number | null;
   render(): void;
   setBudget(step: number): void;
   onStatus(cb: (e: RendererStatusEvent) => void): () => void;

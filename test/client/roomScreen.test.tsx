@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
@@ -59,6 +59,47 @@ beforeEach(() => {
   connectionMock.current = conn({});
 });
 afterEach(cleanup);
+
+describe("RoomScreen: 게임 메뉴", () => {
+  it("가운데 메뉴를 Esc로 닫으면 상단 조작으로 포커스가 돌아간다", () => {
+    vi.useFakeTimers();
+    try {
+      render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+      const open = screen.getByRole("button", { name: "메뉴" });
+      fireEvent.click(open);
+      const menu = screen.getByRole("dialog", { name: "게임 메뉴" });
+      expect(menu.classList.contains("mf-dialog--centered")).toBe(true);
+      expect(document.activeElement).toBe(within(menu).getByRole("button", { name: "닫기" }));
+      expect(open.getAttribute("aria-expanded")).toBe("true");
+      expect(within(menu).queryByRole("button", { name: "내 역할과 기록" })).toBeNull();
+
+      fireEvent(menu, new Event("cancel", { cancelable: true }));
+      act(() => vi.advanceTimersByTime(260));
+      expect(screen.queryByRole("dialog", { name: "게임 메뉴" })).toBeNull();
+      expect(open.getAttribute("aria-expanded")).toBe("false");
+      expect(document.activeElement).toBe(open);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("방 나가기는 가운데 확인을 거쳐야 전송한다", () => {
+    const send = vi.fn(() => true);
+    connectionMock.current = conn({ send });
+    const onExit = vi.fn();
+    render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={onExit} />);
+    fireEvent.click(screen.getByRole("button", { name: "메뉴" }));
+    const menu = screen.getByRole("dialog", { name: "게임 메뉴" });
+    fireEvent.click(within(menu).getByRole("button", { name: "방 나가기" }));
+    const confirm = screen.getByRole("dialog", { name: "방에서 나갈까요?" });
+    expect(confirm.classList.contains("mf-dialog--centered")).toBe(true);
+    expect(document.activeElement).toBe(within(confirm).getByRole("button", { name: "취소" }));
+    expect(send).not.toHaveBeenCalled();
+    fireEvent.click(within(confirm).getByRole("button", { name: "나가기" }));
+    expect(send).toHaveBeenCalledWith({ t: "leave" });
+    expect(onExit).toHaveBeenCalledWith("left");
+  });
+});
 
 describe("RoomScreen: 재접속 띠 (C-02)", () => {
   it("view 가 있고 reconnecting 이면 본문보다 앞에 52px 띠 '연결이 끊겼어요 · 다시 연결하는 중'", () => {

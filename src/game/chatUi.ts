@@ -8,11 +8,14 @@
 
 /** 채팅 기록 칸의 기본 높이. 로비와 이전 지도 단계는 눌러서 기록 칸을 늘린다(0083-4). */
 export const LOG_H = 68;
-/** 이름·아바타·한 줄 말풍선을 두 건 온전히 읽을 수 있는 토론 기록 높이 */
-export const DISCUSSION_LOG_H = 92;
+/** 이름·아바타·한 줄 말풍선을 세 건 읽을 수 있는 공용 방 채팅 기록 높이 */
+export const DISCUSSION_LOG_H = 144;
+/** 짧은 화면의 기록 기본 높이와 헤더·도구·맵 여유를 포함한 예약 높이. */
+export const DISCUSSION_SHORT_LOG_H = 116;
+export const DISCUSSION_VIEWPORT_ALLOWANCE = 480;
 /** 토론에서 키보드 위에 고정하는 기록 칸 높이 */
 export const DISCUSSION_KB_LOG_H = 42;
-/** 토론 패널의 기록 칸 밖 높이 = 도구 66, 입력 간격 8 + 입력 44 + 하단 12 */
+/** 토론 패널의 기록 칸 밖 높이 = 도구 66, 입력 간격 8 + 입력 44 + 패널 안쪽 8 + 바깥 여백 4 */
 export const DISCUSSION_PANEL_EXTRA = 130;
 
 /** 채팅 패널의 기록 칸 밖 높이 = 위 여백 14 + 입력 간격 8 + 입력줄 48 + 아래 여백 22 */
@@ -58,6 +61,11 @@ export const CHAT_KEEP_LINES = 100;
 /** 대기실 패널 높이. 방장·참가자가 같다(기록 칸 68 일 때 160). E2E 사본(scripts/e2e/lib.mjs)이 같은 식이다 */
 export function lobbyPanelHeight(logH: number): number {
   return logH + LOBBY_PANEL_EXTRA;
+}
+
+/** 화면 높이가 줄 때 기록을 먼저 줄여 이동 스테이지의 안전 공간을 확보한다. */
+export function discussionLogHeight(roomH: number): number {
+  return Math.min(DISCUSSION_LOG_H, Math.max(DISCUSSION_SHORT_LOG_H, roomH - DISCUSSION_VIEWPORT_ALLOWANCE));
 }
 
 /**

@@ -1,18 +1,45 @@
 /* 화면 맨 아래 채팅을 공유한다. 상황별 행동은 위 줄에서만 바뀐다. */
-.mf-room-chat { min-width: 0; }
-.mf-room-chat .mv-chat { gap: 0; font-family: var(--font-ui); }
-.mf-room-chat :is(.mv-chat__logbox, .mv-chat__form) { background: var(--noir-panel); pointer-events: auto; }
+.mf-room-chat { position: relative; min-width: 0; padding-bottom: 4px; }
+.mf-room-chat .mv-chat {
+  isolation: isolate;
+  gap: 0;
+  margin-inline: 8px;
+  border-radius: var(--noir-surface-radius);
+  background: var(--noir-sheet-light), var(--noir-panel);
+  box-shadow: inset 0 0 0 1px var(--noir-control-line), var(--noir-rail), var(--shadow-card);
+  font-family: var(--font-ui);
+  pointer-events: auto;
+}
+.mf-room-chat::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 84px;
+  background: linear-gradient(transparent, color-mix(in srgb, var(--night-950) 66%, transparent));
+  pointer-events: none;
+}
 .mf-room-chat .mv-chat__log {
-  gap: 5px;
-  padding: 7px 12px 4px;
-  border-radius: 0;
+  gap: 4px;
+  padding: 4px 9px;
+  max-height: max(var(--mf-room-chat-short-log), calc(var(--mf-room-h, 100dvh) - var(--mf-room-chat-viewport-allowance)));
+  border-radius: var(--noir-surface-radius) var(--noir-surface-radius) 0 0;
   background: transparent;
   box-shadow: none;
+  mask-image: linear-gradient(transparent, black 7px);
 }
+.mf-room-chat .mv-chat__name { line-height: 1.25; }
+.mf-room-chat .mv-chat__text { padding-block: 2px; line-height: 1.35; }
 .mf-room-chat .mv-chat.is-compact .mv-chat__log { padding-block: 2px; }
-.mf-room-chat .mv-chat__form { gap: 6px; padding: 8px 12px 12px; }
+.mf-room-chat .mv-chat__form { gap: 6px; padding: 8px 9px; }
+.mf-room-chat .mv-chat__form::before {
+  content: "";
+  position: absolute;
+  inset: 0 9px auto;
+  border-top: 1px solid var(--noir-line);
+  pointer-events: none;
+}
 .mf-keyword__answer .mv-chat__form { margin-top: var(--space-xs); }
-.mf-room-chat .mv-chat.is-compact .mv-chat__form { padding-bottom: 8px; }
+.mf-room-chat .mv-chat.is-compact .mv-chat__form { padding-bottom: 4px; }
 .mf-room-chat .mv-chat__input,
 .mf-keyword__answer .mv-chat__input { height: var(--tap-min); padding-inline: 9px; border-color: var(--noir-control-line); border-radius: 7px; background: var(--noir-inset); }
 .mf-room-chat .mv-chat__input::placeholder,
@@ -20,7 +47,7 @@
 .mf-room-chat .mv-chat__send { width: var(--tap-min); height: var(--tap-min); border-radius: 7px; }
 .mf-room-chat .mv-chat__send[aria-disabled="true"] { opacity: 1; }
 .mf-room-chat .mv-chat__send svg { width: 20px; height: 20px; }
-.mf-room-chat [data-chat-locked] .mv-chat__form { padding-inline-end: calc(12px + var(--tap-min) + 6px); }
+.mf-room-chat [data-chat-locked] .mv-chat__form { padding-inline-end: calc(9px + var(--tap-min) + 6px); }
 
 .mf-room-chat__tools { position: relative; }
 .mf-room-toolbar {

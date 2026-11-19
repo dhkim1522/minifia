@@ -1,6 +1,7 @@
 // three 구현(WebGLRenderer). 이 파일은 three 를 값으로 import 하는 몇 안 되는 모듈이다 — 정적 import 경로(메인 번들)에
 // 두지 않는다. 06-13 런타임이 `import()` 로만 열어 별도 청크로 나눈다. 렌더러 인터페이스는 renderer.ts(three 값 import 없음).
 import { ACESFilmicToneMapping, Group, MeshBasicMaterial, PCFShadowMap, Plane, PointLight, Raycaster, SRGBColorSpace, Vector2, Vector3, WebGLRenderer } from "three";
+import type { Object3D } from "three";
 import type { MapId } from "../../shared/protocol";
 import { DEFAULT_TARGET } from "./camera";
 import { buildBarScene } from "./maps/bar";
@@ -126,6 +127,12 @@ async function build(opts: Opts): Promise<WorldRenderer> {
   attach(canvas);
 
   const ray = new Raycaster();
+  const screenPoint = new Vector2();
+  const aimRay = (sx: number, sy: number): void => {
+    ray.setFromCamera(screenPoint.set((sx / size.w) * 2 - 1, 1 - (sy / size.h) * 2), camera);
+  };
+  // 한 손 터치가 몸의 가장자리를 살짝 비껴도 누를 수 있도록 한다.
+  const bodyTapOffsets = [[0, 0], [-6, 0], [6, 0], [0, -6], [0, 6]] as const;
   const floor = new Plane(new Vector3(0, 1, 0), 0);
   const loseExt = (): { loseContext(): void; restoreContext(): void } | null => {
     try {
@@ -199,9 +206,24 @@ async function build(opts: Opts): Promise<WorldRenderer> {
       return { sx: ((v.x + 1) / 2) * size.w, sy: ((1 - v.y) / 2) * size.h };
     },
     groundAt(sx: number, sy: number): { x: number; z: number } {
-      ray.setFromCamera(new Vector2((sx / size.w) * 2 - 1, -((sy / size.h) * 2 - 1)), camera);
+      aimRay(sx, sy);
       const hit = ray.ray.intersectPlane(floor, new Vector3());
       return hit ? { x: hit.x, z: hit.z } : { x: target.x, z: target.z };
+    },
+    bodyAt(sx, sy) {
+      const byMesh = new Map<Object3D, number>();
+      for (const [seat, character] of seats) {
+        if (!character.root.visible) continue;
+        for (const mesh of character.bodyMeshes?.() ?? []) if (mesh.visible) byMesh.set(mesh, seat);
+      }
+      const meshes = [...byMesh.keys()];
+      for (const [dx, dy] of bodyTapOffsets) {
+        aimRay(sx + dx, sy + dy);
+        const [hit] = ray.intersectObjects(meshes, false);
+        // 가까운 몸이 가리는 뒤쪽 사람을 고르지 않게 유효 좌석으로 거르기 전에 첫 교점을 사용한다.
+        if (hit) return byMesh.get(hit.object) ?? null;
+      }
+      return null;
     },
     render(): void {
       if (disposed) return;

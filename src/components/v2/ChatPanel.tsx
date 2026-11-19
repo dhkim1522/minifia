@@ -99,8 +99,6 @@ export interface ChatPanelProps {
   keepLogHeightOnFocus?: boolean;
   /** 토론에서는 기록을 항상 스크롤할 수 있고 고정 높이를 유지한다. */
   fixedLog?: boolean;
-  /** 기록 칸 위 토론 조작 줄 */
-  tools?: ReactNode;
 }
 
 interface ChannelUi {
@@ -117,7 +115,7 @@ function channelUi(channel: "all" | "mafia" | "ghost"): ChannelUi {
 }
 
 export function ChatPanel(props: ChatPanelProps) {
-  const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef, onWill, willOpen, willSaved, callInput, callWill, trailing, locked, fixedLog, tools } = props;
+  const { messages, value, onChange, onSend, channel = "all", logHeight, compact, sendDisabled, sendDim, notice, quiet, inputId, inputRef, onWill, willOpen, willSaved, callInput, callWill, trailing, locked, fixedLog } = props;
   const fieldRef = useRef<HTMLInputElement | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
   const composingRef = useRef(false);
@@ -337,7 +335,6 @@ export function ChatPanel(props: ChatPanelProps) {
 
   return (
     <section className={rootCls} data-chat-panel="" data-chat-channel={channel} {...(locked ? { "data-chat-locked": "" } : {})}>
-      {tools}
       <div
         className={open ? "mv-chat__logbox is-open" : "mv-chat__logbox"}
         // 숫자 한 곳은 chatUi.ts 다 — CSS 가 읽는 변수로 넘긴다(.mv-chat__log.is-open 의 clamp)

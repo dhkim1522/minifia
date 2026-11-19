@@ -278,7 +278,7 @@ describe("rolecard.css — Journal 규약", () => {
   });
 
   it("결과 글자색과 NEW 알약 면", () => {
-    expect(rule(".mf-journal__rz--bad")).toContain("color: var(--crimson-300)");
+    expect(rule(".mf-journal__rz--bad")).toContain("color: color-mix(in srgb, var(--crimson-300) 60%, var(--gray-50))");
     expect(rule(".mf-journal__rz--heal")).toContain("color: var(--journal-doctor-ink)");
     expect(rule(".mf-journal__rz--ok")).toContain("color: var(--gray-50)");
     const nw = rule(".mf-journal__new");

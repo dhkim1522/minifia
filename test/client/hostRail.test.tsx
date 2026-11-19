@@ -3,10 +3,9 @@ import { act, cleanup, createEvent, fireEvent, render, screen } from "@testing-l
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
-import { HOST_RAIL_LABEL, HostRail, hostRailLayout } from "../../src/components/v2/HostRail";
+import { HOST_RAIL_LABEL, HostRail } from "../../src/components/v2/HostRail";
 import { HostRailButton } from "../../src/components/v2/HostRailButton";
 import { MapChip } from "../../src/components/v2/MapChip";
-import { splitSideColumn } from "../../src/components/v2/SideColumn";
 
 afterEach(() => {
   cleanup();
@@ -138,41 +137,6 @@ describe("HostRailButton — 방장 도구 타일 (19-03, D-13·D-14, UI-SPEC A-
   });
 });
 
-const layoutOf = (n: number, maxH: number) => JSON.stringify(hostRailLayout(n, maxH));
-const one = (crown: boolean, n: number) => JSON.stringify({ crown, columns: [n] });
-
-describe("hostRailLayout — 왕관 표식과 열 고르기 (19-03, UI-SPEC F-2, P19-2·P19-3)", () => {
-  it("표식까지 들어가면 한 열 + 표식이다(경계 포함): n·52 + (n−1)·12 + 32 ≤ 최대 높이", () => {
-    expect([layoutOf(4, 276), layoutOf(3, 212), layoutOf(2, 148), layoutOf(1, 84)].join(" ")).toBe([one(true, 4), one(true, 3), one(true, 2), one(true, 1)].join(" "));
-  });
-
-  it("표식만 안 들어가면 표식 없는 한 열이다", () => {
-    expect([layoutOf(4, 275), layoutOf(4, 244), layoutOf(3, 211)].join(" ")).toBe([one(false, 4), one(false, 4), one(false, 3)].join(" "));
-  });
-
-  it("한 열도 안 들어가면 splitSideColumn 의 두 열이고 표식이 없다", () => {
-    expect(layoutOf(4, 243)).toBe(JSON.stringify({ crown: false, columns: [3, 1] }));
-    // UI-SPEC F-2 표의 360×560: 띠 두 줄 174 → [2,2], 한 줄 195 → [3,1], 기본 마피아(n=3) 174 → [2,1]
-    expect([layoutOf(4, 174), layoutOf(4, 195), layoutOf(3, 174)].join(" ")).toBe(
-      [
-        { crown: false, columns: [2, 2] },
-        { crown: false, columns: [3, 1] },
-        { crown: false, columns: [2, 1] },
-      ]
-        .map((x) => JSON.stringify(x))
-        .join(" "),
-    );
-    for (const [n, maxH] of [[4, 243], [4, 174], [5, 116], [3, 100]] as const) {
-      expect(JSON.stringify(hostRailLayout(n, maxH).columns)).toBe(JSON.stringify(splitSideColumn(n, maxH)));
-    }
-  });
-
-  it("단추가 없으면 열이 없고, 높이를 아직 모르면(무한) 표식 한 열이다", () => {
-    expect(layoutOf(0, 500)).toBe(JSON.stringify({ crown: false, columns: [] }));
-    expect(layoutOf(3, Infinity)).toBe(one(true, 3));
-  });
-});
-
 const railButtons = (onPress: () => void = () => {}) => [
   <HostRailButton key="bots-a" id="bots" icon="bot" label="봇" onPress={onPress} />,
   <MapChip key="map" rail choice="random" host onPress={onPress} />,
@@ -186,7 +150,7 @@ const colsOf = (container: HTMLElement) =>
     .join(" | ");
 
 describe("HostRail — 방장 줄 틀 (19-03, D-13, UI-SPEC A·F-2)", () => {
-  it("넉넉하면 role=group '방장 전용' 줄 하나에 왕관 표식 + 한 열, 단추는 준 순서대로다", () => {
+  it("넉넉하면 role=group '방장 전용' 줄에 단추만 한 열로 배치한다", () => {
     const { container } = render(<HostRail maxHeight={500}>{railButtons()}</HostRail>);
     const rails = [...container.querySelectorAll("[data-host-rail]")];
     expect(rails.length).toBe(1);
@@ -196,15 +160,8 @@ describe("HostRail — 방장 줄 틀 (19-03, D-13, UI-SPEC A·F-2)", () => {
     expect(rail.classList.contains("mf-hostrail")).toBe(true);
     expect(rail.hasAttribute("tabindex")).toBe(false);
     expect(rail.hasAttribute("data-test-shift")).toBe(false);
-    const crowns = [...rail.querySelectorAll("[data-host-rail-crown]")];
-    expect(crowns.length).toBe(1);
-    expect(crowns[0]?.getAttribute("role")).toBe("img");
-    expect(crowns[0]?.getAttribute("aria-label")).toBe("방장 전용");
-    expect(crowns[0]?.querySelector("svg")?.getAttribute("width")).toBe("20");
-    expect(crowns[0]?.querySelector("button")).toBeNull();
     expect(colsOf(container)).toBe("bots,map,bots,bots");
-    // 표식이 열 묶음보다 먼저(위)다
-    expect([...rail.children].map((c) => c.className).join(" > ")).toBe("mf-hostrail__crown > mf-hostrail__cols");
+    expect([...rail.children].map((c) => c.className)).toEqual(["mf-hostrail__cols"]);
     // 표식 값은 고정 낱말뿐이다(T-19-11)
     expect([...rail.querySelectorAll("[data-host-rail-btn]")].every((b) => ["map", "bots"].includes(b.getAttribute("data-host-rail-btn") ?? ""))).toBe(true);
     // 줄에 보이는 글이 없다(D-15)
@@ -218,12 +175,6 @@ describe("HostRail — 방장 줄 틀 (19-03, D-13, UI-SPEC A·F-2)", () => {
     expect(container.querySelector("[data-host-rail]")?.getAttribute("aria-label")).toBe("방장 전용");
   });
 
-  it("표식만 안 들어가면 표식 없는 한 열이다", () => {
-    const { container } = render(<HostRail maxHeight={250}>{railButtons()}</HostRail>);
-    expect(container.querySelectorAll("[data-host-rail-crown]").length).toBe(0);
-    expect(colsOf(container)).toBe("bots,map,bots,bots");
-  });
-
   it("null 자식은 칸이 아니다 — 빠진 칸은 세지 않는다", () => {
     const { container } = render(
       <HostRail maxHeight={212}>
@@ -233,7 +184,7 @@ describe("HostRail — 방장 줄 틀 (19-03, D-13, UI-SPEC A·F-2)", () => {
       </HostRail>,
     );
     expect(colsOf(container)).toBe("bots,map,bots");
-    expect(container.querySelectorAll("[data-host-rail-crown]").length).toBe(1);
+    expect(container.querySelectorAll("[data-host-rail-crown]").length).toBe(0);
   });
 
   it("testShift 면 data-test-shift 를 단다(테스트 방 단추 아래로, P19-5)", () => {
@@ -317,12 +268,7 @@ describe("방장 줄 CSS (19-03, UI-SPEC A-1·Color, T-19-12; 22-07 칩 규칙 �
     expect(ruleOf(V2, ".mf-hostrail[data-test-shift]")).toContain("top: calc(var(--mf-host-bottom, 62px) + 12px + 48px)");
   });
 
-  it("왕관 표식은 52×20·아래 12·금빛, 열 묶음은 가로 12, 열은 세로 12 다", () => {
-    const crown = ruleOf(V2, ".mf-hostrail__crown");
-    expect(crown).toContain("width: var(--control-button)");
-    expect(crown).toContain("height: 20px");
-    expect(crown).toContain("margin-bottom: 12px");
-    expect(crown).toContain("color: var(--light-lamp)");
+  it("열 사이와 열 안 간격은 12px이다", () => {
     const cols = ruleOf(V2, ".mf-hostrail__cols");
     expect(cols).toContain("flex-direction: row");
     expect(cols).toContain("gap: 12px");

@@ -578,13 +578,13 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     expect(container.querySelector('[data-playtest-surface="reaction"]')).not.toBeNull();
   });
 
-  it("키보드 열림 경계(lift 60) 아래에서는 기록 칸이 92px이고, 블러하면 92px로 돌아온다", () => {
+  it("키보드 열림 경계(lift 60) 아래에서는 기록 칸이 144px이고, 블러하면 144px로 돌아온다", () => {
     const vv = installVV(INNER_H);
     const { container } = mount(makeView());
     focusWithKeyboard(container, vv, 60);
     expect(gameOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(endButton(container)).not.toBeNull();
-    expect(logHeight(container)).toBe("92px");
+    expect(logHeight(container)).toBe("144px");
     focusWithKeyboard(container, vv, 336);
     panelH = KB_PANEL;
     remeasure();
@@ -594,19 +594,19 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     remeasure();
     expect(gameOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(endButton(container)).not.toBeNull();
-    expect(logHeight(container)).toBe("92px");
+    expect(logHeight(container)).toBe("144px");
     expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: DISCUSSION_PANEL_H });
   });
 
-  it("키보드가 닫힌 토론 기록은 방 높이와 무관하게 92px이다", () => {
+  it("키보드가 닫힌 토론에서 기록 높이의 CSS 상한은 144px이다", () => {
     for (const h of [560, 640, 844, 932]) {
       Object.defineProperty(window, "innerHeight", { value: h, configurable: true, writable: true });
       const { container, unmount } = mount(makeView());
-      expect(logHeight(container)).toBe("92px");
+      expect(logHeight(container)).toBe("144px");
       unmount();
     }
     expect(LOG_H).toBe(68);
-    expect(DISCUSSION_PANEL_H).toBe(222);
+    expect(DISCUSSION_PANEL_H).toBe(274);
     expect(LOG_H + 92).toBe(160);
     expect(KB_PANEL).toBe(160);
   });

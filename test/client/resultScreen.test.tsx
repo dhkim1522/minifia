@@ -865,14 +865,14 @@ describe("결과 화면 기록 숨김 (18.1 R5, P181-7)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("기록 칸 높이는 토론과 같은 공용 값이다 — 방 높이로 가르지 않는다 (B 계약 5, E2)", () => {
+  it("기록 칸 높이의 CSS 상한은 토론과 같은 공용 값이다 (B 계약 5, E2)", () => {
     const orig = window.innerHeight;
     try {
       for (const h of [600, 900]) {
         Object.defineProperty(window, "innerHeight", { configurable: true, value: h });
         const r = renderRoom(makeView(), onEvent());
         const log = r.container.querySelector<HTMLElement>("[data-chat-log]")!;
-        expect(log.style.height).toBe("92px")
+        expect(log.style.height).toBe("144px")
         expect(LOG_H).toBe(68);
         r.unmount();
       }

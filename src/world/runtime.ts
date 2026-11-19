@@ -20,6 +20,7 @@ import type { OutfitId } from "./characterData";
 import { admitEmote, EMOTE_RENDER_MAX, emoteDurationMs } from "./emoteCap";
 import type { PlayingEmote } from "./emoteCap";
 import { createTapGate } from "./input";
+import { NOTE_COLORS } from "./palette";
 import { BLEND_SNAP_DIST, blendRemaining, createOwnMoves, predictSegment, stepYaw, travelYaw } from "./motion";
 import { DEFAULT_BUDGET_STEP, LIGHT_BLEND_SEC, nextLadderStep } from "./renderer";
 import type { CharacterHandle, WorldRenderer } from "./renderer";
@@ -178,6 +179,7 @@ export interface WorldRuntimeDeps {
   mySeat(): number;
   players(): readonly { seat: number; nickname: string; connected: boolean; look?: string; animal?: AnimalId }[];
   reducedMotion(): boolean;
+  suspectTargets?(): ReadonlySet<number> | undefined;
   /** 스테이지 사각형의 위·아래 끝(px, 캔버스 위 끝 기준) */
   stageRect(): { top: number; bottom: number };
   onStatus(s: MapStatusState): void;
@@ -248,6 +250,8 @@ export interface WorldRuntime {
   setScene(look: SceneLook | null): void;
   /** 화면 좌표의 탭. 받아들이면 바닥 교점(월드 단위)을 돌려주고 목적지 링을 바로 띄운다 */
   tap(clientX: number, clientY: number): { x: number; z: number } | null;
+  /** 이름표가 아닌 화면상의 캐릭터 몸에 맞은 유효 좌석을 돌려준다. */
+  suspectAt(clientX: number, clientY: number): number | null;
   /**
    * 월드 단위 목적지로 걷는다 — tap 이 바닥 교점을 얻은 뒤와 같은 경로(링을 바로 띄우고 목적지를 돌려준다).
    * 서버로 보내는 일과 notifyMoveSent 는 부른 쪽이 탭과 똑같이 한다
@@ -326,6 +330,7 @@ interface Actor {
   pointing: boolean;
   /** handle.setRing 에 마지막으로 보낸 고리 종류(null = 고리 없음) */
   ringKind: string | null;
+  suspectOutline: "pulse" | "fixed" | null;
   /** 처형 연출로 handle.setOpacity 에 마지막으로 보낸 불투명도(1 = 연출 없음) */
   fadeOpacity: number;
   /** 지금 유령으로 그리고 있나(handle.setGhost 에 마지막으로 보낸 값) */
@@ -806,6 +811,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       dim: false,
       pointing: false,
       ringKind: null,
+      suspectOutline: null,
       fadeOpacity: 1,
       ghost: false,
       ghostAt: 0,
@@ -1108,6 +1114,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const walkingSeats = new Set<number>(); // 이번 프레임 걸은 좌석 — 동작이 끊긴 것으로 보아 재생 목록에서 뺀다
     const mySeat = deps.mySeat();
     const lightNow = look?.lighting ?? deps.lighting ?? "talk";
+    const suspectTargets = deps.suspectTargets?.();
     for (const a of actors.values()) {
       const server = segFor(a.seat);
       if ((server === undefined || !isShown(a.seat)) && a.exit === null) {
@@ -1245,6 +1252,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const y = lift + (look === null ? 0 : stageLiftY(at, mapId)) + (a.ghost ? ghostFloatY(now / 1000, reduced) : 0) + rise;
       a.handle.root.scale.setScalar(a.base * scale);
       a.handle.root.position.set(at.x, y, at.z);
+      const suspectOutline = a.exit === null && !wantGhost && suspectTargets?.has(a.seat) ? (reduced ? "fixed" : "pulse") : null;
+      if (suspectOutline !== a.suspectOutline) {
+        a.suspectOutline = suspectOutline;
+        a.handle.setPickMark?.(suspectOutline !== null, { color: NOTE_COLORS.outline, animate: suspectOutline === "pulse", pulseOutline: true });
+      }
       a.headY = y + a.handle.update(dt, now / 1000, moving).headY * scale;
       a.tagAlpha = alpha === 1 ? "1" : String(Math.round(alpha * 1000) / 1000);
     }
@@ -1473,6 +1485,16 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
   // ---------- 입력 ----------
 
+  function suspectAt(clientX: number, clientY: number): number | null {
+    if (disposed || renderer === null || inputBlocked(status)) return null;
+    const targets = deps.suspectTargets?.();
+    if (!targets?.size) return null;
+    const rect = host.getBoundingClientRect();
+    const seat = renderer.bodyAt?.(clientX - rect.left, clientY - rect.top);
+    const actor = seat == null ? undefined : actors.get(seat);
+    return actor && actor.exit === null && !actor.ghost && targets.has(actor.seat) ? actor.seat : null;
+  }
+
   function tap(clientX: number, clientY: number): { x: number; z: number } | null {
     if (disposed || renderer === null || inputBlocked(status)) return null;
     if (!gate.accept(Date.now())) return null;
@@ -1559,6 +1581,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       (a.handle as PlayableCharacter).setFace?.("surprise");
     },
     tap,
+    suspectAt,
     walkTo,
     notifyMoveSent,
     cancelMove: clearRing,

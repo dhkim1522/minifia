@@ -33,6 +33,7 @@ import type { SceneLook, SeatLook } from "../../src/world/presence";
 // ---------- 가짜 렌더러·캐릭터 도우미 ----------
 
 export interface FakeRenderer extends WorldRenderer {
+  bodyAt: Mock<(sx: number, sy: number) => number | null>;
   chars: Map<number, CharacterHandle>;
   views: { target: { x: number; z: number }; offsetY: number }[];
   markers: { kind: string; at: { x: number; z: number } | null; scale: number; opacity: number }[];
@@ -84,6 +85,7 @@ export function makeFakeRenderer(): FakeRenderer {
     // 발끝(y=0)은 sy = 300 + 10z, 머리(y)는 그만큼 위. 탭 역변환은 groundAt.
     project: (p: { x: number; y: number; z: number }) => ({ sx: 200 + p.x * 10, sy: 300 + p.z * 10 - p.y * 10 }),
     groundAt: vi.fn((sx: number, sy: number) => ({ x: (sx - 200) / 10, z: (sy - 300) / 10 })),
+    bodyAt: vi.fn(() => null),
     render() {
       r.renders++;
     },
@@ -3019,6 +3021,32 @@ describe("게임 이름표: 지목 버튼·tagProps·canWalk (DAY-04, MAP-04)", 
   const pickBtn = (s: Setup, seat: number): HTMLButtonElement => s.utils.container.querySelector<HTMLButtonElement>(`button[data-pick="${seat}"]`)!;
 
   describe("지목 버튼", () => {
+    it("의심 모드에서 몸에 맞으면 고르고, 그 외의 탭은 걸음을 유지한다", async () => {
+      const pick = pickOf({ seats: new Set([1]), hit: "body", attr: "data-suspect-tag" });
+      const s = await open({ pick });
+      const renderer = s.world.renderers[0]!;
+      expect(tagOf(s.utils, 1)?.hasAttribute("data-suspect-target")).toBe(true);
+      expect(pickBtn(s, 1).classList.contains("mf-world__pick--body")).toBe(true);
+      expect(renderer.chars.get(1)?.setPickMark).toHaveBeenCalledWith(true, expect.objectContaining({ animate: true, pulseOutline: true }));
+      expect(renderer.chars.get(0)?.setPickMark).not.toHaveBeenCalled();
+
+      renderer.bodyAt.mockReturnValueOnce(1);
+      tapAt(surface(s.utils), 170, 290);
+      expect(renderer.bodyAt).toHaveBeenLastCalledWith(170, 290);
+      expect(pick.onPick).toHaveBeenCalledExactlyOnceWith(1);
+      expect(s.send).not.toHaveBeenCalled();
+
+      renderer.bodyAt.mockReturnValueOnce(0);
+      tapAt(surface(s.utils), 250, 340);
+      expect(pick.onPick).toHaveBeenCalledTimes(1);
+      expect(s.send).toHaveBeenCalledWith({ t: "move", x: 500, z: 400 });
+
+      s.rerender({ pick: undefined });
+      frame();
+      expect(tagOf(s.utils, 1)?.hasAttribute("data-suspect-target")).toBe(false);
+      expect(renderer.chars.get(1)?.setPickMark).toHaveBeenLastCalledWith(false, expect.anything());
+    });
+
     it("pick 좌석의 이름표만 button[data-pick] 이 되고 aria-label·aria-pressed 가 붙는다", async () => {
       const s = await openPick();
       expect(s.utils.container.querySelectorAll("button[data-pick]")).toHaveLength(3);

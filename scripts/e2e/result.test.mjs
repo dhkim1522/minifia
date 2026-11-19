@@ -17,9 +17,9 @@ const good = () => ({
   // 18.1-17: 판이 끝났을 때 탈락한 좌석(없음)과 유령 그림 훅(window.__mfGhosts 사본)
   deadSeats: [],
   ghosts: { seats: [], ready: true },
-  panel: 222,
-  panelWant: 222,
-  stageBottom: 442,
+  panel: 274,
+  panelWant: 274,
+  stageBottom: 390,
   roomH: 664,
   hasLegacy: [],
   chatEcho: true,
@@ -76,13 +76,13 @@ test("RS4(18.1-17): 탈락 좌석에 의상이 있으면 실패, 유령 훅 seat
   assert.match(rows.find((r) => r.id === "RS4").detail, /측정값 없음/);
 });
 
-test("RS5: 패널 높이가 222(기록 92 + 도구·입력 130) ±1 이 아니면 RS5 만 실패한다", () => {
-  assert.deepEqual(failing({ panel: 224, stageBottom: 440 }), ["RS5"]);
-  assert.deepEqual(failing({ panel: 223, stageBottom: 441 }), []); // ±1 안
-  assert.equal(RESULT_PANEL_H, 222);
-  // panelWant 없이 기대를 계산: 방 높이 600·844 어느 쪽이어도 222
-  for (const roomH of [600, 664, 844]) {
-    const ok = { ...good(), panelWant: undefined, roomH, panel: 222, stageBottom: roomH - 222 };
+test("RS5: 패널 높이가 274(기록 144 + 도구·입력 130) ±1 이 아니면 RS5 만 실패한다", () => {
+  assert.deepEqual(failing({ panel: 276, stageBottom: 388 }), ["RS5"]);
+  assert.deepEqual(failing({ panel: 275, stageBottom: 389 }), []); // ±1 안
+  assert.equal(RESULT_PANEL_H, 274);
+  // panelWant 없이도 실제 방 높이에 맞춰 검사한다.
+  for (const [roomH, panel] of [[568, 246], [600, 250], [664, 274], [844, 274]]) {
+    const ok = { ...good(), panelWant: undefined, roomH, panel, stageBottom: roomH - panel };
     assert.deepEqual(resultStageChecks(ok).filter((r) => !r.ok), [], `방 ${roomH}`);
     assert.deepEqual(resultStageChecks({ ...ok, panel: 188, stageBottom: roomH - 188 }).filter((r) => !r.ok).map((r) => r.id), ["RS5"], `방 ${roomH} 옛 188`);
     assert.deepEqual(resultStageChecks({ ...ok, panel: 244, stageBottom: roomH - 244 }).filter((r) => !r.ok).map((r) => r.id), ["RS5"], `방 ${roomH} 옛 244`);
@@ -91,7 +91,7 @@ test("RS5: 패널 높이가 222(기록 92 + 도구·입력 130) ±1 이 아니�
 
 test("RS6: 스테이지 아래 끝이 방 높이 − 패널과 다르면 RS6 만 실패한다", () => {
   assert.deepEqual(failing({ stageBottom: 498 }), ["RS6"]);
-  assert.deepEqual(failing({ stageBottom: 443 }), []); // ±1 안
+  assert.deepEqual(failing({ stageBottom: 391 }), []); // ±1 안
 });
 
 test("RS7: 옛 요소가 하나라도 남으면 RS7 만 실패하고 이름을 알려 준다", () => {
@@ -159,7 +159,7 @@ const rmGood = () => ({
   dockWidth: 360,
   pillBox: { width: 96, height: 44 },
   pillAboveLog: true,
-  inputWidth: 286,
+  inputWidth: 276,
   guestPill: { before: { ready: "false", pressed: "false" }, after: { ready: "true", pressed: "true" } },
   count: { text: "2/5", dim: true, disabled: true },
   countWant: { n: 2, m: 5, minPlayers: 4 },
@@ -182,8 +182,8 @@ const rmGood = () => ({
 });
 const rmFailing = (over) => rematchChecks({ ...rmGood(), ...over }).filter((r) => !r.ok).map((r) => r.id);
 
-test("READY_PILL: 알약 96×44, 입력줄 여백 74(보내기 44)", () => {
-  assert.deepEqual({ ...READY_PILL }, { w: 96, h: 44, inputExtra: 74 });
+test("READY_PILL: 알약 96×44, 입력줄 여백 84(보내기 44)", () => {
+  assert.deepEqual({ ...READY_PILL }, { w: 96, h: 44, inputExtra: 84 });
 });
 
 test("rematchChecks: 정상 입력은 RM1~RM12 가 모두 통과한다", () => {
@@ -192,15 +192,15 @@ test("rematchChecks: 정상 입력은 RM1~RM12 가 모두 통과한다", () => {
   for (const r of rows) assert.equal(r.ok, true, `${r.id}: ${r.detail}`);
 });
 
-test("RM1: 채팅 위 알약 96×44 ±1, 입력칸은 채팅 폭 − 74 ±2", () => {
+test("RM1: 채팅 위 알약 96×44 ±1, 입력칸은 채팅 폭 − 84 ±2", () => {
   assert.deepEqual(rmFailing({ pillBox: { width: 100, height: 44 } }), ["RM1"]);
   assert.deepEqual(rmFailing({ pillBox: { width: 96, height: 48 } }), ["RM1"]);
   assert.deepEqual(rmFailing({ pillAboveLog: false }), ["RM1"]);
   assert.deepEqual(rmFailing({ pillAboveLog: undefined }), ["RM1"]);
-  assert.deepEqual(rmFailing({ inputWidth: 290 }), ["RM1"]);
-  assert.deepEqual(rmFailing({ inputWidth: 287.5, pillBox: { width: 96.9, height: 44.9 } }), []);
-  assert.deepEqual(rmFailing({ dockWidth: 430, inputWidth: 356 }), []);
-  assert.deepEqual(rmFailing({ dockWidth: 430, inputWidth: 362 }), ["RM1"]);
+  assert.deepEqual(rmFailing({ inputWidth: 280 }), ["RM1"]);
+  assert.deepEqual(rmFailing({ inputWidth: 277.5, pillBox: { width: 96.9, height: 44.9 } }), []);
+  assert.deepEqual(rmFailing({ dockWidth: 430, inputWidth: 346 }), []);
+  assert.deepEqual(rmFailing({ dockWidth: 430, inputWidth: 352 }), ["RM1"]);
 });
 
 test("RM2: 손님 토글 전후로 data-ready 와 aria-pressed 가 반대로 바뀌고 서로 같다", () => {
@@ -294,7 +294,7 @@ test("SHORT_PHONE_H: 방 틀 높이 575 미만이 짧은 폰(14-08 UI#14)", () =
 
 // ---------- 18.1 결과 화면 기록 숨김 (RH1~RH4, UI-SPEC E1·E2) ----------
 const SENT = ["오늘 밤은 조용히 정해요", "나는 유령이에요 억울해요"];
-const hiddenGood = () => ({ tabs: 0, tabRows: 0, bodies: 0, chLines: 0, domText: "시민 승리 전체 대화 안녕하세요", expanded: "false", panelH: 222 });
+const hiddenGood = () => ({ tabs: 0, tabRows: 0, bodies: 0, chLines: 0, domText: "시민 승리 전체 대화 안녕하세요", expanded: "false", panelH: 274 });
 const rhFailing = (over, sent = SENT) => resultHiddenChecks({ ...hiddenGood(), ...over }, { sent }).filter((r) => !r.ok).map((r) => r.id);
 
 test("resultHiddenChecks: 정상 입력은 RH1~RH4 가 모두 통과한다", () => {
@@ -321,11 +321,11 @@ test("RH3: 마피아·유령 줄이 있거나 보낸 문장이 화면 글자에 
   assert.deepEqual(rhFailing({ domText: `끝 ${SENT[1]}` }, []), []);
 });
 
-test("RH4: 확장 상태이거나 패널 높이가 222 ±1 이 아니면 RH4 만 실패한다", () => {
+test("RH4: 확장 상태이거나 패널 높이가 274 ±1 이 아니면 RH4 만 실패한다", () => {
   assert.deepEqual(rhFailing({ expanded: "true" }), ["RH4"]);
   assert.deepEqual(rhFailing({ panelH: 188 }), ["RH4"]);
-  assert.deepEqual(rhFailing({ panelH: 223 }), []);
-  assert.deepEqual(rhFailing({ panelH: 224 }), ["RH4"]);
+  assert.deepEqual(rhFailing({ panelH: 275 }), []);
+  assert.deepEqual(rhFailing({ panelH: 276 }), ["RH4"]);
 });
 
 test("resultHiddenChecks: 입력이 없거나 값이 비면 측정값 없음으로 실패한다", () => {

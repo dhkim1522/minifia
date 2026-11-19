@@ -288,41 +288,13 @@ describe("Lobby — 방장 줄 [맵]·[봇] (19-04, D-13 → 22-07 에서 [판 �
     }
   });
 
-  it("테스트 방([테스트] 단추가 있음)은 줄이 그 아래에서 시작한다(data-test-shift), 없으면 표식이 없다 (P19-5)", () => {
+  it("테스트 방([테스트] 단추가 있음)은 줄이 그 아래에서 시작한다(data-test-shift), 없으면 기본 위치로 돌아온다 (P19-5)", () => {
     const test = <button type="button">테스트</button>;
     const host = render(lobby(hostView(), { testButton: test }));
     expect(host.container.querySelector("[data-host-rail]")?.hasAttribute("data-test-shift")).toBe(true);
     host.unmount();
     const plain = render(lobby(hostView()));
     expect(plain.container.querySelector("[data-host-rail]")?.hasAttribute("data-test-shift")).toBe(false);
-  });
-
-  it("테스트 방은 줄 최대 높이도 48 줄어든다 — 왕관 표식까지 들어가던 높이에서 [테스트]가 있으면 표식이 빠진다 (F-1)", () => {
-    // 줄 단추가 ([맵])·[봇] 으로 고정이다
-    const n = PLAYABLE_MAPS.length > 1 ? 2 : 1;
-    const withCrown = n * 52 + (n - 1) * 12 + 32;
-    const panelH = PANEL;
-    // 오른쪽 열 최대 높이 = 방 높이 − 패널 − 8 − (헤더 62 + 12) = 표식까지의 높이 + 40 (48 을 빼면 표식이 안 들어간다)
-    const roomH = withCrown + 40 + panelH + 8 + 62 + 12;
-    const offset = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
-      if (this.classList.contains("mf-lobby__panel")) return panelH;
-      if (this.classList.contains("mf-lobby__header")) return 62;
-      return 0;
-    });
-    const client = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) {
-      return this.classList.contains("mf-lobby") ? roomH : 0;
-    });
-    try {
-      const crowns = (c: ParentNode) => `${c.querySelectorAll("[data-host-rail]").length}/${c.querySelectorAll("[data-host-rail-crown]").length}/${c.querySelectorAll(".mf-hostrail__col").length}`;
-      const plain = render(lobby(hostView()));
-      expect(crowns(plain.container)).toBe("1/1/1");
-      plain.unmount();
-      const test = render(lobby(hostView(), { testButton: <button type="button">테스트</button> }));
-      expect(crowns(test.container)).toBe("1/0/1");
-    } finally {
-      offset.mockRestore();
-      client.mockRestore();
-    }
   });
 
   it("[시작] 단추는 그대로다: 채팅 패널 위 별도 영역, 같은 클래스·접근성 이름, 방장 줄에 들어가지 않는다 (D-17)", () => {
