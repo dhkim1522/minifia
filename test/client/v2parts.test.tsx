@@ -351,8 +351,7 @@ describe("v2.css 이름표 스타일 계약 (MAP-07, 결정 0052-2)", () => {
     expect(tag).toContain("padding: 2px var(--space-sm)");
     expect(tag).toContain("background: color-mix(in srgb, var(--noir-inset) 94%, transparent)");
     expect(tag).toContain("color: var(--gray-50)");
-    expect(tag).toContain("font-size: 14px");
-    expect(tag).toContain("font-weight: 700");
+    expect(tag).toContain("font: var(--type-label-strong)");
     expect(tag).toContain("text-shadow: var(--shadow-text)");
     const dot = rulesFor(V2_CSS, ".mv-tag__dot").join(";");
     expect(dot).toContain("width: 8px");
@@ -658,8 +657,7 @@ describe("ActionButton·ActionRow (UI-SPEC 행동 줄, E6)", () => {
     expect(btnRule).toContain("min-height: var(--control-button)");
     expect(btnRule).toContain("border-radius: var(--noir-control-radius)");
     expect(btnRule).toMatch(/border: 1px solid/);
-    expect(btnRule).toContain("font-size: 16px");
-    expect(btnRule).toContain("font-weight: 700");
+    expect(btnRule).toContain("font: var(--type-body-strong)");
     expect(btnRule).toContain("padding: 0 12px");
     expect(btnRule).toContain("gap: 8px");
     expect(btnRule).toContain("white-space: nowrap");

@@ -17,7 +17,7 @@
 .mf-lobby__header-gap { flex: none; width: var(--tap-min); height: var(--tap-min); }
 .mf-lobby__header .mv-phase { flex: 1 1 auto; min-width: 0; justify-content: flex-start; text-align: left; }
 .mf-lobby__header .mv-phase__text { min-height: var(--tap-min); justify-content: center; }
-.mf-lobby__header .mv-phase__title { font: 700 19px/1.2 var(--font-ui); color: var(--noir-paper); }
+.mf-lobby__header .mv-phase__title { font: var(--type-stage); color: var(--noir-paper); }
 .mf-lobby__header .mv-phase__title, .mf-lobby__header .mv-phase__hint { text-shadow: var(--shadow-text); }
 /* 접히는 안내 줄 높이(한 줄)만큼만 헤더 아래로 삐져나온다 */
 .mf-lobby__header .mv-phase__text { gap: 0; }

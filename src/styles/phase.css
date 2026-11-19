@@ -78,7 +78,7 @@
 .mf-keyword__genre { position: relative; margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; letter-spacing: 0.05em; color: var(--noir-ink); word-break: keep-all; }
 .mf-keyword__genre::after { content: ""; position: absolute; top: calc(100% + 3px); left: -8px; right: -8px; height: 1px; background: color-mix(in srgb, var(--noir-paper-line) 60%, transparent); }
 /* 키워드: Display 36/700/1.2. 글자를 줄이지 않고 줄만 감는다(최대 2줄, 12자소 상한) */
-.mf-keyword__word { margin: 0; max-width: 100%; font-family: var(--font-serif); font-size: 36px; line-height: 1.2; font-weight: 700; color: var(--noir-ink); word-break: keep-all; overflow-wrap: anywhere; }
+.mf-keyword__word { margin: 0; max-width: 100%; font: var(--type-headline); color: var(--noir-ink); word-break: keep-all; overflow-wrap: anywhere; }
 /* 마피아의 ???: 글자 모양은 시민 카드와 같고 글자 간격만 0.2em(키워드 자리 높이가 같다) */
 .mf-keyword__word.is-hidden { letter-spacing: 0.2em; }
 /* 각주: Label 14/400 — 360 폭에서 2줄이 될 수 있다 */

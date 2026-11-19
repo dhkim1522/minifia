@@ -20,7 +20,7 @@ export const LOBBY_EXTRA_SIZES = LOBBY_SIZES.filter((s) => !DEFAULT_SIZES.some((
 export const OVERLAP_EPS = 0.5;
 /** 탭 대상 하한(px). */
 export const TAP_MIN = 44;
-/** index.html 이 불러오는 Gowun Batang 글꼴 호스트 — 대상 주소 밖에서 요청을 허용하는 유일한 두 곳. */
+/** 이전 배포의 외부 글꼴도 비교 검수할 수 있게 허용한다. 현재 v3는 자체 호스팅한다. */
 export const FONT_HOSTS = ["fonts.googleapis.com", "fonts.gstatic.com"];
 export const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 export const MAX_PARALLEL = 3;

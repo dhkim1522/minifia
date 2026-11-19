@@ -887,7 +887,7 @@ describe("GameMap — 낮 시작 결과 알림과 채팅 줄 (E5 #17~#19)", () =
   it("알림 CSS: 패널 위 무대 가운데·36px 한 줄(keep-all, 28px 로 줄이지 않음)·뒤 night-950 62% 어둡게·움직임 줄이기", () => {
     const css = readFileSync("src/styles/game.css", "utf8");
     expect(css).toMatch(/\.mf-announce\s*\{[^}]*--mf-panel-h/);
-    expect(css).toMatch(/\.mf-announce__text\s*\{[^}]*font-size:\s*36px/);
+    expect(css).toMatch(/\.mf-announce__text\s*\{[^}]*font:\s*var\(--type-headline\)/);
     expect(css).toMatch(/keep-all/);
     expect(css).not.toMatch(/font-size:\s*28px/);
     expect(css).toContain("color-mix(in srgb, var(--night-950) 62%, transparent)");

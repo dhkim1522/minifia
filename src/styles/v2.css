@@ -6,7 +6,7 @@
 
 /* 머리 위 쌓임. 이름표는 최대 폭이 없고 말줄임하지 않는다(MAP-07, 결정 0052-2) */
 .mv-head { display: inline-flex; flex-direction: column; align-items: center; gap: var(--space-xs); }
-.mv-tag { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 2px var(--space-sm); border-radius: 5px; background: color-mix(in srgb, var(--noir-inset) 94%, transparent); color: var(--gray-50); font-family: var(--font-ui); font-size: 14px; line-height: 1.4; font-weight: 700; white-space: nowrap; text-shadow: var(--shadow-text); box-shadow: inset 0 1px 0 var(--noir-line); }
+.mv-tag { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 2px var(--space-sm); border-radius: 5px; background: color-mix(in srgb, var(--noir-inset) 94%, transparent); color: var(--gray-50); font: var(--type-label-strong); white-space: nowrap; text-shadow: var(--shadow-text); box-shadow: inset 0 1px 0 var(--noir-line); }
 .mv-tag.is-me { box-shadow: inset 0 0 0 1.5px var(--gray-100); }
 .mv-tag.is-mine { background: var(--noir-paper); color: var(--noir-ink); text-shadow: none; box-shadow: inset 0 0 0 1px var(--noir-paper-line), inset 0 0 0 3px var(--noir-paper); }
 .mv-tag.is-mine .mv-tag__name { color: var(--noir-ink); }
@@ -57,7 +57,7 @@
 
 /* 행동 줄과 단계 버튼: 승인 보드 Main.dc.html 의 act() 치수. 값은 토큰으로 */
 .mf-act-row { display: grid; gap: 8px; }
-.mf-act { display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; min-height: var(--control-button); box-sizing: border-box; padding: 0 12px; border-radius: var(--noir-control-radius); border: 1px solid transparent; font-family: inherit; font-size: 16px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.mf-act { display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; min-height: var(--control-button); box-sizing: border-box; padding: 0 12px; border-radius: var(--noir-control-radius); border: 1px solid transparent; font: var(--type-body-strong); white-space: nowrap; cursor: pointer; }
 .mf-act__label { white-space: nowrap; }
 .mf-act--primary { background: var(--noir-action); color: var(--noir-accent); box-shadow: none; border: 1px solid var(--noir-action-line); }
 .mf-act--inactive { background: var(--noir-control); color: var(--noir-paper); opacity: 0.45; border: 1px solid var(--noir-control-line); }
@@ -75,10 +75,10 @@
 .mv-chat__byline { display: flex; align-items: center; min-height: 14px; margin-bottom: 1px; }
 .mv-chat__text {
   display: block; width: fit-content; padding: 3px 7px; border-radius: 2px 7px 7px;
-  background: var(--noir-raised); font-size: 14px; line-height: 17px;
+  background: var(--noir-raised); font: var(--type-chat-text);
 }
 
-.mv-chat__name { margin-right: 0; color: var(--noir-silver); font-weight: 700; font-size: 14px; line-height: 14px; }
+.mv-chat__name { margin-right: 0; color: var(--noir-silver); font: var(--type-label-strong); }
 .mv-chat__msg.is-mafia .mv-chat__name { color: var(--crimson-300); }
 .mv-chat__sys { display: flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; color: var(--gray-300); }
 .mv-chat__sys > span { min-width: 0; }
@@ -89,13 +89,14 @@
 .mv-chat__card--mafia { border-color: var(--crimson-700); }
 .mv-chat__card-title { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
 .mv-chat__card--mafia .mv-chat__card-title { color: var(--crimson-300); }
-.mv-chat__card-text { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
+.mv-chat__card-text { margin: 0; font: var(--type-body); color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
+.mv-chat__card:is([data-card="will"], [data-card="note"]) .mv-chat__card-text { font: var(--type-hand-note); }
 /* 입력줄(16페이즈, V-6): 동작·보내기·유언은 48 원, 입력칸도 48 이라 가운데 정렬 하나면 된다. 폭 360: 동작 48 + 입력칸 + 보내기 48 + 유언 48, 간격 8 → 입력칸 160 */
 .mv-chat__form { position: relative; display: flex; align-items: center; gap: var(--space-sm); }
 .mv-chat__field { position: relative; display: flex; flex: 1; min-width: 0; }
 /* 유언 단계 잠금(22-11 P22-9): 입력칸 면 night-700 · 불투명도 .45, 안내 글자 없음. 기록 칸·높이는 채팅 패널 그대로 */
 .mv-chat__input:disabled { background: var(--night-700); opacity: 0.45; cursor: default; }
-.mv-chat__input { flex: 1; min-width: 0; height: var(--control-input); box-sizing: border-box; padding: 0 var(--space-md); border-radius: var(--noir-control-radius); border: 1px solid var(--night-600); background: var(--noir-inset); color: var(--gray-100); font-family: inherit; font-size: 16px; user-select: text; border-color: var(--noir-line); }
+.mv-chat__input { flex: 1; min-width: 0; height: var(--control-input); box-sizing: border-box; padding: 0 var(--space-md); border-radius: var(--noir-control-radius); border: 1px solid var(--night-600); background: var(--noir-inset); color: var(--gray-100); font: var(--type-body); user-select: text; border-color: var(--noir-line); }
 /* 아이콘 단추(16페이즈, V-1·V-6): 단추 상자가 곧 면이다 — 44×44 정사각(radius-badge), 글 없음. 입력줄 단추만 48 원(아래 .mv-chat__* 규칙). 누르기 44 이상 */
 .mv-tool { position: relative; display: flex; align-items: center; justify-content: center; flex: none; box-sizing: border-box; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; border-radius: var(--noir-control-radius); background: transparent; color: var(--gray-100); font-family: var(--font-ui); cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .mv-tool__face { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 100%; height: 100%; box-sizing: border-box; border-radius: inherit; background: var(--noir-control); color: var(--noir-paper); box-shadow: none; border: 1px solid var(--noir-control-line); }
@@ -183,10 +184,10 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-chat__mark.is-mafia { color: var(--crimson-300); }
 .mv-chat__mark.is-ghost { color: var(--gray-300); }
 
-/* 득표 배지(승인 .mv-badge, bundle.css 5-6·44-46). 0표는 부품이 그리지 않는다. 명조(--font-serif)는 배지 숫자와 이 도장에만 쓴다(08-05 토큰, 승인 tokens.css 78~82행 글자 스타일 값) */
+/* 득표 배지(승인 .mv-badge, bundle.css 5-6·44-46). 0표는 부품이 그리지 않는다. 득표 숫자는 조작부와 같은 고딕으로 읽는다. */
 .mv-badge { display: inline-flex; align-items: baseline; justify-content: center; gap: 2px; min-width: var(--badge-min); box-sizing: border-box; padding: 4px 10px 6px; border-radius: var(--radius-badge); background: var(--overlay-ink-strong); border: 2px solid var(--brass-400); box-shadow: var(--shadow-badge); white-space: nowrap; transform-origin: 50% 100%; animation: mv-pop var(--dur-pop) ease-out both; }
 .mv-badge.is-lead { animation: mv-pulse var(--dur-pulse) ease-in-out infinite; filter: drop-shadow(0 0 6px rgba(255, 224, 176, 0.75)); }
-.mv-badge__num { font-family: var(--font-serif); font-size: 22px; line-height: 1; font-weight: 700; color: var(--cream-100); font-variant-numeric: tabular-nums; }
+.mv-badge__num { font-family: var(--font-ui); font-size: 22px; line-height: 1; font-weight: 700; color: var(--cream-100); font-variant-numeric: tabular-nums; }
 .mv-badge__unit { font-family: var(--font-ui); font-size: 12px; line-height: 1; font-weight: 700; color: var(--brass-400); }
 /* 사회자 자막 띠 (14-01, UI-SPEC "자막 띠 계약" · 시안 HostCaption.dc.html 시안 A). 방 틀 기준, 헤더 아래 8·좌우 16. 맵 위에 얹는다(스테이지를 줄이지 않음).
  * 위 끝은 HostBand 가 헤더 아랫변을 재서 --mf-host-top 으로 알린다(기본 70 = 옛 소리 단추 자리). 아랫변은 --mf-host-bottom(띠 면), --mf-host-dock(독) — 테스트 단추·맵 칩·위 알림이 따라 내려간다.
@@ -214,8 +215,8 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 @keyframes mv-pop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); } }
 @keyframes mv-pulse { 0%, 100% { transform: scale(1.18); } 50% { transform: scale(1.34); } }
 
-/* 유력 도장(승인 .mv-stamp, bundle.css 7·47). 명조(--font-serif)는 배지 숫자와 이 도장에만 쓴다(08-05 토큰, 승인 tokens.css 78~82행 글자 스타일 값) */
-.mv-stamp { display: inline-block; padding: 4px 8px 5px 10px; border: 2px solid var(--brass-400); border-radius: var(--radius-stamp); background: var(--overlay-ink-strong); color: var(--brass-200); font-family: var(--font-serif); font-size: 15px; line-height: 1; font-weight: 700; letter-spacing: 0.12em; white-space: nowrap; transform: rotate(-10deg); animation: mv-stamp var(--dur-med) ease-out both; }
+/* 유력 도장(승인 .mv-stamp, bundle.css 7·47). 색과 기울기로 도장을 구분한다. */
+.mv-stamp { display: inline-block; padding: 4px 8px 5px 10px; border: 2px solid var(--brass-400); border-radius: var(--radius-stamp); background: var(--overlay-ink-strong); color: var(--brass-200); font-family: var(--font-ui); font-size: 15px; line-height: 1; font-weight: 700; letter-spacing: 0.12em; white-space: nowrap; transform: rotate(-10deg); animation: mv-stamp var(--dur-med) ease-out both; }
 @keyframes mv-stamp { 0% { transform: rotate(-10deg) scale(2.2); opacity: 0; } 70% { transform: rotate(-10deg) scale(0.92); opacity: 1; } 100% { transform: rotate(-10deg) scale(1); } }
 
 /* 직업 칩(승인 .mv-rolechip, bundle.css 113-114). 유령 화면 분기에서만 그린다 */
@@ -285,16 +286,16 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 /* 유언·쪽지 시트(9페이즈 WILL-01·NIGHT-12). 폭 = 부모 − 20(좌우 10). 진홍은 .mv-will--mafia(쪽지)에만 있다 */
 .mv-will { display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; width: calc(100% - 20px); margin: 0 auto; padding: 12px; border-radius: var(--noir-surface-radius); background: var(--noir-sheet-light), var(--noir-panel); border: 1px solid var(--night-600); box-shadow: var(--noir-rail), var(--shadow-card); font-family: var(--font-ui); color: var(--gray-100); border-color: var(--noir-line); }
 .mv-will__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
-.mv-will__title { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap-min); padding-left: 4px; font-size: 16px; font-weight: 700; color: var(--noir-paper); font-family: var(--font-serif); }
+.mv-will__title { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap-min); padding-left: 4px; font: var(--type-body-strong); color: var(--noir-paper); }
 .mv-will__close { color: var(--gray-300); }
-.mv-will__text { width: 100%; box-sizing: border-box; padding: 12px; border-radius: var(--noir-control-radius); border: 1px solid var(--night-600); background: var(--noir-inset); color: var(--gray-100); font-family: inherit; font-size: 16px; line-height: 1.5; resize: none; user-select: text; border-color: var(--noir-line); }
-.mv-will__text::placeholder { color: var(--gray-300); }
+.mv-will__text { width: 100%; box-sizing: border-box; padding: 12px; border-radius: var(--noir-control-radius); border: 1px solid var(--night-600); background: var(--noir-inset); color: var(--gray-100); font: var(--type-hand-note); resize: none; user-select: text; border-color: var(--noir-line); }
+.mv-will__text::placeholder { font: var(--type-body); color: var(--gray-300); }
 .mv-will__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
 .mv-will__count { font-size: 14px; color: var(--gray-300); font-variant-numeric: tabular-nums; }
 /* 유언 단계 남은 초(22-11 P22-8): 글자 수 오른쪽·[남기기] 왼쪽. 5초 이하는 timerTone 의 urgent(crimson-400) */
 .mv-will__secs { margin-left: auto; font-size: 14px; color: var(--gray-300); font-variant-numeric: tabular-nums; }
 .mv-will__secs[data-tone="urgent"] { color: var(--crimson-400); }
-.mv-will__save { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-input); padding: 0 var(--space-md); border-radius: var(--noir-control-radius); border: 0; background: var(--noir-paper); color: var(--noir-ink); font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; box-shadow: inset 0 0 0 1px var(--noir-paper-line), inset 0 0 0 3px var(--noir-paper); }
+.mv-will__save { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-input); padding: 0 var(--space-md); border-radius: var(--noir-control-radius); border: 0; background: var(--noir-paper); color: var(--noir-ink); font: var(--type-body-strong); cursor: pointer; box-shadow: inset 0 0 0 1px var(--noir-paper-line), inset 0 0 0 3px var(--noir-paper); }
 .mv-will__save[disabled] { background: var(--noir-raised); color: var(--gray-300); cursor: default; box-shadow: inset 0 0 0 1px var(--noir-line); }
 .mv-will__save[aria-disabled="true"] { opacity: 0.6; cursor: default; }
 .mv-will--mafia { border-color: var(--crimson-700); }
@@ -378,7 +379,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-quote.is-on { opacity: 1; }
 .mv-quote.is-still { transition: none; }
 /* 유언 공개 카드(22-12 P22-11): 같은 인용 카드에 줄 수만 4 로(50자소 한글 어절 줄바꿈 최악 4줄). 면·테두리·글자·가운데는 그대로, 새 색·토큰 없음 */
-.mv-quote--will { -webkit-line-clamp: 4; line-clamp: 4; background: var(--noir-paper); color: var(--noir-ink); box-shadow: inset 0 0 0 1px var(--noir-paper-line), inset 0 0 0 3px var(--noir-paper); border-color: var(--noir-paper-line); font-family: var(--font-serif); }
+.mv-quote--will { -webkit-line-clamp: 4; line-clamp: 4; background: var(--noir-paper); color: var(--noir-ink); box-shadow: inset 0 0 0 1px var(--noir-paper-line), inset 0 0 0 3px var(--noir-paper); border-color: var(--noir-paper-line); font: var(--type-hand-note); }
 /* 카드 자리: 독 아랫변 + 8(위 알림 .mv-toast--top 과 같은 윗변), 폭 = 화면 − 32. 누를 수 없다 */
 @media (prefers-reduced-motion: reduce) { .mv-quote { transition: none; } }
 

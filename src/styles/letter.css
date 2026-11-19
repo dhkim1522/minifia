@@ -83,7 +83,7 @@
   max-width: 100%;
   text-align: center;
   white-space: nowrap;
-  font-family: "Nanum Pen Script", var(--font-serif);
+  font-family: var(--font-hand);
   font-weight: 400;
   font-size: var(--lw-font, 46px);
   line-height: var(--lw-line, 56px);
@@ -93,10 +93,10 @@
   /* 왼쪽에서 오른쪽으로 열리는 쓰기. 단계 수 = 그 줄 글자 수 */
   animation: mf-letter-write var(--lw-ms, 1200ms) steps(var(--lw-steps)) var(--lw-delay, 800ms) both;
 }
-/* 글꼴을 1초 안에 못 받으면 대체 글꼴(명조 700)로 그대로 진행한다(C-3) */
+/* 필기 글꼴을 1초 안에 못 받으면 시스템 고딕으로 진행한다. */
 .mf-letter.is-fallback .mf-letter__line,
 .mf-letter-measure.is-fallback .mf-letter__line {
-  font-family: var(--font-serif);
+  font-family: var(--font-ui);
   font-weight: 700;
 }
 
@@ -116,7 +116,7 @@
 .mf-letter__wax-3 { stop-color: var(--letter-wax-3); }
 .mf-letter__seal-ring { fill: none; stroke: var(--letter-wax-edge); stroke-width: 3; }
 .mf-letter__seal-ring-hi { fill: none; stroke: var(--letter-wax-hi-1); stroke-width: 1; opacity: 0.5; }
-.mf-letter__seal-glyph { font-family: var(--font-serif); font-weight: 700; font-size: 38px; text-anchor: middle; }
+.mf-letter__seal-glyph { font-family: var(--font-ui); font-weight: 700; font-size: 38px; text-anchor: middle; }
 .mf-letter__seal-glyph.is-dark { fill: var(--letter-wax-edge); }
 .mf-letter__seal-glyph.is-light { fill: var(--letter-wax-hi-2); opacity: 0.55; }
 .mf-letter__seal-gloss { fill: none; stroke: var(--letter-wax-hi-3); stroke-width: 3; stroke-linecap: round; opacity: 0.45; }
@@ -154,10 +154,10 @@
   white-space: normal;
   word-break: keep-all;
   overflow-wrap: anywhere;
-  font-family: "Nanum Pen Script", var(--font-serif);
+  font-family: var(--font-hand);
   font-weight: 400;
 }
-.mf-letter-measure.is-fallback .mf-letter-measure__text { font-family: var(--font-serif); font-weight: 700; }
+.mf-letter-measure.is-fallback .mf-letter-measure__text { font-family: var(--font-ui); font-weight: 700; }
 /* 알림의 좌우 여백은 space-md. 측정 상자는 이미 좌우 32px씩 들어와 그만큼을 뺀다. */
 .mf-letter-measure__announce { position: absolute; inset-inline: calc(var(--space-md) - 32px); top: 0; display: flex; justify-content: center; }
 

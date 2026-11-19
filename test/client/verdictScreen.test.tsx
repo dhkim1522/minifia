@@ -572,7 +572,7 @@ describe("처형 화면 (DAY-06, 22-12)", () => {
     expect(m.container.querySelectorAll(".mf-announce__text").length).toBe(1);
     const css = readFileSync("src/styles/game.css", "utf8");
     const rule = css.split("\n").find((l) => l.startsWith(".mf-announce__text ")) ?? "";
-    expect(rule).toMatch(/font-size:\s*36px/);
+    expect(rule).toMatch(/font:\s*var\(--type-headline\)/);
     expect(rule).toMatch(/word-break:\s*keep-all/);
     expect(rule).not.toMatch(/white-space:\s*nowrap/);
     expect(css).not.toMatch(/\.mf-announce[^{]*\{[^}]*font-size:\s*28px/);

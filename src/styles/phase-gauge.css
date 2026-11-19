@@ -26,7 +26,7 @@ header.mf-result__header {
 
 .mf-game-phase-header .mv-phase__title {
   color: var(--noir-paper);
-  font: 700 19px/1.2 var(--font-ui);
+  font: var(--type-stage);
   text-shadow: var(--shadow-text);
   white-space: normal;
   word-break: keep-all;

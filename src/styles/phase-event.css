@@ -36,7 +36,7 @@
 .mf-phase-event__card[data-event-interactive] { pointer-events: auto; }
 .mf-phase-event__title {
   margin: 0;
-  font: 700 clamp(18px, 5vw, 22px)/1.3 var(--font-ui);
+  font: var(--type-section);
   word-break: keep-all;
   overflow-wrap: anywhere;
 }

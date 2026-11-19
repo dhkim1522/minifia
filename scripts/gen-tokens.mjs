@@ -13,8 +13,11 @@ const FAMILIES = ["spacing", "radius", "shadow", "size", "duration", "easing", "
 
 const vars = [
   ...tokens.color.tokens,
-  { name: "font-ui", value: tokens.type.families.ui },
-  ...(tokens.type.families.serif ? [{ name: "font-serif", value: tokens.type.families.serif }] : []),
+  ...Object.entries(tokens.type.families).map(([family, value]) => ({ name: `font-${family}`, value })),
+  ...tokens.type.groups.flatMap(({ family, styles }) => styles.map(({ name, fontWeight, fontSize, lineHeight }) => ({
+    name: `type-${name}`,
+    value: `${fontWeight} ${fontSize}/${lineHeight} var(--font-${family})`,
+  }))),
   ...FAMILIES.flatMap((f) => tokens[f]?.tokens ?? []),
 ];
 const css =

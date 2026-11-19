@@ -749,7 +749,7 @@ describe("result.css 연출 정적 단언 (11-05)", () => {
   it("승리 알림은 36px 한 줄·배경 어둡게 80%·터치 통과, 칩 뒤집힘은 transform 0.3초이고 모션 줄이기에서는 없다", () => {
     expect(css).toMatch(/\.mf-result__announce\s*\{[^}]*pointer-events:\s*none/);
     expect(css).toMatch(/\.mf-result__announce\s*\{[^}]*night-950\) 80%/);
-    expect(css).toMatch(/\.mf-result__announce-text\s*\{[^}]*font-size:\s*36px/);
+    expect(css).toMatch(/\.mf-result__announce-text\s*\{[^}]*font:\s*var\(--type-headline\)/);
     expect(css).toMatch(/mv-rolechip[^{]*\{[^}]*animation:\s*mf-chip-flip 300ms/);
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*mv-rolechip[^}]*animation:\s*none/);
   });

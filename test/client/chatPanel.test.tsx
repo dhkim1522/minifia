@@ -228,7 +228,7 @@ describe("ChatPanel 입력칸 계약 (CHAT-05, UI-SPEC 패널과 키보드)", ()
   });
 
   it("입력칸 글자 16px, 입력줄 높이 control-input, 보내기는 금빛 아이콘, 비활성은 은색", () => {
-    expect(rulesFor(V2_CSS, ".mv-chat__input").join(";")).toContain("font-size: 16px");
+    expect(rulesFor(V2_CSS, ".mv-chat__input").join(";")).toContain("font: var(--type-body)");
     expect(rulesFor(V2_CSS, ".mv-chat__input").join(";")).toContain("height: var(--control-input)");
     expect(rulesFor(V2_CSS, ".mv-chat__send").join(";")).toContain("color: var(--noir-accent)");
     const off = rulesFor(V2_CSS, '.mv-chat__send[aria-disabled="true"]').join(";");

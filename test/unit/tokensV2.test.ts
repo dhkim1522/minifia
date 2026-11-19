@@ -1,6 +1,5 @@
 // v2.0 디자인 시스템 토큰이 앱 토큰(design/tokens.json → src/styles/tokens.css)에 같은 값으로 들어 있음을 고정한다.
-// 명조 글꼴(type.families.serif → --font-serif)은 8페이즈(08-05)에서 합쳤다. 글자 스타일 묶음(.badge-number 등)은 변수가 아니라
-// v2.css 의 배지·도장과 B안 제목·유언 규칙에 직접 쓴다.
+// v3의 글꼴과 글자 역할은 현재 제품 규격을 기준으로 검사한다.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
@@ -70,7 +69,7 @@ describe("v2.0 토큰 합치기", () => {
 });
 
 // 08-05: 명조 글꼴 토큰. 값은 승인 v2.0 토큰(design/v2.0/design-system/tokens.json type.families.serif) 그대로다.
-describe("명조 글꼴 토큰 --font-serif (08-05, UI-SPEC Font)", () => {
+describe("v3 공통 글꼴과 글자 역할", () => {
   type TypeDoc = { type?: { families?: Record<string, string> } };
   const fam = (doc: unknown, key: string): string | undefined => (doc as TypeDoc).type?.families?.[key];
   const V2_CSS = readFileSync(new URL("../../src/styles/v2.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
@@ -84,35 +83,31 @@ describe("명조 글꼴 토큰 --font-serif (08-05, UI-SPEC Font)", () => {
     expect(css.split("\n").filter((l) => l.includes("--font-serif:")).length).toBe(1);
   });
 
-  it("tokens.css 의 --font-serif 값이 승인 v2.0 serif 와 같다", () => {
-    const m = css.match(/--font-serif: ([^;]+);/);
-    expect(m !== null).toBe(true);
-    expect(m?.[1] === fam(v2, "serif")).toBe(true);
-  });
-
-  it("인쇄물의 명조와 조작부의 시스템 산세리프를 구분한다", () => {
-    expect(fam(app, "serif") !== undefined).toBe(true);
-    expect(fam(app, "serif") === fam(v2, "serif")).toBe(true);
+  it("대표 명조, 시스템 고딕, 게임 속 필기를 구분한다", () => {
+    expect(fam(app, "serif")).toContain('"Noto Serif KR"');
     expect(fam(app, "ui")).toContain("system-ui");
-    expect(fam(app, "ui")).not.toContain("Gowun");
+    expect(fam(app, "hand")).toContain('"Nanum Pen Script"');
+    expect(css).toContain("--type-headline: 900 36px/1.2 var(--font-serif);");
+    expect(css).toContain("--type-body: 400 16px/1.5 var(--font-ui);");
   });
 
-  it("index.html 은 필요한 Gowun Batang 700만 요청한다", () => {
-    const links = [...INDEX.matchAll(/<link[^>]*href="(https:\/\/fonts\.googleapis\.com\/css2[^"]*)"/g)].map((m) => m[1] ?? "");
-    expect(links.length).toBe(1);
-    expect(links[0]?.includes("family=Gowun+Batang:wght@700")).toBe(true);
-    expect(links[0]?.includes("family=Gowun+Dodum")).toBe(false);
+  it("대표 명조는 자체 호스팅하고 홈은 네 글자 분할을 쓴다", () => {
+    const fontCss = readFileSync(new URL("../../src/styles/serifFont.css", import.meta.url), "utf8");
+    expect(INDEX).not.toMatch(/fonts\.googleapis\.com|fonts\.gstatic\.com/);
+    expect(fontCss).toContain('font-family: "Noto Serif KR"');
+    expect(fontCss).toMatch(/home\.woff2[^}]+unicode-range: U\+B2C8, U\+BBF8, U\+C544, U\+D53C;/);
+    expect(fontCss).toContain("/fonts/noto-serif-kr/game.woff2");
   });
 
-  it("v2.css 의 명조는 배지 숫자·도장·유언 제목 및 인용문에 쓰인다", () => {
-    const users = [...V2_CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => (m[2] ?? "").includes("--font-serif")).map((m) => (m[1] ?? "").trim());
-    expect(users.sort()).toEqual([".mv-badge__num", ".mv-quote--will", ".mv-stamp", ".mv-will__title"]);
-    expect(V2_CSS.includes("var(--font-serif,")).toBe(false);
+  it("유언 인용만 손글씨 역할을 쓰고 배지와 도장은 고딕을 쓴다", () => {
+    expect(body(".mv-quote--will")).toContain("var(--type-hand-note)");
+    expect(body(".mv-stamp")).toContain("var(--font-ui)");
+    expect(V2_CSS).not.toContain("var(--font-serif)");
   });
 
   it("글자 스타일: 배지 숫자 22/1/700, 단위 12/1/700(ui), 도장 15/1/700 자간 0.12em", () => {
     const num = body(".mv-badge__num");
-    expect(num.includes("font-family: var(--font-serif)")).toBe(true);
+    expect(num.includes("font-family: var(--font-ui)")).toBe(true);
     expect(num.includes("font-size: 22px; line-height: 1; font-weight: 700")).toBe(true);
     const unit = body(".mv-badge__unit");
     expect(unit.includes("font-family: var(--font-ui)")).toBe(true);
@@ -286,7 +281,7 @@ describe("마지막 3인 CSS 규칙 (09.1.1-15)", () => {
       expect(r.body, r.selector).not.toMatch(/--(crimson|brass|cream|green|amber|felt)-/);
       for (const m of r.body.matchAll(/var\(--([a-z0-9-]+)\)/g)) {
         const name = m[1] ?? "";
-        if (/^(space|radius|tap|control|font|shadow|dur|ease|z|mf)-?/.test(name)) continue;
+        if (/^(space|radius|tap|control|font|type|shadow|dur|ease|z|mf)-?/.test(name)) continue;
         expect(name, `${r.selector}: --${name}`).toMatch(/^(night|gray|noir)-/);
       }
     }

@@ -1,4 +1,5 @@
 /* 앱 바탕 스타일. 토큰 값은 tokens.css (design/tokens.json 에서 생성). */
+@import "./serifFont.css";
 
 *,
 *::before,
