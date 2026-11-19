@@ -1,5 +1,14 @@
 /* 앱 바탕 스타일. 토큰 값은 tokens.css (design/tokens.json 에서 생성). */
 
+/* 이 주소의 버전은 net/assets.ts의 미리 받기 목록과 함께 바꾼다. */
+:root {
+  --stationery-paper: url("/stationery/paper.webp?v=stationery-1");
+  --stationery-will-paper: url("/stationery/will-paper.webp?v=stationery-1");
+  --stationery-role-front: url("/stationery/role-front.webp?v=stationery-1");
+  --stationery-role-back: url("/stationery/role-back.webp?v=stationery-1");
+  --stationery-note: url("/stationery/note.webp?v=stationery-1");
+}
+
 *,
 *::before,
 *::after {

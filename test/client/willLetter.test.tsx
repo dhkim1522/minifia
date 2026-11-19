@@ -1,6 +1,6 @@
 // 유언 편지 화면 시험 (09.1-11, 결정 0063-3·0063-4, UI-SPEC C-1·C-2·C-5, L16). RoomScreen 을 거쳐 밤 → 아침 view 와 라이브 유언 카드를 실제 ChatStore 로 먹인다.
 // WorldStage 는 받은 props 만 쥐는 가짜(캔버스는 worldStage 시험 몫). 가짜 타이머로 시간표를 읽는다.
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
@@ -8,6 +8,7 @@ import type { PhaseId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { WillLetter, blockTop } from "../../src/components/v2/WillLetter";
 import { ResultAnnounce } from "../../src/components/ResultAnnounce";
 import { LETTER_END_AT_MS, LETTER_FOLD_AT_MS, SEAL_GLYPH, writeSchedule } from "../../src/game/willLetter";
+import { stationeryArt } from "../../src/net/assets";
 import type { WillLetter as WillLetterState } from "../../src/net/useWillLetter";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
@@ -115,8 +116,12 @@ describe("유언 편지 — 암살 아침 (0063-3, C-1·C-2)", () => {
     expect(letter.querySelector("[data-will-guide]")?.textContent).toBe("채팅에도 남아요");
     expect(letter.querySelector("[data-will-guide]")?.closest("[aria-hidden='true']")).not.toBeNull();
     const seal = letter.querySelector("[data-will-seal]")!;
-    expect(seal.tagName.toLowerCase()).toBe("svg");
     expect(seal.getAttribute("aria-hidden")).toBe("true");
+    const sealImage = seal.querySelector("img")!;
+    expect(sealImage.getAttribute("src")).toBe(stationeryArt("seal"));
+    expect(sealImage.alt).toBe("");
+    fireEvent.error(sealImage);
+    expect(seal.querySelector("img")).toBeNull();
     expect([...seal.querySelectorAll("text")].map((t) => t.textContent)).toEqual([SEAL_GLYPH, SEAL_GLYPH]);
   });
 
@@ -145,9 +150,9 @@ describe("유언 편지 — 암살 아침 (0063-3, C-1·C-2)", () => {
     expect(line.getAttribute("data-write-steps")).toBe(String(sched.lines[0]!.steps));
     expect(line.style.getPropertyValue("--lw-delay")).toBe(`${sched.lines[0]!.at}ms`);
     expect(line.style.getPropertyValue("--lw-steps")).toBe(String(sched.lines[0]!.steps));
-    const seal = letterOf(s.container)!.querySelector<SVGElement>("[data-will-seal]")!;
+    const seal = letterOf(s.container)!.querySelector<HTMLElement>("[data-will-seal]")!;
     expect(seal.getAttribute("data-seal-at")).toBe(String(sched.sealAt));
-    expect((seal as unknown as HTMLElement).style.getPropertyValue("--lw-delay")).toBe(`${sched.sealAt}ms`);
+    expect(seal.style.getPropertyValue("--lw-delay")).toBe(`${sched.sealAt}ms`);
   });
 
   it("카드는 편지가 접힐 때(아침 + 0.4 + 5.0초) 유언 → 쪽지 순서로 채팅에 나타나고 5.42초에 편지가 사라진다", () => {
@@ -211,7 +216,7 @@ describe("유언 편지 — 암살 아침 (0063-3, C-1·C-2)", () => {
     s.card("will", 3, 1, evil);
     s.advance(400);
     const letter = letterOf(s.container)!;
-    expect(letter.querySelector("img, b, script")).toBeNull();
+    expect(letter.querySelector(".mf-letter__text :is(img, b, script), [data-will-read] :is(img, b, script)")).toBeNull();
     expect(letter.querySelector("[data-will-read]")!.textContent).toBe(`지아 님의 유언: ${evil}`);
     expect([...letter.querySelectorAll("[data-will-line]")].map((l) => l.textContent).join("")).toContain("<img");
     expect((window as unknown as { __pwn?: number }).__pwn).toBeUndefined();

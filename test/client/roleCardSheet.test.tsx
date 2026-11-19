@@ -10,7 +10,7 @@ import type { RoleRecord, RoomView } from "../../shared/protocol";
 import { RoleCardSheet } from "../../src/components/RoleCardSheet";
 import type { RoleCardTab } from "../../src/components/RoleCardSheet";
 import { ROLE_TEXT } from "../../src/game/roleText";
-import { roleArtSrc } from "../../src/net/assets";
+import { journalArt, roleArtSrc } from "../../src/net/assets";
 
 // 역할 카드 시트(03.1-06 3B, 결정 0026, UI-SPEC D). 열림·탭 상태는 부모(RoomScreen, 03.1-11)가 쥐므로
 // 시트는 제어 컴포넌트다. 단언은 문자열·불리언·숫자로 둔다(한 줄 보고서).
@@ -307,7 +307,7 @@ describe("RoleCardSheet 직업 그림 (T-03.1-20)", () => {
     renderSheet({ role: "police", tab: "activity" });
     const srcs = Array.from(document.querySelectorAll("img")).map((i) => i.getAttribute("src") ?? "");
     expect(srcs.some((s) => s.includes("/characters/"))).toBe(false);
-    expect(srcs.every((s) => s.startsWith("/journals/"))).toBe(true);
+    expect(srcs).toEqual([journalArt("police", "cover").src, journalArt("police", "icon").src]);
   });
 });
 

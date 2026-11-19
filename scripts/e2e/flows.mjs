@@ -131,7 +131,6 @@ import {
   ANNOUNCE_MORNING_AT,
   LETTER_END_AT_MS,
   LETTER_FOLD_AT_MS,
-  SEAL_GLYPH,
   externalPenFontRequests,
   graphemeCount,
   letterChecks,
@@ -2413,7 +2412,7 @@ async function writeSheet(page, tracker, kind, text) {
 
 /**
  * 아침 유언 편지 공통 검사(09.1-11, 결정 0063-3, UI-SPEC C-1~C-3): armLetterWatch 를 아침 전에 심어 둔 페이지에서 부른다. 편지가 걷힐 때까지 기다리고 돌려준다.
- * LT1 아침 진입 appearMaxMs 안에 편지가 나타남(T0 = 일반 0.4초·피해자 0.7초) · LT2 인장 글자가 SEAL_GLYPH · LT3 알림이 위(is-top)로 올라감 · LT4~LT8 letterChecks(등장·인장 애니메이션이 끝난 뒤 한 장)
+ * LT1 아침 진입 appearMaxMs 안에 편지가 나타남(T0 = 일반 0.4초·피해자 0.7초) · LT2 봉랍 이미지 로드 · LT3 알림이 위(is-top)로 올라감 · LT4~LT8 letterChecks(등장·인장 애니메이션이 끝난 뒤 한 장)
  * LT9 채팅 유언 카드는 접힘(T0 + 5.0초) 때 나타남 · LT10 편지는 T0 + 5.42초에 걷힘 · LT11 Nanum 글꼴 외부 요청 0.
  * LT12: 머리글이 "{이름} 님의 유언" 이고 글 줄을 이으면 저장한 유언(wills 중 하나)과 같다(공백 제외).
  */
@@ -2431,8 +2430,6 @@ async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe
   let w = await readLetterWatch(hp, { stop: false });
   const after = w?.appearAt != null && w?.morningAt != null ? Math.round(w.appearAt - w.morningAt) : null;
   rec(sc, "LT1", `아침 진입 ${appearMaxMs / 1000}초 안에 유언 편지([data-will-letter])가 나타난다`, appeared.ok && after !== null && after <= appearMaxMs, `${appeared.detail} 아침 진입 → 편지 ${after}ms`);
-  const glyphs = w?.sealGlyphs ?? null;
-  rec(sc, "LT2", `인장 글자가 ${SEAL_GLYPH} 이다([data-will-seal] 글자 두 겹)`, Array.isArray(glyphs) && glyphs.length === 2 && glyphs.every((t) => t === SEAL_GLYPH), `글자 ${JSON.stringify(glyphs)}`);
   // 알림은 편지가 보이는 동안 위(is-top)로 올라가 있다. 위로 올라간 시각은 편지 등장 직후(같은 렌더 한두 개 뒤)다
   const topOk = await attempt(async () => {
     const start = performance.now();
@@ -2475,6 +2472,8 @@ async function morningLetterChecks(ctx, sc, rec, game, { appearMaxMs, announceRe
     }
   });
   w = await readLetterWatch(hp);
+  const sealImage = w?.sealImage;
+  rec(sc, "LT2", "유언 편지의 봉랍 그림이 로드된다", !!sealImage && new URL(sealImage).pathname === "/stationery/seal.webp", sealImage ?? "이미지 없음");
   const cardGap = w?.appearAt != null && w?.cardAt != null ? Math.round(w.cardAt - w.appearAt) : null;
   rec(sc, "LT9", `채팅 유언 카드는 편지가 접힐 때(편지가 뜬 뒤 약 ${LETTER_FOLD_AT_MS / 1000}초) 나타난다`, cardGap !== null && cardGap >= LETTER_FOLD_AT_MS - 400 && cardGap <= LETTER_FOLD_AT_MS + 1500, `편지 등장 → 카드 ${cardGap}ms`);
   const goneGap = w?.appearAt != null && w?.goneAt != null ? Math.round(w.goneAt - w.appearAt) : null;

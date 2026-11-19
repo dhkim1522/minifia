@@ -1,4 +1,4 @@
-import type { ReactElement, SyntheticEvent } from "react";
+import type { CSSProperties, ReactElement, SyntheticEvent } from "react";
 import type { PublicPlayer, RoleRecord } from "../../shared/protocol";
 import { JOURNAL_TEXT, journalResult } from "../game/journalText";
 import { journalArt } from "../net/assets";
@@ -39,7 +39,7 @@ export function Journal({ role, records, players, mySeat, newCount }: JournalPro
         <img className="mf-journal__icon" src={journalArt(role, "icon").src} width={20} height={20} alt="" aria-hidden="true" draggable={false} onError={hideBroken} />
         <b>{text.name}</b>
       </header>
-      <ol className="mf-journal__l" role="list" style={{ backgroundImage: `url(${journalArt(role, "page").src})` }}>
+      <ol className="mf-journal__l" role="list" style={{ "--jr-page-image": `url(${journalArt(role, "page").src})` } as CSSProperties}>
         {rows.length === 0 ? (
           <li className="mf-journal__empty">{text.empty}</li>
         ) : (

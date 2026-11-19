@@ -32,11 +32,13 @@ import {
   roleArtSrc,
   rolePreloadList,
   seatColorVar,
+  stationeryArt,
 } from "../../src/net/assets";
 
 // node:fs 대신 Vite 의 import.meta.glob 으로 public/ 의 실제 파일 목록을 얻는다.
 const characterFiles = new Set(Object.keys(import.meta.glob("/public/characters/**/*.png")));
 const backdropFiles = new Set(Object.keys(import.meta.glob("/public/backgrounds/*.webp")));
+const stationeryFiles = new Set(Object.keys(import.meta.glob("/public/stationery/*.webp")));
 
 
 /** srcSet "a 2x, b 4x" 에서 URL 만 뽑는다. */
@@ -133,10 +135,10 @@ const JOURNAL_ROLES = ["police", "mafia", "doctor"] as const;
 const JOURNAL_SLOTS = ["cover", "page", "icon"] as const;
 
 describe("일지 그림 슬롯", () => {
-  it("journalArt(role, slot)은 캐시 버전이 붙은 SVG 주소를 반환한다", () => {
+  it("일지 표지는 역할마다 다르고 속지 재질은 공유하며 아이콘은 SVG를 유지한다", () => {
     expect(journalArt("police", "icon")).toEqual({ src: `/journals/journal_police_icon.svg?v=${ASSET_VERSION}` });
-    expect(journalArt("mafia", "cover").src).toBe(`/journals/journal_mafia_cover.svg?v=${ASSET_VERSION}`);
-    expect(journalArt("doctor", "page").src).toBe(`/journals/journal_doctor_page.svg?v=${ASSET_VERSION}`);
+    expect(journalArt("mafia", "cover").src).toBe(stationeryArt("journal-mafia"));
+    for (const role of JOURNAL_ROLES) expect(journalArt(role, "page").src).toBe(stationeryArt("paper"));
     for (const role of JOURNAL_ROLES) for (const slot of JOURNAL_SLOTS) expect("srcSet" in journalArt(role, slot)).toBe(false);
   });
 });
@@ -203,7 +205,7 @@ describe("미리 받기 목록", () => {
     expect(hrefs).toContain(`/backgrounds/bg_game_day.webp?v=${ASSET_VERSION}`);
     expect(hrefs).toContain(`/backgrounds/bg_game_night.webp?v=${ASSET_VERSION}`);
     expect(hrefs).toContain(ghostSrc().src);
-    expect(hrefs).toHaveLength(17);
+    expect(hrefs).toHaveLength(20);
     expect(rolePreloadList()).toEqual(rolePreloadList());
   });
 
@@ -221,11 +223,19 @@ describe("미리 받기 목록", () => {
     expect(preloadDuskAssets.length).toBe(0);
   });
 
-  it("역할 화면 목록은 역할과 무관한 한 목록이고 일지 SVG 아홉 개가 들어 있다 (T-03.1-18)", () => {
+  it("역할 화면에서 일지와 종이 소품을 역할과 무관하게 함께 받는다 (T-03.1-18)", () => {
     const hrefs = rolePreloadList().map((item) => item.href);
-    const journals = hrefs.filter((href) => href.startsWith("/journals/"));
-    expect(journals).toHaveLength(9);
-    for (const role of JOURNAL_ROLES) for (const slot of JOURNAL_SLOTS) expect(journals).toContain(journalArt(role, slot).src);
+    for (const role of JOURNAL_ROLES) for (const slot of JOURNAL_SLOTS) expect(hrefs).toContain(journalArt(role, slot).src);
+    expect(new Set(hrefs).size).toBe(hrefs.length);
+    expect(hrefs.filter((href) => href.startsWith("/stationery/"))).toHaveLength(stationeryFiles.size);
+    const css = readFileSync("src/styles/base.css", "utf8");
+    for (const asset of ["role-front", "role-back", "paper", "will-paper", "note"] as const) {
+      const href = stationeryArt(asset);
+      expect(hrefs).toContain(href);
+      expect(css).toContain(`--stationery-${asset}: url("${href}")`);
+    }
+    expect(hrefs).toContain(stationeryArt("seal"));
+    expect(entryPreloadList().some(({ href }) => href.startsWith("/stationery/"))).toBe(false);
   });
 
   describe("react-dom preload 호출", () => {
@@ -240,7 +250,7 @@ describe("미리 받기 목록", () => {
       }
       vi.mocked(preload).mockClear();
       preloadRoleAssets();
-      expect(preload).toHaveBeenCalledTimes(17);
+      expect(preload).toHaveBeenCalledTimes(20);
       vi.mocked(preload).mockClear();
       preloadDuskAssets();
       expect(preload).toHaveBeenCalledTimes(1);
@@ -272,7 +282,9 @@ describe("실제 파일과의 일치", () => {
     expect(nonJournal.length).toBeGreaterThan(30);
     for (const url of nonJournal) {
       const path = decodeURIComponent(url.split("?")[0]!);
-      const files = path.startsWith("/backgrounds/") ? backdropFiles : characterFiles;
+      const files = path.startsWith("/stationery/") ? stationeryFiles
+        : path.startsWith("/backgrounds/") ? backdropFiles
+        : characterFiles;
       expect(files.has(`/public${path}`), `${url} → /public${path}`).toBe(true);
     }
   });

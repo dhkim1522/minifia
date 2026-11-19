@@ -1660,13 +1660,13 @@ export function readAnnounceWatch(page, { stop = true } = {}) {
 }
 
 /**
- * 유언 편지 관찰을 심는다(09.1-11): 40ms 마다 아침 진입(morningAt)·편지 등장(appearAt)·알림 위로(announceTopAt)·인장 글자·카드 도착(cardAt)·편지 걷힘(goneAt)을
+ * 유언 편지 관찰을 심는다(09.1-11): 40ms 마다 아침 진입(morningAt)·편지 등장(appearAt)·알림 위로(announceTopAt)·인장 이미지 로드·카드 도착(cardAt)·편지 걷힘(goneAt)을
  * page 시계(ms)로 쌓는다. 접힘·카드 도착 같은 짧은 구간을 Playwright 호출 지연과 상관없이 놓치지 않으려고 쓴다. readLetterWatch 가 읽고 멈춘다.
  */
 export function armLetterWatch(page) {
   return page.evaluate(() => {
     window.__letterWatch?.stop?.();
-    const w = { morningAt: null, appearAt: null, announceTopAt: null, announceText: null, sealGlyphs: null, read: null, cardAt: null, cardBase: 0, goneAt: null };
+    const w = { morningAt: null, appearAt: null, announceTopAt: null, announceText: null, sealImage: null, read: null, cardAt: null, cardBase: 0, goneAt: null };
     const timer = setInterval(() => {
       const now = performance.now();
       const stage = document.querySelector("[data-game-stage]");
@@ -1677,8 +1677,11 @@ export function armLetterWatch(page) {
         if (w.appearAt === null) {
           w.appearAt = now;
           w.cardBase = cards;
-          w.sealGlyphs = [...letter.querySelectorAll("[data-will-seal] text")].map((t) => t.textContent ?? "");
           w.read = (letter.querySelector("[data-will-read]")?.textContent ?? "").trim();
+        }
+        if (w.sealImage === null) {
+          const seal = letter.querySelector("[data-will-seal] img");
+          if (seal?.complete && seal.naturalWidth > 0) w.sealImage = seal.currentSrc;
         }
         w.goneAt = null;
       } else if (w.appearAt !== null && w.goneAt === null) w.goneAt = now;

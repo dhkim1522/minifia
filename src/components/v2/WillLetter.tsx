@@ -13,6 +13,7 @@ import {
   writeSchedule,
 } from "../../game/willLetter";
 import type { WriteSchedule } from "../../game/willLetter";
+import { stationeryArt } from "../../net/assets";
 import type { WillLetter as WillLetterState } from "../../net/useWillLetter";
 import { V2Icon } from "./V2Icon";
 
@@ -359,11 +360,21 @@ export function WillLetter({ letter, reducedMotion, splitLines, getInputTop, onL
   );
 }
 
-/** 실링왁스 인장(시안 SVG 그대로): 불규칙 가장자리 · 안쪽 테두리 원 둘 · 글자 두 겹(1px 어긋남) · 하이라이트 호. 글자는 SEAL_GLYPH 한 곳 */
 function Seal({ at, delay }: { at: number; delay: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="mf-letter__seal" data-will-seal="" data-seal-at={at} aria-hidden="true" style={css({ "--lw-delay": delay })}>
+      {failed ? <VectorSeal /> : (
+        <img src={stationeryArt("seal")} alt="" width={84} height={84} draggable={false} onError={() => setFailed(true)} />
+      )}
+    </div>
+  );
+}
+
+function VectorSeal() {
   const gradId = `lw-wax-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   return (
-    <svg className="mf-letter__seal" data-will-seal="" data-seal-at={at} aria-hidden="true" viewBox="0 0 100 100" width="84" height="84" style={css({ "--lw-delay": delay })}>
+    <svg viewBox="0 0 100 100" width="84" height="84">
       <defs>
         <radialGradient id={gradId} cx="38%" cy="30%" r="75%">
           <stop offset="0" className="mf-letter__wax-1" />

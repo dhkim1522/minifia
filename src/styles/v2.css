@@ -90,7 +90,11 @@
 .mv-chat__card-title { display: inline-flex; align-items: center; gap: 6px; font: var(--type-stage); color: var(--gray-50); }
 .mv-chat__card--mafia .mv-chat__card-title { color: var(--crimson-300); }
 .mv-chat__card-text { margin: 0; font: var(--type-body); color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
-.mv-chat__card:is([data-card="will"], [data-card="note"]) .mv-chat__card-text { font-family: var(--font-hand); }
+.mv-chat__card:is([data-card="will"], [data-card="note"]) { background: var(--stationery-paper, none) center / cover no-repeat, var(--noir-paper); border-color: var(--noir-paper-line); }
+.mv-chat__card[data-card="note"] { background-image: var(--stationery-note, none); }
+.mv-chat__card:is([data-card="will"], [data-card="note"]) .mv-chat__card-title { color: var(--noir-ink); }
+.mv-chat__card:is([data-card="will"], [data-card="note"]) .mv-chat__card-text { color: var(--noir-ink); font-family: var(--font-hand); }
+.mv-chat__card--mafia[data-card="note"] .mv-chat__card-title { color: var(--crimson-700); }
 /* 입력줄(16페이즈, V-6): 동작·보내기·유언은 48 원, 입력칸도 48 이라 가운데 정렬 하나면 된다. 폭 360: 동작 48 + 입력칸 + 보내기 48 + 유언 48, 간격 8 → 입력칸 160 */
 .mv-chat__form { position: relative; display: flex; align-items: center; gap: var(--space-sm); }
 .mv-chat__field { position: relative; display: flex; flex: 1; min-width: 0; }
@@ -288,8 +292,9 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-will__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
 .mv-will__title { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap-min); padding-left: 4px; font: var(--type-section); color: var(--noir-paper); }
 .mv-will__close { color: var(--gray-300); }
-.mv-will__text { width: 100%; box-sizing: border-box; padding: 12px; border-radius: var(--noir-control-radius); border: 1px solid var(--night-600); background: var(--noir-inset); color: var(--gray-100); font: var(--type-hand-note); resize: none; user-select: text; border-color: var(--noir-line); }
-.mv-will__text::placeholder { font: var(--type-body); color: var(--gray-300); }
+.mv-will__text { width: 100%; box-sizing: border-box; padding: 12px; border-radius: var(--noir-control-radius); border: 1px solid var(--night-600); background: var(--stationery-paper, none) center / cover no-repeat, var(--noir-paper); color: var(--noir-ink); font: var(--type-hand-note); resize: none; user-select: text; border-color: var(--noir-line); }
+.mv-will--mafia .mv-will__text { background-image: var(--stationery-note, none); }
+.mv-will__text::placeholder { font: var(--type-body); color: var(--noir-ink); opacity: 0.74; }
 .mv-will__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
 .mv-will__count { font: var(--type-label); color: var(--gray-300); font-variant-numeric: tabular-nums; }
 /* 유언 단계 남은 초(22-11 P22-8): 글자 수 오른쪽·[남기기] 왼쪽. 5초 이하는 timerTone 의 urgent(crimson-400) */
@@ -379,7 +384,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-quote.is-on { opacity: 1; }
 .mv-quote.is-still { transition: none; }
 /* 유언 공개 카드(22-12 P22-11): 같은 인용 카드에 줄 수만 4 로(50자소 한글 어절 줄바꿈 최악 4줄). 면·테두리·글자·가운데는 그대로, 새 색·토큰 없음 */
-.mv-quote--will { -webkit-line-clamp: 4; line-clamp: 4; background: var(--noir-paper); color: var(--noir-ink); box-shadow: inset 0 0 0 1px var(--noir-paper-line), inset 0 0 0 3px var(--noir-paper); border-color: var(--noir-paper-line); font: var(--type-hand-note); }
+.mv-quote--will { -webkit-line-clamp: 4; line-clamp: 4; background: var(--stationery-paper, none) center / cover no-repeat, var(--noir-paper); color: var(--noir-ink); box-shadow: inset 0 0 0 1px var(--noir-paper-line), inset 0 0 0 3px var(--noir-paper); border-color: var(--noir-paper-line); font: var(--type-hand-note); }
 /* 카드 자리: 독 아랫변 + 8(위 알림 .mv-toast--top 과 같은 윗변), 폭 = 화면 − 32. 누를 수 없다 */
 @media (prefers-reduced-motion: reduce) { .mv-quote { transition: none; } }
 

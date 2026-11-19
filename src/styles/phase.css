@@ -24,9 +24,25 @@
 .mf-card--front .mf-card__inner { transform: rotateY(180deg); }
 .mf-card__face { position: absolute; inset: 0; isolation: isolate; backface-visibility: hidden; -webkit-backface-visibility: hidden; clip-path: none; background: var(--noir-sheet-light), var(--noir-panel); box-shadow: inset 0 0 0 1px var(--noir-line), var(--shadow-card); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: var(--space-lg); text-align: center; overflow: hidden; border-radius: var(--noir-surface-radius); }
 .mf-card__face::before { content: ""; position: absolute; inset: 7px; border: 1px solid color-mix(in srgb, var(--noir-silver) 38%, transparent); clip-path: none; pointer-events: none; border-radius: var(--noir-control-radius); }
-.mf-card__front { transform: rotateY(180deg); }
+.mf-card__front {
+  transform: rotateY(180deg);
+  background: var(--stationery-role-front, none) center / 100% 100% no-repeat, var(--noir-panel);
+}
+.mf-card__front::before { border: 0; }
 .mf-card__front .mf-t-display { order: -1; color: var(--noir-paper); letter-spacing: -0.04em; }
 .mf-card__back { background: radial-gradient(ellipse at 50% 55%, var(--noir-raised), transparent 70%), var(--noir-inset); }
+/* 뒷면 그림을 마름모 위에 얹는다. 그림 요청이 실패하면 마름모가 남는다. */
+.mf-card__back::before,
+.mf-rolecard__back::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  border-radius: inherit;
+  background: var(--stationery-role-back, none) center / 100% 100% no-repeat;
+}
 .mf-card__diamond { width: 40%; aspect-ratio: 1; }
 /* 직업 그림은 표시 폭 150(3:4). 카드가 낮으면 그림이 먼저 줄어 글자가 잘리지 않는다. */
 .mf-card__art { width: 150px; max-width: 100%; height: auto; flex: 0 1 auto; min-height: 0; object-fit: contain; filter: drop-shadow(0 8px 12px var(--shadow)); }
@@ -72,7 +88,7 @@
 [data-playtest-role] .mf-reveal__stage { padding: 70px var(--space-md) var(--space-md); }
 
 /* 첫날 증거지는 판화선과 따뜻한 종이로 무대에서 분리한다. 카드 안의 간격은 키보드가 열린 크기 계약을 유지한다. */
-.mf-keyword__card { position: relative; width: 100%; max-width: 344px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); padding: var(--space-md) 20px; clip-path: none; background: repeating-linear-gradient(112deg, transparent 0 3px, color-mix(in srgb, var(--noir-paper-line) 5%, transparent) 3px 4px), var(--noir-paper); border: 1px solid var(--noir-paper-line); text-align: center; animation: mf-keyword-in var(--dur-med) var(--ease-out) both; border-radius: var(--noir-surface-radius); box-shadow: var(--shadow-card); }
+.mf-keyword__card { position: relative; width: 100%; max-width: 344px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); padding: var(--space-md) 20px; clip-path: none; background: repeating-linear-gradient(112deg, transparent 0 3px, color-mix(in srgb, var(--noir-paper-line) 5%, transparent) 3px 4px), var(--stationery-paper, none) center / cover no-repeat, var(--noir-paper); border: 1px solid var(--noir-paper-line); text-align: center; animation: mf-keyword-in var(--dur-med) var(--ease-out) both; border-radius: var(--noir-surface-radius); box-shadow: var(--shadow-card); }
 .mf-keyword__card::before { content: ""; position: absolute; inset: 6px; border: 1px solid color-mix(in srgb, var(--noir-paper-line) 38%, transparent); clip-path: none; pointer-events: none; border-radius: var(--noir-control-radius); }
 .mf-keyword__card.is-still { animation: none; }
 .mf-keyword__genre { position: relative; margin: 0; font: var(--type-label-strong); letter-spacing: 0.05em; color: var(--noir-ink); word-break: keep-all; }

@@ -52,9 +52,12 @@
   transform: rotate(-1.5deg);
   background-color: var(--letter-paper);
   /* 줄 쳐진 선: 줄 높이마다 1px. 위치는 글 덩어리 윗변(--lw-pos)에 맞춘다 */
-  background-image: linear-gradient(to bottom, transparent calc(var(--lw-line, 26px) - 1px), var(--letter-rule) calc(var(--lw-line, 26px) - 1px));
-  background-size: 100% var(--lw-line, 26px);
-  background-position: 0 var(--lw-pos, 0px);
+  background-image:
+    linear-gradient(to bottom, transparent calc(var(--lw-line, 26px) - 1px), var(--letter-rule) calc(var(--lw-line, 26px) - 1px)),
+    var(--stationery-will-paper, none);
+  background-repeat: repeat-y, no-repeat;
+  background-size: 100% var(--lw-line, 26px), 100% 100%;
+  background-position: 0 var(--lw-pos, 0px), center;
   color: var(--letter-ink);
 }
 /* 글 덩어리: 윗변·높이는 부품이 잰 값(가운데, 길면 인장 위로) */
@@ -111,6 +114,7 @@
   filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.45));
   animation: mf-letter-seal 500ms ease-out var(--lw-delay, 3200ms) both;
 }
+.mf-letter__seal > :is(img, svg) { display: block; width: 100%; height: 100%; object-fit: contain; }
 .mf-letter__wax-1 { stop-color: var(--letter-wax-1); }
 .mf-letter__wax-2 { stop-color: var(--letter-wax-2); }
 .mf-letter__wax-3 { stop-color: var(--letter-wax-3); }

@@ -1,4 +1,6 @@
 .mf-sheet.mf-first-answers {
+  --answers-tint: color-mix(in srgb, var(--noir-panel) 94%, transparent);
+  background: linear-gradient(var(--answers-tint), var(--answers-tint)), var(--stationery-paper, none) center / cover no-repeat, var(--noir-panel);
   gap: var(--space-sm);
   max-width: 380px;
   max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px);
