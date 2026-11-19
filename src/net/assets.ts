@@ -1,6 +1,7 @@
 // 그림 URL 의 단일 출처. 그림 경로를 화면마다 문자열로 흩뿌리지 않는다.
 // 파일 이름의 @ 는 URL 에서 %40 으로 쓴다(정적 에셋 서빙이 @ 를 307 리다이렉트한다).
 import { preload } from "react-dom";
+import type { AnimalId } from "../../shared/game/animals";
 import { ROLE_IDS } from "../../shared/game/roles";
 import type { RoleId } from "../../shared/game/roles";
 import type { MapId, OutfitId } from "../../shared/protocol";
@@ -28,22 +29,44 @@ export type PreloadItem = { href: string; imageSrcSet?: string };
  * 정적 그림 주소 끝에 붙이는 값. 파일 이름이 같아도 그림을 바꾼 배포가 바로 보이게 한다
  * (정적 그림 캐시가 max-age 1일이라 같은 주소는 하루 동안 옛 그림이 나온다). 그림을 바꾸면 값을 바꾼다.
  */
-export const ASSET_VERSION = "noir-8";
+export const ASSET_VERSION = "noir-9";
 
 // 파일 이름의 @ 는 URL 에서 %40 으로 쓴다.
 function png(dir: "table" | "roles" | "ghost", id: string, scale: 2 | 4): string {
   return `/characters/${dir}/${id}_default%40${scale}x.png?v=${ASSET_VERSION}`;
 }
 
+/** 공개 캐릭터 얼굴. 채팅과 대상 선택에서 같은 동물 이미지를 쓴다. */
+export function animalFaceSrc(animal: AnimalId): string {
+  return `/characters/animals/${animal}/face.png?v=${ASSET_VERSION}`;
+}
+
+function animalArt(animal: AnimalId, form: string, density: "figure" | "role"): { src: string; srcSet: string } {
+  const dir = `/characters/animals/${animal}`;
+  const src = `${dir}/${form}-sm.png?v=${ASSET_VERSION}`;
+  const large = `${dir}/${form}-lg.png?v=${ASSET_VERSION}`;
+  return { src, srcSet: density === "figure" ? `${src} 2x, ${large} 4x` : `${src} 1x, ${large} 2x` };
+}
+
+export function animalFigureSrc(animal: AnimalId): { src: string; srcSet: string } {
+  return animalArt(animal, "figure", "figure");
+}
+
+export function animalRoleArtSrc(animal: AnimalId, role: RoleId): { src: string; srcSet: string } {
+  return animalArt(animal, role === "citizen" ? "figure" : role, "role");
+}
+
 // 인물은 72px 로 표시한다. 밀도 기술자는 파일 폭 ÷ 표시 폭이라 @2x 파일은 2x, @4x 파일은 4x 다.
 // 2배 화면이 @4x 를 받지 않는다. src 는 @2x.
-export function figureSrc(seat: number): { src: string; srcSet: string } {
+export function figureSrc(seat: number, animal?: AnimalId): { src: string; srcSet: string } {
+  if (animal !== undefined) return animalFigureSrc(animal);
   const id = FIGURE_IDS[((seat % FIGURE_IDS.length) + FIGURE_IDS.length) % FIGURE_IDS.length]!;
   return { src: png("table", id, 2), srcSet: `${png("table", id, 2)} 2x, ${png("table", id, 4)} 4x` };
 }
 
 // 대상 선택과 기록에 쓰는 좌석별 얼굴. 맵과 같은 미니어처 모델에서 렌더한다.
-export function faceSrc(seat: number): string {
+export function faceSrc(seat: number, animal?: AnimalId): string {
+  if (animal !== undefined) return animalFaceSrc(animal);
   return `/characters/faces/face-${((seat % 8) + 8) % 8}.png?v=${ASSET_VERSION}`;
 }
 
@@ -73,7 +96,8 @@ export function mapCardSrc(id: MapId): string {
 }
 
 // 직업 그림은 150px 로 표시한다. @2x 파일은 1x, @4x 파일은 2x. 역할을 보낼 수 있는 화면에서만 쓴다.
-export function roleArtSrc(role: RoleId): { src: string; srcSet: string } {
+export function roleArtSrc(role: RoleId, animal?: AnimalId): { src: string; srcSet: string } {
+  if (animal !== undefined) return animalRoleArtSrc(animal, role);
   return { src: png("roles", role, 2), srcSet: `${png("roles", role, 2)} 1x, ${png("roles", role, 4)} 2x` };
 }
 
@@ -97,13 +121,9 @@ export function backdropUrl(layout: BackdropLayout, scene: SceneId): string {
   return `/backgrounds/bg_${layout}_${SCENES[scene].file}.webp?v=${ASSET_VERSION}`;
 }
 
-/** 입장 화면에서 미리 받는다: 입장·대기실 배경, 인물 8종(대기실 첫 그림이 비어 보이지 않게). */
+/** 입장·대기실 배경을 먼저 받는다. 캐릭터는 공개 명단의 동물만 읽는다. */
 export function entryPreloadList(): PreloadItem[] {
-  const figures = FIGURE_IDS.map((_, seat) => {
-    const { src, srcSet } = figureSrc(seat);
-    return { href: src, imageSrcSet: srcSet };
-  });
-  return [{ href: backdropUrl("entry", "lobby") }, { href: backdropUrl("game", "lobby") }, ...figures];
+  return [{ href: backdropUrl("entry", "lobby") }, { href: backdropUrl("game", "lobby") }];
 }
 
 /**
@@ -111,9 +131,9 @@ export function entryPreloadList(): PreloadItem[] {
  * 해질녘 배경은 낮 토론 진입 때 따로 받는다(duskPreloadList).
  * 어떤 역할이든 같은 목록 — 요청 패턴으로 역할이 드러나지 않는다(Pitfall 20).
  */
-export function rolePreloadList(): PreloadItem[] {
+export function rolePreloadList(animal?: AnimalId): PreloadItem[] {
   const arts = ROLE_IDS.map((role) => {
-    const { src, srcSet } = roleArtSrc(role);
+    const { src, srcSet } = roleArtSrc(role, animal);
     return { href: src, imageSrcSet: srcSet };
   });
   const ghost = ghostSrc();
@@ -150,8 +170,8 @@ export function preloadEntryAssets(): void {
   preloadImages(entryPreloadList());
 }
 
-export function preloadRoleAssets(): void {
-  preloadImages(rolePreloadList());
+export function preloadRoleAssets(animal?: AnimalId): void {
+  preloadImages(rolePreloadList(animal));
 }
 
 export function preloadDuskAssets(): void {

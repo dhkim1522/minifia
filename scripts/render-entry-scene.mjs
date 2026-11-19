@@ -1,4 +1,4 @@
-// 로컬 Vite 서버의 실제 맵·좌석 모델로 홈 장면을 굽는다. 런타임에서는 WebP 한 장만 읽는다.
+// 로컬 Vite 서버의 실제 맵·동물 모델로 홈 장면을 굽는다. 런타임에서는 WebP 한 장만 읽는다.
 // node scripts/render-entry-scene.mjs http://127.0.0.1:5173 && node scripts/make-og.mjs
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -17,7 +17,7 @@ try {
   const png = await page.evaluate(async () => {
     const THREE = await import("/node_modules/three/build/three.module.js");
     const { buildBarScene } = await import("/src/world/maps/bar.ts");
-    const { createCharacter, figForSeat } = await import("/src/world/character.ts");
+    const { createCharacter } = await import("/src/world/character.ts");
     const { LADDER } = await import("/src/world/renderer.ts");
     const bar = buildBarScene(LADDER[0]);
     bar.setLighting("night");
@@ -31,8 +31,8 @@ try {
     // 재즈 바 뒤쪽 펜던트 아래의 두 의자와 램프를 그대로 사용한다.
     const tableX = -2.4, tableZ = -4.6;
     const subjects = [];
-    function place(seat, outfit, x, z, angle, seated) {
-      const actor = createCharacter(figForSeat(seat), outfit);
+    function place(animal, outfit, x, z, angle, seated) {
+      const actor = createCharacter(0, outfit, undefined, animal);
       actor.root.position.set(tableX + x, seated ? 0.14 : 0, tableZ + z);
       actor.root.rotation.y = angle;
       if (seated) {
@@ -43,11 +43,11 @@ try {
       subjects.push(actor);
       return actor.root;
     }
-    const left = place(3, "mafia", -0.71, 0.37, 0.9, true);
+    const left = place("rabbit", "mafia", -0.71, 0.37, 0.9, true);
     left.getObjectByName("neck").rotation.y = 0.08;
-    const speaker = place(5, "coat", -0.62, -1.16, 0.13, false);
+    const speaker = place("fox", "coat", -0.62, -1.16, 0.13, false);
     speaker.getObjectByName("armA").rotation.x = -0.54;
-    const right = place(1, "coat", 0.71, -0.37, -0.33, true);
+    const right = place("elephant", "coat", 0.71, -0.37, -0.33, true);
     right.getObjectByName("neck").rotation.z = -0.07;
 
     // 램프의 빛이 큰 얼굴에서도 읽히게 촬영용 조명을 맵의 실광원과 같은 자리에 둔다.

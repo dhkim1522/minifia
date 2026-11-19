@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import "../../styles/v2.css";
+import { ANIMAL_IDS, ANIMALS, type AnimalId } from "../../../shared/game/animals";
 import type { MapChoice, OutfitId } from "../../../shared/protocol";
 import { DRESS_ORDER, DRESS_TAB_NAME, DRESS_TEXT, MAP_CARD_ORDER, MAP_LABEL, OUTFIT_LABEL, mapCardName, outfitCardName } from "../../game/dressText";
-import { mapCardSrc, outfitCardSrc } from "../../net/assets";
-import { V2Icon } from "./V2Icon";
+import { animalFaceSrc, mapCardSrc, outfitCardSrc, roleArtSrc } from "../../net/assets";
+import { V2Icon, type V2IconName } from "./V2Icon";
 
 // 로비 꾸미기 시트 (10-07, UI-SPEC B-2·D-5): 로비 아래 패널을 정확히 덮는다(높이 = --mf-panel-h 250 · 306, 아랫변 = 키보드 올림).
 // 스테이지 사각형이 변하지 않아 카메라가 움직이지 않고 내 캐릭터가 계속 보인다. 위 줄은 hanger 장식 24 와 닫기 44×44 뿐, 제목 글자는 없다.
@@ -26,29 +27,48 @@ export interface DressSheetProps {
   /** 맵을 고를 수 있는 방장(허용 맵 둘 이상)이면 [맵][의상] 탭이 생긴다(11-13). 아니면 탭 행이 없고 의상 카드만. 열린 채 거짓이 되면 의상 탭으로 돌아간다 */
   host?: boolean;
   /** 처음 열리는 탭. 지도 칩은 "map", 꾸미기 버튼은 "dress"(기본). 방장이 아니면 무시한다 */
-  tab?: "map" | "dress";
+  tab?: DressTab;
   /** 서버가 정한 맵 선택(기본 random) */
   mapChoice?: MapChoice;
   /** 방장이 맵 카드를 눌렀다. 보내기는 부르는 쪽이 한다 */
   onPickMap?(id: MapChoice): void;
+  wearer?: AnimalId | undefined;
+  animals?: {
+    value: AnimalId;
+    taken: ReadonlySet<AnimalId>;
+    pending: AnimalId | null;
+    onPick(id: AnimalId): void;
+    only?: boolean;
+  };
 }
 
-export function DressSheet({ value, onPick, onClose, disabled = false, taken, host = false, tab: openTab = "dress", mapChoice = "random", onPickMap }: DressSheetProps) {
+export type DressTab = "map" | "dress" | "animal";
+
+const TAB_NAME = { ...DRESS_TAB_NAME, animal: "동물" } as const;
+const TAB_ICON: Readonly<Record<DressTab, V2IconName>> = { map: "mapBar", dress: "hanger", animal: "face" };
+
+export function DressSheet({ value, onPick, onClose, disabled = false, taken, host = false, tab: openTab = "dress", mapChoice = "random", onPickMap, animals, wearer = animals?.value }: DressSheetProps) {
   const stripRef = useRef<HTMLDivElement>(null);
   const mapsRef = useRef<HTMLDivElement>(null);
-  const [tab, setTab] = useState<"map" | "dress">(host ? openTab : "dress");
-  // 20-07(D-02·P20-16): 열려 있는 동안 맵 탭이 사라지면(방장을 넘겼다) 의상 탭으로 돌아간다.
-  // 탭 줄은 host 일 때만 그리므로 함께 사라진다. 다시 host 가 되어도 저절로 맵 탭으로 돌아가지 않는다
+  const animalsRef = useRef<HTMLDivElement>(null);
+  const tabs: DressTab[] = [
+    ...(host ? ["map" as const] : []),
+    ...(animals ? ["animal" as const] : []),
+    ...(animals?.only ? [] : ["dress" as const]),
+  ];
+  const [chosenTab, setTab] = useState<DressTab>(openTab);
+  const tab = tabs.includes(chosenTab) ? chosenTab : (animals ? "animal" : "dress");
   useEffect(() => {
-    if (!host) setTab("dress");
-  }, [host]);
-  // 열릴 때 한 번(탭을 바꿀 때 초점은 탭 버튼에 둔다): 지금 의상(맵 탭이면 지금 맵) 카드가 띠 가운데로 오도록 맞추고(즉시, 모션 줄이기와 같다) 그 카드로 초점을 준다(스크롤은 위에서 이미 했다)
+    if (tab !== chosenTab) setTab(tab);
+  }, [tab, chosenTab]);
+  const cardStrip = tab === "map" ? mapsRef : tab === "animal" ? animalsRef : stripRef;
+  const firstLayout = useRef(true);
   useEffect(() => {
-    const card = (tab === "map" ? mapsRef.current : stripRef.current)?.querySelector<HTMLElement>("button[aria-pressed='true']");
-    if (!card) return;
-    card.scrollIntoView?.({ inline: "center", block: "nearest", behavior: "auto" });
-    card.focus({ preventScroll: true });
-  }, []);
+    const card = cardStrip.current?.querySelector<HTMLElement>("button[aria-pressed='true']");
+    card?.scrollIntoView?.({ inline: "center", block: "nearest", behavior: "auto" });
+    if (firstLayout.current) card?.focus({ preventScroll: true });
+    firstLayout.current = false;
+  }, [cardStrip]);
 
   // 카드 띠도 화살표키: 좌우로 이웃 카드에 초점(양 끝에서 멈춘다). Enter·Space 는 버튼의 기본 동작, Esc 는 닫기
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -58,7 +78,7 @@ export function DressSheet({ value, onPick, onClose, disabled = false, taken, ho
       return;
     }
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    const cards = [...((tab === "map" ? mapsRef.current : stripRef.current)?.querySelectorAll<HTMLElement>("button[data-outfit],button[data-map-card]") ?? [])];
+    const cards = [...(cardStrip.current?.querySelectorAll<HTMLElement>("button") ?? [])];
     const at = cards.indexOf(document.activeElement as HTMLElement);
     if (at < 0) return;
     e.preventDefault();
@@ -67,34 +87,62 @@ export function DressSheet({ value, onPick, onClose, disabled = false, taken, ho
   };
 
   return (
-    <div className="mv-dress-sheet" data-dress-sheet="" role="group" aria-label={DRESS_TEXT.open} onKeyDown={onKeyDown}>
+    <div className="mv-dress-sheet" data-dress-sheet="" data-dress-view={tab} role="group" aria-label={animals ? "캐릭터 꾸미기" : DRESS_TEXT.open} onKeyDown={onKeyDown}>
       <div className="mv-dress-sheet__top">
-        {host ? (
+        {tabs.length > 1 ? (
           <div className="mv-dress-sheet__tabs" role="tablist">
-            {(["map", "dress"] as const).map((id) => (
+            {tabs.map((id) => (
               <button
                 key={id}
                 type="button"
                 role="tab"
                 className={tab === id ? "mv-dress-sheet__tab is-selected" : "mv-dress-sheet__tab"}
-                data-map-tab={id}
+                data-customize-tab={id}
+                data-map-tab={host && id !== "animal" ? id : undefined}
                 aria-selected={tab === id}
-                aria-label={DRESS_TAB_NAME[id]}
+                aria-label={TAB_NAME[id]}
                 onClick={() => setTab(id)}
               >
-                <V2Icon name={id === "map" ? "mapBar" : "hanger"} size={20} />
-                <span className="mv-dress-sheet__tab-label">{DRESS_TAB_NAME[id]}</span>
+                <V2Icon name={TAB_ICON[id]} size={20} />
+                <span className="mv-dress-sheet__tab-label">{TAB_NAME[id]}</span>
               </button>
             ))}
           </div>
         ) : (
-          <V2Icon name="hanger" size={24} />
+          <V2Icon name={TAB_ICON[tab]} size={24} />
         )}
         <button type="button" className="mv-dress-sheet__close mv-closepill" aria-label={DRESS_TEXT.close} onClick={onClose}>
           <V2Icon name="close" size={20} />
         </button>
       </div>
-      {tab === "map" ? (
+      {tab === "animal" && animals ? (
+        <div ref={animalsRef} className="mv-dress-sheet__strip" aria-busy={animals.pending !== null}>
+          {ANIMAL_IDS.map((id) => {
+            const selected = id === animals.value;
+            const locked = animals.taken.has(id) && !selected;
+            const blocked = disabled || locked || animals.pending !== null;
+            return (
+              <button
+                key={id}
+                type="button"
+                className={"mv-dress-card mv-animal-card" + (selected ? " is-selected" : "")}
+                data-animal={id}
+                data-taken={locked ? "" : undefined}
+                aria-pressed={selected}
+                aria-label={ANIMALS[id].name + (locked ? ", 다른 참가자가 사용 중" : selected ? DRESS_TEXT.selected : "")}
+                aria-disabled={blocked || undefined}
+                onClick={() => {
+                  if (!blocked && !selected) animals.onPick(id);
+                }}
+              >
+                <img className="mv-animal-card__img" src={animalFaceSrc(id)} width={52} height={52} alt="" draggable={false} />
+                <span className="mv-dress-card__name">{ANIMALS[id].name}</span>
+                {selected ? <V2Icon name="check" size={12} className="mv-dress-card__check" /> : locked ? <V2Icon name="lock" size={16} className="mv-dress-card__lock" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : tab === "map" ? (
         <div ref={mapsRef} className="mv-dress-sheet__maps">
           {MAP_CARD_ORDER.map((id) => {
             const selected = id === mapChoice;
@@ -133,6 +181,8 @@ export function DressSheet({ value, onPick, onClose, disabled = false, taken, ho
           {DRESS_ORDER.map((id) => {
             const selected = id === value;
             const locked = taken?.has(id) === true && id !== value;
+            const role = id === "coat" ? "citizen" : id === "mafia" || id === "police" || id === "doctor" ? id : undefined;
+            const art = wearer && role ? roleArtSrc(role, wearer) : undefined;
             return (
               <button
                 key={id}
@@ -147,7 +197,7 @@ export function DressSheet({ value, onPick, onClose, disabled = false, taken, ho
                   if (!disabled && !locked) onPick(id);
                 }}
               >
-                <img className="mv-dress-card__img" src={outfitCardSrc(id)} alt={OUTFIT_LABEL[id]} width={64} height={80} draggable={false} />
+                <img className="mv-dress-card__img" src={art?.src ?? outfitCardSrc(id)} srcSet={art?.srcSet} alt={OUTFIT_LABEL[id]} width={64} height={80} draggable={false} />
                 <span className="mv-dress-card__name">{OUTFIT_LABEL[id]}</span>
                 {selected ? <V2Icon name="check" size={12} className="mv-dress-card__check" /> : locked ? <V2Icon name="lock" size={16} className="mv-dress-card__lock" /> : null}
               </button>

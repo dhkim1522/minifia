@@ -141,7 +141,8 @@ describe("CHAR-01: 테이블 인물 8장은 서로 다르고 자리 번호가 �
 
   it("figureSrc(s + 8) 은 figureSrc(s) 와 같다 — 외형은 자리 번호만의 함수다(역할·능력 입력 없음)", () => {
     for (let seat = 0; seat < 8; seat++) expect(figureSrc(seat + 8)).toEqual(figureSrc(seat));
-    expect(figureSrc.length).toBe(1);
+    expect(figureSrc(0, "rabbit")).toEqual(figureSrc(7, "rabbit"));
+    expect(figureSrc(0, "rabbit").src).not.toBe(figureSrc(0, "bat").src);
   });
 });
 

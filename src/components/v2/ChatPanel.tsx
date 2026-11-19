@@ -4,6 +4,7 @@ import { CHAT_MAX_GRAPHEMES } from "../../../shared/game/chatRules";
 import { CHAT_TEXT } from "../../game/chatText";
 import { AUTO_SCROLL_SLOP_PX, DUP_SUBMIT_MS, IME_WAIT_MS, LOG_FADE_H, LOG_H, LOG_OPEN_MAX, OPEN_STAGE_MIN, TAIL_WINDOW_MS } from "../../game/chatUi";
 import type { EmoteId } from "../../../shared/protocol";
+import type { AnimalId } from "../../../shared/game/animals";
 import { EMOTE_TEXT } from "../../game/chatText";
 import { EmoteTray } from "./EmoteTray";
 import { ChatLines } from "./ChatLines";
@@ -40,6 +41,7 @@ export interface ChatPanelMessage {
   text: string;
   /** 자리 번호 0~7 → 구분색 var(--seat-(n+1)) */
   seat?: number;
+  animal?: AnimalId;
   name?: string;
   me?: boolean;
   ch?: "all" | "mafia" | "ghost";

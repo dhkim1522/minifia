@@ -3,6 +3,7 @@ import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { MAX_BODY_BYTES } from "../../shared/protocol";
 import type { ServerMessage } from "../../shared/protocol";
+import { isAnimalId } from "../../shared/game/animals";
 import {
   closed,
   flat,
@@ -36,9 +37,11 @@ describe("POST /api/rooms/{code}/join", () => {
 
     const state = await nextState(host);
     expect(state.view.players).toEqual([
-      { seat: 0, nickname: "방장", connected: true, isHost: true, alive: true },
-      { seat: 1, nickname: "철수", connected: false, isHost: false, alive: true },
+      { seat: 0, nickname: "방장", connected: true, isHost: true, alive: true, animal: expect.any(String) },
+      { seat: 1, nickname: "철수", connected: false, isHost: false, alive: true, animal: expect.any(String) },
     ]);
+    expect(state.view.players.every((p) => isAnimalId(p.animal))).toBe(true);
+    expect(new Set(state.view.players.map((p) => p.animal)).size).toBe(2);
     // 방장 프레임에 새 참가자의 토큰이 없다.
     expect(host.frames.join("\n")).not.toContain(body.token);
   });

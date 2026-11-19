@@ -119,7 +119,7 @@ describe("POST /api/rooms", () => {
 });
 
 describe("GET /api/rooms/{code}/ws", () => {
-  it("hello{token} 에 그 사람의 RoomView 를 보내고, 공개 항목은 허용 목록 네 키뿐이며 토큰이 프레임에 없다", async () => {
+  it("hello{token} 에서 공개 동물을 포함한 RoomView 를 보내고 프레임에 토큰이 없다", async () => {
     const { code, token } = await createRoom("민수");
     const sock = await openSocket(code);
     sock.ws.send(JSON.stringify({ t: "hello", token }));
@@ -131,8 +131,8 @@ describe("GET /api/rooms/{code}/ws", () => {
     expect(msg.view.code).toBe(code);
     expect(msg.view.phase).toBe("lobby");
     expect(msg.view.phaseEndsAt).toBeNull();
-    expect(msg.view.players).toEqual([{ seat: 0, nickname: "민수", connected: true, isHost: true, alive: true }]);
-    expect(Object.keys(msg.view.players[0]!).sort()).toEqual(["alive", "connected", "isHost", "nickname", "seat"]);
+    expect(msg.view.players).toEqual([{ seat: 0, nickname: "민수", connected: true, isHost: true, alive: true, animal: expect.any(String) }]);
+    expect(Object.keys(msg.view.players[0]!).sort()).toEqual(["alive", "animal", "connected", "isHost", "nickname", "seat"]);
     expect(msg.view.me).toEqual({ seat: 0, isHost: true, chat: "all", testBots: 0 }); // 07-10: 대기실의 내 채널, 0075: 방장 봇 수
     sock.ws.close();
   });

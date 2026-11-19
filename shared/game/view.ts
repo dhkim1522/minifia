@@ -175,7 +175,11 @@ function buildDay(state: RoomState, now: number): DayView {
 export function buildPreview(state: RoomState): RoomPreview {
   const players: PreviewPlayer[] =
     state.phase === "lobby"
-      ? [...state.players].sort((a, b) => a.seat - b.seat).map((p) => ({ seat: p.seat, nickname: p.nickname }))
+      ? [...state.players].sort((a, b) => a.seat - b.seat).map((p) => ({
+          seat: p.seat,
+          nickname: p.nickname,
+          ...(p.animal === undefined ? {} : { animal: p.animal }),
+        }))
       : [];
   return {
     code: state.code,
@@ -189,11 +193,12 @@ export function buildPreview(state: RoomState): RoomPreview {
 
 /**
  * 쉬는 사람(bench)의 view(결정 D-13, 누설 L38, T-11-25). 허용 키만 키 하나씩 써서 만든다 — 게임 상태(day·result·spectate·다른 사람)를 읽지 않는다:
- * 단계·판 번호·맵 같은 공개 값과 자기 한 줄(seat·nickname·connected·isHost·look)뿐이다. 마감 시각은 null 이다(게임 시계는 이들의 일이 아니다).
+ * 단계·판 번호·맵 같은 공개 값과 자기 한 줄(공개 외형 포함)뿐이다. 마감 시각은 null 이다(게임 시계는 이들의 일이 아니다).
  */
 function buildRestingView(state: RoomState, resting: Player, now: number): RoomView {
   const row: PublicPlayer = { seat: resting.seat, nickname: resting.nickname, connected: true, isHost: false };
   if (resting.look !== undefined) row.look = resting.look;
+  if (resting.animal !== undefined) row.animal = resting.animal;
   const view: RoomView = {
     code: state.code,
     phase: state.phase,
@@ -232,6 +237,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
       };
       // 공개 의상(결정 D-6): 값이 있을 때만 키를 만든다(모든 단계 — 게임 중에도 같은 look 을 입는다). 실제 역할의 함수가 아니다.
       if (p.look !== undefined) row.look = p.look;
+      if (p.animal !== undefined) row.animal = p.animal;
       // 다시 하기 준비(결정 D-12, 11-08): 결과 단계의 연결돼 있고 나가지 않은 사람이 준비일 때만(방장·봇은 늘 준비). 값은 true 뿐이고 누가 보든 같다 — 역할의 함수가 아니다.
       if (state.phase === "ended" && p.connected && p.left !== true && isReady(p, state.hostId)) row.ready = true;
       // 쉬었다가 결과에 합류한 사람(결정 D-13): 역할이 없다는 사실만 공개한다.
@@ -411,6 +417,10 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
   };
   if (state.phase !== "lobby" && state.map !== undefined) view.map = state.map;
   if (DAY_PHASES.has(state.phase)) view.day = buildDay(state, now);
+  if (state.phase === "lobby" && state.bench !== undefined) {
+    const reservedAnimals = state.bench.flatMap((p) => p.animal === undefined ? [] : [p.animal]).sort();
+    if (reservedAnimals.length > 0) view.reservedAnimals = reservedAnimals;
+  }
 
   // 결과는 ended 단계에서만 모두에게 같다(D-17). seats 는 관전자 전용 spectate.seats 와 같은 방식으로 따로 만든다 — spectate 규칙은 그대로 둔다.
   if (state.phase === "ended" && state.winner !== undefined) {

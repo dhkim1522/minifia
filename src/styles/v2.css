@@ -72,6 +72,7 @@
 .mv-chat__msg, .mv-chat__sys { margin: 0; font-size: 16px; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
 .mv-chat__msg { color: var(--noir-paper); display: flex; flex: none; align-items: flex-start; gap: 8px; }
 .mv-chat__avatar { flex: none; border-radius: 50%; background: var(--noir-raised); object-fit: cover; }
+.mv-chat__avatar--animal { border-radius: var(--radius-sm); object-fit: contain; }
 .mv-chat__bubble-body { min-width: 0; }
 .mv-chat__byline { display: flex; align-items: center; min-height: 14px; margin-bottom: 1px; }
 .mv-chat__text {
@@ -409,6 +410,10 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 /* 18-05 잠긴 옷 자물쇠 16 — 체크와 같은 자리, 잠긴 카드는 선택될 수 없다 */
 .mv-dress-card__lock { position: absolute; top: 4px; right: 4px; color: var(--gray-300); }
 .mv-dress-card[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.mv-dress-sheet[data-dress-view="animal"] { gap: 6px; padding-block: 6px; }
+.mv-animal-card { justify-content: center; height: 88px; }
+.mv-animal-card__img { width: 52px; height: 52px; object-fit: contain; }
+.mv-animal-card[data-taken] { opacity: 0.58; }
 /* 방장의 [맵][의상] 탭(11-13): 아이콘 44×44, 선택 탭은 아래 2px 줄(gray-100). 맵 탭 카드 3장 96×112 간격 8(합 304) — 그림 80×80 cover + 이름 14px */
 .mv-dress-sheet__tabs { display: flex; align-items: center; }
 /* 14-07 TOOL-01: 탭은 아이콘 20 위 + 라벨 14 아래(높이 44 안), 폭은 글자 따라(최소 44) */

@@ -5,7 +5,7 @@
 ## 지금 상태
 
 - **v3.0 시험판**(`v3`)에 [B안 달빛 누아르](docs/decisions/0093-v3-noir-visual-redesign.md)를 두 맵의 3D 공간·조명, 캐릭터·유령·초상화·의상·배경 이미지, 홈부터 결과까지의 공통 UI에 적용했다. **22** 낮은 토론 → 찬반 → 지목 → 유언 → 처형(결정 0090). **23** 첫날 키워드와 정답 공개, 조기 진행, D1 판 기록(결정 0091). **24-01~07** 구현 완료.
-- [홈·토론·대기실](docs/decisions/0100-home-art-and-discussion-controls.md). 홈·옷장·역할 카드·마피아 본인 맵·결과는 선글라스 도윤을 쓴다. 다른 참가자는 공개 의상만 본다. 채팅은 방장·참가자 모두 하단 고정, 시작은 바로 위 방장 전용이다. [첫날 라이어 게임](docs/decisions/0101-first-day-answer-announcement.md)의 답안은 첫날 토론 시작 때 중앙에서만 발표한다.
+- [동물 12종](docs/decisions/0102-animal-characters.md)을 실제 3D 모델·홈·초상에 적용했다. 대기실에서 중복 없이 고르며 실제 직업 의상은 같은 동물에 입힌다. [첫날 답안](docs/decisions/0101-first-day-answer-announcement.md)은 첫 토론 시작에만 발표한다.
 - **공개 v3** `2026-11-19T02:01:19Z+b542f521`. 공개 8인방 320·390px에서 첫날 답안 발표와 자동 닫힘·재접속을 확인했다. [첫날 실험방](https://minifia-v3.dhplay.workers.dev/?playtest=1)은 별도 링크에서 만든다(0095~0097).
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`. 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터·맵**의 B안 모델은 `src/world/character.ts`, `src/world/ghost3d.ts`, `src/world/maps/`에 있다. 시안은 `design/v3.0/redesign/b-noir.png`. 이미지 재생성은 [에셋 자동 검사](docs/screen-map.md#에셋-자동-검사) 참고.

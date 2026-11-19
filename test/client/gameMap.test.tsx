@@ -167,6 +167,20 @@ describe("GameMap — 내 마피아 의상", () => {
     expect(stage.props?.scene?.seats[0]).toMatchObject({ ghost: true });
     expect(stage.props?.scene?.seats[0]?.costume).toBeUndefined();
   });
+
+  it.each(["mafia", "police", "doctor"] as const)("동물의 비공개 %s 의상은 본인 화면에만 입힌다", (role) => {
+    const view = makeView();
+    view.players[0]!.animal = "rabbit";
+    view.players[1]!.animal = "penguin";
+    view.me.role = role;
+    const { show } = mount(view);
+    expect(stage.props?.scene?.seats[0]?.costume).toBe(role);
+    expect(stage.props?.scene?.seats[1]?.costume).toBeUndefined();
+
+    show({ ...view, me: { ...view.me, seat: 1, isHost: false, role: "citizen" } });
+    expect(stage.props?.scene?.seats[0]?.costume).toBeUndefined();
+    expect(stage.props?.view.players[0]?.animal).toBe("rabbit");
+  });
 });
 
 describe("GameMap — 토론 기록", () => {

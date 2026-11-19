@@ -6,6 +6,7 @@
 //
 // three 는 loadWorld() 의 import() 두 줄로만 끌려온다(이 파일에 three 값 import 가 없다 — 메인 번들 분리, RESEARCH 번들 측정).
 // 렌더러·캐릭터 모듈은 deps.loadModules 로 바꿔 끼울 수 있다(happy-dom 테스트의 가짜, 06-14 의 시나리오 스토어).
+import type { AnimalId } from "../../shared/game/animals";
 import { snapToWalkable, UNIT } from "../../shared/game/map";
 import type { Spawn } from "../../shared/game/map";
 import { mapOf } from "../../shared/game/maps";
@@ -175,7 +176,7 @@ export interface WorldRuntimeDeps {
   store: WorldStore;
   serverNow(): number;
   mySeat(): number;
-  players(): readonly { seat: number; nickname: string; connected: boolean; look?: string }[];
+  players(): readonly { seat: number; nickname: string; connected: boolean; look?: string; animal?: AnimalId }[];
   reducedMotion(): boolean;
   /** 스테이지 사각형의 위·아래 끝(px, 캔버스 위 끝 기준) */
   stageRect(): { top: number; bottom: number };
@@ -343,6 +344,7 @@ interface Actor {
   sceneDim: boolean;
   /** 서버가 준 고른 의상(view.players[].look, 없으면 coat) — 결과 화면 직업 의상을 입는 중에도 여기에 최신 값을 두고 걷히면 이 의상으로 돌아온다 */
   look: string;
+  animal: AnimalId | undefined;
   /** 등장 시작 시각(없으면 서 있다) */
   enter: number | null;
   /** 퇴장 시작 시각 */
@@ -736,10 +738,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     prewarmLater(a);
   }
 
-  function lookOf(seat: number): string {
-    return deps.players().find((p) => p.seat === seat)?.look ?? DEFAULT_LOOK;
-  }
-
   function removeActor(a: Actor): void {
     cancelPrewarm(a);
     renderer?.removeCharacter(a.seat);
@@ -766,6 +764,12 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (a === undefined) continue;
       a.away = !p.connected;
       refreshDim(a);
+      if (p.animal !== a.animal) {
+        a.animal = p.animal;
+        a.handle.applyAnimal?.(p.animal);
+        cancelPrewarm(a);
+        prewarmLater(a);
+      }
       // 서버가 준 look 이 바뀌면 그 좌석만 갈아입는다. 결과 화면의 직업 의상(costume)을 입는 중에는 값만 갱신한다 — costume 이 걷힐 때 최신 look 으로 돌아온다
       const want = p.look ?? DEFAULT_LOOK;
       if (want !== a.look) {
@@ -780,8 +784,11 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
 
   function createActor(seat: number, now: number): void {
     if (renderer === null || kit === null) return;
-    const chosen = lookOf(seat);
-    const handle = kit.create(figForSeat(seat), chosen);
+    const p = deps.players().find((p) => p.seat === seat);
+    const chosen = p?.look ?? DEFAULT_LOOK;
+    const handle = p?.animal === undefined
+      ? kit.create(figForSeat(seat), chosen)
+      : kit.create(figForSeat(seat), chosen, p.animal);
     const startSeg = segFor(seat);
     const at = startSeg === undefined ? null : positionAt(startSeg, deps.serverNow());
     const a: Actor = {
@@ -808,6 +815,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       away: false,
       sceneDim: false,
       look: chosen,
+      animal: p?.animal,
       enter: null,
       exit: null,
       tag: null,
@@ -824,7 +832,6 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     renderer.addCharacter(seat, handle);
     actors.set(seat, a);
     prewarmLater(a);
-    const p = deps.players().find((q) => q.seat === seat);
     if (p !== undefined) {
       a.away = !p.connected;
       refreshDim(a);

@@ -6,7 +6,7 @@ import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { ServerMessage } from "../../shared/protocol";
-import { awaitTransition, clearBotSteps, connect, createRoom, hello, mapPlayers, nextFrame, seat, send, skipOnce, skipThrough, storedRoom, writeRoomEdit, type TestSocket } from "./helpers";
+import { awaitTransition, clearBotSteps, connect, createRoom, hello, mapPlayers, nextFrame, seat, send, skipThrough, storedRoom, writeRoomEdit, type TestSocket } from "./helpers";
 
 // ---- 가짜 소켓 ----
 
@@ -142,11 +142,7 @@ describe("손으로 정한 봇 표를 봇의 남은 계획이 덮지 않는다 (
     await nextFrame(r.host, (m) => m.t === "state" && m.view.phase === "lobby" && m.view.players.length === 5);
     send(r.host, { t: "start" });
     for (const s of socks) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning");
-    await skipThrough(r, "nomination");
-    await writeRoomEdit(env.ROOM.getByName(r.code), (room) =>
-      mapPlayers(clearBotSteps(room), (p) => (p.isBot === true ? { ...p, nominate: 0 } : p.seat === 0 ? { ...p, nominate: 1 } : p)),
-    );
-    await skipOnce(r); // 지목 마감 → 변론(봇 셋이 방장을 가리킨다)
+    // 현행 낮 순서에서는 찬반이 지목보다 앞선다. 첫날 찬반에서 경합을 재현한다.
     await skipThrough(r, "verdict");
     return r;
   }

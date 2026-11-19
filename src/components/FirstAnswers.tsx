@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeywordAnswerRow, RoomView } from "../../shared/protocol";
-import { seatColorVar } from "../net/assets";
+import { faceSrc, seatColorVar } from "../net/assets";
 import { Button } from "./Button";
 import { Sheet } from "./Sheet";
 import "../styles/first-answers.css";
@@ -16,15 +16,23 @@ interface AnswerListProps {
 export function FirstAnswerList({ rows, players }: AnswerListProps) {
   return (
     <ul className="mf-first-answers__list" data-answer-list="">
-      {rows.map(({ seat, text, order }) => (
-        <li key={seat} className="mf-first-answers__row" data-answer-row="" data-answer-order={order} data-answer-seat={seat} data-answer-none={text === null ? "" : undefined}>
-          <span className="mf-first-answers__name">
-            <span aria-hidden="true" style={{ background: seatColorVar(seat) }} />
-            {players.find((player) => player.seat === seat)?.nickname ?? `${seat + 1}번 자리`}
-          </span>
-          <span className="mf-first-answers__text">{text ?? "미제출"}</span>
-        </li>
-      ))}
+      {rows.map(({ seat, text, order }) => {
+        const player = players.find((entry) => entry.seat === seat);
+        const animal = player?.animal;
+        return (
+          <li key={seat} className="mf-first-answers__row" data-answer-row="" data-answer-order={order} data-answer-seat={seat} data-answer-none={text === null ? "" : undefined}>
+            <span className="mf-first-answers__name" data-animal-face={animal}>
+              {animal !== undefined ? (
+                <img className="mf-first-answers__face" src={faceSrc(seat, animal)} width={25} height={25} alt="" />
+              ) : (
+                <span aria-hidden="true" style={{ background: seatColorVar(seat) }} />
+              )}
+              {player?.nickname ?? `${seat + 1}번 자리`}
+            </span>
+            <span className="mf-first-answers__text">{text ?? "미제출"}</span>
+          </li>
+        );
+      })}
     </ul>
   );
 }

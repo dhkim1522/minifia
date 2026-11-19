@@ -274,6 +274,18 @@ describe("useChat: 연결 끊김과 복원 (UI-SPEC 입력 상태표, D2)", () =
     expect(result.current.messages.map((m) => `${m.name}:${m.text}`).join("|")).toBe("민수:민수의 말|지수:지수의 말");
   });
 
+  it("같은 참가자가 고른 동물은 따라가고 그 자리에 새 사람이 앉으면 이전 줄의 동물을 보존한다", () => {
+    const guest = player(1, "하윤");
+    const { result, receive, rerender } = mount(makeView({ players: [player(0, "민수", { animal: "rabbit" }), guest] }));
+    receive({ t: "chat", ...line(1, 0, "민수의 말") });
+    expect(result.current.messages[0]?.animal).toBe("rabbit");
+    rerender({ view: makeView({ players: [player(0, "민수", { animal: "ram" }), guest] }), canSend: true });
+    expect(result.current.messages[0]?.animal).toBe("ram");
+    rerender({ view: makeView({ players: [player(0, "지수", { animal: "bat" }), guest] }), canSend: true });
+    receive({ t: "chat", ...line(2, 0, "지수의 말") });
+    expect(result.current.messages.map(({ name, animal }) => [name, animal])).toEqual([["민수", "ram"], ["지수", "bat"]]);
+  });
+
   it("WR-01: 내 좌석의 줄만 '나' 로 표시된다 — 다른 좌석에 새 사람이 와도 그 줄은 '나' 가 아니다", () => {
     const { result, receive, rerender } = mount();
     receive({ t: "chat", ...line(1, 0, "민수의 말") });

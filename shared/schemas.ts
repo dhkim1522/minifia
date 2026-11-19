@@ -1,5 +1,6 @@
 // 서버 전용 입력 검증 스키마(zod 값 import). Worker 만 이 파일을 import 한다 — src/ 가 import 하면 클라이언트 번들에 zod 가 들어간다.
 import { z } from "zod";
+import { ANIMAL_IDS } from "./game/animals";
 import { NICKNAME_MAX_UTF16 } from "./nickname";
 import { CHAT_TEXT_MAX_UTF16, EMOTE_IDS, MAP_CHOICES, MAX_TEST_BOTS, MOVE_COORD_LIMIT, OUTFIT_IDS, PHASE_KEY_MAX } from "./protocol";
 import type { AnswerSendMessage, ChatSendMessage, ClientMessage, CreateRoomBody, EmoteSendMessage, JoinRoomBody, MoveMessage, NoteSendMessage, TypingSendMessage, WillSendMessage } from "./protocol";
@@ -93,6 +94,7 @@ export const ClientMessageSchema = z.discriminatedUnion("t", [
   z.strictObject({ t: z.literal("badge"), role: z.enum(["mafia", "police", "doctor", "citizen", "none"]) }),
   // 로비 의상(결정 D-6): 값은 의상 id enum 뿐 — 단계(대기실)·간격은 서버 규칙(shared/game/look.ts)이 본다. 역할과는 비교하지 않는다.
   z.strictObject({ t: z.literal("dress"), look: z.enum(OUTFIT_IDS) }),
+  z.strictObject({ t: z.literal("animalPick"), animal: z.enum(ANIMAL_IDS) }),
   // 맵 선택(결정 D-20, 11-06): 값은 enum 뿐 — 방장·단계·허용 맵은 서버 규칙(shared/game/maps.ts pickMap)이 본다. 신원은 소켓 첨부 playerId.
   z.strictObject({ t: z.literal("mapPick"), map: z.enum(MAP_CHOICES) }),
   // 다시 하기(결정 D-12, 11-08): 준비 토글과 시작. round 는 1 이상 정수 — 신원은 소켓 첨부 playerId 뿐이고 방장·단계·판 번호·인원은 서버 규칙(shared/game/rematch.ts)이 본다.

@@ -6,8 +6,10 @@ import "../../styles/v2.css";
 import { dayDivider, nightDivider, RESULT_PANEL_TEXT, RESULT_TABS_SHOWN } from "../../game/resultText";
 import type { ResultTabId } from "../../game/resultText";
 import type { ResultLogChatLine, ResultLogWhisperLine } from "../../../shared/protocol";
+import type { AnimalId } from "../../../shared/game/animals";
 import type { ResultLogSnapshot } from "../../net/resultLogStore";
-import { faceSrc, seatColorVar } from "../../net/assets";
+import { faceSrc } from "../../net/assets";
+import { playerColor } from "../../game/playerIdentity";
 import { V2Icon } from "./V2Icon";
 import type { V2IconName } from "./V2Icon";
 
@@ -38,6 +40,7 @@ export interface ResultPanelProps {
   lines: ResultLogSnapshot;
   /** 좌석 → 닉네임(없으면 이름 칸 비움) */
   contacts: ReadonlyMap<number, string>;
+  animals?: ReadonlyMap<number, AnimalId | undefined>;
   /** 열어 본 적 있는 탭. 여기 없는 마피아·유령·귓속말 탭에 점이 붙는다 */
   opened: ReadonlySet<ResultTab>;
   /** 전체 탭 몸통(채팅 패널) */
@@ -91,28 +94,30 @@ function withDividers<L extends { n: number }>(lines: readonly L[], label: (n: n
   return out;
 }
 
-function ChatRows({ lines, contacts, label, ch }: { lines: readonly ResultLogChatLine[]; contacts: ReadonlyMap<number, string>; label: (n: number) => string; ch: "mafia" | "ghost" }) {
+type ResultIdentities = Pick<ResultPanelProps, "contacts"> & { animals: ResultPanelProps["animals"] };
+
+function ChatRows({ lines, contacts, animals, label, ch }: ResultIdentities & { lines: readonly ResultLogChatLine[]; label: (n: number) => string; ch: "mafia" | "ghost" }) {
   if (lines.length === 0) return <Empty />;
   return (
     <>
       {withDividers(lines, label, (l, i) => (
-        <ChatPlayerLine key={`l${i}`} channel={ch} seat={l.seat} name={contacts.get(l.seat) ?? ""} text={l.text} />
+        <ChatPlayerLine key={`l${i}`} channel={ch} seat={l.seat} animal={animals?.get(l.seat)} name={contacts.get(l.seat) ?? ""} text={l.text} />
       ))}
     </>
   );
 }
 
-function WhisperRows({ lines, contacts }: { lines: readonly ResultLogWhisperLine[]; contacts: ReadonlyMap<number, string> }) {
+function WhisperRows({ lines, contacts, animals }: ResultIdentities & { lines: readonly ResultLogWhisperLine[] }) {
   if (lines.length === 0) return <Empty />;
   return (
     <>
       {withDividers(lines, dayDivider, (l, i) => (
         <div key={`l${i}`} className="mf-result__whisper" data-result-whisper="" data-seat={l.seat} data-to={l.to}>
           <span className="mf-result__whisper-head">
-            <span className="mf-result__whisper-dot" style={{ background: seatColorVar(l.seat) }} />
-            <img className="mf-result__face" src={faceSrc(l.seat)} alt={contacts.get(l.seat) ?? ""} width={28} height={28} />
+            <span className="mf-result__whisper-dot" style={{ background: playerColor(l.seat, animals?.get(l.seat)) }} />
+            <img className="mf-result__face" src={faceSrc(l.seat, animals?.get(l.seat))} alt={contacts.get(l.seat) ?? ""} width={28} height={28} />
             <Arrow />
-            <img className="mf-result__face" src={faceSrc(l.to)} alt={contacts.get(l.to) ?? ""} width={28} height={28} />
+            <img className="mf-result__face" src={faceSrc(l.to, animals?.get(l.to))} alt={contacts.get(l.to) ?? ""} width={28} height={28} />
           </span>
           <span className="mf-result__whisper-text">{l.text}</span>
         </div>
@@ -122,7 +127,7 @@ function WhisperRows({ lines, contacts }: { lines: readonly ResultLogWhisperLine
 }
 
 export function ResultPanel(props: ResultPanelProps) {
-  const { tab, onTab, expanded, expandedHeight, tabsVisible, lines, contacts, opened, allSlot, logSlot, onJumpWhisper, focusDay, pill, panelRef, kb } = props;
+  const { tab, onTab, expanded, expandedHeight, tabsVisible, lines, contacts, animals, opened, allSlot, logSlot, onJumpWhisper, focusDay, pill, panelRef, kb } = props;
   const shown: readonly ResultTab[] = tabsVisible ? RESULT_TABS_SHOWN : ["all"];
 
   const onKey = (e: KeyboardEvent<HTMLElement>): void => {
@@ -151,9 +156,9 @@ export function ResultPanel(props: ResultPanelProps) {
 
   let body: ReactNode;
   if (tab === "all") body = allSlot;
-  else if (tab === "mafia") body = <ChatRows lines={lines.mafia.lines} contacts={contacts} label={nightDivider} ch="mafia" />;
-  else if (tab === "ghost") body = <ChatRows lines={lines.ghost.lines} contacts={contacts} label={dayDivider} ch="ghost" />;
-  else if (tab === "whisper") body = <WhisperRows lines={lines.whisper.lines} contacts={contacts} />;
+  else if (tab === "mafia") body = <ChatRows lines={lines.mafia.lines} contacts={contacts} animals={animals} label={nightDivider} ch="mafia" />;
+  else if (tab === "ghost") body = <ChatRows lines={lines.ghost.lines} contacts={contacts} animals={animals} label={dayDivider} ch="ghost" />;
+  else if (tab === "whisper") body = <WhisperRows lines={lines.whisper.lines} contacts={contacts} animals={animals} />;
   else body = logSlot ?? null;
 
   return (

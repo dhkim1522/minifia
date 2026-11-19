@@ -10,7 +10,9 @@
 // 9페이즈 밤·아침 계약(결정 0061): MorningView.saved·DayView.chalk·MyInfo.nightTally/nightSure/will/note·ChatLineWire.k 를 09-07 에서 한 번에 정한다(채우는 일은 09-07 view, 09-12 유언·쪽지, 09-14 분필).
 
 // 타입 import·재수출이라 값 import 가 아니다 — 클라이언트 번들에는 아무것도 들어가지 않는다.
+import type { AnimalId } from "./game/animals";
 import type { RoleId } from "./game/roles";
+export type { AnimalId } from "./game/animals";
 export type { RoleId } from "./game/roles";
 
 /** 직업 주장 값(결정 0066-1): 이번 판 직업 하나 또는 none(주장 안 함). 참·거짓은 서버가 판정하지 않는다. */
@@ -226,10 +228,11 @@ export interface JoinRoomResponse {
   token: string;
   seat: number;
 }
-// 비인증 미리보기의 앉은 사람. seat·nickname 두 키뿐이다 — 연결 상태·내부 id·토큰·역할은 싣지 않는다.
+// 비인증 미리보기의 앉은 사람. 자리와 이름, 공개 동물만 싣는다.
 export interface PreviewPlayer {
   seat: number;
   nickname: string;
+  animal?: AnimalId;
 }
 export interface RoomPreview {
   code: string;
@@ -270,6 +273,7 @@ export type ClientMessage =
   | { t: "whisper"; to: number; text: string } // 귓속말(결정 0066-2) — 낮 토론, 하루 1번, 산 다른 사람 한 명에게 30자소 이하. 본문은 보낸·받은 사람 소켓에만 간다
   | { t: "badge"; role: BadgeId } // 직업 주장(결정 0066-1) — 서버가 정하는 것은 값의 형식뿐 참·거짓은 판정하지 않는다. 낮 시작 발표·토론·지목 단계에서만
   | { t: "dress"; look: OutfitId } // 로비 의상(결정 D-6) — 의상 id 하나뿐, 대기실에서만. 서버는 고른 값을 저장·방송할 뿐 역할과 비교하지 않는다
+  | { t: "animalPick"; animal: AnimalId } // 대기실에서 본인의 공개 동물을 고른다
   | { t: "ready"; on: boolean; round: number } // 다시 하기 준비(결정 D-12) — 결과 단계의 손님이 토글한다. round 는 지금 보는 판 번호(1 이상 정수)이고 어긋나면 서버가 버린다. 신원은 소켓 첨부 playerId 뿐
   | { t: "rematch"; round: number } // 다시 하기 시작(결정 D-12) — 방장만, 결과 단계에서, round 가 서버 판 번호와 같고 준비한 연결 참가자(방장·봇 포함)가 4명 이상일 때. 서버가 모든 조건을 판정하고 거절 응답은 사유와 무관하게 같다(L40)
   | { t: "mapPick"; map: MapChoice } // 맵 선택(결정 D-20) — 방장이 대기실·결과 단계에서만. 값은 enum 뿐이고 서버가 방장·단계·허용 값을 판정한다. 거절은 오류 프레임 없이 보낸 소켓의 최신 state 한 프레임(L40)
@@ -311,6 +315,7 @@ export interface PublicPlayer {
   alive?: boolean; // 서버는 항상 싣는다(공개 정보, 03-05). 없으면 생존
   badge?: BadgeId; // 공개 직업 주장(결정 0066-1). 산 사람이 건 값이 있을 때만 — 실제 역할의 함수가 아니다
   look?: OutfitId; // 공개 의상(결정 D-6). 사람이 고른 값이 있을 때만 — 실제 역할의 함수가 아니다. 없으면 coat 로 읽는다
+  animal?: AnimalId; // 같은 방에 속한 동안 유지하는 공개 동물. 역할과 별개다.
   badgeSwapped?: true; // 직업을 건 뒤 다른 값으로 바꾼 적이 있다(결정 0066-1). 이전 값은 어디에도 없다
   ready?: true; // 다시 하기 준비(결정 D-12). 결과 단계의 연결돼 있고 나가지 않은 사람이 준비했을 때만 — 방장·봇은 늘 준비로 센다. 값은 true 뿐이고 역할의 함수가 아니다
   sat?: true; // 쉬었다가 결과에 합류한 사람(결정 D-13). 역할이 없고 결과 명단·칭호에서 빠진다. 값은 true 뿐
@@ -355,6 +360,7 @@ export interface RoomView {
   minPlayers: number;
   maxPlayers: number;
   players: PublicPlayer[];
+  reservedAnimals?: AnimalId[]; // 대기실에서 쉬는 사람이 예약한 동물. 참가자 정보는 담지 않는다.
   me: MyInfo;
   day?: DayView; // 낮 두 단계(dayAnnounce·discussion)·처형 다섯 단계·밤·아침·종료에서
   spectate?: SpectateView; // 탈락한 본인 view 에만(결정 0021). 살아 있는 사람 view 에는 키 자체가 없다

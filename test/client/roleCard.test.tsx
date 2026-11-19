@@ -67,6 +67,12 @@ describe("RoleCard 뒷면 (ROLE-02, Pitfall 20)", () => {
 });
 
 describe("RoleCard 앞면 (D-14, E8)", () => {
+  it.each(["mafia", "police", "doctor"] as const)("선택한 토끼가 %s 역할을 입은 앞면을 그린다", (role) => {
+    const { container, rerender } = render(<RoleCard role={role} animal="rabbit" face="back" allies={null} />);
+    expect(container.querySelector("img")).toBeNull();
+    rerender(<RoleCard role={role} animal="rabbit" face="front" allies={null} />);
+    expect(container.querySelector("img")?.getAttribute("src")).toContain(`/characters/animals/rabbit/${role}-sm.png`);
+  });
   it("뒷면에서 앞면으로 바뀌면 직업 그림·이름·설명·동료 줄이 나타난다(마피아, 동료 2명)", () => {
     const { container, rerender } = render(<RoleCard role="mafia" face="back" allies={["서준", "민지"]} onFlip={vi.fn()} />);
     expect(container.querySelector("img")).toBeNull();

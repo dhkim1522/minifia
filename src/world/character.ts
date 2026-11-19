@@ -25,6 +25,8 @@ import {
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { ANIMALS, type AnimalId } from "../../shared/game/animals";
+import { animalLayout, animalSkin, buildAnimalBody, buildAnimalHead } from "./animalGeometry";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { buildGhost3d, type Ghost3d } from "./ghost3d";
 import { createNoteRig, type NoteRig, noteKit } from "./postit";
@@ -182,15 +184,75 @@ function buildFaces(head: Object3D, R: number, browR: number): void {
   for (const x of [-0.31, 0.31]) head.add(onHead(faceSphere(0.081, "#d48676", 1.3, 0.68, 0.3), x, -0.107, R, 0));
 }
 
+/** 동물의 눈·입·안경을 고유 얼굴 위치에 맞춘다. 모든 표정은 기존 병합 캐시와 같은 이름으로 선택한다. */
+function buildAnimalFaces(head: Object3D, animal: AnimalId): void {
+  const layout = animalLayout(animal);
+  const [x, y, eyeDepth] = layout.eye;
+  const z = animal === "crocodile" ? eyeDepth + 0.098 : eyeDepth;
+  const [mx, my, mz] = layout.mouth;
+  const scenePart = (parent: Object3D, mesh: Mesh, px: number, py: number, pz: number, roll = 0): void => {
+    mesh.position.set(px, py, pz);
+    mesh.rotation.z = roll;
+    parent.add(mesh);
+  };
+  const group = (tag: string): Group => {
+    const next = tagged(new Group(), tag);
+    head.add(next);
+    return next;
+  };
+
+  for (const face of FACE_IDS) {
+    const expression = group(`face:${face}`);
+    for (const side of [-1, 1]) {
+      const px = side * x;
+      if (face === "happy" || face === "cry") {
+        scenePart(expression, arc(0.050, 0.015, EYE), px, y, z + 0.026, face === "cry" ? Math.PI : 0);
+        if (face === "cry") scenePart(expression, faceSphere(0.030, "#9ec2ff", 1, 1.55, 0.63), px, y - 0.11, z + 0.045);
+      } else if (face === "dead") {
+        for (const tilt of [0.8, -0.8]) scenePart(expression, faceBox(0.12, 0.022, EYE), px, y, z + 0.017, tilt);
+      } else if (face === "sus") {
+        scenePart(expression, faceBox(0.113, 0.031, EYE), px, y + 0.008, z + 0.018, side * 0.12);
+      } else {
+        const wide = face === "surprise";
+        scenePart(expression, faceSphere(wide ? 0.075 : 0.064, EYE, 0.89, wide ? 1.17 : 1.29, 0.48), px, y, z + 0.017);
+        scenePart(expression, faceSphere(0.013, "#f8f3e9"), px - 0.016, y + 0.024, z + 0.048);
+        if (face === "angry") scenePart(expression, faceBox(0.137, 0.024, EYE), px, y + 0.095, z - 0.016, side * 0.36);
+      }
+    }
+    // 주둥이·부리·코 자체가 입인 동물은 그 위에 다른 입을 겹쳐 쓰지 않는다.
+    if (animal === "crocodile" || animal === "elephant" || animal === "parrot" || animal === "penguin") continue;
+    if (face === "surprise") scenePart(expression, faceSphere(0.057, MOUTH, 1, 1.13, 0.37), mx, my, mz + 0.004);
+    else if (face === "angry" || face === "dead") scenePart(expression, faceBox(0.117, 0.022, MOUTH), mx, my, mz);
+    else {
+      const smile = arc(animal === "frog" ? 0.15 : 0.064, 0.014, MOUTH);
+      smile.scale.y = animal === "frog" ? 0.48 : 0.88;
+      scenePart(expression, smile, mx, my, mz, Math.PI);
+    }
+  }
+
+  const [hatRadius, hatHeight, hatDepth] = layout.hat;
+  const hatMount = new Group();
+  hatMount.position.set(0, hatHeight - HAT_Y, hatDepth);
+  head.add(hatMount);
+  buildHats(hatMount, hatRadius, "", 28);
+
+  const shades = group("acc:shades");
+  for (const side of [-1, 1]) {
+    const px = side * x;
+    scenePart(shades, faceSphere(0.133, "#14161c", 1.04, 0.78, 0.33), px, y + 0.005, z + 0.080);
+    scenePart(shades, faceBox(0.075, 0.014, "#78889b"), px - 0.020, y + 0.038, z + 0.125, 0.23);
+  }
+  if (animal !== "parrot") scenePart(shades, faceBox(x * 1.22, 0.033, "#14161c"), 0, y + 0.02, z + 0.090);
+}
+
 // ---------- 모자 (원문 brimGeo·buildHats) ----------
 
 /** 모자는 머리띠 높이 HAT_Y 에 얹는다. 챙은 아이소 카메라(약 36° 위)에서 눈을 가리지 않을 만큼만 내민다 */
 const HAT_Y = 0.26;
 
 /** 챙: 안쪽 반지름 rIn, 바깥은 각도 a(0 이 앞)마다 outR(a), bend(a, d) 는 안쪽에서 d 만큼 나간 곳의 높이 변화. 위·아래 면과 테두리를 한 메시로 */
-function brimGeo(rIn: number, outR: (a: number) => number, a0: number, a1: number, thick: number, bend: (a: number, d: number) => number): BufferGeometry {
-  const AS = 48;
-  const RS = 4;
+function brimGeo(rIn: number, outR: (a: number) => number, a0: number, a1: number, thick: number, bend: (a: number, d: number) => number, AS: number): BufferGeometry {
+  const RS = AS < 40 ? 3 : 4;
   const W = RS + 1;
   const pos: number[] = [];
   const idx: number[] = [];
@@ -243,7 +305,7 @@ interface BrimmedOpts {
   curl: number;
 }
 
-function buildHats(head: Object3D, F: number, defaultHat: string): void {
+function buildHats(head: Object3D, F: number, defaultHat: string, brimSegments = 48): void {
   function grp(n: string): Group {
     const g = new Group();
     g.userData.tag = `hat:${n}`;
@@ -277,7 +339,7 @@ function buildHats(head: Object3D, F: number, defaultHat: string): void {
       brimGeo(F - 0.03, () => F + o.brim, -Math.PI, Math.PI, 0.035, (a, d) => {
         const c = Math.cos(a);
         return d * (c > 0 ? o.lift : o.lift - o.flip * c) + d * d * o.curl;
-      }),
+      }, brimSegments),
       o.crown,
       0,
       HAT_Y + 0.03,
@@ -309,14 +371,14 @@ function buildHats(head: Object3D, F: number, defaultHat: string): void {
   add(crown, dome(F + 0.1, 0.16), "#2a4372", 0, 0.17);
   const emb = add(crown, new SphereGeometry(0.075, 14, 10), "#c9d3ea", 0, 0.075, F + 0.05);
   emb.scale.z = 0.35;
-  add(g, brimGeo(F - 0.03, visorR(F, 0.22, 1.2), -1.2, 1.2, 0.03, (_a, d) => -d * 0.3), "#121a30", 0, HAT_Y + 0.012, 0, true);
+  add(g, brimGeo(F - 0.03, visorR(F, 0.22, 1.2), -1.2, 1.2, 0.03, (_a, d) => -d * 0.3, brimSegments), "#121a30", 0, HAT_Y + 0.012, 0, true);
 
   // 탐정 모자(디어스토커): 머리를 감싸는 둥근 몸통, 앞뒤 짧은 챙, 위로 묶어 올린 귀덮개와 매듭
   g = grp("deer");
   const Rd = Math.sqrt(F * F + HAT_Y * HAT_Y);
   add(g, new SphereGeometry(Rd, 32, 14, 0, Math.PI * 2, 0, Math.acos(HAT_Y / Rd)), "#8a6a45");
   for (const rot of [0, Math.PI]) {
-    const v = add(g, brimGeo(F - 0.03, visorR(F, 0.17, 1.15), -1.15, 1.15, 0.03, (_a, d) => -d * 0.4), "#6b5236", 0, HAT_Y + 0.012, 0, true);
+    const v = add(g, brimGeo(F - 0.03, visorR(F, 0.17, 1.15), -1.15, 1.15, 0.03, (_a, d) => -d * 0.4, brimSegments), "#6b5236", 0, HAT_Y + 0.012, 0, true);
     v.rotation.y = rot;
   }
   // 귀덮개는 몸통 옆면에 납작하게 붙인다(얇은 축을 면의 바깥 방향으로)
@@ -342,7 +404,7 @@ function buildHats(head: Object3D, F: number, defaultHat: string): void {
   const rim = add(puff, new TorusGeometry(F + 0.035, 0.045, 8, 40), "#4a4f5c");
   rim.rotation.x = Math.PI / 2;
   add(puff, new SphereGeometry(0.05, 10, 8), "#3a3f4b", 0, (F + 0.07) * 0.62, 0);
-  add(g, brimGeo(F - 0.03, visorR(F, 0.18, 1.15), -1.15, 1.15, 0.03, (_a, d) => -d * 0.3), "#3a3f4b", 0, HAT_Y + 0.02, 0, true);
+  add(g, brimGeo(F - 0.03, visorR(F, 0.18, 1.15), -1.15, 1.15, 0.03, (_a, d) => -d * 0.3, brimSegments), "#3a3f4b", 0, HAT_Y + 0.02, 0, true);
 
   // 후드: 머리카락보다 큰 두건. 앞은 이마부터 목까지 트고(가장자리 테), 아래는 어깨로 내려간다
   g = grp("hood");
@@ -398,7 +460,7 @@ function coatLapel(): ExtrudeGeometry {
 }
 
 /** 원문 create(fig) 의 부품을 Mesh 대신 "지오메트리 + 색 + 보이기 이름" 으로 모은 관절별 목록 */
-function bakeFig(fig: Fig): Record<JointName, Part[]> {
+function bakeFig(fig: Fig, animal?: AnimalId): Record<JointName, Part[]> {
   const root = new Group();
   const body = new Group();
   root.add(body);
@@ -463,50 +525,56 @@ function bakeFig(fig: Fig): Record<JointName, Part[]> {
   const head = new Group();
   head.position.y = 0.48;
   neck.add(head);
-  const skull = part(head, new SphereGeometry(R, 28, 22), "skin");
-  skull.scale.set(1.04, 0.96, 0.98);
-  // 단발은 귀를 덮는다. 귀를 그리면 머리카락을 뚫고 나온다
-  if (!girl) {
-    for (const s of [-1, 1]) {
-      const ear = part(head, new SphereGeometry(0.15, 14, 10), "skin", "ear");
-      ear.scale.set(0.57, 0.88, 0.83);
-      ear.position.set(s * (R + 0.012), -0.035, 0.019);
-      const inside = part(head, new SphereGeometry(0.085, 12, 8), "#d79078", "ear");
-      inside.scale.set(0.62, 0.86, 0.46);
-      inside.position.set(s * (R + 0.026), -0.035, 0.115);
+  if (animal === undefined) {
+    const skull = part(head, new SphereGeometry(R, 28, 22), "skin");
+    skull.scale.set(1.04, 0.96, 0.98);
+    // 단발은 귀를 덮는다. 귀를 그리면 머리카락을 뚫고 나온다
+    if (!girl) {
+      for (const s of [-1, 1]) {
+        const ear = part(head, new SphereGeometry(0.15, 14, 10), "skin", "ear");
+        ear.scale.set(0.57, 0.88, 0.83);
+        ear.position.set(s * (R + 0.012), -0.035, 0.019);
+        const inside = part(head, new SphereGeometry(0.085, 12, 8), "#d79078", "ear");
+        inside.scale.set(0.62, 0.86, 0.46);
+        inside.position.set(s * (R + 0.026), -0.035, 0.115);
+      }
     }
-  }
-  const hairRadius = R + (girl ? 0.055 : 0.041);
-  const crop = fig.haircut === "crop";
-  part(head, sculptedHair(hairRadius, girl, false, crop), "hair", "hair");
-  part(head, sculptedHair(hairRadius, girl, true, crop), "hair", "hatHair");
-  if (fig.haircut === "bun") {
-    const bun = part(head, new SphereGeometry(0.21, 16, 12), "hair", "bun");
-    bun.scale.set(1, 0.82, 0.9);
-    bun.position.set(-0.29, 0.54, -0.14);
-  }
-  buildFaces(head, R * 0.98, hairRadius + 0.008);
-  buildHats(head, Math.sqrt(hairRadius ** 2 - HAT_Y ** 2) + 0.018, fig.hat);
+    const hairRadius = R + (girl ? 0.055 : 0.041);
+    const crop = fig.haircut === "crop";
+    part(head, sculptedHair(hairRadius, girl, false, crop), "hair", "hair");
+    part(head, sculptedHair(hairRadius, girl, true, crop), "hair", "hatHair");
+    if (fig.haircut === "bun") {
+      const bun = part(head, new SphereGeometry(0.21, 16, 12), "hair", "bun");
+      bun.scale.set(1, 0.82, 0.9);
+      bun.position.set(-0.29, 0.54, -0.14);
+    }
+    buildFaces(head, R * 0.98, hairRadius + 0.008);
+    buildHats(head, Math.sqrt(hairRadius ** 2 - HAT_Y ** 2) + 0.018, fig.hat);
 
-  // 선글라스·수염
-  const FR = R * 0.98;
-  const shades = tagged(new Group(), "acc:shades");
-  const beard = tagged(new Group(), "acc:beard");
-  head.add(shades);
-  head.add(beard);
-  for (const s of [-1, 1]) {
-    shades.add(onHead(faceSphere(0.14, "#14161c", 1.24, 0.78, 0.3), s * 0.21, 0.03, FR, 0.04));
-    shades.add(onHead(faceBox(0.092, 0.017, "#78889b"), s * 0.21 - 0.026, 0.067, FR, 0.084, 0.26));
-    const a = new Vector3(s * 0.33, 0.05, Math.sqrt(FR * FR - 0.33 * 0.33 - 0.0025) + 0.02);
-    const b = new Vector3(s * (R + 0.01), 0.06, 0.04);
-    const d = new Vector3().subVectors(b, a);
-    const armM = part(shades, new CylinderGeometry(0.014, 0.014, d.length(), 6), "#14161c");
-    armM.position.copy(a).addScaledVector(d, 0.5);
-    armM.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), d.normalize());
+    // 선글라스·수염
+    const FR = R * 0.98;
+    const shades = tagged(new Group(), "acc:shades");
+    const beard = tagged(new Group(), "acc:beard");
+    head.add(shades);
+    head.add(beard);
+    for (const s of [-1, 1]) {
+      shades.add(onHead(faceSphere(0.14, "#14161c", 1.24, 0.78, 0.3), s * 0.21, 0.03, FR, 0.04));
+      shades.add(onHead(faceBox(0.092, 0.017, "#78889b"), s * 0.21 - 0.026, 0.067, FR, 0.084, 0.26));
+      const a = new Vector3(s * 0.33, 0.05, Math.sqrt(FR * FR - 0.33 * 0.33 - 0.0025) + 0.02);
+      const b = new Vector3(s * (R + 0.01), 0.06, 0.04);
+      const d = new Vector3().subVectors(b, a);
+      const armM = part(shades, new CylinderGeometry(0.014, 0.014, d.length(), 6), "#14161c");
+      armM.position.copy(a).addScaledVector(d, 0.5);
+      armM.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), d.normalize());
+    }
+    shades.add(onHead(faceBox(0.23, 0.036, "#14161c"), 0, 0.06, FR, 0.043));
+    beard.add(onHead(faceSphere(0.075, "#eef0f4", 1.9, 0.55, 0.5), 0, -0.118, FR, 0.012));
+    beard.add(onHead(faceSphere(0.17, "#e6e8ee", 1.6, 1.0, 0.5), 0, -0.37, FR, -0.03));
+  } else {
+    buildAnimalHead(head, animal, part);
+    buildAnimalFaces(head, animal);
+    buildAnimalBody(body, animal, part);
   }
-  shades.add(onHead(faceBox(0.23, 0.036, "#14161c"), 0, 0.06, FR, 0.043));
-  beard.add(onHead(faceSphere(0.075, "#eef0f4", 1.9, 0.55, 0.5), 0, -0.118, FR, 0.012));
-  beard.add(onHead(faceSphere(0.17, "#e6e8ee", 1.6, 1.0, 0.5), 0, -0.37, FR, -0.03));
 
   // 팔
   function armOf(x: number): Group {
@@ -591,6 +659,18 @@ function figParts(figIndex: number): Record<JointName, Part[]> {
   return b;
 }
 
+const bakedAnimals = new Map<AnimalId, { fig: Fig; parts: Record<JointName, Part[]> }>();
+function animalParts(animal: AnimalId): { fig: Fig; parts: Record<JointName, Part[]> } {
+  let accessory = bakedAnimals.get(animal);
+  if (!accessory) {
+    const { name, color } = ANIMALS[animal];
+    const fig: Fig = { id: animal, name, style: "boy", hair: animalSkin(animal), hat: "", tie: color };
+    accessory = { fig, parts: bakeFig(fig, animal) };
+    bakedAnimals.set(animal, accessory);
+  }
+  return accessory;
+}
+
 /** 의상·표정에 따라 이 부품을 병합에 넣을지(원문 applyOutfit 의 visible 전환 규칙) */
 function isShown(tag: string, o: Outfit, fig: Fig, face: string): boolean {
   const hat = o.hat === null ? fig.hat : o.hat;
@@ -618,7 +698,7 @@ function isShown(tag: string, o: Outfit, fig: Fig, face: string): boolean {
       return false;
   }
 }
-function slotColor(p: Part, o: Outfit, fig: Fig): Color {
+function slotColor(p: Part, o: Outfit, fig: Fig, skin: string): Color {
   switch (p.slot) {
     case "coat":
       return col(o.coat);
@@ -629,9 +709,9 @@ function slotColor(p: Part, o: Outfit, fig: Fig): Color {
     case "shoe":
       return col(o.shoe);
     case "skin":
-      return col(SKIN);
+      return col(skin);
     case "hand":
-      return col(o.glove || SKIN);
+      return col(o.glove || skin);
     case "hair":
       return col(o.hair || fig.hair);
     case "tie":
@@ -648,7 +728,7 @@ interface Merged {
 }
 
 /** 한 관절의 보이는 부품을 버텍스 컬러로 병합한다(투명 조각은 제외) */
-function mergeJoint(parts: readonly Part[], o: Outfit, fig: Fig, face: string): Merged {
+function mergeJoint(parts: readonly Part[], o: Outfit, fig: Fig, face: string, skin = SKIN): Merged {
   const list: BufferGeometry[] = [];
   for (const p of parts) {
     if (p.glass || !isShown(p.tag, o, fig, face)) continue;
@@ -657,7 +737,7 @@ function mergeJoint(parts: readonly Part[], o: Outfit, fig: Fig, face: string): 
     g.setAttribute("position", pos);
     g.setAttribute("normal", p.geo.getAttribute("normal"));
     g.setIndex(p.geo.index);
-    const c = slotColor(p, o, fig);
+    const c = slotColor(p, o, fig, skin);
     const arr = new Float32Array(pos.count * 3);
     for (let i = 0; i < pos.count; i++) {
       arr[i * 3] = c.r;
@@ -745,6 +825,8 @@ export interface WorldCharacter {
   setDim(on: boolean): void;
   /** 의상 바꾸기(원문 applyOutfit) — 해당 관절만 다시 병합(캐시) */
   applyOutfit(id: OutfitId): void;
+  /** 대기실에서 같은 자리의 동물을 바꾼다. 이동과 자세는 계속 이어진다. */
+  applyAnimal(animal: AnimalId | undefined): void;
   /** 동작 재생(원문 playEmote). reduced 면 모션 줄이기 변형(반복 2 이하, surprise·dance 의 y 진폭 절반)이다 */
   playEmote(id: EmoteId, opts?: { reduced?: boolean }): void;
   /**
@@ -876,10 +958,14 @@ export function createCharacter(
   figIndex: number,
   outfit: OutfitId = "coat",
   portraitColors?: Partial<Pick<Outfit, "coat" | "shirt" | "tie" | "pants" | "shoe">>,
+  animal?: AnimalId,
 ): WorldCharacter {
   let outfitId: OutfitId = Object.hasOwn(OUTFITS, outfit) ? outfit : "coat";
   const figureForOutfit = (id: OutfitId) => id === "mafia" ? MAFIA_FIG_INDEX : figIndex;
   let visibleFigure = figureForOutfit(outfitId);
+  let species = animal;
+  const model = () => species !== undefined ? animalParts(species) : { fig: FIGS[visibleFigure], parts: figParts(visibleFigure) };
+  const appearanceKey = () => `${species ?? visibleFigure}|${outfitId}`;
   const initialOutfit = outfitId;
   // 에셋 렌더에서만 카드 팔레트를 덮는다. 공개 의상 표와 지오메트리 캐시는 공유 상태를 바꾸지 않는다.
   const portraitOutfit = portraitColors === undefined ? undefined : { ...OUTFITS[initialOutfit], ...portraitColors };
@@ -941,11 +1027,12 @@ export function createCharacter(
   const cache = new Map<string, Merged>();
   const owned = new Set<BufferGeometry>();
   function merged(j: JointName, faceId: string = face): Merged {
-    const key = j === "head" ? `${j}|${outfitId}|${faceId}` : `${j}|${outfitId}`;
+    const key = j === "head" ? `${appearanceKey()}|${j}|${faceId}` : `${appearanceKey()}|${j}`;
     let m = cache.get(key);
     if (!m) {
       const colors = (outfitId === initialOutfit ? portraitOutfit : undefined) ?? OUTFITS[outfitId];
-      m = mergeJoint(figParts(visibleFigure)[j], colors, FIGS[visibleFigure], faceId);
+      const { fig, parts } = model();
+      m = mergeJoint(parts[j], colors, fig, faceId, species === undefined ? SKIN : animalSkin(species));
       owned.add(m.geo);
       if (dim) paint(m, true);
       cache.set(key, m);
@@ -966,17 +1053,19 @@ export function createCharacter(
   let glassMesh: Mesh | null = null;
   function refreshGlass(): void {
     const o = OUTFITS[outfitId];
-    const shown = figParts(visibleFigure).armB.filter((p) => p.glass && isShown(p.tag, o, FIGS[visibleFigure], face));
+    const { fig, parts } = model();
+    const shown = parts.armB.filter((p) => p.glass && isShown(p.tag, o, fig, face));
     if (shown.length === 0 || spriteShown()) {
       if (glassMesh) glassMesh.visible = false;
       return;
     }
-    let geo = glassGeos.get(outfitId);
+    const key = appearanceKey();
+    let geo = glassGeos.get(key);
     if (!geo) {
       const list = shown.map((p) => p.geo);
       geo = list.length === 1 ? list[0].clone() : (mergeGeometries(list, false) as BufferGeometry);
       owned.add(geo);
-      glassGeos.set(outfitId, geo);
+      glassGeos.set(key, geo);
     }
     if (!glassMesh) {
       glassMesh = new Mesh(geo, glassMaterial);
@@ -1004,15 +1093,16 @@ export function createCharacter(
    * 의상을 바꾼 뒤 이전 의상의 병합·돋보기 유리 지오메트리를 해제한다(최근 의상 하나만 남긴다, UI-SPEC B-3, 위험 3).
    * refresh 가 보이는 메시와 pickShells 의 지오메트리를 이미 새 의상 것으로 바꾼 뒤에 부른다 — 해제된 것을 가리키는 메시는 없다.
    */
-  function releaseOtherOutfits(): void {
+  function releaseOtherAppearances(): void {
+    const keyPrefix = appearanceKey();
     for (const [key, m] of cache) {
-      if (key.split("|")[1] === outfitId) continue; // 키는 `관절|의상` 또는 `head|의상|표정`
+      if (key.startsWith(`${keyPrefix}|`)) continue;
       m.geo.dispose();
       owned.delete(m.geo);
       cache.delete(key);
     }
     for (const [key, geo] of glassGeos) {
-      if (key === outfitId) continue;
+      if (key === keyPrefix) continue;
       geo.dispose();
       owned.delete(geo);
       glassGeos.delete(key);
@@ -1132,7 +1222,7 @@ export function createCharacter(
       if (moving) walkPhase += dt * WALK_PHASE_RATE;
       walkMix = Math.min(1, Math.max(0, walkMix + ((moving ? 1 : -1) * dt * 1000) / POSE_BLEND_MS));
       // 0 이하는 서 있는 자세 객체, 1 이상은 걷기 자세 객체 그대로(보간 오차 없음)
-      const fig = FIGS[visibleFigure];
+      const fig = species === undefined ? FIGS[visibleFigure] : animalParts(species).fig;
       const base = walkMix >= 1 ? walkPose(walkPhase) : walkMix <= 0 ? idlePose(t, root.position.x, fig) : blendPose(idlePose(t, root.position.x, fig), walkPose(walkPhase), walkMix);
       // 유지 자세: 동작의 마지막 프레임을 목표로 base 와 섞는다. 1 이상은 목표 그대로, 0 이하는 base 그대로(보간 오차 없음)
       holdMix = Math.min(1, Math.max(0, holdMix + ((holdId ? 1 : -1) * dt * 1000) / POSE_BLEND_MS));
@@ -1186,7 +1276,13 @@ export function createCharacter(
       outfitId = id;
       visibleFigure = figureForOutfit(id);
       refresh(JOINTS);
-      releaseOtherOutfits();
+      releaseOtherAppearances();
+    },
+    applyAnimal(next) {
+      if (disposed || species === next) return;
+      species = next;
+      refresh(JOINTS);
+      releaseOtherAppearances();
     },
     playEmote(id, opts) {
       if (disposed || !Object.hasOwn(EMOTES, id)) return;
@@ -1342,7 +1438,7 @@ export function createCharacter(
 export const characterKit = {
   /** 유령 그림 텍스처가 준비됐나 — 런타임이 E2E 훅 window.__mfGhosts 의 ready 로 알린다 */
   ghostReady: ghostArtReady,
-  create(figIndex: number, outfitId: string): WorldCharacter {
-    return createCharacter(figIndex, Object.hasOwn(OUTFITS, outfitId) ? (outfitId as OutfitId) : "coat");
+  create(figIndex: number, outfitId: string, animal?: AnimalId): WorldCharacter {
+    return createCharacter(figIndex, Object.hasOwn(OUTFITS, outfitId) ? (outfitId as OutfitId) : "coat", undefined, animal);
   },
 };

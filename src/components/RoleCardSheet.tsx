@@ -4,7 +4,8 @@ import type { RoomView } from "../../shared/protocol";
 import type { RoleId } from "../../shared/game/roles";
 import { ROLE_TEXT, alliesText, allyNicknames } from "../game/roleText";
 import { suspectLogByDay } from "../game/suspectView";
-import { roleArtSrc, seatColorVar } from "../net/assets";
+import { roleArtSrc } from "../net/assets";
+import { ownAnimalOf, playerColor } from "../game/playerIdentity";
 import type { JournalRole } from "../net/assets";
 import { Journal } from "./Journal";
 import { Diamond } from "./RoleCard";
@@ -151,7 +152,8 @@ export function RoleCardSheet({ view, showBack, tab, onTab, unread, newCount, on
 }
 
 function RecordsPanel({ view }: { view: RoomView }): ReactElement {
-  const nick = (seat: number): string => view.players.find((p) => p.seat === seat)?.nickname ?? "";
+  const players = new Map(view.players.map((p) => [p.seat, p]));
+  const nick = (seat: number): string => players.get(seat)?.nickname ?? "";
   const days = suspectLogByDay(view);
   return (
     <div className="mf-suspect-log">
@@ -172,12 +174,12 @@ function RecordsPanel({ view }: { view: RoomView }): ReactElement {
                   data-suspect-to={r.to}
                   aria-label={mine ? `${nick(r.to)} 님에게 내가 붙인 의심딱지` : `${nick(r.from)} 님이 ${nick(r.to)} 님에게 붙인 의심딱지`}
                 >
-                  <span className="mf-suspect__dot" style={{ background: seatColorVar(r.from) }} aria-hidden="true" />
+                  <span className="mf-suspect__dot" style={{ background: playerColor(r.from, players.get(r.from)?.animal) }} aria-hidden="true" />
                   <span className="mf-suspect__nick mf-suspect__nick--from">{nick(r.from)}</span>
                   <span className="mf-suspect__arrow" aria-hidden="true">
                     <V2Icon name="chevronRight" size={16} />
                   </span>
-                  <span className="mf-suspect__dot" style={{ background: seatColorVar(r.to) }} aria-hidden="true" />
+                  <span className="mf-suspect__dot" style={{ background: playerColor(r.to, players.get(r.to)?.animal) }} aria-hidden="true" />
                   <span className="mf-suspect__nick mf-suspect__nick--to">{nick(r.to)}</span>
                 </li>
               );
@@ -191,7 +193,7 @@ function RecordsPanel({ view }: { view: RoomView }): ReactElement {
 
 // 내 역할 본문: 왼쪽 128×160 액자 + 오른쪽 직업명·설명(마피아는 동료 줄).
 function Front({ view, role }: { view: RoomView; role: RoleId }): ReactElement {
-  const { src, srcSet } = roleArtSrc(role);
+  const { src, srcSet } = roleArtSrc(role, ownAnimalOf(view));
   const text = ROLE_TEXT[role];
   const allies = allyNicknames(view);
   return (

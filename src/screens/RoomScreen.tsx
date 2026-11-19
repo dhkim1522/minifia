@@ -28,6 +28,7 @@ import { READY_TEXT } from "../game/resultText";
 import { keywordAnswersOf } from "../game/keywordView";
 import { noExecutionPrefix, winnerText } from "../game/verdict";
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
+import { ownAnimalOf } from "../game/playerIdentity";
 import { ChatStore } from "../net/chatStore";
 import { ResultLogStore } from "../net/resultLogStore";
 import { usePhaseArrival } from "../net/phaseArrival";
@@ -315,9 +316,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
   }, [chat, view, chatEpoch]);
   // 같은 접속에서 단계가 바뀌어 온 직전 단계. 역할 확인 → 낮 시작으로 DayScene 이 새로 마운트될 때 문구·배경 전환의 근거다(재접속·처음엔 null).
   const arrivedFrom = usePhaseArrival(phase, connection.epoch);
+  const myAnimal = ownAnimalOf(view);
   useEffect(() => {
-    if (phase === "lobby" || phase === "assigning") preloadRoleAssets();
-  }, [phase]);
+    if (phase === "lobby" || phase === "assigning") preloadRoleAssets(myAnimal);
+  }, [phase, myAnimal]);
   // 맵 청크(three)는 역할 확인에서 낮 시작으로 넘어가기 전에 받아 둔다 — 낮 화면이 열릴 때 검은 화면이 단계 시간을 먹지 않게 한다(UI Considerations #32).
   useEffect(() => {
     if (phase === "assigning" || phase === "roleReveal") preloadWorld();

@@ -3,6 +3,7 @@
 // 서버 없이 시드 고정 시나리오(scenario.ts)가 만든 구간을 WorldStore 에 넣어 걷게 한다. 프레임 제한 없음 — rAF 마다 그린다.
 // 닉네임은 textContent 로만 넣는다(innerHTML 없음). 결과를 서버로 보내지 않는다(RESEARCH R2.6).
 import { UNIT, cellCenterFx, routeFx, walkableCells } from "../../../shared/game/map";
+import { animalForSeat } from "../../../shared/game/animals";
 import { mapOf } from "../../../shared/game/maps";
 import { REVISION } from "three";
 import { MOVE_V } from "../../../shared/game/world";
@@ -61,6 +62,7 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
     seat,
     nickname: SPIKE_NAMES[seat % SPIKE_NAMES.length]!,
     connected: true,
+    animal: animalForSeat(seat),
     ...(p.outfits === "mix" ? { look: MIX_OUTFITS[seat % MIX_OUTFITS.length]! } : {}),
   }));
   for (const pl of players) tags.append(makeTag(pl.seat, pl.nickname, pl.seat === 0));

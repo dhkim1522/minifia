@@ -212,7 +212,7 @@ export function JoinByLink({ code, notice, onEnterRoom, onHome }: JoinByLinkProp
           <ul className={`mf-join__seated${compact ? " mf-join__seated--many" : ""}`}>
             {seated.map((p) => (
               <li key={p.seat} className="mf-tag">
-                <Figure seat={p.seat} />
+                <Figure seat={p.seat} animal={p.animal} />
                 <span className="mf-tag__name" title={p.nickname}>
                   <span>{p.nickname}</span>
                 </span>

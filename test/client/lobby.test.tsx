@@ -1290,3 +1290,31 @@ describe("Lobby — 옷장 잠금 (18-05, D-02)", () => {
     expect(sheet.querySelector("[data-outfit='noir']")?.hasAttribute("data-taken")).toBe(true);
   });
 });
+
+describe("Lobby — 동물 선택", () => {
+  it("12종을 표시하고 공용 자리나 예약된 동물을 잠그며 서버 승인으로만 선택을 바꾼다", () => {
+    const send = vi.fn();
+    const view = makeView([player(0, "민수", { animal: "rabbit" }), player(1, "영희", { animal: "bat" })], 0, { reservedAnimals: ["ram"] });
+    const { container, rerender } = render(lobby(view, { send }));
+    fireEvent.click(screen.getByRole("button", { name: "캐릭터 꾸미기" }));
+    const card = (animal: string) => container.querySelector(`[data-animal="${animal}"]`) as HTMLButtonElement;
+    expect(container.querySelectorAll("[data-animal]")).toHaveLength(12);
+    expect(card("rabbit").getAttribute("aria-pressed")).toBe("true");
+    for (const locked of ["bat", "ram"]) {
+      expect(card(locked).getAttribute("aria-disabled")).toBe("true");
+      fireEvent.click(card(locked));
+    }
+    expect(send).not.toHaveBeenCalled();
+
+    fireEvent.click(card("elephant"));
+    fireEvent.click(card("frog"));
+    expect(send.mock.calls).toEqual([[{ t: "animalPick", animal: "elephant" }]]);
+    expect(card("rabbit").getAttribute("aria-pressed")).toBe("true");
+    expect(props().view.players[0]?.animal).toBe("rabbit");
+
+    rerender(lobby({ ...view, players: [player(0, "민수", { animal: "elephant" }), view.players[1]!] }, { send }));
+    expect(card("elephant").getAttribute("aria-pressed")).toBe("true");
+    expect(card("frog").getAttribute("aria-disabled")).toBeNull();
+    expect(props().view.players[0]?.animal).toBe("elephant");
+  });
+});

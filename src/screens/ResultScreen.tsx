@@ -25,6 +25,7 @@ import { V2Icon } from "../components/v2/V2Icon";
 import { WorldStage } from "../components/WorldStage";
 import { DRESS_TEXT } from "../game/dressText";
 import { LOG_H } from "../game/chatUi";
+import { ownAnimalOf } from "../game/playerIdentity";
 import { castOf, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, satSlots, slotsFor, stateAt, walkSnap, winningTeam } from "../game/resultDirector";
 import type { ResultState } from "../game/resultDirector";
 import { READY_TEXT } from "../game/resultText";
@@ -36,7 +37,7 @@ import { useChat } from "../net/useChat";
 import { useDress } from "../net/useDress";
 import { diffRoomViews, toastForDiff } from "../net/roomDiff";
 import { useMapInsets } from "../net/useMapInsets";
-import { useReady } from "../net/useReady";
+import { useReady, type RestingFace } from "../net/useReady";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { GATHER_CENTER } from "../world/camera";
 import type { SceneLook, SeatLook } from "../world/presence";
@@ -105,7 +106,7 @@ function sessionStore(): Storage | null {
 const SAT_OPACITY = 0.5;
 
 /** 쉬게 될 사람 확인 시트(11-12, D-12): 쉬게 될 사람 얼굴 줄(이름 글자 없음, 접근성 이름은 닉네임) + 한 줄 + [시작][취소]. 초점은 [취소] — 엔터 한 번으로 시작되지 않는다 */
-function RestSheet({ faces, onStart, onCancel }: { faces: readonly { seat: number; nickname: string }[]; onStart: () => void; onCancel: () => void }) {
+function RestSheet({ faces, onStart, onCancel }: { faces: readonly RestingFace[]; onStart: () => void; onCancel: () => void }) {
   const cancelRef: RefObject<HTMLButtonElement | null> = useRef<HTMLButtonElement>(null);
   return (
     <Sheet label={READY_TEXT.rest} onClose={onCancel} initialFocusRef={cancelRef}>
@@ -113,7 +114,7 @@ function RestSheet({ faces, onStart, onCancel }: { faces: readonly { seat: numbe
         <>
           <div className="mf-rest__faces" data-rest-faces="">
             {faces.slice(0, REST_FACES_MAX).map((f) => (
-              <img key={f.seat} className="mf-rest__face" data-rest-face="" src={faceSrc(f.seat)} alt={f.nickname} width={40} height={40} />
+              <img key={f.seat} className="mf-rest__face" data-rest-face="" src={faceSrc(f.seat, f.animal)} alt={f.nickname} width={40} height={40} />
             ))}
           </div>
           <h2 className="mf-t-heading mf-sheet__title">{READY_TEXT.rest}</h2>
@@ -175,6 +176,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   );
   const logLines = useMemo(() => resultLog.snapshot(), [resultLog, logRevision]); // eslint-disable-line react-hooks/exhaustive-deps
   const contacts = useMemo(() => new Map(view.players.map((p) => [p.seat, p.nickname] as const)), [view.players]);
+  const animals = useMemo(() => new Map(view.players.map((p) => [p.seat, p.animal] as const)), [view.players]);
   // 확장 높이: 방 높이(루트 높이)로 한 번 정하고 화면 방향·크기가 바뀔 때만 다시 잰다(키보드·주소창으로는 다시 정하지 않는다)
   const [roomH, setRoomH] = useState(0);
   useLayoutEffect(() => {
@@ -475,6 +477,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         onJumpWhisper={jumpWhisper}
         {...(jumpDay !== null ? { focusDay: jumpDay } : {})}
         contacts={contacts}
+        animals={animals}
         opened={opened}
         allSlot={
           <ChatPanel
@@ -522,6 +525,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
           tab={dressTab}
           mapChoice={mapChoice}
           onPickMap={pickMap}
+          wearer={ownAnimalOf(view)}
         />
       ) : null}
       {rematch.confirm !== null ? <RestSheet faces={rematch.confirm.resting} onStart={rematch.confirmStart} onCancel={rematch.cancelConfirm} /> : null}

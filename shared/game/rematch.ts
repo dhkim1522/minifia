@@ -15,7 +15,7 @@ export const REMATCH_STALE_MS = 60_000;
 /** 새 방으로 이어지는 방 키(허용 목록). 있는 키만 복사한다. 판마다 새로 정하는 키(expiresAt·round·phase·phaseEndsAt·map·players·bench)는 rematch 가 따로 쓴다. */
 export const REMATCH_ROOM_KEYS = ["code", "createdAt", "everConnected", "hostId", "nextJoinSeq", "mapChoice", "testMode", "testRole", "testBotVote", "playtest"] as const;
 /** 새 판으로 이어지는 사람 행 키(허용 목록). 역할·생사·밤 선택·기록·유언·주장·통계·준비·앉음은 여기에 없다. */
-export const REMATCH_PLAYER_KEYS = ["id", "token", "seat", "nickname", "nicknameKey", "joinSeq", "connected", "connId", "isBot", "look"] as const;
+export const REMATCH_PLAYER_KEYS = ["id", "token", "seat", "nickname", "nicknameKey", "joinSeq", "connected", "connId", "isBot", "look", "animal"] as const;
 
 /** src 에서 keys 에 든 키만(값이 undefined 가 아닐 때) 하나씩 복사한 새 객체. 펼쳐 복사가 아니다. */
 function copyKeys<T extends object, K extends keyof T>(src: T, keys: readonly K[]): Pick<T, K> {

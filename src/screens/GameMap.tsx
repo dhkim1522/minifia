@@ -33,6 +33,8 @@ import { WorldStage } from "../components/WorldStage";
 import type { WorldPick } from "../components/WorldStage";
 import { DEFENSE_MS, PICK_TURN_MS } from "../../shared/game/phases";
 import { LOG_H } from "../game/chatUi";
+import { ownAnimalOf } from "../game/playerIdentity";
+import { jobOutfit } from "../world/jobOutfit";
 import { todOf, todWordOf } from "../game/timeOfDay";
 import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
@@ -701,13 +703,17 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 판결 순간(UI-SPEC C-1, 22-12 P22-13·P22-14): 처형자 존재 기준 처형 진입 시각의 어둡게 막·카메라 줌·유언 공개 카드(0~3.0초). 모션 줄이기는 줌 없이 막·핀·카드만 쓴다
   const moment = useVerdictMoment(view, offset);
   const verdictZoom = moment.active && !reducedMotion && !playtest ? moment.zoom : undefined;
+  const investigated = policeResult === null ? undefined : view.players.find((player) => player.seat === policeResult.seat);
+  const whisperPeer = whisper.target === null ? undefined : view.players.find((player) => player.seat === whisper.target);
 
   const scene = useMemo(() => {
     const look = sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) });
     if (camera) look.camera = camera;
     // 역할 확인을 마친 게임 맵에서만 내 비공개 역할을 내 모델에 입힌다. 공개 의상과 다른 좌석은 그대로다.
     const ownSeat = look.seats[view.me.seat];
-    if (ownSeat && meAlive && view.spectate === undefined && view.me.role === "mafia") ownSeat.costume = "mafia";
+    const role = view.me.role;
+    const ownRoleOutfit = role === "mafia" || (ownAnimalOf(view) !== undefined && (role === "police" || role === "doctor"));
+    if (ownSeat && meAlive && view.spectate === undefined && ownRoleOutfit) ownSeat.costume = jobOutfit(role);
     return look;
   }, [view, stageH, fading, mine, verdictZoom, camera, meAlive]);
 
@@ -782,7 +788,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
         <PoliceResultCard
           key={policeResult.id}
           seat={policeResult.seat}
-          name={view.players.find((p) => p.seat === policeResult.seat)?.nickname ?? ""}
+          name={investigated?.nickname ?? ""}
+          animal={investigated?.animal}
           isMafia={policeResult.isMafia}
           reducedMotion={reducedMotion}
         />
@@ -921,8 +928,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           ) : layerKind === "line" && whisper.target !== null ? (
             <LineSheet
               key={whisper.target}
-              peer={{ seat: whisper.target, name: view.players.find((p) => p.seat === whisper.target)?.nickname ?? "" }}
-              placeholder={WHISPER_TEXT.placeholder(view.players.find((p) => p.seat === whisper.target)?.nickname ?? "")}
+              peer={{ seat: whisper.target, name: whisperPeer?.nickname ?? "", animal: whisperPeer?.animal }}
+              placeholder={WHISPER_TEXT.placeholder(whisperPeer?.nickname ?? "")}
               value={whisper.draft}
               onChange={whisper.setDraft}
               onSend={whisper.send}

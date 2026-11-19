@@ -10,6 +10,7 @@ import { NICKNAME_MAX_GRAPHEMES, graphemePrefix, validateNickname } from "../nic
 import { MAX_PLAYERS, MAX_TEST_BOTS } from "../protocol";
 import type { BotVoteExec, BotVotePick } from "../protocol";
 import { isAlive } from "./alive";
+import { pickFreeAnimal } from "./animalRoster";
 import { BOT_NAMES, botCount, botExecAgree, botFirstBallotTarget, botNightTarget, botPointTarget, botRunoffTarget, isBot } from "./bots";
 import { testRoleOptions } from "./roles";
 import type { RoleId } from "./roles";
@@ -180,10 +181,11 @@ export function resetToLobby(state: RoomState, actorId: string): TestToolResult 
     joinSeq: p.joinSeq,
     connected: p.connected,
     connId: p.connId,
-    // 서버 봇은 대기실로 되돌려도 남는다(결정 0024). 사람은 지금처럼 여덟 키 그대로다.
+    // 서버 봇은 대기실로 되돌려도 남는다(결정 0024).
     ...(p.isBot === true ? { isBot: true as const } : {}),
     // 고른 의상은 대기실로 돌아와도 남는다(결정 D-6) — 다시 하기(11페이즈)가 이어받는다.
     ...(p.look !== undefined ? { look: p.look } : {}),
+    ...(p.animal !== undefined ? { animal: p.animal } : {}),
   }));
   const next: RoomState = {
     code: state.code,
@@ -246,7 +248,14 @@ function botNickname(keys: ReadonlySet<string>, wantLen: number): { nickname: st
  * 사람이 봇 이름을 쓰고 있어 쓸 수 있는 이름이 모자라면 그 수까지만 둔다. 잘린 결과가 지금과 같으면 입력 상태를 그대로 돌려준다.
  * 봇은 토큰이 없고(빈 문자열) 소켓이 없으며 connected 가 항상 true 다 — makeId 는 호출하는 쪽(방 DO 는 crypto.randomUUID)이 준다.
  */
-export function setBotCount(state: RoomState, actorId: string, count: number, makeId: () => string, randInt: RandInt): TestToolResult {
+export function setBotCount(
+  state: RoomState,
+  actorId: string,
+  count: number,
+  makeId: () => string,
+  randInt: RandInt,
+  animalRandInt: RandInt = () => 0,
+): TestToolResult {
   // 결정 0075: 봇 수 맞추기는 일반 방 방장도 쓴다(사람이 모자란 판을 봇으로 채운다). testMode 검사 없이 방장 검사만 한다.
   if (actorId !== state.hostId) return { ok: false, error: "NOT_HOST" };
   if (state.phase !== "lobby") return { ok: false, error: "WRONG_PHASE" };
@@ -254,12 +263,13 @@ export function setBotCount(state: RoomState, actorId: string, count: number, ma
 
   const humans = state.players.filter((p) => !isBot(p)).length;
   const current = botCount(state);
-  const usedKeys = new Set(state.players.map((p) => p.nicknameKey));
+  const bench = state.bench ?? [];
+  const usedKeys = new Set([...state.players, ...bench].map((p) => p.nicknameKey));
   const freeNames = BOT_NAMES.filter((name) => {
     const checked = validateNickname(name);
     return checked.ok && !usedKeys.has(checked.key);
   }).length;
-  const target = Math.min(count, MAX_PLAYERS - humans, current + freeNames);
+  const target = Math.min(count, MAX_PLAYERS - humans - bench.length, current + freeNames);
   if (target === current) return { ok: true, state };
 
   if (target < current) {
@@ -276,20 +286,22 @@ export function setBotCount(state: RoomState, actorId: string, count: number, ma
   let players = state.players;
   let nextJoinSeq = state.nextJoinSeq;
   for (let added = current; added < target; added += 1) {
-    const keys = new Set(players.map((p) => p.nicknameKey));
+    const occupants = [...players, ...bench];
+    const keys = new Set(occupants.map((p) => p.nicknameKey));
     const wantLen = added === 0 ? NICKNAME_MAX_GRAPHEMES : 1 + randInt(NICKNAME_MAX_GRAPHEMES);
     const nickname = botNickname(keys, wantLen);
     if (nickname === null) break;
     const bot: Player = {
       id: makeId(),
       token: "",
-      seat: lowestFreeSeat(players),
+      seat: lowestFreeSeat(occupants),
       nickname: nickname.nickname,
       nicknameKey: nickname.key,
       joinSeq: nextJoinSeq,
       connected: true,
       connId: null,
       isBot: true,
+      animal: pickFreeAnimal(occupants, animalRandInt),
     };
     nextJoinSeq += 1;
     players = [...players, bot];

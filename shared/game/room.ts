@@ -18,6 +18,8 @@ import type {
   VoteLogEntry,
 } from "../protocol";
 import type { BotPlan } from "./bots";
+import type { AnimalId } from "./animals";
+import { pickFreeAnimal } from "./animalRoster";
 import { hostSuccessor } from "./continuity";
 import { resolveLookConflicts } from "./look";
 import { decideMap } from "./maps";
@@ -51,6 +53,7 @@ export interface Player {
   joinSeq: number;
   connected: boolean;
   connId: string | null;
+  animal?: AnimalId;
   /** 시작할 때 서버가 나눠 준 역할. 대기실에서는 없다. 뷰에는 본인에게만, 정해진 단계에서만 실린다(view.ts). */
   role?: RoleId;
   // ---- 2페이즈 낮 토론 상태. 모두 optional — 저장된 옛 방도 읽히고(everConnected? 선례), 읽는 쪽이 기본값을 쥔다. ----
@@ -265,7 +268,7 @@ export function createRoomState(input: {
   now: number;
   testMode?: boolean;
   playtest?: true;
-}): CreateRoomStateResult {
+}, randInt: (n: number) => number = () => 0): CreateRoomStateResult {
   const checked = validateNickname(input.hostNickname);
   if (!checked.ok) return { ok: false, error: "NICKNAME_INVALID" };
   const host: Player = {
@@ -277,6 +280,7 @@ export function createRoomState(input: {
     joinSeq: 0,
     connected: false,
     connId: null,
+    animal: pickFreeAnimal([], randInt),
   };
   return {
     ok: true,
@@ -316,22 +320,25 @@ export function lowestFreeSeat(players: readonly Player[]): number {
 export function joinRoom(
   state: RoomState,
   input: { playerId: string; token: string; nickname: string },
+  randInt: (n: number) => number = () => 0,
 ): { ok: true; state: RoomState; player: Player } | { ok: false; error: JoinError } {
   // 검사 순서가 계약이다: 시작됨 → 정원(끊긴 사람 포함, 결정 0012) → 닉네임 형식 → 닉네임 중복.
   if (state.phase !== "lobby") return { ok: false, error: "GAME_STARTED" };
-  if (state.players.length >= MAX_PLAYERS) return { ok: false, error: "ROOM_FULL" };
+  const occupants = [...state.players, ...(state.bench ?? [])];
+  if (occupants.length >= MAX_PLAYERS) return { ok: false, error: "ROOM_FULL" };
   const checked = validateNickname(input.nickname);
   if (!checked.ok) return { ok: false, error: "NICKNAME_INVALID" };
-  if (state.players.some((p) => p.nicknameKey === checked.key)) return { ok: false, error: "NICKNAME_TAKEN" };
+  if (occupants.some((p) => p.nicknameKey === checked.key)) return { ok: false, error: "NICKNAME_TAKEN" };
   const player: Player = {
     id: input.playerId,
     token: input.token,
-    seat: lowestFreeSeat(state.players),
+    seat: lowestFreeSeat(occupants),
     nickname: checked.nickname,
     nicknameKey: checked.key,
     joinSeq: state.nextJoinSeq,
     connected: false,
     connId: null,
+    animal: pickFreeAnimal(occupants, randInt),
   };
   return {
     ok: true,
@@ -469,7 +476,10 @@ export function beginGame(
   const { keyword: _prevKeyword, notes: _prevNotes, ...rest } = state;
   const keyword = pickKeyword !== undefined ? pickKeyword(randInt) : undefined;
   // 옷장 조작이 없는 실험방은 좌석별 외형과 기본 코트로 인물을 구분한다.
-  const dressed = state.playtest === true ? state.players : resolveLookConflicts(state.players);
+  // 동물로 구분되는 방에서는 직접 고른 옷만 입는다.
+  const dressed = state.playtest === true || state.players.every((p) => p.animal !== undefined)
+    ? state.players
+    : resolveLookConflicts(state.players);
   return {
     ...rest,
     ...(keyword !== undefined ? { keyword } : {}),

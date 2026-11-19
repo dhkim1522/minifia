@@ -11,7 +11,7 @@
 //   연결이 끊긴 동안은 보내지 않는다. typingSeats = 서버가 보낸 좌석(끊긴 사람 제외) + 내 입력 중이면 내 좌석(즉시).
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { phaseKey } from "../../shared/game/audience";
-import type { ClientMessage, EmoteId, RoomView } from "../../shared/protocol";
+import type { ClientMessage, EmoteId, PublicPlayer, RoomView } from "../../shared/protocol";
 import type { ChatPanelProps, ChatPanelMessage } from "../components/v2/ChatPanel";
 import { CHAT_TEXT, EMOTE_TRAY_ORDER } from "../game/chatText";
 import { SEND_DIM_MS, TYPING_IDLE_OFF_MS, TYPING_REFRESH_MS } from "../game/chatUi";
@@ -39,6 +39,8 @@ export interface ChatConnection {
   canSend: boolean;
 }
 
+type ChatPerson = Pick<PublicPlayer, "nickname" | "animal">;
+
 export function useChat({ store, connection, view, motion }: { store: ChatStore; connection: ChatConnection; view: RoomView; motion?: { moving: boolean; emoting: EmoteId | null } }): ChatBinding {
   const subscribe = useCallback((cb: () => void) => store.subscribe(cb), [store]);
   const getRevision = useCallback(() => store.revision(), [store]);
@@ -52,10 +54,9 @@ export function useChat({ store, connection, view, motion }: { store: ChatStore;
   const lastSent = useRef("");
 
   // 줄 앞 이름: 지금 방에 있는 사람의 닉네임. 떠난 사람의 줄은 마지막으로 본 닉네임을 쓴다.
-  const names = useRef(new Map<number, string>());
-  // 줄 이름 고정(07 리뷰 WR-01): 줄이 처음 그려질 때 알던 이름을 줄 키로 붙들어, 같은 좌석을 새 사람이 받아도 옛 줄이 새 이름으로 바뀌지 않는다.
-  // 이름을 한 번도 못 본 좌석의 줄은 고정하지 않고(빈 이름), 알려지는 순간 채워 고정한다.
-  const lineNames = useRef(new Map<string, string>());
+  const people = useRef(new Map<number, ChatPerson>());
+  // 줄을 보낸 사람이 떠나면 당시 이름과 동물을 유지한다. 같은 참가자가 로비에서 자기 동물을 바꾸면 채팅의 얼굴도 따라간다.
+  const linePeople = useRef(new Map<string, ChatPerson>());
   const channel = view.me.chat ?? null;
   const { players } = view;
   const mySeat = view.me.seat;
@@ -71,16 +72,16 @@ export function useChat({ store, connection, view, motion }: { store: ChatStore;
     return () => clearTimeout(timer);
   }, [store, revision, cardTick]);
   const messages = useMemo<ChatPanelMessage[]>(() => {
-    for (const p of players) names.current.set(p.seat, p.nickname);
+    for (const p of players) people.current.set(p.seat, p);
     const now = Date.now();
     renderedAt.current = now;
-    const nameOf = (seat: number): string => names.current.get(seat) ?? "";
-    const pinnedName = (key: string, seat: number): string => {
-      const pinned = lineNames.current.get(key);
-      if (pinned !== undefined) return pinned;
-      const name = nameOf(seat);
-      if (name !== "") lineNames.current.set(key, name);
-      return name;
+    const nameOf = (seat: number): string => people.current.get(seat)?.nickname ?? "";
+    const personOf = (key: string, seat: number): ChatPerson | undefined => {
+      const pinned = linePeople.current.get(key);
+      const latest = people.current.get(seat);
+      if (latest === undefined || (pinned !== undefined && pinned.nickname !== latest.nickname)) return pinned;
+      linePeople.current.set(key, latest);
+      return latest;
     };
     return store.visibleLines(channel, now).flatMap((line): ChatPanelMessage[] => {
       // 귓속말: 본문 줄(받은·보낸 비공개 블록)과 공개 사실 줄. 이름은 좌석으로 찾는다(저장소는 이름을 모른다)
@@ -95,7 +96,7 @@ export function useChat({ store, connection, view, motion }: { store: ChatStore;
       if (line.kind === "card" && line.card) {
         // 카드는 서버 k 줄과 이 화면의 경찰 카드뿐이다. 서버 카드의 제목은 좌석 닉네임으로 만든다(UI-SPEC 427행).
         const m: ChatPanelMessage = { key: line.key, kind: "card", card: line.card, text: line.text, icon: line.card === "will" ? "quill" : line.card === "note" ? "note" : "eye" };
-        if (line.card === "will") m.title = CHAT_TEXT.cardWill(line.seat === undefined ? "" : pinnedName(line.key, line.seat));
+        if (line.card === "will") m.title = CHAT_TEXT.cardWill(line.seat === undefined ? "" : personOf(line.key, line.seat)?.nickname ?? "");
         else if (line.card === "note") {
           m.title = CHAT_TEXT.cardNote;
           m.tone = "mafia";
@@ -111,7 +112,9 @@ export function useChat({ store, connection, view, motion }: { store: ChatStore;
       const m: ChatPanelMessage = { key: line.key, kind: "player", text: line.text };
       if (line.seat !== undefined) {
         m.seat = line.seat;
-        m.name = pinnedName(line.key, line.seat);
+        const person = personOf(line.key, line.seat);
+        m.name = person?.nickname ?? "";
+        if (person?.animal !== undefined) m.animal = person.animal;
         m.me = line.seat === mySeat;
       }
       if (line.ch) m.ch = line.ch;

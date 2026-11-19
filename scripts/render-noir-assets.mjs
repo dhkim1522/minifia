@@ -2,8 +2,9 @@
 // npm run dev 실행 후 node scripts/render-noir-assets.mjs http://127.0.0.1:5173
 // 얼굴과 전신만 다시 만들 때는 --seat-portraits-only.
 // 역할 카드만 다시 만들 때는 --role-portraits-only.
+// 동물 얼굴·전신·역할·옷장 그림만 다시 만들 때는 --animal-portraits-only.
 import { existsSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import sharp from "sharp";
@@ -29,12 +30,13 @@ try {
   await page.route(endpoint, (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><main></main>" }));
   await page.goto(endpoint);
 
-  const { figures, outfits } = await page.evaluate(async () => {
+  const { figures, outfits, animals } = await page.evaluate(async () => {
     const THREE = await import("/node_modules/three/build/three.module.js");
     const model = await import("/src/world/character.ts");
     const { buildGhost3d } = await import("/src/world/ghost3d.ts");
     const { FIGURE_IDS } = await import("/src/net/assets.ts");
     const { OUTFIT_IDS } = await import("/shared/protocol.ts");
+    const { ANIMAL_IDS } = await import("/shared/game/animals.ts");
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     renderer.setClearColor(0, 0);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -48,20 +50,21 @@ try {
     rim.position.set(3, 4, -3);
     studio.add(key, rim);
 
-    window.noirPortrait = ({ seat, outfit, colors, head, ghost, ratio }) => {
-      const character = ghost ? buildGhost3d() : model.createCharacter(model.figForSeat(seat), outfit, colors);
+    window.noirPortrait = ({ seat, outfit, colors, head, ghost, animal, ratio }) => {
+      const character = ghost ? buildGhost3d() : model.createCharacter(model.figForSeat(seat), outfit, colors, animal);
       const subject = character.root;
       // 실제 램프의 발밑 그림자와 선택 표시가 투명 PNG의 알파에 들어가지 않게 한다.
       if (!ghost) for (const part of subject.children) if (part.isMesh) part.visible = false;
-      subject.rotation.y = head ? -0.07 : -0.16;
+      subject.rotation.y = head ? (animal === "crocodile" || animal === "parrot" ? -0.42 : -0.07) : -0.16;
       studio.add(subject);
       const boundBy = head ? subject.getObjectByName("neck") : subject;
       const box = new THREE.Box3().setFromObject(boundBy);
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
       // 작은 얼굴 버튼에서도 모자와 볼이 다 읽히고 코트 깃이 조금 보인다.
-      if (head) center.y -= 0.12;
-      const half = Math.max(size.y, size.x / ratio) * (head ? 0.69 : 0.56);
+      if (head && !animal) center.y -= 0.12;
+      const margin = animal ? 0.59 : head ? 0.69 : 0.56;
+      const half = Math.max(size.y, size.x / ratio) * margin;
       const camera = new THREE.OrthographicCamera(-half * ratio, half * ratio, half, -half, 0.1, 20);
       camera.position.copy(center).add(new THREE.Vector3(0.42, head ? 0.21 : 0.57, 5.8));
       camera.lookAt(center);
@@ -82,7 +85,7 @@ try {
       world.render();
       window.disposeNoirMap = () => world.dispose();
     };
-    return { figures: FIGURE_IDS, outfits: OUTFIT_IDS };
+    return { figures: FIGURE_IDS, outfits: OUTFIT_IDS, animals: ANIMAL_IDS };
   });
 
   async function scene(options) {
@@ -121,6 +124,22 @@ try {
     }
   }
 
+  async function renderAnimalPortraits() {
+    for (const animal of animals) {
+      const dir = `public/characters/animals/${animal}`;
+      await mkdir(root(dir), { recursive: true });
+      const head = await portrait({ animal, seat: 0, outfit: "coat", head: true, ratio: 1 });
+      await savePng(head, `${dir}/face.png`, 200, 200);
+      for (const [form, outfit] of [["figure", "coat"], ["mafia", "mafia"], ["police", "police"], ["doctor", "doctor"]]) {
+        const image = await portrait({ animal, seat: 0, outfit, ratio: 0.75 });
+        await Promise.all([
+          savePng(image, `${dir}/${form}-sm.png`, 144, 192),
+          savePng(image, `${dir}/${form}-lg.png`, 288, 384),
+        ]);
+      }
+    }
+  }
+
   async function renderGhostPortrait() {
     const ghost = await portrait({ ghost: true, ratio: 0.75 });
     await savePng(ghost, "public/characters/ghost/ghost_default@2x.png", 144, 192);
@@ -128,8 +147,9 @@ try {
   }
 
   async function renderOutfitPortraits() {
+    const models = { police: "elephant", doctor: "frog", mafia: "rabbit" };
     for (const outfit of outfits) {
-      const image = await portrait({ seat: 0, outfit, ratio: 0.8 });
+      const image = await portrait({ animal: models[outfit] ?? "fox", seat: 0, outfit, ratio: 0.8 });
       await savePng(image, `public/outfits/outfit-${outfit}.png`, 240, 300);
     }
   }
@@ -148,11 +168,15 @@ try {
     await renderSeatPortraits();
   } else if (process.argv.includes("--role-portraits-only")) {
     await renderRolePortraits();
+  } else if (process.argv.includes("--animal-portraits-only")) {
+    await renderAnimalPortraits();
+    await renderOutfitPortraits();
   } else if (process.argv.includes("--outfit-portraits-only")) {
     await renderOutfitPortraits();
   } else {
     await renderSeatPortraits();
     await renderRolePortraits();
+    await renderAnimalPortraits();
     await renderGhostPortrait();
     await renderOutfitPortraits();
     await renderMapCards();

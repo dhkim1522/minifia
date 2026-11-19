@@ -24,10 +24,7 @@ export interface UseReadyOptions {
   stageActive: boolean;
 }
 
-export interface RestingFace {
-  seat: number;
-  nickname: string;
-}
+export type RestingFace = Pick<PublicPlayer, "seat" | "nickname" | "animal">;
 
 export interface ReadyApi {
   /** 방장인가(view.me.isHost) */
@@ -60,7 +57,9 @@ export function useReady({ view, send, canSend, stageActive }: UseReadyOptions):
   const total = useMemo(() => view.players.filter((p) => p.connected).length, [view.players]);
   const ready = useMemo(() => view.players.filter(isReady).length, [view.players]);
   const resting = useMemo<RestingFace[]>(
-    () => view.players.filter((p) => p.connected && p.ready !== true).map((p) => ({ seat: p.seat, nickname: p.nickname })),
+    () => view.players.filter((p) => p.connected && p.ready !== true).map(({ seat, nickname, animal }) => (
+      { seat, nickname, ...(animal === undefined ? {} : { animal }) }
+    )),
     [view.players],
   );
   const canStart = ready >= view.minPlayers;

@@ -25,6 +25,7 @@ const DRESS_SELF_MS = 500;
 const DRESS_PEER_MS = 1500;
 const DRESS_FLOAT = '[data-float="dress"]';
 const DRESS_SHEET = "[data-dress-sheet]";
+const OUTFIT_TAB = '[data-customize-tab="dress"]';
 
 /** 구간 { p: [x0,z0,x1,z1,…] 1/100 단위, v: 단위/초 × 100 } 을 걷는 데 걸리는 시간(ms) */
 function walkMs(seg) {
@@ -332,10 +333,12 @@ export function makeAvatarFlows(helpers) {
         const closed = await readDressUi(page);
         // 결정 0075: 방장은 [봇] 버튼이 하나 더 떠 있다(옷장 + 봇), 손님은 옷장 하나.
         const wantFloats = page === hp ? 2 : 1;
-        const idle = closed.sheet === null && closed.float !== null && closed.floatLabel === "옷장" && closed.floatCount === wantFloats;
-        rec(`${sc}-${who}`, "AD1a", `${who}: 로비에 떠 있는 버튼이 ${wantFloats}개(방장은 봇 포함, 0075), 옷장 접근성 이름 '옷장'(14-07 TOOL-01), 시트는 닫혀 있음`, idle, `버튼 ${closed.float ? "있음" : "없음"} · 이름 ${closed.floatLabel} · 떠 있는 버튼 ${closed.floatCount}개 · 시트 ${closed.sheet ? "열림" : "닫힘"}`);
+        const idle = closed.sheet === null && closed.float !== null && closed.floatLabel === "캐릭터 꾸미기" && closed.floatCount === wantFloats;
+        rec(`${sc}-${who}`, "AD1a", `${who}: 로비에 '캐릭터 꾸미기' 버튼이 있고 시트는 닫혀 있음`, idle, `버튼 ${closed.float ? "있음" : "없음"} · 이름 ${closed.floatLabel} · 떠 있는 버튼 ${closed.floatCount}개 · 시트 ${closed.sheet ? "열림" : "닫힘"}`);
         await page.locator(DRESS_FLOAT).click({ timeout: 3000 });
         await page.waitForSelector(DRESS_SHEET, { timeout: 1500 });
+        const animalFocus = await page.evaluate(() => document.activeElement?.matches('[data-animal][aria-pressed="true"]') === true);
+        await page.locator(OUTFIT_TAB).click();
         await sleep(150);
         const open = await readDressUi(page);
         const hidden = open.float === null;
@@ -343,7 +346,7 @@ export function makeAvatarFlows(helpers) {
         for (const l of dressChecks({ float: closed.float, panel: open.panel, sheet: open.sheet, cards: open.cards, close: open.close, selected: open.selected, nameFont: open.nameFont, viewport: { w: open.vw, h: open.vh }, kb: open.kbOpen })) {
           rec(`${sc}-${who}`, l.id, l.label, l.ok, l.detail);
         }
-        rec(`${sc}-${who}`, "AD2b", `${who}: 시트가 열리면 초점이 선택된 카드(coat 또는 지금 의상)로 감`, open.focusedOutfit !== null && open.selected !== null, `초점 ${open.focusedOutfit}`);
+        rec(`${sc}-${who}`, "AD2b", `${who}: 시트가 열리면 초점이 선택된 동물 카드로 감`, animalFocus, `동물 카드 초점 ${animalFocus}`);
       };
       await measure("방장", hp);
       // 방장 시트를 닫고 AD5(초점 복귀)를 그 자리에서 본다
@@ -371,6 +374,7 @@ export function makeAvatarFlows(helpers) {
       const sc4 = "avatar-dress/both";
       await hp.locator(DRESS_FLOAT).click({ timeout: 3000 });
       await hp.waitForSelector(DRESS_SHEET, { timeout: 1500 });
+      await hp.locator(OUTFIT_TAB).click();
       await hp.locator(`${DRESS_SHEET} button[data-outfit="noir"]`).click({ timeout: 3000 });
       const same = await until(async () => {
         const [a, b] = await Promise.all([readLooks(hp), readLooks(gp)]);

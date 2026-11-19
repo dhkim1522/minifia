@@ -1,5 +1,6 @@
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import { ANIMAL_IDS } from "../../shared/game/animals";
 import type { RoomPreview } from "../../shared/protocol";
 import { createRoom, joinOk } from "./helpers";
 
@@ -21,18 +22,19 @@ describe("GET /api/rooms/{code} 미리보기", () => {
       playerCount: 1,
       maxPlayers: 8,
       phase: "lobby",
-      players: [{ seat: 0, nickname: "방장" }],
+      players: [{ seat: 0, nickname: "방장", animal: expect.stringMatching(new RegExp(`^(${ANIMAL_IDS.join("|")})$`)) }],
     });
   });
 
-  it("앉은 사람은 자리 순이고 각 항목의 키는 정확히 nickname·seat 다", async () => {
+  it("앉은 사람은 자리 순이고 공개 동물은 중복되지 않는다", async () => {
     const { code } = await createRoom("방장");
     const a = await joinOk(code, "철수");
     const b = await joinOk(code, "영희");
     const body = (await (await getPreview(code)).json()) as RoomPreview;
     expect(body.playerCount).toBe(3);
     expect(body.players.map((p) => p.seat)).toEqual([0, a.seat, b.seat]);
-    for (const p of body.players) expect(Object.keys(p).sort()).toEqual(["nickname", "seat"]);
+    for (const p of body.players) expect(Object.keys(p).sort()).toEqual(["animal", "nickname", "seat"]);
+    expect(new Set(body.players.map((p) => p.animal)).size).toBe(3);
   });
 
   it("없는 방은 404 ROOM_NOT_FOUND", async () => {

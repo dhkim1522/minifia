@@ -1,8 +1,9 @@
 // 10-06: 인물 에셋 예산 — 인물 8명 × 의상 9종 72조합 (D-15, D-16). `npm run check:character` 의 본체다.
 // WebGL 없이 node 에서 장면 그래프만 검사한다. 새 3D 부품은 만들지 않는다(O-4).
 import { readFileSync } from "node:fs";
-import { Box3, type BufferGeometry, type Mesh, type Object3D, Vector3 } from "three";
-import { describe, expect, it } from "vitest";
+import { Box3, type BufferGeometry, Color, type Mesh, type Object3D, Vector3 } from "three";
+import { describe, expect, it, vi } from "vitest";
+import { ANIMAL_IDS } from "../../shared/game/animals";
 import { EMOTE_MS } from "../../shared/game/emote";
 import { EMOTE_IDS, MAX_PLAYERS } from "../../shared/protocol";
 import { createCharacter } from "../../src/world/character";
@@ -109,6 +110,65 @@ describe("인물 에셋 예산 — 72조합 (D-15, D-16)", () => {
       }
       c.dispose();
     }
+  });
+});
+
+describe("동물 캐릭터의 외형과 렌더링 예산", () => {
+  it("동물 12종과 의상 모두 관절 여섯 개와 기존 삼각형 예산을 지킨다", () => {
+    for (const animal of ANIMAL_IDS) {
+      for (const outfit of OUTFIT_IDS) {
+        const c = createCharacter(0, outfit, undefined, animal);
+        const ms = meshesOf(c.root);
+        const size = new Box3().setFromObject(c.root).getSize(new Vector3());
+        const label = `${animal}/${outfit}`;
+        expect(ms.length, label).toBeLessThanOrEqual(MAX_MESHES);
+        expect(ms.reduce((sum, m) => sum + triangles(m.geometry), 0), label).toBeLessThanOrEqual(MAX_TRIANGLES);
+        expect(size.y, label).toBeGreaterThanOrEqual(HEIGHT_MIN);
+        // 토끼 귀의 꼭대기는 기존 상단 이름표 위치(2.45 × 0.83) 안에 들어온다.
+        expect(size.y, label).toBeLessThanOrEqual(2.04);
+        c.prewarm();
+        expect(c.ownedGeometryCount(), label).toBeLessThanOrEqual(MAX_OWNED_GEOMETRIES);
+        c.dispose();
+      }
+    }
+  });
+
+  it("역할 의상과 종 변경을 같은 움직이는 모델에 적용한다", () => {
+    const c = createCharacter(0, "coat", undefined, "rabbit");
+    const head = c.root.getObjectByName("neck")!.children[0] as Mesh;
+    const torso = c.root.getObjectByName("body")!.children.find((obj) => (obj as Mesh).isMesh)! as Mesh;
+    const hasColor = (mesh: Mesh, hex: string): boolean => {
+      const rgb = new Color(hex);
+      const attr = mesh.geometry.getAttribute("color");
+      for (let i = 0; i < attr.count; i++) {
+        if (Math.abs(attr.getX(i) - rgb.r) < 0.0001 && Math.abs(attr.getY(i) - rgb.g) < 0.0001 && Math.abs(attr.getZ(i) - rgb.b) < 0.0001) return true;
+      }
+      return false;
+    };
+    c.root.position.set(2, 0, -2);
+    c.setYaw(0.7);
+    c.prewarm();
+    const before = head.geometry;
+    const disposed = vi.fn();
+    before.addEventListener("dispose", disposed);
+    c.applyOutfit("mafia");
+    expect(hasColor(head, "#f6f0ea")).toBe(true); // 토끼 머리
+    expect(hasColor(head, "#14161c")).toBe(true); // 선글라스
+    expect(hasColor(head, "#8e0b21")).toBe(true); // 붉은 모자띠
+    expect(disposed).toHaveBeenCalledOnce();
+    c.applyAnimal("elephant");
+    expect(hasColor(head, "#90b6df")).toBe(true);
+    expect(hasColor(head, "#14161c")).toBe(true);
+    c.applyOutfit("police");
+    expect(hasColor(head, "#90b6df")).toBe(true);
+    expect(hasColor(head, "#2a4372")).toBe(true);
+    expect(hasColor(torso, "#c9d3ea")).toBe(true);
+    c.applyOutfit("doctor");
+    expect(hasColor(head, "#90b6df")).toBe(true);
+    expect(hasColor(torso, "#2FA4A0")).toBe(true);
+    expect(c.root.position.toArray()).toEqual([2, 0, -2]);
+    expect(c.root.rotation.y).toBe(0.7);
+    c.dispose();
   });
 });
 

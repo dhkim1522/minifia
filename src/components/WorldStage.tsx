@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { phaseKey } from "../../shared/game/audience";
 import type { ClientMessage, EmoteId, MapId, PublicPlayer, RoomView } from "../../shared/protocol";
 import { MOVE_COORD_LIMIT } from "../../shared/protocol";
+import { playerColor } from "../game/playerIdentity";
 import { useReducedMotion } from "../net/useReducedMotion";
 import { HEADER_BOTTOM, PANEL_HEIGHT } from "../world/camera";
 import { createTapTracker } from "../world/input";
@@ -129,9 +130,6 @@ export interface WorldStageProps {
   /** [새로 고침] 카드가 부른다. 기본은 location.reload(테스트가 바꿔 끼운다) */
   reload?: () => void;
 }
-
-/** 자리 구분색: seat 0~7 → --seat-1~8 */
-const seatColor = (seat: number): string => `var(--seat-${(((seat % 8) + 8) % 8) + 1})`;
 
 /** 접근성 목록 항목: "{닉네임} 님" + ", 방장" · ", 나" · ", 연결 끊김" */
 function listLabel(p: PublicPlayer, mySeat: number): string {
@@ -402,7 +400,7 @@ export function WorldStage(props: WorldStageProps) {
           const stack = (
             <HeadStack
               name={p.nickname}
-              color={seatColor(p.seat)}
+              color={playerColor(p.seat, p.animal)}
               me={me}
               away={away}
               typing={!hideTyping && props.typingSeats?.has(p.seat) === true}

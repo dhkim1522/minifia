@@ -2,10 +2,9 @@
 import { env, exports } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { resolveLookConflicts } from "../../shared/game/look";
 import { RULES, politicsOn } from "../../shared/game/ruleset";
 import type { Ruleset } from "../../shared/game/ruleset";
-import type { OutfitId, RoleId, RoomView, ServerMessage } from "../../shared/protocol";
+import type { RoleId, RoomView, ServerMessage } from "../../shared/protocol";
 import {
   actorsOf,
   advanceTo,
@@ -439,7 +438,7 @@ describe("6명 한 판(두 밤·두 아침, 행동·마피아 채팅·탈락·�
         // day.turn 은 순차 지목이 켜졌을 때(판 규칙의 pickTurn)만 지목 단계에 있다. 기본판(결정 0072)에서는 어느 단계에도 키가 없다(07-08, 09.1 — 결정 0063-1).
         expect(`${msg.view.phase}:${Object.hasOwn(msg.view.day ?? {}, "turn")}`).toBe(`${msg.view.phase}:${GAME_RULES.pickTurn && msg.view.phase === "nomination"}`);
         for (const pl of msg.view.players) {
-          expect(Object.keys(pl).sort()).toEqual(["alive", "connected", "isHost", ...(pl.look !== undefined ? ["look"] : []), "nickname", "seat"]); // look 은 공개 의상(D-01 해소 뒤에는 기본 coat 를 지킨 좌석 0 만 키가 없다)
+          expect(Object.keys(pl).sort()).toEqual(["alive", "animal", "connected", "isHost", ...(pl.look !== undefined ? ["look"] : []), "nickname", "seat"]); // look 은 사용자가 고른 공개 의상이다.
         }
         if (msg.view.phase === "lobby" || msg.view.phase === "assigning") {
           expect(msg.view.me.role).toBeUndefined();
@@ -746,10 +745,6 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
         send(g.sock, { t: "dress", look: dressScript.get(g.seat) });
         for (const sock of socks) await settle(sock, mark(sock));
       }
-      // 시작 때 겹친 옷 풀기(D-01): 기본 coat 가 겹친 나머지 좌석은 남는 옷으로 바뀌어 look 키가 생긴다. 역할이 아닌 대본·좌석만의 함수라 판 내내 같은 값이 실린다.
-      const resolvedScript = new Map<number, string>(
-        resolveLookConflicts(socks.map((_, i) => ({ seat: i, ...(dressScript.has(i) ? { look: dressScript.get(i) as OutfitId } : {}) }))).flatMap((p) => (p.look === undefined ? [] : [[p.seat, p.look] as const])),
-      );
 
       send(room.host, { t: "start" });
       for (const sock of socks) await nextFrame(sock, phaseOf("assigning"));
@@ -1053,11 +1048,11 @@ describe("6명 한 판: 낮 처형(토론 끝내기·지목·변론·찬반·처
           for (const pl of v.players) {
             // 공개 주장(결정 0066-1): badge·badgeSwapped 는 대본에 있는 산 사람 줄에만, 값은 항상 대본의 값이다(실제 역할이 아니다).
             const scripted = badgeScript.get(pl.seat);
-            // 공개 의상(결정 D-6): look 은 대본에 있는 좌석 줄에만, 값은 항상 대본의 값이다(실제 역할이 아니다). 판 내내 같은 값이 실린다.
-            if (pl.look !== undefined) expect(`${pl.seat}:${pl.look}`).toBe(`${pl.seat}:${resolvedScript.get(pl.seat)}`);
+            // 대기실에는 선택 전 프레임도 있다. 시작한 뒤에는 대본에서 고른 옷만 판 내내 공개된다.
+            if (v.phase !== "lobby" || pl.look !== undefined) expect(pl.look).toBe(dressScript.get(pl.seat));
             // 다시 하기 준비(11-08, D-12): ready 는 결과 단계에서 방장(늘 준비)의 줄에만 실린다 — 이 판은 아무도 준비 토글을 하지 않았다. 값은 true 뿐이고 신분과 무관하다.
             const readyKey = v.phase === "ended" && pl.isHost ? ["ready"] : [];
-            const base = ["alive", "connected", "isHost", "nickname", "seat", ...readyKey, ...(pl.look !== undefined ? ["look"] : [])].sort();
+            const base = ["alive", "animal", "connected", "isHost", "nickname", "seat", ...readyKey, ...(pl.look !== undefined ? ["look"] : [])].sort();
             if (pl.badge === undefined) {
               expect(Object.keys(pl).sort()).toEqual(base);
               continue;
@@ -1826,8 +1821,8 @@ describe("다시 하기 · 쉬는 사람 프레임 전수 (D-12~D-16, L38·L39·
   const GAME2 = ["GAME2-CHAT-CANARY", "GAME2-WILL-CANARY", "GAME2-WHISPER-CANARY"];
   // 23-10: gameId·startedAt 은 새 판이 시작될 때 서버가 새로 쓰는 키다(D1 판 기록, D-16) — 지난 판 값을 넘겨받는 것이 아니다.
   const ROOM_KEYS = "code,createdAt,everConnected,expiresAt,gameId,hostId,map,nextJoinSeq,phase,phaseEndsAt,players,round,startedAt";
-  const ROW_KEYS = "connId,connected,id,joinSeq,nickname,nicknameKey,role,seat,token";
-  const BENCH_ROW_KEYS = "connId,connected,id,joinSeq,nickname,nicknameKey,seat,token";
+  const ROW_KEYS = "animal,connId,connected,id,joinSeq,nickname,nicknameKey,role,seat,token";
+  const BENCH_ROW_KEYS = "animal,connId,connected,id,joinSeq,nickname,nicknameKey,seat,token";
   type StoredShape = { bench?: Array<Record<string, unknown>>; players: Array<Record<string, unknown>> } & Record<string, unknown>;
   const keysOf = (o: object): string => Object.keys(o).sort().join(",");
 
@@ -1875,8 +1870,8 @@ describe("다시 하기 · 쉬는 사람 프레임 전수 (D-12~D-16, L38·L39·
       let stored = (await storedRoom(code)) as unknown as StoredShape;
       expect(keysOf(stored).replace("bench,", "")).toBe(ROOM_KEYS);
       expect("bench" in stored).toBe(true);
-      for (const row of stored.players) expect(keysOf(row).replace("look,", "")).toBe(ROW_KEYS); // look 은 시작 때 풀린 공개 의상(D-01) — 있어도 없어도 된다
-      expect(stored.bench!.map((r) => keysOf(r).replace("look,", ""))).toEqual([BENCH_ROW_KEYS]); // 쉬기 전 판에서 풀린 look 은 남을 수 있다(D-01)
+      for (const row of stored.players) expect(keysOf(row).replace("look,", "")).toBe(ROW_KEYS); // look 은 사용자가 고른 공개 의상이다.
+      expect(stored.bench!.map((r) => keysOf(r).replace("look,", ""))).toEqual([BENCH_ROW_KEYS]); // 쉬기 전에 고른 look 은 남는다.
       expect(await chatKeysOf(code)).toEqual([]);
 
       await advanceTo(code, players, "dayAnnounce");
@@ -1923,7 +1918,7 @@ describe("다시 하기 · 쉬는 사람 프레임 전수 (D-12~D-16, L38·L39·
       for (const s of all) await nextFrame(s, (m) => m.t === "state" && m.view.phase === "assigning" && m.view.round === 3);
       stored = (await storedRoom(code)) as unknown as StoredShape;
       expect(keysOf(stored)).toBe(ROOM_KEYS);
-      for (const row of stored.players) expect(keysOf(row).replace("look,", "")).toBe(ROW_KEYS); // look 은 시작 때 풀린 공개 의상(D-01) — 있어도 없어도 된다
+      for (const row of stored.players) expect(keysOf(row).replace("look,", "")).toBe(ROW_KEYS); // look 은 사용자가 고른 공개 의상이다.
       expect(stored.players.length).toBe(6);
       expect(await chatKeysOf(code)).toEqual([]);
       await advanceTo(code, all, "roleReveal");
@@ -1934,7 +1929,7 @@ describe("다시 하기 · 쉬는 사람 프레임 전수 (D-12~D-16, L38·L39·
       // 새 공개 경로는 정확히 이 목록 안이다 — 모든 소켓의 모든 프레임
       const playerPaths = new Set<string>();
       for (const s of g.socks) for (const m of framesOf(s)) for (const path of keyPaths(m)) if (path.startsWith(".view.players[].")) playerPaths.add(path.slice(".view.players[]".length));
-      for (const path of playerPaths) expect([".seat", ".nickname", ".connected", ".isHost", ".alive", ".look", ".badge", ".badgeSwapped", ".ready", ".sat"]).toContain(path);
+      for (const path of playerPaths) expect([".seat", ".nickname", ".connected", ".isHost", ".alive", ".animal", ".look", ".badge", ".badgeSwapped", ".ready", ".sat"]).toContain(path);
     },
   );
 });

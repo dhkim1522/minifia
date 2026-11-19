@@ -16,7 +16,7 @@ function withJoin(state: RoomState, id: string, nickname: string): RoomState {
 }
 
 describe("buildPreview (대기실)", () => {
-  it("링크로 들어온 사람이 자리 순 {seat, nickname} 으로 미리보기에 나타난다", () => {
+  it("링크로 들어온 사람이 자리 순 {seat, nickname, animal} 으로 미리보기에 나타난다", () => {
     const s = withJoin(newRoom("민수"), "p2", "서준");
     expect(buildPreview(s)).toEqual({
       code: "0420",
@@ -25,8 +25,8 @@ describe("buildPreview (대기실)", () => {
       maxPlayers: 8,
       phase: "lobby",
       players: [
-        { seat: 0, nickname: "민수" },
-        { seat: 1, nickname: "서준" },
+        { seat: 0, nickname: "민수", animal: "rabbit" },
+        { seat: 1, nickname: "서준", animal: "elephant" },
       ],
     });
   });

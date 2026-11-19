@@ -325,6 +325,16 @@ describe("봇 행동", () => {
     await nextFrame(r.host, lobbyOf(6));
     send(r.host, { t: "testRole", role: "mafia" });
     await start(r);
+    // 손님이 두 번째 마피아를 받으면 봇 한 명과 역할을 교환해 채널 격리 사례를 고정한다.
+    await writeRoomEdit(env.ROOM.getByName(r.code), (room) => {
+      const players = room["players"] as Array<{ seat: number; role: string; isBot?: true }>;
+      const guest = players.find((p) => p.seat === r.guests[0]!.seat)!;
+      if (guest.role !== "mafia") return room;
+      const bot = players.find((p) => p.isBot === true)!;
+      return mapPlayers(room, (p) =>
+        p.seat === guest.seat ? { ...p, role: bot.role } : p.seat === bot.seat ? { ...p, role: guest.role } : p,
+      );
+    });
     await skipDayToNight(r);
     const bots = await botsOf(r.code);
     const mafiaBot = bots.find((b) => (b as unknown as { role?: string }).role === "mafia")!;
@@ -463,7 +473,7 @@ describe("누출 없음", () => {
         const msg = parse(raw);
         if (msg.t !== "state") continue;
         for (const p of msg.view.players) {
-          expect(`${who}:${Object.keys(p).filter((k) => k !== "look").sort().join(",")}`).toBe(`${who}:alive,connected,isHost,nickname,seat`); // look 은 시작 때 풀린 공개 의상(D-01)
+          expect(`${who}:${Object.keys(p).filter((k) => k !== "look").sort().join(",")}`).toBe(`${who}:alive,animal,connected,isHost,nickname,seat`); // look 은 선택한 공개 의상이다.
         }
         const hasTestBots = raw.includes("testBots");
         expect(`${who}:${hasTestBots}`).toBe(`${who}:${who === "host" && msg.view.me.testBots !== undefined}`);

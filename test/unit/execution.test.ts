@@ -252,7 +252,7 @@ describe("noExecutionOf · day.noExecution (D-34)", () => {
 });
 
 describe("새 단계 전수 누출 검사 (4~8명 × 변론·처형 두 단계 × 모든 viewer × 시드 3, T-04-10·T-04-11·T-04-12)", () => {
-  it("token·id 가 없고, role·allies 키는 me 아래에만 있으며, 공개 항목은 다섯 키뿐이고, 서버 전용 키가 없으며, day 키가 단계별 허용 목록과 같다", () => {
+  it("token·id 가 없고, role·allies 키는 me 아래에만 있으며, 공개 항목의 허용 목록만 있고, 서버 전용 키가 없으며, day 키가 단계별 허용 목록과 같다", () => {
     const violations: string[] = [];
     let views = 0;
     const serverOnly = ["candidateVote", "execVote", "verdict", "lastExecPhrase", "nightPick", "claimPick"];
@@ -288,8 +288,8 @@ describe("새 단계 전수 누출 검사 (4~8명 × 변론·처형 두 단계 �
               if (serverOnly.includes(key)) violations.push(`${tag}: server-only key at ${path}`);
             }
             for (const entry of view.players) {
-              const keys = Object.keys(entry).filter((k) => k !== "look").sort().join(","); // look 은 시작 때 풀린 공개 의상(D-01)
-              if (keys !== "alive,connected,isHost,nickname,seat") violations.push(`${tag}: players[] keys ${keys}`);
+              const keys = Object.keys(entry).filter((k) => k !== "look").sort().join(","); // look 은 선택한 공개 의상이다.
+              if (keys !== "alive,animal,connected,isHost,nickname,seat") violations.push(`${tag}: players[] keys ${keys}`);
             }
             const want = ["n", "roles", "candidate"];
             if (phase === "execution") want.push("execution"); // 22-12: 찬반 결과 수(day.verdict)·찬반 기록(day.ballots)·voteLog 는 없다

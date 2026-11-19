@@ -77,9 +77,9 @@ const TYPING_KEYS = ["on", "seat", "t"];
 const CHAT_REJECT_KEYS = ["t", "why"];
 // D5(shared/game/chatRules.ts)의 최소 전송 간격 600ms. 스크립트는 TS 를 import 하지 않는다.
 const CHAT_MIN_GAP_MS = 600;
-export const ALLOWED_PLAYER_KEYS = ["alive", "connected", "isHost", "nickname", "seat"];
+export const ALLOWED_PLAYER_KEYS = ["alive", "animal", "connected", "isHost", "nickname", "seat"];
 export const OPTIONAL_PLAYER_KEYS = ["look", "ready", "sat"]; // 공개 선택 키(결정 0068·0069). 기본판(결정 0072)에서 badge·badgeSwapped 는 허용하지 않는다 — 나오면 알 수 없는 플레이어 키로 실패한다.
-const PREVIEW_PLAYER_KEYS = ["nickname", "seat"];
+const PREVIEW_PLAYER_KEYS = ["animal", "nickname", "seat"];
 // 낮 시작 발표·토론 진입 편차의 판정 문턱. 재는 대상은 서버 시각(각 클라이언트 첫 프레임의 view.serverNow 차)이다 — 도착 시각 차가 아니다(18-13, G-18-3).
 // 근거: 서버는 방송 한 번에 Date.now() 를 한 번 재서 모든 소켓에 같은 serverNow 를 싣는다 → 이 차이는 서버가 단계를 모두에게 같은 순간 넘겼는가만 잰다(어떤 클라이언트가 방송이 아닌 나중 프레임으로 처음 받으면 커져 여전히 잡힌다).
 // 도착 시각 차는 한 기기에서 먼 엣지까지의 망 지터라 제품이 고칠 수 없고 실제 플레이어는 각자 다른 망이다. 문턱을 올리면 서버 회귀까지 놓치므로 문턱은 그대로 두고 재는 대상만 바꾸며, 도착 편차는 info·SMOKE OK 줄에 숫자로 남긴다.
@@ -533,7 +533,7 @@ async function stageFull(url, args) {
   if (p1.playerCount !== 1) fail(`미리보기 playerCount 가 1 이 아님: ${p1.playerCount}`);
   if (p1.phase !== "lobby") fail(`미리보기 phase 가 lobby 가 아님: ${p1.phase}`);
   if (!Array.isArray(p1.players) || p1.players.length !== 1 || p1.players[0].seat !== 0 || p1.players[0].nickname !== host.nickname) {
-    fail("미리보기 players 가 [{seat:0, nickname:스모크1}] 이 아님");
+    fail("미리보기 방장의 자리 또는 닉네임이 다름");
   }
   for (const pl of p1.players) {
     if (Object.keys(pl).sort().join(",") !== PREVIEW_PLAYER_KEYS.join(",")) fail(`미리보기 players 키 집합이 다름: ${Object.keys(pl).sort().join(",")}`);

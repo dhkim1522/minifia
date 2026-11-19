@@ -2,7 +2,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import "../../styles/v2.css";
 import { countGraphemes } from "../../../shared/nickname";
 import { WHISPER_MAX_GRAPHEMES } from "../../../shared/game/whisper";
-import { seatColorVar, faceSrc } from "../../net/assets";
+import type { AnimalId } from "../../../shared/game/animals";
+import { faceSrc } from "../../net/assets";
+import { playerColor } from "../../game/playerIdentity";
 import { RESULT_PANEL_TEXT } from "../../game/resultText";
 import { useComposedText } from "../../net/useComposedText";
 import { clampGraphemes } from "./WillSheet";
@@ -21,6 +23,7 @@ import type { V2IconName } from "./V2Icon";
 export interface LineSheetPeer {
   seat: number;
   name: string;
+  animal?: AnimalId | undefined;
 }
 
 export interface LineSheetProps {
@@ -98,7 +101,7 @@ export function LineSheet(props: LineSheetProps) {
       <div className="mv-line__head">
         {peer ? (
           <span className="mv-line__peer" data-line-peer="">
-            <PeerFace seat={peer.seat} />
+            <PeerFace seat={peer.seat} animal={peer.animal} />
             <span className="mv-line__name">{peer.name}</span>
             <V2Icon name={icon} size={16} />
           </span>
@@ -157,8 +160,8 @@ export function LineSheet(props: LineSheetProps) {
 }
 
 /** 상대 칩의 얼굴 24px. 그림이 안 열리면 자리 구분색 원으로 바꾼다 */
-function PeerFace({ seat }: { seat: number }) {
+function PeerFace({ seat, animal }: { seat: number; animal: AnimalId | undefined }) {
   const [failed, setFailed] = useState(false);
-  if (failed) return <span className="mv-line__face is-fallback" style={{ background: seatColorVar(seat) }} aria-hidden="true" />;
-  return <img className="mv-line__face" src={faceSrc(seat)} alt="" width={24} height={24} draggable={false} onError={() => setFailed(true)} />;
+  if (failed) return <span className="mv-line__face is-fallback" style={{ background: playerColor(seat, animal) }} aria-hidden="true" />;
+  return <img className="mv-line__face" src={faceSrc(seat, animal)} alt="" width={24} height={24} draggable={false} onError={() => setFailed(true)} />;
 }

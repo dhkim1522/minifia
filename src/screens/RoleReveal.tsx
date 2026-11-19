@@ -7,6 +7,7 @@ import { GamePhaseHeader } from "../components/v2/GamePhaseHeader";
 import { V2Icon } from "../components/v2/V2Icon";
 import { callTargetsOf } from "../game/hostLine";
 import { allyNicknames } from "../game/roleText";
+import { ownAnimalOf } from "../game/playerIdentity";
 import { autoFlipDelayMs, initialCardState, onAutoTimer, onTap, sinceStartMs } from "../net/cardFace";
 import type { CardState } from "../net/cardFace";
 import "../styles/phase.css";
@@ -46,7 +47,7 @@ function PlaytestRoleReveal({ view, offset, epoch = 0, myRoleButton, onSeenFront
         <GamePhaseHeader title="내 역할" view={view} offset={offset} epoch={epoch} extra={myRoleButton} />
       </header>
       <section className="mf-reveal__stage">
-        <RoleCard role={role} face={role === null ? "back" : "front"} allies={allyNicknames(view)} />
+        <RoleCard role={role} animal={ownAnimalOf(view)} face={role === null ? "back" : "front"} allies={allyNicknames(view)} />
       </section>
       <div className="mf-reveal__hints mf-playtest__ready">
         {role !== null && !ready ? (
@@ -113,7 +114,7 @@ function FlippingRoleReveal({ view, offset, epoch = 0, myRoleButton, onSeenFront
         <GamePhaseHeader title="역할 확인" view={view} offset={offset} epoch={epoch} extra={myRoleButton} />
       </header>
       <section className="mf-reveal__stage">
-        <RoleCard role={role} face={card.face} allies={allies} call={callCard} onFlip={() => setCard((s) => onTap(s, hasRole))} />
+        <RoleCard role={role} animal={ownAnimalOf(view)} face={card.face} allies={allies} call={callCard} onFlip={() => setCard((s) => onTap(s, hasRole))} />
       </section>
       <div className="mf-reveal__hints" />
     </main>

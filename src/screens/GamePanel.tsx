@@ -10,7 +10,8 @@ import { FaceList } from "../components/v2/FaceList";
 import { V2Icon } from "../components/v2/V2Icon";
 import { VerdictPicker } from "../components/v2/VerdictPicker";
 import type { Verdict } from "../components/v2/VerdictPicker";
-import { faceSrc, seatColorVar } from "../net/assets";
+import { faceSrc } from "../net/assets";
+import { playerColor } from "../game/playerIdentity";
 import type { ChatBinding } from "../net/useChat";
 import { useViewChoice } from "../net/useViewChoice";
 import { DiscussionPanel, PlaytestGhostChat } from "./PlaytestDiscussion";
@@ -131,7 +132,7 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
   const faces = !nightFaces ? [] : view.players
     .filter((p) => isAlive(p) && (!playtest || (myRole !== "police" && myRole !== "mafia") || p.seat !== view.me.seat && !view.me.allies?.includes(p.seat)))
     .sort((a, b) => a.seat - b.seat)
-    .map((p) => ({ seat: p.seat, name: p.nickname, img: faceSrc(p.seat), color: seatColorVar(p.seat) }));
+    .map((p) => ({ seat: p.seat, name: p.nickname, img: faceSrc(p.seat, p.animal), color: playerColor(p.seat, p.animal) }));
   // 마피아의 합의 수단(결정 0074): 서버가 산 마피아 본인에게만 보낸 집계를 칸 안 작은 배지로 그린다. 다른 역할 view 에는 값이 없고 읽지도 않는다.
   const tally = new Map<number, number>();
   if (nightFaces && myRole === "mafia") for (const t of view.me.nightTally ?? []) if (t.n >= 1) tally.set(t.seat, t.n);
@@ -339,8 +340,8 @@ function PlaytestBallot({ view, ballot, canVote, send }: {
   const faces = alive.filter((player) => player.seat !== view.me.seat).map((player) => ({
     seat: player.seat,
     name: player.nickname,
-    img: faceSrc(player.seat),
-    color: seatColorVar(player.seat),
+    img: faceSrc(player.seat, player.animal),
+    color: playerColor(player.seat, player.animal),
   }));
   return (
     <div className="mf-playtest__ballot" data-first-ballot="">

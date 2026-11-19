@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { CLOSE_CODES, MAX_FRAME_BYTES } from "../shared/protocol";
-import type { ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, MapChoice, OutfitId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
+import type { AnimalId, ApiErrorCode, BadgeId, BotVoteExec, BotVotePick, ChatChannel, ChatRejectWhy, ClientMessage, EmoteId, MapChoice, OutfitId, RemovedReason, RoomPreview, ServerMessage, WorldFrame, WsErrorCode } from "../shared/protocol";
+import { ANIMAL_PICK_MIN_GAP_MS, normalizeAnimalRoster, setAnimal } from "../shared/game/animalRoster";
 import { botMafiaTarget, botWakeAt, isBot, syncBotPlan, takeDueBotSteps } from "../shared/game/bots";
 import type { BotStep } from "../shared/game/bots";
 import { isAlive } from "../shared/game/alive";
@@ -139,7 +140,7 @@ export class Room extends DurableObject<Env> {
       const stored = (got.get("room") as RoomState | undefined) ?? null;
       if (stored) {
         // 1페이즈 종착 단계로 저장된 방은 낮 시작 발표로 옮긴다(RESEARCH Pattern 6). 바뀌지 않으면 같은 객체다.
-        const normalized = normalizeStoredRoom(stored, Date.now());
+        const normalized = normalizeAnimalRoster(normalizeStoredRoom(stored, Date.now()));
         // 옛 표시가 있어 대기실로 되돌려진 방인가(22 WR-04). 방 상태만 되돌리면 옛 판의 채팅 저장분과 월드의 lay·home 이 남는다.
         const wasLegacy = isLegacyV3Room(stored);
         // 깨어날 때마다 살아 있는 소켓 기준으로 connected 를 다시 계산한다(배포·크래시로 소켓이 사라진 경우 보정).
@@ -204,7 +205,7 @@ export class Room extends DurableObject<Env> {
       now: input.now,
       testMode: input.testMode === true,
       ...(input.playtest === true ? { playtest: input.playtest } : {}),
-    });
+    }, cryptoRandInt);
     if (!created.ok) return { ok: false, error: created.error };
 
     this.room = created.state;
@@ -231,7 +232,7 @@ export class Room extends DurableObject<Env> {
       playerId: crypto.randomUUID(),
       token: randomToken(),
       nickname: input.nickname,
-    });
+    }, cryptoRandInt);
     if (!result.ok) return { ok: false, error: result.error };
     this.room = result.state;
     await this.persistAndBroadcast();
@@ -367,6 +368,9 @@ export class Room extends DurableObject<Env> {
       case "dress":
         await this.handleDress(ws, msg.look);
         return;
+      case "animalPick":
+        await this.handleAnimalPick(ws, msg.animal);
+        return;
       case "mapPick":
         await this.handleMapPick(ws, msg.map);
         return;
@@ -472,14 +476,15 @@ export class Room extends DurableObject<Env> {
     await this.flushWorld();
   }
 
-  // 쉬는 사람 나가기(11-08): bench 에서 빼고 소켓을 4003 'left' 로 닫는다. 게임 상태가 아니라 다른 소켓에 보일 것이 없으므로 방송하지 않는다.
+  // 쉬는 사람 나가기(11-08): 대기실이라면 동물 예약의 해제만 공개한다.
   private async handleBenchLeave(playerId: string): Promise<void> {
     if (!this.room) return;
     const result = leaveBench(this.room, playerId);
     if (!result.ok) return;
     this.closePlayerSockets(playerId, "left");
     this.room = result.state;
-    await this.ctx.storage.put("room", this.room);
+    if (this.room.phase === "lobby") await this.persistAndBroadcast();
+    else await this.ctx.storage.put("room", this.room);
     await this.reschedule();
   }
 
@@ -636,6 +641,31 @@ export class Room extends DurableObject<Env> {
     if (result.state === this.room) return;
     this.writeAt.set(key, now);
     this.room = result.state;
+    await this.persistAndBroadcast();
+  }
+
+  private async handleAnimalPick(ws: WebSocket, animal: AnimalId): Promise<void> {
+    const att = this.attachmentOf(ws);
+    if (!att || !this.room) {
+      this.sendTo(ws, { t: "error", code: "BAD_MESSAGE" });
+      return;
+    }
+    const actor = this.room.players.find((p) => p.id === att.playerId);
+    if (actor === undefined || actor.connId !== att.connId) return;
+    const now = Date.now();
+    const key = `animal:${att.playerId}`;
+    const last = this.writeAt.get(key);
+    const next = last !== undefined && now - last < ANIMAL_PICK_MIN_GAP_MS
+      ? null
+      : setAnimal(this.room, att.playerId, animal);
+    if (next === null) {
+      // 동시 선택으로 동물이 이미 사용 중이면 보낸 쪽에 최신 목록을 돌려준다.
+      this.sendTo(ws, { t: "state", view: buildView(this.room, att.playerId, now) });
+      return;
+    }
+    if (next === this.room) return;
+    this.writeAt.set(key, now);
+    this.room = next;
     await this.persistAndBroadcast();
   }
 
@@ -1243,7 +1273,7 @@ export class Room extends DurableObject<Env> {
       return;
     }
     const before = this.room.players;
-    const result = setBotCount(this.room, att.playerId, count, () => crypto.randomUUID(), cryptoRandInt);
+    const result = setBotCount(this.room, att.playerId, count, () => crypto.randomUUID(), cryptoRandInt, cryptoRandInt);
     if (!result.ok) {
       this.rejectTestTool(ws, att.playerId, result.error);
       return;
@@ -1309,7 +1339,7 @@ export class Room extends DurableObject<Env> {
       this.room = benchPruned.state;
       await this.vacateSeats(room.players, benchPruned.state.players);
       this.despawnRemoved(lobbyPruned.removedIds);
-      if (lobbyPruned.state !== room) await this.persistAndBroadcast();
+      if (lobbyPruned.state !== room || this.room.phase === "lobby") await this.persistAndBroadcast();
       else await this.ctx.storage.put("room", this.room);
       await this.reschedule();
       if (lobbyPruned.removedIds.length > 0) await this.flushWorld();

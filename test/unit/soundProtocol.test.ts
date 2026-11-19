@@ -18,6 +18,7 @@ function trackedFiles(...dirs: string[]): string[] {
 
 /** 게임 동작 메시지의 허용 목록. 소리가 새 메시지를 만들지 않았음을 검사한다. */
 const CLIENT_MESSAGE_KINDS = [
+  "animalPick",
   "answer", // 23-06: 키워드 답(소리와 무관한 새 메시지)
   "badge",
   "chat",

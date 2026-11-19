@@ -676,7 +676,7 @@ describe("buildView 연결 기록 불노출 (D-14·D-17·D-18, L43)", () => {
 });
 
 describe("buildView 전수 누출 검사 (T-01-23)", () => {
-  it("4~8명 × 열두 단계 × 모든 플레이어 × 시드 3개: token·id 가 없고, role·allies 키는 me 아래에만 있으며, 공개 항목은 다섯 키뿐이다", () => {
+  it("4~8명 × 열두 단계 × 모든 플레이어 × 시드 3개: token·id 가 없고, role·allies 키는 me 아래에만 있으며, 공개 항목의 허용 목록만 노출한다", () => {
     const violations: string[] = [];
     let views = 0;
     for (const n of PLAYER_COUNTS) {
@@ -699,9 +699,9 @@ describe("buildView 전수 누출 검사 (T-01-23)", () => {
               if (key === "allies" && path !== "me.allies") violations.push(`${tag}: allies at ${path}`);
             }
             for (const entry of view.players) {
-              const keys = Object.keys(entry).filter((k) => k !== "look").sort().join(","); // look 은 시작 때 풀린 공개 의상(D-01)
+              const keys = Object.keys(entry).filter((k) => k !== "look").sort().join(","); // look 은 선택한 공개 의상이다.
               // 11-08(D-12): 결과 단계에서만, 준비로 세는 사람(여기서는 방장뿐)의 행에 ready(true 뿐)가 더해진다 — 신분과 무관한지는 "준비 players[].ready" describe 가 본다.
-              const want = phase === "ended" && entry.isHost ? "alive,connected,isHost,nickname,ready,seat" : "alive,connected,isHost,nickname,seat";
+              const want = phase === "ended" && entry.isHost ? "alive,animal,connected,isHost,nickname,ready,seat" : "alive,animal,connected,isHost,nickname,seat";
               if (keys !== want) violations.push(`${tag}: players[] keys ${keys}`);
             }
             // 서버 전용 필드 이름은 어느 경로에도 없다
@@ -901,15 +901,15 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
 });
 
 describe("buildView 밤 — 생존·본인 선택 (ELIM-01, D-06)", () => {
-  it("night view: day 의 키는 n,noExecution,roles(표 없이 지나온 밤이라 처형 무효 이유가 실린다, D-34) 이고 players[] 키는 alive,connected,isHost,nickname,seat, 모두 alive true", () => {
+  it("night view: day 의 키는 n,noExecution,roles(표 없이 지나온 밤이라 처형 무효 이유가 실린다, D-34) 이고 players[] 키는 alive,animal,connected,isHost,nickname,seat, 모두 alive true", () => {
     const s = stateAt("night", 5, 1);
     const dayKeys = s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(","));
     expect(`[${dayKeys.join(" ")}]`).toBe(`[${Array(5).fill("n,noExecution,roles").join(" ")}]`); // 23-05: 첫날 밤은 정답이 열려 day.keyword 가 더해진다
     const got = s.players.map((p) => {
       const v = buildView(s, p.id, START_AT);
-      return v.players.map((e) => `${Object.keys(e).filter((k) => k !== "look").sort().join(",")}:${String(e.alive)}`).join("|"); // look 은 시작 때 풀린 공개 의상(D-01)
+      return v.players.map((e) => `${Object.keys(e).filter((k) => k !== "look").sort().join(",")}:${String(e.alive)}`).join("|"); // look 은 선택한 공개 의상이다.
     });
-    const one = Array(5).fill("alive,connected,isHost,nickname,seat:true").join("|");
+    const one = Array(5).fill("alive,animal,connected,isHost,nickname,seat:true").join("|");
     expect(got.join(" ")).toBe(Array(5).fill(one).join(" "));
   });
 

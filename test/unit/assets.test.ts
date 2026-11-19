@@ -1,3 +1,4 @@
+import { ANIMAL_IDS } from "../../shared/game/animals";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
@@ -15,6 +16,9 @@ import {
   backdropUrl,
   duskPreloadList,
   entryPreloadList,
+  animalFaceSrc,
+  animalFigureSrc,
+  animalRoleArtSrc,
   faceSrc,
   figureSrc,
   ghostSrc,
@@ -74,6 +78,24 @@ describe("그림 URL 헬퍼", () => {
     const art = roleArtSrc("mafia");
     expect(art.src).toBe(`/characters/roles/mafia_default%402x.png?v=${ASSET_VERSION}`);
     expect(art.srcSet).toBe(`/characters/roles/mafia_default%402x.png?v=${ASSET_VERSION} 1x, /characters/roles/mafia_default%404x.png?v=${ASSET_VERSION} 2x`);
+  });
+
+  it("12종의 공개 얼굴·전신과 본인 동물의 모든 역할 그림을 제공한다", () => {
+    for (const animal of ANIMAL_IDS) {
+      const roleUrls = ROLE_IDS.map((role) => animalRoleArtSrc(animal, role));
+      const urls = [
+        animalFaceSrc(animal),
+        ...urlsOfSrcSet(animalFigureSrc(animal).srcSet),
+        ...roleUrls.flatMap(({ srcSet }) => urlsOfSrcSet(srcSet)),
+      ];
+      for (const url of urls) {
+        const path = url.split("?")[0];
+        expect(characterFiles.has(`/public${path}`), url).toBe(true);
+      }
+      const preloads = rolePreloadList(animal).map(({ href }) => href);
+      for (const art of roleUrls) expect(preloads).toContain(art.src);
+      expect(roleUrls.map(({ src }) => src)).toHaveLength(new Set(roleUrls.map(({ src }) => src)).size);
+    }
   });
 
   it("경찰 역할 카드 그림은 두 해상도 모두 파란 제복을 보여 준다", async () => {
@@ -165,13 +187,12 @@ describe("일지 색 토큰 (UI-SPEC 새 토큰 12개)", () => {
 });
 
 describe("미리 받기 목록", () => {
-  it("입장 화면 목록: 입장·대기실 배경(WebP)과 인물 8종", () => {
+  it("입장 화면 목록: 입장·대기실 배경(WebP)", () => {
     const hrefs = entryPreloadList().map((item) => item.href);
     expect(hrefs).toContain(`/backgrounds/noir-entry.webp?v=${ASSET_VERSION}`);
     expect(hrefs).toContain(`/backgrounds/bg_game_lobby.webp?v=${ASSET_VERSION}`);
     expect(hrefs.some((h) => h.endsWith(".svg"))).toBe(false);
-    for (let seat = 0; seat < FIGURE_IDS.length; seat++) expect(hrefs).toContain(figureSrc(seat).src);
-    expect(hrefs).toHaveLength(10);
+    expect(hrefs).toHaveLength(2);
   });
 
   it("역할 화면 목록: 직업 그림 4종 전부와 아침·낮·밤 배경, 유령 그림(역할과 무관하게 같은 목록)", () => {
@@ -211,7 +232,7 @@ describe("미리 받기 목록", () => {
 
     it("목록 항목마다 as: image 로 미리 받는다", () => {
       preloadEntryAssets();
-      expect(preload).toHaveBeenCalledTimes(10);
+      expect(preload).toHaveBeenCalledTimes(2);
       for (const item of entryPreloadList()) {
         const expected = item.imageSrcSet ? { as: "image", imageSrcSet: item.imageSrcSet } : { as: "image" };
         expect(preload).toHaveBeenCalledWith(item.href, expected);

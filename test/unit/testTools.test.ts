@@ -325,13 +325,13 @@ describe("resetToLobby", () => {
     expect(Object.hasOwn(r.state, "testRole")).toBe(false);
   });
 
-  it("플레이어는 여덟 키뿐이고 자리·닉네임·연결·인원은 그대로다", () => {
+  it("플레이어의 자리·닉네임·동물·연결·인원은 그대로다", () => {
     const before = dayTwoNight();
     const r = resetToLobby(before, before.hostId);
     if (!r.ok) throw new Error(`resetToLobby failed: ${r.error}`);
     expect(String(r.state.players.length)).toBe(String(before.players.length));
     for (const p of r.state.players) {
-      expect(sortedKeys(p).replace("look,", "")).toBe("connId,connected,id,joinSeq,nickname,nicknameKey,seat,token"); // look 은 시작 때 풀린 공개 의상(D-01)
+      expect(sortedKeys(p).replace("look,", "")).toBe("animal,connId,connected,id,joinSeq,nickname,nicknameKey,seat,token"); // look 은 선택한 공개 의상이다.
       const old = before.players.find((q) => q.id === p.id)!;
       expect(`${p.seat}|${p.nickname}|${p.connected}|${p.connId}`).toBe(`${old.seat}|${old.nickname}|${old.connected}|${old.connId}`);
     }
@@ -688,7 +688,7 @@ describe("resetToLobby: 투표·처형·종료 필드를 모두 지운다 (END-0
     for (const key of GONE) expect(`${label}:${key}:${Object.hasOwn(r.state, key)}`).toBe(`${label}:${key}:false`);
     for (const p of r.state.players) {
       for (const key of PLAYER_GONE) expect(`${label}:${p.seat}:${key}:${Object.hasOwn(p, key)}`).toBe(`${label}:${p.seat}:${key}:false`);
-      expect(sortedKeys(p).replace("look,", "")).toBe(p.isBot === true ? "connId,connected,id,isBot,joinSeq,nickname,nicknameKey,seat,token" : "connId,connected,id,joinSeq,nickname,nicknameKey,seat,token"); // look 은 시작 때 풀린 공개 의상(D-01)
+      expect(sortedKeys(p).replace("look,", "")).toBe(p.isBot === true ? "animal,connId,connected,id,isBot,joinSeq,nickname,nicknameKey,seat,token" : "animal,connId,connected,id,joinSeq,nickname,nicknameKey,seat,token"); // look 은 선택한 공개 의상이다.
     }
     expect(sortedKeys(r.state)).toBe("code,createdAt,everConnected,expiresAt,hostId,nextJoinSeq,phase,phaseEndsAt,players,testMode");
   }
@@ -1159,8 +1159,8 @@ describe("resetToLobby — 의상 유지 (10-02, 결정 D-6)", () => {
     };
     const r = resetToLobby(dressed, dressed.hostId);
     if (!r.ok) throw new Error(r.error);
-    expect(sortedKeys(r.state.players[3]!)).toBe("connId,connected,id,isBot,joinSeq,look,nickname,nicknameKey,seat,token");
-    expect(sortedKeys(r.state.players[0]!)).toBe("connId,connected,id,joinSeq,nickname,nicknameKey,seat,token");
+    expect(sortedKeys(r.state.players[3]!)).toBe("animal,connId,connected,id,isBot,joinSeq,look,nickname,nicknameKey,seat,token");
+    expect(sortedKeys(r.state.players[0]!)).toBe("animal,connId,connected,id,joinSeq,nickname,nicknameKey,seat,token");
   });
 });
 

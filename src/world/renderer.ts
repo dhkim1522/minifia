@@ -1,6 +1,7 @@
 // 렌더러 인터페이스·예산·강등 사다리. three 는 `import type` 만 쓴다 — 이 파일은 정적 import 경로(메인 번들)에 있어도
 // three 본체를 끌고 오지 않는다. three 를 값으로 쓰는 모듈은 threeRenderer.ts·threeCamera.ts·maps/ 이고 06-13 이 import() 로만 연다.
 import type { Object3D } from "three";
+import type { AnimalId } from "../../shared/game/animals";
 
 /** nightCitizen은 내 캐릭터에 약한 빛을 더한다. 살아 있는 참가자에게 보이는 인원은 서버가 정한다. */
 export type LightingPhase = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
@@ -42,6 +43,7 @@ export interface CharacterHandle {
   setGhost?(on: boolean, opts?: { opacity?: number; tint?: number }): void;
   /** 의상 바꾸기 — 고른 의상·결과 화면 직업 의상. 시험 가짜 호환을 위해 optional */
   applyOutfit?(id: string): void;
+  applyAnimal?(animal: AnimalId | undefined): void;
   setOpacity?(alpha: number): void;
   /** 손가락 유지 자세·발밑 고리 — optional (08-10) */
   holdPose?(id: "point" | null): void;
@@ -59,7 +61,7 @@ export interface CharacterHandle {
 }
 /** 06-11 의 characterKit 이 구조적으로 맞춘다 */
 export interface CharacterKit {
-  create(figIndex: number, outfitId: string): CharacterHandle;
+  create(figIndex: number, outfitId: string, animal?: AnimalId): CharacterHandle;
 }
 
 export type MarkerKind = "ring" | "cue";

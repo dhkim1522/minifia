@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { ClientMessage, MapChoice, RoomView } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
+import type { AnimalId } from "../../shared/game/animals";
 import { lockedOutfits } from "../../shared/game/look";
 import { connectedCount } from "../../shared/game/room";
 import { ActionButton } from "../components/ActionButton";
@@ -11,7 +12,7 @@ import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
 import { ShareSheet } from "../components/ShareSheet";
 import { ChatPanel } from "../components/v2/ChatPanel";
-import { DressSheet } from "../components/v2/DressSheet";
+import { DressSheet, type DressTab } from "../components/v2/DressSheet";
 import { FloatAction } from "../components/v2/FloatAction";
 import { HostRail } from "../components/v2/HostRail";
 import { HostRailButton } from "../components/v2/HostRailButton";
@@ -25,6 +26,7 @@ import { CHAT_TEXT } from "../game/chatText";
 import { DRESS_TEXT } from "../game/dressText";
 import { callTargetsOf } from "../game/hostLine";
 import { LOG_H } from "../game/chatUi";
+import { ownAnimalOf } from "../game/playerIdentity";
 import { diffRoomViews, toastForDiff } from "../net/roomDiff";
 import { useChat } from "../net/useChat";
 import { useDress } from "../net/useDress";
@@ -37,6 +39,7 @@ import "../styles/sheet.css";
 import "../styles/testtools.css";
 
 const START_LOCK_MS = 2000;
+const ANIMAL_ACK_MS = 2000;
 
 interface LobbyProps {
   view: RoomView;
@@ -127,14 +130,41 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   });
   // 미리 보기·되돌림·전송 간격은 훅이 쥔다. WorldStage 에만 미리 보기가 반영된 stageView 를 넘기고 그 밖(채팅·헤더)은 서버 view 를 쓴다.
   const dress = useDress({ view, send, canSend });
+  const myAnimal = ownAnimalOf(view);
+  const takenAnimals = useMemo(() => {
+    const animals = new Set<AnimalId>(view.reservedAnimals);
+    for (const player of view.players) {
+      if (player.seat !== view.me.seat && player.animal !== undefined) animals.add(player.animal);
+    }
+    return animals;
+  }, [view.players, view.me.seat, view.reservedAnimals]);
+  const [pendingAnimal, setPendingAnimal] = useState<AnimalId | null>(null);
+  useEffect(() => {
+    if (pendingAnimal === null) return;
+    if (!canSend || myAnimal === pendingAnimal) {
+      setPendingAnimal(null);
+    } else if (takenAnimals.has(pendingAnimal)) {
+      show("이미 사용 중인 캐릭터예요");
+      setPendingAnimal(null);
+    }
+  }, [pendingAnimal, myAnimal, takenAnimals, canSend, show]);
+  useEffect(() => {
+    if (pendingAnimal === null) return;
+    const clear = setTimeout(() => setPendingAnimal(null), ANIMAL_ACK_MS);
+    return () => clearTimeout(clear);
+  }, [pendingAnimal]);
+  const pickAnimal = (animal: AnimalId) => {
+    if (!canSend || exiting || pendingAnimal !== null || animal === myAnimal || takenAnimals.has(animal)) return;
+    if (send({ t: "animalPick", animal }) !== false) setPendingAnimal(animal);
+  };
   // 18-05(D-02): 다른 참가자가 직접 고른 옷 — 서버 view.players 에서 나를 빼고 매 방송 다시 계산한다(서버 잠금과 같은 함수)
   const taken = useMemo(() => lockedOutfits(view.players.filter((p) => p.seat !== view.me.seat)), [view.players, view.me.seat]);
   const dressBtnRef = useRef<HTMLButtonElement>(null);
   const restoreDressFocus = useRef(false);
   // 시트 탭(11-13): 지도 칩 → 맵 탭, 꾸미기 버튼 → 의상 탭. 칩·맵 탭은 허용 맵이 둘 이상일 때만 있다(22-07: 판 종류가 없어 늘 켜진다).
-  const [dressTab, setDressTab] = useState<"map" | "dress">("dress");
+  const [dressTab, setDressTab] = useState<DressTab>("dress");
   const mapsOn = !playtest && PLAYABLE_MAPS.length > 1;
-  const openDress = (tab: "map" | "dress" = "dress") => {
+  const openDress = (tab: DressTab = myAnimal ? "animal" : "dress") => {
     inputRef.current?.blur();
     setDressTab(tab);
     setDressOpen(true);
@@ -244,10 +274,10 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           {botsOn ? <HostRailButton key="bots" id="bots" icon="bot" label="봇" pressed={sheet?.kind === "bots"} disabled={!canSend} onPress={() => setSheet({ kind: "bots" })} /> : null}
         </HostRail>
       ) : null}
-      {playtest || dressOpen || kbOpen ? null : (
+      {(!myAnimal && playtest) || dressOpen || kbOpen ? null : (
         // 오른쪽 세로 한 줄: 방장도 소리 · 옷장(19-04, 방장 전용은 왼쪽 줄)
         <SideColumn soundSlot maxHeight={sideMaxH}>
-          <FloatAction key="dress" ref={dressBtnRef} kind="dress" side="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={() => openDress()} />
+          <FloatAction key="dress" ref={dressBtnRef} kind="dress" side="dress" icon={myAnimal ? "face" : "hanger"} label={myAnimal ? "캐릭터 꾸미기" : DRESS_TEXT.open} disabled={!canSend || exiting} onPress={() => openDress()} />
         </SideColumn>
       )}
       {dressOpen ? (
@@ -255,12 +285,13 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           value={dress.look}
           onPick={dress.pick}
           onClose={closeDress}
-          disabled={!canSend}
+          disabled={!canSend || exiting}
           taken={taken}
           host={isHost && mapsOn}
           tab={dressTab}
           mapChoice={mapChoice}
           onPickMap={pickMap}
+          {...(myAnimal === undefined ? {} : { animals: { value: myAnimal, taken: takenAnimals, pending: pendingAnimal, onPick: pickAnimal, only: playtest } })}
         />
       ) : null}
       {sheet?.kind === "leave" ? (

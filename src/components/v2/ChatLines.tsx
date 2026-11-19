@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { CHAT_TEXT } from "../../game/chatText";
+import type { AnimalId } from "../../../shared/game/animals";
 import { faceSrc } from "../../net/assets";
 import type { ChatPanelMessage } from "./ChatPanel";
 import { V2Icon } from "./V2Icon";
@@ -64,24 +65,25 @@ export function ChatLines({ messages, channel }: {
           ) : null;
         const name = m.me ? CHAT_TEXT.me : (m.name ?? "");
         return (
-          <ChatPlayerLine key={m.key} channel={m.ch ?? "all"} seat={m.seat} name={name} text={m.text} mark={mark} />
+          <ChatPlayerLine key={m.key} channel={m.ch ?? "all"} seat={m.seat} animal={m.animal} name={name} text={m.text} mark={mark} />
         );
       })}
     </>
   );
 }
 
-/** 공개 좌석 초상화를 쓴다. 인물의 직업과 의상은 표시하지 않는다. */
-export function ChatPlayerLine({ channel, seat, name, text, mark }: {
+/** 플레이어가 고른 공개 동물 얼굴을 쓴다. 구형 뷰에는 좌석 초상화가 있다. */
+export function ChatPlayerLine({ channel, seat, animal, name, text, mark }: {
   channel: "all" | "mafia" | "ghost";
   seat?: number;
+  animal?: AnimalId | undefined;
   name: string;
   text: string;
   mark?: ReactNode;
 }) {
   return (
     <p className={channel === "mafia" ? "mv-chat__msg is-mafia" : "mv-chat__msg"} data-seat={seat} data-ch={channel}>
-      {seat === undefined ? null : <img className="mv-chat__avatar" src={faceSrc(seat)} width={25} height={25} alt="" decoding="async" />}
+      {seat === undefined ? null : <img className={animal ? "mv-chat__avatar mv-chat__avatar--animal" : "mv-chat__avatar"} src={faceSrc(seat, animal)} width={25} height={25} alt="" decoding="async" />}
       <span className="mv-chat__bubble-body">
         <span className="mv-chat__byline">{mark}<span className="mv-chat__name">{name}</span></span>
         <span className="mv-chat__text">{text}</span>

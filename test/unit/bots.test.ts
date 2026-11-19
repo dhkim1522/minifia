@@ -376,7 +376,7 @@ describe("방 규칙과 봇", () => {
     expect(started.state.players.every((p) => p.role !== undefined)).toBe(true);
   });
 
-  it("resetToLobby 는 봇을 남기고(키 아홉 개) 사람은 여덟 키 그대로며 botPlan 이 없다", () => {
+  it("resetToLobby 는 봇과 사람의 동물을 남기고 botPlan 을 지운다", () => {
     const game = stateAt(2, 3, 5, "discussion");
     const planned = syncBotPlan(game, 1000, seededRandInt(1));
     expect(Object.hasOwn(planned, "botPlan")).toBe(true);
@@ -386,7 +386,7 @@ describe("방 규칙과 봇", () => {
     expect(botCount(result.state)).toBe(3);
     for (const p of result.state.players) {
       expect(`${p.seat}:${sortedKeys(p).replace("look,", "")}`).toBe(
-        `${p.seat}:${isBot(p) ? "connId,connected,id,isBot,joinSeq,nickname,nicknameKey,seat,token" : "connId,connected,id,joinSeq,nickname,nicknameKey,seat,token"}`,
+        `${p.seat}:${isBot(p) ? "animal,connId,connected,id,isBot,joinSeq,nickname,nicknameKey,seat,token" : "animal,connId,connected,id,joinSeq,nickname,nicknameKey,seat,token"}`,
       );
     }
   });
@@ -410,13 +410,13 @@ describe("buildView 와 봇", () => {
     expect(Object.hasOwn(buildView(withBots(normal, 2), guestId, 0).me, "testBots")).toBe(false);
   });
 
-  it("손님 view JSON 에 isBot·botPlan·봇 id·token 이 없고 players 항목 키는 다섯이며 봇 자리는 connected true 다", () => {
+  it("손님 view JSON 에 isBot·botPlan·봇 id·token 이 없고 players 항목에는 동물만 추가되고 봇 자리는 connected true 다", () => {
     const game = syncBotPlan(stateAt(2, 3, 7, "discussion"), 1000, seededRandInt(1));
     const text = JSON.stringify(buildView(game, guestId, 0));
     expect(text.includes("isBot") || text.includes("botPlan") || text.includes("token")).toBe(false);
     for (const bot of botsOf(game)) expect(text.includes(bot.id)).toBe(false);
     const view = buildView(game, guestId, 0);
-    for (const p of view.players) expect(sortedKeys(p).replace("look,", "")).toBe("alive,connected,isHost,nickname,seat"); // look 은 시작 때 풀린 공개 의상(D-01)
+    for (const p of view.players) expect(sortedKeys(p).replace("look,", "")).toBe("alive,animal,connected,isHost,nickname,seat"); // look 은 선택한 공개 의상이다.
     for (const bot of botsOf(game)) expect(view.players.find((p) => p.seat === bot.seat)!.connected).toBe(true);
   });
 
