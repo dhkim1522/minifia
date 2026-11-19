@@ -139,6 +139,21 @@
   text-align: left;
 }
 .mf-nick-sheet .mf-sheet__title { letter-spacing: -.035em; }
+
+@media (hover: hover) and (pointer: fine) {
+  /* 900×1350 홈 그림의 가로 구도를 살리고 조작부는 기존 폭으로 유지한다. */
+  #root:has(> .mf-home-scene) { max-width: max(430px, calc(100dvh * 2 / 3)); }
+  .mf-home-scene .mf-backdrop__art { background-size: 100% auto; }
+  .mf-home-scene .mf-home { max-width: 430px; margin-inline: auto; }
+}
+
+@media (max-aspect-ratio: 2 / 3) and (hover: hover) and (pointer: fine) {
+  /* 폭이 좁은 창에서는 그림 위아래를 입장 화면의 배경색에 연결한다. */
+  .mf-home-scene .mf-backdrop__art {
+    mask: linear-gradient(transparent, black 8%, black 92%, transparent) center / 100% min(100%, 150vw) no-repeat;
+  }
+}
+
 @media (max-height: 620px) {
   .mf-entry-scene .mf-entry { padding-top: 18px; }
   .mf-entry-scene .mf-entry__head { margin-bottom: 12px; }

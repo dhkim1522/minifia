@@ -3590,7 +3590,7 @@ async function chatGameFlow(ctx) {
   }
 }
 
-// ---- pc (05-07, D-11, UI-SPEC 11.3c): 1280x800 데스크톱 창에서 앱이 가운데 폰 폭 ----
+// ---- pc: 데스크톱 홈 그림과 가운데 폰 폭 조작 열, 대기실·게임의 폰 폭 ----
 
 /** `#root` 의 왼쪽·폭을 읽는다(#root 안에 화면이 그려진 뒤). */
 async function readRootRect(page) {
@@ -3612,9 +3612,22 @@ async function pcFlow(ctx) {
     const homePage = await home.newPage();
     homePage.setDefaultTimeout(8000);
     await homePage.goto(`${ctx.origin}/`, { waitUntil: "domcontentloaded" });
-    const homeRect = await readRootRect(homePage);
-    await settle(homePage);
-    recOne(rec, "pc/home", pcCenterChecks({ ...homeRect, where: "홈" }, { w }));
+    await homePage.waitForSelector(".mf-home");
+    for (const [width, height] of [[w, h], [1032, 1174], [400, 1000]]) {
+      await homePage.setViewportSize({ width, height });
+      await settle(homePage);
+      const { art, column, size } = await homePage.evaluate(() => {
+        const background = document.querySelector(".mf-home-scene .mf-backdrop__art");
+        const art = background.getBoundingClientRect();
+        const column = document.querySelector(".mf-home").getBoundingClientRect();
+        return { art: { left: art.left, width: art.width }, column: { left: column.left, width: column.width }, size: getComputedStyle(background).backgroundSize };
+      });
+      const homeRec = recorder({ ...ctx, size: { label: `${width}x${height}` } });
+      recOne(homeRec, "pc/home", pcCenterChecks({ rootLeft: column.left, rootWidth: column.width, where: "홈 조작 열" }, { w: width }));
+      const artWidth = Math.min(width, Math.max(430, height * 2 / 3));
+      homeRec("pc/home", "PC-HOME-ART", "홈 그림이 가운데에서 좌우 전체를 표시", Math.abs(art.width - artWidth) <= 1 && Math.abs(art.left - (width - art.width) / 2) <= 1 && size === "100% auto",
+        `그림 폭 ${Math.round(art.width)}px, 기준 ${Math.round(artWidth)}px, 배경 크기 ${size}`);
+    }
   } finally {
     await home?.close().catch(() => {});
   }
