@@ -111,30 +111,11 @@
 .mf-rolecard__mates { margin: var(--space-sm) 0 0; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); word-break: keep-all; }
 .mf-rolecard__empty { margin: 0; font-size: 16px; line-height: 1.5; color: var(--gray-300); word-break: keep-all; }
 
-/* ---- 답과 의심 탭(23-11 첫날 답 → 24-06, UI-SPEC P23-18·19·P24-19·20) ---- */
-/* 본문만 세로로 스크롤한다(제목·탭은 고정). 구역 = 일차 하나, 24 가 구역을 더한다. 새 토큰·글자 크기 없음(16·14) */
-.mf-answers { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-sm) 0 0; }
-.mf-answers__day + .mf-answers__day { margin-top: var(--space-md); }
-/* 구역 머리는 스크롤 중 맨 위에 붙는다(면 night-800 으로 아래 줄을 가린다) */
-.mf-answers__head { position: sticky; top: 0; z-index: 1; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); padding-bottom: var(--space-xs); margin-bottom: var(--space-xs); background: var(--noir-panel); }
-.mf-answers__dayname { font-size: 16px; line-height: 24px; font-weight: 700; color: var(--gray-50); }
-.mf-answers__genre { font-size: 14px; line-height: 20px; color: var(--gray-300); }
-.mf-answers__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-xs); }
-.mf-answers__row { display: flex; align-items: center; gap: var(--space-sm); min-height: 32px; padding: 0 var(--space-sm); border-radius: var(--radius-md); }
-.mf-answers__row--mine { background: var(--night-700); }
-/* 번호 원: 글꼴의 동그라미 숫자에 기대지 않고 CSS 원으로 그린다 */
-.mf-answers__no {
-  flex: none; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
-  border: 1.5px solid var(--gray-500); border-radius: 50%; font-size: 14px; line-height: 1; font-weight: 700; color: var(--gray-50);
-}
-.mf-answers__dot { flex: none; width: 12px; height: 12px; border-radius: 50%; }
-.mf-answers__nick { flex: none; max-width: 9em; overflow: hidden; white-space: nowrap; font-size: 14px; line-height: 20px; color: var(--gray-300); }
-.mf-answers__text {
-  flex: 1; min-width: 0; padding: 2px 0; font-size: 16px; line-height: 20px; font-weight: 700; color: var(--gray-50);
-  word-break: keep-all; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-.mf-answers__text--none { font-weight: 400; color: var(--gray-300); }
-.mf-answers__correct { margin: var(--space-sm) 0 0; padding-top: var(--space-sm); border-top: 1px solid var(--night-600); font-size: 16px; line-height: 24px; font-weight: 700; color: var(--gray-50); }
+/* 의심 기록은 본문 안에서 스크롤되고 일차 머리는 위에 붙는다. */
+.mf-suspect-log { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-sm) 0 0; }
+.mf-suspect-log__day + .mf-suspect-log__day { margin-top: var(--space-md); }
+.mf-suspect-log__head { position: sticky; top: 0; z-index: 1; padding-bottom: var(--space-xs); margin-bottom: var(--space-xs); background: var(--noir-panel); }
+.mf-suspect-log__dayname { font-size: 16px; line-height: 24px; font-weight: 700; color: var(--gray-50); }
 
 /* 의심 줄(24-06, P24-20): 붙인 점·닉네임 → 화살표 → 받은 점·닉네임. 두 닉네임은 남는 폭을 반씩 나눠 한 줄 말줄임(전체 이름은 줄의 aria-label) */
 .mf-suspect__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-xs); }

@@ -42,6 +42,7 @@ import {
   openGuestJoinPage,
   openHostPage,
   openPerfPage,
+  closeFirstAnswers,
   openTestSheet,
   readLinkState,
   collapseChatLog,
@@ -1439,6 +1440,10 @@ async function openGame(ctx, flowId, { guests = 0, bots = 3, role = "citizen", v
   await chooseRole(hp, ht, role);
   await startGame(hp, ht);
   if (to) await skipTo(hp, ht, to);
+  if (to === "discussion") await Promise.all(pages.map(async ({ page }) => {
+    await untilGame(page, (v) => v.phase === "discussion", 6000, "첫날 토론");
+    await closeFirstAnswers(page);
+  }));
   return { host, hp, ht, hostSeat: ht.last().me.seat, guests: pages };
 }
 

@@ -111,7 +111,7 @@ export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, 
     <main ref={rootRef} className={rootCls} data-keyword-screen="" data-kb-open={kbOpen ? "true" : undefined}>
       <div className="mf-reveal__dim" aria-hidden="true" />
       <header className="mf-reveal__header">
-        <GamePhaseHeader title={playtest ? "첫 단서" : DAY_COPY.titles.keyword ?? ""} view={view} offset={offset} epoch={epoch} extra={myRoleButton} timeless={timeless} />
+        <GamePhaseHeader title={DAY_COPY.titles.keyword ?? ""} view={view} offset={offset} epoch={epoch} extra={myRoleButton} timeless={timeless} />
       </header>
       <section className="mf-reveal__stage">
         <div className={cardCls} data-keyword-card="" data-compact={kbOpen ? "true" : undefined} role="group" aria-label={KEYWORD_COPY.cardName}>

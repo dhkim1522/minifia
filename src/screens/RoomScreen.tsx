@@ -13,6 +13,7 @@ import { LETTER_MS_PER_CHAR, LETTER_WRITE_MAX_MS, oneParagraph } from "../game/w
 import { countGraphemes } from "../../shared/nickname";
 import { Button } from "../components/Button";
 import { ConfirmSheet } from "../components/ConfirmSheet";
+import { FirstAnswers } from "../components/FirstAnswers";
 import { ReconnectBanner } from "../components/ReconnectBanner";
 import { RoleCardButton } from "../components/RoleCardButton";
 import { RoleCardSheet } from "../components/RoleCardSheet";
@@ -24,6 +25,7 @@ import { SoundButton } from "../components/v2/SoundButton";
 import { V2Icon } from "../components/v2/V2Icon";
 import { MORNING_TEXT, morningText } from "../game/eliminationText";
 import { READY_TEXT } from "../game/resultText";
+import { keywordAnswersOf } from "../game/keywordView";
 import { noExecutionPrefix, winnerText } from "../game/verdict";
 import { preloadDuskAssets, preloadRoleAssets } from "../net/assets";
 import { ChatStore } from "../net/chatStore";
@@ -65,7 +67,7 @@ const PHASE_ANNOUNCE: Record<PhaseId, (view: RoomView) => string> = {
   lobby: () => "",
   assigning: () => "직업을 배정하고 있습니다",
   roleReveal: () => "역할 확인",
-  keyword: () => "첫날 단서 쓰기",
+  keyword: () => "라이어 게임",
   dayAnnounce: (view) => `${view.day?.n ?? 1}일차 낮이 되었습니다`,
   discussion: () => "낮 토론",
   night: nightAnnounce,
@@ -435,6 +437,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       buttons
     );
 
+  const answerRows = shown === null ? undefined : keywordAnswersOf(shown);
+  const answersUntil = shown?.day?.keyword?.answersUntil;
+  const answersId = answersUntil === undefined || shown === null ? undefined : `${shown.code}:${shown.round ?? 1}:${answersUntil}`;
+
   return (
     <div ref={roomRef} className="mf-root mf-room" data-first-round-playtest={reducedControls ? "" : undefined}>
       {view && banner !== "hidden" && <ReconnectBanner mode={banner} floating={shown?.phase === "lobby"} />}
@@ -479,6 +485,10 @@ export function RoomScreen({ code, token, onExit }: RoomScreenProps) {
       ) : null}
       {view && testTools && testOpen ? (
         <TestToolsSheet view={view} canSend={connection.canSend} send={connection.send} onClose={() => setTestOpen(false)} />
+      ) : null}
+      {shown && !shown.resting && status !== "replaced" && status !== "failed" && status !== "removed" &&
+        answersId !== undefined && answersUntil !== undefined && answerRows && answerRows.length > 0 ? (
+        <FirstAnswers key={answersId} id={answersId} endsAt={answersUntil} offset={connection.offset} rows={answerRows} players={shown.players} />
       ) : null}
       {view && (
         <p className="mf-sr-only" aria-live="polite">

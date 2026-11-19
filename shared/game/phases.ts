@@ -26,6 +26,7 @@ export const ROLE_REVEAL_MS = 15_000;
 export const KEYWORD_READ_MS = 3_000; // 결정 0089-3 — 카드를 읽는 시간(답 시간에서 뺀다, 입력줄은 이 동안 잠긴다)
 export const KEYWORD_WRITE_MS = 10_000; // 결정 0089-4 — 떠오르는 말을 적는 시간
 export const KEYWORD_MS = KEYWORD_READ_MS + KEYWORD_WRITE_MS;
+export const FIRST_ANSWERS_DISPLAY_MS = 10_000; // 첫날 토론이 시작되면 모두의 답안을 함께 보여 주는 시간
 // 첫날 정답 공개 단계(D-02, P23-20): 처형 뒤(또는 처형 없는 첫날 뒤) 밤 직전 3초. 처형이 없으면 "처형 없음" 큰 글 1.4초가 앞에 붙는다(D-22). 시간은 참고 목표라 연출을 줄이는 근거로 쓰지 않는다.
 export const ANSWER_REVEAL_MS = 3_000;
 export const NO_EXECUTION_MS = 1_400; // 처형 없음 큰 글 시간 — src/game/dayView.ts 의 ANNOUNCE_NOEXEC_MS 가 같은 값을 쓴다(23-07)

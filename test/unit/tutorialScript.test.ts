@@ -187,14 +187,14 @@ describe("가짜 view(D-17, P24-19 판정)", () => {
     expect(tutorialView("keyword", "c", T0, 1).me.answer).toEqual({ text: "발소리가 안 들려요", final: true });
   });
 
-  it("answers: 마피아를 포함해 여섯 명 모두 답하고, 같은 답으로 토론한다", () => {
+  it("answers: 마피아를 포함한 여섯 명의 답을 한 번 공개한다", () => {
     const answers = tutorialView("answers", "a", T0).day?.keyword?.answers;
     expect(answers).toHaveLength(6);
     const last = answers![5]!;
     expect(last.seat).toBe(4);
     expect(last.text).toBe("사람을 잘 따라와요");
     expect(answers!.every((row) => row.text !== null)).toBe(true);
-    expect(tutorialView("discussion", "a", T0).day?.keyword?.answers).toEqual(answers);
+    expect(tutorialView("discussion", "a", T0).day?.keyword?.answers).toBeUndefined();
     expect(answers![2]).toMatchObject({ seat: 5, text: "발소리가 안 들려요" });
     expect(answers!.map((a) => a.order)).toEqual([1, 2, 3, 4, 5, 6]);
   });
@@ -415,7 +415,7 @@ describe("첫날 실험방 연습", () => {
 
   it("첫날 안에 단서를 보고 의심딱지를 붙인 뒤 투표 한 번과 제시어 공개를 거친다", () => {
     expect(TUTORIAL_PLAYTEST_SCENES.map((scene) => scene.id)).toEqual([
-      "roles", "keyword", "postit", "discussion", "verdict", "answerReveal", "night", "end",
+      "roles", "keyword", "answers", "postit", "discussion", "verdict", "answerReveal", "night", "end",
     ]);
     const postit = tutorialView("postit", "b", T0, 0, playtest);
     expect(postit).toMatchObject({ map: "bar", playtest: true, day: { n: 1, suspects: [{ from: 5, to: 4 }] } });

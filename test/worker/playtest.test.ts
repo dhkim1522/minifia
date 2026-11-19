@@ -100,10 +100,11 @@ describe("첫날 실험방 HTTP·소켓", () => {
       const keyEndsEarly = (await storedRoom(code)).phaseEndsAt!;
       expect(keyEndsEarly).toBeLessThan(keyDeadline);
       expect(await alarmOf(code)).toBe(keyEndsEarly);
-      await nextFrame(host, (m) => m.t === "state" && m.view.phase === "dayAnnounce" && m.view.day?.keyword?.answers?.length === 4);
+      await nextFrame(host, (m) => m.t === "state" && m.view.phase === "dayAnnounce" && m.view.day?.keyword === undefined);
       await closePhase(code);
       await settleAll(sockets);
       expect(lastViewOf(host)).toMatchObject({ phase: "discussion", phaseDurationMs: 120_000 });
+      expect(lastViewOf(host).day?.keyword?.answers).toHaveLength(4);
       const hostSeat = lastViewOf(host).me.seat;
       const nearSeat = lastViewOf(sockets[1]!).me.seat;
       const farSeat = lastViewOf(sockets[2]!).me.seat;

@@ -82,10 +82,6 @@ export const TUTORIAL_FLIP_AT_MS = 400;
 /** 역할 아이콘 4개가 올라오는 간격과 시작 시각(장면 1) */
 export const ROLE_ICON_STEP_MS = 150;
 export const ROLE_ICON_START_MS = 2200;
-/** 모두의 기록 줄 등장: 시작·간격·마지막 답에 주는 여유(장면 3) */
-export const ANSWER_ROW_START_MS = 300;
-export const ANSWER_ROW_STEP_MS = 350;
-export const ANSWER_ROW_LAST_EXTRA_MS = 200;
 /** 장면 9: 아침으로 넘어가는 막 길이와 종이 떨어짐 시간 */
 export const POSTIT_CURTAIN_MS = 600;
 export const POSTIT_FALL_MS = 1200;
@@ -283,6 +279,7 @@ export const TUTORIAL_PLAYTEST_SCENES: readonly TutorialScene[] = [
     beats: [beat("a", 0, "roles.citizen", { sfx: "ui.card" }), beat("b", 1900, "roles.find"), beat("c", 3800, "roles.ready")],
   },
   sceneOf("keyword"),
+  sceneOf("answers"),
   {
     ...sceneOf("postit"),
     beats: [
@@ -454,7 +451,6 @@ export function tutorialView(
       const count = Math.min(acted, playtest ? TUTORIAL_CAST.seats.length : END_STEPS);
       out.me = { ...mine, role: "citizen", ...(count >= 1 ? { endDiscussion: true as const } : {}) };
       day.endCount = count;
-      day.keyword = { ...keyword, answers: TUTORIAL_ANSWERS.map((r) => ({ ...r })) };
       if (playtest) day.suspects = [{ to: TUTORIAL_CAST.suspect, from: TUTORIAL_CAST.me }];
       break;
     }
@@ -499,7 +495,6 @@ export function tutorialView(
       break;
     case "postit":
       out.me = { ...mine, role: "citizen", ...(at === "b" ? { suspectTo: TUTORIAL_CAST.suspect } : {}) };
-      if (playtest) day.keyword = { ...keyword, answers: TUTORIAL_ANSWERS.map((r) => ({ ...r })) };
       if (at === "b") day.suspects = [{ to: TUTORIAL_CAST.suspect, from: TUTORIAL_CAST.me }];
       break;
     case "end":

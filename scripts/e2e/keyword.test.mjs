@@ -137,43 +137,44 @@ const rows = [
   { order: 3, seat: 2, none: true },
   { order: 4, seat: 3, none: true },
 ];
-const pg = (who, over = {}) => ({ who, clueCount: 0, dialogOpen: false, inputVisible: true, logVisible: true, hasTab: true, rows, ...over });
-test("KW8: 단서 도구 제거, 고정 채팅, 기록 탭과 정렬을 검사한다", () => {
+const pg = (who, over = {}) => ({
+  who, centered: true, title: "모두의 답", clueCount: 0, dialogOpen: false, inputVisible: true, logVisible: true, rows, ...over,
+});
+test("KW8: 중앙 집계, 같은 답안, 확인 뒤 고정 채팅을 검사한다", () => {
   assert.equal(kw8AnswerList([pg("시민"), pg("마피아")]).ok, true);
-  for (const over of [{ clueCount: 1 }, { dialogOpen: true }, { inputVisible: false }, { logVisible: false }]) {
+  for (const over of [{ centered: false }, { title: "" }, { clueCount: 1 }, { dialogOpen: true }, { inputVisible: false }, { logVisible: false }]) {
     assert.equal(kw8AnswerList([pg("시민"), pg("마피아", over)]).ok, false);
   }
-  assert.equal(kw8AnswerList([pg("시민", { hasTab: false }), pg("마피아")]).ok, false);
   const none2 = [rows[0], rows[2], rows[1], rows[3]].map((r, i) => ({ ...r, order: i + 1 }));
-  assert.equal(kw8AnswerList([pg("시민", { rows: none2 }), pg("마피아", { rows: none2 })]).ok, false); // 단서 없음이 가운데
-  assert.equal(kw8AnswerList([pg("시민"), pg("마피아", { rows: rows.slice().reverse().map((r, i) => ({ ...r, order: i + 1 })) })]).ok, false);
-  assert.equal(kw8AnswerList([pg("시민", { rows: rows.map((r) => ({ ...r, none: true })) }), pg("마피아")]).ok, false);
+  assert.equal(kw8AnswerList([pg("시민", { rows: none2 }), pg("마피아", { rows: none2 })]).ok, false);
+  assert.equal(kw8AnswerList([pg("시민"), pg("마피아", { rows: rows.map((r) => ({ ...r, text: "다름" })) })]).ok, false);
   assert.ok(noMeasure(kw8AnswerList([])));
 });
-test("KW9: 재접속 뒤 토론 도구가 없고 기록 탭 목록이 같으면 통과", () => {
-  assert.equal(kw9Reconnect({ autoOpened: false, rowsBefore: rows, rowsAfter: rows }).ok, true);
-  assert.equal(kw9Reconnect({ autoOpened: true, rowsBefore: rows, rowsAfter: rows }).ok, false);
-  assert.equal(kw9Reconnect({ autoOpened: false, rowsBefore: rows, rowsAfter: rows.slice(0, 3) }).ok, false);
-  assert.ok(noMeasure(kw9Reconnect({ autoOpened: false, rowsBefore: rows, rowsAfter: [] })));
+test("KW9: 새로고침과 역할 기록에 첫날 집계를 반복하지 않는다", () => {
+  const ok = { autoOpened: false, recordRows: 0, recordTab: 0 };
+  assert.equal(kw9Reconnect(ok).ok, true);
+  assert.equal(kw9Reconnect({ ...ok, autoOpened: true }).ok, false);
+  assert.equal(kw9Reconnect({ ...ok, recordRows: 1 }).ok, false);
+  assert.equal(kw9Reconnect({ ...ok, recordTab: 1 }).ok, false);
+  assert.ok(noMeasure(kw9Reconnect(null)));
 });
 
-// ---- KW10·KW11 ----
-test("KW10: 정답 큰 글이 같고 목록 맨 아래에 정답 줄이 있으면 통과", () => {
-  const ok = { pages: [{ who: "시민", label: "제시어", text: "기생충" }, { who: "마피아", label: "제시어", text: "기생충" }], answer: "기생충", correct: [{ who: "시민", text: "제시어 · 기생충", last: true }] };
+test("KW10: 정답 큰 글이 같고 밤에 정답이 남지 않는다", () => {
+  const ok = { pages: [{ who: "시민", label: "제시어", text: "기생충" }, { who: "마피아", label: "제시어", text: "기생충" }], answer: "기생충", hidden: [{ who: "시민", hidden: true }, { who: "마피아", hidden: true }] };
   assert.equal(kw10Reveal(ok).ok, true);
   assert.equal(kw10Reveal({ ...ok, pages: [ok.pages[0], { ...ok.pages[1], text: "???" }] }).ok, false);
   assert.equal(kw10Reveal({ ...ok, pages: [{ ...ok.pages[0], label: "" }, ok.pages[1]] }).ok, false);
-  assert.equal(kw10Reveal({ ...ok, correct: [{ who: "시민", text: "제시어 · 기생충", last: false }] }).ok, false);
-  assert.equal(kw10Reveal({ ...ok, correct: [{ who: "시민", text: "제시어 · 다른", last: true }] }).ok, false);
+  assert.equal(kw10Reveal({ ...ok, hidden: [{ who: "시민", hidden: false }] }).ok, false);
   assert.ok(noMeasure(kw10Reveal({ ...ok, answer: "" })));
 });
-test("KW11: 정답 공개 없이 ended 이고 결과 줄이 제시어 · 키워드면 통과", () => {
-  const ok = { phases: ["execution", "ended"], hostLine: "제시어 · 기생충", answer: "기생충" };
+test("KW11: 정답 공개 없이 바로 결과로 가고 제시어가 보이지 않는다", () => {
+  const ok = { phases: ["execution", "ended"], hostLine: "", keywordPresent: false };
   assert.equal(kw11FirstDayEnd(ok).ok, true);
   assert.equal(kw11FirstDayEnd({ ...ok, phases: ["execution", "answerReveal", "ended"] }).ok, false);
   assert.equal(kw11FirstDayEnd({ ...ok, phases: ["execution", "night"] }).ok, false);
-  assert.equal(kw11FirstDayEnd({ ...ok, hostLine: "" }).ok, false);
-  assert.ok(noMeasure(kw11FirstDayEnd({ ...ok, answer: "" })));
+  assert.equal(kw11FirstDayEnd({ ...ok, hostLine: "제시어 · 기생충" }).ok, false);
+  assert.equal(kw11FirstDayEnd({ ...ok, keywordPresent: true }).ok, false);
+  assert.ok(noMeasure(kw11FirstDayEnd({ phases: [] })));
 });
 
 // ---- KW12 ----

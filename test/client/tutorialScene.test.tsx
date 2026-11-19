@@ -68,7 +68,7 @@ describe("혼자 하기 장면 시계", () => {
   it("실험방에서는 첫 투표와 아침 준비를 실제 입력과 이어 준다", async () => {
     const clickTool = vi.fn();
     const { result } = renderHook(() => useTutorialScene(clickTool, true));
-    expect(result.current.steps).toBe(8);
+    expect(result.current.steps).toBe(9);
     act(() => result.current.go("verdict"));
     await wait(0);
     expect(result.current.target).toBe("first-ballot");

@@ -30,7 +30,7 @@ export type HostKey =
   | "execution.passed"
   | "answerReveal"
   | "night.mafia" | "night.police" | "night.doctor" | "night.citizen" | "night.ghost"
-  | "morning" | "ended" | "ended.answer"
+  | "morning" | "ended"
   | "fallback";
 
 /** 키를 찾지 못했을 때의 한 줄(마침표 없음) */
@@ -78,8 +78,6 @@ export const HOST_LINES: Readonly<Record<HostKey, string>> = {
   // 큰 글(아침 결과)이 말한다
   morning: "",
   ended: "게임이 끝났습니다. 다음 판을 준비해 주세요.",
-  // 결과 화면의 제시어 한 줄(23-11, P23-22): 뒤에 공개된 제시어(day.keyword.answer)를 붙인다
-  "ended.answer": `${DAY_COPY.answerLabel} · `,
   fallback: HOST_FALLBACK,
 };
 
@@ -134,7 +132,7 @@ export function hostKeyOf(view: RoomView, local: HostLocal = {}): HostKey {
     case "morning":
       return view.day?.morning === undefined ? "fallback" : "morning";
     case "ended":
-      return keywordAnswerOf(view) === undefined ? "ended" : "ended.answer"; // 정답은 공개 값 한 선택기로만 읽는다(23-11, T-23-40)
+      return "ended";
     default:
       return "fallback";
   }
@@ -148,9 +146,7 @@ export function hostLineOf(view: RoomView, local: HostLocal = {}): string {
     const line = playtestHostLine(view);
     if (line !== undefined) return line;
   }
-  const key = hostKeyOf(view, local);
-  if (key === "ended.answer") return `${HOST_LINES[key]}${keywordAnswerOf(view) ?? ""}`;
-  return HOST_LINES[key];
+  return HOST_LINES[hostKeyOf(view, local)];
 }
 
 function playtestHostLine(view: RoomView): string | undefined {
@@ -188,8 +184,6 @@ export function playtestResultLine(view: RoomView): string | undefined {
 
 /**
  * 띠 면이 기본으로 보이지 않는 단계: 대기실·결과(초가 없다). 면의 한 줄 자리는 그대로 차지한다(18.1-12).
- * 결과(ended)에서는 공개한 제시어(day.keyword.answer)가 있으면 띠에 `제시어 · {제시어}` 한 줄을 보인다(23-11, P23-22).
- * 그래서 목록은 그대로 두고 hostBandModeOf 가 ended 만 정답 유무로 가른다(e2e 사본 HOST_OFF_PHASES 와 같은 값을 유지한다).
  */
 export const HOST_HIDDEN_PHASES: readonly PhaseId[] = Object.freeze(["lobby", "ended"] as const);
 
@@ -201,7 +195,7 @@ export type HostBandMode = "show" | "blank" | "off";
  * 문장이 비었고 시간 행이 있으면 blank, 그 밖은 show.
  */
 export function hostBandModeOf(view: RoomView, line: string): HostBandMode {
-  if (view.phase === "ended" ? keywordAnswerOf(view) === undefined : HOST_HIDDEN_PHASES.includes(view.phase)) return "off";
+  if (HOST_HIDDEN_PHASES.includes(view.phase)) return "off";
   if (line === "") return hostTimeOf(view) ? "blank" : "off";
   return "show";
 }

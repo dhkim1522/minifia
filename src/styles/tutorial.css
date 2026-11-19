@@ -80,22 +80,11 @@
 
 .tut-room { background: var(--night-950); --tut-exit-top: 10px; }
 .tut-room .mf-world__input,
-.tut-room .mf-card,
-.tut-room .mf-sheet__handle { pointer-events: none; }
+.tut-room .mf-card { pointer-events: none; }
 .tut-room .mf-card { user-select: none; }
 .tut-room .mf-turn__sec,
 .tut-room .mf-turn__bar { display: none; }
 .tut-room .mf-turn { top: calc(var(--mf-host-bottom, 106px) + var(--space-sm)); }
-
-/* 기록은 게임의 시트를 쓰되 상단의 그만두기와 소리 단추를 계속 쓸 수 있다. */
-.tut-room .mf-dialog { position: absolute; z-index: var(--z-overlay); pointer-events: none; }
-.tut-room .mf-sheet.mf-sheet--rolecard {
-  pointer-events: auto; max-height: calc(100% - 191px);
-  padding: var(--space-md); gap: var(--space-sm);
-}
-.tut-room .mf-sheet__handle,
-.tut-room .mf-sheet__close { display: none; }
-.tut-room .mf-answers { padding-top: 0; }
 
 .tut-role-icons {
   position: absolute; inset: auto 0 90px; display: flex; justify-content: center; gap: var(--space-sm);
@@ -133,4 +122,22 @@
 @media (prefers-reduced-motion: reduce) {
   .tut-ring { animation: none; box-shadow: 0 0 11px 3px color-mix(in srgb, var(--light-lamp) 55%, transparent); }
   .tut-pill__text { animation: none; }
+}
+
+.tut-answers {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-md);
+  z-index: var(--z-overlay);
+  pointer-events: none;
+}
+.tut-answers .mf-first-answers {
+  box-sizing: border-box;
+  width: min(100%, 380px);
+  padding: var(--space-md);
+  border-radius: 16px;
+  background: var(--noir-panel);
+  box-shadow: var(--shadow-card);
 }

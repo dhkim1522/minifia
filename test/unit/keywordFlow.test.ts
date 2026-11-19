@@ -275,18 +275,18 @@ describe("정답은 answerReveal 진입 프레임부터 모두에게 같은 값�
   const answerOf = (state: RoomState, id: string): string | undefined =>
     (buildView(state, id, 20_000).day?.keyword as { answer?: string } | undefined)?.answer;
 
-  it("answerOpenOf: keyword 가 없으면 거짓, 첫날은 answerReveal·night·morning 에서만, 둘째 날 이후·ended 는 늘 참", () => {
+  it("answerOpenOf: keyword 가 있고 첫날 answerReveal일 때만 참", () => {
     const kw = { genre: "movie", word: "w" } as RoomState["keyword"];
     const base = { keyword: kw } as unknown as RoomState;
     expect(answerOpenOf({ ...base, phase: "answerReveal", day: 1 })).toBe(true);
-    expect(answerOpenOf({ ...base, phase: "night", day: 1 })).toBe(true);
-    expect(answerOpenOf({ ...base, phase: "morning", day: 1 })).toBe(true);
+    expect(answerOpenOf({ ...base, phase: "night", day: 1 })).toBe(false);
+    expect(answerOpenOf({ ...base, phase: "morning", day: 1 })).toBe(false);
     for (const phase of ["keyword", "dayAnnounce", "discussion", "verdict", "nomination", "runoff", "showdown", "defense", "execution"] as const) {
       expect(answerOpenOf({ ...base, phase, day: 1 }), phase).toBe(false);
     }
     expect(answerOpenOf({ ...base, phase: "keyword" })).toBe(false); // keyword 단계는 day 가 아직 없다
-    expect(answerOpenOf({ ...base, phase: "discussion", day: 2 })).toBe(true);
-    expect(answerOpenOf({ ...base, phase: "ended", day: 1 })).toBe(true);
+    expect(answerOpenOf({ ...base, phase: "discussion", day: 2 })).toBe(false);
+    expect(answerOpenOf({ ...base, phase: "ended", day: 1 })).toBe(false);
     expect(answerOpenOf({ ...base, phase: "answerReveal", day: 1, keyword: undefined })).toBe(false);
   });
 
@@ -308,27 +308,25 @@ describe("정답은 answerReveal 진입 프레임부터 모두에게 같은 값�
     expect(seen.length).toBe(7);
   });
 
-  it("answerReveal·night(첫날)에는 모든 viewer 에게 같은 answer 와 장르 라벨이 실린다 (D-23)", () => {
+  it("첫날 answerReveal에는 모든 viewer에게 같은 정답과 장르가 보이고 밤에 사라진다", () => {
     const reveal = tick(againstAll(stateWithVerdict(6, 1, "verdict")), stateWithVerdict(6, 1, "verdict").phaseEndsAt!, seededRandInt(9));
     expect(reveal.phase).toBe("answerReveal");
     const word = reveal.keyword!.word;
     const label = genreLabelOf(reveal.keyword!.genre);
-    for (const s of [reveal, tickTo(reveal, "night")]) {
-      for (const p of s.players) {
-        const view = buildView(s, p.id, s.phaseEndsAt! - 1000);
-        expect(view.day?.keyword, `${s.phase}`).toMatchObject({ genre: label, answer: word }); // 23-06: keyword 마감 훅을 지난 판이라 answers 도 함께 실린다(여기서는 정답 쪽만 단언)
-      }
+    const night = tickTo(reveal, "night");
+    for (const p of reveal.players) {
+      expect(buildView(reveal, p.id, reveal.phaseEndsAt! - 1).day?.keyword).toEqual({ genre: label, answer: word });
+      expect(buildView(night, p.id, night.phaseEndsAt! - 1).day?.keyword).toBeUndefined();
     }
   });
 
-  it("둘째 날 이후(day 2)·ended 에는 계속 모든 viewer 에게 실린다", () => {
+  it("둘째 날과 게임 종료 화면에는 제시어를 보내지 않는다", () => {
     const day2 = { ...startedAt(6, 1, "discussion"), day: 2 };
-    const word = day2.keyword!.word;
-    for (const p of day2.players) expect(answerOf(day2, p.id)).toBe(word);
+    for (const p of day2.players) expect(answerOf(day2, p.id)).toBeUndefined();
     const exec = stateWithVerdict(4, 1, "execution", { candidate: "mafia" });
     const ended = tick(exec, exec.phaseEndsAt!, seededRandInt(9));
     expect(ended.phase).toBe("ended");
-    for (const p of ended.players) expect(answerOf(ended, p.id)).toBe(ended.keyword!.word);
+    for (const p of ended.players) expect(answerOf(ended, p.id)).toBeUndefined();
   });
 
   it("keyword 가 없는 판의 view 에는 day.keyword 가 없다(옛 방)", () => {

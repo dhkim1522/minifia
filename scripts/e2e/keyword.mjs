@@ -3,7 +3,7 @@
 // day.mjs·avatar.mjs 와 같은 모양: helpers 를 받고 서로 import 하지 않는다.
 // helpers: { recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK }.
 // 표식(data-keyword-*·data-answer-*·data-announce-label·data-early)에는 역할·키워드 값이 없다 — 키워드는 텍스트 노드로만 읽는다(T-23-43).
-import { chooseVerdict, installFakeViewport, openRoleCard, settle, skipDayToExecution, skipTo, sleep, watchSockets } from "./browser.mjs";
+import { chooseVerdict, closeFirstAnswers, installFakeViewport, openRoleCard, settle, skipDayToExecution, skipTo, sleep, watchSockets } from "./browser.mjs";
 import { OVERLAP_EPS, TAP_MIN } from "./lib.mjs";
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
@@ -164,7 +164,7 @@ export function kw7CompactGeometry(m) {
   return result("KW7", label, bad);
 }
 
-const rowsKey = (rows) => rows.map((r) => `${r.order}:${r.seat}:${r.none ? "n" : "a"}`).join(",");
+const rowsKey = (rows) => JSON.stringify(rows);
 /** 목록 줄 하나가 서로 이어지는 번호(1..n)·단서 없음이 맨 끝·답이 하나 이상인지 본다. 어긋난 곳 글 목록을 돌려준다. */
 function listProblems(rows, who) {
   const bad = [];
@@ -173,64 +173,54 @@ function listProblems(rows, who) {
     if (r.order !== i + 1) bad.push(`${who} ${i + 1}번째 줄 번호 ${r.order}`);
   });
   const firstNone = rows.findIndex((r) => r.none);
-  if (firstNone === 0) bad.push(`${who} 답이 하나도 없음`);
   if (firstNone >= 0 && rows.slice(firstNone).some((r) => !r.none)) bad.push(`${who} '단서 없음' 이 맨 끝이 아님`);
   return bad;
 }
 
-/** KW8 토론 화면에는 고정 채팅과 스킵만 남고, 공개 답은 역할 기록에서 확인한다. */
+/** KW8 첫 토론에는 전원에게 같은 답안 집계가 중앙에 열린다. */
 export function kw8AnswerList(pages) {
-  const label = "토론에 단서 도구가 없고 고정 채팅과 역할 기록을 볼 수 있다";
-  if (!Array.isArray(pages) || pages.length === 0) return noMeasure("KW8", label, "페이지");
+  const label = "첫날 토론 중앙에 같은 답안이 보이고 확인 뒤엔 채팅을 쓸 수 있다";
+  if (!pages?.length) return noMeasure("KW8", label, "페이지");
   const bad = [];
   for (const p of pages) {
-    if (p.clueCount !== 0 || p.dialogOpen !== false) bad.push(`${p.who} 토론 중 단서 도구나 창이 보임`);
-    if (p.inputVisible !== true || p.logVisible !== true) bad.push(`${p.who} 토론 채팅을 쓸 수 없음`);
-    if (p.hasTab !== true) bad.push(`${p.who} 탭 '단서와 의심' 없음`);
+    if (!p.centered || p.title !== "모두의 답") bad.push(`${p.who} 중앙 발표 없음`);
+    if (p.clueCount !== 0 || p.dialogOpen !== false || !p.inputVisible || !p.logVisible) bad.push(`${p.who} 확인 뒤 토론 조작이 막힘`);
     bad.push(...listProblems(p.rows, p.who));
   }
-  const keys = pages.filter((p) => Array.isArray(p.rows) && p.rows.length > 0).map((p) => rowsKey(p.rows));
-  if (new Set(keys).size > 1) bad.push(`페이지마다 목록이 다름(${keys.join(" ≠ ")})`);
+  if (new Set(pages.map((p) => rowsKey(p.rows))).size > 1) bad.push("시민과 마피아가 본 답안이 다름");
   return result("KW8", label, bad);
 }
 
-/** KW9(P23-9) 재접속. m = { autoOpened(재접속 뒤 단서가 저절로 열림), rowsBefore, rowsAfter(역할 기록 탭) } */
 export function kw9Reconnect(m) {
-  const label = "토론에 재접속해도 단서 도구가 없고 역할 기록의 공개 답이 유지된다";
-  if (!m || !Array.isArray(m.rowsBefore) || !Array.isArray(m.rowsAfter) || m.rowsBefore.length === 0 || m.rowsAfter.length === 0) return noMeasure("KW9", label, "재접속 전·뒤 목록");
+  const label = "확인한 답안은 새로고침과 역할 카드에서 다시 열리지 않는다";
+  if (!m) return noMeasure("KW9", label, "재접속 화면");
   const bad = [];
-  if (m.autoOpened === true) bad.push("재접속 뒤 단서가 저절로 열림");
-  if (rowsKey(m.rowsBefore) !== rowsKey(m.rowsAfter)) bad.push(`목록이 다름(${rowsKey(m.rowsBefore)} ≠ ${rowsKey(m.rowsAfter)})`);
+  if (m.autoOpened !== false) bad.push("재접속 뒤 답안 발표가 다시 열림");
+  if (m.recordRows !== 0 || m.recordTab !== 0) bad.push("역할 카드에 첫날 답안이 남음");
   return result("KW9", label, bad);
 }
 
-/**
- * KW10(P23-10) 정답 공개. m = { pages: [{ who, label(정답 라벨 글), text(키워드 글) }], answer, correct: [{ who, text(정답 줄 글), last(목록 맨 아래) }] }.
- * 정답 공개 3초 동안 '제시어' + 키워드가 시민·마피아에게 같고, 그 뒤 목록 맨 아래에 `제시어 · {키워드}` 줄이 생긴다.
- */
 export function kw10Reveal(m) {
-  const label = "정답 공개 3초: '제시어' + 키워드가 시민·마피아에게 같다 · 그 뒤 목록 맨 아래에 '제시어 · 키워드' 줄";
-  if (!m || typeof m.answer !== "string" || m.answer === "" || !Array.isArray(m.pages) || m.pages.length === 0 || !Array.isArray(m.correct) || m.correct.length === 0) return noMeasure("KW10", label, "정답·큰 글·정답 줄");
+  const label = "첫날 제시어는 정답 공개 동안 같고 밤에 이어지지 않는다";
+  if (!m?.answer || !m.pages?.length || !m.hidden?.length) return noMeasure("KW10", label, "정답·큰 글·밤 화면");
   const bad = [];
   for (const p of m.pages) {
     if (p.label !== "제시어") bad.push(`${p.who} 라벨 '${p.label}'`);
     if (p.text !== m.answer) bad.push(`${p.who} 큰 글 '${p.text}' ≠ 키워드`);
   }
-  for (const c of m.correct) {
-    if (c.text !== `제시어 · ${m.answer}`) bad.push(`${c.who} 정답 줄 '${c.text}'`);
-    if (c.last !== true) bad.push(`${c.who} 정답 줄이 목록 맨 아래가 아님`);
+  for (const p of m.hidden) {
+    if (!p.hidden) bad.push(`${p.who} 밤에 첫날 답이나 제시어가 남음`);
   }
   return result("KW10", label, bad);
 }
 
-/** KW11(P23-11) 첫날 승패. m = { phases(처형 이후 단계 열), hostLine(결과 띠 글), answer } */
 export function kw11FirstDayEnd(m) {
-  const label = "첫날 처형으로 끝난 판: 정답 공개 없이 ended, 결과에 '제시어 · 키워드' 한 줄";
-  if (!m || typeof m.answer !== "string" || m.answer === "" || !Array.isArray(m.phases) || m.phases.length === 0) return noMeasure("KW11", label, "단계 열·정답");
+  const label = "첫날 종료는 바로 결과로 넘어가고 제시어는 결과에 넣지 않는다";
+  if (!m?.phases?.length) return noMeasure("KW11", label, "단계 열과 결과");
   const bad = [];
   if (m.phases.includes("answerReveal")) bad.push("answerReveal 단계가 끼어 있음");
-  if (m.phases[m.phases.length - 1] !== "ended") bad.push(`마지막 단계 ${m.phases[m.phases.length - 1]}(ended 여야 함)`);
-  if (m.hostLine !== `제시어 · ${m.answer}`) bad.push(`결과 줄 '${m.hostLine}' ≠ '제시어 · ${m.answer}'`);
+  if (m.phases.at(-1) !== "ended") bad.push("마지막 단계가 결과가 아님");
+  if (m.keywordPresent !== false || (m.hostLine ?? "").startsWith("제시어")) bad.push("결과에 첫날 제시어가 남음");
   return result("KW11", label, bad);
 }
 
@@ -370,20 +360,21 @@ const readGeometry = (page) =>
     };
   });
 
-/** 열린 시트 안 목록: 줄(번호·좌석·단서 없음)과 정답 줄 글·맨 아래 여부, 탭 수. 시트가 없거나 목록이 없으면 rows null */
+/** 브라우저에 뜬 발표의 데이터와 중앙 배치 확인. */
 const readAnswerSheet = (page) =>
   page.evaluate(() => {
-    const dlg = document.querySelector("dialog.mf-dialog--open");
-    const list = dlg?.querySelector("[data-answer-list]") ?? null;
-    const rows = list ? [...list.querySelectorAll("[data-answer-row]")].map((r) => ({ order: Number(r.getAttribute("data-answer-order")), seat: Number(r.getAttribute("data-answer-seat")), none: r.hasAttribute("data-answer-none") })) : null;
-    const correctEl = dlg?.querySelector("[data-answer-correct]") ?? null;
-    const rowEls = list ? [...list.querySelectorAll("[data-answer-row]")] : [];
+    const sheet = document.querySelector("dialog.mf-dialog--centered .mf-first-answers");
+    const box = sheet?.getBoundingClientRect();
     return {
-      open: !!dlg,
-      rows,
-      tabs: dlg ? dlg.querySelectorAll('[data-rolecard-tab="records"]').length : 0,
-      correct: correctEl ? (correctEl.textContent ?? "").trim() : null,
-      correctLast: correctEl ? rowEls.every((r) => (r.compareDocumentPosition(correctEl) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0) : null,
+      title: sheet?.querySelector("h2")?.textContent,
+      centered: !!box && Math.abs(box.left + box.width / 2 - window.innerWidth / 2) <= 2 &&
+        Math.abs(box.top + box.height / 2 - window.innerHeight / 2) <= 10,
+      rows: sheet ? [...sheet.querySelectorAll("[data-answer-row]")].map((row) => ({
+        order: Number(row.getAttribute("data-answer-order")),
+        seat: Number(row.getAttribute("data-answer-seat")),
+        none: row.hasAttribute("data-answer-none"),
+        text: row.querySelector(".mf-first-answers__text")?.textContent,
+      })) : null,
     };
   });
 
@@ -545,30 +536,28 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       await at("방장 보내기", () => typeAndSend(hp, "다른말"));
       await hp.waitForSelector('[data-answer-state="sent"]', { timeout: 4000 }).catch(() => {});
 
-      // 사람 전원이 낸 뒤 토론의 채팅과 역할 기록에 남은 답을 확인한다(KW8).
       await Promise.all(pages.map((p) => p.tracker.waitFor((v) => v.phase === "discussion", 12_000, "낮 시작 → 토론")));
-      const sheets = [];
-      for (const p of pages) {
-        await p.page.waitForSelector("[data-playtest-discussion]", { timeout: 4000 });
-        const tools = await readDiscussionTools(p.page);
-        await at(`KW8 ${p.who} 내 역할과 기록`, () => openRoleCard(p.page));
-        await at(`KW8 ${p.who} 단서와 의심 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
+      const sheets = await Promise.all(pages.map(async (p) => {
+        await p.page.waitForSelector("dialog.mf-dialog--open [data-answer-list]", { timeout: 4000 });
         const sh = await readAnswerSheet(p.page);
-        await closeOpenSheet(p.page);
-        sheets.push({ who: p.who, ...tools, rows: sh.rows, hasTab: sh.tabs === 1 });
-      }
+        await closeFirstAnswers(p.page);
+        return { who: p.who, ...sh, ...await readDiscussionTools(p.page) };
+      }));
       rec1(rec, `${id}/answers`, kw8AnswerList(sheets));
 
-      // KW9: 참가자 재접속 — 역할 기록에서 같은 목록을 다시 연다. 그 연결 프레임에서 시민은 키워드를 받는다(KW13 대조군)
-      const rowsBefore = sheets[0].rows;
+      // 시민이 확인 직후 다시 들어와도 같은 판의 답안은 뜨지 않는다.
       await gp.reload({ waitUntil: "domcontentloaded" });
       await untilGame(gp, (x) => x.phase === "discussion", 10_000, "재접속 뒤 토론");
-      await sleep(1800);
       const beforeOpen = await readDiscussionTools(gp);
       await at("KW9 내 역할과 기록", () => openRoleCard(gp));
-      await at("KW9 기록 탭", () => gp.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
-      const afterOpen = await readAnswerSheet(gp);
-      rec1(rec, `${id}/reconnect`, kw9Reconnect({ autoOpened: beforeOpen.clueCount !== 0 || beforeOpen.dialogOpen, rowsBefore, rowsAfter: afterOpen.rows }));
+      const records = await gp.locator('dialog[aria-label="역할 카드"]').evaluate((sheet) => ({
+        recordRows: sheet.querySelectorAll("[data-answer-row]").length,
+        recordTab: sheet.querySelectorAll('[data-rolecard-tab="records"]').length,
+      }));
+      rec1(rec, `${id}/reconnect`, kw9Reconnect({
+        autoOpened: beforeOpen.clueCount !== 0 || beforeOpen.dialogOpen,
+        ...records,
+      }));
       await closeOpenSheet(gp);
 
       // KW13: 정답 공개 전 마피아 프레임에 키워드 문자열 0, view 키 집합(키워드 단계 스냅샷)
@@ -586,16 +575,13 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         return { who: p.who, ...(await readAnnounce(p.page)) };
       }));
       await Promise.all(pages.map((p) => p.tracker.waitFor((v) => v.phase === "night", 9000, "정답 공개 → 밤")));
-      const correct = [];
-      for (const p of pages) {
-        await at(`KW10 ${p.who} 내 역할과 기록`, () => openRoleCard(p.page));
-        await at(`KW10 ${p.who} 단서와 의심 탭`, () => p.page.locator('dialog.mf-dialog--open [data-rolecard-tab="records"]').click({ timeout: 4000 }));
-        await p.page.waitForSelector("dialog.mf-dialog--open [data-answer-list]", { timeout: 4000 }).catch(() => {});
-        const sh = await readAnswerSheet(p.page);
-        correct.push({ who: p.who, text: sh.correct, last: sh.correctLast });
-        await closeOpenSheet(p.page).catch(() => {});
-      }
-      rec1(rec, `${id}/reveal`, kw10Reveal({ pages: reveal, answer: word, correct }));
+      const hidden = await Promise.all(pages.map(async (p) => {
+        await untilGame(p.page, (v) => v.phase === "night", 6000, "밤 화면");
+        return { who: p.who, hidden: p.tracker.last().day?.keyword === undefined &&
+          await p.page.locator("[data-answer-list], [data-answer-correct]").count() === 0 &&
+          await p.page.locator("[data-announce-label]").filter({ hasText: "제시어" }).count() === 0 };
+      }));
+      rec1(rec, `${id}/reveal`, kw10Reveal({ pages: reveal, answer: word, hidden }));
 
       // KW1: 둘째 날까지 단계 열
       await skipTo(hp, ht, "dayAnnounce");
@@ -605,7 +591,7 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       await closeGame(game);
     }
 
-    // KW11: 첫날 처형으로 끝난 판 — 정답 공개 없이 결과로, 결과에 정답 한 줄
+    // KW11: 첫날 처형으로 끝난 판은 제시어 공개 없이 결과로 간다.
     {
       const sc = `${id}/end`;
       const game2 = await openGame(ctx, id, { ...GAME4, role: "mafia", vote: { exec: "yes", pick: "host" }, to: "keyword", hostNick: GAME_HOST_NICK });
@@ -613,19 +599,15 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
         const { hp, ht, guests } = game2;
         const gp = guests[0].page;
         await gp.waitForSelector("[data-keyword-word]", { timeout: 6000 });
-        const word = ((await readCard(gp)).word ?? "").trim();
         await skipTo(hp, ht, "discussion");
+        await untilGame(gp, (v) => v.phase === "discussion", 6000, "첫날 토론");
+        await closeFirstAnswers(gp);
         await skipDayToExecution(hp, ht, [gp]);
         await skipTo(hp, ht, "ended");
-        let line = "";
-        const start = performance.now();
-        while (performance.now() - start < 14_000) {
-          line = ((await gp.evaluate(() => document.querySelector("[data-host-line]")?.textContent ?? "")) || "").trim();
-          if (line.startsWith("제시어")) break;
-          await sleep(200);
-        }
+        await gp.waitForSelector("[data-result-stage]", { timeout: 8000 });
+        const line = await gp.locator("[data-host-line]").textContent();
         const from = Math.max(0, ht.phases.indexOf("execution"));
-        rec1(rec, sc, kw11FirstDayEnd({ phases: ht.phases.slice(from), hostLine: line, answer: word }));
+        rec1(rec, sc, kw11FirstDayEnd({ phases: ht.phases.slice(from), hostLine: line, keywordPresent: ht.last().day?.keyword !== undefined }));
         rec1(rec, sc, kw1PhaseColumns({ seq: ht.phases.slice(), endedDayOne: true }), " (첫날 끝)");
       } finally {
         await closeGame(game2);

@@ -764,104 +764,98 @@ describe("RoomScreen: 쉬는 사람 화면 (11-12)", () => {
   });
 });
 
-// ---------- 첫날 토론의 공개 답과 결과 정답 줄 ----------
-
-describe("RoomScreen: 첫날 토론의 공개 답과 결과 정답 줄", () => {
+describe("RoomScreen: 첫날 답안 집계", () => {
   const mount = () => render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
   const again = (rerender: (ui: React.ReactElement) => void) => rerender(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
-  const four: RoomView["players"] = ["민수", "하윤", "민지", "도현"].map((nickname, seat) => ({ seat, nickname, connected: true, isHost: seat === 0 }));
-  const rows = [{ order: 1, seat: 1, text: "안경" }, { order: 2, seat: 0, text: null }, { order: 3, seat: 2, text: null }, { order: 4, seat: 3, text: null }];
-  const play = (phase: RoomView["phase"], o: { n?: number; round?: number; answers?: boolean; answer?: string } = {}): RoomView => ({
+  const answersUntil = 11_000;
+  const players: RoomView["players"] = ["민수", "하윤", "민지", "도현", "라임", "별빛", "여울", "긴이름참가자"].map((nickname, seat) => (
+    { seat, nickname, connected: true, isHost: seat === 0 }
+  ));
+  const rows = players.map(({ seat }, i) => ({ order: i + 1, seat, text: seat === 0 ? "<b>안경</b>" : seat === 7 ? null : `답안${seat}` }));
+  const play = (phase: RoomView["phase"], opts: { n?: number; round?: number; playtest?: true } = {}): RoomView => ({
     ...view,
     phase,
-    phaseEndsAt: phase === "lobby" ? null : 1000 + 90_000,
-    phaseDurationMs: phase === "lobby" ? null : 90_000,
-    players: four,
+    phaseEndsAt: phase === "ended" ? null : 91_000,
+    phaseDurationMs: phase === "ended" ? null : 90_000,
+    players,
     me: { seat: 0, isHost: true, role: "citizen" },
-    day: {
-      n: o.n ?? 1,
-      roles: ["mafia", "police", "citizen"],
-      keyword: { genre: "영화", ...(o.answers === false ? {} : { answers: rows }), ...(o.answer !== undefined ? { answer: o.answer } : {}) },
-    },
-    ...(o.round !== undefined ? { round: o.round } : {}),
+    day: { n: 1, roles: ["mafia", "police", "citizen"], keyword: { genre: "영화", answers: rows, answersUntil, answer: "해리포터" } },
+    ...opts,
+    ...(opts.n === undefined ? {} : { day: { n: opts.n, roles: [], keyword: { genre: "영화", answers: rows, answersUntil } } }),
   });
   const setView = (v: RoomView, epoch?: number) => {
     connectionMock.current = { ...(connectionMock.current as RoomConnection), view: v, ...(epoch !== undefined ? { epoch } : {}) };
   };
-  const sheet = (): HTMLElement | null => document.querySelector<HTMLElement>("dialog");
-  const evidence = (): HTMLElement | null => document.querySelector<HTMLElement>("[data-discussion-evidence]");
+  const overlay = () => document.querySelector('dialog[aria-label="모두의 답"]');
 
   beforeEach(() => {
+    sessionStorage.clear();
     vi.useFakeTimers();
+    vi.setSystemTime(1_000);
   });
   afterEach(() => {
     vi.useRealTimers();
     stage.props = null;
   });
 
-  it("토론에는 재열람 도구가 없고 공개 답은 역할 카드 기록에서 읽는다", () => {
+  it.each([undefined, true] as const)("일반·실험방의 첫 토론에 여덟 명 답안이 중앙에 함께 보인다(playtest=%s)", (playtest) => {
+    connectionMock.current = conn({ view: play("dayAnnounce", { playtest }) });
+    const { rerender } = mount();
+    expect(overlay()).toBeNull();
+    setView(play("discussion", { playtest }));
+    again(rerender);
+    const dialog = overlay();
+    expect(dialog?.classList.contains("mf-dialog--centered")).toBe(true);
+    const rendered = Array.from(dialog!.querySelectorAll("[data-answer-row]"));
+    expect(rendered).toHaveLength(8);
+    expect(rendered[0]?.textContent).toContain("민수<b>안경</b>");
+    expect(rendered[0]?.querySelector("b")).toBeNull();
+    expect(rendered[7]?.textContent).toContain("긴이름참가자미제출");
+  });
+
+  it("확인 뒤 역할 메뉴에 답안 기록이 없고 현재 판의 창은 다시 열리지 않는다", () => {
     connectionMock.current = conn({ view: play("discussion") });
-    const { container } = mount();
-    expect(evidence()).toBeNull();
+    const { container, unmount } = mount();
+    fireEvent.click(container.querySelector("[data-first-answers-close]")!);
+    expect(overlay()).toBeNull();
     expect(container.querySelector('[data-playtest-action="clues"]')).toBeNull();
-    expect(container.querySelector("[data-chat-input]")).not.toBeNull();
     fireEvent.click(container.querySelector("[data-game-menu]")!);
     fireEvent.click(container.querySelector("[data-game-menu-role]")!);
-    fireEvent.click(container.querySelector('[data-rolecard-tab="records"]')!);
-    expect(sheet()?.getAttribute("aria-label")).toBe("모두의 기록");
-    expect(sheet()?.querySelectorAll("[data-answer-row]")).toHaveLength(rows.length);
+    expect(container.querySelector('[data-rolecard-tab="records"], [data-answer-list]')).toBeNull();
+    unmount();
+    mount();
+    expect(overlay()).toBeNull();
   });
 
-  it("토론 중 재접속해도 채팅 위에 단서 창이 열리지 않는다", () => {
-    connectionMock.current = conn({ view: play("dayAnnounce") });
-    const { rerender, container } = mount();
-    setView(play("discussion"), 2);
+  it("창을 못 본 사람이 토론 중 재접속하면 서버 공개 마감까지만 열린다", () => {
+    vi.setSystemTime(10_000);
+    connectionMock.current = conn({ view: play("discussion"), epoch: 2 });
+    mount();
+    expect(overlay()).not.toBeNull();
+    act(() => vi.advanceTimersByTime(999));
+    expect(overlay()).not.toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    expect(overlay()).toBeNull();
+  });
+
+  it("밤에 들어서면 정답 알림의 타이머가 남아 있어도 글자가 화면에서 사라진다", () => {
+    connectionMock.current = conn({ view: play("answerReveal") });
+    const { container, rerender } = mount();
+    expect(container.querySelector("[data-announce-label]")?.textContent).toBe("제시어");
+    setView(play("night"));
     again(rerender);
-    expect(sheet()).toBeNull();
-    expect(evidence()).toBeNull();
-    expect(container.querySelector('[data-playtest-action="clues"]')).toBeNull();
+    expect(container.querySelector("[data-announce-label]")).toBeNull();
+    expect(container.textContent).not.toContain("해리포터");
   });
 
-  it("2일차에는 첫날 답을 다시 위에 띄우지 않는다", () => {
-    connectionMock.current = conn({ view: play("dayAnnounce", { n: 2 }) });
-    const { rerender } = mount();
-    setView(play("discussion", { n: 2 }));
-    again(rerender);
-    expect(sheet()).toBeNull();
-    expect(evidence()).toBeNull();
-  });
-
-  it("2일차에 의심 기록이 있어도 자동으로 열리지 않고 탭은 있다(P24-19)", () => {
-    const withLog = (phase: RoomView["phase"]): RoomView => {
-      const v = play(phase, { n: 2 });
-      return { ...v, day: { ...v.day!, suspectLog: [{ n: 2, from: 1, to: 2 }] } };
-    };
-    connectionMock.current = conn({ view: withLog("dayAnnounce") });
-    const { rerender } = mount();
-    setView(withLog("discussion"));
-    again(rerender);
-    expect(sheet()).toBeNull();
-  });
-
-  it("키워드 공개 답이 없는 판에는 목록이 없다", () => {
-    connectionMock.current = conn({ view: play("dayAnnounce", { answers: false }) });
-    const { rerender } = mount();
-    setView(play("discussion", { answers: false }));
-    again(rerender);
-    expect(evidence()).toBeNull();
-  });
-
-  it("결과(ended): 정답이 있으면 띠 줄이 `제시어 · 해리포터`, 시간 행은 없다", () => {
-    connectionMock.current = conn({ view: { ...play("ended", { answer: "해리포터" }), phaseEndsAt: null, phaseDurationMs: null } });
+  it.each([
+    ["discussion", { n: 2 }],
+    ["verdict", {}],
+    ["ended", { n: 2 }],
+  ] as const)("첫날 토론 밖(%s)에는 이전 답이 있어도 공개하지 않는다", (phase, options) => {
+    connectionMock.current = conn({ view: play(phase, options) });
     const { container } = mount();
-    expect(container.querySelector("[data-host-band] [data-host-line]")?.textContent).toBe("제시어 · 해리포터");
-    expect(container.querySelector("[data-host-band] [data-host-time]")).toBeNull();
-    expect(container.querySelector(".mv-host__band")?.classList.contains("is-off")).toBe(false);
-  });
-
-  it("결과(ended): 정답이 없으면 띠 면은 지금처럼 숨는다", () => {
-    connectionMock.current = conn({ view: { ...play("ended"), phaseEndsAt: null, phaseDurationMs: null } });
-    const { container } = mount();
-    expect(container.querySelector(".mv-host__band")?.classList.contains("is-off")).toBe(true);
+    expect(overlay()).toBeNull();
+    expect(container.textContent).not.toContain("해리포터");
   });
 });

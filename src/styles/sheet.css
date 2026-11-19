@@ -34,6 +34,18 @@
 .mf-dialog--open .mf-sheet { transform: translateY(0); }
 .mf-sheet--closing { transform: translateY(100%); }
 
+.mf-dialog--centered[open] { justify-content: center; padding-inline: var(--space-sm); }
+.mf-dialog--centered .mf-sheet {
+  width: 100%;
+  box-sizing: border-box;
+  padding-bottom: var(--space-lg);
+  border-radius: 16px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: transform var(--mf-sheet-ms) var(--ease-out), opacity var(--mf-sheet-ms) var(--ease-out);
+}
+.mf-dialog--centered.mf-dialog--open .mf-sheet { opacity: 1; transform: translateY(0); }
+
 /* 손잡이 막대: 끌기는 이 영역에만 건다. 보이는 막대는 40×4, 누르는 영역은 위아래로 넓힌다. */
 .mf-sheet__handle {
   position: relative; align-self: center; flex: none; width: 40px; height: 4px; margin: calc(-1 * var(--space-sm)) 0 calc(-1 * var(--space-sm));
@@ -59,5 +71,5 @@
 .mf-share__block { display: flex; flex-direction: column; gap: var(--space-xs); }
 
 @media (prefers-reduced-motion: reduce) {
-  .mf-sheet, .mf-sheet-scrim { transition-duration: 0.01ms; }
+  .mf-sheet, .mf-dialog--centered .mf-sheet, .mf-sheet-scrim { transition-duration: 0.01ms; }
 }

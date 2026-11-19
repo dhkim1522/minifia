@@ -35,7 +35,7 @@ import { confirmedTarget } from "./night";
 import { pointLinesOf, turnViewOf } from "./nomination";
 import { runoffVotersOf, runoffViewOf } from "./runoff";
 import { showdownViewOf } from "./showdown";
-import { PHASE_DEFS } from "./phases";
+import { FIRST_ANSWERS_DISPLAY_MS, PHASE_DEFS } from "./phases";
 import { firstBallotCount, firstPlaytestDay, humanSeats, voteOpensAt } from "./playtest";
 import { RULES } from "./ruleset";
 import { isReady } from "./rematch";
@@ -69,21 +69,26 @@ const DAY_PHASES: ReadonlySet<PhaseId> = new Set([
  * 낮 정보. 허용 목록 리터럴로만 만든다 — 조건을 채울 때만 키를 만들고, 서버 전용 필드는 싣지 않는다.
  * 읽는 쪽이 기본값을 쥔다: 일차 없으면 1(RESEARCH Pattern 6).
  */
-function buildDay(state: RoomState): DayView {
+function buildDay(state: RoomState, now: number): DayView {
   const day: DayView = {
     n: state.day ?? 1,
     roles: rolesInPlay(state.players.length),
   };
-  // 첫날 키워드(D-06): 장르 라벨은 모두에게 같은 공개 값이다 — 필드별 리터럴이라 서버 전용 word 가 새지 않는다. 단어는 me.keyword 로 시민 편 본인에게만 간다.
-  // 정답(answer)은 answerOpenOf 가 참일 때만(answerReveal 진입부터 모두에게 같은 값, 23-05) — 장르 라벨은 정답이 열린 뒤에도 같이 싣는다(D-23, 기록 카드 구역 머리).
-  // 제출된 답 목록(answers, 23-06 D-14·D-24)은 keyword 단계가 끝난 뒤 모두에게 같은 값으로, 판 내내 남는다 — 필드별 복사라 서버 전용 answerSubmits·answerDraft 는 닿지 않는다.
-  // 마감 전(keyword 단계)에는 목록 자체가 없다: 누가 냈는지가 어느 view 에도 새지 않는다(D-10).
-  if (state.keyword !== undefined && (state.phase === "keyword" || answerOpenOf(state) || state.keywordAnswers !== undefined)) {
+  const revealAnswer = answerOpenOf(state);
+  const discussionDuration = state.phase === "discussion" && day.n === 1 ? phaseDurationOf(state) : null;
+  const answersUntil = discussionDuration !== null && state.phaseEndsAt !== null
+    ? state.phaseEndsAt - discussionDuration + FIRST_ANSWERS_DISPLAY_MS
+    : null;
+
+  // 첫날 토론이 시작되면 답안과 발표 종료 시각을 함께 보낸다. 발표가 지난 뒤에는 재접속한 참가자에게도 답안을 보내지 않는다.
+  const answers = answersUntil !== null && now < answersUntil ? state.keywordAnswers : undefined;
+  if (state.keyword !== undefined && (state.phase === "keyword" || revealAnswer || answers !== undefined)) {
     const kw: KeywordView = { genre: genreLabelOf(state.keyword.genre) ?? "" };
-    if (state.phase !== "keyword" && state.keywordAnswers !== undefined) {
-      kw.answers = state.keywordAnswers.map((r) => ({ order: r.order, seat: r.seat, text: r.text }));
+    if (answers !== undefined && answersUntil !== null) {
+      kw.answers = answers.map(({ order, seat, text }) => ({ order, seat, text }));
+      kw.answersUntil = answersUntil;
     }
-    if (answerOpenOf(state)) kw.answer = state.keyword.word;
+    if (revealAnswer) kw.answer = state.keyword.word;
     day.keyword = kw;
   }
   // 토론 끝내기는 누른 산 사람 수만 공개한다 — 누가 눌렀는지는 서버 전용(Player.endVote)이고 본인 값만 me.endDiscussion 으로 간다(결정 0060-2).
@@ -405,7 +410,7 @@ export function buildView(state: RoomState, playerId: string, now: number): Room
     mapChoice: state.mapChoice ?? "random",
   };
   if (state.phase !== "lobby" && state.map !== undefined) view.map = state.map;
-  if (DAY_PHASES.has(state.phase)) view.day = buildDay(state);
+  if (DAY_PHASES.has(state.phase)) view.day = buildDay(state, now);
 
   // 결과는 ended 단계에서만 모두에게 같다(D-17). seats 는 관전자 전용 spectate.seats 와 같은 방식으로 따로 만든다 — spectate 규칙은 그대로 둔다.
   if (state.phase === "ended" && state.winner !== undefined) {

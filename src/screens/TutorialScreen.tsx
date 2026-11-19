@@ -4,7 +4,7 @@ import type { MouseEvent, RefObject } from "react";
 import { emitSignal } from "../audio/signals";
 import { useSound } from "../audio/useSound";
 import { Button } from "../components/Button";
-import { RoleCardSheet } from "../components/RoleCardSheet";
+import { FirstAnswerList } from "../components/FirstAnswers";
 import { FocusRing } from "../components/tutorial/FocusRing";
 import { TutorialFrame } from "../components/tutorial/TutorialFrame";
 import { HostBand, HostDock } from "../components/v2/HostBand";
@@ -12,9 +12,6 @@ import { V2Icon } from "../components/v2/V2Icon";
 import type { V2IconName } from "../components/v2/V2Icon";
 import { dayEvents } from "../game/dayView";
 import {
-  ANSWER_ROW_LAST_EXTRA_MS,
-  ANSWER_ROW_START_MS,
-  ANSWER_ROW_STEP_MS,
   ROLE_ICON_STEP_MS,
   TUTORIAL_CAST,
   TUTORIAL_CHAT,
@@ -40,7 +37,6 @@ const ROLE_ICONS: readonly V2IconName[] = ["roleCitizen", "roleMafia", "rolePoli
 const PANEL = "[data-world-panel], .mf-keyword__answer";
 const CONTROL = "button, input, textarea, select, a[href]";
 const ALWAYS_ALLOWED = "[data-tutorial-exit], [data-tutorial-home], [data-tutorial-replay], [data-sound-button]";
-const NOOP = () => {};
 
 function selectorFor(target: TutorialTargetId, scene: TutorialSceneId, playtest: boolean): string {
   switch (target) {
@@ -115,7 +111,7 @@ export function TutorialScreen({ onExit, playtest = false }: { onExit: () => voi
   const sceneId = scene.id;
   const beatId = beat.id;
   const selector = target === null ? null : selectorFor(target, sceneId, playtest);
-  const showRecords = !playtest && sceneId === "answers";
+  const showAnswers = sceneId === "answers";
   const bottomEdge = useTutorialLayout(root, selector, sceneId, beatId);
   const [store] = useState(() => {
     const world = new WorldStore();
@@ -124,7 +120,6 @@ export function TutorialScreen({ onExit, playtest = false }: { onExit: () => voi
   });
   const [chat] = useState(() => new ChatStore());
   const [cardSeen, setCardSeen] = useState(false);
-  const [shownAnswers, setShownAnswers] = useState(0);
 
   const view = useMemo(
     () => tutorialView(sceneId, beatId, startedAt, acted, { playtest, ...(firstBallot === undefined ? {} : { firstBallot }) }),
@@ -132,9 +127,6 @@ export function TutorialScreen({ onExit, playtest = false }: { onExit: () => voi
   );
   const timelessView = useMemo(() => ({ ...view, phaseEndsAt: null, phaseDurationMs: null }), [view]);
   const answers = view.day?.keyword?.answers;
-  const recordsView = showRecords && view.day && answers
-    ? { ...view, day: { ...view.day, keyword: { ...view.day.keyword, genre: TUTORIAL_CAST.genre, answers: answers.slice(0, shownAnswers) } } }
-    : view;
   const sound = useSound({ view: timelessView });
 
   useEffect(() => preloadRoleAssets(), []);
@@ -157,15 +149,6 @@ export function TutorialScreen({ onExit, playtest = false }: { onExit: () => voi
     if (beat.sfx === "ui.host") emitSignal({ kind: "host" });
   }, [beat, startedAt]);
 
-  useEffect(() => {
-    setShownAnswers(0);
-    if (!showRecords || answers === undefined) return;
-    const timers = answers.map((_, i) => setTimeout(
-      () => setShownAnswers(i + 1),
-      ANSWER_ROW_START_MS + ANSWER_ROW_STEP_MS * i + (i === answers.length - 1 ? ANSWER_ROW_LAST_EXTRA_MS : 0),
-    ));
-    return () => timers.forEach(clearTimeout);
-  }, [showRecords, startedAt]);
   useEffect(() => {
     if (playtest || sceneId !== "discussion") return;
     const timers = TUTORIAL_CHAT.map((line, i) => setTimeout(() => {
@@ -265,8 +248,13 @@ export function TutorialScreen({ onExit, playtest = false }: { onExit: () => voi
           {ROLE_ICONS.map((icon, i) => <span key={icon} style={{ animationDelay: `${i * ROLE_ICON_STEP_MS}ms` }}><V2Icon name={icon} size={22} /></span>)}
         </div>
       ) : null}
-      {showRecords ? (
-        <RoleCardSheet view={recordsView} showBack={false} tab="records" onTab={NOOP} unread={0} newCount={0} onClose={NOOP} modal={false} />
+      {showAnswers && answers ? (
+        <div className="tut-answers">
+          <section className="mf-first-answers" aria-label="모두의 답">
+            <h2 className="mf-first-answers__title">모두의 답</h2>
+            <FirstAnswerList rows={answers} players={view.players} />
+          </section>
+        </div>
       ) : null}
       {finalScreen ? (
         <section className="tut-end" aria-labelledby="tut-end-title">
@@ -278,7 +266,7 @@ export function TutorialScreen({ onExit, playtest = false }: { onExit: () => voi
       <div key={startedAt} className="tut-cut" aria-hidden="true" />
       <FocusRing target={target === null || selector === null ? null : { id: target, selectors: [target === "first-ballot" ? "[data-first-ballot]" : selector], pill: target === "tag-4" }} />
       <TutorialFrame step={index + 1} steps={steps} pill={beat.pill === null ? null : TUTORIAL_PILLS[beat.pill]}
-        place={showRecords ? "top" : bottomEdge > 0 && !finalScreen ? "aboveBottom" : "bottom"}
+        place={showAnswers ? "top" : bottomEdge > 0 && !finalScreen ? "aboveBottom" : "bottom"}
         bottomEdge={bottomEdge} hideExit={finalScreen} onExit={onExit} />
     </div>
   );

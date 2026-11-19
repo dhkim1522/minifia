@@ -84,12 +84,12 @@ describe("첫날 정답 공개 단계 (D-02·D-22)", () => {
       const view = lastViewOf(a.sock);
       expect(view.phase).toBe("answerReveal");
       expect(view.phaseDurationMs).toBe(4400);
-      expect(view.day?.keyword).toMatchObject({ genre: label, answer: word }); // 23-06: keyword 마감 뒤 answers 도 같이 남는다
+      expect(view.day?.keyword).toEqual({ genre: label, answer: word });
       expect(view.day?.noExecution).toEqual({ reason: "rejected" });
     }
 
     await advanceTo(room.code, socks, "night");
-    for (const a of actors) expect(lastViewOf(a.sock).day?.keyword).toMatchObject({ genre: label, answer: word });
+    for (const a of actors) expect(lastViewOf(a.sock).day?.keyword).toBeUndefined();
   }, 60_000);
 
   it("둘째 날 찬반 부결은 곧장 night 이다(answerReveal 없음)", async () => {
@@ -187,7 +187,7 @@ describe("키워드 답 접수 (D-07·D-10)", () => {
     expect(summary(await settle(mafia.sock, m3))).toBe("[state:keyword]");
   }, 40_000);
 
-  it("마감(forceDue+알람)에 dayAnnounce 의 day.keyword.answers 가 모든 소켓에 같다: 낸 순서 → 쓰던 글 → 답 없음, 봇 좌석은 text null 맨 끝 묶음", async () => {
+  it("마감(forceDue+알람)에 첫날 discussion의 day.keyword.answers 가 모든 소켓에 같다: 낸 순서 → 쓰던 글 → 답 없음, 봇 좌석은 text null 맨 끝 묶음", async () => {
     const { room, socks } = await inKeyword({ bots: 1 });
     const actors = actorsOf(room);
     const [a, b, c, d] = actors as [typeof actors[0], typeof actors[0], typeof actors[0], typeof actors[0]];
@@ -196,6 +196,8 @@ describe("키워드 답 접수 (D-07·D-10)", () => {
     answerOf(b.sock, "쓰던글", false);
     await settle(b.sock, mark(b.sock));
     await advanceTo(room.code, socks, "dayAnnounce");
+    for (const sock of socks) expect(lastViewOf(sock).day?.keyword).toBeUndefined();
+    await advanceTo(room.code, socks, "discussion");
     for (const sock of socks) await settle(sock, mark(sock));
 
     const views = socks.map((s) => lastViewOf(s));

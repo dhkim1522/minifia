@@ -207,5 +207,7 @@ export function useDayFx({ view, epoch, chat }: { view: RoomView | null; epoch: 
     // eslint 규칙 없음 — later/clearAll 은 ref 와 setState 만 쓰므로 의존성에 넣지 않는다
   }, [view, epoch, chat]);
 
-  return { announce, deny, fading, ghostEnter, killFx, policeResult };
+  // 정답 글은 다음 단계가 도착하는 즉시 가린다. 연결 지연으로 연출 종료 타이머가 늦어질 수 있다.
+  const currentAnnounce = announce?.label === DAY_COPY.answerLabel && view?.phase !== "answerReveal" ? null : announce;
+  return { announce: currentAnnounce, deny, fading, ghostEnter, killFx, policeResult };
 }

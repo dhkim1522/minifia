@@ -34,7 +34,7 @@ export const DAY_COPY = {
   announceNight: "밤이 되었습니다",
   // ---- 단계 제목 ----
   titles: {
-    keyword: "제시어", // 첫날 키워드 카드(23-01, P23-2) — PreGame 틀이라 시간대 낱말이 없다
+    keyword: "라이어 게임", // 첫날 키워드 카드(23-01, P23-2) — PreGame 틀이라 시간대 낱말이 없다
     dayAnnounce: "토론", // 앞의 "낮" 은 헤더 시간대 낱말이 말한다(결정 0083-1)
     discussion: "토론",
     nomination: "지목",

@@ -29,6 +29,8 @@ export interface SheetProps {
   showClose?: boolean;
   /** 안내 화면에서 공용 상단 조작을 열어 둘 때만 거짓이다. */
   modal?: boolean;
+  /** 자동으로 열리는 결과처럼 화면 중앙에 띄울 때. */
+  centered?: boolean;
   /** 시트 본체(.mf-sheet)에 덧붙일 클래스. 시트별 높이 같은 모양 차이에 쓴다 */
   className?: string;
   /** 함수면 requestClose 와 닫히는 중 여부를 받는다 */
@@ -44,7 +46,7 @@ interface Drag {
 
 const isTextInput = (el: HTMLElement) => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
 
-export function Sheet({ label, onClose, initialFocusRef, showClose, modal = true, className, children }: SheetProps) {
+export function Sheet({ label, onClose, initialFocusRef, showClose, modal = true, centered = false, className, children }: SheetProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -204,7 +206,7 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, modal = true
   return (
     <dialog
       ref={dialogRef}
-      className={closing ? "mf-dialog mf-dialog--closing" : entered ? "mf-dialog mf-dialog--open" : "mf-dialog"}
+      className={["mf-dialog", centered && "mf-dialog--centered", closing ? "mf-dialog--closing" : entered && "mf-dialog--open"].filter(Boolean).join(" ")}
       aria-label={label}
       onCancel={(e) => {
         // Esc 의 기본 동작은 즉시 닫아 종료 애니메이션이 사라진다. 막고 직접 닫는다.
@@ -217,13 +219,13 @@ export function Sheet({ label, onClose, initialFocusRef, showClose, modal = true
         ref={sheetRef}
         className={[closing ? "mf-sheet mf-sheet--closing" : "mf-sheet", className].filter(Boolean).join(" ")}
       >
-        <div
+        {centered ? null : <div
           className="mf-sheet__handle"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
-        />
+        />}
         {showClose ? (
           <Button
             ref={closeBtnRef}

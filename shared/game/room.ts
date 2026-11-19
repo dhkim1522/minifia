@@ -211,7 +211,7 @@ export interface RoomState {
   keyword?: { genre: string; word: string };
   /** 서버 전용(23-06, D-07). 키워드 단계에서 확정 제출한 답 — 낸 순서가 배열 순서다. closeKeyword 가 키째 지운다(공개 값은 keywordAnswers). 어떤 view 에도 이 키로 실리지 않는다. */
   answerSubmits?: Array<{ seat: number; text: string }>;
-  /** 키워드 마감 뒤 공개 값(D-14·D-24): 확정 낸 순서 → 쓰던 글(좌석 순) → 답 없음(좌석 순). view 의 day.keyword.answers 로 keyword 단계 뒤 모두에게 같은 값이 간다. */
+  /** 키워드 마감 뒤 공개 값(D-14·D-24): 확정 낸 순서 → 쓰던 글(좌석 순) → 답 없음(좌석 순). 첫날 토론 시작의 공통 답안 발표에 쓴다. */
   keywordAnswers?: Array<{ order: number; seat: number; text: string | null }>;
   /** 서버 전용(23-06, D-09). 그 판에서 마피아가 금지어로 거절당한 적이 있음 — D1 "떠보기 성공"의 근거. 어떤 view·프레임에도 싣지 않는다. */
   keywordProbed?: true;

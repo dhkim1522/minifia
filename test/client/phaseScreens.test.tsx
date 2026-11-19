@@ -421,7 +421,7 @@ describe("단계 안내 aria-live · 단계 전환 (UI-SPEC 접근성·Motion)",
     rerenderRoom(r.rerender, makeView({ phase: "keyword", endsIn: 13_000, durationMs: 13_000, role: "citizen" }));
     expect(r.container.querySelector("[data-keyword-screen]")).not.toBeNull();
     expect(r.container.querySelector(".mf-phase-enter") === before).toBe(true);
-    expect(liveRegion(r.container).textContent).toBe("첫날 단서 쓰기");
+    expect(liveRegion(r.container).textContent).toBe("라이어 게임");
     rerenderRoom(r.rerender, makeView({ phase: "dayAnnounce", endsIn: 2_000, role: "citizen", day: 1 }));
     expect(r.container.querySelector(".mf-phase-enter") === before).toBe(false);
   });

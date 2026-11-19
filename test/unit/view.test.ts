@@ -4,7 +4,7 @@ import { channelOf } from "../../shared/game/audience";
 import { answerOpenOf } from "../../shared/game/keywordAnswer";
 import { pickTarget } from "../../shared/game/night";
 import { castTurnPoint, enterNomination, nominationStepMs, stepNomination, turnViewOf } from "../../shared/game/nomination";
-import { ANSWER_REVEAL_MS, DISCUSSION_MS, MORNING_MS, NIGHT_MS, NO_EXECUTION_MS, NOMINATION_GATHER_MS, PHASE_DEFS, VERDICT_MS, nominationMaxMs } from "../../shared/game/phases";
+import { ANSWER_REVEAL_MS, DISCUSSION_MS, FIRST_ANSWERS_DISPLAY_MS, MORNING_MS, NIGHT_MS, NO_EXECUTION_MS, NOMINATION_GATHER_MS, PHASE_DEFS, VERDICT_MS, nominationMaxMs } from "../../shared/game/phases";
 import { ROOM_TTL_MS, attachConnection, createRoomState, joinRoom, roundOf, startGame } from "../../shared/game/room";
 import type { Player, RoomState } from "../../shared/game/room";
 import { rolesInPlay } from "../../shared/game/roles";
@@ -368,16 +368,16 @@ function phaseKeyViolations(s: RoomState, viewer: Player, view: RoomView, phase:
   if (("verdictCount" in day) !== (phase === "verdict")) out.push(`${tag}: day.verdictCount presence ${"verdictCount" in day}`);
   else if (phase === "verdict" && keysOf(day.verdictCount) !== "no,yes") out.push(`${tag}: day.verdictCount keys ${keysOf(day.verdictCount)}`);
   if ("voted" in day) out.push(`${tag}: day.voted present`);
-  // 첫날 키워드(23-01, D-06): day.keyword 는 keyword 단계에만, genre 한 키뿐(단어 없음). 정답이 열린 뒤(answerOpenOf, 23-05)에는 genre·answer 두 키 — 모두에게 같은 값. me.keyword 는 그 단계의 산 시민 편 본인에게만 서버 값 그대로 — 마피아·유령에게는 키 자체가 없다.
-  const answerOpen = s.keyword !== undefined && answerOpenOf(s);
-  // 23-06: 마감 뒤(keywordAnswers 가 생긴 뒤)에는 day.keyword.answers 가 판 내내 남고, keyword 단계에는 없다. 키 집합은 모든 viewer 가 같다.
-  const wantAnswers = phase !== "keyword" && s.keyword !== undefined && s.keywordAnswers !== undefined;
-  const wantDayKeyword = phase === "keyword" || answerOpen || wantAnswers;
-  const wantKeywordKeys = ["genre", ...(answerOpen ? ["answer"] : []), ...(wantAnswers ? ["answers"] : [])].sort().join(",");
+  const answerOpen = answerOpenOf(s);
+  const answersUntil = (s.phaseEndsAt ?? 0) - (view.phaseDurationMs ?? 0) + FIRST_ANSWERS_DISPLAY_MS;
+  const wantAnswers = phase === "discussion" && day.n === 1 && s.keyword !== undefined
+    && s.keywordAnswers !== undefined && view.serverNow < answersUntil;
+  const wantDayKeyword = (phase === "keyword" && s.keyword !== undefined) || answerOpen || wantAnswers;
+  const wantKeywordKeys = ["genre", ...(answerOpen ? ["answer"] : []), ...(wantAnswers ? ["answers", "answersUntil"] : [])].sort().join(",");
   if (("keyword" in day) !== wantDayKeyword) out.push(`${tag}: day.keyword presence ${"keyword" in day}`);
   else if (wantDayKeyword && keysOf(day.keyword) !== wantKeywordKeys) out.push(`${tag}: day.keyword keys ${keysOf(day.keyword)} want ${wantKeywordKeys}`);
-  else if (answerOpen && (day.keyword as { answer?: string }).answer !== s.keyword?.word) out.push(`${tag}: day.keyword.answer value`);
-  else if (wantAnswers && flat(day.keyword!.answers) !== flat(s.keywordAnswers)) out.push(`${tag}: day.keyword.answers value`);
+  else if (answerOpen && day.keyword?.answer !== s.keyword?.word) out.push(`${tag}: day.keyword.answer value`);
+  else if (wantAnswers && (flat(day.keyword?.answers) !== flat(s.keywordAnswers) || day.keyword?.answersUntil !== answersUntil)) out.push(`${tag}: day.keyword.answers value`);
   const wantMeKeyword = phase === "keyword" && isAlive(viewer) && viewer.role !== undefined && viewer.role !== "mafia";
   if (("keyword" in view.me) !== wantMeKeyword) out.push(`${tag}: me.keyword presence ${"keyword" in view.me}`);
   else if (wantMeKeyword && view.me.keyword !== s.keyword?.word) out.push(`${tag}: me.keyword value`);
@@ -784,22 +784,20 @@ describe("buildView 낮 뷰 — 순차 주장 제거 뒤 (07-08, CHAT-06): turn 
     expect(bad.join(",")).toBe("");
   });
 
-  it("dayAnnounce·discussion·night·morning 의 day 키는 n,roles(discussion 은 + endCount, night 는 + noExecution: 표 없이 지나온 밤, morning 은 + morning)이고 turn 키가 없다(night·morning 은 정답이 열려 + keyword, 23-05)", () => {
+  it("dayAnnounce·discussion·night·morning 의 day 키는 n,roles(discussion 은 + endCount, night 는 + noExecution: 표 없이 지나온 밤, morning 은 + morning)이고 turn 키가 없다(첫날 토론 시작만 + keyword)", () => {
     const got: string[] = [];
     for (const phase of ["dayAnnounce", "discussion", "night", "morning"] as const) {
       const s = richStateAt(phase, 5, 1);
       const keys = new Set(s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(",")));
       got.push(`${phase}:${[...keys].join("|")}`);
     }
-    expect(got.join(" ")).toBe("dayAnnounce:keyword,n,roles discussion:endCount,keyword,n,roles night:keyword,n,noExecution,roles morning:keyword,morning,n,roles"); // 23-05: 정답이 열린 뒤(첫날 night·morning)에는 day.keyword { genre, answer }, 23-06: keyword 마감 뒤에는 { genre, answers } 가 판 내내 남는다
+    expect(got.join(" ")).toBe("dayAnnounce:n,roles discussion:endCount,keyword,n,roles night:n,noExecution,roles morning:morning,n,roles");
   });
 
-  it("dayAnnounce 뷰의 day 는 {n, roles} 에 keyword(첫날 답 공개 목록, 23-06)를 더한 것뿐이다", () => {
+  it("dayAnnounce 뷰의 day 는 {n, roles}만 담는다", () => {
     const s = stateAt("dayAnnounce", 5, 1);
     for (const p of s.players) {
-      const { keyword, ...rest } = buildView(s, p.id, START_AT).day!;
-      expect(flat(rest)).toBe(flat({ n: 1, roles: rolesInPlay(5) }));
-      expect(Object.keys(keyword ?? {}).sort().join(",")).toBe("answers,genre");
+      expect(buildView(s, p.id, START_AT).day).toEqual({ n: 1, roles: rolesInPlay(5) });
     }
   });
 
@@ -889,7 +887,7 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
     const s = stateAt("discussion", 5, 1);
     for (const viewer of s.players) {
       const view = buildView(s, viewer.id, START_AT);
-      expect(Object.keys(view.day ?? {}).sort().join(",")).toBe("endCount,keyword,n,roles"); // 23-06: keyword 마감 뒤 day.keyword.answers 가 남는다
+      expect(Object.keys(view.day ?? {}).sort().join(",")).toBe("endCount,keyword,n,roles"); // 첫날 토론 시작에는 답안 발표를 더한다.
       expect(roleValueLeaks(view).join(";")).toBe("");
     }
   });
@@ -903,10 +901,10 @@ describe("buildView 낮 뷰 — 토론·이튿날 (D-02, D-05, D-15)", () => {
 });
 
 describe("buildView 밤 — 생존·본인 선택 (ELIM-01, D-06)", () => {
-  it("night view: day 의 키는 keyword,n,noExecution,roles(표 없이 지나온 밤이라 처형 무효 이유가 실린다, D-34) 이고 players[] 키는 alive,connected,isHost,nickname,seat, 모두 alive true", () => {
+  it("night view: day 의 키는 n,noExecution,roles(표 없이 지나온 밤이라 처형 무효 이유가 실린다, D-34) 이고 players[] 키는 alive,connected,isHost,nickname,seat, 모두 alive true", () => {
     const s = stateAt("night", 5, 1);
     const dayKeys = s.players.map((p) => Object.keys(buildView(s, p.id, START_AT).day ?? {}).sort().join(","));
-    expect(`[${dayKeys.join(" ")}]`).toBe(`[${Array(5).fill("keyword,n,noExecution,roles").join(" ")}]`); // 23-05: 첫날 밤은 정답이 열려 day.keyword 가 더해진다
+    expect(`[${dayKeys.join(" ")}]`).toBe(`[${Array(5).fill("n,noExecution,roles").join(" ")}]`); // 23-05: 첫날 밤은 정답이 열려 day.keyword 가 더해진다
     const got = s.players.map((p) => {
       const v = buildView(s, p.id, START_AT);
       return v.players.map((e) => `${Object.keys(e).filter((k) => k !== "look").sort().join(",")}:${String(e.alive)}`).join("|"); // look 은 시작 때 풀린 공개 의상(D-01)
@@ -2446,19 +2444,23 @@ describe("키워드 답 view (23-06)", () => {
     expect(JSON.stringify(viewOf(withOthers, 1)).includes("비밀확정CANARY")).toBe(false);
   });
 
-  it("keyword 단계 view 에는 day.keyword.answers 가 없고, 마감 뒤 dayAnnounce 부터 모든 viewer 에게 같은 값이다", () => {
-    const s = base();
-    for (const p of s.players) expect("answers" in (viewOf(s, p.seat).day!.keyword ?? {})).toBe(false);
+  it.each([false, true])("첫날 토론 시작 직후에만 같은 답안과 종료 시각을 전달한다 (실험방 %s)", (playtest) => {
+    const s = stateAt("discussion", 5, 1);
     const rows = [
       { order: 1, seat: 2, text: "마법" },
       { order: 2, seat: 0, text: null },
     ];
-    const after: RoomState = { ...s, phase: "dayAnnounce", keywordAnswers: rows };
-    const got = s.players.map((p) => JSON.stringify(viewOf(after, p.seat).day!.keyword));
-    expect(new Set(got).size).toBe(1);
-    expect(viewOf(after, 0).day!.keyword!.answers).toEqual(rows);
-    // 이후 단계(첫날 discussion·둘째 날)에도 남는다
-    const later: RoomState = { ...after, phase: "discussion", day: 2 };
-    expect(viewOf(later, 3).day!.keyword!.answers).toEqual(rows);
+    const start = START_AT;
+    const continuing: RoomState = { ...s, ...(playtest ? { playtest: true as const } : {}), keywordAnswers: rows };
+    const duration = buildView(continuing, s.players[0]!.id, start).phaseDurationMs!;
+    const discussion = { ...continuing, phaseEndsAt: start + duration };
+    const until = start + FIRST_ANSWERS_DISPLAY_MS;
+    for (const p of s.players) {
+      expect(buildView(discussion, p.id, start).day?.keyword).toMatchObject({ answers: rows, answersUntil: until });
+      expect(buildView(discussion, p.id, until - 1).day?.keyword?.answers).toEqual(rows);
+      expect(buildView(discussion, p.id, until).day?.keyword).toBeUndefined();
+      expect(buildView({ ...discussion, day: 2 }, p.id, start).day?.keyword).toBeUndefined();
+      expect(buildView({ ...discussion, phase: "ended" }, p.id, start).day?.keyword).toBeUndefined();
+    }
   });
 });
