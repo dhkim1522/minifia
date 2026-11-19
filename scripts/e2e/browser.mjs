@@ -1573,7 +1573,7 @@ export async function readGame(page) {
           top: rect(q(".mv-tag", el) ?? el)?.top ?? null,
         };
       }),
-      announce: ann && annText ? { text: (annText.textContent ?? "").trim(), fontPx: parseFloat(getComputedStyle(annText).fontSize), lineCount: lineCountOf(annText), wordBreak: getComputedStyle(annText).wordBreak } : null,
+      announce: ann && annText ? { text: (annText.textContent ?? "").trim(), viewportWidth: window.innerWidth, fontPx: parseFloat(getComputedStyle(annText).fontSize), lineCount: lineCountOf(annText), wordBreak: getComputedStyle(annText).wordBreak } : null,
       counts: { ghostView: qa("[data-ghost-view]").length, roleChips: qa("[data-role-chip]").length, ghostSeats: qa("[data-ghost-seat]").length, ghostTexts },
       ring: q("[data-world-stage]")?.getAttribute("data-ring") ?? null,
       testButton: !!q(".mf-game__test .mf-tt"),
@@ -1621,7 +1621,7 @@ export async function pressEndDiscussion(page, on = true) {
 }
 
 /**
- * 결과 알림 관찰을 심는다: 40ms 마다 [data-announce] 를 읽어 글자가 바뀔 때마다 { text(없어지면 null), at(page 시계 ms), fontPx, lineCount, wordBreak } 를 쌓는다.
+ * 결과 알림 관찰을 심는다: 40ms 마다 [data-announce] 를 읽어 글자가 바뀔 때마다 글, 화면 너비, 크기, 줄 수를 쌓는다.
  * 처형 5초처럼 짧은 구간을 Playwright 호출 지연과 상관없이 놓치지 않으려고 쓴다. readAnnounceWatch 가 읽고 멈춘다.
  */
 export function armAnnounceWatch(page) {
@@ -1641,7 +1641,7 @@ export function armAnnounceWatch(page) {
       last = text;
       if (el) {
         const cs = getComputedStyle(el);
-        log.push({ text, at: performance.now(), fontPx: parseFloat(cs.fontSize), lineCount: lineCountOf(el), wordBreak: cs.wordBreak });
+        log.push({ text, at: performance.now(), viewportWidth: window.innerWidth, fontPx: parseFloat(cs.fontSize), lineCount: lineCountOf(el), wordBreak: cs.wordBreak });
       } else log.push({ text: null, at: performance.now() });
     }, 40);
     window.__annWatch = { log, stop: () => clearInterval(timer) };

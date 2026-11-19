@@ -800,6 +800,14 @@ test("announceChecks maxLines 3(큰 글이 띠·소리 단추를 피해 좁아�
   assert.equal(idsOk(announceChecks({ fontPx: 36, lineCount: 3, wordBreak: "keep-all" })).AN2, false);
 });
 
+test("announceChecks: 화면 너비에 맞는 32~36px 발표 크기를 확인한다", () => {
+  for (const [viewportWidth, fontPx] of [[320, 32], [340, 34], [390, 36]]) {
+    const announcement = { viewportWidth, fontPx, lineCount: 1, wordBreak: "keep-all" };
+    assert.equal(idsOk(announceChecks(announcement)).AN1, true);
+    assert.equal(idsOk(announceChecks({ ...announcement, fontPx: fontPx - 2 })).AN1, false);
+  }
+});
+
 test("announceChecks: 값이 없으면 조용히 통과하지 않고 측정값 없음으로 실패한다", () => {
   for (const m of [null, undefined, {}, { fontPx: 36 }]) {
     const lines = announceChecks(m);

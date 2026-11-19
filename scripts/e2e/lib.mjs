@@ -869,17 +869,18 @@ export function showdownChecks(input) {
 }
 
 /**
- * 결과 알림 판정(AN1~AN3). m = { fontPx, lineCount, wordBreak } — `[data-announce]` 의 계산된 글자 크기·줄 수·word-break.
- * AN1 글자 36px(28px 로 줄이지 않는다) · AN2 한두 줄 · AN3 word-break keep-all.
+ * 결과 알림 판정(AN1~AN3). m = { viewportWidth, fontPx, lineCount, wordBreak }.
+ * AN1 화면 너비에 맞는 32~36px · AN2 한두 줄 · AN3 word-break keep-all.
  * opts.maxLines = 3 은 큰 글이 띠·소리 단추를 피해 좁아진 자리(.mf-announce.is-top, 18.1-13 결정 0083-10)에서 8자 이름이 세 줄로 감기는 것을 허용한다. 글자 크기·keep-all 은 그대로다.
  */
 export function announceChecks(m, { maxLines = 2 } = {}) {
-  const label1 = "결과 알림 글자 36px";
+  const fontPx = isNum(m?.viewportWidth) ? Math.min(36, Math.max(32, m.viewportWidth / 10)) : 36;
+  const label1 = `결과 알림 글자 ${fmt(fontPx)}px`;
   const label2 = maxLines >= 3 ? "결과 알림이 세 줄 이하(띠·소리 단추를 피해 좁아진 폭)" : "결과 알림이 한두 줄";
   const label3 = "결과 알림 word-break keep-all";
   if (!m || typeof m !== "object") return [noMeasure("AN1", label1, "announce"), noMeasure("AN2", label2, "announce"), noMeasure("AN3", label3, "announce")];
   return [
-    isNum(m.fontPx) ? result("AN1", label1, Math.abs(m.fontPx - 36) <= 0.5 ? [] : [`${fmt(m.fontPx)}px`]) : noMeasure("AN1", label1, "fontPx"),
+    isNum(m.fontPx) ? result("AN1", label1, Math.abs(m.fontPx - fontPx) <= 0.5 ? [] : [`${fmt(m.fontPx)}px`]) : noMeasure("AN1", label1, "fontPx"),
     isNum(m.lineCount) ? result("AN2", label2, m.lineCount >= 1 && m.lineCount <= maxLines ? [] : [`${m.lineCount}줄`]) : noMeasure("AN2", label2, "lineCount"),
     typeof m.wordBreak === "string" ? result("AN3", label3, m.wordBreak === "keep-all" ? [] : [`word-break ${m.wordBreak}`]) : noMeasure("AN3", label3, "wordBreak"),
   ];
