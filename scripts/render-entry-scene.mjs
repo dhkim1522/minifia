@@ -19,7 +19,9 @@ try {
     const { buildBarScene } = await import("/src/world/maps/bar.ts");
     const { createCharacter } = await import("/src/world/character.ts");
     const { LADDER } = await import("/src/world/renderer.ts");
-    const bar = buildBarScene(LADDER[0]);
+    // 홈 촬영에서는 동물이 둘러싼 원탁의 의자 두 개만 빼고 렌더한다.
+    const tableX = -2.4, tableZ = -4.6;
+    const bar = buildBarScene(LADDER[0], { omitTableChairsAt: [tableX, tableZ] });
     bar.setLighting("night");
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.shadowMap.enabled = true;
@@ -28,9 +30,7 @@ try {
     renderer.toneMappingExposure = 1.15;
     renderer.setSize(1200, 1800, false);
 
-    // 재즈 바 뒤쪽 펜던트 아래에서 테이블을 둘러싼다. 양옆 동물은 의자 바깥쪽에 서고,
-    // 앞쪽으로 나온 발과 가구 프레임 사이에 바닥이 보여 실루엣이 분리된다.
-    const tableX = -2.4, tableZ = -4.6;
+    // 재즈 바 뒤쪽 펜던트 아래에서 테이블을 둘러싼다.
     const subjects = [];
     function place(animal, outfit, x, z, angle) {
       const actor = createCharacter(0, outfit, undefined, animal);

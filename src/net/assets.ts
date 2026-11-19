@@ -31,7 +31,7 @@ export type PreloadItem = { href: string; imageSrcSet?: string };
  */
 export const ASSET_VERSION = "noir-11";
 /** 입장 배경은 캐릭터·맵 그림과 별도로 갱신한다. */
-export const ENTRY_ART_VERSION = "home-seats-1";
+export const ENTRY_ART_VERSION = "home-table-1";
 
 // 파일 이름의 @ 는 URL 에서 %40 으로 쓴다.
 function png(dir: "table" | "roles" | "ghost", id: string, scale: 2 | 4): string {

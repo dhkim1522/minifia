@@ -369,7 +369,7 @@ function windowBeamGeometry(): BufferGeometry {
   return geometry;
 }
 
-export function buildBarScene(budget: Budget): BarScene {
+export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTableChairsAt?: readonly [number, number] } = {}): BarScene {
   const root = new Scene();
   const P = PALETTE;
 
@@ -547,6 +547,7 @@ export function buildBarScene(budget: Budget): BarScene {
     brass.add(new TorusGeometry(0.142, 0.008, 5, 15), P.brass, tf(x, 0.969, z, -Math.PI / 2));
     // 앞쪽 탁상등의 빛 무리도 높이 1.2 시야 제한 안에 둔다.
     glow(glowRoom, P.lamp, x + z > 4 ? 0.54 : 0.66, x, 0.971, z, 0.46);
+    if (omitTableChairsAt?.[0] === x && omitTableChairsAt[1] === z) continue;
     for (let j = 0; j < 2; j++) {
       const a = Math.atan2(x, z) + (j ? Math.PI / 2 : -Math.PI / 2);
       const ch = tf(x + Math.sin(a) * 0.8, 0, z + Math.cos(a) * 0.8, 0, a + Math.PI, 0);
