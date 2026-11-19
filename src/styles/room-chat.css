@@ -1,6 +1,7 @@
 /* 화면 맨 아래 채팅을 공유한다. 상황별 행동은 위 줄에서만 바뀐다. */
-.mf-room-chat { min-width: 0; background: var(--noir-panel); }
+.mf-room-chat { min-width: 0; }
 .mf-room-chat .mv-chat { gap: 0; font-family: var(--font-ui); }
+.mf-room-chat :is(.mv-chat__logbox, .mv-chat__form) { background: var(--noir-panel); pointer-events: auto; }
 .mf-room-chat .mv-chat__log {
   gap: 5px;
   padding: 7px 12px 4px;
@@ -9,9 +10,9 @@
   box-shadow: none;
 }
 .mf-room-chat .mv-chat.is-compact .mv-chat__log { padding-block: 2px; }
-.mf-room-chat .mv-chat__form,
+.mf-room-chat .mv-chat__form { gap: 6px; padding: 8px 12px 12px; }
 .mf-keyword__answer .mv-chat__form { gap: 6px; margin: 8px 12px 12px; }
-.mf-room-chat .mv-chat.is-compact .mv-chat__form,
+.mf-room-chat .mv-chat.is-compact .mv-chat__form { padding-bottom: 8px; }
 .mf-keyword.is-kb .mf-keyword__answer .mv-chat__form { margin-bottom: 8px; }
 .mf-room-chat .mv-chat__input,
 .mf-keyword__answer .mv-chat__input { height: var(--tap-min); padding-inline: 9px; border-color: var(--noir-control-line); border-radius: 7px; background: var(--noir-inset); }
@@ -21,21 +22,20 @@
 .mf-keyword__answer .mv-chat__send { width: var(--tap-min); height: var(--tap-min); border-radius: 7px; }
 .mf-room-chat .mv-chat__send[aria-disabled="true"] { opacity: 1; }
 .mf-room-chat .mv-chat__send svg { width: 20px; height: 20px; }
-.mf-room-chat [data-chat-locked] .mv-chat__form { margin-inline-end: calc(12px + var(--tap-min) + 6px); }
+.mf-room-chat [data-chat-locked] .mv-chat__form { padding-inline-end: calc(12px + var(--tap-min) + 6px); }
 
 .mf-room-chat__tools { position: relative; }
 .mf-room-toolbar {
-  display: grid;
-  grid-template-columns: repeat(3, var(--tap-min)) minmax(0, 1fr);
+  display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 12px;
-  border-top: 1px solid var(--noir-control-line);
-  border-bottom: 1px solid var(--noir-control-line);
-  background: var(--noir-panel);
+  padding: 11px 12px;
+  pointer-events: none;
 }
-.mf-room-toolbar:empty { display: none; }
-.is-compact .mf-room-toolbar { padding-block: 6px; }
+.mf-room-toolbar:not(:has(> :not([hidden]))),
+.mf-room-toolbar > [hidden] { display: none; }
+.mf-room-toolbar > :not([hidden]) { pointer-events: auto; }
+.is-compact .mf-room-toolbar { padding-block: 7px; }
 .mf-room-tool {
   position: relative;
   display: inline-flex;
@@ -57,7 +57,7 @@
 }
 .mf-room-tool svg { flex: none; color: currentColor; }
 .mf-room-tool--skip {
-  margin-left: auto;
+  margin-inline-start: auto;
   min-width: 0;
   flex-direction: column;
   gap: 2px;
@@ -96,6 +96,7 @@
   border-radius: 8px;
   background: var(--noir-panel);
   box-shadow: var(--noir-rail), var(--shadow-card);
+  pointer-events: auto;
 }
 .is-compact .mf-room-chat__surface { max-height: clamp(44px, calc(var(--mf-room-h, 844px) - var(--mf-kb-lift, 0px) - 168px), 180px); }
 .mf-room-chat__surface:focus-visible { outline: 2px solid var(--noir-paper); outline-offset: -2px; }
@@ -109,29 +110,32 @@
   gap: 0;
   padding: 0;
   box-shadow: none;
+  background: transparent;
+  pointer-events: none;
 }
-.mf-game__panel--chat > :not(.mf-room-chat) { padding: 6px 12px; }
+.mf-game__panel--chat > :not(.mf-room-chat) { padding: 6px 12px; background: var(--noir-panel); pointer-events: auto; }
 .mf-game__panel--chat .mf-game__verdict { gap: 4px; }
 .mf-game__panel--chat .mv-verdict__btn { min-height: var(--tap-min); flex-direction: row; gap: 6px; }
 .mf-game__panel--chat .mv-verdict__btn svg { width: 22px; height: 22px; }
-.mf-room-toolbar > [hidden] { display: inline-flex; visibility: hidden; }
 .mf-lobby:has(.mf-room-chat__surface) .mf-lobby__start { visibility: hidden; }
 .mf-room-header__actions { display: flex; flex: none; justify-content: flex-end; min-width: var(--tap-min); gap: 6px; }
 .mf-keyword .mf-keyword__answer { gap: 0; padding: 0; }
 .mf-keyword .mf-keyword__meta { padding: 4px 12px 0; }
 @media (max-height: 420px) and (orientation: landscape) {
   .mf-room-chat .mv-chat__log { max-height: 48px; }
-  .mf-room-toolbar { padding-block: 4px; }
+  .mf-room-toolbar { padding-block: 5px; }
 }
 
-/* 조작이 없는 자리는 비워 두어 의상, 반응, 유언이 다른 단계에서 이동하지 않게 한다. */
-.mf-room-toolbar > * { grid-row: 1; }
-.mf-room-toolbar > [data-emote-button] { grid-column: 1; }
-.mf-room-toolbar > :is([data-suspect-btn], [data-room-tool="dress"]) { grid-column: 2; }
-.mf-room-toolbar > :is([data-will-button], [data-note-button]) { grid-column: 3; }
-.mf-room-toolbar > :is(.mf-room-chat__advance, [data-end-discussion]) { grid-column: 4; justify-self: end; }
-
-/* 채팅을 쓸 수 없는 밤에도 역할 도구의 가로 슬롯을 공유한다. */
+/* 밤에 역할 도구가 떠 있어도 얼굴 선택 패널은 배경을 갖는다. */
+.mf-game .mf-game__panel:has(> :is(.mf-room-toolbar, [data-night-done])) { background: transparent; box-shadow: none; pointer-events: none; }
+.mf-game__panel > [data-night-done] { pointer-events: auto; }
+.mf-game__panel:has(> .mf-room-toolbar) > .mv-faces {
+  margin: -14px calc(-1 * var(--space-md)) 0;
+  padding: 14px var(--space-md) 0;
+  background: var(--noir-panel);
+  box-shadow: var(--noir-rail);
+  pointer-events: auto;
+}
 .mf-game__panel > .mf-room-toolbar { margin-inline: calc(-1 * var(--space-md)); }
 .mf-room :is(.mf-lobby, .mf-result) .mf-hostrail__col > button {
   width: var(--tap-min);

@@ -94,12 +94,14 @@ function readDressUi(page) {
       return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
     };
     const dresser = q('[data-room-tool="dress"]');
+    const visible = (el) => !!el?.getClientRects().length && getComputedStyle(el).visibility === "visible";
     const names = qa(".mv-dress-card__name").map((el) => parseFloat(getComputedStyle(el).fontSize));
     const sel = qa("[data-dress-sheet] button[data-outfit][aria-pressed='true']");
     return {
       vw: window.innerWidth,
       vh: window.innerHeight,
-      float: dresser && getComputedStyle(dresser).visibility === "visible" ? rect(dresser) : null,
+      float: visible(dresser) ? rect(dresser) : null,
+      previousTool: visible(dresser?.previousElementSibling) ? rect(dresser.previousElementSibling) : null,
       floatLabel: q('[data-float="dress"]')?.getAttribute("aria-label") ?? null,
       floatCount: qa("[data-float]").length,
       panel: rect(q(".mf-lobby__panel")),
@@ -345,7 +347,7 @@ export function makeAvatarFlows(helpers) {
         const open = await readDressUi(page);
         const hidden = open.float === null;
         rec(`${sc}-${who}`, "AD2a", `${who}: 시트가 열리면 도구줄의 옷장 버튼이 숨고 카드 아홉 개가 UI-SPEC 순서`, hidden && open.cardIds.join(",") === "coat,police,doctor,mafia,detective,reporter,elder,hood,noir", `버튼 ${hidden ? "숨음" : "보임"} · 카드 ${open.cardIds.join(",")}`);
-        for (const l of dressChecks({ float: closed.float, panel: open.panel, sheet: open.sheet, cards: open.cards, close: open.close, selected: open.selected, nameFont: open.nameFont, viewport: { w: open.vw, h: open.vh }, kb: open.kbOpen, containerTop: open.sheetContainerTop })) {
+        for (const l of dressChecks({ float: closed.float, previousTool: closed.previousTool, panel: open.panel, sheet: open.sheet, cards: open.cards, close: open.close, selected: open.selected, nameFont: open.nameFont, viewport: { w: open.vw, h: open.vh }, kb: open.kbOpen, containerTop: open.sheetContainerTop })) {
           rec(`${sc}-${who}`, l.id, l.label, l.ok, l.detail);
         }
         rec(`${sc}-${who}`, "AD2b", `${who}: 시트가 열리면 초점이 선택된 동물 카드로 감`, animalFocus, `동물 카드 초점 ${animalFocus}`);

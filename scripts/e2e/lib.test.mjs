@@ -2657,12 +2657,13 @@ test("AVATAR_MARKERS: 동작 표식 네 개 + 의상 표식 세 개(10-07) + 잠
 
 // ---- 10-07: 꾸미기 버튼·시트·카드 기하 (dressChecks, D-18) ----
 
-// 일반 폭의 옷장: 도구줄 두 번째 칸과 아래쪽 시트, 카드 72×112.
+// 반응 버튼 옆의 옷장과 아래쪽 시트, 카드 72×112.
 const dressGood = () => {
   const panel = rect(0, 310, 360, 250);
   const cards = Array.from({ length: 9 }, (_, i) => rect(12 + i * 80, 366, 72, 112));
   return {
     float: rect(62, 321, 44, 44),
+    previousTool: rect(12, 321, 44, 44),
     panel,
     sheet: rect(0, 310, 360, 250),
     cards,
@@ -2680,12 +2681,15 @@ test("dressChecks: 정상 값은 DB1·DS1~DS6 모두 통과, 줄 모양은 { id,
   for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
 });
 
-test("dressChecks DB1: 옷장 버튼은 도구줄 두 번째 44px 칸에 있다", () => {
+test("dressChecks DB1: 옷장 버튼은 앞 도구 바로 옆 또는 왼쪽 처음에 있다", () => {
   const check = (box) => onlyFail(dressChecks({ ...dressGood(), float: box }), "DB1");
   check(rect(62, 321, 52, 52));
   check(rect(12, 321, 44, 44));
   check(rect(62, 280, 44, 44));
   check(rect(62, 405, 44, 44));
+  const withoutReaction = { ...dressGood(), previousTool: null };
+  onlyFail(dressChecks(withoutReaction), "DB1");
+  assert.equal(okOf(dressChecks({ ...withoutReaction, float: rect(12, 321, 44, 44) })).DB1, true);
 });
 
 test("dressChecks DS1: 시트 아랫변 = 패널 아랫변 ±1 · 높이 = 패널과 최소 높이 중 큰 값 ±1", () => {

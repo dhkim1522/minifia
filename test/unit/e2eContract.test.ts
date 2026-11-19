@@ -490,7 +490,7 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     expect(dock).toMatch(/\.mf-room-chat__advance \.mv-ready\s*\{[^}]*height: var\(--tap-min\)/);
     expect(tokens).toContain(`--tap-min: ${r.READY_PILL.h}px`);
     // 입력줄은 도구 줄의 알약과 별개로 보내기·간격·양옆 여백만 가진다.
-    expect(dock).toMatch(/\.mf-room-chat \.mv-chat__form,[^{]+\{ gap: 6px; margin: 8px 12px 12px; \}/);
+    expect(dock).toMatch(/\.mf-room-chat \.mv-chat__form\s*\{ gap: 6px; padding: 8px 12px 12px; \}/);
     expect(dock).toMatch(/\.mf-room-chat \.mv-chat__send,[^{]+\{ width: var\(--tap-min\)/);
     expect(r.READY_PILL.h + 6 + 12 * 2).toBe(r.READY_PILL.inputExtra);
   });

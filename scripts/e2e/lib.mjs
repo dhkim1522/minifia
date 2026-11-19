@@ -2115,14 +2115,14 @@ const DRESS_SHEET_MIN_HEIGHT = 193;
  * 꾸미기 기하(DB1·DS1~DS6). 사각형은 { left, top, width, height }.
  * float = 떠 있는 꾸미기 버튼(시트가 닫힌 때), panel = 로비 아래 패널, sheet = 열린 시트, cards = 카드 아홉 개(띠 안에서 가려져도 DOM 사각형),
  * close = 닫기 버튼, selected = { rect, pressedCount }(선택 카드와 aria-pressed="true" 개수), nameFont = 카드 이름 글자 크기 최솟값(px), viewport = { w, h }, kb = 가상 키보드가 열려 있나.
- * DB1 버튼 44x44 ±1 · 채팅 위 도구줄 두 번째 칸.
+ * DB1 버튼 44x44 ±1 · 앞 버튼이 있으면 일정 간격, 없으면 도구 줄의 왼쪽에 붙는다.
  * DS1 시트 아랫변 = 패널 아랫변 ±1, 높이 = 패널과 193 중 큰 값(화면 공간까지) ±1 · DS2 카드 아홉 개, 폭 72 ±2, 높이 44 이상 ·
  * DS3 완전히 보이는 카드 3~4 이상이고 시트 오른쪽 가장자리에 걸쳐 8px 이상 보이는 다음 카드가 있음(더 있음을 알림) · DS4 닫기 44x44 이상, 공간이 충분하면 시트 안에 있음 ·
  * DS5 선택 카드가 시트 가로 안에 완전히 보이고 aria-pressed="true" 가 하나뿐 · DS6 이름 글자 14px 이상.
  */
-export function dressChecks({ float, panel, sheet, cards, close, selected, nameFont, viewport, kb, containerTop = 0 } = {}) {
+export function dressChecks({ float, previousTool = null, panel, sheet, cards, close, selected, nameFont, viewport, kb, containerTop = 0 } = {}) {
   const L = {
-    DB1: `옷장 버튼 ${TAP_MIN}x${TAP_MIN}, 도구줄 두 번째 칸`,
+    DB1: `옷장 버튼 ${TAP_MIN}x${TAP_MIN}, 앞 도구와 빈 칸 없이 배치`,
     DS1: "시트가 패널 아랫변에 맞으며 위 줄과 카드 높이를 확보",
     DS2: "카드 아홉 개: 폭 72 · 높이 44 이상",
     DS3: "화면 폭에 맞는 카드 수와 오른쪽에 걸친 다음 카드",
@@ -2131,13 +2131,15 @@ export function dressChecks({ float, panel, sheet, cards, close, selected, nameF
     DS6: "카드 이름 글자 14px 이상",
   };
   const rectOk = (r) => !!r && allNum(r.left, r.top, r.width, r.height);
-  const valid = rectOk(float) && rectOk(panel) && rectOk(sheet) && Array.isArray(cards) && cards.every(rectOk) && rectOk(close) && !!selected && rectOk(selected.rect) && isNum(selected.pressedCount) && isNum(nameFont) && !!viewport && allNum(viewport.w, viewport.h) && typeof kb === "boolean";
+  const valid = rectOk(float) && (previousTool === null || rectOk(previousTool)) && rectOk(panel) && rectOk(sheet) && Array.isArray(cards) && cards.every(rectOk) && rectOk(close) && !!selected && rectOk(selected.rect) && isNum(selected.pressedCount) && isNum(nameFont) && !!viewport && allNum(viewport.w, viewport.h) && typeof kb === "boolean";
   if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "float·panel·sheet·cards·close·selected·nameFont·viewport·kb"));
   const out = [];
   const db = [];
   if (Math.abs(float.width - TAP_MIN) > 1 || Math.abs(float.height - TAP_MIN) > 1) db.push(`${fmt(float.width)}x${fmt(float.height)}`);
-  const slot = panel.left + TAP_MIN + (viewport.w < 360 ? 12 : 18);
-  if (Math.abs(float.left - slot) > 1) db.push(`왼쪽 ${fmt(float.left)} (두 번째 칸 ${fmt(slot)})`);
+  const inset = viewport.w < 360 ? 8 : 12;
+  const gap = viewport.w < 360 ? 4 : 6;
+  const start = previousTool === null ? panel.left + inset : right(previousTool) + gap;
+  if (Math.abs(float.left - start) > 1) db.push(`왼쪽 ${fmt(float.left)} (빈 칸 없는 위치 ${fmt(start)})`);
   if (float.top < panel.top - 1 || bottom(float) > panel.top + 66 + 1) db.push("버튼이 채팅 위 도구줄 밖에 있음");
   out.push(result("DB1", L.DB1, db));
   const ds1 = [];
