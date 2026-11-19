@@ -31,5 +31,5 @@
 
 - **다음 첫날 라이어게임**. 중앙에 모여 한 명씩 차례대로 답을 말하고, 그 순간 의심딱지를 붙일 수 있게 하는 흐름을 검토한다.
 
-1. **개편 시안 평가 대기**. [4~8인 이동·집결 시안](design/v3.0/field-table-review/index.html), [8인 진행](design/v3.0/field-table-review/field-to-vote.jpg), [좌석 비교](design/v3.0/field-table-review/seat-layouts.jpg). 작은 재즈 바에서 첫 이동 20초 뒤 집결, 첫날 잠정 지목, 둘째 날 자유 대화와 고정 좌석 토론·투표를 비교한다. 320px에서 4~8명 이름표, 8인 탈락 후 6후보와 입력 보존을 확인했다. [앞선 4인 시안](design/v3.0/scenario-review-2026-11-19/)과 [전면 평가](docs/redesign-audit-2026-11-19.md) 참고. 실제 규칙·시간은 사용자 평가 후 결정한다.
+1. **개편 시안 평가 대기**. [작은 재즈 바 3D 시안](design/v3.0/compact-bar-review/index.html)과 [비교 캡처](design/v3.0/compact-bar-review/comparison.webp). 320px에서 짧은 이동·집결, 4인 이름표, 8인 얼굴 선택·딱지를 확인했다. 운영판 적용 전 좌석 간 딱지 거리 검증이 필요하다. [이전 4~8인 흐름](design/v3.0/field-table-review/index.html)과 [전면 평가](docs/redesign-audit-2026-11-19.md) 참고. 실제 구성과 규칙은 사용자 평가 후 결정한다.
 2. **실기기**. 작은 폰의 키보드와 채팅·이름표, 소리 크기, 처음 온 사람이 채팅 없이 단서와 의심딱지를 쓸 수 있는지 팀에서 확인한다. 결과로 실험방의 기본 적용 범위를 판단한다. 24페이즈의 남은 모바일 전체 회귀와 실기기 항목을 확인한 뒤 main 반영을 판단한다.
