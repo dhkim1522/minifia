@@ -235,10 +235,10 @@ describe("E2E 채팅 패널 치수 사본과 src/game/chatUi.ts (07-20, 05-05 �
 
   it("lobbyPanelHeight 사본이 chatUi 와 같고, 채팅 패널 높이는 LOG_H + CHAT_PANEL_EXTRA 다", () => {
     expect(lib.lobbyPanelHeight(LOG_H)).toBe(lobbyPanelHeight(LOG_H));
-    expect(lib.lobbyPanelHeight(LOG_H)).toBe(222);
-    // 19-04(P19-12): 방장 패널 = 참가자 패널. 예전의 두 번째 인자(방장)를 줘도 앱·E2E 사본 모두 222 다
-    expect(lib.lobbyPanelHeight(LOG_H, true)).toBe(222);
-    expect((lobbyPanelHeight as (logH: number, host?: boolean) => number)(LOG_H, true)).toBe(222);
+    expect(lib.lobbyPanelHeight(LOG_H)).toBe(160);
+    // 19-04(P19-12): 방장 패널 = 참가자 패널. 예전의 두 번째 인자(방장)를 줘도 앱·E2E 사본 모두 160 다
+    expect(lib.lobbyPanelHeight(LOG_H, true)).toBe(160);
+    expect((lobbyPanelHeight as (logH: number, host?: boolean) => number)(LOG_H, true)).toBe(160);
     expect(lib.LOG_H + lib.CHAT_PANEL_EXTRA).toBe(LOG_H + CHAT_PANEL_EXTRA);
     expect(LOG_H + CHAT_PANEL_EXTRA).toBe(160);
   });
@@ -1063,8 +1063,8 @@ describe("방장 줄 E2E 사본 계약 (19-06, T-19-18·T-19-19; 22-07 판 종�
     expect(readFileSync(new URL("scripts/e2e/mapselect.mjs", root), "utf8")).toContain("hostRailChecks");
   });
 
-  it("대기실 패널 기대 높이(HR8)는 222 = lobbyPanelHeight(LOG_H) 이다", () => {
-    expect(lib.lobbyPanelHeight(lib.LOG_H)).toBe(222);
+  it("대기실 패널 기대 높이(HR8)는 160 = lobbyPanelHeight(LOG_H) 이다", () => {
+    expect(lib.lobbyPanelHeight(lib.LOG_H)).toBe(160);
   });
 
   it("DOM 표식 셋이 git 이 추적하는 src/ 에 있고 값은 enum 낱말뿐이다 — 좌석·역할 값이 실리지 않는다. 판 종류 표식은 src 에 없다", () => {

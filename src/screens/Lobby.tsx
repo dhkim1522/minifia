@@ -4,7 +4,7 @@ import type { ClientMessage, MapChoice, RoomView } from "../../shared/protocol";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import { lockedOutfits } from "../../shared/game/look";
 import { connectedCount } from "../../shared/game/room";
-import { ActionButton, ActionRow } from "../components/ActionButton";
+import { ActionButton } from "../components/ActionButton";
 import { BotSheet } from "../components/BotSheet";
 import { ToolButton } from "../components/ToolButton";
 import { ConfirmSheet } from "../components/ConfirmSheet";
@@ -63,7 +63,7 @@ interface LobbyProps {
 }
 
 // S-03 대기실(06-15, 07-13): 지하 재즈 바 맵(WorldStage) 위에 승인 로비 틀을 얹는다 — 위쪽 가림막, 헤더([나가기]·PhaseHeader "대기실"·[공유]),
-// 위 알림(TopToast), 아래 패널의 채팅 기록 + 입력줄 + 행동 줄 하나. 방 코드는 헤더의 공유 버튼과 초대 시트에 표시한다. 읽을 글은 "대기실" 과 접히는 한 줄뿐이다(3초 규칙).
+// 위 알림(TopToast), 패널 위 방장 시작 버튼, 아래 채팅 기록과 입력줄. 방 코드는 헤더의 공유 버튼과 초대 시트에 표시한다. 읽을 글은 "대기실" 과 접히는 한 줄뿐이다(3초 규칙).
 // 19-04(D-13): 방장 전용 조작([맵]·[봇])은 왼쪽 세로 줄(HostRail)에 모으고 오른쪽 열은 모두가 쓰는 [소리]·[옷장]만 둔다. 참가자에게는 줄 마크업이 없다(22-07).
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)은 WorldStage 가 React 텍스트 노드로만 그린다.
 export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offset = 0, bannerVisible = false, exiting = false, onLeave, testButton }: LobbyProps) {
@@ -114,7 +114,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   );
 
   // 키보드(07-19, CHAT-05)·스테이지 사각형 측정(06-15)·기록 칸 높이는 게임 맵(GameMap)과 같은 훅 하나가 맡는다(08-13).
-  // 키보드가 열려 있으면(kbOpen) 행동 줄을 숨기고 패널이 키보드 위로 올라간다. 기록 칸은 LOG_H(68) 한 값.
+  // 키보드가 열려 있으면(kbOpen) 방장 시작 버튼을 숨기고 패널이 키보드 위로 올라간다. 기록 칸은 LOG_H(68) 한 값.
   const { rootRef, headerRef, panelRef, inputRef, kbOpen, sideMaxH, stageInsets } = useMapInsets();
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
   const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view, motion });
@@ -218,26 +218,22 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
       </header>
       <TopToast {...toast.props} />
       {testButton ? <div className="mf-lobby__test">{testButton}</div> : null}
+      {isHost && !kbOpen && !dressOpen && sheet === null ? (
+        <div className="mf-lobby__start">
+          <ActionButton
+            variant={enoughPlayers && canSend && !locked ? "primary" : "inactive"}
+            label="시작"
+            icon="play"
+            count={{ count: connected, total: view.maxPlayers }}
+            aria-label={startLabel}
+            data={{ "data-lobby-start": "" }}
+            call={callStart}
+            onClick={pressStart}
+          />
+        </div>
+      ) : null}
       <section ref={panelRef} className={kbOpen ? "mf-lobby__panel mf-lobby__panel--kb" : "mf-lobby__panel"} data-world-panel="">
         <ChatPanel {...binding} {...(playtest ? { emotes: [] } : {})} logHeight={LOG_H} compact={kbOpen} inputRef={inputRef} />
-        {kbOpen ? null : (
-          <ActionRow>
-            {isHost ? (
-              <ActionButton
-                variant={enoughPlayers && canSend && !locked ? "primary" : "inactive"}
-                label="시작"
-                icon="play"
-                count={{ count: connected, total: view.maxPlayers }}
-                aria-label={startLabel}
-                data={{ "data-lobby-start": "" }}
-                call={callStart}
-                onClick={pressStart}
-              />
-            ) : (
-              <ActionButton variant="flat" label="방장을 기다리는 중…" />
-            )}
-          </ActionRow>
-        )}
       </section>
       {/* 꾸미기 시트·키보드가 열린 동안에는 줄·오른쪽 열을 그리지 않는다(P19-16) */}
       {dressOpen || kbOpen ? null : isHost ? (

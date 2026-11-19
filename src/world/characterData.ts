@@ -31,6 +31,9 @@ export const FIGS: readonly Fig[] = [
   { id: "fig5", name: "수아", hair: "#3e3147", style: "girl", hat: "cloche", tie: "#9b749e" },
 ];
 
+/** 마피아 복장을 고르면 어느 좌석이든 역할 카드와 같은 도윤 모델을 입는다. */
+export const MAFIA_FIG_INDEX = FIGS.findIndex((fig) => fig.id === "fig7");
+
 /** 무대와 초상화가 같은 좌석에 같은 인물을 쓴다. */
 export function figForSeat(seat: number): number {
   return ((seat % FIGS.length) + FIGS.length) % FIGS.length;
@@ -61,7 +64,7 @@ export const OUTFITS: Readonly<Record<OutfitId, Outfit>> = {
   doctor: { label: "의사", coat: "#d7d1c4", shirt: "#598c8a", tie: "", pants: "#6e767f", shoe: "#3a414e", hat: "", badge: "cross", prop: "" },
   detective: { label: "탐정", coat: "#a18364", shirt: "#ded0b7", tie: "#645442", pants: "#414958", shoe: "#392e2b", hat: "deer", badge: "", prop: "mag" },
   noir: { label: "누아르 정장", coat: "#333a48", shirt: "#bfaf95", tie: "#4a4f5d", pants: "#2a2d38", shoe: "#24262d", hat: "fedoraDark", badge: "", prop: "" },
-  mafia: { label: "마피아", coat: "#343544", shirt: "#555565", tie: "#843e48", pants: "#2a2e38", shoe: "#25262d", hat: "fedoraMafia", badge: "", prop: "", acc: "shades" },
+  mafia: { label: "마피아", coat: "#2c2934", shirt: "#74666d", tie: "#95465a", pants: "#24252d", shoe: "#25262d", hat: "fedoraMafia", badge: "", prop: "", acc: "shades" },
   reporter: { label: "기자", coat: "#688194", shirt: "#ded0b7", tie: "", pants: "#414658", shoe: "#392e2b", hat: "news", badge: "press", prop: "cam" },
   elder: { label: "어르신", coat: "#7f6b5c", shirt: "#d4c3a9", tie: "", pants: "#454754", shoe: "#392e2b", hat: "", badge: "", prop: "cane", hair: "#bfc2cb", acc: "beard" },
   hood: { label: "후드", coat: "#666477", shirt: "#515464", tie: "", pants: "#414658", shoe: "#392e2b", hat: "hood", badge: "", prop: "", glove: "#856950" },

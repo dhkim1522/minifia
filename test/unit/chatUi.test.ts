@@ -35,12 +35,12 @@ describe("패널 높이 식 (18.1 B 계약 4 — 기록 칸 68 한 값)", () => 
     expect(LOG_H).toBe(24 * 2 + 4 + 8 * 2);
   });
 
-  it("로비 패널 = LOG_H + 154, 14 + 8 + 48 + 10 + 52 + 22 에서 나온다 — 대기실은 방장·참가자 모두 222 (19-04, P19-12)", async () => {
-    expect(LOBBY_PANEL_EXTRA).toBe(154);
-    expect(LOBBY_PANEL_EXTRA).toBe(14 + 8 + 48 + 10 + 52 + 22);
-    expect(lobbyPanelHeight(LOG_H)).toBe(222);
+  it("로비 패널 = LOG_H + 92, 14 + 8 + 48 + 22 에서 나온다 — 대기실은 방장·참가자 모두 160 (19-04, P19-12)", async () => {
+    expect(LOBBY_PANEL_EXTRA).toBe(92);
+    expect(LOBBY_PANEL_EXTRA).toBe(14 + 8 + 48 + 22);
+    expect(lobbyPanelHeight(LOG_H)).toBe(160);
     // 방장 증분이 없다: 예전의 두 번째 인자(방장)를 줘도 값이 같고, 증분 상수는 내보내지 않는다
-    expect((lobbyPanelHeight as (logH: number, host?: boolean) => number)(LOG_H, true)).toBe(222);
+    expect((lobbyPanelHeight as (logH: number, host?: boolean) => number)(LOG_H, true)).toBe(160);
     expect(Object.keys(await import("../../src/game/chatUi")).includes(GONE_HOST_EXTRA)).toBe(false);
   });
 

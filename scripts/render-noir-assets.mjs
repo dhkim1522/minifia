@@ -113,7 +113,7 @@ try {
       ["citizen", 2, "coat", { coat: "#a07754", shirt: "#b6bd9e", tie: "", pants: "#545c59", shoe: "#4a352c" }],
       ["police", 0, "police", { coat: "#305889", shirt: "#a6bbd5", pants: "#243b5a" }],
       ["doctor", 5, "doctor", { coat: "#e6e7e6", shirt: "#397e77", pants: "#576d79" }],
-      ["mafia", 3, "mafia", { coat: "#2c2934", shirt: "#74666d", tie: "#95465a", pants: "#24252d" }],
+      ["mafia", 3, "mafia"],
     ]) {
       const image = await portrait({ seat, outfit, colors, ratio: 0.75 });
       await savePng(image, `public/characters/roles/${role}_default@2x.png`, 144, 192);
@@ -121,11 +121,13 @@ try {
     }
   }
 
-  async function renderOtherPortraits() {
+  async function renderGhostPortrait() {
     const ghost = await portrait({ ghost: true, ratio: 0.75 });
     await savePng(ghost, "public/characters/ghost/ghost_default@2x.png", 144, 192);
     await savePng(ghost, "public/characters/ghost/ghost_default@4x.png", 288, 384);
+  }
 
+  async function renderOutfitPortraits() {
     for (const outfit of outfits) {
       const image = await portrait({ seat: 0, outfit, ratio: 0.8 });
       await savePng(image, `public/outfits/outfit-${outfit}.png`, 240, 300);
@@ -146,10 +148,13 @@ try {
     await renderSeatPortraits();
   } else if (process.argv.includes("--role-portraits-only")) {
     await renderRolePortraits();
+  } else if (process.argv.includes("--outfit-portraits-only")) {
+    await renderOutfitPortraits();
   } else {
     await renderSeatPortraits();
     await renderRolePortraits();
-    await renderOtherPortraits();
+    await renderGhostPortrait();
+    await renderOutfitPortraits();
     await renderMapCards();
     await renderBackdrops(scene);
   }

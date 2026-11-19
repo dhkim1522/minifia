@@ -715,13 +715,14 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const moment = useVerdictMoment(view, offset);
   const verdictZoom = moment.active && !reducedMotion && !playtest ? moment.zoom : undefined;
 
-  const scene = useMemo(
-    () => ({
-      ...sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) }),
-      ...(camera ? { camera } : {}),
-    }),
-    [view, stageH, fading, mine, verdictZoom, camera],
-  );
+  const scene = useMemo(() => {
+    const look = sceneLook(view, { stageH, ...(fading ? { fading } : {}), ...(mine !== undefined ? { mine } : {}), ...(verdictZoom !== undefined ? { verdictZoom } : {}) });
+    if (camera) look.camera = camera;
+    // 역할 확인을 마친 게임 맵에서만 내 비공개 역할을 내 모델에 입힌다. 공개 의상과 다른 좌석은 그대로다.
+    const ownSeat = look.seats[view.me.seat];
+    if (ownSeat && meAlive && view.spectate === undefined && view.me.role === "mafia") ownSeat.costume = "mafia";
+    return look;
+  }, [view, stageH, fading, mine, verdictZoom, camera, meAlive]);
 
   return (
     <main ref={rootRef} className="mf-root mf-game" data-game-stage="" data-phase={view.phase} data-night-dark={nightDark ? "true" : undefined} data-ghost-view={ghost ? "true" : undefined} data-ghost-enter={ghost && entering ? "true" : undefined} data-kb-open={kbLifted ? "true" : undefined} data-suspect-mode={suspect.mode ? "on" : "off"} data-suspects={suspectsMirror}>

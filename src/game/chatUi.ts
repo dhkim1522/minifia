@@ -15,10 +15,10 @@ export const DISCUSSION_KB_LOG_H = 42;
 /** 토론 패널의 기록 칸 밖 높이 = 도구 66, 입력 간격 8 + 입력 44 + 하단 12 */
 export const DISCUSSION_PANEL_EXTRA = 130;
 
-/** 로비 패널 = LOG_H + 154 = 14 + LOG_H + 8 + 48(입력줄) + 10 + 52(행동 줄) + 22. 방장 패널 = 참가자 패널(19-04, P19-12) — 튜토리얼 스위치는 방장 줄의 토글이라 패널에 줄을 더하지 않는다 */
-export const LOBBY_PANEL_EXTRA = 154;
-/** 채팅 패널 = LOG_H + 92 = 14 + LOG_H + 8 + 48 + 22 (UI-SPEC 패널 표). 게임 맵의 채팅 패널 높이 덧셈이다 */
+/** 채팅 패널의 기록 칸 밖 높이 = 위 여백 14 + 입력 간격 8 + 입력줄 48 + 아래 여백 22 */
 export const CHAT_PANEL_EXTRA = 92;
+/** 대기실의 기록·입력줄은 모든 참가자에게 같은 높이로 고정한다. */
+export const LOBBY_PANEL_EXTRA = CHAT_PANEL_EXTRA;
 /** 키보드 열림 패널에서 기록 칸 밖의 높이 = 14 + 8 + 48 + 8(아래 여백, 안전 영역 없음) */
 export const KB_PANEL_REST = 78;
 /** 키보드 열림 패널 = LOG_H + KB_PANEL_REST. 기록 칸이 늘어날 자리가 없을 때의 값이다(늘어나면 KB_PANEL_REST + openLogHeight) */
@@ -55,7 +55,7 @@ export const LOG_FADE_H = 12;
 /** 화면이 들고 있는 기록 줄 수 상한 */
 export const CHAT_KEEP_LINES = 100;
 
-/** 대기실 패널 높이. 방장·참가자가 같다(기록 칸 68 일 때 222). E2E 사본(scripts/e2e/lib.mjs)이 같은 식이다 */
+/** 대기실 패널 높이. 방장·참가자가 같다(기록 칸 68 일 때 160). E2E 사본(scripts/e2e/lib.mjs)이 같은 식이다 */
 export function lobbyPanelHeight(logH: number): number {
   return logH + LOBBY_PANEL_EXTRA;
 }

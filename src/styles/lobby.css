@@ -43,15 +43,19 @@
 /* [테스트] 버튼 자리: 헤더 아래 8, 왼쪽 16 (16-06: 맵 칩은 오른쪽 열로 옮겨 가 이 자리에는 [테스트]만 남는다) */
 .mf-lobby__test { position: absolute; top: calc(var(--mf-host-bottom, 62px) + 8px); left: var(--space-md); z-index: var(--z-overlay); display: flex; align-items: flex-start; gap: var(--space-sm); }
 
-/* 아래 패널: night-800 97%, 위 모서리 radius-lg, 안쪽 14 16 22. 위에서부터 채팅 기록 칸(LOG_H 96·152) + 입력줄(48) + 행동 줄(52), 사이 간격은 부품 8 · 패널 10 → 높이 LOG_H + 154 (07-13).
-   채팅 없는 6페이즈 때는 행동 줄 하나라 88 이었다. 높이는 DOM 에서 재서 스테이지 사각형에 넘기므로 식이 바뀌어도 카메라가 따라간다. */
-.mf-lobby__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 14px var(--space-md) 22px; background: var(--noir-panel); box-shadow: inset 0 1px var(--noir-line); }
+/* 방장은 채팅 바로 위 가운데에서 시작한다. 좌우의 맵·옷장 조작 자리는 비워 둔다. */
+.mf-lobby__start { position: absolute; left: 50%; bottom: calc(var(--mf-panel-h, 160px) + var(--space-sm)); transform: translateX(-50%); z-index: var(--z-overlay); }
+.mf-room:has([data-sheet-layer]) .mf-lobby__start,
+.mf-lobby:has([data-emote-tray]) .mf-lobby__start { visibility: hidden; }
+
+/* 방장과 참가자는 같은 자리에 채팅 기록과 입력줄을 쓴다. 아래 안전 영역은 방 틀이 확보한다. */
+.mf-lobby__panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-overlay); box-sizing: border-box; padding: 14px var(--space-md) 22px; background: var(--noir-panel); box-shadow: inset 0 1px var(--noir-line); }
 
 /* 재접속 띠(떠 있는 변형): 방 화면 루트(.mf-room) 위에 헤더 아래 top 72, 가로 전체. 높이 52·문구·아이콘·색은 v1.0 그대로. 흐름을 밀지 않는다. */
 .mf-reconnect--floating { position: absolute; top: 72px; left: 0; right: 0; z-index: calc(var(--z-overlay) + 2); }
 
 /* 키보드(07-19, CHAT-05, UI-SPEC 패널과 키보드): 입력칸에 포커스가 있고 lift > 80 이면 Lobby 가 패널에 --kb 를 붙인다.
-   패널은 보이는 화면 맨 아래(키보드 바로 위)로 --mf-kb-lift 만큼 올라가고, 아래 여백이 22 → 8 로 줄어 높이 150 (= 14 + 72 + 8 + 48 + 8). 행동 줄은 Lobby 가 그리지 않는다(D3).
+   패널은 보이는 화면 맨 아래(키보드 바로 위)로 --mf-kb-lift 만큼 올라가고, 아래 여백이 22 → 8 로 줄어 기본 높이 146 (= 14 + 68 + 8 + 48 + 8). 방장 시작 버튼은 접는다.
    --mf-kb-lift 는 방 틀(.mf-room)에 쓰이고 키보드가 닫히면 0 이라 이 규칙은 열림에서만 의미가 있다. 캔버스 크기는 건드리지 않는다. */
 .mf-lobby__panel--kb { bottom: var(--mf-kb-lift, 0px); padding-bottom: 8px; }
 

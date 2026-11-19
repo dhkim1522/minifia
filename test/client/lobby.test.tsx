@@ -327,10 +327,11 @@ describe("Lobby — 방장 줄 [맵]·[봇] (19-04, D-13 → 22-07 에서 [판 �
     }
   });
 
-  it("[시작] 단추는 그대로다: 패널 행동 줄 안, 같은 클래스·접근성 이름, 방장 줄에 들어가지 않는다 (D-17)", () => {
+  it("[시작] 단추는 그대로다: 채팅 패널 위 별도 영역, 같은 클래스·접근성 이름, 방장 줄에 들어가지 않는다 (D-17)", () => {
     const { container } = render(lobby(hostView()));
     const start = container.querySelector("[data-lobby-start]") as HTMLButtonElement;
-    expect(start.closest(".mf-lobby__panel") !== null).toBe(true);
+    expect(start.closest(".mf-lobby__start")).not.toBeNull();
+    expect(start.closest(".mf-lobby__panel")).toBeNull();
     expect(start.closest("[data-host-rail]")).toBeNull();
     expect(start.getAttribute("aria-label")).toBe("게임 시작, 4명 모임");
     expect(start.classList.contains("mv-hostrail-btn")).toBe(false);
@@ -387,25 +388,24 @@ describe("Lobby — [맵] 단추 (20-07 → 22-07: 판 종류가 없어 허용 �
   });
 });
 
-describe("Lobby — 채팅 패널: 기록 + 입력줄 + 행동 줄 (CHAT-01, 07-13)", () => {
+describe("Lobby — 채팅 패널: 기록 + 입력줄", () => {
   const base = [player(0, "민수"), player(1, "서준")];
   const sysTexts = (container: HTMLElement): string => [...container.querySelectorAll(".mv-chat__sys")].map((el) => el.textContent ?? "").join("|");
 
-  it("패널 안에서 [data-chat-panel][data-chat-channel=all] 이 위, 그 아래에 방장 [시작]", () => {
-    const { container } = render(lobby(makeView(base, 0)));
-    const panel = container.querySelector(".mf-lobby__panel") as HTMLElement;
-    const chat = panel.querySelector('[data-chat-panel][data-chat-channel="all"]') as HTMLElement;
-    const start = panel.querySelector("[data-lobby-start]") as HTMLElement;
-    expect(chat === null || start === null).toBe(false);
-    expect((chat.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
-  });
-
-  it("손님은 같은 자리에 '방장을 기다리는 중…' 이 채팅 아래에 온다", () => {
-    const { container } = render(lobby(makeView(base, 1)));
-    const panel = container.querySelector(".mf-lobby__panel") as HTMLElement;
-    const chat = panel.querySelector("[data-chat-panel]") as HTMLElement;
-    const wait = within(panel).getByRole("button", { name: "방장을 기다리는 중…" });
-    expect((chat.compareDocumentPosition(wait) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
+  it("방장이 바뀌어도 채팅 입력칸과 기존 초안은 제자리에 남는다", () => {
+    const { container, rerender } = render(lobby(makeView(base, 1)));
+    const panel = container.querySelector(".mf-lobby__panel")!;
+    const input = panel.querySelector<HTMLInputElement>("[data-chat-input]")!;
+    fireEvent.change(input, { target: { value: "잠시만요" } });
+    expect(panel.children).toHaveLength(1);
+    expect(panel.firstElementChild?.matches("[data-chat-panel]")).toBe(true);
+    expect(container.querySelector("[data-lobby-start]")).toBeNull();
+    const promoted = makeView(base.map(p => ({ ...p, isHost: p.seat === 1 })), 1);
+    rerender(lobby(promoted));
+    expect(container.querySelector(".mf-lobby__start [data-lobby-start]")).not.toBeNull();
+    expect(panel.children).toHaveLength(1);
+    expect(panel.querySelector("[data-chat-input]")).toBe(input);
+    expect(input.value).toBe("잠시만요");
   });
 
   it("기록 칸 높이는 어느 방 높이에서나 68 한 값이다(P181-3)", () => {
@@ -422,9 +422,9 @@ describe("Lobby — 채팅 패널: 기록 + 입력줄 + 행동 줄 (CHAT-01, 07-
       Object.defineProperty(window, "innerHeight", { value: realH, configurable: true, writable: true });
     }
     expect(LOG_H).toBe(68);
-    expect(lobbyPanelHeight(LOG_H)).toBe(222);
+    expect(lobbyPanelHeight(LOG_H)).toBe(160);
     // 19-04(P19-12): 방장 패널 = 참가자 패널. 예전의 두 번째 인자(방장)를 줘도 값이 같다
-    expect((lobbyPanelHeight as (logH: number, host?: boolean) => number)(LOG_H, true)).toBe(222);
+    expect((lobbyPanelHeight as (logH: number, host?: boolean) => number)(LOG_H, true)).toBe(160);
     expect(KB_PANEL).toBe(146);
   });
 
@@ -598,7 +598,7 @@ describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행�
     expect(b.textContent).toContain("시작");
     expect(countText(container)).toBe("5 / 8");
     expect(container.querySelector(".mv-dots")).toBeNull();
-    expect(container.querySelector(".mf-lobby__panel")?.contains(b)).toBe(true);
+    expect(container.querySelector(".mf-lobby__start")?.contains(b)).toBe(true);
   });
 
   it("8명이면 숫자 8 / 8 이고 별도 문구는 없다", () => {
@@ -684,21 +684,10 @@ describe("Lobby — 행동 줄: [시작] 과 점, 손님 (ROOM-03, UI-SPEC 행�
     expect(toastText(container)).toBe("");
   });
 
-  it("손님: 평평한 비활성 '방장을 기다리는 중…' 하나뿐 — 시작 버튼·숫자·공유 줄은 없다", () => {
-    const view = makeView([player(0, "민수"), player(1, "서준"), player(2, "하윤")], 1);
-    const { container } = render(lobby(view));
-    const b = screen.getByRole("button", { name: "방장을 기다리는 중…" }) as HTMLButtonElement;
-    expect(b.disabled).toBe(true);
-    expect(b.className).toContain("mf-act--flat");
-    expect(container.querySelector("[data-lobby-start]") === null).toBe(true);
-    expect(container.querySelector(".mv-count") === null).toBe(true);
-    // 패널 안 버튼은 채팅 보내기(07-13)·동작 버튼(10-05)과 이 행동 줄 하나뿐이다
-    expect(container.querySelectorAll(".mf-lobby__panel button:not([data-chat-send]):not([data-chat-open]):not([data-emote-button])").length).toBe(1);
-  });
-
-  it("손님 화면에서 방장이 끊겨 있어도 같은 라벨이다", () => {
-    render(lobby(makeView([player(0, "민수", { connected: false }), player(1, "서준")], 1)));
-    expect(screen.getByRole("button", { name: "방장을 기다리는 중…" })).toBeTruthy();
+  it.each([true, false])("방장 연결 여부(%s)와 관계없이 참가자에게 시작이나 대기 버튼이 없다", (connected) => {
+    const { container } = render(lobby(makeView([player(0, "민수", { connected }), player(1, "서준")], 1)));
+    expect(screen.queryByRole("button", { name: /방장을 기다리는/ })).toBeNull();
+    expect(container.querySelector("[data-lobby-start], .mv-count, .mf-act-row")).toBeNull();
   });
 
   it("시작이 거절된 뒤 같은 view 가 다시 와도 같은 모양이다(화면이 따로 상태를 기억하지 않는다)", () => {
@@ -985,11 +974,10 @@ describe("Lobby — 스타일 계약 (lobby.css)", () => {
     expect(css).toMatch(/\.mf-lobby__panel[^}]*inset 0 1px var\(--noir-line\)/);
   });
 
-  it("아래 패널 안쪽 여백은 14 16 22, 항목 간격 10 — 기록 LOG_H + 입력줄 48 + 행동 줄 52 라 높이 LOG_H + 154 (07-13, 6페이즈 때는 행동 줄 하나라 88)", () => {
+  it("대기실 채팅 패널 높이는 기록 칸과 입력줄·여백을 합한 값이다", () => {
     const rule = css.match(/\.mf-lobby__panel\s*\{[^}]*\}/)?.[0] ?? "";
     expect(rule).toContain("padding: 14px var(--space-md) 22px");
-    expect(rule).toContain("gap: 10px");
-    expect(14 + 8 + 48 + 10 + 52 + 22).toBe(LOBBY_PANEL_EXTRA);
+    expect(14 + 8 + 48 + 22).toBe(LOBBY_PANEL_EXTRA);
   });
 
   it("헤더: 위 18·좌우 space-md·높이 62(윗여백 8 + 이름표 단추), 맵 탭을 가로채지 않는다 (stageBox 의 옛 대기실 바 119.2 검사를 대신한다)", () => {
@@ -1065,7 +1053,7 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
   const remeasure = () => act(() => void resizeCallbacks.forEach((cb) => cb()));
   const inputOf = (container: HTMLElement) => container.querySelector("[data-chat-input]") as HTMLInputElement;
   const rootOf = (container: HTMLElement) => container.querySelector("main.mf-lobby") as HTMLElement;
-  const actionButtons = (container: HTMLElement) => container.querySelectorAll(".mf-lobby__panel button:not([data-chat-send]):not([data-chat-open]):not([data-emote-button])").length;
+  const actionButtons = (container: HTMLElement) => container.querySelectorAll(".mf-lobby__start [data-lobby-start]").length;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -1221,7 +1209,7 @@ describe("Lobby — 튜토리얼 진입이 없다 (22-03, D-08, P22-16)", () => 
     expect(test.container.querySelectorAll(ENTRY)).toHaveLength(0);
   });
 
-  it("방장 패널 = 참가자 패널: 채팅(기록 칸 + 입력줄) + 행동 줄 두 자식뿐이고 첫 자식이 채팅이다 (P19-12)", () => {
+  it("방장 패널 = 참가자 패널: 채팅(기록 칸 + 입력줄) 한 자식만 있다", () => {
     const shape = (mySeat: number) => {
       const { container, unmount } = render(lobby(makeView(hostPlayers(), mySeat, { round: 1 })));
       const panel = container.querySelector(".mf-lobby__panel")!;
@@ -1229,8 +1217,8 @@ describe("Lobby — 튜토리얼 진입이 없다 (22-03, D-08, P22-16)", () => 
       unmount();
       return out;
     };
-    expect(shape(0)).toBe("2:chat");
-    expect(shape(1)).toBe("2:chat");
+    expect(shape(0)).toBe("1:chat");
+    expect(shape(1)).toBe("1:chat");
   });
 
   it("참가자에게도 토글이 없다", () => {

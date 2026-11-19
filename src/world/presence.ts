@@ -37,8 +37,8 @@ export interface SeatLook {
   /** 처형 연출 시작 시각(ms). 산 사람 viewer 는 연출 끝(GHOST_FADE_END_MS)에 이 키가 빠지고 좌석이 ghost 로 남는다 */
   fadeAt?: number;
   /**
-   * 11페이즈 결과 화면 전용: 고른 look 대신 입는 직업 의상(산 사람만 — 탈락 좌석에는 주지 않는다, 0083-2).
-   * 판 중 장면 표(visibleSeats)에는 키 자체가 없다 — 직업 의상이 판 중 경로로 번지지 않는다(T-11-15, L13).
+   * 고른 look 위에 그리는 직업 의상. GameMap은 산 마피아의 본인 좌석에만, 결과 화면은 공개된 생존자에만 넣는다.
+   * 공개 좌석 표(visibleSeats)와 탈락 좌석에는 이 키가 없다.
    */
   costume?: OutfitId;
   /** 11페이즈 결과 화면 전용: 진 팀을 어둡게 한다(연결 끊김 어둠과 별개로 센다) */

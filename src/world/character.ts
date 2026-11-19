@@ -29,7 +29,7 @@ import { MOVE_SPEED } from "../../shared/game/world";
 import { buildGhost3d, type Ghost3d } from "./ghost3d";
 import { createNoteRig, type NoteRig, noteKit } from "./postit";
 import { emoteCycles, REDUCED_Y_SCALE } from "./emoteCap";
-import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, GHOST_SCALE, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
+import { EMOTE_KEYS, EMOTES, EYE, type EmoteId, FACE_IDS, type FaceId, type Fig, FIGS, GHOST_SCALE, MAFIA_FIG_INDEX, MOUTH, type Outfit, OUTFITS, type OutfitId, type PoseKey, SKIN } from "./characterData";
 
 /** 맵 위 크기 — 원래 키 약 2.1 단위를 약 1.7 로 줄여 쓴다 */
 export const CHAR_SCALE = 0.83;
@@ -495,7 +495,8 @@ function bakeFig(fig: Fig): Record<JointName, Part[]> {
   head.add(shades);
   head.add(beard);
   for (const s of [-1, 1]) {
-    shades.add(onHead(faceSphere(0.11, "#14161c", 1.15, 0.7, 0.3), s * 0.21, 0.03, FR, 0.025));
+    shades.add(onHead(faceSphere(0.14, "#14161c", 1.24, 0.78, 0.3), s * 0.21, 0.03, FR, 0.04));
+    shades.add(onHead(faceBox(0.092, 0.017, "#78889b"), s * 0.21 - 0.026, 0.067, FR, 0.084, 0.26));
     const a = new Vector3(s * 0.33, 0.05, Math.sqrt(FR * FR - 0.33 * 0.33 - 0.0025) + 0.02);
     const b = new Vector3(s * (R + 0.01), 0.06, 0.04);
     const d = new Vector3().subVectors(b, a);
@@ -503,7 +504,7 @@ function bakeFig(fig: Fig): Record<JointName, Part[]> {
     armM.position.copy(a).addScaledVector(d, 0.5);
     armM.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), d.normalize());
   }
-  shades.add(onHead(faceBox(0.14, 0.03, "#14161c"), 0, 0.06, FR, 0.03));
+  shades.add(onHead(faceBox(0.23, 0.036, "#14161c"), 0, 0.06, FR, 0.043));
   beard.add(onHead(faceSphere(0.075, "#eef0f4", 1.9, 0.55, 0.5), 0, -0.118, FR, 0.012));
   beard.add(onHead(faceSphere(0.17, "#e6e8ee", 1.6, 1.0, 0.5), 0, -0.37, FR, -0.03));
 
@@ -876,9 +877,9 @@ export function createCharacter(
   outfit: OutfitId = "coat",
   portraitColors?: Partial<Pick<Outfit, "coat" | "shirt" | "tie" | "pants" | "shoe">>,
 ): WorldCharacter {
-  const fig = FIGS[figIndex];
-  const parts = figParts(figIndex);
   let outfitId: OutfitId = Object.hasOwn(OUTFITS, outfit) ? outfit : "coat";
+  const figureForOutfit = (id: OutfitId) => id === "mafia" ? MAFIA_FIG_INDEX : figIndex;
+  let visibleFigure = figureForOutfit(outfitId);
   const initialOutfit = outfitId;
   // 에셋 렌더에서만 카드 팔레트를 덮는다. 공개 의상 표와 지오메트리 캐시는 공유 상태를 바꾸지 않는다.
   const portraitOutfit = portraitColors === undefined ? undefined : { ...OUTFITS[initialOutfit], ...portraitColors };
@@ -944,7 +945,7 @@ export function createCharacter(
     let m = cache.get(key);
     if (!m) {
       const colors = (outfitId === initialOutfit ? portraitOutfit : undefined) ?? OUTFITS[outfitId];
-      m = mergeJoint(parts[j], colors, fig, faceId);
+      m = mergeJoint(figParts(visibleFigure)[j], colors, FIGS[visibleFigure], faceId);
       owned.add(m.geo);
       if (dim) paint(m, true);
       cache.set(key, m);
@@ -965,7 +966,7 @@ export function createCharacter(
   let glassMesh: Mesh | null = null;
   function refreshGlass(): void {
     const o = OUTFITS[outfitId];
-    const shown = parts.armB.filter((p) => p.glass && isShown(p.tag, o, fig, face));
+    const shown = figParts(visibleFigure).armB.filter((p) => p.glass && isShown(p.tag, o, FIGS[visibleFigure], face));
     if (shown.length === 0 || spriteShown()) {
       if (glassMesh) glassMesh.visible = false;
       return;
@@ -1131,6 +1132,7 @@ export function createCharacter(
       if (moving) walkPhase += dt * WALK_PHASE_RATE;
       walkMix = Math.min(1, Math.max(0, walkMix + ((moving ? 1 : -1) * dt * 1000) / POSE_BLEND_MS));
       // 0 이하는 서 있는 자세 객체, 1 이상은 걷기 자세 객체 그대로(보간 오차 없음)
+      const fig = FIGS[visibleFigure];
       const base = walkMix >= 1 ? walkPose(walkPhase) : walkMix <= 0 ? idlePose(t, root.position.x, fig) : blendPose(idlePose(t, root.position.x, fig), walkPose(walkPhase), walkMix);
       // 유지 자세: 동작의 마지막 프레임을 목표로 base 와 섞는다. 1 이상은 목표 그대로, 0 이하는 base 그대로(보간 오차 없음)
       holdMix = Math.min(1, Math.max(0, holdMix + ((holdId ? 1 : -1) * dt * 1000) / POSE_BLEND_MS));
@@ -1182,6 +1184,7 @@ export function createCharacter(
     applyOutfit(id) {
       if (disposed || !Object.hasOwn(OUTFITS, id) || id === outfitId) return;
       outfitId = id;
+      visibleFigure = figureForOutfit(id);
       refresh(JOINTS);
       releaseOtherOutfits();
     },

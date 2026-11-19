@@ -513,7 +513,7 @@ test("lineCount: 높이를 줄 높이로 나눈 줄 수", () => {
 
 const size = { w: 360, h: 640, mySeat: 0 };
 
-test("채팅 패널 치수 사본: LOG_H 68 · KB_PANEL_H 146, 채팅 패널 = LOG_H + 92, 로비 패널 = LOG_H + 154 (18.1 B 계약 4)", () => {
+test("채팅 패널 치수 사본: LOG_H 68 · KB_PANEL_H 146, 채팅 패널 = LOG_H + 92, 로비 패널 = LOG_H + 92 (18.1 B 계약 4)", () => {
   assert.equal(LOG_H, 68);
   assert.equal(KB_PANEL_H, 146);
   assert.equal(KB_PANEL_H, 14 + LOG_H + 8 + 48 + 8);
@@ -523,10 +523,10 @@ test("채팅 패널 치수 사본: LOG_H 68 · KB_PANEL_H 146, 채팅 패널 = L
   assert.equal(LOG_OPEN_MAX, 300);
   assert.equal(OPEN_STAGE_MIN, 120);
   assert.equal(CHAT_PANEL_EXTRA, 92);
-  assert.equal(LOBBY_PANEL_EXTRA, 154);
-  assert.equal(lobbyPanelHeight(LOG_H), 222);
-  // 19-04(P19-12): 방장 패널 = 참가자 패널 222. 예전의 두 번째 인자(방장)를 줘도 같고, 방장 증분 상수 사본은 없다
-  assert.equal(lobbyPanelHeight(LOG_H, true), 222);
+  assert.equal(LOBBY_PANEL_EXTRA, 92);
+  assert.equal(lobbyPanelHeight(LOG_H), 160);
+  // 19-04(P19-12): 방장 패널 = 참가자 패널 160. 예전의 두 번째 인자(방장)를 줘도 같고, 방장 증분 상수 사본은 없다
+  assert.equal(lobbyPanelHeight(LOG_H, true), 160);
   assert.equal(/export const LOBBY_HOST_[A-Z_]+ =/.test(readFileSync(new URL("./lib.mjs", import.meta.url), "utf8")), false);
 });
 
@@ -4090,7 +4090,7 @@ const TOOL_LINE = "rgba(100, 115, 142, 0.65)";
 const railBtn = (id, top, left = 16, extra = {}) => ({ id, rect: rect(left, top, 52, 52), borderColor: TOOL_LINE, color: IVORY, isCall: false, role: null, ariaChecked: null, ...extra });
 /**
  * 390×844 방장 대기실(테스트 방) 정상값(22-07: 줄 단추는 [맵]·[봇] 둘): 띠 면 아랫변 123, [테스트] 131~175, 줄 윗변 183(= 123 + 12 + 48), 왕관 표식 20 + 12, 단추 둘 215·279(아랫변 331),
- * 패널 222(윗변 622) → 줄 최대 높이 431(= 622 − 8 − 135 − 48). 오른쪽 열은 소리·옷장 둘(left 322).
+ * 패널 160(윗변 684) → 줄 최대 높이 493(= 684 − 8 − 135 − 48). 오른쪽 열은 소리·옷장 둘(left 322).
  * 접힌 줄(두 열) 시험은 단추가 셋 이상이어야 하므로 아래에서 단추 셋 모양을 따로 만든다(HR4 순서와 무관한 기하 시험이라 geoFails 로 HR4 를 뺀다).
  */
 function railIn(over = {}) {
@@ -4105,7 +4105,7 @@ function railIn(over = {}) {
     buttons: [railBtn("map", 215), railBtn("bots", 279)],
     crown: rect(16, 183, 52, 20),
     band: rect(16, 70, 358, 53),
-    panel: rect(0, 622, 390, 222),
+    panel: rect(0, 684, 390, 160),
     head: [{ kind: "나가기", rect: rect(16, 8, 44, 44) }, { kind: "공유", rect: rect(330, 8, 44, 44) }],
     test: rect(16, 131, 90, 44),
     toast: null,
@@ -4116,7 +4116,7 @@ function railIn(over = {}) {
 }
 /** 왕관 표식이 없는 한 열(단추 둘이 줄 윗변 183 부터). panelTop 으로 줄 최대 높이를 정한다(최대 높이 = panelTop − 191) */
 function railNoCrown(panelTop, over = {}) {
-  return railIn({ rail: { rect: rect(16, 183, 52, 116), ariaLabel: "방장 전용" }, crown: null, buttons: [railBtn("map", 183), railBtn("bots", 247)], panel: rect(0, panelTop, 390, 222), ...over });
+  return railIn({ rail: { rect: rect(16, 183, 52, 116), ariaLabel: "방장 전용" }, crown: null, buttons: [railBtn("map", 183), railBtn("bots", 247)], panel: rect(0, panelTop, 390, 160), ...over });
 }
 /** 접힌 줄(두 열) 모양: 단추 셋, 첫 열 [map, bots] 둘째 열 [bots] — 360×560 테스트 방 실측 모양 [2,1] */
 const foldedButtons = [railBtn("map", 183), railBtn("bots", 247), railBtn("bots", 183, 80)];
@@ -4162,7 +4162,7 @@ test("hostRailChecks: 정상값(390×844 방장 대기실)은 HR1~HR8 모두 통
   assert.deepEqual(lines.map((l) => l.id), ["HR1", "HR2", "HR3", "HR4", "HR5", "HR6", "HR7", "HR8"]);
   assert.deepEqual(soundFails(lines), []);
   for (const l of lines) assert.deepEqual(Object.keys(l).filter((k) => ["id", "label", "ok", "detail"].includes(k)).sort(), ["detail", "id", "label", "ok"]);
-  assert.deepEqual(hostRailMeasure(railIn()), { bandBottom: 123, shift: 48, maxH: 431, n: 2, crown: true, columns: [2], expect: { crown: true, columns: [2] } });
+  assert.deepEqual(hostRailMeasure(railIn()), { bandBottom: 123, shift: 48, maxH: 493, n: 2, crown: true, columns: [2], expect: { crown: true, columns: [2] } });
 });
 
 test("hostRailChecks: 결과 화면(단추 하나, HR1~HR6)·봇 도구가 꺼진 방(맵 하나)도 통과한다", () => {
@@ -4216,10 +4216,10 @@ test("HR2: 지름 52±1·칸 사이 12±1·왼쪽 16±1·줄 윗변 = 띠 아랫
 
 test("HR3: 줄이 아래 패널(윗변 − 8)·머리 단추·[테스트]·알림·띠·오른쪽 열과 겹치면 실패하고 무엇과 겹쳤는지 적는다", () => {
   const s = railIn();
-  const near = hrLine(railIn({ panel: rect(0, 335, 390, 222) }), "HR3"); // 줄 아랫변 331 = 패널 윗변 − 4
+  const near = hrLine(railIn({ panel: rect(0, 335, 390, 160) }), "HR3"); // 줄 아랫변 331 = 패널 윗변 − 4
   assert.equal(near.ok, false);
   assert.match(near.detail, /패널/);
-  assert.equal(hrLine(railIn({ panel: rect(0, 339, 390, 222) }), "HR3").ok, true); // 331 = 339 − 8
+  assert.equal(hrLine(railIn({ panel: rect(0, 339, 390, 160) }), "HR3").ok, true); // 331 = 339 − 8
   assert.match(hrLine(railIn({ head: [{ kind: "나가기", rect: rect(16, 200, 44, 44) }, s.head[1]] }), "HR3").detail, /머리/);
   assert.match(hrLine(railIn({ test: rect(16, 170, 90, 44) }), "HR3").detail, /테스트/);
   assert.match(hrLine(railIn({ toast: rect(40, 220, 200, 40) }), "HR3").detail, /알림/);
@@ -4302,11 +4302,11 @@ test("HR6: 왕관 표식·열 수는 F-2 식대로 — 문턱보다 10 큰데 �
   assert.equal(edge.ok, true);
   assert.equal(edge.info, true);
   assert.match(edge.detail, /149/);
-  assert.equal(hrLine(railIn({ panel: rect(0, 338, 390, 222) }), "HR6").info, true); // 최대 높이 147, 표식 있음 — 경계라 판정하지 않는다
+  assert.equal(hrLine(railIn({ panel: rect(0, 338, 390, 160) }), "HR6").info, true); // 최대 높이 147, 표식 있음 — 경계라 판정하지 않는다
   const plain = hrLine(railNoCrown(331), "HR6"); // 최대 높이 140 → 표식 없는 한 열
   assert.equal(plain.ok, true);
   assert.notEqual(plain.info, true);
-  assert.equal(hrLine(railIn({ panel: rect(0, 331, 390, 222) }), "HR6").ok, false); // 최대 높이 140 인데 표식 있음
+  assert.equal(hrLine(railIn({ panel: rect(0, 331, 390, 160) }), "HR6").ok, false); // 최대 높이 140 인데 표식 있음
   assert.equal(hrLine(railNoCrown(331, { rail: { rect: rect(16, 183, 52, 116), ariaLabel: "" } }), "HR6").ok, false); // 표식도 이름도 없음
   assert.equal(hrLine(railIn({ rail: { rect: rect(16, 183, 52, 148), ariaLabel: null } }), "HR6").ok, false);
   // 두 열(단추 셋): 최대 높이 174 → [2, 1]
@@ -4324,10 +4324,10 @@ test("HR7: 튜토리얼 토글은 어느 판에도 없다 — [data-host-rail-bt
   assert.match(hrLine(railIn({ panelToggles: undefined }), "HR7").detail, /측정값 없음/);
 });
 
-test("HR8: 대기실 패널 높이는 방장·참가자 모두 222(±1) — 276 은 실패", () => {
+test("HR8: 대기실 패널 높이는 방장·참가자 모두 160(±1) — 276 은 실패", () => {
   assert.ok(hrFails(railIn({ panel: rect(0, 568, 390, 276) })).includes("HR8"));
-  assert.ok(!hrFails(railIn({ panel: rect(0, 621, 390, 223) })).includes("HR8"));
-  assert.ok(hrFails(railIn({ panel: rect(0, 620.5, 390, 223.5) })).includes("HR8"));
+  assert.ok(!hrFails(railIn({ panel: rect(0, 683, 390, 161) })).includes("HR8"));
+  assert.ok(hrFails(railIn({ panel: rect(0, 682.5, 390, 161.5) })).includes("HR8"));
   const guest = railIn({ host: false, rail: null, buttons: [], crown: null, panel: rect(0, 568, 390, 276) });
   assert.deepEqual(hrFails(guest), ["HR8"]);
 });

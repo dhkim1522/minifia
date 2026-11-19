@@ -199,16 +199,40 @@ describe("의상 9종", () => {
     expect(countColor(hood, "#5a5f6c")).toBeGreaterThan(0);
   });
 
-  it("단발(girl) 인물은 어떤 의상에서도 귀가 없다", () => {
+  it("단발 인물은 자신의 머리 모양을 쓰는 의상에서 귀가 없다", () => {
     const hood = createCharacter(0, "hood");
     const skinWithoutEars = countColor(headMesh(hood).geometry, SKIN);
     expect(skinWithoutEars).toBeGreaterThan(0);
     const c = createCharacter(2, "coat");
-    for (const id of OUTFIT_IDS) {
+    for (const id of OUTFIT_IDS.filter((id) => id !== "mafia")) {
       c.applyOutfit(id);
       expect(countColor(headMesh(c).geometry, SKIN)).toBe(skinWithoutEars);
       expect(countColor(headMesh(c).geometry, "#d79078")).toBe(0);
     }
+  });
+
+  it("모든 좌석이 같은 마피아 얼굴과 선글라스를 쓰고, 코트로 돌아가면 원래 얼굴을 되찾는다", () => {
+    const reference = createCharacter(3, "mafia");
+    const expected = headMesh(reference).geometry;
+    for (const seat of FIGS.keys()) {
+      const actor = createCharacter(seat, "coat");
+      const original = headMesh(actor).geometry;
+      const hairCount = countColor(original, FIGS[seat]!.hair);
+      actor.applyOutfit("mafia");
+      const actual = headMesh(actor).geometry;
+      for (const attribute of ["position", "color"]) {
+        const values = actual.getAttribute(attribute).array;
+        const target = expected.getAttribute(attribute).array;
+        expect(values.length).toBe(target.length);
+        expect(values.every((value, index) => value === target[index])).toBe(true);
+      }
+      expect(countColor(actual, "#14161c")).toBeGreaterThan(0);
+      actor.applyOutfit("coat");
+      expect(countColor(headMesh(actor).geometry, FIGS[seat]!.hair)).toBe(hairCount);
+      expect(countColor(headMesh(actor).geometry, "#14161c")).toBe(0);
+      actor.dispose();
+    }
+    reference.dispose();
   });
 
   it("인물 기본 모자(도윤·하은)는 기본 코트에서도 쓴다", () => {

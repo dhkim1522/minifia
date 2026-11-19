@@ -138,6 +138,8 @@ import {
   letterChecks,
   ownPenFontRequests,
   sideColumnChecks,
+  LOG_H as CHAT_LOG,
+  LOBBY_PANEL_EXTRA as CHAT_LOBBY_EXTRA,
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
 import { makeDayFlows } from "./day.mjs";
@@ -467,8 +469,7 @@ async function worldFlow(ctx) {
     const pad = 28;
     const [gScreens, hScreens] = await Promise.all([screensOfWorld(gp, centers), screensOfWorld(hp, centers)]);
     const inStage = (sc, st) => !!sc && !!st && Number.isFinite(sc.sx) && sc.sx > pad && sc.sx < ctx.size.w - pad && sc.sy > st.top + pad && sc.sy < st.bottom - pad;
-    // 19-08: 방장 패널이 참가자와 같은 222 가 되어(결정 0086, 스위치 줄 +54 삭제) 가장 낮은 폰(360x560)도 두 화면에 보이는 칸에서 목적지를 고른다 —
-    // 17-07 의 "이 크기는 손님 화면에서만 고르고 방장 겹침 단계를 건너뛴다"는 예외를 없앴다.
+    // 작은 폰에서도 방장·참가자 양쪽 무대에 보이는 칸을 고른다.
     const onScreen = centers.map((c, i) => ({ ...c, sx: gScreens[i]?.sx, sy: gScreens[i]?.sy, hx: hScreens[i]?.sx, hy: hScreens[i]?.sy })).filter((c, i) => inStage(gScreens[i], gw.stage) && inStage(hScreens[i], hw.stage));
     // 3 단위 이상 먼 칸이 없는 낮은 스테이지(360x560 의 248)는 보이는 칸 중 가장 먼 칸과 더 짧은 걷는 길이 하한을 쓴다(worldTapRanking, 07-20)
     // 떠 있는 버튼(꾸미기 hanger, 10페이즈)·이름표가 덮은 칸은 후보에서 먼저 뺀 뒤 순위를 매긴다 — 가린 칸 때문에 먼 칸이 사라지면 기존 낮은 스테이지 규칙(1.5 단위·0.8초)이 적용된다(문턱은 그대로)
@@ -584,9 +585,6 @@ const CHAT_LONG_TEXT = "오늘은 모두 같이 모여서 천천히 이야기를
 const CHAT_DRAFT_TEXT = "쓰던 글";
 
 // 로비 채팅 패널 치수(UI-SPEC 구조 표). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다 — 값을 바꾸려면 UI-SPEC 과 chatUi.ts 를 먼저 바꾼다.
-/** src/game/chatUi.ts LOG_H 사본 — 18.1 부터 방 높이와 무관 */
-const CHAT_LOG = 68;
-const CHAT_LOBBY_EXTRA = 154;
 const CHAT_CONTROL = 48;
 const CHAT_PANEL_EPS = 1;
 
@@ -639,7 +637,7 @@ async function chatLobbyFlow(ctx) {
       const cleared = await gp.locator("[data-chat-input]").inputValue();
       rec(sc, "CL5", "보낸 뒤 손님 입력칸이 비워짐", cleared === "", `입력칸 ${cleared.length}자`);
     }
-    // 패널 치수: 방장·손님 두 화면 모두 UI-SPEC 폰 크기 표대로(18.1: 기록 칸 68 한 값 — 19페이즈부터 방장도 손님과 같은 222, 결정 0086).
+    // 방장과 손님의 접힌 채팅은 기록 칸과 입력줄이 같은 높이다.
     // 손님은 글을 보내느라 입력칸에 포커스가 있어 기록 칸이 늘어나 있다(0083-4) — 접힌 상태를 재려고 먼저 접는다
     await collapseChatLog(gp);
     for (const [who, page] of [["방장", hp], ["손님", gp]]) {
@@ -839,7 +837,7 @@ async function chatKeyboardFlow(ctx) {
   const armed = await page.evaluate(() => window.__mfRo?.arm?.() === true);
   const closed = await readKeyboardState(page, mySeat);
   if (!closed || !armed) throw new SetupError(`키보드 검사 준비 실패(상태 ${!!closed}, 기록기 ${armed})`);
-  rec(sc, "KB0", "닫힌 기준: 열림 표식 없음·행동 줄 있음·lift 0", closed.kbOpen === null && closed.actionButtons >= 1 && closed.lift === "0px", `data-kb-open ${closed.kbOpen} · 행동 줄 버튼 ${closed.actionButtons} · lift ${closed.lift}`);
+  rec(sc, "KB0", "닫힌 기준: 열림 표식 없음·시작 버튼 표시·lift 0", closed.kbOpen === null && closed.actionButtons >= 1 && closed.lift === "0px", `data-kb-open ${closed.kbOpen} · 시작 버튼 ${closed.actionButtons} · lift ${closed.lift}`);
 
   // 포커스 → 가상 키보드 열기 → 글자를 넣어 입력 중 칸을 켠다(이름표 스택이 22px 늘어난다)
   await input.focus();
@@ -862,7 +860,7 @@ async function chatKeyboardFlow(ctx) {
     const stageBottom = k.panel.top;
     rec(sc, `KB1-${ms}`, `포커스 ${ms}ms: 패널·입력줄 아래 ≤ 보이는 영역 아래(검사 1), 패널은 키보드 바로 위`, k.panel.bottom <= vvBottom + KB_EPS && k.input.bottom <= vvBottom + KB_EPS && near(k.panel.bottom, vvBottom, 1), `패널 아래 ${r1(k.panel.bottom)} · 입력줄 아래 ${r1(k.input.bottom)} · 보이는 영역 아래 ${r1(vvBottom)}`);
     const logWant = chatOpenHeight({ roomH: k.roomH, lift: Number.parseFloat(k.lift) || 0, hostBottom: k.hostBottom, panelRest: KB_PANEL_REST });
-    rec(sc, `KB2-${ms}`, `포커스 ${ms}ms: data-kb-open true·행동 줄 없음·기록 칸 = 식의 값(${logWant})·패널 = ${KB_PANEL_REST} + 기록 칸`, k.kbOpen === "true" && k.actionButtons === 0 && near(k.log.height, logWant, 1) && near(k.panel.height, KB_PANEL_REST + k.log.height, 1), `열림 ${k.kbOpen} · 행동 줄 버튼 ${k.actionButtons} · 기록 칸 ${r1(k.log.height)}(식 ${logWant}: 방 ${r1(k.roomH)} − 키보드 ${k.lift} − 띠 ${r1(k.hostBottom)} − ${CHAT_OPEN_STAGE_MIN} − ${KB_PANEL_REST}) · 패널 ${r1(k.panel.height)}`);
+    rec(sc, `KB2-${ms}`, `포커스 ${ms}ms: data-kb-open true·시작 버튼 숨김·기록 칸 = 식의 값(${logWant})·패널 = ${KB_PANEL_REST} + 기록 칸`, k.kbOpen === "true" && k.actionButtons === 0 && near(k.log.height, logWant, 1) && near(k.panel.height, KB_PANEL_REST + k.log.height, 1), `열림 ${k.kbOpen} · 시작 버튼 ${k.actionButtons} · 기록 칸 ${r1(k.log.height)}(식 ${logWant}: 방 ${r1(k.roomH)} − 키보드 ${k.lift} − 띠 ${r1(k.hostBottom)} − ${CHAT_OPEN_STAGE_MIN} − ${KB_PANEL_REST}) · 패널 ${r1(k.panel.height)}`);
     rec(sc, `KB3-${ms}`, `포커스 ${ms}ms: 캔버스 크기 불변·ResizeObserver 호출 0(검사 2)`, k.roCalls === 0 && k.host.w === closed.host.w && k.host.h === closed.host.h && k.canvas?.attrW === closed.canvas?.attrW && k.canvas?.attrH === closed.canvas?.attrH && k.canvas?.cssW === closed.canvas?.cssW && k.canvas?.cssH === closed.canvas?.cssH, `호출 ${k.roCalls} · 호스트 ${k.host.w}x${k.host.h}(기준 ${closed.host.w}x${closed.host.h}) · canvas ${k.canvas?.attrW}x${k.canvas?.attrH} css ${k.canvas?.cssW}x${k.canvas?.cssH}(기준 ${closed.canvas?.attrW}x${closed.canvas?.attrH} css ${closed.canvas?.cssW}x${closed.canvas?.cssH})`);
     const feet = k.feet?.sy;
     const headY = k.stack ? k.stack.bottom : null;
@@ -957,7 +955,7 @@ async function chatKeyboardFlow(ctx) {
   if (restored) {
     const stageTop = restored.headerBottom;
     const stageBottom = restored.panel.top;
-    rec(sc, "KB12", "닫힌 뒤: 행동 줄 복귀·패널 원래 높이·카메라가 닫힌 스테이지에 다시 맞음", restored.actionButtons >= 1 && near(restored.panel.height, closed.panel.height, 1) && restored.feet.sy >= stageTop - KB_EPS && restored.feet.sy <= stageBottom + KB_EPS, `행동 줄 버튼 ${restored.actionButtons} · 패널 ${r1(restored.panel.height)}(기준 ${r1(closed.panel.height)}) · 발 ${r1(restored.feet.sy)} · 스테이지 ${r1(stageTop)}~${r1(stageBottom)}`);
+    rec(sc, "KB12", "닫힌 뒤: 시작 버튼 복귀·패널 원래 높이·카메라가 닫힌 스테이지에 다시 맞음", restored.actionButtons >= 1 && near(restored.panel.height, closed.panel.height, 1) && restored.feet.sy >= stageTop - KB_EPS && restored.feet.sy <= stageBottom + KB_EPS, `시작 버튼 ${restored.actionButtons} · 패널 ${r1(restored.panel.height)}(기준 ${r1(closed.panel.height)}) · 발 ${r1(restored.feet.sy)} · 스테이지 ${r1(stageTop)}~${r1(stageBottom)}`);
     rec(sc, "KB13", "처음부터 끝까지 캔버스 크기 불변·ResizeObserver 호출 0", restored.roCalls === 0 && restored.host.w === closed.host.w && restored.host.h === closed.host.h && restored.canvas?.attrW === closed.canvas?.attrW && restored.canvas?.attrH === closed.canvas?.attrH, `호출 ${restored.roCalls} · 호스트 ${restored.host.w}x${restored.host.h}(기준 ${closed.host.w}x${closed.host.h}) · canvas ${restored.canvas?.attrW}x${restored.canvas?.attrH}(기준 ${closed.canvas?.attrW}x${closed.canvas?.attrH})`);
   } else {
     rec(sc, "KB12", "닫힌 뒤 상태를 읽음", false, "로비를 읽지 못함");
@@ -3469,6 +3467,7 @@ async function hostHandoffFlow(ctx) {
       rec(stage, "HH1", "방장: 유예 안에 돌아오면 변화 없음(방장 그대로, 알림 없음)", keptHost && earlyToasts.length === 0, `방장 유지 ${keptHost}, 알림 ${earlyToasts.length}개`);
 
       // 긴 끊김: 방장 페이지를 닫는다
+      const beforePromotion = await readChatPanel(guest.page);
       await host.context.close().catch(() => {});
       let handed = true;
       try {
@@ -3481,6 +3480,12 @@ async function hostHandoffFlow(ctx) {
       const toasts = hostToasts(await toastsOf(guest.page));
       const wantToast = `방장 · ${GAME_GUESTS[0]}`;
       rec(stage, "HH2", "방장: 길게 끊기면 손님이 새 방장 — 알림 '방장 · 이름' 과 [시작] 이 나타남", handed && startBtn === 1 && toasts.includes(wantToast), `이양 ${handed}, [시작] ${startBtn}개, 알림 [${toasts}]`);
+
+      const afterPromotion = await readChatPanel(guest.page);
+      const stableChat = beforePromotion && afterPromotion && ["panel", "log", "input"].every(
+        (part) => ["left", "top", "width", "height"].every((key) => Math.abs(beforePromotion[part][key] - afterPromotion[part][key]) <= 1),
+      );
+      rec(stage, "HH2-chat", "방장 위임 뒤에도 채팅 패널·기록·입력 위치와 크기가 유지된다", Boolean(handed && stableChat), `입력 상단 ${beforePromotion?.input.top} → ${afterPromotion?.input.top}`);
 
       // 옛 방장이 돌아옴: 일반 참가자(자동으로 되돌리지 않는다)
       old = await openHostPage(ctx.browser, { origin: ctx.origin, code: ctx.roomCode, token: hostToken, size: ctx.size, dpr: 1, mobile: ctx.size.mobile !== false, guest: true, initScripts: [reconnectInit] });

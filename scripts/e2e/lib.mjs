@@ -248,8 +248,8 @@ export const ONE_LINE_FACTOR = 1.6;
 export const LOG_H = 68;
 /** 토론 고정 기록 높이(chatUi.DISCUSSION_LOG_H 사본) */
 export const DISCUSSION_LOG_H = 92;
-/** 로비 패널 = LOG_H + 154 */
-export const LOBBY_PANEL_EXTRA = 154;
+/** 로비 패널 = LOG_H + 92 */
+export const LOBBY_PANEL_EXTRA = 92;
 /** 채팅 패널(게임 맵의 지목·변론 단계의 입력줄 패널) = LOG_H + 92 */
 export const CHAT_PANEL_EXTRA = 92;
 /** 키보드 열림 패널 = 14 + LOG_H + 8 + 48 + 8 */
@@ -2532,7 +2532,7 @@ export function hostRailMeasure(s) {
  * HR4 순서·개수: 대기실 map(mapsOn)·bots(botsOn), 결과 map(mapsOn). 오른쪽 열은 소리·옷장 둘 ·
  * HR5 방장·참가자 도구의 공통 테두리와 선택 색, 줄 단추에 .is-call 없음 ·
  * HR6 왕관 표식 유무·열별 칸 수가 hostRailLayoutE2E(n, 잰 최대 높이)와 같다(최대 높이 ±2 안에서 배치가 갈리면 판정하지 않고 info), 줄의 접근성 이름은 "방장 전용" ·
- * HR7 튜토리얼 토글(id "tutorial"·role=switch)은 어느 판에도 없고 패널 안 옛 스위치 줄 0 · HR8 대기실 패널 높이 222±1(방장·참가자 같다).
+ * HR7 튜토리얼 토글(id "tutorial"·role=switch)은 어느 판에도 없고 패널 안 옛 스위치 줄 0 · HR8 대기실 패널 높이 160±1(방장·참가자 같다).
  */
 export function hostRailChecks(s = {}) {
   const E = HOST_RAIL_E2E;

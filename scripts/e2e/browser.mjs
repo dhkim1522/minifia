@@ -905,7 +905,7 @@ export function readKeyboardState(page, mySeat) {
       log: rect(document.querySelector("[data-chat-log]")),
       headerBottom: header ? header.getBoundingClientRect().bottom : null,
       headerTop: header ? header.getBoundingClientRect().top : null,
-      actionButtons: panel.querySelectorAll("button:not([data-chat-send]):not([data-chat-newdot]):not([data-chat-open]):not([data-emote-button]):not([data-emote])").length,
+      actionButtons: document.querySelectorAll(".mf-lobby__start [data-lobby-start]").length,
       host: host ? { w: host.clientWidth, h: host.clientHeight } : null,
       canvas: canvas ? { attrW: canvas.width, attrH: canvas.height, cssW: canvas.clientWidth, cssH: canvas.clientHeight } : null,
       roCalls: window.__mfRo ? window.__mfRo.calls : null,
@@ -1168,7 +1168,7 @@ export function clearToasts(page) {
 export async function readPaintStats(page) {
   const canvas = page.locator(".mf-world__canvas canvas").first();
   if ((await canvas.count()) === 0) return null;
-  const png = await canvas.screenshot({ style: ".mf-lobby__scrim,.mf-world__tags,.mf-world__input,.mf-lobby__header,.mf-lobby__panel,.mf-lobby__test,.mv-toast,.mf-reconnect,.mf-mapcard{visibility:hidden !important}", timeout: 5000 });
+  const png = await canvas.screenshot({ style: ".mf-lobby__scrim,.mf-world__tags,.mf-world__input,.mf-lobby__header,.mf-lobby__start,.mf-lobby__panel,.mf-lobby__test,.mv-toast,.mf-reconnect,.mf-mapcard{visibility:hidden !important}", timeout: 5000 });
   const b64 = png.toString("base64");
   return page.evaluate(async (data) => {
     const blob = await (await fetch(`data:image/png;base64,${data}`)).blob();

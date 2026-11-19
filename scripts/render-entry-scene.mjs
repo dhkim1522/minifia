@@ -31,8 +31,8 @@ try {
     // 재즈 바 뒤쪽 펜던트 아래의 두 의자와 램프를 그대로 사용한다.
     const tableX = -2.4, tableZ = -4.6;
     const subjects = [];
-    function place(seat, x, z, angle, seated) {
-      const actor = createCharacter(figForSeat(seat), "coat");
+    function place(seat, outfit, x, z, angle, seated) {
+      const actor = createCharacter(figForSeat(seat), outfit);
       actor.root.position.set(tableX + x, seated ? 0.14 : 0, tableZ + z);
       actor.root.rotation.y = angle;
       if (seated) {
@@ -43,11 +43,11 @@ try {
       subjects.push(actor);
       return actor.root;
     }
-    const left = place(3, -0.71, 0.37, 0.9, true);
+    const left = place(3, "mafia", -0.71, 0.37, 0.9, true);
     left.getObjectByName("neck").rotation.y = 0.08;
-    const speaker = place(5, -0.62, -1.16, 0.13, false);
+    const speaker = place(5, "coat", -0.62, -1.16, 0.13, false);
     speaker.getObjectByName("armA").rotation.x = -0.54;
-    const right = place(1, 0.71, -0.37, -0.33, true);
+    const right = place(1, "coat", 0.71, -0.37, -0.33, true);
     right.getObjectByName("neck").rotation.z = -0.07;
 
     // 램프의 빛이 큰 얼굴에서도 읽히게 촬영용 조명을 맵의 실광원과 같은 자리에 둔다.

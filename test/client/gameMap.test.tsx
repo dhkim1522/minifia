@@ -146,6 +146,29 @@ afterEach(() => {
   stage.props = null;
 });
 
+describe("GameMap — 내 마피아 의상", () => {
+  it("같은 공개 차림을 받아도 마피아 본인의 게임 맵만 내 의상을 덮어쓴다", () => {
+    const view = makeView();
+    view.players[0]!.look = "hood";
+    view.players[1]!.look = "mafia";
+    view.me.role = "mafia";
+    const { show } = mount(view);
+    expect(stage.props?.scene?.seats[0]?.costume).toBe("mafia");
+    expect(stage.props?.scene?.seats[1]?.costume).toBeUndefined();
+    expect(view.players[0]!.look).toBe("hood");
+
+    show({ ...view, me: { ...view.me, seat: 1, isHost: false, role: "citizen" } });
+    expect(Object.values(stage.props!.scene!.seats).every((seat) => seat.costume === undefined)).toBe(true);
+    expect(stage.props?.view.players[1]?.look).toBe("mafia");
+
+    const dead = makeView({ dead: [0] });
+    dead.me.role = "mafia";
+    show(dead);
+    expect(stage.props?.scene?.seats[0]).toMatchObject({ ghost: true });
+    expect(stage.props?.scene?.seats[0]?.costume).toBeUndefined();
+  });
+});
+
 describe("GameMap — 아침 유언 인용", () => {
   it("첫날 단서가 모두 비어 있으면 단서 도구를 표시하지 않는다", () => {
     const view = makeView();

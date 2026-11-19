@@ -36,7 +36,7 @@ import {
   ZOOM_MAJORITY,
   ZOOM_MIN_STAGE_H,
 } from "../../src/world/camera";
-import { CHAT_PANEL_EXTRA, LOG_H, lobbyPanelHeight, TYPING_PILL_H } from "../../src/game/chatUi";
+import { CHAT_PANEL_EXTRA, DISCUSSION_LOG_H, DISCUSSION_PANEL_EXTRA, LOG_H, lobbyPanelHeight, TYPING_PILL_H } from "../../src/game/chatUi";
 import { HEAD_TOP_Y as HEAD_TOP } from "../../shared/game/map";
 import { ringSlots } from "../../shared/game/gather";
 
@@ -201,15 +201,15 @@ describe("스테이지 사각형과 세로 오프셋", () => {
     expect(stageOffsetY(800, 200, 800)).toBe(-100);
   });
 
-  it("stageRect: 위 62 ~ 아래 패널 위 끝(높이 − 222 = 로비 패널 기본값), 폭 전체. 패널 높이를 넘기면 따라간다", () => {
-    expect(stageRect({ w: 390, h: 844 })).toEqual({ top: 62, bottom: 622, left: 0, right: 390 });
-    expect(stageRect({ w: 360, h: 560 })).toEqual({ top: 62, bottom: 338, left: 0, right: 360 });
+  it("stageRect: 위 62 ~ 아래 패널 위 끝(높이 − 160 = 로비 패널 기본값), 폭 전체. 패널 높이를 넘기면 따라간다", () => {
+    expect(stageRect({ w: 390, h: 844 })).toEqual({ top: 62, bottom: 684, left: 0, right: 390 });
+    expect(stageRect({ w: 360, h: 560 })).toEqual({ top: 62, bottom: 400, left: 0, right: 360 });
     expect(stageRect({ w: 390, h: 844 }, 200)).toEqual({ top: 62, bottom: 644, left: 0, right: 390 });
   });
 
-  it("PANEL_HEIGHT 는 DOM 을 재기 전 기본값으로 7페이즈 로비 패널(LOG_H 68 + 154 = 222)이다, HEAD_STACK_H 는 이름표 24 + 입력 중 칸 22 = 46", () => {
+  it("PANEL_HEIGHT 는 DOM 을 재기 전 기본값으로 7페이즈 로비 패널(LOG_H 68 + 92 = 160)이다, HEAD_STACK_H 는 이름표 24 + 입력 중 칸 22 = 46", () => {
     expect(PANEL_HEIGHT).toBe(lobbyPanelHeight(LOG_H));
-    expect(PANEL_HEIGHT).toBe(222);
+    expect(PANEL_HEIGHT).toBe(160);
     expect(TYPING_PILL_H).toBe(22);
     expect(HEAD_STACK_H).toBe(NAMETAG_H + TYPING_PILL_H);
     expect(HEAD_STACK_H).toBe(46);
@@ -293,7 +293,7 @@ type Box = { minX: number; maxX: number; minZ: number; maxZ: number };
 
 const symBox = (p: number): Box => ({ minX: -p, maxX: p, minZ: -p, maxZ: p });
 
-/** 7페이즈 로비 스테이지 사각형: 패널 높이 = LOG_H(68 한 값) + 154 = 222 (18.1 UI-SPEC B 계약 4). 키보드가 열린 상태(스테이지 < 128)는 이 검사 대상이 아니다(A2) */
+/** 키보드를 닫은 대기실의 스테이지 사각형 */
 const lobbyStage = (size: Size) => stageRect(size, lobbyPanelHeight(LOG_H));
 
 /** 걷는 영역 [−half, half]² 의 0.25 간격 모든 점(끝점 포함). 기본은 재즈 바·광장의 5.8, 마을은 ±10 */
@@ -314,11 +314,11 @@ interface Failure {
 }
 
 /** 크기 하나에서 상자 box 로 카메라를 자를 때 발·이름표 상자(입력 중 칸 22 포함 = HEAD_STACK_H)가 스테이지 사각형을 넘는 점들 (A1: 늘 입력 중 칸이 있다고 보는 최악) */
-function visibilityFailures(size: Size, box: Box, half: number = WALK_HALF): Failure[] {
-  const r = lobbyStage(size);
+function visibilityFailures(size: Size, box: Box, panelHeight = lobbyPanelHeight(LOG_H)): Failure[] {
+  const r = stageRect(size, panelHeight);
   const offsetY = stageOffsetY(size.h, r.top, r.bottom);
   const fails: Failure[] = [];
-  for (const p of walkPoints(half)) {
+  for (const p of walkPoints()) {
     const target = clampTarget(p, box);
     const foot = groundToScreen({ x: p.x, y: 0, z: p.z }, target, size, offsetY);
     const head = groundToScreen({ x: p.x, y: HEAD_TOP_Y, z: p.z }, target, size, offsetY);
@@ -377,8 +377,8 @@ function farthestGround(size: Size, box: Box): { far: number; at: string } {
 }
 
 /** 가시성을 통과하는 가장 좁은 대칭 상자 반폭(0.1 단위) */
-function minPanFor(size: Size, half: number = WALK_HALF): number {
-  for (let k = 0; k <= Math.round(half * 10); k++) if (visibilityFailures(size, symBox(k / 10), half).length === 0) return k / 10;
+function minPanFor(size: Size, panelHeight = lobbyPanelHeight(LOG_H)): number {
+  for (let k = 0; k <= Math.round(WALK_HALF * 10); k++) if (visibilityFailures(size, symBox(k / 10), panelHeight).length === 0) return k / 10;
   return Number.POSITIVE_INFINITY;
 }
 
@@ -397,12 +397,12 @@ describe("STAGE_SIZES (UI-SPEC 폰 크기 표)", () => {
     for (const s of STAGE_SIZES) expect(s.label).toBe(`${s.w}x${s.h}`);
   });
 
-  it("로비 스테이지 사각형 높이는 07-UI-SPEC 표와 같다 (356·380·648·276·560·590 — 방 높이 − 62 − (LOG_H + 154), 18.1 UI-SPEC 표)", () => {
+  it("로비 스테이지 사각형 높이는 방 높이에서 헤더·공통 채팅 패널을 뺀 값이다", () => {
     const heights = STAGE_SIZES.map((s) => {
       const r = lobbyStage(s);
       return r.bottom - r.top;
     });
-    expect(heights).toEqual([356, 380, 648, 276, 560, 590]);
+    expect(heights).toEqual([418, 442, 710, 338, 622, 652]);
   });
 });
 
@@ -430,11 +430,14 @@ describe("가시성: 걷는 영역 전 격자점 × 6개 폰 크기 (UI-SPEC E1 
     expect(PAN_BOX.maxX).toBeGreaterThan(0);
   });
 
-  it("PAN_BOX 는 가시성을 통과하는 가장 좁은 0.1 단위 값이다 (0.1 더 좁히면 어느 한 크기가 넘친다)", () => {
-    const needed = Math.max(...STAGE_SIZES.map((s) => minPanFor(s)));
-    expect(PAN_BOX.maxX).toBeCloseTo(needed, 9);
+  it("대기실의 최소 반폭은 4.8이고, 공통 PAN_BOX는 대기실과 토론을 모두 담는 최소 반폭이다", () => {
+    const lobby = Math.max(...STAGE_SIZES.map((s) => minPanFor(s)));
+    const discussionHeight = DISCUSSION_LOG_H + DISCUSSION_PANEL_EXTRA;
+    const discussion = Math.max(...STAGE_SIZES.map((s) => minPanFor(s, discussionHeight)));
+    expect(lobby).toBe(4.8);
+    expect(PAN_BOX.maxX).toBe(Math.max(lobby, discussion));
     const narrower = symBox(Math.round((PAN_BOX.maxX - 0.1) * 10) / 10);
-    expect(STAGE_SIZES.some((s) => visibilityFailures(s, narrower).length > 0)).toBe(true);
+    expect(STAGE_SIZES.some((s) => visibilityFailures(s, narrower, discussionHeight).length > 0)).toBe(true);
   });
 
   it("카메라가 한계에 걸리지 않는 안쪽 점(|x|,|z| ≤ PAN)에서는 캐릭터가 스테이지 사각형 가운데에 온다", () => {

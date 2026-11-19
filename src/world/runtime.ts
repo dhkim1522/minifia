@@ -1109,7 +1109,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
       const seatLook = look?.seats[a.seat];
       const wantGhost = seatLook?.ghost === true;
-      // 결과 화면 직업 의상(11-05): 장면 표에 costume 이 있을 때만 입는다(탈락자는 유령 그림이라 입지 않는다, 0083-2). 걷히면 고른 look 으로 돌아온다
+      // 개인 화면이나 결과 연출의 직업 의상. 장면에서 지정한 동안만 입고 걷히면 고른 look 으로 돌아온다.
       const wantCostume = wantGhost ? null : (seatLook?.costume ?? null);
       if (wantCostume !== a.costume) {
         if (wantCostume !== null) {
