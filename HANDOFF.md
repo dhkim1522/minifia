@@ -6,7 +6,7 @@
 
 - **v3.0 시험판**(`v3`)에 [B안 달빛 누아르](docs/decisions/0093-v3-noir-visual-redesign.md)를 두 맵의 3D 공간·조명, 캐릭터·유령·초상화·의상·배경 이미지, 홈부터 결과까지의 공통 UI에 적용했다. **22** 낮은 토론 → 찬반 → 지목 → 유언 → 처형(결정 0090). **23** 첫날 키워드와 정답 공개, 조기 진행, D1 판 기록(결정 0091). **24-01~07** 구현 완료.
 - [동물 12종](docs/decisions/0102-animal-characters.md)은 3D 모델·초상·의상을 공유한다. [공용 화면](docs/decisions/0100-home-art-and-discussion-controls.md)의 채팅은 하단에 두고, [단계의 선택과 결과](docs/decisions/0103-phase-events.md)는 중앙에서 진행한다.
-- **공개 v3** `2026-11-19T12:27:02Z+d1866abe`. [데스크톱 방·입장 공통 폭과 검수](docs/decisions/0106-desktop-room-layout.md). [채팅·메뉴·의심딱지](docs/decisions/0105-room-controls-and-suspect-targets.md) 모바일 브라우저 검수, 실기기 확인 대기. [3D 시안 원본](design/v3.0/redesign/imagegen-3d-reference/) 보관. [첫날 실험방](https://minifia-v3.dhplay.workers.dev/?playtest=1)은 별도 링크로 만든다.
+- **공개 v3** `2026-11-19T13:42:18Z+9b237c87`. 재즈 바·동물 3D 에셋 적용. [데스크톱 공통 폭](docs/decisions/0106-desktop-room-layout.md)과 [채팅·메뉴·의심딱지](docs/decisions/0105-room-controls-and-suspect-targets.md)는 실기기 확인 대기. [3D 시안 원본](design/v3.0/redesign/imagegen-3d-reference/)과 [첫날 실험방](https://minifia-v3.dhplay.workers.dev/?playtest=1)을 따로 보관한다.
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`. 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터·맵**의 B안 모델은 `src/world/character.ts`, `src/world/ghost3d.ts`, `src/world/maps/`에 있다. 시안은 `design/v3.0/redesign/b-noir.png`. 이미지 재생성은 [에셋 자동 검사](docs/screen-map.md#에셋-자동-검사) 참고.
 - **맵(결정 0050)**: 재즈 바 + 시계탑 광장(`PLAYABLE_MAPS`, 방장이 고름). 블록아웃 https://claude.ai/artifact/1hzgEyAufgnDPVMvPvxdhP (사본 `design/v2.0/blockout/`).
