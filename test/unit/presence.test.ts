@@ -136,6 +136,17 @@ describe("visibleSeats (GHOST-01, T-08-25)", () => {
 });
 
 describe("cameraModeOf (UI-SPEC 카메라 표)", () => {
+  it("재즈 바는 인원수와 관계없이 낮에 중앙 좌석 카메라를 쓴다", () => {
+    for (const phase of ["dayAnnounce", "discussion", "verdict", "nomination"] as const) {
+      const view = { ...viewOf(phase), map: "bar" as const };
+      const want = { mode: "fixed", target: GATHER_CENTER, zoom: 1, barSeats: true };
+      same(cameraModeOf({ ...view, players: view.players.slice(0, 4) }, 500), want);
+      same(cameraModeOf({ ...view, players: [...view.players, ...view.players.slice(0, 3)] }, 500), want);
+    }
+    same(cameraModeOf({ ...viewOf("discussion", { dead: [1], mySeat: 1 }), map: "bar" }, 500), { mode: "follow" });
+    same(cameraModeOf({ ...viewOf("discussion"), map: "plaza" }, 500), { mode: "follow" });
+  });
+
   const follow = ["lobby", "assigning", "roleReveal", "dayAnnounce", "discussion", "night", "morning", "ended"] as const;
   for (const phase of follow) {
     it(`${phase} → 따라가기`, () => {

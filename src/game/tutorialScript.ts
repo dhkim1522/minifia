@@ -7,7 +7,7 @@
 // 시간 표시를 지운 사본(머리·띠용)은 화면 쪽이 만든다. 튜토리얼 루트에 맨 이름 data-tutorial 속성은 쓰지 않는다(표식 이름은 UI-SPEC 표).
 // 옛 서버 쪽 표식과 같은 이름(통과·완료 표식·튜토리얼 단계)은 만들지 않는다 — 혼자 하기는 서버 상태가 없다(D-15).
 import { EARLY_GRACE_MS } from "../../shared/game/early";
-import { BAR_MAP, snapToWalkable, UNIT } from "../../shared/game/map";
+import { BAR_SEATS_FX, UNIT } from "../../shared/game/map";
 import { majorityOf } from "../../shared/game/nomination";
 import { ANSWER_REVEAL_MS, EXECUTION_MS, WILL_REVEAL_MS } from "../../shared/game/phases";
 import { PLAYTEST_DISCUSSION_MIN_MS } from "../../shared/game/playtest";
@@ -565,8 +565,7 @@ export function tutorialSnap(id: TutorialSceneId, at: number, playtest = false):
     const spot = spots[seat]!;
     const pid = `tut-${seat}`;
     players.push({ id: pid, seat });
-    const position = { x: Math.round(spot.x * UNIT), z: Math.round(spot.z * UNIT) };
-    const { x, z } = playtest ? snapToWalkable(BAR_MAP, position) : position;
+    const [x, z] = playtest ? BAR_SEATS_FX[seat]! : [Math.round(spot.x * UNIT), Math.round(spot.z * UNIT)];
     world = { ...world, segs: { ...world.segs, [pid]: restSegment(x, z, at) } };
   }
   return snapFrame(world, players, at);

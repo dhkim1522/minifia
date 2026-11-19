@@ -1,4 +1,5 @@
-// 의심 포스트잇 규칙(결정 0089-10, 24 D-01~D-05·D-22·D-25·D-26). 낮 토론에서 산 사람이 가까이 있는 산 사람에게 하루 한 장 종이를 붙인다(옮기기만 되고 받은 사람은 뗄 수 없다).
+// 의심 포스트잇 규칙(결정 0089-10, 24 D-01~D-05·D-22·D-25·D-26). 낮 토론의 산 사람은 다른 산 사람에게 하루 한 장 붙인다.
+// 바에서는 고정 좌석의 상대를 모두 고를 수 있다. 광장은 이전의 가까운 대상 거리 판정을 쓴다.
 // 서버·클라이언트 공용 순수 모듈 — three·DOM·시각 함수를 import 하지 않는다. 시각은 인자로만 받고 입력 상태를 바꾸지 않는다.
 // 판정·투표·단계 마감과 무관한 서버 기록이다: stickNote 는 RoomState.notes 외의 키를 바꾸지 않는다.
 import type { PhaseId } from "../protocol";
@@ -26,10 +27,11 @@ export const noteAllowedNow = (phase: PhaseId, day: number | undefined, playtest
 
 /**
  * 두 구간의 시각 now 위치가 붙일 거리 안인가. 정수 제곱 비교라 삼각함수·제곱근이 없고 서버와 폰이 같은 값을 얻는다.
- * pct 는 거리 문턱 비율(기본 100). 한쪽 구간이 없으면 거짓이다.
+ * pct는 거리 문턱 비율(기본 100)이다. 고정 좌석은 두 구간이 존재할 때 도달 가능하다.
  */
-export function withinNoteReach(a: Segment | undefined, b: Segment | undefined, now: number, pct = 100): boolean {
+export function withinNoteReach(a: Segment | undefined, b: Segment | undefined, now: number, pct = 100, seated = false): boolean {
   if (a === undefined || b === undefined) return false;
+  if (seated) return true;
   const p = positionAtFx(a, now);
   const q = positionAtFx(b, now);
   const dx = p.x - q.x;
@@ -61,7 +63,7 @@ export function stickNote(state: RoomState, world: Pick<WorldState, "segs">, act
   if (!Number.isInteger(toSeat)) return REJECT;
   const target = state.players.find((p) => p.seat === toSeat);
   if (!target || !isAlive(target) || target.id === actor.id) return REJECT;
-  if (!withinNoteReach(world.segs[actor.id], world.segs[target.id], now)) return REJECT;
+  if (!withinNoteReach(world.segs[actor.id], world.segs[target.id], now, 100, (state.map ?? "bar") === "bar")) return REJECT;
   const n = state.day ?? 1;
   const notes = state.notes ?? [];
   if (notes.some((x) => x.n === n && x.from === actor.seat && x.to === target.seat)) return { ok: true, state };

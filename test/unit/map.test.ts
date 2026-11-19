@@ -1,11 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { seededRandInt } from "../helpers/seededRandom";
+import { LEGACY_BAR_MAP as BAR_MAP, LEGACY_BAR_MASK as BAR_MASK, LEGACY_BAR_OBSTACLES as BAR_OBSTACLES, LEGACY_BAR_SPAWNS as BAR_SPAWNS } from "../helpers/legacyBarMap";
 import {
-  BAR_MAP,
-  BAR_MASK,
-  BAR_OBSTACLES,
-  BAR_SPAWNS,
   CELL,
   CHAR_RADIUS,
   GRID_ORIGIN,

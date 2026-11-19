@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Plane, Raycaster, Vector2, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
-import { groundToScreen, PX_PER_UNIT, screenToGround, STAGE_SIZES, stageOffsetY, stageRect } from "../../src/world/camera";
+import { BAR_TABLE_CAMERA, BAR_WALK_CAMERA, barTableZoom, cameraScale, groundToScreen, PX_PER_UNIT, screenToGround, STAGE_SIZES, stageOffsetY, stageRect } from "../../src/world/camera";
 import { nextLadderStep, UnsupportedRendererError } from "../../src/world/renderer";
 import { configureCamera, createCamera } from "../../src/world/threeCamera";
 import { createThreeRenderer } from "../../src/world/threeRenderer";
@@ -35,6 +35,31 @@ function forEachPhone(fn: (size: { w: number; h: number; label: string }, offset
 }
 
 describe("three 정사영 카메라 = camera.ts 순수 수학", () => {
+  it("재즈 바 근접 카메라에서도 화면 투영과 바닥 탭이 일치한다", () => {
+    const cam = createCamera();
+    const ray = new Raycaster();
+    const floor = new Plane(new Vector3(0, 1, 0), 0);
+    forEachPhone((size, offsetY, target) => {
+      for (const rig of [BAR_TABLE_CAMERA, BAR_WALK_CAMERA]) {
+        configureCamera(cam, target, size, offsetY, 0.92, rig);
+        const point = new Vector3(-1.36, 0, 1.30);
+        const ndc = point.clone().project(cam);
+        const screen = groundToScreen(point, target, size, offsetY, 0.92, rig);
+        expect(screen.sx).toBeCloseTo((ndc.x + 1) * size.w / 2, 5);
+        expect(screen.sy).toBeCloseTo((1 - ndc.y) * size.h / 2, 5);
+        ray.setFromCamera(new Vector2(ndc.x, ndc.y), cam);
+        const hit = ray.ray.intersectPlane(floor, new Vector3());
+        expect(hit?.distanceTo(point)).toBeLessThan(1e-5);
+        expect(screenToGround(screen.sx, screen.sy, target, size, offsetY, 0.92, rig)).toMatchObject({
+          x: expect.closeTo(point.x, 5), z: expect.closeTo(point.z, 5),
+        });
+      }
+    });
+    const size = { w: 390, h: 844 };
+    expect(cameraScale(size, BAR_TABLE_CAMERA)).toBeCloseTo(390 / 4.52, 6);
+    expect(barTableZoom({ top: 62, bottom: 620 }, size, 1)).toBe(1);
+  });
+
   it("임의 점 50개 × 폰 6개: Vector3.project 결과와 groundToScreen 의 차이가 0.01px 이하", () => {
     const rand = rng(1010);
     const cam = createCamera();

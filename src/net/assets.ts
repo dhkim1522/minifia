@@ -29,9 +29,9 @@ export type PreloadItem = { href: string; imageSrcSet?: string };
  * 정적 그림 주소 끝에 붙이는 값. 파일 이름이 같아도 그림을 바꾼 배포가 바로 보이게 한다
  * (정적 그림 캐시가 max-age 1일이라 같은 주소는 하루 동안 옛 그림이 나온다). 그림을 바꾸면 값을 바꾼다.
  */
-export const ASSET_VERSION = "noir-11";
+export const ASSET_VERSION = "noir-12";
 /** 입장 배경은 캐릭터·맵 그림과 별도로 갱신한다. */
-export const ENTRY_ART_VERSION = "home-table-1";
+export const ENTRY_ART_VERSION = "home-table-2";
 export const STATIONERY_VERSION = "stationery-1";
 
 type StationeryAsset = "paper" | "will-paper" | "seal" | "role-front" | "role-back" | "note" | `journal-${JournalRole}`;

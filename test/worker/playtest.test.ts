@@ -1,9 +1,6 @@
 import { env, exports } from "cloudflare:workers";
-import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { ringSlots } from "../../shared/game/gather";
-import type { RoomState } from "../../shared/game/room";
-import { restSegment, type WorldState } from "../../shared/game/world";
+import { BAR_SEATS_FX } from "../../shared/game/map";
 import type { CreateRoomResponse } from "../../shared/protocol";
 import { openKeyword } from "../helpers/keyword";
 import { alarmOf, closePhase, connect, editRoom, framesOf, hello, joinOk, lastViewOf, mark, nextFrame, send, settle, storedRoom, writeRoomEdit } from "./helpers";
@@ -63,6 +60,8 @@ describe("첫날 실험방 HTTP·소켓", () => {
     const restore = openKeyword();
     try {
       const { code, host, sockets } = await seatFour();
+      send(host, { t: "mapPick", map: "bar" });
+      await nextFrame(host, (msg) => msg.t === "state" && msg.view.mapChoice === "bar");
       send(host, { t: "start" });
       await nextFrame(host, (msg) => msg.t === "state" && msg.view.phase === "assigning");
       await closePhase(code);
@@ -73,7 +72,7 @@ describe("첫날 실험방 HTTP·소켓", () => {
         expect(view.players.every((player) => player.look === undefined || player.look === "coat")).toBe(true);
       }
       const gathered = framesOf(host).filter((f) => f.t === "world" && f.k === "snap").at(-1);
-      expect(gathered?.ents.map(({ p }) => p.slice(-2))).toEqual(expect.arrayContaining([...ringSlots(4)]));
+      expect(gathered?.ents.map(({ p }) => p.slice(-2))).toEqual(BAR_SEATS_FX.slice(0, 4));
       const lockedRole = mark(host);
       send(host, { t: "move", x: 300, z: 100 });
       expect((await settle(host, lockedRole)).some((f) => f.t === "world")).toBe(false);
@@ -108,22 +107,11 @@ describe("첫날 실험방 HTTP·소켓", () => {
       const hostSeat = lastViewOf(host).me.seat;
       const nearSeat = lastViewOf(sockets[1]!).me.seat;
       const farSeat = lastViewOf(sockets[2]!).me.seat;
-      await runInDurableObject(env.ROOM.getByName(code), (instance) => {
-        const { players } = instance["room"] as RoomState;
-        const world: WorldState = instance["world"];
-        const now = Date.now();
-        const segs = {
-          ...world.segs,
-          [players.find((p) => p.seat === hostSeat)!.id]: restSegment(-200, 290, now),
-          [players.find((p) => p.seat === nearSeat)!.id]: restSegment(-60, 290, now),
-          [players.find((p) => p.seat === farSeat)!.id]: restSegment(350, 290, now),
-        };
-        instance["world"] = { ...world, segs };
-      });
+      const noWalk = mark(host);
       send(host, { t: "move", x: -100, z: 350 });
-      await nextFrame(host, (f) => f.t === "world" && f.k === "move" && f.s === hostSeat);
+      expect((await settle(host, noWalk)).some((f) => f.t === "world")).toBe(false);
       const noPoint = mark(host);
-      send(sockets[2]!, { t: "suspect", target: hostSeat });
+      send(sockets[2]!, { t: "suspect", target: farSeat });
       await nextFrame(sockets[2]!, (m) => m.t === "error" && m.code === "BAD_MESSAGE");
       expect((await settle(host, noPoint)).some((f) => f.t === "emote")).toBe(false);
       send(host, { t: "suspect", target: nearSeat });
@@ -148,7 +136,7 @@ describe("첫날 실험방 HTTP·소켓", () => {
       expect(Date.now()).toBeLessThan(opensAt);
       expect(lastViewOf(host)).toMatchObject({ phase: "verdict", phaseDurationMs: 28_000, day: { firstBallot: { count: 0 } } });
       const gatheredAgain = framesOf(host).slice(firstBallotFrom).filter((m) => m.t === "world" && m.k === "move");
-      expect(gatheredAgain).toContainEqual(expect.objectContaining({ s: hostSeat, p: expect.any(Array) }));
+      expect(gatheredAgain).toEqual([]); // 토론에서 이미 착석한 사람의 경로를 투표 때 다시 만들지 않는다.
       const lockBallot = mark(host);
       send(host, { t: "move", x: 300, z: 100 });
       expect((await settle(host, lockBallot)).some((f) => f.t === "world")).toBe(false);

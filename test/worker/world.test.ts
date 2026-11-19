@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { PhaseId, ServerMessage } from "../../shared/protocol";
-import { BAR_MAP, lineWalkable } from "../../shared/game/map";
+import { BAR_MAP, BAR_SEATS_FX, BAR_SPAWNS, UNIT, lineWalkable } from "../../shared/game/map";
 import { positionAt } from "../../shared/game/world";
 import {
   advanceTo,
@@ -52,6 +52,10 @@ const isWalk = (s: number) => (m: ServerMessage): m is MoveFrame => isMove(m) &&
 /** 어느 소켓이 받은 world 프레임(원문) 가운데 mark 이후 것. */
 const worldsSince = (sock: TestSocket, from: number): string[] => sock.frames.slice(from).filter((f) => parse(f).t === "world");
 const errorsSince = (sock: TestSocket, from: number): string[] => sock.frames.slice(from).filter((f) => parse(f).t === "error");
+const spawnFx = (s: number): string => {
+  const { x, z } = BAR_SPAWNS[s]!;
+  return `${Math.round(x * UNIT)},${Math.round(z * UNIT)}`;
+};
 
 describe("로비 이동 — 트레이서 (MAP-02, MAP-01)", () => {
   it("방장 hello 의 프레임 순서는 [state, world.snap, chatLog] 이고 snap 에 seat 0 이 입장 지점 한 점으로 있다", async () => {
@@ -66,7 +70,7 @@ describe("로비 이동 — 트레이서 (MAP-02, MAP-01)", () => {
     });
     expect(kinds.join(",")).toBe("state,world.snap,chatLog");
     expect(snap.ents.map((e) => e.s).join(",")).toBe("0");
-    expect(snap.ents[0]!.p.join(",")).toBe("360,40");
+    expect(snap.ents[0]!.p.join(",")).toBe(spawnFx(0));
   });
 
   it("손님이 참가하면 방장 소켓이 state(2명) 다음에 그 손님의 한 점 world.move 를 받는다", async () => {
@@ -81,7 +85,7 @@ describe("로비 이동 — 트레이서 (MAP-02, MAP-01)", () => {
     expect(state.t).toBe("state");
     const move = (await nextFrame(host, isMove)) as MoveFrame;
     expect(move.s).toBe(1);
-    expect(move.p.join(",")).toBe("40,360");
+    expect(move.p.join(",")).toBe(spawnFx(1));
     const order = host.frames.slice(mk).map((f) => parse(f).t);
     expect(order.join(",")).toBe("state,world");
   });
@@ -105,7 +109,7 @@ describe("로비 이동 — 트레이서 (MAP-02, MAP-01)", () => {
     const onHost = (await nextFrame(s.host, isWalk(1))) as MoveFrame;
     const onGuest = (await nextFrame(guest.sock, isWalk(1))) as MoveFrame;
     expect(JSON.stringify(onHost)).toBe(JSON.stringify(onGuest));
-    expect(onHost.p.slice(0, 2).join(",")).toBe("40,360");
+    expect(onHost.p.slice(0, 2).join(",")).toBe(spawnFx(1));
     expect(onHost.p.slice(-2).join(",")).toBe("300,100");
     expect(onHost.v).toBe(180);
   });
@@ -250,7 +254,7 @@ describe("퇴거 복원 (MAP-05)", () => {
     const g2 = await connect(s.code);
     send(g2, { t: "hello", token: s.guests[0]!.token });
     const snap = (await nextFrame(g2, isSnap)) as SnapFrame;
-    expect(snap.ents.map((e) => `${e.s}:${e.p.join(",")}`).join("|")).toBe("0:360,40|1:40,360");
+    expect(snap.ents.map((e) => e.p.join(","))).toEqual([spawnFx(0), spawnFx(1)]);
   });
 });
 
@@ -338,7 +342,7 @@ describe("테스트 방 봇 수·시작·대기실 복귀 (MAP-01)", () => {
     const names = got.map((m) => (m.t === "world" ? `world.${m.k}` : m.t));
     expect(names.join(",")).toBe("state,world.snap");
     const snap = got.find(isSnap)!;
-    expect(snap.ents.map((e) => `${e.s}:${e.p.join(",")}`).join("|")).toBe("0:360,40|1:40,360|2:540,220|3:-420,-120");
+    expect(snap.ents.map((e) => e.p.join(","))).toEqual([0, 1, 2, 3].map(spawnFx));
     await until("복귀 즉시 저장", async () => !hasEnd(await worldOf(s.code), "300,100"));
   });
 });
@@ -466,8 +470,8 @@ describe("단계별 이동 — 산 사람은 막히고 유령은 걷는다 (MAP-
     }, 40_000);
   }
 
-  it("discussion: 산 사람의 move 는 유령을 포함한 모든 소켓이 world.move 로 받는다", async () => {
-    const g = await gameAt("discussion");
+  it("광장 토론: 산 사람의 move 는 유령을 포함한 모든 소켓이 world.move 로 받는다", async () => {
+    const g = await startedGame("discussion", 4, "plaza");
     const marks = g.socks.map((sock) => mark(sock));
     const mover = g.actors[1]!;
     send(mover.sock, { t: "move", x: 300, z: 100 });
@@ -475,16 +479,23 @@ describe("단계별 이동 — 산 사람은 막히고 유령은 걷는다 (MAP-
     expect(got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",")).toBe("1,1,1,1,1");
   }, 40_000);
 
-  it("dayAnnounce: 산 사람의 move 는 모든 소켓이 world.move 로 받는다", async () => {
-    const s = await seat(3, 0);
-    const socks = [s.host, ...s.guests.map((gst) => gst.sock)];
-    send(s.host, { t: "start" });
-    for (const sock of socks) await nextFrame(sock, (m) => m.t === "state" && m.view.phase === "assigning");
-    await advanceTo(s.code, socks, "dayAnnounce");
+  it("광장 낮 시작: 산 사람의 move 는 모든 소켓이 world.move 로 받는다", async () => {
+    const { socks } = await startedGame("dayAnnounce", 3, "plaza");
     const marks = socks.map((sock) => mark(sock));
-    send(s.guests[0]!.sock, { t: "move", x: 300, z: 100 });
+    send(socks[1]!, { t: "move", x: 300, z: 100 });
     const got = await settleAll(socks, marks, 1);
     expect(got.map((msgs) => msgs.filter((m) => m.t === "world").length).join(",")).toBe("1,1,1,1");
+  }, 30_000);
+
+  it("재즈 바 8인 토론: 모두 고정 좌석으로 가고 산 사람의 이동 요청은 막힌다", async () => {
+    const g = await startedGame("discussion", 7, "bar");
+    await flushWorld(g.code);
+    const ends = await segEndsBySeat(g.code, 1);
+    expect(ends.split("|").slice(1)).toEqual(BAR_SEATS_FX.map((p, i) => `${i}:${p.join(",")}`));
+    const marks = g.socks.map((sock) => mark(sock));
+    send(g.socks[1]!, { t: "move", x: 300, z: 100 });
+    const got = await settleAll(g.socks, marks, 1);
+    expect(got.flat().filter((m) => m.t === "world" || m.t === "error")).toEqual([]);
   }, 30_000);
 
   it("assigning·roleReveal 에서는 산 사람의 move 가 막힌다", async () => {

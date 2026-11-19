@@ -14,12 +14,12 @@ import {
   Vector2,
 } from "three";
 
-export const GHOST3D_COLORS = { body: "#e2e8f3", bodyGlow: "#7184b4", halo: "#d9ad68", mark: "#2a2c40", cheek: "#bd8a99" } as const;
+export const GHOST3D_COLORS = { body: "#9fc6ec", bodyGlow: "#527db8", halo: "#8ebde5", mark: "#23344c", cheek: "#84a9d3" } as const;
 /** 유령 전체 높이(후광 꼭대기까지, 로컬 단위) */
 export const GHOST3D_HEIGHT = 2.45;
 
-const BODY_GLOW = 0.22;
-const HALO_GLOW = 0.55;
+const BODY_GLOW = 0.28;
+const HALO_GLOW = 0.33;
 /** 몸통 단면 [높이, 반지름] */
 const PROFILE: readonly (readonly [number, number])[] = [
   [0.0, 0.86],
@@ -65,7 +65,13 @@ export function buildGhost3d(): Ghost3d {
 
   const bodyBase = new Color(GHOST3D_COLORS.body);
   const haloBase = new Color(GHOST3D_COLORS.halo);
-  const bodyMat = new MeshStandardMaterial({ color: GHOST3D_COLORS.body, emissive: GHOST3D_COLORS.bodyGlow, emissiveIntensity: BODY_GLOW, roughness: 0.73, metalness: 0, side: DoubleSide, vertexColors: true });
+  const bodyMat = new MeshStandardMaterial({ color: GHOST3D_COLORS.body, emissive: GHOST3D_COLORS.bodyGlow, emissiveIntensity: BODY_GLOW, roughness: 0.58, metalness: 0, side: DoubleSide, vertexColors: true });
+  // 천의 가장자리만 차갑게 빛나게 한다. 그림자나 투명 메시를 추가하지 않는다.
+  bodyMat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+      float veilRim = 1.0 - abs(dot(normal, normalize(vViewPosition)));
+      totalEmissiveRadiance *= 1.0 + 4.0 * veilRim * veilRim;`);
+  };
   const markMat = new MeshStandardMaterial({ color: GHOST3D_COLORS.mark, roughness: 0.9, metalness: 0 });
   const cheekMat = new MeshStandardMaterial({ color: GHOST3D_COLORS.cheek, roughness: 0.9, metalness: 0 });
   const haloMat = new MeshStandardMaterial({ color: GHOST3D_COLORS.halo, emissive: GHOST3D_COLORS.halo, emissiveIntensity: HALO_GLOW, roughness: 0.5, metalness: 0 });
@@ -83,10 +89,10 @@ export function buildGhost3d(): Ghost3d {
     const z = pos.getZ(i);
     const fold = 0.5 + 0.5 * Math.cos(6 * Math.atan2(z, x));
     const strength = Math.max(0, 1 - Math.max(y, 0) / 0.82);
-    const radius = 1 + (fold - 0.5) * strength * 0.12;
-    pos.setXYZ(i, x * radius, y + (1 - fold) * 0.16 * strength * strength, z * radius);
-    const dark = strength * (1.1 - 0.55 * fold);
-    shade.set([1 - 0.29 * dark, 1 - 0.18 * dark, 1 - 0.08 * dark], i * 3);
+    const radius = 1 + (fold - 0.5) * strength * 0.18;
+    pos.setXYZ(i, x * radius, y + (1 - fold) * 0.22 * strength * strength, z * radius);
+    const dark = strength * (1.13 - 0.57 * fold);
+    shade.set([1 - 0.33 * dark, 1 - 0.17 * dark, 1 - 0.05 * dark], i * 3);
   }
   shellGeo.setAttribute("color", new Float32BufferAttribute(shade, 3));
   shellGeo.computeVertexNormals();
@@ -134,14 +140,14 @@ export function buildGhost3d(): Ghost3d {
   const arms = [-1, 1].map((s) => {
     const arm = new Mesh(armGeo, bodyMat);
     arm.name = "ghost-arm";
-    arm.scale.set(0.9, 1.55, 0.9);
-    arm.position.set(s * 0.79, 0.98, 0.04);
+    arm.scale.set(0.87, 1.35, 0.86);
+    arm.position.set(s * 0.80, 0.67, 0.04);
     arm.rotation.z = s * 0.32;
     body.add(arm);
     return arm;
   });
 
-  // 후광: 머리 위에 떠 있는 금빛 고리
+  // 후광: 머리 위에 떠 있는 옅은 청색 고리
   const haloGeo = new TorusGeometry(0.4, 0.05, 8, 36);
   geos.push(haloGeo);
   const halo = new Mesh(haloGeo, haloMat);

@@ -342,7 +342,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const me = view.players.find((p) => p.seat === view.me.seat);
   const meAlive = me === undefined || isAlive(me);
   // 밤에는 산 사람 누구도 걷지 않는다(15페이즈 D-05) — 서버와 같은 이동 권한 표(canMoveIn)다.
-  const canWalk = canMoveIn(view.phase, meAlive);
+  const canWalk = canMoveIn(view.phase, meAlive, view.map);
   // 유령 화면(GHOST-02, 결정 0021): 내가 탈락했고 서버가 관전 정보(spectate)를 보냈을 때만 그린다. 서버가 안 보낸 view 에서는 이 분기가 아예 없다 — 받아서 감추는 방식이 아니다.
   const spectate = !meAlive ? view.spectate : undefined;
   const ghost = spectate !== undefined;

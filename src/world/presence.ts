@@ -18,7 +18,7 @@ import { pinOf, type PinDesc } from "./pinPlan";
 export type LightingStage = "talk" | "vote" | "trial" | "night" | "nightCitizen" | "nightGhost" | "morning";
 
 /** 따라가기 = 내 캐릭터(6페이즈 규칙), 고정 = 모이는 자리 가운데에서 움직이지 않음(zoom 은 과반 연출) */
-export type CameraMode = { mode: "follow" } | { mode: "fixed"; target: { x: number; z: number }; zoom: number; zoomMs?: number; frameGroup?: true };
+export type CameraMode = { mode: "follow" } | { mode: "fixed"; target: { x: number; z: number }; zoom: number; zoomMs?: number; frameGroup?: true; barSeats?: true };
 
 /** 긴장 단계: 0 평상시, 1 선두·찬반(초점에 점광), 2 과반(실내등 절반) */
 export interface Tension {
@@ -110,6 +110,15 @@ const FIXED_PHASES: ReadonlySet<PhaseId> = new Set<PhaseId>(["nomination", "runo
  */
 export function cameraModeOf(view: RoomView, stageH: number, opts: { verdictZoom?: number } = {}): CameraMode {
   const target = { x: GATHER_CENTER.x, z: GATHER_CENTER.z };
+  if (view.map === "bar") {
+    const seatedTalk = (view.phase === "dayAnnounce" || view.phase === "discussion" || view.phase === "verdict") && !isGhostViewer(view);
+    if (seatedTalk || FIXED_PHASES.has(view.phase) || (view.phase === "verdict" && view.playtest && view.day?.firstBallot !== undefined)) {
+      if (view.phase === "execution" && opts.verdictZoom !== undefined && stageH >= ZOOM_MIN_STAGE_H) {
+        return { mode: "fixed", target, zoom: opts.verdictZoom, zoomMs: ZOOM_IN_MS, barSeats: true };
+      }
+      return { mode: "fixed", target, zoom: 1, barSeats: true };
+    }
+  }
   if (view.playtest === true && view.phase === "verdict" && view.day?.firstBallot !== undefined) {
     return { mode: "fixed", target, zoom: 0.82, frameGroup: true };
   }
@@ -147,6 +156,7 @@ export function lightingOf(phase: PhaseId): LightingStage {
  * 밤이 아니면 lightingOf(phase) — 아침 이후는 역할과 무관하다.
  */
 export function lightingFor(view: RoomView): LightingStage {
+  if (view.map === "bar" && view.phase === "verdict" && view.day?.candidate !== undefined) return "trial";
   if (view.phase !== "night") return lightingOf(view.phase);
   if (isGhostViewer(view)) return "nightGhost";
   return view.me.role === "mafia" ? "night" : "nightCitizen";

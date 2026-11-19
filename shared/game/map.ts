@@ -10,7 +10,7 @@ export const CELL = 0.5;
 export const GRID_SIZE = 28;
 /** 격자 원점(월드 단위, x·z 공통) */
 export const GRID_ORIGIN = -7;
-/** 이동 한계 ±(월드 단위) */
+/** 별도 범위가 없는 맵의 이동 한계 ±(월드 단위) */
 export const WALK_HALF = 5.8;
 /** 캐릭터 반지름(월드 단위) */
 export const CHAR_RADIUS = 0.35;
@@ -38,6 +38,10 @@ export interface MapDef {
    * 무대 원기둥 안이라 마스크로는 막힌 칸이다(변론자가 서는 자리, 결정 0060-7).
    */
   stage?: { x: number; z: number };
+  /** 무대와 가까워도 의자를 가로지르면 안 되는 맵은 출입 바닥점을 지정한다. */
+  stageDoors?: readonly { x: number; z: number }[];
+  /** 바닥을 가로지르지 않고 의자로만 드나드는 고정소수점 경로의 끝점. */
+  seats?: readonly { x: number; z: number; door: { x: number; z: number } }[];
 }
 
 /** 변론자가 서는 무대 위 자리(고정소수점). 블록아웃 design/v2.0/screens/bar.js 의 ctx.center 와 같은 점이다(높이 0.29 는 화면 규칙, A4). */
@@ -59,102 +63,83 @@ export type Obstacle = (
   | { kind: "rect"; x: number; z: number; w: number; d: number; rot: number; y0: number; y1: number; floor: boolean }
 );
 
-/**
- * 재즈 바 장애물 원문(design/v2.0/blockout/bar.js). 길이는 월드 단위, rot 는 three 의 rotation.y(라디안).
- * 순서: 바 카운터 · 스툴 4 · 피아노 · 무대 · 탁자 5 · 의자 10 · 펜던트 갓 2.
- * 의자 중심은 탁자 중심 (x, z) 에서 단위벡터 u 에 수직인 ±(−z, x)/|(x, z)| × 0.8 을 소수 넷째 자리로 적었다(bar.js 의 table()).
- * 의자 발자국 0.62×0.6(회전)은 반지름 0.43 원으로 근사한다 — 원이 사각형을 덮으니 막힘이 넓어지는 쪽이다(가정 A1).
- */
-export const BAR_OBSTACLES: readonly Obstacle[] = [
-  // 바 카운터 box(1.0, 1.05, 6.2) @ (−5.7, −2.2), 윗판 높이 1.09 + 0.04
-  { kind: "rect", x: -5.7, z: -2.2, w: 1.0, d: 6.2, rot: 0, y0: 0, y1: 1.13, floor: true },
-  // 스툴 cyl(0.24 …) @ x −4.8, z −4.4 + i·1.4, 높이 약 0.76
-  { kind: "circle", x: -4.8, z: -4.4, r: 0.24, y0: 0, y1: 0.76, floor: true },
-  { kind: "circle", x: -4.8, z: -3.0, r: 0.24, y0: 0, y1: 0.76, floor: true },
-  { kind: "circle", x: -4.8, z: -1.6, r: 0.24, y0: 0, y1: 0.76, floor: true },
-  { kind: "circle", x: -4.8, z: -0.2, r: 0.24, y0: 0, y1: 0.76, floor: true },
-  // 피아노 그룹 @ (−4.6, −5.0) rotation.y 0.6, 몸통 1.6×1.2, 뚜껑을 올려 높이 약 1.55
-  { kind: "rect", x: -4.6, z: -5.0, w: 1.6, d: 1.2, rot: 0.6, y0: 0, y1: 1.55, floor: true },
-  // 무대 원기둥 반지름 1.18 · 높이 0.28 @ (0, 0)
-  { kind: "circle", x: 0, z: 0, r: 1.18, y0: 0, y1: 0.28, floor: true },
-  // 탁자 5개(반지름 0.5, 높이 약 0.79)
-  { kind: "circle", x: 4.6, z: 1.2, r: 0.5, y0: 0, y1: 0.79, floor: true },
-  { kind: "circle", x: 1.2, z: 4.6, r: 0.5, y0: 0, y1: 0.79, floor: true },
-  { kind: "circle", x: 4.4, z: -3.2, r: 0.5, y0: 0, y1: 0.79, floor: true },
-  { kind: "circle", x: -3.2, z: 4.4, r: 0.5, y0: 0, y1: 0.79, floor: true },
-  { kind: "circle", x: -2.4, z: -4.6, r: 0.5, y0: 0, y1: 0.79, floor: true },
-  // 의자 10개(탁자마다 둘, 반지름 0.43 · 높이 0.99): 탁자 (4.6, 1.2)
-  { kind: "circle", x: 4.3981, z: 1.9741, r: 0.43, y0: 0, y1: 0.99, floor: true },
-  { kind: "circle", x: 4.8019, z: 0.4259, r: 0.43, y0: 0, y1: 0.99, floor: true },
-  // 탁자 (1.2, 4.6)
-  { kind: "circle", x: 0.4259, z: 4.8019, r: 0.43, y0: 0, y1: 0.99, floor: true },
-  { kind: "circle", x: 1.9741, z: 4.3981, r: 0.43, y0: 0, y1: 0.99, floor: true },
-  // 탁자 (4.4, −3.2)
-  { kind: "circle", x: 4.8705, z: -2.553, r: 0.43, y0: 0, y1: 0.99, floor: true },
-  { kind: "circle", x: 3.9295, z: -3.847, r: 0.43, y0: 0, y1: 0.99, floor: true },
-  // 탁자 (−3.2, 4.4)
-  { kind: "circle", x: -3.847, z: 3.9295, r: 0.43, y0: 0, y1: 0.99, floor: true },
-  { kind: "circle", x: -2.553, z: 4.8705, r: 0.43, y0: 0, y1: 0.99, floor: true },
-  // 탁자 (−2.4, −4.6)
-  { kind: "circle", x: -1.6907, z: -4.9701, r: 0.43, y0: 0, y1: 0.99, floor: true },
-  { kind: "circle", x: -3.1093, z: -4.2299, r: 0.43, y0: 0, y1: 0.99, floor: true },
-  // 펜던트 갓 2개(가려짐 전용, 바닥은 막지 않음): 반지름 0.3, y 2.67~2.93
-  { kind: "circle", x: -2.4, z: -4.6, r: 0.3, y0: 2.67, y1: 2.93, floor: false },
-  { kind: "circle", x: 4.4, z: -3.2, r: 0.3, y0: 2.67, y1: 2.93, floor: false },
-];
+/** 작은 재즈 바의 조형과 이동 마스크가 공유하는 월드 좌표. */
+export const BAR_ROOM_HALF = 4.7;
+export const BAR_STAGE_RADIUS = 0.66;
+export const BAR_STAGE_HEIGHT = 0.1175;
+export const BAR_SEAT_RADIUS = 0.36;
+export const BAR_SEAT_HEIGHT = 0.19;
+export const BAR_PIANO = { x: -1.85, z: -BAR_ROOM_HALF + 0.63, width: 1.62, depth: 0.66 } as const;
+export const BAR_COUNTER = { x: BAR_ROOM_HALF - 0.35, z: -1.24, width: 0.55, depth: 2.05 } as const;
 
-/**
- * 재즈 바 이동 마스크 28×28: '.' 걷기 · '#' 막힘. 줄 = z −6.75(뒷벽) → 6.75(앞), 글자 = x −6.75(왼 벽) → 6.75.
- * 칸 중심이 BAR_OBSTACLES 를 캐릭터 반지름 0.35 만큼 부풀린 곳, |x|·|z| > 5.8(이동 한계), 머리 꼭대기(y 2.0335)에서
- * 카메라 쪽 평행 광선이 가구(펜던트 갓 포함)에 막히는 자리, 입장 지점에서 닿지 않는 닫힌 구멍이면 '#'.
- * 바꾸려면 BAR_OBSTACLES 를 고치고 `MAP_PRINT=1 npx vitest run test/unit/map.test.ts -t 래스터화` 출력으로 다시 만든다 —
- * test/unit/map.test.ts 가 이 글자들과 래스터화가 같음을 지킨다.
- */
+/** 승인된 앞뒤 엇갈린 8자리. 4명은 앞·뒤 각 두 자리(좌석 0~3)를 쓴다. */
+export const BAR_SEATS_FX = [
+  [-136, 130], [-149, -183], [-13, -236], [194, 31],
+  [-196, -54], [118, -161], [1, 220], [135, 173],
+] as const;
+
+/** 의자마다 이동 가능한 바닥과 연결하는 인접 칸 중심. 일반 경로는 의자 칸을 통과하지 않는다. */
+const BAR_SEAT_DOORS_FX = [
+  [-225, 125], [-225, -175], [-75, -275], [275, 25],
+  [-225, -125], [75, -225], [75, 225], [225, 225],
+] as const;
+
+/** 배포 마스크는 28×28의 공통 격자 원점을 쓴다. 좁은 통로 옆 피아노·바·중앙 스탠드·의자는 막는다. */
 export const BAR_MASK: readonly string[] = [
   "############################",
   "############################",
-  "########..................##",
-  "############..............##",
-  "############..............##",
-  "###########.........###...##",
-  "#####..##...........####..##",
-  "#####................###..##",
-  "#####................####.##",
-  "####..................###.##",
-  "######....................##",
-  "#####.......####..........##",
-  "#####......######.........##",
-  "######.....######......#..##",
-  "#####......######.....###.##",
-  "####.......######.....###.##",
-  "##..........####......###.##",
-  "##...................###..##",
-  "##...................###..##",
-  "##........................##",
-  "##....#...................##",
-  "##...####........##.......##",
-  "##...#####....#####.......##",
-  "##....####...######.......##",
-  "##......##....###.........##",
-  "##........................##",
+  "############################",
+  "############################",
+  "############################",
+  "#####...#####..........#####",
+  "#####...#####..........#####",
+  "#####...#####..........#####",
+  "#####........##......#######",
+  "#####.....#####.#....#######",
+  "#####.....##.#.###...#######",
+  "#####.....##...###...#######",
+  "#####....##..##......#######",
+  "#####....##.####.##..#######",
+  "#####.......#######..#######",
+  "#####.....#########....#####",
+  "#####.....########.....#####",
+  "#####.....##.#####.....#####",
+  "#####........##.##.....#####",
+  "#####........##........#####",
+  "#####..................#####",
+  "#####..................#####",
+  "#####..................#####",
+  "############################",
+  "############################",
+  "############################",
   "############################",
   "############################",
 ];
 
-/** 입장 지점 8곳 = bar.js 의 ctx.talk 원문 좌표·yaw(yaw 가 없는 곳은 클라이언트가 카메라 쪽 π/4 로 둔다). */
 export const BAR_SPAWNS: readonly Spawn[] = [
-  { x: 3.6, z: 0.4, yaw: 0.896055 }, // atan2(1.0, 0.8)
-  { x: 0.4, z: 3.6 },
-  { x: 5.4, z: 2.2, yaw: -2.356194 }, // atan2(−1.0, −1.0)
-  { x: -4.2, z: -1.2, yaw: -1.570796 }, // −π/2
-  { x: 3.4, z: -2.6 },
-  { x: -2.6, z: 3.4 },
-  { x: -4.2, z: 0.2, yaw: -1.570796 }, // −π/2
-  { x: 2.2, z: 5.4 },
+  { x: 1.0, z: 2.95, yaw: 0.34 },
+  { x: -2.85, z: -0.65, yaw: 0.48 },
+  { x: 0.75, z: -2.95, yaw: 0.12 },
+  { x: 2.85, z: 1.25, yaw: -0.36 },
+  { x: -2.85, z: 1.85, yaw: 0.86 },
+  { x: 2.85, z: -1.75, yaw: -0.24 },
+  { x: -1.25, z: 2.95, yaw: 0.72 },
+  { x: 2.55, z: 2.65, yaw: -0.08 },
 ];
 
-/** 재즈 바 이동 맵(모듈 로드 때 마스크 문자열을 한 번 변환한다 — 결정적). */
-export const BAR_MAP: MapDef = { id: "bar", size: GRID_SIZE, mask: parseMask(BAR_MASK), spawns: BAR_SPAWNS, stage: STAGE_SPOT };
+export const BAR_MAP: MapDef = {
+  id: "bar",
+  size: GRID_SIZE,
+  walkHalf: BAR_ROOM_HALF - CHAR_RADIUS,
+  mask: parseMask(BAR_MASK),
+  spawns: BAR_SPAWNS,
+  stage: STAGE_SPOT,
+  stageDoors: [{ x: -125, z: 25 }, { x: 125, z: -25 }, { x: -25, z: -125 }, { x: -75, z: 175 }],
+  seats: BAR_SEATS_FX.map(([x, z], i) => {
+    const [dx, dz] = BAR_SEAT_DOORS_FX[i]!;
+    return { x, z, door: { x: dx, z: dz } };
+  }),
+};
 
 /** 칸 한 변(고정소수점) = CELL × UNIT */
 const CELL_FX = 50;
@@ -233,7 +218,7 @@ function clampFx(v: number, limit: number): number {
 }
 
 /**
- * 고정소수점 점을 걸을 수 있는 점으로 보정한다. 먼저 맵의 이동 한계(재즈 바·광장 ±580)로 자르고, 점이 닿는 칸이 모두 걸을 수 있으면
+ * 고정소수점 점을 걸을 수 있는 점으로 보정한다. 먼저 맵의 이동 한계로 자르고, 점이 닿는 칸이 모두 걸을 수 있으면
  * 그 좌표 그대로, 아니면 가장 가까운 걸을 수 있는 칸 중심(정수 제곱거리 → 행 → 열 순 결정적 동률 처리)으로 옮긴다.
  * snapped 는 결과가 입력과 다르면 true 다. 걸을 수 있는 칸이 하나도 없으면 자른 좌표를 돌려준다.
  */
@@ -384,11 +369,18 @@ export function findPath(map: MapDef, from: { c: number; r: number }, to: { c: n
  * 고정소수점 두 점 사이 선분이 닿는 모든 칸(슈퍼커버: 선분이 칸 경계·꼭짓점에 닿기만 해도 그 칸 포함)이
  * 걸을 수 있는지. 격자 밖에 닿으면 false. 같은 두 점이면 그 점이 닿는 칸 전부를 본다.
  *
- * 단일 예외(map.stage, 사용자 확정 2026-11-02, 결정 0060-7): 한 끝이 정확히 무대 자리이고 다른 끝이 걸을 수 있는 점이면서
- * STAGE_REACH_FX 안이면 true, 두 끝이 모두 무대 자리여도 true 다. 그 밖의 판정은 예외 없는 규칙 그대로다 —
- * 무대 근처 다른 점이나 무대를 가로지르는 선분은 계속 막혀 있다. snapToWalkable·저장 복원(parseStoredSegment)·routeFx 가 이 함수를 공유한다.
+ * 무대의 정확한 끝점은 인접 바닥과 이어진다(결정 0060-7). 작은 재즈 바는 무대와 의자가 가까워 출입 바닥점을 지정한다.
+ * 해당 무대·의자를 가로지르는 일반 선분은 계속 막힌다. snapToWalkable·저장 복원·routeFx가 이 판정을 공유한다.
  */
 export function lineWalkable(map: MapDef, a: { x: number; z: number }, b: { x: number; z: number }): boolean {
+  const aSeat = seatAt(map, a);
+  const bSeat = seatAt(map, b);
+  if (aSeat !== undefined || bSeat !== undefined) {
+    if (aSeat !== undefined && bSeat !== undefined) return aSeat === bSeat;
+    const door = (aSeat ?? bSeat)!.door;
+    const other = aSeat === undefined ? a : b;
+    return other.x === door.x && other.z === door.z;
+  }
   const stage = map.stage;
   if (stage !== undefined) {
     const aStage = a.x === stage.x && a.z === stage.z;
@@ -396,6 +388,7 @@ export function lineWalkable(map: MapDef, a: { x: number; z: number }, b: { x: n
     if (aStage && bStage) return true;
     if (aStage || bStage) {
       const q = aStage ? b : a;
+      if (map.stageDoors !== undefined) return map.stageDoors.some((door) => door.x === q.x && door.z === q.z);
       const dx = q.x - stage.x;
       const dz = q.z - stage.z;
       if (dx * dx + dz * dz <= STAGE_REACH_FX * STAGE_REACH_FX && lineWalkableBase(map, q, q)) return true;
@@ -500,12 +493,31 @@ function relaxPath(map: MapDef, pts: { x: number; z: number }[]): { x: number; z
  * 같은 칸이거나 곧바로 보이면 두 점, 아니면 A* 칸 중심 경로를 시선 스무딩하고 꼭짓점을 당긴 점들. 이어지지 않으면 출발점 하나.
  */
 export function routeFx(map: MapDef, from: { x: number; z: number }, to: { x: number; z: number }): number[] {
+  if (map.stage === undefined && map.seats === undefined) return routeBase(map, from, to);
+  const s = snapToWalkable(map, from);
+  const e = snapToWalkable(map, to);
+  const aSeat = seatAt(map, s);
+  const bSeat = seatAt(map, e);
+  if (aSeat !== undefined || bSeat !== undefined) {
+    if (aSeat !== undefined && aSeat === bSeat) return [s.x, s.z, e.x, e.z];
+    const start = aSeat?.door ?? s;
+    const end = bSeat?.door ?? e;
+    const path = routeStageOrFloor(map, start, end);
+    if (path[path.length - 2] !== end.x || path[path.length - 1] !== end.z) return [s.x, s.z];
+    return [...(aSeat ? [s.x, s.z] : []), ...path, ...(bSeat ? [e.x, e.z] : [])];
+  }
+  return routeStageOrFloor(map, s, e);
+}
+
+function seatAt(map: MapDef, p: Pt): NonNullable<MapDef["seats"]>[number] | undefined {
+  return map.seats?.find((seat) => seat.x === p.x && seat.z === p.z);
+}
+
+function routeStageOrFloor(map: MapDef, s: Pt, e: Pt): number[] {
   if (map.stage !== undefined) {
-    const s = snapToWalkable(map, from);
-    const e = snapToWalkable(map, to);
     if (isStageSpot(map, s) || isStageSpot(map, e)) return routeViaStage(map, s, e);
   }
-  return routeBase(map, from, to);
+  return routeBase(map, s, e);
 }
 
 function isStageSpot(map: MapDef, p: { x: number; z: number }): boolean {
@@ -519,6 +531,16 @@ function isStageSpot(map: MapDef, p: { x: number; z: number }): boolean {
 function pickStageDoor(map: MapDef, stage: { x: number; z: number }, other: { x: number; z: number }): { x: number; z: number } | null {
   let best: { x: number; z: number } | null = null;
   let bestCost = Infinity;
+  if (map.stageDoors !== undefined) {
+    for (const door of map.stageDoors) {
+      const d = (door.x - other.x) ** 2 + (door.z - other.z) ** 2;
+      if (d < bestCost) {
+        bestCost = d;
+        best = door;
+      }
+    }
+    return best;
+  }
   for (let r = 0; r < map.size; r++) {
     for (let c = 0; c < map.size; c++) {
       if (map.mask[r * map.size + c] !== 1) continue;

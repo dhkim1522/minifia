@@ -7,7 +7,7 @@
 // 클라이언트 전용이라 삼각함수를 써도 된다(shared 의 서버 판정 모듈 규칙은 여기 적용되지 않는다).
 
 import { ringSlots, RING_RADIUS_FX } from "../../shared/game/gather";
-import { HEAD_TOP_Y, STAGE_SPOT, UNIT } from "../../shared/game/map";
+import { BAR_SEAT_HEIGHT, BAR_SEATS_FX, HEAD_TOP_Y, STAGE_SPOT, UNIT } from "../../shared/game/map";
 import { lobbyPanelHeight, LOG_H, TYPING_PILL_H } from "../game/chatUi";
 
 export interface V3 {
@@ -76,8 +76,30 @@ export const STAGE_SIZES: readonly { w: number; h: number; label: string }[] = [
   { w: 402, h: 874, label: "402x874" },
 ];
 
-/** 카메라 방위·수평 거리·높이(경사 시점 하나) */
-const CAMERA_RIG: Readonly<{ yaw: number; dist: number; height: number }> = { yaw: CAM_YAW, dist: CAM_DIST, height: CAM_HEIGHT };
+export interface CameraRig {
+  readonly yaw: number;
+  readonly dist: number;
+  readonly height: number;
+  readonly lookY: number;
+  readonly span?: number;
+  readonly maxScale?: number;
+}
+
+export const DEFAULT_CAMERA: CameraRig = { yaw: CAM_YAW, dist: CAM_DIST, height: CAM_HEIGHT, lookY: LOOK_Y };
+export const BAR_TABLE_CAMERA: CameraRig = {
+  yaw: 0.34, dist: 13, height: 1.14 + Math.tan(26 * Math.PI / 180) * 13, lookY: 1.14, span: 4.52,
+};
+export const BAR_WALK_CAMERA: CameraRig = {
+  yaw: BAR_TABLE_CAMERA.yaw, dist: 13, height: 1 + Math.tan(35 * Math.PI / 180) * 13, lookY: 1,
+  span: 4.55, maxScale: PX_PER_UNIT * 1.27,
+};
+export const BAR_FOLLOW_SHARE = 0.73;
+
+/** 같은 너비에서는 인원과 관계없이 같은 배율을 쓴다. */
+export function cameraScale(c: Pick<Canvas, "w">, rig: CameraRig = DEFAULT_CAMERA): number {
+  if (rig.span === undefined) return PX_PER_UNIT;
+  return Math.min(c.w / rig.span, rig.maxScale ?? Infinity);
+}
 
 interface Basis {
   right: V3;
@@ -87,9 +109,9 @@ interface Basis {
   len: number;
 }
 
-// 카메라 위치 − 주시점 = (sin yaw·거리, 높이 − 0.6, cos yaw·거리). 기저는 한 번만 계산한다.
-function basisOf(rig: { yaw: number; dist: number; height: number }): Basis {
-  const offset: V3 = { x: Math.sin(rig.yaw) * rig.dist, y: rig.height - LOOK_Y, z: Math.cos(rig.yaw) * rig.dist };
+// 카메라 위치에서 주시점을 뺀 값으로 화면 좌우·상하의 단위 벡터를 계산한다.
+function basisOf(rig: CameraRig): Basis {
+  const offset: V3 = { x: Math.sin(rig.yaw) * rig.dist, y: rig.height - rig.lookY, z: Math.cos(rig.yaw) * rig.dist };
   const len = Math.sqrt(offset.x * offset.x + offset.y * offset.y + offset.z * offset.z);
   const back: V3 = { x: offset.x / len, y: offset.y / len, z: offset.z / len };
   // right = normalize(worldUp × back) = normalize((back.z, 0, −back.x))
@@ -103,7 +125,49 @@ function basisOf(rig: { yaw: number; dist: number; height: number }): Basis {
   };
   return { right, up, back, len };
 }
-const BASIS: Basis = basisOf(CAMERA_RIG);
+const BASES = new Map([DEFAULT_CAMERA, BAR_TABLE_CAMERA, BAR_WALK_CAMERA].map((rig) => [rig, basisOf(rig)] as const));
+const BASIS = BASES.get(DEFAULT_CAMERA)!;
+
+const frontBarSeats = new Set([0, 3, 6, 7]);
+const barSeatYawOffsets = [0.68, 0.14, -0.15, -0.70, 0.56, -0.56, 0.38, -0.42];
+const barSeatIndices = new Map<string, number>(BAR_SEATS_FX.map(([x, z], i) => [`${x}:${z}`, i]));
+export function barSeatAt(pos: { x: number; z: number }): number | undefined {
+  return barSeatIndices.get(`${Math.round(pos.x * UNIT)}:${Math.round(pos.z * UNIT)}`);
+}
+
+export function barSeatYaw(index: number): number {
+  return BAR_TABLE_CAMERA.yaw + barSeatYawOffsets[index]!;
+}
+
+/** 앞쪽 좌석 이름표는 자기 의자 앞쪽 바닥에 표시해서 뒤쪽 얼굴을 가리지 않는다. */
+export function barNameTagFoot(pos: { x: number; z: number }, index: number): V3 | undefined {
+  if (!frontBarSeats.has(index)) return undefined;
+  const shift = 0.36;
+  return { x: pos.x + Math.sin(BAR_TABLE_CAMERA.yaw) * shift, y: -0.16, z: pos.z + Math.cos(BAR_TABLE_CAMERA.yaw) * shift };
+}
+
+/** 가장 작은 화면에서도 뒤쪽 이름과 앞쪽 이름이 들어오도록 8석을 기준으로만 맞춘다. */
+const barTableExtents = (() => {
+  const { up } = BASES.get(BAR_TABLE_CAMERA)!;
+  let highest = 0;
+  let lowest = 0;
+  const height = (p: V3): number => up.x * p.x + up.y * (p.y - BAR_TABLE_CAMERA.lookY) + up.z * p.z;
+  for (const [i, [x, z]] of BAR_SEATS_FX.entries()) {
+    const pos = { x: x / UNIT, z: z / UNIT };
+    const head = { ...pos, y: HEAD_TOP_Y + BAR_SEAT_HEIGHT };
+    const foot = barNameTagFoot(pos, i) ?? { ...pos, y: 0 };
+    highest = Math.max(highest, height(head));
+    lowest = Math.max(lowest, -height(foot));
+  }
+  return { highest, lowest };
+})();
+
+export function barTableZoom(stage: { top: number; bottom: number }, size: Canvas, maxZoom: number): number {
+  const scale = cameraScale(size, BAR_TABLE_CAMERA);
+  const half = (stage.bottom - stage.top) / 2;
+  const { highest, lowest } = barTableExtents;
+  return Math.min(maxZoom, Math.max(0.48, Math.min((half - 40) / (highest * scale), (half - 15) / (lowest * scale))));
+}
 
 /** 화면 오른쪽·위쪽·카메라 쪽 단위벡터(서로 수직). 호출마다 새 객체를 돌려준다 */
 export function cameraBasis(): { right: V3; up: V3; back: V3 } {
@@ -122,25 +186,25 @@ export function stageOffsetY(canvasH: number, stageTop: number, stageBottom: num
 }
 
 /** 월드 점 → 화면 좌표(px). 목표가 주시점이고, 오프셋만큼 장면이 위로 올라간다. zoom 은 화면 가운데 기준 확대(기본 1) */
-export function groundToScreen(p: V3, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1): { sx: number; sy: number } {
-  const { right, up } = BASIS;
-  const scale = PX_PER_UNIT * zoom;
-  const d: V3 = { x: p.x - target.x, y: p.y - LOOK_Y, z: p.z - target.z };
+export function groundToScreen(p: V3, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1, rig = DEFAULT_CAMERA): { sx: number; sy: number } {
+  const { right, up } = BASES.get(rig) ?? basisOf(rig);
+  const scale = cameraScale(c, rig) * zoom;
+  const d: V3 = { x: p.x - target.x, y: p.y - rig.lookY, z: p.z - target.z };
   const r = d.x * right.x + d.y * right.y + d.z * right.z;
   const u = d.x * up.x + d.y * up.y + d.z * up.z;
   return { sx: c.w / 2 + r * scale, sy: c.h / 2 - u * scale - offsetY };
 }
 
 /** 화면 점의 정사영 광선: 원점은 카메라 평면 위(주시점에서 카메라 쪽으로 기저의 거리), 방향은 −back */
-export function screenRay(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1): { origin: V3; dir: V3 } {
-  const { right, up, back, len } = BASIS;
-  const scale = PX_PER_UNIT * zoom;
+export function screenRay(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1, rig = DEFAULT_CAMERA): { origin: V3; dir: V3 } {
+  const { right, up, back, len } = BASES.get(rig) ?? basisOf(rig);
+  const scale = cameraScale(c, rig) * zoom;
   const dx = (sx - c.w / 2) / scale;
   const dy = (c.h / 2 - sy - offsetY) / scale;
   return {
     origin: {
       x: target.x + right.x * dx + up.x * dy + back.x * len,
-      y: LOOK_Y + right.y * dx + up.y * dy + back.y * len,
+      y: rig.lookY + right.y * dx + up.y * dy + back.y * len,
       z: target.z + right.z * dx + up.z * dy + back.z * len,
     },
     dir: { x: -back.x, y: -back.y, z: -back.z },
@@ -148,8 +212,8 @@ export function screenRay(sx: number, sy: number, target: { x: number; z: number
 }
 
 /** 화면 점 → 바닥(y = 0) 점. groundToScreen 의 역 */
-export function screenToGround(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1): { x: number; z: number } {
-  const { origin, dir } = screenRay(sx, sy, target, c, offsetY, zoom);
+export function screenToGround(sx: number, sy: number, target: { x: number; z: number }, c: Canvas, offsetY: number, zoom = 1, rig = DEFAULT_CAMERA): { x: number; z: number } {
+  const { origin, dir } = screenRay(sx, sy, target, c, offsetY, zoom, rig);
   const t = origin.y / -dir.y;
   return { x: origin.x + dir.x * t, z: origin.z + dir.z * t };
 }

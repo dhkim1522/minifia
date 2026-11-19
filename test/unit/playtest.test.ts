@@ -97,12 +97,12 @@ describe("로컬 첫날 실험 규칙", () => {
     ["verdict", "1:firstBallot"],
     ["defense", "1:stage"],
     ["execution", "1:exec"],
-    ["dayAnnounce", null],
-    ["discussion", null],
+    ["dayAnnounce", "1:bar-table"],
+    ["discussion", "1:bar-table"],
     ["night", null],
   ] as const)("실험방 %s 배치 및 이동 권한이 일치한다", (phase, key) => {
     expect(layoutKey(room(phase))).toBe(key);
-    expect(canMoveIn(phase, true)).toBe(phase === "dayAnnounce" || phase === "discussion");
+    expect(canMoveIn(phase, true, "bar")).toBe(false);
   });
 
   it("개인 표와 자기·탈락자의 투표를 차단하고 마감 뒤 집계만 공개한다", () => {

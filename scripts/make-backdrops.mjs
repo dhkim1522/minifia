@@ -34,17 +34,18 @@ function shading(entry) {
   </svg>`);
 }
 
-export async function renderBackdrops(scene) {
+export async function renderBackdrops(scene, onlyMap) {
   let total = 0;
   for (const { out, mapId, phase, maxKB } of SOURCES) {
+    if (onlyMap && mapId !== onlyMap) continue;
     const entry = out.startsWith("bg_entry");
     const input = await scene({
       mapId,
       phase,
       width: RENDER_WIDTH,
       height: RENDER_HEIGHT,
-      x: mapId === "bar" ? -1.35 : -0.25,
-      z: mapId === "bar" ? -1.2 : -1.4,
+      x: mapId === "bar" ? 0 : -0.25,
+      z: mapId === "bar" ? 0 : -1.4,
       zoom: 1.15,
       offset: entry ? -45 : -15,
     });

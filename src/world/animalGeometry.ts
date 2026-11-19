@@ -1,7 +1,8 @@
 // 승인 원화의 얼굴 윤곽을 머리와 몸통 관절에 붙일 수 있는 작은 도형으로 옮긴다.
-import { CatmullRomCurve3, ConeGeometry, SphereGeometry, TubeGeometry, Vector3 } from "three";
+import { CatmullRomCurve3, ConeGeometry, LatheGeometry, SphereGeometry, TubeGeometry, Vector2, Vector3 } from "three";
 import type { BufferGeometry, Mesh, Object3D } from "three";
 import { ANIMALS, type AnimalId } from "../../shared/game/animals";
+import { FINISH } from "./animalFinish";
 
 type Point = readonly [x: number, y: number, z: number];
 type AddPart = (parent: Object3D, geometry: BufferGeometry, color: string, tag?: string) => Mesh;
@@ -70,8 +71,8 @@ export function animalHatFit(animal: AnimalId): HatFit {
   return HAT_FITS[animal];
 }
 
-function sphere(add: AddPart, parent: Object3D, color: string, center: Point, radii: Point, tilt = 0, tag?: string): Mesh {
-  const mesh = add(parent, new SphereGeometry(1, 14, 10), color, tag);
+function sphere(add: AddPart, parent: Object3D, color: string, center: Point, radii: Point, tilt = 0, tag?: string, divisions = 10): Mesh {
+  const mesh = add(parent, new SphereGeometry(1, divisions + 4, divisions), color, tag);
   mesh.position.set(...center);
   mesh.scale.set(...radii);
   mesh.rotation.z = tilt;
@@ -121,9 +122,19 @@ function ears(add: AddPart, head: Object3D, color: string, lining: string, x: nu
 }
 
 function pointedEars(add: AddPart, head: Object3D, color: string, lining: string, x: number, tipX: number, tipY: number): void {
+  const edge = ([width, height]: readonly [number, number]) => new Vector2(width, height);
+  const profile = [[0, 0], [0.76, 0.035], [1, 0.18], [0.90, 0.39], [0.67, 0.62], [0.40, 0.82], [0.19, 0.96], [0, 1]] as const;
+  function ear(tint: string, from: Point, to: Point, radius: number, depth: number): void {
+    const base = new Vector3(...from);
+    const direction = new Vector3(...to).sub(base);
+    const mesh = add(head, new LatheGeometry(profile.map(edge), 14), tint);
+    mesh.position.copy(base);
+    mesh.scale.set(radius, direction.length(), depth);
+    mesh.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), direction.normalize());
+  }
   for (const side of [-1, 1]) {
-    spike(add, head, color, [side * x, 0.22, 0], [side * tipX, tipY, -0.05], 0.19);
-    spike(add, head, lining, [side * x, 0.24, 0.133], [side * tipX, tipY - 0.08, 0.038], 0.10);
+    ear(color, [side * x, 0.22, 0], [side * tipX, tipY, -0.04], 0.19, 0.105);
+    ear(lining, [side * x, 0.25, 0.077], [side * tipX, tipY - 0.042, 0.012], 0.132, 0.041);
   }
 }
 
@@ -138,8 +149,10 @@ export function animalLayout(animal: AnimalId): HeadLayout {
 export function buildAnimalHead(head: Object3D, animal: AnimalId, add: AddPart): void {
   const color = animalSkin(animal);
   const layout = LAYOUTS[animal];
-  const nose = (at: Point, radii: Point = [0.067, 0.044, 0.039], tint = "#604343") =>
-    sphere(add, head, tint, at, radii);
+  const nose = (at: Point, radii: Point = [0.067, 0.044, 0.039], tint = "#604343") => {
+    const mesh = sphere(add, head, tint, at, radii);
+    mesh.userData.finish = FINISH.smooth;
+  };
   const baseColor = animal === "hedgehog" ? "#e6bb91" : animal === "lion" ? "#e3ad5d" : color;
   sphere(add, head, baseColor, [0, 0, 0], layout.radii);
 
@@ -179,6 +192,7 @@ export function buildAnimalHead(head: Object3D, animal: AnimalId, add: AddPart):
         sphere(add, head, CREAM, [side * 0.136, -0.144, 0.426], [0.24, 0.125, 0.125], side * -0.16);
       }
       nose([0, -0.094, 0.547], [0.069, 0.043, 0.034], INK);
+      cheeks(add, head, "#dea084", 0.320, -0.125, 0.452);
       break;
     case "pig":
       ears(add, head, color, "#d48b9b", 0.40, 0.29, -0.012, [0.172, 0.107, 0.14], -0.55);
@@ -191,7 +205,7 @@ export function buildAnimalHead(head: Object3D, animal: AnimalId, add: AddPart):
       for (let i = 0; i < 9; i++) {
         const a = 2 * Math.PI * i / 9;
         sphere(add, head, i % 3 === 0 ? "#ba7942" : "#ae6d3a", [0.46 * Math.sin(a), 0.40 * Math.cos(a), -0.115],
-          [0.203, 0.218, 0.21], -a, i === 0 ? "highFeather" : undefined);
+          [0.203, 0.218, 0.21], -a, i === 0 ? "highFeather" : undefined, 8);
       }
       ears(add, head, "#e5af61", "#be8350", 0.34, 0.27, 0.175, [0.114, 0.106, 0.089], 0.2);
       for (const side of [-1, 1]) sphere(add, head, "#e9bc77", [side * 0.07, -0.107, 0.406], [0.136, 0.099, 0.061]);
@@ -226,6 +240,7 @@ export function buildAnimalHead(head: Object3D, animal: AnimalId, add: AddPart):
       sphere(add, head, "#f1ba5f", [0, -0.063, 0.47], [0.192, 0.199, 0.208]);
       tube(add, head, "#e5a449", [[0, -0.06, 0.56], [0, -0.13, 0.644], [0, -0.25, 0.608]], 0.116, 0.42);
       sphere(add, head, "#b97d45", [0, -0.186, 0.493], [0.096, 0.064, 0.11]);
+      cheeks(add, head, "#d7947f", 0.302, -0.11, 0.419);
       break;
     case "hedgehog":
       sphere(add, head, "#825e49", [0, 0.015, -0.175], [0.56, 0.435, 0.36]);
@@ -237,6 +252,7 @@ export function buildAnimalHead(head: Object3D, animal: AnimalId, add: AddPart):
       ears(add, head, "#e8b589", "#bd8c75", 0.37, 0.195, 0.129, [0.104, 0.107, 0.087], 0.18);
       sphere(add, head, "#d9ab83", [0, -0.109, 0.387], [0.158, 0.134, 0.202]);
       nose([0, -0.083, 0.577], [0.068, 0.050, 0.040], INK);
+      cheeks(add, head, "#d39581", 0.299, -0.122, 0.341);
       break;
     case "bat":
       pointedEars(add, head, "#62558d", "#a27cb2", 0.40, 0.61, 0.54);

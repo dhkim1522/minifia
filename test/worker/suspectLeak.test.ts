@@ -42,7 +42,7 @@ const sleep = (ms: number): Promise<void> => new Promise<void>((resolve) => setT
 
 /** 방을 day 일차 phase 로 옮기고 좌석별 x 좌표(fx)에 모두를 세운다(z=0). xBySeat 에 없는 좌석은 0. */
 async function gameAt(day: number, xBySeat: Readonly<Record<number, number>> = {}, phase: "discussion" | "verdict" = "discussion"): Promise<Game> {
-  const g = await startedGame("discussion", 5);
+  const g = await startedGame("discussion", 5, "plaza");
   await toPhase(g.code, phase, (room) => ({ ...room, day }));
   await place(g, xBySeat);
   for (const s of g.socks) await settle(s, mark(s));

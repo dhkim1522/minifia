@@ -82,7 +82,7 @@ export type RendererStatusEvent = { t: "lost" } | { t: "restored" } | { t: "recr
 export interface WorldRenderer {
   readonly canvas: HTMLCanvasElement;
   resize(w: number, h: number): void;
-  setView(target: { x: number; z: number }, offsetY: number): void;
+  setView(target: { x: number; z: number }, offsetY: number, rig?: import("./camera").CameraRig): void;
   /** 전환 시간이 없으면 바로 적용한다. 초기 진입, 저감 모션, 정지 장면에서 사용한다. */
   setLighting(phase: LightingPhase, seconds?: number): void;
   /** 긴장 단계 0·1·2 (결정 0049): 1 = 무대 점광원이 초점 위로 선두 세기, 2 = 그에 더해 실내 emissive 절반. 시험 가짜 렌더러 호환을 위해 optional (08-10) */

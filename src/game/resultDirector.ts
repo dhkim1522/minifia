@@ -4,7 +4,7 @@
 // 직업 의상 대응은 jobOutfit.ts 의 jobOutfit 한 곳을 재사용한다 — 새 표를 만들지 않는다. 직업 의상은 판이 끝났을 때 살아 있던 사람만 입는다(탈락자는 유령 그림, 0083-2).
 import { ringSlots } from "../../shared/game/gather";
 import { isAlive } from "../../shared/game/alive";
-import { snapToWalkable } from "../../shared/game/map";
+import { BAR_SEATS_FX, snapToWalkable } from "../../shared/game/map";
 import { mapOf } from "../../shared/game/maps";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, MapId, RoomView, WorldSeg } from "../../shared/protocol";
@@ -91,12 +91,12 @@ export function castOf(view: RoomView & { result: NonNullable<RoomView["result"]
     .map((s) => ({ seat: s.seat, job: s.job, team: teamOf(s.job), alive: aliveBySeat.get(s.seat) ?? true }));
 }
 
-/** 좌석 → 둘레 자리(고정소수점 [x, z]). 좌석 오름차순 i 번째 → ringSlots(n)[i] — 모든 폰이 같은 배치다 */
-export function slotsFor(cast: readonly CastMember[]): Record<number, readonly [number, number]> {
+/** 재즈 바는 자기 의자, 광장은 좌석 오름차순대로 둘레 자리에 선다. */
+export function slotsFor(cast: readonly CastMember[], mapId?: MapId): Record<number, readonly [number, number]> {
   const table = ringSlots(cast.length);
   const out: Record<number, readonly [number, number]> = {};
   cast.forEach((c, i) => {
-    out[c.seat] = table[i] ?? [0, 265];
+    out[c.seat] = (mapId === "bar" ? BAR_SEATS_FX[c.seat] : table[i]) ?? [0, 265];
   });
   return out;
 }

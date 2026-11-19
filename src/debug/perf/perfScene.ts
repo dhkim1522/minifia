@@ -143,6 +143,7 @@ export function mount(root: HTMLElement, search: URLSearchParams): PerfScene {
     players: () => players,
     reducedMotion: () => false,
     mapId: () => p.map,
+    compactBar: p.map === "bar",
     stageRect: () => ({ top: HEADER_BOTTOM, bottom: (host.clientHeight || window.innerHeight) - PANEL_HEIGHT }),
     onStatus: (s) => {
       if (s.status === "ready" && !running && !frozen) {

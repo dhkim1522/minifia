@@ -12,7 +12,8 @@ import {
   layoutKey,
   ringSlots,
 } from "../../shared/game/gather";
-import { BAR_MAP, BAR_SPAWNS, STAGE_SPOT, UNIT, lineWalkable } from "../../shared/game/map";
+import { STAGE_SPOT, UNIT, lineWalkable } from "../../shared/game/map";
+import { LEGACY_BAR_MAP as BAR_MAP, LEGACY_BAR_SPAWNS as BAR_SPAWNS } from "../helpers/legacyBarMap";
 import { PLAZA_MAP } from "../../shared/game/mapPlaza";
 import { PX_PER_UNIT, groundToScreen } from "../../src/world/camera";
 import { attachConnection, createRoomState, joinRoom } from "../../shared/game/room";
@@ -78,6 +79,7 @@ function stateAt(phase: PhaseId, n: number, o: Opts = {}): RoomState {
     ...base,
     phase,
     day,
+    map: "plaza",
     players: base.players.map((p): Player => ({ ...p, alive: dead.has(p.seat) ? false : undefined })),
     ...withVerdict,
     ...(o.runoff === undefined ? {} : { runoff: { cand: o.runoff, step: 0 as const } }),

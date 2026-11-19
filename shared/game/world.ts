@@ -429,7 +429,13 @@ export function restoreWorld(stored: unknown, players: readonly { id: string; se
   }
   const ids = new Set(players.map((pl) => pl.id));
   const lay = isRecord(stored) && stored.v === 1 ? parseStoredLay(stored.lay, ids) : null;
-  const home = isRecord(stored) && stored.v === 1 ? parseStoredHome(stored.home, ids) : null;
+  const savedHome = isRecord(stored) && stored.v === 1 ? parseStoredHome(stored.home, ids) : null;
+  const home = savedHome !== null && map.seats !== undefined
+    ? { day: savedHome.day, pos: Object.fromEntries(Object.entries(savedHome.pos).map(([id, [x, z]]) => {
+        const safe = snapToWalkable(map, { x, z });
+        return [id, [safe.x, safe.z] as const];
+      })) }
+    : savedHome;
   return { ...out, ...(lay === null ? {} : { lay }), ...(home === null ? {} : { home }) };
 }
 

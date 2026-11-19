@@ -18,7 +18,7 @@ async function notesOf(code: string): Promise<Array<{ n: number; from: number; t
 
 /** 방을 day 일차 토론으로 옮기고(저장 방 편집 + evict), 좌석별 x 좌표(fx)에 모두를 세운다(z=0). xBySeat 에 없는 좌석은 0. */
 async function discussionAt(day: number, xBySeat: Readonly<Record<number, number>>, guests = 5, phase: "discussion" | "verdict" = "discussion"): Promise<Game> {
-  const g = await startedGame("discussion", guests);
+  const g = await startedGame("discussion", guests, "plaza");
   await toPhase(g.code, phase, (room) => ({ ...room, day }));
   await place(g, xBySeat);
   for (const s of g.socks) await settle(s, mark(s));
@@ -68,6 +68,15 @@ describe("의심 포스트잇 — 트레이서 (D-01·D-03·D-04·D-06)", () => 
     const frames = await suspectFrom(g, g.actors[1]!, g.actors[2]!.seat);
     expect(summary(frames[1]!)).toBe("[error:BAD_MESSAGE,state:discussion]");
     expect(await notesOf(g.code)).toEqual([]);
+  });
+
+  it("재즈 바 가운데 좌석에서는 반대편 산 사람도 대상으로 고른다", async () => {
+    const g = await startedGame("discussion", 7, "bar");
+    await toPhase(g.code, "discussion", (room) => ({ ...room, day: 2 }));
+    const from = g.actors[1]!;
+    const to = g.actors[7]!;
+    await suspectFrom(g, from, to.seat);
+    expect(await notesOf(g.code)).toEqual([{ n: 2, from: from.seat, to: to.seat }]);
   });
 });
 

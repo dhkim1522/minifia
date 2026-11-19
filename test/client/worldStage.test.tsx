@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import "../helpers/singleLineErrors";
 import { installMemoryStorage, MemoryStorage } from "../helpers/memoryStorage";
-import { BAR_MAP, snapToWalkable } from "../../shared/game/map";
+import { BAR_MAP, BAR_ROOM_HALF, BAR_SEATS_FX, BAR_SEAT_HEIGHT, BAR_STAGE_HEIGHT, snapToWalkable } from "../../shared/game/map";
 import { PLAZA_MAP } from "../../shared/game/mapPlaza";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
@@ -16,7 +16,7 @@ import { NETWORK_TEXT } from "../../src/net/copy";
 import type { WorldStageProps } from "../../src/components/WorldStage";
 import { LIGHT_BLEND_SEC, UnsupportedRendererError } from "../../src/world/renderer";
 import type { CharacterHandle, LightingPhase, RendererStatusEvent, WorldRenderer } from "../../src/world/renderer";
-import { gatherView, PAN_BOX, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
+import { BAR_FOLLOW_SHARE, gatherView, stageOffsetY, ZOOM_MAJORITY } from "../../src/world/camera";
 import { predictSegment, SEG_BLEND_MS, YAW_TURN_RATE } from "../../src/world/motion";
 import { GHOST_FADE_END_MS } from "../../src/game/dayView";
 import { createWorldRuntime, ENTER_MS, EXIT_MS, MOVE_ACK_TIMEOUT_MS, RING_COLORS, WALK_CUE_KEY } from "../../src/world/runtime";
@@ -613,27 +613,28 @@ describe("WorldStage: 입력칸에 포커스가 있을 때의 탭은 키보드�
 
 describe("WorldStage: 서버 구간대로 걷기와 카메라 (MAP-02, MAP-03)", () => {
   // ---- 결정 0059: 탭하면 바로 걷고, 서버 구간이 오면 튀지 않게 맞추고, 응답이 없으면 돌아간다 ----
-  const DEST = { x: 500, z: 400 }; // tapAt(250, 340) 의 바닥 (5, 4) 을 1/100 정수로
+  const DEST = { x: 400, z: 350 }; // tapAt(240, 335) 의 바닥 (4, 3.5) 을 1/100 정수로
+  const openWalkPath = () => open({}, { ents: [seg(0, [275, 125]), seg(1, [-300, 50])] });
   const dist = (a: { x: number; z: number }, b: { x: number; z: number }): number => Math.hypot(a.x - b.x, a.z - b.z);
   const posOf = (h: CharacterHandle): { x: number; z: number } => ({ x: h.root.position.x, z: h.root.position.z });
   const asWorldSeg = (g: Segment, t0 = g.t0): WorldSeg => ({ s: 0, p: g.p, t0, v: g.v });
 
   it("결정 0059: 탭하면 서버 구간을 기다리지 않고 다음 프레임부터 걷고 서버 위치는 그대로다", async () => {
-    const s = await open();
+    const s = await openWalkPath();
     const mine = s.world.renderers[0]!.chars.get(0)!;
-    tapAt(surface(s.utils), 250, 340);
+    tapAt(surface(s.utils), 240, 335);
     frame(16);
-    expect(dist(posOf(mine), { x: 2, z: 1 })).toBeGreaterThan(0.01);
+    expect(dist(posOf(mine), { x: 2.75, z: 1.25 })).toBeGreaterThan(0.01);
     const server = s.store.positionOf(0, Date.now())!;
-    expect(server.x).toBeCloseTo(2, 6);
-    expect(server.z).toBeCloseTo(1, 6);
+    expect(server.x).toBeCloseTo(2.75, 6);
+    expect(server.z).toBeCloseTo(1.25, 6);
   });
 
   it("결정 0059: 예측 중에는 매 프레임 서버와 같은 길(predictSegment)의 위치에 선다", async () => {
-    const s = await open();
+    const s = await openWalkPath();
     const mine = s.world.renderers[0]!.chars.get(0)!;
     const base = s.store.segOf(0);
-    tapAt(surface(s.utils), 250, 340);
+    tapAt(surface(s.utils), 240, 335);
     const pred = predictSegment(base, DEST, Date.now())!;
     expect(pred).not.toBeNull();
     for (let t = 0; t < 400; t += 16) {
@@ -645,10 +646,10 @@ describe("WorldStage: 서버 구간대로 걷기와 카메라 (MAP-02, MAP-03)",
   });
 
   it("결정 0059: 서버 구간이 RTT/2 늦게 와도 한 프레임에 튀지 않고 서버 구간을 그 시간만큼 앞선 시각으로 그리며, 도착하면 서버 위치와 같다", async () => {
-    const s = await open();
+    const s = await openWalkPath();
     const mine = s.world.renderers[0]!.chars.get(0)!;
     const base = s.store.segOf(0);
-    tapAt(surface(s.utils), 250, 340);
+    tapAt(surface(s.utils), 240, 335);
     const sent = Date.now();
     const pred = predictSegment(base, DEST, sent)!;
     frames(96);
@@ -684,10 +685,10 @@ describe("WorldStage: 서버 구간대로 걷기와 카메라 (MAP-02, MAP-03)",
   };
 
   it("밀림: 서버 응답이 업링크 150ms 만큼 늦은 구간이어도 내 캐릭터는 뒤로 걷지 않고 그리던 걸음을 그대로 잇는다", async () => {
-    const s = await open();
+    const s = await openWalkPath();
     const mine = s.world.renderers[0]!.chars.get(0)!;
     const base = s.store.segOf(0);
-    tapAt(surface(s.utils), 250, 340);
+    tapAt(surface(s.utils), 240, 335);
     const sent = Date.now();
     const pred = predictSegment(base, DEST, sent)!;
     frames(208); // 업링크 150 + 다운링크 58
@@ -710,7 +711,7 @@ describe("WorldStage: 서버 구간대로 걷기와 카메라 (MAP-02, MAP-03)",
     expect(dist(server, positionAt(pred, Date.now() - 150))).toBeLessThan(1e-6);
     frames(4000);
     expect(dist(posOf(mine), s.store.positionOf(0, Date.now())!)).toBeLessThan(1e-6);
-    expect(dist(posOf(mine), { x: 5, z: 4 })).toBeLessThan(1e-6);
+    expect(dist(posOf(mine), { x: 4, z: 3.5 })).toBeLessThan(1e-6);
     expect(s.props.onNotice).not.toHaveBeenCalled();
   });
 
@@ -718,10 +719,10 @@ describe("WorldStage: 서버 구간대로 걷기와 카메라 (MAP-02, MAP-03)",
     ["30ms 빨리", 120],
     ["30ms 늦게", 180],
   ])("밀림: 앞선 채 걷는 중 다시 탭하면 그리던 자리에서 이어 걷고, 둘째 응답이 %s 와도 뒤로 가거나 멈칫하지 않는다", async (_name, uplink2) => {
-    const s = await open();
+    const s = await openWalkPath();
     const mine = s.world.renderers[0]!.chars.get(0)!;
     const base = s.store.segOf(0);
-    tapAt(surface(s.utils), 250, 340);
+    tapAt(surface(s.utils), 240, 335);
     const sent1 = Date.now();
     const pred1 = predictSegment(base, DEST, sent1)!;
     frames(208);
@@ -729,16 +730,16 @@ describe("WorldStage: 서버 구간대로 걷기와 카메라 (MAP-02, MAP-03)",
     move(s.store, asWorldSeg(seg1));
     frames(304);
     const beforeTap = posOf(mine);
-    tapAt(surface(s.utils), 150, 320); // 바닥 (−5, 2) — 거의 반대쪽
+    tapAt(surface(s.utils), 160, 320); // 바닥 (−4, 2) — 거의 반대쪽
     const sent2 = Date.now();
     // 예측은 내 캐릭터의 시각(탭 시각 + 앞섬 150)에 그리던 자리에서 출발한다 — 서버가 150ms 뒤에 받으면 만들 구간과 같다
-    const pred2 = predictSegment(seg1, { x: -500, z: 200 }, sent2 + 150)!;
+    const pred2 = predictSegment(seg1, { x: -400, z: 200 }, sent2 + 150)!;
     frame(16);
     expect(dist(posOf(mine), beforeTap)).toBeLessThanOrEqual(1.8 * 0.066 * 1.05); // 탭 순간에 튀지 않는다(누른 50ms + 한 프레임의 걸음)
     frames(192);
     // 누르는 동안 프레임 없이 흐른 50ms 의 걸음을 섞고 나면 예측 길의 (서버 시각 + 150) 위치다
     expect(dist(posOf(mine), positionAt(pred2, Date.now() + 150))).toBeLessThan(1e-6);
-    const seg2 = predictSegment(seg1, { x: -500, z: 200 }, sent2 + uplink2)!; // 서버가 실제로 만든 구간
+    const seg2 = predictSegment(seg1, { x: -400, z: 200 }, sent2 + uplink2)!; // 서버가 실제로 만든 구간
     move(s.store, asWorldSeg(seg2));
     let prev = posOf(mine);
     let minAlong = Infinity;
@@ -757,76 +758,76 @@ describe("WorldStage: 서버 구간대로 걷기와 카메라 (MAP-02, MAP-03)",
     expect(dist(posOf(mine), positionAt(seg2, Date.now() + uplink2))).toBeLessThan(1e-6);
     frames(6000);
     expect(dist(posOf(mine), s.store.positionOf(0, Date.now())!)).toBeLessThan(1e-6);
-    expect(dist(posOf(mine), { x: -5, z: 2 })).toBeLessThan(1e-6);
+    expect(dist(posOf(mine), { x: -4, z: 2 })).toBeLessThan(1e-6);
     expect(s.props.onNotice).not.toHaveBeenCalled();
   });
 
   it("밀림: 도착해 서 있으면 앞섬이 풀려, 뒤이어 서버가 걷게 한 구간은 서버 시각 그대로 그린다", async () => {
-    const s = await open();
+    const s = await openWalkPath();
     const mine = s.world.renderers[0]!.chars.get(0)!;
     const base = s.store.segOf(0);
-    tapAt(surface(s.utils), 250, 340);
+    tapAt(surface(s.utils), 240, 335);
     const sent = Date.now();
     const pred = predictSegment(base, DEST, sent)!;
     frames(208);
     move(s.store, asWorldSeg(pred, sent + 150));
     frames(4000); // 도착하고 서버 시각으로도 구간이 끝났다
-    expect(dist(posOf(mine), { x: 5, z: 4 })).toBeLessThan(1e-6);
-    move(s.store, seg(0, [500, 400, 300, 400], Date.now(), 180)); // 서버 주도 이동(모이기 등)
+    expect(dist(posOf(mine), { x: 4, z: 3.5 })).toBeLessThan(1e-6);
+    move(s.store, seg(0, [400, 350, 300, 350], Date.now(), 180)); // 서버 주도 이동(모이기 등)
     frames(SEG_BLEND_MS + 32);
     expect(dist(posOf(mine), s.store.positionOf(0, Date.now())!)).toBeLessThan(1e-6);
-    expect(mine.root.position.x).toBeLessThan(4.9);
+    expect(mine.root.position.x).toBeLessThan(3.9);
   });
 
   it("결정 0059: 응답이 없으면 1.5초 뒤 알림 한 번, 링이 사라지고 내 캐릭터는 서버 위치로 150ms 에 걸쳐 돌아간다", async () => {
-    const s = await open();
+    const s = await openWalkPath();
     const r = s.world.renderers[0]!;
     const mine = r.chars.get(0)!;
-    tapAt(surface(s.utils), 250, 340);
+    tapAt(surface(s.utils), 240, 335);
     frames(MOVE_ACK_TIMEOUT_MS - 20);
     expect(s.props.onNotice).not.toHaveBeenCalled();
-    const before = dist(posOf(mine), { x: 2, z: 1 });
+    const before = dist(posOf(mine), { x: 2.75, z: 1.25 });
     expect(before).toBeGreaterThan(1);
     frame(40); // 이 프레임 안에서 응답 없음 시계가 끝난다
     expect(s.props.onNotice).toHaveBeenCalledTimes(1);
     expect(s.props.onNotice).toHaveBeenCalledWith(NETWORK_TEXT);
     expect(r.markers.filter((m) => m.kind === "ring").at(-1)!.at).toBeNull();
-    expect(dist(posOf(mine), { x: 2, z: 1 })).toBeGreaterThanOrEqual(before / 2); // 한 번에 돌아가지 않는다
+    expect(dist(posOf(mine), { x: 2.75, z: 1.25 })).toBeGreaterThanOrEqual(before / 2); // 한 번에 돌아가지 않는다
     frames(SEG_BLEND_MS + 32);
-    expect(dist(posOf(mine), { x: 2, z: 1 })).toBeLessThan(1e-6);
+    expect(dist(posOf(mine), { x: 2.75, z: 1.25 })).toBeLessThan(1e-6);
     frames(3000);
     expect(s.props.onNotice).toHaveBeenCalledTimes(1);
   });
 
   it("처음 열 때 카메라는 날아가지 않고 내 캐릭터에 바로 붙는다", async () => {
-    const s = await open();
+    const s = await openWalkPath();
     const first = s.world.renderers[0]!.views[0]!;
-    expect(first.target.x).toBeCloseTo(2, 6);
-    expect(first.target.z).toBeCloseTo(1, 6);
+    expect(first.target.x).toBeCloseTo(2.75 * BAR_FOLLOW_SHARE, 6);
+    expect(first.target.z).toBeCloseTo(1.25 * BAR_FOLLOW_SHARE, 6);
   });
 
   it("서버 구간이 오면 캐릭터가 positionOf 위치에 서고 이동 방향을 보며 카메라가 따라간다", async () => {
-    const s = await open();
+    const s = await openWalkPath();
     const r = s.world.renderers[0]!;
     const mine = r.chars.get(0)!;
-    move(s.store, seg(0, [200, 100, 600, 100], Date.now(), 180));
+    move(s.store, seg(0, [275, 125, 400, 125], Date.now(), 180));
     frames(500);
     const pos = s.store.positionOf(0, Date.now())!;
     expect(mine.root.position.x).toBeCloseTo(pos.x, 6);
     expect(mine.root.position.z).toBeCloseTo(pos.z, 6);
-    expect(pos.x).toBeGreaterThan(2.5);
+    expect(pos.x).toBeGreaterThan(3);
     // x 가 늘어나는 걸음: yaw = atan2(dx, dz) = π/2
     const yaw = (mine as FakeHandle).yaws.at(-1)!;
     expect(yaw).toBeCloseTo(Math.PI / 2, 4);
     const last = r.views.at(-1)!;
-    expect(last.target.x).toBeGreaterThan(2.2);
-    expect(last.target.x).toBeLessThanOrEqual(pos.x + 1e-6);
+    expect(last.target.x).toBeGreaterThan(2.75 * BAR_FOLLOW_SHARE);
+    expect(last.target.x).toBeLessThanOrEqual(pos.x * BAR_FOLLOW_SHARE + 1e-6);
   });
 
   it("도착해 멈추면 마지막 방향을 유지한다(멈춘 프레임에 yaw 를 새로 정하지 않는다)", async () => {
-    const s = await open();
+    const s = await openWalkPath();
     const mine = s.world.renderers[0]!.chars.get(0)! as FakeHandle;
-    move(s.store, seg(0, [200, 100, 300, 100], Date.now(), 180));
+    move(s.store, seg(0, [275, 125, 300, 125], Date.now(), 180));
     frames(1200);
     // 입장 방향에서 걷는 방향으로 짧게 돌고(결정 0059-3) 마지막 값은 걷는 방향이다. 멈춘 뒤에는 새로 정하지 않는다
     expect(mine.yaws.length).toBeGreaterThan(1);
@@ -908,40 +909,40 @@ describe("G-07-9 섞기·방향 (결정 0059)", () => {
   });
 
   it("결정 0059: 응답이 탭 간격보다 늦어도 둘째 탭의 링과 예측은 첫 탭의 응답에 끌려가지 않고 둘째 응답에서 맞춘다", async () => {
-    const s = await open();
+    const s = await open({}, { ents: [seg(0, [325, 275]), seg(1, [-300, 50])] });
     const r = s.world.renderers[0]!;
     const mine = r.chars.get(0)!;
     const root = s.utils.container.querySelector("[data-world-stage]")!;
     const base = s.store.segOf(0);
-    tapAt(surface(s.utils), 250, 340);
+    tapAt(surface(s.utils), 240, 335);
     const sent1 = Date.now();
-    const pred1 = predictSegment(base, { x: 500, z: 400 }, sent1)!;
+    const pred1 = predictSegment(base, { x: 400, z: 350 }, sent1)!;
     frames(210);
-    tapAt(surface(s.utils), 150, 320); // 바닥 (−5, 2)
+    tapAt(surface(s.utils), 160, 320); // 바닥 (−4, 2)
     const sent2 = Date.now();
-    expect(lastRing(r)!.at).toEqual({ x: -5, z: 2 });
+    expect(lastRing(r)!.at).toEqual({ x: -4, z: 2 });
     move(s.store, { s: 0, p: pred1.p, t0: sent1 + 77, v: pred1.v }); // 첫 탭의 늦은 응답
     frame(16);
-    expect(root.getAttribute("data-ring")).toBe("-5.00,2.00");
-    let prev = dist(posOf(mine), { x: -5, z: 2 });
+    expect(root.getAttribute("data-ring")).toBe("-4.00,2.00");
+    let prev = dist(posOf(mine), { x: -4, z: 2 });
     for (let i = 0; i < 5; i++) {
       frame(16);
-      const d = dist(posOf(mine), { x: -5, z: 2 });
+      const d = dist(posOf(mine), { x: -4, z: 2 });
       expect(d).toBeLessThan(prev); // 둘째 예측으로 계속 다가간다
       prev = d;
     }
     const seg1 = { p: pred1.p, t0: sent1 + 77, v: pred1.v };
-    const pred2 = predictSegment(seg1, { x: -500, z: 200 }, sent2 + 77)!;
+    const pred2 = predictSegment(seg1, { x: -400, z: 200 }, sent2 + 77)!;
     move(s.store, { s: 0, p: pred2.p, t0: sent2 + 77, v: pred2.v }); // 둘째 탭의 응답
     frame(16);
-    expect(root.getAttribute("data-ring")).toBe("-5.00,2.00");
+    expect(root.getAttribute("data-ring")).toBe("-4.00,2.00");
     frames(SEG_BLEND_MS + 48);
     // 둘째 응답의 서버 구간을 그린다 — 서버가 둘째 탭을 늦게 받은 77ms 만큼 앞선 시각의 위치(걷는 동안)
     const want = s.store.positionOf(0, Date.now() + 77)!;
     expect(dist(posOf(mine), want)).toBeLessThan(1e-6);
     frames(MOVE_ACK_TIMEOUT_MS * 4); // 도착 뒤에는 서버 위치와 같다
     expect(dist(posOf(mine), s.store.positionOf(0, Date.now())!)).toBeLessThan(1e-6);
-    expect(dist(posOf(mine), { x: -5, z: 2 })).toBeLessThan(1e-6);
+    expect(dist(posOf(mine), { x: -4, z: 2 })).toBeLessThan(1e-6);
     expect(s.props.onNotice).not.toHaveBeenCalled();
   });
 
@@ -1691,7 +1692,7 @@ describe("WebGL 컨텍스트 소실·복구 (MAP-05)", () => {
       expect(root.position.z).toBeCloseTo(pos.z, 6);
     }
     // 복구 직후 카메라는 날아가지 않고 바로 붙는다
-    expect(r.views.at(-1)!.target.x).toBeCloseTo(2, 6);
+    expect(r.views.at(-1)!.target.x).toBeCloseTo(2 * BAR_FOLLOW_SHARE, 6);
   });
 
   it("소실 3초 뒤 렌더러를 한 번 다시 만들고, 만들어지면 다시 열린다", async () => {
@@ -1783,7 +1784,7 @@ describe("화면 숨김·복귀 (UI-SPEC 연결·복귀 상태)", () => {
     const pos = s.store.positionOf(0, Date.now())!;
     expect(r.chars.get(0)!.root.position.x).toBeCloseTo(pos.x, 6);
     // 숨어 있던 3초를 따라잡느라 걷지 않는다: 카메라는 서버 위치에 바로 붙는다
-    expect(r.views.at(-1)!.target.x).toBeCloseTo(Math.min(PAN_BOX.maxX, pos.x), 6);
+    expect(r.views.at(-1)!.target.x).toBeCloseTo(Math.min(4.7, BAR_FOLLOW_SHARE * pos.x), 6);
   });
 
   it("숨은 채 소실되면 숨은 시간은 세지 않는다: 오래 숨었다 돌아와도 곧바로 실패 카드가 되지 않고 돌아온 때부터 센다 (WR-02)", async () => {
@@ -1962,8 +1963,8 @@ describe("카메라: 날아가지 않고 붙는다, 크기 변화는 다시 맞�
     // 다시 연결: 새 epoch 의 snap 이 내 위치를 반대쪽 끝으로 준다
     snap(s.store, [seg(0, [-400, -300]), seg(1, [-300, 50])], 2);
     frame(16);
-    expect(r.views.at(-1)!.target.x).toBeCloseTo(-4, 6);
-    expect(r.views.at(-1)!.target.z).toBeCloseTo(-3, 6);
+    expect(r.views.at(-1)!.target.x).toBeCloseTo(-4 * BAR_FOLLOW_SHARE, 6);
+    expect(r.views.at(-1)!.target.z).toBeCloseTo(-3 * BAR_FOLLOW_SHARE, 6);
     // 등장 연출도 없다: 캐릭터 크기는 그대로 1
     expect(r.chars.get(0)!.root.scale.x).toBeCloseTo(0.83, 6);
   });
@@ -2006,16 +2007,16 @@ describe("카메라: 날아가지 않고 붙는다, 크기 변화는 다시 맞�
     move(s.store, seg(0, [200, 100, 600, 100], Date.now(), 180));
     frames(500);
     const pos = s.store.positionOf(0, Date.now())!;
-    expect(r.views.at(-1)!.target.x).toBeCloseTo(pos.x, 6);
+    expect(r.views.at(-1)!.target.x).toBeCloseTo(pos.x * BAR_FOLLOW_SHARE, 6);
   });
 });
 
 describe("카메라 한계 (D-12)", () => {
-  it("재즈 바는 PAN_BOX 로 잘린다", async () => {
+  it("재즈 바의 카메라는 가까운 시야 안에서 따라간다", async () => {
     const s = await open({}, { ents: [seg(0, [580, 580]), seg(1, [-300, 50])] });
     const r = s.world.renderers[0]!;
     frames(600);
-    expect(r.views.at(-1)!.target.x).toBeCloseTo(PAN_BOX.maxX, 6);
+    expect(r.views.at(-1)!.target.x).toBeCloseTo(Math.min(BAR_ROOM_HALF, BAR_FOLLOW_SHARE * 5.8), 6);
   });
 });
 
@@ -2034,6 +2035,19 @@ const FOUR = [player(0, "민지"), player(1, "철수"), player(2, "영희"), pla
 const FOUR_ENTS = (): WorldSeg[] => [seg(0, [200, 100]), seg(1, [-300, 50]), seg(2, [-100, 400]), seg(3, [400, -200])];
 
 describe("게임 장면: 보임·유령 (GHOST-01)", () => {
+  it("재즈 바 좌석의 캐릭터는 들어오자마자 의자 높이와 얼굴이 보이는 방향을 쓴다", async () => {
+    const seats = Object.fromEntries(FOUR.map(({ seat }) => [seat, {}]));
+    const view: RoomView = { ...makeView(FOUR), phase: "discussion", map: "bar" };
+    const scene = sceneOf(seats, { camera: cameraModeOf(view, 600) });
+    const ents = FOUR.map(({ seat }) => seg(seat, [...BAR_SEATS_FX[seat]!]));
+    const s = await open({ view, scene }, { players: FOUR, ents });
+    const renderer = s.world.renderers[0]!;
+    for (const char of renderer.chars.values()) {
+      expect(char.root.position.y).toBe(BAR_SEAT_HEIGHT);
+      expect(Math.abs((char as FakeHandle).yaws.at(-1)!)).toBeLessThan(Math.PI / 2);
+    }
+  });
+
   it("scene 이 없으면(로비) 모든 좌석의 캐릭터·이름표가 6페이즈 그대로 생긴다", async () => {
     const s = await open({}, { players: FOUR, ents: FOUR_ENTS() });
     expect([...s.world.renderers[0]!.chars.keys()].sort()).toEqual([0, 1, 2, 3]);
@@ -2486,7 +2500,7 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       const s = await openGame();
       const r = s.world.renderers[0]!;
       const start = r.views.at(-1)!;
-      expect(start.target.x).toBeCloseTo(2, 6); // 따라가기: 내 캐릭터
+      expect(start.target.x).toBeCloseTo(2 * BAR_FOLLOW_SHARE, 6); // 따라가기: 내 캐릭터
       s.rerender({ scene: sceneOf(ALL, { camera: FIXED() }) });
       frames(400);
       const mid = r.views.at(-1)!;
@@ -2600,8 +2614,8 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       frames(1000);
       s.rerender({ scene: sceneOf(ALL) });
       frames(1500);
-      expect(r.views.at(-1)!.target.x).toBeCloseTo(2, 2);
-      expect(r.views.at(-1)!.target.z).toBeCloseTo(1, 2);
+      expect(r.views.at(-1)!.target.x).toBeCloseTo(2 * BAR_FOLLOW_SHARE, 2);
+      expect(r.views.at(-1)!.target.z).toBeCloseTo(BAR_FOLLOW_SHARE, 2);
       expect(r.setZoom.mock.calls.at(-1)![0]).toBeCloseTo(1, 6);
       expect(r.views.at(-1)!.offsetY).toBeCloseTo(stageOffsetY(window.innerHeight, INSETS.top, window.innerHeight - INSETS.bottom), 1);
     });
@@ -2884,10 +2898,10 @@ describe("게임 장면(08-12): 카메라·조명·긴장·떠다님·처형 연
       }
     });
 
-    it("무대(0,0) 위에 선 좌석은 높이 0.29 다", async () => {
+    it("무대(0,0) 위에 선 좌석은 재즈 바 스탠드 높이를 쓴다", async () => {
       const ents = [seg(0, [200, 100]), seg(1, [-300, 50]), seg(2, [-100, 400]), seg(3, [0, 0])];
       const s = await open({ scene: sceneOf(ALL) }, { players: FOUR, ents });
-      expect(yOf(s, 3)).toBeCloseTo(0.29, 6);
+      expect(yOf(s, 3)).toBeCloseTo(BAR_STAGE_HEIGHT, 6);
       expect(yOf(s, 2)).toBe(0);
     });
 

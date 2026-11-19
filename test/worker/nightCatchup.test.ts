@@ -88,12 +88,12 @@ describe("알람 따라잡기 — 밤 → 아침 → 낮 시작 (review-WR-01)",
     expect(snapPoints(got[vi]!)).toBe(homeRows(home, everyone));
   }, 40_000);
 
-  it("멱등: 건너뛴 아침의 키가 기록되고, 같은 단계에서 위치 동기화가 다시 돌아도 같은 snap 이 다시 가지 않는다", async () => {
+  it("멱등: 건너뛴 아침 뒤 바의 고정 좌석 키가 기록되고, 같은 단계에서 위치 동기화가 다시 돌아도 같은 snap 이 다시 가지 않는다", async () => {
     const { g } = await lateCatchup(true);
     const lay = await layOf(g.code);
     expect(lay.key).not.toBeNull();
     expect(lay.key!.endsWith(":night")).toBe(false);
-    expect(lay.key).toMatch(/:morning$/);
+    expect(lay.key).toMatch(/:bar-table$/);
     expect((await worldOf(g.code)) !== undefined).toBe(true);
 
     const marks = g.socks.map((s) => mark(s));

@@ -3,6 +3,8 @@
 // 얼굴과 전신만 다시 만들 때는 --seat-portraits-only.
 // 역할 카드만 다시 만들 때는 --role-portraits-only.
 // 동물 얼굴·전신·역할·옷장 그림만 다시 만들 때는 --animal-portraits-only.
+// 재즈 바 배경과 동물·유령 그림을 다시 만들 때는 --3d-art-refresh.
+// 재즈 바 카드와 배경만 다시 만들 때는 --bar-art-only.
 // 채팅과 기록의 정사각형 초상화만 다시 만들 때는 --faces-only.
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -82,7 +84,7 @@ try {
     const { createThreeRenderer } = await import("/src/world/threeRenderer.ts");
     window.noirMap = async ({ mapId, phase, width, height, x, z, zoom, offset }) => {
       const host = document.querySelector("main");
-      const world = await createThreeRenderer({ host, width, height, mapId, budgetStep: 0, allowSoftware: true });
+      const world = await createThreeRenderer({ host, width, height, mapId, compactBar: mapId === "bar", budgetStep: 0, allowSoftware: true });
       world.setView({ x, z }, offset);
       world.setZoom(zoom);
       world.setLighting(phase);
@@ -163,8 +165,9 @@ try {
     }
   }
 
-  async function renderMapCards() {
-    for (const [mapId, x, z, zoom] of [["bar", -1.3, -1.2, 0.64], ["plaza", -0.25, -1.4, 0.62]]) {
+  async function renderMapCards(onlyMap) {
+    for (const [mapId, x, z, zoom] of [["bar", 0, 0, 0.85], ["plaza", -0.25, -1.4, 0.62]]) {
+      if (onlyMap && mapId !== onlyMap) continue;
       const image = await scene({ mapId, phase: "talk", width: 560, height: 320, x, z, zoom, offset: 0 });
       const png = await sharp(image).resize(560, 320).removeAlpha().png({ palette: true, quality: 95 }).toBuffer();
       await writeFile(root(`public/maps/map-${mapId}.png`), png);
@@ -173,6 +176,13 @@ try {
 
   if (process.argv.includes("--backdrops-only")) {
     await renderBackdrops(scene);
+  } else if (process.argv.includes("--3d-art-refresh") || process.argv.includes("--bar-art-only")) {
+    if (process.argv.includes("--3d-art-refresh")) {
+      await renderAnimalPortraits();
+      await renderGhostPortrait();
+    }
+    await renderMapCards("bar");
+    await renderBackdrops(scene, "bar");
   } else if (process.argv.includes("--faces-only")) {
     for (const [seat] of figures.entries()) await renderFace(`public/characters/faces/face-${seat}.png`, seat);
     for (const animal of animals) await renderFace(`public/characters/animals/${animal}/face.png`, 0, animal);

@@ -236,12 +236,14 @@ describe("원격 에셋 없음 (T-06-24)", () => {
     bar.dispose();
   });
 
-  it("bar.ts·palette.ts 소스에 URL·로더·캔버스·fetch 가 없다", () => {
+  it("3D 재료는 앱이 함께 배포하며 원격 URL·동적 캔버스를 사용하지 않는다", () => {
     for (const f of ["src/world/maps/bar.ts", "src/world/palette.ts"]) {
       const src = readFileSync(resolve(process.cwd(), f), "utf8");
       expect(src, f).not.toMatch(/https?:\/\//);
-      expect(src, f).not.toMatch(/TextureLoader|new Image\b|fetch\(|createElement\(|ImageBitmap/);
+      expect(src, f).not.toMatch(/new Image\b|fetch\(|createElement\(|ImageBitmap/);
     }
+    const source = readFileSync(resolve(process.cwd(), "src/world/maps/bar.ts"), "utf8");
+    expect(source).toContain('loadAsync("/maps/noir-oak.webp")');
   });
 });
 

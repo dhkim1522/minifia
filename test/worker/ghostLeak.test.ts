@@ -2,7 +2,7 @@
 // 유령의 위치·움직임은 유령의 폰으로만 간다 — 산 사람 폰에는 네트워크로도 가지 않는다(화면에서 숨기는 방식이 아니다, 결정 0002·0021).
 // "오지 않았음" 은 settle(ping/pong)로 증명한다. 실패 출력은 한 줄이어야 해서(TAP) 프레임은 요약 문자열로 비교한다.
 import { describe, expect, it } from "vitest";
-import type { ServerMessage } from "../../shared/protocol";
+import type { MapId, ServerMessage } from "../../shared/protocol";
 import { advanceTo, chatSend, chatsOf, connect, ghostsOf, mark, nextFrame, observe, pause, resetChatRates, seat, send, settle, stable, startedGame, summary, toPhase, typingSend, withRole, worldFramesOf } from "./helpers";
 import type { Actor, Game } from "./helpers";
 
@@ -14,8 +14,8 @@ const moveSeats = (msgs: ServerMessage[]): string =>
     .join(",");
 
 /** 5명 판(방장 + 손님 4)을 토론 단계까지 시작해 마피아가 아닌 두 명을 유령으로 만든다. */
-async function fiveWithTwoGhosts(): Promise<{ g: Game; ghosts: Actor[]; living: Actor[] }> {
-  const g = await startedGame("discussion", 4);
+async function fiveWithTwoGhosts(map?: MapId): Promise<{ g: Game; ghosts: Actor[]; living: Actor[] }> {
+  const g = await startedGame("discussion", 4, map);
   const doomed = g.actors.filter((a) => a.role !== "mafia").slice(0, 2);
   expect(doomed.length).toBe(2);
   const { ghosts, living } = await ghostsOf(
@@ -41,8 +41,8 @@ describe("유령 한 걸음 — 트레이서 (GHOST-01, MAP-04)", () => {
     expect(living.map((a) => worldFramesOf(a.sock, marks.get(a.sock)!).length).join(",")).toBe("0,0,0");
   }, 30_000);
 
-  it("산 사람 A 가 토론에서 move 하면 유령을 포함한 모든 소켓이 world.move(s = A)를 받는다", async () => {
-    const { g, living } = await fiveWithTwoGhosts();
+  it("광장에서 산 사람 A 가 토론 중 움직이면 유령을 포함한 모든 소켓이 world.move(s = A)를 받는다", async () => {
+    const { g, living } = await fiveWithTwoGhosts("plaza");
     const a = living[0]!;
 
     const got = await observe(g, a, () => send(a.sock, { t: "move", x: -200, z: 100 }));

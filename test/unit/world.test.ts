@@ -1,8 +1,8 @@
 // 로비 이동 규칙(shared/game/world.ts) — 구간 보간·이동 요청·프레임 모양. 시각과 난수는 모두 인자로 주입한다.
 import { describe, expect, it } from "vitest";
 import { seededRandInt } from "../helpers/seededRandom";
+import { LEGACY_BAR_MAP as BAR_MAP } from "../helpers/legacyBarMap";
 import {
-  BAR_MAP,
   cellCenterFx,
   cellOfFx,
   isWalkable,

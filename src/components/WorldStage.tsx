@@ -227,6 +227,7 @@ export function WorldStage(props: WorldStageProps) {
       allowSoftware: hooksOn,
       loadModules: live.current.props.loadModules,
       mapId: () => mapId,
+      compactBar: mapId === "bar",
     });
     runtimeRef.current = runtime;
     runtime.setScene(live.current.props.scene ?? null);

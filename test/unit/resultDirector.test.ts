@@ -4,7 +4,7 @@ import { ringSlots } from "../../shared/game/gather";
 import type { RoleId } from "../../shared/game/roles";
 import type { GameWinner, PublicPlayer, RoomView } from "../../shared/protocol";
 import { mapOf } from "../../shared/game/maps";
-import { snapToWalkable } from "../../shared/game/map";
+import { BAR_SEATS_FX, snapToWalkable } from "../../shared/game/map";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import * as director from "../../src/game/resultDirector";
 import { castOf, CLAP_MAX, finalState, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, SAT_RADIUS_FX, satSlots, slotsFor, stateAt, teamOf, walkSnap } from "../../src/game/resultDirector";
@@ -62,6 +62,15 @@ describe("castOf · slotsFor", () => {
     const table = ringSlots(JOBS.length);
     cast.forEach((c, i) => expect(slots[c.seat]).toEqual(table[i]));
     expect(slotsFor(castOf(viewOf(JOBS, [1])))).toEqual(slots); // 생사와 무관
+  });
+
+  it("재즈 바의 결과는 생사나 참가자 수와 관계없이 같은 의자를 쓴다", () => {
+    const four = slotsFor(castOf(viewOf(JOBS.slice(0, 4), [1])), "bar");
+    const eight = slotsFor(castOf(viewOf([...JOBS, "citizen", "citizen"], [3])), "bar");
+    for (const [seat, spot] of BAR_SEATS_FX.entries()) {
+      if (seat < 4) expect(four[seat]).toEqual(spot);
+      expect(eight[seat]).toEqual(spot);
+    }
   });
 
   it("참가자 수 2~8 어디서나 자리가 모두 다르다", () => {

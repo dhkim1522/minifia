@@ -51,7 +51,7 @@ export function suspectTargets(
   for (const p of view.players) {
     if (p.seat === view.me.seat || !isAlive(p)) continue;
     const pct = prev?.has(p.seat) === true ? 100 : NOTE_REACH_ON_PCT;
-    if (withinNoteReach(mine, segOf(p.seat), serverNow, pct)) out.add(p.seat);
+    if (withinNoteReach(mine, segOf(p.seat), serverNow, pct, view.map === "bar")) out.add(p.seat);
   }
   return out;
 }

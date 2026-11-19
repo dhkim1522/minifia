@@ -3648,9 +3648,15 @@ async function pcFlow(ctx) {
   // ② 대기실
   const host = await startHost(ctx, "pc");
   const { page, tracker } = host;
+  const mySeat = tracker.last().me.seat;
+  await waitWorldReady(page, 1);
   await settle(page);
   await checkPcRoom(ctx, "lobby", [".mf-lobby__header", ".mf-lobby__panel"]);
   await checkState(ctx, "pc", "lobby");
+  const lobbyPosition = await sampleWorld(page, mySeat);
+  const lobbyTarget = lobbyPosition ? await farWalkableOnSurface(page, ctx.size, lobbyPosition) : null;
+  const walk = lobbyTarget ? await tapWorld(page, tracker, mySeat, lobbyTarget.x, lobbyTarget.z) : null;
+  rec("pc/lobby", "PC-WALK", "재즈 바 대기실의 바닥 클릭이 서버 이동으로 이어짐", !!walk?.move && walk.ringMs !== null);
 
   for (const { width, height, touch } of [{ width: 1033, height: 1221, touch: false }, { width: 390, height: 844, touch: true }]) {
     const context = await ctx.browser.newContext({ viewport: { width, height }, isMobile: touch, hasTouch: touch, locale: "ko-KR" });
@@ -3681,11 +3687,13 @@ async function pcFlow(ctx) {
   await checkPcRoom(ctx, "day", [".mf-game__header", ".mf-game__panel"]);
   await checkState(ctx, "pc", "day");
 
-  const mySeat = tracker.last().me.seat;
   const me = await sampleWorld(page, mySeat);
   const target = me ? await farWalkableOnSurface(page, ctx.size, me) : null;
-  const walk = target ? await tapWorld(page, tracker, mySeat, target.x, target.z) : null;
-  rec("pc/day", "PC-WALK", "넓은 무대에서 바닥 클릭이 서버 이동으로 이어짐", !!walk?.move && walk.ringMs !== null);
+  const sentMoves = tracker.sentMoveAt.length;
+  if (target) await page.mouse.click(target.sx, target.sy);
+  await settle(page);
+  const camera = await page.evaluate(() => window.__mfCamera?.mode);
+  rec("pc/day", "PC-SEATED", "재즈 바 토론은 카메라가 고정되고 바닥을 눌러도 이동 요청이 없음", !!target && camera === "fixed" && tracker.sentMoveAt.length === sentMoves);
 
   // ④ 제보와 같은 세로로 긴 창에서 밤 지도와 의사 조작을 확인한다.
   const reported = { w: 1033, h: 1221, label: "1033x1221" };

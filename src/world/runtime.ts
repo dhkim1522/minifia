@@ -7,14 +7,14 @@
 // three 는 loadWorld() 의 import() 두 줄로만 끌려온다(이 파일에 three 값 import 가 없다 — 메인 번들 분리, RESEARCH 번들 측정).
 // 렌더러·캐릭터 모듈은 deps.loadModules 로 바꿔 끼울 수 있다(happy-dom 테스트의 가짜, 06-14 의 시나리오 스토어).
 import type { AnimalId } from "../../shared/game/animals";
-import { snapToWalkable, UNIT } from "../../shared/game/map";
+import { BAR_ROOM_HALF, BAR_SEAT_HEIGHT, BAR_STAGE_HEIGHT, BAR_STAGE_RADIUS, snapToWalkable, UNIT } from "../../shared/game/map";
 import type { Spawn } from "../../shared/game/map";
 import { mapOf } from "../../shared/game/maps";
 import type { MapId } from "../../shared/protocol";
 import { positionAt, segmentEndsAt } from "../../shared/game/world";
 import type { Segment } from "../../shared/game/world";
 import { NETWORK_TEXT } from "../net/copy";
-import { clampTarget, DEFAULT_TARGET, followStep, gatherGroupZoom, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, PAN_BOX, PX_PER_UNIT, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
+import { BAR_FOLLOW_SHARE, BAR_TABLE_CAMERA, BAR_WALK_CAMERA, barNameTagFoot, barSeatAt, barSeatYaw, barTableZoom, cameraScale, clampTarget, DEFAULT_CAMERA, DEFAULT_TARGET, followStep, gatherGroupZoom, gatherView, NAMETAG_GAP, NAMETAG_MAX_W, PAN_BOX, RESIZE_SETTLE_MS, stageOffsetY } from "./camera";
 import { figForSeat, GHOST_SCALE } from "./characterData";
 import type { OutfitId } from "./characterData";
 import { admitEmote, EMOTE_RENDER_MAX, emoteDurationMs } from "./emoteCap";
@@ -197,6 +197,8 @@ export interface WorldRuntimeDeps {
    * 런타임을 만들 때 한 번 읽는다 — 맵이 바뀌는 화면 전환은 새 런타임(새 렌더러)을 만든다. 서버는 같은 shared MapDef 를 쓴다
    */
   mapId?(): MapId;
+  /** 실제 재즈 바와 같은 가까운 구도를 쓴다. 단독 카메라 실험은 별도 설정을 쓸 수 있다. */
+  compactBar?: boolean;
   raf?: (cb: FrameRequestCallback) => number;
   caf?: (id: number) => void;
   storage?: Storage | null;
@@ -324,6 +326,7 @@ interface Actor {
   yaw: number;
   /** 걷는 선분의 방향(travelYaw). 구간이 끝나도 남겨 두어 돌던 중이면 마저 돈다. 멈춘 뒤에는 새로 정하지 않는다 */
   yawGoal: number | null;
+  barSeat: number | undefined;
   headY: number;
   dim: boolean;
   /** 지금 손가락 자세(holdPose("point"))를 유지하나 */
@@ -385,6 +388,8 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
   // 방의 맵(D-22): 런타임 수명 동안 하나. 이동 예측·입장 방향·무대 높이가 같은 표(shared MapDef)를 읽는다
   const mapId: MapId = deps.mapId?.() ?? "bar";
   const map = mapOf(mapId);
+  const compactBar = mapId === "bar" && deps.compactBar === true;
+  const barPan = { minX: -BAR_ROOM_HALF, maxX: BAR_ROOM_HALF, minZ: -BAR_ROOM_HALF, maxZ: BAR_ROOM_HALF };
 
   let disposed = false;
   let bootGen = 0;
@@ -636,7 +641,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const s = size();
     let r: WorldRenderer;
     try {
-      r = await mods.createThreeRenderer({ host, width: s.w, height: s.h, budgetStep: degrade.step(), allowSoftware: deps.allowSoftware, mapId });
+      r = await mods.createThreeRenderer({ host, width: s.w, height: s.h, budgetStep: degrade.step(), allowSoftware: deps.allowSoftware, mapId, compactBar });
     } catch {
       if (alive()) dispatch({ t: "unsupported" });
       return;
@@ -807,6 +812,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       offAt: now,
       yaw: spawnYaw(map.spawns, seat),
       yawGoal: null,
+      barSeat: undefined,
       headY: 0,
       dim: false,
       pointing: false,
@@ -1188,10 +1194,15 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       const dx = at.x - a.pos.x;
       const dz = at.z - a.pos.z;
       const moving = !resync && dx * dx + dz * dz > MOVE_EPS * MOVE_EPS;
+      a.barSeat = compactBar && !wantGhost ? barSeatAt(at) : undefined;
       if (moving) walkingSeats.add(a.seat);
       // 방향: 걷는 선분의 방향으로 짧은 쪽으로 돌되 한 프레임에 YAW_TURN_RATE × dt 까지만(모션 줄이기면 바로). 복귀 프레임은 건드리지 않는다
       if (resync) {
         a.yawGoal = null;
+        if (a.barSeat !== undefined) {
+          a.yaw = barSeatYaw(a.barSeat);
+          a.handle.setYaw(a.yaw);
+        }
       } else {
         const target = eff === undefined ? null : travelYaw(eff, segNow);
         if (target !== null) a.yawGoal = target;
@@ -1200,6 +1211,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
           const aim = pointAt ?? emotePlaying.find((p) => p.seat === a.seat && p.until > now)?.target;
           const tp = aim === undefined ? undefined : actors.get(aim)?.pos;
           if (tp !== undefined && (tp.x !== at.x || tp.z !== at.z)) a.yawGoal = Math.atan2(tp.x - at.x, tp.z - at.z);
+          else if (a.barSeat !== undefined) a.yawGoal = barSeatYaw(a.barSeat);
         }
         if (a.yawGoal !== null) {
           const next = reduced ? a.yawGoal : stepYaw(a.yaw, a.yawGoal, dt);
@@ -1248,8 +1260,9 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         a.handle.setOpacity?.(bodyFade);
       }
       alpha = Math.min(alpha, tagFade);
-      // 높이: 등장 낙하 + (장면이 있을 때) 무대 위 0.29 + 유령 떠다님 + 처형 떠오름
-      const y = lift + (look === null ? 0 : stageLiftY(at, mapId)) + (a.ghost ? ghostFloatY(now / 1000, reduced) : 0) + rise;
+      const standY = look === null ? 0 : compactBar ? (at.x * at.x + at.z * at.z <= BAR_STAGE_RADIUS ** 2 ? BAR_STAGE_HEIGHT : 0) : stageLiftY(at, mapId);
+      const baseY = a.barSeat === undefined ? standY : BAR_SEAT_HEIGHT;
+      const y = lift + baseY + (a.ghost ? ghostFloatY(now / 1000, reduced) : 0) + rise;
       a.handle.root.scale.setScalar(a.base * scale);
       a.handle.root.position.set(at.x, y, at.z);
       const suspectOutline = a.exit === null && !wantGhost && suspectTargets?.has(a.seat) ? (reduced ? "fixed" : "pulse") : null;
@@ -1266,13 +1279,18 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     const rect = deps.stageRect();
     const stageOff = stageOffsetY(s.h, rect.top, rect.bottom);
     const camLook = look?.camera;
+    const compactFixed = compactBar && camLook?.mode === "fixed" && camLook.barSeats === true;
+    const rig = compactFixed ? BAR_TABLE_CAMERA : compactBar && camLook?.mode !== "fixed" ? BAR_WALK_CAMERA : DEFAULT_CAMERA;
     let offsetGoal = stageOff;
     let blending = false;
     if (camLook !== undefined && camLook.mode === "fixed") {
       // zoomMs 가 있는 구도(판결 순간 느린 확대, 09.1.1-13): 위치·세로 오프셋·줌이 모두 그 시간에 ease-in-out 으로 같이 간다. 모션 줄이기는 줌 없이 1 을 지킨다
       const slow = camLook.zoomMs !== undefined;
-      const goalZoom = camLook.frameGroup ? gatherGroupZoom(rect, s, camLook.zoom) : slow && reduced ? 1 : camLook.zoom;
-      const g = gatherView(rect, s, { ghost: look?.seats[deps.mySeat()]?.ghost === true, zoom: goalZoom, frameGroup: camLook.frameGroup === true });
+      const wantedZoom = slow && reduced ? 1 : camLook.zoom;
+      const goalZoom = compactFixed ? barTableZoom(rect, s, wantedZoom) : camLook.frameGroup ? gatherGroupZoom(rect, s, wantedZoom) : wantedZoom;
+      const g = compactFixed
+        ? { target: camLook.target, offsetY: stageOff }
+        : gatherView(rect, s, { ghost: look?.seats[deps.mySeat()]?.ghost === true, zoom: goalZoom, frameGroup: camLook.frameGroup === true });
       offsetGoal = g.offsetY;
       if (fixed === null || fixed.zoom !== goalZoom) {
         const here = cam ?? DEFAULT_TARGET;
@@ -1298,7 +1316,10 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
         zoomBackStart = now;
       }
       const mine = actors.get(deps.mySeat());
-      const goal = clampTarget(mine ? mine.pos : DEFAULT_TARGET, PAN_BOX);
+      const position = mine?.pos ?? DEFAULT_TARGET;
+      const goal = compactBar
+        ? clampTarget({ x: position.x * BAR_FOLLOW_SHARE, z: position.z * BAR_FOLLOW_SHARE }, barPan)
+        : clampTarget(position, PAN_BOX);
       cam = cam === null || resync ? goal : followStep(cam, goal, dt * 1000, reduced);
       if (zoomCur !== 1) zoomCur = mix(zoomBackFrom, 1, reduced || resync ? 1 : easeOut(Math.min(1, (now - zoomBackStart) / CAM_SLOW_MS)));
     }
@@ -1319,7 +1340,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       }
     }
     offsetCur ??= offsetGoal;
-    r.setView(cam, offsetCur);
+    r.setView(cam, offsetCur, rig);
     if (zoomCur !== zoomSent) {
       zoomSent = zoomCur;
       r.setZoom?.(zoomCur);
@@ -1327,7 +1348,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     }
     if (deps.onCamera !== undefined) {
       const mode = fixed !== null ? "fixed" : "follow";
-      const scale = Math.round(zoomCur * PX_PER_UNIT * 100) / 100;
+      const scale = Math.round(zoomCur * cameraScale(s, rig) * 100) / 100;
       const key = `${mode}|${scale}`;
       if (key !== cameraSent) {
         cameraSent = key;
@@ -1400,7 +1421,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
       if (timed) renderMs = performance.now() - a;
     }
     const b = timed ? performance.now() : 0;
-    writeTags(r);
+    writeTags(r, s.w, rect, compactFixed);
     if (timed) tagsMs = performance.now() - b;
     if (deps.onProject !== undefined) deps.onProject(projectGround(r), now);
     for (const a of gone) {
@@ -1432,7 +1453,7 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
    * 이름표: 머리 꼭대기 투영 좌표를 장치 픽셀에 반올림해 놓는다(밀지 않는다). 내 이름표가 맨 위, 나머지는 발끝 화면 y 가
    * 큰 쪽이 위이고, 다른 이름표와 겹친 것 가운데 맨 앞 하나에만 래퍼 data-front="true" 를 붙인다(면이 overlay-ink-strong).
    */
-  function writeTags(r: WorldRenderer): void {
+  function writeTags(r: WorldRenderer, width: number, stage: { top: number; bottom: number }, compactFixed: boolean): void {
     const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
     const snap = (v: number): number => Math.round(v * dpr) / dpr;
     const mine = deps.mySeat();
@@ -1448,17 +1469,28 @@ export function createWorldRuntime(deps: WorldRuntimeDeps): WorldRuntime {
     for (const a of live) {
       const tag = a.tag;
       if (tag === null) continue;
-      const head = r.project({ x: a.pos.x, y: a.headY, z: a.pos.z });
-      const x = snap(head.sx);
-      const bottom = snap(head.sy - NAMETAG_GAP);
+      const feet = r.project({ x: a.pos.x, y: 0, z: a.pos.z });
+      const tagFoot = a.barSeat === undefined ? undefined : barNameTagFoot(a.pos, a.barSeat);
+      const anchor = r.project(tagFoot ?? { x: a.pos.x, y: a.headY, z: a.pos.z });
+      const w = a.tagW !== null && a.tagW > 0 ? a.tagW : NAMETAG_MAX_W;
+      const framed = compactFixed && !a.ghost && a.exit === null;
+      // 긴 이름이 화면에서 잘리거나 맞은편 이름표를 덮지 않게 각자의 반폭에 둔다.
+      const half = width / 2;
+      const gutter = Math.min(w / 2 + 12, half);
+      const ownHalf = a.barSeat !== undefined && gutter * 2 <= half;
+      const lane = ownHalf && anchor.sx >= half ? half : 0;
+      const laneWidth = ownHalf ? half : width;
+      const x = snap(framed ? Math.min(lane + laneWidth - gutter, Math.max(lane + gutter, anchor.sx)) : anchor.sx);
+      const bottom = snap(framed
+        ? Math.min(stage.bottom - 11, Math.max(stage.top + 45, anchor.sy - NAMETAG_GAP))
+        : anchor.sy - NAMETAG_GAP);
       const style = `translate(${x}px, ${bottom}px) translate(-50%, -100%)`;
       if (style !== a.tagStyle) {
         a.tagStyle = style;
         tag.style.transform = style;
       }
       if (tag.style.opacity !== a.tagAlpha) tag.style.opacity = a.tagAlpha;
-      const w = a.tagW !== null && a.tagW > 0 ? a.tagW : NAMETAG_MAX_W;
-      boxes.push({ seat: a.seat, me: a.seat === mine, ghost: a.ghost, lead: tag.hasAttribute("data-lead"), turn: tag.hasAttribute("data-turn"), foot: r.project({ x: a.pos.x, y: 0, z: a.pos.z }).sy, x, bottom, w });
+      boxes.push({ seat: a.seat, me: a.seat === mine, ghost: a.ghost, lead: tag.hasAttribute("data-lead"), turn: tag.hasAttribute("data-turn"), foot: feet.sy, x, bottom, w });
       // 발밑 고리: 이름표(WorldStage)가 data-ring-kind 로 알린 종류를 캐릭터에 옮긴다(바뀔 때만)
       const kind = tag.getAttribute("data-ring-kind");
       if (kind !== a.ringKind) {

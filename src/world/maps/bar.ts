@@ -32,14 +32,19 @@ import {
   PlaneGeometry,
   PointLight,
   Quaternion,
+  RepeatWrapping,
   RGBAFormat,
   Scene,
   SphereGeometry,
+  SRGBColorSpace,
+  Texture,
+  TextureLoader,
   TorusGeometry,
   TubeGeometry,
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { BAR_COUNTER, BAR_PIANO, BAR_ROOM_HALF, BAR_SEATS_FX, BAR_SEAT_HEIGHT, BAR_SEAT_RADIUS, BAR_STAGE_HEIGHT, BAR_STAGE_RADIUS, UNIT } from "../../../shared/game/map";
 import { cameraBasis, PLATE_FAR } from "../camera";
 import { CHAR_SCALE } from "../character";
 import { PALETTE, TOKEN_COLORS } from "../palette";
@@ -286,6 +291,8 @@ export interface BarScene {
   plate: Mesh;
   /** 마지막으로 적용한 조명 단계의 톤매핑 노출 */
   readonly exposure: number;
+  /** 월넛 바닥 재질을 읽어 붙였거나 기본 월넛 색으로 대체한 뒤 완료된다. */
+  readonly woodReady?: Promise<void>;
   setLighting(phase: LightingPhase, seconds?: number): void;
   /** 프레임 사이 경과 초와 단조 증가 시각. */
   update(dt: number, t: number): void;
@@ -321,6 +328,7 @@ const TABLES: readonly (readonly [number, number])[] = [
 ];
 const SHELF_YS = [0.9, 1.6, 2.3] as const;
 const BAR_WINDOW = { x: 2.2, y: 1.9, z: -6.97, width: 2.4, height: 1.5, divisions: 3, mullion: 0.08 };
+const COMPACT_WINDOW = { x: 0.42, y: 1.96, z: -BAR_ROOM_HALF + 0.13, width: 1.52, height: 1.24, divisions: 3, mullion: 0.045 };
 const WINDOW_LIGHT = { x: 6.6, y: 7, z: -22.45 };
 const WINDOW_BEAM_DAY = { beam: 0.36 };
 const WINDOW_BEAM_NIGHT = { beam: 0.18 };
@@ -335,8 +343,8 @@ const WINDOW_LIGHT_ACCENTS = {
 } satisfies Partial<Record<LightingPhase, { beam: number; cone?: number }>>;
 
 /** 창살 사이 유리의 실루엣을 방향광을 따라 바닥에 투영한다. 한 번 만든 메시의 불투명도만 단계별로 바꾼다. */
-function windowBeamGeometry(): BufferGeometry {
-  const { x, y, z, width, height, divisions, mullion } = BAR_WINDOW;
+function windowBeamGeometry(window = BAR_WINDOW): BufferGeometry {
+  const { x, y, z, width, height, divisions, mullion } = window;
   const target = LIGHT_TUNE.moonTarget;
   const rayX = (target.x - WINDOW_LIGHT.x) / WINDOW_LIGHT.y;
   const rayZ = (target.z - WINDOW_LIGHT.z) / WINDOW_LIGHT.y;
@@ -369,12 +377,164 @@ function windowBeamGeometry(): BufferGeometry {
   return geometry;
 }
 
-export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTableChairsAt?: readonly [number, number] } = {}): BarScene {
+/** 판재 사이를 뚫지 않고 정점 음영으로 이음새를 표현한다. 좁은 폰에서 얇은 틈이 픽셀 단위로 끊기지 않는다. */
+function addCompactPlank(floor: Bundle, width: number, depth: number, x: number, z: number, tint: string): void {
+  const geometry = new PlaneGeometry(width, depth, 3, 3);
+  const points = geometry.getAttribute("position");
+  const w = width / 2;
+  const d = depth / 2;
+  const edgeX = Math.min(w / 2, 0.037);
+  const edgeZ = Math.min(d / 2, 0.029);
+  const xs = [-w, -w + edgeX, w - edgeX, w];
+  const ys = [d, d - edgeZ, -d + edgeZ, -d];
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 4; col++) points.setXY(row * 4 + col, xs[col]!, ys[row]!);
+  }
+  floor.add(geometry, tint, tf(x, 0, z, -Math.PI / 2));
+  const colors = geometry.getAttribute("color");
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 4; col++) {
+      if (row !== 0 && row !== 3 && col !== 0 && col !== 3) continue;
+      const i = row * 4 + col;
+      colors.setXYZ(i, colors.getX(i) * 0.70, colors.getY(i) * 0.70, colors.getZ(i) * 0.70);
+    }
+  }
+}
+
+function compactProps(
+  shell: Bundle,
+  floor: Bundle,
+  furniture: Bundle,
+  far: Bundle,
+  brass: Bundle,
+  lamps: Bundle,
+  farLamps: Bundle,
+  rim: Bundle,
+  pendants: Bundle,
+  stand: Bundle,
+  bulb: Bundle,
+  omitSeats: boolean,
+): void {
+  const P = PALETTE;
+  const half = BAR_ROOM_HALF;
+  const side = half * 2;
+  shell.box(side + 0.08, 0.15, side + 0.08, "#3c2f2d", tf(0, -0.091, 0));
+  const planks = ["#765847", "#6b5041", "#725544"] as const;
+  const depth = side / 31;
+  for (let row = 0; row < 31; row++) {
+    const z = -half + (row + 0.5) * depth;
+    let start = -half;
+    let end = start + (row % 3 + 2) * 0.47;
+    let i = 0;
+    while (start < half - 0.014) {
+      const right = Math.min(end, half);
+      addCompactPlank(floor, right - start, depth, (start + right) / 2, z, planks[(row + i * 2) % planks.length]!);
+      start = right;
+      end += 1.95;
+      i++;
+    }
+  }
+  for (const frame of [tf(0, 0, -half), tf(-half, 0, 0, 0, Math.PI / 2, 0)]) {
+    shell.box(side, 3.45, 0.14, P.wall, under(frame, tf(0, 1.725, 0)));
+    shell.box(side, 0.87, 0.045, P.wainscot, under(frame, tf(0, 0.435, 0.085)));
+    for (const y of [0.09, 0.86, 3.19]) shell.box(side, 0.055, 0.07, P.wallTrim, under(frame, tf(0, y, 0.107)));
+    for (let i = -4; i <= 4; i++) shell.box(0.045, 0.69, 0.04, P.wallTrim, under(frame, tf(i * 1.02, 0.48, 0.115)));
+  }
+  brass.box(side, 0.017, 0.036, P.brass, tf(0, 0.004, half - 0.04));
+  brass.box(0.036, 0.017, side, P.brass, tf(half - 0.04, 0.004, 0));
+
+  const { x, y, z, width, height, divisions, mullion } = COMPACT_WINDOW;
+  const win = tf(x, y, z);
+  shell.box(width + 0.16, height + 0.14, 0.06, P.sill, win);
+  lamps.add(new PlaneGeometry(width, height), "#638ac8", under(win, tf(0, 0, 0.034)), 0.72);
+  for (let i = 0; i <= divisions; i++) {
+    shell.box(width, mullion, 0.044, P.blind, under(win, tf(0, height * (i / divisions - 0.5), 0.063)));
+    shell.box(mullion, height, 0.044, P.blind, under(win, tf(width * (i / divisions - 0.5), 0, 0.063)));
+  }
+  shell.box(width + 0.18, 0.066, 0.18, P.sill, under(win, tf(0, -height / 2 - 0.06, 0.060)));
+  for (const panel of [-3.2, 2.4]) {
+    const wallFan = tf(panel, 1.12, -half + 0.105);
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 4; i++) {
+        const span = 0.12 + i * 0.14;
+        const rise = 1.25 - i * 0.17;
+        shell.box(0.022, Math.hypot(span, rise), 0.014, P.inlay, under(wallFan, tf(side * span / 2, rise / 2, 0, 0, 0, -Math.atan2(side * span, rise))));
+      }
+    }
+    shell.box(1.12, 0.022, 0.021, P.inlay, wallFan);
+  }
+
+  const piano = BAR_PIANO;
+  const pi = tf(piano.x, 0, piano.z);
+  furniture.box(piano.width, 0.69, piano.depth, P.pianoBody, under(pi, tf(0, 0.94, 0)));
+  far.box(piano.width + 0.06, 0.052, piano.depth + 0.05, P.counterTop, under(pi, tf(0, 1.30, 0)));
+  furniture.box(piano.width, 0.11, 0.20, P.pianoBody, under(pi, tf(0, 0.63, 0.37)));
+  brass.box(piano.width - 0.13, 0.015, 0.020, P.brass, under(pi, tf(0, 1.145, 0.337)));
+  const keyWidth = (piano.width - 0.12) / 24;
+  for (let i = 0; i < 24; i++) {
+    const keyX = (i - 11.5) * keyWidth;
+    furniture.box(keyWidth - 0.003, 0.028, 0.15, P.pianoKeys, under(pi, tf(keyX, 0.696, 0.389)));
+    if (i % 7 !== 2 && i % 7 !== 6 && i < 23) furniture.box(keyWidth * 0.53, 0.024, 0.083, P.pianoBody, under(pi, tf(keyX + keyWidth / 2, 0.719, 0.366)));
+  }
+  for (const x of [-0.69, 0.69]) furniture.box(0.086, 0.62, 0.089, P.pianoBody, under(pi, tf(x, 0.31, 0.42)));
+  const bar = BAR_COUNTER;
+  furniture.box(bar.width, 0.78, bar.depth, P.counter, tf(bar.x, 0.39, bar.z));
+  furniture.box(bar.width + 0.1, 0.075, bar.depth + 0.12, P.counterTop, tf(bar.x, 0.81, bar.z));
+  brass.box(0.027, 0.027, bar.depth - 0.07, P.brass, tf(bar.x - bar.width / 2, 0.14, bar.z));
+  for (const height of [1.27, 1.85]) {
+    far.box(0.27, 0.065, bar.depth, P.shelf, tf(half - 0.20, height, bar.z));
+    for (let i = 0; i < 7; i++) {
+      const z = bar.z + (i - 3) * 0.265;
+      farLamps.cyl(0.064, 0.074, 0.17, 8, P.bottles[i % P.bottles.length]!, tf(half - 0.21, height + 0.12, z), 0.58);
+      farLamps.cyl(0.024, 0.053, 0.07, 8, P.bottles[i % P.bottles.length]!, tf(half - 0.21, height + 0.239, z), 0.72);
+    }
+  }
+  for (const [x, z] of [[-2.75, -4.22], [1.95, -4.22]] as const) {
+    pendants.cyl(0.016, 0.016, 0.63, 8, P.darkMetal, tf(x, 3.02, z));
+    pendants.add(new SphereGeometry(0.24, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.62, 1), P.shade, tf(x, 2.69, z));
+    pendants.add(new TorusGeometry(0.23, 0.012, 6, 24), P.brass, tf(x, 2.692, z, -Math.PI / 2));
+    farLamps.sph(0.075, P.lamp, tf(x, 2.678, z), 1.25);
+  }
+
+  const radius = BAR_STAGE_RADIUS;
+  furniture.cyl(radius, radius, 0.087, 48, P.stageBody, tf(0, 0.0435, 0));
+  furniture.cyl(radius - 0.018, radius, BAR_STAGE_HEIGHT - 0.087, 48, "#8d5d42", tf(0, (BAR_STAGE_HEIGHT + 0.087) / 2, 0));
+  brass.add(new TorusGeometry(radius - 0.016, 0.013, 6, 48), P.brass, tf(0, BAR_STAGE_HEIGHT - 0.011, 0, -Math.PI / 2));
+  for (let i = 0; i < 18; i++) {
+    const a = i * Math.PI * 2 / 18;
+    rim.sph(0.017, P.rimBulb, tf(Math.sin(a) * radius, 0.064, Math.cos(a) * radius), 1.25);
+  }
+  stand.cyl(0.22, 0.24, 0.052, 24, P.brass, tf(0, 0.144, 0));
+  stand.cyl(0.032, 0.049, 0.46, 16, P.brass, tf(0, 0.398, 0));
+  stand.cyl(0.13, 0.276, 0.14, 32, "#aa774d", tf(0, 0.70, 0));
+  stand.add(new TorusGeometry(0.271, 0.013, 6, 32), P.brass, tf(0, 0.635, 0, -Math.PI / 2));
+  bulb.cyl(0.246, 0.246, 0.025, 32, "#ffe0af", tf(0, 0.636, 0), 1.5);
+  bulb.sph(0.037, P.lamp, tf(0, 0.786, 0), 1.25);
+  if (!omitSeats) {
+    for (const [sx, sz] of BAR_SEATS_FX) {
+      const chair = tf(sx / UNIT, 0, sz / UNIT, 0, Math.atan2(-sx, -sz));
+      furniture.cyl(BAR_SEAT_RADIUS, 0.326, 0.075, 32, P.chairSeat, under(chair, tf(0, BAR_SEAT_HEIGHT - 0.0375, 0)));
+      furniture.cyl(0.23, 0.27, 0.103, 24, P.chairBack, under(chair, tf(0, 0.070, 0)));
+      brass.add(new TorusGeometry(BAR_SEAT_RADIUS - 0.012, 0.012, 6, 32), P.brass, under(chair, tf(0, BAR_SEAT_HEIGHT - 0.037, 0, -Math.PI / 2)));
+      furniture.add(new SphereGeometry(0.29, 18, 12).scale(1.11, 0.58, 0.20), P.chairSeat, under(chair, tf(0, 0.37, -0.29, -0.11)));
+      for (const x of [-0.17, 0.17]) brass.cyl(0.017, 0.02, 0.265, 8, P.brass, under(chair, tf(x, 0.22, -0.26, -0.13)));
+    }
+  }
+}
+
+interface BarOptions {
+  compact?: boolean;
+  omitCenterSeats?: boolean;
+  omitTableChairsAt?: readonly [number, number];
+}
+
+export function buildBarScene(budget: Budget, { compact = false, omitCenterSeats = false, omitTableChairsAt }: BarOptions = {}): BarScene {
   const root = new Scene();
   const P = PALETTE;
 
   // ----- 재질 -----
   const matProp = new MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0 });
+  const matFloor = compact ? new MeshStandardMaterial({ vertexColors: true, roughness: 0.65 }) : null;
   const matBrass = new MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.5 });
   const matPendant = new MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, side: DoubleSide });
   const matEmRoom = new MeshBasicMaterial({ vertexColors: true });
@@ -384,7 +544,7 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
     new MeshBasicMaterial({ vertexColors: true, map: glowMap, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false });
   const matGlowRoom = glowMat();
   const matGlowVote = glowMat();
-  const matPlate = new MeshStandardMaterial({ color: P.plate, roughness: 0.85, metalness: 0 });
+  const matPlate = new MeshStandardMaterial({ color: compact ? "#171d2a" : P.plate, roughness: 0.85, metalness: 0 });
   // 변론 원뿔 빛: 광원이 아니라 투명 메시 하나(새 광원을 더하지 않는다 — 결정 0057 예산)
   const matCone = new MeshBasicMaterial({ color: P.stageGlow, transparent: true, opacity: 0.12, depthWrite: false, blending: AdditiveBlending, side: DoubleSide, fog: false });
 
@@ -399,6 +559,9 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
   const glowRoom = new Bundle(true);
   const glowVote = new Bundle(true);
   const pendants = new Bundle();
+  const floor = new Bundle();
+  const stand = new Bundle();
+  const bulb = new Bundle();
 
   // 빛 무리: 카메라 yaw 가 고정이라 카메라를 향해 미리 돌린 쿼드를 합친다(Sprite 대신). 색 = hex, 알파 = k
   const basis = cameraBasis();
@@ -408,6 +571,12 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
     b.add(new PlaneGeometry(size, size), hex, m, 1, k);
   };
 
+  if (compact) {
+    compactProps(shell, floor, furniture, furnitureFar, brass, emRoom, emRoomFar, emVote, pendants, stand, bulb, omitCenterSeats);
+    glow(glowRoom, P.lamp, 1.3, -2.75, 2.68, -4.22, 0.42);
+    glow(glowRoom, P.lamp, 1.3, 1.95, 2.68, -4.22, 0.42);
+    glow(glowVote, P.stageGlow, 2.1, 0, 0.24, 0, 0.27);
+  } else {
   // 짙은 월넛을 폭 좁은 널로 엮고 줄마다 이음새를 엇갈리게 배치한다.
   const wood = [P.floorA, P.floorB, P.floorC] as const;
   const boardWidth = 14 / 36;
@@ -591,6 +760,7 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
     emRoom.add(new SphereGeometry(0.079, 10, 8).scale(1, 1.42, 0.78), P.lamp, under(backplate, tf(0, 0.032, 0.066)), 1.2);
     glow(glowRoom, P.lamp, 1.0, x, 2.2, z, 0.5);
   });
+  }
 
   // ----- 메시 만들기 -----
   const meshes: Record<string, Mesh> = {
@@ -605,6 +775,33 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
     glowVote: glowVote.build(matGlowVote, "glowVote"),
     pendants: pendants.build(matPendant, "pendants"),
   };
+  if (matFloor !== null) {
+    const wood = floor.build(matFloor, "woodFloor");
+    const positions = wood.geometry.getAttribute("position");
+    const uv = wood.geometry.getAttribute("uv");
+    // 타일 이음새와 무관하게 섬유 방향을 한 축으로 두고, 월드 크기로 반복한다.
+    for (let i = 0; i < positions.count; i++) uv.setXY(i, positions.getX(i) / 3.6, positions.getZ(i) / 1.8);
+    wood.receiveShadow = true;
+    meshes.woodFloor = wood;
+    meshes.centerStand = stand.build(matBrass, "centerStand");
+    meshes.centerStand.castShadow = meshes.centerStand.receiveShadow = true;
+    meshes.centerBulb = bulb.build(matEmRoom, "centerBulb");
+  }
+  let disposed = false;
+  let woodTexture: Texture | null = null;
+  const woodReady = matFloor !== null && typeof Image !== "undefined"
+    ? new TextureLoader().loadAsync("/maps/noir-oak.webp").then((texture) => {
+        if (disposed) {
+          texture.dispose();
+          return;
+        }
+        texture.colorSpace = SRGBColorSpace;
+        texture.wrapS = texture.wrapT = RepeatWrapping;
+        texture.anisotropy = 8;
+        matFloor.map = woodTexture = texture;
+        matFloor.needsUpdate = true;
+      }, () => { /* 기본 월넛 색에서 계속 렌더한다. */ })
+    : Promise.resolve();
   meshes.shell!.receiveShadow = true;
   for (const n of ["furniture", "furnitureFar"] as const) {
     meshes[n]!.castShadow = true;
@@ -616,14 +813,14 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
   // 변론(trial) 무대 위 한 줄기 빛: 꼭짓점이 위인 속 빈 원뿔. 무대 윗면(0.29)에서 높이 3.1
   const trialCone = new Mesh(new ConeGeometry(1.2, 3.1, 32, 1, true), matCone);
   trialCone.name = "trialCone";
-  trialCone.position.set(0, 0.29 + 3.1 / 2, 0);
+  trialCone.position.set(0, (compact ? BAR_STAGE_HEIGHT : 0.29) + 3.1 / 2, 0);
   trialCone.castShadow = false;
   trialCone.receiveShadow = false;
   trialCone.visible = false;
   trialCone.renderOrder = 2;
   meshes.trialCone = trialCone;
   const matWindowBeam = new MeshBasicMaterial({ color: P.windowBeam, vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false });
-  const windowBeam = new Mesh(windowBeamGeometry(), matWindowBeam);
+  const windowBeam = new Mesh(windowBeamGeometry(compact ? COMPACT_WINDOW : BAR_WINDOW), matWindowBeam);
   windowBeam.name = "windowBeam";
   windowBeam.renderOrder = -1; // 발밑 그림자와 링보다 먼저 합성한다
   meshes.windowBeam = windowBeam;
@@ -632,7 +829,7 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
   meshes.glowVote!.renderOrder = 2;
   for (const m of Object.values(meshes)) root.add(m);
   // 색 보정은 맵을 만들 때 한 번 한다. 시간대 변경에는 정점 색 버퍼를 다시 올리지 않는다.
-  albedoGrader([meshes.shell!, meshes.furniture!, meshes.furnitureFar!, meshes.pendants!], [matPlate])(LIGHT_TUNE.talk.albedo);
+  albedoGrader([meshes.shell!, meshes.furniture!, meshes.furnitureFar!, meshes.pendants!], compact ? [] : [matPlate])(LIGHT_TUNE.talk.albedo);
 
   // 분필 윤곽: 처음부터 만들어 두고 숨긴다(보이기만 바꾼다). 바닥에 눕는 선이라 이동을 막지 않는다
   const chalk = new Mesh(
@@ -662,7 +859,7 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
   const plate = new Mesh(new PlaneGeometry(PLATE_FAR * 2, PLATE_FAR * 2), matPlate);
   plate.name = "plate";
   plate.rotation.x = -Math.PI / 2;
-  plate.position.y = -0.01;
+  plate.position.y = compact ? -0.19 : -0.01;
   plate.receiveShadow = false;
   meshes.plate = plate;
   root.add(plate);
@@ -695,7 +892,8 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
   moon.castShadow = budget.shadowMap !== 0;
   const shadowSize = budget.shadowMap === 0 ? 1024 : budget.shadowMap;
   moon.shadow.mapSize.set(shadowSize, shadowSize);
-  moon.shadow.bias = -0.0015;
+  moon.shadow.bias = compact ? -0.00025 : -0.0015;
+  if (compact) moon.shadow.normalBias = 0.025;
   const sc = moon.shadow.camera;
   sc.left = -12;
   sc.right = 12;
@@ -711,6 +909,8 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
   const stage = point(T.point.stage);
   stage.color.set(P.stageGlow);
   const pendantA = point(T.point.pendantA);
+  const stageY = compact ? 1.48 : T.point.stage.y;
+  if (compact) pendantA.position.set(-2.75, 2.65, -4.22);
   // 내 캐릭터 빛: 세기 0 으로 처음부터 만든다 — 조명 단계가 바뀌어도 점광원 개수가 변하지 않아 셰이더를 다시 컴파일하지 않는다(연구 Pitfall 7).
   // 예산 core 에서도 visible 을 끄지 않는다(끄면 개수가 변한다)
   const self = point(T.point.self);
@@ -722,7 +922,6 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
   root.fog = fog;
 
   let exposure = T.talk.exposure;
-  let disposed = false;
   let current = budget;
   const lighting = phaseLighting(T, WINDOW_LIGHT_ACCENTS);
   let tensionLevel: 0 | 1 | 2 = 0;
@@ -730,13 +929,14 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
   // 핀 조명(결정 0066-6): applyLook 이 정한 단계·긴장 값 위에 얹는다. 기본 값은 applyLook 이 매번 채운다
   let pinState: { x: number; z: number; strength: number } | null = null;
   let pinDim = 1;
+  let stagePhase = false;
   const base = { stage: 0, x: T.point.stage.x, z: T.point.stage.z, room: 0, vote: 0 };
 
   /** 핀 상태를 점광원 위치·세기와 두 발광 색에 반영한다 — 값 몇 개 대입뿐이다(프레임마다 불려도 비용이 없다) */
   const applyPin = (): void => {
     if (pinState === null) {
       stage.intensity = base.stage;
-      stage.position.set(base.x, T.point.stage.y, base.z);
+      stage.position.set(base.x, stagePhase ? T.point.stage.y : stageY, base.z);
       matEmRoom.color.setScalar(base.room);
       matEmVote.color.setScalar(base.vote);
       return;
@@ -764,7 +964,7 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
     self.intensity = t.self;
     // 긴장 1·2: 무대 점광원이 초점 위로 옮겨 선두 세기(초점이 없으면 무대 중앙). 0: 단계 값과 무대 중앙
     const lead = tensionLevel >= 1;
-    base.stage = lead ? T.tension.lead : t.stage;
+    base.stage = lead ? T.tension.lead : t.stage * (compact && !stagePhase ? 1.72 : 1);
     if (lead && tensionFocus) {
       base.x = tensionFocus.x;
       base.z = tensionFocus.z;
@@ -791,6 +991,11 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
     exposure = t.exposure;
   };
   const setLighting = (next: LightingPhase, seconds = 0): void => {
+    stagePhase = next === "trial";
+    if (meshes.centerStand && meshes.centerBulb) {
+      meshes.centerStand.visible = !stagePhase;
+      meshes.centerBulb.visible = !stagePhase;
+    }
     lighting.set(next, seconds);
     applyLook();
   };
@@ -852,6 +1057,7 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
     meshes,
     markers,
     plate,
+    woodReady,
     get exposure(): number {
       return exposure;
     },
@@ -877,6 +1083,7 @@ export function buildBarScene(budget: Budget, { omitTableChairsAt }: { omitTable
       });
       for (const x of mats) x.dispose();
       glowMap.dispose();
+      woodTexture?.dispose();
       moon.shadow.map?.dispose();
     },
   };

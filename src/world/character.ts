@@ -22,6 +22,8 @@ import {
   Shape,
   SphereGeometry,
   TorusGeometry,
+  TubeGeometry,
+  CatmullRomCurve3,
   Uint32BufferAttribute,
   Vector2,
   Vector3,
@@ -29,6 +31,7 @@ import {
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { ANIMALS, type AnimalId } from "../../shared/game/animals";
 import { animalHatFit, animalLayout, animalSkin, buildAnimalBody, buildAnimalHead } from "./animalGeometry";
+import { animalMaterial, FINISH, type Finish } from "./animalFinish";
 import { MOVE_SPEED } from "../../shared/game/world";
 import { buildGhost3d, type Ghost3d } from "./ghost3d";
 import { createNoteRig, type NoteRig, noteKit } from "./postit";
@@ -57,9 +60,11 @@ interface Part {
   geo: BufferGeometry;
   /** 돋보기 유리처럼 투명한 조각 — 병합에서 빼고 따로 둔다 */
   glass: boolean;
+  finish: Finish;
 }
 
-const SLOTS = new Set(["coat", "shirt", "tie", "pants", "shoe", "skin", "hand", "hair"]);
+const SLOTS = new Set(["coat", "coatLight", "coatShade", "shirt", "tie", "pants", "shoe", "skin", "hand", "hair"]);
+const FABRIC_SLOTS = new Set(["coat", "coatLight", "coatShade", "shirt", "tie", "pants"]);
 const DUMMY = new MeshBasicMaterial();
 const colorCache = new Map<string, Color>();
 function col(hex: string): Color {
@@ -72,10 +77,11 @@ function col(hex: string): Color {
 }
 
 /** 템플릿 부품 하나(원문 mesh(geo, mat)). spec 은 '#rrggbb' 고정색 또는 slot 이름, tag 는 보이기 규칙 이름 */
-function part(parent: Object3D, geo: BufferGeometry, spec: string, tag?: string): Mesh {
+function part(parent: Object3D, geo: BufferGeometry, spec: string, tag?: string, finish?: Finish): Mesh {
   const m = new Mesh(geo, DUMMY);
   m.userData.spec = spec;
   if (tag) m.userData.tag = tag;
+  if (finish !== undefined) m.userData.finish = finish;
   parent.add(m);
   return m;
 }
@@ -195,6 +201,7 @@ function buildAnimalFaces(head: Object3D, animal: AnimalId): void {
   const scenePart = (parent: Object3D, mesh: Mesh, px: number, py: number, pz: number, roll = 0): void => {
     mesh.position.set(px, py, pz);
     mesh.rotation.z = roll;
+    mesh.userData.finish = FINISH.smooth;
     parent.add(mesh);
   };
   const group = (tag: string): Group => {
@@ -471,7 +478,7 @@ function sculptedHair(radius: number, bob: boolean, hat: boolean, crop: boolean)
 }
 
 /** Folded coat lapel, cut as a single piece and joined to the torso batch. */
-function coatLapel(): ExtrudeGeometry {
+function coatLapel(rounded: boolean): ExtrudeGeometry {
   const edge = new Shape();
   edge.moveTo(0.025, -0.18);
   edge.lineTo(0.022, 0.145);
@@ -479,7 +486,7 @@ function coatLapel(): ExtrudeGeometry {
   edge.lineTo(0.09, 0.04);
   edge.lineTo(0.124, 0.015);
   edge.closePath();
-  const lapel = new ExtrudeGeometry(edge, { depth: 0.017, bevelEnabled: false });
+  const lapel = new ExtrudeGeometry(edge, { depth: 0.014, bevelEnabled: rounded, bevelSize: 0.007, bevelThickness: 0.006, bevelSegments: 2 });
   lapel.setIndex(Array.from({ length: lapel.getAttribute("position").count }, (_, i) => i));
   return lapel;
 }
@@ -489,7 +496,7 @@ function clothProfile(points: readonly (readonly [radius: number, y: number])[],
   return new LatheGeometry(points.map(([radius, y]) => new Vector2(radius, y)), segments);
 }
 const ANIMAL_COAT_PROFILE = [
-  [0, 0.175], [0.154, 0.18], [0.275, 0.203], [0.341, 0.226], [0.365, 0.258], [0.381, 0.296],
+  [0, 0.221], [0.154, 0.225], [0.275, 0.239], [0.341, 0.252], [0.365, 0.273], [0.381, 0.296],
   [0.388, 0.355], [0.382, 0.41], [0.362, 0.53], [0.338, 0.67], [0.318, 0.81], [0.307, 0.91],
   [0.295, 0.966], [0.266, 1.014], [0.221, 1.052], [0.155, 1.083], [0.083, 1.096], [0, 1.10],
 ] as const;
@@ -502,6 +509,63 @@ const ANIMAL_TROUSER_PROFILE = [
   [0, -0.251], [0.072, -0.245], [0.090, -0.229], [0.095, -0.187],
   [0.106, -0.064], [0.112, 0.02], [0.098, 0.071], [0.063, 0.103], [0, 0.12],
 ] as const;
+
+function coatFront(x: number, y: number): number {
+  const next = ANIMAL_COAT_PROFILE.findIndex((p) => y < p[1]);
+  const [r0, y0] = ANIMAL_COAT_PROFILE[next - 1]!;
+  const [r1, y1] = ANIMAL_COAT_PROFILE[next]!;
+  const radius = r0 + (r1 - r0) * ((y - y0) / (y1 - y0));
+  return Math.sqrt(Math.max(0, radius ** 2 - x ** 2));
+}
+
+function fitCoatPanel(geometry: BufferGeometry, offset: number, height = 0): void {
+  const position = geometry.getAttribute("position");
+  for (let i = 0; i < position.count; i++) {
+    const x = position.getX(i);
+    const y = position.getY(i) + height;
+    position.setXYZ(i, x, y, coatFront(x, y) + offset + position.getZ(i));
+  }
+  geometry.computeVertexNormals();
+}
+
+function cutCoatPanel(points: readonly (readonly [number, number])[], offset: number): BufferGeometry {
+  const profile = new Shape(points.map(([x, y]) => new Vector2(x, y)));
+  profile.closePath();
+  const geometry = new ExtrudeGeometry(profile, { depth: 0.01, bevelEnabled: false });
+  geometry.setIndex(Array.from({ length: geometry.getAttribute("position").count }, (_, i) => i));
+  fitCoatPanel(geometry, offset);
+  return geometry;
+}
+
+/** 여밈, 포켓, 단추는 코트 곡면에 맞춘다. 딱지를 붙이는 왼쪽 가슴은 비워 둔다. */
+function addCoatDetails(body: Group): void {
+  const opening = new CatmullRomCurve3([[0.007, 0.254], [0.02, 0.43], [0.025, 0.61], [0.005, 0.79]].map(([x, y]) =>
+    new Vector3(x, y, coatFront(x, y) + 0.003)));
+  part(body, new TubeGeometry(opening, 9, 0.007, 5, false), "coatShade");
+
+  for (const side of [-1, 1]) {
+    const x = side * 0.202;
+    const y = 0.386;
+    const patch = part(body, new SphereGeometry(1, 8, 5), "coatShade");
+    patch.scale.set(0.084, 0.058, 0.019);
+    patch.position.set(x, y, coatFront(x, y) + 0.004);
+    patch.rotation.y = side * 0.58;
+    const welt = part(body, new SphereGeometry(1, 8, 4), "coatLight");
+    welt.scale.set(0.084, 0.012, 0.018);
+    welt.position.set(x, y + 0.042, coatFront(x, y + 0.042) + 0.014);
+    welt.rotation.y = patch.rotation.y;
+    welt.rotation.z = side * 0.13;
+  }
+
+  for (const y of [0.615, 0.484, 0.319]) {
+    const x = 0.065;
+    const button = part(body, clothProfile([[0, -0.008], [0.024, -0.008], [0.033, 0.0], [0.027, 0.012], [0, 0.014]], 10), "#b58958", undefined, FINISH.brass);
+    button.rotation.x = Math.PI / 2;
+    button.position.set(x, y, coatFront(x, y) + 0.006);
+    const stitch = part(body, new BoxGeometry(0.014, 0.005, 0.004), "#6e4c39", undefined, FINISH.smooth);
+    stitch.position.copy(button.position).add(new Vector3(0, 0, 0.016));
+  }
+}
 
 /** 원문 create(fig) 의 부품을 Mesh 대신 "지오메트리 + 색 + 보이기 이름" 으로 모은 관절별 목록 */
 function bakeFig(fig: Fig, animal?: AnimalId): Record<JointName, Part[]> {
@@ -544,24 +608,38 @@ function bakeFig(fig: Fig, animal?: AnimalId): Record<JointName, Part[]> {
     collar.scale.set(0.195, 0.13, 0.178);
     collar.position.set(0, 1.043, 0.012);
   }
-  const shirt = part(body, new ConeGeometry(0.12, 0.3, 3), "shirt");
-  shirt.rotation.x = Math.PI;
-  shirt.scale.set(1, 1, 0.25);
-  shirt.position.set(0, 0.88, 0.27);
-  const tie = part(body, new BoxGeometry(0.06, 0.24, 0.025), "tie", "tie");
-  tie.position.set(0, 0.8, 0.305);
-  tie.rotation.x = -0.18;
-  for (const s of [-1, 1]) {
-    const lapel = coatLapel();
-    if (s < 0) lapel.rotateY(Math.PI);
-    const lap = part(body, lapel, "coat");
-    lap.position.set(0, 0.86, s < 0 ? 0.315 : 0.298);
-    lap.rotation.x = -0.11;
+  if (animal === undefined) {
+    const shirt = part(body, new ConeGeometry(0.12, 0.3, 3), "shirt");
+    shirt.rotation.x = Math.PI;
+    shirt.scale.set(1, 1, 0.25);
+    shirt.position.set(0, 0.88, 0.27);
+    const tie = part(body, new BoxGeometry(0.06, 0.24, 0.025), "tie", "tie");
+    tie.position.set(0, 0.8, 0.305);
+    tie.rotation.x = -0.18;
+  } else {
+    part(body, cutCoatPanel([[-0.133, 1.014], [0, 0.762], [0.133, 1.014], [0, 1.037]], 0.031), "shirt");
+    part(body, cutCoatPanel([[-0.037, 0.984], [0.037, 0.984], [0.027, 0.928], [0.049, 0.791], [0, 0.748],
+      [-0.049, 0.791], [-0.027, 0.928]], 0.042), "tie", "tie");
   }
-  for (const [x, y] of [[0.055, 0.66], [0.045, 0.545]] as const) {
-    const button = part(body, new CylinderGeometry(0.025, 0.025, 0.014, 10), "#9a8065");
-    button.rotation.x = Math.PI / 2;
-    button.position.set(x, y, 0.39 - (0.1 * (y - 0.36)) / 0.6);
+  for (const s of [-1, 1]) {
+    const lapel = coatLapel(animal !== undefined);
+    if (s < 0) lapel.rotateY(Math.PI);
+    const lap = part(body, lapel, animal === undefined ? "coat" : "coatLight");
+    if (animal === undefined) {
+      lap.position.set(0, 0.86, s < 0 ? 0.315 : 0.298);
+      lap.rotation.x = -0.11;
+    } else {
+      fitCoatPanel(lapel, s < 0 ? 0.061 : 0.047, 0.86);
+    }
+  }
+  if (animal === undefined) {
+    for (const [x, y] of [[0.055, 0.66], [0.045, 0.545]] as const) {
+      const button = part(body, new CylinderGeometry(0.025, 0.025, 0.014, 10), "#9a8065");
+      button.rotation.x = Math.PI / 2;
+      button.position.set(x, y, 0.39 - (0.1 * (y - 0.36)) / 0.6);
+    }
+  } else {
+    addCoatDetails(body);
   }
   const star = part(body, new SphereGeometry(0.05, 10, 8), "#c9d3ea", "badge:star");
   star.scale.z = 0.4;
@@ -645,6 +723,9 @@ function bakeFig(fig: Fig, animal?: AnimalId): Record<JointName, Part[]> {
       const sleeve = part(g, clothProfile(ANIMAL_SLEEVE_PROFILE, 16), "coat");
       sleeve.position.x = -Math.sign(x) * 0.028;
       sleeve.rotation.z = -Math.sign(x) * 0.07;
+      const cuff = part(g, clothProfile([[0.077, -0.419], [0.088, -0.415], [0.097, -0.402], [0.100, -0.379], [0.091, -0.375]], 12), "coatLight");
+      cuff.position.x = sleeve.position.x;
+      cuff.rotation.z = sleeve.rotation.z;
       const hand = part(g, new SphereGeometry(1, 14, 10), "hand");
       hand.position.y = -0.427;
       hand.scale.set(0.091, 0.09, 0.093);
@@ -706,10 +787,26 @@ function bakeFig(fig: Fig, animal?: AnimalId): Record<JointName, Part[]> {
       }
     }
     const g = m.geometry.clone();
-    g.deleteAttribute("uv");
     g.applyMatrix4(inv[joint].clone().multiply(m.matrixWorld));
     const spec: string = m.userData.spec;
-    out[joint].push({ tag, slot: SLOTS.has(spec) ? spec : "fixed", color: SLOTS.has(spec) ? null : col(spec), geo: g, glass: m.userData.glass === true });
+    const finish = (m.userData.finish as Finish | undefined) ?? (
+      FABRIC_SLOTS.has(spec) || tag.startsWith("hat:") ? FINISH.cloth
+        : spec === "shoe" || tag.startsWith("prop:") || tag.startsWith("badge:") || tag === "acc:shades" ? FINISH.smooth
+          : FINISH.felt
+    );
+    if (animal !== undefined && !m.userData.glass) {
+      const uv = g.getAttribute("uv");
+      const pos = g.getAttribute("position");
+      const coordinates = new Float32Array(pos.count * 2);
+      const repeat = finish === FINISH.cloth ? 3 : 4;
+      for (let i = 0; i < pos.count; i++) {
+        coordinates[i * 2] = uv ? uv.getX(i) * repeat : (pos.getX(i) + pos.getZ(i) * 0.35) * 2;
+        coordinates[i * 2 + 1] = uv ? uv.getY(i) * repeat : pos.getY(i) * 2;
+      }
+      g.setAttribute("animalUv", new Float32BufferAttribute(coordinates, 2));
+    }
+    g.deleteAttribute("uv");
+    out[joint].push({ tag, slot: SLOTS.has(spec) ? spec : "fixed", color: SLOTS.has(spec) ? null : col(spec), geo: g, glass: m.userData.glass === true, finish });
   });
   return out;
 }
@@ -767,6 +864,10 @@ function slotColor(p: Part, o: Outfit, fig: Fig, skin: string): Color {
   switch (p.slot) {
     case "coat":
       return col(o.coat);
+    case "coatLight":
+      return col(o.coat).clone().lerp(col("#bdb8ac"), 0.10);
+    case "coatShade":
+      return col(o.coat).clone().multiplyScalar(0.68);
     case "shirt":
       return col(o.shirt);
     case "pants":
@@ -801,6 +902,11 @@ function mergeJoint(parts: readonly Part[], o: Outfit, fig: Fig, face: string, s
     const pos = p.geo.getAttribute("position");
     g.setAttribute("position", pos);
     g.setAttribute("normal", p.geo.getAttribute("normal"));
+    const uv = p.geo.getAttribute("animalUv");
+    if (uv) {
+      g.setAttribute("animalUv", uv);
+      g.setAttribute("animalFinish", new Float32BufferAttribute(new Float32Array(pos.count).fill(p.finish), 1));
+    }
     g.setIndex(p.geo.index);
     const c = slotColor(p, o, fig, skin);
     const arr = new Float32Array(pos.count * 3);
@@ -1019,7 +1125,7 @@ function paint(m: Merged, dim: boolean): void {
   a.needsUpdate = true;
 }
 
-/** 인물 번호에 맞는 모형을 만든다. 병합 재질은 모든 캐릭터가 공유한다. */
+/** 인물 번호에 맞는 모형을 만든다. 동물은 펠트·천의 재질을 공유한다. */
 export function createCharacter(
   figIndex: number,
   outfit: OutfitId = "coat",
@@ -1031,6 +1137,7 @@ export function createCharacter(
   let visibleFigure = figureForOutfit(outfitId);
   let species = animal;
   const model = () => species !== undefined ? animalParts(species) : { fig: FIGS[visibleFigure], parts: figParts(visibleFigure) };
+  const surfaceMaterial = () => species === undefined ? bodyMaterial : animalMaterial;
   const appearanceKey = () => `${species ?? visibleFigure}|${outfitId}`;
   const initialOutfit = outfitId;
   // 에셋 렌더에서만 카드 팔레트를 덮는다. 공개 의상 표와 지오메트리 캐시는 공유 상태를 바꾸지 않는다.
@@ -1109,7 +1216,7 @@ export function createCharacter(
   }
   const meshes = {} as Record<JointName, Mesh>;
   for (const j of JOINTS) {
-    const mesh = new Mesh(merged(j).geo, bodyMaterial);
+    const mesh = new Mesh(merged(j).geo, surfaceMaterial());
     mesh.castShadow = false;
     mesh.receiveShadow = true;
     groups[j].add(mesh);
@@ -1197,7 +1304,7 @@ export function createCharacter(
   function applyGhost(): void {
     if (!ghostOn) {
       if (ghostMat) {
-        for (const j of JOINTS) meshes[j].material = bodyMaterial;
+        for (const j of JOINTS) meshes[j].material = surfaceMaterial();
         ghostMat.dispose();
         ghostMat = null;
       }
@@ -1211,7 +1318,7 @@ export function createCharacter(
     disc.visible = false;
     if (ghostArt) {
       if (ghostMat) {
-        for (const j of JOINTS) meshes[j].material = bodyMaterial;
+        for (const j of JOINTS) meshes[j].material = surfaceMaterial();
         ghostMat.dispose();
         ghostMat = null;
       }
@@ -1354,6 +1461,7 @@ export function createCharacter(
       if (disposed || species === next) return;
       species = next;
       refresh(JOINTS);
+      if (!ghostMat) for (const j of JOINTS) meshes[j].material = surfaceMaterial();
       releaseOtherAppearances();
     },
     playEmote(id, opts) {

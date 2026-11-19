@@ -109,6 +109,7 @@ export class Room extends DurableObject<Env> {
   private room: RoomState | null = null;
   // 로비 이동 상태(06-08). room 키와 분리된 storage "world" 키에 저장한다 — 위치가 room 키를 매번 다시 쓰지 않게(RESEARCH R6).
   private world: WorldState = emptyWorld();
+  private restoredBarLayout = false;
   // 위치 저장 디바운스 타이머(인메모리). 하이버네이션·퇴거로 사라져도 잃는 것은 마지막 2초의 탭뿐이다(RESEARCH A6).
   private worldFlushTimer: ReturnType<typeof setTimeout> | null = null;
   // 인메모리라 하이버네이션으로 비면 새로 센다(수용). 소켓 객체가 키라 hello 전 소켓도 센다.
@@ -140,7 +141,10 @@ export class Room extends DurableObject<Env> {
       const stored = (got.get("room") as RoomState | undefined) ?? null;
       if (stored) {
         // 1페이즈 종착 단계로 저장된 방은 낮 시작 발표로 옮긴다(RESEARCH Pattern 6). 바뀌지 않으면 같은 객체다.
-        const normalized = normalizeAnimalRoster(normalizeStoredRoom(stored, Date.now()));
+        const restored = normalizeAnimalRoster(normalizeStoredRoom(stored, Date.now()));
+        const normalized = restored.phase !== "lobby" && restored.map === undefined
+          ? { ...restored, map: "bar" as const }
+          : restored;
         // 옛 표시가 있어 대기실로 되돌려진 방인가(22 WR-04). 방 상태만 되돌리면 옛 판의 채팅 저장분과 월드의 lay·home 이 남는다.
         const wasLegacy = isLegacyV3Room(stored);
         // 깨어날 때마다 살아 있는 소켓 기준으로 connected 를 다시 계산한다(배포·크래시로 소켓이 사라진 경우 보정).
@@ -167,7 +171,9 @@ export class Room extends DurableObject<Env> {
               }),
         };
         // 저장된 위치를 되살린다. world 키가 없거나 손상된 사람은 입장 지점에 선다(MAP-05).
-        this.world = restoreWorld(got.get("world"), this.room.players, Date.now(), this.mapDef());
+        const map = this.mapDef();
+        this.world = restoreWorld(got.get("world"), this.room.players, Date.now(), map);
+        this.restoredBarLayout = map.id === "bar";
         if (wasLegacy) {
           // 다시 하기·대기실로 되돌리기(handleRematch·handleTestReset)와 같은 길: 채팅 저장 키를 모두 지우고(아래 복원이 빈 줄을 읽는다),
           // 월드는 모두를 입장 지점에 다시 세운다 — 옛 자리 기억(lay·home)을 버려 새 판 1일차가 옛 키를 재사용하지 않게 한다.
@@ -1565,7 +1571,7 @@ export class Room extends DurableObject<Env> {
   }
 
   // 지금 단계의 배치(지목 둘레 자리·변론 무대·부결 복귀)를 서버가 걷게 한다(DAY-04·05, 결정 0060-7).
-  // 단계 전환 이벤트가 아니라 지금 단계의 배치를 맞춘다 — 알람 따라잡기·퇴거에도 안전(RESEARCH 패턴 4). 키가 world.lay.key 와 같으면 아무것도 하지 않는다(멱등).
+  // 단계 전환 이벤트가 아니라 지금 단계의 배치를 맞춘다(알람 따라잡기·퇴거). 복원한 바의 첫 배치를 점검한 뒤 같은 키는 건너뛴다.
   // 이동마다 지금 위치에서 경로를 만들고(planMoveSegment) 150ms 간격·lastMoveAt 을 건드리지 않는 forceSegment 로 적용한 뒤(Pitfall 5)
   // 그 사람이 움직인 것으로 emitWorld 한다(산 사람의 이동은 방 전원에게, A2). 배치 기억 lay 는 world 저장에 실려 퇴거 뒤에도 자리가 뒤섞이지 않는다.
   // 밤·아침은 layoutKey 가 null 이고 syncHome 이 맞춘다(결정 0061-3·4).
@@ -1574,9 +1580,11 @@ export class Room extends DurableObject<Env> {
     const room = this.room;
     if (!room) return;
     const key = layoutKey(room);
-    if (key === null || key === this.world.lay?.key) return;
+    if (key === null) return;
+    if (key === this.world.lay?.key && !this.restoredBarLayout) return;
+    this.restoredBarLayout = false;
     const layout = layoutFor(room, this.world, now);
-    if (layout === null) return;
+    if (layout === null || (layout.moves.length === 0 && key === this.world.lay?.key)) return;
     const map = this.mapDef();
     for (const m of layout.moves) {
       const me = room.players.find((p) => p.id === m.playerId);
@@ -1683,6 +1691,10 @@ export class Room extends DurableObject<Env> {
       await this.helloResting(ws, room, player.id);
       return;
     }
+
+    // 옛 경로를 복원한 바는 새 소켓을 붙이기 전에 현재 단계의 자리를 맞춘다.
+    // 입장하는 소켓에는 보정 이동 방송 대신 아래 순서대로 state → snap 을 보낸다.
+    if (this.mapDef().id === "bar") this.syncLayout(Date.now());
 
     // 연결된 사람이 아무도 없던 방에 처음 사람이 들어오면 봇 배회 알람이 이제 필요하다(아래).
     const wasIdle = !room.players.some((p) => !isBot(p) && p.connected);

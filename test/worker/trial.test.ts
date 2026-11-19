@@ -347,7 +347,7 @@ function pointedAt(target: number): (room: Record<string, unknown>) => Record<st
 
 describe("모이기·무대 배치(결정 0060-7)", () => {
   it("지목에 들어간 뒤 아무 메시지나 오면 산 사람 5명이 둘레 자리 5곳으로 걷고 모든 소켓이 다섯 걸음을 받으며 배치 키는 '일차:ring' 이다", async () => {
-    const g = await startedGame("discussion", 4);
+    const g = await startedGame("discussion", 4, "plaza");
     await toPhase(g.code, "nomination");
     const marks = g.socks.map(mark);
     await flushAll(g, marks);
@@ -363,7 +363,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
   }, 40_000);
 
   it("같은 상태에서 메시지가 한 번 더 와도 새 world 프레임이 없다(멱등)", async () => {
-    const g = await startedGame("discussion", 4);
+    const g = await startedGame("discussion", 4, "plaza");
     await toPhase(g.code, "nomination");
     await flushAll(g, g.socks.map(mark));
     const marks = g.socks.map(mark);
@@ -372,7 +372,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
   }, 40_000);
 
   it("서버 주도 이동은 lastMoveAt 을 건드리지 않고, world 저장값에 lay 가 있다", async () => {
-    const g = await startedGame("discussion", 4);
+    const g = await startedGame("discussion", 4, "plaza");
     await toPhase(g.code, "nomination");
     await flushAll(g, g.socks.map(mark));
     expect((await layOf(g.code)).lastMoveAtCount).toBe(0);
@@ -383,7 +383,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
   }, 40_000);
 
   it("유령은 줄을 서지 않는다 — 산 사람 3명만 걷고 유령 소켓도 그 걸음을 본다", async () => {
-    const g = await startedGame("discussion", 4);
+    const g = await startedGame("discussion", 4, "plaza");
     const doomed = g.actors.filter((a) => a.role !== "mafia").slice(0, 2);
     const { ghosts, living } = await ghostsOf(g, doomed.map((a) => a.seat));
     await toPhase(g.code, "nomination");
@@ -398,7 +398,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
   }, 40_000);
 
   it("지목이 끝나 변론이 되면 변론자만 무대 [0,0] 으로 걷고 나머지는 새 프레임이 없다", async () => {
-    const g = await startedGame("discussion", 4);
+    const g = await startedGame("discussion", 4, "plaza");
     const defender = g.actors[3]!;
     await toPhase(g.code, "nomination", pointedAt(defender.seat));
     await flushAll(g, g.socks.map(mark));
@@ -415,7 +415,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
   }, 40_000);
 
   it("알람이 늦어 지목 배치 없이 변론에 닿아도 변론자는 무대로, 나머지 넷은 둘레 자리로 선다", async () => {
-    const g = await startedGame("discussion", 4);
+    const g = await startedGame("discussion", 4, "plaza");
     const defender = g.actors[3]!;
     await toPhase(g.code, "nomination", pointedAt(defender.seat));
     const marks = g.socks.map(mark);
@@ -432,7 +432,7 @@ describe("모이기·무대 배치(결정 0060-7)", () => {
   }, 40_000);
 
   it("처형 단계의 처형자는 무대에 남아 움직이지 않는다(처형은 찬반이 통과한 날에만 온다, 22-09)", async () => {
-    const g = await startedGame("discussion", 4);
+    const g = await startedGame("discussion", 4, "plaza");
     const defender = g.actors[3]!;
     await toPhase(g.code, "nomination", pointedAt(defender.seat));
     await flushAll(g, g.socks.map(mark));

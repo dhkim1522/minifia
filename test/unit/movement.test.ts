@@ -18,7 +18,7 @@ const BASE: RoomState = (() => {
   return created.state;
 })();
 
-const withPhase = (phase: PhaseId): RoomState => ({ ...BASE, phase });
+const withPhase = (phase: PhaseId): RoomState => ({ ...BASE, phase, map: "plaza" });
 const living: Player = BASE.players[0]!;
 const ghost: Player = { ...BASE.players[0]!, alive: false };
 

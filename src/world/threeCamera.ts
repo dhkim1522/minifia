@@ -2,7 +2,8 @@
 // Vector3.project / Raycaster 결과가 groundToScreen / screenToGround 와 같다는 것을 cameraThree.test.ts 가 증명한다.
 // 시안(blockout.js)은 view 14 를 고정해 폰마다 배율이 달라졌다 — 여기서는 배율(px/단위)을 고정한다(UI-SPEC).
 import { OrthographicCamera } from "three";
-import { CAM_DIST, CAM_HEIGHT, CAM_YAW, LOOK_Y, PX_PER_UNIT } from "./camera";
+import { cameraScale, DEFAULT_CAMERA } from "./camera";
+import type { CameraRig } from "./camera";
 
 export function createCamera(): OrthographicCamera {
   return new OrthographicCamera(-1, 1, 1, -1, 0.1, 120);
@@ -14,15 +15,15 @@ export function createCamera(): OrthographicCamera {
  * 위치·방위는 camera.ts 의 CAM_YAW·CAM_DIST·CAM_HEIGHT 를 따른다.
  * offsetY 는 setViewOffset 으로 건다(양수면 장면이 위로 올라간다). 호출할 때마다 행렬을 모두 다시 계산한다.
  */
-export function configureCamera(camera: OrthographicCamera, target: { x: number; z: number }, canvas: { w: number; h: number }, offsetY: number, zoom = 1): void {
+export function configureCamera(camera: OrthographicCamera, target: { x: number; z: number }, canvas: { w: number; h: number }, offsetY: number, zoom = 1, rig: CameraRig = DEFAULT_CAMERA): void {
   const { w, h } = canvas;
-  const scale = PX_PER_UNIT * zoom; // camera.ts 의 투영과 같은 배율(px/단위)
+  const scale = cameraScale(canvas, rig) * zoom;
   camera.left = -w / 2 / scale;
   camera.right = w / 2 / scale;
   camera.top = h / 2 / scale;
   camera.bottom = -h / 2 / scale;
-  camera.position.set(target.x + Math.sin(CAM_YAW) * CAM_DIST, CAM_HEIGHT, target.z + Math.cos(CAM_YAW) * CAM_DIST);
-  camera.lookAt(target.x, LOOK_Y, target.z);
+  camera.position.set(target.x + Math.sin(rig.yaw) * rig.dist, rig.height, target.z + Math.cos(rig.yaw) * rig.dist);
+  camera.lookAt(target.x, rig.lookY, target.z);
   camera.setViewOffset(w, h, 0, offsetY, w, h); // 안에서 updateProjectionMatrix 를 부른다
   camera.updateMatrixWorld(true);
 }

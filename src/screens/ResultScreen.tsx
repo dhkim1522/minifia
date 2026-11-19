@@ -75,7 +75,7 @@ export interface ResultScreenProps {
 // 아래 패널은 접힌 게임 패널과 같은 높이의 전체 채팅 한 줄이다(동작 버튼 없음). 헤더 [나가기]는 로비와 같은 확인 시트를 연다.
 
 /** 결과 화면 장면: 카메라 무대 중심 고정, 밤 조명, 이긴 팀 조명 구간에만 무대 가운데 점 조명 */
-function sceneOf(cast: ReturnType<typeof castOf>, state: ResultState, sat: readonly number[] = []): SceneLook {
+function sceneOf(cast: ReturnType<typeof castOf>, state: ResultState, sat: readonly number[], mapId?: MapId): SceneLook {
   const seats: Record<number, SeatLook> = {};
   // 쉬었다가 합류한 사람(11-12, D-13): 참가자 밖 별도 자리에 반투명 0.5 로 선다. 직업 의상·어둠·칩이 없다
   for (const seat of sat) seats[seat] = { show: true, ghost: false, opacity: SAT_OPACITY };
@@ -84,7 +84,7 @@ function sceneOf(cast: ReturnType<typeof castOf>, state: ResultState, sat: reado
     seats[c.seat] = { show: true, ghost: !c.alive, ...(costume !== undefined ? { costume } : {}), ...(state.dimmed.includes(c.seat) ? { dim: true as const } : {}) };
   }
   return {
-    camera: { mode: "fixed", target: { x: GATHER_CENTER.x, z: GATHER_CENTER.z }, zoom: 1 },
+    camera: { mode: "fixed", target: { x: GATHER_CENTER.x, z: GATHER_CENTER.z }, zoom: 1, ...(mapId === "bar" ? { barSeats: true } : {}) },
     lighting: "night",
     tension: 0,
     pin: state.lit ? { mode: "point", x: GATHER_CENTER.x, z: GATHER_CENTER.z } : null,
@@ -217,11 +217,11 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
   const mapId: MapId = view.map ?? "bar";
 
   const state = useMemo(() => stateAt(mark, cast, winner), [mark, cast, winner]);
-  const scene = useMemo(() => sceneOf(cast, state, satSeats), [cast, state, satSeats]);
+  const scene = useMemo(() => sceneOf(cast, state, satSeats, view.map), [cast, state, satSeats, view.map]);
 
   // 위치: 모두 자기 둘레 자리로. 연출이면 스토어의 마지막 위치에서 걷는 구간(1200ms), 아니면 한 점 구간이다. 런타임이 만들어지기 전(레이아웃 효과)에 먹여 첫 프레임부터 맞다.
   // 서버 상태가 아니라 이 폰의 연출이다 — 서버 시각 기준(t0 = 지금 + offset)으로 만들어 런타임이 서버 구간과 똑같이 그린다. 새 연결(epoch)이면 다시 먹인다
-  const slots = useMemo(() => ({ ...slotsFor(cast), ...satSlots(satSeats, mapId) }), [cast, satSeats, mapId]);
+  const slots = useMemo(() => ({ ...slotsFor(cast, view.map), ...satSlots(satSeats, mapId) }), [cast, satSeats, mapId, view.map]);
   const offsetRef = useRef(offset);
   offsetRef.current = offset; // 시계 보정이 흔들려도 snap 을 다시 먹이지 않는다(먹일 때만 읽는다)
   const feed = useCallback(

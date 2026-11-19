@@ -114,6 +114,30 @@ describe("인물 에셋 예산 — 72조합 (D-15, D-16)", () => {
 });
 
 describe("동물 캐릭터의 외형과 렌더링 예산", () => {
+  it("종을 바꿔도 병합 재질과 표면 속성이 일치하고 여섯 관절을 다시 쓴다", () => {
+    const c = createCharacter(0, "coat", undefined, "rabbit");
+    const head = c.root.getObjectByName("neck")!.children[0] as Mesh;
+    const torso = c.root.getObjectByName("body")!.children.find((object) => (object as Mesh).isMesh)! as Mesh;
+    const shared = head.material;
+    for (const mesh of [head, torso]) {
+      const positions = mesh.geometry.getAttribute("position");
+      expect(mesh.geometry.getAttribute("animalUv").count).toBe(positions.count);
+      expect(mesh.geometry.getAttribute("animalFinish").count).toBe(positions.count);
+      expect(mesh.material).toBe(shared);
+    }
+    expect(new Set(torso.geometry.getAttribute("animalFinish").array).size).toBeGreaterThan(1);
+
+    c.applyAnimal(undefined);
+    expect(head.geometry.getAttribute("animalUv")).toBeUndefined();
+    expect(head.material).not.toBe(shared);
+    c.applyAnimal("parrot");
+    c.applyOutfit("doctor");
+    expect(head).toBe(c.root.getObjectByName("neck")!.children[0]);
+    expect(head.geometry.getAttribute("animalUv")).toBeDefined();
+    expect(head.material).toBe(shared);
+    c.dispose();
+  });
+
   it("동물 12종과 의상 모두 관절 여섯 개와 기존 삼각형 예산을 지킨다", () => {
     for (const animal of ANIMAL_IDS) {
       for (const outfit of OUTFIT_IDS) {

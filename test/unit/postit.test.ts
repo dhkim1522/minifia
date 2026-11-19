@@ -40,6 +40,7 @@ function room(phase: PhaseId = "discussion", day = 2, n = 6, notes?: RoomState["
     createdAt: 0,
     expiresAt: ROOM_TTL_MS,
     phase,
+    map: "plaza",
     phaseEndsAt: 100_000,
     day,
     hostId: "p0",

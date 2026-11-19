@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createScenario, MIX_OUTFITS, mulberry32, noteLayout, parsePerfParams } from "../../src/debug/perf/scenario";
 import type { ScenarioEvent } from "../../src/debug/perf/scenario";
 import { BAR_MAP, BAR_SPAWNS, UNIT, isWalkable, lineWalkable } from "../../shared/game/map";
+import { LEGACY_BAR_MAP } from "../helpers/legacyBarMap";
 import { PLAZA_MAP, PLAZA_SPAWNS } from "../../shared/game/mapPlaza";
 // @ts-expect-error -- 선언 없는 스크립트 모듈
 import * as perfRun from "../../scripts/perf-run.mjs";
@@ -174,12 +175,12 @@ describe("burst=1(기본)은 10-06 이전과 비트 단위로 같다 (골든)", 
     [7, 8, 121, "c44932b8af1c6a5eac78b70f892597096f3fa359e5f973bcbc3dc0d7336abc8c"],
     [3, 4, 74, "0e5a5daa83b9ba27e5c4c32b8764dc8eed822249a90b43eec4927c6fad036548"],
   ])("seed %i chars %i 첫 60초: 이벤트 %i 개, 해시 일치", (seed, chars, n, hash) => {
-    const ev = createScenario({ seed, chars, map: BAR_MAP }).advance(60000);
+    const ev = createScenario({ seed, chars, map: LEGACY_BAR_MAP }).advance(60000);
     expect(ev.length).toBe(n);
     expect(sha(ev)).toBe(hash);
   });
   it("burst: 1 을 명시해도 같다", () => {
-    expect(sha(createScenario({ seed: 1, chars: 8, map: BAR_MAP, burst: 1 }).advance(60000))).toBe("a6469c86694d1e87d10caa8e4525ef04962486d85bf4c2d4a61bb2dfc604eae2");
+    expect(sha(createScenario({ seed: 1, chars: 8, map: LEGACY_BAR_MAP, burst: 1 }).advance(60000))).toBe("a6469c86694d1e87d10caa8e4525ef04962486d85bf4c2d4a61bb2dfc604eae2");
   });
 });
 
