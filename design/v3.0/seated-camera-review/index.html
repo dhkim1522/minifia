@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>미니피아 · 고정 좌석 카메라 시안</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="review">
+    <header class="review-title">
+      <p>미니피아 고정 좌석 시안</p>
+      <h1>재즈 바 시점 비교</h1>
+      <p>같은 8인 테이블입니다. 얼굴을 눌러 시선을 옮기거나 의심딱지를 붙여보세요.</p>
+    </header>
+    <nav class="views" aria-label="시점 선택"></nav>
+    <div class="comparison"></div>
+  </main>
+
+  <template id="panel">
+    <section class="view">
+      <header class="view-title"><h2></h2><p></p></header>
+      <div class="phone">
+        <header class="phase"><strong>토론</strong><span class="time" aria-hidden="true"></span><span>8명</span></header>
+        <div class="world" role="group"></div>
+        <div class="quote" aria-live="polite">
+          <img alt="" width="37" height="37">
+          <div><strong></strong><p></p></div>
+        </div>
+        <div class="participants" role="group" aria-label="테이블의 참가자"></div>
+        <div class="actions">
+          <button class="suspect" type="button" aria-pressed="false">의심딱지</button>
+          <span class="action-status" role="status"></span>
+        </div>
+        <div class="chat" aria-label="토론 채팅">
+          <p><b>지호</b> 난 창가 쪽에 있었어.</p>
+          <p><b>민준</b> 피아노 소리는 들었어?</p>
+          <div class="chat-placeholder" aria-hidden="true">메시지 입력 <span>➤</span></div>
+        </div>
+      </div>
+    </section>
+  </template>
+  <script type="module" src="./review.ts"></script>
+</body>
+</html>
