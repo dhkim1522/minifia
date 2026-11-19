@@ -1,16 +1,16 @@
 import {
-  ACESFilmicToneMapping, BufferGeometry, DirectionalLight, Line, LineDashedMaterial, Mesh,
-  MeshBasicMaterial, OrthographicCamera, PCFShadowMap, Plane, PointLight, Raycaster, RingGeometry,
-  Vector2, Vector3, WebGLRenderer,
+  ACESFilmicToneMapping, Mesh, MeshBasicMaterial, OrthographicCamera, PCFShadowMap,
+  Plane, Raycaster, RingGeometry, Vector2, Vector3, WebGLRenderer,
 } from "three";
 import type { AnimalId } from "../../../shared/game/animals";
-import { BAR_MAP, UNIT, routeFx, snapToWalkable } from "../../../shared/game/map";
+import { CELL, CHAR_RADIUS, UNIT, parseMask, routeFx, snapToWalkable } from "../../../shared/game/map";
+import type { MapDef } from "../../../shared/game/map";
 import { PX_PER_UNIT } from "../../../src/world/camera";
 import { createCharacter } from "../../../src/world/character";
-import { buildBarScene } from "../../../src/world/maps/bar";
-import { LADDER } from "../../../src/world/renderer";
+import { bar, buildReviewRoom, centerStandRadius, piano, roomHalf, seatTop } from "./room";
 
-type Mode = "walk" | "table" | "speaker";
+export type Mode = "walk" | "four" | "eight";
+export { roomHalf };
 
 export const people = [
   { name: "지호", animal: "rabbit", line: "나는 창가 쪽에 있었어." },
@@ -23,65 +23,63 @@ export const people = [
   { name: "수아", animal: "parrot", line: "지호가 본 것도 들어보고 싶어." },
 ] as const satisfies readonly { name: string; animal: AnimalId; line: string }[];
 
-const table = { x: -2.4, z: -4.6 };
-const walkZone = { left: -4.45, right: 2.9, back: -5.7, front: 1.6 };
-const lookByMode = {
-  walk: { yaw: 0.55, tilt: 35, aim: [0.22, 0.99, 0.64], span: 4.55 },
-  table: { yaw: 0.34, tilt: 26, aim: [0, 1.28, 0], span: 4.52 },
-  speaker: { yaw: 0.34, tilt: 18, aim: [0, 1.28, -0.78], span: 2.43 },
-} as const;
+const discussionCamera = { yaw: 0.34, tilt: 26, aimY: 1.14, span: 4.52 };
+const walkCamera = { yaw: discussionCamera.yaw, tilt: 35, aimY: 1.0, span: 4.55 };
 
-const walkingSpots = [
-  [-0.57, 2.03], [1.53, 0.94], [-1.58, -0.40], [1.72, 2.8],
-  [3.2, 0.12], [2.1, -1.3], [2.63, 4.1], [-2.25, 3.94],
+// 앞·뒤의 네 자리를 엇갈리게 배치해 좁은 화면에서도 뒷줄의 얼굴을 읽을 수 있다.
+const seatLayout = [
+  [-1.72, 0.77], [-0.79, -2.22], [0.67, -2.27], [1.72, 0.94],
+  [-1.67, -1.16], [1.65, -1.12], [-0.73, 2.08], [0.70, 2.08],
 ] as const;
-const tableSpots = [[-1.36, 0.82], [-0.70, -0.94], [0.77, -0.96], [1.35, 0.76]] as const;
-const standingYaw = [0.70, 0.22, -0.18, -0.74, 0.47, -0.54, -0.2, 0.36] as const;
+function rotateFromCamera([x, z]: readonly [number, number]): readonly [number, number] {
+  const { yaw } = discussionCamera;
+  return [x * Math.cos(yaw) + z * Math.sin(yaw), -x * Math.sin(yaw) + z * Math.cos(yaw)];
+}
+export const seatSpots = seatLayout.map(rotateFromCamera);
+const standingYaw = [0.68, 0.14, -0.15, -0.70, 0.56, -0.56, 0.38, -0.42] as const;
+const walkStart = rotateFromCamera([-0.06, 2.92]);
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+const walkHalf = roomHalf - CHAR_RADIUS;
 function insideWalkZone(x: number, z: number): boolean {
-  return x >= walkZone.left && x <= walkZone.right && z >= walkZone.back && z <= walkZone.front;
+  return Math.abs(x) <= walkHalf && Math.abs(z) <= walkHalf;
 }
 
-function walkBoundary(): Line {
-  const { left, right, back, front } = walkZone;
-  const corners = [[left, back], [right, back], [right, front], [left, front], [left, back]] as const;
-  const geometry = new BufferGeometry().setFromPoints(corners.map(([x, z]) => new Vector3(x, 0.026, z)));
-  const material = new LineDashedMaterial({ color: "#caaa72", dashSize: 0.13, gapSize: 0.10, opacity: 0.58, transparent: true });
-  const border = new Line(geometry, material);
-  border.computeLineDistances();
-  return border;
+function makeWalkMap(): MapDef {
+  const size = 14;
+  const origin = -size * CELL / 2;
+  const rows = Array.from({ length: size }, (_, row) => Array.from({ length: size }, (_, col) => {
+    const x = origin + (col + 0.5) * CELL;
+    const z = origin + (row + 0.5) * CELL;
+    const clearance = CHAR_RADIUS + CELL / 4;
+    const hitsStand = Math.hypot(x, z) < centerStandRadius + clearance;
+    const hitsSeat = seatSpots.some(([sx, sz]) => Math.hypot(x - sx, z - sz) < 0.35 + clearance);
+    const hitsFixture = [piano, bar].some(fixture =>
+      Math.abs(x - fixture.x) < fixture.width / 2 + clearance &&
+      Math.abs(z - fixture.z) < fixture.depth / 2 + clearance);
+    return hitsStand || hitsSeat || hitsFixture ? "#" : ".";
+  }).join(""));
+  return { id: "bar", size, origin, walkHalf, mask: parseMask(rows), spawns: [] };
 }
+const walkMap = makeWalkMap();
 
 export function mountScene(host: HTMLElement, mode: Mode, onPick: (index: number) => void): {
   setFocus(index: number): void;
   setMark(index: number | null): void;
 } {
-  const rig = lookByMode[mode];
-  const toWorld = (x: number, y: number, z: number): Vector3 => new Vector3(
-    table.x + x * Math.cos(rig.yaw) + z * Math.sin(rig.yaw), y,
-    table.z - x * Math.sin(rig.yaw) + z * Math.cos(rig.yaw),
-  );
+  const walking = mode === "walk";
+  const rig = walking ? walkCamera : discussionCamera;
+  const room = buildReviewRoom(seatSpots);
   const renderer = new WebGLRenderer({ antialias: true });
   renderer.domElement.className = "scene-canvas";
   renderer.domElement.setAttribute("aria-hidden", "true");
   Object.assign(renderer.domElement.style, { display: "block", width: "100%", height: "100%" });
   host.append(renderer.domElement);
 
-  const bar = buildBarScene(LADDER[2]!, { omitTableChairsAt: [table.x, table.z] });
-  bar.setLighting("night");
-  bar.lights.hemi.intensity *= 0.85;
-  bar.lights.stage.intensity *= 0.5;
-  const key = new PointLight("#ffc893", 11, 5);
-  key.position.copy(toWorld(0, 2.3, 1.25));
-  const fill = new DirectionalLight("#c0d2f7", 1.3);
-  fill.position.copy(toWorld(-1, 3, 6));
-  fill.target.position.copy(toWorld(0, 1, 0));
-  bar.root.add(key, fill, fill.target);
   const destination = new Mesh(new RingGeometry(0.17, 0.21, 28), new MeshBasicMaterial({ color: "#edc784" }));
   destination.rotation.x = -Math.PI / 2;
   destination.visible = false;
-  if (mode === "walk") bar.root.add(walkBoundary(), destination);
+  if (walking) room.add(destination);
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.15;
   renderer.shadowMap.enabled = true;
@@ -91,11 +89,9 @@ export function mountScene(host: HTMLElement, mode: Mode, onPick: (index: number
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
 
   const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 60);
-  const [aimX, aimY, aimZ] = rig.aim;
-  const initialAim = toWorld(aimX, aimY, aimZ);
-  const aim = initialAim.clone();
+  const aim = new Vector3(0, rig.aimY, 0);
   const tilt = rig.tilt * Math.PI / 180;
-  const cameraOffset = toWorld(0, Math.tan(tilt) * 13, 13).sub(toWorld(0, 0, 0));
+  const cameraOffset = new Vector3(Math.sin(rig.yaw) * 13, Math.tan(tilt) * 13, Math.cos(rig.yaw) * 13);
   const ray = new Raycaster();
   const pointer = new Vector2();
   const floor = new Plane(new Vector3(0, 1, 0), 0);
@@ -107,7 +103,7 @@ export function mountScene(host: HTMLElement, mode: Mode, onPick: (index: number
   let height = 0;
   let mark: number | null = null;
 
-  const actors = people.slice(0, mode === "table" ? tableSpots.length : people.length).map((person, index) => {
+  const actors = people.slice(0, mode === "four" ? 4 : people.length).map((person, index) => {
     const character = createCharacter(index, "coat", undefined, person.animal);
     const label = document.createElement("button");
     label.type = "button";
@@ -116,47 +112,35 @@ export function mountScene(host: HTMLElement, mode: Mode, onPick: (index: number
     name.textContent = person.name + (index === 0 ? " · 나" : "");
     label.append(name);
     label.dataset.player = String(index);
-    Object.assign(label.style, { position: "absolute", transform: "translate(-50%, -100%)" });
+    const footLabel = seatLayout[index]![1] > 0 && !(walking && index === 0);
+    Object.assign(label.style, { position: "absolute", transform: footLabel ? "translate(-50%, -20%)" : "translate(-50%, -100%)" });
     label.addEventListener("click", () => onPick(index));
-    if (mode !== "speaker") host.append(label);
-    bar.root.add(character.root);
-    return { character, label };
+    host.append(label);
+    room.add(character.root);
+    const [sx, sz] = seatSpots[index]!;
+    if (walking && index === 0) {
+      const start = snapToWalkable(walkMap, { x: Math.round(walkStart[0] * UNIT), z: Math.round(walkStart[1] * UNIT) });
+      character.root.position.set(start.x / UNIT, 0, start.z / UNIT);
+    } else {
+      character.root.position.set(sx, seatTop, sz);
+    }
+    character.setYaw(rig.yaw + standingYaw[index]!);
+    return { character, label, footLabel };
   });
 
   function poseFocus(): void {
     actors.forEach(({ character, label }, index) => {
       label.setAttribute("aria-pressed", String(index === active));
-      if (mode !== "speaker") {
-        character.setRing(index === active || (mode === "walk" && index === 0) ? "#dbaa65" : null);
-        return;
-      }
-      const beside = index === (active + 1) % people.length ? -1 : index === (active + 2) % people.length ? 1 : 0;
-      character.root.visible = index === active || beside !== 0;
-      character.root.position.copy(beside ? toWorld(beside * 1.32, 0, 0.78) : toWorld(0, 0, -1.05));
-      character.setYaw(rig.yaw - beside * 1.62);
-      character.setDim(beside !== 0);
+      character.setRing(index === active || (walking && index === 0) ? "#dbaa65" : null);
     });
   }
 
-  if (mode !== "speaker") {
-    const spots = mode === "walk" ? walkingSpots : tableSpots;
-    actors.forEach(({ character }, index) => {
-      const [x, z] = spots[index]!;
-      const position = toWorld(x, 0, z);
-      if (mode === "walk") {
-        const snapped = snapToWalkable(BAR_MAP, { x: Math.round(position.x * UNIT), z: Math.round(position.z * UNIT) });
-        position.set(snapped.x / UNIT, 0, snapped.z / UNIT);
-      }
-      character.root.position.copy(position);
-      character.setYaw(rig.yaw + standingYaw[index]!);
-    });
-  }
   poseFocus();
 
   function render(dt = 0): void {
     if (width <= 0 || height <= 0) return;
     let moving = false;
-    if (mode === "walk") {
+    if (walking) {
       const character = actors[0]!.character;
       const next = path[0];
       if (next) {
@@ -174,25 +158,31 @@ export function mountScene(host: HTMLElement, mode: Mode, onPick: (index: number
           moving = true;
         }
         renderer.shadowMap.needsUpdate = true;
+        const target = character.root.position.clone().multiplyScalar(0.42);
+        target.y = rig.aimY;
+        aim.lerp(target, reduced() ? 1 : 1 - Math.exp(-Math.max(dt, 0.016) * 8));
       }
-      const target = character.root.position.clone().lerp(initialAim, 0.54);
-      target.y = initialAim.y;
-      aim.lerp(target, reduced() ? 1 : 1 - Math.exp(-Math.max(dt, 0.016) * 5));
     }
     camera.position.copy(aim).add(cameraOffset);
     camera.lookAt(aim);
     camera.updateMatrixWorld();
-    actors.forEach(({ character, label }, index) => {
+    actors.forEach(({ character, label, footLabel }, index) => {
       const { headY } = character.update(dt, 1, index === 0 && moving);
-      if (mode === "speaker") return;
       const p = character.root.position.clone();
-      p.y = headY;
+      if (footLabel) {
+        // 앞자리의 이름이 뒤편 참가자의 눈과 입을 가리지 않도록 자기 좌석 아래에 둔다.
+        p.y = 0;
+        p.x += Math.sin(rig.yaw) * 0.28;
+        p.z += Math.cos(rig.yaw) * 0.28;
+      } else {
+        p.y += headY;
+      }
       p.project(camera);
       label.hidden = Math.abs(p.x) > 0.96 || Math.abs(p.y) > 0.90;
       label.style.left = `${(p.x + 1) * 50}%`;
-      label.style.top = `${(1 - p.y) * height / 2 - 5}px`;
+      label.style.top = `${(1 - p.y) * height / 2 - (footLabel ? 0 : 5)}px`;
     });
-    renderer.render(bar.root, camera);
+    renderer.render(room, camera);
     host.dataset.ready = "true";
   }
 
@@ -210,7 +200,7 @@ export function mountScene(host: HTMLElement, mode: Mode, onPick: (index: number
     height = host.clientHeight;
     if (width <= 0 || height <= 0) return;
     renderer.setSize(width, height, false);
-    const scale = mode === "walk" ? Math.min(PX_PER_UNIT * 1.27, width / rig.span) : width / rig.span;
+    const scale = walking ? Math.min(PX_PER_UNIT * 1.27, width / rig.span) : width / rig.span;
     camera.left = -width / 2 / scale;
     camera.right = -camera.left;
     camera.top = height / 2 / scale;
@@ -224,10 +214,6 @@ export function mountScene(host: HTMLElement, mode: Mode, onPick: (index: number
     const bounds = renderer.domElement.getBoundingClientRect();
     pointer.set(2 * (event.clientX - bounds.left) / bounds.width - 1, 1 - 2 * (event.clientY - bounds.top) / bounds.height);
     ray.setFromCamera(pointer, camera);
-    if (mode === "speaker") {
-      onPick(active);
-      return;
-    }
     const byMesh = new Map(actors.flatMap(({ character }, index) => character.bodyMeshes().map((mesh) => [mesh, index] as const)));
     const hit = ray.intersectObjects([...byMesh.keys()], false)[0];
     const person = hit?.object instanceof Mesh ? byMesh.get(hit.object) : undefined;
@@ -235,11 +221,11 @@ export function mountScene(host: HTMLElement, mode: Mode, onPick: (index: number
       onPick(person);
       return;
     }
-    if (mode !== "walk") return;
+    if (!walking) return;
     const p = ray.ray.intersectPlane(floor, new Vector3());
     if (!p || !insideWalkZone(p.x, p.z)) return;
     const current = actors[0]!.character.root.position;
-    const fx = routeFx(BAR_MAP, { x: Math.round(current.x * UNIT), z: Math.round(current.z * UNIT) }, {
+    const fx = routeFx(walkMap, { x: Math.round(current.x * UNIT), z: Math.round(current.z * UNIT) }, {
       x: Math.round(p.x * UNIT), z: Math.round(p.z * UNIT),
     });
     const nextPath: Vector3[] = [];

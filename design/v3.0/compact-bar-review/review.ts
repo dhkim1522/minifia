@@ -1,6 +1,6 @@
-import { mountScene, people } from './scene';
+import { mountScene, people, roomHalf, seatSpots } from './scene';
+import type { Mode } from './scene';
 
-type Mode = 'walk' | 'table' | 'speaker';
 type Discussion = Exclude<Mode, 'walk'>;
 
 function element<T extends HTMLElement>(selector: string): T {
@@ -12,23 +12,21 @@ function element<T extends HTMLElement>(selector: string): T {
 const scenes: Partial<Record<Mode, ReturnType<typeof mountScene>>> = {};
 const initialSpeaker = 2;
 const state = {
-  table: { focus: initialSpeaker, marking: false, marked: null as number | null },
-  speaker: { focus: initialSpeaker, marking: false, marked: null as number | null },
+  four: { focus: initialSpeaker, marking: false, marked: null as number | null },
+  eight: { focus: initialSpeaker, marking: false, marked: null as number | null },
 };
 const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-show]')];
 const panels = [...document.querySelectorAll<HTMLElement>('[data-panel]')];
-const roster = element('.roster');
-const rosterButtons = people.map((person, index) => {
-  const button = document.createElement('button');
-  button.type = 'button';
-  const image = document.createElement('img');
-  image.alt = '';
-  image.src = `/characters/animals/${person.animal}/face.png`;
-  button.append(image, person.name);
-  button.addEventListener('click', () => choose('speaker', index));
-  roster.append(button);
-  return button;
-});
+const floorPlan = element('#floor-plan');
+const stand = document.createElement('span');
+stand.className = 'stand';
+floorPlan.append(stand);
+for (const [x, z] of seatSpots) {
+  const seat = document.createElement('span');
+  seat.style.left = `${50 + x / roomHalf * 50}%`;
+  seat.style.top = `${50 + z / roomHalf * 50}%`;
+  floorPlan.append(seat);
+}
 
 function show(panel: string): void {
   for (const tab of tabs) tab.setAttribute('aria-pressed', String(tab.dataset.show === panel));
@@ -45,16 +43,8 @@ function sync(mode: Discussion): void {
   element(`#${mode}-line`).replaceChildren(name, quote);
 
   const status = element(`[data-status="${mode}"]`);
-  status.textContent = marking ? '딱지를 붙일 친구를 고르세요' : marked !== null ? `${people[marked]!.name}에게 딱지 부착` : mode === 'table' ? '이름표를 눌러 발언 확인' : '얼굴을 눌러 발언 확인';
+  status.textContent = marking ? '딱지를 붙일 친구를 고르세요' : marked !== null ? `${people[marked]!.name}에게 딱지 부착` : '이름표를 눌러 발언 확인';
   element(`[data-note="${mode}"]`).setAttribute('aria-pressed', String(marking));
-  if (mode === 'speaker') {
-    for (const [index, button] of rosterButtons.entries()) {
-      const isMarked = index === marked;
-      button.setAttribute('aria-pressed', String(index === focus));
-      button.setAttribute('aria-label', `${people[index]!.name}${isMarked ? ' · 의심딱지' : ''}`);
-      button.dataset.marked = String(isMarked);
-    }
-  }
 }
 
 function choose(mode: Discussion, index: number): void {
@@ -72,12 +62,12 @@ function choose(mode: Discussion, index: number): void {
 
 for (const tab of tabs) tab.addEventListener('click', () => show(tab.dataset.show!));
 element('#gather').addEventListener('click', () => {
-  show('speaker');
-  element('[data-panel="speaker"]').scrollIntoView({ block: 'nearest' });
-  rosterButtons[initialSpeaker]?.focus({ preventScroll: true });
+  show('eight');
+  element('[data-panel="eight"]').scrollIntoView({ block: 'nearest' });
+  document.querySelector<HTMLButtonElement>(`#eight-world [data-player="${state.eight.focus}"]`)?.focus({ preventScroll: true });
 });
 
-for (const mode of ['walk', 'table', 'speaker'] as const) {
+for (const mode of ['walk', 'four', 'eight'] as const) {
   const host = element(`#${mode}-world`);
   if (mode !== 'walk') {
     element(`[data-note="${mode}"]`).addEventListener('click', () => {

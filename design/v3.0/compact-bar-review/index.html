@@ -9,48 +9,48 @@
 <body>
   <main>
     <header class="review-header">
-      <p>미니피아 디자인 시안</p>
-      <h1>작은 재즈 바</h1>
-      <p>테이블 가까이 모이고, 친구의 얼굴을 보며 이야기해요.</p>
+      <div>
+        <p>미니피아 디자인 시안</p>
+        <h1>작은 재즈 바</h1>
+        <p>4인과 8인 토론을 같은 시점과 확대율로 비교합니다.</p>
+      </div>
+      <figure class="layout">
+        <div id="floor-plan" class="floor-plan" role="img" aria-label="정사각형 재즈 바 한가운데에 스탠드가 있고, 여덟 좌석이 둘레에 있습니다."></div>
+        <figcaption><strong>재즈 바 배치</strong><span>중앙 스탠드 · 8석</span></figcaption>
+      </figure>
     </header>
     <nav class="review-nav" aria-label="비교 장면">
-      <button type="button" data-show="current" aria-pressed="false">현재</button>
-      <button type="button" data-show="walk" aria-pressed="true">이동</button>
-      <button type="button" data-show="table" aria-pressed="false">4인 토론</button>
-      <button type="button" data-show="speaker" aria-pressed="false">8인 토론</button>
+      <button type="button" data-show="walk" aria-pressed="false">이동</button>
+      <button type="button" data-show="four" aria-pressed="false">4인 토론</button>
+      <button type="button" data-show="eight" aria-pressed="true">8인 토론</button>
     </nav>
     <div class="review-grid">
-      <section data-panel="current" aria-labelledby="current-title">
-        <header class="panel-header"><h2 id="current-title">기존 토론</h2><p>내 캐릭터를 따라가는 넓은 구도</p></header>
-        <div class="phone current"><img src="../review-2026-11-19/game-390x844-normal-discussion.png" alt="기존 재즈 바 토론 화면. 넓은 바닥에 캐릭터가 떨어져 있고 상대는 등을 보이고 있다."></div>
-      </section>
-      <section data-panel="walk" class="shown" aria-labelledby="walk-title">
-        <header class="panel-header"><h2 id="walk-title">짧은 자유 이동</h2><p>걸을 수 있는 폭을 기존의 약 ⅔로</p></header>
+      <section data-panel="walk" aria-labelledby="walk-title">
+        <header class="panel-header"><h2 id="walk-title">대기실</h2><p>중앙 좌석 둘레로 짧게 이동</p></header>
         <div class="phone">
           <header class="game-header"><b>대기실</b><span>재즈 바</span><span>8명</span></header>
           <div class="world" id="walk-world" aria-label="바닥을 눌러 움직이는 재즈 바"></div>
-          <div class="game-action"><span>바닥을 눌러 걸어보세요</span><button type="button" id="gather">테이블로 모이기</button></div>
-          <div class="chat"><div class="chat-line"><b>서연</b> 테이블에서 얘기할까요?</div><div class="chat-line"><b>민준</b> 좋아요.</div><div class="chat-input">메시지 보내기 <span aria-hidden="true">➤</span></div></div>
+          <div class="game-action"><span>바닥을 눌러 걸어보세요</span><button type="button" id="gather">중앙에 모이기</button></div>
+          <div class="chat"><div class="chat-line"><b>서연</b> 가운데에서 얘기할까요?</div><div class="chat-line"><b>민준</b> 좋아요.</div><div class="chat-input">메시지 보내기 <span aria-hidden="true">➤</span></div></div>
         </div>
       </section>
-      <section data-panel="table" aria-labelledby="table-title">
-        <header class="panel-header"><h2 id="table-title">4인 · 한 테이블</h2><p>이름표와 얼굴을 한 화면에</p></header>
+      <section data-panel="four" aria-labelledby="four-title">
+        <header class="panel-header"><h2 id="four-title">4인 토론</h2><p>빈자리 4석</p></header>
         <div class="phone">
           <header class="game-header"><b>토론</b><span class="timer" aria-hidden="true"></span><span>4명</span></header>
-          <div class="world" id="table-world" aria-label="네 명이 모인 재즈 바 원탁"></div>
-          <div class="discussion-line" id="table-line" aria-live="polite"></div>
-          <div class="game-action"><button class="note-button" type="button" aria-pressed="false" data-note="table">의심딱지</button><span data-status="table" aria-live="polite">이름표를 눌러 발언 확인</span></div>
+          <div class="world" id="four-world" role="group" aria-label="중앙 스탠드 둘레 여덟 자리 중 네 자리에 모인 사람들"></div>
+          <div class="discussion-line" id="four-line" aria-live="polite"></div>
+          <div class="game-action"><button type="button" aria-pressed="false" data-note="four">의심딱지</button><span data-status="four" aria-live="polite">이름표를 눌러 발언 확인</span></div>
           <div class="chat"><div class="chat-line"><b>지호</b> 나는 창가 쪽에 있었어.</div><div class="chat-line"><b>민준</b> 그때 피아노 소리는 안 들렸어?</div><div class="chat-input">메시지 보내기 <span aria-hidden="true">➤</span></div></div>
         </div>
       </section>
-      <section data-panel="speaker" aria-labelledby="speaker-title">
-        <header class="panel-header"><h2 id="speaker-title">8인 · 발언자 가까이</h2><p>한 사람에게 집중하고 모두를 바로 선택</p></header>
+      <section data-panel="eight" class="shown" aria-labelledby="eight-title">
+        <header class="panel-header"><h2 id="eight-title">8인 토론</h2><p>모든 자리 사용</p></header>
         <div class="phone">
           <header class="game-header"><b>토론</b><span class="timer" aria-hidden="true"></span><span>8명</span></header>
-          <div class="world" id="speaker-world" aria-label="현재 보고 있는 캐릭터의 얼굴"></div>
-          <div class="discussion-line" id="speaker-line" aria-live="polite"></div>
-          <div class="roster" aria-label="참가자 얼굴 목록"></div>
-          <div class="game-action"><button class="note-button" type="button" aria-pressed="false" data-note="speaker">의심딱지</button><span data-status="speaker" aria-live="polite">얼굴을 눌러 발언 확인</span></div>
+          <div class="world" id="eight-world" role="group" aria-label="중앙 스탠드 둘레 여덟 자리에 모인 사람들"></div>
+          <div class="discussion-line" id="eight-line" aria-live="polite"></div>
+          <div class="game-action"><button type="button" aria-pressed="false" data-note="eight">의심딱지</button><span data-status="eight" aria-live="polite">이름표를 눌러 발언 확인</span></div>
           <div class="chat"><div class="chat-line"><b>지호</b> 나는 창가 쪽에 있었어.</div><div class="chat-line"><b>민준</b> 그때 피아노 소리는 안 들렸어?</div><div class="chat-input">메시지 보내기 <span aria-hidden="true">➤</span></div></div>
         </div>
       </section>
