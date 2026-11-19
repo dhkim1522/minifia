@@ -82,7 +82,7 @@ export function ShareSheet({ code, hostNickname, full, onClose, origin, nav }: S
         {full ? <p className="mf-share__full">방이 가득 찼어요</p> : null}
         <h2 className="mf-t-heading mf-sheet__title">친구 초대하기</h2>
         <div className="mf-share__block">
-          <p className="mf-t-label">방 코드</p>
+          <p className="mf-share__label">방 코드</p>
           <p className="mf-share__code">{code}</p>
         </div>
         <div className="mf-field">

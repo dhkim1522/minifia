@@ -1673,8 +1673,8 @@ async function dayFlow(ctx) {
       const log = await waitAnnounces(guests[0].page, 1, 9000);
       const texts = log.filter((a) => a.text !== null);
       const iExec = annIndex(log, (t) => t === `${GAME_HOST_NICK} 님 처형`);
-      rec(sc, "EX1", "결과 큰 글이 '{닉네임} 님 처형' 이다(찬반 집계 알림 없음)", iExec >= 0 && !texts.some((a) => TALLY_RE.test(a.text)), `알림 ${texts.map((a) => a.text).join(" → ") || "없음"}`);
-      if (iExec >= 0) recMany(rec, sc, announceChecks(log[iExec]), " (처형)");
+      rec(sc, "EX1", "결과 문장이 '{닉네임} 님 처형' 이다(찬반 집계 알림 없음)", iExec >= 0 && !texts.some((a) => TALLY_RE.test(a.text)), `알림 ${texts.map((a) => a.text).join(" → ") || "없음"}`);
+      if (iExec >= 0) recMany(rec, sc, announceChecks(log[iExec], { titled: true }), " (처형)");
       else rec(sc, "AN0", "결과 알림 글자 판정 (처형)", false, "알림을 보지 못함");
       rec(sc, "EX2", "알림 어디에도 역할 글자가 없다", !texts.some((a) => ROLE_WORD_RE.test(a.text)), `알림 ${texts.map((a) => a.text).join(" → ")}`);
       // 18.1-09 R3: 처형 연출 뒤 산 사람 화면에는 처형된 사람이 마지막 자리에 유령 그림으로 남는다(C1·C2)

@@ -208,8 +208,9 @@ export function kw10Reveal(m) {
   if (!m?.answer || !m.pages?.length || !m.hidden?.length) return noMeasure("KW10", label, "정답·큰 글·밤 화면");
   const bad = [];
   for (const p of m.pages) {
-    if (p.label !== "제시어") bad.push(`${p.who} 라벨 '${p.label}'`);
-    if (p.text !== m.answer) bad.push(`${p.who} 큰 글 '${p.text}' ≠ 키워드`);
+    if (p.label !== "제시어") bad.push(`${p.who} 제목 '${p.label}'`);
+    if (p.text !== m.answer) bad.push(`${p.who} 본문 '${p.text}' ≠ 키워드`);
+    if (p.titlePx !== 20 || p.textPx !== 16) bad.push(`${p.who} 제목 ${p.titlePx}px, 본문 ${p.textPx}px`);
   }
   for (const p of m.hidden) {
     if (!p.hidden) bad.push(`${p.who} 밤에 첫날 답이나 제시어가 남음`);
@@ -397,12 +398,18 @@ const readDiscussionTools = (page) =>
     };
   });
 
-/** 정답 공개 큰 글: 라벨과 키워드 글 */
+/** 공개 제시어의 제목과 본문 */
 const readAnnounce = (page) =>
-  page.evaluate(() => ({
-    label: document.querySelector("[data-announce-label]")?.textContent ?? null,
-    text: document.querySelector("[data-announce] .mf-announce__text")?.textContent ?? null,
-  }));
+  page.evaluate(() => {
+    const label = document.querySelector("[data-announce-label]");
+    const text = document.querySelector("[data-announce] .mf-announce__text");
+    return {
+      label: label?.textContent ?? null,
+      text: text?.textContent ?? null,
+      titlePx: label ? parseFloat(getComputedStyle(label).fontSize) : null,
+      textPx: text ? parseFloat(getComputedStyle(text).fontSize) : null,
+    };
+  });
 
 const keysOf = (v) => ({ top: Object.keys(v ?? {}), me: Object.keys(v?.me ?? {}), day: Object.keys(v?.day ?? {}) });
 

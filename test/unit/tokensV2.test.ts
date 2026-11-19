@@ -87,7 +87,7 @@ describe("v3 공통 글꼴과 글자 역할", () => {
     expect(css).toContain("--type-section: 700 20px/1.3 var(--font-ui);");
     expect(css).toContain("--type-body: 400 16px/1.5 var(--font-ui);");
     expect(css).toContain("--type-label: 400 14px/1.4 var(--font-ui);");
-    expect(css).toContain("--type-hand-note: 400 20px/1.35 var(--font-hand);");
+    expect(css).toContain("--type-hand-note: 400 18px/1.35 var(--font-hand);");
   });
 
   it("홈에서 별도의 웹폰트를 불러오지 않는다", () => {

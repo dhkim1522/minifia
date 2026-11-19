@@ -32,7 +32,7 @@
 .mv-phase__title { font: var(--type-stage); color: var(--noir-paper); letter-spacing: -0.03em; }
 /* 헤더 시간대 글자(0083-1): 한 줄, 낱말·가운뎃점만 옅게. 제목 글자는 그대로라 대비가 유지된다 */
 .mv-phase__line { display: flex; align-items: baseline; gap: var(--space-sm); flex-wrap: nowrap; white-space: nowrap; }
-.mv-phase__tod, .mv-phase__sep { font-size: 24px; line-height: 1.2; font-weight: 400; color: var(--noir-silver); opacity: 1; }
+.mv-phase__tod, .mv-phase__sep { font: var(--type-label); color: var(--noir-silver); opacity: 1; }
 .mv-phase__hint { font: var(--type-label); color: var(--gray-300); max-height: 40px; overflow: hidden; transition: opacity var(--dur-med), max-height var(--dur-med); }
 .mv-phase__hint.is-folded { opacity: 0; max-height: 0; }
 .mv-ring { position: relative; width: 44px; height: 44px; flex: none; display: grid; place-items: center; }
@@ -87,10 +87,10 @@
 /* 채팅 카드(유언·쪽지·경찰 조사 결과, 09-UI-SPEC 271행) */
 .mv-chat__card { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 5px; background: var(--noir-sheet-light), var(--noir-panel); border: 1px solid var(--night-600); border-color: var(--noir-line); }
 .mv-chat__card--mafia { border-color: var(--crimson-700); }
-.mv-chat__card-title { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
+.mv-chat__card-title { display: inline-flex; align-items: center; gap: 6px; font: var(--type-stage); color: var(--gray-50); }
 .mv-chat__card--mafia .mv-chat__card-title { color: var(--crimson-300); }
 .mv-chat__card-text { margin: 0; font: var(--type-body); color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
-.mv-chat__card:is([data-card="will"], [data-card="note"]) .mv-chat__card-text { font: var(--type-hand-note); }
+.mv-chat__card:is([data-card="will"], [data-card="note"]) .mv-chat__card-text { font-family: var(--font-hand); }
 /* 입력줄(16페이즈, V-6): 동작·보내기·유언은 48 원, 입력칸도 48 이라 가운데 정렬 하나면 된다. 폭 360: 동작 48 + 입력칸 + 보내기 48 + 유언 48, 간격 8 → 입력칸 160 */
 .mv-chat__form { position: relative; display: flex; align-items: center; gap: var(--space-sm); }
 .mv-chat__field { position: relative; display: flex; flex: 1; min-width: 0; }
@@ -286,7 +286,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 /* 유언·쪽지 시트(9페이즈 WILL-01·NIGHT-12). 폭 = 부모 − 20(좌우 10). 진홍은 .mv-will--mafia(쪽지)에만 있다 */
 .mv-will { display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; width: calc(100% - 20px); margin: 0 auto; padding: 12px; border-radius: var(--noir-surface-radius); background: var(--noir-sheet-light), var(--noir-panel); border: 1px solid var(--night-600); box-shadow: var(--noir-rail), var(--shadow-card); font-family: var(--font-ui); color: var(--gray-100); border-color: var(--noir-line); }
 .mv-will__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
-.mv-will__title { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap-min); padding-left: 4px; font: var(--type-body-strong); color: var(--noir-paper); }
+.mv-will__title { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap-min); padding-left: 4px; font: var(--type-section); color: var(--noir-paper); }
 .mv-will__close { color: var(--gray-300); }
 .mv-will__text { width: 100%; box-sizing: border-box; padding: 12px; border-radius: var(--noir-control-radius); border: 1px solid var(--night-600); background: var(--noir-inset); color: var(--gray-100); font: var(--type-hand-note); resize: none; user-select: text; border-color: var(--noir-line); }
 .mv-will__text::placeholder { font: var(--type-body); color: var(--gray-300); }

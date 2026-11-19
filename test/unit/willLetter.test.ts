@@ -32,9 +32,9 @@ describe("상수", () => {
     expect([LETTER_SEAL_GAP_MS, LETTER_SEAL_MS, LETTER_FOLD_AT_MS, LETTER_FOLD_MS, LETTER_END_AT_MS, LETTER_FONT_WAIT_MS]).toEqual([100, 500, 5000, 420, 5420, 1000]);
     expect([LETTER_PAPER_MAX_H, LETTER_PAPER_MIN_H]).toEqual([340, 220]);
     expect(LETTER_TIERS).toEqual([
-      { font: 28, line: 36 },
-      { font: 24, line: 32 },
-      { font: 20, line: 28 },
+      { font: 18, line: 26 },
+      { font: 17, line: 24 },
+      { font: 16, line: 22 },
     ]);
     expect(SEAL_GLYPH).toBe("M");
   });
@@ -80,18 +80,18 @@ describe("writeSchedule", () => {
 });
 
 describe("chooseTier", () => {
-  const measure = (n1: number, n2: number, n3: number) => (t: { font: number }) => (t.font === 28 ? n1 : t.font === 24 ? n2 : n3);
-  it("28px 글씨가 들어가면 1단계", () => {
-    expect(chooseTier(measure(7, 5, 4), 284)).toMatchObject({ tier: 1, font: 28, line: 36, lines: 7, overflow: false });
+  const measure = (n1: number, n2: number, n3: number) => (t: { font: number }) => (t.font === 18 ? n1 : t.font === 17 ? n2 : n3);
+  it("18px 글씨가 들어가면 1단계", () => {
+    expect(chooseTier(measure(7, 5, 4), 284)).toMatchObject({ tier: 1, font: 18, line: 26, lines: 7, overflow: false });
   });
   it("1단계가 넘으면 2단계", () => {
-    expect(chooseTier(measure(8, 6, 4), 284)).toMatchObject({ tier: 2, font: 24, line: 32, lines: 6, overflow: false });
+    expect(chooseTier(measure(11, 6, 4), 284)).toMatchObject({ tier: 2, font: 17, line: 24, lines: 6, overflow: false });
   });
   it("2단계도 넘으면 3단계", () => {
-    expect(chooseTier(measure(12, 9, 8), 284)).toMatchObject({ tier: 3, font: 20, line: 28, lines: 8, overflow: false });
+    expect(chooseTier(measure(12, 12, 8), 284)).toMatchObject({ tier: 3, font: 16, line: 22, lines: 8, overflow: false });
   });
   it("3단계로도 넘으면 3단계 + overflow", () => {
-    expect(chooseTier(measure(20, 14, 11), 284)).toMatchObject({ tier: 3, lines: 11, overflow: true });
+    expect(chooseTier(measure(20, 14, 13), 284)).toMatchObject({ tier: 3, lines: 13, overflow: true });
   });
 });
 

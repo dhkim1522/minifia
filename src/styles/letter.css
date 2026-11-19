@@ -52,8 +52,8 @@
   transform: rotate(-1.5deg);
   background-color: var(--letter-paper);
   /* 줄 쳐진 선: 줄 높이마다 1px. 위치는 글 덩어리 윗변(--lw-pos)에 맞춘다 */
-  background-image: linear-gradient(to bottom, transparent calc(var(--lw-line, 36px) - 1px), var(--letter-rule) calc(var(--lw-line, 36px) - 1px));
-  background-size: 100% var(--lw-line, 36px);
+  background-image: linear-gradient(to bottom, transparent calc(var(--lw-line, 26px) - 1px), var(--letter-rule) calc(var(--lw-line, 26px) - 1px));
+  background-size: 100% var(--lw-line, 26px);
   background-position: 0 var(--lw-pos, 0px);
   color: var(--letter-ink);
 }
@@ -68,15 +68,15 @@
 }
 .mf-letter__head {
   position: absolute;
-  left: 24px;
-  top: 24px;
+  inset: 18px 18px auto;
+  display: flex;
+  gap: .25em;
   margin: 0;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.4;
-  font-weight: 400;
-  color: var(--letter-label);
+  font: var(--type-section);
+  color: var(--letter-ink);
+  white-space: nowrap;
 }
+.mf-letter__author { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mf-letter__line {
   margin: 0;
   width: fit-content;
@@ -85,8 +85,8 @@
   white-space: nowrap;
   font-family: var(--font-hand);
   font-weight: 400;
-  font-size: var(--lw-font, 28px);
-  line-height: var(--lw-line, 36px);
+  font-size: var(--lw-font, 18px);
+  line-height: var(--lw-line, 26px);
   color: var(--letter-ink);
   word-break: keep-all;
   overflow-wrap: anywhere;

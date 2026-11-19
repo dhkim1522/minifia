@@ -11,10 +11,6 @@
   min-width: 0;
 }
 
-.mf-game-phase-header :is(.mv-phase__title, .mv-phase__tod, .mv-phase__sep) {
-  font-size: clamp(16px, 4.8vw, 20px);
-}
-
 /* 지도와 역할 확인·답안의 머리는 같은 조작 좌표를 쓴다. */
 .mf-game__header:has(.mf-game-phase-header),
 .mf-reveal > .mf-reveal__header:has(.mf-game-phase-header),

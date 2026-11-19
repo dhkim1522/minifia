@@ -64,7 +64,8 @@
 /* 공유 시트(C-03) */
 .mf-share { display: flex; flex-direction: column; gap: var(--space-md); }
 .mf-share__full { margin: 0; padding-right: calc(var(--tap-min) + var(--space-sm)); font-size: 14px; line-height: 1.4; color: var(--gray-300); word-break: keep-all; }
-.mf-share__code { margin: 0; font: var(--type-display); letter-spacing: 0.12em; font-variant-numeric: tabular-nums; color: var(--gray-50); }
+.mf-share__label { margin: 0; font: var(--type-body-strong); color: var(--gray-50); }
+.mf-share__code { margin: 0; font: var(--type-body); letter-spacing: 0.12em; font-variant-numeric: tabular-nums; color: var(--gray-100); }
 .mf-share__link { white-space: nowrap; overflow-x: auto; text-overflow: clip; }
 .mf-share__hint { margin: 0; font-size: 14px; line-height: 1.4; color: var(--gray-300); word-break: keep-all; }
 .mf-share__buttons { display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-sm); }

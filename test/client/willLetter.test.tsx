@@ -252,8 +252,8 @@ const letterOf2 = (over: Partial<WillLetterState> = {}): WillLetterState => ({
   ...over,
 });
 /** 단계별 줄 수를 정해 주는 가짜 측정: 글자를 그 수만큼의 줄로 나눈다 */
-const linesBy = (counts: { 28: number; 24: number; 20: number }) => (text: string, tier: { font: number; line: number }): string[] => {
-  const n = counts[tier.font as 28 | 24 | 20];
+const linesBy = (counts: { 18: number; 17: number; 16: number }) => (text: string, tier: { font: number; line: number }): string[] => {
+  const n = counts[tier.font as 18 | 17 | 16];
   return Array.from({ length: n }, (_, i) => `${text}-${i + 1}`);
 };
 const pv = (el: Element | null, name: string): string => (el as HTMLElement).style.getPropertyValue(name);
@@ -280,37 +280,37 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
     Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
   });
 
-  it("1단계 9줄이 안쪽 높이를 넘으면 2단계 24/32로 여섯 줄을 배치한다", () => {
-    const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 28: 9, 24: 6, 20: 5 })} />);
+  it("1단계 11줄이 안쪽 높이를 넘으면 2단계 17/24로 여섯 줄을 배치한다", () => {
+    const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 18: 11, 17: 6, 16: 5 })} />);
     tick(400);
     const paper = paperOf(r.container);
-    expect(pv(paper, "--lw-font")).toBe("24px");
-    expect(pv(paper, "--lw-line")).toBe("32px");
+    expect(pv(paper, "--lw-font")).toBe("17px");
+    expect(pv(paper, "--lw-line")).toBe("24px");
     expect(pv(paper, "--lw-paper-h")).toBe("340px");
     expect(lineEls(r.container).length).toBe(6);
   });
 
-  it("1단계로 들어가면 28/36을 쓴다", () => {
-    const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 28: 2, 24: 2, 20: 2 })} />);
+  it("1단계로 들어가면 18/26을 쓴다", () => {
+    const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 18: 2, 17: 2, 16: 2 })} />);
     tick(400);
-    expect(pv(paperOf(r.container), "--lw-font")).toBe("28px");
+    expect(pv(paperOf(r.container), "--lw-font")).toBe("18px");
     expect(lineEls(r.container).length).toBe(2);
   });
 
-  it("3단계로도 넘으면 3단계(20/28)로 두고 편지지를 가용 높이까지 키운다(하한 220)", () => {
-    const grow = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 28: 12, 24: 13, 20: 11 })} getInputTop={() => 640} />);
+  it("3단계로도 넘으면 3단계(16/22)로 두고 편지지를 가용 높이까지 키운다(하한 220)", () => {
+    const grow = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 18: 17, 17: 17, 16: 14 })} getInputTop={() => 640} />);
     tick(400);
     // 가용 = 640 − 78(헤더 62 + 16) − 43(1줄 추정) − 40 − 30 = 449 → 340 을 넘어 가용까지
-    expect(pv(paperOf(grow.container), "--lw-font")).toBe("20px");
+    expect(pv(paperOf(grow.container), "--lw-font")).toBe("16px");
     expect(pv(paperOf(grow.container), "--lw-paper-h")).toBe("449px");
     grow.unmount();
-    const floor = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 28: 12, 24: 13, 20: 11 })} getInputTop={() => 300} />);
+    const floor = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 18: 17, 17: 17, 16: 14 })} getInputTop={() => 300} />);
     tick(400);
     expect(pv(paperOf(floor.container), "--lw-paper-h")).toBe("220px");
   });
 
   it("입력줄 윗변이 알려지면 편지지 높이는 min(340, 가용) 하한 220, 묶음은 알림 아래에서 입력줄 윗변 사이에 놓인다", () => {
-    const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 28: 2, 24: 2, 20: 2 })} getInputTop={() => 520} />);
+    const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 18: 2, 17: 2, 16: 2 })} getInputTop={() => 520} />);
     tick(400);
     // 가용 = 520 − 78 − 43 − 40 − 30 = 329
     expect(pv(paperOf(r.container), "--lw-paper-h")).toBe("329px");
@@ -345,7 +345,7 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
     document.body.appendChild(frame);
     const spy = inheritCustomProps();
     try {
-      const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 28: 2, 24: 2, 20: 2 })} getInputTop={() => 520} />, { container: frame.appendChild(document.createElement("div")) });
+      const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 18: 2, 17: 2, 16: 2 })} getInputTop={() => 520} />, { container: frame.appendChild(document.createElement("div")) });
       tick(400);
       // 가용 = 520 − 116 − 43 − 40 − 30 = 291
       expect(pv(paperOf(r.container), "--lw-paper-h")).toBe("291px");
@@ -364,7 +364,7 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
     document.body.appendChild(frame);
     const spy = inheritCustomProps();
     try {
-      const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 28: 2, 24: 2, 20: 2 })} getInputTop={() => 520} />, { container: frame.appendChild(document.createElement("div")) });
+      const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 18: 2, 17: 2, 16: 2 })} getInputTop={() => 520} />, { container: frame.appendChild(document.createElement("div")) });
       tick(400);
       expect(pv(letterOf(r.container)!, "--lw-top")).toBe("141px");
     } finally {
@@ -377,7 +377,7 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
     const bands: Array<unknown> = [];
     const split = (text: string, tier: { font: number; line: number }, band: { from: number; side: number } | null): string[] => {
       bands.push(band);
-      const n = tier.font === 20 ? (band === null ? 8 : 9) : 20;
+      const n = tier.font === 16 ? (band === null ? 9 : 10) : 20;
       return Array.from({ length: n }, (_, i) => `${i + 1}줄`);
     };
     const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={split} />);
@@ -386,8 +386,8 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
     const block = r.container.querySelector<HTMLElement>(".mf-letter__text")!;
     expect(block.style.top).toBe("52px");
     const lines = lineEls(r.container);
-    expect(lines.length).toBe(9);
-    expect(lines.map((l) => l.style.marginRight)).toEqual(["", "", "", "", "", "", "88px", "88px", "88px"]);
+    expect(lines.length).toBe(10);
+    expect(lines.map((l) => l.style.marginRight)).toEqual(["", "", "", "", "", "", "", "", "88px", "88px"]);
     expect(pv(paperOf(r.container), "--lw-pos")).toBe("52px");
   });
 
@@ -411,12 +411,12 @@ describe("편지 글꼴 대기·시계 기준 수명·모션 줄이기 (C-3·C-5
     Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
   });
   const mountLetter = (over: Partial<WillLetterState> = {}, reduced = false) =>
-    render(<WillLetter letter={letterOf2(over)} reducedMotion={reduced} splitLines={linesBy({ 28: 1, 24: 1, 20: 1 })} />);
+    render(<WillLetter letter={letterOf2(over)} reducedMotion={reduced} splitLines={linesBy({ 18: 1, 17: 1, 16: 1 })} />);
 
-  it("글꼴이 준비되면 T0 에 그대로 시작한다: load 는 28px 글꼴과 본문으로 불린다", async () => {
+  it("글꼴이 준비되면 T0 에 그대로 시작한다: load 는 18px 글꼴과 본문으로 불린다", async () => {
     fontsFake(() => new Promise((res) => setTimeout(() => res([{}]), 100)));
     const r = mountLetter();
-    expect(document.fonts.load).toHaveBeenCalledWith('28px "Nanum Pen Script"', WILL);
+    expect(document.fonts.load).toHaveBeenCalledWith('18px "Nanum Pen Script"', WILL);
     tick(400);
     await flush();
     const letter = letterOf(r.container)!;
@@ -485,7 +485,7 @@ describe("편지 글꼴 대기·시계 기준 수명·모션 줄이기 (C-3·C-5
 
   it("모션 줄이기: 처음부터 완성된 모양(모든 줄·인장), 막대 정지, T0 + 5.42초에 제거 — 애니메이션 클래스 is-still", () => {
     const live = vi.fn();
-    const r = render(<WillLetter letter={letterOf2()} reducedMotion splitLines={linesBy({ 28: 2, 24: 2, 20: 2 })} onLive={live} />);
+    const r = render(<WillLetter letter={letterOf2()} reducedMotion splitLines={linesBy({ 18: 2, 17: 2, 16: 2 })} onLive={live} />);
     tick(400);
     const letter = letterOf(r.container)!;
     expect(letter.classList.contains("is-still")).toBe(true);
@@ -503,7 +503,7 @@ describe("편지 글꼴 대기·시계 기준 수명·모션 줄이기 (C-3·C-5
 
   it("T0 전에는 편지가 없고(onLive false), T0 에 켜진다", () => {
     const live = vi.fn();
-    const r = render(<WillLetter letter={letterOf2({ t0: T + 2600 })} reducedMotion={false} splitLines={linesBy({ 28: 1, 24: 1, 20: 1 })} onLive={live} />);
+    const r = render(<WillLetter letter={letterOf2({ t0: T + 2600 })} reducedMotion={false} splitLines={linesBy({ 18: 1, 17: 1, 16: 1 })} onLive={live} />);
     tick(2599);
     expect(letterOf(r.container)).toBeNull();
     expect(live).not.toHaveBeenCalledWith(true);

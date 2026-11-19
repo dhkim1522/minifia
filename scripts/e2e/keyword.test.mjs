@@ -161,11 +161,13 @@ test("KW9: 새로고침과 역할 기록에 첫날 집계를 반복하지 않는
   assert.ok(noMeasure(kw9Reconnect(null)));
 });
 
-test("KW10: 정답 큰 글이 같고 밤에 정답이 남지 않는다", () => {
-  const ok = { pages: [{ who: "시민", label: "제시어", text: "기생충" }, { who: "마피아", label: "제시어", text: "기생충" }], answer: "기생충", hidden: [{ who: "시민", hidden: true }, { who: "마피아", hidden: true }] };
+test("KW10: 공개 제시어가 같고 제목보다 작으며 밤에 남지 않는다", () => {
+  const announcement = { label: "제시어", text: "기생충", titlePx: 20, textPx: 16 };
+  const ok = { pages: [{ who: "시민", ...announcement }, { who: "마피아", ...announcement }], answer: "기생충", hidden: [{ who: "시민", hidden: true }, { who: "마피아", hidden: true }] };
   assert.equal(kw10Reveal(ok).ok, true);
   assert.equal(kw10Reveal({ ...ok, pages: [ok.pages[0], { ...ok.pages[1], text: "???" }] }).ok, false);
   assert.equal(kw10Reveal({ ...ok, pages: [{ ...ok.pages[0], label: "" }, ok.pages[1]] }).ok, false);
+  assert.equal(kw10Reveal({ ...ok, pages: [{ ...ok.pages[0], textPx: 36 }, ok.pages[1]] }).ok, false);
   assert.equal(kw10Reveal({ ...ok, hidden: [{ who: "시민", hidden: false }] }).ok, false);
   assert.ok(noMeasure(kw10Reveal({ ...ok, answer: "" })));
 });

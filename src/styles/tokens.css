@@ -101,7 +101,7 @@
   --type-chat-text: 400 14px/1.4 var(--font-ui);
   --type-brand: 900 clamp(50px, 15vw, 72px)/1.08 var(--font-ui);
   --type-headline: 900 clamp(32px, 10vw, 36px)/1.2 var(--font-ui);
-  --type-hand-note: 400 20px/1.35 var(--font-hand);
+  --type-hand-note: 400 18px/1.35 var(--font-hand);
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;

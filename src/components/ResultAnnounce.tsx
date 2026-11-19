@@ -9,7 +9,7 @@ export interface ResultAnnounceProps {
   icon?: AnnounceIcon;
   /** top = 유언 편지가 있는 아침: 헤더 아래 위 72 로 올라가 편지 묶음 머리에 선다(09.1-11, UI-SPEC C-2). 기본은 위 240 */
   placement?: "top";
-  /** 글자 위 한 줄 라벨(Body 16/700 gray-300, 23-07 정답 공개의 "정답"). 없으면 글자만 — 있으면 key 가 label+text 라 바뀔 때 등장 모션이 다시 돈다 */
+  /** 세부 내용 위에 표시하는 발표 제목. 생략하면 text가 단독 발표가 된다. */
   label?: string;
   /** 재접속 첫 화면: 등장 모션 없이 남은 시간만 보인다(is-still) */
   still?: boolean;
@@ -17,7 +17,7 @@ export interface ResultAnnounceProps {
   embedded?: boolean;
 }
 
-// 결과 알림(8페이즈, UI-SPEC "결과 알림"): 가운데 위 240 에 36px. 뒤 맵을 night-950 62% 로 어둡게 한다. 모든 단계 공용 틀이다.
+// 결과 알림(8페이즈, UI-SPEC "결과 알림"): 뒤 맵을 어둡게 하는 모든 단계 공용 틀이다.
 // 한 줄을 넘으면 두 줄로 감기고(word-break keep-all) 글자를 줄이지 않는다(E6 #31). 9페이즈(09-18)부터 글자 위에 아이콘 56 을 둘 수 있다(밤·아침 알림).
 // 한 번에 하나다 — 새 알림은 이전 것을 바꾼다(부르는 쪽 useDayFx 가 하나의 알림만 넘기고, key 가 글자라 바뀔 때 등장 모션이 다시 돈다).
 // 결과가 없으면 요소 자체를 만들지 않는다. 글자는 React 텍스트 노드로만 그린다(닉네임이 들어가므로 HTML 로 읽히지 않는다, T-08-33).
@@ -25,7 +25,7 @@ export interface ResultAnnounceProps {
 // 23-07: label 이 있으면 글자 위에 한 줄 라벨을 둔다(정답 공개 "정답"). 읽는 글은 role=status 안에서 "정답 {키워드}" 하나다 — 둘 사이 공백 텍스트가 읽기 이음새다.
 export function ResultAnnounce({ text, icon, placement, label, still, embedded }: ResultAnnounceProps) {
   if (text === null) return null;
-  const cls = ["mf-announce", embedded ? "is-embedded" : "", placement === "top" ? "is-top" : "", still === true ? "is-still" : ""].filter(Boolean).join(" ");
+  const cls = ["mf-announce", embedded ? "is-embedded" : "", label !== undefined ? "has-label" : "", placement === "top" ? "is-top" : "", still === true ? "is-still" : ""].filter(Boolean).join(" ");
   return (
     <div className={cls} data-announce="" role={embedded ? undefined : "status"}>
       <div key={label === undefined ? text : `${label}\n${text}`} className="mf-announce__body">

@@ -996,7 +996,7 @@ describe("ChatPanel card 메시지 (MORN-02)", () => {
     expect(card).toContain("border-color: var(--noir-line)");
     expect(card).toContain("border-radius: 5px");
     expect(rulesFor(V2_CSS, ".mv-chat__card--mafia").join(";")).toContain("border-color: var(--crimson-700)");
-    expect(rulesFor(V2_CSS, ".mv-chat__card-title").join(";")).toContain("font-size: 14px");
+    expect(rulesFor(V2_CSS, ".mv-chat__card-title").join(";")).toContain("font: var(--type-stage)");
     expect(rulesFor(V2_CSS, ".mv-chat__card-text").join(";")).toContain("word-break: keep-all");
     expect(rulesFor(V2_CSS, ".mv-chat__card-text").join(";")).toContain("overflow-wrap: anywhere");
   });

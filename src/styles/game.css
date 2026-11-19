@@ -37,10 +37,11 @@
 .mf-announce__body { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); max-width: 100%; }
 .mf-announce__icon { flex: none; color: var(--gray-300); filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--night-950) 70%, transparent)); }
 .mf-announce__text { display: block; max-width: 100%; text-align: center; font: var(--type-headline); color: var(--gray-50); text-shadow: var(--shadow-text); word-break: keep-all; overflow-wrap: anywhere; animation: mf-announce-in 600ms var(--ease-out) both; }
+.mf-announce:is(.has-label, .is-embedded) .mf-announce__text { font: var(--type-body); }
 /* 처형과 유언 편지가 있는 아침에는 아래 편지가 가리지 않도록 위에 붙인다. */
 .mf-announce.is-top { align-items: flex-start; padding-top: calc(var(--mf-host-bottom, 62px) + var(--space-md)); }
-/* 정답 공개 위 줄은 보조 라벨을 사용한다. 본문과의 간격은 body의 gap으로 일관되게 배치한다. */
-.mf-announce__label { display: block; text-align: center; font: var(--type-label-strong); color: var(--gray-300); text-shadow: var(--shadow-text); animation: mf-announce-in 600ms var(--ease-out) both; }
+/* 정답 공개처럼 제목이 있는 발표는 중앙 카드와 같은 제목 규격을 쓴다. */
+.mf-announce__label { display: block; text-align: center; font: var(--type-section); color: var(--gray-50); text-shadow: var(--shadow-text); animation: mf-announce-in 600ms var(--ease-out) both; }
 .mf-announce.is-still, .mf-announce.is-still .mf-announce__text, .mf-announce.is-still .mf-announce__label { animation: none; }
 @keyframes mf-announce-dim { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mf-announce-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

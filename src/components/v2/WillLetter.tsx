@@ -55,7 +55,7 @@ const INPUT_GAP = 4;
 const ANNOUNCE_H_GUESS = 43;
 /** 가용 높이에서 빼는 값: 간격 합 40 + 접힘 안내 30 */
 const AVAIL_REST = 40 + 30;
-/** 머리글 아래(24 + 14×1.4 ≈ 44, 여유 8)와 인장 윗변 위 간격 */
+/** 머리글 아래(18 + 20×1.3 = 44, 여유 8)와 인장 윗변 위 간격 */
 const HEAD_BOTTOM = 52;
 const SEAL_BOX = 84 + 8;
 const SEAL_GAP = 4;
@@ -66,7 +66,7 @@ const BLOCK_BOTTOM = 24;
 
 /**
  * 글 덩어리 윗변 y(편지지 안). 기본은 편지지 세로 가운데이고(시안), 덩어리 아래끝이 인장 윗변을 침범하면 머리글 아래까지 올려 인장 위에 맞춘다.
- * 인장 위에 아예 못 들어가는 7줄 같은 긴 글은 가운데에 둔다(3단계 줄 높이 32, 마지막 줄이 짧아 대개 인장 왼쪽에 있다).
+ * 인장 위에 아예 못 들어가는 7줄 같은 긴 글은 가운데에 둔다(마지막 줄이 짧아 대개 인장 왼쪽에 있다).
  */
 export function blockTop(paperH: number, lines: number, line: number): number {
   const h = lines * line;
@@ -317,7 +317,7 @@ export function WillLetter({ letter, reducedMotion, splitLines, getInputTop, onL
               style={css({ "--lw-font": `${plan.tier.font}px`, "--lw-line": `${plan.tier.line}px`, "--lw-paper-h": `${plan.paperH}px`, "--lw-pos": `${plan.blockTop}px` })}
             >
               <p className="mf-letter__head" data-will-head="">
-                {`${name} 님의 유언`}
+                <span className="mf-letter__author">{name}</span>{" "}<span>님의 유언</span>
               </p>
               <div className="mf-letter__text" style={{ top: plan.blockTop, height: plan.lines.length * plan.tier.line }}>
                 {plan.lines.map((line, i) => {
