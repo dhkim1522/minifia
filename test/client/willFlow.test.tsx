@@ -697,7 +697,7 @@ describe("키보드 배치 — 패널 숨김 · compact · 초점 복귀 (UI-SPE
 
 
 // ---- 22-11: 유언 단계(defense) — 처형자 시트 자동 열림·[남기기]·자동 저장, 나머지 조용히 지켜보기 (P22-6~9·P22-17, D-15·D-16·D-28) ----
-const secs = (c: ParentNode): HTMLElement | null => c.querySelector<HTMLElement>(".mv-will__secs");
+const gauge = (c: ParentNode): HTMLElement | null => c.querySelector<HTMLElement>("[data-phase-gauge]");
 const defenseOf = (o: ViewOpts = {}): RoomView => makeView({ phase: "defense", mySeat: 3, candidate: 3, endsIn: 10_000, ...o });
 const willMsgs = (send: Send): Array<Extract<ClientMessage, { t: "will" }>> => sent(send).filter((x): x is Extract<ClientMessage, { t: "will" }> => x.t === "will");
 const clock = (): void => {
@@ -705,26 +705,27 @@ const clock = (): void => {
 };
 
 describe("유언 단계 — 처형자 화면 (22-11 P22-6~8)", () => {
-  it("유언 단계가 시작되면 시트가 미리 써 둔 글로 자동으로 열려 아래 패널을 대신하고, 아래줄에 n/50 · 남은 초 · [남기기] 가 있다", () => {
+  it("유언 단계가 시작되면 미리 써 둔 글이 중앙에 열리고 남은 시간은 헤더 게이지에 표시된다", () => {
     clock();
     const m = mount(defenseOf({ will: "미리 쓴 글" }));
     expect(sheet(m.container)).not.toBeNull();
     expect(area(m.container).value).toBe("미리 쓴 글");
+    expect(sheet(m.container)?.closest("[data-phase-event]")?.getAttribute("data-phase-event")).toBe("final-will");
+    expect(m.container.querySelector("[data-chat-locked]")).not.toBeNull();
     const foot = m.container.querySelector(".mv-will__foot")!;
-    expect([...foot.children].map((e) => e.classList[0]).join(",")).toBe("mv-will__count,mv-will__secs,mv-will__save");
-    expect(secs(m.container)?.textContent).toBe("10초");
-    expect(secs(m.container)?.getAttribute("aria-hidden")).toBe("true");
+    expect([...foot.children].map((e) => e.classList[0])).toEqual(["mv-will__count", "mv-will__save"]);
+    expect(gauge(m.container)?.getAttribute("aria-label")).toBe("남은 시간 10초");
     expect(saveBtn(m.container).textContent).toBe("남기기");
     expect(saveBtn(m.container).hasAttribute("data-will-save")).toBe(true);
     expect(saveBtn(m.container).getAttribute("aria-label")).toBe("유언 남기기");
     expect(m.container.querySelector(".mv-will__head")?.textContent).toContain("유언");
   });
 
-  it("마지막 5초는 남은 초가 진홍(urgent) 톤이다", () => {
+  it("마지막 5초에는 헤더 게이지가 진홍으로 바뀐다", () => {
     clock();
     const m = mount(defenseOf({ endsIn: 4_200 }));
-    expect(secs(m.container)?.textContent).toBe("5초");
-    expect(secs(m.container)?.getAttribute("data-tone")).toBe("urgent");
+    expect(gauge(m.container)?.getAttribute("aria-label")).toBe("남은 시간 5초");
+    expect(gauge(m.container)?.getAttribute("data-tone")).toBe("urgent");
   });
 
   it("[남기기] → {t:'will', text, final:true} 한 번, 곧바로 '남김' 비활성이고 3초가 지나도 보내지 못했다는 알림이 없다(서버 응답 대기 표시 없음)", () => {

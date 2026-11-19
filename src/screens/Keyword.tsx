@@ -58,11 +58,11 @@ const META_ID = "mf-keyword-meta";
 /** 카드 등장 모션(opacity·translateY, --dur-med)의 길이와 같은 값 — 이만큼 지난 뒤 들어오면(재접속) 모션 없이 바로 보인다. */
 const CARD_ENTER_MS = 420;
 
-// 첫날 키워드 카드(23-01, P23-1~5) + 답 입력줄(23-09, P23-6·9~15). 역할 확인과 같은 3D 무대(PreGame, sceneKey preGame) 위 가운데 카드 하나와 아래 입력줄이다 — 무대는 PreGame 이 깐다.
+// 첫날 키워드 카드(23-01, P23-1~5) + 답 입력줄(23-09, P23-6·9~15). 역할 확인과 같은 3D 무대(PreGame, sceneKey preGame) 위 가운데 카드 안에 제시어와 답 입력을 모은다 — 무대는 PreGame 이 깐다.
 // 카드는 맨 위 장르, 가운데 큰 키워드(마피아는 ???), 아래 각주 한 줄이다. 마피아 표식 칩·색·문구는 따로 두지 않는다 — 모양은 시민과 같고 ??? 하나만 다르다.
 // 키워드는 서버가 시민 편 본인에게만 보낸다(me.keyword). 마피아는 키 자체가 없으니 DOM 에도 단어가 없다. 입력줄 표식(data-answer-*)에는 역할·키워드 값이 없다(T-23-33).
 // 입력줄: 메타 줄(거절·n/20) + 입력 행(입력칸 + [보내기] 원). 읽기 3초 동안 잠기고(locked) 풀리면 빛난다(open), 보내면 읽기 전용·check(sent).
-// 글 규칙(잠금·20자소·거절·초안 저장)은 useKeywordAnswer, 서버가 정한 규칙을 표시·전송만 한다(결정 0002). 키보드가 열리면 카드가 컴팩트형으로 입력줄 위에 붙는다.
+// 글 규칙(잠금·20자소·거절·초안 저장)은 useKeywordAnswer, 서버가 정한 규칙을 표시·전송만 한다(결정 0002). 키보드가 열리면 같은 카드가 작아지고 보이는 영역 안에 놓인다.
 export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, onEvent, timeless = false }: KeywordProps) {
   const word = view.me.keyword;
   const genre = view.day?.keyword?.genre ?? "";
@@ -130,62 +130,62 @@ export function Keyword({ view, offset, epoch = 0, myRoleButton, send, canSend, 
           {!playtest ? <p className="mf-keyword__note" data-keyword-note="" hidden={kbOpen}>
             {KEYWORD_COPY.note}
           </p> : null}
+          {!timeless || view.me.answer !== undefined ? <div className="mf-keyword__answer" data-answer-state={answer.state}>
+            <div className="mf-keyword__meta" id={META_ID} hidden={playtest && !answer.notice && !sent}>
+              <span className="mf-keyword__mid">
+                <span className="mv-chat__notice" role="status" data-answer-notice="">
+                  {answer.notice ?? ""}
+                </span>
+                <span className="mf-keyword__done" role="status" data-answer-done={sent ? "" : undefined}>{sent ? KEYWORD_COPY.done : ""}</span>
+              </span>
+              {!playtest ? <span className="mf-keyword__count" data-answer-count="" data-full={answer.count >= ANSWER_MAX_GRAPHEMES ? "true" : undefined}>
+                {KEYWORD_COPY.count(answer.count)}
+              </span> : null}
+            </div>
+            <form className="mv-chat__form" onSubmit={onSubmit}>
+              <div className={call ? "mv-chat__field is-call" : "mv-chat__field"}>
+                <input
+                  ref={inputRef}
+                  className="mv-chat__input"
+                  data-answer-input=""
+                  data-call={call ? "" : undefined}
+                  type="text"
+                  inputMode="text"
+                  enterKeyHint="send"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  aria-label={KEYWORD_COPY.inputName}
+                  aria-describedby={META_ID}
+                  placeholder={playtest && !sent ? word === undefined ? KEYWORD_COPY.hiddenHint : KEYWORD_COPY.note : undefined}
+                  disabled={answer.state === "locked"}
+                  readOnly={sent || timeless}
+                  value={answer.value}
+                  onChange={(e) => answer.setValue(e.target.value, composed.composing())}
+                  onCompositionStart={composed.bind.onCompositionStart}
+                  onCompositionEnd={onCompositionEnd}
+                  onBlur={composed.bind.onBlur}
+                />
+              </div>
+              <button
+                type="submit"
+                className="mv-tool mv-chat__send"
+                data-answer-send=""
+                disabled={sent}
+                aria-label={sent ? KEYWORD_COPY.sentName : KEYWORD_COPY.sendName}
+                aria-disabled={sent ? undefined : answer.canSubmit ? "false" : "true"}
+                // 누르는 순간 포커스가 버튼으로 옮겨 가 입력칸이 blur 되어 키보드가 닫히지 않게 한다(채팅 입력줄과 같다)
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                <span className="mv-tool__face">
+                  <V2Icon name={sent ? "check" : "send"} size={22} />
+                </span>
+              </button>
+            </form>
+          </div> : null}
         </div>
       </section>
-      {!timeless || view.me.answer !== undefined ? <div className="mf-keyword__answer" data-answer-state={answer.state}>
-        <div className="mf-keyword__meta" id={META_ID} hidden={playtest && !answer.notice}>
-          <span className="mf-keyword__mid">
-            <span className="mv-chat__notice" role="status" data-answer-notice="">
-              {answer.notice ?? ""}
-            </span>
-          </span>
-          {!playtest ? <span className="mf-keyword__count" data-answer-count="" data-full={answer.count >= ANSWER_MAX_GRAPHEMES ? "true" : undefined}>
-            {KEYWORD_COPY.count(answer.count)}
-          </span> : null}
-        </div>
-        <span className="mf-sr-only" role="status" data-answer-done={sent ? "" : undefined}>{sent ? KEYWORD_COPY.done : ""}</span>
-        <form className="mv-chat__form" onSubmit={onSubmit}>
-          <div className={call ? "mv-chat__field is-call" : "mv-chat__field"}>
-            <input
-              ref={inputRef}
-              className="mv-chat__input"
-              data-answer-input=""
-              data-call={call ? "" : undefined}
-              type="text"
-              inputMode="text"
-              enterKeyHint="send"
-              autoComplete="off"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              aria-label={KEYWORD_COPY.inputName}
-              aria-describedby={META_ID}
-              placeholder={playtest && !sent ? word === undefined ? KEYWORD_COPY.hiddenHint : KEYWORD_COPY.note : undefined}
-              disabled={answer.state === "locked"}
-              readOnly={sent || timeless}
-              value={answer.value}
-              onChange={(e) => answer.setValue(e.target.value, composed.composing())}
-              onCompositionStart={composed.bind.onCompositionStart}
-              onCompositionEnd={onCompositionEnd}
-              onBlur={composed.bind.onBlur}
-            />
-          </div>
-          <button
-            type="submit"
-            className="mv-tool mv-chat__send"
-            data-answer-send=""
-            disabled={sent}
-            aria-label={sent ? KEYWORD_COPY.sentName : KEYWORD_COPY.sendName}
-            aria-disabled={sent ? undefined : answer.canSubmit ? "false" : "true"}
-            // 누르는 순간 포커스가 버튼으로 옮겨 가 입력칸이 blur 되어 키보드가 닫히지 않게 한다(채팅 입력줄과 같다)
-            onMouseDown={(e) => e.preventDefault()}
-          >
-            <span className="mv-tool__face">
-              <V2Icon name={sent ? "check" : "send"} size={22} />
-            </span>
-          </button>
-        </form>
-      </div> : null}
     </main>
   );
 }

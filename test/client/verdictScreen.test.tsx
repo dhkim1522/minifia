@@ -356,12 +356,17 @@ describe("유언 단계 화면 — 채팅 잠금 (22-11 D-16)", () => {
 });
 
 describe("찬반 화면 — 유령·헤더·조명 (22-10)", () => {
-  it("제목 '찬반', 헤더 안내 줄 없음, 산 사람은 숫자 줄 + 단추 둘", () => {
+  it("산 사람은 헤더 안내 줄 없이 중앙 카드에서 질문·두 선택·집계를 본다", () => {
     const { container } = mount(makeView());
     expect(titleOf(container)).toBe("찬반");
     expect(hintOf(container)).toBe("");
     expect(verdictBtns(container).length).toBe(2);
     expect(countRow(container)).not.toBeNull();
+    const event = container.querySelector('[data-phase-event="verdict"]')!;
+    expect(event.querySelector("h2")?.textContent).toBe("오늘 처형할까요?");
+    expect(event.contains(countRow(container))).toBe(true);
+    expect(verdictBtns(container).every((button) => event.contains(button))).toBe(true);
+    expect(container.querySelector("[data-world-panel] [data-verdict-row]")).toBeNull();
   });
 
   it("유령(탈락한 나): 같은 숫자 줄과 채팅, 단추는 0개(보기 패널)", () => {
@@ -409,18 +414,6 @@ describe("찬반 줄 — 키보드가 열리면 숨고 닫으면 돌아온다 (E
   });
 });
 
-describe("찬반 줄 배치 CSS (UI-SPEC 패널 높이 표)", () => {
-  it("찬반 줄 간격 8, 점과 기록 사이는 패널 간격 10, 진홍·놋쇠 변수 없음", () => {
-    const css = readFileSync("src/styles/game.css", "utf8");
-    const rule = css.split("\n").find((l) => l.startsWith(".mf-game__verdict "));
-    expect(rule).toBeDefined();
-    expect(rule).toMatch(/flex-direction:\s*column/);
-    expect(rule).toMatch(/gap:\s*8px/);
-    expect(css).not.toMatch(/crimson|brass/);
-    expect(css).toMatch(/\.mf-game__panel \{[^}]*gap:\s*10px/);
-  });
-});
-
 // ---- 처형 — 유언 카드 3.0초 → 처형 알림 3.0초 → 꼬리 0.6초 (DAY-06, 22-12 P22-11~14, 결정 0053·0060-5) ----
 
 describe("처형 화면 (DAY-06, 22-12)", () => {
@@ -449,11 +442,14 @@ describe("처형 화면 (DAY-06, 22-12)", () => {
     return m;
   };
 
-  it("처형 단계 진입(0ms): 유언 카드가 모두에게 보이고(role=status·data-will-reveal·4줄 클래스) 큰 글·hot 줄은 아직 없다 — 3.0초에 카드가 빠지고 '도윤 님 처형' 이 선다", () => {
+  it("처형 단계 진입(0ms): 유언 카드가 중앙에 보이고 3초 뒤 같은 장면에 처형 결과가 이어진다", () => {
     const m = enter();
     const card = willCard(m.container);
     expect(card?.textContent).toBe("다들 잘 있어");
-    expect(card?.getAttribute("role")).toBe("status");
+    const scene = card?.closest('[data-phase-event="execution"]');
+    const status = scene?.querySelector('[role="status"]');
+    expect(status?.contains(card)).toBe(true);
+    expect(status?.querySelector('[role="status"]')).toBeNull();
     expect(cardBox(m.container)).not.toBeNull();
     expect(announceText(m.container)).toBe("");
     expect(hotLines(m.container)).toEqual([]);
@@ -461,8 +457,9 @@ describe("처형 화면 (DAY-06, 22-12)", () => {
     expect(willCard(m.container)).not.toBeNull();
     expect(announceText(m.container)).toBe("");
     advance(2);
-    expect(willCard(m.container)).toBeNull(); // 페이드 아웃 상태(aria-hidden, 표식 없음)
-    expect(m.container.querySelector(".mv-quote--will")?.getAttribute("aria-hidden")).toBe("true");
+    expect(willCard(m.container)).toBeNull();
+    expect(m.container.querySelector(".mv-quote--will")).toBeNull();
+    expect(m.container.querySelector("[data-announce]")?.closest('[data-phase-event="execution"]')).toBe(scene);
     expect(announceText(m.container)).toBe("도윤 님 처형");
     expect(hotLines(m.container)).toEqual(["도윤 님 처형"]);
   });
@@ -481,17 +478,13 @@ describe("처형 화면 (DAY-06, 22-12)", () => {
     expect(willCard(m.container)?.querySelector("b")).toBeNull();
   });
 
-  it("카드 자리: 부모 .mv-will-reveal 이 독 아랫변 + 8, 폭 = 화면 − 32, 누를 수 없고 줄 수는 4 — CSS 규칙으로 고정한다(새 색·토큰 없음)", () => {
+  it("중앙 유언은 조작 영역을 가리지 않고 인용문은 네 줄로 제한한다", () => {
     const css = readFileSync("src/styles/v2.css", "utf8");
     const will = css.split("\n").find((l) => l.startsWith(".mv-quote--will")) ?? "";
     expect(will).toMatch(/-webkit-line-clamp:\s*4/);
-    const place = css.split("\n").find((l) => l.startsWith(".mv-will-reveal")) ?? "";
-    expect(place).toMatch(/--mf-host-dock/);
-    expect(place).toMatch(/\+ 8px/);
-    expect(place).toMatch(/left:\s*var\(--space-md\)/);
-    expect(place).toMatch(/right:\s*var\(--space-md\)/);
-    expect(place).toMatch(/pointer-events:\s*none/);
-    expect(will + place).not.toMatch(/#[0-9a-fA-F]{3,6}|crimson|brass/);
+    const event = readFileSync("src/styles/phase-event.css", "utf8");
+    expect(event).toMatch(/\.mf-phase-event \{[^}]*pointer-events:\s*none/);
+    expect(event).toMatch(/inset-block-end:[^;]*--mf-panel-h/);
   });
 
   it("처형 단계에는 찬반 단추 줄이 없다 — [data-verdict-row] 0개·찬반 단추 0개이고 채팅 패널은 있다(18.1-13, 결정 0083-9)", () => {
@@ -647,10 +640,11 @@ describe("판결 순간 연출 — 시간표 (22-12)", () => {
     expect(lastScene().camera).toMatchObject({ mode: "fixed", zoom: 1, zoomMs: 600 });
   });
 
-  it("결과 알림은 띠 아래(is-top) 자리에 뜬다(0083-10)", () => {
+  it("결과 알림은 중앙 처형 카드 안에서 한 번만 뜬다", () => {
     const m = enter();
     advance(3000);
-    expect(announce(m.container)?.className).toContain("is-top");
+    expect(announce(m.container)?.closest('[data-phase-event="execution"]')).not.toBeNull();
+    expect(m.container.querySelectorAll("[data-announce]")).toHaveLength(1);
   });
 
   it("모든 viewer 가 같은 연출을 본다: 처형자(탈락)·살아 있는 시민·유령 시점 모두 같은 막·카드 시간표와 같은 장면 표", () => {

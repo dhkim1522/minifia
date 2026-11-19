@@ -33,6 +33,10 @@
 .mf-card__desc { font-size: 16px; line-height: 1.5; color: var(--noir-silver); margin: 0; word-break: keep-all; white-space: pre-line; }
 .mf-card__divider { flex: none; width: 100%; height: 1px; background: var(--gray-700); }
 .mf-card__mates { flex: none; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); margin: 0; word-break: keep-all; }
+.mf-card--action { width: min(74vw, 252px, calc((var(--mf-room-h, 100vh) - 104px) * 2 / 3)); max-height: none; cursor: default; }
+.mf-card--action .mf-card__front { padding: var(--space-md); }
+.mf-card__action { width: 100%; flex: none; }
+.mf-playtest__ready-status { display: flex; align-items: center; justify-content: center; min-height: var(--tap-min); gap: var(--space-xs); font-size: 14px; font-weight: 700; color: var(--noir-silver); }
 @keyframes mf-card-rise { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
 /* PhaseBar — 윗줄 왼쪽 제목+안내, 오른쪽 extra, 아랫줄 타이머(UI-SPEC S-05). */
@@ -65,12 +69,10 @@
 /* 빛나는 카드: ::after/::before 의 둥근 모서리를 카드 면과 맞춘다(루트에는 반경이 없다) */
 .mf-card.is-call::after, .mf-card.is-call::before { border-radius: var(--radius-lg); }
 .mf-reveal__hints { flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); padding: var(--space-md) var(--space-lg) var(--space-xl); text-align: center; }
-[data-playtest-role] .mf-playtest__ready { align-items: flex-end; padding-inline: var(--space-md); }
-.mf-playtest__ready .mf-playtest__ready-control { width: var(--tap-min); height: var(--tap-min); min-height: var(--tap-min); padding: 0; border-radius: var(--noir-control-radius); }
-.mf-playtest__ready-status { display: grid; place-items: center; border: 1px solid var(--noir-line); color: var(--noir-silver); background: var(--noir-inset); }
+[data-playtest-role] .mf-reveal__stage { padding: 70px var(--space-md) var(--space-md); }
 
 /* 첫날 증거지는 판화선과 따뜻한 종이로 무대에서 분리한다. 카드 안의 간격은 키보드가 열린 크기 계약을 유지한다. */
-.mf-keyword__card { position: relative; width: 100%; max-width: 344px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); padding: var(--space-md) 20px; clip-path: none; background: repeating-linear-gradient(112deg, transparent 0 3px, color-mix(in srgb, var(--noir-paper-line) 5%, transparent) 3px 4px), var(--noir-paper); border: 1px solid var(--noir-paper-line); text-align: center; pointer-events: none; animation: mf-keyword-in var(--dur-med) var(--ease-out) both; border-radius: var(--noir-surface-radius); box-shadow: var(--shadow-card); }
+.mf-keyword__card { position: relative; width: 100%; max-width: 344px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); padding: var(--space-md) 20px; clip-path: none; background: repeating-linear-gradient(112deg, transparent 0 3px, color-mix(in srgb, var(--noir-paper-line) 5%, transparent) 3px 4px), var(--noir-paper); border: 1px solid var(--noir-paper-line); text-align: center; animation: mf-keyword-in var(--dur-med) var(--ease-out) both; border-radius: var(--noir-surface-radius); box-shadow: var(--shadow-card); }
 .mf-keyword__card::before { content: ""; position: absolute; inset: 6px; border: 1px solid color-mix(in srgb, var(--noir-paper-line) 38%, transparent); clip-path: none; pointer-events: none; border-radius: var(--noir-control-radius); }
 .mf-keyword__card.is-still { animation: none; }
 .mf-keyword__genre { position: relative; margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; letter-spacing: 0.05em; color: var(--noir-ink); word-break: keep-all; }
@@ -84,32 +86,31 @@
 @keyframes mf-keyword-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .mf-keyword__card { animation: none; } }
 
-/* 답 입력줄(23-09, P23-9). 입력 행은 채팅 입력줄 클래스(.mv-chat__form·__field·__input·__send) 그대로 — 새 토큰·hex 없음.
-   바깥: 좌우 16·위 4·아래 22(키보드 닫힘) / 8(열림). 높이 = 메타 20 + 간격 4 + 입력 행 48 + 위 4 + 아래 22 = 98 (열림 84).
-   키보드가 열리면 입력줄이 --mf-kb-lift(useKeyboardLift 가 방 루트에 쓴다)만큼 올라간다 — 닫히면 0. */
-.mf-keyword__answer { flex: none; display: flex; flex-direction: column; gap: var(--space-xs); padding: var(--space-xs) var(--space-md) 22px; margin-bottom: var(--mf-kb-lift, 0px); background: var(--noir-panel); box-shadow: var(--noir-rail); }
-.mf-keyword.is-kb .mf-keyword__answer { padding-bottom: 0; }
-/* 메타 줄 20: 가운데 거절 알림 · 오른쪽 n/20. Label 14·tabular-nums·gray-300 */
-.mf-keyword__meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: 20px; font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; color: var(--gray-300); }
+/* 제시어 카드에 답안과 제출 결과를 함께 표시한다. */
+.mf-keyword .mf-reveal__stage { align-items: safe center; padding: 70px var(--space-md) var(--space-md); overflow-y: auto; }
+.mf-keyword__answer { width: 100%; display: flex; flex-direction: column; }
+.mf-keyword__meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: 20px; font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; color: var(--noir-ink); }
+.mf-keyword__meta[hidden] { display: none; }
 .mf-keyword__count { flex: none; min-width: 3ch; text-align: right; }
-/* 20자소가 차면 글자색만 gray-50(색 변화는 이것뿐, P23-10) */
-.mf-keyword__count[data-full="true"] { color: var(--gray-50); }
+.mf-keyword__count[data-full="true"], .mf-keyword__done { font-weight: 700; }
 .mf-keyword__mid { flex: 1; min-width: 0; text-align: center; }
-.mf-keyword__mid .mv-chat__notice { display: block; }
-.mf-playtest__ready-control.is-call::before,
+.mf-keyword__mid .mv-chat__notice { display: block; color: var(--crimson-700); }
 .mf-reveal .mf-card.is-call::before,
 .mf-keyword .mv-chat__field.is-call::before { animation-iteration-count: 1; }
 /* 20자소 답은 입력칸 안에서 가로로 밀린다(입력칸은 줄바꿈 없는 한 줄). 낸 글은 night-700 면 없이 gray-100 글자만(P23-13) */
 .mf-keyword__answer .mv-chat__input[readonly] { color: var(--gray-100); }
 
-/* 컴팩트 카드(키보드 열림, P23-15): 각주 hidden, 장르 Body 16, 키워드 Heading 24/700 한 줄, 안쪽 8 16, 높이 72(= 안쪽 8 + 장르 24 + 키워드 29 + 안쪽 8 + 테두리 3, 줄 간격 없음).
-   무대는 띠·독 아래 시작 대신 입력줄 윗변에 붙고(아래 4), 띠·소리 단추 줄 위에 얹는다(z-overlay) — 높이 664 이하 폰에서 일부 덮는 것은 알려진 한계. */
+/* 가상 키보드가 올라와도 헤더와 카드가 보이는 영역 안에 있게 한다. */
 .mf-keyword__note[hidden] { display: none; }
-.mf-keyword.is-kb .mf-reveal__stage { align-items: flex-end; padding-top: 0; padding-bottom: var(--space-xs); z-index: var(--z-overlay); pointer-events: none; }
+.mf-keyword.is-kb .mf-reveal__header { top: var(--mf-vv-top, 0px); }
+.mf-keyword.is-kb .mf-reveal__stage { margin-top: var(--mf-vv-top, 0px); margin-bottom: var(--mf-kb-lift, 0px); padding-top: 66px; padding-bottom: var(--space-xs); }
 .mf-keyword__card.is-compact { padding: 8px 16px; gap: 0; }
 .mf-keyword__card.is-compact .mf-keyword__genre::after { display: none; }
 .mf-keyword__card.is-compact .mf-keyword__word { font-size: 24px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: clip; }
 @media (prefers-reduced-motion: reduce) { .mf-keyword__card.is-compact { animation: none; } }
+@media (max-width: 359px) {
+  .mf-keyword__card.is-compact .mf-keyword__word { font-size: 20px; }
+}
 
 /* 단계 화면 전환(phase-enter, 300ms — 토큰에 없는 길이라 지역 상수). 단계 화면 루트는 남는 높이를 채운다. */
 .mf-phase-enter { --mf-phase-enter-ms: 300ms; flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; animation: mf-phase-enter var(--mf-phase-enter-ms) var(--ease-out) both; }

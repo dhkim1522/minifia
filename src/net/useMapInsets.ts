@@ -6,7 +6,7 @@
 // 2. 스테이지 사각형: 위 끝 = 헤더 블록 아래, 아래 끝 = 아래 패널 위(키보드가 열려 있으면 패널 + 키보드 높이). 캔버스는 화면 전체 크기 그대로 두고 카메라 중심만 이 사각형에 맞춘다.
 //    14-01: 위 끝은 헤더 아랫변과 자막 띠 면([data-host-band] .mv-host__band) 아랫변 중 큰 쪽이다.
 //    16-08: 아래 패널이 없는 장면(panelless)은 아래 끝이 0(화면 아래)이다.
-//    재서 넘기는 값이라 패널이 자라도(채팅·단계별 행동 줄) 같은 길로 따라간다. 측정이 0 이면(레이아웃 없는 환경) 넘기지 않고 WorldStage 기본값을 쓴다.
+//    재서 넘기는 값이라 패널 높이가 바뀌어도 따라간다. 헤더를 아직 재지 못했으면 WorldStage 기본값을 쓴다.
 //    늘어난 기록 칸(0083-4)의 식 재료: 루트에 --mf-room-h(루트 높이)와 --mf-panel-rest(패널 높이 − 패널 안 [data-chat-log] 높이, 기록 칸이 커져도 변하지 않는 값)를 값이 바뀔 때만 쓴다.
 //    지목(09.1-08, UI-SPEC A-1): turnActive 이면 루트 안의 `[data-turn-block]`(차례 알약, GameMap 이 ref 를 넘기지 않고 이 훅이 루트에서 찾는다)의 막대 아랫변을 함께 재서
 //    위 끝을 mapStageTop(알약·막대 아랫변 + 4)으로 내린다. 막대가 없을 때(모이는 중·끝 알림)는 마지막으로 잰 값, 없으면 기본값(160 · 압축 124). 작은 폰이면 압축형(turnCompact)을 알려 준다.
@@ -90,7 +90,7 @@ export function useMapInsets(turnActive = false, panelless = false): MapInsets {
     const measure = (): void => {
       let headerBottom = header.offsetTop + header.offsetHeight;
       const bottom = panelless || panel === null ? 0 : panel.offsetHeight;
-      if (headerBottom <= 0 || (!panelless && bottom <= 0)) return;
+      if (headerBottom <= 0) return;
       // 14-01: 자막 띠가 헤더 아래에 얹히므로 위쪽 안전선은 헤더와 띠 면 아랫변 중 큰 쪽이다(띠가 1→2줄이 되면 따라 내려간다). 띠가 없으면 그대로.
       const hostBottom = hostBandBottom(roomRef.current, rootRef.current);
       if (hostBottom > headerBottom) headerBottom = hostBottom;

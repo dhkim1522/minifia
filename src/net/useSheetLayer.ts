@@ -15,7 +15,7 @@ export interface SheetLayer {
   vvHeight: number;
 }
 
-export function useSheetLayer({ open, panelRef, stageTop }: { open: boolean; panelRef: RefObject<HTMLElement | null>; stageTop: number }): SheetLayer {
+export function useSheetLayer({ open, panelRef, stageTop, centered = false }: { open: boolean; panelRef: RefObject<HTMLElement | null>; stageTop: number; centered?: boolean }): SheetLayer {
   const layerRef = useRef<HTMLDivElement>(null);
   const vvHeight = useVisualViewportHeight(open);
   const panelHeight = useRef(0);
@@ -28,7 +28,8 @@ export function useSheetLayer({ open, panelRef, stageTop }: { open: boolean; pan
     }
     if (!veiled) panelHeight.current = panelRef.current?.offsetHeight ?? 0;
     layer.style.setProperty("--mf-panel-h", `${panelHeight.current}px`);
-    const hide = panelHeight.current + layer.offsetHeight + 8 > vvHeight - stageTop;
+    const contentHeight = centered && layer.firstElementChild instanceof HTMLElement ? layer.firstElementChild.scrollHeight : layer.offsetHeight;
+    const hide = panelHeight.current + contentHeight + 8 > vvHeight - stageTop;
     if (hide !== veiled) setVeiled(hide);
   });
   return { layerRef, veiled, vvHeight };

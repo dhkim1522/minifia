@@ -129,6 +129,7 @@ const mount = (view: RoomView, over: Partial<RoomConnection> = {}) => {
 const block = (c: ParentNode): HTMLElement | null => c.querySelector("[data-turn-block]");
 const gauge = (c: ParentNode): HTMLElement | null => c.querySelector("[data-phase-gauge]");
 const line = (c: ParentNode): string | undefined => c.querySelector(".mf-turn__line.is-on")?.textContent ?? undefined;
+const result = (c: ParentNode) => c.querySelector('[data-phase-event$="-result"] .mf-story__summary');
 const title = (c: ParentNode): string => c.querySelector(".mv-phase__title")?.textContent ?? "";
 const hint = (c: ParentNode): string => c.querySelector(".mv-phase__hint")?.textContent ?? "";
 
@@ -198,7 +199,7 @@ describe("결선 화면 — 알약·막대·헤더 게이지·위 한 줄 (UI-SP
     expect(line(m.container)).toBe("동점이에요");
   });
 
-  it("지목 끝 알림(동점 둘): 위 한 줄이 '모두 골랐어요' 가 아니라 '동점이에요' 이다", () => {
+  it("지목 결과(동점 둘): 중앙 문구가 '모두 골랐어요' 가 아니라 '동점이에요' 이다", () => {
     const base = (i: number) => ({ order: [0, 1, 2, 3], i });
     const mk = (i: number, points: Array<{ seat: number; target: number }>): RoomView => {
       const v = makeRunoff({ count: 4 });
@@ -206,17 +207,18 @@ describe("결선 화면 — 알약·막대·헤더 게이지·위 한 줄 (UI-SP
     };
     const m = mount(mk(3, []));
     m.show(mk(4, [{ seat: 0, target: 2 }, { seat: 1, target: 3 }, { seat: 2, target: 3 }, { seat: 3, target: 2 }]));
-    expect(line(m.container)).toBe("동점이에요");
+    expect(result(m.container)?.textContent).toBe("동점이에요");
   });
 
-  it("결과(step 2): 알약 없음, 위 한 줄 '{이름} 님 {k}표' 또는 '또 동점이에요'", () => {
+  it("결과(step 2): 알약 없이 중앙에 '{이름} 님 {k}표' 또는 '또 동점이에요'", () => {
     const m = mount(makeRunoff({ step: 1 }));
     m.show(makeRunoff({ step: 2, left: 1500, tally: [3, 1] }));
     expect(m.container.querySelector(".mf-turn__pill")).toBeNull();
     expect(gauge(m.container)).toBeNull();
-    expect(line(m.container)).toBe("서준 님 3표");
+    expect(line(m.container)).toBeUndefined();
+    expect(result(m.container)?.textContent).toBe("서준 님 3표");
     m.show(makeRunoff({ step: 2, left: 1500, tally: [2, 2] }));
-    expect(line(m.container)).toBe("또 동점이에요");
+    expect(result(m.container)?.textContent).toBe("또 동점이에요");
   });
 
   it("지목 알약은 그대로: 결선이 아닌 지목 view 의 [data-turn-block] 은 data-turn-mode=pick", () => {
@@ -227,12 +229,12 @@ describe("결선 화면 — 알약·막대·헤더 게이지·위 한 줄 (UI-SP
     expect(block(container)!.textContent).toContain("2 / 4");
   });
 
-  it("닉네임은 글자로 그린다: 위 한 줄에 '<b>서준</b>' 이 HTML 이 되지 않는다", () => {
+  it("닉네임은 글자로 그린다: 중앙 결선 결과에서 '<b>서준</b>' 이 HTML 이 되지 않는다", () => {
     const nicknames = ["민수", "영희", "<b>서준</b>", "지아", "도윤"];
     const m = mount(makeRunoff({ step: 1, nicknames }));
     m.show(makeRunoff({ step: 2, left: 1500, tally: [3, 1], nicknames }));
-    expect(line(m.container)).toBe("<b>서준</b> 님 3표");
-    expect(m.container.querySelector(".mf-turn__line b")).toBeNull();
+    expect(result(m.container)?.textContent).toBe("<b>서준</b> 님 3표");
+    expect(result(m.container)?.querySelector("b")).toBeNull();
   });
 });
 

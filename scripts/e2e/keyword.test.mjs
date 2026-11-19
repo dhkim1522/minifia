@@ -110,19 +110,19 @@ const geo = (over = {}) => ({
   vh: 224,
   compact: true,
   header: rect(0, 0, 360, 48),
-  card: rect(24, 56, 312, 70),
-  meta: rect(12, 132, 336, 20),
-  form: rect(12, 156, 336, 56),
-  send: rect(292, 160, 48, 48),
+  card: rect(16, 56, 328, 160),
+  meta: rect(28, 132, 304, 20),
+  form: rect(28, 156, 304, 56),
+  send: rect(284, 160, 48, 48),
   gauge: rect(140, 24, 80, 8),
-  count: rect(300, 134, 40, 16),
+  count: rect(289, 134, 40, 16),
   ...over,
 });
-test("KW7: 컴팩트 카드가 머리·메타·입력줄과 겹치지 않고 보내기가 44 이상이면 통과", () => {
+test("KW7: 컴팩트 카드 한 장에 답을 쓸 수 있고 머리와 겹치지 않으면 통과", () => {
   assert.equal(kw7CompactGeometry(geo()).ok, true);
   assert.equal(kw7CompactGeometry(geo({ compact: false })).ok, false);
   assert.equal(kw7CompactGeometry(geo({ card: rect(24, 30, 312, 70) })).ok, false); // 머리와 겹침
-  assert.equal(kw7CompactGeometry(geo({ card: rect(24, 90, 312, 70) })).ok, false); // 입력줄과 겹침
+  assert.equal(kw7CompactGeometry(geo({ card: rect(16, 56, 328, 145) })).ok, false); // 입력줄이 카드 밖
   assert.equal(kw7CompactGeometry(geo({ send: rect(292, 160, 40, 40) })).ok, false);
   assert.equal(kw7CompactGeometry(geo({ form: rect(12, 190, 336, 56) })).ok, false); // 보이는 높이 밖
   assert.equal(kw7CompactGeometry(geo({ gauge: rect(0, 0, 0, 0) })).ok, false);

@@ -1,0 +1,55 @@
+.mf-story__summary, .mf-story__tally {
+  margin: 0;
+  font: 600 16px/1.45 var(--font-ui);
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+.mf-story__tally { padding: 0; list-style: none; }
+
+.mf-phase-event[data-phase-event="execution"] .mv-quote--will { width: 100%; max-width: none; }
+.mf-announce.is-embedded {
+  position: static;
+  padding: 0;
+  background: none;
+  animation: none;
+}
+.mf-phase-event[data-phase-event="investigation-result"] { z-index: calc(var(--z-toast) + 10); }
+.mf-phase-event .mf-police-card {
+  position: static;
+  width: 100%;
+  gap: var(--space-xs);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.mf-phase-event .mf-police-card__face { width: 76px; height: 76px; }
+.mf-phase-event .mf-police-card__face--fallback i { width: 44px; height: 44px; }
+.mf-police-card__name { font: 700 16px/1.35 var(--font-ui); overflow-wrap: anywhere; }
+
+.mf-game .mf-will-layer--centered {
+  top: calc(max(62px, var(--mf-host-bottom, 0px)) + var(--mf-vv-top, 0px));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-block: 6px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.mf-will-layer--centered > :is(.mv-will, .mv-line-sheet) {
+  max-width: 380px;
+  max-height: 100%;
+  overflow: auto;
+  pointer-events: auto;
+}
+
+.mf-phase-event .mv-speak-sheet {
+  position: static;
+  justify-content: center;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  overflow: visible;
+}

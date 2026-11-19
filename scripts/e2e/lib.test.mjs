@@ -2472,6 +2472,12 @@ test("announceClearChecks AC2: 큰 글이 소리 단추와 가로·세로 모두
   assert.equal(idsOk(announceClearChecks(clearGood({ announce: rect(76, 142, 216, 86) }))).AC2, true);
 });
 
+test("announceClearChecks AC2: 소리 단추가 없어도 하단 패널 겹침은 검사한다", () => {
+  const checks = (top) => idsOk(announceClearChecks(clearGood({ sound: null, panel: rect(0, top, 360, 180) })));
+  assert.equal(checks(340).AC2, true);
+  assert.equal(checks(200).AC2, false);
+});
+
 test("announceClearChecks: 측정값이 없으면 통과시키지 않는다", () => {
   const lines = announceClearChecks({ announce: null, band: null, sound: null });
   assert.equal(lines.length, 2);

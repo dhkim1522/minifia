@@ -215,13 +215,14 @@ describe("마지막 3인 화면 — 알약·위 한 줄·헤더 (UI-SPEC E-1, �
 });
 
 describe("마지막 3인 화면 — 내 한마디 차례의 칩 시트 (UI-SPEC E-2)", () => {
-  it("내 차례: 칩 4개 + 직접 쓰기 가 채팅 패널 자리를 덮고, 채팅 패널은 숨는다", () => {
+  it("내 차례: 칩과 직접 쓰기는 중앙에 열리고 채팅은 제자리에 남는다", () => {
     const { container } = mount(makeShowdown({ i: 0, mySeat: 0 }));
     const s = sheet(container)!;
     expect(s).not.toBeNull();
     const buttons = [...s.querySelectorAll("button")].map((b) => b.textContent?.trim());
     expect(buttons).toEqual(["저는 아니에요", "쟤가 수상해요", "저를 믿어 주세요", "끝까지 지켜봐요", "직접 쓰기"]);
-    expect(container.querySelector(".mf-game__panel")!.getAttribute("data-will-hide-panel")).toBe("true");
+    expect(s.closest('[data-phase-event="showdown-word"]')).not.toBeNull();
+    expect(container.querySelector(".mf-game__panel")!.hasAttribute("data-will-hide-panel")).toBe(false);
   });
 
   it("칩을 누르면 chat 이 정확히 한 번 나가고 시트가 사라진다(서버 확정 전에도 다시 못 누른다)", () => {

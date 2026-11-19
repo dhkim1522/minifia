@@ -1,0 +1,42 @@
+/* 시간 게이지와 하단 채팅 사이에서 크기를 정한다. 카드 바깥은 맵과 채팅을 가리지 않는다. */
+.mf-phase-event {
+  position: absolute;
+  inset-block-start: var(--mf-event-top, calc(max(62px, var(--mf-host-bottom, 0px)) + var(--mf-vv-top, 0px)));
+  inset-block-end: var(--mf-event-bottom, calc(var(--mf-panel-h, 0px) + var(--mf-kb-lift, 0px)));
+  inset-inline: 0;
+  z-index: calc(var(--z-toast) + 6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 6px 12px;
+  pointer-events: none;
+}
+
+.mf-phase-event__card {
+  width: min(100%, 380px);
+  max-height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: clamp(12px, 4vw, 18px);
+  border: 1px solid var(--noir-line);
+  border-radius: var(--noir-surface-radius);
+  background: var(--noir-sheet-light), var(--noir-panel);
+  box-shadow: var(--noir-rail), var(--shadow-card);
+  color: var(--noir-paper);
+  text-align: center;
+}
+
+.mf-phase-event__card > * { flex: none; }
+.mf-phase-event__card[data-event-interactive] { pointer-events: auto; }
+.mf-phase-event__title {
+  margin: 0;
+  font: 700 clamp(18px, 5vw, 22px)/1.3 var(--font-ui);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}

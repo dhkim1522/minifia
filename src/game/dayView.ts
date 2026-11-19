@@ -294,7 +294,8 @@ function phaseEntry(prev: RoomView, cur: RoomView, day: NonNullable<RoomView["da
       let announce: DayAnnounce = { text: m.text, ...(m.icon !== undefined ? { icon: m.icon } : {}), at: ANNOUNCE_MORNING_AT, ms: ANNOUNCE_MORNING_MS };
       let lineAt = ANNOUNCE_MORNING_AT;
       if (victim) {
-        announce = { text: MORNING_TEXT.victim, icon: "ghost", at: ANNOUNCE_VICTIM_AT, ms: ANNOUNCE_VICTIM_MS };
+        // 경찰 본인에게 두 사건이 겹치면 비공개 조사 결과 뒤 피해 발표와 편지를 이어서 본다.
+        announce = { text: MORNING_TEXT.victim, icon: "ghost", at: police === null ? ANNOUNCE_VICTIM_AT : ANNOUNCE_POLICE_AT, ms: ANNOUNCE_VICTIM_MS };
       } else if (police !== null) {
         announce = { ...announce, at: ANNOUNCE_POLICE_AT, ms: ANNOUNCE_POLICE_MS };
         lineAt = ANNOUNCE_POLICE_AT;

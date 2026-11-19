@@ -9,6 +9,7 @@ import { WILL_MAX_GRAPHEMES } from "../../shared/game/will";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
 import { emitSignal } from "../audio/signals";
 import { KillFx } from "../components/KillFx";
+import { PhaseEvent } from "../components/PhaseEvent";
 import { PoliceResultCard } from "../components/PoliceResultCard";
 import { ResultAnnounce } from "../components/ResultAnnounce";
 import { QuoteCard } from "../components/v2/QuoteCard";
@@ -30,7 +31,6 @@ import type { WillSheetProps } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { WorldStage } from "../components/WorldStage";
 import type { WorldPick } from "../components/WorldStage";
-import { DEFENSE_MS } from "../../shared/game/phases";
 import { ownAnimalOf } from "../game/playerIdentity";
 import { jobOutfit } from "../world/jobOutfit";
 import { todOf, todWordOf } from "../game/timeOfDay";
@@ -38,13 +38,12 @@ import { nightDarkOf } from "../game/nightDark";
 import { BADGE_TEXT, chipsOf, claimLook, floatLabel } from "../game/badgeView";
 import { WHISPER_TEXT } from "../game/whisperView";
 import { SUSPECT_TEXT, suspectStacks } from "../game/suspectView";
-import { headerFor } from "../game/dayView";
-import { callTargetsOf, playtestResultLine } from "../game/hostLine";
+import { DAY_COPY, headerFor } from "../game/dayView";
+import { callTargetsOf } from "../game/hostLine";
 import { blockModeOf, isMyTurn, turnStageOf, turnTopLine } from "../game/pickTurn";
 import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, showdownStageOf, speakerOf } from "../game/showdownView";
 import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
-import { useCountdown } from "../net/countdown";
 import { useBadge, useBadgeFx } from "../net/useBadge";
 import { useChat } from "../net/useChat";
 import { useMyMotion } from "../net/useMyMotion";
@@ -66,6 +65,7 @@ import type { RingKind } from "../world/runtime";
 import type { WorldStore } from "../world/store";
 import { GamePanel } from "./GamePanel";
 import "../styles/game.css";
+import "../styles/phase-story.css";
 import "../styles/sheet.css";
 import "../styles/testtools.css";
 
@@ -181,14 +181,8 @@ function MapHeader({ view, offset, extra, tod, epoch, timeless }: { view: RoomVi
   );
 }
 
-/**
- * 유언 시트. 유언 단계의 처형자(defenseEndsAt 가 있다)에게는 [남기기]·남은 초(P22-7·8)를 붙인다 — 남은 초 시계(useCountdown, 250ms)는 이 부품 안에 가둔다(화면 틀 전체가 다시 그려지지 않게).
- * 그 밖(밤 유언·낮 깃펜·쪽지)은 WillSheet 그대로다.
- */
-function DefenseAwareWillSheet({ defenseEndsAt, offset, ...sheet }: WillSheetProps & { defenseEndsAt: number | null; offset: number }) {
-  const { seconds } = useCountdown(defenseEndsAt ?? 0, DEFENSE_MS, offset);
-  if (defenseEndsAt === null) return <WillSheet {...sheet} />;
-  return <WillSheet {...sheet} saveLabel="남기기" savedLabel="남김" secondsLeft={seconds} />;
+function DefenseAwareWillSheet({ final, ...sheet }: WillSheetProps & { final: boolean }) {
+  return final ? <WillSheet {...sheet} title="마지막 유언" saveLabel="남기기" savedLabel="남김" /> : <WillSheet {...sheet} />;
 }
 
 /** 차례 알약·막대·위 한 줄. 초 경계마다 다시 그리는 시계(useTurnLook)를 이 부품 안에 가둔다 */
@@ -208,11 +202,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 지목이면 스테이지 윗변을 차례 알약 아랫변 + 4 로 내리고(UI-SPEC A-1) 작은 폰은 압축형 알약을 받는다(turnCompact). 알약 요소는 훅이 루트에서 `[data-turn-block]` 으로 찾는다.
   // 튜토리얼 지도 장면(panelless prop, 18-03)은 아래 패널이 없다: 스테이지가 띠 아래부터 화면 아래까지 넓어진다
   const playtest = view.playtest === true;
-  const mapResult = playtest ? playtestResultLine(view) : undefined;
-  const policeName = policeResult ? view.players.find((player) => player.seat === policeResult.seat)?.nickname ?? "" : "";
-  const privateResult = playtest && policeResult ? `조사 결과 · ${policeName} · ${policeResult.isMafia ? "마피아" : "마피아 아님"}` : undefined;
   const toastText = playtest && toast.props.visible ? toast.props.text : undefined;
-  const playtestPanel = mapResult !== undefined || privateResult !== undefined || toastText !== undefined || view.me.chat === "ghost" || view.phase === "discussion" || view.phase === "night" && view.spectate === undefined || view.phase === "verdict" || view.phase === "defense" && view.day?.candidate === view.me.seat;
+  const playtestPanel = toastText !== undefined || view.me.chat === "ghost" || view.phase === "discussion" || view.phase === "night" && view.spectate === undefined || view.phase === "verdict" || view.phase === "defense" && view.day?.candidate === view.me.seat;
   const noPanel = panelless === true || (playtest && !playtestPanel);
   const { rootRef, headerRef, panelRef, inputRef, kbOpen: kbLifted, kbInSheet, turnCompact: compactTurn, stageInsets: measuredInsets } = useMapInsets(blockModeOf(view) !== null, noPanel);
   // 튜토리얼(24 D-31): 아래 여백에 bottomExtra 를 더한다. 키보드 높이를 프레임마다 읽는 getter 는 그대로 살린다. 실제 판은 0 이라 측정값 그대로다.
@@ -264,7 +255,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
     const input = inputRef.current;
     return root !== null && input !== null ? input.getBoundingClientRect().top - root.getBoundingClientRect().top : null;
   };
-  const shownAnnounce: DayFx["announce"] = letter !== null ? (letterLive ? letter.announce : null) : announce;
+  const morningLetter = view.phase === "morning" ? letter : null;
+  const morningPolice = view.phase === "morning" ? policeResult : null;
+  const shownAnnounce: DayFx["announce"] = morningPolice !== null
+    ? null
+    : morningLetter !== null ? (letterLive ? morningLetter.announce : null) : announce;
   const killNonce = killFx?.nonce ?? 0;
   const seenKill = useRef(killNonce);
   const killTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -588,10 +583,10 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 시트 층 하나를 유언·배지·귓속말 한 줄 시트가 번갈아 쓴다 — 한 번에 시트 하나만(귓속말은 열려 있는 다른 시트를 닫고 열린다)
   const layerKind: "will" | "claim" | "line" | "speak" | null =
     will.open !== null ? "will" : badge.open && badge.allowed ? "claim" : whisper.target !== null && whisper.allowed ? "line" : speakOpen && speakWriting ? "speak" : null;
-  // 시트 층의 아래 끝 = 아래 패널 위 끝 + 8 (키보드 위). 패널을 가릴지 판정하는 논리는 useSheetLayer 로 옮겼다(논리 변경 없음).
-  const sheetLayer = useSheetLayer({ open: layerKind !== null, panelRef, stageTop: stageInsets?.top ?? DEFAULT_INSET_TOP });
+  const centeredSheet = sheetReplacesPanel || layerKind === "speak";
+  const sheetLayer = useSheetLayer({ open: layerKind !== null, panelRef, stageTop: stageInsets?.top ?? DEFAULT_INSET_TOP, centered: centeredSheet });
   const { layerRef, vvHeight } = sheetLayer;
-  const veiled = sheetLayer.veiled || sheetReplacesPanel;
+  const veiled = sheetLayer.veiled;
 
   // 이름표 모서리 배지: 서버 view.players 에서만 만든다(내 좌석만 낙관 값을 겹친다). 기존 키는 덮어쓰지 않는다. 주장이 하나도 없고 낙관 값도 없으면 기존 함수 그대로(이름표에 넘기는 속성이 없다)
   const badgeFx = useBadgeFx(view, epoch, reducedMotion);
@@ -659,9 +654,11 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       : `${turnStageOf(view)}:${view.day?.turn?.i}`;
   const firstTurnKey = useRef<string | null | undefined>(undefined);
   if (firstTurnKey.current === undefined) firstTurnKey.current = turnKey;
-  const topLine = turnKey !== null && turnKey === firstTurnKey.current ? null : turnTopLine(view);
-
   const turnStage = turnStageOf(view);
+  const finalTurn = turnStage === "end" || runoff?.step === 2 || showdownStage === "reveal";
+  const topLine = finalTurn || (turnKey !== null && turnKey === firstTurnKey.current) ? null : turnTopLine(view);
+  const showdownResult = showdownStage === "reveal" ? Object.entries(revealCounts(view)) : [];
+  const turnResult = finalTurn ? turnTopLine(view) ?? (showdownResult.length === 0 ? DAY_COPY.noExecution : null) : null;
   // 결선은 전 구간 어둡게(UI-SPEC D-1: 실내등 0.6배)
   // 마지막 3인(09.1.1-15)은 모이기·한마디·동시 지목에 어둡게, 공개에는 걷는다
   const dimOn = turnStage === "gather" || turnStage === "turn" || turnStage === "done" || blockMode === "runoff" || showdownStage === "gather" || showdownStage === "speak" || showdownStage === "point";
@@ -669,7 +666,12 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   // 판결 순간(UI-SPEC C-1, 22-12 P22-13·P22-14): 처형자 존재 기준 처형 진입 시각의 어둡게 막·카메라 줌·유언 공개 카드(0~3.0초). 모션 줄이기는 줌 없이 막·핀·카드만 쓴다
   const moment = useVerdictMoment(view, offset);
   const verdictZoom = moment.active && !reducedMotion && !playtest ? moment.zoom : undefined;
-  const investigated = policeResult === null ? undefined : view.players.find((player) => player.seat === policeResult.seat);
+  const investigated = morningPolice === null ? undefined : view.players.find((player) => player.seat === morningPolice.seat);
+  const willReveal = moment.will?.visible === true ? moment.will : null;
+  const executed = view.players.find((player) => player.seat === view.day?.execution?.seat);
+  const executionResult = moment.active && willReveal === null && executed !== undefined && shownAnnounce?.text === DAY_COPY.executedText(executed.nickname)
+    ? shownAnnounce
+    : null;
   const whisperPeer = whisper.target === null ? undefined : view.players.find((player) => player.seat === whisper.target);
 
   const scene = useMemo(() => {
@@ -742,26 +744,40 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       ) : null}
       {/* 알약·막대·위 한 줄은 순차 지목·결선·마지막 3인에만 있다. 기본판 동시 투표(day.turn 없음)는 DOM 이 없다([data-turn-block] 0) */}
       {blockMode !== null ? <TurnBlock view={view} offset={offset} line={topLine} compact={compactTurn} reducedMotion={reducedMotion} /> : null}
+      {finalTurn ? (
+        <PhaseEvent kind="nomination-result" title={runoff !== undefined ? "결선 결과" : "지목 결과"} interactive={false}>
+          {turnResult !== null ? <p className="mf-story__summary">{turnResult}</p> : null}
+          {showdownResult.length > 0 ? (
+            <ul className="mf-story__tally">
+              {showdownResult.map(([seat, count]) => <li key={seat}>{view.players.find((p) => p.seat === Number(seat))?.nickname} · {count}표</li>)}
+            </ul>
+          ) : null}
+        </PhaseEvent>
+      ) : null}
       {/* 장면 전환 막(09-20): 결과 알림보다 앞(DOM 순서)에 두어 막을 붙잡는 동안 알림이 막 위로 올라올 수 있게 한다. 덮기는 공개 마감만의 함수다 */}
       {!playtest ? <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} /> : null}
       {!playtest ? <KillFx nonce={killNonce} reducedMotion={reducedMotion} /> : null}
-      {!playtest ? <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(shownAnnounce?.label !== undefined ? { label: shownAnnounce.label } : {})} {...(shownAnnounce?.still === true ? { still: true } : {})} {...(letter !== null || moment.active ? { placement: "top" as const } : {})} /> : null}
-      {/* 유언 공개 카드(P22-11): 처형 단계 0~3.0초 모두의 화면. 독 아랫변 + 8, 폭 = 화면 − 32, 누를 수 없다. 사라질 때는 dur-med 페이드 */}
-      {!playtest && moment.will !== null ? (
-        <div className="mv-will-reveal">
-          <QuoteCard text={moment.will.text} visible={moment.will.visible} still={moment.will.still} will />
-        </div>
-      ) : null}
-      {!playtest && letter !== null ? <WillLetter key={`${letter.t0}:${letter.seat}`} letter={letter} reducedMotion={reducedMotion} getInputTop={letterInputTop} onLive={setLetterLive} /> : null}
-      {!playtest && policeResult !== null ? (
-        <PoliceResultCard
-          key={policeResult.id}
-          seat={policeResult.seat}
-          name={investigated?.nickname ?? ""}
-          animal={investigated?.animal}
-          isMafia={policeResult.isMafia}
-          reducedMotion={reducedMotion}
-        />
+      {moment.active ? (
+        willReveal !== null || executionResult !== null ? (
+          <PhaseEvent kind="execution" title={willReveal !== null ? "마지막 유언" : "처형 결과"} interactive={false}>
+            {willReveal !== null ? <QuoteCard text={willReveal.text} visible still={willReveal.still} will announce={false} /> : <ResultAnnounce text={executionResult?.text ?? null} embedded />}
+          </PhaseEvent>
+        ) : null
+      ) : (
+        <ResultAnnounce text={shownAnnounce?.text || null} {...(shownAnnounce?.icon !== undefined ? { icon: shownAnnounce.icon } : {})} {...(shownAnnounce?.label !== undefined ? { label: shownAnnounce.label } : {})} {...(shownAnnounce?.still === true ? { still: true } : {})} {...(morningLetter !== null && letterLive ? { placement: "top" as const } : {})} />
+      )}
+      {morningLetter !== null ? <WillLetter key={`${morningLetter.t0}:${morningLetter.seat}`} letter={morningLetter} reducedMotion={reducedMotion} getInputTop={letterInputTop} onLive={setLetterLive} /> : null}
+      {morningPolice !== null ? (
+        <PhaseEvent kind="investigation-result" title="조사 결과" interactive={false}>
+          <PoliceResultCard
+            key={morningPolice.id}
+            seat={morningPolice.seat}
+            name={investigated?.nickname ?? ""}
+            animal={investigated?.animal}
+            isMafia={morningPolice.isMafia}
+            reducedMotion={reducedMotion}
+          />
+        </PhaseEvent>
       ) : null}
       {noPanel ? null : (
         <GamePanel
@@ -772,7 +788,7 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           binding={binding}
           kbOpen={kbOpen}
           lifted={kbLifted}
-          veiled={veiled || (speakOpen && !speakWriting)}
+          veiled={veiled}
           suspect={suspect.visible && (!playtest || layerKind === null) ? {
             ...suspect,
             disabled: layerKind !== null || suspect.disabled,
@@ -784,14 +800,9 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
             },
             ...(!playtest && canSend && layerKind === null && suspect.targets.size === 0 ? { deny: denySuspect } : {}),
           } : undefined}
-          result={mapResult}
+          pauseNightEvent={view.phase === "night" && announce?.text === DAY_COPY.noExecution}
           notice={playtest ? (
-            <>
-              {toastText ? <p className="mf-playtest__feedback" role="status" {...(toast.props.marker ? { [toast.props.marker]: "" } : {})}>{toastText}</p> : null}
-              {privateResult ? <p className="mf-playtest__result" role="status">{privateResult}</p> : null}
-              {moment.will?.visible ? <p className="mf-playtest__result" role="status">유언 · {moment.will.text}</p> : null}
-              {view.phase === "morning" && letter?.text ? <p className="mf-playtest__result" role="status">유언 · {letter.text}</p> : null}
-            </>
+            toastText ? <p className="mf-playtest__feedback" role="status" {...(toast.props.marker ? { [toast.props.marker]: "" } : {})}>{toastText}</p> : null
           ) : undefined}
           call={{
             ...(callTool === "chat" ? { chat: true } : {}),
@@ -864,14 +875,22 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           ) : null}
         </FloatActions>
       ) : null}
-      {speakOpen && !speakWriting ? <SpeakSheet chips={SHOWDOWN_COPY.chips} onPick={sendWord} onWrite={() => setSpeakWriting(true)} {...(canSend ? {} : { disabled: true })} /> : null}
+      {speakOpen && !speakWriting ? (
+        <PhaseEvent kind="showdown-word" title="마지막 한마디">
+          <SpeakSheet chips={SHOWDOWN_COPY.chips} onPick={sendWord} onWrite={() => setSpeakWriting(true)} {...(canSend ? {} : { disabled: true })} />
+        </PhaseEvent>
+      ) : null}
+      {will.condemned && will.open === null ? (
+        <PhaseEvent kind="final-will" title="마지막 유언">
+          <button type="button" className={callTool === "will" ? "mf-btn mf-btn--primary is-call" : "mf-btn mf-btn--primary"} data-will-button="" data-call={callTool === "will" ? "" : undefined} disabled={!canSend} onClick={(event) => will.openSheet("will", event.currentTarget)}>유언 쓰기</button>
+        </PhaseEvent>
+      ) : null}
       {layerKind !== null ? (
-        <div ref={layerRef} className="mf-will-layer" data-sheet-layer={layerKind} {...(veiled ? { "data-panel-hidden": "true" } : {})}>
+        <div ref={layerRef} className={centeredSheet ? "mf-will-layer mf-will-layer--centered" : "mf-will-layer"} data-sheet-layer={layerKind} data-phase-event={sheetReplacesPanel ? "final-will" : layerKind === "speak" ? "showdown-word" : undefined} {...(veiled ? { "data-panel-hidden": "true" } : {})}>
           {layerKind === "will" && will.open !== null ? (
             <DefenseAwareWillSheet
               key={will.open}
-              defenseEndsAt={sheetReplacesPanel ? (view.phaseEndsAt ?? 0) : null}
-              offset={offset}
+              final={sheetReplacesPanel}
               {...(will.open === "note" ? { title: "쪽지", icon: "note" as const, tone: "mafia" as const, placeholder: NOTE_PLACEHOLDER, max: CHAT_MAX_GRAPHEMES } : { max: WILL_MAX_GRAPHEMES })}
               value={will.draft}
               onChange={will.setDraft}

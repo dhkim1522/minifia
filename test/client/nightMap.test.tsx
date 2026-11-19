@@ -690,18 +690,26 @@ describe("아침 알림 (MORN-03, UI-SPEC 아침)", () => {
       expect(cards(m.container)).toHaveLength(0);
     });
 
-    it("경찰이 그 밤에 당했어도 카드는 받고 알림은 '암살당했습니다' 0.7초", () => {
+    it("경찰이 그 밤에 당하면 조사 결과를 먼저 보고 2.6초부터 본인 결과를 본다", () => {
       const m = mount(police("night", []));
       m.show(police("morning", [{ n: 1, target: 3, isMafia: false }], { morning: { eliminated: POLICE }, dead: [POLICE] }));
-      advance(700);
-      expect(announceText(m.container)).toBe("암살당했습니다");
-      advance(1_700);
+      const investigation = () => m.container.querySelector('[data-phase-event="investigation-result"]');
+      expect(investigation()?.textContent).toContain("지아");
+      expect(investigation()?.textContent).toContain("마피아 아님");
+      advance(2_399);
+      expect(investigation()).not.toBeNull();
+      expect(announceText(m.container)).toBe("");
+      advance(1);
+      expect(investigation()).toBeNull();
       expect(cards(m.container)).toHaveLength(1);
+      advance(200);
+      expect(announceText(m.container)).toBe("암살당했습니다");
     });
 
     it("시민 화면에는 카드도 결과 문구도 없다", () => {
       const m = mount(makeView({ phase: "night", mySeat: 3 }));
       m.show(makeView({ phase: "morning", mySeat: 3, morning: {} }));
+      expect(m.container.querySelector('[data-phase-event="investigation-result"]')).toBeNull();
       advance(5_000);
       expect(cards(m.container)).toHaveLength(0);
       expect(m.container.textContent).not.toContain("마피아 아님");

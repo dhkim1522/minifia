@@ -465,17 +465,17 @@ describe("밤 끝 알림 없음 (결정 0028, UI-SPEC D·R6)", () => {
     feed(r, makeView({ role, phase: "morning", records: [rec] }));
     return r;
   };
-  // 일지 알림이 없다는 뜻이라, 맵 화면의 구조 자리(맵 불러오는 카드·빈 위 알림 영역)와 아침 결과 알림([data-announce], 08-18)과 자막 띠 문장([data-host-line], 14-01)은 세지 않는다
+  // 배경 상태, 단계 발표, 경찰 본인에게만 뜨는 조사 결과는 일지 갱신 알림으로 세지 않는다.
   const statusCount = (): number =>
     [...document.querySelectorAll('[role="status"]')].filter(
-      (e) => !e.classList.contains("mf-mapcard") && !e.hasAttribute("data-announce") && !e.hasAttribute("data-host-line") && (e.textContent ?? "").trim() !== "",
+      (e) => !e.matches(".mf-mapcard, [data-announce], [data-host-line]") && !e.closest('[data-phase-event="investigation-result"]') && (e.textContent ?? "").trim() !== "",
     ).length;
 
   it.each([
     ["police", { n: 1, target: 2, isMafia: true }],
     ["mafia", { n: 1, target: 2, died: true }],
     ["doctor", { n: 1, target: 2 }],
-  ] as const)("%s: 같은 접속에서 기록이 늘어도 알림은 없고 헤더 앰버 점만 켜진다", (role, rec) => {
+  ] as const)("%s: 기록이 늘어도 일지 갱신 알림 없이 헤더 앰버 점이 켜진다", (role, rec) => {
     nightEnd(role, rec as RoleRecord);
     expect(statusCount()).toBe(0);
     expect(document.body.textContent?.includes("눌러서 보기") ? "있음" : "없음").toBe("없음");

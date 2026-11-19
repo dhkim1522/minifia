@@ -47,18 +47,22 @@ function PlaytestRoleReveal({ view, offset, epoch = 0, myRoleButton, onSeenFront
         <GamePhaseHeader title="내 역할" view={view} offset={offset} epoch={epoch} extra={myRoleButton} />
       </header>
       <section className="mf-reveal__stage">
-        <RoleCard role={role} animal={ownAnimalOf(view)} face={role === null ? "back" : "front"} allies={allyNicknames(view)} />
+        <RoleCard
+          role={role}
+          animal={ownAnimalOf(view)}
+          face={role === null ? "back" : "front"}
+          allies={allyNicknames(view)}
+          action={role === null ? null : ready ? (
+            <span className="mf-playtest__ready-status" role="status">
+              <V2Icon name="check" size={20} /> 확인했어요
+            </span>
+          ) : (
+            <Button variant="secondary" compact block disabled={!canSend} data-role-ready="" onClick={() => send?.({ t: "roleReady" })}>
+              확인
+            </Button>
+          )}
+        />
       </section>
-      <div className="mf-reveal__hints mf-playtest__ready">
-        {role !== null && !ready ? (
-          <Button className={`mf-room-tool mf-playtest__ready-control${canSend ? " is-call" : ""}`} icon={<V2Icon name="check" size={24} />} aria-label="준비" disabled={!canSend} data-role-ready="" onClick={() => send?.({ t: "roleReady" })} />
-        ) : ready ? (
-          <span className="mf-room-tool mf-playtest__ready-control mf-playtest__ready-status" aria-hidden="true">
-            <V2Icon name="check" size={24} />
-          </span>
-        ) : null}
-        <span className="mf-sr-only" role="status">{ready ? "준비 완료" : ""}</span>
-      </div>
     </main>
   );
 }

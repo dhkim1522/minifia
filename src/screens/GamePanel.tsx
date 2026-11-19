@@ -1,18 +1,23 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { MAP_PHASES } from "../../shared/game/movement";
 import { majorityOf } from "../../shared/game/nomination";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
+import { Button } from "../components/Button";
+import { PhaseEvent } from "../components/PhaseEvent";
 import { RoomChatDock } from "../components/v2/RoomChatDock";
 import type { RoomChatBinding, RoomChatDockProps } from "../components/v2/RoomChatDock";
 import { FaceList } from "../components/v2/FaceList";
 import { V2Icon } from "../components/v2/V2Icon";
 import { VerdictPicker } from "../components/v2/VerdictPicker";
 import type { Verdict } from "../components/v2/VerdictPicker";
+import { hostLineOf } from "../game/hostLine";
 import { faceSrc } from "../net/assets";
 import { playerColor } from "../game/playerIdentity";
 import { useViewChoice } from "../net/useViewChoice";
+import "../styles/event-choices.css";
+
 export interface GamePanelProps {
   view: RoomView;
   offset?: number;
@@ -50,16 +55,16 @@ export interface GamePanelProps {
   inputRef?: RefObject<HTMLInputElement | null>;
   panelRef?: RefObject<HTMLElement | null>;
   suspect?: RoomChatDockProps["suspect"];
-  result?: string;
   notice?: ReactNode;
+  /** 전날 결과가 잠깐 보이는 동안에는 밤 선택을 같은 자리에 겹쳐 놓지 않는다. */
+  pauseNightEvent?: boolean;
 }
 
 /**
- * 게임 맵 화면의 아래 패널(UI-SPEC "아래 패널 종류와 높이"). 단계마다 행동 줄이 다르다.
- * 낮 토론은 채팅 위에 도구와 토론 스킵을, 찬반은 집계와 선택을 둔다.
+ * 단계별 선택은 중앙에 보여 주고 채팅과 상시 도구는 화면 아래에 둔다.
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, result, notice }: GamePanelProps) {
+export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, notice, pauseNightEvent = false }: GamePanelProps) {
   const playtest = view.playtest === true;
   const voteOpensAt = playtest && view.phase === "discussion" ? view.day?.voteOpensAt : undefined;
   const [openedVoteAt, setOpenedVoteAt] = useState<number>();
@@ -99,7 +104,13 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = f
   // 찬반 줄(22-10, D-11·D-26): 처형 후보가 없어 산 사람 전원이 던진다. 유령은 같은 숫자 줄만 본다(보기 패널).
   // 숫자는 서버가 모두에게 같게 보낸 집계(day.verdictCount)뿐이다 — 누가 던졌는지는 어디에도 없다.
   const firstBallot = playtest && view.phase === "verdict" ? view.day?.firstBallot : undefined;
-  const inVerdict = view.phase === "verdict" && firstBallot === undefined && !kbOpen;
+  const verdictPhase = view.phase === "verdict";
+  useLayoutEffect(() => {
+    // 토론 중 쓰던 글은 그대로 저장하고, 투표가 열릴 때 키보드만 내려 선택지를 드러낸다.
+    const field = inputRef?.current;
+    if (verdictPhase && meAlive && field === document.activeElement) field?.blur();
+  }, [verdictPhase, meAlive, inputRef]);
+  const inVerdict = verdictPhase && firstBallot === undefined && !kbOpen;
   const showVerdict = inVerdict && meAlive; // 찬반 버튼 + 숫자
   const showVerdictCount = inVerdict; // 산 사람·유령 모두 같은 숫자 줄
   const verdictYes = view.day?.verdictCount?.yes ?? 0;
@@ -137,21 +148,22 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = f
 
   // 밤 산 사람은 입력줄이 없어 아래 행동 줄의 [쪽지]·[유언] 이 대신한다(UI-SPEC 237행). 마피아 [쪽지], 그 밖 [유언] — 역할을 읽는 곳은 이 줄뿐이다.
   // 채팅 입력줄이 있는 화면(낮·아침)은 깃펜, 산 사람 + 지도 단계에만(유령·로비·역할 확인에는 없다, UI-SPEC 281·286행)
-  // 유언 단계(defense, 22-11 D-16·P22-9): 산 사람·유령 모두 입력줄이 잠기고, 깃펜은 처형자에게만 있다(접은 시트를 다시 여는 [유언] 단추, P22-17). 처형자는 공개 값 day.candidate 로 안다.
+  // 유언 단계에는 입력줄이 잠기고 마지막 유언을 중앙에서 쓴다.
   // 정답 공개(answerReveal, 23-07 P23-21): 3초 동안 큰 글을 보는 단계라 유언 단계와 같은 잠긴 입력줄을 쓴다(패널 높이 그대로) — 서버도 채팅을 받지 않는다(CHAT_PHASES 미가입).
   // 깃펜은 그리지 않는다: 서버 MAP_PHASES 에는 answerReveal 이 있어 유언 저장을 받지만 화면은 이 3초에 쓰는 길을 열지 않는다(처형자 조건은 유언 단계에만).
   const defense = view.phase === "defense";
   const answerReveal = view.phase === "answerReveal";
   const chatLocked = defense || answerReveal;
   const discussion = view.phase === "discussion";
-  const condemned = defense && meAlive && view.day?.candidate === view.me.seat;
-  const penOn = meAlive && MAP_PHASES.has(view.phase) && onOpenWill !== undefined && !answerReveal && (!defense || condemned) && (!playtest || condemned);
+  const penOn = !playtest && meAlive && MAP_PHASES.has(view.phase) && onOpenWill !== undefined && !chatLocked;
   const showNoteRow = !playtest && nightFaces && myRole === "mafia" && onOpenNote !== undefined;
   const noteHintId = useId();
   const showWillRow = !playtest && nightFaces && myRole !== "mafia" && onOpenWill !== undefined;
   const playtestChat = discussion || (!chatLocked && view.me.chat === "ghost");
   const showChat = chatChannelOk && (!playtest || playtestChat);
   const canReact = !chatLocked && (!playtest || discussion);
+  const showRoleTool = showNoteRow || showWillRow || penOn;
+  const panelEmpty = !showChat && !showRoleTool && !notice;
 
   const pressEnd = (): void => {
     if (!canSend) return;
@@ -169,35 +181,32 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = f
   };
 
   return (
-    <section
-      ref={panelRef}
-      className={`mf-game__panel${lifted ?? kbOpen ? " mf-game__panel--kb" : ""}${showChat ? " mf-game__panel--chat" : ""}`}
-      data-world-panel=""
-      {...(veiled ? { "data-will-hide-panel": "true" } : {})}
-    >
-      {notice}
-      {result ? <p className="mf-playtest__result" data-playtest-result="" role="status">{result}</p> : null}
+    <>
       {showVerdictCount ? (
-        <div className="mf-game__verdict" data-verdict-row="">
-          {showVerdict ? (
-            <VerdictPicker {...(verdict ? { value: verdict } : {})} onChange={pressVerdict} {...(canSend ? {} : { disabled: true })} {...(call?.verdict ? { call: true } : {})} />
-          ) : null}
-          <div className="mf-game__vcount" role="status" aria-label={`찬성 ${verdictYes}표, 반대 ${verdictNo}표`} data-verdict-count-row="">
-            <span className="mf-game__vcount-item" data-verdict-count="yes">
-              <V2Icon name="thumbUp" size={20} />
-              <span className="mv-count">{verdictYes}</span>
-            </span>
-            <span className="mf-game__vcount-item" data-verdict-count="no">
-              <V2Icon name="thumbDown" size={20} />
-              <span className="mv-count">{verdictNo}</span>
-            </span>
+        <PhaseEvent kind="verdict" title="오늘 처형할까요?" interactive={showVerdict}>
+          <div className="mf-game__verdict" data-verdict-row="">
+            {showVerdict ? (
+              <VerdictPicker {...(verdict ? { value: verdict } : {})} onChange={pressVerdict} {...(canSend ? {} : { disabled: true })} {...(call?.verdict ? { call: true } : {})} />
+            ) : null}
+            <div className="mf-game__vcount" role="status" aria-label={`찬성 ${verdictYes}표, 반대 ${verdictNo}표`} data-verdict-count-row="">
+              <span className="mf-game__vcount-item" data-verdict-count="yes">
+                <V2Icon name="thumbUp" size={20} />
+                <span className="mv-count">{verdictYes}</span>
+              </span>
+              <span className="mf-game__vcount-item" data-verdict-count="no">
+                <V2Icon name="thumbDown" size={20} />
+                <span className="mv-count">{verdictNo}</span>
+              </span>
+            </div>
           </div>
-        </div>
+        </PhaseEvent>
       ) : null}
       {firstBallot !== undefined ? (
-        <PlaytestBallot view={view} ballot={firstBallot} canVote={meAlive && canSend} send={send} />
-      ) : nightFaces ? (
-        faces.length > 0 ? (
+        <PhaseEvent kind="first-ballot" title="첫날 지목" interactive={meAlive && firstBallot.result === undefined} className="mf-event-choice">
+          <PlaytestBallot view={view} ballot={firstBallot} canVote={meAlive && canSend} send={send} />
+        </PhaseEvent>
+      ) : !pauseNightEvent && faces.length > 0 ? (
+        <PhaseEvent kind="night-action" title={hostLineOf(view)} className="mf-event-choice">
           <FaceList
             faces={faces}
             {...(nightPick !== undefined ? { value: nightPick } : {})}
@@ -209,65 +218,75 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = f
             {...(tally.size > 0 ? { tally } : {})}
             {...(myRole === "mafia" && view.me.nightSure !== undefined ? { sure: view.me.nightSure } : {})}
           />
-        ) : null
-      ) : citizenNight ? (
-        <button type="button" className="mf-room-tool mf-playtest__night-done" data-night-done="" aria-label={nightDone ? "준비 완료" : "아침 준비"} disabled={!canSend || nightDone} onClick={() => send({ t: "nightDone" })}>
-          <V2Icon name={nightDone ? "check" : "sunrise"} size={22} />
-        </button>
+        </PhaseEvent>
+      ) : !pauseNightEvent && citizenNight ? (
+        <PhaseEvent kind="night-action" title="아침을 기다려요" interactive={!nightDone}>
+          <Button block data-night-done="" disabled={!canSend || nightDone} onClick={() => send({ t: "nightDone" })} icon={<V2Icon name={nightDone ? "check" : "sunrise"} size={22} />}>
+            {nightDone ? "준비 완료" : "아침 준비"}
+          </Button>
+        </PhaseEvent>
       ) : null}
-      {showChat ? (
-        <RoomChatDock
-          binding={{ ...binding, ...(binding.onSend && !chatLocked ? { onSend: sendChat } : {}), ...(!canReact ? { emotes: [] } : {}) }}
-          kbOpen={kbOpen}
-          quickReactions={playtest && discussion}
-          discussion={discussion}
-          locked={chatLocked}
-          inputRef={inputRef}
-          callInput={call?.chat}
-          onInputFocus={onCallUsed}
-          suspect={discussion ? suspect : undefined}
-          skip={discussion && meAlive ? { enabled: canSend, pressed: pressed === true, count, total, request: pressEnd } : undefined}
-          will={penOn ? { open: willOpen, saved: willSaved, call: call?.will === true, request: openWillFrom } : undefined}
-        />
-      ) : showNoteRow || showWillRow || penOn ? (
-        <div className="mf-room-toolbar">
-          {showNoteRow ? (
-            <button
-              type="button"
-              className="mf-room-tool"
-              aria-label="쪽지"
-              aria-pressed={noteOpen}
-              aria-disabled={noteReady && canSend ? undefined : "true"}
-              aria-describedby={noteReady ? undefined : noteHintId}
-              data-note-button=""
-              onClick={(e) => {
-                if (noteReady && canSend) onOpenNote?.(e.currentTarget);
-              }}
-            >
-              <V2Icon name="note" size={22} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={call?.will ? "mf-room-tool is-call" : "mf-room-tool"}
-              aria-label={willSaved ? "유언, 저장됨" : "유언"}
-              aria-pressed={willOpen}
-              aria-disabled={!canSend || undefined}
-              data-will-button=""
-              data-call={call?.will ? "" : undefined}
-              data-will-saved={willSaved ? "" : undefined}
-              onClick={(event) => openWillFrom(event.currentTarget)}
-            >
-              <V2Icon name="quill" size={22} />
-              {willSaved ? <i className="mv-chat__will-dot" aria-hidden="true" /> : null}
-            </button>
-          )}
-        </div>
-      ) : null}
-      {showNoteRow && !noteReady ? (
-        <span id={noteHintId} className="mf-sr-only">암살 대상을 모두 같게 고르면 쓸 수 있어요</span>
-      ) : null}
-    </section>
+      <section
+        ref={panelRef}
+        className={`mf-game__panel${lifted ?? kbOpen ? " mf-game__panel--kb" : ""}${showChat ? " mf-game__panel--chat" : ""}${panelEmpty ? " mf-game__panel--empty" : ""}`}
+        data-world-panel=""
+        {...(veiled ? { "data-will-hide-panel": "true" } : {})}
+      >
+        {notice}
+        {showChat ? (
+          <RoomChatDock
+            binding={{ ...binding, ...(binding.onSend && !chatLocked ? { onSend: sendChat } : {}), ...(!canReact ? { emotes: [] } : {}) }}
+            kbOpen={kbOpen}
+            quickReactions={playtest && discussion}
+            discussion={discussion}
+            locked={chatLocked}
+            inputRef={inputRef}
+            callInput={call?.chat}
+            onInputFocus={onCallUsed}
+            suspect={discussion ? suspect : undefined}
+            skip={discussion && meAlive ? { enabled: canSend, pressed: pressed === true, count, total, request: pressEnd } : undefined}
+            will={penOn ? { open: willOpen, saved: willSaved, call: call?.will === true, request: openWillFrom } : undefined}
+          />
+        ) : showRoleTool ? (
+          <div className="mf-room-toolbar">
+            {showNoteRow ? (
+              <button
+                type="button"
+                className="mf-room-tool"
+                aria-label="쪽지"
+                aria-pressed={noteOpen}
+                aria-disabled={noteReady && canSend ? undefined : "true"}
+                aria-describedby={noteReady ? undefined : noteHintId}
+                data-note-button=""
+                onClick={(e) => {
+                  if (noteReady && canSend) onOpenNote?.(e.currentTarget);
+                }}
+              >
+                <V2Icon name="note" size={22} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={call?.will ? "mf-room-tool is-call" : "mf-room-tool"}
+                aria-label={willSaved ? "유언, 저장됨" : "유언"}
+                aria-pressed={willOpen}
+                aria-disabled={!canSend || undefined}
+                data-will-button=""
+                data-call={call?.will ? "" : undefined}
+                data-will-saved={willSaved ? "" : undefined}
+                onClick={(event) => openWillFrom(event.currentTarget)}
+              >
+                <V2Icon name="quill" size={22} />
+                {willSaved ? <i className="mv-chat__will-dot" aria-hidden="true" /> : null}
+              </button>
+            )}
+          </div>
+        ) : null}
+        {showNoteRow && !noteReady ? (
+          <span id={noteHintId} className="mf-sr-only">암살 대상을 모두 같게 고르면 쓸 수 있어요</span>
+        ) : null}
+      </section>
+    </>
   );
 }
 

@@ -750,16 +750,18 @@ describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
     expect(line(m.container)).toBe("가운데로 모여요");
   });
 
-  it("끝 알림: 알약 없음, 위 한 줄 '모두 골랐어요 · {이름} 님 {k}표'(단독 최다), '동점이에요'(동점) 또는 '고른 사람이 없어요'(0표)", () => {
+  it("지목 결과: 알약 없이 중앙에 '모두 골랐어요 · {이름} 님 {k}표'(단독 최다), '동점이에요'(동점) 또는 '고른 사람이 없어요'(0표)", () => {
     const m = mount(turn4({ i: 3 }));
     m.show(turn4({ i: 4 }, { points: [[0, 2], [1, 2], [3, 1]] }));
     expect(m.container.querySelector(".mf-turn__pill")).toBeNull();
     expect(gauge(m.container)).toBeNull();
-    expect(line(m.container)).toBe("모두 골랐어요 · 서준 님 2표");
+    const result = () => m.container.querySelector('[data-phase-event="nomination-result"] .mf-story__summary')?.textContent;
+    expect(line(m.container)).toBeUndefined();
+    expect(result()).toBe("모두 골랐어요 · 서준 님 2표");
     m.show(turn4({ i: 4 }, { points: [[0, 2], [1, 3]] }));
-    expect(line(m.container)).toBe("동점이에요"); // 22-10: 결선 없이 처형 없음
+    expect(result()).toBe("동점이에요"); // 22-10: 결선 없이 처형 없음
     m.show(turn4({ i: 4 }, { points: [] }));
-    expect(line(m.container)).toBe("고른 사람이 없어요");
+    expect(result()).toBe("고른 사람이 없어요");
   });
 
   it("재접속 첫 화면(확정 직후 차례): 알약은 지금 값으로 바로 보이고 위 한 줄은 만들지 않는다. 그 뒤 차례가 넘어가면 줄이 생긴다", () => {

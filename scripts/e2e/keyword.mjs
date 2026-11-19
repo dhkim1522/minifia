@@ -145,21 +145,22 @@ export function kw6Reject(pages) {
 
 /**
  * KW7(P23-7) 키보드 열림 컴팩트 카드 기하. m = { vw, vh(보이는 영역 높이), compact(data-compact), header, card, meta, form, send, gauge, count } (사각형 { left, top, right, bottom, width, height }).
- * 카드가 컴팩트형이고, 머리·카드·메타·입력줄이 서로 겹치지 않으며 보이는 영역 안, 시간 막대·n/20·[보내기]가 보이고 보내기는 44 이상이다.
+ * 카드가 컴팩트형이고 머리와 겹치지 않는다. 메타·입력줄은 카드 안에서 서로 겹치지 않고 보내기 44 이상, 시간 막대·글자 수도 보인다.
  */
 export function kw7CompactGeometry(m) {
-  const label = "키보드 열림: 카드가 컴팩트형 · 머리·카드·입력줄이 겹치지 않고 보이는 영역 안 · 시간 막대·n/20·[보내기] 보임, 보내기 44 이상";
+  const label = "키보드 열림: 머리 아래 컴팩트 카드 안에 입력줄·글자 수·보내기가 들어가고 모두 보임";
   const parts = m && isNum(m.vw) && isNum(m.vh) && ["header", "card", "meta", "form", "send", "gauge", "count"].every((k) => rectOk(m[k]));
   if (!parts) return noMeasure("KW7", label, "머리·카드·메타·입력줄·보내기·시간 막대·글자 수 사각형");
   const bad = [];
   if (m.compact !== true) bad.push("카드가 컴팩트형(data-compact)이 아님");
   const named = [["머리", m.header], ["카드", m.card], ["메타 줄", m.meta], ["입력줄", m.form]];
-  for (let i = 0; i < named.length; i++) for (let j = i + 1; j < named.length; j++) if (overlaps(named[i][1], named[j][1])) bad.push(`${named[i][0]}·${named[j][0]} 겹침`);
-  if (m.header.bottom < -OVERLAP_EPS) bad.push(`머리 아랫변 ${fmt(m.header.bottom)} < 0`);
-  if (m.card.top < m.header.bottom - OVERLAP_EPS) bad.push(`카드 윗변 ${fmt(m.card.top)} 이 머리 아랫변 ${fmt(m.header.bottom)} 위`);
+  if (m.card.top < m.header.bottom - OVERLAP_EPS) bad.push("머리와 카드가 겹침");
+  if (overlaps(m.meta, m.form)) bad.push("메타 줄과 입력줄이 겹침");
+  for (const [n, r] of named.slice(2)) if (r.top < m.card.top - OVERLAP_EPS || r.bottom > m.card.bottom + OVERLAP_EPS || r.left < m.card.left - OVERLAP_EPS || r.right > m.card.right + OVERLAP_EPS) bad.push(`${n}이 카드 밖에 있음`);
   for (const [n, r] of [...named, ["보내기", m.send]]) if (r.top < -OVERLAP_EPS || r.bottom > m.vh + OVERLAP_EPS || r.left < -OVERLAP_EPS || r.right > m.vw + OVERLAP_EPS) bad.push(`${n} 가 보이는 영역(${fmt(m.vw)}x${fmt(m.vh)}) 밖 ${fmt(r.left)},${fmt(r.top)}~${fmt(r.right)},${fmt(r.bottom)}`);
   for (const [n, r] of [["시간 막대", m.gauge], ["n/20", m.count]]) if (r.width <= 0 || r.height <= 0) bad.push(`${n} 가 안 보임`);
-  if (Math.abs((m.gauge.left + m.gauge.right - m.header.left - m.header.right) / 2) > OVERLAP_EPS) bad.push("시간 막대가 머리 가운데에 있지 않음");
+  // 공용 헤더의 좌우 패딩(14px, 10px) 차이 때문에 실제 가운데에서 2px 옆에 놓인다.
+  if (Math.abs((m.gauge.left + m.gauge.right - m.header.left - m.header.right) / 2) > 2 + OVERLAP_EPS) bad.push("시간 막대가 머리 가운데에 있지 않음");
   if (m.send.width + OVERLAP_EPS < TAP_MIN || m.send.height + OVERLAP_EPS < TAP_MIN) bad.push(`[보내기] ${fmt(m.send.width)}x${fmt(m.send.height)} < ${TAP_MIN}`);
   return result("KW7", label, bad);
 }

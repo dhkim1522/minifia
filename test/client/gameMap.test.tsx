@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
+import { EXECUTION_MS } from "../../shared/game/phases";
 import { RULES } from "../../shared/game/ruleset";
 import type { ClientMessage, MorningView, PhaseId, PublicPlayer, RoleRecord, RoomView } from "../../shared/protocol";
 import { LineSheet } from "../../src/components/v2/LineSheet";
@@ -82,8 +83,8 @@ function makeView(o: ViewOpts = {}): RoomView {
   return {
     code: "0042",
     phase: o.phase ?? "discussion",
-    phaseEndsAt: o.noClock ? null : NOW + 90_000,
-    phaseDurationMs: o.noClock ? null : 90_000,
+    phaseEndsAt: o.noClock ? null : NOW + (o.phase === "execution" ? EXECUTION_MS : 90_000),
+    phaseDurationMs: o.noClock ? null : o.phase === "execution" ? EXECUTION_MS : 90_000,
     serverNow: NOW,
     minPlayers: 4,
     maxPlayers: 8,
@@ -270,8 +271,7 @@ describe("GameMap — 실험방 토론 도구", () => {
     expect(container.querySelector("[data-face-list]")).toBeNull();
     expect(stage.props?.canWalk).toBe(false);
     show({ ...view, me: { ...view.me, nightDone: true } });
-    expect(button.getAttribute("aria-label")).toBe("준비 완료");
-    expect(button.querySelector("svg")).not.toBeNull();
+    expect(button.textContent).toBe("준비 완료");
     expect(button.disabled).toBe(true);
   });
 });

@@ -586,11 +586,11 @@ describe("dayEvents — 경찰 화면 순서 (UI-SPEC 245·266행, E6 #35)", () 
     expect(events.localCards ?? []).toEqual([]);
   });
 
-  it("경찰이 그 밤에 암살당했어도 카드는 받고(A1) 알림은 피해자 문장 0.7초가 이긴다(A2)", () => {
+  it("경찰이 그 밤에 암살당했다면 조사 결과가 사라진 뒤 본인 결과를 받는다", () => {
     const alive = NAMES.map((n, seat) => pl(seat, n));
     const dead = NAMES.map((n, seat) => pl(seat, n, seat !== 1));
     const events = dayEvents(police("night", [], alive), police("morning", [{ n: 1, target: 2, isMafia: false }], dead, { morning: { eliminated: 1 } }));
-    same(events.announces, [{ text: "암살당했습니다", icon: "ghost", at: 700, ms: 2000 }]);
+    same(events.announces, [{ text: "암살당했습니다", icon: "ghost", at: 2600, ms: 2000 }]);
     same(events.localCards, [{ at: 2400, title: "도윤", text: "마피아 아님" }]);
   });
 

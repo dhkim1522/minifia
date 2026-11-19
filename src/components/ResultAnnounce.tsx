@@ -13,6 +13,8 @@ export interface ResultAnnounceProps {
   label?: string;
   /** 재접속 첫 화면: 등장 모션 없이 남은 시간만 보인다(is-still) */
   still?: boolean;
+  /** 중앙 단계 카드 안에서 결과 내용을 그린다. */
+  embedded?: boolean;
 }
 
 // 결과 알림(8페이즈, UI-SPEC "결과 알림"): 가운데 위 240 에 36px. 뒤 맵을 night-950 62% 로 어둡게 한다. 모든 단계 공용 틀이다.
@@ -21,11 +23,11 @@ export interface ResultAnnounceProps {
 // 결과가 없으면 요소 자체를 만들지 않는다. 글자는 React 텍스트 노드로만 그린다(닉네임이 들어가므로 HTML 로 읽히지 않는다, T-08-33).
 // 아이콘은 장식(aria-hidden)이라 읽는 글자는 그대로 하나다. 알림은 입력을 가로채지 않는다(맵 탭·이름표 버튼이 그대로 눌린다).
 // 23-07: label 이 있으면 글자 위에 한 줄 라벨을 둔다(정답 공개 "정답"). 읽는 글은 role=status 안에서 "정답 {키워드}" 하나다 — 둘 사이 공백 텍스트가 읽기 이음새다.
-export function ResultAnnounce({ text, icon, placement, label, still }: ResultAnnounceProps) {
+export function ResultAnnounce({ text, icon, placement, label, still, embedded }: ResultAnnounceProps) {
   if (text === null) return null;
-  const cls = ["mf-announce", placement === "top" ? "is-top" : "", still === true ? "is-still" : ""].filter(Boolean).join(" ");
+  const cls = ["mf-announce", embedded ? "is-embedded" : "", placement === "top" ? "is-top" : "", still === true ? "is-still" : ""].filter(Boolean).join(" ");
   return (
-    <div className={cls} data-announce="" role="status">
+    <div className={cls} data-announce="" role={embedded ? undefined : "status"}>
       <div key={label === undefined ? text : `${label}\n${text}`} className="mf-announce__body">
         {icon !== undefined && <V2Icon name={icon} size={56} className={icon === "target" ? "mf-announce__icon is-death" : "mf-announce__icon"} />}
         {label !== undefined && (

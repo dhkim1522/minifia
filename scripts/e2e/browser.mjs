@@ -1549,6 +1549,7 @@ export async function readGame(page) {
       end: endBtn ? { pressed: endBtn.getAttribute("aria-pressed") === "true", ...(count(endBtn) ?? { on: 0, total: 0 }) } : null,
       // 22페이즈(D-11·P22-2): 찬반 숫자 줄은 두 덩이 [data-verdict-count=yes|no] 의 숫자뿐이다 — 'n / N' 모양이 아니다. 개인 표 표식은 없다
       verdictRow: vrow ? { hasPicker: !!q(".mv-verdict", vrow), hasCount: !!q(".mv-count", vrow) } : null,
+      verdictCard: rect(vrow?.closest(".mf-phase-event__card")),
       verdictCounts: qa("[data-verdict-count]").length === 2 ? Object.fromEntries(qa("[data-verdict-count]").map((el) => [el.getAttribute("data-verdict-count"), Number((q(".mv-count", el)?.textContent ?? "").trim())])) : null,
       willSheets: qa("[data-will-sheet]").length,
       willReveals: qa("[data-will-reveal]").map((el) => (el.textContent ?? "").trim()),
@@ -1704,8 +1705,7 @@ export function readLetterWatch(page, { stop = true } = {}) {
 }
 
 /**
- * 큰 글 자리 판정(announceClearChecks, 18.1-13)에 쓸 사각형을 읽는다: 큰 글 글자 사각형(.mf-announce__text 줄들의 합), 헤더·안내띠, 소리 단추.
- * 큰 글이 없으면 announce 는 null(띠·소리 단추는 있으면 읽는다). 큰 글 등장 애니메이션(600ms)이 끝난 뒤에 부른다.
+ * 결과 글과 그 주변에 있는 헤더·안내띠, 선택적 소리 단추, 하단 패널의 사각형을 읽는다.
  */
 export function readAnnounceClear(page) {
   return page.evaluate(() => {
@@ -1723,7 +1723,8 @@ export function readAnnounceClear(page) {
       .filter((r) => r.width > 0 && r.height > 0);
     const band = headerFaces.sort((a, b) => b.bottom - a.bottom)[0];
     const sound = document.querySelector("[data-sound-button]");
-    return { announce, band: rectOf(band), sound: rectOf(sound?.getBoundingClientRect()), text: (textEl?.textContent ?? "").trim() };
+    const panel = document.querySelector("[data-world-panel]");
+    return { announce, band: rectOf(band), sound: rectOf(sound?.getBoundingClientRect()), panel: rectOf(panel?.getBoundingClientRect()), text: (textEl?.textContent ?? "").trim() };
   });
 }
 

@@ -14,12 +14,13 @@ export interface QuoteCardProps {
   still?: boolean;
   /** 유언 공개 카드(처형 단계 0~3.0초): 4줄까지, 표식 data-will-reveal, role=status */
   will?: boolean;
+  announce?: boolean;
 }
 
-export function QuoteCard({ text, visible, still = false, will = false }: QuoteCardProps) {
+export function QuoteCard({ text, visible, still = false, will = false, announce = true }: QuoteCardProps) {
   const base = will ? "mv-quote mv-quote--will" : "mv-quote";
   const className = visible ? (still ? `${base} is-on is-still` : `${base} is-on`) : base;
-  const mark = will ? { "data-will-reveal": "", role: "status" } : { "data-last-word": "" };
+  const mark = will ? { "data-will-reveal": "", role: announce ? "status" : undefined } : { "data-last-word": "" };
   return (
     <p className={className} {...(visible ? mark : { "aria-hidden": true })}>
       {text}

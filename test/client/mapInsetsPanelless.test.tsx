@@ -1,4 +1,4 @@
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useMapInsets } from "../../src/net/useMapInsets";
 
@@ -21,12 +21,12 @@ afterEach(() => {
   if (realHeight) Object.defineProperty(HTMLElement.prototype, "offsetHeight", realHeight);
 });
 
-function Probe({ kind }: { kind: "chat" | "errand" }) {
+function Probe({ kind }: { kind: "chat" | "hidden" | "errand" }) {
   const { rootRef, headerRef, panelRef, stageInsets } = useMapInsets(false, kind === "errand");
   return (
     <main ref={rootRef} data-top={stageInsets?.top ?? "none"} data-bottom={stageInsets?.bottom ?? "none"}>
       <header ref={headerRef} data-h="62" />
-      {kind === "errand" ? null : <section ref={panelRef} data-h="244" />}
+      {kind === "errand" ? null : <section ref={panelRef} data-h={kind === "chat" ? 244 : 0} />}
     </main>
   );
 }
@@ -47,6 +47,16 @@ describe("useMapInsets: 패널 없는 단계 (16-08)", () => {
     expect(main.getAttribute("data-bottom")).toBe("0");
     rerender(<Probe kind="chat" />);
     expect(main.getAttribute("data-bottom")).toBe("244");
+  });
+
+  it("빈 패널이 같은 요소로 남아도 아래 여백을 0으로 갱신한다", () => {
+    const { container, rerender } = render(<Probe kind="chat" />);
+    const main = container.querySelector("main")!;
+    expect(main.getAttribute("data-bottom")).toBe("244");
+    rerender(<Probe kind="hidden" />);
+    act(() => window.dispatchEvent(new Event("resize")));
+    expect(main.getAttribute("data-top")).toBe("62");
+    expect(main.getAttribute("data-bottom")).toBe("0");
   });
 
   it("panelless 가 아니고 패널도 없으면 재지 않는다(기존 동작 — 대기실·결과 화면은 늘 패널이 있다)", () => {

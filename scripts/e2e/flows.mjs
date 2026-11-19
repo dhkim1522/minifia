@@ -117,7 +117,6 @@ import {
   wakeLockChecks,
   announceChecks,
   announceClearChecks,
-  faceListPanelH,
   faceNameFits,
   tagInStage,
   ghostDomChecks,
@@ -1438,11 +1437,14 @@ function panelRow(rec, sc, id, g, h, who) {
   const dock = g?.chatDock;
   const input = g?.chatInput;
   const verdict = g?.verdictBtns ?? [];
+  const verdictCard = g?.verdictCard;
   const want = ROOM_CHAT_LOG + (g?.chatLockedCount > 0 ? 64 : ROOM_CHAT_EXTRA);
   const near = (a, b) => Math.abs(a - b) <= 1;
   const ok = dock && input && near(dock.height, want) && near(dock.bottom, h)
     && near(g.chatLog?.height, ROOM_CHAT_LOG) && near(input.bottom, h - 12)
-    && near(input.height, CHAT_CONTROL) && verdict.every(({ rect }) => rect.bottom <= dock.top + 1);
+    && near(input.height, CHAT_CONTROL)
+    && (verdict.length === 0 || verdictCard && verdictCard.top >= g.header.bottom && verdictCard.bottom <= dock.top
+      && verdict.every(({ rect }) => rect.top >= verdictCard.top && rect.bottom <= verdictCard.bottom));
   rec(sc, id, `기록과 입력 위치 고정 (${who})`, !!ok, `채팅 ${dock?.height}/${want}px · 입력 아래 ${input?.bottom}/${h - 12}px`);
 }
 
@@ -2304,6 +2306,7 @@ function readNight(page) {
       myTag: mb ? { x: mb.left, y: mb.top, w: mb.width, h: mb.height } : null,
       stage: header && panel ? { left: 0, top: header.getBoundingClientRect().bottom, right: window.innerWidth, bottom: panel.getBoundingClientRect().top } : null,
       panel: box(panel),
+      faceCard: box(q('[data-phase-event="night-action"] .mf-phase-event__card')),
       faceList: !!q("[data-face-list]"),
       faces: qa("[data-face]").map((b) => ({ seat: Number(b.getAttribute("data-face")), pressed: b.getAttribute("aria-pressed") === "true", cell: box(b), name: textBox(q(".mv-face__name", b)), lineH: (() => { const el = q(".mv-face__name", b); if (!el) return null; const cs = getComputedStyle(el); const lh = parseFloat(cs.lineHeight); return Number.isFinite(lh) ? lh : parseFloat(cs.fontSize) * 1.3; })() })),
       willButton: !!q("[data-will-button]"),
@@ -2491,6 +2494,8 @@ async function openNight(ctx, flowId, opts) {
   await armSeenWatch(hp);
   await skipTo(hp, ht, "night");
   const g = await untilGame(hp, (x) => x.phase === "night", 9000, "밤 도착");
+  // '처형 없음'을 먼저 보여 준 다음 밤 선택이 같은 중앙 영역에 들어온다.
+  await hp.locator('[data-phase-event="night-action"] [data-face-list]').waitFor({ state: "visible", timeout: 8000 });
   await settle(hp);
   return { game, g };
 }
@@ -2511,7 +2516,7 @@ async function nightAssassin(ctx) {
     rec(sc, "NA1", "내 직업이 마피아이고 동료가 있다(6명판)", view.me.role === "mafia" && allies === 1, `직업 ${view.me.role}, 동료 ${allies}`);
     // 15-08: 밤 마피아도 시민·경찰·의사와 같은 얼굴 목록(나 포함 산 사람 전원)으로 고른다 — 채팅 입력·이름표 선택 버튼·다가가기 걷기·후보 효과는 없다
     const n0 = await readNight(hp);
-    rec(sc, "NA2", "밤 마피아 아래 패널은 얼굴 목록이고 채팅 입력은 없다", n0?.faceList === true && g.hasInput === false, `얼굴 목록 ${n0?.faceList}, 입력 ${g.hasInput}`);
+    rec(sc, "NA2", "밤 마피아 중앙 카드에 얼굴 목록이 있고 채팅 입력은 없다", n0?.faceList === true && !!n0.faceCard && g.hasInput === false, `얼굴 목록 ${n0?.faceList}, 입력 ${g.hasInput}`);
     rec(sc, "NA3", `이름표 선택 버튼은 없고 얼굴 칸은 나 포함 산 사람 ${alive}개`, g.picks.length === 0 && n0?.faces?.length === alive, `버튼 ${g.picks.length}개, 칸 ${n0?.faces?.length}개`);
     rec(sc, "NA4", "확정 전에는 [쪽지] 가 있고 비활성(aria-disabled)이다", n0?.noteButton?.disabled === true, `쪽지 버튼 ${JSON.stringify(n0?.noteButton)}`);
     rec(sc, "NA5", "밤 마피아 화면에는 어둠·맥박이 없다(시민 편만)", n0?.nightDark === null && n0?.tensionPulse === 0, `어둠 ${n0?.nightDark}, 맥박 ${n0?.tensionPulse}`);
@@ -2600,11 +2605,6 @@ function assertStillNight(ht) {
   if (ht.last().phase !== "night") throw new SetupError(`밤 검사가 길어져 서버가 밤을 먼저 끝냄 (지금 ${ht.last().phase})`);
 }
 
-/** 한 값이 기대와 ±tol 안인지 한 줄로 */
-function recNear(rec, sc, id, label, got, want, tol) {
-  rec(sc, id, label, typeof got === "number" && Math.abs(got - want) <= tol, `실제 ${typeof got === "number" ? Math.round(got * 10) / 10 : got} ≠ 기대 ${Math.round(want * 10) / 10} (±${tol})`);
-}
-
 /** 시민 편(시민·경찰·의사) 밤 DOM(L10, T-09-46): 어둠·맥박이 있고, 이름표는 내 것 하나, 직업 칩 0, 채팅 패널 0, 아래에 [유언] 줄 */
 function sideChecks(rec, sc, who, n, g) {
   rec(sc, "L1", `${who}: 밤 어둠(data-night-dark)과 맥박(data-tension-pulse)이 있다`, n.nightDark === "true" && n.tensionPulse === 1, `어둠 ${n.nightDark}, 맥박 ${n.tensionPulse}`);
@@ -2615,13 +2615,15 @@ function sideChecks(rec, sc, who, n, g) {
   rec(sc, "L7", `${who}: 마피아 밤 선택 효과(data-night-pick·표식)가 0개다`, n.aimTags === 0 && n.aimMarks === 0, `속성 ${n.aimTags}개, 표식 ${n.aimMarks}개`);
 }
 
-/** 경찰·의사 얼굴 목록: 칸 수, 8자 이름이 칸 안(faceNameFits), 패널 높이가 UI-SPEC 160행 식(±2, 가정 A1) */
+/** 밤 선택 카드 전체가 헤더와 하단 도구 사이에 들어간다. */
 function faceListChecks(rec, sc, who, n, expectN) {
   rec(sc, "FL1", `${who}: 얼굴 목록([data-face-list])에 칸이 ${expectN}개`, n.faceList && n.faces.length === expectN, `목록 ${n.faceList}, 칸 ${n.faces.length}개`);
   const bad = n.faces.filter((f) => !faceNameFits({ cell: f.cell, name: f.name }));
   rec(sc, "FL2", `${who}: 8자 이름이 칸 안에 들어간다(faceNameFits)`, n.faces.length > 0 && bad.length === 0, `칸 밖 또는 측정 없음 ${bad.map((f) => f.seat).join(",") || "없음"}`);
-  const wrapped = wrappedRowsOf(n);
-  recNear(rec, sc, "FL3", `${who}: 아래 패널 높이가 얼굴 목록 식(faceListPanelH)과 같다(줄바꿈 행 ${wrapped}개 포함)`, n.panel?.height, faceListPanelH({ w: n.vw, n: n.faces.length, wrappedRows: wrapped }), 2);
+  const card = n.faceCard;
+  const inside = card && card.left >= 0 && card.right <= n.vw && card.top >= n.stage?.top && card.bottom <= n.stage?.bottom;
+  const facesFit = card && n.faces.every(({ cell }) => cell && cell.top >= card.top && cell.bottom <= card.bottom && cell.left >= card.left && cell.right <= card.right);
+  rec(sc, "FL3", `${who}: 얼굴과 이름이 헤더·하단 도구 사이의 중앙 카드 안에 들어간다`, !!(inside && facesFit), `카드 ${JSON.stringify(card)}, 무대 ${JSON.stringify(n.stage)}`);
 }
 
 /** 이름이 줄바꿈된 얼굴 행 수(이름 상자 높이가 한 줄 높이의 1.5배를 넘는 칸이 있는 행) */

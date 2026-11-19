@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import type { RoleId } from "../../shared/game/roles";
 import type { AnimalId } from "../../shared/game/animals";
 import { ROLE_TEXT, alliesText } from "../game/roleText";
@@ -16,6 +16,8 @@ export interface RoleCardProps {
   /** 사회자 줄이 이 카드를 부를 때 true — 루트에 is-call + 값 없는 data-call(14페이즈 HOST-03). 모든 역할에게 같은 모양 */
   call?: boolean;
   onFlip?: () => void;
+  /** 이미 앞면이 열린 역할 카드에서만 쓰는 확인 조작 */
+  action?: ReactNode;
 }
 
 // 뒷면 마름모(design-system 의 Diamond). 역할과 무관하게 모든 사람에게 같은 마크업이다.
@@ -33,12 +35,13 @@ export function Diamond() {
 // 카드 루트 전체가 버튼이다(뒷면·앞면 모두 누르면 onFlip). 뒤집을지 말지는 cardFace 가 정한다.
 // 뒷면 마크업은 역할과 무관하게 같고, 앞면은 면이 처음 front 가 될 때 마운트한다(Pitfall 20, T-01-26):
 // 뒷면 상태의 DOM·이미지 요청에 역할이 드러나지 않는다.
-export function RoleCard({ role, animal, face, allies, call = false, onFlip }: RoleCardProps) {
+export function RoleCard({ role, animal, face, allies, call = false, onFlip, action }: RoleCardProps) {
   const [mountedFront, setMountedFront] = useState(face === "front" && role !== null);
   if (!mountedFront && face === "front" && role !== null) setMountedFront(true);
 
   const showFront = face === "front" && role !== null;
-  const classes = ["mf-card", showFront && "mf-card--front", call && "is-call"].filter(Boolean).join(" ");
+  const frontAction = onFlip === undefined && showFront ? action : undefined;
+  const classes = ["mf-card", showFront && "mf-card--front", frontAction && "mf-card--action", call && "is-call"].filter(Boolean).join(" ");
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key === " " || e.key === "Enter") {
@@ -59,13 +62,13 @@ export function RoleCard({ role, animal, face, allies, call = false, onFlip }: R
         <div className="mf-card__face mf-card__back">
           <Diamond />
         </div>
-        {mountedFront && role !== null ? <CardFront role={role} animal={animal} allies={allies} hidden={!showFront} /> : null}
+        {mountedFront && role !== null ? <CardFront role={role} animal={animal} allies={allies} hidden={!showFront} action={frontAction} /> : null}
       </div>
     </div>
   );
 }
 
-function CardFront({ role, animal, allies, hidden }: { role: RoleId; animal: AnimalId | undefined; allies: string[] | null; hidden: boolean }) {
+function CardFront({ role, animal, allies, hidden, action }: { role: RoleId; animal: AnimalId | undefined; allies: string[] | null; hidden: boolean; action?: ReactNode }) {
   const { src, srcSet } = roleArtSrc(role, animal);
   const text = ROLE_TEXT[role];
   return (
@@ -79,6 +82,7 @@ function CardFront({ role, animal, allies, hidden }: { role: RoleId; animal: Ani
           <p className="mf-card__mates">{alliesText(allies)}</p>
         </>
       ) : null}
+      {action ? <div className="mf-card__action">{action}</div> : null}
     </div>
   );
 }

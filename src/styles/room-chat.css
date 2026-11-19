@@ -11,9 +11,8 @@
 }
 .mf-room-chat .mv-chat.is-compact .mv-chat__log { padding-block: 2px; }
 .mf-room-chat .mv-chat__form { gap: 6px; padding: 8px 12px 12px; }
-.mf-keyword__answer .mv-chat__form { gap: 6px; margin: 8px 12px 12px; }
+.mf-keyword__answer .mv-chat__form { gap: 6px; margin-top: var(--space-xs); }
 .mf-room-chat .mv-chat.is-compact .mv-chat__form { padding-bottom: 8px; }
-.mf-keyword.is-kb .mf-keyword__answer .mv-chat__form { margin-bottom: 8px; }
 .mf-room-chat .mv-chat__input,
 .mf-keyword__answer .mv-chat__input { height: var(--tap-min); padding-inline: 9px; border-color: var(--noir-control-line); border-radius: 7px; background: var(--noir-inset); }
 .mf-room-chat .mv-chat__input::placeholder,
@@ -114,28 +113,15 @@
   pointer-events: none;
 }
 .mf-game__panel--chat > :not(.mf-room-chat) { padding: 6px 12px; background: var(--noir-panel); pointer-events: auto; }
-.mf-game__panel--chat .mf-game__verdict { gap: 4px; }
-.mf-game__panel--chat .mv-verdict__btn { min-height: var(--tap-min); flex-direction: row; gap: 6px; }
-.mf-game__panel--chat .mv-verdict__btn svg { width: 22px; height: 22px; }
 .mf-lobby:has(.mf-room-chat__surface) .mf-lobby__start { visibility: hidden; }
 .mf-room-header__actions { display: flex; flex: none; justify-content: flex-end; min-width: var(--tap-min); gap: 6px; }
-.mf-keyword .mf-keyword__answer { gap: 0; padding: 0; }
-.mf-keyword .mf-keyword__meta { padding: 4px 12px 0; }
 @media (max-height: 420px) and (orientation: landscape) {
   .mf-room-chat .mv-chat__log { max-height: 48px; }
   .mf-room-toolbar { padding-block: 5px; }
 }
 
-/* 밤에 역할 도구가 떠 있어도 얼굴 선택 패널은 배경을 갖는다. */
-.mf-game .mf-game__panel:has(> :is(.mf-room-toolbar, [data-night-done])) { background: transparent; box-shadow: none; pointer-events: none; }
-.mf-game__panel > [data-night-done] { pointer-events: auto; }
-.mf-game__panel:has(> .mf-room-toolbar) > .mv-faces {
-  margin: -14px calc(-1 * var(--space-md)) 0;
-  padding: 14px var(--space-md) 0;
-  background: var(--noir-panel);
-  box-shadow: var(--noir-rail);
-  pointer-events: auto;
-}
+/* 밤의 보조 도구는 맵에 띄운다. */
+.mf-game .mf-game__panel:has(> .mf-room-toolbar) { background: transparent; box-shadow: none; pointer-events: none; }
 .mf-game__panel > .mf-room-toolbar { margin-inline: calc(-1 * var(--space-md)); }
 .mf-room :is(.mf-lobby, .mf-result) .mf-hostrail__col > button {
   width: var(--tap-min);

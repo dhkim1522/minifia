@@ -5,7 +5,6 @@
 .mf-playtest__feedback,
 .mf-playtest__result { margin: 0; padding: 2px 4px; color: var(--gray-100); font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
 .mf-playtest__result { color: var(--noir-paper); font-size: 15px; font-weight: 700; }
-.mf-playtest__night-done { align-self: flex-end; width: var(--tap-min); min-height: var(--tap-min); padding-inline: 0; }
 
 .mf-playtest__ballot,
 .mf-playtest__ballot-result {
@@ -38,9 +37,3 @@
 /* 첫 투표는 후보 카드에, 키보드가 열리면 입력 영역에 집중한다. */
 [data-first-round-playtest] [data-game-stage]:has([data-first-ballot], [data-first-ballot-result]) .mf-world__tag,
 [data-first-round-playtest] [data-game-stage][data-kb-open="true"] .mf-world__tag { visibility: hidden; }
-
-@media (max-height: 680px) {
-  [data-first-round-playtest] .mv-face { min-height: 74px; }
-  [data-first-round-playtest] .mv-face__img,
-  [data-first-round-playtest] .mv-face--fallback { width: min(100%, 48px); }
-}

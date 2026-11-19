@@ -1065,7 +1065,7 @@ export function makePoliticsFlows(h) {
       rec(sc, "V1", "1.5초에 유언 카드가 보이고 글이 방장이 남긴 글이다(처형 단계 0~3.0초)", card !== null && card.text === WILL, card === null ? "유언 카드가 없다" : `글 "${card.text}"`);
       if (card !== null) {
         const clear1 = await readAnnounceClear(hp);
-        recLines(rec, `${id}/fit`, announceClearChecks({ announce: card.rect, band: clear1.band, sound: clear1.sound }), " (유언 카드: 띠 면 아래·소리 단추 밖)");
+        recLines(rec, `${id}/fit`, announceClearChecks({ ...clear1, announce: card.rect }), " (중앙 유언 카드)");
         rec(`${id}/fit`, "V1b", "유언 카드는 누를 수 없다(pointer-events: none)", card.pe === "none", `pointer-events ${card.pe}`);
       }
       const noRecord = await hp.evaluate(() => ({ cards: document.querySelectorAll('[data-card="ballots"]').length, reveal: document.querySelectorAll("[data-ballots], [data-ballot-side], [data-ballot-seat]").length, roleChips: document.querySelectorAll("[data-role-chip]").length })); /* 0건 */

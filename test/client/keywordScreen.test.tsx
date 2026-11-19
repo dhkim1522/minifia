@@ -195,6 +195,7 @@ describe("키워드 입력줄 — 보내기와 제출 뒤 (P23-12·13)", () => {
 
   it("글이 있으면 [보내기]·Enter(제출)가 final:true 로 보내고 곧바로 sent: 읽기 전용·check 아이콘·'단서 보냄'·'냈어요'", () => {
     const { container, sent } = renderAnswer(makeView(CITIZEN, 5_000));
+    expect(input(container).closest("[data-keyword-card]")).not.toBeNull();
     type(container, "안경");
     expect(sendBtn(container).getAttribute("aria-disabled")).toBe("false");
     expect(sendBtn(container).getAttribute("aria-label")).toBe("단서 보내기");
@@ -206,6 +207,7 @@ describe("키워드 입력줄 — 보내기와 제출 뒤 (P23-12·13)", () => {
     expect(sendBtn(container).getAttribute("aria-label")).toBe("단서 보냄");
     expect(sendBtn(container).querySelector("svg path")!.getAttribute("d")).toBe("M5 12.5l4.5 4.5L19 7.5"); // check 아이콘
     expect(q(container, "[data-answer-done]").textContent).toBe("냈어요");
+    expect(q(container, "[data-answer-done]").closest("[data-keyword-card]")).not.toBeNull();
     // 제출 뒤 다시 제출해도 더 보내지 않는다
     fireEvent.submit(q(container, "form"));
     expect(sent.filter((m) => m.t === "answer" && m.final)).toHaveLength(1);
