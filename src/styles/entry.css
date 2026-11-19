@@ -1,5 +1,13 @@
 /* 입장 무대는 제목과 입력 사이를 비워 테이블을 보여 준다.
    키보드를 열면 입력 패널만 보이는 높이에 맞춰 올라온다. */
+@font-face {
+  font-family: "Minifia Title";
+  src: url("/fonts/noto-serif-kr-home/minifia-title.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  unicode-range: U+B2C8, U+BBF8, U+C544, U+D53C;
+}
 .mf-entry-scene .mf-backdrop__art::after {
   content: "";
   position: absolute;
@@ -28,7 +36,32 @@
   text-shadow: 0 2px 16px rgb(4 10 19 / 50%);
 }
 .mf-entry-scene .mf-entry__head .mf-t-display::after { content: none; }
-.mf-entry-scene .mf-home .mf-t-display { font-size: clamp(48px, 14vw, 68px); }
+.mf-entry-scene .mf-home .mf-entry__head { gap: 6px; }
+.mf-entry-scene .mf-entry__head .mf-home__title {
+  font-family: "Minifia Title", var(--font-serif);
+  font-size: clamp(50px, 15vw, 72px);
+  font-weight: 900;
+  line-height: 1.08;
+  letter-spacing: -.045em;
+  text-shadow: 0 2px 0 rgb(4 10 19 / 70%), 0 6px 18px rgb(4 10 19 / 48%);
+}
+.mf-home__flourish {
+  position: relative;
+  width: 40px;
+  height: 6px;
+  color: var(--brass-200);
+  background: linear-gradient(90deg, currentColor, transparent 96%) center / 100% 1px no-repeat;
+}
+.mf-home__flourish::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 33px;
+  width: 4px;
+  height: 4px;
+  background: currentColor;
+  transform: rotate(45deg);
+}
 .mf-entry__subtitle {
   margin: 0;
   font-size: 16px;

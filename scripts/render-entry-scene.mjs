@@ -28,26 +28,23 @@ try {
     renderer.toneMappingExposure = 1.15;
     renderer.setSize(1200, 1800, false);
 
-    // 재즈 바 뒤쪽 펜던트 아래의 두 의자와 램프를 그대로 사용한다.
+    // 재즈 바 뒤쪽 펜던트 아래에서 테이블을 둘러싼다. 양옆 동물은 의자 바깥쪽에 서고,
+    // 앞쪽으로 나온 발과 가구 프레임 사이에 바닥이 보여 실루엣이 분리된다.
     const tableX = -2.4, tableZ = -4.6;
     const subjects = [];
-    function place(animal, outfit, x, z, angle, seated) {
+    function place(animal, outfit, x, z, angle) {
       const actor = createCharacter(0, outfit, undefined, animal);
-      actor.root.position.set(tableX + x, seated ? 0.14 : 0, tableZ + z);
+      actor.root.position.set(tableX + x, 0, tableZ + z);
       actor.root.rotation.y = angle;
-      if (seated) {
-        for (const leg of ["legA", "legB"]) actor.root.getObjectByName(leg).rotation.x = -1.13;
-        for (const child of actor.root.children) if (child.isMesh) child.visible = false;
-      }
       bar.root.add(actor.root);
       subjects.push(actor);
       return actor.root;
     }
-    const left = place("rabbit", "mafia", -0.71, 0.37, 0.9, true);
+    const left = place("rabbit", "mafia", -1.10, 0.93, 0.88);
     left.getObjectByName("neck").rotation.y = 0.08;
-    const speaker = place("fox", "coat", -0.62, -1.16, 0.13, false);
+    const speaker = place("fox", "coat", -0.48, -1.10, 0.20);
     speaker.getObjectByName("armA").rotation.x = -0.54;
-    const right = place("elephant", "coat", 0.71, -0.37, -0.33, true);
+    const right = place("elephant", "coat", 1.21, 0.10, -0.43);
     right.getObjectByName("neck").rotation.z = -0.07;
 
     // 램프의 빛이 큰 얼굴에서도 읽히게 촬영용 조명을 맵의 실광원과 같은 자리에 둔다.
@@ -59,9 +56,9 @@ try {
     fill.position.set(0.7, 2, 4);
     bar.root.add(key, fill);
 
-    const camera = new THREE.PerspectiveCamera(38, 2 / 3, 0.1, 50);
-    camera.position.set(tableX + 3.98, 4.86, tableZ + 7.65);
-    camera.lookAt(tableX, 0.99, tableZ);
+    const camera = new THREE.PerspectiveCamera(39, 2 / 3, 0.1, 50);
+    camera.position.set(tableX + 4.04, 4.68, tableZ + 10.59);
+    camera.lookAt(tableX, 0.72, tableZ);
     renderer.render(bar.root, camera);
     const result = renderer.domElement.toDataURL();
     for (const subject of subjects) subject.dispose();

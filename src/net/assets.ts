@@ -30,6 +30,8 @@ export type PreloadItem = { href: string; imageSrcSet?: string };
  * (정적 그림 캐시가 max-age 1일이라 같은 주소는 하루 동안 옛 그림이 나온다). 그림을 바꾸면 값을 바꾼다.
  */
 export const ASSET_VERSION = "noir-11";
+/** 입장 배경은 캐릭터·맵 그림과 별도로 갱신한다. */
+export const ENTRY_ART_VERSION = "home-seats-1";
 
 // 파일 이름의 @ 는 URL 에서 %40 으로 쓴다.
 function png(dir: "table" | "roles" | "ghost", id: string, scale: 2 | 4): string {
@@ -121,7 +123,7 @@ export function journalArt(role: JournalRole, slot: JournalSlot): { src: string;
 export function backdropUrl(layout: "entry", scene: EntryScene): string;
 export function backdropUrl(layout: "game", scene: SceneId): string;
 export function backdropUrl(layout: BackdropLayout, scene: SceneId): string {
-  if (layout === "entry") return `/backgrounds/noir-entry.webp?v=${ASSET_VERSION}`;
+  if (layout === "entry") return `/backgrounds/noir-entry.webp?v=${ENTRY_ART_VERSION}`;
   return `/backgrounds/bg_${layout}_${SCENES[scene].file}.webp?v=${ASSET_VERSION}`;
 }
 

@@ -13,6 +13,7 @@ import { preload } from "react-dom";
 import {
   FIGURE_IDS,
   ASSET_VERSION,
+  ENTRY_ART_VERSION,
   backdropUrl,
   duskPreloadList,
   entryPreloadList,
@@ -119,7 +120,7 @@ describe("그림 URL 헬퍼", () => {
     expect(backdropUrl("game", "day")).toBe(`/backgrounds/bg_game_day.webp?v=${ASSET_VERSION}`);
     expect(backdropUrl("game", "night")).toBe(`/backgrounds/bg_game_night.webp?v=${ASSET_VERSION}`);
     expect(backdropUrl("game", "verdictDusk")).toBe(`/backgrounds/bg_game_verdict_dusk.webp?v=${ASSET_VERSION}`);
-    expect(backdropUrl("entry", "lobby")).toBe(`/backgrounds/noir-entry.webp?v=${ASSET_VERSION}`);
+    expect(backdropUrl("entry", "lobby")).toBe(`/backgrounds/noir-entry.webp?v=${ENTRY_ART_VERSION}`);
   });
 
   it("배경: entry 구도는 lobby 장면만 받는다 (타입)", () => {
@@ -189,7 +190,7 @@ describe("일지 색 토큰 (UI-SPEC 새 토큰 12개)", () => {
 describe("미리 받기 목록", () => {
   it("입장 화면 목록: 입장·대기실 배경(WebP)", () => {
     const hrefs = entryPreloadList().map((item) => item.href);
-    expect(hrefs).toContain(`/backgrounds/noir-entry.webp?v=${ASSET_VERSION}`);
+    expect(hrefs).toContain(`/backgrounds/noir-entry.webp?v=${ENTRY_ART_VERSION}`);
     expect(hrefs).toContain(`/backgrounds/bg_game_lobby.webp?v=${ASSET_VERSION}`);
     expect(hrefs.some((h) => h.endsWith(".svg"))).toBe(false);
     expect(hrefs).toHaveLength(2);
@@ -304,9 +305,10 @@ describe("실제 파일과의 일치", () => {
   it("홈 아이콘과 공유 그림도 최신 그림 캐시 버전을 쓴다", () => {
     expect(ASSET_VERSION).not.toBe("noir-2");
     const html = readFileSync("index.html", "utf8");
-    for (const icon of ["favicon.svg", "favicon-32.png", "apple-touch-icon.png", "og.png"]) {
+    for (const icon of ["favicon.svg", "favicon-32.png", "apple-touch-icon.png"]) {
       expect(html).toContain(`/${icon}?v=${ASSET_VERSION}`);
     }
+    expect(html).toContain(`/og.png?v=${ENTRY_ART_VERSION}`);
   });
 
   it("어떤 URL 에도 @ 문자가 없다", () => {
