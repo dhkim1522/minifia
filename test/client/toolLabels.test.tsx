@@ -262,7 +262,7 @@ describe("시트 닫기·결과 탭 (TOOL-04, D-01·V-7)", () => {
   it("결과 탭 라벨은 막히지 않은 모든 탭에서 14px 이고 선택된 탭만 gray-100 700 이다", () => {
     const css = readFileSync("src/styles/result.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     const pick = (sel: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => (m[1] ?? "").split(",").some((x) => x.trim() === sel)).map((m) => m[2] ?? "").join(";");
-    expect(pick(".mf-result__tab-label")).toContain("font-weight: 400");
+    expect(pick(".mf-result__tab")).toContain("font: var(--type-label)");
     expect(pick('.mf-result__tab[aria-selected="true"] .mf-result__tab-label')).toContain("font-weight: 700");
   });
 });

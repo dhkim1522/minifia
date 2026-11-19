@@ -59,7 +59,7 @@
 .mf-police-card__face { display: block; width: 140px; height: 140px; border-radius: var(--radius-md); object-fit: contain; }
 .mf-police-card__face--fallback { display: flex; align-items: center; justify-content: center; background: var(--night-900); }
 .mf-police-card__face--fallback i { display: block; width: 72px; height: 72px; border-radius: var(--radius-pill); }
-.mf-police-card__label { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-ui); font-size: 16px; line-height: 1.2; font-weight: 700; color: var(--gray-100); word-break: keep-all; }
+.mf-police-card__label { display: inline-flex; align-items: center; gap: 6px; font: var(--type-body-strong); color: var(--gray-100); word-break: keep-all; }
 .mf-police-card.is-mafia .mf-police-card__label { color: var(--crimson-300); }
 .mf-police-card__icon { display: inline-flex; flex: none; }
 @keyframes mf-police-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

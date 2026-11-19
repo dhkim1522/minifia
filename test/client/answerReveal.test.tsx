@@ -126,9 +126,9 @@ describe("ResultAnnounce label (23-07, P23-20)", () => {
     expect(announceEl(container)?.classList.contains("is-still")).toBe(true);
   });
 
-  it("CSS: .mf-announce__label 은 Body 16/700 gray-300 이고 모션 줄이기·is-still 에서 애니메이션이 없다", () => {
+  it("CSS: .mf-announce__label 은 보조 라벨 14/700 gray-300 이고 모션 줄이기·is-still 에서 애니메이션이 없다", () => {
     const css = readFileSync("src/styles/game.css", "utf8");
-    expect(css).toMatch(/\.mf-announce__label\s*\{[^}]*font:\s*var\(--type-body-strong\)[^}]*var\(--gray-300\)/);
+    expect(css).toMatch(/\.mf-announce__label\s*\{[^}]*font:\s*var\(--type-label-strong\)[^}]*var\(--gray-300\)/);
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce\)\s*\{[^}]*\.mf-announce__label/);
     expect(css).toMatch(/\.mf-announce\.is-still[^{]*\{[^}]*animation:\s*none/);
   });

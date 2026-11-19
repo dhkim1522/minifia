@@ -14,7 +14,7 @@
 .mf-result__header { position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-toast); box-sizing: border-box; height: 62px; padding: var(--space-sm) var(--space-md) 0; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); pointer-events: none; }
 .mf-result__header .mf-btn, .mf-result__header .mv-tool { pointer-events: auto; }
 .mf-result__header-gap { flex: none; width: var(--tap-min); height: var(--tap-min); }
-.mf-result__title { flex: 1 1 auto; min-width: 0; margin: 0; min-height: var(--tap-min); display: flex; align-items: center; justify-content: center; gap: var(--space-xs); text-align: center; font: var(--type-heading); color: var(--noir-paper); text-shadow: var(--shadow-text); word-break: keep-all; }
+.mf-result__title { flex: 1 1 auto; min-width: 0; margin: 0; min-height: var(--tap-min); display: flex; align-items: center; justify-content: center; gap: var(--space-xs); text-align: center; font: var(--type-stage); color: var(--noir-paper); text-shadow: var(--shadow-text); word-break: keep-all; }
 .mf-result__title-icon { flex: none; color: var(--noir-accent); filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--night-950) 70%, transparent)); }
 .mf-result__title-icon.is-mafia { color: var(--crimson-400); }
 
@@ -28,7 +28,7 @@
 .mf-result__scrim, .mf-result__header, .mf-result .mv-side, .mf-result .mf-hostrail, .mf-result .mv-toast { transform: translateY(var(--mf-vv-top, 0px)); }
 
 
-/* 승리 알림(4600~5200, A-1): 가운데 한 줄 36px + 아이콘 56, 배경 어둡게 80%. 시민 승리는 놋쇠 아이콘, 마피아 승리는 진홍 아이콘. 터치를 막지 않는다(건너뛰기 탭이 통과한다). opacity 만 쓴다 */
+/* 승리 알림(4600~5200, A-1): 중앙 발표 규격과 56px 아이콘. 시민 승리는 놋쇠, 마피아 승리는 진홍. 건너뛰기 탭을 통과시킨다. */
 .mf-result__announce { position: absolute; inset: 0; z-index: calc(var(--z-toast) + 5); box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: 0 var(--space-md); pointer-events: none; background: color-mix(in srgb, var(--night-950) 80%, transparent); animation: mf-result-announce 600ms var(--ease-out) both; }
 .mf-result__announce-icon { flex: none; color: var(--noir-accent); filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--night-950) 70%, transparent)); }
 .mf-result__announce-icon.is-mafia { color: var(--crimson-400); }
@@ -55,26 +55,26 @@
 .mf-result__panel.is-expanded { height: min(70%, 520px); }
 
 .mf-result__tabs { flex: none; display: flex; align-items: center; height: 44px; margin: -14px -8px 0; padding: 0; }
-.mf-result__tab { position: relative; flex: none; box-sizing: border-box; min-width: 44px; height: 44px; margin: 0; padding: 0 var(--space-sm); display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: 0; border-radius: var(--radius-badge); background: transparent; color: var(--gray-300); font-family: var(--font-ui); font-size: 14px; line-height: 1.2; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mf-result__tab { position: relative; flex: none; box-sizing: border-box; min-width: 44px; height: 44px; margin: 0; padding: 0 var(--space-sm); display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: 0; border-radius: var(--radius-badge); background: transparent; color: var(--gray-300); font: var(--type-label); cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .mf-result__tab[aria-selected="true"] { color: var(--noir-paper); box-shadow: inset 0 -2px 0 var(--noir-paper); }
 .mf-result__tab.is-mafia .mv-icon { color: var(--crimson-300); }
 /* 14-06 TOOL-01: 네 탭 모두 라벨을 항상 보인다. 기본 14/400 gray-300, 선택된 탭만 gray-100 700 */
-.mf-result__tab-label { color: var(--gray-300); font-size: 14px; font-weight: 400; white-space: nowrap; }
+.mf-result__tab-label { color: var(--gray-300); white-space: nowrap; }
 .mf-result__tab[aria-selected="true"] .mf-result__tab-label { color: var(--gray-100); font-weight: 700; }
 .mf-result__tab-dot { position: absolute; top: 8px; right: 6px; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--gray-100); pointer-events: none; }
 
 /* 몸통: 기록 칸 모양(night-900 둥근 면)을 재사용하고, 쌓임은 위에서 시작해 스크롤한다 */
 .mf-result__body { flex: 1 1 0; min-height: 0; }
 .mf-result__body > :first-child { margin-top: 0; }
-.mf-result__divider { margin: var(--space-xs) 0 0; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-100); }
+.mf-result__divider { margin: var(--space-xs) 0 0; font: var(--type-label-strong); color: var(--gray-100); }
 .mf-result__body > .mf-result__divider:first-child { margin-top: 0; }
-.mf-result__empty { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; color: var(--gray-300); }
+.mf-result__empty { flex: 1 1 auto; font: var(--type-label); display: flex; align-items: center; justify-content: center; color: var(--gray-300); }
 
 .mf-result__whisper { display: flex; flex-direction: column; gap: 2px; margin: 0; }
-.mf-result__whisper-head { display: inline-flex; align-items: center; gap: 6px; color: var(--gray-300); }
+.mf-result__whisper-head { display: inline-flex; font: var(--type-label); align-items: center; gap: 6px; color: var(--gray-300); }
 .mf-result__whisper-dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); }
 .mf-result__arrow { flex: none; display: block; }
-.mf-result__whisper-text { font-size: 16px; line-height: 1.5; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
+.mf-result__whisper-text { font: var(--type-body); color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
 
 /* 알약 자리(11-12): 확장일 때 입력줄 대신 폭 전체로 남는다 */
 .mf-result__pill { flex: none; display: flex; align-items: center; justify-content: stretch; width: 100%; }

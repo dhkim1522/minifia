@@ -68,7 +68,6 @@ describe("v2.0 토큰 합치기", () => {
   });
 });
 
-// 08-05: 명조 글꼴 토큰. 값은 승인 v2.0 토큰(design/v2.0/design-system/tokens.json type.families.serif) 그대로다.
 describe("v3 공통 글꼴과 글자 역할", () => {
   type TypeDoc = { type?: { families?: Record<string, string> } };
   const fam = (doc: unknown, key: string): string | undefined => (doc as TypeDoc).type?.families?.[key];
@@ -79,27 +78,27 @@ describe("v3 공통 글꼴과 글자 역할", () => {
     return hit?.[2] ?? "";
   };
 
-  it("tokens.css 에 --font-serif 한 줄이 생성되어 있다", () => {
-    expect(css.split("\n").filter((l) => l.includes("--font-serif:")).length).toBe(1);
-  });
-
-  it("대표 명조, 시스템 고딕, 게임 속 필기를 구분한다", () => {
-    expect(fam(app, "serif")).toContain('"Noto Serif KR"');
+  it("홈과 중앙 발표는 시스템 고딕을 공유하고 문서 본문은 손글씨를 쓴다", () => {
+    expect(fam(app, "ui")).toContain('"Apple SD Gothic Neo"');
     expect(fam(app, "ui")).toContain("system-ui");
     expect(fam(app, "hand")).toContain('"Nanum Pen Script"');
-    expect(css).toContain("--type-headline: 900 36px/1.2 var(--font-serif);");
+    expect(css).toContain("--type-brand: 900 clamp(50px, 15vw, 72px)/1.08 var(--font-ui);");
+    expect(css).toContain("--type-headline: 900 clamp(32px, 10vw, 36px)/1.2 var(--font-ui);");
+    expect(css).toContain("--type-section: 700 20px/1.3 var(--font-ui);");
     expect(css).toContain("--type-body: 400 16px/1.5 var(--font-ui);");
+    expect(css).toContain("--type-label: 400 14px/1.4 var(--font-ui);");
+    expect(css).toContain("--type-hand-note: 400 20px/1.35 var(--font-hand);");
   });
 
-  it("대표 명조는 자체 호스팅하고 홈은 네 글자 분할을 쓴다", () => {
-    const fontCss = readFileSync(new URL("../../src/styles/serifFont.css", import.meta.url), "utf8");
+  it("홈에서 별도의 웹폰트를 불러오지 않는다", () => {
+    const base = readFileSync(new URL("../../src/styles/base.css", import.meta.url), "utf8");
     expect(INDEX).not.toMatch(/fonts\.googleapis\.com|fonts\.gstatic\.com/);
-    expect(fontCss).toContain('font-family: "Noto Serif KR"');
-    expect(fontCss).toMatch(/home\.woff2[^}]+unicode-range: U\+B2C8, U\+BBF8, U\+C544, U\+D53C;/);
-    expect(fontCss).toContain("/fonts/noto-serif-kr/game.woff2");
+    expect(base).not.toMatch(/serifFont|noto-serif/);
+    expect(css).not.toContain("--font-serif:");
   });
 
-  it("유언 인용만 손글씨 역할을 쓰고 배지와 도장은 고딕을 쓴다", () => {
+  it("일반 인용은 본문 규격을 쓰고 유언 인용에 손글씨를 적용한다", () => {
+    expect(body(".mv-quote")).toContain("var(--type-body)");
     expect(body(".mv-quote--will")).toContain("var(--type-hand-note)");
     expect(body(".mv-stamp")).toContain("var(--font-ui)");
     expect(V2_CSS).not.toContain("var(--font-serif)");
@@ -290,7 +289,7 @@ describe("마지막 3인 CSS 규칙 (09.1.1-15)", () => {
   it("글자 크기는 16px 한 가지(14 미만 없음)", () => {
     for (const r of NEW) for (const m of r.body.matchAll(/font-size:\s*([^;]+);/g)) expect((m[1] ?? "").trim(), r.selector).toBe("16px");
     expect(body(".mv-speak-chip")).toMatch(/font-size:\s*16px/);
-    expect(body(".mv-quote")).toMatch(/font-size:\s*16px; line-height: 1\.5; font-weight: 700/);
+    expect(body(".mv-quote")).toContain("font: var(--type-body)");
   });
 
   it("인용 카드: 은색 테두리 1.5px, 안쪽 8px 16px, 두 줄까지, 누를 수 없다", () => {

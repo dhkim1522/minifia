@@ -3,8 +3,8 @@
 [data-first-round-playtest] .mf-keyword__meta[hidden] { display: none; }
 
 .mf-playtest__feedback,
-.mf-playtest__result { margin: 0; padding: 2px 4px; color: var(--gray-100); font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
-.mf-playtest__result { color: var(--noir-paper); font-size: 15px; font-weight: 700; }
+.mf-playtest__result { margin: 0; padding: 2px 4px; color: var(--gray-100); font: var(--type-label); overflow-wrap: anywhere; }
+.mf-playtest__result { color: var(--noir-paper); font: var(--type-body-strong); }
 
 .mf-playtest__ballot,
 .mf-playtest__ballot-result {
@@ -19,14 +19,13 @@
   align-items: flex-start;
 }
 
-.mf-playtest__ballot-result strong { color: var(--noir-paper); font-size: 20px; }
+.mf-playtest__ballot-result strong { color: var(--noir-paper); font: var(--type-section); }
 
 .mf-playtest__ballot-result span,
 .mf-playtest__ballot-count {
   margin: 0;
   color: var(--noir-silver);
-  font-size: 14px;
-  line-height: 1.35;
+  font: var(--type-label);
 }
 
 .mf-playtest__ballot [data-first-ballot-hold] { min-height: 44px; }

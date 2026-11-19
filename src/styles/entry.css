@@ -20,10 +20,7 @@
 }
 .mf-entry-scene .mf-entry__head .mf-t-display {
   margin: 0;
-  font-family: var(--font-ui);
-  font-weight: 800;
   letter-spacing: -.055em;
-  line-height: 1.1;
   color: var(--noir-paper);
   text-shadow: 0 2px 16px rgb(4 10 19 / 50%);
 }
@@ -102,7 +99,7 @@
   margin: 10px 0 0;
   padding: 0;
   text-align: right;
-  font-size: 14px;
+  font: var(--type-label);
   color: var(--noir-silver);
 }
 .mf-entry-scene .mf-join__plaza {
@@ -141,10 +138,7 @@
   text-shadow: none;
   text-align: left;
 }
-.mf-nick-sheet .mf-sheet__title {
-  font-family: var(--font-ui);
-  letter-spacing: -.035em;
-}
+.mf-nick-sheet .mf-sheet__title { letter-spacing: -.035em; }
 @media (max-height: 620px) {
   .mf-entry-scene .mf-entry { padding-top: 18px; }
   .mf-entry-scene .mf-entry__head { margin-bottom: 12px; }

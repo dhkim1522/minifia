@@ -25,18 +25,18 @@
 .mf-card__face { position: absolute; inset: 0; isolation: isolate; backface-visibility: hidden; -webkit-backface-visibility: hidden; clip-path: none; background: var(--noir-sheet-light), var(--noir-panel); box-shadow: inset 0 0 0 1px var(--noir-line), var(--shadow-card); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: var(--space-lg); text-align: center; overflow: hidden; border-radius: var(--noir-surface-radius); }
 .mf-card__face::before { content: ""; position: absolute; inset: 7px; border: 1px solid color-mix(in srgb, var(--noir-silver) 38%, transparent); clip-path: none; pointer-events: none; border-radius: var(--noir-control-radius); }
 .mf-card__front { transform: rotateY(180deg); }
-.mf-card__front .mf-t-display { order: -1; font-family: var(--font-ui); color: var(--noir-paper); letter-spacing: -0.04em; font-size: clamp(26px, 7vw, 34px); }
+.mf-card__front .mf-t-display { order: -1; color: var(--noir-paper); letter-spacing: -0.04em; }
 .mf-card__back { background: radial-gradient(ellipse at 50% 55%, var(--noir-raised), transparent 70%), var(--noir-inset); }
 .mf-card__diamond { width: 40%; aspect-ratio: 1; }
 /* 직업 그림은 표시 폭 150(3:4). 카드가 낮으면 그림이 먼저 줄어 글자가 잘리지 않는다. */
 .mf-card__art { width: 150px; max-width: 100%; height: auto; flex: 0 1 auto; min-height: 0; object-fit: contain; filter: drop-shadow(0 8px 12px var(--shadow)); }
-.mf-card__desc { font-size: 16px; line-height: 1.5; color: var(--noir-silver); margin: 0; word-break: keep-all; white-space: pre-line; }
+.mf-card__desc { font: var(--type-body); color: var(--noir-silver); margin: 0; word-break: keep-all; white-space: pre-line; }
 .mf-card__divider { flex: none; width: 100%; height: 1px; background: var(--gray-700); }
-.mf-card__mates { flex: none; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--crimson-300); margin: 0; word-break: keep-all; }
+.mf-card__mates { flex: none; font: var(--type-label-strong); color: var(--crimson-300); margin: 0; word-break: keep-all; }
 .mf-card--action { width: min(74vw, 252px, calc((var(--mf-room-h, 100vh) - 104px) * 2 / 3)); max-height: none; cursor: default; }
 .mf-card--action .mf-card__front { padding: var(--space-md); }
 .mf-card__action { width: 100%; flex: none; }
-.mf-playtest__ready-status { display: flex; align-items: center; justify-content: center; min-height: var(--tap-min); gap: var(--space-xs); font-size: 14px; font-weight: 700; color: var(--noir-silver); }
+.mf-playtest__ready-status { display: flex; align-items: center; justify-content: center; min-height: var(--tap-min); gap: var(--space-xs); font: var(--type-label-strong); color: var(--noir-silver); }
 @keyframes mf-card-rise { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
 /* PhaseBar — 윗줄 왼쪽 제목+안내, 오른쪽 extra, 아랫줄 타이머(UI-SPEC S-05). */
@@ -47,7 +47,7 @@
 .mf-phasebar .mf-t-heading { text-shadow: var(--shadow-text); }
 /* 제목·안내는 줄바꿈하지 않는다. 제목 열이 줄어들 일이 없도록 폭을 계산해 둔 값(UI-SPEC A): 360폭 윗줄 가용 328, 버튼 최대 120, 제목 열 ≥ 198 vs 필요 ≈ 150 */
 .mf-phasebar .mf-t-heading, .mf-phasebar__do { white-space: nowrap; }
-.mf-phasebar__do { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
+.mf-phasebar__do { margin: 0; font: var(--type-label); color: var(--gray-300); word-break: keep-all; }
 .mf-phasebar__extra { flex: none; display: flex; gap: var(--space-sm); }
 
 /* S-05 역할 확인 — 3D 재즈 바 무대 위 어두운 막, 테이블 없음. 남는 높이를 카드 영역이 쓰고 카드는 52dvh 를 넘지 않는다. */
@@ -75,21 +75,21 @@
 .mf-keyword__card { position: relative; width: 100%; max-width: 344px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); padding: var(--space-md) 20px; clip-path: none; background: repeating-linear-gradient(112deg, transparent 0 3px, color-mix(in srgb, var(--noir-paper-line) 5%, transparent) 3px 4px), var(--noir-paper); border: 1px solid var(--noir-paper-line); text-align: center; animation: mf-keyword-in var(--dur-med) var(--ease-out) both; border-radius: var(--noir-surface-radius); box-shadow: var(--shadow-card); }
 .mf-keyword__card::before { content: ""; position: absolute; inset: 6px; border: 1px solid color-mix(in srgb, var(--noir-paper-line) 38%, transparent); clip-path: none; pointer-events: none; border-radius: var(--noir-control-radius); }
 .mf-keyword__card.is-still { animation: none; }
-.mf-keyword__genre { position: relative; margin: 0; font-size: 16px; line-height: 1.5; font-weight: 700; letter-spacing: 0.05em; color: var(--noir-ink); word-break: keep-all; }
+.mf-keyword__genre { position: relative; margin: 0; font: var(--type-label-strong); letter-spacing: 0.05em; color: var(--noir-ink); word-break: keep-all; }
 .mf-keyword__genre::after { content: ""; position: absolute; top: calc(100% + 3px); left: -8px; right: -8px; height: 1px; background: color-mix(in srgb, var(--noir-paper-line) 60%, transparent); }
-/* 키워드: Display 36/700/1.2. 글자를 줄이지 않고 줄만 감는다(최대 2줄, 12자소 상한) */
+/* 키워드: 중앙 발표 규격. 기본 카드에서 단어가 길면 줄을 바꾼다(12자소 상한). */
 .mf-keyword__word { margin: 0; max-width: 100%; font: var(--type-headline); color: var(--noir-ink); word-break: keep-all; overflow-wrap: anywhere; }
 /* 마피아의 ???: 글자 모양은 시민 카드와 같고 글자 간격만 0.2em(키워드 자리 높이가 같다) */
 .mf-keyword__word.is-hidden { letter-spacing: 0.2em; }
 /* 각주: Label 14/400 — 360 폭에서 2줄이 될 수 있다 */
-.mf-keyword__note { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--noir-ink); opacity: 0.76; word-break: keep-all; }
+.mf-keyword__note { margin: 0; font: var(--type-label); color: var(--noir-ink); opacity: 0.76; word-break: keep-all; }
 @keyframes mf-keyword-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .mf-keyword__card { animation: none; } }
 
 /* 제시어 카드에 답안과 제출 결과를 함께 표시한다. */
 .mf-keyword .mf-reveal__stage { align-items: safe center; padding: 70px var(--space-md) var(--space-md); overflow-y: auto; }
 .mf-keyword__answer { width: 100%; display: flex; flex-direction: column; }
-.mf-keyword__meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: 20px; font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; color: var(--noir-ink); }
+.mf-keyword__meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: 20px; font: var(--type-label); font-variant-numeric: tabular-nums; color: var(--noir-ink); }
 .mf-keyword__meta[hidden] { display: none; }
 .mf-keyword__count { flex: none; min-width: 3ch; text-align: right; }
 .mf-keyword__count[data-full="true"] { font-weight: 700; }

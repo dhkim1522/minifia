@@ -26,11 +26,11 @@ export const LETTER_FONT_WAIT_MS = 1000;
 /** 편지지 높이 범위 */
 export const LETTER_PAPER_MAX_H = 340;
 export const LETTER_PAPER_MIN_H = 220;
-/** 글 크기 3단: 긴 유언일수록 글자와 줄 간격을 함께 줄인다 */
+/** 글 크기 3단: 중앙 발표 아래에 놓이는 편지 본문은 28px까지, 긴 유언은 줄 간격과 함께 줄인다 */
 export const LETTER_TIERS = [
-  { font: 46, line: 56 },
-  { font: 36, line: 44 },
-  { font: 28, line: 32 },
+  { font: 28, line: 36 },
+  { font: 24, line: 32 },
+  { font: 20, line: 28 },
 ] as const;
 /** 인장 글자(미결 M-7 — 정식 이름이 정해지면 이 줄만 바꾼다) */
 export const SEAL_GLYPH = "M";

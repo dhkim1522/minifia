@@ -609,8 +609,7 @@ describe("경찰 조사 결과 카드 (NIGHT-09, UI-SPEC 245행)", () => {
     expect(mafia).toMatch(/crimson-500/);
     expect(css).toMatch(/\.mf-police-card\.is-mafia[^{]*\{[^}]*crimson-300/);
     const label = css.match(/\.mf-police-card__label\s*\{([^}]*)\}/)?.[1] ?? "";
-    expect(label).toMatch(/font-size:\s*16px/);
-    expect(label).toMatch(/font-weight:\s*700/);
+    expect(label).toMatch(/font:\s*var\(--type-body-strong\)/);
   });
 });
 

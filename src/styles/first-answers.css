@@ -29,9 +29,10 @@
   grid-template-columns: 25px minmax(0, 1fr);
   align-items: center;
   gap: 5px;
+  font: var(--type-label-strong);
   color: var(--gray-200);
   overflow-wrap: anywhere;
 }
-.mf-first-answers__text { color: var(--noir-paper); font-weight: 600; word-break: keep-all; overflow-wrap: anywhere; }
-.mf-first-answers__row[data-answer-none] .mf-first-answers__text { color: var(--gray-400); font-weight: 400; }
+.mf-first-answers__text { color: var(--noir-paper); word-break: keep-all; overflow-wrap: anywhere; }
+.mf-first-answers__row[data-answer-none] .mf-first-answers__text { color: var(--gray-400); }
 .mf-first-answers > button { flex: none; }
