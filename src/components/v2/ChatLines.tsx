@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { CHAT_TEXT } from "../../game/chatText";
 import type { AnimalId } from "../../../shared/game/animals";
-import { faceSrc } from "../../net/assets";
+import { PlayerPortrait } from "../PlayerPortrait";
 import type { ChatPanelMessage } from "./ChatPanel";
 import { V2Icon } from "./V2Icon";
 
@@ -83,7 +83,7 @@ export function ChatPlayerLine({ channel, seat, animal, name, text, mark }: {
 }) {
   return (
     <p className={channel === "mafia" ? "mv-chat__msg is-mafia" : "mv-chat__msg"} data-seat={seat} data-ch={channel}>
-      {seat === undefined ? null : <img className={animal ? "mv-chat__avatar mv-chat__avatar--animal" : "mv-chat__avatar"} src={faceSrc(seat, animal)} width={25} height={25} alt="" decoding="async" />}
+      {seat === undefined ? null : <PlayerPortrait className="mv-chat__avatar" seat={seat} animal={animal} />}
       <span className="mv-chat__bubble-body">
         <span className="mv-chat__byline">{mark}<span className="mv-chat__name">{name}</span></span>
         <span className="mv-chat__text">{text}</span>

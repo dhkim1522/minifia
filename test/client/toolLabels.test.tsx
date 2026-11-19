@@ -453,7 +453,8 @@ describe("방 화면 전수 — 이름표 0건·접근성 이름 (TOOL-04)", () 
       // 방 코드가 있으면 [공유] 도 있다 — 머리 단추는 이름만 단다
       expect(document.body.querySelector('.mv-tool[aria-label="공유"]')).not.toBeNull();
       expect(document.body.querySelector('.mv-tool[aria-label="나가기"]')).not.toBeNull();
-      expect(document.body.querySelector("[data-sound-button]"), "대기실에도 [소리]").not.toBeNull();
+      fireEvent.click(document.body.querySelector("[data-game-menu]")!);
+      expect(document.body.querySelector("[data-sound-button]"), "대기실 메뉴에도 [소리]").not.toBeNull();
       unmount();
     }
   });
@@ -499,6 +500,7 @@ describe("방 화면 전수 — 이름표 0건·접근성 이름 (TOOL-04)", () 
     for (const vp of VIEWPOINTS) {
       const night = renderRoom(makeView({ phase: "night", viewpoint: vp, endsIn: 30_000 }));
       expect(violations(`night/${vp}`)).toEqual([]);
+      fireEvent.click(document.body.querySelector("[data-game-menu]")!);
       expect(document.body.querySelector("[data-sound-button]"), `night/${vp}: [소리]`).not.toBeNull();
       night.unmount();
       const morning = renderRoom(makeView({ phase: "morning", viewpoint: vp, endsIn: 5_000, morning: {} }));
@@ -514,6 +516,7 @@ describe("방 화면 전수 — 이름표 0건·접근성 이름 (TOOL-04)", () 
         expect(violations(`ended/${winner}/${vp}`)).toEqual([]);
         // 결과 머리 [나가기] 는 이름만 단다
         expect(document.body.querySelector('.mf-result__header [aria-label="나가기"]')).not.toBeNull();
+        fireEvent.click(document.body.querySelector("[data-game-menu]")!);
         expect(document.body.querySelector("[data-sound-button]"), `ended/${winner}/${vp}: [소리]`).not.toBeNull();
         unmount();
       }
@@ -567,7 +570,7 @@ describe("방 화면 전수 — 이름표 0건·접근성 이름 (TOOL-04)", () 
     ];
     for (const view of views) {
       const { unmount } = renderRoom(view);
-      for (const el of document.body.querySelectorAll(".mv-tool, .mv-float, [data-map-chip], [data-sound-button], .mf-rolecard-btn, .mv-closepill")) seen.add(el.getAttribute("aria-label") ?? "");
+      for (const el of document.body.querySelectorAll(" .mv-tool, .mv-float, .mf-room-tool, [data-game-menu], [data-map-chip], [data-sound-button], .mv-closepill")) seen.add(el.getAttribute("aria-label") ?? "");
       expect(document.body.innerHTML).not.toMatch(/aria-label="[^"]*(seat|nonce|token|mafia|police|doctor)/i);
       unmount();
     }

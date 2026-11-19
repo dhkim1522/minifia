@@ -7,12 +7,13 @@ import type { ClientMessage, PublicPlayer, RoomView } from "../../shared/protoco
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
 import { openPlaza } from "../helpers/playable";
 import type { WorldStageProps } from "../../src/components/WorldStage";
-import { LOBBY_PANEL_EXTRA, LOG_H, lobbyPanelHeight } from "../../src/game/chatUi";
+import { DISCUSSION_KB_LOG_H, DISCUSSION_LOG_H, DISCUSSION_PANEL_EXTRA, LOBBY_PANEL_EXTRA } from "../../src/game/chatUi";
 import { ChatStore } from "../../src/net/chatStore";
 import { WorldStore } from "../../src/world/store";
 
 /** 키보드 열림 패널 = 14 + 기록 칸 + 8 + 입력줄 48 + 아래 여백 8 (UI-SPEC B 계약 4: 146) */
-const KB_PANEL = 14 + LOG_H + 8 + 48 + 8;
+const PANEL = DISCUSSION_LOG_H + DISCUSSION_PANEL_EXTRA;
+const KB_PANEL = DISCUSSION_KB_LOG_H + (6 + 44 + 6 + 2) + (8 + 44 + 8);
 
 // 06-15: 대기실은 지하 재즈 바 맵(WorldStage) 위에 승인 로비 틀(헤더·알림·행동 줄·시트)을 얹는다.
 // WorldStage 는 가벼운 가짜로 바꾼다 — 캔버스·런타임은 worldStage.test 가 따로 본다. 가짜는 받은 props 만 기억한다.
@@ -158,27 +159,25 @@ describe("Lobby — 맵 로비 틀 (MAP-01, 06-15)", () => {
   });
 });
 
-describe("Lobby — 오른쪽 한 줄 열: 방장도 둘(소리·옷장) (16-06 D-05 → 19-04 D-13, UI-SPEC A-12)", () => {
+describe("Lobby — 하단 공용 도구 줄의 옷장", () => {
   const players = [player(0, "민수"), player(1, "영희"), player(2, "서준")];
-  const side = (c: ParentNode) => [...c.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button")).join(",");
+  const side = (c: ParentNode) => [...c.querySelectorAll("[data-room-chat] [data-room-tool=dress]")].map((e) => e.getAttribute("data-room-tool")).join(",");
 
-  it("참가자: 소리 자리 다음 [dress] 뿐이다 — 맵 칩·봇 단추가 없다 (T-16-13)", () => {
+  it("참가자: 공용 채팅 위에 [dress]가 있다 — 맵 칩·봇 단추가 없다 (T-16-13)", () => {
     const { container } = render(lobby(makeView(players, 2)));
     expect(side(container)).toBe("dress");
     expect(container.querySelector("[data-map-chip], [data-float='bots']")).toBeNull();
-    expect(container.querySelectorAll("[data-side-column]")).toHaveLength(1);
-    expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
+    expect(container.querySelectorAll("[data-side-column]")).toHaveLength(0);
   });
 
-  it("방장 + 봇 도구가 켜진 방: 오른쪽 열은 참가자와 같은 [dress] 하나이고 맵·봇 단추는 열에 없다", () => {
+  it("방장 + 봇 도구가 켜진 방: 옷장은 참가자와 같은 줄에 있고 맵·봇 단추는 호스트 줄에 있다", () => {
     const view = makeView(players, 0);
     view.me = { ...view.me, testBots: 0 };
     const { container } = render(lobby(view));
     expect(side(container)).toBe("dress");
     expect(container.querySelectorAll("[data-side-column] [data-map-chip], [data-side-column] [data-float='bots']")).toHaveLength(0);
-    expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
     expect(container.querySelector("[data-float-stack]")).toBeNull();
-    for (const b of container.querySelectorAll("[data-side-button]")) {
+    for (const b of container.querySelectorAll("[data-room-tool]")) {
       expect(b.textContent).toBe(""); // 글 없음(접근성 이름만)
       expect(b.getAttribute("aria-label")).toBeTruthy();
     }
@@ -208,16 +207,15 @@ describe("Lobby — 방장 줄 [맵]·[봇] (19-04, D-13 → 22-07 에서 [판 �
   /** 줄 안 단추 표식(위 → 아래) */
   const railIds = (c: ParentNode) => [...c.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).join(",");
   const mapId = PLAYABLE_MAPS.length > 1 ? "map," : "";
-  const side = (c: ParentNode) => [...c.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button")).join(",");
+  const side = (c: ParentNode) => [...c.querySelectorAll("[data-room-chat] [data-room-tool=dress]")].map((e) => e.getAttribute("data-room-tool")).join(",");
   /** 판 종류 화면의 표식 네 가지 수 — 22-07 이후 늘 0 이다 */
   const modeMarks = (c: ParentNode) => ['[data-host-rail-btn="mode"]', "[data-mode-sheet]", "[data-mode-card]", "[data-mode-chip]"].map((sel) => c.querySelectorAll(sel).length).join(",");
 
-  it("방장: 왼쪽 줄 하나에 위에서부터 [맵]·[봇], 오른쪽 열은 [옷장] 하나(첫 칸은 소리 자리)다", () => {
+  it("방장: 왼쪽 줄 하나에 위에서부터 [맵]·[봇], 공용 채팅 도구 줄은 [옷장]을 포함한다", () => {
     const { container } = render(lobby(hostView()));
     expect(container.querySelectorAll("[data-host-rail]")).toHaveLength(1);
     expect(railIds(container)).toBe(`${mapId}bots`);
     expect(side(container)).toBe("dress");
-    expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
     expect(container.querySelectorAll("[data-side-column] [data-map-chip], [data-side-column] [data-float='bots']")).toHaveLength(0);
     expect(container.querySelector('[data-host-rail-btn="bots"]')?.getAttribute("aria-label")).toBe("봇");
     expect(modeMarks(container)).toBe("0,0,0,0");
@@ -303,7 +301,7 @@ describe("Lobby — 방장 줄 [맵]·[봇] (19-04, D-13 → 22-07 에서 [판 �
     // 줄 단추가 ([맵])·[봇] 으로 고정이다
     const n = PLAYABLE_MAPS.length > 1 ? 2 : 1;
     const withCrown = n * 52 + (n - 1) * 12 + 32;
-    const panelH = lobbyPanelHeight(LOG_H);
+    const panelH = PANEL;
     // 오른쪽 열 최대 높이 = 방 높이 − 패널 − 8 − (헤더 62 + 12) = 표식까지의 높이 + 40 (48 을 빼면 표식이 안 들어간다)
     const roomH = withCrown + 40 + panelH + 8 + 62 + 12;
     const offset = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
@@ -398,7 +396,7 @@ describe("Lobby — 채팅 패널: 기록 + 입력줄", () => {
     const input = panel.querySelector<HTMLInputElement>("[data-chat-input]")!;
     fireEvent.change(input, { target: { value: "잠시만요" } });
     expect(panel.children).toHaveLength(1);
-    expect(panel.firstElementChild?.matches("[data-chat-panel]")).toBe(true);
+    expect(panel.firstElementChild?.matches("[data-room-chat]")).toBe(true);
     expect(container.querySelector("[data-lobby-start]")).toBeNull();
     const promoted = makeView(base.map(p => ({ ...p, isHost: p.seat === 1 })), 1);
     rerender(lobby(promoted));
@@ -408,24 +406,21 @@ describe("Lobby — 채팅 패널: 기록 + 입력줄", () => {
     expect(input.value).toBe("잠시만요");
   });
 
-  it("기록 칸 높이는 어느 방 높이에서나 68 한 값이다(P181-3)", () => {
+  it("기록 칸 높이는 키보드 닫힘에서 공용 규격을 쓴다", () => {
     const realH = window.innerHeight;
     try {
       for (const h of [560, 640, 844, 932]) {
         Object.defineProperty(window, "innerHeight", { value: h, configurable: true, writable: true });
         const { container, unmount } = render(lobby(makeView(base, 0)));
         const log = container.querySelector("[data-chat-log]") as HTMLElement;
-        expect(log.style.height).toBe("68px");
+        expect(log.style.height).toBe(`${DISCUSSION_LOG_H}px`);
+        expect(log.classList.contains("is-fixed")).toBe(true);
         unmount();
       }
     } finally {
       Object.defineProperty(window, "innerHeight", { value: realH, configurable: true, writable: true });
     }
-    expect(LOG_H).toBe(68);
-    expect(lobbyPanelHeight(LOG_H)).toBe(160);
-    // 19-04(P19-12): 방장 패널 = 참가자 패널. 예전의 두 번째 인자(방장)를 줘도 값이 같다
-    expect((lobbyPanelHeight as (logH: number, host?: boolean) => number)(LOG_H, true)).toBe(160);
-    expect(KB_PANEL).toBe(146);
+
   });
 
   it("보내기는 단계 키와 함께 chat 메시지를 보낸다 (채널 필드 없음)", () => {
@@ -1019,7 +1014,7 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
   const INNER_H = 844;
   const realInnerH = window.innerHeight;
   const lobbyView = makeView([player(0, "민수"), player(1, "서준")], 0);
-  let panelH = lobbyPanelHeight(LOG_H);
+  let panelH = PANEL;
   let resizeCallbacks: Array<() => void> = [];
 
   interface FakeVV extends EventTarget {
@@ -1058,7 +1053,7 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
   beforeEach(() => {
     vi.useFakeTimers();
     Object.defineProperty(window, "innerHeight", { value: INNER_H, configurable: true, writable: true });
-    panelH = lobbyPanelHeight(LOG_H);
+    panelH = PANEL;
     resizeCallbacks = [];
     stubLayout();
   });
@@ -1078,12 +1073,12 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
     advance(20);
   };
 
-  const openLog = (c: HTMLElement) => (c.querySelector("[data-chat-log]") as HTMLElement).classList.contains("is-open") && (c.querySelector("[data-chat-log]") as HTMLElement).style.height === "";
+  const logHeight = (c: HTMLElement) => (c.querySelector("[data-chat-log].is-fixed") as HTMLElement).style.height;
 
-  it("포커스 + lift 336: 루트 data-kb-open true, 행동 줄 없음, 기록 칸 68, 패널 --kb, 스테이지 아래 = 146 + 336", () => {
+  it("포커스 + lift 336: 루트 data-kb-open true, 행동 줄 없음, 기록 칸 42, 스테이지 아래는 패널과 키보드 합", () => {
     const vv = installVV(INNER_H);
     const { container } = render(lobby(lobbyView));
-    expect(props().stageInsets).toEqual({ top: 62, bottom: lobbyPanelHeight(LOG_H) });
+    expect(props().stageInsets).toEqual({ top: 62, bottom: PANEL });
     expect(actionButtons(container)).toBe(1);
     focusWithKeyboard(container, vv, 336);
     panelH = KB_PANEL;
@@ -1091,8 +1086,7 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
     expect(rootOf(container).getAttribute("data-kb-open")).toBe("true");
     expect(rootOf(container).style.getPropertyValue("--mf-kb-lift")).toBe("336px");
     expect(actionButtons(container)).toBe(0);
-    // 포커스가 기록 칸을 늘린다(0083-4): 인라인 높이 없이 CSS 식이 높이를 정한다
-    expect(openLog(container)).toBe(true);
+    expect(logHeight(container)).toBe(`${DISCUSSION_KB_LOG_H}px`);
     expect(container.querySelector(".mv-chat.is-compact")).not.toBeNull();
     expect(container.querySelector(".mf-lobby__panel")?.classList.contains("mf-lobby__panel--kb")).toBe(true);
     expect(props().stageInsets).toEqual({ top: 62, bottom: KB_PANEL + 336 });
@@ -1110,30 +1104,30 @@ describe("Lobby — 키보드가 열리면 패널이 올라가고 행동 줄이 
     expect(props().stageInsets?.bottom).toBe(KB_PANEL + 340);
   });
 
-  it("포커스 중 lift 60(열림 경계 80 아래): data-kb-open 없음, 행동 줄 있음, 기록 칸은 포커스로 늘어남", () => {
+  it("포커스 중 lift 60(열림 경계 80 아래): data-kb-open 없음, 행동 줄 있음, 기록 칸은 같은 높이", () => {
     const vv = installVV(INNER_H);
     const { container } = render(lobby(lobbyView));
     focusWithKeyboard(container, vv, 60);
     expect(rootOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(actionButtons(container)).toBe(1);
-    expect(openLog(container)).toBe(true);
+    expect(logHeight(container)).toBe(`${DISCUSSION_LOG_H}px`);
     expect(container.querySelector(".mf-lobby__panel")?.classList.contains("mf-lobby__panel--kb")).toBe(false);
   });
 
-  it("블러하면 원래대로: data-kb-open 없음, 행동 줄 복귀, 기록 칸은 접지 않고 늘어난 채(닫기는 단추 하나), 스테이지 아래 = 원래 패널 높이", () => {
+  it("블러하면 원래대로: data-kb-open 없음, 행동 줄 복귀, 기록 칸과 스테이지의 높이가 복귀", () => {
     const vv = installVV(INNER_H);
     const { container } = render(lobby(lobbyView));
     focusWithKeyboard(container, vv, 336);
     panelH = KB_PANEL;
     remeasure();
     act(() => inputOf(container).blur());
-    panelH = lobbyPanelHeight(LOG_H);
+    panelH = PANEL;
     remeasure();
     expect(rootOf(container).hasAttribute("data-kb-open")).toBe(false);
     expect(rootOf(container).style.getPropertyValue("--mf-kb-lift")).toBe("0px");
     expect(actionButtons(container)).toBe(1);
-    expect(openLog(container)).toBe(true);
-    expect(props().stageInsets).toEqual({ top: 62, bottom: lobbyPanelHeight(LOG_H) });
+    expect(logHeight(container)).toBe(`${DISCUSSION_LOG_H}px`);
+    expect(props().stageInsets).toEqual({ top: 62, bottom: PANEL });
   });
 
   it("vv.offsetTop 120 이면 --mf-vv-top 120px 가 쓰인다(헤더 계열이 이 값만큼 내려온다)", () => {
@@ -1213,7 +1207,7 @@ describe("Lobby — 튜토리얼 진입이 없다 (22-03, D-08, P22-16)", () => 
     const shape = (mySeat: number) => {
       const { container, unmount } = render(lobby(makeView(hostPlayers(), mySeat, { round: 1 })));
       const panel = container.querySelector(".mf-lobby__panel")!;
-      const out = `${panel.children.length}:${panel.firstElementChild?.hasAttribute("data-chat-panel") ? "chat" : "other"}`;
+      const out = `${panel.children.length}:${panel.firstElementChild?.hasAttribute("data-room-chat") ? "chat" : "other"}`;
       unmount();
       return out;
     };

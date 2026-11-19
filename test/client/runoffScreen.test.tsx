@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import type { SceneLook } from "../../src/world/presence";
 import type { RoomConnection } from "../../src/net/useRoomConnection";
 
-// 09.1.1-14: 결선 화면 — 지목과 같은 부품(알약·막대·헤더 링·위 한 줄) 위에 올라간다. 아래는 08-15 지목 시험과 같은 틀.
+// 09.1.1-14: 결선 화면 — 지목과 같은 부품(알약·막대·헤더 게이지·위 한 줄) 위에 올라간다. 아래는 08-15 지목 시험과 같은 틀.
 // 08-15: 지목 화면(DAY-04·05, MAP-04). RoomScreen 을 거쳐 GameMap 을 그리고, WorldStage 는 진짜를 쓴다 —
 // 이름표 버튼(data-pick)·득표 배지(data-count)·mine 은 WorldStage 가 그리는 DOM 이라서다.
 // 런타임(three)만 가짜로 바꿔 건네받은 장면 표(setScene)·손사래(deny)를 기록한다. 런타임이 장면 표를 렌더러에 옮기는 일은 worldStage.test(08-12) 몫이다.
@@ -127,7 +127,7 @@ const mount = (view: RoomView, over: Partial<RoomConnection> = {}) => {
 };
 
 const block = (c: ParentNode): HTMLElement | null => c.querySelector("[data-turn-block]");
-const ring = (c: ParentNode): HTMLElement | null => c.querySelector(".mv-ring");
+const gauge = (c: ParentNode): HTMLElement | null => c.querySelector("[data-phase-gauge]");
 const line = (c: ParentNode): string | undefined => c.querySelector(".mf-turn__line.is-on")?.textContent ?? undefined;
 const title = (c: ParentNode): string => c.querySelector(".mv-phase__title")?.textContent ?? "";
 const hint = (c: ParentNode): string => c.querySelector(".mv-phase__hint")?.textContent ?? "";
@@ -150,8 +150,8 @@ const advance = (ms: number) =>
     vi.advanceTimersByTime(ms);
   });
 
-describe("결선 화면 — 알약·막대·헤더 링·위 한 줄 (UI-SPEC D-1·D-3, 트레이서)", () => {
-  it("투표(남은 4.2초): 제목 '결선', 알약에 '결선'·'5초' 두 조각만(이름·n / N 없음), 막대, 표식 tone=calm", () => {
+describe("결선 화면 — 알약·막대·헤더 게이지·위 한 줄 (UI-SPEC D-1·D-3, 트레이서)", () => {
+  it("투표(남은 4.2초): 제목 '결선', 알약에 '결선'만, 헤더 게이지, 표식 tone=calm", () => {
     const { container } = mount(makeRunoff({ left: 4200 }));
     expect(title(container)).toBe("결선");
     const b = block(container)!;
@@ -159,38 +159,35 @@ describe("결선 화면 — 알약·막대·헤더 링·위 한 줄 (UI-SPEC D-1
     expect(b.getAttribute("data-turn-tone")).toBe("calm");
     expect(b.getAttribute("data-turn-mode")).toBe("runoff");
     expect(b.querySelector(".mf-turn__count")?.textContent).toBe("결선");
-    expect(b.querySelector(".mf-turn__sec")?.textContent).toBe("5초");
+    expect(b.querySelector(".mf-turn__sec")).toBeNull();
+    expect(gauge(container)?.getAttribute("aria-label")).toBe("남은 시간 5초");
     expect(b.querySelector(".mf-turn__name")).toBeNull();
     expect(b.textContent).not.toMatch(/\d+ \/ \d+/);
-    expect(b.querySelector(".mf-turn__bar")).not.toBeNull();
+    expect(b.querySelector(".mf-turn__bar")).toBeNull();
   });
 
-  it("헤더 링은 알약과 같은 초·같은 색: 마감까지 5초 단계라 시계가 흘러도 calm 이고 링 총합은 5초", () => {
+  it("헤더 게이지는 5초 차례가 흐르는 동안 calm", () => {
     const { container } = mount(makeRunoff({ left: 4200 }));
-    expect(ring(container)!.getAttribute("aria-label")).toBe("남은 시간 5초");
-    expect(ring(container)!.classList.contains("is-urgent")).toBe(false);
+    expect(gauge(container)!.getAttribute("aria-label")).toBe("남은 시간 5초");
+    expect(gauge(container)?.getAttribute("data-tone")).toBe("calm");
     advance(1500); // 남은 2.7초 → 3초
-    expect(block(container)!.querySelector(".mf-turn__sec")?.textContent).toBe("3초");
-    expect(ring(container)!.getAttribute("aria-label")).toBe("남은 시간 3초");
+    expect(gauge(container)!.getAttribute("aria-label")).toBe("남은 시간 3초");
     advance(2000); // 남은 0.7초 → 1초
-    expect(block(container)!.querySelector(".mf-turn__sec")?.textContent).toBe("1초");
     expect(block(container)!.getAttribute("data-turn-tone")).toBe("calm");
-    expect(ring(container)!.classList.contains("is-urgent")).toBe(false);
+    expect(gauge(container)?.getAttribute("data-tone")).toBe("calm");
   });
 
-  it("막대는 5초 기준 비율: 남은 2.5초 근처에서 폭이 절반 아래로 가고 있다", () => {
+  it("게이지는 5초 기준 비율: 남은 2.5초에서 폭이 절반이다", () => {
     const { container } = mount(makeRunoff({ left: 2500 }));
-    const width = parseFloat(((block(container)!.querySelector(".mf-turn__fill") as HTMLElement).style.width || "0"));
-    expect(width).toBeGreaterThan(0);
-    expect(width).toBeLessThanOrEqual(40);
+    expect(gauge(container)?.querySelector<HTMLElement>(".mf-phase-gauge__fill")?.style.transform).toBe("scaleX(0.5)");
   });
 
-  it("앞머리(step 0): 알약·막대·헤더 링이 없고, 라이브로 들어오면 위 한 줄 '동점이에요'", () => {
+  it("앞머리(step 0): 알약·막대·헤더 게이지이 없고, 라이브로 들어오면 위 한 줄 '동점이에요'", () => {
     const m = mount(makeRunoff({ step: 0, left: 1000 }));
     expect(title(m.container)).toBe("결선");
     expect(m.container.querySelector(".mf-turn__pill")).toBeNull();
     expect(m.container.querySelector(".mf-turn__bar")).toBeNull();
-    expect(ring(m.container)).toBeNull();
+    expect(gauge(m.container)).toBeNull();
   });
 
   it("지목 끝 알림 → 결선 앞머리: 위 한 줄 '동점이에요' 가 이어서 뜬다", () => {
@@ -216,7 +213,7 @@ describe("결선 화면 — 알약·막대·헤더 링·위 한 줄 (UI-SPEC D-1
     const m = mount(makeRunoff({ step: 1 }));
     m.show(makeRunoff({ step: 2, left: 1500, tally: [3, 1] }));
     expect(m.container.querySelector(".mf-turn__pill")).toBeNull();
-    expect(ring(m.container)).toBeNull();
+    expect(gauge(m.container)).toBeNull();
     expect(line(m.container)).toBe("서준 님 3표");
     m.show(makeRunoff({ step: 2, left: 1500, tally: [2, 2] }));
     expect(line(m.container)).toBe("또 동점이에요");
@@ -239,25 +236,17 @@ describe("결선 화면 — 알약·막대·헤더 링·위 한 줄 (UI-SPEC D-1
   });
 });
 
-describe("결선 화면 — 헤더 안내 (UI-SPEC D-2)", () => {
-  it("후보가 아닌 산 사람: 투표 중 '둘 중 한 명을 눌러요', 앞머리·결과에는 안내 없음", () => {
-    expect(hint(mount(makeRunoff({ step: 1 })).container)).toBe("둘 중 한 명을 눌러요");
-    cleanup();
-    expect(hint(mount(makeRunoff({ step: 0, left: 1000 })).container)).toBe("");
+describe("결선 화면 — 단계 상태는 공용 헤더에 표시한다", () => {
+  it.each([{ step: 0 as const }, { step: 1 as const }, { step: 1 as const, mySeat: 2 }, { step: 1 as const, dead: [0] }])("헤더에 별도 도움말이 없다 ($step)", (opts) => {
+    expect(hint(mount(makeRunoff(opts)).container)).toBe("");
   });
-  it("후보 본인: '결과를 기다려요'", () => {
-    expect(hint(mount(makeRunoff({ step: 1, mySeat: 2 })).container)).toBe("결과를 기다려요");
-  });
-  it("유령: 기존 '모두의 직업이 보여요'", () => {
-    expect(hint(mount(makeRunoff({ step: 1, dead: [0] })).container)).toBe("모두의 직업이 보여요");
-  });
-  it("앞머리가 끝나 투표가 시작되면 안내가 접혀 있었어도 다시 보인다", () => {
+
+  it("앞머리에서 투표로 바뀌면 같은 헤더에 시간 게이지가 붙는다", () => {
     const m = mount(makeRunoff({ step: 0, left: 1000 }));
-    advance(3000);
+    expect(gauge(m.container)).toBeNull();
     m.show(makeRunoff({ step: 1 }));
-    const el = m.container.querySelector(".mv-phase__hint") as HTMLElement;
-    expect(el.textContent).toBe("둘 중 한 명을 눌러요");
-    expect(el.classList.contains("is-folded")).toBe(false);
+    expect(gauge(m.container)).not.toBeNull();
+    expect(hint(m.container)).toBe("");
   });
 });
 

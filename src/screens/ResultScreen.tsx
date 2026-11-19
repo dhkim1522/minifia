@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import { isAlive } from "../../shared/game/alive";
 import { lockedOutfits } from "../../shared/game/look";
 import { PLAYABLE_MAPS } from "../../shared/game/maps";
@@ -10,13 +10,11 @@ import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Sheet } from "../components/Sheet";
 import { ToolButton } from "../components/ToolButton";
 import { Icon } from "../components/Icon";
-import { ChatPanel } from "../components/v2/ChatPanel";
+import { RoomChatDock } from "../components/v2/RoomChatDock";
 import { DressSheet } from "../components/v2/DressSheet";
-import { FloatAction } from "../components/v2/FloatAction";
 import { HostRail } from "../components/v2/HostRail";
 import { HostRailButton } from "../components/v2/HostRailButton";
 import { MapChip } from "../components/v2/MapChip";
-import { SideColumn } from "../components/v2/SideColumn";
 import { ReadyPill } from "../components/v2/ReadyPill";
 import { ResultPanel } from "../components/v2/ResultPanel";
 import type { ResultTab } from "../components/v2/ResultPanel";
@@ -24,7 +22,6 @@ import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { V2Icon } from "../components/v2/V2Icon";
 import { WorldStage } from "../components/WorldStage";
 import { DRESS_TEXT } from "../game/dressText";
-import { LOG_H } from "../game/chatUi";
 import { ownAnimalOf } from "../game/playerIdentity";
 import { castOf, holdSnap, markTimes, RESULT_TIMELINE, resultPanelHeight, satSlots, slotsFor, stateAt, walkSnap, winningTeam } from "../game/resultDirector";
 import type { ResultState } from "../game/resultDirector";
@@ -68,6 +65,7 @@ export interface ResultScreenProps {
    * 재접속·처음 마운트는 null/없음이라 곧바로 최종 상태다
    */
   arrivedFrom?: PhaseId | null | undefined;
+  menuButton?: ReactNode;
 }
 
 // 결과 화면(11-05, 결정 D-1·D-11, UI-SPEC A-1·A-5): 3D 무대 위의 한 장면이다. 모든 사람이 무대 둘레 자리에 서 있고, 머리 위 직업 칩이 뒤집혀 있고,
@@ -138,7 +136,7 @@ const REST_FACES_MAX = 7;
 /** 박수 큐 한 묶음(WorldStage emoteCues). nonce 가 새로 보일 때마다 한 번 재생한다 */
 type ClapCues = readonly { seat: number; id: EmoteId; nonce: number }[];
 
-export function ResultScreen({ view, store, chat, resultLog, send, canSend, offset, epoch, onExit, arrivedFrom }: ResultScreenProps) {
+export function ResultScreen({ view, store, chat, resultLog, send, canSend, offset, epoch, onExit, arrivedFrom, menuButton }: ResultScreenProps) {
   const { result } = view;
   const toast = useTopToast();
   const { show } = toast;
@@ -455,7 +453,7 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
           )}
           <span>{title}</span>
         </h1>
-        <span className="mf-result__header-gap" aria-hidden="true" />
+        <div className="mf-room-header__actions">{menuButton}</div>
       </header>
       <TopToast {...toast.props} />
       {/* 4600~5200 중앙 승리 알림: 36px 한 줄 + 아이콘, 배경 어둡게 80%, 터치 통과. 읽기용 안내는 RoomScreen 이 이미 하므로 live 영역이 아니다(role img) */}
@@ -480,22 +478,16 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         animals={animals}
         opened={opened}
         allSlot={
-          <ChatPanel
-            messages={binding.messages}
-            value={binding.value}
-            onChange={binding.onChange}
-            {...(binding.onComposingChange ? { onComposingChange: binding.onComposingChange } : {})}
-            {...(binding.onInputBlur ? { onInputBlur: binding.onInputBlur } : {})}
-            onSend={binding.onSend}
-            channel="all"
-            sendDisabled={binding.sendDisabled === true || !chatOpen}
-            sendDim={binding.sendDim === true}
-            notice={binding.notice ?? null}
-            {...(binding.quiet ? { quiet: true } : {})}
-            logHeight={LOG_H}
-            compact={kbOpen}
+          <RoomChatDock
+            binding={{ ...binding, channel: "all", sendDisabled: binding.sendDisabled === true || !chatOpen, emotes: [] }}
+            kbOpen={kbOpen}
             inputRef={inputRef}
-            trailing={readyPill}
+            advance={readyPill}
+            actions={finished ? (
+              <button ref={dressBtnRef} type="button" className="mf-room-tool" data-float="dress" data-room-tool="dress" aria-label={DRESS_TEXT.open} hidden={dressOpen || kbOpen} disabled={!canSend} onClick={() => openDress()}>
+                <V2Icon name="hanger" size={22} />
+              </button>
+            ) : null}
           />
         }
         pill={readyPill}
@@ -507,12 +499,6 @@ export function ResultScreen({ view, store, chat, resultLog, send, canSend, offs
         <HostRail maxHeight={sideMaxH}>
           {mapsOn ? <MapChip key="map" rail pressed={dressOpen && dressTab === "map"} choice={mapChoice} host={canSend} onPress={() => openDress("map")} /> : null}
         </HostRail>
-      ) : null}
-      {/* 연출이 끝나면(5600) 오른쪽 세로 한 줄(16-06 D-05·V-5): 방장도 소리 · 옷장, 방장 전용은 왼쪽 줄(19-05) */}
-      {finished && !expanded && !dressOpen ? (
-        <SideColumn soundSlot maxHeight={sideMaxH}>
-          <FloatAction key="dress" ref={dressBtnRef} kind="dress" side="dress" icon="hanger" label={DRESS_TEXT.open} disabled={!canSend} onPress={() => openDress()} />
-        </SideColumn>
       ) : null}
       {dressOpen ? (
         <DressSheet

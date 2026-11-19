@@ -155,7 +155,7 @@ describe("유언 한 번 저장 — 밤 시민 [유언] (WILL-01, 트레이서)"
   it("밤 산 시민 아래 패널에는 [유언] 버튼 하나뿐이고 채팅 패널은 없다", () => {
     const { container } = mount(makeView());
     expect(container.querySelectorAll("[data-will-button]")).toHaveLength(1);
-    expect(willBtn(container)?.textContent).toContain("유언");
+    expect(willBtn(container)?.getAttribute("aria-label")).toBe("유언");
     expect(container.querySelector(".mv-chat")).toBeNull();
     expect(sheet(container)).toBeNull();
   });
@@ -183,7 +183,7 @@ describe("유언 한 번 저장 — 밤 시민 [유언] (WILL-01, 트레이서)"
     expect(sent(send).filter((x) => x.t === "will")).toHaveLength(1);
     expect(willBtn(m.container)?.hasAttribute("data-will-saved")).toBe(true);
     expect(willBtn(m.container)?.getAttribute("aria-label")).toBe("유언, 저장됨");
-    expect(m.container.querySelectorAll(".mf-game__will-dot")).toHaveLength(1);
+    expect(m.container.querySelectorAll(".mv-chat__will-dot")).toHaveLength(1);
   });
 
   it("밤 시민·경찰·의사의 [유언] 단추: me.will 이 없으면 data-will-saved 없음·이름 '유언'·점 없음, 있으면 켜진다(0083-6)", () => {
@@ -191,12 +191,12 @@ describe("유언 한 번 저장 — 밤 시민 [유언] (WILL-01, 트레이서)"
       const a = mount(makeView({ mySeat: seat }));
       expect(willBtn(a.container)?.hasAttribute("data-will-saved"), `seat ${seat}`).toBe(false);
       expect(willBtn(a.container)?.getAttribute("aria-label") ?? "유언", `seat ${seat}`).toBe("유언");
-      expect(a.container.querySelector(".mf-game__will-dot")).toBeNull();
+      expect(a.container.querySelector(".mv-chat__will-dot")).toBeNull();
       cleanup();
       const b = mount(makeView({ mySeat: seat, will: "남긴 말" }));
       expect(willBtn(b.container)?.hasAttribute("data-will-saved"), `seat ${seat}`).toBe(true);
       expect(willBtn(b.container)?.getAttribute("aria-label"), `seat ${seat}`).toBe("유언, 저장됨");
-      expect(b.container.querySelectorAll(".mf-game__will-dot")).toHaveLength(1);
+      expect(b.container.querySelectorAll(".mv-chat__will-dot")).toHaveLength(1);
       cleanup();
     }
   });
@@ -269,7 +269,7 @@ describe("깃펜 배선 (WILL-01, UI-SPEC 281행)", () => {
   it("낮 토론 산 사람: 도구 줄 깃펜을 누르면 유언 시트가 열리고, 닫으면 초점이 돌아간다", () => {
     const m = mount(makeView({ phase: "discussion" }));
     const pen = willBtn(m.container)!;
-    expect(pen.closest('[role="group"][aria-label="토론 도구"]')).not.toBeNull();
+    expect(pen.closest('[role="group"][aria-label="게임 도구"]')).not.toBeNull();
     expect(pen.getAttribute("aria-label")).toBe("유언 쓰기");
     fireEvent.click(pen);
     expect(sheet(m.container)).not.toBeNull();

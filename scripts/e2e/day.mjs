@@ -3,11 +3,12 @@
 // flows.mjs 가 이미 3천 8백 줄이라 흐름은 이 파일에 둔다(avatar.mjs·sound.mjs 와 같은 모양 — helpers 를 받고 서로 import 하지 않는다).
 // helpers: { recorder, attempt, openGame, closeGame, allAt, untilGame, gameGH, GAME_HOST_NICK }.
 import { chooseVerdict, installFakeViewport, readGame, settle, skipTo, sleep } from "./browser.mjs";
-import { CHAT_PANEL_EXTRA, LOG_H, OVERLAP_EPS, TAP_MIN } from "./lib.mjs";
+import { DISCUSSION_LOG_H, OVERLAP_EPS, TAP_MIN } from "./lib.mjs";
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 const result = (id, label, bad) => ({ id, label, ok: bad.length === 0, detail: bad.length === 0 ? "" : bad.join("; ") });
 const noMeasure = (id, label, what) => result(id, label, [`측정값 없음(${what})`]);
+const LOCKED_DOCK_HEIGHT = DISCUSSION_LOG_H + 64;
 const fmt = (n) => Math.round(n * 10) / 10;
 const rectOk = (r) => r && [r.left, r.top, r.right, r.bottom, r.width, r.height].every(isNum);
 const overlaps = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > OVERLAP_EPS && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > OVERLAP_EPS;
@@ -61,11 +62,11 @@ export function willCarryChecks(m) {
 }
 
 /**
- * 유언 단계 나머지 사람 화면 판정(WF5, P22-7). pages = [{ who, sheets, locked([data-chat-locked] 수), panelH, pinSeat(__mfPin.seat) }], condemned = 처형자 좌석, panelWant = 160.
- * 시트 0개 · 채팅 잠금 1개 · 패널 높이 160(±1) · 스포트라이트(__mfPin.seat)가 처형자.
+ * 유언 단계 나머지 사람 화면 판정(WF5, P22-7). pages = [{ who, sheets, locked([data-chat-locked] 수), panelH, pinSeat(__mfPin.seat) }], condemned = 처형자 좌석, panelWant = 공용 기록과 입력 높이.
+ * 시트 0개 · 채팅 잠금 1개 · 패널 높이 156(±1) · 스포트라이트(__mfPin.seat)가 처형자.
  */
-export function willLockChecks(pages, { condemned, panelWant = LOG_H + CHAT_PANEL_EXTRA }) {
-  const label = "나머지 사람: 시트 0개 · 채팅 잠금 · 패널 160 · 스포트라이트가 처형자";
+export function willLockChecks(pages, { condemned, panelWant = LOCKED_DOCK_HEIGHT }) {
+  const label = "나머지 사람: 시트 0개 · 채팅 잠금 · 고정 패널 · 스포트라이트가 처형자";
   if (!Array.isArray(pages) || pages.length === 0 || !isNum(condemned)) return [noMeasure("WF5", label, "pages·condemned")];
   const bad = [];
   for (const p of pages) {
@@ -325,7 +326,7 @@ export function makeDayFlows({ recorder, attempt, openGame, closeGame, allAt, un
         const gg = await readGame(g.page);
         const pin = await g.page.evaluate(() => window.__mfPin?.seat ?? null);
         recLines(rec, sc, willLockChecks([{ who: "손님", sheets: gg.willSheets, locked: gg.chatLockedCount, panelH: gg.panel?.height, pinSeat: pin }], { condemned: hostSeat }));
-        rec(sc, "WF5h", `나머지 사람 패널 높이는 방 높이 ${h} 와 상관없이 160 이다`, Math.abs((gg.panel?.height ?? 0) - (LOG_H + CHAT_PANEL_EXTRA)) <= 1, `패널 ${gg.panel?.height}`);
+        rec(sc, "WF5h", `나머지 사람 패널 높이는 방 높이 ${h} 와 상관없이 ${LOCKED_DOCK_HEIGHT} 이다`, Math.abs((gg.panel?.height ?? 0) - LOCKED_DOCK_HEIGHT) <= 1, `패널 ${gg.panel?.height}`);
         // 고쳐 [남기기] → 곧바로 처형 단계
         const stops = await Promise.all(pages.map((p) => watchWillReveal(p.page)));
         const t0 = performance.now();

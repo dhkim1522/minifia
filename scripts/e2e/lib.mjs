@@ -1123,7 +1123,7 @@ export function headerContrastChecks(measure, { expectTimer }) {
   if (!Array.isArray(items) || items.length === 0) return result("H1", label, ["측정값 없음(헤더 글씨 항목이 없음)"]);
   const bad = [];
   if (!items.some((i) => i.name === "제목")) bad.push("제목 항목 없음");
-  if (expectTimer && !items.some((i) => i.name === "타이머")) bad.push("타이머가 있어야 하는데 타이머 항목 없음");
+  if (expectTimer && measure.hasGauge !== true && !items.some((i) => i.name === "타이머")) bad.push("타이머가 있어야 하는데 타이머 항목 없음");
   for (const i of items) {
     if (typeof i.bgLum !== "number" || Number.isNaN(i.bgLum) || !Array.isArray(i.color)) {
       bad.push(`${i.name} 측정값 없음(배경 휘도 또는 글자색)`);
@@ -2115,17 +2115,17 @@ const DRESS_SHEET_MIN_HEIGHT = 193;
  * 꾸미기 기하(DB1·DS1~DS6). 사각형은 { left, top, width, height }.
  * float = 떠 있는 꾸미기 버튼(시트가 닫힌 때), panel = 로비 아래 패널, sheet = 열린 시트, cards = 카드 아홉 개(띠 안에서 가려져도 DOM 사각형),
  * close = 닫기 버튼, selected = { rect, pressedCount }(선택 카드와 aria-pressed="true" 개수), nameFont = 카드 이름 글자 크기 최솟값(px), viewport = { w, h }, kb = 가상 키보드가 열려 있나.
- * DB1 버튼 52x52 ±1(16-06 오른쪽 열의 한 칸) · 오른쪽 여백 16 ±1(두 열로 접히면 둘째 열 80) · 아랫변 ≤ 패널 윗변 − 8(키보드가 열려 있으면 보지 않는다) ·
+ * DB1 버튼 44x44 ±1 · 채팅 위 도구줄 두 번째 칸.
  * DS1 시트 아랫변 = 패널 아랫변 ±1, 높이 = 패널과 193 중 큰 값(화면 공간까지) ±1 · DS2 카드 아홉 개, 폭 72 ±2, 높이 44 이상 ·
- * DS3 완전히 보이는 카드 4 이상이고 시트 오른쪽 가장자리에 걸쳐 8px 이상 보이는 다음 카드가 있음(더 있음을 알림) · DS4 닫기 44x44 이상, 공간이 충분하면 시트 안에 있음 ·
+ * DS3 완전히 보이는 카드 3~4 이상이고 시트 오른쪽 가장자리에 걸쳐 8px 이상 보이는 다음 카드가 있음(더 있음을 알림) · DS4 닫기 44x44 이상, 공간이 충분하면 시트 안에 있음 ·
  * DS5 선택 카드가 시트 가로 안에 완전히 보이고 aria-pressed="true" 가 하나뿐 · DS6 이름 글자 14px 이상.
  */
 export function dressChecks({ float, panel, sheet, cards, close, selected, nameFont, viewport, kb, containerTop = 0 } = {}) {
   const L = {
-    DB1: `옷장 버튼 ${SIDE_BUTTON_SIZE}x${SIDE_BUTTON_SIZE}(오른쪽 열) · 오른쪽 ${FLOAT_MARGIN} · 아랫변이 패널 윗변 − ${FLOAT_GAP} 위`,
+    DB1: `옷장 버튼 ${TAP_MIN}x${TAP_MIN}, 도구줄 두 번째 칸`,
     DS1: "시트가 패널 아랫변에 맞으며 위 줄과 카드 높이를 확보",
     DS2: "카드 아홉 개: 폭 72 · 높이 44 이상",
-    DS3: "완전히 보이는 카드 4장 이상 + 오른쪽에 걸친 다음 카드",
+    DS3: "화면 폭에 맞는 카드 수와 오른쪽에 걸친 다음 카드",
     DS4: `닫기가 시트 안에 있고 ${TAP_MIN}x${TAP_MIN} 이상`,
     DS5: "선택 카드가 보이고 aria-pressed=true 는 하나",
     DS6: "카드 이름 글자 14px 이상",
@@ -2135,11 +2135,10 @@ export function dressChecks({ float, panel, sheet, cards, close, selected, nameF
   if (!valid) return Object.entries(L).map(([id, label]) => noMeasure(id, label, "float·panel·sheet·cards·close·selected·nameFont·viewport·kb"));
   const out = [];
   const db = [];
-  if (Math.abs(float.width - SIDE_BUTTON_SIZE) > 1 || Math.abs(float.height - SIDE_BUTTON_SIZE) > 1) db.push(`${fmt(float.width)}x${fmt(float.height)}`);
-  // 열이 하나면 오른쪽 여백 16, 넘쳐 두 열로 접히면(V-3) 옷장이 둘째 열(왼쪽 12 옆)에 서서 16 + 52 + 12 = 80 이다
-  const margin = viewport.w - right(float);
-  if (Math.abs(margin - FLOAT_MARGIN) > 1 && Math.abs(margin - (FLOAT_MARGIN + SIDE_BUTTON_SIZE + SIDE_GAP)) > 1) db.push(`오른쪽 여백 ${fmt(margin)} (기대 ${FLOAT_MARGIN} 또는 둘째 열 ${FLOAT_MARGIN + SIDE_BUTTON_SIZE + SIDE_GAP})`);
-  if (!kb && bottom(float) > panel.top - FLOAT_GAP + OVERLAP_EPS) db.push(`아랫변 ${fmt(bottom(float))} (패널 윗변 − ${FLOAT_GAP} = ${fmt(panel.top - FLOAT_GAP)} 아래로 넘음)`);
+  if (Math.abs(float.width - TAP_MIN) > 1 || Math.abs(float.height - TAP_MIN) > 1) db.push(`${fmt(float.width)}x${fmt(float.height)}`);
+  const slot = panel.left + TAP_MIN + (viewport.w < 360 ? 12 : 18);
+  if (Math.abs(float.left - slot) > 1) db.push(`왼쪽 ${fmt(float.left)} (두 번째 칸 ${fmt(slot)})`);
+  if (float.top < panel.top - 1 || bottom(float) > panel.top + 66 + 1) db.push("버튼이 채팅 위 도구줄 밖에 있음");
   out.push(result("DB1", L.DB1, db));
   const ds1 = [];
   const panelBottom = bottom(panel);
@@ -2160,7 +2159,8 @@ export function dressChecks({ float, panel, sheet, cards, close, selected, nameF
   const full = cards.filter((c) => c.left >= sheet.left - 0.5 && right(c) <= edge + 0.5).length;
   const peek = cards.find((c) => c.left < edge - 8 && right(c) > edge + 0.5);
   const ds3 = [];
-  if (full < 4) ds3.push(`완전히 보이는 카드 ${full}장`);
+  const readable = viewport.w < 360 ? 3 : 4;
+  if (full < readable) ds3.push(`완전히 보이는 카드 ${full}장 (기대 ${readable}장 이상)`);
   if (!peek) ds3.push("오른쪽에 걸쳐 보이는 다음 카드 없음");
   out.push(result("DS3", L.DS3, ds3));
   const ds4 = [];

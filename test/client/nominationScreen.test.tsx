@@ -661,7 +661,7 @@ describe("지목 화면 — 역할 표식 없음·8명·긴 닉네임 (T-08-40)"
 });
 
 
-// ---- 09.1-07 Task 1: 차례 알약 · 막대 · 위 한 줄 · 헤더 링 (UI-SPEC A-1~A-6) ----
+// ---- 09.1-07 Task 1: 차례 알약 · 막대 · 위 한 줄 · 헤더 게이지 (UI-SPEC A-1~A-6) ----
 
 describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
   beforeEach(() => {
@@ -674,7 +674,7 @@ describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
       vi.advanceTimersByTime(ms);
     });
   const block = (c: ParentNode): HTMLElement | null => c.querySelector("[data-turn-block]");
-  const ring = (c: ParentNode): HTMLElement | null => c.querySelector(".mv-ring");
+  const gauge = (c: ParentNode): HTMLElement | null => c.querySelector("[data-phase-gauge]");
   const line = (c: ParentNode): string | undefined => c.querySelector(".mf-turn__line.is-on")?.textContent ?? undefined;
   const readable = (el: Element): string => {
     const copy = el.cloneNode(true) as Element;
@@ -684,7 +684,7 @@ describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
   // 4명, 내 좌석 0, 차례는 1번(영희) — 2 / 4
   const turn4 = (turn: TurnOpts, extra: Partial<ViewOpts> = {}) => makeView({ count: 4, turn, ...extra });
 
-  it("차례 중(남은 7.2초, 2/4): 알약에 '2 / 4'·'영희 님 차례'·'8초', 표식 no·seat·tone=calm, 읽히는 글은 이름만", () => {
+  it("차례 중(남은 7.2초, 2/4): 알약에 '2 / 4'·'영희 님 차례'와 헤더 게이지, 표식 no·seat·tone=calm, 읽히는 글은 이름만", () => {
     const { container } = mount(turn4({ i: 1, left: 7200 }));
     expect(container.querySelectorAll("[data-turn-block]").length).toBe(1);
     const b = block(container)!;
@@ -693,59 +693,60 @@ describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
     expect(b.getAttribute("data-turn-tone")).toBe("calm");
     expect(b.textContent).toContain("2 / 4");
     expect(b.textContent).toContain("영희 님 차례");
-    expect(b.textContent).toContain("8초");
+    expect(b.textContent).not.toContain("8초");
+    expect(gauge(container)?.getAttribute("aria-label")).toBe("남은 시간 8초");
     const status = b.querySelector('[role="status"]')!;
     expect(readable(status)).toBe("영희 님 차례");
-    expect(b.querySelector(".mf-turn__bar")).not.toBeNull();
+    expect(b.querySelector(".mf-turn__bar")).toBeNull();
   });
 
-  it("남은 5.0초 근처 세 시각(4.9·5.0·5.1)에서 알약 표식과 헤더 링 색이 일치한다", () => {
+  it("남은 5.0초 근처 세 시각(4.9·5.0·5.1)에서 알약 표식과 헤더 게이지 색이 일치한다", () => {
     for (const [left, tone] of [[4900, "urgent"], [5000, "urgent"], [5100, "calm"]] as const) {
       const { container, unmount } = mount(turn4({ i: 1, left }));
       expect(block(container)!.getAttribute("data-turn-tone"), `${left}`).toBe(tone);
-      expect(ring(container)!.classList.contains("is-urgent"), `${left}`).toBe(tone === "urgent");
+      expect(gauge(container)?.getAttribute("data-tone"), `${left}`).toBe(tone);
       unmount();
     }
   });
 
-  it("시계가 흘러 5초 이하가 되면 알약·헤더 링이 같은 순간 진홍으로 바뀐다", () => {
+  it("시계가 흘러 5초 이하가 되면 알약·헤더 게이지이 같은 순간 진홍으로 바뀐다", () => {
     const { container } = mount(turn4({ i: 1, left: 6500 }));
     expect(block(container)!.getAttribute("data-turn-tone")).toBe("calm");
-    expect(block(container)!.textContent).toContain("7초");
+    expect(gauge(container)?.getAttribute("aria-label")).toBe("남은 시간 7초");
     advance(1499);
-    expect(block(container)!.textContent).toContain("6초");
+    expect(gauge(container)?.getAttribute("aria-label")).toBe("남은 시간 6초");
     expect(block(container)!.getAttribute("data-turn-tone")).toBe("calm");
     advance(1);
-    expect(block(container)!.textContent).toContain("5초");
+    expect(gauge(container)?.getAttribute("aria-label")).toBe("남은 시간 5초");
     expect(block(container)!.getAttribute("data-turn-tone")).toBe("urgent");
-    expect(ring(container)!.classList.contains("is-urgent")).toBe(true);
-    expect(ring(container)!.getAttribute("aria-label")).toBe("남은 시간 5초");
+    expect(gauge(container)?.getAttribute("data-tone")).toBe("urgent");
+    expect(gauge(container)!.getAttribute("aria-label")).toBe("남은 시간 5초");
   });
 
-  it("헤더 링은 차례 초 / 8: 지목 단계 마감이 아니라 차례 마감을 쓴다", () => {
+  it("헤더 게이지은 차례 초 / 8: 지목 단계 마감이 아니라 차례 마감을 쓴다", () => {
     const { container } = mount(turn4({ i: 1, left: 7200 }));
-    expect(ring(container)!.getAttribute("aria-label")).toBe("남은 시간 8초");
+    expect(gauge(container)!.getAttribute("aria-label")).toBe("남은 시간 8초");
   });
 
   it("확정된 차례는 그 값에서 멈춘다: 시계를 옮겨도 초·막대 폭이 그대로", () => {
     const { container } = mount(turn4({ i: 1, left: 8000, doneLeft: 3000 }, { points: [[1, 2]] }));
-    const width = (): string => (block(container)!.querySelector(".mf-turn__fill") as HTMLElement).style.width;
-    expect(block(container)!.textContent).toContain("3초");
-    expect(width()).toBe("37.5%");
+    const width = (): string => container.querySelector<HTMLElement>(".mf-phase-gauge__fill")!.style.transform;
+    expect(gauge(container)?.getAttribute("aria-label")).toBe("남은 시간 3초");
+    expect(width()).toBe("scaleX(0.375)");
     advance(2000);
-    expect(block(container)!.textContent).toContain("3초");
-    expect(width()).toBe("37.5%");
-    expect(ring(container)!.getAttribute("aria-label")).toBe("남은 시간 3초");
+    expect(gauge(container)?.getAttribute("aria-label")).toBe("남은 시간 3초");
+    expect(width()).toBe("scaleX(0.375)");
+    expect(gauge(container)!.getAttribute("aria-label")).toBe("남은 시간 3초");
   });
 
-  it("모이는 중: 알약·막대·헤더 링이 없고, 라이브로 들어오면 위 한 줄 '가운데로 모여요'", () => {
+  it("모이는 중: 알약·막대·헤더 게이지이 없고, 라이브로 들어오면 위 한 줄 '가운데로 모여요'", () => {
     const m = mount(makeView({ count: 4, phase: "discussion" }));
     expect(block(m.container)).toBeNull();
     m.show(turn4({ i: -1 }));
     expect(block(m.container)).not.toBeNull();
     expect(m.container.querySelector(".mf-turn__pill")).toBeNull();
     expect(m.container.querySelector(".mf-turn__bar")).toBeNull();
-    expect(ring(m.container)).toBeNull();
+    expect(gauge(m.container)).toBeNull();
     expect(line(m.container)).toBe("가운데로 모여요");
   });
 
@@ -753,7 +754,7 @@ describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
     const m = mount(turn4({ i: 3 }));
     m.show(turn4({ i: 4 }, { points: [[0, 2], [1, 2], [3, 1]] }));
     expect(m.container.querySelector(".mf-turn__pill")).toBeNull();
-    expect(ring(m.container)).toBeNull();
+    expect(gauge(m.container)).toBeNull();
     expect(line(m.container)).toBe("모두 골랐어요 · 서준 님 2표");
     m.show(turn4({ i: 4 }, { points: [[0, 2], [1, 3]] }));
     expect(line(m.container)).toBe("동점이에요"); // 22-10: 결선 없이 처형 없음
@@ -785,7 +786,7 @@ describe("차례 알약 (결정 0063-1, UI-SPEC A-1~A-6)", () => {
     expect(block(container)).toBeNull();
   });
 
-  it("day.turn 이 없는 지목(기본판 동시 투표) view 에는 알약이 없다 (헤더 링은 단계 마감 기준, 결정 0072)", () => {
+  it("day.turn 이 없는 지목(기본판 동시 투표) view 에는 알약이 없다 (헤더 게이지은 단계 마감 기준, 결정 0072)", () => {
     const { container } = mount(makeView({ turn: null }));
     expect(container.querySelector(".mf-turn__pill")).toBeNull();
     expect(container.querySelector("[data-turn-block]")).toBeNull();

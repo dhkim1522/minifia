@@ -8,22 +8,28 @@
 
 .mf-game-phase-header .mv-phase__line {
   gap: var(--space-xs);
+  min-width: 0;
 }
 
 .mf-game-phase-header :is(.mv-phase__title, .mv-phase__tod, .mv-phase__sep) {
   font-size: clamp(16px, 4.8vw, 20px);
 }
 
-/* 승인된 토론 시안 A의 제목과 헤더 간격. 시간은 공용 게이지를 쓴다. */
-.mf-game__header:has([data-discussion-header]) {
-  height: var(--mf-discussion-header-height, 61px);
+/* 지도와 역할 확인·답안의 머리는 같은 조작 좌표를 쓴다. */
+.mf-game__header:has(.mf-game-phase-header),
+.mf-reveal > .mf-reveal__header:has(.mf-game-phase-header),
+header.mf-lobby__header,
+header.mf-result__header {
+  height: 62px;
   padding: 8px 10px 8px 14px;
 }
 
-.mf-game-phase-header[data-discussion-header] .mv-phase__title {
-  color: #fbf5e9;
+.mf-game-phase-header .mv-phase__title {
+  color: var(--noir-paper);
   font: 700 19px/1.2 var(--font-ui);
-  text-shadow: 0 2px 4px #0c1322;
+  text-shadow: var(--shadow-text);
+  white-space: normal;
+  word-break: keep-all;
 }
 
 .mf-btn.mf-game-menu {
@@ -43,6 +49,11 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+}
+
+.mf-game-menu__tools .mv-sound {
+  width: var(--tap-min);
+  height: var(--tap-min);
 }
 
 .mf-game-phase-header__actions {

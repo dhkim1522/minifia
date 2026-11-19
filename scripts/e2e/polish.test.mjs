@@ -167,14 +167,14 @@ test("revealCardChecks: 측정값이 없으면 각 줄이 측정값 없음으로
 
 // ---- revealStageChecks ----
 
-// 360×640: 소리 단추 독 아랫변 189, 카드 위 끝 197 이상
+// 헤더와 카드 사이에 여백이 있고 도움말이 없다.
 const stageGood = () => ({
   tagsVisible: 0,
   card: box(69, 197, 222, 333),
   headerButtons: [box(16, 8, 96, 44)],
-  band: box(16, 62, 328, 60),
-  soundButtons: [box(292, 130, 52, 52)],
-  dock: box(16, 124, 328, 65),
+  gauge: box(135, 28, 90, 6),
+  header: box(0, 0, 360, 189),
+  helperVisible: false,
 });
 
 test("revealStageChecks: 정상 입력은 A2a·A2b 통과", () => {
@@ -187,15 +187,15 @@ test("revealStageChecks: 보이는 이름표가 있으면 A2a 실패", () => {
   assert.deepEqual(failing(revealStageChecks({ ...stageGood(), tagsVisible: 1 })), ["A2a"]);
 });
 
-test("revealStageChecks: 카드 위 끝이 독 + 7 이면 A2b 실패, + 8 이면 통과", () => {
+test("revealStageChecks: 카드 위 끝이 헤더 + 7 이면 A2b 실패, + 8 이면 통과", () => {
   assert.deepEqual(failing(revealStageChecks({ ...stageGood(), card: box(69, 196, 222, 333) })), ["A2b"]);
   assert.deepEqual(failing(revealStageChecks({ ...stageGood(), card: box(69, 197, 222, 333) })), []);
 });
 
-test("revealStageChecks: 카드가 띠·소리 단추·헤더 단추와 겹치면 A2b 실패", () => {
-  assert.deepEqual(failing(revealStageChecks({ ...stageGood(), card: box(69, 100, 222, 333), dock: box(16, 20, 328, 10) })), ["A2b"]);
+test("revealStageChecks: 카드가 게이지·헤더 단추와 겹치거나 상단 도움말이 있으면 A2b 실패", () => {
+  assert.deepEqual(failing(revealStageChecks({ ...stageGood(), gauge: box(80, 200, 90, 6) })), ["A2b"]);
   assert.deepEqual(failing(revealStageChecks({ ...stageGood(), headerButtons: [box(100, 190, 96, 44)] })), ["A2b"]);
-  assert.deepEqual(failing(revealStageChecks({ ...stageGood(), soundButtons: [box(250, 300, 52, 52)] })), ["A2b"]);
+  assert.deepEqual(failing(revealStageChecks({ ...stageGood(), helperVisible: true })), ["A2b"]);
 });
 
 test("revealStageChecks: 측정값이 없으면 측정값 없음으로 실패", () => {
@@ -205,7 +205,7 @@ test("revealStageChecks: 측정값이 없으면 측정값 없음으로 실패", 
     assert.equal(r.ok, false);
     assert.match(r.detail, /측정값 없음/);
   }
-  assert.deepEqual(failing(revealStageChecks({ ...stageGood(), dock: null })), ["A2b"]);
+  assert.deepEqual(failing(revealStageChecks({ ...stageGood(), header: null })), ["A2b"]);
 });
 
 // ---- roleLineBoxChecks ----

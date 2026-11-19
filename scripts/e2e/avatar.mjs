@@ -93,12 +93,13 @@ function readDressUi(page) {
       const r = el.getBoundingClientRect();
       return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
     };
+    const dresser = q('[data-room-tool="dress"]');
     const names = qa(".mv-dress-card__name").map((el) => parseFloat(getComputedStyle(el).fontSize));
     const sel = qa("[data-dress-sheet] button[data-outfit][aria-pressed='true']");
     return {
       vw: window.innerWidth,
       vh: window.innerHeight,
-      float: rect(q('[data-float="dress"]')),
+      float: dresser && getComputedStyle(dresser).visibility === "visible" ? rect(dresser) : null,
       floatLabel: q('[data-float="dress"]')?.getAttribute("aria-label") ?? null,
       floatCount: qa("[data-float]").length,
       panel: rect(q(".mf-lobby__panel")),
@@ -343,7 +344,7 @@ export function makeAvatarFlows(helpers) {
         await sleep(150);
         const open = await readDressUi(page);
         const hidden = open.float === null;
-        rec(`${sc}-${who}`, "AD2a", `${who}: 시트가 열리면 떠 있는 버튼은 숨고 카드 아홉 개가 UI-SPEC 순서`, hidden && open.cardIds.join(",") === "coat,police,doctor,mafia,detective,reporter,elder,hood,noir", `버튼 ${hidden ? "숨음" : "보임"} · 카드 ${open.cardIds.join(",")}`);
+        rec(`${sc}-${who}`, "AD2a", `${who}: 시트가 열리면 도구줄의 옷장 버튼이 숨고 카드 아홉 개가 UI-SPEC 순서`, hidden && open.cardIds.join(",") === "coat,police,doctor,mafia,detective,reporter,elder,hood,noir", `버튼 ${hidden ? "숨음" : "보임"} · 카드 ${open.cardIds.join(",")}`);
         for (const l of dressChecks({ float: closed.float, panel: open.panel, sheet: open.sheet, cards: open.cards, close: open.close, selected: open.selected, nameFont: open.nameFont, viewport: { w: open.vw, h: open.vh }, kb: open.kbOpen, containerTop: open.sheetContainerTop })) {
           rec(`${sc}-${who}`, l.id, l.label, l.ok, l.detail);
         }

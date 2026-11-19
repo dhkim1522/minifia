@@ -23,7 +23,7 @@ export const ROLE_ART_MIN_H = 64;
 export const CARD_INNER_INSET = 14;
 /** 헤더 시간대 글자 한 줄 높이 상한(24px × 줄 높이 1.2 ≈ 29 — 두 줄이면 58, 0083-1) */
 export const TOD_LINE_MAX_H = 40;
-/** 카드 위 끝과 소리 단추 독 아랫변의 최소 간격(P181-2, A2b) */
+/** 카드 위 끝과 공용 헤더 아랫변의 최소 간격(P181-2, A2b) */
 export const REVEAL_DOCK_GAP = 8;
 /** 게임 헤더 높이(.mf-game__header, D4 — 시간대 글자가 헤더를 키우지 않는다) */
 export const GAME_HEADER_H = 62;
@@ -160,13 +160,13 @@ export function revealCardChecks(m, { size, role }) {
 // ---- A2 역할 확인 무대 ----
 
 /**
- * A2a·A2b 판정. 입력 m = { tagsVisible, card, headerButtons: [rect], band, soundButtons: [rect], dock }
- * A2a 보이는 `.mf-world__tags .mv-tag` 0개 · A2b 카드 사각형이 헤더 단추·띠 면·소리 단추와 교차 0, 카드 위 끝 ≥ 소리 단추 독 아랫변 + 8.
+ * A2a·A2b 판정. 입력 m = { tagsVisible, card, headerButtons: [rect], gauge, header, helperVisible }
+ * A2a 보이는 `.mf-world__tags .mv-tag` 0개 · A2b는 카드가 공용 헤더와 떨어지고 상단에 보조 문구가 없음을 확인한다.
  */
 export function revealStageChecks(m) {
   const L = {
     A2a: "보이는 3D 이름표가 0개다",
-    A2b: "카드가 헤더 단추·띠·소리 단추와 겹치지 않고 독 아랫변과 8 이상 떨어진다",
+    A2b: "카드가 헤더 단추·게이지를 가리지 않고 상단 보조 문구가 없다",
   };
   if (m === null || typeof m !== "object") return ["A2a", "A2b"].map((id) => noMeasure(id, L[id], "무대 읽기 값"));
   const out = [];
@@ -174,19 +174,15 @@ export function revealStageChecks(m) {
   else out.push(row("A2a", L.A2a, m.tagsVisible === 0 ? [] : [`보이는 이름표 ${m.tagsVisible}개`]));
 
   const buttons = Array.isArray(m.headerButtons) ? m.headerButtons : null;
-  const sounds = Array.isArray(m.soundButtons) ? m.soundButtons : null;
-  if (!isRect(m.card) || buttons === null || sounds === null || !isRect(m.band) || !isRect(m.dock)) out.push(noMeasure("A2b", L.A2b, "카드·헤더 단추·띠·소리 단추·독 사각형"));
+  if (!isRect(m.card) || buttons === null || buttons.length === 0 || !isRect(m.header) || typeof m.helperVisible !== "boolean") out.push(noMeasure("A2b", L.A2b, "카드·헤더·도움말"));
   else {
     const bad = [];
-    buttons.forEach((b, i) => {
-      if (rectsOverlap(m.card, b)) bad.push(`카드 ${rectText(m.card)} 가 헤더 단추 ${i} ${rectText(b)} 와 겹침`);
-    });
-    if (rectsOverlap(m.card, m.band)) bad.push(`카드 ${rectText(m.card)} 가 띠 ${rectText(m.band)} 와 겹침`);
-    sounds.forEach((s, i) => {
-      if (rectsOverlap(m.card, s)) bad.push(`카드 ${rectText(m.card)} 가 소리 단추 ${i} ${rectText(s)} 와 겹침`);
-    });
-    const gap = m.card.top - bottomOf(m.dock);
-    if (gap < REVEAL_DOCK_GAP - 0.5) bad.push(`카드 위 끝이 독 아랫변보다 ${fmt(gap)} (기대 ≥ ${REVEAL_DOCK_GAP})`);
+    for (const box of [...buttons, ...(m.gauge ? [m.gauge] : [])]) {
+      if (rectsOverlap(m.card, box)) bad.push(`카드 ${rectText(m.card)} 가 헤더 요소 ${rectText(box)} 와 겹침`);
+    }
+    const gap = m.card.top - bottomOf(m.header);
+    if (gap < REVEAL_DOCK_GAP - 0.5) bad.push(`카드 위 끝과 헤더의 거리 ${fmt(gap)} (기대 ≥ ${REVEAL_DOCK_GAP})`);
+    if (m.helperVisible) bad.push("상단에 도움말이 표시됨");
     out.push(row("A2b", L.A2b, bad));
   }
   return out;
@@ -331,7 +327,7 @@ export function readRevealCard(page) {
   }, CARD_INNER_INSET);
 }
 
-/** 역할 확인 무대 읽기: 보이는 이름표 수와 카드·헤더 단추·띠·소리 단추·독 사각형 */
+/** 역할 확인 무대 읽기: 이름표, 카드·헤더의 위치와 눈에 보이는 중복 안내. */
 export function readRevealStage(page) {
   return page.evaluate(() => {
     const rect = (el) => {
@@ -347,9 +343,10 @@ export function readRevealStage(page) {
       tagsVisible: [...document.querySelectorAll(".mf-world__tags .mv-tag")].filter(shown).length,
       card: rect(document.querySelector(".mf-card")),
       headerButtons: [...document.querySelectorAll(".mf-reveal__header button")].filter(shown).map(rect),
-      band: rect(document.querySelector("[data-host-band] .mv-host__band")),
-      soundButtons: [...document.querySelectorAll(".mv-sound")].filter(shown).map(rect),
-      dock: rect(document.querySelector("[data-host-band] .mv-host__dock")),
+      gauge: rect(document.querySelector(".mf-reveal__header [data-phase-gauge]")),
+      header: rect(document.querySelector(".mf-reveal__header")),
+      helperVisible: [...document.querySelectorAll("[data-host-line], .mf-reveal__header .mv-phase__hint")]
+        .some((el) => !el.closest(".mf-sr-only, [aria-hidden=true]") && el.textContent.trim() && shown(el)),
     };
   });
 }

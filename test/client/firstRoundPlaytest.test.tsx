@@ -55,7 +55,7 @@ describe("첫날 실험방의 최소 조작", () => {
     vi.setSystemTime(NOW);
     const view = fixture({ day: { n: 1, roles, voteOpensAt: NOW + 45_000, voteReadyTotal: 4, voteReadyRequired: 3 } });
     const send = vi.fn();
-    render(<GamePanel view={view} send={send} binding={binding} logHeight={68} canSend />);
+    render(<GamePanel view={view} send={send} binding={binding} canSend />);
     const vote = screen.getByRole("button", { name: /토론 스킵, 필요한 4명 중 0명 요청/ });
     fireEvent.click(vote);
     expect(send).toHaveBeenCalledWith({ t: "endDiscussion", on: true });
@@ -68,7 +68,7 @@ describe("첫날 실험방의 최소 조작", () => {
     const day = { n: 1, roles, firstBallot: { count: 0 } };
     const view = fixture({ phase: "verdict", day });
     const send = vi.fn();
-    const node = (room: RoomView) => <GamePanel view={room} send={send} binding={binding} logHeight={68} canSend />;
+    const node = (room: RoomView) => <GamePanel view={room} send={send} binding={binding} canSend />;
     const { rerender } = render(node(view));
     fireEvent.click(screen.getByRole("button", { name: "하린" }));
     fireEvent.click(screen.getByRole("button", { name: "오늘은 안 뽑기" }));
@@ -84,7 +84,7 @@ describe("첫날 실험방의 최소 조작", () => {
   it("밤 시민에게 선택이 없고 경찰은 자신을 제외한 사람을 고른다", () => {
     const view = fixture({ phase: "night" });
     const send = vi.fn();
-    const node = (room: RoomView) => <GamePanel view={room} send={send} binding={binding} logHeight={68} canSend />;
+    const node = (room: RoomView) => <GamePanel view={room} send={send} binding={binding} canSend />;
     const { rerender } = render(node(view));
     expect(screen.queryByRole("group", { name: "밤 대상" })).toBeNull();
     const police = { ...view, me: { ...view.me, role: "police" as const } };
@@ -94,14 +94,12 @@ describe("첫날 실험방의 최소 조작", () => {
     expect(send).toHaveBeenCalledWith({ t: "pick", target: 1 });
   });
 
-  it.each(["night", "verdict"] as const)("%s 단계의 유령은 채팅을 직접 열고 닫는다", (phase) => {
+  it.each(["night", "verdict"] as const)("%s 단계의 유령에게 공통 고정 채팅을 표시한다", (phase) => {
     const view = fixture({ phase, players: players.map((player) => player.seat === 0 ? { ...player, alive: false } : player) });
     view.me.chat = "ghost";
-    render(<GamePanel view={view} send={vi.fn()} binding={{ ...binding, channel: "ghost" }} logHeight={68} canSend />);
-    expect(screen.queryByRole("textbox")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "채팅" }));
+    const { container } = render(<GamePanel view={view} send={vi.fn()} binding={{ ...binding, channel: "ghost" }} canSend />);
     expect(screen.getByRole("textbox", { name: "유령 채팅 입력" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "채팅 닫기" }));
-    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(container.querySelector("[data-room-chat] [data-chat-log].is-fixed")).not.toBeNull();
+    expect(container.querySelector("[data-chat-open]")).toBeNull();
   });
 });

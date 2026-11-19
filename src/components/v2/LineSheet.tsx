@@ -1,10 +1,9 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef } from "react";
 import "../../styles/v2.css";
 import { countGraphemes } from "../../../shared/nickname";
 import { WHISPER_MAX_GRAPHEMES } from "../../../shared/game/whisper";
 import type { AnimalId } from "../../../shared/game/animals";
-import { faceSrc } from "../../net/assets";
-import { playerColor } from "../../game/playerIdentity";
+import { PlayerPortrait } from "../PlayerPortrait";
 import { RESULT_PANEL_TEXT } from "../../game/resultText";
 import { useComposedText } from "../../net/useComposedText";
 import { clampGraphemes } from "./WillSheet";
@@ -112,7 +111,7 @@ export function LineSheet(props: LineSheetProps) {
           </span>
         )}
         <span className="mv-line__count">{`${countGraphemes(shown)}/${max}`}</span>
-        <button type="button" className="mv-line__close" data-line-close="" aria-label={LINE_TEXT.close} onMouseDown={(e) => e.preventDefault()} onClick={onClose}>
+        <button type="button" className="mv-closepill mv-line__close" data-line-close="" aria-label={LINE_TEXT.close} onMouseDown={(e) => e.preventDefault()} onClick={onClose}>
           <V2Icon name="close" />
         </button>
       </div>
@@ -159,9 +158,6 @@ export function LineSheet(props: LineSheetProps) {
   );
 }
 
-/** 상대 칩의 얼굴 24px. 그림이 안 열리면 자리 구분색 원으로 바꾼다 */
 function PeerFace({ seat, animal }: { seat: number; animal: AnimalId | undefined }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return <span className="mv-line__face is-fallback" style={{ background: playerColor(seat, animal) }} aria-hidden="true" />;
-  return <img className="mv-line__face" src={faceSrc(seat, animal)} alt="" width={24} height={24} draggable={false} onError={() => setFailed(true)} />;
+  return <PlayerPortrait className="mv-line__face" seat={seat} animal={animal} />;
 }

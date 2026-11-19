@@ -148,11 +148,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("토론의 메뉴와 다른 단계의 내 역할 아이콘", () => {
+describe("인게임 단계의 공통 메뉴", () => {
   const ROLES: RoleId[] = ["police", "mafia", "doctor", "citizen"];
   const PHASES: PhaseId[] = ["roleReveal", "dayAnnounce", "discussion", "night", "morning"];
 
-  it.each(ROLES)("%s: 토론은 메뉴, 다른 단계는 내 역할 아이콘 하나를 표시한다", (role) => {
+  it.each(ROLES)("%s: 모든 인게임 단계에서 메뉴 하나를 표시한다", (role) => {
     for (const phase of PHASES) {
       const r = renderRoom(makeView({ role, phase }));
       const buttons = Array.from(document.querySelectorAll<HTMLElement>("button"));
@@ -160,7 +160,7 @@ describe("토론의 메뉴와 다른 단계의 내 역할 아이콘", () => {
       const head = buttons.filter((b) => b.matches(".mf-rolecard-btn, [data-game-menu]"));
       expect(`${phase}:${head.length}`).toBe(`${phase}:1`);
       expect(`${phase}:${head[0]!.textContent}`).toBe(`${phase}:`);
-      expect(`${phase}:${head[0]!.getAttribute("aria-label")}`).toBe(`${phase}:${phase === "discussion" ? "메뉴" : "내 역할"}`);
+      expect(`${phase}:${head[0]!.getAttribute("aria-label")}`).toBe(`${phase}:메뉴`);
       expect(`${phase}:${head[0]!.hasAttribute("data-tool-label")}`).toBe(`${phase}:false`);
       expect(`${phase}:${names.some((x) => x.includes("수사 기록"))}`).toBe(`${phase}:false`);
       expect(`${phase}:${names.some((x) => x === "역할 카드")}`).toBe(`${phase}:false`);
@@ -168,11 +168,10 @@ describe("토론의 메뉴와 다른 단계의 내 역할 아이콘", () => {
     }
   });
 
-  it("역할 확인의 예전 아이콘과 바로 열리는 역할 카드 동작을 유지한다", () => {
+  it("역할 확인에서도 점 세 개 메뉴에서 역할 카드를 연다", () => {
     renderRoom(makeView({ phase: "roleReveal" }));
     const svg = headBtn()?.querySelector("svg");
-    expect(svg?.getAttribute("width") ?? "(아이콘 없음)").toBe("22");
-    expect(headBtn()?.querySelector(".mf-rolecard-btn__face svg") === null ? "면 없음" : "면 있음").toBe("면 있음");
+    expect(svg?.querySelectorAll("circle")).toHaveLength(3);
     expect(headBtn()?.querySelector(".mf-rolecard-btn__label")).toBeNull();
     expect(headBtn()?.textContent).toBe("");
     openSheet();
@@ -190,13 +189,13 @@ describe("토론의 메뉴와 다른 단계의 내 역할 아이콘", () => {
     expect(document.activeElement).toBe(button);
   });
 
-  it("토론에서 역할 카드를 보는 사이 밤으로 넘어가면 닫을 때 내 역할 아이콘에 초점을 돌려준다", () => {
+  it("토론에서 역할 카드를 보는 사이 밤으로 넘어가면 닫을 때 같은 메뉴 아이콘에 초점을 돌려준다", () => {
     const room = renderRoom(makeView({ phase: "discussion" }));
     openSheet();
     feed(room, makeView({ phase: "night" }));
     expect(sheet()).not.toBeNull();
     closeSheet();
-    expect(headBtn()?.getAttribute("aria-label")).toBe("내 역할");
+    expect(headBtn()?.getAttribute("aria-label")).toBe("메뉴");
     expect(document.activeElement).toBe(headBtn());
   });
 });

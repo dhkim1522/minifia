@@ -285,16 +285,16 @@ describe("결과 화면: 3D 무대 위 한 장면의 최종 상태 (D-1, A-5)", 
     const r = renderRoom(makeView({ withResult: false }));
     expect(screen.getByText("연결 중…")).toBeTruthy();
     expect(r.container.querySelector("[data-result-panel]")).toBeNull();
-    expect(r.container.querySelector(".mf-sr-only")?.textContent).toBe("게임이 끝났습니다");
+    expect(r.container.querySelector("[data-room-announcement]")?.textContent).toBe("게임이 끝났습니다");
   });
 
   it("읽기용 안내는 RoomScreen 한 곳이 한다: 승리 팀을 읽고 결과 화면은 live 영역을 더하지 않는다", () => {
     const a = renderRoom(makeView());
-    expect(a.container.querySelector(".mf-sr-only")?.textContent).toBe("게임이 끝났습니다. 시민 팀 승리");
+    expect(a.container.querySelector("[data-room-announcement]")?.textContent).toBe("게임이 끝났습니다. 시민 팀 승리");
     expect(a.container.querySelector("[data-result-announce]")).toBeNull(); // 최종 상태에는 승리 알림 오버레이가 없다
     a.unmount();
     const b = renderRoom(makeView({ winner: "mafiaWin" }));
-    expect(b.container.querySelector(".mf-sr-only")?.textContent).toBe("게임이 끝났습니다. 마피아 팀 승리");
+    expect(b.container.querySelector("[data-room-announcement]")?.textContent).toBe("게임이 끝났습니다. 마피아 팀 승리");
   });
 
   it("판이 끝나면 열려 있던 테스트 시트·역할 카드 시트를 닫는다", () => {
@@ -865,14 +865,14 @@ describe("결과 화면 기록 숨김 (18.1 R5, P181-7)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("기록 칸 높이는 게임 채팅 패널과 같은 68 한 값이다 — 방 높이로 가르지 않는다 (B 계약 5, E2)", () => {
+  it("기록 칸 높이는 토론과 같은 공용 값이다 — 방 높이로 가르지 않는다 (B 계약 5, E2)", () => {
     const orig = window.innerHeight;
     try {
       for (const h of [600, 900]) {
         Object.defineProperty(window, "innerHeight", { configurable: true, value: h });
         const r = renderRoom(makeView(), onEvent());
         const log = r.container.querySelector<HTMLElement>("[data-chat-log]")!;
-        expect(log.style.height).toBe(`${LOG_H}px`)
+        expect(log.style.height).toBe("92px")
         expect(LOG_H).toBe(68);
         r.unmount();
       }
@@ -976,7 +976,7 @@ describe("시상식 없는 결과 (18.1-16, 0083-7)", () => {
     r.unmount();
   });
 
-  it("오른쪽 열(옷장)은 5599 까지 없고 5600 부터 있다 — 칭호가 있어도 더 기다리지 않는다. 알약은 4600 부터 활성이다", () => {
+  it("공용 도구 줄의 옷장은 5599 까지 없고 5600 부터 있다 — 칭호가 있어도 더 기다리지 않는다. 알약은 4600 부터 활성이다", () => {
     const r = arrive({ me: 1 });
     advance(4599);
     expect(r.container.querySelector("button[data-ready-pill]")!.hasAttribute("data-inactive")).toBe(true);
@@ -987,7 +987,7 @@ describe("시상식 없는 결과 (18.1-16, 0083-7)", () => {
     expect(r.container.querySelector("[data-side-column]")).toBeNull();
     advance(1);
     expect(dress(r.container)).not.toBeNull();
-    expect(r.container.querySelectorAll("[data-side-column]")).toHaveLength(1);
+    expect(r.container.querySelectorAll("[data-room-chat] [data-room-tool=dress]")).toHaveLength(1);
   });
 
   it("최종 상태: 산 좌석이 직업 의상을 입은 채 남는다 — 탈락 좌석은 유령 그림 (연출 뒤 30초를 돌려도 걷히지 않는다)", () => {
@@ -1043,11 +1043,11 @@ describe("다시 하기 알약 (11-12)", () => {
     return v;
   };
 
-  it("입력줄 오른쪽 끝(보내기 뒤)에 알약 하나가 있다 — 손님은 '준비' 토글", () => {
+  it("입력 위 공용 도구 줄 오른쪽에 알약 하나가 있다 — 손님은 '준비' 토글", () => {
     const r = renderRoom(makeView({ me: 1, ready: [0] }));
     const pill = pillOf(r.container)!;
     expect(pill).not.toBeNull();
-    expect(pill.closest("[data-chat-trailing]")).not.toBeNull();
+    expect(pill.closest(".mf-room-chat__advance")).not.toBeNull();
     expect(pill.textContent).toBe("준비");
     expect(pill.getAttribute("data-ready")).toBe("false");
     expect(r.container.querySelectorAll("[data-ready-pill]")).toHaveLength(1);
@@ -1248,7 +1248,7 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
     expect(skip(r.container)).toBeNull();
   });
 
-  it("칭호가 있는 판도 5600 에 오른쪽 열 [꾸미기]가 나타나고 [넘기기]는 끝까지 없다 (0083-7 — 시상식 뒤를 기다리지 않는다)", () => {
+  it("칭호가 있는 판도 5600 에 공용 도구 줄의 [꾸미기]가 나타나고 [넘기기]는 끝까지 없다 (0083-7 — 시상식 뒤를 기다리지 않는다)", () => {
     const r = renderRoom(executionView());
     r.rerenderRoom(makeView());
     advance(5600 - 100);
@@ -1262,7 +1262,7 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
     expect(skip(r.container)).toBeNull();
   });
 
-  it("방장이면 5600 에 오른쪽 열 [dress] 와 왼쪽 줄(맵 단추 포함)이 한 번에 나타난다 — 떠 있는 [넘기기]는 없다 (16-06 D-05 → 19-05 D-13)", () => {
+  it("방장이면 5600 에 공용 도구 줄의 [dress] 와 왼쪽 줄(맵 단추 포함)이 한 번에 나타난다 — 떠 있는 [넘기기]는 없다 (16-06 D-05 → 19-05 D-13)", () => {
     const r = renderRoom(executionView());
     r.rerenderRoom(makeView({ me: 0 }));
     advance(5600 - 100);
@@ -1271,9 +1271,9 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
     expect(r.container.querySelector("[data-map-chip]")).toBeNull();
     advance(100);
     expect(skip(r.container)).toBeNull();
-    expect(r.container.querySelectorAll("[data-side-column]")).toHaveLength(1);
+    expect(r.container.querySelectorAll("[data-room-chat] [data-room-tool=dress]")).toHaveLength(1);
     expect(r.container.querySelectorAll("[data-host-rail]")).toHaveLength(1);
-    expect(dress(r.container)!.getAttribute("data-side-button")).toBe("dress");
+    expect(dress(r.container)!.getAttribute("data-room-tool")).toBe("dress");
     // 맵 단추는 오른쪽 열이 아니라 왼쪽 줄에 있다(허용 맵이 둘 이상인 빌드)
     expect(r.container.querySelectorAll("[data-side-column] [data-map-chip]")).toHaveLength(0);
     expect(r.container.querySelectorAll("[data-host-rail] [data-map-chip]")).toHaveLength(PLAYABLE_MAPS.length > 1 ? 1 : 0);
@@ -1291,7 +1291,7 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
     fireEvent.click(dress(r.container)!);
     const cards = Array.from(r.container.querySelectorAll<HTMLElement>("button[data-outfit]"));
     expect(cards.length).toBeGreaterThan(1);
-    expect(dress(r.container)).toBeNull();
+    expect(dress(r.container)?.hasAttribute("hidden")).toBe(true);
     const other = cards.find((c) => c.getAttribute("aria-pressed") !== "true")!;
     fireEvent.click(other);
     act(() => void vi.advanceTimersByTime(300));
@@ -1364,7 +1364,7 @@ describe("결과 단계 지도 칩과 맵 탭 (11-13, D-20·O-11)", () => {
   });
   afterEach(() => restore());
   const chip = (c: ParentNode) => c.querySelector<HTMLElement>("[data-map-chip]");
-  const sideButtons = (c: ParentNode) => [...c.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button"));
+  const sideButtons = (c: ParentNode) => [...c.querySelectorAll("[data-room-chat] [data-room-tool=dress]")].map((e) => e.getAttribute("data-room-tool"));
   const railIds = (c: ParentNode) => [...c.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).join(",");
   const withMap = (v: RoomView, mapChoice: "bar" | "plaza" | "random", map?: "bar" | "plaza"): RoomView => ({ ...v, mapChoice, ...(map ? { map } : {}) });
   const basicView = (o: Parameters<typeof makeView>[0] = {}): RoomView => makeView(o);
@@ -1377,17 +1377,16 @@ describe("결과 단계 지도 칩과 맵 탭 (11-13, D-20·O-11)", () => {
     }
   });
 
-  it("참가자 화면에는 칩이 없다 — 오른쪽 열은 [dress] 하나(16-06 V-5, T-16-13)", () => {
+  it("참가자 화면에는 칩이 없다 — 공용 도구 줄에 [dress] 하나(16-06 V-5, T-16-13)", () => {
     const r = renderRoom(withMap(basicView({ me: 1 }), "plaza"));
     expect(chip(r.container)).toBeNull();
     expect(sideButtons(r.container)).toEqual(["dress"]);
   });
 
-  it("최종 상태에서 방장의 오른쪽 열은 소리 자리 다음 [dress] 하나이고 맵 단추는 왼쪽 줄의 첫 칸이다 (16-06 D-05 → 19-05 D-13 → 22-07 [판 종류] 없어짐)", () => {
+  it("최종 상태에서 방장의 공용 도구 줄에 [dress] 하나이고 맵 단추는 왼쪽 줄의 첫 칸이다 (16-06 D-05 → 19-05 D-13 → 22-07 [판 종류] 없어짐)", () => {
     const r = renderRoom(basicView({ me: 0 }));
-    expect(r.container.querySelectorAll("[data-side-column]")).toHaveLength(1);
+    expect(r.container.querySelectorAll("[data-room-chat] [data-room-tool=dress]")).toHaveLength(1);
     expect(sideButtons(r.container).join(",")).toBe("dress");
-    expect(r.container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
     expect(railIds(r.container)).toBe("map");
     expect(r.container.querySelectorAll("[data-host-rail] [data-map-chip]")).toHaveLength(1);
     expect(r.container.querySelectorAll("[data-side-column] [data-map-chip]")).toHaveLength(0);
@@ -1473,13 +1472,13 @@ describe("결과 화면 방장 줄 [맵] (19-05, D-06·D-13 → 22-07 에서 [�
   /** 판 종류 화면의 표식 네 가지 수 — 22-07 이후 늘 0 이다 */
   const modeMarks = (c: ParentNode) => ['[data-host-rail-btn="mode"]', "[data-mode-sheet]", "[data-mode-card]", "[data-mode-chip]"].map((sel) => c.querySelectorAll(sel).length).join(",");
   const railIds = (c: ParentNode) => [...c.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).join(",");
-  const side = (c: ParentNode) => [...c.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button")).join(",");
+  const side = (c: ParentNode) => [...c.querySelectorAll("[data-room-chat] [data-room-tool=dress]")].map((e) => e.getAttribute("data-room-tool")).join(",");
   const toastText = (c: ParentNode) => c.querySelector(".mv-toast")?.textContent ?? "";
   const pillOf = (c: ParentNode) => c.querySelector<HTMLElement>("[data-result-panel] [data-ready-pill]");
   /** 방장 줄의 기대값 — 허용 맵이 둘 이상일 때만 [맵] 하나다(없으면 줄 자체가 없다) */
   const railWant = PLAYABLE_MAPS.length > 1 ? "map" : "";
 
-  it("방장(최종 상태): 왼쪽 줄 하나에 [맵]뿐이고 [봇]·[튜토리얼 먼저]·[판 종류]는 없다. 오른쪽 열은 [옷장] 하나(첫 칸은 소리 자리)다", () => {
+  it("방장(최종 상태): 왼쪽 줄 하나에 [맵]뿐이고 [봇]·[튜토리얼 먼저]·[판 종류]는 없다. 공용 도구 줄에 [옷장]이 있다", () => {
     // 봇 도구 값이 실려 와도(대기실 전용 키) 결과 화면 줄에는 [봇]이 없다
     const v = makeView({ me: 0 });
     const r = renderRoom({ ...v, me: { ...v.me, testBots: 2 } });
@@ -1488,7 +1487,6 @@ describe("결과 화면 방장 줄 [맵] (19-05, D-06·D-13 → 22-07 에서 [�
     expect(r.container.querySelectorAll('[data-host-rail-btn="bots"], [data-host-rail-btn="tutorial"], [data-float="bots"], [data-tutorial-toggle]')).toHaveLength(0);
     expect(modeMarks(r.container)).toBe("0,0,0,0");
     expect(side(r.container)).toBe("dress");
-    expect(r.container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
     expect(r.container.querySelectorAll("[data-side-column] [data-map-chip]")).toHaveLength(0);
     expect(r.container.querySelector("[data-host-rail]")?.getAttribute("aria-label")).toBe("방장 전용");
   });
@@ -1532,7 +1530,7 @@ describe("결과 화면 방장 줄 [맵] (19-05, D-06·D-13 → 22-07 에서 [�
     }
   });
 
-  it("방장: 연출이 끝나기 전(5600 전)에는 줄이 없고 5600 에 줄이 오른쪽 열과 함께 나타난다 (줄에 [맵])", () => {
+  it("방장: 연출이 끝나기 전(5600 전)에는 줄이 없고 5600 에 줄이 옷장과 함께 나타난다 (줄에 [맵])", () => {
     const r = renderRoom(executionView());
     r.rerenderRoom(makeView({ me: 0 }));
     for (const ms of [0, 1200, 3400, 900]) {
@@ -1540,7 +1538,7 @@ describe("결과 화면 방장 줄 [맵] (19-05, D-06·D-13 → 22-07 에서 [�
       expect(rails(r.container)).toBe(0);
     }
     advance(100);
-    expect(r.container.querySelectorAll("[data-side-column]")).toHaveLength(1);
+    expect(r.container.querySelectorAll("[data-room-chat] [data-room-tool=dress]")).toHaveLength(1);
     expect(rails(r.container)).toBe(1);
     expect(railIds(r.container)).toBe(railWant);
   });
@@ -1552,7 +1550,7 @@ describe("결과 화면 방장 줄 [맵] (19-05, D-06·D-13 → 22-07 에서 [�
       advance(ms);
       expect(rails(r.container)).toBe(0);
     }
-    expect(r.container.querySelectorAll("[data-side-column]")).toHaveLength(1);
+    expect(r.container.querySelectorAll("[data-room-chat] [data-room-tool=dress]")).toHaveLength(1);
   });
 
   it("방장 [시작] 알약의 마크업·자리(패널 안)와 준비 수는 줄과 무관하다 (D-06, P19-13)", () => {
@@ -1663,7 +1661,7 @@ describe("결과 화면 방장 줄 [맵] (19-05, D-06·D-13 → 22-07 에서 [�
     });
   });
 
-  it("result.css: 가상 뷰포트 이동 줄(--mf-vv-top)에 방장 줄이 오른쪽 열과 함께 묶여 있고 판 종류 칩 선택자는 없다", () => {
+  it("result.css: 가상 뷰포트 이동 줄(--mf-vv-top)에 방장 줄이 옷장과 함께 묶여 있고 판 종류 칩 선택자는 없다", () => {
     const css = readFileSync("src/styles/result.css", "utf8");
     const line = css.split("\n").find((l) => l.includes("translateY(var(--mf-vv-top")) ?? "";
     const selectors = (line.split("{")[0] ?? "").split(",").map((x) => x.trim());

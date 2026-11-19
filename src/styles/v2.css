@@ -71,8 +71,6 @@
 .mv-chat__log > :first-child { margin-top: auto; }
 .mv-chat__msg, .mv-chat__sys { margin: 0; font-size: 16px; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
 .mv-chat__msg { color: var(--noir-paper); display: flex; flex: none; align-items: flex-start; gap: 8px; }
-.mv-chat__avatar { flex: none; border-radius: 50%; background: var(--noir-raised); object-fit: cover; }
-.mv-chat__avatar--animal { border-radius: var(--radius-sm); object-fit: contain; }
 .mv-chat__bubble-body { min-width: 0; }
 .mv-chat__byline { display: flex; align-items: center; min-height: 14px; margin-bottom: 1px; }
 .mv-chat__text {
@@ -285,11 +283,11 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-face__mark { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: var(--radius-pill); background: var(--gray-100); color: var(--night-900); }
 
 /* 유언·쪽지 시트(9페이즈 WILL-01·NIGHT-12). 폭 = 부모 − 20(좌우 10). 진홍은 .mv-will--mafia(쪽지)에만 있다 */
-.mv-will { display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; width: calc(100% - 20px); margin: 0 auto; padding: 12px; border-radius: var(--noir-control-radius); background: var(--noir-sheet-light), var(--noir-panel); border: 1px solid var(--night-600); box-shadow: var(--noir-rail), var(--shadow-card); font-family: var(--font-ui); color: var(--gray-100); border-color: var(--noir-line); }
+.mv-will { display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; width: calc(100% - 20px); margin: 0 auto; padding: 12px; border-radius: var(--noir-surface-radius); background: var(--noir-sheet-light), var(--noir-panel); border: 1px solid var(--night-600); box-shadow: var(--noir-rail), var(--shadow-card); font-family: var(--font-ui); color: var(--gray-100); border-color: var(--noir-line); }
 .mv-will__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
 .mv-will__title { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap-min); padding-left: 4px; font-size: 16px; font-weight: 700; color: var(--noir-paper); font-family: var(--font-serif); }
 .mv-will__close { color: var(--gray-300); }
-.mv-will__text { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 6px; border: 1px solid var(--night-600); background: var(--noir-inset); color: var(--gray-100); font-family: inherit; font-size: 16px; line-height: 1.5; resize: none; user-select: text; border-color: var(--noir-line); }
+.mv-will__text { width: 100%; box-sizing: border-box; padding: 12px; border-radius: var(--noir-control-radius); border: 1px solid var(--night-600); background: var(--noir-inset); color: var(--gray-100); font-family: inherit; font-size: 16px; line-height: 1.5; resize: none; user-select: text; border-color: var(--noir-line); }
 .mv-will__text::placeholder { color: var(--gray-300); }
 .mv-will__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
 .mv-will__count { font-size: 14px; color: var(--gray-300); font-variant-numeric: tabular-nums; }
@@ -350,15 +348,12 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-claim-chip:focus-visible, .mv-claim-sheet__close:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
 
 /* 귓속말 한 줄 시트(09.1.1-09, UI-SPEC B-2): 틀은 유언 시트(.mv-will)와 같은 값. 높이 12 + 44 + 8 + 48 + 12 = 124. 진홍·놋쇠·밝은 종이 면 없음 */
-.mv-line-sheet { display: flex; flex-direction: column; gap: var(--space-sm); box-sizing: border-box; width: calc(100% - 20px); margin: 0 auto; padding: 12px; border-radius: var(--noir-control-radius); background: var(--noir-sheet-light), var(--noir-panel); border: 1px solid var(--night-600); box-shadow: var(--noir-rail), var(--shadow-card); font-family: var(--font-ui); color: var(--gray-100); border-color: var(--noir-line); }
+.mv-line-sheet { display: flex; flex-direction: column; gap: var(--space-sm); box-sizing: border-box; width: calc(100% - 20px); margin: 0 auto; padding: 12px; border-radius: var(--noir-surface-radius); background: var(--noir-sheet-light), var(--noir-panel); border: 1px solid var(--night-600); box-shadow: var(--noir-rail), var(--shadow-card); font-family: var(--font-ui); color: var(--gray-100); border-color: var(--noir-line); }
 .mv-line__notice { margin: 0; text-align: center; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); word-break: keep-all; }
 .mv-line__head { display: flex; align-items: center; gap: var(--space-sm); height: var(--tap-min); }
 .mv-line__peer { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; padding-left: var(--space-xs); color: var(--gray-50); }
-.mv-line__face { flex: none; width: 24px; height: 24px; border-radius: var(--radius-pill); object-fit: cover; }
-.mv-line__face.is-fallback { display: inline-block; }
 .mv-line__name { min-width: 0; word-break: keep-all; overflow-wrap: anywhere; font-size: 14px; line-height: 1.4; font-weight: 700; color: var(--gray-50); }
 .mv-line__count { flex: none; font-size: 14px; line-height: 1.4; font-weight: 400; color: var(--gray-300); font-variant-numeric: tabular-nums; }
-.mv-line__close { display: grid; place-items: center; flex: none; width: var(--tap-min); height: var(--tap-min); padding: 0; border: 0; border-radius: var(--radius-md); background: none; color: var(--gray-300); cursor: pointer; }
 .mv-line__row { display: flex; gap: var(--space-sm); height: var(--control-input); }
 .mv-line__input { flex: 1; min-width: 0; height: var(--control-input); box-sizing: border-box; padding: 0 var(--space-md); border-radius: var(--noir-control-radius); border: 1px solid var(--night-600); background: var(--noir-inset); color: var(--gray-100); font-family: inherit; font-size: 16px; user-select: text; border-color: var(--noir-line); }
 .mv-line__input::placeholder { color: var(--gray-300); }
@@ -395,7 +390,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 
 /* 꾸미기 시트: 채팅 패널과 아랫변을 맞추고 모든 탭에 테두리 1 + 안쪽 여백 24 + 위 줄 44 + 간격 12 + 카드 112를 확보한다.
    가로 화면이나 키보드로 공간이 더 작아지면 시트 안에서만 세로로 스크롤한다. */
-.mv-dress-sheet { position: absolute; left: 0; right: 0; bottom: var(--mf-kb-lift, 0px); z-index: calc(var(--z-overlay) + 1); height: max(var(--mf-panel-h, 250px), 193px); max-height: calc(100% - var(--mf-kb-lift, 0px)); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow: hidden auto; overscroll-behavior-y: contain; background: var(--noir-sheet-light), var(--noir-panel); border: 1px solid var(--night-600); border-bottom: 0; border-radius: 14px 14px 0 0; font-family: var(--font-ui); color: var(--gray-100); border-color: var(--noir-line); box-shadow: var(--noir-rail), var(--shadow-card); }
+.mv-dress-sheet { position: absolute; left: 0; right: 0; bottom: var(--mf-kb-lift, 0px); z-index: calc(var(--z-overlay) + 1); height: max(var(--mf-panel-h, 250px), 193px); max-height: calc(100% - var(--mf-kb-lift, 0px)); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow: hidden auto; overscroll-behavior-y: contain; background: var(--noir-sheet-light), var(--noir-panel); border: 1px solid var(--night-600); border-bottom: 0; border-radius: var(--noir-surface-radius) var(--noir-surface-radius) 0 0; font-family: var(--font-ui); color: var(--gray-100); border-color: var(--noir-line); box-shadow: var(--noir-rail), var(--shadow-card); }
 .mv-dress-sheet__top { flex: none; display: flex; align-items: center; justify-content: space-between; height: var(--tap-min); padding-left: 4px; }
 /* 닫기는 공통 알약 .mv-closepill(14-06) */
 .mv-dress-sheet__close { color: var(--gray-100); }
@@ -403,7 +398,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-dress-sheet__strip::-webkit-scrollbar { display: none; }
 .mv-dress-card { position: relative; flex: none; scroll-snap-align: start; display: flex; flex-direction: column; align-items: center; gap: 2px; box-sizing: border-box; width: 72px; height: 112px; padding: 4px 0 6px; border: 1px solid var(--noir-control-line); border-radius: var(--noir-control-radius); background: var(--noir-control); color: var(--noir-paper); font-family: inherit; cursor: pointer; }
 .mv-dress-card.is-selected { border: 2px solid var(--gray-100); padding: 3px 0 5px; border-color: var(--noir-paper); background: var(--noir-control-on); color: var(--noir-paper); box-shadow: inset 0 0 0 1px var(--noir-paper); }
-.mv-dress-card__img { width: 64px; height: 80px; object-fit: contain; pointer-events: none; -webkit-user-drag: none; }
+.mv-dress-card__img { width: 60px; height: 80px; object-fit: contain; pointer-events: none; -webkit-user-drag: none; }
 .mv-dress-card__name { max-width: 100%; font-size: 14px; line-height: 1.2; font-weight: 700; white-space: nowrap; overflow: hidden; }
 .mv-dress-card__check { position: absolute; top: 4px; right: 4px; }
 /* 18-05 잠긴 옷 자물쇠 16 — 체크와 같은 자리, 잠긴 카드는 선택될 수 없다 */

@@ -300,9 +300,9 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
   it("3단계로도 넘으면 3단계(28/32)로 두고 편지지를 가용 높이까지 키운다(하한 220)", () => {
     const grow = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 12, 36: 10, 28: 9 })} getInputTop={() => 640} />);
     tick(400);
-    // 가용 = 640 − 142(띠 아랫변 126 + 16, 변수가 없을 때의 기본) − 43(1줄 추정) − 40 − 30 = 385 → 340 을 넘어 가용까지
+    // 가용 = 640 − 78(헤더 62 + 16) − 43(1줄 추정) − 40 − 30 = 449 → 340 을 넘어 가용까지
     expect(pv(paperOf(grow.container), "--lw-font")).toBe("28px");
-    expect(pv(paperOf(grow.container), "--lw-paper-h")).toBe("385px");
+    expect(pv(paperOf(grow.container), "--lw-paper-h")).toBe("449px");
     grow.unmount();
     const floor = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 12, 36: 10, 28: 9 })} getInputTop={() => 300} />);
     tick(400);
@@ -312,14 +312,14 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
   it("입력줄 윗변이 알려지면 편지지 높이는 min(340, 가용) 하한 220, 묶음은 알림 아래에서 입력줄 윗변 사이에 놓인다", () => {
     const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 2, 36: 2, 28: 2 })} getInputTop={() => 520} />);
     tick(400);
-    // 가용 = 520 − 142 − 43 − 40 − 30 = 265
-    expect(pv(paperOf(r.container), "--lw-paper-h")).toBe("265px");
+    // 가용 = 520 − 78 − 43 − 40 − 30 = 329
+    expect(pv(paperOf(r.container), "--lw-paper-h")).toBe("329px");
     const root = letterOf(r.container)!;
-    expect(pv(root, "--lw-top")).toBe("205px"); // 142 + 43 + 20
-    expect(pv(root, "--lw-h")).toBe("311px"); // 520 − 4 − 205
+    expect(pv(root, "--lw-top")).toBe("141px"); // 78 + 43 + 20
+    expect(pv(root, "--lw-h")).toBe("375px"); // 520 − 4 − 141
   });
 
-  // 18.1-13(0083-10): 큰 글 위 끝은 띠 면 아랫변(--mf-host-bottom) + 16 — 같은 변수를 방 틀에서 상속으로 읽는다. 못 읽으면 126 + 16 = 142
+  // 18.1-13(0083-10): 큰 글 위 끝은 헤더 아랫변에 16을 더한다. 변수를 못 읽으면 62 + 16 = 78
   // happy-dom 의 getComputedStyle 은 사용자 지정 속성을 자식에게 상속하지 않아(브라우저는 한다) 조상을 거슬러 올라가며 읽는 가짜로 상속을 흉내 낸다
   const inheritCustomProps = () => {
     const real = window.getComputedStyle.bind(window);
@@ -358,7 +358,7 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
     }
   });
 
-  it("변수가 0 이거나 없으면 기본 126 기준(142)이다", () => {
+  it("변수가 0 이거나 없으면 기본 62 기준(78)이다", () => {
     const frame = document.createElement("div");
     frame.style.setProperty("--mf-host-bottom", "0px");
     document.body.appendChild(frame);
@@ -366,7 +366,7 @@ describe("편지 글 크기 3단·편지지 높이 (C-3)", () => {
     try {
       const r = render(<WillLetter letter={letterOf2()} reducedMotion={false} splitLines={linesBy({ 46: 2, 36: 2, 28: 2 })} getInputTop={() => 520} />, { container: frame.appendChild(document.createElement("div")) });
       tick(400);
-      expect(pv(letterOf(r.container)!, "--lw-top")).toBe("205px");
+      expect(pv(letterOf(r.container)!, "--lw-top")).toBe("141px");
     } finally {
       spy.mockRestore();
       frame.remove();
@@ -523,38 +523,28 @@ describe("아침 알림 위치: 큰 글은 띠 아래에서 시작한다 (C-2, 0
     expect(b.container.querySelector(".mf-announce")!.classList.contains("is-top")).toBe(true);
   });
 
-  it("game.css: .mf-announce.is-top 의 위 여백은 띠 면 아랫변(--mf-host-bottom, 기본 126) + space-md 이고 고정 72 가 아니다", () => {
+  it("game.css: .mf-announce.is-top 의 위 여백은 헤더 아랫변(--mf-host-bottom, 기본 62) + space-md 이고 고정 72 가 아니다", () => {
     const css = readFileSync("src/styles/game.css", "utf8");
     const top = rule(css, ".mf-announce.is-top");
-    expect(top).toMatch(/--mf-host-bottom,\s*126px/);
+    expect(top).toMatch(/--mf-host-bottom,\s*62px/);
     expect(top).toMatch(/var\(--space-md\)/);
     expect(top).not.toMatch(/padding-top:\s*72px/);
   });
 
-  it("game.css: .is-top 의 좌우 여백은 양쪽이 같고 소리 단추 지름 52 를 포함한다(가운데 맞춤 유지)", () => {
+  it("game.css: 결과 알림은 헤더와 채팅 사이의 영역에 자리한다", () => {
     const css = readFileSync("src/styles/game.css", "utf8");
-    const top = rule(css, ".mf-announce.is-top");
-    const m = /padding-left:\s*([^;]+);\s*padding-right:\s*([^;]+);/.exec(top);
-    expect(m, top).not.toBeNull();
-    expect(m![1]).toBe(m![2]);
-    expect(m![1]).toMatch(/52px/);
+    const announce = rule(css, ".mf-announce {");
+    expect(announce).toMatch(/padding:\s*62px var\(--space-md\) var\(--mf-panel-h,\s*0px\)/);
+    expect(announce).toMatch(/align-items:\s*center/);
   });
 
-  it("game.css: 기본 .mf-announce 의 위 240 은 그대로다", () => {
-    const css = readFileSync("src/styles/game.css", "utf8");
-    expect(rule(css, ".mf-announce {")).toMatch(/padding:\s*240px var\(--space-md\) 0/);
-  });
-
-  it("letter.css: 알림 높이를 재는 틀의 좌우는 새 큰 글 폭과 같다(양쪽 같고 52px 를 포함)", () => {
+  it("letter.css: 알림 높이를 재는 틀은 같은 좌우 여백을 쓴다", () => {
     const css = readFileSync("src/styles/letter.css", "utf8");
     const line = css.split("\n").find((l) => l.startsWith(".mf-letter-measure__announce")) ?? "";
-    const m = /left:\s*([^;]+);\s*right:\s*([^;]+);/.exec(line);
-    expect(m, line).not.toBeNull();
-    expect(m![1]).toBe(m![2]);
-    expect(m![1]).toMatch(/52px/);
+    expect(line).toMatch(/inset-inline:\s*calc\(var\(--space-md\) - 32px\)/);
   });
 
-  it("방 화면: 편지가 있는 아침의 알림은 is-top 으로 올라가 편지와 함께 걷히고, 편지가 없는 아침은 위 240 그대로", () => {
+  it("방 화면: 편지가 있는 아침의 알림은 is-top 으로 올라가 편지와 함께 걷히고, 편지가 없는 아침은 무대 가운데에 있다", () => {
     const s = setup();
     s.show(killed());
     s.card("will", 3, 1, WILL);

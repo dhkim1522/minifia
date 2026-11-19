@@ -166,18 +166,18 @@ describe("자막 띠 트레이서 (HOST-01, TOOL-02)", () => {
 describe("띠 세 상태 (18.1-12)", () => {
   const face = (c: HTMLElement) => c.querySelector<HTMLElement>(".mv-host__band")!;
 
-  it("대기실·결과: 띠 면은 is-off + aria-hidden 이고 표식 셋은 하나씩, 소리 독은 그대로 그려진다", () => {
+  it("대기실·결과: 시각 안내와 소리 독이 없고 예전 띠 표식은 화면 읽기용으로만 남는다", () => {
     const rig = makeRig();
     rig.engine.unlock();
     setEngineForTest(rig.engine);
     for (const phase of ["lobby", "ended"] as const) {
       const { container, unmount } = renderRoom(makeView({ phase, endsIn: null }));
-      expect(face(container).classList.contains("is-off"), phase).toBe(true);
-      expect(face(container).getAttribute("aria-hidden"), phase).toBe("true");
+      expect(face(container), phase).toBeNull();
+      expect(container.querySelector("[data-host-line]")?.parentElement?.getAttribute("aria-hidden"), phase).toBe("true");
       expect(container.querySelectorAll("[data-host-band]"), phase).toHaveLength(1);
       expect(container.querySelectorAll("[data-host-line]"), phase).toHaveLength(1);
       expect(container.querySelectorAll("[data-guide]"), phase).toHaveLength(1);
-      expect(container.querySelector(".mv-host__dock [data-sound-button]"), phase).not.toBeNull();
+      expect(container.querySelector(".mv-host__dock [data-sound-button]"), phase).toBeNull();
       unmount();
     }
   });
@@ -265,7 +265,7 @@ describe("띠 아래 자리 (U-1·U-6·U-8)", () => {
     renderRoom(makeView({ phase: "night" }));
     expect(roomVar("--mf-host-top")).toBe("70px");
     expect(roomVar("--mf-host-bottom")).toBe("");
-    expect(roomVar("--mf-host-dock")).toBe("126px");
+    expect(roomVar("--mf-host-dock")).toBe("");
   });
 
   it("헤더 안 단추가 헤더보다 아래로 나오면 단추 아랫변을 쓴다 (띠가 이름표 단추를 덮지 않게)", () => {
@@ -311,7 +311,7 @@ describe("띠 아래 자리 (U-1·U-6·U-8)", () => {
     const css = (file: string) => readFileSync(`src/styles/${file}.css`, "utf8");
     expect(css("lobby")).toMatch(/\.mf-lobby__test\s*\{[^}]*--mf-host-bottom/);
     expect(css("v2")).toMatch(/\.mv-side\s*\{[^}]*--mf-host-bottom/); // 오른쪽 열(맵 칩 포함): 띠 아랫변 + 12 (16-06)
-    expect(css("game")).toMatch(/\.mf-game__test\s*\{[^}]*--mf-host-bottom/);
+    expect(css("phase-gauge")).toMatch(/\.mf-game-phase-header__actions \.mf-tt\s*\{[^}]*width:\s*var\(--tap-min\)/);
     expect(css("v2")).toMatch(/\.mv-toast--top\s*\{[^}]*--mf-host-dock/);
     expect(css("v2")).toMatch(/\.mv-host\s*\{[^}]*--mf-host-top/);
   });

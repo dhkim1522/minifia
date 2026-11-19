@@ -8,7 +8,7 @@ import type { ResultTabId } from "../../game/resultText";
 import type { ResultLogChatLine, ResultLogWhisperLine } from "../../../shared/protocol";
 import type { AnimalId } from "../../../shared/game/animals";
 import type { ResultLogSnapshot } from "../../net/resultLogStore";
-import { faceSrc } from "../../net/assets";
+import { PlayerPortrait } from "../PlayerPortrait";
 import { playerColor } from "../../game/playerIdentity";
 import { V2Icon } from "./V2Icon";
 import type { V2IconName } from "./V2Icon";
@@ -115,9 +115,9 @@ function WhisperRows({ lines, contacts, animals }: ResultIdentities & { lines: r
         <div key={`l${i}`} className="mf-result__whisper" data-result-whisper="" data-seat={l.seat} data-to={l.to}>
           <span className="mf-result__whisper-head">
             <span className="mf-result__whisper-dot" style={{ background: playerColor(l.seat, animals?.get(l.seat)) }} />
-            <img className="mf-result__face" src={faceSrc(l.seat, animals?.get(l.seat))} alt={contacts.get(l.seat) ?? ""} width={28} height={28} />
+            <PlayerPortrait className="mf-result__face" seat={l.seat} animal={animals?.get(l.seat)} label={contacts.get(l.seat) ?? ""} />
             <Arrow />
-            <img className="mf-result__face" src={faceSrc(l.to, animals?.get(l.to))} alt={contacts.get(l.to) ?? ""} width={28} height={28} />
+            <PlayerPortrait className="mf-result__face" seat={l.to} animal={animals?.get(l.to)} label={contacts.get(l.to) ?? ""} />
           </span>
           <span className="mf-result__whisper-text">{l.text}</span>
         </div>

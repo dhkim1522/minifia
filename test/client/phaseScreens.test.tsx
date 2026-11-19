@@ -156,13 +156,14 @@ afterEach(() => {
 });
 
 describe("S-05 역할 확인 (GAME-01, ROLE-02, D-13 개정, D-14, D-15, R12)", () => {
-  it("역할 확인 뒷면: 제목 '역할 확인'과 [내 역할], 숫자 없는 시간 막대를 표시한다", () => {
+  it("역할 확인 뒷면: 제목 '역할 확인'과 [메뉴], 숫자 없는 시간 막대를 표시한다", () => {
     const { container } = renderRoom(makeView({ phase: "roleReveal", endsIn: 15_000, role: "mafia", allies: [2] }));
     expect(revealTitle(container)).toBe("역할 확인");
     const header = container.querySelector(".mf-reveal__header") as HTMLElement;
     expect(header.querySelectorAll(".mv-phase__title").length).toBe(1);
-    expect(Array.from(header.querySelectorAll("button")).map((b) => b.getAttribute("aria-label"))).toEqual(["내 역할"]);
+    expect(Array.from(header.querySelectorAll("button")).map((b) => b.getAttribute("aria-label"))).toEqual(["메뉴"]);
     expect(header.querySelector(".mv-phase__hint")).toBeNull();
+    expect(container.querySelector(".mv-host__band")).toBeNull();
     expect(header.querySelector(".mv-ring")).toBeNull();
     expect(container.querySelector(".mf-phasebar")).toBeNull();
     expect(container.querySelector(".mf-phasebar__do")).toBeNull();
@@ -311,17 +312,17 @@ function rerenderRoom(rerender: (ui: React.ReactElement) => void, view: RoomView
 }
 
 describe("S-04 역할 배정 (GAME-01, D-12, R11, E7, T-01-44)", () => {
-  it("배정 화면: 문구 둘·맥박 링 3개가 있고 테이블은 없으며 [역할 카드] 은 없다", () => {
+  it("배정 화면: 중앙 상태 한 문장과 맥박 링 3개가 있고 테이블은 없으며 [역할 카드] 은 없다", () => {
     const { container } = renderRoom(makeView({ phase: "assigning" }));
     expect(byText("직업을 배정하고 있습니다…")).toBeTruthy();
-    // 18.1-12: 띠 문장(assigning)도 같은 말이라 화면 글(.mf-t-label)로 좁혀 찾는다
-    expect(container.querySelector(".mf-t-label")?.textContent).toBe("잠시만 기다려 주세요");
+    expect(container.querySelector(".mf-assign__center .mf-t-label")).toBeNull();
     // 08-19: 사용자 확정(2026-11-02) 임시 처리 — v1.0 테이블 상자를 뺐다. 머리 .mf-assign__bar · 빈 패널 .mf-assign__panel 만 남는다
     expect(screen.queryByRole("group", { name: "테이블" })).toBeNull();
     expect(container.querySelector(".mf-assign__scene")).toBeNull();
     expect(container.querySelector(".mf-dt")).toBeNull();
     expect(container.querySelector(["table", "seat", "badge"].map((n) => `.mf-${n}`).join(", "))).toBeNull(); // 옛 Table 요소 없음
-    expect(container.querySelector(".mf-assign__bar h1")?.textContent).toBe("역할 배정");
+    expect(container.querySelector(".mf-assign__bar h1")).toBeNull();
+    expect(container.querySelector(".mf-assign__bar [data-game-menu]")).not.toBeNull();
     const panel = container.querySelector(".mf-assign__panel");
     expect(panel).not.toBeNull();
     expect(panel?.children.length).toBe(0);
@@ -352,7 +353,7 @@ describe("S-06 낮 시작 (D-01, D-02, R13, E9)", () => {
   it("낮 화면의 [역할 카드] 버튼 마크업은 마피아·시민·역할 없음에서 같다", () => {
     const html = (view: RoomView) => {
       renderRoom(view);
-      const out = byRole("button", "내 역할").outerHTML;
+      const out = byRole("button", "메뉴").outerHTML;
       cleanup();
       return out;
     };
@@ -530,7 +531,7 @@ describe("S-06a 낮 시작 발표 개정 (D-20, M6)", () => {
   it("[역할 카드] 버튼 마크업은 마피아·시민·역할 없음에서 같다", () => {
     const html = (view: RoomView) => {
       renderRoom(view);
-      const out = byRole("button", "내 역할").outerHTML;
+      const out = byRole("button", "메뉴").outerHTML;
       cleanup();
       return out;
     };
@@ -641,7 +642,8 @@ describe("단계 전환은 서버 view 만 따른다 (T-01-46)", () => {
 // ---- [역할 카드] 시트 (D-19 개정, 결정 0012, R14, E14, T-01-45) ----
 
 function openRoleCard(): HTMLElement {
-  fireEvent.click(byRole("button", "내 역할"));
+  fireEvent.click(byRole("button", "메뉴"));
+  fireEvent.click(byRole("button", "내 역할과 기록"));
   const dialog = document.querySelector<HTMLElement>('dialog[aria-label="역할 카드"]');
   expect(dialog, "역할 카드 시트(dialog)").not.toBeNull();
   return dialog!;
@@ -739,18 +741,19 @@ describe("C-01 [역할 카드] 시트", () => {
   it("[역할 카드] 버튼 마크업은 마피아·시민·역할 없음 view 에서 같고 대기실·배정에는 없다", () => {
     const html = (view: RoomView) => {
       renderRoom(view);
-      const out = byRole("button", "내 역할").outerHTML;
+      const out = byRole("button", "메뉴").outerHTML;
       cleanup();
       return out;
     };
     const mafia = html(mafiaReveal(15_000));
     expect(html(makeView({ phase: "roleReveal", endsIn: 15_000, role: "citizen" }))).toBe(mafia);
     expect(html(makeView({ phase: "roleReveal", endsIn: 15_000 }))).toBe(mafia);
-    renderRoom(makeView({ phase: "assigning" }));
-    expect(screen.queryByRole("button", { name: "내 역할" })).toBeNull();
-    cleanup();
-    renderRoom(makeView({ phase: "lobby", isHost: true }));
-    expect(screen.queryByRole("button", { name: "내 역할" })).toBeNull();
+    for (const phase of ["assigning", "lobby"] as const) {
+      renderRoom(makeView({ phase, isHost: true }));
+      fireEvent.click(byRole("button", "메뉴"));
+      expect(screen.queryByRole("button", { name: "내 역할과 기록" })).toBeNull();
+      cleanup();
+    }
   });
 });
 
@@ -767,7 +770,7 @@ describe("G-01-9 [역할 카드] 시트 진입 — 낮 화면 한 경로", () =>
     vi.stubGlobal("cancelAnimationFrame", vi.fn());
     const runFrame = () =>
       act(() => {
-        frames.shift()?.(0);
+        for (const frame of frames.splice(0)) frame(0);
       });
     renderRoom(makeView({ phase: "dayAnnounce", role: "police" }));
     const dialog = openRoleCard();

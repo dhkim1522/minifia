@@ -26,15 +26,12 @@
 .mf-first-answers__row:last-child { border-bottom: 0; }
 .mf-first-answers__name {
   display: grid;
-  grid-template-columns: 8px minmax(0, 1fr);
-  align-items: baseline;
+  grid-template-columns: 25px minmax(0, 1fr);
+  align-items: center;
   gap: 5px;
   color: var(--gray-200);
   overflow-wrap: anywhere;
 }
-.mf-first-answers__name > span { width: 8px; height: 8px; border-radius: 50%; }
-.mf-first-answers__name[data-animal-face] { grid-template-columns: 25px minmax(0, 1fr); align-items: center; }
-.mf-first-answers__face { width: 25px; height: 25px; object-fit: contain; }
 .mf-first-answers__text { color: var(--noir-paper); font-weight: 600; word-break: keep-all; overflow-wrap: anywhere; }
 .mf-first-answers__row[data-answer-none] .mf-first-answers__text { color: var(--gray-400); font-weight: 400; }
 .mf-first-answers > button { flex: none; }

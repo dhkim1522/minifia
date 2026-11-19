@@ -344,7 +344,12 @@ describe("outfitCardSrc (10-07)", () => {
   });
 
   it("의상 id 아홉 개 모두 public/outfits 에 실제 파일이 있고 그 밖의 파일은 없다", () => {
-    for (const id of OUTFIT_IDS) expect(outfitFiles.has(`/public/outfits/outfit-${id}.png`), id).toBe(true);
+    for (const id of OUTFIT_IDS) {
+      const path = `public/outfits/outfit-${id}.png`;
+      expect(outfitFiles.has(`/${path}`), id).toBe(true);
+      const png = readFileSync(path);
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)], id).toEqual([144, 192]);
+    }
     expect(outfitFiles.size).toBe(OUTFIT_IDS.length);
   });
 

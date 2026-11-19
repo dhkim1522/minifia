@@ -184,11 +184,11 @@ describe("Lobby — 꾸미기 버튼과 시트 (10-07, D-4·D-5)", () => {
     }
   });
 
-  it("누르면 시트가 열리고 떠 있는 버튼은 숨는다", () => {
+  it("누르면 시트가 열리고 도구 줄의 옷장 버튼은 숨는다", () => {
     const { container } = render(lobby(view));
     fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     expect(container.querySelector("[data-dress-sheet]")).not.toBeNull();
-    expect(container.querySelector("[data-float='dress']")).toBeNull();
+    expect(container.querySelector("[data-room-tool=dress]")?.hasAttribute("hidden")).toBe(true);
     // 내 지금 의상(서버 값 doctor)이 선택돼 있다
     expect(container.querySelector("button[data-outfit='doctor']")?.getAttribute("aria-pressed")).toBe("true");
   });
@@ -477,7 +477,7 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
     fireEvent.click(container.querySelector("[data-map-chip]")!);
     expect(container.querySelector("[data-dress-sheet]")).not.toBeNull();
     expect(container.querySelectorAll("button[data-map-card]")).toHaveLength(3);
-    expect(container.querySelector("[data-float='dress']")).toBeNull();
+    expect(container.querySelector("[data-room-tool=dress]")?.hasAttribute("hidden")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "닫기" }));
     fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     expect(container.querySelector("button[data-map-card]")).toBeNull();
@@ -485,10 +485,10 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
     expect(container.querySelectorAll("button[data-map-tab]")).toHaveLength(2);
   });
 
-  it("손님은 맵 칩·봇 단추가 없고(열은 [dress] 하나), 꾸미기 시트에는 탭이 없다", () => {
+  it("손님은 맵 칩·봇 단추가 없고(하단 도구 줄에 [dress] 하나), 꾸미기 시트에는 탭이 없다", () => {
     const { container } = render(lobby(guestView()));
     expect(container.querySelector("[data-map-chip]")).toBeNull();
-    expect([...container.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button"))).toEqual(["dress"]);
+    expect([...container.querySelectorAll("[data-room-chat] [data-room-tool=dress]")].map((e) => e.getAttribute("data-room-tool"))).toEqual(["dress"]);
     fireEvent.click(screen.getByRole("button", { name: "옷장" }));
     expect(container.querySelector("button[data-map-tab]")).toBeNull();
     expect(container.querySelector("button[data-map-card]")).toBeNull();
@@ -525,13 +525,12 @@ describe("Lobby — 지도 칩과 맵 탭 (11-13, D-20·MAP-06)", () => {
     expect(container.querySelectorAll("[data-side-column] [data-map-chip]")).toHaveLength(0);
   });
 
-  it("방장 대기실(봇 단추 없는 방): 오른쪽 열은 소리 자리 다음 [dress] 하나, 맵 단추는 왼쪽 방장 줄의 첫 칸이다 (19-04 D-13 → 22-07 에서 [판 종류] 없어짐)", () => {
+  it("방장 대기실(봇 단추 없는 방): 하단 도구 줄은 [dress] 하나, 맵 단추는 왼쪽 방장 줄의 첫 칸이다 (19-04 D-13 → 22-07 에서 [판 종류] 없어짐)", () => {
     const { container, unmount } = render(lobby(hostView()));
     const rail = (c: ParentNode) => [...c.querySelectorAll("[data-host-rail] [data-host-rail-btn]")].map((e) => e.getAttribute("data-host-rail-btn")).join(",");
-    expect([...container.querySelectorAll("[data-side-column] [data-side-button]")].map((e) => e.getAttribute("data-side-button")).join(",")).toBe("dress");
+    expect([...container.querySelectorAll("[data-room-chat] [data-room-tool=dress]")].map((e) => e.getAttribute("data-room-tool")).join(",")).toBe("dress");
     expect(rail(container)).toBe("map");
-    expect(container.querySelectorAll("[data-side-column]")).toHaveLength(1);
-    expect(container.querySelector(".mv-side__col")!.firstElementChild!.classList.contains("mv-side__slot")).toBe(true);
+    expect(container.querySelectorAll("[data-side-column]")).toHaveLength(0);
     unmount();
   });
 });

@@ -13,7 +13,7 @@ export const RESULT_MARKERS = Object.freeze([
   "data-result-tab", // 탭 버튼 data-result-tab="{all|mafia|ghost|whisper|log}" (11-07)
   "data-result-dot", // 처음 나타난 마피아·유령·귓속말 탭의 점 표식 (11-07)
   "data-result-divider", // 탭 안 `{n}밤`·`{n}일차` 구분선 (11-07)
-  "data-ready-pill", // 입력줄 오른쪽 끝 다시 하기 알약 (11-12)
+  "data-ready-pill", // 공용 도구 줄 오른쪽 다시 하기 알약
   "data-ready", // 손님 알약 data-ready="true|false" (11-12)
   "data-ready-count", // 방장 알약 data-ready-count="n/m" (11-12)
   "data-bench-view", // 쉬는 사람 전용 화면 (11-12)
@@ -28,13 +28,13 @@ export const RESULT_JOB_OUTFIT = Object.freeze({ mafia: "mafia", police: "police
 /** 헤더 승리 한 줄 (src/game/verdict.ts RESULT_TEXT.title 의 사본) */
 export const RESULT_WIN_TITLE = Object.freeze({ citizenWin: "시민 승리", mafiaWin: "마피아 승리" });
 
-/** 결과 화면 아래 패널 = 기록 칸 LOG_H 68 + 92 (18.1, 게임 채팅 패널과 같음, 방 높이와 무관) */
-export const RESULT_PANEL_H = 160;
+/** 결과 화면 아래 패널 = 고정 기록 92 + 도구 줄과 입력줄 130. */
+export const RESULT_PANEL_H = 222;
 /** 이 높이(px) 미만의 폰은 방 틀 높이 575 미만의 짧은 폰(360×560 probe) — 14-08 UI#14 알려진 한계 적용 대상 */
 export const SHORT_PHONE_H = 575;
 
-/** 다시 하기 알약(11-12, UI-SPEC D-1·G): 96×48, 입력줄 = [입력 flex][보내기 48 원][알약 96], 요소 사이 8, 좌우 16 → 입력칸 폭 = 폭 − 192. test/unit/e2eContract.test.ts 가 앱 CSS 와 대조한다 */
-export const READY_PILL = Object.freeze({ w: 96, h: 48, inputExtra: 192 });
+/** 다시 하기 알약은 도구 줄의 오른쪽. 입력줄 여백은 보내기 44 + 간격 6 + 좌우 12씩이다. */
+export const READY_PILL = Object.freeze({ w: 96, h: 44, inputExtra: 74 });
 
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 const result = (id, label, bad) => ({ id, label, ok: bad.length === 0, detail: bad.length === 0 ? "" : bad.join("; ") });
@@ -44,7 +44,7 @@ const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x))
 /**
  * RS1~RS8 결과 화면 최종 상태 판정. 입력 { winner, header, chips, seats, dimmed, loserSeats, costumes, jobBySeat, panel, panelWant, stageBottom, roomH, hasLegacy, chatEcho }:
  *  winner 기대 승자 · header 헤더 글자 · chips [data-role-chip] 개수 · seats 참가자 수 · dimmed 런타임이 어둡게 한 좌석(window.__mfResult.dimmed) · loserSeats 진 팀 좌석(서버 view 기준)
- *  costumes 런타임이 입힌 의상 표(좌석 → 의상) · jobBySeat 서버 view.result.seats 의 직업 표(좌석 → 직업) · deadSeats 판이 끝났을 때 탈락한 좌석 · ghosts 유령 훅 사본({ seats, ready }) · panel 아래 패널 높이 · panelWant 기대 높이(없으면 RESULT_PANEL_H 160)
+ *  costumes 런타임이 입힌 의상 표(좌석 → 의상) · jobBySeat 서버 view.result.seats 의 직업 표(좌석 → 직업) · deadSeats 판이 끝났을 때 탈락한 좌석 · ghosts 유령 훅 사본({ seats, ready }) · panel 아래 패널 높이 · panelWant 기대 높이(없으면 RESULT_PANEL_H 222)
  *  stageBottom 스테이지 아래 끝(= 패널 위 끝, 방 위 끝 기준) · roomH 방 높이 · hasLegacy 옛 요소 이름 배열(없으면 빈 배열) · chatEcho 내가 보낸 한 줄이 기록 칸에 보였나
  * RS1 헤더 승리 한 줄 · RS2 칩 수 == 참가자 수 · RS3 어두운 좌석 == 진 팀 · RS4 산 좌석 의상 == 직업 의상 표, 탈락 좌석은 의상 없이 유령 그림(훅 seats) · RS5 패널 188/244 ±1 · RS6 스테이지 아래 끝 = 방 − 패널 ±1 · RS7 옛 요소 없음 · RS8 채팅 한 줄 전달.
  * RS10(18.1-16): hold = { title: 최종 상태에 닿았을 때 헤더 글자, later: 3초 뒤 헤더 글자, marks: 시상 표식(패·[넘기기]·진행 숫자) 수 }. title·later 가 둘 다 승리 한 줄 사본이고 marks 가 0 이어야 통과.
@@ -248,18 +248,18 @@ const has = (x) => x !== undefined && x !== null;
 
 /**
  * RM1~RM12 다시 하기(알약·확인 시트·쉬는 사람·의상·채팅·쉬었던 사람) 판정 (11-12, 결정 D-11~D-13·D-16·D-26, UI-SPEC D·G). 입력:
- *  viewport {w,h} 페이지 · pillBox {width,height} 알약 · inputWidth 입력칸 폭 · guestPill {before,after} 각 {ready,pressed} 손님이 한 번 누르기 전후
+ *  dockWidth 공용 채팅 폭 · pillBox {width,height} 알약 · inputWidth 입력칸 폭 · pillAboveLog 기록 위의 도구 줄에 위치하는지 · guestPill {before,after} 각 {ready,pressed} 손님이 한 번 누르기 전후
  *  count {text,dim,disabled}·countWant {n,m,minPlayers} 방장 알약(준비 전) · countFull·countFullWant 준비를 마친 뒤 · toast 인원 부족 토스트 · minPlayers · roundUnchanged 토스트 뒤 판이 그대로
  *  sheet {title,buttons,faces,extraText} 쉬게 될 사람 확인 시트 · restingWant 쉬게 될 사람 수 · round {before,after,phases} 시작 뒤 참가자 페이지 · benchView 쉬는 페이지에 BenchView
  *  bench {timers,chatInputs,floats,text,buttons} 쉬는 페이지 · looks·looksWant 새 판의 look · chat {before,old} 이전 판 채팅 · sat {seats,want,chipsOnSat,chips,participants} 다음 결과
  *  afterLight {pillActive,marks} 승리 조명 뒤(시상 표식 수 포함) · early {disabled} 승리 조명 전.
- * RM1 알약 96×48 ±1 · 입력칸 폭 − 192 ±2 · RM2 손님 토글 전후 반대 · RM3 방장 n/m · RM4 4명 미만 토스트 · RM5 쉬는 사람 시트 · RM6 시작 후 round + 1·assigning·BenchView ·
+ * RM1 도구 줄의 알약 96×44 ±1 · 입력칸 폭 − 74 ±2 · RM2 손님 토글 전후 반대 · RM3 방장 n/m · RM4 4명 미만 토스트 · RM5 쉬는 사람 시트 · RM6 시작 후 round + 1·assigning·BenchView ·
  * RM7 쉬는 페이지에 타이머·채팅 입력·떠 있는 버튼 없음 · RM8 의상 유지 · RM9 이전 판 채팅 0줄 · RM10 쉬었던 사람 sat·칩 없음 · RM11 승리 조명 뒤 알약 활성·시상 표식 0 · RM12 조명 전 비활성.
  * 측정값이 없으면 조용히 통과하지 않고 `측정값 없음(…)` 으로 실패한다.
  */
 export function rematchChecks(m) {
   const L = {
-    RM1: "다시 하기: 알약 96×48, 입력칸 폭 = 폭 − 192",
+    RM1: "다시 하기: 채팅 위 도구 줄에 알약 96×44, 입력칸 폭 = 채팅 폭 − 74",
     RM2: "다시 하기: 손님 알약 토글 전후로 data-ready·aria-pressed 가 반대",
     RM3: "다시 하기: 방장 알약 'n/m' 이 준비 상태와 같고 n < 최소면 흐림",
     RM4: "다시 하기: 인원 부족 탭 → 토스트 '{최소}명부터 시작해요' 뿐(판은 그대로)",
@@ -277,11 +277,12 @@ export function rematchChecks(m) {
   const miss = (id, what) => out.push(noMeasure(id, L[id], what));
 
   // RM1
-  if (!isNum(m?.viewport?.w) || !isNum(m?.pillBox?.width) || !isNum(m?.pillBox?.height) || !isNum(m?.inputWidth)) miss("RM1", "viewport·pillBox·inputWidth");
+  if (!isNum(m?.dockWidth) || !isNum(m?.pillBox?.width) || !isNum(m?.pillBox?.height) || !isNum(m?.inputWidth) || typeof m?.pillAboveLog !== "boolean") miss("RM1", "dockWidth·pillBox·inputWidth·pillAboveLog");
   else {
     const bad = [];
     if (!within(m.pillBox.width, READY_PILL.w, 1) || !within(m.pillBox.height, READY_PILL.h, 1)) bad.push(`알약 ${m.pillBox.width}x${m.pillBox.height} ≠ ${READY_PILL.w}x${READY_PILL.h}`);
-    const want = m.viewport.w - READY_PILL.inputExtra;
+    if (!m.pillAboveLog) bad.push("알약이 채팅 기록 위 도구 줄에 없음");
+    const want = m.dockWidth - READY_PILL.inputExtra;
     if (!within(m.inputWidth, want, 2)) bad.push(`입력칸 폭 ${m.inputWidth} ≠ ${want}`);
     add("RM1", bad);
   }
@@ -417,12 +418,19 @@ export function readRematchState(page) {
     };
     const text = (el) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
     const pillEl = root.querySelector("[data-ready-pill]");
-    const input = root.querySelector("[data-chat-input]");
+    const dock = root.querySelector("[data-room-chat]");
+    const log = dock?.querySelector("[data-chat-log]");
+    const input = dock?.querySelector("[data-chat-input]");
+    const pill = rect(pillEl);
+    const pillAboveLog = pill !== null && log != null && dock != null
+      && dock.contains(pillEl?.closest(".mf-room-chat__advance"))
+      && pill.bottom <= log.getBoundingClientRect().top + 1;
     const toast = root.querySelector(".mv-toast.is-on");
     const hook = window.__mfResult ?? null;
     return {
-      viewportW: window.innerWidth,
-      pill: rect(pillEl),
+      pill,
+      pillAboveLog,
+      dockWidth: dock?.getBoundingClientRect().width ?? Number.NaN,
       text: text(pillEl),
       ready: pillEl?.getAttribute("data-ready") ?? null,
       pressed: pillEl?.getAttribute("aria-pressed") ?? null,

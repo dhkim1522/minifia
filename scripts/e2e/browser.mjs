@@ -389,7 +389,10 @@ export async function readHeaderContrast(page) {
     style.id = "__e2e_hide_glyphs";
     style.textContent = `${hide.map((s) => `${s}, ${s} *`).join(", ")} { color: transparent !important; text-shadow: none !important; -webkit-text-stroke: 0 !important; }`;
     document.head.appendChild(style);
-    return { items, vw: window.innerWidth, vh: window.innerHeight };
+    const gauge = document.querySelector("[data-phase-gauge][role=timer]");
+    const gaugeBox = gauge?.getBoundingClientRect();
+    const hasGauge = !!gauge?.getAttribute("aria-label") && (gaugeBox?.width ?? 0) > 0 && (gaugeBox?.height ?? 0) > 0;
+    return { items, hasGauge, vw: window.innerWidth, vh: window.innerHeight };
   });
   if (probe === null) return null;
   try {
@@ -423,7 +426,7 @@ export async function readHeaderContrast(page) {
       },
       { b64: png.toString("base64"), rects: probe.items.map((i) => i.rect), clip },
     );
-    return { items: probe.items.map((i, n) => ({ name: i.name, rect: i.rect, color: i.color, bgLum: rgbP95Luminance(pixels[n]) })) };
+    return { hasGauge: probe.hasGauge, items: probe.items.map((i, n) => ({ name: i.name, rect: i.rect, color: i.color, bgLum: rgbP95Luminance(pixels[n]) })) };
   } finally {
     await page.evaluate(() => document.getElementById("__e2e_hide_glyphs")?.remove());
   }
@@ -1537,6 +1540,9 @@ export async function readGame(page) {
       turn,
       dim: q(".mf-game__dim")?.getAttribute("data-dim") ?? null,
       panel: rect(panel),
+      chatDock: rect(q("[data-room-chat]")),
+      chatLog: rect(q("[data-chat-log]")),
+      chatInput: rect(q("[data-chat-input]")),
       chatChannel: q("[data-chat-panel]")?.getAttribute("data-chat-channel") ?? null,
       hasChat: !!q("[data-chat-panel]"),
       hasInput: !!q("[data-chat-input]"),

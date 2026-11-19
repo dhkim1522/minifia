@@ -41,7 +41,7 @@
   padding: 16px;
   background: var(--noir-panel);
   border: 1px solid var(--noir-line);
-  border-radius: 14px;
+  border-radius: var(--noir-surface-radius);
   box-shadow: 0 8px 22px rgb(6 12 24 / 32%);
 }
 .mf-entry-scene .mf-entry__actions {
@@ -88,7 +88,7 @@
 .mf-entry-scene .mf-join__plaza {
   padding: 12px;
   gap: 8px;
-  border-radius: 14px;
+  border-radius: var(--noir-control-radius);
   background: color-mix(in srgb, var(--noir-inset) 90%, transparent);
 }
 .mf-entry-scene .mf-join__count { color: var(--noir-silver); }

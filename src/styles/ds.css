@@ -4,6 +4,7 @@
 .mf-root, .mf-root * { box-sizing: border-box; }
 :where(.mf-icon) { display: inline-block; width: 24px; height: 24px; flex: none; }
 .mf-root { font-family: var(--font-ui); color: var(--gray-100); -webkit-font-smoothing: antialiased; }
+.mf-player-portrait { display: block; flex: none; width: 25px; height: 25px; object-fit: contain; border-radius: var(--radius-sm); background: var(--noir-raised); }
 
 :root {
   --noir-cut: polygon(0 12px, 12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px));

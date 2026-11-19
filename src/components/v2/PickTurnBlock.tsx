@@ -18,6 +18,7 @@ export interface PickTurnBlockProps {
   /** 마지막 3인의 확정된 한마디(알약 아래 인용 카드). 없으면 null — 사라질 때는 마지막 글을 남겨 페이드 아웃한다 */
   quote?: { text: string } | null;
   compact?: boolean;
+  showClock?: boolean;
   reducedMotion: boolean;
 }
 
@@ -53,7 +54,7 @@ function showdownStep(look: BlockLook): string | undefined {
   return undefined;
 }
 
-export function PickTurnBlock({ look, line, quote = null, compact = false, reducedMotion }: PickTurnBlockProps) {
+export function PickTurnBlock({ look, line, quote = null, compact = false, showClock = true, reducedMotion }: PickTurnBlockProps) {
   const lastLine = useRef("");
   if (line !== null) lastLine.current = line;
   const lastQuote = useRef("");
@@ -94,13 +95,11 @@ export function PickTurnBlock({ look, line, quote = null, compact = false, reduc
                 <span className="mf-turn__name">{look.name !== undefined ? TURN_COPY.turnOf(look.name) : ""}</span>
               </>
             )}
-            <span className="mf-turn__sec" aria-hidden="true">
-              {TURN_COPY.seconds(look.seconds)}
-            </span>
+            {showClock ? <span className="mf-turn__sec" aria-hidden="true">{TURN_COPY.seconds(look.seconds)}</span> : null}
           </div>
-          <div className="mf-turn__bar" aria-hidden="true">
+          {showClock ? <div className="mf-turn__bar" aria-hidden="true">
             <Fill key={`${look.mode}${look.no}`} look={look} reducedMotion={reducedMotion} />
-          </div>
+          </div> : null}
         </>
       ) : null}
       {quote !== null || lastQuote.current !== "" ? <QuoteCard text={quote?.text ?? lastQuote.current} visible={quote !== null} still={mountedWithQuote.current} /> : null}

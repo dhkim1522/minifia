@@ -3,6 +3,7 @@
 // 얼굴과 전신만 다시 만들 때는 --seat-portraits-only.
 // 역할 카드만 다시 만들 때는 --role-portraits-only.
 // 동물 얼굴·전신·역할·옷장 그림만 다시 만들 때는 --animal-portraits-only.
+// 채팅과 기록의 정사각형 초상화만 다시 만들 때는 --faces-only.
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -58,12 +59,15 @@ try {
       subject.rotation.y = head ? (animal === "crocodile" || animal === "parrot" ? -0.42 : -0.07) : -0.16;
       studio.add(subject);
       const boundBy = head ? subject.getObjectByName("neck") : subject;
+      if (head) {
+        for (const part of boundBy.parent.children) if (part !== boundBy) part.visible = false;
+        // 머리 서브그룹의 바운드에도 몸체 크기와 회전이 반영되어야 한다.
+        subject.updateMatrixWorld(true);
+      }
       const box = new THREE.Box3().setFromObject(boundBy);
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
-      // 작은 얼굴 버튼에서도 모자와 볼이 다 읽히고 코트 깃이 조금 보인다.
-      if (head && !animal) center.y -= 0.12;
-      const margin = animal ? 0.59 : head ? 0.69 : 0.56;
+      const margin = head ? 0.57 : animal ? 0.59 : 0.56;
       const half = Math.max(size.y, size.x / ratio) * margin;
       const camera = new THREE.OrthographicCamera(-half * ratio, half * ratio, half, -half, 0.1, 20);
       camera.position.copy(center).add(new THREE.Vector3(0.42, head ? 0.21 : 0.57, 5.8));
@@ -100,13 +104,17 @@ try {
 
   const portrait = (options) => page.evaluate((opts) => window.noirPortrait(opts), options);
 
+  async function renderFace(path, seat, animal) {
+    const head = await portrait({ seat, outfit: "coat", head: true, ratio: 1, animal });
+    await savePng(head, path, 200, 200);
+  }
+
   async function renderSeatPortraits() {
     for (const [seat, figure] of figures.entries()) {
       const full = await portrait({ seat, outfit: "coat", ratio: 0.75 });
       await savePng(full, `public/characters/table/${figure}_default@2x.png`, 144, 192);
       await savePng(full, `public/characters/table/${figure}_default@4x.png`, 288, 384);
-      const head = await portrait({ seat, outfit: "coat", head: true, ratio: 1 });
-      await savePng(head, `public/characters/faces/face-${seat}.png`, 200, 200);
+      await renderFace(`public/characters/faces/face-${seat}.png`, seat);
     }
   }
 
@@ -128,8 +136,7 @@ try {
     for (const animal of animals) {
       const dir = `public/characters/animals/${animal}`;
       await mkdir(root(dir), { recursive: true });
-      const head = await portrait({ animal, seat: 0, outfit: "coat", head: true, ratio: 1 });
-      await savePng(head, `${dir}/face.png`, 200, 200);
+      await renderFace(`${dir}/face.png`, 0, animal);
       for (const outfit of outfits) {
         const form = outfit === "coat" ? "figure" : outfit;
         const image = await portrait({ animal, seat: 0, outfit, ratio: 0.75 });
@@ -151,8 +158,8 @@ try {
 
   async function renderOutfitPortraits() {
     for (const outfit of outfits) {
-      const image = await portrait({ seat: 0, outfit, ratio: 0.8 });
-      await savePng(image, `public/outfits/outfit-${outfit}.png`, 240, 300);
+      const image = await portrait({ seat: 0, outfit, ratio: 0.75 });
+      await savePng(image, `public/outfits/outfit-${outfit}.png`, 144, 192);
     }
   }
 
@@ -166,6 +173,9 @@ try {
 
   if (process.argv.includes("--backdrops-only")) {
     await renderBackdrops(scene);
+  } else if (process.argv.includes("--faces-only")) {
+    for (const [seat] of figures.entries()) await renderFace(`public/characters/faces/face-${seat}.png`, seat);
+    for (const animal of animals) await renderFace(`public/characters/animals/${animal}/face.png`, 0, animal);
   } else if (process.argv.includes("--seat-portraits-only")) {
     await renderSeatPortraits();
   } else if (process.argv.includes("--role-portraits-only")) {

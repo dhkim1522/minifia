@@ -73,7 +73,6 @@
 .mf-result__whisper { display: flex; flex-direction: column; gap: 2px; margin: 0; }
 .mf-result__whisper-head { display: inline-flex; align-items: center; gap: 6px; color: var(--gray-300); }
 .mf-result__whisper-dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); }
-.mf-result__face { flex: none; display: block; width: 28px; height: 28px; border-radius: var(--radius-pill); object-fit: cover; background: var(--noir-inset); }
 .mf-result__arrow { flex: none; display: block; }
 .mf-result__whisper-text { font-size: 16px; line-height: 1.5; color: var(--gray-100); word-break: keep-all; overflow-wrap: anywhere; }
 

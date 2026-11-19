@@ -11,21 +11,19 @@ import { ToolButton } from "../components/ToolButton";
 import { ConfirmSheet } from "../components/ConfirmSheet";
 import { Icon } from "../components/Icon";
 import { ShareSheet } from "../components/ShareSheet";
-import { ChatPanel } from "../components/v2/ChatPanel";
+import { RoomChatDock } from "../components/v2/RoomChatDock";
+import { V2Icon } from "../components/v2/V2Icon";
 import { DressSheet, type DressTab } from "../components/v2/DressSheet";
-import { FloatAction } from "../components/v2/FloatAction";
 import { HostRail } from "../components/v2/HostRail";
 import { HostRailButton } from "../components/v2/HostRailButton";
 import { MapChip } from "../components/v2/MapChip";
 import { PhaseHeader } from "../components/v2/PhaseHeader";
-import { SideColumn } from "../components/v2/SideColumn";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { WorldStage } from "../components/WorldStage";
 import type { ChatStore } from "../net/chatStore";
 import { CHAT_TEXT } from "../game/chatText";
 import { DRESS_TEXT } from "../game/dressText";
 import { callTargetsOf } from "../game/hostLine";
-import { LOG_H } from "../game/chatUi";
 import { ownAnimalOf } from "../game/playerIdentity";
 import { diffRoomViews, toastForDiff } from "../net/roomDiff";
 import { useChat } from "../net/useChat";
@@ -63,13 +61,14 @@ interface LobbyProps {
   onLeave?: () => void;
   /** 테스트 방 방장의 [테스트] 버튼(결정 0022). 있으면 헤더 아래 왼쪽에 놓는다. 방장 줄은 그 아래로 내려간다(19-04, P19-5) */
   testButton?: ReactNode;
+  menuButton?: ReactNode;
 }
 
 // S-03 대기실(06-15, 07-13): 지하 재즈 바 맵(WorldStage) 위에 승인 로비 틀을 얹는다 — 위쪽 가림막, 헤더([나가기]·PhaseHeader "대기실"·[공유]),
 // 위 알림(TopToast), 패널 위 방장 시작 버튼, 아래 채팅 기록과 입력줄. 방 코드는 헤더의 공유 버튼과 초대 시트에 표시한다. 읽을 글은 "대기실" 과 접히는 한 줄뿐이다(3초 규칙).
 // 19-04(D-13): 방장 전용 조작([맵]·[봇])은 왼쪽 세로 줄(HostRail)에 모으고 오른쪽 열은 모두가 쓰는 [소리]·[옷장]만 둔다. 참가자에게는 줄 마크업이 없다(22-07).
 // 화면은 서버가 보낸 view 만으로 다시 그린다. 닉네임(이름표)은 WorldStage 가 React 텍스트 노드로만 그린다.
-export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offset = 0, bannerVisible = false, exiting = false, onLeave, testButton }: LobbyProps) {
+export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offset = 0, bannerVisible = false, exiting = false, onLeave, testButton, menuButton }: LobbyProps) {
   const playtest = view.playtest === true;
   // 입장·퇴장·방장 변경 알림: 서버가 보낸 스냅샷 두 개의 차이로만 만든다. 처음 열 때·epoch 가 바뀐 직후(재연결)에는
   // 직전 스냅샷을 비워 지난 일을 다시 알리지 않는다. 재접속 띠가 떠 있는 동안은 알림을 띄우지 않되 기준선은 갱신한다.
@@ -117,7 +116,7 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
   );
 
   // 키보드(07-19, CHAT-05)·스테이지 사각형 측정(06-15)·기록 칸 높이는 게임 맵(GameMap)과 같은 훅 하나가 맡는다(08-13).
-  // 키보드가 열려 있으면(kbOpen) 방장 시작 버튼을 숨기고 패널이 키보드 위로 올라간다. 기록 칸은 LOG_H(68) 한 값.
+  // 키보드가 열려 있으면 방장 시작 버튼을 접고 채팅은 키보드 위에 놓는다.
   const { rootRef, headerRef, panelRef, inputRef, kbOpen, sideMaxH, stageInsets } = useMapInsets();
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
   const { typingSeats, ...binding } = useChat({ store: chat, connection: { send, canSend }, view, motion });
@@ -237,14 +236,15 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
         {/* 머리 단추: 아이콘 단추, 이름은 aria-label(이름표는 결정 0077·0079 로 없앴다) */}
         <ToolButton name="나가기" icon={<Icon name="back" />} disabled={!canSend} onClick={() => setSheet({ kind: "leave" })} />
         <PhaseHeader title="대기실" />
-        {view.code ? (
-          <label className="mf-lobby__invite">
-            <span><span className="mv-sr">방 코드 </span>{view.code}</span>
-            <ToolButton name="공유" icon={<Icon name="share" />} onClick={() => setSheet({ kind: "share" })} />
-          </label>
-        ) : (
-          <span className="mf-lobby__header-gap" aria-hidden="true" />
-        )}
+        <div className="mf-room-header__actions">
+          {view.code ? (
+            <label className="mf-lobby__invite">
+              <span><span className="mv-sr">방 코드 </span>{view.code}</span>
+              <ToolButton name="공유" icon={<Icon name="share" />} onClick={() => setSheet({ kind: "share" })} />
+            </label>
+          ) : null}
+          {menuButton}
+        </div>
       </header>
       <TopToast {...toast.props} />
       {testButton ? <div className="mf-lobby__test">{testButton}</div> : null}
@@ -263,7 +263,16 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
         </div>
       ) : null}
       <section ref={panelRef} className={kbOpen ? "mf-lobby__panel mf-lobby__panel--kb" : "mf-lobby__panel"} data-world-panel="">
-        <ChatPanel {...binding} {...(playtest ? { emotes: [] } : {})} logHeight={LOG_H} compact={kbOpen} inputRef={inputRef} />
+        <RoomChatDock
+          binding={playtest ? { ...binding, emotes: [] } : binding}
+          kbOpen={kbOpen}
+          inputRef={inputRef}
+          actions={(!myAnimal && playtest) ? null : (
+            <button ref={dressBtnRef} type="button" className="mf-room-tool" data-float="dress" data-room-tool="dress" aria-label={myAnimal ? "캐릭터 꾸미기" : DRESS_TEXT.open} hidden={dressOpen || kbOpen} disabled={!canSend || exiting} onClick={() => openDress()}>
+              <V2Icon name="hanger" size={22} />
+            </button>
+          )}
+        />
       </section>
       {/* 꾸미기 시트·키보드가 열린 동안에는 줄·오른쪽 열을 그리지 않는다(P19-16) */}
       {dressOpen || kbOpen ? null : isHost ? (
@@ -274,12 +283,6 @@ export function Lobby({ view, store, chat, send, canSend = true, epoch = 0, offs
           {botsOn ? <HostRailButton key="bots" id="bots" icon="bot" label="봇" pressed={sheet?.kind === "bots"} disabled={!canSend} onPress={() => setSheet({ kind: "bots" })} /> : null}
         </HostRail>
       ) : null}
-      {(!myAnimal && playtest) || dressOpen || kbOpen ? null : (
-        // 오른쪽 세로 한 줄: 방장도 소리 · 옷장(19-04, 방장 전용은 왼쪽 줄)
-        <SideColumn soundSlot maxHeight={sideMaxH}>
-          <FloatAction key="dress" ref={dressBtnRef} kind="dress" side="dress" icon={myAnimal ? "face" : "hanger"} label={myAnimal ? "캐릭터 꾸미기" : DRESS_TEXT.open} disabled={!canSend || exiting} onPress={() => openDress()} />
-        </SideColumn>
-      )}
       {dressOpen ? (
         <DressSheet
           value={dress.look}

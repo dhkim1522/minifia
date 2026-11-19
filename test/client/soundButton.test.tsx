@@ -228,12 +228,14 @@ function conn(over: Partial<RoomConnection>): RoomConnection {
 }
 
 describe("RoomScreen 에 소리 단추가 한 번 그려진다 (D-4, B-1, B-3)", () => {
-  it("view 가 있으면 [data-sound-button] 이 정확히 하나, 엔진이 running 이면 on·'소리 끄기'·aria-pressed 참", () => {
+  it("대기실 메뉴에서 [data-sound-button] 이 정확히 하나, 엔진이 running 이면 on·'소리 끄기'·aria-pressed 참", () => {
     const rig = makeRig();
     rig.engine.unlock();
     setEngineForTest(rig.engine);
     connectionMock.current = conn({});
     render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    expect(document.querySelector("[data-sound-button]")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "메뉴" }));
     const all = document.querySelectorAll("[data-sound-button]");
     expect(all).toHaveLength(1);
     expect(all[0]!.getAttribute("data-sound-state")).toBe("on");
@@ -263,6 +265,7 @@ describe("RoomScreen 에 소리 단추가 한 번 그려진다 (D-4, B-1, B-3)",
     setEngineForTest(rig.engine);
     connectionMock.current = conn({ status: "reconnecting", banner: "reconnecting", canSend: false });
     render(<RoomScreen code="0042" token={"t".repeat(43)} onExit={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "메뉴" }));
     expect(document.querySelectorAll("[data-sound-button]")).toHaveLength(1);
     expect(document.querySelector(".mf-reconnect")).not.toBeNull();
   });

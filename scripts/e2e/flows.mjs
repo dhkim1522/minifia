@@ -120,7 +120,6 @@ import {
   faceListPanelH,
   faceNameFits,
   tagInStage,
-  gamePanelHeight,
   ghostDomChecks,
   pickButtonChecks,
   basicOrderChecks,
@@ -139,8 +138,7 @@ import {
   letterChecks,
   ownPenFontRequests,
   sideColumnChecks,
-  LOG_H as CHAT_LOG,
-  LOBBY_PANEL_EXTRA as CHAT_LOBBY_EXTRA,
+  DISCUSSION_LOG_H as ROOM_CHAT_LOG,
 } from "./lib.mjs";
 import { makeAvatarFlows } from "./avatar.mjs";
 import { makeDayFlows } from "./day.mjs";
@@ -150,7 +148,7 @@ import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readR
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
 import { makeHostFlows } from "./host.mjs";
-import { CHAT_KB_PANEL_REST, CHAT_OPEN_STAGE_MIN, chatOpenChecks, chatOpenHeight, chatWindowChecks, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, measureChatOpen, readChatWindow, readLiveGhost } from "./polish.mjs";
+import { CHAT_OPEN_STAGE_MIN, ghostStillChecks, ghostViewChecks, liveGhostChecks, makePolishFlows, readLiveGhost } from "./polish.mjs";
 
 // Windows 에서 URL.pathname 은 "/C:/..." 라 mkdir 이 "C:\C:\..." 로 깨진다 — fileURLToPath 로 바꾼다(21-16).
 export const OUT_DIR = fileURLToPath(new URL("./out/", import.meta.url));
@@ -580,26 +578,27 @@ const CHAT_LOBBY_TYPING = "안";
 /** 두 줄 창(18.1-09, B2)을 재려고 손님이 보내는 서로 다른 여섯 줄 — 서버 연속 전송 한도(5초 5개, CHAT_BURST)를 지키려고 줄마다 1.1초 쉰다 */
 const CHAT_WINDOW_LINES = ["첫째 줄이에요", "둘째 줄이에요", "셋째 줄이에요", "넷째 줄이에요", "다섯째 줄이에요", "여섯째 줄이에요"];
 const CHAT_WINDOW_GAP_MS = 1100;
-/** 긴 줄 backstop: 본문 30자(닉네임 8자 + 본문이 두 줄을 넘어가는 길이) */
+/** 닉네임·본문이 긴 경우에도 고정 기록 칸 안에 들어간다. */
 const CHAT_LONG_TEXT = "오늘은 모두 같이 모여서 천천히 이야기를 나눠 봅시다요";
-/** B4: 기록 칸을 늘렸다 접는 동안 입력칸에 남아 있어야 하는 글 */
+/** 기록을 스크롤하는 동안 보낸 적 없는 글을 보관한다. */
 const CHAT_DRAFT_TEXT = "쓰던 글";
 
 // 로비 채팅 패널 치수(UI-SPEC 구조 표). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다 — 값을 바꾸려면 UI-SPEC 과 chatUi.ts 를 먼저 바꾼다.
-const CHAT_CONTROL = 48;
+const CHAT_CONTROL = 44;
+const ROOM_CHAT_EXTRA = 130;
 const CHAT_PANEL_EPS = 1;
 
 /** 한 페이지의 로비 채팅 패널 치수 판정. m 은 readChatPanel 의 값. 방장 패널 = 참가자 패널(19-04, P19-12). 검사 행 목록을 돌려준다. */
 function chatPanelRows(m) {
   if (!m) return [{ id: "CP0", label: "채팅 패널을 읽음", ok: false, detail: "패널·기록 칸·입력칸 중 없는 것이 있음" }];
-  const logWant = CHAT_LOG;
-  const panelWant = logWant + CHAT_LOBBY_EXTRA;
+  const logWant = ROOM_CHAT_LOG;
+  const panelWant = logWant + ROOM_CHAT_EXTRA;
   const near = (a, b) => Math.abs(a - b) <= CHAT_PANEL_EPS;
   const r1 = (n) => Math.round(n * 10) / 10;
   return [
-    { id: "CP1", label: `로비 패널 높이 ${r1(panelWant)} (기록 ${logWant} + ${CHAT_LOBBY_EXTRA})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
+    { id: "CP1", label: `로비 패널 높이 ${r1(panelWant)} (기록 ${logWant} + ${ROOM_CHAT_EXTRA})`, ok: near(m.panel.height, panelWant), detail: `패널 ${r1(m.panel.height)}` },
     { id: "CP2", label: `기록 칸 높이 ${logWant}`, ok: near(m.log.height, logWant), detail: `기록 칸 ${r1(m.log.height)}` },
-    { id: "CP3", label: `입력칸 높이 ${CHAT_CONTROL} · 접힌 빈 입력에는 [보내기] 가 없음(0083-5)`, ok: near(m.input.height, CHAT_CONTROL) && m.send === null, detail: `입력칸 ${r1(m.input.height)} · 보내기 ${m.send === null ? "없음" : `${r1(m.send.width)}x${r1(m.send.height)}`}` },
+    { id: "CP3", label: `입력칸과 보내기 ${CHAT_CONTROL}px`, ok: near(m.input.height, CHAT_CONTROL) && m.send !== null && near(m.send.height, CHAT_CONTROL) && near(m.send.width, CHAT_CONTROL), detail: `입력칸 ${r1(m.input.height)} · 보내기 ${m.send === null ? "없음" : `${r1(m.send.width)}x${r1(m.send.height)}`}` },
     { id: "CP4", label: "입력칸 글자 16px", ok: m.inputFont === 16, detail: `${m.inputFont}px` },
     { id: "CP6", label: "스테이지 사각형 아래 끝 = 방 높이 − 패널 높이", ok: near(m.stageBottom, m.roomH - m.panel.height), detail: `아래 끝 ${r1(m.stageBottom)} · 방 높이 − 패널 ${r1(m.roomH - m.panel.height)}` },
   ];
@@ -638,9 +637,7 @@ async function chatLobbyFlow(ctx) {
       const cleared = await gp.locator("[data-chat-input]").inputValue();
       rec(sc, "CL5", "보낸 뒤 손님 입력칸이 비워짐", cleared === "", `입력칸 ${cleared.length}자`);
     }
-    // 방장과 손님의 접힌 채팅은 기록 칸과 입력줄이 같은 높이다.
-    // 손님은 글을 보내느라 입력칸에 포커스가 있어 기록 칸이 늘어나 있다(0083-4) — 접힌 상태를 재려고 먼저 접는다
-    await collapseChatLog(gp);
+    // 입력 포커스와 무관하게 방장과 참가자의 기록 칸과 입력줄은 같은 높이다.
     for (const [who, page] of [["방장", hp], ["손님", gp]]) {
       for (const r of chatPanelRows(await readChatPanel(page))) rec(`chat-lobby/panel-${who}`, r.id, r.label, r.ok, r.detail);
     }
@@ -661,50 +658,33 @@ async function chatLobbyFlow(ctx) {
     });
     rec(sc, "CL8", "손님이 칸을 비우면 방장 화면 알약이 사라짐", typingOff.ok, typingOff.detail);
 
-    // 18.1-09 R2: 두 줄 창(B1·B2)과 늘어나는 기록 칸(B3·B4·B5, 18.1-14)
-    {
-      const wsc = "chat-lobby/window";
-      await hp.waitForTimeout(1700); // 위 입력 중 켜짐과 서버 전송 간격이 겹치지 않게
-      const sent = await attempt(async () => {
-        for (const text of CHAT_WINDOW_LINES) {
-          await typeAndSendChat(gp, text);
-          await Promise.all([waitChatLine(hp, text), waitChatLine(gp, text)]);
-          await gp.waitForTimeout(CHAT_WINDOW_GAP_MS);
-        }
-      });
-      rec(wsc, "B0", `손님이 채팅 ${CHAT_WINDOW_LINES.length}줄을 보내 두 페이지 기록 칸에 모두 도착(${ctx.size.label})`, sent.ok, sent.detail);
-      await collapseChatLog(gp); // 줄을 보내는 동안 포커스가 있어 늘어나 있다 — 접힌 두 줄 창을 잰다
-      await Promise.all([settle(hp), settle(gp)]);
-      for (const [who, page] of [["방장", hp], ["손님", gp]]) {
-        const r = await attempt(async () => {
-          for (const row of chatWindowChecks(await readChatWindow(page))) rec(`chat-lobby/window-${who}`, row.id, `${row.label} (${ctx.size.label}, ${who})`, row.ok, row.detail, row.ok);
-        });
-        if (!r.ok) rec(`chat-lobby/window-${who}`, "B2r", `기록 칸을 읽는다(${ctx.size.label}, ${who})`, false, r.detail);
+    const wsc = "chat-lobby/window";
+    await hp.waitForTimeout(1700);
+    const readDock = (page) => page.locator("[data-chat-log]").evaluate((el) => ({
+      height: el.getBoundingClientRect().height,
+      scrollHeight: el.scrollHeight,
+      atBottom: el.scrollHeight - el.scrollTop - el.clientHeight <= 2,
+      fixed: el.classList.contains("is-fixed"),
+      expanded: document.querySelector("[data-chat-open]") !== null,
+    }));
+    const sent = await attempt(async () => {
+      for (const text of [...CHAT_WINDOW_LINES, CHAT_LONG_TEXT]) {
+        await typeAndSendChat(gp, text);
+        await Promise.all([waitChatLine(hp, text), waitChatLine(gp, text)]);
+        await gp.waitForTimeout(CHAT_WINDOW_GAP_MS);
       }
-      // 늘어나는 기록 칸(0083-4·0083-5): 손님 화면에서 두 줄 창·입력칸을 눌러 식의 높이로 늘어나는지, 쓰던 글이 남는지, [보내기] 가 입력 중·쓴 글이 있을 때만 있는지 본다
-      const open = await attempt(async () => {
-        for (const row of chatOpenChecks(await measureChatOpen(gp, CHAT_DRAFT_TEXT))) rec("chat-lobby/open", row.id, `${row.label} (${ctx.size.label})`, row.ok, row.detail, row.ok);
-      });
-      if (!open.ok) rec("chat-lobby/open", "B3r", `늘어나는 기록 칸을 읽는다(${ctx.size.label})`, false, open.detail);
-      await collapseChatLog(gp);
-      // backstop: 긴 줄(닉네임 8자 + 본문 30자) — 방장 화면 접힌 기록 칸·늘어난 기록 칸 스크린샷
-      await gp.waitForTimeout(CHAT_WINDOW_GAP_MS);
-      const long = await attempt(async () => {
-        await typeAndSendChat(gp, CHAT_LONG_TEXT);
-        await Promise.all([waitChatLine(hp, CHAT_LONG_TEXT), waitChatLine(gp, CHAT_LONG_TEXT)]);
-        await settle(hp);
-        const rows = chatWindowChecks(await readChatWindow(hp), { long: true });
-        for (const row of rows) if (row.id === "B2L") rec("chat-lobby/long-line", row.id, `${row.label} (${ctx.size.label})`, row.ok, row.detail, row.ok);
-        mkdirSync(OUT_DIR, { recursive: true });
-        await hp.locator("[data-chat-log]").screenshot({ path: join(OUT_DIR, `chat-lobby-long-window-${ctx.size.label}.png`) });
-        await hp.locator("[data-chat-open]").click({ timeout: 4000 });
-        await hp.waitForSelector('[data-chat-open][aria-expanded="true"]', { timeout: 3000 });
-        await sleep(400);
-        await shot(hp, join(OUT_DIR, `chat-lobby-long-open-${ctx.size.label}.png`));
-        await collapseChatLog(hp);
-      });
-      if (!long.ok) rec("chat-lobby/long-line", "B2Lr", `긴 줄 backstop(${ctx.size.label})`, false, long.detail);
+    });
+    rec(wsc, "B0", "두 화면에 채팅 기록과 긴 줄이 도착", sent.ok, sent.detail);
+    for (const [who, page] of [["방장", hp], ["참가자", gp]]) {
+      const dock = await readDock(page);
+      rec(wsc, `B1-${who}`, "기록을 고정하고 제자리에서 스크롤", dock.fixed && !dock.expanded && dock.height === ROOM_CHAT_LOG && dock.scrollHeight > dock.height && dock.atBottom, JSON.stringify(dock));
     }
+    const input = gp.locator("[data-chat-input]");
+    await input.fill(CHAT_DRAFT_TEXT);
+    await gp.locator("[data-chat-log]").evaluate((el) => { el.scrollTop = 0; });
+    const older = await readDock(gp);
+    rec(wsc, "B2", "이전 기록까지 스크롤해도 기록 높이와 작성 중인 내용 유지", older.fixed && !older.atBottom && older.height === ROOM_CHAT_LOG && (await input.inputValue()) === CHAT_DRAFT_TEXT, JSON.stringify(older));
+    await input.fill("");
     await checkState(ctx, "chat-lobby", "lobby"); // 방장 화면의 G (콘솔 오류·가로 넘침·누르기 크기·글자 크기)
   } finally {
     await g.context.close().catch(() => {});
@@ -796,8 +776,9 @@ async function chatImeFlow(ctx) {
 // 키보드 열림 치수(UI-SPEC 패널과 키보드). src/game/chatUi.ts 의 값을 그대로 옮긴 사본이다.
 /** 가상 키보드 높이(폰 크기 표의 K) */
 const KB_LIFT = 336;
-/** 키보드 열림 패널 = KB_PANEL_REST 78(14 + 8 + 입력줄 48 + 8) + 기록 칸. 포커스가 기록 칸을 늘리므로(0083-4) 기록 칸은 식의 값(chatOpenHeight)이고, 늘어날 자리가 없는 폰은 68 그대로다(앱 상수 chatUi.ts) */
-const KB_PANEL_REST = CHAT_KB_PANEL_REST;
+/** 키보드 열림 시 기록 42 + 도구 58 + 입력줄 및 여백 60. */
+const KB_DOCK_LOG = 42;
+const KB_DOCK_REST = 118;
 /** 큰 폰(390x844 이상)은 캐릭터 발과 이름표(입력 중 칸 포함)가 남은 스테이지 안에 모두 있어야 한다. 그 아래 작은 폰은 캐릭터 몸만 본다(가정 A2, 합격 검사 3) */
 const KB_BIG_MIN_H = 800;
 const KB_EPS = 0.5;
@@ -860,8 +841,7 @@ async function chatKeyboardFlow(ctx) {
     const stageTop = k.headerBottom;
     const stageBottom = k.panel.top;
     rec(sc, `KB1-${ms}`, `포커스 ${ms}ms: 패널·입력줄 아래 ≤ 보이는 영역 아래(검사 1), 패널은 키보드 바로 위`, k.panel.bottom <= vvBottom + KB_EPS && k.input.bottom <= vvBottom + KB_EPS && near(k.panel.bottom, vvBottom, 1), `패널 아래 ${r1(k.panel.bottom)} · 입력줄 아래 ${r1(k.input.bottom)} · 보이는 영역 아래 ${r1(vvBottom)}`);
-    const logWant = chatOpenHeight({ roomH: k.roomH, lift: Number.parseFloat(k.lift) || 0, hostBottom: k.hostBottom, panelRest: KB_PANEL_REST });
-    rec(sc, `KB2-${ms}`, `포커스 ${ms}ms: data-kb-open true·시작 버튼 숨김·기록 칸 = 식의 값(${logWant})·패널 = ${KB_PANEL_REST} + 기록 칸`, k.kbOpen === "true" && k.actionButtons === 0 && near(k.log.height, logWant, 1) && near(k.panel.height, KB_PANEL_REST + k.log.height, 1), `열림 ${k.kbOpen} · 시작 버튼 ${k.actionButtons} · 기록 칸 ${r1(k.log.height)}(식 ${logWant}: 방 ${r1(k.roomH)} − 키보드 ${k.lift} − 띠 ${r1(k.hostBottom)} − ${CHAT_OPEN_STAGE_MIN} − ${KB_PANEL_REST}) · 패널 ${r1(k.panel.height)}`);
+    rec(sc, `KB2-${ms}`, `포커스 ${ms}ms: 시작 버튼 숨김·고정 기록 ${KB_DOCK_LOG}px·입력과 도구 유지`, k.kbOpen === "true" && k.actionButtons === 0 && near(k.log.height, KB_DOCK_LOG, 1) && near(k.panel.height, KB_DOCK_REST + KB_DOCK_LOG, 1), `열림 ${k.kbOpen} · 시작 버튼 ${k.actionButtons} · 기록 칸 ${r1(k.log.height)} · 패널 ${r1(k.panel.height)}`);
     rec(sc, `KB3-${ms}`, `포커스 ${ms}ms: 캔버스 크기 불변·ResizeObserver 호출 0(검사 2)`, k.roCalls === 0 && k.host.w === closed.host.w && k.host.h === closed.host.h && k.canvas?.attrW === closed.canvas?.attrW && k.canvas?.attrH === closed.canvas?.attrH && k.canvas?.cssW === closed.canvas?.cssW && k.canvas?.cssH === closed.canvas?.cssH, `호출 ${k.roCalls} · 호스트 ${k.host.w}x${k.host.h}(기준 ${closed.host.w}x${closed.host.h}) · canvas ${k.canvas?.attrW}x${k.canvas?.attrH} css ${k.canvas?.cssW}x${k.canvas?.cssH}(기준 ${closed.canvas?.attrW}x${closed.canvas?.attrH} css ${closed.canvas?.cssW}x${closed.canvas?.cssH})`);
     const feet = k.feet?.sy;
     const headY = k.stack ? k.stack.bottom : null;
@@ -941,16 +921,12 @@ async function chatKeyboardFlow(ctx) {
     const still = !!me && !!meAfter && Math.hypot(me.x - meAfter.x, me.z - meAfter.z) < 0.01;
     rec(sc, "KB10", "D4: 포커스 중 맵 탭 → 걷기 요청 없음(위치·구간·링 그대로)", still && moveN() === nBefore && afterTap?.ring === null, `위치 변화 ${me && meAfter ? r1(Math.hypot(me.x - meAfter.x, me.z - meAfter.z)) : "?"} · 새 구간 ${moveN() - nBefore} · 링 ${afterTap?.ring}`);
     rec(sc, "KB11", "D4: 입력칸이 blur 되고 열림 표식이 사라짐", !!afterTap && afterTap.focusOnInput === false && afterTap.kbOpen === null, `포커스 ${afterTap?.focusOnInput} · 열림 ${afterTap?.kbOpen}`);
-    // 0083-4: 키보드가 닫혀도 늘어난 기록 칸은 저절로 접히지 않는다(닫기는 [data-chat-open] 하나). 키보드가 닫히며 배치가 바뀌면 같은 자리의 뒤따르는 click 이
-    // 새로 그 자리에 온 단추([data-chat-open]·방장 줄)를 누를 수 있었다 — 19-08 부터 앱이 그 click 을 삼킨다(WorldStage swallowDismissClick). 참고 줄은 그대로 남기고, 아래 KB12 는 어느 쪽이든 접은 뒤 잰다.
-    const stillOpen = await page.evaluate(() => document.querySelector('[data-chat-open][aria-expanded="true"]') !== null);
-    infoRow(ctx, sc, "KB10k", "참고: 키보드를 닫은 맵 탭 뒤 기록 칸이 늘어난 채인가(판정 아님)", stillOpen ? "늘어난 채" : "접혔음(손 뗌이 [data-chat-open] 위에 떨어짐)");
+
   }
 
   // 키보드가 닫힌 뒤(가짜 값을 되돌림): 원래 배치로 돌아오고 카메라가 다시 맞는다, 캔버스는 처음부터 끝까지 한 번도 크기를 바꾸지 않았다. 탭은 평소처럼 걷는다.
   await page.evaluate(() => window.__mfVv.set(window.innerHeight, 0));
   await page.waitForTimeout(500);
-  await collapseChatLog(page); // 늘어난 채로 남아 있으면 접는다 — 접힌 두 줄 창의 원래 패널 높이로 돌아오는지 본다
   await page.waitForTimeout(300);
   const restored = await readKeyboardState(page, mySeat);
   if (restored) {
@@ -1457,12 +1433,17 @@ async function allAt(pages, phase, ms = 8000) {
   return Promise.all(pages.map((p) => untilGame(p, (g) => g.phase === phase, ms, `${phase} 도착`)));
 }
 
-/** 아래 패널 높이를 UI-SPEC 표(gamePanelHeight)와 견준다(오차 1px). */
-function panelRow(rec, sc, id, g, h, kind, who) {
-  const want = gamePanelHeight(h, kind);
-  const got = g?.panel?.height;
-  const ok = typeof got === "number" && Math.abs(got - want) <= 1;
-  rec(sc, id, `아래 패널 높이 ${want}px (${who})`, ok, `실제 ${typeof got === "number" ? Math.round(got * 10) / 10 : got} ≠ 기대 ${want}`);
+/** 채팅과 단계별 조작을 같이 그려도 입력과 기록은 같은 위치에 둔다. */
+function panelRow(rec, sc, id, g, h, who) {
+  const dock = g?.chatDock;
+  const input = g?.chatInput;
+  const verdict = g?.verdictBtns ?? [];
+  const want = ROOM_CHAT_LOG + (g?.chatLockedCount > 0 ? 64 : ROOM_CHAT_EXTRA);
+  const near = (a, b) => Math.abs(a - b) <= 1;
+  const ok = dock && input && near(dock.height, want) && near(dock.bottom, h)
+    && near(g.chatLog?.height, ROOM_CHAT_LOG) && near(input.bottom, h - 12)
+    && near(input.height, CHAT_CONTROL) && verdict.every(({ rect }) => rect.bottom <= dock.top + 1);
+  rec(sc, id, `기록과 입력 위치 고정 (${who})`, !!ok, `채팅 ${dock?.height}/${want}px · 입력 아래 ${input?.bottom}/${h - 12}px`);
 }
 
 /** 게임 화면의 G(공통)·H(헤더 대비) 묶음을 한 페이지에 적용한다. */
@@ -1540,7 +1521,7 @@ async function dayFlow(ctx) {
       const sc = `${id}/discussion`;
       for (const x of humans) {
         const g = await readGame(x.page);
-        panelRow(rec, sc, "DY1", g, h, "talk", x.who);
+        panelRow(rec, sc, "DY1", g, h, x.who);
         rec(sc, "DY2", `[토론 끝내기]가 있고 숫자 최대가 과반(${majorityOf(N)})이다 (${x.who})`, !!g.end && g.end.total === majorityOf(N) && g.end.pressed === false, `end ${JSON.stringify(g.end)}`);
         rec(sc, "DY2b", `토론에는 지목 버튼이 없다 (${x.who})`, g.picks.length === 0, `지목 버튼 ${g.picks.length}개`);
       }
@@ -1577,7 +1558,7 @@ async function dayFlow(ctx) {
       rec(sc, "DY5", `과반(${majorityOf(N)}명)이 누르면 찬반으로 넘어간다`, moved.ok, moved.detail);
     }
 
-    // 찬반(22페이즈 D-11, P22-2): 후보 없이 산 사람 전원이 "오늘 처형할까?" 에 답한다. 투표자 패널 LOG_H + 218(286), 숫자 줄 두 덩이가 모든 페이지에서 같고 개인 표 표식은 없다.
+    // 찬반(22페이즈 D-11, P22-2): 후보 없이 산 사람 전원이 "오늘 처형할까?" 에 답한다. 투표자는 채팅 위 찬반을 고르고, 모두 같은 집계를 본다.
     {
       const sc = `${id}/verdict`;
       await allAt(pages, "verdict");
@@ -1585,7 +1566,7 @@ async function dayFlow(ctx) {
       for (const x of humans) {
         const g = await readGame(x.page);
         recMany(rec, sc, verdictPanelChecks({ kind: "voter", hasPicker: !!g.verdictRow?.hasPicker, hasCount: !!g.verdictRow?.hasCount, kbOpen: g.kbOpen }), ` (${x.who})`);
-        panelRow(rec, sc, "VD1", g, h, "verdictVoter", x.who);
+        panelRow(rec, sc, "VD1", g, h, x.who);
         rec(sc, "VD1b", `헤더 제목이 '찬반' 이고 이름표를 누르는 단추(data-pick)가 없다 (${x.who})`, g.title === "찬반" && g.picks.length === 0, `제목 '${g.title}' · 이름표 단추 ${g.picks.length}개`);
         rec(sc, "VD1c", `숫자 줄이 처음엔 0·0 이다 (${x.who})`, g.verdictCounts?.yes === 0 && g.verdictCounts?.no === 0, `숫자 ${JSON.stringify(g.verdictCounts)}`);
       }
@@ -1626,7 +1607,7 @@ async function dayFlow(ctx) {
       await Promise.all(pages.map((p) => settle(p)));
       const g0 = await readGame(hp);
       rec(sc, "NM7", "헤더 제목이 '지목' 이다", g0.title === "지목", `제목 '${g0.title}'`);
-      panelRow(rec, sc, "NM2", g0, h, "chat", "방장");
+      panelRow(rec, sc, "NM2", g0, h, "방장");
       rec(sc, "NM2b", "지목에는 토론 끝내기·찬반 단추가 없다", g0.end === null && g0.verdictBtns.length === 0, `end ${JSON.stringify(g0.end)} · 찬반 단추 ${g0.verdictBtns.length}`);
       // 차례 알약이 한 명씩 돈다: 방장 페이지가 본 차례 번호(1..N)를 모은다
       const noRecord = await watchTurns(hp);
@@ -1656,7 +1637,7 @@ async function dayFlow(ctx) {
       rec(sc, "NM9c", "지목이 끝난 뒤 손가락·차례 블록이 DOM 에 남지 않는다", resid.every((r) => r.finger === 0 && r.turn === 0), JSON.stringify(resid));
     }
 
-    // 유언(22페이즈 D-15·D-16, P22-5·7): 처형자(방장)에게는 시트가 자동으로 열리고, 나머지는 채팅 입력이 잠긴 채(패널 160) 스포트라이트를 본다
+    // 유언(22페이즈 D-15·D-16, P22-5·7): 처형자(방장)에게는 시트가 자동으로 열리고, 나머지는 채팅 입력이 잠긴 채 스포트라이트를 본다
     {
       const sc = `${id}/defense`;
       await allAt(pages, "defense");
@@ -1665,7 +1646,7 @@ async function dayFlow(ctx) {
       rec(sc, "DF1", "처형자(방장)에게 유언 시트가 하나 자동으로 열려 있다", gh.willSheets === 1, `시트 ${gh.willSheets}개`);
       for (let i = 0; i < guests.length; i++) {
         const g = await readGame(guests[i].page);
-        panelRow(rec, sc, "DF2", g, h, "chat", humans[i + 1].who);
+        panelRow(rec, sc, "DF2", g, h, humans[i + 1].who);
         rec(sc, "DF3", `나머지 사람은 시트가 없고 채팅 입력이 잠겨 있다 (${humans[i + 1].who})`, g.willSheets === 0 && g.chatLockedCount === 1, `시트 ${g.willSheets} · 잠금 ${g.chatLockedCount}`);
       }
       await gameGH(ctx, id, "defense", host);
@@ -1710,7 +1691,7 @@ async function dayFlow(ctx) {
         const gx = await readGame(guests[0].page).catch(() => null);
         if (gx && gx.phase === "execution") {
           rec(sc, "EX5", "처형 단계 패널에 찬반 단추 줄이 없다([data-verdict-row] 0개, 찬반 단추 0개)", gx.verdictRow === null && (gx.verdictBtns?.length ?? 0) === 0, `찬반 줄 ${gx.verdictRow === null ? "없음" : "있음"} · 찬반 단추 ${gx.verdictBtns?.length ?? "?"}개`);
-          panelRow(rec, sc, "EX5b", gx, h, "chat", humans[1].who);
+          panelRow(rec, sc, "EX5b", gx, h, humans[1].who);
         } else infoRow(ctx, sc, "EX5", "처형 단계가 이미 끝나 패널 판정을 건너뜀(판정 아님)", `단계 ${gx?.phase ?? "읽기 실패"}`);
       }
     }
@@ -3267,19 +3248,6 @@ async function settledResult(page) {
 
 const pillBy = (page) => page.locator("[data-ready-pill]");
 
-/**
- * RM1 읽기(18.1-16, 0083-5 뒤): [보내기] 는 입력칸에 포커스가 있거나 글이 있을 때만 나온다 — 쉬는 줄은 [입력][알약] 이라 입력칸이 48 + 8 넓다.
- * RM1 의 기대(폭 − 192 = 보내기 48 · 알약 96 · 간격 16 · 좌우 32)는 [보내기] 가 있을 때의 줄이므로, 입력칸에 포커스를 준 채 읽고 접는다.
- */
-async function readRematchSendRow(page) {
-  await page.locator("[data-chat-input]").focus();
-  await sleep(250);
-  const state = await readRematchState(page).catch(() => null);
-  await collapseChatLog(page);
-  await page.evaluate(() => document.activeElement?.blur?.());
-  return state;
-}
-
 async function resultRematchFlow(ctx) {
   const id = "result-rematch";
   const rec = recorder(ctx);
@@ -3335,7 +3303,6 @@ async function resultRematchFlow(ctx) {
 
     // 알약: 준비 전 방장 n/m = 방장·봇 2 / 연결된 5 (흐림), 인원 부족 탭 → 토스트 (RM3·RM4)
     const hostBefore = await readRematchState(hp);
-    const hostSendRow = await readRematchSendRow(hp); // RM1 은 [보내기] 가 있는 줄에서 잰다
     // 흐린 알약은 aria-disabled 라 Playwright 가 비활성으로 보고 기다린다 — 실제 탭처럼 좌표에 눌러야 한다(흐려도 탭은 토스트를 부른다)
     await step("방장 알약(토스트)", () => pillBy(hp).click({ timeout: 4000, force: true }));
     await sleep(350);
@@ -3398,9 +3365,10 @@ async function resultRematchFlow(ctx) {
     await checkState(ctx, id, "ended-2", game.host);
 
     const accept = {
-      viewport: { w: REMATCH_HOST_SIZE.w, h: REMATCH_HOST_SIZE.h },
-      pillBox: hostBefore?.pill ? { width: hostBefore.pill.width, height: hostBefore.pill.height } : undefined,
-      inputWidth: hostSendRow?.inputWidth,
+      dockWidth: hostBefore?.dockWidth,
+      pillBox: hostBefore?.pill,
+      pillAboveLog: hostBefore?.pillAboveLog,
+      inputWidth: hostBefore?.inputWidth,
       guestPill: guestBefore && guestAfter ? { before: { ready: guestBefore.ready, pressed: guestBefore.pressed }, after: { ready: guestAfter.ready, pressed: guestAfter.pressed } } : undefined,
       count: hostBefore ? { text: hostBefore.count ?? "", dim: hostBefore.dim, disabled: hostBefore.disabled } : undefined,
       countWant: { n: 2, m: 5, minPlayers: 4 },
@@ -3422,12 +3390,16 @@ async function resultRematchFlow(ctx) {
       early: early?.pill ? { disabled: early.inactive } : undefined,
     };
     for (const row of rematchChecks(accept)) recOne(rec, sc, row);
-    // 손님 크기(430×932)에서도 알약 96×48·입력칸 폭 − 192
-    const guestState = await readRematchSendRow(B.page).catch(() => null);
-    if (guestState?.pill) {
-      const only = rematchChecks({ viewport: { w: REMATCH_GUEST_SIZE.w, h: REMATCH_GUEST_SIZE.h }, pillBox: { width: guestState.pill.width, height: guestState.pill.height }, inputWidth: guestState.inputWidth }).find((r) => r.id === "RM1");
-      rec(sc, "RM1b", `${only.label} (손님 ${REMATCH_GUEST_SIZE.label})`, only.ok, only.detail);
-    }
+    // 손님 크기(430×932)에서도 공용 도구 줄과 입력 영역을 잰다.
+    const guestState = await readRematchState(B.page);
+    const guestLayout = {
+      dockWidth: guestState?.dockWidth,
+      pillBox: guestState?.pill,
+      pillAboveLog: guestState?.pillAboveLog,
+      inputWidth: guestState?.inputWidth,
+    };
+    const only = rematchChecks(guestLayout).find((row) => row.id === "RM1");
+    rec(sc, "RM1b", `${only.label} (손님 ${REMATCH_GUEST_SIZE.label})`, only.ok, only.detail);
   } finally {
     await closeGame(game);
   }

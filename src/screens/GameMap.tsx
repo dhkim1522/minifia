@@ -17,8 +17,7 @@ import type { WillLetter as WillLetterState } from "../net/useWillLetter";
 import { SceneCurtain } from "../components/SceneCurtain";
 import { PickTurnBlock } from "../components/v2/PickTurnBlock";
 import { RoleCardButton } from "../components/RoleCardButton";
-import { PhaseHeader } from "../components/v2/PhaseHeader";
-import { GamePhaseHeader } from "../components/v2/GamePhaseHeader";
+import { GamePhaseHeader, PhaseGauge } from "../components/v2/GamePhaseHeader";
 import { TopToast, useTopToast } from "../components/v2/TopToast";
 import { suspectChipShown } from "../components/v2/HeadStack";
 import { CLAIM_ICON } from "../components/v2/ClaimBadge";
@@ -31,8 +30,7 @@ import type { WillSheetProps } from "../components/v2/WillSheet";
 import { TensionVignette } from "../components/TensionVignette";
 import { WorldStage } from "../components/WorldStage";
 import type { WorldPick } from "../components/WorldStage";
-import { DEFENSE_MS, PICK_TURN_MS } from "../../shared/game/phases";
-import { LOG_H } from "../game/chatUi";
+import { DEFENSE_MS } from "../../shared/game/phases";
 import { ownAnimalOf } from "../game/playerIdentity";
 import { jobOutfit } from "../world/jobOutfit";
 import { todOf, todWordOf } from "../game/timeOfDay";
@@ -47,7 +45,6 @@ import { isMySpeakTurn, pointSeatsOf, quoteOf, revealCounts, SHOWDOWN_COPY, show
 import type { ChatStore } from "../net/chatStore";
 import type { DayFx } from "../net/useDayFx";
 import { useCountdown } from "../net/countdown";
-import { useEarlyCalm } from "../net/earlyCalm";
 import { useBadge, useBadgeFx } from "../net/useBadge";
 import { useChat } from "../net/useChat";
 import { useMyMotion } from "../net/useMyMotion";
@@ -164,39 +161,21 @@ interface GameMapProps {
   timeless?: boolean;
 }
 
-/**
- * 일반 지도 단계는 제목, 남은 시간 게이지, 오른쪽 조작을 한 줄에 둔다.
- * 순차 지목·결선·마지막 3인은 별도 차례 시계를 쓴다.
- */
-function MapHeader({ view, offset, hintOn, hintOverride, extra, tod, epoch }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode; tod: boolean; epoch: number }) {
-  if (view.playtest === true || blockModeOf(view) === null) {
-    const title = view.phase === "verdict" && view.day?.firstBallot !== undefined ? "투표" : headerFor(view).title;
-    return <GamePhaseHeader title={title} view={view} offset={offset} epoch={epoch} {...(tod ? { tod: { id: todOf(view.phase), word: view.phase === "discussion" ? null : todWordOf(view.phase, title) } } : {})} extra={extra} />;
-  }
-  return <LegacyMapHeader view={view} offset={offset} hintOn={hintOn} {...(hintOverride !== undefined ? { hintOverride } : {})} extra={extra} tod={tod} />;
-}
-
-/** 꺼진 장치 화면의 헤더: 제목 + 접히는 안내 + (서버 마감 기준 시간·차례 링) + 링 왼쪽 [역할 카드] (13페이즈 계약 그대로) */
-function LegacyMapHeader({ view, offset, hintOn, hintOverride, extra, tod }: { view: RoomView; offset: number; hintOn: boolean; hintOverride?: string; extra: ReactNode; tod: boolean }) {
-  const head = headerFor(view);
-  // 순차 지목·결선은 단계 마감이 아니라 알약·막대와 같은 값(blockLook)으로 링을 그린다(UI-SPEC A-3·D-3). 지목의 세부 단계 길이 3000/8000/900/2000 이나 결선 앞머리 1000 은 링 비율에 쓰지 않는다.
+/** 차례와 일반 단계는 같은 위치의 게이지를 쓰고, 차례 이름은 TurnBlock에서 보여 준다. */
+function MapHeader({ view, offset, extra, tod, epoch, timeless }: { view: RoomView; offset: number; extra: ReactNode; tod: boolean; epoch: number; timeless: boolean }) {
   const blocked = blockModeOf(view) !== null;
-  const look = useTurnLook(view, offset);
-  const { seconds } = useCountdown(blocked ? 0 : (view.phaseEndsAt ?? 0), view.phaseDurationMs ?? 0, offset);
-  // 조기 진행(23-11 P23-23): 단계 마감이 줄어든 단계는 링도 calm. 지목·결선(blocked)은 마감이 아니라 알약·막대 값으로 그리므로 대상이 아니다
-  const early = useEarlyCalm(view);
-  // 낮 시작은 링이 없다(2초 알림 단계). 마감이 없는 view 도 링을 그리지 않는다. 지목의 모이는 중·끝 알림, 결선의 앞머리·결과에도 없다
-  const timing = blocked ? look !== null && (look.stage === "turn" || look.stage === "done") : view.phase !== "dayAnnounce" && view.phaseEndsAt !== null && view.phaseDurationMs !== null;
-  const time = blocked ? (look?.seconds ?? 0) : seconds;
-  const total = blocked ? (look?.totalMs ?? PICK_TURN_MS) / 1000 : (view.phaseDurationMs ?? 0) / 1000;
+  const turn = useTurnLook(view, offset);
+  const title = view.phase === "verdict" && view.day?.firstBallot !== undefined ? "투표" : headerFor(view).title;
+  const showTurnGauge = !timeless && turn !== null && (turn.stage === "turn" || turn.stage === "done");
   return (
-    <PhaseHeader
-      title={head.title}
-      {...(tod ? { tod: { id: todOf(view.phase), word: todWordOf(view.phase, head.title) } } : {})}
-      {...(hintOverride !== undefined ? { hint: hintOverride } : head.hint !== undefined ? { hint: head.hint } : {})}
-      showHint={hintOverride !== undefined || hintOn}
-      {...(timing ? { time, total } : {})}
-      {...(!blocked && early ? { calm: true } : {})}
+    <GamePhaseHeader
+      title={title}
+      view={view}
+      offset={offset}
+      epoch={epoch}
+      timeless={timeless || blocked}
+      turnGauge={showTurnGauge ? <PhaseGauge seconds={turn.seconds} ratio={turn.ratio} tone={turn.tone} /> : null}
+      {...(tod ? { tod: { id: todOf(view.phase), word: view.phase === "discussion" ? null : todWordOf(view.phase, title) } } : {})}
       extra={extra}
     />
   );
@@ -216,7 +195,7 @@ function DefenseAwareWillSheet({ defenseEndsAt, offset, ...sheet }: WillSheetPro
 function TurnBlock({ view, offset, line, compact, reducedMotion }: { view: RoomView; offset: number; line: string | null; compact: boolean; reducedMotion: boolean }) {
   const look = useTurnLook(view, offset);
   const quote = quoteOf(view);
-  return <PickTurnBlock look={look} line={line} quote={quote === null ? null : { text: quote.text }} compact={compact} reducedMotion={reducedMotion} />;
+  return <PickTurnBlock look={look} line={line} quote={quote === null ? null : { text: quote.text }} compact={compact} showClock={false} reducedMotion={reducedMotion} />;
 }
 
 // 8페이즈 게임 맵 화면 틀(08-13, UI-SPEC "게임 화면 틀"): 지하 재즈 바 맵(WorldStage) 위에 위쪽 가림막, 헤더(단계 이름 + 접히는 안내 + 시간 링 + [역할 카드]), [테스트], 결과 알림, 아래 패널을 얹는다.
@@ -256,21 +235,8 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
   const motion = useMyMotion(store, view.me.seat, () => Date.now() + offset);
   const { typingSeats, liveWhisperIn, ...binding } = useChat({ store: chat, connection: { send, canSend }, view, motion });
 
-  // 안내 한 줄: 단계가 시작되면 보이고 2.5초 뒤 접힌다. 단계가 바뀔 때마다 다시 보인다.
-  // 지목은 내 차례가 시작될 때도 다시 보인다(UI-SPEC A-4 "의심되는 사람을 눌러요"): myTurnNo = 내 차례의 번호, 아니면 undefined.
-  const phase = view.phase;
   const myTurnNo = isMyTurn(view) ? view.day?.turn?.i : undefined;
-  // 결선은 앞머리(1초) 뒤 투표가 열릴 때 안내 '둘 중 한 명을 눌러요' 를 다시 보인다(UI-SPEC D-1): 단계(step)가 바뀔 때마다 한 번 더
-  const runoffStep = phase === "runoff" ? view.day?.runoff?.step : undefined;
-  // 마지막 3인(09.1.1-15): 내 한마디 차례가 시작될 때(차례 번호)와 동시 지목이 열릴 때(세부 단계)도 안내를 다시 보인다
   const showdownStage = showdownStageOf(view);
-  const speakNo = isMySpeakTurn(view) ? view.day?.showdown?.i : undefined;
-  const [hintOn, setHintOn] = useState(true);
-  useEffect(() => {
-    setHintOn(true);
-    const timer = setTimeout(() => setHintOn(false), HINT_MS);
-    return () => clearTimeout(timer);
-  }, [phase, myTurnNo, runoffStep, showdownStage, speakNo]);
 
   // 유령이 된 순간(같은 단계 안이어도): 직업 칩 등장 연출을 2.5초 켠다(14-02: 헤더 안내 줄은 다시 띄우지 않는다 — 띠가 유령 줄을 말한다). 처음 마운트 때의 번호는 지난 일이라 연출하지 않는다.
   const seenGhostEnter = useRef(ghostEnter);
@@ -726,10 +692,14 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           view={headerView}
           offset={offset}
           epoch={epoch}
-          hintOn={hintOn}
-          {...(suspect.mode ? { hintOverride: SUSPECT_TEXT.modeHint } : whisper.mode ? { hintOverride: WHISPER_TEXT.modeHint } : {})}
+          timeless={timeless}
           tod={tod && !playtest}
-          extra={headerAction ?? (roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null)}
+          extra={(
+            <>
+              {testButton ? <div className="mf-game__test">{testButton}</div> : null}
+              {headerAction ?? (roleCard ? <RoleCardButton iconOnly unread={roleCard.unread} onOpen={roleCard.onOpen} /> : null)}
+            </>
+          )}
         />
       </header>
       <WorldStage
@@ -772,7 +742,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
       ) : null}
       {/* 알약·막대·위 한 줄은 순차 지목·결선·마지막 3인에만 있다. 기본판 동시 투표(day.turn 없음)는 DOM 이 없다([data-turn-block] 0) */}
       {blockMode !== null ? <TurnBlock view={view} offset={offset} line={topLine} compact={compactTurn} reducedMotion={reducedMotion} /> : null}
-      {testButton ? <div className="mf-game__test">{testButton}</div> : null}
       {/* 장면 전환 막(09-20): 결과 알림보다 앞(DOM 순서)에 두어 막을 붙잡는 동안 알림이 막 위로 올라올 수 있게 한다. 덮기는 공개 마감만의 함수다 */}
       {!playtest ? <SceneCurtain view={view} offset={offset} reducedMotion={reducedMotion} {...(killFx !== null ? { holdUntil: killFx.at + KILL_HOLD_MS } : {})} /> : null}
       {!playtest ? <KillFx nonce={killNonce} reducedMotion={reducedMotion} /> : null}
@@ -801,7 +770,6 @@ export function GameMap({ view, store, chat, send, canSend = true, offset = 0, r
           send={send}
           canSend={canSend}
           binding={binding}
-          logHeight={LOG_H}
           kbOpen={kbOpen}
           lifted={kbLifted}
           veiled={veiled || (speakOpen && !speakWriting)}

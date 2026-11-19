@@ -51,9 +51,9 @@ function PlaytestRoleReveal({ view, offset, epoch = 0, myRoleButton, onSeenFront
       </section>
       <div className="mf-reveal__hints mf-playtest__ready">
         {role !== null && !ready ? (
-          <Button className={`mf-playtest__ready-control${canSend ? " is-call" : ""}`} icon={<V2Icon name="check" size={24} />} aria-label="준비" disabled={!canSend} data-role-ready="" onClick={() => send?.({ t: "roleReady" })} />
+          <Button className={`mf-room-tool mf-playtest__ready-control${canSend ? " is-call" : ""}`} icon={<V2Icon name="check" size={24} />} aria-label="준비" disabled={!canSend} data-role-ready="" onClick={() => send?.({ t: "roleReady" })} />
         ) : ready ? (
-          <span className="mf-playtest__ready-control mf-playtest__ready-status" aria-hidden="true">
+          <span className="mf-room-tool mf-playtest__ready-control mf-playtest__ready-status" aria-hidden="true">
             <V2Icon name="check" size={24} />
           </span>
         ) : null}

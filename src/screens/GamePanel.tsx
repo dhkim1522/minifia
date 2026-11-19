@@ -4,22 +4,15 @@ import { isAlive } from "../../shared/game/alive";
 import { MAP_PHASES } from "../../shared/game/movement";
 import { majorityOf } from "../../shared/game/nomination";
 import type { ClientMessage, RoomView } from "../../shared/protocol";
-import { ActionRow } from "../components/ActionButton";
-import { ChatPanel } from "../components/v2/ChatPanel";
+import { RoomChatDock } from "../components/v2/RoomChatDock";
+import type { RoomChatBinding, RoomChatDockProps } from "../components/v2/RoomChatDock";
 import { FaceList } from "../components/v2/FaceList";
 import { V2Icon } from "../components/v2/V2Icon";
 import { VerdictPicker } from "../components/v2/VerdictPicker";
 import type { Verdict } from "../components/v2/VerdictPicker";
 import { faceSrc } from "../net/assets";
 import { playerColor } from "../game/playerIdentity";
-import type { ChatBinding } from "../net/useChat";
 import { useViewChoice } from "../net/useViewChoice";
-import { DiscussionPanel, PlaytestGhostChat } from "./PlaytestDiscussion";
-import type { DiscussionToolsProps } from "./PlaytestDiscussion";
-
-/** 채팅 부품에 그대로 펼치는 속성 묶음 — 머리 위 입력 중 좌석(typingSeats)은 화면 틀이 WorldStage 로 따로 넘긴다 */
-export type ChatPanelBinding = Omit<ChatBinding, "typingSeats" | "liveWhisperIn">;
-
 export interface GamePanelProps {
   view: RoomView;
   offset?: number;
@@ -27,9 +20,7 @@ export interface GamePanelProps {
   send: (msg: ClientMessage) => boolean | void;
   /** 연결이 열려 있어 서버로 보낼 수 있는가 */
   canSend: boolean;
-  binding: ChatPanelBinding;
-  /** 기록 칸 높이(키보드가 열려 있으면 부르는 쪽이 72 를 준다) */
-  logHeight: number;
+  binding: RoomChatBinding;
   /** 키보드가 열려 있는가 — 열려 있으면 행동 줄을 그리지 않고 패널이 키보드 위로 올라간다(7페이즈 규칙) */
   kbOpen?: boolean;
   /** 키보드가 열려 있으면(시트 textarea 초점 포함) 패널이 키보드 위로 올라간다. 주지 않으면 kbOpen 을 따른다 */
@@ -58,7 +49,7 @@ export interface GamePanelProps {
   onCallUsed?: () => void;
   inputRef?: RefObject<HTMLInputElement | null>;
   panelRef?: RefObject<HTMLElement | null>;
-  suspect?: DiscussionToolsProps["suspect"];
+  suspect?: RoomChatDockProps["suspect"];
   result?: string;
   notice?: ReactNode;
 }
@@ -68,7 +59,7 @@ export interface GamePanelProps {
  * 낮 토론은 채팅 위에 도구와 토론 스킵을, 찬반은 집계와 선택을 둔다.
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
-export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, result, notice }: GamePanelProps) {
+export function GamePanel({ view, offset = 0, send, canSend, binding, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, result, notice }: GamePanelProps) {
   const playtest = view.playtest === true;
   const voteOpensAt = playtest && view.phase === "discussion" ? view.day?.voteOpensAt : undefined;
   const [openedVoteAt, setOpenedVoteAt] = useState<number>();
@@ -153,12 +144,14 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
   const answerReveal = view.phase === "answerReveal";
   const chatLocked = defense || answerReveal;
   const discussion = view.phase === "discussion";
-  const ghostChat = !chatLocked && !meAlive && view.me.chat === "ghost";
   const condemned = defense && meAlive && view.day?.candidate === view.me.seat;
   const penOn = meAlive && MAP_PHASES.has(view.phase) && onOpenWill !== undefined && !answerReveal && (!defense || condemned) && (!playtest || condemned);
   const showNoteRow = !playtest && nightFaces && myRole === "mafia" && onOpenNote !== undefined;
   const noteHintId = useId();
   const showWillRow = !playtest && nightFaces && myRole !== "mafia" && onOpenWill !== undefined;
+  const playtestChat = discussion || (!chatLocked && view.me.chat === "ghost");
+  const showChat = chatChannelOk && (!playtest || playtestChat);
+  const canReact = !chatLocked && (!playtest || discussion);
 
   const pressEnd = (): void => {
     if (!canSend) return;
@@ -178,7 +171,7 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
   return (
     <section
       ref={panelRef}
-      className={`mf-game__panel${lifted ?? kbOpen ? " mf-game__panel--kb" : ""}${playtest ? " mf-playtest__panel" : ""}${discussion ? " mf-discussion-panel" : ""}`}
+      className={`mf-game__panel${lifted ?? kbOpen ? " mf-game__panel--kb" : ""}${showChat ? " mf-game__panel--chat" : ""}`}
       data-world-panel=""
       {...(veiled ? { "data-will-hide-panel": "true" } : {})}
     >
@@ -201,20 +194,6 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
           </div>
         </div>
       ) : null}
-      {discussion ? (
-        <DiscussionPanel
-          key={`${view.round ?? 1}:${view.day?.n ?? 0}:${view.phase}`}
-          binding={binding.onSend ? { ...binding, onSend: sendChat } : binding}
-          kbOpen={kbOpen}
-          playtest={playtest}
-          inputRef={inputRef}
-          callInput={call?.chat}
-          onInputFocus={onCallUsed}
-          suspect={suspect}
-          skip={meAlive ? { enabled: canSend, pressed: pressed === true, count, total, request: pressEnd } : undefined}
-          will={penOn ? { open: willOpen, saved: willSaved, request: openWillFrom } : undefined}
-        />
-      ) : null}
       {firstBallot !== undefined ? (
         <PlaytestBallot view={view} ballot={firstBallot} canVote={meAlive && canSend} send={send} />
       ) : nightFaces ? (
@@ -232,85 +211,61 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
           />
         ) : null
       ) : citizenNight ? (
-        <button type="button" className="mf-btn mf-btn--secondary mf-playtest__night-done" data-night-done="" aria-label={nightDone ? "준비 완료" : "아침 준비"} disabled={!canSend || nightDone} onClick={() => send({ t: "nightDone" })}>
+        <button type="button" className="mf-room-tool mf-playtest__night-done" data-night-done="" aria-label={nightDone ? "준비 완료" : "아침 준비"} disabled={!canSend || nightDone} onClick={() => send({ t: "nightDone" })}>
           <V2Icon name={nightDone ? "check" : "sunrise"} size={22} />
         </button>
-      ) : playtest && condemned ? (
-        <button type="button" className="mf-btn mf-btn--secondary" data-will-button="" aria-pressed={willOpen} disabled={!canSend} onClick={(event) => onOpenWill?.(event.currentTarget)}>유언</button>
-      ) : playtest && !discussion && ghostChat ? (
-        <PlaytestGhostChat key={view.phase} binding={binding} logHeight={logHeight} kbOpen={kbOpen} inputRef={inputRef} />
-      ) : !playtest && !discussion && chatChannelOk ? (
-        <ChatPanel
-          {...binding}
-          logHeight={logHeight}
-          compact={kbOpen}
-          {...(chatLocked ? { locked: true } : {})}
-          {...(inputRef ? { inputRef } : {})}
-          onInputFocus={() => onCallUsed?.()}
-          {...(binding.onSend && !chatLocked
-            ? {
-                onSend: sendChat,
-              }
-            : {})}
-          {...(call?.chat ? { callInput: true } : {})}
-          {...(penOn
-            ? {
-                onWill: () => openWillFrom(panelRef?.current?.querySelector<HTMLElement>("[data-will-button]") ?? null),
-                willOpen,
-                willSaved,
-                ...(call?.will ? { callWill: true } : {}),
-              }
-            : {})}
-        />
       ) : null}
-      {showNoteRow ? (
-        <ActionRow>
-          <button
-            type="button"
-            className="mf-act mf-game__note"
-            aria-pressed={noteOpen}
-            aria-disabled={noteReady && canSend ? undefined : "true"}
-            {...(noteReady ? {} : { "aria-describedby": noteHintId })}
-            data-note-button=""
-            onClick={(e) => {
-              if (!noteReady || !canSend) return;
-              onOpenNote?.(e.currentTarget);
-            }}
-          >
-            <span className="mf-game__note-icon" aria-hidden="true">
+      {showChat ? (
+        <RoomChatDock
+          binding={{ ...binding, ...(binding.onSend && !chatLocked ? { onSend: sendChat } : {}), ...(!canReact ? { emotes: [] } : {}) }}
+          kbOpen={kbOpen}
+          quickReactions={playtest && discussion}
+          discussion={discussion}
+          locked={chatLocked}
+          inputRef={inputRef}
+          callInput={call?.chat}
+          onInputFocus={onCallUsed}
+          suspect={discussion ? suspect : undefined}
+          skip={discussion && meAlive ? { enabled: canSend, pressed: pressed === true, count, total, request: pressEnd } : undefined}
+          will={penOn ? { open: willOpen, saved: willSaved, call: call?.will === true, request: openWillFrom } : undefined}
+        />
+      ) : showNoteRow || showWillRow || penOn ? (
+        <div className="mf-room-toolbar">
+          {showNoteRow ? (
+            <button
+              type="button"
+              className="mf-room-tool"
+              aria-label="쪽지"
+              aria-pressed={noteOpen}
+              aria-disabled={noteReady && canSend ? undefined : "true"}
+              aria-describedby={noteReady ? undefined : noteHintId}
+              data-note-button=""
+              onClick={(e) => {
+                if (noteReady && canSend) onOpenNote?.(e.currentTarget);
+              }}
+            >
               <V2Icon name="note" size={22} />
-            </span>
-            <span className="mf-act__label">쪽지</span>
-          </button>
-        </ActionRow>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={call?.will ? "mf-room-tool is-call" : "mf-room-tool"}
+              aria-label={willSaved ? "유언, 저장됨" : "유언"}
+              aria-pressed={willOpen}
+              aria-disabled={!canSend || undefined}
+              data-will-button=""
+              data-call={call?.will ? "" : undefined}
+              data-will-saved={willSaved ? "" : undefined}
+              onClick={(event) => openWillFrom(event.currentTarget)}
+            >
+              <V2Icon name="quill" size={22} />
+              {willSaved ? <i className="mv-chat__will-dot" aria-hidden="true" /> : null}
+            </button>
+          )}
+        </div>
       ) : null}
       {showNoteRow && !noteReady ? (
-        <span id={noteHintId} className="mf-sr-only">
-          암살 대상을 모두 같게 고르면 쓸 수 있어요
-        </span>
-      ) : null}
-      {showWillRow ? (
-        <ActionRow>
-          <button
-            type="button"
-            className="mf-act mf-game__will"
-            aria-pressed={willOpen}
-            aria-disabled={canSend ? undefined : "true"}
-            // 저장 표시(0083-6): 유언은 저장하면 창이 닫히니 저장됨은 단추가 말한다 — 값은 서버가 본인에게만 보낸 me.will
-            {...(willSaved ? { "data-will-saved": "", "aria-label": "유언, 저장됨" } : {})}
-            data-will-button=""
-            onClick={(e) => {
-              if (!canSend) return;
-              onOpenWill?.(e.currentTarget);
-            }}
-          >
-            <span className="mf-game__will-icon">
-              <V2Icon name="quill" size={22} />
-              {willSaved ? <i className="mf-game__will-dot" aria-hidden="true" /> : null}
-            </span>
-            <span className="mf-act__label">유언</span>
-          </button>
-        </ActionRow>
+        <span id={noteHintId} className="mf-sr-only">암살 대상을 모두 같게 고르면 쓸 수 있어요</span>
       ) : null}
     </section>
   );

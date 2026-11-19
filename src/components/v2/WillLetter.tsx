@@ -46,8 +46,8 @@ export interface WillLetterProps {
 
 const css = (vars: Record<string, string | number>): CSSProperties => vars as CSSProperties;
 
-/** 큰 글 위 끝 = 띠 면 아랫변(--mf-host-bottom) + 16(0083-10). 변수를 못 읽으면(값 없음·0) 아랫변 126 으로 본다 — game.css .mf-announce.is-top 과 같은 식 */
-const HOST_BOTTOM_FALLBACK = 126;
+/** 유언과 함께 뜨는 알림은 헤더 아래에서 시작한다. game.css .mf-announce.is-top과 같은 값. */
+const HOST_BOTTOM_FALLBACK = 62;
 const ANNOUNCE_TOP_GAP = 16;
 /** 알림 아래 간격(20), 입력줄과의 간격(4). 알림이 1줄일 때 높이 43(측정이 안 되는 환경의 추정값) */
 const ANNOUNCE_GAP = 20;

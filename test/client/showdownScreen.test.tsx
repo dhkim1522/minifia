@@ -163,7 +163,7 @@ const advance = (ms: number) =>
   });
 
 describe("마지막 3인 화면 — 알약·위 한 줄·헤더 (UI-SPEC E-1, 트레이서)", () => {
-  it("한마디 1번째(남은 8초): 제목 '마지막 셋', 알약 `1 / 3` · `서연 님 차례` · `8초`, 막대, data-turn-mode=speak", () => {
+  it("한마디 1번째(남은 8초): 제목 '마지막 셋', 알약 `1 / 3` · `서연 님 차례` 과 헤더 게이지, data-turn-mode=speak", () => {
     const { container } = mount(makeShowdown({ i: 0, mySeat: 2 }));
     expect(title(container)).toBe("마지막 셋");
     const b = block(container)!;
@@ -171,24 +171,26 @@ describe("마지막 3인 화면 — 알약·위 한 줄·헤더 (UI-SPEC E-1, �
     expect(b.getAttribute("data-showdown-step")).toBe("speak");
     expect(b.querySelector(".mf-turn__count")?.textContent).toBe("1 / 3");
     expect(b.querySelector(".mf-turn__name")?.textContent).toBe("서연 님 차례");
-    expect(b.querySelector(".mf-turn__sec")?.textContent).toBe("8초");
-    expect(b.querySelector(".mf-turn__bar")).not.toBeNull();
+    expect(b.querySelector(".mf-turn__sec")).toBeNull();
+    expect(container.querySelector("[data-phase-gauge]")?.getAttribute("aria-label")).toBe("남은 시간 8초");
+    expect(b.querySelector(".mf-turn__bar")).toBeNull();
   });
 
-  it("남은 5초 이하는 내 차례가 아닌 화면에도 진홍(urgent), 헤더 링과 같은 값", () => {
+  it("남은 5초 이하는 내 차례가 아닌 화면에도 진홍(urgent), 헤더 게이지와 같은 값", () => {
     const { container } = mount(makeShowdown({ i: 1, mySeat: 0, left: 4200 }));
     expect(block(container)!.getAttribute("data-turn-tone")).toBe("urgent");
-    expect(container.querySelector(".mv-ring")!.classList.contains("is-urgent")).toBe(true);
+    expect(container.querySelector("[data-phase-gauge]")?.getAttribute("data-tone")).toBe("urgent");
   });
 
-  it("동시 지목: 알약 `지목` · `모두 동시에` · `{초}초`, data-turn-mode=point, 위 한 줄 없음", () => {
+  it("동시 지목: 알약 `지목` · `모두 동시에`와 헤더 게이지, data-turn-mode=point, 위 한 줄 없음", () => {
     const { container } = mount(makeShowdown({ i: 3, mySeat: 0, left: 7300 }));
     const b = block(container)!;
     expect(b.getAttribute("data-turn-mode")).toBe("point");
     expect(b.getAttribute("data-showdown-step")).toBe("point");
     expect(b.querySelector(".mf-turn__count")?.textContent).toBe("지목");
     expect(b.querySelector(".mf-turn__name")?.textContent).toBe("모두 동시에");
-    expect(b.querySelector(".mf-turn__sec")?.textContent).toBe("8초");
+    expect(b.querySelector(".mf-turn__sec")).toBeNull();
+    expect(container.querySelector("[data-phase-gauge]")?.getAttribute("aria-label")).toBe("남은 시간 8초");
     expect(line(container)).toBeUndefined();
   });
 
@@ -201,14 +203,8 @@ describe("마지막 3인 화면 — 알약·위 한 줄·헤더 (UI-SPEC E-1, �
     expect(line(m.container)).toBe("마지막 셋이에요");
   });
 
-  it("헤더 안내: 내 한마디 차례 '한마디를 골라요', 남의 차례 없음, 동시 지목 '의심되는 사람을 눌러요', 유령은 기존", () => {
-    expect(hint(mount(makeShowdown({ i: 0, mySeat: 0 })).container)).toBe("한마디를 골라요");
-    cleanup();
-    expect(hint(mount(makeShowdown({ i: 0, mySeat: 2 })).container)).toBe("");
-    cleanup();
-    expect(hint(mount(makeShowdown({ i: 3, mySeat: 2 })).container)).toBe("의심되는 사람을 눌러요");
-    cleanup();
-    expect(hint(mount(makeShowdown({ i: 3, mySeat: 1 })).container)).toBe("모두의 직업이 보여요");
+  it.each([{ i: 0, mySeat: 0 }, { i: 0, mySeat: 2 }, { i: 3, mySeat: 2 }, { i: 3, mySeat: 1 }])("한마디·지목의 헤더에 도움말을 덧붙이지 않는다", (opts) => {
+    expect(hint(mount(makeShowdown(opts)).container)).toBe("");
   });
 
   it("닉네임은 글자로 그린다: 알약 이름에 '<b>서연</b>' 이 HTML 이 되지 않는다", () => {
@@ -506,11 +502,12 @@ describe("마지막 3인 — 직업 단어·직업 칩 분리 (L23, T-09.1.1-43)
 });
 
 describe("마지막 3인 — 접근성 (UI-SPEC 접근성·모션)", () => {
-  it("알약은 role=status, 초 숫자는 aria-hidden, 칩 버튼 이름 = 칩 문구, [직접 쓰기] 이름 '직접 쓰기'", () => {
+  it("알약은 role=status, 남은 시간은 헤더 timer가 읽고, 칩 버튼 이름 = 칩 문구, [직접 쓰기] 이름 '직접 쓰기'", () => {
     const { container } = mount(makeShowdown({ i: 0, mySeat: 0 }));
     const pill = container.querySelector(".mf-turn__pill")!;
     expect(pill.getAttribute("role")).toBe("status");
-    expect(pill.querySelector(".mf-turn__sec")!.getAttribute("aria-hidden")).toBe("true");
+    expect(pill.querySelector(".mf-turn__sec")).toBeNull();
+    expect(container.querySelector("[data-phase-gauge]")?.getAttribute("role")).toBe("timer");
     const names = [...sheet(container)!.querySelectorAll("button")].map((b) => b.textContent?.trim());
     expect(names).toEqual(["저는 아니에요", "쟤가 수상해요", "저를 믿어 주세요", "끝까지 지켜봐요", "직접 쓰기"]);
   });

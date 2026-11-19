@@ -27,7 +27,7 @@
   position: relative; display: flex; flex-direction: column; gap: var(--space-lg);
   width: 100%; max-width: 430px; margin: 0 auto; max-height: 80dvh; overflow-y: auto;
   padding: var(--space-lg); padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
-  background: var(--noir-panel); border-radius: 16px 16px 0 0; box-shadow: var(--noir-rail), var(--shadow-card);
+  background: var(--noir-sheet-light), var(--noir-panel); border-radius: var(--noir-surface-radius) var(--noir-surface-radius) 0 0; box-shadow: var(--noir-rail), var(--shadow-card);
   transform: translateY(100%);
   transition: transform var(--mf-sheet-ms) var(--ease-out);
 }
@@ -39,7 +39,7 @@
   width: 100%;
   box-sizing: border-box;
   padding-bottom: var(--space-lg);
-  border-radius: 16px;
+  border-radius: var(--noir-surface-radius);
   opacity: 0;
   transform: translateY(8px);
   transition: transform var(--mf-sheet-ms) var(--ease-out), opacity var(--mf-sheet-ms) var(--ease-out);

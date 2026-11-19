@@ -449,7 +449,7 @@ const noticeOf = (c: ParentNode): HTMLElement | null => c.querySelector<HTMLElem
 describe("GameMap — [의심] 단추 보임 (P24-1·P24-2)", () => {
   it("둘째 날 토론·산 본인: 채팅 기록 위 도구 줄에 의심 단추가 있다", () => {
     const { container } = mountMap(makeView());
-    expect(container.querySelector('[role="group"][aria-label="토론 도구"] [data-suspect-btn]')).toBe(suspectBtn(container));
+    expect(container.querySelector('[role="group"][aria-label="게임 도구"] [data-suspect-btn]')).toBe(suspectBtn(container));
     expect(suspectBtn(container)?.getAttribute("aria-label")).toBe("의심딱지 붙이기");
     expect(stageEl(container).getAttribute("data-suspect-mode")).toBe("off");
   });

@@ -228,7 +228,7 @@ describe("귓속말 CSS 규칙 (09.1.1-09)", () => {
     expect(body).toMatch(/background:\s*var\(--noir-sheet-light\), var\(--noir-panel\)/);
     expect(body).toMatch(/border:\s*1px solid/);
     expect(body).toMatch(/border-color:\s*var\(--noir-line\)/);
-    expect(body).toMatch(/border-radius:\s*var\(--noir-control-radius\)/);
+    expect(body).toMatch(/border-radius:\s*var\(--noir-surface-radius\)/);
     expect(body).toMatch(/padding:\s*12px/);
     expect(body).toMatch(/width:\s*calc\(100% - 20px\)/);
   });
@@ -240,8 +240,10 @@ describe("귓속말 CSS 규칙 (09.1.1-09)", () => {
     expect(body(".mv-line__input")).toMatch(/height:\s*var\(--control-input\)/);
     expect(body(".mv-line__send")).toMatch(/width:\s*var\(--control-input\)/);
     expect(body(".mv-line__send")).toMatch(/height:\s*var\(--control-input\)/);
-    expect(body(".mv-line__close")).toMatch(/width:\s*var\(--tap-min\)/);
-    expect(body(".mv-line__close")).toMatch(/height:\s*var\(--tap-min\)/);
+    const close = rules.find((r) => r.selector === ".mv-closepill")?.body ?? "";
+    expect(close).toMatch(/width:\s*var\(--tap-min\)/);
+    expect(close).toMatch(/height:\s*var\(--tap-min\)/);
+    expect(readFileSync("src/components/v2/LineSheet.tsx", "utf8")).toContain('className="mv-closepill mv-line__close"');
   });
 
   it("입력칸 글자는 16px, 보내기는 금빛 글자와 진행 버튼 면, 글자 수는 고정 너비 숫자", () => {

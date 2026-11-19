@@ -58,7 +58,6 @@ import { HOST_HIDDEN_PHASES, HOST_LINES, type HostKey } from "../../src/game/hos
 import { ROLE_TEXT } from "../../src/game/roleText";
 import { RESULT_TEXT } from "../../src/game/verdict";
 import { JOB_OUTFIT } from "../../src/world/jobOutfit";
-import { CHAT_PANEL_EXTRA as RESULT_CHAT_EXTRA } from "../../src/game/chatUi";
 import { hostRailLayout } from "../../src/components/v2/HostRail";
 import { SIDE_CELL, SIDE_GAP } from "../../src/components/v2/SideColumn";
 import { HOST_RAIL_LABEL } from "../../src/components/v2/HostRail";
@@ -471,8 +470,8 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
   it("직업 의상 표·승리 한 줄·패널 높이가 앱 상수와 같다 (E2E 사본이 어긋나지 않게)", () => {
     expect({ ...r.RESULT_JOB_OUTFIT }).toEqual({ ...JOB_OUTFIT });
     expect({ ...r.RESULT_WIN_TITLE }).toEqual({ citizenWin: RESULT_TEXT.title.citizenWin, mafiaWin: RESULT_TEXT.title.mafiaWin });
-    expect(r.RESULT_PANEL_H).toBe(LOG_H + RESULT_CHAT_EXTRA);
-    expect(r.RESULT_PANEL_H).toBe(160);
+    expect(r.RESULT_PANEL_H).toBe(DISCUSSION_LOG_H + DISCUSSION_PANEL_EXTRA);
+    expect(r.RESULT_PANEL_H).toBe(222);
   });
 
   it("11-12: 다시 하기 알약·쉬는 사람 화면 표식과 훅 sat 가 앱에 있고, 알약 치수가 CSS 와 같다", () => {
@@ -486,9 +485,14 @@ describe("11페이즈 결과 화면 E2E 표식·표(11-05)", () => {
     const css = readFileSync(new URL("src/styles/v2.css", root), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     const pill = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) => (m[1] ?? "").trim() === ".mv-ready")?.[2] ?? "";
     expect(pill).toContain(`width: ${r.READY_PILL.w}px`);
-    expect(pill).toContain(`height: ${r.READY_PILL.h}px`);
-    // 입력줄 여백 192 = 보내기 48 원 + 알약 96 + 요소 사이 8 × 2 + 좌우 16 × 2
-    expect(48 + r.READY_PILL.w + 8 * 2 + 16 * 2).toBe(r.READY_PILL.inputExtra);
+    const dock = readFileSync(new URL("src/styles/room-chat.css", root), "utf8");
+    const tokens = readFileSync(new URL("src/styles/tokens.css", root), "utf8");
+    expect(dock).toMatch(/\.mf-room-chat__advance \.mv-ready\s*\{[^}]*height: var\(--tap-min\)/);
+    expect(tokens).toContain(`--tap-min: ${r.READY_PILL.h}px`);
+    // 입력줄은 도구 줄의 알약과 별개로 보내기·간격·양옆 여백만 가진다.
+    expect(dock).toMatch(/\.mf-room-chat \.mv-chat__form,[^{]+\{ gap: 6px; margin: 8px 12px 12px; \}/);
+    expect(dock).toMatch(/\.mf-room-chat \.mv-chat__send,[^{]+\{ width: var\(--tap-min\)/);
+    expect(r.READY_PILL.h + 6 + 12 * 2).toBe(r.READY_PILL.inputExtra);
   });
 });
 
@@ -527,7 +531,7 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
 
   // 19-04·19-05(D-13): 봇·맵 단추가 방장 줄(data-host-rail-btn)로 옮겨 가 오른쪽 열은 방장도 소리·옷장 둘이다. 19-06: E2E 사본 SIDE_ORDER 도 둘이다.
   // src 에 남은 값 map 은 어느 화면도 쓰지 않는 MapChip 의 줄 아닌 변형 한 곳뿐이다 — 화면이 그 변형을 다시 쓰면 아래 단언이 잡는다
-  it("SIDE_MARKERS(16-06 오른쪽 열 표식)가 src/ 에 있고, 화면이 쓰는 data-side-button 값은 sound·dress 고정 낱말뿐이다(T-16-14)", () => {
+  it("옆 열의 표식은 구 화면의 sound·map에 한정하고 옷장은 공용 도구 표식을 쓴다", () => {
     const side = e2eLib as unknown as { SIDE_MARKERS: readonly string[]; SIDE_ORDER: readonly string[] };
     expect(side.SIDE_MARKERS).toEqual(["data-side-column", "data-side-button"]);
     expect(side.SIDE_MARKERS.filter((m) => !sources.some((s) => s.text.includes(m)))).toEqual([]);
@@ -537,7 +541,8 @@ describe("12페이즈 소리 시험 페이지 E2E 표식·문턱(12-06)", () => 
       for (const m of s.text.replace(/\/\/.*$/gm, "").matchAll(/data-side-button(?:"?\s*[:=]\s*|=)\{?"([a-z]+)"/g)) found.push({ value: m[1]!, f: s.f });
       for (const m of s.text.replace(/\/\/.*$/gm, "").matchAll(/<FloatAction\b[^>]*\sside="([a-z]+)"/g)) found.push({ value: m[1]!, f: s.f });
     }
-    expect([...new Set(found.map((x) => x.value))].sort().join(",")).toBe("dress,map,sound");
+    expect([...new Set(found.map((x) => x.value))].sort().join(",")).toBe("map,sound");
+    expect(sources.some((s) => s.text.includes('data-room-tool="dress"'))).toBe(true);
     const outside = found.filter((x) => !side.SIDE_ORDER.includes(x.value));
     expect(outside.map((x) => `${x.value}@${x.f}`).join(",")).toBe("map@src/components/v2/MapChip.tsx");
     // 화면은 MapChip 을 줄 변형(rail)으로만 쓴다 — 오른쪽 열에 맵이 다시 생기지 않는다

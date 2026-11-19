@@ -2657,12 +2657,12 @@ test("AVATAR_MARKERS: 동작 표식 네 개 + 의상 표식 세 개(10-07) + 잠
 
 // ---- 10-07: 꾸미기 버튼·시트·카드 기하 (dressChecks, D-18) ----
 
-// 360x560 폰: 패널 윗변 310(높이 250). 떠 있는 버튼 48 · 오른쪽 16 · 아랫변 = 패널 윗변 − 8. 시트 = 패널 사각형. 카드 72x112, 사이 8, 왼쪽 12 에서 시작.
+// 일반 폭의 옷장: 도구줄 두 번째 칸과 아래쪽 시트, 카드 72×112.
 const dressGood = () => {
   const panel = rect(0, 310, 360, 250);
   const cards = Array.from({ length: 9 }, (_, i) => rect(12 + i * 80, 366, 72, 112));
   return {
-    float: rect(292, 130, 52, 52),
+    float: rect(62, 321, 44, 44),
     panel,
     sheet: rect(0, 310, 360, 250),
     cards,
@@ -2680,29 +2680,12 @@ test("dressChecks: 정상 값은 DB1·DS1~DS6 모두 통과, 줄 모양은 { id,
   for (const l of lines) assert.deepEqual(Object.keys(l).sort(), ["detail", "id", "label", "ok"]);
 });
 
-test("dressChecks DB1: 지름 52±1 · 오른쪽 여백 16±1 · 아랫변 ≤ 패널 윗변 − 8 중 하나라도 어긋나면 그 항목만 실패", () => {
-  const a = dressGood();
-  a.float = rect(292, 130, 44, 44);
-  onlyFail(dressChecks(a), "DB1");
-  const b = dressGood();
-  b.float = rect(280, 130, 52, 52);
-  onlyFail(dressChecks(b), "DB1");
-  const c = dressGood();
-  c.float = rect(292, 252, 52, 52); // 아랫변 304 > 302
-  onlyFail(dressChecks(c), "DB1");
-  const d = dressGood();
-  d.float = rect(292, 250, 52, 52); // 아랫변 302 — 경계 통과
-  assert.equal(okOf(dressChecks(d)).DB1, true);
-  const e = dressGood();
-  e.float = rect(292, 252, 52, 52);
-  e.kb = true; // 키보드가 열려 있으면 아랫변은 보지 않는다
-  assert.equal(okOf(dressChecks(e)).DB1, true);
-  const f = dressGood();
-  f.float = rect(228, 130, 52, 52); // 두 열로 접힌 둘째 열: 오른쪽 여백 16 + 52 + 12 = 80
-  assert.equal(okOf(dressChecks(f)).DB1, true);
-  const g = dressGood();
-  g.float = rect(240, 130, 52, 52); // 여백 68 — 어느 열도 아니다
-  onlyFail(dressChecks(g), "DB1");
+test("dressChecks DB1: 옷장 버튼은 도구줄 두 번째 44px 칸에 있다", () => {
+  const check = (box) => onlyFail(dressChecks({ ...dressGood(), float: box }), "DB1");
+  check(rect(62, 321, 52, 52));
+  check(rect(12, 321, 44, 44));
+  check(rect(62, 280, 44, 44));
+  check(rect(62, 405, 44, 44));
 });
 
 test("dressChecks DS1: 시트 아랫변 = 패널 아랫변 ±1 · 높이 = 패널과 최소 높이 중 큰 값 ±1", () => {
@@ -3917,7 +3900,7 @@ test("floatButtonChecks boxH: 높이를 주면 그 높이로 판정한다(기본
   assert.equal(okOf(floatButtonChecks(g)).FB4, false);
 });
 
-test("dressChecks: 옷장 단추는 오른쪽 열의 52 원이다 — 48x48 은 실패한다(16-06)", () => {
+test("dressChecks: 옷장 단추는 다른 도구와 같은 44px다", () => {
   const a = dressGood();
   a.float = rect(292, 130, 48, 48);
   onlyFail(dressChecks(a), "DB1");
