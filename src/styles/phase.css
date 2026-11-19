@@ -92,13 +92,26 @@
 .mf-keyword__meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: 20px; font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; color: var(--noir-ink); }
 .mf-keyword__meta[hidden] { display: none; }
 .mf-keyword__count { flex: none; min-width: 3ch; text-align: right; }
-.mf-keyword__count[data-full="true"], .mf-keyword__done { font-weight: 700; }
+.mf-keyword__count[data-full="true"] { font-weight: 700; }
 .mf-keyword__mid { flex: 1; min-width: 0; text-align: center; }
 .mf-keyword__mid .mv-chat__notice { display: block; color: var(--crimson-700); }
 .mf-reveal .mf-card.is-call::before,
 .mf-keyword .mv-chat__field.is-call::before { animation-iteration-count: 1; }
 /* 20자소 답은 입력칸 안에서 가로로 밀린다(입력칸은 줄바꿈 없는 한 줄). 낸 글은 night-700 면 없이 gray-100 글자만(P23-13) */
 .mf-keyword__answer .mv-chat__input[readonly] { color: var(--gray-100); }
+.mf-keyword__answer .mv-chat__input[data-answer-action] { padding-inline-end: var(--tap-min); }
+.mf-keyword__answer .mf-keyword__action {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  display: grid;
+  place-items: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  color: var(--noir-accent);
+}
+.mf-keyword__action[data-answer-check] { pointer-events: none; }
+.mf-keyword__answer .mf-keyword__action:focus-visible { outline-offset: -3px; }
 
 /* 가상 키보드가 올라와도 헤더와 카드가 보이는 영역 안에 있게 한다. */
 .mf-keyword__note[hidden] { display: none; }

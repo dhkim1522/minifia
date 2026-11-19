@@ -113,6 +113,7 @@ const geo = (over = {}) => ({
   card: rect(16, 56, 328, 160),
   meta: rect(28, 132, 304, 20),
   form: rect(28, 156, 304, 56),
+  input: rect(28, 160, 304, 48),
   send: rect(284, 160, 48, 48),
   gauge: rect(140, 24, 80, 8),
   count: rect(289, 134, 40, 16),
@@ -124,6 +125,7 @@ test("KW7: 컴팩트 카드 한 장에 답을 쓸 수 있고 머리와 겹치지
   assert.equal(kw7CompactGeometry(geo({ card: rect(24, 30, 312, 70) })).ok, false); // 머리와 겹침
   assert.equal(kw7CompactGeometry(geo({ card: rect(16, 56, 328, 145) })).ok, false); // 입력줄이 카드 밖
   assert.equal(kw7CompactGeometry(geo({ send: rect(292, 160, 40, 40) })).ok, false);
+  assert.equal(kw7CompactGeometry(geo({ send: rect(332, 160, 48, 48) })).ok, false);
   assert.equal(kw7CompactGeometry(geo({ form: rect(12, 190, 336, 56) })).ok, false); // 보이는 높이 밖
   assert.equal(kw7CompactGeometry(geo({ gauge: rect(0, 0, 0, 0) })).ok, false);
   assert.equal(kw7CompactGeometry(geo({ gauge: rect(40, 24, 80, 8) })).ok, false);

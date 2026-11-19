@@ -171,42 +171,49 @@ describe("키워드 입력줄 — 보내기와 제출 뒤 (P23-12·13)", () => {
     vi.useRealTimers();
   });
 
-  it("빈 글이면 [보내기] 는 aria-disabled 이고 누르거나 제출해도 아무것도 보내지 않는다", () => {
+  it("빈 글과 공백에는 전송을 숨기고 제출을 막는다. 지우면 다시 숨긴다", () => {
     const { container, sent } = renderAnswer(makeView(CITIZEN, 5_000));
-    expect(sendBtn(container).getAttribute("aria-disabled")).toBe("true");
-    fireEvent.click(sendBtn(container));
+    expect(container.querySelector("[data-answer-send], [data-answer-check]")).toBeNull();
+    type(container, "안경");
+    expect(sendBtn(container).closest(".mv-chat__field")).toBe(input(container).parentElement);
+    type(container, "  ");
+    expect(container.querySelector("[data-answer-send], [data-answer-check]")).toBeNull();
     fireEvent.submit(q(container, "form"));
     expect(sent).toHaveLength(0);
     expect(root(container).getAttribute("data-answer-state")).toBe("open");
   });
 
-  it("읽는 3초 중과 연결이 끊겼을 때도 [보내기] 는 aria-disabled 이고 아무것도 보내지 않는다", () => {
+  it("읽는 3초 중에는 전송을 숨기고 연결이 끊기면 비활성화한다", () => {
     const locked = renderAnswer(makeView(CITIZEN));
-    expect(sendBtn(locked.container).getAttribute("aria-disabled")).toBe("true");
+    expect(locked.container.querySelector("[data-answer-send]")).toBeNull();
     fireEvent.submit(q(locked.container, "form"));
     expect(locked.sent).toHaveLength(0);
     cleanup();
     const off = renderAnswer(makeView(CITIZEN, 5_000), { canSend: false });
     type(off.container, "안경");
-    expect(sendBtn(off.container).getAttribute("aria-disabled")).toBe("true");
+    expect((sendBtn(off.container) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.submit(q(off.container, "form"));
     expect(off.sent).toHaveLength(0);
   });
 
-  it("글이 있으면 [보내기]·Enter(제출)가 final:true 로 보내고 곧바로 sent: 읽기 전용·check 아이콘·'단서 보냄'·'냈어요'", () => {
-    const { container, sent } = renderAnswer(makeView(CITIZEN, 5_000));
+  it("글을 보내면 읽기 전용으로 바뀌고 서버가 접수한 뒤 같은 입력칸에 체크와 접근성 상태가 생긴다", () => {
+    const { container, sent, rerenderWith } = renderAnswer(makeView(CITIZEN, 5_000));
     expect(input(container).closest("[data-keyword-card]")).not.toBeNull();
     type(container, "안경");
-    expect(sendBtn(container).getAttribute("aria-disabled")).toBe("false");
+    expect((sendBtn(container) as HTMLButtonElement).disabled).toBe(false);
     expect(sendBtn(container).getAttribute("aria-label")).toBe("단서 보내기");
     fireEvent.click(sendBtn(container));
     expect(sent).toEqual([{ t: "answer", text: "안경", final: true }]);
     expect(root(container).getAttribute("data-answer-state")).toBe("sent");
     expect(input(container).readOnly).toBe(true);
     expect(input(container).value).toBe("안경");
-    expect(sendBtn(container).getAttribute("aria-label")).toBe("단서 보냄");
-    expect(sendBtn(container).querySelector("svg path")!.getAttribute("d")).toBe("M5 12.5l4.5 4.5L19 7.5"); // check 아이콘
-    expect(q(container, "[data-answer-done]").textContent).toBe("냈어요");
+    expect(container.querySelector("[data-answer-send], [data-answer-check], [data-answer-done]")).toBeNull();
+    rerenderWith(makeView({ ...CITIZEN, answer: { text: "안경", final: true } }, 5_000));
+    const check = q(container, "[data-answer-check]");
+    expect(check.tagName).toBe("SPAN");
+    expect(check.parentElement).toBe(input(container).parentElement);
+    expect(check.querySelector("svg path")!.getAttribute("d")).toBe("M5 12.5l4.5 4.5L19 7.5");
+    expect(q(container, "[data-answer-done]").textContent).toBe("단서 보냄");
     expect(q(container, "[data-answer-done]").closest("[data-keyword-card]")).not.toBeNull();
     // 제출 뒤 다시 제출해도 더 보내지 않는다
     fireEvent.submit(q(container, "form"));
@@ -215,7 +222,20 @@ describe("키워드 입력줄 — 보내기와 제출 뒤 (P23-12·13)", () => {
 
   it("[보내기] mousedown 의 기본 동작을 막아 입력칸 포커스를 지킨다", () => {
     const { container } = renderAnswer(makeView(CITIZEN, 5_000));
+    type(container, "안경");
     expect(fireEvent.mouseDown(sendBtn(container))).toBe(false);
+  });
+
+  it("입력 중 키보드 제출을 연달아 요청해도 한글 조합이 끝난 글을 한 번만 보낸다", () => {
+    const { container, sent } = renderAnswer(makeView(CITIZEN, 5_000));
+    fireEvent.compositionStart(input(container));
+    type(container, "안겨");
+    fireEvent.submit(q(container, "form"));
+    fireEvent.submit(q(container, "form"));
+    expect(sent).toHaveLength(0);
+    type(container, "안경");
+    fireEvent.compositionEnd(input(container));
+    expect(sent).toEqual([{ t: "answer", text: "안경", final: true }]);
   });
 
   it("금지어로 거절되면 '쓸 수 없는 말이에요'(role=status) 2.5초, 입력 가능으로 돌아오고 글이 남는다", () => {
@@ -229,6 +249,8 @@ describe("키워드 입력줄 — 보내기와 제출 뒤 (P23-12·13)", () => {
     expect(root(container).getAttribute("data-answer-state")).toBe("open");
     expect(input(container).value).toBe("안경");
     expect(input(container).readOnly).toBe(false);
+    expect(sendBtn(container).tagName).toBe("BUTTON");
+    expect(container.querySelector("[data-answer-check]")).toBeNull();
     act(() => {
       vi.advanceTimersByTime(2_500);
     });
@@ -254,7 +276,7 @@ describe("키워드 입력줄 — 보내기와 제출 뒤 (P23-12·13)", () => {
     expect(q(container, "[data-keyword-card]").classList.contains("is-still")).toBe(true);
     expect(root(container).getAttribute("data-answer-state")).toBe("sent");
     expect(input(container).value).toBe("안경");
-    expect(sendBtn(container).getAttribute("aria-label")).toBe("단서 보냄");
+    expect(q(container, "[data-answer-done]").textContent).toBe("단서 보냄");
   });
 
   it("재접속: 초안이면 글을 채우고 open 으로 이어 쓴다", () => {

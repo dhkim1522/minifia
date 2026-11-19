@@ -123,7 +123,7 @@ export function kw5InputLimit(m) {
   if (m.countText.trim() !== `${ANSWER_MAX_GRAPHEMES_COPY}/${ANSWER_MAX_GRAPHEMES_COPY}`) bad.push(`글자 수 '${m.countText}'`);
   if (m.afterSend.state !== "sent") bad.push(`제출 뒤 상태 ${m.afterSend.state}`);
   if (m.afterSend.readOnly !== true) bad.push("제출 뒤 입력칸이 읽기 전용이 아님");
-  if (m.afterSend.label !== "단서 보냄") bad.push(`제출 뒤 [보내기] 이름 '${m.afterSend.label}'`);
+  if (m.afterSend.label !== "단서 보냄") bad.push(`접수 상태 '${m.afterSend.label}'`);
   return result("KW5", label, bad);
 }
 
@@ -144,12 +144,12 @@ export function kw6Reject(pages) {
 }
 
 /**
- * KW7(P23-7) 키보드 열림 컴팩트 카드 기하. m = { vw, vh(보이는 영역 높이), compact(data-compact), header, card, meta, form, send, gauge, count } (사각형 { left, top, right, bottom, width, height }).
+ * KW7(P23-7) 키보드 열림 컴팩트 카드 기하. m = { vw, vh(보이는 영역 높이), compact(data-compact), header, card, meta, form, input, send, gauge, count } (사각형 { left, top, right, bottom, width, height }).
  * 카드가 컴팩트형이고 머리와 겹치지 않는다. 메타·입력줄은 카드 안에서 서로 겹치지 않고 보내기 44 이상, 시간 막대·글자 수도 보인다.
  */
 export function kw7CompactGeometry(m) {
   const label = "키보드 열림: 머리 아래 컴팩트 카드 안에 입력줄·글자 수·보내기가 들어가고 모두 보임";
-  const parts = m && isNum(m.vw) && isNum(m.vh) && ["header", "card", "meta", "form", "send", "gauge", "count"].every((k) => rectOk(m[k]));
+  const parts = m && isNum(m.vw) && isNum(m.vh) && ["header", "card", "meta", "form", "input", "send", "gauge", "count"].every((k) => rectOk(m[k]));
   if (!parts) return noMeasure("KW7", label, "머리·카드·메타·입력줄·보내기·시간 막대·글자 수 사각형");
   const bad = [];
   if (m.compact !== true) bad.push("카드가 컴팩트형(data-compact)이 아님");
@@ -162,6 +162,8 @@ export function kw7CompactGeometry(m) {
   // 공용 헤더의 좌우 패딩(14px, 10px) 차이 때문에 실제 가운데에서 2px 옆에 놓인다.
   if (Math.abs((m.gauge.left + m.gauge.right - m.header.left - m.header.right) / 2) > 2 + OVERLAP_EPS) bad.push("시간 막대가 머리 가운데에 있지 않음");
   if (m.send.width + OVERLAP_EPS < TAP_MIN || m.send.height + OVERLAP_EPS < TAP_MIN) bad.push(`[보내기] ${fmt(m.send.width)}x${fmt(m.send.height)} < ${TAP_MIN}`);
+  if (m.send.left < m.input.left - OVERLAP_EPS || Math.abs(m.send.right - m.input.right) > OVERLAP_EPS ||
+    m.send.top < m.input.top - OVERLAP_EPS || m.send.bottom > m.input.bottom + OVERLAP_EPS) bad.push("[보내기]가 입력칸 오른쪽 안에 없음");
   return result("KW7", label, bad);
 }
 
@@ -321,7 +323,7 @@ const readDomText = (page) =>
     return { html: document.documentElement.outerHTML, attrs: attrs.join("\n") };
   });
 
-/** 입력줄 한 장: 입력칸 자소 수·글자 수 글·상태·읽기 전용·[보내기] 이름 */
+/** 입력줄 한 장: 입력칸 자소 수·글자 수 글·상태·읽기 전용·서버 접수 상태 */
 const readAnswerLine = (page) =>
   page.evaluate(() => {
     const root = document.querySelector("[data-answer-state]");
@@ -333,7 +335,7 @@ const readAnswerLine = (page) =>
       inputLen: [...new Intl.Segmenter("ko", { granularity: "grapheme" }).segment(v)].length,
       countText: root?.querySelector("[data-answer-count]")?.textContent ?? "",
       readOnly: !!input && input.readOnly,
-      label: root?.querySelector("[data-answer-send]")?.getAttribute("aria-label") ?? null,
+      label: root?.querySelector("[data-answer-done]")?.textContent ?? null,
     };
   });
 
@@ -355,7 +357,9 @@ const readGeometry = (page) =>
       card: rectOf(q("[data-keyword-card]")),
       meta: rectOf(q(".mf-keyword__meta")),
       form: rectOf(q(".mv-chat__form")),
+      input: rectOf(q("[data-answer-input]")),
       send: rectOf(q("[data-answer-send]")),
+      check: rectOf(q("[data-answer-check]")),
       gauge: rectOf(q("[data-phase-gauge]")),
       count: rectOf(q("[data-answer-count]")),
     };
@@ -519,19 +523,29 @@ export function makeKeywordFlows({ recorder, attempt, openGame, closeGame, allAt
       const w = await readWatch(gp);
       const openAt = w?.states?.find((s) => s.state === "open")?.at;
       rec1(rec, `${id}/citizen`, kw4ReadLock({ firstState: w?.states?.[0]?.state, firstAtMs: w?.states?.[0] ? w.states[0].at - t0 : undefined, openAtMs: openAt !== undefined ? openAt - t0 : undefined, callAtMs: w?.callAt != null ? w.callAt - t0 : null }));
+      const blank = await readGeometry(gp);
 
       // KW6: 시민·마피아가 같은 금지어(그 판 키워드)를 보낸다
       const rej = await rejectBoth([{ who: "참가자(시민 편)", page: gp }, { who: "방장(마피아)", page: hp }], word);
       rec1(rec, `${id}/reject`, kw6Reject(rej));
 
-      // KW5: 21자 입력 → 20 에서 멈춤, n/20 → 보내면 sent·읽기 전용
-      await gp.locator("[data-answer-input]").fill(KW_LONG);
+      // KW5: 21자 입력 → 20 에서 멈춤, n/20 → 키보드로 보내면 접수 표시·읽기 전용
+      const answerInput = gp.locator("[data-answer-input]");
+      await answerInput.fill(KW_LONG);
       await sleep(100);
       const longLine = await readAnswerLine(gp);
-      await at("KW5 보내기", () => typeAndSend(gp, KW_WORD));
-      await gp.waitForSelector('[data-answer-state="sent"]', { timeout: 4000 }).catch(() => {});
+      await answerInput.fill(KW_WORD);
+      const withText = await readGeometry(gp);
+      await at("KW5 키보드 전송", () => answerInput.press("Enter"));
+      await gp.waitForSelector("[data-answer-check]", { timeout: 4000 });
       const sent = await readAnswerLine(gp);
+      const confirmed = await readGeometry(gp);
       rec1(rec, `${id}/input`, kw5InputLimit({ inputLen: longLine.inputLen, countText: longLine.countText, afterSend: { state: sent.state, readOnly: sent.readOnly, label: sent.label } }));
+      const stays = (before, after) => before && after && ["left", "top", "width", "height"].every((key) => Math.abs(before[key] - after[key]) <= OVERLAP_EPS);
+      rec(`${id}/input`, "KW5b", "빈 입력칸에는 아이콘이 없고 입력칸 위치를 그대로 두며 전송과 체크가 같은 자리에 뜬다",
+        blank.send === null && blank.check === null && confirmed.send === null &&
+          stays(blank.input, withText.input) && stays(withText.input, confirmed.input) && stays(withText.send, confirmed.check),
+        JSON.stringify({ blank: blank.input, withText: withText.input, confirmed: confirmed.input, send: withText.send, check: confirmed.check }));
 
       // 방장도 거절 뒤 다른 글을 보낸다(두 번째로 낸 사람)
       await at("방장 보내기", () => typeAndSend(hp, "다른말"));
