@@ -364,7 +364,7 @@ E2E 판정(`scripts/e2e/lib.mjs`): `sideColumnChecks` (SC1~SC6, 폰 6종) — �
 
 ## 에셋 자동 검사
 
-현재 입장 장면은 별도 원화 `public/backgrounds/noir-entry.webp`를 사용한다. 아래의 맵 렌더링 명령은 이 파일을 덮어쓰지 않는다.
+홈과 초대 링크 미리보기에는 실제 재즈 바와 좌석 모델을 렌더한 장면을 쓴다. 로컬 개발 서버가 켜져 있을 때 `node scripts/render-entry-scene.mjs http://127.0.0.1:5173`로 `public/backgrounds/noir-entry.webp`를 만들고, 이어서 `node scripts/make-og.mjs`로 공유 이미지를 만든다.
 
 - 로컬 개발 서버 실행 후 `node scripts/render-noir-assets.mjs http://127.0.0.1:5173`으로 실제 Three.js 모델에서 배경, 560×320 맵 카드, 전신·얼굴·역할·유령·의상 그림을 만든다. `npm run backdrops -- http://127.0.0.1:5173`은 배경 WebP 7종만 만들고 용량 상한을 검사한다.
 - 역할 카드 그림만 갱신할 때는 `node scripts/render-noir-assets.mjs http://127.0.0.1:5173 --roles-only`를 쓴다.

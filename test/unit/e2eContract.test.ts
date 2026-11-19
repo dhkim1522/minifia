@@ -988,8 +988,8 @@ describe("방장 줄 E2E 사본 계약 (19-06, T-19-18·T-19-19; 22-07 판 종�
     HOST_RAIL_E2E: { cell: number; gap: number; crownH: number; left: number; testShift: number };
     HOST_RAIL_MARKERS: readonly string[];
     HOST_RAIL_ORDER: readonly string[];
-    LAMP_RGB: string;
-    NIGHT600_RGB: string;
+    TOOL_ICON_RGB: string;
+    TOOL_BORDER_RGBA: string;
     LOG_H: number;
     lobbyPanelHeight(logH: number): number;
     hostRailLayoutE2E(n: number, maxH: number): Layout;
@@ -1042,14 +1042,14 @@ describe("방장 줄 E2E 사본 계약 (19-06, T-19-18·T-19-19; 22-07 판 종�
     expect(readFileSync(new URL("scripts/e2e/lib.mjs", root), "utf8")).toContain(`const HOST_RAIL_NAME = "${HOST_RAIL_LABEL}";`);
   });
 
-  it("색 사본 둘이 tokens.css 의 --light-lamp·--night-600 과 같고 서로 다르다, 줄 단추·오른쪽 열 단추가 그 토큰을 테두리에 쓴다", () => {
-    expect(lib.LAMP_RGB).toBe(rgbOf("--light-lamp"));
-    expect(lib.NIGHT600_RGB).toBe(rgbOf("--night-600"));
-    expect(lib.LAMP_RGB).not.toBe(lib.NIGHT600_RGB);
-    expect(body(".mv-hostrail-btn")).toContain("border: 1.5px solid var(--light-lamp)");
-    expect(body(".mv-hostrail-btn")).toContain("color: var(--light-lamp)");
-    expect(body(".mv-float")).toContain("border: 1px solid var(--night-600)");
-    expect(body(".mv-sound")).toContain("border: 1px solid var(--night-600)");
+  it("방장 줄과 참가자 도구의 테두리가 토론 타일 색과 같다", () => {
+    expect(lib.TOOL_ICON_RGB).toBe(rgbOf("--noir-paper"));
+    expect(lib.TOOL_BORDER_RGBA).toBe("rgba(100, 115, 142, 0.65)");
+    expect(tokens).toContain("--noir-control-line: #64738ea6");
+    for (const selector of [".mv-hostrail-btn", ".mv-float", ".mv-sound"]) {
+      expect(body(selector)).toContain("border: 1px solid var(--noir-control-line)");
+      expect(body(selector)).toContain("color: var(--noir-paper)");
+    }
   });
 
   it("판 종류 흐름(mode-rail·mode-pick·mode-basic·mode-leak)과 modes.mjs 는 없고 방장 줄 판정(hostRailChecks)은 lib.mjs 에 남아 map-select 가 쓴다", () => {

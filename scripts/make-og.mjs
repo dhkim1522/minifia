@@ -8,8 +8,8 @@ const { width, height } = await art.metadata();
 const cardWidth = 1200;
 const cardHeight = 630;
 const cropHeight = Math.round(width * cardHeight / cardWidth);
-// 세 사람의 얼굴과 테이블 조명이 원화 높이의 39% 지점을 둘러싼다.
-const top = Math.max(0, Math.min(height - cropHeight, Math.round(height * 0.39 - cropHeight / 2)));
+// 세 사람의 얼굴과 테이블 조명이 원화 높이의 44% 지점을 둘러싼다.
+const top = Math.max(0, Math.min(height - cropHeight, Math.round(height * 0.44 - cropHeight / 2)));
 await art.extract({ left: 0, top, width, height: cropHeight })
   .resize(cardWidth, cardHeight)
   .png({ palette: true, colours: 256, dither: 0.6 })

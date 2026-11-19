@@ -681,6 +681,7 @@ export function readHostRail(page) {
           isCall: el.classList.contains("is-call"),
           role: el.getAttribute("role"),
           ariaChecked: el.getAttribute("aria-checked"),
+          ariaPressed: el.getAttribute("aria-pressed"),
           ariaDisabled: el.getAttribute("aria-disabled"),
           label: el.getAttribute("aria-label"),
         };

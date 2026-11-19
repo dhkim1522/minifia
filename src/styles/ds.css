@@ -33,8 +33,8 @@
 /* 꺼진 버튼도 읽히되 켜진 버튼보다 분명히 흐리게(글자 대비 4.5:1 이상, UAT G-01-1b) */
 .mf-btn:disabled { opacity: 0.6; cursor: default; }
 .mf-btn--block { width: 100%; }
-.mf-btn--primary { background: var(--noir-accent); color: var(--noir-ink); border-radius: var(--noir-control-radius); box-shadow: none; }
-.mf-btn--secondary { background: var(--noir-raised); color: var(--noir-paper); border-radius: var(--noir-control-radius); border-color: var(--noir-line); }
+.mf-btn--primary { background: var(--noir-action); color: var(--noir-accent); border-radius: var(--noir-control-radius); box-shadow: none; border: 1px solid var(--noir-action-line); }
+.mf-btn--secondary { background: var(--noir-control); color: var(--noir-paper); border-radius: var(--noir-control-radius); border: 1px solid var(--noir-control-line); }
 .mf-btn--text { background: transparent; color: var(--gray-300); min-height: var(--tap-min); font-size: 14px; font-weight: 400; }
 .mf-btn--compact { min-height: var(--tap-min); }
 
@@ -97,8 +97,6 @@
 .mf-entry__actions { margin-top: auto; display: flex; flex-direction: column; gap: var(--space-md); }
 .mf-entry__actions .mf-field__label { color: var(--gray-50); text-shadow: var(--shadow-text); }
 .mf-entry__actions .mf-field__input { background: color-mix(in srgb, var(--noir-inset) 94%, transparent); }
-.mf-entry__actions .mf-btn--primary { clip-path: var(--noir-ticket); }
-.mf-entry__actions .mf-btn--primary:focus-visible { clip-path: none; }
 .mf-nick-sheet { display: flex; flex-direction: column; gap: var(--space-md); }
 
 /* Toast: 알약, 한 번에 하나, 2초. 진홍 없음. */

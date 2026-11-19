@@ -2432,9 +2432,8 @@ export const HOST_RAIL_MARKERS = Object.freeze(["data-host-rail", "data-host-rai
 /** 줄 단추의 위 → 아래 순서([data-host-rail-btn] 값). 봇은 대기실의 테스트 방에만 있다(22-03 에서 튜토리얼 토글이 없어졌다) */
 export const HOST_RAIL_ORDER = Object.freeze(["map", "bots"]);
 /** 방장 줄과 오른쪽 열의 테두리 색 토큰을 getComputedStyle 의 형식으로 비교한다. */
-export const LAMP_RGB = "rgb(255, 207, 138)";
-export const NIGHT600_RGB = "rgb(42, 55, 96)";
-export const NOIR_LINE_RGB = "rgb(83, 101, 128)";
+export const TOOL_BORDER_RGBA = "rgba(100, 115, 142, 0.65)";
+export const TOOL_ICON_RGB = "rgb(248, 240, 227)";
 /** 줄의 접근성 이름(src/components/v2/HostRail.tsx HOST_RAIL_LABEL 사본) — 왕관 표식이 빠져도 남는다 */
 const HOST_RAIL_NAME = "방장 전용";
 /** 줄의 오른쪽 끝과 오른쪽 열의 왼쪽 끝 사이 최소 간격(UI-SPEC F-1) */
@@ -2531,7 +2530,7 @@ export function hostRailMeasure(s) {
  * HR3 줄(표식 + 단추)이 아래 패널(윗변 − 8)·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열 단추와 교차 0, 오른쪽 열과는 가로 16 이상 떨어진다
  *     (접힌 줄의 둘째 열과 위 알림의 겹침만 HOST_RAIL_KNOWN_LIMITS 의 알려진 한계 — 잰 값을 남기고 실패로 세지 않는다) ·
  * HR4 순서·개수: 대기실 map(mapsOn)·bots(botsOn), 결과 map(mapsOn). 오른쪽 열은 소리·옷장 둘 ·
- * HR5 줄 단추 금빛(켜진 토글은 테두리만), 오른쪽 소리 단추 누아르 구분선, 옷장 night-600, 줄 단추에 .is-call 없음 ·
+ * HR5 방장·참가자 도구의 공통 테두리와 선택 색, 줄 단추에 .is-call 없음 ·
  * HR6 왕관 표식 유무·열별 칸 수가 hostRailLayoutE2E(n, 잰 최대 높이)와 같다(최대 높이 ±2 안에서 배치가 갈리면 판정하지 않고 info), 줄의 접근성 이름은 "방장 전용" ·
  * HR7 튜토리얼 토글(id "tutorial"·role=switch)은 어느 판에도 없고 패널 안 옛 스위치 줄 0 · HR8 대기실 패널 높이 222±1(방장·참가자 같다).
  */
@@ -2543,7 +2542,7 @@ export function hostRailChecks(s = {}) {
     HR2: `줄 단추 지름 ${E.cell}±1 · 칸 사이 ${E.gap}±1 · 왼쪽 ${E.left}±1 · 윗변 = 띠 아랫변 + ${E.gap}(테스트 방 + ${E.testShift}) ±2`,
     HR3: "줄이 아래 패널·머리 단추·자막 띠·[테스트]·위 알림·오른쪽 열과 교차 0",
     HR4: "줄 순서·개수: 맵(허용 맵 둘 이상)·봇, 결과는 맵 · 오른쪽 열은 소리·옷장",
-    HR5: "줄 단추는 금빛, 오른쪽 소리·옷장 테두리는 각 중립색 · 줄 단추에 빛남(.is-call) 없음",
+    HR5: "양쪽 도구는 같은 테두리와 상아색 아이콘 · 줄 단추에 빛남(.is-call) 없음",
     HR6: `왕관 표식·열 수는 F-2 식대로 · 줄의 접근성 이름 "${HOST_RAIL_NAME}"`,
     HR7: "튜토리얼 토글 없음(22-03) · role=switch 단추 0 · 패널 안 옛 스위치 줄 0",
     HR8: `대기실 패널 높이 ${panelH}±1(방장·참가자 같다)`,
@@ -2645,14 +2644,14 @@ export function hostRailChecks(s = {}) {
     // HR5
     const bad5 = [];
     for (const b of btns) {
-      if (b.borderColor !== LAMP_RGB) bad5.push(`${b.id} 테두리 ${b.borderColor}`);
-      const filled = b.role === "switch" && b.ariaChecked === "true";
-      if (!filled && b.color !== LAMP_RGB) bad5.push(`${b.id} 아이콘 ${b.color}`);
+      const active = b.ariaPressed === "true" || b.ariaChecked === "true";
+      if (b.borderColor !== (active ? TOOL_ICON_RGB : TOOL_BORDER_RGBA)) bad5.push(`${b.id} 테두리 ${b.borderColor}`);
+      if (b.color !== TOOL_ICON_RGB) bad5.push(`${b.id} 아이콘 ${b.color}`);
       if (b.isCall !== false) bad5.push(`${b.id} 에 빛남(.is-call)`);
     }
     if (s.side.length === 0) bad5.push("견줄 오른쪽 열 단추가 없음");
     for (const b of s.side) {
-      const expected = b.side === "sound" ? NOIR_LINE_RGB : NIGHT600_RGB;
+      const expected = TOOL_BORDER_RGBA;
       if (b.borderColor !== expected) bad5.push(`오른쪽 열 ${b.side} 테두리 ${b.borderColor} (기대 ${expected})`);
     }
     out.push(result("HR5", L.HR5, bad5));

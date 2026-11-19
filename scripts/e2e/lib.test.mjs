@@ -154,9 +154,8 @@ import {
   HOST_RAIL_KNOWN_LIMITS,
   HOST_RAIL_MARKERS,
   HOST_RAIL_ORDER,
-  LAMP_RGB,
-  NIGHT600_RGB,
-  NOIR_LINE_RGB,
+  TOOL_BORDER_RGBA,
+  TOOL_ICON_RGB,
   hostRailChecks,
   hostRailLayoutE2E,
   hostRailMeasure,
@@ -4086,10 +4085,9 @@ test("sideColumnChecks: 빠진 입력은 전부 측정값 없음으로 실패한
 
 // ---- 19-06: 방장 줄 hostRailChecks(HR1~HR8) — 22-07: 판 종류 칩·시트 판정(CH·MS)과 기본 마피아 판정(BM)은 판 종류와 함께 없어졌다 ----
 
-const LAMP = "rgb(255, 207, 138)";
-const N600 = "rgb(42, 55, 96)";
-const NOIR_LINE = "rgb(83, 101, 128)";
-const railBtn = (id, top, left = 16, extra = {}) => ({ id, rect: rect(left, top, 52, 52), borderColor: LAMP, color: LAMP, isCall: false, role: null, ariaChecked: null, ...extra });
+const IVORY = "rgb(248, 240, 227)";
+const TOOL_LINE = "rgba(100, 115, 142, 0.65)";
+const railBtn = (id, top, left = 16, extra = {}) => ({ id, rect: rect(left, top, 52, 52), borderColor: TOOL_LINE, color: IVORY, isCall: false, role: null, ariaChecked: null, ...extra });
 /**
  * 390×844 방장 대기실(테스트 방) 정상값(22-07: 줄 단추는 [맵]·[봇] 둘): 띠 면 아랫변 123, [테스트] 131~175, 줄 윗변 183(= 123 + 12 + 48), 왕관 표식 20 + 12, 단추 둘 215·279(아랫변 331),
  * 패널 222(윗변 622) → 줄 최대 높이 431(= 622 − 8 − 135 − 48). 오른쪽 열은 소리·옷장 둘(left 322).
@@ -4111,7 +4109,7 @@ function railIn(over = {}) {
     head: [{ kind: "나가기", rect: rect(16, 8, 44, 44) }, { kind: "공유", rect: rect(330, 8, 44, 44) }],
     test: rect(16, 131, 90, 44),
     toast: null,
-    side: [{ side: "sound", rect: rect(322, 135, 52, 52), borderColor: NOIR_LINE }, { side: "dress", rect: rect(322, 199, 52, 52), borderColor: N600 }],
+    side: [{ side: "sound", rect: rect(322, 135, 52, 52), borderColor: TOOL_LINE }, { side: "dress", rect: rect(322, 199, 52, 52), borderColor: TOOL_LINE }],
     panelToggles: 0,
     ...over,
   };
@@ -4137,12 +4135,11 @@ const hrLine = (args, id) => {
 const moveBtn = (s, id, rc) => ({ buttons: s.buttons.map((x) => (x.id === id ? { ...x, rect: rc } : x)) });
 const editBtn = (s, id, extra) => ({ buttons: s.buttons.map((x) => (x.id === id ? { ...x, ...extra } : x)) });
 
-test("hostRail 사본 상수: 지름 52·간격 12·표식 20·왼쪽 16·테스트 방 48, 순서 map·bots, 색 셋, 표식 셋", () => {
+test("hostRail 사본 상수: 지름 52·간격 12·표식 20·왼쪽 16·테스트 방 48, 순서 map·bots, 색 둘, 표식 셋", () => {
   assert.deepEqual({ ...HOST_RAIL_E2E }, { cell: 52, gap: 12, crownH: 20, left: 16, testShift: 48 });
   assert.deepEqual([...HOST_RAIL_ORDER], ["map", "bots"]);
-  assert.equal(LAMP_RGB, LAMP);
-  assert.equal(NIGHT600_RGB, N600);
-  assert.equal(NOIR_LINE_RGB, NOIR_LINE);
+  assert.equal(TOOL_ICON_RGB, IVORY);
+  assert.equal(TOOL_BORDER_RGBA, TOOL_LINE);
   assert.deepEqual([...HOST_RAIL_MARKERS], ["data-host-rail", "data-host-rail-btn", "data-host-rail-crown"]);
 });
 
@@ -4263,7 +4260,7 @@ test("HR4: 순서·개수 — 대기실 map·bots(봇 도구가 켜진 방), 결
   assert.ok(hrFails(railIn({ buttons: s.buttons.slice(0, 1) })).includes("HR4")); // 봇 도구가 켜졌는데 봇 단추가 없음
   assert.ok(hrFails(railResult({ buttons: [railBtn("map", 167), railBtn("bots", 231)] })).includes("HR4")); // 결과 화면에 봇
   assert.ok(hrFails(railIn({ buttons: [railBtn("mode", 215), ...s.buttons.map((b, i) => ({ ...b, rect: rect(16, 279 + i * 64, 52, 52) }))] })).includes("HR4")); // 옛 [판 종류] 표식(mode)이 남은 줄
-  assert.ok(hrFails(railIn({ side: [...s.side, { side: "map", rect: rect(322, 263, 52, 52), borderColor: N600 }] })).includes("HR4")); // 오른쪽 열에 맵
+  assert.ok(hrFails(railIn({ side: [...s.side, { side: "map", rect: rect(322, 263, 52, 52), borderColor: TOOL_LINE }] })).includes("HR4")); // 오른쪽 열에 맵
   assert.ok(hrFails(railIn({ side: [s.side[0]] })).includes("HR4")); // 옷장 없음
   // 두 열은 왼쪽 열부터 위에서 아래로 읽는다(접힌 줄 모양: 단추 셋 — 아래는 순서 비교 자체만 본다)
   const twoBad = railNoCrown(365, { buttons: [railBtn("bots", 183), railBtn("map", 247), railBtn("bots", 183, 80)] });
@@ -4288,16 +4285,14 @@ test("HR4(22-07): 흐름이 넘기는 mapsOn = railMapsOn(허용 맵 둘 이상)
   assert.deepEqual(hrFails(railResult({ mapsOn: railMapsOn(true) })), []);
 });
 
-test("HR5: 방장 줄은 금빛, 소리는 누아르 구분선, 옷장은 night-600", () => {
+test("HR5: 방장·참가자 도구는 같은 윤곽과 선택 색을 사용한다", () => {
   const s = railIn();
-  assert.ok(hrFails(railIn(editBtn(s, "map", { borderColor: N600 }))).includes("HR5"));
+  assert.ok(hrFails(railIn(editBtn(s, "map", { borderColor: IVORY }))).includes("HR5"));
   assert.ok(hrFails(railIn(editBtn(s, "bots", { isCall: true }))).includes("HR5"));
-  assert.ok(hrFails(railIn(editBtn(s, "map", { color: "rgb(230, 232, 240)" }))).includes("HR5"));
-  // 켜진 토글은 금빛 채움이라 아이콘 색이 어둡다 — 테두리만 본다
-  assert.ok(!hrFails(railIn(editBtn(s, "bots", { role: "switch", ariaChecked: "true", color: "rgb(12, 16, 32)" }))).includes("HR5"));
-  assert.ok(hrFails(railIn({ side: [s.side[0], { ...s.side[1], borderColor: LAMP }] })).includes("HR5")); // 오른쪽 열이 금빛
-  assert.ok(hrFails(railIn({ side: [{ ...s.side[0], borderColor: N600 }, s.side[1]] })).includes("HR5"));
-  assert.ok(hrFails(railIn({ side: [] })).includes("HR5")); // 견줄 오른쪽 열이 없으면 실패
+  assert.ok(hrFails(railIn(editBtn(s, "map", { color: TOOL_LINE }))).includes("HR5"));
+  assert.ok(!hrFails(railIn(editBtn(s, "bots", { ariaPressed: "true", borderColor: IVORY }))).includes("HR5"));
+  assert.ok(hrFails(railIn({ side: [s.side[0], { ...s.side[1], borderColor: IVORY }] })).includes("HR5"));
+  assert.ok(hrFails(railIn({ side: [] })).includes("HR5"));
 });
 
 test("HR6: 왕관 표식·열 수는 F-2 식대로 — 문턱보다 10 큰데 표식 없음은 실패, 문턱 ±2 안은 참고 줄(info), 표식이 없어도 접근성 이름은 있어야 한다", () => {

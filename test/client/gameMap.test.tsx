@@ -147,6 +147,13 @@ afterEach(() => {
 });
 
 describe("GameMap — 아침 유언 인용", () => {
+  it("첫날 단서가 모두 비어 있으면 단서 도구를 표시하지 않는다", () => {
+    const view = makeView();
+    view.day!.keyword = { genre: "영화", answers: [{ seat: 1, order: 1, text: null }] };
+    const { container } = mount(view);
+    expect(container.querySelector('[data-playtest-action="clues"]')).toBeNull();
+  });
+
   it("둘째 날 토론에는 이번 아침 피해자의 공개 유언만 표시한다", () => {
     const store = new WorldStore();
     const chat = new ChatStore();
@@ -165,11 +172,14 @@ describe("GameMap — 아침 유언 인용", () => {
       ] }, 1, NOW);
     });
     rerender(frame(makeView({ n: 2, dead: [1, 2] })));
-    fireEvent.click(container.querySelector('[data-playtest-action="clues"]')!);
+    expect(container.querySelector('[data-playtest-action="clues"]')).toBeNull();
     expect(evidence()).toBeNull();
     act(() => chat.apply({ t: "chatLog", lines: [
       { ch: "all", k: "will", at: NOW, seat: 2, seq: 3, text: "이번 아침 유언" },
     ] }, 1, NOW));
+    const record = container.querySelector<HTMLButtonElement>('[data-playtest-action="clues"]')!;
+    expect(record.textContent).toBe("아침 유언");
+    fireEvent.click(record);
     expect(evidence()?.textContent).toBe("아침 유언서준이번 아침 유언");
     fireEvent.click(evidence()!.querySelector("[data-evidence-quote]")!);
     expect(input().value).toBe("서준 “이번 아침 유언”");
@@ -223,7 +233,7 @@ describe("GameMap — 실험방 토론 도구", () => {
     expect(send.mock.calls.some(([message]) => message.t === "chat")).toBe(false);
   });
 
-  it("토론 시작부터 투표를 요청하고 근처에 아무도 없어도 의심 모드로 걸을 수 있다", () => {
+  it("토론 시작부터 토론 스킵을 요청하고 근처에 아무도 없어도 의심 모드로 걸을 수 있다", () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
     try {
@@ -232,7 +242,7 @@ describe("GameMap — 실험방 토론 도구", () => {
       Object.assign(view.day!, { voteOpensAt: NOW + 45_000, voteReadyTotal: 4, voteReadyRequired: 3 });
       const { container } = mount(view, { send });
       const button = endButton(container)!;
-      expect(button.getAttribute("aria-label")).toContain("0/4");
+      expect(button.getAttribute("aria-label")).toContain("필요한 4명 중 0명 요청");
       fireEvent.click(button);
       expect(send).toHaveBeenCalledWith({ t: "endDiscussion", on: true });
       expect(button.getAttribute("aria-pressed")).toBe("true");
@@ -244,7 +254,7 @@ describe("GameMap — 실험방 토론 도구", () => {
       expect(stage.props?.pick?.seats.size).toBe(0);
       expect(container.textContent).toContain("조금 더 가까이 가 보세요");
       act(() => vi.advanceTimersByTime(45_000));
-      expect(button.getAttribute("aria-label")).toContain("0/3");
+      expect(button.getAttribute("aria-label")).toContain("필요한 3명 중 0명 요청");
     } finally {
       vi.useRealTimers();
     }
@@ -276,7 +286,7 @@ describe("GameMap — 낮 토론 [토론 끝내기] (DAY-03, 08-13)", () => {
     expect(root.getAttribute("data-phase")).toBe("discussion");
     expect(root.querySelector("[data-world-stage-fake]")).not.toBeNull();
     expect(container.querySelectorAll("[data-end-discussion]").length).toBe(1);
-    expect(endButton(container)?.getAttribute("aria-label")).toBe("투표 요청, 0/3명 요청");
+    expect(endButton(container)?.getAttribute("aria-label")).toBe("토론 스킵, 필요한 3명 중 0명 요청");
     expect(endButton(container)?.getAttribute("aria-pressed")).toBe("false");
     // 5명 → 과반 3
     expect(countMax(container)).toBe(3);
@@ -537,7 +547,7 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
     expect(stage.props?.stageInsets).toEqual({ top: 62, bottom: LOG_H + 92 });
   });
 
-  it("키보드가 열려도 투표 요청은 같은 줄에 있고 기록 칸을 42px로 줄여 패널을 336px 올린다", () => {
+  it("키보드가 열려도 토론 스킵은 같은 줄에 있고 기록 칸을 42px로 줄여 패널을 336px 올린다", () => {
     const vv = installVV(INNER_H);
     const { container } = mount(makeView());
     const vote = endButton(container);
@@ -556,7 +566,9 @@ describe("GameMap — 스테이지 사각형 측정과 키보드 (CHAT-05, 08-13
 
   it("키보드가 열려 있을 때 단서 도구를 누르면 초안을 유지하고 키보드를 접는다", () => {
     const vv = installVV(INNER_H);
-    const { container } = mount(makeView());
+    const view = makeView();
+    view.day!.keyword = { genre: "영화", answers: [{ seat: 0, text: "무대", order: 1 }] };
+    const { container } = mount(view);
     focusWithKeyboard(container, vv, 336);
     const input = inputOf(container);
     fireEvent.change(input, { target: { value: "쓰던 말" } });

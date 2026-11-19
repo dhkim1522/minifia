@@ -50,17 +50,17 @@ describe("첫날 실험방의 최소 조작", () => {
     expect(hostLineOf(confirmed)).toBe("다른 사람을 기다려요");
   });
 
-  it("토론을 시작하면 곧바로 투표를 요청하고 45초 뒤 과반으로 바뀐다", () => {
+  it("토론을 시작하면 곧바로 토론 스킵을 요청하고 45초 뒤 과반으로 바뀐다", () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
     const view = fixture({ day: { n: 1, roles, voteOpensAt: NOW + 45_000, voteReadyTotal: 4, voteReadyRequired: 3 } });
     const send = vi.fn();
     render(<GamePanel view={view} send={send} binding={binding} logHeight={68} canSend />);
-    const vote = screen.getByRole("button", { name: /투표 요청, 0\/4명 요청/ });
+    const vote = screen.getByRole("button", { name: /토론 스킵, 필요한 4명 중 0명 요청/ });
     fireEvent.click(vote);
     expect(send).toHaveBeenCalledWith({ t: "endDiscussion", on: true });
     act(() => { vi.advanceTimersByTime(45_000); });
-    expect(screen.getByRole("button", { name: /투표 요청, 0\/3명 요청/ })).toBe(vote);
+    expect(screen.getByRole("button", { name: /토론 스킵 취소, 필요한 3명 중 0명 요청/ })).toBe(vote);
     expect(vote.getAttribute("aria-pressed")).toBe("true");
   });
 

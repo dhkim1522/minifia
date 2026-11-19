@@ -160,9 +160,9 @@ describe("채팅 입력줄 단추 (TOOL-04, D-01)", () => {
     expect(tool).not.toContain("flex-direction: column");
     expect(rule(".mv-tool--head")).toContain("border-radius: var(--noir-control-radius)");
     const face = rule(".mv-tool--head .mv-tool__face");
-    expect(face).toContain("background: var(--noir-panel)");
+    expect(face).toContain("background: var(--noir-control)");
     expect(face).toMatch(/border: 1px solid/);
-    expect(face).toContain("border-color: var(--noir-line)");
+    expect(face).toContain("border: 1px solid var(--noir-control-line)");
     expect(rule('.mv-tool[aria-disabled="true"]')).toContain("opacity: 0.45");
   });
 

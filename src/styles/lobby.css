@@ -29,8 +29,8 @@
   flex: none;
   padding-inline-start: 12px;
   border-radius: var(--noir-control-radius);
-  background: var(--noir-panel);
-  box-shadow: inset 0 0 0 1px var(--noir-line);
+  background: var(--noir-control);
+  box-shadow: inset 0 0 0 1px var(--noir-control-line);
   color: var(--noir-paper);
   font-weight: 700;
   font-variant-numeric: tabular-nums;

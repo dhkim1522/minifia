@@ -7,6 +7,11 @@
   --night-600: #2a3760;
   --noir-panel: #182332;
   --noir-inset: #101927;
+  --noir-action-line: #bd9d6ea6;
+  --noir-action: #252d3a;
+  --noir-control-on: #394963;
+  --noir-control-line: #64738ea6;
+  --noir-control: #263346;
   --noir-raised: #2a374b;
   --noir-line: #536580;
   --noir-accent: #f2d4a1;
@@ -98,7 +103,7 @@
   --radius-pill: 999px;
   --radius-stamp: 4px;
   --radius-badge: 12px;
-  --noir-control-radius: 10px;
+  --noir-control-radius: 11px;
   --shadow-text: 0 1px 2px rgba(0, 0, 0, 0.55);
   --shadow-card: 0 16px 40px rgba(0, 0, 0, 0.55);
   --shadow-badge: 0 2px 6px rgba(0, 0, 0, 0.5);

@@ -25,11 +25,11 @@ export interface DiscussionToolsProps {
   suspect?: Pick<SuspectApi, "mode" | "targets" | "disabled" | "used" | "off" | "toggleMode"> & {
     deny?: () => void;
   };
-  vote?: { enabled: boolean; pressed: boolean; count: number; total: number; request: () => void };
+  skip?: { enabled: boolean; pressed: boolean; count: number; total: number; request: () => void };
   will?: { open: boolean; saved: boolean; request: (opener: HTMLElement) => void };
 }
 
-export function DiscussionPanel({ binding, kbOpen, playtest, callInput, onInputFocus, inputRef, suspect, vote, will }: DiscussionToolsProps) {
+export function DiscussionPanel({ binding, kbOpen, playtest, callInput, onInputFocus, inputRef, suspect, skip, will }: DiscussionToolsProps) {
   const [surface, setSurface] = useState<Surface | null>(null);
   const [reacted, setReacted] = useState("");
   const { evidence, ...composer } = binding;
@@ -101,9 +101,16 @@ export function DiscussionPanel({ binding, kbOpen, playtest, callInput, onInputF
         renderTools={(addQuote) => (
           <div className="mf-playtest__tools">
             <div className="mf-playtest__toolbar" role="group" aria-label="토론 도구">
-              <button type="button" className="mf-playtest__action" data-playtest-action="clues" aria-label="단서" aria-expanded={surface === "clues"} aria-controls={surface === "clues" ? surfaceId : undefined} onMouseDown={(event) => event.preventDefault()} onClick={(event) => toggleSurface("clues", event.detail === 0)}>
-                <V2Icon name="lens" size={22} />
-              </button>
+              {evidence ? (
+                <button
+                  type="button" className="mf-playtest__action mf-playtest__record" data-playtest-action="clues"
+                  aria-expanded={surface === "clues"} aria-controls={surface === "clues" ? surfaceId : undefined}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={(event) => toggleSurface("clues", event.detail === 0)}
+                >
+                  {evidence.label}
+                </button>
+              ) : null}
               {reactions.length > 0 && binding.onEmote ? <button type="button" className="mf-playtest__action" data-playtest-action="reaction" data-emote-button="" aria-label={reactionLabel} aria-expanded={surface === "reaction"} aria-pressed={surface === "reaction"} aria-controls={surface === "reaction" ? surfaceId : undefined} aria-disabled={binding.sendDisabled || undefined} onMouseDown={(event) => event.preventDefault()} onClick={(event) => { if (!binding.sendDisabled) toggleSurface("reaction", event.detail === 0); }}>
                 <V2Icon name="face" size={22} />
               </button> : null}
@@ -127,15 +134,22 @@ export function DiscussionPanel({ binding, kbOpen, playtest, callInput, onInputF
                 <V2Icon name="quill" size={22} />
                 {will.saved ? <i className="mv-chat__will-dot" aria-hidden="true" /> : null}
               </button> : null}
-              {vote ? <button type="button" className="mf-playtest__action mf-playtest__action--vote" data-playtest-action="vote" data-end-discussion="" aria-label={`투표 요청, ${vote.count}/${vote.total}명 요청`} aria-pressed={vote.pressed} aria-disabled={!vote.enabled || undefined} onMouseDown={(event) => event.preventDefault()} onClick={vote.request}>
-                <V2Icon name="ballot" size={22} />
-                <HeadCount count={vote.count} total={vote.total} />
-              </button> : null}
+              {skip ? (
+                <button
+                  type="button" className="mf-playtest__action mf-playtest__action--skip" data-playtest-action="skip" data-end-discussion=""
+                  aria-label={`토론 스킵${skip.pressed ? " 취소" : ""}, 필요한 ${skip.total}명 중 ${skip.count}명 요청`}
+                  aria-pressed={skip.pressed} aria-disabled={!skip.enabled || undefined}
+                  onMouseDown={(event) => event.preventDefault()} onClick={skip.request}
+                >
+                  <span>{skip.pressed ? "스킵 취소" : "토론 스킵"}</span>
+                  <HeadCount count={skip.count} total={skip.total} />
+                </button>
+              ) : null}
             </div>
             {suspect?.mode ? <p className="mf-playtest__surface mf-playtest__feedback" data-suspect-guidance="" role="status">{suspect.targets.size === 0 ? SUSPECT_TEXT.tooFar : SUSPECT_TEXT.modeHint}</p> : null}
-            {surface === "clues" ? (
-              <div id={surfaceId} ref={surfaceRef} className="mf-playtest__surface" data-playtest-surface="clues" role="region" aria-label="단서" tabIndex={-1}>
-                {evidence ? <DiscussionEvidence key={evidence.key} evidence={evidence} expanded canQuote={Boolean(binding.onSend)} onQuote={addQuote} onQuoted={() => setSurface(null)} /> : <p className="mf-playtest__feedback">공개된 단서가 없어요</p>}
+            {surface === "clues" && evidence ? (
+              <div id={surfaceId} ref={surfaceRef} className="mf-playtest__surface" data-playtest-surface="clues" role="region" aria-label={evidence.label} tabIndex={-1}>
+                <DiscussionEvidence key={evidence.key} evidence={evidence} expanded canQuote={Boolean(binding.onSend)} onQuote={addQuote} onQuoted={() => setSurface(null)} />
               </div>
             ) : null}
             {surface === "reaction" ? (

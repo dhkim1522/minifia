@@ -57,7 +57,7 @@
 .mf-entry-scene .mf-field__input {
   height: 48px;
   background: var(--noir-inset);
-  border-radius: var(--noir-control-radius, 10px);
+  border-radius: var(--noir-control-radius);
   color: var(--noir-paper);
 }
 .mf-entry-scene .mf-field__input--code {
@@ -70,23 +70,13 @@
 }
 .mf-entry-scene .mf-btn {
   min-height: 48px;
-  border-radius: var(--noir-control-radius, 10px);
+  border-radius: var(--noir-control-radius);
   gap: 8px;
 }
-.mf-entry-scene .mf-btn--secondary {
-  background: var(--noir-raised);
-  border-color: var(--noir-line);
-}
 .mf-entry-scene .mf-btn--field:not(:disabled) {
-  color: var(--noir-accent);
-  border-color: var(--noir-accent);
-}
-.mf-entry-scene .mf-btn--primary {
-  background: var(--noir-paper);
-  color: var(--noir-ink);
-  border: 1px solid transparent;
-  box-shadow: none;
-  clip-path: none;
+  color: var(--noir-paper);
+  border-color: var(--noir-paper);
+  background: var(--noir-control-on);
 }
 .mf-entry-scene .mf-entry__build {
   margin: 10px 0 0;

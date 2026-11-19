@@ -133,13 +133,13 @@ describe("열 단추 표식·모양 (V-2)", () => {
       expect(b, sel).toMatch(/height:\s*var\(--control-button\)/);
     }
     expect(body(".mv-sound")).toMatch(/border-radius:\s*var\(--noir-control-radius\)/);
-    expect(body(".mv-sound")).toMatch(/background:\s*var\(--noir-panel\)/);
+    expect(body(".mv-sound")).toMatch(/background:\s*var\(--noir-control\)/);
     expect(body(".mv-sound")).toMatch(/border:\s*1px solid/);
-    expect(body(".mv-sound")).toMatch(/border-color:\s*var\(--noir-line\)/);
+    expect(body(".mv-sound")).toMatch(/border:\s*1px solid var\(--noir-control-line\)/);
     for (const sel of [".mf-mapchip", ".mv-float"]) {
       expect(body(sel), sel).toMatch(/border-radius:\s*var\(--noir-control-radius\)/);
-      expect(body(sel), sel).toMatch(/background:\s*var\(--night-700\)/);
-      expect(body(sel), sel).toMatch(/border:\s*1px solid var\(--night-600\)/);
+      expect(body(sel), sel).toMatch(/background:\s*var\(--noir-control\)/);
+      expect(body(sel), sel).toMatch(/border:\s*1px solid var\(--noir-control-line\)/);
     }
   });
 

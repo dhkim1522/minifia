@@ -64,7 +64,7 @@ export interface GamePanelProps {
 
 /**
  * 게임 맵 화면의 아래 패널(UI-SPEC "아래 패널 종류와 높이"). 단계마다 행동 줄이 다르다.
- * 낮 토론은 채팅 위에 도구와 투표 요청을, 찬반은 집계와 선택을 둔다.
+ * 낮 토론은 채팅 위에 도구와 토론 스킵을, 찬반은 집계와 선택을 둔다.
  * 눌림은 서버 view(me.endDiscussion·me.verdictVote)가 기준이고, 내가 누른 즉시 바뀌는 것은 내 눌림 표시 하나뿐이다. 숫자는 서버가 센 값만 그린다(누가 눌렀는지·무엇을 골랐는지는 서버가 보내지 않는다).
  */
 export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight, kbOpen = false, lifted, veiled = false, rejected = 0, onNightPickSent, onOpenWill, willOpen = false, onOpenNote, noteOpen = false, noteReady = false, willSaved = false, call, onCallUsed, inputRef, panelRef, suspect, result, notice }: GamePanelProps) {
@@ -210,7 +210,7 @@ export function GamePanel({ view, offset = 0, send, canSend, binding, logHeight,
           callInput={call?.chat}
           onInputFocus={onCallUsed}
           suspect={suspect}
-          vote={meAlive ? { enabled: canSend, pressed: pressed === true, count, total, request: pressEnd } : undefined}
+          skip={meAlive ? { enabled: canSend, pressed: pressed === true, count, total, request: pressEnd } : undefined}
           will={penOn ? { open: willOpen, saved: willSaved, request: openWillFrom } : undefined}
         />
       ) : null}

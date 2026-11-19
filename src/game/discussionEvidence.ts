@@ -36,10 +36,10 @@ export function discussionEvidenceOf(view: RoomView, victim: MorningVictim | nul
 
   if (day === 1) {
     const answers = keywordAnswersOf(view);
-    if (answers === undefined || answers.length === 0) return undefined;
+    if (!answers?.some((answer) => answer.text?.trim())) return undefined;
     return {
       key: `${view.round ?? 1}:answers`,
-      label: "모두의 단서",
+      label: "첫날 단서",
       rows: answers.map(({ seat, text, order }) => ({ seat, name: nameOf(seat), text, order })),
     };
   }

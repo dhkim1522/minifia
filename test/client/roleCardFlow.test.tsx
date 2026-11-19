@@ -364,13 +364,13 @@ describe("css 규약: 머리말 간격과 [역할 카드] 버튼 (UI-SPEC A·S5)
     expect(/(^|[;\s])height:\s*var\(--tap-min\)/.test(r)).toBe(true);
     expect(/flex-direction:\s*column/.test(r)).toBe(false);
     expect(/max-width/.test(r)).toBe(false);
-    expect(/border-radius:\s*var\(--radius-badge\)/.test(r)).toBe(true);
+    expect(/border-radius:\s*var\(--noir-control-radius\)/.test(r)).toBe(true);
     expect(rule(roleCss, ".mf-rolecard-btn__label")).toBe("");
     const face = rule(roleCss, ".mf-rolecard-btn__face");
     expect(/width:\s*100%/.test(face) && /height:\s*100%/.test(face)).toBe(true);
-    expect(face).toMatch(/background:\s*var\(--noir-panel\)/);
+    expect(face).toMatch(/background:\s*var\(--noir-control\)/);
     expect(face).toMatch(/border:\s*1px solid/);
-    expect(face).toMatch(/border-color:\s*var\(--noir-line\)/);
+    expect(face).toMatch(/border:\s*1px solid var\(--noir-control-line\)/);
   });
 
   it("점은 면 오른쪽 위의 gray-100 8px(테두리 night-900 1px), 전환·애니메이션 없음 — v2.0 에서 앰버는 쓰지 않는다", () => {

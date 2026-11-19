@@ -150,7 +150,7 @@ describe("FaceList — 고른 칸·줄바꿈·그림 실패·칸 수 (E1 #2~#5)"
 
   it("고른 칸은 종이색 테두리 2px, 안 고른 얼굴 그림은 밝기 .95와 채도 .92 (E1 #3)", () => {
     const face_ = rulesStarting(".mv-face").filter((r) => /^\s*\.mv-face\s*\{/.test(r)).join("");
-    expect(face_).toMatch(/border:\s*2px solid transparent/);
+    expect(face_).toMatch(/border:\s*1px solid var\(--noir-control-line\)/);
     // 필터는 얼굴 그림에만 건다.
     expect(rulesStarting(".mv-face__img").join("")).toMatch(/brightness\(0?\.95\)\s*saturate\(0?\.92\)/);
     expect(rulesStarting(".mv-face.is-on .mv-face__img").join("")).toMatch(/filter:\s*none/);

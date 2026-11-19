@@ -244,12 +244,12 @@ describe("귓속말 CSS 규칙 (09.1.1-09)", () => {
     expect(body(".mv-line__close")).toMatch(/height:\s*var\(--tap-min\)/);
   });
 
-  it("입력칸 글자는 16px, 보내기는 종이 면과 잉크 글자, 글자 수는 고정 너비 숫자", () => {
+  it("입력칸 글자는 16px, 보내기는 금빛 글자와 진행 버튼 면, 글자 수는 고정 너비 숫자", () => {
     const body = (sel: string) => NEW.find((r) => r.selector === sel)?.body ?? "";
     expect(body(".mv-line__input")).toMatch(/font-size:\s*16px/);
     expect(body(".mv-line__input")).toMatch(/background:\s*var\(--noir-inset\)/);
-    expect(body(".mv-line__send")).toMatch(/background:\s*var\(--noir-paper\)/);
-    expect(body(".mv-line__send")).toMatch(/color:\s*var\(--noir-ink\)/);
+    expect(body(".mv-line__send")).toMatch(/background:\s*var\(--noir-action\)/);
+    expect(body(".mv-line__send")).toMatch(/color:\s*var\(--noir-accent\)/);
     expect(body(".mv-line__count")).toMatch(/tabular-nums/);
   });
 

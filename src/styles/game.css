@@ -54,14 +54,7 @@
 .mf-discussion-panel .mv-chat__input { height: var(--tap-min); padding-inline: 9px; border-color: #68788caa; border-radius: 7px; background: var(--noir-inset); }
 .mf-discussion-panel .mv-chat__input::placeholder { color: #bdc6d3; font-size: 14px; opacity: 1; }
 .mf-discussion-panel .mv-chat__send { width: var(--tap-min); height: var(--tap-min); border-radius: 7px; }
-.mf-discussion-panel .mv-chat__send .mv-tool__face {
-  border: 1px solid #879bb4;
-  background: #435471;
-  color: #f8e4c4;
-  box-shadow: none;
-}
 .mf-discussion-panel .mv-chat__send[aria-disabled="true"] { opacity: 1; }
-.mf-discussion-panel .mv-chat__send[aria-disabled="true"] .mv-tool__face { border-color: #62748c; background: #364458; color: #e1d2b9; }
 .mf-discussion-panel .mv-chat__send svg { width: 20px; height: 20px; }
 
 /* 찬반 줄(08-16, UI-SPEC 패널 높이 표): VerdictPicker 84 + 간격 8 + 숫자 한 줄, 아래 기록과는 패널 간격 10. 변론자·유령은 숫자만 */

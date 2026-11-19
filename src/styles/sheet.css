@@ -47,7 +47,7 @@
 .mf-sheet__close { position: absolute; top: var(--space-md); right: var(--space-md); }
 
 /* 아이콘 버튼: 44×44 정사각. 대기실 위쪽 바의 [뒤로]·[공유]와 시트의 [닫기]가 쓴다. */
-.mf-btn.mf-iconbtn { flex: none; width: var(--tap-min); height: var(--tap-min); min-height: var(--tap-min); padding: 0; border-radius: var(--noir-control-radius); background: var(--noir-raised); border-color: var(--noir-line); color: var(--noir-paper); }
+.mf-btn.mf-iconbtn { flex: none; width: var(--tap-min); height: var(--tap-min); min-height: var(--tap-min); padding: 0; border-radius: var(--noir-control-radius); background: var(--noir-control); color: var(--noir-paper); border: 1px solid var(--noir-control-line); }
 
 /* 공유 시트(C-03) */
 .mf-share { display: flex; flex-direction: column; gap: var(--space-md); }

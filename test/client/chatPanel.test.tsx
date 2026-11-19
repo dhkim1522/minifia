@@ -272,13 +272,13 @@ describe("ChatPanel 입력칸 계약 (CHAT-05, UI-SPEC 패널과 키보드)", ()
     expect(btn.hasAttribute("data-tool-label")).toBe(false);
   });
 
-  it("입력칸 글자 16px, 입력줄 높이 control-input, 보내기는 금빛 아이콘, 비활성은 흐린 아이보리", () => {
+  it("입력칸 글자 16px, 입력줄 높이 control-input, 보내기는 금빛 아이콘, 비활성은 은색", () => {
     expect(rulesFor(V2_CSS, ".mv-chat__input").join(";")).toContain("font-size: 16px");
     expect(rulesFor(V2_CSS, ".mv-chat__input").join(";")).toContain("height: var(--control-input)");
     expect(rulesFor(V2_CSS, ".mv-chat__send").join(";")).toContain("color: var(--noir-accent)");
     const off = rulesFor(V2_CSS, '.mv-chat__send[aria-disabled="true"]').join(";");
-    expect(off).toContain("background: var(--noir-raised)");
-    expect(off).toContain("color: var(--noir-paper)");
+    expect(off).toContain("background: var(--noir-control)");
+    expect(off).toContain("color: var(--noir-silver)");
   });
 
   it("CSS: 줄 글자 규칙(player 16px/1.5, system 14px/1.4, keep-all, overflow-wrap anywhere)과 기록 칸 고정 높이", () => {
@@ -1098,8 +1098,8 @@ describe("ChatPanel 깃펜 버튼 (WILL-01)", () => {
     const rule = rulesFor(V2_CSS, ".mv-tool__face").join(";");
     expect(rule).toContain("width: 100%");
     expect(rule).toContain("height: 100%");
-    expect(rule).toContain("background: var(--noir-raised)");
-    expect(rule).toContain("color: var(--gray-100)");
+    expect(rule).toContain("background: var(--noir-control)");
+    expect(rule).toContain("color: var(--noir-paper)");
     expect(rule).toContain("border-radius: inherit");
     const will = rulesFor(V2_CSS, ".mv-chat__will").join(";");
     expect(will).toContain("width: var(--control-input)");

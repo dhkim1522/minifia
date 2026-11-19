@@ -113,7 +113,7 @@ export const TUTORIAL_PILLS = {
   "postit.tool": "가까이서 의심딱지를 눌러요",
   "discussion.unanimous": "모두 요청하면 투표해요",
   "discussion.majority": `${PLAYTEST_DISCUSSION_MIN_MS / 1000}초 뒤엔 절반만 넘으면 돼요`,
-  "discussion.request": "투표 요청을 눌러요",
+  "discussion.request": "토론 스킵을 눌러요",
   "verdict.choice": "한 명을 뽑거나 건너뛰어요",
   "night.ready": "시민은 아침을 준비해요",
 } as const;

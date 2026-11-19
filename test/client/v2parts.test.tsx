@@ -675,8 +675,8 @@ describe("ActionButton·ActionRow (UI-SPEC 행동 줄, E6)", () => {
   });
 
   it("행동 버튼은 기본 금빛, 비활성 남색·불투명도 0.45, 보조 버튼은 투명", () => {
-    expect(V2_CSS).toMatch(/\.mf-act--primary\s*\{[^}]*background: var\(--noir-accent\)[^}]*color: var\(--noir-ink\)/);
-    expect(V2_CSS).toMatch(/\.mf-act--inactive\s*\{[^}]*background: var\(--noir-raised\)[^}]*border-color: var\(--noir-line\)[^}]*opacity: 0\.45/);
+    expect(V2_CSS).toMatch(/\.mf-act--primary\s*\{[^}]*background: var\(--noir-action\)[^}]*color: var\(--noir-accent\)/);
+    expect(V2_CSS).toMatch(/\.mf-act--inactive\s*\{[^}]*background: var\(--noir-control\)[^}]*opacity: 0\.45[^}]*border: 1px solid var\(--noir-control-line\)/);
     expect(V2_CSS).toMatch(/\.mf-act--flat\s*\{[^}]*background: transparent[^}]*color: var\(--gray-300\)/);
   });
 

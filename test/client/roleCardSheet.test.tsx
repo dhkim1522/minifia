@@ -347,13 +347,13 @@ describe("rolecard.css — 시트 규약", () => {
   it("탭: 최소 높이 var(--tap-min), 선택/안 선택 색", () => {
     expect(rule(".mf-rolecard__tab")).toContain("min-height: var(--tap-min)");
     const sel = rule('.mf-rolecard__tab[aria-selected="true"]');
-    expect(sel).toContain("background: var(--noir-raised)");
-    expect(sel).toContain("border-color: var(--noir-accent)");
+    expect(sel).toContain("background: var(--noir-control-on)");
+    expect(sel).toContain("border-color: var(--noir-paper)");
     expect(sel).toContain("color: var(--noir-paper)");
     const off = rule(".mf-rolecard__tab");
-    expect(off).toContain("background: var(--noir-inset)");
-    expect(off).toContain("border-color: var(--noir-line)");
-    expect(off).toContain("color: var(--gray-300)");
+    expect(off).toContain("background: var(--noir-control)");
+    expect(off).toContain("border: 1px solid var(--noir-control-line)");
+    expect(off).toContain("color: var(--noir-paper)");
   });
 
   it("앰버 점: 10px, var(--amber-400), 전환 없음", () => {

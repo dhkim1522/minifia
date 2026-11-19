@@ -120,20 +120,20 @@ describe("HostRailButton — 방장 도구 타일 (19-03, D-13·D-14, UI-SPEC A-
     expect(ev.defaultPrevented).toBe(true);
   });
 
-  it("CSS: 52px 누아르 타일과 금빛 테두리, 눌림과 켜짐 상태를 금빛으로 표시", () => {
+  it("CSS: 52px 도구 타일, 선택 상태에 밝은 윤곽 표시", () => {
     const base = ruleOf(V2, ".mv-hostrail-btn");
-    expect(base).toContain("border: 1.5px solid var(--light-lamp)");
-    expect(base).toContain("background: var(--noir-panel)");
-    expect(base).toContain("color: var(--light-lamp)");
+    expect(base).toContain("border: 1px solid var(--noir-control-line)");
+    expect(base).toContain("background: var(--noir-control)");
+    expect(base).toContain("color: var(--noir-paper)");
     expect(base).toContain("width: var(--control-button)");
     expect(base).toContain("height: var(--control-button)");
     expect(base).toContain("border-radius: var(--noir-control-radius)");
-    expect(ruleOf(V2, '.mv-hostrail-btn[aria-pressed="true"]')).toContain("box-shadow: inset 0 0 0 2px var(--light-lamp)");
+    expect(ruleOf(V2, '.mv-hostrail-btn[aria-pressed="true"]')).toContain("box-shadow: inset 0 0 0 1px var(--noir-paper)");
     const on = ruleOf(V2, '.mv-hostrail-btn[role="switch"][aria-checked="true"]');
-    expect(on).toContain("background: var(--light-lamp)");
-    expect(on).toContain("color: var(--night-900)");
+    expect(on).toContain("background: var(--noir-control-on)");
+    expect(on).toContain("color: var(--noir-paper)");
     expect(ruleOf(V2, '.mv-hostrail-btn[aria-disabled="true"]')).toContain("opacity: 0.45");
-    expect(ruleOf(V2, ".mv-hostrail-btn:focus-visible")).toContain("outline: 2px solid var(--light-lamp)");
+    expect(ruleOf(V2, ".mv-hostrail-btn:focus-visible")).toContain("outline: 2px solid var(--noir-paper)");
     expect(ruleOf(V2, ".mv-hostrail-btn:active")).toContain("transform: scale(0.94)");
   });
 });
