@@ -5,11 +5,11 @@ import {
 import { Bundle, tf, under } from "../../../src/world/maps/bar";
 import { PALETTE as P } from "../../../src/world/palette";
 
-export const roomHalf = 3.65;
+export const roomHalf = 4.7;
 export const seatTop = 0.19;
 export const centerStandRadius = 0.66;
-export const piano = { x: -1.85, z: -3.02, width: 1.62, depth: 0.66 } as const;
-export const bar = { x: 3.30, z: -1.24, width: 0.55, depth: 2.05 } as const;
+export const piano = { x: -1.85, z: -roomHalf + 0.63, width: 1.62, depth: 0.66 } as const;
+export const bar = { x: roomHalf - 0.35, z: -1.24, width: 0.55, depth: 2.05 } as const;
 const seatRadius = 0.36;
 
 export function buildReviewRoom(seats: readonly (readonly [number, number])[]): Scene {
@@ -26,8 +26,9 @@ export function buildReviewRoom(seats: readonly (readonly [number, number])[]): 
 
   floor.box(side + 0.16, 0.18, side + 0.16, P.wall, tf(0, -0.1, 0));
   const planks = [P.floorA, P.floorB, P.floorC] as const;
-  for (let row = 0; row < 24; row++) {
-    const depth = side / 24;
+  const plankRows = Math.round(side / 0.30);
+  for (let row = 0; row < plankRows; row++) {
+    const depth = side / plankRows;
     const z = -roomHalf + (row + 0.5) * depth;
     let left = -roomHalf;
     let seam = left + (row % 3 + 2) * 0.43;
@@ -52,17 +53,19 @@ export function buildReviewRoom(seats: readonly (readonly [number, number])[]): 
   brass.box(0.038, 0.017, side, P.brass, tf(roomHalf - 0.04, 0.007, 0));
 
   // 창은 방의 차가운 바탕색을 살리고, 벽 아래에 피아노 실루엣을 남긴다.
-  floor.box(1.54, 1.24, 0.048, P.wallTrim, tf(0.79, 1.96, -3.52));
-  floor.box(1.45, 1.16, 0.032, P.windowGlass, tf(0.79, 1.96, -3.49));
-  for (const x of [0.09, 0.55, 1.02, 1.49]) {
-    floor.box(0.049, 1.17, 0.027, P.blind, tf(x, 1.96, -3.46));
+  const windowX = 0.42;
+  const windowZ = -roomHalf + 0.13;
+  floor.box(1.54, 1.24, 0.048, P.wallTrim, tf(windowX, 1.96, windowZ));
+  floor.box(1.45, 1.16, 0.032, P.windowGlass, tf(windowX, 1.96, windowZ + 0.03));
+  for (const dx of [-0.7, -0.24, 0.23, 0.7]) {
+    floor.box(0.049, 1.17, 0.027, P.blind, tf(windowX + dx, 1.96, windowZ + 0.06));
   }
   for (const y of [1.42, 1.87, 2.18, 2.51]) {
-    floor.box(1.48, 0.032, 0.029, P.blind, tf(0.79, y, -3.45));
+    floor.box(1.48, 0.032, 0.029, P.blind, tf(windowX, y, windowZ + 0.07));
   }
-  floor.box(1.61, 0.055, 0.19, P.sill, tf(0.79, 1.36, -3.47));
+  floor.box(1.61, 0.055, 0.19, P.sill, tf(windowX, 1.36, windowZ + 0.05));
   for (let i = -3; i <= 3; i++) {
-    brass.box(0.02, 0.76 + Math.abs(i) * 0.025, 0.013, P.inlay, tf(2.69 + i * 0.108, 2.10 - Math.abs(i) * 0.12, -3.55, 0, 0, -i * 0.33));
+    brass.box(0.02, 0.76 + Math.abs(i) * 0.025, 0.013, P.inlay, tf(2.69 + i * 0.108, 2.10 - Math.abs(i) * 0.12, -roomHalf + 0.10, 0, 0, -i * 0.33));
   }
   furniture.box(piano.width, 0.69, piano.depth, P.pianoBody, tf(piano.x, 0.94, piano.z));
   furniture.box(piano.width + 0.06, 0.052, piano.depth + 0.05, P.wallTrim, tf(piano.x, 1.30, piano.z));
@@ -113,14 +116,15 @@ export function buildReviewRoom(seats: readonly (readonly [number, number])[]): 
   fill.position.set(2.8, 7.0, 5.8);
   fill.castShadow = true;
   fill.shadow.mapSize.set(512, 512);
-  fill.shadow.camera.left = fill.shadow.camera.bottom = -5;
-  fill.shadow.camera.right = fill.shadow.camera.top = 5;
+  const shadowExtent = roomHalf + 1.35;
+  fill.shadow.camera.left = fill.shadow.camera.bottom = -shadowExtent;
+  fill.shadow.camera.right = fill.shadow.camera.top = shadowExtent;
   fill.shadow.camera.far = 22;
   fill.shadow.normalBias = 0.028;
   const lamp = new PointLight("#ffc280", 8, 4);
   lamp.position.set(0, 1.03, 0);
   const window = new DirectionalLight("#8fa8f1", 0.6);
-  window.position.set(0.8, 2.2, -4.3);
+  window.position.set(windowX, 2.2, -roomHalf - 0.65);
   room.add(fill, lamp, window);
   return room;
 }

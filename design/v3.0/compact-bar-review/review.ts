@@ -18,6 +18,8 @@ const state = {
 const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-show]')];
 const panels = [...document.querySelectorAll<HTMLElement>('[data-panel]')];
 const floorPlan = element('#floor-plan');
+const previousRoomHalf = 3.65;
+floorPlan.style.setProperty('--previous-room-inset', `${(1 - previousRoomHalf / roomHalf) * 50}%`);
 const stand = document.createElement('span');
 stand.className = 'stand';
 floorPlan.append(stand);

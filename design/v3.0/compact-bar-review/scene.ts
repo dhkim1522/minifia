@@ -46,7 +46,7 @@ function insideWalkZone(x: number, z: number): boolean {
 }
 
 function makeWalkMap(): MapDef {
-  const size = 14;
+  const size = 2 * Math.ceil(walkHalf / CELL);
   const origin = -size * CELL / 2;
   const rows = Array.from({ length: size }, (_, row) => Array.from({ length: size }, (_, col) => {
     const x = origin + (col + 0.5) * CELL;
@@ -90,6 +90,7 @@ export function mountScene(host: HTMLElement, mode: Mode, onPick: (index: number
 
   const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 60);
   const aim = new Vector3(0, rig.aimY, 0);
+  const walkAim = aim.clone();
   const tilt = rig.tilt * Math.PI / 180;
   const cameraOffset = new Vector3(Math.sin(rig.yaw) * 13, Math.tan(tilt) * 13, Math.cos(rig.yaw) * 13);
   const ray = new Raycaster();
@@ -158,10 +159,9 @@ export function mountScene(host: HTMLElement, mode: Mode, onPick: (index: number
           moving = true;
         }
         renderer.shadowMap.needsUpdate = true;
-        const target = character.root.position.clone().multiplyScalar(0.42);
-        target.y = rig.aimY;
-        aim.lerp(target, reduced() ? 1 : 1 - Math.exp(-Math.max(dt, 0.016) * 8));
+        walkAim.set(current.x * 0.73, rig.aimY, current.z * 0.73);
       }
+      aim.lerp(walkAim, reduced() ? 1 : 1 - Math.exp(-Math.max(dt, 0.016) * 8));
     }
     camera.position.copy(aim).add(cameraOffset);
     camera.lookAt(aim);
@@ -191,7 +191,7 @@ export function mountScene(host: HTMLElement, mode: Mode, onPick: (index: number
     const dt = previous ? Math.min((now - previous) / 1_000, 0.05) : 0.016;
     previous = now;
     render(dt);
-    if (path.length > 0) raf = requestAnimationFrame(animate);
+    if (path.length > 0 || aim.distanceToSquared(walkAim) > 0.0001) raf = requestAnimationFrame(animate);
     else previous = 0;
   }
 

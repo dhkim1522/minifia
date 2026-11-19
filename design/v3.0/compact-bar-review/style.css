@@ -20,6 +20,7 @@ main { max-width: 1252px; margin: auto; padding: 25px 26px 28px; }
 .layout figcaption span { color: #adb6c5; font-size: 12px; }
 .floor-plan { position: relative; flex: none; width: 86px; height: 86px; border: 1px solid #50606d; border-radius: 5px; background: #202834; }
 .floor-plan::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 49%, #76849c39 49% 51%, transparent 51%), linear-gradient(transparent 49%, #76849c39 49% 51%, transparent 51%); }
+.floor-plan::after { content: ''; position: absolute; inset: var(--previous-room-inset); border: 1px dashed #a2acc1; }
 .floor-plan span { position: absolute; width: 7px; height: 7px; border: 1px solid #e4d6bc; border-radius: 50%; background: #5a4d47; transform: translate(-50%, -50%); }
 .floor-plan .stand { left: 50%; top: 50%; width: 9px; height: 9px; border-color: #ffe3b3; background: var(--gold); }
 .review-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; margin-top: 18px; }
