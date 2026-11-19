@@ -21,19 +21,27 @@ function portrait(index: number): string {
 const template = find<HTMLTemplateElement>(document, '#panel');
 const nav = find(document, '.views');
 const comparison = find(document, '.comparison');
-const polished = new URLSearchParams(location.search).get('art') !== 'original';
-const styleLink = polished ? 'polished' : 'original';
-find(document, `.art a[href="?art=${styleLink}"]`).setAttribute('aria-current', 'true');
+const query = new URLSearchParams(location.search);
+const art = query.get('art') === 'original' ? 'original' : 'polished';
+const model = query.get('model') === 'original' ? 'original' : 'detail';
+const styleLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('.variants a'));
+find(document, `[data-art="${art}"]`).setAttribute('aria-current', 'true');
+find(document, `[data-model="${model}"]`).setAttribute('aria-current', 'true');
 const controllers: Partial<Record<ViewMode, Awaited<ReturnType<typeof mountScene>>>> = {};
 const panels = new Map<ViewMode, { section: HTMLElement; tab: HTMLButtonElement; players: HTMLButtonElement[]; mark: HTMLButtonElement }>();
-const initialFocus = 2;
-let activeMode: ViewMode = 'shoulder';
-let focus = initialFocus;
+const requestedFocus = Number(query.get('focus') ?? 2);
+const requestedView = query.get('view');
+let activeMode: ViewMode = requestedView === 'shoulder' || requestedView === 'wide' ? requestedView : 'eye';
+let focus = people[requestedFocus] ? requestedFocus : 2;
 let marking = false;
 let marked: number | null = null;
 
 function sync(): void {
   const person = people[focus]!;
+  for (const link of styleLinks) {
+    const params = new URLSearchParams({ art: link.dataset.art ?? art, model: link.dataset.model ?? model, focus: String(focus), view: activeMode });
+    link.href = `?${params}`;
+  }
   for (const [mode, panel] of panels) {
     panel.tab.setAttribute('aria-pressed', String(mode === activeMode));
     panel.section.classList.toggle('active', mode === activeMode);
@@ -117,7 +125,7 @@ for (const mode of ['eye', 'shoulder', 'wide'] as const) {
   const world = find(section, '.world');
   world.setAttribute('aria-label', view.name);
   world.toggleAttribute('data-lookable', mode !== 'wide');
-  void mountScene(world, mode, choose, polished).then(controller => {
+  void mountScene(world, mode, choose, art === 'polished', model === 'detail').then(controller => {
     controllers[mode] = controller;
     controller.lookAt(focus);
     controller.mark(marked);

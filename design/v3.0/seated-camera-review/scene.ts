@@ -9,6 +9,8 @@ import { createCharacter } from "../../../src/world/character";
 import { buildBarScene, Bundle, tf, under } from "../../../src/world/maps/bar";
 import { LADDER } from "../../../src/world/renderer";
 import { addFinishedRoom } from "./finish";
+import { makeElephantDetail } from "./elephant-detail";
+import { makeFoxDetail } from "./fox-detail";
 
 export type ViewMode = "eye" | "shoulder" | "wide";
 
@@ -22,6 +24,9 @@ export const people = [
   { name: "현우", animal: "hedgehog", line: "두 사람이 본 게 다른가 봐." },
   { name: "수아", animal: "parrot", line: "지호가 본 것도 들어보고 싶어." },
 ] as const satisfies readonly { name: string; animal: AnimalId; line: string }[];
+
+const detailedHeads: Partial<Record<AnimalId, () => Object3D>> = { elephant: makeElephantDetail, fox: makeFoxDetail };
+const HEAD_CENTER_Y = 0.431; // 현재 동물 목 리그의 머리 중심
 
 const speaker = 2;
 const ringAngles = [0, -0.83, 3.09, 0.87, -1.64, 1.66, -2.39, 2.41];
@@ -141,7 +146,7 @@ function aimAt(position: Vector3, i: number): { yaw: number; pitch: number } {
   };
 }
 
-export async function mountScene(host: HTMLElement, mode: ViewMode, onPick: (index: number) => void, finish = true): Promise<{
+export async function mountScene(host: HTMLElement, mode: ViewMode, onPick: (index: number) => void, finish = true, detailed = true): Promise<{
   lookAt(index: number): void; mark(index: number | null): void;
 }> {
   const bar = buildBarScene(LADDER[1]!, { compact: true, omitCenterSeats: true });
@@ -161,14 +166,22 @@ export async function mountScene(host: HTMLElement, mode: ViewMode, onPick: (ind
   makeFurniture(root, finish);
   if (finish) addFinishedRoom(bar, places, tableY);
 
+  const viewer = cameraSpot("eye");
   const actors = people.map((person, i) => {
     const character = createCharacter(i, "coat", { coat: coatColors[i]!, tie: i === speaker ? "#c88844" : "#a2a0b7" }, person.animal);
     const model = character.root;
     const pos = places[i]!;
     model.position.set(pos.x, chairY - 0.30, pos.z);
-    character.setYaw(Math.atan2(-pos.x, -pos.z));
+    const facing = Math.atan2(-pos.x, -pos.z);
+    character.setYaw(facing);
     const body = model.getObjectByName("body")!;
     const head = model.getObjectByName("neck")!;
+    const detail = detailed ? detailedHeads[person.animal]?.() : undefined;
+    if (detail) {
+      for (const part of head.children) part.visible = false;
+      detail.position.y = HEAD_CENTER_Y;
+      head.add(detail);
+    }
     const left = model.getObjectByName("armA")!;
     const right = model.getObjectByName("armB")!;
     for (const name of ["legA", "legB"]) model.getObjectByName(name)!.rotation.x = -1.33;
@@ -180,8 +193,13 @@ export async function mountScene(host: HTMLElement, mode: ViewMode, onPick: (ind
     }
     if (i === 0 && mode === "shoulder") head.visible = false;
     root.add(model);
-    const headTop = new Box3().setFromObject(head).max.y;
-    return { character, head, left, right, headTop };
+    model.updateWorldMatrix(true, true);
+    const headTop = new Box3().setFromObject(detail ?? head).max.y;
+    const pickMeshes = character.bodyMeshes().filter(mesh => mesh.visible);
+    detail?.traverse(part => { if (part instanceof Mesh) pickMeshes.push(part); });
+    const towardViewer = Math.atan2(viewer.x - pos.x, viewer.z - pos.z) - facing;
+    const glanceAtViewer = MathUtils.clamp(Math.atan2(Math.sin(towardViewer), Math.cos(towardViewer)), -0.54, 0.54);
+    return { character, head, left, right, headTop, pickMeshes, glanceAtViewer, glance: 0 };
   });
 
   const renderer = new WebGLRenderer({ antialias: true });
@@ -222,9 +240,9 @@ export async function mountScene(host: HTMLElement, mode: ViewMode, onPick: (ind
   let drag: { x: number; y: number; yaw: number; active: boolean } | null = null;
   const projected = new Vector3();
   const position = new Vector3();
-  const targets = actors.flatMap((actor, i) => i === 0 ? [] : actor.character.bodyMeshes());
+  const targets = actors.flatMap((actor, i) => i === 0 ? [] : actor.pickMeshes);
   const owners = new Map<Object3D, number>();
-  actors.forEach((a, i) => a.character.bodyMeshes().forEach(mesh => owners.set(mesh, i)));
+  actors.forEach((actor, i) => actor.pickMeshes.forEach(mesh => owners.set(mesh, i)));
   const actorHeads = actors.map(actor => actor.head.position.y);
   const noteOnTable = new Mesh(new PlaneGeometry(0.15, 0.10), new MeshStandardMaterial({
     color: "#e29772", roughness: 0.91, emissive: "#472117", emissiveIntensity: 0.25,
@@ -250,8 +268,10 @@ export async function mountScene(host: HTMLElement, mode: ViewMode, onPick: (ind
     for (const [i, actor] of actors.entries()) {
       const rate = t * 0.0026;
       const gesture = i === speaker && !reduceMotion.matches ? Math.sin(rate) * 0.05 : 0;
+      const glance = i === focus && i !== 0 ? actor.glanceAtViewer : 0;
+      actor.glance = MathUtils.lerp(actor.glance, glance, reduceMotion.matches ? 1 : 0.23);
       actor.head.rotation.set(i === speaker ? -0.026 + gesture * 0.28 : 0.018,
-        (i === speaker ? -0.095 : 0) + (i === focus ? gesture * 2 : 0), 0);
+        actor.glance + (i === speaker ? -0.095 : 0) + (i === focus ? gesture * 2 : 0), 0);
       actor.head.position.y = actorHeads[i]! + (i === speaker ? gesture * 0.22 : 0);
       actor.left.rotation.set(-1.33 + gesture * 1.38, 0, 0.17);
       actor.right.rotation.set(-1.30, 0, -0.18);
