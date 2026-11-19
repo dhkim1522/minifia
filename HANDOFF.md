@@ -6,7 +6,7 @@
 
 - **v3.0 시험판**(`v3`)에 [B안 달빛 누아르](docs/decisions/0093-v3-noir-visual-redesign.md)를 두 맵의 3D 공간·조명, 캐릭터·유령·초상화·의상·배경 이미지, 홈부터 결과까지의 공통 UI에 적용했다. **22** 낮은 토론 → 찬반 → 지목 → 유언 → 처형(결정 0090). **23** 첫날 키워드와 정답 공개, 조기 진행, D1 판 기록(결정 0091). **24-01~07** 구현 완료.
 - [토론 조작과 홈 모델](docs/decisions/0100-home-art-and-discussion-controls.md). 실제 재즈 바와 좌석 모델로 홈·초대 이미지를 만들었다. 공통 조작 타일을 통일하고 ‘첫날 단서’·‘아침 유언’은 읽을 내용이 있을 때만 노출한다. ‘토론 스킵’은 조기 종료 동의이며 선택 후 취소 가능하다.
-- **공개 v3** `2026-11-19T01:10:26Z+50026a5a`. 홈·OG·초대 참가, 4인 일반·실험방에서 스킵·취소와 실제 투표까지 공개 검수 완료. [첫날 실험방](https://minifia-v3.dhplay.workers.dev/?playtest=1)은 별도 링크에서 만든다(0095~0097).
+- **공개 v3** `2026-11-19T01:24:30Z+e0560f22`. 홈 부제 ‘우리 중 누가 마피아일까?’와 초대 링크 설명을 공개 주소에서 확인했다. [첫날 실험방](https://minifia-v3.dhplay.workers.dev/?playtest=1)은 별도 링크에서 만든다(0095~0097).
 - **v2.0 완료 처리(2026-11-07)**: 태그 `v2.0`, 문서는 `.planning/milestones/v2.0-*`. 열린 감사 항목 26개는 STATE.md 미룬 항목. main 은 v1.0 그대로, v3.0 실테스트 통과 뒤 반영.
 - **캐릭터·맵**의 B안 모델은 `src/world/character.ts`, `src/world/ghost3d.ts`, `src/world/maps/`에 있다. 시안은 `design/v3.0/redesign/b-noir.png`. 이미지 재생성은 [에셋 자동 검사](docs/screen-map.md#에셋-자동-검사) 참고.
 - **맵(결정 0050)**: 재즈 바 + 시계탑 광장(`PLAYABLE_MAPS`, 방장이 고름). 블록아웃 https://claude.ai/artifact/1hzgEyAufgnDPVMvPvxdhP (사본 `design/v2.0/blockout/`).
