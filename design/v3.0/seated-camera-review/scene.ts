@@ -11,10 +11,14 @@ import { LADDER } from "../../../src/world/renderer";
 import { addFinishedRoom } from "./finish";
 import { makeElephantDetail } from "./elephant-detail";
 import { makeFoxDetail } from "./fox-detail";
+import { makeBatDetail, makeLionDetail, makePigDetail, makeRabbitDetail, makeRamDetail } from "./mammal-detail";
+import { makeCrocodileDetail, makeFrogDetail, makeHedgehogDetail, makeParrotDetail, makePenguinDetail } from "./mixed-detail";
 
 export type ViewMode = "eye" | "shoulder" | "wide";
 
-export const people = [
+type ReviewPerson = { name: string; animal: AnimalId; line: string };
+
+const startingPeople = [
   { name: "지호", animal: "rabbit", line: "창가 쪽에 앉아 있었어." },
   { name: "민준", animal: "elephant", line: "그때 피아노 소리가 들렸어?" },
   { name: "서연", animal: "fox", line: "아까 민준이 한 말이랑 달라." },
@@ -23,10 +27,37 @@ export const people = [
   { name: "유진", animal: "frog", line: "난 노란 불빛만 기억나." },
   { name: "현우", animal: "hedgehog", line: "두 사람이 본 게 다른가 봐." },
   { name: "수아", animal: "parrot", line: "지호가 본 것도 들어보고 싶어." },
-] as const satisfies readonly { name: string; animal: AnimalId; line: string }[];
+] as const satisfies readonly ReviewPerson[];
 
-const detailedHeads: Partial<Record<AnimalId, () => Object3D>> = { elephant: makeElephantDetail, fox: makeFoxDetail };
+export const previewSeat = 1;
+
+export function seatedPeople(animal?: AnimalId): readonly ReviewPerson[] {
+  if (!animal) return startingPeople;
+  const previousSeat = startingPeople.findIndex(person => person.animal === animal);
+  return startingPeople.map((person, index) => {
+    if (index === previewSeat) return { ...person, animal };
+    if (index === previousSeat) return { ...person, animal: startingPeople[previewSeat].animal };
+    return person;
+  });
+}
+
+const detailedHeads: Record<AnimalId, () => Object3D> = {
+  rabbit: makeRabbitDetail, elephant: makeElephantDetail, crocodile: makeCrocodileDetail,
+  penguin: makePenguinDetail, fox: makeFoxDetail, pig: makePigDetail,
+  lion: makeLionDetail, ram: makeRamDetail, frog: makeFrogDetail,
+  parrot: makeParrotDetail, hedgehog: makeHedgehogDetail, bat: makeBatDetail,
+};
+const headCache = new Map<AnimalId, Object3D>();
 const HEAD_CENTER_Y = 0.431; // 현재 동물 목 리그의 머리 중심
+
+function copyDetailedHead(animal: AnimalId): Object3D {
+  let master = headCache.get(animal);
+  if (!master) {
+    master = detailedHeads[animal]();
+    headCache.set(animal, master);
+  }
+  return master.clone();
+}
 
 const speaker = 2;
 const ringAngles = [0, -0.83, 3.09, 0.87, -1.64, 1.66, -2.39, 2.41];
@@ -135,9 +166,8 @@ function cameraSpot(mode: ViewMode): Vector3 {
   return new Vector3(1.65, 4.57, 5.72);
 }
 
-function aimAt(position: Vector3, i: number): { yaw: number; pitch: number } {
+function aimAt(position: Vector3, i: number, height = 1.11): { yaw: number; pitch: number } {
   const person = places[i] ?? places[speaker]!;
-  const height = 1.11;
   const x = i ? person.x - position.x : -position.x;
   const z = i ? person.z - position.z : -position.z;
   return {
@@ -146,7 +176,10 @@ function aimAt(position: Vector3, i: number): { yaw: number; pitch: number } {
   };
 }
 
-export async function mountScene(host: HTMLElement, mode: ViewMode, onPick: (index: number) => void, finish = true, detailed = true): Promise<{
+export async function mountScene(
+  host: HTMLElement, mode: ViewMode, people: readonly ReviewPerson[], onPick: (index: number) => void,
+  { finish, detailed, preview }: { finish: boolean; detailed: boolean; preview: boolean },
+): Promise<{
   lookAt(index: number): void; mark(index: number | null): void;
 }> {
   const bar = buildBarScene(LADDER[1]!, { compact: true, omitCenterSeats: true });
@@ -176,7 +209,7 @@ export async function mountScene(host: HTMLElement, mode: ViewMode, onPick: (ind
     character.setYaw(facing);
     const body = model.getObjectByName("body")!;
     const head = model.getObjectByName("neck")!;
-    const detail = detailed ? detailedHeads[person.animal]?.() : undefined;
+    const detail = detailed ? copyDetailedHead(person.animal) : undefined;
     if (detail) {
       for (const part of head.children) part.visible = false;
       detail.position.y = HEAD_CENTER_Y;
@@ -284,11 +317,11 @@ export async function mountScene(host: HTMLElement, mode: ViewMode, onPick: (ind
     projected.copy(position).project(camera);
     const left = (projected.x * 0.5 + 0.5) * width;
     const top = (0.5 - projected.y * 0.5) * height - 6;
-    chip.hidden = focus === 0 || projected.z > 1 || left < 22 || left > width - 22 || top < 44 || top > height - 14;
+    chip.hidden = focus === 0 || projected.z > 1 || left < 22 || left > width - 22 || top > height - 14;
     if (!chip.hidden) {
       chip.textContent = people[focus]!.name;
       chip.style.left = `${left}px`;
-      chip.style.top = `${top}px`;
+      chip.style.top = `${Math.max(54, top)}px`;
     }
     host.dataset.ready = "true";
   }
@@ -373,7 +406,8 @@ export async function mountScene(host: HTMLElement, mode: ViewMode, onPick: (ind
     lookAt(index) {
       if (!people[index]) return;
       focus = index;
-      beginAim(aimAt(camera.position, index), mode === "wide");
+      const height = mode === "eye" && preview && index === previewSeat ? 1.24 : undefined;
+      beginAim(aimAt(camera.position, index, height), mode === "wide");
     },
     mark(index) {
       actors.forEach((actor, i) => actor.character.setNotes(i === index ? [0] : [], { animate: false }));

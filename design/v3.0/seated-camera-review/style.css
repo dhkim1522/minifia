@@ -18,9 +18,10 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .review-title p:first-child { color: var(--gold); font-size: 12px; font-weight: 700; }
 .variants { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; }
 .variants nav { display: flex; gap: 4px; }
-.variants a { display: grid; place-items: center; min-height: 44px; padding-inline: 8px; border: 1px solid var(--frame); border-radius: 7px; color: #f7eee0; background: #253342; font-size: 12px; text-decoration: none; white-space: nowrap; }
+.variants a, .preview-animal { min-height: 44px; padding-inline: 8px; border: 1px solid var(--frame); border-radius: 7px; color: #f7eee0; background: #253342; font-size: 12px; }
+.variants a { display: grid; place-items: center; text-decoration: none; white-space: nowrap; }
 .variants a[aria-current='true'] { border-color: var(--gold); background: #45382d; }
-.variants a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.variants a:focus-visible, .preview-animal:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .views { display: none; }
 .comparison { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; margin-top: 18px; }
 .view-title { padding: 0 2px 8px; }

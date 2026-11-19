@@ -1,5 +1,6 @@
-import { mountScene, people } from './scene';
+import { mountScene, previewSeat, seatedPeople } from './scene';
 import type { ViewMode } from './scene';
+import { ANIMAL_IDS, ANIMALS, isAnimalId } from '../../../shared/game/animals';
 import { animalFaceSrc } from '../../../src/net/assets';
 
 const views = {
@@ -24,15 +25,31 @@ const comparison = find(document, '.comparison');
 const query = new URLSearchParams(location.search);
 const art = query.get('art') === 'original' ? 'original' : 'polished';
 const model = query.get('model') === 'original' ? 'original' : 'detail';
+const requestedAnimal = query.get('animal');
+const previewAnimal = isAnimalId(requestedAnimal) ? requestedAnimal : undefined;
+const people = seatedPeople(previewAnimal);
+const animalSelect = find<HTMLSelectElement>(document, '.preview-animal');
+for (const animal of ANIMAL_IDS) animalSelect.add(new Option(ANIMALS[animal].name, animal));
+animalSelect.value = previewAnimal ?? '';
+animalSelect.addEventListener('change', () => {
+  const params = new URLSearchParams({ art, model });
+  if (isAnimalId(animalSelect.value)) {
+    params.set('animal', animalSelect.value);
+    params.set('focus', String(previewSeat));
+    params.set('view', 'eye');
+  }
+  location.search = params.toString();
+});
 const styleLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('.variants a'));
 find(document, `[data-art="${art}"]`).setAttribute('aria-current', 'true');
 find(document, `[data-model="${model}"]`).setAttribute('aria-current', 'true');
 const controllers: Partial<Record<ViewMode, Awaited<ReturnType<typeof mountScene>>>> = {};
 const panels = new Map<ViewMode, { section: HTMLElement; tab: HTMLButtonElement; players: HTMLButtonElement[]; mark: HTMLButtonElement }>();
-const requestedFocus = Number(query.get('focus') ?? 2);
+const defaultFocus = previewAnimal ? previewSeat : 2;
+const requestedFocus = Number(query.get('focus') ?? defaultFocus);
 const requestedView = query.get('view');
 let activeMode: ViewMode = requestedView === 'shoulder' || requestedView === 'wide' ? requestedView : 'eye';
-let focus = people[requestedFocus] ? requestedFocus : 2;
+let focus = people[requestedFocus] ? requestedFocus : defaultFocus;
 let marking = false;
 let marked: number | null = null;
 
@@ -40,6 +57,7 @@ function sync(): void {
   const person = people[focus]!;
   for (const link of styleLinks) {
     const params = new URLSearchParams({ art: link.dataset.art ?? art, model: link.dataset.model ?? model, focus: String(focus), view: activeMode });
+    if (previewAnimal) params.set('animal', previewAnimal);
     link.href = `?${params}`;
   }
   for (const [mode, panel] of panels) {
@@ -125,7 +143,9 @@ for (const mode of ['eye', 'shoulder', 'wide'] as const) {
   const world = find(section, '.world');
   world.setAttribute('aria-label', view.name);
   world.toggleAttribute('data-lookable', mode !== 'wide');
-  void mountScene(world, mode, choose, art === 'polished', model === 'detail').then(controller => {
+  void mountScene(world, mode, people, choose, {
+    finish: art === 'polished', detailed: model === 'detail', preview: Boolean(previewAnimal),
+  }).then(controller => {
     controllers[mode] = controller;
     controller.lookAt(focus);
     controller.mark(marked);
