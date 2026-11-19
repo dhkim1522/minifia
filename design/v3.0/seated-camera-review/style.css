@@ -16,6 +16,10 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .review-title h1 { margin: 4px 0 5px; font-size: clamp(26px, 3.5vw, 40px); letter-spacing: -.055em; }
 .review-title p { margin: 0; color: var(--muted); font-size: 14px; }
 .review-title p:first-child { color: var(--gold); font-size: 12px; font-weight: 700; }
+.art { display: flex; gap: 6px; margin-top: 12px; }
+.art a { display: grid; place-items: center; min-height: 44px; padding-inline: 12px; border: 1px solid var(--frame); border-radius: 7px; color: #f7eee0; background: #253342; font-size: 12px; text-decoration: none; }
+.art a[aria-current='true'] { border-color: var(--gold); background: #45382d; }
+.art a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .views { display: none; }
 .comparison { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; margin-top: 18px; }
 .view-title { padding: 0 2px 8px; }
@@ -54,7 +58,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .chat-placeholder span { color: #e8c18c; }
 @media (max-width: 1040px) {
   .review { padding: 12px 0 16px; }
-  .review-title, .views { width: min(100% - 16px, 390px); margin-inline: auto; }
+  .review-title, .art, .views { width: min(100% - 16px, 390px); margin-inline: auto; }
   .review-title p { font-size: 12px; }
   .views { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 11px; }
   .comparison { display: block; max-width: 390px; margin: 10px auto 0; }

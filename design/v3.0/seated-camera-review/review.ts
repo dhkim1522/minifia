@@ -21,6 +21,9 @@ function portrait(index: number): string {
 const template = find<HTMLTemplateElement>(document, '#panel');
 const nav = find(document, '.views');
 const comparison = find(document, '.comparison');
+const polished = new URLSearchParams(location.search).get('art') !== 'original';
+const styleLink = polished ? 'polished' : 'original';
+find(document, `.art a[href="?art=${styleLink}"]`).setAttribute('aria-current', 'true');
 const controllers: Partial<Record<ViewMode, Awaited<ReturnType<typeof mountScene>>>> = {};
 const panels = new Map<ViewMode, { section: HTMLElement; tab: HTMLButtonElement; players: HTMLButtonElement[]; mark: HTMLButtonElement }>();
 const initialFocus = 2;
@@ -114,7 +117,7 @@ for (const mode of ['eye', 'shoulder', 'wide'] as const) {
   const world = find(section, '.world');
   world.setAttribute('aria-label', view.name);
   world.toggleAttribute('data-lookable', mode !== 'wide');
-  void mountScene(world, mode, choose).then(controller => {
+  void mountScene(world, mode, choose, polished).then(controller => {
     controllers[mode] = controller;
     controller.lookAt(focus);
     controller.mark(marked);
