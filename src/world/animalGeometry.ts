@@ -10,7 +10,6 @@ interface HeadLayout {
   radii: Point;
   eye: Point; // 양쪽 눈은 x만 반대
   mouth: Point;
-  hat: Point; // 챙 반지름, 바닥 높이, 앞뒤 위치
 }
 
 const WHITE = "#f6f0ea";
@@ -28,22 +27,51 @@ export function animalSkin(animal: AnimalId): string {
 }
 
 const LAYOUTS: Readonly<Record<AnimalId, HeadLayout>> = {
-  rabbit:    { radii: [0.52, 0.47, 0.48], eye: [0.19, 0.015, 0.46], mouth: [0, -0.15, 0.47], hat: [0.30, 0.35, 0.04] },
-  elephant:  { radii: [0.52, 0.46, 0.48], eye: [0.23, 0.015, 0.44], mouth: [0, -0.17, 0.45], hat: [0.37, 0.36, 0] },
-  crocodile: { radii: [0.51, 0.42, 0.47], eye: [0.22, 0.18, 0.40], mouth: [0, -0.22, 0.78], hat: [0.38, 0.35, -0.07] },
-  penguin:   { radii: [0.50, 0.49, 0.46], eye: [0.18, 0.015, 0.49], mouth: [0, -0.16, 0.47], hat: [0.38, 0.37, -0.04] },
-  fox:       { radii: [0.52, 0.42, 0.46], eye: [0.19, 0.005, 0.45], mouth: [0, -0.15, 0.55], hat: [0.31, 0.31, 0.02] },
-  pig:       { radii: [0.53, 0.45, 0.48], eye: [0.22, 0.015, 0.45], mouth: [0, -0.23, 0.41], hat: [0.37, 0.35, 0] },
-  lion:      { radii: [0.46, 0.42, 0.44], eye: [0.18, 0.018, 0.44], mouth: [0, -0.16, 0.43], hat: [0.36, 0.4, 0.03] },
-  ram:       { radii: [0.43, 0.40, 0.45], eye: [0.17, -0.035, 0.45], mouth: [0, -0.19, 0.40], hat: [0.29, 0.37, 0] },
-  frog:      { radii: [0.58, 0.37, 0.46], eye: [0.29, 0.26, 0.40], mouth: [0, -0.105, 0.45], hat: [0.30, 0.29, -0.14] },
-  parrot:    { radii: [0.48, 0.47, 0.45], eye: [0.22, 0.015, 0.44], mouth: [0, -0.17, 0.50], hat: [0.33, 0.39, 0.035] },
-  hedgehog:  { radii: [0.50, 0.42, 0.42], eye: [0.18, 0.015, 0.43], mouth: [0, -0.19, 0.47], hat: [0.31, 0.38, 0.06] },
-  bat:       { radii: [0.50, 0.41, 0.46], eye: [0.19, 0.015, 0.43], mouth: [0, -0.16, 0.43], hat: [0.28, 0.31, 0.04] },
+  rabbit:    { radii: [0.52, 0.47, 0.48], eye: [0.19, 0.015, 0.46], mouth: [0, -0.15, 0.47] },
+  elephant:  { radii: [0.52, 0.46, 0.48], eye: [0.23, 0.015, 0.44], mouth: [0, -0.17, 0.45] },
+  crocodile: { radii: [0.51, 0.42, 0.47], eye: [0.22, 0.18, 0.40], mouth: [0, -0.22, 0.78] },
+  penguin:   { radii: [0.50, 0.49, 0.46], eye: [0.18, 0.015, 0.49], mouth: [0, -0.16, 0.47] },
+  fox:       { radii: [0.52, 0.42, 0.46], eye: [0.19, 0.005, 0.45], mouth: [0, -0.15, 0.55] },
+  pig:       { radii: [0.53, 0.45, 0.48], eye: [0.22, 0.015, 0.45], mouth: [0, -0.23, 0.41] },
+  lion:      { radii: [0.46, 0.42, 0.44], eye: [0.18, 0.018, 0.44], mouth: [0, -0.16, 0.43] },
+  ram:       { radii: [0.43, 0.40, 0.45], eye: [0.17, -0.035, 0.45], mouth: [0, -0.19, 0.40] },
+  frog:      { radii: [0.58, 0.37, 0.46], eye: [0.29, 0.26, 0.40], mouth: [0, -0.105, 0.45] },
+  parrot:    { radii: [0.48, 0.47, 0.45], eye: [0.22, 0.015, 0.44], mouth: [0, -0.17, 0.50] },
+  hedgehog:  { radii: [0.50, 0.42, 0.42], eye: [0.18, 0.015, 0.43], mouth: [0, -0.19, 0.47] },
+  bat:       { radii: [0.50, 0.41, 0.46], eye: [0.19, 0.015, 0.43], mouth: [0, -0.16, 0.43] },
 };
 
-function sphere(add: AddPart, parent: Object3D, color: string, center: Point, radii: Point, tilt = 0): Mesh {
-  const mesh = add(parent, new SphereGeometry(1, 14, 10), color);
+// 귀·뿔·눈 옆에 모자를 얹는 자리. 기울기는 챙의 접촉점을 중심으로 적용한다.
+interface HatFit {
+  radius: number;
+  y: number;
+  z: number;
+  tilt?: number;
+  scale?: Point;
+  brim?: number;
+}
+
+const HAT_FITS: Readonly<Record<AnimalId, HatFit>> = {
+  rabbit:    { radius: 0.268, y: 0.378, z: 0.237, tilt: 0.21, scale: [0.89, 0.77, 0.69], brim: 0.42 },
+  elephant:  { radius: 0.38,  y: 0.392, z: 0.01,  scale: [1, 0.88, 0.92], brim: 0.75 },
+  crocodile: { radius: 0.34,  y: 0.369, z: -0.11, tilt: -0.26, scale: [0.98, 0.82, 0.94], brim: 0.70 },
+  penguin:   { radius: 0.37,  y: 0.421, z: -0.024, scale: [1, 0.83, 0.91], brim: 0.78 },
+  fox:       { radius: 0.297, y: 0.349, z: 0.18,  tilt: 0.15, scale: [0.79, 0.77, 0.72], brim: 0.46 },
+  pig:       { radius: 0.373, y: 0.394, z: -0.008, scale: [0.99, 0.85, 0.91], brim: 0.72 },
+  lion:      { radius: 0.37,  y: 0.467, z: -0.035, tilt: 0.08, scale: [1, 0.85, 0.94], brim: 0.67 },
+  ram:       { radius: 0.31,  y: 0.48,  z: 0.042, tilt: 0.06, scale: [0.89, 0.82, 0.96], brim: 0.52 },
+  frog:      { radius: 0.34,  y: 0.345, z: -0.17, tilt: -0.36, scale: [1, 0.83, 0.93], brim: 0.61 },
+  parrot:    { radius: 0.347, y: 0.398, z: 0.024, scale: [1, 0.82, 0.93], brim: 0.65 },
+  hedgehog:  { radius: 0.343, y: 0.378, z: 0.083, tilt: 0.1, scale: [0.91, 0.83, 0.80], brim: 0.51 },
+  bat:       { radius: 0.296, y: 0.346, z: 0.057, scale: [0.79, 0.78, 0.89], brim: 0.48 },
+};
+
+export function animalHatFit(animal: AnimalId): HatFit {
+  return HAT_FITS[animal];
+}
+
+function sphere(add: AddPart, parent: Object3D, color: string, center: Point, radii: Point, tilt = 0, tag?: string): Mesh {
+  const mesh = add(parent, new SphereGeometry(1, 14, 10), color, tag);
   mesh.position.set(...center);
   mesh.scale.set(...radii);
   mesh.rotation.z = tilt;
@@ -76,10 +104,10 @@ function tube(add: AddPart, parent: Object3D, color: string, points: readonly Po
   sphere(add, parent, color, end, [r, r, r]);
 }
 
-function spike(add: AddPart, parent: Object3D, color: string, start: Point, tip: Point, radius: number): void {
+function spike(add: AddPart, parent: Object3D, color: string, start: Point, tip: Point, radius: number, tag?: string): void {
   const base = new Vector3(...start);
   const direction = new Vector3(...tip).sub(base);
-  const mesh = add(parent, new ConeGeometry(radius, direction.length(), 9), color);
+  const mesh = add(parent, new ConeGeometry(radius, direction.length(), 9), color, tag);
   mesh.position.copy(base).addScaledVector(direction, 0.5);
   mesh.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), direction.normalize());
 }
@@ -163,7 +191,7 @@ export function buildAnimalHead(head: Object3D, animal: AnimalId, add: AddPart):
       for (let i = 0; i < 9; i++) {
         const a = 2 * Math.PI * i / 9;
         sphere(add, head, i % 3 === 0 ? "#ba7942" : "#ae6d3a", [0.46 * Math.sin(a), 0.40 * Math.cos(a), -0.115],
-          [0.203, 0.218, 0.21], -a);
+          [0.203, 0.218, 0.21], -a, i === 0 ? "highFeather" : undefined);
       }
       ears(add, head, "#e5af61", "#be8350", 0.34, 0.27, 0.175, [0.114, 0.106, 0.089], 0.2);
       for (const side of [-1, 1]) sphere(add, head, "#e9bc77", [side * 0.07, -0.107, 0.406], [0.136, 0.099, 0.061]);
@@ -192,7 +220,7 @@ export function buildAnimalHead(head: Object3D, animal: AnimalId, add: AddPart):
     case "parrot":
       for (const side of [-1, 1]) sphere(add, head, "#ecd1b9", [side * 0.19, -0.024, 0.331], [0.205, 0.236, 0.135], side * 0.19);
       for (const [y, z, r] of [[0.385, -0.19, 0.29], [0.463, -0.20, 0.23], [0.515, -0.17, 0.16]] as const) {
-        const plume = sphere(add, head, color, [0, y, z], [0.146, 0.104, r]);
+        const plume = sphere(add, head, color, [0, y, z], [0.146, 0.104, r], 0, "highFeather");
         plume.rotation.x = -0.50;
       }
       sphere(add, head, "#f1ba5f", [0, -0.063, 0.47], [0.192, 0.199, 0.208]);
@@ -204,7 +232,7 @@ export function buildAnimalHead(head: Object3D, animal: AnimalId, add: AddPart):
       for (let i = 0; i < 10; i++) {
         const a = (2 * Math.PI * i) / 10;
         spike(add, head, i % 2 ? "#805943" : "#916b51", [0.43 * Math.sin(a), 0.33 * Math.cos(a), -0.18],
-          [0.64 * Math.sin(a), 0.56 * Math.cos(a), -0.34], 0.175);
+          [0.64 * Math.sin(a), 0.56 * Math.cos(a), -0.34], 0.175, i === 0 ? "highFeather" : undefined);
       }
       ears(add, head, "#e8b589", "#bd8c75", 0.37, 0.195, 0.129, [0.104, 0.107, 0.087], 0.18);
       sphere(add, head, "#d9ab83", [0, -0.109, 0.387], [0.158, 0.134, 0.202]);

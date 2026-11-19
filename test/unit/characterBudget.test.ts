@@ -1,7 +1,7 @@
 // 10-06: 인물 에셋 예산 — 인물 8명 × 의상 9종 72조합 (D-15, D-16). `npm run check:character` 의 본체다.
 // WebGL 없이 node 에서 장면 그래프만 검사한다. 새 3D 부품은 만들지 않는다(O-4).
 import { readFileSync } from "node:fs";
-import { Box3, type BufferGeometry, Color, type Mesh, type Object3D, Vector3 } from "three";
+import { Box3, type BufferGeometry, Color, type Mesh, type Object3D, Triangle, Vector3 } from "three";
 import { describe, expect, it, vi } from "vitest";
 import { ANIMAL_IDS } from "../../shared/game/animals";
 import { EMOTE_MS } from "../../shared/game/emote";
@@ -131,6 +131,54 @@ describe("동물 캐릭터의 외형과 렌더링 예산", () => {
         c.dispose();
       }
     }
+  });
+
+  it("개구리 중절모의 몸통과 챙이 튀어나온 양쪽 눈을 관통하지 않는다", () => {
+    const c = createCharacter(0, "mafia", undefined, "frog");
+    const head = c.root.getObjectByName("neck")!.children[0] as Mesh;
+    const { geometry } = head;
+    const positions = geometry.getAttribute("position");
+    const colors = geometry.getAttribute("color");
+    const indices = geometry.index!;
+    const hatColors = ["#1a1d24", "#8e0b21"].map((value) => new Color(value));
+    const colorOf = new Color();
+    const isHat = (index: number) => {
+      colorOf.fromBufferAttribute(colors, index);
+      return hatColors.some((color) => Math.abs(color.r - colorOf.r) < 0.0001 && Math.abs(color.g - colorOf.g) < 0.0001 && Math.abs(color.b - colorOf.b) < 0.0001);
+    };
+    const origin = new Vector3();
+    const nearest = new Vector3();
+    const triangle = new Triangle();
+    const inverseEyeRadii = new Vector3(1 / 0.206, 1 / 0.21, 1 / 0.188);
+    // 동물 머리 y 0.431에서 개구리 눈 중심 offset [±0.29, 0.24, 0.22].
+    const eyeCenters = [new Vector3(-0.29, 0.671, 0.22), new Vector3(0.29, 0.671, 0.22)];
+    let clearance = Number.POSITIVE_INFINITY;
+    let tested = 0;
+    for (let i = 0; i < indices.count; i += 3) {
+      const a = indices.getX(i), b = indices.getX(i + 1), d = indices.getX(i + 2);
+      if (!isHat(a) || !isHat(b) || !isHat(d)) continue;
+      tested++;
+      for (const center of eyeCenters) {
+        triangle.a.fromBufferAttribute(positions, a).sub(center).multiply(inverseEyeRadii);
+        triangle.b.fromBufferAttribute(positions, b).sub(center).multiply(inverseEyeRadii);
+        triangle.c.fromBufferAttribute(positions, d).sub(center).multiply(inverseEyeRadii);
+        triangle.closestPointToPoint(origin, nearest);
+        clearance = Math.min(clearance, nearest.length());
+      }
+    }
+    expect(tested).toBeGreaterThan(0);
+    expect(clearance).toBeGreaterThan(1);
+    c.dispose();
+  });
+
+  it("동물의 소매와 바짓단이 흔들리는 관절축 안쪽까지 들어온다", () => {
+    const c = createCharacter(0, "coat", undefined, "fox");
+    for (const joint of ["armA", "armB", "legA", "legB"]) {
+      const mesh = c.root.getObjectByName(joint)!.children[0] as Mesh;
+      mesh.geometry.computeBoundingBox();
+      expect(mesh.geometry.boundingBox!.max.y, joint).toBeGreaterThan(0.08);
+    }
+    c.dispose();
   });
 
   it("역할 의상과 종 변경을 같은 움직이는 모델에 적용한다", () => {

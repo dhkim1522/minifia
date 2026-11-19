@@ -103,6 +103,7 @@ function readDressUi(page) {
       floatCount: qa("[data-float]").length,
       panel: rect(q(".mf-lobby__panel")),
       sheet: rect(q("[data-dress-sheet]")),
+      sheetContainerTop: q("[data-dress-sheet]")?.offsetParent?.getBoundingClientRect().top ?? 0,
       cards: qa("[data-dress-sheet] button[data-outfit]").map((el) => rect(el)),
       cardIds: qa("[data-dress-sheet] button[data-outfit]").map((el) => el.getAttribute("data-outfit")),
       cardStates: qa("[data-dress-sheet] button[data-outfit]").map((el) => ({ id: el.getAttribute("data-outfit"), taken: el.hasAttribute("data-taken"), disabled: el.getAttribute("aria-disabled") === "true", pressed: el.getAttribute("aria-pressed") === "true" })),
@@ -343,7 +344,7 @@ export function makeAvatarFlows(helpers) {
         const open = await readDressUi(page);
         const hidden = open.float === null;
         rec(`${sc}-${who}`, "AD2a", `${who}: 시트가 열리면 떠 있는 버튼은 숨고 카드 아홉 개가 UI-SPEC 순서`, hidden && open.cardIds.join(",") === "coat,police,doctor,mafia,detective,reporter,elder,hood,noir", `버튼 ${hidden ? "숨음" : "보임"} · 카드 ${open.cardIds.join(",")}`);
-        for (const l of dressChecks({ float: closed.float, panel: open.panel, sheet: open.sheet, cards: open.cards, close: open.close, selected: open.selected, nameFont: open.nameFont, viewport: { w: open.vw, h: open.vh }, kb: open.kbOpen })) {
+        for (const l of dressChecks({ float: closed.float, panel: open.panel, sheet: open.sheet, cards: open.cards, close: open.close, selected: open.selected, nameFont: open.nameFont, viewport: { w: open.vw, h: open.vh }, kb: open.kbOpen, containerTop: open.sheetContainerTop })) {
           rec(`${sc}-${who}`, l.id, l.label, l.ok, l.detail);
         }
         rec(`${sc}-${who}`, "AD2b", `${who}: 시트가 열리면 초점이 선택된 동물 카드로 감`, animalFocus, `동물 카드 초점 ${animalFocus}`);

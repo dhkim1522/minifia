@@ -319,13 +319,24 @@ describe("실제 파일과의 일치", () => {
   });
 });
 
-// 10-07: 로비 꾸미기 카드 그림 아홉 장(승인 디자인 시스템 사본). 인물별 45장은 만들지 않는다(O-3).
+// 옷장 카드에서는 현재 동물의 실제 의상 렌더를 읽는다.
 describe("outfitCardSrc (10-07)", () => {
   const outfitFiles = new Set(Object.keys(import.meta.glob("/public/outfits/*.png")));
 
   it("/outfits/outfit-{id}.png?v={ASSET_VERSION} 모양이다", () => {
     expect(outfitCardSrc("coat")).toBe(`/outfits/outfit-coat.png?v=${ASSET_VERSION}`);
     expect(outfitCardSrc("noir")).toBe(`/outfits/outfit-noir.png?v=${ASSET_VERSION}`);
+  });
+
+  it("동물 12종의 아홉 의상에 같은 동물의 실제 렌더 파일이 있다", () => {
+    for (const animal of ANIMAL_IDS) {
+      for (const outfit of OUTFIT_IDS) {
+        const form = outfit === "coat" ? "figure" : outfit;
+        const path = `/characters/animals/${animal}/${form}-sm.png`;
+        expect(outfitCardSrc(outfit, animal)).toBe(`${path}?v=${ASSET_VERSION}`);
+        expect(characterFiles.has(`/public${path}`), path).toBe(true);
+      }
+    }
   });
 
   it("ASSET_VERSION 은 i3 에서 올라갔다", () => {

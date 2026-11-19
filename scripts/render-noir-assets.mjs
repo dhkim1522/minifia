@@ -130,12 +130,15 @@ try {
       await mkdir(root(dir), { recursive: true });
       const head = await portrait({ animal, seat: 0, outfit: "coat", head: true, ratio: 1 });
       await savePng(head, `${dir}/face.png`, 200, 200);
-      for (const [form, outfit] of [["figure", "coat"], ["mafia", "mafia"], ["police", "police"], ["doctor", "doctor"]]) {
+      for (const outfit of outfits) {
+        const form = outfit === "coat" ? "figure" : outfit;
         const image = await portrait({ animal, seat: 0, outfit, ratio: 0.75 });
-        await Promise.all([
-          savePng(image, `${dir}/${form}-sm.png`, 144, 192),
-          savePng(image, `${dir}/${form}-lg.png`, 288, 384),
-        ]);
+        const writes = [savePng(image, `${dir}/${form}-sm.png`, 144, 192)];
+        // 확대 역할 카드와 입장 미리보기에서 사용하는 의상만 고밀도로 저장한다.
+        if (outfit === "coat" || outfit === "mafia" || outfit === "police" || outfit === "doctor") {
+          writes.push(savePng(image, `${dir}/${form}-lg.png`, 288, 384));
+        }
+        await Promise.all(writes);
       }
     }
   }
@@ -147,9 +150,8 @@ try {
   }
 
   async function renderOutfitPortraits() {
-    const models = { police: "elephant", doctor: "frog", mafia: "rabbit" };
     for (const outfit of outfits) {
-      const image = await portrait({ animal: models[outfit] ?? "fox", seat: 0, outfit, ratio: 0.8 });
+      const image = await portrait({ seat: 0, outfit, ratio: 0.8 });
       await savePng(image, `public/outfits/outfit-${outfit}.png`, 240, 300);
     }
   }
@@ -170,7 +172,6 @@ try {
     await renderRolePortraits();
   } else if (process.argv.includes("--animal-portraits-only")) {
     await renderAnimalPortraits();
-    await renderOutfitPortraits();
   } else if (process.argv.includes("--outfit-portraits-only")) {
     await renderOutfitPortraits();
   } else {

@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../helpers/singleLineErrors";
+import type { AnimalId } from "../../shared/game/animals";
 import type { ClientMessage, PublicPlayer, RoomView } from "../../shared/protocol";
 import { OUTFIT_IDS } from "../../shared/protocol";
 import type { WorldStageProps } from "../../src/components/WorldStage";
@@ -190,6 +191,28 @@ describe("Lobby — 꾸미기 버튼과 시트 (10-07, D-4·D-5)", () => {
     expect(container.querySelector("[data-float='dress']")).toBeNull();
     // 내 지금 의상(서버 값 doctor)이 선택돼 있다
     expect(container.querySelector("button[data-outfit='doctor']")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("동물을 바꾼 뒤 옷장을 열면 아홉 의상 모두 내 동물의 미리보기를 쓴다", () => {
+    const viewOf = (animal: AnimalId) => makeView(
+      [player(0, "민수", { animal: "fox" }), player(1, "영희", { animal })],
+      1,
+    );
+    const send = vi.fn(() => true);
+    const { container, rerender } = render(lobby(viewOf("frog"), send));
+    fireEvent.click(screen.getByRole("button", { name: "캐릭터 꾸미기" }));
+    fireEvent.click(screen.getByRole("tab", { name: "의상" }));
+
+    const images = () => [...container.querySelectorAll<HTMLImageElement>("button[data-outfit] img")]
+      .map((img) => img.getAttribute("src"));
+    expect(images()).toEqual(OUTFIT_IDS.map((id) => outfitCardSrc(id, "frog")));
+
+    fireEvent.click(screen.getByRole("tab", { name: "동물" }));
+    fireEvent.click(container.querySelector("[data-animal='rabbit']")!);
+    expect(send).toHaveBeenCalledWith({ t: "animalPick", animal: "rabbit" });
+    rerender(lobby(viewOf("rabbit"), send));
+    fireEvent.click(screen.getByRole("tab", { name: "의상" }));
+    expect(images()).toEqual(OUTFIT_IDS.map((id) => outfitCardSrc(id, "rabbit")));
   });
 
   it("닫기를 누르면 시트가 사라지고 버튼이 돌아온다", () => {

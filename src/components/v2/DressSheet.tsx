@@ -4,11 +4,11 @@ import "../../styles/v2.css";
 import { ANIMAL_IDS, ANIMALS, type AnimalId } from "../../../shared/game/animals";
 import type { MapChoice, OutfitId } from "../../../shared/protocol";
 import { DRESS_ORDER, DRESS_TAB_NAME, DRESS_TEXT, MAP_CARD_ORDER, MAP_LABEL, OUTFIT_LABEL, mapCardName, outfitCardName } from "../../game/dressText";
-import { animalFaceSrc, mapCardSrc, outfitCardSrc, roleArtSrc } from "../../net/assets";
+import { animalFaceSrc, mapCardSrc, outfitCardSrc } from "../../net/assets";
 import { V2Icon, type V2IconName } from "./V2Icon";
 
-// 로비 꾸미기 시트 (10-07, UI-SPEC B-2·D-5): 로비 아래 패널을 정확히 덮는다(높이 = --mf-panel-h 250 · 306, 아랫변 = 키보드 올림).
-// 스테이지 사각형이 변하지 않아 카메라가 움직이지 않고 내 캐릭터가 계속 보인다. 위 줄은 hanger 장식 24 와 닫기 44×44 뿐, 제목 글자는 없다.
+// 꾸미기 시트의 아래를 채팅 패널에 맞춘다. 탭 줄과 카드가 잘리지 않도록 시트에 최소 높이를 둔다.
+// 스테이지 사각형이 변하지 않아 카메라가 움직이지 않고 내 캐릭터가 계속 보인다.
 // 카드 띠는 한 줄 가로 스크롤 스냅이다. 카드를 누르면 onPick(id) — 미리 보기·전송은 부르는 쪽(useDress)이 한다.
 // 11-13(맵 선택): 방장에게만 [맵][의상] 탭(아이콘 44×44, 선택 탭은 아래 2px 줄)이 생긴다. 맵 탭은 카드 3장(재즈 바·광장·랜덤, 96×112 간격 8)이고
 // 누르면 onPickMap(id) 만 부른다 — 미리 보기·낙관 갱신 없이 서버가 mapChoice 를 방송하면 카드가 바뀐다. 손님에게는 탭이 없고 의상 카드만 보인다.
@@ -181,8 +181,6 @@ export function DressSheet({ value, onPick, onClose, disabled = false, taken, ho
           {DRESS_ORDER.map((id) => {
             const selected = id === value;
             const locked = taken?.has(id) === true && id !== value;
-            const role = id === "coat" ? "citizen" : id === "mafia" || id === "police" || id === "doctor" ? id : undefined;
-            const art = wearer && role ? roleArtSrc(role, wearer) : undefined;
             return (
               <button
                 key={id}
@@ -197,7 +195,7 @@ export function DressSheet({ value, onPick, onClose, disabled = false, taken, ho
                   if (!disabled && !locked) onPick(id);
                 }}
               >
-                <img className="mv-dress-card__img" src={art?.src ?? outfitCardSrc(id)} srcSet={art?.srcSet} alt={OUTFIT_LABEL[id]} width={64} height={80} draggable={false} />
+                <img key={wearer} className="mv-dress-card__img" src={outfitCardSrc(id, wearer)} alt={OUTFIT_LABEL[id]} width={64} height={80} draggable={false} />
                 <span className="mv-dress-card__name">{OUTFIT_LABEL[id]}</span>
                 {selected ? <V2Icon name="check" size={12} className="mv-dress-card__check" /> : locked ? <V2Icon name="lock" size={16} className="mv-dress-card__lock" /> : null}
               </button>

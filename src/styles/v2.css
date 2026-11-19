@@ -393,10 +393,9 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
   .mv-claim.is-pop, .mv-claim__notice, .mv-claim-sheet { animation: none; }
 }
 
-/* 로비 꾸미기(10-07, UI-SPEC B-2·D-5): 시트가 아래 패널을 정확히 덮는다 — 높이 = 패널 높이(--mf-panel-h 250 · 306), 아랫변 = 키보드 올림(.mv-speak-sheet 와 같은 방식).
-   면 night-800, 테두리 1px night-600, 안쪽 12. 위 줄: hanger 장식 24 왼쪽 · 닫기 44×44 오른쪽(제목 글자 없음). 쌓기 12 + 44 + 12 + 112 + 4 + 12 = 196 ≤ 250.
-   카드 띠: 한 줄 가로 스크롤 스냅, 카드 72×112(그림 64×80 · 이름 14px 700 한 줄, 안쪽 위 4 · 아래 6), 사이 8. 선택 카드 = 테두리 2px gray-100 + 오른쪽 위 체크 12. 새 색·진홍 없음. */
-.mv-dress-sheet { position: absolute; left: 0; right: 0; bottom: var(--mf-kb-lift, 0px); z-index: calc(var(--z-overlay) + 1); height: var(--mf-panel-h, 250px); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow: hidden; background: var(--noir-sheet-light), var(--noir-panel); border: 1px solid var(--night-600); border-bottom: 0; border-radius: 14px 14px 0 0; font-family: var(--font-ui); color: var(--gray-100); border-color: var(--noir-line); box-shadow: var(--noir-rail), var(--shadow-card); }
+/* 꾸미기 시트: 채팅 패널과 아랫변을 맞추고 모든 탭에 테두리 1 + 안쪽 여백 24 + 위 줄 44 + 간격 12 + 카드 112를 확보한다.
+   가로 화면이나 키보드로 공간이 더 작아지면 시트 안에서만 세로로 스크롤한다. */
+.mv-dress-sheet { position: absolute; left: 0; right: 0; bottom: var(--mf-kb-lift, 0px); z-index: calc(var(--z-overlay) + 1); height: max(var(--mf-panel-h, 250px), 193px); max-height: calc(100% - var(--mf-kb-lift, 0px)); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow: hidden auto; overscroll-behavior-y: contain; background: var(--noir-sheet-light), var(--noir-panel); border: 1px solid var(--night-600); border-bottom: 0; border-radius: 14px 14px 0 0; font-family: var(--font-ui); color: var(--gray-100); border-color: var(--noir-line); box-shadow: var(--noir-rail), var(--shadow-card); }
 .mv-dress-sheet__top { flex: none; display: flex; align-items: center; justify-content: space-between; height: var(--tap-min); padding-left: 4px; }
 /* 닫기는 공통 알약 .mv-closepill(14-06) */
 .mv-dress-sheet__close { color: var(--gray-100); }
@@ -410,11 +409,10 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 /* 18-05 잠긴 옷 자물쇠 16 — 체크와 같은 자리, 잠긴 카드는 선택될 수 없다 */
 .mv-dress-card__lock { position: absolute; top: 4px; right: 4px; color: var(--gray-300); }
 .mv-dress-card[aria-disabled="true"] { opacity: 0.45; cursor: default; }
-.mv-dress-sheet[data-dress-view="animal"] { gap: 6px; padding-block: 6px; }
 .mv-animal-card { justify-content: center; height: 88px; }
 .mv-animal-card__img { width: 52px; height: 52px; object-fit: contain; }
 .mv-animal-card[data-taken] { opacity: 0.58; }
-/* 방장의 [맵][의상] 탭(11-13): 아이콘 44×44, 선택 탭은 아래 2px 줄(gray-100). 맵 탭 카드 3장 96×112 간격 8(합 304) — 그림 80×80 cover + 이름 14px */
+/* 방장의 맵 카드: 96×112, 간격 8. 카드 띠의 좌우 여백을 6px씩 줄여 320px 화면에도 세 장을 담는다. */
 .mv-dress-sheet__tabs { display: flex; align-items: center; }
 /* 14-07 TOOL-01: 탭은 아이콘 20 위 + 라벨 14 아래(높이 44 안), 폭은 글자 따라(최소 44) */
 .mv-dress-sheet__tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; box-sizing: border-box; min-width: var(--tap-min); height: var(--tap-min); padding: 0 var(--space-sm); border: 0; background: none; color: var(--gray-300); font-family: var(--font-ui); cursor: pointer; }
@@ -423,7 +421,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-dress-sheet__tab.is-selected .mv-dress-sheet__tab-label { font-weight: 700; }
 .mv-dress-sheet__tab.is-selected::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: var(--noir-paper); }
 .mv-dress-sheet__tab:focus-visible { outline: 2px solid var(--gray-100); outline-offset: -2px; }
-.mv-dress-sheet__maps { flex: none; display: flex; justify-content: center; gap: var(--space-sm); }
+.mv-dress-sheet__maps { flex: none; display: flex; justify-content: safe center; gap: var(--space-sm); margin-inline: -6px; overflow: auto hidden; scrollbar-width: none; }
 .mv-map-card { position: relative; flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; box-sizing: border-box; width: 96px; height: 112px; padding: 7px 0 0; border: 1px solid var(--noir-control-line); border-radius: var(--noir-control-radius); background: var(--noir-control); color: var(--noir-paper); font-family: inherit; cursor: pointer; }
 .mv-map-card.is-selected { box-shadow: inset 0 0 0 1px var(--noir-paper); border-color: var(--noir-paper); background: var(--noir-control-on); color: var(--noir-paper); }
 .mv-map-card__img { flex: none; display: block; width: 80px; height: 80px; object-fit: cover; border-radius: var(--radius-sm); pointer-events: none; -webkit-user-drag: none; }
@@ -431,7 +429,7 @@ body:has([data-emote-tray]) .mf-float { visibility: hidden; }
 .mv-map-card__name { max-width: 100%; font-size: 14px; line-height: 1.2; font-weight: 700; white-space: nowrap; overflow: hidden; }
 .mv-map-card__check { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: var(--radius-pill); background: var(--overlay-ink-strong); color: var(--gray-100); }
 .mv-map-card[aria-disabled="true"] { opacity: 0.45; cursor: default; }
-.mv-map-card:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+.mv-map-card:focus-visible { outline: 2px solid var(--gray-100); outline-offset: -2px; }
 /* 맵 단추는 52px 도구 타일에 24px 아이콘을 둔다. */
 .mf-mapchip { position: relative; flex: none; display: grid; place-items: center; box-sizing: border-box; width: var(--control-button); height: var(--control-button); margin: 0; padding: 0; border: 1px solid var(--noir-control-line); border-radius: var(--noir-control-radius); background: var(--noir-control); color: var(--noir-paper); cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
 .mf-mapchip[aria-disabled="true"] { cursor: default; }

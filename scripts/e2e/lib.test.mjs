@@ -2705,13 +2705,22 @@ test("dressChecks DB1: 지름 52±1 · 오른쪽 여백 16±1 · 아랫변 ≤ �
   onlyFail(dressChecks(g), "DB1");
 });
 
-test("dressChecks DS1: 시트 윗변 = 패널 윗변 ±1 · 높이 = 패널 높이 ±1 — 어긋나면 그 항목만 실패", () => {
+test("dressChecks DS1: 시트 아랫변 = 패널 아랫변 ±1 · 높이 = 패널과 최소 높이 중 큰 값 ±1", () => {
   const a = dressGood();
   a.sheet = rect(0, 300, 360, 260);
   onlyFail(dressChecks(a), "DS1");
   const b = dressGood();
-  b.sheet = rect(0, 310, 360, 200);
+  b.sheet = rect(0, 303, 360, 250);
   onlyFail(dressChecks(b), "DS1");
+  const c = dressGood();
+  c.panel = rect(0, 400, 360, 160);
+  c.sheet = rect(0, 367, 360, 193);
+  assert.equal(okOf(dressChecks(c)).DS1, true);
+  const d = dressGood();
+  d.panel = rect(0, 400, 360, 160);
+  d.sheet = rect(0, 380, 360, 180);
+  d.containerTop = 380;
+  assert.equal(okOf(dressChecks(d)).DS1, true);
 });
 
 test("dressChecks DS2: 카드가 아홉 개가 아니거나 폭 72±2 가 아니거나 높이 44 미만이면 그 항목만 실패", () => {
@@ -2725,6 +2734,9 @@ test("dressChecks DS2: 카드가 아홉 개가 아니거나 폭 72±2 가 아니
   const c = dressGood();
   c.cards = c.cards.map((x, i) => (i === 3 ? rect(x.left, x.top, 72, 40) : x));
   assert.equal(okOf(dressChecks(c)).DS2, false);
+  const d = dressGood();
+  d.cards = d.cards.map((x) => rect(x.left, 450, x.width, x.height));
+  onlyFail(dressChecks(d), "DS2");
 });
 
 test("dressChecks DS3: 폭 360 에서 완전히 보이는 카드 4 이상 + 오른쪽 가장자리에 걸친 다음 카드(8px 이상 보이고 잘림) — 어느 하나 없으면 그 항목만 실패", () => {

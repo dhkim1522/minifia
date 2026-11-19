@@ -2109,22 +2109,24 @@ export function floatTrayChecks({ visibleBefore, hiddenWhileOpen, visibleAfter }
 
 // ---- 10페이즈 로비 꾸미기 버튼·시트·카드 띠 (10-07, 결정 D-4·D-5·D-18, UI-SPEC B-1·B-2) ----
 
+const DRESS_SHEET_MIN_HEIGHT = 193;
+
 /**
  * 꾸미기 기하(DB1·DS1~DS6). 사각형은 { left, top, width, height }.
  * float = 떠 있는 꾸미기 버튼(시트가 닫힌 때), panel = 로비 아래 패널, sheet = 열린 시트, cards = 카드 아홉 개(띠 안에서 가려져도 DOM 사각형),
  * close = 닫기 버튼, selected = { rect, pressedCount }(선택 카드와 aria-pressed="true" 개수), nameFont = 카드 이름 글자 크기 최솟값(px), viewport = { w, h }, kb = 가상 키보드가 열려 있나.
  * DB1 버튼 52x52 ±1(16-06 오른쪽 열의 한 칸) · 오른쪽 여백 16 ±1(두 열로 접히면 둘째 열 80) · 아랫변 ≤ 패널 윗변 − 8(키보드가 열려 있으면 보지 않는다) ·
- * DS1 시트 윗변 = 패널 윗변 ±1, 높이 = 패널 높이 ±1(키보드가 열려 있으면 윗변은 보지 않는다) · DS2 카드 아홉 개, 폭 72 ±2, 높이 44 이상 ·
- * DS3 완전히 보이는 카드 4 이상이고 시트 오른쪽 가장자리에 걸쳐 8px 이상 보이는 다음 카드가 있음(더 있음을 알림) · DS4 닫기 44x44 이상 ·
+ * DS1 시트 아랫변 = 패널 아랫변 ±1, 높이 = 패널과 193 중 큰 값(화면 공간까지) ±1 · DS2 카드 아홉 개, 폭 72 ±2, 높이 44 이상 ·
+ * DS3 완전히 보이는 카드 4 이상이고 시트 오른쪽 가장자리에 걸쳐 8px 이상 보이는 다음 카드가 있음(더 있음을 알림) · DS4 닫기 44x44 이상, 공간이 충분하면 시트 안에 있음 ·
  * DS5 선택 카드가 시트 가로 안에 완전히 보이고 aria-pressed="true" 가 하나뿐 · DS6 이름 글자 14px 이상.
  */
-export function dressChecks({ float, panel, sheet, cards, close, selected, nameFont, viewport, kb } = {}) {
+export function dressChecks({ float, panel, sheet, cards, close, selected, nameFont, viewport, kb, containerTop = 0 } = {}) {
   const L = {
     DB1: `옷장 버튼 ${SIDE_BUTTON_SIZE}x${SIDE_BUTTON_SIZE}(오른쪽 열) · 오른쪽 ${FLOAT_MARGIN} · 아랫변이 패널 윗변 − ${FLOAT_GAP} 위`,
-    DS1: "시트가 아래 패널을 정확히 덮음(윗변·높이)",
+    DS1: "시트가 패널 아랫변에 맞으며 위 줄과 카드 높이를 확보",
     DS2: "카드 아홉 개: 폭 72 · 높이 44 이상",
     DS3: "완전히 보이는 카드 4장 이상 + 오른쪽에 걸친 다음 카드",
-    DS4: `닫기 ${TAP_MIN}x${TAP_MIN} 이상`,
+    DS4: `닫기가 시트 안에 있고 ${TAP_MIN}x${TAP_MIN} 이상`,
     DS5: "선택 카드가 보이고 aria-pressed=true 는 하나",
     DS6: "카드 이름 글자 14px 이상",
   };
@@ -2140,14 +2142,18 @@ export function dressChecks({ float, panel, sheet, cards, close, selected, nameF
   if (!kb && bottom(float) > panel.top - FLOAT_GAP + OVERLAP_EPS) db.push(`아랫변 ${fmt(bottom(float))} (패널 윗변 − ${FLOAT_GAP} = ${fmt(panel.top - FLOAT_GAP)} 아래로 넘음)`);
   out.push(result("DB1", L.DB1, db));
   const ds1 = [];
-  if (!kb && Math.abs(sheet.top - panel.top) > 1) ds1.push(`윗변 ${fmt(sheet.top)} (패널 ${fmt(panel.top)})`);
-  if (Math.abs(sheet.height - panel.height) > 1) ds1.push(`높이 ${fmt(sheet.height)} (패널 ${fmt(panel.height)})`);
+  const panelBottom = bottom(panel);
+  const availableHeight = panelBottom - containerTop;
+  const expectedHeight = Math.min(Math.max(panel.height, DRESS_SHEET_MIN_HEIGHT), availableHeight);
+  if (Math.abs(bottom(sheet) - panelBottom) > 1) ds1.push(`아랫변 ${fmt(bottom(sheet))} (패널 ${fmt(panelBottom)})`);
+  if (Math.abs(sheet.height - expectedHeight) > 1) ds1.push(`높이 ${fmt(sheet.height)} (기대 ${fmt(expectedHeight)})`);
   out.push(result("DS1", L.DS1, ds1));
   const ds2 = [];
   if (cards.length !== 9) ds2.push(`카드 ${cards.length}개`);
   for (const c of cards) {
     if (Math.abs(c.width - 72) > 2) ds2.push(`폭 ${fmt(c.width)}`);
     if (c.height + OVERLAP_EPS < TAP_MIN) ds2.push(`높이 ${fmt(c.height)}`);
+    if (availableHeight >= DRESS_SHEET_MIN_HEIGHT && (c.top < sheet.top - 1 || bottom(c) > bottom(sheet) + 1)) ds2.push("카드 높이가 시트 밖으로 넘음");
   }
   out.push(result("DS2", L.DS2, ds2));
   const edge = right(sheet);
@@ -2157,7 +2163,10 @@ export function dressChecks({ float, panel, sheet, cards, close, selected, nameF
   if (full < 4) ds3.push(`완전히 보이는 카드 ${full}장`);
   if (!peek) ds3.push("오른쪽에 걸쳐 보이는 다음 카드 없음");
   out.push(result("DS3", L.DS3, ds3));
-  out.push(result("DS4", L.DS4, close.width + OVERLAP_EPS < TAP_MIN || close.height + OVERLAP_EPS < TAP_MIN ? [`${fmt(close.width)}x${fmt(close.height)}`] : []));
+  const ds4 = [];
+  if (close.width + OVERLAP_EPS < TAP_MIN || close.height + OVERLAP_EPS < TAP_MIN) ds4.push(`${fmt(close.width)}x${fmt(close.height)}`);
+  if (availableHeight >= DRESS_SHEET_MIN_HEIGHT && (close.top < sheet.top - 1 || bottom(close) > bottom(sheet) + 1)) ds4.push("닫기 버튼이 시트 밖으로 넘음");
+  out.push(result("DS4", L.DS4, ds4));
   const ds5 = [];
   if (selected.rect.left < sheet.left - 0.5 || right(selected.rect) > edge + 0.5) ds5.push(`선택 카드 ${fmt(selected.rect.left)}~${fmt(right(selected.rect))} 가 시트 밖`);
   if (selected.pressedCount !== 1) ds5.push(`aria-pressed=true ${selected.pressedCount}개`);

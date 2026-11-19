@@ -1298,6 +1298,17 @@ describe("결과 단계 꾸미기 (11-12, D-16)", () => {
     expect(r.send.mock.calls.map((c) => c[0] as { t: string }).filter((m) => m.t === "dress")).toEqual([{ t: "dress", look: other.getAttribute("data-outfit") }]);
   });
 
+  it("결과 옷장의 탐정·후드 미리보기도 내 동물을 쓴다", () => {
+    const view = makeView({ me: 1 });
+    view.players = view.players.map((player) => ({ ...player, animal: player.seat === 1 ? "frog" : "fox" }));
+    const r = renderRoom(view);
+    fireEvent.click(dress(r.container)!);
+    for (const outfit of ["detective", "hood"]) {
+      const img = r.container.querySelector(`button[data-outfit='${outfit}'] img`);
+      expect(img?.getAttribute("src")).toContain(`/characters/animals/frog/${outfit}-sm.png?v=`);
+    }
+  });
+
   it("다른 사람(연결이 끊긴 사람 포함)이 직접 고른 옷은 시트에서 data-taken 이고 내 옷·기본 coat 는 잠기지 않는다 (18-05, D-02)", () => {
     const v = makeView({ me: 1, offline: [3] });
     v.players = v.players.map((p) => (p.seat === 3 ? { ...p, look: "noir" as const } : p.seat === 2 ? { ...p, look: "hood" as const } : p.seat === 1 ? { ...p, look: "hood" as const } : p));

@@ -29,22 +29,25 @@ export type PreloadItem = { href: string; imageSrcSet?: string };
  * 정적 그림 주소 끝에 붙이는 값. 파일 이름이 같아도 그림을 바꾼 배포가 바로 보이게 한다
  * (정적 그림 캐시가 max-age 1일이라 같은 주소는 하루 동안 옛 그림이 나온다). 그림을 바꾸면 값을 바꾼다.
  */
-export const ASSET_VERSION = "noir-9";
+export const ASSET_VERSION = "noir-10";
 
 // 파일 이름의 @ 는 URL 에서 %40 으로 쓴다.
 function png(dir: "table" | "roles" | "ghost", id: string, scale: 2 | 4): string {
   return `/characters/${dir}/${id}_default%40${scale}x.png?v=${ASSET_VERSION}`;
 }
 
+function animalImageSrc(animal: AnimalId, filename: string): string {
+  return `/characters/animals/${animal}/${filename}?v=${ASSET_VERSION}`;
+}
+
 /** 공개 캐릭터 얼굴. 채팅과 대상 선택에서 같은 동물 이미지를 쓴다. */
 export function animalFaceSrc(animal: AnimalId): string {
-  return `/characters/animals/${animal}/face.png?v=${ASSET_VERSION}`;
+  return animalImageSrc(animal, "face.png");
 }
 
 function animalArt(animal: AnimalId, form: string, density: "figure" | "role"): { src: string; srcSet: string } {
-  const dir = `/characters/animals/${animal}`;
-  const src = `${dir}/${form}-sm.png?v=${ASSET_VERSION}`;
-  const large = `${dir}/${form}-lg.png?v=${ASSET_VERSION}`;
+  const src = animalImageSrc(animal, `${form}-sm.png`);
+  const large = animalImageSrc(animal, `${form}-lg.png`);
   return { src, srcSet: density === "figure" ? `${src} 2x, ${large} 4x` : `${src} 1x, ${large} 2x` };
 }
 
@@ -85,8 +88,9 @@ export function ghostSpriteSrc(): string {
   return png("ghost", "ghost", 4);
 }
 
-// 로비 꾸미기 카드 그림. 표시 64×80, 파일 240×300.
-export function outfitCardSrc(id: OutfitId): string {
+/** 옷장 카드에는 지금 동물의 의상을 보여 준다. 기본 코트는 전신 그림을 공유한다. */
+export function outfitCardSrc(id: OutfitId, animal?: AnimalId): string {
+  if (animal !== undefined) return animalImageSrc(animal, `${id === "coat" ? "figure" : id}-sm.png`);
   return `/outfits/outfit-${id}.png?v=${ASSET_VERSION}`;
 }
 
