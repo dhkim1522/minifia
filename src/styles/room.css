@@ -20,6 +20,26 @@
   flex-direction: column;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  /* 방의 모든 단계가 같은 폭을 쓰고 3D 무대는 실제 영역을 잰다. */
+  #root:has(> .mf-room) { max-width: 960px; }
+
+  .mf-room { --mf-room-controls-max: 600px; }
+
+  .mf-room :is(
+    .mf-lobby__header, .mf-lobby__panel,
+    .mf-assign__bar, .mf-assign__panel, .mf-reveal__header,
+    .mf-game__header, .mf-game__panel,
+    .mf-result__header, .mf-result__panel, .mf-bench__panel, .mv-host
+  ) {
+    max-width: var(--mf-room-controls-max);
+    margin-inline: auto;
+  }
+
+  .mf-room :is(.mf-assign__bar, .mf-assign__panel) { width: 100%; }
+  .mf-room .mf-will-layer { max-width: 450px; margin-inline: auto; }
+}
+
 .mf-phase {
   flex: 1;
   min-height: 0;

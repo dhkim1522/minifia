@@ -141,7 +141,7 @@ import {
 import { makeAvatarFlows } from "./avatar.mjs";
 import { makeDayFlows } from "./day.mjs";
 import { makeKeywordFlows } from "./keyword.mjs";
-import { makeMapSelectFlows } from "./mapselect.mjs";
+import { makeMapSelectFlows, pickMapViaUi } from "./mapselect.mjs";
 import { SHORT_PHONE_H, readBenchView, readRematchState, readResultHidden, readRestSheet, readResultStage, rematchChecks, resultHiddenChecks, resultSkipChecks, resultStageChecks } from "./result.mjs";
 import { makePoliticsFlows } from "./politics.mjs";
 import { makeSoundFlows } from "./sound.mjs";
@@ -3590,15 +3590,41 @@ async function chatGameFlow(ctx) {
   }
 }
 
-// ---- pc: 데스크톱 홈 그림과 가운데 폰 폭 조작 열, 대기실·게임의 폰 폭 ----
+// ---- pc: 데스크톱 홈 그림과 조작 열, 대기실에서 결과까지 넓은 맵 ----
 
-/** `#root` 의 왼쪽·폭을 읽는다(#root 안에 화면이 그려진 뒤). */
-async function readRootRect(page) {
-  await page.waitForSelector("#root > *", { timeout: 8000 });
-  return page.evaluate(() => {
-    const r = document.querySelector("#root").getBoundingClientRect();
-    return { rootLeft: r.left, rootWidth: r.width };
-  });
+async function checkPcRoom(ctx, state, selectors) {
+  const page = ctx.host.page;
+  await page.locator(".mf-world__canvas canvas").waitFor({ timeout: 8000 });
+  const { viewport, room, canvas, controls } = await page.evaluate((selectors) => {
+    const bounds = (selector) => {
+      const rect = document.querySelector(selector)?.getBoundingClientRect();
+      return rect ? { left: rect.left, width: rect.width } : null;
+    };
+    return { viewport: window.innerWidth, room: bounds(".mf-room"), canvas: bounds(".mf-world__canvas canvas"), controls: selectors.map(bounds) };
+  }, selectors);
+  const width = Math.min(960, viewport);
+  const centeredAtWidth = (rect, expected) => rect !== null && Math.abs(rect.width - expected) <= 1 && Math.abs(rect.left - (viewport - expected) / 2) <= 1;
+  const rec = recorder(ctx);
+  rec(`pc/${state}`, "PC-ROOM", "방과 3D 맵이 같은 넓은 폭으로 가운데에 배치", centeredAtWidth(room, width) && centeredAtWidth(canvas, width), `방 ${room?.width}px, 캔버스 ${canvas?.width}px, 기준 ${width}px`);
+  rec(`pc/${state}`, "PC-CONTROLS", "헤더·하단 조작·중앙 카드가 조작 폭 안에서 가운데에 배치", controls.every((rect) => rect !== null && rect.width > 0 && rect.width <= 600 && centeredAtWidth(rect, rect.width)), JSON.stringify(controls));
+}
+
+async function checkEntryWidth(ctx, page, state, columnSelector, { width, height }, touch = false) {
+  await page.setViewportSize({ width, height });
+  await page.locator(columnSelector).waitFor({ timeout: 8000 });
+  await settle(page);
+  const { art, column, size } = await page.evaluate((selector) => {
+    const background = document.querySelector(".mf-entry-scene .mf-backdrop__art");
+    const art = background.getBoundingClientRect();
+    const column = document.querySelector(selector).getBoundingClientRect();
+    return { art: { left: art.left, width: art.width }, column: { left: column.left, width: column.width }, size: getComputedStyle(background).backgroundSize };
+  }, columnSelector);
+  const rec = recorder({ ...ctx, size: { label: `${width}x${height}` } });
+  recOne(rec, `pc/${state}`, pcCenterChecks({ rootLeft: column.left, rootWidth: column.width, where: "입장 조작 열" }, { w: width }));
+  const artWidth = Math.min(width, touch ? 430 : Math.max(430, height * 2 / 3));
+  const artSize = touch ? "cover" : "100% auto";
+  rec(`pc/${state}`, "ENTRY-ART", touch ? "터치 화면의 배경 구도 유지" : "입장 그림이 좌우 전체를 표시", Math.abs(art.width - artWidth) <= 1 && Math.abs(art.left - (width - art.width) / 2) <= 1 && size === artSize,
+    `그림 폭 ${Math.round(art.width)}px, 기준 ${Math.round(artWidth)}px, 배경 크기 ${size}`);
 }
 
 async function pcFlow(ctx) {
@@ -3612,21 +3638,8 @@ async function pcFlow(ctx) {
     const homePage = await home.newPage();
     homePage.setDefaultTimeout(8000);
     await homePage.goto(`${ctx.origin}/`, { waitUntil: "domcontentloaded" });
-    await homePage.waitForSelector(".mf-home");
     for (const [width, height] of [[w, h], [1032, 1174], [400, 1000]]) {
-      await homePage.setViewportSize({ width, height });
-      await settle(homePage);
-      const { art, column, size } = await homePage.evaluate(() => {
-        const background = document.querySelector(".mf-home-scene .mf-backdrop__art");
-        const art = background.getBoundingClientRect();
-        const column = document.querySelector(".mf-home").getBoundingClientRect();
-        return { art: { left: art.left, width: art.width }, column: { left: column.left, width: column.width }, size: getComputedStyle(background).backgroundSize };
-      });
-      const homeRec = recorder({ ...ctx, size: { label: `${width}x${height}` } });
-      recOne(homeRec, "pc/home", pcCenterChecks({ rootLeft: column.left, rootWidth: column.width, where: "홈 조작 열" }, { w: width }));
-      const artWidth = Math.min(width, Math.max(430, height * 2 / 3));
-      homeRec("pc/home", "PC-HOME-ART", "홈 그림이 가운데에서 좌우 전체를 표시", Math.abs(art.width - artWidth) <= 1 && Math.abs(art.left - (width - art.width) / 2) <= 1 && size === "100% auto",
-        `그림 폭 ${Math.round(art.width)}px, 기준 ${Math.round(artWidth)}px, 배경 크기 ${size}`);
+      await checkEntryWidth(ctx, homePage, "home", ".mf-home", { width, height });
     }
   } finally {
     await home?.close().catch(() => {});
@@ -3636,20 +3649,70 @@ async function pcFlow(ctx) {
   const host = await startHost(ctx, "pc");
   const { page, tracker } = host;
   await settle(page);
-  recOne(rec, "pc/lobby", pcCenterChecks({ ...(await readRootRect(page)), where: "대기실" }, { w }));
+  await checkPcRoom(ctx, "lobby", [".mf-lobby__header", ".mf-lobby__panel"]);
   await checkState(ctx, "pc", "lobby");
 
-  // ③ 낮(discussion): 봇 3명 → 시작 → 첫 낮 토론
+  for (const { width, height, touch } of [{ width: 1033, height: 1221, touch: false }, { width: 390, height: 844, touch: true }]) {
+    const context = await ctx.browser.newContext({ viewport: { width, height }, isMobile: touch, hasTouch: touch, locale: "ko-KR" });
+    try {
+      const invite = await context.newPage();
+      await invite.goto(`${ctx.origin}/r/${ctx.roomCode}`, { waitUntil: "domcontentloaded" });
+      await checkEntryWidth(ctx, invite, "invite", ".mf-join", { width, height }, touch);
+    } finally {
+      await context.close();
+    }
+  }
+
+  // ③ 역할 확인과 낮 토론: 밤의 의사 선택을 재현할 5인방
+  await pickMapViaUi(page, tracker, "bar");
   await openTestSheet(page);
-  await setBots(page, tracker, 3);
+  await setBots(page, tracker, 4);
+  await chooseRole(page, tracker, "doctor");
+  await setBotVote(page, tracker, { exec: "no", pick: "other" });
   await startGame(page, tracker);
+  await page.locator(".mf-reveal__header").waitFor({ timeout: 8000 });
+  await checkPcRoom(ctx, "role", [".mf-reveal__header"]);
+  await skipTo(page, tracker, "keyword");
+  await page.locator("[data-keyword-card]").waitFor({ timeout: 8000 });
+  await checkPcRoom(ctx, "keyword", [".mf-reveal__header", "[data-keyword-card]"]);
   await skipTo(page, tracker, "discussion");
   await settle(page);
   ctx.stage = "play";
-  recOne(rec, "pc/day", pcCenterChecks({ ...(await readRootRect(page)), where: "낮" }, { w }));
+  await checkPcRoom(ctx, "day", [".mf-game__header", ".mf-game__panel"]);
   await checkState(ctx, "pc", "day");
 
-  await resetAndLeave(page, tracker);
+  const mySeat = tracker.last().me.seat;
+  const me = await sampleWorld(page, mySeat);
+  const target = me ? await farWalkableOnSurface(page, ctx.size, me) : null;
+  const walk = target ? await tapWorld(page, tracker, mySeat, target.x, target.z) : null;
+  rec("pc/day", "PC-WALK", "넓은 무대에서 바닥 클릭이 서버 이동으로 이어짐", !!walk?.move && walk.ringMs !== null);
+
+  // ④ 제보와 같은 세로로 긴 창에서 밤 지도와 의사 조작을 확인한다.
+  const reported = { w: 1033, h: 1221, label: "1033x1221" };
+  await page.setViewportSize({ width: reported.w, height: reported.h });
+  await skipTo(page, tracker, "night");
+  const nightCard = page.locator('[data-phase-event="night-action"] .mf-phase-event__card');
+  await nightCard.waitFor({ timeout: 8000 });
+  await settle(page);
+  const nightCtx = { ...ctx, size: reported };
+  await checkPcRoom(nightCtx, "night", [".mf-game__header", '[data-phase-event="night-action"] .mf-phase-event__card']);
+  const faceSeats = (await readNightFaces(page)).faceSeats;
+  const patient = faceSeats.find((seat) => seat !== mySeat);
+  recorder(nightCtx)("pc/night", "PC-DOCTOR", "의사에게 다섯 후보가 모두 보임", tracker.last().me.role === "doctor" && faceSeats.length === 5);
+  if (patient !== undefined) {
+    await tapFace(page, patient);
+    await tracker.waitFor((view) => view.phase === "night" && view.me.pick === patient, 3000, "의사의 보호 대상 서버 반영");
+  }
+  recorder(nightCtx)("pc/night", "PC-PICK", "얼굴 선택이 서버의 보호 대상으로 반영됨", patient !== undefined);
+  await checkState(nightCtx, "pc", "night");
+
+  await toEnded({ hp: page, ht: tracker });
+  await page.locator(".mf-result__panel").waitFor({ timeout: 8000 });
+  await checkPcRoom(nightCtx, "result", [".mf-result__header", ".mf-result__panel"]);
+  await checkState(nightCtx, "pc", "result");
+  await page.locator("[data-game-menu]").click();
+  await clickInDialog(page, "게임 메뉴", "방 나가기");
+  await clickInDialog(page, "방에서 나갈까요?", "나가기");
 }
 
 // ---- wakelock (05-07, D-12·D-13, UI-SPEC 12): 화면 켜짐 유지 API 가 없을 때·요청을 셀 때 ----

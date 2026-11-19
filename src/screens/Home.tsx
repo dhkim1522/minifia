@@ -142,7 +142,7 @@ export function Home({ onEnterRoom }: HomeProps) {
   }
 
   return (
-    <Backdrop layout="entry" scene="lobby" className="mf-home-scene">
+    <Backdrop layout="entry" scene="lobby">
       <main className="mf-root mf-entry mf-home" style={{ "--entry-height": `${viewportHeight}px` } as CSSProperties}>
         <header className="mf-entry__head">
           <h1 className="mf-t-display mf-home__title">미니피아</h1>
