@@ -55,8 +55,8 @@
 .mf-journal__w { display: inline-flex; align-items: center; gap: var(--space-xs); min-width: 0; color: var(--gray-50); }
 .mf-journal__w b { font-weight: 700; }
 .mf-journal__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
-/* 결과: 도장·테두리·회전 없이 글자만 */
-.mf-journal__rz--bad { color: var(--crimson-300); font-weight: 700; }
+/* 붉은 결과는 밝은 속지 결 위에서도 읽히도록 색을 밝힌다. */
+.mf-journal__rz--bad { color: color-mix(in srgb, var(--crimson-300) 60%, var(--gray-50)); font-weight: 700; }
 .mf-journal__rz--ok { color: var(--gray-50); font-weight: 400; }
 .mf-journal__rz--heal { color: var(--journal-doctor-ink); font-weight: 700; }
 .mf-journal__nw { justify-self: end; }
